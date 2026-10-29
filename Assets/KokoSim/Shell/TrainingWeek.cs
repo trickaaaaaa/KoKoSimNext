@@ -70,9 +70,8 @@ namespace KokoSim.Unity.Shell
         {
             if (!Calendar.CanTrain(p.Grade, week)) return;
 
-            var isPitcher = PitcherRoleResolver.LeansPitcher(p);
-            var plan = p.Plan ?? TrainingPlan.Auto(isPitcher);
-            var alloc = TrainingPresets.Resolve(plan, isPitcher, Budget);
+            var plan = p.Plan ?? TrainingPlan.Default;   // 未設定は全員バランス型（issue #680）
+            var alloc = TrainingPresets.Resolve(plan, Budget);
             var stage = Calendar.StageIndex(p.Grade, week);
             var campMult = Calendar.CampMultiplier(week, Training) * extraMult;
             // 施設係数を焼き込んだ係数で走らせる（engine SeasonEngine と同じ: training with { FacilityCoef }）。

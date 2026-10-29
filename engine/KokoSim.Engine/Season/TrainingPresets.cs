@@ -25,16 +25,14 @@ public static class TrainingPresets
         (TrainingMenu.Throwing, 1), (TrainingMenu.Bunt, 1), (TrainingMenu.Rest, 1),
     };
 
-    private static readonly (TrainingMenu Menu, double Weight)[] BalancedPitcher =
+    // バランス型（練習計画を組んでいない選手の既定でもある）。全員共通の配分＝ゲームが判定した
+    // 投手らしさ（PitcherRoleResolver.LeansPitcher）で中身を変えない。守備位置・投手適性は
+    // プレイヤーが決めるもの（issue #680）なので、投手向けの配分は「投手お任せ」等を選んだ時だけ。
+    private static readonly (TrainingMenu Menu, double Weight)[] Balanced =
     {
-        (TrainingMenu.Pitching, 2), (TrainingMenu.VelocityTraining, 1), (TrainingMenu.BreakingBall, 1),
-        (TrainingMenu.Running, 1), (TrainingMenu.Batting, 1), (TrainingMenu.Rest, 1),
-    };
-
-    private static readonly (TrainingMenu Menu, double Weight)[] BalancedBatter =
-    {
-        (TrainingMenu.Batting, 2), (TrainingMenu.Defense, 1), (TrainingMenu.BaseRunning, 1),
-        (TrainingMenu.Strength, 1), (TrainingMenu.Throwing, 1), (TrainingMenu.Rest, 1),
+        (TrainingMenu.Batting, 2), (TrainingMenu.Pitching, 1), (TrainingMenu.Defense, 1),
+        (TrainingMenu.BaseRunning, 1), (TrainingMenu.Strength, 1), (TrainingMenu.Throwing, 1),
+        (TrainingMenu.Rest, 1),
     };
 
     private static readonly (TrainingMenu Menu, double Weight)[] DefenseFocus =
@@ -56,7 +54,7 @@ public static class TrainingPresets
     };
 
     /// <summary>プランを実効配分（分）へ解決する。</summary>
-    public static IReadOnlyList<MenuAllocation> Resolve(TrainingPlan plan, bool isPitcher, int budgetMinutes)
+    public static IReadOnlyList<MenuAllocation> Resolve(TrainingPlan plan, int budgetMinutes)
     {
         if (budgetMinutes <= 0) return System.Array.Empty<MenuAllocation>();
 
@@ -67,11 +65,11 @@ public static class TrainingPresets
         {
             TrainingPreset.PitcherAuto => PitcherAuto,
             TrainingPreset.BatterAuto => BatterAuto,
-            TrainingPreset.Balanced => isPitcher ? BalancedPitcher : BalancedBatter,
+            TrainingPreset.Balanced => Balanced,
             TrainingPreset.DefenseFocus => DefenseFocus,
             TrainingPreset.AceDevelopment => AceDevelopment,
             TrainingPreset.SluggerDevelopment => SluggerDevelopment,
-            _ => isPitcher ? PitcherAuto : BatterAuto,
+            _ => Balanced,
         };
         return DistributeByWeight(table, budgetMinutes);
     }
