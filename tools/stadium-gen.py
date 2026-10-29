@@ -57,13 +57,15 @@ PARAMS = dict(
     # ---- stands (one continuous bowl) ----
     STAND_GAP=3.0,        # bowl inner edge, just outside the playing surface
     ROWS=28,              # rows in the foul-side / backstop bowl  -> 11.8 m
-    ROWS_OF=14,           # rows on top of the outfield berm       -> 13.9 m total
+    ROWS_OF=24,           # outfield seat rows (from OF_BASE_Y)    -> 13.6 m total
     RISE=0.42,
     TREAD=0.80,
     RAIL_H=1.0,           # parapet above the last row
     CONCOURSE=4.0,        # walkway behind the parapet
-    BERM_D=20.0,          # outfield berm: depth from the fence
-    BERM_H=7.0,           # outfield berm: height at the back
+    # 外野は柵のすぐ後ろから座席（issue #704）。旧「柵の奥に20mの芝の土手（高さ0→7m）」では
+    # 本塁打の99%が土手に落ち、余裕の差（前列/中段/上段）が絵に出ず全部「ぎりぎり」に見えた。
+    OF_GAP=2.0,           # outfield: fence -> front wall of the seats (walkway)
+    OF_BASE_Y=3.5,        # outfield: height of the first row (just above the fence top)
     SCREEN_H=14.0,        # batter's eye (dead centre)
     SCREEN_DEG=14.0,
     CORNER_DEG=62.0,      # bowl blends to the outfield radius between FOUL_DEG and this
@@ -155,7 +157,7 @@ def r_bowl(t):
     b = r_edge(t) + P.STAND_GAP
     if d >= P.CORNER_DEG:
         return b
-    a = r_fence(P.FOUL_DEG * D2R) + P.BERM_D
+    a = r_fence(P.FOUL_DEG * D2R) + P.OF_GAP
     u = max(0.0, min(1.0, (d - P.FOUL_DEG) / (P.CORNER_DEG - P.FOUL_DEG)))
     u = u * u * (3.0 - 2.0 * u)
     return a + (b - a) * u
@@ -554,20 +556,48 @@ def build_stands(M):
             M.box(ro0 * math.sin(t0), P.ROWS * P.RISE + P.RAIL_H,
                   ro0 * math.cos(t0), 0.6, P.ROOF_Y - P.ROWS * P.RISE - P.RAIL_H, 0.6, -t0)
 
-    # ---- 外野: 芝生の土手 ＋ その上の段 ----
+    # ---- 外野: 柵のすぐ後ろから座席の段（issue #704） ----
+    # 本塁打の着弾が前列・中段・上段に散るのは、座席が柵の直後から始まるときだけ。
+    # バックスクリーンの扇（±SCREEN_DEG）は座席を置かず、下の「スクリーン裏の壁」で塞ぐ。
     of = []
-    segs_of = 40
-    for i in range(segs_of):
-        d0 = -45.0 + i * 90.0 / segs_of
-        d1 = -45.0 + (i + 1) * 90.0 / segs_of
-        t0, t1 = d0 * D2R, d1 * D2R
-        f0, f1 = r_fence(t0), r_fence(t1)
-        g = "stand_outfield_right" if (d0 + d1) / 2.0 >= 0 else "stand_outfield_left"
-        M.grp(g, "berm")
-        M.quad(pol(f0 + 2.5, t0, 0), pol(f1 + 2.5, t1, 0),
-               pol(f1 + P.BERM_D, t1, P.BERM_H), pol(f0 + P.BERM_D, t0, P.BERM_H), (0, 1, 0))
-        of.append((t0, t1, f0 + P.BERM_D, f1 + P.BERM_D, P.BERM_H, g, "seat_blue"))
+    segs_side = 14
+    for lo, hi in ((-45.0, -P.SCREEN_DEG), (P.SCREEN_DEG, 45.0)):
+        for i in range(segs_side):
+            d0 = lo + i * (hi - lo) / segs_side
+            d1 = lo + (i + 1) * (hi - lo) / segs_side
+            t0, t1 = d0 * D2R, d1 * D2R
+            f0, f1 = r_fence(t0) + P.OF_GAP, r_fence(t1) + P.OF_GAP
+            g = "stand_outfield_right" if (d0 + d1) / 2.0 >= 0 else "stand_outfield_left"
+            # 最前列の前壁（通路の床 y=0 から1段目まで）
+            M.grp(g, "conc_mid")
+            M.quad(pol(f0, t0, 0), pol(f1, t1, 0), pol(f1, t1, P.OF_BASE_Y), pol(f0, t0, P.OF_BASE_Y),
+                   inward(t0, t1))
+            of.append((t0, t1, f0, f1, P.OF_BASE_Y, g, "seat_blue"))
     steps(M, of, P.ROWS_OF)
+
+    # ---- スクリーン裏の壁（中堅の扇。座席の代わりにバックスクリーンと同じ高さの塊で塞ぐ） ----
+    depth = P.OF_GAP + P.ROWS_OF * P.TREAD + P.CONCOURSE
+    seg_c = 14
+    for i in range(seg_c):
+        d0 = -P.SCREEN_DEG + i * 2 * P.SCREEN_DEG / seg_c
+        d1 = -P.SCREEN_DEG + (i + 1) * 2 * P.SCREEN_DEG / seg_c
+        t0, t1 = d0 * D2R, d1 * D2R
+        a0, a1 = r_fence(t0) + 5.6, r_fence(t1) + 5.6       # バックスクリーン上面（+2.6〜+5.6）の奥から
+        b0, b1 = r_fence(t0) + depth, r_fence(t1) + depth
+        M.grp("backscreen", "screen")
+        M.quad(pol(a0, t0, P.SCREEN_H), pol(a1, t1, P.SCREEN_H),
+               pol(b1, t1, P.SCREEN_H), pol(b0, t0, P.SCREEN_H), (0, 1, 0))
+        out = inward(t0, t1)
+        M.grp("backscreen", "conc_dark")
+        M.quad(pol(b0, t0, 0), pol(b1, t1, 0), pol(b1, t1, P.SCREEN_H), pol(b0, t0, P.SCREEN_H),
+               (-out[0], 0.0, -out[2]))
+    # 扇の両脇の側壁（座席の段から見える面）
+    for sgn in (-1, 1):
+        t = sgn * P.SCREEN_DEG * D2R
+        a, b = r_fence(t) + 2.6, r_fence(t) + depth
+        n = (math.cos(t) * sgn, 0.0, -math.sin(t) * sgn)
+        M.grp("backscreen", "conc_dark")
+        M.quad(pol(a, t, 0), pol(b, t, 0), pol(b, t, P.SCREEN_H), pol(a, t, P.SCREEN_H), n)
 
     # ---- バックスクリーン（打者の目線を切る暗い壁。無いと球場に見えない） ----
     seg_s = 14

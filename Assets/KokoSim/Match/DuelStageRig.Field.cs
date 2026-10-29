@@ -2549,6 +2549,8 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private Vector3 FieldBallPoint(Vector3 enginePos, float t)
         {
+            // 本塁打はスタンドに当たったら、そこで跳ねて止まる（issue #704。engine の弾道は地面まで沈む）
+            if (StandHitBallPoint(t) is { } onStand) return onStand;
             for (int i = 0; i < _throwEvents.Count; i++)
             {
                 var e = _throwEvents[i];
@@ -3367,6 +3369,13 @@ namespace KokoSim.Unity.Match
                     mats[i] = mat;
                 }
                 go.AddComponent<MeshRenderer>().sharedMaterials = mats;
+                // 本塁打の球を止める面（issue #704）。描いているメッシュそのものに当てる＝形の二重持ちをしない
+                if (IsBallStopPart(part.Name))
+                {
+                    var col = go.AddComponent<MeshCollider>();
+                    col.sharedMesh = part.Mesh;
+                    _standColliders.Add(col);
+                }
             }
             return true;
         }
@@ -3840,6 +3849,13 @@ namespace KokoSim.Unity.Match
                     frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + FieldMarginM * 2f);
                 }
             }
+            // スタンドに当たった本塁打は、地面まで沈む engine の高さでなく止まった球の高さを収める。
+            // 打球区間が終わった後（flight==null）も効かせる＝球がスタンドに残っている間は枠から外さない（issue #704）
+            if (StandHitBallPoint(t) is { } onStand)
+            {
+                aimY = Mathf.Max(FieldAimYMin, onStand.y * 0.5f);
+                frameH = Mathf.Max(frameH, onStand.y + FieldMarginM * 2f);
+            }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
             if (_fieldInfieldFixed)
             {
@@ -4198,6 +4214,7 @@ namespace KokoSim.Unity.Match
             BuildFieldCatchPlan(play);
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             BuildFieldTagPlan(play);           // ⚠ 捕球の後（タッチする野手を捕球の予定表から引く。issue #489）
+            PlanHomeRunStandHit(play);         // 本塁打の球が外野スタンドに当たる点（issue #704）
 
             // 立ち位置の不連続を控える。engine の言う定位置と実際の立ち位置の差を
             // **プレーの頭で1回だけ**採り、0.3秒かけて 0 へ落とす（投手1.347m・捕手1.200m）
@@ -4314,6 +4331,7 @@ namespace KokoSim.Unity.Match
             if (_fieldPlay == null) return;
             _fieldPlay = null;
             _fieldPlan = null;
+            _hrHit = false;
             _fieldStationCuts.Clear();
             _loco.Clear();
             _catchEvents.Clear();
@@ -4436,11 +4454,13 @@ namespace KokoSim.Unity.Match
 
             // ボール
             var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
+            // スタンドに当たった本塁打は、engine の打球区間が終わった後も止まった位置に球を残す（issue #704）
+            var onStand = StandHitBallPoint(t);
             if (_ball != null)
             {
-                if (ball.HasValue)
+                if (ball.HasValue || onStand.HasValue)
                 {
-                    var p = FieldBallPoint(new Vector3((float)ball.Value.X, (float)ball.Value.H, (float)ball.Value.Y), t);
+                    var p = onStand ?? FieldBallPoint(new Vector3((float)ball.Value.X, (float)ball.Value.H, (float)ball.Value.Y), t);
                     _ball.transform.SetParent(_root.transform, false);
                     _ball.transform.localPosition = p;
                     _ball.SetActive(true);
