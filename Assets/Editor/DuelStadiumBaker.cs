@@ -60,15 +60,21 @@ namespace KokoSim.UnityEditorTools
                 parts.Add(part);
                 tris += part.Mesh.triangles.Length / 3;
             }
+            // 観客（issue #705）。座れる場所は生成スクリプトが書いた座席TSVから
+            var crowd = DuelCrowdBaker.Build(Path.ChangeExtension(src, null) + ".seats.tsv", out var people, out var crowdTris);
+            parts.AddRange(crowd);
+            tris += crowdTris;
             asset.Parts = parts.ToArray();
             asset.Triangles = tris;
+            asset.CrowdPeople = people;
+            asset.CrowdTriangles = crowdTris;
 
             AssetDatabase.CreateAsset(asset, AssetPath);
             foreach (var p in asset.Parts) AssetDatabase.AddObjectToAsset(p.Mesh, asset);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"球場メッシュを焼いた: {asset.Parts.Length} 部位 / {tris} 三角形 → {AssetPath}");
+            Debug.Log($"球場メッシュを焼いた: {asset.Parts.Length} 部位 / {tris} 三角形（うち観客 {people} 人・{crowdTris} 三角形） → {AssetPath}");
             Verify();
         }
 

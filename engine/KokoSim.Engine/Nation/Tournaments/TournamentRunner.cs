@@ -148,7 +148,11 @@ public sealed record LivePlayerMatch(
     bool ManagerIsAway,
     string OpponentName,
     string RoundName,
-    int OpponentId);
+    int OpponentId)
+{
+    /// <summary>決勝までの残りラウンド数（決勝=1）。観客の入り（<see cref="CrowdTurnouts"/>・issue #705）に使う。不明は null。</summary>
+    public int? RoundsRemaining { get; init; }
+}
 
 /// <summary>
 /// 大会概要の1試合行。ManagerInvolved で自校ハイライトを表現する。
@@ -899,7 +903,8 @@ public sealed class TournamentRunner
                 var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
                     MercyRuleEnabledFor(roundsRemaining), context);
-                var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName, opp.Id);
+                var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName, opp.Id)
+                    { RoundsRemaining = roundsRemaining };
                 _pending = new PendingLiveMatch(
                     cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway, handle, matchDay);
                 return handle;

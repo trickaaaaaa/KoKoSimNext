@@ -292,6 +292,7 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 現代ルール | ModernRules | DH/タイブレーク/球数制限の年代連動トグル（設計書05 §1.3） |
 | 県内地区 | School.DistrictId | 地理固定割の添字（設計書05 §2.2） |
 | 球場 / 球場格 | Stadium / StadiumTier(Municipal/Prefectural/National) | data/stadiums.yaml。寸法→FieldGeometry（設計書13） |
+| 観客の入り | CrowdTurnout(Sparse/Half/Full) / CrowdTurnouts.For | 表示専用（issue #705）。大会と回戦から3段で決め、3Dスタンドの観客層 `crowd_0..2` の表示数になる |
 | 両翼 / 中堅 / フェンス高 | LeftFenceM＋RightFenceM / CenterFenceM / FenceHeightM | 左右非対称対応。本塁打判定に直結（設計書13 §2） |
 | 怪物 | Phenom | 才能外れ値の隠しフラグ。一芸特化型/総合型（OPEN-QUESTIONS Q20, design-04 §2） |
 | 怪我の種類（傷病名） | InjuryType | 捻挫/肉離れ/骨折/打撲/靭帯損傷/疲労性炎症。定義は `data/injuries.yaml`（InjuryCatalog）。抽選は種類→部位→段階の順（design-03 §3.5） |

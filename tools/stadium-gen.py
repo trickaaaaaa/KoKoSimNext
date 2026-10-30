@@ -72,6 +72,11 @@ PARAMS = dict(
     ROOF_Y=15.5,          # roof slab over the seats behind the plate
     ROOF_DEG=115.0,       # |theta| beyond which the roof exists
     AISLE=9,              # every Nth column is a stairway instead of seats
+    # 座席（issue #705）。踏面の奥に背もたれの帯を立てる＝1段まるごと色面だった頃は「段々の斜面」にしか見えなかった。
+    # 色は背もたれだけに塗り、踏面はコンクリートに戻す（色の帯とコンクリの帯が交互に並んで初めて座席の列に見える）
+    SEAT_BACK_H=0.38,     # 背もたれの高さ（踏面から）
+    SEAT_BACK_D=0.10,     # 背もたれの厚み
+    SEAT_BACK_IN=0.12,    # 踏面の奥の縁から手前へ何m入れるか（蹴上げと面一にしない）
 
     # ---- foul territory / enclosure ----
     FOUL_DEG=45.0,
@@ -473,6 +478,11 @@ def wrap(d):
     return ((d + 180.0) % 360.0) - 180.0
 
 
+# 座席の列（issue #705）。観客は Unity の焼き込み（DuelStadiumBaker）がこの一覧から撒く
+#   (group, t0, t1, r0, r1, y_tread, tread, row)
+SEAT_ROWS = []
+
+
 def steps(M, cols, rows):
     """cols = [(t0, t1, r0, r1, y_base, group, seat_material)] の段組み。
 
@@ -484,15 +494,23 @@ def steps(M, cols, rows):
         inw = inward(t0, t1)
         out = (-inw[0], 0.0, -inw[2])
         aisle = (i % P.AISLE == 0)          # 階段。近景の密度はここで出る
-        top = seat if not aisle else "conc_light"
         for k in range(rows):
             a0, a1 = r0 + k * tread, r1 + k * tread
             y0, y1 = yb + k * rise, yb + (k + 1) * rise
             M.grp(g, "conc_dark")
             M.quad(pol(a0, t0, y0), pol(a1, t1, y0), pol(a1, t1, y1), pol(a0, t0, y1), inw)
-            M.grp(g, top)
+            M.grp(g, "conc_light" if aisle else "conc_mid")
             M.quad(pol(a0, t0, y1), pol(a1, t1, y1),
                    pol(a1 + tread, t1, y1), pol(a0 + tread, t0, y1), (0, 1, 0))
+            if not aisle:
+                # 背もたれの帯（前面＋天面）。前面は球場の内側を向く
+                b0f, b1f = a0 + tread - P.SEAT_BACK_IN - P.SEAT_BACK_D, a1 + tread - P.SEAT_BACK_IN - P.SEAT_BACK_D
+                b0b, b1b = b0f + P.SEAT_BACK_D, b1f + P.SEAT_BACK_D
+                yt_ = y1 + P.SEAT_BACK_H
+                M.grp(g, seat)
+                M.quad(pol(b0f, t0, y1), pol(b1f, t1, y1), pol(b1f, t1, yt_), pol(b0f, t0, yt_), inw)
+                M.quad(pol(b0f, t0, yt_), pol(b1f, t1, yt_), pol(b1b, t1, yt_), pol(b0b, t0, yt_), (0, 1, 0))
+                SEAT_ROWS.append((g, t0, t1, a0, a1, y1, tread, k))
         rb0, rb1 = r0 + rows * tread, r1 + rows * tread
         yt = yb + rows * rise
         M.grp(g, "conc_light")
@@ -751,6 +769,18 @@ def write_obj(M, base):
     return order, counts
 
 
+def write_seats(base):
+    """座席の列を TSV で書く（issue #705）。観客の形・密度・服の色は Unity 側の焼き込みが決める。
+    ここが持つのは「どこに座れるか」だけ＝形の単一ソースはこのスクリプトのまま。"""
+    out = ["# group\tt0_rad\tt1_rad\tr0_front_m\tr1_front_m\ty_tread_m\ttread_m\trow\tback_in_m"]
+    for g, t0, t1, a0, a1, y, tr, k in SEAT_ROWS:
+        out.append("%s\t%.6f\t%.6f\t%.4f\t%.4f\t%.4f\t%.4f\t%d\t%.4f"
+                   % (g, t0, t1, a0, a1, y, tr, k, P.SEAT_BACK_IN + P.SEAT_BACK_D))
+    with open(base + ".seats.tsv", "w") as fh:
+        fh.write("\n".join(out) + "\n")
+    return len(SEAT_ROWS)
+
+
 def write_mtl(base):
     out = ["# stadium materials (Kd only)"]
     for k, c in MATERIALS.items():
@@ -816,7 +846,9 @@ def main():
     build_props(M)
     order, counts = write_obj(M, base)
     write_mtl(base)
+    n_rows = write_seats(base)
     report(M, order, counts)
+    print("seat rows: %d" % n_rows)
 
 
 if __name__ == "__main__":

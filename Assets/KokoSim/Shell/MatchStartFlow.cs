@@ -74,6 +74,7 @@ namespace KokoSim.Unity.Shell
                         AwaySchoolId = live.ManagerIsAway ? NationService.ManagerSchoolId : live.OpponentId,
                         HomeSchoolId = live.ManagerIsAway ? live.OpponentId : NationService.ManagerSchoolId,
                         ManagerTacticalSense = ManagerService.TacticalSenseForAi,
+                        Crowd = CrowdTurnouts.For(session.Kind, live.RoundsRemaining),   // issue #705
                         OnComplete = result =>
                         {
                             // issue #138: CompleteMatch は残りブラケットのフルシム＋全国背景シムへの join を含み重い。
@@ -124,6 +125,7 @@ namespace KokoSim.Unity.Shell
                 HomeSchoolId = live.ManagerIsAway ? opponentId : NationService.ManagerSchoolId,
                 ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                 RematchOnTie = false,   // 練習試合は引き分けで終わる（再試合はない）
+                Crowd = CrowdTurnouts.For(null, null),   // 練習試合はまばら（issue #705）
                 OnComplete = result =>
                 {
                     // 大会戦（CompleteMatch）と違いブラケットのフルシムを伴わないが、実戦成長・怪我・成績畳み込みは
