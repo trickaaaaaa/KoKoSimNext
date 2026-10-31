@@ -13,7 +13,7 @@ namespace KokoSim.Unity.Match
     ///
     /// <b>なぜ Resources に置いてよいか</b>: 中身は全部**生成物**で、購入資産の GUID を1つも参照しない
     /// （<see cref="DuelAssetCatalog"/> を gitignore している理由がここには無い）。1球場ぶんで
-    /// 26,000 三角形＝ビルドに丸ごと入っても軽い。
+    /// 約39,000 三角形＋観客（満員12,898人・約206,000 三角形。issue #705）＝ビルドに丸ごと入っても軽い。
     ///
     /// 部位を <c>o</c> グループ単位で分けてあるのは、後から一部だけ隠す／差し替えるため
     /// （例: 対決ビューでネット裏スタンドだけ落とす）。材質はグループの中のサブメッシュに割る。
@@ -43,5 +43,11 @@ namespace KokoSim.Unity.Match
 
         [Tooltip("三角形の総数。焼き直したときに増減が分かるように残す")]
         public int Triangles;
+
+        [Tooltip("観客の人数（満員＝全層の合計。issue #705）")]
+        public int CrowdPeople;
+
+        [Tooltip("観客の三角形数（Triangles の内数）")]
+        public int CrowdTriangles;
     }
 }

@@ -3369,6 +3369,11 @@ namespace KokoSim.Unity.Match
                     mats[i] = mat;
                 }
                 go.AddComponent<MeshRenderer>().sharedMaterials = mats;
+                if (TryCrowdLayer(part.Name, out var crowdLayer))
+                {
+                    _crowdLayers.Add((crowdLayer, go));
+                    go.SetActive(crowdLayer < CrowdLayersShown);
+                }
                 // 本塁打の球を止める面（issue #704）。描いているメッシュそのものに当てる＝形の二重持ちをしない
                 if (IsBallStopPart(part.Name))
                 {

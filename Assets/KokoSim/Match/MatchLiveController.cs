@@ -61,6 +61,11 @@ namespace KokoSim.Unity.Match
             /// 明示するかに使う（issue #253）。練習試合は引き分けで終わるので false（issue #269）。
             /// </summary>
             public bool RematchOnTie = true;
+            /// <summary>
+            /// 観客の入り（issue #705・表示専用）。大会と回戦から <see cref="KokoSim.Engine.Nation.Tournaments.CrowdTurnouts"/> で決める。
+            /// 試合中に変わらないので配色と同じ静的経路で渡す（観測データには載せない）。
+            /// </summary>
+            public KokoSim.Engine.Nation.Tournaments.CrowdTurnout Crowd = KokoSim.Engine.Nation.Tournaments.CrowdTurnout.Full;
             public System.Action<GameResult> OnComplete;
         }
 
@@ -137,6 +142,9 @@ namespace KokoSim.Unity.Match
 
         // ライブ観戦（大会フロー）モードの状態。デモ生成モードでは false / null。
         private bool _managerIsAway;
+        // 観客の入り（issue #705）。対決ビューを組むときに DuelStageRig へ渡す
+        private KokoSim.Engine.Nation.Tournaments.CrowdTurnout _crowd = KokoSim.Engine.Nation.Tournaments.CrowdTurnout.Full;
+
         // 両校の配色（設計書18 §3.5.1）。攻守交代のたびに守備側/攻撃側へ割り当て直す（DuelStageRig.SetTeamColors）。
         private KokoSim.Engine.Nation.TeamColors _awayColors;
         private KokoSim.Engine.Nation.TeamColors _homeColors;
@@ -778,6 +786,7 @@ namespace KokoSim.Unity.Match
                 _homeColors = req.HomeColors;
                 _awaySchoolId = req.AwaySchoolId;
                 _homeSchoolId = req.HomeSchoolId;
+                _crowd = req.Crowd;
                 // 掲示板の校名はエンジンの観測データ（LiveLineScore.Name）から出るのでここでは埋めない。
                 SetColumnTitles();
                 return;
@@ -794,6 +803,7 @@ namespace KokoSim.Unity.Match
 #endif
             _onComplete = null;
             _rematchOnTie = true;
+            _crowd = KokoSim.Engine.Nation.Tournaments.CrowdTurnout.Full;   // デモは満員で見せる
             // 委任AIの采配値も成長した監督の実値を使う（旧ハードコード70を廃す, issue #171）。
             managerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi;
             // デモの相手校（away＝右列）は本番と同じ StrengthTeamFactory 生成（氏名＋控え8人つき）で観戦する。
@@ -3542,6 +3552,7 @@ namespace KokoSim.Unity.Match
                 ? (offenseIsTop ? _homeColors : _awayColors, offenseIsTop ? _awayColors : _homeColors)
                 : ((KokoSim.Engine.Nation.TeamColors, KokoSim.Engine.Nation.TeamColors)?)null;
             _duelColorsOffenseIsTop = anyColors ? offenseIsTop : (bool?)null;
+            DuelStageRig.CrowdLayersShown = (int)_crowd;   // 観客の入り（issue #705）。球場を組むときに効く
             var rig = new DuelStageRig();
             DuelStageRig.InitialTeamColors = null;   // 静的な受け渡し窓は使ったら必ず閉じる
             // 判定表示の長さを流し込む＝捕手の据え置き（捕球位置で静止する窓）が表示と同じ時刻に終わる
