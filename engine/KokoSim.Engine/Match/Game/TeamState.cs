@@ -664,8 +664,19 @@ public sealed class TeamState
     /// <summary>伝令の効果窓（残り打席数）。効いている間はプレッシャー負補正を緩和。</summary>
     public int OffenseCalmPa { get; private set; }
     public int DefenseCalmPa { get; private set; }
-    public void StartOffenseCalm(int pa) => OffenseCalmPa = Math.Max(OffenseCalmPa, pa);
-    public void StartDefenseCalm(int pa) => DefenseCalmPa = Math.Max(DefenseCalmPa, pa);
+    /// <summary>いま効いている攻撃／守備伝令の伝令役（issue #716）。null＝伝令役なし（記録員が走る・係数1.0）。</summary>
+    public Player? OffenseMessenger { get; private set; }
+    public Player? DefenseMessenger { get; private set; }
+    public void StartOffenseCalm(int pa, Player? messenger = null)
+    {
+        OffenseCalmPa = Math.Max(OffenseCalmPa, pa);
+        OffenseMessenger = messenger;
+    }
+    public void StartDefenseCalm(int pa, Player? messenger = null)
+    {
+        DefenseCalmPa = Math.Max(DefenseCalmPa, pa);
+        DefenseMessenger = messenger;
+    }
     public void TickOffenseCalm() { if (OffenseCalmPa > 0) OffenseCalmPa--; }
     public void TickDefenseCalm() { if (DefenseCalmPa > 0) DefenseCalmPa--; }
 

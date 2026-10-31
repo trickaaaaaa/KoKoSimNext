@@ -605,15 +605,15 @@ personalities:
   factor_min: 0.75
   factor_max: 1.25
   profiles:
-    #                  weight  coaching  growth  bunt    chance  lead
-    - { type: HotBlood,     spawn_weight: 1.0, coaching_receptivity: 1.00, self_growth_factor: 1.08, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:  14 }
-    - { type: Hardworker,   spawn_weight: 1.4, coaching_receptivity: 1.06, self_growth_factor: 1.10, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:   4 }
-    - { type: Genius,       spawn_weight: 0.5, coaching_receptivity: 0.88, self_growth_factor: 1.10, bunt_success_bonus: -0.06, chance_hit_factor: 1.10, leadership_mean_offset:   0 }
-    - { type: HonorStudent, spawn_weight: 1.0, coaching_receptivity: 1.10, self_growth_factor: 1.00, bunt_success_bonus:  0.05, chance_hit_factor: 0.98, leadership_mean_offset:  12 }
-    - { type: MyPace,       spawn_weight: 1.4, coaching_receptivity: 0.94, self_growth_factor: 0.95, bunt_success_bonus:  0.00, chance_hit_factor: 1.00, leadership_mean_offset:   0 }
-    - { type: MoodMaker,    spawn_weight: 1.2, coaching_receptivity: 1.00, self_growth_factor: 0.92, bunt_success_bonus: -0.06, chance_hit_factor: 1.08, leadership_mean_offset:   4 }
-    - { type: LoneWolf,     spawn_weight: 0.8, coaching_receptivity: 0.92, self_growth_factor: 1.00, bunt_success_bonus: -0.05, chance_hit_factor: 1.06, leadership_mean_offset: -16 }
-    - { type: Introvert,    spawn_weight: 1.2, coaching_receptivity: 1.08, self_growth_factor: 0.95, bunt_success_bonus:  0.04, chance_hit_factor: 0.97, leadership_mean_offset: -14 }
+    #                  weight  coaching  growth  bunt    chance  lead  伝令役の得意場面（issue #716: 投手へ／打者へ）
+    - { type: HotBlood,     spawn_weight: 1.0, coaching_receptivity: 1.00, self_growth_factor: 1.08, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:  14, messenger_to_pitcher:  0.10, messenger_to_batter:  0.05 }
+    - { type: Hardworker,   spawn_weight: 1.4, coaching_receptivity: 1.06, self_growth_factor: 1.10, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:   4, messenger_to_pitcher:  0.03, messenger_to_batter:  0.03 }
+    - { type: Genius,       spawn_weight: 0.5, coaching_receptivity: 0.88, self_growth_factor: 1.10, bunt_success_bonus: -0.06, chance_hit_factor: 1.10, leadership_mean_offset:   0, messenger_to_pitcher: -0.05, messenger_to_batter: -0.05 }
+    - { type: HonorStudent, spawn_weight: 1.0, coaching_receptivity: 1.10, self_growth_factor: 1.00, bunt_success_bonus:  0.05, chance_hit_factor: 0.98, leadership_mean_offset:  12, messenger_to_pitcher:  0.05, messenger_to_batter:  0.03 }
+    - { type: MyPace,       spawn_weight: 1.4, coaching_receptivity: 0.94, self_growth_factor: 0.95, bunt_success_bonus:  0.00, chance_hit_factor: 1.00, leadership_mean_offset:   0, messenger_to_pitcher: -0.03, messenger_to_batter: -0.03 }
+    - { type: MoodMaker,    spawn_weight: 1.2, coaching_receptivity: 1.00, self_growth_factor: 0.92, bunt_success_bonus: -0.06, chance_hit_factor: 1.08, leadership_mean_offset:   4, messenger_to_pitcher:  0.00, messenger_to_batter:  0.10 }
+    - { type: LoneWolf,     spawn_weight: 0.8, coaching_receptivity: 0.92, self_growth_factor: 1.00, bunt_success_bonus: -0.05, chance_hit_factor: 1.06, leadership_mean_offset: -16, messenger_to_pitcher: -0.10, messenger_to_batter: -0.10 }
+    - { type: Introvert,    spawn_weight: 1.2, coaching_receptivity: 1.08, self_growth_factor: 0.95, bunt_success_bonus:  0.04, chance_hit_factor: 0.97, leadership_mean_offset: -14, messenger_to_pitcher: -0.10, messenger_to_batter: -0.10 }
 
 # --- プレッシャー指数×精神力（設計書02 §3.1-3.2）🟡 精神力50は常に恒等（帯不変） ---
 pressure:
@@ -761,6 +761,16 @@ tactics:
   timeout_calm_per_pressure: 0.01
   timeout_sense_slope: 0.007
   timeout_sense_neutral: 50
+  # 伝令役の人選（issue #716）: 落ち着きの上乗せ分に 伝令役の係数 を掛ける。
+  # 係数 = clamp(min,max, 1+(統率傾向−neutral)×slope + 3年+/1年− + 同学年+ + 性格の得意場面(personalities の messenger_to_*))
+  messenger_leadership_slope: 0.006
+  messenger_leadership_neutral: 50
+  messenger_senior_bonus: 0.08
+  messenger_freshman_penalty: 0.08
+  messenger_same_grade_bonus: 0.06
+  messenger_factor_min: 0.7
+  messenger_factor_max: 1.4
+  ai_messenger_pick_min_sense: 60    # AI監督の采配がこれ以上なら最適な伝令役、未満ならベンチの先頭を走らせる
   rattled_consecutive_baserunners: 3
   rattled_negative_amplify: 1.4
   rattled_control_penalty: 0.10        # 動揺中は精神力に関係なく制球×(1−これ)（issue #714。守備伝令で解く価値）
