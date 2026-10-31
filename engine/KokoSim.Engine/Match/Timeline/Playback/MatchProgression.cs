@@ -450,7 +450,7 @@ public sealed class MatchProgression
     {
         /// <summary>残り0／試合終了で発動できなかった（伝令を消費していない）。</summary>
         Unavailable,
-        /// <summary>攻撃伝令（打者・走者へ）を1回消費した。</summary>
+        /// <summary>攻撃伝令（打者へ）を1回消費した。</summary>
         Offense,
         /// <summary>守備伝令（マウンドへ）を1回消費した。</summary>
         Defense,

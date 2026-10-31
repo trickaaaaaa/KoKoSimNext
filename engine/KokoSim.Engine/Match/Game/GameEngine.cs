@@ -675,7 +675,7 @@ public static class GameEngine
 
                 if (offense.Tactics is not null)
                 {
-                    // 攻撃伝令（打者・走者へ, §3）: 打者の緊張を数打席のあいだ緩和。
+                    // 攻撃伝令（打者へ, §3）: 打者の緊張を数打席のあいだ緩和。
                     if (offense.Tactics.CallOffenseTimeout(situation, rng) && offense.TryUseOffenseTimeout())
                     {
                         offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
