@@ -41,7 +41,10 @@ namespace KokoSim.Unity.Match
         private VisualElement _scrim, _kinds, _outRows, _inRows, _cmpRows, _cmpToggle;
         private ScrollView _cmpScroll;
         private Label _phase, _outsCap, _insCap, _note;
-        private Button _ok, _close, _cancel;
+        private Button _ok, _close, _cancel, _commit;
+        // 予約した交代（issue #718）: 「確定して試合へ戻る」までは「全部やめる」で開く前へ戻せる。
+        private readonly List<string> _reserved = new();
+        private VisualElement _queue;
 
         private MatchProgression _prog;
         private bool _teamIsAway;
@@ -103,10 +106,13 @@ namespace KokoSim.Unity.Match
             _ok = _root.Q<Button>("msub-ok");
             _close = _root.Q<Button>("msub-close");
             _cancel = _root.Q<Button>("msub-cancel");
+            _commit = _root.Q<Button>("msub-commit");
+            _queue = _root.Q<VisualElement>("msub-queue");
 
-            Click("msub-close", Close);
-            Click("msub-cancel", Close);
+            Click("msub-close", CancelAll);
+            Click("msub-cancel", CancelAll);
             Click("msub-ok", Apply);
+            Click("msub-commit", CommitAndClose);
             Close();
         }
 
@@ -123,6 +129,9 @@ namespace KokoSim.Unity.Match
             if (_prog == null || _scrim == null) return;
             _opt = _prog.SubstitutionOptions(_teamIsAway);
             _offKind = SubstitutionKind.PinchHit;
+            // 開いた時点を下書きの開始点にする（issue #718）。ここから先の交代は「全部やめる」で戻せる。
+            _prog.BeginSubstitutionDraft();
+            _reserved.Clear();
             ResetSelection();
             _open = true;
             _scrim.style.display = DisplayStyle.Flex;
@@ -135,9 +144,45 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private bool ForcedPitcherChangePending => _prog != null && _prog.PendingForcedPitcherChange;
 
+        /// <summary>
+        /// 閉じる。予約が残っていれば取り消してから閉じる（確定は <see cref="CommitAndClose"/> だけ。issue #718）。
+        /// </summary>
         public void Close()
         {
+            if (_open && _prog != null && _prog.InSubstitutionDraft) { CancelAll(); return; }
             if (ForcedPitcherChangePending) return;
+            _open = false;
+            if (_scrim != null) _scrim.style.display = DisplayStyle.None;
+        }
+
+        // 「全部やめる」／✕: 予約した交代をまとめて取り消し、開く前の状態へ戻して閉じる（issue #718）。
+        // 取り消しは engine の再生し直し（決定論）。球数制限の強制交代待ちに戻るなら閉じずに選び直させる。
+        private void CancelAll()
+        {
+            if (_prog == null) return;
+            if (BackgroundGameOp.Running) return;
+            var hadReserved = _prog.SubstitutionDraftCount > 0;
+            _prog.CancelSubstitutionDraft();
+            _reserved.Clear();
+            if (hadReserved) _onApplied?.Invoke();   // 盤面・スタメン列を開く前の姿へ戻す
+            if (ForcedPitcherChangePending)
+            {
+                _prog.BeginSubstitutionDraft();
+                _opt = _prog.SubstitutionOptions(_teamIsAway);
+                ResetSelection();
+                Render();
+                return;
+            }
+            _open = false;
+            if (_scrim != null) _scrim.style.display = DisplayStyle.None;
+        }
+
+        // 「確定して試合へ戻る」: 予約した交代をそのまま確定して閉じる（issue #718）。
+        private void CommitAndClose()
+        {
+            if (_prog == null || ForcedPitcherChangePending) return;
+            _prog.CommitSubstitutionDraft();
+            _reserved.Clear();
             _open = false;
             if (_scrim != null) _scrim.style.display = DisplayStyle.None;
         }
@@ -214,6 +259,10 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 「この操作を確定」を押す（実行経路はボタンと同一）。issue #452 の操作一巡確認用。</summary>
         public void ApplyForCapture() => Apply();
+        /// <summary>スクショ用（issue #718）: 予約した交代を確定して閉じる（「確定して試合へ戻る」）。</summary>
+        public void CommitForCapture() => CommitAndClose();
+        /// <summary>スクショ用（issue #718）: 予約をまとめて取り消して閉じる（「全部やめる」）。</summary>
+        public void CancelAllForCapture() => CancelAll();
 
         /// <summary>スクショ用: 保留中の操作の要約（フッター文）。確定できる状態かの確認に使う。</summary>
         public string NoteForCapture => _note?.text ?? "";
@@ -533,6 +582,12 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void ClickSlot(int slotIdx)
         {
+            // 控えを先に選んでいた（枠は未選択）なら、この枠がその控えの入る先（issue #718）。
+            if (_defInIndex >= 0 && _pickedSlot < 0)
+            {
+                _pickedSlot = slotIdx; _pickedSlot2 = -1; _convertTo = null; _dhWithdraw = false;
+                return;
+            }
             _defInIndex = -1;   // 枠を触ったら控え選択は解除
             _convertTo = null;
             _dhWithdraw = false;
@@ -574,14 +629,16 @@ namespace KokoSim.Unity.Match
             else if (a is { Role: SlotRole.Dh }) BuildDhWithdrawChoice();
         }
 
+        // 控え→枠／枠→控え のどちらの順でもよい（issue #718）。枠が未選択なら控えを選んだまま待ち、
+        // 次にクリックした枠へ入れる（旧来は投枠へ自動で倒していた＝守備だけ変えたいのに継投になった）。
+        // 枠未選択のまま同じ控えをもう一度押すと選択を外す。
         private void ClickCandidate(int idx)
         {
+            if (_pickedSlot < 0 && _defInIndex == idx) { _defInIndex = -1; return; }
             _defInIndex = idx;
             _pickedSlot2 = -1;      // 控えを選んだら枠→枠は解除
             _convertTo = null;
             _dhWithdraw = false;
-            // 控えは主選択の枠へ入る。枠が未選択なら投枠を主選択に（継投の最短手）。
-            if (_pickedSlot < 0) _pickedSlot = _slots.FindIndex(s => s.Role == SlotRole.Pitcher);
         }
 
         /// <summary>継投で元投手をどうするか（既定＝退場／守備位置を選ぶとコンバート継投）。</summary>
@@ -807,9 +864,36 @@ namespace KokoSim.Unity.Match
             if (_ok != null)
             {
                 _ok.text = _opt.IsOffense
-                    ? (_offKind == SubstitutionKind.PinchRun ? "この代走を確定 ▶" : "この代打を確定 ▶")
-                    : "この操作を確定 ▶";
+                    ? (_offKind == SubstitutionKind.PinchRun ? "この代走を予約 ＋" : "この代打を予約 ＋")
+                    : "この操作を予約 ＋";
                 _ok.SetEnabled(ready);
+            }
+            var forced = ForcedPitcherChangePending;
+            if (_commit != null)
+            {
+                _commit.text = _reserved.Count > 0 ? "確定して試合へ戻る ▶" : "試合へ戻る ▶";
+                _commit.SetEnabled(!forced);
+            }
+            if (_cancel != null) _cancel.text = _reserved.Count > 0 ? "全部やめる" : "やめる";
+            BuildQueue();
+        }
+
+        // 予約した交代の一覧（確定前）。1件ごとに1行・番号つき。
+        private void BuildQueue()
+        {
+            if (_queue == null) return;
+            _queue.Clear();
+            _queue.style.display = _reserved.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_reserved.Count == 0) return;
+            var cap = new Label("予約（" + _reserved.Count + "件・確定まで取り消せる）");
+            cap.AddToClassList("msub-queue__cap");
+            _queue.Add(cap);
+            // 打順表の下の空きに収める＝直近2件だけ出す（1件で2行になるため）（件数は見出しに出ている）。
+            for (var i = System.Math.Max(0, _reserved.Count - 2); i < _reserved.Count; i++)
+            {
+                var line = new Label((i + 1) + ". " + _reserved[i]);
+                line.AddToClassList("msub-queue__item");
+                _queue.Add(line);
             }
         }
 
@@ -851,7 +935,9 @@ namespace KokoSim.Unity.Match
                             + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
                             + " を守る（誰も退場しない・後で再登板できる）。", false);
                 case DefKind.FielderSwap:
-                    return (true, "守備位置を入れ替える（誰も退場しない・何度でも行える）。", false);
+                    return (true, NameOf(_slots[_pickedSlot].Player) + "（" + PosJp(_slots[_pickedSlot].Pos) + "）と "
+                        + NameOf(_slots[_pickedSlot2].Player) + "（" + PosJp(_slots[_pickedSlot2].Pos)
+                        + "）の守備位置を入れ替える（誰も退場しない）。", false);
                 case DefKind.Assign:
                     return (true, NameOf(op.Incoming) + " が " + PosJp(op.Pos) + " に就き、" + NameOf(op.Outgoing)
                         + " が退場（再出場できない）。", false);
@@ -867,7 +953,8 @@ namespace KokoSim.Unity.Match
                     if (a is { Role: SlotRole.Pitcher }) return (false, "控えを選べば継投／別の守備枠を選べば投野交代。", false);
                     if (a is { Role: SlotRole.Dh }) return (false, "守備位置の枠を選べばDH解除／控えは指枠に就けない。", false);
                     if (a != null) return (false, "別の守備枠を選べば入替／控えを選べば守備固め。", false);
-                    return (false, "動かす守備の枠を選ぶ。", false);
+                    if (_defInIndex >= 0) return (false, "入れる枠を選ぶ（投手の枠なら継投）。", false);
+                    return (false, "動かす枠か、入れる控えを選ぶ。", false);
             }
         }
 
@@ -879,6 +966,7 @@ namespace KokoSim.Unity.Match
             // 立たないが、押下配信は1フレーム遅れうるため二重に守る。競合させると進行体を奪い合い、
             // 最悪 Unity ごとフリーズする（背景 Advance の列挙状態とラインナップの同時変更）。
             if (BackgroundGameOp.Running) return;
+            var (_, description, _) = FooterState();   // 予約一覧に残す一文（適用前の局面で組む）
             bool ok;
             if (_opt.IsOffense)
             {
@@ -918,9 +1006,9 @@ namespace KokoSim.Unity.Match
                 }
                 return;
             }
-            // 確定してもモーダルは閉じない＝続けて別の交代・守備位置変更を行える（一操作ごとに開き直す
-            // 手間を消す）。1手ずつ即時確定・取り消し不可なのは変わらない。閉じるのはユーザーが
-            // ✕／やめるを押した時だけ（Close は Click ハンドラ側に残したまま）。
+            // 予約（issue #718）: 試合には即反映して表・比較を交代後の姿で見せるが、「確定して試合へ戻る」を
+            // 押すまでは「全部やめる」で開く前へ戻せる。続けて別の交代も予約できる。
+            _reserved.Add(description);
             _opt = _prog.SubstitutionOptions(_teamIsAway);
             ResetSelection();
             _onApplied?.Invoke();

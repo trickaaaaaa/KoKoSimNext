@@ -100,6 +100,11 @@ public sealed class MatchProgression
     private readonly Team _homeTeam;
     private readonly GameContext _ctx;
     private readonly Debugging.ScenarioStart? _scenarioStart; // 注入で始めた試合は再生時も同じ局面から起こす
+    // 大会の試合の持ち越し（投手回復度・前週の球数）。再生し直すとき元と同じ値を渡す（issue #718）。
+    private readonly IReadOnlyDictionary<Player, double>? _awayPitchRecovery, _homePitchRecovery;
+    private readonly IReadOnlyDictionary<Player, int>? _awayPriorWeekPitches, _homePriorWeekPitches;
+    // 交代の下書き（issue #718）: 交代パネルを開いた時点の決定列の長さ。null＝下書きなし。
+    private int? _draftMark;
 
     private int _confirmed;   // 確定した打席数
     private int _pitchIndexInCurrentPa; // AdvancePitch() で現在の打席内に何回Pitch窓が来たか（0始まり）
@@ -157,6 +162,10 @@ public sealed class MatchProgression
         _awayTeam = away;
         _homeTeam = home;
         _ctx = ctx;
+        _awayPitchRecovery = awayPitchRecovery;
+        _homePitchRecovery = homePitchRecovery;
+        _awayPriorWeekPitches = awayPriorWeekPitches;
+        _homePriorWeekPitches = homePriorWeekPitches;
         // NewProgress は dayForm 抽選で rng を消費するので、控えるのは必ずその手前。
         _rngState = (rng as Xoshiro256Random)?.CaptureState();
         _p = GameEngine.NewProgress(
@@ -451,12 +460,7 @@ public sealed class MatchProgression
     /// いま（この打席境界で）自校（teamIsAway）が攻撃側（打者側）か。3アウト直後は次の半イニングへ
     /// 攻守が入れ替わるので、<see cref="SubstitutionOptions"/> と同じ規則で判定する（伝令の攻守判定に使う）。
     /// </summary>
-    public bool IsTeamOnOffense(bool teamIsAway)
-    {
-        var halfEnded = _p.CurrentOuts >= 3;
-        var battingIsAway = halfEnded ? !_p.CurrentIsTop : _p.CurrentIsTop;
-        return battingIsAway == teamIsAway;
-    }
+    public bool IsTeamOnOffense(bool teamIsAway) => SubstitutionCommands.IsOnOffense(_p, teamIsAway);
 
     /// <summary>自校（teamIsAway）の攻撃伝令の残り回数（攻各3回・延長で+1, 設計書09 §3）。</summary>
     public int OffenseTimeoutsLeft(bool teamIsAway) => _p.OffenseOf(teamIsAway).OffenseTimeoutsLeft;
@@ -488,22 +492,17 @@ public sealed class MatchProgression
     /// </summary>
     /// <para>messengerIndex（issue #716）＝伝令役にする控えの添字（<see cref="TimeoutMessengerCandidates"/> の並び）。
     /// null／範囲外＝伝令役なし（記録員が走る・係数1.0＝従来と同じ効き目）。</para>
+    /// <para>決定列へ積む（issue #718）＝中断保存・シーク・交代の取り消し（再生し直し）で伝令が消えない。</para>
     public PlayerTimeoutResult CallTimeout(bool teamIsAway, int? messengerIndex = null)
     {
         if (IsFinished) return PlayerTimeoutResult.Unavailable;
-        var team = _p.OffenseOf(teamIsAway);
-        var reserves = team.AvailableReserves;
-        var messenger = messengerIndex is int i && i >= 0 && i < reserves.Count ? reserves[i] : null;
-        if (IsTeamOnOffense(teamIsAway))
-        {
-            if (!team.TryUseOffenseTimeout()) return PlayerTimeoutResult.Unavailable;
-            team.StartOffenseCalm(_ctx.Tactics.TimeoutDurationPa, messenger);
-            return PlayerTimeoutResult.Offense;
-        }
-        if (!team.TryUseDefenseTimeout()) return PlayerTimeoutResult.Unavailable;
-        team.ClearRattled();
-        team.StartDefenseCalm(_ctx.Tactics.TimeoutDurationPa, messenger);
-        return PlayerTimeoutResult.Defense;
+        var reserves = _p.OffenseOf(teamIsAway).AvailableReserves;
+        var idx = messengerIndex is int i && i >= 0 && i < reserves.Count ? i : -1;
+        var kind = SubstitutionCommands.CallTimeout(_p, teamIsAway, idx >= 0 ? idx : null);
+        if (kind == 0) return PlayerTimeoutResult.Unavailable;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.Timeout, teamIsAway, BenchIndex: 0,
+            TargetIndex: idx, PitchIndex: PendingPitchIndex));
+        return kind == 1 ? PlayerTimeoutResult.Offense : PlayerTimeoutResult.Defense;
     }
 
     /// <summary>
@@ -818,6 +817,48 @@ public sealed class MatchProgression
     }
 
     /// <summary>
+    /// 交代の下書きを始める（issue #718）。以降の交代・伝令は従来どおりその場で試合に反映されるが、
+    /// <see cref="CancelSubstitutionDraft"/> で開始時点へまとめて戻せる。<see cref="CommitSubstitutionDraft"/> で確定。
+    /// 既に下書き中なら何もしない（開始点は最初の1回）。乱数・状態は動かさない。
+    /// </summary>
+    public void BeginSubstitutionDraft()
+    {
+        if (IsFinished) return;
+        _draftMark ??= _decisions.Count;
+    }
+
+    /// <summary>下書き中か（<see cref="BeginSubstitutionDraft"/> 後、確定・取り消し前）。</summary>
+    public bool InSubstitutionDraft => _draftMark is not null;
+
+    /// <summary>下書きを開始してから積んだ決定の数（＝予約した交代・伝令の数）。下書き外は0。</summary>
+    public int SubstitutionDraftCount => _draftMark is int m ? _decisions.Count - m : 0;
+
+    /// <summary>下書きを確定する（試合に反映済みの交代をそのまま残す）。</summary>
+    public void CommitSubstitutionDraft() => _draftMark = null;
+
+    /// <summary>
+    /// 下書きを取り消す（issue #718）。開始後に積んだ決定を捨て、同じ位置へ先頭から再生し直す
+    /// （<see cref="SeekTo"/> と同じ経路＝決定論。乱数の位置も元どおり）。直近の打席（<see cref="Current"/>）と
+    /// 終了フラグは保つ。何も積んでいなければ再生せずに終える。
+    /// </summary>
+    public void CancelSubstitutionDraft()
+    {
+        if (_draftMark is not int mark) return;
+        _draftMark = null;
+        if (_decisions.Count <= mark) return;
+        _decisions.RemoveRange(mark, _decisions.Count - mark);
+        var current = Current;
+        var finished = IsFinished;
+        var pending = PendingPitchIndex;
+        SeekTo(_confirmed, _pitchIndexInCurrentPa);
+        Current = current;
+        IsFinished = finished;
+        PendingPitchIndex = pending;
+        // 下書きより前に確定した交代が同じ窓にあれば、再生後の観測（窓の対戦）も今の実体へ合わせる。
+        RefreshLiveMatchupAfterSubstitution();
+    }
+
+    /// <summary>
     /// 指定の位置（確定打席数, 打席内の消化球数）へシークする（設計書17 §6.2）。
     /// 実装は「先頭から再生し直す」だけなので、往復しても同じ場面・同じトレースになる（決定論そのもの）。
     /// 進む方向のシークでも再生し直す（現在位置からの差分進行と結果は同じだが、経路を1本に保つため）。
@@ -837,7 +878,8 @@ public sealed class MatchProgression
             ConfirmedPlateAppearances = plateAppearances,
             ConfirmedPitchesInCurrentPa = pitchesInCurrentPa,
         };
-        var resumed = GameReplay.Restore(_awayTeam, _homeTeam, _ctx, save, _scenarioStart);
+        var resumed = GameReplay.Restore(_awayTeam, _homeTeam, _ctx, save, _scenarioStart,
+            _awayPitchRecovery, _homePitchRecovery, _awayPriorWeekPitches, _homePriorWeekPitches);
         _p = resumed.Progress;
         _steps = resumed.Steps;
 

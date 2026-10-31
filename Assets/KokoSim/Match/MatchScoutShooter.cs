@@ -52,7 +52,8 @@ namespace KokoSim.Unity.Match
             // ④ 交代を挟んでから開き直す＝**交代後の実体**が出ていること（完了条件）。
             for (var i = 0; i < 40 && ctrl.ManagerOnOffenseForCapture; i++) ctrl.AdvanceForCapture();
             ctrl.OpenSubstitutionForCapture();
-            ctrl.PickSubstitutionCandidateForCapture(0);   // 控えを1クリック＝継投の最短手
+            ctrl.PickSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition.Pitcher);
+            ctrl.PickSubstitutionCandidateForCapture(0);   // 投枠→控え＝継投
             ctrl.ApplySubstitutionForCapture();
             ctrl.CloseSubstitutionForCapture();
             ctrl.OpenScoutForCapture();

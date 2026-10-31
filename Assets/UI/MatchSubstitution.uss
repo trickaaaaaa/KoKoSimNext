@@ -166,6 +166,16 @@
 }
 .msub-note--warn { color: var(--color-warn); }
 
+/* 予約した交代の一覧（issue #718）。確定前の操作を1行ずつ並べる。 */
+.msub-queue {
+    margin-top: var(--sp-2);
+    padding: var(--sp-2);
+    background-color: var(--color-panel-deep);
+    flex-shrink: 0;
+}
+.msub-queue__cap { font-size: var(--fs-label); color: var(--color-muted); margin: 0; padding: 0; }
+.msub-queue__item { font-size: var(--fs-label); color: var(--color-chalk); margin: 0; padding: 0; white-space: normal; }
+
 .msub-actions { flex-direction: row; margin-top: var(--sp-2); flex-shrink: 0; }
 .msub-btn {
     height: 44px;
