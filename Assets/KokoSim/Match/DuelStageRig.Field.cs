@@ -3862,6 +3862,7 @@ namespace KokoSim.Unity.Match
                 frameH = Mathf.Max(frameH, onStand.y + FieldMarginM * 2f);
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
+            ApplyHomeRunStyleFrame(t, ref aim, ref frameH);   // 当たりの種類ごとの見せ方（issue #704）
             if (_fieldInfieldFixed)
             {
                 aim = InfieldFixedAim; frameH = InfieldFixedFrameH;
@@ -4110,7 +4111,7 @@ namespace KokoSim.Unity.Match
             }
             else
             {
-                float step = Mathf.Max(dt, 0f);
+                float step = Mathf.Max(dt, 0f) * HomeRunCamSpeedScale;   // 弾丸ライナーは速く追う（issue #704）
                 _fieldAimY = Mathf.MoveTowards(_fieldAimY, target.y, FieldAimYSpeedCapMPerSecond * step);
                 _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, target.x, FieldPanSpeedCapMPerSecond * step);
                 _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, target.z, FieldPanSpeedCapMPerSecond * step);
@@ -4337,6 +4338,8 @@ namespace KokoSim.Unity.Match
             _fieldPlay = null;
             _fieldPlan = null;
             _hrHit = false;
+            _hrFence = false;
+            _hrStyle = KokoSim.Engine.Match.Timeline.HomeRunStyle.Standard;
             _fieldStationCuts.Clear();
             _loco.Clear();
             _catchEvents.Clear();
