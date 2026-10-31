@@ -1345,6 +1345,8 @@ public static class CoefficientsLoader
         public double AccuracyBase { get; set; } = D.AccuracyBase;
         public double AccuracyPerTalentEye { get; set; } = D.AccuracyPerTalentEye;
         public double AccuracyMax { get; set; } = D.AccuracyMax;
+        public double NominatedProbFactor { get; set; } = D.NominatedProbFactor;
+        public double NominatedAccuracyAdd { get; set; } = D.NominatedAccuracyAdd;
 
         public InsightCoefficients ToModel() => new()
         {
@@ -1353,6 +1355,8 @@ public static class CoefficientsLoader
             AccuracyBase = AccuracyBase,
             AccuracyPerTalentEye = AccuracyPerTalentEye,
             AccuracyMax = AccuracyMax,
+            NominatedProbFactor = NominatedProbFactor,
+            NominatedAccuracyAdd = NominatedAccuracyAdd,
         };
     }
 
@@ -1483,6 +1487,7 @@ public static class CoefficientsLoader
         public int IndividualCoachingSlots { get; set; } = D.IndividualCoachingSlots;
         public double IndividualCoachingBaseMultiplier { get; set; } = D.IndividualCoachingBaseMultiplier;
         public double IndividualCoachingBonusScale { get; set; } = D.IndividualCoachingBonusScale;
+        public double IndividualCoachingMentalExp { get; set; } = D.IndividualCoachingMentalExp;
         public List<FacilityTierDto>? FacilityTiers { get; set; }
         public double LevelUpBase { get; set; } = D.LevelUpBase;
         public double LevelUpGrowth { get; set; } = D.LevelUpGrowth;
@@ -1507,6 +1512,7 @@ public static class CoefficientsLoader
             IndividualCoachingSlots = IndividualCoachingSlots,
             IndividualCoachingBaseMultiplier = IndividualCoachingBaseMultiplier,
             IndividualCoachingBonusScale = IndividualCoachingBonusScale,
+            IndividualCoachingMentalExp = IndividualCoachingMentalExp,
             FacilityTiers = FacilityTiers is null
                 ? new TrainingCoefficients().FacilityTiers
                 : FacilityTiers.Select(t => t.ToModel()).ToList(),

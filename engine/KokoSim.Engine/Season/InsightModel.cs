@@ -17,7 +17,11 @@ public enum InsightTopic
 /// 気づき通知（設計書03 §5.6）。断定しない温度で提示し、外れることもある（IsAccurate=false は読み違え）。
 /// UI はこのレコードを「〜かもしれない」文言に整形する。IsAccurate は内部検証用（プレイヤーには見せない）。
 /// </summary>
-public sealed record InsightNotice(DevelopingPlayer Player, InsightTopic Topic, string Domain, bool IsAccurate);
+public sealed record InsightNotice(DevelopingPlayer Player, InsightTopic Topic, string Domain, bool IsAccurate)
+{
+    /// <summary>個別指導に指名中の選手の気づき（見極め・issue #702）。UI が「個別指導で見えてきた」と添える。</summary>
+    public bool ViaCoaching { get; init; }
+}
 
 /// <summary>気づきの係数（設計書03 §5.6）。🟡頻度・精度カーブは検証で調整。</summary>
 public sealed record InsightCoefficients
@@ -31,6 +35,13 @@ public sealed record InsightCoefficients
     /// <summary>育成眼1あたりの精度増（上限0.97: 完全な答え合わせにはしない）。</summary>
     public double AccuracyPerTalentEye { get; init; } = 0.004;
     public double AccuracyMax { get; init; } = 0.97;
+    /// <summary>
+    /// 個別指導の効果2「見極め」（issue #702・設計書03 §3.3）。指名中の選手だけ発生率に掛ける倍率。
+    /// 1.0 で無効（指名の有無で差が出ない）。2026-10-31 監督決定 ×5。
+    /// </summary>
+    public double NominatedProbFactor { get; init; } = 5.0;
+    /// <summary>見極め: 指名中の選手だけ精度に足す値（上限は <see cref="AccuracyMax"/> のまま）。監督決定 +0.15。</summary>
+    public double NominatedAccuracyAdd { get; init; } = 0.15;
 }
 
 /// <summary>
@@ -53,12 +64,18 @@ public static class InsightModel
         var accuracy = MathUtil.Clamp(
             c.AccuracyBase + talentEye * c.AccuracyPerTalentEye + accuracyAdd, 0.0, c.AccuracyMax);
 
+        // 個別指導の「見極め」（issue #702）: 指名中の選手だけ発生率と精度を上乗せする。
+        // 乱数の引き方（1人1回＋当たれば精度と話題）は指名の有無で変えない＝誰も指名していなければ従来と1ビット一致。
+        var nominatedProb = prob * c.NominatedProbFactor;
+        var nominatedAccuracy = MathUtil.Clamp(accuracy + c.NominatedAccuracyAdd, 0.0, c.AccuracyMax);
+
         foreach (var p in roster)
         {
-            if (!MathUtil.Chance(prob, rng)) continue;
+            var nominated = p.IndividualCoaching;
+            if (!MathUtil.Chance(nominated ? nominatedProb : prob, rng)) continue;
 
-            var accurate = MathUtil.Chance(accuracy, rng);
-            notices.Add(Compose(p, accurate, rng));
+            var accurate = MathUtil.Chance(nominated ? nominatedAccuracy : accuracy, rng);
+            notices.Add(Compose(p, accurate, rng) with { ViaCoaching = nominated });
         }
         return notices;
     }

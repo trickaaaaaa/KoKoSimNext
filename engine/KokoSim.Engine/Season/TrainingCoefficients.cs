@@ -45,6 +45,13 @@ public sealed record TrainingCoefficients
     public double IndividualCoachingBonusScale { get; init; } = 3.0;
 
     /// <summary>
+    /// 個別指導の効果3「信頼関係」（issue #702・設計書03 §3.3）。指名中の週ごとに精神力へ足すexp。
+    /// 成長段階・合宿・大会の倍率は掛けない（体でなく関係が育つ）。怪我中も入る（練習に出なくても目はかけている）。
+    /// 必要expは能力と同じ曲線（精神力55で約865）＝1年指名し続けて +5 前後（2026-10-31 監督決定）。0で無効。
+    /// </summary>
+    public double IndividualCoachingMentalExp { get; init; } = 90.0;
+
+    /// <summary>
     /// 施設レベル→(係数, 週練習時間) 対応表（Issue #115・設計書03 §4）。index=施設レベル。
     /// 既定は data/coefficients.yaml training.facility_tiers と一致（Lv0-4, issue #402）。Lv0＝現状値(1.0/300)で
     /// SeasonContext.FacilityLevel=0（既定）のとき従来と1ビット一致する。多軸施設は <see cref="FacilityCatalog"/> が担い、

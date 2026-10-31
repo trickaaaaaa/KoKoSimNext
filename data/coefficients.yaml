@@ -956,6 +956,10 @@ insight:
   accuracy_base: 0.55
   accuracy_per_talent_eye: 0.004
   accuracy_max: 0.97
+  # 効果2「見極め」（#702・設計書03 §3.3）: 個別指導に指名中の選手だけ発生率×factor・精度+add（上限は accuracy_max）。
+  # 2026-10-31 監督決定: 頻度×5・精度+15%。
+  nominated_prob_factor: 5.0
+  nominated_accuracy_add: 0.15
 
 # --- 週次イベントの発火（設計書03 §5 / 04 §3.2・issue #609）---
 # 従来 EventScheduler にハードコードされていた「同一週最大1件・発火率50%」をここへ出したもの。
@@ -1035,6 +1039,9 @@ training:
   individual_coaching_slots: 3
   individual_coaching_base_multiplier: 1.5
   individual_coaching_bonus_scale: 3.0
+  # 効果3「信頼関係」（#702・設計書03 §3.3）: 指名中の週ごとに精神力へ足すexp（成長段階・練習倍率は掛けない）。
+  # 必要expは能力と同じ曲線（精神力55で約865）。2026-10-31 監督決定「1年指名し続けて+5相当」。
+  individual_coaching_mental_exp: 90.0
   # 施設レベル→(係数, 週練習時間[分])（#115・設計書03 §4 / 04）。index=施設レベル。Lv0=現状(1.0/300)で従来一致。
   # 資金/名声からレベルを上げる接続は将来（OPEN-QUESTIONS Q6）。現状は SeasonContext.FacilityLevel の注入口のみ。
   # 「豪腕素質×名将＋フル施設(Lv4)で3年+15〜20km/h」が成立するよう据える（out/overnight/issue-115 で実測）。
