@@ -16,6 +16,37 @@ namespace KokoSim.Engine.Match.Game;
 /// </summary>
 internal static class SubstitutionCommands
 {
+    /// <summary>
+    /// プレイヤーの伝令（設計書09 §3・issue #714/#716）。teamIsAway 側がいま攻撃中なら攻撃伝令、守備中なら守備伝令を
+    /// 1回消費する。3アウト直後は次の半イニングへ攻守が入れ替わる扱い（SubstitutionOptions と同じ規則）。
+    /// 戻り値: 0=残り0で発動せず／1=攻撃伝令／2=守備伝令。ライブ操作と取り消しの再生（issue #718）が同じ関数を通る。
+    /// </summary>
+    public static int CallTimeout(GameProgress p, bool teamIsAway, int? messengerIndex)
+    {
+        var team = p.OffenseOf(teamIsAway);
+        var reserves = team.AvailableReserves;
+        var messenger = messengerIndex is int i && i >= 0 && i < reserves.Count ? reserves[i] : null;
+        var duration = p.Ctx.Tactics.TimeoutDurationPa;
+        if (IsOnOffense(p, teamIsAway))
+        {
+            if (!team.TryUseOffenseTimeout()) return 0;
+            team.StartOffenseCalm(duration, messenger);
+            return 1;
+        }
+        if (!team.TryUseDefenseTimeout()) return 0;
+        team.ClearRattled();
+        team.StartDefenseCalm(duration, messenger);
+        return 2;
+    }
+
+    /// <summary>いま（この境界で）teamIsAway 側が攻撃側か。3アウト直後は次の半イニングの攻守で見る。</summary>
+    public static bool IsOnOffense(GameProgress p, bool teamIsAway)
+    {
+        var halfEnded = p.CurrentOuts >= 3;
+        var battingIsAway = halfEnded ? !p.CurrentIsTop : p.CurrentIsTop;
+        return battingIsAway == teamIsAway;
+    }
+
     /// <summary>次打者へ代打（teamIsAway=交代するチームが先攻か）。</summary>
     public static bool PinchHit(GameProgress p, bool teamIsAway, int benchIndex)
     {

@@ -40,7 +40,8 @@ namespace KokoSim.Unity.Match
             ctrl.OpenSubstitutionForCapture();
             yield return Capture(ctrl, "sub-1-defense-assign");
 
-            // ②b 継投プレビュー（控え1クリック→投枠の行が「旧 → 新」＋✕・比較は投球ビュー, issue #452）。
+            // ②b 継投プレビュー（投枠→控え。投枠の行が「旧 → 新」＋✕・比較は投球ビュー, issue #452/#718）。
+            ctrl.PickSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition.Pitcher);
             ctrl.PickSubstitutionCandidateForCapture(0);
             yield return Capture(ctrl, "sub-2-defense-relief-preview");
 

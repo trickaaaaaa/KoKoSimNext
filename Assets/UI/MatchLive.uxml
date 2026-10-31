@@ -217,6 +217,9 @@
                         <ui:ScrollView mode="Vertical" class="msub-scroll">
                             <ui:VisualElement name="msub-out-rows" />
                         </ui:ScrollView>
+                        <!-- 予約した交代（issue #718）。打順表の下の空きに出す（モーダルの高さを変えない）。
+                             確定して試合へ戻るまでは「全部やめる」で開く前へ戻せる。 -->
+                        <ui:VisualElement name="msub-queue" class="msub-queue" style="display: none;" />
                     </ui:VisualElement>
 
                     <!-- 中：入る選手（控え／DHの行き先） -->
@@ -244,7 +247,8 @@
                 <ui:Label name="msub-note" text="" class="msub-note" />
                 <ui:VisualElement class="msub-actions">
                     <ui:Button name="msub-cancel" text="やめる" class="msub-btn msub-btn--ghost" />
-                    <ui:Button name="msub-ok" text="この交代を確定 ▶" class="msub-btn msub-btn--go" />
+                    <ui:Button name="msub-ok" text="この操作を予約 ＋" class="msub-btn msub-btn--ghost" />
+                    <ui:Button name="msub-commit" text="試合へ戻る ▶" class="msub-btn msub-btn--go" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -4801,7 +4801,10 @@ namespace KokoSim.Unity.Match
             => _prog != null && _prog.SubstitutionOptions(_managerIsAway).CanPinchRun;
 
         /// <summary>スクショ用: 選手交代モーダルを閉じる。</summary>
-        public void CloseSubstitutionForCapture() => _subPanel?.Close();
+        /// <summary>スクショ用: 予約した交代を確定して閉じる（issue #718 以降、✕／やめる は予約の取り消し）。</summary>
+        public void CloseSubstitutionForCapture() => _subPanel?.CommitForCapture();
+        /// <summary>スクショ用（issue #718）: 予約をまとめて取り消して閉じる（「全部やめる」）。</summary>
+        public void CancelSubstitutionForCapture() => _subPanel?.CancelAllForCapture();
 
         /// <summary>スクショ用: 攻撃タブを選ぶ（0=代打 1=代走）。守備中はタブ無し＝守備の割当2ペイン（issue #256）。</summary>
         public void SelectSubstitutionKindForCapture(int index) => _subPanel?.SelectKindForCapture(index);

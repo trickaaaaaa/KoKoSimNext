@@ -118,7 +118,11 @@ public enum GameDecisionKind
     OffensiveSign,
     /// <summary>盗塁（2026-07-31）。OffenseIsAway=**攻撃側**が先攻か。Start=始動種別／StealTarget=狙う塁。1球限り。</summary>
     StealAttempt,
-    // 将来: Timeout, ...
+    /// <summary>
+    /// プレイヤーの伝令（issue #718。取り消しの再生で伝令が消えないよう決定列へ積む）。OffenseIsAway=**伝令をかけた側**が先攻か。
+    /// TargetIndex=伝令役の控えの添字（TeamState.AvailableReserves。−1＝伝令役なし）。攻守はその時点の局面で決まる。
+    /// </summary>
+    Timeout,
 }
 
 /// <summary>復元された進行（状態＋続きを回すための enumerator）。drain して <see cref="GameEngine.BuildResult"/> へ。</summary>
@@ -145,15 +149,24 @@ public static class GameReplay
     /// 場面ジャンプで始めた試合を復元するときの開始局面（設計書17 §3.4）。
     /// null=通常の試合（1回表の頭から再生）。注入で始めた試合をこれ無しで復元すると別の試合になる。
     /// </param>
+    /// <param name="awayPitchRecovery">
+    /// 大会の試合の投手回復度・前週の球数（issue #718）。元の進行と同じ値を渡さないと、再生した試合が
+    /// 元の試合と食い違う（調子・週間球数制限が変わる）。null＝持ち越しなし＝従来どおり。
+    /// </param>
     public static ResumedGame Restore(Team awayTeam, Team homeTeam, GameContext ctx, GameSaveState save,
-        Debugging.ScenarioStart? scenarioStart = null)
+        Debugging.ScenarioStart? scenarioStart = null,
+        IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null,
+        IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null)
     {
         // 開始乱数源: RngState があればそこから（大会Fork経路の中断保存, 設計書17 §3.2）、
         // 無ければ従来どおりシードから。既存セーブは RngState=null なので挙動不変。
         var rng = save.RngState is { } st
             ? Xoshiro256Random.FromState(st)
             : new Xoshiro256Random(save.Seed);
-        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, rng, scenarioStart: scenarioStart);
+        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, rng, awayPriorWeekPitches, homePriorWeekPitches,
+            scenarioStart: scenarioStart, awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         var e = GameEngine.Steps(p).GetEnumerator();
 
         // 采配決定を「その球の直前」に適用しながら、確定打席数ぶん再生する（設計書15 Phase D-1）。
@@ -278,6 +291,9 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.DefenseAssign:
                     SubstitutionCommands.DefenseAssign(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);
+                    break;
+                case GameDecisionKind.Timeout:
+                    SubstitutionCommands.CallTimeout(p, d.OffenseIsAway, d.TargetIndex >= 0 ? d.TargetIndex : null);
                     break;
             }
         }
