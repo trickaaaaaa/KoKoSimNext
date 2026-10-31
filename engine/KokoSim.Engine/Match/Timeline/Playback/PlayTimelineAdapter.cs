@@ -72,6 +72,7 @@ public static class PlayTimelineAdapter
             // 守備の芝居の入力（表示専用）。座標と同じく既に決まった値の素通し
             CatchMargin = t.CatchMarginSeconds,
             Fumbled = t.FumbledCatch,
+            HomeRun = t.HomeRunStyle,
             Caps = caps,
             Judgements = judgements,
         };

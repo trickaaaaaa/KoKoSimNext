@@ -198,6 +198,9 @@ public sealed record PlayTimeline
     /// </summary>
     public bool FumbledCatch { get; init; }
 
+    /// <summary>本塁打の当たりの種類（<see cref="Fielding.FieldingPlay.HomeRunStyle"/> の写し。表示専用・issue #704）。</summary>
+    public HomeRunStyle? HomeRunStyle { get; init; }
+
     public IReadOnlyList<BallSegment> Ball { get; init; } = System.Array.Empty<BallSegment>();
     public IReadOnlyList<FielderMove> Moves { get; init; } = System.Array.Empty<FielderMove>();
     public IReadOnlyList<RunnerLeg> Runners { get; init; } = System.Array.Empty<RunnerLeg>();

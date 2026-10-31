@@ -898,6 +898,7 @@ public static class TimelineBuilder
             // 表示専用の観測（既に決まった値の写し＝新規計算・乱数消費ゼロ）
             CatchMarginSeconds = play.CatchMarginSeconds,
             FumbledCatch = play.ErrorKind == FieldingErrorKind.Catch,
+            HomeRunStyle = play.HomeRunStyle,
             Ball = ball,
             Moves = moves,
             Runners = runners,
