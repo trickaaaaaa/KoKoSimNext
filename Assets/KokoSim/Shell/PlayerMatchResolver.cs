@@ -182,9 +182,12 @@ namespace KokoSim.Unity.Shell
         public static Team BuildManagerTeam(string name)
         {
             var lineup = GameSession.Current.Lineup;
-            if (lineup != null) return RosterTeamBuilder.BuildFromLineup(lineup);
             // 未設定＝スタメン画面を通らなかった場合は能力順の自動編成（従来同等の編成）。
-            return RosterTeamBuilder.Build(RosterService.Active, name);
+            var team = lineup != null
+                ? RosterTeamBuilder.BuildFromLineup(lineup)
+                : RosterTeamBuilder.Build(RosterService.Active, name);
+            // 伝令の効き目は監督の采配能力で変わる（設計書09 §3・issue #714）。
+            return team with { ManagerTacticalSense = ManagerService.TacticalSenseForAi };
         }
     }
 }

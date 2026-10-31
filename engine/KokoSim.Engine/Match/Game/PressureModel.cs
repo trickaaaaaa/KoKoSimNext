@@ -73,6 +73,21 @@ public static class PressureModel
         return 1.0 + raw;
     }
 
+    /// <summary>
+    /// 伝令の「落ち着き」倍率（issue #714）。効果窓の中だけ呼ぶ。精神力に関係なく 1 以上。
+    /// = 1 + (Base + PerPressure × P) × 采配係数 × 素直さ（采配係数・素直さは0未満にしない）。
+    /// </summary>
+    public static double CalmMultiplier(int pressureIndex, int tacticalSense, double receptivity,
+        Tactics.TacticsCoefficients c)
+    {
+        var bonus = c.TimeoutCalmBase + c.TimeoutCalmPerPressure * pressureIndex;
+        return 1.0 + Math.Max(0.0, bonus) * SenseFactor(tacticalSense, c) * Math.Max(0.0, receptivity);
+    }
+
+    /// <summary>監督の采配能力による伝令の効き目の係数（中立値で1.0。0未満にしない）。</summary>
+    public static double SenseFactor(int tacticalSense, Tactics.TacticsCoefficients c)
+        => Math.Max(0.0, 1.0 + (tacticalSense - c.TimeoutSenseNeutral) * c.TimeoutSenseSlope);
+
     /// <summary>打者へ適用（コンタクト率の元となるミートに補正）。倍率1.0なら恒等。</summary>
     public static BatterAttributes ApplyBatter(BatterAttributes b, double multiplier)
     {

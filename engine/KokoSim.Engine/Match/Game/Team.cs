@@ -35,6 +35,12 @@ public sealed record Team
     /// </summary>
     public Tactics.ITacticsBrain? Tactics { get; init; }
 
+    /// <summary>
+    /// 監督の采配能力（1〜100）。伝令の効き目に使う（設計書09 §3・issue #714）。null なら
+    /// 敵AI/委任の采配（<see cref="KokoSim.Engine.Match.Tactics.AiTacticsBrain.Profile"/>）から取り、それも無ければ中立値。
+    /// </summary>
+    public int? ManagerTacticalSense { get; init; }
+
     /// <summary>主将（設計書09 §8）。在場時チーム全体のプレッシャー負補正を統率力に応じて緩和。null=不在。</summary>
     public Player? Captain { get; init; }
 

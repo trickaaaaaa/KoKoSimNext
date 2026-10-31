@@ -698,6 +698,15 @@ public sealed class TeamState
         }
     }
 
+    /// <summary>
+    /// 伝令の効き目に使う監督の采配能力（issue #714）。チームに明示があればそれ、無ければ采配AI
+    /// （敵AI・スキップ後の委任）の采配能力、それも無ければ <paramref name="neutral"/>。
+    /// </summary>
+    public int TimeoutSense(int neutral)
+        => _team.ManagerTacticalSense
+           ?? (Tactics as AiTacticsBrain)?.Profile.TacticalSense
+           ?? neutral;
+
     public void ClearRattled()
     {
         PitcherRattled = false;

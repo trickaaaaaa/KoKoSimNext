@@ -253,9 +253,32 @@ public sealed record TacticsCoefficients
     /// <summary>伝令1回の負補正緩和量（0〜1）とその継続打席数。</summary>
     public double TimeoutMitigation { get; init; } = 0.60;
     public int TimeoutDurationPa { get; init; } = 3;
+
+    /// <summary>
+    /// 伝令の「落ち着き」（issue #714）。効果窓（<see cref="TimeoutDurationPa"/>）のあいだ、守備伝令なら投手の制球、
+    /// 攻撃伝令なら打者のミートに掛ける上乗せ倍率 = 1 + (Base + PerPressure × プレッシャー指数) × 采配係数 × 素直さ。
+    /// 負補正の緩和（<see cref="TimeoutMitigation"/>）と違い精神力に関係なく効く＝精神力の高い選手にも手応えがある。
+    /// 既定: プレッシャー5で +6%（大一番ほど効く・2026-10-31 監督決定「動揺を重くし、伝令に落ち着きを足す」）。
+    /// </summary>
+    public double TimeoutCalmBase { get; init; } = 0.01;
+    /// <summary>落ち着きのプレッシャー指数1あたりの上乗せ。</summary>
+    public double TimeoutCalmPerPressure { get; init; } = 0.01;
+    /// <summary>
+    /// 監督の采配能力による伝令の効き目（設計書09 §3「効果量は監督の采配能力で変動」・issue #714）。
+    /// 采配係数 = 1 + (采配 − <see cref="TimeoutSenseNeutral"/>) × この値（采配20で×0.79、90で×1.28）。
+    /// </summary>
+    public double TimeoutSenseSlope { get; init; } = 0.007;
+    /// <summary>采配係数が1.0になる采配能力。采配の値を持たないチーム（無指示の統計シム）もこの値として扱う。</summary>
+    public int TimeoutSenseNeutral { get; init; } = 50;
     /// <summary>動揺: 連続出塁がこの数に達すると投手が動揺し、負補正が増幅される。</summary>
     public int RattledConsecutiveBaserunners { get; init; } = 3;
     public double RattledNegativeAmplify { get; init; } = 1.4;
+    /// <summary>
+    /// 動揺中の投手の制球の落ち込み（issue #714）。精神力に関係なく 制球 × (1 − この値)。
+    /// 従来の動揺は負補正の増幅（<see cref="RattledNegativeAmplify"/>）だけで、精神力50以上の投手には何も起きず
+    /// 守備伝令で解く意味が無かった。0で従来どおり。
+    /// </summary>
+    public double RattledControlPenalty { get; init; } = 0.10;
     /// <summary>動揺の発生耐性（精神力50で従来と同値, 100で+offset・0で-offset）。</summary>
     public int RattledThresholdMentalOffset { get; init; } = 1;
     /// <summary>動揺後、無失点でこの数だけアウトを重ねると自然回復（伝令・継投を使わず解除）。</summary>

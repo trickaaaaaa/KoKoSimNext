@@ -755,8 +755,15 @@ tactics:
   # 伝令効果・動揺・主将（§3/§8）
   timeout_mitigation: 0.60
   timeout_duration_pa: 3
+  # 伝令の「落ち着き」（issue #714）: 効果窓のあいだ 守備=制球／攻撃=ミート に 1+(base+per_pressure×P)×采配係数×素直さ。
+  # 精神力に関係なく効く。P5で+6%。采配係数=1+(采配−neutral)×sense_slope（20→×0.79／90→×1.28）
+  timeout_calm_base: 0.01
+  timeout_calm_per_pressure: 0.01
+  timeout_sense_slope: 0.007
+  timeout_sense_neutral: 50
   rattled_consecutive_baserunners: 3
   rattled_negative_amplify: 1.4
+  rattled_control_penalty: 0.10        # 動揺中は精神力に関係なく制球×(1−これ)（issue #714。守備伝令で解く価値）
   rattled_threshold_mental_offset: 1   # 精神力50で従来同値・100で+1しにくく・0で-1しやすく（issue #73）
   rattled_recovery_outs: 2             # 動揺後、無失点でこの数アウトを重ねると自然回復（issue #73）
   captain_mitigation_per_power: 0.004   # 統率力（統率傾向×精神力/100）1あたりの負補正緩和

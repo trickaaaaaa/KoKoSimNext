@@ -735,6 +735,20 @@ public static class GameEngine
                 bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
                     batter.Mental, pressureIdx, ctx.Pressure,
                     offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
+
+                // 動揺と伝令の手応え（issue #714）。どちらも精神力に関係なく効く＝伝令を送る意味が見える大きさ。
+                // 動揺: 制球が落ちる。伝令の効果窓: 守備=制球／攻撃=ミートが上がる（大一番ほど・采配と素直さで増減）。
+                // 乱数は使わない＝RNG列は不変（結果は効果の分だけ変わる）。
+                if (defense.PitcherRattled && ctx.Tactics.RattledControlPenalty > 0.0)
+                    pit = PressureModel.ApplyPitcher(pit, 1.0 - ctx.Tactics.RattledControlPenalty);
+                if (defense.DefenseCalmPa > 0)
+                    pit = PressureModel.ApplyPitcher(pit, PressureModel.CalmMultiplier(pressureIdx,
+                        defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
+                        ctx.Personalities.Profile(currentPitcher.Personality).CoachingReceptivity, ctx.Tactics));
+                if (offense.OffenseCalmPa > 0)
+                    bat = PressureModel.ApplyBatter(bat, PressureModel.CalmMultiplier(pressureIdx,
+                        offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
+                        ctx.Personalities.Profile(batter.Personality).CoachingReceptivity, ctx.Tactics));
                 return (pit, bat, mods);
             }
             var (pitcher, batterBase, playMods) = EffectiveMatchup();
