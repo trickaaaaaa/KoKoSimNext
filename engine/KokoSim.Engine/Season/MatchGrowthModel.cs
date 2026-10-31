@@ -62,7 +62,7 @@ public static class MatchGrowthModel
     /// exp加算→必要exp消費でレベルアップ→cap到達で余剰破棄（DevelopmentModel.ApplyExp のスカラー版）。
     /// 戻り値=更新後の値。exp の書き戻しは setter 経由。
     /// </summary>
-    private static int GrowScalar(int value, int cap, Action<double> setExp, double exp, double delta,
+    internal static int GrowScalar(int value, int cap, Action<double> setExp, double exp, double delta,
         TrainingCoefficients c)
     {
         if (value >= cap) { setExp(0.0); return value; }

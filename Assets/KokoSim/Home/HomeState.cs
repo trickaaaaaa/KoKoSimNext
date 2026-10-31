@@ -467,9 +467,23 @@ namespace KokoSim.Unity.Home
             {
                 if (!KokoSim.Unity.Shell.TrainingWeek.CanTrain(p.Grade, week)) continue;
                 var before = Snapshot(p);
+                var mentalBefore = p.Mental;
                 // 期間つきの練習効率補正（issue #615）。補正が無ければ 1.0＝従来と1ビット一致。
                 var boost = KokoSim.Unity.Shell.TrainingBoostService.MultiplierFor(p.Id);
                 KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult * boost, Roster);
+                // 個別指導の効果3「信頼関係」（issue #702）: 練習で精神力が伸びるのは指名中だけ。
+                // 1行で効いていることを見せる（新しい画面部品は作らない＝2026-10-31 監督決定）。
+                var mentalGained = p.Mental - mentalBefore;
+                if (mentalGained > 0)
+                {
+                    newItems.Add(new FeedItem
+                    {
+                        When = "今週",
+                        Text = p.Name + " との信頼が深まった（精神力 +" + mentalGained + "）",
+                        Kind = FeedKind.Up,
+                        Tag = "成長",
+                    });
+                }
                 foreach (var k in AbilityKinds.All)
                 {
                     var gained = p.Level(k) - before[k];
@@ -593,7 +607,8 @@ namespace KokoSim.Unity.Home
                 KokoSim.Unity.Shell.EventService.Push("insight_growth_type", n.Player.Name,
                     // ★ 断定しない（設計書03 §5.6）。育成眼が低いと読み違える＝当たっているとは限らない。
                     KokoSim.Unity.Shell.PresentedEffect.Good(
-                        n.Player.Name + " は " + n.Domain + "型かもしれない（見立て）"),
+                        n.Player.Name + " は " + n.Domain + "型かもしれない"
+                        + (n.ViaCoaching ? "（個別指導で見えてきた見立て）" : "（見立て）")),
                     n.Player.Id);
             }
             PushFeed(newItems);
@@ -603,6 +618,13 @@ namespace KokoSim.Unity.Home
         /// 気づき1件の文言。断定しない温度で出す（設計書03 §5.6）。当たり外れは文面に出さない。
         /// </summary>
         private static string InsightText(InsightNotice n)
+        {
+            var text = InsightBody(n);
+            // 個別指導の効果2「見極め」（issue #702）: 指名中の選手の気づきだと分かるように一言添える。
+            return n.ViaCoaching ? text + "（個別指導で見えてきた）" : text;
+        }
+
+        private static string InsightBody(InsightNotice n)
         {
             var name = n.Player.Name;
             switch (n.Topic)
