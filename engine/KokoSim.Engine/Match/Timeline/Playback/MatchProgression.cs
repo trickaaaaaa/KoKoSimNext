@@ -486,21 +486,32 @@ public sealed class MatchProgression
     /// 効果は次に <see cref="Advance"/> で解決される打席から効く（今表示中の打席は既に確定済み）。
     /// AI/brain 駆動の伝令（<see cref="GameEngine"/>）と同じ伝令カウンタを共有する。</para>
     /// </summary>
-    public PlayerTimeoutResult CallTimeout(bool teamIsAway)
+    /// <para>messengerIndex（issue #716）＝伝令役にする控えの添字（<see cref="TimeoutMessengerCandidates"/> の並び）。
+    /// null／範囲外＝伝令役なし（記録員が走る・係数1.0＝従来と同じ効き目）。</para>
+    public PlayerTimeoutResult CallTimeout(bool teamIsAway, int? messengerIndex = null)
     {
         if (IsFinished) return PlayerTimeoutResult.Unavailable;
         var team = _p.OffenseOf(teamIsAway);
+        var reserves = team.AvailableReserves;
+        var messenger = messengerIndex is int i && i >= 0 && i < reserves.Count ? reserves[i] : null;
         if (IsTeamOnOffense(teamIsAway))
         {
             if (!team.TryUseOffenseTimeout()) return PlayerTimeoutResult.Unavailable;
-            team.StartOffenseCalm(_ctx.Tactics.TimeoutDurationPa);
+            team.StartOffenseCalm(_ctx.Tactics.TimeoutDurationPa, messenger);
             return PlayerTimeoutResult.Offense;
         }
         if (!team.TryUseDefenseTimeout()) return PlayerTimeoutResult.Unavailable;
         team.ClearRattled();
-        team.StartDefenseCalm(_ctx.Tactics.TimeoutDurationPa);
+        team.StartDefenseCalm(_ctx.Tactics.TimeoutDurationPa, messenger);
         return PlayerTimeoutResult.Defense;
     }
+
+    /// <summary>
+    /// 伝令役の候補（issue #716）＝いまベンチに居る控え（未出場）。<see cref="CallTimeout"/> の messengerIndex はこの並び。
+    /// 表示専用の読み口（乱数・状態を動かさない）。0人なら伝令役を選ばず記録員が走る扱い。
+    /// </summary>
+    public IReadOnlyList<Player> TimeoutMessengerCandidates(bool teamIsAway)
+        => _p.OffenseOf(teamIsAway).AvailableReserves;
 
     /// <summary>
     /// 1球采配（設計書15 Phase C-3）: 次の1球への打撃指示（強攻/待て）を予約する。

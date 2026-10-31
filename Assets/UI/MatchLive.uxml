@@ -147,16 +147,27 @@
             <ui:VisualElement class="modal-card pausem-card">
                 <ui:Label class="pausem-title" text="タイム" />
                 <ui:Label name="pm-situation" class="pausem-situation" text="" />
-                <ui:VisualElement class="pausem-row">
-                    <ui:Button name="pm-timeout" class="msub-btn msub-btn--ghost pausem-btn" text="📣 伝令を送る" />
-                    <ui:Button name="pm-sub" class="msub-btn msub-btn--ghost pausem-btn" text="⇄ 選手交代" />
+                <ui:VisualElement name="pm-menu">
+                    <ui:VisualElement class="pausem-row">
+                        <ui:Button name="pm-timeout" class="msub-btn msub-btn--ghost pausem-btn" text="📣 伝令を送る" />
+                        <ui:Button name="pm-sub" class="msub-btn msub-btn--ghost pausem-btn" text="⇄ 選手交代" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="pausem-row">
+                        <ui:Button name="pm-scout" class="msub-btn msub-btn--ghost pausem-btn" text="🔍 選手能力" />
+                        <ui:Button name="pm-skip" class="msub-btn msub-btn--ghost pausem-btn" text="⏭ スキップ（委任）" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="pausem-row">
+                        <ui:Button name="pm-resume" class="msub-btn msub-btn--go pausem-btn pausem-btn--wide" text="▶ 再開" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
-                <ui:VisualElement class="pausem-row">
-                    <ui:Button name="pm-scout" class="msub-btn msub-btn--ghost pausem-btn" text="🔍 選手能力" />
-                    <ui:Button name="pm-skip" class="msub-btn msub-btn--ghost pausem-btn" text="⏭ スキップ（委任）" />
-                </ui:VisualElement>
-                <ui:VisualElement class="pausem-row">
-                    <ui:Button name="pm-resume" class="msub-btn msub-btn--go pausem-btn pausem-btn--wide" text="▶ 再開" />
+                <!-- 伝令役の人選（issue #716・A案）: 「伝令を送る」を押すとメニューと入れ替わる。
+                     行を押すとその控えを伝令に出して閉じる。効き目の数字・状態は出さない（名前・学年・性格だけ）。 -->
+                <ui:VisualElement name="pm-messenger" class="pausem-messenger" style="display: none;">
+                    <ui:Label name="pm-messenger-cap" class="pausem-messenger__cap" text="誰を伝令に？" />
+                    <ui:ScrollView name="pm-messenger-list" class="pausem-messenger__list" />
+                    <ui:VisualElement class="pausem-row">
+                        <ui:Button name="pm-messenger-back" class="msub-btn msub-btn--ghost pausem-btn pausem-btn--wide" text="もどる" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

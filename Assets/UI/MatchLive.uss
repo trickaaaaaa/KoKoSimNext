@@ -112,6 +112,15 @@
     margin-bottom: var(--sp-2);
 }
 .pausem-row { flex-direction: row; margin-top: var(--sp-2); }
+/* 伝令役の人選（issue #716）: 控え一覧。行は部品辞書の bench-row（背番号・名前・学年・性格）。 */
+.pausem-messenger__cap {
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    margin-bottom: var(--sp-1);
+}
+.pausem-messenger__list { max-height: 360px; flex-shrink: 0; }
+.pausem-messenger .bench-row .num-badge { margin-right: var(--sp-2); }
+.pausem-messenger .bench-row__tag { flex-shrink: 0; }
 .pausem-btn {
     flex-grow: 1;
     flex-basis: 0;

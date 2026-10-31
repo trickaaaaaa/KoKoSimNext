@@ -666,7 +666,10 @@ public static class GameEngine
                     if (defense.Tactics.CallDefenseTimeout(situation, rng) && defense.TryUseDefenseTimeout())
                     {
                         defense.ClearRattled();
-                        defense.StartDefenseCalm(ctx.Tactics.TimeoutDurationPa);
+                        // 伝令役の人選（issue #716）: 乱数を使わない＝RNG列は不変。
+                        defense.StartDefenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
+                            defense.AvailableReserves, currentPitcher, toPitcher: true,
+                            defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities));
                     }
                 }
 
@@ -675,7 +678,9 @@ public static class GameEngine
                     // 攻撃伝令（打者・走者へ, §3）: 打者の緊張を数打席のあいだ緩和。
                     if (offense.Tactics.CallOffenseTimeout(situation, rng) && offense.TryUseOffenseTimeout())
                     {
-                        offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa);
+                        offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
+                            offense.AvailableReserves, batter, toPitcher: false,
+                            offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities));
                     }
                     sign = offense.Tactics.CallOffense(situation, rng);
                 }
@@ -744,11 +749,15 @@ public static class GameEngine
                 if (defense.DefenseCalmPa > 0)
                     pit = PressureModel.ApplyPitcher(pit, PressureModel.CalmMultiplier(pressureIdx,
                         defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
-                        ctx.Personalities.Profile(currentPitcher.Personality).CoachingReceptivity, ctx.Tactics));
+                        ctx.Personalities.Profile(currentPitcher.Personality).CoachingReceptivity, ctx.Tactics,
+                        TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
+                            ctx.Tactics, ctx.Personalities)));
                 if (offense.OffenseCalmPa > 0)
                     bat = PressureModel.ApplyBatter(bat, PressureModel.CalmMultiplier(pressureIdx,
                         offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
-                        ctx.Personalities.Profile(batter.Personality).CoachingReceptivity, ctx.Tactics));
+                        ctx.Personalities.Profile(batter.Personality).CoachingReceptivity, ctx.Tactics,
+                        TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
+                            ctx.Tactics, ctx.Personalities)));
                 return (pit, bat, mods);
             }
             var (pitcher, batterBase, playMods) = EffectiveMatchup();

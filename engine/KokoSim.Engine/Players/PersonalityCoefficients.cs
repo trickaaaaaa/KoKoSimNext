@@ -22,6 +22,10 @@ public sealed record PersonalityProfile
     public double ChanceHitFactor { get; init; } = 1.0;
     /// <summary>①統率傾向: 生成時の統率傾向平均への偏り（主将向き+/不向き−）。</summary>
     public double LeadershipMeanOffset { get; init; }
+    /// <summary>⑤伝令役の得意場面（issue #716）: マウンド（投手）への伝令に走ったときの係数加算。</summary>
+    public double MessengerToPitcher { get; init; }
+    /// <summary>⑤伝令役の得意場面（issue #716）: 打者への伝令に走ったときの係数加算。</summary>
+    public double MessengerToBatter { get; init; }
 }
 
 /// <summary>
@@ -76,14 +80,14 @@ public sealed record PersonalityCoefficients
     /// </summary>
     private static IReadOnlyList<PersonalityProfile> DefaultProfiles() => new PersonalityProfile[]
     {
-        //                                        w     ②Coach ③Grow  ④Bunt  ④Chance ①Lead
-        new() { Type = Personality.HotBlood,     SpawnWeight = 1.0, CoachingReceptivity = 1.00, SelfGrowthFactor = 1.08, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.99, LeadershipMeanOffset =  14 },
-        new() { Type = Personality.Hardworker,   SpawnWeight = 1.4, CoachingReceptivity = 1.06, SelfGrowthFactor = 1.10, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.99, LeadershipMeanOffset =   4 },
-        new() { Type = Personality.Genius,       SpawnWeight = 0.5, CoachingReceptivity = 0.88, SelfGrowthFactor = 1.10, BuntSuccessBonus = -0.06, ChanceHitFactor = 1.10, LeadershipMeanOffset =   0 },
-        new() { Type = Personality.HonorStudent, SpawnWeight = 1.0, CoachingReceptivity = 1.10, SelfGrowthFactor = 1.00, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.98, LeadershipMeanOffset =  12 },
-        new() { Type = Personality.MyPace,       SpawnWeight = 1.4, CoachingReceptivity = 0.94, SelfGrowthFactor = 0.95, BuntSuccessBonus =  0.00, ChanceHitFactor = 1.00, LeadershipMeanOffset =   0 },
-        new() { Type = Personality.MoodMaker,    SpawnWeight = 1.2, CoachingReceptivity = 1.00, SelfGrowthFactor = 0.92, BuntSuccessBonus = -0.06, ChanceHitFactor = 1.08, LeadershipMeanOffset =   4 },
-        new() { Type = Personality.LoneWolf,     SpawnWeight = 0.8, CoachingReceptivity = 0.92, SelfGrowthFactor = 1.00, BuntSuccessBonus = -0.05, ChanceHitFactor = 1.06, LeadershipMeanOffset = -16 },
-        new() { Type = Personality.Introvert,    SpawnWeight = 1.2, CoachingReceptivity = 1.08, SelfGrowthFactor = 0.95, BuntSuccessBonus =  0.04, ChanceHitFactor = 0.97, LeadershipMeanOffset = -14 },
+        //                                        w     ②Coach ③Grow  ④Bunt  ④Chance ①Lead  ⑤伝令(投/打)
+        new() { Type = Personality.HotBlood,     SpawnWeight = 1.0, CoachingReceptivity = 1.00, SelfGrowthFactor = 1.08, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.99, LeadershipMeanOffset =  14, MessengerToPitcher =  0.10, MessengerToBatter =  0.05 },
+        new() { Type = Personality.Hardworker,   SpawnWeight = 1.4, CoachingReceptivity = 1.06, SelfGrowthFactor = 1.10, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.99, LeadershipMeanOffset =   4, MessengerToPitcher =  0.03, MessengerToBatter =  0.03 },
+        new() { Type = Personality.Genius,       SpawnWeight = 0.5, CoachingReceptivity = 0.88, SelfGrowthFactor = 1.10, BuntSuccessBonus = -0.06, ChanceHitFactor = 1.10, LeadershipMeanOffset =   0, MessengerToPitcher = -0.05, MessengerToBatter = -0.05 },
+        new() { Type = Personality.HonorStudent, SpawnWeight = 1.0, CoachingReceptivity = 1.10, SelfGrowthFactor = 1.00, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.98, LeadershipMeanOffset =  12, MessengerToPitcher =  0.05, MessengerToBatter =  0.03 },
+        new() { Type = Personality.MyPace,       SpawnWeight = 1.4, CoachingReceptivity = 0.94, SelfGrowthFactor = 0.95, BuntSuccessBonus =  0.00, ChanceHitFactor = 1.00, LeadershipMeanOffset =   0, MessengerToPitcher = -0.03, MessengerToBatter = -0.03 },
+        new() { Type = Personality.MoodMaker,    SpawnWeight = 1.2, CoachingReceptivity = 1.00, SelfGrowthFactor = 0.92, BuntSuccessBonus = -0.06, ChanceHitFactor = 1.08, LeadershipMeanOffset =   4, MessengerToPitcher =  0.00, MessengerToBatter =  0.10 },
+        new() { Type = Personality.LoneWolf,     SpawnWeight = 0.8, CoachingReceptivity = 0.92, SelfGrowthFactor = 1.00, BuntSuccessBonus = -0.05, ChanceHitFactor = 1.06, LeadershipMeanOffset = -16, MessengerToPitcher = -0.10, MessengerToBatter = -0.10 },
+        new() { Type = Personality.Introvert,    SpawnWeight = 1.2, CoachingReceptivity = 1.08, SelfGrowthFactor = 0.95, BuntSuccessBonus =  0.04, ChanceHitFactor = 0.97, LeadershipMeanOffset = -14, MessengerToPitcher = -0.10, MessengerToBatter = -0.10 },
     };
 }

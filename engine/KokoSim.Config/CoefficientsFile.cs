@@ -1691,6 +1691,8 @@ public static class CoefficientsLoader
         public double BuntSuccessBonus { get; set; }
         public double ChanceHitFactor { get; set; } = 1.0;
         public double LeadershipMeanOffset { get; set; }
+        public double MessengerToPitcher { get; set; }
+        public double MessengerToBatter { get; set; }
 
         public KokoSim.Engine.Players.PersonalityProfile ToModel() => new()
         {
@@ -1702,6 +1704,8 @@ public static class CoefficientsLoader
             BuntSuccessBonus = BuntSuccessBonus,
             ChanceHitFactor = ChanceHitFactor,
             LeadershipMeanOffset = LeadershipMeanOffset,
+            MessengerToPitcher = MessengerToPitcher,
+            MessengerToBatter = MessengerToBatter,
         };
     }
 
@@ -1849,6 +1853,14 @@ public static class CoefficientsLoader
         public double TimeoutSenseSlope { get; set; } = D.TimeoutSenseSlope;
         public int TimeoutSenseNeutral { get; set; } = D.TimeoutSenseNeutral;
         public double RattledControlPenalty { get; set; } = D.RattledControlPenalty;
+        public double MessengerLeadershipSlope { get; set; } = D.MessengerLeadershipSlope;
+        public int MessengerLeadershipNeutral { get; set; } = D.MessengerLeadershipNeutral;
+        public double MessengerSeniorBonus { get; set; } = D.MessengerSeniorBonus;
+        public double MessengerFreshmanPenalty { get; set; } = D.MessengerFreshmanPenalty;
+        public double MessengerSameGradeBonus { get; set; } = D.MessengerSameGradeBonus;
+        public double MessengerFactorMin { get; set; } = D.MessengerFactorMin;
+        public double MessengerFactorMax { get; set; } = D.MessengerFactorMax;
+        public int AiMessengerPickMinSense { get; set; } = D.AiMessengerPickMinSense;
         public int RattledConsecutiveBaserunners { get; set; } = D.RattledConsecutiveBaserunners;
         public double RattledNegativeAmplify { get; set; } = D.RattledNegativeAmplify;
         public int RattledThresholdMentalOffset { get; set; } = D.RattledThresholdMentalOffset;
@@ -1969,6 +1981,14 @@ public static class CoefficientsLoader
             TimeoutSenseSlope = TimeoutSenseSlope,
             TimeoutSenseNeutral = TimeoutSenseNeutral,
             RattledControlPenalty = RattledControlPenalty,
+            MessengerLeadershipSlope = MessengerLeadershipSlope,
+            MessengerLeadershipNeutral = MessengerLeadershipNeutral,
+            MessengerSeniorBonus = MessengerSeniorBonus,
+            MessengerFreshmanPenalty = MessengerFreshmanPenalty,
+            MessengerSameGradeBonus = MessengerSameGradeBonus,
+            MessengerFactorMin = MessengerFactorMin,
+            MessengerFactorMax = MessengerFactorMax,
+            AiMessengerPickMinSense = AiMessengerPickMinSense,
             RattledConsecutiveBaserunners = RattledConsecutiveBaserunners,
             RattledNegativeAmplify = RattledNegativeAmplify,
             RattledThresholdMentalOffset = RattledThresholdMentalOffset,

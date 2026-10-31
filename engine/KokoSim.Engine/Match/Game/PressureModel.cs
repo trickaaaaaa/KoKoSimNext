@@ -75,13 +75,15 @@ public static class PressureModel
 
     /// <summary>
     /// 伝令の「落ち着き」倍率（issue #714）。効果窓の中だけ呼ぶ。精神力に関係なく 1 以上。
-    /// = 1 + (Base + PerPressure × P) × 采配係数 × 素直さ（采配係数・素直さは0未満にしない）。
+    /// = 1 + (Base + PerPressure × P) × 采配係数 × 素直さ × 伝令役の係数（どれも0未満にしない）。
+    /// 伝令役の係数（issue #716・<see cref="TimeoutMessenger.Factor"/>）は既定1.0＝伝令役なし。
     /// </summary>
     public static double CalmMultiplier(int pressureIndex, int tacticalSense, double receptivity,
-        Tactics.TacticsCoefficients c)
+        Tactics.TacticsCoefficients c, double messengerFactor = 1.0)
     {
         var bonus = c.TimeoutCalmBase + c.TimeoutCalmPerPressure * pressureIndex;
-        return 1.0 + Math.Max(0.0, bonus) * SenseFactor(tacticalSense, c) * Math.Max(0.0, receptivity);
+        return 1.0 + Math.Max(0.0, bonus) * SenseFactor(tacticalSense, c) * Math.Max(0.0, receptivity)
+            * Math.Max(0.0, messengerFactor);
     }
 
     /// <summary>監督の采配能力による伝令の効き目の係数（中立値で1.0。0未満にしない）。</summary>

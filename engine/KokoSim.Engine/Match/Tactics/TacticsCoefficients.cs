@@ -270,6 +270,25 @@ public sealed record TacticsCoefficients
     public double TimeoutSenseSlope { get; init; } = 0.007;
     /// <summary>采配係数が1.0になる采配能力。采配の値を持たないチーム（無指示の統計シム）もこの値として扱う。</summary>
     public int TimeoutSenseNeutral { get; init; } = 50;
+
+    // --- 伝令役の人選（issue #716）: 落ち着き倍率の上乗せ分に掛ける「伝令役の係数」 ---
+    // 係数 = clamp(Min, Max, 1 + (統率傾向−Neutral)×Slope + 学年 + 同学年 + 性格の得意場面)。伝令役なし＝1.0。
+    /// <summary>伝令役の統率傾向1あたりの係数の傾き（統率20で−0.18／85で+0.21）。</summary>
+    public double MessengerLeadershipSlope { get; init; } = 0.006;
+    /// <summary>伝令役の統率傾向の中立値（係数の加算0）。</summary>
+    public int MessengerLeadershipNeutral { get; init; } = 50;
+    /// <summary>伝令役が3年生なら加算（先輩の一言は重い）。</summary>
+    public double MessengerSeniorBonus { get; init; } = 0.08;
+    /// <summary>伝令役が1年生なら減算。</summary>
+    public double MessengerFreshmanPenalty { get; init; } = 0.08;
+    /// <summary>伝令役と受け手（投手／打者）が同学年なら加算。</summary>
+    public double MessengerSameGradeBonus { get; init; } = 0.06;
+    /// <summary>伝令役の係数の下限。</summary>
+    public double MessengerFactorMin { get; init; } = 0.7;
+    /// <summary>伝令役の係数の上限。</summary>
+    public double MessengerFactorMax { get; init; } = 1.4;
+    /// <summary>AI監督がこの采配能力以上なら最適な伝令役を選ぶ。未満ならベンチの先頭（手近な控え）を走らせる。</summary>
+    public int AiMessengerPickMinSense { get; init; } = 60;
     /// <summary>動揺: 連続出塁がこの数に達すると投手が動揺し、負補正が増幅される。</summary>
     public int RattledConsecutiveBaserunners { get; init; } = 3;
     public double RattledNegativeAmplify { get; init; } = 1.4;

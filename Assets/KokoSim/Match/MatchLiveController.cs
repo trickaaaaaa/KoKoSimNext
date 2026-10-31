@@ -178,6 +178,11 @@ namespace KokoSim.Unity.Match
         private VisualElement _pauseModal;
         private Label _pmSituation;
         private Button _pmTimeout, _pmSub, _pmSkip, _pmResume;
+        // 伝令役の人選（issue #716・A案）: 「伝令を送る」でメニューと入れ替わる控え一覧。
+        private VisualElement _pmMenu, _pmMessenger;
+        private ScrollView _pmMessengerList;
+        private Label _pmMessengerCap;
+        private Button _pmMessengerBack;
         private bool _timeoutSentThisPause;   // 1中断につき伝令1回（連打で複数消費させない）
         // 自動連続進行の中断中フラグ（ポップアップ表示〜再開の間 true）。盤面・自動進行の両方を止める。
         private bool _paused;
@@ -527,6 +532,12 @@ namespace KokoSim.Unity.Match
             _pmSituation = _root.Q<Label>("pm-situation");
             _pmTimeout = _root.Q<Button>("pm-timeout");
             if (_pmTimeout != null) _pmTimeout.clicked += OnSendTimeout;
+            _pmMenu = _root.Q<VisualElement>("pm-menu");
+            _pmMessenger = _root.Q<VisualElement>("pm-messenger");
+            _pmMessengerList = _root.Q<ScrollView>("pm-messenger-list");
+            _pmMessengerCap = _root.Q<Label>("pm-messenger-cap");
+            _pmMessengerBack = _root.Q<Button>("pm-messenger-back");
+            if (_pmMessengerBack != null) _pmMessengerBack.clicked += CloseMessengerPicker;
             _pmSub = _root.Q<Button>("pm-sub");
             if (_pmSub != null) _pmSub.clicked += OnOpenSubstitution;
             _pmScout = _root.Q<Button>("pm-scout");
@@ -657,6 +668,7 @@ namespace KokoSim.Unity.Match
             if (_pmTimeout != null) _pmTimeout.clicked -= OnSendTimeout;
             if (_pmResume != null) _pmResume.clicked -= OnResume;
             if (_pmSub != null) _pmSub.clicked -= OnOpenSubstitution;
+            if (_pmMessengerBack != null) _pmMessengerBack.clicked -= CloseMessengerPicker;
             if (_pmSkip != null) _pmSkip.clicked -= OnSkip;
             _pauseModal?.UnregisterCallback<PointerDownEvent>(OnPauseScrimDown);
             _inningBreak?.UnregisterCallback<PointerDownEvent>(OnInningBreakDown);
@@ -1188,6 +1200,7 @@ namespace KokoSim.Unity.Match
         {
             _paused = true;
             _timeoutSentThisPause = false;
+            CloseMessengerPicker();
             UpdatePauseMenu();
             SetVisible(_pauseModal, true);
         }
@@ -1248,18 +1261,80 @@ namespace KokoSim.Unity.Match
             return s + "塁";
         }
 
-        // 「伝令を送る」（ポップアップ内）: ここで初めて伝令を1回消費する（クリック中断自体は消費しない）。
+        // 「伝令を送る」（ポップアップ内）: 控えが居れば伝令役の一覧へ入れ替える（issue #716・A案）。
+        // 控えが0人なら記録員が走る扱いで、そのまま1押しで送る（伝令役の係数は中立）。
         // 攻守はいまの表裏×自校の先後で自動判定（攻撃中＝攻撃伝令／守備中＝守備伝令）。残り0では発動しない。
-        // 効果は次に解決される打席から効く（エンジンの決定論経路を通す＝帯・digest不変。設計書09 §3）。
         private void OnSendTimeout()
         {
-            if (_gameOver || !_paused || _prog == null) return;
-            if (BackgroundGameOp.Running || EngineAheadOfScreen) return;   // 解決中は打席境界が未確定なので受け付けない
-            if (_timeoutSentThisPause) return;      // 1中断につき1回
-            var kind = _prog.CallTimeout(_managerIsAway);
+            if (!CanSendTimeoutNow()) return;
+            var cands = _prog.TimeoutMessengerCandidates(_managerIsAway);
+            if (cands.Count == 0) { SendTimeout(null); return; }
+            OpenMessengerPicker(cands);
+        }
+
+        private bool CanSendTimeoutNow()
+        {
+            if (_gameOver || !_paused || _prog == null) return false;
+            if (BackgroundGameOp.Running || EngineAheadOfScreen) return false;   // 解決中は打席境界が未確定なので受け付けない
+            return !_timeoutSentThisPause;          // 1中断につき1回
+        }
+
+        // ここで初めて伝令を1回消費する（クリック中断自体は消費しない）。効果は次に解決される打席から効く
+        //（エンジンの決定論経路を通す・乱数を引かない。設計書09 §3）。messengerIndex＝控えの添字（null＝記録員）。
+        private void SendTimeout(int? messengerIndex)
+        {
+            if (!CanSendTimeoutNow()) return;
+            var kind = _prog.CallTimeout(_managerIsAway, messengerIndex);
+            CloseMessengerPicker();
             if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
             _timeoutSentThisPause = true;
             UpdatePauseMenu();   // 残数と送信済み表示を反映
+        }
+
+        // 伝令役の一覧（背番号順）。行＝背番号・名前・学年・性格だけ（効き目の数字や状態は出さない＝監督方針）。
+        private void OpenMessengerPicker(IReadOnlyList<Player> cands)
+        {
+            if (_pmMessenger == null || _pmMessengerList == null) { SendTimeout(null); return; }
+            var onOffense = _prog.IsTeamOnOffense(_managerIsAway);
+            var left = onOffense ? _prog.OffenseTimeoutsLeft(_managerIsAway) : _prog.DefenseTimeoutsLeft(_managerIsAway);
+            if (_pmMessengerCap != null)
+                _pmMessengerCap.text = (onOffense ? "打者へ" : "マウンドへ") + "、誰を伝令に？（残り" + left + "回）";
+            _pmMessengerList.Clear();
+            var order = new List<int>();
+            for (var i = 0; i < cands.Count; i++) order.Add(i);
+            order.Sort((a, b) =>
+            {
+                int Key(Player p) => p.UniformNumber > 0 ? p.UniformNumber : int.MaxValue;
+                var c = Key(cands[a]).CompareTo(Key(cands[b]));
+                return c != 0 ? c : a.CompareTo(b);
+            });
+            foreach (var i in order)
+            {
+                var p = cands[i];
+                var idx = i;
+                var row = new VisualElement();
+                row.AddToClassList("bench-row");
+                row.Add(MakeLabel(NumText(p.UniformNumber), "num-badge", "num-badge--sm", "f-num"));
+                row.Add(MakeLabel(p.Name, "bench-row__name"));
+                if (p.Grade > 0)
+                {
+                    var g = UiComponents.NumUnit(p.Grade.ToString(), "年", false, "bench-row__tag");
+                    g.pickingMode = PickingMode.Ignore;
+                    row.Add(g);
+                }
+                if (p.Personality != Personality.Normal)
+                    row.Add(MakeLabel(Personalities.DisplayName(p.Personality), "bench-row__tag"));
+                row.RegisterCallback<PointerDownEvent>(e => { e.StopPropagation(); SendTimeout(idx); });
+                _pmMessengerList.Add(row);
+            }
+            SetVisible(_pmMenu, false);
+            SetVisible(_pmMessenger, true);
+        }
+
+        private void CloseMessengerPicker()
+        {
+            SetVisible(_pmMessenger, false);
+            SetVisible(_pmMenu, true);
         }
 
         // 「再開」: 中断を解いて自動連続進行へ戻る。暗幕クリックでも呼ばれる（OnPauseScrimDown）。
@@ -1268,6 +1343,7 @@ namespace KokoSim.Unity.Match
             if (_gameOver || !_paused) return;
             _subPanel?.Close();
             _scoutPanel?.Close();
+            CloseMessengerPicker();
             SetVisible(_pauseModal, false);
             _paused = false;
             UpdateControlState();
@@ -4702,6 +4778,10 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
         /// <summary>スクショ用: 能力ビューアを開く／閉じる／タブを切り替える（issue #602 の受け入れ絵）。</summary>
+        /// <summary>スクショ用（issue #716）: タイムを開いて「伝令を送る」を押した状態（伝令役の一覧）にする。</summary>
+        internal void OpenMessengerPickerForCapture() { OpenPauseMenu(); OnSendTimeout(); }
+        /// <summary>スクショ用（issue #716）: 伝令役の一覧で i 番目（背番号順でなく控えの添字）を選んで送る。</summary>
+        internal void PickMessengerForCapture(int i) => SendTimeout(i);
         public void OpenScoutForCapture() { _paused = true; SetVisible(_pauseModal, true); _scoutPanel?.Open(); }
         public void CloseScoutForCapture() => _scoutPanel?.Close();
         public void SelectScoutTabForCapture(int tab) => _scoutPanel?.SelectTabForCapture(tab);
