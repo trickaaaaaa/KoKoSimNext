@@ -79,7 +79,7 @@ public static class DeterminismCards
     }
 
     /// <summary>代表カード名。</summary>
-    public static readonly string[] CardNames = { "avg", "tactics", "modern", "pitch-tactics" };
+    public static readonly string[] CardNames = { "avg", "tactics", "modern", "pitch-tactics", "messenger" };
 
     public static GameResult Run(string card, ulong seed)
     {
@@ -104,9 +104,43 @@ public static class DeterminismCards
                     Team("A") with { Tactics = new AiTacticsBrain(profile) },
                     Team("H") with { Tactics = new AiTacticsBrain(profile) },
                     new GameContext(), rng);
+            case "messenger":
+                return RunMessenger(seed, new GameContext());
             default:
                 throw new System.ArgumentOutOfRangeException(nameof(card), card, "unknown card");
         }
+    }
+
+    /// <summary>
+    /// 伝令役の人選（issue #716/#721）の決定論アンカー。控えの学年・統率傾向・性格をばらけさせ、受け手（投手・打者）にも
+    /// 学年を付ける＝誰を走らせるかで落ち着き倍率が変わる試合にする。采配能力85の AI 同士＝伝令を使い、最適な控えを選ぶ。
+    /// 他のカードの控えは全員中立（学年0・統率50・性格なし）で、伝令役の係数が常に1.0＝このカードだけが人選を見張る。
+    /// ctx を差し替えられるのは「係数を中立にすると digest が変わる」ことを確かめるため。
+    /// </summary>
+    public static GameResult RunMessenger(ulong seed, GameContext ctx)
+    {
+        var profile = new AiProfile(TacticalSense: 85, TierRank: 6, SchoolStyle.Standard);
+        return GameEngine.Play(
+            MessengerTeam("A") with { Tactics = new AiTacticsBrain(profile) },
+            MessengerTeam("H") with { Tactics = new AiTacticsBrain(profile) },
+            ctx, new Xoshiro256Random(seed));
+    }
+
+    private static Team MessengerTeam(string name)
+    {
+        var t = Team(name);
+        var grades = new[] { 3, 2, 1, 3, 2, 1, 3, 2, 2 };
+        var order = new List<Player>();
+        for (var i = 0; i < t.BattingOrder.Count; i++)
+            order.Add(t.BattingOrder[i] with { Grade = grades[i], Mental = 40 });
+        var reserves = new List<Player>
+        {
+            t.Reserves[0] with { Grade = 1, Leadership = 30, Personality = Personality.Introvert },
+            t.Reserves[1] with { Grade = 2, Leadership = 55, Personality = Personality.MoodMaker },
+            t.Reserves[2] with { Grade = 3, Leadership = 80, Personality = Personality.HotBlood },
+            t.Reserves[3] with { Grade = 2, Leadership = 45, Personality = Personality.LoneWolf },
+        };
+        return t with { BattingOrder = order, Reserves = reserves };
     }
 
     private static Player Pos(FieldPosition pos) => new()
