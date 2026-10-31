@@ -819,6 +819,7 @@ namespace KokoSim.Unity.Match
             home = home with
             {
                 Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(home.Reserves, BuildBench()),
+                ManagerTacticalSense = managerTacticalSense,   // 伝令の効き目（issue #714）
             };
             _homeTeam = home;
             _awayDisp = awayName;

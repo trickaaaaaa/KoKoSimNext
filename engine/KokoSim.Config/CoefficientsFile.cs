@@ -1844,6 +1844,11 @@ public static class CoefficientsLoader
         // 伝令効果・動揺・主将
         public double TimeoutMitigation { get; set; } = D.TimeoutMitigation;
         public int TimeoutDurationPa { get; set; } = D.TimeoutDurationPa;
+        public double TimeoutCalmBase { get; set; } = D.TimeoutCalmBase;
+        public double TimeoutCalmPerPressure { get; set; } = D.TimeoutCalmPerPressure;
+        public double TimeoutSenseSlope { get; set; } = D.TimeoutSenseSlope;
+        public int TimeoutSenseNeutral { get; set; } = D.TimeoutSenseNeutral;
+        public double RattledControlPenalty { get; set; } = D.RattledControlPenalty;
         public int RattledConsecutiveBaserunners { get; set; } = D.RattledConsecutiveBaserunners;
         public double RattledNegativeAmplify { get; set; } = D.RattledNegativeAmplify;
         public int RattledThresholdMentalOffset { get; set; } = D.RattledThresholdMentalOffset;
@@ -1959,6 +1964,11 @@ public static class CoefficientsLoader
             InsideAimXOffsetM = InsideAimXOffsetM,
             TimeoutMitigation = TimeoutMitigation,
             TimeoutDurationPa = TimeoutDurationPa,
+            TimeoutCalmBase = TimeoutCalmBase,
+            TimeoutCalmPerPressure = TimeoutCalmPerPressure,
+            TimeoutSenseSlope = TimeoutSenseSlope,
+            TimeoutSenseNeutral = TimeoutSenseNeutral,
+            RattledControlPenalty = RattledControlPenalty,
             RattledConsecutiveBaserunners = RattledConsecutiveBaserunners,
             RattledNegativeAmplify = RattledNegativeAmplify,
             RattledThresholdMentalOffset = RattledThresholdMentalOffset,

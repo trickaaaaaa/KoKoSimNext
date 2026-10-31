@@ -35,6 +35,9 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
             _ai.OptimalBase + profile.TacticalSense * _ai.OptimalPerSense, _ai.OptimalFloor, _ai.OptimalCap);
     }
 
+    /// <summary>三層プロファイル（采配能力・ティア・校風）。伝令の効き目が采配能力を読む（issue #714）。</summary>
+    public AiProfile Profile => _profile;
+
     /// <summary>この AI が最適解を選ぶ確率（テスト・寸評用）。</summary>
     public double OptimalProbability => _optimalProb;
 

@@ -48,6 +48,9 @@ public sealed record GameContext
     /// <summary>采配まわりの係数（設計書09, YAML駆動）。判断閾値と効果量の両方。</summary>
     public Tactics.TacticsCoefficients Tactics { get; init; } = new();
 
+    /// <summary>性格の係数（設計書01 §1.1）。伝令の効き目に「素直さ」を使う（issue #714）。</summary>
+    public Players.PersonalityCoefficients Personalities { get; init; } = new();
+
     /// <summary>在フィールド野手の緊急登板時の backfill 経路判定係数（issue #209 Phase C path②）。</summary>
     public ReliefBackfillCoefficients ReliefBackfill { get; init; } = new();
 
