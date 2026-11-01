@@ -244,8 +244,8 @@ namespace KokoSim.Unity.Shell
             while (runner.BracketResolutionPending)
             {
                 var roundIndex = _senbatsuTotalRounds - runner.RemainingBracketRounds;
-                var cards = Math.Max(1, 1 << Math.Max(0, _senbatsuTotalRounds - roundIndex - 1));
-                var lastCardDay = TournamentEntry.Schedule.MatchDay(_senbatsuTotalRounds, roundIndex, cards - 1, cards);
+                // そのラウンドの全カードが終わる日（カードの消化順は混ぜてあるので最後の添字＝最終日ではない。#723）。
+                var lastCardDay = TournamentEntry.Schedule.RoundLastDay(_senbatsuTotalRounds, roundIndex, runner.FieldSize);
                 if (SenbatsuDay < lastCardDay) return;
                 runner.StepBracketResolution();
             }
@@ -837,8 +837,8 @@ namespace KokoSim.Unity.Shell
             while (runner.BracketResolutionPending)
             {
                 var roundIndex = _koshienTotalRounds - runner.RemainingBracketRounds;
-                var cards = Math.Max(1, 1 << Math.Max(0, _koshienTotalRounds - roundIndex - 1));
-                var lastCardDay = TournamentEntry.Schedule.MatchDay(_koshienTotalRounds, roundIndex, cards - 1, cards);
+                // そのラウンドの全カードが終わる日（カードの消化順は混ぜてあるので最後の添字＝最終日ではない。#723）。
+                var lastCardDay = TournamentEntry.Schedule.RoundLastDay(_koshienTotalRounds, roundIndex, runner.FieldSize);
                 if (KoshienDay < lastCardDay) return;   // まだそのラウンドの日に届いていない
                 runner.StepBracketResolution();
             }

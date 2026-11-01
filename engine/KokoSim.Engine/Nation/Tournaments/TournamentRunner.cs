@@ -40,6 +40,13 @@ public sealed record TournamentSchedule
     /// <summary>準決勝（残り2）の後に置く休養日。</summary>
     public int RestDaysAfterSemifinal { get; init; } = 1;
 
+    /// <summary>
+    /// 1日に消化できる試合数の上限（全国一律・issue #723）。序盤・中盤ラウンドは
+    /// 「試合数 ÷ この値」日より短くは詰めない＝出場校の多い県ほど1回戦・2回戦が長くなる。
+    /// 0 以下で上限なし（従来どおり分散日数だけで決まる）。終盤（準々決勝以降）は同日開催のまま効かない。
+    /// </summary>
+    public int MaxGamesPerDay { get; init; } = 16;
+
     /// <summary>夏の地方大会の実開幕月（表示専用・issue #583）。</summary>
     public int SummerOpenMonth { get; init; } = 7;
     /// <summary>夏の地方大会の実開幕日。</summary>
@@ -85,34 +92,85 @@ public sealed record TournamentSchedule
         _ => 0,
     };
 
+    /// <summary>
+    /// ラウンド index の実際の試合数（不戦勝のカードを除く）。不戦勝は1回戦だけに置かれる
+    /// （<see cref="TournamentDraw"/>）ので、1回戦＝出場校数 − 2回戦の枠、2回戦以降はカード数そのもの。
+    /// <paramref name="fieldSize"/> が 0 以下なら空きの無い満杯の表とみなす。
+    /// </summary>
+    public int GamesInRound(int totalRounds, int roundIndex, int fieldSize = 0)
+    {
+        var cards = 1 << Math.Max(0, totalRounds - roundIndex - 1);
+        if (roundIndex > 0 || fieldSize <= 0) return cards;
+        return Math.Clamp(fieldSize - cards, 1, cards);
+    }
+
+    /// <summary>
+    /// そのラウンドのカードを分散させる日数（issue #723）。残りラウンド数で決まる最低日数
+    /// （<see cref="SpreadDaysFor"/>）と、1日の上限（<see cref="MaxGamesPerDay"/>）で試合数を割った日数の大きい方。
+    /// 終盤は上限を見ない（同日開催）。
+    /// </summary>
+    public int SpreadDays(int totalRounds, int roundIndex, int fieldSize = 0)
+    {
+        var rr = Math.Max(1, totalRounds - roundIndex);
+        var basic = SpreadDaysFor(rr);
+        if (rr <= LateRoundsThreshold || MaxGamesPerDay <= 0) return basic;
+        var games = GamesInRound(totalRounds, roundIndex, fieldSize);
+        return Math.Max(basic, (games + MaxGamesPerDay - 1) / MaxGamesPerDay);
+    }
+
     /// <summary>ラウンド index（0基点＝初戦）の初日。以降のカードはここから分散する。</summary>
-    public int RoundStartDay(int totalRounds, int roundIndex)
+    public int RoundStartDay(int totalRounds, int roundIndex, int fieldSize = 0)
     {
         var day = FirstRoundDay;
         for (var r = 0; r < roundIndex; r++)
         {
             var rr = totalRounds - r;
-            day += SpreadDaysFor(rr) + RestDaysAfter(rr);
+            day += SpreadDays(totalRounds, r, fieldSize) + RestDaysAfter(rr);
         }
         return day;
     }
 
+    /// <summary>ラウンド index の最終日（そのラウンドの全カードが終わる日）。</summary>
+    public int RoundLastDay(int totalRounds, int roundIndex, int fieldSize = 0)
+        => RoundStartDay(totalRounds, roundIndex, fieldSize) + SpreadDays(totalRounds, roundIndex, fieldSize) - 1;
+
     /// <summary>
     /// ラウンド index <paramref name="roundIndex"/>・カード <paramref name="slot"/> の試合日。
-    /// カードは <see cref="SpreadDaysFor"/> 日に均等割りする（slot が小さいほど早い日＝ブラケットの上から順に消化）。
+    /// カードは分散日数に均等割りする。割り当ての順番はブラケットの上から順ではなく、ラウンドごとに
+    /// 混ぜた順（<see cref="DayOrder"/>）＝勝ち上がった校の次戦までの間隔が毎回同じにならない（issue #723）。
     /// </summary>
-    public int MatchDay(int totalRounds, int roundIndex, int slot, int cardsInRound)
+    public int MatchDay(int totalRounds, int roundIndex, int slot, int cardsInRound, int fieldSize = 0)
     {
-        var rr = Math.Max(1, totalRounds - roundIndex);
-        var spread = SpreadDaysFor(rr);
+        var spread = SpreadDays(totalRounds, roundIndex, fieldSize);
         var cards = Math.Max(1, cardsInRound);
-        var offset = (int)((long)Math.Max(0, slot) * spread / cards);
+        var order = DayOrder(Math.Max(0, slot), cards, roundIndex);
+        var offset = (int)((long)order * spread / cards);
         if (offset >= spread) offset = spread - 1;
-        return RoundStartDay(totalRounds, roundIndex) + offset;
+        return RoundStartDay(totalRounds, roundIndex, fieldSize) + offset;
+    }
+
+    /// <summary>
+    /// ラウンド内でカードを消化する順番（0..cards−1 の並べ替え・乱数不使用の固定式）。
+    /// 奇数の掛け算と XOR は 2 の冪を法とする全単射なので、どの日にも均等にカードが割れたまま、
+    /// 勝ち上がり（カード i → 次ラウンドのカード i/2）で順番の位置が毎ラウンド変わる。
+    /// カード数が 2 の冪でないとき（保険）はそのままの順。
+    /// </summary>
+    public static int DayOrder(int slot, int cards, int roundIndex)
+    {
+        if (cards <= 1 || (cards & (cards - 1)) != 0) return Math.Min(slot, Math.Max(0, cards - 1));
+        var mask = (uint)(cards - 1);
+        // 掛ける奇数と XOR する値はラウンドだけから作る（カードに依存させると全単射でなくなる）。
+        var r = (uint)(roundIndex + 1) * 0x9E3779B1u;
+        r ^= r >> 15;
+        r *= 0x85EBCA6Bu;
+        r ^= r >> 13;
+        var odd = r | 1u;
+        return (int)((((uint)slot * odd) ^ (r >> 7)) & mask);
     }
 
     /// <summary>大会の最終日（＝決勝の日）。消費する週数の算出に使う。</summary>
-    public int FinalDay(int totalRounds) => RoundStartDay(totalRounds, Math.Max(0, totalRounds - 1));
+    public int FinalDay(int totalRounds, int fieldSize = 0)
+        => RoundStartDay(totalRounds, Math.Max(0, totalRounds - 1), fieldSize);
 }
 
 /// <summary>
@@ -222,6 +280,8 @@ public sealed class TournamentRunner
     private readonly IBackgroundMatchResolver? _backgroundResolver;
     private readonly int _managerId;
     private readonly int _totalRounds;
+    // 出場校数（不戦勝の空きを除く）。1回戦の実試合数＝日割りの母数（issue #723）。
+    private readonly int _fieldSize;
     /// <summary>
     /// 裏カードを<b>ランナーが記録した瞬間</b>に呼ぶフック（(先攻ID, 後攻ID, 結果)）。全国成績への畳み込みに使う。
     ///
@@ -360,6 +420,7 @@ public sealed class TournamentRunner
         // rng は大会ごとに（母種＾年＾種別で）違うので、同じ年でも夏と秋で別の表になる。
         _current = TournamentDraw.Arrange(entrants, rng.Fork(TournamentDraw.DrawStreamId));
         _totalRounds = TournamentRecorder.RoundsRemaining(_current.Length);
+        _fieldSize = _current.Count(x => x is not null);
 
         _roundEntrants = new School?[]?[_totalRounds + 1];
         _roundEntrants[0] = (School?[])_current.Clone();   // 初期シード配置は確定済み＝樹形図の起点。
@@ -429,6 +490,7 @@ public sealed class TournamentRunner
         if (state.RoundEntrants.Count == 0 || state.RoundEntrants[0] is null)
             throw new ArgumentException("セーブに初期シード配置がありません。");
         _totalRounds = TournamentRecorder.RoundsRemaining(state.RoundEntrants[0]!.Count);
+        _fieldSize = state.RoundEntrants[0]!.Count(x => x is not null);
         _roundEntrants = new School?[]?[_totalRounds + 1];
         for (var r = 0; r < state.RoundEntrants.Count && r < _roundEntrants.Length; r++)
             if (state.RoundEntrants[r] is { } row) _roundEntrants[r] = Resolve(row);
@@ -517,7 +579,11 @@ public sealed class TournamentRunner
     public Tier NextOpponentTier => _nextOpponent?.Tier ?? Tier.G;
     /// <summary>次戦の試合日（大会開幕からの相対日）。</summary>
     public int NextMatchDay =>
-        _schedule.MatchDay(_totalRounds, _roundIndex, ManagerCardSlot(_current), Math.Max(1, _current.Length / 2));
+        _schedule.MatchDay(_totalRounds, _roundIndex, ManagerCardSlot(_current), Math.Max(1, _current.Length / 2), _fieldSize);
+    /// <summary>出場校数（不戦勝の空きを除く）。日程表の日割りの母数（issue #723）。</summary>
+    public int FieldSize => _fieldSize;
+    /// <summary>総ラウンド数。</summary>
+    public int TotalRounds => _totalRounds;
     /// <summary>次戦のラウンド名（決勝/準決勝/…/N回戦）。</summary>
     public string RoundName => RoundNameFor(TournamentRecorder.RoundsRemaining(_current.Length));
 
@@ -675,7 +741,7 @@ public sealed class TournamentRunner
     /// </summary>
     private int MatchDayOf(int roundsRemaining, int slot)
         => _schedule.MatchDay(
-            _totalRounds, _totalRounds - roundsRemaining, slot, 1 << Math.Max(0, roundsRemaining - 1));
+            _totalRounds, _totalRounds - roundsRemaining, slot, 1 << Math.Max(0, roundsRemaining - 1), _fieldSize);
 
     /// <summary>現ラウンドで自校が入っているカードの添字（＝自校の試合日を決める位置）。居なければ0。</summary>
     private int ManagerCardSlot(School?[] cur)
