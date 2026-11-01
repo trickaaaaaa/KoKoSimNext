@@ -181,13 +181,24 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static Team BuildManagerTeam(string name)
         {
-            var lineup = GameSession.Current.Lineup;
+            var lineup = UsableLineup();
             // 未設定＝スタメン画面を通らなかった場合は能力順の自動編成（従来同等の編成）。
             var team = lineup != null
                 ? RosterTeamBuilder.BuildFromLineup(lineup)
                 : RosterTeamBuilder.Build(RosterService.Active, name);
             // 伝令の効き目は監督の采配能力で変わる（設計書09 §3・issue #714）。
             return team with { ManagerTacticalSense = ManagerService.TacticalSenseForAi };
+        }
+
+        /// <summary>
+        /// 保存済みのスタメンのうち、今もそのまま使えるもの（issue #724）。確定の後に背番号を外した選手や
+        /// 引退・卒業した選手が混ざっていたら null＝未設定と同じ扱いにする（ベンチ外を出場させない・例外で
+        /// 画面を止めない）。スタメン画面は開くたびに前回スタメンから組み直すので、次の確定で元へ戻る。
+        /// </summary>
+        public static KokoSim.Engine.Season.LineupSpec UsableLineup()
+        {
+            var lineup = GameSession.Current.Lineup;
+            return lineup != null && RosterTeamBuilder.IsStillRegistrable(lineup, RosterService.Active) ? lineup : null;
         }
     }
 }
