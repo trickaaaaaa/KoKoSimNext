@@ -16,6 +16,6 @@ sed -i '' 's/\[Fact(Skip = "ベースライン再生成用。determinism-baselin
   --filter "FullyQualifiedName~DeterminismBaselineDump" --logger "console;verbosity=detailed" 2>&1 \
   | grep -E "^[[:space:]]*BL " | sed -E 's/^[[:space:]]*BL //' > "$OUT.new"
 lines=$(wc -l < "$OUT.new" | tr -d ' ')
-if [[ "$lines" -ne 200 ]]; then echo "ベースラインの行数が 200 でない: $lines" >&2; rm -f "$OUT.new"; exit 1; fi
+if [[ "$lines" -ne 250 ]]; then echo "ベースラインの行数が 250 でない: $lines" >&2; rm -f "$OUT.new"; exit 1; fi
 mv "$OUT.new" "$OUT"
 echo "再生成: $OUT ($lines 行)"

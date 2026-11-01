@@ -52,6 +52,7 @@ namespace KokoSim.Unity.Match
                 ctrl.PickSubstitutionCandidateForCapture(0);
                 var noteHit = ctrl.SubstitutionNoteForCapture;
                 ctrl.ApplySubstitutionForCapture();
+                ctrl.CloseSubstitutionForCapture();   // 予約→「確定して試合へ戻る」（issue #718/#721）
                 yield return null;
                 Line("① 代打", !ctrl.SubstitutionOpenForCapture && ctrl.BenchCountForCapture < beforeBench,
                     "控え " + beforeBench + " → " + ctrl.BenchCountForCapture + "   [" + Trim(noteHit) + "]");
@@ -78,6 +79,7 @@ namespace KokoSim.Unity.Match
                 ctrl.PickSubstitutionCandidateForCapture(0);
                 var noteRun = ctrl.SubstitutionNoteForCapture;
                 ctrl.ApplySubstitutionForCapture();
+                ctrl.CloseSubstitutionForCapture();   // 予約→「確定して試合へ戻る」（issue #718/#721）
                 yield return null;
                 Line("② 代走", !ctrl.SubstitutionOpenForCapture && ctrl.BenchCountForCapture < beforeRunners,
                     "控え " + beforeRunners + " → " + ctrl.BenchCountForCapture + "   [" + Trim(noteRun) + "]");
@@ -96,6 +98,7 @@ namespace KokoSim.Unity.Match
             ctrl.PickSubstitutionCandidateForCapture(0);
             var note1 = ctrl.SubstitutionNoteForCapture;
             ctrl.ApplySubstitutionForCapture();
+            ctrl.CloseSubstitutionForCapture();   // 予約→「確定して試合へ戻る」（issue #718/#721）
             yield return null;
             Check("③ 継投", beforeP, SlotName(ctrl, FieldPosition.Pitcher), ctrl, note1);
             yield return Capture(ctrl, "3-relieve");
@@ -110,6 +113,7 @@ namespace KokoSim.Unity.Match
             // 確定後は選択が消えて比較が空になるので、保留中に撮る。
             yield return Capture(ctrl, "4-defensive-sub-pending", reopen: false);
             ctrl.ApplySubstitutionForCapture();
+            ctrl.CloseSubstitutionForCapture();   // 予約→「確定して試合へ戻る」（issue #718/#721）
             yield return null;
             Check("④ 守備固め", beforeLf, SlotName(ctrl, FieldPosition.LeftField), ctrl, note2);
             yield return Capture(ctrl, "4-defensive-sub");
@@ -122,6 +126,7 @@ namespace KokoSim.Unity.Match
             ctrl.PickSubstitutionSlotForCapture(FieldPosition.Shortstop);
             var note3 = ctrl.SubstitutionNoteForCapture;
             ctrl.ApplySubstitutionForCapture();
+            ctrl.CloseSubstitutionForCapture();   // 予約→「確定して試合へ戻る」（issue #718/#721）
             yield return null;
             CheckSwap("⑤ 入替", before2b, beforeSs,
                 SlotName(ctrl, FieldPosition.SecondBase), SlotName(ctrl, FieldPosition.Shortstop), ctrl, note3);
@@ -136,6 +141,7 @@ namespace KokoSim.Unity.Match
             var note4 = ctrl.SubstitutionNoteForCapture;
             yield return Capture(ctrl, "6-convert-pending", reopen: false);   // 確定前のプレビュー＋フッタ
             ctrl.ApplySubstitutionForCapture();
+            ctrl.CloseSubstitutionForCapture();   // 予約→「確定して試合へ戻る」（issue #718/#721）
             yield return null;
             // 非DHは単純な入れ替え＝控えは動かない・誰も退場しない（旧仕様の「空き枠は自動補充」は廃止）。
             CheckSwap("⑥ 投野交代", beforeP4, beforeRf,
