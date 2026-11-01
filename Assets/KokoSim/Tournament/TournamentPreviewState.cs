@@ -380,7 +380,7 @@ namespace KokoSim.Unity.Tournament
         /// ベンチ外を打順に入れ控え野手も積まないので、そのまま使うと背番号0が載って12人前後になる。
         /// </summary>
         private static KokoSim.Engine.Match.Game.Team ManagerTeamForPreview(string schoolName)
-            => KokoSim.Unity.Shell.GameSession.Current.Lineup != null
+            => KokoSim.Unity.Shell.PlayerMatchResolver.UsableLineup() != null
                 ? KokoSim.Unity.Shell.PlayerMatchResolver.BuildManagerTeam(schoolName)
                 : KokoSim.Engine.Season.RosterTeamBuilder.BuildRegistered(
                     KokoSim.Unity.Shell.RosterService.Active, schoolName);
