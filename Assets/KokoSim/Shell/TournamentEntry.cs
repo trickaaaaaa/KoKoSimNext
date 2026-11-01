@@ -245,10 +245,10 @@ namespace KokoSim.Unity.Shell
             if (kind == TournamentKind.AutumnDistrict)
             {
                 // 自校が戦う地区を添える（例「秋季神奈川県地区予選（湘南地区）」。issue #725）。
-                var district = NationService.DistrictId is { } d
-                    ? "（" + DistrictPlanProvider.DistrictTitleName(pref, d) + "）"
-                    : "";
-                return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "地区予選" + district;
+                // 地区未設定（新規ゲーム設定を通らない起動）は Enter の組み合わせと同じく第0地区とみなす。
+                var d = NationService.DistrictId ?? 0;
+                return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "地区予選"
+                    + "（" + DistrictPlanProvider.DistrictTitleName(pref, d) + "）";
             }
             return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "大会";
         }
