@@ -15,7 +15,7 @@ namespace KokoSim.Engine.Tests.Nation;
 public sealed class PrefFormatDistrictParserTests
 {
     [Theory]
-    [InlineData("kanagawa.yaml", "kanagawa", 4)]   // 地区予選 group_split / groups:4（districts の名前は7個だが運用は4）
+    [InlineData("kanagawa.yaml", "kanagawa", 7)]   // 地区予選 group_split / groups:7（issue #725 で districts の7地区どおり）
     [InlineData("hyogo.yaml", "hyogo", 5)]         // 地区予選 group_split / groups:5
     [InlineData("nara.yaml", "nara", 0)]           // district_assignment: none ＝ 県内地区なし
     [InlineData("aichi.yaml", "aichi", 5)]         // 地区予選 group_split / groups:5
@@ -29,7 +29,7 @@ public sealed class PrefFormatDistrictParserTests
     /// <summary>県大会へ進む校数と夏代表の推薦も同じファイルから読む（issue #688）。
     /// 地区なしの県（奈良）は規則を持たない＝1校・推薦なし。</summary>
     [Theory]
-    [InlineData("kanagawa.yaml", 4, 8, true)]
+    [InlineData("kanagawa.yaml", 7, 5, true)]
     [InlineData("hyogo.yaml", 5, 8, true)]
     [InlineData("aichi.yaml", 5, 6, false)]
     [InlineData("hokkaido.yaml", 10, 3, false)]
@@ -80,6 +80,43 @@ stages:
         Assert.Equal(("kanagawa", 4), PrefFormatDistrictParser.Parse(yaml));
     }
 
+    /// <summary>
+    /// 地区の実名（issue #725）。districts: の並び＝地区Id順。数が地区数と一致する県だけ名前を持つ。
+    /// </summary>
+    [Theory]
+    [InlineData("kanagawa.yaml", 0, "川崎")]
+    [InlineData("kanagawa.yaml", 4, "湘南")]
+    [InlineData("kanagawa.yaml", 6, "北相")]
+    [InlineData("hyogo.yaml", 0, "神戸")]
+    [InlineData("aichi.yaml", 4, "尾張")]
+    [InlineData("hokkaido.yaml", 9, "釧根")]
+    public void ParseRule_DistrictNames(string file, int districtId, string expected)
+    {
+        var rule = PrefFormatDistrictParser.ParseRule(File.ReadAllText(FindPrefFormat(file)));
+        Assert.Equal(expected, rule.NameOf(districtId));
+    }
+
+    /// <summary>名前の数が地区数と食い違う県は名前を持たない（番号で出す）。範囲外も null。</summary>
+    [Fact]
+    public void NameOf_MismatchedCount_IsNull()
+    {
+        const string yaml = @"
+pref: kanagawa
+districts: [川崎, 横浜北, 横浜南]
+district_assignment: geographic
+stages:
+  - name: 地区予選
+    type: group_split
+    groups: 4
+    grouping: geographic
+";
+        var rule = PrefFormatDistrictParser.ParseRule(yaml);
+        Assert.Null(rule.NameOf(0));
+        var ok = PrefFormatDistrictParser.ParseRule(yaml.Replace("groups: 4", "groups: 3"));
+        Assert.Equal("横浜南", ok.NameOf(2));
+        Assert.Null(ok.NameOf(3));
+    }
+
     /// <summary>geographic でない割当（抽選など）は地区を持たない扱い＝0。</summary>
     [Fact]
     public void Parse_NonGeographicAssignment_HasNoDistricts()
@@ -107,7 +144,7 @@ stages:
             .Select(File.ReadAllText);
         var plan = PrefFormatDistrictParser.BuildPlan(texts);
 
-        Assert.Equal(4, plan[PrefectureNames.IdOf("kanagawa")]);
+        Assert.Equal(7, plan[PrefectureNames.IdOf("kanagawa")]);
         Assert.Equal(5, plan[PrefectureNames.IdOf("hyogo")]);
         Assert.Equal(5, plan[PrefectureNames.IdOf("aichi")]);
         Assert.Equal(10, plan[PrefectureNames.IdOf("hokkaido")]);

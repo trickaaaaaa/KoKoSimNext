@@ -9,7 +9,7 @@ using KokoSim.Engine.Season;
 namespace KokoSim.Unity.Shell
 {
     /// <summary>
-    /// 秋季地区予選（神奈川4地区・兵庫5地区・愛知5地区・北海道10支部等、地理固定割の県だけ）から
+    /// 秋季地区予選（神奈川7地区・兵庫5地区・愛知5地区・北海道10支部等、地理固定割の県だけ）から
     /// 秋季県大会（<see cref="TournamentKind.Autumn"/>）への遷移。<see cref="KoshienEntry"/>／
     /// <see cref="RegionalEntry"/> と同型のシェル層クラス（issue autumn-district-tournament-not-wired）。
     ///
