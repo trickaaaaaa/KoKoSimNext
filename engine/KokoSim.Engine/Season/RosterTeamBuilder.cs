@@ -175,6 +175,21 @@ public static class RosterTeamBuilder
     }
 
     /// <summary>
+    /// 保存済みのスタメン（<see cref="LineupSpec"/>）が今もそのまま使えるか（issue #724）。
+    /// スタメン確定の後に、メンバー設定で背番号を外した（ベンチ外にした）選手や、夏の引退・卒業で
+    /// 在籍部員（<paramref name="active"/>）から外れた選手を参照していたら false。
+    /// false のスタメンを <see cref="BuildFromLineup"/> へ渡すとベンチ外の安全網が例外を投げる。
+    /// </summary>
+    public static bool IsStillRegistrable(LineupSpec spec, IEnumerable<DevelopingPlayer> active)
+    {
+        var members = new HashSet<DevelopingPlayer>(active);
+        var referenced = spec.BattingOrder.Select(s => s.Player)
+            .Concat(spec.StartingPitcher != null ? new[] { spec.StartingPitcher } : Array.Empty<DevelopingPlayer>())
+            .Concat(spec.Reserves ?? Array.Empty<DevelopingPlayer>());
+        return referenced.All(p => p.UniformNumber >= 1 && members.Contains(p));
+    }
+
+    /// <summary>
     /// ユーザーが決めたスタメン（<see cref="LineupSpec"/>）から試合用 <see cref="Team"/> を組む。
     /// 打順・守備位置・DH・先発は spec 通り。投影は <see cref="ToPlayer"/> を再利用（自動編成 Build と同じ物理層写像）。
     /// 主将は在場なら同一 Player 参照を Team.Captain へ、ベンチ在籍なら単独投影して差す（Build と同じ挙動）。
