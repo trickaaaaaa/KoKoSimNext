@@ -108,6 +108,39 @@ public sealed class LineupSpecTests
         Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(new LineupSpec(slots)));
     }
 
+    // issue #724: スタメン確定の後で背番号を外す・部員から外れると、保存済みのスタメンはもう使えない。
+    [Fact]
+    public void IsStillRegistrable_TrueWhenEveryoneIsStillBenchIn()
+    {
+        var order = StandardOrder(out _);
+        var reserve = Dp(12, "控え");
+        var spec = new LineupSpec(order, Reserves: new List<DevelopingPlayer> { reserve });
+        var active = order.Select(s => s.Player).Append(reserve).ToList();
+        Assert.True(RosterTeamBuilder.IsStillRegistrable(spec, active));
+    }
+
+    [Fact]
+    public void IsStillRegistrable_FalseAfterNumberIsRemoved()
+    {
+        var order = StandardOrder(out _);
+        var reserve = Dp(12, "控え");
+        var spec = new LineupSpec(order, Reserves: new List<DevelopingPlayer> { reserve });
+        var active = order.Select(s => s.Player).Append(reserve).ToList();
+
+        reserve.UniformNumber = 0;   // メンバー設定でベンチ外へ
+        Assert.False(RosterTeamBuilder.IsStillRegistrable(spec, active));
+        Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(spec));   // 使うと例外になる組み合わせ
+    }
+
+    [Fact]
+    public void IsStillRegistrable_FalseWhenAPlayerLeftTheClub()
+    {
+        var order = StandardOrder(out _);
+        var spec = new LineupSpec(order);
+        var active = order.Select(s => s.Player).Skip(1).ToList();   // 1番打者が引退・卒業
+        Assert.False(RosterTeamBuilder.IsStillRegistrable(spec, active));
+    }
+
     [Fact]
     public void BuildFromLineup_BenchOutInBattingOrder_Throws()
     {
