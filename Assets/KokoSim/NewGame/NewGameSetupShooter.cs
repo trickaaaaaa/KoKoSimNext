@@ -39,7 +39,7 @@ namespace KokoSim.Unity.NewGame
             yield return null; yield return null;
             yield return Capture(doc, "00-empty-name");
 
-            // ② 地区あり県（神奈川＝4地区）＋校名入力
+            // ② 地区あり県（神奈川＝7地区）＋校名入力
             ctrl.SetForCapture(13, "湘南台");
             yield return null; yield return null;
             yield return Capture(doc, "01-kanagawa");

@@ -3,7 +3,7 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// <summary>
 /// 県内地区の割当計画（設計書05 §2.2 / CHANGELOG 28）。地理固定割（district_assignment=geographic）の県について
 /// 「県Id → 地区数」を県フォーマットから導く。地区数＝地区予選 group_split ステージの Groups
-/// （例: 神奈川=4 / 兵庫=5。districts 一覧の名称数ではなく運用ブロック数に合わせる）。
+/// （例: 神奈川=7 / 兵庫=5。地区の実名は districts 一覧＝同じ並び。issue #725）。
 /// NationGenerator に渡すと学校へ DistrictId が付与され、group_split の地理割が実際に効く。
 /// </summary>
 public static class DistrictPlan

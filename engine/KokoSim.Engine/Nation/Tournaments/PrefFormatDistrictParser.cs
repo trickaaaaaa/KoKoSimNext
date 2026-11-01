@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace KokoSim.Engine.Nation.Tournaments;
 
@@ -23,7 +24,17 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public static class PrefFormatDistrictParser
 {
     /// <summary>秋季地区予選の規則（県内地区数・各地区の進出校数・夏代表の推薦）。地区が無い県は Districts=0。</summary>
-    public sealed record AutumnDistrictRule(string Pref, int Districts, int AdvancePerDistrict, bool SeedExemption);
+    /// <para><see cref="Names"/> は YAML の <c>districts:</c>（地区の実名・地区Id順）。数が <see cref="Districts"/> と
+    /// 食い違う県は名前を持たない扱い（空）＝表示側は番号で出す（issue #725）。</para>
+    public sealed record AutumnDistrictRule(string Pref, int Districts, int AdvancePerDistrict, bool SeedExemption,
+        IReadOnlyList<string>? Names = null)
+    {
+        /// <summary>地区Id の実名。名前を持たない県・範囲外は null。</summary>
+        public string? NameOf(int districtId)
+            => Names != null && Names.Count == Districts && districtId >= 0 && districtId < Names.Count
+                ? Names[districtId]
+                : null;
+    }
 
     /// <summary>1県ぶんの YAML から (ローマ字県名, 地区数) を返す。地区が無い県は Districts=0。</summary>
     public static (string Pref, int Districts) Parse(string yaml)
@@ -36,6 +47,7 @@ public static class PrefFormatDistrictParser
     public static AutumnDistrictRule ParseRule(string yaml)
     {
         string pref = "";
+        var names = new List<string>();
         var geographic = false;
         var seedExemption = false;
         var foundAdvance = 1;
@@ -74,6 +86,7 @@ public static class PrefFormatDistrictParser
                 var (k0, v0) = Split(trimmed);
                 if (k0 == null) continue;
                 if (k0 == "pref") pref = v0;
+                else if (k0 == "districts") names = ParseInlineList(v0);
                 else if (k0 == "district_assignment") geographic = v0 == "geographic";
                 else if (k0 == "seed_exemption") seedExemption = v0 == "true";
                 else if (k0 == "stages") inStages = true;
@@ -112,7 +125,7 @@ public static class PrefFormatDistrictParser
         CloseStage();
 
         return geographic
-            ? new AutumnDistrictRule(pref, found, foundAdvance, seedExemption)
+            ? new AutumnDistrictRule(pref, found, foundAdvance, seedExemption, names)
             : new AutumnDistrictRule(pref, 0, 1, false);
     }
 
@@ -142,6 +155,18 @@ public static class PrefFormatDistrictParser
             if (id >= 0) map[id] = rule;
         }
         return map;
+    }
+
+    /// <summary>インライン配列 <c>[a, b, c]</c> を要素の並びにする（引用符は外す）。配列でなければ空。</summary>
+    private static List<string> ParseInlineList(string v)
+    {
+        var t = v.Trim();
+        if (t.Length < 2 || t[0] != '[' || t[t.Length - 1] != ']') return new List<string>();
+        return t.Substring(1, t.Length - 2)
+            .Split(',')
+            .Select(x => x.Trim().Trim('"', '\''))
+            .Where(x => x.Length > 0)
+            .ToList();
     }
 
     private static string StripComment(string line)
