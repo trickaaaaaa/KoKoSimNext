@@ -762,6 +762,7 @@ namespace KokoSim.Unity.Home
                 var cell = new VisualElement();
                 cell.AddToClassList("hm-rk-e");
                 var name = new Label(e.Name); name.AddToClassList("hm-rk-e__n");
+                UiComponents.ShrinkToFit(name);   // 入らない長さの名前だけ縮める（issue #730）
                 var val = new Label(e.Value); val.AddToClassList("hm-rk-e__v"); val.AddToClassList("f-num");
                 cell.Add(name); cell.Add(val);
                 row.Add(cell);
