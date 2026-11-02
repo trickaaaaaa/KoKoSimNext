@@ -242,10 +242,17 @@ public static class TimelineBuilder
         var fieldedAt = play.FieldedAtSeconds is { } f ? ContactAt + f : landAt;
         if (play.IsFly || play.Result == BattedBallResult.HomeRun)
         {
+            // 本塁打は柵上の点（判定に使った高さ）を必ず通す（issue #743）。対称な放物線のままだと、空気抵抗で
+            // 後半ほど急に落ちる実軌道より柵の位置で低く描かれ、ぎりぎりの当たりが柵の手前に落ちて見える。
+            var landRange = Distance(Home, landing);
+            double? pass = play.Result == BattedBallResult.HomeRun && play.FenceCrossRangeM is { } cr && landRange > 1e-6
+                ? Math.Clamp(cr / landRange, 0.0, 1.0)
+                : null;
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Flight, T0 = ContactAt, T1 = landAt,
                 From = Home, To = landing, ApexHeightM = play.ApexHeightM, LaunchHeightM = play.LaunchHeightM,
+                PassFraction = pass, PassHeightM = play.FenceCrossHeightM ?? 0.0,
             });
             // 抜けた飛球は着地して終わりではない: 着地点→回収点まで転がる（Issue #301②）。
             // 経路・時刻はエンジンの転がり結果（FieldedX/Z・FieldedAtSeconds）をそのまま使い、

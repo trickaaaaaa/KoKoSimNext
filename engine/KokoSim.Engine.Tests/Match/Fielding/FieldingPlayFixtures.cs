@@ -56,9 +56,11 @@ internal static class FieldingPlayFixtures
     /// </summary>
     public static FieldingPlay HomeRun(
         double landingX = 0.0, double landingZ = 130.0,
-        double hangTimeSeconds = 4.2, double apexHeightM = 22.0, double batterToFirstSeconds = 4.2)
+        double hangTimeSeconds = 4.2, double apexHeightM = 22.0, double batterToFirstSeconds = 4.2,
+        double fenceCrossRangeM = 122.0, double fenceCrossHeightM = 8.0)
         => Base(BattedBallResult.HomeRun, landingX, landingZ,
-            hangTimeSeconds, apexHeightM, batterToFirstSeconds, BattedBallClass.Fly);
+            hangTimeSeconds, apexHeightM, batterToFirstSeconds, BattedBallClass.Fly)
+            with { FenceCrossRangeM = fenceCrossRangeM, FenceCrossHeightM = fenceCrossHeightM };
 
     /// <summary>
     /// 空中捕球（フライ／ライナーのアウト・失策）。回収時刻＝滞空しきった瞬間で、

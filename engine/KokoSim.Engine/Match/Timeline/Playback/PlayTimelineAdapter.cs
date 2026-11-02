@@ -131,9 +131,15 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         _dist = Math.Sqrt(dx * dx + dy * dy);
     }
 
+    // 滞空が必ず通る点（issue #743・本塁打の柵上）。null なら対称な放物線。
+    private double? _passU;
+    private double _passH;
+
     public static EndpointBallSegment From(BallSegment s)
         => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM, s.LaunchHeightM)
         {
+            _passU = s.PassFraction is { } pu && pu > 1e-6 && pu < 1 - 1e-6 ? pu : null,
+            _passH = Math.Max(0.0, s.PassHeightM),
             // 送球の投げ手／受け手（Issue E1）。座標と違って**推定できない**値なので素通しする
             FromRole = s.FromRole, ToRole = s.ToRole, ToBase = s.ToBase,
         };
@@ -148,6 +154,30 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         return new PlaybackBall(x, y, h);
     }
 
+    /// <summary>
+    /// 通過点つきの滞空（issue #743）。[0,pu] は打点→頂点→通過点、[pu,1] は通過点→着地0 の2本の放物線をつなぐ。
+    /// 前半は従来式を「終点の高さ」まで一般化したもの（終点0なら従来式と同じ）＝頂点はほぼ ApexHeightM。
+    /// 後半は前半の終わりの傾きを引き継ぐ（折れ目を作らない）。上に凸（放物線項≥0）に限り、引き継げないときは
+    /// 直線で降ろす。通過点 pu で高さはちょうど PassHeightM になる。
+    /// </summary>
+    private double PassHeight(double u, double pu)
+    {
+        var p = _passH;
+        var ka = Math.Max(0, _apex - (_launch + p) * 0.5);
+        if (u <= pu)
+        {
+            var v = u / pu;
+            return _launch * (1 - v) + p * v + ka * 4 * v * (1 - v);
+        }
+        // 前半の終わりの傾き（u あたり）: d/du = (−launch + p − 4ka) / pu
+        var slope = (-_launch + p - 4 * ka) / pu;
+        var rest = 1 - pu;
+        // 後半 h(w) = p(1−w) + kb·4w(1−w)、w=(u−pu)/rest。始点の傾き (−p + 4kb)/rest を slope にそろえる。
+        var kb = Math.Max(0, (slope * rest + p) / 4);
+        var w = (u - pu) / rest;
+        return Math.Max(0, p * (1 - w) + kb * 4 * w * (1 - w));
+    }
+
     // 種別ごとの高さプロファイル[m]（表示演出。判定・帯には無関係）。
     private double Height(double u)
     {
@@ -156,6 +186,7 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
             case BallSegmentKind.Pitch:
                 return 1.7 - 1.1 * u;                          // リリース→やや低め（mock pitch）
             case BallSegmentKind.Flight:
+                if (_passU is { } pu) return PassHeight(u, pu);
                 // 打点→頂点ApexHeightM→着地0 の放物線（issue duel-view-fly-leaves-bat-flat-then-rises）。
                 // 線形項 launch·(1−u) で打点から始め、放物線項の振幅を launch/2 だけ削ると頂点はほぼ ApexHeightM
                 // のまま（誤差 launch²/(16·(Apex−launch/2))＝1mの打点・20mの弧で 0.3cm）。launch=0 なら従来式。
