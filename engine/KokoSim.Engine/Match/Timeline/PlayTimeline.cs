@@ -44,6 +44,14 @@ public sealed record BallSegment
     public double LaunchHeightM { get; init; }
 
     /// <summary>
+    /// 滞空（<see cref="BallSegmentKind.Flight"/>）が必ず通る点（issue #743・本塁打だけ）。区間の水平距離に
+    /// 対する割合 <see cref="PassFraction"/>（0〜1）の位置で高さ <see cref="PassHeightM"/> を通る。
+    /// 本塁打の柵上の高さ（判定に使った値）を絵の弧にも通すためのもの。null なら従来の対称な放物線。
+    /// </summary>
+    public double? PassFraction { get; init; }
+    public double PassHeightM { get; init; }
+
+    /// <summary>
     /// この送球を投げた野手（<see cref="BallSegmentKind.Throw"/> のみ。表示専用・Issue E1）。
     ///
     /// 3Dの守備ビューは「誰が投げるモーションをするか」を決める必要があるが、座標だけでは

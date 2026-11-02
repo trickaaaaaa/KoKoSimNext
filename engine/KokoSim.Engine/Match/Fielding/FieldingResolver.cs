@@ -120,6 +120,14 @@ public sealed record FieldingPlay
     public Timeline.HomeRunStyle? HomeRunStyle { get; init; }
 
     /// <summary>
+    /// 本塁打が柵を越えた点の本塁からの水平距離[m]と、その点での高さ[m]（判定に使った
+    /// <c>FenceCrossPosition</c> の写し・issue #743）。本塁打以外は null。弧の絵が柵の上を必ず通るように
+    /// タイムラインへ渡すだけ＝判定・乱数には触れない。
+    /// </summary>
+    public double? FenceCrossRangeM { get; init; }
+    public double? FenceCrossHeightM { get; init; }
+
+    /// <summary>
     /// 失策の種類（issue #439）。<see cref="Result"/>==Error のときだけ非null。
     /// 引いたロールの結果を記録するだけ＝新規RNGなし（不変条件#2）。
     /// </summary>
@@ -263,6 +271,9 @@ public static class FieldingResolver
             {
                 HomeRunStyle = Timeline.HomeRunStyles.Classify(
                     ground.FenceCrossPosition.Y - field.FenceHeightM, ball.LaunchAngleDeg),
+                FenceCrossRangeM = Math.Sqrt(ground.FenceCrossPosition.X * ground.FenceCrossPosition.X
+                                             + ground.FenceCrossPosition.Z * ground.FenceCrossPosition.Z),
+                FenceCrossHeightM = ground.FenceCrossPosition.Y,
             };
         }
 
