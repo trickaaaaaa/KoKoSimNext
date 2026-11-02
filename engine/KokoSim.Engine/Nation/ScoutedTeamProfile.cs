@@ -18,6 +18,14 @@ public static class ScoutedTeamProfile
         => TeamStrengthProfile.Compute(ToRoster(team), c);
 
     /// <summary>
+    /// 相手校のランク（総合の等級）。**画面に出す相手校のランクはここだけから引く**（issue #737）。
+    /// 学校に付いた抽象的な強さ（<see cref="School.Tier"/>）は実際に出場するチームと別に動くので、
+    /// 次戦の相手を見せる画面（ホーム・試合前画面）はどちらもこの値にそろえる。
+    /// </summary>
+    public static Tier OverallTier(Team team, TeamStrengthCoefficients c)
+        => Tiers.FromStrength(Compute(team, c).Overall);
+
+    /// <summary>
     /// 試合層の <see cref="Player"/> を集計用の <see cref="DevelopingPlayer"/> へ写す（表示能力の逆投影）。
     /// 球速・スタミナは物理量で保持されているので <see cref="PitcherAttributes"/> の逆変換で Level に戻す。
     /// </summary>

@@ -575,8 +575,6 @@ public sealed class TournamentRunner
 
     /// <summary>自校の次戦相手（不戦勝続き/敗退済み/優勝は null）。</summary>
     public School? NextOpponent => _nextOpponent;
-    /// <summary>次戦相手のランク（NextOpponent が null のときは意味を持たない）。</summary>
-    public Tier NextOpponentTier => _nextOpponent?.Tier ?? Tier.G;
     /// <summary>次戦の試合日（大会開幕からの相対日）。</summary>
     public int NextMatchDay =>
         _schedule.MatchDay(_totalRounds, _roundIndex, ManagerCardSlot(_current), Math.Max(1, _current.Length / 2), _fieldSize);

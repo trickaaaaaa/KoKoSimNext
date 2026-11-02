@@ -37,6 +37,9 @@ namespace KokoSim.Unity.Components
         // --- 上限のない量の数値表示（issue #356）: スタミナ＝目安投球数など 0..100 バーに載らない量は
         //     バーを出さず「数字＋和文単位」を右端に出す（HideBar と併用。数字は Oswald・単位はサンセリフ＝NumUnit）。 ---
         public string Unit = "";         // 非空かつ HideBar のとき Value をこの単位付き数値（例「135球」）で右端表示
+        // --- ランクを持たない軸（球速＝km/h で読む量, issue #736）: チップは出さず、チップ幅の空きだけ残して
+        //     バーの左端をほかの行とそろえる。 ---
+        public bool KeepChipSlot;        // true かつチップ無しのとき、チップ幅の空き枠を置く
     }
 
     /// <summary>
@@ -625,6 +628,12 @@ namespace KokoSim.Unity.Components
 
             if (!string.IsNullOrEmpty(d.TypeLabel)) row.Add(TypeChip(d.TypeLabel));
             else if (!string.IsNullOrEmpty(d.Grade)) row.Add(RankChip(d.Grade));
+            else if (d.KeepChipSlot)
+            {
+                var slot = new VisualElement();
+                slot.AddToClassList("abil-row__chip-slot");
+                row.Add(slot);
+            }
 
             if (!d.HideBar)
             {
