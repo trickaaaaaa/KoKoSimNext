@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+<!-- 直：直球中心（まっすぐ来る球）。黒＝絵、白＝抜き（PNG化で透明になる） -->
+<g fill="none" stroke="#000000" stroke-width="5" stroke-linecap="round"><path d="M16,37 L48,37"></path><path d="M6,50 L50,50"></path><path d="M16,63 L48,63"></path></g>
+<circle cx="70" cy="50" r="13" fill="#ffffff" stroke="#000000" stroke-width="5"></circle>
+</svg>

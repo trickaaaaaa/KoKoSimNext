@@ -1528,11 +1528,11 @@ namespace KokoSim.Unity.Match
         {
             _signPad?.SetDefs(new[]
             {
-                // ── 攻撃: 打ち方（1手）──  Icon はカードの絵の位置に敷く1文字（将来ここへ実際の絵が入る）。
-                new SignPad.SignDef { Id = "batting-swing", Label = "積極的に", Icon = "打", Offense = true, Group = "batting",
+                // ── 攻撃: 打ち方（1手）──  Art はカードの絵（Assets/UI/Images/signs）。Icon は絵が無いときに敷く1文字。
+                new SignPad.SignDef { Id = "batting-swing", Label = "積極的に", Icon = "打", Art = "swing", Offense = true, Group = "batting",
                     GroupLabel = "打撃", OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.ForceSwing; PrepareBuntStance(false); },
                     OnClear = () => _pitchBattingChoice = null },
-                new SignPad.SignDef { Id = "batting-take", Label = "待て", Icon = "待", Offense = true, Group = "batting",
+                new SignPad.SignDef { Id = "batting-take", Label = "待て", Icon = "待", Art = "take", Offense = true, Group = "batting",
                     GroupLabel = "打撃", OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.ForceTake; PrepareBuntStance(false); },
                     OnClear = () => _pitchBattingChoice = null },
                 // ── 攻撃: 仕掛け（1手・走者が要る）──
@@ -1541,11 +1541,11 @@ namespace KokoSim.Unity.Match
                 // リリースまでは実測 0.3秒しかない（クリップ内時刻を実測: リリース時点で
                 // Idle_To_Bunt が t=0.00＝始まったばかり）。窓の滞在時間ぶんを丸ごと使わないと
                 // 着弾までに構えへ入り切らない。
-                new SignPad.SignDef { Id = "batting-bunt", Label = "バント", Icon = "犠", Offense = true, Group = "batting",
+                new SignPad.SignDef { Id = "batting-bunt", Label = "バント", Icon = "犠", Art = "bunt", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnAnyBase,
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
-                new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Offense = true, Group = "batting",
+                new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Art = "squeeze", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnThird && !HomeStealChosen,
                     OnSelect = () =>
                     {
@@ -1559,43 +1559,43 @@ namespace KokoSim.Unity.Match
                         PrepareBuntStance(false);
                         _signPad?.RefreshEnabled();
                     } },
-                new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Offense = true, Group = "batting",
+                new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Art = "hitrun", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst,
                     OnSelect = () => _signChoice = OffensiveSign.HitAndRun,
                     OnClear = () => _signChoice = null },
                 // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗／三塁のみ→本盗）ので、
                 // カードは1枚のままラベルだけ書き換える（issue #622・案A）。
-                new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Offense = true, Group = "run",
+                new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Art = "steal", Offense = true, Group = "run",
                     GroupLabel = "走塁", LabelOf = () => StealCardLabel,
                     EnabledIf = () => StealTargetNow != null,
                     OnSelect = () => { _stealChoice = StartType.Gamble; _signPad?.RefreshEnabled(); },
                     OnClear = () => { _stealChoice = null; _signPad?.RefreshEnabled(); } },
                 // ── 攻撃: 構え（方針・解除するまで続く）──
-                new SignPad.SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Offense = true, Group = "approach",
+                new SignPad.SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Art = "work", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.WorkCount),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignPad.SignDef { Id = "app-ground", Label = "転がせ", Icon = "転", Offense = true, Group = "approach",
+                new SignPad.SignDef { Id = "app-ground", Label = "転がせ", Icon = "転", Art = "ground", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.GroundBall),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignPad.SignDef { Id = "app-slug", Label = "長打狙い", Icon = "長", Offense = true, Group = "approach",
+                new SignPad.SignDef { Id = "app-slug", Label = "長打狙い", Icon = "長", Art = "slug", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.Slug),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignPad.SignDef { Id = "app-put", Label = "当てに行け", Icon = "当", Offense = true, Group = "approach",
+                new SignPad.SignDef { Id = "app-put", Label = "当てに行け", Icon = "当", Art = "put", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.PutInPlay),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
 
                 // ── 守備（すべて方針・解除するまで続く）──
-                new SignPad.SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Offense = false, Group = "infield",
+                new SignPad.SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Art = "infield-in", Offense = false, Group = "infield",
                     GroupLabel = "陣形", OnSelect = () => PushDefInfield(DefenseDepth.In), OnClear = () => PushDefInfield(null) },
-                new SignPad.SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Offense = false, Group = "outfield",
+                new SignPad.SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Art = "outfield-deep", Offense = false, Group = "outfield",
                     GroupLabel = "陣形", OnSelect = () => PushDefOutfield(DefenseDepth.Deep), OnClear = () => PushDefOutfield(null) },
-                new SignPad.SignDef { Id = "policy-fast", Label = "直球中心", Icon = "直", Offense = false, Group = "policy",
+                new SignPad.SignDef { Id = "policy-fast", Label = "直球中心", Icon = "直", Art = "fastball", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.FastballHeavy), OnClear = () => PushDefPolicy(null) },
-                new SignPad.SignDef { Id = "policy-break", Label = "変化球中心", Icon = "変", Offense = false, Group = "policy",
+                new SignPad.SignDef { Id = "policy-break", Label = "変化球中心", Icon = "変", Art = "breaking", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.BreakingHeavy), OnClear = () => PushDefPolicy(null) },
-                new SignPad.SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Offense = false, Group = "policy",
+                new SignPad.SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Art = "control", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.ControlFirst), OnClear = () => PushDefPolicy(null) },
-                new SignPad.SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Offense = false, Group = "gear",
+                new SignPad.SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Art = "push", Offense = false, Group = "gear",
                     GroupLabel = "ギア", OnSelect = () => PushDefGear(PitcherGear.Push), OnClear = () => PushDefGear(null) },
             });
         }

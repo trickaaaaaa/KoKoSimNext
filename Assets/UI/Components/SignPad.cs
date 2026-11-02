@@ -28,6 +28,11 @@ namespace KokoSim.Unity.Components
             public Func<string> LabelOf;
             /// <summary>将来のアイコン化用（null=文字タイル）。指定時はアイコンを主表示に回す。</summary>
             public string Icon;
+            /// <summary>
+            /// カードの絵（null=<see cref="Icon"/> の1文字を淡く敷く）。値は絵の名前で、
+            /// components.uss の <c>.tcard__pic--{Art}</c> が Assets/UI/Images/signs/sign-{Art}.png を引く。
+            /// </summary>
+            public string Art;
             /// <summary>true=攻撃中に出す指示 / false=守備中に出す指示。</summary>
             public bool Offense;
             /// <summary>排他グループ（例: "batting" / "policy"）。同グループ内で1つだけ選べる。</summary>

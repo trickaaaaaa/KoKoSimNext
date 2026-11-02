@@ -39,6 +39,9 @@ namespace KokoSim.Unity.Components
         /// <summary>名前の段（カード下部）の高さ比。絵の面は残り。</summary>
         private const float CapHeightRatio = 0.38f;
 
+        /// <summary>絵の周りに残す余白（帯の幅に対する比）。</summary>
+        private const float PicInsetRatio = 0.08f;
+
         /// <summary>行送りの見込み（級数に対する1行の実高）。実測 1.3 前後なので余裕をみて 1.45 で割る。</summary>
         private const float LineHeightFactor = 1.45f;
 
@@ -249,12 +252,22 @@ namespace KokoSim.Unity.Components
             var enabled = (def.EnabledIf?.Invoke() ?? true) && _accepting;
             if (!enabled) card.AddToClassList("tcard--off");
 
-            // 上＝将来ここに絵を入れる場所。いまは Icon の1文字を淡く敷いて「絵の枠」だと分かるようにする。
+            // 上＝絵。Art があれば絵を、無ければ Icon の1文字を淡く敷いて「絵の枠」だと分かるようにする。
             var art = new VisualElement { pickingMode = PickingMode.Ignore };
             art.AddToClassList("tcard__art");
-            var ghost = new Label(def.Icon ?? "") { pickingMode = PickingMode.Ignore };
-            ghost.AddToClassList("tcard__ghost");
-            art.Add(ghost);
+            if (!string.IsNullOrEmpty(def.Art))
+            {
+                var pic = new VisualElement { pickingMode = PickingMode.Ignore };
+                pic.AddToClassList("tcard__pic");
+                pic.AddToClassList("tcard__pic--" + def.Art);
+                art.Add(pic);
+            }
+            else
+            {
+                var ghost = new Label(def.Icon ?? "") { pickingMode = PickingMode.Ignore };
+                ghost.AddToClassList("tcard__ghost");
+                art.Add(ghost);
+            }
             card.Add(art);
 
             // 下＝名前。左の帯（隣に隠れない幅）の中央へ置く。
@@ -294,6 +307,16 @@ namespace KokoSim.Unity.Components
                 {
                     ghost.style.width = Step;
                     ghost.style.fontSize = Mathf.Round(Step * 0.62f);
+                }
+                // 絵も同じ帯の中央へ。帯の幅に対して一定の余白を残す（絵は正方形で、帯に収まる大きさへ縮む）。
+                var pic = card.Q(className: "tcard__pic");
+                if (pic != null)
+                {
+                    var inset = Mathf.Round(Step * PicInsetRatio);
+                    pic.style.left = inset;
+                    pic.style.width = Step - inset * 2;
+                    pic.style.top = inset;
+                    pic.style.bottom = inset;
                 }
                 var cap = card.Q(className: "tcard__cap");
                 var capHeight = CardHeight * CapHeightRatio;

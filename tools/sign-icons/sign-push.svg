@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+<!-- 飛：とばしていけ（メーターを振り切る）。黒＝絵、白＝抜き（PNG化で透明になる） -->
+<path d="M16,72 A34,34 0 0 1 84,72" fill="none" stroke="#000000" stroke-width="6" stroke-linecap="round"></path>
+<path d="M79.4,55 A34,34 0 0 1 84,72" fill="none" stroke="#000000" stroke-width="13"></path>
+<g fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round"><path d="M33,55 L29.5,51.5"></path><path d="M50,48 L50,43"></path><path d="M67,55 L70.5,51.5"></path></g>
+<path d="M50,72 L77.2,59.3" fill="none" stroke="#000000" stroke-width="6" stroke-linecap="round"></path>
+<circle cx="50" cy="72" r="7" fill="#000000"></circle>
+<path d="M16,84 L84,84" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round"></path>
+</svg>
