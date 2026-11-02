@@ -96,7 +96,6 @@
                 <ui:VisualElement class="card card--half sc-card-last">
                   <ui:VisualElement class="card__hd card__hd--tight">
                     <ui:Label class="card__hd-title" text="わかっていること" />
-                    <ui:Label class="card__hd-sub" text="段が上がるほど？が減る" />
                   </ui:VisualElement>
                   <ui:VisualElement class="card__body">
                     <ui:VisualElement name="sc-hidden" class="sc-hidden" />

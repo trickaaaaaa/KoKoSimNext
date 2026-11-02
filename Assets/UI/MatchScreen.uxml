@@ -41,7 +41,6 @@
                             <ui:Label name="home-team" class="vs__team" text="桜丘" />
                         </ui:VisualElement>
                         <ui:VisualElement name="scoreboard" class="scoreboard" />
-                        <ui:Label name="board-empty" class="note" text="「試合開始」で試合を消化します。" />
                         <ui:Button name="play-btn" class="advance play-btn" text="試合開始 ▶" />
                     </ui:VisualElement>
                 </ui:VisualElement>
@@ -76,7 +75,6 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:Label class="footer" text="※ プレイアブルα 試合(高速)。校名・選手名はすべて架空。盗塁・犠打等は今後実装。" />
       </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

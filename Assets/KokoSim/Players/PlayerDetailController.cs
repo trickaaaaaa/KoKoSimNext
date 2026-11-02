@@ -19,7 +19,6 @@ namespace KokoSim.Unity.Players
     {
         private PlayerDetailState _state;
         private VisualElement _root;
-        private Button _designateButton;
         private RadarChartView _radar;
 
         // 成績タブ（issue #77）: 0=能力 / 1=成績。スコープ: 0=通算 / 1=公式戦 / 2=大会別。
@@ -41,14 +40,6 @@ namespace KokoSim.Unity.Players
 
             // 背番号は純数字（index+1）＝コンデンス数字書体（design-16 §2「純数字セルのみ」）。62px の大見出し数字なので f-num-bd。
             _root.Q<Label>("number")?.AddToClassList("f-num-bd");
-
-            // 主将に指名（設計書09 §8）: 新チーム発足時（夏の3年引退直後）だけ受け付ける。
-            // 期間外・候補外は非活性にして理由を添えるため、ボタン参照を保持しておく。
-            _designateButton = _root.Q<Button>("designate-captain");
-            if (_designateButton != null) _designateButton.clicked += () =>
-            {
-                if (_state.DesignateCaptain(PlayerSelection.Index)) Render();
-            };
 
             // レーダーは部品辞書の共通部品（チーム総合力・練習試合・試合開始前と同一の描画）。
             _radar = new RadarChartView(_root.Q<VisualElement>("radar"), RadiusFactor,
@@ -86,12 +77,6 @@ namespace KokoSim.Unity.Players
             SetText("number", v.Number);
             SetText("name", v.Name);
             SetDisplay("captain-badge", v.IsCaptain);
-            // 既に主将なら指名ボタンを隠す（重複指名の抑止）。
-            SetDisplay("designate-captain", !v.IsCaptain);
-            // 指名ウィンドウ外・候補外は押せない。理由はボタン脇に添える（設計書09 §8）。
-            if (_designateButton != null) _designateButton.SetEnabled(v.CanDesignateCaptain);
-            SetDisplay("designate-reason", !v.IsCaptain && !v.CanDesignateCaptain);
-            SetText("designate-reason", v.DesignateReason);
             SetText("meta-grade", v.GradeLabel);
             SetText("meta-tb", v.ThrowsBats);
             // 投法・最速のメタ表記は廃止（issue #215）。ストレート最速は球種チャート内の表記で読める（issue #130）。

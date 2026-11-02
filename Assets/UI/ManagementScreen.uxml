@@ -28,7 +28,7 @@
         <ui:VisualElement class="card">
           <ui:VisualElement class="card__hd card__hd--tight">
             <ui:Label class="card__hd-title" text="資金" />
-            <ui:Label class="card__hd-sub" text="単位: 万円 ／ 部費＝運営費、施設基金＝建物専用。どちらも年度頭に入る" />
+            <ui:Label class="card__hd-sub" text="単位: 万円" />
           </ui:VisualElement>
           <ui:VisualElement class="card__body">
             <ui:VisualElement name="mn-ledger" class="mn-ledger" />
@@ -41,7 +41,6 @@
         <ui:VisualElement class="card card--grow mn-card-last">
           <ui:VisualElement class="card__hd card__hd--tight">
             <ui:Label class="card__hd-title" text="買えるもの" />
-            <ui:Label class="card__hd-sub" text="1段ずつ購入 ／ 効果はすぐ反映" />
           </ui:VisualElement>
           <ui:VisualElement class="card__body card__body--fill">
             <ui:VisualElement name="mn-tabs" class="mn-tabs" />

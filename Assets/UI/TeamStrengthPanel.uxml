@@ -50,7 +50,6 @@
               </ui:VisualElement>
               <ui:VisualElement class="pd2-meta">
                 <ui:Label class="pd2-meta__i" text="レギュラー＋控えから算出" />
-                <ui:Label class="pd2-meta__i" text="6指標の加重平均をリーグ尺度に標準化（投手力を重く）" />
               </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement class="pd2-overall">
@@ -70,10 +69,7 @@
             <ui:VisualElement name="radar" class="pd2-radar ts-radar" />
           </ui:VisualElement>
           <ui:VisualElement class="card card--col">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="指標" />
-              <ui:Label class="card__hd-sub" text="数値は 0〜100（各指標の集計値）" />
-            </ui:VisualElement>
+            <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="指標" /></ui:VisualElement>
             <ui:VisualElement name="factors" class="ts-factors" />
             <ui:VisualElement class="ts-analysis">
               <ui:Label class="ts-analysis__k" text="分析" />

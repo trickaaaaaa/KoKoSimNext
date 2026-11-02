@@ -65,7 +65,6 @@
             <ui:VisualElement class="card card--col cr-card-last">
               <ui:VisualElement class="card__hd card__hd--tight card__hd--dirt">
                 <ui:Label class="card__hd-title" text="通算成績" />
-                <ui:Label class="card__hd-sub" text="卒業後も継続" />
               </ui:VisualElement>
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="cr-record" />
@@ -111,7 +110,6 @@
               <ui:VisualElement class="card">
                 <ui:VisualElement class="card__hd card__hd--tight">
                   <ui:Label class="card__hd-title" text="歴任校" />
-                  <ui:Label class="card__hd-sub" text="転任は未実装" />
                 </ui:VisualElement>
                 <ui:VisualElement class="card__body">
                   <ui:VisualElement class="cr-post cr-post--head">

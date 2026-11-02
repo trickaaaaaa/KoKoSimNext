@@ -99,10 +99,6 @@ namespace KokoSim.Unity.Players
         public string GradeLabel = "1年";
         public string ThrowsBats = "右投右打";
         public bool IsCaptain;
-        /// <summary>この選手を今この週に主将へ指名できるか（設計書09 §8: 新チーム発足時のみ）。</summary>
-        public bool CanDesignateCaptain;
-        /// <summary>指名できない理由（できるときは空）。ボタン非活性時に添える。</summary>
-        public string DesignateReason = "";
         public int TopVelocityKmh;
         public string OverallGrade = "D";
         public int OverallValue;
@@ -170,7 +166,6 @@ namespace KokoSim.Unity.Players
     {
         // 全画面で共有する単一ソースのロスター（主将フラグを含む可変状態を画面間で一致させる, RosterService）。
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
-        private readonly SeasonCalendar _calendar = new SeasonCalendar();
 
         // カテゴリ別ランクの重み（単一静的ソースを参照, Issue #30・#93 レーダー統一・#140 集約）。
         private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
@@ -181,21 +176,6 @@ namespace KokoSim.Unity.Players
         }
 
         public int Count => _roster.Count;
-
-        /// <summary>
-        /// 主将を手動指名する（設計書09 §8）。UIの「主将に指名」から呼ぶ。
-        /// 指名できるのは夏の3年引退後＝新チーム発足時の候補（新最上級生）だけ。可否は engine 側の純関数で判定する。
-        /// </summary>
-        /// <returns>指名できたら true（false なら状態は変えていない）。</returns>
-        public bool DesignateCaptain(int index)
-        {
-            if (_roster.Count == 0) return false;
-            index = System.Math.Max(0, System.Math.Min(index, _roster.Count - 1));
-            var p = _roster[index];
-            if (!CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar)) return false;
-            CaptainSelector.Designate(_roster, p);
-            return true;
-        }
 
         public PlayerDetailView BuildView(int index)
         {
@@ -215,8 +195,6 @@ namespace KokoSim.Unity.Players
             };
             // 故障（設計書03 §3.5: 常に可視）。文言は engine のカタログ由来（InjuryLabel が単一ソース）。
             v.Injury = KokoSim.Unity.Shell.InjuryLabel.Full(p);
-            v.CanDesignateCaptain = CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar);
-            v.DesignateReason = v.CanDesignateCaptain ? "" : DesignateReasonJp(p);
 
             var overall = (int)System.Math.Round(p.AverageLevel());
             v.OverallValue = overall;
@@ -290,14 +268,6 @@ namespace KokoSim.Unity.Players
         }
 
         // ===== 補助 =====
-
-        /// <summary>指名できない理由（設計書09 §8）。期間外か、候補（新最上級生）でないかを区別して伝える。</summary>
-        private string DesignateReasonJp(DevelopingPlayer p)
-        {
-            if (!CaptainSelector.IsDesignationWindow(GameClock.Week, _calendar))
-                return "主将は夏の3年引退後（新チーム発足時）に指名できます";
-            return "主将は新チームの最上級生から指名します";
-        }
 
         private static AbilityBar Bar(DevelopingPlayer p, AbilityKind k, string label)
         {
