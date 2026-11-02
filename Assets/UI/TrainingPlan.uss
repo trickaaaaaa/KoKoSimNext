@@ -144,9 +144,18 @@
 .preset-open__texts { flex-direction: column; flex-grow: 0; flex-shrink: 0; width: 240px; }
 /* 積み上げバー（部品 .stack-bar）を空き帯いっぱいに伸ばす。テキスト（主眼メニュー名）が凡例を兼ねる。 */
 .preset-open__bar { flex-grow: 1; margin-left: var(--sp-3); margin-right: var(--sp-4); }
-.preset-open__label { font-size: 20px; color: var(--color-chalk); }
+/* 2行は器（52px−枠）に収める（issue #734）。Label 既定の padding/margin（4px）とフォントの行送り（20px→31px）を
+   そのまま積むと中身が87pxになり行枠へはみ出す＝余白を外し、各行の高さを字面＋αに固定して縦中央に置く。 */
+.preset-open__label {
+    font-size: 20px; color: var(--color-chalk);
+    height: 25px; margin: 0; padding: 0; -unity-text-align: middle-left;
+}
 .preset-open__label--custom { color: var(--sky); }
-.preset-open__focus { font-size: var(--fs-label); color: var(--color-muted); margin-top: 3px; }
+.preset-open__focus {
+    font-size: var(--fs-label); color: var(--color-muted);
+    height: 23px; margin: 0; padding: 0; -unity-text-align: middle-left;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* 行ごとに反復する導線なのでアクセントにしない（30行ぶん黄が並ぶと希少性が壊れる＝UI原則②）。 */
 .preset-open__go { font-size: 19px; color: var(--color-muted); flex-shrink: 0; }
 

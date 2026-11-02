@@ -42,4 +42,20 @@ public sealed class ScoutedTeamProfileTests
         foreach (var v in new[] { t.Batting, t.Pitching, t.Defense, t.Mobility, t.Depth, t.Mental })
             Assert.InRange(v, 1, 100);
     }
+
+    /// <summary>
+    /// issue #737: ホームの次戦表示は School.Tier（学校の抽象的な強さ）、試合前画面は実ロスターの総合で、
+    /// 同じ相手校のランクが食い違っていた。両画面が引く単一入口 OverallTier が試合前画面の総合と一致し、
+    /// School.Tier とは一致しない（＝School.Tier を相手のランクとして出してはいけない）ことを固定する。
+    /// </summary>
+    [Fact]
+    public void OverallTier_MatchesPreviewOverall_NotSchoolTier()
+    {
+        var s = School(101, 62);
+        var team = StrengthTeamFactory.ForSchool(s, yearIndex: 0);
+        var overall = ScoutedTeamProfile.Compute(team, C).Overall;
+
+        Assert.Equal(Tiers.FromStrength(overall), ScoutedTeamProfile.OverallTier(team, C));
+        Assert.NotEqual(s.Tier, ScoutedTeamProfile.OverallTier(team, C));
+    }
 }

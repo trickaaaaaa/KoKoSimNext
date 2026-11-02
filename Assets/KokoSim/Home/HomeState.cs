@@ -687,7 +687,8 @@ namespace KokoSim.Unity.Home
             {
                 var r = GameSession.Current.Runner;
                 if (r == null || r.NextOpponent == null) return "";
-                return "vs " + r.NextOpponent.Name + " [" + r.NextOpponentTier + "]";
+                // ランクは試合前画面と同じ実ロスターの総合（issue #737。School.Tier は使わない）。
+                return "vs " + r.NextOpponent.Name + " [" + OpponentRank.Of(r.NextOpponent) + "]";
             }
         }
 
@@ -878,7 +879,7 @@ namespace KokoSim.Unity.Home
                 view.GameTag = r.RoundName;
                 view.AwayTeam = r.NextOpponent?.Name ?? "―";
                 view.AwaySub = r.NextOpponent != null
-                    ? "ランク " + r.NextOpponentTier + OfficialRecordSuffix(s.Records.For(r.NextOpponent.Id))
+                    ? "ランク " + OpponentRank.Of(r.NextOpponent) + OfficialRecordSuffix(s.Records.For(r.NextOpponent.Id))
                     : "";
                 // 日付欄は実月日（issue #583）。カウントダウンの升目は「あと N 日」のまま
                 // ＝「いつ」と「あと何日」は別の情報なので両方出す。

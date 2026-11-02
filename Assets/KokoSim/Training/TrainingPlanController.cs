@@ -631,6 +631,7 @@ namespace KokoSim.Unity.Training
                 Pct = (float)gb.Progress,
                 Grade = gb.Grade,
                 TypeLabel = gb.TypeLabel,
+                KeepChipSlot = gb.KeepChipSlot,
                 // 行高32px固定のコンパクト行（issue #327②-b）。1440×840 で14行が
                 // スクロールなしで一望できる密度（14×32+13×2=474px ≤ 欄477px）。
                 Size = AbilityRowSize.Compact,
