@@ -181,7 +181,10 @@ namespace KokoSim.Unity.Shell
             System.Func<PlayerStats, string> text)
         {
             var pool = new List<PlayerStats>();
-            foreach (var kv in book.Players) if (qualify(kv.Value)) pool.Add(kv.Value);
+            // チーム内ランキング＝今の学校の部員（在籍・引退・卒業生）だけ。転任すると旧校の部員の通算成績は
+            // 成績ストアに残るが、名前の引き先（Roster/Graduated）からは外れて「?」で載っていた（issue #730）。
+            foreach (var kv in book.Players)
+                if (names.ContainsKey(kv.Value.SourceId) && qualify(kv.Value)) pool.Add(kv.Value);
 
             // 同値は選手ID昇順で確定させる（決定論・順序が揺れない）。
             pool.Sort((x, y) =>
@@ -201,7 +204,7 @@ namespace KokoSim.Unity.Shell
                     string name;
                     row.Top.Add(new RankEntry
                     {
-                        Name = names.TryGetValue(s.SourceId, out name) ? name : "?",
+                        Name = names.TryGetValue(s.SourceId, out name) ? name : "",
                         Value = text(s),
                         Empty = false,
                     });
