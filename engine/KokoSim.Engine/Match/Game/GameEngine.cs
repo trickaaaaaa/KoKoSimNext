@@ -2024,6 +2024,15 @@ public static class GameEngine
                         timeline = Match.Timeline.TimelineBuilder.AppendBackHomeThrows(
                             timeline, bhPlay, ctx.Field, o.T1, runnerOut: true, paBaserunning);
                         homeThrowAdded = true;
+                        // 本封→一封（issue #741）: 本塁封殺のあと捕手が一塁へ転送した。打者の生死は判定どおり。
+                        if (runnerMoves.Any(m => m.HomeForceRelay))
+                        {
+                            var batterArrive = timeline.Duration;
+                            foreach (var leg in timeline.Runners)
+                                if (leg.Label == "打") { batterArrive = leg.T1; break; }
+                            timeline = Match.Timeline.TimelineBuilder.AppendHomeForceRelay(
+                                timeline, ctx.Field, batterArrive, batterOut: !batterSafeOnFc, paBaserunning);
+                        }
                     }
                     else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield)
                         && !HasOutAtOtherBase(runnerMoves))
