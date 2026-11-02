@@ -44,19 +44,17 @@ namespace KokoSim.Unity.Shell
 
     /// <summary>
     /// セーブスロット選択画面（<c>SaveSlotsController</c>）をどこから開いたか（issue #509 ／ タブは #565）。
-    /// 同じ1画面を3つの入口から開くため、呼び出し側が遷移前に必ずこれを設定する
+    /// 同じ1画面を2つの入口から開くため、呼び出し側が遷移前に必ずこれを設定する
     /// （既定 <see cref="Title"/>＝安全側フォールバック）。
     ///
     /// <list type="bullet">
     /// <item><see cref="Title"/> — タイトルの「つづきから」。読込／削除だけ。まだどのシェルサービスも
     /// 遅延初期化されていないので<b>共通トップバーを出せない</b>（値を引くと初期化が走ってしまう）</item>
-    /// <item><see cref="Home"/> — ホームの ≡メニュー「セーブ」。保存も出す。トップバーは出さず
-    /// 「◀ ホームへ戻る」で戻る（オーバーレイから開いた流れを保つ）</item>
-    /// <item><see cref="Tab"/> — 共通ナビの「システム」タブ。保存も出す。<b>トップバー（タブ帯）を出す</b>
-    /// ＝他のタブと同じ見え方にし、戻るボタンは出さない（移動はタブで行う）</item>
+    /// <item><see cref="Tab"/> — 共通ナビの「システム」タブ。保存と「タイトルへ戻る」も出す（issue #730 でホームの
+    /// ≡メニューから移設）。<b>トップバー（タブ帯）を出す</b>＝他のタブと同じ見え方にし、移動はタブで行う</item>
     /// </list>
     /// </summary>
-    public enum SaveSlotsEntry { Title, Home, Tab }
+    public enum SaveSlotsEntry { Title, Tab }
 
     /// <summary>
     /// セーブスロットの一覧・メタ読み取り・削除（issue #508 F1）。<b>手動3枠だけ</b>を固定で持つ
@@ -64,13 +62,12 @@ namespace KokoSim.Unity.Shell
     /// 「形」は <see cref="SaveCodec"/>、ファイルIOは <see cref="SaveGameIO"/> に任せ、ここはスロットの
     /// 並び・存在確認・削除・保存/上書きの入口だけを持つ。
     ///
-    /// <para>保存/上書きはホーム画面のメニュー入口から開いたときだけ UI に出す（issue #509・
-    /// <see cref="Entry"/> が <see cref="SaveSlotsEntry.Home"/> のとき）。タイトル経由（<see cref="SaveSlotsEntry.Title"/>）
+    /// <para>保存/上書きはゲーム中（<see cref="Entry"/> が <see cref="SaveSlotsEntry.Tab"/>）だけ UI に出す。タイトル経由（<see cref="SaveSlotsEntry.Title"/>）
     /// では「今保存すべき進行中のゲーム状態」が無いため出さない（オーナー判断・issue #508）。</para>
     /// </summary>
     public static class SaveSlots
     {
-        /// <summary>直近の画面遷移元（<see cref="TitleController"/> / <c>HomeDashboardController</c> が
+        /// <summary>直近の画面遷移元（<see cref="TitleController"/> / <c>ScreenRouter</c>（システムタブ）が
         /// <c>ShowDeferred("SaveSlots")</c> の直前に設定する）。</summary>
         public static SaveSlotsEntry Entry { get; set; } = SaveSlotsEntry.Title;
 
