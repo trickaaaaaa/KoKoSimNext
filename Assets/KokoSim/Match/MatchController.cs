@@ -43,9 +43,6 @@ namespace KokoSim.Unity.Match
             var play = _root.Q<Button>("play-btn");
             if (play != null) play.text = v.Played ? "もう一度 ▶" : "試合開始 ▶";
 
-            var empty = _root.Q<Label>("board-empty");
-            if (empty != null) empty.style.display = v.Played ? DisplayStyle.None : DisplayStyle.Flex;
-
             // 成績パネルは試合後のみ表示。
             SetDisplay("home-bat-panel", v.Played);
             SetDisplay("away-bat-panel", v.Played);

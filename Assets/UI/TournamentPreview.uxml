@@ -21,7 +21,6 @@
             <!-- 空状態：大会モード中でないとき（本機能は開催中のみ機能する） -->
             <ui:VisualElement name="tp-empty" class="tp-empty">
                 <ui:Label class="tp-empty__title" text="現在開催中の大会はありません" />
-                <ui:Label class="tp-empty__sub" text="大会が開幕すると、トーナメントの経過と大会展望をここで見られます。" />
             </ui:VisualElement>
 
             <!-- ビュー1：トーナメント（自校の勝ち上がりと各回戦の結果） -->
@@ -129,7 +128,6 @@
           </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:Label class="footer" text="※ 本プレビューは登録データ・能力から自動生成された読み物です。校名・人名・数値はすべて架空。" />
       </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

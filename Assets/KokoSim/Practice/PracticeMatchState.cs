@@ -130,7 +130,7 @@ namespace KokoSim.Unity.Practice
             }
             else
             {
-                v.StatusText = "週1回まで。成績は通算に加算され、公式戦通算には残りません。";
+                v.StatusText = "週1回まで";
             }
 
             return v;

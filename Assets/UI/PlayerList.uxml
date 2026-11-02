@@ -58,7 +58,6 @@
             </ui:VisualElement>
           </ui:VisualElement>
 
-          <ui:Label class="footer" text="※ プレイアブルα 選手一覧。校名・選手名はすべて架空。" />
         </ui:ScrollView>
 
         <!-- ===== 右ペイン：能力詳細（ホバー中の選手を表示・旧 PlayerDetail.uxml の pd2-* 本体） ===== -->
@@ -75,8 +74,6 @@
                 <ui:VisualElement class="pd2-nameline">
                   <ui:Label name="name" class="pd2-name" text="三宅 航平" />
                   <ui:Label name="captain-badge" class="pd2-captain" text="主将" />
-                  <ui:Button name="designate-captain" class="pd2-capbtn" text="主将に指名" />
-                  <ui:Label name="designate-reason" class="pd2-caphint" text="" />
                 </ui:VisualElement>
                 <ui:VisualElement class="pd2-meta">
                   <ui:Label name="meta-grade" class="pd2-meta__i" text="3年" />
@@ -101,7 +98,6 @@
             <ui:VisualElement class="card card--half">
               <ui:VisualElement class="card__hd">
                 <ui:Label class="card__hd-title" text="投手能力" />
-                <ui:Label class="card__hd-sub" text="数値は内部値（1〜100）" />
               </ui:VisualElement>
               <ui:VisualElement name="pitcher-abils" class="pd2-abils" />
               <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />
@@ -109,7 +105,6 @@
             <ui:VisualElement class="card card--half">
               <ui:VisualElement class="card__hd">
                 <ui:Label class="card__hd-title" text="野手能力" />
-                <ui:Label class="card__hd-sub" text="数値は内部値（1〜100）" />
               </ui:VisualElement>
               <ui:VisualElement name="fielder-abils" class="pd2-abils" />
             </ui:VisualElement>
@@ -131,7 +126,6 @@
               <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="隠しパラメータ（推定）" /></ui:VisualElement>
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="hidden-list" />
-                <ui:Label class="pd2-hidden-note" text="試合起用・面談・スカウトで段階的に判明します。" />
               </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>
@@ -176,10 +170,7 @@
             </ui:VisualElement>
 
             <ui:VisualElement name="tourn-panel" class="card">
-              <ui:VisualElement class="card__hd">
-                <ui:Label class="card__hd-title" text="大会別成績" />
-                <ui:Label class="card__hd-sub" text="学年×大会（当時の背番号）／夏は県・甲子園別枠・秋は合算" />
-              </ui:VisualElement>
+              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="大会別成績" /></ui:VisualElement>
               <ui:VisualElement name="tourn-rows" />
             </ui:VisualElement>
           </ui:VisualElement>

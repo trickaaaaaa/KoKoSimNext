@@ -25,14 +25,13 @@
                         <ui:Label name="camp-title" text="冬合宿・鍛錬期" class="tp-camp__title" />
                         <ui:Label name="camp-mult" text="×2.5 経験値" class="tp-camp__mult" />
                     </ui:VisualElement>
-                    <ui:Label name="camp-note" text="対外試合禁止期間（12〜3月）— 育成の山場です。" class="tp-camp__note" />
+                    <ui:Label name="camp-note" text="対外試合禁止期間（12〜3月）" class="tp-camp__note" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement class="tp-coach">
                 <ui:VisualElement class="tp-coach__head">
                     <ui:Label text="個別指導 3枠" class="tp-coach__title" />
-                    <ui:Label text="下の表の★で指名・解除。指名中は主眼メニューの経験値に指導力ボーナスが上乗せされる" class="tp-coach__hint" />
                 </ui:VisualElement>
                 <ui:VisualElement name="nom-slots" class="tp-coach__slots" />
             </ui:VisualElement>

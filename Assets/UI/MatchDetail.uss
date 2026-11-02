@@ -11,14 +11,7 @@
     font-size: 22px;
     color: var(--color-chalk);
     letter-spacing: 2px;
-}
-
-.md-sub {
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
-    margin-top: 4px;
     margin-bottom: 12px;
-    white-space: normal;
 }
 
 /* ステージ（球場＋実況＋操作をまとめるパネル） */

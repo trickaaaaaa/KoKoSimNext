@@ -148,11 +148,11 @@ namespace KokoSim.Unity.Management
             // 購入の操作はどの区分でも同じで、支払いに使う財布だけが区分で決まる
             // （FacilityPurchase.WalletOf が単一ソース）。
             AddGroup(v, catalog, set, m, PurchaseKind.Facility, "施設",
-                "レベル制・学校の資産として残る ／ 施設基金から支払う");
+                "施設基金から支払う");
             AddGroup(v, catalog, set, m, PurchaseKind.Equipment, "練習道具",
-                "効果小・効果大の2段。振っているメニューの分野にだけ効く ／ 部費から支払う");
+                "部費から支払う");
             AddGroup(v, catalog, set, m, PurchaseKind.Gear, "備品",
-                "買い切り ／ 部費から支払う");
+                "部費から支払う");
             AddContractGroup(v);
 
             // 区分が減ることは無いが、念のため範囲外を丸めてから返す。
@@ -177,7 +177,7 @@ namespace KokoSim.Unity.Management
             var group = new LedgerGroup
             {
                 Label = "年契約",
-                Note = "毎年かかる ／ いつでも解約できる ／ 部費から支払う",
+                Note = "部費から支払う",
                 IsContract = true,
             };
             foreach (var def in catalog.Contracts) group.Rows.Add(BuildContractRow(def, set));

@@ -488,9 +488,7 @@ namespace KokoSim.Unity.Training
             var winter = mult >= _training.WinterCampMult;
             view.CampTitle = winter ? "冬合宿・鍛錬期" : "夏合宿";
             view.CampMult = "×" + mult.ToString("0.0");
-            view.CampNote = winter
-                ? "対外試合禁止期間（12〜3月）— 育成の山場です。"
-                : "新チーム結成直後の底上げ期間です。";
+            view.CampNote = winter ? "対外試合禁止期間（12〜3月）" : "";
         }
 
         private void BuildNominations(TrainingPlanView view)

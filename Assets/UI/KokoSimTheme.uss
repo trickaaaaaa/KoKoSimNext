@@ -444,7 +444,6 @@
 .mfeed--hit { color: var(--color-chalk); font-size: 20px; }
 .mfeed--run { color: #B9D45A; font-size: 21px; }
 
-.footer { padding: 10px 22px 16px 22px; font-size: 19px; color: var(--color-muted); }
 
 /* ===== 大会プレビュー（設計書06 §3.5b, mock-tournament-preview.html） ===== */
 .tp-masthead {
@@ -556,10 +555,6 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 /* 非大会時の空状態。 */
 .tp-empty { align-items: center; padding-top: 80px; padding-bottom: 80px; }
 .tp-empty__title { font-size: var(--fs-page); color: var(--tx-1); }
-.tp-empty__sub {
-    font-size: var(--fs-label); color: var(--tx-2); margin-top: var(--sp-2);
-    white-space: normal; -unity-text-align: middle-center;
-}
 
 /* 注目選手：2列（USSは grid 非対応のため flex-wrap ＋ 幅%で段組み）。 */
 .tp-players { flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
@@ -946,21 +941,6 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
     padding: 2px 9px;
     margin-right: 14px;
 }
-/* 主将に指名ボタン: 控えめなアウトライン調。 */
-.pd2-capbtn {
-    background-color: rgba(245, 198, 74, 0.12);
-    color: var(--sky);
-    border-width: 1px;
-    border-color: var(--sky);
-    border-radius: var(--radius-chip);
-    font-size: var(--fs-label);
-    padding: 4px 12px;
-    margin-left: 16px;
-}
-.pd2-capbtn:hover { background-color: rgba(245, 198, 74, 0.24); }
-/* 指名ウィンドウ外は押せない（設計書09 §8）。アンバーの主張を落として理由ラベルへ視線を渡す。 */
-.pd2-capbtn:disabled { opacity: 0.35; }
-.pd2-caphint { font-size: var(--fs-cap); color: var(--tx-2); margin-left: var(--sp-2); }
 .pd2-meta { flex-direction: row; flex-wrap: wrap; margin-top: 10px; }
 .pd2-meta__i { font-size: 18px; color: var(--color-muted); margin-right: 20px; }
 /* 故障中だけ警告色（UI原則②: 本当の警告にだけ使う）。健常時はこの要素自体を隠す。 */
@@ -1005,7 +985,6 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-hidden-k { font-size: var(--fs-label); color: var(--color-muted); }
 .pd2-hidden-v { font-size: 18px; color: var(--color-chalk); }
 .pd2-hidden-v--unknown { font-size: 19px; color: var(--color-faint); }
-.pd2-hidden-note { font-size: var(--fs-cap); color: var(--color-faint); margin-top: 4px; white-space: normal; }
 
 /* --- 球種テーブル --- */
 .pd2-pitch-head { flex-direction: row; padding: 9px 0; border-bottom-width: 1px; border-bottom-color: var(--color-line); }

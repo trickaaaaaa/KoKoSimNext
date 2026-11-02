@@ -36,7 +36,6 @@
 .tp-coach__head { flex-direction: column; margin-right: var(--sp-3); width: 190px; }
 .tp-coach__title { font-size: var(--fs-label); color: var(--color-muted); white-space: normal; }
 /* 個別指導3枠が空きのままだと何をする枠か画面から読めない問題の補足（Issue #273・issue #126の効果説明）。 */
-.tp-coach__hint { font-size: 12px; color: var(--color-faint); white-space: normal; margin-top: 3px; }
 .tp-coach__slots { flex-direction: row; }
 .nom-slot {
     flex-shrink: 0;

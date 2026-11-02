@@ -136,6 +136,8 @@ namespace KokoSim.Unity.Training
             SetText("camp-title", v.CampTitle);
             SetText("camp-mult", v.CampMult + " 経験値");
             SetText("camp-note", v.CampNote);
+            var note = _root.Q<VisualElement>("camp-note");
+            if (note != null) note.style.display = v.CampNote.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         // ── 個別指導3枠 ─────────────────────────────

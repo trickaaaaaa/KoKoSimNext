@@ -55,7 +55,6 @@
             <ui:VisualElement class="card rc-card-side">
               <ui:VisualElement class="card__hd card__hd--tight card__hd--dirt">
                 <ui:Label class="card__hd-title" text="学校の通算" />
-                <ui:Label class="card__hd-sub" text="監督が代わっても残る" />
               </ui:VisualElement>
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="rc-summary" />

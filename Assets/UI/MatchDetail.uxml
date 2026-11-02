@@ -7,7 +7,6 @@
     <ui:VisualElement class="ui-root md-root">
 
         <ui:Label class="md-title" text="試合ビュー — 2D俯瞰 再生" />
-        <ui:Label class="md-sub" text="エンジンが出力するタイムラインをUIが再生するだけ（物理はすべて事前計算済み）。" />
 
         <ui:VisualElement class="md-stage">
 
