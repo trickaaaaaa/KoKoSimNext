@@ -59,6 +59,13 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     public bool SelfForceDoublePlayLead { get; init; }
 
     /// <summary>
+    /// タイムライン表示専用（issue #741）: 満塁・内野前進の本塁封殺（送球で三塁走者を本塁でアウト）のあと、
+    /// 捕手が一塁へ転送したか。打者が一塁でアウト（本封→一封の併殺）か野選で生きたかは呼び出し側の
+    /// batterSafeOnFc で分かる。乱数不使用・判定不変。
+    /// </summary>
+    public bool HomeForceRelay { get; init; }
+
+    /// <summary>
     /// タイムライン表示専用（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 飛び出し（ライナー併殺の
     /// 物理レース <see cref="DoubledOffResolver"/>）を走った一塁走者なら、守備の戻し送球が一塁に届く時刻[s]
     /// （接触基準）。<c>FromBase == ToBase == 1</c> の move（憤死=Out／帰塁セーフ=!Out）にだけ載る。
@@ -685,8 +692,21 @@ public static class BaserunningModel
                 else
                 {
                     extraOuts++; homeOuts++; // 本塁封殺（フォースアウト）
+                    // 本封→一封（issue #741）: 守備が投げたのは処理点→本塁の1本だけ＝打者の一塁アウトには
+                    // 捕手の一塁転送が要る。二死はここへ来ない（打者の一塁アウトで既にチェンジ＝上の早期 return）。
+                    // 転送レースは併殺の二段目と同じ作法。乱数はこの分岐（満塁×内野前進×本塁封殺成立）でだけ1回引く。
+                    var relayed = hforce.BatterToFirstSeconds is not null;
                     mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
-                        { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay, Force = true });
+                        { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay, Force = true, HomeForceRelay = relayed });
+                    if (relayed && MathUtil.Chance(HomeForceRelayBatterSafeProbability(hforce, coeff), rng))
+                    {
+                        // 野選: 本塁は封殺したが転送が打者に間に合わない＝打者は一塁で生きる。一塁走者・二塁走者は
+                        // この先のフォース進塁カスケードが押し上げる（一塁の後始末は r1 自身が居るときだけ＝打者は残る）。
+                        batterSafeOnFc = true;
+                        battersOwnOut = 0;
+                        bases.First = batter;
+                        mv?.Add(new RunnerMove(batter, 0, 1, false));
+                    }
                 }
                 bases.Third = null;
                 r3 = null;
@@ -1014,6 +1034,32 @@ public static class BaserunningModel
 
         var (eo2, fc2) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv);
         return (eo2, fc2, DoublePlayForceTarget.Second);
+    }
+
+    /// <summary>
+    /// 本封→一封の転送で打者が一塁に生きる確率（issue #741）。処理点→本塁の送球到達を起点に、捕手が本塁を
+    /// 踏んで一塁へ投げる（握り替えは自己フォースの転送と同じ <see cref="BaserunningCoefficients.DoublePlaySelfForceRelayTransferSeconds"/>・
+    /// 球速は内野の共通値 <see cref="BaserunningCoefficients.RelayThrowSpeedMps"/>）。打者の一塁到達は守備解決の正典値。
+    /// 秒と確率の作りは併殺の二段目（<see cref="ResolveDoublePlaySelfForce"/>）と同じ。絵（TimelineBuilder）も
+    /// <see cref="HomeForceRelayArriveSeconds"/> で同じ秒を使う。
+    /// </summary>
+    public static double HomeForceRelayBatterSafeProbability(HomePlayContext home, BaserunningCoefficients coeff)
+    {
+        var margin = HomeForceRelayArriveSeconds(home.Situation, home.Field, coeff)
+                     - home.BatterToFirstSeconds!.Value + coeff.DoublePlayRelayBias;
+        return MathUtil.Clamp(MathUtil.Logistic(margin / coeff.DoublePlayRelayMarginScale), 0.01, 0.99);
+    }
+
+    /// <summary>本封→一封の転送が一塁に着いて打者に触れる時刻[s]（接触基準・issue #741）。判定と絵の共通の秒。</summary>
+    public static double HomeForceRelayArriveSeconds(
+        HomePlaySituation situation, FieldGeometry field, BaserunningCoefficients coeff)
+    {
+        var plate = new Vector3D(0, 0, 0);
+        var toHome = HomePlayResolver.ResolveThrowPath(situation, plate, coeff);
+        var catcher = new HomePlaySituation(plate, toHome.ArriveAtSeconds, coeff.RelayThrowSpeedMps, 50);
+        return HomePlayResolver.ResolveThrowPath(catcher, field.FirstBase, coeff,
+                   transferSecondsOverride: coeff.DoublePlaySelfForceRelayTransferSeconds).ArriveAtSeconds
+               + coeff.SecondForceTagSeconds;
     }
 
     /// <summary>

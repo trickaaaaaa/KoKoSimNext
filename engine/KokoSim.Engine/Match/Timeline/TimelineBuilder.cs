@@ -2755,6 +2755,63 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 満塁・内野前進の本塁封殺のあとの「本塁→一塁」の転送を描く（issue #741）。<see cref="AppendBackHomeThrows"/>
+    /// の後に呼ぶ。基礎解決（<see cref="BuildBattedBall"/>）が積んだ「処理点→一塁」の直接送球は実際には投げていない
+    /// ので除き、本塁に着いた送球の後へ捕手の一塁転送を足す。打者は転送が勝てばアウト（本封→一封の併殺）、
+    /// 負ければ野選で一塁セーフ。秒は判定（<see cref="BaserunningModel.HomeForceRelayArriveSeconds"/>）と同じ
+    /// 握り替え・球速・タッチ。表示専用・乱数不使用。
+    /// </summary>
+    public static PlayTimeline AppendHomeForceRelay(
+        PlayTimeline timeline, FieldGeometry field, double batterArriveAnchor, bool batterOut,
+        BaserunningCoefficients? coefficients = null)
+    {
+        var c = coefficients ?? new BaserunningCoefficients();
+        var first = BasePoint(field, "first");
+
+        // 本塁に着いた送球（最後に積まれた本塁行き）と、基礎解決の直接送球（本塁以外から一塁へ）。
+        BallSegment? toHome = null;
+        BallSegment? directToFirst = null;
+        foreach (var seg in timeline.Ball)
+        {
+            if (seg.Kind == BallSegmentKind.Throw && seg.ToBase == "home") toHome = seg;
+            if (directToFirst is null && (seg.Kind == BallSegmentKind.Throw || seg.Kind == BallSegmentKind.Carry)
+                && seg.ToBase == "first" && Distance(seg.From, Home) > 0.5)
+                directToFirst = seg;
+        }
+        if (toHome is null) return timeline;
+
+        var ball = new List<BallSegment>(timeline.Ball.Count + 1);
+        foreach (var seg in timeline.Ball)
+            if (!ReferenceEquals(seg, directToFirst)) ball.Add(seg);
+
+        var releaseAt = toHome.T1 + c.DoublePlaySelfForceRelayTransferSeconds;
+        var flight = LegSeconds(Distance(Home, first), c.RelayThrowSpeedMps);
+        var physical = releaseAt + flight + c.SecondForceTagSeconds;
+        var firstArrive = GuardAgainstVerdict(physical, releaseAt + flight, batterArriveAnchor, batterOut);
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = firstArrive,
+            From = Home, To = first,
+            FromRole = toHome.ToRole ?? FieldPosition.Catcher,
+            ToRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase), ToBase = "first",
+        });
+
+        var tl = timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, firstArrive + 1.0) };
+        if (!batterOut)
+            return PatchFieldersChoiceBatterLeg(
+                tl, batterArriveAnchor, closeCall: Math.Abs(physical - batterArriveAnchor) < c.CloseCallMarginSeconds);
+
+        // 打者アウト: 判定・結果確定を、描かない直接送球の到達でなく実際の転送の到達へ合わせる。
+        var judgements = new List<JudgementEvent>(tl.Judgements.Count);
+        foreach (var j in tl.Judgements)
+            judgements.Add(j.Label == "打" && j.Kind == JudgementKind.Out ? j with { T = firstArrive } : j);
+        var runners = new List<RunnerLeg>(tl.Runners.Count);
+        foreach (var r in tl.Runners)
+            runners.Add(r.Label == "打" && r.OutAtEnd && r.T1 > firstArrive ? r with { T1 = firstArrive } : r);
+        return tl with { Judgements = judgements, Runners = runners, ResolvedAt = firstArrive };
+    }
+
+    /// <summary>
     /// タッチで刺された走者のレッグ終端を、その塁へ着いた送球の時刻まで延ばす（issue #685）。
     /// 返球は「間ゼロで投げ切った最速」より早くは着けられない（<see cref="GuardAgainstVerdict"/>）ので、
     /// 判定がアウトでも送球がわずかに遅れて着くことがある（実測: タッチアップの憤死で最大0.07秒）。
