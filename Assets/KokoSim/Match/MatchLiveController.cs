@@ -4148,11 +4148,11 @@ namespace KokoSim.Unity.Match
             row.AddToClassList("mlineup-pitcher");
             if (mirror) row.AddToClassList("mlineup-pitcher--mirror");
             row.Add(MakeLabel("投", "mlineup-pitcher__tag"));
+            // 背番号＋名前フル＋球数だけ（issue #739。投球回・失点は出さない）。
+            row.Add(MakeLabel(NumText(p.Number), "num-badge", "num-badge--sm", "f-num"));
             row.Add(MakeLabel(p.Name, "mlineup-pitcher__name"));
             // 確定球数＋進行中の打席ぶん（issue #397。LiveLineScore.PendingRuns と同型）。
-            row.Add(MakeLabel((p.Pitches + p.PendingPitches) + "球", "mlineup-pitcher__stat"));
-            row.Add(MakeLabel(InningsText(p.Outs) + "回", "mlineup-pitcher__stat"));
-            row.Add(MakeLabel("失" + p.Runs, "mlineup-pitcher__stat"));
+            row.Add(UiComponents.NumUnit((p.Pitches + p.PendingPitches).ToString(), "球", false, "mlineup-pitcher__stat"));
             return row;
         }
 
@@ -4539,14 +4539,6 @@ namespace KokoSim.Unity.Match
 
         // 背番号テキスト（0＝番号なしは空表示）。
         private static string NumText(int n) => n > 0 ? n.ToString() : "";
-
-        // アウト数 → 投球回テキスト（n / n 1/3 / n 2/3）。
-        private static string InningsText(int outs)
-        {
-            var whole = outs / 3;
-            var frac = outs % 3;
-            return frac == 0 ? whole.ToString() : whole + " " + frac + "/3";
-        }
 
         // ── スクショ用（決定論シーク不要：進行状態を外部から操作するフックだけ提供） ──
         public MatchProgression Progression => _prog;
