@@ -2230,7 +2230,7 @@
 /* 持ち上がるのはカーソルが乗った1枚だけ。最前面化は C# の BringToFront が行う（USS に z-index は無い）。 */
 .tcard--hot { translate: 0 -12px; scale: 1.22; }
 
-/* 上2/3＝将来ここへ絵を入れる場所。いまは Icon の1文字を淡く敷いて枠だと分かるようにする。 */
+/* 上2/3＝絵の面。絵（.tcard__pic）が無いカードは Icon の1文字を淡く敷いて枠だと分かるようにする。 */
 .tcard__art {
     flex-grow: 1;
     background-color: var(--sf-inset);
@@ -2244,6 +2244,29 @@
     opacity: 0.14;
     -unity-text-align: middle-center;
 }
+/* 絵（SignDef.Art）。PNG は白い絵＋透明地なので、色はここで付ける（状態色を絵の差し替えなしで出すため）。
+   位置と大きさは TacticsCardDeck.cs が決める（左の帯の中央）。元絵と書き出しは tools/gen-sign-icons.py。 */
+.tcard__pic {
+    position: absolute;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--ink);
+}
+.tcard__pic--swing { background-image: url("project:///Assets/UI/Images/signs/sign-swing.png"); }
+.tcard__pic--take { background-image: url("project:///Assets/UI/Images/signs/sign-take.png"); }
+.tcard__pic--bunt { background-image: url("project:///Assets/UI/Images/signs/sign-bunt.png"); }
+.tcard__pic--squeeze { background-image: url("project:///Assets/UI/Images/signs/sign-squeeze.png"); }
+.tcard__pic--hitrun { background-image: url("project:///Assets/UI/Images/signs/sign-hitrun.png"); }
+.tcard__pic--steal { background-image: url("project:///Assets/UI/Images/signs/sign-steal.png"); }
+.tcard__pic--work { background-image: url("project:///Assets/UI/Images/signs/sign-work.png"); }
+.tcard__pic--ground { background-image: url("project:///Assets/UI/Images/signs/sign-ground.png"); }
+.tcard__pic--slug { background-image: url("project:///Assets/UI/Images/signs/sign-slug.png"); }
+.tcard__pic--put { background-image: url("project:///Assets/UI/Images/signs/sign-put.png"); }
+.tcard__pic--infield-in { background-image: url("project:///Assets/UI/Images/signs/sign-infield-in.png"); }
+.tcard__pic--outfield-deep { background-image: url("project:///Assets/UI/Images/signs/sign-outfield-deep.png"); }
+.tcard__pic--fastball { background-image: url("project:///Assets/UI/Images/signs/sign-fastball.png"); }
+.tcard__pic--breaking { background-image: url("project:///Assets/UI/Images/signs/sign-breaking.png"); }
+.tcard__pic--control { background-image: url("project:///Assets/UI/Images/signs/sign-control.png"); }
+.tcard__pic--push { background-image: url("project:///Assets/UI/Images/signs/sign-push.png"); }
 /* 下段＝名前。左の帯（隣に隠れない幅）の中央へ置く＝カード全幅で中央揃えにすると隣の下に潜る。
    段の高さと級数は TacticsCardDeck.cs が決める（長い名前は2行に割るので、幅と高さの両方で効く）。 */
 .tcard__cap {

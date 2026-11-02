@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+<!-- 変：変化球中心（曲がって落ちる球）。黒＝絵、白＝抜き（PNG化で透明になる） -->
+<path d="M8,26 Q58,20 68,68" fill="none" stroke="#000000" stroke-width="5" stroke-linecap="round" stroke-dasharray="0.1 9"></path>
+<circle cx="70" cy="76" r="11" fill="#ffffff" stroke="#000000" stroke-width="5"></circle>
+</svg>

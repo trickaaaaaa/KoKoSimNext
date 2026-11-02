@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+<!-- 深：長打警戒（外野がフェンス際へ下がる）。黒＝絵、白＝抜き（PNG化で透明になる） -->
+<path d="M8,36 Q50,4 92,36" fill="none" stroke="#000000" stroke-width="7" stroke-linecap="round"></path>
+<g fill="#000000"><circle cx="24" cy="80" r="6"></circle><circle cx="50" cy="86" r="6"></circle><circle cx="76" cy="80" r="6"></circle></g>
+<g fill="none" stroke="#000000" stroke-width="5" stroke-linecap="round"><path d="M24,72 L24,52"></path><path d="M50,78 L50,46"></path><path d="M76,72 L76,52"></path></g>
+<g fill="#000000" stroke="#000000" stroke-width="2" stroke-linejoin="round"><path d="M24,41 L18,51 L30,51 Z"></path><path d="M50,34 L44,45 L56,45 Z"></path><path d="M76,41 L70,51 L82,51 Z"></path></g>
+</svg>
