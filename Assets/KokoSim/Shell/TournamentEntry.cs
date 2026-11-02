@@ -235,14 +235,21 @@ namespace KokoSim.Unity.Shell
         /// <summary>
         /// 開幕バナー用の大会名（例「2028年 選手権神奈川大会」）。ホームのバナー表示と同一の表記。
         /// 県は自校の本拠県から引く（issue #585 で可変になった）。夏は短縮形（神奈川）、
-        /// 秋は正式名（神奈川県）＝実在の大会名の慣習に合わせる。
+        /// 秋は正式名（神奈川県）＝実在の大会名の慣習に合わせる。秋季地区予選は自校の地区名を括弧で添える（#725）。
         /// </summary>
         public static string TournamentTitle(TournamentKind kind)
         {
             var year = SeasonClock.SeasonBaseYear + (GameClock.YearIndex - 1);
             var pref = NationService.PrefectureId;
             if (kind == TournamentKind.Summer) return year + "年 選手権" + PrefectureNames.ShortOf(pref) + "大会";
-            if (kind == TournamentKind.AutumnDistrict) return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "地区予選";
+            if (kind == TournamentKind.AutumnDistrict)
+            {
+                // 自校が戦う地区を添える（例「秋季神奈川県地区予選（湘南地区）」。issue #725）。
+                // 地区未設定（新規ゲーム設定を通らない起動）は Enter の組み合わせと同じく第0地区とみなす。
+                var d = NationService.DistrictId ?? 0;
+                return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "地区予選"
+                    + "（" + DistrictPlanProvider.DistrictTitleName(pref, d) + "）";
+            }
             return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "大会";
         }
 

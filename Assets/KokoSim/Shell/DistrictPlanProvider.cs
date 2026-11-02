@@ -62,24 +62,26 @@ namespace KokoSim.Unity.Shell
         public static int AutumnDistrictsOf(int prefectureId)
             => Plan.TryGetValue(prefectureId, out var n) ? n : 0;
 
-        private const int HokkaidoId = 0;
-
         /// <summary>
         /// 表示名。東京は夏のブラケット名（東東京/西東京）で出す（<see cref="SummerRegions.SplitDistrictNames"/>
-        /// と同じ順序＝index 0/1 がそのまま Split 0/1 に対応）。北海道は10支部の実名（YAMLの districts:
-        /// と1:1対応なので実名を出してよい、<see cref="SummerRegions.HokkaidoBranchNames"/>）。
-        /// それ以外の県は「第N地区」で統一（YAML の districts 名は運用ブロック数と食い違うため使わない）。
+        /// と同じ順序＝index 0/1 がそのまま Split 0/1 に対応）。地区予選のある県（神奈川・兵庫・愛知・北海道）は
+        /// YAML の districts: の実名（地区Id順・issue #725）。名前の数が地区数と食い違う県だけ「第N地区」。
         /// </summary>
         public static string DistrictLabel(int prefectureId, int districtId)
         {
             var names = SummerRegions.SplitDistrictNames(prefectureId);
             if (districtId >= 0 && districtId < names.Count) return names[districtId];
-            if (prefectureId == HokkaidoId)
-            {
-                var branches = SummerRegions.HokkaidoBranchNames;
-                if (districtId >= 0 && districtId < branches.Count) return branches[districtId];
-            }
+            if (Rules.TryGetValue(prefectureId, out var rule) && rule.NameOf(districtId) is { } name) return name;
             return "第" + (districtId + 1) + "地区";
+        }
+
+        /// <summary>
+        /// 大会名に添える地区名（例「湘南地区」。issue #725）。実名に「地区」を足し、番号の名前はそのまま。
+        /// </summary>
+        public static string DistrictTitleName(int prefectureId, int districtId)
+        {
+            var label = DistrictLabel(prefectureId, districtId);
+            return label.EndsWith("地区", StringComparison.Ordinal) ? label : label + "地区";
         }
 
         private static IReadOnlyDictionary<int, PrefFormatDistrictParser.AutumnDistrictRule> LoadRules()

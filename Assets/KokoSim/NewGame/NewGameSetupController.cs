@@ -122,7 +122,7 @@ namespace KokoSim.Unity.NewGame
             if (prefectureId < 0 || prefectureId >= PrefectureNames.Japanese.Count) return;
             _prefectureId = prefectureId;
 
-            // 県内地区は group_split 採用県だけ（現状は神奈川4・兵庫5）。それ以外は欄ごと出さない。
+            // 県内地区は group_split 採用県だけ（現状は神奈川7・兵庫5・愛知5・北海道10）。それ以外は欄ごと出さない。
             var districts = DistrictPlanProvider.DistrictsOf(prefectureId);
             var has = districts > 0;
             _districtId = has ? 0 : (int?)null;

@@ -11,7 +11,7 @@ namespace KokoSim.Unity.Tournament
 {
     /// <summary>
     /// 【開発用・エディタ限定】秋季地区予選→秋季県大会の実プレー経路を通しで確かめる
-    /// （issue autumn-district-tournament-not-wired）。既定の本拠県（神奈川・4地区）で走らせる想定。
+    /// （issue autumn-district-tournament-not-wired）。既定の本拠県（神奈川・7地区）で走らせる想定。
     /// 使い捨て。<c>Debug.Log</c> に PASS/FAIL を出すだけで、ゲーム状態は書き換えたまま止まる。
     /// </summary>
     public sealed class DistrictFlowCheck : MonoBehaviour

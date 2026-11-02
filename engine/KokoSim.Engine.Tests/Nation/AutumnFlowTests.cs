@@ -210,7 +210,7 @@ public sealed class AutumnFlowTests
         var kanagawaId = prefTable.Prefectures.First(p => p.Name == "kanagawa").Id;
         var hyogoId = prefTable.Prefectures.First(p => p.Name == "hyogo").Id;
         var naraId = prefTable.Prefectures.First(p => p.Name == "nara").Id;
-        Assert.Equal(4, plan[kanagawaId]);       // group_split groups=4（districts一覧は7だが運用4）
+        Assert.Equal(7, plan[kanagawaId]);       // group_split groups=7（issue #725 で districts 一覧の7地区どおり）
         Assert.Equal(5, plan[hyogoId]);           // group_split groups=5
         Assert.False(plan.ContainsKey(naraId));   // nara は district_assignment=none
     }
