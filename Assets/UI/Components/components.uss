@@ -1319,7 +1319,7 @@
     font-size: var(--fs-cap);
 }
 
-/* ── MLineupPitcher：各列下の固定1行（投手＝打順外・名前/球数/投球回/失点） ── */
+/* ── MLineupPitcher：各列下の固定1行（投手＝打順外・背番号/名前/球数。issue #739） ── */
 .mlineup-pitcher {
     flex-direction: row;
     align-items: center;
@@ -1351,12 +1351,14 @@
     margin-right: var(--sp-1);
 }
 .mlineup-pitcher__stat {
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
+    flex-direction: row;
+    align-items: center;
     margin-left: var(--sp-1);
     margin-right: var(--sp-1);
     flex-shrink: 0;
 }
+.mlineup-pitcher__stat .nu-num { font-size: var(--fs-label); color: var(--color-chalk); }
+.mlineup-pitcher__stat .nu-unit { font-size: var(--fs-cap); color: var(--color-muted); }
 
 /* ═══ MatchupHud（黒半透明の一体帯）─ 対決ビュー上の右上=打者 / 右下=投手 ═══
    中継のテロップ帯。**面を持つのは帯コンテナ1枚だけ**で、中の段・セル・チップは背景を持たない
