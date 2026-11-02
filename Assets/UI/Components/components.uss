@@ -324,6 +324,8 @@
 .abil-row__label { font-size: var(--fs-label); color: var(--color-chalk); }
 .abil-row__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
 .abil-row .rank-chip { margin-right: var(--sp-3); }
+.abil-row__chip-slot { width: 30px; flex-shrink: 0; margin-right: var(--sp-3); }   /* ランク無しの軸（球速, issue #736）でバー位置をそろえる空き */
+.abil-row--lg .abil-row__chip-slot { margin-right: var(--sp-4); }
 .abil-row__bar {
     flex-grow: 1;
     flex-basis: 0;

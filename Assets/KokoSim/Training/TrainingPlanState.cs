@@ -42,6 +42,7 @@ namespace KokoSim.Unity.Training
         public string Grade = "";  // 現在値のランク S〜G（空＝ランクを持たない相対バー）
         // 弾道など優劣のないタイプ軸（issue #219）: 非空なら Grade の代わりにこのラベルをチップ表示する
         public string TypeLabel = "";
+        public bool KeepChipSlot;  // ランクを持たない軸（球速, issue #736）: チップ幅の空きでバー位置をそろえる
     }
 
     /// <summary>能力タブの1行（issue #327③・案A）。現在能力の値とランク。作りは選手詳細
@@ -607,7 +608,13 @@ namespace KokoSim.Unity.Training
                 // （監督決定 2026-08-09, issue #561）。上限なし（issue #356）は変わらず、Lv100超はバーが振り切れる。
                 info.Grade = Tiers.FromStrength(v).ToString();
             if (k == AbilityKind.Velocity)
+            {
+                // 球速は km/h という実寸で読む量＝ランク分けしない（issue #736）。チップもバーも出さず数字＋単位だけ。
+                info.Grade = "";
+                info.HideBar = true;
+                info.Unit = "km/h";
                 info.ValueText = ((int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(v))).ToString();
+            }
             return info;
         }
 
@@ -649,8 +656,11 @@ namespace KokoSim.Unity.Training
                     // ランク併記は「今週の伸び」ではなく**現在の能力値**を表す（UI原則③）。
                     // 弾道は優劣のないタイプ軸なのでランクチップではなくタイプラベルを出す（issue #219）。
                     Value = p.Level(k),
-                    Grade = k == AbilityKind.LaunchTendency ? "" : Tiers.FromStrength(p.Level(k)).ToString(),
+                    // 球速はランク分けしない（issue #736）。バーは「今週の伸び」なので残す。
+                    Grade = k == AbilityKind.LaunchTendency || k == AbilityKind.Velocity
+                        ? "" : Tiers.FromStrength(p.Level(k)).ToString(),
                     TypeLabel = k == AbilityKind.LaunchTendency ? KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(p.Level(k)) : "",
+                    KeepChipSlot = k == AbilityKind.Velocity,
                 });
             }
             return bars;
