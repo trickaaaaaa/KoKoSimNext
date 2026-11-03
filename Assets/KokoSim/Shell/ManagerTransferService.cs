@@ -136,6 +136,7 @@ namespace KokoSim.Unity.Shell
             if (schoolId == null)
             {
                 if (_kind == TransferEventKind.ForcedTransfer) return false;
+                ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: false, ManagerService.Coefficients);
                 Clear();
                 return true;
             }
@@ -144,7 +145,7 @@ namespace KokoSim.Unity.Shell
             foreach (var c in _candidates) if (c.SchoolId == schoolId.Value) { target = c; break; }
             if (target == null) return false;
 
-            ManagerTransferModel.ApplyTransfer(ManagerService.Manager, ManagerService.Coefficients);
+            ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: true, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();
             // 部員は学校に所属する（issue #641）: 旧校は AI校として全国に残り旧部員もそこに残る。
             // 転任先 AI校の部員を引き継ぎ、転任先は全国から外れる（自校＝専用ID で大会に出る）。
