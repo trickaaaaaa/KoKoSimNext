@@ -1749,6 +1749,20 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// <see cref="OnPitchReleased"/> で予約した「次のリリース」を <paramref name="deltaSeconds"/> だけずらす
+        /// （正＝遅らせる）。ファウルで呼び出し側が間合いを打球の飛行時間まで延ばしたり、時計を接触時刻へ
+        /// 巻き戻したりしたときに、投手の振りかぶりと打者の足上げを実際のリリースへ合わせ直す（issue #770）。
+        /// クリップの緩急は変えない＝遅らせた分だけ投手はフォロースルー後のセット姿勢で待つ（design-18 §4.5）。
+        /// 既に振りかぶりへ入った後（予約が消化済み）は何もしない。
+        /// </summary>
+        public void ShiftNextRelease(float deltaSeconds)
+        {
+            if (!Available || Mathf.Abs(deltaSeconds) < 1e-4f) return;
+            if (_cutCountdown >= 0f) _cutCountdown = Mathf.Max(0f, _cutCountdown + deltaSeconds);
+            if (_preLoadCountdown >= 0f) _preLoadCountdown = Mathf.Max(0f, _preLoadCountdown + deltaSeconds);
+        }
+
+        /// <summary>
         /// 打者の足上げ（PreLoad）を「次のリリースの lead 秒前」に予約する（issue batter-timing-load-earlier）。
         /// lead ＝ 足上げ(<see cref="TakeLoadStartSec"/>)→振り出し(<see cref="TakeLoadStopSec"/>) を LoadSpeed で再生する実秒 −
         /// （典型の到達時間 − 前足接地の先行 <see cref="TakeLoadLeadSeconds"/>）。到達 0.45s・LoadSpeed 1.2 なら
@@ -2272,6 +2286,10 @@ namespace KokoSim.Unity.Match
             // 逆に向きまで据え置くと、リリースが12fpsコマ境界のどこで来たかで最大1コマぶん
             // （リリース近傍は1コマ20〜40°回る）取りこぼし、フォロースルーの向きが球ごとに
             // 40°ばらつく（実測: 1球目 -107° / 2球目 -148°）。向きは Seek の値をそのまま使う。
+            // 実測用（issue #770）: 球を出す瞬間に投手のクリップがどこにいたか。0 ならフォームと球が合っている
+#if UNITY_EDITOR
+            ReleaseDriftsForCapture.Add(_pitcher.Time - _cal.BallReleaseClipTime);
+#endif
             var keepPos = _pitcher.Go.transform.localPosition;
             // 先に**発射時刻**の姿勢へ送って球の出所を採る（アンカーの ReleaseTime では手が振り下ろされた後）。
             // Seek は BasePos から積分し直す決定論なので、続けてアンカー時刻へ送り直せば姿勢は同じに揃う。
@@ -6278,6 +6296,14 @@ namespace KokoSim.Unity.Match
                 + "\t" + targetYaw.ToString("F1")
                 + "\t" + pos.x.ToString("F2") + "," + pos.z.ToString("F2");
         }
+
+        /// <summary>
+        /// リリースごとの「投手クリップ時刻 − 発射時刻（BallReleaseClipTime）」[秒]（issue #770）。
+        /// 合っている球でもフレーム間隔ぶんばらつく（2026-11-03 実測 −0.05〜+0.45）。投げ終えて待機へ
+        /// 戻った後に球が出ると大きく負になる（修正前のファウル後 −2.97）。
+        /// </summary>
+        internal readonly System.Collections.Generic.List<float> ReleaseDriftsForCapture =
+            new System.Collections.Generic.List<float>();
 
         internal string PitcherDiagForCapture()
         {
