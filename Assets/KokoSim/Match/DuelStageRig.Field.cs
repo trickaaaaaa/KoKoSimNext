@@ -1112,6 +1112,29 @@ namespace KokoSim.Unity.Match
         };
 
         /// <summary>
+        /// このプレーの「捕ってから投げるまで」の見せ方（表示専用・2026-11-03 監督報告「サードが怠慢に見える」）。
+        /// engine のもたつき（内野安打率の校正項）が長い打席だけ、握り直し／お手玉の芝居を付ける。
+        /// </summary>
+        private HandleBobble _bobble = HandleBobble.NoneValue;
+
+        /// <summary>もたつきの芝居を付けるか（見比べ撮影用の静的スイッチ。既定 true）。</summary>
+        public static bool HandleBobbleEnabled = true;
+
+        /// <summary>握り直しで球がグラブから浮く高さ[m]・浮き始め（捕球から）[s]・浮いている秒数。</summary>
+        private const float JuggleHeightM = 0.35f;
+        private const float JuggleStartAfterCatchS = 0.30f;
+        private const float JuggleAirS = 0.40f;
+
+        /// <summary>お手玉でグラブから跳ねた球が地面へ落ちるまで[s]・跳ねる高さ（グラブから）[m]。</summary>
+        private const float FumblePopS = 0.35f;
+        private const float FumblePopHeightM = 0.25f;
+
+        /// <summary>この捕球予定が「もたつきのお手玉」の弾く瞬間か（本物の失策のお手玉は含まない）。</summary>
+        private bool IsBobbleFumble(FieldCatchEvent e)
+            => _bobble.Kind == HandleBobbleKind.Fumble && e.Kind == FieldCatchKind.Fumble && e.Pos == _bobble.Fielder
+               && Mathf.Abs(e.TCatch - (float)_bobble.CatchT) < 0.05f;
+
+        /// <summary>
         /// 飛び込み系を選ぶ**純関数**（乱数なし）。合わなければ −1 ＝従来の高さ×近づき方へ落とす。
         ///
         /// <para>高さの主軸は使わない。<c>CatchHeightFor</c> は種別ごとの定数（滞空は一律 1.40m）で
@@ -1345,6 +1368,8 @@ namespace KokoSim.Unity.Match
             if (play.Fumbled && play.Judgements != null)
                 foreach (var j in play.Judgements)
                     if (j.Kind == JudgementKind.Error) fumbleAt = (float)j.T;
+            // もたつきのお手玉（失策ではない・表示専用）も同じ芝居で見せる
+            if (float.IsNaN(fumbleAt) && _bobble.Kind == HandleBobbleKind.Fumble) fumbleAt = (float)_bobble.CatchT;
             // 空中捕球の余裕（フライ/ライナーのみ非null）。ゴロは NaN＝下の分岐が全部素通りする
             var catchMargin = play.CatchMargin.HasValue ? (float)play.CatchMargin.Value : float.NaN;
             var aerialResolved = false;   // 空中の勝負は1本の打球につき1回だけ
@@ -1545,6 +1570,23 @@ namespace KokoSim.Unity.Match
         /// 「体の向き」は捕球と同じくグラブが球へ向くよう後から回すので、判定は<b>向きに依らない量</b>
         /// ——球の進行方向と「野手→球」の外積の符号——で採る。</para>
         /// </summary>
+        /// <summary>
+        /// もたつきのお手玉で流すお手玉の収録（左右）。捕球予定（<see cref="BuildFieldCatchPlan"/>）と同じ
+        /// <see cref="SelectFumbleSide"/> で選ぶ＝弾く芝居・起き上がりの尺・グラブの距離がずれない。
+        /// </summary>
+        private static int FumbleSideFor(PlaybackPlay play, HandleBobble bobble)
+        {
+            foreach (var seg in play.Ball)
+                if (seg is EndpointBallSegment { Kind: BallSegmentKind.Roll or BallSegmentKind.Bounce } eb
+                    && System.Math.Abs(eb.T1 - bobble.CatchT) < 1e-6)
+                    return SelectFumbleSide(play, bobble.Fielder, (float)eb.T1, eb);
+            return 0;
+        }
+
+        /// <summary>その収録のグラブが届く水平距離[m]＝捕球点を置く距離（<see cref="BuildFieldCatchPlan"/> と同じ式）。</summary>
+        private static float AnchorReach(FieldCatchAnchor an)
+            => new Vector2(an.GloveX, an.GloveZ).magnitude * CatchReachSlack;
+
         private static int SelectFumbleSide(PlaybackPlay play, FieldPosition who, float tc, PlaybackBallSegment seg)
         {
             var end = seg.At(seg.T1 - seg.T0);
@@ -4244,6 +4286,15 @@ namespace KokoSim.Unity.Match
         {
             if (!Available || play == null) return;
             play = StripPostResolutionReturnMoves(play);
+            _bobble = HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
+            if (_bobble.Kind == HandleBobbleKind.Fumble)
+            {
+                var fumbleAn = FieldFumbleAnchors[FumbleSideFor(play, _bobble)];
+                // 拾うのはゴロをその場で捕る収録（低い構え）。その収録のグラブが届く距離に球を置く
+                var pickAn = FieldCatchAnchors[SelectFieldCatch(CatchHeightFor(BallSegmentKind.Roll), CatchApproach.Still)];
+                play = HandleBobblePlanner.ApplyFumble(play, _bobble, DiveTailSeconds(fumbleAn),
+                    AnchorReach(fumbleAn), AnchorReach(pickAn));
+            }
             EnsureFieldCast();
             SetFieldCastVisible(true);
             _fieldPlay = play;
@@ -4382,6 +4433,7 @@ namespace KokoSim.Unity.Match
             if (_fieldPlay == null) return;
             _fieldPlay = null;
             _fieldPlan = null;
+            _bobble = HandleBobble.NoneValue;
             _hrHit = false;
             _hrFence = false;
             _hrStyle = KokoSim.Engine.Match.Timeline.HomeRunStyle.Standard;
@@ -4522,7 +4574,9 @@ namespace KokoSim.Unity.Match
                     // ⚠ 送球は種別で外す（issue #505 ①）。外すときも**時計だけは進める**＝
                     //    進めないと打球の尾が刈られず、送球のあいだ宙に浮いたまま残る
                     bool onThrow = IsThrowAt(t);
-                    if (FieldTrailOnThrow || !onThrow) PushTrailPoint(p, t, FieldBattedTrailSeconds);
+                    // もたつきのお手玉は弾いた後に残像を出さない（こぼれた球・拾い上げは打球ではない）
+                    bool bobbled = _bobble.Kind == HandleBobbleKind.Fumble && t >= _bobble.CatchT;
+                    if (!bobbled && (FieldTrailOnThrow || !onThrow)) PushTrailPoint(p, t, FieldBattedTrailSeconds);
                     else if (_trail.Count > 0) TrimTrail(t, FieldBattedTrailSeconds);
                     // 受け入れ実測（issue #505 ①）: 送球中に線が**描かれた**コマ数。
                     // ⚠ 0 にはならないのが正しい。積むのを止めても、直前まで積んだ打球の尾が
@@ -4731,8 +4785,25 @@ namespace KokoSim.Unity.Match
             for (int i = 0; i < _catchEvents.Count; i++)
             {
                 var e = _catchEvents[i];
+                if (IsBobbleFumble(e))
+                {
+                    // もたつきのお手玉: 球は一度グラブ（捕球点）へ着き、そこから跳ねて地面へ落ちる。
+                    // 落ちた後は engine のこぼれ区間（グラブの所から外へ転がる）そのまま
+                    if (t >= e.TCatch - CatchBallBlendSeconds && t < e.TCatch)
+                    {
+                        float ub = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
+                        return Vector3.Lerp(enginePos, e.Point, ub * ub * (3f - 2f * ub));
+                    }
+                    if (t >= e.TCatch && t < e.TCatch + FumblePopS)
+                    {
+                        float up = (t - e.TCatch) / FumblePopS;
+                        var flat = Vector3.Lerp(new Vector3(e.Point.x, 0f, e.Point.z), enginePos, up * up * (3f - 2f * up));
+                        return flat + new Vector3(0f, e.Point.y * (1f - up) + 4f * FumblePopHeightM * up * (1f - up), 0f);
+                    }
+                    continue;
+                }
                 if (t > e.HoldUntil) continue;
-                if (t >= e.TCatch) return CatchGloveNow(e);            // 捕ってから次の区間まではグラブに追従
+                if (t >= e.TCatch) return CatchGloveNow(e) + JuggleOffset(e, t);   // 捕ってから次の区間まではグラブに追従
                 if (t < e.TCatch - CatchBallBlendSeconds) continue;
                 float u = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
                 return Vector3.Lerp(enginePos, e.Point, u * u * (3f - 2f * u));
@@ -4748,6 +4819,19 @@ namespace KokoSim.Unity.Match
         /// 待機へ戻っていくグラブから球だけが微妙にずれて見える（issue #399 ①）。
         /// アニメータが無い（未生成・破棄済み等）ときだけ、確定済みの捕球点へフォールバックする。
         /// </summary>
+        /// <summary>
+        /// 握り直し（<see cref="HandleBobbleKind.Juggle"/>）の間だけ、球をグラブから上へ小さく浮かせる
+        /// （放物線で浮いて同じグラブへ戻る）。それ以外は 0。
+        /// </summary>
+        private Vector3 JuggleOffset(FieldCatchEvent e, float t)
+        {
+            if (_bobble.Kind != HandleBobbleKind.Juggle || e.Pos != _bobble.Fielder
+                || Mathf.Abs(e.TCatch - (float)_bobble.CatchT) > 0.05f) return Vector3.zero;
+            float u = (t - e.TCatch - JuggleStartAfterCatchS) / JuggleAirS;
+            if (u <= 0f || u >= 1f) return Vector3.zero;
+            return new Vector3(0f, 4f * JuggleHeightM * u * (1f - u), 0f);
+        }
+
         private Vector3 CatchGloveNow(FieldCatchEvent e)
         {
             var a = FielderActor(e.Pos);
