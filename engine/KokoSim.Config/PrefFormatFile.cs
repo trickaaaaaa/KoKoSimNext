@@ -82,7 +82,7 @@ public static class PrefFormatLoader
             ThirdPlaceMatch = ThirdPlaceMatch,
             Groups = Groups,
             Grouping = Grouping == "draw" ? GroupingMode.Draw : GroupingMode.Geographic,
-            Child = Child is null ? null : new ChildStage(ParseStage(Child.Type), Child.TeamsPerGroup),
+            Child = Child is null ? null : new ChildStage(ParseStage(Child.Type), Child.TeamsPerGroup, Child.Advance),
             AdvancePerGroup = AdvancePerGroup,
             LoserBracket = LoserBracket is null ? null : new LoserBracketRule(LoserBracket.Enabled, LoserBracket.Advance),
             Entries = Entries,
@@ -101,6 +101,8 @@ public static class PrefFormatLoader
     {
         public string Type { get; set; } = "knockout";
         public int? TeamsPerGroup { get; set; }
+        /// <summary>ブロックごとの進出数（teams_per_group 付きの round_robin だけが使う。issue #772）。</summary>
+        public int? Advance { get; set; }
     }
 
     private sealed class LoserBracketDto

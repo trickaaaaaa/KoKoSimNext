@@ -474,6 +474,12 @@
     margin-top: 22px; margin-bottom: 12px;
 }
 
+/* 地区予選のブロックリーグ戦（issue #772・A案）: 左＝自校ブロックの順位表＋日程、右＝他ブロックの小さな順位表。 */
+.lg-wrap { flex-direction: row; align-items: flex-start; }
+.lg-main { flex-grow: 1; flex-basis: 0; min-width: 0; margin-right: var(--sp-4); }
+.lg-side { width: var(--col-league-side); flex-shrink: 0; }
+.lg-sec { margin-top: var(--sp-3); }
+
 /* 出場校カード。枠線ではなく面の明度で区切る（UI原則④）。角丸はカードトークンに従う。 */
 .tp-team {
     flex-direction: row; background-color: var(--sf-card); border-width: 0;

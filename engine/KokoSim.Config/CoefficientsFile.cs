@@ -307,6 +307,7 @@ public static class CoefficientsLoader
         public int LateRoundsThreshold { get; set; } = D.LateRoundsThreshold;
         public int RestDaysAfterQuarterfinal { get; set; } = D.RestDaysAfterQuarterfinal;
         public int RestDaysAfterSemifinal { get; set; } = D.RestDaysAfterSemifinal;
+        public int LeagueRoundSpreadDays { get; set; } = D.LeagueRoundSpreadDays;
         public int MaxGamesPerDay { get; set; } = D.MaxGamesPerDay;
         public int SummerOpenMonth { get; set; } = D.SummerOpenMonth;
         public int SummerOpenDay { get; set; } = D.SummerOpenDay;
@@ -331,6 +332,7 @@ public static class CoefficientsLoader
             LateRoundsThreshold = LateRoundsThreshold,
             RestDaysAfterQuarterfinal = RestDaysAfterQuarterfinal,
             RestDaysAfterSemifinal = RestDaysAfterSemifinal,
+            LeagueRoundSpreadDays = LeagueRoundSpreadDays,
             MaxGamesPerDay = MaxGamesPerDay,
             SummerOpenMonth = SummerOpenMonth,
             SummerOpenDay = SummerOpenDay,

@@ -48,7 +48,7 @@ namespace KokoSim.Unity.Shell
         /// 完了したら <paramref name="onComplete"/> をメインスレッドで呼ぶ（<see cref="MainThreadDispatcher"/> 経由）。
         /// 既に消化不要（優勝時・現役時）なら即座に <paramref name="onComplete"/> を呼んで返る。
         /// </summary>
-        public static void Start(TournamentRunner runner, Action onComplete)
+        public static void Start(ITournamentRunner runner, Action onComplete)
         {
             if (runner == null || !runner.BracketResolutionPending)
             {
@@ -67,7 +67,7 @@ namespace KokoSim.Unity.Shell
                 }));
         }
 
-        private static void Worker(TournamentRunner runner)
+        private static void Worker(ITournamentRunner runner)
         {
             while (runner.BracketResolutionPending)
             {

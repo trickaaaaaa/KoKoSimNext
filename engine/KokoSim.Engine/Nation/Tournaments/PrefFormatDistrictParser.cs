@@ -19,7 +19,9 @@ namespace KokoSim.Engine.Nation.Tournaments;
 ///   - <c>stages:</c> の中で <c>type: group_split</c> かつ <c>grouping: geographic</c> のステージの <c>groups: N</c>
 ///   - 同ステージの <c>advance_per_group: N</c>（各地区から県大会へ進む校数。null/無し＝1。issue #688）
 ///   - 先頭の <c>seed_exemption: true</c>（夏の代表校を県大会へ推薦するか。issue #688）
-/// ステージの入れ子（<c>child:</c> 配下の type）を拾わないよう、**ステージ自身の字下げ段だけ**を見る。
+///   - 同ステージの <c>child:</c> 配下の <c>type: round_robin</c>＋<c>teams_per_group: N</c>＋<c>advance: N</c>
+///     （地区の中を N 校ブロックのリーグ戦にする県・ブロックごとの進出数。issue #772）
+/// ステージ自身のキーと <c>child:</c> 配下のキーは字下げ段で区別する（取り違えない）。
 /// </summary>
 public static class PrefFormatDistrictParser
 {
@@ -27,8 +29,11 @@ public static class PrefFormatDistrictParser
     /// <para><see cref="Names"/> は YAML の <c>districts:</c>（地区の実名・地区Id順）。数が <see cref="Districts"/> と
     /// 食い違う県は名前を持たない扱い（空）＝表示側は番号で出す（issue #725）。</para>
     public sealed record AutumnDistrictRule(string Pref, int Districts, int AdvancePerDistrict, bool SeedExemption,
-        IReadOnlyList<string>? Names = null)
+        IReadOnlyList<string>? Names = null, int TeamsPerBlock = 0, int AdvancePerBlock = 0)
     {
+        /// <summary>地区予選が「地区の中のブロックごとのリーグ戦」か（神奈川・issue #772）。偽＝地区ごとの1トーナメント。</summary>
+        public bool IsBlockLeague => TeamsPerBlock >= 2;
+
         /// <summary>地区Id の実名。名前を持たない県・範囲外は null。</summary>
         public string? NameOf(int districtId)
             => Names != null && Names.Count == Districts && districtId >= 0 && districtId < Names.Count
@@ -59,6 +64,12 @@ public static class PrefFormatDistrictParser
         string? stageType = null, stageGrouping = null;
         int? stageGroups = null;
         var found = 0;
+        // child: 配下（ステージより深い段）。ブロックのリーグ戦の県だけが使う（issue #772）。
+        var inChild = false;
+        string? childType = null;
+        int? childTeams = null, childAdvance = null;
+        var foundTeamsPerBlock = 0;
+        var foundAdvancePerBlock = 0;
 
         void CloseStage()
         {
@@ -66,8 +77,14 @@ public static class PrefFormatDistrictParser
             {
                 found = g;
                 foundAdvance = System.Math.Max(1, stageAdvance ?? 1);
+                if (childType == "round_robin" && childTeams is { } t && t >= 2)
+                {
+                    foundTeamsPerBlock = t;
+                    foundAdvancePerBlock = System.Math.Max(1, childAdvance ?? stageAdvance ?? 1);
+                }
             }
             stageType = null; stageGrouping = null; stageGroups = null; stageAdvance = null;
+            inChild = false; childType = null; childTeams = null; childAdvance = null;
         }
 
         foreach (var raw in yaml.Replace("\r\n", "\n").Split('\n'))
@@ -103,13 +120,26 @@ public static class PrefFormatDistrictParser
                 trimmed = trimmed.Substring(1).Trim();
                 if (trimmed.Length == 0) continue;
             }
+            else if (indent > stageIndent)
+            {
+                // child: 配下（ステージ自身より深い段）。それ以外の入れ子（loser_bracket 等）は見ない
+                if (!inChild) continue;
+                var (ck, cv) = Split(trimmed);
+                if (ck == "type") childType = cv;
+                else if (ck == "teams_per_group"
+                         && int.TryParse(cv, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ct)) childTeams = ct;
+                else if (ck == "advance"
+                         && int.TryParse(cv, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ca)) childAdvance = ca;
+                continue;
+            }
             else if (indent != stageIndent)
             {
-                continue;   // child: 配下など、ステージ自身より深い（or 浅い）段は見ない
+                continue;   // ステージより浅い段は見ない
             }
 
             var (k, v) = Split(trimmed);
             if (k == null) continue;
+            inChild = k == "child";
             switch (k)
             {
                 case "type": stageType = v; break;
@@ -125,7 +155,7 @@ public static class PrefFormatDistrictParser
         CloseStage();
 
         return geographic
-            ? new AutumnDistrictRule(pref, found, foundAdvance, seedExemption, names)
+            ? new AutumnDistrictRule(pref, found, foundAdvance, seedExemption, names, foundTeamsPerBlock, foundAdvancePerBlock)
             : new AutumnDistrictRule(pref, 0, 1, false);
     }
 

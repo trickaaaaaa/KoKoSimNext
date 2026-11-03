@@ -125,15 +125,46 @@ namespace KokoSim.Unity.Shell
             if (school != null) field.Add(school);
         }
 
+        /// <summary>
+        /// 地区の出場校をブロックへ分ける（ブロックリーグ戦の県・issue #772）。夏の県大会の順位でシード分散し、
+        /// 抽選は大会シードから Fork した専用ストリーム（進行体の乱数列とは別）。自校の地区（対話）と
+        /// 他地区（<see cref="ResolveOtherDistrict"/>）が同じ規則で組む唯一の入口。
+        /// </summary>
+        public static IReadOnlyList<IReadOnlyList<School>> DrawBlocks(IReadOnlyList<School> entrants, int prefectureId, ulong seed)
+            => BlockDraw.Split(entrants, DistrictPlanProvider.TeamsPerBlockOf(prefectureId), SummerSeedRank(),
+                new Xoshiro256Random(seed).Fork(BlockDraw.DrawStreamId));
+
+        /// <summary>夏の県大会の順位（0＝優勝）。控えが無い年（初年度・旧セーブ）は null＝全校抽選。</summary>
+        private static Func<School, int?> SummerSeedRank()
+        {
+            var ids = GameSession.Current.LastSummerPlacementIds;
+            if (ids == null || ids.Count == 0) return null;
+            var rank = new Dictionary<int, int>();
+            for (var i = 0; i < ids.Count; i++) if (!rank.ContainsKey(ids[i])) rank[ids[i]] = i;
+            return s => rank.TryGetValue(s.Id, out var r) ? r : (int?)null;
+        }
+
         /// <summary>自校が居ない地区の進出校（上位 advance 校）を同期解決する（自校IDを混ぜないので Spectated でよい）。</summary>
         private static IReadOnlyList<School> ResolveOtherDistrict(
             int prefectureId, int districtId, int advance, int yearIndex)
         {
             var entrants = NationService.PrefectureSchools.Where(s => s.DistrictId == districtId).ToList();
-            if (entrants.Count <= advance) return entrants;
-
             var seed = GameSeed.Master ^ (9600UL + (ulong)yearIndex * 10 + (ulong)districtId * 1000
                 + (ulong)prefectureId);
+
+            // ブロックリーグ戦の県（神奈川・issue #772）: 自校の地区と同じ規則（夏の順位でシード分散・
+            // 各ブロック上位 N 校）で解く。集計モデル＝数十試合を同期で済ませる（自校の地区だけフルシム）。
+            if (DistrictPlanProvider.IsBlockLeagueOf(prefectureId))
+            {
+                if (entrants.Count < 2) return entrants;
+                var league = BlockLeagueRunner.Spectated(DrawBlocks(entrants, prefectureId, seed),
+                    DistrictPlanProvider.AdvancePerBlockOf(prefectureId), NationCoeff, new Xoshiro256Random(seed),
+                    TournamentEntry.Schedule, "秋季地区予選代表決定");
+                league.DrainBracketResolution();
+                return league.Qualifiers();
+            }
+
+            if (entrants.Count <= advance) return entrants;
             var title = "秋季地区予選代表決定";
             var runner = TournamentRunner.Spectated(
                 entrants, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule, title);

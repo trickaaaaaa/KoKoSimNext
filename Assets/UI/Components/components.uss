@@ -1902,6 +1902,8 @@
     border-bottom-color: var(--divider);
 }
 .bs-row--last { border-bottom-width: 0; }
+/* 自校の行（順位表など・issue #772）。選択行と同じ桜色の地＝一覧をスキャンして自校が拾える（UI原則⑥）。 */
+.bs-row--mine { background-color: var(--sakura-tint); }
 /* 表の見出し行。本体との境はインク（外枠と同じ強さ）で明確に分ける。 */
 .bs-row--head {
     height: 26px;
@@ -1941,6 +1943,8 @@
 .bs-cell--avg { width: 48px; }
 .bs-cell--inn { width: 56px; }        /* 投球回（延長の「10 1/3」まで） */
 .bs-cell--mark { width: 22px; -unity-text-align: middle-center; color: var(--color-muted); padding-right: 0; }
+/* 月日（「10月12日」まで）。日程表の先頭列（issue #772）。 */
+.bs-cell--date { width: 96px; -unity-text-align: middle-left; padding-left: var(--sp-2); }
 /* 打席結果セル（1〜n打席目）。等分割で伸ばす。 */
 .bs-cell--pa {
     flex-grow: 1;

@@ -33,6 +33,19 @@ public static class RoundRobin
             recorder?.Record(0, w, l, m); // リーグ戦は序盤扱い（early 抽選）
         }
 
+        return Rank(teams, wins, losses, margin, head);
+    }
+
+    /// <summary>
+    /// リーグ戦の順位付け（設計書05 §1.5）。勝点（勝利数）→得失点差→強さ→Id の総順序で並べ、
+    /// 勝点が並んだ隣り合う2校は直接対決の勝者を上にする。<see cref="Run"/> と対話リーグ
+    /// （<see cref="BlockLeagueRunner"/>）が同じ規則で順位を出すための単一の入口。
+    /// <paramref name="head"/> のキーは (小Id, 大Id)・値は勝者Id。
+    /// </summary>
+    public static IReadOnlyList<Standing> Rank(
+        IReadOnlyList<School> teams, IReadOnlyDictionary<int, int> wins, IReadOnlyDictionary<int, int> losses,
+        IReadOnlyDictionary<int, int> margin, IReadOnlyDictionary<(int, int), int> head)
+    {
         // 総順序で並べ（勝点→得失点→強さ→Id）、その後 2校同点の直接対決で局所補正（§1.5）。
         var ordered = teams
             .OrderByDescending(t => wins[t.Id])
