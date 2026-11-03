@@ -88,6 +88,19 @@ public static class ManagerTransferModel
     }
 
     /// <summary>
+    /// 転任判定の選択を確定したときの監督メタの更新（issue #777）。<paramref name="transferred"/>=false は残留。
+    /// フリー化資格（<see cref="TransferEventKind.BecameFreeAgent"/>）は<b>残留・転任のどちらを選んでも</b>
+    /// 教員身分を離れる＝以降は <see cref="TransferEventKind.FreeAgentOffer"/> の抽選だけになる
+    /// （<see cref="CareerEngine"/> と同じ。ここを書かないと毎年フリー化資格が出続ける）。
+    /// 強制転任は教員のまま。転任したときは <see cref="ApplyTransfer"/> も当てる。
+    /// </summary>
+    public static void ApplyDecision(Manager m, TransferEventKind kind, bool transferred, CareerCoefficients c)
+    {
+        if (kind == TransferEventKind.BecameFreeAgent) m.Status = ManagerStatus.Free;
+        if (transferred) ApplyTransfer(m, c);
+    }
+
+    /// <summary>
     /// 転任に伴う監督メタの更新（設計書04 §1.3「監督能力と名声は持ち越し」）。信頼度は転任でリセットし、
     /// 在任年数も新しい学校での0に戻す（最低在任年数の下限はここから再カウント）。
     /// </summary>
