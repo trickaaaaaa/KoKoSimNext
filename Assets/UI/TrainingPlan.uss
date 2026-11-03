@@ -274,6 +274,9 @@
 .tpm-col--last { margin-right: 0; }   /* 能力タブの右端カラム（issue #327③） */
 .tpm-col__title { font-size: var(--fs-cap); color: var(--color-chalk); letter-spacing: 1px; flex-shrink: 0; margin-bottom: var(--sp-2); }
 .tpm-col__list { flex-direction: column; flex-shrink: 0; }
+/* 能力タブの球種チャート（issue #735）。投手能力の5行の下の空きを埋める（選手詳細と同じ部品）。 */
+.tpm-pitchchart { flex-grow: 1; min-height: 240px; margin-top: var(--sp-3); }
+.tpm-pitchchart--compact { flex-grow: 0; height: 104px; min-height: 104px; }
 /* 節見出し（野手練習/投手練習・Issue #133-⑥）。列見出しより一段淡い従属見出し。 */
 .tpm-menugroup { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: 3px; }
 /* 伸びる能力カラムは部品辞書のコンパクト行（.abil-row--compact＝行高32px固定・間隔2px）で

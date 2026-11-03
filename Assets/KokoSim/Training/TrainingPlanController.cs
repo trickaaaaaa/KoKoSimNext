@@ -376,8 +376,28 @@ namespace KokoSim.Unity.Training
         {
             if (!_abilityTab) return;
             FillAbilityList("tpm-abil-pitcher", v.SelPitcherAbilities);
+            FillPitchChart(v);
             FillAbilityList("tpm-abil-defense", v.SelDefenseAptitudes);
             FillAbilityList("tpm-abil-fielder", v.SelFielderAbilities);
+        }
+
+        // 能力タブの球種チャート（issue #735）。器は UXML に常設＝初回だけ部品を差し込み、選手切替のたびにデータだけ入れ替える。
+        // CompactPitchChartForCapture は通常版／比較カード版（compact）の見比べ撮影用（エディタ限定の切替）。
+        public static bool CompactPitchChartForCapture;
+        private KokoSim.Unity.Components.PitchChartView _abilPitchChart;
+        private bool _abilPitchChartCompact;
+        private void FillPitchChart(TrainingPlanView v)
+        {
+            var host = _root.Q<VisualElement>("tpm-abil-pitchchart");
+            if (host == null) return;
+            if (_abilPitchChart == null || _abilPitchChartCompact != CompactPitchChartForCapture)
+            {
+                host.Clear();
+                host.EnableInClassList("tpm-pitchchart--compact", CompactPitchChartForCapture);
+                _abilPitchChart = new KokoSim.Unity.Components.PitchChartView(host, compact: CompactPitchChartForCapture);
+                _abilPitchChartCompact = CompactPitchChartForCapture;
+            }
+            _abilPitchChart.SetData(v.SelPitches);
         }
 
         private void FillAbilityList(string hostName, System.Collections.Generic.List<AbilityRowInfo> rows)
