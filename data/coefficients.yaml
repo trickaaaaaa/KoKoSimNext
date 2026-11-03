@@ -1526,6 +1526,7 @@ roster:
   # AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）: 旧実装は全能力を同じ中心で独立に引き
   # 成長も一律なので B/A校は先発全員がスラッガーだった。パワーを希少側にしてミートへ振り替え（打撃指標不変）＋5能力の凸凹配分。
   ai_power_skew: 8.0               # パワー中心 −これ／ミート中心 +これ（.35C+.35P の打撃指標を保つ）
+  ai_arm_sd: 12.0                  # 肩の個人差σ（issue #767。旧は全能力と同じ6＝自校の身体系 physical_sd 12 の半分で、強肩の遊撃手が中位校に出なかった）
   ai_concentration: 0.15           # ミート/パワー/選球眼/守備/捕球の凸凹配分σ（総和不変。自校 concentration_mean 0.35 より控えめ）
   # AI校の上位集中＝スター型（issue prefecture-dominance-star, 2026-08-18）: ティア圧縮を一様に掛けると上位校のエースが平凡になる
   # （A校のエース最速 138km/h）。圧縮で削った分（raw−圧縮後）をエース＋主軸へ戻し、脇役は圧縮後の中心のまま＝現実の強豪の形。
@@ -1640,6 +1641,15 @@ persistent_roster:
   # 二刀流運用（issue ai-two-way-hitting-pitchers-start-as-fielders）: 守備8枠の割当重み＝実効守備力＋打撃総合×これ。
   # 0 なら従来どおり守備だけで先発を選ぶ。打撃は候補ごとの定数なので「誰を出すか」にだけ効き、枠の割り振りには効かない。
   field_slot_batting_weight: 2.0
+  # 肩の位置別重み（issue #767）: 割当重みに 肩Lv×これ を足す＝肩の強い選手が遊撃・捕手・右翼へ入る。0＝その位置は肩を見ない。
+  field_slot_arm_weight_catcher: 0.6
+  field_slot_arm_weight_first_base: 0.0
+  field_slot_arm_weight_second_base: 0.2
+  field_slot_arm_weight_third_base: 0.4
+  field_slot_arm_weight_shortstop: 0.6
+  field_slot_arm_weight_left_field: 0.1
+  field_slot_arm_weight_center_field: 0.3
+  field_slot_arm_weight_right_field: 0.5
   freshman_gap: 8.0             # 新入生の能力中心 = Strength − これ（未熟スタート・3年で開花）
   fame_recruit_weight: 0.04     # 名声由来の入学時上振れ（(Fame−50)×これ）
   annual_growth: 6.0            # 逆算配分のベースライン年間成長素点

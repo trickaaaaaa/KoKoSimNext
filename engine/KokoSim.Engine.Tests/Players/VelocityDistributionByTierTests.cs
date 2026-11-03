@@ -65,7 +65,9 @@ public sealed class VelocityDistributionByTierTests
         Assert.InRange(Pct(byTier[Tier.C], .5), 136.0, 143.0);
         Assert.InRange(Pct(byTier[Tier.B], .5), 143.0, 149.0);
         Assert.InRange(Pct(byTier[Tier.A], .5), 145.0, 150.0);   // n=5・小標本。一様圧縮だけの世界（137.8）は帯外
-        Assert.InRange(Pct(byTier[Tier.D], .5), 132.0, 137.5);
+        // 上限 137.5→138.0（issue #767・2026-11-03）: AI校の肩の個人差σを 6→12 に広げ、肩から球速を推定する
+        // 野手兼投手がエースに選ばれる校が出た（D 137.4→137.8・F/G +1.4〜1.9・C以上は不変）。
+        Assert.InRange(Pct(byTier[Tier.D], .5), 132.0, 138.0);
         Assert.InRange(Pct(byTier[Tier.E], .5), 130.0, 135.0);   // E 以下は変更前後で不変（Lv≦50 側）
         Assert.InRange(Pct(byTier[Tier.G], .5), 116.0, 125.0);   // 逆算配分の目標が圧縮後（G は raw より上）になり +0.5
         // C校で 145+ のエースは 1 割強まで（変更前 25%）。

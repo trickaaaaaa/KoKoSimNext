@@ -388,7 +388,11 @@ public static class StrengthTeamFactory
         var launch = Ability(50, rng);
         var discipline = Ability((strength + battingLift) * prof.Discipline, rng);
         var speed = Ability(strength, rng);
-        var arm = Ability(strength, rng);
+        // 肩は身体系＝個人差を自校と同じ σ で引く（issue #767。消費数は Ability と同じ1回）。
+        // 送球精度は従来どおり肩と同じ標準正規値から σ6 で作る＝旧値と1ビット一致（肩の幅だけ広げる）。
+        var armZ = rng.NextGaussian(0.0, 1.0);
+        var arm = (int)MathUtil.Clamp(Math.Round(strength + rc.AiArmSd * armZ), 10, 99);
+        var throwAccuracy = (int)MathUtil.Clamp(Math.Round(strength + 6.0 * armZ), 10, 99);
         var fielding = Ability(strength * prof.Fielding, rng);
         var catching = Ability(strength * prof.Catching, rng);
 
@@ -454,7 +458,7 @@ public static class StrengthTeamFactory
             Speed = speed,
             ArmStrength = arm,
             // 新パラメータは既存の抽選値から派生（新規RNG非消費）。正式生成は 2B。
-            ThrowAccuracy = arm,
+            ThrowAccuracy = throwAccuracy,
             Fielding = fielding,
             Catching = catching,
             Bunt = (int)MathUtil.Clamp(strength, 10, 99),

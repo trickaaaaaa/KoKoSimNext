@@ -242,7 +242,8 @@ public static class AiTeamBuilder
                     fielders[i].Snapshot.Fielding, fielders[i].Aptitude(FieldSlots[slot]), coeff);
                 if (fielders[i].Snapshot.Throws == Players.Handedness.Left)
                     raw -= LeftThrowPenalty(FieldSlots[slot]);
-                w[slot, i] = raw + batting;
+                w[slot, i] = raw + batting
+                             + fielders[i].Snapshot.ArmStrength * pc.FieldSlotArmWeight(FieldSlots[slot]);
             }
         }
 

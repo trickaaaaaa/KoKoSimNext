@@ -2277,6 +2277,7 @@ public static class CoefficientsLoader
         public double AiStyleMentalBonus { get; set; } = D.AiStyleMentalBonus;
         // AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）
         public double AiPowerSkew { get; set; } = D.AiPowerSkew;
+        public double AiArmSd { get; set; } = D.AiArmSd;
         public double AiConcentration { get; set; } = D.AiConcentration;
         // AI校の上位集中＝スター型（issue prefecture-dominance-star）
         public double AiStarShare { get; set; } = D.AiStarShare;
@@ -2422,6 +2423,7 @@ public static class CoefficientsLoader
             AiMentalPerGrade = AiMentalPerGrade,
             AiStyleMentalBonus = AiStyleMentalBonus,
             AiPowerSkew = AiPowerSkew,
+            AiArmSd = AiArmSd,
             AiConcentration = AiConcentration,
             AiStarShare = AiStarShare,
             AiStarLiftPerPoint = AiStarLiftPerPoint,
@@ -2468,6 +2470,14 @@ public static class CoefficientsLoader
         public int CohortSize { get; set; } = D.CohortSize;
         public int PitcherCountFloor { get; set; } = D.PitcherCountFloor;
         public double FieldSlotBattingWeight { get; set; } = D.FieldSlotBattingWeight;
+        public double FieldSlotArmWeightCatcher { get; set; } = D.FieldSlotArmWeightCatcher;
+        public double FieldSlotArmWeightFirstBase { get; set; } = D.FieldSlotArmWeightFirstBase;
+        public double FieldSlotArmWeightSecondBase { get; set; } = D.FieldSlotArmWeightSecondBase;
+        public double FieldSlotArmWeightThirdBase { get; set; } = D.FieldSlotArmWeightThirdBase;
+        public double FieldSlotArmWeightShortstop { get; set; } = D.FieldSlotArmWeightShortstop;
+        public double FieldSlotArmWeightLeftField { get; set; } = D.FieldSlotArmWeightLeftField;
+        public double FieldSlotArmWeightCenterField { get; set; } = D.FieldSlotArmWeightCenterField;
+        public double FieldSlotArmWeightRightField { get; set; } = D.FieldSlotArmWeightRightField;
         public double FreshmanGap { get; set; } = D.FreshmanGap;
         public double FameRecruitWeight { get; set; } = D.FameRecruitWeight;
         public double AnnualGrowth { get; set; } = D.AnnualGrowth;
@@ -2497,6 +2507,14 @@ public static class CoefficientsLoader
             CohortSize = CohortSize,
             PitcherCountFloor = PitcherCountFloor,
             FieldSlotBattingWeight = FieldSlotBattingWeight,
+            FieldSlotArmWeightCatcher = FieldSlotArmWeightCatcher,
+            FieldSlotArmWeightFirstBase = FieldSlotArmWeightFirstBase,
+            FieldSlotArmWeightSecondBase = FieldSlotArmWeightSecondBase,
+            FieldSlotArmWeightThirdBase = FieldSlotArmWeightThirdBase,
+            FieldSlotArmWeightShortstop = FieldSlotArmWeightShortstop,
+            FieldSlotArmWeightLeftField = FieldSlotArmWeightLeftField,
+            FieldSlotArmWeightCenterField = FieldSlotArmWeightCenterField,
+            FieldSlotArmWeightRightField = FieldSlotArmWeightRightField,
             FreshmanGap = FreshmanGap,
             FameRecruitWeight = FameRecruitWeight,
             AnnualGrowth = AnnualGrowth,
