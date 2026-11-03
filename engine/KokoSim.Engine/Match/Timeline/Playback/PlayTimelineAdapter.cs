@@ -116,7 +116,7 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
     public BallSegmentKind Kind => _kind;
 
     private readonly BallSegmentKind _kind;
-    private readonly double _fx, _fy, _tx, _ty, _apex, _launch, _dist;
+    private readonly double _fx, _fy, _tx, _ty, _apex, _launch;
 
     private EndpointBallSegment(
         BallSegmentKind kind, double t0, double t1, TimelinePoint from, TimelinePoint to, double apex, double launch)
@@ -127,9 +127,6 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         _tx = to.X; _ty = to.Z;
         _apex = apex;
         _launch = Math.Max(0.0, launch);
-        var dx = _tx - _fx;
-        var dy = _ty - _fy;
-        _dist = Math.Sqrt(dx * dx + dy * dy);
     }
 
     // 滞空が必ず通る点（issue #743・本塁打の柵上）。null なら対称な放物線。
@@ -205,6 +202,17 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         return 0.0;
     }
 
+    /// <summary>送球の離し・捕球の高さ[m]（表示演出）。</summary>
+    internal const double ThrowReleaseHeightM = 1.7;
+
+    /// <summary>
+    /// 送球の弧の上がり[m]＝飛翔時間 T[s] だけ重力に従う放物線の頂点（同じ高さで離して捕る＝g·T²/8。issue #764）。
+    /// 旧式（距離/9）は速さを見ず、140km/h の強肩でも 100km/h の弱肩でも遊撃→一塁で4.2m上がる山なりだった。
+    /// これで強肩は低く速い（38m・0.98秒で1.2m）、弱肩はふわっと上がる（1.37秒で2.3m）。
+    /// </summary>
+    internal static double ThrowRiseM(double flightSeconds)
+        => flightSeconds > 0 ? 9.80665 * flightSeconds * flightSeconds / 8.0 : 0.0;
+
     // 種別ごとの高さプロファイル[m]（表示演出。判定・帯には無関係）。
     private double Height(double u)
     {
@@ -220,7 +228,7 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
                 // のまま（誤差 launch²/(16·(Apex−launch/2))＝1mの打点・20mの弧で 0.3cm）。launch=0 なら従来式。
                 return _launch * (1 - u) + Math.Max(0, _apex - _launch * 0.5) * 4 * u * (1 - u);
             case BallSegmentKind.Throw:
-                return 1.7 + (_dist / 9) * 4 * u * (1 - u);    // 山なりの送球（mock throw）
+                return ThrowReleaseHeightM + ThrowRiseM(T1 - T0) * 4 * u * (1 - u);
             case BallSegmentKind.Carry:
                 return 0.6;                                    // 野手が保持して移動（低め）
             case BallSegmentKind.Bounce:

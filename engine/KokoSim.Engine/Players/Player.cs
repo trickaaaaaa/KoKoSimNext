@@ -134,14 +134,15 @@ public sealed record Player
     public FielderAttributes ToFielder() => ToFielder(AbilityEffectCoefficients.Identity);
 
     /// <summary>
-    /// 表示層→物理層の変換（不変条件#1・設計書21）。守備4能力は <see cref="AbilityEffectCoefficients.Fielding"/>、走力は
+    /// 表示層→物理層の変換（不変条件#1・設計書21）。守備/捕球/送球精度は <see cref="AbilityEffectCoefficients.Fielding"/>、
+    /// 肩は <see cref="AbilityEffectCoefficients.Arm"/>（送球速度＝km/h で語る量・issue #764）、走力は
     /// <see cref="AbilityEffectCoefficients.Running"/> の効きを通す。捕手リードは投手側の能力なので
     /// <see cref="AbilityEffectCoefficients.Pitching"/> の効きを通す（配球の球威上乗せ・盗塁の読み）。
     /// </summary>
     public FielderAttributes ToFielder(AbilityEffectCoefficients e) => new()
     {
         Speed = e.Running(Speed),
-        ArmStrength = e.Fielding(ArmStrength),
+        ArmStrength = e.Arm(ArmStrength),
         ThrowAccuracy = e.Fielding(ThrowAccuracy),
         Fielding = e.Fielding(Fielding),
         Catching = e.Fielding(Catching),

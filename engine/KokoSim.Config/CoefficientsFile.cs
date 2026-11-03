@@ -182,6 +182,7 @@ public static class CoefficientsLoader
         public double Pivot { get; set; } = D.Pivot;
         public double BattingScale { get; set; } = D.BattingScale;
         public double FieldingScale { get; set; } = D.FieldingScale;
+        public double ArmScale { get; set; } = D.ArmScale;
         public double RunningScale { get; set; } = D.RunningScale;
         public double PitchingScale { get; set; } = D.PitchingScale;
 
@@ -190,6 +191,7 @@ public static class CoefficientsLoader
             Pivot = Pivot,
             BattingScale = BattingScale,
             FieldingScale = FieldingScale,
+            ArmScale = ArmScale,
             RunningScale = RunningScale,
             PitchingScale = PitchingScale,
         };

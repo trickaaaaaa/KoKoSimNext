@@ -92,7 +92,9 @@ public sealed class GroundBallDoublePlayDecisionTests
         // 「一塁アウトのみ（走者を二塁へ進める）」は内野ゴロの 5 割未満（旧 0.80 では 60%）。
         // 0.65 への再校正（issue double-play-per-game-band-review, 2026-08-30）で ≈33%→≈44% に上昇したが、
         // 依然として旧値の「過半」からは区別される水準。
-        Assert.True(t.FirstOnly <= t.Total * 0.48, $"一塁のみ {t.FirstOnly}/{t.Total}={100.0 * t.FirstOnly / t.Total:F1}% が多すぎる（併殺を狙いに行かない）");
+        // 0.48→0.50（issue #764, 2026-11-03・オーナー承認）: 肩を効きで寝かせなくなり（肩20≈100／肩100=140km/h）、
+        // 強さ50の生成校（実際の肩≈44）は送球が少し遅くなって 46.9%→48.6%。上限をコメントどおりの「5割未満」に合わせた。
+        Assert.True(t.FirstOnly < t.Total * 0.50, $"一塁のみ {t.FirstOnly}/{t.Total}={100.0 * t.FirstOnly / t.Total:F1}% が多すぎる（併殺を狙いに行かない）");
         // 併殺はゴロアウトの 30〜45%（旧 21%、0.55 校正時は 35〜50%）。上限は「刺せない相手にも投げる」を防ぐ検収。
         var dpShare = (double)t.Dp / t.GroundOuts;
         Assert.InRange(dpShare, 0.30, 0.45);

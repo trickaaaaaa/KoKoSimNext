@@ -39,6 +39,7 @@ public sealed class AbilityEffectConsistencyTests
         {
             Assert.Equal(lv, id.Batting(lv));
             Assert.Equal(lv, id.Fielding(lv));
+            Assert.Equal(lv, id.Arm(lv));
             Assert.Equal(lv, id.Running(lv));
             Assert.Equal(lv, id.Pitching(lv));
         }
@@ -94,7 +95,8 @@ public sealed class AbilityEffectConsistencyTests
         Assert.Equal(80, b.LaunchTendency);   // 弾道は「型」＝寝かせない
         Assert.Equal(60, b.Speed);
         var f = p.ToFielder(e);
-        Assert.Equal(40, f.ArmStrength); Assert.Equal(60, f.ThrowAccuracy); Assert.Equal(70, f.Fielding); Assert.Equal(30, f.Catching);
+        Assert.Equal(30, f.ArmStrength);      // 肩は ArmScale（既定1.0＝寝かせない・issue #764）
+        Assert.Equal(60, f.ThrowAccuracy); Assert.Equal(70, f.Fielding); Assert.Equal(30, f.Catching);
         Assert.Equal(65, f.Lead);             // 捕手リードは投手側の効き（PitchingScale）で寝る
         Assert.Equal(60, f.Speed);
         // 恒等はビット一致
