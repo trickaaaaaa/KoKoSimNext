@@ -3697,6 +3697,13 @@ namespace KokoSim.Unity.Match
         private const float InfieldOutFrameH = 22f;
         /// <summary>最後の送球の到達後も寄せ続ける秒数（据え置きの収束余白）。</summary>
         private const float InfieldOutSettleSeconds = 0.3f;
+        /// <summary>
+        /// 内野ゴロを「捕る野手（＋球）中心の追従」で撮るときの枠の縦[m]（issue #742 の見比べ用・null＝使わない）。
+        /// 固定枠（<see cref="FieldInfieldFixedFrame"/>）を切った状態で値を入れると、注視点は engine の追従プラン
+        /// （打球中＝球と捕りに行く野手／保持中＝球を持つ野手／送球中＝送球の終点）のまま、縦の実寸だけこの値に据える。
+        /// </summary>
+        public static float? InfieldFollowFrameH;
+        private bool _fieldInfieldFollow;
         private bool _fieldInfieldFixed;
         private bool _fieldInfieldHasOut;
         private float _fieldInfieldOutT0, _fieldInfieldOutT1;
@@ -3863,6 +3870,11 @@ namespace KokoSim.Unity.Match
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
             ApplyHomeRunStyleFrame(t, ref aim, ref frameH);   // 当たりの種類ごとの見せ方（issue #704）
+            if (_fieldInfieldFollow && InfieldFollowFrameH is { } followH)
+            {
+                frameH = followH;   // 注視点は追従プランのまま・縦の実寸だけ据える（issue #742 見比べ）
+                return;
+            }
             if (_fieldInfieldFixed)
             {
                 aim = InfieldFixedAim; frameH = InfieldFixedFrameH;
@@ -4268,6 +4280,7 @@ namespace KokoSim.Unity.Match
             _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
 
             _fieldInfieldFixed = FieldInfieldFixedFrame && IsInfieldGrounder(play);
+            _fieldInfieldFollow = !FieldInfieldFixedFrame && InfieldFollowFrameH.HasValue && IsInfieldGrounder(play);
             _fieldInfieldHasOut = false;
             if (_fieldInfieldFixed)
             {

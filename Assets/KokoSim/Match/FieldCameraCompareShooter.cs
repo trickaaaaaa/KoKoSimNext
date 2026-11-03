@@ -25,8 +25,8 @@ namespace KokoSim.Unity.Match
     {
         private const int W = 1280;
         private const int H = 720;
-        private const string ShotDir = "screenshots/field-cam-689";
-        private const string OutDir = "out/field-cam-689";
+        private const string ShotDir = "screenshots/field-cam-742";
+        private const string OutDir = "out/field-cam-742";
         private const string SpawnFlag = "KokoSim.FieldCameraCompareShooter.Spawn";
         private const int MaxGames = 30;
         private const int MaxPlatesPerGame = 200;
@@ -67,8 +67,9 @@ namespace KokoSim.Unity.Match
             var targets = new List<Target>();
             var want = new HashSet<string> { "6-3遊ゴロ", "4-3二ゴロ", "5-3三ゴロ", "併殺" };
 
-            // ---- パス1: 場面を探しながら現行(案A側)で撮る ----
-            DuelStageRig.FieldInfieldFixedFrame = false;
+            // ---- パス1: 場面を探しながら現行（固定枠44m＋アウトで一塁へ寄せる）で撮る ----
+            DuelStageRig.FieldInfieldFixedFrame = true;
+            DuelStageRig.InfieldFollowFrameH = null;
             for (var game = 1; game <= MaxGames && want.Count > 0; game++)
             {
                 var seed = (ulong)(50000 + game * 7717);
@@ -83,27 +84,33 @@ namespace KokoSim.Unity.Match
                     want.Remove(kind);
                     KindOf(pa.Result, play, null, out var ts);
                     targets.Add(new Target { Kind = kind, Seed = seed, Plate = plate, Times = ts });
-                    yield return ShootSet(kind, "A-current", ts, seed, plate);
+                    yield return ShootSet(kind, "A-fixed44", ts, seed, plate);
                 }
             }
-            foreach (var w in want) Debug.LogWarning("[cam689] 出なかった場面: " + w);
+            foreach (var w in want) Debug.LogWarning("[cam742] 出なかった場面: " + w);
 
-            // ---- パス2: 同じ打席を折衷（案B＋アウトで寄せる）で撮る ----
-            foreach (var tg in targets)
+            // ---- パス2・3: 同じ打席を「捕る野手中心の追従」縦12m／18m で撮る（issue #742） ----
+            foreach (var (mode, h) in new[] { ("B-follow12", 12f), ("C-follow18", 18f) })
             {
-                yield return RestartWithSeed(tg.Seed);
-                for (var plate = 1; plate <= tg.Plate && !_ctrl.IsGameOver; plate++)
+                foreach (var tg in targets)
                 {
-                    DuelStageRig.FieldInfieldFixedFrame = plate == tg.Plate;
-                    if (!_ctrl.AdvanceForCapture()) break;
-                    if (plate < tg.Plate) { _ctrl.FreezeCurrentAtResult(); yield return null; continue; }
-                    yield return ShootSet(tg.Kind, "C-hybrid", tg.Times, tg.Seed, plate);
+                    yield return RestartWithSeed(tg.Seed);
+                    for (var plate = 1; plate <= tg.Plate && !_ctrl.IsGameOver; plate++)
+                    {
+                        var on = plate == tg.Plate;
+                        DuelStageRig.FieldInfieldFixedFrame = !on;
+                        DuelStageRig.InfieldFollowFrameH = on ? h : (float?)null;
+                        if (!_ctrl.AdvanceForCapture()) break;
+                        if (!on) { _ctrl.FreezeCurrentAtResult(); yield return null; continue; }
+                        yield return ShootSet(tg.Kind, mode, tg.Times, tg.Seed, plate);
+                    }
                 }
             }
-            DuelStageRig.FieldInfieldFixedFrame = false;
+            DuelStageRig.FieldInfieldFixedFrame = true;
+            DuelStageRig.InfieldFollowFrameH = null;
 
             File.WriteAllText(Path.Combine(OutDir, "frames.tsv"), _log.ToString());
-            Debug.Log("[cam689] DONE → " + ShotDir);
+            Debug.Log("[cam742] DONE → " + ShotDir);
             Time.captureDeltaTime = 0f;
         }
 
@@ -179,7 +186,7 @@ namespace KokoSim.Unity.Match
             var cols = diag.Split('\t');
             var frameH = cols.Length > 7 ? cols[7] : "?";
 
-            _log.Append(kind).Append('\t').Append(file.Contains("-C-") ? "C" : "A").Append('\t').Append(frame).Append('\t')
+            _log.Append(kind).Append('\t').Append(file.Contains("-C-") ? "C" : file.Contains("-B-") ? "B" : "A").Append('\t').Append(frame).Append('\t')
                 .Append(_ctrl.PlayClockForCapture.ToString("F2")).Append('\t')
                 .Append(frameH).Append('\t').Append(seed).Append('\t').Append(plate).Append('\n');
 
