@@ -11,7 +11,7 @@ namespace KokoSim.Unity.Member
     /// 配置する。選手チップの立ち位置も必ず同じ変換を使うこと（Controller が FieldToLocal を参照）。
     ///
     /// スケール：内野ダイヤ（塁間27.4m ＝ 1塁〜3塁の横幅 38.8m）が描画幅の <see cref="DiamondFraction"/> を
-    /// 占めるよう Sx を決める。外野が縦に収まりきらない分は非等方スケール（Sy = 0.8·Sx）で上方向へ圧縮する。
+    /// 占めるよう Sx を決める。縦は要素の高さに合わせて伸ばし（等方が上限）、収まりきらない分だけ非等方（下限 Sy = 0.8·Sx）で圧縮する（issue #732）。
     /// 外野はフェンス弧で閉じ、弧の外側は背景色（球場の外）。
     /// </summary>
     public sealed class BaseballFieldElement : VisualElement
@@ -84,7 +84,20 @@ namespace KokoSim.Unity.Member
         }
 
         private float Sx => contentRect.width * DiamondFraction / DiamondWidthM;
-        private float Sy => Sx * Aniso;
+        // 縦は要素の高さが許す限り伸ばす（issue #732: 上のスタンド側の空きを使って守備位置の段間を広げ、
+        // 2段チップ同士を重ねない）。中堅フェンスが上端の FenceTopMarginFrac 内に収まる範囲で、等方（Sx）を上限。
+        // 高さが足りなければ従来の Aniso まで詰める（それ以上は詰めない＝中堅が見切れる条件は従来と同じ）。
+        private float Sy
+        {
+            get
+            {
+                var h = contentRect.height;
+                if (float.IsNaN(h) || h <= 0f) return Sx * Aniso;
+                var fit = h * HomeYFrac * (1f - FenceTopMarginFrac) / CenterM;
+                return Mathf.Clamp(fit, Sx * Aniso, Sx);
+            }
+        }
+        private const float FenceTopMarginFrac = 0.02f;   // 中堅フェンスの上に残す余白（本塁から上端までに対する割合）
 
         /// <summary>球場座標[m] → 要素ローカル座標[px]。全配置の単一変換（本塁=下中央・+Y=上・非等方）。</summary>
         public Vector2 FieldToLocal(Vector2 m)
