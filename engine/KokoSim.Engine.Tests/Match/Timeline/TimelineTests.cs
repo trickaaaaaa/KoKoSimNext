@@ -382,6 +382,71 @@ public sealed class TimelineTests
         }
     }
 
+    // --- Issue #771: フェンス際の打球で外野手の体がフェンスにめり込まない（球場ごとの寸法で） ---
+
+    /// <summary>市営級（狭い）・標準・県営級（広い）の3球場（data/stadiums.yaml の寸法）。</summary>
+    public static TheoryData<double, double> FenceStadiums => new()
+    {
+        { 91.0, 115.0 },   // municipal_small_01
+        { 95.0, 118.0 },   // standard_01
+        { 100.0, 122.0 },  // pref_large_01
+    };
+
+    private static void AssertOutfieldersInsideFence(PlayTimeline tl, FieldGeometry field, double marginM)
+    {
+        foreach (var m in tl.Moves.Where(m => IsOutfieldRole(m.Role)))
+        {
+            var range = System.Math.Sqrt(m.To.X * m.To.X + m.To.Z * m.To.Z);
+            var fence = field.FenceDistance(System.Math.Atan2(m.To.X, m.To.Z));
+            Assert.True(range <= fence - marginM + 1e-6,
+                $"{m.Role} の移動先({range:F2}m)がフェンス({fence:F2}m)から{marginM}m内側に収まっていない");
+        }
+    }
+
+    private static bool IsOutfieldRole(FieldPosition p) =>
+        p is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField;
+
+    [Theory]
+    [MemberData(nameof(FenceStadiums))]
+    public void BallRolledToFence_FielderBodyStopsInsideFence(double wingM, double centerM)
+    {
+        var field = new FieldGeometry { LeftFenceM = wingM, RightFenceM = wingM, CenterFenceM = centerM };
+        // 中堅・左中間・右翼線寄りの3方向で、回収点がフェンスちょうど（ExtraBaseResolver の rollDist = toFence）
+        foreach (var (bearingDeg, role) in new[]
+                 {
+                     (0.0, FieldPosition.CenterField), (-25.0, FieldPosition.LeftField), (38.0, FieldPosition.RightField),
+                 })
+        {
+            var rad = bearingDeg * System.Math.PI / 180.0;
+            var fence = field.FenceDistance(rad);
+            var landR = fence - 20.0;
+            var play = FieldingPlayFixtures.OutfieldHit(role,
+                landingX: landR * System.Math.Sin(rad), landingZ: landR * System.Math.Cos(rad),
+                fieldedAtSeconds: 7.0,
+                fieldedX: fence * System.Math.Sin(rad), fieldedZ: fence * System.Math.Cos(rad),
+                result: BattedBallResult.Double);
+            var tl = TimelineBuilder.BuildBattedBall(
+                play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+            var move = Assert.Single(tl.Moves, m => m.Role == role && m.Task == FielderTask.FieldBall);
+            var range = System.Math.Sqrt(move.To.X * move.To.X + move.To.Z * move.To.Z);
+            Assert.True(range > fence - 5.0, $"{role} がフェンス際の球へ向かっていない({range:F2}m / フェンス{fence:F2}m)");
+            AssertOutfieldersInsideFence(tl, field, TimelineBuilder.FenceBodyMarginM);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(FenceStadiums))]
+    public void HomeRun_FielderBodyStopsInsideFence_PerStadium(double wingM, double centerM)
+    {
+        var field = new FieldGeometry { LeftFenceM = wingM, RightFenceM = wingM, CenterFenceM = centerM };
+        var play = FieldingPlayFixtures.HomeRun(landingZ: centerM + 12.0, fenceCrossRangeM: centerM);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.CenterField && m.Task == FielderTask.FieldBall);
+        AssertOutfieldersInsideFence(tl, field, TimelineBuilder.FenceBodyMarginM);
+    }
+
     [Fact]
     public void HomeRun_FieldBallMove_DoesNotExceedLandingPoint()
     {

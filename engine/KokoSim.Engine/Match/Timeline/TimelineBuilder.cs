@@ -603,6 +603,11 @@ public static class TimelineBuilder
             // 野手の移動先。フェンスの外までは追わせず、フェンス際で止めて見送らせる（Issue #300）。
             // ボールそのものの描画（Flight/Roll セグメント）は着地点(landing)のまま＝柵越えの絵は保つ。
             var fieldBallTarget = ballFielder is null ? ClampToFence(landing, field, play.BearingDeg) : landing;
+            // 実捕球者の体の行き先（issue #771）。フェンスまで転がった球は回収点がフェンスちょうど
+            // （ExtraBaseResolver の rollDist = toFence）なので、体の中心をそこへ置くと半身がフェンスに入る。
+            // 体の分だけ内側で止める（手は届く＝StopWithinReach と同じ考え方）。球・送球の起点は回収点のまま
+            // ＝表示専用で判定は読まない。
+            var ballFielderTarget = ClampToFence(fieldPoint, field, fieldBearingDeg, FenceBodyMarginM);
 
             var firstBaseCovered = false;
             // アンアシスト（3U, Issue #400）で一塁手がボールを捕った実位置（FieldBall レッグの終端）。
@@ -662,7 +667,7 @@ public static class TimelineBuilder
 
                 // 実捕球者はゾーン役割を上書きしてボールへ（保持＝戻さない）。
                 var task = isBallFielder ? FielderTask.FieldBall : a.Task;
-                var to = isBallFielder ? fieldPoint : ResolveTarget(a, fieldPoint, field, from, fieldBallTarget);
+                var to = isBallFielder ? ballFielderTarget : ResolveTarget(a, fieldPoint, field, from, fieldBallTarget);
                 if (isBallFielder) ballFielderMoved = true;
                 if (task == FielderTask.CoverBase && a.Target == "first") firstBaseCovered = true;
 
@@ -752,12 +757,12 @@ public static class TimelineBuilder
                 if (fielder is not null)
                 {
                     var from = new TimelinePoint(fielder.Location.X, fielder.Location.Z);
-                    var dist = Distance(from, fieldPoint);
+                    var dist = Distance(from, ballFielderTarget);
                     if (dist >= 0.5)
                     {
                         var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
                         var (t0, t1) = ArriveByFieldedAt(ContactAt + 0.35, ContactAt + 0.35 + dist / speed, fieldedAt);
-                        var stop = StopWithinReach(from, fieldPoint, speed * (t1 - t0), fielderReachM);
+                        var stop = StopWithinReach(from, ballFielderTarget, speed * (t1 - t0), fielderReachM);
                         if (bfr == FieldPosition.FirstBase) firstBaseFieldEnd = stop; // アンアシスト運びの起点（#400）
                         moves.Add(new FielderMove { Role = bfr, T0 = t0, T1 = t1, To = stop, Task = FielderTask.FieldBall });
                     }
@@ -3260,6 +3265,12 @@ public static class TimelineBuilder
     private const double FenceApproachMarginM = 1.0;
 
     /// <summary>
+    /// フェンス際で球を処理する野手の体の中心をフェンスから離す距離[m]（issue #771）。体の半径（約0.3m）＋
+    /// 余白。手（リーチ）で拾う距離なので判定の回収点・時刻とは食い違わない。
+    /// </summary>
+    internal const double FenceBodyMarginM = 0.6;
+
+    /// <summary>
     /// 抜けた打球へ「寄る/飛びつく」演出の最大変位[m]（Issue #336②・表示専用）。
     /// FieldingCoefficients.InfielderFieldingRadiusM の既定値(4.20)と同じ意味を持つ表示専用の複製
     /// （判定側の実値とは意図的に分離する。OutfieldDepthM と同じ設計）。捕れない打球なので
@@ -3272,12 +3283,13 @@ public static class TimelineBuilder
     /// 内側へ丸める（Issue #300）。本塁より外側へ着地する打球（本塁打）はフェンス際で止めて見送らせ、
     /// フェンスの外まで追いかけさせない。着地点がフェンス内側ならそのまま返す（従来どおり）。
     /// </summary>
-    private static TimelinePoint ClampToFence(TimelinePoint landing, FieldGeometry field, double bearingDeg)
+    private static TimelinePoint ClampToFence(TimelinePoint landing, FieldGeometry field, double bearingDeg,
+        double marginM = FenceApproachMarginM)
     {
         var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
         if (range < 1e-6) return landing;
         var bearingRad = bearingDeg * Math.PI / 180.0;
-        var limit = Math.Max(0.0, field.FenceDistance(bearingRad) - FenceApproachMarginM);
+        var limit = Math.Max(0.0, field.FenceDistance(bearingRad) - marginM);
         if (range <= limit) return landing;
         var s = limit / range;
         return new TimelinePoint(landing.X * s, landing.Z * s);
