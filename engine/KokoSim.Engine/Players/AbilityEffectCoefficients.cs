@@ -34,8 +34,16 @@ public sealed record AbilityEffectCoefficients
     /// <summary>打撃3能力（ミート/パワー/選球眼/バント）の効き。1.0＝従来どおり。</summary>
     public double BattingScale { get; init; } = 0.55;
 
-    /// <summary>守備4能力（守備/捕球/肩/送球）の効き。1.0＝従来どおり。</summary>
+    /// <summary>守備3能力（守備/捕球/送球精度）の効き。1.0＝従来どおり。肩は <see cref="ArmScale"/> が別に持つ。</summary>
     public double FieldingScale { get; init; } = 0.45;
+
+    /// <summary>
+    /// 肩（地肩→送球速度）の効き（issue #764）。送球は km/h で語られる量（「強肩遊撃手の140km/h」）なので、
+    /// 球速と同じく表示どおりの km/h を物理に通す＝既定 1.0（肩20≈100km/h／肩50=115／肩100=140）。
+    /// 守備と同じ 0.45 で寝かせていた頃は肩100でも約126km/h・肩20との差18km/hしかなく、肩の強弱が出なかった。
+    /// 肩50 は不動点なのでリーグ平均の野手（統計帯の母集団）は1ビットも変わらない。
+    /// </summary>
+    public double ArmScale { get; init; } = 1.0;
 
     /// <summary>走力系（走力/盗塁/走塁）の効き。1.0＝従来どおり。</summary>
     public double RunningScale { get; init; } = 0.55;
@@ -47,10 +55,11 @@ public sealed record AbilityEffectCoefficients
     public double PitchingScale { get; init; } = 0.55;
 
     /// <summary>恒等（従来と1ビット一致）。テストと非物理経路の既定。</summary>
-    public static readonly AbilityEffectCoefficients Identity = new() { BattingScale = 1.0, FieldingScale = 1.0, RunningScale = 1.0, PitchingScale = 1.0 };
+    public static readonly AbilityEffectCoefficients Identity = new() { BattingScale = 1.0, FieldingScale = 1.0, ArmScale = 1.0, RunningScale = 1.0, PitchingScale = 1.0 };
 
     public int Batting(int lv) => Scale(lv, BattingScale);
     public int Fielding(int lv) => Scale(lv, FieldingScale);
+    public int Arm(int lv) => Scale(lv, ArmScale);
     public int Running(int lv) => Scale(lv, RunningScale);
     public int Pitching(int lv) => Scale(lv, PitchingScale);
 

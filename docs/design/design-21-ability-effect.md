@@ -33,7 +33,7 @@
 | 入口 | 何を寝かせるか |
 |---|---|
 | `Player.ToBatter(effect)` | ミート/パワー/選球眼（Batting）・走力（Running）。弾道は「型」＝寝かせない |
-| `Player.ToFielder(effect)` | 守備/捕球/肩/送球（Fielding）・走力（Running）・**捕手リード（Pitching）** |
+| `Player.ToFielder(effect)` | 守備/捕球/送球精度（Fielding）・**肩（Arm＝既定1.0で寝かせない・§3.3）**・走力（Running）・**捕手リード（Pitching）** |
 | `AbilityEffectCoefficients.Pitcher(PitcherAttributes)` | 制球・PitchRank・各球種の Power/Sharpness（Pitching）。最速 km/h・目安球数・投法・球質タイプは据え置き。反応オフセットを焼く |
 | 解決式が `Player` の能力を直接読む場所 | `c.AbilityEffect.Batting(batter.Bunt)`／`Running(runner.Steal/Baserunning)` のように必ずこの写像を通す（RunnerClock の恒等オーバーロードは廃止＝呼び手が effect を渡す） |
 
@@ -50,6 +50,14 @@ GameEngine では打席頭の `EffectiveMatchup()` が唯一の入口: `batter.T
 - 読む側: 球威 `Stuff`（PitchSelection）・タイミング `TimingOffsetMean`・打球質 `PitcherContactQualityBias`（ContactModel）・バント難度（BuntResolver）
 - 読まない側: 弾道（飛翔時間・誘発変化量は実球速）・表示・実況・タイムライン・PitchRecord
 - **差分で持つ**ので、消耗・調子・ギア・毎球のドロップ・変化球の緩急（球速比）はそのまま効く。平均投手（132km/h）はオフセット0＝帯の平均は動かない
+
+### 3.3 肩（送球速度）は寝かせない（issue #764・2026-11-03）
+
+肩は試合中「送球速度 90+肩×0.5 km/h」にしか使われず、送球は球速と同じく km/h で語られる量（「強肩遊撃手の140km/h」）。
+守備と同じ 0.45 で寝かせていた頃は肩100でも約126km/h・肩20との差18km/hしかなく、強肩と弱肩の区別が絵にも結果にも出なかった。
+そこで `ability_effect.arm_scale`（`AbilityEffectCoefficients.ArmScale`・既定 **1.0**）を守備から分け、表示どおりの km/h を物理に通す
+（肩20≈100／肩50=115／肩100=140km/h）。肩50 は不動点なのでリーグ平均の母集団（統計帯）は1ビットも変わらない。
+効果の実測（`ArmThrowSpeedTests`）: 深い遊撃ゴロの「送球が間に合わない率」が肩20と肩90で最大13pt差（旧0.45では7pt）。
 
 ## 4. 球速の価値（同時に直したもの）
 
