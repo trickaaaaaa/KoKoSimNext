@@ -48,12 +48,18 @@ public sealed class HandleBobbleTests
     public void RealErrorIsLeftAlone()
         => Assert.Equal(HandleBobbleKind.None, HandleBobblePlanner.Plan(Grounder(2.13, 4.28, fumbled: true)).Kind);
 
+    private const double GloveReach = 0.47;
+    private const double PickupReach = 0.2;
+
+    private static double Dist(double ax, double ay, double bx, double by)
+        => System.Math.Sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
+
     [Fact]
-    public void FumbleDeflectsForwardAndKeepsTheThrowUntouched()
+    public void FumblePopsOutOfTheGloveAndKeepsTheThrowUntouched()
     {
         var play = Grounder(2.13, 4.28);
         var b = HandleBobblePlanner.Plan(play);
-        var after = HandleBobblePlanner.ApplyFumble(play, b, recoverSeconds: 0.9);
+        var after = HandleBobblePlanner.ApplyFumble(play, b, recoverSeconds: 0.9, GloveReach, PickupReach);
 
         Assert.Equal(play.Ball.Count + 1, after.Ball.Count);
         var bobble = (EndpointBallSegment)after.Ball[2];
@@ -61,37 +67,54 @@ public sealed class HandleBobbleTests
         Assert.Equal(2.13, bobble.T0, 6);
         // 拾うのは投げ始めの PickupLeadSeconds 前
         Assert.Equal(4.28 - HandleBobblePlanner.PickupLeadSeconds, bobble.T1, 6);
+        // 弾く瞬間の球はグラブの所（野手から GloveReach）に居て、そこから外へこぼれる
+        var fp = PlaybackEvaluator.FielderAt(play, FieldPosition.ThirdBase, 2.13).Pos;
         var start = bobble.At(0);
         var rest = bobble.At(bobble.T1 - bobble.T0);
-        Assert.True(rest.Y > start.Y, "本塁から遠ざかる向きへこぼれる");
+        Assert.Equal(GloveReach, Dist(start.X, start.Y, fp.X, fp.Y), 3);
+        Assert.True(Dist(rest.X, rest.Y, fp.X, fp.Y) >= GloveReach + HandleBobblePlanner.PopM - 1e-6, "グラブから外へ跳ねる");
         // 送球はそのまま（判定の時刻を動かさない）
         Assert.Same(play.Ball[2], after.Ball[3]);
     }
 
-    [Fact]
-    public void FielderWalksToTheBallAfterTheBobbleAndArrivesBeforeThePickup()
+    /// <summary>拾う瞬間に球を手へ引き寄せない（監督指摘「残像付きで吸い込まれる」）。</summary>
+    [Theory]
+    [InlineData(4.40, 0.9)]   // 歩く時間がある
+    [InlineData(4.20, 1.6)]   // 弾いた芝居で時間を使い切る
+    public void FielderStandsWithinPickupReachOfTheBall(double releaseT, double recover)
     {
-        var play = Grounder(2.13, 4.40);
-        var after = HandleBobblePlanner.ApplyFumble(play, HandleBobblePlanner.Plan(play), recoverSeconds: 0.9);
-        var leg = after.Moves[FieldPosition.ThirdBase].Single();
-        Assert.Equal(2.13 + 0.9, leg.T0, 6);
-        var pickup = after.Ball[2].T1;
-        Assert.True(leg.T1 <= pickup, "拾う前に球の所へ着く");
-        var rest = after.Ball[2].At(after.Ball[2].T1 - after.Ball[2].T0);
-        var gap = System.Math.Sqrt((rest.X - leg.To.X) * (rest.X - leg.To.X) + (rest.Y - leg.To.Y) * (rest.Y - leg.To.Y));
-        Assert.Equal(HandleBobblePlanner.PickupStandOffM, gap, 3);
+        var play = Grounder(2.13, releaseT);
+        var after = HandleBobblePlanner.ApplyFumble(play, HandleBobblePlanner.Plan(play), recover, GloveReach, PickupReach);
+        var seg = after.Ball[2];
+        var rest = seg.At(seg.T1 - seg.T0);
+        var at = PlaybackEvaluator.FielderAt(after, FieldPosition.ThirdBase, seg.T1).Pos;
+        Assert.Equal(PickupReach, Dist(rest.X, rest.Y, at.X, at.Y), 3);
     }
 
     [Fact]
-    public void NoTimeToWalk_PicksItUpOnTheSpot()
+    public void FielderWalksFurtherWhenThereIsTime()
+    {
+        var shortPlay = Grounder(2.13, 4.20);
+        var longPlay = Grounder(2.13, 5.20);
+        double Walked(PlaybackPlay p)
+        {
+            var after = HandleBobblePlanner.ApplyFumble(p, HandleBobblePlanner.Plan(p), 0.9, GloveReach, PickupReach);
+            var a = PlaybackEvaluator.FielderAt(after, FieldPosition.ThirdBase, 2.13).Pos;
+            var z = PlaybackEvaluator.FielderAt(after, FieldPosition.ThirdBase, after.Ball[2].T1).Pos;
+            return Dist(a.X, a.Y, z.X, z.Y);
+        }
+        Assert.True(Walked(longPlay) > Walked(shortPlay) + 0.5);
+    }
+
+    [Fact]
+    public void NoTimeToWalk_StillTakesOneUnhurriedStep()
     {
         var play = Grounder(2.13, 4.20);
-        var after = HandleBobblePlanner.ApplyFumble(play, HandleBobblePlanner.Plan(play), recoverSeconds: 1.5);
-        var seg = after.Ball[2];
-        var a = seg.At(0); var z = seg.At(seg.T1 - seg.T0);
-        var d = System.Math.Sqrt((z.X - a.X) * (z.X - a.X) + (z.Y - a.Y) * (z.Y - a.Y));
-        Assert.Equal(HandleBobblePlanner.MinDeflectM, d, 3);
-        Assert.False(after.Moves.ContainsKey(FieldPosition.ThirdBase));
+        var after = HandleBobblePlanner.ApplyFumble(play, HandleBobblePlanner.Plan(play), recoverSeconds: 1.6, GloveReach, PickupReach);
+        var leg = after.Moves[FieldPosition.ThirdBase].Single();
+        Assert.True(leg.T0 >= 2.13 + 0.3 - 1e-9, "弾いた直後は動かない");
+        Assert.True(leg.T1 - leg.T0 >= HandleBobblePlanner.MinStepSeconds - 1e-9, "一歩に時間をかける");
+        Assert.True(leg.T1 <= after.Ball[2].T1, "拾う前に寄り終わる");
     }
 
     [Fact]

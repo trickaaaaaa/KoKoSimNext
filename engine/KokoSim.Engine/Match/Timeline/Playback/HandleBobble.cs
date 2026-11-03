@@ -42,8 +42,6 @@ public static class HandleBobblePlanner
     public const double JuggleAboveSeconds = 1.4;
     /// <summary>これより長く持つと「お手玉」。</summary>
     public const double FumbleAboveSeconds = 2.0;
-    /// <summary>お手玉でこぼれる距離[m]（球の進行方向へ）。</summary>
-    public const double FumbleDeflectM = 0.6;
 
     /// <summary>保持の長さから見せ方を決める（純関数）。</summary>
     public static HandleBobbleKind KindFor(double holdSeconds)
@@ -82,68 +80,84 @@ public static class HandleBobblePlanner
 
     /// <summary>拾い上げてから投げ始めるまで[s]（拾った球を握り替えて投げる間）。</summary>
     public const double PickupLeadSeconds = 0.45;
-    /// <summary>歩み寄る時間がほとんど無いときのこぼれ幅[m]（その場で拾い直す）。</summary>
-    public const double MinDeflectM = 0.6;
-    /// <summary>こぼれ幅の上限[m]。</summary>
-    public const double MaxDeflectM = 2.0;
+    /// <summary>グラブで弾いた球がグラブから外へ跳ねる最小の幅[m]（歩く時間が無いとき）。</summary>
+    public const double PopM = 0.3;
+    /// <summary>歩いて拾いに行ける距離の上限[m]。</summary>
+    public const double MaxWalkM = 1.5;
     /// <summary>拾いに行く歩きの速さ[m/s]（こぼれ幅を歩く時間から決める）。</summary>
     public const double WalkSpeedMps = 1.5;
-    /// <summary>拾うとき、野手が球の手前に立つ距離[m]（グラブが届く距離）。</summary>
-    public const double PickupStandOffM = 0.5;
+    /// <summary>拾いに寄る一歩に最低限かける時間[s]（これより短いと体が滑って見える）。</summary>
+    public const double MinStepSeconds = 0.5;
 
     /// <summary>
     /// お手玉の球と野手の動きを足したプレーを返す（表示専用）。
-    /// 捕球点で弾いた球は進行方向へこぼれて転がり、野手は弾いた芝居（<paramref name="recoverSeconds"/>）の後に
-    /// 歩み寄って、投げ始めの <see cref="PickupLeadSeconds"/> 前に拾う。<b>投げ始めまで動きが途切れない</b>よう、
-    /// こぼれ幅は歩く時間から決める（歩く時間が無ければその場で拾い直す）。
+    ///
+    /// <para>球は<b>野手の体から見てグラブの向き</b>（＝野手から打球の止まる点への向き）へこぼす。
+    /// 弾く瞬間の球はグラブの位置（野手から <paramref name="gloveReachM"/>）に居て、そこから
+    /// <see cref="PopM"/>＋歩ける距離だけ外へ転がって止まる。野手はその球へ寄り、
+    /// 拾う収録のグラブの距離（<paramref name="pickupReachM"/>）まで近づいて拾う＝
+    /// <b>拾う瞬間に球を手へ引き寄せない</b>（2026-11-03 監督指摘「残像付きで吸い込まれる」）。</para>
+    ///
+    /// <para>従来は打球の終点から進行方向へこぼしていたが、engine の終点は野手から 1.1m 横
+    /// （実測）＝球がグラブに触れずに通り過ぎ、拾う瞬間に 1.4m 吸い寄せていた。</para>
+    ///
     /// 送球の区間・時刻はそのまま。お手玉でない予定ならそのまま返す。
     /// </summary>
-    public static PlaybackPlay ApplyFumble(PlaybackPlay play, HandleBobble bobble, double recoverSeconds)
+    public static PlaybackPlay ApplyFumble(PlaybackPlay play, HandleBobble bobble, double recoverSeconds,
+        double gloveReachM, double pickupReachM)
     {
         if (bobble.Kind != HandleBobbleKind.Fumble) return play;
         var pickupT = bobble.ReleaseT - PickupLeadSeconds;
         if (pickupT <= bobble.CatchT + 0.1) return play;
-        var walkStart = bobble.CatchT + Math.Max(0.0, recoverSeconds);
-        var walkEnd = pickupT - 0.1;
-        var walk = walkEnd - walkStart;
-        var deflect = walk >= 0.25 ? Math.Min(MaxDeflectM, MinDeflectM + walk * WalkSpeedMps) : MinDeflectM;
+        var stepEnd = pickupT - 0.1;
+        // 歩き出しは弾いた芝居が終わってから。ただし一歩ぶんの時間は必ず残す（弾いた直後は動かない）
+        var stepStart = Math.Max(bobble.CatchT + 0.3,
+            Math.Min(bobble.CatchT + Math.Max(0.0, recoverSeconds), stepEnd - MinStepSeconds));
+        var walk = Math.Max(0.0, stepEnd - (bobble.CatchT + Math.Max(0.0, recoverSeconds)));
+        var walkM = Math.Min(MaxWalkM, walk * WalkSpeedMps);
 
         var balls = new List<PlaybackBallSegment>(play.Ball.Count + 1);
         TimelinePoint? stand = null;
+        var fp = PlaybackEvaluator.FielderAt(play, bobble.Fielder, bobble.CatchT).Pos;
         foreach (var s in play.Ball)
         {
             balls.Add(s);
             if (stand != null || s is not EndpointBallSegment eb || Math.Abs(eb.T1 - bobble.CatchT) > 1e-6
                 || eb.Kind is not (BallSegmentKind.Roll or BallSegmentKind.Bounce)) continue;
-            var dur = eb.T1 - eb.T0;
-            var end = eb.At(dur);
-            var back = eb.At(Math.Max(0.0, dur - 0.1));
-            var dx = end.X - back.X;
-            var dy = end.Y - back.Y;
+            var end = eb.At(eb.T1 - eb.T0);
+            var dx = end.X - fp.X;
+            var dy = end.Y - fp.Y;
             var len = Math.Sqrt(dx * dx + dy * dy);
-            if (len < 1e-9) { dx = 0; dy = 1; len = 1; }
+            if (len < 1e-6)
+            {
+                // 野手の真上で止まる打球＝向きが決まらない。打球の進行方向へ落とす
+                var back = eb.At(Math.Max(0.0, eb.T1 - eb.T0 - 0.1));
+                dx = end.X - back.X; dy = end.Y - back.Y;
+                len = Math.Sqrt(dx * dx + dy * dy);
+                if (len < 1e-9) { dx = 0; dy = 1; len = 1; }
+            }
             dx /= len; dy /= len;
-            var rest = new TimelinePoint(end.X + dx * deflect, end.Y + dy * deflect);
+            var glove = new TimelinePoint(fp.X + dx * gloveReachM, fp.Y + dy * gloveReachM);
+            var restR = gloveReachM + PopM + walkM;
+            var rest = new TimelinePoint(fp.X + dx * restR, fp.Y + dy * restR);
             balls.Add(EndpointBallSegment.From(new BallSegment
             {
                 Kind = BallSegmentKind.Roll,
                 T0 = bobble.CatchT, T1 = pickupT,
-                From = new TimelinePoint(end.X, end.Y), To = rest,
+                From = glove, To = rest,
             }));
-            stand = new TimelinePoint(rest.X - dx * PickupStandOffM, rest.Z - dy * PickupStandOffM);
+            var standR = Math.Max(0.0, restR - pickupReachM);
+            stand = new TimelinePoint(fp.X + dx * standR, fp.Y + dy * standR);
         }
         if (stand is not { } st) return play;
 
         var moves = new Dictionary<FieldPosition, IReadOnlyList<PlaybackMove>>();
         if (play.Moves != null) foreach (var kv in play.Moves) moves[kv.Key] = kv.Value;
-        if (walk >= 0.25)
-        {
-            var legs = new List<PlaybackMove>();
-            if (moves.TryGetValue(bobble.Fielder, out var had))
-                foreach (var m in had) if (m.T1 <= walkStart + 1e-9) legs.Add(m);   // 後ろのレッグは拾いに行く間は捨てる
-            legs.Add(new PlaybackMove(walkStart, walkEnd, new PlaybackVec(st.X, st.Z)));
-            moves[bobble.Fielder] = legs;
-        }
+        var legs = new List<PlaybackMove>();
+        if (moves.TryGetValue(bobble.Fielder, out var had))
+            foreach (var m in had) if (m.T1 <= stepStart + 1e-9) legs.Add(m);   // 後ろのレッグは拾いに行く間は捨てる
+        legs.Add(new PlaybackMove(stepStart, stepEnd, new PlaybackVec(st.X, st.Z)));
+        moves[bobble.Fielder] = legs;
         return play with { Ball = balls, Moves = moves };
     }
 
