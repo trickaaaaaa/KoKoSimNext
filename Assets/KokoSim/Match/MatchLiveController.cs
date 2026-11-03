@@ -3633,8 +3633,11 @@ namespace KokoSim.Unity.Match
                 : ((KokoSim.Engine.Nation.TeamColors, KokoSim.Engine.Nation.TeamColors)?)null;
             _duelColorsOffenseIsTop = anyColors ? offenseIsTop : (bool?)null;
             DuelStageRig.CrowdLayersShown = (int)_crowd;   // 観客の入り（issue #705）。球場を組むときに効く
+            // 球場寸法は判定と同じもの（issue #771）。県大会の決勝なら県営級（両翼100m）で描く
+            DuelStageRig.InitialField = _prog?.Field;
             var rig = new DuelStageRig();
             DuelStageRig.InitialTeamColors = null;   // 静的な受け渡し窓は使ったら必ず閉じる
+            DuelStageRig.InitialField = null;
             // 判定表示の長さを流し込む＝捕手の据え置き（捕球位置で静止する窓）が表示と同じ時刻に終わる
             rig.PitchCallHoldSeconds = pitchCallHoldSeconds;
             return rig;

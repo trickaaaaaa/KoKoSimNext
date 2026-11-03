@@ -119,6 +119,12 @@ public sealed class MatchProgression
     /// </summary>
     private const int MaxStepsPerAdvance = 1_000_000;
 
+    /// <summary>
+    /// この試合の球場寸法（判定が使っている <see cref="GameContext.Field"/>）。3D球場を同じ寸法で
+    /// 描くために表示側が読む（issue #771）。読むだけ＝進行・乱数には触れない。
+    /// </summary>
+    public Field.FieldGeometry Field => _ctx.Field;
+
     /// <param name="scenarioStart">
     /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
     /// 注入した試合は <see cref="GameResult.ScenarioId"/> が立ち、digest・統計集計から外れる。
