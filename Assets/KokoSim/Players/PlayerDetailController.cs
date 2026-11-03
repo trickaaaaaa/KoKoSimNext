@@ -290,7 +290,8 @@ namespace KokoSim.Unity.Players
         {
             var wrap = new VisualElement();
             wrap.AddToClassList("pd2-skill");
-            var name = new Label(s.Name); name.AddToClassList("pd2-skill__name"); wrap.Add(name);
+            // 名前は部品辞書の特殊能力チップ（比較カード・試合中HUDと同じ見た目・issue #738）。
+            var name = UiComponents.SkillChip(s.Name, null); name.AddToClassList("pd2-skill__name"); wrap.Add(name);
             var desc = new Label(s.Desc); desc.AddToClassList("pd2-skill__desc"); wrap.Add(desc);
             return wrap;
         }

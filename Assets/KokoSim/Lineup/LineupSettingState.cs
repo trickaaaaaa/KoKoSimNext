@@ -84,6 +84,7 @@ namespace KokoSim.Unity.Lineup
         /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力）。選手個人の総合ランクは廃止（Issue #30/#270）。</summary>
         public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);
         public bool IsCaptain;
+        public KokoSim.Engine.Players.SkillSet Skills;   // 特殊能力（見えている分だけ表示・issue #738）
         public StatTableView Stats = new StatTableView();
         // 持ち球のミニ球種変化チャート用データ（issue #94 案C）。未習得選手はストレート1球のみ。
         public List<PitchChartDatum> Pitches = new List<PitchChartDatum>();
@@ -676,6 +677,7 @@ namespace KokoSim.Unity.Lineup
                 // 並べ替えキー（ByBatting/ByPitching）と同じメモを引く＝表示と並びで指標がズレない。
                 Strength = Strength(index),
                 IsCaptain = p.IsCaptain,
+                Skills = p.Skills,
                 Stats = BuildStats(p),
                 // 持ち球（ミニ球種チャート）は詳細画面と同じ生成ロジック（単一ソース, issue #94 案C）。
                 Pitches = PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(p), topKmh),

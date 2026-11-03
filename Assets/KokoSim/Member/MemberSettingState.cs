@@ -47,6 +47,7 @@ namespace KokoSim.Unity.Member
         public string HandLabel = "";    // 投打（例「右投左打」）
         public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);   // カテゴリ別ランク（打撃/走力/守備/投手）
         public bool IsCaptain;
+        public KokoSim.Engine.Players.SkillSet Skills;   // 特殊能力（見えている分だけ表示・issue #738）
         // 持ち球のミニ球種変化チャート用データ（issue #94 案C）。未習得選手はストレート1球のみ。
         public System.Collections.Generic.List<PitchChartDatum> Pitches = new System.Collections.Generic.List<PitchChartDatum>();
     }
@@ -262,6 +263,7 @@ namespace KokoSim.Unity.Member
                 HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
                 Strength = PlayerStrengthProfile.Compute(p, Coeff),
                 IsCaptain = p.IsCaptain,
+                Skills = p.Skills,
                 // 持ち球（ミニ球種チャート）は詳細画面と同じ生成ロジック（単一ソース, issue #94 案C）。
                 Pitches = PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(p), topKmh),
             };

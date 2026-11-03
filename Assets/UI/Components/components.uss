@@ -902,6 +902,8 @@
 .cmp-card__hand { font-size: 13px; color: var(--color-muted); margin-right: var(--sp-1); }
 .cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }
 .cmp-card .cat-rank-chips { margin-top: var(--sp-2); }
+/* 特殊能力のチップ列（issue #738 案A＝名前の下）。最大4枠（超える分は「他N」）で2行に収まる。 */
+.cmp-card__skills { margin-top: var(--sp-1); }
 /* 持ち球のミニ球種変化チャート（部品 PitchChartView・compact）。Painter2D 描画のため固定高を確保（issue #94） */
 .cmp-card__pitch { height: 104px; margin-top: var(--sp-2); }
 
@@ -2831,3 +2833,28 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
     margin: 0;
     padding: 0;
 }
+
+/* ═══ SkillChip / SkillChips（特殊能力の名前チップ・issue #738）═══
+   選手詳細・比較カード・試合中HUDで同じ部品。説明はホバー（tooltip）。字の高さを固定して行高を揃える
+   （和文の行箱は級数の倍近くある＝詰めるには箱の高さを明示する）。 */
+.skill-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.skill-chip {
+    height: 22px;
+    margin: 0 4px 4px 0;
+    padding: 0 8px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-cap);
+    color: var(--sky);
+    border-width: 1px;
+    border-color: var(--sky);
+    white-space: nowrap;
+}
+.skill-chip--more { color: var(--color-muted); border-color: var(--color-line); }
+/* 試合中HUD（黒半透明の帯）では帯の段として置く: 区切りは段間の1px線だけ（.mhud-pas と同じ作法）。 */
+.mhud-skills {
+    padding: 4px var(--sp-2) 0 var(--sp-2);
+    border-top-width: 1px;
+    border-top-color: var(--hud-divider);
+}
+.mhud-skills .skill-chip { font-size: var(--hud-fs-pa); color: #FFFFFF; border-color: var(--hud-divider); background-color: var(--hud-chip-dim); }
+.mhud-skills .skill-chip--more { color: var(--hud-label); background-color: rgba(0, 0, 0, 0); }
