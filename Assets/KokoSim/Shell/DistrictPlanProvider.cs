@@ -40,6 +40,20 @@ namespace KokoSim.Unity.Shell
         public static int AdvancePerDistrictOf(int prefectureId)
             => Rules.TryGetValue(prefectureId, out var r) ? r.AdvancePerDistrict : 1;
 
+        /// <summary>
+        /// 秋季地区予選が「地区の中の少数校ブロックのリーグ戦」か（神奈川・issue #772）。偽＝地区ごとの1トーナメント。
+        /// </summary>
+        public static bool IsBlockLeagueOf(int prefectureId)
+            => Rules.TryGetValue(prefectureId, out var r) && r.IsBlockLeague;
+
+        /// <summary>ブロックリーグ戦の1ブロックの校数（リーグ戦でない県は0）。</summary>
+        public static int TeamsPerBlockOf(int prefectureId)
+            => Rules.TryGetValue(prefectureId, out var r) ? r.TeamsPerBlock : 0;
+
+        /// <summary>ブロックリーグ戦の各ブロックから県大会へ進む校数（リーグ戦でない県は0）。</summary>
+        public static int AdvancePerBlockOf(int prefectureId)
+            => Rules.TryGetValue(prefectureId, out var r) ? r.AdvancePerBlock : 0;
+
         /// <summary>夏の代表校を秋季県大会へ推薦するか（<c>seed_exemption</c>）。</summary>
         public static bool SeedExemptionOf(int prefectureId)
             => Rules.TryGetValue(prefectureId, out var r) && r.SeedExemption;

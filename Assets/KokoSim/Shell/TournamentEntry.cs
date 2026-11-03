@@ -78,9 +78,17 @@ namespace KokoSim.Unity.Shell
                     useRegionalStadiumTier: true));
 
             // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
-            var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
-                TournamentTitle(actualKind), new PlayerMatchResolver(), homeBg,
-                onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
+            // 秋季地区予選がブロックリーグ戦の県（神奈川・issue #772）は、地区を夏の順位でシード分散した
+            // 少数校ブロックに分けて総当たりする（同じ口＝ITournamentRunner で Shell は同じ手順で進める）。
+            ITournamentRunner runner = actualKind == TournamentKind.AutumnDistrict
+                                       && DistrictPlanProvider.IsBlockLeagueOf(manager.PrefectureId)
+                ? new BlockLeagueRunner(DistrictEntry.DrawBlocks(field, manager.PrefectureId, seed), manager,
+                    DistrictPlanProvider.AdvancePerBlockOf(manager.PrefectureId), NationCoeff,
+                    new Xoshiro256Random(seed), Schedule, TournamentTitle(actualKind), new PlayerMatchResolver(), homeBg,
+                    onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g))
+                : new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
+                    TournamentTitle(actualKind), new PlayerMatchResolver(), homeBg,
+                    onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
             // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
             GameSession.Current.EnterTournament(actualKind, TournamentTitle(actualKind), runner, field);
             GameSession.Current.Year = yearIndex;
@@ -179,7 +187,8 @@ namespace KokoSim.Unity.Shell
                     // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
                     useRegionalStadiumTier: true));
 
-            var runner = TournamentRunner.FromSaved(t.Runner, field, manager, NationCoeff, Schedule,
+            // リーグ戦の状態が載っていればリーグ戦（issue #772）。v22 以前の地区予選の途中は勝ち抜き戦のまま続く
+            var runner = TournamentRunners.FromSaved(t.Runner, field, manager, NationCoeff, Schedule,
                 new PlayerMatchResolver(), homeBg,
                 onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
             GameSession.Current.RestoreTournament(t, runner, field);

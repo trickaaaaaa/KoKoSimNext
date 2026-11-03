@@ -14,9 +14,9 @@ stages:
     groups: 7                 # 7地区（districts と同じ並び）
     grouping: geographic
     child:
-      type: round_robin       # 各ブロック4チームのリーグ戦
+      type: round_robin       # 地区の中を4校ブロックに分けて総当たり（夏の順位でシード分散・issue #772）
       teams_per_group: 4
-    advance_per_group: 5       # 各地区の上位5校が県大会へ（7地区×5＝35校＋夏代表の推薦。issue #688 の4地区×8＝32校とほぼ同じ規模・issue #725）
+      advance: 2              # 各ブロックの1位・2位が県大会へ（1地区約14校・7地区で約98校＋夏代表の推薦。監督決定 2026-11-03）
   - name: 県大会
     type: knockout
 # 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=横浜スタジアム、序盤=市営級プールから抽選
@@ -26,4 +26,4 @@ stadiums:
 notes:
   - 春と異なり秋は地区がリーグ戦形式
   - seed_exemptionの推薦校は県大会から登場
-  - 現状の実装は地区ごとの1トーナメントで、上位 advance_per_group 校が県大会へ進む（4校ブロックのリーグ戦の再現は issue #688 の後続）
+  - 地区予選は4校ブロックのリーグ戦（issue #772）。ブロックは夏の県大会の順位でシード分散（上位校が同じブロックに固まらない）。同率は勝数→直接対決→得失点差

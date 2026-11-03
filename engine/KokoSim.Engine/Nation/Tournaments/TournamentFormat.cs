@@ -26,8 +26,17 @@ public enum GroupingMode
 /// <summary>敗者復活（設計書05 §1.5 / CHANGELOG 27）。各ブロックで代表決定戦を行う。</summary>
 public sealed record LoserBracketRule(bool Enabled, int? Advance);
 
-/// <summary>group_split の子ステージ（各ブロック内で実行する下位トーナメント/リーグ）。</summary>
-public sealed record ChildStage(StageType Type, int? TeamsPerGroup);
+/// <summary>
+/// group_split の子ステージ（各ブロック内で実行する下位トーナメント/リーグ）。
+/// <paramref name="TeamsPerGroup"/> が付いた round_robin は、地区（グループ）の中をさらに
+/// その校数のブロックへ分けて総当たりする（神奈川の秋季地区予選＝4校ブロック・issue #772）。
+/// <paramref name="Advance"/> はそのブロックごとの進出数（null＝地区単位の <see cref="StageFormat.AdvancePerGroup"/>）。
+/// </summary>
+public sealed record ChildStage(StageType Type, int? TeamsPerGroup, int? Advance = null)
+{
+    /// <summary>地区の中をブロックに分けるリーグ戦か（teams_per_group 付きの round_robin）。</summary>
+    public bool IsBlockLeague => Type == StageType.RoundRobin && TeamsPerGroup is >= 2;
+}
 
 /// <summary>1ステージの定義（型ごとに使うフィールドが異なる）。</summary>
 public sealed record StageFormat

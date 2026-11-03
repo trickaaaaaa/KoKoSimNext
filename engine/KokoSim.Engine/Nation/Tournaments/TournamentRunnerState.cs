@@ -60,4 +60,27 @@ public sealed class TournamentRunnerState
 
     /// <summary>投手球数台帳（issue #41）。エース温存判断（issue #42）の入力。</summary>
     public List<TournamentPitchLedger.SavedOuting> PitchLedger { get; set; } = new();
+
+    /// <summary>
+    /// ブロックリーグ戦（<see cref="BlockLeagueRunner"/>・issue #772）の状態。null＝勝ち抜き戦
+    /// （<see cref="TournamentRunner"/>）。復元側はこれの有無で進行体の型を選ぶ（<see cref="TournamentRunners.FromSaved"/>）。
+    /// リーグ戦では <see cref="RoundEntrants"/>・<see cref="Current"/>・<see cref="Cards"/> は空のまま。
+    /// </summary>
+    public LeagueRunnerState? League { get; set; }
+}
+
+/// <summary>消化済みのリーグ戦1試合（節・節内のカード添字・スコア）。</summary>
+public readonly record struct SavedLeagueGame(int Round, int Card, int AScore, int BScore, bool MercyEnded);
+
+/// <summary>ブロックリーグ戦の可変状態（<see cref="TournamentRunnerState.League"/>）。</summary>
+public sealed class LeagueRunnerState
+{
+    /// <summary>各ブロックから県大会へ進む校数。</summary>
+    public int AdvancePerBlock { get; set; } = 2;
+    /// <summary>自校が出ない（観るだけ）のリーグ戦か。</summary>
+    public bool Spectated { get; set; }
+    /// <summary>ブロック分け（学校 Id・ブロック内の並び＝総当たりの組み順の基準）。抽選し直さない＝並びを保存する。</summary>
+    public List<List<int>> Blocks { get; set; } = new();
+    /// <summary>消化済みの試合。</summary>
+    public List<SavedLeagueGame> Games { get; set; } = new();
 }

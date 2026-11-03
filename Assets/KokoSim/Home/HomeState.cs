@@ -793,10 +793,14 @@ namespace KokoSim.Unity.Home
             var wrapUp = GameSession.Current.ConsumeTournamentWrapUp();
             if (wrapUp is { } w)
             {
-                var summary = w.IsChampion ? w.Title + " 優勝！" : w.Title + " 敗退";
+                // ブロックリーグ戦の地区予選（issue #772）は優勝が無い＝「県大会進出／敗退」で語る
+                var good = w.LeagueQualified ?? w.IsChampion;
+                var summary = w.LeagueQualified is { } q
+                    ? w.Title + (q ? " 県大会進出" : " 敗退")
+                    : w.IsChampion ? w.Title + " 優勝！" : w.Title + " 敗退";
                 PushFeed(new List<FeedItem>
                 {
-                    new FeedItem { When = "大会", Text = summary, Kind = w.IsChampion ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
+                    new FeedItem { When = "大会", Text = summary, Kind = good ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
                 });
                 // 大会が消費した週ぶん共有週を進める（大会モードは既に抜けているのでここでは時計だけ）。
                 // 大会が消費した週数＝最終日がどの週に入るか（切り捨てで正しい: 18日目は開幕週+2週の
@@ -855,10 +859,11 @@ namespace KokoSim.Unity.Home
             {
                 view.CountdownValue = "―";
                 view.CountdownCells = "―";
-                view.GameTag = r.IsChampion ? "優勝" : "敗退";
+                var leagueQualified = (r as KokoSim.Engine.Nation.Tournaments.BlockLeagueRunner)?.ManagerQualified;
+                view.GameTag = leagueQualified is { } q ? (q ? "県大会進出" : "敗退") : r.IsChampion ? "優勝" : "敗退";
                 view.AwayTeam = "―";
                 view.AwaySub = "";
-                view.GameDate = r.IsChampion ? "全試合終了" : "大会敗退";
+                view.GameDate = leagueQualified != null || r.IsChampion ? "全試合終了" : "大会敗退";
             }
             else
             {

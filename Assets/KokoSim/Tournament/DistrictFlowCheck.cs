@@ -65,9 +65,39 @@ namespace KokoSim.Unity.Tournament
                 "district=" + districtFieldCount + " pref=" + (NationService.PrefectureSchools.Count + 1));
             GameSession.Current.ConsumeBanner();
 
-            yield return PlayOutCurrentTournament();
+            // ブロックリーグ戦の県（神奈川・issue #772）: 進行体がリーグ戦で、自校はブロックの全校と1回ずつ戦う
+            var prefId = NationService.PrefectureId;
+            var isLeague = DistrictPlanProvider.IsBlockLeagueOf(prefId);
+            var league = GameSession.Current.Runner as KokoSim.Engine.Nation.Tournaments.BlockLeagueRunner;
+            Check("地区予選の進行体がYAMLの形式どおり（リーグ戦＝BlockLeagueRunner）", isLeague == (league != null),
+                "isLeague=" + isLeague + " runner=" + GameSession.Current.Runner?.GetType().Name);
+            var myBlockSize = 0;
+            var blockCount = 0;
+            if (league != null)
+            {
+                var views = league.BuildBlockViews();
+                blockCount = views.Count;
+                myBlockSize = views[league.ManagerBlockIndex].Standings.Count;
+                Note("地区のブロック: " + blockCount + "ブロック（自校のブロック " + myBlockSize + "校）");
+                Check("ブロックは4校か3校", System.Linq.Enumerable.All(views, v => v.Standings.Count is 3 or 4));
+            }
+
+            var districtGames = 0;
+            yield return PlayOutCurrentTournament(n => districtGames = n);
             var wonDistrict = GameSession.Current.LastOutcome != null && GameSession.Current.LastOutcome.IsChampion;
-            Note("地区予選の結果: " + (wonDistrict ? "優勝" : "敗退"));
+            Note("地区予選の結果: " + (league != null ? (league.ManagerQualified ? "県大会進出" : "敗退") : wonDistrict ? "優勝" : "敗退")
+                + "（自校の試合 " + districtGames + "）");
+            if (league != null)
+            {
+                Check("自校はブロックの全校と1回ずつ戦った（負けても途中で終わらない）", districtGames == myBlockSize - 1,
+                    "games=" + districtGames + " block=" + myBlockSize);
+                var q = GameSession.Current.LastDistrictQualifierIds;
+                Check("自地区の進出校＝ブロック数×上位" + DistrictPlanProvider.AdvancePerBlockOf(prefId) + "校",
+                    q != null && q.Count == blockCount * DistrictPlanProvider.AdvancePerBlockOf(prefId),
+                    "qualifiers=" + (q?.Count ?? -1));
+                Check("夏の順位が控えてある（ブロック分けのシード分散の材料）",
+                    GameSession.Current.LastSummerPlacementIds is { Count: > 0 });
+            }
 
             HomeState.Current.DismissResult();
             yield return null;
@@ -89,10 +119,27 @@ namespace KokoSim.Unity.Tournament
             var advance = DistrictPlanProvider.AdvancePerDistrictOf(NationService.PrefectureId);
             var districts = DistrictPlanProvider.AutumnDistrictsOf(NationService.PrefectureId);
             var seedExtra = DistrictPlanProvider.SeedExemptionOf(NationService.PrefectureId) ? 1 : 0;
-            Note("秋季県大会の出場校数（各地区の上位" + advance + "校×" + districts + "地区＋夏代表推薦）: " + prefFieldCount);
-            Check("秋季県大会の出場校数が 地区数×進出校数（＋夏代表の推薦）に収まる",
-                prefFieldCount > districts && prefFieldCount <= districts * advance + seedExtra,
-                "pref大会=" + prefFieldCount + " 上限=" + (districts * advance + seedExtra));
+            var maxField = districts * advance + seedExtra;
+            if (isLeague)
+            {
+                // リーグ戦: 各地区の（ブロック数×上位N校）の合計。自校の地区は自校のぶん1校多い
+                var per = DistrictPlanProvider.TeamsPerBlockOf(prefId);
+                var adv = DistrictPlanProvider.AdvancePerBlockOf(prefId);
+                maxField = seedExtra;
+                for (var d = 0; d < districts; d++)
+                {
+                    var n = System.Linq.Enumerable.Count(NationService.PrefectureSchools, x => x.DistrictId == d)
+                            + (d == (NationService.DistrictId ?? 0) ? 1 : 0);
+                    maxField += System.Math.Min(n, (n + per - 1) / per * adv);
+                }
+            }
+            Note("秋季県大会の出場校数（上限 " + maxField + "）: " + prefFieldCount);
+            Check("秋季県大会の出場校数が 地区の進出校数の合計（＋夏代表の推薦）に収まる",
+                prefFieldCount > districts && prefFieldCount <= maxField,
+                "pref大会=" + prefFieldCount + " 上限=" + maxField);
+            if (isLeague)
+                Check("リーグ戦の県は進出校の合計とほぼ一致する（推薦が重複したぶん以内）",
+                    prefFieldCount >= maxField - seedExtra, "pref大会=" + prefFieldCount + " 上限=" + maxField);
             GameSession.Current.ConsumeBanner();
 
             yield return PlayOutCurrentTournament();
@@ -110,15 +157,18 @@ namespace KokoSim.Unity.Tournament
             Debug.Log("[DISTRICTFLOW] " + (_fail == 0 ? "PASS" : "FAIL(" + _fail + ")") + "\n" + _log);
         }
 
-        private static IEnumerator PlayOutCurrentTournament()
+        private static IEnumerator PlayOutCurrentTournament(System.Action<int> played = null)
         {
             var guard = 0;
+            var games = 0;
             while (GameSession.Current.InTournament && !GameSession.Current.Runner.Finished && guard++ < 40)
             {
                 GameSession.Current.PlayMatch();
                 GameSession.Current.ConsumeResult();
+                games++;
                 yield return null;
             }
+            played?.Invoke(games);
         }
 
         /// <summary>自校の部員を上限まで引き上げる（大会を確実に勝ち抜かせるための検証用の細工）。</summary>

@@ -47,6 +47,8 @@
                          （横スクロールには列と一緒に追従する）。列と同じ寸法トークンで組んで幅を揃える。 -->
                     <ui:VisualElement name="tp-bracket-head" class="brk-head" />
                 </ui:ScrollView>
+                <!-- 地区予選がブロックリーグ戦の県（issue #772）はトーナメント表の代わりにブロック順位表 -->
+                <ui:VisualElement name="tp-league" class="lg-wrap" />
 
                 <ui:Label name="tb-h-mine" class="tp-h2 f-display" text="自校の戦績" />
                 <ui:VisualElement name="tp-my-matches" />

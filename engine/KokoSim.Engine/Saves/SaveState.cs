@@ -201,6 +201,9 @@ public sealed class SaveState
     /// <summary>直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。空＝未確定。</summary>
     public List<int> LastAutumnPlacementIds { get; set; } = new();
 
+    /// <summary>直近に終わった夏の県大会の順位付き出場校ID（秋季地区予選のブロック分けのシード分散・v23・issue #772）。空＝未確定。</summary>
+    public List<int> LastSummerPlacementIds { get; set; } = new();
+
     /// <summary>直近に終わった地区大会の優勝校ID（＝明治神宮大会の自地区代表）。null＝未確定。</summary>
     public int? LastRegionalChampionId { get; set; }
 

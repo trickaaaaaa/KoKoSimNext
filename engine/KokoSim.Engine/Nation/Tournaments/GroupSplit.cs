@@ -10,9 +10,14 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public static class GroupSplit
 {
     /// <summary>ブロック分割を実行し、全ブロックの進出校を返す。districtOf は geographic 割当用。</summary>
+    /// <param name="seedRank">
+    /// 地区の中をさらにブロックへ分けるリーグ戦（<see cref="ChildStage.IsBlockLeague"/>・issue #772）の
+    /// シード分散に使う夏の順位（<see cref="BlockDraw.Split"/>）。null＝全校抽選。
+    /// </param>
     public static IReadOnlyList<School> Run(
         IReadOnlyList<School> entrants, StageFormat stage, NationCoefficients coeff, IRandomSource rng,
-        System.Func<School, int?>? districtOf = null, TournamentRecorder? recorder = null)
+        System.Func<School, int?>? districtOf = null, TournamentRecorder? recorder = null,
+        System.Func<School, int?>? seedRank = null)
     {
         var groupCount = stage.Groups ?? 1;
         var groups = SplitIntoGroups(entrants, groupCount, stage.Grouping, districtOf, rng);
@@ -24,7 +29,18 @@ public static class GroupSplit
         {
             if (group.Count == 0) continue;
             var childType = stage.Child?.Type ?? StageType.Knockout;
-            if (childType == StageType.RoundRobin)
+            if (stage.Child is { IsBlockLeague: true } child)
+            {
+                // 地区の中を少数校ブロックに分けて総当たり（神奈川・issue #772）。対話経路（BlockLeagueRunner）と同じ
+                // 組み方・同じ順位規則。ブロック抽選は Fork した専用ストリーム（本流の消費順は各ブロックの試合だけ）
+                var perBlock = child.Advance ?? advancePerGroup;
+                foreach (var block in BlockDraw.Split(group, child.TeamsPerGroup!.Value, seedRank, rng.Fork(BlockDraw.DrawStreamId)))
+                {
+                    var standings = RoundRobin.Run(block, coeff, rng, recorder);
+                    advancers.AddRange(standings.Take(perBlock).Select(s => s.School));
+                }
+            }
+            else if (childType == StageType.RoundRobin)
             {
                 var standings = RoundRobin.Run(group, coeff, rng, recorder);
                 advancers.AddRange(standings.Take(advancePerGroup).Select(s => s.School));

@@ -1,5 +1,6 @@
 using System.Linq;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Season;
 using KokoSim.Unity.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -130,8 +131,11 @@ namespace KokoSim.Unity.Tournament
             var display = session.Display;
             var live = display.IsLive;          // false＝自校が出ていない大会（観るだけの甲子園）
             var runner = display.Runner;
+            // 地区予選のブロックリーグ戦（issue #772）は優勝が無い＝「県大会進出／敗退」で語り、表は順位表
+            var league = runner as BlockLeagueRunner;
 
             var status = !live ? "自校は出場していません"
+                : league != null ? (league.Finished ? (league.ManagerQualified ? "自校 県大会進出" : "自校 敗退") : "自校 進行中")
                 : view.ManagerIsChampion ? "自校 優勝！"
                 : view.ManagerEliminated ? "自校 敗退"
                 : "自校 進行中";
@@ -146,6 +150,8 @@ namespace KokoSim.Unity.Tournament
                 next = runner.BracketResolutionPending
                     ? "開催中　残り " + runner.RemainingBracketRounds + " ラウンド"
                     : "全日程終了　優勝 " + (view.ChampionName ?? "―");
+            else if (runner.Finished && league != null)
+                next = league.ManagerQualified ? "全試合終了 ─ 県大会進出" : "全試合終了 ─ 敗退";
             else if (runner.Finished)
                 next = view.ManagerIsChampion ? "全試合終了 ─ 優勝" : "自校は敗退しました";
             else if (session.ReachedMatchDay)
@@ -155,7 +161,11 @@ namespace KokoSim.Unity.Tournament
                        + "　（" + session.NextMatchDateLabel + "・あと " + session.DaysUntilNextMatch + " 日）";
             SetText("tb-next", next);
 
-            RenderBracketTree(view);
+            SetText("tb-h-tree", league != null ? "ブロック順位" : "トーナメント表");
+            Show(_root.Q<VisualElement>("tp-bracket-scroll"), league == null);
+            Show(_root.Q<VisualElement>("tp-league"), league != null);
+            if (league != null) RenderLeague(league, display.Kind);
+            else RenderBracketTree(view);
 
             // 自校の勝ち上がりを先頭にまとめ、その下に他校の結果を置く（200校規模で自校が埋もれないように）。
             var mine = new System.Collections.Generic.List<BracketMatch>();
@@ -189,6 +199,132 @@ namespace KokoSim.Unity.Tournament
             if (others.Count > shown)
                 host.Add(Note("ほか " + (others.Count - shown) + " 試合（直近 " + shown + " 試合を表示）"));
         }
+
+        // ===== ブロック順位表（地区予選のリーグ戦・issue #772・A案） =====
+
+        /// <summary>
+        /// 左に自校のブロック（順位表＋自校の日程）、右に同じ地区の他ブロックの小さな順位表を縦に並べる。
+        /// 中身は engine の <see cref="BlockLeagueRunner.BuildBlockViews"/> をそのまま表に写すだけ（順位は engine が決める）。
+        /// </summary>
+        private void RenderLeague(BlockLeagueRunner league, TournamentKind kind)
+        {
+            var host = _root.Q<VisualElement>("tp-league");
+            if (host == null) return;
+            host.Clear();
+
+            var main = new VisualElement();
+            main.AddToClassList("lg-main");
+            var side = new VisualElement();
+            side.AddToClassList("lg-side");
+            host.Add(main);
+            host.Add(side);
+
+            var views = league.BuildBlockViews();
+            var district = DistrictPlanProvider.DistrictTitleName(NationService.PrefectureId, NationService.DistrictId ?? 0);
+            foreach (var v in views)
+            {
+                if (v.IsManagerBlock)
+                {
+                    main.Add(LeagueCard(BlockTitle(v.Block), district, StandingsTable(v, compact: false), tight: false));
+                    var sched = LeagueCard("自校の日程", null, ScheduleTable(v, kind, league), tight: false);
+                    sched.AddToClassList("lg-sec");
+                    main.Add(sched);
+                }
+                else
+                {
+                    side.Add(LeagueCard(BlockTitle(v.Block), null, StandingsTable(v, compact: true), tight: true));
+                }
+            }
+        }
+
+        private static string BlockTitle(int block) => "第" + (block + 1) + "ブロック";
+
+        /// <summary>部品辞書の <c>.card</c>（塗り見出し帯＋本文）で包む。</summary>
+        private static VisualElement LeagueCard(string title, string sub, VisualElement body, bool tight)
+        {
+            var card = new VisualElement();
+            card.AddToClassList("card");
+            var hd = new VisualElement();
+            hd.AddToClassList("card__hd");
+            if (tight) hd.AddToClassList("card__hd--tight");
+            var t = new Label(title);
+            t.AddToClassList("card__hd-title");
+            t.AddToClassList("f-display");
+            hd.Add(t);
+            if (!string.IsNullOrEmpty(sub))
+            {
+                var s = new Label(sub);
+                s.AddToClassList("card__hd-sub");
+                hd.Add(s);
+            }
+            card.Add(hd);
+            var b = new VisualElement();
+            b.AddToClassList("card__body");
+            b.Add(body);
+            card.Add(b);
+            return card;
+        }
+
+        /// <summary>順位表。compact＝他ブロック用（順・学校・勝・敗だけ）。進出圏は試合が始まってから示す。</summary>
+        private static VisualElement StandingsTable(LeagueBlockView v, bool compact)
+        {
+            var table = new VisualElement();
+            var started = System.Linq.Enumerable.Any(v.Games, g => g.Played);
+            table.Add(compact
+                ? UiComponents.BoxRow(new[] { ("順", "mark"), ("学校", "name"), ("勝", "num"), ("敗", "num") }, header: true)
+                : UiComponents.BoxRow(new[] { ("順", "mark"), ("学校", "name"), ("勝", "num"), ("敗", "num"), ("得失", "num"), ("", "pos") }, header: true));
+            foreach (var s in v.Standings)
+            {
+                var margin = s.RunMargin > 0 ? "+" + s.RunMargin : s.RunMargin.ToString();
+                var row = compact
+                    ? UiComponents.BoxRow(new[] { (s.Rank.ToString(), "mark"), (s.SchoolName, "name"), (s.Wins.ToString(), "num"), (s.Losses.ToString(), "num") })
+                    : UiComponents.BoxRow(new[]
+                    {
+                        (s.Rank.ToString(), "mark"), (s.SchoolName, "name"), (s.Wins.ToString(), "num"), (s.Losses.ToString(), "num"),
+                        (margin, "num"), (started && s.InQualifyingPlace ? "進出圏" : "", "pos"),
+                    });
+                if (s.IsManager) row.AddToClassList("bs-row--mine");
+                MinchoNameCell(row);
+                table.Add(row);
+            }
+            UiComponents.BoxTable(table);
+            return table;
+        }
+
+        /// <summary>自校の日程（月日・相手・スコア・勝敗）。未消化の最初の試合に「次戦」。</summary>
+        private static VisualElement ScheduleTable(LeagueBlockView v, TournamentKind kind, BlockLeagueRunner league)
+        {
+            var table = new VisualElement();
+            table.Add(UiComponents.BoxRow(new[] { ("月日", "date"), ("相手", "name"), ("スコア", "avg"), ("", "pos") }, header: true));
+            var nextMarked = false;
+            foreach (var g in v.Games)
+            {
+                if (!g.InvolvesManager) continue;
+                var mgrIsA = v.Standings.Any(s => s.IsManager && s.SchoolId == g.AId);
+                var opp = mgrIsA ? g.BName : g.AName;
+                var my = mgrIsA ? g.AScore : g.BScore;
+                var their = mgrIsA ? g.BScore : g.AScore;
+                string mark;
+                if (g.Played) mark = my > their ? "○" : "●";
+                else if (!nextMarked && !league.Finished) { mark = "次戦"; nextMarked = true; }
+                else mark = "";
+                var row = UiComponents.BoxRow(new[]
+                {
+                    (TournamentDate.Label(TournamentEntry.Schedule, kind, g.MatchDay), "date"),
+                    (opp, "name"),
+                    (g.Played ? my + "-" + their : "", "avg"),
+                    (mark, "pos"),
+                });
+                MinchoNameCell(row);
+                table.Add(row);
+            }
+            UiComponents.BoxTable(table);
+            return table;
+        }
+
+        /// <summary>校名セルは太明朝（書体3役ルール）。BoxRow は列種別しか付けないので、名前列にだけ足す。</summary>
+        private static void MinchoNameCell(VisualElement row)
+            => row.Query<Label>(className: "bs-cell--name").ForEach(l => { if (!string.IsNullOrEmpty(l.text) && l.text != "学校" && l.text != "相手") l.AddToClassList("f-display"); });
 
         /// <summary>他校結果の表示上限（全部出すと200校規模でスクロールが破綻するため）。</summary>
         private const int OtherMatchLimit = 40;
@@ -303,6 +439,8 @@ namespace KokoSim.Unity.Tournament
         {
             var v = new TournamentPreviewState().Build();
             if (v == null) return;
+            // リーグ戦（地区予選・issue #772）は樹形図を持たない＝パンフレット書き出しを出さない
+            Show(_root.Q<Button>("tp-export-html"), !(GameSession.Current.Display?.Runner is BlockLeagueRunner));
 
             SetText("tp-title", v.Title);
             SetText("tp-meta", v.Meta);
@@ -324,6 +462,7 @@ namespace KokoSim.Unity.Tournament
             var display = GameSession.Current.Display;
             if (v == null || display == null) return;   // 開催中でなければ何もしない（展望ビュー自体も出ない）
 
+            if (display.Runner is BlockLeagueRunner) return;   // リーグ戦は樹形図を持たない（ボタンも出さない）
             var bracket = NewspaperBracketLayout.Build(display.Runner.BuildBracketView(), TournamentPamphletHtml.Metrics);
             var schools = TournamentPreviewState.BuildPamphletSchools(v, bracket);
             var html = TournamentPamphletHtml.Render(v, bracket, schools);

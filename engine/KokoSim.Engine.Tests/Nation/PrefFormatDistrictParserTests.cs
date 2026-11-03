@@ -29,7 +29,7 @@ public sealed class PrefFormatDistrictParserTests
     /// <summary>県大会へ進む校数と夏代表の推薦も同じファイルから読む（issue #688）。
     /// 地区なしの県（奈良）は規則を持たない＝1校・推薦なし。</summary>
     [Theory]
-    [InlineData("kanagawa.yaml", 7, 5, true)]
+    [InlineData("kanagawa.yaml", 7, 1, true)]   // 神奈川はブロックごとの進出（下の BlockLeague の項）＝地区単位の数は持たない
     [InlineData("hyogo.yaml", 5, 8, true)]
     [InlineData("aichi.yaml", 5, 6, false)]
     [InlineData("hokkaido.yaml", 10, 3, false)]
@@ -56,6 +56,34 @@ public sealed class PrefFormatDistrictParserTests
         var rule = PrefFormatDistrictParser.ParseRule(File.ReadAllText(path));
         Assert.Equal(stage.AdvancePerGroup ?? 1, rule.AdvancePerDistrict);
         Assert.Equal(full.SeedExemption, rule.SeedExemption);
+    }
+
+    /// <summary>
+    /// 神奈川の秋季地区予選は「地区の中の4校ブロックのリーグ戦・各ブロック上位2校が県大会へ」（issue #772）。
+    /// ほかの地区予選の県は地区ごとの1トーナメントのまま（ブロックを持たない）。
+    /// </summary>
+    [Theory]
+    [InlineData("kanagawa.yaml", 4, 2)]
+    [InlineData("hyogo.yaml", 0, 0)]
+    [InlineData("aichi.yaml", 0, 0)]
+    [InlineData("hokkaido.yaml", 0, 0)]
+    public void ParseRule_BlockLeague(string file, int teamsPerBlock, int advancePerBlock)
+    {
+        var path = FindPrefFormat(file);
+        var rule = PrefFormatDistrictParser.ParseRule(File.ReadAllText(path));
+        Assert.Equal(teamsPerBlock, rule.TeamsPerBlock);
+        Assert.Equal(advancePerBlock, rule.AdvancePerBlock);
+        Assert.Equal(teamsPerBlock >= 2, rule.IsBlockLeague);
+
+        // 完全ロード（Config 層）と同じ値＝2経路の乖離防止
+        var full = KokoSim.Config.PrefFormatLoader.LoadFromFile(path);
+        var child = full.Stages.First(st => st.Type == StageType.GroupSplit).Child;
+        Assert.Equal(teamsPerBlock >= 2, child?.IsBlockLeague ?? false);
+        if (teamsPerBlock >= 2)
+        {
+            Assert.Equal(teamsPerBlock, child!.TeamsPerGroup);
+            Assert.Equal(advancePerBlock, child.Advance);
+        }
     }
 
     /// <summary>入れ子（child: の type）をステージ自身の type と取り違えない。</summary>

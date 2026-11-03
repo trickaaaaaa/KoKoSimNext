@@ -47,6 +47,15 @@ public sealed record TournamentSchedule
     /// </summary>
     public int MaxGamesPerDay { get; init; } = 16;
 
+    /// <summary>
+    /// ブロックリーグ戦（秋季地区予選・issue #772）の節と節の間隔[日]。第 r 節（0基点）は
+    /// <see cref="FirstRoundDay"/> ＋ r × これ の日に組む（<see cref="LeagueMatchDay"/>）。
+    /// </summary>
+    public int LeagueRoundSpreadDays { get; init; } = 2;
+
+    /// <summary>ブロックリーグ戦の第 <paramref name="leagueRound"/> 節（0基点）の試合日。</summary>
+    public int LeagueMatchDay(int leagueRound) => FirstRoundDay + Math.Max(0, leagueRound) * Math.Max(1, LeagueRoundSpreadDays);
+
     /// <summary>夏の地方大会の実開幕月（表示専用・issue #583）。</summary>
     public int SummerOpenMonth { get; init; } = 7;
     /// <summary>夏の地方大会の実開幕日。</summary>
@@ -271,7 +280,7 @@ public sealed record TournamentBracketView(
 /// 自校の一戦だけで停止できるようステートフルに刻む。自校以外の裏試合は AggregateMatch で即時決着し
 /// （設計書05 §1.4 第3層＝自動消化）、大会概要に記録する。乱数は注入で決定論（不変条件#2）。
 /// </summary>
-public sealed class TournamentRunner
+public sealed class TournamentRunner : ITournamentRunner
 {
     private readonly NationCoefficients _coeff;
     private readonly IRandomSource _rng;
@@ -303,7 +312,7 @@ public sealed class TournamentRunner
     /// （安打数→強さ→Id, <see cref="DecideByReplay"/>）で強制決着し有限終了を保証する（安全弁）。
     /// 4試合連続で15回引き分けになる確率は無視できるため、通常は 0〜1 回の再試合で決着する。
     /// </summary>
-    private const int MaxTieReplays = 3;
+    internal const int MaxTieReplays = 3;
 
     /// <summary>ラウンド r（0基点）開始時の各スロットの残存校。未到達ラウンドは null（＝校名未確定）。</summary>
     private readonly School?[]?[] _roundEntrants;
@@ -1119,7 +1128,7 @@ public sealed class TournamentRunner
     /// GameResult の先攻/後攻に対応する School（規定決着の強さ・Id 比較に使う）。
     /// 戻り値: Decisive＝決着した（最後の）試合、AwayWon＝先攻が勝ったか、Replays＝行った再試合数（0＝初戦決着）。
     /// </summary>
-    private static (GameResult Decisive, bool AwayWon, int Replays) DecideByReplay(
+    internal static (GameResult Decisive, bool AwayWon, int Replays) DecideByReplay(
         School away, School home, Func<int, GameResult> playGame)
     {
         var r = playGame(0);

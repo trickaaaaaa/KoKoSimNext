@@ -27,12 +27,12 @@ namespace KokoSim.Unity.Shell
     {
         public TournamentKind Kind { get; }
         public string Title { get; }
-        public TournamentRunner Runner { get; }
+        public ITournamentRunner Runner { get; }
         public IReadOnlyList<School> Field { get; }
         /// <summary>自校が出場していて対話的に消化中か（false＝観るだけ）。</summary>
         public bool IsLive { get; }
 
-        public TournamentDisplay(TournamentKind kind, string title, TournamentRunner runner,
+        public TournamentDisplay(TournamentKind kind, string title, ITournamentRunner runner,
             IReadOnlyList<School> field, bool isLive)
         {
             Kind = kind;
@@ -52,6 +52,12 @@ namespace KokoSim.Unity.Shell
         /// <summary>終わった大会の種別。夏の県大会なら後始末から甲子園へつなぐ（設計書05 §1.1a）。</summary>
         public TournamentKind Kind { get; }
 
+        /// <summary>
+        /// ブロックリーグ戦の地区予選（issue #772）で自校が県大会へ進んだか。null＝リーグ戦ではない
+        /// （勝ち抜き戦は優勝/敗退で語る）。結果の通知文を「県大会進出／地区予選敗退」に切り替える。
+        /// </summary>
+        public bool? LeagueQualified { get; set; }
+
         public TournamentWrapUp(string title, int tournamentDay, bool isChampion, TournamentKind kind)
         {
             Title = title;
@@ -69,7 +75,7 @@ namespace KokoSim.Unity.Shell
         public GameMode Mode { get; private set; } = GameMode.Normal;
         public TournamentKind Kind { get; private set; }
         public string Title { get; private set; } = "";
-        public TournamentRunner Runner { get; private set; }
+        public ITournamentRunner Runner { get; private set; }
         public int Year { get; set; } = 1;
 
         /// <summary>
@@ -100,7 +106,7 @@ namespace KokoSim.Unity.Shell
         /// ブラケット全カード確定後でないと集計できないため、別途ここへ確定時点の Runner/Kind/Year を控えて
         /// 消化完了後に確定させる。
         /// </summary>
-        private TournamentRunner _bracketFoldRunner;
+        private ITournamentRunner _bracketFoldRunner;
         private TournamentKind _bracketFoldKind;
         private int _bracketFoldYear;
 
@@ -298,6 +304,12 @@ namespace KokoSim.Unity.Shell
         public IReadOnlyList<int> LastAutumnPlacementIds { get; private set; }
 
         /// <summary>
+        /// 直近に終わった夏の県大会の順位付き出場校ID（優勝校が先頭）。秋季地区予選のブロックリーグ戦で
+        /// 夏の上位校を別々のブロックへ散らす材料（issue #772・v23でセーブに載る）。null＝未確定（その年は全校抽選）。
+        /// </summary>
+        public IReadOnlyList<int> LastSummerPlacementIds { get; private set; }
+
+        /// <summary>
         /// 自校が出場しなかった秋季県大会（地区予選の進出圏外・issue #688）を同期解決した順位を控える。
         /// 出場した年は <see cref="FoldTournamentRecords"/> が同じ値を畳み込みで入れる（地区大会の判定の材料）。
         /// </summary>
@@ -370,7 +382,7 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>大会モードに入る（HomeState が構築した進行体を公開し、開幕演出を要求する）。</summary>
         /// <param name="field">出場校（自校を含む）。大会展望が実際の出場校を引くために保持する。</param>
-        public void EnterTournament(TournamentKind kind, string title, TournamentRunner runner,
+        public void EnterTournament(TournamentKind kind, string title, ITournamentRunner runner,
             IReadOnlyList<School> field = null)
         {
             Mode = GameMode.Tournament;
@@ -674,7 +686,10 @@ namespace KokoSim.Unity.Shell
             ArchiveTournamentStats();
             // 自校の成績（勝敗・優勝したか）は LastOutcome.IsChampion で既に確定済み（敗退時は常に false）。
             // 「大会全体の優勝校」の確定を待たずに出せる（issue #529 Plan A）。
-            PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion, Kind);
+            PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion, Kind)
+            {
+                LeagueQualified = (runner as BlockLeagueRunner)?.ManagerQualified,
+            };
             Mode = GameMode.Normal;
             Runner = null;
             BannerPending = false;
@@ -728,16 +743,32 @@ namespace KokoSim.Unity.Shell
         /// 2経路が同じ処理を書かないための単一の入口。<b>乱数を引かない</b>＝統計帯は不変。
         /// 優勝校は通算戦績の畳み込みが返す値をそのまま渡す（決勝カードを2度走査しない）。
         /// </summary>
-        private void FoldTournamentRecords(TournamentRunner runner, TournamentKind kind, int year)
+        private void FoldTournamentRecords(ITournamentRunner runner, TournamentKind kind, int year)
         {
             var matches = runner.BuildBracketView().Matches;
             var champion = Records.FoldTournament(matches, kind, year);
             // 自県の代表＝甲子園の出場校の1つ。ここが「夏の県大会の優勝校」を知る唯一の地点なので控える
             // （Runner は敗退確定と同時に null 化されるので、後から拾い直せない）。
-            if (kind == TournamentKind.Summer) LastPrefChampionId = champion?.Id;
+            if (kind == TournamentKind.Summer)
+            {
+                LastPrefChampionId = champion?.Id;
+                // 夏の県大会の順位＝秋季地区予選のブロック分けのシード分散の材料（issue #772）
+                var byIdSummer = (System.Func<int, School>)(id => id == NationService.ManagerSchoolId
+                    ? NationService.ManagerSchool() : NationService.SchoolById(id));
+                LastSummerPlacementIds = KnockoutPlacement.FromMatches(matches, byIdSummer).Select(s => s.Id).ToList();
+            }
             // 秋季地区予選の優勝校＝秋季県大会の自地区代表。自校の県が地区予選を持つ年だけここを通る
             // （持たない県は DistrictEntry を経由せず TournamentEntry.Enter が直接 Autumn を開くため）。
-            if (kind == TournamentKind.AutumnDistrict)
+            if (kind == TournamentKind.AutumnDistrict && runner is BlockLeagueRunner league)
+            {
+                // ブロックリーグ戦（issue #772）: 優勝校は無い＝各ブロックの上位校がそのまま県大会へ。
+                // 「地区予選が消化された」印として LastDistrictChampionId には第1ブロックの1位を入れる
+                // （DistrictEntry はこれが null だと地区予選を飛ばす）。
+                var q = league.Qualifiers().Select(s => s.Id).ToList();
+                LastDistrictQualifierIds = q;
+                LastDistrictChampionId = q.Count > 0 ? q[0] : (int?)null;
+            }
+            else if (kind == TournamentKind.AutumnDistrict)
             {
                 LastDistrictChampionId = champion?.Id;
                 // 自地区の県大会進出校＝トーナメント順位の上位N校（issue #688）。N は YAML の advance_per_group。
@@ -930,6 +961,8 @@ namespace KokoSim.Unity.Shell
                 ? new List<int>(LastDistrictQualifierIds) : new List<int>();
             s.LastAutumnPlacementIds = LastAutumnPlacementIds != null
                 ? new List<int>(LastAutumnPlacementIds) : new List<int>();
+            s.LastSummerPlacementIds = LastSummerPlacementIds != null
+                ? new List<int>(LastSummerPlacementIds) : new List<int>();
             s.LastRegionalChampionId = LastRegionalChampionId;
             s.LastRegionalPlacementIds = LastRegionalPlacementIds != null
                 ? new List<int>(LastRegionalPlacementIds) : new List<int>();
@@ -1019,6 +1052,8 @@ namespace KokoSim.Unity.Shell
                 ? new List<int>(s.LastDistrictQualifierIds) : null;
             LastAutumnPlacementIds = s.LastAutumnPlacementIds != null && s.LastAutumnPlacementIds.Count > 0
                 ? new List<int>(s.LastAutumnPlacementIds) : null;
+            LastSummerPlacementIds = s.LastSummerPlacementIds != null && s.LastSummerPlacementIds.Count > 0
+                ? new List<int>(s.LastSummerPlacementIds) : null;
             LastRegionalChampionId = s.LastRegionalChampionId;
             LastRegionalPlacementIds = s.LastRegionalPlacementIds != null && s.LastRegionalPlacementIds.Count > 0
                 ? new List<int>(s.LastRegionalPlacementIds) : null;
@@ -1030,7 +1065,7 @@ namespace KokoSim.Unity.Shell
         /// <see cref="EnterTournament"/> との違いは2つ＝<b>今大会成績をリセットしない</b>（保存された成績を
         /// そのまま使う）ことと、<b>大会内経過日を0へ戻さない</b>こと。
         /// </summary>
-        public void RestoreTournament(TournamentSaveState t, TournamentRunner runner, IReadOnlyList<School> field)
+        public void RestoreTournament(TournamentSaveState t, ITournamentRunner runner, IReadOnlyList<School> field)
         {
             Mode = GameMode.Tournament;
             Kind = t.Kind;
@@ -1085,6 +1120,7 @@ namespace KokoSim.Unity.Shell
             LastDistrictChampionId = null;
             LastDistrictQualifierIds = null;
             LastAutumnPlacementIds = null;
+            LastSummerPlacementIds = null;
             LastRegionalChampionId = null;
             LastRegionalPlacementIds = null;
             LastJinguChampionId = null;

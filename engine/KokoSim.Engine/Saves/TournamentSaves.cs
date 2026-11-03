@@ -57,7 +57,7 @@ internal static class TournamentSaves
                 .Add("bySource", o.BySource).Add("a", o.KeyA).Add("b", o.KeyB)
                 .Add("day", o.MatchDay).Add("pitches", o.Pitches));
 
-        return new JsonObject()
+        var json = new JsonObject()
             .Add("title", r.Title)
             .Add("national", r.IsNationalTournament)
             .Add("playerActive", r.PlayerActive)
@@ -70,6 +70,44 @@ internal static class TournamentSaves
             .Add("cards", cards)
             .Add("matches", matches)
             .Add("pitchLedger", ledger);
+        // ブロックリーグ戦（issue #772・v23）。勝ち抜き戦では書かない＝旧版のセーブと同じ形のまま
+        if (r.League is { } league) json.Add("league", LeagueToJson(league));
+        return json;
+    }
+
+    private static JsonObject LeagueToJson(LeagueRunnerState l)
+    {
+        var blocks = new JsonArray();
+        foreach (var b in l.Blocks) blocks.Add(IntsToJson(b));
+        var games = new JsonArray();
+        foreach (var g in l.Games)
+            games.Add(new JsonObject()
+                .Add("round", g.Round).Add("card", g.Card).Add("a", g.AScore).Add("b", g.BScore).Add("mercy", g.MercyEnded));
+        return new JsonObject()
+            .Add("advancePerBlock", l.AdvancePerBlock)
+            .Add("spectated", l.Spectated)
+            .Add("blocks", blocks)
+            .Add("games", games);
+    }
+
+    private static LeagueRunnerState? LeagueFromJson(JsonValue? value)
+    {
+        if (value is not JsonObject o) return null;   // 無い＝勝ち抜き戦（v22 以前は必ずこれ）
+        var blocks = new List<List<int>>();
+        foreach (var item in o.Arr("blocks").Items) blocks.Add(IntsFromJson((JsonArray)item));
+        var games = new List<SavedLeagueGame>();
+        foreach (var item in o.Arr("games").Items)
+        {
+            var g = item.AsObject();
+            games.Add(new SavedLeagueGame(g.Int("round"), g.Int("card"), g.Int("a"), g.Int("b"), g.Bool("mercy")));
+        }
+        return new LeagueRunnerState
+        {
+            AdvancePerBlock = o.Int("advancePerBlock"),
+            Spectated = o.Bool("spectated"),
+            Blocks = blocks,
+            Games = games,
+        };
     }
 
     private static JsonArray IntsToJson(IReadOnlyList<int> ids)
@@ -153,6 +191,7 @@ internal static class TournamentSaves
             Cards = cards,
             Matches = matches,
             PitchLedger = ledger,
+            League = o.Has("league") ? LeagueFromJson(o["league"]) : null,
         };
     }
 
