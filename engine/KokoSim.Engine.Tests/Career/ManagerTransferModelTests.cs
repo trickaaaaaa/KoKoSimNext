@@ -200,6 +200,54 @@ public sealed class ManagerTransferModelTests
         Assert.Equal(40, m.CoachingBatting);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ApplyDecision_BecameFreeAgent_MakesManagerFree_WhetherStayingOrMoving(bool transferred)
+    {
+        // issue #777: 昇格を確定したら残留でも転任でも身分がフリーになり、翌年はフリー化資格を再び返さない。
+        var m = new Manager { Status = ManagerStatus.Teacher, KoshienAppearances = 1, Trust = 80, YearsAtSchool = 4 };
+        var nation = BuildNation();
+        var first = ManagerTransferModel.Evaluate(m, 13, nation, new Xoshiro256Random(1), C);
+        Assert.Equal(TransferEventKind.BecameFreeAgent, first.Kind);
+
+        ManagerTransferModel.ApplyDecision(m, first.Kind, transferred, C);
+
+        Assert.Equal(ManagerStatus.Free, m.Status);
+        Assert.Equal(transferred ? C.TrustReset : 80, m.Trust);
+        Assert.Equal(transferred ? 0 : 4, m.YearsAtSchool);
+        for (ulong seed = 0; seed < 50; seed++)
+        {
+            var next = ManagerTransferModel.Evaluate(m, 13, nation, new Xoshiro256Random(seed), C);
+            Assert.NotEqual(TransferEventKind.BecameFreeAgent, next.Kind);
+            Assert.NotEqual(TransferEventKind.ForcedTransfer, next.Kind);
+        }
+    }
+
+    [Fact]
+    public void ApplyDecision_ForcedTransfer_KeepsTeacherStatus()
+    {
+        var m = new Manager { Status = ManagerStatus.Teacher, Trust = 70, YearsAtSchool = 5 };
+
+        ManagerTransferModel.ApplyDecision(m, TransferEventKind.ForcedTransfer, transferred: true, C);
+
+        Assert.Equal(ManagerStatus.Teacher, m.Status);
+        Assert.Equal(C.TrustReset, m.Trust);
+        Assert.Equal(0, m.YearsAtSchool);
+    }
+
+    [Fact]
+    public void ApplyDecision_FreeAgentOffer_Staying_ChangesNothing()
+    {
+        var m = new Manager { Status = ManagerStatus.Free, Trust = 70, YearsAtSchool = 5 };
+
+        ManagerTransferModel.ApplyDecision(m, TransferEventKind.FreeAgentOffer, transferred: false, C);
+
+        Assert.Equal(ManagerStatus.Free, m.Status);
+        Assert.Equal(70, m.Trust);
+        Assert.Equal(5, m.YearsAtSchool);
+    }
+
     /// <summary>常に同じ値を返す <see cref="IRandomSource"/>（NextDouble のしきい値をまたぐテスト専用）。</summary>
     private sealed class FixedDoubleRandomSource : IRandomSource
     {
