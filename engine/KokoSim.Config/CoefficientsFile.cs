@@ -2277,6 +2277,7 @@ public static class CoefficientsLoader
         public double AiStyleMentalBonus { get; set; } = D.AiStyleMentalBonus;
         // AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）
         public double AiPowerSkew { get; set; } = D.AiPowerSkew;
+        public double AiArmSd { get; set; } = D.AiArmSd;
         public double AiConcentration { get; set; } = D.AiConcentration;
         // AI校の上位集中＝スター型（issue prefecture-dominance-star）
         public double AiStarShare { get; set; } = D.AiStarShare;
@@ -2422,6 +2423,7 @@ public static class CoefficientsLoader
             AiMentalPerGrade = AiMentalPerGrade,
             AiStyleMentalBonus = AiStyleMentalBonus,
             AiPowerSkew = AiPowerSkew,
+            AiArmSd = AiArmSd,
             AiConcentration = AiConcentration,
             AiStarShare = AiStarShare,
             AiStarLiftPerPoint = AiStarLiftPerPoint,

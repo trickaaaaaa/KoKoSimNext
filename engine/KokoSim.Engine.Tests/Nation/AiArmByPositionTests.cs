@@ -76,5 +76,7 @@ public sealed class AiArmByPositionTests
         var allSsBefore = ssBefore.Values.SelectMany(v => v).ToList();
         var allSsAfter = ssAfter.Values.SelectMany(v => v).ToList();
         Assert.True(Median(allSsAfter) >= Median(allSsBefore) + 4, $"遊撃 p50 {Median(allSsBefore)} → {Median(allSsAfter)}");
+        // 中位校（D）にも強肩の遊撃手がいる（肩75＝127km/h 以上。σ6・位置重み付きでは 4%）。
+        Assert.True(Share(ssAfter[Tier.D], 75) >= 0.20, $"D校の遊撃手で肩75以上 {Share(ssAfter[Tier.D], 75):P1}");
     }
 }
