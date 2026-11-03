@@ -2880,6 +2880,10 @@ namespace KokoSim.Unity.Match
                         // 同じ時計で並走させるだけ。
                         var wasDuelOn = _duelOn;
                         var shownFoul = wasDuelOn ? (_duelRig?.BattedElapsedSeconds ?? -1f) : -1f;
+                        // 投手はリリースの時点で「duelPitchIntervalSeconds 後に次を投げる」前提で振りかぶりを
+                        // 予約済み。下で間合いを打球の飛行時間まで延ばし、時計も接触時刻へ巻き戻すので、
+                        // 次のリリースまでの残りが変わった分だけ予約もずらす（issue #770）。
+                        var releaseRemainBefore = duelPitchIntervalSeconds - _pitchClock;
                         _view.SetPlay(_pendingFoulFlight);
                         _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
                         _pitchBallVisible = true;
@@ -2890,6 +2894,12 @@ namespace KokoSim.Unity.Match
                         _pitchClock = wasDuelOn ? (float)ContactMomentOf(_pendingFoulFlight, shownFoul) : 0f;
                         _view.SetTime(_pitchClock);
                         _pendingFoulFlight = null;
+                        if (DuelPacingActive && !FoulReleaseShiftDisabledForCapture)
+                        {
+                            var releaseRemainAfter = Mathf.Max(duelPitchIntervalSeconds, _foulFlightHoldSeconds.Value)
+                                                     - _pitchClock;
+                            _duelRig?.ShiftNextRelease(releaseRemainAfter - releaseRemainBefore);
+                        }
                     }
                 }
                 if (_pitchCallDone)
@@ -3936,6 +3946,9 @@ namespace KokoSim.Unity.Match
                 _duelImg.Bind(_duelRig.Target);
             }
         }
+
+        /// <summary>実測の比較用（issue #770）: 真にするとファウル後の振りかぶり予約の補正を切る（修正前の挙動）。</summary>
+        internal static bool FoulReleaseShiftDisabledForCapture;
 
         /// <summary>撮影ハーネス用: 現在ロード中の打席の再生を頭からやり直す（対決ビューの狙い撃ち撮影用）。</summary>
         internal void RestartCurrentPaForCapture()
