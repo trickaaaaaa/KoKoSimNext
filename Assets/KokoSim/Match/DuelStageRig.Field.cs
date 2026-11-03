@@ -2182,6 +2182,12 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>フォロースルーを見せる長さ[s]（リリースから先）。</summary>
+        /// <summary>
+        /// 内野手の送球モーションを速回しする上限倍率（issue #765）。これを越える短い窓は頭を捨てて合わせる。
+        /// 1.6倍＝通常のリリース 0.76s を 0.48s まで（名手の最短保持≈0.56s を収める）。
+        /// </summary>
+        private const float InfieldThrowMaxRate = 1.6f;
+
         private const float ThrowFollowSeconds = 0.55f;
 
         /// <summary>投げ終わりの据え置き[s]（打ち切りには必ず据え置きを添える＝design-18 §4.5-⑭）。</summary>
@@ -2334,6 +2340,21 @@ namespace KokoSim.Unity.Match
                     rate = Mathf.Clamp(an.Release / window, 1f, 4f);   // 約1.3〜1.9倍速
                     tStart = catchAt;                                  // クリップの頭（捕った姿勢）を捕球の瞬間へ
                     tFire = catchAt;
+                }
+            }
+            else
+            {
+                // 内野手の握り替え圧縮（issue #765）: 守備の上手い内野手は捕ってから 0.6〜0.8s で離す
+                // （engine の握り替え＋もたつきが守備で強く縮む）。収録のリリース（0.76s／深い位置 1.36s）より
+                // 窓が短いと、頭を切って「捕った姿勢から投げる途中へ飛ぶ」。捕手と同じく一様に速回しして収める
+                // ＝機敏な野手ほど投げる動作そのものも速く見える。倍率は上限で切り、足りない分だけ頭を捨てる。
+                float catchAt = CatchTimeOf(who, tr);
+                float window = tr - catchAt;
+                if (catchAt > 0f && window > 1e-3f && window < an.Release)
+                {
+                    rate = Mathf.Clamp(an.Release / window, 1f, InfieldThrowMaxRate);
+                    tStart = tr - an.Release / rate;
+                    tFire = Mathf.Max(tStart, catchAt);
                 }
             }
 

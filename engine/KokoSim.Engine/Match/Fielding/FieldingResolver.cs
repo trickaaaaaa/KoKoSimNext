@@ -392,13 +392,16 @@ public static class FieldingResolver
             var throwAccuracy = (int)Math.Round(
                 infielder.Attributes.ThrowAccuracy - coeff.ChargeThrowAccuracyPenalty * chargeFrac);
             // 握り替え（トランスファー）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
-            var handFactor = infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin);
+            // 内野は外野返球より強く効かせる（issue #765: 上手い内野手ほど捕ってから離すまでが速い）。
+            var handFactor = infielder.Attributes.TransferFactor(coeff.InfieldTransferFieldingSlope, coeff.InfieldTransferFactorMin);
             // 前進捕球（issue #630）の体勢の悪さは握り替えへ乗せる（チャージ量に比例）。
             var transfer = coeff.ThrowTransferSeconds * handFactor
                            + coeff.ChargeThrowPenaltySeconds * chargeFrac;
             // もたつき（判定境界の校正項を物理層へ移した項）。**引いた値がそのまま絵の秒**になる
-            // ＝送球開始が遅れる形で見える。守備力で伸縮＝手さばきの単一ソース（transfer と同じ係数）
-            var handleJitter = DrawHandleJitter(coeff, rng) * handFactor;
+            // ＝送球開始が遅れる形で見える。守備力で伸縮（issue #765: 名手はほぼもたつかず、下手ほど握り損ねる）。
+            // 乱数は守備に関係なく必ず1つ引く（不変条件#2）。
+            var jitterFactor = infielder.Attributes.TransferFactor(coeff.InfieldHandleJitterFieldingSlope, coeff.InfieldHandleJitterFactorMin);
+            var handleJitter = DrawHandleJitter(coeff, rng) * jitterFactor;
             var throwTime = fieldTime + coeff.InfieldPlayOverheadSeconds
                             + transfer + handleJitter + throwDist / infielder.Attributes.ThrowSpeedMps;
             // アンアシスト刺殺（3U, Issue #400）: 処理野手が一塁手なら、投手カバーへ送球する以外に「自分で

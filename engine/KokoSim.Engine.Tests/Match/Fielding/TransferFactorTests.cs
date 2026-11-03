@@ -73,8 +73,8 @@ public sealed class TransferFactorTests
     public void Transfer_ContributesIndependentlyOfReaction()
     {
         // 反応遅延(Fielding)由来の差を除いても、握り替え倍率だけで送球到達に差が出ることを確認。
-        // 傾き0（トランスファー無効）と現行傾きを同じ守備値で比べる。
-        var fixedTransfer = Coeff with { ThrowTransferFieldingSlope = 0.0 };
+        // 傾き0（トランスファー無効）と現行傾きを同じ守備値で比べる。内野ゴロは内野専用の傾き（issue #765）。
+        var fixedTransfer = Coeff with { InfieldTransferFieldingSlope = 0.0, InfieldHandleJitterFieldingSlope = 0.0 };
         var elite = Grounder(90, fixedTransfer).ThrowArriveSeconds;
         var eliteWithTransfer = Grounder(90, Coeff).ThrowArriveSeconds;
 

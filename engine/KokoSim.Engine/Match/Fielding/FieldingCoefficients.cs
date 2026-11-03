@@ -152,6 +152,29 @@ public sealed record FieldingCoefficients
     /// data/coefficients.yaml と同値。
     /// </summary>
     public double InfieldHandleJitterMaxFactor { get; init; } = 3.0;
+
+    /// <summary>
+    /// 内野ゴロ→一塁の握り替え倍率の守備傾き（issue #765「内野守備がもっさり」）。
+    /// 倍率 = max(<see cref="InfieldTransferFactorMin"/>, 1 − (守備−50)×この値)。守備は効き後の値（design-21）。
+    /// 外野返球・中継と共有の <see cref="ThrowTransferFieldingSlope"/>（0.004）のままだと守備90と20で
+    /// 「捕ってから離すまで」が約0.15秒しか違わず、上手い内野手が機敏に見えなかった。
+    /// 守備50で×1.0＝リーグ平均の野手（統計帯の母集団）は変わらない。data/coefficients.yaml と同値。
+    /// </summary>
+    public double InfieldTransferFieldingSlope { get; init; } = 0.014;
+
+    /// <summary>内野の握り替え倍率の下限（最速側のクランプ, issue #765）。表示の守備≈98で届く。</summary>
+    public double InfieldTransferFactorMin { get; init; } = 0.65;
+
+    /// <summary>
+    /// もたつき（<see cref="InfieldHandleJitterMeanSeconds"/>）の平均を守備で伸縮する傾き（issue #765）。
+    /// 倍率 = max(<see cref="InfieldHandleJitterFactorMin"/>, 1 − (守備−50)×この値)。
+    /// 上手い内野手は「一発で握り替える」＝もたつきがほぼ出ず、下手な内野手ほど握り損ね・お手玉が増える。
+    /// 守備50で×1.0（帯不変）。表示の守備90で×0.35／守備20で×1.49。data/coefficients.yaml と同値。
+    /// </summary>
+    public double InfieldHandleJitterFieldingSlope { get; init; } = 0.036;
+
+    /// <summary>もたつき倍率の下限（issue #765）。どんな名手でも、たまには握り直す。</summary>
+    public double InfieldHandleJitterFactorMin { get; init; } = 0.25;
     /// <summary>
     /// お手玉の失策（2026-11-03）: もたつき[s]がこれ以上で、もたつきが無ければアウトだったセーフは
     /// 内野安打でなく失策（<see cref="FieldingErrorKind.Bobble"/>）。0以下＝無効（従来どおり内野安打）。
