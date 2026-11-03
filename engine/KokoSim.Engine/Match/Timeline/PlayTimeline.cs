@@ -219,6 +219,12 @@ public sealed record PlayTimeline
     /// </summary>
     public bool FumbledCatch { get; init; }
 
+    /// <summary>
+    /// お手玉の失策か（<c>FieldingPlay.ErrorKind == Bobble</c> の写し。表示専用・2026-11-03）。
+    /// 捕ってから握り損ね、拾い直して投げたが一塁に間に合わなかった失策。3Dはこのときだけお手玉の芝居を出す。
+    /// </summary>
+    public bool BobbleError { get; init; }
+
     /// <summary>本塁打の当たりの種類（<see cref="Fielding.FieldingPlay.HomeRunStyle"/> の写し。表示専用・issue #704）。</summary>
     public HomeRunStyle? HomeRunStyle { get; init; }
 

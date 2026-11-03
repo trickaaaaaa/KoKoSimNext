@@ -11,7 +11,7 @@ public enum HandleBobbleKind
     None,
     /// <summary>握り損ねて、球がグラブの中で小さく跳ねてから掴み直す。</summary>
     Juggle,
-    /// <summary>お手玉。グラブで弾いて前へこぼし、拾い直して投げる（記録は失策にならない）。</summary>
+    /// <summary>お手玉。グラブで弾いて前へこぼし、拾い直して投げる（記録はお手玉の失策＝<see cref="PlaybackPlay.BobbleError"/> のときだけ）。</summary>
     Fumble,
 }
 
@@ -32,9 +32,9 @@ public readonly record struct HandleBobble(HandleBobbleKind Kind, FieldPosition 
 /// 3Dではその間ずっとボールを持って立っているだけなので、長いもたつきを引いた打席
 /// （内野安打の大半）は「捕ったまま突っ立っている＝怠慢」に見えていた（2026-11-03 監督報告）。</para>
 ///
-/// <para>捕球時刻・投げ始め・送球の到達は1つも動かさない。保持の長さで見せ方を3段に分けるだけ。
-/// 境目は実測（400試合・内野→一塁 6,791本）で、全体の約20%が握り直し・約11%がお手玉
-/// （内野安打の約6割がお手玉）になる値。</para>
+/// <para>捕球時刻・投げ始め・送球の到達は1つも動かさない。保持の長さで握り直しを出し、
+/// お手玉は engine が「お手玉の失策」（<c>FieldingErrorKind.Bobble</c>）と記録した打席だけに出す
+/// （2026-11-03: お手玉の絵で内野安打＝記録と絵の矛盾、を解消。それまでは保持2秒超で一律お手玉だった）。</para>
 /// </summary>
 public static class HandleBobblePlanner
 {
@@ -70,7 +70,10 @@ public static class HandleBobblePlanner
             if (eb.Kind != BallSegmentKind.Throw || eb.FromRole is not { } from || !IsInfielder(from))
                 return HandleBobble.NoneValue;
             if (eb.T0 < ground.T1 - 1e-6) return HandleBobble.NoneValue;
-            var kind = KindFor(eb.T0 - ground.T1);
+            // お手玉の芝居は「お手玉の失策」のときだけ（2026-11-03 監督報告: お手玉したのに内野安打は記録と絵の矛盾）。
+            // それ以外の長いもたつきは握り直しまで＝セーフでも「握り直す間に足で稼いだ内野安打」に見える。
+            var kind = play.BobbleError ? HandleBobbleKind.Fumble : KindFor(eb.T0 - ground.T1);
+            if (!play.BobbleError && kind == HandleBobbleKind.Fumble) kind = HandleBobbleKind.Juggle;
             return kind == HandleBobbleKind.None
                 ? HandleBobble.NoneValue
                 : new HandleBobble(kind, from, ground.T1, eb.T0);
