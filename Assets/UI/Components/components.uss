@@ -904,6 +904,8 @@
 .cmp-card .cat-rank-chips { margin-top: var(--sp-2); }
 /* 特殊能力のチップ列（issue #738 案A＝名前の下）。最大4枠（超える分は「他N」）で2行に収まる。 */
 .cmp-card__skills { margin-top: var(--sp-1); }
+/* 比較カードは幅が狭い（約150px）＝1行に2つ・最大2行に収める小型チップ（字の直書きは .cmp-card__hand の 13px と同じ扱い）。 */
+.cmp-card__skills .skill-chip { height: 20px; font-size: 13px; padding: 0 5px; margin: 0 3px 3px 0; }
 /* 持ち球のミニ球種変化チャート（部品 PitchChartView・compact）。Painter2D 描画のため固定高を確保（issue #94） */
 .cmp-card__pitch { height: 104px; margin-top: var(--sp-2); }
 
