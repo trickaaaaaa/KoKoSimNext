@@ -176,6 +176,19 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
+        /// 表示用の相手校チーム（issue #737）。<see cref="BuildOpponentTeam(School)"/> と同じチームを、
+        /// 未生成の学校でもロスターを保存せずに組む（画面を開いたかで世界が変わらない）。ランク表示専用。
+        /// </summary>
+        public static Team PeekOpponentTeam(School opponent)
+        {
+            var yearIndex = GameSession.Current.Year;
+            var team = NationService.Rosters.PeekTeamFor(opponent, yearIndex, Rules, CalendarYear());
+            var brain = EnemyAiFactory.BrainFor(opponent);
+            var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
+            return team.WithBattingOrder(brain.ComposeBattingOrder(team.BattingOrder, orderRng)) with { Tactics = brain };
+        }
+
+        /// <summary>
         /// 自校ラインナップを組む。試合開始前画面（対戦カード）も同じ入口を通し、
         /// 表示したスタメンと実際に出場するスタメンが必ず一致する契約を守る。
         /// </summary>

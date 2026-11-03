@@ -58,10 +58,7 @@ namespace KokoSim.Unity.Practice
     /// </summary>
     public sealed class PracticeMatchState
     {
-        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
-        // 相手校の6指標は「校ID＋年度」で決まる決定論なので、画面を開き直しても同じ値になる。都度の再集計は重いためキャッシュする。
-        private static readonly Dictionary<int, TeamStrength> ProfileCache = new Dictionary<int, TeamStrength>();
 
         private int _selectedId = int.MinValue;
         private string _message = "";
@@ -197,14 +194,8 @@ namespace KokoSim.Unity.Practice
             return d;
         }
 
-        private static TeamStrength Profile(School s)
-        {
-            if (ProfileCache.TryGetValue(s.Id, out var cached)) return cached;
-            var team = StrengthTeamFactory.ForSchool(s, GameSession.Current.Year);
-            var strength = ScoutedTeamProfile.Compute(team, Coeff);
-            ProfileCache[s.Id] = strength;
-            return strength;
-        }
+        // 相手校の6指標は実際に戦うチームから（issue #737。一覧の格・総合と詳細とホーム・試合前画面で同じ値）。
+        private static TeamStrength Profile(School s) => OpponentRank.ProfileOf(s);
 
         private static void Add(PracticeOpponentDetail d, string label, double value)
         {
@@ -231,8 +222,8 @@ namespace KokoSim.Unity.Practice
         {
             SchoolId = s.Id,
             Name = s.Name,
-            TierLetter = s.Tier.ToString(),
-            Overall = (int)Math.Round(s.Strength),
+            TierLetter = Tiers.FromStrength(Profile(s).Overall).ToString(),
+            Overall = (int)Math.Round(Profile(s).Overall),
             Tradition = TraditionLabel(s.Tradition),
             AcceptPercent = Percent(scheduler.AcceptChance(manager, own, s)),
             PrefectureName = prefName,
