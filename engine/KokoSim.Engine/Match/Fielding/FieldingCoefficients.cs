@@ -152,6 +152,11 @@ public sealed record FieldingCoefficients
     /// data/coefficients.yaml と同値。
     /// </summary>
     public double InfieldHandleJitterMaxFactor { get; init; } = 3.0;
+    /// <summary>
+    /// お手玉の失策（2026-11-03）: もたつき[s]がこれ以上で、もたつきが無ければアウトだったセーフは
+    /// 内野安打でなく失策（<see cref="FieldingErrorKind.Bobble"/>）。0以下＝無効（従来どおり内野安打）。
+    /// </summary>
+    public double BobbleErrorMinJitterSeconds { get; init; } = 1.3;
 
     /// <summary>
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。

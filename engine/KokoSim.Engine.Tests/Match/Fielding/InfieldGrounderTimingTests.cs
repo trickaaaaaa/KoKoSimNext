@@ -51,7 +51,12 @@ public sealed class InfieldGrounderTimingTests
     {
         var hits = 0;
         for (ulong s = 1; s <= (ulong)seeds; s++)
-            if (Grounder(exitVelocityMps, bearingDeg, batter, seed: s * 7919).Result == BattedBallResult.Single) hits++;
+        {
+            // 送球が間に合わなかった率＝内野安打＋お手玉の失策（2026-11-03）。お手玉の失策は「もたつかなければ
+            // アウト」の打球が記録上失策へ振り替わったもので、秒軸（打球の緩さ）の効きはどちらにも同じく出る。
+            var p = Grounder(exitVelocityMps, bearingDeg, batter, seed: s * 7919);
+            if (p.Result == BattedBallResult.Single || p.ErrorKind == FieldingErrorKind.Bobble) hits++;
+        }
         return (double)hits / seeds;
     }
 

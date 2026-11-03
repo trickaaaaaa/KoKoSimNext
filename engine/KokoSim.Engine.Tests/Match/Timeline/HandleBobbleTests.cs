@@ -19,9 +19,9 @@ public sealed class HandleBobbleTests
         });
 
     /// <summary>この打席を写した形: 投球 → バウンド（サードが捕る）→ 一塁送球。</summary>
-    private static PlaybackPlay Grounder(double catchT, double releaseT, bool fumbled = false) => new()
+    private static PlaybackPlay Grounder(double catchT, double releaseT, bool fumbled = false, bool bobble = false) => new()
     {
-        Name = "t", Dur = releaseT + 3, Result = "t", ResAt = releaseT + 1, Fumbled = fumbled,
+        Name = "t", Dur = releaseT + 3, Result = "t", ResAt = releaseT + 1, Fumbled = fumbled, BobbleError = bobble,
         Ball = new PlaybackBallSegment[]
         {
             Seg(BallSegmentKind.Pitch, 0.4, 0.85, 0, 18.44, 0, 0),
@@ -36,12 +36,20 @@ public sealed class HandleBobbleTests
     [InlineData(1.4, HandleBobbleKind.None)]
     [InlineData(1.41, HandleBobbleKind.Juggle)]
     [InlineData(2.0, HandleBobbleKind.Juggle)]
-    [InlineData(2.15, HandleBobbleKind.Fumble)]
+    [InlineData(2.15, HandleBobbleKind.Juggle)]   // お手玉は失策のときだけ＝長くても握り直しまで
     public void KindFollowsHoldLength(double hold, HandleBobbleKind want)
     {
         var b = HandleBobblePlanner.Plan(Grounder(2.13, 2.13 + hold));
         Assert.Equal(want, b.Kind);
         if (want != HandleBobbleKind.None) Assert.Equal(FieldPosition.ThirdBase, b.Fielder);
+    }
+
+    /// <summary>お手玉の芝居は「お手玉の失策」のときだけ（2026-11-03 監督報告: お手玉なのに内野安打）。</summary>
+    [Fact]
+    public void FumbleOnlyWhenTheBobbleIsScoredAsAnError()
+    {
+        Assert.Equal(HandleBobbleKind.Juggle, HandleBobblePlanner.Plan(Grounder(2.13, 4.28)).Kind);
+        Assert.Equal(HandleBobbleKind.Fumble, HandleBobblePlanner.Plan(Grounder(2.13, 4.28, bobble: true)).Kind);
     }
 
     [Fact]
@@ -57,7 +65,7 @@ public sealed class HandleBobbleTests
     [Fact]
     public void FumblePopsOutOfTheGloveAndKeepsTheThrowUntouched()
     {
-        var play = Grounder(2.13, 4.28);
+        var play = Grounder(2.13, 4.28, bobble: true);
         var b = HandleBobblePlanner.Plan(play);
         var after = HandleBobblePlanner.ApplyFumble(play, b, recoverSeconds: 0.9, GloveReach, PickupReach);
 
@@ -83,7 +91,7 @@ public sealed class HandleBobbleTests
     [InlineData(4.20, 1.6)]   // 弾いた芝居で時間を使い切る
     public void FielderStandsWithinPickupReachOfTheBall(double releaseT, double recover)
     {
-        var play = Grounder(2.13, releaseT);
+        var play = Grounder(2.13, releaseT, bobble: true);
         var after = HandleBobblePlanner.ApplyFumble(play, HandleBobblePlanner.Plan(play), recover, GloveReach, PickupReach);
         var seg = after.Ball[2];
         var rest = seg.At(seg.T1 - seg.T0);
@@ -94,8 +102,8 @@ public sealed class HandleBobbleTests
     [Fact]
     public void FielderWalksFurtherWhenThereIsTime()
     {
-        var shortPlay = Grounder(2.13, 4.20);
-        var longPlay = Grounder(2.13, 5.20);
+        var shortPlay = Grounder(2.13, 4.20, bobble: true);
+        var longPlay = Grounder(2.13, 5.20, bobble: true);
         double Walked(PlaybackPlay p)
         {
             var after = HandleBobblePlanner.ApplyFumble(p, HandleBobblePlanner.Plan(p), 0.9, GloveReach, PickupReach);
@@ -109,7 +117,7 @@ public sealed class HandleBobbleTests
     [Fact]
     public void NoTimeToWalk_StillTakesOneUnhurriedStep()
     {
-        var play = Grounder(2.13, 4.20);
+        var play = Grounder(2.13, 4.20, bobble: true);
         var after = HandleBobblePlanner.ApplyFumble(play, HandleBobblePlanner.Plan(play), recoverSeconds: 1.6, GloveReach, PickupReach);
         var leg = after.Moves[FieldPosition.ThirdBase].Single();
         Assert.True(leg.T0 >= 2.13 + 0.3 - 1e-9, "弾いた直後は動かない");

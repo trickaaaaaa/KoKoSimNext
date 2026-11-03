@@ -27,7 +27,11 @@ public enum BattedBallResult
 /// ＝失策後の走者の進塁が幾何で決まる（不変条件#1）。issue #629 の失策連鎖（悪送球だけに乗る
 /// 一律確率）と役割が分かれていて、こちらは<b>外野からの返球との時間勝負</b>になる。</para>
 /// </summary>
-public enum FieldingErrorKind { Catch, Throw, Tunnel }
+/// <summary>
+/// 失策の種別。Catch=捕球で弾いて前へこぼす／Throw=悪送球／Tunnel=股を抜かれる（issue #632）／
+/// Bobble=お手玉（握り損ねて拾い直すあいだに打者が一塁へ着く。送球は正しく一塁へ届くが遅い。2026-11-03 監督報告）。
+/// </summary>
+public enum FieldingErrorKind { Catch, Throw, Tunnel, Bobble }
 
 /// <summary>
 /// 守備解決の詳細（結果＋幾何・時間情報, CHANGELOG 32）。
@@ -486,6 +490,32 @@ public static class FieldingResolver
                     ErrorKind = errorKind,
                     GroundHops = path.Hops,
                     GroundPathCatchSeconds = fieldTimeRaw,
+                };
+            }
+            // お手玉の失策（2026-11-03 監督報告「あれだけファンブルしたら内野安打じゃなくて普通にエラーでは？」）:
+            // もたつきが長く（お手玉級）、しかも**もたつきが無ければアウトだった**セーフは、記録上は失策。
+            // 新しい乱数は引かない（もたつきは上で引き済み）＝内野安打の一部が失策へ振り替わるだけ。
+            if (coeff.BobbleErrorMinJitterSeconds > 0.0
+                && handleJitter >= coeff.BobbleErrorMinJitterSeconds
+                && defenseTime - handleJitter + coeff.ForceOutMarginSeconds <= runnerTime)
+            {
+                return GroundBase(BattedBallResult.Error) with
+                {
+                    GroundHops = path.Hops,
+                    GroundPathCatchSeconds = fieldTimeRaw,
+                    FieldedX = catchPoint.X,
+                    FieldedZ = catchPoint.Z,
+                    FielderRole = infielder.Position,
+                    FieldedAtSeconds = fieldTime,
+                    ThrowArriveSeconds = defenseTime,
+                    UnassistedPutout = unassistedPutout,
+                    FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
+                    FielderFielding = infielder.Attributes.Fielding,
+                    FielderThrowAccuracy = throwAccuracy,
+                    JudgementMarginSeconds = judgementMargin,
+                    ErrorKind = FieldingErrorKind.Bobble,
+                    ErrorFielderRole = infielder.Position,
+                    ErrorAtSeconds = fieldTime,   // 「エラー」は弾いた瞬間（捕球直後）に出す
                 };
             }
             // 間に合わず内野安打（失策ロールは引かない＝main の校正モデルを保つ）。

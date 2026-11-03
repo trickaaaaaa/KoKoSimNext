@@ -426,7 +426,7 @@ public static class TimelineBuilder
                     errorBallDeadAt = deadAt;
                     errorChaser = firstBaseCoverer;
                 }
-                else if (play.Result == BattedBallResult.Error)
+                else if (play.Result == BattedBallResult.Error && play.ErrorKind != FieldingErrorKind.Bobble)
                 {
                     // 捕球エラー（お手玉。issue #439）: 送球は存在しない。打球の進行方向へ数m弾く絵。
                     // アンアシスト中の悪送球（実質起こらない縁ケース）もここへ落とす＝刺殺の絵は描かない。
@@ -467,7 +467,9 @@ public static class TimelineBuilder
                     // 肩どおりのまま（T0 を後ろへずらすだけ）。アウトは判定の「走者到達の0.60秒前以前」を
                     // 破らないよう走者到達の少し前を上限にする（それでも受け手が間に合わないほど遅い走者は、
                     // 判定どおり先着させる＝判定を絵で覆さない）。セーフは走者より後ろなので上限なし。
-                    if (coverReadyAt is { } ready && play.Result != BattedBallResult.Error)
+                    // お手玉の失策（Bobble）は送球が正しく一塁へ届く（遅いだけ）＝内野安打と同じ扱い
+                    if (coverReadyAt is { } ready
+                        && (play.Result != BattedBallResult.Error || play.ErrorKind == FieldingErrorKind.Bobble))
                     {
                         var wait = ready + ReceiverSetSeconds;
                         arrive = firstOut
@@ -930,6 +932,7 @@ public static class TimelineBuilder
             // 表示専用の観測（既に決まった値の写し＝新規計算・乱数消費ゼロ）
             CatchMarginSeconds = play.CatchMarginSeconds,
             FumbledCatch = play.ErrorKind == FieldingErrorKind.Catch,
+            BobbleError = play.ErrorKind == FieldingErrorKind.Bobble,
             HomeRunStyle = play.HomeRunStyle,
             Ball = ball,
             Moves = moves,
