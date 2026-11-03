@@ -25,6 +25,13 @@ public enum BallSegmentKind
 /// ボールの1セグメント（誰が・どこから・どこへ・何時に到達）。
 /// UI は T0〜T1 を補間再生するだけ（物理計算はエンジン側で完結済み, CHANGELOG 32）。
 /// </summary>
+/// <summary>
+/// ゴロ系セグメントの高さの山1つ（issue #759・表示専用）。区間の進み [<see cref="U0"/>, <see cref="U1"/>] で
+/// 高さ <see cref="StartHeightM"/> から立ち上がり頂点 <see cref="ApexM"/> を経て 0 に降りる放物線。
+/// 打球の最初の滞空（打点の高さから最初の接地まで）だけ StartHeightM が正になる。
+/// </summary>
+public readonly record struct SegmentHop(double U0, double U1, double ApexM, double StartHeightM = 0.0);
+
 public sealed record BallSegment
 {
     public required BallSegmentKind Kind { get; init; }
@@ -50,6 +57,12 @@ public sealed record BallSegment
     /// </summary>
     public double? PassFraction { get; init; }
     public double PassHeightM { get; init; }
+
+    /// <summary>
+    /// ゴロ系（<see cref="BallSegmentKind.Roll"/>/<see cref="BallSegmentKind.Bounce"/>）の高さの山（issue #759・表示専用）。
+    /// エンジンの実際の弾み列を区間の進み u（0〜1）へ写したもの。null なら従来の決め打ちプロファイル。
+    /// </summary>
+    public IReadOnlyList<SegmentHop>? Hops { get; init; }
 
     /// <summary>
     /// この送球を投げた野手（<see cref="BallSegmentKind.Throw"/> のみ。表示専用・Issue E1）。

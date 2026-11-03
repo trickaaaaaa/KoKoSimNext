@@ -28,6 +28,7 @@ internal static class CommandLine
             "simulate-tiers" => RunSimulateTiers(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
+            "infield-hit-profile" => RunInfieldTiming(args[1..], profile: true),
             "trace" => RunTrace(args[1..]),
             "trace-diff" => RunTraceDiff(args[1..]),
             _ => Fail($"未知のコマンド: {args[0]}"),
@@ -359,7 +360,7 @@ internal static class CommandLine
     /// 内野ゴロの判定margin分布を実測する（issue #358）。帯に内野安打の指標が無いため、
     /// 守備の所要時間に関わる係数を動かす前後の比較はこのコマンドで行う。
     /// </summary>
-    private static int RunInfieldTiming(string[] args)
+    private static int RunInfieldTiming(string[] args, bool profile = false)
     {
         var atBats = 40000;
         var seed = 42UL;
@@ -386,6 +387,16 @@ internal static class CommandLine
                 default:
                     return Fail($"未知のオプション: {args[i]}");
             }
+        }
+
+        if (profile)
+        {
+            // 内野安打の型別内訳（issue #759）
+            var p = AtBatSimulation.RunInfieldHitProfile(atBats, seed, coefficientsPath, ResolveStadium(stadiumId));
+            Console.WriteLine($"# 内野安打の内訳（seed {seed}・{atBats}打席）");
+            Console.WriteLine();
+            Console.Write(p.ToMarkdown());
+            return 0;
         }
 
         var timing = AtBatSimulation.RunInfieldTiming(atBats, seed, coefficientsPath, ResolveStadium(stadiumId));

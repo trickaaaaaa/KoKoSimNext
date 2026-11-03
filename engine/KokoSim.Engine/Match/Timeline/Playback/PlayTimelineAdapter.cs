@@ -134,12 +134,15 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
     // 滞空が必ず通る点（issue #743・本塁打の柵上）。null なら対称な放物線。
     private double? _passU;
     private double _passH;
+    // ゴロ系の実際の弾み列（issue #759）。null なら種別ごとの決め打ちプロファイル。
+    private IReadOnlyList<SegmentHop>? _hops;
 
     public static EndpointBallSegment From(BallSegment s)
         => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM, s.LaunchHeightM)
         {
             _passU = s.PassFraction is { } pu && pu > 1e-6 && pu < 1 - 1e-6 ? pu : null,
             _passH = Math.Max(0.0, s.PassHeightM),
+            _hops = s.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce && s.Hops is { Count: > 0 } hs ? hs : null,
             // 送球の投げ手／受け手（Issue E1）。座標と違って**推定できない**値なので素通しする
             FromRole = s.FromRole, ToRole = s.ToRole, ToBase = s.ToBase,
         };
@@ -178,9 +181,33 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         return Math.Max(0, p * (1 - w) + kb * 4 * w * (1 - w));
     }
 
+    /// <summary>
+    /// 弾み列どおりの高さ（issue #759）。u が属する山の放物線を返し、山の外（転がり）は 0。
+    /// 山は始点 StartHeightM・終点 0・頂点 ApexM を通る放物線 h(v) = s + b·v − (s+b)·v²
+    /// （b = 2(A−s) + 2√((A−s)·A)）。s=0 なら 4A·v(1−v)。頂点が始点以下（叩きつけ）は直線で降ろす。
+    /// </summary>
+    internal static double HopHeight(IReadOnlyList<SegmentHop> hops, double u)
+    {
+        foreach (var h in hops)
+        {
+            if (u < h.U0) return 0.0;
+            if (u >= h.U1) continue;
+            var span = h.U1 - h.U0;
+            if (span <= 1e-9) return 0.0;
+            var v = (u - h.U0) / span;
+            var st = Math.Max(0.0, h.StartHeightM);
+            var a = Math.Max(0.0, h.ApexM);
+            if (a <= st + 1e-6) return st * (1 - v);
+            var b = 2 * (a - st) + 2 * Math.Sqrt((a - st) * a);
+            return Math.Max(0.0, st + b * v - (st + b) * v * v);
+        }
+        return 0.0;
+    }
+
     // 種別ごとの高さプロファイル[m]（表示演出。判定・帯には無関係）。
     private double Height(double u)
     {
+        if (_hops is { } hops) return HopHeight(hops, u);
         switch (_kind)
         {
             case BallSegmentKind.Pitch:

@@ -11,7 +11,7 @@ using KokoSim.Engine.Players;
 namespace KokoSim.Balance;
 
 /// <summary>1万打席シミュレーションと統計集計（Phase 1 DoD）。</summary>
-public static class AtBatSimulation
+public static partial class AtBatSimulation
 {
     public sealed record Stats
     {
