@@ -1117,6 +1117,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private HandleBobble _bobble = HandleBobble.NoneValue;
 
+        /// <summary>もたつきの芝居を付けるか（見比べ撮影用の静的スイッチ。既定 true）。</summary>
+        public static bool HandleBobbleEnabled = true;
+
         /// <summary>握り直しで球がグラブから浮く高さ[m]・浮き始め（捕球から）[s]・浮いている秒数。</summary>
         private const float JuggleHeightM = 0.35f;
         private const float JuggleStartAfterCatchS = 0.30f;
@@ -4241,7 +4244,7 @@ namespace KokoSim.Unity.Match
         {
             if (!Available || play == null) return;
             play = StripPostResolutionReturnMoves(play);
-            _bobble = HandleBobblePlanner.Plan(play);
+            _bobble = HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
             if (_bobble.Kind == HandleBobbleKind.Fumble)
                 play = HandleBobblePlanner.ApplyFumble(play, _bobble, FumbleRecoverSeconds(play, _bobble));
             EnsureFieldCast();
