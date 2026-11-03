@@ -141,6 +141,8 @@
                     <ui:VisualElement class="tpm-col">
                         <ui:Label text="投手能力" class="tpm-col__title" />
                         <ui:VisualElement name="tpm-abil-pitcher" class="tpm-col__list" />
+                        <!-- 持ち球の球種チャート（issue #735・部品 PitchChartView）。投手能力が5行で下が空くので使う -->
+                        <ui:VisualElement name="tpm-abil-pitchchart" class="tpm-pitchchart" />
                     </ui:VisualElement>
                     <ui:VisualElement class="tpm-col">
                         <ui:Label text="守備適性" class="tpm-col__title" />

@@ -150,6 +150,8 @@ namespace KokoSim.Unity.Training
         public List<GainBar> SelectedGrowth = new List<GainBar>();    // この設定で伸びる能力（現在設定の伸びバー）
         // 能力タブ（issue #327③・案A: 投手能力｜守備適性｜野手能力の3カラム）
         public List<AbilityRowInfo> SelPitcherAbilities = new List<AbilityRowInfo>();
+        // 能力タブの投手能力列の下に出す持ち球（issue #735）。全選手に出す（投/野で出し分けない・#93）。
+        public List<KokoSim.Unity.Components.PitchChartDatum> SelPitches = new List<KokoSim.Unity.Components.PitchChartDatum>();
         public List<AbilityRowInfo> SelDefenseAptitudes = new List<AbilityRowInfo>();
         public List<AbilityRowInfo> SelFielderAbilities = new List<AbilityRowInfo>();
         public List<string> Templates = new List<string>();          // 保存済み週テンプレ名
@@ -572,6 +574,10 @@ namespace KokoSim.Unity.Training
 
             // 能力タブ（issue #327③・案A）: 現在能力を投手｜守備適性｜野手の3カラムで提示。
             foreach (var k in PitcherAbilityOrder) view.SelPitcherAbilities.Add(AbilityInfoOf(sel, k));
+            // 持ち球は選手詳細と同じ生成ロジック・ストレートに最速 km/h を添える（単一ソース・issue #735 / #130）。
+            view.SelPitches = KokoSim.Unity.Players.PitchData.ToPitchChartData(
+                KokoSim.Unity.Players.PlayerDetailState.BuildPitchData(sel),
+                (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(sel.Level(AbilityKind.Velocity))));
             foreach (var k in FielderAbilityOrder) view.SelFielderAbilities.Add(AbilityInfoOf(sel, k));
             foreach (var (pos, _) in DefenseMenus)
                 view.SelDefenseAptitudes.Add(new AbilityRowInfo

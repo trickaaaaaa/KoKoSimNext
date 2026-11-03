@@ -376,8 +376,20 @@ namespace KokoSim.Unity.Training
         {
             if (!_abilityTab) return;
             FillAbilityList("tpm-abil-pitcher", v.SelPitcherAbilities);
+            FillPitchChart(v);
             FillAbilityList("tpm-abil-defense", v.SelDefenseAptitudes);
             FillAbilityList("tpm-abil-fielder", v.SelFielderAbilities);
+        }
+
+        // 能力タブの球種チャート（issue #735・監督決定 2026-11-03: 選手詳細と同じ通常版）。器は UXML に常設＝初回だけ
+        // 部品を差し込み、選手切替のたびにデータだけ入れ替える。
+        private KokoSim.Unity.Components.PitchChartView _abilPitchChart;
+        private void FillPitchChart(TrainingPlanView v)
+        {
+            var host = _root.Q<VisualElement>("tpm-abil-pitchchart");
+            if (host == null) return;
+            _abilPitchChart ??= new KokoSim.Unity.Components.PitchChartView(host);
+            _abilPitchChart.SetData(v.SelPitches);
         }
 
         private void FillAbilityList(string hostName, System.Collections.Generic.List<AbilityRowInfo> rows)
