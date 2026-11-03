@@ -13,7 +13,7 @@ using UnityEngine.UIElements;
 namespace KokoSim.Unity.Match
 {
     /// <summary>
-    /// 【開発用・エディタ限定】内野ゴロの守備カメラ比較撮影（issue #689）。使い捨て。
+    /// 【開発用・エディタ限定】内野ゴロの守備カメラ比較撮影（issue #689 → #742 で3案に）。使い捨て。
     ///
     /// <para>同じシード・同じ打席を2回再生し、<b>現行の追従（案A側）</b>と<b>内野固定枠（案B）</b>を
     /// 同じ4時刻（開始／捕球／送球リリース／決着）で撮る。場面は 6-3・4-3・5-3・併殺。
@@ -106,8 +106,9 @@ namespace KokoSim.Unity.Match
                     }
                 }
             }
-            DuelStageRig.FieldInfieldFixedFrame = true;
-            DuelStageRig.InfieldFollowFrameH = null;
+            // 既定（issue #742 決定: 野手中心 12m）へ戻す
+            DuelStageRig.FieldInfieldFixedFrame = false;
+            DuelStageRig.InfieldFollowFrameH = 12f;
 
             File.WriteAllText(Path.Combine(OutDir, "frames.tsv"), _log.ToString());
             Debug.Log("[cam742] DONE → " + ShotDir);
