@@ -81,7 +81,9 @@ public sealed class NationTests
     {
         var gameCtx = new GameContext();
         var root = new Xoshiro256Random(1);
-        const int n = 300;
+        // 試合数 300→600（issue #740・2026-11-03）: 互角(55,55)は 300 試合だと標準誤差 0.029 で、許容 ±0.10 の縁へ
+        // シードの偏りだけで触れる（4秒上限撤去の前後で seed1 の実測 0.457→0.432・差は誤差内）。許容幅は変えない。
+        const int n = 600;
         // 強い側は機動力・采配能力80の敵AIブレインでフル采配（小技を最も使う＝集計との乖離が最大の校風）。
         var brainSchool = new School
         {
