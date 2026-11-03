@@ -3706,6 +3706,21 @@ namespace KokoSim.Unity.Match
         /// パンの遅れで被写体が枠から外れそうなときは <see cref="FieldKeepSubjectFramed"/> が枠を広げる（広げる方向だけ）。
         /// </summary>
         public static float? InfieldFollowFrameH = 12f;
+
+        /// <summary>
+        /// 内野ゴロの追従で、注視点を追従プラン（球と野手のあいだ）でなく**球そのもの**に置くか（2026-11-03 監督報告
+        /// 「捕球の瞬間が見えない」）。プランの注視点＋パン速度上限だと、速いゴロは捕球の瞬間に枠が追いつかない。
+        /// 球は捕球の瞬間グラブの中にある＝球を真ん中に置けば捕球は必ず枠に入る。送球も球を追う。
+        /// </summary>
+        public static bool InfieldFollowOnBall = true;
+
+        /// <summary>
+        /// 球追いのなじませ時定数[s]。一次遅れの追従に同じ秒数の先読みを足す＝等速の球には遅れが0になり、
+        /// 打った瞬間・捕った瞬間の折れ目だけが滑らかになる。
+        /// </summary>
+        public static float InfieldBallFollowTauS = 0.12f;
+        /// <summary>球追いのパン速度の安全上限[m/s]（送球 ~40m/s を追えること）。</summary>
+        private const float InfieldBallFollowPanCapMPerSecond = 90f;
         private bool _fieldInfieldFollow;
         private bool _fieldInfieldFixed;
         private bool _fieldInfieldHasOut;
@@ -3875,7 +3890,10 @@ namespace KokoSim.Unity.Match
             ApplyHomeRunStyleFrame(t, ref aim, ref frameH);   // 当たりの種類ごとの見せ方（issue #704）
             if (_fieldInfieldFollow && InfieldFollowFrameH is { } followH)
             {
-                frameH = followH;   // 注視点は追従プランのまま・縦の実寸だけ据える（issue #742 見比べ）
+                frameH = followH;   // 縦の実寸を据える（issue #742）
+                if (InfieldFollowOnBall
+                    && PlaybackEvaluator.BallAt(_fieldPlay, t + InfieldBallFollowTauS) is { } ball)
+                    aim = new Vector3((float)ball.X, Mathf.Max(FieldAimYMin, (float)ball.H * 0.5f), (float)ball.Y);
                 return;
             }
             if (_fieldInfieldFixed)
@@ -4128,8 +4146,19 @@ namespace KokoSim.Unity.Match
             {
                 float step = Mathf.Max(dt, 0f) * HomeRunCamSpeedScale;   // 弾丸ライナーは速く追う（issue #704）
                 _fieldAimY = Mathf.MoveTowards(_fieldAimY, target.y, FieldAimYSpeedCapMPerSecond * step);
-                _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, target.x, FieldPanSpeedCapMPerSecond * step);
-                _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, target.z, FieldPanSpeedCapMPerSecond * step);
+                if (_fieldInfieldFollow && InfieldFollowOnBall && InfieldFollowFrameH.HasValue)
+                {
+                    // 球追い: 一次遅れ（先読みと同じ時定数）＋安全上限。速度上限だけだと速いゴロに置いていかれる
+                    float k = 1f - Mathf.Exp(-Mathf.Max(dt, 0f) / Mathf.Max(0.01f, InfieldBallFollowTauS));
+                    float cap = InfieldBallFollowPanCapMPerSecond * Mathf.Max(dt, 0f);
+                    _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, Mathf.Lerp(_fieldAimXShown, target.x, k), cap);
+                    _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, Mathf.Lerp(_fieldAimZShown, target.z, k), cap);
+                }
+                else
+                {
+                    _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, target.x, FieldPanSpeedCapMPerSecond * step);
+                    _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, target.z, FieldPanSpeedCapMPerSecond * step);
+                }
                 _fieldFrameHShown = Mathf.MoveTowards(_fieldFrameHShown, frameH, FieldZoomSpeedCapMPerSecond * step);
             }
 
