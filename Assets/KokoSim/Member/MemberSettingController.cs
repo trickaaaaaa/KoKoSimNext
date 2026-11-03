@@ -22,7 +22,7 @@ namespace KokoSim.Unity.Member
             return true;
         }
 
-        private const float ChipRise = 8f;   // 立ち位置点からチップ下端までの持ち上げ[px]
+        private const float ChipRise = 2f;   // 立ち位置点からチップ下端までの持ち上げ[px]（点はチップの下端に接する・issue #732）
 
         private MemberSettingState _state;
         private VisualElement _root;
@@ -146,7 +146,8 @@ namespace KokoSim.Unity.Member
                 var bottomY = it.Dot.y - ChipRise;
                 it.El.style.left = it.Cx - it.W * 0.5f;
                 it.El.style.top = bottomY - it.H;
-                var offset = Mathf.Abs(it.Cx - it.Dot.x) > 1.5f;
+                // 引き出し線は点がチップの幅の外へ出たときだけ（下端の真下にあるうちは点だけ＝線が文字を横切らない。issue #732）。
+                var offset = Mathf.Abs(it.Cx - it.Dot.x) > it.W * 0.5f - 4f;
                 markers.Add(new FieldMarkersElement.Marker
                 {
                     Dot = it.Dot,
@@ -258,20 +259,23 @@ namespace KokoSim.Unity.Member
             }
         }
 
-        // 球場図の常設は小型チップのみ（背番号＋姓＋ランク・高さ24px以下）。学年/投打/×はポップオーバーへ。
+        // 球場図の常設チップは2段（issue #732 案A）: 上段＝背番号＋ランク、下段＝名前（フル）。学年/投打/×はポップオーバーへ。
         private void FillChip(VisualElement el, SlotView slot)
         {
+            var top = new VisualElement();
+            top.AddToClassList("field-chip__top");
             var badge = new Label(slot.Number.ToString());
             badge.AddToClassList("field-chip__num");
             badge.AddToClassList("f-num");
-            el.Add(badge);
+            top.Add(badge);
+            el.Add(top);
 
             if (slot.PlayerIndex >= 0)
             {
-                var name = new Label(Surname(slot.Name));
+                top.Add(UiComponents.RankChip(slot.RankGrade));
+                var name = new Label(slot.Name);
                 name.AddToClassList("field-chip__name");
                 el.Add(name);
-                el.Add(UiComponents.RankChip(slot.RankGrade));
             }
             else
             {
@@ -299,14 +303,6 @@ namespace KokoSim.Unity.Member
                 _state.ClearHovered(pidx);
                 RenderCompareOnly();
             });
-        }
-
-        // 姓（フルネームの先頭トークン）。チップは省スペースなので姓のみ。フル名はポップオーバー。
-        private static string Surname(string fullName)
-        {
-            if (string.IsNullOrEmpty(fullName)) return fullName;
-            var sp = fullName.IndexOf(' ');
-            return sp > 0 ? fullName.Substring(0, sp) : fullName;
         }
 
         // ── フルカードのポップオーバー（ホバー/選択時のみ） ──
