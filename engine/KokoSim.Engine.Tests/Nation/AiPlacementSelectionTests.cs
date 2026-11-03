@@ -145,8 +145,10 @@ public sealed class AiPlacementSelectionTests
 
         // Player は適性を持たないので、ロスター側の適性で測り直す（SourceId で突き合わせる）。
         var byId = roster.Players.ToDictionary(p => p.Id);
+        // 割当の目的関数は「実効守備力＋肩×位置別重み（issue #767）」。打撃は候補ごとの定数なので入替では相殺する。
         double Eff(Player pl, FieldPosition pos)
-            => EffectiveFielding.Raw(pl.Fielding, byId[pl.SourceId!.Value].Aptitude(pos), coeff);
+            => EffectiveFielding.Raw(pl.Fielding, byId[pl.SourceId!.Value].Aptitude(pos), coeff)
+               + pl.ArmStrength * deps.Persistent.FieldSlotArmWeight(pos);
 
         // ⚠ 比べるのは**規則上あり得る入替**だけ（issue ai-lefty-not-at-c-2b-3b-ss）。左投げを
         // 捕手・二塁・三塁・遊撃へ動かす入替は守備力が上がっても採らない＝ソルバの目的関数は

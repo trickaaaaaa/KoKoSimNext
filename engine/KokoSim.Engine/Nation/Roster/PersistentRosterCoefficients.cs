@@ -31,6 +31,33 @@ public sealed record PersistentRosterCoefficients
     /// </summary>
     public double FieldSlotBattingWeight { get; init; } = 2.0;
 
+    // 守備8枠の割当重みに足す「肩（地肩 Lv）×これ」の位置別係数（issue #767）。実野球の「肩の強い選手が
+    // 遊撃・捕手・右翼に入る」を割当に入れる。0＝その位置は肩を見ない（従来どおり）。旧割当は肩を見ず、
+    // 先発の肩は遊撃も一塁も同じ分布（p50 48前後）だった。肩は候補ごとの定数なので位置ごとの差だけが「誰がどこを
+    // 守るか」に効き、全位置の平均ぶんは打撃と同じく「誰を出すか」に効く。
+    public double FieldSlotArmWeightCatcher { get; init; } = 0.6;
+    public double FieldSlotArmWeightFirstBase { get; init; } = 0.0;
+    public double FieldSlotArmWeightSecondBase { get; init; } = 0.2;
+    public double FieldSlotArmWeightThirdBase { get; init; } = 0.4;
+    public double FieldSlotArmWeightShortstop { get; init; } = 0.6;
+    public double FieldSlotArmWeightLeftField { get; init; } = 0.1;
+    public double FieldSlotArmWeightCenterField { get; init; } = 0.3;
+    public double FieldSlotArmWeightRightField { get; init; } = 0.5;
+
+    /// <summary>守備位置ごとの肩の重み（<see cref="FieldSlotArmWeightCatcher"/> 等）。投手・DH は 0。</summary>
+    public double FieldSlotArmWeight(Match.Field.FieldPosition pos) => pos switch
+    {
+        Match.Field.FieldPosition.Catcher => FieldSlotArmWeightCatcher,
+        Match.Field.FieldPosition.FirstBase => FieldSlotArmWeightFirstBase,
+        Match.Field.FieldPosition.SecondBase => FieldSlotArmWeightSecondBase,
+        Match.Field.FieldPosition.ThirdBase => FieldSlotArmWeightThirdBase,
+        Match.Field.FieldPosition.Shortstop => FieldSlotArmWeightShortstop,
+        Match.Field.FieldPosition.LeftField => FieldSlotArmWeightLeftField,
+        Match.Field.FieldPosition.CenterField => FieldSlotArmWeightCenterField,
+        Match.Field.FieldPosition.RightField => FieldSlotArmWeightRightField,
+        _ => 0.0,
+    };
+
     /// <summary>
     /// 新入生（1年）の能力中心 = 学校Strength − これ（未熟スタート・3年間の実戦で開花）。
     /// 自校の <c>ProspectGenerator</c>（mental_mean 46 等）と同じ「新入生は未熟」の思想に合わせる。

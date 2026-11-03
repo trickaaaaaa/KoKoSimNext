@@ -1640,6 +1640,15 @@ persistent_roster:
   # 二刀流運用（issue ai-two-way-hitting-pitchers-start-as-fielders）: 守備8枠の割当重み＝実効守備力＋打撃総合×これ。
   # 0 なら従来どおり守備だけで先発を選ぶ。打撃は候補ごとの定数なので「誰を出すか」にだけ効き、枠の割り振りには効かない。
   field_slot_batting_weight: 2.0
+  # 肩の位置別重み（issue #767）: 割当重みに 肩Lv×これ を足す＝肩の強い選手が遊撃・捕手・右翼へ入る。0＝その位置は肩を見ない。
+  field_slot_arm_weight_catcher: 0.6
+  field_slot_arm_weight_first_base: 0.0
+  field_slot_arm_weight_second_base: 0.2
+  field_slot_arm_weight_third_base: 0.4
+  field_slot_arm_weight_shortstop: 0.6
+  field_slot_arm_weight_left_field: 0.1
+  field_slot_arm_weight_center_field: 0.3
+  field_slot_arm_weight_right_field: 0.5
   freshman_gap: 8.0             # 新入生の能力中心 = Strength − これ（未熟スタート・3年で開花）
   fame_recruit_weight: 0.04     # 名声由来の入学時上振れ（(Fame−50)×これ）
   annual_growth: 6.0            # 逆算配分のベースライン年間成長素点
