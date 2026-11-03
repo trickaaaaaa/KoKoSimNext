@@ -25,8 +25,8 @@ namespace KokoSim.Unity.Match
     {
         private const int W = 1280;
         private const int H = 720;
-        private const string ShotDir = "screenshots/field-cam-742";
-        private const string OutDir = "out/field-cam-742";
+        private const string ShotDir = "screenshots/field-cam-ball";
+        private const string OutDir = "out/field-cam-ball";
         private const string SpawnFlag = "KokoSim.FieldCameraCompareShooter.Spawn";
         private const int MaxGames = 30;
         private const int MaxPlatesPerGame = 200;
@@ -67,9 +67,10 @@ namespace KokoSim.Unity.Match
             var targets = new List<Target>();
             var want = new HashSet<string> { "6-3遊ゴロ", "4-3二ゴロ", "5-3三ゴロ", "併殺" };
 
-            // ---- パス1: 場面を探しながら現行（固定枠44m＋アウトで一塁へ寄せる）で撮る ----
-            DuelStageRig.FieldInfieldFixedFrame = true;
-            DuelStageRig.InfieldFollowFrameH = null;
+            // ---- パス1: 場面を探しながら #742 版（野手中心の追従・縦12m）で撮る ----
+            DuelStageRig.FieldInfieldFixedFrame = false;
+            DuelStageRig.InfieldFollowFrameH = 12f;
+            DuelStageRig.InfieldFollowOnBall = false;
             for (var game = 1; game <= MaxGames && want.Count > 0; game++)
             {
                 var seed = (ulong)(50000 + game * 7717);
@@ -84,13 +85,14 @@ namespace KokoSim.Unity.Match
                     want.Remove(kind);
                     KindOf(pa.Result, play, null, out var ts);
                     targets.Add(new Target { Kind = kind, Seed = seed, Plate = plate, Times = ts });
-                    yield return ShootSet(kind, "A-fixed44", ts, seed, plate);
+                    yield return ShootSet(kind, "A-fielder12", ts, seed, plate);
                 }
             }
             foreach (var w in want) Debug.LogWarning("[cam742] 出なかった場面: " + w);
 
-            // ---- パス2・3: 同じ打席を「捕る野手中心の追従」縦12m／18m で撮る（issue #742） ----
-            foreach (var (mode, h) in new[] { ("B-follow12", 12f), ("C-follow18", 18f) })
+            // ---- パス2・3: 同じ打席を「球追い」縦12m／16m で撮る（2026-11-03 監督報告「捕球の瞬間が見えない」） ----
+            DuelStageRig.InfieldFollowOnBall = true;
+            foreach (var (mode, h) in new[] { ("B-ball12", 12f), ("C-ball16", 16f) })
             {
                 foreach (var tg in targets)
                 {
@@ -98,20 +100,20 @@ namespace KokoSim.Unity.Match
                     for (var plate = 1; plate <= tg.Plate && !_ctrl.IsGameOver; plate++)
                     {
                         var on = plate == tg.Plate;
-                        DuelStageRig.FieldInfieldFixedFrame = !on;
-                        DuelStageRig.InfieldFollowFrameH = on ? h : (float?)null;
+                        DuelStageRig.InfieldFollowFrameH = on ? h : 12f;
                         if (!_ctrl.AdvanceForCapture()) break;
                         if (!on) { _ctrl.FreezeCurrentAtResult(); yield return null; continue; }
                         yield return ShootSet(tg.Kind, mode, tg.Times, tg.Seed, plate);
                     }
                 }
             }
-            // 既定（issue #742 決定: 野手中心 12m）へ戻す
+            // 既定へ戻す
             DuelStageRig.FieldInfieldFixedFrame = false;
             DuelStageRig.InfieldFollowFrameH = 12f;
+            DuelStageRig.InfieldFollowOnBall = true;
 
             File.WriteAllText(Path.Combine(OutDir, "frames.tsv"), _log.ToString());
-            Debug.Log("[cam742] DONE → " + ShotDir);
+            Debug.Log("[camball] DONE → " + ShotDir);
             Time.captureDeltaTime = 0f;
         }
 
@@ -149,7 +151,7 @@ namespace KokoSim.Unity.Match
             if (kind == null) return null;
             if (want != null && !want.Contains(kind)) return null;
             var start = pitch.T1 + 0.5;
-            times = new[] { start + 0.15, System.Math.Max(start + 0.3, roll.T1 + 0.2), th[0].T0 + 0.15, th[th.Count - 1].T1 + 0.1 };
+            times = new[] { start + 0.15, roll.T1, th[0].T0 + 0.15, th[th.Count - 1].T1 };
             return kind;
         }
 
