@@ -3689,14 +3689,24 @@ namespace KokoSim.Unity.Match
         /// 接触から送球リリースまでは「本塁〜二塁を収める固定枠」に据えて動かさず、最後の送球が出てから
         /// 到達までのあいだに、送球の終点（一塁）へゆっくり寄せて決着まで据える。
         /// false にすると従来の追従（比較撮影用の切り替え）。
+        /// issue #742（監督決定 2026-11-03: 案B＝捕る野手中心・縦12m）で既定を false にした＝固定枠は見比べ用に残すだけ。
         /// </summary>
-        public static bool FieldInfieldFixedFrame = true;
+        public static bool FieldInfieldFixedFrame = false;
         private static readonly Vector3 InfieldFixedAim = new(0f, 1.2f, 24f);
         private const float InfieldFixedFrameH = 44f;
         /// <summary>アウトの瞬間に寄せる枠の縦[m]。ズーム速度上限（12m/s）で追える範囲に収める。</summary>
         private const float InfieldOutFrameH = 22f;
         /// <summary>最後の送球の到達後も寄せ続ける秒数（据え置きの収束余白）。</summary>
         private const float InfieldOutSettleSeconds = 0.3f;
+        /// <summary>
+        /// 内野ゴロを「捕る野手（＋球）中心の追従」で撮るときの枠の縦[m]（issue #742 の見比べ用・null＝使わない）。
+        /// 固定枠（<see cref="FieldInfieldFixedFrame"/>）を切った状態で値を入れると、注視点は engine の追従プラン
+        /// （打球中＝球と捕りに行く野手／保持中＝球を持つ野手＝併殺なら捕球した野手→二塁のピボット／送球中＝送球の終点）
+        /// のまま、縦の実寸だけこの値に据える。既定 12m（監督決定 2026-11-03・案B。比較撮影で 44m固定／12m／18m を見比べた）。
+        /// パンの遅れで被写体が枠から外れそうなときは <see cref="FieldKeepSubjectFramed"/> が枠を広げる（広げる方向だけ）。
+        /// </summary>
+        public static float? InfieldFollowFrameH = 12f;
+        private bool _fieldInfieldFollow;
         private bool _fieldInfieldFixed;
         private bool _fieldInfieldHasOut;
         private float _fieldInfieldOutT0, _fieldInfieldOutT1;
@@ -3863,6 +3873,11 @@ namespace KokoSim.Unity.Match
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
             ApplyHomeRunStyleFrame(t, ref aim, ref frameH);   // 当たりの種類ごとの見せ方（issue #704）
+            if (_fieldInfieldFollow && InfieldFollowFrameH is { } followH)
+            {
+                frameH = followH;   // 注視点は追従プランのまま・縦の実寸だけ据える（issue #742 見比べ）
+                return;
+            }
             if (_fieldInfieldFixed)
             {
                 aim = InfieldFixedAim; frameH = InfieldFixedFrameH;
@@ -4268,6 +4283,7 @@ namespace KokoSim.Unity.Match
             _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
 
             _fieldInfieldFixed = FieldInfieldFixedFrame && IsInfieldGrounder(play);
+            _fieldInfieldFollow = !FieldInfieldFixedFrame && InfieldFollowFrameH.HasValue && IsInfieldGrounder(play);
             _fieldInfieldHasOut = false;
             if (_fieldInfieldFixed)
             {
