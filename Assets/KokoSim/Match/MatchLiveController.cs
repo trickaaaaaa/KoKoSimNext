@@ -2708,9 +2708,12 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
-            // 判定オーバーレイは自前の寿命で消す（打球再生へ移った直後の1球分もそのまま見せる）。
-            // pitchCallHoldSeconds は出現・消失を含めた総寿命なので、畳む 0.16 秒前に is-enter を戻して
-            // 縮みながら消えるところまでを窓の中で終わらせる（対決ビューの捕手据え置きと窓を揃えるため）。
+            // 判定オーバーレイは自前の寿命で消す。pitchCallHoldSeconds は出現・消失を含めた総寿命なので、
+            // 畳む 0.16 秒前に is-enter を戻して縮みながら消えるところまでを窓の中で終わらせる
+            // （対決ビューの捕手据え置きと窓を揃えるため）。
+            // ただし3Dの守備ビューに切り替わったらその場で消す（2026-11-03 監督報告「サードが見えない」:
+            // 盤面の真ん中に残った球種・球速が、三塁線を向いたカメラの三塁手にちょうど重なっていた）。
+            if (_pitchCallOn && FieldPlayActive) HidePitchCall();
             if (_pitchCallOn)
             {
                 _pitchCallClock += Time.deltaTime * _speed;
