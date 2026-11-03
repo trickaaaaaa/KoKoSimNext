@@ -11,10 +11,11 @@ namespace KokoSim.Unity.Saves
     /// 並べ、選択枠の詳細（学校名・年度・週・保存日時）と読込／削除を出す
     /// （オート枠は廃止・監督決定 2026-08-09）。
     ///
-    /// <para>タイトルの「つづきから」とホームのメニュー「セーブ」の2箇所から同じ画面を開く（issue #509）。
+    /// <para>タイトルの「つづきから」と共通ナビの「システム」タブの2箇所から同じ画面を開く。
     /// <see cref="SaveSlots.Entry"/> で分岐する: タイトル経由（<see cref="SaveSlotsEntry.Title"/>）は
-    /// 「今保存すべき進行状態が無い」ため読込／削除だけ（オーナー判断・issue #508）。ホーム経由
-    /// （<see cref="SaveSlotsEntry.Home"/>）は保存（大会中は不可）と「戻る」も出す。</para>
+    /// 「今保存すべき進行状態が無い」ため読込／削除だけ（オーナー判断・issue #508）。タブ経由
+    /// （<see cref="SaveSlotsEntry.Tab"/>）は保存（大会中は不可）と「タイトルへ戻る」（issue #730 でホームの
+    /// ≡メニューから移設）も出す。</para>
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class SaveSlotsController : MonoBehaviour
@@ -23,12 +24,12 @@ namespace KokoSim.Unity.Saves
         private VisualElement _confirm;
         private string _selected;
         private string _errorText = "";
-        /// <summary>進行中のゲームの上で開いているか（保存できるのはこの2入口だけ）。</summary>
+        /// <summary>進行中のゲームの上で開いているか（保存・タイトルへ戻るはこのときだけ）。</summary>
         private bool _inGame;
-        /// <summary>「◀ ホームへ戻る」を出すか（タブ経由はタブで移動するので出さない）。</summary>
-        private bool _showBack;
+        private VisualElement _titleConfirm;
 
-        private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo, _saveBtn, _backBtn, _advanceBtn;
+        private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo, _saveBtn, _advanceBtn;
+        private Button _titleBtn, _titleYes, _titleNo;
 
         private void OnEnable()
         {
@@ -36,7 +37,6 @@ namespace KokoSim.Unity.Saves
             _confirm = _root.Q<VisualElement>("ss-confirm");
             var entry = SaveSlots.Entry;
             _inGame = entry != SaveSlotsEntry.Title;
-            _showBack = entry == SaveSlotsEntry.Home;
             SetupTopBar(entry == SaveSlotsEntry.Tab);
 
             _loadBtn = Wire("ss-load", OnLoad);
@@ -44,8 +44,11 @@ namespace KokoSim.Unity.Saves
             _confirmYes = Wire("ss-confirm-yes", OnDeleteConfirm);
             _confirmNo = Wire("ss-confirm-no", OnDeleteCancel);
             _saveBtn = Wire("ss-save", OnSave);
-            _backBtn = Wire("ss-back", OnBack);
-            if (_backBtn != null) _backBtn.style.display = _showBack ? DisplayStyle.Flex : DisplayStyle.None;
+            _titleConfirm = _root.Q<VisualElement>("ss-title-confirm");
+            _titleBtn = Wire("ss-title", OnTitleRequest);
+            _titleYes = Wire("ss-title-yes", OnTitleConfirm);
+            _titleNo = Wire("ss-title-no", OnTitleCancel);
+            if (_titleBtn != null) _titleBtn.style.display = _inGame ? DisplayStyle.Flex : DisplayStyle.None;
 
             _selected = DefaultSlot(_inGame);
             _errorText = "";
@@ -61,7 +64,9 @@ namespace KokoSim.Unity.Saves
             if (_confirmYes != null) _confirmYes.clicked -= OnDeleteConfirm;
             if (_confirmNo != null) _confirmNo.clicked -= OnDeleteCancel;
             if (_saveBtn != null) _saveBtn.clicked -= OnSave;
-            if (_backBtn != null) _backBtn.clicked -= OnBack;
+            if (_titleBtn != null) _titleBtn.clicked -= OnTitleRequest;
+            if (_titleYes != null) _titleYes.clicked -= OnTitleConfirm;
+            if (_titleNo != null) _titleNo.clicked -= OnTitleCancel;
             if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
         }
 
@@ -312,10 +317,54 @@ namespace KokoSim.Unity.Saves
             });
         }
 
-        private void OnBack()
+        // ===== タイトルへ戻る（issue #730 でホームの ≡メニューから移設。挙動は #509 のまま） =====
+
+        private void OnTitleRequest()
         {
-            if (!_inGame) return;
-            ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+            if (!_inGame || BackgroundGameOp.Running || _titleConfirm == null) return;
+            var since = _root.Q<Label>("ss-title-since");
+            if (since != null) since.text = LastSavedText();
+            _titleConfirm.style.display = DisplayStyle.Flex;
+            _titleConfirm.BringToFront();
+        }
+
+        private void OnTitleCancel()
+        {
+            if (_titleConfirm != null) _titleConfirm.style.display = DisplayStyle.None;
+        }
+
+        /// <summary>
+        /// 最後の保存からの経過1行（オートセーブ廃止・監督決定 2026-08-09）。
+        /// 自動で拾ってくれる保存が無いので、「ここで戻ると何週ぶん失うか」を確認の場で見せる。
+        /// 週数は暦の通算週（(年度-1)×50＋週）の差で、単一ソースの <see cref="ManagerService.AbsoluteWeek"/> と同じ式。
+        /// </summary>
+        private static string LastSavedText()
+        {
+            if (SaveGameIO.LastSavedAt is not { } at)
+                return "この進行はまだ一度も保存していません。";
+            var lost = ManagerService.AbsoluteWeek - GameClock.AbsoluteWeekOf(at.YearIndex, at.Week);
+            var label = SeasonClock.CurrentLabel(at.YearIndex, at.Week);
+            return lost <= 0 ? $"最後の保存: {label}（保存済み）" : $"最後の保存: {label}（{lost}週前）";
+        }
+
+        private void OnTitleConfirm()
+        {
+            if (_titleConfirm != null) _titleConfirm.style.display = DisplayStyle.None;
+            // 背景の全国裏試合／敗退後の残りブラケット消化を完了させてから静的リセットする。GameClock.Advance の
+            // 年度替わり・新チーム発足と同じ作法（issue #529）＝背景スレッドと同じ NationRosters を同時に触らない。
+            // この待ちは main をブロックし得るので ManualWait で「タイトルへ戻る準備中」を1フレーム先に描画してから入る。
+            ManualWait.Run<object>(_root, "タイトルへ戻る準備中", () =>
+            {
+                NationBackgroundSim.EnsureCompleted();
+                BracketFinishSim.EnsureCompleted();
+                KoshienQualifierStatsSim.EnsureCompleted();
+                return null;
+            }, _ =>
+            {
+                SaveGameIO.ResetForNewGame();
+                KokoSim.Unity.Home.HomeState.Reset();
+                ScreenRouter.Instance?.ShowDeferred("TitleScreen");
+            });
         }
 
         private void OnDeleteRequest()

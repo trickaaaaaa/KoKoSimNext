@@ -586,6 +586,50 @@ namespace KokoSim.Unity.Components
             return row;
         }
 
+        // ===== ShrinkToFit（入らない長さの文字だけ縮める）=====
+
+        /// <summary>
+        /// 1行の Label が親の中の空き幅に入らないときだけ、入る大きさまで字を縮める（issue #730）。
+        /// 入る長さなら USS の大きさのまま（縮めない）。空き幅＝親の内寸から兄弟要素（数値など）の幅と余白を引いた分。
+        /// <paramref name="minFontPx"/> より小さくはしない（それでも入らなければ切れる）。
+        /// </summary>
+        public static void ShrinkToFit(Label label, float minFontPx = 11f)
+        {
+            float baseSize = 0f;
+            void Fit()
+            {
+                var parent = label.parent;
+                if (parent == null || float.IsNaN(parent.contentRect.width)) return;
+                if (baseSize <= 0f)
+                {
+                    // USS の大きさ（インライン指定を外した状態で解決した値）を基準として一度だけ控える。
+                    if (label.style.fontSize.keyword != StyleKeyword.Null) return;
+                    baseSize = label.resolvedStyle.fontSize;
+                    if (baseSize <= 0f) return;
+                }
+                var avail = parent.contentRect.width - label.resolvedStyle.marginLeft - label.resolvedStyle.marginRight;
+                foreach (var sib in parent.Children())
+                {
+                    if (sib == label || sib.resolvedStyle.display == DisplayStyle.None) continue;
+                    avail -= sib.layout.width + sib.resolvedStyle.marginLeft + sib.resolvedStyle.marginRight;
+                }
+                // 必要幅は基準の大きさで測る（いまの大きさで測ると縮めた後に戻れない）。
+                var need = label.MeasureTextSize(label.text, 0, VisualElement.MeasureMode.Undefined,
+                    0, VisualElement.MeasureMode.Undefined).x * baseSize / Mathf.Max(1f, label.resolvedStyle.fontSize);
+                var target = need > avail && avail > 0f
+                    ? Mathf.Max(minFontPx, Mathf.Floor(baseSize * avail / need))
+                    : baseSize;
+                var current = label.style.fontSize.keyword == StyleKeyword.Null ? baseSize : label.style.fontSize.value.value;
+                if (Mathf.Abs(target - current) < 0.5f) return;
+                label.style.fontSize = Mathf.Approximately(target, baseSize)
+                    ? new StyleLength(StyleKeyword.Null)
+                    : new StyleLength(target);
+            }
+            label.RegisterCallback<GeometryChangedEvent>(_ => Fit());
+            label.RegisterCallback<AttachToPanelEvent>(_ =>
+                label.parent?.RegisterCallback<GeometryChangedEvent>(__ => Fit()));
+        }
+
         // ===== NumUnit（数字＋和文単位の混植セル）=====
 
         /// <summary>

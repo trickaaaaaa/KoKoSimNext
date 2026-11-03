@@ -156,4 +156,6 @@
     white-space: normal;
     -unity-text-align: middle-center;
 }
+/* 「タイトルへ戻る」確認の補足（最後の保存から何週か。issue #730 でホームから移設） */
+.ss-confirm__sub { font-size: var(--fs-label); color: var(--color-muted); margin-bottom: var(--sp-4); }
 .ss-confirm__btns { flex-direction: row; }
