@@ -358,9 +358,21 @@ namespace KokoSim.Unity.Member
             if (float.IsNaN(pw) || pw <= 0f) { _popover.schedule.Execute(PositionPopover); return; }
             var fw = _field.contentRect.width;
             var left = Mathf.Clamp(dot.x - pw * 0.5f, 2f, fw - pw - 2f);
-            var top = Mathf.Max(2f, dot.y - ChipRise - 22f - ph - 4f); // チップ上端の少し上
+            // チップ上端の少し上。チップの高さは実寸で取る（2段チップ＝issue #732 で 22px 固定ではなくなった）。
+            var chipH = ChipHeightOf(_popoverSlot);
+            var top = Mathf.Max(2f, dot.y - ChipRise - chipH - ph - 4f);
             _popover.style.left = left;
             _popover.style.top = top;
+        }
+
+        private float ChipHeightOf(int number)
+        {
+            var host = _root.Q<VisualElement>("ms-field-slots");
+            if (host != null)
+                foreach (var child in host.Children())
+                    if (child.userData is int n && n == number && !float.IsNaN(child.layout.height) && child.layout.height > 0f)
+                        return child.layout.height;
+            return 46f;
         }
 
         // カーソル移動での比較プレビューは比較パネルだけ更新（盤面は再構築しない＝ホバー対象がぶれない）。
