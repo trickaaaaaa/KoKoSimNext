@@ -1344,7 +1344,7 @@ public static class GameEngine
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,
                     batterOverride: batterAttrsPitch, swingFactorOverride: swingFactorPitch,
                     fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
-                    squeezeWasteOverride: sqWasteOverride);
+                    squeezeWasteOverride: sqWasteOverride, basesNow: bases);
 
                 // 盗塁の取り消し（issue #626）: 投げた球が「盗塁が成立しない球」だったら、上で適用した
                 // 盗塁の結果だけを巻き戻す。乱数は既に引き終わっており順序も量も変えない（不変条件#2）。

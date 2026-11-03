@@ -39,6 +39,7 @@ public sealed class AtBatSession
     private readonly Player? _thirdBaseRunner;
     private readonly Player? _firstBaseRunner;
     private readonly Player? _secondBaseRunner;
+    private (Player? First, Player? Second, Player? Third) _runnersNow;
     private readonly double _squeezeWasteProbability;
     private PitcherAttributes _pitcher;
     private AtBatContext _ctx;
@@ -68,6 +69,7 @@ public sealed class AtBatSession
         _thirdBaseRunner = thirdBaseRunner;
         _firstBaseRunner = firstBaseRunner;
         _secondBaseRunner = secondBaseRunner;
+        _runnersNow = (firstBaseRunner, secondBaseRunner, thirdBaseRunner);
         _squeezeWasteProbability = squeezeWasteProbability;
         _pitcher = pitcher;
         _ctx = ctx;
@@ -130,8 +132,8 @@ public sealed class AtBatSession
     /// <param name="firstBaseRunner">
     /// バント/スクイズ（issue bunt-no-take-on-ball-pitches）で <see cref="BuntResolver"/> が一塁走者の
     /// 二塁封殺（<see cref="BuntResult.ForceOutAtSecond"/>）を判定するのに使う一塁走者の生 <see cref="Player"/>。
-    /// 打席頭のスナップショットで固定（<see cref="_thirdBaseRunner"/> と異なり毎球オーバーライドは無い＝
-    /// 打席途中の代走等は稀かつ致命的でないためスコープ外）。null=一塁に走者がいない、または一塁封殺を
+    /// 打席頭のスナップショット。<see cref="ThrowNextPitch"/> の basesNow が渡されればそちら（その球の時点の塁上）を使う
+    /// （打席中の盗塁で走者は普通に動く。issue #740 の統計回帰で発覚）。null=一塁に走者がいない、または一塁封殺を
     /// 判定しない呼び出し（既存テスト等）向けの省略時既定＝その場合は従来どおり一塁送球のみで判定する。
     /// </param>
     /// <param name="secondBaseRunner">
@@ -247,8 +249,20 @@ public sealed class AtBatSession
         double? swingFactorOverride = null,
         IReadOnlyList<Fielder>? fieldersOverride = null,
         Player? thirdRunnerOverride = null,
-        double? squeezeWasteOverride = null)
+        double? squeezeWasteOverride = null,
+        Game.BaseState? basesNow = null)
     {
+        // この球を投げる時点の塁上（issue #740 の統計回帰で発覚）。打席頭のスナップショットのままだと、打席中に
+        // 盗塁した走者を元の塁の走者として扱う（例: 二塁へ盗んだ走者をバントの小フライで「一塁走者の飛び出し」にして
+        // アウトだけ数え、塁から消さない＝走者保存則違反）。渡されなければ従来どおり打席頭の値。
+        _runnersNow = basesNow is null
+            ? (_firstBaseRunner, _secondBaseRunner, _thirdBaseRunner)
+            : (basesNow.First, basesNow.Second, basesNow.Third);
+        // 打席の頭で決めたスクイズの間に三塁走者が居なくなった（同じ打席の本盗・牽制死など）: 還す走者が居ないので
+        // 送りバントとして転がす（以前は打席頭の走者＝もう塁に居ない走者でスクイズを解いていた）。
+        if (battingOverride == Tactics.PitchBattingOverride.Squeeze && thirdRunnerOverride is null
+            && basesNow is not null && basesNow.Third is null)
+            battingOverride = Tactics.PitchBattingOverride.Bunt;
         if (_result is not null)
             throw new System.InvalidOperationException("打席は既に確定しています。ThrowNextPitch は呼べません。");
 
@@ -334,7 +348,7 @@ public sealed class AtBatSession
             // bases.Third を無条件に渡す）なので、通常バント（非スクイズ）でもそのまま満塁の本塁封殺判定に使える。
             var bunt = BuntResolver.Resolve(
                 _batterPlayer, pitcher, plan.Stuff, courseDifficulty, safety,
-                _firstBaseRunner, _secondBaseRunner, _thirdBaseRunner, ctx.Field, ctx.Baserunning, rng);
+                _runnersNow.First, _runnersNow.Second, _runnersNow.Third, ctx.Field, ctx.Baserunning, rng);
             switch (bunt)
             {
                 case BuntResult.MissedBunt:
@@ -387,7 +401,7 @@ public sealed class AtBatSession
                     "スクイズ指示を受けましたが AtBatSession.Begin に batterPlayer が渡されていません。");
             // issue #492 C: 三塁走者は毎球取り直す（thirdRunnerOverride）。打席途中に三塁へ来た走者でも例外を
             // 投げない。上書きが無ければ打席頭スナップショット（_thirdBaseRunner）を使う＝brain スクイズは従来不変。
-            var thirdRunner = thirdRunnerOverride ?? _thirdBaseRunner;
+            var thirdRunner = thirdRunnerOverride ?? _runnersNow.Third;
             if (thirdRunner is null)
                 throw new System.InvalidOperationException(
                     "スクイズ指示を受けましたが三塁走者が渡されていません（AtBatSession.Begin の thirdBaseRunner も thirdRunnerOverride も null）。");
@@ -395,7 +409,7 @@ public sealed class AtBatSession
             var squeezeCourseDifficulty = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y);
             var sq = SqueezeResolver.Resolve(
                 _batterPlayer, thirdRunner, pitcher, plan.Stuff, squeezeCourseDifficulty,
-                _firstBaseRunner, _secondBaseRunner, ctx.Field, wasteProb, ctx.Baserunning, rng);
+                _runnersNow.First, _runnersNow.Second, ctx.Field, wasteProb, ctx.Baserunning, rng);
 
             // バントが不成立（ウエストを読まれた、または空振り/ファウル）: 三塁走者が飛び出していれば挟殺
             // される。打席は確定せず、以降は強攻へフォールバックする。issue bunt-no-take-on-ball-pitches で

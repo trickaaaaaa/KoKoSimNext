@@ -879,7 +879,9 @@ public static class FieldingResolver
     /// </summary>
     private static double CatchTimeBudget(double hangTime, Fielder fielder, FieldingCoefficients coeff)
     {
-        var routeFactor = 1.0 + (fielder.Attributes.Fielding - 50) * coeff.CatchReachFieldingSlope;
+        // 守備の巧さは上乗せだけ（issue #740）。守備50未満で予算を滞空時間より短くすると、反応＋脚力で走る絵では
+        // 落下点に先着しているのに安打になる。下手さは反応遅延（ReactionDelaySeconds）で判定にも絵にも既に出ている。
+        var routeFactor = Math.Max(1.0, 1.0 + (fielder.Attributes.Fielding - 50) * coeff.CatchReachFieldingSlope);
         return Math.Min(hangTime * coeff.CatchReachFactor, coeff.CatchReachCapSeconds) * routeFactor;
     }
 

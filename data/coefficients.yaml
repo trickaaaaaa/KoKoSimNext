@@ -177,7 +177,7 @@ batting:
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
   fly_apex_threshold_m: 2.5
-  catch_reach_factor: 1.00
+  catch_reach_factor: 0.93     # issue #740: 1.00→0.93（4秒上限撤去で増えたアウトを打率帯へ戻す）
   throw_transfer_seconds: 0.70
   throw_transfer_fielding_slope: 0.004 # 握り替えの守備連動（Issue #36）: 倍率=max(min,1−(守備−50)×これ)。守備50で×1.0＝恒等
   throw_transfer_factor_min: 0.70      # トランスファー倍率の下限（最速側クランプ, Issue #36）
@@ -220,7 +220,7 @@ fielding:
   # 無制限に広がるため、走れる時間に絶対上限を掛け、走路取りの巧拙（守備力）で伸縮させる。
   # 守備50・上限未満では従来（滞空×1.00）と同一。
   catch_reach_fielding_slope: 0.004
-  catch_reach_cap_seconds: 4.00
+  catch_reach_cap_seconds: 99.0   # issue #740 で実質撤去（4.00）。判定を絵の物理（反応＋距離÷脚力）にそろえる
   # --- 塁打数の決定（Issue #24 原因1: 距離しきい値を廃止し、転がり＋幾何＋走力の連続量へ） ---
   roll_decel_mps2: 2.60          # 着地後の転がりの減速度（芝・土の摩擦＋バウンド損失）
   roll_retention_flat: 0.72      # 水平に近いライナーがバウンドで保持する前進速度の割合（滑って伸びる）

@@ -31,8 +31,10 @@ public sealed record FieldingCoefficients
     /// <summary>フライと判定する最高到達点の閾値[m]。これ以上は空中捕球の対象。</summary>
     public double FlyApexThresholdM { get; init; } = 2.5;
 
-    /// <summary>空中捕球に許容する到達時間の倍率（滞空時間×この値まで間に合えば捕球）。</summary>
-    public double CatchReachFactor { get; init; } = 1.00;
+    /// <summary>空中捕球に許容する到達時間の倍率（滞空時間×この値まで間に合えば捕球）。
+    /// issue #740 で 1.00→0.93（4秒上限の撤去で増えたアウトを打率帯へ戻す校正）。着地の直前（滞空の7%以内）に届く打球は
+    /// 捕れず、捕球余裕が小さい負になる＝3Dでは「背走ジャンピングで届かない」芝居で描かれる（棒立ちで落ちる絵にならない）。</summary>
+    public double CatchReachFactor { get; init; } = 0.93;
 
     /// <summary>
     /// 空中捕球の到達可否に効く守備力の傾き（打球判断＝走路取りの巧拙）。
@@ -43,8 +45,10 @@ public sealed record FieldingCoefficients
     /// <summary>
     /// 空中捕球で走れる時間の上限[s]（滞空時間比例のままだと深い飛球ほど守備範囲が無制限に広がるため）。
     /// 走れる距離 ≈ (この値 − 反応遅延)×スプリント速度。
+    /// issue #740 で実質撤去（99）: 4秒で頭打ちにすると、絵では落下点に先着した野手の飛球が安打になっていた
+    /// （安打フライの 8.7%）。判定を絵の物理（反応＋距離÷脚力 ≤ 滞空時間）にそろえる。
     /// </summary>
-    public double CatchReachCapSeconds { get; init; } = 4.00;
+    public double CatchReachCapSeconds { get; init; } = 99.0;
 
     /// <summary>送球の持ち替え・リリース所要[s]。</summary>
     public double ThrowTransferSeconds { get; init; } = 0.70;
