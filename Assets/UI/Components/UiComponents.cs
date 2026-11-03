@@ -542,6 +542,50 @@ namespace KokoSim.Unity.Components
             return row;
         }
 
+        // ===== SkillChip / SkillChips（特殊能力の名前チップ・issue #738） =====
+
+        /// <summary>特殊能力1つの名前チップ。説明はホバー（tooltip）で出す。選手詳細の名前表示もこれ。</summary>
+        public static Label SkillChip(string name, string desc)
+        {
+            var chip = new Label(name);
+            chip.AddToClassList("skill-chip");
+            if (!string.IsNullOrEmpty(desc)) chip.tooltip = desc;
+            return chip;
+        }
+
+        /// <summary>
+        /// 選手の<b>見えている</b>特殊能力（<see cref="KokoSim.Engine.Players.SkillSet.Visible"/>）のチップ列（issue #738）。
+        /// 隠しスキルは出さない（設計書10 §6）。<paramref name="maxChips"/> を超える分は最後の1枠を「他N」にまとめ、
+        /// そのホバーで残りの名前と説明を出す。持っていなければ null（呼び出し側は段ごと出さない）。
+        /// </summary>
+        public static VisualElement SkillChipsFor(KokoSim.Engine.Players.SkillSet skills, int maxChips, string extraClass = null)
+        {
+            if (skills == null || skills.Visible.Count == 0) return null;
+            var row = new VisualElement();
+            row.AddToClassList("skill-chips");
+            if (!string.IsNullOrEmpty(extraClass)) row.AddToClassList(extraClass);
+            var list = new List<KokoSim.Engine.Players.Skill>(skills.Visible);
+            list.Sort();   // 集合の列挙順に頼らず定義順で並べる（画面を開くたびに並びが変わらない）
+            var shown = list.Count <= maxChips ? list.Count : Mathf.Max(0, maxChips - 1);
+            for (var i = 0; i < shown; i++)
+                row.Add(SkillChip(SkillCatalogProvider.Name(list[i]), SkillCatalogProvider.Description(list[i])));
+            if (shown < list.Count)
+            {
+                var rest = new System.Text.StringBuilder();
+                for (var i = shown; i < list.Count; i++)
+                {
+                    if (rest.Length > 0) rest.Append('\n');
+                    rest.Append(SkillCatalogProvider.Name(list[i])).Append('：').Append(SkillCatalogProvider.Description(list[i]));
+                }
+                var more = new Label("他" + (list.Count - shown));
+                more.AddToClassList("skill-chip");
+                more.AddToClassList("skill-chip--more");
+                more.tooltip = rest.ToString();
+                row.Add(more);
+            }
+            return row;
+        }
+
         // ===== ShrinkToFit（入らない長さの文字だけ縮める）=====
 
         /// <summary>

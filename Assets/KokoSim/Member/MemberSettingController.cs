@@ -505,6 +505,9 @@ namespace KokoSim.Unity.Member
             // 4つの総合ランクは1字ラベル「打走守投」の1行に畳む（issue #452・監督指示 2026-08-09）。
             // 2段組(66px)だと比較列に守備適性の帯が入らない＝一番厚いここを削る。
             el.Add(UiComponents.CategoryRankChipsCompact(card.Strength, small: true));
+            // 特殊能力（issue #738・案A＝名前の下にチップ列。説明はホバー）。持っていなければ段ごと出さない。
+            var skills = UiComponents.SkillChipsFor(card.Skills, 4, "cmp-card__skills");
+            if (skills != null) el.Add(skills);
 
             // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
             // 投手能力タブのときだけ出す（タブでゲート・投/野区分ではゲートしない, Issue #93/#293）。

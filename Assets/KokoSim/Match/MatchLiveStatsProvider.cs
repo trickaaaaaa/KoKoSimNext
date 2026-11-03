@@ -122,6 +122,13 @@ namespace KokoSim.Unity.Match
             return PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(found), topKmh);
         }
 
+        /// <summary>
+        /// 自校の選手の特殊能力（issue #738）。相手校の選手は試合中に開示しない（監督決定 2026-11-02）＝null。
+        /// 試合中に変わらない静的情報なので観測データ（MatchLiveSnapshot）には載せず、ここで選手IDから引く。
+        /// </summary>
+        public KokoSim.Engine.Players.SkillSet OwnSkills(int schoolId, int? sourceId)
+            => _lookup.IsManagerSchool(schoolId) ? FindDeveloping(sourceId)?.Skills : null;
+
         /// <summary>名簿（RosterService）の育成レイヤ選手を <see cref="Player.SourceId"/> で引く（相手校は null）。</summary>
         private static DevelopingPlayer FindDeveloping(int? sourceId)
         {
