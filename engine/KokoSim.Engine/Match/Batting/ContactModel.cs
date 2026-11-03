@@ -133,10 +133,10 @@ public static class ContactModel
             coeff.QualityMean + coeff.QualityContactSlope * (batter.Contact - 50)
                 + PitcherContactQualityBias(plan, features, coeff)
                 + rng.NextGaussian(0, coeff.QualitySigma),
-            0.05, 1.05);
+            QualityMin, 1.05);
 
         var maxExitKmh = coeff.ExitVeloInterceptKmh + batter.Power * coeff.ExitVeloPerPower;
-        var veloFactor = coeff.MinQualityVeloFactor + (1.0 - coeff.MinQualityVeloFactor) * quality;
+        var veloFactor = VeloFactor(quality, coeff);
         var exitMps = maxExitKmh * veloFactor / 3.6;
 
         // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。ミートが良いほど締まる（安打の分業。issue ai-roster-power-top-tier-all-sluggers）。
@@ -157,5 +157,24 @@ public static class ContactModel
             BearingDeg = bearing,
         };
         return (ContactOutcome.InPlay, ball);
+    }
+
+    /// <summary>コンタクト品質の下限（クランプ値）。</summary>
+    internal const double QualityMin = 0.05;
+
+    /// <summary>
+    /// コンタクト品質→初速係数（満初速に対する比）。基本は直線 min + (1−min)·品質。
+    /// 品質が <see cref="BattingCoefficients.MishitQualityThreshold"/> 未満の裾（芯を外した当たり）だけ、
+    /// 品質の下限で <see cref="BattingCoefficients.MishitVeloFactorFloor"/> になる直線へ折る（issue #759）。
+    /// 閾値の点で値は連続。閾値0以下なら従来の直線と恒等。
+    /// </summary>
+    internal static double VeloFactor(double quality, BattingCoefficients coeff)
+    {
+        var line = coeff.MinQualityVeloFactor + (1.0 - coeff.MinQualityVeloFactor) * quality;
+        var q0 = coeff.MishitQualityThreshold;
+        if (q0 <= QualityMin || quality >= q0) return line;
+        var atThreshold = coeff.MinQualityVeloFactor + (1.0 - coeff.MinQualityVeloFactor) * q0;
+        var v = (quality - QualityMin) / (q0 - QualityMin);
+        return coeff.MishitVeloFactorFloor + (atThreshold - coeff.MishitVeloFactorFloor) * v;
     }
 }

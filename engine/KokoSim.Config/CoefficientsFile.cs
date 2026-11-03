@@ -518,6 +518,8 @@ public static class CoefficientsLoader
         public double BearingGroundAngleDeg { get; set; } = D.BearingGroundAngleDeg;
         public double BearingFlyAngleDeg { get; set; } = D.BearingFlyAngleDeg;
         public double MinQualityVeloFactor { get; set; } = D.MinQualityVeloFactor;
+        public double MishitQualityThreshold { get; set; } = D.MishitQualityThreshold;
+        public double MishitVeloFactorFloor { get; set; } = D.MishitVeloFactorFloor;
         public double ContactQualityVelocityRefKmh { get; set; } = D.ContactQualityVelocityRefKmh;
         public double ContactQualityPerKmh { get; set; } = D.ContactQualityPerKmh;
         public double ContactQualityPerControl { get; set; } = D.ContactQualityPerControl;
@@ -576,6 +578,8 @@ public static class CoefficientsLoader
             BearingGroundAngleDeg = BearingGroundAngleDeg,
             BearingFlyAngleDeg = BearingFlyAngleDeg,
             MinQualityVeloFactor = MinQualityVeloFactor,
+            MishitQualityThreshold = MishitQualityThreshold,
+            MishitVeloFactorFloor = MishitVeloFactorFloor,
             ContactQualityVelocityRefKmh = ContactQualityVelocityRefKmh,
             ContactQualityPerKmh = ContactQualityPerKmh,
             ContactQualityPerControl = ContactQualityPerControl,

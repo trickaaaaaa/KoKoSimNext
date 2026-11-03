@@ -162,6 +162,17 @@ public sealed record FieldingPlay
     public bool IrregularBounce { get; init; }
     /// <summary>バウンド/転がりで内野を抜けた打球か（外野へ二次展開した）。</summary>
     public bool ThroughInfield { get; init; }
+    /// <summary>
+    /// 表示専用（issue #759）: 内野手が処理したゴロ系の、着地後の弾み列（<see cref="BouncePath.Hops"/> の写し）。
+    /// 3D の打球の高さを「決め打ちの3山」でなく実際の弾み方で描くための入力。判定・帯は一切読まない。
+    /// 内野を抜けた打球・フライには入らない（null）。
+    /// </summary>
+    public IReadOnlyList<BounceHop>? GroundHops { get; init; }
+    /// <summary>
+    /// 表示専用（issue #759）: 弾み列の時計で、球が捕球点に着いた時刻[s]（チョッパー待ちを含まない）。
+    /// <see cref="FieldedAtSeconds"/> はチョッパー待ちを足した処理時刻なので、両者の比で弾み列を再生尺へ伸ばす。
+    /// </summary>
+    public double? GroundPathCatchSeconds { get; init; }
 
     // --- 抜けた打球の「寄る/飛びつく」表示専用データ（Issue #336②） ---
 
@@ -473,11 +484,15 @@ public static class FieldingResolver
                     FielderThrowAccuracy = throwAccuracy,
                     JudgementMarginSeconds = judgementMargin,
                     ErrorKind = errorKind,
+                    GroundHops = path.Hops,
+                    GroundPathCatchSeconds = fieldTimeRaw,
                 };
             }
             // 間に合わず内野安打（失策ロールは引かない＝main の校正モデルを保つ）。
             return GroundBase(BattedBallResult.Single) with
             {
+                GroundHops = path.Hops,
+                GroundPathCatchSeconds = fieldTimeRaw,
                 FieldedX = catchPoint.X,
                 FieldedZ = catchPoint.Z,
                 FielderRole = infielder.Position,

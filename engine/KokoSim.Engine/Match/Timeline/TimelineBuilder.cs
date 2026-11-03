@@ -21,6 +21,30 @@ public static class TimelineBuilder
     /// <summary>投球開始→接触までのリード[s]。</summary>
     /// <summary>接触（打球発生）のタイムライン時刻[s]。走者・野手のレッグはこれを起点に「接触からの秒」を足す。</summary>
     public const double ContactAt = 0.85;
+
+    /// <summary>
+    /// 内野で処理されたゴロ系の弾み列を、本塁→捕球点の区間の進み u へ写す（issue #759・表示専用）。
+    /// 弾み列の時計で捕球点に着いた時刻を u=1 に置く＝チョッパー待ちのぶんは区間全体を一様に伸ばして吸収する
+    /// （球が捕球点の上で止まって見えない）。最初の滞空（打点→最初の接地）も1つ目の山として含める。
+    /// 弾み列が無い打球（内野を抜けた・旧データ）は null＝従来の決め打ちプロファイル。
+    /// </summary>
+    internal static IReadOnlyList<SegmentHop>? GroundSegmentHops(FieldingPlay play)
+    {
+        if (play.GroundHops is not { } hops || play.GroundPathCatchSeconds is not { } catchT || catchT <= 1e-6) return null;
+        var list = new List<SegmentHop>(hops.Count + 1);
+        var landU = play.HangTimeSeconds / catchT;
+        if (landU > 0)
+        {
+            list.Add(new SegmentHop(0.0, landU, Math.Max(play.ApexHeightM, play.LaunchHeightM), play.LaunchHeightM));
+        }
+        foreach (var h in hops)
+        {
+            var u0 = h.T0 / catchT;
+            if (u0 >= 1.0) break;
+            list.Add(new SegmentHop(u0, (h.T0 + h.DurationSeconds) / catchT, h.ApexHeightM));
+        }
+        return list;
+    }
     /// <summary>牽制球のリリース→走者が帰塁を始めるまでの反応[s]（演出用の固定値）。
     /// <see cref="PickoffResolver"/> は時間の勝負を持たない単発のベルヌーイ試行なので流用元が無い。</summary>
     private const double PickoffReactionSeconds = 0.05;
@@ -299,6 +323,7 @@ public static class TimelineBuilder
             {
                 Kind = groundKind, T0 = ContactAt, T1 = Math.Max(landAt, fieldedAt),
                 From = Home, To = fieldPoint, ApexHeightM = play.BounceApexHeightM,
+                Hops = GroundSegmentHops(play),
             });
         }
 

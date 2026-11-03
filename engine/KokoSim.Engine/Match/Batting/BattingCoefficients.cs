@@ -196,6 +196,14 @@ public sealed record BattingCoefficients
     public double BearingSigma { get; init; } = 19.0;
     /// <summary>芯を外すと初速が落ちる度合い（品質1で満初速, 0で係数分だけ残る）。</summary>
     public double MinQualityVeloFactor { get; init; } = 0.55;
+    /// <summary>
+    /// 芯を外した当たり（issue #759）: 品質がこれ未満の裾だけ初速カーブを下へ曲げる。0以下＝無効（従来の直線）。
+    /// 直線のままだと最悪の当たりでも満初速の約57%（≈89km/h）残り、ボテボテのゴロが1球も生まれなかった。
+    /// 引く乱数は増やさない（品質の値から決まる）＝乱数の消費順は不変。
+    /// </summary>
+    public double MishitQualityThreshold { get; init; } = 0.40;
+    /// <summary>芯を外した当たり（issue #759）: 品質の下限（0.05）での初速係数。閾値の点で従来の直線へつながる。</summary>
+    public double MishitVeloFactorFloor { get; init; } = 0.20;
 
     // --- コンタクト品質への投手側寄与（「打たせて取る」の土台） ---
     // 打球質が打者能力だけで決まると、技巧派の優位は与四球の少なさからしか生まれず
