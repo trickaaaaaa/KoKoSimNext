@@ -132,6 +132,19 @@ public sealed class NationRosters
             aceRest);
 
     /// <summary>
+    /// 表示用に、学校の「いま戦えば出てくるチーム」を<b>ロスターを保存せずに</b>組む（issue #737）。
+    /// 生成済みならそのロスターから、未生成なら <see cref="TeamFor"/> が生成するのと同じロスターをその場で作って捨てる。
+    /// 画面を開いたかどうかで世界（以後の進級・成長の対象校）が変わらないようにするための入口。
+    /// </summary>
+    public Team PeekTeamFor(School school, int yearIndex, ModernRules? modernRules = null, int? calendarYear = null)
+    {
+        AiSchoolRoster? r;
+        lock (_gate) _rosters.TryGetValue(school.Id, out r);
+        r ??= AiRosterFactory.Bootstrap(school, yearIndex, _deps);
+        return AiTeamBuilder.Build(r, school, yearIndex, _deps, modernRules, calendarYear);
+    }
+
+    /// <summary>
     /// 夏大会後の代替わり: 生成済み全校の3年生を引退させる（秋の新チーム＝下級生のみ）。
     /// カレンダー節目（メインスレッド）でのみ呼ぶ＝背景フルシムと同時実行しない前提。
     /// </summary>
