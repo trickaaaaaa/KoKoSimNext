@@ -6298,8 +6298,9 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// リリースごとの「投手クリップ時刻 − 発射時刻（BallReleaseClipTime）」[秒]（issue #770）。正＝投手が先に
-        /// 投げ終わっていた（球が遅れて出た）。12fps量子化ぶん（±0.09）を超えたらずれている。
+        /// リリースごとの「投手クリップ時刻 − 発射時刻（BallReleaseClipTime）」[秒]（issue #770）。
+        /// 合っている球でもフレーム間隔ぶんばらつく（2026-11-03 実測 −0.05〜+0.45）。投げ終えて待機へ
+        /// 戻った後に球が出ると大きく負になる（修正前のファウル後 −2.97）。
         /// </summary>
         internal readonly System.Collections.Generic.List<float> ReleaseDriftsForCapture =
             new System.Collections.Generic.List<float>();
