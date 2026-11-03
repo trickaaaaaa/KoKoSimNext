@@ -3371,14 +3371,33 @@ namespace KokoSim.Unity.Match
         // **同じ幾何・同じ色**で3Dへ起こす（Match2DPlaybackElement.DrawField と対応）。
         // 弧の式は engine の FieldDiagramGeometry が単一ソース＝2Dと3Dで形がずれない。
 
-        private const float FenceWingM = 95f;    // 両翼（2D の _wingM と同値）
-        private const float FenceCenterM = 118f; // 中堅（同 _centerM）
-        // フェンス高さは engine の既定（FieldGeometry.FenceHeightM）を単一ソースにする
-        // （issue fence-carom-and-over-the-head-cues）。3Dだけ 3.2m を持っていて、engine の判定
-        // （本塁打・フェンス激突）が使う 4.0m と食い違っていた＝**絵で越えているのに越えていない**
-        // （逆も）が起こり得る。跳ね返りを描く前に揃える。
-        private static readonly float FenceHeightM =
-            (float)new KokoSim.Engine.Match.Field.FieldGeometry().FenceHeightM;
+        /// <summary>
+        /// 生成前に一度だけ渡す試合の球場寸法（issue #771）。判定（<c>GameContext.Field</c>）と同じものを渡す。
+        /// null なら engine の既定（<see cref="KokoSim.Engine.Match.Field.FieldGeometry"/> の初期値）。
+        /// </summary>
+        public static KokoSim.Engine.Match.Field.FieldGeometry InitialField { get; set; }
+
+        /// <summary>この球場の判定寸法（フェンス距離・高さ）。3D のフェンスはここから描く＝判定と食い違わない。</summary>
+        private KokoSim.Engine.Match.Field.FieldGeometry _field = new KokoSim.Engine.Match.Field.FieldGeometry();
+
+        // フェンス高さも判定と同じ値を使う（issue fence-carom-and-over-the-head-cues・#771）。
+        // 絵で越えているのに越えていない（逆も）を起こさない。
+        private float FenceHeightM => (float)_field.FenceHeightM;
+
+        // 焼いた球場メッシュの寸法（tools/stadium-gen.py の PARAMS: R_CORNER / R_CENTER / FENCE_H）。
+        // ここを基準に、試合の球場寸法へ外野側を変形する。生成側を変えたらここも合わせる
+        // （DuelStadiumBaker.Verify がフェンス弧 95/118 を照合している）。
+        private const float BakedWingM = 95f;
+        private const float BakedCenterM = 118f;
+        private const float BakedFenceHeightM = 3.2f;
+
+        /// <summary>変形を始める本塁からの距離[m]。内野（塁・マウンド・ダート・グラスライン29m）には触らない。</summary>
+        private const float WarpInnerM = 50f;
+        /// <summary>フェンスのこれだけ手前[m]から先は丸ごとずらす（ウォーニングトラック3.5m＋余白）。</summary>
+        private const float WarpFullBeforeFenceM = 6f;
+        /// <summary>ファウル側でずらしを消し切る方位[rad]。ポール（±45°）から外へ向けて徐々に弱める。</summary>
+        private const float WarpFoulFadeRad = 70f * Mathf.Deg2Rad;
+
         private const float WarningTrackM = 3.5f;
         private const float HomeCircleM = 4.3f;
         private const float FoulQuarterRad = Mathf.PI / 4f;   // フェア領域は ±45°
@@ -3419,8 +3438,9 @@ namespace KokoSim.Unity.Match
                 var go = new GameObject(part.Name);
                 go.transform.SetParent(_root.transform, false);
                 go.layer = layer;
-                go.AddComponent<MeshFilter>().sharedMesh = part.Mesh;
-                var mats = new Material[part.Mesh.subMeshCount];
+                var mesh = WarpMeshToField(part.Mesh, part.Name);   // 試合の球場寸法へ（issue #771）
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var mats = new Material[mesh.subMeshCount];
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var c = i < part.Colors.Length ? part.Colors[i] : Color.magenta;
@@ -3441,7 +3461,7 @@ namespace KokoSim.Unity.Match
                 if (IsBallStopPart(part.Name))
                 {
                     var col = go.AddComponent<MeshCollider>();
-                    col.sharedMesh = part.Mesh;
+                    col.sharedMesh = mesh;   // 描いている（変形後の）面に当てる
                     _standColliders.Add(col);
                 }
             }
@@ -3475,8 +3495,62 @@ namespace KokoSim.Unity.Match
         private static readonly Color BackdropColor = new(0.12f, 0.20f, 0.16f);
 
         /// <summary>本塁からの距離[m]（方位角θ・+Z=センターから+X側が正）。2Dの FencePoint と同式。</summary>
-        private static float FenceR(float th) =>
-            (float)FieldDiagramGeometry.FenceRadius(th, FenceWingM, FenceCenterM);
+        private float FenceR(float th) => (float)_field.FenceDistance(th);
+
+        /// <summary>焼いたメッシュのままの寸法か（変形が要らない）。</summary>
+        private bool FieldIsBaked =>
+            Mathf.Approximately((float)_field.LeftFenceM, BakedWingM)
+            && Mathf.Approximately((float)_field.RightFenceM, BakedWingM)
+            && Mathf.Approximately((float)_field.CenterFenceM, BakedCenterM)
+            && Mathf.Approximately((float)_field.FenceHeightM, BakedFenceHeightM);
+
+        /// <summary>
+        /// 焼いた寸法の球場の点を、この試合の球場寸法へ写す（issue #771）。方位ごとのフェンス差
+        /// （試合のフェンス − 焼いたフェンス）だけ半径方向へずらす。内野（<see cref="WarpInnerM"/> まで）は
+        /// 動かさず、フェンスの <see cref="WarpFullBeforeFenceM"/> 手前から先（トラック・フェンス・スタンド・
+        /// 外壁）は丸ごとずらし、間の外野芝で伸び縮みを吸収する。ファウル側はポールの外で徐々に弱め、
+        /// 本塁の後ろ（バックネット・内野スタンド）は動かさない。
+        /// <paramref name="isOutfieldFence"/> のときだけ高さも判定のフェンス高へ合わせる。
+        /// </summary>
+        internal Vector3 WarpToField(Vector3 p, bool isOutfieldFence)
+        {
+            float r = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+            if (r < WarpInnerM) return p;
+            float th = Mathf.Atan2(p.x, p.z);
+            float thc = Mathf.Clamp(th, -Mathf.PI / 4f, Mathf.PI / 4f);
+            float r0 = (float)FieldDiagramGeometry.FenceRadius(thc, BakedWingM, BakedCenterM);
+            float delta = FenceR(thc) - r0;
+            float wa = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(Mathf.PI / 4f, WarpFoulFadeRad, Mathf.Abs(th)));
+            float wr = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(WarpInnerM, r0 - WarpFullBeforeFenceM, r));
+            float nr = r + delta * wa * wr;
+            float k = nr / r;
+            float y = isOutfieldFence ? p.y * FenceHeightM / BakedFenceHeightM : p.y;
+            return new Vector3(p.x * k, y, p.z * k);
+        }
+
+        /// <summary>
+        /// 焼いたメッシュをこの試合の球場寸法へ変形した複製を返す（寸法が焼いたままなら元をそのまま）。
+        /// 複製は実行時生成なので <c>_meshes</c> へ入れて Dispose で消す（元の資産には触らない）。
+        /// 法線は再計算しない（掟: 非溶接メッシュでハードエッジ化する）。伸び縮みは数%なので元の法線で足りる。
+        /// </summary>
+        private Mesh WarpMeshToField(Mesh src, string partName)
+        {
+            if (FieldIsBaked) return src;
+            // 内野だけの部品（塁・マウンド等）は変形しない＝複製もしない
+            var b = src.bounds;
+            float farX = Mathf.Max(Mathf.Abs(b.min.x), Mathf.Abs(b.max.x));
+            float farZ = Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z));
+            if (farX * farX + farZ * farZ < WarpInnerM * WarpInnerM) return src;
+            var mesh = Object.Instantiate(src);
+            mesh.name = src.name + "~field";
+            var v = mesh.vertices;
+            bool fence = partName == "fence_outfield";
+            for (int i = 0; i < v.Length; i++) v[i] = WarpToField(v[i], fence);
+            mesh.vertices = v;
+            mesh.RecalculateBounds();
+            _meshes.Add(mesh);
+            return mesh;
+        }
 
         /// <summary>
         /// 球場の面を組む。<c>BuildGround</c> の後（＝地面プレーンの上）に重ねる。
