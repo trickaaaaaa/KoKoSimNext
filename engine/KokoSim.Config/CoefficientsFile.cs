@@ -605,6 +605,10 @@ public static class CoefficientsLoader
         public double ForceOutMarginSeconds { get; set; } = D.ForceOutMarginSeconds;
         public double InfieldHandleJitterMeanSeconds { get; set; } = D.InfieldHandleJitterMeanSeconds;
         public double InfieldHandleJitterMaxFactor { get; set; } = D.InfieldHandleJitterMaxFactor;
+        public double InfieldTransferFieldingSlope { get; set; } = D.InfieldTransferFieldingSlope;
+        public double InfieldTransferFactorMin { get; set; } = D.InfieldTransferFactorMin;
+        public double InfieldHandleJitterFieldingSlope { get; set; } = D.InfieldHandleJitterFieldingSlope;
+        public double InfieldHandleJitterFactorMin { get; set; } = D.InfieldHandleJitterFactorMin;
         public double BobbleErrorMinJitterSeconds { get; set; } = D.BobbleErrorMinJitterSeconds;
         public double CatchCloseCallMarginSeconds { get; set; } = D.CatchCloseCallMarginSeconds;
         public double ErrorBaseProb { get; set; } = D.ErrorBaseProb;
@@ -672,6 +676,10 @@ public static class CoefficientsLoader
             ForceOutMarginSeconds = ForceOutMarginSeconds,
             InfieldHandleJitterMeanSeconds = InfieldHandleJitterMeanSeconds,
             InfieldHandleJitterMaxFactor = InfieldHandleJitterMaxFactor,
+            InfieldTransferFieldingSlope = InfieldTransferFieldingSlope,
+            InfieldTransferFactorMin = InfieldTransferFactorMin,
+            InfieldHandleJitterFieldingSlope = InfieldHandleJitterFieldingSlope,
+            InfieldHandleJitterFactorMin = InfieldHandleJitterFactorMin,
             BobbleErrorMinJitterSeconds = BobbleErrorMinJitterSeconds,
             CatchCloseCallMarginSeconds = CatchCloseCallMarginSeconds,
             ErrorBaseProb = ErrorBaseProb,

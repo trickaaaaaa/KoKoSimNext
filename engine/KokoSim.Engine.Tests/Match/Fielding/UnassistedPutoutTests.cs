@@ -78,7 +78,7 @@ public sealed class UnassistedPutoutTests
         var throwDelta = Coeff.InfieldPlayOverheadSeconds
                          + Coeff.ThrowTransferSeconds
                            * new FielderAttributes { Fielding = 50 }
-                               .TransferFactor(Coeff.ThrowTransferFieldingSlope, Coeff.ThrowTransferFactorMin)
+                               .TransferFactor(Coeff.InfieldTransferFieldingSlope, Coeff.InfieldTransferFactorMin)
                          + dist / throwSpeed;
         Assert.True(overheadPlusRun < throwDelta,
             $"アンアシスト所要 {overheadPlusRun:F3}s が送球所要 {throwDelta:F3}s より速くない（比較が逆）");
@@ -124,7 +124,7 @@ public sealed class UnassistedPutoutTests
                                    + Coeff.InfieldPlayOverheadSeconds
                                    + Coeff.ThrowTransferSeconds
                                      * new FielderAttributes { Fielding = 50 }
-                                         .TransferFactor(Coeff.ThrowTransferFieldingSlope, Coeff.ThrowTransferFactorMin)
+                                         .TransferFactor(Coeff.InfieldTransferFieldingSlope, Coeff.InfieldTransferFactorMin)
                                    + dist / throwSpeed;
         Assert.True(play.ThrowArriveSeconds!.Value < oldForcedThrowArrive,
             $"新モデルの刺殺 {play.ThrowArriveSeconds:F3}s が旧・強制送球 {oldForcedThrowArrive:F3}s 未満でない");
