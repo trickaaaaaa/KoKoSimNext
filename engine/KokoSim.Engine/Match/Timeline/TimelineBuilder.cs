@@ -565,7 +565,11 @@ public static class TimelineBuilder
                 : play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
                     ? ContactAt + et
                     : fieldedAt;
-            judgements.Add(new JudgementEvent { Label = "打", T = errAt, Kind = JudgementKind.Error });
+            // テロップは記録として失策が確定する瞬間＝打者が一塁でセーフになった瞬間に出す（issue #806）。
+            // T（取り損ないの瞬間）は「！」マーク・寄りカメラが使うので動かさない。打者が先に一塁を
+            // 越えている（外野の落球等）ときも「！」（T＋ErrorMarkDelaySeconds）より前には出さない
+            var errDisplayAt = Math.Max(batterArrive, errAt + JudgementEvent.ErrorMarkDelaySeconds);
+            judgements.Add(new JudgementEvent { Label = "打", T = errAt, Kind = JudgementKind.Error, DisplayT = errDisplayAt });
         }
         else if (batterCloseCall)
         {
