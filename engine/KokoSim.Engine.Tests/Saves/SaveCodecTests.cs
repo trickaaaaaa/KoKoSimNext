@@ -27,6 +27,18 @@ public sealed class SaveCodecTests
     }
 
     [Fact]
+    public void Dto_Roundtrip_KeepsFreeManagerStatus()
+    {
+        // issue #777: フリー監督の身分がロードで教員へ戻ると、翌年またフリー化資格が出る。
+        var state = SaveTestFixtures.BuildRichState();
+        state.Manager.Status = KokoSim.Engine.Career.ManagerStatus.Free;
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Equal(KokoSim.Engine.Career.ManagerStatus.Free, s.Manager.Status);
+    }
+
+    [Fact]
     public void Dto_Roundtrip_RestoresMutableValues()
     {
         var state = SaveTestFixtures.BuildRichState();
