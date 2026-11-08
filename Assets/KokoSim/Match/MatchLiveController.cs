@@ -1851,7 +1851,10 @@ namespace KokoSim.Unity.Match
                           || PendingBuntSign();
             var afterField = _windupAfterFieldPlay;
             _windupAfterFieldPlay = false;
-            var useWindup = (index == 0 || forceWindup || afterField) && DuelPacingActive;
+            // 打席の途中でも、投手がセット姿勢で止まっていれば振りかぶりから（継投で左右を当て直した窓の後。
+            // issue #818）。前の球の予約は当て直しのときに捨ててあるので、予約頼みでは投げ始めない
+            var awaitsWindup = _duelRig != null && _duelRig.Available && _duelRig.PitcherAwaitsWindup;
+            var useWindup = (index == 0 || forceWindup || afterField || awaitsWindup) && DuelPacingActive;
             PrepareBuntStance(buntNow, useWindup ? DuelStageRig.WindupSeconds : 0f);
 
             if (useWindup)
