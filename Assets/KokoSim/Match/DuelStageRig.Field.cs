@@ -204,6 +204,11 @@ namespace KokoSim.Unity.Match
         private void PlaceFielder(Actor a, float x, float z, float? yawDeg = null)
         {
             if (a == null || a.Go == null) return;
+            // 捕球のための体の寄せ（issue #782）。engine の位置に足すだけ＝判定にも帯にも触れない。
+            // 置き場所が6か所あるので、ここ1か所で足す（個別に足すと漏れた所だけ体が跳ぶ）
+            var shift = CatchBodyShiftNow(a);
+            x += shift.x;
+            z += shift.y;
             // 引数は**ステージ座標**（x=+一塁側・yaw=世界の向き）。左投手は x=0 面の鏡映親ノード
             // （localScale.x=-1）の下に居るので、そのまま local へ書くと x も向きも左右が逆になる
             // ＝一塁カバーに走る左投手が三塁側へ走り、一塁は無人のままアウトになった（issue #672 の再現で実害）。
@@ -218,6 +223,55 @@ namespace KokoSim.Unity.Match
             // 飛び込み中は上下をクリップ（ルートモーション）が持っている＝足で吸わせない。
             // 吸わせると足が上がったぶんだけ胴が地面へ潜る（実測 −0.40m。design-18 §7-2）
             if (!a.RootDrivenY) GroundFix(a);
+        }
+
+        /// <summary>捕球のための体の寄せを入れ始める時刻（捕球の何秒前か）[s]。</summary>
+        private const float CatchBodyShiftInSeconds = 0.5f;
+        /// <summary>寄せた体を engine の位置へ戻すのにかける時間[s]（送球を離した後／保持の後から）。</summary>
+        private const float CatchBodyShiftOutSeconds = 0.5f;
+
+        /// <summary>
+        /// いま（<see cref="_fieldT"/>）この野手の体を寄せる量（issue #782）。捕球の
+        /// <see cref="CatchBodyShiftInSeconds"/> 前から寄せ始めて捕球で寄せ切り、球を持っている間は保つ。
+        /// 送球するなら離した後、しないなら保持の後から <see cref="CatchBodyShiftOutSeconds"/> で戻す
+        /// （球は手を離れた後に engine の送球線へ寄せ戻される＝送球とは食い違わない）。
+        /// </summary>
+        private Vector2 CatchBodyShiftNow(Actor a)
+        {
+            if (_fieldPlay == null || _catchEvents.Count == 0) return Vector2.zero;
+            float t = _fieldT;
+            var sum = Vector2.zero;
+            for (int i = 0; i < _catchEvents.Count; i++)
+            {
+                var e = _catchEvents[i];
+                if (e.BodyShift.sqrMagnitude < 1e-8f) continue;
+                // 寄せ切るのは捕球の**1コマ前**（ポーズは12fps。瞬間ちょうどで1になる台形だと、絵に出る
+                // 直前のコマで重み0.94＝1.4m寄せる場面で8cm足りない。design-18 §4.5-③ の IK と同じ掟）
+                float full = e.TCatch - 1f / PoseFps;
+                if (t < full - CatchBodyShiftInSeconds) continue;
+                if (!ReferenceEquals(FielderActor(e.Pos), a)) continue;
+                float w;
+                if (t < full)
+                {
+                    float u = Mathf.InverseLerp(full - CatchBodyShiftInSeconds, full, t);
+                    w = u * u * (3f - 2f * u);
+                }
+                else if (t < e.TCatch) w = 1f;
+                else
+                {
+                    // 捕った後の最初の送球（予定は時刻順とは限らない）
+                    float release = float.NaN, fire = float.PositiveInfinity;
+                    foreach (var th in _throwEvents)
+                        if (th.From == e.Pos && th.TFire >= e.TCatch - 1e-3f && th.TFire < fire)
+                        { fire = th.TFire; release = th.TRelease; }
+                    float outFrom = e.TCatch + CatchHoldSeconds;
+                    if (!float.IsNaN(release)) outFrom = Mathf.Max(outFrom, release);
+                    float u = Mathf.InverseLerp(outFrom, outFrom + CatchBodyShiftOutSeconds, t);
+                    w = 1f - u * u * (3f - 2f * u);
+                }
+                sum += e.BodyShift * w;
+            }
+            return sum;
         }
 
         /// <summary>投手板まわりの平坦部の半径[m]。マウンドの断面はここまで水平。</summary>
@@ -1187,6 +1241,14 @@ namespace KokoSim.Unity.Match
             public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
             public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
             public float PulledM;     // 捕球点を engine の終点から**軌跡に沿って**遡らせた量[m]
+            public float LineOffM;    // 捕球点が球の線（終点へ来る向き）から**横へ**外れた量[m]（issue #782・実測用）
+            /// <summary>
+            /// 捕球のために野手の体を寄せる量（ステージ XZ）。球の線の上の捕球点へ、収録のグラブの距離まで
+            /// 届かないぶんだけ体の側を動かす（issue #782。球は線から外さない）。0 なら寄せない。
+            /// </summary>
+            public Vector2 BodyShift;
+            public bool Rolling;      // 転がり（ゴロ）を捕る予定か（実測の仕分け用）
+            public float GloveErrM;   // 捕球直前のコマのミット中心→捕球点の距離[m]（実測用。未計測は −1）
             /// <summary>
             /// クリップを流さない（球の扱いだけ行う）。飛び込んだ本人が**そのまま拾う**ときに立つ。
             ///
@@ -1494,10 +1556,34 @@ namespace KokoSim.Unity.Match
                 // **絵ではカメラの狙い外しと区別できない**＝内訳を測って初めて判る）。
                 var pt = new Vector3((float)end.X, an.GloveY, (float)end.Y);
                 float pulled = 0f;
+                var bodyShift = Vector2.zero;
                 var gap = new Vector2((float)(end.X - fp.X), (float)(end.Y - fp.Y));
-                if (reach > 0.01f && gap.magnitude > reach)
+                // 球が終点へ来る向き（XYは全種別とも直線）。捕球点はこの線の上で解く＝球を横へ動かさない
+                var inBack = seg.At(System.Math.Max(0.0, (seg.T1 - seg.T0) - 0.1));
+                var inDir = new Vector2((float)(end.X - inBack.X), (float)(end.Y - inBack.Y));
+                if (reach > 0.01f && gap.magnitude > reach && inDir.sqrMagnitude > 1e-8f)
                 {
-                    // 遠い＝届かない。野手へ真っ直ぐ寄せる
+                    // 遠い＝届かない（issue #782）。旧実装は捕球点を野手へ真っ直ぐ寄せていたため、
+                    // 横へ寄って捕るゴロで球が捕球の 0.3 秒前から線を外れ、グラブへ吸い込まれていた
+                    // （実測: 内野ゴロ200本で横ずれ最大 1.88m）。捕球点は**球の線の上**に取る:
+                    //   ・線がグラブの届く円を通る → 円を抜ける点（終点にいちばん近い）
+                    //   ・通らない → 線の上で野手にいちばん近い点。届かない残りは**体の側**を寄せる
+                    var d = inDir.normalized;
+                    float aDot = Vector2.Dot(gap, d);   // 終点から線を遡ったときの、野手の足元までの量
+                    float disc = aDot * aDot - (gap.sqrMagnitude - reach * reach);
+                    float sBack;
+                    if (aDot > 0f && disc >= 0f) sBack = aDot - Mathf.Sqrt(disc);
+                    else sBack = Mathf.Max(0f, aDot);
+                    var g2 = new Vector2((float)end.X, (float)end.Y) - d * sBack;
+                    pulled = sBack;
+                    pt = new Vector3(g2.x, an.GloveY, g2.y);
+                    var toPt = g2 - new Vector2((float)fp.X, (float)fp.Y);
+                    float dist = toPt.magnitude;
+                    if (dist > reach + 1e-3f) bodyShift = toPt * (1f - reach / dist);
+                }
+                else if (reach > 0.01f && gap.magnitude > reach)
+                {
+                    // 向きが取れない（終点で止まっている区間）ときだけ従来どおり野手へ寄せる
                     var g2 = new Vector2((float)fp.X, (float)fp.Y) + gap.normalized * reach;
                     pulled = (new Vector2(pt.x, pt.z) - g2).magnitude;
                     pt = new Vector3(g2.x, an.GloveY, g2.y);
@@ -1524,8 +1610,25 @@ namespace KokoSim.Unity.Match
                     }
                 }
 
+                // 球の線からの横ずれ（issue #782）。線＝終点へ来る向き（近すぎの枝と同じ取り方）
+                float lineOff = 0f;
+                {
+                    var back = seg.At(System.Math.Max(0.0, (seg.T1 - seg.T0) - 0.1));
+                    var dir = new Vector2((float)(end.X - back.X), (float)(end.Y - back.Y));
+                    if (dir.sqrMagnitude > 1e-8f)
+                    {
+                        var d = dir.normalized;
+                        var off = new Vector2(pt.x - (float)end.X, pt.z - (float)end.Y);
+                        lineOff = Mathf.Abs(off.x * d.y - off.y * d.x);
+                    }
+                }
+
                 _catchEvents.Add(new FieldCatchEvent
                 {
+                    BodyShift = bodyShift,
+                    LineOffM = lineOff,
+                    Rolling = !isThrow && (eb != null ? eb.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce : seg is RollSegment),
+                    GloveErrM = -1f,
                     Pos = who,
                     TCatch = tc,
                     TStart = tc - an.Moment,
@@ -1722,7 +1825,9 @@ namespace KokoSim.Unity.Match
                         if (gh.magnitude > 0.05f)
                         {
                             var here = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, e.TCatch).Pos;
-                            var toBall = new Vector2(e.Point.x - (float)here.X, e.Point.z - (float)here.Y);
+                            // 体を寄せる捕球（issue #782）は、寄せ切った位置から球を向く
+                            var toBall = new Vector2(e.Point.x - ((float)here.X + e.BodyShift.x),
+                                                     e.Point.z - ((float)here.Y + e.BodyShift.y));
                             if (toBall.sqrMagnitude > 1e-6f)
                                 st.Yaw = Mathf.Atan2(toBall.x, toBall.y) * Mathf.Rad2Deg
                                          - Mathf.Atan2(gh.x, gh.y) * Mathf.Rad2Deg;
@@ -2016,6 +2121,8 @@ namespace KokoSim.Unity.Match
                     var target = _root.transform.TransformPoint(e.Point);
                     float d = Vector3.Distance(DuelCatcherPose.MittCenter(a.Animator), target);
                     _catchGloveErrMax = Mathf.Max(_catchGloveErrMax, d);
+                    e.GloveErrM = d;
+                    _catchEvents[st.CatchEvent] = e;
                     // 残差の内訳。**この2つを分けないと直しようがない**:
                     //   手首 … IK が狙いの手首位置へ届いたか（届かない＝腕の長さ/胴の助けの問題）
                     //   ミット … 手首→ミット中心のずれが IK 後に回ったか（＝1回では収束しない性質の問題）
@@ -2072,6 +2179,26 @@ namespace KokoSim.Unity.Match
         /// 【撮影ハーネス用】捕球の受け入れ実測。グラブ（手ボーン）と捕球点の距離。
         /// 捕手の実績は 0.007〜0.039m。**絵ではカメラの狙い外しと区別できない**ので実測で採る。
         /// </summary>
+        /// <summary>
+        /// 【撮影ハーネス用】捕球点の「球の線からの横ずれ」（issue #782）。1予定1行:
+        /// 守備位置・転がりか・横ずれ[m]・野手との距離[m]・手前へ[m]・捕球直前のグラブ誤差[m]（未計測は −1）。
+        /// </summary>
+        public string FieldCatchLineDiagForCapture()
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new StringBuilder();
+            foreach (var e in _catchEvents)
+            {
+                if (!HoldsBall(e.Kind)) continue;
+                var an = AnchorOf(e.Kind, e.Anchor);
+                sb.AppendLine(string.Format(ci, "{0}\t{1}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F3}\t{8}",
+                    e.Pos, e.Rolling ? "roll" : "air", e.LineOffM, e.FielderGapM, e.PulledM, e.GloveErrM,
+                    e.BodyShift.magnitude, new Vector2(an.GloveX, an.GloveZ).magnitude,
+                    an.Clip.Replace("AA_Baseball_Defender_", "")));
+            }
+            return sb.ToString();
+        }
+
         public string FieldCatchDiagForCapture()
         {
             var sb = new StringBuilder();
