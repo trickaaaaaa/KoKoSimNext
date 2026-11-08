@@ -30,10 +30,18 @@ public sealed class PlayerNameVocab
     /// </summary>
     public double GivenWeightExponent { get; init; } = PlayerNameData.GivenWeightExponent;
 
+    /// <summary>
+    /// 苗字重みの圧縮指数（0&lt;e≦1。issue #819）。生の全国占率を e 乗して上位偏重を平坦化する
+    /// ＝毎年同じ苗字ばかり被らず、たくさんの苗字が出る。
+    /// </summary>
+    public double FamilyWeightExponent { get; init; } = PlayerNameData.FamilyWeightExponent;
+
     // 圧縮後の実効重み（語彙は不変なので初回抽選時に一度だけ算出してキャッシュする）。
     private double[]? _givenEffective;
+    private double[]? _familyEffective;
 
     internal double[] GivenEffectiveWeights => _givenEffective ??= Compress(GivenNames, GivenWeightExponent);
+    internal double[] FamilyEffectiveWeights => _familyEffective ??= Compress(FamilyNames, FamilyWeightExponent);
 
     private static double[] Compress(IReadOnlyList<WeightedName> list, double exponent)
     {
@@ -68,7 +76,7 @@ public static class PlayerNameGenerator
     /// </summary>
     public static string Generate(PlayerNameVocab v, IRandomSource rng, ISet<string>? usedGivenNames)
     {
-        var family = PickWeighted(v.FamilyNames, null, rng);
+        var family = PickWeighted(v.FamilyNames, v.FamilyEffectiveWeights, rng);
         var given = PickGiven(v, rng, usedGivenNames);
         usedGivenNames?.Add(given);
         if (family.Length == 0) return given;

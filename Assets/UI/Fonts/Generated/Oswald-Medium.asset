@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!21 &-8306902771327836163
+--- !u!21 &-2999755641601918309
 Material:
   serializedVersion: 8
   m_ObjectHideFlags: 0
@@ -24,7 +24,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _MainTex:
-        m_Texture: {fileID: 8667547911794470566}
+        m_Texture: {fileID: 5058863298751405422}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
@@ -70,7 +70,7 @@ MonoBehaviour:
   m_Name: Oswald-Medium
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.TextCore.Text.FontAsset
   m_Version: 1.1.0
-  m_Material: {fileID: -8306902771327836163}
+  m_Material: {fileID: -2999755641601918309}
   m_SourceFontFileGUID: 27f1ac6f9048d4f389d1ea807caf111e
   m_fontAssetCreationEditorSettings:
     sourceFontFileGUID: 
@@ -1925,7 +1925,7 @@ MonoBehaviour:
     m_GlyphIndex: 803
     m_Scale: 1
   m_AtlasTextures:
-  - {fileID: 8667547911794470566}
+  - {fileID: 5058863298751405422}
   m_AtlasTextureIndex: 0
   m_IsMultiAtlasTexturesEnabled: 0
   m_GetFontFeatures: 1
@@ -2635,7 +2635,7 @@ MonoBehaviour:
   m_BoldStyleSpacing: 7
   m_ItalicStyleSlant: 35
   m_TabMultiple: 10
---- !u!28 &8667547911794470566
+--- !u!28 &5058863298751405422
 Texture2D:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
