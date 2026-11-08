@@ -26,6 +26,7 @@ internal static class CommandLine
             "simulate-nation" => RunSimulateNation(args[1..]),
             "simulate-manager" => RunSimulateManager(args[1..]),
             "simulate-tiers" => RunSimulateTiers(args[1..]),
+            "defense-sensitivity" => RunDefenseSensitivity(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
             "infield-hit-profile" => RunInfieldTiming(args[1..], profile: true),
@@ -348,6 +349,41 @@ internal static class CommandLine
         return 0;
     }
 
+    /// <summary>
+    /// 走力・守備の能力差が守備範囲と失点に効く大きさの計測（issue #832）。**係数も帯も動かさない**。
+    /// </summary>
+    private static int RunDefenseSensitivity(string[] args)
+    {
+        var games = KokoSim.Balance.DefenseSensitivitySimulation.DefaultGames;
+        var seed = 42UL;
+        string? reportPath = null;
+        string? coefficientsPath = null;
+        string? cachePath = null;
+        double? budgetSec = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--games": games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
+                case "--cache": cachePath = RequireValue(args, ref i); break;
+                case "--budget-sec": budgetSec = double.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        var (text, remaining) = KokoSim.Balance.DefenseSensitivitySimulation.Run(games, seed, coefficientsPath, cachePath, budgetSec);
+        if (text is null)
+        {
+            Console.WriteLine($"時間枠を使い切りました。未測定の条件が {remaining} 件あります。同じコマンドをもう一度回すと続きから測ります（--cache {cachePath}）。");
+            return 3;
+        }
+        Console.Write(text);
+        WriteReport(reportPath, text);
+        return 0;
+    }
+
     private static void WriteReport(string? reportPath, string text)
     {
         if (reportPath is null) return;
@@ -553,6 +589,8 @@ internal static class CommandLine
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
         Console.WriteLine("  simulate-tiers  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--compress-slope X] [--compress-pivot Y]");
         Console.WriteLine("                  # ティア格子（強度30〜60の総当たり）＋実プレイの自校vs相手校＋ランク式の食い違い（issue #536・計測のみ）");
+        Console.WriteLine("  defense-sensitivity [--games N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--cache path] [--budget-sec S]");
+        Console.WriteLine("                  # 走力・守備を20/50/80/100に固定した守備側の失点・BABIP・アウト率＋打撃±30との比較（issue #832・計測のみ）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
         Console.WriteLine("  simulate-nation [--years N]   [--seed S] [--report path] [--school-names data/school-names.yaml]");
         Console.WriteLine("                  [--autumn data] [--start-year 2025]   # 秋の大会フロー(秋季→地区→神宮→センバツ)を併走");
