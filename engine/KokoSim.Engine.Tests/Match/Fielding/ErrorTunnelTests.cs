@@ -40,13 +40,16 @@ public sealed class ErrorTunnelTests
     private static readonly Aerodynamics Aero = new();
     private static readonly FieldGeometry Field = new();
 
-    /// <summary>捕球エラーを必ず起こす係数（クランプ上限も開ける）。内訳ロールだけを見たいので送球ロールは止める。</summary>
+    /// <summary>捕球エラーを必ず起こす係数（クランプ上限も開ける）。内訳ロールだけを見たいので送球ロールは止める。
+    /// こぼれ幅を極端に大きくして捕球ミスの回収レース（design-14 P1-6 追記, issue #817）を必ず失敗させる＝
+    /// 「捕球エラーが確定すれば必ず失策になる」という本クラスの前提（トンネル内訳の検証）を保つ。</summary>
     private static FieldingCoefficients AlwaysCatchError(double tunnelShare) => new()
     {
         ErrorBaseProb = 1.0,
         ErrorMaxProb = 1.0,
         ThrowErrorBaseProb = 0.0,
         TunnelShareProb = tunnelShare,
+        CatchFumbleScatterSigmaM = 1_000_000.0,
     };
 
     private static FieldingPlay Grounder(FieldingCoefficients coeff, IRandomSource? rng = null,
@@ -84,8 +87,10 @@ public sealed class ErrorTunnelTests
         Assert.Equal(BattedBallResult.Error, noTunnel.Result);
         Assert.Equal(FieldingErrorKind.Catch, noTunnel.ErrorKind);
         Assert.Equal(FieldingErrorKind.Tunnel, tunnel.ErrorKind);
-        // 内訳ロールはちょうど1本＝0のときは引いていない（乱数消費順が従来と一致する根拠）。
-        Assert.Equal(zero.Stats.Draws + 1, full.Stats.Draws);
+        // Catch/Tunnel は排他（内訳ロールがどちらかを選ぶ）。issue #817 で Catch 側にも捕球ミスの
+        // 回収レースが追加されたため、どちらの設定でも捕球ロールの直後に必ず1本追加で引く
+        // （0%＝回収レースのガウス／100%＝内訳ロール）＝消費本数そのものは変わらず一致し続ける。
+        Assert.Equal(zero.Stats.Draws, full.Stats.Draws);
     }
 
     /// <summary>トンネルは捕球エラーの内訳＝どちらの設定でも「失策になること」自体は変わらない。</summary>

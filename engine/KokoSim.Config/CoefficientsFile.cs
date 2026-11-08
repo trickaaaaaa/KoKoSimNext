@@ -641,6 +641,7 @@ public static class CoefficientsLoader
         public double ReceiveErrorBaseProb { get; set; } = D.ReceiveErrorBaseProb;
         public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
         public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
+        public double CatchFumbleScatterSigmaM { get; set; } = D.CatchFumbleScatterSigmaM;
         public double FoulFlyShare { get; set; } = D.FoulFlyShare;
         public double FoulFlyLaunchMeanDeg { get; set; } = D.FoulFlyLaunchMeanDeg;
         public double FoulFlyLaunchSigmaDeg { get; set; } = D.FoulFlyLaunchSigmaDeg;
@@ -720,6 +721,7 @@ public static class CoefficientsLoader
             ReceiveErrorBaseProb = ReceiveErrorBaseProb,
             WildThrowScatterSigmaM = WildThrowScatterSigmaM,
             RecoveryReactionSeconds = RecoveryReactionSeconds,
+            CatchFumbleScatterSigmaM = CatchFumbleScatterSigmaM,
             FoulFlyShare = FoulFlyShare,
             FoulFlyLaunchMeanDeg = FoulFlyLaunchMeanDeg,
             FoulFlyLaunchSigmaDeg = FoulFlyLaunchSigmaDeg,
