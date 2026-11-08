@@ -266,6 +266,12 @@ fielding:
   fence_carom_seconds: 0.40      # フェンス到達打球の跳ね返り処理の追加時間
   fence_restitution: 0.35        # フェンスの反発係数（跳ね返り初速＝到達時の残速×これ。表示専用・判定不変）
   outfield_pickup_seconds: 0.30  # 転がる打球を拾い上げる時間
+  # 外野手のファンブル（回収時に弾く・後逸, issue #811 / design-14 P1-6 追記）。安打の記録は変えず失策だけ外野手に付く。
+  # base=0で内訳ロールを引かない＝従来と完全一致。難度は回収点でのボール速度で連続的に決まる（速度0で難度0）。
+  outfield_fumble_base_prob: 0.05       # ファンブルの基準確率（速度がoutfield_fumble_speed_ref_mps以上・Catching50時）
+  outfield_fumble_speed_ref_mps: 10.0   # この速度以上で難度1（基準確率フル）。速度0（止まった球）で難度0
+  outfield_fumble_delay_mean_seconds: 1.2  # ファンブルで余分に逸れる時間の平均（指数分布）
+  outfield_fumble_delay_max_factor: 3.0    # 遅れの上限（平均の何倍で頭打ち）
   throw_distance_drag_per_m: 0.0045  # 送球の失速: 到達 = 距離÷送球速度×(1+距離×この値)
   running_top_speed_factor: 1.15 # 一塁到達後の巡航速度倍率（本塁→一塁の平均速度に対する比）
   base_turn_seconds: 0.30        # 塁を回る方向転換のロス

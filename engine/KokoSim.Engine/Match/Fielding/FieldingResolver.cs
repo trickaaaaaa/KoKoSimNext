@@ -30,9 +30,10 @@ public enum BattedBallResult
 /// <summary>
 /// 失策の種別。Catch=捕球で弾いて前へこぼす／Throw=悪送球／Tunnel=股を抜かれる（issue #632）／
 /// Bobble=お手玉（握り損ねて拾い直すあいだに打者が一塁へ着く。送球は正しく一塁へ届くが遅い。2026-11-03 監督報告）／
-/// Receive=一塁手の捕球ミス（送球は正確なのに一塁手が落とす／ショートバウンドを捕れない。失策は一塁手に付く。issue #810）。
+/// Receive=一塁手の捕球ミス（送球は正確なのに一塁手が落とす／ショートバウンドを捕れない。失策は一塁手に付く。issue #810）／
+/// Fumble=外野手のファンブル（安打の回収時に弾く・後逸して余分に進塁される。安打の記録は変えず、失策は外野手に付く。issue #811）。
 /// </summary>
-public enum FieldingErrorKind { Catch, Throw, Tunnel, Bobble, Receive }
+public enum FieldingErrorKind { Catch, Throw, Tunnel, Bobble, Receive, Fumble }
 
 /// <summary>
 /// 守備解決の詳細（結果＋幾何・時間情報, CHANGELOG 32）。
@@ -344,7 +345,7 @@ public static class FieldingResolver
                 };
             }
             // 捕れないフライ → 安打。着地後の転がりと幾何・走力で塁打数を決める。
-            return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime)
+            return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime, rng)
                 with { IsFly = true, CatchMarginSeconds = catchMargin };
         }
 
@@ -380,7 +381,7 @@ public static class FieldingResolver
                     : ExtraBaseResolver.RollFrom(
                         td.Position, path.DirectionAt(td.Seconds), path.HorizontalSpeedAt(td.Seconds),
                         td.Seconds, fenceDist, coeff);
-                var result = HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime)
+                var result = HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime, rng)
                     with { ThroughInfield = true };
                 // 表示専用（Issue #336②）: 最も惜しく迫った内野手と最接近点。判定・帯には無関係。
                 if (FindClosestInfielderMiss(fielders, path, coeff) is { } miss)
@@ -498,7 +499,7 @@ public static class FieldingResolver
                     var through = ExtraBaseResolver.RollFrom(
                         catchPoint, path.DirectionAt(fieldTimeRaw), path.HorizontalSpeedAt(fieldTimeRaw),
                         fieldTimeRaw, fenceDist, coeff);
-                    return HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime) with
+                    return HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime, rng) with
                     {
                         Result = BattedBallResult.Error,
                         ThroughInfield = true,
@@ -582,7 +583,7 @@ public static class FieldingResolver
         }
 
         // 内野を抜けた（外野への低い打球）→ 安打。転がりと幾何・走力で塁打数を決める。
-        return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime);
+        return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime, rng);
     }
 
     /// <summary>
@@ -909,7 +910,8 @@ public static class FieldingResolver
 
     /// <summary>
     /// 空中で捕れなかった打球（＝安打）の解決。着地後の転がり → 回収 → 各塁への送球 vs 打者走者。
-    /// 乱数は消費しない（決定論・進塁判断は幾何と時間のみで決まる）。
+    /// 乱数は外野手のファンブル判定（issue #811・<see cref="FieldingCoefficients.OutfieldFumbleBaseProb"/>>0 のときのみ）
+    /// だけが消費する。進塁判断そのものは幾何と時間のみで決まる。
     /// </summary>
     private static FieldingPlay Hit(
         Func<BattedBallResult, FieldingPlay> baseOf,
@@ -920,14 +922,19 @@ public static class FieldingResolver
         BatterAttributes batter,
         IReadOnlyList<Fielder> fielders,
         FieldingCoefficients coeff,
-        double runnerTime)
+        double runnerTime,
+        IRandomSource rng)
     {
         var roll = ExtraBaseResolver.ComputeRoll(
             landing, ground.LandingVelocity, ground.HangTimeSeconds, fenceDistanceM, coeff);
-        return HitFromRoll(baseOf, roll, field, batter, fielders, coeff, runnerTime);
+        return HitFromRoll(baseOf, roll, field, batter, fielders, coeff, runnerTime, rng);
     }
 
-    /// <summary>転がり経路から回収・塁打数を決めて FieldingPlay を組む（乱数不使用・決定論）。</summary>
+    /// <summary>
+    /// 転がり経路から回収・塁打数を決めて FieldingPlay を組む。外野手のファンブル（issue #811）を
+    /// ここで一括判定する＝安打の回収経路（フライが落ちて安打になった球／内野を抜けたゴロ／
+    /// トンネルで抜けた球）すべてに同じ規則が掛かる。
+    /// </summary>
     private static FieldingPlay HitFromRoll(
         Func<BattedBallResult, FieldingPlay> baseOf,
         ExtraBaseResolver.RollPath roll,
@@ -935,12 +942,30 @@ public static class FieldingResolver
         BatterAttributes batter,
         IReadOnlyList<Fielder> fielders,
         FieldingCoefficients coeff,
-        double runnerTime)
+        double runnerTime,
+        IRandomSource rng)
     {
         var (retriever, retrieveAt) = ExtraBaseResolver.Retrieve(fielders, roll, coeff);
+
+        // 外野手のファンブル（issue #811 / design-14 P1-6 追記）: 回収点でのボール速度（速いほど難度が
+        // 上がる・止まった球ではほぼ発生しない）と外野手の Catching から判定する。既定0では一切ロールを
+        // 引かない＝乱数消費順・結果とも完全に従来どおり（ThrowErrorBaseProb と同じ恒等の作法）。
+        // 発生時は一律の追加進塁ではなく、遅れた回収時刻で ResolveBases を解き直す（不変条件#1）。
+        var fumbled = false;
+        var effectiveRetrieveAt = retrieveAt;
+        if (coeff.OutfieldFumbleBaseProb > 0.0 && IsOutfield(retriever.Position))
+        {
+            var ballSpeed = roll.SpeedAt(retrieveAt);
+            if (MaybeOutfieldFumble(retriever, ballSpeed, coeff, rng))
+            {
+                fumbled = true;
+                effectiveRetrieveAt = retrieveAt + DrawOutfieldFumbleDelay(coeff, rng);
+            }
+        }
+
         var result = ExtraBaseResolver.ResolveBases(
-            roll, retriever, retrieveAt, field, batter, runnerTime, coeff);
-        var fieldedPoint = roll.PositionAt(retrieveAt);
+            roll, retriever, effectiveRetrieveAt, field, batter, runnerTime, coeff);
+        var fieldedPoint = roll.PositionAt(effectiveRetrieveAt);
         return baseOf(result) with
         {
             FieldedX = fieldedPoint.X,
@@ -952,15 +977,55 @@ public static class FieldingResolver
             // フェンスに当たらない（実測: 単打の3分の1が ReachedFence だが、その多くは外野手が
             // 手前で回収している）。跳ね返りを描くのは**実際に当たったプレーだけ**なので、
             // 回収時刻が衝突時刻より後のときに限って観測を載せる。
-            Carom = ExtraBaseResolver.ComputeFenceCarom(roll, coeff) is { } k && retrieveAt > k.HitAtSeconds + 1e-9
+            Carom = ExtraBaseResolver.ComputeFenceCarom(roll, coeff) is { } k && effectiveRetrieveAt > k.HitAtSeconds + 1e-9
                 ? k
                 : null,
             FielderRole = retriever.Position,
-            FieldedAtSeconds = retrieveAt,
+            FieldedAtSeconds = effectiveRetrieveAt,
             FielderThrowSpeedMps = retriever.Attributes.ThrowSpeedMps,
             FielderFielding = retriever.Attributes.Fielding,
             FielderThrowAccuracy = retriever.Attributes.ThrowAccuracy,
+            // 安打＋失策（issue #811）: Result はそのまま安打（Single/Double/Triple）のまま変えず、
+            // 失策だけ外野手に付ける。ErrorAtSeconds は弾いた瞬間（＝遅延前の回収時刻）の写し。
+            ErrorKind = fumbled ? FieldingErrorKind.Fumble : null,
+            ErrorFielderRole = fumbled ? retriever.Position : null,
+            ErrorAtSeconds = fumbled ? retrieveAt : null,
         };
+    }
+
+    private static bool IsOutfield(FieldPosition pos)
+        => pos is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField;
+
+    /// <summary>
+    /// 外野手のファンブルの確率（issue #811）。回収点でのボール速度から難度を出し（<see cref="FieldingCoefficients.OutfieldFumbleSpeedRefMps"/>
+    /// 以上で難度1・速度0で難度0）、外野手の Catching から守備力連動（捕球エラーと同じ非対称スロープを共有）で
+    /// 伸縮させる。FlyCatchErrorProb（issue #532）と同じ「難度×基準確率」の形。
+    /// </summary>
+    private static double OutfieldFumbleProb(Fielder retriever, double ballSpeedMps, FieldingCoefficients coeff)
+    {
+        var difficulty = MathUtil.Clamp(ballSpeedMps / Math.Max(1e-6, coeff.OutfieldFumbleSpeedRefMps), 0.0, 1.0);
+        var catchingDelta = retriever.Attributes.Catching - 50;
+        var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
+        var errProb = (coeff.OutfieldFumbleBaseProb - catchingDelta * slope) * difficulty;
+        return MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb);
+    }
+
+    /// <summary>外野手のファンブル判定（rng を1回消費）。</summary>
+    private static bool MaybeOutfieldFumble(Fielder retriever, double ballSpeedMps, FieldingCoefficients coeff, IRandomSource rng)
+        => MathUtil.Chance(OutfieldFumbleProb(retriever, ballSpeedMps, coeff), rng);
+
+    /// <summary>
+    /// 外野手のファンブルで球が余分に逸れる時間[s]（issue #811）。指数分布の逆関数法（下限0・右に裾）＝
+    /// たいていは小さく弾くだけ、たまに大きく後逸する。内野のもたつき（<see cref="DrawHandleJitter"/>）と同じ形。
+    /// 平均が0でも必ず1つ rng を引く（不変条件#2）。
+    /// </summary>
+    private static double DrawOutfieldFumbleDelay(FieldingCoefficients coeff, IRandomSource rng)
+    {
+        var u = rng.NextDouble();
+        if (coeff.OutfieldFumbleDelayMeanSeconds <= 0.0) return 0.0;
+        var delay = -coeff.OutfieldFumbleDelayMeanSeconds * Math.Log(1.0 - u);
+        var cap = coeff.OutfieldFumbleDelayMeanSeconds * coeff.OutfieldFumbleDelayMaxFactor;
+        return Math.Min(delay, cap);
     }
 
     /// <summary>

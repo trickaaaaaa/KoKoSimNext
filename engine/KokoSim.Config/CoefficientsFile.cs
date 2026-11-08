@@ -657,6 +657,10 @@ public static class CoefficientsLoader
         public double FenceCaromSeconds { get; set; } = D.FenceCaromSeconds;
         public double FenceRestitution { get; set; } = D.FenceRestitution;
         public double OutfieldPickupSeconds { get; set; } = D.OutfieldPickupSeconds;
+        public double OutfieldFumbleBaseProb { get; set; } = D.OutfieldFumbleBaseProb;
+        public double OutfieldFumbleSpeedRefMps { get; set; } = D.OutfieldFumbleSpeedRefMps;
+        public double OutfieldFumbleDelayMeanSeconds { get; set; } = D.OutfieldFumbleDelayMeanSeconds;
+        public double OutfieldFumbleDelayMaxFactor { get; set; } = D.OutfieldFumbleDelayMaxFactor;
         public double ThrowDistanceDragPerM { get; set; } = D.ThrowDistanceDragPerM;
         public double RunningTopSpeedFactor { get; set; } = D.RunningTopSpeedFactor;
         public double BaseTurnSeconds { get; set; } = D.BaseTurnSeconds;
@@ -736,6 +740,10 @@ public static class CoefficientsLoader
             FenceCaromSeconds = FenceCaromSeconds,
             FenceRestitution = FenceRestitution,
             OutfieldPickupSeconds = OutfieldPickupSeconds,
+            OutfieldFumbleBaseProb = OutfieldFumbleBaseProb,
+            OutfieldFumbleSpeedRefMps = OutfieldFumbleSpeedRefMps,
+            OutfieldFumbleDelayMeanSeconds = OutfieldFumbleDelayMeanSeconds,
+            OutfieldFumbleDelayMaxFactor = OutfieldFumbleDelayMaxFactor,
             ThrowDistanceDragPerM = ThrowDistanceDragPerM,
             RunningTopSpeedFactor = RunningTopSpeedFactor,
             BaseTurnSeconds = BaseTurnSeconds,

@@ -39,6 +39,19 @@ public static class ExtraBaseResolver
             var d = Math.Min(RollDistanceM, InitialSpeedMps * te - 0.5 * DecelMps2 * te * te);
             return Landing + Direction * Math.Max(0.0, d);
         }
+
+        /// <summary>
+        /// 時刻 t における打球の速度[m/s]（issue #811: 外野手のファンブルの難度に使う物理量）。
+        /// 着地前（まだ空中）は初速のまま、停止後は0。<see cref="PositionAt"/> と同じ減速直線を微分しただけの値で、
+        /// 新たな乱数・新たな経路は持たない。
+        /// </summary>
+        public double SpeedAt(double t)
+        {
+            var tau = Math.Max(0.0, t - HangTimeSeconds);
+            var tStop = DecelMps2 > 0 ? InitialSpeedMps / DecelMps2 : 0.0;
+            var te = Math.Min(tau, tStop);
+            return Math.Max(0.0, InitialSpeedMps - DecelMps2 * te);
+        }
     }
 
     /// <summary>

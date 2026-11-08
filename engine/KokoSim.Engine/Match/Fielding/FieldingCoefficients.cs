@@ -314,6 +314,36 @@ public sealed record FieldingCoefficients
     /// <summary>外野手が転がる打球を拾い上げるのに要する時間[s]（内野ゴロの InfieldPlayOverheadSeconds 相当）。</summary>
     public double OutfieldPickupSeconds { get; init; } = 0.30;
 
+    // 外野手のファンブル（回収時に弾く・後逸, issue #811 / design-14 P1-6 追記）。内野の3段階（捕球/送球/受け手）
+    // とは別の失策経路で、「安打の回収」そのものを外野手が仕損じる。安打の記録（Single/Double/Triple）は変えず、
+    // 失策だけ外野手に付ける（安打＋失策）。難度は物理量（回収点でのボール速度。速いほど難しい・止まった球では
+    // ほぼ発生しない）で決まる。発生時は球が逸れた分だけ回収が遅れ、その遅れた回収時刻で ResolveBases を
+    // 解き直す＝一律の追加進塁ではなく時間勝負で塁打数が伸びる（不変条件#1）。
+    /// <summary>
+    /// 外野手のファンブルの基準確率（回収点でのボール速度が <see cref="OutfieldFumbleSpeedRefMps"/> 以上・
+    /// Catching50時）。難度は回収点での打球速度で0〜1に連続的に伸縮する（速度0＝完全に止まった球ではほぼ発生
+    /// しない。クランプ下限 <see cref="ErrorMinProb"/> だけ残る）。既定0なら「ロールを一切引かない」＝
+    /// 乱数消費順・結果とも完全に従来どおり（<see cref="ThrowErrorBaseProb"/> と同じ恒等の作法）。
+    /// data/coefficients.yaml と同値（issue #811で正値化・errors_per_game/outfield_error_shareの帯内で校正）。
+    /// </summary>
+    public double OutfieldFumbleBaseProb { get; init; } = 0.05;
+
+    /// <summary>
+    /// 回収点でのボール速度[m/s]がこの値以上で難度1（基準確率フル）とみなす。難度は 0（停止球）〜1（この速度以上）
+    /// へ線形に伸縮する。
+    /// </summary>
+    public double OutfieldFumbleSpeedRefMps { get; init; } = 10.0;
+
+    /// <summary>
+    /// ファンブルで球が余分に逸れる時間[s]の平均（指数分布・下限0・右に裾＝たいていは小さく弾くだけ、
+    /// たまに大きく後逸する）。内野のもたつき（<see cref="InfieldHandleJitterMeanSeconds"/>）と同じ形。
+    /// この時間を回収時刻へ加算してから塁打数（<see cref="ExtraBaseResolver.ResolveBases"/>）を解き直す。
+    /// </summary>
+    public double OutfieldFumbleDelayMeanSeconds { get; init; } = 1.2;
+
+    /// <summary>ファンブルの遅れの上限（平均の何倍で頭打ちにするか）。<see cref="InfieldHandleJitterMaxFactor"/> と同じ趣旨。</summary>
+    public double OutfieldFumbleDelayMaxFactor { get; init; } = 3.0;
+
     /// <summary>
     /// 送球距離1mあたりの失速係数[1/m]。到達時間 = 距離÷送球速度×(1 + 距離×この値)。
     /// 長い送球ほど山なり／中継が要るぶん遅くなることを、しきい値なしの連続量で表す。

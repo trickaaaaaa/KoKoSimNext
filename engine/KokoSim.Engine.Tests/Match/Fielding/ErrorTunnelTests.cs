@@ -40,13 +40,15 @@ public sealed class ErrorTunnelTests
     private static readonly Aerodynamics Aero = new();
     private static readonly FieldGeometry Field = new();
 
-    /// <summary>捕球エラーを必ず起こす係数（クランプ上限も開ける）。内訳ロールだけを見たいので送球ロールは止める。</summary>
+    /// <summary>捕球エラーを必ず起こす係数（クランプ上限も開ける）。内訳ロールだけを見たいので送球ロールと
+    /// 外野手のファンブル（issue #811・FumbleErrorTests.cs で別途検証）は止める。</summary>
     private static FieldingCoefficients AlwaysCatchError(double tunnelShare) => new()
     {
         ErrorBaseProb = 1.0,
         ErrorMaxProb = 1.0,
         ThrowErrorBaseProb = 0.0,
         TunnelShareProb = tunnelShare,
+        OutfieldFumbleBaseProb = 0.0,
     };
 
     private static FieldingPlay Grounder(FieldingCoefficients coeff, IRandomSource? rng = null,

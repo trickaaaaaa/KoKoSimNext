@@ -644,6 +644,15 @@ public static class TimelineBuilder
             var errDisplayAt = Math.Max(batterArrive, errAt + JudgementEvent.ErrorMarkDelaySeconds);
             judgements.Add(new JudgementEvent { Label = "打", T = errAt, Kind = JudgementKind.Error, DisplayT = errDisplayAt });
         }
+        else if (play.ErrorKind == FieldingErrorKind.Fumble)
+        {
+            // 外野手のファンブル（issue #811）: 安打の記録（Result）は変えないが、弾いた瞬間に「エラー」の
+            // 「！」マーク・テロップを出す＝観測者に「安打＋失策」の両方を見せる。ErrorAtSeconds は
+            // 遅延前（弾いた瞬間）の回収時刻の写し。
+            var fumbleAt = play.ErrorAtSeconds is { } fa ? ContactAt + fa : fieldedAt;
+            var fumbleDisplayAt = Math.Max(batterArrive, fumbleAt + JudgementEvent.ErrorMarkDelaySeconds);
+            judgements.Add(new JudgementEvent { Label = "打", T = fumbleAt, Kind = JudgementKind.Error, DisplayT = fumbleDisplayAt });
+        }
         else if (batterCloseCall)
         {
             judgements.Add(new JudgementEvent { Label = "打", T = batterArrive, Kind = JudgementKind.Safe, CloseCall = true });
