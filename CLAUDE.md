@@ -224,12 +224,17 @@ dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（�
 dotnet test engine/ -c Release                               # 全テスト実行
 dotnet run --project engine/KokoSim.Balance -- \
   simulate --games 10000 --seed 42 --report out/report.md   # 一括シミュレーション＋統計レポート
+dotnet run --project engine/KokoSim.Balance -- \
+  ability-sweep --games 2000 --report out/ability-sweep.md  # 能力を1つずつ20/80に振り結果が動くか（約8分・issue #840）
 ```
 
 - テストは必ず `-c Release` で回す（issue #361）。フルゲームシムは Debug だと約17倍遅く、日常ループが5分超になる。
   CI（fast/heavy）も `tools/sync-engine-dll.sh` も Release ビルド＝Debug で回す場面はない。
   engine に `#if DEBUG` / `Debug.Assert` は無いので検証内容も変わらない
 - 統計回帰（`[Trait("Category","Heavy")]`）はバランス係数・確率モデルの変更時とコミット前に必ず回す（不変条件#5）
+- **能力感度の検査**（`AbilitySensitivityTests`・Heavy）は、帯が測らない「能力を変えたとき結果が動くか／逆向きでないか」を見張る。
+  期待は `data/balance-targets.yaml` の `ability_sensitivity`、既知の不具合は `known_defects` に issue 番号付きで載せる（直ったら外す＝外し忘れは赤になる）。
+  新しく赤くなった能力は新しい穴。解決式・能力の効き（`ability_effect`）・采配AIを触ったら、`ability-sweep` の表で意図どおりか確かめる
 - **数百試合以上のフルゲームループを回す統計テストは Heavy に置く**（fast 側の膨張防止。issue #361）。
 - **xUnit は同じクラスのテスト（Theory の各ケースも）を直列に回す**＝1クラスが重いと、それだけで日常ループの
   壁時間が決まる（issue #639: `SkipDelegateAlwaysEndsTests` の3ケースが直列426秒で、日常ループが7分台になっていた）。

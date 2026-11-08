@@ -272,3 +272,46 @@ nation_dominance:
   regions_with_ten_plus:     { min: 0, max: 8 }      # 最多校が10回以上の地区数
   max_champion_count_max:    { min: 0, max: 17 }     # 一強の尾（20年全部＝20 は不可）
   top_two_win_probability_mean: { min: 0.55, max: 0.78 }  # 初期の県1位 vs 2位の単試合勝率（集計モデル・49地区平均）。校正前 ≈0.85
+
+# --- 能力感度（issue #840・2026-11-09） ---
+# 上の帯は「平均的なチーム同士の平均値」しか測らない。能力を変えたとき結果がどう動くかは誰も見ておらず、
+# 変化球が効かない(#835)・遅い投手ほど打たれない(#837)・盗塁AIが損をする(#838)は帯が全部緑のまま残っていた。
+# Balance `ability-sweep`（AbilitySweep）: 全能力50の均一チーム同士で、能力を1つだけ 20 / 80 に振る。
+# **片方のチームだけ**変える＝自軍得点が攻撃側の効果／相手得点が守備側の効果（両軍同時だと攻守に効く能力が打ち消し合う）。
+# 変えたチームの先攻・後攻は試合ごとに入れ替える（後攻の9回裏省略で、守備・肩・制球が自軍得点を下げて見えるのを避ける）。
+#   expect: up = 20→80 で増える ／ down = 減る。 min_runs = 20→80 で期待する向きに最低これだけ（点/試合）。
+# 実測（2000試合×seed42・自軍得点Δ／相手得点Δ。誤差は ±0.07）:
+#   ミート +3.22 ／ パワー +3.03 ／ 弾道 +2.48 ／ 選球眼 +1.09 ／ 走力 +1.07・−1.82 ／ 守備 −3.40 ／ 捕球 −0.82 ／ 肩 −0.74 ／
+#   送球精度 −0.42 ／ 調子 +1.89・−1.98 ／ 精神力 +0.25・−0.33 ／ 投手: 制球 −3.71・最速(110→150) −0.94・球威 −0.57・キレ −0.61
+# min_runs は上の実測の約半分（Heavy は 1000 試合なので誤差 ±0.14 の2σ以上の余白を取る）。
+# **検査しない能力**（誤差に埋もれるか、効かなくて設計どおり）: 盗塁(全員50は一度も走らない)・走塁(本塁突入の出足秒だけ・±0.05)・
+#   バント(犠打の回数は動くが得点は動かなくてよい)・捕手のリード(−0.25)・捕手の捕球(暴投/捕逸だけ・−0.04)・投手のスタミナ/守備(この条件では効かなくて当然)。
+#   これらの調査結果は issue #840 のコメントに書いた（効きを足すかはオーナー判断）。
+ability_sensitivity:
+  noise_runs: 0.25                 # 最速の梯子で、1段上げて相手得点がこれ以上増えたら逆転とみなす
+  velocity_ladder_min_drop: 0.5    # 最速 100→150km/h で相手得点が最低これだけ下がる
+  repertoire_min_drop: 0.3         # ストレートのみ→変化球2本で相手得点が最低これだけ下がる
+  abilities:
+    contact:          { offense: { expect: up, min_runs: 2.0 } }
+    power:            { offense: { expect: up, min_runs: 2.0 } }
+    launch:           { offense: { expect: up, min_runs: 1.5 } }
+    discipline:       { offense: { expect: up, min_runs: 0.5 } }
+    speed:            { offense: { expect: up, min_runs: 0.5 }, defense: { expect: down, min_runs: 1.0 } }
+    steal_fast:       { offense: { expect: up, min_runs: 0.3 } }   # 走力80の走者で盗塁20→80。#838 で今は逆向き
+    arm:              { defense: { expect: down, min_runs: 0.2 } }
+    throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
+    fielding:         { defense: { expect: down, min_runs: 2.0 } }
+    catching:         { defense: { expect: down, min_runs: 0.3 } }
+    mental:           { offense: { expect: up, min_runs: 0.0 }, defense: { expect: down, min_runs: 0.1 } }   # 打者側は弱い(+0.25)＝向きだけ見る
+    condition:        { offense: { expect: up, min_runs: 1.0 }, defense: { expect: down, min_runs: 1.0 } }
+    catcher_arm:      { defense: { expect: down, min_runs: 0.3 } }   # 弱肩の捕手が相手得点を減らす(#838)
+    pitcher_velocity: { defense: { expect: down, min_runs: 0.4 } }   # 110→150km/h
+    pitcher_control:  { defense: { expect: down, min_runs: 2.0 } }
+    pitcher_stuff:    { defense: { expect: down, min_runs: 0.25 } }
+    pitcher_sharpness: { defense: { expect: down, min_runs: 0.25 } }
+  # 既知の不具合で今は満たせない項目（除外リスト）。直ったら**外す**（外し忘れは Heavy が「もう通っている」と赤くする）。
+  known_defects:
+    - { ability: velocity_ladder, side: defense, issue: 837, note: "最速 100/110km/h の方が 132km/h より相手得点が少ない（遅い投手ほど打たれない）" }
+    - { ability: repertoire,      side: defense, issue: 835, note: "変化球の本数を変えても相手得点が動かない（全球種バックスピン固定）" }
+    - { ability: catcher_arm,     side: defense, issue: 838, note: "弱肩の捕手だと相手が走って損をし、相手得点が基準より減る" }
+    - { ability: steal_fast,      side: offense, issue: 838, note: "走力80で盗塁を上げると企図が増えて成功率51%＝得点が下がる" }
