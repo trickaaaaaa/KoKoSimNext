@@ -2847,6 +2847,58 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// ゴロの進塁打で二塁走者が三塁で刺されたときの「一塁→三塁」の転送を描く（issue #801）。
+    /// 判定（<c>BaserunningModel.ResolveGrounderAdvance</c>）は打者を一塁で取った送球の到達を起点に、
+    /// 一塁手の握り替え（<see cref="BaserunningCoefficients.AdvanceRelayTransferSeconds"/>）＋中継速度で三塁へ転送する
+    /// 秒で勝負しているのに、絵には一塁への送球しか無く、走者は送球の無い三塁でアウトになっていた。
+    /// 転送は一塁に着いた送球の後へ同じ係数で積み、走者のレッグは転送の到達へ揃える
+    /// （<see cref="AlignTaggedRunnerToThrow"/>）。表示専用・乱数不使用。一塁への送球が無ければ何もしない。
+    /// </summary>
+    /// <param name="runnerLabel">刺された二塁走者のレッグ名（"走N"）。</param>
+    public static PlayTimeline AppendAdvanceRelayToThird(
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, string runnerLabel,
+        BaserunningCoefficients? coefficients = null)
+    {
+        var c = coefficients ?? new BaserunningCoefficients();
+        BallSegment? toFirst = null;
+        foreach (var seg in timeline.Ball)
+        {
+            if (seg.ToBase == "third" && (seg.Kind == BallSegmentKind.Throw || seg.Kind == BallSegmentKind.Carry))
+                return timeline; // 三塁への送球が既にある＝二重に描かない
+            if ((seg.Kind == BallSegmentKind.Throw || seg.Kind == BallSegmentKind.Carry) && seg.ToBase == "first")
+                toFirst = seg;
+        }
+        if (toFirst is null) return timeline;
+
+        double? runnerArrive = null;
+        foreach (var leg in timeline.Runners)
+            if (leg.Label == runnerLabel && leg.OutAtEnd) runnerArrive = leg.T1;
+        if (runnerArrive is not { } anchor) return timeline;
+
+        var first = BasePoint(field, "first");
+        var third = BasePoint(field, "third");
+        // 判定と同じ握り替え（処理野手の守備で伸縮）・同じ中継速度。
+        var transferFactor = new Players.FielderAttributes { Fielding = play.FielderFielding }
+            .TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var releaseAt = toFirst.T1 + c.AdvanceRelayTransferSeconds * transferFactor;
+        var flight = LegSeconds(Distance(first, third), c.RelayThrowSpeedMps);
+        var arrive = GuardAgainstVerdict(releaseAt + flight, toFirst.T1 + flight, anchor, runnerOut: true);
+
+        var ball = new List<BallSegment>(timeline.Ball)
+        {
+            new()
+            {
+                Kind = BallSegmentKind.Throw, T0 = arrive - flight, T1 = arrive,
+                From = first, To = third,
+                FromRole = toFirst.ToRole ?? FieldPosition.FirstBase,
+                ToRole = CoverRoleAt(timeline, third, FieldPosition.ThirdBase), ToBase = "third",
+            },
+        };
+        var tl = timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, arrive + 1.0) };
+        return AlignTaggedRunnerToThrow(tl, "third", runnerLabel);
+    }
+
+    /// <summary>
     /// タッチで刺された走者のレッグ終端を、その塁へ着いた送球の時刻まで延ばす（issue #685）。
     /// 返球は「間ゼロで投げ切った最速」より早くは着けられない（<see cref="GuardAgainstVerdict"/>）ので、
     /// 判定がアウトでも送球がわずかに遅れて着くことがある（実測: タッチアップの憤死で最大0.07秒）。
@@ -2887,7 +2939,8 @@ public static class TimelineBuilder
     }
 
     /// <summary>
-    /// 外野安打の返球先（issue #627）。<b>アウトも含めた先頭走者の到達塁</b>と、その走者のレッグ名・生死。
+    /// 外野安打の返球先（issue #627）。<b>走者を刺した塁</b>（無ければアウトも含めた先頭走者の到達塁, issue #801）と、
+    /// その走者のレッグ名・生死。
     /// </summary>
     /// <param name="BaseName">投げる塁（"second" / "third" 等）。<see cref="AppendOutfieldReturnThrow"/> へ渡す。</param>
     /// <param name="AnchorLabel">
@@ -2920,7 +2973,12 @@ public static class TimelineBuilder
             if (m.FromBase == 0) continue;              // 打者走者は「先頭走者」ではない（下の既定で見る）
             index++;                                    // AppendRunnerLegs の "走N" と同じ採番（塁上の走者だけ数える）
             if (m.ToBase <= m.FromBase) continue;       // 動いていない＝レッグが無いのでアンカーに使えない
-            if (m.ToBase > 3 || m.ToBase <= leadTo) continue;
+            if (m.ToBase > 3) continue;
+            // 刺した塁が最優先（issue #801）: 1プレー1送球＝球はアウトを取った塁へ行っている。先頭走者を
+            // 優先すると、満塁のタッチアップで一塁走者が二塁で刺されたのに三塁へ返す（二塁へは送球が無い
+            // ままアウト）ことになっていた。
+            if (leadOut) continue;
+            if (!m.Out && m.ToBase <= leadTo) continue;
             leadTo = m.ToBase;
             leadOut = m.Out;
             leadLabel = $"走{index}";
@@ -2956,7 +3014,9 @@ public static class TimelineBuilder
         FieldingCoefficients? coefficients = null, Game.BaserunningCoefficients? baserunning = null,
         bool runnerOut = false)
     {
-        if (!IsOutfieldHit(play)) return timeline; // 外野へ抜けた打球のみ（バウンド抜けを含む, Issue #63）
+        // 外野へ抜けた打球のみ（バウンド抜けを含む, Issue #63）。ただし走者を刺した送球は着地の浅い打球
+        // （外野手の前に落ちたライナー）でも実在する＝必ず描く（issue #801）。
+        if (!runnerOut && !IsOutfieldHit(play)) return timeline;
         foreach (var seg in timeline.Ball)
             if (seg.Kind == BallSegmentKind.Throw) return timeline; // 既存送球があれば二重返球しない
 

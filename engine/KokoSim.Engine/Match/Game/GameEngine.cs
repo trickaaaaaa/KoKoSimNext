@@ -1961,6 +1961,17 @@ public static class GameEngine
                     preFirstPlayer, preSecondPlayer, preThirdPlayer,
                     runnerMoves, ctx.Field, outsBefore, res.Play, paBaserunning);
 
+                // ゴロの進塁打で二塁走者が三塁で刺された（issue #801）: 打者を取った一塁から三塁へ転送する。
+                // 判定はこの転送との勝負で決まっているのに、絵には一塁への送球しか無かった。
+                if (res.Play is { IsFly: false } advPlay
+                    && runnerMoves.Any(m => m.FromBase == 2 && m.ToBase == 3 && m.Out && !m.Force))
+                {
+                    var advTarget = Match.Timeline.TimelineBuilder.ResolveOutfieldReturnTarget(runnerMoves, advPlay.Result);
+                    if (advTarget.RunnerOut && advTarget.BaseName == "third")
+                        timeline = Match.Timeline.TimelineBuilder.AppendAdvanceRelayToThird(
+                            timeline, advPlay, ctx.Field, advTarget.AnchorLabel, paBaserunning);
+                }
+
                 // バックホーム: 本塁で憤死した走者、または外野安打で生還した走者がいれば送球連鎖
                 // （外野→中継→本塁）を描く（設計書12 §3, F2 Slice D＋#7 セーフ生還も描く）。
                 var homeThrowAdded = false;
@@ -2003,7 +2014,10 @@ public static class GameEngine
                 // トンネル（issue #632）も外野まで球が行く＝返球しないと外野手が球を持ったまま棒立ちになる
                 // （issue #629 ③と同じ症状）。ただしお手玉・悪送球・フライ落球は「拾い直し」を持つので、
                 // 下の AppendErrorReturnThrow が投げる＝二重に積まないよう ErrorPickupAt が無い失策だけを拾う。
-                if (!homeThrowAdded && res.Play is { } ofHit && (ofHit.RangeM > 46.0 || ofHit.ThroughInfield)
+                // 浅い打球（46m以下）でも、他の塁で走者を刺したならその送球は実在する＝必ず描く（issue #801:
+                // 一・二塁の単打で一塁走者が三塁で刺されたのに、送球が1本も無いまま 7.6 秒でアウトになっていた）。
+                if (!homeThrowAdded && res.Play is { } ofHit
+                    && (ofHit.RangeM > 46.0 || ofHit.ThroughInfield || HasOutAtOtherBase(runnerMoves))
                     && (ofHit.Result is Match.Fielding.BattedBallResult.Single
                             or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple
                         || (ofHit.Result == Match.Fielding.BattedBallResult.Error && timeline.ErrorPickupAt is null)))
@@ -2016,6 +2030,10 @@ public static class GameEngine
                     timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
                         timeline, ofHit, ctx.Field, returnTo.BaseName, runnerArrive, ctx.Fielding, paBaserunning,
                         returnTo.RunnerOut);
+                    // 刺した送球が「間ゼロ」でも走者より遅れて着く分は、走者を送球の到達へ揃える（issue #801・#685 と同じ）。
+                    if (returnTo.RunnerOut)
+                        timeline = Match.Timeline.TimelineBuilder.AlignTaggedRunnerToThrow(
+                            timeline, returnTo.BaseName, returnTo.AnchorLabel);
                 }
 
                 // 外野フライのタッチアップで別の走者が進塁を刺された（issue #685）: 捕った外野手からその塁へ投げる。
