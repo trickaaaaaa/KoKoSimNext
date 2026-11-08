@@ -11,7 +11,7 @@ using KokoSim.Engine.Players;
 namespace KokoSim.Balance;
 
 /// <summary>1万試合シミュレーションと得点分布・試合時間の集計（Phase 2 DoD）。</summary>
-public static class GameSimulation
+public static partial class GameSimulation
 {
     // 試合時間の推定係数（1球あたり秒 ＋ ハーフイニングの合間）。
     private const double SecondsPerPitch = 22.0;

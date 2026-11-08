@@ -163,6 +163,13 @@ public sealed record FieldingPlay
     /// <summary>拾い直しでアウトが成立した時刻[s]（接触基準＝<see cref="ThrowArriveSeconds"/> と同じ時計）。</summary>
     public double? RecoveredThrowOutSeconds { get; init; }
 
+    /// <summary>
+    /// 悪送球（<see cref="ErrorKind"/>==Throw）で、回収レースでも拾い直しが間に合わなかった打席の逸れ幅[m]
+    /// （issue #812・表示専用）。回収レースで引いた値の写し＝新しい乱数は引かない。逸れ方の絵
+    /// （<see cref="Timeline.WildThrowStyles.Classify"/>）の入力。それ以外は null。
+    /// </summary>
+    public double? WildThrowScatterM { get; init; }
+
     // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
 
     /// <summary>
@@ -446,7 +453,7 @@ public static class FieldingResolver
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
                 var (result, errorKind) = MaybeInfieldError(
                     fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy);
-                double? recoveredScatterM = null, recoveredOutSeconds = null;
+                double? recoveredScatterM = null, recoveredOutSeconds = null, wildScatterM = null;
                 var recoveredByBackup = false;
                 if (errorKind == FieldingErrorKind.Throw)
                 {
@@ -471,6 +478,10 @@ public static class FieldingResolver
                         recoveredScatterM = scatterM;
                         recoveredByBackup = byBackup;
                         recoveredOutSeconds = defenseTime + recovery;
+                    }
+                    else
+                    {
+                        wildScatterM = scatterM;   // 表示専用（issue #812）: 逸れ方の絵の入力
                     }
                 }
                 if (errorKind == FieldingErrorKind.Tunnel)
@@ -515,6 +526,7 @@ public static class FieldingResolver
                     RecoveredThrowScatterM = recoveredScatterM,
                     RecoveredThrowByBackup = recoveredByBackup,
                     RecoveredThrowOutSeconds = recoveredOutSeconds,
+                    WildThrowScatterM = wildScatterM,
                 };
             }
             // お手玉の失策（2026-11-03 監督報告「あれだけファンブルしたら内野安打じゃなくて普通にエラーでは？」）:

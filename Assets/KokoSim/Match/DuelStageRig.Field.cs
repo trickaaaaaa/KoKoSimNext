@@ -1141,6 +1141,11 @@ namespace KokoSim.Unity.Match
 
         private const int DiveAnchorBackJump = 0;
 
+        /// <summary>悪送球の捕り損ね（issue #812）に流す収録: 頭上を抜ける＝ジャンプ捕球／脇を抜ける＝一塁手の伸び。
+        /// <see cref="FieldCatchAnchors"/> の添字。</summary>
+        private const int MissAnchorJump = 5;
+        private const int MissAnchorStretch = 1;
+
         /// <summary>
         /// 飛び込み（いまは背走ジャンピングだけ。横っ飛び・スライディングは #674 で廃止）を出す捕球余裕[s]（監督決定 2026-08-13）。
         ///
@@ -1310,13 +1315,14 @@ namespace KokoSim.Unity.Match
         /// **球に触らせない**＝engine の球の位置がそのまま描かれ、届かなかった距離は
         /// 「野手の立ち位置と球の距離」そのものになる（絵のために距離を発明しない）。</para>
         /// </summary>
-        private enum FieldCatchKind { Catch, Dive, DiveMiss, Fumble }
+        /// <summary>Miss＝悪送球が脇・頭上を抜ける（issue #812）。捕球の収録を流すが球には触らない。</summary>
+        private enum FieldCatchKind { Catch, Dive, DiveMiss, Fumble, Miss }
 
         private static FieldCatchAnchor AnchorOf(FieldCatchKind kind, int index) => kind switch
         {
             FieldCatchKind.Dive or FieldCatchKind.DiveMiss => FieldDiveAnchors[index],
             FieldCatchKind.Fumble => FieldFumbleAnchors[index],
-            _ => FieldCatchAnchors[index],
+            _ => FieldCatchAnchors[index],   // Catch / Miss
         };
 
         /// <summary>球をグラブへ吸わせる種別か（＝捕った芝居）。</summary>
@@ -1494,8 +1500,12 @@ namespace KokoSim.Unity.Match
                     if (!isThrow && !(seg is ArcSegment) && !(seg is RollSegment)) continue;
                 }
 
-                float tc = (float)seg.T1;
-                var end = seg.At(seg.T1 - seg.T0);
+                // 捕り損ねの区間（issue #812。悪送球が一塁手の脇・頭上を抜ける／手前で弾んでグラブを弾く）は
+                // 終点では誰も捕らない。engine が名指しした野手が、球がそばを通る瞬間に「届かない」芝居をする
+                var missBy = seg.MissedBy;
+                double tLocal = missBy.HasValue ? seg.MissAfter : seg.T1 - seg.T0;
+                float tc = (float)(seg.T0 + tLocal);
+                var end = seg.At(tLocal);
 
                 // どう終わる芝居か（engine が決めた結果の写し）。
                 //   弾いた瞬間で終わる打球  → お手玉
@@ -1503,9 +1513,13 @@ namespace KokoSim.Unity.Match
                 //                             完全に抜けた当たりは芝居なし（従来の「落球に捕球クリップを
                 //                             流さない」を明示的に保つ）
                 var kind = FieldCatchKind.Catch;
-                var aerial = !isThrow && !float.IsNaN(catchMargin) && !aerialResolved
+                var aerial = !missBy.HasValue && !isThrow && !float.IsNaN(catchMargin) && !aerialResolved
                     && (eb == null ? seg is ArcSegment : eb.Kind == BallSegmentKind.Flight);
-                if (!isThrow && !float.IsNaN(fumbleAt) && Mathf.Abs(tc - fumbleAt) < 0.05f)
+                if (missBy.HasValue)
+                {
+                    kind = seg.WildThrow == WildThrowStyle.ShortHop ? FieldCatchKind.Fumble : FieldCatchKind.Miss;
+                }
+                else if (!isThrow && !float.IsNaN(fumbleAt) && Mathf.Abs(tc - fumbleAt) < 0.05f)
                 {
                     kind = FieldCatchKind.Fumble;
                     aerialResolved |= aerial;
@@ -1523,9 +1537,9 @@ namespace KokoSim.Unity.Match
                 // 受け手。送球は engine が知っている（E1）＝推定しない。無ければ従来どおり最近傍へ落とす
                 FieldPosition who;
                 float bestD;
-                if (isThrow && seg.ToRole.HasValue)
+                if (missBy.HasValue || (isThrow && seg.ToRole.HasValue))
                 {
-                    who = seg.ToRole.Value;
+                    who = missBy ?? seg.ToRole.Value;
                     var p = PlaybackEvaluator.FielderAt(play, who, tc).Pos;
                     bestD = new Vector2((float)(p.X - end.X), (float)(p.Y - end.Y)).magnitude;
                 }
@@ -1552,6 +1566,8 @@ namespace KokoSim.Unity.Match
                         : (seg is RollSegment ? BallSegmentKind.Roll : BallSegmentKind.Flight));
                 int anchor;
                 if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
+                else if (kind == FieldCatchKind.Miss)
+                    anchor = seg.WildThrow == WildThrowStyle.Sail ? MissAnchorJump : MissAnchorStretch;
                 else if (kind == FieldCatchKind.DiveMiss)
                 {
                     // 横っ飛びを廃止した（#674）ので、届かなかった絵は背走ジャンプだけ。前進・横は従来の
@@ -1599,7 +1615,7 @@ namespace KokoSim.Unity.Match
                 var bodyShift = Vector2.zero;
                 var gap = new Vector2((float)(end.X - fp.X), (float)(end.Y - fp.Y));
                 // 球が終点へ来る向き（XYは全種別とも直線）。捕球点はこの線の上で解く＝球を横へ動かさない
-                var inBack = seg.At(System.Math.Max(0.0, (seg.T1 - seg.T0) - 0.1));
+                var inBack = seg.At(System.Math.Max(0.0, tLocal - 0.1));
                 var inDir = new Vector2((float)(end.X - inBack.X), (float)(end.Y - inBack.Y));
                 if (reach > 0.01f && gap.magnitude > reach && inDir.sqrMagnitude > 1e-8f)
                 {
@@ -1632,7 +1648,7 @@ namespace KokoSim.Unity.Match
                 {
                     // 近すぎ＝畳むことになる。**球が来た向きへ遡って**離す＝球は自分の線から
                     // 外れない（横へ飛ばない）。XYは全種別とも直線なので二次方程式で厳密に出る
-                    var back = seg.At(System.Math.Max(0.0, (seg.T1 - seg.T0) - 0.1));
+                    var back = seg.At(System.Math.Max(0.0, tLocal - 0.1));
                     var dir = new Vector2((float)(end.X - back.X), (float)(end.Y - back.Y));
                     if (dir.sqrMagnitude > 1e-8f)
                     {
@@ -1653,7 +1669,7 @@ namespace KokoSim.Unity.Match
                 // 球の線からの横ずれ（issue #782）。線＝終点へ来る向き（近すぎの枝と同じ取り方）
                 float lineOff = 0f;
                 {
-                    var back = seg.At(System.Math.Max(0.0, (seg.T1 - seg.T0) - 0.1));
+                    var back = seg.At(System.Math.Max(0.0, tLocal - 0.1));
                     var dir = new Vector2((float)(end.X - back.X), (float)(end.Y - back.Y));
                     if (dir.sqrMagnitude > 1e-8f)
                     {
@@ -1663,6 +1679,8 @@ namespace KokoSim.Unity.Match
                     }
                 }
 
+                // 捕り損ねは体を球へ寄せない（寄せると届いてしまう。外れる量は engine の幾何のまま）
+                if (kind == FieldCatchKind.Miss) bodyShift = Vector2.zero;
                 _catchEvents.Add(new FieldCatchEvent
                 {
                     BodyShift = bodyShift,
@@ -1682,7 +1700,8 @@ namespace KokoSim.Unity.Match
                 switch (kind)
                 {
                     case FieldCatchKind.Dive: _kindDive++; break;
-                    case FieldCatchKind.DiveMiss: _kindDiveMiss++; break;
+                    case FieldCatchKind.DiveMiss:
+                    case FieldCatchKind.Miss: _kindDiveMiss++; break;
                     case FieldCatchKind.Fumble: _kindFumble++; break;
                     default: _kindCatch++; break;
                 }

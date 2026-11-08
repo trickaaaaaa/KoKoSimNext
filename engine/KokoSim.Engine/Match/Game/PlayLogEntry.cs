@@ -47,6 +47,10 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="IsSacFly">犠飛か（issue #68 のフライ捕球＋タッチアップ生還判定の写し）。</param>
 /// <param name="IsSacBunt">送りバント/スクイズ成功か（<see cref="BuntResult.SacrificeSuccess"/>）。</param>
 /// <remarks>
+/// <param name="ErrorKind">失策の種類（<see cref="Fielding.FieldingPlay.ErrorKind"/> の写し。issue #812）。フライ落球は
+/// null（ReachedOnError かつ <paramref name="BattedIsFly"/>）。</param>
+/// <param name="WildThrowScatterM">悪送球の逸れ幅[m]（<see cref="Fielding.FieldingPlay.WildThrowScatterM"/> の写し。issue #812）。</param>
+/// <param name="ThrowRecovered">一塁送球が逸れたが拾い直してアウトにした打席か（issue #815/#812。頻度の観測用）。</param>
 /// Timeline 以降の追加フィールドはすべて「観測データ」で試合結果に影響しない（判定・乱数順は不変）。
 /// うち PitchLog は決定論ゲート GameResultDigest のハッシュ対象（設計書15 §3.2, Phase Bで再ベースライン済み。
 /// Trajectory は含めない）。それ以外のフィールドはハッシュ対象外＝足しても SHA 不変。
@@ -72,4 +76,7 @@ public sealed record PlayLogEntry(
     double? BattedBearingDeg = null,
     int OutsThisPa = 0,
     bool IsSacFly = false,
-    bool IsSacBunt = false);
+    bool IsSacBunt = false,
+    Fielding.FieldingErrorKind? ErrorKind = null,
+    double? WildThrowScatterM = null,
+    bool ThrowRecovered = false);

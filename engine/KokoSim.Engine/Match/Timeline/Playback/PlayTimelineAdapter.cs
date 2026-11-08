@@ -140,9 +140,13 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         {
             _passU = s.PassFraction is { } pu && pu > 1e-6 && pu < 1 - 1e-6 ? pu : null,
             _passH = Math.Max(0.0, s.PassHeightM),
-            _hops = s.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce && s.Hops is { Count: > 0 } hs ? hs : null,
+            // 送球にも弾み列を許す（issue #812: 手前で弾む悪送球＝離しの高さから地面へ落ちる）
+            _hops = s.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce or BallSegmentKind.Throw
+                    && s.Hops is { Count: > 0 } hs ? hs : null,
             // 送球の投げ手／受け手（Issue E1）。座標と違って**推定できない**値なので素通しする
             FromRole = s.FromRole, ToRole = s.ToRole, ToBase = s.ToBase,
+            // 捕り損ね（issue #812）
+            MissedBy = s.MissedBy, MissAfter = (s.T1 - s.T0) * Math.Clamp(s.MissFraction, 0.0, 1.0), WildThrow = s.WildThrow,
         };
 
     public override PlaybackBall At(double tt)
@@ -228,6 +232,8 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
                 // のまま（誤差 launch²/(16·(Apex−launch/2))＝1mの打点・20mの弧で 0.3cm）。launch=0 なら従来式。
                 return _launch * (1 - u) + Math.Max(0, _apex - _launch * 0.5) * 4 * u * (1 - u);
             case BallSegmentKind.Throw:
+                // 通過点つきの送球（issue #812: 悪送球が一塁の上・脇を決まった高さで抜けて先へ落ちる）
+                if (_passU is { } tpu) return PassHeight(u, tpu);
                 return ThrowReleaseHeightM + ThrowRiseM(T1 - T0) * 4 * u * (1 - u);
             case BallSegmentKind.Carry:
                 return 0.6;                                    // 野手が保持して移動（低め）

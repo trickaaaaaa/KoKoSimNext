@@ -42,6 +42,16 @@ public abstract record PlaybackBallSegment(double T0, double T1)
 
     /// <summary>受け先の塁名（"first"/"second"/"third"/"home"）。塁でなければ null。</summary>
     public string? ToBase { get; init; }
+
+    /// <summary>この区間の球を捕り損ねる野手（<see cref="BallSegment.MissedBy"/> の写し。issue #812）。
+    /// 非null の区間は誰も捕らない。</summary>
+    public FieldPosition? MissedBy { get; init; }
+
+    /// <summary><see cref="MissedBy"/> のそばを球が通る区間内の時刻[s]（T0 からの経過）。</summary>
+    public double MissAfter { get; init; }
+
+    /// <summary>悪送球の逸れ方（<see cref="BallSegment.WildThrow"/> の写し）。</summary>
+    public WildThrowStyle? WildThrow { get; init; }
 }
 
 /// <summary>投球（マウンド→本塁）。mock: pitchSeg。</summary>
