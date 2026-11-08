@@ -1975,7 +1975,11 @@ public static class GameEngine
                 // バックホーム: 本塁で憤死した走者、または外野安打で生還した走者がいれば送球連鎖
                 // （外野→中継→本塁）を描く（設計書12 §3, F2 Slice D＋#7 セーフ生還も描く）。
                 var homeThrowAdded = false;
-                if (res.Play is { FielderThrowSpeedMps: not null } bhPlay)
+                // 本塁の自己フォース併殺（Q31）は本塁への球（運び／捕手への送球）を AppendSelfForceDoublePlayThrows が
+                // 既に描いている＝ここでもう1本描くと、同じ瞬間に2本の球が本塁へ向かう（issue #830 で表に出た）
+                var selfForceAtHome = runnerMoves.Any(m => m.SelfForceDoublePlayLead && m.ToBase == 4 && m.Out);
+                homeThrowAdded = selfForceAtHome;
+                if (res.Play is { FielderThrowSpeedMps: not null } bhPlay && !selfForceAtHome)
                 {
                     var (outAtHome, safeAtHome) = FindHomeArrivals(timeline, runnerMoves);
                     if (outAtHome is { } o)

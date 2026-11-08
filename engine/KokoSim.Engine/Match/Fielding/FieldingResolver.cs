@@ -170,6 +170,9 @@ public sealed record FieldingPlay
     /// </summary>
     public double? WildThrowScatterM { get; init; }
 
+    /// <summary>ファウルフライのアウト（issue #830）。落下点はファウルグラウンド。</summary>
+    public bool FoulFly { get; init; }
+
     // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
 
     /// <summary>
@@ -238,15 +241,14 @@ public static class FieldingResolver
         FieldingCoefficients coeff,
         IRandomSource rng)
     {
-        // 本塁→一塁の実戦タイム（設計書02 §4.1b）: 天井速度での距離÷速度＋実戦オフセット−左打者短縮。
-        var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
-            ? coeff.LeftBatterFirstStepBonusSeconds : 0.0;
-        var runnerTime = field.BaseDistanceM / batter.SpeedToFirstMps()
-                         + coeff.RunnerReactionSeconds - handednessBonus;
+        var runnerTime = BatterToFirstSeconds(field, batter, coeff);
 
         // フェア/ファウル: 方位角が±45°を越えたらファウル。
         if (Math.Abs(ball.BearingDeg) > 45.0)
         {
+            // ファウルフライ（issue #830）: ファウルグラウンドに落ちる前に野手が届けばアウト（乱数不使用）
+            if (coeff.FoulFlyShare > 0.0 && ResolveFoulFly(ball, field, aero, fielders, coeff, runnerTime) is { } foulOut)
+                return foulOut;
             return new FieldingPlay
             {
                 Result = BattedBallResult.Foul,
@@ -1038,6 +1040,79 @@ public static class FieldingResolver
             }
         }
         return (BattedBallResult.Out, null);
+    }
+
+    /// <summary>本塁→一塁の実戦タイム（設計書02 §4.1b）: 天井速度での距離÷速度＋実戦オフセット−左打者短縮。</summary>
+    public static double BatterToFirstSeconds(FieldGeometry field, BatterAttributes batter, FieldingCoefficients coeff)
+    {
+        var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
+            ? coeff.LeftBatterFirstStepBonusSeconds : 0.0;
+        return field.BaseDistanceM / batter.SpeedToFirstMps() + coeff.RunnerReactionSeconds - handednessBonus;
+    }
+
+    /// <summary>
+    /// ファウルフライの捕球（issue #830）。打球を積分して落下点を求め、ファウルグラウンド（スタンドより内側）に
+    /// 落ちる飛球へ捕手を含む全野手のうち最も早く届く者が間に合えばアウトの <see cref="FieldingPlay"/> を返す。
+    /// 届かない・スタンドに入る・低い打球は null（＝ただのファウル）。乱数は使わない（落球は扱わない）。
+    /// </summary>
+    public static FieldingPlay? ResolveFoulFly(
+        BattedBall ball, FieldGeometry field, Aerodynamics aero,
+        IReadOnlyList<Fielder> fielders, FieldingCoefficients coeff, double runnerTime)
+    {
+        var ground = BallisticIntegrator.IntegrateToGround(
+            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
+        if (ground.ApexHeightM < coeff.FlyApexThresholdM) return null;
+        var landing = ground.LandingPosition;
+        if (!field.InFoulTerritory(landing)) return null;
+
+        Fielder? best = null;
+        var bestReach = double.MaxValue;
+        foreach (var f in fielders)
+        {
+            var t = ReachTime(f, landing);
+            if (t < bestReach) { bestReach = t; best = f; }
+        }
+        if (best is null) return null;
+        var budget = CatchTimeBudget(ground.HangTimeSeconds, best, coeff);
+        if (bestReach > budget) return null;
+
+        var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
+        return new FieldingPlay
+        {
+            Result = BattedBallResult.Out,
+            LandingX = landing.X,
+            LandingZ = landing.Z,
+            HangTimeSeconds = ground.HangTimeSeconds,
+            ApexHeightM = ground.ApexHeightM,
+            LaunchHeightM = ball.ContactHeightM,
+            RangeM = range,
+            BearingDeg = ball.BearingDeg,
+            BatterToFirstSeconds = runnerTime,
+            Class = BattedBallClass.Fly,
+            IsFly = true,
+            FoulFly = true,
+            FielderRole = best.Position,
+            FieldedAtSeconds = ground.HangTimeSeconds,
+            FielderThrowSpeedMps = best.Attributes.ThrowSpeedMps,
+            FielderFielding = best.Attributes.Fielding,
+            FielderThrowAccuracy = best.Attributes.ThrowAccuracy,
+            CatchMarginSeconds = budget - bestReach,
+        };
+    }
+
+    /// <summary>
+    /// 打ち上がったファウルの打球（issue #830）。接触判定の「ファウル」は弾道を持たないので、
+    /// <see cref="FieldingCoefficients.FoulFlyShare"/> の割合でこの打球を与える。<paramref name="rng"/> は
+    /// 打席の本流から Fork した専用ストリーム（本流の乱数順を変えない）。打ち上がらない回は null。
+    /// </summary>
+    public static BattedBall? FoulFlyBall(FieldingCoefficients coeff, IRandomSource rng)
+    {
+        if (!MathUtil.Chance(coeff.FoulFlyShare, rng)) return null;
+        var la = MathUtil.Clamp(rng.NextGaussian(coeff.FoulFlyLaunchMeanDeg, coeff.FoulFlyLaunchSigmaDeg), 25.0, 85.0);
+        var kmh = Math.Max(40.0, rng.NextGaussian(coeff.FoulFlyExitMeanKmh, coeff.FoulFlyExitSigmaKmh));
+        var abs = coeff.FoulFlyBearingMinDeg + rng.NextDouble() * (coeff.FoulFlyBearingMaxDeg - coeff.FoulFlyBearingMinDeg);
+        var sign = rng.NextDouble() < 0.5 ? -1.0 : 1.0;
+        return new BattedBall { ExitVelocityMps = kmh / 3.6, LaunchAngleDeg = la, BearingDeg = sign * abs };
     }
 
     private static double ReachTime(Fielder f, Vector3D target)

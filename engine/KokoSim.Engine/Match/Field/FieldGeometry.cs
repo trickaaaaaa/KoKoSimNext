@@ -69,6 +69,37 @@ public sealed record FieldGeometry
     public double BaseDistanceM { get; init; } = 27.43;
 
     /// <summary>
+    /// 本塁からバックネットまでの距離[m]（issue #830）。ファウルグラウンドの奥行き＝この内側に落ちる飛球は
+    /// 捕手（と投手・一三塁手）が捕りにいける。公認野球規則の推奨 60ft(18.29m)。
+    /// </summary>
+    public double BackstopM { get; init; } = 18.3;
+
+    /// <summary>ファウルラインからスタンド（フェンス）までの幅[m]（issue #830）。一塁・三塁側で共通。</summary>
+    public double FoulSideM { get; init; } = 13.0;
+
+    /// <summary>
+    /// 地上の点がファウルグラウンド（競技場内のファウル地域＝スタンドより内側）にあるか（issue #830）。
+    /// 本塁の後ろはバックネットまでの円、ライン沿いはラインからスタンドまで <see cref="FoulSideM"/> の帯
+    /// （ポール＝両翼フェンスの距離まで）。フェア地域の点は false。
+    /// </summary>
+    public bool InFoulTerritory(Vector3D p)
+    {
+        var r = Math.Sqrt(p.X * p.X + p.Z * p.Z);
+        if (r < 1e-6) return false;
+        var bearing = Math.Atan2(p.X, p.Z);
+        var abs = Math.Abs(bearing);
+        if (abs <= Math.PI / 4) return false;   // フェア
+        if (r <= BackstopM) return true;
+        if (abs >= Math.PI / 2) return false;  // 本塁より後ろでバックネットの外
+        // ライン（±45°）からの垂直距離と、ラインに沿った距離
+        var off = abs - Math.PI / 4;
+        var perp = r * Math.Sin(off);
+        var along = r * Math.Cos(off);
+        var lineFence = bearing >= 0 ? RightFenceM : LeftFenceM;
+        return perp <= FoulSideM && along <= lineFence;
+    }
+
+    /// <summary>
     /// 方位角 φ [rad] のフェンスまでの距離。φ=0 で Center、φ=±45°(=±π/4) で該当ポール。
     /// φ&gt;0（+X=右翼側）は Right、φ&lt;0（−X=左翼側）は Left を用い、cos(2φ) で中堅と補間。
     /// 左右同値のとき従来式 R = Line + (Center−Line)·cos(2φ) と一致する。

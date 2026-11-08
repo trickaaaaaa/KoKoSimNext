@@ -34,7 +34,7 @@ public sealed record FieldingCoefficients
     /// <summary>空中捕球に許容する到達時間の倍率（滞空時間×この値まで間に合えば捕球）。
     /// issue #740 で 1.00→0.93（4秒上限の撤去で増えたアウトを打率帯へ戻す校正）。着地の直前（滞空の7%以内）に届く打球は
     /// 捕れず、捕球余裕が小さい負になる＝3Dでは「背走ジャンピングで届かない」芝居で描かれる（棒立ちで落ちる絵にならない）。</summary>
-    public double CatchReachFactor { get; init; } = 0.93;
+    public double CatchReachFactor { get; init; } = 0.92;
 
     /// <summary>
     /// 空中捕球の到達可否に効く守備力の傾き（打球判断＝走路取りの巧拙）。
@@ -245,6 +245,21 @@ public sealed record FieldingCoefficients
     public double WildThrowScatterSigmaM { get; init; } = 6.0;
     /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
     public double RecoveryReactionSeconds { get; init; } = 0.30;
+
+    // ファウルフライ（issue #830）。打撃の接触判定で「ファウル」になった球（弾道を持たない）のうち、
+    // この割合を打ち上がったファウルとして弾道を与え、ファウルグラウンドに落ちる前に野手が届けばアウト。
+    // 弾道は打席の本流と別の乱数ストリーム（Fork）で引く＝ファウル以外の打席の乱数順は変わらない。
+    /// <summary>接触判定のファウルのうち、打ち上がる（捕れる可能性がある）割合。0で無効＝従来と完全一致。</summary>
+    public double FoulFlyShare { get; init; } = 0.24;
+    /// <summary>打ち上がったファウルの打球角度の平均・標準偏差[度]。</summary>
+    public double FoulFlyLaunchMeanDeg { get; init; } = 55.0;
+    public double FoulFlyLaunchSigmaDeg { get; init; } = 12.0;
+    /// <summary>打ち上がったファウルの初速の平均・標準偏差[km/h]（擦った打球＝遅い）。</summary>
+    public double FoulFlyExitMeanKmh { get; init; } = 100.0;
+    public double FoulFlyExitSigmaKmh { get; init; } = 18.0;
+    /// <summary>打ち上がったファウルの方位角の範囲[度]（絶対値。45°＝ファウルライン、180°＝真後ろ）。一様に引く。</summary>
+    public double FoulFlyBearingMinDeg { get; init; } = 46.0;
+    public double FoulFlyBearingMaxDeg { get; init; } = 160.0;
 
     /// <summary>
     /// トンネル（股・脇を抜けて球が外野へ行く失策, issue #632）の割合。

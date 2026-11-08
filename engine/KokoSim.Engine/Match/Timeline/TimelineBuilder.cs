@@ -2789,12 +2789,24 @@ public static class TimelineBuilder
         var carryStart = ContactAt + pathToTarget.ReleaseAtSeconds;
         var targetArrive = ContactAt + pathToTarget.ArriveAtSeconds;
 
-        ball.Add(new BallSegment
-        {
-            Kind = BallSegmentKind.Carry, T0 = carryStart, T1 = targetArrive,
-            From = fieldPoint, To = targetPt,
-            FromRole = play.FielderRole, ToRole = play.FielderRole, ToBase = targetBaseName,
-        });
+        // 本塁から遠い投手（マウンド付近で捕った等）は自分で運ばない＝捕手へ投げ、捕手が本塁を踏んで一塁へ投げる
+        // （issue #830: 17m 先から運んで踏む絵＝秒速32mで走っていた）。判定は元から「本塁への送球」の秒で
+        // 解いている（ResolveThrowPath＝肩の速さ）ので、秒はそのまま・投げる人の絵だけ変える。
+        var carried = targetBase != 4 || Distance(fieldPoint, targetPt) <= SelfForceCarryMaxM;
+        var relayRole = carried ? play.FielderRole : FieldPosition.Catcher;
+        ball.Add(carried
+            ? new BallSegment
+            {
+                Kind = BallSegmentKind.Carry, T0 = carryStart, T1 = targetArrive,
+                From = fieldPoint, To = targetPt,
+                FromRole = play.FielderRole, ToRole = play.FielderRole, ToBase = targetBaseName,
+            }
+            : new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = carryStart, T1 = targetArrive,
+                From = fieldPoint, To = targetPt,
+                FromRole = play.FielderRole, ToRole = FieldPosition.Catcher, ToBase = targetBaseName,
+            });
 
         // 二段目（対象塁→一塁）: 同じ野手がそのまま投げる自己送球（中継なし）。起点は対象塁・時刻は判定モデルと
         // 同じ基準（BallFieldedAtSeconds＝一段目と同じ捕球時刻。ResolveDoublePlaySelfForce 参照）、握り替えは
@@ -2816,7 +2828,7 @@ public static class TimelineBuilder
             {
                 Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = firstArrive,
                 From = targetPt, To = first,
-                FromRole = play.FielderRole, ToRole = firstRole, ToBase = "first",
+                FromRole = relayRole, ToRole = firstRole, ToBase = "first",
             });
 
         // 対象走者（三塁/本塁で自己フォースされた走者）の判定時刻を、実際に描いた到達（targetArrive）へ
@@ -3239,6 +3251,10 @@ public static class TimelineBuilder
     /// <summary>一塁駆け抜け（オーバーラン）で塁の先まで走り抜ける距離[m]（issue #443。表示専用）。</summary>
     private const double FirstBaseOverrunDistanceM = 3.5;
 
+    /// <summary>本塁の自己フォース併殺で、処理野手が自分で本塁まで運んで踏む絵にする最大距離[m]（issue #830。表示専用）。
+    /// これより遠い（マウンド付近の投手等）は捕手への送球として描く。</summary>
+    private const double SelfForceCarryMaxM = 6.0;
+
     /// <summary>悪送球が一塁を逸れて抜ける距離[m]（issue #439。表示専用）。</summary>
     private const double ErrantThrowOvershootM = 6.0;
 
@@ -3527,6 +3543,7 @@ public static class TimelineBuilder
             BattedBallResult.HomeRun => "ホームラン",
             BattedBallResult.Foul => "ファウル",
             BattedBallResult.Error => pos.Length > 0 ? $"{pos}のエラー" : "エラー",
+            BattedBallResult.Out when play.FoulFly => $"{pos}ファウルフライ",   // issue #830
             BattedBallResult.Out => play.IsFly ? $"{pos}フライ" : $"{pos}ゴロ",
             // 内野ゴロで間に合わなかった安打（送球あり）＝内野安打。
             BattedBallResult.Single when !play.IsFly && play.ThrowArriveSeconds is not null => "内野安打",

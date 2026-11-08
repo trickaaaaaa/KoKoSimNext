@@ -624,6 +624,13 @@ public static class CoefficientsLoader
         public double ThrowErrorAccuracySlope { get; set; } = D.ThrowErrorAccuracySlope;
         public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
         public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
+        public double FoulFlyShare { get; set; } = D.FoulFlyShare;
+        public double FoulFlyLaunchMeanDeg { get; set; } = D.FoulFlyLaunchMeanDeg;
+        public double FoulFlyLaunchSigmaDeg { get; set; } = D.FoulFlyLaunchSigmaDeg;
+        public double FoulFlyExitMeanKmh { get; set; } = D.FoulFlyExitMeanKmh;
+        public double FoulFlyExitSigmaKmh { get; set; } = D.FoulFlyExitSigmaKmh;
+        public double FoulFlyBearingMinDeg { get; set; } = D.FoulFlyBearingMinDeg;
+        public double FoulFlyBearingMaxDeg { get; set; } = D.FoulFlyBearingMaxDeg;
         public double TunnelShareProb { get; set; } = D.TunnelShareProb;
         public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
         public double CatchReachCapSeconds { get; set; } = D.CatchReachCapSeconds;
@@ -695,6 +702,13 @@ public static class CoefficientsLoader
             ThrowErrorAccuracySlope = ThrowErrorAccuracySlope,
             WildThrowScatterSigmaM = WildThrowScatterSigmaM,
             RecoveryReactionSeconds = RecoveryReactionSeconds,
+            FoulFlyShare = FoulFlyShare,
+            FoulFlyLaunchMeanDeg = FoulFlyLaunchMeanDeg,
+            FoulFlyLaunchSigmaDeg = FoulFlyLaunchSigmaDeg,
+            FoulFlyExitMeanKmh = FoulFlyExitMeanKmh,
+            FoulFlyExitSigmaKmh = FoulFlyExitSigmaKmh,
+            FoulFlyBearingMinDeg = FoulFlyBearingMinDeg,
+            FoulFlyBearingMaxDeg = FoulFlyBearingMaxDeg,
             TunnelShareProb = TunnelShareProb,
             CatchReachFieldingSlope = CatchReachFieldingSlope,
             CatchReachCapSeconds = CatchReachCapSeconds,
