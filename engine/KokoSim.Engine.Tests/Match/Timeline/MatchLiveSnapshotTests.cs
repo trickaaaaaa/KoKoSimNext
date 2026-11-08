@@ -484,4 +484,26 @@ public sealed class MatchLiveSnapshotTests
             Assert.Equal(box.EarnedRuns, final.Home.Pitcher.EarnedRuns);
         }
     }
+
+    /// <summary>
+    /// 打順の各枠は選手の投げる手を運ぶ（issue #795: 3D守備ビューが左投げの野手を鏡に映して描く材料）。
+    /// 控えの一覧も同じ。観測データ＝試合結果に影響しない。
+    /// </summary>
+    [Fact]
+    public void LineupSlots_CarryTheThrowingHand()
+    {
+        var home = Team("H", withSourceIds: true, withBench: true);
+        // 一塁手と左翼手を左投げにする（並びは Team() と同じ: 2番＝一塁、6番＝左翼）
+        var order = home.BattingOrder.ToList();
+        order[1] = order[1] with { Throws = Handedness.Left };
+        order[5] = order[5] with { Throws = Handedness.Left };
+        home = home with { BattingOrder = order };
+        var prog = new MatchProgression(Team("A", withSourceIds: false, withBench: true), home,
+            new GameContext(), 43UL);
+
+        var lineup = prog.Snapshot().Home.Lineup;
+        var lefties = lineup.Where(s => s.Throws == Handedness.Left).Select(s => s.Position).ToList();
+        Assert.Equal(new[] { FieldPosition.FirstBase, FieldPosition.LeftField }, lefties);
+        Assert.All(prog.Snapshot().Home.Reserves, r => Assert.Equal(Handedness.Right, r.Throws));
+    }
 }
