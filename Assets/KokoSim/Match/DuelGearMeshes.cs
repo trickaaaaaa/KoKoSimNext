@@ -54,7 +54,7 @@ namespace KokoSim.Unity.Match
         /// **捕手ミットは別物**（指の区切りが無く縁が厚い）なので、これは流用しない。
         /// </summary>
         public static Mesh Glove() => Get("AIGear_Glove1_lo",
-            m => CanonicalizeMeshy(m, new Vector3(0.245f, 0.295f, 0.125f)));
+            m => CanonicalizeMeshyFromBack(m, new Vector3(0.245f, 0.295f, 0.125f)));
 
         /// <summary>
         /// 捕手ミット。原点=中心、ポケット開口が+Z。非一様フィット（幅0.30 / 高0.33 / 奥行0.145）。
@@ -62,7 +62,7 @@ namespace KokoSim.Unity.Match
         /// **6,000tri と装備中で最も重い**が、これは削れないぶん（下の経緯）であって余裕ではない。
         /// </summary>
         public static Mesh Mitt() => Get("AIGear_Mitt1_lo",
-            m => CanonicalizeMeshy(m, new Vector3(0.300f, 0.330f, 0.145f)));
+            m => CanonicalizeMeshyFromBack(m, new Vector3(0.300f, 0.330f, 0.145f)));
 
         /// <summary>
         /// レガース片脚。原点=中心、膝が上（+Y）・正面+Z。
@@ -210,6 +210,19 @@ namespace KokoSim.Unity.Match
                 targetSize.z / Mathf.Max(0.01f, b.size.z));
             Apply(mesh, Matrix4x4.Scale(s) * Matrix4x4.Translate(-b.center));
             mesh.RecalculateNormals();   // 非一様スケールでは法線が面へ直交しなくなるため取り直す
+        }
+
+        /// <summary>
+        /// グラブ・ミット用。元写真（Assets/_AIGearRaw/ref-glove.png / ref-mitt.png）が**背面**
+        /// （ロゴと人差し指の穴がある側）なので、生成物の「正面」は背面＝そのままだとポケットが
+        /// 掌側（-Z）へ向き、相手から見えるのが甲側になる（2026-11-08 監督指摘「中継視点でずっと
+        /// ミットの甲が見えている」。単体レンダで -Z 側に網が出ることを確認）。
+        /// 上下軸まわりに180°回してポケットを+Zへ向ける。回転なので左右の手の形は変わらない（鏡映ではない）。
+        /// </summary>
+        private static void CanonicalizeMeshyFromBack(Mesh mesh, Vector3 targetSize)
+        {
+            Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(0f, 0f, 180f)));   // 生成姿勢の上軸(+Z)まわり
+            CanonicalizeMeshy(mesh, targetSize);
         }
 
         /// <summary>生成姿勢（正面-Y・上+Z）→ 装着正位（正面+Z・上+Y）。</summary>

@@ -18,6 +18,9 @@ namespace KokoSim.Unity.Match
 
         private DuelStageRig _rig;
 
+        /// <summary>true＝中継視点（試合の構図）だけを撮る。Play中に代入してから付けること。</summary>
+        public static bool TvOnly;
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
@@ -73,6 +76,7 @@ namespace KokoSim.Unity.Match
                     }
                     yield return null;
                 }
+                if (TvOnly) { yield return Shot(tag + "-f" + m + "-tv", null); continue; }   // 中継視点（対決ビュー本来の構図）
                 yield return Shot(tag + "-f" + m + "-front", Front);
                 yield return Shot(tag + "-f" + m + "-side", Side);
             }
@@ -86,9 +90,12 @@ namespace KokoSim.Unity.Match
         private static readonly (Vector3 cam, Vector3 look, float h) Side =
             (new Vector3(2.6f, 0.9f, -0.6f), new Vector3(0f, 0.75f, -0.6f), 1.6f);
 
-        private IEnumerator Shot(string name, (Vector3 cam, Vector3 look, float h) f)
+        private IEnumerator Shot(string name, (Vector3 cam, Vector3 look, float h)? f)
         {
-            _rig.FramePreview(f.cam, f.look, f.h);
+            if (f.HasValue) _rig.FramePreview(f.Value.cam, f.Value.look, f.Value.h);
+            // null＝中継視点。寄り枠を一度でも組むとカメラ位置が試合の構図へ戻らないので、
+            // 中継視点は TvOnly の回でだけ撮る（寄り枠を一切組まない）
+
             _rig.RenderNow();   // RT へ同期描画（WaitForEndOfFrame はエディタが裏だと来ないので使わない）
             yield return null;
             var tex = new Texture2D(W, H, TextureFormat.RGBA32, false);

@@ -110,7 +110,9 @@
 - 素体はバインドポーズの顔向きが個体ごとに違う（UBC＝-Z／購入素体＝+Z）。取り違えても例外も
   テスト失敗も出ず**帽子が後ろ被りになるだけ**なので、素体を足したら必ず絵で確かめる（design-18 §3.2.1）
 - AI生成メッシュ（Meshy画像→3D）の出力姿勢は「正面 -Y・上 +Z」で一定。装着正位への変換は
-  `DuelGearMeshes.CanonicalizeMeshy` に集約し、資産ごとに向きを推測しない（design-18 §3.3.1）
+  `DuelGearMeshes.CanonicalizeMeshy` に集約し、資産ごとに向きを推測しない（design-18 §3.3.1）。
+  ただし「正面」は**元写真に写っていた面**＝グラブ・ミットは背面写真から作ったので180°回す
+  （`CanonicalizeMeshyFromBack`。逆だと中継視点でミットの甲が見え続ける＝2026-11-08 実害）
 - 生成メッシュはUnityに取り込む前に必ずデシメートする（50万tri級を取り込ませるとエディタが固まる）。
   形の確認は `tools/aigear-preview.py`（Blender単体の6面図）。Decimate(Collapse) は穴を保存するので、
   穴の多い生成物は voxel remesh を前置する。ただし細バーは溶けるので捕手マスクには使わない（design-18 §3.3.1）
