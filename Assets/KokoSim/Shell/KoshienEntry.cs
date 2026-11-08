@@ -197,7 +197,11 @@ namespace KokoSim.Unity.Shell
             // 甲子園の裏カードも1球フルシムで解く（49校＝48試合なので県大会1つぶんより軽い）。
             // メモ化で包むのは自校が出る年だけでよいが、両方同じ形にして経路を1本に保つ。
             // 球場は自校戦と同じ甲子園（設計書13 §1）＝同じ大会の中で球場が2種類にならない。
-            var ctx = new GameContext { Field = MatchStadium.For(TournamentKind.SummerKoshien) };
+            var ctx = new GameContext
+            {
+                Field = MatchStadium.For(TournamentKind.SummerKoshien),
+                Weather = WeatherModel.ForSeason(WeatherModel.SeasonFor(TournamentKind.SummerKoshien)),   // Issue #803
+            };
             return new MemoizingBackgroundResolver(
                 new BackgroundMatchResolver(NationService.Rosters, ctx, yearIndex, stats: null,
                     modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory()));

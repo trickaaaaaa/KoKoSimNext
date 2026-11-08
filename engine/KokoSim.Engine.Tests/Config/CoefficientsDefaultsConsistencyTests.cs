@@ -25,10 +25,8 @@ public sealed class CoefficientsDefaultsConsistencyTests
 {
     // 意図的な乖離（アラインしない）:
     //   Version … 係数ではなくファイル版数。
-    //   Weather … data/coefficients.yaml:313 の記述通り、実プレイ側（GameContext.Weather=null）では無効で
-    //             sim/Heavy 回帰でだけ効かせる「意図された sim 限定の乖離」。実ゲームへの反映（C#既定を
-    //             非nullにする）は決定論 baseline 再生成を伴う後続作業として明示的に切り出されている。
-    private static readonly HashSet<string> ExcludedMembers = new(StringComparer.Ordinal) { "Version", "Weather" };
+    // Weather は Issue #803 で実ゲームに配線した（C#既定も data/coefficients.yaml と一致）ので除外しない。
+    private static readonly HashSet<string> ExcludedMembers = new(StringComparer.Ordinal) { "Version" };
 
     [Fact]
     public void CSharpDefaults_MatchRepositoryCoefficientsYaml()

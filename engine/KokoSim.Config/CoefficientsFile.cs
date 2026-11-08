@@ -29,8 +29,8 @@ public sealed record CoefficientsBundle
     public FieldingCoefficients Fielding { get; init; } = new();
     public BaserunningCoefficients Baserunning { get; init; } = new();
     public FatigueCoefficients Fatigue { get; init; } = new();
-    /// <summary>試合ごとの天候（気温）モデル（Issue #120）。null＝weather ブロック無し＝無効（従来挙動）。</summary>
-    public WeatherCoefficients? Weather { get; init; }
+    /// <summary>試合ごとの天候（季節別気温モデル, Issue #120/#803）。null＝weather ブロック無し＝無効（従来挙動）。</summary>
+    public SeasonalWeatherCoefficients? Weather { get; init; }
     public PitchRecoveryCoefficients PitchRecovery { get; init; } = new();
     public KokoSim.Engine.Players.FormCoefficients Form { get; init; } = new();
     public KokoSim.Engine.Players.SkillCoefficients Skills { get; init; } = new();
@@ -98,7 +98,7 @@ public static class CoefficientsLoader
         public BaserunningDto? Baserunning { get; set; }
         public FatigueDto? Fatigue { get; set; }
         public AbilityEffectDto? AbilityEffect { get; set; }
-        public WeatherDto? Weather { get; set; }
+        public SeasonalWeatherDto? Weather { get; set; }
         public PitchRecoveryDto? PitchRecovery { get; set; }
         public FormDto? Form { get; set; }
         public SkillsDto? Skills { get; set; }
@@ -140,7 +140,7 @@ public static class CoefficientsLoader
             Fielding = (Fielding?.ToModel() ?? new FieldingCoefficients()) with { AbilityEffect = effect },
             Baserunning = (Baserunning?.ToModel() ?? new BaserunningCoefficients()) with { AbilityEffect = effect },
             Fatigue = Fatigue?.ToModel() ?? new FatigueCoefficients(),
-            Weather = Weather?.ToModel(),   // Issue #120: weather ブロック無し＝null＝無効（従来挙動）
+            Weather = Weather?.ToModel(),   // Issue #120/#803: weather ブロック無し＝null＝無効（従来挙動）
             PitchRecovery = PitchRecovery?.ToModel() ?? new PitchRecoveryCoefficients(),
             Form = Form?.ToModel() ?? new KokoSim.Engine.Players.FormCoefficients(),
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
@@ -1119,6 +1119,12 @@ public static class CoefficientsLoader
         };
     }
 
+    /// <summary>
+    /// 天気係数1季節ぶんの DTO（Issue #803）。省略したフィールドは夏既定（<see cref="WeatherCoefficients"/>
+    /// の素の既定値）で埋める。<see cref="SeasonalWeatherDto"/> 側で季節ブロック自体が無いときは
+    /// 季節既定（<see cref="WeatherModel.Spring"/> 等）へ丸ごと差し替えるので、実運用（data/coefficients.yaml は
+    /// 3季節とも全項目を書く）ではこの既定は効かない。
+    /// </summary>
     private sealed class WeatherDto
     {
         private static readonly WeatherCoefficients D = new();
@@ -1131,6 +1137,8 @@ public static class CoefficientsLoader
         public double DensityDamping { get; set; } = D.DensityDamping;
         public double FatigueBaselineTemperatureC { get; set; } = D.FatigueBaselineTemperatureC;
         public double FatigueAlphaPerDegree { get; set; } = D.FatigueAlphaPerDegree;
+        public double RainZThreshold { get; set; } = D.RainZThreshold;
+        public double CloudyZThreshold { get; set; } = D.CloudyZThreshold;
 
         public WeatherCoefficients ToModel() => new()
         {
@@ -1143,6 +1151,27 @@ public static class CoefficientsLoader
             DensityDamping = DensityDamping,
             FatigueBaselineTemperatureC = FatigueBaselineTemperatureC,
             FatigueAlphaPerDegree = FatigueAlphaPerDegree,
+            RainZThreshold = RainZThreshold,
+            CloudyZThreshold = CloudyZThreshold,
+        };
+    }
+
+    /// <summary>
+    /// 季節別の天気係数（Issue #803 決定4: 季節別分布・地域差なし）。季節ブロックを省略した場合は
+    /// その季節の既定（<see cref="WeatherModel"/> の静的プリセット）を使う＝<c>weather:</c> 自体を
+    /// 省略すれば従来通り null（無効）。
+    /// </summary>
+    private sealed class SeasonalWeatherDto
+    {
+        public WeatherDto? Spring { get; set; }
+        public WeatherDto? Summer { get; set; }
+        public WeatherDto? Autumn { get; set; }
+
+        public SeasonalWeatherCoefficients ToModel() => new()
+        {
+            Spring = Spring?.ToModel() ?? WeatherModel.Spring,
+            Summer = Summer?.ToModel() ?? WeatherModel.Summer,
+            Autumn = Autumn?.ToModel() ?? WeatherModel.Autumn,
         };
     }
 

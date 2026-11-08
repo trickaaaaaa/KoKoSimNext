@@ -71,8 +71,9 @@ namespace KokoSim.Unity.Shell
             //   全国成績への畳み込みはランナーが裏カードを**記録した瞬間**に行う（下の onBackgroundMatch）。
             //   計算時に畳むと、大会中セーブ（issue #565）を挟んだときにメモ化キャッシュが消え、
             //   同じカードがロード後にもう一度畳まれる＝二重計上になる。
+            var weatherCtx = new GameContext { Weather = WeatherModel.ForSeason(WeatherModel.SeasonFor(actualKind)) };   // Issue #803
             var homeBg = new MemoizingBackgroundResolver(
-                new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats: null,
+                new BackgroundMatchResolver(NationService.Rosters, weatherCtx, yearIndex, stats: null,
                     modernRules: null, calendarYear: calendarYear, brains: brains,
                     // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
                     useRegionalStadiumTier: true));
@@ -181,8 +182,9 @@ namespace KokoSim.Unity.Shell
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             var brains = new EnemyAiBrainFactory();
             var stats = NationService.TournamentStats;   // 復元済み＝StartTournament は呼ばない
+            var weatherCtx = new GameContext { Weather = WeatherModel.ForSeason(WeatherModel.SeasonFor(t.Kind)) };   // Issue #803
             var homeBg = new MemoizingBackgroundResolver(
-                new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats: null,
+                new BackgroundMatchResolver(NationService.Rosters, weatherCtx, yearIndex, stats: null,
                     modernRules: null, calendarYear: calendarYear, brains: brains,
                     // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
                     useRegionalStadiumTier: true));

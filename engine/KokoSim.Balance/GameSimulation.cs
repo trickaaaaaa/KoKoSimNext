@@ -479,7 +479,9 @@ public static partial class GameSimulation
             Fielding = b.Fielding,
             Baserunning = b.Baserunning,
             Fatigue = b.Fatigue,
-            Weather = b.Weather,   // Issue #120: 天候（気温）モデル。null＝weather ブロック無し＝無効
+            // Issue #120/#803: 天候（季節別気温）モデル。null＝weather ブロック無し＝無効。
+            // Heavy の summer 帯（games_10k_summer）は夏想定なので夏季節ぶんを使う（従来と同値）。
+            Weather = b.Weather?.Summer,
             Form = b.Form,
             Skills = b.Skills,
             Pressure = b.Pressure,
