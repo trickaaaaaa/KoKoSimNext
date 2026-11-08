@@ -36,6 +36,13 @@ namespace KokoSim.Unity.Shell
         public static string Description(Skill s)
             => Catalog.TryGetValue(s, out var e) ? e.Description : "";
 
+        /// <summary>
+        /// 分類（data/skills.yaml の <c>category:</c>）。カタログに無ければ null（issue #781 の HUD 絞り込みで使う。
+        /// 分類の引けない能力は HUD に出さない＝能力IDごとに Unity 側で分類を手書きしない）。
+        /// </summary>
+        public static SkillCategory? Category(Skill s)
+            => Catalog.TryGetValue(s, out var e) ? e.Category : (SkillCategory?)null;
+
         /// <summary>テスト・リセット用（プロバイダのキャッシュを捨てる）。</summary>
         public static void Clear() => _cached = null;
 

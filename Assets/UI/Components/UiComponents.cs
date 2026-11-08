@@ -557,15 +557,26 @@ namespace KokoSim.Unity.Components
         /// 選手の<b>見えている</b>特殊能力（<see cref="KokoSim.Engine.Players.SkillSet.Visible"/>）のチップ列（issue #738）。
         /// 隠しスキルは出さない（設計書10 §6）。<paramref name="maxChips"/> を超える分は最後の1枠を「他N」にまとめ、
         /// そのホバーで残りの名前と説明を出す。持っていなければ null（呼び出し側は段ごと出さない）。
+        /// <paramref name="category"/> を渡すとその分類の能力だけに絞る（issue #781: 試合 HUD の打者帯＝打撃・
+        /// 投手帯＝投手）。分類はカタログ（data/skills.yaml）から引き、「他N」は絞った後の件数で数える。
         /// </summary>
-        public static VisualElement SkillChipsFor(KokoSim.Engine.Players.SkillSet skills, int maxChips, string extraClass = null)
+        public static VisualElement SkillChipsFor(KokoSim.Engine.Players.SkillSet skills, int maxChips, string extraClass = null,
+            KokoSim.Engine.Players.SkillCategory? category = null)
         {
             if (skills == null || skills.Visible.Count == 0) return null;
+            List<KokoSim.Engine.Players.Skill> list;
+            if (category is { } cat)
+                list = new List<KokoSim.Engine.Players.Skill>(
+                    KokoSim.Engine.Players.SkillCategoryFilter.VisibleIn(skills, SkillCatalogProvider.Category, cat));
+            else
+            {
+                list = new List<KokoSim.Engine.Players.Skill>(skills.Visible);
+                list.Sort();   // 集合の列挙順に頼らず定義順で並べる（画面を開くたびに並びが変わらない）
+            }
+            if (list.Count == 0) return null;
             var row = new VisualElement();
             row.AddToClassList("skill-chips");
             if (!string.IsNullOrEmpty(extraClass)) row.AddToClassList(extraClass);
-            var list = new List<KokoSim.Engine.Players.Skill>(skills.Visible);
-            list.Sort();   // 集合の列挙順に頼らず定義順で並べる（画面を開くたびに並びが変わらない）
             var shown = list.Count <= maxChips ? list.Count : Mathf.Max(0, maxChips - 1);
             for (var i = 0; i < shown; i++)
                 row.Add(SkillChip(SkillCatalogProvider.Name(list[i]), SkillCatalogProvider.Description(list[i])));
