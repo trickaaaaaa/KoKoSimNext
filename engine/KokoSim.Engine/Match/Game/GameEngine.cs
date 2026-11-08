@@ -1028,6 +1028,9 @@ public static class GameEngine
                 var runnersStartedMask = 0;
                 var stealRecSuccess = false;
                 Player? stealRecScorer = null;      // 本盗・重盗で得点した走者（帰属の取り消し対象）
+                // 走者の憤死で3アウト目になった球（issue #779）。盗塁死・エンドランの憤死は投球と同時に
+                // 起きる＝その球は実際に投げる。半回はこの球の観測（LivePitch）を出してから終える。
+                var runnerOutEndsHalf = false;
                 var stealDoubleBreak = false;       // 重盗の三塁ブレイクを数えたか
                 StartType? stealStartApplied = null; // 実際に走った始動種別（打球の球でだけ活かす）
 
@@ -1143,7 +1146,8 @@ public static class GameEngine
                                     paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer,
                                     steal.RunnerSeconds, steal.DefenseSeconds));
 
-                        if (outs >= 3) { stealEndedHalf = true; break; }
+                        // 3アウト目の盗塁死でもこの球は投げる（issue #779）。成否はこの球の結果で決まる（下）。
+                        if (outs >= 3) runnerOutEndsHalf = true;
                     }
                 }
                 // 三盗（issue #67）: 二塁のみ在塁でのみ判断側が返す（塁状況が排他のため一・三塁の重盗とは無競合）。
@@ -1192,7 +1196,7 @@ public static class GameEngine
                                     thirdStealer, defense.Catcher, steal.Result,
                                     ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart,
                                     doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds));
-                        if (outs >= 3) { stealEndedHalf = true; break; }
+                        if (outs >= 3) runnerOutEndsHalf = true;   // issue #779: この球は投げる
                     }
                 }
                 // 本盗（issue #67, design-14）: 三塁のみ在塁でのみ判断側が返す。同じ球でスクイズが確定していれば
@@ -1261,7 +1265,7 @@ public static class GameEngine
                                     homeStealer, defense.Catcher, steal.Result,
                                     ctx.Baserunning, ctx.Field, StealTarget.Home, pitchout, homeStart,
                                     doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds));
-                        if (outs >= 3) { stealEndedHalf = true; break; }
+                        if (outs >= 3) runnerOutEndsHalf = true;   // issue #779: この球は投げる
                     }
                 }
 
@@ -1357,8 +1361,11 @@ public static class GameEngine
                 // 当面 Foul へ一括する（2026-08-13 監督判断。OPEN-QUESTIONS 参照）。
                 // 三盗・本盗を打球の球で巻き戻した場合の「スタートの有利」は、走塁モデルが一塁走者の始動しか
                 // 受け取らないため表現しない（走者は通常の始動で進む＝有利を捨てる保守側に倒す）。
+                //  - 3アウト目の盗塁死で、この球が打席を終わらせた（三振・四球・死球）… 打席の決着が先に立つ
+                //             （三振が3アウト目／四球・死球は走者に安全進塁権）＝盗塁死は成立しない（issue #779）
                 if (stealRecRunner is not null
-                    && session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay)
+                    && (session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay
+                        || (runnerOutEndsHalf && pitchRes.EndsPlateAppearance)))
                 {
                     bases.First = steal0First;
                     bases.Second = steal0Second;
@@ -1376,6 +1383,7 @@ public static class GameEngine
                     }
                     if (stealDoubleBreak) offense.DoubleStealThirdBreakCount--;
                     stealPlay = null;   // 絵にも出さない＝同じ球のファウル打球の再生へ落ちる
+                    runnerOutEndsHalf = false;
                     if (session.LastPitchKind == AtBat.PitchKind.InPlay
                         && stealStartApplied is { } appliedStart)
                     {
@@ -1389,7 +1397,9 @@ public static class GameEngine
                 // 終わらせた最後の球が三振だった場合」だけを見ていたが、Fix Bで空振り自体が増えるため
                 // 2ストライク未満の途中の空振りも同じリスクを持たせる。盗塁ブロックと同じ「即座にoutsへ
                 // 計上しRecordRunnerOutで投球回へ計上、3死目なら半回を終える」idiomへ揃える）。
-                if (endrunThisPitch && bases.First is not null && session.LastPitchKind == AtBat.PitchKind.SwingingStrike)
+                // ただし2アウトからの空振り三振は三振が3アウト目＝走者の憤死は起きない（issue #779）。
+                if (endrunThisPitch && bases.First is not null && session.LastPitchKind == AtBat.PitchKind.SwingingStrike
+                    && !(outs >= 2 && pitchRes.EndsPlateAppearance))
                 {
                     var caughtRunner = bases.First;
                     var stealSafeProb = StealResolver.SuccessProbability(bases.First, defense.Catcher, paBaserunning)
@@ -1406,7 +1416,7 @@ public static class GameEngine
                         defense.RecordRunnerOut(currentPitcher);
                     }
                     bases.First = null;
-                    if (outs >= 3) { stealEndedHalf = true; break; }
+                    if (outs >= 3) runnerOutEndsHalf = true;   // 観測を出してから半回を終える（issue #779）
                 }
 
                 // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
@@ -1469,6 +1479,11 @@ public static class GameEngine
                         Forced = forcedThisPa,
                     });
                 }
+
+                // 盗塁死・エンドランの憤死で3アウト目（issue #779）: 投げた球の観測（盗塁の再生データ込み）を
+                // 載せてから半回を終える。打席は未決着＝この打者が次の回の先頭（カウントは0-0から）。
+                // 旧実装は投球より前に半回を抜けていたため、UI へ1球も届かず、いきなり攻守交代していた。
+                if (runnerOutEndsHalf && outs >= 3) { stealEndedHalf = true; EmitPitchTrace(); break; }
 
                 if (pitchRes.SqueezeRunnerCaughtAtThird)
                 {
@@ -1559,6 +1574,7 @@ public static class GameEngine
             if (walkoffMidPa)
             {
                 defense.AddPitches(session.PitchCount, gearWeight);
+                defense.RecordUnresolvedPitches(currentPitcher, session.PitchCount);
                 p.TotalPitches += session.PitchCount;
                 p.CurrentBases = bases;
                 p.CurrentOuts = outs;
@@ -1566,7 +1582,14 @@ public static class GameEngine
                 offense.RecordInningRuns(runsThisHalf);
                 yield break;
             }
-            if (squeezeAbandoned || stealEndedHalf) continue;
+            if (squeezeAbandoned || stealEndedHalf)
+            {
+                // 打席は未決着でも投げた球は投手の球数に数える（issue #779。サヨナラ打ち切りと同じ扱い）。
+                defense.AddPitches(session.PitchCount, gearWeight);
+                defense.RecordUnresolvedPitches(currentPitcher, session.PitchCount);
+                p.TotalPitches += session.PitchCount;
+                continue;
+            }
 
             // 打順消費（設計書15 Phase D-2e・旧Q13）: 打席が実際に確定した時のみ1回だけ進める。三塁走者/一塁
             // 走者の挟殺・盗塁死・牽制死で3アウト目になり打席未決着のまま終わる場合は上のcontinueで抜けるため
