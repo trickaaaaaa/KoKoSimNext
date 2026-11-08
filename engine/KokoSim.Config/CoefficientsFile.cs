@@ -868,6 +868,7 @@ public static class CoefficientsLoader
         public double SecondForceSuccessBias { get; set; } = D.SecondForceSuccessBias;
         public double DoublePlayForceMaxRunnerSuccess { get; set; } = D.DoublePlayForceMaxRunnerSuccess;
         public double DoublePlayAttemptMinRelaySuccess { get; set; } = D.DoublePlayAttemptMinRelaySuccess;
+        public double DoublePlayForceOnlyMaxRunnerSuccess { get; set; } = D.DoublePlayForceOnlyMaxRunnerSuccess;
         public double DoublePlayPivotTransferSeconds { get; set; } = D.DoublePlayPivotTransferSeconds;
         public double DoublePlayRelayMarginScale { get; set; } = D.DoublePlayRelayMarginScale;
         public double DoublePlayRelayBias { get; set; } = D.DoublePlayRelayBias;
@@ -1025,6 +1026,7 @@ public static class CoefficientsLoader
             SecondForceSuccessBias = SecondForceSuccessBias,
             DoublePlayForceMaxRunnerSuccess = DoublePlayForceMaxRunnerSuccess,
             DoublePlayAttemptMinRelaySuccess = DoublePlayAttemptMinRelaySuccess,
+            DoublePlayForceOnlyMaxRunnerSuccess = DoublePlayForceOnlyMaxRunnerSuccess,
             DoublePlayPivotTransferSeconds = DoublePlayPivotTransferSeconds,
             DoublePlayRelayMarginScale = DoublePlayRelayMarginScale,
             DoublePlayRelayBias = DoublePlayRelayBias,

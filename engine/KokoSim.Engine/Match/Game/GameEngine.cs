@@ -30,6 +30,8 @@ public sealed record GameResult
 
     // ===== design-14 第1段（P1）新プレー発生数（両軍計。統計参考値） =====
     public int FieldersChoiceCount { get; init; }
+    /// <summary>併殺を狙わず先の走者だけを封殺し、打者を一塁に残した数（両軍計・issue #797。統計参考値）。</summary>
+    public int LeadRunnerForceOnlyCount { get; init; }
     public int DroppedThirdStrikeCount { get; init; }
     public int ErrorExtraAdvanceCount { get; init; }
     public int PickoffCount { get; init; }
@@ -357,6 +359,7 @@ public static class GameEngine
             ThirdPlayOuts = away.ThirdPlayOuts + home.ThirdPlayOuts,
             DoublePlayCount = away.DoublePlayCount + home.DoublePlayCount,
             FieldersChoiceCount = away.FieldersChoiceCount + home.FieldersChoiceCount,
+            LeadRunnerForceOnlyCount = away.LeadRunnerForceOnlyCount + home.LeadRunnerForceOnlyCount,
             DroppedThirdStrikeCount = away.DroppedThirdStrikeCount + home.DroppedThirdStrikeCount,
             ErrorExtraAdvanceCount = away.ErrorExtraAdvanceCount + home.ErrorExtraAdvanceCount,
             PickoffCount = away.PickoffCount + home.PickoffCount,
@@ -1878,10 +1881,12 @@ public static class GameEngine
                     // で除外していたため、野選が「打者も一塁アウト＝併殺成立」に誤って見えていた）。
                     var hasForceAtSecond = false;
                     RunnerMove? selfForceLead = null;
+                    var forceOnlyDraw = false;   // 先の走者を封殺するだけ＝一塁へ転送しない（issue #797）
                     foreach (var m in runnerMoves)
                     {
                         if (m.Out && m.FromBase == 1 && m.ToBase == 2) hasForceAtSecond = true;
                         else if (m.SelfForceDoublePlayLead) selfForceLead = m;
+                        if (m.ForceOnly) forceOnlyDraw = true;
                     }
                     if (hasForceAtSecond && res.Play is { IsFly: false } dpPlay)
                     {
@@ -1923,7 +1928,7 @@ public static class GameEngine
                         timeline = Match.Timeline.TimelineBuilder.AppendDoublePlayThrows(
                             timeline, dpPlay, ctx.Field, batterArrive, ctx.Baserunning, dpPivotBonusForDisplay,
                             pivotSprintSpeedByRole, batterOut: !batterSafeOnFc,
-                            pivotThrowSpeedByRole: pivotThrowSpeedByRole);
+                            pivotThrowSpeedByRole: pivotThrowSpeedByRole, relayToFirst: !forceOnlyDraw);
                     }
                     // 併殺の代替ルート（三塁/本塁の自己フォース, Q31）: 三塁手/捕手/投手が自打球を自分でベースへ
                     // 運んで封殺→一塁へ自己送球。上の二塁封殺(hasForceAtSecond)とは互いに排他
@@ -1937,7 +1942,7 @@ public static class GameEngine
                         }
                         timeline = Match.Timeline.TimelineBuilder.AppendSelfForceDoublePlayThrows(
                             timeline, sfPlay, ctx.Field, batterArrive, sfl.ToBase, ctx.Baserunning,
-                            batterOut: !batterSafeOnFc);
+                            batterOut: !batterSafeOnFc, relayToFirst: !forceOnlyDraw);
                     }
 
                     // 飛び出しの勝負（フライ捕球→一塁走者が戻る vs 戻し送球）: 戻し送球を描く
@@ -2105,7 +2110,11 @@ public static class GameEngine
 
             offense.HomePlayOuts += homeOuts; // 本塁クロスプレー憤死（F2外野＋G1内野ゴロ, 統計参考値）
             offense.ThirdPlayOuts += thirdOuts; // 単打の一塁→三塁レース憤死（Issue #89, 統計参考値）
-            if (batterSafeOnFc) offense.FieldersChoiceCount++; // 野選（FC, design-14 P1-1。統計参考値）
+            // 先の走者を封殺するだけ（issue #797）は野選ではない（記録上は「二ゴロ（封殺）」）＝別に数える
+            var forceOnlyOut = false;
+            foreach (var m in runnerMoves) if (m.ForceOnly) { forceOnlyOut = true; break; }
+            if (forceOnlyOut) offense.LeadRunnerForceOnlyCount++;
+            else if (batterSafeOnFc) offense.FieldersChoiceCount++; // 野選（FC, design-14 P1-1。統計参考値）
             // 併殺打（GIDP, Issue #369）: 二塁封殺（1→2 Out）成立かつ打者一塁アウト（野選でない）の内野ゴロ。
             // AppendDoublePlayThrows は野選（FC）でも呼ぶ（打者を実際の結末へ描き直すため）が、
             // この集計は従来どおり !batterSafeOnFc だけを併殺打として数える。

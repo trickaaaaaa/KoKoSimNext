@@ -2363,8 +2363,9 @@ public static class TimelineBuilder
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
         BaserunningCoefficients? coefficients = null, double pivotBonusSeconds = 0.0,
         IReadOnlyDictionary<FieldPosition, double>? pivotSprintSpeedByRole = null, bool batterOut = true,
-        IReadOnlyDictionary<FieldPosition, double>? pivotThrowSpeedByRole = null)
+        IReadOnlyDictionary<FieldPosition, double>? pivotThrowSpeedByRole = null, bool relayToFirst = true)
     {
+        // relayToFirst=false: 先の走者を二塁で封殺するだけ（issue #797）＝二塁→一塁の2本目を描かない。打者は一塁に生きる。
         // 野選（FC・batterOut=false）は、この先どの経路を通っても（3Uアンアシスト等でこの下の早期returnに
         // 掛かっても）「打」の誤アウトだけは必ず訂正する。BuildBattedBall は二塁封殺・野選の区別を知らず、
         // 打球の基礎解決（直接送球1本の前提）の時点で「打」を一塁アウトとして作ってしまっているため。
@@ -2438,12 +2439,13 @@ public static class TimelineBuilder
             From = fieldPoint, To = second,
             FromRole = play.FielderRole, ToRole = pivotRole, ToBase = "second",
         });
-        ball.Add(new BallSegment
-        {
-            Kind = BallSegmentKind.Throw, T0 = pivotAt, T1 = firstArrive,
-            From = second, To = first,
-            FromRole = pivotRole, ToRole = firstRole, ToBase = "first",
-        });
+        if (relayToFirst)
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = pivotAt, T1 = firstArrive,
+                From = second, To = first,
+                FromRole = pivotRole, ToRole = firstRole, ToBase = "first",
+            });
 
         // 二塁カバーの急ぎ度を、実際に描いた二塁送球の到達へ引き直す（issue③・fielder-leg-speed-by-distance
         // と同じ式）。陣形ループはこの二塁送球がまだ無い時点で急ぎ度を決めており、期限がここへ届かず
@@ -2534,7 +2536,9 @@ public static class TimelineBuilder
             // ここでは実際の際どさ（判定の物理下限＝打者到達に対する勝敗マージン。GuardAgainstVerdict
             // 適用前）が分かるので、際どければ「セーフ」演出へ格上げする＝際どくない（守備が大差で負けた）
             // 野選まで毎回演出を出さない（通常の内野安打と同じ出し分け規約, batterCloseCall 参照）。
-            var fcCloseCall = Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
+            // 一塁へ転送しない（先の走者の封殺だけ）なら打者の際どさは無い（issue #797）
+            var fcCloseCall = relayToFirst
+                && Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
             if (fcCloseCall)
             {
                 var updatedRunners = new List<RunnerLeg>(runners.Count);
@@ -2553,7 +2557,7 @@ public static class TimelineBuilder
             resolvedAt = batterArriveAnchor;
         }
 
-        var duration = Math.Max(timeline.Duration, firstArrive + 1.0);
+        var duration = Math.Max(timeline.Duration, (relayToFirst ? firstArrive : secondArrive) + 1.0);
         return timeline with
         {
             Ball = ball, Moves = moves, Duration = duration, Runners = runners, Judgements = judgements,
@@ -2580,8 +2584,9 @@ public static class TimelineBuilder
     /// </summary>
     public static PlayTimeline AppendSelfForceDoublePlayThrows(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
-        int targetBase, BaserunningCoefficients? coefficients = null, bool batterOut = true)
+        int targetBase, BaserunningCoefficients? coefficients = null, bool batterOut = true, bool relayToFirst = true)
     {
+        // relayToFirst=false: 対象塁を踏むだけで一塁へは投げない（issue #797）。打者は一塁に生きる。
         if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
 
         if (play.IsFly || play.RangeM > 46.0) return timeline; // ゲート自体が内野ゴロ限定（Q31）＝保守的に同じ条件
@@ -2646,12 +2651,13 @@ public static class TimelineBuilder
         var firstArrivePhysical = ContactAt + pathToFirst.ArriveAtSeconds + c.SecondForceTagSeconds;
         var firstArrive = GuardAgainstVerdict(firstArrivePhysical, firstArrivePhysical, batterArriveAnchor, runnerOut: batterOut);
 
-        ball.Add(new BallSegment
-        {
-            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = firstArrive,
-            From = targetPt, To = first,
-            FromRole = play.FielderRole, ToRole = firstRole, ToBase = "first",
-        });
+        if (relayToFirst)
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = firstArrive,
+                From = targetPt, To = first,
+                FromRole = play.FielderRole, ToRole = firstRole, ToBase = "first",
+            });
 
         // 対象走者（三塁/本塁で自己フォースされた走者）の判定時刻を、実際に描いた到達（targetArrive）へ
         // 差し替える（AppendDoublePlayThrows の二塁封殺パッチと同型）。フォースはタッチが要らないので、
@@ -2688,7 +2694,8 @@ public static class TimelineBuilder
         {
             // 野選（FC）: 冒頭の PatchFieldersChoiceBatterLeg で既にアウト判定は消してある（安全側）。
             // 際どければ「セーフ」演出へ格上げする（AppendDoublePlayThrows と同じ出し分け規約）。
-            var fcCloseCall = Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
+            var fcCloseCall = relayToFirst
+                && Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
             if (fcCloseCall)
             {
                 var updatedRunners = new List<RunnerLeg>(runners.Count);
@@ -2703,7 +2710,7 @@ public static class TimelineBuilder
             resolvedAt = batterArriveAnchor;
         }
 
-        var duration = Math.Max(timeline.Duration, firstArrive + 1.0);
+        var duration = Math.Max(timeline.Duration, (relayToFirst ? firstArrive : targetArrive) + 1.0);
         return timeline with
         {
             Ball = ball, Duration = duration, Runners = runners, Judgements = judgements, ResolvedAt = resolvedAt,

@@ -74,11 +74,11 @@ public sealed class DoublePlayRaceTests
     // 1死一塁の内野ゴロを1回解く（打者アウトのカウントは呼び出し側の battersOwnOut なので extraOuts には含まれない）。
     private static (BaseState Bases, int ExtraOuts, bool BatterSafeOnFc, System.Collections.Generic.IReadOnlyList<RunnerMove> Moves) RunOnce(
         HomePlayContext home, Player r1, Player batter, IRandomSource rng, int currentOuts = 1,
-        Player? r2 = null, Player? r3 = null)
+        Player? r2 = null, Player? r3 = null, BaserunningCoefficients? coeff = null)
     {
         var bases = new BaseState { First = r1, Second = r2, Third = r3 };
         var (_, extraOuts, _, batterSafeOnFc, _, moves) = BaserunningModel.ApplyDetailed(
-            bases, PlateAppearanceResult.InPlayOut, batter, currentOuts, C, rng, collectMoves: true, home);
+            bases, PlateAppearanceResult.InPlayOut, batter, currentOuts, coeff ?? C, rng, collectMoves: true, home);
         return (bases, extraOuts, batterSafeOnFc, moves);
     }
 
@@ -419,29 +419,93 @@ public sealed class DoublePlayRaceTests
     }
 
     [Fact]
-    public void SelfForceThird_RelayTooSlowForFastBatter_NoAttempt_NoRngConsumed()
+    public void SelfForceThird_RelayTooSlowForFastBatter_StepsOnThirdOnly_NoRngConsumed()
     {
-        // 三塁の自己フォース自体は確実（分岐A-1は通る）が、一塁への転送が快足打者に間に合わない
-        // ＝守備は仕掛けない（分岐A-2, RNG非消費）。二塁封殺への再挑戦もしない（v1の単純化）。
+        // 三塁の自己フォース自体は確実だが、一塁への転送が快足打者に間に合わない＝併殺は仕掛けない（分岐A-2）。
+        // issue #797: それでも三塁は楽に踏める＝**三塁を踏むだけ**で二塁走者を封殺し、打者は一塁に残す（RNG非消費）。
         var home = Grounder(
             x: Field.ThirdBase.X, z: Field.ThirdBase.Z, fieldedAt: 1.3, batterToFirst: 2.8,
             fielderRole: FieldPosition.ThirdBase);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
         var force3rd = HomePlayResolver.ThirdForceParams(Field, C);
-        Assert.True(PLeadSafe(home, r2, 2, force3rd) < C.DoublePlayForceMaxRunnerSuccess, "三塁の自己フォースは間に合う域のはず");
+        Assert.True(PLeadSafe(home, r2, 2, force3rd) <= C.DoublePlayForceOnlyMaxRunnerSuccess, "三塁の自己フォースは楽に間に合う域のはず");
 
         var rng = new Xoshiro256Random(913);
         for (var i = 0; i < 50; i++)
         {
             var r1 = new Player { Speed = 50, Baserunning = 50 };
-            var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r1, new Player(), rng, r2: r2);
-            Assert.Equal(0, extraOuts);
-            Assert.False(batterSafeOnFc);
-            Assert.False(SelfForceOutAt(moves, toBase: 3));
+            var batter = new Player();
+            var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r1, batter, rng, r2: r2);
+            Assert.Equal(1, extraOuts);                          // 二塁走者を三塁で封殺
+            Assert.True(batterSafeOnFc);                         // 打者は一塁に残る
+            Assert.True(SelfForceOutAt(moves, toBase: 3));
+            Assert.Contains(moves, m => m.ForceOnly && m.ToBase == 3);
             Assert.False(ForceOutAtSecond(moves));
+            Assert.Same(batter, bases.First);
+            Assert.Same(r1, bases.Second);                       // 一塁走者は押し出されて二塁へ
+            Assert.Null(bases.Third);
         }
         var fresh = new Xoshiro256Random(913);
         Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15); // RNG非消費
+    }
+
+    [Fact]
+    public void SelfForceThird_RelayTooSlow_WithForceOnlyOff_TakesFirstOnly()
+    {
+        // 新しい分岐を止める（閾値0）と従来どおり＝仕掛けず一塁だけ（回帰の対照）。
+        var off = C with { DoublePlayForceOnlyMaxRunnerSuccess = 0.0 };
+        var home = Grounder(
+            x: Field.ThirdBase.X, z: Field.ThirdBase.Z, fieldedAt: 1.3, batterToFirst: 2.8,
+            fielderRole: FieldPosition.ThirdBase);
+        var rng = new Xoshiro256Random(913);
+        var (_, extraOuts, batterSafeOnFc, moves) = RunOnce(home, new Player { Speed = 50, Baserunning = 50 }, new Player(), rng,
+            r2: new Player { Speed = 50, Baserunning = 50 }, coeff: off);
+        Assert.Equal(0, extraOuts);
+        Assert.False(batterSafeOnFc);
+        Assert.False(SelfForceOutAt(moves, toBase: 3));
+    }
+
+    // ================= 分岐 A-3（先の走者だけ封殺・issue #797）: 併殺は無理だが二塁封殺は楽 =================
+
+    [Fact]
+    public void NearSecond_VeryFastBatter_TakesLeadRunnerOnly_NoRngConsumed()
+    {
+        // 二遊間の浅いゴロ（二塁封殺は楽）だが、打者が快足で二塁→一塁の転送が間に合わない＝併殺は狙わない。
+        // 旧実装はここで二塁を捨てて一塁へ投げ、一塁走者を二塁へ進めていた。いまは一塁走者を二塁で封殺し、
+        // 打者を一塁に残す（転送しない＝野選ではない）。
+        var home = Grounder(x: -6, z: 37, fieldedAt: 1.4, batterToFirst: 3.4);
+        var r1 = new Player { Speed = 50, Baserunning = 50 };
+        Assert.True(PR1Safe(home, r1) <= C.DoublePlayForceOnlyMaxRunnerSuccess, "二塁封殺は楽に間に合う域のはず");
+        Assert.True(1.0 - PBatterSafe(home) < C.DoublePlayAttemptMinRelaySuccess, "併殺は狙わない域のはず");
+
+        var rng = new Xoshiro256Random(404);
+        for (var i = 0; i < 50; i++)
+        {
+            var runner = new Player { Speed = 50, Baserunning = 50 };
+            var batter = new Player();
+            var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, runner, batter, rng);
+            Assert.Equal(1, extraOuts);
+            Assert.True(batterSafeOnFc);
+            Assert.True(ForceOutAtSecond(moves));
+            Assert.Contains(moves, m => m.ForceOnly && m.FromBase == 1 && m.ToBase == 2 && m.Force);
+            Assert.Same(batter, bases.First);
+            Assert.Null(bases.Second);
+        }
+        var fresh = new Xoshiro256Random(404);
+        Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15); // 分岐A-3 も RNG 非消費
+    }
+
+    [Fact]
+    public void NearSecond_VeryFastBatter_WithForceOnlyOff_TakesFirstOnly()
+    {
+        var off = C with { DoublePlayForceOnlyMaxRunnerSuccess = 0.0 };
+        var home = Grounder(x: -6, z: 37, fieldedAt: 1.4, batterToFirst: 3.4);
+        var runner = new Player { Speed = 50, Baserunning = 50 };
+        var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, runner, new Player(), new Xoshiro256Random(404), coeff: off);
+        Assert.Equal(0, extraOuts);
+        Assert.False(batterSafeOnFc);
+        Assert.False(ForceOutAtSecond(moves));
+        Assert.Same(runner, bases.Second);
     }
 
     [Fact]

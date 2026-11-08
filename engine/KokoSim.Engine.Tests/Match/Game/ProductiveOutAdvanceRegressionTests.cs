@@ -29,7 +29,9 @@ public sealed class ProductiveOutAdvanceRegressionTests
     [Fact]
     public void R2Only_InfieldGrounder_RunnerUsuallyAdvancesToThird()
     {
-        const int games = 600;
+        // 600→800（issue #797）: 一塁走者ありのゴロで先の走者を二塁で封殺するようになり（打者が一塁に残る）、
+        // 「二塁走者だけ」の場面が減った（600試合で 400件弱）。標本の下限 400 を保つために試合を増やす。
+        const int games = 800;
         var advanced = new int[games];
         var held = new int[games];
         var outAtThird = new int[games];

@@ -427,6 +427,13 @@ public sealed record BaserunningCoefficients
     /// 再校正（暫定値。併殺/試合そのものの高校野球実測は未発見＝docs/design/OPEN-QUESTIONS.md 参照）。
     /// 0.65 で 一塁のみ 44%／併殺 37%（ゴロアウト比）・併殺 1.39〜1.41/試合・FC 0.36/試合（新帯内）。</summary>
     public double DoublePlayAttemptMinRelaySuccess { get; init; } = 0.65;
+    /// <summary>
+    /// 併殺の見込みが薄い（分岐A-2）ときでも、先の走者の封殺がこの見込み以下で間に合う（走者の到達見込み
+    /// ≦ この値）なら、一塁でなく<b>先の走者を封殺して打者を一塁に残す</b>（issue #797）。実物の内野は
+    /// 「封殺が取れる限りまず二塁」（上の項）。この値を超える＝封殺が危ういときだけ確実な一塁アウトを取る。
+    /// 0 にすると従来どおり（A-2 は常に一塁のみ）。二塁封殺・三塁/本塁の自己フォースの両方に効く。乱数不使用。
+    /// </summary>
+    public double DoublePlayForceOnlyMaxRunnerSuccess { get; init; } = 0.20;
     /// <summary>二塁ベース経由の転送（ピボット）握り替え[s]。一塁手の中継 <see cref="RelayTransferSeconds"/> とは別値
     /// （捕って踏み替えて投げ返す連携動作＝中継より長い。#318 が外野値と分けたのと同じ扱い）。
     /// 「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）はこの時間を短縮する

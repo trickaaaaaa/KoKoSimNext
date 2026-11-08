@@ -79,6 +79,8 @@ public sealed class TeamState
 
     // ===== design-14 第1段（P1）新プレー発生数（統計参考値。試合結果には影響しない） =====
     public int FieldersChoiceCount { get; set; }
+    /// <summary>先の走者だけを封殺して打者を一塁に残した数（issue #797）。</summary>
+    public int LeadRunnerForceOnlyCount { get; set; }
     public int DroppedThirdStrikeCount { get; set; }
     public int ErrorExtraAdvanceCount { get; set; }
     public int PickoffCount { get; set; }
