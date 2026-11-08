@@ -86,6 +86,14 @@ public sealed record SeasonCalendar
     /// </summary>
     public int SenbatsuAnnounceWeek { get; init; } = 39;
 
+    /// <summary>
+    /// AI校の節目成長・冬明けノードの週（冬合宿（<see cref="WinterCampWeek"/>=38）の直後 ≒ 第39週。
+    /// 設計書05 §2.3・issue #843）。年間成長予算（<see cref="Nation.Roster.AiPlayer.PendingBudget"/>）の
+    /// 残り全額をここで使い切る＝4月の年度替わりより前に今年度の成長を完了させる
+    /// （<see cref="SenbatsuAnnounceWeek"/> と同週になるが、互いに無関係な処理なので衝突しない）。
+    /// </summary>
+    public int WinterGrowthNodeWeek { get; init; } = 39;
+
     public bool IsFirstHalf(int week) => week < SecondHalfStartWeek;
 
     /// <summary>その週が入部予定者の確定週か（設計書04 §2.1）。</summary>
@@ -102,6 +110,9 @@ public sealed record SeasonCalendar
 
     /// <summary>その週がセンバツ選考発表週か（設計書05 §1.5b）。週送りループの発表フック判定に使う。</summary>
     public bool IsSenbatsuAnnounceWeek(int week) => week == SenbatsuAnnounceWeek;
+
+    /// <summary>その週がAI校節目成長の冬明けノードか（設計書05 §2.3・issue #843）。</summary>
+    public bool IsWinterGrowthNodeWeek(int week) => week == WinterGrowthNodeWeek;
 
     /// <summary>
     /// その週から見た「次の公式戦」と開幕までの残り週（issue #582）。トップバーのカウントダウンの単一ソース。
