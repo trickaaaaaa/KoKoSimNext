@@ -721,44 +721,6 @@ public sealed class BaserunningPlaysTests
         Assert.True(differs, "三盗を積極化しても試合結果が一切変わらない");
     }
 
-    [Fact]
-    public void StealHome_EnabledAggressively_ProducesAttemptsAndAffectsGames()
-    {
-        var off = new TacticsCoefficients();
-        var on = new TacticsCoefficients { StealHomeMinSuccess = 0.0, StealHomeProb = 1.0, StealHomeMaxDiffAbs = 99 };
-        var attemptsOn = 0;
-        var differs = false;
-        for (ulong s = 0; s < 60; s++)
-        {
-            var a = GameEngine.Play(Brainy("A", off), Brainy("H", off), new GameContext(), new Xoshiro256Random(s));
-            var b = GameEngine.Play(
-                Brainy("A", on), Brainy("H", on), new GameContext { Tactics = on }, new Xoshiro256Random(s));
-            attemptsOn += b.AwayTactics.StealAttempts + b.HomeTactics.StealAttempts;
-            if (a.TotalRuns != b.TotalRuns) differs = true;
-        }
-        Assert.True(attemptsOn > 0, "本盗を積極化しても盗塁企図が一度も発生しない");
-        Assert.True(differs, "本盗を積極化しても試合結果が一切変わらない");
-    }
-
-    [Fact]
-    public void StealHome_NeverFiresTheSamePitchAsSqueeze()
-    {
-        // 三塁のみ在塁は本盗・スクイズ両方の対象塁状況。スクイズが確定した球では本盗を試みない
-        // （GameEngine側の単純上書きで解消, Q12-3と同型）ため、両方が同時に走者を消費して二重計上する
-        // ような矛盾（3アウト超過やRuns++の二重加算）は起きない＝多数試行しても異常終了しないことで確認する。
-        var tactics = new TacticsCoefficients
-        {
-            SqueezeProb = 1.0, SqueezeFromInning = 1, SqueezeMaxDiffAbs = 99, SqueezeMinBunt = 0,
-            StealHomeMinSuccess = 0.0, StealHomeProb = 1.0, StealHomeMaxDiffAbs = 99, StealHomeMaxOuts = 1,
-        };
-        var ctx = new GameContext { Tactics = tactics };
-        for (ulong s = 0; s < 60; s++)
-        {
-            var r = GameEngine.Play(Brainy("A", tactics), Brainy("H", tactics), ctx, new Xoshiro256Random(s));
-            Assert.True(r.TotalRuns >= 0);
-        }
-    }
-
     // --- 暴投・パスボール（design-14 P2-8, 設計書15 Phase D-3）: 既定オフでは rng 消費ゼロ・走者無しでは無発 ---
 
     [Fact]
@@ -954,15 +916,16 @@ public sealed class BaserunningPlaysTests
     }
 
     [Fact]
-    public void StealResolver_ThirdAndHome_AreHarderThanSecond()
+    public void StealResolver_Third_IsHarderThanSecond()
     {
         var runner = new Player { Speed = 70, Steal = 70 };
         var catcher = Catcher(60);
         var second = StealResolver.SuccessProbability(runner, catcher, C, target: StealTarget.Second);
         var third = StealResolver.SuccessProbability(runner, catcher, C, target: StealTarget.Third);
-        var home = StealResolver.SuccessProbability(runner, catcher, C, target: StealTarget.Home);
         Assert.True(third < second, $"三盗が二盗より易しい: third={third:F2} second={second:F2}");
-        Assert.True(home < third, $"本盗が三盗より易しい: home={home:F2} third={third:F2}");
+        // 単独の本盗は採用しない（issue #788）＝成功率を問い合わせても明示的に失敗する
+        Assert.Throws<System.ArgumentException>(() =>
+            StealResolver.SuccessProbability(runner, catcher, C, target: StealTarget.Home));
     }
 
     // --- スモールボール発生（既定オフ）: フラグで挙動が変わる ---

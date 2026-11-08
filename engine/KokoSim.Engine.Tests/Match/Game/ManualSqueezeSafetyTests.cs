@@ -19,7 +19,8 @@ namespace KokoSim.Engine.Tests.Match.Game;
 /// ライブ進行に try/catch が無いため試合がその場で強制終了していた。</para>
 ///
 /// <para>本盗の抑止ガードは brain 由来のスクイズ（squeezeSign）しか見ていなかったので、手動スクイズは
-/// ガードの外に居た。ここでは手動盗塁（本盗）と手動スクイズを同じ球へ同時に予約して、その競合を固定する。</para>
+/// ガードの外に居た。ここでは手動盗塁（本盗）と手動スクイズを同じ球へ同時に予約して、その競合を固定する。
+/// issue #788 で単独の本盗そのものを外したので、いまは「本盗の予約が紛れ込んでもスクイズだけが走る」の確認。</para>
 /// </summary>
 public sealed class ManualSqueezeSafetyTests
 {
@@ -48,7 +49,7 @@ public sealed class ManualSqueezeSafetyTests
     }
 
     /// <summary>
-    /// 同じ球へ「本盗」と「スクイズ」を予約したら、本盗が抑止されスクイズだけが走る。
+    /// 同じ球へ「本盗」と「スクイズ」を予約したら、スクイズだけが走る（単独の本盗は issue #788 で採用しない）。
     ///
     /// <para>修正前は本盗が先に解決して三塁走者を消費し（<c>bases.Third = null</c>）、その後にスクイズ予約が
     /// 消費されていた。打席頭に三塁走者が居るこの場面では <c>AtBatSession</c> が打席頭スナップショットへ

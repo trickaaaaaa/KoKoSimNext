@@ -285,6 +285,8 @@ avg/modernカードの実ゲームプレー・RNG消費順は一切変わって�
 ---
 ## Q28. 三盗 −0.35 / 本盗 −0.7 のバイアスは物理層に置き場所が無い（2026-08-14・issue verdict-margin-into-physical-layer で発見）
 
+> **本盗の部分は閉じた**（2026-11-08・issue #788）: 単独の本盗そのものを採用しないことにした。三盗の部分は未決のまま。
+
 二盗の校正項（`steal_success_bias` 0.38）は物理層の秒（走者のジャンプ0.19＋捕手の立ち上がり0.19）へ移し、
 **判定＝絵**になった（実測: 送球のある盗塁131件で食い違い0件）。残った2つのバイアスには同じ手が使えない。
 
@@ -1347,7 +1349,7 @@ B案（投球と完全結合＝ピッチアウトがボール球としてカウ�
 
 第1段（野選/振り逃げ/敬遠/重盗/牽制/失策連鎖）は全て**係数の既定値で無効化した状態**で実装・テスト緑まで完了（`dotnet test engine/ --filter "Category!=Heavy"` 477件、`-c Release --filter "Category=Heavy"` 17件とも全緑）。以下は今回スコープ外として明示的に見送った項目。
 
-- **未決A: 三盗・本盗の単独発生は resolver 層のみ実装、采配Brain配線は未接続**。`StealResolver` は `StealTarget`（Second/Third/Home）に一般化済みで、三盗・本盗の成功確率計算・単体テスト（`StealResolver_ThirdAndHome_AreHarderThanSecond`等）は揃っている。しかし `StandardTacticsBrain.CallOffense` の盗塁判断は現状「一塁走者・二塁空き」のみを見る条件のままで、二塁のみ在塁（三盗候補）・三塁のみ在塁（本盗候補）のケースでは `OffensiveSign.Steal` を返さない＝実戦では発生しない。実装済みなのは**一・三塁の重盗**（`BaserunningCoefficients.DoubleStealThirdBreakProb`、既に到達可能な塁配置だったため）のみ。単独三盗・単独本盗をゲームに接続するには `StandardTacticsBrain`/`AiTacticsBrain` 双方への采配閾値・AIティアゲート追加が必要（設計未確定、下記未決Bと関連）。→ **Issue化 [#67](https://github.com/trickaaaaaa/KoKoSimNext/issues/67)（2026-07-21。AIティアゲート＝未決Bの盗塁側も同Issueに含める）**
+- **未決A: 三盗・本盗の単独発生は resolver 層のみ実装、采配Brain配線は未接続**。（**解決**: 三盗は #67/#622 で配線済み。単独の本盗は採用しない＝2026-11-08 監督決定・#788）`StealResolver` は `StealTarget`（Second/Third/Home）に一般化済みで、三盗・本盗の成功確率計算・単体テスト（`StealResolver_ThirdAndHome_AreHarderThanSecond`等）は揃っている。しかし `StandardTacticsBrain.CallOffense` の盗塁判断は現状「一塁走者・二塁空き」のみを見る条件のままで、二塁のみ在塁（三盗候補）・三塁のみ在塁（本盗候補）のケースでは `OffensiveSign.Steal` を返さない＝実戦では発生しない。実装済みなのは**一・三塁の重盗**（`BaserunningCoefficients.DoubleStealThirdBreakProb`、既に到達可能な塁配置だったため）のみ。単独三盗・単独本盗をゲームに接続するには `StandardTacticsBrain`/`AiTacticsBrain` 双方への采配閾値・AIティアゲート追加が必要（設計未確定、下記未決Bと関連）。→ **Issue化 [#67](https://github.com/trickaaaaaa/KoKoSimNext/issues/67)（2026-07-21。AIティアゲート＝未決Bの盗塁側も同Issueに含める）**
 - **未決B: 敵AI（`AiTacticsBrain`）の敬遠・重盗へのティアゲート/校風重みは未実装**。`IntentionalWalk`・`DoubleStealThirdBreakProb`とも係数既定0のため実害はないが、将来これらを有効化する際は`AiTacticsBrain.TierGateDefense`・`ApplyStyle`（校風「守り勝つ」等）への配線を別途設計する。→ **敬遠/重盗のAIティアゲートは盗塁側と同じ [#67](https://github.com/trickaaaaaa/KoKoSimNext/issues/67) の射程に含める（2026-07-22）**。
 - **~~未決C: 牽制（`PickoffResolver`）の投手側パラメータは`Mental`の代理指標のまま~~【クローズ 2026-07-22・現状維持を正式採用】**。「クイックモーション」相当の専用パラメータは設けず、`Player.Mental` を牽制の鋭さの代理指標として流用する現状を正式採用とする（能力値の数を増やさない方針と整合）。専用能力の追加は将来要望が出た時に再検討。
 - **~~帯の再校正は未着手~~【解決 2026-07-17】**。全6係数を実値に有効化し`data/balance-targets.yaml`に`games_10k`拡張＋`games_10k_tactics`新設で校正済み（詳細は`HANDOFF-2026-07-17-rules.md` §3.5）。ヘッドレスシムが元々采配Brainなしだった点を発見し、`GameSimulation.Run`に`useTacticsBrain`オプション（既存呼び出しは非破壊）を追加して敬遠・重盗・牽制も検証可能にした。値はすべて🟡実測ベースの初期値でプレイテストでの再調整を前提とする。振り逃げは捕手Catching補正の非対称クランプにより基準確率と実測の関係が非線形になる注意点あり（§3.5参照）。

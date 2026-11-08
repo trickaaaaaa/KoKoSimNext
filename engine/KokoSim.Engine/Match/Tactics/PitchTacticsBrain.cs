@@ -38,7 +38,7 @@ public readonly record struct PitchTacticsSituation(
 /// （<see cref="PitchDirective"/>）への解決は呼び出し側（GameEngine）が行う。
 /// </summary>
 /// <param name="StealAttempt">
-/// この球で走者に盗塁を試みさせるか（設計書15 Phase D-2d／issue #67で三盗・本盗へ拡張）。null=試みない。
+/// この球で走者に盗塁を試みさせるか（設計書15 Phase D-2d／issue #67で三盗へ拡張。単独本盗は不採用・#788）。null=試みない。
 /// 非null=その始動種別（Normal/Gamble）で試みる。打席頭一度きりだった判断（旧 ITacticsBrain.CallOffense/
 /// CallStartType）を毎球の独立試行へ置き換えたもの。解決自体（PickoffResolver/StealReadModel/StealResolver）は
 /// GameEngine がこの指示を受けてから行う（ここでは「試みるか」だけを返す）。

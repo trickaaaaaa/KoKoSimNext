@@ -12,8 +12,10 @@ public enum StealResult
     CaughtStealing,
 }
 
-/// <summary>盗塁の狙い塁（design-14 P1-4）。既定は二盗。三盗・本盗は末尾オプション引数のため
-/// 既存呼び出し（target省略）の挙動・シグネチャに一切影響しない。</summary>
+/// <summary>盗塁の狙い塁（design-14 P1-4）。既定は二盗。三盗は末尾オプション引数のため
+/// 既存呼び出し（target省略）の挙動・シグネチャに一切影響しない。
+/// <see cref="Home"/> は<b>一・三塁の重盗で本塁を突く三塁走者の到達時間</b>（<see cref="StealResolver.RunnerTimeSeconds"/>）
+/// にだけ使う。単独の本盗は採用しない（issue #788・2026-11-08 監督決定）＝判定・絵・采配には出てこない。</summary>
 public enum StealTarget
 {
     Second,
@@ -33,7 +35,11 @@ public readonly record struct StealVerdict(StealResult Result, double RunnerSeco
 /// <para><b>判定式はここにしか置かない</b>。<see cref="GameEngine"/> の解決分岐も、采配カードの
 /// 可否・ラベルもこの1か所を引く＝「押せたのに engine が解決しない指示」が構造的に作れない。</para>
 ///
-/// <para>3つの条件は排他なので狙う塁は塁状況で一意に決まる（＝プレイヤーに選ばせる余地が無い）。
+/// <para>単独の本盗（三塁のみ在塁）は<b>採用しない</b>（issue #788・2026-11-08 監督決定）。野球人生で1回あるか
+/// ないかのプレーで、成功率も下限近く（走力50≈1.6%）＝押すとアウトになるだけのボタンだった。三塁のみ在塁は null。
+/// 一・三塁の重盗で三塁走者が本塁を突くプレーは二盗に付随する作戦なので残している（GameEngine の二盗分岐）。</para>
+///
+/// <para>2つの条件は排他なので狙う塁は塁状況で一意に決まる（＝プレイヤーに選ばせる余地が無い）。
 /// 一・二塁や満塁のように<b>どれにも当たらない塁状況では null</b>＝単独盗塁は走らない
 /// （重盗は別経路・design-14 P1-4）。</para>
 /// </summary>
@@ -46,8 +52,7 @@ public static class StealTargets
         if (onFirst && !onSecond) return StealTarget.Second;
         // 三盗: 二塁のみ。
         if (onSecond && !onFirst && !onThird) return StealTarget.Third;
-        // 本盗: 三塁のみ。
-        if (onThird && !onFirst && !onSecond) return StealTarget.Home;
+        // 三塁のみ（単独の本盗）は採用しない（issue #788）。
         return null;
     }
 }
@@ -76,13 +81,13 @@ public static class StealResolver
     /// <summary>確定結果と絵が食い違わないための最小の勝ち幅[s]（表示専用）。
     ///
     /// <para><see cref="SuccessProbability"/> は 1%/99% でクランプされるので、そこが効く極端な場面
-    /// （実質は本盗だけ）に限り、引いたゆらぎが結果と食い違う。その時だけ結果に合う最小の秒へ寄せる。
+    /// （極端な能力差）に限り、引いたゆらぎが結果と食い違う。その時だけ結果に合う最小の秒へ寄せる。
     /// 通常の場面では一切効かない＝従来の「表示側ガード」はここに畳み込まれて消えた。</para></summary>
     private const double MinMarginSeconds = 0.05;
 
     /// <summary>走者所要時間[s]。ギャンブル始動(<see cref="StartType.Gamble"/>)は好ジャンプで短縮（G3）。
-    /// 塁間距離は二盗・三盗を同一と近似（<see cref="BaserunningCoefficients.StealLeadDistanceM"/>）。本盗だけは
-    /// 投手のワインドアップ中に大きくリードを取れるので専用の距離（<see cref="BaserunningCoefficients.StealHomeDistanceM"/>・issue #637）。</summary>
+    /// 塁間距離は二盗・三盗を同一と近似（<see cref="BaserunningCoefficients.StealLeadDistanceM"/>）。<see cref="StealTarget.Home"/>
+    /// （一・三塁の重盗で本塁を突く三塁走者）は三塁からの距離（<see cref="BaserunningCoefficients.StealHomeDistanceM"/>・issue #637）。</summary>
     public static double RunnerTimeSeconds(Player runner, BaserunningCoefficients c, StartType startType = StartType.Normal,
         StealTarget target = StealTarget.Second)
     {
@@ -96,19 +101,14 @@ public static class StealResolver
     }
 
     /// <summary>守備所要時間[s]（投手クイック＋捕手ポップ＋タッチ）。ピッチアウト成立で捕手優位＝短縮（G3）。
-    /// ギャンブル走者は無防備でさらに短縮（読まれると最も刺されやすい）。本盗は捕手からの送球ではなく
-    /// 投球そのものが送球を兼ねるため送球区間を持たない＝投手の始動から球が捕手に届くまで
-    /// （<see cref="BaserunningCoefficients.StealHomeDeliverySeconds"/>）＋タッチ（issue #637）。</summary>
+    /// ギャンブル走者は無防備でさらに短縮（読まれると最も刺されやすい）。単独の本盗は採用しない（issue #788）。</summary>
     public static double DefenseTimeSeconds(
         Player catcher, BaserunningCoefficients c, bool pitchout = false, StartType startType = StartType.Normal,
         StealTarget target = StealTarget.Second)
     {
-        double defense;
         if (target == StealTarget.Home)
-        {
-            defense = c.StealHomeDeliverySeconds + c.HomeTagSeconds;
-        }
-        else
+            throw new ArgumentException("単独の本盗は採用しない（issue #788）。", nameof(target));
+        double defense;
         {
             var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
             var catcherFielder = catcher.ToFielder(c.AbilityEffect);
@@ -128,18 +128,12 @@ public static class StealResolver
     }
 
     /// <summary>盗塁成功確率（走塁と同式のlogistic）。pitchout=読み切り, startType=始動種別（G3）。
-    /// 三盗・本盗は<see cref="BaserunningCoefficients.StealThirdSuccessBias"/>/<see cref="BaserunningCoefficients.StealHomeSuccessBias"/>
-    /// で成功率を下方補正する（design-14「三盗は成功率下方、本盗はさらに下方」）。</summary>
+    /// 三盗は<see cref="BaserunningCoefficients.StealThirdSuccessBias"/> で成功率を下方補正する（design-14「三盗は成功率下方」）。</summary>
     public static double SuccessProbability(
         Player runner, Player catcher, BaserunningCoefficients c,
         bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second)
     {
-        var bias = target switch
-        {
-            StealTarget.Third => c.StealSuccessBias + c.StealThirdSuccessBias,
-            StealTarget.Home => c.StealSuccessBias + c.StealHomeSuccessBias,
-            _ => c.StealSuccessBias,
-        };
+        var bias = target == StealTarget.Third ? c.StealSuccessBias + c.StealThirdSuccessBias : c.StealSuccessBias;
         var margin = DefenseTimeSeconds(catcher, c, pitchout, startType, target)
                      - RunnerTimeSeconds(runner, c, startType, target) + bias;
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.StealMarginScale), 0.01, 0.99);

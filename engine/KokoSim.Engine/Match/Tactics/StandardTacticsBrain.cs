@@ -178,11 +178,10 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     }
 
     /// <summary>
-    /// 盗塁を試みるか＋始動種別＋狙う塁（設計書12 §5, G3b／設計書15 Phase D-2d／issue #67で三盗・本盗へ拡張）。
+    /// 盗塁を試みるか＋始動種別＋狙う塁（設計書12 §5, G3b／設計書15 Phase D-2d／issue #67で三盗へ拡張）。
     /// 旧来は打席頭で一度だけ（<c>ITacticsBrain.CallOffense</c>/<c>CallStartType</c>）判定していたが、
     /// 毎球の独立試行へ置き換えた（＝任意の球の前で発動しうる。解決式・係数はそのまま、試行回数が増える分だけ
-    /// 発動タイミングが多様化）。塁状況は排他（一塁のみ在塁＝二盗候補／二塁のみ在塁＝三盗候補／三塁のみ在塁＝
-    /// 本盗候補）なので同時に複数の狙いが競合することはない。一・三塁の重盗（DoubleStealThirdBreakProb）は
+    /// 発動タイミングが多様化）。塁状況は排他（一塁のみ在塁＝二盗候補／二塁のみ在塁＝三盗候補）なので同時に複数の狙いが競合することはない。一・三塁の重盗（DoubleStealThirdBreakProb）は
     /// 一塁+三塁在塁が前提でこの分岐に一切入らないため、優先順位の整理は不要（塁状況で自然に排他）。
     /// </summary>
     private (StartType Start, StealTarget Target)? CallStealAttempt(in TacticsSituation s, IRandomSource rng)
@@ -196,14 +195,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         {
             return AttemptSteal(s.OnSecond, s.Catcher, StealTarget.Third, _c.StealThirdMinSuccess, _c.StealThirdProb, rng);
         }
-        if (s.OnFirst is null && s.OnSecond is null && s.OnThird is not null
-            && s.Outs <= _c.StealHomeMaxOuts && System.Math.Abs(s.ScoreDiff) <= _c.StealHomeMaxDiffAbs)
-        {
-            // 本盗は超高閾値のギャンブル枠（design-14）: 仕掛けると決めたら常に好ジャンプの一発勝負。
-            var estimate = StealResolver.SuccessProbability(s.OnThird, s.Catcher, _br, target: StealTarget.Home);
-            if (estimate < _c.StealHomeMinSuccess || rng.NextDouble() >= _c.StealHomeProb) return null;
-            return (StartType.Gamble, StealTarget.Home);
-        }
+        // 単独の本盗（三塁のみ在塁）は採用しない（issue #788・2026-11-08 監督決定）。
         return null;
     }
 

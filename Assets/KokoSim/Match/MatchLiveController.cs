@@ -1546,12 +1546,11 @@ namespace KokoSim.Unity.Match
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Art = "squeeze", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", EnabledIf = () => RunnerOnThird && !HomeStealChosen,
+                    GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
                     OnSelect = () =>
                     {
                         _pitchBattingChoice = PitchBattingOverride.Squeeze;
                         PrepareBuntStance(true);
-                        _signPad?.RefreshEnabled();   // 本盗札をその場で消灯（issue #622）
                     },
                     OnClear = () =>
                     {
@@ -1563,7 +1562,7 @@ namespace KokoSim.Unity.Match
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst,
                     OnSelect = () => _signChoice = OffensiveSign.HitAndRun,
                     OnClear = () => _signChoice = null },
-                // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗／三塁のみ→本盗）ので、
+                // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗。三塁のみは盗塁不可・issue #788）ので、
                 // カードは1枚のままラベルだけ書き換える（issue #622・案A）。
                 new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Art = "steal", Offense = true, Group = "run",
                     GroupLabel = "走塁", LabelOf = () => StealCardLabel,
@@ -1613,25 +1612,16 @@ namespace KokoSim.Unity.Match
         /// 判定式は engine の <see cref="StealTargets"/> が単一ソース＝「押せたのに engine が
         /// 解決しない指示」を構造的に作らない。狙う塁は塁状況で一意に決まるので選ばせない。
         /// </summary>
-        private StealTarget? StealTargetOnBases => _atBat == null
+        /// <para>単独の本盗は採用しない（issue #788）＝三塁のみ在塁では null（カードは消灯）。
+        /// 本盗とスクイズの排他（issue #619）もこれで不要になった。</para>
+        private StealTarget? StealTargetNow => _atBat == null
             ? null
             : StealTargets.FromBases(_atBat.BaseFirst, _atBat.BaseSecond, _atBat.BaseThird);
-
-        private StealTarget? StealTargetNow
-            // 本盗とスクイズは同じ三塁走者を使う。engine は手動スクイズの予約がある球で本盗を
-            // 走らせない（issue #619）ので、押しても不発になる並びをカード側でも作らせない。
-            => StealTargetOnBases == StealTarget.Home && _pitchBattingChoice == PitchBattingOverride.Squeeze
-                ? null
-                : StealTargetOnBases;
-
-        /// <summary>本盗を予約済みか（スクイズ側の可否に効かせる。上の裏返し）。</summary>
-        private bool HomeStealChosen => _stealChoice != null && StealTargetOnBases == StealTarget.Home;
 
         /// <summary>盗塁カードの表示名（狙う塁で書き換える。案A・2026-08-14 監督選択）。</summary>
         private string StealCardLabel => StealTargetNow switch
         {
             StealTarget.Third => "三盗",
-            StealTarget.Home => "本盗",
             _ => "盗塁",
         };
 

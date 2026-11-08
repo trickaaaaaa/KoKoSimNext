@@ -41,7 +41,7 @@ public sealed class StealPictureMatchesVerdictTests
         {
             var leg = play.Runners.FirstOrDefault(r => r.Label == "走");
             var thrown = play.Ball.OfType<EndpointBallSegment>().FirstOrDefault(b => b.Kind == BallSegmentKind.Throw);
-            if (leg is null || thrown is null) continue;   // 本盗は送球区間そのものが無い
+            if (leg is null || thrown is null) continue;
             var runnerArrive = leg.Segs[^1].T1;
             var defenseArrive = thrown.T1 + C.TagSeconds;
 
@@ -118,9 +118,6 @@ public sealed class StealPictureMatchesVerdictTests
     /// 校正項は<b>移しただけ</b>で成功率を変えていない: 旧係数（バイアス0.38・ジャンプ0・立ち上がり0）と
     /// 新係数（バイアス0・ジャンプ0.19・立ち上がり0.19）で <see cref="StealResolver.SuccessProbability"/> が
     /// 完全一致する（二盗・三盗）。＝帯も決定論ダイジェストも動かないことの根拠。
-    ///
-    /// <para>本盗は対象外（送球区間が無い＝立ち上がりが乗らない）。issue #637 で本盗専用の秒へ組み直し、
-    /// 下限1%張り付きではなくなったので、旧係数との一致は確かめられない（本盗は StealHomeModelTests）。</para>
     /// </summary>
     [Fact]
     public void MovingTheBias_DoesNotChangeAnySuccessProbability()

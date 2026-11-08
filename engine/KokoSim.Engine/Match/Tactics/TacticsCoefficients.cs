@@ -38,10 +38,9 @@ public sealed record TacticsCoefficients
     public double StealMinSuccess { get; init; } = 0.50;
     public double StealProb { get; init; } = 0.45;
 
-    // ===== 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。 =====
+    // ===== 三盗（issue #67, design-14 未決A）: 二塁のみ在塁でのみ判定。 =====
     // 一・三塁の重盗（DoubleStealThirdBreakProb）とは塁状況が排他（重盗は一塁+三塁）のため優先順位の
-    // 競合はない。三塁が絡む唯一の競合はスクイズ（本盗も三塁走者が起点）で、GameEngine 側で
-    // 「この球スクイズが確定していれば本盗は試みない」という単純上書きで解消する（Q12-3と同型）。
+    // 競合はない。単独の本盗は採用しない（issue #788・2026-11-08 監督決定）。
     /// <summary>三盗: 二盗より選別的な成功見込み閾値。
     ///
     /// <para>issue steal-thresholds-unreachable（2026-08-27）: 旧コメントは「俊足×弱肩でも≈0.4〜0.65」と
@@ -58,15 +57,7 @@ public sealed record TacticsCoefficients
     public int StealThirdMaxOuts { get; init; } = 0;
     public int StealThirdMaxDiffAbs { get; init; } = 3;
 
-    /// <summary>本盗: 超高閾値のギャンブル枠。issue #637 で解決式（StealResolver）の守備側を「ワインドアップ＋
-    /// 球の到達」、走者側を三塁からのリード込み距離に直し、成功見込みが走者で変わるようになった
-    /// （通常始動の見込みで走力50≈1.6%・走力70≈3.2%・走力90≈5.9%）。閾値は走力70前後から上だけが仕掛ける水準
-    /// （旧: 見込みが常に下限1%だったので0＝常に通過）。実際の企図はギャンブル始動なので成功率は見込みの約2倍。
-    /// 発生頻度は StealHomeProb と状況条件（アウトカウント・点差）で絞る。</summary>
-    public double StealHomeMinSuccess { get; init; } = 0.03;
-    public double StealHomeProb { get; init; } = 0.10;
-    public int StealHomeMaxOuts { get; init; } = 1;
-    public int StealHomeMaxDiffAbs { get; init; } = 1;
+    // 単独の本盗は採用しない（issue #788・2026-11-08 監督決定）＝本盗の判断係数は持たない。
 
     public double HitAndRunProb { get; init; } = 0.07;
     public int HitAndRunMinContact { get; init; } = 55;
