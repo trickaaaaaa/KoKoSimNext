@@ -36,10 +36,14 @@ public sealed class GroundBallDoublePlayDecisionTests
     }
 
     internal static (Tally Tally, double DpPerGame, double FcPerGame, double RunsPerTeam) Measure(
-        double threshold, int games = 300, ulong seedBase = 7100)
+        double threshold, int games = 300, ulong seedBase = 7100, double? forceOnlyMax = null)
     {
         var baseCtx = new GameContext();
-        var ctx = baseCtx with { Baserunning = baseCtx.Baserunning with { DoublePlayAttemptMinRelaySuccess = threshold } };
+        var ctx = baseCtx with { Baserunning = baseCtx.Baserunning with
+        {
+            DoublePlayAttemptMinRelaySuccess = threshold,
+            DoublePlayForceOnlyMaxRunnerSuccess = forceOnlyMax ?? baseCtx.Baserunning.DoublePlayForceOnlyMaxRunnerSuccess,
+        } };
         var perGame = new int[games][];
         var dps = new int[games];
         var fcs = new int[games];
@@ -65,7 +69,7 @@ public sealed class GroundBallDoublePlayDecisionTests
                 if (e.Result.IsHit()) { local[3]++; continue; }
                 if (e.Result != PlateAppearanceResult.InPlayOut) { local[5]++; continue; }
                 if (e.OutsThisPa >= 2) { local[0]++; continue; }                                    // 併殺
-                if (e.OutsThisPa == 1 && e.BaseFirstAfter && !e.BaseSecondAfter) { local[1]++; continue; } // 二塁封殺のみ（FC）
+                if (e.OutsThisPa == 1 && e.BaseFirstAfter && !e.BaseSecondAfter) { local[1]++; continue; } // 二塁封殺のみ（野選＋先の走者だけ封殺 #797）
                 if (e.OutsThisPa == 1 && !e.BaseFirstAfter && e.BaseSecondAfter) { local[2]++; continue; } // 一塁アウトのみ（走者は二塁へ）
                 local[5]++;
             }
@@ -89,24 +93,24 @@ public sealed class GroundBallDoublePlayDecisionTests
         _out.WriteLine($"n={t.Total} DP={t.Dp} FConly={t.FcOnly} FirstOnly={t.FirstOnly} IFH={t.InfieldHit} E={t.Error} " +
                        $"| DP/groundouts={100.0 * t.Dp / t.GroundOuts:F1}% | DP/g={dpg:F2} FC/g={fcg:F2} runs/team={rpt:F2}");
         Assert.True(t.Total > 600, $"標本不足 n={t.Total}");
-        // 「一塁アウトのみ（走者を二塁へ進める）」は内野ゴロの 5 割未満（旧 0.80 では 60%）。
-        // 0.65 への再校正（issue double-play-per-game-band-review, 2026-08-30）で ≈33%→≈44% に上昇したが、
-        // 依然として旧値の「過半」からは区別される水準。
-        // 0.48→0.50（issue #764, 2026-11-03・オーナー承認）: 肩を効きで寝かせなくなり（肩20≈100／肩100=140km/h）、
-        // 強さ50の生成校（実際の肩≈44）は送球が少し遅くなって 46.9%→48.6%。上限をコメントどおりの「5割未満」に合わせた。
-        Assert.True(t.FirstOnly < t.Total * 0.50, $"一塁のみ {t.FirstOnly}/{t.Total}={100.0 * t.FirstOnly / t.Total:F1}% が多すぎる（併殺を狙いに行かない）");
+        // 「一塁アウトのみ（走者を二塁へ進める）」は、二塁封殺が危うい場面だけに限られる（issue #797）。
+        // 旧来は併殺の見込みが薄いと二塁封殺が楽でも一塁へ投げており、内野ゴロの ≈49% がこれだった。
+        // いまは「封殺が取れる限りまず二塁」＝先の走者だけ封殺（打者は一塁に残る）へ移る。
+        Assert.True(t.FirstOnly < t.Total * 0.15, $"一塁のみ {t.FirstOnly}/{t.Total}={100.0 * t.FirstOnly / t.Total:F1}% が多すぎる（二塁封殺を捨てている）");
         // 併殺はゴロアウトの 30〜45%（旧 21%、0.55 校正時は 35〜50%）。上限は「刺せない相手にも投げる」を防ぐ検収。
         var dpShare = (double)t.Dp / t.GroundOuts;
         Assert.InRange(dpShare, 0.30, 0.45);
-        // 転送負けの FC は残差として残る（0 でも 併殺と同数でもない）。
-        Assert.InRange((double)t.FcOnly / t.GroundOuts, 0.05, 0.20);
+        // 二塁封殺のみ（転送負けの野選＋先の走者だけ封殺）。旧来は野選の残差だけで 5〜20%、
+        // issue #797 で旧「一塁のみ」の大半がここへ移る。
+        Assert.InRange((double)t.FcOnly / t.GroundOuts, 0.30, 0.65);
     }
 
     [Fact]
     public void LegacyThreshold_WasTakingTheSureOutTooOften()
     {
         // 旧値 0.80 は「一塁のみ」が過半（回帰の対照。値の意味づけを固定する）。
-        var (t, _, _, _) = Measure(0.80, games: 150);
+        // 先の走者だけ封殺（issue #797）を止めた状態で測る＝当時の振る舞い。
+        var (t, _, _, _) = Measure(0.80, games: 150, forceOnlyMax: 0.0);
         Assert.True(t.FirstOnly > t.Total * 0.50, $"旧値で一塁のみ {100.0 * t.FirstOnly / t.Total:F1}%（想定 >50%）");
     }
 }

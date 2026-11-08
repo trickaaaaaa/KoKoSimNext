@@ -59,6 +59,13 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     public bool SelfForceDoublePlayLead { get; init; }
 
     /// <summary>
+    /// この封殺アウトは<b>先の走者を封殺するだけ</b>で、一塁へは転送しない（issue #797）。併殺の見込みが薄いが
+    /// 封殺は十分間に合う場面（<see cref="BaserunningCoefficients.DoublePlayForceOnlyMaxRunnerSuccess"/>）。
+    /// 打者は一塁に残る（打数1・安打0。野選には数えない）。絵は一塁への転送を描かない。乱数不使用。
+    /// </summary>
+    public bool ForceOnly { get; init; }
+
+    /// <summary>
     /// タイムライン表示専用（issue #741）: 満塁・内野前進の本塁封殺（送球で三塁走者を本塁でアウト）のあと、
     /// 捕手が一塁へ転送したか。打者が一塁でアウト（本封→一封の併殺）か野選で生きたかは呼び出し側の
     /// batterSafeOnFc で分かる。乱数不使用・判定不変。
@@ -996,10 +1003,14 @@ public static class BaserunningModel
         // 本塁のフォースは満塁（一・二・三塁とも占有）でなければ成立しない（r3Forced＝486行目付近と同じ定義）。
         // 二塁が空いていれば三塁走者は押し出されない＝フォースでないので自己フォースの対象外。
         var homeCandidate = r2 is not null && r3 is not null && home.FielderRole is FieldPosition.Catcher or FieldPosition.Pitcher;
+        // 満塁・内野前進は「本塁で封殺して1点を防ぐ」が本筋（ApplyInPlayOut の r3Forced×In 分岐）。併殺を狙わない
+        // ときに二塁・三塁の封殺だけを取ると、その本塁封殺の判定が飛ばされる＝先の走者だけの封殺（A-3・issue #797）は
+        // 本塁を踏むとき以外は使わない。
+        var homeFirst = r2 is not null && r3 is not null && home.InfieldDepth == Tactics.DefenseDepth.In;
 
         if (!thirdCandidate && !homeCandidate)
         {
-            var (eo, fc) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv);
+            var (eo, fc) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv, allowForceOnly: !homeFirst);
             return (eo, fc, DoublePlayForceTarget.Second);
         }
 
@@ -1015,7 +1026,8 @@ public static class BaserunningModel
             if (pR2Safe3rd < pR1Safe2nd)
             {
                 var (eo, fc) = ResolveDoublePlaySelfForce(
-                    bases, batter, leadRunner: r2!, leadFromBase: 2, home, force3rd, delay, coeff, rng, mv);
+                    bases, batter, leadRunner: r2!, leadFromBase: 2, home, force3rd, delay, coeff, rng, mv,
+                    allowForceOnly: !homeFirst);
                 return (eo, fc, DoublePlayForceTarget.Third);
             }
         }
@@ -1032,7 +1044,7 @@ public static class BaserunningModel
             }
         }
 
-        var (eo2, fc2) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv);
+        var (eo2, fc2) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv, allowForceOnly: !homeFirst);
         return (eo2, fc2, DoublePlayForceTarget.Second);
     }
 
@@ -1073,7 +1085,7 @@ public static class BaserunningModel
     private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlaySelfForce(
         BaseState bases, Player batter, Player leadRunner, int leadFromBase, HomePlayContext home,
         HomePlayResolver.BasePlayParams force, double delay,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, bool allowForceOnly = true)
     {
         // A-1) 自己フォース自体が間に合わない（現実にはほぼ起きない＝呼び出し元の比較で既に二塁封殺より
         // 有利と分かっているが、絶対的な間に合わなさは独立に見る）＝守備は諦め一塁を取る。RNG非消費。
@@ -1096,9 +1108,24 @@ public static class BaserunningModel
         var pBatterSafe = MathUtil.Clamp(
             MathUtil.Logistic(batterMargin / coeff.DoublePlayRelayMarginScale), 0.01, 0.99);
 
-        // A-2) この代替の一塁転送が薄い＝仕掛けない（二塁封殺への再挑戦はしない＝v1の単純化。代替は
+        // A-2) この代替の一塁転送が薄い＝併殺は仕掛けない（二塁封殺への再挑戦はしない＝v1の単純化。代替は
         // 二塁より生存見込みが低いと分かった上で選ばれているため、二塁を試しても大差ない見込み）。RNG非消費。
-        if (1.0 - pBatterSafe < coeff.DoublePlayAttemptMinRelaySuccess) return (0, false);
+        // ただし先の走者の封殺が十分間に合うなら、封殺だけ取って打者を一塁に残す（issue #797）。
+        if (1.0 - pBatterSafe < coeff.DoublePlayAttemptMinRelaySuccess)
+        {
+            if (!allowForceOnly || pLeadSafe > coeff.DoublePlayForceOnlyMaxRunnerSuccess) return (0, false);
+            var onlyMargin = HomePlayResolver.Margin(
+                leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+            mv?.Add(new RunnerMove(leadRunner, leadFromBase, force.TargetBase, Out: true)
+            {
+                CloseCall = Math.Abs(onlyMargin) < coeff.CloseCallMarginSeconds, Force = true,
+                SelfForceDoublePlayLead = true, ForceOnly = true,
+            });
+            if (leadFromBase == 2) bases.Second = null; else bases.Third = null;
+            bases.First = batter;
+            mv?.Add(new RunnerMove(batter, 0, 1, false));
+            return (1, true);
+        }
 
         // 自己フォースは成立（対象走者アウト）。際どさは表示のみ（RNG非消費）。
         var leadMargin = HomePlayResolver.Margin(
@@ -1141,7 +1168,7 @@ public static class BaserunningModel
     /// <returns>(追加アウト数, 打者が野選で一塁生存したか)。</returns>
     private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlayAtSecond(
         BaseState bases, Player batter, Player r1, HomePlayContext home,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, bool allowForceOnly = true)
     {
         var force = HomePlayResolver.SecondForceParams(home.Field, coeff);
         var delay = coeff.DoublePlayR1StartDelaySeconds;
@@ -1173,7 +1200,19 @@ public static class BaserunningModel
         // A-2) 併殺の見込みが薄い（打者を刺せる確率 P_relay_out が閾値未満）＝守備は二塁へ投げず「確実な一塁アウト」を取る。
         //    ＝ルーティンなゴロ凡打（打者一塁アウト＋一塁走者は二塁へ進塁）。快足打者や深いゴロはここへ落ちる。RNG非消費。
         //    これにより野選（下の B）は「併殺を狙った末に転送が僅かに間に合わなかった残差」に限られる（現実の稀な頻度）。
-        if (1.0 - pBatterSafe < coeff.DoublePlayAttemptMinRelaySuccess) return (0, false);
+        if (1.0 - pBatterSafe < coeff.DoublePlayAttemptMinRelaySuccess)
+        {
+            // A-3) ただし二塁封殺が十分間に合う（一塁走者の二塁到達見込み ≦ DoublePlayForceOnlyMaxRunnerSuccess）なら、
+            //    一塁でなく先の走者を二塁で封殺して打者を一塁に残す（issue #797。実物の内野は封殺が取れる限りまず二塁）。
+            //    転送はしない＝打者は一塁に生きる（野選には数えない）。RNG非消費。
+            if (!allowForceOnly || pR1Safe > coeff.DoublePlayForceOnlyMaxRunnerSuccess) return (0, false);
+            var onlyMargin = HomePlayResolver.Margin(r1, 1, home.Situation, home.Field, coeff, force, delay);
+            mv?.Add(new RunnerMove(r1, 1, 2, Out: true)
+                { CloseCall = Math.Abs(onlyMargin) < coeff.CloseCallMarginSeconds, Force = true, ForceOnly = true });
+            bases.First = batter;
+            mv?.Add(new RunnerMove(batter, 0, 1, false));
+            return (1, true);
+        }
 
         // 二塁封殺は成立（一塁走者アウト）。#318 と同様に一段目のアウトは幾何で確定させ、際どさは表示のみ（RNG非消費）。
         var forceMargin = HomePlayResolver.Margin(r1, 1, home.Situation, home.Field, coeff, force, delay);

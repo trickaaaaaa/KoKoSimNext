@@ -111,6 +111,8 @@ public sealed class TwoOutFlyNoBackHomeTests
             {
                 if (e.OutsBefore != 2 || !e.BaseThirdBefore || !e.BattedIsFly || e.Timeline is null) continue;
                 if (e.OutsThisPa < 1 || e.RunsScored > 0) continue;
+                // フライアウトだけを見る（安打で三塁走者が本塁で刺された打席は別の話＝本塁送球があって正しい）
+                if (e.Result != KokoSim.Engine.Match.AtBat.PlateAppearanceResult.InPlayOut) continue;
                 if (e.FieldedBy is not (FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField)) continue;
                 Interlocked.Increment(ref hits);
                 if (e.Timeline.Ball.Any(b => b.Kind == BallSegmentKind.Throw
