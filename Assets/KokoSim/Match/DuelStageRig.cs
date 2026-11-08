@@ -1719,6 +1719,14 @@ namespace KokoSim.Unity.Match
         /// false へ戻る。采配カードの受付締切判定に使う（issue #493）。
         /// </summary>
         public bool HasCutToNextWindup { get; private set; }
+
+        /// <summary>
+        /// 投手がセット姿勢で静止していて、次の球は <see cref="OnPitchWindup"/> から投げ始める必要があるか。
+        /// <see cref="ResetPitcherToSet"/> がカットバック予約を捨てて止めるので、打席の途中でここを通ると
+        /// （継投で左右が裏返った, issue #818）2球目以降の「前の球の予約で振りかぶりへ繋ぐ」経路が使えない＝
+        /// 呼び出し側（MatchLiveController）はこれを見て振りかぶりから投げ直す。<see cref="OnPitchWindup"/> で false。
+        /// </summary>
+        public bool PitcherAwaitsWindup { get; private set; }
         private float _umpireCallCountdown = -1f;   // 球審ストライクコール開始まで（負=予約なし）
         private float _umpireCallStartAt;           // コールクリップの頭出し位置（アンカー逆算）
         private float _umpireCallEndAt;             // コールクリップの打ち切り時刻（0=末尾まで）
@@ -1755,6 +1763,7 @@ namespace KokoSim.Unity.Match
             CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
             GroundFix(_pitcher);
             _pitcher.Speed = 1f;   // 采配窓の静止を解いて等速再生を始める
+            PitcherAwaitsWindup = false;
             SchedulePreLoad(WindupSeconds);   // 打者の足上げはリリースの前から（issue batter-timing-load-earlier）
         }
 
@@ -1888,6 +1897,37 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 投手をセット姿勢（クリップ0秒）へクロスフェードで寄せて静止させる。打席の仕切り直し
+        /// （<see cref="ResetForNewPlateAppearance"/>）と、打席の途中で投手の左右が裏返ったとき
+        /// （継投, issue #818）に使う。後者は前の投手の投げ終わりの姿勢を鏡映したまま采配窓に立つため。
+        /// </summary>
+        private void ResetPitcherToSet()
+        {
+            if (_pitcher == null) return;
+            // 投手は打者・捕手・球審と違って「待機クリップ」が無い（1本のクリップを
+            // 振りかぶり〜フォロースルーまで頭出し無しで使い回す）ので、SetActorClip の
+            // 頭出しでは跳ぶ・向きが飛ぶ（design-18 §4.5-③）。クロスフェードで寄せる。
+            // カットバック予約（_cutCountdown）が残っていると寄せた
+            // 直後に別クリップ内時刻へまた跳ぶので、寄せる前に破棄する。
+            //
+            // 行き先は**セット姿勢（クリップ0秒）**。旧実装は DeliveryStartTime（1.75s＝足上げの
+            // 途中）で凍らせていたため、守備ビューから戻った采配窓の間じゅう「投げかけのポーズ」で
+            // 静止して見えた（2026-08-05 監督指摘「投手がモーションに入ってしまっている。
+            // すこしセットポジションで静止しといて」）。振りかぶりの切り口へは OnPitchWindup が
+            // 投球開始の瞬間に改めて入る＝リリースの時計（−WindupSeconds 起点）は変わらない
+            _cutCountdown = -1f;
+            HasCutToNextWindup = false;
+            PitcherAwaitsWindup = true;
+            CrossfadeActorTo(_pitcher, 0f, CrossfadeSeconds);
+            GroundFix(_pitcher);
+            // クロスフェードは実時間（Tick は対決ビューが映っている間ずっと回る）で進むので、
+            // 進めたままだと采配窓の間（paHeadDwellSeconds）に投球動作が先走って見える。
+            // OnPitchWindup が実際の投球開始でここを1へ戻すまで進めない＝止まって見えるのが
+            // 意図どおり（完了条件「セット姿勢または静止した待機」）
+            _pitcher.Speed = 0f;
+        }
+
+        /// <summary>
         /// 打席の頭で打者・捕手・球審・投手を待機へ戻し、球を投手の手へ戻す（前打席の一発物が残っていても仕切り直す）。
         ///
         /// **対決ビューを開ける側は、開けると同時にこれを呼ぶこと。**一発物クリップが進むのは
@@ -1922,29 +1962,7 @@ namespace KokoSim.Unity.Match
             _passedBallCountdown = -1f;   // 後逸の予約も打席をまたがない（issue #525）
             _passedBallIndex = -1;
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
-            if (_pitcher != null)
-            {
-                // 投手は打者・捕手・球審と違って「待機クリップ」が無い（1本のクリップを
-                // 振りかぶり〜フォロースルーまで頭出し無しで使い回す）ので、SetActorClip の
-                // 頭出しでは跳ぶ・向きが飛ぶ（design-18 §4.5-③）。クロスフェードで寄せる。
-                // カットバック予約（_cutCountdown）が残っていると寄せた
-                // 直後に別クリップ内時刻へまた跳ぶので、寄せる前に破棄する。
-                //
-                // 行き先は**セット姿勢（クリップ0秒）**。旧実装は DeliveryStartTime（1.75s＝足上げの
-                // 途中）で凍らせていたため、守備ビューから戻った采配窓の間じゅう「投げかけのポーズ」で
-                // 静止して見えた（2026-08-05 監督指摘「投手がモーションに入ってしまっている。
-                // すこしセットポジションで静止しといて」）。振りかぶりの切り口へは OnPitchWindup が
-                // 投球開始の瞬間に改めて入る＝リリースの時計（−WindupSeconds 起点）は変わらない
-                _cutCountdown = -1f;
-                HasCutToNextWindup = false;
-                CrossfadeActorTo(_pitcher, 0f, CrossfadeSeconds);
-                GroundFix(_pitcher);
-                // クロスフェードは実時間（Tick は対決ビューが映っている間ずっと回る）で進むので、
-                // 進めたままだと采配窓の間（paHeadDwellSeconds）に投球動作が先走って見える。
-                // OnPitchWindup が実際の投球開始でここを1へ戻すまで進めない＝止まって見えるのが
-                // 意図どおり（完了条件「セット姿勢または静止した待機」）
-                _pitcher.Speed = 0f;
-            }
+            ResetPitcherToSet();
             HoldBallInHand();   // 振りかぶりから球を手に持たせる（issue #332）
         }
 
@@ -2348,6 +2366,9 @@ namespace KokoSim.Unity.Match
             SeekActor(_pitcher, ReleaseTime);
             _pitcher.Go.transform.localPosition = keepPos;
             GroundFix(_pitcher);
+            // 振りかぶりを通らずにリリースが来た（セットで止めたまま）＝止めたままだとリリースの形で固まる。
+            // 呼び出し側は PitcherAwaitsWindup を見て振りかぶりから投げるが、取りこぼしても絵が凍らないように
+            if (PitcherAwaitsWindup) { _pitcher.Speed = 1f; PitcherAwaitsWindup = false; }
             HasCutToNextWindup = false;   // 新しいリリースぶんの予約＝まだ切り替わっていない
             if (nextReleaseIn > 0f)
             {
@@ -5958,6 +5979,10 @@ namespace KokoSim.Unity.Match
             {
                 _pitcherLeft = pitcherLeft;
                 ApplyMirror(_pitcherMirror, _pitcher, pitcherLeft);
+                // 投手が入れ替わった（継投）＝前の投手の投げ終わりを鏡映したまま窓に立たせない（issue #818）。
+                // 打席の頭では直前の ResetForNewPlateAppearance と同じことをもう一度するだけ
+                // （同じフレームなので寄せ始めたフェードがセット姿勢へ置き換わるだけで、絵は飛ばない）。
+                ResetPitcherToSet();
             }
             // 本塁組の並び（§7-1「本塁組の左右の並びは打者の左右打席で入れ替わる」）:
             // 球審のスロットは常に打者と反対側の肩越し。捕手のわずかな寄りも合わせて映す
