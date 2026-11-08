@@ -2957,8 +2957,25 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 捕球の瞬間に、球がミットに届いていないとみなす距離[m]（ミット中心〜球心。issue #805）。
+        /// ミットIKは腕の長さで頭打ちになる（<see cref="DuelCatcherPose.ReachMitt"/>・ReachGuard）ので、
+        /// 大きく外れた球はミットの外に残る。そのまま手の子にすると宙に浮いた球が据え置き窓のあいだ
+        /// 映り続けるため、この距離を超えたら捕球の瞬間に球を消す。
+        /// 値は捕球の受け入れ基準（≦0.12m＝ミットの半径。<see cref="CatchDiagForCapture"/>）と同じ。
+        /// 実測（2026-11-08・CatcherFaceShooter WildOnly）: 普通の球と体寄せで届く左右の大外れは
+        /// 0.003〜0.025m。0.136m（左下へ外れた球）は球がミットの下縁からはみ出し、0.154m（高め）は
+        /// 上縁に乗って見えた＝0.15m では縁にぶら下がる球が残る。届かない球は 0.219〜0.478m。
+        /// </summary>
+        private const float MittMissHideDistanceM = 0.12f;
+
+        /// <summary>直近の捕球の瞬間のミット中心〜球心[m]（実測の出口。負＝未計測）。</summary>
+        private float _lastCatchMittGapM = -1f;
+
+        /// <summary>
         /// 球をミット（捕手の左手ボーン）の子へ移す。位置は**捕球面での実位置のまま**焼き付ける
         /// （ミット中心へ寄せ直さない＝IKでミットを球へ寄せてあるので、そのままで噛み合う）。
+        /// ミットが届いていない球（<see cref="MittMissHideDistanceM"/> 超）はミットへ入れずその場で消す。
+        /// 捕手の芝居・捕球音・判定表示は変えない（球の見せ方だけ。issue #805）。
         /// </summary>
         private bool TryPutBallInMitt()
         {
@@ -2966,6 +2983,11 @@ namespace KokoSim.Unity.Match
                 ? _catcher.Animator.GetBoneTransform(HumanBodyBones.LeftHand) : null;
             if (hand == null) return false;
             _ball.transform.localPosition = _ballCatchPoint;
+            _lastCatchMittGapM = Vector3.Distance(_ball.transform.position, DuelCatcherPose.MittCenter(_catcher.Animator));
+            // 届かない球も「ミットの中」と同じ扱いで時計は進める（_ballT を止めない）。
+            // ミットIKの重み・体寄せの据え置きは球の時計で決まるので、ここで止めると
+            // 捕手のミットが据え置き中に構えへ戻ってしまう。隠すのは見た目だけ。
+            if (_lastCatchMittGapM > MittMissHideDistanceM) _ball.SetActive(false);
             _ball.transform.SetParent(hand, true);
             _ballInMitt = true;
             _ballInMittRemaining = CatcherLingerSeconds(_catchIsStrike);   // 判定表示が消えるまでミットの中に見せる
@@ -6114,7 +6136,11 @@ namespace KokoSim.Unity.Match
                 + " IK重み=" + w.ToString("F2")
                 + " ミット中心=" + center.ToString("F3")
                 + " 狙点=" + _ballCatchPoint.ToString("F3")
-                + " ずれ=" + Vector3.Distance(center, _ballCatchPoint).ToString("F3") + "m";
+                + " ずれ=" + Vector3.Distance(center, _ballCatchPoint).ToString("F3") + "m"
+                + (_ballInMitt
+                    ? " 捕球時のミット〜球=" + _lastCatchMittGapM.ToString("F3") + "m"
+                      + (_ball != null && !_ball.activeSelf ? "（届かず消した）" : "")
+                    : "");
         }
 
         /// <summary>

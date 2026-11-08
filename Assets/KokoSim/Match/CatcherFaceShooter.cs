@@ -21,6 +21,9 @@ namespace KokoSim.Unity.Match
         /// <summary>true＝中継視点（試合の構図）だけを撮る。Play中に代入してから付けること。</summary>
         public static bool TvOnly;
 
+        /// <summary>true＝大きく外れた球（狙いは真ん中・実着弾が外れる）だけを流す（issue #805）。</summary>
+        public static bool WildOnly;
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
@@ -31,6 +34,21 @@ namespace KokoSim.Unity.Match
             _rig.EnsureSize(W, H);
             for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
 
+            if (WildOnly)
+            {
+                // 狙い=ゾーン中央。実着弾を上下左右・斜めへ大きく外す＋届く範囲の外れも混ぜる（しきい値の根拠）
+                yield return Run("W-ok-mid", 0.10f, 0.70f, 0f, 0.65f);
+                yield return Run("W-ok-side", 0.30f, 0.60f, 0f, 0.65f);
+                yield return Run("W-up", 0.00f, 1.55f, 0f, 0.65f);
+                yield return Run("W-down", 0.00f, 0.02f, 0f, 0.65f);
+                yield return Run("W-left", -0.85f, 0.65f, 0f, 0.65f);
+                yield return Run("W-right", 0.85f, 0.65f, 0f, 0.65f);
+                yield return Run("W-upright", 0.60f, 1.40f, 0f, 0.65f);
+                yield return Run("W-downleft", -0.60f, 0.10f, 0f, 0.65f);
+                yield return Run("W-high-edge", 0.00f, 1.15f, 0f, 1.15f);   // 狙いどおりの高め（縁に乗る球）
+                Debug.Log("[i804] DONE → " + Dir);
+                yield break;
+            }
             yield return Run("C-center", 0.00f, 0.78f);
             yield return Run("U-high", 0.00f, 1.15f);
             yield return Run("D-low", 0.00f, 0.32f);
@@ -45,7 +63,9 @@ namespace KokoSim.Unity.Match
             Debug.Log("[i804] DONE → " + Dir);
         }
 
-        private IEnumerator Run(string tag, float x, float y)
+        private IEnumerator Run(string tag, float x, float y) => Run(tag, x, y, x, y);
+
+        private IEnumerator Run(string tag, float x, float y, float aimX, float aimY)
         {
             _rig.ResetForNewPlateAppearance();
             for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
@@ -54,7 +74,7 @@ namespace KokoSim.Unity.Match
             while (t < DuelStageRig.WindupSeconds) { _rig.Tick(1f / 60f); t += 1f / 60f; yield return null; }
 
             const float flight = 0.45f;
-            _rig.OnPitchReleased(-1f, DuelPitchOutcome.Take, new DuelPitchFlight(x, y, x, y, flight, 0.35f, 0f));
+            _rig.OnPitchReleased(-1f, DuelPitchOutcome.Take, new DuelPitchFlight(x, y, aimX, aimY, flight, 0.35f, 0f));
             Debug.Log("[i804] === " + tag + " / " + _rig.CatchDiagForCapture());
 
             // 捕球の前後: −0.10 / 0 / +0.15 / +0.30 / +0.45 / +0.60 秒
@@ -76,6 +96,7 @@ namespace KokoSim.Unity.Match
                     }
                     yield return null;
                 }
+                if (m == 2) Debug.Log("[i804] " + tag + " 捕球+0.15s / " + _rig.CatchDiagForCapture() + " / " + _rig.BallDiagForCapture());
                 if (TvOnly) { yield return Shot(tag + "-f" + m + "-tv", null); continue; }   // 中継視点（対決ビュー本来の構図）
                 yield return Shot(tag + "-f" + m + "-front", Front);
                 yield return Shot(tag + "-f" + m + "-side", Side);
