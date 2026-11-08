@@ -4937,11 +4937,12 @@ namespace KokoSim.Unity.Match
             }
             if (_errorMarkRole == null) _errorMarkAt = float.PositiveInfinity;
 
-            // 表示はワンテンポ遅らせる（2026-08-05 監督指示。テロップと同じ engine の演出定数が単一ソース）。
+            // 表示はワンテンポ遅らせる（2026-08-05 監督指示。engine の演出定数が単一ソース）。テロップは
+            // これより後の「打者が一塁でセーフになった瞬間」に出る（issue #806）＝「！」→「エラー」の順。
             // ⚠ ここより上の「誰がエラーしたか」の特定は**物理時刻**で行う（弾きロールの T0 は物理時刻）＝
             // 遅らせるのは特定が終わった後。以降の据え枠・カメラ窓・カット遅延はみな遅延後の時刻に乗る
             if (!float.IsPositiveInfinity(_errorMarkAt))
-                _errorMarkAt += (float)PlaybackEvaluator.ErrorDisplayDelaySeconds;
+                _errorMarkAt += (float)PlaybackEvaluator.ErrorMarkDelaySeconds;
 
             // マーク窓の据え枠を前計算する（ComputeFieldFrame が窓の間これに据える）。
             // 収めるのは①エラーした野手 ②エラー時刻の球 ③窓終端の球（転がり先。球が先に消える

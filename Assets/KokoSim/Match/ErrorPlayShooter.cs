@@ -21,7 +21,7 @@ namespace KokoSim.Unity.Match
     {
         private const int W = 1600;
         private const int H = 900;
-        private const string Dir = "screenshots/error-play-439";
+        private const string Dir = "screenshots/error-telop-806";
         private const BindingFlags Priv = BindingFlags.NonPublic | BindingFlags.Instance;
 
         private IEnumerator Start()
@@ -52,9 +52,9 @@ namespace KokoSim.Unity.Match
                 var play = cur?.GetType().GetProperty("Play")?.GetValue(cur) as PlaybackPlay;
                 if (play == null) continue;
 
-                double errT = -1;
+                double errT = -1, errDisp = -1;
                 foreach (var j in play.Judgements)
-                    if (j.Kind == JudgementKind.Error) errT = j.T;
+                    if (j.Kind == JudgementKind.Error) { errT = j.T; errDisp = PlaybackEvaluator.DisplayTime(j); }
                 if (errT < 0) continue;
 
                 // 絵の監査: 一塁へ正着する送球が残っていないか＋どの種類のエラーの絵か。
@@ -83,9 +83,19 @@ namespace KokoSim.Unity.Match
                 fDuelOn.SetValue(ctrl, false);
                 mApplyView.Invoke(ctrl, null);
 
-                // エラーの表示は物理時刻からワンテンポ遅れる（PlaybackEvaluator.ErrorDisplayDelaySeconds）
+                // エラーのテロップは打者が一塁でセーフになった瞬間に出る（PlaybackEvaluator.DisplayTime。issue #806）
                 // ＝シークも表示起点に合わせる
-                var dispT = errT + PlaybackEvaluator.ErrorDisplayDelaySeconds;
+                var dispT = errDisp;
+                // 「！」が出た直後（テロップはまだ出ていないはず。issue #806）
+                var markT = errT + PlaybackEvaluator.ErrorMarkDelaySeconds + 0.1;
+                string telopAtMark = "-";
+                if (markT < dispT - 0.05)
+                {
+                    ctrl.SeekForCapture(markT);
+                    yield return null;
+                    telopAtMark = ctrl.JudgementVisibleForCapture ? ctrl.JudgementTextForCapture : "(なし)";
+                    yield return Capture(ctrl, kindName + "-0-mark");
+                }
                 ctrl.SeekForCapture(dispT + 0.15);
                 yield return null;
                 var telop = ctrl.JudgementTextForCapture;
@@ -103,7 +113,7 @@ namespace KokoSim.Unity.Match
                 if (rig != null && rig.Available)
                 {
                     rig.BeginFieldPlay(play, 0f);
-                    rig.SetFieldTime((float)dispT + 0.3f);
+                    rig.SetFieldTime((float)markT);
                     yield return null;
                     var markGo = GameObject.Find("ErrorMark");
                     mark3dOn = markGo != null && markGo.activeInHierarchy;
@@ -116,8 +126,9 @@ namespace KokoSim.Unity.Match
                     rig.EndFieldPlay();
                 }
 
-                var ok = telop == "エラー" && !throwToFirst && mark3dOn;
+                var ok = telop == "エラー" && !throwToFirst && mark3dOn && telopAtMark != "エラー";
                 Debug.Log($"[Err439] {kindName} {(ok ? "OK" : "NG")} 「{play.Result}」 判定T={errT:F2} " +
+                          $"「！」={markT:F2}（その時のテロップ=「{telopAtMark}」） テロップ表示={dispT:F2} " +
                           $"テロップ=「{telop}」 一塁正着送球={throwToFirst}(Carry={hasCarry}) " +
                           $"マーク表示={mark3dOn} 球=[{segs.ToString().Trim()}]");
                 if (kindName == "catch") doneCatch = true; else doneThrow = true;

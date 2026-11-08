@@ -175,6 +175,19 @@ public sealed record JudgementEvent
     /// （<c>FieldingPlay.RangeM</c>）をそのまま観測データとして運ぶ＝乱数を引かない（帯不変）。
     /// </summary>
     public double? DistanceM { get; init; }
+    /// <summary>
+    /// テロップを出し始める時刻[s]（表示専用・null＝<see cref="T"/> と同じ）。物理の確定時刻 <see cref="T"/> と
+    /// 記録として見せたい瞬間がずれる判定だけが持つ。いまはエラーだけ（issue #806）: <see cref="T"/> は
+    /// 取り損ないの瞬間（「！」マーク・寄りカメラの起点）、テロップは打者が一塁でセーフになった瞬間。
+    /// </summary>
+    public double? DisplayT { get; init; }
+
+    /// <summary>
+    /// エラーの「！」マーク・寄りカメラを取り損ないの物理時刻からどれだけ遅らせるか[s]
+    /// （2026-08-05 監督指示「触れたタイミングですぐ出るのをワンテンポ遅らせたい」）。
+    /// テロップはこれより前には出さない（「！」→「エラー」の順を保つ。issue #806）。
+    /// </summary>
+    public const double ErrorMarkDelaySeconds = 0.5;
 }
 
 /// <summary>

@@ -145,6 +145,13 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>「エラー」が確定した時刻（＝内野手が抜かれた瞬間, issue #632）。無ければ 0。</summary>
+        private static double ErrorDisplayOf(PlaybackPlay play)
+        {
+            foreach (var j in play.Judgements)
+                if (j.Kind == KokoSim.Engine.Match.Timeline.JudgementKind.Error) return PlaybackEvaluator.DisplayTime(j);
+            return -1;
+        }
+
         private static double ErrorMomentOf(PlaybackPlay play)
         {
             foreach (var j in play.Judgements)
@@ -199,9 +206,9 @@ namespace KokoSim.Unity.Match
 
             if (beaten > 0)
             {
-                // ⚠ 「エラー」の表示は物理時刻からワンテンポ遅れる（PlaybackEvaluator.ErrorDisplayDelaySeconds）。
-                // 判定時刻ちょうどで撮るとテロップの出る前の絵になる（初回キャプチャの実害）。
-                yield return WaitClock(beaten + PlaybackEvaluator.ErrorDisplayDelaySeconds + 0.15);
+                // ⚠ 「エラー」のテロップは物理時刻でなく打者が一塁でセーフになった瞬間に出る
+                // （PlaybackEvaluator.DisplayTime。issue #806）。判定時刻ちょうどで撮るとテロップの出る前の絵になる。
+                yield return WaitClock(ErrorDisplayOf(play) + 0.15);
                 yield return Shoot(tag + "-1-beaten");      // 抜かれた瞬間（「エラー」テロップ）
             }
             yield return WaitClock(pickup);
