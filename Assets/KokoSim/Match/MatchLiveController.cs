@@ -1126,7 +1126,10 @@ namespace KokoSim.Unity.Match
             }
 
             ApplyWindowSituation();
-            if (head) ApplyDuelHandedness();   // この打席の左右で立たせ替える（継投後の利き腕もここで追従。issue #337）
+            // この打席の左右で立たせ替える（継投後の利き腕もここで追従。issue #337）。打席の途中の窓でも、
+            // 投球・打球の描画中に交代して窓の対戦と左右が食い違っていれば当て直す（issue #802。窓で止まって
+            // いない交代は OnSubstitutionApplied で当て直さない＝動作の途中で鏡映を裏返さないため、ここが受け皿）。
+            if (head || DuelHandednessStale()) ApplyDuelHandedness();
             if (_caption != null && head) _caption.text = at.BatterName + " 打席";
 
             _stage = LiveStage.Window;
@@ -3889,7 +3892,19 @@ namespace KokoSim.Unity.Match
             // 打球の途中で俯瞰トグルを叩いたときだけ通る道で、絵にしか出ない（F9）。
             // 左右は次の打席の頭（OpenWindow / BeginPa）で必ず当て直すので、飛ばして困らない。
             if (FieldPlayActive) return;
-            // 1球進行では采配窓の対戦（＝いまの打者・投手）が単一ソース。一括経路では確定打席から引く。
+            if (!TryDuelHandedness(out var batterLeft, out var pitcherLeft)) return;
+            _duelRig.SetHandedness(batterLeft, pitcherLeft);
+            ApplyFielderHandedness();
+        }
+
+        /// <summary>
+        /// いまの対戦で立たせるべき左右（打者が左打席か・投手が左投げか）。1球進行では采配窓の対戦
+        /// （＝いまの打者・投手）が単一ソース。一括経路では確定打席から引く。対戦が無ければ false。
+        /// スイッチヒッターは対戦投手の逆に立つ。
+        /// </summary>
+        private bool TryDuelHandedness(out bool batterLeft, out bool pitcherLeft)
+        {
+            batterLeft = pitcherLeft = false;
             Handedness bats, throws;
             if (_atBat is { } at)
             {
@@ -3899,12 +3914,17 @@ namespace KokoSim.Unity.Match
             {
                 bats = _current.BatterBats; throws = _current.PitcherThrows;
             }
-            else return;
-            var pitcherLeft = throws == Handedness.Left;
-            var batterLeft = bats == Handedness.Left || (bats == Handedness.Switch && !pitcherLeft);
-            _duelRig.SetHandedness(batterLeft, pitcherLeft);
-            ApplyFielderHandedness();
+            else return false;
+            pitcherLeft = throws == Handedness.Left;
+            batterLeft = bats == Handedness.Left || (bats == Handedness.Switch && !pitcherLeft);
+            return true;
         }
+
+        /// <summary>対決ビューの左右が、いまの対戦と食い違っているか（打席の途中の交代の追従, issue #802）。</summary>
+        private bool DuelHandednessStale()
+            => _duelRig != null && _duelRig.Available
+               && TryDuelHandedness(out var batterLeft, out var pitcherLeft)
+               && _duelRig.HandednessDiffers(batterLeft, pitcherLeft);
 
         /// <summary>
         /// 守備側の各位置の選手の投げる手を3D守備ビューへ渡す（issue #795）。いま守っている9人の位置は
