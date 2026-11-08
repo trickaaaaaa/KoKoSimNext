@@ -2097,14 +2097,16 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        // 先頭が中央（既定・同点時に勝つ側）。CatchSelectionBias はこれ以外へ課す下駄
+        // 先頭が中央（既定・同点時に勝つ側）。CatchSelectionBias はこれ以外へ課す下駄。
+        // Catching_R（捕手から見て右・Mitt=(0.195, 0.638, 0.407)・瞬間0.19s）は使わない（issue #804）:
+        // 捕球の瞬間に首をかしげて顔をミットの陰へ埋める＝球から顔を背けて見える。
+        // 捕手の右の球は中央(C)が受け持ち、残りの横ずれは体寄せとミットIKで回収する。
         private static readonly CatchAnchor[] CatchAnchors =
         {
             new("AA_Baseball_Catcher_Catching_C", new Vector3(-0.081f, 0.633f, 0.400f), 0.06f),
             new("AA_Baseball_Catcher_Catching_U", new Vector3(-0.071f, 0.918f, 0.498f), 0.21f),
             new("AA_Baseball_Catcher_Catching_D", new Vector3(-0.036f, 0.320f, 0.185f), 0.20f),
             new("AA_Baseball_Catcher_Catching_L", new Vector3(-0.263f, 0.662f, 0.495f), 0.17f),
-            new("AA_Baseball_Catcher_Catching_R", new Vector3(0.195f, 0.638f, 0.407f), 0.19f),
         };
 
         /// <summary>
