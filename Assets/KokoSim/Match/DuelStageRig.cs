@@ -1860,6 +1860,34 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 打者を構え（待機クリップの頭）へ戻し、振り・見逃しの溜め・バット軌跡の状態を捨てる。
+        /// 打席の仕切り直し（<see cref="ResetForNewPlateAppearance"/>）と、打席の途中で打者の左右が
+        /// 裏返ったとき（代打, issue #802）に使う。後者は前の打者の姿勢と、右/左打席で焼いたバットの向きを
+        /// 残したまま鏡映すると、バットが手を離れて前の打席位置に浮いて見えるため。
+        /// </summary>
+        private void ResetBatterToStance()
+        {
+            if (_batter != null && _batter.IdleClip != null)
+            {
+                SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
+                // スイングの倍率を持ち越さない。**SetActorClip では戻らない**（守備・走塁が毎コマ
+                // 入れ直す前提でそう作ってある）ので、仕切り直す側が明示的に戻す。戻さないと
+                // 振っている途中で打席が終わった次の打者が、構えを SwingSpeed 倍で刻む
+                // （実測 2026-08-01: 前の打席の 2.6倍が待機ループに残った）。
+                // 振り切って待機へ戻る通常経路は FinishOneShot が戻すのでここは来ない
+                _batter.Speed = 1f;
+            }
+            _batTrailSwing = false;   // 打席の仕切り直し＝バット軌跡の武装も持ち越さない（issue #444）
+            _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
+            _swingPendingIsLoad = false;
+            _batterTakeLoad = false;
+            _batterTakeLoadReturning = false;
+            _preLoadCountdown = -1f;
+            _batterPreLoaded = false;
+            ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
+        }
+
+        /// <summary>
         /// 打席の頭で打者・捕手・球審・投手を待機へ戻し、球を投手の手へ戻す（前打席の一発物が残っていても仕切り直す）。
         ///
         /// **対決ビューを開ける側は、開けると同時にこれを呼ぶこと。**一発物クリップが進むのは
@@ -1880,17 +1908,7 @@ namespace KokoSim.Unity.Match
         public void ResetForNewPlateAppearance()
         {
             if (!Available) return;
-            if (_batter != null && _batter.IdleClip != null)
-            {
-                SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
-                // スイングの倍率を持ち越さない。**SetActorClip では戻らない**（守備・走塁が毎コマ
-                // 入れ直す前提でそう作ってある）ので、仕切り直す側が明示的に戻す。戻さないと
-                // 振っている途中で打席が終わった次の打者が、構えを SwingSpeed 倍で刻む
-                // （実測 2026-08-01: 前の打席の 2.6倍が待機ループに残った）。
-                // 振り切って待機へ戻る通常経路は FinishOneShot が戻すのでここは来ない
-                _batter.Speed = 1f;
-            }
-            _batTrailSwing = false;   // 打席の仕切り直し＝バット軌跡の武装も持ち越さない（issue #444）
+            ResetBatterToStance();
             // 前の打席最後の投球の狙い寄り・残差の体寄せ（issue #396 ①②）を引きずらない＝
             // 較正の固定位置へ戻してから待機クリップへ（順序が逆だと RewindActor が古い BasePos へ戻す）
             SetActorXZ(_catcher, CatcherBaseX, _cal.CatcherZ);
@@ -1903,13 +1921,6 @@ namespace KokoSim.Unity.Match
             _catchIsStrike = false;
             _passedBallCountdown = -1f;   // 後逸の予約も打席をまたがない（issue #525）
             _passedBallIndex = -1;
-            _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
-            _swingPendingIsLoad = false;
-            _batterTakeLoad = false;
-            _batterTakeLoadReturning = false;
-            _preLoadCountdown = -1f;
-            _batterPreLoaded = false;
-            ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
             if (_pitcher != null)
             {
@@ -5915,6 +5926,9 @@ namespace KokoSim.Unity.Match
             {
                 _batterLeft = batterLeft;
                 ApplyMirror(_batterMirror, _batter, batterLeft);
+                // 打者が入れ替わった（代打）＝前の打者の姿勢とバットの向きを持ち越さず構えから（issue #802）。
+                // 打席の頭では直前の ResetForNewPlateAppearance と同じことをもう一度するだけ。
+                ResetBatterToStance();
             }
             if (_pitcherMirror != null && _pitcherLeft != pitcherLeft)
             {
