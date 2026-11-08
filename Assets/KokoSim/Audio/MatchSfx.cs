@@ -4,10 +4,11 @@ using UnityEngine;
 namespace KokoSim.Unity.Audio
 {
     /// <summary>
-    /// 試合の効果音（打球音・捕手の捕球音）。表示専用＝判定・帯には一切関与しない。
+    /// 試合の効果音（打球音・捕手の捕球音）と審判コールの声。表示専用＝判定・帯には一切関与しない。
     ///
-    /// 素材は On-Jin ～音人～（https://on-jin.com/）の野球SE。規約で「素材のまま第三者が取得できる状態」
+    /// 効果音は On-Jin ～音人～（https://on-jin.com/）の野球SE。規約で「素材のまま第三者が取得できる状態」
     /// が禁止なので Git 管理外（.gitignore の Assets/KokoSim/Audio/Vendor/）に置き、Resources から読む。
+    /// 審判の声は VOICEVOX:No.7 で生成したもの（tools/voicevox-umpire-calls.py で作り直せる）。同じく Git 管理外。
     /// **素材が無い環境では黙って鳴らさない**（購入素体と同じ流儀＝ゲームは動く）。
     ///
     /// 強さは「段（どのクリップ群か）」と「音量・ピッチ」の2つで出す。素材は段ごとに数本しか無いので、
@@ -15,7 +16,8 @@ namespace KokoSim.Unity.Audio
     /// </summary>
     public static class MatchSfx
     {
-        private const string ResourceDir = "Sfx/OnJin/";
+        private const string SfxDir = "Sfx/OnJin/";
+        private const string VoiceDir = "Voice/No7/";
 
         // 捕球音の段の境目[km/h]。高校生の球速帯（110〜150）を3つに割る
         private const float CatchMidKmh = 120f;
@@ -44,7 +46,7 @@ namespace KokoSim.Unity.Audio
                 : kmh >= CatchMidKmh ? "catch_mid"
                 : "catch_light";
             float s = Mathf.InverseLerp(100f, 155f, kmh);
-            Play(bank, Mathf.Lerp(0.65f, 1.0f, s), Mathf.Lerp(0.97f, 1.04f, s));
+            Play(SfxDir + bank, Mathf.Lerp(0.65f, 1.0f, s), Mathf.Lerp(0.97f, 1.04f, s));
         }
 
         /// <summary>
@@ -56,13 +58,19 @@ namespace KokoSim.Unity.Audio
             float s = Mathf.Clamp01(strength01);
             if (isBunt)
             {
-                Play("bat_bunt", 0.8f, 1f);
+                Play(SfxDir + "bat_bunt", 0.8f, 1f);
                 return;
             }
             string bank = s >= BatStrongThreshold ? "bat_hit_strong" : "bat_hit";
             // 素材は控えめな音量で収録されているので、強い当たりは上限まで出す
-            Play(bank, Mathf.Lerp(0.45f, 1.0f, s), Mathf.Lerp(0.92f, 1.03f, s));
+            Play(SfxDir + bank, Mathf.Lerp(0.45f, 1.0f, s), Mathf.Lerp(0.92f, 1.03f, s));
         }
+
+        /// <summary>
+        /// 審判のコール（「アウトォ！」／「セーフ！」）。判定テロップが出る瞬間に鳴らす。
+        /// </summary>
+        public static void PlayUmpireCall(bool isOut)
+            => Play(VoiceDir + (isOut ? "umpire_out" : "umpire_safe"), 1f, 1f);
 
         /// <summary>
         /// 打ち出し直後の速さ[m/s]から打球の強さ 0..1 を出す。
@@ -70,6 +78,7 @@ namespace KokoSim.Unity.Audio
         public static float BatStrengthFromSpeed(float launchSpeedMps)
             => Mathf.InverseLerp(BatWeakMps, BatStrongMps, launchSpeedMps);
 
+        /// <param name="bank">Resources 内の連番クリップの頭（例 "Sfx/OnJin/bat_hit"）。</param>
         private static void Play(string bank, float volume, float pitch)
         {
             var clips = Bank(bank);
@@ -91,7 +100,7 @@ namespace KokoSim.Unity.Audio
             var list = new List<AudioClip>();
             for (int n = 1; n <= 9; n++)
             {
-                var c = Resources.Load<AudioClip>(ResourceDir + bank + "_" + n.ToString("00"));
+                var c = Resources.Load<AudioClip>(bank + "_" + n.ToString("00"));
                 if (c != null) list.Add(c);
             }
             var arr = list.ToArray();
