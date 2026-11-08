@@ -108,14 +108,18 @@ public static class TournamentPreviewBuilder
         string title, IReadOnlyList<School> entrants, int berths, string nextStageName, int yearIndex = 1,
         System.Func<School, int, Match.Game.Team>? teamProvider = null,
         System.Func<int, Stats.StatBook?>? statsForSchool = null,
-        PreviewStage stage = PreviewStage.Autumn)
+        PreviewStage stage = PreviewStage.Autumn,
+        PreviewPhrases? phrases = null)
     {
         if (entrants.Count == 0) throw new System.ArgumentException("出場校が空です。");
+        var ph = phrases ?? PreviewPhrases.Fallback;
 
         // シード＝強さ順（Knockout と同じ序列）。同強さは Id で安定化。
         var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
         var ratings = ranked.ToDictionary(s => s.Id, Rate);
         var marks = ComputeMarks(ranked, ratings, berths);
+        // 寸評は出場校全体で一度に組む（同じ大会の中で同じ文を2校に出さない・issue #784）
+        var blurbs = PreviewWriter.SchoolBlurbs(ranked, ratings, marks, stage, yearIndex, ph);
 
         var contenders = new List<PreviewContender>();
         for (var i = 0; i < ranked.Count; i++)
@@ -127,7 +131,7 @@ public static class TournamentPreviewBuilder
             var rating = ratings[s.Id];
             contenders.Add(new PreviewContender(
                 Seed: i + 1, Mark: mark, Name: s.Name, Tier: s.Tier, Rating: rating,
-                Blurb: Blurb(mark, rating, s.Style, s.Id, seed: i + 1, fieldSize: ranked.Count, stage)));
+                Blurb: blurbs[s.Id]));
         }
         // ◎○○▲ の順（マーク→シード）。
         contenders = contenders
@@ -155,8 +159,9 @@ public static class TournamentPreviewBuilder
             var team = teamProvider is not null ? teamProvider(school, yearIndex)
                 : StrengthTeamFactory.ForSchool(school, yearIndex);
             var book = statsForSchool?.Invoke(school.Id);
-            notables.Add(PickNotable(c, team, book, stage));
-            rosters.Add(BuildRoster(c, team, stage));
+            var notable = PickNotable(c, team, book, stage, yearIndex, ph, out var teamBlurb);
+            notables.Add(notable);
+            rosters.Add(BuildRoster(c, team, stage, teamBlurb));
         }
 
         return new TournamentPreview(title, meta, lead, contenders, notables, rosters);
@@ -167,12 +172,15 @@ public static class TournamentPreviewBuilder
     /// （issue #189。従来の <see cref="Build"/> は格付け校ぶんしか Rosters を作らないため、
     /// トーナメント表クリックでどの校を選んでも詳細を出せるようにする窓口）。
     /// 格付け（◎○▲/無印）・シード・寸評は Build と同じロジックで算出するため、展望と矛盾しない。
+    /// 寸評（TeamBlurb）の後ろには、この学校の注目選手の紹介が続く（全出場校に1人・issue #784）。
     /// </summary>
     public static RosterExcerpt BuildRosterFor(
         School school, IReadOnlyList<School> entrants, int berths, int yearIndex = 1,
         System.Func<School, int, Match.Game.Team>? teamProvider = null,
-        PreviewStage stage = PreviewStage.Autumn)
+        PreviewStage stage = PreviewStage.Autumn,
+        PreviewPhrases? phrases = null)
     {
+        var ph = phrases ?? PreviewPhrases.Fallback;
         var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
         var seed = ranked.FindIndex(s => s.Id == school.Id) + 1;
         if (seed <= 0) throw new System.ArgumentException("school が entrants に含まれていません。", nameof(school));
@@ -185,10 +193,34 @@ public static class TournamentPreviewBuilder
         var team = teamProvider is not null ? teamProvider(school, yearIndex)
             : StrengthTeamFactory.ForSchool(school, yearIndex);
 
+        // 寸評の通し番号は出場校全体で振るので、1校でも全体を数える（材料が軽いので出場200校でも安い）
+        var blurbs = PreviewWriter.SchoolBlurbs(ranked, ratings, marks, stage, yearIndex, ph);
         var contender = new PreviewContender(
             Seed: seed, Mark: mark, Name: school.Name, Tier: school.Tier, Rating: rating,
-            Blurb: Blurb(mark, rating, school.Style, school.Id, seed, ranked.Count, stage));
-        return BuildRoster(contender, team, stage);
+            Blurb: blurbs[school.Id]);
+        PickNotable(contender, team, book: null, stage, yearIndex, ph, out var teamBlurb);
+        return BuildRoster(contender, team, stage, teamBlurb);
+    }
+
+    /// <summary>出場校全体の寸評（校ID→文）。テストで「同じ大会で被らない」を確かめる窓口。</summary>
+    internal static Dictionary<int, string> SchoolBlurbsFor(
+        IReadOnlyList<School> entrants, int berths, PreviewStage stage, int yearIndex, PreviewPhrases phrases)
+    {
+        var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
+        var ratings = ranked.ToDictionary(s => s.Id, Rate);
+        return PreviewWriter.SchoolBlurbs(ranked, ratings, ComputeMarks(ranked, ratings, berths), stage, yearIndex, phrases);
+    }
+
+    /// <summary>1校の注目選手の紹介文（導入を除く）。テストの窓口。</summary>
+    internal static string NotableBlurbFor(
+        School school, IReadOnlyList<School> entrants, PreviewStage stage, int yearIndex, PreviewPhrases phrases)
+    {
+        var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
+        var seed = ranked.FindIndex(s => s.Id == school.Id) + 1;
+        var rating = Rate(school);
+        var pick = PreviewWriter.ChooseNotable(StrengthTeamFactory.ForSchool(school, yearIndex),
+            pitcherLed: rating.Pitching > rating.Batting);
+        return PreviewWriter.PlayerBlurb(pick, seed, stage, yearIndex, phrases);
     }
 
     /// <summary>格付け（◎○▲/無印）を出場校全体ぶん一括で決める（Build/BuildRosterFor で共有）。</summary>
@@ -211,20 +243,19 @@ public static class TournamentPreviewBuilder
     // ===== 注目選手・登録メンバー（材料は実戦と同一の ForSchool 出力） =====
 
     /// <summary>
-    /// 1校の看板選手を選ぶ。投手力が打力を上回る校はエース、そうでなければ主砲。
-    /// 表示中の3軸バーと選出理由が一致するので「なぜこの選手か」が読み手に伝わる。
+    /// 1校の注目選手を選び、紹介文を組む（issue #784）。投手力で採る学校（3軸の投手＞打力）はエース、
+    /// それ以外はその学校で一番光っている選手（長打・ミート・走力・肩・選球眼・守備・エースの投球から）。
+    /// 紹介文は選手の水準に合わせる（強豪の看板は「県内屈指」、弱小校はチームの中での見どころ）。
+    /// <paramref name="teamBlurb"/> は1校詳細の寸評＝学校の寸評＋導入（「注目は2年の山田。」）＋紹介文。
     /// </summary>
     private static NotablePlayer PickNotable(
-        PreviewContender c, Match.Game.Team team, Stats.StatBook? book, PreviewStage stage)
+        PreviewContender c, Match.Game.Team team, Stats.StatBook? book, PreviewStage stage, int yearIndex,
+        PreviewPhrases phrases, out string teamBlurb)
     {
-        // 同値は打者側に寄せる（投手ばかりが並ぶのを避け、投打の顔ぶれが混ざるようにする）。
-        var pitcherLed = c.Rating.Pitching > c.Rating.Batting;
-        var p = pitcherLed
-            // 投手はエース（先発）を採る。実際に対戦するのはこの投手なので「展望で見た投手と当たる」が成立する。
-            // 誰を看板にするかは球速では決めない（型と成績の見せ方は StatLine/Blurb が担う）。
-            ? (team.UsesDh ? team.StartingPitcher! : team.BattingOrder[team.PitcherSlot])
-            : team.BattingOrder.Where((_, i) => team.UsesDh || i != team.PitcherSlot)   // DH制は打順に投手がいない
-                  .OrderByDescending(x => x.Power * 2 + x.Contact).First();
+        var pick =PreviewWriter.ChooseNotable(team, pitcherLed: c.Rating.Pitching > c.Rating.Batting);
+        var p = pick.Player;
+        var blurb = PreviewWriter.PlayerBlurb(pick, c.Seed, stage, yearIndex, phrases);
+        teamBlurb = c.Blurb + PreviewWriter.Intro(pick, c.Seed, yearIndex, phrases) + blurb;
 
         return new NotablePlayer(
             SchoolName: c.Name,
@@ -232,14 +263,14 @@ public static class TournamentPreviewBuilder
             Name: p.Name,
             Grade: p.Grade,
             HandednessLabel: Players.HandednessLabels.Combined(p.Throws, p.Bats),
-            PitcherLed: pitcherLed,
-            StatLine: pitcherLed
+            PitcherLed: pick.Ace,
+            StatLine: pick.Ace
                 ? PitcherStatLine(p, StatsOf(book, p), stage)
                 : BatterStatLine(p, StatsOf(book, p), stage),
-            Blurb: pitcherLed ? PitcherBlurb(p) : BatterBlurb(p));
+            Blurb: blurb);
     }
 
-    private static RosterExcerpt BuildRoster(PreviewContender c, Match.Game.Team team, PreviewStage stage)
+    private static RosterExcerpt BuildRoster(PreviewContender c, Match.Game.Team team, PreviewStage stage, string teamBlurb)
     {
         var members = team.BattingOrder.Concat(team.Reserves)
             .Concat(team.StartingPitcher is { } sp && !team.Reserves.Contains(sp) && !team.BattingOrder.Contains(sp)
@@ -250,7 +281,7 @@ public static class TournamentPreviewBuilder
                 p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats),
                 SourceId: p.SourceId ?? 0))
             .ToList();
-        return new RosterExcerpt(c.Name, c.Tier, SeedLabel(c.Mark, c.Seed, stage), c.Blurb, members, c.Rating);
+        return new RosterExcerpt(c.Name, c.Tier, SeedLabel(c.Mark, c.Seed, stage), teamBlurb, members, c.Rating);
     }
 
     /// <summary>
@@ -336,34 +367,6 @@ public static class TournamentPreviewBuilder
             : $"{period} 打率{avgText}・{s.Rbi}打点";
     }
 
-    /// <summary>球質タイプで語り口を分ける（球速の閾値では分けない＝技巧派・軟投派も主役になれる）。</summary>
-    private static string PitcherBlurb(Players.Player p)
-    {
-        // 夏/秋どちらの大会でも使える言い回しにする（大会種別に依存させない）。
-        var grade = p.Grade < 3 ? $"まだ{p.Grade}年、伸びしろも十分。" : "最終学年、集大成の大会になる。";
-        return ArchetypeOf(p) switch
-        {
-            Players.PitcherArchetype.Power =>
-                $"県内屈指の本格派。角度のある直球で押し込み、空振りを量産する。{grade}",
-            Players.PitcherArchetype.Finesse =>
-                $"球速こそ派手ではないが制球は県内随一。四球で崩れず、変化球を散らして打たせて取る。{grade}",
-            Players.PitcherArchetype.SoftToss =>
-                $"速球に頼らない軟投派。緩急と抜群の制球で打者のタイミングを外し続ける。{grade}",
-            _ =>
-                $"突出した武器はないが穴もない。試合を作る力があり、大崩れしない安定感が持ち味。{grade}",
-        };
-    }
-
-    private static string BatterBlurb(Players.Player p)
-    {
-        var grade = p.Grade < 3 ? $"{p.Grade}年生ながら中軸を担う。" : "最終学年の主軸。";
-        if (p.Power >= 75)
-            return $"県屈指のスラッガー。打球初速は野手最速クラスで、一発は文句なしの飛距離。{grade}";
-        if (p.Speed >= 72)
-            return $"出塁すれば必ず次の塁を狙う積極走塁で、相手バッテリーに重圧をかける快足。{grade}";
-        return $"確実性の高いミートで走者を還す。勝負強さが光る打者。{grade}";
-    }
-
     private static TeamRating Rate(School s)
     {
         var (ob, op, od) = StyleOffset(s.Style);
@@ -394,114 +397,6 @@ public static class TournamentPreviewBuilder
         }
         return best;
     }
-
-    private static string AxisName(TeamRating r, bool strongest)
-    {
-        var pairs = new (string Name, int V)[] { ("打線", r.Batting), ("投手陣", r.Pitching), ("守備", r.Defense) };
-        var ordered = strongest
-            ? pairs.OrderByDescending(p => p.V).ToList()
-            : pairs.OrderBy(p => p.V).ToList();
-        return ordered[0].Name;
-    }
-
-    private static string StyleFlavor(SchoolStyle s) => s switch
-    {
-        SchoolStyle.SmallBall => "機動力を絡めた野球",
-        SchoolStyle.DefensiveMinded => "堅い守りと粘り",
-        SchoolStyle.PowerHitting => "一発のある打線",
-        SchoolStyle.AceDependent => "エースの存在感",
-        SchoolStyle.TotalBaseball => "選手層の厚み",
-        _ => "勝負強さ",
-    };
-
-    /// <summary>
-    /// チーム寸評（issue #189）。校風・3軸・シード・出場校数から複数の言い回しを用意し、seed（校ID）から
-    /// 導いた決定論乱数で1本を選ぶ。同じ格付け・校風の校が並んでも文言が揃わないようにする狙い
-    /// （不変条件#2: 乱数は必ずシード付き IRandomSource 経由。System.Random 直 new は禁止）。
-    /// </summary>
-    private static string Blurb(ContenderMark mark, TeamRating r, SchoolStyle style, int schoolId, int seed, int fieldSize,
-        PreviewStage stage)
-    {
-        var strong = AxisName(r, strongest: true);
-        var weak = AxisName(r, strongest: false);
-        var flavor = StyleFlavor(style);
-        // 言い回しの本数は舞台によらず同じ（4本）＝選ぶ添字が変わらない。リーグ戦は総当たりの語で書く
-        var templates = stage == PreviewStage.DistrictLeague
-            ? LeagueBlurbTemplates(mark, strong, weak, flavor, seed, fieldSize)
-            : BlurbTemplates(mark, strong, weak, flavor, seed, fieldSize);
-        var rng = new Xoshiro256Random(0xB1EB_0000UL ^ (ulong)schoolId);
-        return templates[rng.NextInt(0, templates.Count)];
-    }
-
-    private static IReadOnlyList<string> BlurbTemplates(
-        ContenderMark mark, string strong, string weak, string flavor, int seed, int fieldSize) => mark switch
-    {
-        ContenderMark.Favorite => new[]
-        {
-            $"死角の少ない優勝候補。{strong}を軸に、撃ち勝つ試合も守り勝つ試合もできる。",
-            $"今大会の本命。{strong}の破壊力は頭ひとつ抜けており、{weak}にも大きな穴はない。",
-            $"戦力・実績とも申し分ない大本命。{flavor}で相手を寄せ付けない試合運びが持ち味。",
-            $"{strong}を武器に隙のない仕上がり。優勝から逆算した戦い方ができるチーム。",
-        },
-        ContenderMark.Contender => new[]
-        {
-            $"{strong}が武器の実力校。{weak}に不安を残すが、噛み合えば頂点も見えてくる。",
-            $"優勝候補の一角。{flavor}で上位に食らいつく力を持つ。",
-            $"{strong}の水準は本命校にも引けを取らない。{weak}の安定感が鍵を握る。",
-            "対抗格の一番手。勢いに乗れば台風の目になり得る戦力を備える。",
-        },
-        ContenderMark.DarkHorse => new[]
-        {
-            $"戦力値では一歩譲るが、{flavor}で上位を脅かす伏兵。短期決戦では侮れない。",
-            $"無印評価ながら{strong}に光るものがあり、一泡吹かせる可能性を秘める。",
-            $"シード校ではないが{flavor}が持ち味。番狂わせを起こす力は十分にある。",
-            $"地力こそ上位に譲るものの、{flavor}で流れを引き寄せれば侮れない。",
-        },
-        _ => new[]
-        {
-            $"全{fieldSize}校中{seed}番目の戦力評価。{strong}に持ち味があり、上位相手にも簡単には転ばない。",
-            $"上位校ほどの決め手は無いが、{flavor}で試合を作れるチーム。組み合わせ次第で上位を脅かす。",
-            $"{strong}を軸にした堅実な戦い方が持ち味。大きく崩れないタイプの一校。",
-            $"地力では上位に一歩譲るが、{weak}さえ克服できれば台風の目になり得る。",
-        },
-    };
-
-    /// <summary>
-    /// リーグ戦（地区予選）の寸評（issue #783）。総当たりは負けても終わらないので「優勝」「短期決戦」
-    /// 「シード」の語を使わず、取りこぼし・直接対決・星勘定で書く。
-    /// </summary>
-    private static IReadOnlyList<string> LeagueBlurbTemplates(
-        ContenderMark mark, string strong, string weak, string flavor, int seed, int fieldSize) => mark switch
-    {
-        ContenderMark.Favorite => new[]
-        {
-            $"取りこぼしの少なさが光る本命。{strong}を軸に、総当たりを勝ち切る力がある。",
-            $"地区の本命。{strong}の破壊力は頭ひとつ抜けており、{weak}にも大きな穴はない。",
-            $"戦力・実績とも申し分ない本命。{flavor}で星を落とさない戦い方ができる。",
-            $"{strong}を武器に隙のない仕上がり。どの相手にも同じ力で戦えるチーム。",
-        },
-        ContenderMark.Contender => new[]
-        {
-            $"{strong}が武器の実力校。{weak}に不安を残すが、噛み合えばブロック首位も見えてくる。",
-            $"本命を追う一番手。{flavor}で星の潰し合いに食らいつく。",
-            $"{strong}の水準は本命校にも引けを取らない。{weak}の安定感が鍵を握る。",
-            "対抗格の一番手。直接対決を制すれば順位は一気に入れ替わる。",
-        },
-        ContenderMark.DarkHorse => new[]
-        {
-            $"戦力値では一歩譲るが、{flavor}で上位を脅かす伏兵。直接対決では侮れない。",
-            $"無印評価ながら{strong}に光るものがあり、上位校から星を奪う可能性を秘める。",
-            $"戦力評価は高くないが{flavor}が持ち味。上位の星勘定を狂わせる力はある。",
-            $"地力こそ上位に譲るものの、{flavor}で流れを引き寄せれば侮れない。",
-        },
-        _ => new[]
-        {
-            $"全{fieldSize}校中{seed}番目の戦力評価。{strong}に持ち味があり、上位相手にも簡単には転ばない。",
-            $"上位校ほどの決め手は無いが、{flavor}で試合を作れるチーム。ブロックの上位を脅かす。",
-            $"{strong}を軸にした堅実な戦い方が持ち味。大きく崩れないタイプの一校。",
-            $"地力では上位に一歩譲るが、{weak}さえ克服できれば台風の目になり得る。",
-        },
-    };
 
     private static string BuildLead(
         IReadOnlyList<PreviewContender> contenders, int entrantCount, int berths, string nextStageName,

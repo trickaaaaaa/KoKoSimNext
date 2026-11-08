@@ -120,7 +120,8 @@ namespace KokoSim.Unity.Tournament
                 yearIndex: KokoSim.Unity.Shell.GameSession.Current.Year,
                 teamProvider: TeamFor,
                 statsForSchool: id => BookFor(id, statScope),
-                stage: stage);
+                stage: stage,
+                phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default);
 
             var v = new View
             {
@@ -200,7 +201,8 @@ namespace KokoSim.Unity.Tournament
                 : d.Kind == TK.SummerKoshien || d.Kind == TK.Summer ? 1 : 2;
             var excerpt = TournamentPreviewBuilder.BuildRosterFor(
                 school, d.Field, berths: berths, yearIndex: session.Year,
-                teamProvider: TeamFor, stage: stage);
+                teamProvider: TeamFor, stage: stage,
+                phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default);
 
             // 通算戦績（issue #84）は寸評の頭に付け足す（展望の Contenders 行と同じ扱い）。
             var history = KoshienHistoryText(session.Records.For(school.Id));

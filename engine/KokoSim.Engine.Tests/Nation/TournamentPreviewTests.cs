@@ -448,8 +448,8 @@ public sealed class TournamentPreviewTests
     }
 
     /// <summary>
-    /// 寸評の語彙バリエーション（issue #189「なるべく多い語彙で」）。同じ格付け・校風の校が並んでも
-    /// 文言が使い回しにならないことを、多数の無印校の寸評が複数種類に分散することで確認する。
+    /// 寸評の語彙バリエーション（issue #189「なるべく多い語彙で」→ issue #784「同じ大会で被らせない」）。
+    /// 同じ強さ・同じ校風の無印校が40校並んでも、寸評が40通りに分かれる。
     /// </summary>
     [Fact]
     public void Blurb_Vocabulary_VariesAcrossSchools()
@@ -457,17 +457,11 @@ public sealed class TournamentPreviewTests
         var many = Enumerable.Range(1, 40)
             .Select(id => Sch(id, 45, SchoolStyle.Standard, $"分散{id}高校"))
             .ToList();
+        var phrases = PreviewPhrasesParser.Parse(System.IO.File.ReadAllText(
+            Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("preview-phrases.yaml")));
 
-        // 無印カテゴリの4テンプレートそれぞれに固有の一節（テンプレ選択の判別マーカー）。
-        var markers = new[] { "戦力評価", "組み合わせ次第", "堅実な戦い方が持ち味", "克服できれば" };
+        var blurbs = TournamentPreviewBuilder.SchoolBlurbsFor(many, berths: 2, PreviewStage.Autumn, 1, phrases).Values;
 
-        var usedTemplates = many
-            .Select(s => TournamentPreviewBuilder.BuildRosterFor(s, many, berths: 2).TeamBlurb)
-            .Select(blurb => markers.FirstOrDefault(blurb.Contains))
-            .Where(m => m != null)
-            .Distinct()
-            .Count();
-
-        Assert.True(usedTemplates > 1, "同一格付け・校風でも寸評テンプレートが複数種類に分散するはず");
+        Assert.Equal(40, blurbs.Distinct().Count());
     }
 }
