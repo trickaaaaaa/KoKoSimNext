@@ -550,17 +550,26 @@ public sealed class BaserunningPlaysTests
     {
         var off = new GameContext();
         var on = new GameContext { Baserunning = C with { DropThirdStrikeReachProb = 0.9, DropThirdStrikeCatchingSlope = 0.0 } };
-        var totalOff = 0;
-        var totalOn = 0;
         // ⚠ 30シードでは足りない（実測 2026-08-14: off=72 / on=70 で逆転した）。150シードも
         // バックホーム悪送球導入（2026-08-30, RelayThrowErrorBaseProb>0）で乱数列が変わり再度逆転した
-        // （off=629 on=626）。振り逃げ1回の得点価値は小さく、乱数列がずれると試合ごとの揺れに埋もれる
-        // ＝母数をさらに増やして殺す（500シード）。
-        for (ulong s = 0; s < 500; s++)
+        // （off=629 on=626）。500シードも一塁手の捕球ミス導入（issue #810, ReceiveErrorBaseProb>0）で
+        // 乱数列が変わり再度逆転した（off=1923 on=1910）。振り逃げ1回の得点価値は小さく、乱数列がずれると
+        // 試合ごとの揺れに埋もれる＝母数をさらに増やして殺す（3000シード。1試合=独立シードなので
+        // Parallel.For で並列化し壁時間を抑える＝issue #639 と同じ作法）。
+        var totalOff = 0;
+        var totalOn = 0;
+        var gate = new object();
+        System.Threading.Tasks.Parallel.For(0, 3000, i =>
         {
-            totalOff += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
-            totalOn += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(s)).TotalRuns;
-        }
+            var s = (ulong)i;
+            var off1 = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
+            var on1 = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(s)).TotalRuns;
+            lock (gate)
+            {
+                totalOff += off1;
+                totalOn += on1;
+            }
+        });
         Assert.True(totalOn > totalOff, $"振り逃げ有効化で得点が増えていない: off={totalOff} on={totalOn}");
     }
 

@@ -5424,7 +5424,10 @@ namespace KokoSim.Unity.Match
                 lp.y = (mesh != null ? mesh.bounds.size.y : size.y) * 0.25f;
             lp.z += GloveForward;   // 掌の上に重ねると手に飲まれる＝ポケットぶん前へ出す
             if (mesh != null)
-                GearMeshPart(c, mesh, "prop-glove", lp, Quaternion.identity, LeatherColor, layer);
+            {
+                var part = GearMeshPart(c, mesh, "prop-glove", lp, Quaternion.identity, LeatherColor, layer);
+                part.GetComponent<MeshRenderer>().sharedMaterial.SetFloat("_UseVertexColor", 1f);
+            }
             else
                 GearPart(c, PrimitiveType.Sphere, "prop-glove", lp, size, LeatherColor, layer);
         }

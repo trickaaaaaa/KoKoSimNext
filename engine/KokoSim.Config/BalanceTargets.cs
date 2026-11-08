@@ -152,6 +152,36 @@ public sealed record MatchupGridTargets
     public Band WalkRateP50B45 { get; init; } = new(0.06, 0.10);
 }
 
+/// <summary>期待する向き。Up＝能力を上げると増える／Down＝減る。</summary>
+public enum SensitivityDirection { Up, Down }
+
+/// <summary>片側（攻撃＝自軍得点／守備＝相手得点）の期待。<see cref="MinRuns"/>＝20→80 で期待する向きに最低これだけ動く。</summary>
+public sealed record SideExpectation(SensitivityDirection Expect, double MinRuns);
+
+/// <summary>1能力の期待。無い側は検査しない。</summary>
+public sealed record AbilityExpectation
+{
+    public SideExpectation? Offense { get; init; }
+    public SideExpectation? Defense { get; init; }
+}
+
+/// <summary>既知の不具合で今は満たせない項目（除外リスト）。直ったら外す＝外し忘れは検査が赤くする。</summary>
+public sealed record KnownDefect(string Ability, string Side, int Issue, string Note);
+
+/// <summary>能力感度の期待（issue #840・ability_sensitivity セクション）。</summary>
+public sealed record AbilitySensitivityTargets
+{
+    /// <summary>隣り合う水準の比較で許す雑音幅[点]（最速の梯子の逆転判定）。</summary>
+    public double NoiseRuns { get; init; } = 0.25;
+    public IReadOnlyDictionary<string, AbilityExpectation> Abilities { get; init; }
+        = new Dictionary<string, AbilityExpectation>();
+    public IReadOnlyList<KnownDefect> KnownDefects { get; init; } = Array.Empty<KnownDefect>();
+    /// <summary>最速100→150km/h で相手得点が最低これだけ下がる。</summary>
+    public double VelocityLadderMinDrop { get; init; } = 0.5;
+    /// <summary>変化球なし→変化球2本で相手得点が最低これだけ下がる。</summary>
+    public double RepertoireMinDrop { get; init; } = 0.3;
+}
+
 public static class BalanceTargetsLoader
 {
     private static readonly IDeserializer Deserializer = new DeserializerBuilder()
@@ -241,6 +271,48 @@ public static class BalanceTargetsLoader
         };
     }
 
+    public static AbilitySensitivityTargets LoadAbilitySensitivityFromFile(string path)
+        => ParseAbilitySensitivity(File.ReadAllText(path));
+
+    public static AbilitySensitivityTargets ParseAbilitySensitivity(string yaml)
+    {
+        var t = Root(yaml).AbilitySensitivity;
+        if (t is null) return new AbilitySensitivityTargets();
+        var d = new AbilitySensitivityTargets();
+
+        static SideExpectation? Side(SideDto? s, string where)
+        {
+            if (s is null) return null;
+            var dir = s.Expect?.ToLowerInvariant() switch
+            {
+                "up" => SensitivityDirection.Up,
+                "down" => SensitivityDirection.Down,
+                _ => throw new InvalidDataException($"ability_sensitivity.{where}.expect は up か down: '{s.Expect}'"),
+            };
+            return new SideExpectation(dir, s.MinRuns);
+        }
+
+        var abilities = new Dictionary<string, AbilityExpectation>();
+        foreach (var (id, a) in t.Abilities ?? new Dictionary<string, AbilityDto>())
+        {
+            abilities[id] = new AbilityExpectation
+            {
+                Offense = Side(a.Offense, id + ".offense"),
+                Defense = Side(a.Defense, id + ".defense"),
+            };
+        }
+        return new AbilitySensitivityTargets
+        {
+            NoiseRuns = t.NoiseRuns ?? d.NoiseRuns,
+            Abilities = abilities,
+            KnownDefects = (t.KnownDefects ?? new List<KnownDefectDto>())
+                .Select(k => new KnownDefect(k.Ability ?? "", k.Side ?? "", k.Issue, k.Note ?? ""))
+                .ToList(),
+            VelocityLadderMinDrop = t.VelocityLadderMinDrop ?? d.VelocityLadderMinDrop,
+            RepertoireMinDrop = t.RepertoireMinDrop ?? d.RepertoireMinDrop,
+        };
+    }
+
     public static LowTierTargets LoadLowTierFromFile(string path) => ParseLowTier(File.ReadAllText(path));
 
     public static LowTierTargets ParseLowTier(string yaml)
@@ -322,6 +394,38 @@ public static class BalanceTargetsLoader
 
         [YamlMember(Alias = "nation_dominance")]
         public NationDominanceDto? NationDominance { get; set; }
+
+        [YamlMember(Alias = "ability_sensitivity")]
+        public AbilitySensitivityDto? AbilitySensitivity { get; set; }
+    }
+
+    private sealed class AbilitySensitivityDto
+    {
+        public double? NoiseRuns { get; set; }
+        public Dictionary<string, AbilityDto>? Abilities { get; set; }
+        public List<KnownDefectDto>? KnownDefects { get; set; }
+        public double? VelocityLadderMinDrop { get; set; }
+        public double? RepertoireMinDrop { get; set; }
+    }
+
+    private sealed class AbilityDto
+    {
+        public SideDto? Offense { get; set; }
+        public SideDto? Defense { get; set; }
+    }
+
+    private sealed class SideDto
+    {
+        public string? Expect { get; set; }
+        public double MinRuns { get; set; }
+    }
+
+    private sealed class KnownDefectDto
+    {
+        public string? Ability { get; set; }
+        public string? Side { get; set; }
+        public int Issue { get; set; }
+        public string? Note { get; set; }
     }
 
     private sealed class NationDominanceDto

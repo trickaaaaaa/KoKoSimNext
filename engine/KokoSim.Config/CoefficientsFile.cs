@@ -674,6 +674,7 @@ public static class CoefficientsLoader
         public double FlyErrorRoutineMarginSeconds { get; set; } = D.FlyErrorRoutineMarginSeconds;
         public double ThrowErrorBaseProb { get; set; } = D.ThrowErrorBaseProb;
         public double ThrowErrorAccuracySlope { get; set; } = D.ThrowErrorAccuracySlope;
+        public double ReceiveErrorBaseProb { get; set; } = D.ReceiveErrorBaseProb;
         public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
         public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
         public double FoulFlyShare { get; set; } = D.FoulFlyShare;
@@ -752,6 +753,7 @@ public static class CoefficientsLoader
             FlyErrorRoutineMarginSeconds = FlyErrorRoutineMarginSeconds,
             ThrowErrorBaseProb = ThrowErrorBaseProb,
             ThrowErrorAccuracySlope = ThrowErrorAccuracySlope,
+            ReceiveErrorBaseProb = ReceiveErrorBaseProb,
             WildThrowScatterSigmaM = WildThrowScatterSigmaM,
             RecoveryReactionSeconds = RecoveryReactionSeconds,
             FoulFlyShare = FoulFlyShare,

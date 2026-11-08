@@ -194,8 +194,10 @@ public sealed record FieldingCoefficients
     /// <summary>捕球エラーの基準確率（Catching50時）。送球ロール(ThrowErrorBaseProb)有効化に伴い再配分（issue #169, 2026-07-23）：
     /// 旧0.064（捕球のみで両軍計≈2.4/試合校正）から、内野ゴロ失策の約40%を送球由来へ移す分だけ捕球側を下げた値。
     /// issue #532（2026-08-08）で×1.29（0.0384→0.0495）：外野フライ落球を難度連動（<see cref="FlyErrorBaseProb"/>）で減らした分、
-    /// errors_per_game を現行水準（≈2.4）に保つため内野ゴロ側を引き上げた（捕球60/送球40の按分は維持）。</summary>
-    public double ErrorBaseProb { get; init; } = 0.0495;
+    /// errors_per_game を現行水準（≈2.4）に保つため内野ゴロ側を引き上げた（捕球60/送球40の按分は維持）。
+    /// issue #810（2026-11-09）で 0.0495→0.0400：受け手の捕球ミス(<see cref="ReceiveErrorBaseProb"/>)を三段目として
+    /// 新設した分だけ、捕球・送球の両方から再配分し errors_per_game を帯内（1.8–3.6）に保った。</summary>
+    public double ErrorBaseProb { get; init; } = 0.0400;
     /// <summary>捕球(Catching−50)あたりのエラー変化（守備が平均より低い側＝弱小の傾き）。急にして弱小同士を大量失策に。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0065;
     /// <summary>守備が平均(50)より高い側の傾き（弱小側 ErrorCatchingSlope と非対称）。緩くして精鋭側に
@@ -229,11 +231,22 @@ public sealed record FieldingCoefficients
     // 乱数消費順・結果とも完全一致（ErrorExtraAdvanceProb と同じ gating 方式で決定論を保つ）。
     /// <summary>送球エラーの基準確率（ThrowAccuracy50時）。issue #169で 0.0→0.0266 に正値化＝実ゲームで悪送球が発火。
     /// Ac50 で内野ゴロ失策の約40%が送球由来になる按分（残り≈60%が捕球由来 ErrorBaseProb）。
-    /// issue #532 で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）。決定論baselineは再生成済み。</summary>
-    public double ThrowErrorBaseProb { get; init; } = 0.0343;
+    /// issue #532 で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）。
+    /// issue #810（2026-11-09）で 0.0343→0.0280：受け手の捕球ミス(<see cref="ReceiveErrorBaseProb"/>)を三段目として
+    /// 新設した分だけ再配分（捕球・送球・受け手の按分は概ね48/34/18）。決定論baselineは再生成済み。</summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.0280;
     /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
+
+    // 受け手の捕球ミス（内野ゴロ→一塁の3段階目, issue #810 / design-14 P1-6b 追記）。捕球ロール(Catching)→
+    // 送球ロール(ThrowAccuracy)を通過した（＝送球自体は正確）後に、受け手の一塁手が正確な送球を落とす／
+    // ショートバウンドを捕れない失策を引く。既定 base=0.0 なら「ロールを一切引かない」＝現行の2段判定と
+    // 乱数消費順・結果とも完全一致（ThrowErrorBaseProb と同じ gating 方式で決定論を保つ）。
+    /// <summary>受け手の捕球ミスの基準確率（一塁手 Catching50時）。issue #810で正値化＝捕球・送球の両方から
+    /// 再配分し errors_per_game を帯内（1.8–3.6）に保った（捕球・送球・受け手の按分は概ね48/34/18）。
+    /// 一塁手自身が処理した打球（受け手が別にいない）には適用しない。</summary>
+    public double ReceiveErrorBaseProb { get; init; } = 0.0150;
 
     // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
     // 守備所要時間へ加算してもう一度同じ判定基準（defenseTime+ForceOutMarginSeconds vs runnerTime）で

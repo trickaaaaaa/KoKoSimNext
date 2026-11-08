@@ -29,9 +29,10 @@ public enum BattedBallResult
 /// </summary>
 /// <summary>
 /// 失策の種別。Catch=捕球で弾いて前へこぼす／Throw=悪送球／Tunnel=股を抜かれる（issue #632）／
-/// Bobble=お手玉（握り損ねて拾い直すあいだに打者が一塁へ着く。送球は正しく一塁へ届くが遅い。2026-11-03 監督報告）。
+/// Bobble=お手玉（握り損ねて拾い直すあいだに打者が一塁へ着く。送球は正しく一塁へ届くが遅い。2026-11-03 監督報告）／
+/// Receive=一塁手の捕球ミス（送球は正確なのに一塁手が落とす／ショートバウンドを捕れない。失策は一塁手に付く。issue #810）。
 /// </summary>
-public enum FieldingErrorKind { Catch, Throw, Tunnel, Bobble }
+public enum FieldingErrorKind { Catch, Throw, Tunnel, Bobble, Receive }
 
 /// <summary>
 /// 守備解決の詳細（結果＋幾何・時間情報, CHANGELOG 32）。
@@ -523,6 +524,11 @@ public static class FieldingResolver
                     FielderThrowAccuracy = throwAccuracy,
                     JudgementMarginSeconds = judgementMargin,
                     ErrorKind = errorKind,
+                    // 一塁手の捕球ミス（issue #810）: 処理野手（FielderRole）は球を処理した野手（遊撃等）の
+                    // ままだが、失策を犯したのは受け手の一塁手＝ErrorFielderRole で帰属を分ける（トンネルと同じ作法）。
+                    ErrorFielderRole = errorKind == FieldingErrorKind.Receive ? FieldPosition.FirstBase : null,
+                    // 「エラー」は送球が一塁へ届いて弾かれた瞬間（＝送球到達時刻）に出す。
+                    ErrorAtSeconds = errorKind == FieldingErrorKind.Receive ? defenseTime : null,
                     GroundHops = path.Hops,
                     GroundPathCatchSeconds = fieldTimeRaw,
                     RecoveredThrowScatterM = recoveredScatterM,
@@ -1009,9 +1015,10 @@ public static class FieldingResolver
             ? BattedBallResult.Error : BattedBallResult.Out;
 
     /// <summary>
-    /// 内野ゴロ→一塁送球のエラー判定（Issue #37, design-14 P1-6b）。捕球ロール(Catching)→送球ロール(ThrowAccuracy)の
-    /// 2段階。送球ロールは <see cref="FieldingCoefficients.ThrowErrorBaseProb"/> &gt; 0 のときのみ引く＝既定0では
-    /// 捕球ロールのみ（現行と乱数消費順・結果とも完全一致, 決定論不変）。extraProb はイレギュラーバウンドを
+    /// 内野ゴロ→一塁送球のエラー判定（Issue #37, design-14 P1-6b）。捕球ロール(Catching)→送球ロール(ThrowAccuracy)→
+    /// 受け手の捕球ロール(Catching, issue #810)の3段階。送球ロールは <see cref="FieldingCoefficients.ThrowErrorBaseProb"/>、
+    /// 受け手ロールは <see cref="FieldingCoefficients.ReceiveErrorBaseProb"/> が &gt; 0 のときのみ引く＝既定0では
+    /// 両方スキップ（現行と乱数消費順・結果とも完全一致, 決定論不変）。extraProb はイレギュラーバウンドを
     /// 捕球ロールへ加算する（Issue #63・既定0で恒等）。
     /// </summary>
     private static (BattedBallResult Result, FieldingErrorKind? ErrorKind) MaybeInfieldError(
@@ -1037,6 +1044,22 @@ public static class FieldingResolver
             if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
             {
                 return (BattedBallResult.Error, FieldingErrorKind.Throw);
+            }
+        }
+        // 一塁手の捕球ミス（issue #810）: 送球自体は正確（上の2段を通過済み）でも、受け手の一塁手が
+        // 正確な送球を落とす／ショートバウンドを捕れない失策を三段目として引く。守備力連動は捕球エラーと
+        // 同じ非対称スロープ（弱小側 ErrorCatchingSlope・精鋭側 ErrorCatchingSlopeStrong）を一塁手自身の
+        // Catching へ適用する。一塁手自身が処理した打球（アンアシスト含む）には「受け手」が別にいないので
+        // 対象外＝ロールを引かない（乱数消費順は処理野手で変わらない）。
+        if (coeff.ReceiveErrorBaseProb > 0.0 && infielder.Position != FieldPosition.FirstBase)
+        {
+            var firstBaseman = fielders.First(f => f.Position == FieldPosition.FirstBase);
+            var catchingDelta = firstBaseman.Attributes.Catching - 50;
+            var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
+            var errProb = coeff.ReceiveErrorBaseProb - catchingDelta * slope;
+            if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
+            {
+                return (BattedBallResult.Error, FieldingErrorKind.Receive);
             }
         }
         return (BattedBallResult.Out, null);

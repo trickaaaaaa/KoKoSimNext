@@ -225,6 +225,37 @@
 > 2段階化で rng 消費順が変わるため**決定論baseline（determinism-baseline.txt）を再生成**。Heavy統計回帰で
 > 失策数/試合・失策連鎖・BABIP・内野安打の全帯内を確認。ThrowAccuracy の高低で失策/悪送球が実ゲームでも単調に変わる。
 
+##### 第3の段階「受け手の捕球ミス」（issue #810, 監督決定 2026-11-09）
+
+失策の種類が少なく、ほぼ「ファンブル」しか見えない（2026-11-08 ユーザー報告）という問題に対する種類拡充4本
+（#810〜#813）の1本目。内野ゴロ→一塁送球の判定は捕球ロール→送球ロールの2段で止まっていて、**送球は正確なのに
+受け手の一塁手が落とす／ショートバウンドを捕れない**という、実戦でもよく起こる失策の形を表現できていなかった。
+
+- **判定**: `MaybeInfieldError` の3段目。捕球ロール（Catching, 処理野手）→送球ロール（ThrowAccuracy, 処理野手）を
+  両方通過した（＝送球そのものは正確）後に、受け手ロール（Catching, **一塁手自身**）を引く。失策確率 =
+  `ReceiveErrorBaseProb − (一塁手のCatching−50)×slope`。slope は捕球エラーと同じ非対称（弱小側
+  `ErrorCatchingSlope`・精鋭側 `ErrorCatchingSlopeStrong`）を流用し、新しい傾き係数は増やさない。
+  クランプは `ErrorMinProb`/`ErrorMaxProb` を流用。
+- **対象外**: 一塁手自身が処理した打球（アンアシスト刺殺を含む）には「受け手」が別にいないため、
+  `処理野手の守備位置 == FirstBase` のときはロール自体を引かない（乱数消費順は処理野手で変わらない）。
+- **gating**: `ReceiveErrorBaseProb` 既定 0.0 なら「ロールを一切引かない」＝現行の2段判定と乱数消費順・結果とも
+  完全一致（`ThrowErrorBaseProb` と同じ恒等の作法）。
+- **失策の帰属**: 処理野手（`FielderRole`）は打球を処理した野手（遊撃等）のまま、失策は受け手の一塁手に付ける
+  （`ErrorFielderRole = FieldPosition.FirstBase`。トンネルと同じ「処理者≠失策者」の分離）。
+- **タイムライン**: 送球は通常どおり一塁へ到達する絵を描き（Bobble と同じ「送球は正しく届く」扱い）、到達の
+  瞬間にグラブで弾いて数mこぼす Roll 区間を追加する。弾む距離・時間・拾い直す野手の決め方はお手玉（Catch）と
+  共有する（`ErrorDeflectM`/`ErrorDeflectSeconds`、拾い直しは一塁手自身＝#809 の規則）。「エラー」テロップは
+  送球が一塁へ届いて弾かれた瞬間（`ErrorAtSeconds` = 送球到達時刻）に出す。
+- **総数の按分（オーナー決定）**: 失策の総数は増減どちらでもよいが、まず「保つ」側を採用。`ErrorBaseProb`
+  （捕球）と `ThrowErrorBaseProb`（送球）の両方を下げ、三者（捕球/送球/受け手）の按分を概ね48/34/18に再配分して
+  errors_per_game を帯内（1.8–3.6）に保った。
+- **係数（`data/coefficients.yaml`）**: `fielding.receive_error_base_prob`（新設）。既存の `error_base_prob` /
+  `throw_error_base_prob` を下げて再配分（#4 に従い C#既定と YAML を同値化）。
+- **3D**: 専用の「捕球ミス」クリップは無いため、既存の一塁手捕球クリップ＋球がグラブで弾かれる絵（タイムラインの
+  Roll 区間）で表す。「！」マークは一塁手に付ける（`ErrorFielderRole` 基準の既存の汎用マーク判定がそのまま動く）。
+- **rng 消費順**: 3段目が新設されるため、`処理野手≠一塁手` かつ上2段を通過した判定では常に1本追加で引く
+  （`ReceiveErrorBaseProb>0` のとき）＝**決定論baseline（determinism-baseline.txt）を再生成**。
+
 ### P2-7. 死球（HBP）
 
 - **現状**: 列挙型に無し。四球のみ。
