@@ -76,7 +76,7 @@
 
                 <ui:Label name="tp-lead" class="tp-lead" text="" />
 
-                <ui:Label class="tp-h2 f-display" text="優勝争いの構図" />
+                <ui:Label name="tp-contenders-h" class="tp-h2 f-display" text="優勝争いの構図" />
                 <ui:VisualElement name="tp-contenders" />
 
                 <ui:Label class="tp-h2 f-display" text="注目選手" />
