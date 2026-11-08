@@ -44,6 +44,7 @@ public sealed class PlayerNameTests
                 new() { Value = "軽", Weight = 1.0 },
             },
             GivenNames = new List<WeightedName> { new() { Value = "太", Weight = 1.0 } },
+            FamilyWeightExponent = 1.0,   // 重み付き抽選そのものを測る（圧縮は FamilyNames_AreVariedEnough）
         };
         var rng = new Xoshiro256Random(42);
         var heavy = 0;
@@ -212,6 +213,28 @@ public sealed class PlayerNameTests
             $"観測された最大リロール回数 {maxRerollsObserved} が上限 {maxGivenRerolls} に到達（フォールバック発生の危険域）");
     }
 
+    /// <summary>
+    /// 苗字の出方（issue #819）: 語彙1,000種以上・圧縮後の実効重みで上位10姓の占有率が15%以下、
+    /// 30人の部で同姓になる組の期待数が2組以下（旧語彙は26.8%・5.5組で毎年同じ苗字が被っていた）。
+    /// 実効重みは抽選に使う値そのもの（FamilyEffectiveWeights）。
+    /// </summary>
+    [Fact]
+    public void FamilyNames_AreVariedEnough()
+    {
+        var v = new PlayerNameVocab();
+        Assert.True(v.FamilyNames.Count >= 1000, $"苗字語彙 {v.FamilyNames.Count} 種（1,000種以上が目標）");
+        var w = v.FamilyEffectiveWeights;
+        var total = w.Sum();
+        var p = w.Select(x => x / total).OrderByDescending(x => x).ToArray();
+        var top10 = p.Take(10).Sum();
+        var pairs30 = 30 * 29 / 2 * p.Sum(x => x * x);
+        Assert.True(top10 <= 0.15, $"上位10姓の占有率 {top10:P1}");
+        Assert.True(pairs30 <= 2.0, $"30人の部で同姓の組 {pairs30:F2}");
+        Assert.True(pairs30 >= 0.3, $"30人の部で同姓の組 {pairs30:F2}（平坦にしすぎ＝人気の苗字が出なさすぎる）");
+        // 表示幅（姓3文字。#297）を超える苗字を入れない
+        Assert.All(v.FamilyNames, n => Assert.True(n.Value.Length <= 3, $"4文字以上の苗字: {n.Value}"));
+    }
+
     /// <summary>data/player-names.yaml とベイク値 PlayerNameData が同内容（語彙の単一ソース維持）。</summary>
     [Fact]
     public void Yaml_AndBakedDefaults_AreInSync()
@@ -221,6 +244,7 @@ public sealed class PlayerNameTests
         var baked = new PlayerNameVocab();
 
         Assert.Equal(baked.GivenWeightExponent, yaml.GivenWeightExponent, 6);
+        Assert.Equal(baked.FamilyWeightExponent, yaml.FamilyWeightExponent, 6);
         AssertSameVocab(baked.FamilyNames, yaml.FamilyNames, "family_names");
         AssertSameVocab(baked.GivenNames, yaml.GivenNames, "given_names");
 
