@@ -1,3 +1,4 @@
+using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Season;
 
 namespace KokoSim.Unity.Shell
@@ -108,7 +109,15 @@ namespace KokoSim.Unity.Shell
 
             // 中学生リストが出る週（秋の大会の直後）。寮が無ければ何も起きない。
             if (Calendar.IsRecruitListWeek(Week))
+            {
                 RecruitListOpened = RecruitService.BuildList(YearIndex + 1);
+                // AI校の節目成長・秋大会後（issue #843・Phase C）。ロスターを触るので背景裏試合の
+                // 完了を待つ（週18の夏ノードと同じ作法）。
+                NationBackgroundSim.EnsureCompleted();
+                BracketFinishSim.EnsureCompleted();
+                KoshienQualifierStatsSim.EnsureCompleted();
+                NationService.ApplyAiGrowthNode(AiGrowthNode.Autumn);
+            }
 
             // ドラフト（設計書20 §4・issue #586）。注目度の再評価は毎週（候補入り／評価の増減を拾うため）、
             // 指名の確定は10月最終週だけ。どちらも母種由来の独立ストリームで、本編の乱数列は進めない＝帯不変。
@@ -130,6 +139,16 @@ namespace KokoSim.Unity.Shell
             if (Calendar.IsSenbatsuAnnounceWeek(Week) && GameSession.Current.Mode == GameMode.Normal)
                 SenbatsuEntry.Announce();
 
+            // AI校の節目成長・冬明け（issue #843・Phase C）。4月の年度替わりより前に今年度ぶんの
+            // 成長予算（PendingBudget）を使い切る。センバツ選考発表と同週だが互いに無関係。
+            if (Calendar.IsWinterGrowthNodeWeek(Week))
+            {
+                NationBackgroundSim.EnsureCompleted();
+                BracketFinishSim.EnsureCompleted();
+                KoshienQualifierStatsSim.EnsureCompleted();
+                NationService.ApplyAiGrowthNode(AiGrowthNode.Winter);
+            }
+
             // 観るだけのセンバツ（自校が選ばれていない年）を1週ぶん進める（AdvanceSpectatedKoshien と同型）。
             GameSession.Current.AdvanceSpectatedSenbatsu(7);
 
@@ -142,6 +161,9 @@ namespace KokoSim.Unity.Shell
                 BracketFinishSim.EnsureCompleted();   // issue #529: 同じロスターを読むため同様に完了を待つ。
                 KoshienQualifierStatsSim.EnsureCompleted();   // 設計書05 §1.4b: 同上。
                 NationService.RetireAiGraduates();
+                // AI校の節目成長・夏大会後（issue #843・Phase C）。引退（代替わり）の直後＝
+                // 新チームに残る1・2年だけへ成長が乗る（退く3年の予算は引退と一緒に消える）。
+                NationService.ApplyAiGrowthNode(AiGrowthNode.Summer);
             }
         }
 

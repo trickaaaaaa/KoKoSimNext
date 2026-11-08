@@ -150,6 +150,98 @@ public sealed class AiRosterTests
         }
     }
 
+    // --- 年3節目への分割（#843・Phase C） ---
+
+    /// <summary>
+    /// <see cref="AiRosterCycle.BeginYear"/> は代替わり（進級・新入生加入）は即座に適用するが、
+    /// 成長（Contact等）は節目まで反映しない＝<see cref="AiPlayer.PendingBudget"/> に積むだけで止める。
+    /// </summary>
+    [Fact]
+    public void BeginYear_DefersGrowth_UntilNodesApplied()
+    {
+        var deps = NoPhenomDeps();
+        var school = MakeSchool(strength: 70);
+        var roster = AiRosterFactory.Bootstrap(school, 1, deps);
+        var beforeContact = roster.Players.ToDictionary(p => p.Id, p => p.Snapshot.Contact);
+        var beforeGrades = roster.Players.ToDictionary(p => p.Id, p => p.Grade);
+
+        AiRosterCycle.BeginYear(roster, school, 2, deps);
+
+        // 代替わり（進級）は即座。
+        foreach (var p in roster.Players.Where(p => beforeGrades.ContainsKey(p.Id)))
+            Assert.Equal(beforeGrades[p.Id] + 1, p.Grade);
+
+        // 成長はまだ見た目に出ない（新入生以外は Snapshot 不変）。予算だけが積まれている。
+        foreach (var p in roster.Players.Where(p => beforeContact.ContainsKey(p.Id)))
+            Assert.Equal(beforeContact[p.Id], p.Snapshot.Contact);
+        Assert.Contains(roster.Players, p => p.PendingBudget > 0);
+    }
+
+    /// <summary>
+    /// 節目（夏大会後→秋大会後→冬明け）を順に適用すると、チーム総合が単調に伸び、最終的に
+    /// <see cref="AiRosterCycle.AdvanceOneYear"/>（原子操作・参照実装）と同じターゲット近傍へ収束する
+    /// （issue #843 完了条件: 節目ごとに能力が伸び、合計が一括適用と一致）。
+    /// </summary>
+    [Fact]
+    public void ApplyGrowthNode_Summer_Autumn_Winter_ConvergesToSameTargetAsAtomic()
+    {
+        var deps = NoPhenomDeps();
+        var school = MakeSchool(strength: 70);   // 生成中心から伸ばす必要があるが、99クランプに刺さない程度
+        var roster = AiRosterFactory.Bootstrap(school, 1, deps);
+
+        AiRosterCycle.BeginYear(roster, school, 2, deps);
+
+        // 予算が付いた選手を1人追跡。個々の能力は BumpTo が全指標へ一律加算のみ＝節目を踏むごとに
+        // 単調非減少（99クランプで単能力が動かない回に当たらないよう、合計で見る）。
+        var tracked = roster.Players.First(p => p.PendingBudget > 0);
+        var id = tracked.Id;
+        static int CoreSum(Player s) => s.Contact + s.Power + s.Discipline + s.Speed
+            + s.ArmStrength + s.ThrowAccuracy + s.Fielding + s.Catching;
+        var afterBegin = CoreSum(roster.Players.Single(p => p.Id == id).Snapshot);
+
+        AiRosterCycle.ApplyGrowthNode(roster, deps, AiGrowthNode.Summer);
+        var afterSummer = CoreSum(roster.Players.Single(p => p.Id == id).Snapshot);
+        AiRosterCycle.ApplyGrowthNode(roster, deps, AiGrowthNode.Autumn);
+        var afterAutumn = CoreSum(roster.Players.Single(p => p.Id == id).Snapshot);
+        AiRosterCycle.ApplyGrowthNode(roster, deps, AiGrowthNode.Winter);
+        var afterWinter = CoreSum(roster.Players.Single(p => p.Id == id).Snapshot);
+
+        Assert.True(afterSummer >= afterBegin, $"{afterBegin} -> {afterSummer}");
+        Assert.True(afterAutumn >= afterSummer, $"{afterSummer} -> {afterAutumn}");
+        Assert.True(afterWinter >= afterAutumn, $"{afterAutumn} -> {afterWinter}");
+        Assert.True(afterWinter > afterBegin, "節目を3回通しても追跡選手の能力が伸びていない");
+
+        // 冬明けで PendingBudget を使い切る（残差0・以後の節目呼び出しは安全な no-op）。
+        Assert.All(roster.Players, p => Assert.True(p.PendingBudget <= 1e-9));
+
+        // 原子操作（AdvanceOneYear）の参照実装と同じターゲット近傍へ収束する（#843 完了条件）。
+        var team = AiTeamBuilder.Build(roster, school, 2, deps);
+        var overall = ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
+        var target = AiRosterCycle.GrowthTarget(school, deps);
+        Assert.InRange(overall, target - deps.Persistent.TargetTolerance - 4,
+            target + deps.Persistent.TargetTolerance);
+    }
+
+    /// <summary>
+    /// 旧セーブ（<see cref="AiPlayer.PendingBudget"/>=0のまま）を年度途中（節目）で読み込んでも、
+    /// 節目適用は無害な no-op（例外なし・Snapshot不変）になる（issue #843 完了条件）。
+    /// </summary>
+    [Fact]
+    public void ApplyGrowthNode_OldSaveWithZeroPendingBudget_IsSafeNoOp()
+    {
+        var deps = NoPhenomDeps();
+        var school = MakeSchool();
+        var roster = AiRosterFactory.Bootstrap(school, 1, deps);
+        // Bootstrap 済みロスターは PendingBudget=0（旧セーブと同じ状態）。
+        Assert.All(roster.Players, p => Assert.Equal(0, p.PendingBudget));
+        var before = roster.Players.Select(p => p.Snapshot.Contact).ToList();
+
+        foreach (var node in new[] { AiGrowthNode.Summer, AiGrowthNode.Autumn, AiGrowthNode.Winter })
+            AiRosterCycle.ApplyGrowthNode(roster, deps, node);
+
+        Assert.Equal(before, roster.Players.Select(p => p.Snapshot.Contact).ToList());
+    }
+
     // --- 代替わり直後（3年引退後）のベンチ20成立（#80 完了条件） ---
 
     [Fact]

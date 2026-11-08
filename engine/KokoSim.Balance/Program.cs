@@ -27,6 +27,7 @@ internal static class CommandLine
             "simulate-manager" => RunSimulateManager(args[1..]),
             "simulate-tiers" => RunSimulateTiers(args[1..]),
             "defense-sensitivity" => RunDefenseSensitivity(args[1..]),
+            "ability-sweep" => RunAbilitySweep(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
             "infield-hit-profile" => RunInfieldTiming(args[1..], profile: true),
@@ -158,6 +159,46 @@ internal static class CommandLine
         {
             System.IO.File.WriteAllText(reportPath, report);
             Console.WriteLine($"ティア格子レポートを書き出しました: {reportPath}");
+        }
+        else
+        {
+            Console.WriteLine(report);
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// 能力感度の掃引（issue #840）。能力を1つずつ 20 / 80 に振り、結果（得点など）が期待どおり動くかを表にする。
+    /// 統計帯は平均的なチーム同士しか測らないので、効いていない／逆向きの能力は帯が緑のまま残る。
+    /// </summary>
+    private static int RunAbilitySweep(string[] args)
+    {
+        var games = 2000;
+        var seed = 42UL;
+        string? reportPath = null;
+        string? coefficientsPath = null;
+        string? targetsPath = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--games": games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
+                case "--targets": targetsPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        targetsPath ??= System.IO.File.Exists("data/balance-targets.yaml") ? "data/balance-targets.yaml" : null;
+        var targets = targetsPath is null ? null : BalanceTargetsLoader.LoadAbilitySensitivityFromFile(targetsPath);
+
+        var result = AbilitySweep.Run(games, seed, coefficientsPath);
+        var report = AbilitySweep.Report(result, targets);
+        if (reportPath is not null)
+        {
+            System.IO.File.WriteAllText(reportPath, report);
+            Console.WriteLine($"能力感度レポートを書き出しました: {reportPath}");
         }
         else
         {
@@ -591,6 +632,8 @@ internal static class CommandLine
         Console.WriteLine("                  # ティア格子（強度30〜60の総当たり）＋実プレイの自校vs相手校＋ランク式の食い違い（issue #536・計測のみ）");
         Console.WriteLine("  defense-sensitivity [--games N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--cache path] [--budget-sec S]");
         Console.WriteLine("                  # 走力・守備を20/50/80/100に固定した守備側の失点・BABIP・アウト率＋打撃±30との比較（issue #832・計測のみ）");
+        Console.WriteLine("  ability-sweep   [--games N]   [--seed S] [--report path] [--coefficients ...] [--targets data/balance-targets.yaml]");
+        Console.WriteLine("                  # 能力を1つずつ20/80に振り結果が動くかを見る（issue #840・片側だけ変更・先攻後攻入れ替え）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
         Console.WriteLine("  simulate-nation [--years N]   [--seed S] [--report path] [--school-names data/school-names.yaml]");
         Console.WriteLine("                  [--autumn data] [--start-year 2025]   # 秋の大会フロー(秋季→地区→神宮→センバツ)を併走");

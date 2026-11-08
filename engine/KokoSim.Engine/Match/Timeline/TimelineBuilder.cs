@@ -427,7 +427,8 @@ public static class TimelineBuilder
                     errorChaser = firstBaseCoverer;
                     wildStep = wild.Step;
                 }
-                else if (play.Result == BattedBallResult.Error && play.ErrorKind != FieldingErrorKind.Bobble)
+                else if (play.Result == BattedBallResult.Error
+                         && play.ErrorKind != FieldingErrorKind.Bobble && play.ErrorKind != FieldingErrorKind.Receive)
                 {
                     // 捕球エラー（お手玉。issue #439）: 送球は存在しない。打球の進行方向へ数m弾く絵。
                     // アンアシスト中の悪送球（実質起こらない縁ケース）もここへ落とす＝刺殺の絵は描かない。
@@ -516,9 +517,11 @@ public static class TimelineBuilder
                     // 肩どおりのまま（T0 を後ろへずらすだけ）。アウトは判定の「走者到達の0.60秒前以前」を
                     // 破らないよう走者到達の少し前を上限にする（それでも受け手が間に合わないほど遅い走者は、
                     // 判定どおり先着させる＝判定を絵で覆さない）。セーフは走者より後ろなので上限なし。
-                    // お手玉の失策（Bobble）は送球が正しく一塁へ届く（遅いだけ）＝内野安打と同じ扱い
+                    // お手玉の失策（Bobble）・一塁手の捕球ミス（Receive, issue #810）は送球が正しく
+                    // 一塁へ届く（Bobbleは遅いだけ／Receiveは届いた後に弾く）＝内野安打と同じ扱い
                     if (coverReadyAt is { } ready
-                        && (play.Result != BattedBallResult.Error || play.ErrorKind == FieldingErrorKind.Bobble))
+                        && (play.Result != BattedBallResult.Error
+                            || play.ErrorKind == FieldingErrorKind.Bobble || play.ErrorKind == FieldingErrorKind.Receive))
                     {
                         var wait = ready + ReceiverSetSeconds;
                         arrive = firstOut
@@ -533,6 +536,22 @@ public static class TimelineBuilder
                         From = fieldPoint, To = firstBase,
                         FromRole = play.FielderRole, ToRole = firstBaseCoverer, ToBase = "first",
                     });
+                    if (play.ErrorKind == FieldingErrorKind.Receive)
+                    {
+                        // 一塁手の捕球ミス（issue #810）: 送球自体は正確に一塁へ届くが、受け手がグラブで
+                        // 弾いてこぼす。弾む距離・時間・拾い直す野手の決め方はお手玉（Catch）と共有する。
+                        var dropRest = Overshoot(fieldPoint, firstBase, ErrorDeflectM);
+                        ball.Add(new BallSegment
+                        {
+                            Kind = BallSegmentKind.Roll,
+                            T0 = arrive, T1 = arrive + ErrorDeflectSeconds,
+                            From = firstBase, To = dropRest,
+                            FromRole = firstBaseCoverer,
+                        });
+                        errorBallRest = dropRest;
+                        errorBallDeadAt = arrive + ErrorDeflectSeconds;
+                        errorChaser = firstBaseCoverer;
+                    }
                 }
             }
         }
@@ -607,13 +626,18 @@ public static class TimelineBuilder
             // 失策出塁（issue #439）: エラー確定の瞬間に「エラー」を必ず1枚出す。
             // 捕球エラー＝処理点で弾いた時刻／悪送球＝送球が一塁に届くはずだった時刻／
             // トンネル（issue #632）＝内野手が抜かれた瞬間（ErrorAtSeconds。処理時刻は外野手が
-            // 球を回収する時刻＝ずっと後なので、fieldedAt を使うと絵とテロップが数秒ずれる）。
+            // 球を回収する時刻＝ずっと後なので、fieldedAt を使うと絵とテロップが数秒ずれる）／
+            // 一塁手の捕球ミス（Receive, issue #810）＝送球が実際に一塁へ着いた瞬間（firstThrowArriveAt。
+            // ErrorAtSeconds は判定の defenseTime の写しで、GuardAgainstVerdict による絵の調整を含まない
+            // ＝球側の弾きロール（下で追加）の T0 とずれるので、絵と一致する firstThrowArriveAt を優先する）。
             // セーフと違い際どさ条件を課さない＝「アウトの絵に見えるのに黙って出塁」を防ぐのが目的。
-            var errAt = play.ErrorAtSeconds is { } ea
-                ? ContactAt + ea
-                : play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
-                    ? ContactAt + et
-                    : fieldedAt;
+            var errAt = play.ErrorKind == FieldingErrorKind.Receive && firstThrowArriveAt is { } receiveArrive
+                ? receiveArrive
+                : play.ErrorAtSeconds is { } ea
+                    ? ContactAt + ea
+                    : play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
+                        ? ContactAt + et
+                        : fieldedAt;
             // テロップは記録として失策が確定する瞬間＝打者が一塁でセーフになった瞬間に出す（issue #806）。
             // T（取り損ないの瞬間）は「！」マーク・寄りカメラが使うので動かさない。打者が先に一塁を
             // 越えている（外野の落球等）ときも「！」（T＋ErrorMarkDelaySeconds）より前には出さない
@@ -943,7 +967,11 @@ public static class TimelineBuilder
             if (chaser is not null)
             {
                 var speed = Math.Max(4.0, chaser.Attributes.SprintSpeedMps);
-                var t0 = (play.ErrorKind == FieldingErrorKind.Throw ? ContactAt + (play.ThrowArriveSeconds ?? 0.0) : fieldedAt)
+                // 一塁手の捕球ミス（Receive, issue #810）は球が止まる基準が「送球が一塁に着いた瞬間」
+                // （firstThrowArriveAt。弾きロールの開始＝errorBallDeadAt の起点と同じ値）。
+                var t0 = (play.ErrorKind == FieldingErrorKind.Receive && firstThrowArriveAt is { } receiveChaseFrom
+                        ? receiveChaseFrom
+                        : play.ErrorKind == FieldingErrorKind.Throw ? ContactAt + (play.ThrowArriveSeconds ?? 0.0) : fieldedAt)
                          + ErrorChaseReactionSeconds;
                 // ⚠ 自分の直前のレッグ（一塁カバーへの走り込み等）が終わってから追いかけ始め、
                 // 出発点はそのレッグの行き先＝**実際に立っている位置**から距離を出す。

@@ -353,6 +353,18 @@
   決定論生成した学年コホートとして入学〜引退の3年間在籍し、年3節目で成長する（engine `Nation/Roster/`）。
   在校生の年間成長量は「翌夏のチーム総合が進化後Strengthに一致する」よう逆算配分（Strength主・成長は従属）。
   展望も実戦も同じ永続ロスターを引く（`NationRosters.TeamFor`）＝展望で見た選手が実戦で出る。
+  - **節目成長の実装（2026-11-08・issue #843/Phase C）**: 4月の年度替わり（`AiRosterCycle.BeginYear`）は
+    進級・新入生加入・3年引退は即座に適用するが、逆算配分で決めた年間成長量は即時反映せず
+    `AiPlayer.PendingBudget` に積むだけで止める。年3節目（`AiRosterCycle.ApplyGrowthNode`／`AiGrowthNode`）で
+    `*_node_share` の割合ずつ消費する: **夏大会後**＝新チーム発足週（`CaptainSelector.IsNewTeamStartWeek`＝
+    `SummerRetireWeek`+1、3年引退の直後）、**秋大会後**＝中学生リストが出る週（`RecruitListWeek`）、
+    **冬明け**＝冬合宿の直後（`WinterGrowthNodeWeek`＝`WinterCampWeek`+1）。夏・秋は残り節目ぶんで正規化した
+    割合を `max_residual_per_node` で頭打ちし、一気に寄せず複数節目でならす。冬明けは頭打ちで溜まった残差も
+    含め**残り全額を使い切る**＝テストの参照実装（原子操作・`AiRosterCycle.AdvanceOneYear`）と最終結果
+    （チーム総合）が一致することを保証する。怪物（Phenom）の固定成長も同じ予算機構に乗る。
+    旧セーブ（`PendingBudget`=0）を年度途中で読み込んでも、各節目は `PendingBudget<=0` の選手を
+    素通りするだけ＝例外にならない。Unity 配線は `GameClock.EnterWeek`（3節目の呼び出し）と
+    `NationService.AdvanceAiYear`/`ApplyAiGrowthNode`（Shell入口）。
   - **打撃プロフィール（2026-08-18・issue ai-roster-power-top-tier-all-sluggers）**: 旧実装は全能力を同じ中心 N(center,6) で
     独立に引き、逆算配分も全能力を一律に足したので、B/A校は先発9人がみな中心≒75〜85 の万能型（全員スラッガー）だった。
     ①パワー中心 −`ai_power_skew`(8)・ミート中心 +8（.35C+.35P の打撃指標＝学校の強さの意味は不変）②5能力（ミート/パワー/選球眼/

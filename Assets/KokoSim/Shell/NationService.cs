@@ -316,7 +316,16 @@ namespace KokoSim.Unity.Shell
         /// <summary>夏大会後の代替わり: 生成済み全校の3年生を引退させる（秋の新チーム＝下級生のみ）。</summary>
         public static void RetireAiGraduates() => Rosters.RetireGraduatesAll();
 
-        /// <summary>年度替わり（4月）: 生成済み全校で進級・新入生加入・逆算配分成長を適用する。</summary>
-        public static void AdvanceAiYear(int newYearIndex) => Rosters.AdvanceExistingYear(SchoolById, newYearIndex);
+        /// <summary>
+        /// 年度替わり（4月）: 生成済み全校で進級・新入生加入を適用する。年間成長予算は節目
+        /// （<see cref="ApplyAiGrowthNode"/>）まで積んで待たせる＝即時成長しない（issue #843・Phase C）。
+        /// </summary>
+        public static void AdvanceAiYear(int newYearIndex) => Rosters.BeginExistingYear(SchoolById, newYearIndex);
+
+        /// <summary>
+        /// 年3節目（夏大会後／秋大会後／冬明け）の1つを、生成済み全校へ適用する（<see cref="GameClock"/> が
+        /// カレンダー節目で呼ぶ・issue #843）。<see cref="AdvanceAiYear"/> が積んだ成長予算を消費する。
+        /// </summary>
+        public static void ApplyAiGrowthNode(AiGrowthNode node) => Rosters.ApplyGrowthNodeExisting(node);
     }
 }

@@ -875,6 +875,15 @@ Issue: [#80](https://github.com/trickaaaaaa/KoKoSimNext/issues/80)
 7. **帯への影響**: 相手校能力の季節分布・年またぎ相関が変わるため帯再計測は必須。
    Q15未決4の決定（#43単独で帯再計測）に同乗させ、一括バッチには載せない
 
+**追記（2026-11-08・issue #843「年3節目への分割（Phase C）」の決着）**:
+
+- 2026-07-22 の実装は決定事項2（年3節目）の**原子操作版だけ**（`AiRosterCycle.AdvanceOneYear` が4月に
+  1年分を一括適用）で、Unity側で3節目へ分割して届けるPhase Cが未着手のまま残っていた
+  （`summer_node_share`/`autumn_node_share`/`winter_node_share`/`max_residual_per_node` は定義済みだが
+  一度も読まれていなかった）。Phase Cを実装: `AiRosterCycle.BeginYear`（4月・代替わりのみ即時適用、
+  成長予算は `AiPlayer.PendingBudget` へ）＋ `AiRosterCycle.ApplyGrowthNode`（節目ごとに消費）。
+  詳細は design-05 §2.3 を参照
+
 **追記（2026-08-02・issue #366「投手は配置であって属性ではない」の決着）**:
 
 - `AiPlayer.Position`（入学時に確定し在籍中不変）は**在籍上の配置**であり、#366 が抹殺した
