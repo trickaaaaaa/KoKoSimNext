@@ -82,6 +82,10 @@ namespace KokoSim.Unity.Tournament
             public string Title;
             public string Meta;
             public string Lead;
+            /// <summary>格付け表の見出し（勝ち抜き戦「優勝争いの構図」／リーグ戦「有力校」。issue #783）。</summary>
+            public string ContendersHeading = "優勝争いの構図";
+            /// <summary>リーグ戦（地区予選のブロック総当たり・issue #772）の大会か。</summary>
+            public bool IsLeague;
             public List<ContenderRow> Contenders = new List<ContenderRow>();
             public List<NotableRow> Notables = new List<NotableRow>();
             /// <summary>出場校の名簿（甲子園のときだけ埋まる。県大会は空＝セクションごと出さない）。</summary>
@@ -102,17 +106,7 @@ namespace KokoSim.Unity.Tournament
             if (d == null || d.Field.Count == 0) return null;
 
             var kind = d.Kind;
-            // 大会ごとの差分は「見出し文言（stage）」「上位何校が次へ行くか」「出場校一覧を出すか」の3点だけ。
-            // 3軸・格付け・寸評のロジックは TournamentPreviewBuilder 1本で共通（engine 側で分岐）。
-            var (stage, berths, nextStageName) = kind switch
-            {
-                TK.Summer => (PreviewStage.SummerPrefecture, 1, "甲子園"),
-                TK.SummerKoshien => (PreviewStage.SummerKoshien, 1, ""),
-                TK.Regional => (PreviewStage.Regional, 1, "明治神宮大会"),
-                TK.Jingu => (PreviewStage.Jingu, 1, ""),
-                TK.SenbatsuKoshien => (PreviewStage.SenbatsuKoshien, 1, ""),
-                _ => (PreviewStage.Autumn, 2, "地区大会"),
-            };
+            var (stage, berths, nextStageName) = StageOf(d);
             // 県予選の実測を出せるのは夏の甲子園（KoshienQualifierStatsSim）、地区大会の実測を出せるのは
             // センバツ（SenbatsuQualifierStatsSim）。どちらも開幕前の「直前の大会でどう戦ったか」を見せる。
             var koshien = kind == TK.SummerKoshien;
@@ -128,7 +122,12 @@ namespace KokoSim.Unity.Tournament
                 statsForSchool: id => BookFor(id, statScope),
                 stage: stage);
 
-            var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
+            var v = new View
+            {
+                Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead,
+                ContendersHeading = TournamentPreviewBuilder.ContendersHeading(stage),
+                IsLeague = stage == PreviewStage.DistrictLeague,
+            };
             if (showEntrants)
                 v.Entrants = koshien ? BuildEntrants(d.Field) : BuildSenbatsuEntrants(d.Field);
             var session = KokoSim.Unity.Shell.GameSession.Current;
@@ -149,11 +148,11 @@ namespace KokoSim.Unity.Tournament
                 {
                     MarkSym = Sym(c.Mark),
                     MarkClass = MarkClass(c.Mark),
-                    MarkLabel = MarkLabel(c.Mark),
+                    MarkLabel = TournamentPreviewBuilder.MarkLabel(c.Mark, stage),
                     IsFavorite = c.Mark == ContenderMark.Favorite,
                     Name = c.Name,
                     TierLetter = c.Tier.ToString(),
-                    SeedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : "第" + c.Seed + "シード",
+                    SeedLabel = TournamentPreviewBuilder.SeedLabel(c.Mark, c.Seed, stage),
                     Blurb = history + c.Blurb,
                     Batting = c.Rating.Batting,
                     Pitching = c.Rating.Pitching,
@@ -195,11 +194,13 @@ namespace KokoSim.Unity.Tournament
             if (school == null) return null;
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
-            var koshien = d.Kind == KokoSim.Engine.Season.TournamentKind.SummerKoshien;
-            var summer = d.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
+            var (stage, leagueBerths, _) = StageOf(d);
+            // 勝ち抜き戦は従来どおり（甲子園・夏は1、それ以外は2）。リーグ戦だけブロックの進出校数
+            var berths = stage == PreviewStage.DistrictLeague ? leagueBerths
+                : d.Kind == TK.SummerKoshien || d.Kind == TK.Summer ? 1 : 2;
             var excerpt = TournamentPreviewBuilder.BuildRosterFor(
-                school, d.Field, berths: koshien || summer ? 1 : 2, yearIndex: session.Year,
-                teamProvider: TeamFor);
+                school, d.Field, berths: berths, yearIndex: session.Year,
+                teamProvider: TeamFor, stage: stage);
 
             // 通算戦績（issue #84）は寸評の頭に付け足す（展望の Contenders 行と同じ扱い）。
             var history = KoshienHistoryText(session.Records.For(school.Id));
@@ -233,6 +234,45 @@ namespace KokoSim.Unity.Tournament
                 block.Members.Add(row);
             }
             return block;
+        }
+
+        /// <summary>
+        /// 大会ごとの差分は「見出し文言（stage）」「上位何校が次へ行くか」「次の舞台」の3点だけ。
+        /// 3軸・格付け・寸評のロジックは TournamentPreviewBuilder 1本で共通（engine 側で分岐）。
+        /// リーグ戦（地区予選のブロック総当たり・issue #772）は各ブロックの上位校が県大会へ進む（issue #783）。
+        /// </summary>
+        private static (PreviewStage Stage, int Berths, string Next) StageOf(KokoSim.Unity.Shell.TournamentDisplay d)
+        {
+            if (d.Runner is BlockLeagueRunner league)
+                return (PreviewStage.DistrictLeague, league.AdvancePerBlock, "県大会");
+            return d.Kind switch
+            {
+                TK.Summer => (PreviewStage.SummerPrefecture, 1, "甲子園"),
+                TK.SummerKoshien => (PreviewStage.SummerKoshien, 1, ""),
+                TK.Regional => (PreviewStage.Regional, 1, "明治神宮大会"),
+                TK.Jingu => (PreviewStage.Jingu, 1, ""),
+                TK.SenbatsuKoshien => (PreviewStage.SenbatsuKoshien, 1, ""),
+                _ => (PreviewStage.Autumn, 2, "地区大会"),
+            };
+        }
+
+        /// <summary>
+        /// リーグ戦の大会パンフレット（issue #783）に載せる登録メンバー。**自校ブロックの学校だけ**
+        /// （地区予選は校数が多く、全校載せると紙面が長くなりすぎる）。並びは自校ブロックの順位表の順。
+        /// </summary>
+        public static List<TournamentPamphletHtml.School> BuildLeaguePamphletSchools(
+            IReadOnlyList<LeagueBlockView> blocks)
+        {
+            var list = new List<TournamentPamphletHtml.School>();
+            var own = blocks.FirstOrDefault(b => b.IsManagerBlock);
+            if (own == null) return list;
+            foreach (var st in own.Standings)
+            {
+                var block = BuildSchoolDetail(st.SchoolName, StatScope.CurrentTournament);
+                if (block == null) continue;
+                list.Add(new TournamentPamphletHtml.School { Block = block, IsManager = st.IsManager });
+            }
+            return list;
         }
 
         /// <summary>
@@ -478,12 +518,5 @@ namespace KokoSim.Unity.Tournament
             _ => "cont",
         };
 
-        private static string MarkLabel(ContenderMark m) => m switch
-        {
-            ContenderMark.Favorite => "優勝候補",
-            ContenderMark.Contender => "対抗",
-            ContenderMark.DarkHorse => "ダークホース",
-            _ => "",
-        };
     }
 }

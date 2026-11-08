@@ -439,10 +439,11 @@ namespace KokoSim.Unity.Tournament
         {
             var v = new TournamentPreviewState().Build();
             if (v == null) return;
-            // リーグ戦（地区予選・issue #772）は樹形図を持たない＝パンフレット書き出しを出さない
-            Show(_root.Q<Button>("tp-export-html"), !(GameSession.Current.Display?.Runner is BlockLeagueRunner));
+            // パンフレット書き出しはリーグ戦（地区予選・issue #772）でも出す（星取表版・issue #783）
+            Show(_root.Q<Button>("tp-export-html"), true);
 
             SetText("tp-title", v.Title);
+            SetText("tp-contenders-h", v.ContendersHeading);
             SetText("tp-meta", v.Meta);
             SetText("tp-lead", v.Lead);
 
@@ -462,10 +463,21 @@ namespace KokoSim.Unity.Tournament
             var display = GameSession.Current.Display;
             if (v == null || display == null) return;   // 開催中でなければ何もしない（展望ビュー自体も出ない）
 
-            if (display.Runner is BlockLeagueRunner) return;   // リーグ戦は樹形図を持たない（ボタンも出さない）
-            var bracket = NewspaperBracketLayout.Build(display.Runner.BuildBracketView(), TournamentPamphletHtml.Metrics);
-            var schools = TournamentPreviewState.BuildPamphletSchools(v, bracket);
-            var html = TournamentPamphletHtml.Render(v, bracket, schools);
+            string html;
+            if (display.Runner is BlockLeagueRunner league)
+            {
+                // リーグ戦は樹形図の代わりに全ブロックの星取表。メンバー表は自校ブロックの学校だけ（issue #783）
+                var blocks = league.BuildBlockViews();
+                var tables = new System.Collections.Generic.List<LeagueCrossTableView>(blocks.Count);
+                foreach (var b in blocks) tables.Add(LeagueCrossTable.Build(b));
+                html = TournamentPamphletHtml.RenderLeague(v, tables, TournamentPreviewState.BuildLeaguePamphletSchools(blocks));
+            }
+            else
+            {
+                var bracket = NewspaperBracketLayout.Build(display.Runner.BuildBracketView(), TournamentPamphletHtml.Metrics);
+                var schools = TournamentPreviewState.BuildPamphletSchools(v, bracket);
+                html = TournamentPamphletHtml.Render(v, bracket, schools);
+            }
 
             var dir = System.IO.Path.Combine(Application.persistentDataPath, "previews");
             System.IO.Directory.CreateDirectory(dir);

@@ -94,8 +94,115 @@ namespace KokoSim.Unity.Tournament
                   == "file:///C:/Users/%E5%B1%B1%E7%94%B0%20%E5%A4%AA%E9%83%8E/AppData/1-Summer.html",
                 "file URL（Windows・ドライブ／区切り）");
 
+            RunLeague(Check);
+
             log.Insert(0, fail == 0 ? "ALL PASS\n" : "FAILED " + fail + "\n");
             return log.ToString();
+        }
+
+        /// <summary>
+        /// リーグ戦版（issue #783）。合成の地区（自校＋26校・4校ブロック）で <see cref="BlockLeagueRunner"/> を
+        /// 実際に回し、1節消化（途中）と全節消化（終了）の2時点で書き出して確かめる。書き出した HTML は
+        /// out/pamphlet-league-{mid,end}.html に残す（ブラウザでの目視用）。
+        /// </summary>
+        private static void RunLeague(System.Action<bool, string> check)
+        {
+            var field = new List<KokoSim.Engine.Nation.School>();
+            field.Add(new KokoSim.Engine.Nation.School { Id = 1, Name = "自校高", PrefectureId = 0, Strength = 60 });
+            for (var i = 0; i < 26; i++)
+                field.Add(new KokoSim.Engine.Nation.School
+                {
+                    Id = 100 + i, Name = "第" + (i + 1) + "高校", PrefectureId = 0, Strength = 30 + (i * 7) % 41,
+                    Style = (KokoSim.Engine.Match.Tactics.SchoolStyle)(i % 6),
+                });
+            var blocks = BlockDraw.Split(field, 4, null, new KokoSim.Engine.Core.Xoshiro256Random(7));
+            var runner = new BlockLeagueRunner(blocks, field[0], 2, new KokoSim.Engine.Nation.NationCoefficients(),
+                new KokoSim.Engine.Core.Xoshiro256Random(42), new TournamentSchedule(), "秋季テスト地区予選");
+
+            var preview = TournamentPreviewBuilder.Build("秋季テスト地区予選", field, berths: 2, nextStageName: "県大会",
+                stage: PreviewStage.DistrictLeague);
+            var view = new TournamentPreviewState.View
+            {
+                Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead,
+                ContendersHeading = TournamentPreviewBuilder.ContendersHeading(PreviewStage.DistrictLeague),
+                IsLeague = true,
+            };
+            foreach (var c in preview.Contenders)
+                view.Contenders.Add(new TournamentPreviewState.ContenderRow
+                {
+                    MarkSym = c.Mark == ContenderMark.Favorite ? "◎" : c.Mark == ContenderMark.Contender ? "○" : "▲",
+                    MarkClass = "cont", MarkLabel = TournamentPreviewBuilder.MarkLabel(c.Mark, PreviewStage.DistrictLeague),
+                    Name = c.Name, TierLetter = c.Tier.ToString(),
+                    SeedLabel = TournamentPreviewBuilder.SeedLabel(c.Mark, c.Seed, PreviewStage.DistrictLeague),
+                    Blurb = c.Blurb, Batting = c.Rating.Batting, Pitching = c.Rating.Pitching, Defense = c.Rating.Defense,
+                });
+            foreach (var n in preview.NotablePlayers)
+                view.Notables.Add(new TournamentPreviewState.NotableRow
+                {
+                    Number = n.UniformNumber.ToString(), Name = n.Name, Sub = n.SchoolName, StatLine = n.StatLine, Blurb = n.Blurb,
+                });
+
+            string Write(string tag)
+            {
+                var views = runner.BuildBlockViews();
+                var tables = new List<LeagueCrossTableView>();
+                foreach (var b in views) tables.Add(LeagueCrossTable.Build(b));
+                var own = views[runner.ManagerBlockIndex];
+                var schools = new List<TournamentPamphletHtml.School>();
+                foreach (var st in own.Standings)
+                {
+                    var school = field.Find(f => f.Id == st.SchoolId);
+                    var ex = TournamentPreviewBuilder.BuildRosterFor(school, field, berths: 2, stage: PreviewStage.DistrictLeague);
+                    var block = new TournamentPreviewState.RosterBlock
+                    {
+                        SchoolName = ex.SchoolName, TierLetter = ex.Tier.ToString(), Tag = "総合 " + ex.Tier + " ／ " + ex.SeedLabel,
+                        Sub = ex.TeamBlurb, StatsCaption = "今大会", Batting = ex.Rating.Batting, Pitching = ex.Rating.Pitching,
+                        Defense = ex.Rating.Defense, Members = new List<TournamentPreviewState.MemberRow>(),
+                    };
+                    foreach (var m in ex.Members)
+                        block.Members.Add(new TournamentPreviewState.MemberRow
+                        {
+                            Number = m.UniformNumber.ToString(), Name = m.Name, Grade = m.Grade + "年", Hand = m.HandednessLabel,
+                            Stat1 = "—", Stat2 = "—", Stat3 = "—",
+                        });
+                    schools.Add(new TournamentPamphletHtml.School { Block = block, IsManager = st.IsManager });
+                }
+                var html = TournamentPamphletHtml.RenderLeague(view, tables, schools);
+                System.IO.Directory.CreateDirectory("out");
+                System.IO.File.WriteAllText("out/pamphlet-league-" + tag + ".html", html, new UTF8Encoding(false));
+
+                check(Count(html, "<div class=\"blk") == views.Count, tag + ": 全ブロックの星取表がある（" + views.Count + "）");
+                check(html.IndexOf("<div class=\"blk own\">") == html.IndexOf("<div class=\"blk"), tag + ": 自校ブロックが先頭");
+                check(Count(html, "<article class=\"school") == own.Standings.Count,
+                    tag + ": メンバー表は自校ブロックの校数だけ（" + own.Standings.Count + "）");
+                check(Count(html, "<ol class=\"idx-schools\">") == 1 && Count(html, "<li><a href=\"#s-") + Count(html, "<li class=\"own\"><a href=\"#s-") == own.Standings.Count,
+                    tag + ": 索引は自校ブロックの学校だけ");
+                check(!html.Contains("トーナメント") && !html.Contains("優勝") && !html.Contains("シード"),
+                    tag + ": 「トーナメント」「優勝」「シード」の語が出ない");
+                check(html.Contains("<h2>ブロック戦績</h2>") && html.Contains("<h2>有力校</h2>"), tag + ": 見出し（ブロック戦績・有力校）");
+                check(html.Contains("<tr class=\"own\">"), tag + ": 自校の行を強調");
+                check(Count(html, "<td class=\"xs\">／</td>") == field.Count, tag + ": 対角の斜線が校数ぶん");
+                check(!html.Contains("<script") && !html.Contains("@font-face") && !html.Contains("<link") && !html.Contains("<img")
+                      && !html.Contains("http"),
+                    tag + ": 外部リソース参照なし");
+                return html;
+            }
+
+            runner.PlayNextPlayerMatch();   // 1節だけ消化（途中）
+            var mid = Write("mid");
+            check(mid.Contains("○") && mid.Contains("<td class=\"xc\"></td>"), "mid: 消化済み（○●）と未消化（空欄）が混在");
+            check(mid.Contains(">進出<"), "mid: 進出圏の印（文字）が出る");
+            while (!runner.Finished) runner.PlayNextPlayerMatch();
+            var end = Write("end");
+            check(!end.Contains("<td class=\"xc\"></td>"), "end: 全節消化で空欄が無い");
+            check(Count(end, ">進出<") == runner.BuildBlockViews().Count * 2, "end: 進出は各ブロック2校");
+        }
+
+        private static int Count(string s, string sub)
+        {
+            var n = 0;
+            for (var i = s.IndexOf(sub, System.StringComparison.Ordinal); i >= 0; i = s.IndexOf(sub, i + sub.Length, System.StringComparison.Ordinal)) n++;
+            return n;
         }
     }
 }

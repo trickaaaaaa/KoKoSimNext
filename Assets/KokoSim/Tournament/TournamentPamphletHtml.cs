@@ -28,7 +28,40 @@ namespace KokoSim.Unity.Tournament
         public static readonly NewspaperBracketMetrics Metrics =
             new NewspaperBracketMetrics(NameWidth: 150, RoundWidth: 56, RowPitch: 22, HeaderHeight: 28, ChampionGap: 44);
 
+        /// <summary>勝ち抜き戦のパンフレット（展望＋トーナメント表＋出場全校の登録メンバー）。</summary>
         public static string Render(TournamentPreviewState.View view, NewspaperBracket bracket, IReadOnlyList<School> schools)
+            => RenderPage(view, schools, "bracket", "トーナメント表", sb =>
+            {
+                sb.Append("<section id=\"bracket\">\n<h2>トーナメント表</h2>\n<div class=\"bracket\">");
+                AppendBracketSvg(sb, bracket, schools);
+                sb.Append("</div>\n</section>\n");
+            });
+
+        /// <summary>
+        /// リーグ戦（地区予選のブロック総当たり）のパンフレット（issue #783）。トーナメント表の代わりに
+        /// **全ブロックの星取表＋順位**を載せる（自校ブロックが先頭、残りはブロック番号順）。
+        /// 登録メンバー表と索引は <paramref name="schools"/>（＝自校ブロックの学校だけ）。
+        /// </summary>
+        public static string RenderLeague(TournamentPreviewState.View view, IReadOnlyList<LeagueCrossTableView> tables,
+            IReadOnlyList<School> schools)
+            => RenderPage(view, schools, "blocks", "ブロック戦績", sb =>
+            {
+                sb.Append("<section id=\"blocks\">\n<h2>ブロック戦績</h2>\n");
+                var anchorOf = new Dictionary<string, int>();
+                for (var i = 0; i < schools.Count; i++)
+                    if (!anchorOf.ContainsKey(schools[i].Block.SchoolName)) anchorOf[schools[i].Block.SchoolName] = i;
+                var ordered = new List<LeagueCrossTableView>();
+                foreach (var t in tables) if (t.IsManagerBlock) ordered.Add(t);
+                var rest = new List<LeagueCrossTableView>();
+                foreach (var t in tables) if (!t.IsManagerBlock) rest.Add(t);
+                rest.Sort((a, b) => a.Block.CompareTo(b.Block));
+                ordered.AddRange(rest);
+                foreach (var t in ordered) AppendCrossTable(sb, t, anchorOf);
+                sb.Append("</section>\n");
+            });
+
+        private static string RenderPage(TournamentPreviewState.View view, IReadOnlyList<School> schools,
+            string drawId, string drawTitle, System.Action<StringBuilder> appendDraw)
         {
             var sb = new StringBuilder(64 * 1024);
             sb.Append("<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n")
@@ -36,20 +69,16 @@ namespace KokoSim.Unity.Tournament
               .Append("<title>").Append(Esc(view.Title)).Append(" 大会パンフレット</title>\n<style>")
               .Append(Css).Append("</style>\n</head>\n<body>\n<div class=\"layout\">\n");
 
-            AppendIndex(sb, schools);
+            AppendIndex(sb, schools, view.ContendersHeading, drawId, drawTitle);
 
             sb.Append("<main>\n<header class=\"mast\" id=\"top\">\n<div class=\"kicker\">大会展望</div>\n")
               .Append("<h1>").Append(Esc(view.Title)).Append("</h1>\n")
               .Append("<div class=\"meta\">").Append(Esc(view.Meta)).Append("</div>\n</header>\n");
             sb.Append("<section id=\"lead\"><p class=\"lead\">").Append(Esc(view.Lead)).Append("</p></section>\n");
 
-            AppendContenders(sb, view.Contenders);
+            AppendContenders(sb, view.Contenders, view.ContendersHeading);
             AppendNotables(sb, view.Notables);
-
-            sb.Append("<section id=\"bracket\">\n<h2>トーナメント表</h2>\n<div class=\"bracket\">");
-            AppendBracketSvg(sb, bracket, schools);
-            sb.Append("</div>\n</section>\n");
-
+            appendDraw(sb);
             AppendSchools(sb, schools);
             sb.Append("</main>\n</div>\n</body>\n</html>\n");
             return sb.ToString();
@@ -57,11 +86,16 @@ namespace KokoSim.Unity.Tournament
 
         // ===== 左の索引（セクション＋出場校。印刷では隠す） =====
 
-        private static void AppendIndex(StringBuilder sb, IReadOnlyList<School> schools)
+        private static void AppendIndex(StringBuilder sb, IReadOnlyList<School> schools, string contendersHeading,
+            string drawId, string drawTitle)
         {
+            // 格付け表の索引名は見出しから「の構図」を落とした短い形（勝ち抜き戦＝「優勝争い」・リーグ戦＝「有力校」）
+            var contendersShort = contendersHeading.EndsWith("の構図")
+                ? contendersHeading.Substring(0, contendersHeading.Length - 3) : contendersHeading;
             sb.Append("<nav class=\"index\">\n<div class=\"idx-h\">索引</div>\n<ul class=\"idx-sec\">")
-              .Append("<li><a href=\"#lead\">展望</a></li><li><a href=\"#contenders\">優勝争い</a></li>")
-              .Append("<li><a href=\"#notables\">注目選手</a></li><li><a href=\"#bracket\">トーナメント表</a></li>")
+              .Append("<li><a href=\"#lead\">展望</a></li><li><a href=\"#contenders\">").Append(Esc(contendersShort)).Append("</a></li>")
+              .Append("<li><a href=\"#notables\">注目選手</a></li><li><a href=\"#").Append(drawId).Append("\">")
+              .Append(Esc(drawTitle)).Append("</a></li>")
               .Append("<li><a href=\"#schools\">出場校</a></li></ul>\n<ol class=\"idx-schools\">\n");
             for (var i = 0; i < schools.Count; i++)
             {
@@ -76,10 +110,12 @@ namespace KokoSim.Unity.Tournament
 
         // ===== 本文 =====
 
-        private static void AppendContenders(StringBuilder sb, List<TournamentPreviewState.ContenderRow> rows)
+        private static void AppendContenders(StringBuilder sb, List<TournamentPreviewState.ContenderRow> rows, string heading)
         {
-            sb.Append("<section id=\"contenders\">\n<h2>優勝争いの構図</h2>\n<table class=\"grid\">\n<thead><tr>")
-              .Append("<th>印</th><th class=\"l\">校名</th><th>総合</th><th class=\"l\">シード</th>")
+            // シード欄の見出しはシード制の大会だけ「シード」。リーグ戦の欄は「戦力評価N位」なので「評価」
+            var seedHead = rows.Count > 0 && rows[0].SeedLabel != null && !rows[0].SeedLabel.Contains("シード") ? "評価" : "シード";
+            sb.Append("<section id=\"contenders\">\n<h2>").Append(Esc(heading)).Append("</h2>\n<table class=\"grid\">\n<thead><tr>")
+              .Append("<th>印</th><th class=\"l\">校名</th><th>総合</th><th class=\"l\">").Append(seedHead).Append("</th>")
               .Append("<th class=\"n\">打力</th><th class=\"n\">投手</th><th class=\"n\">守備</th><th class=\"l\">寸評</th></tr></thead>\n<tbody>\n");
             foreach (var c in rows)
             {
@@ -142,6 +178,49 @@ namespace KokoSim.Unity.Tournament
                 sb.Append("</tbody>\n</table>\n<a class=\"totop\" href=\"#top\">▲ 先頭へ</a>\n</article>\n");
             }
             sb.Append("</section>\n");
+        }
+
+        // ===== ブロック戦績（星取表・issue #783） =====
+
+        /// <summary>
+        /// 1ブロックの星取表。行＝学校・列＝相手校（同じ並び）・対角は斜線。消化済みは ○/● とスコア
+        /// （その行の学校から見た得点-失点）、コールドは「コ」、未消化は空欄。右端に勝・敗・得失・順位、
+        /// 進出圏は「進出」の文字（色だけにしない）。自校の行・自校ブロックだけ強調する。
+        /// </summary>
+        private static void AppendCrossTable(StringBuilder sb, LeagueCrossTableView t, Dictionary<string, int> anchorOf)
+        {
+            sb.Append("<div class=\"blk").Append(t.IsManagerBlock ? " own" : "").Append("\">\n<h3>第").Append(t.Block + 1)
+              .Append("ブロック").Append(t.IsManagerBlock ? "<span class=\"blk-own\">自校</span>" : "").Append("</h3>\n")
+              .Append("<div class=\"xt-wrap\"><table class=\"grid xt\">\n<thead><tr><th class=\"l\">学校</th>");
+            foreach (var r in t.Rows) sb.Append("<th class=\"xo\">").Append(Esc(r.SchoolName)).Append("</th>");
+            sb.Append("<th class=\"n\">勝</th><th class=\"n\">敗</th><th class=\"n\">得失</th><th class=\"n\">順位</th><th></th></tr></thead>\n<tbody>\n");
+            foreach (var r in t.Rows)
+            {
+                sb.Append("<tr").Append(r.IsManager ? " class=\"own\"" : "").Append("><td class=\"l sn\">");
+                if (anchorOf.TryGetValue(r.SchoolName, out var idx)) sb.Append("<a href=\"#s-").Append(idx).Append("\">").Append(Esc(r.SchoolName)).Append("</a>");
+                else sb.Append(Esc(r.SchoolName));
+                sb.Append("</td>");
+                foreach (var c in r.Cells)
+                {
+                    switch (c.Kind)
+                    {
+                        case CrossCellKind.Self: sb.Append("<td class=\"xs\">／</td>"); break;
+                        case CrossCellKind.Unplayed: sb.Append("<td class=\"xc\"></td>"); break;
+                        default:
+                            var win = c.Kind == CrossCellKind.Win;
+                            sb.Append("<td class=\"xc ").Append(win ? "w" : "lo").Append("\"><span class=\"mk2\">").Append(win ? "○" : "●")
+                              .Append("</span><span class=\"num\">").Append(c.RunsFor).Append('-').Append(c.RunsAgainst).Append("</span>");
+                            if (c.Mercy) sb.Append("<span class=\"mercy\">コ</span>");
+                            sb.Append("</td>");
+                            break;
+                    }
+                }
+                var margin = r.RunMargin > 0 ? "+" + r.RunMargin : r.RunMargin.ToString(CultureInfo.InvariantCulture);
+                sb.Append("<td class=\"n num\">").Append(r.Wins).Append("</td><td class=\"n num\">").Append(r.Losses)
+                  .Append("</td><td class=\"n num\">").Append(margin).Append("</td><td class=\"n num\">").Append(r.Rank)
+                  .Append("</td><td class=\"q\">").Append(t.Started && r.InQualifyingPlace ? "進出" : "").Append("</td></tr>\n");
+            }
+            sb.Append("</tbody>\n</table></div>\n</div>\n");
         }
 
         // ===== トーナメント表（画面と同じ座標を SVG に描く） =====
@@ -320,6 +399,22 @@ table.grid{border-collapse:collapse;width:100%;background:var(--card)}
 .sh .axes b{font-variant-numeric:tabular-nums;color:var(--ink);font-size:14px;margin:0 10px 0 4px}
 .school .blurb{margin:4px 0 6px}
 .totop{display:inline-block;margin-top:4px;font-size:12px;color:var(--tx2)}
+.blk{margin:0 0 18px;padding:10px 12px;background:var(--card)}
+.blk h3{font-family:serif;font-weight:700;font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.blk.own h3{color:var(--sky)}
+.blk-own{font-family:sans-serif;font-weight:400;font-size:12px;color:var(--card);background:var(--sky);padding:0 6px}
+.xt-wrap{overflow-x:auto}
+.xt{width:auto;min-width:100%}
+.xt th.xo{font-family:serif;font-weight:700;color:var(--ink);font-size:13px}
+.xt td.xc{min-width:72px;white-space:nowrap}
+.xt td.xs{background:var(--inset);color:var(--tx3);min-width:72px}
+.xt .mk2{font-size:15px;margin-right:3px}
+.xt td.lo .mk2,.xt td.lo .num{color:var(--tx2)}
+.xt .mercy{font-size:10px;color:var(--tx2);margin-left:2px}
+.xt tr.own td{background:var(--inset)}
+.xt tr.own .sn,.xt tr.own .sn a{color:var(--sky)}
+.xt .sn a{text-decoration:none}
+.xt td.q{font-size:12px;font-weight:700;white-space:nowrap;text-align:left}
 @media (max-width:760px){.layout{display:block}nav.index{position:static;width:auto;height:auto;border-right:0;border-bottom:2px solid var(--ink)}main{padding:12px 16px}}
 @media print{nav.index{display:none}.totop{display:none}body{background:#fff}.school{break-inside:avoid}}
 ";

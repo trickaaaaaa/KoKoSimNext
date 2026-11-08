@@ -25,6 +25,11 @@ public enum PreviewStage
     Jingu,
     /// <summary>春のセンバツ本戦（32校・次のステージが無い）。</summary>
     SenbatsuKoshien,
+    /// <summary>
+    /// 秋季地区予選のブロックリーグ戦（神奈川・issue #772/#783）。総当たりで負けても終わらず、優勝も無い
+    /// ＝「優勝」「シード」「短期決戦」の語を使わない。各ブロックの上位 berths 校が県大会へ進む。
+    /// </summary>
+    DistrictLeague,
 }
 
 /// <summary>チームの3軸レーティング（表示用0〜99。打力/投手/守備）。</summary>
@@ -122,7 +127,7 @@ public static class TournamentPreviewBuilder
             var rating = ratings[s.Id];
             contenders.Add(new PreviewContender(
                 Seed: i + 1, Mark: mark, Name: s.Name, Tier: s.Tier, Rating: rating,
-                Blurb: Blurb(mark, rating, s.Style, s.Id, seed: i + 1, fieldSize: ranked.Count)));
+                Blurb: Blurb(mark, rating, s.Style, s.Id, seed: i + 1, fieldSize: ranked.Count, stage)));
         }
         // ◎○○▲ の順（マーク→シード）。
         contenders = contenders
@@ -130,7 +135,9 @@ public static class TournamentPreviewBuilder
 
         var meta = IsFinalStage(stage)
             ? $"出場 {entrants.Count}{(stage == PreviewStage.SummerKoshien ? "代表" : "校")} ─ 自動生成プレビュー"
-            : $"出場 {entrants.Count}校 ／ 上位{berths}校が{nextStageName}へ ─ 自動生成プレビュー";
+            : stage == PreviewStage.DistrictLeague
+                ? $"出場 {entrants.Count}校 ／ 各ブロック上位{berths}校が{nextStageName}へ ─ 自動生成プレビュー"
+                : $"出場 {entrants.Count}校 ／ 上位{berths}校が{nextStageName}へ ─ 自動生成プレビュー";
         var lead = BuildLead(contenders, entrants.Count, berths, nextStageName, stage);
 
         // 注目選手・登録メンバーは格付け校ぶんだけ実チーム（＝実戦と同一ソース）から組む。
@@ -149,7 +156,7 @@ public static class TournamentPreviewBuilder
                 : StrengthTeamFactory.ForSchool(school, yearIndex);
             var book = statsForSchool?.Invoke(school.Id);
             notables.Add(PickNotable(c, team, book, stage));
-            rosters.Add(BuildRoster(c, team));
+            rosters.Add(BuildRoster(c, team, stage));
         }
 
         return new TournamentPreview(title, meta, lead, contenders, notables, rosters);
@@ -163,7 +170,8 @@ public static class TournamentPreviewBuilder
     /// </summary>
     public static RosterExcerpt BuildRosterFor(
         School school, IReadOnlyList<School> entrants, int berths, int yearIndex = 1,
-        System.Func<School, int, Match.Game.Team>? teamProvider = null)
+        System.Func<School, int, Match.Game.Team>? teamProvider = null,
+        PreviewStage stage = PreviewStage.Autumn)
     {
         var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
         var seed = ranked.FindIndex(s => s.Id == school.Id) + 1;
@@ -179,8 +187,8 @@ public static class TournamentPreviewBuilder
 
         var contender = new PreviewContender(
             Seed: seed, Mark: mark, Name: school.Name, Tier: school.Tier, Rating: rating,
-            Blurb: Blurb(mark, rating, school.Style, school.Id, seed, ranked.Count));
-        return BuildRoster(contender, team);
+            Blurb: Blurb(mark, rating, school.Style, school.Id, seed, ranked.Count, stage));
+        return BuildRoster(contender, team, stage);
     }
 
     /// <summary>格付け（◎○▲/無印）を出場校全体ぶん一括で決める（Build/BuildRosterFor で共有）。</summary>
@@ -231,7 +239,7 @@ public static class TournamentPreviewBuilder
             Blurb: pitcherLed ? PitcherBlurb(p) : BatterBlurb(p));
     }
 
-    private static RosterExcerpt BuildRoster(PreviewContender c, Match.Game.Team team)
+    private static RosterExcerpt BuildRoster(PreviewContender c, Match.Game.Team team, PreviewStage stage)
     {
         var members = team.BattingOrder.Concat(team.Reserves)
             .Concat(team.StartingPitcher is { } sp && !team.Reserves.Contains(sp) && !team.BattingOrder.Contains(sp)
@@ -242,9 +250,31 @@ public static class TournamentPreviewBuilder
                 p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats),
                 SourceId: p.SourceId ?? 0))
             .ToList();
-        var seedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : $"第{c.Seed}シード";
-        return new RosterExcerpt(c.Name, c.Tier, seedLabel, c.Blurb, members, c.Rating);
+        return new RosterExcerpt(c.Name, c.Tier, SeedLabel(c.Mark, c.Seed, stage), c.Blurb, members, c.Rating);
     }
+
+    /// <summary>
+    /// シード欄の文言。勝ち抜き戦は「第Nシード」（伏兵は「ノーシード」）。リーグ戦（地区予選）には
+    /// シードが無いので、同じ序列を「戦力評価N位」と書く（issue #783）。文言は engine が決める。
+    /// </summary>
+    public static string SeedLabel(ContenderMark mark, int seed, PreviewStage stage)
+        => stage == PreviewStage.DistrictLeague ? $"戦力評価{seed}位"
+            : mark == ContenderMark.DarkHorse ? "ノーシード" : $"第{seed}シード";
+
+    /// <summary>
+    /// 格付けの呼び名（◎○▲）。リーグ戦には優勝が無いので ◎ は「本命」（issue #783）。
+    /// </summary>
+    public static string MarkLabel(ContenderMark mark, PreviewStage stage) => mark switch
+    {
+        ContenderMark.Favorite => stage == PreviewStage.DistrictLeague ? "本命" : "優勝候補",
+        ContenderMark.Contender => "対抗",
+        ContenderMark.DarkHorse => "ダークホース",
+        _ => "",
+    };
+
+    /// <summary>展望の格付け表の見出し。リーグ戦は「有力校」（優勝争いが無い）。</summary>
+    public static string ContendersHeading(PreviewStage stage)
+        => stage == PreviewStage.DistrictLeague ? "有力校" : "優勝争いの構図";
 
     // --- 成績行（今大会の実測値。裏試合フルシム #43 が全4000校ぶん積んでいる, issue #634） ---
     //
@@ -389,12 +419,16 @@ public static class TournamentPreviewBuilder
     /// 導いた決定論乱数で1本を選ぶ。同じ格付け・校風の校が並んでも文言が揃わないようにする狙い
     /// （不変条件#2: 乱数は必ずシード付き IRandomSource 経由。System.Random 直 new は禁止）。
     /// </summary>
-    private static string Blurb(ContenderMark mark, TeamRating r, SchoolStyle style, int schoolId, int seed, int fieldSize)
+    private static string Blurb(ContenderMark mark, TeamRating r, SchoolStyle style, int schoolId, int seed, int fieldSize,
+        PreviewStage stage)
     {
         var strong = AxisName(r, strongest: true);
         var weak = AxisName(r, strongest: false);
         var flavor = StyleFlavor(style);
-        var templates = BlurbTemplates(mark, strong, weak, flavor, seed, fieldSize);
+        // 言い回しの本数は舞台によらず同じ（4本）＝選ぶ添字が変わらない。リーグ戦は総当たりの語で書く
+        var templates = stage == PreviewStage.DistrictLeague
+            ? LeagueBlurbTemplates(mark, strong, weak, flavor, seed, fieldSize)
+            : BlurbTemplates(mark, strong, weak, flavor, seed, fieldSize);
         var rng = new Xoshiro256Random(0xB1EB_0000UL ^ (ulong)schoolId);
         return templates[rng.NextInt(0, templates.Count)];
     }
@@ -432,6 +466,43 @@ public static class TournamentPreviewBuilder
         },
     };
 
+    /// <summary>
+    /// リーグ戦（地区予選）の寸評（issue #783）。総当たりは負けても終わらないので「優勝」「短期決戦」
+    /// 「シード」の語を使わず、取りこぼし・直接対決・星勘定で書く。
+    /// </summary>
+    private static IReadOnlyList<string> LeagueBlurbTemplates(
+        ContenderMark mark, string strong, string weak, string flavor, int seed, int fieldSize) => mark switch
+    {
+        ContenderMark.Favorite => new[]
+        {
+            $"取りこぼしの少なさが光る本命。{strong}を軸に、総当たりを勝ち切る力がある。",
+            $"地区の本命。{strong}の破壊力は頭ひとつ抜けており、{weak}にも大きな穴はない。",
+            $"戦力・実績とも申し分ない本命。{flavor}で星を落とさない戦い方ができる。",
+            $"{strong}を武器に隙のない仕上がり。どの相手にも同じ力で戦えるチーム。",
+        },
+        ContenderMark.Contender => new[]
+        {
+            $"{strong}が武器の実力校。{weak}に不安を残すが、噛み合えばブロック首位も見えてくる。",
+            $"本命を追う一番手。{flavor}で星の潰し合いに食らいつく。",
+            $"{strong}の水準は本命校にも引けを取らない。{weak}の安定感が鍵を握る。",
+            "対抗格の一番手。直接対決を制すれば順位は一気に入れ替わる。",
+        },
+        ContenderMark.DarkHorse => new[]
+        {
+            $"戦力値では一歩譲るが、{flavor}で上位を脅かす伏兵。直接対決では侮れない。",
+            $"無印評価ながら{strong}に光るものがあり、上位校から星を奪う可能性を秘める。",
+            $"戦力評価は高くないが{flavor}が持ち味。上位の星勘定を狂わせる力はある。",
+            $"地力こそ上位に譲るものの、{flavor}で流れを引き寄せれば侮れない。",
+        },
+        _ => new[]
+        {
+            $"全{fieldSize}校中{seed}番目の戦力評価。{strong}に持ち味があり、上位相手にも簡単には転ばない。",
+            $"上位校ほどの決め手は無いが、{flavor}で試合を作れるチーム。ブロックの上位を脅かす。",
+            $"{strong}を軸にした堅実な戦い方が持ち味。大きく崩れないタイプの一校。",
+            $"地力では上位に一歩譲るが、{weak}さえ克服できれば台風の目になり得る。",
+        },
+    };
+
     private static string BuildLead(
         IReadOnlyList<PreviewContender> contenders, int entrantCount, int berths, string nextStageName,
         PreviewStage stage)
@@ -458,6 +529,7 @@ public static class TournamentPreviewBuilder
         PreviewStage.Regional => "秋季県大会を勝ち抜いた顔ぶれが、地区の頂点をかけて集う。",
         PreviewStage.Jingu => "各地区の代表が全国屈指の力を競う、大学野球部との定期戦とは別の高校の部。",
         PreviewStage.SenbatsuKoshien => $"秋の激闘を経て選ばれた{entrantCount}校が、春の聖地に集った。",
+        PreviewStage.DistrictLeague => "新チーム最初の公式戦。地区の各ブロックで総当たりが始まる。",
         _ => "新チーム始動の秋、まだ誰も完成していない。",
     };
 
@@ -465,5 +537,7 @@ public static class TournamentPreviewBuilder
     private static string Closing(PreviewStage stage, int entrantCount, int berths, string nextStageName)
         => IsFinalStage(stage)
             ? "頂点に立つのは一校だけ。"
-            : $"上位{berths}校に与えられる{nextStageName}への切符を、{entrantCount}校が争う。";
+            : stage == PreviewStage.DistrictLeague
+                ? $"各ブロックの上位{berths}校に与えられる{nextStageName}への切符を、{entrantCount}校が争う。"
+                : $"上位{berths}校に与えられる{nextStageName}への切符を、{entrantCount}校が争う。";
 }
