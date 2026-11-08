@@ -1379,21 +1379,15 @@ public sealed class TimelineTests
         }
     }
 
-    // --- 本盗（issue #485）: 投球が送球を兼ねる＝捕手からの送球区間そのものが無い。 ---
+    // --- 単独の本盗は採用しない（issue #788）: 絵を組もうとしたら明示的に失敗する（重盗の三塁走者は二盗の絵の中）。 ---
     [Fact]
-    public void StealTimeline_HomeSteal_HasNoThrowSegment_RunnerThirdToHome()
+    public void StealTimeline_SoloHomeSteal_IsRejected()
     {
         var c = new BaserunningCoefficients();
-        var field = new FieldGeometry();
         var runner = new Player { Speed = 85, Steal = 80 };
         var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60 };
-
-        var tl = TimelineBuilder.BuildSteal(runner, catcher, StealResult.Safe, c, field, StealTarget.Home);
-        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
-        Assert.Contains(tl.Ball, b => b.Kind == BallSegmentKind.Pitch);
-        var leg = Assert.Single(tl.Runners);
-        Assert.True(Near(leg.From, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)), "本盗の走者が三塁発でない");
-        Assert.True(System.Math.Abs(leg.To.X) < 0.5 && System.Math.Abs(leg.To.Z) < 0.5, "本盗の走者が本塁着でない");
+        Assert.Throws<System.ArgumentException>(() =>
+            TimelineBuilder.BuildSteal(runner, catcher, StealResult.Safe, c, new FieldGeometry(), StealTarget.Home));
     }
 
     // --- 三盗（issue #485）: 送球先＝三塁・受け手＝三塁手・送球距離は三塁までで決まる。 ---

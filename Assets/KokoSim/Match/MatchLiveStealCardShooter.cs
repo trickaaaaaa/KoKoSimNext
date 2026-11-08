@@ -27,8 +27,8 @@ namespace KokoSim.Unity.Match
         public static void Arm() => Arm("");
 
         /// <summary>
-        /// <paramref name="only"/> に「三盗」「本盗」を渡すと、その再生だけを狙う（残りは撮らない）。
-        /// 狙いの塁状況は待たないと出ないので、1試合で両方拾えないことがある＝分けて撮れるようにする。
+        /// <paramref name="only"/> に「三盗」を渡すと、その再生だけを狙う（残りは撮らない）。
+        /// 単独の本盗は採用しない（issue #788）ので、三塁のみの場面はカードが消灯していることを撮るだけ。
         /// </summary>
         public static void Arm(string only)
         {
@@ -87,17 +87,16 @@ namespace KokoSim.Unity.Match
                 foreach (var kv in want) Debug.LogWarning("[StealCard] 出なかった塁状況: " + kv.Key);
             }
 
-            // ② 指示した三盗・本盗の**絵**が出るか。カードの可否と違い、再生は実時間の進行でしか
+            // ② 指示した三盗の**絵**が出るか。カードの可否と違い、再生は実時間の進行でしか
             //    動かない（AdvanceForCapture は打席を一気に解決してしまう）ので、狙いの窓まで手動で
             //    進めてからカードを押し、そこだけ通常進行へ返して再生の開始を待つ。
             if (only.Length == 0 || only == "三盗") yield return ShootStealPlay(ctrl, "三盗", "steal-play-third");
-            if (only.Length == 0 || only == "本盗") yield return ShootStealPlay(ctrl, "本盗", "steal-play-home");
 
             Debug.Log("[StealCard] DONE");
         }
 
         /// <summary>
-        /// 指定の札（三盗/本盗）が出る窓まで進めて押し、盗塁の再生が始まったところを撮る。
+        /// 指定の札（三盗）が出る窓まで進めて押し、盗塁の再生が始まったところを撮る。
         /// 押した球がファウル・打球だと盗塁は無かったことになる（issue #626）ので、始まるまで何度でも押す。
         /// </summary>
         private IEnumerator ShootStealPlay(MatchLiveController ctrl, string wantLabel, string file)
@@ -108,7 +107,7 @@ namespace KokoSim.Unity.Match
                 MatchLiveController.CaptureMode = true;
                 if (!ctrl.AdvanceForCapture())
                 {
-                    // 三塁のみ・自校攻撃のような窓は1試合で出ないことがある＝シードを変えて撮り直す。
+                    // 二塁のみ・自校攻撃のような窓は1試合で出ないことがある＝シードを変えて撮り直す。
                     if (++games >= MaxGames) break;
                     MatchLiveController.GameSeedOverrideForCapture = 20260814UL + (ulong)games;
                     var go = ctrl.gameObject;

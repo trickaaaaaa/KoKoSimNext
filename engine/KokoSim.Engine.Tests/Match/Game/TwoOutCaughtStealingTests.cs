@@ -22,7 +22,6 @@ public sealed class TwoOutCaughtStealingTests
     {
         new object[] { new ScenarioStart { Inning = 3, IsTop = true, Outs = 2, OnFirst = true }, StealTarget.Second },
         new object[] { new ScenarioStart { Inning = 3, IsTop = true, Outs = 2, OnSecond = true }, StealTarget.Third },
-        new object[] { new ScenarioStart { Inning = 3, IsTop = true, Outs = 2, OnThird = true }, StealTarget.Home },
     };
 
     [Theory]

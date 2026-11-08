@@ -139,7 +139,7 @@ public sealed class TacticsTests
         Assert.Equal(0, GambleCount(brain, empty, 200));
     }
 
-    // ===== StandardTacticsBrain: 三盗・本盗（issue #67, design-14 未決A） =====
+    // ===== StandardTacticsBrain: 三盗（issue #67, design-14 未決A）・単独本盗は不採用（issue #788） =====
 
     [Fact]
     public void Brain_StealThird_OnlyWhenSecondOnlyOccupied()
@@ -172,33 +172,16 @@ public sealed class TacticsTests
         Assert.Equal(0, StealTargetCount(brain, blowout, StealTarget.Third, 400));
     }
 
+    /// <summary>単独の本盗は採用しない（issue #788）: 三塁のみ在塁では、俊足・弱肩捕手・僅差でも盗塁を企図しない。</summary>
     [Fact]
-    public void Brain_StealHome_OnlyWhenThirdOnlyOccupied_AndAlwaysGambles()
+    public void Brain_NeverStealsHome_WhenOnlyThirdIsOccupied()
     {
         var brain = new StandardTacticsBrain(C, Br);
         var runner = P(speed: 95, steal: 95);
         var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
         var third = Situation(outs: 0, third: runner, catcher: weakCatcher);
-        var count = StealTargetCount(brain, third, StealTarget.Home, 600);
-        Assert.True(count > 0, "本盗候補で一度も企図されない");
-        Assert.Equal(count, GambleTargetCount(brain, third, StealTarget.Home, 600));
-
-        // 一塁・二塁が埋まっていれば本盗の対象塁状況ではない。
-        var withFirst = Situation(outs: 0, first: P(), third: runner, catcher: weakCatcher);
-        Assert.Equal(0, StealTargetCount(brain, withFirst, StealTarget.Home, 400));
-    }
-
-    [Fact]
-    public void Brain_StealHome_RespectsOutsAndScoreDiffLimits()
-    {
-        var brain = new StandardTacticsBrain(C);
-        var runner = P(speed: 95, steal: 95);
-        var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
-        var tooManyOuts = Situation(outs: C.StealHomeMaxOuts + 1, third: runner, catcher: weakCatcher);
-        Assert.Equal(0, StealTargetCount(brain, tooManyOuts, StealTarget.Home, 400));
-
-        var blowout = Situation(outs: 0, diff: C.StealHomeMaxDiffAbs + 5, third: runner, catcher: weakCatcher);
-        Assert.Equal(0, StealTargetCount(brain, blowout, StealTarget.Home, 400));
+        foreach (var target in new[] { StealTarget.Second, StealTarget.Third, StealTarget.Home })
+            Assert.Equal(0, StealTargetCount(brain, third, target, 600));
     }
 
     private static int StealTargetCount(StandardTacticsBrain brain, TacticsSituation s, StealTarget target, int n)
@@ -208,17 +191,6 @@ public sealed class TacticsTests
         {
             var d = brain.CallPitchAction(new PitchTacticsSituation(s, 0, 0, 0, null), new Xoshiro256Random(i));
             if (d?.StealAttempt is not null && d.Value.StealTarget == target) c++;
-        }
-        return c;
-    }
-
-    private static int GambleTargetCount(StandardTacticsBrain brain, TacticsSituation s, StealTarget target, int n)
-    {
-        var c = 0;
-        for (ulong i = 0; i < (ulong)n; i++)
-        {
-            var d = brain.CallPitchAction(new PitchTacticsSituation(s, 0, 0, 0, null), new Xoshiro256Random(i));
-            if (d?.StealAttempt == StartType.Gamble && d.Value.StealTarget == target) c++;
         }
         return c;
     }

@@ -11,9 +11,10 @@ using Xunit;
 namespace KokoSim.Engine.Tests.Match.Game;
 
 /// <summary>
-/// issue #622: 監督が三盗・本盗を指示できる（engine は #67 で解決できるのに、UI が二盗しか
+/// issue #622: 監督が三盗を指示できる（engine は #67 で解決できるのに、UI が二盗しか
 /// 渡していなかった）。狙う塁の判定は <see cref="StealTargets"/> が単一ソースで、
 /// engine の解決分岐も采配カードの可否・ラベルもここを引く。
+/// issue #788: 単独の本盗は採用しない＝三塁のみ在塁は盗塁できない。一・三塁の重盗で三塁走者が本塁を突くプレーは残す。
 /// </summary>
 public sealed class StealTargetTests
 {
@@ -25,8 +26,6 @@ public sealed class StealTargetTests
     [InlineData(true, false, true, StealTarget.Second)]
     // 二塁のみ → 三盗
     [InlineData(false, true, false, StealTarget.Third)]
-    // 三塁のみ → 本盗
-    [InlineData(false, false, true, StealTarget.Home)]
     public void FromBases_PicksTheOnlyFeasibleBase(bool first, bool second, bool third, StealTarget expected)
         => Assert.Equal(expected, StealTargets.FromBases(first, second, third));
 
@@ -35,6 +34,7 @@ public sealed class StealTargetTests
     [InlineData(true, true, false)]     // 一・二塁
     [InlineData(false, true, true)]     // 二・三塁
     [InlineData(true, true, true)]      // 満塁
+    [InlineData(false, false, true)]    // 三塁のみ＝単独の本盗は採用しない（issue #788）
     public void FromBases_ReturnsNull_WhenNoSingleStealIsPossible(bool first, bool second, bool third)
         => Assert.Null(StealTargets.FromBases(first, second, third));
 
@@ -53,17 +53,39 @@ public sealed class StealTargetTests
         Assert.True(attempts > 0, "盗塁企図として記録されていない");
     }
 
-    /// <summary>三塁のみの場面で本盗を予約すると、その球で走者が三塁を離れる（生還かアウト）。</summary>
+    /// <summary>
+    /// 三塁のみの場面で本盗を予約しても engine は解決しない（issue #788）。采配カードは消灯しているが、
+    /// 予約が紛れ込んでも走らないことを engine 側からも固定する。
+    /// </summary>
     [Fact]
-    public void HomeSteal_ResolvesOnTheNextPitch()
+    public void SoloHomeSteal_IsNeverResolved()
     {
-        var (moved, attempts) = StealFromScenario(
+        var (_, attempts) = StealFromScenario(
             new ScenarioStart { Inning = 1, IsTop = true, Outs = 0, OnThird = true },
             StealTarget.Home,
-            (before, after) => !after.BaseThird);
+            (before, after) => false);
 
-        Assert.True(moved > 0, "本盗を予約しても走者が一度も動かない");
-        Assert.True(attempts > 0, "盗塁企図として記録されていない");
+        Assert.Equal(0, attempts);
+    }
+
+    /// <summary>
+    /// 一・三塁の二盗で三塁走者が本塁を突く重盗は残っている（issue #788 の対象外）。
+    /// </summary>
+    [Fact]
+    public void DoubleSteal_ThirdRunnerStillBreaksForHome()
+    {
+        var breaks = 0;
+        var start = new ScenarioStart { Inning = 1, IsTop = true, Outs = 0, OnFirst = true, OnThird = true };
+        for (ulong seed = 1; seed <= 40; seed++)
+        {
+            var prog = new MatchProgression(Team("A"), Team("H"),
+                new GameContext { CaptureTimelines = true, CapturePitches = true }, seed, start);
+            if (prog.AdvancePitch() != AdvancePitchResult.Pitch) continue;
+            prog.SetStealAttempt(offenseIsAway: true, StartType.Normal, StealTarget.Second);
+            prog.AdvancePitch();
+            breaks += prog.BuildResult().DoubleStealThirdBreakCount;
+        }
+        Assert.True(breaks > 0, "一・三塁の二盗で三塁走者が一度も本塁を突かない");
     }
 
     /// <summary>

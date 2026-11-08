@@ -777,9 +777,7 @@ public static class CoefficientsLoader
         public double StealSuccessBias { get; set; } = D.StealSuccessBias;
         public double CatchThrowToThirdDistanceM { get; set; } = D.CatchThrowToThirdDistanceM;
         public double StealThirdSuccessBias { get; set; } = D.StealThirdSuccessBias;
-        public double StealHomeSuccessBias { get; set; } = D.StealHomeSuccessBias;
         public double StealHomeDistanceM { get; set; } = D.StealHomeDistanceM;
-        public double StealHomeDeliverySeconds { get; set; } = D.StealHomeDeliverySeconds;
         public double DoubleStealThirdBreakProb { get; set; } = D.DoubleStealThirdBreakProb;
         public double PickoffBaseProb { get; set; } = D.PickoffBaseProb;
         public double PickoffRunnerLeadSlope { get; set; } = D.PickoffRunnerLeadSlope;
@@ -946,9 +944,7 @@ public static class CoefficientsLoader
             StealSuccessBias = StealSuccessBias,
             CatchThrowToThirdDistanceM = CatchThrowToThirdDistanceM,
             StealThirdSuccessBias = StealThirdSuccessBias,
-            StealHomeSuccessBias = StealHomeSuccessBias,
             StealHomeDistanceM = StealHomeDistanceM,
-            StealHomeDeliverySeconds = StealHomeDeliverySeconds,
             DoubleStealThirdBreakProb = DoubleStealThirdBreakProb,
             PickoffBaseProb = PickoffBaseProb,
             PickoffRunnerLeadSlope = PickoffRunnerLeadSlope,
@@ -1776,10 +1772,6 @@ public static class CoefficientsLoader
         public double StealThirdProb { get; set; } = D.StealThirdProb;
         public int StealThirdMaxOuts { get; set; } = D.StealThirdMaxOuts;
         public int StealThirdMaxDiffAbs { get; set; } = D.StealThirdMaxDiffAbs;
-        public double StealHomeMinSuccess { get; set; } = D.StealHomeMinSuccess;
-        public double StealHomeProb { get; set; } = D.StealHomeProb;
-        public int StealHomeMaxOuts { get; set; } = D.StealHomeMaxOuts;
-        public int StealHomeMaxDiffAbs { get; set; } = D.StealHomeMaxDiffAbs;
         public double HitAndRunProb { get; set; } = D.HitAndRunProb;
         public int HitAndRunMinContact { get; set; } = D.HitAndRunMinContact;
         public int HitAndRunMaxPower { get; set; } = D.HitAndRunMaxPower;
@@ -1916,10 +1908,6 @@ public static class CoefficientsLoader
             StealThirdProb = StealThirdProb,
             StealThirdMaxOuts = StealThirdMaxOuts,
             StealThirdMaxDiffAbs = StealThirdMaxDiffAbs,
-            StealHomeMinSuccess = StealHomeMinSuccess,
-            StealHomeProb = StealHomeProb,
-            StealHomeMaxOuts = StealHomeMaxOuts,
-            StealHomeMaxDiffAbs = StealHomeMaxDiffAbs,
             HitAndRunProb = HitAndRunProb,
             HitAndRunMinContact = HitAndRunMinContact,
             HitAndRunMaxPower = HitAndRunMaxPower,
@@ -2037,7 +2025,6 @@ public static class CoefficientsLoader
         public int SafetyBuntMinTier { get; set; } = D.SafetyBuntMinTier;
         public int StealMinTier { get; set; } = D.StealMinTier;
         public int StealThirdMinTier { get; set; } = D.StealThirdMinTier;
-        public int StealHomeMinTier { get; set; } = D.StealHomeMinTier;
         public int GambleStartMinTier { get; set; } = D.GambleStartMinTier;
         public int SqueezeMinTier { get; set; } = D.SqueezeMinTier;
         public int HitAndRunMinTier { get; set; } = D.HitAndRunMinTier;
@@ -2138,7 +2125,6 @@ public static class CoefficientsLoader
             SafetyBuntMinTier = SafetyBuntMinTier,
             StealMinTier = StealMinTier,
             StealThirdMinTier = StealThirdMinTier,
-            StealHomeMinTier = StealHomeMinTier,
             GambleStartMinTier = GambleStartMinTier,
             SqueezeMinTier = SqueezeMinTier,
             HitAndRunMinTier = HitAndRunMinTier,

@@ -98,7 +98,7 @@ public sealed class EnemyAiTests
         Assert.True(CountStealAttempts(high, stealSit, 500) > 0, "上級ティアで盗塁企図が一度も出ない");
     }
 
-    // ===== 三盗・本盗のティアゲート（issue #67）: 二盗より高いティア下限を要求する独立軸 =====
+    // ===== 三盗のティアゲート（issue #67）: 二盗より高いティア下限を要求する独立軸（単独本盗は不採用・#788） =====
 
     [Fact]
     public void Tier_StealThird_GatedBelowStealThirdMinTier_AllowedAtOrAbove()
@@ -115,18 +115,15 @@ public sealed class EnemyAiTests
             "StealThirdMinTier以上なら三盗が出るはず");
     }
 
+    /// <summary>単独の本盗は採用しない（issue #788）: 最上位ティアの機動力校でも三塁のみの場面で本盗しない。</summary>
     [Fact]
-    public void Tier_StealHome_GatedBelowStealHomeMinTier_AllowedAtOrAbove()
+    public void TopTierSmallBall_NeverStealsHome_WhenOnlyThirdIsOccupied()
     {
         var runner = P(speed: 95, steal: 95);
-        var s = Sit(inning: 8, outs: 0, third: runner, batter: P(power: 40));
-        var belowTier = Ai.StealHomeMinTier - 1;
-        var low = new AiTacticsBrain(new AiProfile(95, belowTier, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
-        Assert.Equal(0, CountStealTargetAttempts(low, s, StealTarget.Home, 800));
-
-        var high = new AiTacticsBrain(new AiProfile(95, Ai.StealHomeMinTier, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
-        Assert.True(CountStealTargetAttempts(high, s, StealTarget.Home, 800) > 0,
-            "StealHomeMinTier以上なら本盗が出るはず");
+        var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
+        var s = Sit(inning: 8, outs: 0, third: runner, batter: P(power: 40), catcher: weakCatcher);
+        var top = new AiTacticsBrain(new AiProfile(95, 7, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
+        Assert.Equal(0, CountStealTargetAttempts(top, s, StealTarget.Home, 800));
     }
 
     private static int CountStealTargetAttempts(AiTacticsBrain brain, TacticsSituation s, StealTarget target, int n)

@@ -1027,6 +1027,8 @@ public static class TimelineBuilder
         StealTarget target = StealTarget.Second, bool pitchout = false, Tactics.StartType startType = Tactics.StartType.Normal,
         Player? doubleStealScorer = null, double? runnerSeconds = null, double? defenseSeconds = null)
     {
+        if (target == StealTarget.Home)
+            throw new ArgumentException("単独の本盗は採用しない（issue #788）。重盗の三塁走者は doubleStealScorer で描く。", nameof(target));
         // 秒は判定が使ったものをそのまま写す（表示専用・新規計算ゼロ）。持たない呼び出しだけ組み直す。
         var play = runnerSeconds is { } rs && defenseSeconds is { } ds
             ? new StealVerdict(result, rs, ds)
@@ -1039,7 +1041,6 @@ public static class TimelineBuilder
         var (fromName, toName, receiver, baseLabel) = target switch
         {
             StealTarget.Third => ("second", "third", FieldPosition.ThirdBase, "三塁"),
-            StealTarget.Home => ("third", "home", FieldPosition.Catcher, "本塁"),
             _ => ("first", "second", FieldPosition.Shortstop, "二塁"),
         };
         var fromPt = BasePoint(field, fromName);
@@ -1057,12 +1058,6 @@ public static class TimelineBuilder
         var moves = new List<FielderMove>();
         var captions = new List<TimelineCaption> { new(0.05, "スタートを切った！") };
 
-        if (target == StealTarget.Home)
-        {
-            // 本盗は送球区間なし（投球そのものが送球を兼ねる。StealResolver.DefenseTimeSeconds も HomeTag のみ）。
-            captions.Add(new TimelineCaption(pitchArrive, "本盗——本塁へ突っ込む！"));
-        }
-        else
         {
             // 到達は判定が使った秒そのもの（守備の巧拙・読み切り・ゆらぎは全部この中に入っている）。
             // 投げ始めは「到達 − 距離÷肩」で逆算する（issue #485 の性質＝差が球の速さに化けない）。

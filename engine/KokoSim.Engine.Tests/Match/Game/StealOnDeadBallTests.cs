@@ -203,43 +203,4 @@ public sealed class StealOnDeadBallTests
         }
         Assert.True(hits >= 5, $"初球がファウルになるシードが足りない（{hits} 件）");
     }
-
-    /// <summary>
-    /// 本盗がファウルの球と重なっても得点は入らない（三塁走者は三塁のまま・アウトも増えない）。
-    ///
-    /// <para>本盗は「三塁のみ在塁」でしか走らず自然発生を待てないので、場面ジャンプで三塁走者を置き、
-    /// 初球がファウルになるシードを探して狙い撃ちする。</para>
-    /// </summary>
-    [Fact]
-    public void StealHome_NeverScoresOnFoul()
-    {
-        var hits = 0;
-        for (ulong seed = 1; seed <= 400 && hits < 5; seed++)
-        {
-            var prog = new MatchProgression(Team("A"), Team("H"),
-                new GameContext { CaptureTimelines = true, CapturePitches = true }, seed,
-                new KokoSim.Engine.Debugging.ScenarioStart
-                {
-                    Inning = 1, IsTop = true, Outs = 0, OnThird = true,
-                });
-            if (prog.AdvancePitch() != AdvancePitchResult.Pitch) continue;
-            prog.SetStealAttempt(offenseIsAway: true, StartType.Gamble, StealTarget.Home);
-            prog.AdvancePitch();
-
-            var lp = prog.LastPitch;
-            if (lp is null || lp.Pitch.Kind != PitchKind.Foul) continue;
-            hits++;
-
-            Assert.True(lp.BaseThird, $"seed {seed}: 三塁走者が戻っていない");
-            Assert.Equal(0, lp.Outs);
-            Assert.Null(lp.StealPlay);
-
-            while (prog.AdvancePitch() != AdvancePitchResult.Finished) { }
-            var r = prog.BuildResult();
-            // 得点は三塁走者が本塁へ到達したときにしか入らないので、
-            // 「走者が三塁のまま」＝この球で得点が入っていない、と同値。
-            Assert.Equal(0, r.AwayTactics.StealAttempts);
-        }
-        Assert.True(hits >= 5, $"初球がファウルになるシードが足りない（{hits} 件）");
-    }
 }
