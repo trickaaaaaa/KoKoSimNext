@@ -257,23 +257,26 @@ public sealed class HomePlayResolverTests
     [Fact]
     public void ResolveWithWildThrow_ConvertsSomeOutsToSafe_WhenDefenseWouldWin()
     {
-        // 強肩・近距離＝素の Resolve ならほぼ確実に憤死する場面。悪送球ロールが有効だと、
+        // 強肩・浅い単打で二塁走者が本塁を突く＝素の Resolve なら大半が憤死する場面。悪送球ロールが有効だと、
         // その一部が SafeOnWildThrow に転じる（＝毎回ドンピシャで刺さるわけではなくなる）。
+        // 回収ロス（数秒）で逆転し得る程度の差であること。走者が何秒も遅れる場面では悪送球でもアウトのまま
+        // （勝負の抽選は 1%/99% でクランプしない＝issue #801）。
         var runner = Runner();
-        var s = Situation(35, 1.0, arm: 95, throwAccuracy: 20); // 精度20＝低いほど悪送球が起きやすい
+        var s = Situation(55, 2.2, arm: 80, throwAccuracy: 20); // 精度20＝低いほど悪送球が起きやすい
         var rng = new Xoshiro256Random(3);
         int safe = 0, outAtHome = 0, safeOnWild = 0;
         const int trials = 4000;
         for (var i = 0; i < trials; i++)
         {
-            switch (HomePlayResolver.ResolveWithWildThrow(runner, 1, s, Field, CWild, rng))
+            switch (HomePlayResolver.ResolveWithWildThrow(runner, 2, s, Field, CWild, rng))
             {
                 case HomePlayResolver.HomeThrowOutcome.Safe: safe++; break;
                 case HomePlayResolver.HomeThrowOutcome.OutAtHome: outAtHome++; break;
                 case HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow: safeOnWild++; break;
             }
         }
-        Assert.True(safeOnWild > 0, "守備が勝つはずの場面で悪送球が一度も起きていない");
+        Assert.True(safe < trials / 2, $"守備が勝つ場面になっていない: safe={safe}");
+        Assert.True(safeOnWild > 0, $"守備が勝つはずの場面で悪送球が一度も起きていない out={outAtHome} wild={safeOnWild} safe={safe}");
         Assert.True(outAtHome > safeOnWild, $"悪送球が起きすぎ（毎回セーフになっている）: out={outAtHome} wild={safeOnWild} safe={safe}");
     }
 
