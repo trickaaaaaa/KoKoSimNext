@@ -14,6 +14,9 @@ name: unity-ci
 #
 # ライセンス: Personal でも Activation が要る。**Secret 未設定の間はスキップして緑にする**
 # （赤にすると全 PR がブロックされて開発が止まるため）。設定手順は license ジョブの Step Summary に出る。
+#
+# engine DLL と StreamingAssets の YAML 複製は Git 管理外の生成物（issue #785）。Assets のコンパイルは
+# engine の API に依存するので engine/・data/ の変更でも発火し、コンパイル前に sync-engine-dll.sh で作る。
 on:
   push:
     branches:
@@ -22,12 +25,18 @@ on:
       - "Assets/**"
       - "Packages/**"
       - "ProjectSettings/**"
+      - "engine/KokoSim.Engine/**"
+      - "data/**"
+      - "tools/sync-engine-dll.sh"
       - ".github/workflows/unity-ci.yml"
   pull_request:
     paths:
       - "Assets/**"
       - "Packages/**"
       - "ProjectSettings/**"
+      - "engine/KokoSim.Engine/**"
+      - "data/**"
+      - "tools/sync-engine-dll.sh"
       - ".github/workflows/unity-ci.yml"
   workflow_dispatch:
 
@@ -36,6 +45,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 生成物（engine DLL・StreamingAssets の YAML 複製）が追跡に戻っていないかを見る（issue #785）。
+  # .gitignore 済みでも `git add -f` や古いブランチの rebase で紛れ込むと、並行 PR がまたバイナリで衝突する。
+  # ライセンス不要なので常に走る。
+  generated-files:
+    name: generated files are not tracked
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        run: |
+          tracked="$(git ls-files -- Assets/Plugins/KokoSim/KokoSim.Engine.dll ':(glob)Assets/StreamingAssets/KokoSim/**/*.yaml')"
+          if [ -n "$tracked" ]; then
+            echo "::error::生成物が Git に入っています（issue #785）。git rm --cached で外してください:"
+            echo "$tracked"
+            exit 1
+          fi
+          echo "OK: 生成物は追跡されていません"
+
   # Secret の有無を先に見る。secrets は job の if: で直接参照できないので env へ写してから判定する。
   license:
     name: license check
@@ -87,8 +114,15 @@ jobs:
           restore-keys: |
             Library-
 
-      # engine の DLL は Assets/Plugins にコミット済みなので、ここでは engine をビルドしない
-      # （Assets/ のコンパイルに必要なのは配置済み DLL だけ＝sync-engine-dll.sh の結果が入っている）。
+      # engine の DLL と StreamingAssets の YAML 複製は Git 管理外（issue #785）。ここで作ってから
+      # Unity に渡す（このブランチの engine/ と data/ から作る＝PR の engine 変更込みで検査される）。
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build engine DLL
+        run: DOTNET=dotnet bash tools/sync-engine-dll.sh
 
       # EditMode で走らせるのが目的ではなく、**Assets 全体がコンパイルできること**を見るのが目的。
       # コンパイルエラーがあれば Unity が非ゼロで終わるのでジョブが赤になる。

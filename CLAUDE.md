@@ -240,6 +240,13 @@ dotnet run --project engine/KokoSim.Balance -- \
   engine の CI は `engine/ data/ global.json` にしか発火せず、**Assets だけを触る変更は engine テストが
   全部緑でも壊れたまま main に入る**（実例: PR #344 の CS0103 で Unity が12時間コンパイル不能／
   PR #390 の交代パネル二重表示）。`bash tools/install-git-hooks.sh` を一度実行すると pre-push で自動化される。
+- **engine DLL（`Assets/Plugins/KokoSim/KokoSim.Engine.dll`）と StreamingAssets の YAML 複製は Git 管理外の生成物**（issue #785）。
+  並行 PR がマージのたびにバイナリ DLL で衝突していたため外した。**コミットするものは無い**（`git add -f` 禁止。Unity CI が検出する）。
+  作るのは `bash tools/sync-engine-dll.sh`。clone 直後は `bash tools/install-git-hooks.sh` が一度回し、以降は
+  checkout / pull / rebase の後にフックが engine/・data/ の変化を見て自動で回す。`check-unity-compile.sh` と Unity CI も検査前に作る。
+  engine を編集中に Unity で確かめたいときだけ手で回す
+- **`determinism-baseline.txt` が rebase で衝突したら手で直さない**。片側を採って rebase を終え、
+  `bash tools/regen-determinism-baseline.sh` で作り直してコミットする（2本の PR が両方再生成すると必ず衝突する。issue #785）
   CI 側（`.github/workflows/unity-ci.yml`）は Unity ライセンスの Secret が入るまでスキップされる
 
 ## コーディング規約

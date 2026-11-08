@@ -3,7 +3,7 @@
 #
 # open な issue を複数ワーカーで並列に解決する。1 issue = 1 プロセス（毎回まっさらなコンテキスト）。
 # セッション（claude -p）の責務は「実装→テスト緑→WIPコミット→（UIなら）実機確認→push→PR作成」まで。
-# **CI 待ち・rebase・マージ・DLL 同期はこのスクリプトが単一ロックで直列に行う**（内側セッションの
+# **CI 待ち・rebase・マージはこのスクリプトが単一ロックで直列に行う**（内側セッションの
 # 「CI待ちで消滅」「Monitor待ちで消滅」を構造的に根絶する）。
 # **未コミットのまま消滅したセッションへの構造的保険（issue #433）**: 実機確認待ち（Play モード・
 # スクショ完了待ち）は内側セッションが最も消滅しやすい区間で、テンプレは手順4でその前の WIP
@@ -17,9 +17,9 @@
 #   - engine 系はワーカー間に分散。衝突は「マージ直前の rebase＋再テスト」で機械検出し、
 #     コンフリクト時は needs-human 送り（main は壊さない）。
 #   - マージは REPO ロックで直列化（rebase→禁止物除去→ローカル再テスト→squash マージ）。
-#   - DLL（Assets/Plugins/KokoSim/KokoSim.Engine.dll）は **PR に含めない**。エンジンを触った
-#     ラウンドの最後に、このスクリプトが main 上で 1 コミットとして同期 push する（PR 同士の
-#     バイナリ衝突を消し、並列マージを可能にする）。※夜間ラン限定ルール。日中の手動コミットは従来通り。
+#   - DLL（Assets/Plugins/KokoSim/KokoSim.Engine.dll）と StreamingAssets の YAML 複製は Git 管理外の
+#     生成物（issue #785）。各 worktree では post-checkout / post-rewrite フックと check-unity-compile.sh
+#     が作る。万一ブランチに紛れ込んだらマージ工程で追跡から外す。
 #   - main の直近 CI が failure なら以降のマージを停止（赤 main への積み増し防止）。
 #
 # 使い方:
@@ -68,8 +68,9 @@ RUN_START="$(date +%s)"
 LOG_DIR="$REPO_DIR/out/overnight/$STAMP"
 PROMPT_TEMPLATE="$REPO_DIR/tools/overnight-prompt.template.md"
 DOTNET="/usr/local/share/dotnet/dotnet"
-# 生成物（DLL / StreamingAssets 複製）。PR にも WIP 自動退避にも含めない（マージ工程が main 版へ戻す）。
-GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml Assets/StreamingAssets/KokoSim/team-colors.yaml"
+# 生成物（DLL / StreamingAssets 複製）の pathspec。Git 管理外（.gitignore 済み・issue #785）だが、
+# `git add -f` 等で紛れ込んだ場合に備えて WIP 自動退避から除外し、マージ工程で追跡から外す。
+GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll :(glob)Assets/StreamingAssets/KokoSim/**/*.yaml"
 
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 MODEL="${OVERNIGHT_MODEL:-claude-sonnet-5}"          # 既定は Sonnet。model:opus ラベルで昇格
@@ -119,7 +120,7 @@ SYS_NOTES="$LOG_DIR/summary-sys.md"
 PROCESSED="$LOG_DIR/processed.txt"; : > "$PROCESSED"
 COUNTER="$LOG_DIR/counter.txt"; echo 0 > "$COUNTER"
 HALT="$LOG_DIR/HALT"
-REPO_LOCK="$LOG_DIR/.repolock"      # REPO_DIR の .git を触る操作＋マージ＋DLL同期の単一ミューテックス
+REPO_LOCK="$LOG_DIR/.repolock"      # REPO_DIR の .git を触る操作＋マージの単一ミューテックス
 CTR_LOCK="$LOG_DIR/.ctrlock"        # カウンタ/processed 追記用の軽量ロック
 
 # ── ロック（mkdir はアトミック。bash 3.2 に BASHPID が無いので PID 監視はせず、
@@ -149,58 +150,6 @@ main_ci_failing() {
   [ "$c" = "failure" ]
 }
 
-# ── DLL 同期用の専用 worktree（REPO_DIR の作業ツリー＝ユーザーの WIP には絶対触れない） ──
-DLLWT="$WT_ROOT/dll-sync"
-git -C "$REPO_DIR" fetch origin +refs/heads/main:refs/remotes/origin/main -q 2>/dev/null || true
-git -C "$REPO_DIR" worktree remove --force "$DLLWT" 2>/dev/null || true
-if ! git -C "$REPO_DIR" worktree add -q --detach "$DLLWT" refs/remotes/origin/main 2>/dev/null; then
-  echo "警告: dll-sync worktree の作成に失敗（DLL 同期はスキップされる）" | tee -a "$SYS_NOTES"
-  DLLWT=""
-fi
-
-# エンジンをビルドして DLL/StreamingAssets を main へ同期 push（ラウンド末に1回・ロック内）
-sync_dll_to_main() {
-  [ -z "$DLLWT" ] && return
-  lock "$REPO_LOCK"
-  if git -C "$DLLWT" fetch origin +refs/heads/main:refs/remotes/origin/main -q 2>/dev/null; then
-    git -C "$DLLWT" reset --hard refs/remotes/origin/main -q 2>/dev/null || { unlock "$REPO_LOCK"; return; }
-    if "$DOTNET" build "$DLLWT/engine/KokoSim.Engine/KokoSim.Engine.csproj" -c Release >/dev/null 2>&1; then
-      cp "$DLLWT/engine/KokoSim.Engine/bin/Release/netstandard2.1/KokoSim.Engine.dll" \
-         "$DLLWT/Assets/Plugins/KokoSim/KokoSim.Engine.dll" 2>/dev/null || true
-      cp "$DLLWT/data/school-names.yaml" "$DLLWT/Assets/StreamingAssets/KokoSim/school-names.yaml" 2>/dev/null || true
-      if ! git -C "$DLLWT" diff --quiet 2>/dev/null; then
-        git -C "$DLLWT" add Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml 2>/dev/null || true
-        git -C "$DLLWT" commit -q -m "chore: sync engine DLL（夜間エージェント自動同期）" 2>/dev/null || true
-        if git -C "$DLLWT" push -q origin HEAD:main 2>/dev/null; then
-          note "- 🔧 DLL を main へ同期 push した"
-        else
-          note "- ⚠ DLL の push に失敗（次ラウンドで再試行）"
-        fi
-      fi
-    else
-      note "- ⚠ DLL 同期ビルドに失敗（朝に手動 sync-engine-dll.sh を）"
-    fi
-  fi
-  unlock "$REPO_LOCK"
-}
-
-# push 直前に呼ぶ: ディスクの engine DLL だけ「このブランチの engine/ 変更」で再ビルドする
-# （コミットはしない。issue #432）。merge_sequence は push 前に gen_files（DLL 等）を main 版へ
-# checkout・commit するため、そのままだと disk 上の DLL が旧版に固定される。Assets の C# がこの
-# ブランチで新設した engine API を使っていると、pre-push フックの check-unity-compile.sh が
-# 「新 API を使う Assets コード × 旧 DLL」でコンパイルして誤って赤くなる（横断 PR だけ必ず push
-# 拒否される原因）。退避 push（PR未作成のまま終了したセッションの保全 push）も同じ穴があるため
-# 同じ前処理を通す。
-refresh_engine_dll_on_disk() { # $1=worktree $2=log
-  local wt="$1" log="$2"
-  if "$DOTNET" build "$wt/engine/KokoSim.Engine/KokoSim.Engine.csproj" -c Release >>"$log" 2>&1; then
-    cp "$wt/engine/KokoSim.Engine/bin/Release/netstandard2.1/KokoSim.Engine.dll" \
-       "$wt/Assets/Plugins/KokoSim/KokoSim.Engine.dll" 2>>"$log" || true
-  else
-    echo "⚠ push 前の DLL 再ビルドに失敗（${wt}）。旧 DLL のまま push を試行する" >>"$log"
-  fi
-}
-
 # ── マージ工程（ロック内で直列）: rebase→禁止物除去→ガード→ローカル再テスト→squash マージ ──
 # 返り値ではなく note で結果を残す。呼び出しは PR が存在するときのみ。
 merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
@@ -219,8 +168,8 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
     unlock "$REPO_LOCK"; return
   fi
 
-  # rebase 前に未コミットの変更を捨てる（issue #416）。セッションは規約どおり生成物
-  # （DLL / StreamingAssets 複製）を未コミットで残すが、dirty tree のままだと rebase が
+  # rebase 前に未コミットの変更を捨てる（issue #416）。セッションが未コミットの変更を
+  # 残していると、dirty tree のままだと rebase が
   # 「unstaged changes」で拒否され、下の分岐が本物のコンフリクトと誤判定して PR を
   # クローズしてしまう（2026-08-03 の夜間ランで #396/#397 が誤クローズされた実害）。
   # セッションの成果は push 済みコミットが全てなので、ここで捨ててよい。
@@ -235,12 +184,11 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
     unlock "$REPO_LOCK"; return
   fi
 
-  # 生成物（DLL / StreamingAssets 複製）は PR に含めない。main 版へ戻してコミットに残さない。
-  # team-colors.yaml も sync-engine-dll.sh が複製する生成物（school-names と同型。issue #416）。
-  git -C "$wt" checkout refs/remotes/origin/main -- $GEN_FILES >/dev/null 2>&1 || true
-  if ! git -C "$wt" diff --quiet -- $GEN_FILES 2>/dev/null; then
-    git -C "$wt" add $GEN_FILES >/dev/null 2>&1 || true
-    git -C "$wt" commit -q -m "chore: drop generated DLL from PR（マージ後に自動同期する）" >/dev/null 2>&1 || true
+  # 生成物（DLL / StreamingAssets 複製）は Git 管理外（issue #785）。紛れ込んでいたら追跡から外す
+  # （作業ツリーのファイルは残す＝Unity 検査で使う）。
+  if [ -n "$(git -C "$wt" ls-files -- $GEN_FILES 2>/dev/null)" ]; then
+    git -C "$wt" rm -r -q --cached -- $GEN_FILES >/dev/null 2>&1 || true
+    git -C "$wt" commit -q -m "chore: untrack generated engine DLL / StreamingAssets (#785)" >/dev/null 2>&1 || true
   fi
 
   # 禁止物ガード: フォントバイナリ / 静的フォント資産 / CI 定義の改変はマージしない
@@ -256,8 +204,8 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
     unlock "$REPO_LOCK"; return
   fi
 
-  # rebase 後のブランチを更新（push 前にディスク DLL を再ビルドして pre-push フックの誤検知を防ぐ）
-  refresh_engine_dll_on_disk "$wt" "$log"
+  # rebase 後のブランチを更新（pre-push フックの Unity 検査は check-unity-compile.sh が
+  # このブランチの engine/ から DLL を作り直してから走る＝旧 DLL での誤検知は起きない。issue #432/#785）
   if ! git -C "$wt" push --force-with-lease -q origin "$branch" >>"$log" 2>&1; then
     note "- 🔴 #$num $title — rebase 後の push に失敗（マージ見送り。ログ: ${log}）"
     unlock "$REPO_LOCK"; return
@@ -339,14 +287,21 @@ Assembly-CSharp.csproj が生成され、\\`bash tools/check-unity-compile.sh\\`
 # スクショ完了待ち）は内側セッションが最も消滅しやすい区間で、そこで未コミットのまま消えると
 # 退避ネット（#348・下の「未 push の作業を失わないための退避」）はコミット済みしか救えず
 # worktree ごと全損する（実例: #393、45分の実装が跡形もなく消えた）。gen_files（DLL /
-# StreamingAssets 複製）は対象から除外する（main 版への差し戻しはマージ工程の仕事で、
+# StreamingAssets 複製）は対象から除外する（.gitignore 済みだが、念のため明示的に外す。
 # ここで巻き込むと退避 PR に生成物が混ざる）。PR が既にある場合は呼ばない
 # （merge_sequence が別途 reset --hard するため）。
 auto_wip_commit() { # $1=wt $2=log $3=num
   local wt="$1" log="$2" num="$3" f
   [ -d "$wt" ] || return
   local excludes=()
-  for f in $GEN_FILES; do excludes+=(":(exclude)$f"); done
+  # ":(glob)x" は ":(exclude,glob)x" へ組み直す（":(exclude):(glob)x" は不正な pathspec で
+  # status ごと失敗し、WIP 退避が黙って空振りする）
+  for f in $GEN_FILES; do
+    case "$f" in
+      ":(glob)"*) excludes+=(":(exclude,glob)${f#:(glob)}") ;;
+      *)          excludes+=(":(exclude)$f") ;;
+    esac
+  done
   [ -z "$(git -C "$wt" status --porcelain -- . "${excludes[@]}" 2>/dev/null)" ] && return
   git -C "$wt" add -A -- . "${excludes[@]}" >>"$log" 2>&1
   if git -C "$wt" commit -q -m "$(printf '[WIP] auto-evacuate uncommitted changes at session end\n\nCo-Authored-By: Claude <noreply@anthropic.com>')" >>"$log" 2>&1; then
@@ -493,10 +448,6 @@ process_issue() { # $1=num $2=title
     elif [ "$timed_out" = 1 ]; then why="タイムアウト"
     fi
     lock "$REPO_LOCK"
-    # push 前にディスク DLL を再ビルドして pre-push フックの誤検知を防ぐ（issue #432。
-    # merge_sequence 同様、このブランチが engine と Assets を両方触っていると旧 DLL のまま
-    # 検査が走り push が拒否されるため、退避 push でも同じ前処理を通す）。
-    refresh_engine_dll_on_disk "$wt" "$log"
     # 既に PR がある（マージ工程で弾かれた等）ならブランチを push し直すだけでよい。
     local existing; existing="$(gh pr list --head "$branch" --state all --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
     if [ -n "$existing" ]; then
@@ -537,7 +488,7 @@ run_worker() { # $1=worker番号 $2=割当ファイル
   done < "$list"
 }
 
-# ── ラウンドループ: 割当→並列実行→DLL同期→再取得（新着があれば続行） ──
+# ── ラウンドループ: 割当→並列実行→再取得（新着があれば続行） ──
 round=1
 while :; do
   [ -f "$REPO_DIR/out/overnight/STOP" ] && { rm -f "$REPO_DIR/out/overnight/STOP"; NOTE_TARGET="$SYS_NOTES"; note "- 🛑 STOP ファイル検出。終了。"; break; }
@@ -573,9 +524,6 @@ while :; do
   done
   for p in $pids; do wait "$p"; done
 
-  # ラウンド末に DLL を main へ同期（エンジン変更があった場合のみ commit される）
-  sync_dll_to_main
-
   round=$((round + 1))
 done
 
@@ -600,9 +548,6 @@ done
   total_min="$(( ($(date +%s) - RUN_START) / 60 ))"
   echo "総所要時間: $(( total_min / 60 ))時間$(( total_min % 60 ))分（着手 $(count_now) 件・並列 ${ISSUE_WORKERS}）"
 } > "$SUMMARY"
-
-# dll-sync worktree の後片付け
-[ -n "$DLLWT" ] && git -C "$REPO_DIR" worktree remove --force "$DLLWT" 2>/dev/null || true
 
 echo ""
 echo "===================================="
