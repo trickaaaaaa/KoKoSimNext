@@ -25,8 +25,8 @@ namespace KokoSim.Unity.Match
     {
         private const int W = 1600;
         private const int H = 900;
-        private const string ShotDir = "screenshots/error-play-629";
-        private const string OutDir = "out/error-play-629";
+        private const string ShotDir = "screenshots/error-play-809";
+        private const string OutDir = "out/error-play-809";
         private const string SpawnFlag = "KokoSim.ErrorKindPictureShooter.Spawn";
 
         private const int MaxGames = 24;
@@ -172,12 +172,20 @@ namespace KokoSim.Unity.Match
             yield return Shoot(tag + "-1-error");           // 弾いた／逸れた直後
             yield return WaitClock(deflect + 1.0);
             yield return Shoot(tag + "-2-pickup");          // 拾い直したところ
-            if (back > 0)
+            // 拾い直し以降の送球を1本ずつ（issue #809: 走っている走者の塁へ→止まってから投手へ）
+            var stopped = 0.0;
+            foreach (var r in play.Runners) foreach (var sg in r.Segs) if (sg.T1 > stopped) stopped = sg.T1;
+            var n = 0;
+            var desc = new StringBuilder();
+            foreach (var sg in play.Ball)
             {
-                yield return WaitClock(back);
-                yield return Shoot(tag + "-3-return");      // 返球の到達
+                var e = sg as EndpointBallSegment;
+                if (e == null || e.Kind != KokoSim.Engine.Match.Timeline.BallSegmentKind.Throw || e.ToRole == null || e.T0 < deflect) continue;
+                desc.Append($" [{e.FromRole}→{e.ToRole}{(e.ToBase != null ? "(" + e.ToBase + ")" : "")} {e.T0:F2}-{e.T1:F2}]");
+                yield return WaitClock(e.T1);
+                yield return Shoot($"{tag}-3-throw{n++}");
             }
-            Debug.Log($"[#629Shot] {tag} 撮影（{game}試合目 {plate}打席目 {play.Result} 返球到達={back:F2}s）");
+            Debug.Log($"[#629Shot] {tag} 撮影（{game}試合目 {plate}打席目 {play.Result} 拾い直し後の送球{desc} 全走者停止={stopped:F2}s）");
         }
 
         private IEnumerator WaitClock(double t)

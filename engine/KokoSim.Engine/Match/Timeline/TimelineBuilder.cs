@@ -1835,6 +1835,42 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 時刻 <paramref name="t"/> にまだ塁へ向かって走っている走者のうち、いちばん先の塁へ向かう走者の
+    /// 行き先の塁と到達時刻（issue #809）。走者レッグの写しから引くだけ（表示専用）。
+    /// 塁で終わらないレッグ（一塁の駆け抜け）・その場の待機レッグ・アウトで終わるレッグは数えない。
+    /// </summary>
+    private static (string BaseName, double ArriveAt)? LeadRunningTarget(PlayTimeline timeline, FieldGeometry field, double t)
+    {
+        string[] names = { "first", "second", "third", "home" };
+        (string BaseName, double ArriveAt)? best = null;
+        var bestRank = -1;
+        foreach (var leg in timeline.Runners)
+        {
+            if (leg.T1 <= t) continue;   // もう着いている（この後に走り出すレッグは「まだ走る」に数える）
+            if (leg.OutAtEnd || Distance(leg.From, leg.To) < 0.5) continue;
+            for (var i = 0; i < names.Length; i++)
+            {
+                if (Distance(leg.To, BasePoint(field, names[i])) > 0.5) continue;
+                if (i > bestRank || (i == bestRank && best is { } b && leg.T1 > b.ArriveAt))
+                {
+                    bestRank = i;
+                    best = (names[i], leg.T1);
+                }
+                break;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>全走者が止まる時刻（走者レッグの終端の最大。一塁の駆け抜けも含む）。表示専用。</summary>
+    private static double AllRunnersStoppedAt(PlayTimeline timeline)
+    {
+        var last = 0.0;
+        foreach (var leg in timeline.Runners) if (leg.T1 > last) last = leg.T1;
+        return last;
+    }
+
+    /// <summary>
     /// 失策でこぼれた球を拾った野手が内野へ投げ返す（issue #629 ③）。表示専用・乱数不使用。
     ///
     /// <para>これが無いと、拾った野手は球を持ったまま<b>棒立ち</b>で、走者が本塁まで走り抜けるのを
@@ -1887,6 +1923,48 @@ public static class TimelineBuilder
                 },
             };
             return timeline with { Ball = outBall, Duration = Math.Max(timeline.Duration, outArrive + 0.6) };
+        }
+
+        // 拾った時点でまだ走っている走者がいる（issue #809）: まず先頭走者が向かう塁へ投げて刺しにいく
+        // （セーフの走者なので GuardAgainstVerdict で走者の到達より少し後に着く＝判定と矛盾させない）。
+        // 投手へ返すのはプレーが止まってから＝受け手が持ち直して、全走者が止まった後に返す。
+        if (LeadRunningTarget(timeline, field, t0) is { } lead)
+        {
+            var leadTo = BasePoint(field, lead.BaseName);
+            var leadRole = CoverRoleAt(timeline, leadTo, DefaultBaseGuard(lead.BaseName));
+            var ballLead = new List<BallSegment>(timeline.Ball);
+            var holder = fromRole;
+            var holderAt = from;
+            var heldFrom = t0;
+            if (leadRole != fromRole && Distance(from, leadTo) >= 5.0)
+            {
+                var physical = t0 + LegSeconds(Distance(from, leadTo), ThrowSpeedOf(play));
+                var arrive = GuardAgainstVerdict(physical, physical, lead.ArriveAt, runnerOut: false);
+                ballLead.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Throw, T0 = t0, T1 = arrive, From = from, To = leadTo,
+                    FromRole = fromRole, ToRole = leadRole, ToBase = lead.BaseName,
+                });
+                holder = leadRole;
+                holderAt = leadTo;
+                heldFrom = arrive;
+            }
+            var end = heldFrom;
+            // プレーが止まってから投手へ返す（受け手が持ち直す間を置く）。投手がマウンドに居ないなら返さない
+            var backT0 = Math.Max(heldFrom + ErrorReturnTransferSeconds, AllRunnersStoppedAt(timeline) + ErrorReturnTransferSeconds);
+            var pitcherHome = Distance(FielderPositionAt(timeline, FieldPosition.Pitcher, backT0), Mound) < ErrorReturnPitcherOnMoundM;
+            if (pitcherHome && holder != FieldPosition.Pitcher && Distance(holderAt, Mound) >= 5.0)
+            {
+                var backT1 = backT0 + LegSeconds(Distance(holderAt, Mound), ThrowSpeedOf(play));
+                ballLead.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Throw, T0 = backT0, T1 = backT1, From = holderAt, To = Mound,
+                    FromRole = holder, ToRole = FieldPosition.Pitcher,
+                });
+                end = backT1;
+            }
+            if (ballLead.Count == timeline.Ball.Count) return timeline;
+            return timeline with { Ball = ballLead, Duration = Math.Max(timeline.Duration, end + 0.6) };
         }
 
         // 投手のお手玉＝拾った本人が投手。自分から自分へは投げないし、他所へ投げる理由も無い＝そのまま持っている。

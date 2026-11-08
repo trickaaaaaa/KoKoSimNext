@@ -92,13 +92,14 @@ public sealed class ErrorBallPictureTests
 
     /// <summary>
     /// 投手がマウンドを離れている（走者ありの内野ゴロ＝本塁バックアップ）失策では投手へ返さない
-    /// （誰も居ないマウンドへ球が飛ぶ絵になる。2026-08-15 監督報告）＝二塁ベースのカバーへ返す。
-    /// 遊撃お手玉・三塁悪送球の両方で、投げ始めの時刻に投手がマウンドから離れていることも実測で確かめる。
+    /// （誰も居ないマウンドへ球が飛ぶ絵になる。2026-08-15 監督報告）。
+    /// 拾った時点で打者がまだ走っていれば一塁へ（issue #809）、走り終えていれば二塁ベースのカバーへ返す。
     /// </summary>
     [Theory]
-    [InlineData(FieldPosition.Shortstop, FieldingErrorKind.Catch)]
-    [InlineData(FieldPosition.ThirdBase, FieldingErrorKind.Throw)]
-    public void InfieldError_WithPitcherBackingUpHome_ReturnThrowGoesToSecond(FieldPosition role, FieldingErrorKind kind)
+    [InlineData(FieldPosition.Shortstop, FieldingErrorKind.Catch, "first")]
+    [InlineData(FieldPosition.ThirdBase, FieldingErrorKind.Throw, "second")]
+    public void InfieldError_WithPitcherBackingUpHome_NeverThrowsToTheEmptyMound(
+        FieldPosition role, FieldingErrorKind kind, string wantBase)
     {
         var play = (role == FieldPosition.ThirdBase
                 ? FieldingPlayFixtures.InfieldGrounder(role, fieldedX: -18.0, fieldedZ: 24.0, result: BattedBallResult.Error)
@@ -108,13 +109,12 @@ public sealed class ErrorBallPictureTests
         Assert.Contains(before.Moves, m => m.Role == FieldPosition.Pitcher && m.Task == FielderTask.Backup);   // 前提: 投手は本塁バックアップ
 
         var tl = TimelineBuilder.AppendErrorReturnThrow(before, play, Field);
-        var back = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).OrderBy(b => b.T1).Last();
-        Assert.NotEqual(FieldPosition.Pitcher, back.ToRole);
-        Assert.Equal("second", back.ToBase);
-        Assert.True(Dist(back.To, new TimelinePoint(Field.SecondBase.X, Field.SecondBase.Z)) < 1.0,
-            $"投手不在時の返球先が二塁でない（({back.To.X:F1},{back.To.Z:F1})）");
-        Assert.NotEqual(back.ToRole, back.FromRole);
-        Assert.True(back.T0 >= tl.ErrorPickupAt, "拾う前に投げている");
+        var added = tl.Ball.Skip(before.Ball.Count).ToList();
+        Assert.NotEmpty(added);
+        Assert.DoesNotContain(added, b => b.ToRole == FieldPosition.Pitcher);
+        Assert.Equal(wantBase, added[0].ToBase);
+        Assert.NotEqual(added[0].ToRole, added[0].FromRole);
+        Assert.True(added[0].T0 >= tl.ErrorPickupAt, "拾う前に投げている");
     }
 
     /// <summary>外野のフライ落球: 二塁へ投げ返す（内野へ戻す）。</summary>
@@ -131,7 +131,7 @@ public sealed class ErrorBallPictureTests
         Assert.Equal("second", back.ToBase);
     }
 
-    /// <summary>投手のお手玉は自分からマウンドへ投げない（拾った本人がそこに居る＝そのまま持っている）。</summary>
+    /// <summary>投手のお手玉は自分からマウンドへ投げない（拾った本人がそこに居る）。走っている打者がいれば一塁へ投げる。</summary>
     [Fact]
     public void PitcherCatchError_DoesNotThrowToItself()
     {
@@ -142,7 +142,10 @@ public sealed class ErrorBallPictureTests
         var after = TimelineBuilder.AppendErrorReturnThrow(before, play, Field);
 
         Assert.NotNull(before.ErrorPickupAt);   // 拾い直しの絵は出る
-        Assert.Equal(before.Ball.Count, after.Ball.Count);
+        var added = after.Ball.Skip(before.Ball.Count).ToList();
+        Assert.DoesNotContain(added, b => b.FromRole == FieldPosition.Pitcher && b.ToRole == FieldPosition.Pitcher);
+        // 打者がまだ走っていれば一塁へ刺しにいく（issue #809）。マウンドへは投げない
+        Assert.All(added, b => Assert.Equal("first", b.ToBase));
     }
 
     /// <summary>失策でないプレーには返球を足さない（恒等）。</summary>
