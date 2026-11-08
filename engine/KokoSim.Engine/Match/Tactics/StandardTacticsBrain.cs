@@ -188,7 +188,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     {
         if (s.OnFirst is not null && s.OnSecond is null && s.Outs < 2)
         {
-            return AttemptSteal(s.OnFirst, s.Catcher, StealTarget.Second, _c.StealMinSuccess, _c.StealProb, rng);
+            return AttemptSteal(s.OnFirst, s.Catcher, StealTarget.Second, _c.StealMinSuccessFor(s.Outs), _c.StealProb, rng);
         }
         if (s.OnFirst is null && s.OnSecond is not null && s.OnThird is null
             && s.Outs <= _c.StealThirdMaxOuts && System.Math.Abs(s.ScoreDiff) <= _c.StealThirdMaxDiffAbs)
@@ -199,13 +199,24 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         return null;
     }
 
-    /// <summary>成功見込みがこの値以上のときだけ確率的に仕掛け、際どいほど好ジャンプ・意表のギャンブルに賭ける
-    /// （見込みが十分高い盗塁は通常始動で堅実に決める＝無防備リスクを負わない）。二盗・三盗で共通の型。</summary>
+    /// <summary>損益分岐（<paramref name="minSuccess"/>）未満は仕掛けない（損をする盗塁を選ばない不変条件は維持）。
+    /// 以上のときは、余裕（差分）が大きいほど高頻度・際どいほど低頻度で仕掛け、仕掛けた中でも際どいほど
+    /// 好ジャンプ・意表のギャンブルに賭ける（見込みが十分高い盗塁は通常始動で堅実に決める＝無防備リスクを
+    /// 負わない）。二盗・三盗で共通の型。
+    ///
+    /// <para>issue #838: 旧来は閾値以上で一律 <paramref name="attemptProb"/> という二値だった（能力がわずかに
+    /// 動くだけで企図数が0↔上限へ跳ぶ「崖」の原因）。差分を0でゼロに固定したロジスティック
+    /// （<c>2*logistic(kx)-1</c>, x&gt;=0のみ）に通し、損益分岐ちょうどは0・余裕があるほど
+    /// <paramref name="attemptProb"/> へなだらかに近づける＝閾値未満ゼロの不変条件はそのまま、
+    /// 閾値直上での「即満額」だけを崖からなだらかな立ち上がりへ変える。</para></summary>
     private (StartType Start, StealTarget Target)? AttemptSteal(
         Player runner, Player catcher, StealTarget target, double minSuccess, double attemptProb, IRandomSource rng)
     {
         var estimate = StealResolver.SuccessProbability(runner, catcher, _br, target: target);
-        if (estimate < minSuccess || rng.NextDouble() >= attemptProb) return null;
+        var margin = estimate - minSuccess;
+        if (margin < 0.0) return null;
+        var p = attemptProb * (2.0 * MathUtil.Logistic(margin * _c.StealAttemptLogisticSteepness) - 1.0);
+        if (rng.NextDouble() >= p) return null;
         var start = estimate < _c.GambleStartMaxSuccess && rng.NextDouble() < _c.GambleStartProb
             ? StartType.Gamble
             : StartType.Normal;
