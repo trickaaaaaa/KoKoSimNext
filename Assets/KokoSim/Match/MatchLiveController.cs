@@ -2167,7 +2167,8 @@ namespace KokoSim.Unity.Match
                 (float)(pt.AimX ?? x), (float)(pt.AimY ?? y),
                 (float)(tr?.FlightTimeSeconds ?? 0.0),         // 0 は rig 側で既定（BallFlightSeconds）へ落ちる
                 (float)(tr?.InducedVerticalBreakM ?? 0.0),
-                (float)(tr?.InducedHorizontalBreakM ?? 0.0));
+                (float)(tr?.InducedHorizontalBreakM ?? 0.0),
+                (float)(pt.VelocityKmh ?? 0.0));
         }
 
         /// <summary>

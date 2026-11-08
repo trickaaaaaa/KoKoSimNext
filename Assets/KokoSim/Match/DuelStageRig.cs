@@ -35,10 +35,12 @@ namespace KokoSim.Unity.Match
         public readonly float AimX, AimY;                                 // 狙い位置[m]（投球前に判明済み）
         public readonly float FlightSeconds;                             // 飛翔時間[s]
         public readonly float InducedVerticalBreakM, InducedHorizontalBreakM;   // 誘発変化[m]
+        public readonly float VelocityKmh;                               // 球速[km/h]（捕球音の強さ用。不明=0）
 
         public DuelPitchFlight(float plateX, float plateY, float aimX, float aimY,
-            float flightSeconds, float ivb, float ihb)
+            float flightSeconds, float ivb, float ihb, float velocityKmh = 0f)
         {
+            VelocityKmh = velocityKmh;
             PlateX = plateX;
             PlateY = plateY;
             AimX = aimX;
@@ -997,6 +999,12 @@ namespace KokoSim.Unity.Match
         private bool _ballWillBeCaught;     // この球は捕手が捕るか
         private bool _ballInMitt;           // ミットの子になっているか
         private float _ballInMittRemaining; // ミットの中で残す秒数
+
+        // 効果音（表示専用）。打球音は「球が接触点に着いた瞬間」、捕球音はミットに入った瞬間に鳴らす
+        private bool _ballMeetsBat;         // この球はバットに当たるか（インプレー・ファウル）
+        private bool _batSoundDone;         // この球の打球音を鳴らしたか
+        private bool _ballIsBunt;           // バントの指示が出ている球か（打球音を「コツッ」にする）
+        private float _ballVelocityKmh;     // 球速[km/h]（不明なら飛翔時間から推定）
 
         // ---- 打球（接触後の一瞬。2026-07-31）----
         // 軌道は engine の打球セグメントをそのまま評価する＝この後すぐ俯瞰が描くのと**同じ単一ソース**。
@@ -2313,6 +2321,7 @@ namespace KokoSim.Unity.Match
             StanceCatcherToAim(pitch);
             bool meetsBat = outcome == DuelPitchOutcome.InPlayContact
                 || outcome == DuelPitchOutcome.FoulContact;
+            _ballIsBunt = isBuntAttempt;
             float flight = LaunchBall(pitch, catchIndex, meetsBat);
             // 見逃し・空振り（ストライク系）は球審のコール（＝捕球後に動き出した腕が伸び切る瞬間）に、
             // ボール（コールの絵が無い＝issue #527 C）は反応だけに、打つ球・死球は当たった瞬間に
@@ -2798,6 +2807,12 @@ namespace KokoSim.Unity.Match
             _ballIvb = pitch?.InducedVerticalBreakM ?? 0f;
             _ballIhb = pitch?.InducedHorizontalBreakM ?? 0f;
             _ballFlight = flight;
+            _ballMeetsBat = meetsBat;
+            _batSoundDone = false;
+            // 球速は実記録の値。無い球（合成列）はリリース点→本塁の距離と飛翔時間から出す
+            _ballVelocityKmh = pitch?.VelocityKmh > 0f
+                ? pitch.Value.VelocityKmh
+                : _ballRelease.magnitude / flight * 3.6f;
             _ballT = 0f;
             _catcherShiftT = 0f;   // 体寄せの時計も同時に始める（戻りは球より長生き）
             _ballHeld = false;
@@ -2902,6 +2917,13 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
+            // 打球音は接触の瞬間に1回。物理を持たないファウル（_batted=null）も当たってはいるので鳴らす
+            if (_ballMeetsBat && !_batSoundDone && _ballT >= _ballArrival)
+            {
+                _batSoundDone = true;
+                KokoSim.Unity.Audio.MatchSfx.PlayBat(BattedStrength01(), _ballIsBunt);
+            }
+
             if (_ballT >= _ballArrival && _ballWillBeCaught && TryPutBallInMitt()) return;
 
             // 接触＝球が判定面に着いた瞬間（打者のスイングはこの時刻にアンカーしてある）。
@@ -2934,7 +2956,25 @@ namespace KokoSim.Unity.Match
             _ball.transform.SetParent(hand, true);
             _ballInMitt = true;
             _ballInMittRemaining = CatcherLingerSeconds(_catchIsStrike);   // 判定表示が消えるまでミットの中に見せる
+            KokoSim.Unity.Audio.MatchSfx.PlayCatch(_ballVelocityKmh);
             return true;
+        }
+
+        /// <summary>
+        /// 打球音の強さ 0..1。engine の打球セグメントの出だし（0.1秒）の速さ[m/s]から出す
+        /// （打球の初速は再生データに載っていないため。表示専用）。打球データが無いファウルは中くらい。
+        /// </summary>
+        private float BattedStrength01()
+        {
+            if (_batted == null) return 0.4f;
+            double dur = _batted.T1 - _batted.T0;
+            double dt = System.Math.Min(0.1, dur);
+            if (dt <= 1e-4) return 0.4f;
+            var a = _batted.At(0.0);
+            var b = _batted.At(dt);
+            double dx = b.X - a.X, dy = b.Y - a.Y, dh = b.H - a.H;
+            float mps = (float)(System.Math.Sqrt(dx * dx + dy * dy + dh * dh) / dt);
+            return KokoSim.Unity.Audio.MatchSfx.BatStrengthFromSpeed(mps);
         }
 
         /// <summary>
