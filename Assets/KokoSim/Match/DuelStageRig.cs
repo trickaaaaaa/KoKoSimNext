@@ -5877,6 +5877,15 @@ namespace KokoSim.Unity.Match
         private float BatterSideSign => _batterLeft ? -1f : 1f;
 
         /// <summary>
+        /// いまの立たせ方（打者の打席・投手の利き腕）が指定と食い違っているか（issue #802）。
+        /// <see cref="SetHandedness"/> は捕手・球審を毎回置き直すので、打席の途中で当て直すのは差があるときだけにする。
+        /// ミラー親が無い役（rig 未完成）は比べない＝当て直しても何も変わらない。
+        /// </summary>
+        public bool HandednessDiffers(bool batterLeft, bool pitcherLeft)
+            => (_batterMirror != null && _batterLeft != batterLeft)
+               || (_pitcherMirror != null && _pitcherLeft != pitcherLeft);
+
+        /// <summary>
         /// 捕手の較正上の基準x（issue #396 前の唯一の値）。<see cref="StanceCatcherToAim"/> が
         /// 投球ごとに立ち位置を動かすため、以後は「今どこにいるか」ではなく常にこの固定値を基準にする。
         /// </summary>
