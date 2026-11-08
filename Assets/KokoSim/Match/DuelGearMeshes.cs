@@ -53,16 +53,22 @@ namespace KokoSim.Unity.Match
         /// （実測: 指先は掌側へ最大4.6cm出る）。奥行は装着側の実測に合わせた最小限にとどめる。
         /// **捕手ミットは別物**（指の区切りが無く縁が厚い）なので、これは流用しない。
         /// </summary>
-        public static Mesh Glove() => Get("AIGear_Glove1_lo",
-            m => CanonicalizeMeshyFromBack(m, new Vector3(0.245f, 0.295f, 0.125f)));
+        public static Mesh Glove() => Get("AIGear_Glove1_lo", m =>
+        {
+            CanonicalizeMeshyFromBack(m, new Vector3(0.245f, 0.295f, 0.125f));
+            PaintPocket(m);
+        });
 
         /// <summary>
         /// 捕手ミット。原点=中心、ポケット開口が+Z。非一様フィット（幅0.30 / 高0.33 / 奥行0.145）。
         /// 生成物は 0.330×0.324×0.317 のほぼ球で、実物の「丸くて薄い」比率と大きく違うため奥行を強く詰める。
         /// **6,000tri と装備中で最も重い**が、これは削れないぶん（下の経緯）であって余裕ではない。
         /// </summary>
-        public static Mesh Mitt() => Get("AIGear_Mitt1_lo",
-            m => CanonicalizeMeshyFromBack(m, new Vector3(0.300f, 0.330f, 0.145f)));
+        public static Mesh Mitt() => Get("AIGear_Mitt1_lo", m =>
+        {
+            CanonicalizeMeshyFromBack(m, new Vector3(0.300f, 0.330f, 0.145f));
+            PaintPocket(m);
+        });
 
         /// <summary>
         /// レガース片脚。原点=中心、膝が上（+Y）・正面+Z。
@@ -223,6 +229,41 @@ namespace KokoSim.Unity.Match
         {
             Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(0f, 0f, 180f)));   // 生成姿勢の上軸(+Z)まわり
             CanonicalizeMeshy(mesh, targetSize);
+        }
+
+        /// <summary>縁の革ひも（黄土色）。sRGB で書いてリニアへ直す（頂点色は SetColor の自動変換を通らない）。</summary>
+        private static readonly Color RimLace = new Color(0.80f, 0.62f, 0.30f).linear;
+
+        /// <summary>ポケットの内側（一段暗い革）。</summary>
+        private static readonly Color PocketDark = new Color(0.20f, 0.10f, 0.05f).linear;
+
+        /// <summary>
+        /// ポケット側が読めるようにする頂点色の塗り分け（issue #822）。一色塗りでは前後の面が
+        /// 同じ茶の円盤に見えるので、縁を回る明るい革ひも（全周）と、+Z 面の凹み（ポケットの内側）の
+        /// 暗色を頂点色（a=重み）で載せる。位置と法線だけで決める＝手作業で頂点を触らない。
+        /// 縁は外周の帯で、ポケット側（+Z）に寄るほど濃い。内側は +Z を向く法線で中心寄りだけ。
+        /// </summary>
+        private static void PaintPocket(Mesh mesh)
+        {
+            var verts = mesh.vertices;
+            var normals = mesh.normals;
+            var b = mesh.bounds;
+            var colors = new Color[verts.Length];
+            for (int i = 0; i < verts.Length; i++)
+            {
+                var v = verts[i] - b.center;
+                float rx = v.x / Mathf.Max(1e-4f, b.extents.x);
+                float ry = v.y / Mathf.Max(1e-4f, b.extents.y);
+                float r = Mathf.Sqrt(rx * rx + ry * ry);
+                float nz = normals.Length == verts.Length ? normals[i].z : 0f;
+                float rim = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.80f, 0.92f, r));
+                float inside = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.15f, 0.55f, nz))
+                    * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.60f, 0.80f, r)));
+                var c = rim >= inside ? RimLace : PocketDark;
+                c.a = Mathf.Max(rim, inside);
+                colors[i] = c;
+            }
+            mesh.colors = colors;
         }
 
         /// <summary>生成姿勢（正面-Y・上+Z）→ 装着正位（正面+Z・上+Y）。</summary>
