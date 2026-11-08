@@ -225,6 +225,8 @@ namespace KokoSim.Unity.Match
             if (pos is null) return "凡退";
             if (e.OutsThisPa >= 2) return pos + "併";
             if (e.BattedClass == BattedBallClass.Liner) return pos + "直";
+            // ファウルフライ（issue #830）は記録上「邪飛」（落下点がファウル地域＝方位角±45°超）
+            if (e.BattedIsFly && e.BattedBearingDeg is double fb && System.Math.Abs(fb) > 45.0) return pos + "邪飛";
             if (e.BattedIsFly) return pos + "飛";
             return pos + "ゴ";
         }

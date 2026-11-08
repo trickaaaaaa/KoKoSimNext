@@ -479,6 +479,15 @@ public sealed class AtBatSession
                 return Continue();
 
             case ContactOutcome.Foul:
+                // ファウルフライ（issue #830）: 打ち上がったファウルは弾道を与え、ファウルグラウンドで捕れればアウト。
+                // 弾道は打席の本流から Fork した専用ストリームで引く（Fork は親の状態を進めない＝本流の乱数順は不変）。
+                if (ctx.Fielding.FoulFlyShare > 0.0
+                    && FieldingResolver.FoulFlyBall(ctx.Fielding, rng.Fork(FoulFlyStreamId)) is { } foulBall
+                    && FieldingResolver.ResolveFoulFly(foulBall, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding,
+                        FieldingResolver.BatterToFirstSeconds(ctx.Field, batter, ctx.Fielding)) is { } foulOut)
+                {
+                    return FinishBattedBall(foulOut, foulBall, plan, loc, inZone, swingProb, ctx, fielders);
+                }
                 if (_strikes < 2) _strikes++;
                 RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: ball);
                 return Continue();
@@ -493,41 +502,52 @@ public sealed class AtBatSession
                     RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: ball);
                     return Continue();
                 }
-                RecordPitch(PitchKind.InPlay, plan, loc, inZone, swingProb, swung: true, ball: ball);
-
-                var pa = play.Result switch
-                {
-                    BattedBallResult.Single => PlateAppearanceResult.Single,
-                    BattedBallResult.Double => PlateAppearanceResult.Double,
-                    BattedBallResult.Triple => PlateAppearanceResult.Triple,
-                    BattedBallResult.HomeRun => PlateAppearanceResult.HomeRun,
-                    BattedBallResult.Error => PlateAppearanceResult.ReachedOnError,
-                    _ => PlateAppearanceResult.InPlayOut,
-                };
-
-                // タイムライン出力（CHANGELOG 32: 既定オフ。UI再生時のみ構築＝乱数不使用）。
-                Timeline.PlayTimeline? timeline = null;
-                if (ctx.CaptureTimeline)
-                {
-                    timeline = Timeline.TimelineBuilder.BuildBattedBall(
-                        play, fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
-                        Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
-                        ctx.Fielding.CatchCloseCallMarginSeconds, ctx.Fielding.InfielderFieldingRadiusM,
-                        _batterPlayer, ctx.Fielding);
-                }
-                _result = new AtBatResult(pa, _pitchCount)
-                {
-                    Timeline = timeline,
-                    // F2: 本塁クロスプレー（バックホーム憤死）が結果に効くため、幾何を常時保持する
-                    // （F1では捕捉時のみ＝統計シムゼロコストだったが、F2で判定入力になったので常時計算）。
-                    Play = play,
-                    PitchLog = _pitchLog,
-                };
-                return new PitchResolution(EndsPlateAppearance: true);
+                return FinishBattedBall(play, ball!, plan, loc, inZone, swingProb, ctx, fielders);
         }
 
         // ContactOutcome の網羅漏れは想定しない（従来 switch も同様に continue へ落ちる）。
         return Continue();
+    }
+
+    /// <summary>ファウルフライ（issue #830）の打球の Fork 用ストリーム番号（本流の乱数順を変えないための分岐）。</summary>
+    private const ulong FoulFlyStreamId = 0x830F0F1UL;
+
+    /// <summary>インプレーで打席が終わる（前に飛んだ打球・ファウルフライのアウト）。決め球の記録・結果の写像・タイムライン。</summary>
+    private PitchResolution FinishBattedBall(
+        FieldingPlay play, Batting.BattedBall ball, PitchPlan plan, ControlScatter.Location loc, bool inZone, double swingProb,
+        AtBatContext ctx, IReadOnlyList<Fielder> fielders)
+    {
+        RecordPitch(PitchKind.InPlay, plan, loc, inZone, swingProb, swung: true, ball: ball);
+
+        var pa = play.Result switch
+        {
+            BattedBallResult.Single => PlateAppearanceResult.Single,
+            BattedBallResult.Double => PlateAppearanceResult.Double,
+            BattedBallResult.Triple => PlateAppearanceResult.Triple,
+            BattedBallResult.HomeRun => PlateAppearanceResult.HomeRun,
+            BattedBallResult.Error => PlateAppearanceResult.ReachedOnError,
+            _ => PlateAppearanceResult.InPlayOut,
+        };
+
+        // タイムライン出力（CHANGELOG 32: 既定オフ。UI再生時のみ構築＝乱数不使用）。
+        Timeline.PlayTimeline? timeline = null;
+        if (ctx.CaptureTimeline)
+        {
+            timeline = Timeline.TimelineBuilder.BuildBattedBall(
+                play, fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
+                Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
+                ctx.Fielding.CatchCloseCallMarginSeconds, ctx.Fielding.InfielderFieldingRadiusM,
+                _batterPlayer, ctx.Fielding);
+        }
+        _result = new AtBatResult(pa, _pitchCount)
+        {
+            Timeline = timeline,
+            // F2: 本塁クロスプレー（バックホーム憤死）が結果に効くため、幾何を常時保持する
+            // （F1では捕捉時のみ＝統計シムゼロコストだったが、F2で判定入力になったので常時計算）。
+            Play = play,
+            PitchLog = _pitchLog,
+        };
+        return new PitchResolution(EndsPlateAppearance: true);
     }
 
     /// <summary>

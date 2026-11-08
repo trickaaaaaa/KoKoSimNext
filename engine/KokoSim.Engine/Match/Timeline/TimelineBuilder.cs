@@ -3527,6 +3527,7 @@ public static class TimelineBuilder
             BattedBallResult.HomeRun => "ホームラン",
             BattedBallResult.Foul => "ファウル",
             BattedBallResult.Error => pos.Length > 0 ? $"{pos}のエラー" : "エラー",
+            BattedBallResult.Out when play.FoulFly => $"{pos}ファウルフライ",   // issue #830
             BattedBallResult.Out => play.IsFly ? $"{pos}フライ" : $"{pos}ゴロ",
             // 内野ゴロで間に合わなかった安打（送球あり）＝内野安打。
             BattedBallResult.Single when !play.IsFly && play.ThrowArriveSeconds is not null => "内野安打",
