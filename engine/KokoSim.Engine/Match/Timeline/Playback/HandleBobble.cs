@@ -11,7 +11,7 @@ public enum HandleBobbleKind
     None,
     /// <summary>握り損ねて、球がグラブの中で小さく跳ねてから掴み直す。</summary>
     Juggle,
-    /// <summary>お手玉。グラブで弾いて前へこぼし、拾い直して投げる（記録はお手玉の失策＝<see cref="PlaybackPlay.BobbleError"/> のときだけ）。</summary>
+    /// <summary>お手玉。グラブで弾いて前へこぼし、拾い直して投げる（お手玉の失策＝<see cref="PlaybackPlay.BobbleError"/> か、お手玉しても一塁アウトのとき）。</summary>
     Fumble,
 }
 
@@ -70,15 +70,24 @@ public static class HandleBobblePlanner
             if (eb.Kind != BallSegmentKind.Throw || eb.FromRole is not { } from || !IsInfielder(from))
                 return HandleBobble.NoneValue;
             if (eb.T0 < ground.T1 - 1e-6) return HandleBobble.NoneValue;
-            // お手玉の芝居は「お手玉の失策」のときだけ（2026-11-03 監督報告: お手玉したのに内野安打は記録と絵の矛盾）。
-            // それ以外の長いもたつきは握り直しまで＝セーフでも「握り直す間に足で稼いだ内野安打」に見える。
+            // お手玉の芝居は「お手玉の失策」か「お手玉しても一塁アウト」のときだけ。
+            // 内野安打（セーフ）でお手玉は記録と絵の矛盾（2026-11-03 監督報告）なので握り直しまで＝
+            // 「握り直す間に足で稼いだ内野安打」に見える。お手玉＋アウトは矛盾しない（issue #815）。
             var kind = play.BobbleError ? HandleBobbleKind.Fumble : KindFor(eb.T0 - ground.T1);
-            if (!play.BobbleError && kind == HandleBobbleKind.Fumble) kind = HandleBobbleKind.Juggle;
+            if (!play.BobbleError && kind == HandleBobbleKind.Fumble && !BatterOut(play)) kind = HandleBobbleKind.Juggle;
             return kind == HandleBobbleKind.None
                 ? HandleBobble.NoneValue
                 : new HandleBobble(kind, from, ground.T1, eb.T0);
         }
         return HandleBobble.NoneValue;
+    }
+
+    /// <summary>打者走者がアウトになるプレーか（判定イベント「打」のアウトがある）。</summary>
+    private static bool BatterOut(PlaybackPlay play)
+    {
+        foreach (var j in play.Judgements)
+            if (j.Label == "打" && j.Kind == JudgementKind.Out) return true;
+        return false;
     }
 
     /// <summary>拾い上げてから投げ始めるまで[s]（拾った球を握り替えて投げる間）。</summary>

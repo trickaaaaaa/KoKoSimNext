@@ -150,6 +150,19 @@ public sealed record FieldingPlay
     /// </summary>
     public double? ErrorAtSeconds { get; init; }
 
+    // --- 悪送球を拾い直してアウト（issue #815・表示専用） ---
+
+    /// <summary>
+    /// 一塁への送球が逸れたが、回収レース（design-12 §3.8）で拾い直しが間に合ってアウトになった打席の
+    /// 逸れ幅[m]（塁を通り過ぎて転がり着いた点までの距離）。それ以外は null。回収レースで引いた値の写し
+    /// ＝新しい乱数は引かない。判定・帯は読まない（絵に「逸れた送球→拾い直し→アウト」を出す入力）。
+    /// </summary>
+    public double? RecoveredThrowScatterM { get; init; }
+    /// <summary>拾い直したのがバックアップ（一塁なら右翼手。<see cref="ThrowRecovery.BackupRole"/>）か。false＝一塁手自身。</summary>
+    public bool RecoveredThrowByBackup { get; init; }
+    /// <summary>拾い直しでアウトが成立した時刻[s]（接触基準＝<see cref="ThrowArriveSeconds"/> と同じ時計）。</summary>
+    public double? RecoveredThrowOutSeconds { get; init; }
+
     // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
 
     /// <summary>
@@ -433,6 +446,8 @@ public static class FieldingResolver
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
                 var (result, errorKind) = MaybeInfieldError(
                     fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy);
+                double? recoveredScatterM = null, recoveredOutSeconds = null;
+                var recoveredByBackup = false;
                 if (errorKind == FieldingErrorKind.Throw)
                 {
                     // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）: 悪送球確定後、逸れ幅→回収ロスを
@@ -447,11 +462,15 @@ public static class FieldingResolver
                     var recovery = ThrowRecovery.RecoveryPenaltySeconds(
                         scatterM, throwLanding, new Vector3D(backupX, 0, backupZ),
                         firstBaseman.Attributes.SprintSpeedMps, backup.Attributes.SprintSpeedMps,
-                        backup.Attributes.ThrowSpeedMps, coeff.RecoveryReactionSeconds);
+                        backup.Attributes.ThrowSpeedMps, coeff.RecoveryReactionSeconds, out var byBackup);
                     if (defenseTime + recovery + coeff.ForceOutMarginSeconds <= runnerTime)
                     {
                         result = BattedBallResult.Out;
                         errorKind = null;
+                        // 表示専用（issue #815）: 逸れた送球を拾い直してアウト、を絵に出すために回収レースの値を残す
+                        recoveredScatterM = scatterM;
+                        recoveredByBackup = byBackup;
+                        recoveredOutSeconds = defenseTime + recovery;
                     }
                 }
                 if (errorKind == FieldingErrorKind.Tunnel)
@@ -493,6 +512,9 @@ public static class FieldingResolver
                     ErrorKind = errorKind,
                     GroundHops = path.Hops,
                     GroundPathCatchSeconds = fieldTimeRaw,
+                    RecoveredThrowScatterM = recoveredScatterM,
+                    RecoveredThrowByBackup = recoveredByBackup,
+                    RecoveredThrowOutSeconds = recoveredOutSeconds,
                 };
             }
             // お手玉の失策（2026-11-03 監督報告「あれだけファンブルしたら内野安打じゃなくて普通にエラーでは？」）:

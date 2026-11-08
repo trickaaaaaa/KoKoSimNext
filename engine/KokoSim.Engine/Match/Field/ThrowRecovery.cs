@@ -29,10 +29,20 @@ public static class ThrowRecovery
         double scatterM, Vector3D landingPoint, Vector3D backupPosition,
         double selfSprintSpeedMps, double backupSprintSpeedMps, double backupThrowSpeedMps,
         double reactionSeconds)
+        => RecoveryPenaltySeconds(scatterM, landingPoint, backupPosition, selfSprintSpeedMps,
+            backupSprintSpeedMps, backupThrowSpeedMps, reactionSeconds, out _);
+
+    /// <summary>同上。<paramref name="byBackup"/>＝回収したのがバックアップか（絵の入力。issue #815）。
+    /// 値は上と完全に同じ（同点は受け手自身＝<c>Math.Min</c> と同じ側）。</summary>
+    public static double RecoveryPenaltySeconds(
+        double scatterM, Vector3D landingPoint, Vector3D backupPosition,
+        double selfSprintSpeedMps, double backupSprintSpeedMps, double backupThrowSpeedMps,
+        double reactionSeconds, out bool byBackup)
     {
         var selfTime = scatterM / selfSprintSpeedMps + reactionSeconds;
         var backupTime = (backupPosition - landingPoint).Length / backupSprintSpeedMps
                           + reactionSeconds + scatterM / backupThrowSpeedMps;
+        byBackup = backupTime < selfTime;
         return System.Math.Min(selfTime, backupTime);
     }
 }
