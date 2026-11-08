@@ -915,6 +915,42 @@ public sealed class TimelineTests
         => FieldingPlayFixtures.InfieldGrounder(
             FieldPosition.Catcher, fieldedX: 1.0, fieldedZ: 3.0);
 
+    /// <summary>
+    /// 本塁の自己フォース併殺で、投手がマウンド付近（本塁から17m）で捕ったときは自分で運ばない（issue #830）。
+    /// 捕手へ投げ、捕手が本塁を踏んで一塁へ投げる。秒は判定と同じ（本塁への送球の秒）。
+    /// </summary>
+    [Fact]
+    public void SelfForceDoublePlayThrows_PitcherFarFromHome_ThrowsToCatcherWhoRelays()
+    {
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.InfieldGrounder(FieldPosition.Pitcher, fieldedX: -1.2, fieldedZ: 17.1);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArrive, targetBase: 4);
+
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Carry);
+        var toHome = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "home");
+        Assert.Equal(FieldPosition.Pitcher, toHome.FromRole);
+        Assert.Equal(FieldPosition.Catcher, toHome.ToRole);
+        var toFirst = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "first");
+        Assert.Equal(FieldPosition.Catcher, toFirst.FromRole);
+        Assert.True(toFirst.T0 >= toHome.T1 - 1e-9, "捕手が受ける前に一塁へ投げている");
+    }
+
+    /// <summary>捕手が本塁の近くで捕ったときは従来どおり自分で運んで踏む。</summary>
+    [Fact]
+    public void SelfForceDoublePlayThrows_CatcherNearHome_StillCarries()
+    {
+        var field = new FieldGeometry();
+        var play = HomeSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, 5.0, targetBase: 4);
+        Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Carry && b.ToBase == "home");
+    }
+
     [Fact]
     public void SelfForceDoublePlayThrows_ThirdBase_ReplacesSingleThrowWithCarryAndThrow()
     {

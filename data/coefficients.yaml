@@ -186,7 +186,7 @@ batting:
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
   fly_apex_threshold_m: 2.5
-  catch_reach_factor: 0.93     # issue #740: 1.00→0.93（4秒上限撤去で増えたアウトを打率帯へ戻す）
+  catch_reach_factor: 0.92     # issue #740: 1.00→0.93（4秒上限撤去で増えたアウトを打率帯へ戻す）→0.92（#830: ファウルフライのアウト新設で下がった得点 4.37→4.51 を戻す）
   throw_transfer_seconds: 0.70
   throw_transfer_fielding_slope: 0.004 # 握り替えの守備連動（Issue #36）: 倍率=max(min,1−(守備−50)×これ)。守備50で×1.0＝恒等
   throw_transfer_factor_min: 0.70      # トランスファー倍率の下限（最速側クランプ, Issue #36）
