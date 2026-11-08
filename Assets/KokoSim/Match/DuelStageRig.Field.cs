@@ -1228,6 +1228,11 @@ namespace KokoSim.Unity.Match
         private const float FumblePopS = 0.35f;
         private const float FumblePopHeightM = 0.25f;
 
+        /// <summary>フライ落球（issue #813）でグラブに当たった球が地面へ落ちるまで[s]・跳ねる高さ[m]。
+        /// 胸〜頭上の高さ（1.2〜1.7m）からの自由落下が約0.5秒。</summary>
+        private const float DropPopS = 0.55f;
+        private const float DropPopHeightM = 0.35f;
+
         /// <summary>この捕球予定が「もたつきのお手玉」の弾く瞬間か（本物の失策のお手玉は含まない）。</summary>
         private bool IsBobbleFumble(FieldCatchEvent e)
             => _bobble.Kind == HandleBobbleKind.Fumble && e.Kind == FieldCatchKind.Fumble && e.Pos == _bobble.Fielder
@@ -1316,13 +1321,14 @@ namespace KokoSim.Unity.Match
         /// 「野手の立ち位置と球の距離」そのものになる（絵のために距離を発明しない）。</para>
         /// </summary>
         /// <summary>Miss＝悪送球が脇・頭上を抜ける（issue #812）。捕球の収録を流すが球には触らない。</summary>
-        private enum FieldCatchKind { Catch, Dive, DiveMiss, Fumble, Miss }
+        /// <summary>Drop＝フライ落球（issue #813）。飛球の捕球の収録で捕りにいき、球はグラブに当たって落ちる。</summary>
+        private enum FieldCatchKind { Catch, Dive, DiveMiss, Fumble, Miss, Drop }
 
         private static FieldCatchAnchor AnchorOf(FieldCatchKind kind, int index) => kind switch
         {
             FieldCatchKind.Dive or FieldCatchKind.DiveMiss => FieldDiveAnchors[index],
             FieldCatchKind.Fumble => FieldFumbleAnchors[index],
-            _ => FieldCatchAnchors[index],   // Catch / Miss
+            _ => FieldCatchAnchors[index],   // Catch / Miss / Drop
         };
 
         /// <summary>球をグラブへ吸わせる種別か（＝捕った芝居）。</summary>
@@ -1521,7 +1527,10 @@ namespace KokoSim.Unity.Match
                 }
                 else if (!isThrow && !float.IsNaN(fumbleAt) && Mathf.Abs(tc - fumbleAt) < 0.05f)
                 {
-                    kind = FieldCatchKind.Fumble;
+                    // 空中の球を弾いた＝フライ落球（issue #813）。ゴロのお手玉（Fumble_L/R＝低い球を弾く収録）
+                    // ではなく、飛球の捕球の収録で捕りにいってグラブから落とす
+                    bool flying = eb == null ? seg is ArcSegment : eb.Kind == BallSegmentKind.Flight;
+                    kind = flying ? FieldCatchKind.Drop : FieldCatchKind.Fumble;
                     aerialResolved |= aerial;
                 }
                 else if (aerial)
@@ -1568,6 +1577,13 @@ namespace KokoSim.Unity.Match
                 if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
                 else if (kind == FieldCatchKind.Miss)
                     anchor = seg.WildThrow == WildThrowStyle.Sail ? MissAnchorJump : MissAnchorStretch;
+                else if (kind == FieldCatchKind.Drop)
+                {
+                    // 高さ×近づき方で普通の捕球と同じ収録を選ぶ（落とすのは球の側で描く）
+                    anchor = SelectFieldCatch(h, app);
+                    if (anchor < 0) anchor = SelectFieldCatch(h, CatchApproach.Still);
+                    if (anchor < 0) { kind = FieldCatchKind.Fumble; anchor = SelectFumbleSide(play, who, tc, seg); }
+                }
                 else if (kind == FieldCatchKind.DiveMiss)
                 {
                     // 横っ飛びを廃止した（#674）ので、届かなかった絵は背走ジャンプだけ。前進・横は従来の
@@ -1702,7 +1718,8 @@ namespace KokoSim.Unity.Match
                     case FieldCatchKind.Dive: _kindDive++; break;
                     case FieldCatchKind.DiveMiss:
                     case FieldCatchKind.Miss: _kindDiveMiss++; break;
-                    case FieldCatchKind.Fumble: _kindFumble++; break;
+                    case FieldCatchKind.Fumble:
+                    case FieldCatchKind.Drop: _kindFumble++; break;
                     default: _kindCatch++; break;
                 }
             }
@@ -1712,7 +1729,7 @@ namespace KokoSim.Unity.Match
             for (int i = 0; i < _catchEvents.Count; i++)
             {
                 var body = _catchEvents[i];
-                if (body.Kind == FieldCatchKind.Catch) continue;
+                if (body.Kind is FieldCatchKind.Catch or FieldCatchKind.Drop) continue;
                 var tail = body.TCatch + DiveTailSeconds(AnchorOf(body.Kind, body.Anchor));
                 for (int j = 0; j < _catchEvents.Count; j++)
                 {
@@ -1869,7 +1886,8 @@ namespace KokoSim.Unity.Match
                         // 捕るのは 0.80s で、残りが着地〜起き上がり。腰の高さが 0.79→0.17→0.72 と戻る）。
                         // 0.35 秒で窓を閉じると走りの段がクリップを奪い、倒れた姿勢から待機へ瞬間移動する
                         // （打ち切りには必ず据え置きを添える＝design-18 §4.5-⑬⑭ と同じ失敗）。
-                        st.CatchUntil = e.TCatch + (e.Kind == FieldCatchKind.Catch
+                        // 落球（issue #813）も捕球の収録なので、尻尾まで流すと「捕った形」で立ち続ける＝短く切る
+                        st.CatchUntil = e.TCatch + (e.Kind is FieldCatchKind.Catch or FieldCatchKind.Drop
                             ? CatchHoldSeconds : DiveTailSeconds(anchor));
                         st.CatchEvent = i;
                         // **グラブが球の来る方を向くように体を回す**。走る向きを速度ベクトルへ
@@ -2166,7 +2184,8 @@ namespace KokoSim.Unity.Match
                 // 寄せると**捕ってしまう**＝収録は捕るクリップなので、IK を当てないことが
                 // 「届かなかった」の表現そのものになる。外れる量は engine の幾何
                 // （その時刻の野手の位置と球の位置の差）がそのまま出る＝絵のために距離を発明しない
-                if (!HoldsBall(e.Kind)) continue;
+                // フライ落球（issue #813）だけは例外: グラブは球に届いている（当てて落とす）
+                if (!HoldsBall(e.Kind) && e.Kind != FieldCatchKind.Drop) continue;
                 var a = FielderActor(kv.Key);
                 if (a == null || a.Animator == null) continue;
 
@@ -5077,8 +5096,11 @@ namespace KokoSim.Unity.Match
             for (int i = 0; i < _catchEvents.Count; i++)
             {
                 var e = _catchEvents[i];
-                if (IsBobbleFumble(e))
+                if (IsBobbleFumble(e) || e.Kind == FieldCatchKind.Drop)
                 {
+                    // 落球（issue #813）はグラブの高さから落ちるので、跳ねて落ちるまでを長めに取る
+                    float popS = e.Kind == FieldCatchKind.Drop ? DropPopS : FumblePopS;
+                    float popH = e.Kind == FieldCatchKind.Drop ? DropPopHeightM : FumblePopHeightM;
                     // もたつきのお手玉: 球は一度グラブ（捕球点）へ着き、そこから跳ねて地面へ落ちる。
                     // 落ちた後は engine のこぼれ区間（グラブの所から外へ転がる）そのまま
                     if (t >= e.TCatch - CatchBallBlendSeconds && t < e.TCatch)
@@ -5086,11 +5108,11 @@ namespace KokoSim.Unity.Match
                         float ub = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
                         return Vector3.Lerp(enginePos, e.Point, ub * ub * (3f - 2f * ub));
                     }
-                    if (t >= e.TCatch && t < e.TCatch + FumblePopS)
+                    if (t >= e.TCatch && t < e.TCatch + popS)
                     {
-                        float up = (t - e.TCatch) / FumblePopS;
+                        float up = (t - e.TCatch) / popS;
                         var flat = Vector3.Lerp(new Vector3(e.Point.x, 0f, e.Point.z), enginePos, up * up * (3f - 2f * up));
-                        return flat + new Vector3(0f, e.Point.y * (1f - up) + 4f * FumblePopHeightM * up * (1f - up), 0f);
+                        return flat + new Vector3(0f, e.Point.y * (1f - up) + 4f * popH * up * (1f - up), 0f);
                     }
                     continue;
                 }
