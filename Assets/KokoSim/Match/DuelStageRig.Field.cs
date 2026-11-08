@@ -45,6 +45,12 @@ namespace KokoSim.Unity.Match
         };
 
         private readonly Dictionary<FieldPosition, Actor> _fieldCast = new();
+        // 野手ごとの鏡映親ノード（issue #795）。投手・打者と同じ x=0 面の無回転な親＝左投げの位置だけ
+        // localScale.x=-1 にする（design-18 §3.4。恒等の間は描画に一切影響しない＝右投げの絵は従来とビット一致）。
+        private readonly Dictionary<FieldPosition, Transform> _fieldMirror = new();
+        // 呼び出し側が最後に渡した「左投げの位置」。守備陣の生成（最初の打球の前）より先に渡されても
+        // 生成直後に当て直せるよう控えておく。
+        private readonly HashSet<FieldPosition> _fieldLeft = new();
         private bool _fieldCastVisible;
 
         /// <summary>守備陣（投手・捕手を含む9人）を役割で引く。未生成なら空。</summary>
@@ -123,7 +129,9 @@ namespace KokoSim.Unity.Match
 
                 _fieldCast[pos] = a;
                 _fieldIdleClip[pos] = clip;
+                _fieldMirror[pos] = WrapInMirrorNode(a, "mirror-" + pos);
             }
+            ApplyFielderHandedness();
 
             // 投手・捕手も打球中は守備陣の一員として動く（engine の Moves に入る）。
             // 待機は対決用のクリップ（投球・捕手の構え）ではなく守備の待機を使い、
@@ -169,6 +177,38 @@ namespace KokoSim.Unity.Match
             {
                 var home = FieldHomeSpot(kv.Key);
                 PlaceFielder(kv.Value, (float)home.X, (float)home.Y);
+            }
+        }
+
+        /// <summary>
+        /// 守備陣（一塁〜右翼の7人）の投げる手を差し替える（issue #795）。左投げの位置は鏡映親ノードを
+        /// 裏返す＝グラブは右手・送球は左手に見える（グラブは左手ボーン・送球は右手ボーンのまま、鏡に映すだけ）。
+        /// 投手は <see cref="SetHandedness"/>、捕手は対決ビューの捕球・立ち位置の較正が反転を前提にしていないので対象外。
+        /// <para>打球プレー中は触らない（位置・向きは保つが、プレーの途中で体が鏡に入れ替わる）。
+        /// 渡された値は控えておき、プレーが終わった後と守備陣の生成直後に当て直す。</para>
+        /// </summary>
+        public void SetFielderHandedness(IEnumerable<FieldPosition> leftThrowers)
+        {
+            _fieldLeft.Clear();
+            if (leftThrowers != null) foreach (var p in leftThrowers) _fieldLeft.Add(p);
+            ApplyFielderHandedness();
+        }
+
+        private void ApplyFielderHandedness()
+        {
+            if (!Available || FieldPlayActive) return;
+            foreach (var kv in _fieldCast)
+            {
+                var a = kv.Value;
+                if (a == null || a.Go == null) continue;
+                if (!_fieldMirror.TryGetValue(kv.Key, out var node) || node == null) continue;
+                var left = _fieldLeft.Contains(kv.Key);
+                if (a.Mirrored == left) continue;
+                // 裏返すと local の x・向きの意味が逆になる＝ステージ上の立ち位置と向きを控えてから置き直す
+                var pos = StagePos(a);
+                var yaw = StageYaw(a);
+                ApplyMirror(node, a, left);
+                PlaceFielder(a, pos.x, pos.z, yaw);
             }
         }
 
@@ -1821,7 +1861,8 @@ namespace KokoSim.Unity.Match
                         //    走り込み捕球（グラブが体の真下＝オフセット 0.112m）が丸ごと外れ、
                         //    狙点だけ「野手→球」の向きに置かれてグラブは走った向きのまま＝残差 0.094m。
                         //    引き寄せた狙点はグラブの居場所そのものなので、**向きを合わせて初めて一致する**
-                        var gh = new Vector2(anchor.GloveX, anchor.GloveZ);
+                        // 左投げ（鏡映中・issue #795）はグラブが体の反対側＝横の符号を返す
+                        var gh = new Vector2(anchor.GloveX * MirrorSign(a), anchor.GloveZ);
                         if (gh.magnitude > 0.05f)
                         {
                             var here = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, e.TCatch).Pos;
@@ -1955,7 +1996,8 @@ namespace KokoSim.Unity.Match
                         st.CatchUntil = e.TTag + TagHoldSeconds;
                         // **グラブが走者の方を向くように体を回す**（捕球でグラブを球へ向けたのと同型）。
                         // これが無いと、伸ばした腕が走者と無関係な方向を指したままになる。
-                        var gh = new Vector2(DefenderTagOut.GloveX, DefenderTagOut.GloveZ);
+                        // 左投げ（鏡映中・issue #795）はグラブが体の反対側＝横の符号を返す
+                        var gh = new Vector2(DefenderTagOut.GloveX * MirrorSign(a), DefenderTagOut.GloveZ);
                         var here = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, e.TTag).Pos;
                         var toRunner = new Vector2(e.RunnerAt.x - (float)here.X,
                                                    e.RunnerAt.z - (float)here.Y);
@@ -2384,6 +2426,7 @@ namespace KokoSim.Unity.Match
             _throwWindupMin = float.MaxValue;
             _throwHeadMin = float.MaxValue;
             _throwLateralMax = 0f;
+            _throwLaterals.Clear();
             _throwAimErrMax = 0f;
             _throwFacingWorst = 0f;
             _throwFacingSwingWorst = 0f;
@@ -2763,7 +2806,9 @@ namespace KokoSim.Unity.Match
                     if (line.sqrMagnitude > 1e-6f)
                     {
                         var n = line.normalized;
-                        _throwLateralMax = Mathf.Max(_throwLateralMax, Mathf.Abs(d.x * n.y - d.y * n.x));
+                        var lat = Mathf.Abs(d.x * n.y - d.y * n.x);
+                        _throwLateralMax = Mathf.Max(_throwLateralMax, lat);
+                        if (_throwLaterals.Count < 64) _throwLaterals.Add(lat);
                     }
                     float u = Mathf.InverseLerp(e.TRelease, e.TRelease + ThrowHandoffSeconds, t);
                     float w = 1f - u * u * (3f - 2f * u);
@@ -2872,6 +2917,10 @@ namespace KokoSim.Unity.Match
         }
 
         private float _throwWindupMin, _throwHeadMin, _throwLateralMax, _throwAimErrMax;
+        // 送球1本ごとの横ずれ（コマごとに入るので同じ送球が数回入る。分布を見る用・撮影ハーネス向け）
+        private readonly List<float> _throwLaterals = new();
+        /// <summary>【撮影ハーネス用】このプレーの送球の横ずれ[m]（手放し直後のコマごと）。</summary>
+        public IReadOnlyList<float> ThrowLateralsForCapture => _throwLaterals;
 
         /// <summary>
         /// 【撮影ハーネス用】送球の受け入れ実測。
@@ -4687,6 +4736,7 @@ namespace KokoSim.Unity.Match
                 kv.Value.Speed = 1f;
             }
             PlaceFieldCastAtDefault();
+            ApplyFielderHandedness();   // プレー中に守備交代があれば、ここで当て直す（issue #795）
             SetFieldCastVisible(false);
             HideBall();
             ClearPreviewFrame();

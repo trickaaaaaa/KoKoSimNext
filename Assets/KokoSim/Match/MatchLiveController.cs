@@ -3902,6 +3902,22 @@ namespace KokoSim.Unity.Match
             var pitcherLeft = throws == Handedness.Left;
             var batterLeft = bats == Handedness.Left || (bats == Handedness.Switch && !pitcherLeft);
             _duelRig.SetHandedness(batterLeft, pitcherLeft);
+            ApplyFielderHandedness();
+        }
+
+        /// <summary>
+        /// 守備側の各位置の選手の投げる手を3D守備ビューへ渡す（issue #795）。いま守っている9人の位置は
+        /// 観測データの打順（交代反映済み）から引く。投手は <see cref="ApplyDuelHandedness"/> の側で済んでいる。
+        /// </summary>
+        private void ApplyFielderHandedness()
+        {
+            if (_duelRig == null || !_duelRig.Available || _prog == null) return;
+            var snap = _prog.Snapshot();
+            var defense = snap.OffenseIsTop ? snap.Home : snap.Away;
+            var left = new System.Collections.Generic.List<KokoSim.Engine.Match.Field.FieldPosition>();
+            foreach (var slot in defense.Lineup)
+                if (slot.Throws == Handedness.Left) left.Add(slot.Position);
+            _duelRig.SetFielderHandedness(left);
         }
 
         /// <summary>撮影ハーネス用（エディタ限定運用）: 対決ビューのトグルを外から叩く。</summary>

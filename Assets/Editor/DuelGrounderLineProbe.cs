@@ -28,9 +28,19 @@ namespace KokoSim.UnityEditorTools
         [UnityEditor.MenuItem("KokoSim/Duel/内野ゴロの捕球点を実測（#782）")]
         public static void RunMenu() => Debug.Log(Run(40, 200));
 
-        /// <summary><paramref name="games"/> 試合ぶんの内野ゴロ（最大 <paramref name="maxPlays"/> 本）を測り、要約を返す。</summary>
-        public static string Run(int games, int maxPlays)
+        private static readonly FieldPosition[] SevenFielders =
         {
+            FieldPosition.FirstBase, FieldPosition.SecondBase, FieldPosition.ThirdBase, FieldPosition.Shortstop,
+            FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
+        };
+
+        /// <summary><paramref name="games"/> 試合ぶんの内野ゴロ（最大 <paramref name="maxPlays"/> 本）を測り、要約を返す。
+        /// <paramref name="leftFielders"/> で野手7人を全員左投げ（鏡映）にして同じ打球を測る（issue #795）。</summary>
+        public static string Run(int games, int maxPlays, bool leftFielders = false)
+        {
+            float throwLateralMax = 0f;
+            var laterals = new List<float>();
+            int throws = 0;
             var plays = CollectGrounders(games, maxPlays);
             var rows = new StringBuilder();
             rows.AppendLine("play\tpos\tkind\tlineOff\tfielderGap\tpulled\tgloveErr\tbodyShift\tgloveReach\tclip");
@@ -42,6 +52,7 @@ namespace KokoSim.UnityEditorTools
             {
                 if (!rig.Available) return "DuelStageRig が組めない（素体/クリップ未導入）";
                 rig.EnsureSize(320, 180);
+                if (leftFielders) rig.SetFielderHandedness(SevenFielders);
                 float poseStep = 1f / DuelStageRig.PoseFps;
                 for (int i = 0; i < plays.Count; i++)
                 {
@@ -52,6 +63,15 @@ namespace KokoSim.UnityEditorTools
                     {
                         if (t > contact) rig.Tick(poseStep);
                         rig.SetFieldTime(t);
+                    }
+                    // 送球: 球が手を離れた点と engine の送球線の横ずれ（投げる手が鏡に入れ替わっても球が手から出るか）
+                    var head = rig.FieldThrowDiagForCapture().Split('\n')[0];
+                    var m = System.Text.RegularExpressions.Regex.Match(head, "送球予定=(\\d+)件.*横ずれの最悪=([0-9.]+)m");
+                    laterals.AddRange(rig.ThrowLateralsForCapture);
+                    if (m.Success)
+                    {
+                        throws += int.Parse(m.Groups[1].Value);
+                        throwLateralMax = Mathf.Max(throwLateralMax, float.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture));
                     }
                     foreach (var line in rig.FieldCatchLineDiagForCapture().Split('\n'))
                     {
@@ -72,20 +92,24 @@ namespace KokoSim.UnityEditorTools
             }
 
             Directory.CreateDirectory(Dir);
-            File.WriteAllText(Path.Combine(Dir, "grounder-line.tsv"), rows.ToString());
+            File.WriteAllText(Path.Combine(Dir, leftFielders ? "grounder-line-left.tsv" : "grounder-line.tsv"), rows.ToString());
             return string.Format(CultureInfo.InvariantCulture,
                 "内野ゴロ {0}本 / ゴロ捕球 {1}件: 線からの横ずれ 最大={2:F3}m p95={3:F3}m 平均={4:F3}m >0.05m={5}件"
                 + " | ゴロのグラブ誤差 最大={6:F3}m p95={7:F3}m 平均={8:F3}m（{9}件） | 送球・飛球のグラブ誤差 最大={10:F3}m（{11}件）",
                 plays.Count, ground.Count, Max(ground), Pct(ground, 0.95f), Mean(ground), Count(ground, 0.05f),
                 Max(groundGlove), Pct(groundGlove, 0.95f), Mean(groundGlove), groundGlove.Count,
-                Max(airGlove), airGlove.Count);
+                Max(airGlove), airGlove.Count)
+                + string.Format(CultureInfo.InvariantCulture,
+                    " | 送球 {0}本: 手を離れた点の横ずれ 最悪={1:F3}m p95={3:F3}m 中央={4:F3}m | 送球・飛球のグラブ誤差 p95={5:F3}m 平均={6:F3}m{2}",
+                    throws, throwLateralMax, leftFielders ? "（野手7人を左投げ）" : "",
+                    Pct(laterals, 0.95f), Pct(laterals, 0.5f), Pct(airGlove, 0.95f), Mean(airGlove));
         }
 
         /// <summary>
         /// <paramref name="playIndex"/> 本目（<see cref="Run"/> と同じ集合）の <paramref name="pos"/> の捕球を、
         /// 捕球の <paramref name="offsets"/> 秒ずれた時刻で撮る（負＝捕球前）。out/duel-stage/grounder-line-*.png
         /// </summary>
-        public static string Shoot(int games, int maxPlays, int playIndex, string pos, float[] offsets)
+        public static string Shoot(int games, int maxPlays, int playIndex, string pos, float[] offsets, bool leftFielders = false)
         {
             var plays = CollectGrounders(games, maxPlays);
             var play = plays[playIndex];
@@ -95,6 +119,7 @@ namespace KokoSim.UnityEditorTools
             {
                 if (!rig.Available) return "DuelStageRig が組めない";
                 rig.EnsureSize(960, 540);
+                if (leftFielders) rig.SetFielderHandedness(SevenFielders);
                 float contact = ContactOf(play);
                 rig.BeginFieldPlay(play, contact);
                 float tCatch = float.NaN;
@@ -121,7 +146,7 @@ namespace KokoSim.UnityEditorTools
                     tex.Apply();
                     RenderTexture.active = prev;
                     var file = Path.Combine(Dir, string.Format(CultureInfo.InvariantCulture,
-                        "grounder-line-{0}-{1}-{2:+0.00;-0.00}.png", playIndex, pos, offsets[k]));
+                        "grounder-line-{0}-{1}{3}-{2:+0.00;-0.00}.png", playIndex, pos, offsets[k], leftFielders ? "-L" : ""));
                     File.WriteAllBytes(file, tex.EncodeToPNG());
                     Object.DestroyImmediate(tex);
                     sb.AppendLine(file + " t=" + t.ToString("F2", CultureInfo.InvariantCulture));

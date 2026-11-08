@@ -420,7 +420,7 @@ public sealed class TeamState
             var displayPos = _usesDh && i == _dhSlot ? FieldPosition.DesignatedHitter : p.Position;
             slots.Add(new LiveBatterSlot(
                 i + 1, p.SourceId, p.UniformNumber, p.Name, displayPos, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue, p.Grade));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue, p.Grade, p.Throws));
         }
         return slots;
     }
@@ -463,7 +463,7 @@ public sealed class TeamState
             var a = _bat.TryGetValue(KeyOf(p), out var acc) ? acc : null;
             list.Add(new LiveBatterSlot(
                 0, p.SourceId, p.UniformNumber, p.Name, p.Position, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue, p.Grade));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue, p.Grade, p.Throws));
         }
         return list;
     }
