@@ -73,9 +73,9 @@ DOTNET="/usr/local/share/dotnet/dotnet"
 GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll :(glob)Assets/StreamingAssets/KokoSim/**/*.yaml"
 
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
-MODEL="${OVERNIGHT_MODEL:-claude-sonnet-5}"          # 既定は Sonnet。model:opus ラベルで昇格
-OPUS_MODEL="claude-opus-4-8"
-FALLBACK_MODEL="${OVERNIGHT_FALLBACK:-claude-sonnet-4-6}"
+MODEL="${OVERNIGHT_MODEL:-claude-sonnet-5-5}"          # 既定は Sonnet。model:opus ラベルで昇格
+OPUS_MODEL="claude-opus-5-5"
+FALLBACK_MODEL="${OVERNIGHT_FALLBACK:-claude-sonnet-5}"
 ISSUE_TIMEOUT="${ISSUE_TIMEOUT:-5400}"               # 1件あたりのハード上限（Unity実機確認込みで90分）
 STALL_TIMEOUT="${STALL_TIMEOUT:-600}"                # セッションの transcript が無進捗なら kill（既定10分）
 MAX_ISSUES="${MAX_ISSUES:-0}"                        # 0 = 無制限
