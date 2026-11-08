@@ -425,6 +425,8 @@ public static class CoefficientsLoader
         /// <summary>ストレートの球威(Power-50)あたりの回転数傾き（Issue #274）。</summary>
         public double SpinRpmPerPower { get; set; } = D.SpinRpmPerPower;
         public double SpinRpmPerSharpness { get; set; } = D.SpinRpmPerSharpness;
+        // 球種ごとの回転軸・実効回転数倍率（設計書02 §2.1・issue #835）
+        public List<PitchAxisDto>? PitchAxis { get; set; }
         // 投手ギア（設計書02 §1.1f）
         public double GearPushVelocityBonusKmh { get; set; } = D.GearPushVelocityBonusKmh;
         public double GearPushStaminaFactor { get; set; } = D.GearPushStaminaFactor;
@@ -453,12 +455,42 @@ public static class CoefficientsLoader
                 SpinRpmBase = SpinRpmBase,
                 SpinRpmPerPower = SpinRpmPerPower,
                 SpinRpmPerSharpness = SpinRpmPerSharpness,
+                PitchAxis = PitchAxis is null ? D.PitchAxis : PitchAxis.Select(a => a.ToModel()).ToList(),
                 GearPushVelocityBonusKmh = GearPushVelocityBonusKmh,
                 GearPushStaminaFactor = GearPushStaminaFactor,
                 GearCoastVelocityPenaltyKmh = GearCoastVelocityPenaltyKmh,
                 GearCoastStaminaFactor = GearCoastStaminaFactor,
             };
         }
+    }
+
+    /// <summary>球種1つの回転軸・実効回転数倍率（設計書02 §2.1・issue #835）。</summary>
+    private sealed class PitchAxisDto
+    {
+        public string Type { get; set; } = "fastball";
+        public double TiltDeg { get; set; }
+        public double RpmScale { get; set; } = 1.0;
+
+        public PitchAxisCoefficients ToModel() => new()
+        {
+            Type = ParseType(Type),
+            TiltDeg = TiltDeg,
+            RpmScale = RpmScale,
+        };
+
+        private static PitchType ParseType(string s) => s switch
+        {
+            "fastball" => PitchType.Fastball,
+            "two_seam" => PitchType.TwoSeam,
+            "cutter" => PitchType.Cutter,
+            "slider" => PitchType.Slider,
+            "curve" => PitchType.Curve,
+            "fork" => PitchType.Fork,
+            "changeup" => PitchType.Changeup,
+            "shuuto" => PitchType.Shuuto,
+            "sinker" => PitchType.Sinker,
+            _ => PitchType.Fastball,
+        };
     }
 
     private sealed class ControlToSigmaDto
@@ -508,6 +540,8 @@ public static class CoefficientsLoader
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
         public double LaunchAngleSigmaPerContact { get; set; } = D.LaunchAngleSigmaPerContact;
         public double LaunchAngleSigmaContactFloor { get; set; } = D.LaunchAngleSigmaContactFloor;
+        public double LaunchAnglePerVerticalBreakM { get; set; } = D.LaunchAnglePerVerticalBreakM;
+        public double LaunchAngleBreakRefM { get; set; } = D.LaunchAngleBreakRefM;
         public double BearingSigma { get; set; } = D.BearingSigma;
         // ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）
         public double TimingSigma { get; set; } = D.TimingSigma;
@@ -577,6 +611,8 @@ public static class CoefficientsLoader
             LaunchAngleSigma = LaunchAngleSigma,
             LaunchAngleSigmaPerContact = LaunchAngleSigmaPerContact,
             LaunchAngleSigmaContactFloor = LaunchAngleSigmaContactFloor,
+            LaunchAnglePerVerticalBreakM = LaunchAnglePerVerticalBreakM,
+            LaunchAngleBreakRefM = LaunchAngleBreakRefM,
             BearingSigma = BearingSigma,
             TimingSigma = TimingSigma,
             TimingRefKmh = TimingRefKmh,

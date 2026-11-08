@@ -9,8 +9,8 @@ namespace KokoSim.Engine.Match.Pitching;
 public readonly record struct PitchTrajectoryFeatures(
     double InducedVerticalBreakM, double InducedHorizontalBreakM, double FlightTimeSeconds)
 {
-    /// <summary>誘発変化の合成量（縦横合成, 設計書15 Phase E-2）。現行モデルは全球種バックスピン固定のため
-    /// 横成分は常に0（実質縦成分のみ）だが、将来球種ごとに回転軸を持たせた時にそのまま効くよう合成量で持つ。</summary>
+    /// <summary>誘発変化の合成量（縦横合成, 設計書15 Phase E-2）。球種ごとの回転軸（issue #835）で
+    /// 横成分・縦成分の配分が変わるため、判定側は常にこの合成量を読む。</summary>
     public double BreakMagnitudeM => System.Math.Sqrt(
         InducedVerticalBreakM * InducedVerticalBreakM + InducedHorizontalBreakM * InducedHorizontalBreakM);
 }
@@ -21,7 +21,9 @@ public readonly record struct PitchTrajectoryFeatures(
 /// はゲーム内で不変（YAML起動時に確定）なので、値の組ごとにテーブルを1回だけ構築してキャッシュする。
 ///
 /// <para>Trajectory（誘発縦変化・到達時間）はリリース角・方位角に依存しない（ホップ量は無回転球との差分で
-/// 測るため）ため、実質的に (球速, rpm) だけの純関数。2次元グリッド＋補間に理想的な形。</para>
+/// 測るため）ため、実質的に (球速, rpm) だけの純関数。2次元グリッド＋補間に理想的な形。
+/// 回転軸（<paramref name="tiltDeg"/>, issue #835）は球種ごとに固定値（<see cref="PitchingCoefficients.AxisFor"/>）
+/// なので、球種ごとに別インスタンス（tiltDeg違い）をキャッシュして持つ＝グリッドの次元を増やさずに済む。</para>
 /// </summary>
 public sealed class TrajectoryFeatureTable
 {
@@ -33,7 +35,7 @@ public sealed class TrajectoryFeatureTable
     private readonly double[,] _horizontalBreakM;
     private readonly double[,] _flightTimeSeconds;
 
-    private static readonly ConcurrentDictionary<(Aerodynamics, MoundGeometry), TrajectoryFeatureTable> Cache = new();
+    private static readonly ConcurrentDictionary<(Aerodynamics, MoundGeometry, double), TrajectoryFeatureTable> Cache = new();
 
     private TrajectoryFeatureTable(
         double[] speeds, double[] rpms, double[,] verticalBreakM, double[,] horizontalBreakM, double[,] flightTimeSeconds)
@@ -48,14 +50,18 @@ public sealed class TrajectoryFeatureTable
     }
 
     /// <summary>
-    /// (aero, mound) の組ごとにテーブルを1回だけ構築してキャッシュを返す（決定論的な純構築＝並行呼び出しでも安全）。
+    /// (aero, mound, tiltDeg) の組ごとにテーブルを1回だけ構築してキャッシュを返す（決定論的な純構築＝並行呼び出しでも安全）。
+    /// グリッド範囲は <see cref="Build"/> の既定よりも広い（issue #835: 球種ごとの rpm_scale で基準回転数から
+    /// 大きく外れる値が出るため。既定の狭い範囲は <see cref="Build"/> を直接呼ぶ既存テスト・用途のために残す）。
     /// </summary>
-    public static TrajectoryFeatureTable GetOrBuild(Aerodynamics aero, MoundGeometry mound)
-        => Cache.GetOrAdd((aero, mound), key => Build(key.Item1, key.Item2));
+    public static TrajectoryFeatureTable GetOrBuild(Aerodynamics aero, MoundGeometry mound, double tiltDeg = 0.0)
+        => Cache.GetOrAdd((aero, mound, tiltDeg), key => Build(
+            key.Item1, key.Item2, tiltDeg: key.Item3, rpmMin: 600.0, rpmMax: 3000.0, rpmStep: 100.0));
 
     /// <summary>
     /// グリッドを構築する。範囲は実運用の (球速, rpm) レンジに余裕を持たせた値（設計書02 §1.1d/§1.1b, coefficients.yaml
     /// の spin_rpm_* から実際に出うる値を包含）。範囲外は <see cref="Lookup"/> 側でクランプする。
+    /// <paramref name="tiltDeg"/> は回転軸角度（既定0=純バックスピン、<see cref="PitchSpec.SpinFromRpmAndTilt"/>）。
     /// </summary>
     public static TrajectoryFeatureTable Build(
         Aerodynamics aero,
@@ -65,7 +71,8 @@ public sealed class TrajectoryFeatureTable
         double speedStepKmh = 2.0,
         double rpmMin = 1800.0,
         double rpmMax = 2700.0,
-        double rpmStep = 50.0)
+        double rpmStep = 50.0,
+        double tiltDeg = 0.0)
     {
         var speeds = Range(speedMinKmh, speedMaxKmh, speedStepKmh);
         var rpms = Range(rpmMin, rpmMax, rpmStep);
@@ -80,7 +87,7 @@ public sealed class TrajectoryFeatureTable
                 var spec = new PitchSpec
                 {
                     SpeedKmh = speeds[i],
-                    SpinRadPerSec = PitchSpec.BackspinFromRpm(rpms[j]),
+                    SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(rpms[j], tiltDeg),
                 };
                 var traj = PitchSimulator.Simulate(spec, aero, mound);
                 vertical[i, j] = traj.InducedVerticalBreakM;
