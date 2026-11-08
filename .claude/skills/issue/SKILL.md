@@ -114,7 +114,7 @@ gh issue create \
 ## 完了条件
 - [ ] 1機能=1テスト以上
 - [ ] `dotnet test engine/ --filter "Category!=Heavy"` が緑
-- [ ] （engine 変更時）`tools/sync-engine-dll.sh` で Unity へ反映
+- [ ] （engine 変更時）`tools/sync-engine-dll.sh` で Unity へ反映（DLL は Git 管理外＝コミットしない）
 - [ ] （UI変更時）バッチスクショで UI原則7箇条 を自己レビュー
 ```
 

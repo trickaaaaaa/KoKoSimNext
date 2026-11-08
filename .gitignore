@@ -67,3 +67,10 @@ Assets/KokoSim/Resources.meta
 # 出所未確認の実写ポートレート（公開リポジトリに載せない・ローカルにだけ置く）
 Assets/UI/Images/portraits/*.jpeg
 Assets/UI/Images/portraits/*.jpeg.meta
+
+# --- エンジン生成物（tools/sync-engine-dll.sh が engine/・data/ から作る。issue #785） ---
+# 並行 PR がマージのたびにバイナリ DLL で衝突していたため Git 管理から外した。
+# 各環境ではフック（tools/install-git-hooks.sh）・Unity CI・check-unity-compile.sh が作る。
+# .meta（インポート設定）は追跡したまま。
+/Assets/Plugins/KokoSim/KokoSim.Engine.dll
+/Assets/StreamingAssets/KokoSim/**/*.yaml

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# pull / merge の後に engine DLL を作り直す（DLL は Git 管理外・issue #785）。
+root="$(git rev-parse --show-toplevel)"
+[ -f "$root/tools/sync-engine-dll-if-changed.sh" ] || exit 0
+bash "$root/tools/sync-engine-dll-if-changed.sh" ORIG_HEAD HEAD

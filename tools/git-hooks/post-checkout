@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# ブランチを切り替えたら engine DLL を作り直す（DLL は Git 管理外・issue #785）。
+# $1=旧HEAD $2=新HEAD $3=1ならブランチ切替（0はファイル単位の checkout＝対象外）
+[ "${3:-0}" = 1 ] || exit 0
+# rebase の途中で走る checkout は無視する（完了時に post-rewrite が1回だけ回す）
+gd="$(git rev-parse --git-dir 2>/dev/null)" || exit 0
+[ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] && exit 0
+root="$(git rev-parse --show-toplevel)"
+[ -f "$root/tools/sync-engine-dll-if-changed.sh" ] || exit 0   # 導入前の古いコミットを checkout した場合
+bash "$root/tools/sync-engine-dll-if-changed.sh" "$1" "$2"

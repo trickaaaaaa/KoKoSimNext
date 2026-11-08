@@ -8,6 +8,7 @@
 ## 構成
 
 - `Assets/Plugins/KokoSim/KokoSim.Engine.dll` … 純エンジン（netstandard2.1・外部依存なし）。`Assembly-CSharp` が自動参照。
+  **Git 管理外の生成物**（issue #785）。`Assets/StreamingAssets/KokoSim/**/*.yaml`（data/ の複製）も同じ。
 - `Assets/UI/HomeDashboard.uxml` … ホーム画面レイアウト（設計書06 §3.1）。全体を `ScrollView` で縦スクロール。
 - `Assets/UI/KokoSimTheme.uss` … スコアボードテーマ（モックの配色・等級カラーを UI Toolkit へ移植）。
 - `Assets/UI/KokoSimRuntimeTheme.tss` … 既定ランタイムテーマ（`@import unity-theme://default`）。
@@ -29,12 +30,21 @@
 
 - **Player Settings → Api Compatibility Level = .NET Standard 2.1**（エンジンDLLが netstandard2.1 のため）。Unity 6 の既定はこの値です。異なる場合は変更してください。
 
+## clone 直後（Unity で開く前に必須）
+
+```bash
+bash tools/install-git-hooks.sh   # フック導入＋engine DLL・StreamingAssets を生成
+```
+DLL は Git 管理外なので、これを回さずに Unity で開くと engine が見つからずコンパイルが全滅します
+（DLL の .meta も孤児扱いで消されるので、その場合は `git checkout -- Assets/Plugins` で戻してください）。
+
 ## エンジンを更新したら
 
 ```bash
-tools/sync-engine-dll.sh   # エンジンをビルドして Plugins へ再配置
+bash tools/sync-engine-dll.sh   # エンジンをビルドして Plugins へ再配置（コミットするものは無い）
 ```
-その後 Editor にフォーカスを戻すと再インポートされます。
+その後 Editor にフォーカスを戻すと再インポートされます。ブランチの切り替え・pull・rebase の後は
+フック（post-checkout / post-merge / post-rewrite）が engine/・data/ の変化を見て自動で回します。
 
 ## 既知の移植上の注意（要 Editor 検証）
 

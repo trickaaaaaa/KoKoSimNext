@@ -47,6 +47,13 @@ if [ ! -f "$TEMPLATE_DIR/Assembly-CSharp.csproj" ]; then
   fi
 fi
 
+# engine DLL は Git 管理外の生成物（issue #785）。検査対象ブランチの engine/ から作り直してから
+# コンパイルする（無いと全滅、古いと「新 API を使う Assets × 旧 DLL」で偽の赤になる）。
+if ! DOTNET="$DOTNET" bash "$SELF_ROOT/tools/sync-engine-dll.sh" "$TARGET" >/dev/null 2>&1; then
+  echo "🔴 engine DLL のビルドに失敗しました（bash tools/sync-engine-dll.sh ${TARGET} で詳細）"
+  exit 1
+fi
+
 rc=0
 # 3パス目 "Assembly-CSharp-Player" は Assembly-CSharp を **UNITY_EDITOR 抜き**で通す
 # （issue: 打球処理3D化 F8）。エディタ定義付きでしか通していないと、製品コードが
