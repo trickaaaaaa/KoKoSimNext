@@ -120,7 +120,7 @@ namespace KokoSim.Unity.Tournament
                 new KokoSim.Engine.Core.Xoshiro256Random(42), new TournamentSchedule(), "秋季テスト地区予選");
 
             var preview = TournamentPreviewBuilder.Build("秋季テスト地区予選", field, berths: 2, nextStageName: "県大会",
-                stage: PreviewStage.DistrictLeague);
+                stage: PreviewStage.DistrictLeague, phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default);
             var view = new TournamentPreviewState.View
             {
                 Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead,
@@ -152,7 +152,8 @@ namespace KokoSim.Unity.Tournament
                 foreach (var st in own.Standings)
                 {
                     var school = field.Find(f => f.Id == st.SchoolId);
-                    var ex = TournamentPreviewBuilder.BuildRosterFor(school, field, berths: 2, stage: PreviewStage.DistrictLeague);
+                    var ex = TournamentPreviewBuilder.BuildRosterFor(school, field, berths: 2, stage: PreviewStage.DistrictLeague,
+                        phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default);
                     var block = new TournamentPreviewState.RosterBlock
                     {
                         SchoolName = ex.SchoolName, TierLetter = ex.Tier.ToString(), Tag = "総合 " + ex.Tier + " ／ " + ex.SeedLabel,

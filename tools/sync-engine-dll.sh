@@ -36,7 +36,7 @@ place "$ROOT/engine/KokoSim.Engine/bin/Release/netstandard2.1/KokoSim.Engine.dll
 # data/ の YAML を StreamingAssets へ複製（Unity は data/ を直接読めない＝C-1）。data/ を単一ソースに保つ。
 SA_DIR="$ROOT/Assets/StreamingAssets/KokoSim"
 mkdir -p "$SA_DIR"
-for y in school-names.yaml team-colors.yaml events.yaml skills.yaml; do
+for y in school-names.yaml team-colors.yaml events.yaml skills.yaml preview-phrases.yaml; do
   place "$ROOT/data/$y" "$SA_DIR/$y"
 done
 
