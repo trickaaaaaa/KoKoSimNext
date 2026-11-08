@@ -364,6 +364,8 @@ public static class TimelineBuilder
         TimelinePoint? errorBallRest = null;
         var errorBallDeadAt = 0.0;
         FieldPosition? errorChaser = null;
+        // 横へ逸れた悪送球で一塁手が塁を離れる一歩（issue #812）。追いかけレッグの直前に積む。
+        (TimelinePoint To, double T0, double T1)? wildStep = null;
         // 失策球を拾い上げる瞬間（issue #629 ③。返球を積むのは GameEngine 側）。
         double? errorPickupAt = null;
         TimelinePoint? errorPickupPoint = null;
@@ -413,24 +415,17 @@ public static class TimelineBuilder
                     && play.ErrorKind == FieldingErrorKind.Throw && !play.UnassistedPutout)
                 {
                     // 悪送球（issue #439）: 一塁へ向かうが逸れて外へ抜ける。投げ始めは通常送球と同じ逆算、
-                    // 一塁の脇を「届くはずだった時刻」ごろに通過し、少し先へ抜けて死ぬ。
+                    // 一塁の脇を「届くはずだった時刻」ごろに通過し、先へ抜けて転がる。
                     // ⚠ 一塁に正着する絵（ToBase="first"・受け手あり）にしない＝「完璧な送球が先着したのに
                     // 出塁」という矛盾がこの issue の症状そのもの。受け手なし（ToRole=null）で誰も捕らない。
-                    var over = Overshoot(fieldPoint, firstBase, ErrantThrowOvershootM);
-                    var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
-                    var t0 = Math.Max(fieldedAt, arrive - flightToFirst);
-                    var deadAt = t0 + LegSeconds(Distance(fieldPoint, over), ThrowSpeedOf(play));
-                    ball.Add(new BallSegment
-                    {
-                        Kind = BallSegmentKind.Throw,
-                        T0 = t0, T1 = deadAt,
-                        From = fieldPoint, To = over,
-                        FromRole = play.FielderRole,
-                    });
-                    // 逸れた球は一塁カバーが振り返って拾いに行く（①）
-                    errorBallRest = over;
-                    errorBallDeadAt = deadAt;
+                    // 逸れ方（issue #812）は判定で引いた逸れ幅から決める（WildThrowStyles）。どれも球は
+                    // 一塁手の後ろへ逃げる＝失策連鎖（約9割）の追加進塁と食い違わない。
+                    var wild = BuildWildThrow(play, fieldPoint, firstBase, arrive, fieldedAt, firstBaseCoverer);
+                    ball.AddRange(wild.Segments);
+                    errorBallRest = wild.Rest;
+                    errorBallDeadAt = wild.DeadAt;
                     errorChaser = firstBaseCoverer;
+                    wildStep = wild.Step;
                 }
                 else if (play.Result == BattedBallResult.Error && play.ErrorKind != FieldingErrorKind.Bobble)
                 {
@@ -935,6 +930,13 @@ public static class TimelineBuilder
         // 捕球エラー＝弾いた本人が拾い直す／悪送球＝一塁カバーが振り返って追う。
         // 表示専用の定点計算のみ（乱数不使用）。3D側はエラープレーの決着後レッグを剥がさない
         // （StripPostResolutionReturnMoves の例外）ことで、このレッグが絵に出る。
+        if (wildStep is { } step && errorChaser is { } stepRole)
+        {
+            // 自分の直前のレッグ（一塁カバーへの走り込み）が終わってからでないと離れない＝走行中に重ねない
+            var busyUntil = moves.Where(m => m.Role == stepRole).Select(m => m.T1).DefaultIfEmpty(double.MinValue).Max();
+            if (busyUntil <= step.T0)
+                moves.Add(new FielderMove { Role = stepRole, T0 = step.T0, T1 = step.T1, To = step.To, Task = FielderTask.CoverBase });
+        }
         if (errorBallRest is { } chaseTo && errorChaser is { } chaserRole)
         {
             var chaser = Find(fielders, chaserRole);
@@ -3239,6 +3241,150 @@ public static class TimelineBuilder
 
     /// <summary>悪送球が一塁を逸れて抜ける距離[m]（issue #439。表示専用）。</summary>
     private const double ErrantThrowOvershootM = 6.0;
+
+    // ---- 悪送球の逸れ方（issue #812。表示専用・乱数不使用） ----
+
+    /// <summary>手前で弾む: 塁の何m手前で弾むか（送球距離の4割が上限）。</summary>
+    private const double WildShortHopBeforeBaseM = 3.0;
+    /// <summary>手前で弾む: 弾んだ球がグラブの所へ上がる高さ[m]。</summary>
+    private const double WildShortHopApexM = 0.55;
+    /// <summary>手前で弾む: グラブに当たって転がる最短距離[m]。</summary>
+    private const double WildShortHopMinRollM = 2.5;
+    /// <summary>横へ逸れる: 塁から本塁側へ何m横を通るか。</summary>
+    private const double WildWideOffsetM = 2.0;
+    /// <summary>横へ逸れる: 塁の脇を通るときの高さ[m]（伸ばしたグラブの先）。</summary>
+    private const double WildWidePassHeightM = 1.2;
+    /// <summary>横へ逸れる: 一塁手が塁を離れて踏み出す距離[m]。</summary>
+    private const double WildWideStepM = 1.0;
+    /// <summary>高く抜ける: 塁の上を通る高さ[m]（一塁手のジャンプの指先 約2.6m より上）。</summary>
+    private const double WildSailPassHeightM = 3.3;
+    /// <summary>横へ逸れる・高く抜ける: 塁（脇）を過ぎてから地面に落ちるまでの距離[m]。</summary>
+    private const double WildLandBeyondM = 5.0;
+    /// <summary>落ちた（弾いた）球が転がる速さ[m/s]。</summary>
+    private const double WildRollSpeedMps = 8.0;
+
+    /// <summary>悪送球の絵（issue #812）。球の区間・止まる点・止まる時刻・一塁手の一歩（横へ逸れるときだけ）。</summary>
+    private readonly record struct WildThrowPicture(
+        IReadOnlyList<BallSegment> Segments, TimelinePoint Rest, double DeadAt, (TimelinePoint To, double T0, double T1)? Step);
+
+    /// <summary>
+    /// 悪送球の球の区間を逸れ方ごとに組む（issue #812）。球は <paramref name="arrive"/>（一塁へ届くはずだった時刻）に
+    /// 塁（横へ逸れるときは塁の脇）を通る。逸れ幅が無い経路（強制結果など）は従来の「先へ6m抜ける」1本。
+    /// </summary>
+    private static WildThrowPicture BuildWildThrow(
+        FieldingPlay play, TimelinePoint fieldPoint, TimelinePoint firstBase, double arrive, double fieldedAt,
+        FieldPosition receiver)
+    {
+        var speed = ThrowSpeedOf(play);
+        var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), speed);
+        var t0 = Math.Max(fieldedAt, arrive - flightToFirst);
+        var tBase = t0 + flightToFirst;
+        var segs = new List<BallSegment>();
+        if (play.WildThrowScatterM is not { } scatter)
+        {
+            var over = Overshoot(fieldPoint, firstBase, ErrantThrowOvershootM);
+            var deadAt0 = t0 + LegSeconds(Distance(fieldPoint, over), speed);
+            segs.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = t0, T1 = deadAt0, From = fieldPoint, To = over, FromRole = play.FielderRole,
+            });
+            return new WildThrowPicture(segs, over, deadAt0, null);
+        }
+
+        var style = WildThrowStyles.Classify(scatter);
+        var throwLen = Math.Max(1e-6, Distance(fieldPoint, firstBase));
+        var d = new TimelinePoint((firstBase.X - fieldPoint.X) / throwLen, (firstBase.Z - fieldPoint.Z) / throwLen);
+        // 送球線に直交する向きのうち本塁側（＝ファウルグラウンド側）
+        var n = new TimelinePoint(-d.Z, d.X);
+        if (n.X * (Home.X - firstBase.X) + n.Z * (Home.Z - firstBase.Z) < 0) n = new TimelinePoint(-n.X, -n.Z);
+        TimelinePoint Along(TimelinePoint p, TimelinePoint dir, double m) => new(p.X + dir.X * m, p.Z + dir.Z * m);
+        var rise = PlayTimelineAdapterRise(flightToFirst);
+
+        switch (style)
+        {
+            case WildThrowStyle.ShortHop:
+            {
+                // 塁の手前で弾み、グラブに当たって横（ファウル側）へ転がる
+                var before = Math.Min(WildShortHopBeforeBaseM, throwLen * 0.4);
+                var bounce = Along(firstBase, d, -before);
+                var glove = Along(firstBase, d, -0.3);
+                var tBounce = t0 + LegSeconds(Distance(fieldPoint, bounce), speed);
+                var tGlove = tBase;
+                var deflect = new TimelinePoint(d.X * 0.6 + n.X * 0.8, d.Z * 0.6 + n.Z * 0.8);
+                var dl = Math.Sqrt(deflect.X * deflect.X + deflect.Z * deflect.Z);
+                deflect = new TimelinePoint(deflect.X / dl, deflect.Z / dl);
+                var rest = Along(glove, deflect, Math.Max(WildShortHopMinRollM, scatter));
+                var deadAt = tGlove + LegSeconds(Distance(glove, rest), WildRollSpeedMps);
+                segs.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Throw, T0 = t0, T1 = tBounce, From = fieldPoint, To = bounce, FromRole = play.FielderRole,
+                    Hops = new[] { new SegmentHop(0, 1, PlayTimelineAdapterReleaseHeight + rise, PlayTimelineAdapterReleaseHeight) },
+                });
+                // 弾んで上がってくる途中でグラブに当たる（u=1 で高さ≈0.64×頂点）
+                segs.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Bounce, T0 = tBounce, T1 = tGlove, From = bounce, To = glove,
+                    ApexHeightM = WildShortHopApexM,
+                    Hops = new[] { new SegmentHop(0, 1.25, WildShortHopApexM) },
+                    MissedBy = receiver, MissFraction = 1.0, WildThrow = style,
+                });
+                var gloveH = 4 * WildShortHopApexM * 0.8 * 0.2;
+                segs.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Roll, T0 = tGlove, T1 = deadAt, From = glove, To = rest,
+                    Hops = new[] { new SegmentHop(0, 0.3, gloveH + 0.15, gloveH) },
+                });
+                return new WildThrowPicture(segs, rest, deadAt, null);
+            }
+            case WildThrowStyle.Wide:
+            {
+                // 塁の本塁側の脇を抜けてファウルグラウンドへ。一塁手は塁を離れて手を伸ばすが届かない
+                var side = Along(firstBase, n, WildWideOffsetM);
+                var land = Along(side, d, WildLandBeyondM);
+                var tSide = t0 + LegSeconds(Distance(fieldPoint, side), speed);
+                var tLand = tSide + LegSeconds(WildLandBeyondM, speed);
+                var rest = Along(side, d, Math.Max(WildLandBeyondM + 1.0, scatter));
+                var deadAt = tLand + LegSeconds(Distance(land, rest), WildRollSpeedMps);
+                var throwDist = Distance(fieldPoint, land);
+                segs.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Throw, T0 = t0, T1 = tLand, From = fieldPoint, To = land, FromRole = play.FielderRole,
+                    LaunchHeightM = PlayTimelineAdapterReleaseHeight,
+                    ApexHeightM = PlayTimelineAdapterReleaseHeight + rise,
+                    PassFraction = Distance(fieldPoint, side) / throwDist,
+                    PassHeightM = WildWidePassHeightM,
+                    MissedBy = receiver, MissFraction = Distance(fieldPoint, side) / throwDist, WildThrow = style,
+                });
+                segs.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = tLand, T1 = deadAt, From = land, To = rest });
+                var stepTo = Along(firstBase, n, WildWideStepM);
+                return new WildThrowPicture(segs, rest, deadAt, (stepTo, Math.Max(t0, tSide - 0.45), tSide));
+            }
+            default:
+            {
+                // 高く抜ける: 塁の上を一塁手のジャンプより高く越え、先に落ちて遠くへ転がる
+                var land = Along(firstBase, d, WildLandBeyondM);
+                var tLand = tBase + LegSeconds(WildLandBeyondM, speed);
+                var rest = Along(firstBase, d, Math.Max(WildLandBeyondM + 1.0, scatter));
+                var deadAt = tLand + LegSeconds(Distance(land, rest), WildRollSpeedMps);
+                var throwDist = Distance(fieldPoint, land);
+                segs.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Throw, T0 = t0, T1 = tLand, From = fieldPoint, To = land, FromRole = play.FielderRole,
+                    LaunchHeightM = PlayTimelineAdapterReleaseHeight,
+                    ApexHeightM = WildSailPassHeightM + 0.3,
+                    PassFraction = throwLen / throwDist,
+                    PassHeightM = WildSailPassHeightM,
+                    MissedBy = receiver, MissFraction = throwLen / throwDist, WildThrow = style,
+                });
+                segs.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = tLand, T1 = deadAt, From = land, To = rest });
+                return new WildThrowPicture(segs, rest, deadAt, null);
+            }
+        }
+    }
+
+    /// <summary>送球の離しの高さ[m]（再生側 <c>PlayTimelineAdapter.ThrowReleaseHeightM</c> と同じ値）。</summary>
+    private const double PlayTimelineAdapterReleaseHeight = Playback.EndpointBallSegment.ThrowReleaseHeightM;
+    private static double PlayTimelineAdapterRise(double flightSeconds) => Playback.EndpointBallSegment.ThrowRiseM(flightSeconds);
 
     /// <summary>捕球エラーで弾いたボールが転がる距離[m]と時間[s]（issue #439。表示専用）。</summary>
     private const double ErrorDeflectM = 3.0;

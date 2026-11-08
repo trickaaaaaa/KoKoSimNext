@@ -29,6 +29,7 @@ internal static class CommandLine
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
             "infield-hit-profile" => RunInfieldTiming(args[1..], profile: true),
+            "error-kinds" => RunErrorKinds(args[1..]),
             "trace" => RunTrace(args[1..]),
             "trace-diff" => RunTraceDiff(args[1..]),
             _ => Fail($"未知のコマンド: {args[0]}"),
@@ -360,6 +361,24 @@ internal static class CommandLine
     /// 内野ゴロの判定margin分布を実測する（issue #358）。帯に内野安打の指標が無いため、
     /// 守備の所要時間に関わる係数を動かす前後の比較はこのコマンドで行う。
     /// </summary>
+    /// <summary>失策の種類別の出現数（issue #812）。</summary>
+    private static int RunErrorKinds(string[] args)
+    {
+        var games = 2000;
+        var seed = 42UL;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--games": games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        Console.Write(GameSimulation.RunErrorKinds(games, seed));
+        return 0;
+    }
+
     private static int RunInfieldTiming(string[] args, bool profile = false)
     {
         var atBats = 40000;

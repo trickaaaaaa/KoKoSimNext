@@ -2268,7 +2268,8 @@ public static class GameEngine
             // ⚠ 失策の記録は「処理した野手」ではなく「失策を犯した野手」に付く。トンネル（issue #632）は
             // 球を回収するのが外野手なので、ErrorFielderRole を優先しないと「左失」（＝外野失策）になる。
             play?.ErrorFielderRole ?? play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
-            outsThisPa, isSacFly, isSacBunt));
+            outsThisPa, isSacFly, isSacBunt,
+            play?.ErrorKind, play?.WildThrowScatterM, play?.RecoveredThrowScatterM is not null));
     }
 
     /// <summary>バント処理時の進塁: 一・二塁走者が1つ進む（三塁走者は自重）。batter 非null なら打者一塁へ。</summary>

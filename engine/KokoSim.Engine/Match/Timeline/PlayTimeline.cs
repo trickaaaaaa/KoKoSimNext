@@ -79,6 +79,19 @@ public sealed record BallSegment
 
     /// <summary>受け先の塁名（"first"/"second"/"third"/"home"）。中継地点など塁でなければ null。</summary>
     public string? ToBase { get; init; }
+
+    /// <summary>
+    /// この区間の球を捕り損ねる野手（issue #812・表示専用）。悪送球が一塁手のそばを抜けていく区間に付く。
+    /// 非null の区間は<b>誰も捕らない</b>（3D は終点で捕球の芝居を組まない）。代わりにこの野手が
+    /// <see cref="MissFraction"/> の瞬間に「届かない／弾く」芝居をする。
+    /// </summary>
+    public FieldPosition? MissedBy { get; init; }
+
+    /// <summary><see cref="MissedBy"/> のそばを球が通る瞬間（区間の進み u・0〜1）。</summary>
+    public double MissFraction { get; init; } = 1.0;
+
+    /// <summary><see cref="MissedBy"/> が付いた悪送球の逸れ方（芝居の選択用。issue #812）。</summary>
+    public WildThrowStyle? WildThrow { get; init; }
 }
 
 /// <summary>野手1人の移動（守備陣形ルール表から自動付与, CHANGELOG 33）。</summary>
