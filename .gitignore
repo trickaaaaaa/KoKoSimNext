@@ -26,6 +26,11 @@ Assets/Animo.meta
 Assets/DuelSpike/Vendor/
 Assets/DuelSpike/Vendor.meta
 
+# --- 効果音素材（On-Jin ～音人～ https://on-jin.com/ 。素材のまま第三者が取得できる状態にするのは規約違反） ---
+# 組み込み利用は可。ファイルが無い環境では MatchSfx が黙って鳴らさないだけ（ゲームは動く）。
+Assets/KokoSim/Audio/Vendor/
+Assets/KokoSim/Audio/Vendor.meta
+
 # --- Mixamo モーション（Adobe 素材。作品への使用は自由だが素材単体の再配布はNG） ---
 # Assets/Motions/ 直下は自作収録＝追跡するが、このサブフォルダだけ外す。
 # インポート既定（DuelMotionImportDefaults）は Assets/Motions/ 配下なら効くので置き場所は変えない。
