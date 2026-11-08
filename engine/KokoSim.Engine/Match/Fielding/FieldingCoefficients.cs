@@ -34,7 +34,7 @@ public sealed record FieldingCoefficients
     /// <summary>空中捕球に許容する到達時間の倍率（滞空時間×この値まで間に合えば捕球）。
     /// issue #740 で 1.00→0.93（4秒上限の撤去で増えたアウトを打率帯へ戻す校正）。着地の直前（滞空の7%以内）に届く打球は
     /// 捕れず、捕球余裕が小さい負になる＝3Dでは「背走ジャンピングで届かない」芝居で描かれる（棒立ちで落ちる絵にならない）。</summary>
-    public double CatchReachFactor { get; init; } = 0.92;
+    public double CatchReachFactor { get; init; } = 0.895;
 
     /// <summary>
     /// 空中捕球の到達可否に効く守備力の傾き（打球判断＝走路取りの巧拙）。

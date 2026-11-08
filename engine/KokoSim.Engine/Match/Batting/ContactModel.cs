@@ -150,6 +150,21 @@ public static class ContactModel
         var timing = TimingOffsetMean(batter, plan, features, coeff) + rng.NextGaussian(0, coeff.TimingSigma);
         var bearing = BearingDeg(batter, timing, launchAngle, coeff, rng);
 
+        // ポップフライ（issue #830 ②）: 芯の下を叩いた当たりは真上に近く上がる遅い打球になる。品質が低いほど
+        // なりやすい。方向は上で決めたまま。本流から Fork した専用ストリームで引く（Fork は親を進めない＝
+        // ポップフライにならない打席の乱数・結果は1ビットも変わらない）。
+        if (coeff.PopupShare > 0.0 && quality < coeff.PopupQualityMax && launchAngle >= coeff.PopupMinLaunchDeg)
+        {
+            var pop = rng.Fork(PopupStreamId);
+            var weakness = (coeff.PopupQualityMax - quality) / (coeff.PopupQualityMax - QualityMin);
+            var w = coeff.PopupWeaknessWeight;
+            if (MathUtil.Chance(coeff.PopupShare * ((1.0 - w) + w * weakness), pop))
+            {
+                launchAngle = MathUtil.Clamp(pop.NextGaussian(coeff.PopupLaunchMeanDeg, coeff.PopupLaunchSigmaDeg), 50.0, 85.0);
+                exitMps = Math.Max(45.0, pop.NextGaussian(coeff.PopupExitMeanKmh, coeff.PopupExitSigmaKmh)) / 3.6;
+            }
+        }
+
         var ball = new BattedBall
         {
             ExitVelocityMps = exitMps,
@@ -158,6 +173,9 @@ public static class ContactModel
         };
         return (ContactOutcome.InPlay, ball);
     }
+
+    /// <summary>ポップフライ（issue #830 ②）の Fork 用ストリーム番号。</summary>
+    private const ulong PopupStreamId = 0x830B0B1UL;
 
     /// <summary>コンタクト品質の下限（クランプ値）。</summary>
     internal const double QualityMin = 0.05;

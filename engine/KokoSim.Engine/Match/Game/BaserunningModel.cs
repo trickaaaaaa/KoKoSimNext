@@ -722,7 +722,8 @@ public static class BaserunningModel
                         mv?.Add(new RunnerMove(batter, 0, 1, false));
                     }
                 }
-                bases.Third = null;
+                // 返球が逸れた分岐は押し上げ済みの三塁（元の二塁走者）を消さない（issue #830 と同じ不具合）
+                if (forceHomeOutcome != HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow) bases.Third = null;
                 r3 = null;
             }
             else if (r3Forced)
@@ -768,7 +769,8 @@ public static class BaserunningModel
                         mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
                             { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay + backHomeLate });
                     }
-                    bases.Third = null;
+                    // 返球が逸れた分岐は押し上げ済みの三塁（元の二塁走者）を消さない（issue #830 と同じ不具合）
+                    if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow) bases.Third = null;
                     r3 = null;
                 }
                 // 自重は三塁に残る（bases.Third は r3 のまま）。
@@ -805,7 +807,9 @@ public static class BaserunningModel
                         mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
                             { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt, ExtraStartDelaySeconds = tagLate });
                     }
-                    bases.Third = null;
+                    // 返球が逸れた分岐は、三塁を空けた後で二塁走者を三塁へ押し上げ済み＝ここで空にすると
+                    // 押し上げた走者が消える（issue #830 の Heavy で走者保存則違反として表に出た）
+                    if (tagOutcome != HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow) bases.Third = null;
                     r3 = null;
                 }
                 // 自重（浅いフライ）は三塁に残る（RNG非消費＝本塁レースの流儀, 不変条件#2）。

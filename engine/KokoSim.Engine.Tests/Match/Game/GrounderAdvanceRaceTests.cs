@@ -256,13 +256,16 @@ public sealed class GrounderAdvanceRaceTests
         var tAdvance = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
         Assert.True(PRelay(home, r2) < tAdvance, "この一塁到達は二塁走者の物理レースでは自重域のはず");
 
+        // 本塁送球の悪送球は切る: 逸れると二塁走者が三塁へ押し出され（物理レースとは別の進塁）、
+        // clean 側に混ざる（issue #830 で押し出した走者を消さないよう直してから表に出た）。
+        var c = C with { RelayThrowErrorBaseProb = 0.0 };
         var rng = new Xoshiro256Random(2024);
         int advOnExtra = 0, nExtra = 0, advOnClean = 0, nClean = 0;
         for (var i = 0; i < 8000; i++)
         {
             var bases = new BaseState { Second = r2, Third = r3 };
             var (_, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
-                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: false, home);
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, c, rng, collectMoves: false, home);
             var advanced = bases.Third == r2; // 二塁走者が三塁へ進んだか
             if (extraOuts > 0) { nExtra++; if (advanced) advOnExtra++; }
             else { nClean++; if (advanced) advOnClean++; }
