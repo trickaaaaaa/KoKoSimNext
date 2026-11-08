@@ -2005,20 +2005,7 @@ public static class GameEngine
                 var homeThrowAdded = false;
                 if (res.Play is { FielderThrowSpeedMps: not null } bhPlay)
                 {
-                    Match.Timeline.RunnerLeg? outAtHome = null;
-                    Match.Timeline.RunnerLeg? safeAtHome = null;
-                    foreach (var leg in timeline.Runners)
-                    {
-                        var toHome = Math.Abs(leg.To.X) < 0.5 && Math.Abs(leg.To.Z) < 0.5;
-                        if (!toHome) continue;
-                        if (leg.OutAtEnd) { outAtHome = leg; break; }
-                        // 複数生還するプレーでは**最後に還る走者**に送球を合わせる（issue
-                        // match-picture-vs-safe-out-verdict）。走者レッグは三塁走者→二塁走者→一塁走者の順に
-                        // 積まれるので、先に見つかったものを採ると<b>いちばん早く還る走者</b>に固定され、
-                        // 後から還る走者は捕手がボールを持ったあとに悠々とホームインする絵になっていた
-                        // （実測 300試合で189件・中央値0.82秒・最大1.76秒の先着）。すぐ下の外野返球の枝と同じ形。
-                        if (safeAtHome is null || leg.T1 > safeAtHome.T1) safeAtHome = leg;
-                    }
+                    var (outAtHome, safeAtHome) = FindHomeArrivals(timeline, runnerMoves);
                     if (outAtHome is { } o)
                     {
                         timeline = Match.Timeline.TimelineBuilder.AppendBackHomeThrows(
@@ -2334,6 +2321,38 @@ public static class GameEngine
     /// （<c>outThrowUsed</c>）なので、本塁以外で憤死した走者がいれば実際の送球はそちらへ行っており、
     /// 本塁への安全な生還は無条件（送球なし）だったということになる。
     /// </summary>
+    /// <summary>
+    /// バックホームを描く相手を走者レッグから選ぶ（設計書12 §3, F2 Slice D＋#7）。
+    /// <c>outAtHome</c>＝本塁で憤死した走者、<c>safeAtHome</c>＝生還した走者（複数なら最後に還る走者）。
+    /// <para>生還は**判定で得点が記録されたときだけ**数える（issue #780）。2アウトのフライアウトでは塁上の
+    /// 走者を「打った瞬間にスタートし捕球で止まる」レッグで描く（#299）ので、滞空が長いと三塁走者の
+    /// レッグが捕球前に本塁へ届く。レッグの終点だけで拾うと、3アウトでプレーが終わっているのに
+    /// 外野手が本塁へ送球する絵になっていた。</para>
+    /// </summary>
+    internal static (Match.Timeline.RunnerLeg? OutAtHome, Match.Timeline.RunnerLeg? SafeAtHome) FindHomeArrivals(
+        Match.Timeline.PlayTimeline timeline, IReadOnlyList<RunnerMove> moves)
+    {
+        var scored = false;
+        foreach (var m in moves)
+            if (m.ToBase == 4 && !m.Out) { scored = true; break; }
+
+        Match.Timeline.RunnerLeg? safeAtHome = null;
+        foreach (var leg in timeline.Runners)
+        {
+            var toHome = Math.Abs(leg.To.X) < 0.5 && Math.Abs(leg.To.Z) < 0.5;
+            if (!toHome) continue;
+            if (leg.OutAtEnd) return (leg, null);
+            if (!scored) continue;
+            // 複数生還するプレーでは**最後に還る走者**に送球を合わせる（issue
+            // match-picture-vs-safe-out-verdict）。走者レッグは三塁走者→二塁走者→一塁走者の順に
+            // 積まれるので、先に見つかったものを採ると<b>いちばん早く還る走者</b>に固定され、
+            // 後から還る走者は捕手がボールを持ったあとに悠々とホームインする絵になっていた
+            // （実測 300試合で189件・中央値0.82秒・最大1.76秒の先着）。外野返球の枝と同じ形。
+            if (safeAtHome is null || leg.T1 > safeAtHome.T1) safeAtHome = leg;
+        }
+        return (null, safeAtHome);
+    }
+
     private static bool HasOutAtOtherBase(IReadOnlyList<RunnerMove> moves)
     {
         foreach (var m in moves)
