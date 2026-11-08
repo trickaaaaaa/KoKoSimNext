@@ -183,4 +183,35 @@ public sealed class NationRosters
             AiRosterCycle.AdvanceOneYear(r, s, newYearIndex, _deps);
         }
     }
+
+    /// <summary>
+    /// 年度替わり（4月）: 既にブートストラップ済みの学校だけ進める（<see cref="AdvanceExistingYear"/> と同じ対象選定）。
+    /// 代替わり（進級・新入生加入・3年引退）は即座に適用するが、年間成長予算は節目（<see cref="ApplyGrowthNodeExisting"/>）
+    /// まで <see cref="AiPlayer.PendingBudget"/> に積んで待たせる（issue #843・Phase C）。
+    /// </summary>
+    public void BeginExistingYear(System.Func<int, School?> schoolById, int newYearIndex)
+    {
+        List<int> ids;
+        lock (_gate) ids = new List<int>(_rosters.Keys);
+        foreach (var id in ids)
+        {
+            var s = schoolById(id);
+            if (s is null) continue;
+            AiSchoolRoster r;
+            lock (_gate) { if (!_rosters.TryGetValue(id, out r!)) continue; }
+            AiRosterCycle.BeginYear(r, s, newYearIndex, _deps);
+        }
+    }
+
+    /// <summary>
+    /// 年3節目（<see cref="AiGrowthNode"/>）の1つを、既にブートストラップ済みの全校に適用する
+    /// （全国の未生成校は今どおり触らない＝遅延生成を崩さない。issue #843）。
+    /// カレンダー節目（メインスレッド）でのみ呼ぶ。
+    /// </summary>
+    public void ApplyGrowthNodeExisting(AiGrowthNode node)
+    {
+        List<AiSchoolRoster> snapshot;
+        lock (_gate) snapshot = new List<AiSchoolRoster>(_rosters.Values);
+        foreach (var r in snapshot) AiRosterCycle.ApplyGrowthNode(r, _deps, node);
+    }
 }
