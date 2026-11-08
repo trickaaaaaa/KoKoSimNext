@@ -21,6 +21,14 @@
 #     生成物（issue #785）。各 worktree では post-checkout / post-rewrite フックと check-unity-compile.sh
 #     が作る。万一ブランチに紛れ込んだらマージ工程で追跡から外す。
 #   - main の直近 CI が failure なら以降のマージを停止（赤 main への積み増し防止）。
+#   - PR ができたら、マージ工程の前に**別セッション（既定 Opus）がレビュー**する（review_pr）。
+#     実装セッションと文脈を共有しない新しい claude -p が差分・issue・設計書を読み、
+#     BLOCK なら PR に指摘をコメントして needs-human（マージしない）。判定不能もマージしない。
+#
+# レビューの設定:
+#   OVERNIGHT_REVIEW_MODEL=claude-sonnet-5-5 bash tools/overnight-agent.sh  # レビュー担当のモデルを変える
+#   REVIEW_TIMEOUT=1800 bash tools/overnight-agent.sh                        # レビュー1件の上限秒数
+#   SKIP_REVIEW=1 bash tools/overnight-agent.sh                              # レビューを飛ばす（従来の動き）
 #
 # 使い方:
 #   bash tools/overnight-agent.sh                    # open issue を消化し尽くすまで並列処理
@@ -81,10 +89,17 @@ STALL_TIMEOUT="${STALL_TIMEOUT:-600}"                # セッションの transc
 MAX_ISSUES="${MAX_ISSUES:-0}"                        # 0 = 無制限
 ISSUE_WORKERS="${ISSUE_WORKERS:-3}"                  # 並列ワーカー数
 [ "$ISSUE_WORKERS" -lt 1 ] && ISSUE_WORKERS=1
+# 別セッションによる PR レビュー（マージ前ゲート）。実装セッションと文脈を共有しない新しいセッションで読ませる。
+REVIEW_PROMPT_TEMPLATE="$REPO_DIR/tools/overnight-review-prompt.template.md"
+REVIEW_MODEL="${OVERNIGHT_REVIEW_MODEL:-$OPUS_MODEL}"     # レビュー担当は Opus
+REVIEW_FALLBACK="${OVERNIGHT_REVIEW_FALLBACK:-claude-sonnet-5-5}"
+REVIEW_TIMEOUT="${REVIEW_TIMEOUT:-1800}"             # レビュー1件あたりの上限（既定30分）
+SKIP_REVIEW="${SKIP_REVIEW:-}"                        # 1 でレビュー工程を飛ばす（従来の動き）
 
 command -v gh >/dev/null || { echo "gh が見つかりません" >&2; exit 1; }
 [ -x "$CLAUDE_BIN" ] || { echo "claude CLI が見つかりません: $CLAUDE_BIN" >&2; exit 1; }
 [ -f "$PROMPT_TEMPLATE" ] || { echo "プロンプトテンプレートがありません: $PROMPT_TEMPLATE" >&2; exit 1; }
+[ -n "$SKIP_REVIEW" ] || [ -f "$REVIEW_PROMPT_TEMPLATE" ] || { echo "レビュー用テンプレートがありません: $REVIEW_PROMPT_TEMPLATE" >&2; exit 1; }
 [ -x "$DOTNET" ] || { echo "dotnet が見つかりません: $DOTNET" >&2; exit 1; }
 
 # 処理対象: needs-human / agent-failed を除く、所有者本人の open issue。
@@ -283,6 +298,41 @@ Assembly-CSharp.csproj が生成され、\\`bash tools/check-unity-compile.sh\\`
   unlock "$REPO_LOCK"
 }
 
+# ── 別セッションによる PR レビュー（マージ前ゲート） ──
+# 実装セッションと文脈を共有しない新しい claude -p に差分・issue・設計書を読ませ、最終行の
+# 「VERDICT: PASS / BLOCK」で判定する。レビュー担当は読むだけ（編集・テスト・GitHub への書き込みは
+# ツール制限で塞ぐ）。結果のコメント投稿とラベル付けはこのスクリプトが行う。
+# 返り値: 0=PASS（マージ工程へ）/ 1=BLOCK / 2=レビュー不能（判定行が無い・タイムアウト等）。
+# 1 と 2 はどちらもマージしない（人が見ていない変更を判定なしで入れないため）。
+# ロック外で走る＝ワーカー間で並列にレビューできる。
+review_pr() { # $1=num $2=pr $3=wt $4=log
+  local num="$1" pr="$2" wt="$3" log="$4"
+  local rlog="${log%.log}-review.log" out="${log%.log}-review.md" prompt
+  prompt="$(sed -e "s/__ISSUE__/${num}/g" -e "s/__PR__/${pr}/g" "$REVIEW_PROMPT_TEMPLATE")"
+
+  ( cd "$wt" && exec "$CLAUDE_BIN" -p "$prompt" \
+      --model "$REVIEW_MODEL" --fallback-model "$REVIEW_FALLBACK" \
+      --allowedTools "Read,Grep,Glob,Bash(gh pr view *),Bash(gh pr diff *),Bash(gh issue view *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git grep *)" \
+      --disallowedTools "Edit,Write,NotebookEdit" ) < /dev/null > "$out" 2> "$rlog" &
+  local pid=$! watchdog
+  ( sleep "$REVIEW_TIMEOUT"; kill "$pid" 2>/dev/null; pkill -P "$pid" 2>/dev/null ) & watchdog=$!
+  wait "$pid" 2>/dev/null
+  { kill "$watchdog" && wait "$watchdog"; } 2>/dev/null || true
+  pkill -P "$watchdog" 2>/dev/null || true
+  pkill -P "$pid" 2>/dev/null || true
+
+  # 判定は「最後の空でない行」だけを見る（本文中に VERDICT の文字列が出ても拾わない）
+  local verdict
+  verdict="$(grep -v '^[[:space:]]*$' "$out" 2>/dev/null | tail -1 | tr -d '\r`' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  case "$verdict" in
+    "VERDICT: PASS")  gh pr comment "$pr" --body-file "$out" >/dev/null 2>&1 || true; return 0 ;;
+    "VERDICT: BLOCK") gh pr comment "$pr" --body-file "$out" >/dev/null 2>&1 || true; return 1 ;;
+  esac
+  gh pr comment "$pr" --body "自動: 夜間レビューが判定を出せませんでした（タイムアウトまたは出力形式の崩れ）。人が差分を見てからマージしてください。
+ログ: \`${rlog}\` / \`${out}\`" >/dev/null 2>&1 || true
+  return 2
+}
+
 # 未コミットの変更を退避直前に自動で WIP コミットする（issue #433）。実機確認待ち（Play モード・
 # スクショ完了待ち）は内側セッションが最も消滅しやすい区間で、そこで未コミットのまま消えると
 # 退避ネット（#348・下の「未 push の作業を失わないための退避」）はコミット済みしか救えず
@@ -422,8 +472,22 @@ process_issue() { # $1=num $2=title
     note "- ✅ #$num $title — 既にクローズ済み [${dur}]"
   elif [ -n "$pr" ]; then
     # PR ができている → マージ工程（ロック内で直列）
-    note "- ⏩ #$num $title — PR #$pr 作成。マージ工程へ [${dur}]"
-    merge_sequence "$num" "$title" "$wt" "$branch" "$log"
+    # 別セッションのレビューを通ったものだけマージ工程へ（A案: BLOCK なら朝に人が見る）
+    local rc=0
+    if [ -z "$SKIP_REVIEW" ]; then
+      review_pr "$num" "$pr" "$wt" "$log"; rc=$?
+    fi
+    if [ "$rc" = 0 ]; then
+      note "- ⏩ #$num $title — PR #${pr} 作成・レビュー通過。マージ工程へ [${dur}]"
+      merge_sequence "$num" "$title" "$wt" "$branch" "$log"
+    elif [ "$rc" = 1 ]; then
+      gh issue edit "$num" --add-label needs-human >/dev/null 2>&1 || true
+      gh issue comment "$num" --body "自動: PR #${pr} は夜間レビューで差し戻しになりました（指摘は PR のコメント参照）。マージしていません。" >/dev/null 2>&1 || true
+      note "- 🔍 #$num $title — PR #${pr} はレビューで差し戻し→needs-human（指摘は PR コメント）[${dur}]"
+    else
+      gh issue edit "$num" --add-label needs-human >/dev/null 2>&1 || true
+      note "- 🟡 #$num $title — PR #${pr} のレビューが判定を出せず→マージせず needs-human（${log%.log}-review.log）[${dur}]"
+    fi
   elif [ "$stalled" = 1 ]; then
     note "- 🔴 #$num $title — stall 検知で kill（transcript が ${STALL_TIMEOUT}秒 無進捗＝ハング。${log}）[${dur}]"
   elif [ "$timed_out" = 1 ]; then
