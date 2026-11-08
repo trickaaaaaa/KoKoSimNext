@@ -24,6 +24,8 @@ public static partial class GameSimulation
         var styleCounts = new long[3];
         var scatterEdges = new[] { 0.0, 3, 5, 7, 10, 15, 20, 999 };
         var scatterHist = new long[scatterEdges.Length - 1];
+        var flyByPos = new long[9];
+        var flyChancesByPos = new long[9];
         var gate = new object();
         Parallel.For(0, games, i =>
         {
@@ -34,9 +36,17 @@ public static partial class GameSimulation
             var local = new long[8];
             var ls = new long[3];
             var lh = new long[scatterHist.Length];
+            var lf = new long[9];
+            var lfc = new long[9];
             foreach (var e in r.Log)
             {
                 local[7]++;
+                if (e.BattedIsFly && e.FieldedBy is { } fpos && (int)fpos < 9
+                    && e.Result is Engine.Match.AtBat.PlateAppearanceResult.InPlayOut or Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError)
+                {
+                    lfc[(int)fpos]++;
+                    if (e.Result == Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError) lf[(int)fpos]++;
+                }
                 if (e.ThrowRecovered) local[6]++;
                 if (e.Result != Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError) continue;
                 var k = e.ErrorKind switch
@@ -61,6 +71,7 @@ public static partial class GameSimulation
                 for (var k = 0; k < counts.Length; k++) counts[k] += local[k];
                 for (var k = 0; k < 3; k++) styleCounts[k] += ls[k];
                 for (var k = 0; k < lh.Length; k++) scatterHist[k] += lh[k];
+                for (var k = 0; k < 9; k++) { flyByPos[k] += lf[k]; flyChancesByPos[k] += lfc[k]; }
             }
         });
 
@@ -77,6 +88,13 @@ public static partial class GameSimulation
         for (var k = 0; k < 6; k++)
             sb.AppendLine(c, $"| {names[k]} | {counts[k]} | {(double)counts[k] / games:F3} | {(errors == 0 ? 0 : (double)counts[k] / errors):P1} |");
         sb.AppendLine(c, $"| （参考）悪送球を拾い直してアウト | {counts[6]} | {(double)counts[6] / games:F3} | — |");
+        sb.AppendLine();
+        sb.AppendLine("## フライ落球の守備位置別（空中で処理した打球＝捕球アウト＋落球）");
+        sb.AppendLine();
+        sb.AppendLine("| 位置 | 空中処理 | 落球 | 落球率 | 1試合あたり |");
+        sb.AppendLine("|---|---:|---:|---:|---:|");
+        for (var k = 0; k < 9; k++)
+            sb.AppendLine(c, $"| {(Engine.Match.Field.FieldPosition)k} | {flyChancesByPos[k]} | {flyByPos[k]} | {(flyChancesByPos[k] == 0 ? 0 : (double)flyByPos[k] / flyChancesByPos[k]):P2} | {(double)flyByPos[k] / games:F3} |");
         sb.AppendLine();
         sb.AppendLine("## 悪送球の逸れ幅");
         sb.AppendLine();
