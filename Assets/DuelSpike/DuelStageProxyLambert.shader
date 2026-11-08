@@ -36,6 +36,9 @@ Shader "KokoSim/DuelStageProxyLambert"
         // ボーン直付け）の巻き順が裏返り、閉じたメッシュは全面裏向き＝完全不可視になる。
         // ミラー中のアクターだけ 0 (Off) にして両面描画へ切り替える（既定 2 = Back ＝従来どおり）
         _CullMode ("Cull Mode (2=Back, 0=Off)", Float) = 2
+        // 頂点色の塗り分け（グラブ・ミットのポケット/縁）。1のとき、メッシュの頂点色 a を重みに
+        // 頂点色 rgb（リニア値をそのまま持つ）で _BaseColor を置き換える。a=0 の頂点は従来色のまま
+        _UseVertexColor ("Use Vertex Color (rgb=color, a=weight)", Float) = 0
     }
     SubShader
     {
@@ -57,12 +60,14 @@ Shader "KokoSim/DuelStageProxyLambert"
             fixed4 _StripeColor;
             float _StripeFreq;
             float _StripeDuty;
+            float _UseVertexColor;
 
             struct appdata
             {
                 float4 vertex : POSITION;
                 float3 normal : NORMAL;
                 float2 uv1 : TEXCOORD1;   // 領域ID（mesh.uv2）。非溶接メッシュなので三角形内で定数
+                fixed4 color : COLOR;
             };
 
             struct v2f
@@ -71,6 +76,7 @@ Shader "KokoSim/DuelStageProxyLambert"
                 float3 normal : TEXCOORD0;
                 float region : TEXCOORD1;
                 float restX : TEXCOORD2;   // 縦縞の刻み座標（バインドポーズの左右座標。UV1.y に焼いてある）
+                fixed4 color : COLOR;
             };
 
             v2f vert(appdata v)
@@ -80,6 +86,7 @@ Shader "KokoSim/DuelStageProxyLambert"
                 o.normal = UnityObjectToWorldNormal(v.normal);
                 o.region = v.uv1.x;
                 o.restX = v.uv1.y;
+                o.color = v.color;
                 return o;
             }
 
@@ -115,6 +122,8 @@ Shader "KokoSim/DuelStageProxyLambert"
                         baseCol = lerp(baseCol, _StripeColor.rgb, cov);
                     }
                 }
+                if (_UseVertexColor > 0.5)
+                    baseCol = lerp(baseCol, i.color.rgb, i.color.a);
                 float l = saturate(dot(normalize(i.normal), -normalize(_LightDir.xyz)));
                 float shade = _Ambient + (1.0 - _Ambient) * l;
                 return fixed4(baseCol * shade, 1.0);
