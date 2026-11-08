@@ -70,7 +70,10 @@ public sealed class RunnersStartedObservationTests
         {
             if (lp.StealPlay is not null) Assert.True(lp.RunnerStarted(1), "盗塁の再生がある球で一塁走者のスタートが載っていない");
             if (!before.BaseFirst) Assert.False(lp.RunnerStarted(1), "一塁が空なのに一塁走者がスタートしている");
-            Assert.False(lp.RunnerStarted(3), "二盗だけの試合で三塁走者がスタートしている");
+            // 三塁走者が走るのは一・三塁の重盗（二盗の送球中に本塁を狙う, design-14 P1-4）だけ。
+            // 2アウトの盗塁死の球も観測に出るようになった（issue #779）ので、seed によってはここに現れる。
+            if (!(before.BaseFirst && before.BaseThird))
+                Assert.False(lp.RunnerStarted(3), "重盗でもないのに三塁走者がスタートしている");
         }
         Assert.Contains(pitches, x => x.Pitch.StealPlay is not null);
         // 打球・ファウルで盗塁が取り消された球でも、走った事実は残る（StealPlay は消える）。

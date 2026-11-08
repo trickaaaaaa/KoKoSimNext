@@ -298,6 +298,18 @@ public sealed class TeamState
         a.Outs += outs;
     }
 
+    /// <summary>
+    /// 打席が未決着のまま終わった球（3アウト目の盗塁死・スクイズ挟殺・打席途中のサヨナラ）を投手の球数へ積む
+    /// （issue #779）。打席確定を通らず <see cref="RecordPitching"/> に乗らないため。対戦記録（BF等）は動かさない。
+    /// </summary>
+    public void RecordUnresolvedPitches(Player pitcher, int pitches)
+    {
+        if (pitches <= 0) return;
+        var key = KeyOf(pitcher);
+        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        a.Pitches += pitches;
+    }
+
     /// <summary>当該試合でこの打者が既に完了した打席数（尻上がり等の試合内非線形スキル用, 設計書10）。</summary>
     public int PriorPlateAppearances(Player batter) => _bat.TryGetValue(KeyOf(batter), out var a) ? a.PA : 0;
 
