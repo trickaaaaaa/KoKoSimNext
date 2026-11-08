@@ -205,6 +205,27 @@ public sealed record BattingCoefficients
     /// <summary>芯を外した当たり（issue #759）: 品質の下限（0.05）での初速係数。閾値の点で従来の直線へつながる。</summary>
     public double MishitVeloFactorFloor { get; init; } = 0.20;
 
+    // ポップフライ（issue #830 ②）。芯の下を叩いた打球は真上に近く上がって内野で捕られる。品質の低い当たりの一部を
+    // ポップフライの角度・初速へ差し替える。判定は打席の本流から Fork した専用ストリームで引く＝本流の乱数順は不変。
+    /// <summary>ポップフライ（issue #830 ②）: 芯を外した当たりがポップフライ（真上に近く上がる遅い打球）になる割合の上限。品質が下限のとき満額、popup_quality_max で0。</summary>
+    public double PopupShare { get; init; } = 0.45;
+    /// <summary>ポップフライ（issue #830 ②）: この品質未満の当たりだけポップフライになりうる。</summary>
+    public double PopupQualityMax { get; init; } = 0.65;
+    /// <summary>ポップフライ（issue #830 ②）: 元の打球角度がこれ以上の当たりだけポップフライになりうる[度]（球の下を叩いた当たり。
+    /// ゴロ（ボテボテの内野安打の源）は差し替えない）。</summary>
+    public double PopupMinLaunchDeg { get; init; } = 20.0;
+    /// <summary>ポップフライ（issue #830 ②）: 確率のうち品質の低さに比例させる割合（0＝品質上限未満なら一律、1＝品質の低さに比例）。
+    /// 1 だと弱い打者に集中し、格上との差（投打の格子・低ティアの帯）を広げすぎる。</summary>
+    public double PopupWeaknessWeight { get; init; } = 0.0;
+    /// <summary>ポップフライ（issue #830 ②）: 打球角度の平均[度]。</summary>
+    public double PopupLaunchMeanDeg { get; init; } = 64.0;
+    /// <summary>ポップフライ（issue #830 ②）: 打球角度の標準偏差[度]。</summary>
+    public double PopupLaunchSigmaDeg { get; init; } = 7.0;
+    /// <summary>ポップフライ（issue #830 ②）: 初速の平均[km/h]。</summary>
+    public double PopupExitMeanKmh { get; init; } = 95.0;
+    /// <summary>ポップフライ（issue #830 ②）: 初速の標準偏差[km/h]。</summary>
+    public double PopupExitSigmaKmh { get; init; } = 15.0;
+
     // --- コンタクト品質への投手側寄与（「打たせて取る」の土台） ---
     // 打球質が打者能力だけで決まると、技巧派の優位は与四球の少なさからしか生まれず
     // 「弱い打球を打たせる＝結果が守備力に左右される」という型の個性が成立しない。

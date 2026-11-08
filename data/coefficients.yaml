@@ -156,6 +156,16 @@ batting:
   # ボテボテ型（平均球足<15m/s）の内野安打 0.2%→6.2%、AVG .263→.259・HR%/K% 不変。0以下＝無効。
   mishit_quality_threshold: 0.40
   mishit_velo_factor_floor: 0.20
+  # ポップフライ（issue #830 ②）。芯の下を叩いた打球。品質の低い当たりの一部を真上に近い遅い打球へ差し替える。
+  # 判定は打席の本流から Fork した専用ストリーム＝本流の乱数順は不変。popup_share=0 で無効。
+  popup_share: 0.45   # 品質 popup_quality_max 未満・元の角度 popup_min_launch_deg 以上の当たりがポップフライになる割合（weakness_weight=0 で一律）。打球の約9%（目安 MLB 7.1% より少し多め）
+  popup_quality_max: 0.65   # この品質未満の当たりだけポップフライになりうる
+  popup_min_launch_deg: 20.0   # 元の打球角度がこれ以上の当たりだけ（球の下を叩いた当たり。ゴロ＝内野安打の源は差し替えない）
+  popup_weakness_weight: 0.0   # 確率のうち品質の低さに比例させる割合（0＝一律・1＝比例。1 だと弱い打者に集中して格上との差を広げる）
+  popup_launch_mean_deg: 64.0   # 打球角度の平均[度]
+  popup_launch_sigma_deg: 7.0   # 打球角度の標準偏差[度]
+  popup_exit_mean_kmh: 95.0   # 初速の平均[km/h]
+  popup_exit_sigma_kmh: 15.0   # 初速の標準偏差[km/h]
   # ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）🟡実測校正
   # 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。
   # ズレは無次元（正＝差し込まれ／負＝早い）。これが引っ張り/流しへ変換され、打者の左右が符号を与える。
@@ -186,7 +196,7 @@ batting:
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
   fly_apex_threshold_m: 2.5
-  catch_reach_factor: 0.92     # issue #740: 1.00→0.93（4秒上限撤去で増えたアウトを打率帯へ戻す）→0.92（#830: ファウルフライのアウト新設で下がった得点 4.37→4.51 を戻す）
+  catch_reach_factor: 0.895    # issue #740: 1.00→0.93（4秒上限撤去で増えたアウトを打率帯へ戻す）→0.92（#830: ファウルフライのアウト新設で下がった得点 4.37→4.51 を戻す）→0.895（#830②: ポップフライ新設で下がった得点を戻す。本塁打率を動かさない手段として）
   throw_transfer_seconds: 0.70
   throw_transfer_fielding_slope: 0.004 # 握り替えの守備連動（Issue #36）: 倍率=max(min,1−(守備−50)×これ)。守備50で×1.0＝恒等
   throw_transfer_factor_min: 0.70      # トランスファー倍率の下限（最速側クランプ, Issue #36）

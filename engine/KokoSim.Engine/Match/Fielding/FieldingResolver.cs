@@ -1127,7 +1127,7 @@ public static class FieldingResolver
         var bestT = double.MaxValue;
         foreach (var f in fielders)
         {
-            if (f.Position is FieldPosition.Catcher) continue;
+            // 捕手も飛球を捕る（issue #830: 本塁付近のポップフライ。以前は候補から外されていて捕手フライが0だった）
             var t = ReachTime(f, target);
             if (t < bestT) { bestT = t; best = f; }
         }
