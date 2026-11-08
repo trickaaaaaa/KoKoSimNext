@@ -42,7 +42,7 @@ namespace KokoSim.Unity.Match
         private ScrollView _cmpScroll;
         private Label _phase, _outsCap, _insCap, _note;
         private Button _ok, _close, _cancel, _commit;
-        // 予約した交代（issue #718）: 「確定して試合へ戻る」までは「全部やめる」で開く前へ戻せる。
+        // 確定した交代（issue #718・文言は #796）: 「試合へ戻る」までは「全部やめる」で開く前へ戻せる。
         private readonly List<string> _reserved = new();
         private VisualElement _queue;
 
@@ -145,7 +145,7 @@ namespace KokoSim.Unity.Match
         private bool ForcedPitcherChangePending => _prog != null && _prog.PendingForcedPitcherChange;
 
         /// <summary>
-        /// 閉じる。予約が残っていれば取り消してから閉じる（確定は <see cref="CommitAndClose"/> だけ。issue #718）。
+        /// 閉じる。確定した交代が残っていれば取り消してから閉じる（確定は <see cref="CommitAndClose"/> だけ。issue #718）。
         /// </summary>
         public void Close()
         {
@@ -155,7 +155,7 @@ namespace KokoSim.Unity.Match
             if (_scrim != null) _scrim.style.display = DisplayStyle.None;
         }
 
-        // 「全部やめる」／✕: 予約した交代をまとめて取り消し、開く前の状態へ戻して閉じる（issue #718）。
+        // 「全部やめる」／✕: 確定した交代をまとめて取り消し、開く前の状態へ戻して閉じる（issue #718）。
         // 取り消しは engine の再生し直し（決定論）。球数制限の強制交代待ちに戻るなら閉じずに選び直させる。
         private void CancelAll()
         {
@@ -177,7 +177,7 @@ namespace KokoSim.Unity.Match
             if (_scrim != null) _scrim.style.display = DisplayStyle.None;
         }
 
-        // 「確定して試合へ戻る」: 予約した交代をそのまま確定して閉じる（issue #718）。
+        // 「試合へ戻る」: 確定した交代をそのまま試合へ持ち帰って閉じる（issue #718・文言は #796）。
         private void CommitAndClose()
         {
             if (_prog == null || ForcedPitcherChangePending) return;
@@ -259,9 +259,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 「この操作を確定」を押す（実行経路はボタンと同一）。issue #452 の操作一巡確認用。</summary>
         public void ApplyForCapture() => Apply();
-        /// <summary>スクショ用（issue #718）: 予約した交代を確定して閉じる（「確定して試合へ戻る」）。</summary>
+        /// <summary>スクショ用（issue #718）: 確定した交代を持ち帰って閉じる（「試合へ戻る」）。</summary>
         public void CommitForCapture() => CommitAndClose();
-        /// <summary>スクショ用（issue #718）: 予約をまとめて取り消して閉じる（「全部やめる」）。</summary>
+        /// <summary>スクショ用（issue #718）: 確定した交代をまとめて取り消して閉じる（「全部やめる」）。</summary>
         public void CancelAllForCapture() => CancelAll();
 
         /// <summary>スクショ用: 保留中の操作の要約（フッター文）。確定できる状態かの確認に使う。</summary>
@@ -864,28 +864,29 @@ namespace KokoSim.Unity.Match
             if (_ok != null)
             {
                 _ok.text = _opt.IsOffense
-                    ? (_offKind == SubstitutionKind.PinchRun ? "この代走を予約 ＋" : "この代打を予約 ＋")
-                    : "この操作を予約 ＋";
+                    ? (_offKind == SubstitutionKind.PinchRun ? "この代走を確定 ＋" : "この代打を確定 ＋")
+                    : "この操作を確定 ＋";
                 _ok.SetEnabled(ready);
             }
             var forced = ForcedPitcherChangePending;
             if (_commit != null)
             {
-                _commit.text = _reserved.Count > 0 ? "確定して試合へ戻る ▶" : "試合へ戻る ▶";
+                // 「確定」は左のボタンだけが使う言葉（issue #796）。戻るボタンは件数によらず同じ文言
+                _commit.text = "試合へ戻る ▶";
                 _commit.SetEnabled(!forced);
             }
             if (_cancel != null) _cancel.text = _reserved.Count > 0 ? "全部やめる" : "やめる";
             BuildQueue();
         }
 
-        // 予約した交代の一覧（確定前）。1件ごとに1行・番号つき。
+        // 確定した交代の一覧（試合へ戻る前）。1件ごとに1行・番号つき。
         private void BuildQueue()
         {
             if (_queue == null) return;
             _queue.Clear();
             _queue.style.display = _reserved.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             if (_reserved.Count == 0) return;
-            var cap = new Label("予約（" + _reserved.Count + "件・確定まで取り消せる）");
+            var cap = new Label("確定した交代（" + _reserved.Count + "件・試合へ戻るまで取り消せる）");
             cap.AddToClassList("msub-queue__cap");
             _queue.Add(cap);
             // 打順表の下の空きに収める＝直近2件だけ出す（1件で2行になるため）（件数は見出しに出ている）。
@@ -966,7 +967,7 @@ namespace KokoSim.Unity.Match
             // 立たないが、押下配信は1フレーム遅れうるため二重に守る。競合させると進行体を奪い合い、
             // 最悪 Unity ごとフリーズする（背景 Advance の列挙状態とラインナップの同時変更）。
             if (BackgroundGameOp.Running) return;
-            var (_, description, _) = FooterState();   // 予約一覧に残す一文（適用前の局面で組む）
+            var (_, description, _) = FooterState();   // 確定した交代の一覧に残す一文（適用前の局面で組む）
             bool ok;
             if (_opt.IsOffense)
             {
@@ -1006,8 +1007,8 @@ namespace KokoSim.Unity.Match
                 }
                 return;
             }
-            // 予約（issue #718）: 試合には即反映して表・比較を交代後の姿で見せるが、「確定して試合へ戻る」を
-            // 押すまでは「全部やめる」で開く前へ戻せる。続けて別の交代も予約できる。
+            // 確定（issue #718・文言は #796）: 試合には即反映して表・比較を交代後の姿で見せるが、「試合へ戻る」を
+            // 押すまでは「全部やめる」で開く前へ戻せる。続けて別の交代も確定できる。
             _reserved.Add(description);
             _opt = _prog.SubstitutionOptions(_teamIsAway);
             ResetSelection();
