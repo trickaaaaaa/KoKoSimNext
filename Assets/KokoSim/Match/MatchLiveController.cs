@@ -4299,8 +4299,9 @@ namespace KokoSim.Unity.Match
             stats.Add(HudCell("与四死球", (def.Walks + def.HitByPitch).ToString()));
             band.Add(stats);
 
-            // 特殊能力（自校の選手だけ・issue #738 案A）。無ければ段ごと出さない。
-            var pSkills = UiComponents.SkillChipsFor(_statsProvider.OwnSkills(schoolId, def.SourceId), 4, "mhud-skills");
+            // 特殊能力（自校の選手だけ・issue #738 案A）。投手帯は投手の能力だけ（issue #781）。無ければ段ごと出さない。
+            var pSkills = UiComponents.SkillChipsFor(_statsProvider.OwnSkills(schoolId, def.SourceId), 4, "mhud-skills",
+                KokoSim.Engine.Players.SkillCategory.Pitching);
             if (pSkills != null) band.Add(pSkills);
 
             // 3段目＝スタミナ。帯の最下段として帯と同幅で組み込む（別要素として浮かせない）。
@@ -4387,8 +4388,10 @@ namespace KokoSim.Unity.Match
             stats.Add(HudCell("打点", b == null ? "—" : b.Rbi.ToString()));
             band.Add(stats);
 
-            // 特殊能力（自校の選手だけ・issue #738 案A＝成績の下にチップ段）。無ければ段ごと出さない。
-            var bSkills = UiComponents.SkillChipsFor(_statsProvider.OwnSkills(schoolId, m.BatterSourceId), 4, "mhud-skills");
+            // 特殊能力（自校の選手だけ・issue #738 案A＝成績の下にチップ段）。打者帯は打撃の能力だけ（issue #781）。
+            // 無ければ段ごと出さない。
+            var bSkills = UiComponents.SkillChipsFor(_statsProvider.OwnSkills(schoolId, m.BatterSourceId), 4, "mhud-skills",
+                KokoSim.Engine.Players.SkillCategory.Batting);
             if (bSkills != null) band.Add(bSkills);
 
             // 3段目＝本日の打席。まだ結果が無い1打席目は段ごと出ない＝帯は2段のまま。
