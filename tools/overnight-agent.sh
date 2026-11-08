@@ -70,6 +70,9 @@ if [ -z "${OVERNIGHT_CAFFEINATED:-}" ] && [ -z "${DRY_RUN:-}" ] && command -v ca
 fi
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# gh は「いまいるフォルダ」でリポジトリを判定する。リポジトリの外（~ 等）から起動すると
+# issue 一覧が取れず「対象0件」で即終了するので、ここで必ずリポジトリへ移る。
+cd "$REPO_DIR" || { echo "リポジトリへ移動できません: $REPO_DIR" >&2; exit 1; }
 WT_ROOT="${REPO_DIR}-worktrees"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RUN_START="$(date +%s)"
