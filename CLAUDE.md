@@ -232,6 +232,9 @@ dotnet run --project engine/KokoSim.Balance -- \
   CI（fast/heavy）も `tools/sync-engine-dll.sh` も Release ビルド＝Debug で回す場面はない。
   engine に `#if DEBUG` / `Debug.Assert` は無いので検証内容も変わらない
 - 統計回帰（`[Trait("Category","Heavy")]`）はバランス係数・確率モデルの変更時とコミット前に必ず回す（不変条件#5）
+  要るかどうかは `bash tools/needs-heavy.sh`（終了コード0＝要る・理由を1行表示）で判定する。data/・試合結果の指紋
+  （determinism-baseline.txt）・指紋で測っていない engine（Match/ 以外）・Heavy のテスト自体を触ったら要る。
+  試合の解決（Match/）だけで指紋が不変なら帯は動かない＝省いてよい（日常ループの緑が前提）。CI は毎PR全 Heavy を回す
 - **能力感度の検査**（`AbilitySensitivityTests`・Heavy）は、帯が測らない「能力を変えたとき結果が動くか／逆向きでないか」を見張る。
   期待は `data/balance-targets.yaml` の `ability_sensitivity`、既知の不具合は `known_defects` に issue 番号付きで載せる（直ったら外す＝外し忘れは赤になる）。
   新しく赤くなった能力は新しい穴。解決式・能力の効き（`ability_effect`）・采配AIを触ったら、`ability-sweep` の表で意図どおりか確かめる
@@ -239,7 +242,9 @@ dotnet run --project engine/KokoSim.Balance -- \
 - **xUnit は同じクラスのテスト（Theory の各ケースも）を直列に回す**＝1クラスが重いと、それだけで日常ループの
   壁時間が決まる（issue #639: `SkipDelegateAlwaysEndsTests` の3ケースが直列426秒で、日常ループが7分台になっていた）。
   fast に残す重いテストは、中身を `Parallel.For` で並列化する（押下点・シードごとに状態を作り直して独立にする）。
-  所要時間の内訳は `--logger "trx"` の結果をクラス別に集計すれば出る
+  所要時間の内訳は `bash tools/test-timing.sh`（日常ループを回してクラス別に集計。`"Category=Heavy"` を渡せば Heavy）で出る。
+  2026-11-09 にも同じ形で日常ループが6分半へ戻っていた（同じ試合をテストごとに回し直すクラスが直列300秒）。
+  **同じシードの試合を複数テストで使うなら、クラス内で1回だけ並列に作って共有する**（`PictureVsVerdictTests` が前例）
   CI の rest シャードが自動で拾う（網羅性は tools/check-heavy-shards.sh が検証）
 - 統計シム（GameSimulation/AtBatSimulation）は決定論保存で並列化済み（事前Fork＋整数部分和）。同シード同結果は維持される。
   テスト内で数百試合を逐次 for で回す場合も同じ作法（シード事前確定＋試合ローカルのチーム生成＋整数部分和）で並列化する

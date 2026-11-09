@@ -11,8 +11,8 @@ public static partial class GameSimulation
 {
     /// <summary>
     /// 失策の種類別の出現数（issue #812。エラー表現4本の共通の物差し）。実試合（GameEngine）の打席ログから数える。
-    /// お手玉・捕球・トンネル・悪送球・一塁手の捕球ミス（issue #810）・フライ落球と、悪送球を拾い直してアウトにした
-    /// 打席、悪送球の逸れ幅分布と逸れ方の内訳。
+    /// お手玉・捕球・トンネル・悪送球・一塁手の捕球ミス（issue #810）・外野手のファンブル（issue #811）・
+    /// フライ落球と、悪送球を拾い直してアウトにした打席、悪送球の逸れ幅分布と逸れ方の内訳。
     /// </summary>
     public static string RunErrorKinds(int games, ulong seed)
     {
@@ -21,7 +21,7 @@ public static partial class GameSimulation
         var forks = new IRandomSource[games];
         for (var i = 0; i < games; i++) forks[i] = root.Fork((ulong)i);
 
-        var counts = new long[9];   // Bobble, Catch, Tunnel, Throw, Receive, FlyDrop, Other, ThrowRecovered, PA
+        var counts = new long[10];   // Bobble, Catch, Tunnel, Throw, Receive, Fumble, FlyDrop, Other, ThrowRecovered, PA
         var styleCounts = new long[3];
         var scatterEdges = new[] { 0.0, 3, 5, 7, 10, 15, 20, 999 };
         var scatterHist = new long[scatterEdges.Length - 1];
@@ -34,31 +34,38 @@ public static partial class GameSimulation
             var away = GenerateTeam(g, "遠征校");
             var home = GenerateTeam(g, "地元校");
             var r = GameEngine.Play(away, home, ctx, g);
-            var local = new long[9];
+            var local = new long[10];
             var ls = new long[3];
             var lh = new long[scatterHist.Length];
             var lf = new long[9];
             var lfc = new long[9];
             foreach (var e in r.Log)
             {
-                local[8]++;
+                local[9]++;
                 if (e.BattedIsFly && e.FieldedBy is { } fpos && (int)fpos < 9
                     && e.Result is Engine.Match.AtBat.PlateAppearanceResult.InPlayOut or Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError)
                 {
                     lfc[(int)fpos]++;
                     if (e.Result == Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError) lf[(int)fpos]++;
                 }
-                if (e.ThrowRecovered) local[7]++;
-                if (e.Result != Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError) continue;
+                if (e.ThrowRecovered) local[8]++;
+                // 外野手のファンブル（issue #811）は安打のまま失策が成立する（Result≠ReachedOnError）＝
+                // Result でなく ErrorKind で判定しないと種類別カウントから漏れる。
+                if (e.Result != Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError
+                    && e.ErrorKind != FieldingErrorKind.Fumble)
+                {
+                    continue;
+                }
                 var k = e.ErrorKind switch
                 {
                     FieldingErrorKind.Bobble => 0,
-                    FieldingErrorKind.Catch when e.BattedIsFly => 5,   // フライ落球は捕球エラーの空中版
+                    FieldingErrorKind.Catch when e.BattedIsFly => 6,   // フライ落球は捕球エラーの空中版
                     FieldingErrorKind.Catch => 1,
                     FieldingErrorKind.Tunnel => 2,
                     FieldingErrorKind.Throw => 3,
                     FieldingErrorKind.Receive => 4,
-                    _ => 6,
+                    FieldingErrorKind.Fumble => 5,
+                    _ => 7,
                 };
                 local[k]++;
                 if (e.WildThrowScatterM is { } sc)
@@ -79,17 +86,18 @@ public static partial class GameSimulation
 
         var c = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
-        var errors = counts[0] + counts[1] + counts[2] + counts[3] + counts[4] + counts[5] + counts[6];
-        sb.AppendLine(c, $"# 失策の種類別（seed {seed}・{games}試合・{counts[8]}打席）");
+        var errors = counts[0] + counts[1] + counts[2] + counts[3] + counts[4] + counts[5] + counts[6] + counts[7];
+        sb.AppendLine(c, $"# 失策の種類別（seed {seed}・{games}試合・{counts[9]}打席）");
         sb.AppendLine();
-        sb.AppendLine(c, $"失策出塁 {errors}（1試合 {(double)errors / games:F2}）");
+        // 外野手のファンブル（issue #811）は安打＋失策の両立＝「出塁」ではなく「失策」全般の件数として数える。
+        sb.AppendLine(c, $"失策 {errors}（1試合 {(double)errors / games:F2}）");
         sb.AppendLine();
         sb.AppendLine("| 種類 | 件数 | 1試合あたり | 失策に占める |");
         sb.AppendLine("|---|---:|---:|---:|");
-        string[] names = { "お手玉（もたつき）", "捕球（ゴロを弾く）", "トンネル", "悪送球", "一塁手の捕球ミス", "フライ落球", "その他（種類なし）" };
-        for (var k = 0; k < 7; k++)
+        string[] names = { "お手玉（もたつき）", "捕球（ゴロを弾く）", "トンネル", "悪送球", "一塁手の捕球ミス", "外野手のファンブル", "フライ落球", "その他（種類なし）" };
+        for (var k = 0; k < 8; k++)
             sb.AppendLine(c, $"| {names[k]} | {counts[k]} | {(double)counts[k] / games:F3} | {(errors == 0 ? 0 : (double)counts[k] / errors):P1} |");
-        sb.AppendLine(c, $"| （参考）悪送球を拾い直してアウト | {counts[7]} | {(double)counts[7] / games:F3} | — |");
+        sb.AppendLine(c, $"| （参考）悪送球を拾い直してアウト | {counts[8]} | {(double)counts[8] / games:F3} | — |");
         sb.AppendLine();
         sb.AppendLine("## フライ落球の守備位置別（空中で処理した打球＝捕球アウト＋落球）");
         sb.AppendLine();

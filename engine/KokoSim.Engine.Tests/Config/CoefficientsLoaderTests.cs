@@ -42,7 +42,8 @@ public sealed class CoefficientsLoaderTests
     [Fact]
     public void ParsesWeatherBlock()
     {
-        // Issue #120: weather ブロックが読めること。ブロック無しなら null（無効・従来挙動）。
+        // Issue #120/#803: weather ブロック（季節別）が読めること。ブロック無しなら null（無効・従来挙動）。
+        // 季節サブブロックを省略した場合はその季節の既定（WeatherModel.Spring/Autumn）へ丸ごと差し替わる。
         const string yaml = """
             version: 1
             aerodynamics:
@@ -55,18 +56,22 @@ public sealed class CoefficientsLoaderTests
                 slope_cm_per_point: 0.20
                 min_sigma_cm: 3.0
             weather:
-              enabled: true
-              mean_temperature_c: 32.0
-              density_damping: 0.5
-              fatigue_alpha_per_degree: 0.01
+              summer:
+                enabled: true
+                mean_temperature_c: 32.0
+                density_damping: 0.5
+                fatigue_alpha_per_degree: 0.01
             """;
 
         var bundle = CoefficientsLoader.Parse(yaml);
         Assert.NotNull(bundle.Weather);
-        Assert.True(bundle.Weather!.Enabled);
-        Assert.Equal(32.0, bundle.Weather.MeanTemperatureC, 6);
-        Assert.Equal(0.5, bundle.Weather.DensityDamping, 6);
-        Assert.Equal(0.01, bundle.Weather.FatigueAlphaPerDegree, 6);
+        Assert.True(bundle.Weather!.Summer.Enabled);
+        Assert.Equal(32.0, bundle.Weather.Summer.MeanTemperatureC, 6);
+        Assert.Equal(0.5, bundle.Weather.Summer.DensityDamping, 6);
+        Assert.Equal(0.01, bundle.Weather.Summer.FatigueAlphaPerDegree, 6);
+        // spring ブロックを書かなかったので春の既定（WeatherModel.Spring）がそのまま入る。
+        Assert.Equal(KokoSim.Engine.Match.Game.WeatherModel.Spring, bundle.Weather.Spring);
+        Assert.Equal(KokoSim.Engine.Match.Game.WeatherModel.Autumn, bundle.Weather.Autumn);
 
         // weather ブロック無し → null（従来挙動）。
         var noWeather = CoefficientsLoader.Parse("""
@@ -221,7 +226,7 @@ public sealed class CoefficientsLoaderTests
 
         // 守備の読み/ピッチアウト（G3, 設計書12 §5）の係数も YAML から束縛される。
         Assert.Equal(0.42, bundle.Baserunning.StealExpectednessIntercept, 6);
-        Assert.Equal(0.50, bundle.Baserunning.StealReadIntercept, 6);
+        Assert.Equal(0.15, bundle.Baserunning.StealReadIntercept, 6);
         Assert.Equal(0.55, bundle.Baserunning.MaxPitchoutProb, 6);
         Assert.Equal(0.35, bundle.Baserunning.PitchoutDefenseBonusSeconds, 6);
 
