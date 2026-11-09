@@ -70,8 +70,14 @@ public sealed class PopupTests
                 new BattingCoefficients(), on);
             Assert.Equal(off.NextUInt64(), on.NextUInt64());   // 本流は同じだけ進んでいる
             if (a.Ball is null) { Assert.Null(b.Ball); continue; }
-            if (b.Ball!.LaunchAngleDeg >= 50.0 && a.Ball.LaunchAngleDeg < 50.0) { popped++; continue; }
-            Assert.Equal(a.Ball, b.Ball);
+            // 違いが出てよいのはポップフライに差し替えた打球（真上の角度）だけ。元の角度は問わない
+            // （芯を外した当たりは元から50°を超えることがある）。
+            if (!Equals(a.Ball, b.Ball))
+            {
+                Assert.True(b.Ball!.LaunchAngleDeg >= 50.0, $"差し替え後の角度 {b.Ball.LaunchAngleDeg:F1}° がポップフライでない");
+                popped++;
+                continue;
+            }
             same++;
         }
         Assert.True(popped > 0, "ポップフライが1本も出ない");

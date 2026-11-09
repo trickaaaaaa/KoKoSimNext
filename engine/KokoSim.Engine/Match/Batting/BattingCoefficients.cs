@@ -105,7 +105,7 @@ public sealed record BattingCoefficients
     /// あたりの空振り加算（対数オッズ）。球種ランク(PitchRank)は Sharpness→rpm→変化量の経路で既に弾道へ
     /// 織り込み済みのため、旧 StuffPerPitchRank（球種ランク直参照）を本項へ完全置換した（二重計上を避ける）。
     /// </summary>
-    public double WhiffBreakSlope { get; init; } = 1.5;
+    public double WhiffBreakSlope { get; init; } = 1.2;
     /// <summary>
     /// 投打差（球威 − ミート項）の対数オッズ寄与を頭打ちにする soft-cap（issue matchup-gap-saturation-k-rate）。
     /// z 寄与 = cap × tanh(d / cap)。互角近傍（|d| ≪ cap）は従来の線形と一致し、大差では ±cap で飽和する
@@ -260,7 +260,7 @@ public sealed record BattingCoefficients
     /// <summary>コンタクト品質への誘発変化合成量の基準[m]（リーグ平均球速×平均キレ＝この変化量で寄与0）。</summary>
     public double ContactQualityBreakRefM { get; init; } = 0.47;
     /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>
-    public double ContactQualityPerBreakM { get; init; } = -0.90;
+    public double ContactQualityPerBreakM { get; init; } = -0.70;
 
     // --- ④ タイミングのズレ → ⑤ 打球方向（設計書01 §2④⑤, issue #262） ---
     // 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。

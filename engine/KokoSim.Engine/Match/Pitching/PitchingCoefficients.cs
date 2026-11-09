@@ -88,7 +88,7 @@ public sealed record PitchingCoefficients
     /// <summary>ストレート: 球威(Power-50)あたりの回転数の傾き[rpm/能力1]（Issue #274）。</summary>
     public double SpinRpmPerPower { get; init; } = 6.0;
     /// <summary>変化球: キレ(Sharpness-50)あたりの回転数の傾き[rpm/能力1]。</summary>
-    public double SpinRpmPerSharpness { get; init; } = 6.0;
+    public double SpinRpmPerSharpness { get; init; } = 9.0;
 
     // === 球種ごとの回転軸（設計書02 §2.1・issue #835） ===
     // 「全球種バックスピン固定」だった穴（issue #835）を塞ぐ。各球種に回転軸（tilt）と実効回転数倍率
