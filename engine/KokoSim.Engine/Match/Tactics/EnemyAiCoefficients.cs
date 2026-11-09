@@ -43,6 +43,12 @@ public sealed record EnemyAiCoefficients
     public double SmallBallBuntFactor { get; init; } = 1.4;
     public int SmallBallBuntInningEarlier { get; init; } = 2;   // 送りバント開始回を早める
     public double SmallBallHitAndRunFactor { get; init; } = 1.8;
+    // issue #838 やること#3（2026-11-10実測・確認のみ、変更なし）: 強肩捕手（肩80）に対して相手が
+    // 低い成功率で盗塁する場面を計測したが、内訳は①三盗（StealThirdMinSuccess=0.045が緩め幅を引いても
+    // クランプ下限0.01に飽和し、本係数の値に無関係＝issue steal-thresholds-unreachable 2026-08-27 の既知事項）
+    // と②RecklessOnMissProb（①能力値ミス層。閾値を見ずに走る別メカニズムで③校風層とは無関係）の合算で、
+    // 本係数（StealMinSuccessの緩め）を 0.04 に変えても同じ実測値（0.09/試合・4.4%）になり無関係だった。
+    // ＝③校風層の緩めは「損をする盗塁」を増やしていないと確認（0.08のまま）。
     public double SmallBallStealMinSuccessRelax { get; init; } = 0.08; // 多少無理でも走る
     public double SmallBallGambleStartFactor { get; init; } = 1.8;     // 機動力校はギャンブル始動を多用（G3b）
     // 強打・待球
@@ -66,6 +72,8 @@ public sealed record EnemyAiCoefficients
     // 2) 盗塁・エンドラン好き
     public double RunAndGunStealFactor { get; init; } = 1.6;
     public double RunAndGunHitAndRunFactor { get; init; } = 1.8;
+    // issue #838 やること#3（2026-11-10実測・確認のみ、変更なし）: SmallBallと同様に確認した。
+    // 実測（強肩捕手×全員50の均一チーム）では企図0件（閾値を一度も越えない）で、損をする盗塁は作っていない。
     public double RunAndGunStealMinSuccessRelax { get; init; } = 0.06;
     // 3) エース酷使: 継投しきい値（RelievePitchMargin）を引き上げ＝より引っ張る（諸刃＝疲労で被打率上昇）。
     //    旧 AceOveruseHardCapAdd はハードキャップ撤廃（issue #356）に伴い撤去。

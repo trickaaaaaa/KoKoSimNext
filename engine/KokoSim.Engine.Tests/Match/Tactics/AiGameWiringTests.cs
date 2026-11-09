@@ -67,7 +67,7 @@ public sealed class AiGameWiringTests
     [Fact]
     public void NoTactics_RecordsZeroTacticEvents_AndBandUnchanged()
     {
-        // 無指示（Tactics=null, EnableSmallBall 既定オフ）＝采配集計は全ゼロ＝従来の試合と完全一致。
+        // 無指示（Tactics=null）＝采配集計は全ゼロ＝従来の試合と完全一致。
         var ctx = new GameContext();
         var rng = new Xoshiro256Random(7);
         var away = StrengthTeamFactory.Create(52, "A", rng);

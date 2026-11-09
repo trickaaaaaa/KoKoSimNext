@@ -167,7 +167,6 @@ public sealed class InjuryTypeAndMatchTests
                 FenceCrashMarginM = 40.0, SlidingProb = 1.0, OveruseProb = 1.0, OveruseOverPitches = 0.0,
             },
             InjuryCatalog = InjuryCatalog.Default,
-            EnableSmallBall = true,
         };
         var offCtx = new GameContext
         {
@@ -176,7 +175,6 @@ public sealed class InjuryTypeAndMatchTests
                 HitByPitchProb = 0, HomeCollisionProb = 0, FenceCrashProb = 0,
                 SlidingProb = 0, OveruseProb = 0,
             },
-            EnableSmallBall = true,
         };
 
         var scenes = new HashSet<InjuryScene>();
