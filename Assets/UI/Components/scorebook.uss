@@ -7,7 +7,7 @@
    ・スクールカラー --color-accent は既定値。実行時の差し替えは C# SchoolAccent.Apply が
      acc-fg / acc-bg / acc-bd / acc-bd-top の付いた要素へ直接色を流し込む
      （USS変数は C# から書き換えられないため。差し色の付く場所はこの4クラスでしか表さない）。
-   ・ランク（画像）と調子の色は機能色なので変えない（設計書19 §0）。
+   ・ランク（画像）は機能色なので変えない（設計書19 §0）。書体（Noto Sans JP）と調子の色は全画面共通（design-22 G0）。
    gap/grid/擬似要素は使わない（USS非対応）。
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -60,30 +60,6 @@
 
     background-color: var(--sbk-paper);
     color: var(--sbk-text);
-    /* 書体：本文も数字も Noto Sans JP（名前・打順・題字だけ .f-display の明朝）。 */
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
-}
-
-/* ── 書体の読み替え（この試作の中だけ）。書体3役の本文・数字クラスを Noto Sans JP の実ウェイトへ。
-      Regular 400 / Medium 500 / Bold 700。明朝（.f-display）はそのまま。 ── */
-.sbk .f-body, .sbk .f-num {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
-}
-.sbk .f-body-md {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Medium.asset?fileID=11400000&guid=cbbe2e847b1fb4f839c984a420d81dcb&type=2#NotoSansJP-Medium");
-}
-.sbk .f-body-bd, .sbk .f-num-bd {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
-}
-
-/* 共通部品が自分で書体を持っている所（書体3役の移行レジストリで Plex を直接指定している部品）も、
-   この試作の中では Noto Sans JP に読み替える（書体の監査で見つかったもの：ランク文字・カテゴリ別ランク・
-   特殊能力のタグ・成績表の見出し）。 */
-.sbk .rank-chip, .sbk .grade {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
-}
-.sbk .skill-chip, .sbk .stat-table__scope, .sbk .stat-table__lab {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
 }
 
 /* Label 既定の上下 margin/padding は行の高さを狂わせるので、この試作の中では消す（行高は器で決める）。 */
@@ -185,17 +161,7 @@
 .sbk .rank-chip--sbk36 { min-width: 36px; width: 36px; height: 36px; padding: 0; flex-shrink: 0; }
 
 /* ── ConditionFace：この試作では輪郭リングを出さない（白カードの上なので「普通」も溶けない） ── */
-.sbk .cond-face {
-    --face-ring: rgba(0, 0, 0, 0);
-    /* 調子の色（この試作の中だけ。ConditionFace が自分の要素のカスタムプロパティとして読む。
-       他画面は C# 既定＝tokens.uss の --cond-* のまま） */
-    --face-best: #E0605A;     /* 絶好調 */
-    --face-good: #E8904A;     /* 好調 */
-    --face-normal: #E3BD3C;   /* 普通 */
-    --face-bad: #7FA8D6;      /* 不調 */
-    --face-worst: #4F6FA8;    /* 絶不調 */
-    --face-ink: #2A2622;      /* 目と口 */
-}
+.sbk .cond-face { --face-ring: rgba(0, 0, 0, 0); }   /* 調子の色は全画面共通（tokens.uss --cond-*）。ここでは輪郭だけ消す */
 .sbk .cond-face--26 { width: 26px; height: 26px; }
 .sbk .cond-face--24 { width: 24px; height: 24px; }
 

@@ -115,3 +115,13 @@ supersedes: design-19「デーゲーム・フルNB」の面・枠・影・カー
 - 各ゲートで画面ごとのバッチスクショ（`OrderRestyleShooter` の型）→ 自己レビュー → ユーザー目視
 - 書体の監査（Noto / 明朝 / 試合中スコア部品の DotGothic 以外が0）
 - 純粋な見た目の変更＝エンジン・data・帯への影響ゼロ。Assets を触るので `tools/check-unity-compile.sh` は毎回
+
+## 9. 進捗
+
+- **G0 完了（2026-11-09）**: 既定フォント3箇所と `.f-body*` `.f-num*`・移行レジストリを Noto Sans JP へ向け替え
+  （Regular→Regular／Medium→Medium／SemiBold→Bold／Oswald Medium→Regular／Oswald SemiBold→Bold）。
+  調子5色を4面（tokens `--cond-*`／KokoSimTheme `.cond--*`／`ConditionFace`／`ConditionLabels.ColorHex`）で同期。
+  書体の監査は `ScreenshotBatch` が `<prefix>fonts.txt` に書く（`FontAudit`）。データ18画面で Plex・Oswald ゼロ。
+  旧書体と並べた比較で、G0 起因の崩れは無し。以下は旧書体でも同じだった既存の問題（G2/G3 で扱う）:
+  経営「資金」の説明2行の折り返し／試合開始前のレーダーのラベルが図に重なる／試合中の投手行（投 10 … 22球）の下端が欠ける／
+  戦術カード「コントロール重視」の語中での折り返し

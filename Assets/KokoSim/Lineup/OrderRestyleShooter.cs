@@ -80,29 +80,9 @@ namespace KokoSim.Unity.Lineup
             Debug.Log("[order] DONE");
         }
 
-        /// <summary>
-        /// 書体の監査：画面上の文字要素の解決済みフォントを数え、Noto Sans JP（本文・数字）と
-        /// Shippori Mincho B1（名前・打順・題字）以外が使われていたら一覧を出す。
-        /// </summary>
+        /// <summary>書体の監査（FontAudit）。許可外の書体が使われていたら一覧が出る。</summary>
         private static void AuditFonts(MonoBehaviour ctrl)
-        {
-            var root = ctrl.GetComponent<UIDocument>().rootVisualElement;
-            var counts = new Dictionary<string, int>();
-            var stray = new System.Text.StringBuilder();
-            root.Query<TextElement>().ForEach(t =>
-            {
-                if (string.IsNullOrEmpty(t.text) || t.resolvedStyle.display == DisplayStyle.None) return;
-                var fa = t.resolvedStyle.unityFontDefinition.fontAsset;
-                var name = fa != null ? fa.name : (t.resolvedStyle.unityFontDefinition.font != null ? "font:" + t.resolvedStyle.unityFontDefinition.font.name : "(none)");
-                counts[name] = counts.TryGetValue(name, out var c) ? c + 1 : 1;
-                if (!name.StartsWith("NotoSansJP") && !name.StartsWith("ShipporiMinchoB1"))
-                    stray.Append("\n  ").Append(name).Append(" <- \"").Append(t.text).Append("\" ").Append(string.Join(".", t.GetClasses()));
-            });
-            var sb = new System.Text.StringBuilder("[order] fonts:");
-            foreach (var kv in counts) sb.Append(" ").Append(kv.Key).Append("=").Append(kv.Value);
-            sb.Append(stray.Length == 0 ? "\n  stray: none" : "\n  stray:" + stray);
-            Debug.Log(sb.ToString());
-        }
+            => Debug.Log("[order] fonts: " + FontAudit.Report(ctrl.GetComponent<UIDocument>().rootVisualElement));
 
         private static void Render(MonoBehaviour ctrl) => ctrl.GetType().GetMethod("Render", Priv)?.Invoke(ctrl, null);
 

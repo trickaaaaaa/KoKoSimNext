@@ -14,13 +14,13 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public sealed class ConditionFace : VisualElement
     {
-        // tokens.uss --cond-best/good/normal/bad/worst のミラー（ConditionLabels.ColorHex とも一致させる）。
-        private static readonly Color Excellent = new(0xEF / 255f, 0x3B / 255f, 0x3B / 255f); // 赤
-        private static readonly Color Good = new(0xF2 / 255f, 0x8B / 255f, 0x2E / 255f);      // 橙
-        private static readonly Color Normal = new(0xF4 / 255f, 0xCB / 255f, 0x3C / 255f);    // 黄
-        private static readonly Color Poor = new(0x5A / 255f, 0xA9 / 255f, 0xE6 / 255f);      // 水色
-        private static readonly Color Terrible = new(0x4C / 255f, 0x5B / 255f, 0xD4 / 255f);  // 青
-        private static readonly Color Ink = new(0x14 / 255f, 0x23 / 255f, 0x1B / 255f);        // 顔上の暗インク
+        // tokens.uss --cond-best/good/normal/bad/worst のミラー（ConditionLabels.ColorHex とも一致させる）。design-22 G0 で新5色。
+        private static readonly Color Excellent = new(0xE0 / 255f, 0x60 / 255f, 0x5A / 255f); // 赤
+        private static readonly Color Good = new(0xE8 / 255f, 0x90 / 255f, 0x4A / 255f);      // 橙
+        private static readonly Color Normal = new(0xE3 / 255f, 0xBD / 255f, 0x3C / 255f);    // 黄
+        private static readonly Color Poor = new(0x7F / 255f, 0xA8 / 255f, 0xD6 / 255f);      // 水色
+        private static readonly Color Terrible = new(0x4F / 255f, 0x6F / 255f, 0xA8 / 255f);  // 青
+        private static readonly Color Ink = new(0x2A / 255f, 0x26 / 255f, 0x22 / 255f);        // 顔上の暗インク
 
         private Condition _condition = Condition.Normal;
 

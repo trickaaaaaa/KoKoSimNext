@@ -30,6 +30,7 @@ namespace KokoSim.Unity.Shell
             // エディタ非フォーカスでも WaitForEndOfFrame を進めるため（撮影が空フレームになる対策）。
             var prevBackground = Application.runInBackground;
             Application.runInBackground = true;
+            var audit = new System.Text.StringBuilder();
 
             foreach (var screen in screens)
             {
@@ -48,11 +49,25 @@ namespace KokoSim.Unity.Shell
 
                 ScreenshotCapture.Capture(screen, width, height, pathPrefix + screen + ".png");
                 for (var f = 0; f < SettleFrames; f++) yield return new WaitForEndOfFrame();
+
+                // 書体の監査（design-22 §3）。撮った画面の文字の解決済みフォントを数えて書き出す。
+                var doc = FindDocument(screen);
+                audit.Append("■ ").Append(screen).Append('\n')
+                     .Append(doc != null ? FontAudit.Report(doc.rootVisualElement) : "(UIDocument なし)").Append("\n\n");
             }
 
+            try { System.IO.File.WriteAllText(pathPrefix + "fonts.txt", audit.ToString()); }
+            catch (System.Exception e) { Debug.LogWarning("[ScreenshotBatch] 書体の監査を書けない: " + e.Message); }
             Debug.Log("[ScreenshotBatch] done: " + screens.Length + " screens → " + pathPrefix + "*.png");
             Application.runInBackground = prevBackground;
             Destroy(gameObject);
+        }
+
+        private static UnityEngine.UIElements.UIDocument FindDocument(string screen)
+        {
+            foreach (var d in Resources.FindObjectsOfTypeAll<UnityEngine.UIElements.UIDocument>())
+                if (d.gameObject.scene.IsValid() && d.gameObject.name == screen && d.gameObject.activeInHierarchy) return d;
+            return null;
         }
     }
 }
