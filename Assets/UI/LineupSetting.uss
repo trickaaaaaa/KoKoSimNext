@@ -12,6 +12,9 @@
     flex-grow: 1;
     padding: 28px 32px;
 }
+/* Label 既定の上下 margin/padding は行の高さを狂わせるので、この画面では消す（行高は器で決める）。
+   スコアブックの部品（.sbk-*）もこの前提で寸法を決めている。 */
+.lu-root Label { margin: 0; padding: 0; }
 .lu-root .lu-flex { flex-grow: 1; }
 
 /* ── ヘッダー（高さ52・下に1px区切り） ── */

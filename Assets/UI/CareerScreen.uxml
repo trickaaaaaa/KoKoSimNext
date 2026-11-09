@@ -9,8 +9,9 @@
     <Style src="tokens.uss" />
     <Style src="Components/components.uss" />
     <Style src="KokoSimTheme.uss" />
+    <Style src="Components/scorebook.uss" />
     <Style src="CareerScreen.uss" />
-    <ui:VisualElement class="root ui-root">
+    <ui:VisualElement class="root ui-root sbk">
 
       <ui:Instance template="TopBar" class="topbar-slot" />
 

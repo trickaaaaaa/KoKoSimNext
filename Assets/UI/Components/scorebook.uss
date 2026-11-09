@@ -62,8 +62,6 @@
     color: var(--sbk-text);
 }
 
-/* Label 既定の上下 margin/padding は行の高さを狂わせるので、この試作の中では消す（行高は器で決める）。 */
-.sbk Label { margin: 0; padding: 0; }
 
 /* ── 差し色クラス（既定値。実行時は SchoolAccent.Apply が上書き） ── */
 .sbk .acc-fg { color: var(--color-accent); }
@@ -218,3 +216,160 @@
 /* 数値なし（弾道などのタイプ軸）。テキストだけを置く。 */
 .sbk-bar__text { font-size: 14px; color: var(--sbk-text); -unity-text-align: middle-left; }
 .sbk-bar__none { font-size: 14px; color: var(--sbk-lose); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   design-22 G1：シェルと共通の器をスコアブックへ（.sbk を付けたデータ画面だけ）
+   ───────────────────────────────────────────────────────────────────────
+   ① 昼NB（design-19）のトークンを .sbk の中で読み替える＝トークン駆動の部品は自動で切り替わる。
+   ② インクの枠（--ink は文字色も兼ねる）・塗りの見出しプレート・ベタ影の固定幅は
+      トークンだけでは消えないので、器ごとに .sbk 付きのセレクタで上書きする。
+   試合中の画面は .sbk を付けない＝ここは一切効かない。
+   ═══════════════════════════════════════════════════════════════════════ */
+.sbk {
+    /* 面 */
+    --sf-base: #F2EFE8;  --color-field: #F2EFE8;
+    --sf-raise: #F2EFE8; --color-strip: #F2EFE8;
+    --sf-card: #FFFFFF;  --color-panel: #FFFFFF;
+    --sf-inset: #F4F1EA; --color-panel-deep: #F4F1EA;
+    --sf-hover: #ECE8DF; --color-panel-hover: #ECE8DF;
+    --dirt-well: #F2EFE8;
+    --color-row-hover: #F7F5F0;
+    /* 文字（--ink は文字色として残す。枠は下で個別に淡色へ） */
+    --ink: #1D1B18;
+    --tx-1: #1D1B18; --color-chalk: #1D1B18; --day-tx-1: #1D1B18;
+    --tx-2: #6F6A60; --color-muted: #6F6A60; --day-tx-2: #6F6A60;
+    --tx-3: #8A857A; --color-faint: #8A857A; --day-tx-3: #8A857A;
+    /* 線 */
+    --color-line: #E3DFD5; --color-line-soft: #ECE8DF; --divider: #E3DFD5;
+    --color-line-focus: #2F2C27;
+    /* 枠の太さ・ベタ影は撤去（1px の淡い枠だけ） */
+    --nb-border: 1px; --nb-border-card: 1px;
+    --nb-shadow: 0;   --nb-shadow-card: 0;
+    --nb-card-edge: 1px; --nb-panel-edge: 1px;
+    /* 角丸 */
+    --radius-card: 10px; --radius-panel: 12px; --radius-chip: 6px; --radius-modal: 12px;
+    /* 役割色：操作・選択は墨。見出しの塗りプレートは白（＝塗らない） */
+    --sky: #2F2C27;
+    --sakura: #ECE8DF; --sakura-tint: #F6F3EC;
+    --grass: #FFFFFF; --dirt: #FFFFFF;
+}
+
+/* ── カード・パネル系の器：淡い1px枠＋角丸。右下のベタ影（固定幅）も1pxへ ── */
+.sbk .card, .sbk .hm-hero, .sbk .tpm-card, .sbk .tpc-card, .sbk .ev__box, .sbk .nb-plate__front, .sbk .tcard {
+    border-color: var(--sbk-card-line);
+    border-width: 1px;
+    border-radius: var(--sbk-r-card);
+}
+.sbk .nb-plate__shadow { display: none; }
+.sbk .panel { border-radius: var(--sbk-r-panel); }
+
+/* カードの見出し：塗りをやめ、白地に明朝の題字＋パネル内の淡い区切り線 */
+.sbk .card__hd, .sbk .plate-header {
+    background-color: rgba(0, 0, 0, 0);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--sbk-rule-soft);
+    padding: 14px 18px 10px 18px;
+}
+.sbk .card__hd--tight { padding-top: 8px; padding-bottom: 6px; }
+.sbk .card__hd-title, .sbk .plate-header__title {
+    color: var(--sbk-text);
+    font-size: 18px;
+    letter-spacing: 1.4px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.sbk .card__hd-sub, .sbk .plate-header__sub { color: var(--sbk-sub); opacity: 1; }
+
+/* 小さな器（ボタン・枠・小片）：淡い1px枠 */
+.sbk .nb-border, .sbk .tool-btn, .sbk .banner, .sbk .lv-pip, .sbk .ev__stage,
+.sbk .ev-por__head, .sbk .ev-por__body, .sbk .ev-por__image, .sbk .tpm-head, .sbk .tpm-preset-strip,
+.sbk .tpm-foot, .sbk .tpc-head, .sbk .tp-ed-id, .sbk Button.ngs-sug {
+    border-color: var(--sbk-card-line);
+}
+.sbk .tool-btn, .sbk Button.ngs-sug { border-width: 1px; border-radius: var(--sbk-r-chip); }
+
+/* ── 行パネル：紙色の上に白カードの行を6px間隔で積む。選択は墨の2px枠 ── */
+.sbk .row-well { background-color: rgba(0, 0, 0, 0); padding: 4px 0 12px 0; }
+.sbk .row-panel, .sbk .lineup-row, .sbk .bench-row {
+    border-color: var(--sbk-card-line);
+    border-width: 1px;
+    border-radius: var(--sbk-r-card);
+    margin-bottom: 6px;
+}
+.sbk .row-panel:hover { background-color: var(--sbk-card); border-color: var(--sbk-card-line-hover); }
+.sbk .row-panel--selected, .sbk .row-panel--selected:hover {
+    background-color: var(--sbk-card);
+    border-width: 2px;
+    border-color: var(--sbk-ink);
+}
+.sbk .row--selected { border-color: var(--sbk-ink); }
+
+/* ── 主ボタン（今週を進める等）：応援団赤のまま。インク枠とベタ影だけ外して角丸に ── */
+.sbk .advance {
+    border-width: 0;
+    border-radius: var(--sbk-r-card);
+}
+.sbk .advance:hover { background-color: var(--color-cta-hi); }
+
+/* ── トップバー（案A：1段＋ナビ）。紙色の地・校名は明朝・数字は Noto ── */
+.sbk .sb2 { background-color: var(--sbk-paper); }
+.sbk .sb2-badge {
+    background-color: var(--sbk-card);
+    color: var(--sbk-text);
+    border-width: 1.5px;
+    border-color: var(--sbk-patch-line);
+    border-radius: var(--sbk-r-patch);
+}
+.sbk .sb2-name {
+    color: var(--sbk-text);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.sbk .sb2-pref, .sbk .sb2-rank__k, .sbk .sb2-meter__k { color: var(--sbk-sub); }
+
+/* 中央：黒い電光掲示板 → 明朝の日付行。升目（1字1マス）の仕組みはそのまま、マスの地と枠を消して文字だけにする */
+.sbk .sbs {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    padding: 0;
+}
+.sbk .sbs-group__k, .sbk .sbs-group__sup {
+    font-size: 12px;
+    color: var(--sbk-sub);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
+}
+.sbk .sbs-group__head { margin-bottom: 2px; }
+.sbk .sbs-cell, .sbk .sbs-cell--wide {
+    width: auto;
+    height: auto;
+    margin-right: 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    font-size: 26px;
+    color: var(--sbk-text);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.sbk .sbs-cell--unit { font-size: 15px; color: var(--sbk-sub); margin-left: 1px; margin-right: 4px; -unity-text-align: lower-center; padding-bottom: 3px; }
+.sbk .sbs-cell--lit { color: var(--sbk-text); background-color: rgba(0, 0, 0, 0); }
+.sbk .sbs-gap { width: 28px; }
+
+/* ナビ：文字タブ。選択中は墨の下線（塗らない）。下端は1pxの区切り線 */
+.sbk .nav {
+    background-color: var(--sbk-paper);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--sbk-rule);
+    padding: 4px 18px 0 18px;
+}
+.sbk .nav__item {
+    color: var(--sbk-sub);
+    font-size: 17px;
+    padding: 8px 14px 9px 14px;
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(0, 0, 0, 0);
+    border-radius: 0;
+}
+.sbk .nav__item:hover { color: var(--sbk-text); }
+.sbk .nav__item--on {
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--sbk-text);
+    border-bottom-color: var(--sbk-ink);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
