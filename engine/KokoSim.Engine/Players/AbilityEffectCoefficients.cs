@@ -31,11 +31,13 @@ public sealed record AbilityEffectCoefficients
     //   投手1.0/打撃0.5/守備0.4/走力0.5: 80vs75 65%／80vs70 78%／80vs65 89%／60vs50 85%、ただし 80vs80 が 1.3−1.3 の投手戦
     //   投手0.55/打撃0.55/守備0.45/走力0.55: 80vs75 65%／80vs70 82%／80vs65 88%／80vs60 94%／60vs50 81%、80vs80 2.4−2.4
     // → 案A（全員一律≈0.55）を採用。守備だけ 0.45 なのは守備+10 の得点価値（+1.43点）が打撃+10（+1.1点）より大きいため。
+    // → issue #833（2026-11-09）: 一律に約1割寝かせ直し 0.50／守備0.41。#835/#837 で変化球が効くようになり、低ティアの自校が
+    //   2ティア上に完封され率33〜36%へ悪化していた。全員一律の原則は保つ（2000試合: C60 得点1.60→1.80・完封され率33→29%）。
     /// <summary>打撃3能力（ミート/パワー/選球眼/バント）の効き。1.0＝従来どおり。</summary>
-    public double BattingScale { get; init; } = 0.55;
+    public double BattingScale { get; init; } = 0.50;
 
     /// <summary>守備3能力（守備/捕球/送球精度）の効き。1.0＝従来どおり。肩は <see cref="ArmScale"/> が別に持つ。</summary>
-    public double FieldingScale { get; init; } = 0.45;
+    public double FieldingScale { get; init; } = 0.41;
 
     /// <summary>
     /// 肩（地肩→送球速度）の効き（issue #764）。送球は km/h で語られる量（「強肩遊撃手の140km/h」）なので、
@@ -46,13 +48,13 @@ public sealed record AbilityEffectCoefficients
     public double ArmScale { get; init; } = 1.0;
 
     /// <summary>走力系（走力/盗塁/走塁）の効き。1.0＝従来どおり。</summary>
-    public double RunningScale { get; init; } = 0.55;
+    public double RunningScale { get; init; } = 0.50;
 
     /// <summary>
     /// 投手系（制球/キレ/球威ランク/捕手リード）と球速の反応の効き。1.0＝従来どおり。
     /// 球速は km/h を変えず <see cref="PitchingKmh(double)"/> で打者側の反応だけを寝かせる。
     /// </summary>
-    public double PitchingScale { get; init; } = 0.55;
+    public double PitchingScale { get; init; } = 0.50;
 
     /// <summary>恒等（従来と1ビット一致）。テストと非物理経路の既定。</summary>
     public static readonly AbilityEffectCoefficients Identity = new() { BattingScale = 1.0, FieldingScale = 1.0, ArmScale = 1.0, RunningScale = 1.0, PitchingScale = 1.0 };
