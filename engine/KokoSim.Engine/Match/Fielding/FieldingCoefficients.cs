@@ -259,6 +259,14 @@ public sealed record FieldingCoefficients
     /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
     public double RecoveryReactionSeconds { get; init; } = 0.30;
 
+    // 捕球ミス（お手玉）の回収レース（design-14 P1-6 追記, issue #817）。送球逸れの回収レースと同じ形で、
+    // 捕球エラー(FieldingErrorKind.Catch)が確定した後も「弾いたら即失策」にしない。こぼれ幅→拾い直しの
+    // ロスを守備所要時間へ加算し、同じ判定基準でもう一度評価する（間に合えばアウトに戻る）。球は捕球点の
+    // すぐそばにあるのでバックアップ野手の概念は無く、回収役は常に処理野手自身（RecoveryReactionSeconds を共有）。
+    /// <summary>捕球ミス1回あたりのこぼれ幅の標準偏差[m]（半正規分布からサンプル）。送球の逸れ幅
+    /// (<see cref="WildThrowScatterSigmaM"/>)より小さい＝グラブ際で弾く距離は送球が逸れる距離より近い。</summary>
+    public double CatchFumbleScatterSigmaM { get; init; } = 2.5;
+
     // ファウルフライ（issue #830）。打撃の接触判定で「ファウル」になった球（弾道を持たない）のうち、
     // この割合を打ち上がったファウルとして弾道を与え、ファウルグラウンドに落ちる前に野手が届けばアウト。
     // 弾道は打席の本流と別の乱数ストリーム（Fork）で引く＝ファウル以外の打席の乱数順は変わらない。

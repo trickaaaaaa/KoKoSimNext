@@ -677,6 +677,7 @@ public static class CoefficientsLoader
         public double ReceiveErrorBaseProb { get; set; } = D.ReceiveErrorBaseProb;
         public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
         public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
+        public double CatchFumbleScatterSigmaM { get; set; } = D.CatchFumbleScatterSigmaM;
         public double FoulFlyShare { get; set; } = D.FoulFlyShare;
         public double FoulFlyLaunchMeanDeg { get; set; } = D.FoulFlyLaunchMeanDeg;
         public double FoulFlyLaunchSigmaDeg { get; set; } = D.FoulFlyLaunchSigmaDeg;
@@ -756,6 +757,7 @@ public static class CoefficientsLoader
             ReceiveErrorBaseProb = ReceiveErrorBaseProb,
             WildThrowScatterSigmaM = WildThrowScatterSigmaM,
             RecoveryReactionSeconds = RecoveryReactionSeconds,
+            CatchFumbleScatterSigmaM = CatchFumbleScatterSigmaM,
             FoulFlyShare = FoulFlyShare,
             FoulFlyLaunchMeanDeg = FoulFlyLaunchMeanDeg,
             FoulFlyLaunchSigmaDeg = FoulFlyLaunchSigmaDeg,
@@ -851,6 +853,13 @@ public static class CoefficientsLoader
         public double PickoffRunnerLeadSlope { get; set; } = D.PickoffRunnerLeadSlope;
         public double PickoffPitcherSenseSlope { get; set; } = D.PickoffPitcherSenseSlope;
         public double PickoffMaxProb { get; set; } = D.PickoffMaxProb;
+        // 送球の逸れ（捕手の盗塁送球, issue #841）
+        public double StealThrowScatterLateralSecPerCm { get; set; } = D.StealThrowScatterLateralSecPerCm;
+        public double StealThrowScatterHighSecPerCm { get; set; } = D.StealThrowScatterHighSecPerCm;
+        public double StealThrowScatterShortHopSecPerCm { get; set; } = D.StealThrowScatterShortHopSecPerCm;
+        public double StealThrowScatterCatchingReliefSlope { get; set; } = D.StealThrowScatterCatchingReliefSlope;
+        public double StealThrowScatterCatchingReliefMinFactor { get; set; } = D.StealThrowScatterCatchingReliefMinFactor;
+        public double StealThrowWildThresholdCm { get; set; } = D.StealThrowWildThresholdCm;
         // バント（設計書02 §4.3）
         public double BuntBase { get; set; } = D.BuntBase;
         public double BuntSkillSlope { get; set; } = D.BuntSkillSlope;
@@ -1019,6 +1028,12 @@ public static class CoefficientsLoader
             PickoffRunnerLeadSlope = PickoffRunnerLeadSlope,
             PickoffPitcherSenseSlope = PickoffPitcherSenseSlope,
             PickoffMaxProb = PickoffMaxProb,
+            StealThrowScatterLateralSecPerCm = StealThrowScatterLateralSecPerCm,
+            StealThrowScatterHighSecPerCm = StealThrowScatterHighSecPerCm,
+            StealThrowScatterShortHopSecPerCm = StealThrowScatterShortHopSecPerCm,
+            StealThrowScatterCatchingReliefSlope = StealThrowScatterCatchingReliefSlope,
+            StealThrowScatterCatchingReliefMinFactor = StealThrowScatterCatchingReliefMinFactor,
+            StealThrowWildThresholdCm = StealThrowWildThresholdCm,
             BuntBase = BuntBase,
             BuntSkillSlope = BuntSkillSlope,
             BuntVelocityRefKmh = BuntVelocityRefKmh,

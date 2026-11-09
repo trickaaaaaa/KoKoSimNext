@@ -112,22 +112,30 @@ public sealed class CatchMarginDisplayTests
             $"「飛び込んだが届かない」の母数が無い（落球 {dropped} 件／うち際どい {droppedTight} 件）");
     }
 
-    /// <summary>実試合でも弾いた打球にだけお手玉の印が立つ（＝収録を流す条件が母集団で機能する）。</summary>
+    /// <summary>
+    /// 実試合でも弾いた打球にだけお手玉の印が立つ（＝収録を流す条件が母集団で機能する）。
+    /// 捕球ミスの回収レース（design-14 P1-6 追記, issue #817）で拾い直しが間に合った打席は、
+    /// 実際に弾いてはいるが記録は失策にならず <c>InPlayOut</c> になる＝お手玉の印は立つがアウト、
+    /// も正当な組み合わせとして許容する。
+    /// </summary>
     [Fact]
     public void RealGames_FumbleFlag_OnlyOnErrors()
     {
-        int fumbles = 0, otherErrors = 0;
+        int fumbles = 0, recoveredToOut = 0, otherErrors = 0;
         foreach (var e in Plays())
         {
             if (e.Timeline is null) continue;
             if (e.Timeline.FumbledCatch)
             {
-                Assert.Equal(PlateAppearanceResult.ReachedOnError, e.Result);
+                Assert.True(
+                    e.Result is PlateAppearanceResult.ReachedOnError or PlateAppearanceResult.InPlayOut,
+                    $"弾いた打席が想定外の結果（{e.Result}）");
+                if (e.Result == PlateAppearanceResult.InPlayOut) recoveredToOut++;
                 fumbles++;
             }
             else if (e.Result == PlateAppearanceResult.ReachedOnError) otherErrors++;
         }
-        Assert.True(fumbles >= 5, $"お手玉が {fumbles} 件しか出ていない＝テストが空回り");
+        Assert.True(fumbles >= 5, $"お手玉が {fumbles} 件しか出ていない＝テストが空回り（拾い直してアウト {recoveredToOut} 件）");
         Assert.True(otherErrors >= 1, $"悪送球が {otherErrors} 件＝区別の検証になっていない");
     }
 
