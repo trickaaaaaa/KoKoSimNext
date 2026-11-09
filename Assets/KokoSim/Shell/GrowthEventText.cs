@@ -76,12 +76,16 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 実際に上がった能力を「ミート ＋4・パワー ＋4」の形にする（issue #694。上限で止まった分は載らない）。
-        /// 精神力の上昇（大舞台）も同じ列に並べる。
+        /// 精神力の上昇（大舞台）も同じ列に並べる。球速だけは km/h の伸びで出す（issue #864。0km/h に丸まるときは「球速 アップ」）。
         /// </summary>
         private static string GainsText(GrowthNotice n)
         {
             var parts = new System.Collections.Generic.List<string>();
-            foreach (var g in n.Gains) parts.Add(AbilityLabels.Jp(g.Ability) + " ＋" + g.Amount);
+            foreach (var g in n.Gains)
+            {
+                var amount = GrowthGainDisplay.Amount(n.Player, g);
+                parts.Add(AbilityLabels.Jp(g.Ability) + (amount.Length > 0 ? " " + amount : " アップ"));
+            }
             if (n.MentalGain > 0) parts.Add("精神力 ＋" + n.MentalGain);
             return string.Join("・", parts);
         }
@@ -90,7 +94,11 @@ namespace KokoSim.Unity.Shell
         private static string GainsSentence(GrowthNotice n)
         {
             var parts = new System.Collections.Generic.List<string>();
-            foreach (var g in n.Gains) parts.Add(AbilityLabels.Jp(g.Ability) + "が ＋" + g.Amount);
+            foreach (var g in n.Gains)
+            {
+                var amount = GrowthGainDisplay.Amount(n.Player, g);
+                parts.Add(AbilityLabels.Jp(g.Ability) + "が" + (amount.Length > 0 ? " " + amount : ""));
+            }
             if (n.MentalGain > 0) parts.Add("精神力が ＋" + n.MentalGain);
             return string.Join("、", parts);
         }
