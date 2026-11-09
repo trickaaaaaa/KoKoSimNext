@@ -114,6 +114,24 @@ public sealed record BattingCoefficients
     /// </summary>
     public double WhiffMatchupCap { get; init; } = 1.5;
 
+    /// <summary>
+    /// 誘発変化合成量[m]の欺瞞効果を実球速で割り引く基準球速[km/h]（issue #837・設計書21 §3.5。
+    /// 「効きの入口」の5つ目）。この球速以上は満額（割引なし）、それ未満は実球速との比を
+    /// <see cref="BreakDeceptionExponent"/> 乗して割引く（<see cref="ContactModel.BreakDeceptionFactor"/>）。
+    /// 遅い球ほど打者が軌道を見る時間が長く、誘発変化（ホップ）に欺かれにくい＝「変化量は実球速のまま
+    /// 寝かせていない」非対称（球速の有利は反応球速で寝るのに変化量の有利は寝ない）を正す。
+    /// Lv35格子投手（125km/h・<c>MatchupGridRegressionTests</c>）の変化球（スライダー比0.90＝約112.5km/h）が
+    /// 割引を受けない水準に置く＝格下格子（<c>average_p35_b75</c>）の裾を動かさない。既定はストレート単体の
+    /// 平均実球速（<see cref="StuffBaseVelocityKmh"/>）より更に低い108（実測で校正。issue #837）。
+    /// </summary>
+    public double BreakDeceptionRefKmh { get; init; } = 108.0;
+    /// <summary>
+    /// <see cref="BreakDeceptionRefKmh"/> 未満の球速に対する割引の強さ（指数）。0以下＝無効（割引なし・従来どおり）。
+    /// 実測（<c>AbilitySweep.VelocityLadderKmh</c> 100〜150km/h の梯子・<c>LowTierRegressionTests</c> 完封され率）
+    /// で校正: 最速100km/hの投手が150km/hと同じだけ抑える逆転を解消し、速いほど単調に失点が減る形にする。
+    /// </summary>
+    public double BreakDeceptionExponent { get; init; } = 1.5;
+
     // --- 打者の「慣れ」（設計書02 §2.3b・issue times-through-order-familiarity） ---
     // 同一投手との試合内の対戦回数（打席の頭で数える・継投でその投手に対して0から）が増えるほど
     // コンタクト（空振り対数オッズ）と選球（追いかけ率）が控えめに良くなる。個人スキル SecondTimeThrough
