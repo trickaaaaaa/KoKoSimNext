@@ -256,6 +256,49 @@
 - **rng 消費順**: 3段目が新設されるため、`処理野手≠一塁手` かつ上2段を通過した判定では常に1本追加で引く
   （`ReceiveErrorBaseProb>0` のとき）＝**決定論baseline（determinism-baseline.txt）を再生成**。
 
+##### 第4の段階「外野手のファンブル」（issue #811, 監督決定 2026-11-09）
+
+種類拡充4本（#810〜#813）の2本目。内野の3段階（捕球/送球/受け手）とは別経路で、**外野の安打処理そのものに
+失策が無い**という穴を塞ぐ。既存の外野失策はフライ落球（`MaybeFlyError`, issue #532）だけで、「ヒットの
+打球を外野手が弾く・後逸し、打者や走者が余分に進む」という形を表現できていなかった。
+
+- **適用範囲**: `FieldingResolver.HitFromRoll`（安打の回収経路の単一ソース）。フライが落ちて安打になった球・
+  内野を抜けたゴロ・トンネル（issue #632）で抜けた球のすべてが通る＝1箇所に実装すれば全経路に効く。
+  判定対象は**回収野手が外野手（左翼/中堅/右翼）のときだけ**（`IsOutfield`）。トンネルで抜けた球を外野手が
+  さらにファンブルする（二重失策）場合は、記録上は先に確定した失策（`Tunnel`）が残る＝二重では記録しない
+  （実際の野球でも1プレーに付く失策は通常1つ）。
+- **物理量（不変条件#1）**: 回収点でのボール速度（`ExtraBaseResolver.RollPath.SpeedAt`＝減速直線を素通しした
+  観測値。新しい経路・新しい乱数は持たない）。速い球ほど難度が上がり、完全に止まった球（速度0）ではほぼ
+  発生しない。`FlyCatchErrorProb`（issue #532）と同じ「難度×基準確率」の形で、守備力連動は捕球エラーと
+  同じ非対称スロープ（`ErrorCatchingSlope`/`ErrorCatchingSlopeStrong`）を外野手自身の `Catching` へ適用する
+  （新しい傾き係数は増やさない）。
+- **一律の追加進塁にしない**: 発生時は「球が逸れた分だけ回収が遅れる」時間（指数分布、内野のもたつき
+  `InfieldHandleJitterMeanSeconds` と同じ形）を回収時刻へ加算し、**その遅れた回収時刻で
+  `ExtraBaseResolver.ResolveBases` を解き直す**。単打が二塁打へ伸びるかどうかは一律確率ではなく、
+  伸びた回収時刻と走者・送球の時間勝負で決まる（不変条件#1）。
+- **記録は「安打＋失策」**: `BattedBallResult`（Single/Double/Triple）はそのまま安打のまま変えない
+  （内野の3段階・トンネルのように `Error` へ変換しない）。`ErrorKind = Fumble`・`ErrorFielderRole` =
+  回収した外野手（`FielderRole` と同一人物）を立てるだけ。打者は安打を記録したまま、チーム・個人の失策数
+  （`TeamState.RecordFieldingError`）にも加算する＝「安打＋失策」の両立。`GameEngine.FinishPlateAppearance`
+  の失策記録ゲートは `Result==ReachedOnError` に加えて `Play.ErrorKind==Fumble` でも発火するよう広げた。
+- **Balance CLI の按分**: `errors_per_game`/`outfield_error_share`（`GameSimulation.cs` の守備位置別
+  Fly/GroundChances・Errors 集計）は従来 `Result∈{InPlayOut, ReachedOnError}` だけを機会として数えており、
+  安打のままの失策（Fumble）は漏れる。`ErrorKind==Fumble` のときも機会・失策としてカウントするよう広げた
+  （`ErrorKindProfile.RunErrorKinds` の種類別内訳も同様に対応・6種目として追加）。
+- **gating**: 既定0なら「ロールを一切引かない」＝乱数消費順・結果とも完全に従来どおり（`ThrowErrorBaseProb`
+  と同じ恒等の作法）。正値化すると `HitFromRoll`（＝ほぼ全ての長打・外野安打）で1本追加の rng を引く
+  ＝**決定論baseline（determinism-baseline.txt）を再生成**。
+- **係数（`data/coefficients.yaml` fielding:）**: `outfield_fumble_base_prob`（新設・基準確率）、
+  `outfield_fumble_speed_ref_mps`（この速度以上で難度1）、`outfield_fumble_delay_mean_seconds`・
+  `outfield_fumble_delay_max_factor`（遅れの指数分布の平均・上限倍率）。既存の失策係数は再配分しない
+  （内野の3段階・フライ落球とは独立の確率で、按分の都合で下げる理由が無い）。
+- **タイムライン**: 回収点でのボール速度がそのまま遅延分だけ「外野手の手前を抜けて先へ転がる／弾いて
+  止まるまでが長い」絵になる（`RollPath.PositionAt` は接地後の減速直線を辿るだけなので、回収時刻を遅らせる
+  ことがそのまま「後逸」の絵になる＝新しい描画ロジックは不要）。「エラー」の「！」マーク・テロップは
+  弾いた瞬間（`ErrorAtSeconds` = 遅延前の回収時刻）に、安打の絵（送球・走者の塁回り）はそのまま描く。
+- **3D**: 専用クリップは当面無し（既存の外野処理クリップ＋タイムラインの転がりで表現）。「！」マークは
+  `ErrorFielderRole`（＝回収した外野手）基準の既存の汎用マーク判定がそのまま動く。
+
 ##### 捕球ミスの回収レース（issue #817, 監督決定 2026-11-08）
 
 種類拡充4本（#810〜#813）の流れで見つかった構造上の穴。`MaybeInfieldError` の1段目（捕球ロール,

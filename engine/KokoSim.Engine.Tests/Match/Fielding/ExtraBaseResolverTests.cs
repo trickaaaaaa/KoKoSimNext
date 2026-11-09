@@ -16,7 +16,9 @@ public sealed class ExtraBaseResolverTests
 {
     private static readonly Aerodynamics Aero = new();
     private static readonly FieldGeometry Field = new();
-    private static readonly FieldingCoefficients Coeff = new() { ErrorBaseProb = 0 };
+    // OutfieldFumbleBaseProb=0: このファイルは塁打数の幾何・時間だけを見る（issue #811 の外野ファンブル
+    // ロールは別ファイル FumbleErrorTests.cs で検証する）。
+    private static readonly FieldingCoefficients Coeff = new() { ErrorBaseProb = 0, OutfieldFumbleBaseProb = 0 };
 
     // 標準守備位置: 左翼 −28.0°, 中堅 0°, 右翼 +28.0°（FieldGeometry.StandardAlignment）。
     private const double AtLeftFielderDeg = -28.0;

@@ -2179,9 +2179,13 @@ public static class GameEngine
             // ため通常は解決できるが、万一 null でもチーム計（AddError相当）は FinishPlateAppearance 側で必ず加算する。
             // ⚠ トンネル（issue #632）は<b>処理野手が回収する外野手</b>なので FielderRole では別人に付く。
             // 失策は抜かれた内野手（ErrorFielderRole）に付ける（他の種別では null＝FielderRole と同じ）。
+            // 外野手のファンブル（issue #811）は <see cref="PlateAppearanceResult.ReachedOnError"/> ではなく
+            // 安打（Single/Double/Triple）のまま＝「安打＋失策」を両立させるため、Result でなく
+            // Play.ErrorKind で判定してチーム失策数・個人失策数に加算する。
             Player? errorFielder = null;
             Match.Field.FieldPosition errorRole = default;
-            if (res.Result == PlateAppearanceResult.ReachedOnError
+            if ((res.Result == PlateAppearanceResult.ReachedOnError
+                    || res.Play?.ErrorKind == Match.Fielding.FieldingErrorKind.Fumble)
                 && (res.Play?.ErrorFielderRole ?? res.Play?.FielderRole) is { } eRole)
             {
                 errorRole = eRole;
@@ -2254,7 +2258,12 @@ public static class GameEngine
         int? pitcherRuns = null)
     {
         if (result.IsHit()) offense.AddHit();
-        if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
+        // 外野手のファンブル（issue #811）は安打のまま失策も記録する＝「安打＋失策」の両立。
+        if (result == PlateAppearanceResult.ReachedOnError
+            || play?.ErrorKind == Match.Fielding.FieldingErrorKind.Fumble)
+        {
+            defense.RecordFieldingError(errorFielder, errorRole);
+        }
         offense.RecordBatting(batter, result, runs, isSacFly, isSacBunt);
         offense.RecordMatchup(batter, pitcher);   // 慣れの蓄積（設計書02 §2.3b）
         // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
