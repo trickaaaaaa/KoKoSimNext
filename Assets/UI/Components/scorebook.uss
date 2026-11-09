@@ -447,9 +447,9 @@
 .sbk .sbk-cmp-pl--none { border-top-color: var(--sbk-rule-soft); }
 .sbk .sbk-cmp-pl__name { font-size: 20px; letter-spacing: 1.6px; color: var(--sbk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; }
 .sbk .sbk-cmp-pl__meta { font-size: 12px; color: var(--sbk-info); margin: 4px 0 0 0; padding: 0; white-space: nowrap; overflow: hidden; }
-.sbk .sbk-cmp-pl .cat-rank-chips { margin-top: 6px; justify-content: flex-start; }
+/* 先頭ラベルの左余白（4px）ぶん行ごと左へ寄せる（USS は :first-child 非対応）。 */
+.sbk .sbk-cmp-pl .cat-rank-chips { margin-top: 6px; margin-left: -4px; justify-content: flex-start; }
 .sbk .sbk-cmp-pl .cat-rank-chips__label { font-size: 11px; color: var(--sbk-sub); margin: 0 1px 0 4px; padding: 0; }
-.sbk .sbk-cmp-pl .cat-rank-chips__label:first-child { margin-left: 0; }
 .sbk .sbk-cmp-pl .skill-chips { margin-top: 6px; }
 .sbk .sbk-cmp-pl .skill-chip {
     height: 20px;

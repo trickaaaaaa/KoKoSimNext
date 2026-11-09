@@ -56,8 +56,6 @@ namespace KokoSim.EditorTools
             {
                 // 第一候補
                 "ShipporiMinchoB1-Bold", "ShipporiMinchoB1-ExtraBold",
-                "IBMPlexSansJP-Regular", "IBMPlexSansJP-Medium", "IBMPlexSansJP-SemiBold",
-                "Oswald-Medium", "Oswald-SemiBold",
                 "DotGothic16-Regular",
                 // 代替
                 "ZenOldMincho-Bold",
@@ -93,9 +91,8 @@ namespace KokoSim.EditorTools
         {
             var sources = new[]
             {
+                // 本文・数字の Plex / Oswald は design-22 で Noto Sans JP（ScorebookSources）に置き換えて削除した（2026-11-10）。
                 "ShipporiMinchoB1-Bold", "ShipporiMinchoB1-ExtraBold",
-                "IBMPlexSansJP-Regular", "IBMPlexSansJP-Medium", "IBMPlexSansJP-SemiBold",
-                "Oswald-Medium", "Oswald-SemiBold",
                 "DotGothic16-Regular",
             }.Concat(ScorebookSources).ToArray();
 
