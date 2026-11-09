@@ -226,7 +226,7 @@ public sealed class CoefficientsLoaderTests
 
         // 守備の読み/ピッチアウト（G3, 設計書12 §5）の係数も YAML から束縛される。
         Assert.Equal(0.42, bundle.Baserunning.StealExpectednessIntercept, 6);
-        Assert.Equal(0.50, bundle.Baserunning.StealReadIntercept, 6);
+        Assert.Equal(0.15, bundle.Baserunning.StealReadIntercept, 6);
         Assert.Equal(0.55, bundle.Baserunning.MaxPitchoutProb, 6);
         Assert.Equal(0.35, bundle.Baserunning.PitchoutDefenseBonusSeconds, 6);
 

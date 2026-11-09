@@ -27,15 +27,37 @@ public sealed record TacticsCoefficients
     public int SqueezeMaxDiffAbs { get; init; } = 1;
     public int SqueezeMinBunt { get; init; } = 55;
 
-    /// <summary>盗塁: 成功見込みがこの値以上のときだけ、確率的に仕掛ける。
+    /// <summary>盗塁（二盗）: 無死の損益分岐の近似値。成功見込みがこの値以上のときだけ、確率的に仕掛ける。
     ///
     /// <para>issue steal-thresholds-unreachable（2026-08-27）: 旧値 0.72 は 2026-08-14 の
     /// steal_success_bias 物理層移設と design-21 の能力圧縮より前のレンジで校正されており、
     /// 実ロスター（<see cref="Nation.StrengthTeamFactory"/>、強度30〜90・全打順・全捕手の組み合わせ
     /// 11200件で実測）の到達可能上限は p99=60.7%・観測max=65.8% しかない＝0.72 は原理的に一度も通らない
     /// 死にコードだった。現行値 0.50 は概ね p70 相当（実測 p50=40.4%・p75=48.3%）＝「上位3割程度の
-    /// 好機だけ仕掛ける」という元の設計意図をいまの解決式で実現する値。</para></summary>
-    public double StealMinSuccess { get; init; } = 0.50;
+    /// 好機だけ仕掛ける」という元の設計意図をいまの解決式で実現する値。</para>
+    ///
+    /// <para>issue #838（2026-11-09）: 損益分岐（一般的なセイバーメトリクス近似≈0.70）に寄せた。比べる見込みは
+    /// <see cref="Game.StealResolver.ExpectedSuccessProbability"/>（守備に読まれる確率込み）。読まれない場合だけの
+    /// 見込みで比べると、盗塁のうまい走者ほど読まれて実成功が見込みを約7ポイント下回っていた。0.65 で走った盗塁の
+    /// 実成功は 69〜72%（simulate-games tactics 2000試合×2シード）。得点期待値表（run expectancy）は持たず、
+    /// アウト数別の固定オフセット（<see cref="StealMinSuccessOneOutOffset"/>/<see cref="StealMinSuccessTwoOutOffset"/>）で
+    /// 近似する（表の自前構築はオーナー決定で対象外）。</para></summary>
+    public double StealMinSuccess { get; init; } = 0.65;
+    /// <summary>1アウトの損益分岐オフセット（<see cref="StealMinSuccess"/>への加算）。残り打席を気にせず
+    /// 先の塁を取りに行く価値が無死よりやや下がるため負（issue #838・セイバーメトリクス近似の目安 -0.03）。</summary>
+    public double StealMinSuccessOneOutOffset { get; init; } = -0.03;
+    /// <summary>2アウトの損益分岐オフセット。刺されても残塁ロスが無く失敗の代償が小さい一方、
+    /// 得点圏へ進める価値だけが残るため正（issue #838・目安 +0.10）。二盗は0/1アウトでしか判定しない
+    /// （<see cref="StandardTacticsBrain"/>の<c>s.Outs &lt; 2</c>ガード）ため現状は到達しないが、
+    /// 損益分岐カーブの形を保つため定義だけ持つ。</summary>
+    public double StealMinSuccessTwoOutOffset { get; init; } = 0.10;
+    /// <summary>崖の緩和（issue #838）: 旧来は閾値以上で一律 <see cref="StealProb"/>・未満で0という
+    /// 二値だった。閾値未満はそのままゼロ（損をする盗塁を選ばない不変条件は維持）だが、閾値以上では
+    /// 余裕（損益分岐からの差）をゼロ始点のロジスティック（<c>StandardTacticsBrain.AttemptSteal</c>の
+    /// <c>2*logistic(kx)-1</c>）に通し、閾値ちょうどは0・余裕が大きいほど <see cref="StealProb"/> へ
+    /// なだらかに近づける＝旧来の「閾値を跨いだ瞬間に満額」をなだらかな立ち上がりに変える。
+    /// 既定40は「差0.025で約5割・差0.05で約76%・差0.10でほぼ満額」の立ち上がり。</summary>
+    public double StealAttemptLogisticSteepness { get; init; } = 40.0;
     public double StealProb { get; init; } = 0.45;
 
     // ===== 三盗（issue #67, design-14 未決A）: 二塁のみ在塁でのみ判定。 =====
@@ -321,4 +343,14 @@ public sealed record TacticsCoefficients
         var offset = (int)Math.Round((mental - 50) / 50.0 * RattledThresholdMentalOffset);
         return Math.Max(1, RattledConsecutiveBaserunners + offset);
     }
+
+    /// <summary>二盗の損益分岐（アウト数別、issue #838）。<see cref="StealMinSuccess"/>（0アウト）に
+    /// アウト数別オフセットを載せる。2アウトは二盗の判定自体が <c>s.Outs &lt; 2</c> で素通しのため
+    /// 現状は呼ばれないが、式の形は保つ。</summary>
+    public double StealMinSuccessFor(int outs) => StealMinSuccess + (outs switch
+    {
+        <= 0 => 0.0,
+        1 => StealMinSuccessOneOutOffset,
+        _ => StealMinSuccessTwoOutOffset,
+    });
 }

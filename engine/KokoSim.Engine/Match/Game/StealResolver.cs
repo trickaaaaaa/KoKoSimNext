@@ -173,6 +173,23 @@ public static class StealResolver
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.StealMarginScale), 0.01, 0.99);
     }
 
+    /// <summary>
+    /// 守備に読まれる（ピッチアウト）確率まで込みの成功見込み（issue #838・采配AIの損益判断用）。
+    /// <see cref="StealReadModel.PitchoutProbability"/> で読まれる確率 q を出し、
+    /// (1−q)×読まれない場合 ＋ q×読まれた場合 の期待値を返す＝実際の判定（GameEngine が RollPitchout→
+    /// <see cref="ResolveVerdict"/> の順に解く）の平均と一致する。
+    /// </summary>
+    public static double ExpectedSuccessProbability(
+        Player runner, Player catcher, Player pitcher, BaserunningCoefficients c,
+        StartType startType = StartType.Normal, StealTarget target = StealTarget.Second, Player? receiver = null)
+    {
+        var q = StealReadModel.PitchoutProbability(
+            catcher, pitcher, StealReadModel.Expectedness(runner, startType, c), c);
+        var plain = SuccessProbability(runner, catcher, c, pitchout: false, startType, target, receiver);
+        var read = SuccessProbability(runner, catcher, c, pitchout: true, startType, target, receiver);
+        return (1.0 - q) * plain + q * read;
+    }
+
     public static StealResult Resolve(
         Player runner, Player catcher, BaserunningCoefficients c, IRandomSource rng,
         bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
