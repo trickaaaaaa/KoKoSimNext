@@ -75,6 +75,9 @@ namespace KokoSim.Unity.Shell
                         HomeSchoolId = live.ManagerIsAway ? live.OpponentId : NationService.ManagerSchoolId,
                         ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                         Crowd = CrowdTurnouts.For(session.Kind, live.RoundsRemaining),   // issue #705
+                        // アルプスの応援は甲子園だけ（2026-11-08 監督決定）
+                        BrassBand = session.Kind is KokoSim.Engine.Season.TournamentKind.SummerKoshien
+                            or KokoSim.Engine.Season.TournamentKind.SenbatsuKoshien,
                         OnComplete = result =>
                         {
                             // issue #138: CompleteMatch は残りブラケットのフルシム＋全国背景シムへの join を含み重い。
