@@ -116,4 +116,51 @@ public sealed class TrajectoryFeatureTableTests
 
         Assert.Same(a, b);
     }
+
+    // --- 空気密度の節点＋補間（天候ありの試合で表を作り直さない。2026-11-10 試合開始が1分以上止まった件） ---
+
+    [Fact]
+    public void DensityAnchor_IsDefaultAirDensity()
+        => Assert.Equal(TrajectoryFeatureTable.DensityAnchor, new Aerodynamics().AirDensity);
+
+    [Theory]
+    [InlineData(0.0, 146.0, 2210.0)]
+    [InlineData(-70.0, 128.0, 2450.0)]
+    [InlineData(180.0, 132.0, 1700.0)]
+    public void LookupFeatures_WithoutWeather_IsBitIdenticalToTable(double tilt, double speed, double rpm)
+    {
+        var expected = TrajectoryFeatureTable.GetOrBuild(Aero, Mound, tilt).Lookup(speed, rpm);
+        var actual = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, tilt, speed, rpm);
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(1.1834, 0.0)]     // 夏の上限 36℃ 相当
+    [InlineData(1.2271, -70.0)]   // 秋の下限 14℃ 相当
+    [InlineData(1.2400, 170.0)]   // 春の下限 8℃ 相当
+    public void LookupFeatures_OffNode_MatchesTableBuiltAtExactDensity(double density, double tilt)
+    {
+        var aero = Aero with { AirDensity = density };
+        var exact = TrajectoryFeatureTable.Build(aero, Mound, tiltDeg: tilt, rpmMin: 600.0, rpmMax: 3000.0, rpmStep: 100.0)
+            .Lookup(140.0, 2300.0);
+        var interp = TrajectoryFeatureTable.LookupFeatures(aero, Mound, tilt, 140.0, 2300.0);
+        // 補間誤差は 0.5mm／0.1ms 未満（変化量そのものは数十cm・到達時間は約0.45秒）。
+        Assert.InRange(System.Math.Abs(interp.InducedVerticalBreakM - exact.InducedVerticalBreakM), 0, 5e-4);
+        Assert.InRange(System.Math.Abs(interp.InducedHorizontalBreakM - exact.InducedHorizontalBreakM), 0, 5e-4);
+        Assert.InRange(System.Math.Abs(interp.FlightTimeSeconds - exact.FlightTimeSeconds), 0, 1e-4);
+    }
+
+    [Fact]
+    public void LookupFeatures_ManyDensities_DoNotGrowCache()
+    {
+        var cacheField = typeof(TrajectoryFeatureTable).GetField(
+            "Cache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var cache = (System.Collections.ICollection)cacheField.GetValue(null)!;
+        const double tilt = 25.0;
+        TrajectoryFeatureTable.LookupFeatures(Aero with { AirDensity = 1.20 }, Mound, tilt, 140.0, 2200.0);
+        var before = cache.Count;
+        for (var i = 0; i < 40; i++)
+            TrajectoryFeatureTable.LookupFeatures(Aero with { AirDensity = 1.1801 + i * 0.001 }, Mound, tilt, 140.0, 2200.0);
+        Assert.Equal(before, cache.Count);   // 1.175〜1.225 の節点2枚で賄える＝増えない
+    }
 }

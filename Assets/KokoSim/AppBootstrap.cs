@@ -18,6 +18,7 @@ namespace KokoSim.Unity
         {
             QualitySettings.vSyncCount = 0;           // targetFrameRateを無視させない
             Application.targetFrameRate = targetFps;  // 明示的な上限
+            Shell.TrajectoryTableWarmup.Start();      // 弾道の判定テーブルを背景で先に作る（最初の試合で待たせない）
         }
     }
 }

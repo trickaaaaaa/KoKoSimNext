@@ -285,16 +285,19 @@ public sealed class BlockLeagueRunner : ITournamentRunner
     public LivePlayerMatch ResumePendingLiveMatch()
         => _pending?.Live ?? throw new InvalidOperationException("進行中のライブ自校戦がありません。");
 
-    public void PrefetchCurrentRoundBackgroundCards()
+    public void PrefetchCurrentRoundBackgroundCards(int maxParallelism = 1)
     {
         if (_backgroundResolver is null || Finished || _roundIndex >= _totalRounds) return;
+        var resolver = _backgroundResolver;
         var matchDay = _schedule.LeagueMatchDay(_roundIndex);
+        var jobs = new List<(School A, School B, IRandomSource Rng, TournamentMatchContext Context)>();
         foreach (var c in CardsOf(_roundIndex))
         {
             if (Involves(c)) continue;
             var context = new TournamentMatchContext(LeagueRoundsRemaining, matchDay, _pitchLedger);
-            _backgroundResolver.Resolve(c.A, c.B, _rng.Fork(BackgroundStream(_roundIndex, c.Index)), context);
+            jobs.Add((c.A, c.B, _rng.Fork(BackgroundStream(_roundIndex, c.Index)), context));
         }
+        PrefetchRunner.Run(jobs, j => resolver.Resolve(j.A, j.B, j.Rng, j.Context), maxParallelism);
     }
 
     // ===== 自校が出ない（観るだけ）の消化 =====
