@@ -19,7 +19,8 @@ public static class ManagerSeasonUpdate
     /// <param name="reachedKoshien">このシーズンに甲子園（夏＝県予選優勝）へ到達したか。</param>
     /// <param name="nationalChampion">このシーズンに全国優勝したか（甲子園本戦が実プレイ接続するまでは false）。</param>
     /// <param name="wins">このシーズンの公式戦勝数。</param>
-    /// <param name="upsetFameDelta">番狂わせ連動の名声デルタ（issue #170）。未算出時は 0（順当扱い＝二重計上なし）。</param>
+    /// <param name="upsetFameGain">金星の名声上昇（issue #170・0以上）。未算出時は 0（順当扱い＝二重計上なし）。</param>
+    /// <param name="upsetFameLoss">取りこぼしの名声低下（issue #170/#868・0以下）。上昇と別枠で引く。</param>
     /// <param name="contracts">
     /// 年契約の実効値（設計書04 §1.4a）。null なら従来どおりスカウト費を固定で引く＝1ビット一致。
     /// </param>
@@ -28,14 +29,15 @@ public static class ManagerSeasonUpdate
         IRandomSource milestoneRng,
         CareerCoefficients? careerCoeff = null,
         ManagerGrowthCoefficients? growthCoeff = null,
-        double upsetFameDelta = 0,
+        double upsetFameGain = 0,
+        double upsetFameLoss = 0,
         ContractEffects? contracts = null)
     {
         var c = careerCoeff ?? new CareerCoefficients();
         var mg = growthCoeff ?? new ManagerGrowthCoefficients();
 
         // 自然増（指導力・采配・育成眼・名声・信頼度・資金）。
-        CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameDelta, c, contracts);
+        CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c, contracts);
         m.CareerYears++;
         m.YearsAtSchool++;
         if (reachedKoshien) m.KoshienAppearances++;

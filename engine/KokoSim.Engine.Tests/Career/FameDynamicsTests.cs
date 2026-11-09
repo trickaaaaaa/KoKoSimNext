@@ -58,7 +58,7 @@ public sealed class FameDynamicsTests
         {
             var next = CareerEngine.NextFame(
                 start, reachedKoshien: true, nationalChampion: true, wins: 13,
-                upsetFameDelta: C.FameUpsetSeasonCap, C);
+                upsetFameGain: C.FameUpsetSeasonCap, upsetFameLoss: 0, C);
             Assert.True(next - start <= C.FameSeasonRiseCap + 1e-9,
                 $"名声 {start:F0} からの1年の上昇が上限を超えた: +{next - start:F1}");
         }
@@ -68,8 +68,8 @@ public sealed class FameDynamicsTests
     public void KoshienStillFeelsLikeAnEvent()
     {
         // 寝かせても「甲子園に出た年は跳ねる」は残す＝上限いっぱいまで上がる（勝ちだけの年より大きい）。
-        var koshienYear = CareerEngine.NextFame(35, true, false, wins: 13, upsetFameDelta: 0, C);
-        var winsOnlyYear = CareerEngine.NextFame(35, false, false, wins: 5, upsetFameDelta: 0, C);
+        var koshienYear = CareerEngine.NextFame(35, true, false, wins: 13, upsetFameGain: 0, upsetFameLoss: 0, C);
+        var winsOnlyYear = CareerEngine.NextFame(35, false, false, wins: 5, upsetFameGain: 0, upsetFameLoss: 0, C);
         Assert.True(koshienYear - 35 >= C.FameSeasonRiseCap - 1e-9);
         Assert.True(koshienYear > winsOnlyYear);
     }
@@ -93,11 +93,66 @@ public sealed class FameDynamicsTests
     }
 
     [Fact]
-    public void UpsetLoss_IsNotSoftenedByHighFame()
+    public void UpsetLoss_IsNotSoftenedByWins()
     {
-        // 逓減は上昇側だけに掛ける（名声が高いほど取りこぼしの罰が軽くなるのは逆）。
-        // 勝ちも甲子園も無く負のデルタだけの年は、減衰＋デルタがそのまま出る。
-        var next = CareerEngine.NextFame(80, false, false, wins: 0, upsetFameDelta: -7.0, C);
-        Assert.Equal(80 * C.FameDecay - 7.0, next, 6);
+        // 取りこぼしは勝ちの加点と相殺せず別枠で引く（相殺すると、合計が正のとき逓減で罰が丸ごと縮む）。
+        // 名声80・4勝・格下に1敗: 取りこぼしなしとの差は 3.5×(1+80/50)=9.1 ちょうど。
+        var loss = -C.FameUpsetLossPerTier;
+        var clean = CareerEngine.NextFame(80, false, false, wins: 4, upsetFameGain: 0, upsetFameLoss: 0, C);
+        var slipped = CareerEngine.NextFame(80, false, false, wins: 4, upsetFameGain: 0, upsetFameLoss: loss, C);
+        Assert.Equal(-loss * (1 + 80 / C.FameUpsetLossFameScale), clean - slipped, 6);
+    }
+
+    [Fact]
+    public void UpsetLoss_IsHeavierTheHigherTheFame()
+    {
+        // 同じ勝数・同じ取りこぼしでも、名声が高いほど名声の減る量が単調に大きい。
+        var loss = -C.FameUpsetLossPerTier;
+        var prev = 0.0;
+        foreach (var fame in new[] { 0.0, 20.0, 40.0, 60.0, 80.0, 100.0 })
+        {
+            var clean = CareerEngine.NextFame(fame, false, false, wins: 4, upsetFameGain: 0, upsetFameLoss: 0, C);
+            var slipped = CareerEngine.NextFame(fame, false, false, wins: 4, upsetFameGain: 0, upsetFameLoss: loss, C);
+            var drop = clean - slipped;
+            Assert.True(drop > prev - 1e-9, $"名声 {fame:F0}: 取りこぼしの減点 {drop:F2} が低名声より軽い（{prev:F2}）");
+            prev = drop;
+        }
+        // 無名校（名声0）の取りこぼしは今までと同じ軽さ（×1.0）。
+        var cleanZero = CareerEngine.NextFame(0, false, false, wins: 4, upsetFameGain: 0, upsetFameLoss: 0, C);
+        var slippedZero = CareerEngine.NextFame(0, false, false, wins: 4, upsetFameGain: 0, upsetFameLoss: loss, C);
+        Assert.Equal(-loss, cleanZero - slippedZero, 6);
+    }
+
+    [Fact]
+    public void UpsetLoss_IsNotSoftenedByUpsetGains()
+    {
+        // 金星と取りこぼしが同じ年にあっても、取りこぼしぶんは倍率どおりに引かれる（金星の逓減に巻き込まない）。
+        var loss = -C.FameUpsetLossPerTier * 2;
+        var withLoss = CareerEngine.NextFame(70, false, false, wins: 6, upsetFameGain: 6, upsetFameLoss: loss, C);
+        var withoutLoss = CareerEngine.NextFame(70, false, false, wins: 6, upsetFameGain: 6, upsetFameLoss: 0, C);
+        Assert.Equal(-loss * (1 + 70 / C.FameUpsetLossFameScale), withoutLoss - withLoss, 6);
+    }
+
+    [Fact]
+    public void HighFame_FallsFaster_WhenTheYearHasNoWins()
+    {
+        // 勝てなかった年の下がり幅は名声が高いほど大きい（60を超えた分は保持率が低い）。
+        var prev = 0.0;
+        foreach (var fame in new[] { 20.0, 40.0, 60.0, 70.0, 80.0, 100.0 })
+        {
+            var next = CareerEngine.NextFame(fame, false, false, wins: 0, upsetFameGain: 0, upsetFameLoss: 0, C);
+            var dropRatio = (fame - next) / fame;
+            Assert.True(dropRatio > prev - 1e-9, $"名声 {fame:F0}: 下がる割合 {dropRatio:P0} が低名声より小さい");
+            prev = dropRatio;
+        }
+        // 60以下は従来の ×0.80、60を超えた分は ×0.70。
+        Assert.Equal(40 * C.FameDecay, CareerEngine.NextFame(40, false, false, 0, 0, 0, C), 6);
+        Assert.Equal(60 * C.FameDecay + 20 * C.FameDecayHigh, CareerEngine.NextFame(80, false, false, 0, 0, 0, C), 6);
+    }
+
+    [Fact]
+    public void LossIsClampedAtZero()
+    {
+        Assert.Equal(0.0, CareerEngine.NextFame(2, false, false, 0, 0, upsetFameLoss: -50, C), 6);
     }
 }

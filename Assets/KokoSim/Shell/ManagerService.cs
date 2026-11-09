@@ -238,12 +238,12 @@ namespace KokoSim.Unity.Shell
 
             // 番狂わせ加減点（issue #170）: 大会確定時に積んだ試合ごとのデルタを畳み込む（上昇側は季8上限）。
             // 二重適用ガードの内側で消費するので、同じ年度を複数回叩いても1回だけ効く。
-            var upsetFameDelta = FameUpsetModel.SeasonDelta(_pendingUpsetDeltas, CareerCoeff);
+            var (upsetFameGain, upsetFameLoss) = FameUpsetModel.SeasonSplit(_pendingUpsetDeltas, CareerCoeff);
             _pendingUpsetDeltas.Clear();
 
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
                 Manager, reachedKoshien, nationalChampion, wins, milestoneRng,
-                upsetFameDelta: upsetFameDelta, contracts: ContractEffects);
+                upsetFameGain: upsetFameGain, upsetFameLoss: upsetFameLoss, contracts: ContractEffects);
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 
