@@ -320,7 +320,7 @@ namespace KokoSim.Unity.Lineup
             {
                 rows.Clear();
                 // 操作説明は出さない（未選択でも1番打者が片側に出る＝空にならない）。
-                foreach (var r in v.Rows2) rows.Add(CompareRow(r));
+                foreach (var r in v.Rows2) rows.Add(CompareTable.Row(r));
             }
 
             BuildApt(v);
@@ -350,72 +350,17 @@ namespace KokoSim.Unity.Lineup
             var head = _root.Q<VisualElement>("lu-cmp-head");
             if (head == null) return;
             head.Clear();
-            head.Add(Spacer("lu-cmp-lab"));
-            head.Add(PlayerHead(v.CardA, true));
-            head.Add(Spacer("lu-cmp-gap"));
-            head.Add(PlayerHead(v.CardB, false));
+            head.Add(CompareTable.Head(HeadOf(v.CardA), HeadOf(v.CardB)));
         }
 
-        private static VisualElement PlayerHead(CompareCardView card, bool own)
+        private static CompareTable.PlayerHeadData HeadOf(CompareCardView card) => new CompareTable.PlayerHeadData
         {
-            var col = new VisualElement();
-            col.AddToClassList("lu-cmp-col");
-            col.AddToClassList("lu-cmp-pl");
-            if (!card.Present)
-            {
-                // 比較相手がいない側は線だけ（操作説明の文字は出さない）。
-                col.AddToClassList("lu-cmp-pl--none");
-                return col;
-            }
-            col.AddToClassList(own ? "acc-bd-top" : "lu-cmp-pl--b");
-
-            var name = new Label(Nm(card.Name));
-            name.AddToClassList("lu-cmp-pl__name");
-            name.AddToClassList("f-display");
-            col.Add(name);
-
-            var meta = new Label(card.GradeLabel + "　" + card.RoleText);
-            meta.AddToClassList("lu-cmp-pl__meta");
-            col.Add(meta);
-
-            // カテゴリ別ランク（打走守投）。選手個人の総合ランクは出さない（Issue #30）。
-            col.Add(UiComponents.CategoryRankChipsCompact(card.Strength, small: true));
-            // 特殊能力（見えている分だけ。説明はホバー, issue #738）。持っていなければ段ごと出さない。
-            var skills = UiComponents.SkillChipsFor(card.Skills, 4);
-            if (skills != null) col.Add(skills);
-            return col;
-        }
-
-        // 能力の1行：能力名｜自チーム側（差し色の棒）｜間｜比較相手（墨の棒）。
-        private static VisualElement CompareRow(PlayerCompareRow r)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("lu-cmp-row");
-            var lab = new Label(r.Label);
-            lab.AddToClassList("lu-cmp-lab");
-            row.Add(lab);
-            row.Add(CompareSide(r, StatBarRow.Side.Own));
-            row.Add(Spacer("lu-cmp-gap"));
-            row.Add(CompareSide(r, StatBarRow.Side.Other));
-            return row;
-        }
-
-        private static VisualElement CompareSide(PlayerCompareRow r, StatBarRow.Side side)
-        {
-            var own = side == StatBarRow.Side.Own;
-            VisualElement cell;
-            if (!(own ? r.HasA : r.HasB)) cell = StatBarRow.Empty();
-            else if (r.HideBar) cell = StatBarRow.TextOnly(own ? r.TextA : r.TextB);   // 弾道（タイプ軸, issue #219）
-            else
-            {
-                var value = own ? r.ValueA : r.ValueB;
-                var fill = own ? r.FillA : r.FillB;
-                cell = new StatBarRow(own ? r.GradeA : r.GradeB, value, fill >= 0 ? fill : value,
-                    side, StatBarRow.OutcomeFor(side, r.Winner));
-            }
-            cell.AddToClassList("lu-cmp-col");
-            return cell;
-        }
+            Present = card.Present,
+            Name = card.Name,
+            Meta = card.GradeLabel + "　" + card.RoleText,
+            Strength = card.Strength,
+            Skills = card.Skills,
+        };
 
         private void BuildApt(LineupSettingView v)
         {
@@ -438,18 +383,7 @@ namespace KokoSim.Unity.Lineup
             if (host == null) return;
             host.Clear();
             if (!v.ShowPitchChart || (!v.CardA.Present && !v.CardB.Present)) return;
-            host.Add(Spacer("lu-cmp-lab"));
-            host.Add(ChartCell(v.CardA));
-            host.Add(Spacer("lu-cmp-gap"));
-            host.Add(ChartCell(v.CardB));
-        }
-
-        private static VisualElement ChartCell(CompareCardView card)
-        {
-            var cell = new VisualElement();
-            cell.AddToClassList("lu-cmp__chart-cell");
-            if (card.Present) new PitchChartView(cell, compact: true).SetData(card.Pitches);
-            return cell;
+            host.Add(CompareTable.PitchCharts(v.CardA.Present, v.CardA.Pitches, v.CardB.Present, v.CardB.Pitches));
         }
 
         // 通算/公式戦/今大会の成績（選んだ選手ごとに1表。④で存置）。
@@ -568,13 +502,6 @@ namespace KokoSim.Unity.Lineup
             l.AddToClassList("lu-row__cnt");
             l.AddToClassList("f-num");
             return l;
-        }
-
-        private static VisualElement Spacer(string cls)
-        {
-            var el = new VisualElement();
-            el.AddToClassList(cls);
-            return el;
         }
 
         private void SetText(string name, string text)

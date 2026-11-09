@@ -149,50 +149,10 @@
 .lu-root .lu-cmp__top { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
 .lu-root .lu-cmp-scroll { flex-grow: 1; min-height: 0; }
 
-/* 比較表の列：能力名64｜自チーム側｜間24｜比較相手。見出し・能力行・守備適性で同じ構成。 */
-.lu-root .lu-cmp-lab { width: 64px; flex-shrink: 0; font-size: 12px; color: var(--sbk-sub); }
-.lu-root .lu-cmp-col { flex-grow: 1; flex-basis: 0; min-width: 0; }
-.lu-root .lu-cmp-gap { width: 24px; flex-shrink: 0; }
-
-/* 選手の見出し（上端に3pxの線：自チーム側＝差し色、比較相手＝墨） */
-.lu-root .lu-cmp__head { flex-direction: row; flex-shrink: 0; margin-top: 10px; padding-bottom: 12px; border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft); }
-.lu-root .lu-cmp-pl { border-top-width: 3px; padding-top: 10px; }
-.lu-root .lu-cmp-pl--b { border-top-color: var(--sbk-ink); }
-.lu-root .lu-cmp-pl--none { border-top-color: var(--sbk-rule-soft); }
-.lu-root .lu-cmp-pl__name { font-size: 20px; letter-spacing: 1.6px; color: var(--sbk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lu-root .lu-cmp-pl__meta { font-size: 12px; color: var(--sbk-info); margin-top: 4px; white-space: nowrap; overflow: hidden; }
-.lu-root .lu-cmp-pl .cat-rank-chips { margin-top: 6px; justify-content: flex-start; }
-.lu-root .lu-cmp-pl .cat-rank-chips__label { font-size: 11px; color: var(--sbk-sub); }
-/* 特殊能力のタグ（11px・枠付きの丸いタグ） */
-.lu-root .lu-cmp-pl .skill-chips { margin-top: 6px; }
-.lu-root .lu-cmp-pl .skill-chip {
-    height: 20px;
-    font-size: 11px;
-    color: var(--sbk-info);
-    border-color: var(--sbk-card-line-hover);
-    border-radius: 10px;
-    padding: 0 8px;
-    margin: 0 4px 4px 0;
-}
-
-/* 能力の行（高さ26） */
-.lu-root .lu-cmp__rows { margin-top: 8px; }
-.lu-root .lu-cmp-row { flex-direction: row; align-items: center; height: 26px; }
-
-/* 守備適性（9マス）。共通部品 AptitudeStrip を、この画面の列（能力名64）に合わせて敷き直す。 */
-.lu-root .lu-cmp__apt { margin-top: 12px; padding-top: 10px; border-top-width: 1px; border-top-color: var(--sbk-rule-soft); }
+/* 比較表の列・見出し・能力行・守備適性・持ち球チャートは共通部品（scorebook.uss の .sbk-cmp*）。 */
 .lu-root .lu-cmp__apt.lu-hidden { display: none; }
-.lu-root .lu-cmp__apt .apt-strip { margin-top: 0; }
-.lu-root .lu-cmp__apt .apt-strip__row { min-height: 26px; }
-.lu-root .lu-cmp__apt .apt-strip__row--head { min-height: 18px; }
-.lu-root .lu-cmp__apt .apt-strip__lab { width: 64px; font-size: 12px; color: var(--sbk-text); border-left-width: 0; padding-left: 0; }
-.lu-root .lu-cmp__apt .apt-strip__row--head .apt-strip__lab { color: var(--sbk-sub); }
-.lu-root .lu-cmp__apt .apt-strip__pos { font-size: 12px; color: var(--sbk-sub); }
-.lu-root .lu-cmp__apt .apt-strip__cell .rank-chip { min-width: 22px; height: 22px; padding: 0; }
 
 /* 持ち球チャート（投手能力タブ）と成績表（④で存置） */
-.lu-root .lu-cmp__chart { flex-direction: row; margin-top: 12px; }
-.lu-root .lu-cmp__chart-cell { flex-grow: 1; flex-basis: 0; min-width: 0; height: 150px; }
 .lu-root .lu-cmp__stats { margin-top: 12px; padding-top: 10px; border-top-width: 1px; border-top-color: var(--sbk-rule-soft); }
 /* 成績表は能力表と同じ列（ラベル64）に揃え、級数を比較表の小見出しと揃える。 */
 .lu-root .lu-cmp__stats .stat-table__row { height: 22px; }

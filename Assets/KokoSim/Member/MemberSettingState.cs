@@ -45,6 +45,8 @@ namespace KokoSim.Unity.Member
         public string Name = "";
         public string GradeLabel = "";
         public string HandLabel = "";    // 投打（例「右投左打」）
+        /// <summary>この画面での立場（「背番号4」「ベンチ外」）。プレイヤーが決めた割当だけを出す。</summary>
+        public string RoleText = "";
         public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);   // カテゴリ別ランク（打撃/走力/守備/投手）
         public bool IsCaptain;
         public KokoSim.Engine.Players.SkillSet Skills;   // 特殊能力（見えている分だけ表示・issue #738）
@@ -215,7 +217,8 @@ namespace KokoSim.Unity.Member
 
             // 左＝選択中(_picked)、右＝ホバー中(_hovered)。右は選択中があるときだけ／別人のときだけ。
             // 未選択のときはホバーだけで能力値を見せる（左＝ホバー選手）。クリック不要で一覧を舐められる。
-            var leftIdx = _picked >= 0 ? _picked : _hovered;
+            // どちらも無いときは背番号1の選手を左に出す（オーダー画面の「初期は1番打者」と同じ扱い＝表を空にしない）。
+            var leftIdx = _picked >= 0 ? _picked : _hovered >= 0 ? _hovered : DefaultLeft();
             var rightIdx = (_picked >= 0 && _hovered != _picked) ? _hovered : -1;
             v.CardA = MakeCard(leftIdx);
             v.CardB = MakeCard(rightIdx);
@@ -261,12 +264,24 @@ namespace KokoSim.Unity.Member
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
                 HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
+                RoleText = p.UniformNumber > 0 ? "背番号" + p.UniformNumber : "ベンチ外",
                 Strength = PlayerStrengthProfile.Compute(p, Coeff),
                 IsCaptain = p.IsCaptain,
                 Skills = p.Skills,
                 // 持ち球（ミニ球種チャート）は詳細画面と同じ生成ロジック（単一ソース, issue #94 案C）。
                 Pitches = PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(p), topKmh),
             };
+        }
+
+        // 何も選んでいないときの比較の左：背番号の若い順に最初の選手（割当が無ければ部員の先頭）。
+        private int DefaultLeft()
+        {
+            for (var n = 1; n <= Slots; n++)
+            {
+                var idx = IndexOfNumber(n);
+                if (idx >= 0) return idx;
+            }
+            return _roster.Count > 0 ? 0 : -1;
         }
 
         private int IndexOfNumber(int number)

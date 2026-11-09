@@ -431,3 +431,50 @@
     padding-right: 0;
     margin-right: 8px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   比較表 CompareTable（オーダー画面・メンバー設定で共有）
+   列：能力名64｜自チーム側｜間24｜比較相手。見出し・能力行・守備適性・持ち球チャートで同じ構成。
+   ═══════════════════════════════════════════════════════════════════════ */
+.sbk .sbk-cmp-lab { width: 64px; flex-shrink: 0; font-size: 12px; color: var(--sbk-sub); margin: 0; padding: 0; -unity-text-align: middle-left; }
+.sbk .sbk-cmp-col { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.sbk .sbk-cmp-gap { width: 24px; flex-shrink: 0; }
+
+/* 選手の見出し（上端に3pxの線：自チーム側＝差し色、比較相手＝墨、いない側＝淡線だけ） */
+.sbk .sbk-cmp__head { flex-direction: row; flex-shrink: 0; margin-top: 10px; padding-bottom: 12px; border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft); }
+.sbk .sbk-cmp-pl { border-top-width: 3px; padding-top: 10px; }
+.sbk .sbk-cmp-pl--b { border-top-color: var(--sbk-ink); }
+.sbk .sbk-cmp-pl--none { border-top-color: var(--sbk-rule-soft); }
+.sbk .sbk-cmp-pl__name { font-size: 20px; letter-spacing: 1.6px; color: var(--sbk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; }
+.sbk .sbk-cmp-pl__meta { font-size: 12px; color: var(--sbk-info); margin: 4px 0 0 0; padding: 0; white-space: nowrap; overflow: hidden; }
+.sbk .sbk-cmp-pl .cat-rank-chips { margin-top: 6px; justify-content: flex-start; }
+.sbk .sbk-cmp-pl .cat-rank-chips__label { font-size: 11px; color: var(--sbk-sub); margin: 0 1px 0 4px; padding: 0; }
+.sbk .sbk-cmp-pl .cat-rank-chips__label:first-child { margin-left: 0; }
+.sbk .sbk-cmp-pl .skill-chips { margin-top: 6px; }
+.sbk .sbk-cmp-pl .skill-chip {
+    height: 20px;
+    font-size: 11px;
+    color: var(--sbk-info);
+    border-color: var(--sbk-card-line-hover);
+    border-radius: 10px;
+    padding: 0 8px;
+    margin: 0 4px 4px 0;
+}
+
+/* 能力の行（高さ26） */
+.sbk .sbk-cmp__rows { margin-top: 8px; }
+.sbk .sbk-cmp-row { flex-direction: row; align-items: center; height: 26px; }
+
+/* 守備適性（9マス）。共通部品 AptitudeStrip を表の列（能力名64）に合わせて敷き直す。 */
+.sbk .sbk-cmp__apt { margin-top: 12px; padding-top: 10px; border-top-width: 1px; border-top-color: var(--sbk-rule-soft); }
+.sbk .sbk-cmp__apt .apt-strip { margin-top: 0; }
+.sbk .sbk-cmp__apt .apt-strip__row { min-height: 26px; }
+.sbk .sbk-cmp__apt .apt-strip__row--head { min-height: 18px; }
+.sbk .sbk-cmp__apt .apt-strip__lab { width: 64px; font-size: 12px; color: var(--sbk-text); border-left-width: 0; padding-left: 0; }
+.sbk .sbk-cmp__apt .apt-strip__row--head .apt-strip__lab { color: var(--sbk-sub); }
+.sbk .sbk-cmp__apt .apt-strip__pos { font-size: 12px; color: var(--sbk-sub); }
+.sbk .sbk-cmp__apt .apt-strip__cell .rank-chip { min-width: 22px; height: 22px; padding: 0; }
+
+/* 持ち球チャート（投手能力タブ） */
+.sbk .sbk-cmp__chart { flex-direction: row; margin-top: 12px; }
+.sbk .sbk-cmp__chart-cell { flex-grow: 1; flex-basis: 0; min-width: 0; height: 150px; }

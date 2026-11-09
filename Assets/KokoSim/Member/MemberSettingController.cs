@@ -32,10 +32,12 @@ namespace KokoSim.Unity.Member
         private FieldMarkersElement _markers;   // 立ち位置点＋引き出し線
         private VisualElement _popover;         // ホバー/選択時のフルカード
         private int _popoverSlot = -1;          // 表示中フルカードの背番号（-1=非表示）
+        private Color _accent = KokoSim.Unity.Shell.SchoolAccent.Default;   // 比較表の自チーム側の色（オーダー画面と同じ）
 
         private void OnEnable()
         {
             _state = new MemberSettingState();
+            _accent = KokoSim.Unity.Shell.SchoolAccent.ForManager();
             _root = GetComponent<UIDocument>().rootVisualElement;
 
             // 球場図（座標系ドリブンで芝/ファウル/ダート/ライン/ベース/フェンスを描く）をスロットの背面へ。
@@ -409,12 +411,9 @@ namespace KokoSim.Unity.Member
             }
         }
 
-        // ── 2選手比較 ──
+        // ── 2選手比較（共通部品 CompareTable＝オーダー画面と同じ表。操作説明の文字は出さない） ──
         private void BuildCompare(MemberSettingView v)
         {
-            FillCompareCard("ms-cmp-a", true, v.CardA, v.ShowPitchChart);
-            FillCompareCard("ms-cmp-b", false, v.CardB, v.ShowPitchChart);
-
             var tabs = _root.Q<VisualElement>("ms-cmp-tabs");
             if (tabs != null)
             {
@@ -430,117 +429,64 @@ namespace KokoSim.Unity.Member
                 }
             }
 
-            var rows = _root.Q<VisualElement>("ms-cmp-rows");
-            if (rows == null) return;
-            // 投手能力タブは球速を km/h で出すので値セルを表ごと広げる（issue #246）。
-            UiComponents.SetCompareUnitColumn(rows, KokoSim.Unity.Shell.PlayerCompareTabs.HasUnitValues(v.Tab));
-            // 行高は試合中の交代モーダルと同じ密な組（32px基準・UI原則①, issue #452）。
-            // 素の組は Label 既定の上下 margin/padding で43pxになり、13行が窓に入らなかった。
-            UiComponents.SetCompareDense(rows, true);
-            rows.Clear();
-            if (v.Rows.Count == 0)
+            var head = _root.Q<VisualElement>("ms-cmp-head");
+            if (head != null)
             {
-                var empty = new Label("選手をクリックで選択 → 別の選手にカーソルを合わせて比較");
-                empty.AddToClassList("ms-cmp-empty");
-                rows.Add(empty);
+                head.Clear();
+                head.Add(CompareTable.Head(HeadOf(v.CardA), HeadOf(v.CardB)));
             }
-            else
+
+            var rows = _root.Q<VisualElement>("ms-cmp-rows");
+            if (rows != null)
             {
-                // タブ自体が「野手能力」「投手能力」を示しているため、表側の重複見出しは出さない（issue #326③）。
-                foreach (var r in v.Rows) rows.Add(CompareRowEl(r));
+                rows.Clear();
+                foreach (var r in v.Rows) rows.Add(CompareTable.Row(r));
             }
 
             BuildApt(v);
+
+            // 持ち球のミニ球種変化チャート（投手能力タブのときだけ・タブでゲートする, Issue #93/#293）。
+            var chart = _root.Q<VisualElement>("ms-cmp-chart");
+            if (chart != null)
+            {
+                chart.Clear();
+                if (v.ShowPitchChart && (v.CardA.Present || v.CardB.Present))
+                    chart.Add(CompareTable.PitchCharts(v.CardA.Present, v.CardA.Pitches, v.CardB.Present, v.CardB.Pitches));
+            }
+
+            KokoSim.Unity.Shell.SchoolAccent.Apply(_root.Q<VisualElement>(className: "ms-compare"), _accent);
         }
 
-        // ── 守備適性ダイヤ（野手能力タブ内・選手ごとに1枚を横並び） ──
+        private static CompareTable.PlayerHeadData HeadOf(CompareCard card) => new CompareTable.PlayerHeadData
+        {
+            Present = card.Present,
+            Name = card.Name,
+            Meta = card.GradeLabel + "\u3000" + card.RoleText,
+            Strength = card.Strength,
+            Skills = card.Skills,
+        };
+
+        // ── 守備適性（野手能力タブ内・9マスの帯。行見出しは姓） ──
         private void BuildApt(MemberSettingView v)
         {
             var host = _root.Q<VisualElement>("ms-cmp-apt");
             if (host == null) return;
             host.Clear();
+            host.EnableInClassList("ms-hidden", !v.ShowApt);
             if (!v.ShowApt) return;
-
-            // 盤面（apt-field 210px×2枚＋見出し＝252px）から帯（約90px）へ差し替えた（issue #452・案A, 2026-08-09）。
-            // 理由: この帯は試合中の交代モーダルにも載せるが、あちらは残り高さが 56px しかなく盤面が入らない。
-            // 3画面で同じ部品を使うために、余地のあるこの画面も帯に揃える。
-            // 副次効果として、既定で窓の外へ落ちていた 252px のうち 162px が窓に戻る。
             host.Add(UiComponents.AptitudeStrip(
-                v.HasAptA ? v.AptA : null, v.HasAptB ? v.AptB : null, "1人目", "2人目",
-                // 詰め版（issue #452）: 比較列は表13行と帯を同時に見せる。交代モーダルは既定のまま。
+                v.HasAptA ? v.AptA : null, v.HasAptB ? v.AptB : null,
+                v.CardA.Present ? Surname(v.CardA.Name) : "", v.CardB.Present ? Surname(v.CardB.Name) : "",
                 tight: true));
         }
 
-        private static VisualElement NewChild(string cls)
+        private static string Surname(string name)
         {
-            var el = new VisualElement();
-            el.AddToClassList(cls);
-            return el;
+            var n = name ?? "";
+            var i = n.IndexOf('\u3000');
+            if (i < 0) i = n.IndexOf(' ');
+            return i > 0 ? n.Substring(0, i) : n;
         }
-
-        private void FillCompareCard(string host, bool isA, CompareCard card, bool showPitchChart)
-        {
-            var el = _root.Q<VisualElement>(host);
-            if (el == null) return;
-            el.Clear();
-            if (!card.Present)
-            {
-                var empty = new Label(isA ? "選手をクリック" : "選手にカーソル");
-                empty.AddToClassList("cmp-card__empty");
-                el.Add(empty);
-                return;
-            }
-            var name = new Label(card.Name);
-            name.AddToClassList("cmp-card__name");
-            el.Add(name);
-
-            var meta = new VisualElement();
-            meta.AddToClassList("cmp-card__meta");
-            meta.Add(GradeLabel(card.GradeLabel));
-            var hand = new Label(card.HandLabel);
-            hand.AddToClassList("cmp-card__hand");
-            meta.Add(hand);
-            if (card.IsCaptain)
-            {
-                var cap = new Label("主将");
-                cap.AddToClassList("chip");
-                cap.AddToClassList("chip--tag");
-                cap.AddToClassList("chip--out");
-                meta.Add(cap);
-            }
-            el.Add(meta);
-            // 2行固定＋小サイズ（issue #326①）: カード幅が狭く1行4組では中途半端に折り返すため。
-            // 4つの総合ランクは1字ラベル「打走守投」の1行に畳む（issue #452・監督指示 2026-08-09）。
-            // 2段組(66px)だと比較列に守備適性の帯が入らない＝一番厚いここを削る。
-            el.Add(UiComponents.CategoryRankChipsCompact(card.Strength, small: true));
-            // 特殊能力（issue #738・案A＝名前の下にチップ列。説明はホバー）。持っていなければ段ごと出さない。
-            var skills = UiComponents.SkillChipsFor(card.Skills, 4, "cmp-card__skills");
-            if (skills != null) el.Add(skills);
-
-            // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
-            // 投手能力タブのときだけ出す（タブでゲート・投/野区分ではゲートしない, Issue #93/#293）。
-            if (showPitchChart)
-            {
-                var chartHost = new VisualElement();
-                chartHost.AddToClassList("cmp-card__pitch");
-                el.Add(chartHost);
-                new PitchChartView(chartHost, compact: true).SetData(card.Pitches);
-            }
-        }
-
-        // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
-        private static VisualElement CompareRowEl(KokoSim.Unity.Shell.PlayerCompareRow r)
-            => UiComponents.CompareRow(new CompareRowData
-            {
-                Label = r.Label,
-                ValueA = r.ValueA, ValueB = r.ValueB,
-                HasA = r.HasA, HasB = r.HasB,
-                Winner = r.Winner,
-                TextA = r.TextA, TextB = r.TextB,   // 球速の km/h テキスト（issue #94）
-                FillA = r.FillA, FillB = r.FillB,
-                GradeA = r.GradeA, GradeB = r.GradeB,   // ランク併記（issue #326②）
-                HideBar = r.HideBar,   // 弾道のタイプ表示（issue #219）
-            });
 
         // ── 部品ヘルパ ──
 

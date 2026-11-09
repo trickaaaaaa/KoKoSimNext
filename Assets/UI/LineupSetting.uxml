@@ -73,11 +73,11 @@
                     <ui:VisualElement class="lu-flex" />
                     <ui:VisualElement name="lu-cmp-tabs" class="sbk-seg" />
                 </ui:VisualElement>
-                <ui:VisualElement name="lu-cmp-head" class="lu-cmp__head" />
+                <ui:VisualElement name="lu-cmp-head" />
                 <ui:ScrollView mode="Vertical" class="lu-cmp-scroll">
-                    <ui:VisualElement name="lu-cmp-rows" class="lu-cmp__rows" />
-                    <ui:VisualElement name="lu-cmp-apt" class="lu-cmp__apt" />
-                    <ui:VisualElement name="lu-cmp-chart" class="lu-cmp__chart" />
+                    <ui:VisualElement name="lu-cmp-rows" class="sbk-cmp__rows" />
+                    <ui:VisualElement name="lu-cmp-apt" class="lu-cmp__apt sbk-cmp__apt" />
+                    <ui:VisualElement name="lu-cmp-chart" />
                     <ui:VisualElement name="lu-cmp-stats" class="lu-cmp__stats" />
                 </ui:ScrollView>
             </ui:VisualElement>

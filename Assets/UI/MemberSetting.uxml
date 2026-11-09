@@ -21,7 +21,6 @@
             <!-- 左：背番号割当（ダイヤ＋控え＋プール） -->
             <ui:VisualElement class="ms-left">
                 <ui:VisualElement class="ms-head">
-                    <ui:Label name="ms-hint" text="選手をクリックで選択（比較の左）→ 相手にカーソルを合わせて比較 → クリックで背番号を交換" class="ms-head__hint" />
                     <ui:VisualElement class="ms-head__spacer" />
                     <ui:Button name="ms-auto" text="能力順で自動割当" class="ms-auto-btn" />
                 </ui:VisualElement>
@@ -53,16 +52,14 @@
 
             <!-- 右：2選手比較 -->
             <ui:VisualElement class="ms-compare panel">
-                <ui:VisualElement class="ms-cmp-cards">
-                    <ui:VisualElement name="ms-cmp-a" class="cmp-card ms-cmp-card--a" />
-                    <ui:VisualElement name="ms-cmp-b" class="cmp-card" />
-                </ui:VisualElement>
-
                 <ui:VisualElement name="ms-cmp-tabs" class="ms-cmp-tabs" />
 
+                <!-- 比較表（共通部品 CompareTable：見出し＋ランク・数値・横棒。オーダー画面と同じ表） -->
+                <ui:VisualElement name="ms-cmp-head" />
                 <ui:ScrollView mode="Vertical" class="ms-cmp-scroll">
-                    <ui:VisualElement name="ms-cmp-rows" />
-                    <ui:VisualElement name="ms-cmp-apt" class="ms-cmp-apt" />
+                    <ui:VisualElement name="ms-cmp-rows" class="sbk-cmp__rows" />
+                    <ui:VisualElement name="ms-cmp-apt" class="sbk-cmp__apt" />
+                    <ui:VisualElement name="ms-cmp-chart" />
                 </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>

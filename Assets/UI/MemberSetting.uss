@@ -30,7 +30,6 @@
 .ms-left-body { flex-direction: row; flex-grow: 1; }
 .ms-roster { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-4); }
 .ms-head { flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
-.ms-head__hint { font-size: var(--fs-cap); color: var(--color-muted); margin-left: var(--sp-3); }
 .ms-head__spacer { flex-grow: 1; }
 
 .ms-auto-btn, .ms-swap-btn {
@@ -83,15 +82,6 @@
        主因だった（issue #326⑥）。panel 側の値をそのまま使う。 */
     padding-bottom: var(--sp-3);
 }
-.ms-cmp-cards {
-    flex-direction: row;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-chip);
-    border-width: var(--border-w);
-    border-color: var(--color-line);
-}
-.ms-cmp-card--a { border-right-width: var(--border-w); border-right-color: var(--color-line); }
-
 /* タブ前後の余白は比較列の縦を食うので最小に（issue #452・帯まで収めるため）。 */
 .ms-cmp-tabs { flex-direction: row; margin-top: var(--sp-1); margin-bottom: 2px; }
 .ms-tab {
@@ -112,6 +102,8 @@
 .ms-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 
 .ms-cmp-scroll { flex-grow: 1; }
-.ms-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }
 .ms-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: var(--sp-1); }
-.ms-cmp-apt { margin-top: 0; }   /* 帯側で margin を持つ（issue #452） */
+.ms-cmp-apt.ms-hidden { display: none; }
+/* 比較表は共通部品（scorebook.uss の .sbk-cmp*）。この画面の比較列は狭い（2人並べると片側約135px）ので、
+   見出しの「打走守投」4組を1行に収めるためチップだけ18pxに詰める。 */
+.sbk .ms-compare .sbk-cmp-pl .cat-rank-chips .grade { min-width: 18px; width: 18px; height: 18px; padding: 0; margin: 0; }
