@@ -28,8 +28,9 @@ namespace KokoSim.Unity.Components
         /// <c>lsc-b1</c>/<c>lsc-base-1</c> 等の name を直接トグルする（この部品は器と見た目だけを持つ）。
         /// </summary>
         /// <param name="venueName">
-        /// 球場・大会名（issue #803。Shell の大会タイトルが単一ソース＝engine は文字列を持たない）。
-        /// null/空なら球場欄は空のまま（既存の呼び出し元・LineScoreStatesShooter 等との後方互換）。
+        /// その試合の球場名（issue #803。<see cref="GameContext.StadiumName"/> の写しが単一ソース＝UIで
+        /// 大会タイトルを流用しない。PR #883 レビュー指摘）。null/空なら球場欄は空のまま
+        /// （球場割当が未配線の大会・既存の呼び出し元・LineScoreStatesShooter 等との後方互換）。
         /// </param>
         /// <param name="weather">
         /// その試合に実際に効いた天気（<see cref="GameContext.ResolvedWeather"/> の写し）。null なら

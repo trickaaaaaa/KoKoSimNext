@@ -2103,12 +2103,13 @@
 
 /* 球場・天気（issue #803）。掲示板本体の上、右端に小さく出す。天気が無い試合は
    MatchLiveController が lsc-venue-weather を display:none で隠す（球場名だけは常に出す）。 */
+/* 掲示板は黒島＝文字は常に明色（--color-* に追従させない。--sb-ink-* を使う。PR #883 レビュー指摘）。 */
 .lsc-venue { flex-direction: row; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; }
-.lsc-venue__name { font-size: var(--fs-cap); color: var(--color-muted); margin-right: 10px; }
+.lsc-venue__name { font-size: var(--fs-cap); color: var(--sb-ink-2); margin-right: 10px; }
 .lsc-venue__weather { flex-direction: row; align-items: baseline; }
-.lsc-venue__weather-k { font-size: var(--fs-cap); color: var(--color-muted); margin-right: 3px; }
-.lsc-venue__temp-num { font-size: var(--fs-cap); color: var(--color-chalk); margin-right: 1px; }
-.lsc-venue__temp-unit { font-size: var(--fs-cap); color: var(--color-muted); }
+.lsc-venue__weather-k { font-size: var(--fs-cap); color: var(--sb-ink-2); margin-right: 3px; }
+.lsc-venue__temp-num { font-size: var(--fs-cap); color: var(--sb-ink-1); margin-right: 1px; }
+.lsc-venue__temp-unit { font-size: var(--fs-cap); color: var(--sb-ink-2); }
 
 .lsc {
     flex-direction: row;

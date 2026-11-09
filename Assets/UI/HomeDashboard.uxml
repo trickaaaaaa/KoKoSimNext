@@ -38,7 +38,7 @@
             <ui:Label name="game-date" class="hm-hero__when" text="本日 試合" />
             <ui:Label name="venue" class="nm-meta__i" text="甲子園" />
             <!-- 天気（issue #803）。試合の無い週・次戦未確定はコントローラが display:none で丸ごと隠す。
-                 文字（晴/曇/雨）と気温の数字（Oswald）は書体3役ルールで Label を分ける。 -->
+                 文字（晴/曇/雨）と気温の数字（Noto Sans JP。design-22でOswaldから改訂済み）は書体3役ルールで Label を分ける。 -->
             <ui:VisualElement name="weather-group" class="nm-meta__i hm-hero__weather">
                 <ui:Label name="weather-label" class="hm-hero__weather-k f-body" text="晴" />
                 <ui:Label name="weather-temp-num" class="hm-hero__weather-num f-num-bd" text="33" />

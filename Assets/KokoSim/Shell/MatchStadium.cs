@@ -37,6 +37,28 @@ namespace KokoSim.Unity.Shell
                 _ => For(kind),
             };
 
+        /// <summary>
+        /// <see cref="For(TournamentKind)"/> と同じ判定で、寸法だけでなく球場そのもの（名称を含む）を返す
+        /// （issue #803・電光掲示板の球場名表示）。甲子園は固有球場、それ以外（地区・神宮）は球場割当が
+        /// 未配線＝実体が無いので null（表示側で推測しない）。
+        /// </summary>
+        public static Stadium? ForStadium(TournamentKind kind)
+            => kind is TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien ? Stadium.Koshien : null;
+
+        /// <summary>
+        /// <see cref="For(TournamentKind, int?, IRandomSource?)"/> と同じ判定・同じ乱数消費で、球場そのもの
+        /// （名称を含む）を返す。<b>rng の引き方を変えない</b>＝<see cref="For(TournamentKind, int?, IRandomSource?)"/>
+        /// と同時に同じ呼び出し元で両方呼ぶと二重に乱数を消費するので、名前も寸法も必要なときはこちらだけを呼び
+        /// <c>.ToFieldGeometry()</c> で寸法を取る（<see cref="PlayerMatchResolver"/> 参照）。
+        /// </summary>
+        public static Stadium? ForStadium(TournamentKind kind, int? roundsRemaining, IRandomSource? rng)
+            => kind switch
+            {
+                TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict
+                    => RegionalStadiumTier.ForStadium(roundsRemaining, rng),
+                _ => ForStadium(kind),
+            };
+
         /// <summary>甲子園（C#既定＝data/stadiums.yaml の koshien と一致・不変条件#4）。</summary>
         private static readonly FieldGeometry Koshien = Stadium.Koshien.ToFieldGeometry();
 

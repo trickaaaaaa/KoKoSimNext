@@ -36,6 +36,13 @@ public sealed record GameContext
     /// </summary>
     public WeatherSample? ResolvedWeather { get; init; }
 
+    /// <summary>
+    /// その試合の球場名（issue #803・電光掲示板の球場表示）。甲子園・地方大会の汎用ティア球場は
+    /// Shell 側（<see cref="Match.Field.Stadium"/>）の実体名をここへ写す。地区大会・神宮大会のように
+    /// 球場割当が未配線の大会は null（＝推測で埋めない。表示側は球場欄を隠す）。
+    /// </summary>
+    public string? StadiumName { get; init; }
+
     public Players.FormCoefficients Form { get; init; } = new();
     public Players.SkillCoefficients Skills { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();
