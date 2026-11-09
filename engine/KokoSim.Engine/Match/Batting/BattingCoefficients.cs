@@ -260,7 +260,7 @@ public sealed record BattingCoefficients
     /// <summary>コンタクト品質への誘発変化合成量の基準[m]（リーグ平均球速×平均キレ＝この変化量で寄与0）。</summary>
     public double ContactQualityBreakRefM { get; init; } = 0.47;
     /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>
-    public double ContactQualityPerBreakM { get; init; } = -0.70;
+    public double ContactQualityPerBreakM { get; init; } = -0.90;
 
     // --- ④ タイミングのズレ → ⑤ 打球方向（設計書01 §2④⑤, issue #262） ---
     // 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。

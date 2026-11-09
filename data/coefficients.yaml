@@ -46,7 +46,7 @@ pitching:
   # Issue #274: 球種分岐。ストレート=球威(Power)軸、変化球=キレ(Sharpness)軸。
   spin_rpm_base: 2200.0            # 基準回転数[rpm]（能力=50のとき・145km/h・2200rpm）
   spin_rpm_per_power: 6.0          # ストレート: 球威(Power−50)あたりの傾き[rpm/能力1]（Issue #274）
-  spin_rpm_per_sharpness: 9.0      # 変化球: キレ(Sharpness−50)あたりの傾き[rpm/能力1]。issue #835: 6→9（空振りの効きを下げた分、キレの差を回転数で付け直す）
+  spin_rpm_per_sharpness: 7.0      # 変化球: キレ(Sharpness−50)あたりの傾き[rpm/能力1]。issue #835: 6→7（空振りの効きを下げた分、キレの差を回転数で付け直す）
   # 球種ごとの回転軸・実効回転数倍率（設計書02 §2.1・issue #835）。
   # 「全球種バックスピン固定」だった穴（issue #835）を塞ぐ。tilt_deg は回転軸角度（0=純バックスピン=ホップ、
   # 180=純トップスピン=落下方向を強める、±90=純サイドスピン・+で design-18「+x=一塁側」の規約）。
@@ -144,7 +144,7 @@ batting:
   whiff_out_of_zone_penalty: 0.85
   # 誘発変化合成量[m]（設計書15 Phase E-2）あたりの空振り加算。旧stuff_per_pitch_rank（球種ランク直参照）は
   # Sharpness→rpm→変化量の経路で弾道へ織り込み済みのため完全置換（二重計上回避）。校正ノブ。
-  whiff_break_slope: 1.2   # issue #835: 球種ごとの回転軸で変化量が増えた分 1.5→1.2（キレの差は spin_rpm_per_sharpness で付け直す）
+  whiff_break_slope: 1.2   # issue #835: 球種ごとの回転軸で変化量が増えた分 1.5→1.2（P80 vs B30 被打率が帯下限 .120 を割ったため。キレの差は spin_rpm_per_sharpness で付け直す）
   # 投打差（球威−ミート項）の対数オッズ寄与の soft-cap（issue matchup-gap-saturation-k-rate）: cap×tanh(d/cap)。
   # 互角近傍は線形のまま、大差で ±cap に飽和＝A投手が格下打線から平均24三振を取るのを止める。0以下＝無効（従来の線形）。
   whiff_matchup_cap: 1.5
@@ -231,7 +231,7 @@ batting:
   contact_quality_per_kmh: -0.0050         # 速い球は差し込まれる（当たっても弱い）
   contact_quality_per_control: -0.0030     # 制球が良いほど芯を外させる（技巧派の武器）
   contact_quality_break_ref_m: 0.47        # 132km/h・2200rpm の誘発変化合成量
-  contact_quality_per_break_m: -0.70       # 変化が大きいほど詰まる。issue #835: 球種ごとの回転軸で変化量が増えた分 −0.90→−0.70（P80 vs B30 被打率が帯下限 .120 を割ったため）
+  contact_quality_per_break_m: -0.90       # 変化が大きいほど詰まる
 
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
