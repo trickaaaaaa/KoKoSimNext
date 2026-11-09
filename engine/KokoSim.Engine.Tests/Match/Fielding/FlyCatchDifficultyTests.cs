@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Batting;
 using KokoSim.Engine.Match.Field;
@@ -48,15 +50,16 @@ public sealed class FlyCatchDifficultyTests
     private static double DropRate(Vector3D centerFielderLoc, int trials = 8000)
     {
         var fielders = WithCenterFielderAt(centerFielderLoc);
+        // 1回ごとにシード独立＝並列に回して整数で数える（順序に依らず同じ結果。issue #639 と同じ作法）。
         var drops = 0;
         var catches = 0;
-        for (ulong seed = 1; seed <= (ulong)trials; seed++)
+        Parallel.For(1, trials + 1, i =>
         {
             var r = FieldingResolver.ResolveDetailed(
-                Fly, Field, Aero, BatterAttributes.LeagueAverage, fielders, Coeff, new Xoshiro256Random(seed));
-            if (r.Result == BattedBallResult.Error) drops++;
-            if (r is { IsFly: true, Result: BattedBallResult.Out or BattedBallResult.Error }) catches++;
-        }
+                Fly, Field, Aero, BatterAttributes.LeagueAverage, fielders, Coeff, new Xoshiro256Random((ulong)i));
+            if (r.Result == BattedBallResult.Error) Interlocked.Increment(ref drops);
+            if (r is { IsFly: true, Result: BattedBallResult.Out or BattedBallResult.Error }) Interlocked.Increment(ref catches);
+        });
         // 際どい配置でも「捕球を試みている（＝安打で抜けていない）」ことを担保してから率を返す。
         Assert.True(catches >= trials * 9 / 10, $"捕球機会が少なすぎる（{catches}/{trials}）");
         return (double)drops / trials;
@@ -107,12 +110,12 @@ public sealed class FlyCatchDifficultyTests
                 new Fielder(FieldPosition.CenterField, loc, new FielderAttributes { Fielding = 50, Catching = catching }),
             };
             var drops = 0;
-            for (ulong seed = 1; seed <= 8000; seed++)
+            Parallel.For(1, 8001, i =>
             {
                 var r = FieldingResolver.ResolveDetailed(
-                    Fly, Field, Aero, BatterAttributes.LeagueAverage, fielders, Coeff, new Xoshiro256Random(seed));
-                if (r.Result == BattedBallResult.Error) drops++;
-            }
+                    Fly, Field, Aero, BatterAttributes.LeagueAverage, fielders, Coeff, new Xoshiro256Random((ulong)i));
+                if (r.Result == BattedBallResult.Error) Interlocked.Increment(ref drops);
+            });
             return drops / 8000.0;
         }
 
