@@ -3,7 +3,8 @@
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
-    <ui:VisualElement class="root">
+    <Style src="Components/scorebook.uss" />
+    <ui:VisualElement class="root sbk">
 
       <!-- ===== スコアボードヘッダー（選手詳細と共通の sb2） ===== -->
       <ui:VisualElement class="sb2">

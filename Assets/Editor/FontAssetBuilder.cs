@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -55,8 +56,6 @@ namespace KokoSim.EditorTools
             {
                 // 第一候補
                 "ShipporiMinchoB1-Bold", "ShipporiMinchoB1-ExtraBold",
-                "IBMPlexSansJP-Regular", "IBMPlexSansJP-Medium", "IBMPlexSansJP-SemiBold",
-                "Oswald-Medium", "Oswald-SemiBold",
                 "DotGothic16-Regular",
                 // 代替
                 "ZenOldMincho-Bold",
@@ -92,11 +91,10 @@ namespace KokoSim.EditorTools
         {
             var sources = new[]
             {
+                // 本文・数字の Plex / Oswald は design-22 で Noto Sans JP（ScorebookSources）に置き換えて削除した（2026-11-10）。
                 "ShipporiMinchoB1-Bold", "ShipporiMinchoB1-ExtraBold",
-                "IBMPlexSansJP-Regular", "IBMPlexSansJP-Medium", "IBMPlexSansJP-SemiBold",
-                "Oswald-Medium", "Oswald-SemiBold",
                 "DotGothic16-Regular",
-            };
+            }.Concat(ScorebookSources).ToArray();
 
             if (!AssetDatabase.IsValidFolder(OutDir)) AssetDatabase.CreateFolder(FontDir, "Generated");
 
@@ -111,6 +109,34 @@ namespace KokoSim.EditorTools
             }
             EditorUtility.ClearProgressBar();
 
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[FontAssetBuilder]\n" + log);
+        }
+
+        /// <summary>
+        /// スコアブック試作スキン（オーダー画面・scorebook.uss）の本文・数字の書体 Noto Sans JP（OFL）。
+        /// 可変フォント NotoSansJP[wght].ttf から 400/500/700 を静的に切り出したもの（fontTools の instancer）。
+        /// </summary>
+        private static readonly string[] ScorebookSources =
+        {
+            "NotoSansJP-Regular", "NotoSansJP-Medium", "NotoSansJP-Bold",
+        };
+
+        /// <summary>試作スキン用の Noto Sans JP 3書体だけを本番の文字セットで焼く（他の書体は触らない）。</summary>
+        [MenuItem("KokoSim/Fonts/スコアブック試作用の SDF を生成（Noto Sans JP）")]
+        public static void BuildScorebookSet()
+        {
+            if (!AssetDatabase.IsValidFolder(OutDir)) AssetDatabase.CreateFolder(FontDir, "Generated");
+            var chars = ProductionCharacterSet();
+            var log = new StringBuilder();
+            log.AppendLine("文字セット " + chars.Length + " 字（data/ の語彙を含む）");
+            for (var i = 0; i < ScorebookSources.Length; i++)
+            {
+                EditorUtility.DisplayProgressBar("SDF生成（Noto Sans JP）", ScorebookSources[i], (float)i / ScorebookSources.Length);
+                log.AppendLine(Build(ScorebookSources[i], chars, production: true));
+            }
+            EditorUtility.ClearProgressBar();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("[FontAssetBuilder]\n" + log);
@@ -246,6 +272,7 @@ namespace KokoSim.EditorTools
             Add("県立桜丘高校北都大付属享栄神奈川");
             Add("年月週日目残選手権秋季大会甲子園回戦優勝敗退開幕");
             Add("部実力成績内順位個別指導故障者今出来事次試合通知");
+            Add("入替比較控先発背番主将選手学年右左指名決定能力弾道型肩送走塁捕球精神力適性順");   // オーダー画面（スコアブック試作）
             Add("打率本塁安点防御奪三振投球盗勝利通算公式総合撃守備機動層精神");
             Add("軽度中重肩肘腰膝足首復帰名該当無");
             Add("練習計画配分育成能値上限春夏冬合宿");

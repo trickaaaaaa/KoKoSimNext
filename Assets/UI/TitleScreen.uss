@@ -91,3 +91,20 @@
     font-size: var(--fs-cap);
     color: var(--day-tx-3);
 }
+
+/* ── スコアブック（design-22 G3・2026-11-10 ユーザー指示「紙色に寄せる」） ──
+   全面を紙色にし、色ブロックは「芝・土」の細い2本線だけ残す（空とスタンドの帯は出さない）。
+   線の位置は旧帯の地面の高さに合わせず、本文の上に余白を取ってから引く。 */
+.sbk.ts-root { background-color: var(--sbk-paper); }
+.sbk .ts-backdrop { height: 140px; min-height: 40px; justify-content: flex-end; }
+.sbk .ts-band--sky,
+.sbk .ts-band--stand { display: none; }
+.sbk .ts-band--grass { height: 6px; flex-shrink: 0; }
+.sbk .ts-band--dirt  { height: 3px; flex-shrink: 0; }
+.sbk .ts-title { color: var(--sbk-text); }
+.sbk .ts-rule { background-color: var(--sbk-text); }
+.sbk .ts-menu-item { color: var(--sbk-text); }
+.sbk .ts-menu-item:hover { color: var(--sbk-sub); }
+.sbk .ts-version { color: var(--sbk-sub); }
+.sbk .ts-menu-item--cta { color: var(--color-cta); }
+.sbk .ts-menu-item--cta:hover { color: var(--color-cta-hi); }

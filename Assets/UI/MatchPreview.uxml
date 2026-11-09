@@ -9,9 +9,10 @@
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
+    <Style src="Components/scorebook.uss" />
     <Style src="MatchPreview.uss" />
 
-    <ui:VisualElement class="ui-root mp-root">
+    <ui:VisualElement class="ui-root mp-root sbk">
 
         <!-- 画面専用ヘッダー（共通ナビは出さない：この画面は試合開始フロー専用）。 -->
         <ui:VisualElement class="mp-topbar">

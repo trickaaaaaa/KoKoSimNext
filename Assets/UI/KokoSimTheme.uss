@@ -11,7 +11,7 @@
     /* 既定フォント＝IBM Plex Sans JP Regular（tokens.uss .ui-root と同一・設計書16 F1-a）。
        既定テーマの legacy ビットマップフォント(NotInter)を上書きし、全子孫へ継承させる。
        これが無いとテキストが legacy フォントで拡大描画されて滲む（設計書06）。 */
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Regular.asset?fileID=11400000&guid=1c2f415f2731d410cad039b0f26f6602&type=2#IBMPlexSansJP-Regular");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
 }
 
 /* トップバー（<ui:Instance template="TopBar" class="topbar-slot" />）は絶対に潰さない。
@@ -894,11 +894,11 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 /* 調子5段階の色（選手一覧・主将指名など全画面共通）。
    値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
    色分岐はC#側で Condition enum から行い、表示文字列で比較しない。 */
-.cond--best { color: #EF3B3B; }    /* = --cond-best 絶好調（赤） */
-.cond--good { color: #F28B2E; }    /* = --cond-good 好調（橙） */
-.cond--normal { color: #F4CB3C; }  /* = --cond-normal 普通（黄） */
-.cond--bad { color: #5AA9E6; }     /* = --cond-bad 不調（水色） */
-.cond--worst { color: #4C5BD4; }   /* = --cond-worst 絶不調（青） */
+.cond--best { color: #E0605A; }    /* = --cond-best 絶好調（赤） */
+.cond--good { color: #E8904A; }    /* = --cond-good 好調（橙） */
+.cond--normal { color: #E3BD3C; }  /* = --cond-normal 普通（黄） */
+.cond--bad { color: #7FA8D6; }     /* = --cond-bad 不調（水色） */
+.cond--worst { color: #4F6FA8; }   /* = --cond-worst 絶不調（青） */
 
 /* --- 通知フィード --- */
 .fd-item { flex-direction: row; align-items: stretch; border-bottom-width: 1px; border-bottom-color: var(--color-line); }

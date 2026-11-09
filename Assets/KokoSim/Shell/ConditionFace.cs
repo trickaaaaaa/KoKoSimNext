@@ -14,13 +14,13 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public sealed class ConditionFace : VisualElement
     {
-        // tokens.uss --cond-best/good/normal/bad/worst のミラー（ConditionLabels.ColorHex とも一致させる）。
-        private static readonly Color Excellent = new(0xEF / 255f, 0x3B / 255f, 0x3B / 255f); // 赤
-        private static readonly Color Good = new(0xF2 / 255f, 0x8B / 255f, 0x2E / 255f);      // 橙
-        private static readonly Color Normal = new(0xF4 / 255f, 0xCB / 255f, 0x3C / 255f);    // 黄
-        private static readonly Color Poor = new(0x5A / 255f, 0xA9 / 255f, 0xE6 / 255f);      // 水色
-        private static readonly Color Terrible = new(0x4C / 255f, 0x5B / 255f, 0xD4 / 255f);  // 青
-        private static readonly Color Ink = new(0x14 / 255f, 0x23 / 255f, 0x1B / 255f);        // 顔上の暗インク
+        // tokens.uss --cond-best/good/normal/bad/worst のミラー（ConditionLabels.ColorHex とも一致させる）。design-22 G0 で新5色。
+        private static readonly Color Excellent = new(0xE0 / 255f, 0x60 / 255f, 0x5A / 255f); // 赤
+        private static readonly Color Good = new(0xE8 / 255f, 0x90 / 255f, 0x4A / 255f);      // 橙
+        private static readonly Color Normal = new(0xE3 / 255f, 0xBD / 255f, 0x3C / 255f);    // 黄
+        private static readonly Color Poor = new(0x7F / 255f, 0xA8 / 255f, 0xD6 / 255f);      // 水色
+        private static readonly Color Terrible = new(0x4F / 255f, 0x6F / 255f, 0xA8 / 255f);  // 青
+        private static readonly Color Ink = new(0x2A / 255f, 0x26 / 255f, 0x22 / 255f);        // 顔上の暗インク
 
         private Condition _condition = Condition.Normal;
 
@@ -29,6 +29,16 @@ namespace KokoSim.Unity.Shell
         // 既定は無指定＝リングなし＝夜スキンの見た目は不変（scope 保証）。
         private static readonly CustomStyleProperty<Color> RingProp = new("--face-ring");
         private Color _ring = new(0f, 0f, 0f, 0f);  // α=0＝リングなし
+
+        // 色の上書き（任意）。USS で `--face-best` 等を与えた画面だけ差し替わる（オーダー画面のスコアブック試作）。
+        // 指定のない画面は上の既定色（tokens.uss --cond-* のミラー）のまま。
+        private static readonly CustomStyleProperty<Color>[] FaceProps =
+        {
+            new("--face-best"), new("--face-good"), new("--face-normal"), new("--face-bad"), new("--face-worst"),
+        };
+        private static readonly CustomStyleProperty<Color> InkProp = new("--face-ink");
+        private readonly Color?[] _override = new Color?[5];
+        private Color? _inkOverride;
 
         public ConditionFace()
         {
@@ -40,11 +50,20 @@ namespace KokoSim.Unity.Shell
 
         private void OnCustomStyle(CustomStyleResolvedEvent e)
         {
+            var dirty = false;
             if (e.customStyle.TryGetValue(RingProp, out var c) && c != _ring)
             {
                 _ring = c;
-                MarkDirtyRepaint();
+                dirty = true;
             }
+            for (var i = 0; i < FaceProps.Length; i++)
+            {
+                Color? v = e.customStyle.TryGetValue(FaceProps[i], out var fc) ? fc : null;
+                if (v != _override[i]) { _override[i] = v; dirty = true; }
+            }
+            Color? ink = e.customStyle.TryGetValue(InkProp, out var ic) ? ic : null;
+            if (ink != _inkOverride) { _inkOverride = ink; dirty = true; }
+            if (dirty) MarkDirtyRepaint();
         }
 
         /// <summary>調子を設定。</summary>
@@ -52,6 +71,15 @@ namespace KokoSim.Unity.Shell
         {
             _condition = c;
             MarkDirtyRepaint();
+        }
+
+        private Color ResolvedFaceColor(Condition c)
+        {
+            var i = c switch
+            {
+                Condition.Excellent => 0, Condition.Good => 1, Condition.Poor => 3, Condition.Terrible => 4, _ => 2,
+            };
+            return _override[i] ?? FaceColor(c);
         }
 
         private static Color FaceColor(Condition c) => c switch
@@ -85,7 +113,7 @@ namespace KokoSim.Unity.Shell
             var rad = Mathf.Min(r.width, r.height) * 0.45f;
 
             // 顔の丸（状態色で塗り）。装飾（影/グロー）は付けない（UI原則③）。
-            p.fillColor = FaceColor(c);
+            p.fillColor = ResolvedFaceColor(c);
             p.BeginPath();
             p.Arc(new Vector2(cx, cy), rad, 0f, 360f);
             p.Fill();
@@ -104,7 +132,8 @@ namespace KokoSim.Unity.Shell
             var eyeR = rad * 0.16f;
             var eyeDx = rad * 0.4f;
             var eyeDy = rad * 0.18f;
-            p.fillColor = Ink;
+            var ink = _inkOverride ?? Ink;
+            p.fillColor = ink;
             foreach (var sx in new[] { -1f, 1f })
             {
                 p.BeginPath();
@@ -116,7 +145,7 @@ namespace KokoSim.Unity.Shell
             var curve = MouthCurve(c);
             var mouthW = rad * 0.5f;
             var mouthY = cy + rad * 0.32f;
-            p.strokeColor = Ink;
+            p.strokeColor = ink;
             p.lineWidth = Mathf.Max(1.2f, rad * 0.14f);
             p.lineCap = LineCap.Round;
             p.BeginPath();

@@ -24,8 +24,9 @@ namespace KokoSim.Unity.MatchPreview
         // 準備中の二重起動防止（「試合開始」の連打・BackgroundGameOp 完了前の再入をブロックする）。
         private bool _starting;
 
-        private const float RadiusFactor = 0.34f;
-        private const float LabelOffset = 1.22f;
+        // 6角形を少し小さくして軸ラベルを外へ出す（横の軸ラベルが頂点に重なっていた。design-22 G3）。
+        private const float RadiusFactor = 0.30f;
+        private const float LabelOffset = 1.40f;
 
         private void OnEnable()
         {

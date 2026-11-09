@@ -159,3 +159,7 @@
 /* 「タイトルへ戻る」確認の補足（最後の保存から何週か。issue #730 でホームから移設） */
 .ss-confirm__sub { font-size: var(--fs-label); color: var(--color-muted); margin-bottom: var(--sp-4); }
 .ss-confirm__btns { flex-direction: row; }
+
+/* 画面の高さいっぱいに紙色を敷く（ルートが伸びず下半分が白く抜けていた）。 */
+.ss-root { flex-grow: 1; }
+.ss-root .ss-body { flex-grow: 0; }   /* カードは中身の高さで止める（監督判断 2026-08-10・上の注記） */

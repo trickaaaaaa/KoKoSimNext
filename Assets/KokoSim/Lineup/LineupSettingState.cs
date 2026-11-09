@@ -26,7 +26,12 @@ namespace KokoSim.Unity.Lineup
         public string Name = "";
         public string GradeLabel = "";
         public string HandLabel = "";
-        public string StatText = "";      // 通算の簡易成績（打率・本・点。全員打撃成績・データ無しは「-」）
+        // 通算の打撃成績（全員打撃成績＝投手も。データ無しは「-」）。列見出し「打率・本・点」の下に数値だけ並べる
+        // （オーダー画面リデザイン 2026-11-09＝行ごとの「打率」「本」「点」の繰り返し表記をやめた）。
+        public string AvgText = "-";
+        public bool AvgHigh;              // 打率 .400 以上（差し色の太字で出す）
+        public string HomeRunsText = "-";
+        public string RbiText = "-";
         public int PlayerIndex = -1;      // 共有ロスターの安定index
         public bool IsPicked;
         public bool IsPosPicked;          // 守備位置チップが選択中（次のチップクリックで入替）
@@ -44,6 +49,7 @@ namespace KokoSim.Unity.Lineup
         public int UniformNumber;         // 背番号（メンバー設定で割当。0＝未割当）
         public string Name = "";
         public string GradeLabel = "";
+        public string HandLabel = "";     // 投打（比較パネルの見出し用）
         public bool IsPicked;
         /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空（設計書03 §3.5）。</summary>
         public string Injury = "";
@@ -80,7 +86,14 @@ namespace KokoSim.Unity.Lineup
     {
         public bool Present;
         public string Name = "";
+        /// <summary>姓（守備適性の行見出し用。名前に空白が無ければ名前そのまま）。</summary>
+        public string ShortName = "";
         public string GradeLabel = "";
+        /// <summary>
+        /// この画面での立場（例「スタメン 2番・左」「控え・背番号1」「先発投手」）。
+        /// 位置はプレイヤーが決めた配置だけを出す（CLAUDE.md UI原則の注記）。
+        /// </summary>
+        public string RoleText = "";
         /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力）。選手個人の総合ランクは廃止（Issue #30/#270）。</summary>
         public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);
         public bool IsCaptain;
@@ -95,18 +108,24 @@ namespace KokoSim.Unity.Lineup
         public List<LineupRowView> Rows = new List<LineupRowView>();
         public List<BenchRowView> Bench = new List<BenchRowView>();
         public bool UsesDh;
+        // 先発投手カード（issue #656 → オーダー画面リデザイン 2026-11-09 で DH の有無を問わず常に出す）。
+        // DH制＝打順外の先発、DHなし＝打順内で「投」に就いている選手（カードと打順行は同じ人を指す）。
+        public bool HasStartingPitcher;
+        public int StartingPitcherIndex = -1;   // 共有ロスターの安定index（ホバー比較用）
         public string StartingPitcherName = "";
         public bool StartingPitcherPicked;
-        // 先発投手の行（DH制時のみ・issue #656）。打順行と情報量を揃える＝背番号・主将・学年投打・成績・故障・調子。
-        // 成績欄は打順行の「打率・本・点」の位置に投手の通算「防御率・投球回・奪三振」（監督決定）。
         public int StartingPitcherNumber;
         public bool StartingPitcherIsCaptain;
         public string StartingPitcherGradeLabel = "";
         public string StartingPitcherHandLabel = "";
-        public string StartingPitcherStatText = "";
+        // 通算の投手成績（防御率・投球回・奪三振。データ無しは「-」）。ラベルと数値は画面側で分けて組む。
+        public string StartingPitcherEraText = "-";
+        public string StartingPitcherInningsText = "-";
+        public string StartingPitcherStrikeoutsText = "-";
         public string StartingPitcherInjury = "";
         public Condition StartingPitcherCondition = Condition.Normal;
         public string TeamRankGrade = "C";
+        public int TeamOverallValue;        // チーム総合の数値（0〜100。ランクチップの隣に出す）
 
         public CompareCardView CardA = new CompareCardView();
         public CompareCardView CardB = new CompareCardView();
@@ -116,7 +135,6 @@ namespace KokoSim.Unity.Lineup
         public bool ShowPitchChart;
         public bool CanConfirm = true;      // ベンチ入りが9人未満なら false（確定ボタンを塞ぐ）
         public string WarnText = "";        // 上の理由（空＝警告なし）
-        public string HintText = "";        // 守備位置・先発の操作説明（打順表の下・控えめ）
         public List<PlayerCompareRow> Rows2 = new List<PlayerCompareRow>();  // 比較能力行
         public bool ShowApt;
         public bool HasAptA;
@@ -186,6 +204,10 @@ namespace KokoSim.Unity.Lineup
         // 「投を別の打順へ動かしたのに PitcherSlot が古いまま」のズレが起き、確定した LineupSpec が
         // 9ポジション網羅を満たさず試合開始時に engine が例外を投げる。
         private int PitcherSlot => DefenseAssignment.SlotOf(_pos, FieldPosition.Pitcher);
+
+        // 先発投手（ロスターindex）。DH制は打順外の先発、DHなしは打順内で「投」に就いている選手。-1＝不在。
+        private int StartingPitcherIndex
+            => _usesDh ? _spIdx : (PitcherSlot >= 0 ? _idx[PitcherSlot] : -1);
         private int DhSlot => DefenseAssignment.SlotOf(_pos, FieldPosition.DesignatedHitter);
 
         // 操作状態：クリック選択＝比較の左＋入替の主体。ホバー＝比較の右。
@@ -328,9 +350,18 @@ namespace KokoSim.Unity.Lineup
 
             // 先発投手ピルを選んだ状態でのクリック＝先発と打順選手の入替（DH制。打順内の任意選手を
             // 先発にできる, issue #233）。元の先発はその打順枠へ入り、守備位置は枠のものを引き継ぐ。
-            if (_pickKind == PickKind.StartingPitcher && _spIdx >= 0)
+            if (_pickKind == PickKind.StartingPitcher && _usesDh && _spIdx >= 0)
             {
                 (_idx[slot], _spIdx) = (_spIdx, _idx[slot]);
+                ClearPick();
+                return;
+            }
+            // DHなしで先発カードを選んだ状態のクリック＝その選手を投手にする。「投」とその選手の守備位置を
+            // 入れ替える（守備位置チップ2回の入替と同じ結果＝打順は動かない）。投手の行そのものなら解除。
+            if (_pickKind == PickKind.StartingPitcher && !_usesDh)
+            {
+                var ps = PitcherSlot;
+                if (ps >= 0 && ps != slot) SwapSlotPositions(ps, slot);
                 ClearPick();
                 return;
             }
@@ -364,7 +395,9 @@ namespace KokoSim.Unity.Lineup
 
             if (_pickKind == PickKind.StartingPitcher)
             {
-                _spIdx = idx;   // 先発投手を差し替え
+                // 先発投手を差し替え。DHなしは打順内の「投」の枠へ控えを入れる（元の投手は控えへ）。
+                if (_usesDh) _spIdx = idx;
+                else if (PitcherSlot >= 0) _idx[PitcherSlot] = idx;
                 ClearPick();
                 return;
             }
@@ -375,13 +408,31 @@ namespace KokoSim.Unity.Lineup
         }
 
         /// <summary>
-        /// 先発投手ピル クリック（DH制）：先発を選択＝以後の控え/打順クリックで差し替え。
-        /// 逆順（先に選手を選んでからピル）も同じ結果になるようにしてある（issue #233）。
+        /// 先発投手カード クリック：先発を選択＝以後の控え/打順クリックで差し替え。
+        /// 逆順（先に選手を選んでからカード）も同じ結果になるようにしてある（issue #233）。
+        /// DHなしでは先発＝打順内で「投」に就いている選手。打順の選手を選ぶと「投」と守備位置を入れ替え、
+        /// 控えを選ぶと「投」の枠へ入る（オーダー画面リデザイン 2026-11-09・監督決定⑤）。
         /// </summary>
         public void ClickStartingPitcher()
         {
-            if (!_usesDh) return;
             if (_pickKind == PickKind.StartingPitcher) { ClearPick(); return; }
+
+            if (!_usesDh)
+            {
+                var ps = PitcherSlot;
+                if (ps < 0) return;
+                if (_pickKind == PickKind.OrderPlayer && _picked >= 0 && _picked != _idx[ps])
+                {
+                    var from = SlotOf(_picked);
+                    if (from >= 0) SwapSlotPositions(ps, from);   // 打順の選手を投手へ（守備位置の入替）
+                    else _idx[ps] = _picked;                      // 控えを投手へ（元の投手は控えへ）
+                    ClearPick();
+                    return;
+                }
+                ClearPick();
+                _picked = _idx[ps]; _pickKind = PickKind.StartingPitcher;
+                return;
+            }
 
             if (_pickKind == PickKind.OrderPlayer && _picked >= 0 && _picked != _spIdx)
             {
@@ -563,14 +614,12 @@ namespace KokoSim.Unity.Lineup
             else
                 v.WarnText = InjuredStarterWarning();
 
-            // 操作の入口を1行だけ明記する（見つからない操作は無いのと同じ, issue #233）。
-            v.HintText = _usesDh
-                ? "守備位置：「守」チップを2つクリックで入替　先発投手：先発ピル→選手をクリック"
-                : "守備位置：「守」チップを2つクリックで入替（投も動かせる＝任意の選手を投手にできる）";
+            // 画面下部の操作説明は廃止（オーダー画面リデザイン 2026-11-09）。
 
             for (var i = 0; i < 9; i++)
             {
                 var p = _roster[_idx[i]];
+                var bat = BatCells(p);
                 v.Rows.Add(new LineupRowView
                 {
                     Order = i + 1,
@@ -580,7 +629,10 @@ namespace KokoSim.Unity.Lineup
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
                     HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
-                    StatText = CareerBatLine(p),
+                    AvgText = bat.Avg,
+                    AvgHigh = bat.High,
+                    HomeRunsText = bat.Hr,
+                    RbiText = bat.Rbi,
                     PlayerIndex = _idx[i],
                     IsPicked = _picked == _idx[i] && _pickKind == PickKind.OrderPlayer,
                     IsPosPicked = _pickKind == PickKind.SlotPosition && _posPickSlot == i,
@@ -590,16 +642,23 @@ namespace KokoSim.Unity.Lineup
                 });
             }
 
-            if (_usesDh && _spIdx >= 0)
+            // 先発投手カード：DH制＝打順外の先発、DHなし＝打順内の「投」の選手（同じ人を2箇所に出す）。
+            var spIdx = StartingPitcherIndex;
+            if (spIdx >= 0)
             {
-                var sp = _roster[_spIdx];
+                var sp = _roster[spIdx];
+                var pit = PitchCells(sp);
+                v.HasStartingPitcher = true;
+                v.StartingPitcherIndex = spIdx;
                 v.StartingPitcherName = sp.Name;
                 v.StartingPitcherPicked = _pickKind == PickKind.StartingPitcher;
                 v.StartingPitcherNumber = sp.UniformNumber;
                 v.StartingPitcherIsCaptain = sp.IsCaptain;
                 v.StartingPitcherGradeLabel = sp.Grade + "年";
                 v.StartingPitcherHandLabel = HandednessLabels.Combined(sp.Throws, sp.Bats);
-                v.StartingPitcherStatText = CareerPitchLine(sp);
+                v.StartingPitcherEraText = pit.Era;
+                v.StartingPitcherInningsText = pit.Ip;
+                v.StartingPitcherStrikeoutsText = pit.K;
                 v.StartingPitcherInjury = InjuryChipText(sp);
                 v.StartingPitcherCondition = FormModel.Quantize(sp.ConditionValue);
             }
@@ -619,6 +678,7 @@ namespace KokoSim.Unity.Lineup
                     UniformNumber = p.UniformNumber,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
+                    HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
                     Injury = InjuryChipText(p),
                     Condition = FormModel.Quantize(p.ConditionValue),
@@ -627,10 +687,13 @@ namespace KokoSim.Unity.Lineup
 
             // 共通トップバーのチーム総合力＝6指標のリーグ標準化総合（③, 全画面統一）。スタメン依存にしない。
             v.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(_roster);
+            v.TeamOverallValue = (int)Math.Round(KokoSim.Unity.Shell.TeamOverall.Of(_roster));
 
             // 比較：左＝選択中、右＝ホバー中（選択があるとき・別人のとき）。
             // 未選択のときはホバーだけで能力値を見せる（左＝ホバー選手）。クリック不要で一覧を舐められる。
-            var leftIdx = _picked >= 0 ? _picked : _hovered;
+            // 誰も選ばず・カーソルも無いときは1番打者を片側だけ出す（空の比較パネルを見せない。2026-11-09）。
+            // 表示のためだけの既定で、選択状態にはしない（次のクリックが入替にならない）。
+            var leftIdx = _picked >= 0 ? _picked : _hovered >= 0 ? _hovered : _idx[0];
             var rightIdx = (_picked >= 0 && _hovered != _picked) ? _hovered : -1;
             v.CardA = MakeCard(leftIdx);
             v.CardB = MakeCard(rightIdx);
@@ -668,11 +731,14 @@ namespace KokoSim.Unity.Lineup
             if (index < 0 || index >= _roster.Count) return new CompareCardView { Present = false };
             var p = _roster[index];
             var topKmh = (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(p.Level(AbilityKind.Velocity)));
+            var space = p.Name.IndexOfAny(new[] { ' ', '　' });
             return new CompareCardView
             {
                 Present = true,
                 Name = p.Name,
+                ShortName = space > 0 ? p.Name.Substring(0, space) : p.Name,
                 GradeLabel = p.Grade + "年",
+                RoleText = RoleOf(index),
                 // カテゴリ別ランク（打撃力/走力/守備力/投手力）。メンバー設定の比較カードと同じ部品・同じ係数。
                 // 並べ替えキー（ByBatting/ByPitching）と同じメモを引く＝表示と並びで指標がズレない。
                 Strength = Strength(index),
@@ -789,28 +855,46 @@ namespace KokoSim.Unity.Lineup
             Value = s => s?.Batting is { Games: > 0 } b ? b.HomeRuns.ToString() : "—",
         };
 
-        // 先発投手行の簡易成績（通算の防御率・投球回・奪三振。issue #656 監督決定）。値の定義は比較カードの指標
-        // （EraMetric 等）と同じ・データ無しは「-」。区切りは打順行（全角空白）より狭い半角2つ＝DHバーの中に
-        // 置くので幅が足りず、全角だと6文字の名前が切れる（実測: 欄669pxに名前の最低148pxが入らない）。
-        // 見出しも打順行の「本」「点」にならって1文字（防＝防御率）。「防御率」のままだと3桁の奪三振で欄を超える。
-        internal static string CareerPitchLine(DevelopingPlayer p)
-            => PitchLine(GameSession.Current.Stats.Career.Get(p.Id)?.Pitching);
-
-        internal static string PitchLine(PitchingStatLine q)
+        // この画面での立場（比較パネルの見出し）。位置はプレイヤーが決めた配置だけ（打順表の「守」）。
+        private string RoleOf(int index)
         {
-            if (q == null || q.Games == 0) return "防 -  回 -  振 -";
-            var era = q.Outs > 0 ? q.Era.ToString("0.00") : "-";
-            var ip = q.Outs > 0 ? q.InningsText : "-";
-            return "防 " + era + "  回 " + ip + "  振 " + q.StrikeOuts;
+            var slot = SlotOf(index);
+            if (slot >= 0) return "スタメン " + (slot + 1) + "番・" + PosKanji[_pos[slot]];
+            if (_usesDh && _spIdx == index) return "先発投手";
+            var n = _roster[index].UniformNumber;
+            return n > 0 ? "控え・背番号" + n : "控え";
         }
 
-        // 打順行の簡易成績（通算のみ・全員打撃成績＝投手も打率/本/点）。データ無しは「-」。
-        private static string CareerBatLine(DevelopingPlayer p)
+        // 先発投手カードの成績（通算の防御率・投球回・奪三振。issue #656 監督決定）。値の定義は比較カードの指標
+        // （EraMetric 等）と同じ・データ無しは「-」。ラベル（防・回・振）は画面側で数値と別の Label に組む。
+        internal static (string Era, string Ip, string K) PitchCells(DevelopingPlayer p)
+            => PitchCells(GameSession.Current.Stats.Career.Get(p.Id)?.Pitching);
+
+        internal static (string Era, string Ip, string K) PitchCells(PitchingStatLine q)
+        {
+            if (q == null || q.Games == 0) return ("-", "-", "-");
+            var era = q.Outs > 0 ? q.Era.ToString("0.00") : "-";
+            var ip = q.Outs > 0 ? InningsWithFraction(q.Outs) : "-";
+            return (era, ip, q.StrikeOuts.ToString());
+        }
+
+        /// <summary>投球回を「10⅓」の形で（端数は ⅓ / ⅔ の1文字。画面側で整数部と端数を組み分ける）。</summary>
+        internal static string InningsWithFraction(int outs)
+            => (outs / 3) + (outs % 3 == 1 ? "⅓" : outs % 3 == 2 ? "⅔" : "");
+
+        /// <summary>打率を差し色の太字にする下限（.400 以上）。</summary>
+        internal const double HighAverage = 0.400;
+
+        // 打順行の打撃成績（通算のみ・全員打撃成績＝投手も打率/本/点）。データ無しは「-」。
+        private static (string Avg, bool High, string Hr, string Rbi) BatCells(DevelopingPlayer p)
         {
             var b = GameSession.Current.Stats.Career.Get(p.Id)?.Batting;
-            if (b == null || b.Games == 0) return "打率 -　本 -　点 -";
-            var avg = b.AtBats > 0 ? b.Average.ToString(".000") : "-";
-            return "打率 " + avg + "　本 " + b.HomeRuns + "　点 " + b.Rbi;
+            if (b == null || b.Games == 0) return ("-", false, "-", "-");
+            var hasAvg = b.AtBats > 0;
+            var avg = hasAvg ? b.Average.ToString(".000") : "-";
+            // 表示の丸め（.3995→.400）と判定を揃えるため、表示と同じ3桁で比べる。
+            var high = hasAvg && Math.Round(b.Average, 3) >= HighAverage;
+            return (avg, high, b.HomeRuns.ToString(), b.Rbi.ToString());
         }
     }
 }

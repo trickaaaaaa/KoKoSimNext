@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 4cd57e4a8fb494fdda3a6b6c2e2dbfcd
+guid: afe2d407a247847328fde3f5a38aa9f4
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - IBM Plex Sans JP
+  - Noto Sans JP
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0

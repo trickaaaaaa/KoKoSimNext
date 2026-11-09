@@ -1,91 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 試合前スタメン設定 画面（UI-BUILD-METHOD Step 4）。大会モードで「試合開始→はい」直後に表示。
-     左＝打順1〜9の表（守備位置・DH・先発・控え）、右＝選んだ2選手の能力比較＋守備適性＋通算/今大会成績。
-     骨組みだけ置き、行・比較・成績は LineupSettingController が部品（components.uss）で動的生成する。
-     スタイルは tokens → KokoSimTheme → components → 画面USS の順。 -->
+<!-- 試合前オーダー（スタメン設定）画面。大会モードで「試合開始→はい」直後に表示。
+     スコアブック試作スキン（2026-11-09。Components/scorebook.uss・画面ルートの sbk クラスの中だけに効く）。
+     ヘッダー／本体3列（スタメン・控え・入れ替え比較）／フッター。
+     骨組みだけ置き、行・比較・成績は LineupSettingController が部品で動的生成する。
+     スタイルは tokens → KokoSimTheme → components → scorebook → 画面USS の順。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
+    <Style src="Components/scorebook.uss" />
     <Style src="LineupSetting.uss" />
 
-    <ui:VisualElement class="ui-root lu-root">
+    <ui:VisualElement class="ui-root sbk lu-root">
 
-        <!-- 画面専用ヘッダー（共通ナビは出さない：この画面は試合開始フロー専用で「今週を進める」等は無関係）。
-             この試合の文脈＝大会名・ラウンド・対戦相手を表示する。 -->
-        <ui:VisualElement class="lu-topbar">
-            <ui:Label text="オーダー＆スタメン設定" class="lu-title" />
-            <ui:Label name="lu-match" text="" class="lu-match" />
-            <ui:VisualElement class="lu-topbar__spacer" />
-            <ui:Label text="チーム" class="lu-head__cap" />
+        <!-- ヘッダー：差し色の縦線・題字・大会と回戦・対戦校／右端にチーム総合 -->
+        <ui:VisualElement class="lu-head">
+            <ui:VisualElement class="lu-head__bar acc-bg" />
+            <ui:Label text="オーダー" class="lu-head__title f-display" />
+            <ui:Label name="lu-match" text="" class="lu-head__match" />
+            <ui:Label name="lu-opp" text="" class="lu-head__opp f-body-md" />
+            <ui:VisualElement class="lu-head__spacer" />
+            <ui:Label text="チーム総合" class="lu-head__cap" />
             <ui:VisualElement name="lu-team-rank" class="lu-head__rank" />
         </ui:VisualElement>
 
         <ui:VisualElement class="lu-body">
 
-            <!-- 左＋中：[スタメン＋DH] と [控え] を横並び（上端揃え）。下部に確定操作。 -->
-            <ui:VisualElement class="lu-left">
-                <ui:VisualElement class="lu-cols">
-
-                    <!-- 左カラム：打順表＋DH -->
-                    <ui:VisualElement class="lu-orders">
-                        <ui:VisualElement class="lu-table">
-                            <ui:VisualElement class="lu-thead">
-                                <ui:Label text="順" class="lu-th lu-th--ord" />
-                                <ui:Label text="番" class="lu-th lu-th--num" />
-                                <ui:Label text="守" class="lu-th lu-th--pos" />
-                                <ui:Label text="選手" class="lu-th lu-th--name" />
-                                <ui:Label text="学年・投打" class="lu-th lu-th--info" />
-                            </ui:VisualElement>
-                            <ui:VisualElement name="lu-rows" class="lu-rows" />
-                        </ui:VisualElement>
-
-                        <!-- 守備位置・先発の操作説明（1行・控えめ）。DH制ON/OFFで文言が変わる。 -->
-                        <ui:Label name="lu-hint" text="" class="lu-hint" />
-
-                        <!-- DH制トグル＋先発投手（DH時のみ先発ピルを出す） -->
-                        <ui:VisualElement class="lu-dhbar">
-                            <ui:Label text="DH" class="lu-dhbar__label" />
-                            <ui:VisualElement name="lu-dh-switch" class="switch">
-                                <ui:VisualElement class="switch__knob" />
-                            </ui:VisualElement>
-                            <ui:VisualElement class="lu-dhbar__spacer" />
-                            <ui:VisualElement name="lu-sp" class="lu-sp" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <!-- 中カラム：控え（打順外）。上端はスタメンのヘッダー行と揃え、高さはスタメン＋DH相当で内部スクロール。 -->
-                    <ui:VisualElement class="lu-bench-wrap">
-                        <ui:Label text="控え" class="lu-section" />
-                        <ui:ScrollView mode="Vertical" class="lu-bench-scroll">
-                            <ui:VisualElement name="lu-bench" class="lu-bench" />
-                        </ui:ScrollView>
+            <!-- 左列：スタメン -->
+            <ui:VisualElement class="lu-orders">
+                <ui:VisualElement class="lu-orders__top">
+                    <ui:Label text="スタメン" class="sbk-cap" />
+                    <ui:VisualElement class="lu-flex" />
+                    <ui:VisualElement name="lu-dh" class="sbk-seg">
+                        <ui:Label name="lu-dh-on" text="DHあり" class="sbk-seg__opt f-body-bd" />
+                        <ui:Label name="lu-dh-off" text="DHなし" class="sbk-seg__opt f-body-bd" />
                     </ui:VisualElement>
                 </ui:VisualElement>
+                <ui:VisualElement class="lu-thead">
+                    <ui:Label text="順" class="lu-th lu-c-ord" />
+                    <ui:Label text="背番" class="lu-th lu-c-num" />
+                    <ui:Label text="守" class="lu-th lu-c-pos" />
+                    <ui:Label text="選手" class="lu-th lu-c-name" />
+                    <ui:Label text="学年・投打" class="lu-th lu-c-info" />
+                    <ui:Label text="打率" class="lu-th lu-c-avg" />
+                    <ui:Label text="本" class="lu-th lu-c-hr" />
+                    <ui:Label text="点" class="lu-th lu-c-rbi" />
+                    <ui:VisualElement class="lu-c-cond" />
+                </ui:VisualElement>
+                <ui:VisualElement name="lu-rows" class="lu-rows" />
 
-                <!-- 確定操作（下部・全幅） -->
+                <!-- 先発投手カード（9番打者の行のすぐ下。カード全体がボタン） -->
+                <ui:VisualElement name="lu-sp" class="lu-sp" />
+
+                <!-- 編成不備・故障者起用の警告（空なら非表示） -->
                 <ui:Label name="lu-warn" text="" class="lu-warn" />
-                <ui:VisualElement class="lu-actions">
-                    <ui:Button name="lu-cancel" text="キャンセル" class="lu-btn lu-btn--ghost" />
-                    <ui:Button name="lu-ok" text="この打順で決定 ▶" class="lu-btn lu-btn--go" />
-                </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- 右：2選手比較＋成績 -->
-            <ui:VisualElement class="lu-compare panel">
-                <ui:VisualElement class="lu-cmp-cards">
-                    <ui:VisualElement name="lu-cmp-a" class="cmp-card lu-cmp-card--a" />
-                    <ui:VisualElement name="lu-cmp-b" class="cmp-card" />
+            <!-- 中央列：控え -->
+            <ui:VisualElement class="lu-bench-col">
+                <ui:VisualElement class="lu-bench-col__top">
+                    <ui:Label text="控え" class="sbk-cap" />
                 </ui:VisualElement>
-
-                <ui:VisualElement name="lu-cmp-tabs" class="lu-cmp-tabs" />
-
-                <ui:ScrollView mode="Vertical" class="lu-cmp-scroll">
-                    <ui:VisualElement name="lu-cmp-rows" />
-                    <ui:VisualElement name="lu-cmp-apt" class="lu-cmp-apt" />
-                    <ui:VisualElement name="lu-cmp-stats" class="lu-cmp-stats" />
+                <ui:ScrollView mode="Vertical" class="lu-bench-scroll">
+                    <ui:VisualElement name="lu-bench" class="lu-bench" />
                 </ui:ScrollView>
             </ui:VisualElement>
+
+            <!-- 右列：入れ替え比較 -->
+            <ui:VisualElement class="lu-cmp sbk-panel">
+                <ui:VisualElement class="lu-cmp__top">
+                    <ui:Label text="入れ替え比較" class="sbk-cap" />
+                    <ui:VisualElement class="lu-flex" />
+                    <ui:VisualElement name="lu-cmp-tabs" class="sbk-seg" />
+                </ui:VisualElement>
+                <ui:VisualElement name="lu-cmp-head" />
+                <ui:ScrollView mode="Vertical" class="lu-cmp-scroll">
+                    <ui:VisualElement name="lu-cmp-rows" class="sbk-cmp__rows" />
+                    <ui:VisualElement name="lu-cmp-apt" class="lu-cmp__apt sbk-cmp__apt" />
+                    <ui:VisualElement name="lu-cmp-chart" />
+                    <ui:VisualElement name="lu-cmp-stats" class="lu-cmp__stats" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- フッター：キャンセル（文字だけ）＋決定（差し色で塗る・残りの幅すべて） -->
+        <ui:VisualElement class="lu-foot">
+            <ui:Button name="lu-cancel" text="キャンセル" class="lu-cancel f-body-md" />
+            <ui:Button name="lu-ok" text="この打順で決定" class="lu-ok acc-bg f-body-bd" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

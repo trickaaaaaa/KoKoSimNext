@@ -47,6 +47,10 @@ USSカスタムプロパティ（`--var`）で、以下を**1ファイルに集�
   `--color-panel-deep` #0E1A13 / `--color-line` #38543F）、チョーク白 `--color-chalk` #EFF4EA、
   副次 `--color-muted` #9DB3A0、アンバー `--color-lamp` #F5C64A、警告 `--color-warn` #E86A4A、
   ランクS〜Gの7色（`--rank-s` … `--rank-g`、色覚対応・文字併記前提）。
+  **データ画面はこの上に design-22「スコアブック」の読み替えが乗る**（画面ルートの `.sbk` の中だけ。
+  紙色 `--sbk-paper` #F2EFE8／白カード `--sbk-card`／淡い線 `--sbk-rule` #D9D4C8・`--sbk-rule-soft` #ECE8DF／
+  文字 `--sbk-text` #1D1B18・`--sbk-sub` #6F6A60・`--sbk-info` #4F4A42／選択の墨 `--sbk-ink` #2F2C27。
+  定義は `Components/scorebook.uss`）。試合中の画面（`.sbk` を付けない）は上の昼NBのまま。
 - **タイポグラフィ**: フォント指定（SDF丸ゴ `KokoSimFont`）と、見出し／本文／数値の**サイズ段階**
   （例 `--fs-page` 18 / `--fs-body` 16 / `--fs-label` 13 / `--fs-cap` 11 / `--fs-num-lg` 22）。
   フォントは基底クラス `.ui-root`（`tokens.uss`）に `-unity-font-definition` で1回だけ定義し、
@@ -100,7 +104,28 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | **`PlateHeader`** | 主役カード/一覧の塗り見出し帯（`.plate-header--grass/--dirt/--sky` ＋白抜き題字）。案ロの背面プレート `.nb-plate` と併用する主役カード向け |
 | **`ScoreboardStrip`** | トップバー中央の電光掲示板（`.sbs`）。黒緑面＋升目マトリクス＋電光アンバー数字。**掲示板の中だけ**ドット字＋アンバー（外はインク文字） |
 
-> **昼NBスキンの継承**：新規画面は ①`tokens.uss`/`components.uss`/`KokoSimTheme.uss` をこの順で `<Style>` する ②トップバーは `<ui:Instance template="TopBar">` 1行 ③器は上表の `.card`／`.row-well`+`.row-panel`／`.plate-header` を組み合わせる ④色・寸法は `var(--...)` のみ（直書き禁止）。この4点を守れば昼NBデザインは自動で継承される。
+#### design-22「スコアブック」（データ画面の正典・2026-11-09〜）
+
+データ画面は上の容器部品をそのまま使い、**画面ルートに `sbk` クラスを付けて** `Components/scorebook.uss` を
+`components.uss` の後に `<Style>` する。`.sbk` の中で面・枠・影・角丸・役割色のトークンが読み替わり、
+`.card` などは白地・淡い1px枠・角丸10・影なしになる（器の class を書き換える必要はない）。
+新スキンだけの見た目は `.sbk .部品` のセレクタで書き、試合中の画面用の旧定義は消さない。
+
+| 部品 | 役割 |
+|---|---|
+| `PositionChip` | 守備位置チップ（投・捕・内野・外野・指の5系統色）。出してよい位置の規則（CLAUDE.md）は不変 |
+| `NumberPatch` | 背番号布（30×24・14px）。`.sbk .num-badge` も同じ見た目に寄る |
+| `CaptainStamp` | 主将の判子（-8°） |
+| `StatBarRow` | 能力の3点セット（ランク22＋数値＋横棒）。自チーム側＝差し色、比較相手＝墨、負け＝淡色 |
+| `CompareTable` | 2選手の比較表（見出し・能力行・守備適性・持ち球チャートを同じ列に乗せる）。オーダー画面とメンバー設定で共有 |
+| `.sbk-seg` | 2択切替（土台＋選ばれた側だけ白地＋1px枠）。`ms-tab` / `seg-tab` / `filter-chip` も `.sbk` の中ではこの見た目 |
+| `SchoolAccent` | スクールカラー（`acc-fg/bg/bd/bd-top` の付いた要素へ流し込む）。使うのは比較表の自チーム側とオーダー画面だけ |
+
+- 主ボタンは応援団赤（`--color-cta`）のまま・文字は白
+- 画面固有の Label の余白リセットは**画面ルート**（例 `.lu-root Label`）に置く。`.sbk Label` に置くと全データ画面の文字がくっつく
+- 撮影のたびに書体の監査を回す（`ScreenshotBatch` が `<prefix>fonts.txt` を書く＝`FontAudit`。許可は Noto Sans JP・Shippori Mincho B1・DotGothic16 だけ）
+
+> **昼NBスキンの継承**（試合中の画面。データ画面は上の `sbk` を足す）：新規画面は ①`tokens.uss`/`components.uss`/`KokoSimTheme.uss` をこの順で `<Style>` する ②トップバーは `<ui:Instance template="TopBar">` 1行 ③器は上表の `.card`／`.row-well`+`.row-panel`／`.plate-header` を組み合わせる ④色・寸法は `var(--...)` のみ（直書き禁止）。この4点を守れば昼NBデザインは自動で継承される。
 
 各部品は**サンプルデータ入りのプレビュー**（UI Builder のPreview、またはStep 3の単体スクショ）を持つ。
 
@@ -110,7 +135,7 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 
 ---
 
-## 書体3役ルール（設計書16「テロップと電光掲示板」・F0〜F4で確立）
+## 書体ルール（設計書16 で確立 → 設計書22 で本文・数字を Noto Sans JP へ改訂）
 
 UIの文字は**役割で書体を割り当てる**。役割ごとにユーティリティクラスが `tokens.uss` に用意してある。
 見た目のために書体を選ばず、**中身が何か（役割）で決める**。
@@ -118,15 +143,17 @@ UIの文字は**役割で書体を割り当てる**。役割ごとにユーテ�
 | 役割 | 書体 | クラス | 何に当てるか |
 |---|---|---|---|
 | ディスプレイ（新聞見出し） | Shippori Mincho B1 | `.f-display`（ExtraBold 16〜28px）／`.f-display-lg`（Bold 32px以上・**-lg の方が細い**） | **校名・大会名・ページ見出し・人名（選手/監督/主将候補）**。太ウェイト限定＝本文には使わない |
-| 本文・UI | IBM Plex Sans JP | `.f-body`／`.f-body-md`／`.f-body-bd`（R/M/SB） | ラベル・本文・ボタン・説明。強調は**実ウェイト**（`-md`/`-bd`）で出す |
-| 数字 | Oswald | `.f-num`／`.f-num-bd`（Medium/SemiBold） | **数字だけのセル**（能力値・打率・スコア・金額・背番号・回別得点） |
+| 本文・UI | Noto Sans JP | `.f-body`／`.f-body-md`／`.f-body-bd`（Regular/Medium/Bold） | ラベル・本文・ボタン・説明。強調は**実ウェイト**（`-md`/`-bd`）で出す |
+| 数字 | Noto Sans JP | `.f-num`／`.f-num-bd`（Regular/Bold） | 数字のセル（能力値・打率・スコア・金額・背番号・回別得点）。クラス名は残し向き先だけ Noto |
 | 掲示板（電光） | DotGothic16 | `.f-dot` | **掲示板部品の中だけ**（ScoreboardStrip / LineScorePanel）。外に出たら明朝＋サンセリフに戻す |
 
 ### 適用の鉄則
 
 1. **人名・校名・大会名・見出しは明朝**。「校名は常に太明朝」がシグネチャ。人名も明朝（一覧の可読性低下は許容と決定済み）。
    本文・ラベル・数値セルには**明朝を使わない**（暗背景で細い横画が潰れる）。
-2. **数字だけのセルは Oswald**。Oswald は**欧文専用＝和文グリフを持たない**。和文と混ざると豆腐になる。
+2. **数字のセルも Noto Sans JP**（2026-11-09 に Oswald から切替・design-22）。Noto は和文を持つので混植で豆腐は出ない。
+   以下は Oswald 時代の規則で、既存の分割はそのままでよい（新規に分ける必要はない）。
+   ⅓ ⅔ はどの書体にも字形が無い＝整数＋右上の小さな「1/3」で組む（オーダー画面の先発カード）。
    - 「2年」「15週」「45名」のような**数字＋和文の混植は Label を分ける**。混植用に `UiComponents.NumUnit(digits, unit)` /
      `NumUnitAuto("2年")` があり、数字部だけ `.f-num` に載る。
    - 値クラスが**ヘッダ等で和文を持ち得る**場合（例：`.hm-sc-v` が値と見出しに共用）、USSセレクタで一括適用すると豆腐が出る。
@@ -142,7 +169,7 @@ UIの文字は**役割で書体を割り当てる**。役割ごとにユーテ�
 ### 移行レジストリ（引き継ぎ注意）
 
 USS には `@extend` が無く、変数にアセット参照を入れる方式は罠なので、**置換先セレクタを `tokens.uss` に列挙する
-registry 方式**で一括移行してある（疑似ボールド→Plex実ウェイト／校名・人名→明朝）。registry は `.f-*` ユーティリティより
+registry 方式**で一括移行してある（疑似ボールド→実ウェイト／校名・人名→明朝。向き先は G0 で Plex から Noto へ替えた）。registry は `.f-*` ユーティリティより
 **前**に置いてあり、要素に `.f-num` 等を明示すればそちらが勝つ。**新規コードは registry の表に足さず、`.f-body-bd` /
 `.f-num` / `.f-display` を要素へ直接付ける**こと。
 

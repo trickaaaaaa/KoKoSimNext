@@ -76,11 +76,11 @@
        兼ねさせない＝怪我・球数の警告は --color-warn / --color-lamp を使い、--cond-* を借りない。
        この定義を正とし、KokoSimTheme.uss の .cond--best/good/normal/bad/worst、
        ConditionFace.cs / ConditionLabels.ColorHex を必ず一致させること。 */
-    --cond-best:   #EF3B3B;
-    --cond-good:   #F28B2E;
-    --cond-normal: #F4CB3C;
-    --cond-bad:    #5AA9E6;
-    --cond-worst:  #4C5BD4;
+    --cond-best:   #E0605A;
+    --cond-good:   #E8904A;
+    --cond-normal: #E3BD3C;
+    --cond-bad:    #7FA8D6;
+    --cond-worst:  #4F6FA8;
 
     /* ── カラー：練習メニュー（積み上げ配分バーの色分け・Issue #133） ──────────────
        野手系＝暖色〜緑、投手系＝寒色の色相族で「どの系統か」を遠目でも掴めるようにする。
@@ -439,7 +439,7 @@
      ② 旧アセットは Static 化時点の667字しか焼かれておらず、data/ が要求する1206字のうち
         758字が欠落＝校名・選手名が豆腐(□)になっていた（design-16 §8） */
 .ui-root {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Regular.asset?fileID=11400000&guid=1c2f415f2731d410cad039b0f26f6602&type=2#IBMPlexSansJP-Regular");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
 }
 
 /* ═══ 書体3役＋掲示板（設計書16 F0・2026-07-21 確定）══════════════════════
@@ -588,7 +588,7 @@ Button.tp-cta,
 .tp-tpl__title,
 .tp-toast,
 .tpm-card .gainbar__lv {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-SemiBold.asset?fileID=11400000&guid=5c6d942636708417b84a53f7f084f0f8&type=2#IBMPlexSansJP-SemiBold");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
 
 /* Medium：12px 以下の小さな強調（SemiBold だと字画が潰れて読みにくくなる帯） */
@@ -613,7 +613,7 @@ Button.tp-cta,
 .cmp-head__cap,
 .msub-group,
 .ms-cmp-group {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Medium.asset?fileID=11400000&guid=e0684afefb1bb435cac49ce90b59ce4e&type=2#IBMPlexSansJP-Medium");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Medium.asset?fileID=11400000&guid=cbbe2e847b1fb4f839c984a420d81dcb&type=2#NotoSansJP-Medium");
 }
 
 /* ── 校名・大会名・ページ見出しの明朝化（設計書16 §2・F3）───────────────────
@@ -696,25 +696,25 @@ Button.tp-cta,
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-Bold.asset?fileID=11400000&guid=79e45b7605bce4026b70c4d8d01cf21b&type=2#ShipporiMinchoB1-Bold");
 }
 
-/* ── 本文・UI（サンセリフ）IBM Plex Sans JP ─────────────────────────── */
+/* ── 本文・UI（サンセリフ）Noto Sans JP（design-22 G0。旧 IBM Plex Sans JP）──────────────────────────── */
 .f-body {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Regular.asset?fileID=11400000&guid=1c2f415f2731d410cad039b0f26f6602&type=2#IBMPlexSansJP-Regular");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
 }
 .f-body-md {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Medium.asset?fileID=11400000&guid=e0684afefb1bb435cac49ce90b59ce4e&type=2#IBMPlexSansJP-Medium");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Medium.asset?fileID=11400000&guid=cbbe2e847b1fb4f839c984a420d81dcb&type=2#NotoSansJP-Medium");
 }
 .f-body-bd {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-SemiBold.asset?fileID=11400000&guid=5c6d942636708417b84a53f7f084f0f8&type=2#IBMPlexSansJP-SemiBold");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
 
-/* ── データ数字（コンデンス）Oswald ────────────────────────────────────
+/* ── データ数字 Noto Sans JP（design-22 G0。旧 Oswald＝欧文コンデンス）─────────────────────────────────────
    欧文フォントなので和文グリフを持たない。数値だけを載せる Label に付ける
    （和文と混ぜる行は Label を分ける＝既存の sb2-cell__k / __v 方式）。 */
 .f-num {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/Oswald-Medium.asset?fileID=11400000&guid=932206d30144143c79b25b15892c3c31&type=2#Oswald-Medium");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
 }
 .f-num-bd {
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/Oswald-SemiBold.asset?fileID=11400000&guid=56177966b74534dd8938dac51a4a1c48&type=2#Oswald-SemiBold");
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
 
 /* ── 掲示板（ドット）DotGothic16 ───────────────────────────────────────
