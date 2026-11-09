@@ -1,215 +1,226 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   LineupSetting.uss — 試合前スタメン設定 画面の配置のみ（UI-BUILD-METHOD Step 4）
+   LineupSetting.uss — オーダー画面の配置だけ（スコアブック試作スキン 2026-11-09）
    ───────────────────────────────────────────────────────────────────────
-   見た目の最小単位は components.uss（部品辞書）。ここは2カラム分割や列幅など
-   「この画面固有の並べ方」だけを持ち、色・余白・角丸は tokens を参照する。
-   gap/grid/擬似要素は使わない（USS非対応）。固定寸法セクションは flex-shrink:0。
+   見た目の部品とトークンは Components/scorebook.uss。ここは列幅・行高・間隔など
+   「この画面固有の並べ方」だけを持つ。基準解像度 1600×900（KokoSimPanelSettings）。
+   ルールは .lu-root から書く（scorebook.uss の Label 余白リセット .sbk Label より強くするため）。
+   列幅はヘッダーとデータで同じクラス（.lu-c-*）を使う＝横ずれしない。
+   gap/grid/擬似要素は使わない（USS非対応）。固定寸法の要素は flex-shrink:0。
    ═══════════════════════════════════════════════════════════════════════ */
 
 .lu-root {
     flex-grow: 1;
-    background-color: var(--color-field);
+    padding: 28px 32px;
 }
+.lu-root .lu-flex { flex-grow: 1; }
 
-.lu-body {
-    flex-direction: row;
-    flex-grow: 1;
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-    padding-top: var(--sp-3);
-    padding-bottom: var(--sp-4);
-}
-
-/* ── 左：打順表＋DH/先発＋控え＋確定 ── */
-.lu-left {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
-    margin-right: var(--sp-4);
-}
-/* 画面専用ヘッダー（共通TopBarの代替・全幅ストリップ）。ナビタブや「今週を進める」は出さない。 */
-.lu-topbar {
+/* ── ヘッダー（高さ52・下に1px区切り） ── */
+.lu-root .lu-head {
     flex-direction: row;
     align-items: center;
-    height: var(--h-header);
-    background-color: var(--color-strip);
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-}
-.lu-topbar__spacer { flex-grow: 1; }
-.lu-title { font-size: var(--fs-page); color: var(--color-chalk); }
-.lu-match { font-size: var(--fs-label); color: var(--color-muted); margin-left: var(--sp-4); }
-.lu-head__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
-.lu-head__rank { flex-direction: row; }
-
-/* 左＋中の2カラム（[スタメン＋DH] ｜ [控え]）。ヘッダー下から確定ボタン上までを縦に使い切る（flex-grow）。
-   align-items:stretch で上端を揃えつつ控えの高さを左カラムに合わせ、あふれは控え内でスクロールさせる。 */
-.lu-cols { flex-direction: row; align-items: stretch; flex-grow: 1; }
-/* 左カラム：スタメン＋DH。選手名の右余白が空きすぎないよう約68%幅に据える。 */
-.lu-orders { width: 68%; flex-shrink: 0; }
-
-/* 打順テーブル：ヘッダ列幅は行（.lineup-row__*）と揃える（横ずれ対策）。
-   縦は使い切る＝テーブルと行ホストを flex-grow し、9行を等分配で拡大（固定pxにしない）。 */
-.lu-table { flex-grow: 1; }
-.lu-rows { flex-grow: 1; }
-
-/* 行拡大に合わせて文字を1.3〜1.5倍（選手名を最大に）。ランク/守備チップはこの画面のみ拡大（共有部品を汚さない）。 */
-.lu-root .lineup-row__ord { font-size: 25px; }
-.lu-root .lineup-row__name { font-size: 24px; }
-.lu-root .lineup-row__info { font-size: 19px; }
-.lineup-row .num-badge { margin-left: var(--sp-2); }
-.lineup-row .pos-chip { min-width: 36px; height: 34px; font-size: 19px; }
-.lineup-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
-/* 調子（表情顔）。故障チップの隣＝行の末尾（issue: スタメン決定画面に調子が無い, 2026-08-25）。 */
-.lu-row__cond { margin-left: var(--sp-2); }
-/* 選手名と「学年・投打」の間の通算成績。学年・投打と同じ控えめグレー・名前より目立たせない。 */
-.lu-root .lineup-row__stat { font-size: 19px; color: var(--color-muted); margin-right: var(--sp-3); }
-
-/* 控えも行高・文字をスタメンと揃える（成績は付けない＝幅節約）。ランクチップも同スケール。 */
-.lu-root .bench-row__name { font-size: 24px; }
-.lu-root .bench-row__tag { font-size: 18px; }
-.bench-row .num-badge { margin-right: var(--sp-2); }
-.bench-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
-.lu-thead {
-    flex-direction: row;
-    align-items: center;
-    height: var(--h-thead);
-    padding-left: var(--sp-2);
-    padding-right: var(--sp-2);
-    border-bottom-width: var(--border-w);
-    border-bottom-color: var(--color-line);
-    margin-bottom: var(--sp-1);
-}
-.lu-th { font-size: var(--fs-th); color: var(--color-muted); }
-.lu-th--ord { width: 22px; -unity-text-align: middle-center; }
-.lu-th--num { width: 22px; -unity-text-align: middle-center; margin-left: var(--sp-2); }
-.lu-th--pos { width: 40px; -unity-text-align: middle-center; margin-left: var(--sp-2); }
-.lu-th--name { flex-grow: 1; flex-basis: 0; margin-left: var(--sp-2); }
-/* 総合ランク列は廃止（Issue #30/#270）。空いた幅は「学年・投打」に回して「右投右打」の切れを解消する。 */
-.lu-th--info { width: 128px; }
-.lu-root .lineup-row__info { width: 128px; }
-/* 先発の欄の学年投打は中身の幅（欄が狭いので打順行の128px固定だと名前が消える。issue #656） */
-.lu-root .sp-pill--wide .lineup-row__info { width: auto; }
-
-/* 守備位置・先発の操作説明（打順表の直下・1行）。操作の入口を示すだけの補助文字なので最弱の文字色。 */
-.lu-hint {
-    font-size: var(--fs-cap);
-    color: var(--color-faint);
-    margin-top: var(--sp-1);
+    height: 52px;
     flex-shrink: 0;
-    /* 列幅に収まらなくなったら折り返す（切って読めなくするより1行増やす方を取る）。 */
-    white-space: normal;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--sbk-rule);
+    margin-bottom: 20px;
 }
+.lu-root .lu-head__bar { width: 12px; height: 28px; border-radius: 2px; margin-right: 14px; flex-shrink: 0; }
+.lu-root .lu-head__title { font-size: 30px; letter-spacing: 3.6px; color: var(--sbk-text); margin-right: 20px; }
+.lu-root .lu-head__match { font-size: 15px; color: var(--sbk-sub); margin-right: 16px; }
+.lu-root .lu-head__opp { font-size: 15px; color: var(--sbk-text); }
+.lu-root .lu-head__spacer { flex-grow: 1; }
+.lu-root .lu-head__cap { font-size: 12px; color: var(--sbk-sub); margin-right: 10px; }
+.lu-root .lu-head__rank { flex-direction: row; align-items: center; }
+.lu-root .lu-head__value { font-size: 22px; color: var(--sbk-text); margin-left: 8px; }
 
-/* DH制トグル＋先発 */
-.lu-dhbar {
+/* ── 本体3列（間隔24） ── */
+.lu-root .lu-body { flex-direction: row; flex-grow: 1; min-height: 0; }
+
+/* 左列：スタメン（幅620） */
+.lu-root .lu-orders { width: 620px; flex-shrink: 0; margin-right: 24px; }
+/* 見出しの段＝「スタメン」＋DH切替（36）＋列見出し（24）＝60。控えの見出し行と高さを揃える。 */
+.lu-root .lu-orders__top { flex-direction: row; align-items: center; height: 36px; flex-shrink: 0; }
+.lu-root .lu-thead {
     flex-direction: row;
     align-items: center;
-    margin-top: var(--sp-3);
-    margin-bottom: var(--sp-2);
-    background-color: var(--color-panel-deep);
-    border-radius: var(--radius-chip);
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    padding-top: var(--sp-2);
-    padding-bottom: var(--sp-2);
+    height: 24px;
+    flex-shrink: 0;
+    /* 行カードの左右余白16＋枠1＋確保した選択枠1 と同じ位置に列を揃える */
+    padding-left: 18px;
+    padding-right: 18px;
 }
-.lu-dhbar__label { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-3); }
-/* トグルと先発の欄の間は固定の間隔だけ。空いた幅は先発の欄が全部使う（issue #656）。 */
-.lu-dhbar__spacer { width: var(--sp-3); flex-shrink: 0; }
-.lu-sp { flex-direction: row; flex-grow: 1; flex-basis: 0; min-width: 0; }
-/* 先発の欄の見出し「先発」は打順行の学年投打と同じ級数（小さいと読めない＝監督指摘）。 */
-.lu-root .sp-pill__cap { font-size: 19px; }
+.lu-root .lu-th { font-size: 12px; color: var(--sbk-sub); }
 
-.lu-section {
-    font-size: var(--fs-label);
-    color: var(--color-muted);
-    margin-top: var(--sp-2);
-    margin-bottom: var(--sp-2);
+/* 列（ヘッダーとデータで共用）。要素間の横の間隔10は、2列目以降の左マージンで作る。 */
+.lu-root .lu-c-ord { width: 36px; flex-shrink: 0; -unity-text-align: middle-center; }
+.lu-root .lu-c-num { width: 32px; flex-shrink: 0; margin-left: 10px; align-items: center; -unity-text-align: middle-center; }
+.lu-root .lu-c-pos { width: 44px; flex-shrink: 0; margin-left: 10px; -unity-text-align: middle-center; }
+.lu-root .lu-c-name { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 10px; }
+.lu-root .lu-c-info { width: 116px; flex-shrink: 0; margin-left: 10px; }
+.lu-root .lu-c-avg { width: 52px; flex-shrink: 0; margin-left: 10px; -unity-text-align: middle-right; }
+.lu-root .lu-c-hr { width: 30px; flex-shrink: 0; margin-left: 10px; -unity-text-align: middle-right; }
+.lu-root .lu-c-rbi { width: 30px; flex-shrink: 0; margin-left: 10px; -unity-text-align: middle-right; }
+.lu-root .lu-c-cond { width: 26px; flex-shrink: 0; margin-left: 10px; align-items: center; }
+
+/* スタメン行（高さ52・白カード・行間6・左右余白16） */
+.lu-root .lu-rows { flex-shrink: 0; }
+.lu-root .lu-row {
+    flex-direction: row;
+    align-items: center;
+    height: 52px;
+    margin-bottom: 6px;
+    padding-left: 17px;   /* 16＋確保した選択枠1（選択時は 2px枠で吸収） */
+    padding-right: 17px;
 }
-/* 中カラム：控え。左カラムの右隣に置き、残り幅を占める。高さは左カラム（スタメン＋DH）に追従（stretch）。 */
-.lu-bench-wrap { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-4); }
-/* height:0＋flex-grow で「スクロール中身が行高を決めない」ようにする＝行高はスタメン側で決まり、
-   控えはその高さいっぱいに広がって収まらない分を内部スクロール（左カラム高＝控え高に揃う）。 */
-.lu-bench-scroll { flex-grow: 1; min-height: 0; height: 0; }
-.lu-bench { }
+.lu-root .lu-row.sbk-card--sel { padding-left: 16px; padding-right: 16px; }
+.lu-root .lu-row__ord { font-size: 26px; color: var(--sbk-text); }
+.lu-root .lu-row__name-cell { flex-direction: row; align-items: center; }
+.lu-root .lu-row__name {
+    font-size: 20px;
+    letter-spacing: 1.6px;
+    color: var(--sbk-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
+}
+.lu-root .lu-row__info { font-size: 15px; color: var(--sbk-info); white-space: nowrap; overflow: hidden; }
+.lu-root .lu-row__avg { font-size: 18px; color: var(--sbk-text); }
+.lu-root .lu-row__cnt { font-size: 17px; color: var(--sbk-text); }
+/* 名前の下に置く怪我タグ（行高52の中に2段で収める） */
+.lu-root .lu-row__name-block { flex-direction: column; justify-content: center; }
+.lu-root .lu-row__name-block .sbk-injury { margin-top: 2px; }
 
-/* スタメン＋控えの下と確定ボタンの間を詰めるスペーサ（CTAを最下部へ）。 */
-.lu-spacer { flex-grow: 1; }
-
-/* 編成不備の警告（ベンチ入り9人未満）。本当の警告なので警告色を使う（UI原則②）。既定は非表示。 */
-.lu-warn {
-    color: var(--color-warn);
-    font-size: var(--fs-label);
-    margin-top: var(--sp-3);
+/* 警告（編成不備・故障者起用）。本当の警告なので怪我タグと同じ色。空なら非表示。 */
+.lu-root .lu-warn {
+    font-size: 12px;
+    color: var(--sbk-injury-fg);
+    white-space: normal;
+    margin-top: 4px;
     display: none;
 }
 
-.lu-actions { flex-direction: row; margin-top: var(--sp-3); }
-.lu-btn {
-    height: 44px;
-    -unity-text-align: middle-center;
-    font-size: var(--fs-body);
-    border-radius: var(--radius-chip);
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-}
-.lu-btn--ghost {
-    color: var(--color-muted);
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w);
-    border-color: var(--color-line);
-    margin-right: var(--sp-2);
-}
-.lu-btn--ghost:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
-.lu-btn--go {
-    flex-grow: 1;
-    background-color: var(--color-cta);
-    color: var(--color-ink);
-}
-.lu-btn--go:hover { background-color: var(--color-cta-hi); }
-
-/* ── 右：2選手比較＋成績 ── */
-.lu-compare {
-    width: 384px;
-    flex-shrink: 0;
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    /* padding-top は指定しない: .panel(KokoSimTheme.uss) の14pxとの二重掛けが上端の余白過多の
-       主因だった（issue #326⑥）。panel 側の値をそのまま使う。 */
-    padding-bottom: var(--sp-3);
-}
-.lu-cmp-cards {
+/* 先発投手カード（高さ60・列の下端へ寄せる） */
+/* 9番打者の行のすぐ下に置く（行間と同じ 6px は行側の margin-bottom で既に空いている）。 */
+.lu-root .lu-sp { flex-shrink: 0; }
+.lu-root .lu-sp-card {
     flex-direction: row;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-chip);
-    border-width: var(--border-w);
-    border-color: var(--color-line);
+    align-items: center;
+    height: 60px;
+    padding-left: 17px;
+    padding-right: 17px;
 }
-.lu-cmp-card--a { border-right-width: var(--border-w); border-right-color: var(--color-line); }
+.lu-root .lu-sp-card.sbk-card--sel { padding-left: 16px; padding-right: 16px; }
+.lu-root .lu-sp-card__cap { font-size: 13px; color: var(--sbk-sub); }
+.lu-root .lu-sp-card__info { font-size: 15px; color: var(--sbk-info); margin-top: 2px; white-space: nowrap; }
+.lu-root .lu-sp-stats { flex-direction: row; align-items: center; flex-shrink: 0; margin-left: 10px; }
+.lu-root .lu-sp-stats__lab { font-size: 13px; color: var(--sbk-sub); margin-left: 12px; margin-right: 4px; }
+.lu-root .lu-sp-stats__val { font-size: 17px; color: var(--sbk-text); }
+.lu-root .lu-sp-stats__frac { font-size: 11px; color: var(--sbk-text); align-self: flex-start; margin-top: 0; margin-left: 1px; }
 
-/* タブ前後の余白は比較列の縦を食うので最小に（issue #452・帯まで収めるため）。 */
-.lu-cmp-tabs { flex-direction: row; margin-top: var(--sp-1); margin-bottom: 2px; }
-.lu-tab {
+/* ── 中央列：控え（幅290） ── */
+.lu-root .lu-bench-col { width: 290px; flex-shrink: 0; margin-right: 24px; }
+/* 見出し行の高さ60（スタメン側の「スタメン＋列見出し」と揃える）。ラベルは下寄せ。 */
+.lu-root .lu-bench-col__top { height: 60px; flex-shrink: 0; justify-content: flex-end; padding-bottom: 6px; }
+.lu-root .lu-bench-scroll { flex-grow: 1; min-height: 0; }
+.lu-root .lu-bench-row {
+    flex-direction: row;
+    align-items: center;
+    height: 52px;
+    margin-bottom: 6px;
+    padding-left: 15px;
+    padding-right: 15px;
+}
+.lu-root .lu-bench-row.sbk-card--sel-ink { padding-left: 14px; padding-right: 14px; }
+.lu-root .lu-bench-row__name { font-size: 18px; letter-spacing: 1.4px; color: var(--sbk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lu-root .lu-bench-row__cond { width: 24px; flex-shrink: 0; margin-left: 10px; align-items: center; }
+
+/* ── 右列：入れ替え比較（残りの幅すべて・余白18×22） ── */
+.lu-root .lu-cmp {
     flex-grow: 1;
     flex-basis: 0;
-    -unity-text-align: middle-center;
-    height: 30px;
-    font-size: var(--fs-label);
-    color: var(--color-muted);
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w);
-    border-color: var(--color-line);
-    border-radius: var(--radius-chip);
-    margin-left: 2px;
-    margin-right: 2px;
+    min-width: 0;
+    padding: 18px 22px;
 }
-.lu-tab:hover { color: var(--color-chalk); }
-.lu-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+.lu-root .lu-cmp__top { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.lu-root .lu-cmp-scroll { flex-grow: 1; min-height: 0; }
 
-.lu-cmp-scroll { flex-grow: 1; }
-.lu-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }
-.lu-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-2); margin-bottom: var(--sp-1); }
-.lu-cmp-apt { margin-top: 0; }   /* 帯側で margin を持つ（issue #452） */
-.lu-cmp-stats { margin-top: var(--sp-2); }
-.lu-stat-name { font-size: var(--fs-label); color: var(--color-chalk); margin-top: var(--sp-2); margin-bottom: 2px; }
+/* 比較表の列：能力名64｜自チーム側｜間24｜比較相手。見出し・能力行・守備適性で同じ構成。 */
+.lu-root .lu-cmp-lab { width: 64px; flex-shrink: 0; font-size: 12px; color: var(--sbk-sub); }
+.lu-root .lu-cmp-col { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.lu-root .lu-cmp-gap { width: 24px; flex-shrink: 0; }
+
+/* 選手の見出し（上端に3pxの線：自チーム側＝差し色、比較相手＝墨） */
+.lu-root .lu-cmp__head { flex-direction: row; flex-shrink: 0; margin-top: 10px; padding-bottom: 12px; border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft); }
+.lu-root .lu-cmp-pl { border-top-width: 3px; padding-top: 10px; }
+.lu-root .lu-cmp-pl--b { border-top-color: var(--sbk-ink); }
+.lu-root .lu-cmp-pl--none { border-top-color: var(--sbk-rule-soft); }
+.lu-root .lu-cmp-pl__name { font-size: 20px; letter-spacing: 1.6px; color: var(--sbk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lu-root .lu-cmp-pl__meta { font-size: 12px; color: var(--sbk-info); margin-top: 4px; white-space: nowrap; overflow: hidden; }
+.lu-root .lu-cmp-pl .cat-rank-chips { margin-top: 6px; justify-content: flex-start; }
+.lu-root .lu-cmp-pl .cat-rank-chips__label { font-size: 11px; color: var(--sbk-sub); }
+/* 特殊能力のタグ（11px・枠付きの丸いタグ） */
+.lu-root .lu-cmp-pl .skill-chips { margin-top: 6px; }
+.lu-root .lu-cmp-pl .skill-chip {
+    height: 20px;
+    font-size: 11px;
+    color: var(--sbk-info);
+    border-color: var(--sbk-card-line-hover);
+    border-radius: 10px;
+    padding: 0 8px;
+    margin: 0 4px 4px 0;
+}
+
+/* 能力の行（高さ26） */
+.lu-root .lu-cmp__rows { margin-top: 8px; }
+.lu-root .lu-cmp-row { flex-direction: row; align-items: center; height: 26px; }
+
+/* 守備適性（9マス）。共通部品 AptitudeStrip を、この画面の列（能力名64）に合わせて敷き直す。 */
+.lu-root .lu-cmp__apt { margin-top: 12px; padding-top: 10px; border-top-width: 1px; border-top-color: var(--sbk-rule-soft); }
+.lu-root .lu-cmp__apt.lu-hidden { display: none; }
+.lu-root .lu-cmp__apt .apt-strip { margin-top: 0; }
+.lu-root .lu-cmp__apt .apt-strip__row { min-height: 26px; }
+.lu-root .lu-cmp__apt .apt-strip__row--head { min-height: 18px; }
+.lu-root .lu-cmp__apt .apt-strip__lab { width: 64px; font-size: 12px; color: var(--sbk-text); border-left-width: 0; padding-left: 0; }
+.lu-root .lu-cmp__apt .apt-strip__row--head .apt-strip__lab { color: var(--sbk-sub); }
+.lu-root .lu-cmp__apt .apt-strip__pos { font-size: 12px; color: var(--sbk-sub); }
+.lu-root .lu-cmp__apt .apt-strip__cell .rank-chip { min-width: 22px; height: 22px; padding: 0; }
+
+/* 持ち球チャート（投手能力タブ）と成績表（④で存置） */
+.lu-root .lu-cmp__chart { flex-direction: row; margin-top: 12px; }
+.lu-root .lu-cmp__chart-cell { flex-grow: 1; flex-basis: 0; min-width: 0; height: 150px; }
+.lu-root .lu-cmp__stats { margin-top: 12px; padding-top: 10px; border-top-width: 1px; border-top-color: var(--sbk-rule-soft); }
+/* 成績表は能力表と同じ列（ラベル64）に揃え、級数を比較表の小見出しと揃える。 */
+.lu-root .lu-cmp__stats .stat-table__row { height: 22px; }
+.lu-root .lu-cmp__stats .stat-table__row--head { height: 18px; }
+.lu-root .lu-cmp__stats .stat-table__lab { width: 64px; font-size: 12px; color: var(--sbk-sub); }
+.lu-root .lu-cmp__stats .stat-table__scope { font-size: 12px; color: var(--sbk-sub); -unity-text-align: middle-right; }
+.lu-root .lu-cmp__stats .stat-table__val { font-size: 15px; color: var(--sbk-text); -unity-text-align: middle-right; }
+.lu-root .lu-cmp-stat-name { font-size: 12px; color: var(--sbk-info); margin-top: 6px; margin-bottom: 2px; }
+
+/* ── フッター（高さ56） ── */
+.lu-root .lu-foot { flex-direction: row; height: 56px; flex-shrink: 0; margin-top: 20px; }
+.lu-root Button.lu-cancel {
+    width: 160px;
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 15px;
+    color: var(--sbk-sub);
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    border-radius: 0;
+}
+.lu-root Button.lu-cancel:hover { color: var(--sbk-text); }
+.lu-root Button.lu-ok {
+    flex-grow: 1;
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 3.6px;
+    color: #FFFFFF;
+    border-width: 0;
+    border-radius: var(--sbk-r-card);
+}
+/* 差し色の塗りは実行時に直接入るので、ホバーは塗り替えず不透明度で示す。 */
+.lu-root Button.lu-ok:hover { opacity: 0.9; }
+.lu-root Button.lu-ok:disabled { opacity: 0.4; }

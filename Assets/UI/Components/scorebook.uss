@@ -1,0 +1,254 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   scorebook.uss — 試作スキン「モダンミニマル＋スコアブック」のトークンと部品（2026-11-09）
+   ───────────────────────────────────────────────────────────────────────
+   オーダー画面（LineupSetting）で試す新スキン。良ければ設計書を改訂して他画面へ広げる前提の試作で、
+   それまでは .sbk を付けた画面ルートの中だけに効く（他画面の昼NBスキンは変えない）。
+   ・トークンは .sbk に置く（USSカスタムプロパティは子へ継承される）。部品はトークンだけを参照する。
+   ・スクールカラー --color-accent は既定値。実行時の差し替えは C# SchoolAccent.Apply が
+     acc-fg / acc-bg / acc-bd / acc-bd-top の付いた要素へ直接色を流し込む
+     （USS変数は C# から書き換えられないため。差し色の付く場所はこの4クラスでしか表さない）。
+   ・ランク（画像）と調子の色は機能色なので変えない（設計書19 §0）。
+   gap/grid/擬似要素は使わない（USS非対応）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.sbk {
+    /* 面と線 */
+    --sbk-paper: #F2EFE8;          /* 画面背景（紙色） */
+    --sbk-card: #FFFFFF;           /* カード・パネル */
+    --sbk-card-line: #E3DFD5;      /* カードの枠（通常） */
+    --sbk-card-line-hover: #D9D4C8;/* カードの枠（ホバー） */
+    --sbk-rule: #D9D4C8;           /* ヘッダー下の区切り線 */
+    --sbk-rule-soft: #ECE8DF;      /* パネル内の区切り線・横棒の下地 */
+    --sbk-seg-bg: #E6E2D8;         /* 2択切替の土台 */
+
+    /* 文字 */
+    --sbk-text: #1D1B18;           /* 本文 */
+    --sbk-sub: #6F6A60;            /* 補足 */
+    --sbk-info: #4F4A42;           /* 学年・投打 */
+    --sbk-lose: #7A756C;           /* 負けている数値 */
+
+    /* 差し色と比較相手 */
+    --color-accent: #7A1F2B;       /* スクールカラー既定（臙脂）。実行時に SchoolAccent が差し替える */
+    --sbk-ink: #2F2C27;            /* 比較相手（墨） */
+
+    /* 背番号布 */
+    --sbk-patch-bg: #FBFAF6;
+    --sbk-patch-line: #3A3631;
+
+    /* 怪我タグ */
+    --sbk-injury-bg: #F9E3E0;
+    --sbk-injury-fg: #8A1F1A;
+
+    /* 守備位置チップ（系統で色分け） */
+    --sbk-pos-p-bg: #F6D4D0;  --sbk-pos-p-fg: #8A1F1A;   /* 投手 */
+    --sbk-pos-c-bg: #DBE8F5;  --sbk-pos-c-fg: #1D4E80;   /* 捕手 */
+    --sbk-pos-if-bg: #F6E6CF; --sbk-pos-if-fg: #7A4510;  /* 内野 */
+    --sbk-pos-of-bg: #DFECD2; --sbk-pos-of-fg: #2F5612;  /* 外野 */
+    --sbk-pos-dh-bg: #E9E6F3; --sbk-pos-dh-fg: #4A3E8C;  /* 指名打者 */
+
+    /* 角丸 */
+    --sbk-r-card: 10px;
+    --sbk-r-panel: 12px;
+    --sbk-r-chip: 6px;
+    --sbk-r-tag: 4px;
+    --sbk-r-patch: 3px;
+
+    /* 線の太さ */
+    --sbk-line: 1px;
+    --sbk-line-sel: 2px;
+    --sbk-line-patch: 1.5px;
+
+    background-color: var(--sbk-paper);
+    color: var(--sbk-text);
+    /* 書体：本文も数字も Noto Sans JP（名前・打順・題字だけ .f-display の明朝）。 */
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
+}
+
+/* ── 書体の読み替え（この試作の中だけ）。書体3役の本文・数字クラスを Noto Sans JP の実ウェイトへ。
+      Regular 400 / Medium 500 / Bold 700。明朝（.f-display）はそのまま。 ── */
+.sbk .f-body, .sbk .f-num {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
+}
+.sbk .f-body-md {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Medium.asset?fileID=11400000&guid=cbbe2e847b1fb4f839c984a420d81dcb&type=2#NotoSansJP-Medium");
+}
+.sbk .f-body-bd, .sbk .f-num-bd {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+
+/* 共通部品が自分で書体を持っている所（書体3役の移行レジストリで Plex を直接指定している部品）も、
+   この試作の中では Noto Sans JP に読み替える（書体の監査で見つかったもの：ランク文字・カテゴリ別ランク・
+   特殊能力のタグ・成績表の見出し）。 */
+.sbk .rank-chip, .sbk .grade {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.sbk .skill-chip, .sbk .stat-table__scope, .sbk .stat-table__lab {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
+}
+
+/* Label 既定の上下 margin/padding は行の高さを狂わせるので、この試作の中では消す（行高は器で決める）。 */
+.sbk Label { margin: 0; padding: 0; }
+
+/* ── 差し色クラス（既定値。実行時は SchoolAccent.Apply が上書き） ── */
+.sbk .acc-fg { color: var(--color-accent); }
+.sbk .acc-bg { background-color: var(--color-accent); }
+.sbk .acc-bd { border-color: var(--color-accent); }
+.sbk .acc-bd-top { border-top-color: var(--color-accent); }
+
+/* ── カード（白・角丸10・1px枠）。選択枠は2px＝通常時も 1px枠＋1px内余白で同じ外寸を確保し、
+      選択時に 2px枠＋0内余白へ切り替える（レイアウトがずれない）。 ── */
+.sbk-card {
+    background-color: var(--sbk-card);
+    border-width: var(--sbk-line);
+    border-color: var(--sbk-card-line);
+    border-radius: var(--sbk-r-card);
+    padding: 1px;
+    flex-shrink: 0;
+}
+.sbk-card:hover { border-color: var(--sbk-card-line-hover); }
+.sbk-card--sel { border-width: var(--sbk-line-sel); padding: 0; }
+.sbk-card--sel-ink { border-width: var(--sbk-line-sel); padding: 0; border-color: var(--sbk-ink); }
+.sbk-card--sel-ink:hover { border-color: var(--sbk-ink); }
+
+/* パネル（白・角丸12・1px枠） */
+.sbk-panel {
+    background-color: var(--sbk-card);
+    border-width: var(--sbk-line);
+    border-color: var(--sbk-card-line);
+    border-radius: var(--sbk-r-panel);
+}
+
+/* 小見出しラベル（12px・補足色） */
+.sbk-cap { font-size: 12px; color: var(--sbk-sub); }
+
+/* ── NumberPatch：背番号布（30×24・数字14px） ── */
+.sbk-patch {
+    width: 30px;
+    height: 24px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    font-size: 14px;
+    color: var(--sbk-text);
+    background-color: var(--sbk-patch-bg);
+    border-width: var(--sbk-line-patch);
+    border-color: var(--sbk-patch-line);
+    border-radius: var(--sbk-r-patch);
+}
+
+/* ── PositionChip：守備位置チップ（高さ30・15px。系統で色分け。ボタンとして押せる） ── */
+.sbk-pos {
+    width: 44px;
+    height: 30px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    font-size: 15px;
+    border-radius: var(--sbk-r-chip);
+    border-width: var(--sbk-line-sel);
+    border-color: rgba(0, 0, 0, 0);   /* 選択時の2px枠ぶんを常に確保（外寸を変えない） */
+}
+.sbk-pos--p { background-color: var(--sbk-pos-p-bg); color: var(--sbk-pos-p-fg); }
+.sbk-pos--c { background-color: var(--sbk-pos-c-bg); color: var(--sbk-pos-c-fg); }
+.sbk-pos--if { background-color: var(--sbk-pos-if-bg); color: var(--sbk-pos-if-fg); }
+.sbk-pos--of { background-color: var(--sbk-pos-of-bg); color: var(--sbk-pos-of-fg); }
+.sbk-pos--dh { background-color: var(--sbk-pos-dh-bg); color: var(--sbk-pos-dh-fg); }
+.sbk-pos--button:hover { border-color: var(--sbk-card-line-hover); }
+/* 1つ目を選んだ状態（2つ目のチップで入替）。差し色は使わない＝墨の枠。 */
+.sbk-pos--picked { border-color: var(--sbk-ink); }
+.sbk-pos--picked:hover { border-color: var(--sbk-ink); }
+
+/* ── CaptainStamp：主将マーク（20pxの円・差し色1.5px枠・「主」11px・-8度） ── */
+.sbk-captain {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border-width: var(--sbk-line-patch);
+    border-radius: 10px;
+    rotate: -8deg;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+}
+.sbk-captain__ch { font-size: 11px; -unity-text-align: middle-center; }
+
+/* ── 怪我タグ（11px） ── */
+.sbk .sbk-injury {
+    font-size: 11px;
+    color: var(--sbk-injury-fg);
+    background-color: var(--sbk-injury-bg);
+    border-radius: var(--sbk-r-tag);
+    padding: 1px 6px;
+    align-self: flex-start;
+}
+
+/* ── RankChip のこの試作での大きさ（画像はそのまま。設計書19＝ランク色は機能色） ── */
+.sbk .rank-chip--sbk22 { min-width: 22px; width: 22px; height: 22px; padding: 0; flex-shrink: 0; }
+.sbk .rank-chip--sbk36 { min-width: 36px; width: 36px; height: 36px; padding: 0; flex-shrink: 0; }
+
+/* ── ConditionFace：この試作では輪郭リングを出さない（白カードの上なので「普通」も溶けない） ── */
+.sbk .cond-face {
+    --face-ring: rgba(0, 0, 0, 0);
+    /* 調子の色（この試作の中だけ。ConditionFace が自分の要素のカスタムプロパティとして読む。
+       他画面は C# 既定＝tokens.uss の --cond-* のまま） */
+    --face-best: #E0605A;     /* 絶好調 */
+    --face-good: #E8904A;     /* 好調 */
+    --face-normal: #E3BD3C;   /* 普通 */
+    --face-bad: #7FA8D6;      /* 不調 */
+    --face-worst: #4F6FA8;    /* 絶不調 */
+    --face-ink: #2A2622;      /* 目と口 */
+}
+.sbk .cond-face--26 { width: 26px; height: 26px; }
+.sbk .cond-face--24 { width: 24px; height: 24px; }
+
+/* ── 2択切替（DHあり/なし・野手/投手タブ）。選ばれている側は白地＋1px枠 ── */
+.sbk-seg {
+    flex-direction: row;
+    background-color: var(--sbk-seg-bg);
+    border-radius: 8px;
+    padding: 3px;
+    flex-shrink: 0;
+}
+.sbk .sbk-seg__opt {
+    height: 26px;
+    padding: 0 12px;
+    -unity-text-align: middle-center;
+    font-size: 12px;
+    color: var(--sbk-sub);
+    border-radius: var(--sbk-r-chip);
+    border-width: var(--sbk-line);
+    border-color: rgba(0, 0, 0, 0);
+}
+.sbk .sbk-seg__opt:hover { color: var(--sbk-text); }
+.sbk .sbk-seg__opt--on { background-color: var(--sbk-card); color: var(--sbk-text); border-color: var(--sbk-card-line); }
+
+/* ── StatBarRow：ランクチップ（22）＋数値（28・右揃え・15px）＋横棒（残り・太さ8） ── */
+.sbk-bar {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    height: 26px;
+}
+.sbk .sbk-bar__val {
+    width: 28px;
+    flex-shrink: 0;
+    font-size: 15px;
+    -unity-text-align: middle-right;
+    color: var(--sbk-text);
+    margin-left: 6px;
+    margin-right: 8px;
+}
+.sbk-bar__track {
+    flex-grow: 1;
+    height: 8px;
+    border-radius: 4px;
+    background-color: var(--sbk-rule-soft);
+    overflow: hidden;
+}
+.sbk-bar__fill { height: 8px; border-radius: 4px; }
+.sbk-bar--b .sbk-bar__fill { background-color: var(--sbk-ink); }
+.sbk-bar--lose .sbk-bar__val { color: var(--sbk-lose); }
+.sbk-bar--lose .sbk-bar__fill { opacity: 0.35; }
+/* 数値なし（弾道などのタイプ軸）。テキストだけを置く。 */
+.sbk-bar__text { font-size: 14px; color: var(--sbk-text); -unity-text-align: middle-left; }
+.sbk-bar__none { font-size: 14px; color: var(--sbk-lose); }
