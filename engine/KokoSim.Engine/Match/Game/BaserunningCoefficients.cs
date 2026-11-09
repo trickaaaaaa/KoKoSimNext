@@ -163,6 +163,23 @@ public sealed record BaserunningCoefficients
     /// <summary>牽制アウト確率の上限。</summary>
     public double PickoffMaxProb { get; init; } = 0.08;
 
+    // === 送球の逸れ（捕手の盗塁送球, issue #841）===
+    // 送球精度(ThrowAccuracy)から決まる散布σ（FielderAttributes.ThrowScatterSigmaCm）を
+    // ThrowScatterModel で2次元正規分布へサンプリングし、横・浮き・ショートバウンドをそれぞれ
+    // 重みづけて受け手のタッチ/捕球までの秒へ加算する。受け手の捕球能力(Catching)で縮む。
+    /// <summary>横の逸れ1cmあたり追加される秒（寄る・足が離れる分）。</summary>
+    public double StealThrowScatterLateralSecPerCm { get; init; } = 0.0015;
+    /// <summary>浮いた（高い）逸れ1cmあたり追加される秒（ミットを下ろす分）。</summary>
+    public double StealThrowScatterHighSecPerCm { get; init; } = 0.0010;
+    /// <summary>低い（ショートバウンド側）逸れ1cmあたり追加される秒（捕り直す分。高い側より重い）。</summary>
+    public double StealThrowScatterShortHopSecPerCm { get; init; } = 0.0030;
+    /// <summary>受け手Catching(-50)あたりの遅れ縮小の傾き（TransferFieldingSlopeと同方式）。Catching50で×1.0＝恒等。</summary>
+    public double StealThrowScatterCatchingReliefSlope { get; init; } = 0.004;
+    /// <summary>遅れ縮小倍率の下限（最速側クランプ）。</summary>
+    public double StealThrowScatterCatchingReliefMinFactor { get; init; } = 0.60;
+    /// <summary>逸れの大きさ（RadialCm）がこれ以上なら悪送球（ボールが逸れて守備側に正規のプレーがない＝走者は無条件セーフ）。</summary>
+    public double StealThrowWildThresholdCm { get; init; } = 70.0;
+
     // === バント（設計書02 §4.3） ===
     /// <summary>基礎成功率 = BuntBase + Bunt×BuntSkillSlope − 球速補正。</summary>
     public double BuntBase { get; init; } = 0.60;

@@ -494,6 +494,34 @@ public static class TimelineBuilder
                     }
                     firstThrowArriveAt = outAt;
                 }
+                else if (play.Result == BattedBallResult.Out && play.RecoveredCatchScatterM is { } fumbleScatterM
+                         && play.RecoveredCatchOutSeconds is { } fumbleOutSeconds && !play.UnassistedPutout && !runnersOn)
+                {
+                    // 捕球ミスを拾い直してアウト（issue #817・表示専用）: 捕球点で弾いた球を処理野手自身が
+                    // 拾い直し、そこから一塁へ送球してアウトになる。「弾いたのに一塁アウト」が絵でも成立する。
+                    // 弾く方向はお手玉の失策（上の FieldingErrorKind.Catch 分岐）と同じ（打球の進行方向へ
+                    // Overshoot）。アウトの時刻は判定が決めた recoveredCatchOutSeconds（絵は逆算で合わせる。
+                    // issue #815 の悪送球回収と同じ作法）。
+                    var fumbleRest = Overshoot(Home, fieldPoint, fumbleScatterM);
+                    var flightToFirst = LegSeconds(Distance(fumbleRest, firstBase), ThrowSpeedOf(play));
+                    var outAt = Math.Max(ContactAt + fumbleOutSeconds, fieldedAt + flightToFirst);
+                    var pickupAt = Math.Max(fieldedAt, outAt - flightToFirst);
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Roll,
+                        T0 = fieldedAt, T1 = pickupAt,
+                        From = fieldPoint, To = fumbleRest,
+                        FromRole = play.FielderRole,
+                    });
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Throw,
+                        T0 = pickupAt, T1 = outAt,
+                        From = fumbleRest, To = firstBase,
+                        FromRole = play.FielderRole, ToRole = firstBaseCoverer, ToBase = "first",
+                    });
+                    firstThrowArriveAt = outAt;
+                }
                 else if (play.UnassistedPutout)
                 {
                     // アンアシスト（3U, Issue #400）: 送球せず一塁手がボールをグラブに収めたまま運ぶ。
@@ -1055,7 +1083,8 @@ public static class TimelineBuilder
             FielderStarts = StartsOf(fielders),
             // 表示専用の観測（既に決まった値の写し＝新規計算・乱数消費ゼロ）
             CatchMarginSeconds = play.CatchMarginSeconds,
-            FumbledCatch = play.ErrorKind == FieldingErrorKind.Catch,
+            // 拾い直してアウトに戻った打席（issue #817）も実際には弾いている＝真のまま広げる。
+            FumbledCatch = play.ErrorKind == FieldingErrorKind.Catch || play.RecoveredCatchScatterM is not null,
             BobbleError = play.ErrorKind == FieldingErrorKind.Bobble,
             HomeRunStyle = play.HomeRunStyle,
             Ball = ball,
