@@ -68,14 +68,17 @@
 /* 差引がマイナスの年は本当の警告（部費が減り続ける）なので警告色を許す（UI原則②）。 */
 .mn-kv--neg .nu-num,
 .mn-kv--neg .nu-unit { color: var(--color-warn); }
+/* 内訳は金額の下に1行（枠を折り返して全幅へ）。 */
+.mn-kv--wide { flex-wrap: wrap; }
 .mn-kv__note {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
+    width: 100%;
     font-size: var(--fs-cap);
     color: var(--color-muted);
-    white-space: normal;
-    margin-left: var(--sp-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 2px 0 0 0;
+    padding: 0;
 }
 
 /* ── 施設台帳：ヘッダー ────────────────────────────────────

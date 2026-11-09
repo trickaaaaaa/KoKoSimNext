@@ -110,8 +110,8 @@ namespace KokoSim.Unity.Management
             k.AddToClassList("mn-kv__k");
             box.Add(k);
 
-            // 金額と内訳は同じ行に並べる（内訳を下段に置くと4枠ぶんの行が縦に効いて、
-            // 下の施設台帳が1画面に収まらなくなる＝実測で 1600x900 に 64px 不足した）。
+            // 内訳は金額の下に1行で置く（design-22 G3）。金額の右に並べると欄が狭く、語の途中で2行に折れていた。
+            // 折れていた分の高さをそのまま使うので、下の施設台帳の窓は痩せない。
             var line = new VisualElement();
             line.AddToClassList("mn-kv__line");
 
@@ -123,7 +123,9 @@ namespace KokoSim.Unity.Management
             {
                 var n = new Label(note);
                 n.AddToClassList("mn-kv__note");
-                line.Add(n);
+                box.Add(line);
+                box.Add(n);
+                return box;
             }
             box.Add(line);
             return box;
