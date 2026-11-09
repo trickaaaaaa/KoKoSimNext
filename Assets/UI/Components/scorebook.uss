@@ -478,3 +478,25 @@
 /* 持ち球チャート（投手能力タブ） */
 .sbk .sbk-cmp__chart { flex-direction: row; margin-top: 12px; }
 .sbk .sbk-cmp__chart-cell { flex-grow: 1; flex-basis: 0; min-width: 0; height: 150px; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   G3 残りのデータ画面
+   ═══════════════════════════════════════════════════════════════════════ */
+/* 主ボタン（応援団赤）の文字は白。試合開始前・試合結果の CTA はアンバー時代の暗文字のままだった。 */
+.sbk Button.mp-cta,
+.sbk Button.mr-cta { color: #FFFFFF; }
+
+/* レーダーの軸ラベル：Label 既定の上下余白のぶん「名前」と「値」の間が空き、値が6角形に重なっていた。 */
+.sbk .radar-axis__l,
+.sbk .radar-axis__v { margin: 0; padding: 0; }
+
+/* 入力欄（新規作成の都道府県・地区・校名）：Unity 既定の灰色を白地＋淡い1px枠へ。 */
+.sbk .ngs-drop .unity-base-field__input,
+.sbk .ngs-text .unity-base-field__input {
+    background-color: var(--sbk-card);
+    border-width: 1px;
+    border-color: var(--sbk-card-line-hover);
+    border-radius: var(--sbk-r-chip);
+    color: var(--sbk-text);
+}
+.sbk .ngs-drop .unity-base-popup-field__arrow { -unity-background-image-tint-color: var(--sbk-sub); }
