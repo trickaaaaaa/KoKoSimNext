@@ -805,6 +805,7 @@ namespace KokoSim.Unity.Match
                 _homeSchoolId = req.HomeSchoolId;
                 _crowd = req.Crowd;
                 KokoSim.Unity.Audio.MatchBrassBand.Begin(req.BrassBand, req.AwaySchoolId, req.HomeSchoolId);
+                KokoSim.Unity.Audio.MatchSfx.IsKoshienMatch = req.BrassBand;   // 応援が鳴る＝甲子園
                 // 掲示板の校名はエンジンの観測データ（LiveLineScore.Name）から出るのでここでは埋めない。
                 SetColumnTitles();
                 return;
@@ -823,6 +824,7 @@ namespace KokoSim.Unity.Match
             _rematchOnTie = true;
             _crowd = KokoSim.Engine.Nation.Tournaments.CrowdTurnout.Full;   // デモは満員で見せる
             KokoSim.Unity.Audio.MatchBrassBand.Begin(false, _awaySchoolId, _homeSchoolId);
+            KokoSim.Unity.Audio.MatchSfx.IsKoshienMatch = false;
             // 委任AIの采配値も成長した監督の実値を使う（旧ハードコード70を廃す, issue #171）。
             managerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi;
             // デモの相手校（away＝右列）は本番と同じ StrengthTeamFactory 生成（氏名＋控え8人つき）で観戦する。
@@ -3394,7 +3396,11 @@ namespace KokoSim.Unity.Match
             _scoreCallOppScore = ownIsAway ? homeAfter : awayAfter;
             _scoreCallClock = 0f;
             _scoreCallOn = true;
-            if (!_fastMode) KokoSim.Unity.Audio.MatchBrassBand.Scored(isTop);
+            if (!_fastMode)
+            {
+                KokoSim.Unity.Audio.MatchBrassBand.Scored(isTop);
+                KokoSim.Unity.Audio.MatchSfx.PlayCheer();
+            }
 
             if (_scoreCallOwnName != null) _scoreCallOwnName.text = ownIsAway ? _awayDisp : _homeDisp;
             if (_scoreCallOppName != null) _scoreCallOppName.text = ownIsAway ? _homeDisp : _awayDisp;

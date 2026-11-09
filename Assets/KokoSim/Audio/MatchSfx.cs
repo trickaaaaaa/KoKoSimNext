@@ -18,6 +18,7 @@ namespace KokoSim.Unity.Audio
     {
         private const string SfxDir = "Sfx/OnJin/";
         private const string VoiceDir = "Voice/No7/";
+        private const string CheerDir = "Sfx/Cheer/";
 
         // 捕球音の段の境目[km/h]。高校生の球速帯（110〜150）を3つに割る
         private const float CatchMidKmh = 120f;
@@ -71,6 +72,18 @@ namespace KokoSim.Unity.Audio
         /// </summary>
         public static void PlayUmpireCall(bool isOut)
             => Play(VoiceDir + (isOut ? "umpire_out" : "umpire_safe"), 1f, 1f);
+
+        /// <summary>
+        /// いまの試合が甲子園か（歓声の種類を選ぶ）。試合の頭で MatchLiveController が設定する。
+        /// </summary>
+        public static bool IsKoshienMatch { get; set; }
+
+        /// <summary>
+        /// 観客の歓声。得点のテロップと「ホームラン」の判定で鳴らす（ホームランは両方で鳴って重なる＝
+        /// 歓声が厚く長くなる。2026-11-09 監督決定）。甲子園は大きい球場の歓声、それ以外は歓声と拍手。
+        /// </summary>
+        public static void PlayCheer()
+            => Play(CheerDir + (IsKoshienMatch ? "cheer_koshien" : "cheer_local"), 0.85f, 1f);
 
         /// <summary>
         /// 打ち出し直後の速さ[m/s]から打球の強さ 0..1 を出す。

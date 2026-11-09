@@ -381,6 +381,8 @@ namespace KokoSim.Unity.Match
                 _voicedAt = found.Value.T1;
                 if (kind == JudgementKind.Out || kind == JudgementKind.Safe)
                     KokoSim.Unity.Audio.MatchSfx.PlayUmpireCall(kind == JudgementKind.Out);
+                else if (kind == JudgementKind.HomeRun)
+                    KokoSim.Unity.Audio.MatchSfx.PlayCheer();   // 得点テロップでもう一度鳴って重なる（意図どおり）
             }
             // 併殺の2つ目のアウト（常に打者）は「ダブルプレー」（issue
             // double-play-throw-pace-and-second-out-call ③案F・2026-08-27監督判断）。
