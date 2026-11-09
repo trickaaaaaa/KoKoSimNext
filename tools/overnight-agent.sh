@@ -239,10 +239,18 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
       note "- 🔴 #$num $title — rebase 後の non-Heavy 再テストが赤→agent-failed（ログ: ${log}）"
       unlock "$REPO_LOCK"; return
     fi
-    if ! ( cd "$wt" && "$DOTNET" test engine/ -c Release --filter "Category=Heavy" ) >>"$log" 2>&1; then
-      gh issue edit "$num" --add-label agent-failed >/dev/null 2>&1 || true
-      note "- 🔴 #$num $title — rebase 後の Heavy 統計回帰が赤→agent-failed（ログ: ${log}）"
-      unlock "$REPO_LOCK"; return
+    # Heavy は帯が動きうる変更のときだけ（判定は tools/needs-heavy.sh＝試合結果の指紋・データ・
+    # 指紋で測っていない engine を見る）。省いた分は post-merge の CI が全 Heavy を回して拾い、
+    # 赤なら上の「main の直近 CI が赤」ガードで以降のマージが止まる。
+    local heavy_why
+    if heavy_why="$(bash "$REPO_DIR/tools/needs-heavy.sh" refs/remotes/origin/main "$wt")"; then
+      if ! ( cd "$wt" && "$DOTNET" test engine/ -c Release --filter "Category=Heavy" ) >>"$log" 2>&1; then
+        gh issue edit "$num" --add-label agent-failed >/dev/null 2>&1 || true
+        note "- 🔴 #$num $title — rebase 後の Heavy 統計回帰が赤→agent-failed（ログ: ${log}）"
+        unlock "$REPO_LOCK"; return
+      fi
+    else
+      echo "[merge] Heavy 省略: ${heavy_why}" >>"$log"
     fi
   fi
 

@@ -91,9 +91,21 @@ jobs:
           # 逐次ループなので分割はここが限界（これ以上はテスト側の並列化か試合数の見直しが要る）。
           - name: archetype-defense
             filter: "Category=Heavy&FullyQualifiedName~PitcherArchetypeTests.PowerPitchers_StrikeOutMore"
+          # 以下3つは 2026-11-09 に rest（21分＝CI全体の律速）から切り出した重いもの。
+          # 能力感度は3メソッドが同じ Lazy の実測（約40条件×1000試合）を共有する＝クラスごと1シャード。
+          - name: ability-sensitivity
+            filter: "Category=Heavy&FullyQualifiedName~AbilitySensitivityTests"
+          # 実ロスター vs strength ラダーの照合。2メソッドとも数分かかり独立なので1つずつ。
+          - name: roster-calibration
+            filter: "Category=Heavy&FullyQualifiedName~PlayerMatchCalibrationTests.RosterTeam_VsStrengthLadder_IsMonotonic"
+          - name: roster-calibration-ai
+            filter: "Category=Heavy&FullyQualifiedName~PlayerMatchCalibrationTests&FullyQualifiedName!~PlayerMatchCalibrationTests.RosterTeam_VsStrengthLadder_IsMonotonic"
+          # 打順3巡目（3000試合）と低ティア帯（3強度×400試合×2シード）。
+          - name: tto-lowtier
+            filter: "Category=Heavy&(FullyQualifiedName~TimesThroughOrderTests|FullyQualifiedName~LowTierRegressionTests)"
           # 受け皿。上のどれにも入らない Heavy（球場の本塁打/長打・Nation・型の中立性 ほか）はここで走る。
           - name: rest
-            filter: "Category=Heavy&FullyQualifiedName!~CaptureTimelinesCost&FullyQualifiedName!~StadiumRegressionTests.NarrowStandardWide_OrderRunsPerTeam&FullyQualifiedName!~Balance.GameRegressionTests&FullyQualifiedName!~Balance.BalanceRegressionTests&FullyQualifiedName!~PitcherArchetypeTests.PowerPitchers_StrikeOutMore"
+            filter: "Category=Heavy&FullyQualifiedName!~CaptureTimelinesCost&FullyQualifiedName!~StadiumRegressionTests.NarrowStandardWide_OrderRunsPerTeam&FullyQualifiedName!~Balance.GameRegressionTests&FullyQualifiedName!~Balance.BalanceRegressionTests&FullyQualifiedName!~PitcherArchetypeTests.PowerPitchers_StrikeOutMore&FullyQualifiedName!~AbilitySensitivityTests&FullyQualifiedName!~PlayerMatchCalibrationTests&FullyQualifiedName!~TimesThroughOrderTests&FullyQualifiedName!~LowTierRegressionTests"
     steps:
       - uses: actions/checkout@v4
 

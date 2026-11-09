@@ -232,6 +232,9 @@ dotnet run --project engine/KokoSim.Balance -- \
   CI（fast/heavy）も `tools/sync-engine-dll.sh` も Release ビルド＝Debug で回す場面はない。
   engine に `#if DEBUG` / `Debug.Assert` は無いので検証内容も変わらない
 - 統計回帰（`[Trait("Category","Heavy")]`）はバランス係数・確率モデルの変更時とコミット前に必ず回す（不変条件#5）
+  要るかどうかは `bash tools/needs-heavy.sh`（終了コード0＝要る・理由を1行表示）で判定する。data/・試合結果の指紋
+  （determinism-baseline.txt）・指紋で測っていない engine（Match/ 以外）・Heavy のテスト自体を触ったら要る。
+  試合の解決（Match/）だけで指紋が不変なら帯は動かない＝省いてよい（日常ループの緑が前提）。CI は毎PR全 Heavy を回す
 - **能力感度の検査**（`AbilitySensitivityTests`・Heavy）は、帯が測らない「能力を変えたとき結果が動くか／逆向きでないか」を見張る。
   期待は `data/balance-targets.yaml` の `ability_sensitivity`、既知の不具合は `known_defects` に issue 番号付きで載せる（直ったら外す＝外し忘れは赤になる）。
   新しく赤くなった能力は新しい穴。解決式・能力の効き（`ability_effect`）・采配AIを触ったら、`ability-sweep` の表で意図どおりか確かめる
