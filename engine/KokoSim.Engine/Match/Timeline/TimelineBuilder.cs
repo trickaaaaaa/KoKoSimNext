@@ -2679,43 +2679,9 @@ public static class TimelineBuilder
         var moves = timeline.Moves;
         if (pivotRole is { } pr)
         {
-            var idx = -1;
-            for (var i = 0; i < moves.Count; i++)
-            {
-                if (moves[i].Role == pr && moves[i].Task == FielderTask.CoverBase && Distance(moves[i].To, second) < 1.0)
-                {
-                    idx = i;
-                    break;
-                }
-            }
-            if (idx >= 0)
-            {
-                var mv = moves[idx];
-                var start = timeline.FielderStarts is { } starts && starts.TryGetValue(pr, out var s0) ? s0 : mv.To;
-                var dist = Distance(start, mv.To);
-                var deadline = secondArrive - CoverSetSeconds;
-                var speed = Math.Max(4.0, pivotSprintSpeedByRole != null
-                    && pivotSprintSpeedByRole.TryGetValue(pr, out var sp) ? sp : new FielderAttributes().SprintSpeedMps);
-                double t1;
-                if (deadline - mv.T0 > 1e-6)
-                {
-                    var need = dist / (deadline - mv.T0);
-                    var pace = need <= EasyPaceMinMps ? EasyPaceMinMps
-                        : need < EasyJogMps ? Math.Min(speed, EasyJogMps)
-                        : Math.Min(speed, need);
-                    t1 = mv.T0 + dist / pace;
-                }
-                else
-                {
-                    t1 = mv.T0 + dist / speed;   // 間に合わない＝全力（fielder-leg-speed-by-distance と同じ扱い）
-                }
-                if (t1 < mv.T1)
-                {
-                    var updatedMoves = new List<FielderMove>(moves);
-                    updatedMoves[idx] = mv with { T1 = t1 };
-                    moves = updatedMoves;
-                }
-            }
+            var speed = Math.Max(4.0, pivotSprintSpeedByRole != null
+                && pivotSprintSpeedByRole.TryGetValue(pr, out var sp) ? sp : new FielderAttributes().SprintSpeedMps);
+            moves = RepaceCoverLeg(timeline, moves, pr, second, secondArrive, speed);
         }
 
         // 二塁封殺の判定時刻を走者到達ではなく実際の送球到達へ差し替える（Issue #328①）。フォース
@@ -2948,10 +2914,14 @@ public static class TimelineBuilder
             resolvedAt = batterArriveAnchor;
         }
 
+        // 受け手の一塁カバーは、除いた直接送球（もっと遅く着く）を期限に歩いている＝二段目の到達へ急ぎ度を引き直す。
+        var moves = relayToFirst && firstRole is { } fr
+            ? RepaceCoverLeg(timeline, timeline.Moves, fr, first, firstArrive, new FielderAttributes().SprintSpeedMps)
+            : timeline.Moves;
         var duration = Math.Max(timeline.Duration, (relayToFirst ? firstArrive : targetArrive) + 1.0);
         return timeline with
         {
-            Ball = ball, Duration = duration, Runners = runners, Judgements = judgements, ResolvedAt = resolvedAt,
+            Ball = ball, Moves = moves, Duration = duration, Runners = runners, Judgements = judgements, ResolvedAt = resolvedAt,
         };
     }
 
@@ -3061,15 +3031,21 @@ public static class TimelineBuilder
         var flight = LegSeconds(Distance(Home, first), c.RelayThrowSpeedMps);
         var physical = releaseAt + flight + c.SecondForceTagSeconds;
         var firstArrive = GuardAgainstVerdict(physical, releaseAt + flight, batterArriveAnchor, batterOut);
+        var receiver = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
         ball.Add(new BallSegment
         {
             Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = firstArrive,
             From = Home, To = first,
             FromRole = toHome.ToRole ?? FieldPosition.Catcher,
-            ToRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase), ToBase = "first",
+            ToRole = receiver, ToBase = "first",
         });
 
-        var tl = timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, firstArrive + 1.0) };
+        // 受け手の一塁カバーは、除いた直接送球（もっと遅く着く）を期限に歩いている＝転送の到達へ急ぎ度を引き直す。
+        var moves = receiver is { } rcv
+            ? RepaceCoverLeg(timeline, timeline.Moves, rcv, first, firstArrive,
+                new FielderAttributes().SprintSpeedMps)
+            : timeline.Moves;
+        var tl = timeline with { Ball = ball, Moves = moves, Duration = Math.Max(timeline.Duration, firstArrive + 1.0) };
         if (!batterOut)
             return PatchFieldersChoiceBatterLeg(
                 tl, batterArriveAnchor, closeCall: Math.Abs(physical - batterArriveAnchor) < c.CloseCallMarginSeconds);
@@ -3639,6 +3615,51 @@ public static class TimelineBuilder
     /// 合成移動になり、どちらのレッグの尺よりも速く動く。判定には出ず絵にも「向きが変」としか
     /// 出ないので、重なりを作る側で塞ぐ（検出は LegSpeedTests / PictureNeverSplitsAFielder）。</para>
     /// </summary>
+    /// <summary>
+    /// ベースカバーのレッグの急ぎ度を、後から描き足した送球の到達（<paramref name="ballArrive"/>）へ引き直す
+    /// （fielder-leg-speed-by-distance と同じ式）。陣形ループは差し替え前の送球を期限に急ぎ度を決めているので、
+    /// 送球を早く着く別経路へ差し替えると、受け手が悠々と歩いて球より遅れてベースへ着く。
+    /// 早める方向にだけ直す（遅くはしない）。該当レッグが無ければ <paramref name="moves"/> をそのまま返す。
+    /// </summary>
+    private static IReadOnlyList<FielderMove> RepaceCoverLeg(
+        PlayTimeline timeline, IReadOnlyList<FielderMove> moves, FieldPosition role, TimelinePoint basePt,
+        double ballArrive, double sprintSpeed)
+    {
+        var idx = -1;
+        for (var i = 0; i < moves.Count; i++)
+        {
+            if (moves[i].Role == role && moves[i].Task == FielderTask.CoverBase && Distance(moves[i].To, basePt) < 1.0)
+            {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) return moves;
+
+        var mv = moves[idx];
+        var start = timeline.FielderStarts is { } starts && starts.TryGetValue(role, out var s0) ? s0 : mv.To;
+        var dist = Distance(start, mv.To);
+        var deadline = ballArrive - CoverSetSeconds;
+        double t1;
+        if (deadline - mv.T0 > 1e-6)
+        {
+            var need = dist / (deadline - mv.T0);
+            var pace = need <= EasyPaceMinMps ? EasyPaceMinMps
+                : need < EasyJogMps ? Math.Min(sprintSpeed, EasyJogMps)
+                : Math.Min(sprintSpeed, need);
+            t1 = mv.T0 + dist / pace;
+        }
+        else
+        {
+            t1 = mv.T0 + dist / sprintSpeed;   // 間に合わない＝全力（fielder-leg-speed-by-distance と同じ扱い）
+        }
+        if (t1 >= mv.T1) return moves;
+
+        var updated = new List<FielderMove>(moves);
+        updated[idx] = mv with { T1 = t1 };
+        return updated;
+    }
+
     private static bool IsBusy(IReadOnlyList<FielderMove> moves, FieldPosition role, double t0, double t1)
     {
         foreach (var m in moves)

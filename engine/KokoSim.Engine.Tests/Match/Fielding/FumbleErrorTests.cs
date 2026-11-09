@@ -118,6 +118,18 @@ public sealed class FumbleErrorTests
             $"速い球+下手 {fastPoorCatch:F3} が遅い球+名手 {slowGoodCatch:F3} 以下");
     }
 
+    /// <summary>捕球の効きは基準確率に対する倍率＝基準確率を半分にすれば、捕球の弱い外野手でも半分になる。
+    /// 傾きを足し算で使っていた時は、捕球10の外野手で基準と無関係に+26%が乗り、基準を下げても頻度が下がらなかった。</summary>
+    [Fact]
+    public void LoweringBaseProb_ScalesDownEvenForPoorCatcher()
+    {
+        var high = FumbleRate(FumbleOnly(0.02), leftFieldCatching: 10, exitMps: 55.0);
+        var low = FumbleRate(FumbleOnly(0.01), leftFieldCatching: 10, exitMps: 55.0);
+
+        _out.WriteLine($"捕球10: 基準0.02 {high:F3} / 基準0.01 {low:F3}");
+        Assert.InRange(low / high, 0.35, 0.65);
+    }
+
     [Fact]
     public void StoppedBall_AlmostNeverFumbles()
     {

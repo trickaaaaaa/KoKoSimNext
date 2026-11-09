@@ -329,12 +329,12 @@ public sealed record FieldingCoefficients
     // 解き直す＝一律の追加進塁ではなく時間勝負で塁打数が伸びる（不変条件#1）。
     /// <summary>
     /// 外野手のファンブルの基準確率（回収点でのボール速度が <see cref="OutfieldFumbleSpeedRefMps"/> 以上・
-    /// Catching50時）。難度は回収点での打球速度で0〜1に連続的に伸縮する（速度0＝完全に止まった球ではほぼ発生
-    /// しない。クランプ下限 <see cref="ErrorMinProb"/> だけ残る）。既定0なら「ロールを一切引かない」＝
+    /// Catching50時）。難度は回収点での打球速度で0〜1に連続的に伸縮する（速度0＝完全に止まった球では発生しない）。
+    /// 捕球の効きは <see cref="ErrorCatchingSlope"/> を <see cref="ErrorBaseProb"/> に対する比率で掛ける。既定0なら「ロールを一切引かない」＝
     /// 乱数消費順・結果とも完全に従来どおり（<see cref="ThrowErrorBaseProb"/> と同じ恒等の作法）。
     /// data/coefficients.yaml と同値（issue #811で正値化・errors_per_game/outfield_error_shareの帯内で校正）。
     /// </summary>
-    public double OutfieldFumbleBaseProb { get; init; } = 0.05;
+    public double OutfieldFumbleBaseProb { get; init; } = 0.008;
 
     /// <summary>
     /// 回収点でのボール速度[m/s]がこの値以上で難度1（基準確率フル）とみなす。難度は 0（停止球）〜1（この速度以上）

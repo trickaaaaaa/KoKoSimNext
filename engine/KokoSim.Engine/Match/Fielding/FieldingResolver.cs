@@ -1038,8 +1038,13 @@ public static class FieldingResolver
         var difficulty = MathUtil.Clamp(ballSpeedMps / Math.Max(1e-6, coeff.OutfieldFumbleSpeedRefMps), 0.0, 1.0);
         var catchingDelta = retriever.Attributes.Catching - 50;
         var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
-        var errProb = (coeff.OutfieldFumbleBaseProb - catchingDelta * slope) * difficulty;
-        return MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb);
+        // 捕球の効きは内野の捕球エラー（error_base_prob）に対する比率で掛ける。傾きを足し算で使うと
+        // 基準確率と無関係な上乗せ（捕球40で+6.5%）になり、基準確率を下げても頻度が下がらない。
+        var catchingFactor = coeff.ErrorBaseProb > 0.0
+            ? Math.Max(0.0, 1.0 - catchingDelta * slope / coeff.ErrorBaseProb)
+            : 1.0;
+        var errProb = coeff.OutfieldFumbleBaseProb * catchingFactor * difficulty;
+        return MathUtil.Clamp(errProb, 0.0, coeff.ErrorMaxProb);
     }
 
     /// <summary>外野手のファンブル判定（rng を1回消費）。</summary>
