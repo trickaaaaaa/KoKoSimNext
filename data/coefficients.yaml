@@ -1102,6 +1102,12 @@ growth:
   big_stage_prob_koshien: 0.4
   big_stage_prob_regional: 0.25
   big_stage_prob_prefectural: 0.1
+  # 相手係数（相手Tier−自校Tier。確率 = 大会の格 × 係数・上限1。issue #862）
+  big_stage_opp_lower2: 0.1
+  big_stage_opp_lower1: 0.4
+  big_stage_opp_even: 1.0
+  big_stage_opp_upper1: 1.6
+  big_stage_opp_upper2: 2.2
   big_stage_mental_gain: 5
   big_stage_gain: 3
   big_stage_min_hits: 3

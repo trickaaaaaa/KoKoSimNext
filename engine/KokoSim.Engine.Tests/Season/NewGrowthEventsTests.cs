@@ -216,4 +216,30 @@ public sealed class NewGrowthEventsTests
             System.Array.Empty<PitchingLine>());
         Assert.Empty(GrowthEventModel.BigStage(game, false, new[] { hero }, prob: 0.0, new Xoshiro256Random(1), c));
     }
+    [Fact]
+    public void BigStageProb_RisesWithOpponentTier_AndNeverExceedsOne()
+    {
+        var c = new GrowthEventCoefficients();
+        const double self = 55;   // D
+        double P(double opp, TournamentKind k = TournamentKind.Summer) => GrowthEventModel.BigStageProb(k, self, opp, c);
+
+        var lower2 = P(35);   // F
+        var lower1 = P(45);   // E
+        var even = P(55);     // D
+        var upper1 = P(65);   // C
+        var upper2 = P(75);   // B
+        Assert.True(lower2 < lower1 && lower1 < even && even < upper1 && upper1 < upper2);
+        Assert.Equal(c.BigStageProb(TournamentKind.Summer), even, 12);
+        Assert.True(lower2 <= c.BigStageProb(TournamentKind.Summer) * c.BigStageOppLower2 + 1e-12);
+        Assert.True(lower2 < 0.02);
+        Assert.Equal(P(5), lower2, 12);    // 格下2段以上は同じ係数
+        Assert.Equal(upper2, P(95), 12);   // 格上2段以上は同じ係数
+
+        foreach (var k in new[] { TournamentKind.SummerKoshien, TournamentKind.Regional, TournamentKind.Summer })
+        foreach (var opp in new[] { 5.0, 35, 55, 75, 95 })
+            Assert.InRange(P(opp, k), 0.0, 1.0);
+        Assert.Equal(1.0, GrowthEventModel.BigStageProb(
+            TournamentKind.SummerKoshien, 55, 95, new GrowthEventCoefficients { BigStageProbKoshien = 0.9 }));
+        Assert.Equal(0.0, P(95, TournamentKind.AutumnDistrict));
+    }
 }
