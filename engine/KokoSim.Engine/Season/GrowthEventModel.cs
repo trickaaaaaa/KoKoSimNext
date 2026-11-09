@@ -111,6 +111,15 @@ public sealed record GrowthEventCoefficients
     public double BigStageProbKoshien { get; init; } = 0.4;
     public double BigStageProbRegional { get; init; } = 0.25;
     public double BigStageProbPrefectural { get; init; } = 0.1;
+    /// <summary>
+    /// 大舞台の相手係数（相手Tier−自校Tier の差で引く。issue #862）。格上ほど起きやすく、格下2段以上ではほぼ起きない。
+    /// 大会の格の確率にこの係数を掛ける（上限1）。
+    /// </summary>
+    public double BigStageOppLower2 { get; init; } = 0.1;
+    public double BigStageOppLower1 { get; init; } = 0.4;
+    public double BigStageOppEven { get; init; } = 1.0;
+    public double BigStageOppUpper1 { get; init; } = 1.6;
+    public double BigStageOppUpper2 { get; init; } = 2.2;
     public int BigStageMentalGain { get; init; } = 5;
     /// <summary>大舞台で分野の能力（2つ）に入る上昇量。</summary>
     public int BigStageGain { get; init; } = 3;
@@ -129,6 +138,16 @@ public sealed record GrowthEventCoefficients
         TournamentKind.Regional or TournamentKind.Jingu => BigStageProbRegional,
         TournamentKind.Summer or TournamentKind.Autumn => BigStageProbPrefectural,
         _ => 0.0,
+    };
+
+    /// <summary>相手との Tier 差（相手−自校。正＝相手が格上）→ 大舞台の相手係数。</summary>
+    public double BigStageOpponentFactor(int tierGap) => tierGap switch
+    {
+        <= -2 => BigStageOppLower2,
+        -1 => BigStageOppLower1,
+        0 => BigStageOppEven,
+        1 => BigStageOppUpper1,
+        _ => BigStageOppUpper2,
     };
 }
 
@@ -288,6 +307,19 @@ public static class GrowthEventModel
         if (gained == 0) return false;   // 上限に張り付いていて上がらない＝起きなかったことにする
         notices.Add(new GrowthNotice(p, GrowthEventType.Breakthrough, k) { Gains = new[] { new AbilityGain(k, gained) } });
         return true;
+    }
+
+    /// <summary>
+    /// 大舞台の発火確率 = 大会の格の確率 × 相手係数（issue #862）。相手との格差は名声の番狂わせと同じ
+    /// <see cref="Career.FameUpsetModel.TierGap"/>。上限は1。練習試合（大会の格が0）は0のまま。
+    /// </summary>
+    public static double BigStageProb(
+        TournamentKind kind, double selfStrength, double opponentStrength, GrowthEventCoefficients c)
+    {
+        var baseProb = c.BigStageProb(kind);
+        if (baseProb <= 0.0) return 0.0;
+        var gap = Career.FameUpsetModel.TierGap(selfStrength, opponentStrength);
+        return Math.Min(1.0, baseProb * c.BigStageOpponentFactor(gap));
     }
 
     /// <summary>

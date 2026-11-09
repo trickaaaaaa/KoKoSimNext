@@ -1428,6 +1428,11 @@ public static class CoefficientsLoader
         public double BigStageProbKoshien { get; set; } = D.BigStageProbKoshien;
         public double BigStageProbRegional { get; set; } = D.BigStageProbRegional;
         public double BigStageProbPrefectural { get; set; } = D.BigStageProbPrefectural;
+        public double BigStageOppLower2 { get; set; } = D.BigStageOppLower2;
+        public double BigStageOppLower1 { get; set; } = D.BigStageOppLower1;
+        public double BigStageOppEven { get; set; } = D.BigStageOppEven;
+        public double BigStageOppUpper1 { get; set; } = D.BigStageOppUpper1;
+        public double BigStageOppUpper2 { get; set; } = D.BigStageOppUpper2;
         public int BigStageMentalGain { get; set; } = D.BigStageMentalGain;
         public int BigStageGain { get; set; } = D.BigStageGain;
         public int BigStageMinHits { get; set; } = D.BigStageMinHits;
@@ -1473,6 +1478,11 @@ public static class CoefficientsLoader
             BigStageProbKoshien = BigStageProbKoshien,
             BigStageProbRegional = BigStageProbRegional,
             BigStageProbPrefectural = BigStageProbPrefectural,
+            BigStageOppLower2 = BigStageOppLower2,
+            BigStageOppLower1 = BigStageOppLower1,
+            BigStageOppEven = BigStageOppEven,
+            BigStageOppUpper1 = BigStageOppUpper1,
+            BigStageOppUpper2 = BigStageOppUpper2,
             BigStageMentalGain = BigStageMentalGain,
             BigStageGain = BigStageGain,
             BigStageMinHits = BigStageMinHits,

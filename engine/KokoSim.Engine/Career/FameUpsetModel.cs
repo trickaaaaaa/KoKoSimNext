@@ -10,13 +10,17 @@ namespace KokoSim.Engine.Career;
 /// </summary>
 public static class FameUpsetModel
 {
+    /// <summary>相手Tier − 自校Tier（正＝相手が格上）。名声の番狂わせ・大舞台の化け（#862）が共有する格差の定義。</summary>
+    public static int TierGap(double selfStrength, double opponentStrength)
+        => (int)Tiers.FromStrength(opponentStrength) - (int)Tiers.FromStrength(selfStrength);
+
     /// <summary>
     /// 1試合の名声デルタ。gap = 相手Tier − 自校Tier（正＝相手が格上）。
     /// 金星（格上に勝利）で正、取りこぼし（格下に敗北）で負、その他 0。
     /// </summary>
     public static double MatchDelta(double selfStrength, double opponentStrength, bool won, CareerCoefficients c)
     {
-        var gap = (int)Tiers.FromStrength(opponentStrength) - (int)Tiers.FromStrength(selfStrength);
+        var gap = TierGap(selfStrength, opponentStrength);
         if (won && gap > 0) return c.FameUpsetWinPerTier * gap;    // 金星：格差ほど大きい
         if (!won && gap < 0) return c.FameUpsetLossPerTier * gap;  // 取りこぼし：gap<0 なので負に働く
         return 0.0;                                                // 順当（同格含む）はほぼ動かさない

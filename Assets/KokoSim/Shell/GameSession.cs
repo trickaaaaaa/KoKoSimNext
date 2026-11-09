@@ -493,10 +493,15 @@ namespace KokoSim.Unity.Shell
         /// 公式戦の後に大舞台イベントを判定する（練習試合は呼ばない）。乱数は試合ごとの独立ストリーム
         /// （怪我と同じ作法）＝大会の展開・ほかの抽選の乱数列はずれない。
         /// </summary>
-        private void ApplyBigStage(GameResult detail, bool managerWasAway)
+        private void ApplyBigStage(GameResult detail, bool managerWasAway, int opponentId)
         {
-            var prob = GrowthEventsCoeff.BigStageProb(Kind);
-            if (prob <= 0.0) return;
+            var baseProb = GrowthEventsCoeff.BigStageProb(Kind);
+            if (baseProb <= 0.0) return;
+            // 相手の強さは名声の番狂わせと同じ取り方（自校＝ManagerSchool().Strength・相手＝全国の School.Strength）。引けなければ同格扱い。
+            var opponent = NationService.SchoolById(opponentId);
+            var prob = opponent == null
+                ? baseProb
+                : GrowthEventModel.BigStageProb(Kind, NationService.ManagerSchool().Strength, opponent.Strength, GrowthEventsCoeff);
             var rng = new Xoshiro256Random(
                 0x8167_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_bigStageSeq)));
             _bigStageNotices.AddRange(GrowthEventModel.BigStage(
@@ -616,7 +621,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
-                ApplyBigStage(detail, LastOutcome.ManagerWasAway);
+                ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
@@ -661,7 +666,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
-                ApplyBigStage(detail, LastOutcome.ManagerWasAway);
+                ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
