@@ -6,37 +6,51 @@
      置くのは行の器だけで、マス（回数ぶん）は C# 側 LineScorePanel.Fill が生成する。
      延長で回が増えたときはルート要素に lsc の修飾子 dense が付き、マス幅が詰まる。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <ui:VisualElement name="lsc-root" class="lsc">
-        <ui:VisualElement class="lsc-board">
-            <ui:VisualElement name="lsc-head" class="lsc-row lsc-row--head" />
-            <ui:VisualElement name="lsc-away" class="lsc-row" />
-            <ui:VisualElement name="lsc-home" class="lsc-row" />
+    <ui:VisualElement name="lsc-outer" class="lsc-outer">
+        <!-- 球場・天気（issue #803）。盤面の端（右）に小さく出す。球場は Shell（大会タイトル）から、
+             天気は engine の観測データ（GameContext.ResolvedWeather）から＝ここで抽選し直さない。
+             試合に天気が無ければ MatchLiveController が display:none で丸ごと隠す。 -->
+        <ui:VisualElement name="lsc-venue" class="lsc-venue">
+            <ui:Label name="lsc-venue-name" class="lsc-venue__name f-body" text="" />
+            <ui:VisualElement name="lsc-venue-weather" class="lsc-venue__weather">
+                <ui:Label name="lsc-venue-weather-k" class="lsc-venue__weather-k f-body" text="" />
+                <ui:Label name="lsc-venue-temp-num" class="lsc-venue__temp-num f-num-bd" text="" />
+                <ui:Label name="lsc-venue-temp-unit" class="lsc-venue__temp-unit f-body" text="" />
+            </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:VisualElement class="lsc-count">
-            <ui:VisualElement class="lsc-lamps">
-                <ui:VisualElement class="lsc-lamp-row">
-                    <ui:Label class="lsc-lamp-key f-dot" text="B" />
-                    <ui:VisualElement name="lsc-b1" class="lsc-lamp lsc-lamp--ball" />
-                    <ui:VisualElement name="lsc-b2" class="lsc-lamp lsc-lamp--ball" />
-                    <ui:VisualElement name="lsc-b3" class="lsc-lamp lsc-lamp--ball" />
-                </ui:VisualElement>
-                <ui:VisualElement class="lsc-lamp-row">
-                    <ui:Label class="lsc-lamp-key f-dot" text="S" />
-                    <ui:VisualElement name="lsc-s1" class="lsc-lamp lsc-lamp--strike" />
-                    <ui:VisualElement name="lsc-s2" class="lsc-lamp lsc-lamp--strike" />
-                </ui:VisualElement>
-                <ui:VisualElement class="lsc-lamp-row">
-                    <ui:Label class="lsc-lamp-key f-dot" text="O" />
-                    <ui:VisualElement name="lsc-o1" class="lsc-lamp lsc-lamp--out" />
-                    <ui:VisualElement name="lsc-o2" class="lsc-lamp lsc-lamp--out" />
-                </ui:VisualElement>
+        <ui:VisualElement name="lsc-root" class="lsc">
+            <ui:VisualElement class="lsc-board">
+                <ui:VisualElement name="lsc-head" class="lsc-row lsc-row--head" />
+                <ui:VisualElement name="lsc-away" class="lsc-row" />
+                <ui:VisualElement name="lsc-home" class="lsc-row" />
             </ui:VisualElement>
 
-            <ui:VisualElement class="lsc-diamond">
-                <ui:VisualElement name="lsc-base-2" class="lsc-base lsc-base--second" />
-                <ui:VisualElement name="lsc-base-3" class="lsc-base lsc-base--third" />
-                <ui:VisualElement name="lsc-base-1" class="lsc-base lsc-base--first" />
+            <ui:VisualElement class="lsc-count">
+                <ui:VisualElement class="lsc-lamps">
+                    <ui:VisualElement class="lsc-lamp-row">
+                        <ui:Label class="lsc-lamp-key f-dot" text="B" />
+                        <ui:VisualElement name="lsc-b1" class="lsc-lamp lsc-lamp--ball" />
+                        <ui:VisualElement name="lsc-b2" class="lsc-lamp lsc-lamp--ball" />
+                        <ui:VisualElement name="lsc-b3" class="lsc-lamp lsc-lamp--ball" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="lsc-lamp-row">
+                        <ui:Label class="lsc-lamp-key f-dot" text="S" />
+                        <ui:VisualElement name="lsc-s1" class="lsc-lamp lsc-lamp--strike" />
+                        <ui:VisualElement name="lsc-s2" class="lsc-lamp lsc-lamp--strike" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="lsc-lamp-row">
+                        <ui:Label class="lsc-lamp-key f-dot" text="O" />
+                        <ui:VisualElement name="lsc-o1" class="lsc-lamp lsc-lamp--out" />
+                        <ui:VisualElement name="lsc-o2" class="lsc-lamp lsc-lamp--out" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="lsc-diamond">
+                    <ui:VisualElement name="lsc-base-2" class="lsc-base lsc-base--second" />
+                    <ui:VisualElement name="lsc-base-3" class="lsc-base lsc-base--third" />
+                    <ui:VisualElement name="lsc-base-1" class="lsc-base lsc-base--first" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

@@ -2099,6 +2099,17 @@
 
    マスは C# 側（LineScorePanel.Fill）が回数ぶん生成する。延長で回が増えたら --dense へ切り替えて
    マス幅を詰める（列を flex-shrink で潰さない＝UI-BUILD-METHOD の落とし穴）。 */
+.lsc-outer { flex-direction: column; flex-shrink: 0; }
+
+/* 球場・天気（issue #803）。掲示板本体の上、右端に小さく出す。天気が無い試合は
+   MatchLiveController が lsc-venue-weather を display:none で隠す（球場名だけは常に出す）。 */
+.lsc-venue { flex-direction: row; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; }
+.lsc-venue__name { font-size: var(--fs-cap); color: var(--color-muted); margin-right: 10px; }
+.lsc-venue__weather { flex-direction: row; align-items: baseline; }
+.lsc-venue__weather-k { font-size: var(--fs-cap); color: var(--color-muted); margin-right: 3px; }
+.lsc-venue__temp-num { font-size: var(--fs-cap); color: var(--color-chalk); margin-right: 1px; }
+.lsc-venue__temp-unit { font-size: var(--fs-cap); color: var(--color-muted); }
+
 .lsc {
     flex-direction: row;
     align-items: center;

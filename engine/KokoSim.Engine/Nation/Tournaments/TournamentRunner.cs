@@ -758,6 +758,19 @@ public sealed class TournamentRunner : ITournamentRunner
         return 0;
     }
 
+    /// <inheritdoc/>
+    public WeatherSample? PeekNextMatchWeather(WeatherCoefficients coefficients)
+    {
+        if (_nextOpponent is null) return null;
+        var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
+        var slot = ManagerCardSlot(_current);
+        // ResolveRound が自校カードで辿る鎖と同一: _rng.Fork(PlayerMatchStream(...)) がResolve/BeginLiveの
+        // "rng" 引数、その .Fork(2) が GameEngine.Play/NewProgress の matchRng（= WeatherModel.ApplyForMatch
+        // が Fork するストリーム）。両方 Fork のみ＝ _rng は1ビットも消費しない。
+        var matchRng = _rng.Fork(PlayerMatchStream(roundsRemaining, slot)).Fork(2);
+        return WeatherModel.SampleForMatch(matchRng, coefficients);
+    }
+
     private void RecordCard(int round, int slot, bool topWon, int winnerScore, int loserScore, bool mercyEnded = false)
         => _cardResults[(round, slot)] = new CardResult(topWon, winnerScore, loserScore, mercyEnded);
 

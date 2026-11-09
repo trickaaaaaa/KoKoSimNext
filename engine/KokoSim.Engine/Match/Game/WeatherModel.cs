@@ -238,7 +238,8 @@ public static class WeatherModel
     public static GameContext ApplyForMatch(GameContext ctx, IRandomSource matchRng)
     {
         if (ctx.Weather is not { Enabled: true } c) return ctx;
-        return ApplyTo(ctx, SampleForMatch(matchRng, c).TemperatureC);
+        var sample = SampleForMatch(matchRng, c);
+        return ApplyTo(ctx, sample.TemperatureC) with { ResolvedWeather = sample };
     }
 
     /// <summary>

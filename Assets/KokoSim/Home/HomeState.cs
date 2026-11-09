@@ -66,7 +66,12 @@ namespace KokoSim.Unity.Home
         public string AwaySub = "県立・強豪";
         public string GameDate = "";
         public string Venue = "自校グラウンド";
-        public string Weather = "曇";
+        /// <summary>天気の文字（晴/曇/雨）。試合の無い週・次戦未確定は空＝天気欄を出さない（issue #803）。</summary>
+        public string WeatherLabel = "";
+        /// <summary>気温の数値部分（Oswald・単位抜き）。<see cref="WeatherLabel"/> と同時にしか立たない。</summary>
+        public string WeatherTempValue = "";
+        /// <summary>気温の単位（"℃"・サンセリフ）。数字とは別 Label に割る（書体3役ルール）。</summary>
+        public string WeatherTempUnit = "";
 
         public bool TournamentMode;   // 大会モード中は次戦カード/カウントダウンを大会仕様に切替える
 
@@ -853,7 +858,6 @@ namespace KokoSim.Unity.Home
             view.HomeTeam = NationService.ManagerSchoolName;
             view.HomeSub = "";
             view.Venue = s.Title;
-            view.Weather = "―";
 
             if (r.Finished)
             {
@@ -864,6 +868,7 @@ namespace KokoSim.Unity.Home
                 view.AwayTeam = "―";
                 view.AwaySub = "";
                 view.GameDate = leagueQualified != null || r.IsChampion ? "全試合終了" : "大会敗退";
+                // 次戦が無い＝天気欄は出さない（issue #803, 固定文字の廃止）。
             }
             else
             {
@@ -876,6 +881,15 @@ namespace KokoSim.Unity.Home
                 view.AwaySub = r.NextOpponent != null
                     ? "ランク " + OpponentRank.Of(r.NextOpponent)   // 通算勝敗は出さない（issue #730 で #84 を撤回）
                     : "";
+
+                // 次戦に実際に効く天気を、試合を解決せずに覗く（issue #803・オーナー決定2026-11-09）。
+                // Resolve/BeginLive が後で辿るのと同一のFork鎖を辿るだけ＝ここで抽選し直さない。
+                if (r.PeekNextMatchWeather(PlayerMatchResolver.CurrentWeatherCoefficients()) is { } weather)
+                {
+                    view.WeatherLabel = WeatherLabels.Jp(weather.State);
+                    view.WeatherTempValue = Math.Round(weather.TemperatureC).ToString();
+                    view.WeatherTempUnit = "℃";
+                }
                 // 日付欄は実月日（issue #583）。カウントダウンの升目は「あと N 日」のまま
                 // ＝「いつ」と「あと何日」は別の情報なので両方出す。
                 view.GameDate = reached ? "本日 試合" : s.NextMatchDateLabel + " 試合";
