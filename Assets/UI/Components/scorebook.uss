@@ -373,3 +373,61 @@
     border-bottom-color: var(--sbk-ink);
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   design-22 G2：主要データ画面に残る旧スキンの共通部品をスコアブックの部品へ寄せる
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 背番号バッジ → 背番号布（NumberPatch と同じ見た目） */
+.sbk .num-badge, .sbk .num-badge--sm {
+    background-color: var(--sbk-patch-bg);
+    color: var(--sbk-text);
+    border-width: var(--sbk-line-patch);
+    border-color: var(--sbk-patch-line);
+    border-radius: var(--sbk-r-patch);
+}
+/* 寸法もオーダー画面の背番号布（30×24・数字14px）に揃える。小型（--sm）は 24×20・12px */
+.sbk .num-badge { width: 30px; height: 24px; font-size: 14px; }
+.sbk .num-badge--sm { width: 24px; height: 20px; font-size: 12px; }
+.sbk .num-badge--out { color: var(--sbk-lose); border-color: var(--sbk-card-line-hover); }
+
+/* 切替（タブ・絞り込み）→ 2択切替と同じ。土台の上で、選ばれている側だけ白地＋1px枠 */
+.sbk .ms-cmp-tabs, .sbk .seg-tabs {
+    background-color: var(--sbk-seg-bg);
+    border-radius: 8px;
+    padding: 3px;
+}
+.sbk .ms-tab, .sbk .seg-tab, .sbk .filter-chip {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: var(--sbk-r-chip);
+    color: var(--sbk-sub);
+}
+.sbk .ms-tab:hover, .sbk .seg-tab:hover, .sbk .filter-chip:hover { color: var(--sbk-text); border-color: rgba(0, 0, 0, 0); }
+.sbk .ms-tab--on, .sbk .seg-tab--on, .sbk .filter-chip--on,
+.sbk .ms-tab--on:hover, .sbk .seg-tab--on:hover, .sbk .filter-chip--on:hover {
+    background-color: var(--sbk-card);
+    color: var(--sbk-text);
+    border-color: var(--sbk-card-line);
+}
+.sbk .ms-tab { margin-left: 0; margin-right: 0; }
+
+/* 矢印ボタン（配色の選択など）：白地・淡い枠 */
+.sbk Button.ucp-arrow {
+    background-color: var(--sbk-card);
+    color: var(--sbk-sub);
+    border-color: var(--sbk-card-line);
+    border-radius: var(--sbk-r-chip);
+}
+.sbk Button.ucp-arrow:hover { color: var(--sbk-text); border-color: var(--sbk-card-line-hover); background-color: var(--sbk-card); }
+
+/* 練習の行：学年・投打はタグにせず文字で（オーダー画面と同じ「1年 右投右打」） */
+.sbk .trow .chip--tag {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    color: var(--sbk-info);
+    padding-left: 0;
+    padding-right: 0;
+    margin-right: 8px;
+}
