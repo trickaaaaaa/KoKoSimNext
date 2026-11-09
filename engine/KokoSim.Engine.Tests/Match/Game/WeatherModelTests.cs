@@ -140,25 +140,41 @@ public sealed class WeatherModelTests
         }
     }
 
-    // ===== Issue #803: 天気の状態（晴れ/曇り/雨）は気温と同じ乱数から導く =====
+    // ===== Issue #803: 天気の状態（晴れ/曇り/雨）は気温と同じ専用ストリームで別に抽選する =====
 
     [Fact]
-    public void StateFor_UsesZScoreThresholds()
+    public void SampleState_FrequenciesMatchProbabilities()
     {
-        // 平均そのもの＝z=0 は CloudyZThreshold(0.25) 以下なので曇り。
-        Assert.Equal(WeatherState.Cloudy, WeatherModel.StateFor(Summer.MeanTemperatureC, Summer));
-        // 平均+1σ＝z=1 は CloudyZThreshold より大きいので晴れ。
-        var sunnyTemp = Summer.MeanTemperatureC + Summer.TemperatureStdDevC;
-        Assert.Equal(WeatherState.Sunny, WeatherModel.StateFor(sunnyTemp, Summer));
-        // 平均-1σ＝z=-1 は RainZThreshold(-0.75) 以下なので雨。
-        var rainyTemp = Summer.MeanTemperatureC - Summer.TemperatureStdDevC;
-        Assert.Equal(WeatherState.Rainy, WeatherModel.StateFor(rainyTemp, Summer));
+        int rain = 0, cloudy = 0;
+        const int n = 20000;
+        var rng = new Xoshiro256Random(7);
+        for (var i = 0; i < n; i++)
+        {
+            var st = WeatherModel.SampleState(rng, Summer);
+            if (st == WeatherState.Rainy) rain++;
+            else if (st == WeatherState.Cloudy) cloudy++;
+        }
+        Assert.InRange((double)rain / n, Summer.RainProb - 0.01, Summer.RainProb + 0.01);
+        Assert.InRange((double)cloudy / n, Summer.CloudyProb - 0.015, Summer.CloudyProb + 0.015);
+    }
+
+    [Fact]
+    public void SampleWeather_HotRainyDaysStillOccur()
+    {
+        // 気温から状態を決める作りだと「暑い日は必ず晴れ」になる。抽選なら平均以上の雨の日も出る。
+        var hotRain = 0;
+        for (ulong seed = 0; seed < 4000; seed++)
+        {
+            var s = WeatherModel.SampleWeather(new Xoshiro256Random(seed), Summer);
+            if (s.State == WeatherState.Rainy && s.TemperatureC >= Summer.MeanTemperatureC) hotRain++;
+        }
+        Assert.True(hotRain > 0, "平均気温以上の雨の日が一度も出ない");
     }
 
     [Fact]
     public void SampleWeather_RainCorrelatesWithLowerTemperature()
     {
-        // 決定1: 雨の日は気温が低い（同じ乱数から導くので別途の相関付けは要らない）。
+        // 決定1: 雨の日は気温が低い（雨の日は気温の平均を下げる）。
         double rainySum = 0, sunnySum = 0;
         int rainyCount = 0, sunnyCount = 0;
         for (ulong seed = 0; seed < 2000; seed++)
@@ -180,12 +196,15 @@ public sealed class WeatherModelTests
     }
 
     [Fact]
-    public void SampleWeather_ConsumesSameRandomnessAsSampleTemperature()
+    public void SampleForMatch_TemperatureIsWhatTheMatchUses()
     {
-        // 状態は気温からの導出のみ＝追加の乱数消費が無い（ApplyForMatch の乱数消費・帯を変えない保証）。
-        var t = WeatherModel.SampleTemperatureC(new Xoshiro256Random(99), Summer);
-        var sample = WeatherModel.SampleWeather(new Xoshiro256Random(99), Summer);
-        Assert.Equal(t, sample.TemperatureC);
+        // 画面に出す天気（SampleForMatch）と、試合に効く気温（ApplyForMatch）は同じストリーム＝同じ気温。
+        var ctx = new GameContext { Weather = Summer };
+        var sample = WeatherModel.SampleForMatch(new Xoshiro256Random(99), Summer);
+        var applied = WeatherModel.ApplyForMatch(ctx, new Xoshiro256Random(99));
+        var expected = WeatherModel.ApplyTo(ctx, sample.TemperatureC);
+        Assert.Equal(expected.Aerodynamics, applied.Aerodynamics);
+        Assert.Equal(expected.Fatigue, applied.Fatigue);
     }
 
     // ===== Issue #803: 季節別プリセットと季節判定 =====

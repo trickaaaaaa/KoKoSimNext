@@ -47,14 +47,15 @@ public sealed record WeatherCoefficients
     /// </summary>
     public double FatigueAlphaPerDegree { get; init; } = 0.01;
 
-    // ===== 気温→天気の状態（Issue #803 決定1: 晴れ/曇り/雨は気温と同じ乱数から導く）=====
-    /// <summary>
-    /// 雨のしきい値（気温のz値。これ以下＝雨）。気温は<b>この乱数自体から</b>導く＝追加の乱数消費なしで
-    /// 「雨の日は涼しい」という相関を内在させる（別々に抽選すると相関を別途作り込む必要が出る）。
-    /// </summary>
-    public double RainZThreshold { get; init; } = -0.75;
-    /// <summary>曇りのしきい値（気温のz値。これ以下＝曇り、それ以上＝晴れ。<see cref="RainZThreshold"/>未満は雨）。</summary>
-    public double CloudyZThreshold { get; init; } = 0.25;
+    // ===== 天気の状態（Issue #803 決定1・2026-11-09 改定: 気温と同じ専用ストリームで別に1回抽選する）=====
+    /// <summary>雨の確率（試合ごと）。状態は気温より先に引き、雨・曇りは気温の平均を下げる＝暑い日の雨も低確率で出る。</summary>
+    public double RainProb { get; init; } = 0.15;
+    /// <summary>曇りの確率（試合ごと）。残り（1 − 雨 − 曇り）が晴れ。</summary>
+    public double CloudyProb { get; init; } = 0.35;
+    /// <summary>雨の日の気温の平均のずれ[℃]（負＝涼しい）。σ・上下限は晴れと同じ。</summary>
+    public double RainTemperatureOffsetC { get; init; } = -3.0;
+    /// <summary>曇りの日の気温の平均のずれ[℃]。</summary>
+    public double CloudyTemperatureOffsetC { get; init; } = -1.0;
 }
 
 /// <summary>天気の状態（Issue #803 オーナー決定2026-11-09: 表示専用。試合には気温チャネルだけが効く）。</summary>
@@ -90,7 +91,7 @@ public static class WeatherModel
     private const double KelvinOffset = 273.15;
 
     // ===== 季節別プリセット（Issue #803 決定4: 季節別・地域差なし）=====
-    // 気温分布（平均/σ/下限/上限）だけが季節で変わる。物理変換（基準気温・減衰係数・消耗係数・天気しきい値）は
+    // 気温分布（平均/σ/下限/上限）と雨の確率だけが季節で変わる。物理変換（基準気温・減衰係数・消耗係数・雨/曇りの気温のずれ）は
     // 季節に依らない定数なので、既定（夏）から mean/std/min/max だけを差し替える。
 
     /// <summary>夏（既定）。data/coefficients.yaml <c>weather.summer</c> と同値（夏の甲子園を想定, 28〜36℃）。</summary>
@@ -100,12 +101,14 @@ public static class WeatherModel
     public static WeatherCoefficients Spring { get; } = Summer with
     {
         MeanTemperatureC = 16.0, TemperatureStdDevC = 3.0, MinTemperatureC = 8.0, MaxTemperatureC = 24.0,
+        RainProb = 0.25,
     };
 
     /// <summary>秋。data/coefficients.yaml <c>weather.autumn</c> と同値（秋季大会期を想定, 14〜30℃）。</summary>
     public static WeatherCoefficients Autumn { get; } = Summer with
     {
         MeanTemperatureC = 22.0, TemperatureStdDevC = 3.0, MinTemperatureC = 14.0, MaxTemperatureC = 30.0,
+        RainProb = 0.20,
     };
 
     /// <summary>季節→係数の単一入口。GameContext.Weather へ通すのは常にこの戻り値（1季節ぶん）。</summary>
@@ -150,25 +153,34 @@ public static class WeatherModel
     }
 
     /// <summary>
-    /// 気温[℃]から天気の状態を導く（Issue #803 決定1）。気温のz値で3値化する純関数＝追加の乱数は使わない
-    /// （気温と同じ1回の抽選から状態まで決まる＝「雨の日は涼しい」の相関が自然に出る）。
+    /// 天気の状態を引く（Issue #803 決定1）。一様乱数1つで 雨／曇り／晴れ を決める。
     /// </summary>
-    public static WeatherState StateFor(double temperatureC, WeatherCoefficients c)
+    public static WeatherState SampleState(IRandomSource weatherRng, WeatherCoefficients c)
     {
-        var z = (temperatureC - c.MeanTemperatureC) / c.TemperatureStdDevC;
-        if (z <= c.RainZThreshold) return WeatherState.Rainy;
-        if (z <= c.CloudyZThreshold) return WeatherState.Cloudy;
+        var u = weatherRng.NextDouble();
+        if (u < c.RainProb) return WeatherState.Rainy;
+        if (u < c.RainProb + c.CloudyProb) return WeatherState.Cloudy;
         return WeatherState.Sunny;
     }
 
+    /// <summary>状態ごとの気温の平均のずれ[℃]。</summary>
+    public static double TemperatureOffsetC(WeatherState state, WeatherCoefficients c) => state switch
+    {
+        WeatherState.Rainy => c.RainTemperatureOffsetC,
+        WeatherState.Cloudy => c.CloudyTemperatureOffsetC,
+        _ => 0.0,
+    };
+
     /// <summary>
-    /// 天気（状態＋気温）を1回の抽選で生成する（Issue #803）。<see cref="SampleTemperatureC"/> と同じ1回の
-    /// Gaussian 抽選だけを使う＝<see cref="ApplyForMatch"/> の乱数消費・帯は不変（状態は気温からの導出のみ）。
+    /// 天気（状態＋気温）を引く（Issue #803）。専用ストリームから<b>状態→気温</b>の順に引く
+    /// （状態で気温の平均をずらし、[Min, Max] にクランプ）。<see cref="ApplyForMatch"/> と画面の表示は
+    /// 同じストリーム（<c>matchRng.Fork(WeatherStreamId)</c>）からこれを呼ぶ＝表示と試合が食い違わない。
     /// </summary>
     public static WeatherSample SampleWeather(IRandomSource weatherRng, WeatherCoefficients c)
     {
-        var t = SampleTemperatureC(weatherRng, c);
-        return new WeatherSample(StateFor(t, c), t);
+        var state = SampleState(weatherRng, c);
+        var t = weatherRng.NextGaussian(c.MeanTemperatureC + TemperatureOffsetC(state, c), c.TemperatureStdDevC);
+        return new WeatherSample(state, MathUtil.Clamp(t, c.MinTemperatureC, c.MaxTemperatureC));
     }
 
     /// <summary>
@@ -226,7 +238,13 @@ public static class WeatherModel
     public static GameContext ApplyForMatch(GameContext ctx, IRandomSource matchRng)
     {
         if (ctx.Weather is not { Enabled: true } c) return ctx;
-        var temperatureC = SampleTemperatureC(matchRng.Fork(WeatherStreamId), c);
-        return ApplyTo(ctx, temperatureC);
+        return ApplyTo(ctx, SampleForMatch(matchRng, c).TemperatureC);
     }
+
+    /// <summary>
+    /// その試合の天気（状態＋気温）。<see cref="ApplyForMatch"/> と同じ専用ストリームから引く＝画面に出す天気と
+    /// 試合に効く気温が必ず一致する。<paramref name="matchRng"/> は Fork のみで消費しない（不変条件#2）。
+    /// </summary>
+    public static WeatherSample SampleForMatch(IRandomSource matchRng, WeatherCoefficients c)
+        => SampleWeather(matchRng.Fork(WeatherStreamId), c);
 }

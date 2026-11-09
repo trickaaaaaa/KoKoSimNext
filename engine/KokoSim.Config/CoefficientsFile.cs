@@ -1152,8 +1152,10 @@ public static class CoefficientsLoader
         public double DensityDamping { get; set; } = D.DensityDamping;
         public double FatigueBaselineTemperatureC { get; set; } = D.FatigueBaselineTemperatureC;
         public double FatigueAlphaPerDegree { get; set; } = D.FatigueAlphaPerDegree;
-        public double RainZThreshold { get; set; } = D.RainZThreshold;
-        public double CloudyZThreshold { get; set; } = D.CloudyZThreshold;
+        public double RainProb { get; set; } = D.RainProb;
+        public double CloudyProb { get; set; } = D.CloudyProb;
+        public double RainTemperatureOffsetC { get; set; } = D.RainTemperatureOffsetC;
+        public double CloudyTemperatureOffsetC { get; set; } = D.CloudyTemperatureOffsetC;
 
         public WeatherCoefficients ToModel() => new()
         {
@@ -1166,8 +1168,10 @@ public static class CoefficientsLoader
             DensityDamping = DensityDamping,
             FatigueBaselineTemperatureC = FatigueBaselineTemperatureC,
             FatigueAlphaPerDegree = FatigueAlphaPerDegree,
-            RainZThreshold = RainZThreshold,
-            CloudyZThreshold = CloudyZThreshold,
+            RainProb = RainProb,
+            CloudyProb = CloudyProb,
+            RainTemperatureOffsetC = RainTemperatureOffsetC,
+            CloudyTemperatureOffsetC = CloudyTemperatureOffsetC,
         };
     }
 
