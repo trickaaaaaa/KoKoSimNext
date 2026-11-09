@@ -3762,7 +3762,10 @@ public static class TimelineBuilder
     {
         var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
         if (range < 1e-6) return landing;
-        var bearingRad = bearingDeg * Math.PI / 180.0;
+        // ファウルライン（±45°）の外は FenceDistance の補間式が外挿になり、ポールより手前へ縮む
+        // （ライト線の外 49° で 95m→91m）。ファウルグラウンドの捕球は判定が正当に落下点まで届かせるので、
+        // 柵はライン上の距離で頭打ちにする（issue #871）。
+        var bearingRad = Math.Clamp(bearingDeg, -45.0, 45.0) * Math.PI / 180.0;
         var limit = Math.Max(0.0, field.FenceDistance(bearingRad) - marginM);
         if (range <= limit) return landing;
         var s = limit / range;
