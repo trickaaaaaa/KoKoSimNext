@@ -66,6 +66,10 @@ namespace KokoSim.Unity.Match
             /// 試合中に変わらないので配色と同じ静的経路で渡す（観測データには載せない）。
             /// </summary>
             public KokoSim.Engine.Nation.Tournaments.CrowdTurnout Crowd = KokoSim.Engine.Nation.Tournaments.CrowdTurnout.Full;
+            /// <summary>
+            /// アルプス席のブラスバンド応援を流すか（表示専用）。甲子園の試合だけ真（<see cref="KokoSim.Unity.Audio.MatchBrassBand"/>）。
+            /// </summary>
+            public bool BrassBand;
             public System.Action<GameResult> OnComplete;
         }
 
@@ -680,6 +684,7 @@ namespace KokoSim.Unity.Match
             _duelRig?.Dispose();
             _duelRig = null;
             _duelImg = null;
+            KokoSim.Unity.Audio.MatchBrassBand.End(immediate: true);
             foreach (var (b, h) in _speedHandlers) b.clicked -= h;
             _speedHandlers.Clear();
             _speedButtons.Clear();
@@ -799,6 +804,7 @@ namespace KokoSim.Unity.Match
                 _awaySchoolId = req.AwaySchoolId;
                 _homeSchoolId = req.HomeSchoolId;
                 _crowd = req.Crowd;
+                KokoSim.Unity.Audio.MatchBrassBand.Begin(req.BrassBand, req.AwaySchoolId, req.HomeSchoolId);
                 // 掲示板の校名はエンジンの観測データ（LiveLineScore.Name）から出るのでここでは埋めない。
                 SetColumnTitles();
                 return;
@@ -816,6 +822,7 @@ namespace KokoSim.Unity.Match
             _onComplete = null;
             _rematchOnTie = true;
             _crowd = KokoSim.Engine.Nation.Tournaments.CrowdTurnout.Full;   // デモは満員で見せる
+            KokoSim.Unity.Audio.MatchBrassBand.Begin(false, _awaySchoolId, _homeSchoolId);
             // 委任AIの采配値も成長した監督の実値を使う（旧ハードコード70を廃す, issue #171）。
             managerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi;
             // デモの相手校（away＝右列）は本番と同じ StrengthTeamFactory 生成（氏名＋控え8人つき）で観戦する。
@@ -1440,6 +1447,7 @@ namespace KokoSim.Unity.Match
             // 止めないと終わった試合で投げ終わりの余韻が再生され続ける。⚠ EndFieldPlay の後（戻された姿勢から畳む）
             if (_duelRig != null && _duelRig.Available) _duelRig.FreezeForGameEnd();
             _view.HideJudgement();
+            KokoSim.Unity.Audio.MatchBrassBand.End(immediate: false);
             _gameOver = true;
             _stage = LiveStage.Over;
             _inPitchPhase = false;
@@ -1887,6 +1895,7 @@ namespace KokoSim.Unity.Match
             SetCount(0, 0);
             SetOuts(0);
             SetBases(false, false, false);
+            KokoSim.Unity.Audio.MatchBrassBand.Rest();   // 攻守交代の間は応援も止む（明けた最初の塁表示で再開）
 
             if (_ibCaption != null)
                 _ibCaption.text = endedInning + "回" + (endedIsTop ? "表" : "裏") + " 終了";
@@ -3385,6 +3394,7 @@ namespace KokoSim.Unity.Match
             _scoreCallOppScore = ownIsAway ? homeAfter : awayAfter;
             _scoreCallClock = 0f;
             _scoreCallOn = true;
+            if (!_fastMode) KokoSim.Unity.Audio.MatchBrassBand.Scored(isTop);
 
             if (_scoreCallOwnName != null) _scoreCallOwnName.text = ownIsAway ? _awayDisp : _homeDisp;
             if (_scoreCallOppName != null) _scoreCallOppName.text = ownIsAway ? _homeDisp : _awayDisp;
@@ -3497,6 +3507,10 @@ namespace KokoSim.Unity.Match
             _bases?[0]?.EnableInClassList("is-on", first);   // base-1（一塁）
             _bases?[1]?.EnableInClassList("is-on", second);  // base-2（二塁）
             _bases?[2]?.EnableInClassList("is-on", third);   // base-3（三塁）
+            // 応援曲は塁の表示に合わせて切り替える（得点圏に走者＝チャンスの曲）。
+            // 試合が始まる前・攻守交代の間・高速試合モード中・終局後は鳴らさない。
+            if (_shownAnyHalf && !_inningBreakOn && !_fastMode && !_gameOver)
+                KokoSim.Unity.Audio.MatchBrassBand.SetOffense(_shownIsTop, second || third);
         }
 
         // ── 速度・補助 ──
@@ -3553,6 +3567,7 @@ namespace KokoSim.Unity.Match
             if (tacticsHost != null) tacticsHost.style.display = on ? DisplayStyle.None : DisplayStyle.Flex;
             if (on)
             {
+                KokoSim.Unity.Audio.MatchBrassBand.Rest();   // 高速試合モードは音を出さない
                 // 振りかぶりで先に解決した球（issue #696）はエンジン側では投げ終わっている＝描かずに捨てる。
                 _preStep = null;
                 HideRunnerGo();
