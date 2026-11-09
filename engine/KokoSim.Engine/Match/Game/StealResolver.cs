@@ -1,5 +1,6 @@
 using System;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Players;
 
@@ -100,11 +101,19 @@ public static class StealResolver
         return distance / runner.ToFielder(c.AbilityEffect).SprintSpeedMps + startDelay;
     }
 
-    /// <summary>守備所要時間[s]（投手クイック＋捕手ポップ＋タッチ）。ピッチアウト成立で捕手優位＝短縮（G3）。
-    /// ギャンブル走者は無防備でさらに短縮（読まれると最も刺されやすい）。単独の本盗は採用しない（issue #788）。</summary>
+    /// <summary>守備所要時間[s]（投手クイック＋捕手ポップ＋タッチ＋送球の逸れの期待遅れ）。ピッチアウト成立で
+    /// 捕手優位＝短縮（G3）。ギャンブル走者は無防備でさらに短縮（読まれると最も刺されやすい）。
+    /// 単独の本盗は採用しない（issue #788）。
+    ///
+    /// <para>送球の逸れ（issue #841）は<b>期待値のうち、送球精度50・受け手Catching50（リーグ平均）からの
+    /// 差分だけ</b>を加える（<see cref="CenteredExpectedScatterDelaySeconds"/>）＝AIの読み（<see cref="SuccessProbability"/>）
+    /// と絵の基準線（<see cref="Forced"/>）が使う値。平均的な捕手・受け手では加算がちょうど0＝帯不変
+    /// （不変条件#5、TransferFactor等と同じ「50が恒等」の作法）。実際の1本ごとの判定
+    /// （<see cref="ResolveVerdict"/>）は、ここに<b>サンプリングした逸れの実際の期待値からの差分</b>を
+    /// 別途乗せる＝平均はこの関数の値のまま、本番だけ本物のばらつきを持つ。</para></summary>
     public static double DefenseTimeSeconds(
         Player catcher, BaserunningCoefficients c, bool pitchout = false, StartType startType = StartType.Normal,
-        StealTarget target = StealTarget.Second)
+        StealTarget target = StealTarget.Second, Player? receiver = null)
     {
         if (target == StealTarget.Home)
             throw new ArgumentException("単独の本盗は採用しない（issue #788）。", nameof(target));
@@ -117,7 +126,9 @@ public static class StealResolver
             var popTransfer = c.PopTransferSeconds * catcherFielder.TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
             // 立ち上がり（守備力で縮まない固定部分）＋握り替え（守備力で伸縮）＋送球。
             var popTime = c.CatcherPopRiseSeconds + popTransfer + throwTime;
-            defense = c.PitcherQuickSeconds + popTime + c.TagSeconds;
+            var receiverCatching = receiver?.ToFielder(c.AbilityEffect).Catching ?? 50;
+            defense = c.PitcherQuickSeconds + popTime + c.TagSeconds
+                      + CenteredExpectedScatterDelaySeconds(catcherFielder.ThrowScatterSigmaCm, receiverCatching, c);
         }
         if (pitchout)
         {
@@ -127,52 +138,101 @@ public static class StealResolver
         return defense;
     }
 
+    /// <summary>リーグ平均（送球精度50→σ22cm, <see cref="FielderAttributes.LeagueAverage"/>）での
+    /// 逸れの期待遅れ[s]。これ自体は正値だが、<see cref="CenteredExpectedScatterDelaySeconds"/> が
+    /// 差分をとって打ち消す＝平均的な捕手・受け手ではタッチ秒が変わらない（帯不変）。</summary>
+    private static double LeagueAverageExpectedScatterDelaySeconds(BaserunningCoefficients c)
+        => RawExpectedScatterDelaySeconds(FielderAttributes.LeagueAverage.ThrowScatterSigmaCm, receiverCatching: 50, c);
+
+    /// <summary>受け手のCatchingで縮む、送球の逸れの期待遅れ[s]（サンプリングなしの解析解）。</summary>
+    private static double RawExpectedScatterDelaySeconds(double sigmaCm, int receiverCatching, BaserunningCoefficients c)
+        => ThrowScatterModel.ExpectedRecoverySeconds(
+            sigmaCm, receiverCatching,
+            c.StealThrowScatterLateralSecPerCm, c.StealThrowScatterHighSecPerCm, c.StealThrowScatterShortHopSecPerCm,
+            c.StealThrowScatterCatchingReliefSlope, c.StealThrowScatterCatchingReliefMinFactor);
+
+    /// <summary>リーグ平均（送球精度50・受け手Catching50）からの差分だけの期待遅れ[s]（issue #841）。
+    /// <see cref="DefenseTimeSeconds"/>・<see cref="SuccessProbability"/>・<see cref="Forced"/> が使う
+    /// ＝平均的な能力では加算が0＝帯不変（不変条件#5）。送球精度が高い／受け手の捕球が高いほど負（短縮）、
+    /// 低いほど正（延長）になる。</summary>
+    private static double CenteredExpectedScatterDelaySeconds(double sigmaCm, int receiverCatching, BaserunningCoefficients c)
+        => RawExpectedScatterDelaySeconds(sigmaCm, receiverCatching, c) - LeagueAverageExpectedScatterDelaySeconds(c);
+
     /// <summary>盗塁成功確率（走塁と同式のlogistic）。pitchout=読み切り, startType=始動種別（G3）。
-    /// 三盗は<see cref="BaserunningCoefficients.StealThirdSuccessBias"/> で成功率を下方補正する（design-14「三盗は成功率下方」）。</summary>
+    /// 三盗は<see cref="BaserunningCoefficients.StealThirdSuccessBias"/> で成功率を下方補正する（design-14「三盗は成功率下方」）。
+    /// <paramref name="receiver"/>（二塁カバー＝遊撃手／三塁カバー＝三塁手）の送球精度・捕球の効きを
+    /// 判定と揃える（issue #841「判定と読みを一致させる」）。</summary>
     public static double SuccessProbability(
         Player runner, Player catcher, BaserunningCoefficients c,
-        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second)
+        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
+        Player? receiver = null)
     {
         var bias = target == StealTarget.Third ? c.StealSuccessBias + c.StealThirdSuccessBias : c.StealSuccessBias;
-        var margin = DefenseTimeSeconds(catcher, c, pitchout, startType, target)
+        var margin = DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver)
                      - RunnerTimeSeconds(runner, c, startType, target) + bias;
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.StealMarginScale), 0.01, 0.99);
     }
 
     public static StealResult Resolve(
         Player runner, Player catcher, BaserunningCoefficients c, IRandomSource rng,
-        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second)
-        => ResolveVerdict(runner, catcher, c, rng, pitchout, startType, target).Result;
+        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
+        Player? receiver = null)
+        => ResolveVerdict(runner, catcher, c, rng, pitchout, startType, target, receiver).Result;
 
     /// <summary>
     /// 盗塁1回を解決し、<b>判定に使った秒</b>（ゆらぎ込み）も返す。絵はこの秒をそのまま描く。
     ///
-    /// <para>乱数の消費は<b>1つだけ</b>で、その1つが「ゆらぎ[s]」と勝敗の両方を決める
-    /// （逆関数法: u→logistic ゆらぎ。<c>safe ⟺ u &lt; SuccessProbability</c> は従来の
-    /// <c>MathUtil.Chance</c> と同一なので、結果は1ビットも変わらない＝帯・決定論ダイジェスト不変）。</para>
+    /// <para>乱数の消費: 送球の逸れ（<see cref="ThrowScatterModel.Sample"/>、横・縦2軸）で2つ（Box-Muller
+    /// のキャッシュにより実質1組の一様乱数）＋ロジスティックの「ゆらぎ」用に1つ（issue #841で1→実質2系統に拡張。
+    /// 従来の「ちょうど1つ」という前提は崩れるため決定論ベースラインは再生成が必要）。
+    /// ゆらぎ用の1つは <c>u→logistic ゆらぎ</c> の逆関数法で、<c>safe ⟺ u &lt; p</c>（p は送球の逸れ込みの
+    /// margin から出す）。逸れが悪送球閾値以上（<see cref="ThrowScatterModel.IsWild"/>）なら、送球が抜けて
+    /// 守備側に正規のプレーが無い＝無条件セーフにする（ロジスティックの1%キャップでは起きえない「抜けたのに
+    /// アウト」を構造的に塞ぐ）。</para>
     /// </summary>
     public static StealVerdict ResolveVerdict(
         Player runner, Player catcher, BaserunningCoefficients c, IRandomSource rng,
-        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second)
+        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
+        Player? receiver = null)
     {
-        var p = SuccessProbability(runner, catcher, c, pitchout, startType, target);
-        var u = rng.NextDouble();   // ⚠ 1回だけ引く（従来 MathUtil.Chance と同じ消費）
-        return Times(
-            RunnerTimeSeconds(runner, c, startType, target),
-            DefenseTimeSeconds(catcher, c, pitchout, startType, target),
-            LuckSeconds(u, c), u < p);
+        var catcherFielder = catcher.ToFielder(c.AbilityEffect);
+        var sigmaCm = catcherFielder.ThrowScatterSigmaCm;
+        var receiverCatching = receiver?.ToFielder(c.AbilityEffect).Catching ?? 50;
+
+        // 送球1本ぶんの実際の逸れ（issue #841）。「この捕手・この受け手自身の期待値」からの差分だけを
+        // 乗せる＝DefenseTimeSeconds（リーグ平均からの差分込みの期待値）はそのまま保ち、個々の本だけ
+        // 本物のばらつきが出る（ゼロ平均のノイズ。AIの読み=平均と実際の判定の平均が一致する）。
+        var scatter = ThrowScatterModel.Sample(sigmaCm, rng);
+        var sampledDelay = ThrowScatterModel.RecoverySeconds(
+            scatter, receiverCatching,
+            c.StealThrowScatterLateralSecPerCm, c.StealThrowScatterHighSecPerCm, c.StealThrowScatterShortHopSecPerCm,
+            c.StealThrowScatterCatchingReliefSlope, c.StealThrowScatterCatchingReliefMinFactor);
+        var ownExpectedDelay = RawExpectedScatterDelaySeconds(sigmaCm, receiverCatching, c);
+        var defenseSeconds = DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver)
+                              + (sampledDelay - ownExpectedDelay);
+        var wild = ThrowScatterModel.IsWild(scatter, c.StealThrowWildThresholdCm);
+
+        var runnerSeconds = RunnerTimeSeconds(runner, c, startType, target);
+        var bias = target == StealTarget.Third ? c.StealSuccessBias + c.StealThirdSuccessBias : c.StealSuccessBias;
+        var p = MathUtil.Clamp(MathUtil.Logistic((defenseSeconds - runnerSeconds + bias) / c.StealMarginScale), 0.01, 0.99);
+
+        var u = rng.NextDouble();   // ゆらぎ＋勝敗（逆関数法）
+        var safe = wild || u < p;
+        return Times(runnerSeconds, defenseSeconds, LuckSeconds(u, c), safe);
     }
 
     /// <summary>
     /// 抽選せずに結果を与えて秒を組む（強制発動＝デバッグ注入と、判定を持たない絵づくり用）。
-    /// ゆらぎ0から始め、与えられた結果と食い違うときだけ最小の秒へ寄せる。
+    /// ゆらぎ0から始め、与えられた結果と食い違うときだけ最小の秒へ寄せる。送球の逸れは期待値のみ
+    /// （<see cref="DefenseTimeSeconds"/>）＝サンプリングしない（抽選しない呼び出しのため）。
     /// </summary>
     public static StealVerdict Forced(
         Player runner, Player catcher, BaserunningCoefficients c, StealResult result,
-        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second)
+        bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
+        Player? receiver = null)
         => Times(
             RunnerTimeSeconds(runner, c, startType, target),
-            DefenseTimeSeconds(catcher, c, pitchout, startType, target),
+            DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver),
             0.0, result == StealResult.Safe);
 
     /// <summary>ゆらぎ[s]（+で走者有利）。logistic(0, StealMarginScale) の逆関数法。</summary>

@@ -1083,14 +1083,19 @@ public static class GameEngine
                         // 強制発動（F4）は抽選をスキップして成否を固定する。ここだけ乱数の消費順が変わるが、
                         // 強制した試合は HasForcedOutcomes で digest・統計から丸ごと外れるので影響が漏れない。
                         // 非強制時 paBaserunning は ctx.Baserunning と同一参照＝従来の乱数順・結果に不変。
+                        // 送球の逸れ（issue #841）の受け手＝二塁カバーの遊撃手（BuildSteal の二盗送球と同じ約束）。
+                        var secondBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.Shortstop);
                         var steal = force switch
                         {
                             Debugging.ForcedOutcome.StealSuccess => StealResolver.Forced(
-                                bases.First, defense.Catcher, paBaserunning, StealResult.Safe, pitchout, stealStart),
+                                bases.First, defense.Catcher, paBaserunning, StealResult.Safe, pitchout, stealStart,
+                                receiver: secondBaseReceiver),
                             Debugging.ForcedOutcome.StealCaught => StealResolver.Forced(
-                                bases.First, defense.Catcher, paBaserunning, StealResult.CaughtStealing, pitchout, stealStart),
+                                bases.First, defense.Catcher, paBaserunning, StealResult.CaughtStealing, pitchout, stealStart,
+                                receiver: secondBaseReceiver),
                             _ => StealResolver.ResolveVerdict(
-                                bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart),
+                                bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart,
+                                receiver: secondBaseReceiver),
                         };
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.First, safe);
@@ -1176,8 +1181,11 @@ public static class GameEngine
                         var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
+                        // 送球の逸れ（issue #841）の受け手＝三塁カバーの三塁手（BuildSteal の三盗送球と同じ約束）。
+                        var thirdBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.ThirdBase);
                         var steal = StealResolver.ResolveVerdict(
-                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart, StealTarget.Third);
+                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart, StealTarget.Third,
+                            receiver: thirdBaseReceiver);
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.Second, safe);
                         stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
@@ -1338,7 +1346,9 @@ public static class GameEngine
                     && !(outs >= 2 && pitchRes.EndsPlateAppearance))
                 {
                     var caughtRunner = bases.First;
-                    var stealSafeProb = StealResolver.SuccessProbability(bases.First, defense.Catcher, paBaserunning)
+                    var stealSafeProb = StealResolver.SuccessProbability(
+                            bases.First, defense.Catcher, paBaserunning,
+                            receiver: defense.PlayerAtPosition(Field.FieldPosition.Shortstop))
                             - ctx.Tactics.HitAndRunCaughtPenalty;
                     var caughtSafe = bases.Second is null
                         && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng);
@@ -2430,7 +2440,10 @@ public static class GameEngine
         if (runner.Steal < ctx.StealAttemptThreshold) return 0;
 
         var catcher = defense.Catcher;
-        var safe = StealResolver.Resolve(runner, catcher, ctx.Baserunning, rng) == StealResult.Safe;
+        // 送球の逸れ（issue #841）の受け手＝二塁カバーの遊撃手（BuildSteal の二盗送球と同じ約束）。
+        var safe = StealResolver.Resolve(
+            runner, catcher, ctx.Baserunning, rng,
+            receiver: defense.PlayerAtPosition(Field.FieldPosition.Shortstop)) == StealResult.Safe;
         offense.RecordSteal(runner, safe);
         if (safe)
         {

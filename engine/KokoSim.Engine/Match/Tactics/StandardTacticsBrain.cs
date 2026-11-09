@@ -208,7 +208,12 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     /// 動くだけで企図数が0↔上限へ跳ぶ「崖」の原因）。差分を0でゼロに固定したロジスティック
     /// （<c>2*logistic(kx)-1</c>, x&gt;=0のみ）に通し、損益分岐ちょうどは0・余裕があるほど
     /// <paramref name="attemptProb"/> へなだらかに近づける＝閾値未満ゼロの不変条件はそのまま、
-    /// 閾値直上での「即満額」だけを崖からなだらかな立ち上がりへ変える。</para></summary>
+    /// 閾値直上での「即満額」だけを崖からなだらかな立ち上がりへ変える。</para>
+    ///
+    /// <para><see cref="TacticsSituation"/> はベースカバー役（遊撃手/三塁手）を持たないため、送球の逸れ
+    /// （issue #841）の受け手はCatching=50（恒等）で見込む＝送球精度（捕手）の効きは正しく読むが、
+    /// 受け手の捕球能力ぶんの読みは近似（実際の判定は<see cref="KokoSim.Engine.Match.Game.GameEngine"/>
+    /// が実際のカバー役で解決する）。</para></summary>
     private (StartType Start, StealTarget Target)? AttemptSteal(
         Player runner, Player catcher, StealTarget target, double minSuccess, double attemptProb, IRandomSource rng)
     {

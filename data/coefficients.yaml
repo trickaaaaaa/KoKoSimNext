@@ -241,6 +241,11 @@ fielding:
   # 加算してもう一度同じ判定基準で再評価する（拾い直しが間に合えばアウトのまま）。
   wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）
   recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
+  # 捕球ミス（お手玉）の回収レース（design-14 P1-6 追記, issue #817）。送球逸れの回収レースと同じ形で、
+  # 捕球エラー確定後も「弾いたら即失策」にしない。こぼれ幅→拾い直しのロス（recovery_reaction_seconds共有+
+  # こぼれ幅÷脚力）を守備所要時間へ加算してもう一度同じ判定基準で再評価する（間に合えばアウトに戻る）。
+  # こぼれた球は捕球点のすぐそば＝バックアップ野手の概念は無く、回収役は常に処理野手自身。
+  catch_fumble_scatter_sigma_m: 2.5   # こぼれ幅の標準偏差[m]（半正規分布）。送球逸れ(6.0)より小さい
   # ファウルフライ（issue #830）。接触判定の「ファウル」（弾道なし）のうち一定割合に打ち上がった弾道を与え、
   # ファウルグラウンド（バックネット 18.3m・ライン外 13m）に落ちる前に野手（捕手を含む）が届けばアウト。
   # 弾道は別の乱数ストリーム（Fork）で引く＝ファウル以外の打席の乱数順は不変。0で無効。
@@ -352,6 +357,15 @@ baserunning:
   pickoff_runner_lead_slope: 0.0015
   pickoff_pitcher_sense_slope: 0.001
   pickoff_max_prob: 0.08
+  # 送球の逸れ（捕手の盗塁送球, issue #841）: 送球精度から決まる散布σ（FielderAttributes.ThrowScatterSigmaCm）を
+  # ThrowScatterModel で2次元正規分布へサンプリングし、横・浮き・ショートバウンドをそれぞれ重みづけて受け手の
+  # タッチ/捕球までの秒へ加算する。受け手の捕球能力(Catching)で縮む。
+  steal_throw_scatter_lateral_sec_per_cm: 0.0015
+  steal_throw_scatter_high_sec_per_cm: 0.0010
+  steal_throw_scatter_short_hop_sec_per_cm: 0.0030
+  steal_throw_scatter_catching_relief_slope: 0.004
+  steal_throw_scatter_catching_relief_min_factor: 0.60
+  steal_throw_wild_threshold_cm: 70.0   # 逸れ(RadialCm)がこれ以上で悪送球＝無条件セーフ
   # バント（設計書02 §4.3）
   bunt_base: 0.60
   bunt_skill_slope: 0.005          # バント×0.5%
