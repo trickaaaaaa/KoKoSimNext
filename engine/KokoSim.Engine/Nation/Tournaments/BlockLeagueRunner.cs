@@ -459,6 +459,19 @@ public sealed class BlockLeagueRunner : ITournamentRunner
 
     private bool Involves(Card c) => c.A.Id == _managerId || c.B.Id == _managerId;
 
+    /// <inheritdoc/>
+    public WeatherSample? PeekNextMatchWeather(WeatherCoefficients coefficients)
+    {
+        if (_nextOpponent is null) return null;
+        var mine = CardsOf(_roundIndex).FirstOrDefault(Involves);
+        if (mine is null) return null;
+        // AdvanceUntilPlayerMatch / ResolveRound が自校カードで辿る鎖と同一: _rng.Fork(PlayerStream(...)) が
+        // Resolve/BeginLive の "rng" 引数、その .Fork(2) が GameEngine 側の matchRng（天候Forkの親）。
+        // 両方 Fork のみ＝ _rng は1ビットも消費しない。
+        var matchRng = _rng.Fork(PlayerStream(_roundIndex, mine.Index)).Fork(2);
+        return WeatherModel.SampleForMatch(matchRng, coefficients);
+    }
+
     /// <summary>第 round 節（0基点）の全カード（ブロック順→ブロック内の組み順）。添字は節の中で0から通し。</summary>
     private List<Card> CardsOf(int round)
     {

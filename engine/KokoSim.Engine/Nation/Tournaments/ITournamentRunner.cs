@@ -58,4 +58,14 @@ public interface ITournamentRunner
 
     bool CanCaptureState { get; }
     TournamentRunnerState CaptureState();
+
+    /// <summary>
+    /// 自校の次戦に実際に効く天気（状態＋気温）を、試合を解決せずに覗く（表示用, Issue #803）。
+    /// 後で <see cref="PlayNextPlayerMatch"/>／<see cref="BeginNextPlayerMatch"/> が辿るのと同一の
+    /// Fork鎖（本流rng→対戦カードのFork→試合Fork→天候Fork）を辿るだけで、rng を1つも消費しない
+    /// （Fork は親の状態を進めない, 不変条件#2）＝覗いた値と実際に試合へ適用される値は常に一致する
+    /// （<see cref="WeatherModel.SampleForMatch"/> 参照。UIで抽選し直さない契約）。
+    /// 次戦相手が未確定（<see cref="Finished"/> 等）なら null。
+    /// </summary>
+    WeatherSample? PeekNextMatchWeather(WeatherCoefficients coefficients);
 }

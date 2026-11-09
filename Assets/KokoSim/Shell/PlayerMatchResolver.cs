@@ -31,7 +31,7 @@ namespace KokoSim.Unity.Shell
                 new GameContext
                 {
                     MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
-                    Weather = WeatherModel.ForSeason(CurrentSeason()),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
+                    Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -61,7 +61,7 @@ namespace KokoSim.Unity.Shell
                     // 自校の投手交代はプレイヤーの采配権にする（Resolve側＝観戦しない裏解決には付けない）。
                     PlayerControlsPitcherChanges = true,
                     MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
-                    Weather = WeatherModel.ForSeason(CurrentSeason()),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
+                    Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -151,6 +151,13 @@ namespace KokoSim.Unity.Shell
         /// （<see cref="SeasonClock"/> と同じ <see cref="SeasonCalendar.DateOf"/> を単一ソースにする）。
         /// </summary>
         private static WeatherSeason CurrentSeason() => WeatherModel.SeasonFor(Calendar.DateOf(GameClock.Week).Month);
+
+        /// <summary>
+        /// 今週の天気係数（Issue #803）。<see cref="Resolve"/>/<see cref="BeginLive"/> が試合へ渡す値と
+        /// 同一の入口＝ホーム画面の対戦カードが <c>ITournamentRunner.PeekNextMatchWeather</c> で覗く天気も、
+        /// 必ずこの係数で引く（覗いた値と実際に試合へ適用される値が食い違わない）。
+        /// </summary>
+        public static WeatherCoefficients CurrentWeatherCoefficients() => WeatherModel.ForSeason(CurrentSeason());
 
         /// <summary>
         /// 相手校ラインナップを「校ID＋年度」から決定論生成する。大会展望が同じ入口で同じチームを引くので、

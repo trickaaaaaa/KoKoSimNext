@@ -543,7 +543,13 @@ namespace KokoSim.Unity.Home
                 SetText("away-sub", v.AwaySub);
                 SetText("game-date", v.GameDate);
                 SetText("venue", v.Venue);
-                SetText("weather", "天気 " + v.Weather);
+                // 天気（issue #803）。試合の無い週・次戦未確定は WeatherLabel が空＝欄ごと隠す（固定文字の廃止）。
+                var weatherGroup = _root.Q<VisualElement>("weather-group");
+                if (weatherGroup != null)
+                    weatherGroup.style.display = string.IsNullOrEmpty(v.WeatherLabel) ? DisplayStyle.None : DisplayStyle.Flex;
+                SetText("weather-label", v.WeatherLabel);
+                SetText("weather-temp-num", v.WeatherTempValue);
+                SetText("weather-temp-unit", v.WeatherTempUnit);
             }
             else
             {
