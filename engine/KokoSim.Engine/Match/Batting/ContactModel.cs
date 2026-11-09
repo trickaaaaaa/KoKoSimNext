@@ -31,19 +31,39 @@ public static class ContactModel
         BattingCoefficients coeff,
         int familiarityPa = 0)
     {
+        // 誘発変化量の欺瞞効果は実球速で割り引く（issue #837・設計書21 §3.5）。遅い球ほど見る時間が長く、
+        // 大きなホップに欺かれにくい＝球威・タイミング・打球質の球速項（反応球速で寝かせ済み）と対称に扱う。
+        var effectiveBreak = features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff);
+
         // 投打差 d＝球威（腕の振り＋捕手リード）− ミート項。差の効きは soft-cap で飽和させる
         // （issue matchup-gap-saturation-k-rate）: 互角近傍は線形のまま、大差で頭打ち。
         var matchup = plan.Stuff - coeff.WhiffContactSlope * (batter.Contact - 50);
         var z = coeff.WhiffIntercept
                 + SaturateMatchup(matchup, coeff.WhiffMatchupCap)
-                + coeff.WhiffBreakSlope * features.BreakMagnitudeM
+                + coeff.WhiffBreakSlope * effectiveBreak
                 // 慣れ（設計書02 §2.3b）: 同一投手との対戦回数ぶん空振りにくくなる。変化量が大きい球ほど割引。
-                - coeff.FamiliarityWhiffPerPa * FamiliarityEffect(familiarityPa, features.BreakMagnitudeM, coeff);
+                - coeff.FamiliarityWhiffPerPa * FamiliarityEffect(familiarityPa, effectiveBreak, coeff);
         if (!inZone)
         {
             z += coeff.WhiffOutOfZonePenalty;
         }
         return MathUtil.Logistic(z);
+    }
+
+    /// <summary>
+    /// 誘発変化合成量[m]の欺瞞効果への実球速割引（issue #837・設計書21 §3.5）。基準球速
+    /// <see cref="BattingCoefficients.BreakDeceptionRefKmh"/> 以上は満額（1.0）、それ未満は
+    /// (実球速/基準球速)^<see cref="BattingCoefficients.BreakDeceptionExponent"/> まで減衰する。
+    /// 指数0以下＝無効（従来どおり割引なし）。球速は<b>実球速</b>（<see cref="PitchPlan.VelocityKmh"/>）を読む＝
+    /// 反応球速で寝かせた球威・タイミング・打球質の球速項とは別入口（物理の変化量自体は変えない）。
+    /// </summary>
+    public static double BreakDeceptionFactor(double velocityKmh, BattingCoefficients coeff)
+    {
+        if (coeff.BreakDeceptionExponent <= 0.0 || coeff.BreakDeceptionRefKmh <= 0.0) return 1.0;
+        if (velocityKmh <= 0.0) return 0.0;
+        var ratio = velocityKmh / coeff.BreakDeceptionRefKmh;
+        var factor = System.Math.Pow(ratio, coeff.BreakDeceptionExponent);
+        return factor < 1.0 ? factor : 1.0;
     }
 
     /// <summary>
@@ -70,21 +90,25 @@ public static class ContactModel
     /// 打球質を動かす。速い球は当たれば強い打球になり（本格派の代償）、制球とキレは芯を外させる（技巧派の武器）。
     /// 3項とも基準値で0＝リーグ平均投手では恒等なので、係数を入れても得点環境の平均は動かない。
     /// 球速は反応球速（<see cref="PitchPlan.ReactionKmh"/>＝効きを通した値）を読む（設計書21）。
+    /// 変化量だけは欺瞞効果の実球速割引（<see cref="BreakDeceptionFactor"/>）を通した値を使う（issue #837）。
     /// </summary>
     public static double PitcherContactQualityBias(
         PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
         => coeff.ContactQualityPerKmh * (plan.ReactionKmh - coeff.ContactQualityVelocityRefKmh)
            + coeff.ContactQualityPerControl * (plan.ControlLevel - 50.0)
-           + coeff.ContactQualityPerBreakM * (features.BreakMagnitudeM - coeff.ContactQualityBreakRefM);
+           + coeff.ContactQualityPerBreakM
+               * (features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.ContactQualityBreakRefM);
 
     /// <summary>
     /// タイミングのズレの平均（設計書01 §2④, issue #262）。正＝差し込まれ（遅れ）／負＝早い。
     /// 速い球・変化の大きい球ほど遅れ、ミートが良いほどズレない。実測から直接引けるよう Resolve と分離。
+    /// 変化量だけは欺瞞効果の実球速割引（<see cref="BreakDeceptionFactor"/>）を通した値を使う（issue #837）。
     /// </summary>
     public static double TimingOffsetMean(
         BatterAttributes batter, PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
         => coeff.TimingPerKmh * (plan.ReactionKmh - coeff.TimingRefKmh)
-           + coeff.TimingPerBreakM * (features.BreakMagnitudeM - coeff.TimingBreakRefM)
+           + coeff.TimingPerBreakM
+               * (features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.TimingBreakRefM)
            - coeff.TimingPerContact * (batter.Contact - 50);
 
     /// <summary>

@@ -311,7 +311,6 @@ ability_sensitivity:
     pitcher_sharpness: { defense: { expect: down, min_runs: 0.25 } }
   # 既知の不具合で今は満たせない項目（除外リスト）。直ったら**外す**（外し忘れは Heavy が「もう通っている」と赤くする）。
   known_defects:
-    - { ability: velocity_ladder, side: defense, issue: 837, note: "最速 100/110km/h の方が 132km/h より相手得点が少ない（遅い投手ほど打たれない）" }
     - { ability: repertoire,      side: defense, issue: 835, note: "変化球の本数を変えても相手得点が動かない（全球種バックスピン固定）" }
     - { ability: catcher_arm,     side: defense, issue: 838, note: "弱肩の捕手だと相手が走って損をし、相手得点が基準より減る" }
     - { ability: steal_fast,      side: offense, issue: 838, note: "走力80で盗塁を上げると企図が増えて成功率51%＝得点が下がる" }
