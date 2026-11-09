@@ -338,8 +338,8 @@ baserunning:
   # 盗塁（設計書02 §4.2）: すべて秒の時間軸で校正（🟡 設計書07で実タイムに合わせ込む）
   steal_lead_distance_m: 23.5
   catch_throw_distance_m: 38.8
-  steal_reaction_intercept: 0.90   # スタート遅延[s] = intercept − steal×slope（Step4再校正: 快足を3.4秒台へ）
-  steal_reaction_slope: 0.004
+  steal_reaction_intercept: 0.95   # スタート遅延[s] = intercept − steal×slope。issue #838 で 0.90→0.95（傾き倍化に合わせ、平均的な走者の遅延を 0.70→0.55 へ）
+  steal_reaction_slope: 0.008   # issue #838: 盗塁能力の差が秒に出るよう倍化（盗塁50の遅延は 0.95−0.40＝0.55）
   steal_jump_credit_seconds: 0.19  # ジャンプ[s]。走者は投手の始動を読んで既に動き出している＝遅延から差し引く（床の後に引く）。steal_success_bias 0.38 を物理層へ移した半分（2026-08-14）。走力50/盗塁50の二塁到達 3.94→3.75秒（高校生の実測3.6〜3.8秒へ）
   pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
   pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋立ち上がり＋送球時間）
@@ -514,7 +514,7 @@ baserunning:
   steal_expectedness_intercept: 0.42         # 盗塁企図の基準「予想されやすさ」E
   steal_expectedness_steal_slope: 0.006      # Steal能力→予想度（快足盗塁屋は読まれやすい）
   gamble_unexpectedness_reduction: 0.28      # ギャンブル始動は意表＝予想度を下げる（G3b配線）
-  steal_read_intercept: 0.50                 # 読み力の基準（捕手リード＋投手センス）
+  steal_read_intercept: 0.15                 # 読み力の基準（捕手リード＋投手センス）。issue #838 で 0.50→0.15（盗塁屋が3割の確率でピッチアウトされていた）
   steal_read_catcher_lead_slope: 0.006       # 捕手リード(Lead−50)あたり読み力加算
   steal_read_pitcher_sense_slope: 0.003      # 投手センス(Mental−50)あたり読み力加算
   max_pitchout_prob: 0.55                    # 読み切っても上限
@@ -694,8 +694,12 @@ tactics:
   # issue steal-thresholds-unreachable（2026-08-27）: 旧0.72は実ロスター実測の到達可能上限（p99=60.7%・
   # max=65.8%）を超えていて原理的に一度も通らない死にコードだった。0.50は概ねp70相当（詳細は
   # TacticsCoefficients.StealMinSuccess のコメント参照）。
-  steal_min_success: 0.50          # 解決式の成功見込みがこの値以上で仕掛ける
+  steal_min_success: 0.65          # 読まれる確率込みの成功見込みがこの値以上で仕掛ける（issue #838: 0アウトの損益分岐の近似）
   steal_prob: 0.45
+  # issue #838: 損益分岐のアウト数別オフセット（セイバーメトリクス近似）と、閾値直上の崖をなだらかにする傾き。
+  steal_min_success_one_out_offset: -0.03
+  steal_min_success_two_out_offset: 0.10
+  steal_attempt_logistic_steepness: 40.0
   # 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。塁状況が排他のため
   # 一・三塁の重盗（baserunning.double_steal_third_break_prob）とは競合しない。
   # 三盗: issue steal-thresholds-unreachable（2026-08-27）: 旧コメントの想定天井（俊足×弱肩でも≈0.4〜0.65）

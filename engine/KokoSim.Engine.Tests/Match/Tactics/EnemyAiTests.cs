@@ -156,7 +156,7 @@ public sealed class EnemyAiTests
     // 超える帯（設計書15 Phase D-2d で「試みるか」と「始動種別」が1メソッドに統合されたため、
     // どちらの校風でも試み自体は発生する見込みを選ぶ）。
     private static TacticsSituation MarginalStealSit()
-        => Sit(inning: 8, outs: 0, first: P(speed: 80, steal: 80), batter: P(power: 72));
+        => Sit(inning: 8, outs: 0, first: P(speed: 70, steal: 70), batter: P(power: 72));  // issue #838 の物理見直しで 80/80 は余裕の側へ移った
 
     private static int CountGambles(SchoolStyle style, int tier, int n = 600)
     {

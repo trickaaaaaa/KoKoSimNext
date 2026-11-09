@@ -36,14 +36,13 @@ public sealed record TacticsCoefficients
     /// 死にコードだった。現行値 0.50 は概ね p70 相当（実測 p50=40.4%・p75=48.3%）＝「上位3割程度の
     /// 好機だけ仕掛ける」という元の設計意図をいまの解決式で実現する値。</para>
     ///
-    /// <para>issue #838（2026-11-09）: 本エンジンには得点期待値（run expectancy）表が無く、自前構築は
-    /// このissueの対象外（オーナー決定）。そこで一般的なセイバーメトリクス近似（0死≈損益分岐そのもの・
-    /// 2アウトは失敗の代償が小さく損益分岐が上がる）を<see cref="StealMinSuccessOneOutOffset"/>/
-    /// <see cref="StealMinSuccessTwoOutOffset"/>の固定オフセットで載せ、この値は「0アウトの損益分岐の
-    /// 近似値」を兼ねる。実測（2000試合×2seed, <c>TacticsGames_StayWithinTargetBands</c>）で帯内に
-    /// 収まることを確認済み。到達可能レンジの制約から、セイバーメトリクスの素の目安（≈0.70〜0.75）より
-    /// 低い値に留めている（要実測微調整、2026-11-09時点の値）。</para></summary>
-    public double StealMinSuccess { get; init; } = 0.56;
+    /// <para>issue #838（2026-11-09）: 損益分岐（一般的なセイバーメトリクス近似≈0.70）に寄せた。比べる見込みは
+    /// <see cref="Game.StealResolver.ExpectedSuccessProbability"/>（守備に読まれる確率込み）。読まれない場合だけの
+    /// 見込みで比べると、盗塁のうまい走者ほど読まれて実成功が見込みを約7ポイント下回っていた。0.65 で走った盗塁の
+    /// 実成功は 69〜72%（simulate-games tactics 2000試合×2シード）。得点期待値表（run expectancy）は持たず、
+    /// アウト数別の固定オフセット（<see cref="StealMinSuccessOneOutOffset"/>/<see cref="StealMinSuccessTwoOutOffset"/>）で
+    /// 近似する（表の自前構築はオーナー決定で対象外）。</para></summary>
+    public double StealMinSuccess { get; init; } = 0.65;
     /// <summary>1アウトの損益分岐オフセット（<see cref="StealMinSuccess"/>への加算）。残り打席を気にせず
     /// 先の塁を取りに行く価値が無死よりやや下がるため負（issue #838・セイバーメトリクス近似の目安 -0.03）。</summary>
     public double StealMinSuccessOneOutOffset { get; init; } = -0.03;
@@ -57,7 +56,7 @@ public sealed record TacticsCoefficients
     /// 余裕（損益分岐からの差）をゼロ始点のロジスティック（<c>StandardTacticsBrain.AttemptSteal</c>の
     /// <c>2*logistic(kx)-1</c>）に通し、閾値ちょうどは0・余裕が大きいほど <see cref="StealProb"/> へ
     /// なだらかに近づける＝旧来の「閾値を跨いだ瞬間に満額」をなだらかな立ち上がりに変える。
-    /// 既定15は「差0.05で約4割・差0.10で約6割・差0.20で約9割」程度の立ち上がり（要実測微調整）。</summary>
+    /// 既定40は「差0.025で約5割・差0.05で約76%・差0.10でほぼ満額」の立ち上がり。</summary>
     public double StealAttemptLogisticSteepness { get; init; } = 40.0;
     public double StealProb { get; init; } = 0.45;
 

@@ -1816,6 +1816,9 @@ public static class CoefficientsLoader
         public int SqueezeMinBunt { get; set; } = D.SqueezeMinBunt;
         public double StealMinSuccess { get; set; } = D.StealMinSuccess;
         public double StealProb { get; set; } = D.StealProb;
+        public double StealMinSuccessOneOutOffset { get; set; } = D.StealMinSuccessOneOutOffset;
+        public double StealMinSuccessTwoOutOffset { get; set; } = D.StealMinSuccessTwoOutOffset;
+        public double StealAttemptLogisticSteepness { get; set; } = D.StealAttemptLogisticSteepness;
         // 三盗・本盗（issue #67）
         public double StealThirdMinSuccess { get; set; } = D.StealThirdMinSuccess;
         public double StealThirdProb { get; set; } = D.StealThirdProb;
@@ -1953,6 +1956,9 @@ public static class CoefficientsLoader
             SqueezeMinBunt = SqueezeMinBunt,
             StealMinSuccess = StealMinSuccess,
             StealProb = StealProb,
+            StealMinSuccessOneOutOffset = StealMinSuccessOneOutOffset,
+            StealMinSuccessTwoOutOffset = StealMinSuccessTwoOutOffset,
+            StealAttemptLogisticSteepness = StealAttemptLogisticSteepness,
             StealThirdMinSuccess = StealThirdMinSuccess,
             StealThirdProb = StealThirdProb,
             StealThirdMaxOuts = StealThirdMaxOuts,

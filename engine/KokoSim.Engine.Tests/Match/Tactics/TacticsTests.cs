@@ -105,12 +105,13 @@ public sealed class TacticsTests
     public void Brain_StartType_MarginalSteal_SometimesGambles()
     {
         // 成功見込みが際どい盗塁（通常始動では心もとない）＝好ジャンプ・意表のギャンブルに賭ける。
-        // 試みが発生するために StealMinSuccess(0.72) 以上、ギャンブル対象になるために
+        // 試みが発生するために StealMinSuccess 以上、ギャンブル対象になるために
         // GambleStartMaxSuccess(0.82) 未満の帯を狙う（設計書15 Phase D-2d で両判定が1メソッドに統合された）。
+        // 見込みは読まれる確率込み（issue #838・AI が実際に比べる値）。
         var brain = new StandardTacticsBrain(C, Br);
-        var runner = P(speed: 80, steal: 80);
-        var catcher = P(arm: 60, pos: FieldPosition.Catcher);
-        var est = StealResolver.SuccessProbability(runner, catcher, Br);
+        var runner = P(speed: 65, steal: 65);
+        var catcher = P(arm: 50, pos: FieldPosition.Catcher);
+        var est = StealResolver.ExpectedSuccessProbability(runner, catcher, Pitcher(), Br);
         Assert.True(est >= C.StealMinSuccess && est < C.GambleStartMaxSuccess, $"前提: 際どい見込みのはず est={est}");
         var s = Situation(first: runner, catcher: catcher);
         Assert.True(GambleCount(brain, s, 300) > 0, "際どい盗塁でギャンブル始動が一度も出ない");
@@ -123,7 +124,7 @@ public sealed class TacticsTests
         var brain = new StandardTacticsBrain(C, Br);
         var runner = P(speed: 95, steal: 95);
         var catcher = P(arm: 20, pos: FieldPosition.Catcher);
-        var est = StealResolver.SuccessProbability(runner, catcher, Br);
+        var est = StealResolver.ExpectedSuccessProbability(runner, catcher, Pitcher(), Br);
         Assert.True(est >= C.GambleStartMaxSuccess, $"前提: 余裕の見込みのはず est={est}");
         var s = Situation(first: runner, catcher: catcher);
         Assert.Equal(0, GambleCount(brain, s, 300));

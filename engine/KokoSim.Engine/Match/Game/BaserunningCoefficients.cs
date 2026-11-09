@@ -84,8 +84,8 @@ public sealed record BaserunningCoefficients
     public double CatchThrowDistanceM { get; init; } = 38.8;
     /// <summary>スタート遅延[s] = Intercept − Steal×Slope（盗塁パラメータでスタートが速くなる）。
     /// スプリント速度は天井速度（加速ランプ非モデル化）なので、反応＋加速不足をこの遅延で吸収する（Step4再校正）。</summary>
-    public double StealReactionIntercept { get; init; } = 0.90;
-    public double StealReactionSlope { get; init; } = 0.004;
+    public double StealReactionIntercept { get; init; } = 0.95;
+    public double StealReactionSlope { get; init; } = 0.008;
     /// <summary>
     /// ジャンプ[s]（走者が投手の始動を読んで既に動き出している分。上の遅延から差し引く）。
     ///
@@ -568,7 +568,7 @@ public sealed record BaserunningCoefficients
     /// <summary>ギャンブル始動は意表＝予想度を下げる（読まれにくくなる）。</summary>
     public double GambleUnexpectednessReduction { get; init; } = 0.28;
     /// <summary>守備の読み力の基準（捕手リード＋投手センスが50/50で得られる読み力）。</summary>
-    public double StealReadIntercept { get; init; } = 0.50;
+    public double StealReadIntercept { get; init; } = 0.15;
     /// <summary>捕手リード(Lead−50)あたりの読み力加算。</summary>
     public double StealReadCatcherLeadSlope { get; init; } = 0.006;
     /// <summary>投手センス(Mental−50)あたりの読み力加算（バッテリーで読む）。</summary>

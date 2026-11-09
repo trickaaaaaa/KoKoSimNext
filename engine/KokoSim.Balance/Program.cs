@@ -178,6 +178,7 @@ internal static class CommandLine
         string? reportPath = null;
         string? coefficientsPath = null;
         string? targetsPath = null;
+        System.Collections.Generic.HashSet<string>? only = null;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -187,13 +188,15 @@ internal static class CommandLine
                 case "--report": reportPath = RequireValue(args, ref i); break;
                 case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
                 case "--targets": targetsPath = RequireValue(args, ref i); break;
+                // 調整中は見たい項目だけ回す（全24項目×2水準は重い）。例: --only speed,steal,steal_fast,catcher_arm
+                case "--only": only = new System.Collections.Generic.HashSet<string>(RequireValue(args, ref i).Split(',')); break;
                 default: return Fail($"未知のオプション: {args[i]}");
             }
         }
         targetsPath ??= System.IO.File.Exists("data/balance-targets.yaml") ? "data/balance-targets.yaml" : null;
         var targets = targetsPath is null ? null : BalanceTargetsLoader.LoadAbilitySensitivityFromFile(targetsPath);
 
-        var result = AbilitySweep.Run(games, seed, coefficientsPath);
+        var result = AbilitySweep.Run(games, seed, coefficientsPath, only);
         var report = AbilitySweep.Report(result, targets);
         if (reportPath is not null)
         {
@@ -632,7 +635,7 @@ internal static class CommandLine
         Console.WriteLine("                  # ティア格子（強度30〜60の総当たり）＋実プレイの自校vs相手校＋ランク式の食い違い（issue #536・計測のみ）");
         Console.WriteLine("  defense-sensitivity [--games N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--cache path] [--budget-sec S]");
         Console.WriteLine("                  # 走力・守備を20/50/80/100に固定した守備側の失点・BABIP・アウト率＋打撃±30との比較（issue #832・計測のみ）");
-        Console.WriteLine("  ability-sweep   [--games N]   [--seed S] [--report path] [--coefficients ...] [--targets data/balance-targets.yaml]");
+        Console.WriteLine("  ability-sweep   [--games N]   [--seed S] [--report path] [--coefficients ...] [--targets data/balance-targets.yaml] [--only id,id]");
         Console.WriteLine("                  # 能力を1つずつ20/80に振り結果が動くかを見る（issue #840・片側だけ変更・先攻後攻入れ替え）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
         Console.WriteLine("  simulate-nation [--years N]   [--seed S] [--report path] [--school-names data/school-names.yaml]");

@@ -188,16 +188,21 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     {
         if (s.OnFirst is not null && s.OnSecond is null && s.Outs < 2)
         {
-            return AttemptSteal(s.OnFirst, s.Catcher, StealTarget.Second, _c.StealMinSuccessFor(s.Outs), _c.StealProb, rng);
+            return AttemptSteal(s.OnFirst, s.Catcher, s.Pitcher, StealTarget.Second, _c.StealMinSuccessFor(s.Outs), _c.StealProb, rng);
         }
         if (s.OnFirst is null && s.OnSecond is not null && s.OnThird is null
             && s.Outs <= _c.StealThirdMaxOuts && System.Math.Abs(s.ScoreDiff) <= _c.StealThirdMaxDiffAbs)
         {
-            return AttemptSteal(s.OnSecond, s.Catcher, StealTarget.Third, _c.StealThirdMinSuccess, _c.StealThirdProb, rng);
+            return AttemptSteal(s.OnSecond, s.Catcher, s.Pitcher, StealTarget.Third, _c.StealThirdMinSuccess, _c.StealThirdProb, rng);
         }
         // 単独の本盗（三塁のみ在塁）は採用しない（issue #788・2026-11-08 監督決定）。
         return null;
     }
+
+    /// <summary>損益分岐からの余裕 <paramref name="margin"/> に対する仕掛ける確率（issue #838）。余裕0未満は0、
+    /// 0ちょうども0で、余裕が大きいほど <paramref name="attemptProb"/> へなだらかに近づく（<c>2*logistic(kx)-1</c>）。</summary>
+    public static double StealAttemptProbability(double margin, double attemptProb, double steepness)
+        => margin < 0.0 ? 0.0 : attemptProb * (2.0 * MathUtil.Logistic(margin * steepness) - 1.0);
 
     /// <summary>損益分岐（<paramref name="minSuccess"/>）未満は仕掛けない（損をする盗塁を選ばない不変条件は維持）。
     /// 以上のときは、余裕（差分）が大きいほど高頻度・際どいほど低頻度で仕掛け、仕掛けた中でも際どいほど
@@ -215,12 +220,14 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     /// 受け手の捕球能力ぶんの読みは近似（実際の判定は<see cref="KokoSim.Engine.Match.Game.GameEngine"/>
     /// が実際のカバー役で解決する）。</para></summary>
     private (StartType Start, StealTarget Target)? AttemptSteal(
-        Player runner, Player catcher, StealTarget target, double minSuccess, double attemptProb, IRandomSource rng)
+        Player runner, Player catcher, Player pitcher, StealTarget target, double minSuccess, double attemptProb, IRandomSource rng)
     {
-        var estimate = StealResolver.SuccessProbability(runner, catcher, _br, target: target);
+        // 読まれる（ピッチアウト）確率まで込みの見込み（issue #838）。読まれない場合だけの見込みで判断すると、
+        // 盗塁のうまい走者ほど読まれて実成功が見込みを7ポイントほど下回り、損益分岐を守っても損をしていた。
+        var estimate = StealResolver.ExpectedSuccessProbability(runner, catcher, pitcher, _br, target: target);
         var margin = estimate - minSuccess;
         if (margin < 0.0) return null;
-        var p = attemptProb * (2.0 * MathUtil.Logistic(margin * _c.StealAttemptLogisticSteepness) - 1.0);
+        var p = StealAttemptProbability(margin, attemptProb, _c.StealAttemptLogisticSteepness);
         if (rng.NextDouble() >= p) return null;
         var start = estimate < _c.GambleStartMaxSuccess && rng.NextDouble() < _c.GambleStartProb
             ? StartType.Gamble
