@@ -965,7 +965,7 @@ enemy_ai:
   small_ball_bunt_factor: 1.4
   small_ball_bunt_inning_earlier: 2
   small_ball_hit_and_run_factor: 1.8
-  small_ball_steal_min_success_relax: 0.08
+  small_ball_steal_min_success_relax: 0.08 # issue #838 やること#3: 実測で確認済み。損する盗塁の増加要因ではない（内訳は三盗の既知クランプ＋無謀な盗塁の別メカニズム）
   small_ball_gamble_start_factor: 1.8   # 機動力校はギャンブル始動を多用（G3b）
   power_bunt_factor: 0.30
   power_take_factor: 1.5
@@ -981,7 +981,7 @@ enemy_ai:
   bunt_heavy_bunt_inning_earlier: 2
   run_and_gun_steal_factor: 1.6              # 2) 盗塁・エンドラン好き
   run_and_gun_hit_and_run_factor: 1.8
-  run_and_gun_steal_min_success_relax: 0.06
+  run_and_gun_steal_min_success_relax: 0.06 # issue #838 やること#3: 実測で確認済み。強肩相手では企図0件で問題なし
   ace_overuse_relieve_margin_factor: 1.6     # 3) エース酷使（継投を引っ張る＝諸刃。ハードキャップ撤廃で margin だけで表現, issue #356）
   quick_hook_relieve_margin_factor: 0.45     # 4) 継投早め
   quick_hook_defensive_sub_inning_earlier: 1
