@@ -2803,8 +2803,11 @@ public static class CoefficientsLoader
         public double FameDecay { get; set; } = D.FameDecay;
         public double FameGainCeiling { get; set; } = D.FameGainCeiling;
         public double FameSeasonRiseCap { get; set; } = D.FameSeasonRiseCap;
+        public double FameDecayHighThreshold { get; set; } = D.FameDecayHighThreshold;
+        public double FameDecayHigh { get; set; } = D.FameDecayHigh;
         public double FameUpsetWinPerTier { get; set; } = D.FameUpsetWinPerTier;
         public double FameUpsetLossPerTier { get; set; } = D.FameUpsetLossPerTier;
+        public double FameUpsetLossFameScale { get; set; } = D.FameUpsetLossFameScale;
         public double FameUpsetSeasonCap { get; set; } = D.FameUpsetSeasonCap;
         public double TrustReset { get; set; } = D.TrustReset;
         public double TrustPerWin { get; set; } = D.TrustPerWin;
@@ -2846,8 +2849,11 @@ public static class CoefficientsLoader
             FameDecay = FameDecay,
             FameGainCeiling = FameGainCeiling,
             FameSeasonRiseCap = FameSeasonRiseCap,
+            FameDecayHighThreshold = FameDecayHighThreshold,
+            FameDecayHigh = FameDecayHigh,
             FameUpsetWinPerTier = FameUpsetWinPerTier,
             FameUpsetLossPerTier = FameUpsetLossPerTier,
+            FameUpsetLossFameScale = FameUpsetLossFameScale,
             FameUpsetSeasonCap = FameUpsetSeasonCap,
             TrustReset = TrustReset,
             TrustPerWin = TrustPerWin,

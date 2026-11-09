@@ -42,12 +42,30 @@ public static class FameUpsetModel
     /// </summary>
     public static double SeasonDelta(IEnumerable<double> matchDeltas, CareerCoefficients c)
     {
+        var (gain, loss) = SeasonSplit(matchDeltas, c);
+        return gain + loss;
+    }
+
+    /// <summary>
+    /// <see cref="SeasonDelta(IEnumerable{double}, CareerCoefficients)"/> を上昇（金星・季上限適用済み）と
+    /// 取りこぼし（負）に分けて返す。年次の名声更新は両者を別枠で扱う（issue #868・<see cref="CareerEngine.NextFame"/>）。
+    /// </summary>
+    public static (double Gain, double Loss) SeasonSplit(IEnumerable<double> matchDeltas, CareerCoefficients c)
+    {
         double up = 0.0, down = 0.0;
         foreach (var d in matchDeltas)
         {
             if (d > 0) up += d; else down += d;
         }
         if (up > c.FameUpsetSeasonCap) up = c.FameUpsetSeasonCap;
-        return up + down;
+        return (up, down);
+    }
+
+    /// <summary><see cref="SeasonSplit(IEnumerable{double}, CareerCoefficients)"/> の試合列版（自校の強さは年度末の1値）。</summary>
+    public static (double Gain, double Loss) SeasonSplit(IEnumerable<TrackedMatch> matches, double selfStrength, CareerCoefficients c)
+    {
+        var deltas = new List<double>();
+        foreach (var m in matches) deltas.Add(MatchDelta(selfStrength, m.OpponentStrength, m.Won, c));
+        return SeasonSplit(deltas, c);
     }
 }

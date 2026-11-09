@@ -87,7 +87,7 @@ public static class CareerEngine
                 SimulateSeason(nation, managerSchool, prefId, nationCoeff, rng);
 
             // 番狂わせ連動の名声デルタ（issue #170）。自校 vs 相手の Tier 格差で金星/取りこぼしを算出。
-            var upsetFameDelta = FameUpsetModel.SeasonDelta(upsetMatches, managerSchool.Strength, c);
+            var (upsetFameGain, upsetFameLoss) = FameUpsetModel.SeasonSplit(upsetMatches, managerSchool.Strength, c);
 
             // 秋の大会フロー（設計書05 §1.5/§4）。監督校を全校に加えた一時全国で回す。
             // 独立ストリーム(Fork)＝夏の予選・監督成長・AI進化の乱数列を乱さない（既存キャリアの決定論を保存）。
@@ -106,7 +106,7 @@ public static class CareerEngine
             }
 
             // メタ更新。
-            ApplyResults(manager, reachedKoshien, nationalChampion, wins, upsetFameDelta, c);
+            ApplyResults(manager, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c);
             manager.CareerYears++;
             manager.YearsAtSchool++;
             if (reachedKoshien) manager.KoshienAppearances++;
@@ -218,8 +218,8 @@ public static class CareerEngine
     /// 非nullならスカウト費は年契約側（スカウト網 Lv1 が同額）に含まれるので二重には引かない。
     /// </param>
     internal static void ApplyResults(
-        Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameDelta, CareerCoefficients c,
-        ContractEffects? contracts = null)
+        Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameGain, double upsetFameLoss,
+        CareerCoefficients c, ContractEffects? contracts = null)
     {
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする
         // （「気づいたら練れていた」の意図に沿った緩やかなカーブ。線形だと十数年で99へ急上昇し
@@ -237,9 +237,9 @@ public static class CareerEngine
         m.TacticalSense = Grow(m.TacticalSense, 0.7);
         m.TalentEye = Grow(m.TalentEye, 0.5);
 
-        // 名声（持ち越し）。FamePerWin は勝利一律の加算、upsetFameDelta は Tier 格差ぶんの金星/取りこぼし
+        // 名声（持ち越し）。FamePerWin は勝利一律の加算、upsetFameGain/Loss は Tier 格差ぶんの金星/取りこぼし
         // （順当な結果には効かない＝二重計上でない, issue #170）。
-        m.Fame = NextFame(m.Fame, reachedKoshien, nationalChampion, wins, upsetFameDelta, c);
+        m.Fame = NextFame(m.Fame, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c);
 
         // 信頼度（校内）。
         var trust = m.Trust + c.TrustPerWin * wins + (reachedKoshien ? c.TrustKoshien : 0);
@@ -263,33 +263,45 @@ public static class CareerEngine
     }
 
     /// <summary>
-    /// 名声の1年ぶんの更新（設計書04 §1.2・2026-08-26 案C+D）。純関数＝乱数を引かない。
+    /// 名声の1年ぶんの更新（設計書04 §1.2・2026-08-26 案C+D、issue #868 で維持を難しく）。純関数＝乱数を引かない。
     ///
-    /// <para>形は「減衰＋上昇」だが、上昇側にだけ2段の抑えが入る:
+    /// <para>形は「減衰＋上昇−取りこぼし」で、上昇側と取りこぼし側を<b>別枠</b>で扱う:
     /// <list type="number">
-    /// <item>逓減（案C）: 上昇量に <c>(1 − 名声/FameGainCeiling)</c> を掛ける。定常値が
-    /// <c>100g/(20+g)</c> になり100へ張り付かない（強さ75の常勝校でも C 帯で落ち着く）。</item>
-    /// <item>年間上限（案D）: <b>正味の</b>上昇量を <see cref="CareerCoefficients.FameSeasonRiseCap"/> で
-    /// 頭打ちにする。県大会を制した年でも等級が1段ぶんずつしか動かない。</item>
-    /// </list>
-    /// どちらも下降側には効かない＝勝てなくなった王朝は従来どおり一世代で崩れる。</para>
+    /// <item>逓減（案C）: 上昇量（勝ち・甲子園・金星）にだけ <c>(1 − 名声/FameGainCeiling)</c> を掛ける。</item>
+    /// <item>減衰: 名声 <see cref="CareerCoefficients.FameDecayHighThreshold"/> までは <see cref="CareerCoefficients.FameDecay"/>、
+    /// それを超えた分には <see cref="CareerCoefficients.FameDecayHigh"/>＝名門ほど保つのに勝ち続けなければならない。</item>
+    /// <item>年間上限（案D）: 上昇後の<b>正味の</b>上昇量を <see cref="CareerCoefficients.FameSeasonRiseCap"/> で頭打ち。</item>
+    /// <item>取りこぼし: 上のあとに別枠で引く。<c>× (1 + 名声/FameUpsetLossFameScale)</c>＝名声が高いほど重い。
+    /// 勝ちの加点と先に足し合わせると、合計が正のとき逓減で丸ごと縮んで罰が消えてしまう。</item>
+    /// </list></para>
     /// </summary>
+    /// <param name="upsetFameGain">金星の名声上昇（0以上・季上限適用済み）。上昇側として逓減を受ける。</param>
+    /// <param name="upsetFameLoss">取りこぼしの名声低下（0以下）。逓減を受けず、名声に応じた倍率で引く。</param>
     public static double NextFame(
-        double fame, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameDelta,
-        CareerCoefficients c)
+        double fame, bool reachedKoshien, bool nationalChampion, int wins,
+        double upsetFameGain, double upsetFameLoss, CareerCoefficients c)
     {
         var gain = c.FamePerWin * wins
                    + (reachedKoshien ? c.FameKoshienAppearance : 0)
                    + (nationalChampion ? c.FameNationalChampion : 0)
-                   + upsetFameDelta;
+                   + upsetFameGain;
 
-        // 逓減は上昇側だけ（負のデルタに掛けると「名声が高いほど取りこぼしの罰が軽い」になって逆）。
         if (gain > 0 && c.FameGainCeiling > 0)
             gain *= Math.Max(0, 1.0 - fame / c.FameGainCeiling);
 
-        var next = fame * c.FameDecay + gain;
+        var low = Math.Min(fame, c.FameDecayHighThreshold);
+        var high = Math.Max(0, fame - c.FameDecayHighThreshold);
+        var kept = low * c.FameDecay + high * c.FameDecayHigh;
+
+        var next = kept + gain;
         // 正味の上昇の頭打ち。減衰で下がる年（next < fame）には効かない。
         if (next > fame + c.FameSeasonRiseCap) next = fame + c.FameSeasonRiseCap;
+
+        if (upsetFameLoss < 0)
+        {
+            var weight = c.FameUpsetLossFameScale > 0 ? 1.0 + fame / c.FameUpsetLossFameScale : 1.0;
+            next += upsetFameLoss * weight;
+        }
         return MathUtil.Clamp(next, 0, 100);
     }
 }

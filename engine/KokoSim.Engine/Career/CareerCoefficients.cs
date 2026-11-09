@@ -68,6 +68,15 @@ public sealed record CareerCoefficients
     /// </summary>
     public double FameSeasonRiseCap { get; init; } = 12.0;
 
+    // 2026-11-10（issue #868）: 名声を「上げるより維持するのが難しい」ものにする。
+    /// <summary>
+    /// これを超えた名声の分には <see cref="FameDecayHigh"/> の減衰を使う（以下は <see cref="FameDecay"/>）。
+    /// 名門ほど現状維持に勝ち続けなければならない。
+    /// </summary>
+    public double FameDecayHighThreshold { get; init; } = 60.0;
+    /// <summary>名声が <see cref="FameDecayHighThreshold"/> を超えた分にかかる年間の保持率（低いほど落ちやすい）。</summary>
+    public double FameDecayHigh { get; init; } = 0.70;
+
     // --- 番狂わせ連動の名声変動（issue #170, 設計書04 §1.2） ---
     // FamePerWin は「勝った事実」への一律加算のまま。ここは勝敗に加えて「相手との Tier 格差」だけを見る
     // 追加項で、順当な結果には効かない＝二重計上にならない（金星/取りこぼしのボーナス・ペナルティ）。
@@ -75,6 +84,11 @@ public sealed record CareerCoefficients
     public double FameUpsetWinPerTier { get; init; } = 3.0;
     /// <summary>格下に負けた時、Tier 格差1段あたりの名声低下（取りこぼし）。取りこぼしはやや重く。</summary>
     public double FameUpsetLossPerTier { get; init; } = 3.5;
+    /// <summary>
+    /// 取りこぼしの名声低下に掛ける倍率 <c>1 + 名声/この値</c> の分母（issue #868）。50 なら名声0で×1.0・50で×2.0・100で×3.0。
+    /// 名門ほど取りこぼしが許されない。0以下で倍率なし。取りこぼしは上昇側の逓減を受けず、別枠で引く。
+    /// </summary>
+    public double FameUpsetLossFameScale { get; init; } = 50.0;
     /// <summary>1シーズンの金星による名声上昇の上限（頭打ち＝短期で急上昇させない）。</summary>
     public double FameUpsetSeasonCap { get; init; } = 8.0;
 
