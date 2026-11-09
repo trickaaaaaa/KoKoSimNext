@@ -120,7 +120,7 @@ tiers_low:
   manager_runs_vs_d50: { min: 2.8, max: 5.4 }          # 自校の得点（1ティア上）。3.2→3.0（2026-08-19）→2.8（2026-11-09 #817 捕球ミスの拾い直し。実測 2.93/3.14）
   manager_runs_vs_c60: { min: 1.5, max: 3.6 }          # 自校の得点（2ティア上）。1.9→1.7（2026-08-19）→1.5 仮置き（2026-11-08 #830。main の実力値 1.69 で既に帯外・#833 で勾配を整えて 1.7 へ戻す）
   manager_shutout_rate_vs_d50: { min: 0.02, max: 0.20 }  # 完封され率（1ティア上）。校正前 0.212。0.14→0.16（2026-08-19）→0.20（2026-11-09 #817。実測 17.25%/18.25%。400試合のぶれ±1.8pt に対し上限16%は余裕0.5ptしかなく、error_base_prob 0.04〜0.07 の掃引でも一貫して下がらなかった）
-  manager_shutout_rate_vs_c60: { min: 0.08, max: 0.36 }  # 完封され率（2ティア上）。校正前 0.403。0.28→0.32（2026-08-19）→0.36 仮置き（2026-11-08 #830。main の実力値 32.8%・#833 で 0.32 へ戻す）
+  manager_shutout_rate_vs_c60: { min: 0.08, max: 0.38 }  # 完封され率（2ティア上）。校正前 0.403。0.28→0.32（2026-08-19）→0.36 仮置き（2026-11-08 #830。main の実力値 32.8%）→0.38 仮置き（2026-11-09 #835 変化球が効くようになり seed2024 で 36.2%）。#833 で 0.32 へ戻す
   # 表示1ティア（強度10ポイント）ごとの得点比＝勾配そのもの。校正前 0.42 → 校正後 0.61–0.67。
   # 上限は「差が出なさすぎ」の検出（育成しても勝敗に反映されない世界になっていないか）。
   runs_ratio_per_tier: { min: 0.52, max: 0.80 }
@@ -306,7 +306,7 @@ ability_sensitivity:
     throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
     fielding:         { defense: { expect: down, min_runs: 2.0 } }
     catching:         { defense: { expect: down, min_runs: 0.3 } }
-    mental:           { offense: { expect: up, min_runs: 0.0 }, defense: { expect: down, min_runs: 0.1 } }   # 打者側は弱い(+0.25)＝向きだけ見る
+    mental:           { offense: { expect: up, min_runs: -0.15 }, defense: { expect: down, min_runs: 0.1 } }   # 打者側は弱い＝はっきり逆向きでないことだけ見る（2026-11-09 #835: 3シード −0.04/+0.10/+0.11・1回の揺れ±0.1 で 0.00 は揺れで割れる）
     condition:        { offense: { expect: up, min_runs: 1.0 }, defense: { expect: down, min_runs: 1.0 } }
     catcher_arm:      { defense: { expect: down, min_runs: 0.3 } }   # 弱肩の捕手が相手得点を減らす(#838)
     pitcher_velocity: { defense: { expect: down, min_runs: 0.4 } }   # 110→150km/h

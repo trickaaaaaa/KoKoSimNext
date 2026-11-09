@@ -505,6 +505,10 @@ public static class TimelineBuilder
                     var fumbleRest = Overshoot(Home, fieldPoint, fumbleScatterM);
                     var flightToFirst = LegSeconds(Distance(fumbleRest, firstBase), ThrowSpeedOf(play));
                     var outAt = Math.Max(ContactAt + fumbleOutSeconds, fieldedAt + flightToFirst);
+                    // 受け手が一塁へ着くまで送球を持って待つ（issue #672 と同じ扱い。上限は走者到達の少し前）。
+                    // 抜けていると「一塁手→投手」のトスが投手より先に無人の一塁へ着く（実測 最大0.24s）。
+                    if (coverReadyAt is { } fumbleReady)
+                        outAt = Math.Max(outAt, Math.Min(fumbleReady + ReceiverSetSeconds, runnerAnchor - ReceiverSetSeconds));
                     var pickupAt = Math.Max(fieldedAt, outAt - flightToFirst);
                     ball.Add(new BallSegment
                     {
