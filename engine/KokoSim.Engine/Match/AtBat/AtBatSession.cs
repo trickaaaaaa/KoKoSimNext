@@ -624,8 +624,8 @@ public sealed class AtBatSession
     {
         var rpm = RpmForPlan(plan);
         var tiltDeg = _ctx.Pitching.AxisFor(plan.Type).TiltDeg;
-        var table = TrajectoryFeatureTable.GetOrBuild(_ctx.Aerodynamics, _ctx.Mound, tiltDeg);
-        return table.Lookup(plan.VelocityKmh, rpm);
+        // 天候で密度が変わった試合は節点の表の補間（表の作り直しをしない）。
+        return TrajectoryFeatureTable.LookupFeatures(_ctx.Aerodynamics, _ctx.Mound, tiltDeg, plan.VelocityKmh, rpm);
     }
 
     /// <summary>

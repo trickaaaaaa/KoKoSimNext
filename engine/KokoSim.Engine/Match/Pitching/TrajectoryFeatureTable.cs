@@ -35,7 +35,23 @@ public sealed class TrajectoryFeatureTable
     private readonly double[,] _horizontalBreakM;
     private readonly double[,] _flightTimeSeconds;
 
-    private static readonly ConcurrentDictionary<(Aerodynamics, MoundGeometry, double), TrajectoryFeatureTable> Cache = new();
+    // Lazy で包む＝並列プレフェッチで同じ鍵が同時に来ても構築は1回だけ（1枚 Mono で約1.9秒）。
+    private static readonly ConcurrentDictionary<(Aerodynamics, MoundGeometry, double), System.Lazy<TrajectoryFeatureTable>> Cache = new();
+
+    /// <summary>
+    /// 空気密度の節点の基準[kg/m^3]＝天候なし（<see cref="Aerodynamics.AirDensity"/> の既定）。天候なしの試合は
+    /// 必ずこの節点に乗る＝補間を通らず従来とビット一致する。
+    /// </summary>
+    public const double DensityAnchor = 1.225;
+
+    /// <summary>
+    /// 空気密度の節点の間隔[kg/m^3]。天候（気温）で密度が試合ごとに連続値でばらつくため、テーブルは節点でだけ作り、
+    /// 間は直線補間する。以前は密度そのものを鍵にしていて、天候ありの試合は<b>毎試合9枚を作り直し</b>
+    /// （Mono で1試合5秒超）、作った表を捨てずに溜め続けていた（2026-11-10 実測・試合開始が1分以上止まった）。
+    /// 0.05 で全季節（8〜36℃＝約1.18〜1.24）が 1.175/1.225/1.275 の3節点に収まる。抗力・マグヌス力は密度に比例し、
+    /// この幅（約4%）では特徴量はほぼ直線＝補間誤差は無視できる。
+    /// </summary>
+    public const double DensityNodeStep = 0.05;
 
     private TrajectoryFeatureTable(
         double[] speeds, double[] rpms, double[,] verticalBreakM, double[,] horizontalBreakM, double[,] flightTimeSeconds)
@@ -55,8 +71,57 @@ public sealed class TrajectoryFeatureTable
     /// 大きく外れる値が出るため。既定の狭い範囲は <see cref="Build"/> を直接呼ぶ既存テスト・用途のために残す）。
     /// </summary>
     public static TrajectoryFeatureTable GetOrBuild(Aerodynamics aero, MoundGeometry mound, double tiltDeg = 0.0)
-        => Cache.GetOrAdd((aero, mound, tiltDeg), key => Build(
-            key.Item1, key.Item2, tiltDeg: key.Item3, rpmMin: 600.0, rpmMax: 3000.0, rpmStep: 100.0));
+        => Cache.GetOrAdd((aero, mound, tiltDeg), key => new System.Lazy<TrajectoryFeatureTable>(() => Build(
+            key.Item1, key.Item2, tiltDeg: key.Item3, rpmMin: 600.0, rpmMax: 3000.0, rpmStep: 100.0))).Value;
+
+    /// <summary>
+    /// 判定用の弾道特徴量を引く入口（<see cref="Match.AtBat.AtBatSession"/> が毎球呼ぶ）。空気密度が節点
+    /// （<see cref="DensityAnchor"/> ＋ <see cref="DensityNodeStep"/> の整数倍）に乗っていればその表をそのまま引き、
+    /// 外れていれば（＝天候で密度が変わった試合）両隣の節点の表を密度で直線補間する。表は節点でしか作らない。
+    /// </summary>
+    public static PitchTrajectoryFeatures LookupFeatures(
+        Aerodynamics aero, MoundGeometry mound, double tiltDeg, double speedKmh, double rpm)
+    {
+        var k = (aero.AirDensity - DensityAnchor) / DensityNodeStep;
+        var k0 = System.Math.Floor(k);
+        var t = k - k0;
+        const double OnNode = 1e-9;
+        if (t < OnNode || t > 1.0 - OnNode)
+        {
+            var node = aero with { AirDensity = DensityAnchor + System.Math.Round(k) * DensityNodeStep };
+            // 節点ちょうど（天候なし）は元の aero をそのまま鍵にする＝従来の表と同一・ビット一致。
+            if (System.Math.Abs(node.AirDensity - aero.AirDensity) < 1e-12) node = aero;
+            return GetOrBuild(node, mound, tiltDeg).Lookup(speedKmh, rpm);
+        }
+        var lo = GetOrBuild(aero with { AirDensity = DensityAnchor + k0 * DensityNodeStep }, mound, tiltDeg)
+            .Lookup(speedKmh, rpm);
+        var hi = GetOrBuild(aero with { AirDensity = DensityAnchor + (k0 + 1) * DensityNodeStep }, mound, tiltDeg)
+            .Lookup(speedKmh, rpm);
+        return new PitchTrajectoryFeatures(
+            lo.InducedVerticalBreakM + (hi.InducedVerticalBreakM - lo.InducedVerticalBreakM) * t,
+            lo.InducedHorizontalBreakM + (hi.InducedHorizontalBreakM - lo.InducedHorizontalBreakM) * t,
+            lo.FlightTimeSeconds + (hi.FlightTimeSeconds - lo.FlightTimeSeconds) * t);
+    }
+
+    /// <summary>
+    /// 節点の表を先に作っておく（起動直後に背景で呼ぶ＝最初の試合で数十秒止まらないように）。
+    /// 密度の範囲 [<paramref name="minDensity"/>, <paramref name="maxDensity"/>] を覆う節点×回転軸ぶんを作る。
+    /// </summary>
+    public static void Prewarm(
+        Aerodynamics aero, MoundGeometry mound, System.Collections.Generic.IEnumerable<double> tiltDegs,
+        double minDensity, double maxDensity, int maxParallelism = 1)
+    {
+        var kMin = (int)System.Math.Floor((minDensity - DensityAnchor) / DensityNodeStep);
+        var kMax = (int)System.Math.Ceiling((maxDensity - DensityAnchor) / DensityNodeStep);
+        var jobs = new System.Collections.Generic.List<(Aerodynamics, double)>();
+        foreach (var tilt in System.Linq.Enumerable.Distinct(tiltDegs))
+            for (var k = kMin; k <= kMax; k++)
+                jobs.Add((k == 0 && aero.AirDensity == DensityAnchor
+                    ? aero : aero with { AirDensity = DensityAnchor + k * DensityNodeStep }, tilt));
+        System.Threading.Tasks.Parallel.For(0, jobs.Count,
+            new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = System.Math.Max(1, maxParallelism) },
+            i => GetOrBuild(jobs[i].Item1, mound, jobs[i].Item2));
+    }
 
     /// <summary>
     /// グリッドを構築する。範囲は実運用の (球速, rpm) レンジに余裕を持たせた値（設計書02 §1.1d/§1.1b, coefficients.yaml

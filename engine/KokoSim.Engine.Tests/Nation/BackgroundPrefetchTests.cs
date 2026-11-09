@@ -99,6 +99,39 @@ public sealed class BackgroundPrefetchTests
         }
     }
 
+    /// <summary>
+    /// 並列プレフェッチ（Shell の運用＝resolver は畳まず、ランナーが記録時に畳む）が素のフルシムとバイト一致すること。
+    /// 試合開始前の待ちを縮めるため Shell は複数コアで先読みする＝並び順で結果が変わってはいけない。
+    /// </summary>
+    [Theory]
+    [InlineData(32, 42UL)]
+    [InlineData(11, 999UL)]
+    public void ParallelPrefetch_MatchesPlain(int count, ulong seed)
+    {
+        var plain = RunPlain(MakePrefecture(4000, count), seed);
+
+        var schools = MakePrefecture(4000, count);
+        var stats = new NationTournamentStats();
+        var bg = new MemoizingBackgroundResolver(
+            new BackgroundMatchResolver(new NationRosters(new AiRosterDeps()), new GameContext(), 1, stats: null));
+        var runner = new TournamentRunner(
+            schools, schools[0], Coeff, new Xoshiro256Random(seed), Schedule, "並", null, bg,
+            onBackgroundMatch: (a, h, g) => stats.FoldMatch(a, h, g));
+        while (!runner.Finished)
+        {
+            runner.PrefetchCurrentRoundBackgroundCards(maxParallelism: 4);
+            runner.PlayNextPlayerMatch();
+        }
+        runner.DrainBracketResolution();
+
+        Assert.Equal(plain.Champion, runner.ChampionName);
+        Assert.Equal(StatTotals(plain.Stats), StatTotals(stats));
+        foreach (var id in plain.Stats.Schools)
+            Assert.Equal(
+                plain.Stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits),
+                stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits));
+    }
+
     [Fact]
     public void Prefetch_DoesNotDoubleFold_Stats()
     {

@@ -44,7 +44,12 @@ public interface ITournamentRunner
 
     /// <summary>試合ログ（通算戦績の集計キー）＋表の形。リーグ戦は節ごとの対戦を「ラウンド」として返す。</summary>
     TournamentBracketView BuildBracketView();
-    void PrefetchCurrentRoundBackgroundCards();
+    /// <summary>
+    /// 現ラウンドの自校非関与カードを先に解いてメモ化 resolver を温める。<paramref name="maxParallelism"/> は
+    /// 同時に解くカード数（既定1＝逐次）。カードごとに独立 Fork・ランナー状態は読み取り専用なので、
+    /// 並列でも結果は逐次と一致する（BackgroundPrefetchTests）。
+    /// </summary>
+    void PrefetchCurrentRoundBackgroundCards(int maxParallelism = 1);
 
     bool BracketResolutionPending { get; }
     int RemainingBracketRounds { get; }

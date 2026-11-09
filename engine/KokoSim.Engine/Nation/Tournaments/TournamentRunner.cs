@@ -774,12 +774,15 @@ public sealed class TournamentRunner : ITournamentRunner
     /// 本解決へ入り、プレフェッチ（背景）と本解決（前景）が時間的に重ならないようにする＝台帳・rng の同時
     /// アクセスを避ける。自校が敗退/優勝済み（<see cref="Finished"/>）や自校が実対戦を持つ前の不戦勝途中では何もしない。</para>
     /// </summary>
-    public void PrefetchCurrentRoundBackgroundCards()
+    public void PrefetchCurrentRoundBackgroundCards(int maxParallelism = 1)
     {
         if (_backgroundResolver is null || Finished) return;
+        var resolver = _backgroundResolver;
         var cur = _current;
         if (cur.Length < 2) return;
         var roundsRemaining = TournamentRecorder.RoundsRemaining(cur.Length);
+        // fork は base rng を進めない純導出だが、Fork 自体をワーカーから同時に呼ばないよう先に作っておく。
+        var jobs = new List<(School A, School B, IRandomSource Rng, TournamentMatchContext Context)>();
         for (var i = 0; i < cur.Length / 2; i++)
         {
             var a = cur[2 * i];
@@ -789,9 +792,11 @@ public sealed class TournamentRunner : ITournamentRunner
             // 試合日はカードごとに違う（序盤は数日に分散・issue #583）。本解決と<b>必ず同じ日</b>で
             // 呼ばないと、メモ化 resolver が別条件で温めた結果を本解決が拾ってしまう。
             var context = new TournamentMatchContext(roundsRemaining, MatchDayOf(roundsRemaining, i), _pitchLedger);
-            // ResolveRound の裏カード分岐と同一呼び出し（結果は捨てる＝メモ化 resolver が温める）。
-            _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, i)), context);
+            jobs.Add((a, b, _rng.Fork(BackgroundStream(roundsRemaining, i)), context));
         }
+        // ResolveRound の裏カード分岐と同一呼び出し（結果は捨てる＝メモ化 resolver が温める）。
+        // 1校は1ラウンドに1カードにしか出ない＝カード同士でロスターを取り合わない。
+        PrefetchRunner.Run(jobs, j => resolver.Resolve(j.A, j.B, j.Rng, j.Context), maxParallelism);
     }
 
     // ===== 内部進行 =====
