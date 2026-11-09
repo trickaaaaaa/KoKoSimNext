@@ -134,6 +134,10 @@ public sealed class InfieldBodyReachTests
             foreach (var e in r.Log)
             {
                 if (e.Timeline is null || e.BattedIsFly != fly || e.Result != PlateAppearanceResult.InPlayOut) continue;
+                // 捕球ミスを拾い直してアウトに戻った打席（issue #817）は、ボールが捕球点からこぼれて
+                // 処理野手から数m離れた所に移ってから拾い直す＝体と球が離れることが絵の本旨（弾いた）。
+                // 「処理点は体の届く所」という本テストの前提（通常の内野ゴロ処理）とは別の物理なので除外する。
+                if (e.Timeline.FumbledCatch) continue;
                 if (e.FieldedBy is not { } role) continue;
                 if (!fly && (role is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField)) continue; // ゴロは内野だけ
                 var leg = e.Timeline.Moves.Where(m => m.Role == role && m.Task == FielderTask.FieldBall)

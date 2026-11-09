@@ -200,7 +200,11 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     }
 
     /// <summary>成功見込みがこの値以上のときだけ確率的に仕掛け、際どいほど好ジャンプ・意表のギャンブルに賭ける
-    /// （見込みが十分高い盗塁は通常始動で堅実に決める＝無防備リスクを負わない）。二盗・三盗で共通の型。</summary>
+    /// （見込みが十分高い盗塁は通常始動で堅実に決める＝無防備リスクを負わない）。二盗・三盗で共通の型。
+    /// <see cref="TacticsSituation"/> はベースカバー役（遊撃手/三塁手）を持たないため、送球の逸れ
+    /// （issue #841）の受け手はCatching=50（恒等）で見込む＝送球精度（捕手）の効きは正しく読むが、
+    /// 受け手の捕球能力ぶんの読みは近似（実際の判定は<see cref="KokoSim.Engine.Match.Game.GameEngine"/>
+    /// が実際のカバー役で解決する）。</summary>
     private (StartType Start, StealTarget Target)? AttemptSteal(
         Player runner, Player catcher, StealTarget target, double minSuccess, double attemptProb, IRandomSource rng)
     {
