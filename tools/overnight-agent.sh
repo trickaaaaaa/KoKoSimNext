@@ -161,11 +161,31 @@ bump_and_mark() { # $1=issue番号
 count_now() { cat "$COUNTER"; }
 
 # main の直近 CI（完了済み）が failure なら真。赤 main への積み増しを止める。
+# ただし初回の赤は落ちたジョブだけ1回再実行して確かめる（2026-11-10: 時間計測の
+# Trace_OverheadDoesNotBlowUp が1本だけ落ちて夜間ランが54分で HALT した。再実行で緑）。
+# 再実行は最大 CI_RERUN_WAIT 秒待つ。2回目も赤なら本物の赤として真を返す。
+CI_RERUN_WAIT="${CI_RERUN_WAIT:-1500}"
 main_ci_failing() {
-  local c
-  c="$(gh run list --branch main --workflow engine-ci --limit 1 --json status,conclusion \
-        --jq '.[0] | select(.status=="completed") | .conclusion' 2>/dev/null)"
-  [ "$c" = "failure" ]
+  local row id c attempt
+  row="$(gh run list --branch main --workflow engine-ci --limit 1 --json databaseId,status,conclusion,attempt \
+        --jq '.[0] | select(.status=="completed") | "\(.databaseId) \(.conclusion) \(.attempt)"' 2>/dev/null)"
+  id="${row%% *}"; c="$(echo "$row" | awk '{print $2}')"; attempt="$(echo "$row" | awk '{print $3}')"
+  [ "$c" = "failure" ] || return 1
+  if [ "${attempt:-1}" -le 1 ] && gh run rerun "$id" --failed >/dev/null 2>&1; then
+    echo "main CI が赤（run ${id}）。落ちたジョブを1回だけ再実行して確かめる…"
+    local waited=0 st
+    sleep 30; waited=30
+    while [ "$waited" -lt "$CI_RERUN_WAIT" ]; do
+      st="$(gh run view "$id" --json status,conclusion --jq '"\(.status) \(.conclusion)"' 2>/dev/null)"
+      case "$st" in
+        "completed success") echo "再実行で緑（フレーク）。続行"; return 1 ;;
+        completed*) return 0 ;;
+      esac
+      sleep 60; waited=$((waited+60))
+    done
+    return 0  # 待ち切れなければ安全側（赤扱い）
+  fi
+  return 0
 }
 
 # ── マージ工程（ロック内で直列）: rebase→禁止物除去→ガード→ローカル再テスト→squash マージ ──
@@ -515,7 +535,9 @@ process_issue() { # $1=num $2=title
   # ローカルにコミットがあっても消えていた（#318 は実装完成・全緑のまま消滅し、
   # git fsck の dangling commit から救出した）。分岐の外へ出して常に通す。
   # マージ済みなら origin/main..HEAD が空になるのでこの条件で自然に除外される。
-  if [ -d "$wt" ] && [ -n "$(git -C "$wt" log --oneline refs/remotes/origin/main..HEAD 2>/dev/null)" ]; then
+  # squash マージ済みでもブランチのコミットは origin/main..HEAD に残るので、PR の実状態で除外する
+  local merged_pr; merged_pr="$(gh pr list --head "$branch" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
+  if [ -z "$merged_pr" ] && [ -d "$wt" ] && [ -n "$(git -C "$wt" log --oneline refs/remotes/origin/main..HEAD 2>/dev/null)" ]; then
     local why="PR 作成前に終了"
     if echo "$labels" | grep -q needs-human; then why="判断待ち（needs-human）"
     elif echo "$labels" | grep -q agent-failed; then why="実装失敗（agent-failed）"
