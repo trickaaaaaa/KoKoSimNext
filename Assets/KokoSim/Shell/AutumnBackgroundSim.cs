@@ -97,7 +97,7 @@ namespace KokoSim.Unity.Shell
             int excludePrefectureId, ulong seed, IEnemyBrainFactory brains, bool collectGarbage = true)
         {
             var rng = new Xoshiro256Random(seed ^ 0x41A2_0000UL);
-            var ctx = new GameContext();
+            var ctx = new GameContext { Weather = WeatherModel.ForSeason(WeatherSeason.Autumn) };   // Issue #803
             // 他46県（自校非関与）は優勝校＋順位のみ集計モデルで即決する（夏の背景シムと同じ理由）。
             var run = AutumnNationEngine.BeginAutumn(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,

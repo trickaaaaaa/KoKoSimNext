@@ -546,24 +546,59 @@ fatigue:
   # hard_cap_pitches はハードキャップ撤廃（issue #356）で撤去。降板は目安投球数＋relieve_pitch_margin と
   # 疲労による能力低下だけで決まる。スタミナ自体も上限なし（伸ばした分だけ長く投げられる）。
 
-# --- 試合ごとの天候（気温）モデル（Issue #120 / OPEN-QUESTIONS Q22, design-05 大会単位の味付け） ---
+# --- 試合ごとの天候（季節別気温＋状態）モデル（Issue #120/#803, design-05 大会単位の味付け） ---
 # 気温を物理層（空気密度ρ・投手消耗）だけに効かせて「夏場は点が動きやすい」を創発させる（不変条件#1）。
 # 気温は試合開始時に専用Forkストリームで1回引くだけ＝本体の乱数順・決定論は不変（不変条件#2）。
-# enabled=true でも実プレイ側（C#既定 GameContext）は weather=null のまま＝この YAML は sim/Heavy 回帰でのみ効く
-# （メモリ「sim/Unity係数の乖離」）。実ゲーム反映は C#既定＋決定論baseline再生成を伴う後続作業。
+# 天気の状態（晴れ/曇り/雨）は気温と同じ専用ストリームで先に1回抽選し、雨・曇りは気温の平均を下げる
+# （Issue #803 決定1・2026-11-09改定。表示専用＝決定2で物理には気温だけが効く）。
+# 季節ごとに mean/std/min/max だけが違う（決定4: 季節別分布・地域差なし）。物理変換（基準気温・減衰係数・
+# 消耗係数・雨/曇りの気温のずれ）は季節共通。雨の確率だけ季節で変える。実プレイ側は C#既定（WeatherModel.Spring/Summer/Autumn）がこの値と
+# 一致している（CoefficientsDefaultsConsistencyTests・不変条件#4）。
 weather:
-  enabled: true
-  # 気温分布（決定1: 夏の甲子園を想定, 28〜36℃・平均32℃・σ2.5）
-  mean_temperature_c: 32.0
-  temperature_std_dev_c: 2.5
-  min_temperature_c: 28.0
-  max_temperature_c: 36.0
-  # 気温→空気密度（決定1=案B: ρ(T)=ρ0×(273.15+基準温)/(273.15+T) の基準差分に減衰係数 k=0.5 を掛け効きを半減）
-  baseline_temperature_c: 15.0   # この気温で aerodynamics.air_density の既定値になる基準
-  density_damping: 0.5           # k（0=無効, 1=物理そのまま）。極端な乱打戦を避けるため 0.5
-  # 気温→投手消耗（決定2=案A: 加算・線形。基準28℃超過1℃ごとに超過球数あたりの低下量を α だけ増やす。36℃で+8%）
-  fatigue_baseline_temperature_c: 28.0
-  fatigue_alpha_per_degree: 0.01
+  spring:   # センバツ期を想定
+    enabled: true
+    mean_temperature_c: 16.0
+    temperature_std_dev_c: 3.0
+    min_temperature_c: 8.0
+    max_temperature_c: 24.0
+    baseline_temperature_c: 15.0
+    density_damping: 0.5
+    fatigue_baseline_temperature_c: 28.0
+    fatigue_alpha_per_degree: 0.01
+    rain_prob: 0.25               # 天気の状態は試合ごとに別に1回抽選（#803 決定1・2026-11-09改定）
+    cloudy_prob: 0.35
+    rain_temperature_offset_c: -3.0  # 雨の日は気温の平均を下げる（暑い日の雨も低確率で出る）
+    cloudy_temperature_offset_c: -1.0
+  summer:   # 夏の甲子園を想定, 28〜36℃・平均32℃・σ2.5（Issue #120 決定1）
+    enabled: true
+    mean_temperature_c: 32.0
+    temperature_std_dev_c: 2.5
+    min_temperature_c: 28.0
+    max_temperature_c: 36.0
+    # 気温→空気密度（決定1=案B: ρ(T)=ρ0×(273.15+基準温)/(273.15+T) の基準差分に減衰係数 k=0.5 を掛け効きを半減）
+    baseline_temperature_c: 15.0   # この気温で aerodynamics.air_density の既定値になる基準
+    density_damping: 0.5           # k（0=無効, 1=物理そのまま）。極端な乱打戦を避けるため 0.5
+    # 気温→投手消耗（決定2=案A: 加算・線形。基準28℃超過1℃ごとに超過球数あたりの低下量を α だけ増やす。36℃で+8%）
+    fatigue_baseline_temperature_c: 28.0
+    fatigue_alpha_per_degree: 0.01
+    rain_prob: 0.15               # 天気の状態は試合ごとに別に1回抽選（#803 決定1・2026-11-09改定）
+    cloudy_prob: 0.35
+    rain_temperature_offset_c: -3.0  # 雨の日は気温の平均を下げる（暑い日の雨も低確率で出る）
+    cloudy_temperature_offset_c: -1.0
+  autumn:   # 秋季大会期を想定
+    enabled: true
+    mean_temperature_c: 22.0
+    temperature_std_dev_c: 3.0
+    min_temperature_c: 14.0
+    max_temperature_c: 30.0
+    baseline_temperature_c: 15.0
+    density_damping: 0.5
+    fatigue_baseline_temperature_c: 28.0
+    fatigue_alpha_per_degree: 0.01
+    rain_prob: 0.20               # 天気の状態は試合ごとに別に1回抽選（#803 決定1・2026-11-09改定）
+    cloudy_prob: 0.35
+    rain_temperature_offset_c: -3.0  # 雨の日は気温の平均を下げる（暑い日の雨も低確率で出る）
+    cloudy_temperature_offset_c: -1.0
 
 # --- 試合間の回復モデル（設計書02 §1.1e・issue #41: 連戦で目安投球数が回復し切らない） ---
 # 前登板からの休養日数 × 直近ウィンドウの球数 → 実効の目安投球数を減衰させる。🟡 実測校正前のプレースホルダ。

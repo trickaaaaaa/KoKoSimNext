@@ -1,6 +1,7 @@
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Pitching;
+using KokoSim.Engine.Season;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Match.Game;
@@ -137,5 +138,112 @@ public sealed class WeatherModelTests
         {
             Assert.Equal(reference.NextUInt64(), rng.NextUInt64());
         }
+    }
+
+    // ===== Issue #803: 天気の状態（晴れ/曇り/雨）は気温と同じ専用ストリームで別に抽選する =====
+
+    [Fact]
+    public void SampleState_FrequenciesMatchProbabilities()
+    {
+        int rain = 0, cloudy = 0;
+        const int n = 20000;
+        var rng = new Xoshiro256Random(7);
+        for (var i = 0; i < n; i++)
+        {
+            var st = WeatherModel.SampleState(rng, Summer);
+            if (st == WeatherState.Rainy) rain++;
+            else if (st == WeatherState.Cloudy) cloudy++;
+        }
+        Assert.InRange((double)rain / n, Summer.RainProb - 0.01, Summer.RainProb + 0.01);
+        Assert.InRange((double)cloudy / n, Summer.CloudyProb - 0.015, Summer.CloudyProb + 0.015);
+    }
+
+    [Fact]
+    public void SampleWeather_HotRainyDaysStillOccur()
+    {
+        // 気温から状態を決める作りだと「暑い日は必ず晴れ」になる。抽選なら平均以上の雨の日も出る。
+        var hotRain = 0;
+        for (ulong seed = 0; seed < 4000; seed++)
+        {
+            var s = WeatherModel.SampleWeather(new Xoshiro256Random(seed), Summer);
+            if (s.State == WeatherState.Rainy && s.TemperatureC >= Summer.MeanTemperatureC) hotRain++;
+        }
+        Assert.True(hotRain > 0, "平均気温以上の雨の日が一度も出ない");
+    }
+
+    [Fact]
+    public void SampleWeather_RainCorrelatesWithLowerTemperature()
+    {
+        // 決定1: 雨の日は気温が低い（雨の日は気温の平均を下げる）。
+        double rainySum = 0, sunnySum = 0;
+        int rainyCount = 0, sunnyCount = 0;
+        for (ulong seed = 0; seed < 2000; seed++)
+        {
+            var sample = WeatherModel.SampleWeather(new Xoshiro256Random(seed), Summer);
+            if (sample.State == WeatherState.Rainy) { rainySum += sample.TemperatureC; rainyCount++; }
+            if (sample.State == WeatherState.Sunny) { sunnySum += sample.TemperatureC; sunnyCount++; }
+        }
+        Assert.True(rainyCount > 0 && sunnyCount > 0, "2000シードの中に雨・晴れの両方が出るはず");
+        Assert.True(rainySum / rainyCount < sunnySum / sunnyCount, "雨の日の平均気温は晴れの日より低いはず");
+    }
+
+    [Fact]
+    public void SampleWeather_IsDeterministic()
+    {
+        var a = WeatherModel.SampleWeather(new Xoshiro256Random(99), Summer);
+        var b = WeatherModel.SampleWeather(new Xoshiro256Random(99), Summer);
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void SampleForMatch_TemperatureIsWhatTheMatchUses()
+    {
+        // 画面に出す天気（SampleForMatch）と、試合に効く気温（ApplyForMatch）は同じストリーム＝同じ気温。
+        var ctx = new GameContext { Weather = Summer };
+        var sample = WeatherModel.SampleForMatch(new Xoshiro256Random(99), Summer);
+        var applied = WeatherModel.ApplyForMatch(ctx, new Xoshiro256Random(99));
+        var expected = WeatherModel.ApplyTo(ctx, sample.TemperatureC);
+        Assert.Equal(expected.Aerodynamics, applied.Aerodynamics);
+        Assert.Equal(expected.Fatigue, applied.Fatigue);
+    }
+
+    // ===== Issue #803: 季節別プリセットと季節判定 =====
+
+    [Theory]
+    [InlineData(3)] [InlineData(4)] [InlineData(5)]
+    public void SeasonFor_SpringMonths_ReturnSpring(int month)
+        => Assert.Equal(WeatherSeason.Spring, WeatherModel.SeasonFor(month));
+
+    [Theory]
+    [InlineData(6)] [InlineData(7)] [InlineData(8)]
+    public void SeasonFor_SummerMonths_ReturnSummer(int month)
+        => Assert.Equal(WeatherSeason.Summer, WeatherModel.SeasonFor(month));
+
+    [Theory]
+    [InlineData(9)] [InlineData(10)] [InlineData(11)]
+    public void SeasonFor_AutumnMonths_ReturnAutumn(int month)
+        => Assert.Equal(WeatherSeason.Autumn, WeatherModel.SeasonFor(month));
+
+    [Theory]
+    [InlineData(TournamentKind.Summer, WeatherSeason.Summer)]
+    [InlineData(TournamentKind.SummerKoshien, WeatherSeason.Summer)]
+    [InlineData(TournamentKind.SenbatsuKoshien, WeatherSeason.Spring)]
+    [InlineData(TournamentKind.Autumn, WeatherSeason.Autumn)]
+    [InlineData(TournamentKind.AutumnDistrict, WeatherSeason.Autumn)]
+    [InlineData(TournamentKind.Regional, WeatherSeason.Autumn)]
+    [InlineData(TournamentKind.Jingu, WeatherSeason.Autumn)]
+    public void SeasonFor_TournamentKind_MapsToExpectedSeason(TournamentKind kind, WeatherSeason expected)
+        => Assert.Equal(expected, WeatherModel.SeasonFor(kind));
+
+    [Fact]
+    public void ForSeason_ReturnsDistinctTemperatureProfilesPerSeason()
+    {
+        // 決定4: 季節別分布・地域差なし。平均気温は 春 < 秋 < 夏。
+        var spring = WeatherModel.ForSeason(WeatherSeason.Spring);
+        var summer = WeatherModel.ForSeason(WeatherSeason.Summer);
+        var autumn = WeatherModel.ForSeason(WeatherSeason.Autumn);
+        Assert.True(spring.MeanTemperatureC < autumn.MeanTemperatureC);
+        Assert.True(autumn.MeanTemperatureC < summer.MeanTemperatureC);
+        Assert.True(spring.Enabled && summer.Enabled && autumn.Enabled);
     }
 }
