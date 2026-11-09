@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
@@ -87,6 +88,12 @@ public sealed class StealPictureMatchesVerdictTests
     /// <summary>
     /// ゆらぎの振り分けは物理の上限を破らない: 走者は<b>自分の脚より速く走らない</b>し、
     /// 捕手は<b>自分の肩より速く投げない</b>（どちらも取り分に上限があり、超えた分は相手側の失敗として出る）。
+    ///
+    /// <para>守備側は issue #841 で送球の逸れ（ThrowScatterModel）が別のばらつきとして乗った。逸れ0
+    /// （完璧な送球）の回は「この捕手の平均的な逸れ」より最大<see cref="ScatterBenefitCapSeconds"/>だけ
+    /// 速くなるので、守備側のゆらぎ上限（0.20）にその分だけ加える＝捕手の肩自体を超えて速くなっている
+    /// わけではない（逸れが無い送球は肩の速さそのものなので物理的に正当）。走者側は逸れの対象外なので
+    /// 上限は変えない。</para>
     /// </summary>
     [Fact]
     public void Luck_NeverMakesAnyoneFasterThanTheirBody()
@@ -96,6 +103,13 @@ public sealed class StealPictureMatchesVerdictTests
         var runnerTime = StealResolver.RunnerTimeSeconds(runner, C);
         var defenseTime = StealResolver.DefenseTimeSeconds(catcher, C);
         var rng = new Xoshiro256Random(4242);
+
+        // 逸れ0（完璧な送球）のときに「この捕手の平均的な逸れ」から浮く最大分（issue #841）。
+        // 受け手未指定＝Catching50（中立）で DefenseTimeSeconds と同じ取り方。
+        var scatterBenefitCapSeconds = ThrowScatterModel.ExpectedRecoverySeconds(
+            catcher.ToFielder(C.AbilityEffect).ThrowScatterSigmaCm, receiverCatching: 50,
+            C.StealThrowScatterLateralSecPerCm, C.StealThrowScatterHighSecPerCm, C.StealThrowScatterShortHopSecPerCm,
+            C.StealThrowScatterCatchingReliefSlope, C.StealThrowScatterCatchingReliefMinFactor);
 
         double worstRunnerGain = 0, worstDefenseGain = 0;
         for (var i = 0; i < 5000; i++)
@@ -107,9 +121,10 @@ public sealed class StealPictureMatchesVerdictTests
             worstDefenseGain = System.Math.Max(worstDefenseGain, defenseTime - v.DefenseSeconds);
         }
 
-        _out.WriteLine($"取り分の最大: 走者 {worstRunnerGain:F2}s / 守備 {worstDefenseGain:F2}s（上限 0.20）");
+        _out.WriteLine($"取り分の最大: 走者 {worstRunnerGain:F2}s / 守備 {worstDefenseGain:F2}s"
+            + $"（上限 0.20 / 守備は逸れ分+{scatterBenefitCapSeconds:F2}）");
         Assert.True(worstRunnerGain <= 0.20 + 1e-9, $"走者が {worstRunnerGain:F2}s も速くなっている");
-        Assert.True(worstDefenseGain <= 0.20 + 1e-9, $"守備が {worstDefenseGain:F2}s も速くなっている");
+        Assert.True(worstDefenseGain <= 0.20 + scatterBenefitCapSeconds + 1e-9, $"守備が {worstDefenseGain:F2}s も速くなっている");
         // 上限まで使う場面が実際に出る（＝上限が形骸化していない）
         Assert.True(worstRunnerGain > 0.19 && worstDefenseGain > 0.19, "取り分の上限に一度も届いていない");
     }
