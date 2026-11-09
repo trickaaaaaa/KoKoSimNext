@@ -357,6 +357,15 @@ baserunning:
   pickoff_runner_lead_slope: 0.0015
   pickoff_pitcher_sense_slope: 0.001
   pickoff_max_prob: 0.08
+  # 送球の逸れ（捕手の盗塁送球, issue #841）: 送球精度から決まる散布σ（FielderAttributes.ThrowScatterSigmaCm）を
+  # ThrowScatterModel で2次元正規分布へサンプリングし、横・浮き・ショートバウンドをそれぞれ重みづけて受け手の
+  # タッチ/捕球までの秒へ加算する。受け手の捕球能力(Catching)で縮む。
+  steal_throw_scatter_lateral_sec_per_cm: 0.0015
+  steal_throw_scatter_high_sec_per_cm: 0.0010
+  steal_throw_scatter_short_hop_sec_per_cm: 0.0030
+  steal_throw_scatter_catching_relief_slope: 0.004
+  steal_throw_scatter_catching_relief_min_factor: 0.60
+  steal_throw_wild_threshold_cm: 70.0   # 逸れ(RadialCm)がこれ以上で悪送球＝無条件セーフ
   # バント（設計書02 §4.3）
   bunt_base: 0.60
   bunt_skill_slope: 0.005          # バント×0.5%
