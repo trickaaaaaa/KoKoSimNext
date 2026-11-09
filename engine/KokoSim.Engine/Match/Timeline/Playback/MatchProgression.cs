@@ -765,7 +765,7 @@ public sealed class MatchProgression
             _p.Home.LivePitcherLine(homeIsDefending ? PendingPitchIndex : 0),
             _p.Home.LiveReserves(), _p.Home.LiveReservePitchers());
         return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
-            _p.Away.LiveLine(), _p.Home.LiveLine());
+            _p.Away.LiveLine(), _p.Home.LiveLine(), _p.Ctx.ResolvedWeather, _p.Ctx.StadiumName);
     }
 
     /// <summary>

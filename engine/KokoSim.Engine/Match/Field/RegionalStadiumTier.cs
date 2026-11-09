@@ -20,10 +20,16 @@ public static class RegionalStadiumTier
     /// <see cref="Stadium.MunicipalSmall01"/>（展望など、試合ごとの乱数を持たない呼び出し向け）。
     /// </param>
     public static FieldGeometry For(int? roundsRemaining, IRandomSource? rng)
+        => ForStadium(roundsRemaining, rng).ToFieldGeometry();
+
+    /// <summary>
+    /// <see cref="For"/> と同じ判定で、寸法だけでなく球場そのもの（名称を含む）を返す
+    /// （issue #803・電光掲示板の球場名表示。rng の引き方は一字一句同じ＝乱数消費は変わらない）。
+    /// </summary>
+    public static Stadium ForStadium(int? roundsRemaining, IRandomSource? rng)
     {
-        if (roundsRemaining is >= 1 and <= 2) return Stadium.PrefLarge.ToFieldGeometry();
-        var municipal = rng is null ? Stadium.MunicipalSmall01 : Pick(rng);
-        return municipal.ToFieldGeometry();
+        if (roundsRemaining is >= 1 and <= 2) return Stadium.PrefLarge;
+        return rng is null ? Stadium.MunicipalSmall01 : Pick(rng);
     }
 
     private static Stadium Pick(IRandomSource rng)

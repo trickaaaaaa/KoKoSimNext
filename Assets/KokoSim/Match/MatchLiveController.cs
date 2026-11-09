@@ -3168,8 +3168,12 @@ namespace KokoSim.Unity.Match
             // inning-break のインスタンスと同名が2つ並ぶ。_root の丸ごと検索（単一マッチ）だと
             // ツリー順で先に来る側しか埋まらず、もう一方が空のまま表示される（2026-08-25 実害）。
             // 各インスタンスの器（自分のサブツリーだけ）を渡して個別に埋める。
-            LineScorePanel.Fill(_inningBreak, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
-            LineScorePanel.Fill(_fastModeBoard, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            // 球場名は engine の観測データ（GameContext.StadiumName）そのもの＝実際にその試合が開催された
+            // 球場（Stadium）の名前（PR #883 レビュー指摘。大会タイトルの流用を撤回）。天気と同じく
+            // ここで抽選し直さない（issue #803）。球場割当が未配線の大会（地区・神宮）・練習試合は null＝空欄。
+            var venueName = snap.StadiumName ?? "";
+            LineScorePanel.Fill(_inningBreak, snap.AwayLine, snap.HomeLine, inning, isTop, finished, venueName, snap.Weather);
+            LineScorePanel.Fill(_fastModeBoard, snap.AwayLine, snap.HomeLine, inning, isTop, finished, venueName, snap.Weather);
             ScoreBug.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
             // 掲げた点を控える（issue #628）。次に掲げるときの「まだ出していない点」の基準になる。
             _postedAwayRuns = snap.AwayLine.Runs;

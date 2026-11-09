@@ -27,6 +27,22 @@ public sealed record GameContext
     /// </summary>
     public WeatherCoefficients? Weather { get; init; }
 
+    /// <summary>
+    /// その試合に実際に効いた天気（状態＋気温、Issue #803）。<see cref="WeatherModel.ApplyForMatch"/> が
+    /// 専用Forkストリームで1回だけ抽選した結果をここへ写す（以降の再取得はこのコピーを読むだけ＝再抽選しない）。
+    /// Weather が null／無効、またはまだ試合開始前（<see cref="WeatherModel.ApplyForMatch"/> 未適用）なら null。
+    /// ホーム画面・試合中の電光掲示板はここか、同じFork鎖を試合前に覗く
+    /// <see cref="KokoSim.Engine.Nation.Tournaments.ITournamentRunner.PeekNextMatchWeather"/> から読む＝UIで抽選し直さない。
+    /// </summary>
+    public WeatherSample? ResolvedWeather { get; init; }
+
+    /// <summary>
+    /// その試合の球場名（issue #803・電光掲示板の球場表示）。甲子園・地方大会の汎用ティア球場は
+    /// Shell 側（<see cref="Match.Field.Stadium"/>）の実体名をここへ写す。地区大会・神宮大会のように
+    /// 球場割当が未配線の大会は null（＝推測で埋めない。表示側は球場欄を隠す）。
+    /// </summary>
+    public string? StadiumName { get; init; }
+
     public Players.FormCoefficients Form { get; init; } = new();
     public Players.SkillCoefficients Skills { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();

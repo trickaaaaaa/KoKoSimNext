@@ -885,6 +885,12 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .hm-hero__meta { flex-direction: row; align-items: center; margin-left: auto; flex-shrink: 0; }
 .hm-hero__when { font-size: 18px; color: var(--color-chalk); letter-spacing: 1px; margin-right: 18px; }
 
+/* 天気（issue #803）。文字（晴/曇/雨）と気温の数字を Label で分ける（書体3役ルール）。
+   .nm-meta__i を併用するフォント/色/行末マージンはそのまま継承させる。 */
+.hm-hero__weather { flex-direction: row; align-items: baseline; }
+.hm-hero__weather-k { margin-right: 4px; }
+.hm-hero__weather-num { font-size: 16px; color: var(--color-chalk); margin-right: 1px; }
+
 /* 通常週: 夏予選カウントダウン（数字は Oswald＝f-num-bd を UXML で付与） */
 .hm-hero__plain { flex-direction: row; align-items: baseline; flex-grow: 1; }
 .hm-hero__cd-k { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; margin-right: 16px; }

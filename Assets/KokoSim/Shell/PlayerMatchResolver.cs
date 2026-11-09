@@ -27,11 +27,12 @@ namespace KokoSim.Unity.Shell
         {
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
+            var (field, stadiumName) = Stadium(context, rng);
             var ctx = Rules.ApplyTo(
                 new GameContext
                 {
-                    MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
-                    Weather = WeatherModel.ForSeason(CurrentSeason()),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
+                    MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName,
+                    Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -54,14 +55,15 @@ namespace KokoSim.Unity.Shell
             // 一致する＝観戦しても大会結果は変わらない。
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
+            var (field, stadiumName) = Stadium(context, rng);
             var ctx = Rules.ApplyTo(
                 new GameContext
                 {
                     CaptureTimelines = true, CapturePitches = true,
                     // 自校の投手交代はプレイヤーの采配権にする（Resolve側＝観戦しない裏解決には付けない）。
                     PlayerControlsPitcherChanges = true,
-                    MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
-                    Weather = WeatherModel.ForSeason(CurrentSeason()),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
+                    MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName,
+                    Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -134,12 +136,19 @@ namespace KokoSim.Unity.Shell
         private const ulong StadiumStreamId = 13;
 
         /// <summary>
-        /// いま戦っている大会の球場寸法（設計書13 §1）。甲子園は固有球場、夏・秋の県大会は汎用ティア
-        /// （序盤=市営級／準決勝・決勝=県営級）、それ以外（地区・神宮）は既定。<b>Resolve と BeginLive が
-        /// 同じ値を使う</b>（観戦しても結果が変わらない契約）ので、両者ともこの1メソッドを通す。
+        /// いま戦っている大会の球場寸法＋球場名（設計書13 §1・issue #803）。甲子園は固有球場、夏・秋の県大会は
+        /// 汎用ティア（序盤=市営級／準決勝・決勝=県営級）、それ以外（地区・神宮）は既定で球場名は null
+        /// （球場割当が未配線＝実体が無いので表示側で推測しない）。<b>Resolve と BeginLive が同じ値を使う</b>
+        /// （観戦しても結果が変わらない契約）ので、両者ともこの1メソッドを通す。
+        /// <see cref="MatchStadium.ForStadium(TournamentKind, int?, IRandomSource?)"/> を1回だけ呼ぶ
+        /// （寸法用・名前用に2回呼ぶと Fork の乱数消費が二重になる）。
         /// </summary>
-        private static KokoSim.Engine.Match.Field.FieldGeometry Stadium(TournamentMatchContext? context, IRandomSource rng)
-            => MatchStadium.For(GameSession.Current.Kind, context?.RoundsRemaining, rng.Fork(StadiumStreamId));
+        private static (KokoSim.Engine.Match.Field.FieldGeometry Field, string? Name) Stadium(
+            TournamentMatchContext? context, IRandomSource rng)
+        {
+            var stadium = MatchStadium.ForStadium(GameSession.Current.Kind, context?.RoundsRemaining, rng.Fork(StadiumStreamId));
+            return (stadium?.ToFieldGeometry() ?? new KokoSim.Engine.Match.Field.FieldGeometry(), stadium?.Name);
+        }
 
         /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
         private static int CalendarYear() => SeasonClock.SeasonBaseYear + (GameSession.Current.Year - 1);
@@ -151,6 +160,13 @@ namespace KokoSim.Unity.Shell
         /// （<see cref="SeasonClock"/> と同じ <see cref="SeasonCalendar.DateOf"/> を単一ソースにする）。
         /// </summary>
         private static WeatherSeason CurrentSeason() => WeatherModel.SeasonFor(Calendar.DateOf(GameClock.Week).Month);
+
+        /// <summary>
+        /// 今週の天気係数（Issue #803）。<see cref="Resolve"/>/<see cref="BeginLive"/> が試合へ渡す値と
+        /// 同一の入口＝ホーム画面の対戦カードが <c>ITournamentRunner.PeekNextMatchWeather</c> で覗く天気も、
+        /// 必ずこの係数で引く（覗いた値と実際に試合へ適用される値が食い違わない）。
+        /// </summary>
+        public static WeatherCoefficients CurrentWeatherCoefficients() => WeatherModel.ForSeason(CurrentSeason());
 
         /// <summary>
         /// 相手校ラインナップを「校ID＋年度」から決定論生成する。大会展望が同じ入口で同じチームを引くので、

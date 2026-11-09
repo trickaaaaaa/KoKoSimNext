@@ -207,6 +207,28 @@ public sealed class WeatherModelTests
         Assert.Equal(expected.Fatigue, applied.Fatigue);
     }
 
+    /// <summary>
+    /// Issue #803: 試合開始時に一度だけ抽選した天気（状態＋気温）を <see cref="GameContext.ResolvedWeather"/> へ
+    /// 写す＝ホーム画面・電光掲示板はこのコピーを読むだけで済み、再抽選しない（二重に抽選すると値がずれる、
+    /// <see cref="WeatherModel.SampleWeather"/> は呼ぶたびに親のFork元状態から引き直すため）。
+    /// </summary>
+    [Fact]
+    public void ApplyForMatch_StoresResolvedWeather_MatchingSampleForMatch()
+    {
+        var ctx = new GameContext { Weather = Summer };
+        var expected = WeatherModel.SampleForMatch(new Xoshiro256Random(55), Summer);
+        var applied = WeatherModel.ApplyForMatch(ctx, new Xoshiro256Random(55));
+        Assert.Equal(expected, applied.ResolvedWeather);
+    }
+
+    [Fact]
+    public void ApplyForMatch_WhenWeatherNull_ResolvedWeatherStaysNull()
+    {
+        var ctx = new GameContext();
+        var applied = WeatherModel.ApplyForMatch(ctx, new Xoshiro256Random(1));
+        Assert.Null(applied.ResolvedWeather);
+    }
+
     // ===== Issue #803: 季節別プリセットと季節判定 =====
 
     [Theory]

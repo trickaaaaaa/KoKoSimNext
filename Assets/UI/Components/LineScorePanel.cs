@@ -27,9 +27,19 @@ namespace KokoSim.Unity.Components
         /// 右袖の B/S/O ランプ・塁ダイヤは1球ごとに動くので、画面コントローラが
         /// <c>lsc-b1</c>/<c>lsc-base-1</c> 等の name を直接トグルする（この部品は器と見た目だけを持つ）。
         /// </summary>
+        /// <param name="venueName">
+        /// その試合の球場名（issue #803。<see cref="GameContext.StadiumName"/> の写しが単一ソース＝UIで
+        /// 大会タイトルを流用しない。PR #883 レビュー指摘）。null/空なら球場欄は空のまま
+        /// （球場割当が未配線の大会・既存の呼び出し元・LineScoreStatesShooter 等との後方互換）。
+        /// </param>
+        /// <param name="weather">
+        /// その試合に実際に効いた天気（<see cref="GameContext.ResolvedWeather"/> の写し）。null なら
+        /// 天気欄を隠す（Weather 無効の試合・観測データ未着のフレーム）。ここで抽選し直さない。
+        /// </param>
         public static void Fill(
             VisualElement root, LiveLineScore away, LiveLineScore home,
-            int inning, bool isTop, bool finished)
+            int inning, bool isTop, bool finished,
+            string venueName = null, WeatherSample? weather = null)
         {
             if (root == null || away == null || home == null) return;
 
@@ -49,6 +59,28 @@ namespace KokoSim.Unity.Components
             BuildHead(root.Q("lsc-head"), innings, current, caption);
             BuildTeam(root.Q("lsc-away"), away, innings, battingNow: !finished && isTop);
             BuildTeam(root.Q("lsc-home"), home, innings, battingNow: !finished && !isTop);
+
+            SetLabel(root.Q<Label>("lsc-venue-name"), venueName ?? "");
+            var weatherGroup = root.Q("lsc-venue-weather");
+            if (weatherGroup != null)
+            {
+                if (weather is { } w)
+                {
+                    weatherGroup.style.display = DisplayStyle.Flex;
+                    SetLabel(root.Q<Label>("lsc-venue-weather-k"), KokoSim.Unity.Shell.WeatherLabels.Jp(w.State));
+                    SetLabel(root.Q<Label>("lsc-venue-temp-num"), System.Math.Round(w.TemperatureC).ToString());
+                    SetLabel(root.Q<Label>("lsc-venue-temp-unit"), "℃");
+                }
+                else
+                {
+                    weatherGroup.style.display = DisplayStyle.None;
+                }
+            }
+        }
+
+        private static void SetLabel(Label label, string text)
+        {
+            if (label != null) label.text = text;
         }
 
         /// <summary>見出し行＝左上に現在の回（実物の掲示板では空欄の位置）、続けて回番号と R / H / E。</summary>

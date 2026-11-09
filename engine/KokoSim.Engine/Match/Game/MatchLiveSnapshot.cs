@@ -113,6 +113,14 @@ public sealed record LiveLineScore(
 /// <param name="CurrentBatterOrder">現在の打者の打順（1-9。攻撃側列のハイライト用）。</param>
 /// <param name="AwayLine">先攻のラインスコア。</param>
 /// <param name="HomeLine">後攻のラインスコア。</param>
+/// <param name="Weather">
+/// その試合に実際に効いた天気（<see cref="GameContext.ResolvedWeather"/> の写し、Issue #803）。
+/// Weather が null／無効な試合は null＝電光掲示板は天気欄を出さない。
+/// </param>
+/// <param name="StadiumName">
+/// その試合の球場名（<see cref="GameContext.StadiumName"/> の写し、Issue #803）。未配線の大会は null
+/// ＝電光掲示板は球場名欄を出さない（UIで推測で埋めない）。
+/// </param>
 public sealed record MatchLiveSnapshot(
     LiveTeamSnapshot Away, LiveTeamSnapshot Home, bool OffenseIsTop, int CurrentBatterOrder,
-    LiveLineScore AwayLine, LiveLineScore HomeLine);
+    LiveLineScore AwayLine, LiveLineScore HomeLine, WeatherSample? Weather = null, string? StadiumName = null);
