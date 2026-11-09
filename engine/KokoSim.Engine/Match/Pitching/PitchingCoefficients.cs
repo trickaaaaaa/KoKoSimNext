@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using KokoSim.Engine.Players;
+
 namespace KokoSim.Engine.Match.Pitching;
 
 /// <summary>
@@ -85,7 +88,41 @@ public sealed record PitchingCoefficients
     /// <summary>ストレート: 球威(Power-50)あたりの回転数の傾き[rpm/能力1]（Issue #274）。</summary>
     public double SpinRpmPerPower { get; init; } = 6.0;
     /// <summary>変化球: キレ(Sharpness-50)あたりの回転数の傾き[rpm/能力1]。</summary>
-    public double SpinRpmPerSharpness { get; init; } = 6.0;
+    public double SpinRpmPerSharpness { get; init; } = 7.0;
+
+    // === 球種ごとの回転軸（設計書02 §2.1・issue #835） ===
+    // 「全球種バックスピン固定」だった穴（issue #835）を塞ぐ。各球種に回転軸（tilt）と実効回転数倍率
+    // （rpm_scale）を持たせ、変化量の「質」（ホップ寄り/横滑り寄り/縦落ち寄り）を球種ごとに分ける。
+    // rpm_scale はグリップが生む生回転数の差とジャイロ（力を生まない）成分の両方を1つの実効倍率に
+    // まとめたもの（2つの係数は式の上で完全に同じ効き方をするため、不変条件#1「変換式は一箇所」に
+    // 従って1つへ集約）。値は実測で妥当性を確認した出発点（§2.1「変化の性質」の記述と整合）。
+    /// <summary>球種ごとの回転軸・実効回転数倍率。<see cref="AxisFor"/> で参照する。</summary>
+    public IReadOnlyList<PitchAxisCoefficients> PitchAxis { get; init; } = DefaultPitchAxis;
+
+    private static readonly PitchAxisCoefficients[] DefaultPitchAxis =
+    {
+        // tiltDeg: 0=純バックスピン(ホップ) / 180=純トップスピン(落下方向を強める) / ±90=純サイドスピン
+        //          (+で design-18「+x=一塁側」方向)。
+        new() { Type = PitchType.Fastball, TiltDeg = 0.0,   RpmScale = 1.00 }, // バックスピンによるホップ成分
+        new() { Type = PitchType.TwoSeam,  TiltDeg = 25.0,  RpmScale = 0.95 }, // 微シュート＋微沈
+        new() { Type = PitchType.Cutter,   TiltDeg = -20.0, RpmScale = 0.95 }, // 小さく横滑り
+        new() { Type = PitchType.Slider,   TiltDeg = -70.0, RpmScale = 1.10 }, // 横〜斜めの大きな変化（実測はストレート以上の回転数のことが多い）
+        new() { Type = PitchType.Curve,    TiltDeg = 170.0, RpmScale = 1.15 }, // 縦の大変化（真性スピンが大きい）
+        new() { Type = PitchType.Fork,     TiltDeg = 180.0, RpmScale = 0.90 }, // 低回転の縦落ち（ストレートよりやや低回転。落差の符号が完全に逆＝トップスピン方向で、縦の変化量そのものは大きい）
+        new() { Type = PitchType.Changeup, TiltDeg = 150.0, RpmScale = 0.85 }, // 沈み＋緩急
+        new() { Type = PitchType.Shuuto,   TiltDeg = 110.0, RpmScale = 0.95 }, // 打者の内側へ食い込む
+        new() { Type = PitchType.Sinker,   TiltDeg = 145.0, RpmScale = 0.95 }, // 内側へ沈む
+    };
+
+    /// <summary>球種→回転軸。見つからなければストレート相当（フォールバック、通常は発生しない）。</summary>
+    public PitchAxisCoefficients AxisFor(PitchType type)
+    {
+        foreach (var axis in PitchAxis)
+        {
+            if (axis.Type == type) return axis;
+        }
+        return new PitchAxisCoefficients { Type = type, TiltDeg = 0.0, RpmScale = 1.0 };
+    }
 
     // === 投手ギア「飛ばす/流す」（設計書02 §1.1f）。エンジンフック（既定Normal） ===
     /// <summary>飛ばす: 球速天井ボーナス[km/h]。</summary>
@@ -104,4 +141,19 @@ public enum PitcherGear
     Normal,
     Push,   // 飛ばしていけ
     Coast,  // 流していけ
+}
+
+/// <summary>
+/// 球種1つの回転軸定義（設計書02 §2.1・issue #835）。<see cref="PitchSpec.SpinFromRpmAndTilt"/> に渡す
+/// tiltDeg と、基準回転数に対する実効回転数倍率。<see cref="PitchingCoefficients.AxisFor"/> 経由で参照する。
+/// </summary>
+public sealed record PitchAxisCoefficients
+{
+    public required PitchType Type { get; init; }
+
+    /// <summary>回転軸角度[deg]（0=純バックスピン／180=純トップスピン／±90=純サイドスピン）。</summary>
+    public double TiltDeg { get; init; }
+
+    /// <summary>基準回転数（<see cref="PitchingCoefficients.SpinRpmBase"/> 系）に対する実効回転数の倍率。</summary>
+    public double RpmScale { get; init; } = 1.0;
 }

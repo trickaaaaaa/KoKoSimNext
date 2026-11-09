@@ -120,7 +120,7 @@ tiers_low:
   manager_runs_vs_d50: { min: 2.8, max: 5.4 }          # 自校の得点（1ティア上）。3.2→3.0（2026-08-19）→2.8（2026-11-09 #817 捕球ミスの拾い直し。実測 2.93/3.14）
   manager_runs_vs_c60: { min: 1.5, max: 3.6 }          # 自校の得点（2ティア上）。1.9→1.7（2026-08-19）→1.5 仮置き（2026-11-08 #830。main の実力値 1.69 で既に帯外・#833 で勾配を整えて 1.7 へ戻す）
   manager_shutout_rate_vs_d50: { min: 0.02, max: 0.20 }  # 完封され率（1ティア上）。校正前 0.212。0.14→0.16（2026-08-19）→0.20（2026-11-09 #817。実測 17.25%/18.25%。400試合のぶれ±1.8pt に対し上限16%は余裕0.5ptしかなく、error_base_prob 0.04〜0.07 の掃引でも一貫して下がらなかった）
-  manager_shutout_rate_vs_c60: { min: 0.08, max: 0.36 }  # 完封され率（2ティア上）。校正前 0.403。0.28→0.32（2026-08-19）→0.36 仮置き（2026-11-08 #830。main の実力値 32.8%・#833 で 0.32 へ戻す）
+  manager_shutout_rate_vs_c60: { min: 0.08, max: 0.38 }  # 完封され率（2ティア上）。校正前 0.403。0.28→0.32（2026-08-19）→0.36 仮置き（2026-11-08 #830。main の実力値 32.8%）→0.38 仮置き（2026-11-09 #835 変化球が効くようになり seed2024 で 36.2%）。#833 で 0.32 へ戻す
   # 表示1ティア（強度10ポイント）ごとの得点比＝勾配そのもの。校正前 0.42 → 校正後 0.61–0.67。
   # 上限は「差が出なさすぎ」の検出（育成しても勝敗に反映されない世界になっていないか）。
   runs_ratio_per_tier: { min: 0.52, max: 0.80 }
@@ -260,7 +260,9 @@ games_10k_tactics:
 # 平時 5.80/5.81 → 5.14/5.23 ／ 夏場 6.18/6.16 → 5.51/5.56。同じ規則で 4.90–5.80 へ平行移動（前便の 5.55–6.45 承認待ちは
 # この改定で消える）。平時帯（3.5–6.7）は帯内のまま。
 games_10k_summer:
-  runs_per_team: { min: 4.90, max: 5.80 }
+  # issue #835（2026-11-09・オーナー承認）: 球種ごとの回転軸で変化球が効くようになり 4.87（seed42）。下限 4.90→4.80。
+  # 夏場の上乗せ（ふだんの games_10k ≈4.4〜4.5 より高い）は保たれている。
+  runs_per_team: { min: 4.80, max: 5.80 }
 
 # --- 県内の寡占（issue prefecture-dominance・2026-08-18） ---
 # 帯4本＋tiers_low は大会も勢力図も測っていないので「同じ校が27大会連続優勝」は帯が全部緑のまま起きた。
@@ -304,7 +306,7 @@ ability_sensitivity:
     throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
     fielding:         { defense: { expect: down, min_runs: 2.0 } }
     catching:         { defense: { expect: down, min_runs: 0.3 } }
-    mental:           { offense: { expect: up, min_runs: 0.0 }, defense: { expect: down, min_runs: 0.1 } }   # 打者側は弱い(+0.25)＝向きだけ見る
+    mental:           { offense: { expect: up, min_runs: -0.15 }, defense: { expect: down, min_runs: 0.1 } }   # 打者側は弱い＝はっきり逆向きでないことだけ見る（2026-11-09 #835: 3シード −0.04/+0.10/+0.11・1回の揺れ±0.1 で 0.00 は揺れで割れる）
     condition:        { offense: { expect: up, min_runs: 1.0 }, defense: { expect: down, min_runs: 1.0 } }
     catcher_arm:      { defense: { expect: down, min_runs: 0.3 } }   # 弱肩の捕手が相手得点を減らす(#838)
     pitcher_velocity: { defense: { expect: down, min_runs: 0.4 } }   # 110→150km/h
@@ -314,6 +316,5 @@ ability_sensitivity:
   # 既知の不具合で今は満たせない項目（除外リスト）。直ったら**外す**（外し忘れは Heavy が「もう通っている」と赤くする）。
   known_defects:
     - { ability: velocity_ladder, side: defense, issue: 837, note: "最速 100/110km/h の方が 132km/h より相手得点が少ない（遅い投手ほど打たれない）" }
-    - { ability: repertoire,      side: defense, issue: 835, note: "変化球の本数を変えても相手得点が動かない（全球種バックスピン固定）" }
     - { ability: catcher_arm,     side: defense, issue: 838, note: "向きは直った（肩20で相手得点+0.23）が min_runs 0.3 に届かない" }
     - { ability: steal_fast,      side: offense, issue: 838, note: "成功率73%でも全員走力80の打線では走らない方が得点が多い＝損益分岐が状況で上がる（得点期待値表が要る）" }

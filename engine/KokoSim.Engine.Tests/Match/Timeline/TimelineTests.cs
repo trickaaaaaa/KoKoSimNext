@@ -1332,8 +1332,9 @@ public sealed class TimelineTests
             var r = CapturedGame(s);
             foreach (var tl in r.Log.Select(e => e.Timeline).Where(t => t is not null)!)
             {
+                // 本塁の封殺（満塁の内野ゴロ・Force）はタッチが要らない＝「タッチアウト」実況は出ない。対象はタッチプレーだけ。
                 var homeOutLeg = tl!.Runners.Any(
-                    leg => leg.OutAtEnd && System.Math.Abs(leg.To.X) < 0.5 && System.Math.Abs(leg.To.Z) < 0.5);
+                    leg => leg.OutAtEnd && !leg.Force && System.Math.Abs(leg.To.X) < 0.5 && System.Math.Abs(leg.To.Z) < 0.5);
                 if (!homeOutLeg) continue;
 
                 // 憤死には本塁で終わる送球と「タッチアウト」実況が伴う（Slice D）。

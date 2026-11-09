@@ -144,7 +144,9 @@ public static class ContactModel
             ? Math.Max(coeff.LaunchAngleSigmaContactFloor, 1.0 - coeff.LaunchAngleSigmaPerContact * (batter.Contact - 50))
             : 1.0;
         var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality)) * contactTighten;
-        var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + rng.NextGaussian(0, angleSigma);
+        // 球種の縦変化で角度が動く（issue #835）: 縦に落ちる球（フォーク等）ほど角度が下がりゴロが増える。
+        var breakAngleShift = coeff.LaunchAnglePerVerticalBreakM * (features.InducedVerticalBreakM - coeff.LaunchAngleBreakRefM);
+        var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + breakAngleShift + rng.NextGaussian(0, angleSigma);
 
         // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。
         var timing = TimingOffsetMean(batter, plan, features, coeff) + rng.NextGaussian(0, coeff.TimingSigma);

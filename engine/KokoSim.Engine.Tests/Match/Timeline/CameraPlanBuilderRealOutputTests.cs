@@ -160,6 +160,8 @@ public sealed class CameraPlanBuilderRealOutputTests
                 var roll = segs.FirstOrDefault(b => b.Kind == BallSegmentKind.Roll);
                 var throws = segs.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
                 if (pitch is null || roll is null || throws.Count != 1) continue;
+                // 捕球ミスを拾い直した打球（issue #817）は転がりが2本＝「持っている」のではなく球が転がっている。
+                if (segs.Count(b => b.Kind == BallSegmentKind.Roll) != 1) continue;
                 if (throws[0].ToRole != FieldPosition.FirstBase) continue;
                 if (throws[0].FromRole is not (FieldPosition.Shortstop or FieldPosition.SecondBase or FieldPosition.ThirdBase)) continue;
                 if (throws[0].T0 - roll.T1 < 0.9) continue;   // 保持が十分長いものだけ

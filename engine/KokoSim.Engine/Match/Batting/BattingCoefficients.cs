@@ -105,7 +105,7 @@ public sealed record BattingCoefficients
     /// あたりの空振り加算（対数オッズ）。球種ランク(PitchRank)は Sharpness→rpm→変化量の経路で既に弾道へ
     /// 織り込み済みのため、旧 StuffPerPitchRank（球種ランク直参照）を本項へ完全置換した（二重計上を避ける）。
     /// </summary>
-    public double WhiffBreakSlope { get; init; } = 1.5;
+    public double WhiffBreakSlope { get; init; } = 1.2;
     /// <summary>
     /// 投打差（球威 − ミート項）の対数オッズ寄与を頭打ちにする soft-cap（issue matchup-gap-saturation-k-rate）。
     /// z 寄与 = cap × tanh(d / cap)。互角近傍（|d| ≪ cap）は従来の線形と一致し、大差では ±cap で飽和する
@@ -192,6 +192,21 @@ public sealed record BattingCoefficients
     public double LaunchAngleSigmaPerContact { get; init; } = 0.010;
     /// <summary>ミートによる角度σ倍率の下限。</summary>
     public double LaunchAngleSigmaContactFloor { get; init; } = 0.6;
+    /// <summary>
+    /// 球種の誘発縦変化による打球角度シフト（issue #835）: + <see cref="LaunchAnglePerVerticalBreakM"/> ×
+    /// (<see cref="Pitching.PitchTrajectoryFeatures.InducedVerticalBreakM"/> − <see cref="LaunchAngleBreakRefM"/>)。
+    /// 縦に落ちる球（フォーク・チェンジアップ等、誘発縦変化が負または小さい）ほど打球角度が下がりゴロが増える。
+    /// 基準 <see cref="LaunchAngleBreakRefM"/> はストレート相当の誘発縦変化（他のbreak系refと同じ0.47）に
+    /// 揃えてあるため、球種ごとの回転軸を初導入した今回もストレート中心の既存バランスはほぼ恒等。
+    /// </summary>
+    public double LaunchAnglePerVerticalBreakM { get; init; } = 15.0;
+    /// <summary>
+    /// 打球角度シフトの基準となる誘発縦変化[m]。ストレート単体の誘発縦変化（他のbreak系refと同じ0.47）ではなく、
+    /// 既定配球（ストレート比0.55・残りを変化球で等分、design02 §2.1既定のrpm_scale/tilt）での
+    /// 「誘発縦変化の打席加重平均」に合わせてある。ここをストレート単体値(0.47)にすると、変化球を持つ投手が
+    /// 多い母集団全体の平均打球角度が恒常的に下がり、本塁打率が校正前の帯から大きく外れる（issue #835 実測）。
+    /// </summary>
+    public double LaunchAngleBreakRefM { get; init; } = 0.20;
     /// <summary>方位角の残差（引っ張り/流しを引いた後のばらつき）の標準偏差[deg]。</summary>
     public double BearingSigma { get; init; } = 19.0;
     /// <summary>芯を外すと初速が落ちる度合い（品質1で満初速, 0で係数分だけ残る）。</summary>

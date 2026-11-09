@@ -604,30 +604,35 @@ public sealed class AtBatSession
 
     /// <summary>
     /// 弾道は観測専用（設計書15 §0.1 Q12-5）。<see cref="PitchSimulator"/> はRNGを使わない決定論積分で、
-    /// 判定には使わない（Phase E で接続）。回転数はキレ(Sharpness)の線形写像（暫定式・観測専用のため帯に無関係）、
-    /// 回転軸は全球種バックスピン固定（横変化は現モデルでは扱わない）。
+    /// 判定には使わない（Phase E で接続）。回転数はキレ(Sharpness)の線形写像（暫定式・観測専用のため帯に無関係）。
+    /// 回転軸は球種ごとに固定（<see cref="PitchingCoefficients.AxisFor"/>・issue #835で全球種バックスピン固定を解消）。
     /// </summary>
     private PitchTrajectory ComputeTrajectory(PitchPlan plan)
     {
         var rpm = RpmForPlan(plan);
-        var spec = new PitchSpec { SpeedKmh = plan.VelocityKmh, SpinRadPerSec = PitchSpec.BackspinFromRpm(rpm) };
+        var tiltDeg = _ctx.Pitching.AxisFor(plan.Type).TiltDeg;
+        var spec = new PitchSpec { SpeedKmh = plan.VelocityKmh, SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(rpm, tiltDeg) };
         return PitchSimulator.Simulate(spec, _ctx.Aerodynamics, _ctx.Mound);
     }
 
     /// <summary>
     /// 判定用弾道特徴量を <see cref="TrajectoryFeatureTable"/> の補間で求める（設計書15 Phase E-1）。
     /// 毎球呼ぶが O(1) の配列参照のみ・RNG非消費。<see cref="ComputeTrajectory"/>（観測専用・毎回RK4）とは別経路。
+    /// 回転軸ごとに別テーブル（<see cref="TrajectoryFeatureTable.GetOrBuild"/> がキャッシュ）を参照する（issue #835）。
     /// </summary>
     private PitchTrajectoryFeatures ComputeFeatures(PitchPlan plan)
     {
         var rpm = RpmForPlan(plan);
-        var table = TrajectoryFeatureTable.GetOrBuild(_ctx.Aerodynamics, _ctx.Mound);
+        var tiltDeg = _ctx.Pitching.AxisFor(plan.Type).TiltDeg;
+        var table = TrajectoryFeatureTable.GetOrBuild(_ctx.Aerodynamics, _ctx.Mound, tiltDeg);
         return table.Lookup(plan.VelocityKmh, rpm);
     }
 
     /// <summary>
     /// 球種別の有効軸 → rpm の写像（Issue #274・設計書15 §0.1 Q12-5、観測用ComputeTrajectoryと判定用ComputeFeaturesで共有）。
     /// ストレートは球威(Power)→ SpinRpmPerPower、変化球はキレ(Sharpness)→ SpinRpmPerSharpness。
+    /// 球種ごとの実効回転数倍率（<see cref="PitchingCoefficients.AxisFor"/>.RpmScale、issue #835）を最後に掛ける
+    /// （フォークは低回転・カーブは高回転など、球種の「持ち味」を乗せる）。
     /// </summary>
     private double RpmForPlan(PitchPlan plan)
     {
@@ -644,7 +649,8 @@ public sealed class AtBatSession
         var slope = Players.PitchSlot.IsSpinByPower(plan.Type)
             ? _ctx.Pitching.SpinRpmPerPower
             : _ctx.Pitching.SpinRpmPerSharpness;
-        return _ctx.Pitching.SpinRpmBase + (rank - 50) * slope;
+        var raw = _ctx.Pitching.SpinRpmBase + (rank - 50) * slope;
+        return raw * _ctx.Pitching.AxisFor(plan.Type).RpmScale;
     }
 
     /// <summary>enum 結果で打席を確定させる（三振/四球）。従来ループの early return と同一。</summary>
