@@ -545,7 +545,9 @@ public sealed class BaserunningPlaysTests
         Assert.Equal(a.TotalPitches, b.TotalPitches);
     }
 
+    // 6,000試合を回す統計テスト＝Heavy（数百試合以上のフルゲームループは fast に置かない。issue #361）。
     [Fact]
+    [Trait("Category", "Heavy")]
     public void DropThirdStrike_Enabled_RaisesRunsForHighStrikeoutTeams()
     {
         var off = new GameContext();
@@ -787,13 +789,16 @@ public sealed class BaserunningPlaysTests
         var totalOn = 0;
         var wpOn = 0;
         // ⚠ 30シードでは足りない（実測 2026-08-14: off=255 / on=252 で逆転した）。理由は上の振り逃げと同じ。
-        for (ulong s = 0; s < 150; s++)
+        // 1試合=独立シード＝並列に回して整数で足す（順序に依らず同じ合計。issue #639 と同じ作法）。
+        System.Threading.Tasks.Parallel.For(0, 150, i =>
         {
-            totalOff += GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
+            var s = (ulong)i;
+            var off1 = GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
             var r = GameEngine.Play(FastTeam("A"), FastTeam("H"), on, new Xoshiro256Random(s));
-            totalOn += r.TotalRuns;
-            wpOn += r.WildPitchCount;
-        }
+            System.Threading.Interlocked.Add(ref totalOff, off1);
+            System.Threading.Interlocked.Add(ref totalOn, r.TotalRuns);
+            System.Threading.Interlocked.Add(ref wpOn, r.WildPitchCount);
+        });
         Assert.True(wpOn > 0, "暴投・パスボールを有効化しても一度も発生しなかった");
         Assert.True(totalOn > totalOff, $"暴投・パスボール有効化で得点が増えていない: off={totalOff} on={totalOn}");
     }

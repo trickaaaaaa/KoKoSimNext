@@ -40,7 +40,8 @@ public sealed class ErrorTunnelTests
     private static readonly Aerodynamics Aero = new();
     private static readonly FieldGeometry Field = new();
 
-    /// <summary>捕球エラーを必ず起こす係数（クランプ上限も開ける）。内訳ロールだけを見たいので送球ロールは止める。
+    /// <summary>捕球エラーを必ず起こす係数（クランプ上限も開ける）。内訳ロールだけを見たいので送球ロールと
+    /// 外野手のファンブル（issue #811・FumbleErrorTests.cs で別途検証）は止める。
     /// こぼれ幅を極端に大きくして捕球ミスの回収レース（design-14 P1-6 追記, issue #817）を必ず失敗させる＝
     /// 「捕球エラーが確定すれば必ず失策になる」という本クラスの前提（トンネル内訳の検証）を保つ。</summary>
     private static FieldingCoefficients AlwaysCatchError(double tunnelShare) => new()
@@ -49,6 +50,7 @@ public sealed class ErrorTunnelTests
         ErrorMaxProb = 1.0,
         ThrowErrorBaseProb = 0.0,
         TunnelShareProb = tunnelShare,
+        OutfieldFumbleBaseProb = 0.0,
         CatchFumbleScatterSigmaM = 1_000_000.0,
     };
 

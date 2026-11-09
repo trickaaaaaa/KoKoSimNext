@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
@@ -260,18 +261,32 @@ public sealed class PictureVsVerdictTests
 
     // ---- 補助 ----
 
-    /// <summary>実試合のタイムライン（打球プレーのみ）。</summary>
-    private static IEnumerable<PlayTimeline> Timelines(int games = Games)
+    /// <summary>テストが使う試合数の上限（<see cref="RunnerOutAtSecond_AlwaysHasABallToSecond"/> の400）。</summary>
+    private const int MaxGames = 400;
+
+    /// <summary>
+    /// シード1〜<see cref="MaxGames"/> の試合のタイムラインを1回だけ並列に作り、全テストで共有する。
+    /// 以前はテストごとに同じ試合を最初から回し直していた（xUnit は同じクラスを直列に回すので
+    /// クラス計300秒＝日常ループの壁時間を決めていた）。各試合はシードもチームも独立で、
+    /// 並びはシード順に固定してあるので、テストが見る中身は回し直していた頃と同じ。
+    /// </summary>
+    private static readonly Lazy<IReadOnlyList<PlayTimeline>[]> TimelinesBySeed = new(() =>
     {
-        for (ulong seed = 1; seed <= (ulong)games; seed++)
+        var bySeed = new IReadOnlyList<PlayTimeline>[MaxGames];
+        Parallel.For(0, MaxGames, i =>
         {
             var r = GameEngine.Play(BuildTeam("A"), BuildTeam("H"),
-                new GameContext { CaptureTimelines = true }, new Xoshiro256Random(seed));
-            foreach (var e in r.Log)
-            {
-                if (e.Timeline is not null) yield return e.Timeline;
-            }
-        }
+                new GameContext { CaptureTimelines = true }, new Xoshiro256Random((ulong)i + 1));
+            bySeed[i] = r.Log.Where(e => e.Timeline is not null).Select(e => e.Timeline!).ToList();
+        });
+        return bySeed;
+    });
+
+    /// <summary>実試合（シード1〜games）のタイムライン（打球プレーのみ）。</summary>
+    private static IEnumerable<PlayTimeline> Timelines(int games = Games)
+    {
+        if (games > MaxGames) throw new ArgumentOutOfRangeException(nameof(games), $"上限 {MaxGames} を上げること");
+        return TimelinesBySeed.Value.Take(games).SelectMany(t => t);
     }
 
     /// <summary>指定の塁へ着く球（送球・保持運び）の到達時刻。無ければ null。</summary>

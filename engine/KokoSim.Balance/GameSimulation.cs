@@ -4,6 +4,7 @@ using KokoSim.Config;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Players;
@@ -313,12 +314,16 @@ public static partial class GameSimulation
 
                 // 守備位置別・フライ/ゴロ別の失策内訳（issue #532）。処理野手が確定した打球（凡打 or 失策出塁）を
                 // フライ/ゴロ別に機会として数え、ReachedOnError を失策として数える。安打で終わった打球は機会に含めない。
+                // 外野手のファンブル（issue #811）は安打のまま失策が成立する（ErrorKind==Fumble）ので、
+                // Result では拾えない＝ErrorKind でも機会・失策を数える（安打扱いの打球をここだけ例外的に含む）。
+                var isFumble = e.ErrorKind == FieldingErrorKind.Fumble;
                 if (e.FieldedBy is { } pos
-                    && e.Result is KokoSim.Engine.Match.AtBat.PlateAppearanceResult.InPlayOut
-                        or KokoSim.Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError)
+                    && (e.Result is KokoSim.Engine.Match.AtBat.PlateAppearanceResult.InPlayOut
+                        or KokoSim.Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError
+                        || isFumble))
                 {
                     var pi = (int)pos;
-                    var isError = e.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError;
+                    var isError = e.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError || isFumble;
                     if (e.BattedIsFly) { FlyChances[pi]++; if (isError) FlyErrors[pi]++; }
                     else { GroundChances[pi]++; if (isError) GroundErrors[pi]++; }
                 }
@@ -479,7 +484,9 @@ public static partial class GameSimulation
             Fielding = b.Fielding,
             Baserunning = b.Baserunning,
             Fatigue = b.Fatigue,
-            Weather = b.Weather,   // Issue #120: 天候（気温）モデル。null＝weather ブロック無し＝無効
+            // Issue #120/#803: 天候（季節別気温）モデル。null＝weather ブロック無し＝無効。
+            // Heavy の summer 帯（games_10k_summer）は夏想定なので夏季節ぶんを使う（従来と同値）。
+            Weather = b.Weather?.Summer,
             Form = b.Form,
             Skills = b.Skills,
             Pressure = b.Pressure,

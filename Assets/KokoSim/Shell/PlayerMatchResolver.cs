@@ -28,7 +28,12 @@ namespace KokoSim.Unity.Shell
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var ctx = Rules.ApplyTo(
-                new GameContext { MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng) }, CalendarYear());
+                new GameContext
+                {
+                    MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
+                    Weather = WeatherModel.ForSeason(CurrentSeason()),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
+                },
+                CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
             var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
             var managerIsAway = ManagerIsAway(manager, opponent);
@@ -56,6 +61,7 @@ namespace KokoSim.Unity.Shell
                     // 自校の投手交代はプレイヤーの采配権にする（Resolve側＝観戦しない裏解決には付けない）。
                     PlayerControlsPitcherChanges = true,
                     MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
+                    Weather = WeatherModel.ForSeason(CurrentSeason()),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -137,6 +143,14 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
         private static int CalendarYear() => SeasonClock.SeasonBaseYear + (GameSession.Current.Year - 1);
+
+        private static readonly SeasonCalendar Calendar = new SeasonCalendar();
+
+        /// <summary>
+        /// 今週の季節（Issue #803）。大会に紐付かない試合（練習試合等）もここを通るので、暦月から導く
+        /// （<see cref="SeasonClock"/> と同じ <see cref="SeasonCalendar.DateOf"/> を単一ソースにする）。
+        /// </summary>
+        private static WeatherSeason CurrentSeason() => WeatherModel.SeasonFor(Calendar.DateOf(GameClock.Week).Month);
 
         /// <summary>
         /// 相手校ラインナップを「校ID＋年度」から決定論生成する。大会展望が同じ入口で同じチームを引くので、
