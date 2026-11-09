@@ -942,33 +942,6 @@ public sealed class BaserunningPlaysTests
             StealResolver.SuccessProbability(runner, catcher, C, target: StealTarget.Home));
     }
 
-    // --- スモールボール発生（既定オフ）: フラグで挙動が変わる ---
-
-    [Fact]
-    public void SmallBall_Disabled_ByDefault_DoesNotChangeGame()
-    {
-        var off = new GameContext();
-        Assert.False(off.EnableSmallBall);
-        var a = GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(42));
-        var b = GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(42));
-        Assert.Equal(a.AwayRuns, b.AwayRuns); // 決定論維持
-    }
-
-    [Fact]
-    public void SmallBall_Enabled_AltersOutcomes()
-    {
-        var off = new GameContext();
-        var on = new GameContext { EnableSmallBall = true, StealAttemptThreshold = 50 };
-        var differ = 0;
-        for (ulong s = 0; s < 20; s++)
-        {
-            var a = GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(s));
-            var b = GameEngine.Play(FastTeam("A"), FastTeam("H"), on, new Xoshiro256Random(s));
-            if (a.AwayRuns != b.AwayRuns || a.HomeRuns != b.HomeRuns) differ++;
-        }
-        Assert.True(differ > 0, "盗塁ヒューリスティックが試合に反映されていない");
-    }
-
     private static Player Pos(FieldPosition p) => new()
     {
         Position = p, Contact = 55, Power = 45, Discipline = 50,

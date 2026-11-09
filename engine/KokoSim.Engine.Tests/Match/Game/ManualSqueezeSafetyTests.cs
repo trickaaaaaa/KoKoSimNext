@@ -77,7 +77,7 @@ public sealed class ManualSqueezeSafetyTests
         while (prog.AdvancePitch() != AdvancePitchResult.Finished) { }
         var result = prog.BuildResult();
 
-        // 采配Brain も EnableSmallBall も無いので、盗塁が記録されるならこの本盗しかありえない。
+        // 采配Brain が無いので、盗塁が記録されるならこの本盗しかありえない。
         Assert.Equal(0, result.AwayTactics.StealAttempts);
         Assert.Equal(1, result.AwayTactics.Squeezes);
     }

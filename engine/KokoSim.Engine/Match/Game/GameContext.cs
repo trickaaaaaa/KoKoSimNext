@@ -67,15 +67,6 @@ public sealed record GameContext
     public int TieBreakStartInning { get; init; } = 10;
 
     /// <summary>
-    /// スモールボール（盗塁・バント）の自動発生。既定オフ。
-    /// 本来は監督采配（設計書09）が駆動する。09 実装までの暫定ヒューリスティックのゲート。
-    /// オフの間は既存の試合挙動・統計帯を一切変えない。
-    /// </summary>
-    public bool EnableSmallBall { get; init; }
-    /// <summary>暫定: 盗塁を試みる盗塁パラメータの下限（これ以上の走者が単独盗塁を試みる）。</summary>
-    public int StealAttemptThreshold { get; init; } = 62;
-
-    /// <summary>
     /// 1投手の球数上限（設計書05 §1.3, 現代ルール）。既定 int.MaxValue＝上限なし＝従来挙動。
     /// ModernRules.EffectiveWeeklyPitchLimit(year) を流し込む。週の持ち越し球数（GameEngine.Play の
     /// priorWeekPitches）＋当試合の球数がこの値に達した投手は、打者を打ち終えた時点で継投へ回す。

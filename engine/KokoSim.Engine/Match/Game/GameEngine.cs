@@ -550,13 +550,6 @@ public static class GameEngine
             // 選手交代（設計書09 §6, 攻撃側）: 代走→代打。控え空/無指示なら素通り＝従来と完全一致。
             MaybeOffenseSubs(p, offense, defense, ctx, rng, inning, outs, bases);
 
-            // スモールボール暫定ヒューリスティック（既定オフ）。采配Brain設定時はサインが置き換える。
-            if (ctx.EnableSmallBall && offense.Tactics is null)
-            {
-                outs += TryStealAttempt(bases, offense, defense, ctx, rng, outs);
-                if (outs >= 3) break;
-            }
-
             // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。乱数は消費しない。
             Timeline.Playback.LiveAtBat LiveAtBatOf(Player b, Player pit, int balls, int strikes, int pitchNumberInPa) => new()
             {
@@ -2434,37 +2427,6 @@ public static class GameEngine
     private static ulong PitchStreamId(int inning, bool isTop, int paIndex, int pitchNumber, ulong salt)
         => salt ^ ((ulong)(uint)inning << 48) ^ ((isTop ? 1UL : 0UL) << 47)
                 ^ ((ulong)(uint)paIndex << 16) ^ (ulong)(uint)pitchNumber;
-
-    /// <summary>
-    /// 暫定盗塁ヒューリスティック: 一塁に俊足走者・二塁が空・&lt;2アウトなら単独二盗を試みる。
-    /// 戻り値=このプレーで増えたアウト数（盗塁死なら1）。成功なら走者を二塁へ進める。
-    /// 采配Brain（設計書09）設定時はサインが置き換えるため呼ばれない。
-    /// </summary>
-    private static int TryStealAttempt(
-        BaseState bases, TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int outs)
-    {
-        if (outs >= 2) return 0;
-        var runner = bases.First;
-        if (runner is null || bases.Second is not null) return 0;
-        if (runner.Steal < ctx.StealAttemptThreshold) return 0;
-
-        var catcher = defense.Catcher;
-        // 送球の逸れ（issue #841）の受け手＝二塁カバーの遊撃手（BuildSteal の二盗送球と同じ約束）。
-        var safe = StealResolver.Resolve(
-            runner, catcher, ctx.Baserunning, rng,
-            receiver: defense.PlayerAtPosition(Field.FieldPosition.Shortstop)) == StealResult.Safe;
-        offense.RecordSteal(runner, safe);
-        if (safe)
-        {
-            bases.Second = runner;
-            bases.First = null;
-            return 0;
-        }
-        // 盗塁死。投球回にも数える（完投=27アウトの保証）。
-        defense.RecordRunnerOut(defense.CurrentPitcher);
-        bases.First = null;
-        return 1;
-    }
 
     // ===== 選手交代（設計書09 §6, C-2）。控えが非空かつBrainありの時だけ判断＝既定オフで従来一致。 =====
 
