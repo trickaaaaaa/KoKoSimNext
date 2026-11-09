@@ -523,6 +523,8 @@ public static class CoefficientsLoader
         public double WhiffOutOfZonePenalty { get; set; } = D.WhiffOutOfZonePenalty;
         public double WhiffBreakSlope { get; set; } = D.WhiffBreakSlope;
         public double WhiffMatchupCap { get; set; } = D.WhiffMatchupCap;
+        public double BreakDeceptionRefKmh { get; set; } = D.BreakDeceptionRefKmh;
+        public double BreakDeceptionExponent { get; set; } = D.BreakDeceptionExponent;
         public double FamiliarityWhiffPerPa { get; set; } = D.FamiliarityWhiffPerPa;
         public double FamiliarityChasePerPa { get; set; } = D.FamiliarityChasePerPa;
         public int FamiliarityMaxPa { get; set; } = D.FamiliarityMaxPa;
@@ -594,6 +596,8 @@ public static class CoefficientsLoader
             WhiffOutOfZonePenalty = WhiffOutOfZonePenalty,
             WhiffBreakSlope = WhiffBreakSlope,
             WhiffMatchupCap = WhiffMatchupCap,
+            BreakDeceptionRefKmh = BreakDeceptionRefKmh,
+            BreakDeceptionExponent = BreakDeceptionExponent,
             FamiliarityWhiffPerPa = FamiliarityWhiffPerPa,
             FamiliarityChasePerPa = FamiliarityChasePerPa,
             FamiliarityMaxPa = FamiliarityMaxPa,
