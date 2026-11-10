@@ -18,6 +18,9 @@ public sealed class DevelopingPlayerCloneTests
             Throws = Handedness.Left,
             Bats = Handedness.Switch,
             GrowthType = GrowthType.Late,
+            PitchingGrowthType = GrowthType.Early,
+            BattingGrowthType = GrowthType.Standard,
+            DefenseGrowthType = GrowthType.Late,
             PersonalityFactor = 1.2,
             IsProdigy = true,
             Leadership = 77,
@@ -82,6 +85,9 @@ public sealed class DevelopingPlayerCloneTests
         Assert.Equal(original.Throws, clone.Throws);
         Assert.Equal(original.Bats, clone.Bats);
         Assert.Equal(original.GrowthType, clone.GrowthType);
+        Assert.Equal(original.PitchingGrowthType, clone.PitchingGrowthType);
+        Assert.Equal(original.BattingGrowthType, clone.BattingGrowthType);
+        Assert.Equal(original.DefenseGrowthType, clone.DefenseGrowthType);
         Assert.Equal(original.PersonalityFactor, clone.PersonalityFactor);
         Assert.Equal(original.IsProdigy, clone.IsProdigy);
         Assert.Equal(original.Mental, clone.Mental);

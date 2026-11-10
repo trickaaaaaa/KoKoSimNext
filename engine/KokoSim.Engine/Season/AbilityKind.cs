@@ -63,4 +63,12 @@ public static class AbilityKinds
     /// <summary>守備系（伸びしろ分野の判定に使用, 設計書01 §1.1）。</summary>
     public static bool IsDefense(AbilityKind k) => k is AbilityKind.Fielding or AbilityKind.Catching
         or AbilityKind.ArmStrength or AbilityKind.ThrowAccuracy;
+
+    /// <summary>
+    /// 打撃中核（スイング・選球眼・弾道）。成長タイプの分野分け（設計書02 §5.2・issue #866）で
+    /// 「打撃」に属する能力はここだけ。走力・走塁系（Speed/Bunt/Steal/Baserunning）は3分野のどれにも
+    /// 属さず、分野外として基本タイプ（<see cref="DevelopingPlayer.GrowthType"/>）に従う。
+    /// </summary>
+    public static bool IsBattingCore(AbilityKind k) => k is AbilityKind.Contact or AbilityKind.Power
+        or AbilityKind.LaunchTendency or AbilityKind.Discipline;
 }

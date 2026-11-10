@@ -320,6 +320,9 @@ public sealed class InjuryAndEventsTests
     /// 成長タイプの気づきが実際に返ってくること（issue #614）。<see cref="InsightTopic.GrowthType"/> は
     /// 列挙子だけあって<b>一度も返されていなかった</b>（＝「大器晩成かもしれない」は実在しない気づきだった）。
     /// 列挙子の存在はテストにならないので、話題として出ることを測る。
+    /// 分野別化（issue #866）: 示唆は pitching/batting/defense のいずれかの分野を名指しする
+    /// （<see cref="InsightNotice.GrowthField"/>）ので、正解判定はその分野の成長タイプ
+    /// （<see cref="DevelopingPlayer.GrowthTypeForField"/>）と比べる。
     /// </summary>
     [Fact]
     public void Insight_YieldsGrowthTypeTopic()
@@ -335,14 +338,16 @@ public sealed class InjuryAndEventsTests
         Assert.NotEmpty(growthType);
         // 示唆されたタイプは Domain に入る（表示名。空だと UI が「型かもしれない」になる）。
         Assert.All(growthType, n => Assert.False(string.IsNullOrEmpty(n.Domain)));
+        // 分野は必ず3つのどれかを名指しする（基本タイプ全体への言及は無い）。
+        Assert.All(growthType, n => Assert.Contains(n.GrowthField, new[] { "pitching", "batting", "defense" }));
         // 読み違えのときは本当のタイプと違うものが出る（当てにいく気づきにしない）。
         var wrong = growthType.Where(n => !n.IsAccurate).ToList();
         Assert.NotEmpty(wrong);
         Assert.All(wrong, n =>
-            Assert.NotEqual(GrowthTypeNames.DisplayName(n.Player.GrowthType), n.Domain));
+            Assert.NotEqual(GrowthTypeNames.DisplayName(n.Player.GrowthTypeForField(n.GrowthField)), n.Domain));
         // 当たりのときは本当のタイプが出る。
         Assert.All(growthType.Where(n => n.IsAccurate), n =>
-            Assert.Equal(GrowthTypeNames.DisplayName(n.Player.GrowthType), n.Domain));
+            Assert.Equal(GrowthTypeNames.DisplayName(n.Player.GrowthTypeForField(n.GrowthField)), n.Domain));
     }
 
     // ===== 監督成長イベント（設計書04 §1.1b） =====

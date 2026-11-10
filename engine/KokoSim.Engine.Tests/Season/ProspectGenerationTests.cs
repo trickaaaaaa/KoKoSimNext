@@ -286,6 +286,56 @@ public sealed class ProspectGenerationTests
             $"Lateのリードcap上振れが無い (Late={Gap(GrowthType.Late):F1} Std={Gap(GrowthType.Standard):F1})");
     }
 
+    // --- 成長タイプの分野別化（設計書02 §5.2・issue #866） ---
+
+    /// <summary>
+    /// 分野別タイプの分布が係数どおり: 各分野が基本タイプと一致する割合が GrowthDomainSameProb に
+    /// 近い。全分野が基本タイプと一致する選手（「全分野バラバラ」ではない個体）が一定数いること。
+    /// </summary>
+    [Fact]
+    public void GrowthDomainTypes_SameAsBaseRate_MatchesCoefficient()
+    {
+        var pop = Cohort(C.TalentCenterDefault, seeds: 400);
+        Assert.NotEmpty(pop);
+
+        double SameRate(Func<DevelopingPlayer, GrowthType?> domain) =>
+            pop.Count(p => domain(p) == p.GrowthType) / (double)pop.Count;
+
+        var pitchingSame = SameRate(p => p.PitchingGrowthType);
+        var battingSame = SameRate(p => p.BattingGrowthType);
+        var defenseSame = SameRate(p => p.DefenseGrowthType);
+
+        foreach (var rate in new[] { pitchingSame, battingSame, defenseSame })
+            Assert.InRange(rate, C.GrowthDomainSameProb - 0.05, C.GrowthDomainSameProb + 0.05);
+
+        // 全分野が基本タイプと一致する個体が GrowthDomainSameProb^3 近辺で一定数いる（「全分野バラバラ」ばかりではない）。
+        var allSame = pop.Count(p =>
+            p.PitchingGrowthType == p.GrowthType && p.BattingGrowthType == p.GrowthType && p.DefenseGrowthType == p.GrowthType)
+            / (double)pop.Count;
+        var expectedAllSame = Math.Pow(C.GrowthDomainSameProb, 3);
+        Assert.InRange(allSame, expectedAllSame - 0.08, expectedAllSame + 0.08);
+
+        // 基本タイプ自体の比率（30/40/30）は分野別化の前と変わらない。
+        double BaseRate(GrowthType t) => pop.Count(p => p.GrowthType == t) / (double)pop.Count;
+        Assert.InRange(BaseRate(GrowthType.Early), 0.24, 0.36);
+        Assert.InRange(BaseRate(GrowthType.Standard), 0.34, 0.46);
+        Assert.InRange(BaseRate(GrowthType.Late), 0.24, 0.36);
+    }
+
+    /// <summary>生成は分野別化後も決定論（同シード同結果）。</summary>
+    [Fact]
+    public void GrowthDomainTypes_AreDeterministic()
+    {
+        var a = ProspectGenerator.Intake(1, C, new Xoshiro256Random(55));
+        var b = ProspectGenerator.Intake(1, C, new Xoshiro256Random(55));
+        for (var i = 0; i < a.Count; i++)
+        {
+            Assert.Equal(a[i].PitchingGrowthType, b[i].PitchingGrowthType);
+            Assert.Equal(a[i].BattingGrowthType, b[i].BattingGrowthType);
+            Assert.Equal(a[i].DefenseGrowthType, b[i].DefenseGrowthType);
+        }
+    }
+
     // --- 調子の初期値（設計書02 §3.3, issue #50）: 全員Normal(0)固定ではなく定常分布からサンプリングする ---
 
     [Fact]

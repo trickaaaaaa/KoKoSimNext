@@ -119,10 +119,15 @@ public static class TransferRosterConversion
     {
         var s = ai.Snapshot;
         var growth = ProspectGenerator.SampleGrowthType(rng);
+        // 成長タイプの分野別化（設計書02 §5.2・issue #866）: 独立Forkストリームで抽選し、
+        // この後の推定抽選列（性格・精神系・才能上限）を1ビットも乱さない（不変条件#2）。
+        var (pitchingGrowthType, battingGrowthType, defenseGrowthType) =
+            ProspectGenerator.SampleGrowthDomains(growth, rng.Fork(ConversionSalt ^ 0x1F9AUL), c);
         var personality = pc.Sample(rng);
         var profile = pc.Profile(personality);
-        double GrowthRoll() => MathUtil.Clamp(
-            rng.NextGaussian(c.GrowthMean, c.GrowthSd) + (growth == GrowthType.Late ? c.LateGrowthBonus : 0),
+        // 晩成の上乗せ（issue #866）はその分野自身の成長タイプで判定する（基本タイプではない）。
+        double GrowthRoll(GrowthType domainType) => MathUtil.Clamp(
+            rng.NextGaussian(c.GrowthMean, c.GrowthSd) + (domainType == GrowthType.Late ? c.LateGrowthBonus : 0),
             c.GrowthMin, c.GrowthMax);
 
         var dp = new DevelopingPlayer
@@ -130,12 +135,15 @@ public static class TransferRosterConversion
             Name = s.Name,
             Grade = ai.Grade,
             GrowthType = growth,
+            PitchingGrowthType = pitchingGrowthType,
+            BattingGrowthType = battingGrowthType,
+            DefenseGrowthType = defenseGrowthType,
             IsProdigy = ai.Phenom != PhenomType.None,
             Throws = s.Throws,
             Bats = s.Bats,
-            PitchingGrowth = GrowthRoll(),
-            BattingGrowth = GrowthRoll(),
-            DefenseGrowth = GrowthRoll(),
+            PitchingGrowth = GrowthRoll(pitchingGrowthType),
+            BattingGrowth = GrowthRoll(battingGrowthType),
+            DefenseGrowth = GrowthRoll(defenseGrowthType),
             PersonalityFactor = MathUtil.Clamp(
                 profile.SelfGrowthFactor + rng.NextGaussian(0, pc.FactorJitterSd), pc.FactorMin, pc.FactorMax),
             Personality = personality,
@@ -152,8 +160,9 @@ public static class TransferRosterConversion
         int CapFor(AbilityKind k, int level)
         {
             var gapFactor = c.CapGapFactor(k) * remaining;
+            // 晩成の上乗せ（issue #866）は能力 k が属する分野の成長タイプで判定する（分野外は基本タイプ）。
             var gap = rng.NextGaussian(c.CapGapMean * gapFactor, c.CapGapSd * gapFactor)
-                      + (growth == GrowthType.Late ? c.LateCapBonus * remaining : 0);
+                      + (dp.GrowthTypeFor(k) == GrowthType.Late ? c.LateCapBonus * remaining : 0);
             var rounded = Math.Round(level + gap);
             return k == AbilityKind.Stamina
                 ? (int)Math.Max(level + 2, rounded)

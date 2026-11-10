@@ -611,8 +611,9 @@ namespace KokoSim.Unity.Home
                 if (n.Topic != InsightTopic.GrowthType) continue;
                 KokoSim.Unity.Shell.EventService.Push("insight_growth_type", n.Player.Name,
                     // ★ 断定しない（設計書03 §5.6）。育成眼が低いと読み違える＝当たっているとは限らない。
+                    // 成長タイプの分野別化（issue #866）: 「投手としては」「打撃は」のように分野を名指しする。
                     KokoSim.Unity.Shell.PresentedEffect.Good(
-                        n.Player.Name + " は " + n.Domain + "型かもしれない"
+                        n.Player.Name + "は、" + GrowthFieldPhrase(n.GrowthField) + n.Domain + "型かもしれない"
                         + (n.ViaCoaching ? "（個別指導で見えてきた見立て）" : "（見立て）")),
                     n.Player.Id);
             }
@@ -644,9 +645,25 @@ namespace KokoSim.Unity.Home
                     return name + " の " + DomainJp(n.Domain) + " は伸びしろがないかもしれない。";
                 case InsightTopic.GrowthType:
                     // 示唆されたタイプは n.Domain に入る（晩成とは限らない・issue #614）。
-                    return name + " は " + n.Domain + "型かもしれない。";
+                    // 分野別化（issue #866）: n.GrowthField（pitching/batting/defense）で分野を名指しする。
+                    return name + "は、" + GrowthFieldPhrase(n.GrowthField) + n.Domain + "型かもしれない。";
                 default:
                     return name + " について何か気づいた。";
+            }
+        }
+
+        /// <summary>
+        /// 成長タイプの話題（issue #866・分野別化）で分野を名指しする言い回し。
+        /// 「○○は、投手としては晩成型かもしれない」「○○は、打撃は早熟型かもしれない」の「、」以降の頭。
+        /// </summary>
+        private static string GrowthFieldPhrase(string field)
+        {
+            switch (field)
+            {
+                case "pitching": return "投手としては";
+                case "batting": return "打撃は";
+                case "defense": return "守備は";
+                default: return "";
             }
         }
 

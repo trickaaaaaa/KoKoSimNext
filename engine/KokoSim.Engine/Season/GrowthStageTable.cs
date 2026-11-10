@@ -20,6 +20,18 @@ public static class GrowthTypeNames
         GrowthType.Late => "晩成",
         _ => "標準",
     };
+
+    /// <summary>
+    /// 指定タイプと異なる残り2種（順序固定）。気づきの読み違え（<see cref="InsightModel"/>）と
+    /// 成長タイプの分野別抽選（<see cref="ProspectGenerator.SampleGrowthDomains"/>・issue #866）の
+    /// 「基本タイプと別のタイプ」の抽選元を共有する。
+    /// </summary>
+    public static GrowthType[] OtherTypes(GrowthType t) => t switch
+    {
+        GrowthType.Early => new[] { GrowthType.Standard, GrowthType.Late },
+        GrowthType.Late => new[] { GrowthType.Standard, GrowthType.Early },
+        _ => new[] { GrowthType.Early, GrowthType.Late },
+    };
 }
 
 /// <summary>
