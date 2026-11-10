@@ -102,15 +102,15 @@ namespace KokoSim.Unity.Shell
             {
                 ManagerService.ApplyYearlyGrowth(YearIndex);
                 ProspectConfirmed = ProspectService.Confirm(YearIndex + 1);
-                // 能動勧誘の成否も同じ週に決まる（設計書04 §2.2・issue #588）。受動枠の器ができた
-                // 後に呼ぶ＝勧誘で獲った中学生はその器へ合流する。
-                RecruitsWon = RecruitService.Resolve(YearIndex + 1);
+                // スカウトの成否も同じ週に決まる（設計書04 §2.4・issue #867）。受動枠の器ができた
+                // 後に呼ぶ＝成功した候補はその器（受動枠の末尾）と差し替わる。
+                RecruitsWon = ScoutService.Resolve(YearIndex + 1);
             }
 
-            // 中学生リストが出る週（秋の大会の直後）。寮が無ければ何も起きない。
+            // スカウト候補リストが出る週（秋の大会の直後）。スカウト網が未契約なら何も起きない。
             if (Calendar.IsRecruitListWeek(Week))
             {
-                RecruitListOpened = RecruitService.BuildList(YearIndex + 1);
+                RecruitListOpened = ScoutService.BuildList(YearIndex + 1);
                 // AI校の節目成長・秋大会後（issue #843・Phase C）。ロスターを触るので背景裏試合の
                 // 完了を待つ（週18の夏ノードと同じ作法）。
                 NationBackgroundSim.EnsureCompleted();
@@ -180,7 +180,7 @@ namespace KokoSim.Unity.Shell
         public static bool ProspectJoined { get; set; }
 
         /// <summary>
-        /// 直前の週送りで中学生リストが出たか（issue #588）。ホームが通知フィードへ流したら下ろす。
+        /// 直前の週送りでスカウト候補リストが出たか（issue #867）。ホームが通知フィードへ流したら下ろす。
         /// </summary>
         public static bool RecruitListOpened { get; set; }
 

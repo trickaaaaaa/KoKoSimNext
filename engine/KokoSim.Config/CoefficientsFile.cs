@@ -48,8 +48,8 @@ public sealed record CoefficientsBundle
     public KokoSim.Engine.Season.Events.EventCoefficients Events { get; init; } = new();
     /// <summary>入部予定者の事前開示（設計書04 §2.1 効果2・issue #587）。</summary>
     public ProspectScoutingCoefficients Scouting { get; init; } = new();
-    /// <summary>能動勧誘枠（設計書04 §2.2・issue #588）。</summary>
-    public RecruitCoefficients Recruiting { get; init; } = new();
+    /// <summary>スカウト（設計書04 §2・issue #867）。枠数自体は Contracts の scouting 段が持つ。</summary>
+    public ScoutCoefficients Scout { get; init; } = new();
     public ManagerGrowthCoefficients ManagerGrowth { get; init; } = new();
     public TrainingCoefficients Training { get; init; } = new();
     public RosterCoefficients Roster { get; init; } = new();
@@ -114,7 +114,7 @@ public static class CoefficientsLoader
         public InsightDto? Insight { get; set; }
         public ScoutingDto? Scouting { get; set; }
         public EventsDto? Events { get; set; }
-        public RecruitingDto? Recruiting { get; set; }
+        public ScoutDto? Scout { get; set; }
         public ManagerGrowthDto? ManagerGrowth { get; set; }
         public TrainingDto? Training { get; set; }
         public RosterDto? Roster { get; set; }
@@ -158,7 +158,7 @@ public static class CoefficientsLoader
             Insight = Insight?.ToModel() ?? new InsightCoefficients(),
             Scouting = Scouting?.ToModel() ?? new ProspectScoutingCoefficients(),
             Events = Events?.ToModel() ?? new KokoSim.Engine.Season.Events.EventCoefficients(),
-            Recruiting = Recruiting?.ToModel() ?? new RecruitCoefficients(),
+            Scout = Scout?.ToModel() ?? new ScoutCoefficients(),
             ManagerGrowth = ManagerGrowth?.ToModel() ?? new ManagerGrowthCoefficients(),
             Training = Training?.ToModel() ?? new TrainingCoefficients(),
             Roster = Roster?.ToModel() ?? new RosterCoefficients(),
@@ -226,6 +226,7 @@ public static class CoefficientsLoader
         public double CoachingDefenseAdd { get; set; }
         public bool OutOfPrefectureOpponents { get; set; }
         public double ProspectDisclosure { get; set; }
+        public int ScoutSlots { get; set; }
 
         public ContractTier ToModel() => new()
         {
@@ -236,6 +237,7 @@ public static class CoefficientsLoader
             CoachingDefenseAdd = CoachingDefenseAdd,
             OutOfPrefectureOpponents = OutOfPrefectureOpponents,
             ProspectDisclosure = ProspectDisclosure,
+            ScoutSlots = ScoutSlots,
         };
     }
 
@@ -281,7 +283,6 @@ public static class CoefficientsLoader
         public double DefenseFactor { get; set; } = D.DefenseFactor;
         public double BaseRunningFactor { get; set; } = D.BaseRunningFactor;
         public double PitchingFactor { get; set; } = D.PitchingFactor;
-        public int RecruitSlots { get; set; } = D.RecruitSlots;
 
         public FacilityUpgrade ToModel() => new()
         {
@@ -296,7 +297,6 @@ public static class CoefficientsLoader
             DefenseFactor = DefenseFactor,
             BaseRunningFactor = BaseRunningFactor,
             PitchingFactor = PitchingFactor,
-            RecruitSlots = RecruitSlots,
         };
     }
 
@@ -1587,14 +1587,18 @@ public static class CoefficientsLoader
         };
     }
 
-    private sealed class RecruitingDto
+    private sealed class ScoutDto
     {
-        private static readonly RecruitCoefficients D = new();
-        public int ListSize { get; set; } = D.ListSize;
-        public double TalentCenterAdd { get; set; } = D.TalentCenterAdd;
+        private static readonly ScoutCoefficients D = new();
+        public int CandidatesPerSlot { get; set; } = D.CandidatesPerSlot;
+        public double CandidateTalentCenterAdd { get; set; } = D.CandidateTalentCenterAdd;
+        public double FieldBiasOversample { get; set; } = D.FieldBiasOversample;
+        public double FieldBiasJitterSd { get; set; } = D.FieldBiasJitterSd;
         public double OutOfPrefectureRatio { get; set; } = D.OutOfPrefectureRatio;
         public double BaseProbability { get; set; } = D.BaseProbability;
         public double ProbPerFame { get; set; } = D.ProbPerFame;
+        public double ProbPerOpportunity { get; set; } = D.ProbPerOpportunity;
+        public double ProbPerLocal { get; set; } = D.ProbPerLocal;
         public double ProbPerVisit { get; set; } = D.ProbPerVisit;
         public double VisitGainMax { get; set; } = D.VisitGainMax;
         public double ProbPerRivalTier { get; set; } = D.ProbPerRivalTier;
@@ -1610,14 +1614,24 @@ public static class CoefficientsLoader
         public double VisitCostFar { get; set; } = D.VisitCostFar;
         public double RivalEventProb { get; set; } = D.RivalEventProb;
         public int RivalEventTierStep { get; set; } = D.RivalEventTierStep;
+        public double PreferencePrestigeWeight { get; set; } = D.PreferencePrestigeWeight;
+        public double PreferencePlayingTimeWeight { get; set; } = D.PreferencePlayingTimeWeight;
+        public double PreferenceLocalWeight { get; set; } = D.PreferenceLocalWeight;
+        public double ReportNoiseSdTier1 { get; set; } = D.ReportNoiseSdTier1;
+        public double ReportNoiseSdTier2 { get; set; } = D.ReportNoiseSdTier2;
+        public double ReportNoiseSdTier3 { get; set; } = D.ReportNoiseSdTier3;
 
-        public RecruitCoefficients ToModel() => new()
+        public ScoutCoefficients ToModel() => new()
         {
-            ListSize = ListSize,
-            TalentCenterAdd = TalentCenterAdd,
+            CandidatesPerSlot = CandidatesPerSlot,
+            CandidateTalentCenterAdd = CandidateTalentCenterAdd,
+            FieldBiasOversample = FieldBiasOversample,
+            FieldBiasJitterSd = FieldBiasJitterSd,
             OutOfPrefectureRatio = OutOfPrefectureRatio,
             BaseProbability = BaseProbability,
             ProbPerFame = ProbPerFame,
+            ProbPerOpportunity = ProbPerOpportunity,
+            ProbPerLocal = ProbPerLocal,
             ProbPerVisit = ProbPerVisit,
             VisitGainMax = VisitGainMax,
             ProbPerRivalTier = ProbPerRivalTier,
@@ -1633,6 +1647,12 @@ public static class CoefficientsLoader
             VisitCostFar = VisitCostFar,
             RivalEventProb = RivalEventProb,
             RivalEventTierStep = RivalEventTierStep,
+            PreferencePrestigeWeight = PreferencePrestigeWeight,
+            PreferencePlayingTimeWeight = PreferencePlayingTimeWeight,
+            PreferenceLocalWeight = PreferenceLocalWeight,
+            ReportNoiseSdTier1 = ReportNoiseSdTier1,
+            ReportNoiseSdTier2 = ReportNoiseSdTier2,
+            ReportNoiseSdTier3 = ReportNoiseSdTier3,
         };
     }
 

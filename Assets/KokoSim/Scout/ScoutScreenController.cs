@@ -1,16 +1,18 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Engine.Nation;   // Tier（ランクチップの入力）
-using KokoSim.Unity.Components;  // 部品辞書（RankChip / CategoryRankChips）
+using KokoSim.Unity.Components;  // 部品辞書（RankChip / CategoryRankChips / SegTabs）
 using KokoSim.Unity.Shell;       // WeekAdvance / ScoreboardStrip / TopBarMeters / ScreenRouter
 
 namespace KokoSim.Unity.Scout
 {
     /// <summary>
-    /// スカウト画面（設計書04 §2.1 受動枠 ／ 設計書06 §3.6・issue #587）。
-    /// 左＝入部予定者の名簿、右＝選んだ1人の見立て（監督選択のB案＝選手一覧と同じマスターディテール）。
-    /// 表示するのは <see cref="ProspectService"/> が持つ確定済みの学年だけで、ここでは何も抽選しない。
-    /// スカウト網の契約はこの画面では変更しない（買い物の唯一の場所は経営タブ）。
+    /// スカウト画面（設計書04 §2.1 受動枠 ／ §2.4 スカウト・issue #587, #867）。
+    /// 左＝名簿（入部予定者／スカウト候補のタブ切替）、右＝選んだ1人の詳細
+    /// （監督選択のB案＝選手一覧と同じマスターディテール）。
+    /// 表示するのは <see cref="ProspectService"/> / <see cref="ScoutService"/> が持つ確定済みの状態だけで、
+    /// ここでは何も抽選しない。スカウト網の契約・探す分野の生成後の変更はここでは行わない
+    /// （買い物の唯一の場所は経営タブ・分野は生成前だけ切り替えられる）。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class ScoutScreenController : MonoBehaviour
@@ -34,8 +36,6 @@ namespace KokoSim.Unity.Scout
             if (toManagement != null)
                 toManagement.clicked += () => ScreenRouter.Instance?.ShowDeferred("ManagementScreen");
 
-            var target = _root.Q<Button>("sc-target");
-            if (target != null) target.clicked += ToggleTarget;
             var visit = _root.Q<Button>("sc-visit");
             if (visit != null) visit.clicked += Visit;
 
@@ -59,25 +59,18 @@ namespace KokoSim.Unity.Scout
             Render();
         }
 
-        /// <summary>勧誘対象の指定を切り替える（枠を超えたら断る）。</summary>
-        public void ToggleTarget()
-        {
-            if (_view == null || _selected >= _view.Rows.Count || !_view.Rows[_selected].IsRecruit) return;
-            _status = RecruitService.ToggleTarget(_selected)
-                ? ""
-                : "勧誘枠が埋まっている。他の対象を外してから指定する。";
-            Render();
-        }
-
-        /// <summary>1回訪問する（費用は部費から）。</summary>
+        /// <summary>
+        /// 1回訪問する（費用は部費から）。まだ対象にしていなければ枠の空きがある限り自動で対象にする
+        /// （ワイヤー案A＝ボタンは1つ）。
+        /// </summary>
         public void Visit()
         {
-            if (_view == null || _selected >= _view.Rows.Count || !_view.Rows[_selected].IsRecruit) return;
-            switch (RecruitService.Visit(_selected))
+            if (_view == null || _selected >= _view.Rows.Count || !_view.Rows[_selected].IsScout) return;
+            switch (ScoutService.Visit(_selected))
             {
                 case VisitResult.Visited: _status = "訪問した。手応えはあった。"; break;
                 case VisitResult.VisitedWithRivalMove: _status = "訪問した。だが競合校も動いたようだ。"; break;
-                case VisitResult.NotTargeted: _status = "先に勧誘対象へ指定する。"; break;
+                case VisitResult.SlotsFull: _status = "スカウト枠が埋まっている。"; break;
                 case VisitResult.NotEnoughFunds: _status = "部費が足りない。"; break;
                 default: _status = "いまは訪問できない（秋〜冬のあいだだけ）。"; break;
             }
@@ -90,10 +83,10 @@ namespace KokoSim.Unity.Scout
             if (_selected >= _view.Rows.Count) _selected = 0;
 
             RenderTopBar();
+            RenderTopBand();
             RenderTabs();
             RenderList();
             RenderDetail();
-            RenderFoot();
         }
 
         /// <summary>共通トップバーの動的値（週・メーター・自校の総合ランク）を埋める。他画面と同じ単一ソース。</summary>
@@ -107,20 +100,42 @@ namespace KokoSim.Unity.Scout
             rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Active)));
         }
 
-        // ── 名簿のタブ（入部予定者 / 中学生リスト） ───────────────────
+        // ── 共通の上部帯（オーナー決定2026-11-09・ワイヤー案A） ───────────
+        private void RenderTopBand()
+        {
+            var net = _root.Q<Label>("sc-net");
+            if (net != null) net.text = _view.NetworkWord;
+            var slots = _root.Q<Label>("sc-slots");
+            if (slots != null) slots.text = _view.SlotWord;
+            var milestone = _root.Q<Label>("sc-milestone");
+            if (milestone != null) milestone.text = _view.MilestoneWord;
+
+            var host = _root.Q<VisualElement>("sc-field-tabs");
+            if (host == null) return;
+            host.Clear();
+            var tabs = UiComponents.SegTabs(_view.FieldOptions, _view.FieldIndex, i =>
+            {
+                _state.SelectField(i);
+                Render();
+            });
+            tabs.SetEnabled(_view.CanChooseField);
+            host.Add(tabs);
+        }
+
+        // ── 名簿のタブ（入部予定者 / スカウト候補） ───────────────────
         private void RenderTabs()
         {
             var host = _root.Q<VisualElement>("sc-tabs");
             if (host == null) return;
             host.Clear();
-            // 寮が無いうちはタブを出さない（押しても何も無い項目を並べない）。
-            if (!_view.HasRecruiting) return;
+            // スカウト網が未契約のうちはタブを出さない（押しても何も無い項目を並べない）。
+            if (!_view.HasScouting) return;
             host.Add(UiComponents.SegTabs(
-                new[] { "入部予定者", "中学生リスト" }, (int)_view.Tab,
+                new[] { "入部予定者", "スカウト" }, (int)_view.Tab,
                 i => SelectTab((ScoutTab)i)));
         }
 
-        // ── 左：入部予定者の名簿 ────────────────────────────────
+        // ── 左：名簿 ────────────────────────────────────────────
         private void RenderList()
         {
             var title = _root.Q<Label>("sc-list-title");
@@ -139,10 +154,14 @@ namespace KokoSim.Unity.Scout
             SetShown(_root.Q<VisualElement>("sc-thead"), !isEmpty);
             SetShown(_root.Q<VisualElement>("sc-scroll"), !isEmpty);
 
+            var isScout = _view.Tab == ScoutTab.Candidates;
             var th2 = _root.Q<Label>("sc-th-2");
-            if (th2 != null) th2.text = _view.Tab == ScoutTab.Recruits ? "出身" : "投打";
+            if (th2 != null) th2.text = isScout ? "地方" : "投打";
+            var th3 = _root.Q<Label>("sc-th-3");
+            if (th3 != null) th3.text = isScout ? "能力" : "事前の見立て";
             var th4 = _root.Q<Label>("sc-th-4");
-            if (th4 != null) th4.text = _view.Tab == ScoutTab.Recruits ? "競合" : "？";
+            if (th4 != null) th4.text = isScout ? "進路" : "？";
+            SetShown(_root.Q<VisualElement>("sc-th-5"), isScout);
 
             var host = _root.Q<VisualElement>("sc-rows");
             if (host == null) return;
@@ -162,18 +181,17 @@ namespace KokoSim.Unity.Scout
             row.AddToClassList("row-panel--dense");   // 4軸を1段に畳んだので行を詰める（UI原則①）
             if (index == _selected) row.AddToClassList("row-panel--selected");
 
-            // 人名は明朝（書体3役ルール）。勧誘対象は氏名の頭に印を付ける
-            // ＝「いま追いかけている2人」が一覧を眺めるだけで拾える（UI原則⑥）。
-            // ◆＝「自分から獲りにいった子」。中学生リストでは勧誘対象、入部予定者では勧誘で獲れた子。
-            var marked = r.IsRecruit ? r.Targeted : r.Recruited;
+            // 人名は明朝（書体3役ルール）。スカウトで獲れた子は氏名の頭に印を付ける
+            // ＝「口説いて獲った子」が一覧を眺めるだけで拾える（UI原則⑥）。
+            var marked = r.IsScout ? r.Targeted : r.Recruited;
             var name = new Label(marked ? "◆ " + r.Name : r.Name);
             name.AddToClassList("sc-cell");
             name.AddToClassList("sc-cell--name");
             name.AddToClassList("f-display");
             row.Add(name);
 
-            // 中学生は投打より「どこの子か」が先に要る（距離が成功率に直結するため）。
-            var hand = new Label(r.IsRecruit ? r.Hometown : r.Handedness);
+            // スカウト候補は投打より「どこの子か」が先に要る（距離が入部の相性に直結するため）。
+            var hand = new Label(r.IsScout ? r.Hometown : r.Handedness);
             hand.AddToClassList("sc-cell");
             hand.AddToClassList("sc-cell--hand");
             row.Add(hand);
@@ -188,20 +206,28 @@ namespace KokoSim.Unity.Scout
             }
             else
             {
-                // 未契約＝報告書そのものが無い。雑音のランクを色付きで出さず「？」で通す。
+                // 段1（寸評だけ）・未契約＝ランクそのものが無い。雑音のランクを色付きで出さず「？」で通す。
                 var none = new Label("？");
                 none.AddToClassList("sc-cell--none");
                 est.Add(none);
             }
             row.Add(est);
 
-            // 入部予定者は「？」の残り数、中学生は競合校の格（＝いちばん効く不利要因）。
-            var tail = new Label(r.IsRecruit
-                ? r.RivalTier
+            // 入部予定者は「？」の残り数、スカウト候補は進路希望の短語（＝いちばん効く相性要因）。
+            var tail = new Label(r.IsScout
+                ? r.CareerPathWord
                 : r.UnknownCount > 0 ? "？×" + r.UnknownCount : "—");
             tail.AddToClassList("sc-cell");
             tail.AddToClassList("sc-cell--unknown");
             row.Add(tail);
+
+            if (r.IsScout)
+            {
+                var visits = new Label(Dots(r.Visits));
+                visits.AddToClassList("sc-cell");
+                visits.AddToClassList("sc-cell--visits");
+                row.Add(visits);
+            }
 
             // 選択は PointerDown で採る（Click は down/up の対と合成に依存する・UI-BUILD-METHOD 既知の罠）。
             var captured = index;
@@ -209,7 +235,14 @@ namespace KokoSim.Unity.Scout
             return row;
         }
 
-        // ── 右：選んだ1人の見立て ───────────────────────────────
+        /// <summary>訪問回数を丸ドット3つで表す（4回目以降は埋まったまま・issue #867 ワイヤー案A）。</summary>
+        private static string Dots(int visits)
+        {
+            var filled = Mathf.Clamp(visits, 0, 3);
+            return new string('●', filled) + new string('○', 3 - filled);
+        }
+
+        // ── 右：選んだ1人の詳細 ───────────────────────────────
         private void RenderDetail()
         {
             var detail = _root.Q<VisualElement>("sc-detail");
@@ -220,7 +253,9 @@ namespace KokoSim.Unity.Scout
             if (detailEmpty != null)
             {
                 detailEmpty.style.display = has ? DisplayStyle.None : DisplayStyle.Flex;
-                detailEmpty.text = "確定した入部予定者が居ないので、見立てもまだ無い。";
+                detailEmpty.text = _view.Tab == ScoutTab.Candidates
+                    ? "スカウト候補が居ないので、見立てもまだ無い。"
+                    : "確定した入部予定者が居ないので、見立てもまだ無い。";
             }
             if (!has) return;
 
@@ -230,7 +265,7 @@ namespace KokoSim.Unity.Scout
             if (name != null) name.text = r.Name;
             var sub = _root.Q<Label>("sc-sub");
             if (sub != null)
-                sub.text = r.IsRecruit
+                sub.text = r.IsScout
                     ? r.Handedness + " ・ " + r.Hometown + " ・ " + r.DistanceWord
                     : r.Handedness + " ・ " + _view.StateWord;
             var note = _root.Q<Label>("sc-est-note");
@@ -238,92 +273,72 @@ namespace KokoSim.Unity.Scout
 
             RenderEstimate(r);
             RenderHidden(r);
-            RenderRecruit(r);
+            RenderDetailAbilities(r);
+            RenderScoutCard(r);
 
             var comment = _root.Q<Label>("sc-comment");
-            if (comment != null) comment.text = r.Comment;
+            SetShown(_root.Q<VisualElement>("sc-comment-card"), !r.IsScout);
+            if (comment != null && !r.IsScout) comment.text = r.Comment;
         }
 
         /// <summary>
-        /// 勧誘カード（中学生リストのときだけ・issue #588）。成功率と<b>その内訳</b>を素直に並べる
-        /// ＝何が効いているかを隠さない（名声・距離・競合校の格・訪問回数）。
+        /// スカウトカード（スカウト候補のときだけ・issue #867）。入部の見込み（%）は出さない。
+        /// 寸評・進路希望・競合校・訪問回数から読ませる（オーナー決定・ワイヤー案A）。
         /// </summary>
-        private void RenderRecruit(ProspectRow r)
+        private void RenderScoutCard(ProspectRow r)
         {
-            var card = _root.Q<VisualElement>("sc-recruit-card");
-            SetShown(card, r.IsRecruit);
-            if (!r.IsRecruit) return;
+            var card = _root.Q<VisualElement>("sc-scout-card");
+            SetShown(card, r.IsScout);
+            if (!r.IsScout) return;
 
-            var note = _root.Q<Label>("sc-recruit-note");
+            var blurb = _root.Q<Label>("sc-blurb");
+            if (blurb != null) blurb.text = r.Blurb;
+
+            var note = _root.Q<Label>("sc-scout-note");
             if (note != null)
                 note.text = r.Decided ? (r.Succeeded ? "入部が決まった" : "他校へ行った")
-                    : _view.InRecruitSeason ? "秋〜冬のあいだ訪問できる"
+                    : _view.InScoutSeason ? "秋〜冬のあいだ訪問できる"
                     : "いまは訪問できない";
 
-            var host = _root.Q<VisualElement>("sc-recruit");
+            var host = _root.Q<VisualElement>("sc-scout");
             if (host != null)
             {
                 host.Clear();
-                // 決着後に成功率を出し続けると「まだ何か変えられる」ように見える＝結果へ差し替える。
-                if (r.Decided) host.Add(SmallRow("結果", r.Succeeded ? "入部が決まった" : "他校へ行った", !r.Succeeded));
-                else host.Add(BigRow("成功率", (r.SuccessProbability * 100).ToString("0") + "%"));
-
-                host.Add(SmallRow("名声", ManagerService.Manager.Fame.ToString("0"), false));
-                // 同県は距離の減点そのものが無いので「寮でカバー」を書かない（効いていない注釈を出さない）。
-                var hasPenalty = r.DistanceWord != "同県";
-                host.Add(SmallRow("距離",
-                    r.DistanceWord + (hasPenalty && RecruitService.HasDorm ? "（寮でカバー）" : ""), hasPenalty));
-                host.Add(SmallRow("競合校", r.RivalTier, r.RivalIsStronger));
-                host.Add(SmallRow("訪問", r.Visits + " 回 ／ 1回 " + r.VisitCost.ToString("0") + "万", false));
+                if (r.Decided) host.Add(Row("結果", r.Succeeded ? "入部が決まった" : "他校へ行った", !r.Succeeded));
+                host.Add(Row("進路希望", r.CareerPathSentence, false));
+                host.Add(Row("競合校", r.RivalTier, r.RivalIsStronger));
+                host.Add(Row("訪問", Dots(r.Visits) + " ・ " + r.Visits + "回", false));
             }
 
-            var target = _root.Q<Button>("sc-target");
-            if (target != null)
-            {
-                target.text = r.Targeted ? "勧誘対象から外す" : "勧誘対象にする";
-                target.SetEnabled(!r.Decided);
-            }
             var visit = _root.Q<Button>("sc-visit");
             if (visit != null)
             {
                 visit.text = "訪問する（" + r.VisitCost.ToString("0") + "万）";
-                visit.SetEnabled(!r.Decided && r.Targeted && _view.InRecruitSeason);
+                visit.SetEnabled(!r.Decided && _view.InScoutSeason);
             }
-            var status = _root.Q<Label>("sc-recruit-status");
+            var status = _root.Q<Label>("sc-scout-status");
             if (status != null) status.text = _status;
         }
 
-        private static VisualElement BigRow(string key, string value)
+        private static VisualElement Row(string key, string value, bool isMinus)
         {
             var row = new VisualElement();
-            row.AddToClassList("sc-recruit__row");
+            row.AddToClassList("sc-scout__row");
             var k = new Label(key);
-            k.AddToClassList("sc-recruit__key");
+            k.AddToClassList("sc-scout__key");
             row.Add(k);
             var v = new Label(value);
-            v.AddToClassList("sc-recruit__prob");
-            v.AddToClassList("f-num");   // 数字だけのセル（書体3役ルール）
-            row.Add(v);
-            return row;
-        }
-
-        private static VisualElement SmallRow(string key, string value, bool isMinus)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("sc-recruit__row");
-            var k = new Label(key);
-            k.AddToClassList("sc-recruit__key");
-            row.Add(k);
-            var v = new Label(value);
-            v.AddToClassList("sc-recruit__val");
-            if (isMinus) v.AddToClassList("sc-recruit__val--minus");
+            v.AddToClassList("sc-scout__val");
+            if (isMinus) v.AddToClassList("sc-scout__val--minus");
             row.Add(v);
             return row;
         }
 
         /// <summary>
         /// 4軸を縦に並べた見立て表。入部済みなら「実際」の列を足して答え合わせにする
-        /// （＝「？が埋まった」ことが絵で分かる）。列見出しは実際の列があるときだけ出す。
+        /// （＝「？が埋まった」ことが絵で分かる）。入部予定者は段ゲートが無いので常に出す
+        /// （未契約だけ「？」になる）。スカウト候補は段2未満では表自体を伏せ、
+        /// 「まだ分からない」ことを欄の有無で示す（1マスずつ？を並べると雑音が色付きに見える）。
         /// </summary>
         private void RenderEstimate(ProspectRow r)
         {
@@ -331,8 +346,16 @@ namespace KokoSim.Unity.Scout
             if (host == null) return;
             host.Clear();
 
+            if (r.IsScout && !r.HasEstimate)
+            {
+                var note = new Label("スカウト網 Lv2 以上で打・守・走・投のランクが見える。");
+                note.AddToClassList("sc-est__none");
+                note.style.whiteSpace = WhiteSpace.Normal;
+                host.Add(note);
+                return;
+            }
+
             // 列は「見立て（契約しているときだけ）」と「実際（入部後だけ）」の2本。
-            // 両方あるときだけ列見出しを出す（1本しか無い列に見出しは要らない）。
             var hasActual = r.Actual != null;
             if (r.HasEstimate && hasActual) host.Add(EstimateHead());
             host.Add(EstimateRow("打撃力", r, s => s.BattingTier, hasActual));
@@ -394,8 +417,14 @@ namespace KokoSim.Unity.Scout
             return cell;
         }
 
+        /// <summary>隠し素質（入部予定者だけ・issue #587）。スカウト候補では一切見せない（オーナー決定2）。</summary>
         private void RenderHidden(ProspectRow r)
         {
+            SetShown(_root.Q<VisualElement>("sc-hidden-card"), !r.IsScout);
+            // 右隣の隠し素質カードを伏せたときは見立てカードが行の右端まで伸びる（右の余白を残さない）。
+            _root.Q<VisualElement>("sc-est-card")?.EnableInClassList("sc-card-last", r.IsScout);
+            if (r.IsScout) return;
+
             var host = _root.Q<VisualElement>("sc-hidden");
             if (host == null) return;
             host.Clear();
@@ -422,12 +451,27 @@ namespace KokoSim.Unity.Scout
             return item;
         }
 
-        private void RenderFoot()
+        /// <summary>個別能力（スカウト候補・段3だけ・issue #867）。</summary>
+        private void RenderDetailAbilities(ProspectRow r)
         {
-            var slots = _root.Q<Label>("sc-slots");
-            if (slots != null) slots.text = _view.SlotLine;
-            var net = _root.Q<Label>("sc-net");
-            if (net != null) net.text = _view.NetworkLine;
+            var card = _root.Q<VisualElement>("sc-detail-card");
+            var show = r.IsScout && r.Tier >= 3;
+            SetShown(card, show);
+            if (!show) return;
+
+            var host = _root.Q<VisualElement>("sc-detail-abilities");
+            if (host == null) return;
+            host.Clear();
+            foreach (var a in r.Abilities)
+            {
+                var item = new VisualElement();
+                item.AddToClassList("sc-detail-abilities__item");
+                var k = new Label(a.Label);
+                k.AddToClassList("sc-detail-abilities__key");
+                item.Add(k);
+                item.Add(UiComponents.RankChipLegacy(a.Rank.ToString()));
+                host.Add(item);
+            }
         }
     }
 }

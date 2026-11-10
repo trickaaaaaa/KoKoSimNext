@@ -18,18 +18,48 @@
     margin-bottom: var(--sp-2);
 }
 
+/* ── 共通の上部帯（オーナー決定2026-11-09・ワイヤー案A）。
+   スカウト網の段・探す分野・枠の使用状況・次の節目を1行に並べる。買い物自体は経営タブ。 */
+.sc-topband {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    height: 40px;
+    margin-bottom: var(--sp-2);
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--divider);
+}
+.sc-topband__item { font-size: var(--fs-label); color: var(--ink); }
+.sc-topband__item--muted { color: var(--color-muted); }
+.sc-topband__label {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin-left: var(--sp-3);
+    margin-right: var(--sp-2);
+}
+.sc-topband__sep {
+    width: 1px;
+    height: 20px;
+    margin-left: var(--sp-3);
+    background-color: var(--divider);
+}
+.sc-topband__spacer { flex-grow: 1; }
+.sc-field-tabs { flex-shrink: 0; }
+
 /* ── マスターディテール（監督選択のB案）: 左=予定者一覧 / 右=選んだ1人の見立て。
    比率は選手一覧（40:60）に合わせる＝タブを移っても目線の位置が変わらない。 */
 .sc-split { flex-direction: row; flex-grow: 1; min-height: 0; }
-.sc-split__left { flex-grow: 0; flex-shrink: 0; width: 40%; }
+.sc-split__left { flex-grow: 0; flex-shrink: 0; width: 46%; }
 .sc-split__right {
     flex-grow: 0;
     flex-shrink: 0;
-    width: 60%;
+    width: 54%;
     padding-left: var(--sp-4);
 }
 
-/* 名簿のタブ（入部予定者 / 中学生リスト）。共通部品 .seg-tabs の器に載せる。 */
+/* 名簿のタブ（入部予定者 / スカウト候補）。共通部品 .seg-tabs の器に載せる。 */
 .sc-tabs { flex-shrink: 0; margin-bottom: var(--sp-2); }
 
 /* 左ペインは高さいっぱいに伸ばし、中の一覧だけがスクロールする（カードごと流れない）。 */
@@ -59,6 +89,7 @@
 .sc-th--hand    { width: var(--col-sc-hand); flex-shrink: 0; }
 .sc-th--est     { flex-grow: 1; flex-basis: 0; min-width: 0; }
 .sc-th--unknown { width: var(--col-sc-unknown); flex-shrink: 0; -unity-text-align: middle-right; }
+.sc-th--visits  { width: var(--col-sc-visits); flex-shrink: 0; -unity-text-align: middle-right; }
 
 /* ── 予定者1行（.row-panel の中身）。 */
 .sc-cell { margin: 0; padding: 0; }
@@ -67,6 +98,14 @@
 .sc-cell--est     { flex-grow: 1; flex-basis: 0; min-width: 0; }
 .sc-cell--unknown {
     width: var(--col-sc-unknown);
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+}
+/* 訪問の丸ドット（スカウト候補だけ・issue #867）。入部予定者の行では空のまま。 */
+.sc-cell--visits {
+    width: var(--col-sc-visits);
     flex-shrink: 0;
     -unity-text-align: middle-right;
     font-size: var(--fs-label);
@@ -152,11 +191,17 @@
     white-space: normal;
 }
 
-/* ── 勧誘カード（中学生リストのときだけ出す・issue #588） ────────────
-   「何が効いているか」を隠さないので、成功率とその内訳を素直に縦へ並べる。 */
-.sc-recruit { flex-direction: column; }
-.sc-recruit__row { flex-direction: row; align-items: center; height: 30px; }
-.sc-recruit__key {
+/* ── スカウトカード（スカウト候補を見ているときだけ出す・issue #867） ────
+   入部の見込み（%）は出さない（オーナー決定）。寸評・競合校・訪問回数から読ませる。 */
+.sc-blurb {
+    font-size: var(--fs-body);
+    color: var(--ink);
+    white-space: normal;
+    margin-bottom: var(--sp-2);
+}
+.sc-scout { flex-direction: column; }
+.sc-scout__row { flex-direction: row; align-items: center; height: 30px; }
+.sc-scout__key {
     width: 108px;
     flex-shrink: 0;
     font-size: var(--fs-label);
@@ -164,34 +209,36 @@
     margin: 0;
     padding: 0;
 }
-.sc-recruit__val { font-size: var(--fs-body); color: var(--ink); margin: 0; padding: 0; }
-/* 成功率だけは大きく出す（この画面で監督が見る唯一の数字）。 */
-.sc-recruit__prob { font-size: var(--fs-num-lg); color: var(--ink); margin: 0; padding: 0; }
-/* 不利に効いている行は淡く（警告色は使わない＝勧誘が難しいのは警告ではない・UI原則②）。 */
-.sc-recruit__val--minus { color: var(--color-faint); }
+.sc-scout__val { font-size: var(--fs-body); color: var(--ink); margin: 0; padding: 0; }
+/* 不利に効いている行は淡く（警告色は使わない＝口説くのが難しいのは警告ではない・UI原則②）。 */
+.sc-scout__val--minus { color: var(--color-faint); }
 
-.sc-recruit__actions {
+.sc-scout__actions {
     flex-direction: row;
     align-items: center;
     margin-top: var(--sp-3);
 }
-.sc-recruit__actions .tool-btn { margin-right: var(--sp-2); }
-.sc-recruit__status {
+.sc-scout__actions .tool-btn { margin-right: var(--sp-2); }
+.sc-scout__status {
     font-size: var(--fs-label);
     color: var(--color-muted);
     white-space: normal;
     flex-shrink: 1;
 }
 
-/* ── 下段: スカウト網の状態（変更は経営タブ＝ここには買い物を置かない） ─── */
-.sc-foot {
+/* ── 個別能力（段3だけ・issue #867）。ランクチップを横に並べる簡易グリッド。 */
+.sc-detail-abilities { flex-direction: row; flex-wrap: wrap; }
+.sc-detail-abilities__item {
     flex-direction: row;
     align-items: center;
-    flex-shrink: 0;
-    height: 40px;
-    padding-left: var(--sp-2);
-    padding-right: var(--sp-2);
+    width: 50%;
+    height: 30px;
 }
-.sc-net { font-size: var(--fs-label); color: var(--color-muted); }
-.sc-slots { font-size: var(--fs-label); color: var(--color-muted); margin-right: var(--sp-4); }
-.sc-foot__spacer { flex-grow: 1; }
+.sc-detail-abilities__key {
+    width: 72px;
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin: 0;
+    padding: 0;
+}

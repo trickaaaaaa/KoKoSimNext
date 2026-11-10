@@ -114,12 +114,18 @@ public sealed class SaveState
     /// </summary>
     public IncomingClass? Incoming { get; set; }
 
-    // --- 能動勧誘（寮で解禁・issue #588。v6 で追加） ---
+    // --- スカウト（年契約「スカウト網」の段で解禁・issue #867。v26 で追加。旧 Recruiting(v6) を置き換え） ---
     /// <summary>
-    /// 中学生リストと訪問の状態。<b>null＝寮が無い／まだ秋を跨いでいない</b>（旧セーブも null）。
+    /// 候補リストと訪問の状態。<b>null＝スカウト網が未契約／まだ秋を跨いでいない</b>（旧セーブも null）。
     /// 3月の判定で使い切り、次の秋に新しいリストで上書きされる。
     /// </summary>
-    public RecruitingState? Recruiting { get; set; }
+    public ScoutingState? Scouting { get; set; }
+
+    /// <summary>
+    /// 探す分野の選択（issue #867）。次のスカウト候補リスト生成（<see cref="SeasonCalendar.RecruitListWeek"/>）
+    /// に使われる値で、生成されるまでは何度でも変えられる。既定はおまかせ（旧セーブも同様）。
+    /// </summary>
+    public ScoutField ScoutFieldSelection { get; set; } = ScoutField.Omakase;
 
     // --- 教え子名鑑（過年度のドラフト指名確定・issue #586。v7 で追加） ---
     /// <summary>

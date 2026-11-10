@@ -334,60 +334,78 @@ public sealed class SaveCodecTests
         Assert.Equal("北嶺", s.SchoolName);   // 他の項目は素通りで読めている
     }
 
-    // ===== 能動勧誘（issue #588） =====
+    // ===== スカウト（issue #867） =====
 
-    // 中学生リスト・訪問回数・競合校の格・勧誘対象が往復すること。
+    // 候補リスト・訪問回数・競合校の格・勧誘対象・進路希望・見立てが往復すること。
     [Fact]
-    public void RecruitingState_RoundTrips()
+    public void ScoutingState_RoundTrips()
     {
         var state = SaveTestFixtures.BuildRichState();
         Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
 
-        var a = state.Recruiting!;
-        var b = s.Recruiting;
+        var a = state.Scouting!;
+        var b = s.Scouting;
         Assert.NotNull(b);
         Assert.Equal(a.YearIndex, b!.YearIndex);
+        Assert.Equal(a.Field, b.Field);
         Assert.Equal(a.Slots, b.Slots);
         Assert.Equal(a.Resolved, b.Resolved);
-        Assert.Equal(a.Prospects.Count, b.Prospects.Count);
+        Assert.Equal(a.Candidates.Count, b.Candidates.Count);
         Assert.Equal(a.TargetedCount, b.TargetedCount);
-        for (var i = 0; i < a.Prospects.Count; i++)
+        for (var i = 0; i < a.Candidates.Count; i++)
         {
-            Assert.Equal(a.Prospects[i].Player.Name, b.Prospects[i].Player.Name);
-            Assert.Equal(a.Prospects[i].PrefectureId, b.Prospects[i].PrefectureId);
-            Assert.Equal(a.Prospects[i].Distance, b.Prospects[i].Distance);
-            Assert.Equal(a.Prospects[i].RivalTier, b.Prospects[i].RivalTier);
-            Assert.Equal(a.Prospects[i].Visits, b.Prospects[i].Visits);
-            Assert.Equal(a.Prospects[i].Targeted, b.Prospects[i].Targeted);
-            Assert.Equal(a.Prospects[i].Report.Batting, b.Prospects[i].Report.Batting, 9);
+            Assert.Equal(a.Candidates[i].Player.Name, b.Candidates[i].Player.Name);
+            Assert.Equal(a.Candidates[i].PrefectureId, b.Candidates[i].PrefectureId);
+            Assert.Equal(a.Candidates[i].Distance, b.Candidates[i].Distance);
+            Assert.Equal(a.Candidates[i].RivalTier, b.Candidates[i].RivalTier);
+            Assert.Equal(a.Candidates[i].Visits, b.Candidates[i].Visits);
+            Assert.Equal(a.Candidates[i].Targeted, b.Candidates[i].Targeted);
+            Assert.Equal(a.Candidates[i].Preference, b.Candidates[i].Preference);
+            Assert.Equal(a.Candidates[i].Report.Tier, b.Candidates[i].Report.Tier);
+            Assert.Equal(a.Candidates[i].Report.BlurbAxis, b.Candidates[i].Report.BlurbAxis);
+            Assert.Equal(a.Candidates[i].Report.Batting, b.Candidates[i].Report.Batting, 9);
         }
     }
 
-    // 勧誘を持たない進行（寮が無い／秋を跨いでいない）も往復すること。
+    // 探す分野の選択が往復すること（issue #867）。
     [Fact]
-    public void RecruitingState_Null_RoundTrips()
+    public void ScoutFieldSelection_RoundTrips()
     {
         var state = SaveTestFixtures.BuildRichState();
-        state.Recruiting = null;
+        state.ScoutFieldSelection = KokoSim.Engine.Season.ScoutField.Pitching;
         Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
-        Assert.Null(s.Recruiting);
+        Assert.Equal(KokoSim.Engine.Season.ScoutField.Pitching, s.ScoutFieldSelection);
     }
 
-    // v5（勧誘が無かった版）のセーブは recruiting を持たない。読めて null で補われること。
+    // スカウトを持たない進行（未契約／秋を跨いでいない）も往復すること。
     [Fact]
-    public void V5Save_WithoutRecruiting_StillLoads()
+    public void ScoutingState_Null_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Scouting = null;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Null(s.Scouting);
+    }
+
+    // v25（スカウトが無かった版）のセーブは scouting を持たない。読めて null で補われること。
+    //
+    // 注意: 契約段の辞書（contracts）もキー "scouting"（年契約「スカウト網」のID）を持つため、
+    // トップレベルの "scouting" キーを検索するときは値が常にオブジェクト（{）で始まることを使って
+    // 区別する（","scouting":3" のような契約段の数値とは衝突しない）。
+    [Fact]
+    public void V25Save_WithoutScouting_StillLoads()
     {
         var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
-        var start = json.IndexOf(",\"recruiting\":", System.StringComparison.Ordinal);
-        Assert.True(start >= 0, "recruiting が直列化されていない");
-        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
-        Assert.True(end > start, "tournament が recruiting の後に居ない");
-        var v5 = json.Remove(start, end - start)
-            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":5");
-        Assert.DoesNotContain("\"recruiting\"", v5);
+        var start = json.IndexOf(",\"scouting\":{", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "scouting が直列化されていない");
+        var end = json.IndexOf(",\"draft\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "draft が scouting の後に居ない");
+        var v25 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":25");
+        Assert.DoesNotContain(",\"scouting\":{", v25);   // 契約段の "scouting":3 は残ってよい
 
-        Assert.True(SaveCodec.TryDeserialize(v5, out var s, out var err), err);
-        Assert.Null(s.Recruiting);
+        Assert.True(SaveCodec.TryDeserialize(v25, out var s, out var err), err);
+        Assert.Null(s.Scouting);
         Assert.NotNull(s.Incoming);   // 他の項目は素通りで読めている
     }
 
@@ -675,7 +693,7 @@ public sealed class SaveCodecTests
 
         Assert.True(SaveCodec.TryDeserialize(v6, out var s, out var err), err);
         Assert.Empty(s.Draft.Records);
-        Assert.NotNull(s.Recruiting);   // 他の項目は素通りで読めている
+        Assert.NotNull(s.Scouting);   // 他の項目は素通りで読めている
     }
 
     // 歴代大会結果（issue #600・v8）が往復すること。年度別の情報は累計へ畳むと復元できない＝焼く必要がある。

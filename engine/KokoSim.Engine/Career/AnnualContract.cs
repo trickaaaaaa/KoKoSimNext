@@ -37,6 +37,13 @@ public sealed record ContractTier
 
     /// <summary>県外の学校とも練習試合を組めるようにする（遠征）。</summary>
     public bool OutOfPrefectureOpponents { get; init; }
+
+    /// <summary>
+    /// スカウト候補の枠数（設計書04 §2・issue #867）。未契約0／Lv1=2／Lv2=3／Lv3=4。
+    /// 契約段は候補の枠数と「どこまで見えるか」（寸評だけ／4分野ランク／個別能力のランク）を兼ねる
+    /// （<see cref="Season.ScoutModel.BuildCandidates"/> が段の値をそのまま見立ての段として使う）。
+    /// </summary>
+    public int ScoutSlots { get; init; }
 }
 
 /// <summary>年契約1系統の定義。<c>Tiers[0]</c> は「未契約」＝年額0・効果なし。</summary>
@@ -73,6 +80,9 @@ public sealed record ContractEffects
     /// </summary>
     public double ProspectDisclosure { get; init; }
 
+    /// <summary>スカウト候補の枠数（設計書04 §2・issue #867）。0＝候補が1人も居ない。</summary>
+    public int ScoutSlots { get; init; }
+
     /// <summary>何も契約していない状態（年額0・効果なし）。</summary>
     public static ContractEffects None { get; } = new();
 }
@@ -97,6 +107,7 @@ public sealed record ContractCatalog
     {
         double cost = 0, scout = 0, bat = 0, pit = 0, def = 0, disclosure = 0;
         var away = false;
+        var scoutSlots = 0;
         foreach (var d in Contracts)
         {
             var lv = Math.Clamp(set.LevelOf(d.Id), 0, d.MaxLevel);
@@ -110,6 +121,7 @@ public sealed record ContractCatalog
             def += t.CoachingDefenseAdd;
             away |= t.OutOfPrefectureOpponents;
             disclosure = Math.Max(disclosure, t.ProspectDisclosure);   // 開示は重ねない＝最大値
+            scoutSlots += t.ScoutSlots;
         }
         return new ContractEffects
         {
@@ -120,6 +132,7 @@ public sealed record ContractCatalog
             CoachingDefenseAdd = def,
             OutOfPrefectureOpponents = away,
             ProspectDisclosure = disclosure,
+            ScoutSlots = scoutSlots,
         };
     }
 
@@ -147,11 +160,12 @@ public sealed record ContractCatalog
                 Tiers = new[]
                 {
                     new ContractTier(),
-                    // 効果1＝新入生の質（ScoutTalentAdd）／効果2＝入部前にどこまで見えるか（ProspectDisclosure）。
+                    // 効果1＝新入生の質（ScoutTalentAdd）／効果2＝入部前にどこまで見えるか（ProspectDisclosure）／
+                    // 効果3＝スカウト候補の枠数・見立ての段（ScoutSlots, issue #867）。
                     // Lv1 は従来のスカウト費と同額で質も据え置き。上げると質より先に「見通し」が良くなる。
-                    new ContractTier { AnnualCost = 30, ScoutTalentAdd = 0, ProspectDisclosure = 0.15 },   // 県内を回る
-                    new ContractTier { AnnualCost = 80, ScoutTalentAdd = 3, ProspectDisclosure = 0.45 },   // 近隣県まで足を伸ばす
-                    new ContractTier { AnnualCost = 140, ScoutTalentAdd = 6, ProspectDisclosure = 0.75 },  // 全国に網を張る
+                    new ContractTier { AnnualCost = 30, ScoutTalentAdd = 0, ProspectDisclosure = 0.15, ScoutSlots = 2 },   // 県内を回る
+                    new ContractTier { AnnualCost = 80, ScoutTalentAdd = 3, ProspectDisclosure = 0.45, ScoutSlots = 3 },   // 近隣県まで足を伸ばす
+                    new ContractTier { AnnualCost = 140, ScoutTalentAdd = 6, ProspectDisclosure = 0.75, ScoutSlots = 4 },  // 全国に網を張る
                 },
             },
             // 遠征: 県外の学校と練習試合が組める（相手の幅＝実戦成長の相手ティアの幅）。

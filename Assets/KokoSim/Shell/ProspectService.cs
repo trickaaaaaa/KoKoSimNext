@@ -71,18 +71,42 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
-        /// 勧誘で獲得した中学生を入部予定者へ足す（設計書04 §2.2・issue #588）。
+        /// スカウトに成功した候補を入部予定者へ<b>差し替える</b>（設計書04 §2.4・issue #867）。
+        /// 入部の総数は受動枠の抽選どおり（名声で増やさない＝オーナー決定）なので、<b>追加しない</b>。
+        /// 成功した人数ぶんだけ受動枠の末尾（自動の子）を外し、代わりにスカウトした本人を足す
+        /// ＝口説き損ねた分は通常どおり自動の子が残る（「失敗しても人数は詰まらない」）。
         /// <b>選手を作り直さない</b>＝秋のリストで見ていた本人がそのまま4月に入部する。
         /// 確定済み（未合流）の学年が無い／すでに合流済みなら何もしない。
         /// </summary>
-        public static void AddRecruited(DevelopingPlayer player, ProspectReport report)
+        public static void AbsorbScouted(IReadOnlyList<ScoutCandidate> won)
         {
-            if (Current == null || Current.Joined || player == null) return;
-            var r = report ?? new ProspectReport { Name = player.Name };
-            r.Recruited = true;   // 受動枠で降ってきた子と区別して見せる（能力には影響しない）
-            Current.Players.Add(player);
-            Current.Reports.Add(r);
+            if (Current == null || Current.Joined || won == null || won.Count == 0) return;
+            var n = System.Math.Min(won.Count, Current.Players.Count);
+            if (n > 0)
+            {
+                Current.Players.RemoveRange(Current.Players.Count - n, n);
+                Current.Reports.RemoveRange(Current.Reports.Count - n, n);
+            }
+            for (var i = 0; i < n; i++)
+            {
+                var c = won[i];
+                var r = c.Report is null ? new ProspectReport { Name = c.Player.Name } : ToProspectReport(c);
+                r.Recruited = true;   // 受動枠で降ってきた子と区別して見せる（能力には影響しない）
+                Current.Players.Add(c.Player);
+                Current.Reports.Add(r);
+            }
         }
+
+        /// <summary>スカウトの見立て（<see cref="ScoutReport"/>）を入部予定者一覧の見立て（<see cref="ProspectReport"/>）へ写す。
+        /// 入部後は画面が既存の実測表示に切り替わるので、ここでの変換は合流直後の一覧表示だけに使われる。</summary>
+        private static ProspectReport ToProspectReport(ScoutCandidate c) => new()
+        {
+            Name = c.Player.Name,
+            Batting = c.Report.Batting,
+            Mobility = c.Report.Mobility,
+            Defense = c.Report.Defense,
+            Pitching = c.Report.Pitching,
+        };
 
         /// <summary>
         /// 4月の合流で取り出す（<see cref="RosterService.AdvanceYear"/> から呼ぶ）。年度が違う／すでに合流済み

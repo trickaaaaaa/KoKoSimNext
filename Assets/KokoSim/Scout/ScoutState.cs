@@ -8,7 +8,15 @@ using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Scout
 {
-    /// <summary>入部予定者1人ぶんの表示行（設計書04 §2.1・issue #587）。</summary>
+    /// <summary>個別能力1項目ぶんの表示行（スカウト候補の段3詳細・issue #867）。</summary>
+    public readonly struct AbilityRankRow
+    {
+        public readonly string Label;
+        public readonly Tier Rank;
+        public AbilityRankRow(string label, Tier rank) { Label = label; Rank = rank; }
+    }
+
+    /// <summary>入部予定者／スカウト候補1人ぶんの表示行（設計書04 §2.1・§2.4）。</summary>
     public sealed class ProspectRow
     {
         public string Name = "";
@@ -29,43 +37,51 @@ namespace KokoSim.Unity.Scout
         public string Personality;
         public string InjuryResistance;
 
-        /// <summary>スカウト評（見立てのいちばん高い軸を一言にしたもの）。</summary>
+        /// <summary>スカウト評（見立てのいちばん高い軸を一言にしたもの。入部予定者の一覧で使う）。</summary>
         public string Comment = "";
 
-        // ── 中学生リストのときだけ埋まる（能動勧誘・issue #588） ──
-        /// <summary>中学生リストの行か（false＝入部予定者）。</summary>
-        public bool IsRecruit;
+        // ── スカウト候補のときだけ埋まる（issue #867・design-04 §2.4） ──
+        /// <summary>スカウト候補の行か（false＝入部予定者）。</summary>
+        public bool IsScout;
         /// <summary>出身県（「静岡県」）。</summary>
         public string Hometown = "";
         /// <summary>自校から見た遠さ（「遠方」）。</summary>
         public string DistanceWord = "";
-        /// <summary>競合校の格（「A」）。</summary>
+        /// <summary>競合校の格と自校との上下（「A（格上）」。ワイヤー案A）。</summary>
         public string RivalTier = "";
         /// <summary>競合校が自校より上か（不利に効いている＝淡く出す）。</summary>
         public bool RivalIsStronger;
-        /// <summary>勧誘対象に指定しているか（枠を1つ使っている）。中学生リストで使う。</summary>
+        /// <summary>勧誘対象に指定しているか（枠を1つ使っている。訪問すると自動で立つ）。</summary>
         public bool Targeted;
-        /// <summary>能動勧誘で獲った子か（入部予定者の一覧で印を付ける）。</summary>
+        /// <summary>スカウトで獲った子か（入部予定者の一覧で印を付ける）。</summary>
         public bool Recruited;
         /// <summary>訪問回数。</summary>
         public int Visits;
-        /// <summary>いまの成功率（0〜1）。</summary>
-        public double SuccessProbability;
         /// <summary>訪問1回の費用[万円]。</summary>
         public double VisitCost;
         /// <summary>3月の判定が済んでいるか。</summary>
         public bool Decided;
         /// <summary>判定の結果（<see cref="Decided"/> が true のときだけ意味を持つ）。</summary>
         public bool Succeeded;
+        /// <summary>段（1〜3）。見立ての段ゲートに使う。</summary>
+        public int Tier;
+        /// <summary>寸評（data/scout-blurbs.yaml 駆動）。</summary>
+        public string Blurb = "";
+        /// <summary>進路希望の短い語（一覧用。「名門」「出場機会」「地元」）。</summary>
+        public string CareerPathWord = "";
+        /// <summary>進路希望の一文（詳細用。「名門校に行きたいようだ」）。</summary>
+        public string CareerPathSentence = "";
+        /// <summary>個別能力のランク（段3だけ埋まる）。</summary>
+        public List<AbilityRankRow> Abilities = new List<AbilityRankRow>();
     }
 
-    /// <summary>左の名簿のタブ（設計書06 §3.6・issue #588 A案）。</summary>
+    /// <summary>左の名簿のタブ（設計書06 §3.6・issue #867）。</summary>
     public enum ScoutTab
     {
         /// <summary>入部予定者（受動枠・issue #587）。</summary>
         Incoming = 0,
-        /// <summary>中学生リスト（能動勧誘・issue #588）。</summary>
-        Recruits = 1,
+        /// <summary>スカウト候補（issue #867・旧「中学生リスト」を置き換え）。</summary>
+        Candidates = 1,
     }
 
     /// <summary>スカウト画面の ViewModel（設計書06 §3.6）。</summary>
@@ -85,28 +101,41 @@ namespace KokoSim.Unity.Scout
         public bool HasEstimate;
         /// <summary>見立てカードの注記（開示の程度）。</summary>
         public string EstimateNote = "";
-        /// <summary>下段のスカウト網の状態（段・年額・開示）。</summary>
-        public string NetworkLine = "";
-        /// <summary>下段の勧誘枠の状態（「勧誘枠 1/2 ・ 寮 Lv1」）。空＝寮が無い。</summary>
-        public string SlotLine = "";
         /// <summary>いま見ているタブ。</summary>
         public ScoutTab Tab;
-        /// <summary>中学生リストのタブを出せるか（寮を建てて枠が解禁されている）。</summary>
-        public bool HasRecruiting;
+        /// <summary>スカウト候補のタブを出せるか（スカウト網を契約して枠が解禁されている）。</summary>
+        public bool HasScouting;
         /// <summary>いま訪問できる時期か（秋〜冬）。</summary>
-        public bool InRecruitSeason;
+        public bool InScoutSeason;
+
+        // ── 共通の上部帯（オーナー決定2026-11-09・ワイヤー案A） ──
+        /// <summary>「スカウト網 Lv2」。</summary>
+        public string NetworkWord = "";
+        /// <summary>「スカウト枠 3人（内定1）」。</summary>
+        public string SlotWord = "";
+        /// <summary>「次の節目: 3月 入部確定（あと8週）」。</summary>
+        public string MilestoneWord = "";
+        /// <summary>探す分野（選択肢の表示名）。</summary>
+        public string[] FieldOptions = { "おまかせ", "投球", "打撃", "守備走塁" };
+        /// <summary>いま選んでいる分野（<see cref="FieldOptions"/> の添字）。</summary>
+        public int FieldIndex;
+        /// <summary>分野を選べるか（候補リストが生成済みなら凍結されており選べない）。</summary>
+        public bool CanChooseField;
+
         public List<ProspectRow> Rows = new List<ProspectRow>();
     }
 
     /// <summary>
-    /// スカウト画面の状態（設計書04 §2.1 受動枠 ／ 設計書06 §3.6・issue #587）。
-    /// エンジンが確定した <see cref="IncomingClass"/> を読むだけで、ここでは何も抽選しない
-    /// （UI-BUILD-METHOD 大原則④＝UIはロジックを持たない）。
+    /// スカウト画面の状態（設計書04 §2.1 受動枠 ／ §2.4 スカウト・issue #867）。
+    /// エンジンが確定した状態を読むだけで、ここでは何も抽選しない（UI-BUILD-METHOD 大原則④）。
     /// </summary>
     public sealed class ScoutState
     {
         private static readonly TeamStrengthCoefficients Strength = new TeamStrengthCoefficients();
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
+
+        private static readonly ScoutField[] FieldValues =
+            { ScoutField.Omakase, ScoutField.Pitching, ScoutField.Batting, ScoutField.Defense };
 
         /// <summary>いま見ているタブ（画面から切り替える）。</summary>
         public ScoutTab Tab { get; set; }
@@ -114,13 +143,12 @@ namespace KokoSim.Unity.Scout
         public ScoutView BuildView()
         {
             var v = new ScoutView();
-            BuildNetworkLine(v);
-            BuildSlotLine(v);
-            v.HasRecruiting = RecruitService.Slots > 0;
-            v.InRecruitSeason = RecruitService.InSeason;
-            v.Tab = v.HasRecruiting ? Tab : ScoutTab.Incoming;
+            BuildTopBand(v);
+            v.HasScouting = ScoutService.Slots > 0;
+            v.InScoutSeason = ScoutService.InSeason;
+            v.Tab = v.HasScouting ? Tab : ScoutTab.Incoming;
 
-            if (v.Tab == ScoutTab.Recruits) return BuildRecruitView(v);
+            if (v.Tab == ScoutTab.Candidates) return BuildScoutView(v);
 
             var cls = ProspectService.Current;
             if (cls == null)
@@ -134,7 +162,6 @@ namespace KokoSim.Unity.Scout
             v.Joined = cls.Joined;
             v.HasEstimate = cls.Disclosure > 0;
             v.ListTitle = cls.Joined ? "今年の入部者" : "入部予定者";
-            // 半幅カードの見出しに収まる長さにする（長いと右端で黙って切れる）。
             v.EstimateNote = !v.HasEstimate ? "スカウト網 未契約"
                 : cls.Joined ? "見立てと実際"
                 : DisclosureWord(cls.Disclosure);
@@ -149,86 +176,131 @@ namespace KokoSim.Unity.Scout
             return v;
         }
 
-        // ── 中学生リスト（能動勧誘・issue #588） ─────────────────────
-        private ScoutView BuildRecruitView(ScoutView v)
+        /// <summary>探す分野を切り替える（候補リストが生成済みなら無視＝凍結）。</summary>
+        public void SelectField(int fieldIndex)
         {
-            var state = RecruitService.Current;
-            v.ListTitle = "中学生リスト";
-            v.EstimateNote = state == null || state.Prospects.Count == 0
-                ? ""
-                : DisclosureWord(ManagerService.ContractEffects.ProspectDisclosure);
+            if (ScoutService.Current != null) return;   // 既に今年ぶんのリストが出ていれば変えられない
+            if (fieldIndex < 0 || fieldIndex >= FieldValues.Length) return;
+            ScoutService.SelectedField = FieldValues[fieldIndex];
+        }
 
-            if (state == null || state.Prospects.Count == 0)
+        // ── 上部帯（オーナー決定・ワイヤー案A） ─────────────────────
+        private void BuildTopBand(ScoutView v)
+        {
+            var level = ScoutService.Level;
+            v.NetworkWord = level <= 0 ? "スカウト網 未契約" : "スカウト網 Lv" + level;
+
+            var slots = ScoutService.Slots;
+            if (slots <= 0)
+            {
+                v.SlotWord = "スカウト枠 なし（経営でスカウト網を契約）";
+            }
+            else
+            {
+                var used = ScoutService.Current?.TargetedCount ?? 0;
+                v.SlotWord = "スカウト枠 " + slots + "人（内定" + used + "）";
+            }
+
+            v.MilestoneWord = "次の節目: " + ConfirmMonthWord() + " 入部確定（あと " + WeeksUntilConfirm() + " 週）";
+
+            v.CanChooseField = ScoutService.Current == null;
+            var idx = System.Array.IndexOf(FieldValues, ScoutService.SelectedField);
+            v.FieldIndex = idx < 0 ? 0 : idx;
+        }
+
+        private string ConfirmMonthWord()
+        {
+            var (month, _, _) = _calendar.DateOf(_calendar.ProspectConfirmWeek);
+            return month + "月";
+        }
+
+        // ── スカウト候補一覧（issue #867） ─────────────────────────
+        private ScoutView BuildScoutView(ScoutView v)
+        {
+            var state = ScoutService.Current;
+            v.ListTitle = "スカウト候補";
+
+            if (state == null || state.Candidates.Count == 0)
             {
                 v.ListSub = "未着";
-                v.EmptyText = "中学生リストは秋（10月）に届く（あと " + WeeksUntilRecruitList() + " 週）。\n"
-                              + "届いたら枠のぶんだけ勧誘対象を選び、秋〜冬に訪問を重ねる。";
+                v.EmptyText = "スカウト候補は秋（10月）に届く（あと " + WeeksUntilCandidates() + " 週）。\n"
+                              + "届いたら訪問を重ね、気に入った候補を口説く。";
                 return v;
             }
 
-            v.ListSub = state.Prospects.Count + "名 ・ " + (state.Resolved ? "決着済み" : "勧誘期間中");
-            foreach (var p in state.Prospects) v.Rows.Add(BuildRecruitRow(p));
+            v.ListSub = state.Candidates.Count + "名 ・ " + (state.Resolved ? "決着済み" : "スカウト期間中");
+            foreach (var c in state.Candidates) v.Rows.Add(BuildScoutRow(c));
             return v;
         }
 
-        private ProspectRow BuildRecruitRow(RecruitProspect p)
+        private ProspectRow BuildScoutRow(ScoutCandidate c)
         {
-            var r = p.Report;
-            var hasEstimate = ManagerService.ContractEffects.ProspectDisclosure > 0;
+            var r = c.Report;
             var row = new ProspectRow
             {
-                IsRecruit = true,
-                Name = string.IsNullOrEmpty(r.Name) ? p.Player.Name : r.Name,
-                Handedness = HandednessJp(p.Player),
+                IsScout = true,
+                Name = c.Player.Name,
+                Handedness = HandednessJp(c.Player),
                 Estimate = new PlayerStrength(r.Batting, r.Mobility, r.Defense, r.Pitching),
-                HasEstimate = hasEstimate,
-                UnknownCount = r.UnknownCount,
-                Hometown = PrefectureNames.JapaneseOf(p.PrefectureId),
-                DistanceWord = PrefectureRegions.DisplayName(p.Distance),
-                RivalTier = p.RivalTier.ToString(),
-                RivalIsStronger = RecruitModel.TierRank(p.RivalTier) > RecruitModel.TierRank(HomeTier()),
-                Targeted = p.Targeted,
-                Visits = p.Visits,
-                SuccessProbability = RecruitService.SuccessProbability(p.Index),
-                VisitCost = RecruitService.VisitCost(p.Index),
-                Decided = p.Decided,
-                Succeeded = p.Succeeded,
+                HasEstimate = r.Tier >= 2,
+                Hometown = PrefectureNames.JapaneseOf(c.PrefectureId),
+                DistanceWord = PrefectureRegions.DisplayName(c.Distance),
+                RivalTier = c.RivalTier + RivalRelation(ScoutModel.TierRank(c.RivalTier) - ScoutModel.TierRank(HomeTier())),
+                RivalIsStronger = ScoutModel.TierRank(c.RivalTier) > ScoutModel.TierRank(HomeTier()),
+                Targeted = c.Targeted,
+                Visits = c.Visits,
+                VisitCost = ScoutModel.VisitCost(c.Distance, ScoutService.Coefficients),
+                Decided = c.Decided,
+                Succeeded = c.Succeeded,
+                Tier = r.Tier,
+                Blurb = ScoutModel.BlurbText(c, ScoutBlurbPhrasesProvider.Default),
+                CareerPathWord = CareerPathShort(c.Preference),
+                CareerPathSentence = CareerPathLong(c.Preference),
             };
 
-            // 隠しパラメータは受動枠と同じ扱い（判明した項目だけ出す）。
-            if (r.KnowsGrowthType) row.GrowthType = GrowthTypeJp(p.Player.GrowthType);
-            if (r.KnowsPotential) row.Potential = PotentialJp(p.Player);
-            if (r.KnowsPersonality) row.Personality = Personalities.DisplayName(p.Player.Personality);
-            if (r.KnowsInjuryResistance) row.InjuryResistance = InjuryResistanceJp(p.Player.InjuryResistance);
+            if (r.Tier >= 3)
+            {
+                row.Abilities.Add(new AbilityRankRow("ミート", Tiers.FromStrength(r.Contact)));
+                row.Abilities.Add(new AbilityRankRow("パワー", Tiers.FromStrength(r.Power)));
+                row.Abilities.Add(new AbilityRankRow("選球眼", Tiers.FromStrength(r.Discipline)));
+                row.Abilities.Add(new AbilityRankRow("走力", Tiers.FromStrength(r.Speed)));
+                row.Abilities.Add(new AbilityRankRow("守備", Tiers.FromStrength(r.Fielding)));
+                row.Abilities.Add(new AbilityRankRow("捕球", Tiers.FromStrength(r.Catching)));
+                row.Abilities.Add(new AbilityRankRow("送球", Tiers.FromStrength(r.ThrowAccuracy)));
+                row.Abilities.Add(new AbilityRankRow("走塁", Tiers.FromStrength(r.Baserunning)));
+                row.Abilities.Add(new AbilityRankRow("球速", Tiers.FromStrength(r.Velocity)));
+                row.Abilities.Add(new AbilityRankRow("制球", Tiers.FromStrength(r.Control)));
+                row.Abilities.Add(new AbilityRankRow("キレ", Tiers.FromStrength(r.PitchRank)));
+                row.Abilities.Add(new AbilityRankRow("スタミナ", Tiers.FromStrength(r.Stamina)));
+            }
 
-            row.Comment = hasEstimate
-                ? Comment(row)
-                : "スカウト網を契約していないので、名前しか分からない。";
+            row.Comment = row.Blurb;
             return row;
         }
 
+        private static string CareerPathShort(CareerPathPreference p) => p switch
+        {
+            CareerPathPreference.Prestige => "名門",
+            CareerPathPreference.PlayingTime => "出場機会",
+            _ => "地元",
+        };
+
+        private static string CareerPathLong(CareerPathPreference p) => p switch
+        {
+            CareerPathPreference.Prestige => "名門校に行きたいようだ",
+            CareerPathPreference.PlayingTime => "試合に出られる場所を探しているようだ",
+            _ => "地元でプレーしたいようだ",
+        };
+
         private static Tier HomeTier() => Tiers.FromStrength(TeamOverall.Of(RosterService.Active));
 
-        private static void BuildSlotLine(ScoutView v)
-        {
-            var slots = RecruitService.Slots;
-            if (slots <= 0)
-            {
-                v.SlotLine = "勧誘枠 なし（寮を建てると解禁）";
-                return;
-            }
-            var used = RecruitService.Current?.TargetedCount ?? 0;
-            v.SlotLine = "勧誘枠 " + used + "/" + slots
-                         + " ・ 寮 Lv" + ManagerService.Facilities.LevelOf("dorm");
-        }
-
-        private int WeeksUntilRecruitList()
+        private int WeeksUntilCandidates()
         {
             var left = _calendar.RecruitListWeek - GameClock.Week;
             return left > 0 ? left : left + _calendar.WeeksPerYear;
         }
 
-        // ── 1行ぶん ────────────────────────────────────────────
+        // ── 1行ぶん（入部予定者） ────────────────────────────────
         private ProspectRow BuildRow(IncomingClass cls, int index)
         {
             var r = cls.Reports[index];
@@ -270,22 +342,6 @@ namespace KokoSim.Unity.Scout
 
         private static DevelopingPlayer FindInRoster(int id)
             => id <= 0 ? null : RosterService.Roster.FirstOrDefault(p => p.Id == id);
-
-        // ── 下段: スカウト網の状態 ─────────────────────────────
-        private static void BuildNetworkLine(ScoutView v)
-        {
-            var def = ManagerService.ContractList.Find("scouting");
-            var level = ManagerService.Contracts.LevelOf("scouting");
-            if (def == null || level <= 0 || level >= def.Tiers.Count)
-            {
-                v.NetworkLine = "スカウト網 未契約 ／ 事前開示 なし";
-                return;
-            }
-            var tier = def.Tiers[level];
-            v.NetworkLine = "スカウト網 Lv" + level
-                            + " ／ " + tier.AnnualCost.ToString("0") + "万/年"
-                            + " ／ 事前開示 " + DisclosureWord(tier.ProspectDisclosure);
-        }
 
         private int WeeksUntilConfirm()
         {
@@ -355,5 +411,8 @@ namespace KokoSim.Unity.Scout
 
         /// <summary>「合流する年度の4月」の暦年（週0＝その年度の4月1週目で引く）。</summary>
         private static string YearLabel(int joinYearIndex) => SeasonClock.YearLabel(joinYearIndex, 0);
+        /// <summary>競合校の格を自校と比べた語（ワイヤー案A「競合 △△高校（格上）」の括弧部分）。</summary>
+        static string RivalRelation(int diff) => diff > 0 ? "（格上）" : diff < 0 ? "（格下）" : "（同格）";
+
     }
 }
