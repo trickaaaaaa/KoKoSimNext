@@ -243,6 +243,12 @@
     --col-ent-rank: 44px;   /* 総合ランクのチップ */
     --col-ent-app: 140px;   /* 出場（「2年連続12回目」が --fs-label で収まる幅） */
 
+    /* ── 大きいモーダル（左リスト＋右詳細）の共通寸法（issue #869。主将指名 #861 も同じトークンを使う）。
+       本体の高さは「ヘッダ26＋32px行×11（候補10校＋残留）＋リストの内側余白14」＝392 が収まる値。 */
+    --modal-lg-w: 900px;
+    --modal-lg-body-h: 400px;
+    --modal-lg-detail-w: 300px;
+
     /* ── 大会：トーナメント表（新聞型・issue #645）。座標は engine NewspaperBracketLayout が決め、
        寸法は NewspaperBracketElement.Metrics（校名欄176／1段64／行28）が持つ。ここは線の色だけ。
        Painter2D は CustomStyleProperty で色を読むが var() を解決しないので、値を直書きで写す

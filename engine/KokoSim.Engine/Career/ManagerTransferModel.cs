@@ -55,7 +55,7 @@ public static class ManagerTransferModel
             {
                 var candidates = PickCandidates(
                     nation, currentPrefectureId, samePrefectureOnly: false,
-                    c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread, c.FreeAgentOfferCount, rng);
+                    c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread, OfferCandidateCount(manager.Fame, c), rng);
                 return new TransferResult(TransferEventKind.BecameFreeAgent, candidates, CanStay: true);
             }
 
@@ -81,10 +81,23 @@ public static class ManagerTransferModel
         {
             var candidates = PickCandidates(
                 nation, currentPrefectureId, samePrefectureOnly: false,
-                c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread, c.FreeAgentOfferCount, rng);
+                c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread, OfferCandidateCount(manager.Fame, c), rng);
             return new TransferResult(TransferEventKind.FreeAgentOffer, candidates, CanStay: true);
         }
         return TransferResult.Stayed;
+    }
+
+    /// <summary>
+    /// フリー監督に並べる候補校の数（issue #869）。名声が高いほど声がかかる学校が増える:
+    /// clamp(下限, 上限, 下限 + floor((名声 − 基準) / 刻み))。
+    /// </summary>
+    public static int OfferCandidateCount(double fame, CareerCoefficients c)
+    {
+        var steps = c.FreeAgentOfferFameStep > 0
+            ? (int)Math.Floor((fame - c.FreeAgentOfferFameBase) / c.FreeAgentOfferFameStep)
+            : 0;
+        var upper = Math.Max(c.FreeAgentOfferCount, c.FreeAgentOfferMaxCount);
+        return Math.Clamp(c.FreeAgentOfferCount + steps, c.FreeAgentOfferCount, upper);
     }
 
     /// <summary>

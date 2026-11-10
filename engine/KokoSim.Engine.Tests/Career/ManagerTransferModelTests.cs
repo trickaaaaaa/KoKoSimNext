@@ -260,4 +260,63 @@ public sealed class ManagerTransferModelTests
         public double NextGaussian(double mean = 0.0, double stdDev = 1.0) => _inner.NextGaussian(mean, stdDev);
         public IRandomSource Fork(ulong streamId) => _inner.Fork(streamId);
     }
+
+    [Fact]
+    public void OfferCandidateCount_LowFame_StaysAtFloor()
+    {
+        Assert.Equal(C.FreeAgentOfferCount, ManagerTransferModel.OfferCandidateCount(0, C));
+        Assert.Equal(C.FreeAgentOfferCount, ManagerTransferModel.OfferCandidateCount(C.FreeAgentOfferFameBase, C));
+        Assert.Equal(C.FreeAgentOfferCount, ManagerTransferModel.OfferCandidateCount(C.FreeAgentOfferFameBase - 20, C));
+    }
+
+    [Fact]
+    public void OfferCandidateCount_RisesMonotonicallyWithFame_AndClampsAtCeiling()
+    {
+        var prev = 0;
+        for (var fame = 0.0; fame <= 100.0; fame += 0.5)
+        {
+            var n = ManagerTransferModel.OfferCandidateCount(fame, C);
+            Assert.InRange(n, C.FreeAgentOfferCount, C.FreeAgentOfferMaxCount);
+            Assert.True(n >= prev, $"fame {fame}: {n} < {prev}");
+            prev = n;
+        }
+        Assert.Equal(C.FreeAgentOfferMaxCount, ManagerTransferModel.OfferCandidateCount(1000, C));
+    }
+
+    [Fact]
+    public void OfferCandidateCount_FormulaExamples()
+    {
+        Assert.Equal(2, ManagerTransferModel.OfferCandidateCount(50, C));
+        Assert.Equal(7, ManagerTransferModel.OfferCandidateCount(70, C));
+        Assert.Equal(9, ManagerTransferModel.OfferCandidateCount(81.9, C));
+        Assert.Equal(10, ManagerTransferModel.OfferCandidateCount(82, C));
+    }
+
+    [Theory]
+    [InlineData(TransferEventKind.BecameFreeAgent)]
+    [InlineData(TransferEventKind.FreeAgentOffer)]
+    public void Evaluate_HighFame_ListsMoreDistinctOutOfPrefectureSchools(TransferEventKind kind)
+    {
+        var nation = BuildNation();
+        Manager Make(double fame) => kind == TransferEventKind.BecameFreeAgent
+            ? new Manager { Status = ManagerStatus.Teacher, KoshienAppearances = 1, Fame = fame }
+            : new Manager { Status = ManagerStatus.Free, Fame = fame };
+        // FreeAgentOffer は最初の NextDouble がオファー確率を下回る種でないと届かない＝その種を探す。
+        ulong seed = 1;
+        while (kind == TransferEventKind.FreeAgentOffer && new Xoshiro256Random(seed).NextDouble() >= C.FreeAgentOfferChance)
+            seed++;
+        var low = ManagerTransferModel.Evaluate(Make(10), 13, nation, new Xoshiro256Random(seed), C);
+        var high = ManagerTransferModel.Evaluate(Make(95), 13, nation, new Xoshiro256Random(seed), C);
+
+        Assert.Equal(kind, low.Kind);
+        Assert.Equal(kind, high.Kind);
+        Assert.Equal(C.FreeAgentOfferCount, low.Candidates.Count);
+        Assert.Equal(C.FreeAgentOfferMaxCount, high.Candidates.Count);
+        Assert.Equal(high.Candidates.Count, high.Candidates.Select(x => x.SchoolId).Distinct().Count());
+        Assert.All(high.Candidates, x => Assert.NotEqual(13, x.PrefectureId));
+        // 引き順は変わらない＝名声が低いときの候補は、名声が高いときの先頭と同じ学校。
+        Assert.Equal(
+            low.Candidates.Select(x => x.SchoolId),
+            high.Candidates.Take(low.Candidates.Count).Select(x => x.SchoolId));
+    }
 }

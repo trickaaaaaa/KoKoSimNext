@@ -2908,6 +2908,9 @@ public static class CoefficientsLoader
         public double FreeChoiceSchoolStrength { get; set; } = D.FreeChoiceSchoolStrength;
         public double FreeAgentOfferChance { get; set; } = D.FreeAgentOfferChance;
         public int FreeAgentOfferCount { get; set; } = D.FreeAgentOfferCount;
+        public int FreeAgentOfferMaxCount { get; set; } = D.FreeAgentOfferMaxCount;
+        public double FreeAgentOfferFameBase { get; set; } = D.FreeAgentOfferFameBase;
+        public double FreeAgentOfferFameStep { get; set; } = D.FreeAgentOfferFameStep;
         public double FreeAgentOfferSpread { get; set; } = D.FreeAgentOfferSpread;
 
         public CareerCoefficients ToModel() => new()
@@ -2954,6 +2957,9 @@ public static class CoefficientsLoader
             FreeChoiceSchoolStrength = FreeChoiceSchoolStrength,
             FreeAgentOfferChance = FreeAgentOfferChance,
             FreeAgentOfferCount = FreeAgentOfferCount,
+            FreeAgentOfferMaxCount = FreeAgentOfferMaxCount,
+            FreeAgentOfferFameBase = FreeAgentOfferFameBase,
+            FreeAgentOfferFameStep = FreeAgentOfferFameStep,
             FreeAgentOfferSpread = FreeAgentOfferSpread,
         };
     }
