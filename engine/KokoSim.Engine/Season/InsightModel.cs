@@ -21,6 +21,13 @@ public sealed record InsightNotice(DevelopingPlayer Player, InsightTopic Topic, 
 {
     /// <summary>個別指導に指名中の選手の気づき（見極め・issue #702）。UI が「個別指導で見えてきた」と添える。</summary>
     public bool ViaCoaching { get; init; }
+
+    /// <summary>
+    /// <see cref="InsightTopic.GrowthType"/> のとき、どの分野についての示唆か（"pitching"/"batting"/"defense"、
+    /// 成長タイプの分野別化・issue #866）。<see cref="Domain"/> には示唆された成長タイプの表示名が入る
+    /// （この話題では Domain は分野名ではなく型名＝既存の流儀を保つ）。他の話題では未使用（""）。
+    /// </summary>
+    public string GrowthField { get; init; } = "";
 }
 
 /// <summary>気づきの係数（設計書03 §5.6）。🟡頻度・精度カーブは検証で調整。</summary>
@@ -95,14 +102,18 @@ public static class InsightModel
             return new InsightNotice(p, InsightTopic.Personality, Players.Personalities.DisplayName(shown), accurate);
         }
 
-        // 成長タイプの兆し（設計書03 §5.6・issue #614）。
+        // 成長タイプの兆し（設計書03 §5.6・issue #614、分野別化・issue #866）。
         // ★ この話題は列挙子だけあって**一度も返されていなかった**（2026-08-14 まで実在しない気づき）。
         //    「大器晩成かもしれない」は隠しパラメータの中でも起用と我慢の判断に直結するので、
         //    伸びしろの高低より前に置く。読み違え時は別のタイプを示唆する。
+        //    分野別化で「投手としては晩成型かもしれない」のように分野を名指しする（pitching/batting/defense から一様に選ぶ）。
         if (rng.NextDouble() < 0.25)
         {
-            var shownType = accurate ? p.GrowthType : WrongGrowthType(p.GrowthType, rng);
-            return new InsightNotice(p, InsightTopic.GrowthType, GrowthTypeNames.DisplayName(shownType), accurate);
+            var field = GrowthFields[rng.NextInt(0, GrowthFields.Length)];
+            var trueType = p.GrowthTypeForField(field);
+            var shownType = accurate ? trueType : WrongGrowthType(trueType, rng);
+            return new InsightNotice(p, InsightTopic.GrowthType, GrowthTypeNames.DisplayName(shownType), accurate)
+            { GrowthField = field };
         }
 
         // 分野別伸びしろの最大/最小を話題にする。読み違え(accurate=false)時は逆の示唆を返す。
@@ -119,15 +130,13 @@ public static class InsightModel
         }
     }
 
+    /// <summary>成長タイプの話題で名指しする分野（issue #866）。基本タイプは別経路（スカウト開示）があるのでここには含めない。</summary>
+    private static readonly string[] GrowthFields = { "pitching", "batting", "defense" };
+
     /// <summary>読み違え用: 本当の成長タイプと異なるタイプを1つ選ぶ（必ず別タイプになる）。</summary>
     private static GrowthType WrongGrowthType(GrowthType actual, IRandomSource rng)
     {
-        var others = actual switch
-        {
-            GrowthType.Early => new[] { GrowthType.Standard, GrowthType.Late },
-            GrowthType.Late => new[] { GrowthType.Standard, GrowthType.Early },
-            _ => new[] { GrowthType.Early, GrowthType.Late },
-        };
+        var others = GrowthTypeNames.OtherTypes(actual);
         return others[rng.NextInt(0, others.Length)];
     }
 

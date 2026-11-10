@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
@@ -1115,5 +1116,53 @@ public sealed class SaveCodecTests
 
         Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
         Assert.Equal(0, s.MomentumLevel);
+    }
+
+    // ===== 成長タイプの分野別化（issue #866・v25） =====
+
+    [Fact]
+    public void GrowthDomainTypes_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+
+        for (var i = 0; i < state.Roster.Count; i++)
+        {
+            Assert.Equal(state.Roster[i].PitchingGrowthType, s.Roster[i].PitchingGrowthType);
+            Assert.Equal(state.Roster[i].BattingGrowthType, s.Roster[i].BattingGrowthType);
+            Assert.Equal(state.Roster[i].DefenseGrowthType, s.Roster[i].DefenseGrowthType);
+        }
+    }
+
+    /// <summary>
+    /// 旧セーブ（v24以前）には部員ごとの分野別キーが無い。null＝基本タイプに従う、として読める
+    /// （挙動不変）こと。新規追加3キーは安全な既定（null）が決まっているので Migrate では補わず、
+    /// DevelopingPlayerSaves.FromJson の Has 分岐で読む（他の v24以前キーと同じ作法）。
+    /// </summary>
+    [Fact]
+    public void V24Save_WithoutGrowthDomainTypes_StillLoads_AsNull_FollowingBaseType()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var json = SaveCodec.Serialize(state);
+        json = Regex.Replace(json, "\"pitchingGrowthType\":(\"[A-Za-z]+\"|null),", "");
+        json = Regex.Replace(json, "\"battingGrowthType\":(\"[A-Za-z]+\"|null),", "");
+        json = Regex.Replace(json, "\"defenseGrowthType\":(\"[A-Za-z]+\"|null),", "");
+        json = json.Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":24");
+        Assert.DoesNotContain("pitchingGrowthType", json);
+        Assert.DoesNotContain("battingGrowthType", json);
+        Assert.DoesNotContain("defenseGrowthType", json);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(state.Roster.Count, s.Roster.Count);
+        foreach (var p in s.Roster)
+        {
+            Assert.Null(p.PitchingGrowthType);
+            Assert.Null(p.BattingGrowthType);
+            Assert.Null(p.DefenseGrowthType);
+            // GrowthTypeFor は null を基本タイプへ落とす＝旧セーブは「全分野＝基本タイプ1つ」で読める。
+            foreach (var k in AbilityKinds.All)
+                Assert.Equal(p.GrowthType, p.GrowthTypeFor(k));
+        }
     }
 }

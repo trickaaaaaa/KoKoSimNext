@@ -53,6 +53,10 @@ internal static class DevelopingPlayerSaves
             .Add("throws", EnumJson.Write(p.Throws))
             .Add("bats", EnumJson.Write(p.Bats))
             .Add("growthType", EnumJson.Write(p.GrowthType))
+            // 成長タイプの分野別化（設計書02 §5.2・issue #866）。null=基本タイプに従う（旧セーブ相当）。
+            .Add("pitchingGrowthType", EnumJson.WriteNullable(p.PitchingGrowthType))
+            .Add("battingGrowthType", EnumJson.WriteNullable(p.BattingGrowthType))
+            .Add("defenseGrowthType", EnumJson.WriteNullable(p.DefenseGrowthType))
             .Add("personalityFactor", p.PersonalityFactor)
             .Add("isProdigy", p.IsProdigy)
             .Add("mental", p.Mental)
@@ -97,6 +101,11 @@ internal static class DevelopingPlayerSaves
             Throws = EnumJson.Read<Handedness>(o.Str("throws")),
             Bats = EnumJson.Read<Handedness>(o.Str("bats")),
             GrowthType = EnumJson.Read<GrowthType>(o.Str("growthType")),
+            // 成長タイプの分野別化（issue #866）: 旧セーブ（キー欠損）・null（意図的な「基本タイプに従う」）
+            // のどちらも null として読む＝全分野が基本タイプ1つという旧来の挙動のまま（安全な既定・Has分岐）。
+            PitchingGrowthType = o.Has("pitchingGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("pitchingGrowthType")) : null,
+            BattingGrowthType = o.Has("battingGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("battingGrowthType")) : null,
+            DefenseGrowthType = o.Has("defenseGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("defenseGrowthType")) : null,
             PersonalityFactor = o.Double("personalityFactor"),
             IsProdigy = o.Bool("isProdigy"),
             Leadership = o.Int("leadership"),

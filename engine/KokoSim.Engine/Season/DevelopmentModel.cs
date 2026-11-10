@@ -35,7 +35,6 @@ public static class DevelopmentModel
         // 怪我中は練習不可（設計書03 §3.5）: 全メニュー効果なし。
         if (p.Injury != Players.InjurySeverity.None) return;
 
-        var stageCoef = stages.Coefficient(p.GrowthType, stageIndex);
         // ②素直さ（性格, 設計書01 §1.1）: 指導寄与を倍率補正。personalities=null または Normal は 1.0＝従来と一致。
         var receptivity = personalities?.Profile(p.Personality).CoachingReceptivity ?? 1.0;
         // 基準指導力（中立点）を common に焼き込む＝従来と同じ乗算列。分野別指導力（#115）は
@@ -50,10 +49,13 @@ public static class DevelopmentModel
             skillExp *= TeamSkillExpFactor(p, roster, skills);
         }
 
+        // 成長段階係数（設計書02 §5.2・issue #866）は能力の分野ごとに別のタイプで変わるので、
+        // common からは外し能力ごとに掛ける（全分野が同じタイプなら従来と1ビット一致）。
         var common = c.BaseMainExp * c.FacilityCoef * baselineFactor
-                     * p.PersonalityFactor * stageCoef * campMultiplier * skillExp;
+                     * p.PersonalityFactor * campMultiplier * skillExp;
         // 守備位置適性は守備・走塁分野（Defense 指導力）で駆動する（Fielding が代表）。
         var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
+        var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
 
         var refMinutes = (double)referenceWeekMinutes;
         foreach (var (menu, minutes) in allocations)
@@ -70,13 +72,15 @@ public static class DevelopmentModel
             }
             var eff = TrainingMenus.Effects(menu);
             if (eff.Main is { } mainAbility)
-                ApplyExp(p, mainAbility, common * scale * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
+                ApplyExp(p, mainAbility, common * scale * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
+                    * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
                     * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor), c);
             foreach (var subAbility in eff.Subs)
-                ApplyExp(p, subAbility, common * scale * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
+                ApplyExp(p, subAbility, common * scale * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
+                    * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
             // 守備位置適性は守備・走塁分野（Defense 指導力）で駆動する。
             foreach (var (pos, weight) in eff.Aptitudes)
-                ApplyAptitudeExp(p, pos, common * scale * weight * defenseAdj, c);
+                ApplyAptitudeExp(p, pos, common * scale * defenseStage * weight * defenseAdj, c);
         }
     }
 
@@ -136,7 +140,6 @@ public static class DevelopmentModel
         // 怪我中は練習不可（設計書03 §3.5: リハビリ/休養に限定）。
         if (p.Injury != Players.InjurySeverity.None) return;
 
-        var stageCoef = stages.Coefficient(p.GrowthType, stageIndex);
         // ②素直さ（性格, 設計書01 §1.1）: 指導寄与を倍率補正。personalities=null または Normal は 1.0＝従来と一致。
         var receptivity = personalities?.Profile(p.Personality).CoachingReceptivity ?? 1.0;
         // 基準指導力（中立点）を common に焼き込む＝従来と同じ乗算列（分野別指導力の比は後段, #115）。
@@ -153,18 +156,23 @@ public static class DevelopmentModel
         }
 
         var eff = TrainingMenus.Effects(menu);
+        // 成長段階係数（設計書02 §5.2・issue #866）は能力の分野ごとに別のタイプで変わるので、
+        // common からは外し能力ごとに掛ける（全分野が同じタイプなら従来と1ビット一致）。
         var common = c.BaseMainExp * c.FacilityCoef * baselineFactor
-                     * p.PersonalityFactor * stageCoef * campMultiplier * skillExp;
+                     * p.PersonalityFactor * campMultiplier * skillExp;
         var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
+        var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
 
         if (eff.Main is { } mainAbility)
-            ApplyExp(p, mainAbility, common * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
+            ApplyExp(p, mainAbility, common * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
+                * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
                 * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor), c);
         foreach (var subAbility in eff.Subs)
-            ApplyExp(p, subAbility, common * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
+            ApplyExp(p, subAbility, common * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
+                * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
         // 守備位置適性（設計書01 §1.1）: 守備分野の伸びしろを乗せる（Defense 指導力）。
         foreach (var (pos, weight) in eff.Aptitudes)
-            ApplyAptitudeExp(p, pos, common * weight * defenseAdj, c);
+            ApplyAptitudeExp(p, pos, common * defenseStage * weight * defenseAdj, c);
     }
 
     /// <summary>

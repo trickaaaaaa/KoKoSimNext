@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 24;
+    public const int CurrentVersion = 25;
 
     // ===== Serialize =====
 
@@ -301,6 +301,9 @@ public static class SaveCodec
         // v24（issue #863）: チームの勢い（自校のみ）が増えた。旧セーブは勢いという概念が存在しえない＝0で補う。
         if (version < 24 && !root.Has("momentumLevel"))
             root.Add("momentumLevel", 0);
+        // v25（issue #866）: 成長タイプの分野別化（投球/打撃/守備）。部員1人ぶんの新規キー3つは
+        // 安全な既定（null＝基本タイプに従う＝旧セーブと1ビット一致）が決まっているので、ここでは補わず
+        // DevelopingPlayerSaves.FromJson の Has 分岐で読む（CareerSaves.FacilityFund と同じ作法）。
         // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
         // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
         // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。

@@ -243,6 +243,87 @@ public sealed class DevelopmentTests
         Assert.True(focused.Aptitude(FieldPosition.Shortstop) > p.Aptitude(FieldPosition.Shortstop));
     }
 
+    // --- 成長タイプの分野別化（設計書02 §5.2・issue #866） ---
+
+    /// <summary>
+    /// 分野ごとに違うタイプの選手で、同じ練習でも分野ごとに伸びる時期が変わる（issue #866 完了条件）。
+    /// 投球=早熟・打撃=晩成の選手は、1年前半は投球がよく伸び打撃は伸びず、3年では逆転する。
+    /// </summary>
+    [Fact]
+    public void DifferentDomainTypes_FollowOwnStageCurve_IndependentOfOtherDomains()
+    {
+        var c = new TrainingCoefficients();
+        var stages = new GrowthStageTable();
+
+        DevelopingPlayer NewPlayer()
+        {
+            var p = new DevelopingPlayer
+            {
+                PitchingGrowthType = GrowthType.Early,
+                BattingGrowthType = GrowthType.Late,
+            };
+            p.SetLevel(AbilityKind.Control, 30); p.SetCap(AbilityKind.Control, 99);
+            p.SetLevel(AbilityKind.Contact, 30); p.SetCap(AbilityKind.Contact, 99);
+            return p;
+        }
+
+        (int PitchingGain, int BattingGain) Run(int stageIndex)
+        {
+            var p = NewPlayer();
+            for (var i = 0; i < 20; i++)
+            {
+                DevelopmentModel.TrainWeek(p, TrainingMenu.Pitching, stageIndex, 1.0, stages, c);
+                DevelopmentModel.TrainWeek(p, TrainingMenu.Batting, stageIndex, 1.0, stages, c);
+            }
+            return (p.Level(AbilityKind.Control) - 30, p.Level(AbilityKind.Contact) - 30);
+        }
+
+        var early = Run(0); // 1年前半: 早熟×1.4・晩成×0.6
+        var late = Run(4);  // 3年: 早熟×0.6・晩成×1.8
+
+        // 投球（早熟）は前半の方がよく伸びる。
+        Assert.True(early.PitchingGain > late.PitchingGain,
+            $"投球(早熟) 前半{early.PitchingGain} vs 3年{late.PitchingGain}");
+        // 打撃（晩成）は3年の方がよく伸びる＝同じ選手でも分野ごとに伸びる時期が違う。
+        Assert.True(late.BattingGain > early.BattingGain,
+            $"打撃(晩成) 前半{early.BattingGain} vs 3年{late.BattingGain}");
+    }
+
+    /// <summary>
+    /// 分野別の型を一切設定しない（null＝旧セーブ相当）選手は、全分野を基本タイプで明示した選手と
+    /// 1ビット一致する（issue #866 完了条件: 旧挙動の保存）。
+    /// </summary>
+    [Fact]
+    public void AllDomainsNull_MatchesAllDomainsExplicitlySameAsBase()
+    {
+        var c = new TrainingCoefficients();
+        var stages = new GrowthStageTable();
+
+        var implicitBase = new DevelopingPlayer { GrowthType = GrowthType.Late };
+        var explicitBase = new DevelopingPlayer
+        {
+            GrowthType = GrowthType.Late,
+            PitchingGrowthType = GrowthType.Late,
+            BattingGrowthType = GrowthType.Late,
+            DefenseGrowthType = GrowthType.Late,
+        };
+        foreach (var p in new[] { implicitBase, explicitBase })
+            foreach (var k in AbilityKinds.All) { p.SetLevel(k, 30); p.SetCap(k, 99); }
+
+        // VelocityTraining は主効果(球速)+副効果(球威/スタミナ/パワー)で投球と打撃の分野が混在するメニュー。
+        for (var i = 0; i < 20; i++)
+        {
+            DevelopmentModel.TrainWeek(implicitBase, TrainingMenu.VelocityTraining, 2, 1.0, stages, c);
+            DevelopmentModel.TrainWeek(explicitBase, TrainingMenu.VelocityTraining, 2, 1.0, stages, c);
+        }
+
+        foreach (var k in AbilityKinds.All)
+        {
+            Assert.Equal(implicitBase.Exp(k), explicitBase.Exp(k), 9);
+            Assert.Equal(implicitBase.Level(k), explicitBase.Level(k));
+        }
+    }
+
     // --- 適性の緩め係数（守備適性 未決1）: 必要expを下げると同じ週数で適性が速く伸びる ---
 
     [Fact]

@@ -279,6 +279,15 @@ public sealed record RosterCoefficients
     public double LateCapBonus { get; init; } = 6.0;
 
     /// <summary>
+    /// 成長タイプの分野別化（設計書02 §5.2・issue #866）。生成でまず基本タイプを1つ引き、
+    /// 投球・打撃・守備の各分野はこの確率で基本タイプと同じ、残りは基本タイプと異なる方のタイプ
+    /// （<see cref="GrowthTypeNames.OtherTypes"/>）を一様に1つ選ぶ（「全分野バラバラ」ばかりにしない＝
+    /// 基本タイプとの相関を持たせる）。1.0 なら全分野が常に基本タイプと一致し、旧来（分野化前）と1ビット一致。
+    /// 走力・精神力・捕手リード・走塁系など3分野に属さない能力はこの抽選と無関係に常に基本タイプで決まる。
+    /// </summary>
+    public double GrowthDomainSameProb { get; init; } = 0.6;
+
+    /// <summary>
     /// 足(Speed) の才能上限gap圧縮係数（Issue #114）。素質固定能力は「伸びる速さ」だけでなく「天井」も近い
     /// ＝両方きつく。gap（mean/sd）にこれを乗じる。既定1.0で従来と一致（能力別 gap 係数の第一号）。
     /// 逸材（IsProdigy）はこの圧縮を免除し規格外の俊足になりうる（<see cref="CapGapFactor"/> で分岐）。
@@ -476,6 +485,10 @@ public static class ProspectGenerator
         PersonalityCoefficients personalityCoeff, FormCoefficients formCoeff, ISet<string> usedGiven)
     {
         var growth = SampleGrowthType(rng);
+        // 成長タイプの分野別化（設計書02 §5.2・issue #866）: 独立Forkストリームで抽選し、
+        // 既存の能力ロール列を1ビットも乱さない（不変条件#2）。
+        var (pitchingGrowthType, battingGrowthType, defenseGrowthType) =
+            SampleGrowthDomains(growth, rng.Fork(GrowthDomainStreamId(year, index)), c);
 
         // --- 投打の利き（条件付き, 設計書01 §1.1c） ---
         var throws = rng.NextDouble() < c.ThrowLeftProb ? Handedness.Left : Handedness.Right;
@@ -485,12 +498,13 @@ public static class ProspectGenerator
         else bats = rng.NextDouble() < c.BatLeftGivenRightThrow ? Handedness.Left : Handedness.Right;
 
         // --- 伸びしろ（分野別・凸凹, 現在値と独立） ---
-        double GrowthRoll() => MathUtil.Clamp(
-            rng.NextGaussian(c.GrowthMean, c.GrowthSd) + (growth == GrowthType.Late ? c.LateGrowthBonus : 0),
+        // 晩成の上乗せ（issue #866）はその分野自身の成長タイプで判定する（基本タイプではない）。
+        double GrowthRoll(GrowthType domainType) => MathUtil.Clamp(
+            rng.NextGaussian(c.GrowthMean, c.GrowthSd) + (domainType == GrowthType.Late ? c.LateGrowthBonus : 0),
             c.GrowthMin, c.GrowthMax);
-        var pitchingGrowth = GrowthRoll();
-        var battingGrowth = GrowthRoll();
-        var defenseGrowth = GrowthRoll();
+        var pitchingGrowth = GrowthRoll(pitchingGrowthType);
+        var battingGrowth = GrowthRoll(battingGrowthType);
+        var defenseGrowth = GrowthRoll(defenseGrowthType);
 
         // 精神系（設計書02 §3 / 09 §8）: 独立ストリーム(Fork)で抽選し、既存の能力ロール列を乱さない。
         var mentalRng = rng.Fork(MentalStreamId(year, index));
@@ -530,6 +544,9 @@ public static class ProspectGenerator
             Name = PlayerNameGenerator.Generate(vocab, rng.Fork(NameStreamId(year, index)), usedGiven),
             Grade = 1,
             GrowthType = growth,
+            PitchingGrowthType = pitchingGrowthType,
+            BattingGrowthType = battingGrowthType,
+            DefenseGrowthType = defenseGrowthType,
             IsProdigy = isProdigy,
             Throws = throws,
             Bats = bats,
@@ -577,13 +594,13 @@ public static class ProspectGenerator
         foreach (var k in Physical)
         {
             var level = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(physicalCenter, c.PhysicalSd)), 10, 92);
-            SetWithCap(p, k, level, c, growth, rng);
+            SetWithCap(p, k, level, c, rng);
         }
 
         // 弾道は型属性（練習で伸びない）。中庸に振る。
         {
             var lt = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(50, 15)), 1, 99);
-            SetWithCap(p, AbilityKind.LaunchTendency, lt, c, growth, rng);
+            SetWithCap(p, AbilityKind.LaunchTendency, lt, c, rng);
         }
 
         // --- Stage 2: 総合力→専門能力へ凸凹配分（投手寄せは w で連続化, Issue #174） ---
@@ -610,8 +627,8 @@ public static class ProspectGenerator
         var battingCenter = Lerp(total, offCenter, w);
         var pitchingFloor = (int)Math.Round(Lerp(c.OffSpecialtyFloor, c.SpecialtyFloor, w));
         var battingFloor = (int)Math.Round(Lerp(c.SpecialtyFloor, c.OffSpecialtyFloor, w));
-        Distribute(p, PitchingSkill, pitchingCenter, concentration, pitchingFloor, c, growth, rng);
-        Distribute(p, BattingSkill, battingCenter, concentration, battingFloor, c, growth, rng);
+        Distribute(p, PitchingSkill, pitchingCenter, concentration, pitchingFloor, c, rng);
+        Distribute(p, BattingSkill, battingCenter, concentration, battingFloor, c, rng);
 
         // 投手球速level = 地肩 ＋ 投手センス（設計書01 §1.1b-3）。地肩は Stage1 で確定済み。
         var arm = p.Level(AbilityKind.ArmStrength);
@@ -637,7 +654,7 @@ public static class ProspectGenerator
                 Math.Max(pitchingFloor, LvStamina(p.Level(AbilityKind.Stamina) + ds * wRole)));
             AdjustLevel(p, AbilityKind.PitchRank, Adjusted(AbilityKind.PitchRank, dr * wRole));
         }
-        SetWithCap(p, AbilityKind.Velocity, veloLevel, c, growth, rng);
+        SetWithCap(p, AbilityKind.Velocity, veloLevel, c, rng);
 
         // 球威（Issue #274）: ストレートのホップ成分を担う育成軸。球速練習の主効果に接続。
         // 本流 rng を1ビットも消費しないよう専用 Fork ストリームから引く（CoreTwelve列の後方互換を保つ）。
@@ -646,7 +663,7 @@ public static class ProspectGenerator
             var stuffRng = rng.Fork(StuffStreamId(year, index));
             var stuffBase = Lerp(total * c.NonPitcherSenseFactor, veloLevel + c.PitcherSenseBonus * 0.3, w);
             var stuffLevel = (int)MathUtil.Clamp(Math.Round(stuffBase + stuffRng.NextGaussian(0, 8)), 5, 95);
-            SetWithCap(p, AbilityKind.Stuff, stuffLevel, c, growth, stuffRng);
+            SetWithCap(p, AbilityKind.Stuff, stuffLevel, c, stuffRng);
         }
 
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
@@ -697,7 +714,7 @@ public static class ProspectGenerator
 
     /// <summary>総合力 center を kinds へ凸凹配分（重み=exp(N(0,σ))を平均1正規化 → mean(level)≈center）。</summary>
     private static void Distribute(DevelopingPlayer p, AbilityKind[] kinds, double center, double concentration,
-        int floor, RosterCoefficients c, GrowthType growth, IRandomSource rng)
+        int floor, RosterCoefficients c, IRandomSource rng)
     {
         var n = kinds.Length;
         var weights = new double[n];
@@ -712,7 +729,7 @@ public static class ProspectGenerator
         {
             var raw = center * weights[i] / wmean;
             var level = (int)MathUtil.Clamp(Math.Round(raw), floor, 90);
-            SetWithCap(p, kinds[i], level, c, growth, rng);
+            SetWithCap(p, kinds[i], level, c, rng);
         }
     }
 
@@ -746,15 +763,16 @@ public static class ProspectGenerator
     }
 
     private static void SetWithCap(DevelopingPlayer p, AbilityKind k, int level,
-        RosterCoefficients c, GrowthType growth, IRandomSource rng)
+        RosterCoefficients c, IRandomSource rng)
     {
         // 能力別 cap gap 圧縮（Issue #114）: 素質固定能力（足）は天井も近い＝両方きつく。逸材（IsProdigy）は免除。
         // gap の mean/sd を同率で縮める。NextGaussian は mean/sd に依らず同数の乱数を消費するため、
         // 係数1.0（既定・非逸材の他能力）では従来と1ビットも変わらない（不変条件#2）。
         var gapFactor = c.CapGapFactor(k);
         if (p.IsProdigy) gapFactor = Math.Max(1.0, gapFactor);
+        // 晩成の上乗せ（issue #866）は能力 k が属する分野の成長タイプで判定する（分野外は基本タイプ）。
         var gap = rng.NextGaussian(c.CapGapMean * gapFactor, c.CapGapSd * gapFactor)
-                  + (growth == GrowthType.Late ? c.LateCapBonus : 0);
+                  + (p.GrowthTypeFor(k) == GrowthType.Late ? c.LateCapBonus : 0);
         // スタミナだけ才能上限の天井（99）を外す（issue #356）＝伸ばした分だけ長く投げられる。
         // 乱数消費列は不変（NextGaussian は上で共通に引き済み）＝クランプ上限の差し替えだけ（不変条件#2）。
         var rounded = Math.Round(level + gap);
@@ -795,6 +813,9 @@ public static class ProspectGenerator
     /// <summary>球威抽選の独立ストリームID（CoreTwelve列を1ビットも乱さない, Issue #274）。</summary>
     private static ulong StuffStreamId(int year, int index) => 0x8D52_0000UL ^ (ulong)(year * 1000 + index + 1);
 
+    /// <summary>成長タイプの分野別化抽選の独立ストリームID（能力ロール列を1ビットも乱さない, issue #866）。</summary>
+    private static ulong GrowthDomainStreamId(int year, int index) => 0x1F9A_0000UL ^ (ulong)(year * 1000 + index + 1);
+
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
     private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
 
@@ -829,5 +850,23 @@ public static class ProspectGenerator
         if (r < 0.30) return GrowthType.Early;
         if (r < 0.70) return GrowthType.Standard;
         return GrowthType.Late;
+    }
+
+    /// <summary>
+    /// 成長タイプの分野別抽選（設計書02 §5.2・issue #866）。<paramref name="baseType"/>（基本タイプ）を基準に、
+    /// 投球・打撃・守備の各分野を <see cref="RosterCoefficients.GrowthDomainSameProb"/> の確率で基本タイプと
+    /// 同じにし、外れたら基本タイプと異なる方のタイプ（<see cref="GrowthTypeNames.OtherTypes"/>）を一様に選ぶ。
+    /// 呼び出し側は独立 Fork ストリームの <paramref name="rng"/> を渡すこと（既存の生成列を乱さない）。
+    /// </summary>
+    internal static (GrowthType Pitching, GrowthType Batting, GrowthType Defense) SampleGrowthDomains(
+        GrowthType baseType, IRandomSource rng, RosterCoefficients c)
+    {
+        GrowthType Pick()
+        {
+            if (rng.NextDouble() < c.GrowthDomainSameProb) return baseType;
+            var others = GrowthTypeNames.OtherTypes(baseType);
+            return others[rng.NextInt(0, others.Length)];
+        }
+        return (Pick(), Pick(), Pick());
     }
 }

@@ -51,7 +51,42 @@ public sealed class DevelopingPlayer
     /// </summary>
     public List<LearnedPitch> LearnedPitches { get; } = new();
 
+    /// <summary>
+    /// 基本タイプ（設計書02 §5.2・issue #866）。生成でまず引く1つのタイプ。スカウトが開示するのもこれ
+    /// （スカウト画面は分野を出さない・2026-11-10 監督決定）。走力・精神力・捕手リード・走塁系
+    /// （Speed/Bunt/Steal/Baserunning・Mental・Lead）など3分野に属さない能力は常にこれで伸びる時期が決まる。
+    /// </summary>
     public GrowthType GrowthType { get; init; } = GrowthType.Standard;
+
+    /// <summary>投球分野の成長タイプ（null=基本タイプ(<see cref="GrowthType"/>)に従う＝旧セーブ相当）。</summary>
+    public GrowthType? PitchingGrowthType { get; init; }
+    /// <summary>打撃分野の成長タイプ（スイング・選球眼・弾道。null=基本タイプに従う）。</summary>
+    public GrowthType? BattingGrowthType { get; init; }
+    /// <summary>守備分野の成長タイプ（null=基本タイプに従う）。</summary>
+    public GrowthType? DefenseGrowthType { get; init; }
+
+    /// <summary>
+    /// 能力 <paramref name="k"/> が属する分野の成長タイプ（設計書02 §5.2・issue #866）。
+    /// 分野別の型（上記3つ）が未設定（null＝旧セーブ）なら基本タイプへ落ちる＝旧セーブは全分野
+    /// 「基本タイプ1つ」として読める（挙動不変）。走力・走塁系（分野外）は常に基本タイプ。
+    /// </summary>
+    public GrowthType GrowthTypeFor(AbilityKind k)
+    {
+        if (AbilityKinds.IsPitching(k)) return PitchingGrowthType ?? GrowthType;
+        if (AbilityKinds.IsBattingCore(k)) return BattingGrowthType ?? GrowthType;
+        if (AbilityKinds.IsDefense(k)) return DefenseGrowthType ?? GrowthType;
+        return GrowthType; // Speed/Bunt/Steal/Baserunning: 分野に属さない
+    }
+
+    /// <summary>気づき（InsightModel）の分野名文字列から成長タイプを引く（"pitching"/"batting"/"defense"、他は基本タイプ）。</summary>
+    public GrowthType GrowthTypeForField(string field) => field switch
+    {
+        "pitching" => PitchingGrowthType ?? GrowthType,
+        "batting" => BattingGrowthType ?? GrowthType,
+        "defense" => DefenseGrowthType ?? GrowthType,
+        _ => GrowthType,
+    };
+
     public double PersonalityFactor { get; init; } = 1.0; // 練習効率 0.8〜1.2
 
     /// <summary>
@@ -205,6 +240,9 @@ public sealed class DevelopingPlayer
             Throws = Throws,
             Bats = Bats,
             GrowthType = GrowthType,
+            PitchingGrowthType = PitchingGrowthType,
+            BattingGrowthType = BattingGrowthType,
+            DefenseGrowthType = DefenseGrowthType,
             PersonalityFactor = PersonalityFactor,
             IsProdigy = IsProdigy,
             Mental = Mental,
