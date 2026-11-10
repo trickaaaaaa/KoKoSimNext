@@ -116,9 +116,11 @@ public sealed class ReproBasisTests
     // 成立する前提を満たす値を選ぶ）。旧 5→2（Issue #63 バウンド導入）→3（issue #262 打球方向）
     // →4/9（2026-08-14 もたつきの導入で内野ゴロ1件につき1発ぶん列がずれた）
     // →1/9（design-14 P3-11 のタッチアップ物理レース化で列がずれた。4 は次打席が1球で終わるようになった）
-    // →2/9（issue #811 の外野手のファンブル判定・#835 の球種ごとの回転軸で列がずれた。1 は次打席が1球で終わるようになった）。
+    // →2/9（issue #811 の外野手のファンブル判定・#835 の球種ごとの回転軸で列がずれた。1 は次打席が1球で終わるようになった）
+    // →1/9（issue #858 の送球の逸れの一般化で内野ゴロ→一塁送球の乱数消費が1→2系統に増え列がずれた。2 は
+    // 次打席が1球で終わるようになった。9 は変わらず）。
     [Theory]
-    [InlineData(2UL)]
+    [InlineData(1UL)]
     [InlineData(9UL)]
     public void InjectedRng_SaveMidPlateAppearance_MatchesUninterrupted(ulong seed)
     {

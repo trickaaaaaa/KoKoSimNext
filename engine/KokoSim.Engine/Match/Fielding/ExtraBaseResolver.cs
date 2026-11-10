@@ -227,10 +227,16 @@ public static class ExtraBaseResolver
     /// <summary>
     /// 回収点から目標塁へ送球が到達する時刻[s]。距離に比例して伸びる失速項（長い送球ほど山なり・
     /// 中継が要る）を掛ける、しきい値なしの連続量。塁打数判定と表示タイムラインの**単一ソース**。
+    ///
+    /// <para>送球の逸れ（issue #858）: <paramref name="throwAccuracy"/> のリーグ平均（50）からの差分だけの
+    /// 期待遅れを ThrowScatterModel で加える（<see cref="FieldingResolver.ThrowScatterCenteredBiasSeconds"/>と
+    /// 同じ式）。既定50＝恒等（既存呼び出しはビット一致で不変）。塁打数の判定（Single/Double/Triple）は
+    /// 一律の確率ロールでなく margin 比較なので新規 RNG は消費しない（決定論・不変条件#2）。</para>
     /// </summary>
     public static double ThrowArriveSeconds(
-        double readySeconds, double distanceM, double armMps, FieldingCoefficients c)
-        => readySeconds + distanceM / armMps * (1.0 + distanceM * c.ThrowDistanceDragPerM);
+        double readySeconds, double distanceM, double armMps, FieldingCoefficients c, int throwAccuracy = 50)
+        => readySeconds + distanceM / armMps * (1.0 + distanceM * c.ThrowDistanceDragPerM)
+           + FieldingResolver.ThrowScatterCenteredBiasSeconds(throwAccuracy, c);
 
     /// <summary>
     /// 打者走者の時計の文脈（Issue #316）。打席から走り出すのでリードは無く、一塁を回った後は
@@ -259,7 +265,7 @@ public static class ExtraBaseResolver
         var arm = retriever.Attributes.ThrowSpeedMps;
 
         double ThrowArrivesAt(Vector3D target)
-            => ThrowArriveSeconds(ready, (target - ball).Length, arm, c);
+            => ThrowArriveSeconds(ready, (target - ball).Length, arm, c, retriever.Attributes.ThrowAccuracy);
 
         // 打者走者の塁間所要は走者の時計の「打席から」文脈（Issue #316）。一塁到達までは
         // batterToFirstSeconds（打撃動作・左右差込み）なので、そこから1塁ずつ積む。

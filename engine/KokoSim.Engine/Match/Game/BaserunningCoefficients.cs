@@ -352,6 +352,30 @@ public sealed record BaserunningCoefficients
     /// <summary>送球精度(ThrowAccuracy−50)あたりの本塁悪送球確率の減少幅。内野送球エラーと同値。</summary>
     public double RelayThrowErrorAccuracySlope { get; init; } = 0.004;
 
+    // === 送球の逸れ（本塁/中継・併殺/バント封殺の各送球へ一般化, issue #858）===
+    // HomePlayResolver.ResolveThrowPath/DefenseTimeSeconds が併殺（BaserunningModel.ResolveDoublePlay）・
+    // 犠飛タッチアップ・一塁→三塁/二塁→三塁の進塁打・バントの封殺を含む全ての送球が通る単一経路
+    // （HomePlaySituation.ThrowerThrowAccuracyから決まるσ）。既存の悪送球ロール（上の
+    // RelayThrowErrorBaseProb/RelayThrowErrorAccuracySlope）は確率係数としてそのまま残し、
+    // 判定の形だけ ThrowScatterModel.WildThresholdCmForProbability で閾値へ統合する（HomePlayResolver.IsWildThrow）。
+    /// <summary>横の逸れ1cmあたり追加される秒（寄る・足が離れる分）。盗塁送球と同値を既定にする
+    /// （<see cref="StealThrowScatterLateralSecPerCm"/>）。</summary>
+    public double ThrowScatterLateralSecPerCm { get; init; } = 0.00075;
+    /// <summary>浮いた（高い）逸れ1cmあたり追加される秒（ミットを下ろす分）。</summary>
+    public double ThrowScatterHighSecPerCm { get; init; } = 0.0005;
+    /// <summary>低い（ショートバウンド側）逸れ1cmあたり追加される秒（捕り直す分。高い側より重い）。</summary>
+    public double ThrowScatterShortHopSecPerCm { get; init; } = 0.0015;
+    /// <summary>受け手Catching(-50)あたりの遅れ縮小の傾き。既定の受け手は league average
+    /// （Catching50＝恒等）＝本塁・各塁をカバーする個別の受け手は特定しない（帯への影響をゼロに保つための
+    /// 意図的な簡略化, issue #858）。</summary>
+    public double ThrowScatterCatchingReliefSlope { get; init; } = 0.004;
+    /// <summary>遅れ縮小倍率の下限（最速側クランプ）。</summary>
+    public double ThrowScatterCatchingReliefMinFactor { get; init; } = 0.60;
+    /// <summary>バント処理野手の代表送球精度（issue #858）。既定50＝「誰が処理したか特定しない」
+    /// バントの簡略化（design-02 §4.3/BuntFielderThrowSpeedMps等と同じ抽象レベル）と恒等＝現状の挙動を変えない。
+    /// 将来、処理野手を特定する実装に寄せるときの差し替え口。</summary>
+    public double BuntFielderThrowAccuracyLevel { get; init; } = 50.0;
+
     // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
     // 守備所要時間へ加算してもう一度同じ時間勝負を評価する（拾い直しが間に合えばアウトのまま）。
     /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。バックホーム/中継は

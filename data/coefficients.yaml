@@ -295,6 +295,15 @@ fielding:
   # base=0 で送球ロールを引かない＝現行の捕球のみ判定と完全一致（決定論不変）。正値で悪送球が能力駆動に。
   throw_error_base_prob: 0.0280       # 送球エラー基準確率（ThrowAccuracy50時）。issue #169で正値化＝Ac50で内野ゴロ失策の約40%が送球由来→issue #532で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）→issue #810で0.0343→0.0280：受け手の捕球ミスを三段目として新設した分だけ再配分（捕球・送球・受け手の按分は概ね48/34/18）
   throw_error_accuracy_slope: 0.004   # 送球精度(Ac−50)あたりの悪送球減少幅
+  # 送球の逸れ（内野ゴロ→一塁, issue #858）。上の throw_error_base_prob/throw_error_accuracy_slope は確率係数
+  # としてそのまま使うが、判定の形を二値ロールから「2次元の逸れ(ThrowScatterModel)をサンプルして閾値と比べる」
+  # へ統合する（WildThresholdCmForProbabilityで確率→閾値を逆算＝確率カーブは不変）。盗塁送球(steal_throw_scatter_*,
+  # issue #841)と同じ変換式・同値の既定。
+  throw_scatter_lateral_sec_per_cm: 0.0015
+  throw_scatter_high_sec_per_cm: 0.0010
+  throw_scatter_short_hop_sec_per_cm: 0.0030
+  throw_scatter_catching_relief_slope: 0.004
+  throw_scatter_catching_relief_min_factor: 0.60
   # 受け手の捕球ミス（内野ゴロ→一塁の3段階目, issue #810 / design-14 P1-6b 追記）。捕球ロール→送球ロールを通過した
   # （＝送球自体は正確）後に、受け手の一塁手が正確な送球を落とす／ショートバウンドを捕れない失策を引く。
   # base=0 でロールを引かない＝現行の2段判定と完全一致（決定論不変）。一塁手自身が処理した打球（受け手が別にいない）には適用しない。
@@ -518,6 +527,20 @@ baserunning:
   wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）。内野側とは独立値
   recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
   recovery_sprint_speed_mps: 6.5      # 回収に動く野手のスプリント速度[m/s]（平均的な値の定数）
+  # 送球の逸れを本塁/中継・併殺・バント封殺へ一般化（issue #858）。HomePlayResolver.ResolveThrowPath/
+  # DefenseTimeSeconds が併殺（BaserunningModel.ResolveDoublePlay）・タッチアップ・進塁打・バント封殺を
+  # 含む全送球が通る単一経路＝ここの値を変えると全部に効く。relay_throw_error_base_prob は確率係数として
+  # そのまま残し、判定の形だけ HomePlayResolver.IsWildThrow が閾値へ統合する。
+  # 2026-11-10 issue #858: 盗塁送球(steal_throw_scatter_*)と同値の0.0015/0.0010/0.0030で導入したところ、
+  # LowTierRegressionTests（C60完封され率、帯0.08-0.32）が32.3%で帯上限を僅かに超えた（上位ティアの送球精度が
+  # 高く、全送球が通るこの経路の継続的な遅れ短縮ぶん守備が強くなり過ぎた）。半分の値へ校正して帯内に収めた。
+  throw_scatter_lateral_sec_per_cm: 0.00075
+  throw_scatter_high_sec_per_cm: 0.0005
+  throw_scatter_short_hop_sec_per_cm: 0.0015
+  throw_scatter_catching_relief_slope: 0.004
+  throw_scatter_catching_relief_min_factor: 0.60
+  # バント処理野手の代表送球精度。既定50＝「誰が処理したか特定しない」簡略化と恒等（帯不変）。
+  bunt_fielder_throw_accuracy_level: 50.0
   home_tag_seconds: 0.12
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅

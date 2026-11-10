@@ -3248,7 +3248,7 @@ public static class TimelineBuilder
         // 塁打数を決めたのと同一の式で「この塁へ返球が着く時刻」を出す（＝絵と判定が同じ物理で動く）。
         // 失速項（長い送球ほど山なり）が入るので、深い外野からの返球は自然に時間がかかる。
         var readyAt = ExtraBaseResolver.ReadySeconds(fieldedAt, play.FielderFielding, c);
-        var physicalArrive = ExtraBaseResolver.ThrowArriveSeconds(readyAt, straightDist, arm, c);
+        var physicalArrive = ExtraBaseResolver.ThrowArriveSeconds(readyAt, straightDist, arm, c, play.FielderThrowAccuracy);
 
         // 中継: カットマン位置は陣形ルールが実際に配置した中継野手と同一座標ソースにする（#136）。
         // 中継に入るかは**判定と同じ関数**で決める（issue #526）。旧実装はここに 60m 固定の複製を
