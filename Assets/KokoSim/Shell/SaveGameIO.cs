@@ -82,7 +82,7 @@ namespace KokoSim.Unity.Shell
             GameClock.Capture(s);
             RosterService.Capture(s);
             ProspectService.Capture(s);
-            RecruitService.Capture(s);
+            ScoutService.Capture(s);
             ManagerService.Capture(s);
             NationService.Capture(s);
             GameSession.Current.Capture(s);
@@ -106,7 +106,7 @@ namespace KokoSim.Unity.Shell
             GameClock.Restore(s);
             RosterService.Restore(s);
             ProspectService.Restore(s);   // ロスターの後（合流済み学年は実体をロスター側だけが持つ）
-            RecruitService.Restore(s);
+            ScoutService.Restore(s);
             ManagerService.Restore(s);
             NationService.Restore(s);
             GameSession.Current.Restore(s);

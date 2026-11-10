@@ -326,12 +326,12 @@ namespace KokoSim.Unity.Home
             if (KokoSim.Unity.Shell.GameClock.RecruitListOpened)
             {
                 KokoSim.Unity.Shell.GameClock.RecruitListOpened = false;
-                var n = KokoSim.Unity.Shell.RecruitService.Current?.Prospects.Count ?? 0;
+                var n = KokoSim.Unity.Shell.ScoutService.Current?.Candidates.Count ?? 0;
                 items.Add(new FeedItem
                 {
                     When = "今週",
-                    Text = "中学生 " + n + "名 のリストが届いた。勧誘枠は "
-                           + KokoSim.Unity.Shell.RecruitService.Slots + "名。",
+                    Text = "スカウト候補 " + n + "名 のリストが届いた。枠は "
+                           + KokoSim.Unity.Shell.ScoutService.Slots + "名。",
                     Kind = FeedKind.Discover,
                     Tag = "発見",
                 });
@@ -343,7 +343,7 @@ namespace KokoSim.Unity.Home
                 items.Add(new FeedItem
                 {
                     When = "今週",
-                    Text = "勧誘した中学生 " + won + "名 が入部を決めた。",
+                    Text = "口説いた候補 " + won + "名 が入部を決めた。",
                     Kind = FeedKind.Up,
                     Tag = "成長",
                 });
