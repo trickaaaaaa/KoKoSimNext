@@ -36,6 +36,8 @@ public sealed record CoefficientsBundle
     public KokoSim.Engine.Players.SkillCoefficients Skills { get; init; } = new();
     public KokoSim.Engine.Players.PersonalityCoefficients Personalities { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();
+    /// <summary>チームの勢い（issue #863）。<see cref="Team.MomentumLevel"/> が0のチームには恒等＝帯不変。</summary>
+    public MomentumCoefficients Momentum { get; init; } = new();
     public TacticsCoefficients Tactics { get; init; } = new();
     public EnemyAiCoefficients EnemyAi { get; init; } = new();
     public InjuryCoefficients Injury { get; init; } = new();
@@ -104,6 +106,7 @@ public static class CoefficientsLoader
         public SkillsDto? Skills { get; set; }
         public PersonalitiesDto? Personalities { get; set; }
         public PressureDto? Pressure { get; set; }
+        public MomentumDto? Momentum { get; set; }
         public TacticsDto? Tactics { get; set; }
         public EnemyAiDto? EnemyAi { get; set; }
         public InjuryDto? Injury { get; set; }
@@ -146,6 +149,7 @@ public static class CoefficientsLoader
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
             Personalities = Personalities?.ToModel() ?? new KokoSim.Engine.Players.PersonalityCoefficients(),
             Pressure = Pressure?.ToModel() ?? new PressureCoefficients(),
+            Momentum = Momentum?.ToModel() ?? new MomentumCoefficients(),
             Tactics = Tactics?.ToModel() ?? new TacticsCoefficients(),
             EnemyAi = EnemyAi?.ToModel() ?? new EnemyAiCoefficients(),
             Injury = Injury?.ToModel() ?? new InjuryCoefficients(),
@@ -1897,6 +1901,31 @@ public static class CoefficientsLoader
             MaxIndex = MaxIndex,
             MultiplierSlope = MultiplierSlope,
             FatigueNegativeAmplify = FatigueNegativeAmplify,
+        };
+    }
+
+    private sealed class MomentumDto
+    {
+        private static readonly MomentumCoefficients D = new();
+        public int MaxLevel { get; set; } = D.MaxLevel;
+        public int UpsetTierGap1Bonus { get; set; } = D.UpsetTierGap1Bonus;
+        public int UpsetTierGap2Bonus { get; set; } = D.UpsetTierGap2Bonus;
+        public int WalkoffBonus { get; set; } = D.WalkoffBonus;
+        public int ComebackBonus { get; set; } = D.ComebackBonus;
+        public int ComebackFromInning { get; set; } = D.ComebackFromInning;
+        public int ComebackMinDeficit { get; set; } = D.ComebackMinDeficit;
+        public double MultiplierPerLevel { get; set; } = D.MultiplierPerLevel;
+
+        public MomentumCoefficients ToModel() => new()
+        {
+            MaxLevel = MaxLevel,
+            UpsetTierGap1Bonus = UpsetTierGap1Bonus,
+            UpsetTierGap2Bonus = UpsetTierGap2Bonus,
+            WalkoffBonus = WalkoffBonus,
+            ComebackBonus = ComebackBonus,
+            ComebackFromInning = ComebackFromInning,
+            ComebackMinDeficit = ComebackMinDeficit,
+            MultiplierPerLevel = MultiplierPerLevel,
         };
     }
 

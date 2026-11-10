@@ -86,6 +86,17 @@ public sealed record GameResult
     public bool Tied => HomeRuns == AwayRuns;
     public int TotalRuns => AwayRuns + HomeRuns;
     public int RunDifferential => Math.Abs(HomeRuns - AwayRuns);
+
+    /// <summary>
+    /// サヨナラ勝ちで終局したか（issue #863）。後攻が最終回（延長含む）の裏で勝ち越して終わった試合のみ。
+    /// コールドゲーム（<see cref="MercyEnded"/>）はルール上「サヨナラ」と呼ばないので除く。
+    /// 既にリードして裏の攻撃を行わずに終わった「サヨナラでない後攻勝ち」は、その回の
+    /// <see cref="HomeLineScore"/> が記録されない（裏を省略する）ため <see cref="AwayLineScore"/> より
+    /// 1少なくなり、ここで自然に false になる（<see cref="GameEngine"/> の打ち切り判定の構造上、後攻が
+    /// 最終回以降の裏で勝ち越した瞬間は必ず即座に試合が終わる＝「3アウトを消化してから後攻が勝ち越す」
+    /// 経路は存在しない。打席途中の打ち切りも含め全経路がこの性質を満たす）。
+    /// </summary>
+    public bool WalkoffWin => HomeWon && !MercyEnded && HomeLineScore.Count == AwayLineScore.Count;
 }
 
 /// <summary>1チームの采配集計（設計書09/11。記録のみ＝試合結果に影響しない）。</summary>
@@ -437,6 +448,10 @@ public static class GameEngine
         var rng = p.Rng;
         var log = p.Log;
         var inning = p.Inning; // 半イニングは単一イニング内で完結（p.Inning は Steps が進める）
+        // チームの勢い（issue #863）: offense/defense は p.Away/p.Home のどちらかの参照なので、
+        // どちらの Team（AwayTeam/HomeTeam）の MomentumLevel かを参照一致で引く。試合中は不変。
+        var offenseMomentum = ReferenceEquals(offense, p.Away) ? p.AwayTeam.MomentumLevel : p.HomeTeam.MomentumLevel;
+        var defenseMomentum = ReferenceEquals(defense, p.Away) ? p.AwayTeam.MomentumLevel : p.HomeTeam.MomentumLevel;
 
         var bases = new BaseState();
         var outs = 0;
@@ -754,6 +769,13 @@ public static class GameEngine
                         ctx.Personalities.Profile(batter.Personality).CoachingReceptivity, ctx.Tactics,
                         TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
                             ctx.Tactics, ctx.Personalities)));
+
+                // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
+                // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。
+                // 段階0（AI校・裏試合・統計シムは常にこちら）なら恒等＝帯不変。
+                if (offenseMomentum > 0) bat = MomentumModel.ApplyBatter(bat, offenseMomentum, ctx.Momentum);
+                if (defenseMomentum > 0) pit = MomentumModel.ApplyPitcher(pit, defenseMomentum, ctx.Momentum);
+
                 return (pit, bat, mods);
             }
             var (pitcher, batterBase, playMods) = EffectiveMatchup();

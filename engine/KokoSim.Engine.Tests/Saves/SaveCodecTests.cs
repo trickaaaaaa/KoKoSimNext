@@ -1090,4 +1090,30 @@ public sealed class SaveCodecTests
         var restoredOuts = restored.Stats.Career.Players.Values.First(p => p.Pitching.Games > 0).Pitching.Outs;
         Assert.Equal(expectedOuts, restoredOuts);
     }
+
+    // ===== チームの勢い（issue #863・v24） =====
+
+    [Fact]
+    public void MomentumLevel_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.MomentumLevel = 2;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(2, s.MomentumLevel);
+    }
+
+    [Fact]
+    public void V23Save_WithoutMomentumLevel_StillLoads_AsZero()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.MomentumLevel = 3;
+        var json = SaveCodec.Serialize(state)
+            .Replace(",\"momentumLevel\":3", "")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":23");
+        Assert.DoesNotContain("\"momentumLevel\"", json);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(0, s.MomentumLevel);
+    }
 }

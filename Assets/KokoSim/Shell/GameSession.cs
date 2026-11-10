@@ -148,6 +148,41 @@ namespace KokoSim.Unity.Shell
         public LineupMemory LastLineup { get; set; }
 
         /// <summary>
+        /// チームの勢い段階（0〜3、issue #863）。自校の公式戦だけで増減する（練習試合・AI校・裏試合は
+        /// 常に0のまま触らない）。大会の進行状態として**セーブに載る**（v24）＝ロード後も引き継ぐ。
+        /// 大会の敗退・大会の終了（<see cref="ExitTournamentIfFinished"/>）で0に戻す。
+        /// </summary>
+        public int MomentumLevel { get; private set; }
+
+        private static readonly MomentumCoefficients MomentumCoeff = new();
+        private readonly List<int> _momentumNotices = new List<int>();
+
+        /// <summary>
+        /// 公式戦の後に勢いを更新する（大舞台・怪我と同じ合流点。練習試合は呼ばない）。増えたときだけ
+        /// 通知フィード用に新しい段階を控える（<see cref="DrainMomentumNotices"/>）。
+        /// </summary>
+        private void ApplyMomentum(GameResult detail, bool managerWasAway, int opponentId)
+        {
+            var selfStrength = NationService.ManagerSchool().Strength;
+            var opponent = NationService.SchoolById(opponentId);
+            // 相手が引けない（裏試合扱い等）ときは格上撃破の判定ができないので同格扱い＝サヨナラ/逆転の
+            // 加点だけが効く（大舞台の化けと同じ「引けなければ同格扱い」の方針）。
+            var opponentStrength = opponent?.Strength ?? selfStrength;
+            var next = MomentumModel.NextLevel(MomentumLevel, detail, managerWasAway, selfStrength, opponentStrength, MomentumCoeff);
+            if (next == MomentumLevel) return;
+            MomentumLevel = next;
+            _momentumNotices.Add(next);
+        }
+
+        /// <summary>勢いが上がった結果（新しい段階）を取り出して空にする（通知フィード用）。</summary>
+        public List<int> DrainMomentumNotices()
+        {
+            var list = new List<int>(_momentumNotices);
+            _momentumNotices.Clear();
+            return list;
+        }
+
+        /// <summary>
         /// 試合開始フローの中継フラグ。試合日「はい」でスタメン設定画面へ遷移する際に true。対戦カード画面
         /// （MatchPreview）の「試合開始」が <see cref="MatchStartFlow.Begin"/> でこれを消費して自校戦を始める
         /// （issue #325: ホームは中継しない）。キャンセルで false。開始に失敗した場合（二重起動）は戻される。
@@ -622,6 +657,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
@@ -667,6 +703,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
@@ -703,6 +740,8 @@ namespace KokoSim.Unity.Shell
             Runner = null;
             BannerPending = false;
             // ResultPending はここでは変えない＝結果モーダルは引き続き表示する。
+            // チームの勢い（issue #863）: 大会の敗退・大会の終了（優勝含め、どちらも Runner.Finished）で0に戻す。
+            MomentumLevel = 0;
 
             if (runner.BracketResolutionPending)
             {
@@ -977,6 +1016,7 @@ namespace KokoSim.Unity.Shell
                 ? new List<int>(LastRegionalPlacementIds) : new List<int>();
             s.LastJinguChampionId = LastJinguChampionId;
             s.LastLineup = LastLineup;
+            s.MomentumLevel = MomentumLevel;
         }
 
         /// <summary>観るだけのセンバツを DTO へ（<see cref="CaptureSpectatedKoshien"/> と同型）。</summary>
@@ -1049,6 +1089,7 @@ namespace KokoSim.Unity.Shell
             History = s.TournamentHistory;
             ClearTransient();
             LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
+            MomentumLevel = s.MomentumLevel;   // 同上（v24・issue #863）
             PendingSenbatsuFieldIds = s.PendingSenbatsuFieldIds != null
                 ? new List<int>(s.PendingSenbatsuFieldIds) : new List<int>();
             PendingSenbatsuJinguRegion = s.PendingSenbatsuJinguRegion ?? "";
@@ -1095,6 +1136,7 @@ namespace KokoSim.Unity.Shell
             Records = new SchoolRecordBook();
             History = new TournamentHistory();
             Year = 1;
+            MomentumLevel = 0;
             ClearTransient();
         }
 

@@ -47,6 +47,9 @@ public sealed record GameContext
     public Players.SkillCoefficients Skills { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();
 
+    /// <summary>チームの勢い（issue #863）の係数。<see cref="Team.MomentumLevel"/> が0のチームには恒等＝帯不変。</summary>
+    public MomentumCoefficients Momentum { get; init; } = new();
+
     /// <summary>
     /// 試合中の受傷係数（設計書03 §3.5）。判定は Fork した専用ストリームで引くため、
     /// 値を変えても試合結果・乱数順は動かない（観測データのみ）。

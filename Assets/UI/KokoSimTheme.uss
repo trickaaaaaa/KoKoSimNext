@@ -458,6 +458,15 @@
 }
 .tp-meta { font-size: 18px; color: var(--color-muted); white-space: normal; }
 
+/* チームの勢い（issue #863）: 校名＋「勢い」ラベル＋升目（部品辞書 LevelPips）を1行に並べる。
+   数字は出さない（升目の有無だけ＝UI原則③⑥）。相手校は常に0なので出さない＝自校だけの行。 */
+.tp-momentum {
+    flex-direction: row; align-items: center;
+    margin-top: var(--sp-2);
+}
+.tp-momentum__name { font-size: 18px; color: var(--color-chalk); margin-right: var(--sp-2); }
+.tp-momentum__label { font-size: 16px; color: var(--color-muted); margin-right: var(--sp-2); }
+
 /* リード文は「読み物」だが本文であることに変わりはないのでサンセリフ（明朝は見出し・固有名詞のみ）。
    疑似イタリックは Plex に実イタリックが無く斜体変形になるため廃止した（design-16 §2）。 */
 .tp-lead {

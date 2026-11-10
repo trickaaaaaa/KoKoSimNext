@@ -33,6 +33,13 @@
                     </ui:VisualElement>
                     <ui:Label name="tb-title" class="tp-title f-display-lg" text="" />
                     <ui:Label name="tb-meta" class="tp-meta" text="" />
+                    <!-- チームの勢い（issue #863）: 自校だけ常時表示。段階は数字を出さず部品辞書の
+                         升目（LevelPips）で示す。相手校は常に勢い0＝観るだけの大会では出さない。 -->
+                    <ui:VisualElement name="tb-momentum" class="tp-momentum">
+                        <ui:Label name="tb-momentum-name" class="tp-momentum__name f-display" text="" />
+                        <ui:Label class="tp-momentum__label" text="勢い" />
+                        <ui:VisualElement name="tb-momentum-pips" class="tp-momentum__pips" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <ui:Label name="tb-next" class="tp-next" text="" />
