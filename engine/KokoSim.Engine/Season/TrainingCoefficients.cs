@@ -6,8 +6,17 @@ namespace KokoSim.Engine.Season;
 /// <summary>育成式の係数（設計書02 §5.1, YAML駆動）。</summary>
 public sealed record TrainingCoefficients
 {
-    /// <summary>主効果の練習基礎値[exp/週]。2026-08-15 に 85→130（案D。中核能力の3年間の伸び +4〜5 → +7）。</summary>
-    public double BaseMainExp { get; init; } = 130.0;
+    /// <summary>
+    /// 主効果の練習基礎値[exp/週]。2026-08-15 に 85→130（案D。中核能力の3年間の伸び +4〜5 → +7）。
+    /// 2026-11-10（issue #865・監督決定）: 130→580。施設なし・お任せ練習の3年の伸びを +15〜20 にする改定。
+    /// <see cref="LevelUpGrowth"/> は意図的に変更していない（Mental/Lead/Baserunning の実戦成長や個別指導の
+    /// 必要exp曲線を共有しており、そこを寝かせると関係のない系統まで一緒に加速してしまう＝影響範囲をここ1つに
+    /// 封じる判断。詳細はこのクラスの <see cref="LevelUpGrowth"/> のコメントを参照）。新入生の中心
+    /// （<see cref="RosterCoefficients.TalentCenterDefault"/>）を20.0まで下げ、3年夏の到達水準は改定前比
+    /// +3.5 程度（身体系が名声独立で下げ切れない構造の残差。それ以上下げると内訳の凸凹が潰れる＝
+    /// <see cref="RosterCoefficients.SpecialtyFloor"/>等のフロアに当たり始める。out/overnight/issue-865 実測）。
+    /// </summary>
+    public double BaseMainExp { get; init; } = 580.0;
     /// <summary>副効果の倍率。</summary>
     public double SubFactor { get; init; } = 0.4;
 
@@ -73,6 +82,11 @@ public sealed record TrainingCoefficients
     /// レベルアップ必要exp = LevelUpBase × LevelUpGrowth^v（設計書02 §5.1）。
     /// Growth は 2026-08-15 に 1.05→1.04（案D）。1.05 だと Lv74 の必要expが Lv32 の7.8倍で高レベル帯の成長が
     /// ほぼ止まり、名声で入る B/A の新入生が「入学時が完成形」になる。1.04 で Lv74 でも3年 +2〜3（施設フル +10）。
+    /// 2026-11-10（issue #865）: 検討したが変更していない。この曲線は <see cref="MatchGrowthModel"/>（精神力/
+    /// 捕手リード/走塁判断の実戦成長）・個別指導の信頼関係exp・守備位置適性にも共有されており、ここを
+    /// 寝かせると「育成式の伸びを強める」という本issueの範囲を越えてそれら全部が一緒に速くなる
+    /// （実測: 1.017へ緩めただけで3年のリード成長が旧期待値レンジの2倍超に膨らんだ）。<see cref="BaseMainExp"/>
+    /// 側だけで +15〜20 を作る（6倍弱の引き上げで足りる・才能上限には遠い。out/overnight/issue-865 実測）。
     /// </summary>
     public double LevelUpBase { get; init; } = 100.0;
     public double LevelUpGrowth { get; init; } = 1.04;

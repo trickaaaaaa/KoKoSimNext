@@ -46,8 +46,20 @@ public sealed record RosterCoefficients
     public double CatcherAptitudeFloor { get; init; } = 50.0;
 
     // --- 総合力（名声由来）。既定は一般校相当。名声接続は SeasonEngine 側で talentCenter を渡す ---
-    /// <summary>総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する。</summary>
-    public double TalentCenterDefault { get; init; } = 32.0;
+    /// <summary>
+    /// 総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する。
+    /// 2026-11-10（issue #865・監督決定「入学時を下げて3年夏の水準は今と同じ」）: 32→20。<see cref="TrainingCoefficients.BaseMainExp"/>
+    /// の育成式改定（施設なしの3年の伸び +7→+15）に合わせて切片を下げ、名声による上振れの傾き
+    /// （<see cref="FameTalentCenterSpan"/>/<see cref="FameTalentCenterTau"/>）は変えていない。
+    /// 身体系（<see cref="PhysicalMean"/>）は talentCenter が <see cref="TalentCenterDefault"/> と等しい限り
+    /// 名声独立に固定（<see cref="PhysicalCenterFor"/>）のため、ここを下げても「3年夏の中核能力平均」は
+    /// 全部は下がらない＝改定前比 +3.5 程度の残差あり（out/overnight/issue-865 実測。身体系の分だけ構造的に縮まらない）。
+    /// 0近くまで下げれば残差はさらに縮むが、内訳の凸凹（<see cref="SpecialtyFloor"/>等のフロア）に当たって
+    /// 選手の個性が潰れる（実測: center=0で内部σ0.84・16で3.77、閾値4.0を割る）。20はその下限の少し上。
+    /// AI校（<see cref="Nation.Roster.AiRosterFactory.RecruitCenter"/>）はこの値を参照しない別経路＝変更の影響を受けない
+    /// （意図的に変更していない。理由は issue #865 の PR 本文を参照）。
+    /// </summary>
+    public double TalentCenterDefault { get; init; } = 20.0;
     public double TalentSd { get; init; } = 8.0;
     public double TalentMin { get; init; } = 10.0;
     public double TalentMax { get; init; } = 90.0;

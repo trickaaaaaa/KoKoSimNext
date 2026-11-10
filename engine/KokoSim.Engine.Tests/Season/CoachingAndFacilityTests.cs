@@ -30,8 +30,11 @@ public sealed class CoachingAndFacilityTests
         return p;
     }
 
+    // weeks の既定値は issue #865（base_main_exp 130→580）で 200→15 に短縮。200週分だと指導力の差に関係なく
+    // 才能上限（cap=99）まで届いてしまい、差が測れなくなる（実測: 名将・基準とも67で頭打ち）。15週なら
+    // 両条件とも cap に届かず、指導力の差がそのまま伸びの差として残る。
     private static int GainByTrainWeek(AbilityKind ability, TrainingMenu menu, CoachingProfile? coaching,
-        int weeks = 200, int start = 32)
+        int weeks = 15, int start = 32)
     {
         var c = new TrainingCoefficients();
         var stages = new GrowthStageTable();
