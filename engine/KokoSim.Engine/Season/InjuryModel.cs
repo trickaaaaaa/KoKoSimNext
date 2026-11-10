@@ -192,6 +192,36 @@ public static class InjuryModel
         return Math.Max(1, (int)Math.Round(weeks * typeFactor * c.MedicalRecoveryFactor));
     }
 
+    /// <summary>
+    /// 完治までの残り週。回復は段階を1つずつ下げる方式（Severe→Moderate→Minor→完治）なので、
+    /// 現段階の残り週に下位段階の回復週を足し込む（<see cref="WeeklyRecover"/> と同じ規則）。健常は 0。
+    /// </summary>
+    public static int WeeksToFullRecovery(DevelopingPlayer p, InjuryCoefficients c, InjuryCatalog? catalog = null)
+    {
+        if (p.Injury == InjurySeverity.None) return 0;
+        var factor = RecoveryFactorOf(p.InjuryType, catalog);
+        var weeks = p.InjuryWeeksRemaining;
+        if (p.Injury == InjurySeverity.Severe)
+            weeks += RecoveryWeeks(InjurySeverity.Moderate, c, factor);
+        if (p.Injury == InjurySeverity.Severe || p.Injury == InjurySeverity.Moderate)
+            weeks += RecoveryWeeks(InjurySeverity.Minor, c, factor);
+        return Math.Max(1, weeks);
+    }
+
+    /// <summary>大会の日送りで怪我の週次処理が走る周期（<c>TournamentDay % 7 == 0</c> の日）。</summary>
+    public const int TournamentDaysPerWeek = 7;
+
+    /// <summary>
+    /// 大会中（日送り）の完治までの残り日数。次の回復処理の日までの日数に、残りの週ぶんを足す。
+    /// 「大会がその日まで続く」前提の見込み。<paramref name="weeksToFull"/> は <see cref="WeeksToFullRecovery"/>。
+    /// </summary>
+    public static int DaysToFullRecovery(int weeksToFull, int tournamentDay)
+    {
+        if (weeksToFull <= 0) return 0;
+        var toNextTick = TournamentDaysPerWeek - ((tournamentDay % TournamentDaysPerWeek) + TournamentDaysPerWeek) % TournamentDaysPerWeek;
+        return toNextTick + (weeksToFull - 1) * TournamentDaysPerWeek;
+    }
+
     private static double RecoveryFactorOf(InjuryType type, InjuryCatalog? catalog)
         => (catalog ?? InjuryCatalog.Default).Find(type)?.RecoveryWeekFactor ?? 1.0;
 }

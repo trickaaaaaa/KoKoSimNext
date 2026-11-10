@@ -164,7 +164,7 @@ namespace KokoSim.Unity.Lineup
         }
 
         // 選手名（明朝）＋主将マーク。故障中は名前の下に怪我タグ（2段）。
-        private static VisualElement NameCell(string name, bool captain, string injury)
+        private static VisualElement NameCell(string name, bool captain, InjuryChipView injury)
         {
             var cell = new VisualElement();
             cell.AddToClassList("lu-c-name");
@@ -179,7 +179,7 @@ namespace KokoSim.Unity.Lineup
             if (captain) line.Add(new CaptainStamp());
             cell.Add(line);
 
-            if (!string.IsNullOrEmpty(injury)) cell.Add(InjuryTag(injury));
+            if (!injury.IsEmpty) cell.Add(InjuryTag(injury));
             return cell;
         }
 
@@ -221,7 +221,7 @@ namespace KokoSim.Unity.Lineup
             var info = new Label(v.StartingPitcherGradeLabel + " " + v.StartingPitcherHandLabel);
             info.AddToClassList("lu-sp-card__info");
             sub.Add(info);
-            if (!string.IsNullOrEmpty(v.StartingPitcherInjury))
+            if (!v.StartingPitcherInjury.IsEmpty)
             {
                 var tag = InjuryTag(v.StartingPitcherInjury);
                 tag.style.marginLeft = 8;
@@ -293,7 +293,7 @@ namespace KokoSim.Unity.Lineup
                 name.AddToClassList("lu-bench-row__name");
                 name.AddToClassList("f-display");
                 block.Add(name);
-                if (b.Injury.Length > 0) block.Add(InjuryTag(b.Injury));
+                if (!b.Injury.IsEmpty) block.Add(InjuryTag(b.Injury));
                 row.Add(block);
 
                 var cond = new VisualElement();
@@ -472,11 +472,14 @@ namespace KokoSim.Unity.Lineup
         }
 
         // ── 部品ヘルパ ──
-        private static Label InjuryTag(string text)
+        private static VisualElement InjuryTag(InjuryChipView chip)
         {
-            var l = new Label(text);
-            l.AddToClassList("sbk-injury");
-            return l;
+            var tag = new VisualElement();
+            tag.AddToClassList("sbk-injury");
+            tag.AddToClassList("sbk-injury--row");
+            tag.Add(new Label(chip.Head));
+            tag.Add(UiComponents.NumUnit(chip.Digits, chip.Unit));
+            return tag;
         }
 
         private static ConditionFace Face(Condition c, string sizeClass)

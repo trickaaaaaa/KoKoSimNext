@@ -68,27 +68,21 @@ namespace KokoSim.Unity.Shell
                 ? ""
                 : Short(p) + "／あと " + WeeksToFullRecovery(p) + " 週";
 
-        /// <summary>
-        /// 完治までの残り週。回復は段階を1つずつ下げる方式（Severe→Moderate→Minor→完治）なので、
-        /// 現段階の残り週に下位段階の回復週を足し込む（<see cref="InjuryModel"/> の内部規則と同じ計算）。
-        /// 傷病の種類ごとの回復倍率もここで掛ける。
-        /// </summary>
+        /// <summary>完治までの残り週（規則は <see cref="InjuryModel.WeeksToFullRecovery"/> が単一ソース）。</summary>
         public static int WeeksToFullRecovery(DevelopingPlayer p)
-        {
-            if (p == null || p.Injury == InjurySeverity.None) return 0;
-            var factor = FactorOf(p.InjuryType);
-            var weeks = p.InjuryWeeksRemaining;
-            if (p.Injury == InjurySeverity.Severe)
-                weeks += InjuryModel.RecoveryWeeks(InjurySeverity.Moderate, Coeff, factor);
-            if (p.Injury == InjurySeverity.Severe || p.Injury == InjurySeverity.Moderate)
-                weeks += InjuryModel.RecoveryWeeks(InjurySeverity.Minor, Coeff, factor);
-            return Math.Max(1, weeks);
-        }
+            => p == null ? 0 : InjuryModel.WeeksToFullRecovery(p, Coeff);
 
-        private static double FactorOf(InjuryType type)
+        /// <summary>
+        /// 完治までの残りを「単位つき」で返す。大会中（日送り）は日、それ以外（週送り）は週。
+        /// 健常なら (0, "")。
+        /// </summary>
+        public static (int Amount, string Unit) Remaining(DevelopingPlayer p, bool inTournament, int tournamentDay)
         {
-            var entry = InjuryCatalog.Default.Find(type);
-            return entry == null ? 1.0 : entry.RecoveryWeekFactor;
+            if (p == null || p.Injury == InjurySeverity.None) return (0, "");
+            var weeks = WeeksToFullRecovery(p);
+            return inTournament
+                ? (InjuryModel.DaysToFullRecovery(weeks, tournamentDay), "日")
+                : (weeks, "週");
         }
     }
 }

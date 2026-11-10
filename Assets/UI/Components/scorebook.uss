@@ -153,6 +153,8 @@
     padding: 1px 6px;
     align-self: flex-start;
 }
+.sbk .sbk-injury--row { flex-direction: row; align-items: center; }
+.sbk .sbk-injury--row Label { font-size: 11px; color: var(--sbk-injury-fg); }
 
 /* ── RankChip のこの試作での大きさ（画像はそのまま。設計書19＝ランク色は機能色） ── */
 .sbk .rank-chip--sbk22 { min-width: 22px; width: 22px; height: 22px; padding: 0; flex-shrink: 0; }
