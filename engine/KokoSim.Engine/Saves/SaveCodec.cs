@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 25;
+    public const int CurrentVersion = 26;
 
     // ===== Serialize =====
 
@@ -72,7 +72,7 @@ public static class SaveCodec
             .Add("districtId", s.DistrictId.HasValue ? JsonValue.Of(s.DistrictId.Value) : JsonNull.Instance)
             .Add("nationOverlay", NationOverlayToJson(s.NationOverlay))
             .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
-            .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
+            .Add("scouting", ScoutingSaves.ToJson(s.Scouting))
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("events", EventSaves.ToJson(s.Events))
@@ -307,6 +307,10 @@ public static class SaveCodec
         // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
         // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
         // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。
+        // v26（issue #867）: 能動勧誘（寮で解禁・recruiting）をスカウト（scouting・年契約「スカウト網」の
+        // 段で解禁）へ置き換えた。旧セーブの recruiting キーは読まない（寮の勧誘枠は打ち切り、口説いていた
+        // 中学生リストは持ち越せない＝次の秋に新しいスカウト候補で作り直す）。scouting は null で補う。
+        if (version < 26 && !root.Has("scouting")) root.Add("scouting", JsonNull.Instance);
         return root;
     }
 
@@ -358,8 +362,10 @@ public static class SaveCodec
             NationOverlay = NationOverlayFromJson(root.Obj("nationOverlay")),
             // 入部予定者は v5 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Incoming = IncomingClassSaves.FromJson(root.Has("incoming") ? root["incoming"] : null),
-            // 能動勧誘は v6 で追加。Migrate が旧セーブへ null を補うので素直に読む。
-            Recruiting = RecruitingSaves.FromJson(root.Has("recruiting") ? root["recruiting"] : null),
+            // スカウト（issue #867・v26）は v6〜v25 の能動勧誘（recruiting）を置き換えた。
+            // 旧キー recruiting は読まない（寮の勧誘枠はスカウトへ一本化・オーナー決定2026-11-09の8）。
+            // Migrate が旧セーブへ scouting=null を補うので素直に読む。
+            Scouting = ScoutingSaves.FromJson(root.Has("scouting") ? root["scouting"] : null),
             // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
             // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。

@@ -195,8 +195,8 @@ internal static class SaveTestFixtures
             DistrictId = 3,
             // 入部予定者（v5・issue #587）。3月に確定し、まだ合流していない状態で採る。
             Incoming = BuildIncomingClass(),
-            // 能動勧誘（v6・issue #588）。秋にリストが出て、訪問を重ねた途中の状態で採る。
-            Recruiting = BuildRecruitingState(),
+            // スカウト（v26・issue #867）。秋にリストが出て、訪問を重ねた途中の状態で採る。
+            Scouting = BuildScoutingState(),
             // 教え子名鑑（v7・issue #586）。過年度の指名を2件だけ積んだ状態で採る。
             Draft = BuildDraftHistory(),
             // 歴代大会結果（v8・issue #600）。優勝した年・敗退した年・優勝校が未確定の年を混ぜる。
@@ -271,28 +271,25 @@ internal static class SaveTestFixtures
     }
 
     /// <summary>
-    /// 訪問を重ねた途中の勧誘状態（issue #588）。実物の生成・訪問・見立てから採る
+    /// 訪問を重ねた途中のスカウト状態（issue #867）。実物の生成・訪問から採る
     /// （手で組んだ DTO では「保存できる形」しか試せない）。
     /// </summary>
-    public static RecruitingState BuildRecruitingState()
+    public static ScoutingState BuildScoutingState()
     {
-        var coeff = new RecruitCoefficients();
-        var state = RecruitModel.BuildList(
-            yearIndex: 3, slots: 2, homePrefectureId: 27, homeTier: Tier.C,
-            talentCenter: new RosterCoefficients().TalentCenterDefault,
-            roster: new RosterCoefficients(), c: coeff, rng: new Xoshiro256Random(9101));
+        var coeff = new ScoutCoefficients();
+        var strength = new TeamStrengthCoefficients();
+        var state = ScoutModel.BuildCandidates(
+            yearIndex: 3, field: ScoutField.Batting, level: 2, slots: 3, homePrefectureId: 27, homeTier: Tier.C,
+            talentCenter: new RosterCoefficients().TalentCenterDefault, contractQualityAdd: 3,
+            roster: new RosterCoefficients(), c: coeff, strengthCoeff: strength, rng: new Xoshiro256Random(9101));
 
         var visitRng = new Xoshiro256Random(9102);
-        var scoutRng = new Xoshiro256Random(9103);
-        var strength = new TeamStrengthCoefficients();
-        var scoutCoeff = new ProspectScoutingCoefficients();
-        for (var i = 0; i < state.Prospects.Count; i++)
+        for (var i = 0; i < state.Candidates.Count; i++)
         {
-            var p = state.Prospects[i];
-            p.Report = ProspectScouting.Survey(p.Player, 0.45, strength, scoutCoeff, scoutRng);
+            var p = state.Candidates[i];
             if (i >= 2) continue;
             p.Targeted = true;                                   // 枠2つを使っている途中
-            for (var v = 0; v <= i; v++) RecruitModel.Visit(p, coeff, visitRng);
+            for (var v = 0; v <= i; v++) ScoutModel.Visit(p, coeff, visitRng);
         }
         return state;
     }
