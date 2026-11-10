@@ -1195,33 +1195,47 @@ scouting:
   reveal_min: 0.05        # 開示0のとき隠し1項目が判明する確率
   reveal_max: 0.85        # 開示1でも1.0にしない＝全部は見えない
 
-# --- 能動勧誘枠（設計書04 §2.2・issue #588）---
-# 寮を建てると解禁される「年最大2名」の枠。位置づけは補強の主役ではなくスパイスなので、
-# リストの質は上振れさせつつ、成功率は名声・距離・競合校の格で削られるように置く。
-recruiting:
-  list_size: 12                    # 中学生リストに載る人数
-  talent_center_add: 10.0          # 受動枠の中心(32)より上振れ＝わざわざ名前が挙がる中学生
-  out_of_prefecture_ratio: 0.65    # 県外から載る割合（残りは自県＝距離0）
-  # 成功率 = base + fame項 - 距離の減点(寮で緩和) - 競合校の格の減点 + 訪問の積み上げ
-  base_probability: 0.20
-  prob_per_fame: 0.0035            # 名声100で +0.35
+# --- スカウト（設計書04 §2・issue #867）---
+# 枠の数自体は年契約「スカウト網」の段（contracts.scouting の scout_slots）が持つ。ここは
+# 候補リストの作り方・入部成否・訪問費用・見立ての当たりやすさの係数だけを持つ。
+# 進路希望の重み・見立てノイズの具体値は issue 本文に数値指定が無いため無難な初期値（要調整）。
+scout:
+  candidates_per_slot: 3            # 候補リストの人数＝枠×これ（オーナー決定「候補は枠の約3倍」）
+  candidate_talent_center_add: 10.0 # 受動枠の中心(32)より上振れ＝わざわざ名前が挙がる子
+  field_bias_oversample: 3.0        # 分野指定時に生成するプールの倍率（選抜前）
+  field_bias_jitter_sd: 10.0        # 選抜の順位付けに乗せるジッタσ（機械的な固定選抜を避ける）
+  out_of_prefecture_ratio: 0.65     # 県外から来る割合（残りは自県＝距離0）
+  # 成功率 = base + 進路希望の相性項 - 距離の減点(寮で緩和) - 競合校の格の減点 + 訪問の積み上げ
+  # base は遠方(penalty_far=0.24)でも相性項0の志向が床に落ちきらない水準に置く（0.24を上回らせる）。
+  base_probability: 0.30
+  prob_per_fame: 0.0035             # 名門志向: 名声100で +0.35
+  prob_per_opportunity: 0.35        # 出場機会志向: 空き(0〜1)の傾き
+  prob_per_local: 0.35              # 地元志向: 近さ(0〜1。同県=1.0〜遠方=0.0)の傾き
   prob_per_visit: 0.09
-  visit_gain_max: 0.36             # 通い詰めても確実にはしない
-  prob_per_rival_tier: 0.08        # 自校より上の段だけ効く
+  visit_gain_max: 0.36              # 通い詰めても確実にはしない
+  prob_per_rival_tier: 0.08         # 自校より上の段だけ効く
   probability_min: 0.02
   probability_max: 0.92
   penalty_same_region: 0.06
   penalty_neighbor_region: 0.14
   penalty_far: 0.24
-  dorm_distance_relief: 0.6        # 「距離は寮でカバー」の実体（距離の減点を6割打ち消す）
+  dorm_distance_relief: 0.6         # 寮が距離の減点を打ち消す割合（オーナー決定8）
   # 訪問費用[万円]（部費から。設計書04 §1.4）
   visit_cost_same_prefecture: 5.0
   visit_cost_same_region: 10.0
   visit_cost_neighbor_region: 20.0
   visit_cost_far: 30.0
   # 争奪戦
-  rival_event_prob: 0.22           # 訪問1回あたりに競合校が動く確率
-  rival_event_tier_step: 1         # 動くと競合校の格が1段上がる
+  rival_event_prob: 0.22            # 訪問1回あたりに競合校が動く確率
+  rival_event_tier_step: 1          # 動くと競合校の格が1段上がる
+  # 進路希望の分布（重みの比。等分が初期値）
+  preference_prestige_weight: 1.0
+  preference_playing_time_weight: 1.0
+  preference_local_weight: 1.0
+  # 段ごとの見立てノイズσ（寸評の軸選び・ランク表示の両方。段を上げるほど小さい＝当たりやすい）
+  report_noise_sd_tier1: 18.0
+  report_noise_sd_tier2: 10.0
+  report_noise_sd_tier3: 4.0
 
 # --- 監督成長イベント（設計書04 §1.1b: 節目の跳ね）🟡 ---
 manager_growth:
@@ -1528,11 +1542,12 @@ facilities:
       - { cost: 3000, coef_add: 0.15, budget_add: 50 }
       - { cost: 5000, coef_add: 0.15, budget_add: 50 }
       - { cost: 8000, coef_add: 0.15, budget_add: 50 }
-  - id: dorm              # 寮: 生活・体調管理で効率↑。Lv1 で能動勧誘枠が2つ解禁（設計書04 §2.2・#588）
+  - id: dorm              # 寮: 生活・体調管理で効率↑。能動勧誘枠（旧2名）はスカウトへ一本化（issue #867）。
+                          # 寮は「スカウト候補の距離の減点を打ち消す」効果として残る（scout.dorm_distance_relief）。
     name: 寮
     tiers:
       - {}
-      - { cost: 5000,  coef_add: 0.15, recruit_slots: 2 }   # 枠は Lv1 だけ＝上げても「年最大2名」は変わらない
+      - { cost: 5000,  coef_add: 0.15 }
       - { cost: 8000,  coef_add: 0.15 }
       - { cost: 12000, coef_add: 0.15 }
   - id: weight            # トレーニング場: ウェイト・マシンで効率↑
@@ -1611,10 +1626,12 @@ contracts:
     tiers:
       - {}
       # 効果1=新入生の質(scout_talent_add) / 効果2=入部予定者の事前開示精度(prospect_disclosure, #587)
+      # 効果3=スカウト枠・候補の開示段（scout_slots, issue #867）: 未契約0/Lv1=2/Lv2=3/Lv3=4
+      #   （Lv1=寸評だけ／Lv2=打・守・走・投の4分野ランク／Lv3=個別能力のランク、オーナー決定2026-11-09）
       # 年額は「その契約だけで部費が赤字にならない最低信頼度 = (年額-35)/0.8」で決める（2026-08-11 値上げ）
-      - { annual_cost: 30, scout_talent_add: 0, prospect_disclosure: 0.15 }    # 県内を回る（必要信頼度 -6＝常に可）
-      - { annual_cost: 80, scout_talent_add: 3, prospect_disclosure: 0.45 }    # 近隣県まで（必要信頼度 56）
-      - { annual_cost: 140, scout_talent_add: 6, prospect_disclosure: 0.75 }   # 全国に網を張る（必要信頼度 131＝恒常維持不能）
+      - { annual_cost: 30, scout_talent_add: 0, prospect_disclosure: 0.15, scout_slots: 2 }    # 県内を回る（必要信頼度 -6＝常に可）
+      - { annual_cost: 80, scout_talent_add: 3, prospect_disclosure: 0.45, scout_slots: 3 }    # 近隣県まで（必要信頼度 56）
+      - { annual_cost: 140, scout_talent_add: 6, prospect_disclosure: 0.75, scout_slots: 4 }   # 全国に網を張る（必要信頼度 131＝恒常維持不能）
   - id: expedition
     name: 遠征
     tiers:
