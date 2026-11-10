@@ -203,8 +203,8 @@ public sealed class CoefficientsLoaderTests
         var effects = bundle.Facilities.AggregateEffects(maxSet);
         Assert.Equal(0.85 * 0.85 * 0.85, effects.InjuryProbFactor, 6);
         Assert.Equal(0.90 * 0.90 * 0.90, effects.InjuryRecoveryFactor, 6);
-        Assert.Equal(1.05 * 1.07, effects.Equipment.Batting, 6);
-        Assert.Equal(1.05 * 1.07, effects.Equipment.Pitching, 6);
+        Assert.Equal(1.08 * 1.10, effects.Equipment.Batting, 6);
+        Assert.Equal(1.08 * 1.10, effects.Equipment.Pitching, 6);
         Assert.Equal(1.5, effects.InsightProbFactor, 6);
         Assert.Equal(0.05, effects.InsightAccuracyAdd, 6);
         Assert.Equal(20.0, bundle.Career.SummerCampCost, 6);

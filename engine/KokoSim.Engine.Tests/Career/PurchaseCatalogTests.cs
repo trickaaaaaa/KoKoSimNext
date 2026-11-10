@@ -96,7 +96,7 @@ public sealed class PurchaseCatalogTests
         set.SetLevel("gear_batting", 2);
         var e = Catalog.AggregateEffects(set);
 
-        Assert.Equal(1.05 * 1.07, e.Equipment.Batting, 6);
+        Assert.Equal(1.08 * 1.10, e.Equipment.Batting, 6);
         Assert.Equal(1.0, e.Equipment.Defense);
         Assert.Equal(1.0, e.Equipment.BaseRunning);
         Assert.Equal(1.0, e.Equipment.Pitching);

@@ -40,7 +40,10 @@ public sealed class FameTalentCenterTests
             $"Fame=100のtalentCenter({atMax})が上限({C.TalentCenterDefault + C.FameTalentCenterSpan})を超えた");
         // 2026-08-15（案D・オーナー決定）: 名声を極めた学校には B/A の新入生が入る＝Fame=100 で中心 B 帯（70〜79）。
         // 旧決定 1-A「控えめ（32→40）」は撤回。
-        Assert.InRange(atMax, 70.0, 79.0);
+        // 2026-11-10（issue #865）: talent_center_default を 32→20（切片だけ-12）へ下げたため、span/tau
+        // （傾き）は維持したままカーブ全体が-12平行移動し、Fame=100の到達点も C 帯（60〜69）へ下がる。
+        // 入学時はここで下がった分、3年間の育成（training.base_main_exp）で伸びて取り戻す設計（issue #865 PR参照）。
+        Assert.InRange(atMax, 60.0, 69.0);
     }
 
     [Fact]
@@ -48,10 +51,12 @@ public sealed class FameTalentCenterTests
     {
         // 案D の目標帯（2026-08-15）: 名声20→E / 40→D / 60→C / 80→B。名声は減衰（CareerCoefficients.FameDecay）で
         // 自己制限するので、この帯に「居続ける」には勝ち続ける必要がある＝暴走防止は減衰側が担う。
-        Assert.Equal(Tier.E, Tiers.FromStrength(C.TalentCenterFromFame(20)));
-        Assert.Equal(Tier.D, Tiers.FromStrength(C.TalentCenterFromFame(40)));
-        Assert.Equal(Tier.C, Tiers.FromStrength(C.TalentCenterFromFame(60)));
-        Assert.Equal(Tier.B, Tiers.FromStrength(C.TalentCenterFromFame(80)));
+        // 2026-11-10（issue #865）: talent_center_default を 32→20 へ下げた分、カーブ全体が-12平行移動し
+        // 各帯が1段ずつ下がる（F/E/D/D）。入学時に下がった分は3年間の育成（+15〜20）で取り戻す設計。
+        Assert.Equal(Tier.F, Tiers.FromStrength(C.TalentCenterFromFame(20)));
+        Assert.Equal(Tier.E, Tiers.FromStrength(C.TalentCenterFromFame(40)));
+        Assert.Equal(Tier.D, Tiers.FromStrength(C.TalentCenterFromFame(60)));
+        Assert.Equal(Tier.D, Tiers.FromStrength(C.TalentCenterFromFame(80)));
     }
 
     [Fact]

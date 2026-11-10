@@ -14,8 +14,10 @@ namespace KokoSim.Engine.Tests.Season;
 /// </summary>
 public sealed class IndividualCoachingTests
 {
+    // weeks の既定値は issue #865（base_main_exp 130→580）で 150→15 に短縮。150週分だと才能上限
+    // （cap=99）に届いて指名の有無に関係なく頭打ちになり、差が測れなくなる（実測: 指名/非指名とも99）。
     private static int GainByTrainWeek(AbilityKind ability, TrainingMenu menu, bool nominated,
-        CoachingProfile? coaching, TrainingCoefficients? coefficients = null, int weeks = 150, int start = 30)
+        CoachingProfile? coaching, TrainingCoefficients? coefficients = null, int weeks = 15, int start = 30)
     {
         var c = coefficients ?? new TrainingCoefficients();
         var stages = new GrowthStageTable();
@@ -75,8 +77,8 @@ public sealed class IndividualCoachingTests
         var rookie = CoachingProfile.FromManager(new KokoSim.Engine.Career.Manager());
         Assert.Equal(20, rookie.Pitching);
 
-        var withSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: true, coaching: rookie, weeks: 40);
-        var withoutSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: false, coaching: rookie, weeks: 40);
+        var withSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: true, coaching: rookie, weeks: 15);
+        var withoutSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: false, coaching: rookie, weeks: 15);
 
         Assert.True(withSlot >= withoutSlot * 1.3,
             $"新任監督の個別指導で伸びが変わらない（指名{withSlot} vs 非指名{withoutSlot}）");
@@ -151,7 +153,8 @@ public sealed class IndividualCoachingTests
         PitcherRoleResolver.SeedAptitudeForRole(nominated, true);
         nominated.SetLevel(AbilityKind.Velocity, 30); nominated.SetCap(AbilityKind.Velocity, 99);
 
-        for (var i = 0; i < 150; i++)
+        // issue #865（base_main_exp 130→580）で150→15週に短縮（150週だと両者とも才能上限に届いて差が消える）。
+        for (var i = 0; i < 15; i++)
         {
             DevelopmentModel.TrainWeekPlan(notNominated, alloc, c.ReferenceWeekMinutes, 1, 1.0, stages, c, coaching: ace);
             DevelopmentModel.TrainWeekPlan(nominated, alloc, c.ReferenceWeekMinutes, 1, 1.0, stages, c, coaching: ace);
