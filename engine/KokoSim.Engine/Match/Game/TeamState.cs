@@ -639,6 +639,15 @@ public sealed class TeamState
         };
     }
 
+    /// <summary>
+    /// くさい所（issue #872）をプレイヤーが押したか。<b>その打席だけ</b>効く＝エンジンが打席の確定で下ろす
+    /// （他の配球方針が「解除するまで続く」のと違い、打者ごとの采配）。未設定ならフィールド読み取りだけでRNG非消費。
+    /// </summary>
+    public bool PitchAround { get; private set; }
+
+    /// <summary>くさい所を入れる／解く。</summary>
+    public void SetPitchAround(bool on) => PitchAround = on;
+
     private OffensiveSign? _pendingOffensiveSign;
 
     /// <summary>次の打席の攻撃サインを予約する（エンドラン等）。null=解除。1打席限り。</summary>

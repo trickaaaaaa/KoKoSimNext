@@ -28,6 +28,7 @@ internal static class CommandLine
             "simulate-tiers" => RunSimulateTiers(args[1..]),
             "defense-sensitivity" => RunDefenseSensitivity(args[1..]),
             "ability-sweep" => RunAbilitySweep(args[1..]),
+            "pitch-around" => RunPitchAround(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
             "infield-hit-profile" => RunInfieldTiming(args[1..], profile: true),
@@ -172,6 +173,34 @@ internal static class CommandLine
     /// 能力感度の掃引（issue #840）。能力を1つずつ 20 / 80 に振り、結果（得点など）が期待どおり動くかを表にする。
     /// 統計帯は平均的なチーム同士しか測らないので、効いていない／逆向きの能力は帯が緑のまま残る。
     /// </summary>
+    /// <summary>くさい所（issue #872）の効果測定: 強打者×制球3段で「方針なし／くさい所」を比べる。</summary>
+    private static int RunPitchAround(string[] args)
+    {
+        var atBats = 200_000;
+        var seed = 42UL;
+        string? reportPath = null;
+        string? coefficientsPath = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--atbats": atBats = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        var report = PitchAroundSimulation.Report(atBats, seed, coefficientsPath);
+        if (reportPath is not null)
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(reportPath))!);
+            System.IO.File.WriteAllText(reportPath, report);
+        }
+        Console.WriteLine(report);
+        return 0;
+    }
+
     private static int RunAbilitySweep(string[] args)
     {
         var games = 2000;
@@ -672,6 +701,7 @@ internal static class CommandLine
         Console.WriteLine("                  # ティア格子（強度30〜60の総当たり）＋実プレイの自校vs相手校＋ランク式の食い違い（issue #536・計測のみ）");
         Console.WriteLine("  defense-sensitivity [--games N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--cache path] [--budget-sec S]");
         Console.WriteLine("                  # 走力・守備を20/50/80/100に固定した守備側の失点・BABIP・アウト率＋打撃±30との比較（issue #832・計測のみ）");
+        Console.WriteLine("  pitch-around    [--atbats N] [--seed S] [--report path] [--coefficients ...]   # くさい所（縁狙い）の効果測定（issue #872）");
         Console.WriteLine("  ability-sweep   [--games N]   [--seed S] [--report path] [--coefficients ...] [--targets data/balance-targets.yaml] [--only id,id]");
         Console.WriteLine("                  # 能力を1つずつ20/80に振り結果が動くかを見る（issue #840・片側だけ変更・先攻後攻入れ替え）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");

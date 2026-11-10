@@ -262,6 +262,23 @@ public sealed record TacticsCoefficients
     public double KeepLowAimYOffsetM { get; init; } = -0.18;
     public double InsideAimXOffsetM { get; init; } = 0.15;
 
+    // ===== くさい所（issue #872）: 縁を狙う =====
+    /// <summary>縁から外へはみ出して狙う量[m]（ボール半径0.037mの約半分）。</summary>
+    public double PitchAroundOvershootM { get; init; } = 0.02;
+    /// <summary>縁を選ぶ重み: 低め。打者は低めを掬いにくく、長打になりにくい。</summary>
+    public double PitchAroundWeightLow { get; init; } = 0.40;
+    /// <summary>縁を選ぶ重み: 外角。</summary>
+    public double PitchAroundWeightOutside { get; init; } = 0.35;
+    /// <summary>縁を選ぶ重み: 高め。</summary>
+    public double PitchAroundWeightHigh { get; init; } = 0.10;
+    /// <summary>縁を選ぶ重み: 内角。</summary>
+    public double PitchAroundWeightInside { get; init; } = 0.15;
+
+    /// <summary>くさい所の縁狙い。右打者の外角は一塁側(+X)、左打者は三塁側(−X)（<see cref="DirectiveFor"/> の内角と対）。</summary>
+    public PitchEdgeAim EdgeAimFor(Handedness batterBats) => new(
+        PitchAroundOvershootM, PitchAroundWeightLow, PitchAroundWeightOutside, PitchAroundWeightHigh, PitchAroundWeightInside,
+        batterBats == Handedness.Right ? 1.0 : -1.0);
+
     // ===== 伝令効果・動揺・主将（設計書09 §3/§8） =====
     /// <summary>伝令1回の負補正緩和量（0〜1）とその継続打席数。</summary>
     public double TimeoutMitigation { get; init; } = 0.60;

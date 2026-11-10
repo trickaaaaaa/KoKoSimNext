@@ -559,6 +559,7 @@ public static class GameEngine
         offense.SetPendingSteal(null, StealTarget.Second);
         offense.ConsumePendingOffensiveSign();
         defense.SetPendingPitchDefenseOverride(null, null);
+        defense.SetPitchAround(false);
 
         while (outs < 3)
         {
@@ -1252,6 +1253,14 @@ public static class GameEngine
                     tracePolicy = mp; // 観測専用
                 }
                 if (manualGear is { } mg) gearOverride = mg;
+                // くさい所（issue #872）: 打席頭の方針・1球指示の配球ウェイトに縁狙いを重ねる。押していなければ何もしない
+                // （＝警戒しない打席は配球の乱数を1発も増やさない）。敬遠の打席は投げないのでここへ来ない。
+                if (defTactics.PitchAround || defense.PitchAround)
+                {
+                    pitchOverride = (pitchOverride ?? abCtx.Directive ?? PitchDirective.Identity)
+                        with { Edge = ctx.Tactics.EdgeAimFor(batter.Bats) };
+                    tracePolicy ??= defTactics.Policy;
+                }
 
                 // 手動の攻撃サイン（エンドラン）を毎球評価（issue #492 B）。無指示ならフィールド読み取りのみ
                 // ＝RNG非消費。ここは1球分の消費でしかないが、Unity側（MatchLiveController）が打席が
@@ -1573,6 +1582,7 @@ public static class GameEngine
             // （バント/スクイズが決着する打席では、決着後の分岐内でも二重にNextBatter()を呼んでおり、
             // 打者を1人分余計に飛ばしていた。ここへ一本化したことで両方解消）。
             offense.NextBatter();
+            defense.SetPitchAround(false);   // くさい所はその打席だけ（issue #872）
             var res = session.Result;
             defense.AddPitches(res.Pitches, gearWeight);
             p.TotalPitches += res.Pitches;

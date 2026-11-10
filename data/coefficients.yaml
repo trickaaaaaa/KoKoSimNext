@@ -254,6 +254,10 @@ batting:
   contact_quality_per_control: -0.0030     # 制球が良いほど芯を外させる（技巧派の武器）
   contact_quality_break_ref_m: 0.47        # 132km/h・2200rpm の誘発変化合成量
   contact_quality_per_break_m: -0.90       # 変化が大きいほど詰まる
+  # 際の球は芯を外しやすい（issue #872）。実着弾の縁への近さ（StrikeZone.EdgeProximity: 中心0・縁上と外1）が基準より大きいほど
+  # 品質が下がり、真ん中は強く打たれる。基準で寄与0。くさい所（縁狙い）の打席だけでなく全打席に効く。
+  contact_quality_edge_ref: 0.72
+  contact_quality_per_edge: -0.12
 
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
@@ -941,6 +945,12 @@ tactics:
   control_first_aim_sigma_factor: 0.72
   keep_low_aim_y_offset_m: -0.18
   inside_aim_x_offset_m: 0.15
+  # くさい所（issue #872）: 縁を重みつきで1本選び、縁の上をわずかに外へ狙う（打席単位の守備指示）
+  pitch_around_overshoot_m: 0.02
+  pitch_around_weight_low: 0.40
+  pitch_around_weight_outside: 0.35
+  pitch_around_weight_high: 0.10
+  pitch_around_weight_inside: 0.15
   # 伝令効果・動揺・主将（§3/§8）
   timeout_mitigation: 0.60
   timeout_duration_pa: 3

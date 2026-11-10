@@ -310,6 +310,8 @@ public sealed class AtBatSession
 
         var loc = ControlScatter.Sample(plan.AimX, plan.AimY, pitcher.Control, ctx.Pitching, rng);
         var inZone = ctx.StrikeZone.Contains(loc.X, loc.Y);
+        // 実着弾の縁への近さ（際の球は芯を外しやすい・issue #872）。判定に使われた実位置から引く＝狙いでなく結果で効く。
+        plan = plan with { EdgeProximity = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y) };
 
         // 判定用弾道特徴量（設計書15 Phase E-1）: テーブル補間・RNG非消費。Phase E-2 から④の空振り判定へ接続。
         _lastPitchFeatures = ComputeFeatures(plan);

@@ -578,6 +578,20 @@ public sealed class MatchProgression
     }
 
     /// <summary>
+    /// くさい所（issue #872）: ゾーンの縁を突き、甘い球を投げない（四球も辞さない）。<b>その打席だけ</b>効き、打席が終わると解ける。
+    /// teamIsAway=指示する側（守備側）が先攻か。on=false で取り消し。乱数を消費しない。
+    /// </summary>
+    public void SetPitchAround(bool teamIsAway, bool on)
+    {
+        _p.OffenseOf(teamIsAway).SetPitchAround(on);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PitchAround, !teamIsAway, BenchIndex: 0,
+            On: on, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>くさい所が入っているか（表示専用の読み口。乱数も状態も動かさない）。teamIsAway=守備側が先攻か。</summary>
+    public bool PitchAroundOn(bool teamIsAway) => _p.OffenseOf(teamIsAway).PitchAround;
+
+    /// <summary>
     /// 采配カード（2026-07-31）: 次に解決される打席の攻撃サイン（エンドラン等）を予約する。<b>1打席限り</b>。
     /// null=解除。委任采配（brain）の判断より優先する。
     /// </summary>

@@ -109,13 +109,15 @@ public static class ContactModel
     /// 3項とも基準値で0＝リーグ平均投手では恒等なので、係数を入れても得点環境の平均は動かない。
     /// 球速は反応球速（<see cref="PitchPlan.ReactionKmh"/>＝効きを通した値）を読む（設計書21）。
     /// 変化量だけは欺瞞効果の実球速割引（<see cref="BreakDeceptionFactor"/>）を通した値を使う（issue #837）。
+    /// 4項目: 実着弾の縁への近さ（<see cref="PitchPlan.EdgeProximity"/>）＝際の球は芯を外しやすい（issue #872）。
     /// </summary>
     public static double PitcherContactQualityBias(
         PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
         => coeff.ContactQualityPerKmh * (plan.ReactionKmh - coeff.ContactQualityVelocityRefKmh)
            + coeff.ContactQualityPerControl * (plan.ControlLevel - 50.0)
            + coeff.ContactQualityPerBreakM
-               * (features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.ContactQualityBreakRefM);
+               * (features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.ContactQualityBreakRefM)
+           + coeff.ContactQualityPerEdge * ((plan.EdgeProximity ?? coeff.ContactQualityEdgeRef) - coeff.ContactQualityEdgeRef);
 
     /// <summary>
     /// タイミングのズレの平均（設計書01 §2④, issue #262）。正＝差し込まれ（遅れ）／負＝早い。

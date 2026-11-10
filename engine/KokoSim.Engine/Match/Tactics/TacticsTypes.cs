@@ -87,6 +87,11 @@ public sealed record DefensiveTactics
     public PitcherGear Gear { get; init; } = PitcherGear.Normal;
     /// <summary>敬遠（design-14 P1-3）。真なら次打者と勝負するため、この打席は無条件四球（申告制＝投球数0）。</summary>
     public bool IntentionalWalk { get; init; }
+    /// <summary>
+    /// くさい所（issue #872）。真なら、この打席は甘い球を投げずゾーンの縁（際）を突く＝四球も辞さない勝負。
+    /// 敬遠（勝負しない）と方針なし（普通に勝負）の間。<see cref="Policy"/> とは別の軸で重ねて使え、打席が終わると解除される。
+    /// </summary>
+    public bool PitchAround { get; init; }
 
     /// <summary>指示なし（現状の試合挙動と完全一致）。</summary>
     public static DefensiveTactics Default { get; } = new();
@@ -208,4 +213,19 @@ public readonly record struct PitchDirective(
     double AimSigmaFactor)
 {
     public static PitchDirective Identity => new(0.0, 0.0, 0.0, 1.0);
+
+    /// <summary>null＝ゾーン中心を狙う（従来）。値があれば縁を狙う（くさい所, issue #872）。</summary>
+    public PitchEdgeAim? Edge { get; init; }
 }
+
+/// <summary>
+/// 縁を狙う配球（くさい所, issue #872）。縁を重みつきで1本選び、その縁の上をわずかに外へ狙う。
+/// 重みは 低め／外角／高め／内角。外角は打者の利きで符号が変わる（<see cref="OutsideSignX"/>：+1＝+X側が外角）。
+/// </summary>
+public readonly record struct PitchEdgeAim(
+    double OvershootM,
+    double WeightLow,
+    double WeightOutside,
+    double WeightHigh,
+    double WeightInside,
+    double OutsideSignX);
