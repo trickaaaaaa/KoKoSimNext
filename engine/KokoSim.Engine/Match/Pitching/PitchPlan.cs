@@ -37,6 +37,13 @@ public sealed record PitchPlan
     /// （<see cref="Batting.ContactModel.PitcherContactQualityBias"/>）。既定50＝リーグ平均で恒等。
     /// </summary>
     public double ControlLevel { get; init; } = 50.0;
+
+    /// <summary>
+    /// 選択した球種のランク（<see cref="Players.PitchSlot.Rank"/>＝球威/キレのうち有効軸）。球種の慣れ
+    /// （設計書02 §2.3b 案A・issue #836）の割引に使う: ランクが高いほど慣れられても抑えられる。
+    /// 既定50＝平均ランク相当（テスト等で直接組んだ PitchPlan の後方互換・恒等）。
+    /// </summary>
+    public int PitchRank { get; init; } = 50;
 }
 
 /// <summary>
@@ -108,6 +115,7 @@ public static class PitchSelection
             ReactionVelocityKmh = reactionRaw * slot.SpeedRatio,
             Stuff = stuff,
             ControlLevel = pitcher.Control,
+            PitchRank = slot.Rank,
         };
     }
 

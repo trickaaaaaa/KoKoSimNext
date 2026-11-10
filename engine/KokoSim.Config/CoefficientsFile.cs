@@ -529,6 +529,11 @@ public static class CoefficientsLoader
         public double FamiliarityChasePerPa { get; set; } = D.FamiliarityChasePerPa;
         public int FamiliarityMaxPa { get; set; } = D.FamiliarityMaxPa;
         public double FamiliarityBreakDiscountPerM { get; set; } = D.FamiliarityBreakDiscountPerM;
+        public double PitchFamiliarityDecay { get; set; } = D.PitchFamiliarityDecay;
+        public double PitchFamiliarityBaselineLevel { get; set; } = D.PitchFamiliarityBaselineLevel;
+        public double PitchFamiliarityRankDiscountPerPoint { get; set; } = D.PitchFamiliarityRankDiscountPerPoint;
+        public double PitchFamiliarityWhiffPerLevel { get; set; } = D.PitchFamiliarityWhiffPerLevel;
+        public double PitchFamiliarityQualityPerLevel { get; set; } = D.PitchFamiliarityQualityPerLevel;
         public double FoulShare { get; set; } = D.FoulShare;
         public double StuffBaseVelocityKmh { get; set; } = D.StuffBaseVelocityKmh;
         public double StuffPerKmh { get; set; } = D.StuffPerKmh;
@@ -602,6 +607,11 @@ public static class CoefficientsLoader
             FamiliarityChasePerPa = FamiliarityChasePerPa,
             FamiliarityMaxPa = FamiliarityMaxPa,
             FamiliarityBreakDiscountPerM = FamiliarityBreakDiscountPerM,
+            PitchFamiliarityDecay = PitchFamiliarityDecay,
+            PitchFamiliarityBaselineLevel = PitchFamiliarityBaselineLevel,
+            PitchFamiliarityRankDiscountPerPoint = PitchFamiliarityRankDiscountPerPoint,
+            PitchFamiliarityWhiffPerLevel = PitchFamiliarityWhiffPerLevel,
+            PitchFamiliarityQualityPerLevel = PitchFamiliarityQualityPerLevel,
             FoulShare = FoulShare,
             StuffBaseVelocityKmh = StuffBaseVelocityKmh,
             StuffPerKmh = StuffPerKmh,

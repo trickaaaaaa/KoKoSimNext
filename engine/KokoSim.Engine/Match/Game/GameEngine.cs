@@ -856,7 +856,10 @@ public static class GameEngine
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
                     swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics),
                     // 慣れ（設計書02 §2.3b）: この打者がこの試合でこの投手と対戦した打席数。継投で0へ戻る。
-                    familiarityPa: offense.PriorPlateAppearancesAgainst(batter, currentPitcher));
+                    familiarityPa: offense.PriorPlateAppearancesAgainst(batter, currentPitcher),
+                    // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: この打者×この投手の球種ごとの見慣れ度。
+                    // 投手が変われば新しいトラッカー＝0から（PitchFamiliarityTrackerFor が継投リセットを担う）。
+                    pitchFamiliarity: offense.PitchFamiliarityTrackerFor(batter, currentPitcher));
             }
             var abCtx = BuildAtBatContext();
 

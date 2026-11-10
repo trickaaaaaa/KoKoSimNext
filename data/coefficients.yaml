@@ -167,6 +167,16 @@ batting:
   familiarity_chase_per_pa: 0.008
   familiarity_max_pa: 3
   familiarity_break_discount_per_m: 1.2
+  # 球種の慣れ（設計書02 §2.3b 案A・issue #836）: 対戦回数の慣れ（上）とは別軸。配球で同じ球種が連投されると、
+  # その球種だけ「見慣れ度」が指数移動平均（λ=decay）で溜まり、空振りにくく・打球の質も上がる。持ち球が
+  # 少ない／偏った投手ほど同じ球種が連投されやすく、新しい特徴量なしで自然に強く効く。基準値(baseline)は
+  # 「ストレート＋変化球2つ・均等配球」の定常値（見慣れ度の使用率加重平均≈2.7）に置き、平均的な持ち球構成の
+  # 投手では効きが0＝得点環境の平均を動かさない。球種ランクが高い球ほど割引（慣れを万能にしない）。
+  pitch_familiarity_decay: 0.85
+  pitch_familiarity_baseline_level: 0.7
+  pitch_familiarity_rank_discount_per_point: 0.01
+  pitch_familiarity_whiff_per_level: 0.05
+  pitch_familiarity_quality_per_level: 0.01
   foul_share: 0.35               # コンタクト中のファウル割合（方位角±45°超の幾何ファウルは別枠, issue #262）
   # 球速→球威。基準はリーグ平均投手の平均リリース球速（最速132 − 平均ドロップ4）に置き、
   # 傾きは「球速1レベル ≈ ミート1レベル」になるよう 0.030 ÷ 0.47(km/h per level) ≈ 0.064 とする。

@@ -147,6 +147,28 @@ public sealed record BattingCoefficients
     /// 既定 1.2 ＝ 変化量 0.4m の球で効きが 52%、0.8m 超では 0。制球で散らす投手ほど進みにくい表現は係数の器のみ（未接続）。
     /// </summary>
     public double FamiliarityBreakDiscountPerM { get; init; } = 1.2;
+
+    // --- 球種の慣れ（設計書02 §2.3b 案A・issue #836） ---
+    // 対戦回数の慣れ（上）とは別軸。配球で同じ球種が連投されると、その球種だけ「見慣れ度」が指数移動平均
+    // （<see cref="PitchFamiliarityTracker.Advance"/>）で溜まり、空振りにくく・打球の質も上がる。持ち球が
+    // 少ない／偏った投手ほど同じ球種が連投されやすく、自然に見慣れ度が溜まりやすい（新しい特徴量は持たない）。
+    /// <summary>見慣れ度の毎球の減衰率λ。1に近いほど記憶が長く残る（0.85＝半減期約4.3球）。</summary>
+    public double PitchFamiliarityDecay { get; init; } = 0.85;
+    /// <summary>
+    /// 見慣れ度の基準値。平均的な持ち球構成（ストレート＋変化球2つ・均等配球）の定常値に置くことで、
+    /// 平均的な投手では効き（<see cref="ContactModel.PitchFamiliarityEffect"/>）が0＝得点環境の平均を動かさない。
+    /// </summary>
+    public double PitchFamiliarityBaselineLevel { get; init; } = 0.7;
+    /// <summary>
+    /// 球種ランク（50からの差）1点あたりの割引[0,1]にクランプ。高ランク（キレ・球威）の球ほど
+    /// 慣れられても効きを打ち消す（§2.3b「慣れを万能にしない」）。
+    /// </summary>
+    public double PitchFamiliarityRankDiscountPerPoint { get; init; } = 0.01;
+    /// <summary>見慣れ度の効き1単位あたりの空振り対数オッズ低下。</summary>
+    public double PitchFamiliarityWhiffPerLevel { get; init; } = 0.05;
+    /// <summary>見慣れ度の効き1単位あたりの打球品質の加点。</summary>
+    public double PitchFamiliarityQualityPerLevel { get; init; } = 0.01;
+
     /// <summary>
     /// コンタクトのうちファウルになる割合。方位角が±45°を越えて幾何的にファウルになる分は別枠で、
     /// issue #262 で打球方向が広がった結果その別枠が増えたため、ここを 0.40→0.35 に下げて総ファウル率を保つ。
