@@ -44,6 +44,13 @@ public sealed record PitchPlan
     /// 既定50＝平均ランク相当（テスト等で直接組んだ PitchPlan の後方互換・恒等）。
     /// </summary>
     public int PitchRank { get; init; } = 50;
+
+    /// <summary>
+    /// この球の実着弾位置のゾーン縁への近さ（<see cref="Field.StrikeZone.EdgeProximity"/>。ゾーン外は1）。
+    /// 縁の球ほど芯を外させる打球質の補正（<see cref="Batting.ContactModel.PitcherContactQualityBias"/>・issue #872）に使う。
+    /// null＝未設定（テスト等で直接組んだ PitchPlan）＝基準値扱いで補正0。
+    /// </summary>
+    public double? EdgeProximity { get; init; }
 }
 
 /// <summary>
@@ -76,6 +83,20 @@ public static class PitchSelection
         var spread = Math.Max(0.5, 1.0 + coeff.AimSpreadControlSlopePerPoint * (pitcher.Control - 50));
         var aimX = rng.NextGaussian(0.0, coeff.AimSigmaXMeters * d.AimSigmaFactor * spread) + d.AimXOffsetM;
         var aimY = zone.CenterY + rng.NextGaussian(0.0, coeff.AimSigmaYMeters * d.AimSigmaFactor * spread) + d.AimYOffsetM;
+
+        // くさい所（issue #872）: 縁を重みつきで1本選び、その縁の上をわずかに外へ狙う。引くのは縁の抽選1回だけで、
+        // 縁に沿う座標は上のガウスをそのまま使う（ゾーン内へ収める）＝指示なしの打席は乱数を1発も増やさない。
+        if (d.Edge is { } edge)
+        {
+            var total = edge.WeightLow + edge.WeightOutside + edge.WeightHigh + edge.WeightInside;
+            var r = rng.NextDouble() * total;
+            aimX = MathUtil.Clamp(aimX, -zone.HalfWidthM, zone.HalfWidthM);
+            aimY = MathUtil.Clamp(aimY, zone.BottomM, zone.TopM);
+            if ((r -= edge.WeightLow) < 0.0) aimY = zone.BottomM - edge.OvershootM;
+            else if ((r -= edge.WeightOutside) < 0.0) aimX = edge.OutsideSignX * (zone.HalfWidthM + edge.OvershootM);
+            else if ((r -= edge.WeightHigh) < 0.0) aimY = zone.TopM + edge.OvershootM;
+            else aimX = -edge.OutsideSignX * (zone.HalfWidthM + edge.OvershootM);
+        }
 
         // ① 球種選択（Phase 簡略: ストレート基礎シェア±方針の重み、残りを変化球で等分。
         //    捕手リードが50超のぶんだけ投手の強い軸へ寄せる＝設計書01 §2①）。

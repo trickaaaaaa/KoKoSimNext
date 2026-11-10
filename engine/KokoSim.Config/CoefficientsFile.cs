@@ -582,6 +582,8 @@ public static class CoefficientsLoader
         public double ContactQualityPerControl { get; set; } = D.ContactQualityPerControl;
         public double ContactQualityBreakRefM { get; set; } = D.ContactQualityBreakRefM;
         public double ContactQualityPerBreakM { get; set; } = D.ContactQualityPerBreakM;
+        public double ContactQualityEdgeRef { get; set; } = D.ContactQualityEdgeRef;
+        public double ContactQualityPerEdge { get; set; } = D.ContactQualityPerEdge;
 
         public BattingCoefficients ToModel() => new()
         {
@@ -659,6 +661,8 @@ public static class CoefficientsLoader
             ContactQualityPerControl = ContactQualityPerControl,
             ContactQualityBreakRefM = ContactQualityBreakRefM,
             ContactQualityPerBreakM = ContactQualityPerBreakM,
+            ContactQualityEdgeRef = ContactQualityEdgeRef,
+            ContactQualityPerEdge = ContactQualityPerEdge,
         };
     }
 
@@ -2062,6 +2066,11 @@ public static class CoefficientsLoader
         public double ControlFirstAimSigmaFactor { get; set; } = D.ControlFirstAimSigmaFactor;
         public double KeepLowAimYOffsetM { get; set; } = D.KeepLowAimYOffsetM;
         public double InsideAimXOffsetM { get; set; } = D.InsideAimXOffsetM;
+        public double PitchAroundOvershootM { get; set; } = D.PitchAroundOvershootM;
+        public double PitchAroundWeightLow { get; set; } = D.PitchAroundWeightLow;
+        public double PitchAroundWeightOutside { get; set; } = D.PitchAroundWeightOutside;
+        public double PitchAroundWeightHigh { get; set; } = D.PitchAroundWeightHigh;
+        public double PitchAroundWeightInside { get; set; } = D.PitchAroundWeightInside;
         // 伝令効果・動揺・主将
         public double TimeoutMitigation { get; set; } = D.TimeoutMitigation;
         public int TimeoutDurationPa { get; set; } = D.TimeoutDurationPa;
@@ -2192,6 +2201,11 @@ public static class CoefficientsLoader
             ControlFirstAimSigmaFactor = ControlFirstAimSigmaFactor,
             KeepLowAimYOffsetM = KeepLowAimYOffsetM,
             InsideAimXOffsetM = InsideAimXOffsetM,
+            PitchAroundOvershootM = PitchAroundOvershootM,
+            PitchAroundWeightLow = PitchAroundWeightLow,
+            PitchAroundWeightOutside = PitchAroundWeightOutside,
+            PitchAroundWeightHigh = PitchAroundWeightHigh,
+            PitchAroundWeightInside = PitchAroundWeightInside,
             TimeoutMitigation = TimeoutMitigation,
             TimeoutDurationPa = TimeoutDurationPa,
             TimeoutCalmBase = TimeoutCalmBase,

@@ -65,7 +65,8 @@ public sealed record GameDecision(
     // 采配カードの拡充（2026-07-31）。既存の決定列は末尾追加＝古い保存の読み出しに影響しない。
     BattingApproach? Approach = null, OffensiveSign? Sign = null,
     StartType? Start = null, StealTarget StealTarget = StealTarget.Second,
-    DefenseDepth? Infield = null, DefenseDepth? Outfield = null);
+    DefenseDepth? Infield = null, DefenseDepth? Outfield = null,
+    bool On = false);
 
 public enum GameDecisionKind
 {
@@ -123,6 +124,8 @@ public enum GameDecisionKind
     /// TargetIndex=伝令役の控えの添字（TeamState.AvailableReserves。−1＝伝令役なし）。攻守はその時点の局面で決まる。
     /// </summary>
     Timeout,
+    /// <summary>くさい所（issue #872）。OffenseIsAway=**攻撃側**が先攻か（指示は守備側＝その逆に載る）。On=入れる／解く。その打席だけ。</summary>
+    PitchAround,
 }
 
 /// <summary>復元された進行（状態＋続きを回すための enumerator）。drain して <see cref="GameEngine.BuildResult"/> へ。</summary>
@@ -258,6 +261,9 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.StandingDefense:
                     p.OffenseOf(!d.OffenseIsAway).SetStandingDefense(d.Policy, d.Gear, d.Infield, d.Outfield);
+                    break;
+                case GameDecisionKind.PitchAround:
+                    p.OffenseOf(!d.OffenseIsAway).SetPitchAround(d.On);
                     break;
                 case GameDecisionKind.OffensiveSign:
                     p.OffenseOf(d.OffenseIsAway).SetPendingOffensiveSign(d.Sign);

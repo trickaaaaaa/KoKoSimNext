@@ -254,6 +254,9 @@ namespace KokoSim.Unity.Match
         private PitcherGear? _defGear;
         private DefenseDepth? _defInfield;
         private DefenseDepth? _defOutfield;
+        // ③その打席だけの守備指示（くさい所・issue #872）。押すとエンジンへ入り、打席が終わるとエンジン側で解ける。
+        // 表示の点灯は窓ごとにエンジンの実状態へ合わせ直す（半回が変わって打席が確定しないまま解けた場合も消灯する）。
+        private bool _pitchAroundOn;
         private MatchLiveStatsProvider _statsProvider;
         private string _awayDisp = "先攻", _homeDisp = "後攻";
         // 勝者が要る文脈か（大会戦=true／練習試合=false, issue #269）。結果画面の引き分け表記に渡す。
@@ -747,6 +750,7 @@ namespace KokoSim.Unity.Match
             _pitchBattingChoice = null;
             _signChoice = null;
             _stealChoice = null;
+            _pitchAroundOn = false;
             // 方針カードは試合をまたがない（前の試合の前進守備が次の試合に残らないよう明示的に戻す）。
             _approach = BattingApproach.Normal;
             _defPolicy = null;
@@ -1035,6 +1039,8 @@ namespace KokoSim.Unity.Match
             {
                 // 打席が確定した＝「1打席」持続のエンドラン指示はここで解除する（design-09 §1.2）。
                 if (_signChoice != null) { _signChoice = null; _signPad?.ClearSelection("batting"); }
+                // くさい所は「その打席だけ」。エンジンは打席の確定で解いているので、表示の点灯も落とす（issue #872）。
+                if (_pitchAroundOn) { _pitchAroundOn = false; _signPad?.ClearSelection("pitcharound"); }
                 // 打席が確定した。<b>打席を終わらせた1球はここから描く</b>——インプレーの打球は確定して
                 // 初めて手に入る（BattedOf が _current.Play を読む）ので、順序は入れ替えられない。
                 _current = _prog.Current;
@@ -1159,6 +1165,12 @@ namespace KokoSim.Unity.Match
             RefreshPanel();                                       // HUD（打者・投手・球数）とスタメン列
             _signPad?.SetPhase(_atBat.IsTop == _managerIsAway);   // 攻撃中は打撃指示だけ／守備中は配球指示だけ
             _signPad?.RefreshEnabled();                           // 走者の有無でバント/盗塁の可否が変わる
+            // くさい所の点灯はエンジンの実状態に合わせる（半回が変わって打席が確定しないまま解けた場合の取りこぼし）。
+            if (_pitchAroundOn && _prog != null && !_prog.PitchAroundOn(_managerIsAway))
+            {
+                _pitchAroundOn = false;
+                _signPad?.ClearSelection("pitcharound");
+            }
         }
 
         /// <summary>
@@ -1607,6 +1619,10 @@ namespace KokoSim.Unity.Match
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.BreakingHeavy), OnClear = () => PushDefPolicy(null) },
                 new SignPad.SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Art = "control", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.ControlFirst), OnClear = () => PushDefPolicy(null) },
+                // くさい所（issue #872）: ゾーンの際を突き、甘い球を投げない（四球も辞さない）。その打席だけ効く。
+                // 陣形の「長打警戒」と取り違えないよう名前は「くさい所」・アイコン文字は「際」（2026-11-10 オーナー決定）。絵は未作成＝文字を敷く。
+                new SignPad.SignDef { Id = "def-pitch-around", Label = "くさい所", Icon = "際", Offense = false, Group = "pitcharound",
+                    GroupLabel = "打席", OnSelect = () => PushPitchAround(true), OnClear = () => PushPitchAround(false) },
                 new SignPad.SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Art = "push", Offense = false, Group = "gear",
                     GroupLabel = "ギア", OnSelect = () => PushDefGear(PitcherGear.Push), OnClear = () => PushDefGear(null) },
             });
@@ -1651,6 +1667,14 @@ namespace KokoSim.Unity.Match
         private void PushDefGear(PitcherGear? v) { _defGear = v; PushDefense(); }
         private void PushDefInfield(DefenseDepth? v) { _defInfield = v; PushDefense(); }
         private void PushDefOutfield(DefenseDepth? v) { _defOutfield = v; PushDefense(); }
+
+        // くさい所は「その打席だけ」＝エンジンが打席の確定で解く。押した次の1球から効く。自校が守備側の窓でだけ入れる。
+        private void PushPitchAround(bool on)
+        {
+            _pitchAroundOn = on;
+            if (_prog == null || ManagerIsOnOffense()) return;
+            _prog.SetPitchAround(_managerIsAway, on);
+        }
 
         // 守備方針を1球の口へ即予約する（issue #492）。押した次の1球から効き、以降は PushPitchTacticsChoice が
         // 采配窓ごとに再予約して「解除するまで続く」寿命を維持する。自校が守備側の窓でだけ載せる
@@ -1749,6 +1773,7 @@ namespace KokoSim.Unity.Match
             PushPitchTacticsChoice();
             var advanced = _prog.Advance();
             _signChoice = null;   // 一括経路は1回のAdvanceで打席全体を解決する＝エンドランもここで解除
+            if (_pitchAroundOn) { _pitchAroundOn = false; _signPad?.ClearSelection("pitcharound"); }   // くさい所もその打席だけ
             ResetPitchTacticsChoice();
             if (!advanced) { EndGame(_prog.BuildResult()); return; }
             _current = _prog.Current;
