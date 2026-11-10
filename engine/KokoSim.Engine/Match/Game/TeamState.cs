@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Match.AtBat;
+using KokoSim.Engine.Match.Batting;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Players;
@@ -328,6 +329,25 @@ public sealed class TeamState
     {
         var key = (KeyOf(batter), KeyOf(pitcher));
         _matchupPa[key] = (_matchupPa.TryGetValue(key, out var n) ? n : 0) + 1;
+    }
+
+    // 打者×投手の球種の慣れ（設計書02 §2.3b 案A・issue #836）。試合内（打席をまたいで）持続し、
+    // 投手が変われば新しいインスタンス＝自然に0から（キーは帰属キー・_matchupPa と同じ仕組み）。
+    private readonly Dictionary<(Player Batter, Player Pitcher), Batting.PitchFamiliarityTracker> _pitchFamiliarity = new();
+
+    /// <summary>
+    /// この打者×この投手の球種慣れトラッカー（無ければ新規作成して返す）。<see cref="AtBat.AtBatSession"/> が
+    /// 毎球これを読み書きする参照を保持する＝打席をまたいでも同じインスタンス、投手が変われば別インスタンス。
+    /// </summary>
+    public Batting.PitchFamiliarityTracker PitchFamiliarityTrackerFor(Player batter, Player pitcher)
+    {
+        var key = (KeyOf(batter), KeyOf(pitcher));
+        if (!_pitchFamiliarity.TryGetValue(key, out var tracker))
+        {
+            tracker = new Batting.PitchFamiliarityTracker();
+            _pitchFamiliarity[key] = tracker;
+        }
+        return tracker;
     }
 
     /// <summary>当該試合でこの投手が既に対戦した打者数（尻上がり/打者一巡用, 設計書10）。継投でリセット。</summary>

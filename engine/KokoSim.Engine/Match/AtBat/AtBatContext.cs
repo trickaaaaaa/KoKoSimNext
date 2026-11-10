@@ -57,6 +57,14 @@ public sealed record AtBatContext
     /// </summary>
     public int FamiliarityPa { get; init; }
 
+    /// <summary>
+    /// 球種の慣れ（設計書02 §2.3b 案A・issue #836）: この打者×この投手の試合内の球種ごとの見慣れ度蓄積。
+    /// 試合エンジンが <see cref="Game.TeamState.PitchFamiliarityTrackerFor"/> から設定（継投で新しいインスタンス＝0から）。
+    /// 既定 null＝未配線＝効き0（<see cref="Batting.ContactModel.PitchFamiliarityEffect"/>）。参照型なので
+    /// <see cref="AtBat.AtBatSession"/> が毎球 <see cref="Batting.PitchFamiliarityTracker.Advance"/> で更新する。
+    /// </summary>
+    public Batting.PitchFamiliarityTracker? PitchFamiliarity { get; init; }
+
     /// <summary>スキルによる1打席の挙動補正（設計書10）。既定は無効果（スキルなしと同一）。</summary>
     public SkillPlayMods Skills { get; init; } = SkillPlayMods.None;
 

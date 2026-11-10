@@ -29,7 +29,8 @@ public static class ContactModel
         PitchTrajectoryFeatures features,
         bool inZone,
         BattingCoefficients coeff,
-        int familiarityPa = 0)
+        int familiarityPa = 0,
+        double? pitchFamiliarityLevel = null)
     {
         // 誘発変化量の欺瞞効果は実球速で割り引く（issue #837・設計書21 §3.5）。遅い球ほど見る時間が長く、
         // 大きなホップに欺かれにくい＝球威・タイミング・打球質の球速項（反応球速で寝かせ済み）と対称に扱う。
@@ -42,7 +43,10 @@ public static class ContactModel
                 + SaturateMatchup(matchup, coeff.WhiffMatchupCap)
                 + coeff.WhiffBreakSlope * effectiveBreak
                 // 慣れ（設計書02 §2.3b）: 同一投手との対戦回数ぶん空振りにくくなる。変化量が大きい球ほど割引。
-                - coeff.FamiliarityWhiffPerPa * FamiliarityEffect(familiarityPa, effectiveBreak, coeff);
+                - coeff.FamiliarityWhiffPerPa * FamiliarityEffect(familiarityPa, effectiveBreak, coeff)
+                // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: 同じ球種が連投されるほど空振りにくくなる。
+                // 持ち球が少ない投手ほど自然に強く効く（追加の特徴量なし・慣れの蓄積だけで表現）。
+                - coeff.PitchFamiliarityWhiffPerLevel * PitchFamiliarityEffect(pitchFamiliarityLevel, plan.PitchRank, coeff);
         if (!inZone)
         {
             z += coeff.WhiffOutOfZonePenalty;
@@ -76,6 +80,20 @@ public static class ContactModel
         var n = System.Math.Min(familiarityPa, coeff.FamiliarityMaxPa);
         var discount = System.Math.Max(0.0, 1.0 - coeff.FamiliarityBreakDiscountPerM * breakMagnitudeM);
         return n * discount;
+    }
+
+    /// <summary>
+    /// 球種の慣れ（設計書02 §2.3b 案A・issue #836）の効き。見慣れ度（<see cref="PitchFamiliarityTracker.Level"/>）が
+    /// 基準（持ち球が平均的なときの定常値）からどれだけ離れているかに、球種ランクによる割引（キレ・球威が高い球は
+    /// 慣れられても効きにくい＝§2.3b「慣れを万能にしない」）を掛ける。<paramref name="level"/> が null（トラッカー
+    /// 未配線）なら常に0＝恒等。正＝持ち球が偏っていて見慣れられている（打者有利）、負＝持ち球が豊富で
+    /// その球は相対的に見慣れていない（投手有利）。
+    /// </summary>
+    public static double PitchFamiliarityEffect(double? level, int pitchRank, BattingCoefficients coeff)
+    {
+        if (level is null) return 0.0;
+        var discount = MathUtil.Clamp(coeff.PitchFamiliarityRankDiscountPerPoint * (pitchRank - 50), 0.0, 1.0);
+        return (level.Value - coeff.PitchFamiliarityBaselineLevel) * (1.0 - discount);
     }
 
     /// <summary>
@@ -135,9 +153,10 @@ public static class ContactModel
         BattingCoefficients coeff,
         IRandomSource rng,
         int familiarityPa = 0,
-        int strikes = 0)
+        int strikes = 0,
+        double? pitchFamiliarityLevel = null)
     {
-        var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff, familiarityPa);
+        var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff, familiarityPa, pitchFamiliarityLevel);
         if (MathUtil.Chance(whiffProb, rng))
         {
             return (ContactOutcome.Whiff, null);
@@ -153,9 +172,11 @@ public static class ContactModel
 
         // フェア: コンタクト品質 → 初速・角度・方向。バレル(品質>1)で満初速を少し越える。
         // 投手側の寄与（球速/制球/キレ）が入るため、同じ打者でも「打たせて取る」投手には弱い打球になる。
+        // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: 同じ球種を連投されるほど打球の質も上がる。
         var quality = MathUtil.Clamp(
             coeff.QualityMean + coeff.QualityContactSlope * (batter.Contact - 50)
                 + PitcherContactQualityBias(plan, features, coeff)
+                + coeff.PitchFamiliarityQualityPerLevel * PitchFamiliarityEffect(pitchFamiliarityLevel, plan.PitchRank, coeff)
                 + rng.NextGaussian(0, coeff.QualitySigma),
             QualityMin, 1.05);
 

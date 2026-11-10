@@ -301,6 +301,13 @@ public sealed class AtBatSession
         var plan = PitchSelection.Select(pitcher, ctx.StrikeZone, batting, ctx.Pitching, rng, gear, directive, ctx.CatcherLead);
         // クセ球/荒れ球（設計書10）: 球速に依らない球威の上乗せ（空振り誘発の質的個性）。
         if (ctx.Skills.StuffBonus != 0.0) plan = plan with { Stuff = plan.Stuff + ctx.Skills.StuffBonus };
+
+        // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: この球を履歴へ畳み込む前の見慣れ度を読み（＝この球の
+        // 判定にはまだ含めない）、読んだ直後に Advance で畳み込む（毎球必ず1回＝球種が決まった実球すべてに効く。
+        // 敬遠・強制発動はこの行より前で return 済みなので対象外＝ RNG 非消費のまま）。
+        var pitchFamiliarityLevel = ctx.PitchFamiliarity?.Level(plan.Type);
+        ctx.PitchFamiliarity?.Advance(plan.Type, batting.PitchFamiliarityDecay);
+
         var loc = ControlScatter.Sample(plan.AimX, plan.AimY, pitcher.Control, ctx.Pitching, rng);
         var inZone = ctx.StrikeZone.Contains(loc.X, loc.Y);
 
@@ -469,7 +476,8 @@ public sealed class AtBatSession
         }
 
         // ④ コンタクト判定 → ⑤ 打球生成（広角打法/粘り打ちは batting コピーへ反映済み）
-        var (outcome, ball) = ContactModel.Resolve(batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes);
+        var (outcome, ball) = ContactModel.Resolve(
+            batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes, pitchFamiliarityLevel);
         switch (outcome)
         {
             case ContactOutcome.Whiff:
