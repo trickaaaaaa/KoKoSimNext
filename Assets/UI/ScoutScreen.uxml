@@ -99,7 +99,7 @@
               <!-- 見立てと隠しパラメータは横並び（片方だけだと項目4つに対して幅が余りすぎる）。
                    スカウト候補では「わかっていること」（隠し素質）は出さない（issue #867・オーナー決定2）。 -->
               <ui:VisualElement class="sc-row2">
-                <ui:VisualElement class="card card--half">
+                <ui:VisualElement name="sc-est-card" class="card card--half">
                   <ui:VisualElement class="card__hd card__hd--tight">
                     <ui:Label class="card__hd-title" text="事前の見立て" />
                     <ui:Label name="sc-est-note" class="card__hd-sub" text="" />

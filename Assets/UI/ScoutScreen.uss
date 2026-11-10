@@ -51,11 +51,11 @@
 /* ── マスターディテール（監督選択のB案）: 左=予定者一覧 / 右=選んだ1人の見立て。
    比率は選手一覧（40:60）に合わせる＝タブを移っても目線の位置が変わらない。 */
 .sc-split { flex-direction: row; flex-grow: 1; min-height: 0; }
-.sc-split__left { flex-grow: 0; flex-shrink: 0; width: 40%; }
+.sc-split__left { flex-grow: 0; flex-shrink: 0; width: 46%; }
 .sc-split__right {
     flex-grow: 0;
     flex-shrink: 0;
-    width: 60%;
+    width: 54%;
     padding-left: var(--sp-4);
 }
 

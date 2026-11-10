@@ -421,6 +421,8 @@ namespace KokoSim.Unity.Scout
         private void RenderHidden(ProspectRow r)
         {
             SetShown(_root.Q<VisualElement>("sc-hidden-card"), !r.IsScout);
+            // 右隣の隠し素質カードを伏せたときは見立てカードが行の右端まで伸びる（右の余白を残さない）。
+            _root.Q<VisualElement>("sc-est-card")?.EnableInClassList("sc-card-last", r.IsScout);
             if (r.IsScout) return;
 
             var host = _root.Q<VisualElement>("sc-hidden");

@@ -47,7 +47,7 @@ namespace KokoSim.Unity.Scout
         public string Hometown = "";
         /// <summary>自校から見た遠さ（「遠方」）。</summary>
         public string DistanceWord = "";
-        /// <summary>競合校の格（「A」）。</summary>
+        /// <summary>競合校の格と自校との上下（「A（格上）」。ワイヤー案A）。</summary>
         public string RivalTier = "";
         /// <summary>競合校が自校より上か（不利に効いている＝淡く出す）。</summary>
         public bool RivalIsStronger;
@@ -245,7 +245,7 @@ namespace KokoSim.Unity.Scout
                 HasEstimate = r.Tier >= 2,
                 Hometown = PrefectureNames.JapaneseOf(c.PrefectureId),
                 DistanceWord = PrefectureRegions.DisplayName(c.Distance),
-                RivalTier = c.RivalTier.ToString(),
+                RivalTier = c.RivalTier + RivalRelation(ScoutModel.TierRank(c.RivalTier) - ScoutModel.TierRank(HomeTier())),
                 RivalIsStronger = ScoutModel.TierRank(c.RivalTier) > ScoutModel.TierRank(HomeTier()),
                 Targeted = c.Targeted,
                 Visits = c.Visits,
@@ -411,5 +411,8 @@ namespace KokoSim.Unity.Scout
 
         /// <summary>「合流する年度の4月」の暦年（週0＝その年度の4月1週目で引く）。</summary>
         private static string YearLabel(int joinYearIndex) => SeasonClock.YearLabel(joinYearIndex, 0);
+        /// <summary>競合校の格を自校と比べた語（ワイヤー案A「競合 △△高校（格上）」の括弧部分）。</summary>
+        static string RivalRelation(int diff) => diff > 0 ? "（格上）" : diff < 0 ? "（格下）" : "（同格）";
+
     }
 }
