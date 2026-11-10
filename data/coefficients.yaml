@@ -256,8 +256,8 @@ batting:
   contact_quality_per_break_m: -0.90       # 変化が大きいほど詰まる
   # 際の球は芯を外しやすい（issue #872）。実着弾の縁への近さ（StrikeZone.EdgeProximity: 中心0・縁上と外1）が基準より大きいほど
   # 品質が下がり、真ん中は強く打たれる。基準で寄与0。くさい所（縁狙い）の打席だけでなく全打席に効く。
-  contact_quality_edge_ref: 0.72
-  contact_quality_per_edge: -0.12
+  contact_quality_edge_ref: 0.73
+  contact_quality_per_edge: -0.15
 
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:

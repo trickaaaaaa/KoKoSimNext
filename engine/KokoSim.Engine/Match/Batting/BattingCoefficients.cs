@@ -302,9 +302,9 @@ public sealed record BattingCoefficients
     /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>
     public double ContactQualityPerBreakM { get; init; } = -0.90;
     /// <summary>コンタクト品質への「縁への近さ」の基準（<see cref="Field.StrikeZone.EdgeProximity"/>。この近さで寄与0）。</summary>
-    public double ContactQualityEdgeRef { get; init; } = 0.72;
+    public double ContactQualityEdgeRef { get; init; } = 0.73;
     /// <summary>縁への近さ1あたりのコンタクト品質寄与（issue #872）。負＝際の球ほど芯を外させる（真ん中は強く打たれる）。</summary>
-    public double ContactQualityPerEdge { get; init; } = -0.12;
+    public double ContactQualityPerEdge { get; init; } = -0.15;
 
     // --- ④ タイミングのズレ → ⑤ 打球方向（設計書01 §2④⑤, issue #262） ---
     // 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。
