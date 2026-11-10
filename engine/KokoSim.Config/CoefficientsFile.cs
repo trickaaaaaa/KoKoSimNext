@@ -2078,11 +2078,13 @@ public static class CoefficientsLoader
         public double MessengerFactorMin { get; set; } = D.MessengerFactorMin;
         public double MessengerFactorMax { get; set; } = D.MessengerFactorMax;
         public int AiMessengerPickMinSense { get; set; } = D.AiMessengerPickMinSense;
+        public double CaptainMessengerBonusPerPower { get; set; } = D.CaptainMessengerBonusPerPower;
+        public double CaptainMessengerFactorMax { get; set; } = D.CaptainMessengerFactorMax;
         public int RattledConsecutiveBaserunners { get; set; } = D.RattledConsecutiveBaserunners;
         public double RattledNegativeAmplify { get; set; } = D.RattledNegativeAmplify;
         public int RattledThresholdMentalOffset { get; set; } = D.RattledThresholdMentalOffset;
         public int RattledRecoveryOuts { get; set; } = D.RattledRecoveryOuts;
-        public double CaptainMitigationPerPower { get; set; } = D.CaptainMitigationPerPower;
+        public double CaptainPresencePerPower { get; set; } = D.CaptainPresencePerPower;
         public double CaptainBenchFactor { get; set; } = D.CaptainBenchFactor;
         // 1球采配（設計書15 §2.3, Phase C）
         public double PitchTacticsTwoStrikeForceSwingProb { get; set; } = D.PitchTacticsTwoStrikeForceSwingProb;
@@ -2205,11 +2207,13 @@ public static class CoefficientsLoader
             MessengerFactorMin = MessengerFactorMin,
             MessengerFactorMax = MessengerFactorMax,
             AiMessengerPickMinSense = AiMessengerPickMinSense,
+            CaptainMessengerBonusPerPower = CaptainMessengerBonusPerPower,
+            CaptainMessengerFactorMax = CaptainMessengerFactorMax,
             RattledConsecutiveBaserunners = RattledConsecutiveBaserunners,
             RattledNegativeAmplify = RattledNegativeAmplify,
             RattledThresholdMentalOffset = RattledThresholdMentalOffset,
             RattledRecoveryOuts = RattledRecoveryOuts,
-            CaptainMitigationPerPower = CaptainMitigationPerPower,
+            CaptainPresencePerPower = CaptainPresencePerPower,
             CaptainBenchFactor = CaptainBenchFactor,
             PitchTacticsTwoStrikeForceSwingProb = PitchTacticsTwoStrikeForceSwingProb,
             PitchTacticsTwoStrikeMinContact = PitchTacticsTwoStrikeMinContact,

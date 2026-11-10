@@ -221,18 +221,19 @@ public sealed class SkillTests
         }
     }
 
-    // ===== 精神的支柱: 主将の緩和量を拡大 =====
+    // ===== 精神的支柱: 主将の底上げ倍率（issue #860 A）を拡大 =====
 
     [Fact]
-    public void SpiritualPillar_AmplifiesCaptainMitigation()
+    public void SpiritualPillar_AmplifiesCaptainPresenceMultiplier()
     {
         var plainCap = new Player { Position = FieldPosition.Catcher, Mental = 80, Leadership = 80 };
         var pillarCap = plainCap with { Skills = new SkillSet(new[] { Skill.SpiritualPillar }) };
         var plain = new TeamState(TeamOf("A", captain: plainCap));
         var pillar = new TeamState(TeamOf("B", captain: pillarCap));
         var tactics = new KokoSim.Engine.Match.Tactics.TacticsCoefficients();
-        Assert.Equal(plain.CaptainMitigation(tactics, C) * C.SpiritualPillarCaptainFactor,
-                     pillar.CaptainMitigation(tactics, C), 9);
+        // 倍率は「1 + 上乗せ」の形なので、1を引いた上乗せ分どうしを比べる（倍率全体を掛けると1の分だけずれる）。
+        Assert.Equal((plain.CaptainPresenceMultiplier(tactics, C) - 1.0) * C.SpiritualPillarCaptainFactor,
+                     pillar.CaptainPresenceMultiplier(tactics, C) - 1.0, 9);
     }
 
     // ===== ムードメーカー: 出場中ならプレッシャー緩和量へ加算（主将とは別枠） =====

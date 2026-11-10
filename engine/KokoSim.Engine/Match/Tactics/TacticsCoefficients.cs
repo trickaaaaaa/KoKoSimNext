@@ -302,6 +302,14 @@ public sealed record TacticsCoefficients
     public double MessengerFactorMax { get; init; } = 1.4;
     /// <summary>AI監督がこの采配能力以上なら最適な伝令役を選ぶ。未満ならベンチの先頭（手近な控え）を走らせる。</summary>
     public int AiMessengerPickMinSense { get; init; } = 60;
+    /// <summary>
+    /// 主将を伝令役に走らせたときの上乗せ（issue #860 B）。統率力（<see cref="CaptainPresencePerPower"/>と同じ
+    /// Leadership×Mental/100）1あたり係数へ加算し、<see cref="MessengerFactorMax"/>（通常1.4）を超えられる
+    /// （上限は<see cref="CaptainMessengerFactorMax"/>）。主将以外の伝令役には効かない。
+    /// </summary>
+    public double CaptainMessengerBonusPerPower { get; init; } = 0.015;
+    /// <summary>主将が伝令役のときだけ使う係数の上限（通常の<see cref="MessengerFactorMax"/>より広い）。</summary>
+    public double CaptainMessengerFactorMax { get; init; } = 2.4;
     /// <summary>動揺: 連続出塁がこの数に達すると投手が動揺し、負補正が増幅される。</summary>
     public int RattledConsecutiveBaserunners { get; init; } = 3;
     public double RattledNegativeAmplify { get; init; } = 1.4;
@@ -315,8 +323,16 @@ public sealed record TacticsCoefficients
     public int RattledThresholdMentalOffset { get; init; } = 1;
     /// <summary>動揺後、無失点でこの数だけアウトを重ねると自然回復（伝令・継投を使わず解除）。</summary>
     public int RattledRecoveryOuts { get; init; } = 2;
-    /// <summary>主将: 統率力（統率傾向×精神力/100, 0〜100）1あたりの負補正緩和。ベンチ時は大きく減衰。</summary>
-    public double CaptainMitigationPerPower { get; init; } = 0.004;
+    /// <summary>
+    /// 主将（issue #860 A）: 在場中チーム全員へ常時かける底上げ倍率 = 1 + 統率力 × この値 ×（在場1.0／ベンチ<see cref="CaptainBenchFactor"/>）。
+    /// 統率力 = 統率傾向×精神力/100（0〜100）。旧「プレッシャー負補正の緩和」（<c>CaptainMitigation</c>）を置き換えた
+    /// （2026-11-10 監督決定。緩和は負側にしか効かず精神力50以上の選手には無風だったため、全員に乗る正の倍率へ一本化）。
+    /// </summary>
+    public double CaptainPresencePerPower { get; init; } = 0.0003;
+    /// <summary>
+    /// 主将がベンチにいるときの底上げ倍率の減衰率。旧「負補正緩和のベンチ減衰」と同じ値を残し、
+    /// ベンチの主将でも底上げの3割は効く（2026-11-10 監督決定。Bの伝令ボーナスと両取りできる）。
+    /// </summary>
     public double CaptainBenchFactor { get; init; } = 0.30;
 
     /// <summary>配球方針→自動配球への重み（おまかせは恒等）。内角は打者の利きで符号が変わる。</summary>

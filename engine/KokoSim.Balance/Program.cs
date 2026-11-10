@@ -34,6 +34,7 @@ internal static class CommandLine
             "error-kinds" => RunErrorKinds(args[1..]),
             "trace" => RunTrace(args[1..]),
             "trace-diff" => RunTraceDiff(args[1..]),
+            "captain-usage" => RunCaptainUsage(args[1..]),
             _ => Fail($"未知のコマンド: {args[0]}"),
         };
     }
@@ -423,6 +424,42 @@ internal static class CommandLine
             Console.WriteLine($"時間枠を使い切りました。未測定の条件が {remaining} 件あります。同じコマンドをもう一度回すと続きから測ります（--cache {cachePath}）。");
             return 3;
         }
+        Console.Write(text);
+        WriteReport(reportPath, text);
+        return 0;
+    }
+
+    /// <summary>
+    /// 主将の起用ジレンマ（issue #860 C）: 「主将スタメン」と「最良選手スタメン＋主将ベンチ（伝令）」の
+    /// 勝率比較。係数も帯も動かさない計測専用コマンド。
+    /// </summary>
+    private static int RunCaptainUsage(string[] args)
+    {
+        var games = 3000;
+        var seed = 42UL;
+        string? reportPath = null;
+        string? coefficientsPath = null;
+        var leadership = 85;
+        var mental = 75;
+        var battingGap = 10;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--games": games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
+                case "--leadership": leadership = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--mental": mental = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--batting-gap": battingGap = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+
+        var result = KokoSim.Balance.CaptainUsageSimulation.Run(games, seed, coefficientsPath, leadership, mental, battingGap);
+        var text = KokoSim.Balance.CaptainUsageSimulation.Report(result, seed, leadership, mental, battingGap);
         Console.Write(text);
         WriteReport(reportPath, text);
         return 0;

@@ -14,9 +14,13 @@ public static class TimeoutMessenger
     /// <summary>
     /// 伝令役の係数 = clamp(Min, Max, 1 + 統率傾向 + 学年 + 同学年 + 性格の得意場面)。
     /// receiver＝伝令を受ける選手（守備伝令なら投手、攻撃伝令ならその打席の打者）。学年0（未設定）は学年の項を足さない。
+    /// captain＝チームの主将（§8）。messenger が主将本人なら統率力に比例した上乗せを足し、
+    /// 通常の上限（<see cref="TacticsCoefficients.MessengerFactorMax"/>＝1.4）を超えて
+    /// <see cref="TacticsCoefficients.CaptainMessengerFactorMax"/>まで伸びる（issue #860 B・
+    /// ベンチの主将を伝令で使う「ここ一番」の得＝Aの常時効果とは別枠）。
     /// </summary>
     public static double Factor(Player? messenger, Player receiver, bool toPitcher,
-        TacticsCoefficients c, PersonalityCoefficients pc)
+        TacticsCoefficients c, PersonalityCoefficients pc, Player? captain = null)
     {
         if (messenger is null) return 1.0;
         var f = 1.0 + (messenger.Leadership - c.MessengerLeadershipNeutral) * c.MessengerLeadershipSlope;
@@ -25,23 +29,31 @@ public static class TimeoutMessenger
         if (messenger.Grade > 0 && messenger.Grade == receiver.Grade) f += c.MessengerSameGradeBonus;
         var profile = pc.Profile(messenger.Personality);
         f += toPitcher ? profile.MessengerToPitcher : profile.MessengerToBatter;
+        if (captain is not null && ReferenceEquals(messenger, captain))
+        {
+            var power = messenger.Leadership * messenger.Mental / 100.0;
+            f += power * c.CaptainMessengerBonusPerPower;
+            return Math.Clamp(f, c.MessengerFactorMin, c.CaptainMessengerFactorMax);
+        }
         return Math.Clamp(f, c.MessengerFactorMin, c.MessengerFactorMax);
     }
 
     /// <summary>
     /// AI監督の人選。采配能力が <see cref="TacticsCoefficients.AiMessengerPickMinSense"/> 以上なら係数が最大の控え
     /// （同値は先頭）、未満ならベンチの先頭（手近な控え）。控えが居なければ null（記録員が走る＝係数1.0）。
+    /// captain を渡すと <see cref="Factor"/> の主将ボーナス（issue #860 B）込みで比較するので、
+    /// ベンチの主将は自然に最有力候補になる＝AI監督の人選を別途変える必要はない。
     /// </summary>
     public static Player? AiPick(IReadOnlyList<Player> reserves, Player receiver, bool toPitcher, int tacticalSense,
-        TacticsCoefficients c, PersonalityCoefficients pc)
+        TacticsCoefficients c, PersonalityCoefficients pc, Player? captain = null)
     {
         if (reserves.Count == 0) return null;
         if (tacticalSense < c.AiMessengerPickMinSense) return reserves[0];
         var best = reserves[0];
-        var bestF = Factor(best, receiver, toPitcher, c, pc);
+        var bestF = Factor(best, receiver, toPitcher, c, pc, captain);
         for (var i = 1; i < reserves.Count; i++)
         {
-            var f = Factor(reserves[i], receiver, toPitcher, c, pc);
+            var f = Factor(reserves[i], receiver, toPitcher, c, pc, captain);
             if (f > bestF) { best = reserves[i]; bestF = f; }
         }
         return best;

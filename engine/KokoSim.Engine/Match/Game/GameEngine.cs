@@ -677,10 +677,12 @@ public static class GameEngine
                     if (defense.Tactics.CallDefenseTimeout(situation, rng) && defense.TryUseDefenseTimeout())
                     {
                         defense.ClearRattled();
-                        // 伝令役の人選（issue #716）: 乱数を使わない＝RNG列は不変。
+                        // 伝令役の人選（issue #716/#860 B）: 乱数を使わない＝RNG列は不変。主将を渡すと
+                        // ベンチの主将が通常上限1.4超えの係数で自然に最有力候補になる。
                         defense.StartDefenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
                             defense.AvailableReserves, currentPitcher, toPitcher: true,
-                            defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities));
+                            defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities,
+                            defense.Captain));
                     }
                 }
 
@@ -691,7 +693,8 @@ public static class GameEngine
                     {
                         offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
                             offense.AvailableReserves, batter, toPitcher: false,
-                            offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities));
+                            offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities,
+                            offense.Captain));
                     }
                     sign = offense.Tactics.CallOffense(situation, rng);
                 }
@@ -742,7 +745,7 @@ public static class GameEngine
                 pit = SkillModel.ApplyPitcher(pit, currentPitcher.Skills, priorBf, ctx.Skills);
                 var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
 
-                // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
+                // プレッシャー×精神力（設計書02 §3）: 緩和=伝令、負側増幅=疲労・動揺。精神力50なら恒等。
                 var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
                 pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
                     currentPitcher.Mental, pressureIdx, ctx.Pressure,
@@ -752,8 +755,15 @@ public static class GameEngine
                     batter.Mental, pressureIdx, ctx.Pressure,
                     offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
 
+                // 主将（設計書09 §8.1, issue #860 A）: 在場なら常時チーム全員を底上げ。退場すると次打席で消える。
+                // ベンチでも底上げの3割（CaptainBenchFactor）は残る＝Bの伝令ボーナスと両取り可（2026-11-10 監督決定）。
+                // 精神力に関係なく効く＝プレッシャーのMultiplierとは別枠（恒等倍率1.0が既定）。
+                pit = PressureModel.ApplyPitcher(pit, defense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills));
+                bat = PressureModel.ApplyBatter(bat, offense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills));
+
                 // 動揺と伝令の手応え（issue #714）。どちらも精神力に関係なく効く＝伝令を送る意味が見える大きさ。
                 // 動揺: 制球が落ちる。伝令の効果窓: 守備=制球／攻撃=ミートが上がる（大一番ほど・采配と素直さで増減）。
+                // 伝令役が主将なら通常上限1.4を超える（issue #860 B・TimeoutMessenger.Factor）。
                 // 乱数は使わない＝RNG列は不変（結果は効果の分だけ変わる）。
                 if (defense.PitcherRattled && ctx.Tactics.RattledControlPenalty > 0.0)
                     pit = PressureModel.ApplyPitcher(pit, 1.0 - ctx.Tactics.RattledControlPenalty);
@@ -762,13 +772,13 @@ public static class GameEngine
                         defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.Profile(currentPitcher.Personality).CoachingReceptivity, ctx.Tactics,
                         TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
-                            ctx.Tactics, ctx.Personalities)));
+                            ctx.Tactics, ctx.Personalities, defense.Captain)));
                 if (offense.OffenseCalmPa > 0)
                     bat = PressureModel.ApplyBatter(bat, PressureModel.CalmMultiplier(pressureIdx,
                         offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.Profile(batter.Personality).CoachingReceptivity, ctx.Tactics,
                         TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
-                            ctx.Tactics, ctx.Personalities)));
+                            ctx.Tactics, ctx.Personalities, offense.Captain)));
 
                 // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
                 // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。

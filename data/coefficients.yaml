@@ -960,13 +960,20 @@ tactics:
   messenger_factor_min: 0.7
   messenger_factor_max: 1.4
   ai_messenger_pick_min_sense: 60    # AI監督の采配がこれ以上なら最適な伝令役、未満ならベンチの先頭を走らせる
+  # 主将を伝令役に走らせたときの上乗せ（issue #860 B）。統率力（captain_presence_per_powerと同じLeadership×Mental/100）
+  # 1あたり係数へ加算し、通常上限（messenger_factor_max=1.4）を超えて captain_messenger_factor_max まで伸びる。
+  captain_messenger_bonus_per_power: 0.015
+  captain_messenger_factor_max: 2.4
   rattled_consecutive_baserunners: 3
   rattled_negative_amplify: 1.4
   rattled_control_penalty: 0.10        # 動揺中は精神力に関係なく制球×(1−これ)（issue #714。守備伝令で解く価値）
   rattled_threshold_mental_offset: 1   # 精神力50で従来同値・100で+1しにくく・0で-1しやすく（issue #73）
   rattled_recovery_outs: 2             # 動揺後、無失点でこの数アウトを重ねると自然回復（issue #73）
-  captain_mitigation_per_power: 0.004   # 統率力（統率傾向×精神力/100）1あたりの負補正緩和
-  captain_bench_factor: 0.30
+  # 主将（issue #860 A・設計書09 §8.1）: 在場中チーム全員へ常時かける底上げ倍率 = 1 + 統率力 ×
+  # captain_presence_per_power ×（在場1.0／ベンチcaptain_bench_factor）。統率力=統率傾向×精神力/100。
+  # 旧「プレッシャー負補正の緩和」(captain_mitigation_per_power)を置き換えた（2026-11-10 監督決定）。
+  captain_presence_per_power: 0.0003
+  captain_bench_factor: 0.30   # ベンチの主将でも底上げの3割は残る（Bの伝令ボーナスと両取り可）
   # 1球采配（設計書15 §2.3, Phase C）
   pitch_tactics_two_strike_force_swing_prob: 0.0   # 追い込まれ矯正はbatting.two_strike_*（本則）へ統合済み・無効化
   pitch_tactics_two_strike_min_contact: 50
