@@ -239,6 +239,25 @@ public sealed record FieldingCoefficients
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
 
+    // 送球の逸れ（内野ゴロ→一塁, issue #858）。盗塁送球（StealResolver, issue #841）と同じ
+    // ThrowScatterModel を通す。<see cref="ThrowErrorBaseProb"/>/<see cref="ThrowErrorAccuracySlope"/> は
+    // そのまま残し「確率係数」として使うが、判定の形を二値ロールから「2次元の逸れをサンプルして
+    // 閾値と比べる」へ差し替える（<see cref="ThrowScatterModel.WildThresholdCmForProbability"/>で
+    // 確率→閾値へ逆算＝同じ確率カーブを保ったまま rng の消費が1→2系統に増えるだけ、不変条件#5）。
+    /// <summary>横の逸れ1cmあたり追加される秒（寄る・足が離れる分）。盗塁送球と同値を既定にする
+    /// （<see cref="KokoSim.Engine.Match.Game.BaserunningCoefficients.StealThrowScatterLateralSecPerCm"/>）。</summary>
+    public double ThrowScatterLateralSecPerCm { get; init; } = 0.0015;
+    /// <summary>浮いた（高い）逸れ1cmあたり追加される秒（ミットを下ろす分）。</summary>
+    public double ThrowScatterHighSecPerCm { get; init; } = 0.0010;
+    /// <summary>低い（ショートバウンド側）逸れ1cmあたり追加される秒（捕り直す分。高い側より重い）。</summary>
+    public double ThrowScatterShortHopSecPerCm { get; init; } = 0.0030;
+    /// <summary>受け手Catching(-50)あたりの遅れ縮小の傾き。既定の受け手は league average（Catching50＝恒等）
+    /// ＝個別の一塁手Catchingは読まない（この送球だけでは受け手が特定できない呼び出し site もあるため、
+    /// 全文脈で同じ既定にして帯への影響をゼロに保つ）。</summary>
+    public double ThrowScatterCatchingReliefSlope { get; init; } = 0.004;
+    /// <summary>遅れ縮小倍率の下限（最速側クランプ）。</summary>
+    public double ThrowScatterCatchingReliefMinFactor { get; init; } = 0.60;
+
     // 受け手の捕球ミス（内野ゴロ→一塁の3段階目, issue #810 / design-14 P1-6b 追記）。捕球ロール(Catching)→
     // 送球ロール(ThrowAccuracy)を通過した（＝送球自体は正確）後に、受け手の一塁手が正確な送球を落とす／
     // ショートバウンドを捕れない失策を引く。既定 base=0.0 なら「ロールを一切引かない」＝現行の2段判定と

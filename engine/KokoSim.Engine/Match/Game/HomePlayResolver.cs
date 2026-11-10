@@ -1,6 +1,7 @@
 using System;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Game;
@@ -174,6 +175,16 @@ public static class HomePlayResolver
         {
             throwTime = dist / s.OutfielderThrowSpeedMps; // 直接返球
         }
+        // 送球の逸れ（issue #858）: 送球者(s.ThrowerThrowAccuracy)のリーグ平均（50）からの差分だけの
+        // 期待遅れを ThrowScatterModel で加える。この経路は本塁・三塁クロスプレー、犠飛/進塁のタッチアップ、
+        // 併殺（BaserunningModel.ResolveDoublePlay の二塁/三塁/本塁フォース）、バントの封殺が共有する単一経路
+        // ＝ここ一箇所の変更で全部に広がる。受け手は league average 固定（Catching=50＝恒等。この経路には
+        // 塁をカバーする個別の受け手が無い場面も混在するため、全文脈で同じ既定にして帯への影響をゼロに保つ）。
+        // 精度50では厳密に0.0（既存呼び出し＝既定 ThrowerThrowAccuracy=50 は浮動小数まで完全不変）。
+        throwTime += ThrowScatterModel.CenteredExpectedRecoverySeconds(
+            ThrowScatterModel.SigmaCmForAccuracy(s.ThrowerThrowAccuracy), receiverCatching: 50,
+            c.ThrowScatterLateralSecPerCm, c.ThrowScatterHighSecPerCm, c.ThrowScatterShortHopSecPerCm,
+            c.ThrowScatterCatchingReliefSlope, c.ThrowScatterCatchingReliefMinFactor);
 
         // 握り替え秒: null なら OutfieldTransferSeconds（既存経路とビット一致）。
         var transferSeconds = transferSecondsOverride ?? c.OutfieldTransferSeconds;
@@ -317,7 +328,9 @@ public static class HomePlayResolver
     /// トリガーする合図。<see cref="Safe"/>（走者が普通に勝った）とは区別する。</summary>
     public enum HomeThrowOutcome { Safe, OutAtHome, SafeOnWildThrow }
 
-    /// <summary>本塁への送球が逸れるか（送球者の ThrowAccuracy から確率を出し1回だけロール）。
+    /// <summary>本塁への送球が逸れるか（送球者の ThrowAccuracy から確率を出し、2次元の逸れをサンプルして
+    /// 閾値と比べる＝issue #858で逸れの閾値へ統合。確率係数は不変（下の式）なので、確率カーブ自体は従来の
+    /// 二値ロールと完全に同じ＝rng消費が1→2系統に増える以外は帯への影響なし。決定論baseline再生成が必要）。
     /// Ac=50 で <see cref="BaserunningCoefficients.RelayThrowErrorBaseProb"/> と恒等。
     /// <see cref="BaserunningCoefficients.RelayThrowErrorBaseProb"/>≤0 なら常にfalse（rng非消費＝旧経路と完全一致）。</summary>
     public static bool IsWildThrow(int throwAccuracy, BaserunningCoefficients c, IRandomSource rng)
@@ -325,7 +338,9 @@ public static class HomePlayResolver
         if (c.RelayThrowErrorBaseProb <= 0.0) return false;
         var prob = MathUtil.Clamp(
             c.RelayThrowErrorBaseProb - (throwAccuracy - 50) * c.RelayThrowErrorAccuracySlope, 0.0, 1.0);
-        return MathUtil.Chance(prob, rng);
+        var sigmaCm = ThrowScatterModel.SigmaCmForAccuracy(throwAccuracy);
+        var thresholdCm = ThrowScatterModel.WildThresholdCmForProbability(sigmaCm, prob);
+        return ThrowScatterModel.IsWild(ThrowScatterModel.Sample(sigmaCm, rng), thresholdCm);
     }
 
     /// <summary>送球逸れの回収レース（design-12 §3.8）: 逸れ幅をサンプルし、拾い直しロス[s]を返す。

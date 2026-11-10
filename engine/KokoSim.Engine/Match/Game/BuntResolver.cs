@@ -71,7 +71,9 @@ public static class BuntResolver
             new Vector3D(c.BuntFieldedXM, 0, c.BuntFieldedZM),
             c.BuntFieldedAtSeconds,
             c.BuntFielderThrowSpeedMps,
-            (int)c.BuntFielderFieldingLevel);
+            (int)c.BuntFielderFieldingLevel,
+            // 送球の逸れ（issue #858）: 既定50＝「誰が処理したか特定しない」簡略化と恒等（帯不変）。
+            (int)c.BuntFielderThrowAccuracyLevel);
 
     /// <summary>小フライの落下点（issue bunt-no-take-on-ball-pitches。<see cref="Timeline.TimelineBuilder.BuildBunt"/>
     /// の絵と共有する単一ソース＝X=0固定・判定＝絵）。</summary>

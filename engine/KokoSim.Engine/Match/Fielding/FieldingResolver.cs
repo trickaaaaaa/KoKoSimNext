@@ -438,8 +438,17 @@ public static class FieldingResolver
             // 乱数は守備に関係なく必ず1つ引く（不変条件#2）。
             var jitterFactor = infielder.Attributes.TransferFactor(coeff.InfieldHandleJitterFieldingSlope, coeff.InfieldHandleJitterFactorMin);
             var handleJitter = DrawHandleJitter(coeff, rng) * jitterFactor;
+            // 送球の逸れ（issue #858）: 送球精度から決まる期待遅れの、リーグ平均（精度50）からの差分だけを
+            // 送球時間へ乗せる（ThrowScatterCenteredBiasSeconds）。精度50では常に0（定義により厳密に0.0。
+            // 両項が同じ式に同じσ・同じ受け手Catching=50を渡すため浮動小数も完全一致）＝精度50の既存テストは
+            // 1件も結果が変わらない。受け手は league average 固定（この送球では受け手を特定しない。帯への
+            // 影響をゼロに保つための意図的な簡略化, issue #858）。ThrowErrorBaseProb<=0（悪送球ロール自体が
+            // 無効化された呼び出し）では0固定＝「送球精度がこの送球に一切効かない」という従来の恒等を保つ
+            // （ThrowAccuracyErrorTests.ThrowErrorDisabled_IsIdenticalToCatchOnly が精度だけ振って完全一致を要求する）。
+            var throwScatterBias = coeff.ThrowErrorBaseProb > 0.0 ? ThrowScatterCenteredBiasSeconds(throwAccuracy, coeff) : 0.0;
             var throwTime = fieldTime + coeff.InfieldPlayOverheadSeconds
-                            + transfer + handleJitter + throwDist / infielder.Attributes.ThrowSpeedMps;
+                            + transfer + handleJitter + throwDist / infielder.Attributes.ThrowSpeedMps
+                            + throwScatterBias;
             // アンアシスト刺殺（3U, Issue #400）: 処理野手が一塁手なら、投手カバーへ送球する以外に「自分で
             // ベースを踏む」選択肢を持つ。捕球点がベース至近なら握り替え0.70sを払わずに済むぶん自重で踏むほうが
             // 速い＝実際の 3U が発生する。所要は握り替え・送球を除いた「捕球点→一塁ベースを走り込む」時間で、
@@ -633,6 +642,19 @@ public static class FieldingResolver
     /// <para>⚠ 平均が 0 でも<b>必ず1つ引く</b>。分岐で消費数を変えると同シード同結果が壊れる
     /// （不変条件#2。係数を 0 にして帯を比べる、という運用ができなくなる）。</para>
     /// </summary>
+    /// <summary>
+    /// 送球精度のリーグ平均（50）からの差分だけの期待遅れ[s]（issue #858）。内野ゴロ→一塁送球・外野からの
+    /// 返球（<see cref="ExtraBaseResolver.ThrowArriveSeconds"/>）が共有する。受け手は league average 固定
+    /// （Catching=50＝個別の受け手を特定しない。帯への影響をゼロに保つための意図的な簡略化）。
+    /// 精度50では厳密に0.0（<see cref="ThrowScatterModel.CenteredExpectedRecoverySeconds"/> の定義により、
+    /// 既存の精度50の呼び出しは浮動小数まで完全に不変）。
+    /// </summary>
+    internal static double ThrowScatterCenteredBiasSeconds(int throwAccuracy, FieldingCoefficients coeff)
+        => ThrowScatterModel.CenteredExpectedRecoverySeconds(
+            ThrowScatterModel.SigmaCmForAccuracy(throwAccuracy), receiverCatching: 50,
+            coeff.ThrowScatterLateralSecPerCm, coeff.ThrowScatterHighSecPerCm, coeff.ThrowScatterShortHopSecPerCm,
+            coeff.ThrowScatterCatchingReliefSlope, coeff.ThrowScatterCatchingReliefMinFactor);
+
     private static double DrawHandleJitter(FieldingCoefficients coeff, IRandomSource rng)
     {
         var u = rng.NextDouble();
@@ -1143,7 +1165,13 @@ public static class FieldingResolver
             // throwAccuracy は前進捕球の低下を織り込んだ実効精度（issue #630。null＝素の精度）。
             var accuracy = throwAccuracy ?? infielder.Attributes.ThrowAccuracy;
             var errProb = coeff.ThrowErrorBaseProb - (accuracy - 50) * coeff.ThrowErrorAccuracySlope;
-            if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
+            var clampedProb = MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb);
+            // 送球の逸れ（issue #858）: 従来の二値ロール（MathUtil.Chance(clampedProb)）を、2次元の逸れを
+            // サンプルして閾値と比べる形へ統合する。閾値は ThrowScatterModel.WildThresholdCmForProbability で
+            // clampedProb から逆算＝確率カーブは完全に不変（rng消費だけが1→2系統に増える。決定論baseline再生成）。
+            var sigmaCm = ThrowScatterModel.SigmaCmForAccuracy(accuracy);
+            var thresholdCm = ThrowScatterModel.WildThresholdCmForProbability(sigmaCm, clampedProb);
+            if (ThrowScatterModel.IsWild(ThrowScatterModel.Sample(sigmaCm, rng), thresholdCm))
             {
                 return (BattedBallResult.Error, FieldingErrorKind.Throw);
             }

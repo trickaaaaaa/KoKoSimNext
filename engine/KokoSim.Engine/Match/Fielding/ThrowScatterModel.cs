@@ -9,12 +9,37 @@ namespace KokoSim.Engine.Match.Fielding;
 /// 投球コントロール散布（<see cref="KokoSim.Engine.Match.Pitching.ControlScatter"/>）と同型の幾何モデルで、
 /// 設計書02 §1.2 が「発展タスク」として温存していたσの消費先をここで実装する。
 ///
-/// <para><b>最初に通すのは捕手の盗塁送球（<see cref="KokoSim.Engine.Match.Game.StealResolver"/>）だけ</b>
-/// （issue #841・2026-11-09 オーナー判断）。内野→一塁・併殺・外野送球/中継・バント処理への展開（既存の
-/// 二値の悪送球ロールとの統合も含む）は後続issueに分ける。</para>
+/// <para>issue #841 で最初に通したのは捕手の盗塁送球（<see cref="KokoSim.Engine.Match.Game.StealResolver"/>）。
+/// issue #858 で残りの送球（内野ゴロ→一塁・併殺・外野送球/中継・バント処理の封殺）へ広げ、既存の二値の
+/// 悪送球ロール（<c>FieldingCoefficients.ThrowErrorBaseProb</c>・<c>BaserunningCoefficients.RelayThrowErrorBaseProb</c>）
+/// を<see cref="WildThresholdCmForProbability"/>で逸れの閾値へ統合した。</para>
 /// </summary>
 public static class ThrowScatterModel
 {
+    /// <summary>送球精度(ThrowAccuracy)から散布σ[cm]を求める（<see cref="KokoSim.Engine.Players.FielderAttributes.ThrowScatterSigmaCm"/>
+    /// と同じ式の単一ソース。呼び出し側がPlayer/Fielderを持たない場面向けの便宜関数）。</summary>
+    public static double SigmaCmForAccuracy(int throwAccuracy)
+        => new KokoSim.Engine.Players.FielderAttributes { ThrowAccuracy = throwAccuracy }.ThrowScatterSigmaCm;
+
+    /// <summary>リーグ平均（送球精度50・受け手Catching50）での逸れの期待遅れ[s]（サンプリングなしの解析解）。
+    /// 各送球文脈が自分の係数束でこの値との差分を取り、「平均的な送球精度・平均的な受け手では遅れが0」に
+    /// 中心化する（帯不変, 不変条件#5）。issue #841 の <c>StealResolver</c> 内の private実装を一般化。</summary>
+    public static double LeagueAverageExpectedRecoverySeconds(
+        double lateralSecPerCm, double highSecPerCm, double shortHopSecPerCm,
+        double catchingReliefSlope, double catchingReliefMinFactor)
+        => ExpectedRecoverySeconds(
+            KokoSim.Engine.Players.FielderAttributes.LeagueAverage.ThrowScatterSigmaCm, receiverCatching: 50,
+            lateralSecPerCm, highSecPerCm, shortHopSecPerCm, catchingReliefSlope, catchingReliefMinFactor);
+
+    /// <summary>リーグ平均からの差分だけの期待遅れ[s]（issue #858で全送球文脈へ一般化）。平均的な送球精度・
+    /// 受け手では加算が0＝帯不変（不変条件#5）。送球精度が高い／受け手の捕球が高いほど負（短縮）、
+    /// 低いほど正（延長）になる。</summary>
+    public static double CenteredExpectedRecoverySeconds(
+        double sigmaCm, int receiverCatching,
+        double lateralSecPerCm, double highSecPerCm, double shortHopSecPerCm,
+        double catchingReliefSlope, double catchingReliefMinFactor)
+        => ExpectedRecoverySeconds(sigmaCm, receiverCatching, lateralSecPerCm, highSecPerCm, shortHopSecPerCm, catchingReliefSlope, catchingReliefMinFactor)
+           - LeagueAverageExpectedRecoverySeconds(lateralSecPerCm, highSecPerCm, shortHopSecPerCm, catchingReliefSlope, catchingReliefMinFactor);
     /// <summary>1本の送球の逸れ[cm]。Lateral=横方向（符号は左右の意味を持たず対称に扱う）。
     /// Vertical=高さ方向（+は浮く・-は低く短くバウンドする側＝ショートバウンド）。</summary>
     public readonly record struct Scatter(double LateralCm, double VerticalCm)
@@ -64,6 +89,25 @@ public static class ThrowScatterModel
 
     /// <summary>逸れの大きさが閾値以上なら悪送球（ボールが逸れて守備側に正規のプレーがない）。</summary>
     public static bool IsWild(Scatter s, double wildThresholdCm) => s.RadialCm >= wildThresholdCm;
+
+    /// <summary>
+    /// 「この送球精度σで悪送球になる確率」を実現する閾値[cm]を逆算する（issue #858）。
+    /// 逸れ（<see cref="Scatter.RadialCm"/>）は横・縦が独立な N(0,σ) なので、原点からの距離はレイリー分布
+    /// （<c>P(R≥r) = exp(-r²/(2σ²))</c>）＝解析的に逆が引ける: <c>r = σ√(-2·ln p)</c>。
+    ///
+    /// <para>既存の二値ロール（<c>FieldingCoefficients.ThrowErrorBaseProb</c>・
+    /// <c>BaserunningCoefficients.RelayThrowErrorBaseProb</c>）を「逸れの閾値」へ統合するときに使う
+    /// （issue #858）: 確率係数（基準値・送球精度の傾き）はそのまま残し、<b>判定の形だけ</b>を
+    /// 「2次元の逸れをサンプルして閾値と比べる」へ差し替える。確率を直接クランプ(0〜1)して渡せば
+    /// 旧ロールと同じ確率カーブを完全に再現する＝帯への影響なし（rng消費数だけが1→2系統に増える。
+    /// 決定論baselineの再生成が必要）。
+    /// </para>
+    /// </summary>
+    public static double WildThresholdCmForProbability(double sigmaCm, double probability)
+    {
+        var p = MathUtil.Clamp(probability, 1e-12, 1.0);
+        return sigmaCm * Math.Sqrt(-2.0 * Math.Log(p));
+    }
 
     /// <summary>受け手の捕球能力(Catching)による遅れの縮み率。Catching50で×1.0＝恒等（帯不変, 不変条件#5）。
     /// 高いほど縮む（＜1）、低いほど伸びる（＞1）。下限は<paramref name="minFactor"/>でクランプ（最速側）。</summary>

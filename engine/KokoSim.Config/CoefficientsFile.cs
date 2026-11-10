@@ -692,6 +692,11 @@ public static class CoefficientsLoader
         public double FlyErrorRoutineMarginSeconds { get; set; } = D.FlyErrorRoutineMarginSeconds;
         public double ThrowErrorBaseProb { get; set; } = D.ThrowErrorBaseProb;
         public double ThrowErrorAccuracySlope { get; set; } = D.ThrowErrorAccuracySlope;
+        public double ThrowScatterLateralSecPerCm { get; set; } = D.ThrowScatterLateralSecPerCm;
+        public double ThrowScatterHighSecPerCm { get; set; } = D.ThrowScatterHighSecPerCm;
+        public double ThrowScatterShortHopSecPerCm { get; set; } = D.ThrowScatterShortHopSecPerCm;
+        public double ThrowScatterCatchingReliefSlope { get; set; } = D.ThrowScatterCatchingReliefSlope;
+        public double ThrowScatterCatchingReliefMinFactor { get; set; } = D.ThrowScatterCatchingReliefMinFactor;
         public double ReceiveErrorBaseProb { get; set; } = D.ReceiveErrorBaseProb;
         public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
         public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
@@ -776,6 +781,11 @@ public static class CoefficientsLoader
             FlyErrorRoutineMarginSeconds = FlyErrorRoutineMarginSeconds,
             ThrowErrorBaseProb = ThrowErrorBaseProb,
             ThrowErrorAccuracySlope = ThrowErrorAccuracySlope,
+            ThrowScatterLateralSecPerCm = ThrowScatterLateralSecPerCm,
+            ThrowScatterHighSecPerCm = ThrowScatterHighSecPerCm,
+            ThrowScatterShortHopSecPerCm = ThrowScatterShortHopSecPerCm,
+            ThrowScatterCatchingReliefSlope = ThrowScatterCatchingReliefSlope,
+            ThrowScatterCatchingReliefMinFactor = ThrowScatterCatchingReliefMinFactor,
             ReceiveErrorBaseProb = ReceiveErrorBaseProb,
             WildThrowScatterSigmaM = WildThrowScatterSigmaM,
             RecoveryReactionSeconds = RecoveryReactionSeconds,
@@ -950,6 +960,13 @@ public static class CoefficientsLoader
         public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
         public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
         public double RecoverySprintSpeedMps { get; set; } = D.RecoverySprintSpeedMps;
+        // 送球の逸れの一般化（issue #858）
+        public double ThrowScatterLateralSecPerCm { get; set; } = D.ThrowScatterLateralSecPerCm;
+        public double ThrowScatterHighSecPerCm { get; set; } = D.ThrowScatterHighSecPerCm;
+        public double ThrowScatterShortHopSecPerCm { get; set; } = D.ThrowScatterShortHopSecPerCm;
+        public double ThrowScatterCatchingReliefSlope { get; set; } = D.ThrowScatterCatchingReliefSlope;
+        public double ThrowScatterCatchingReliefMinFactor { get; set; } = D.ThrowScatterCatchingReliefMinFactor;
+        public double BuntFielderThrowAccuracyLevel { get; set; } = D.BuntFielderThrowAccuracyLevel;
         public double HomeTagSeconds { get; set; } = D.HomeTagSeconds;
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
@@ -1117,6 +1134,12 @@ public static class CoefficientsLoader
             WildThrowScatterSigmaM = WildThrowScatterSigmaM,
             RecoveryReactionSeconds = RecoveryReactionSeconds,
             RecoverySprintSpeedMps = RecoverySprintSpeedMps,
+            ThrowScatterLateralSecPerCm = ThrowScatterLateralSecPerCm,
+            ThrowScatterHighSecPerCm = ThrowScatterHighSecPerCm,
+            ThrowScatterShortHopSecPerCm = ThrowScatterShortHopSecPerCm,
+            ThrowScatterCatchingReliefSlope = ThrowScatterCatchingReliefSlope,
+            ThrowScatterCatchingReliefMinFactor = ThrowScatterCatchingReliefMinFactor,
+            BuntFielderThrowAccuracyLevel = BuntFielderThrowAccuracyLevel,
             HomeTagSeconds = HomeTagSeconds,
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,
