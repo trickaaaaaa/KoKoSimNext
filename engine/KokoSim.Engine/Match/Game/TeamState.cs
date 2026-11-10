@@ -760,12 +760,14 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// プレッシャー負補正の緩和量（0〜1）: 主将の在場×統率力（§8）＋ムードメーカーの在場（設計書10）＋
-    /// 伝令の効果窓（§3）。offense=true なら攻撃側（打者へ）、false なら守備側（投手へ）。
+    /// プレッシャー負補正の緩和量（0〜1）: ムードメーカーの在場（設計書10）＋伝令の効果窓（§3）。
+    /// offense=true なら攻撃側（打者へ）、false なら守備側（投手へ）。
+    /// 主将の常時効果（§8.1）は<see cref="CaptainPresenceMultiplier"/>に一本化した（issue #860・2026-11-10 監督決定。
+    /// 負側だけに効く緩和では精神力50以上の選手に無風だったため、全員にかかる正の倍率へ置き換えた）。
     /// </summary>
     public double MitigationFor(bool offense, TacticsCoefficients c, SkillCoefficients? skills = null)
     {
-        var m = CaptainMitigation(c, skills) + MoodmakerMitigation(skills);
+        var m = MoodmakerMitigation(skills);
         if (offense && OffenseCalmPa > 0) m += c.TimeoutMitigation;
         if (!offense && DefenseCalmPa > 0) m += c.TimeoutMitigation;
         return Math.Min(1.0, m);
@@ -788,20 +790,25 @@ public sealed class TeamState
         return 0.0;
     }
 
+    /// <summary>主将（§8）。null=不在。伝令役の人選（issue #716/#860 B）で「伝令役が主将か」を見るのに使う。</summary>
+    public Player? Captain => _team.Captain;
+
     /// <summary>
-    /// 主将の緩和量。統率力 = 統率傾向×精神力/100（0〜100）。ベンチ時は大きく減衰、不在は0。
-    /// スキル「精神的支柱」（設計書10）を持つ主将は緩和量が拡大する（設計書09 §8 の統率力寄与）。
+    /// 主将の常時底上げ倍率（issue #860 A・設計書09 §8.1）。チーム全員の実効能力（打者=ミート／投手=制球）に
+    /// 常時掛かる＝1以上。退場すると<see cref="IsOnField"/>がfalseになり次の打席から即ベンチ扱いに落ちる。
+    /// 統率力 = 統率傾向×精神力/100（0〜100）。不在なら1.0（恒等）。
+    /// スキル「精神的支柱」（設計書10）を持つ主将は上乗せが拡大する（設計書09 §8 の統率力寄与）。
     /// </summary>
-    public double CaptainMitigation(TacticsCoefficients c, SkillCoefficients? skills = null)
+    public double CaptainPresenceMultiplier(TacticsCoefficients c, SkillCoefficients? skills = null)
     {
         var cap = _team.Captain;
-        if (cap is null) return 0.0;
+        if (cap is null) return 1.0;
         var power = cap.Leadership * cap.Mental / 100.0;
         var presence = IsOnField(cap) ? 1.0 : c.CaptainBenchFactor;
         var pillar = cap.Skills.Has(Skill.SpiritualPillar)
             ? (skills ?? new SkillCoefficients()).SpiritualPillarCaptainFactor
             : 1.0;
-        return power * c.CaptainMitigationPerPower * presence * pillar;
+        return 1.0 + power * c.CaptainPresencePerPower * presence * pillar;
     }
 
     private bool IsOnField(Player p)

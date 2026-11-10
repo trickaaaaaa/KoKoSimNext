@@ -489,21 +489,83 @@ public sealed class TacticsTests
     }
 
     [Fact]
-    public void Captain_OnFieldFullEffect_BenchReduced_NoneZero()
+    public void Captain_OnFieldFullEffect_BenchReduced_NoneIdentity()
     {
         var captain = P(mental: 80);
         captain = captain with { Leadership = 80 }; // 統率力 = 80×80/100 = 64
         var onField = new TeamState(TeamOf("A", captain: captain));
-        var expected = 64.0 * C.CaptainMitigationPerPower;
-        Assert.Equal(expected, onField.CaptainMitigation(C), 9);
+        var expected = 1.0 + 64.0 * C.CaptainPresencePerPower;
+        Assert.Equal(expected, onField.CaptainPresenceMultiplier(C), 9);
 
-        // ベンチ在籍は大きく減衰。
+        // ベンチ在籍は大きく減衰（issue #860: 0ではなくCaptainBenchFactor分は残る）。
         var benchTeam = TeamOf("B", bullpen: new[] { captain with { Pitching = PitcherAttributes.LeagueAverage } });
         var benchCaptain = benchTeam.Reserves[0];
         var bench = new TeamState(benchTeam with { Captain = benchCaptain });
-        Assert.Equal(expected * C.CaptainBenchFactor, bench.CaptainMitigation(C), 9);
+        Assert.Equal(1.0 + 64.0 * C.CaptainPresencePerPower * C.CaptainBenchFactor,
+            bench.CaptainPresenceMultiplier(C), 9);
 
-        Assert.Equal(0.0, new TeamState(TeamOf("C")).CaptainMitigation(C));
+        // 主将が引いた瞬間に恒等へ戻る（在場→ベンチの切り替わりをIsOnFieldで判定）。
+        Assert.Equal(1.0, new TeamState(TeamOf("C")).CaptainPresenceMultiplier(C));
+    }
+
+    [Fact]
+    public void Captain_PresenceMultiplier_DropsToBenchFactor_WhenSubstitutedOut()
+    {
+        // issue #860 完了条件: 「在場で倍率が付く／退くと消える」。退場後もCaptainBenchFactor分は残る
+        // （0ではない。2026-11-10 監督決定＝Bの伝令ボーナスと両取りできる設計）。
+        var captain = P(mental: 80);
+        captain = captain with { Leadership = 80 }; // 統率力 = 64
+        var sub = P(mental: 50, pos: FieldPosition.CenterField);
+        var team = TeamOf("A", captain: captain, bullpen: new[] { sub });
+        var state = new TeamState(team);
+        var onField = 1.0 + 64.0 * C.CaptainPresencePerPower;
+        Assert.Equal(onField, state.CaptainPresenceMultiplier(C), 9);
+
+        Assert.True(state.SubstituteForTest(6, sub)); // TeamOf: captainはスロット6(既定CenterField)
+        var benched = 1.0 + 64.0 * C.CaptainPresencePerPower * C.CaptainBenchFactor;
+        Assert.Equal(benched, state.CaptainPresenceMultiplier(C), 9);
+    }
+
+    [Fact]
+    public void CaptainMessenger_ExceedsNormalCap()
+    {
+        // issue #860 B: 伝令役が主将なら通常上限(MessengerFactorMax=1.4)を超えて効く。
+        var captain = new Player
+        {
+            Name = "主将", Grade = 3, Leadership = 80, Mental = 80, Personality = Personality.HotBlood,
+        };
+        var twin = captain with { Name = "双子" }; // 同じ能力値でも「主将本人」でなければボーナス無し
+        var receiver = new Player { Name = "r", Grade = 1 }; // 学年を外して同学年ボーナスを避ける
+        var pc = new PersonalityCoefficients();
+
+        var withoutCaptainArg = TimeoutMessenger.Factor(captain, receiver, toPitcher: true, C, pc);
+        Assert.Equal(1.36, withoutCaptainArg, 10); // 1 + 0.18(統率) + 0.08(3年) + 0.10(熱血→投手) = 1.36（通常上限1.4未満）
+
+        var withCaptainArg = TimeoutMessenger.Factor(captain, receiver, toPitcher: true, C, pc, captain);
+        Assert.Equal(2.32, withCaptainArg, 10); // 1.36 + 統率力64×0.015 = 2.32（通常上限1.4を超える）
+        Assert.True(withCaptainArg > C.MessengerFactorMax);
+
+        // 同じ能力値でも主将本人でなければボーナスは乗らない。
+        Assert.Equal(withoutCaptainArg, TimeoutMessenger.Factor(twin, receiver, toPitcher: true, C, pc, captain), 10);
+    }
+
+    [Fact]
+    public void AiPick_PrefersBenchCaptain_OverHigherPlainFactorReserve()
+    {
+        // issue #860 B: AiPickはFactorの比較だけで選ぶので、主将ボーナスが乗れば自動でベンチの主将を選ぶ
+        // （AI監督側の特別分岐は不要＝「AiPickが係数最大の控えを選ぶので自動で主将を走らせる」の検証）。
+        var captain = new Player { Name = "主将", Grade = 2, Leadership = 55, Mental = 70 }; // 単体では平凡な係数
+        var rival = new Player { Name = "ライバル", Grade = 3, Leadership = 99, Personality = Personality.HotBlood };
+        var receiver = new Player { Name = "r", Grade = 1 };
+        var pc = new PersonalityCoefficients();
+
+        // 主将ボーナス抜きならrivalの方が係数が高い（通常の人選）。
+        Assert.True(TimeoutMessenger.Factor(rival, receiver, true, C, pc)
+            > TimeoutMessenger.Factor(captain, receiver, true, C, pc));
+
+        // captainを渡すと主将ボーナスが乗り、rivalを上回って選ばれる。
+        var picked = TimeoutMessenger.AiPick(new[] { rival, captain }, receiver, true, 80, C, pc, captain);
+        Assert.Same(captain, picked);
     }
 
     [Fact]
@@ -681,7 +743,7 @@ public sealed class TacticsTests
         Assert.Equal(new PressureCoefficients().MultiplierSlope, b.Pressure.MultiplierSlope, 9);
         Assert.Equal(new TacticsCoefficients().SacBuntProb, b.Tactics.SacBuntProb, 9);
         Assert.Equal(new TacticsCoefficients().TimeoutDurationPa, b.Tactics.TimeoutDurationPa);
-        Assert.Equal(new TacticsCoefficients().CaptainMitigationPerPower, b.Tactics.CaptainMitigationPerPower, 9);
+        Assert.Equal(new TacticsCoefficients().CaptainPresencePerPower, b.Tactics.CaptainPresencePerPower, 9);
     }
 
     [Fact]
