@@ -73,6 +73,7 @@ public static class SaveCodec
             .Add("nationOverlay", NationOverlayToJson(s.NationOverlay))
             .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
             .Add("scouting", ScoutingSaves.ToJson(s.Scouting))
+            .Add("scoutFieldSelection", EnumJson.Write(s.ScoutFieldSelection))
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("events", EventSaves.ToJson(s.Events))
@@ -311,6 +312,7 @@ public static class SaveCodec
         // 段で解禁）へ置き換えた。旧セーブの recruiting キーは読まない（寮の勧誘枠は打ち切り、口説いていた
         // 中学生リストは持ち越せない＝次の秋に新しいスカウト候補で作り直す）。scouting は null で補う。
         if (version < 26 && !root.Has("scouting")) root.Add("scouting", JsonNull.Instance);
+        if (version < 26 && !root.Has("scoutFieldSelection")) root.Add("scoutFieldSelection", "Omakase");
         return root;
     }
 
@@ -366,6 +368,7 @@ public static class SaveCodec
             // 旧キー recruiting は読まない（寮の勧誘枠はスカウトへ一本化・オーナー決定2026-11-09の8）。
             // Migrate が旧セーブへ scouting=null を補うので素直に読む。
             Scouting = ScoutingSaves.FromJson(root.Has("scouting") ? root["scouting"] : null),
+            ScoutFieldSelection = EnumJson.Read<ScoutField>(root.Str("scoutFieldSelection")),
             // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
             // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。

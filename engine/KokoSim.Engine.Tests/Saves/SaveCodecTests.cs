@@ -367,6 +367,16 @@ public sealed class SaveCodecTests
         }
     }
 
+    // 探す分野の選択が往復すること（issue #867）。
+    [Fact]
+    public void ScoutFieldSelection_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.ScoutFieldSelection = KokoSim.Engine.Season.ScoutField.Pitching;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Equal(KokoSim.Engine.Season.ScoutField.Pitching, s.ScoutFieldSelection);
+    }
+
     // スカウトを持たない進行（未契約／秋を跨いでいない）も往復すること。
     [Fact]
     public void ScoutingState_Null_RoundTrips()

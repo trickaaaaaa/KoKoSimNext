@@ -121,6 +121,12 @@ public sealed class SaveState
     /// </summary>
     public ScoutingState? Scouting { get; set; }
 
+    /// <summary>
+    /// 探す分野の選択（issue #867）。次のスカウト候補リスト生成（<see cref="SeasonCalendar.RecruitListWeek"/>）
+    /// に使われる値で、生成されるまでは何度でも変えられる。既定はおまかせ（旧セーブも同様）。
+    /// </summary>
+    public ScoutField ScoutFieldSelection { get; set; } = ScoutField.Omakase;
+
     // --- 教え子名鑑（過年度のドラフト指名確定・issue #586。v7 で追加） ---
     /// <summary>
     /// 監督キャリアに紐づく指名実績の台帳（設計書20 §6）。空＝一度も指名が出ていない
