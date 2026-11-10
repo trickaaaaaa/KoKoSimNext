@@ -155,7 +155,7 @@ namespace KokoSim.Unity.Shell
             _rosterSeed = DefaultSeed;
             _rosterTalentCenterOverride = null;
             ProspectService.Reset();   // 予定者もこの進行のものなので一緒に捨てる（issue #587）
-            RecruitService.Reset();    // 勧誘の中学生リストも同じ（issue #588）
+            ScoutService.Reset();    // スカウト候補リストも同じ（issue #867）
             DraftService.Reset();      // 教え子名鑑（過年度の指名確定）も同じ（issue #586）
         }
 
@@ -201,7 +201,7 @@ namespace KokoSim.Unity.Shell
             _rosterSeed = GameSeed.Master ^ (TransferRosterStream ^ (ulong)yearIndex);
             _rosterTalentCenterOverride = TalentCenter();
             ProspectService.Reset();   // 旧校の入部予定者は同行しない
-            RecruitService.Reset();    // 旧校で勧誘中だった中学生リストも同様
+            ScoutService.Reset();    // 旧校でスカウト中だった候補リストも同様
         }
 
         /// <summary>次に振る安定ID（転任の変換で新しい部員へ振る続き番号。issue #641）。</summary>
@@ -224,7 +224,7 @@ namespace KokoSim.Unity.Shell
             _nextId = nextId;
             _newSchool = false;
             ProspectService.Reset();   // 旧校の入部予定者は同行しない
-            RecruitService.Reset();    // 旧校で勧誘中だった中学生リストも同様
+            ScoutService.Reset();    // 旧校でスカウト中だった候補リストも同様
         }
 
         private static List<DevelopingPlayer> Build(ulong seed, double? talentCenterOverride = null)
