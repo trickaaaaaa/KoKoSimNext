@@ -16,7 +16,7 @@ public sealed record TrainingCoefficients
     /// +3.5 程度（身体系が名声独立で下げ切れない構造の残差。それ以上下げると内訳の凸凹が潰れる＝
     /// <see cref="RosterCoefficients.SpecialtyFloor"/>等のフロアに当たり始める。out/overnight/issue-865 実測）。
     /// </summary>
-    public double BaseMainExp { get; init; } = 580.0;
+    public double BaseMainExp { get; init; } = 290.0;
     /// <summary>副効果の倍率。</summary>
     public double SubFactor { get; init; } = 0.4;
 
@@ -72,10 +72,10 @@ public sealed record TrainingCoefficients
     private static IReadOnlyList<FacilityTier> DefaultFacilityTiers() => new FacilityTier[]
     {
         new() { Coef = 1.00, BudgetMinutes = 300 }, // Lv0 施設なし（現状・従来一致）
-        new() { Coef = 1.35, BudgetMinutes = 400 }, // Lv1
-        new() { Coef = 1.70, BudgetMinutes = 500 }, // Lv2
-        new() { Coef = 2.05, BudgetMinutes = 600 }, // Lv3
-        new() { Coef = 2.40, BudgetMinutes = 700 }, // Lv4 フル施設
+        new() { Coef = 1.12, BudgetMinutes = 335 }, // Lv1
+        new() { Coef = 1.25, BudgetMinutes = 370 }, // Lv2
+        new() { Coef = 1.37, BudgetMinutes = 405 }, // Lv3
+        new() { Coef = 1.49, BudgetMinutes = 440 }, // Lv4 フル施設
     };
 
     /// <summary>

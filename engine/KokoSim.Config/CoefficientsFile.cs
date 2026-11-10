@@ -2540,6 +2540,7 @@ public static class CoefficientsLoader
         public double CapGapMean { get; set; } = D.CapGapMean;
         public double CapGapSd { get; set; } = D.CapGapSd;
         public double LateCapBonus { get; set; } = D.LateCapBonus;
+        public double SkillCapGapBonus { get; set; } = D.SkillCapGapBonus;
         // 成長タイプの分野別化（issue #866）
         public double GrowthDomainSameProb { get; set; } = D.GrowthDomainSameProb;
         public double SpeedCapGapFactor { get; set; } = D.SpeedCapGapFactor;
@@ -2683,6 +2684,7 @@ public static class CoefficientsLoader
             CapGapMean = CapGapMean,
             CapGapSd = CapGapSd,
             LateCapBonus = LateCapBonus,
+            SkillCapGapBonus = SkillCapGapBonus,
             GrowthDomainSameProb = GrowthDomainSameProb,
             SpeedCapGapFactor = SpeedCapGapFactor,
             ProdigyProb = ProdigyProb,

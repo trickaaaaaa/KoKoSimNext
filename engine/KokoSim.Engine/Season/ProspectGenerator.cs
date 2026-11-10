@@ -289,6 +289,15 @@ public sealed record RosterCoefficients
     public double CapGapMean { get; init; } = 26.0;
     public double CapGapSd { get; init; } = 10.0;
     public double LateCapBonus { get; init; } = 6.0;
+    /// <summary>
+    /// 技能（凸凹配分で決まる打撃・守備・投球の能力）の才能上限だけに足す gap（issue #865）。
+    /// 新入生の中心（<see cref="TalentCenterDefault"/>）を下げて「弱く入って大きく育つ」にしたぶん、
+    /// 上限まで一緒に下がると卒業時に上限へ張り付き、施設・道具・コーチが効かなくなる。下げた量を
+    /// ここで足し戻して才能の天井は改定前の高さに保つ。身体系（走力・地肩・スタミナ）は中心を下げて
+    /// いないので対象外。定数を足すだけなので乱数消費列は不変（不変条件#2）。
+    /// 既定は data/coefficients.yaml roster.skill_cap_gap_bonus と一致。
+    /// </summary>
+    public double SkillCapGapBonus { get; init; } = 20.0;
 
     /// <summary>
     /// 成長タイプの分野別化（設計書02 §5.2・issue #866）。生成でまず基本タイプを1つ引き、
@@ -741,7 +750,7 @@ public static class ProspectGenerator
         {
             var raw = center * weights[i] / wmean;
             var level = (int)MathUtil.Clamp(Math.Round(raw), floor, 90);
-            SetWithCap(p, kinds[i], level, c, rng);
+            SetWithCap(p, kinds[i], level, c, rng, c.SkillCapGapBonus);
         }
     }
 
@@ -775,7 +784,7 @@ public static class ProspectGenerator
     }
 
     private static void SetWithCap(DevelopingPlayer p, AbilityKind k, int level,
-        RosterCoefficients c, IRandomSource rng)
+        RosterCoefficients c, IRandomSource rng, double extraGap = 0.0)
     {
         // 能力別 cap gap 圧縮（Issue #114）: 素質固定能力（足）は天井も近い＝両方きつく。逸材（IsProdigy）は免除。
         // gap の mean/sd を同率で縮める。NextGaussian は mean/sd に依らず同数の乱数を消費するため、
@@ -784,7 +793,8 @@ public static class ProspectGenerator
         if (p.IsProdigy) gapFactor = Math.Max(1.0, gapFactor);
         // 晩成の上乗せ（issue #866）は能力 k が属する分野の成長タイプで判定する（分野外は基本タイプ）。
         var gap = rng.NextGaussian(c.CapGapMean * gapFactor, c.CapGapSd * gapFactor)
-                  + (p.GrowthTypeFor(k) == GrowthType.Late ? c.LateCapBonus : 0);
+                  + (p.GrowthTypeFor(k) == GrowthType.Late ? c.LateCapBonus : 0)
+                  + extraGap;
         // スタミナだけ才能上限の天井（99）を外す（issue #356）＝伸ばした分だけ長く投げられる。
         // 乱数消費列は不変（NextGaussian は上で共通に引き済み）＝クランプ上限の差し替えだけ（不変条件#2）。
         var rounded = Math.Round(level + gap);

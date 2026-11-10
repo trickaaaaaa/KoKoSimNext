@@ -114,7 +114,7 @@ public sealed class AnnualContractTests
         set.SetLevel("coach_batting", 1);
         var e = Catalog.Aggregate(set);
 
-        Assert.Equal(20, e.CoachingBattingAdd, 9);
+        Assert.Equal(50, e.CoachingBattingAdd, 9);
         Assert.Equal(0, e.CoachingPitchingAdd, 9);
         Assert.Equal(0, e.CoachingDefenseAdd, 9);
     }
@@ -157,7 +157,7 @@ public sealed class AnnualContractTests
         var p = CoachingProfile.FromManager(m, Catalog.Aggregate(set));
 
         Assert.Equal(41, p.Batting, 9);
-        Assert.Equal(72, p.Pitching, 9);   // 52 + 20
+        Assert.Equal(102, p.Pitching, 9);   // 52 + 50
         Assert.Equal(63, p.Defense, 9);
         // 監督自身は書き換えない＝解約すればその年から元に戻る。
         Assert.Equal(52, m.CoachingPitching, 9);
@@ -173,7 +173,7 @@ public sealed class AnnualContractTests
         var set = new ContractSet();
         set.SetLevel("coach_batting", 1);
 
-        Assert.Equal(119, CoachingProfile.FromManager(m, Catalog.Aggregate(set)).Batting, 9);
+        Assert.Equal(149, CoachingProfile.FromManager(m, Catalog.Aggregate(set)).Batting, 9);
     }
 
     // ── 部費からの年額支払い ────────────────────────────────────────

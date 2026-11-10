@@ -20,27 +20,27 @@ public sealed class FacilityEconomyTests
     [Fact]
     public void AllMaxLevel_ReproducesLegacyTier4Envelope()
     {
-        // 全系統Lv3で 効率2.40 / 練習700分 ＝ 旧 facility_tiers Lv4 と一致（#115の校正を保つ）。
+        // 全系統Lv3で 効率1.49 / 練習440分 ＝ facility_tiers Lv4 と一致（issue #865 で施設の効きを×0.35）。
         var set = new FacilitySet();
         foreach (var f in Catalog.Facilities) set.SetLevel(f.Id, f.MaxLevel);
 
         var ctx = new SeasonContext { Facilities = set, FacilityCatalog = Catalog };
         var (coef, budget) = ctx.ResolveFacility();
-        Assert.Equal(2.40, coef, 3);
-        Assert.Equal(700, budget);
+        Assert.Equal(1.49, coef, 3);
+        Assert.Equal(440, budget);
     }
 
     [Fact]
     public void Aggregate_IsAdditiveAcrossSystems()
     {
-        // 照明Lv1(+80分) と 寮Lv1(+0.15) だけ。加算されて (1.15, 380分)。
+        // 照明Lv1(+30分) と 寮Lv1(+0.05) だけ。加算されて (1.05, 330分)。
         var set = new FacilitySet();
         set.SetLevel("lighting", 1);
         set.SetLevel("dorm", 1);
         var ctx = new SeasonContext { Facilities = set, FacilityCatalog = Catalog };
         var (coef, budget) = ctx.ResolveFacility();
-        Assert.Equal(1.15, coef, 3);
-        Assert.Equal(380, budget);
+        Assert.Equal(1.05, coef, 3);
+        Assert.Equal(330, budget);
     }
 
     // 建物は施設基金から出る（部費ではない・設計書04 §1.4）。

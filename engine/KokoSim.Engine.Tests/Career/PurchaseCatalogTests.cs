@@ -6,7 +6,7 @@ namespace KokoSim.Engine.Tests.Career;
 /// <summary>
 /// 買えるもののカタログ拡張（医務室・練習道具・備品）の検証。
 /// 要点は「新しく足したものは練習効率・週練習時間を1ビットも動かさない」こと＝
-/// 既存4系統だけで決まる (2.40 / 700分) の校正（#115）が保たれること。
+/// 既存4系統だけで決まる (1.49 / 440分) の校正（#115）が保たれること。
 /// </summary>
 public sealed class PurchaseCatalogTests
 {
@@ -39,8 +39,8 @@ public sealed class PurchaseCatalogTests
     {
         var e = Catalog.AggregateEffects(Maxed());
         // 既存4系統だけで 2.40 / 700分。医務室・道具・備品は CoefAdd / BudgetAdd を持たない。
-        Assert.Equal(1.40, e.CoefAdd, 3);
-        Assert.Equal(400, e.BudgetAdd);
+        Assert.Equal(0.49, e.CoefAdd, 3);
+        Assert.Equal(140, e.BudgetAdd);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class PurchaseCatalogTests
         set.SetLevel("gear_batting", 2);
         var e = Catalog.AggregateEffects(set);
 
-        Assert.Equal(1.08 * 1.10, e.Equipment.Batting, 6);
+        Assert.Equal(1.12 * 1.12, e.Equipment.Batting, 6);
         Assert.Equal(1.0, e.Equipment.Defense);
         Assert.Equal(1.0, e.Equipment.BaseRunning);
         Assert.Equal(1.0, e.Equipment.Pitching);

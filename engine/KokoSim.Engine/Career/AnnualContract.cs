@@ -187,19 +187,19 @@ public sealed record ContractCatalog
             {
                 Id = "coach_batting",
                 Name = "打撃コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingBattingAdd = 20 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingBattingAdd = 50 } },
             },
             new ContractDef
             {
                 Id = "coach_pitching",
                 Name = "投手コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingPitchingAdd = 20 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingPitchingAdd = 50 } },
             },
             new ContractDef
             {
                 Id = "coach_defense",
                 Name = "守備走塁コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingDefenseAdd = 20 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingDefenseAdd = 50 } },
             },
         },
     };
