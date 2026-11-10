@@ -61,6 +61,14 @@ public sealed record Team
     /// </summary>
     public FatigueCoefficients? Fatigue { get; init; }
 
+    /// <summary>
+    /// チームの勢い段階（0〜MomentumCoefficients.MaxLevel、既定3。issue #863・design-05想定節）。
+    /// 格上撃破・サヨナラ勝ち・終盤の逆転勝ちで上がり、大会の敗退・大会の終了で0に戻る（Unity側 GameSession が
+    /// 自校ぶんだけ大会の進行状態として保持・計算する）。AI校・裏試合・統計シムは常にこの既定0のまま
+    /// （帯不変）＝<see cref="MomentumModel"/> は0のとき恒等。
+    /// </summary>
+    public int MomentumLevel { get; init; } = 0;
+
     /// <summary>DH制か。</summary>
     public bool UsesDh => DhSlot >= 0;
 

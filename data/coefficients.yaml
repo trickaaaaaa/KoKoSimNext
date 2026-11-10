@@ -783,6 +783,17 @@ pressure:
   multiplier_slope: 0.02     # 倍率 = 1 + (精神力−50)/50 × slope × P（精神力100・P8で+16%）
   fatigue_negative_amplify: 1.5   # 疲労閾値超過時は負側のみ増幅（終盤の失点劇）
 
+# --- チームの勢い（issue #863）🟡 自校だけ大会中に保持・計算（Unity側）。段階0（AI校・裏試合・統計シム）は恒等＝帯不変 ---
+momentum:
+  max_level: 3                   # 勢いの段階上限
+  upset_tier_gap1_bonus: 1       # 格上撃破: ティア差1段で+1
+  upset_tier_gap2_bonus: 2       # 格上撃破: ティア差2段以上で+2
+  walkoff_bonus: 1               # サヨナラ勝ちで+1
+  comeback_bonus: 1              # 終盤の逆転勝ちで+1
+  comeback_from_inning: 7        # 「終盤」の開始イニング
+  comeback_min_deficit: 3        # 逆転判定の最小点差
+  multiplier_per_level: 0.02     # 倍率 = 1 + 段階×この値（打者=ミート/投手=制球。最大段階で+6%）
+
 # --- 采配（設計書09: サイン/守備指示/伝令/主将）🟡 判断閾値と効果量 ---
 tactics:
   # 攻撃サイン判断（StandardTacticsBrain＝委任・敵AIの土台）

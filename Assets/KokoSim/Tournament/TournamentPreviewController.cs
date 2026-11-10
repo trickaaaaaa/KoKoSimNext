@@ -1,4 +1,5 @@
 using System.Linq;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Season;
 using KokoSim.Unity.Shell;
@@ -160,6 +161,7 @@ namespace KokoSim.Unity.Tournament
                 next = "次戦　" + runner.RoundName + "　vs " + (runner.NextOpponent?.Name ?? "―")
                        + "　（" + session.NextMatchDateLabel + "・あと " + session.DaysUntilNextMatch + " 日）";
             SetText("tb-next", next);
+            RenderMomentum(live);
 
             SetText("tb-h-tree", league != null ? "ブロック順位" : "トーナメント表");
             Show(_root.Q<VisualElement>("tp-bracket-scroll"), league == null);
@@ -198,6 +200,24 @@ namespace KokoSim.Unity.Tournament
             for (var i = others.Count - shown; i < others.Count; i++) host.Add(BuildMatchRow(others[i]));
             if (others.Count > shown)
                 host.Add(Note("ほか " + (others.Count - shown) + " 試合（直近 " + shown + " 試合を表示）"));
+        }
+
+        private static readonly MomentumCoefficients MomentumCoeff = new();
+
+        /// <summary>
+        /// チームの勢い（issue #863）: 自校だけ常時表示。相手校は常に勢い0＝観るだけの大会（live=false）
+        /// では自校という当事者がいないので行ごと隠す。段階は数字を出さず部品辞書の升目（LevelPips）で示す。
+        /// </summary>
+        private void RenderMomentum(bool live)
+        {
+            var row = _root.Q<VisualElement>("tb-momentum");
+            Show(row, live);
+            if (!live) return;
+            SetText("tb-momentum-name", NationService.ManagerSchool().Name);
+            var pips = _root.Q<VisualElement>("tb-momentum-pips");
+            if (pips == null) return;
+            pips.Clear();
+            pips.Add(UiComponents.LevelPips(GameSession.Current.MomentumLevel, MomentumCoeff.MaxLevel));
         }
 
         // ===== ブロック順位表（地区予選のリーグ戦・issue #772・A案） =====

@@ -741,7 +741,20 @@ namespace KokoSim.Unity.Home
             };
             items.AddRange(InjuryFeedItems());
             items.AddRange(BigStageFeedItems(_growth));
+            items.AddRange(MomentumFeedItems());
             PushFeed(items);
+        }
+
+        /// <summary>
+        /// チームの勢い（issue #863）が上がった試合だけ通知する（維持・減衰は無音＝変化が起きたときだけ伝える）。
+        /// 段階の見せ方は大会画面ヘッダのチップ（数値は出さない）と同じ方針＝ここも段階の数は出さない。
+        /// </summary>
+        private static List<FeedItem> MomentumFeedItems()
+        {
+            var items = new List<FeedItem>();
+            foreach (var _ in GameSession.Current.DrainMomentumNotices())
+                items.Add(new FeedItem { When = "本日", Text = "チームに勢いがついた。", Kind = FeedKind.Up, Tag = "情報" });
+            return items;
         }
 
         /// <summary>

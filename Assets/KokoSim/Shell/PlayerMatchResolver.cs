@@ -229,8 +229,13 @@ namespace KokoSim.Unity.Shell
             var team = lineup != null
                 ? RosterTeamBuilder.BuildFromLineup(lineup)
                 : RosterTeamBuilder.Build(RosterService.Active, name);
-            // 伝令の効き目は監督の采配能力で変わる（設計書09 §3・issue #714）。
-            return team with { ManagerTacticalSense = ManagerService.TacticalSenseForAi };
+            // 伝令の効き目は監督の采配能力で変わる（設計書09 §3・issue #714）。チームの勢い（issue #863）は
+            // 自校だけが持つ（相手校・AI校は Team.MomentumLevel の既定0のまま＝ここでは触らない）。
+            return team with
+            {
+                ManagerTacticalSense = ManagerService.TacticalSenseForAi,
+                MomentumLevel = GameSession.Current.MomentumLevel,
+            };
         }
 
         /// <summary>

@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 23;
+    public const int CurrentVersion = 24;
 
     // ===== Serialize =====
 
@@ -90,7 +90,8 @@ public static class SaveCodec
             .Add("lastRegionalChampionId", NullableIntToJson(s.LastRegionalChampionId))
             .Add("lastRegionalPlacementIds", IntsToJson(s.LastRegionalPlacementIds))
             .Add("lastJinguChampionId", NullableIntToJson(s.LastJinguChampionId))
-            .Add("lastLineup", LineupSaves.ToJson(s.LastLineup));
+            .Add("lastLineup", LineupSaves.ToJson(s.LastLineup))
+            .Add("momentumLevel", s.MomentumLevel);
         return root.ToString();
     }
 
@@ -297,6 +298,9 @@ public static class SaveCodec
         // （runner.league）が載りうる＝旧セーブには無く、地区予選の途中なら従来どおり勝ち抜き戦として読む。
         if (version < 23 && !root.Has("lastSummerPlacementIds"))
             root.Add("lastSummerPlacementIds", new JsonArray());
+        // v24（issue #863）: チームの勢い（自校のみ）が増えた。旧セーブは勢いという概念が存在しえない＝0で補う。
+        if (version < 24 && !root.Has("momentumLevel"))
+            root.Add("momentumLevel", 0);
         // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
         // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
         // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。
@@ -374,6 +378,8 @@ public static class SaveCodec
             PendingSenbatsuJinguRegion = root.Has("pendingSenbatsuJinguRegion") ? (root.Str("pendingSenbatsuJinguRegion") ?? "") : "",
             // 前回スタメンは v14 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             LastLineup = LineupSaves.FromJson(root["lastLineup"]),
+            // チームの勢いは v24 で追加。Migrate が旧セーブへ0を補うので素直に読む。
+            MomentumLevel = root.Int("momentumLevel"),
         };
 
         s.TournamentStats = new NationTournamentStats();

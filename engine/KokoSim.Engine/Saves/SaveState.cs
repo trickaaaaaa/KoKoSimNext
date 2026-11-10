@@ -218,4 +218,11 @@ public sealed class SaveState
     /// 選手IDで持つ純データ。<b>null＝まだ一度も確定していない</b>（v13 以前のセーブは常に null＝自動シード）。
     /// </summary>
     public LineupMemory? LastLineup { get; set; }
+
+    /// <summary>
+    /// 自校のチームの勢い段階（issue #863・v24）。大会の進行状態として持つ＝大会中に保存→再開しても
+    /// 消えない。大会の敗退・大会の終了で0に戻す（<see cref="Match.Game.MomentumModel"/>）。
+    /// 旧セーブは勢いという概念が存在しえない＝既定0で補う。
+    /// </summary>
+    public int MomentumLevel { get; set; }
 }
