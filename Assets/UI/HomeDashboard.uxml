@@ -231,6 +231,8 @@
                 <ui:Label class="nt-c-no nt-th__c" text="背" />
                 <ui:Label class="nt-c-name nt-th__c" text="選手" />
                 <ui:Label class="nt-c-mental nt-th__c" text="精神" />
+                <ui:Label class="nt-c-rank nt-th__c" text="スタメン" />
+                <ui:Label class="nt-c-rank nt-th__c" text="ベンチ" />
               </ui:VisualElement>
               <ui:ScrollView name="nt-rows" class="nt-rows" />
             </ui:VisualElement>

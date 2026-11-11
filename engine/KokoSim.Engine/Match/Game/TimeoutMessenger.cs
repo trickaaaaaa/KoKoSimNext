@@ -23,16 +23,27 @@ public static class TimeoutMessenger
         TacticsCoefficients c, PersonalityCoefficients pc, Player? captain = null)
     {
         if (messenger is null) return 1.0;
-        var f = 1.0 + (messenger.Leadership - c.MessengerLeadershipNeutral) * c.MessengerLeadershipSlope;
-        if (messenger.Grade == 3) f += c.MessengerSeniorBonus;
-        else if (messenger.Grade == 1) f -= c.MessengerFreshmanPenalty;
-        if (messenger.Grade > 0 && messenger.Grade == receiver.Grade) f += c.MessengerSameGradeBonus;
-        var profile = pc.Profile(messenger.Personality);
+        var isCaptain = captain is not null && ReferenceEquals(messenger, captain);
+        return FactorOf(messenger.Leadership, messenger.Mental, messenger.Grade, messenger.Personality,
+            receiver.Grade, toPitcher, isCaptain, c, pc);
+    }
+
+    /// <summary>
+    /// <see cref="Factor"/> の式の本体（選手の能力値だけを受ける）。試合層の <see cref="Player"/> を持たない
+    /// 育成層の選手（主将指名画面の段階表示など）も同じ式で引けるよう、式はここ一箇所にだけ置く。
+    /// </summary>
+    public static double FactorOf(int leadership, int mental, int grade, Personality personality,
+        int receiverGrade, bool toPitcher, bool isCaptain, TacticsCoefficients c, PersonalityCoefficients pc)
+    {
+        var f = 1.0 + (leadership - c.MessengerLeadershipNeutral) * c.MessengerLeadershipSlope;
+        if (grade == 3) f += c.MessengerSeniorBonus;
+        else if (grade == 1) f -= c.MessengerFreshmanPenalty;
+        if (grade > 0 && grade == receiverGrade) f += c.MessengerSameGradeBonus;
+        var profile = pc.Profile(personality);
         f += toPitcher ? profile.MessengerToPitcher : profile.MessengerToBatter;
-        if (captain is not null && ReferenceEquals(messenger, captain))
+        if (isCaptain)
         {
-            var power = messenger.Leadership * messenger.Mental / 100.0;
-            f += power * c.CaptainMessengerBonusPerPower;
+            f += leadership * mental / 100.0 * c.CaptainMessengerBonusPerPower;
             return Math.Clamp(f, c.MessengerFactorMin, c.CaptainMessengerFactorMax);
         }
         return Math.Clamp(f, c.MessengerFactorMin, c.MessengerFactorMax);
