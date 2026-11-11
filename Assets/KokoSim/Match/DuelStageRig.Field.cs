@@ -1573,6 +1573,21 @@ namespace KokoSim.Unity.Match
                 float h = isThrow ? ThrowCatchHeightM
                     : CatchHeightFor(eb != null ? eb.Kind
                         : (seg is RollSegment ? BallSegmentKind.Roll : BallSegmentKind.Flight));
+                // 送球の逸れの見せ方の試作（issue #859）。球を逸らさない案では、受け手の狙点だけを逸れの終点へずらす
+                var sc = isThrow && eb != null && (eb.ScatterLateralM != 0 || eb.ScatterVerticalM != 0) ? eb : null;
+                if (sc != null && !sc.ScatterShapesBall)
+                {
+                    var so = sc.ScatterEndOffset();
+                    end = new PlaybackBall(end.X + so.Dx, end.Y + so.Dy, end.H);
+                }
+                if (sc != null && ThrowScatterReaction && kind == FieldCatchKind.Catch)
+                {
+                    h = sc.ScatterIsShortHop ? 0.25f : Mathf.Clamp(ThrowCatchHeightM + (float)sc.ScatterVerticalM, 0.25f, 1.75f);
+                    // 逸れの+は進行方向の左＝受け手から見て右
+                    app = Mathf.Abs((float)sc.ScatterLateralM) >= 0.2f
+                        ? (sc.ScatterLateralM > 0 ? CatchApproach.Right : CatchApproach.Left)
+                        : CatchApproach.Still;
+                }
                 int anchor;
                 if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
                 else if (kind == FieldCatchKind.Miss)
@@ -1599,6 +1614,7 @@ namespace KokoSim.Unity.Match
                     else
                     {
                         anchor = SelectFieldCatch(h, app);
+                        if (anchor < 0 && sc != null) anchor = SelectFieldCatch(h, CatchApproach.Still);
                         if (anchor < 0) continue;
                     }
                 }
@@ -1812,6 +1828,9 @@ namespace KokoSim.Unity.Match
         /// それは山なりの弦の高さであって「受ける高さ」ではない（打球と同じ事情）。
         /// </summary>
         private const float ThrowCatchHeightM = 1.15f;
+
+        /// <summary>【見せ方の試作・issue #859】送球の逸れに受け手が合わせて捕球の収録を選ぶか。</summary>
+        public static bool ThrowScatterReaction;
 
         /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
         private const float CatchBallBlendSeconds = 0.30f;

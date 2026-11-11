@@ -149,6 +149,35 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
             MissedBy = s.MissedBy, MissAfter = (s.T1 - s.T0) * Math.Clamp(s.MissFraction, 0.0, 1.0), WildThrow = s.WildThrow,
         };
 
+    /// <summary>送球の逸れ（横・縦）[m]。表示専用（issue #859 の見せ方の試作）。横は進行方向の左が正、
+    /// 縦は＋が浮き・−が低い（−が大きいとショートバウンド）。0＝逸れなし（従来の絵）。</summary>
+    public double ScatterLateralM { get; init; }
+    public double ScatterVerticalM { get; init; }
+
+    /// <summary>true なら球の軌道そのものを逸れの終点へ向ける。false なら球は従来どおり正確に届き、
+    /// 逸れは受け手の芝居（<see cref="ScatterEndOffset"/>）だけで見せる。</summary>
+    public bool ScatterShapesBall { get; init; }
+
+    /// <summary>受け手が捕る高さ[m]の基準（3D守備ビューの送球の捕球高さと同じ値）。</summary>
+    public const double ScatterCatchHeightM = 1.15;
+
+    /// <summary>ショートバウンドとみなす縦の逸れ[m]（これ以下の低さ）。</summary>
+    public const double ShortHopMinDropM = 0.30;
+
+    public EndpointBallSegment WithThrowScatter(double lateralM, double verticalM, bool shapeBall)
+        => this with { ScatterLateralM = lateralM, ScatterVerticalM = verticalM, ScatterShapesBall = shapeBall };
+
+    public bool ScatterIsShortHop => ScatterVerticalM <= -ShortHopMinDropM;
+
+    /// <summary>逸れによる終点のずれ（x,y は進行方向の左を正とする横ずれの XY 成分、dh は捕球高さからの高さ差）。</summary>
+    public (double Dx, double Dy, double Dh) ScatterEndOffset()
+    {
+        var dx = _tx - _fx; var dy = _ty - _fy;
+        var len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) return (0, 0, ScatterVerticalM);
+        return (-dy / len * ScatterLateralM, dx / len * ScatterLateralM, ScatterVerticalM);
+    }
+
     public override PlaybackBall At(double tt)
     {
         var dur = T1 - T0;
@@ -156,6 +185,20 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         var x = _fx + (_tx - _fx) * u;
         var y = _fy + (_ty - _fy) * u;
         var h = Height(u);
+        if (ScatterShapesBall && _kind == BallSegmentKind.Throw && _hops == null && _passU == null)
+        {
+            var (ox, oy, _) = ScatterEndOffset();
+            x += ox * u; y += oy * u;
+            if (ScatterIsShortHop)
+            {
+                const double uB = 0.82;
+                h = u < uB
+                    ? h * (1 - Math.Pow(u / uB, 3))
+                    : 0.45 * 4 * ((u - uB) / (1 - uB)) * (1 - (u - uB) / (1 - uB));
+            }
+            else
+                h = Math.Max(0.0, h + (ScatterCatchHeightM + ScatterVerticalM - ThrowReleaseHeightM) * u * u);
+        }
         return new PlaybackBall(x, y, h);
     }
 
