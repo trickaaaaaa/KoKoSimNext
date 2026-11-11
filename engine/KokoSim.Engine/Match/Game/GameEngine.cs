@@ -1762,9 +1762,13 @@ public static class GameEngine
             {
                 // 送球の起点は「回収点」（安打では着地後の転がりの終端＝Issue #24）。転がりを解かない
                 // 経路は null＝着地点フォールバックなので従来と一致する（Issue #315）。
+                // こぼれ球を拾い直せずに確定した捕球ミス（issue #816）は、こぼれた瞬間（FieldedAtSeconds）
+                // でなく拾い直しを終えた時刻（CatchErrorReadyAtSeconds）をクロックの起点にする。ここを直さないと
+                // 「弾いた直後にどこへでも送球できる」という誤った前提になり、塁上の走者がこぼれ球を見て
+                // 次塁を狙う判断（下の TryHome）が常に守備有利に出てしまう（本 issue の主眼）。
                 var homePlaySituation = new HomePlaySituation(
                     new Vector3D(fp.FieldedX ?? fp.LandingX, 0, fp.FieldedZ ?? fp.LandingZ),
-                    fp.FieldedAtSeconds ?? fp.HangTimeSeconds,
+                    fp.CatchErrorReadyAtSeconds ?? fp.FieldedAtSeconds ?? fp.HangTimeSeconds,
                     arm,
                     fp.FielderFielding,
                     // バックホーム悪送球（2026-08-30）: 処理野手のThrowAccuracy。下の errorThrowAccuracy
