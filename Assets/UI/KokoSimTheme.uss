@@ -1208,7 +1208,9 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 
 .nt-c-no { width: 34px; flex-shrink: 0; -unity-text-align: middle-right; padding-right: 8px;
     font-size: var(--fs-label); color: var(--color-muted); }
-.nt-c-name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-body); color: var(--color-chalk); }
+.nt-c-name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-body); color: var(--color-chalk);
+    -unity-text-align: middle-left; }
+.nt-th .nt-c-name { font-size: var(--fs-cap); color: var(--color-faint); }
 .nt-c-pos { width: 30px; flex-shrink: 0; -unity-text-align: middle-center; font-size: var(--fs-label); color: var(--color-muted); }
 .nt-c-rank { width: 78px; flex-shrink: 0; flex-direction: row; justify-content: center; align-items: center;
     -unity-text-align: middle-center; }
@@ -1222,10 +1224,11 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .nt-d__name { font-size: 22px; color: var(--color-chalk); }
 .nt-d__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
 .nt-d__radar { height: 128px; flex-shrink: 0; margin-top: 4px; }
-.nt-d__facts { flex-direction: row; flex-wrap: wrap; margin-top: 6px; flex-shrink: 0; }
-.nt-fact { flex-direction: row; align-items: center; width: 50%; height: 22px; }
-.nt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
-.nt-fact__chip { flex-direction: row; align-items: center; padding-right: 10px; }
+.nt-d__facts { flex-direction: column; margin-top: 6px; flex-shrink: 0; }
+.nt-fact { flex-direction: row; align-items: center; height: 28px; flex-shrink: 0; }
+.nt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0;
+    -unity-text-align: middle-left; }
+.nt-fact__chip { flex-direction: row; align-items: center; justify-content: flex-end; padding-right: 10px; }
 .nt-fact__v { font-size: var(--fs-label); color: var(--color-chalk); -unity-text-align: middle-right; padding-right: 10px; }
 .nt-d__cap { font-size: var(--fs-cap); color: var(--color-faint); margin-top: 8px; letter-spacing: 1px; }
 .nt-d__skills { flex-direction: row; flex-wrap: wrap; margin-top: 4px; flex-grow: 1; overflow: hidden; }
