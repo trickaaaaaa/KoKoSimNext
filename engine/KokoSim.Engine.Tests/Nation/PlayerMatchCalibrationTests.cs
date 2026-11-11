@@ -32,6 +32,7 @@ public sealed class PlayerMatchCalibrationTests
                 list.Add(p);
             }
         }
+        StartingRoster.PreTrain(list);   // RosterService.Build と同じ（issue #865）
         for (var i = 0; i < list.Count; i++) list[i].Id = i + 1;
         return list;
     }

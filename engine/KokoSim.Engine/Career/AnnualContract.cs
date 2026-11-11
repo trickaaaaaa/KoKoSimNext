@@ -181,23 +181,25 @@ public sealed record ContractCatalog
             },
             // 専門コーチ: 分野別指導力の実効値を底上げする。監督自身の指導力は変えないので、
             // 解約すればその年から元に戻る（雇っている間だけ効く）。
+            // 2026-11-10 issue #865: +10→+20（効き目を引き上げる）。CoachingSlope(0.005)自体は
+            // 監督本人の指導力全般に効く係数なので変えていない＝コーチ契約だけを強める。
             new ContractDef
             {
                 Id = "coach_batting",
                 Name = "打撃コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingBattingAdd = 10 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingBattingAdd = 50 } },
             },
             new ContractDef
             {
                 Id = "coach_pitching",
                 Name = "投手コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingPitchingAdd = 10 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingPitchingAdd = 50 } },
             },
             new ContractDef
             {
                 Id = "coach_defense",
                 Name = "守備走塁コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingDefenseAdd = 10 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingDefenseAdd = 50 } },
             },
         },
     };

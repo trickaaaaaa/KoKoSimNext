@@ -1267,7 +1267,11 @@ manager_growth:
 # --- 育成（練習→能力, 設計書02 §5.1） ---
 training:
   # 2026-08-15: 85→130（案D）。旧値では中核能力+4〜5/3年で「新入生の質＝チームの質」になりすぎた。
-  base_main_exp: 130.0
+  # 2026-11-12（issue #865・監督決定）: 130→290。施設なし・お任せ練習の3年の伸びを+7→+16.4へ。
+  # level_up_growth は意図的に変更していない（Mental/Lead/Baserunningの実戦成長・個別指導の信頼関係exp・
+  # 守備位置適性も同じ曲線を共有しており、そこを寝かせると関係ない系統まで一緒に加速する）。
+  # roster.intake_drop（練習で伸びる能力だけ入学時を下げる）とセット。定常のチーム総合は改定前と±0.8以内。
+  base_main_exp: 290.0
   sub_factor: 0.4
   facility_coef: 1.0          # 施設レベル0（施設なし）の基準施設係数。facility_tiers で上位を注入（#115）
   # 基準指導力（中立点, #115）。監督メタ（分野別指導力）を注入しないときの既定＝この指導力で従来と1ビット一致。
@@ -1289,13 +1293,17 @@ training:
   # 「豪腕素質×名将＋フル施設(Lv4)で3年+15〜20km/h」が成立するよう据える（out/overnight/issue-115 で実測）。
   facility_tiers:
     - { coef: 1.00, budget_minutes: 300 }   # Lv0 施設なし（現状・従来一致）
-    - { coef: 1.35, budget_minutes: 400 }   # Lv1
-    - { coef: 1.70, budget_minutes: 500 }   # Lv2
-    - { coef: 2.05, budget_minutes: 600 }   # Lv3
-    - { coef: 2.40, budget_minutes: 700 }   # Lv4 フル施設（名門・強豪）
+    - { coef: 1.12, budget_minutes: 335 }   # Lv1
+    - { coef: 1.25, budget_minutes: 370 }   # Lv2
+    - { coef: 1.37, budget_minutes: 405 }   # Lv3
+    - { coef: 1.49, budget_minutes: 440 }   # Lv4 フル施設（名門・強豪）
   level_up_base: 100.0        # 必要exp = base × growth^level
   # 2026-08-15: 1.05→1.04（案D）。1.05だと Lv70台の必要expがLv32の7.8倍で成長がほぼ止まり、名声で入る
   # B/Aの新入生が「入学時が完成形」になる。1.04で Lv74 でも3年+2〜3（施設フルで+10）。
+  # 2026-11-10（issue #865）: 検討したが変更していない。Mental/Lead/Baserunningの実戦成長・個別指導の
+  # 信頼関係exp・守備位置適性もこの曲線を共有しており、寝かせると本issueの範囲外のそれらまで一緒に
+  # 加速してしまう（実測: 1.017へ緩めただけで3年のリード成長が旧期待値レンジの2倍超に膨らんだ）。
+  # base_main_exp 側だけで +15〜20 を作る方を選んだ（out/overnight/issue-865 実測）。
   level_up_growth: 1.04
   aptitude_required_exp_factor: 0.6   # 守備位置適性は能力より緩い必要exp（<1.0で速く伸びる, 守備適性 未決1）
   # 能力別 trainability（伸ばしやすさ, Issue #114）: 能力の素質の形（内在特性）。exp加算時に乗算する。
@@ -1545,31 +1553,31 @@ facilities:
     name: 照明設備
     tiers:
       - {}
-      - { cost: 2000, budget_add: 80 }
-      - { cost: 3000, budget_add: 80 }
-      - { cost: 5000, budget_add: 90 }
+      - { cost: 2000, budget_add: 30 }
+      - { cost: 3000, budget_add: 30 }
+      - { cost: 5000, budget_add: 30 }
   - id: indoor            # 室内練習場: 雨天でも練習（時間）＋設備（効率）
     name: 室内練習場
     tiers:
       - {}
-      - { cost: 3000, coef_add: 0.15, budget_add: 50 }
-      - { cost: 5000, coef_add: 0.15, budget_add: 50 }
-      - { cost: 8000, coef_add: 0.15, budget_add: 50 }
+      - { cost: 3000, coef_add: 0.05, budget_add: 15 }
+      - { cost: 5000, coef_add: 0.05, budget_add: 15 }
+      - { cost: 8000, coef_add: 0.05, budget_add: 20 }
   - id: dorm              # 寮: 生活・体調管理で効率↑。能動勧誘枠（旧2名）はスカウトへ一本化（issue #867）。
                           # 寮は「スカウト候補の距離の減点を打ち消す」効果として残る（scout.dorm_distance_relief）。
     name: 寮
     tiers:
       - {}
-      - { cost: 5000,  coef_add: 0.15 }
-      - { cost: 8000,  coef_add: 0.15 }
-      - { cost: 12000, coef_add: 0.15 }
+      - { cost: 5000,  coef_add: 0.05 }
+      - { cost: 8000,  coef_add: 0.05 }
+      - { cost: 12000, coef_add: 0.05 }
   - id: weight            # トレーニング場: ウェイト・マシンで効率↑
     name: トレーニング場
     tiers:
       - {}
-      - { cost: 500,  coef_add: 0.15 }
-      - { cost: 1000, coef_add: 0.15 }
-      - { cost: 2000, coef_add: 0.20 }
+      - { cost: 500,  coef_add: 0.05 }
+      - { cost: 1000, coef_add: 0.05 }
+      - { cost: 2000, coef_add: 0.09 }
   # 医務室: 怪我が起きにくくなり復帰も早まる。coef_add / budget_add を持たないので
   # 全系統Lv3の (2.40 / 700分) は動かない（#115の校正を保つ）。累計Lv3で発生率0.61倍・全治週0.73倍。
   - id: clinic
@@ -1582,35 +1590,37 @@ facilities:
 
   # --- 練習道具（kind: equipment）: 効果小 Lv1 / 効果大 Lv2 の2段。
   # 施設の練習効率が全メニュー一律なのに対し、道具は振っているメニューの分野にだけ効く。
-  # 累計 Lv2 で 1.05 × 1.07 ≒ +12%。
+  # 累計 Lv2 で 1.08 × 1.10 ≒ +19%（2026-11-10 issue #865: 1.05×1.07≒+12%→引き上げ）。
+  # 才能上限（roster.cap_gap_mean等）が育成期間に対して相対的に狭く、ここをさらに強めても
+  # 才能上限で頭打ちの選手が増えるだけで実測効果は小さい（out/overnight/issue-865）。
   - id: gear_batting
     name: 打撃の道具
     kind: equipment
     tiers:
       - {}
-      - { cost: 30, batting_factor: 1.05 }       # バッティングティー・ネット
-      - { cost: 70, batting_factor: 1.07 }       # ピッチングマシン
+      - { cost: 30, batting_factor: 1.12 }       # バッティングティー・ネット
+      - { cost: 70, batting_factor: 1.12 }       # ピッチングマシン
   - id: gear_defense
     name: 守備の道具
     kind: equipment
     tiers:
       - {}
-      - { cost: 30, defense_factor: 1.05 }       # ノックバット・防具一式
-      - { cost: 70, defense_factor: 1.07 }       # 守備マシン
+      - { cost: 30, defense_factor: 1.12 }       # ノックバット・防具一式
+      - { cost: 70, defense_factor: 1.12 }       # 守備マシン
   - id: gear_baserunning
     name: 走塁の道具
     kind: equipment
     tiers:
       - {}
-      - { cost: 10, base_running_factor: 1.05 }  # ラダー・ミニハードル
-      - { cost: 70, base_running_factor: 1.07 }  # タイム計測システム
+      - { cost: 10, base_running_factor: 1.12 }  # ラダー・ミニハードル
+      - { cost: 70, base_running_factor: 1.12 }  # タイム計測システム
   - id: gear_pitching
     name: 投手の道具
     kind: equipment
     tiers:
       - {}
-      - { cost: 15, pitching_factor: 1.05 }      # 重量球・練習球一式
-      - { cost: 70, pitching_factor: 1.07 }      # スピードガン＋ブルペン整備
+      - { cost: 15, pitching_factor: 1.12 }      # 重量球・練習球一式
+      - { cost: 70, pitching_factor: 1.12 }      # スピードガン＋ブルペン整備
 
   # --- 備品（kind: gear）: 買い切り1段 ---
   - id: video             # ビデオ・分析機材: 気づきが増え、読み違えも減る
@@ -1655,17 +1665,17 @@ contracts:
     name: 打撃コーチ
     tiers:
       - {}
-      - { annual_cost: 50, coaching_batting_add: 10 }
+      - { annual_cost: 50, coaching_batting_add: 50 }   # 2026-11-12 issue #865: 10→50（該当分野の3年の伸び +3 前後）
   - id: coach_pitching
     name: 投手コーチ
     tiers:
       - {}
-      - { annual_cost: 50, coaching_pitching_add: 10 }
+      - { annual_cost: 50, coaching_pitching_add: 50 }   # 2026-11-12 issue #865: 10→50（該当分野の3年の伸び +3 前後）
   - id: coach_defense
     name: 守備走塁コーチ
     tiers:
       - {}
-      - { annual_cost: 50, coaching_defense_add: 10 }
+      - { annual_cost: 50, coaching_defense_add: 50 }   # 2026-11-12 issue #865: 10→50（該当分野の3年の伸び +3 前後）
 
 # --- 新入生生成（設計書04 §2.1・設計書01 §1.1b-c）: 名声→総合力→凸凹配分 ---
 roster:
@@ -1680,16 +1690,24 @@ roster:
   # これ未満しか居ないコホートで最も惜しい1人をここまで引き上げる（実測発動率 0.122%）。
   catcher_aptitude_floor: 50.0
   # 総合力（名声由来。既定は一般校相当。名声接続後は talentCenter を上書き）
+  # issue #865 の「入学時を下げる」はこの値ではなく intake_drop（下）で行う（中心値・名声の傾きは改定前のまま）。
   talent_center_default: 32.0
+  # 入学時の下げ（issue #865・監督決定「入学時を下げて3年夏は同じ」）。練習で伸びる能力だけを intake_drop 下げて
+  # 入学させ、強めた育成式（training.base_main_exp）で取り戻す。お任せ練習で伸びない能力（盗塁・送球精度・走塁・
+  # 球速・キレ・球威・バント）は下げない＝下げると卒業まで戻らず定常のチーム総合だけが落ちる（実測: 無名校 38.0→36.0）。
+  # 下げ幅は中心値 talent_center_default で満額、名声で届く上限（talent_center_default＋fame_talent_center_span）で0（線形）。
+  # 高い能力ほど伸びにくい育成式なので、強豪の入学時を一律に下げると3年で取り戻せない（実測: 名声60 63.0→58.5）。
+  # この形で名声0/30/60/90 の定常チーム総合は改定前と ±0.8 以内（出典: ProspectGenerator.IntakeDropFor）。
+  intake_drop: 12.0
   talent_sd: 8.0
   talent_min: 10.0
   talent_max: 90.0
   # 名声→talentCenterフィードバック（issue #127・設計書04 §2.1）: 監督の名声が高いほど良い新入生が集まる。
   # 上振れは指数飽和カーブ（線形→漸近）で頭打ち＝「勝つ→怪物→また勝つ」の暴走ループ防止が必須要件。
   # 2026-08-15（案D）: 8/30 → 50/50。旧値は Fame最大でも 32→40（E境界）で、自校の新入生は名声を極めても
-  # AI C校（強度60）の新入生に届かず、自校がD以上へ行く経路が実質閉じていた。新値は名声20→48(E) / 40→59(D) /
-  # 60→67(C) / 80→72(B) / 100→75(B。SD8なので上位個体はA)。頭打ち（span）は残す＝暴走防止の要件は維持。
-  # 名声は fame_decay(0.80) で自己制限するので、勝ち続けないと中心も落ちる。
+  # AI C校（強度60）の新入生に届かず、自校がD以上へ行く経路が実質閉じていた。
+  # 頭打ち（span）は残す＝暴走防止の要件は維持。名声は fame_decay(0.80) で自己制限するので、
+  # 勝ち続けないと中心も落ちる。
   fame_talent_center_span: 50.0
   fame_talent_center_tau: 50.0
   # ティア→能力の圧縮（issue #578・OPEN-QUESTIONS Q24 の確定2）。AI校の「強度→能力中心」だけを寝かせ、
@@ -1781,6 +1799,9 @@ roster:
   cap_gap_mean: 26.0
   cap_gap_sd: 10.0
   late_cap_bonus: 6.0         # 晩成の才能上限上方補正（設計書02 §5.2）
+  # 入学時を下げた能力（intake_drop）の才能上限だけに足す gap（issue #865）。下げたぶん上限も下がると卒業時に
+  # 張り付き、施設・道具・コーチが効かない＝下げ幅に比例して足し戻す（満額でこの値）。下げていない能力・身体系は対象外。
+  skill_cap_gap_bonus: 20.0
   # 成長タイプの分野別化（設計書02 §5.2・issue #866）: 投球・打撃・守備の各分野が基本タイプと同じになる確率。
   # 残りは基本タイプと異なる方のタイプを一様に1つ選ぶ（「全分野バラバラ」ばかりにしない）。
   growth_domain_same_prob: 0.6

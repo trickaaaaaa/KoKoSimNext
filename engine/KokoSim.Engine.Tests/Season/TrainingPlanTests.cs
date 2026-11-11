@@ -50,18 +50,34 @@ public sealed class TrainingPlanTests
     }
 
     // 2. 分配分: 150/150分の2メニューは、各300分満額のちょうど半分ずつ成長する。
+    // 開始Lvは60（issue #865でbase_main_exp 130→290に上げた後、Lv30開始だと週内に複数回レベルアップして
+    // 残expが「レベル→exp」の辞書順になり、半分ちょうどにならない。Lv60はフル配分でもレベルアップしない
+    // 必要exp（RequiredExp(60)>フル配分1週分）に収まる値を実測で選んだ＝残expの単純な比較が成立する）。
+    private static DevelopingPlayer NewBatterAt(int level)
+    {
+        var p = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(p, false);
+        foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline,
+                                  AbilityKind.Stamina, AbilityKind.Fielding })
+        {
+            p.SetLevel(k, level);
+            p.SetCap(k, 99);
+        }
+        return p;
+    }
+
     [Fact]
     public void TrainWeekPlan_SplitByMinutes_DistributesExp()
     {
         var c = new TrainingCoefficients();
         var stages = new GrowthStageTable();
 
-        var full = NewBatter();
+        var full = NewBatterAt(60);
         DevelopmentModel.TrainWeekPlan(full,
             new[] { new MenuAllocation(TrainingMenu.Batting, Ref) },
             Ref, 0, 1.0, stages, c);
 
-        var half = NewBatter();
+        var half = NewBatterAt(60);
         DevelopmentModel.TrainWeekPlan(half,
             new[] { new MenuAllocation(TrainingMenu.Batting, Ref / 2), new MenuAllocation(TrainingMenu.Defense, Ref / 2) },
             Ref, 0, 1.0, stages, c);

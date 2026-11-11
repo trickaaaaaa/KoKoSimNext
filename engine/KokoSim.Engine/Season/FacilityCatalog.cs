@@ -171,9 +171,9 @@ public sealed record FacilityCatalog
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 2000, BudgetAdd = 80 },
-                    new FacilityUpgrade { Cost = 3000, BudgetAdd = 80 },
-                    new FacilityUpgrade { Cost = 5000, BudgetAdd = 90 },
+                    new FacilityUpgrade { Cost = 2000, BudgetAdd = 30 },
+                    new FacilityUpgrade { Cost = 3000, BudgetAdd = 30 },
+                    new FacilityUpgrade { Cost = 5000, BudgetAdd = 30 },
                 },
             },
             // 室内練習場: 雨天でも練習でき（練習時間）、設備で効率も上がる。
@@ -183,9 +183,9 @@ public sealed record FacilityCatalog
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 3000, CoefAdd = 0.15, BudgetAdd = 50 },
-                    new FacilityUpgrade { Cost = 5000, CoefAdd = 0.15, BudgetAdd = 50 },
-                    new FacilityUpgrade { Cost = 8000, CoefAdd = 0.15, BudgetAdd = 50 },
+                    new FacilityUpgrade { Cost = 3000, CoefAdd = 0.05, BudgetAdd = 15 },
+                    new FacilityUpgrade { Cost = 5000, CoefAdd = 0.05, BudgetAdd = 15 },
+                    new FacilityUpgrade { Cost = 8000, CoefAdd = 0.05, BudgetAdd = 20 },
                 },
             },
             // 寮: 生活・体調管理で練習効率が上がる。能動勧誘枠（旧・寮Lv1で2名）はスカウトへ一本化
@@ -197,9 +197,9 @@ public sealed record FacilityCatalog
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 5000, CoefAdd = 0.15 },
-                    new FacilityUpgrade { Cost = 8000, CoefAdd = 0.15 },
-                    new FacilityUpgrade { Cost = 12000, CoefAdd = 0.15 },
+                    new FacilityUpgrade { Cost = 5000, CoefAdd = 0.05 },
+                    new FacilityUpgrade { Cost = 8000, CoefAdd = 0.05 },
+                    new FacilityUpgrade { Cost = 12000, CoefAdd = 0.05 },
                 },
             },
             // トレーニング場: ウェイト・マシンで練習効率が上がる。
@@ -209,9 +209,9 @@ public sealed record FacilityCatalog
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 500, CoefAdd = 0.15 },
-                    new FacilityUpgrade { Cost = 1000, CoefAdd = 0.15 },
-                    new FacilityUpgrade { Cost = 2000, CoefAdd = 0.20 },
+                    new FacilityUpgrade { Cost = 500, CoefAdd = 0.05 },
+                    new FacilityUpgrade { Cost = 1000, CoefAdd = 0.05 },
+                    new FacilityUpgrade { Cost = 2000, CoefAdd = 0.09 },
                 },
             },
             // 医務室: 怪我が起きにくくなり、復帰も早まる。練習効率・時間には効かないので
@@ -230,15 +230,20 @@ public sealed record FacilityCatalog
             },
 
             // --- 練習道具（効果小 Lv1 / 効果大 Lv2）: 振っているメニューの分野にだけ効く。
-            //     累計 Lv2 で 1.05 × 1.07 ≒ +12%。施設の効率係数と違って全メニューには効かない。
+            //     累計 Lv2 で 1.08 × 1.10 ≒ +19%（2026-11-10 issue #865: 1.05×1.07≒+12%→引き上げ）。
+            //     施設の効率係数と違って全メニューには効かない。実測（out/overnight/issue-865）: 才能上限
+            //     （RosterCoefficients.CapGapMean）が3年の育成期間に対して相対的に狭く、ここをさらに強めても
+            //     才能上限で頭打ちの選手が増えるだけで中核能力平均への寄与はごく小さい（+0.1〜0.2/3年）。
+            //     「買うと目に見えて変わる」までの引き上げ（目安+3）には才能上限側の見直しが別途必要
+            //     （本issueの範囲外・才能上限は成長式と別の係数群のため未変更）。
             new FacilityDef
             {
                 Id = "gear_batting", Name = "打撃の道具", Kind = PurchaseKind.Equipment,
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 30, BattingFactor = 1.05 },   // バッティングティー・ネット
-                    new FacilityUpgrade { Cost = 70, BattingFactor = 1.07 },   // ピッチングマシン
+                    new FacilityUpgrade { Cost = 30, BattingFactor = 1.12 },   // バッティングティー・ネット
+                    new FacilityUpgrade { Cost = 70, BattingFactor = 1.12 },   // ピッチングマシン
                 },
             },
             new FacilityDef
@@ -247,8 +252,8 @@ public sealed record FacilityCatalog
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 30, DefenseFactor = 1.05 },   // ノックバット・防具一式
-                    new FacilityUpgrade { Cost = 70, DefenseFactor = 1.07 },   // 守備マシン
+                    new FacilityUpgrade { Cost = 30, DefenseFactor = 1.12 },   // ノックバット・防具一式
+                    new FacilityUpgrade { Cost = 70, DefenseFactor = 1.12 },   // 守備マシン
                 },
             },
             new FacilityDef
@@ -257,8 +262,8 @@ public sealed record FacilityCatalog
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 10, BaseRunningFactor = 1.05 },  // ラダー・ミニハードル
-                    new FacilityUpgrade { Cost = 70, BaseRunningFactor = 1.07 },  // タイム計測システム
+                    new FacilityUpgrade { Cost = 10, BaseRunningFactor = 1.12 },  // ラダー・ミニハードル
+                    new FacilityUpgrade { Cost = 70, BaseRunningFactor = 1.12 },  // タイム計測システム
                 },
             },
             new FacilityDef
@@ -267,8 +272,8 @@ public sealed record FacilityCatalog
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 15, PitchingFactor = 1.05 },  // 重量球・練習球一式
-                    new FacilityUpgrade { Cost = 70, PitchingFactor = 1.07 },  // スピードガン＋ブルペン整備
+                    new FacilityUpgrade { Cost = 15, PitchingFactor = 1.12 },  // 重量球・練習球一式
+                    new FacilityUpgrade { Cost = 70, PitchingFactor = 1.12 },  // スピードガン＋ブルペン整備
                 },
             },
 

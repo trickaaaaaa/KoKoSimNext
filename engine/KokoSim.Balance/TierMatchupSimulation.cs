@@ -63,13 +63,13 @@ public static class TierMatchupSimulation
         => StrengthTeamFactory.Create(strength, name, rng, rosterCoeff: coeff);
 
     /// <summary>
-    /// 実プレイと同じ自校（<see cref="ProspectGenerator"/>＝才能中心 <c>TalentCenterDefault</c> 32.0 の
-    /// 1〜3年）を <see cref="RosterTeamBuilder"/> で組む。**ゲーム開始直後の自校**そのもの。
+    /// 実プレイと同じ自校（<see cref="ProspectGenerator"/>＝才能中心 <c>TalentCenterDefault</c> の
+    /// 1〜3年＋<see cref="StartingRoster.PreTrain"/>）を <see cref="RosterTeamBuilder"/> で組む。**ゲーム開始直後の自校**そのもの。
     /// </summary>
     private static Team ManagerTeam(IRandomSource rng, string name, RosterCoefficients coeff)
         => RosterTeamBuilder.Build(ManagerRoster(rng, coeff), name);
 
-    /// <summary>ゲーム開始直後の自校ロスター（1〜3年の入学コホート3本）。</summary>
+    /// <summary>ゲーム開始直後の自校ロスター（1〜3年の入学コホート3本＋上級生の既習の練習）。</summary>
     private static List<DevelopingPlayer> ManagerRoster(IRandomSource rng, RosterCoefficients coeff)
     {
         var list = new List<DevelopingPlayer>();
@@ -81,6 +81,7 @@ public static class TierMatchupSimulation
                 list.Add(p);
             }
         }
+        StartingRoster.PreTrain(list);   // 実ゲームの RosterService.Build と同じ（issue #865）
         return list;
     }
 

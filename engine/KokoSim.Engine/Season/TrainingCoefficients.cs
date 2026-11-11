@@ -6,8 +6,15 @@ namespace KokoSim.Engine.Season;
 /// <summary>育成式の係数（設計書02 §5.1, YAML駆動）。</summary>
 public sealed record TrainingCoefficients
 {
-    /// <summary>主効果の練習基礎値[exp/週]。2026-08-15 に 85→130（案D。中核能力の3年間の伸び +4〜5 → +7）。</summary>
-    public double BaseMainExp { get; init; } = 130.0;
+    /// <summary>
+    /// 主効果の練習基礎値[exp/週]。2026-08-15 に 85→130（案D。中核能力の3年間の伸び +4〜5 → +7）。
+    /// 2026-11-12（issue #865・監督決定）: 130→290。施設なし・お任せ練習の3年の伸びを +7 → +16.4 にする改定。
+    /// <see cref="LevelUpGrowth"/> は意図的に変更していない（Mental/Lead/Baserunning の実戦成長や個別指導の
+    /// 必要exp曲線を共有しており、そこを寝かせると関係のない系統まで一緒に加速してしまう）。
+    /// 入学時の下げ（<see cref="RosterCoefficients.IntakeDrop"/>：練習で伸びる能力だけ）とセットで、定常のチーム総合は
+    /// 改定前と ±0.8 以内（名声0/30/60/90 実測）。
+    /// </summary>
+    public double BaseMainExp { get; init; } = 290.0;
     /// <summary>副効果の倍率。</summary>
     public double SubFactor { get; init; } = 0.4;
 
@@ -63,16 +70,21 @@ public sealed record TrainingCoefficients
     private static IReadOnlyList<FacilityTier> DefaultFacilityTiers() => new FacilityTier[]
     {
         new() { Coef = 1.00, BudgetMinutes = 300 }, // Lv0 施設なし（現状・従来一致）
-        new() { Coef = 1.35, BudgetMinutes = 400 }, // Lv1
-        new() { Coef = 1.70, BudgetMinutes = 500 }, // Lv2
-        new() { Coef = 2.05, BudgetMinutes = 600 }, // Lv3
-        new() { Coef = 2.40, BudgetMinutes = 700 }, // Lv4 フル施設
+        new() { Coef = 1.12, BudgetMinutes = 335 }, // Lv1
+        new() { Coef = 1.25, BudgetMinutes = 370 }, // Lv2
+        new() { Coef = 1.37, BudgetMinutes = 405 }, // Lv3
+        new() { Coef = 1.49, BudgetMinutes = 440 }, // Lv4 フル施設
     };
 
     /// <summary>
     /// レベルアップ必要exp = LevelUpBase × LevelUpGrowth^v（設計書02 §5.1）。
     /// Growth は 2026-08-15 に 1.05→1.04（案D）。1.05 だと Lv74 の必要expが Lv32 の7.8倍で高レベル帯の成長が
     /// ほぼ止まり、名声で入る B/A の新入生が「入学時が完成形」になる。1.04 で Lv74 でも3年 +2〜3（施設フル +10）。
+    /// 2026-11-10（issue #865）: 検討したが変更していない。この曲線は <see cref="MatchGrowthModel"/>（精神力/
+    /// 捕手リード/走塁判断の実戦成長）・個別指導の信頼関係exp・守備位置適性にも共有されており、ここを
+    /// 寝かせると「育成式の伸びを強める」という本issueの範囲を越えてそれら全部が一緒に速くなる
+    /// （実測: 1.017へ緩めただけで3年のリード成長が旧期待値レンジの2倍超に膨らんだ）。<see cref="BaseMainExp"/>
+    /// 側だけで +15〜20 を作る（6倍弱の引き上げで足りる・才能上限には遠い。out/overnight/issue-865 実測）。
     /// </summary>
     public double LevelUpBase { get; init; } = 100.0;
     public double LevelUpGrowth { get; init; } = 1.04;

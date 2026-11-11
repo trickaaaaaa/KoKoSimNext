@@ -246,6 +246,8 @@ namespace KokoSim.Unity.Shell
                     list.Add(p);
                 }
             }
+            // 2・3年生は入学から今日までの練習を済ませた能力にする（issue #865。乱数は使わない）。
+            StartingRoster.PreTrain(list);
 
             // 成績集計の帰属キー（安定ID）を連番付与。生成順＝安定順なので決定論（乱数不使用）。
             // 新規ゲーム（_nextId=0）は 1 から、転任後は旧校で使った Id の続きから振る（issue #535 / #644）。

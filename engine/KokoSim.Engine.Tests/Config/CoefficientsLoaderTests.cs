@@ -190,21 +190,21 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(0.50, bundle.Tactics.SendHomeAggressionSpan, 6);
 
         // 買えるもの（Issue #128 とその拡張）: 施設5系統＋練習道具4＋備品1が YAML から束縛される。
-        // 全部を最大まで買っても練習効率・週練習時間は旧Lv4包絡 (2.40 / 700分) のままで、
+        // 全部を最大まで買っても練習効率・週練習時間はLv4包絡 (1.49 / 440分・issue #865) のままで、
         // 医務室・道具・備品はそこへ一切足さない＝ #115 の校正が保たれる（yaml と C#既定のドリフト検出）。
         Assert.Equal(10, bundle.Facilities.Facilities.Count);
         var maxSet = new KokoSim.Engine.Season.FacilitySet();
         foreach (var f in bundle.Facilities.Facilities) maxSet.SetLevel(f.Id, f.MaxLevel);
         var (coefAdd, budgetAdd) = bundle.Facilities.Aggregate(maxSet);
-        Assert.Equal(1.40, coefAdd, 3);
-        Assert.Equal(400, budgetAdd);
+        Assert.Equal(0.49, coefAdd, 3);
+        Assert.Equal(140, budgetAdd);
 
         // 拡張した効果の軸も YAML から束縛される（医務室・道具・備品）。
         var effects = bundle.Facilities.AggregateEffects(maxSet);
         Assert.Equal(0.85 * 0.85 * 0.85, effects.InjuryProbFactor, 6);
         Assert.Equal(0.90 * 0.90 * 0.90, effects.InjuryRecoveryFactor, 6);
-        Assert.Equal(1.05 * 1.07, effects.Equipment.Batting, 6);
-        Assert.Equal(1.05 * 1.07, effects.Equipment.Pitching, 6);
+        Assert.Equal(1.12 * 1.12, effects.Equipment.Batting, 6);
+        Assert.Equal(1.12 * 1.12, effects.Equipment.Pitching, 6);
         Assert.Equal(1.5, effects.InsightProbFactor, 6);
         Assert.Equal(0.05, effects.InsightAccuracyAdd, 6);
         Assert.Equal(20.0, bundle.Career.SummerCampCost, 6);

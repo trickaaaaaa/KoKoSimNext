@@ -61,17 +61,34 @@ public static class TrainingPresets
         if (plan.Preset == TrainingPreset.Custom)
             return ResolveCustom(plan.Allocations, budgetMinutes);
 
-        var table = plan.Preset switch
+        return DistributeByWeight(TableFor(plan.Preset), budgetMinutes);
+    }
+
+    private static (TrainingMenu Menu, double Weight)[] TableFor(TrainingPreset preset) => preset switch
+    {
+        TrainingPreset.PitcherAuto => PitcherAuto,
+        TrainingPreset.BatterAuto => BatterAuto,
+        TrainingPreset.Balanced => Balanced,
+        TrainingPreset.DefenseFocus => DefenseFocus,
+        TrainingPreset.AceDevelopment => AceDevelopment,
+        TrainingPreset.SluggerDevelopment => SluggerDevelopment,
+        _ => Balanced,
+    };
+
+    /// <summary>
+    /// プリセット（Custom 以外）が主効果・副効果で伸ばす能力。issue #865: お任せ（<see cref="TrainingPlan.Default"/>）で
+    /// 伸びない能力は新入生の入学時を下げない（<see cref="RosterCoefficients.IntakeDrop"/>）ので、その判定に使う。
+    /// </summary>
+    public static IReadOnlyCollection<AbilityKind> AbilitiesGrownBy(TrainingPreset preset)
+    {
+        var set = new HashSet<AbilityKind>();
+        foreach (var (menu, _) in TableFor(preset))
         {
-            TrainingPreset.PitcherAuto => PitcherAuto,
-            TrainingPreset.BatterAuto => BatterAuto,
-            TrainingPreset.Balanced => Balanced,
-            TrainingPreset.DefenseFocus => DefenseFocus,
-            TrainingPreset.AceDevelopment => AceDevelopment,
-            TrainingPreset.SluggerDevelopment => SluggerDevelopment,
-            _ => Balanced,
-        };
-        return DistributeByWeight(table, budgetMinutes);
+            var e = TrainingMenus.Effects(menu);
+            if (e.Main is { } m) set.Add(m);
+            foreach (var k in e.Subs) set.Add(k);
+        }
+        return set;
     }
 
     /// <summary>手動配分を budget にクランプ。超過は比例縮小、不足は idle（そのまま）。</summary>
