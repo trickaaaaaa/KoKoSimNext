@@ -1832,6 +1832,9 @@ namespace KokoSim.Unity.Match
         /// <summary>【見せ方の試作・issue #859】送球の逸れに受け手が合わせて捕球の収録を選ぶか。</summary>
         public static bool ThrowScatterReaction;
 
+        /// <summary>【見せ方の試作・撮影専用】守備ビューのカメラを固定する（ルート相対の位置・注視点・縦に収める実寸[m]）。</summary>
+        public static (Vector3 Pos, Vector3 Look, float FrameH)? CameraOverrideForCapture;
+
         /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
         private const float CatchBallBlendSeconds = 0.30f;
 
@@ -4927,6 +4930,10 @@ namespace KokoSim.Unity.Match
             }
 
             ApplyFieldCamera(t, dt);
+            if (CameraOverrideForCapture is { } co)
+            {
+                FramePreview(co.Pos, co.Look, co.FrameH);
+            }
             // びっくりマーク（issue #439 ②）はカメラを動かした後＝このフレームの視点へ正対させる
             UpdateErrorMark(t);
             if (_ball != null && _ball.activeSelf) ApplyBallReadability();

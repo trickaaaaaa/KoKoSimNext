@@ -2,6 +2,7 @@
 using System.Collections;
 using System.IO;
 using System.Reflection;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
 using UnityEngine;
@@ -27,6 +28,17 @@ namespace KokoSim.Unity.Match
             new Scn { Name = "largeLow", Lat = 0.15, Vert = -0.45 },
         };
         private static readonly string[] Modes = { "0now", "A", "B", "C" };
+
+        private const string SpawnFlag = "KokoSim.ThrowScatterShooter.Spawn";
+        public static void Arm() => UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void AutoSpawn()
+        {
+            if (!UnityEditor.EditorPrefs.GetBool(SpawnFlag, false)) return;
+            UnityEditor.EditorPrefs.SetBool(SpawnFlag, false);
+            new GameObject("~ThrowScatterAuto").AddComponent<ThrowScatterShooter>();
+        }
 
         private IEnumerator Start()
         {
@@ -63,12 +75,12 @@ namespace KokoSim.Unity.Match
                 if (wild == null)
                     foreach (var s in play.Ball)
                         if (s.MissedBy.HasValue && s.WildThrow == WildThrowStyle.Wide) { wild = play; wildSeg = s; break; }
-                if (plain == null && play.Result == "Out" || plain == null && play.Result != null && play.Result.Contains("Out"))
+                if (plain == null)
                 {
                     int n = 0, idx = -1;
                     for (int i = 0; i < play.Ball.Count; i++)
                         if (play.Ball[i] is EndpointBallSegment e && e.Kind == BallSegmentKind.Throw)
-                        { n++; if (e.ToBase == "first" && !e.MissedBy.HasValue && e.ToRole.HasValue) idx = i; }
+                        { n++; if (e.ToBase == "first" && !e.MissedBy.HasValue && e.ToRole.HasValue && e.FromRole.HasValue && e.FromRole != FieldPosition.Catcher) idx = i; }
                     if (n == 1 && idx >= 0) { plain = play; plainIdx = idx; Debug.Log($"[i859] 一塁ゴロ見つけた {pa}打席目 {play.Result}"); }
                 }
             }
@@ -82,7 +94,12 @@ namespace KokoSim.Unity.Match
             {
                 var seg = (EndpointBallSegment)plain.Ball[plainIdx];
                 double tc = seg.T1;
-                double[] dts = { -0.40, -0.15, 0.0, 0.35 };
+                double[] dts = { -0.45, -0.20, 0.0, 0.20 };
+                var a0 = seg.At(0); var a1 = seg.At(seg.T1 - seg.T0);
+                var dir = new Vector3((float)(a1.X - a0.X), 0f, (float)(a1.Y - a0.Y)).normalized;
+                var baseP = new Vector3((float)a1.X, 0f, (float)a1.Y);
+                // 受け手の正面（投げ手の側）から見る。横の逸れが画面の左右、縦の逸れが画面の上下に出る
+                DuelStageRig.CameraOverrideForCapture = (baseP - dir * 7.5f + Vector3.up * 1.5f, baseP + Vector3.up * 1.0f, 3.4f);
                 foreach (var scn in Scns)
                     for (int m = 0; m < Modes.Length; m++)
                     {
@@ -110,11 +127,16 @@ namespace KokoSim.Unity.Match
                         yield return null;
                     }
                 DuelStageRig.ThrowScatterReaction = false;
+                DuelStageRig.CameraOverrideForCapture = null;
             }
             if (wild != null)
             {
                 double missT = wildSeg.T0 + wildSeg.MissAfter;
                 double[] dts = { -0.5, -0.15, 0.0, 0.6 };
+                var w0 = wildSeg.At(0); var w1 = wildSeg.At(wildSeg.MissAfter);
+                var wdir = new Vector3((float)(w1.X - w0.X), 0f, (float)(w1.Y - w0.Y)).normalized;
+                var wbase = new Vector3((float)w1.X, 0f, (float)w1.Y);
+                DuelStageRig.CameraOverrideForCapture = (wbase - wdir * 7.5f + Vector3.up * 1.5f, wbase + Vector3.up * 1.0f, 3.4f);
                 rig.BeginFieldPlay(wild, 0f);
                 for (int i = 0; i < dts.Length; i++)
                 {
@@ -127,6 +149,7 @@ namespace KokoSim.Unity.Match
                     yield return CaptureRig(rig, $"wild-now-{i}");
                 }
                 rig.EndFieldPlay();
+                DuelStageRig.CameraOverrideForCapture = null;
             }
             Debug.Log($"[i859] DONE → {Dir}");
         }
