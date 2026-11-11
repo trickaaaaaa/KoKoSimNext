@@ -184,6 +184,26 @@ public sealed record FieldingPlay
     /// <summary>拾い直しでアウトが成立した時刻[s]（接触基準＝<see cref="ThrowArriveSeconds"/> と同じ時計）。</summary>
     public double? RecoveredCatchOutSeconds { get; init; }
 
+    // --- こぼれ球と塁上の走者の勝負（issue #816） ---
+
+    /// <summary>
+    /// 捕球ミス（<see cref="FieldingErrorKind.Catch"/>）が確定し、回収レース（issue #817）でも
+    /// 拾い直しが間に合わず失策のまま確定した打席の、こぼれ幅[m]（<see cref="WildThrowScatterM"/> の
+    /// 捕球ミス版・表示専用）。それ以外（回収に成功／別の種別）は null。回収レースで引いた値の写し
+    /// ＝新しい乱数は引かない。
+    /// </summary>
+    public double? CatchErrorScatterM { get; init; }
+
+    /// <summary>
+    /// 捕球ミスが拾い直せず確定した打席で、処理野手がこぼれ球を拾い直して次の送球に移れる時刻[s]
+    /// （接触基準。issue #816）。<see cref="FieldedAtSeconds"/> は最初に球へ触れた時刻（=こぼれた瞬間）の
+    /// ままなので、塁上の走者が次塁を狙うかどうかの判断（<see cref="KokoSim.Engine.Match.Game.HomePlayResolver"/>）
+    /// にそちらを使うと「弾いた直後に別の塁へ送球できる」という誤った前提になる。回収レース（issue #817）で引いた
+    /// 反応遅延・こぼれ幅・脚力から出た<see cref="FieldedAtSeconds"/>+回収ロスの写し＝新しい乱数は引かない。
+    /// それ以外（回収に成功／別の種別）は null。
+    /// </summary>
+    public double? CatchErrorReadyAtSeconds { get; init; }
+
     /// <summary>ファウルフライのアウト（issue #830）。落下点はファウルグラウンド。</summary>
     public bool FoulFly { get; init; }
 
@@ -480,6 +500,7 @@ public static class FieldingResolver
                     fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy);
                 double? recoveredScatterM = null, recoveredOutSeconds = null, wildScatterM = null;
                 double? recoveredCatchScatterM = null, recoveredCatchOutSeconds = null;
+                double? catchErrorScatterM = null, catchErrorReadyAtSeconds = null;
                 var recoveredByBackup = false;
                 if (errorKind == FieldingErrorKind.Catch)
                 {
@@ -496,6 +517,15 @@ public static class FieldingResolver
                         // 表示専用（issue #817）: 弾いた球を拾い直してアウト、を絵に出すために回収レースの値を残す
                         recoveredCatchScatterM = scatterM;
                         recoveredCatchOutSeconds = defenseTime + recovery;
+                    }
+                    else
+                    {
+                        // 拾い直しが間に合わず失策のまま確定（issue #816）: 球は捕球点のすぐそばに留まる
+                        // （位置は変えない）が、野手が次の送球に動けるのは拾い直しを終えた後＝fieldTime+recovery。
+                        // この時刻を呼び出し側（GameEngine の本塁/三塁クロスプレー文脈）へ渡すことで、
+                        // 塁上の走者の次塁判断・守備との時間勝負が「弾いた直後に送球できる」誤った前提を使わずに済む。
+                        catchErrorScatterM = scatterM;
+                        catchErrorReadyAtSeconds = fieldTime + recovery;
                     }
                 }
                 if (errorKind == FieldingErrorKind.Throw)
@@ -577,6 +607,8 @@ public static class FieldingResolver
                     WildThrowScatterM = wildScatterM,
                     RecoveredCatchScatterM = recoveredCatchScatterM,
                     RecoveredCatchOutSeconds = recoveredCatchOutSeconds,
+                    CatchErrorScatterM = catchErrorScatterM,
+                    CatchErrorReadyAtSeconds = catchErrorReadyAtSeconds,
                 };
             }
             // お手玉の失策（2026-11-03 監督報告「あれだけファンブルしたら内野安打じゃなくて普通にエラーでは？」）:
