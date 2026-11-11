@@ -1223,9 +1223,9 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
     border-radius: var(--radius-card); padding: 12px 14px; overflow: hidden; }
 .nt-d__name { font-size: 22px; color: var(--color-chalk); }
 .nt-d__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
-.nt-d__radar { height: 128px; flex-shrink: 0; margin-top: 4px; }
+.nt-d__radar { height: 116px; flex-shrink: 0; margin-top: 4px; }
 .nt-d__facts { flex-direction: column; margin-top: 6px; flex-shrink: 0; }
-.nt-fact { flex-direction: row; align-items: center; height: 28px; flex-shrink: 0; }
+.nt-fact { flex-direction: row; align-items: center; height: 24px; flex-shrink: 0; }
 .nt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0;
     -unity-text-align: middle-left; }
 .nt-fact__chip { flex-direction: row; align-items: center; justify-content: flex-end; padding-right: 10px; }

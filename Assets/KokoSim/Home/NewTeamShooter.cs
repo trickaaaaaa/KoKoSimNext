@@ -18,6 +18,9 @@ namespace KokoSim.Unity.Home
         private const int W = 1600;
         private const int H = 900;
 
+        /// <summary>&gt;0 なら候補がこの人数になるまで下級生を新最上級生へ昇格させて撮る（候補が多いケースの確認用）。</summary>
+        public static int InflateCandidatesTo;
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
@@ -29,6 +32,16 @@ namespace KokoSim.Unity.Home
             GameClock.Advance(18);
             Debug.Log("[NT] week=" + GameClock.Week + " pending=" + NewTeamService.Pending
                 + " candidates=" + NewTeamService.BuildView().Candidates.Count);
+
+            if (InflateCandidatesTo > 0)
+            {
+                foreach (var p in KokoSim.Engine.Season.CaptainSelector.NewTeamMembers(RosterService.Roster))
+                {
+                    if (KokoSim.Engine.Season.CaptainSelector.DesignationCandidates(RosterService.Roster).Count >= InflateCandidatesTo) break;
+                    if (p.Grade < 2) p.Grade = 2;
+                }
+                Debug.Log("[NT] inflated candidates=" + NewTeamService.BuildView().Candidates.Count);
+            }
 
             var doc = Reopen();
             if (doc == null) { Debug.LogError("[NT] HomeDashboard が見つからない"); yield break; }
