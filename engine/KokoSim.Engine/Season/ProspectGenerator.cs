@@ -47,19 +47,35 @@ public sealed record RosterCoefficients
 
     // --- 総合力（名声由来）。既定は一般校相当。名声接続は SeasonEngine 側で talentCenter を渡す ---
     /// <summary>
-    /// 総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する。
-    /// 2026-11-10（issue #865・監督決定「入学時を下げて3年夏の水準は今と同じ」）: 32→20。<see cref="TrainingCoefficients.BaseMainExp"/>
-    /// の育成式改定（施設なしの3年の伸び +7→+15）に合わせて切片を下げ、名声による上振れの傾き
-    /// （<see cref="FameTalentCenterSpan"/>/<see cref="FameTalentCenterTau"/>）は変えていない。
-    /// 身体系（<see cref="PhysicalMean"/>）は talentCenter が <see cref="TalentCenterDefault"/> と等しい限り
-    /// 名声独立に固定（<see cref="PhysicalCenterFor"/>）のため、ここを下げても「3年夏の中核能力平均」は
-    /// 全部は下がらない＝改定前比 +3.5 程度の残差あり（out/overnight/issue-865 実測。身体系の分だけ構造的に縮まらない）。
-    /// 0近くまで下げれば残差はさらに縮むが、内訳の凸凹（<see cref="SpecialtyFloor"/>等のフロア）に当たって
-    /// 選手の個性が潰れる（実測: center=0で内部σ0.84・16で3.77、閾値4.0を割る）。20はその下限の少し上。
-    /// AI校（<see cref="Nation.Roster.AiRosterFactory.RecruitCenter"/>）はこの値を参照しない別経路＝変更の影響を受けない
-    /// （意図的に変更していない。理由は issue #865 の PR 本文を参照）。
+    /// 総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する（<see cref="TalentCenterFromFame"/>）。
+    /// issue #865 で入学時を下げたのはこの値ではなく <see cref="IntakeDrop"/>（練習で伸びる能力だけを下げる）。
+    /// AI校（<see cref="Nation.Roster.AiRosterFactory.RecruitCenter"/>）はこの値を参照しない別経路。
     /// </summary>
-    public double TalentCenterDefault { get; init; } = 20.0;
+    public double TalentCenterDefault { get; init; } = 32.0;
+
+    /// <summary>
+    /// 新入生の「練習で伸びる能力」だけを入学時に下げる量（issue #865・監督決定「入学時を下げて3年夏は同じ」）。
+    /// 育成式を強めた（<see cref="TrainingCoefficients.BaseMainExp"/>）ぶん、弱く入って大きく育つ形にする。
+    /// <para><b>お任せ（<see cref="TrainingPlan.Default"/>）で伸びない能力は下げない</b>（盗塁・送球精度・走塁・
+    /// 球速・キレ・球威・バント）。下げても卒業まで取り戻せず、定常のチーム総合だけが落ちる（実測: 無名校 38.0→36.0）。
+    /// 判定は <see cref="TrainingPresets.AbilitiesGrownBy"/>＝お任せの中身から導く（一覧を別に持たない）。</para>
+    /// <para>下げ幅は中心値が高いほど小さい（<see cref="IntakeDropFor"/>。名声で届く上限で0）。高い能力ほど伸びにくい育成式
+    /// （必要exp＝100×1.04^Lv）なので、強豪の入学時を一律に下げると3年で取り戻せない（実測: 名声60 63.0→58.5）。</para>
+    /// 既定は data/coefficients.yaml roster.intake_drop と一致。
+    /// </summary>
+    public double IntakeDrop { get; init; } = 12.0;
+
+    /// <summary>
+    /// 中心値 <paramref name="talentCenter"/> の新入生が、練習で伸びる能力を入学時にどれだけ下げて入るか。
+    /// <see cref="TalentCenterDefault"/> で満額、名声で届く上限（<see cref="TalentCenterDefault"/>＋<see cref="FameTalentCenterSpan"/>）で0、
+    /// その間は線形（実測: 名声0/30/60/90 の定常チーム総合が改定前と ±0.8 以内。issue #865）。
+    /// </summary>
+    public double IntakeDropFor(double talentCenter)
+    {
+        if (FameTalentCenterSpan <= 0) return talentCenter <= TalentCenterDefault ? IntakeDrop : 0.0;
+        var fade = (TalentCenterDefault + FameTalentCenterSpan - talentCenter) / FameTalentCenterSpan;
+        return IntakeDrop * MathUtil.Clamp(fade, 0.0, 1.0);
+    }
     public double TalentSd { get; init; } = 8.0;
     public double TalentMin { get; init; } = 10.0;
     public double TalentMax { get; init; } = 90.0;
@@ -290,11 +306,10 @@ public sealed record RosterCoefficients
     public double CapGapSd { get; init; } = 10.0;
     public double LateCapBonus { get; init; } = 6.0;
     /// <summary>
-    /// 技能（凸凹配分で決まる打撃・守備・投球の能力）の才能上限だけに足す gap（issue #865）。
-    /// 新入生の中心（<see cref="TalentCenterDefault"/>）を下げて「弱く入って大きく育つ」にしたぶん、
-    /// 上限まで一緒に下がると卒業時に上限へ張り付き、施設・道具・コーチが効かなくなる。下げた量を
-    /// ここで足し戻して才能の天井は改定前の高さに保つ。身体系（走力・地肩・スタミナ）は中心を下げて
-    /// いないので対象外。定数を足すだけなので乱数消費列は不変（不変条件#2）。
+    /// 入学時を下げた能力（<see cref="IntakeDrop"/>）の才能上限だけに足す gap（issue #865）。
+    /// 「弱く入って大きく育つ」にしたぶん、上限まで一緒に下がると卒業時に上限へ張り付き、施設・道具・コーチが
+    /// 効かなくなる。下げ幅に比例して足す（下げ幅満額でこの値・下げ幅0なら0）。下げていない能力・身体系は対象外。
+    /// 定数を足すだけなので乱数消費列は不変（不変条件#2）。
     /// 既定は data/coefficients.yaml roster.skill_cap_gap_bonus と一致。
     /// </summary>
     public double SkillCapGapBonus { get; init; } = 20.0;
@@ -370,6 +385,10 @@ public static class ProspectGenerator
         AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.ThrowAccuracy,
         AbilityKind.Bunt, AbilityKind.Steal, AbilityKind.Baserunning,
     };
+    // お任せ（練習計画を組んでいない選手の既定）で伸びる能力。入学時の下げ（IntakeDrop・issue #865）はこれだけに掛ける。
+    private static readonly IReadOnlyCollection<AbilityKind> GrownByDefaultPlan =
+        TrainingPresets.AbilitiesGrownBy(TrainingPlan.Default.Preset);
+
     // 投手専門（球速を除く）: コントロール・球種ランク。
     private static readonly AbilityKind[] PitchingSkill =
     {
@@ -625,11 +644,18 @@ public static class ProspectGenerator
         }
 
         // --- Stage 2: 総合力→専門能力へ凸凹配分（投手寄せは w で連続化, Issue #174） ---
-        var total = MathUtil.Clamp(rng.NextGaussian(talentCenter, c.TalentSd), c.TalentMin, c.TalentMax);
+        // 入学時の下げ（issue #865）: 総合力は「練習で伸びる能力」の尺度＝下げた中心から引く。
+        // お任せで伸びない能力は、同じ素質を下げない尺度（total＋下げ幅）で読む＝改定前と同じ値になる。
+        var drop = c.IntakeDropFor(talentCenter);
+        var trainedCenter = talentCenter - drop;
+        var total = MathUtil.Clamp(rng.NextGaussian(trainedCenter, c.TalentSd), c.TalentMin, c.TalentMax);
+        var untrainedTotal = total + drop;
+        var untrainedScale = total > 0 ? untrainedTotal / total : 1.0;
+        var capBonus = c.IntakeDrop > 0 ? c.SkillCapGapBonus * drop / c.IntakeDrop : 0.0;
         var concentration = MathUtil.Clamp(rng.NextGaussian(c.ConcentrationMean, c.ConcentrationSd), 0.05, 1.0);
         // 投打の両立素質（#684）: 専用Forkで独立に引くので主RNG列は不変。ゲート未満の大多数は従来の 0.55 のまま。
         var dualRng = rng.Fork(DualTalentStreamId(year, index));
-        var zTotal = c.TalentSd > 0 ? (total - talentCenter) / c.TalentSd : 0.0;
+        var zTotal = c.TalentSd > 0 ? (total - trainedCenter) / c.TalentSd : 0.0;
         var zDual = c.DualTalentCorr * zTotal
                     + Math.Sqrt(Math.Max(0.0, 1.0 - c.DualTalentCorr * c.DualTalentCorr)) * dualRng.NextGaussian(0, 1);
         var offRatio = MathUtil.Clamp(
@@ -639,7 +665,8 @@ public static class ProspectGenerator
 
         // 投手センス（隠し, 球速levelの土台）: 野手水準(total×係数) ↔ 投手上振れ(total+bonus) を w で補間。
         // 二段分岐を廃し、投手適性に対して連続に振る（旧: isPitcher で total+bonus か total×0.45 の二択）。
-        var senseMean = Lerp(total * c.NonPitcherSenseFactor, total + c.PitcherSenseBonus, w);
+        // 投手センスは球速・球威の土台＝お任せで伸びない側なので、下げない尺度（untrainedTotal）で読む。
+        var senseMean = Lerp(untrainedTotal * c.NonPitcherSenseFactor, untrainedTotal + c.PitcherSenseBonus, w);
         var pitcherSense = MathUtil.Clamp(senseMean + rng.NextGaussian(0, 6), 5, 95);
 
         // 専門配分の中心・フロアも w で連続補間（w=1で投手が本業＝total／w=0で野手が本業＝total）。
@@ -648,8 +675,8 @@ public static class ProspectGenerator
         var battingCenter = Lerp(total, offCenter, w);
         var pitchingFloor = (int)Math.Round(Lerp(c.OffSpecialtyFloor, c.SpecialtyFloor, w));
         var battingFloor = (int)Math.Round(Lerp(c.SpecialtyFloor, c.OffSpecialtyFloor, w));
-        Distribute(p, PitchingSkill, pitchingCenter, concentration, pitchingFloor, c, rng);
-        Distribute(p, BattingSkill, battingCenter, concentration, battingFloor, c, rng);
+        Distribute(p, PitchingSkill, pitchingCenter, concentration, pitchingFloor, c, rng, untrainedScale, capBonus);
+        Distribute(p, BattingSkill, battingCenter, concentration, battingFloor, c, rng, untrainedScale, capBonus);
 
         // 投手球速level = 地肩 ＋ 投手センス（設計書01 §1.1b-3）。地肩は Stage1 で確定済み。
         var arm = p.Level(AbilityKind.ArmStrength);
@@ -682,7 +709,7 @@ public static class ProspectGenerator
         // #377: 二択を廃止。もともと真側が w 補間で、w=0 では偽側と一致するので分岐を畳むだけで連続になる。
         {
             var stuffRng = rng.Fork(StuffStreamId(year, index));
-            var stuffBase = Lerp(total * c.NonPitcherSenseFactor, veloLevel + c.PitcherSenseBonus * 0.3, w);
+            var stuffBase = Lerp(untrainedTotal * c.NonPitcherSenseFactor, veloLevel + c.PitcherSenseBonus * 0.3, w);
             var stuffLevel = (int)MathUtil.Clamp(Math.Round(stuffBase + stuffRng.NextGaussian(0, 8)), 5, 95);
             SetWithCap(p, AbilityKind.Stuff, stuffLevel, c, stuffRng);
         }
@@ -734,8 +761,10 @@ public static class ProspectGenerator
     }
 
     /// <summary>総合力 center を kinds へ凸凹配分（重み=exp(N(0,σ))を平均1正規化 → mean(level)≈center）。</summary>
+    /// <param name="untrainedScale">お任せで伸びない能力に掛ける倍率（入学時を下げない尺度へ戻す・issue #865）。</param>
+    /// <param name="capBonus">入学時を下げた能力の才能上限に足す gap（<see cref="RosterCoefficients.SkillCapGapBonus"/>）。</param>
     private static void Distribute(DevelopingPlayer p, AbilityKind[] kinds, double center, double concentration,
-        int floor, RosterCoefficients c, IRandomSource rng)
+        int floor, RosterCoefficients c, IRandomSource rng, double untrainedScale, double capBonus)
     {
         var n = kinds.Length;
         var weights = new double[n];
@@ -748,9 +777,10 @@ public static class ProspectGenerator
         var wmean = sum / n;
         for (var i = 0; i < n; i++)
         {
-            var raw = center * weights[i] / wmean;
+            var trained = GrownByDefaultPlan.Contains(kinds[i]);
+            var raw = center * weights[i] / wmean * (trained ? 1.0 : untrainedScale);
             var level = (int)MathUtil.Clamp(Math.Round(raw), floor, 90);
-            SetWithCap(p, kinds[i], level, c, rng, c.SkillCapGapBonus);
+            SetWithCap(p, kinds[i], level, c, rng, trained ? capBonus : 0.0);
         }
     }
 

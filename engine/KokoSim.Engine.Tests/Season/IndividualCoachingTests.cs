@@ -14,7 +14,7 @@ namespace KokoSim.Engine.Tests.Season;
 /// </summary>
 public sealed class IndividualCoachingTests
 {
-    // weeks の既定値は issue #865（base_main_exp 130→580）で 150→15 に短縮。150週分だと才能上限
+    // weeks の既定値は issue #865（base_main_exp 130→290）で 150→15 に短縮。150週分だと才能上限
     // （cap=99）に届いて指名の有無に関係なく頭打ちになり、差が測れなくなる（実測: 指名/非指名とも99）。
     private static int GainByTrainWeek(AbilityKind ability, TrainingMenu menu, bool nominated,
         CoachingProfile? coaching, TrainingCoefficients? coefficients = null, int weeks = 15, int start = 30)
@@ -153,7 +153,7 @@ public sealed class IndividualCoachingTests
         PitcherRoleResolver.SeedAptitudeForRole(nominated, true);
         nominated.SetLevel(AbilityKind.Velocity, 30); nominated.SetCap(AbilityKind.Velocity, 99);
 
-        // issue #865（base_main_exp 130→580）で150→15週に短縮（150週だと両者とも才能上限に届いて差が消える）。
+        // issue #865（base_main_exp 130→290）で150→15週に短縮（150週だと両者とも才能上限に届いて差が消える）。
         for (var i = 0; i < 15; i++)
         {
             DevelopmentModel.TrainWeekPlan(notNominated, alloc, c.ReferenceWeekMinutes, 1, 1.0, stages, c, coaching: ace);

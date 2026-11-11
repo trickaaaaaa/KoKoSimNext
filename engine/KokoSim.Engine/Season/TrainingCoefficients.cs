@@ -8,13 +8,11 @@ public sealed record TrainingCoefficients
 {
     /// <summary>
     /// 主効果の練習基礎値[exp/週]。2026-08-15 に 85→130（案D。中核能力の3年間の伸び +4〜5 → +7）。
-    /// 2026-11-10（issue #865・監督決定）: 130→580。施設なし・お任せ練習の3年の伸びを +15〜20 にする改定。
+    /// 2026-11-12（issue #865・監督決定）: 130→290。施設なし・お任せ練習の3年の伸びを +7 → +16.4 にする改定。
     /// <see cref="LevelUpGrowth"/> は意図的に変更していない（Mental/Lead/Baserunning の実戦成長や個別指導の
-    /// 必要exp曲線を共有しており、そこを寝かせると関係のない系統まで一緒に加速してしまう＝影響範囲をここ1つに
-    /// 封じる判断。詳細はこのクラスの <see cref="LevelUpGrowth"/> のコメントを参照）。新入生の中心
-    /// （<see cref="RosterCoefficients.TalentCenterDefault"/>）を20.0まで下げ、3年夏の到達水準は改定前比
-    /// +3.5 程度（身体系が名声独立で下げ切れない構造の残差。それ以上下げると内訳の凸凹が潰れる＝
-    /// <see cref="RosterCoefficients.SpecialtyFloor"/>等のフロアに当たり始める。out/overnight/issue-865 実測）。
+    /// 必要exp曲線を共有しており、そこを寝かせると関係のない系統まで一緒に加速してしまう）。
+    /// 入学時の下げ（<see cref="RosterCoefficients.IntakeDrop"/>：練習で伸びる能力だけ）とセットで、定常のチーム総合は
+    /// 改定前と ±0.8 以内（名声0/30/60/90 実測）。
     /// </summary>
     public double BaseMainExp { get; init; } = 290.0;
     /// <summary>副効果の倍率。</summary>

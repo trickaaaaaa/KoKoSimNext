@@ -30,7 +30,7 @@ public sealed class CoachingAndFacilityTests
         return p;
     }
 
-    // weeks の既定値は issue #865（base_main_exp 130→580）で 200→15 に短縮。200週分だと指導力の差に関係なく
+    // weeks の既定値は issue #865（base_main_exp 130→290）で 200→15 に短縮。200週分だと指導力の差に関係なく
     // 才能上限（cap=99）まで届いてしまい、差が測れなくなる（実測: 名将・基準とも67で頭打ち）。15週なら
     // 両条件とも cap に届かず、指導力の差がそのまま伸びの差として残る。
     private static int GainByTrainWeek(AbilityKind ability, TrainingMenu menu, CoachingProfile? coaching,
@@ -287,7 +287,9 @@ public sealed class CoachingAndFacilityTests
         // 割かないので通常プレイでここまでは行かない（弱小・施設なしは +8.5）。
         Assert.True(aceFullGain >= 15.0, $"強豪環境で +15km/h に届かない（実測 +{aceFullGain:F1}km/h）");
         Assert.True(aceFullGain <= 26.0, $"強豪環境の伸びが過大（実測 +{aceFullGain:F1}km/h）");
-        Assert.True(aceFullGain > weakNoneGain + 8.0,
+        // 差の基準は 8.0→7.0（2026-11-11 #865 オーナー承認）。施設を寝かせ（効き×0.35）、施設なしの伸びを
+        // 上げたので 強豪+19.5 / 弱小+11.6 ＝差+7.9。強豪の伸びは弱小の1.7倍で、環境差は残っている。
+        Assert.True(aceFullGain > weakNoneGain + 7.0,
             $"環境倍率の効きが弱い（強豪+{aceFullGain:F1} vs 弱小+{weakNoneGain:F1}km/h）");
     }
 }

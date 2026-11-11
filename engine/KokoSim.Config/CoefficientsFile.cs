@@ -2470,6 +2470,7 @@ public static class CoefficientsLoader
         public double CatcherAptitudeFloor { get; set; } = D.CatcherAptitudeFloor;
         // 総合力（名声由来）
         public double TalentCenterDefault { get; set; } = D.TalentCenterDefault;
+        public double IntakeDrop { get; set; } = D.IntakeDrop;
         public double TalentSd { get; set; } = D.TalentSd;
         public double TalentMin { get; set; } = D.TalentMin;
         public double TalentMax { get; set; } = D.TalentMax;
@@ -2630,6 +2631,7 @@ public static class CoefficientsLoader
             PitcherAptitudeWeightSpan = PitcherAptitudeWeightSpan,
             CatcherAptitudeFloor = CatcherAptitudeFloor,
             TalentCenterDefault = TalentCenterDefault,
+            IntakeDrop = IntakeDrop,
             TalentSd = TalentSd,
             TalentMin = TalentMin,
             TalentMax = TalentMax,

@@ -50,7 +50,7 @@ public sealed class TrainingPlanTests
     }
 
     // 2. 分配分: 150/150分の2メニューは、各300分満額のちょうど半分ずつ成長する。
-    // 開始Lvは60（issue #865でbase_main_exp 130→580に上げた後、Lv30開始だと週内に複数回レベルアップして
+    // 開始Lvは60（issue #865でbase_main_exp 130→290に上げた後、Lv30開始だと週内に複数回レベルアップして
     // 残expが「レベル→exp」の辞書順になり、半分ちょうどにならない。Lv60はフル配分でもレベルアップしない
     // 必要exp（RequiredExp(60)>フル配分1週分）に収まる値を実測で選んだ＝残expの単純な比較が成立する）。
     private static DevelopingPlayer NewBatterAt(int level)
