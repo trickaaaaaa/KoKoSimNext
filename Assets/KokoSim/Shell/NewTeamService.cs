@@ -15,6 +15,10 @@ namespace KokoSim.Unity.Shell
         public string Name = "";
         public string GradeLabel = "3年";
         public int Mental;
+        /// <summary>スタメンで主将にしたときの底上げの段階（G〜S。式は engine CaptainEffectTiers）。</summary>
+        public string StarterTier = "G";
+        /// <summary>ベンチで伝令に走らせたときの効きの段階（G〜S）。</summary>
+        public string BenchTier = "G";
         /// <summary>自動選出された暫定主将か（初期選択に使う）。</summary>
         public bool IsInterim;
     }
@@ -90,6 +94,8 @@ namespace KokoSim.Unity.Shell
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
                     Mental = p.Mental,
+                    StarterTier = CaptainEffectTiers.Starter(p).ToString(),
+                    BenchTier = CaptainEffectTiers.Bench(p).ToString(),
                     IsInterim = p.IsCaptain,
                 });
             }

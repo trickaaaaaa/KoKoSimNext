@@ -221,7 +221,7 @@ namespace KokoSim.Unity.Home
                 rows.Clear();
                 foreach (var c in view.Candidates) rows.Add(BuildCandidateRow(c));
             }
-            RenderNewTeamDetail();
+            RenderNewTeamDetail(view);
         }
 
         private VisualElement BuildCandidateRow(KokoSim.Unity.Shell.CaptainCandidateRow c)
@@ -234,10 +234,20 @@ namespace KokoSim.Unity.Home
             var name = new Label(c.Name); name.AddToClassList("nt-c-name"); row.Add(name);
 
             var mental = new Label(c.Mental.ToString()); mental.AddToClassList("nt-c-mental"); row.Add(mental);
+            row.Add(TierCell(c.StarterTier));
+            row.Add(TierCell(c.BenchTier));
 
             var index = c.ActiveIndex;
             row.RegisterCallback<ClickEvent>(_ => OnPickCandidate(index));
             return row;
+        }
+
+        private static VisualElement TierCell(string tier)
+        {
+            var cell = new VisualElement();
+            cell.AddToClassList("nt-c-rank");
+            cell.Add(UiComponents.RankChip(tier, RankChipSize.Small));
+            return cell;
         }
 
         private void OnPickCandidate(int activeIndex)
@@ -249,7 +259,7 @@ namespace KokoSim.Unity.Home
 
         // 右ペイン：選択中の候補を選手詳細と同じ ViewModel で描く（レーダー・可視情報・特殊能力）。
         // 統率力は主将本人しか判らない隠しパラメータなので出さない（設計書09 §8）。
-        private void RenderNewTeamDetail()
+        private void RenderNewTeamDetail(KokoSim.Unity.Shell.NewTeamView view)
         {
             if (_ntPick < 0) return;
             var v = new KokoSim.Unity.Players.PlayerDetailState().BuildView(_ntPick);
@@ -265,6 +275,12 @@ namespace KokoSim.Unity.Home
                 facts.Clear();
                 facts.Add(Fact("精神力", MentalOf(v)));
                 facts.Add(Fact("性格", PersonalityOf(v)));
+                var pick = view.Candidates.Find(c => c.ActiveIndex == _ntPick);
+                if (pick != null)
+                {
+                    facts.Add(TierFact("スタメン", pick.StarterTier));
+                    facts.Add(TierFact("ベンチ", pick.BenchTier));
+                }
             }
 
             var skills = _root.Q<VisualElement>("nt-d-skills");
@@ -288,6 +304,17 @@ namespace KokoSim.Unity.Home
                     skills.Add(none);
                 }
             }
+        }
+
+        private static VisualElement TierFact(string key, string tier)
+        {
+            var e = new VisualElement();
+            e.AddToClassList("nt-fact");
+            var k = new Label(key); k.AddToClassList("nt-fact__k");
+            var chip = new VisualElement(); chip.AddToClassList("nt-fact__chip");
+            chip.Add(UiComponents.RankChip(tier, RankChipSize.Small));
+            e.Add(k); e.Add(chip);
+            return e;
         }
 
         private static VisualElement Fact(string key, string value)
