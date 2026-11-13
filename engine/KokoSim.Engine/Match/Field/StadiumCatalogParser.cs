@@ -83,6 +83,7 @@ public static class StadiumCatalogParser
             CenterM = Num(map, "center", 118.0),
             FenceHeightM = Num(map, "fence_height", 2.5),
             Wind = map.TryGetValue("wind", out var wind) && wind.Length > 0 ? wind : null,
+            Model = map.TryGetValue("model", out var model) && model.Length > 0 ? model : null,
         };
         return true;
     }

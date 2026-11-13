@@ -20,8 +20,18 @@ namespace KokoSim.Unity.Match
     /// </summary>
     public sealed class DuelStadiumMesh : ScriptableObject
     {
-        /// <summary>Resources からの読み出し名（＝ファイル名）。</summary>
+        /// <summary>Resources からの読み出し名（＝ファイル名）。汎用の standard はこの名前のまま。</summary>
         public const string ResourceName = "DuelStadiumMesh";
+
+        /// <summary>汎用（伸縮して全球場に使う）モデルの名前。</summary>
+        public const string StandardModel = "standard";
+
+        /// <summary>
+        /// モデル名 → Resources の読み出し名（issue #904）。standard は従来どおり <see cref="ResourceName"/>、
+        /// それ以外は <c>DuelStadiumMesh_&lt;model&gt;</c>（例: 神宮＝DuelStadiumMesh_jingu）。
+        /// </summary>
+        public static string ResourceNameFor(string model)
+            => string.IsNullOrEmpty(model) || model == StandardModel ? ResourceName : ResourceName + "_" + model;
 
         [System.Serializable]
         public sealed class Part
@@ -36,8 +46,21 @@ namespace KokoSim.Unity.Match
             public Color[] Colors = new Color[0];
         }
 
-        [Tooltip("焼き元の相対パス（data/stadiums/standard.obj）")]
+        [Tooltip("焼き元の相対パス（data/stadiums/<model>.obj）")]
         public string SourceObj;
+
+        [Tooltip("モデル名（data/stadiums.yaml の model。standard＝汎用）")]
+        public string Model = StandardModel;
+
+        // 焼いたメッシュの寸法（issue #904）。試合の球場寸法へ外野を変形するときの基準。
+        // 両翼・中堅は判定と同じ値で作ってある（「球場メッシュを検証する」が照合する）。
+        // フェンス高はモデルのフェンス本体の高さ（判定の高さとは違ってよい＝変形で合わせる）。
+        [Tooltip("焼いたフェンスの両翼[m]")]
+        public float BakedWingM = 95f;
+        [Tooltip("焼いたフェンスの中堅[m]")]
+        public float BakedCenterM = 118f;
+        [Tooltip("焼いたフェンス本体の高さ[m]")]
+        public float BakedFenceHeightM = 3.2f;
 
         public Part[] Parts = new Part[0];
 

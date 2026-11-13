@@ -106,6 +106,34 @@ public sealed class StadiumLoaderTests
     }
 
     /// <summary>
+    /// 明治神宮野球場の C#既定（<see cref="Stadium.Jingu"/>）と data/stadiums.yaml が一致すること（不変条件#4・issue #904）。
+    /// 実ゲームは YAML を読まず C#既定で神宮大会・東京の準決勝/決勝を戦う。3Dモデル名（model）も揃える。
+    /// 東西東京の決勝（同じ球場）も寸法とモデルが同じであること。
+    /// </summary>
+    [Theory]
+    [InlineData("jingu")]
+    [InlineData("higashi_tokyo_final")]
+    [InlineData("nishi_tokyo_final")]
+    public void JinguDefault_MatchesTheRepositoryYaml(string id)
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("stadiums.yaml");
+        var yaml = StadiumCatalogLoader.LoadCatalog(path)[id];
+        var code = Stadium.Jingu;
+
+        if (id == "jingu")
+        {
+            Assert.Equal(yaml.Id, code.Id);
+            Assert.Equal(yaml.Tier, code.Tier);
+        }
+        Assert.Equal(yaml.Name, code.Name);
+        Assert.Equal(yaml.Model, code.Model);
+        Assert.Equal(yaml.LeftM, code.LeftM, 6);
+        Assert.Equal(yaml.RightM, code.RightM, 6);
+        Assert.Equal(yaml.CenterM, code.CenterM, 6);
+        Assert.Equal(yaml.FenceHeightM, code.FenceHeightM, 6);
+    }
+
+    /// <summary>
     /// 汎用ティア球場（<see cref="Stadium.MunicipalSmall01"/>/<see cref="Stadium.MunicipalSmall02"/>/
     /// <see cref="Stadium.PrefLarge"/>）の C#既定と data/stadiums.yaml が一致すること（不変条件#4）。
     /// 実ゲーム（<c>RegionalStadiumTier</c> 経由）は YAML を読まず C#既定で走るので、片方だけ動かすと

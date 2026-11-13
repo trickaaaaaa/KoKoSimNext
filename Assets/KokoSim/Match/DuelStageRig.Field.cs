@@ -3622,8 +3622,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 生成前に一度だけ渡す試合の球場ID（<c>GameContext.StadiumId</c>。issue #905）。<see cref="InitialField"/> と
-        /// 同じ静的窓で、使ったら呼び出し側が閉じる。どの球場の3Dメッシュを使うかの選択は #904 が担う
-        /// （それまでは受け取って保持するだけ＝どの球場も standard の伸縮で描く）。null＝割当なし。
+        /// 同じ静的窓で、使ったら呼び出し側が閉じる。どの球場の3Dメッシュを使うかを決める（<see cref="LoadStadiumAsset"/>・
+        /// issue #904）。null＝割当なし＝standard。
         /// </summary>
         public static string InitialStadiumId { get; set; }
 
@@ -3637,12 +3637,12 @@ namespace KokoSim.Unity.Match
         // 絵で越えているのに越えていない（逆も）を起こさない。
         private float FenceHeightM => (float)_field.FenceHeightM;
 
-        // 焼いた球場メッシュの寸法（tools/stadium-gen.py の PARAMS: R_CORNER / R_CENTER / FENCE_H）。
-        // ここを基準に、試合の球場寸法へ外野側を変形する。生成側を変えたらここも合わせる
-        // （DuelStadiumBaker.Verify がフェンス弧 95/118 を照合している）。
-        private const float BakedWingM = 95f;
-        private const float BakedCenterM = 118f;
-        private const float BakedFenceHeightM = 3.2f;
+        // 焼いた球場メッシュの寸法。ここを基準に、試合の球場寸法へ外野側を変形する。
+        // 値は使う球場メッシュの資産が持つ（issue #904。standard＝95/118/3.2、神宮＝97.5/120/3.5）。
+        // DuelStadiumBaker.Verify が両翼・中堅を engine の弧と照合している。
+        private float BakedWingM = 95f;
+        private float BakedCenterM = 118f;
+        private float BakedFenceHeightM = 3.2f;
 
         /// <summary>変形を始める本塁からの距離[m]。内野（塁・マウンド・ダート・グラスライン29m）には触らない。</summary>
         private const float WarpInnerM = 50f;
@@ -3668,7 +3668,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private bool BuildStadiumMesh(int layer)
         {
-            var asset = Resources.Load<DuelStadiumMesh>(DuelStadiumMesh.ResourceName);
+            var asset = LoadStadiumAsset();
             if (asset == null || asset.Parts == null || asset.Parts.Length == 0)
             {
                 // ⚠ 黙って落ちない。焼いた資産は Resources ごと gitignore なので、**clone 直後や
@@ -3682,6 +3682,10 @@ namespace KokoSim.Unity.Match
                 }
                 return false;
             }
+
+            BakedWingM = asset.BakedWingM;
+            BakedCenterM = asset.BakedCenterM;
+            BakedFenceHeightM = asset.BakedFenceHeightM;
 
             // 色は17種しか無いのにサブメッシュは60超あるので、色で使い回す（毎回 new すると材質が60個できる）
             var byColor = new Dictionary<Color, Material>();
@@ -3720,6 +3724,26 @@ namespace KokoSim.Unity.Match
             }
             return true;
         }
+
+        /// <summary>
+        /// この試合の球場の3Dメッシュ（issue #904）。球場ID → data/stadiums.yaml の model → 焼いた資産。
+        /// モデルを持たない球場・焼いていないモデルは standard（判定寸法へ伸縮）へ落ちる。
+        /// </summary>
+        private DuelStadiumMesh LoadStadiumAsset()
+        {
+            var model = KokoSim.Unity.Shell.StadiumCatalogProvider.Find(StadiumId)?.Model;
+            if (!string.IsNullOrEmpty(model))
+            {
+                var own = Resources.Load<DuelStadiumMesh>(DuelStadiumMesh.ResourceNameFor(model));
+                if (own != null) return own;
+                if (_missingModelsWarned.Add(model))
+                    Debug.LogWarning($"球場モデル「{model}」が焼かれていないので standard で描く。"
+                                     + "メニュー「KokoSim/Duel/球場メッシュを焼く」で焼くこと");
+            }
+            return Resources.Load<DuelStadiumMesh>(DuelStadiumMesh.ResourceName);
+        }
+
+        private static readonly HashSet<string> _missingModelsWarned = new HashSet<string>();
 
         // 高さの積み順（本塁プレート0.012・打席0.011 より下に収める）
         private const float YFair = 0.002f;

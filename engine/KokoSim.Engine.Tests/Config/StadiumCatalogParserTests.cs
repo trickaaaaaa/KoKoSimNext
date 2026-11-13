@@ -47,6 +47,7 @@ public sealed class StadiumCatalogParserTests
                 right: 100
                 center: 122
                 fence_height: 3.0
+                model: some_model
             """;
 
         var list = StadiumCatalogParser.Parse(yaml)!;
@@ -60,6 +61,8 @@ public sealed class StadiumCatalogParserTests
         Assert.Equal(118, a.CenterM, 6);         // center 省略＝118
         Assert.Equal(2.5, a.FenceHeightM, 6);    // fence_height 省略＝2.5
         Assert.Equal(StadiumTier.Prefectural, list[1].Tier);   // tier 省略＝県営級
+        Assert.Null(a.Model);                                  // model 省略＝standard
+        Assert.Equal("some_model", list[1].Model);
     }
 
     [Fact]

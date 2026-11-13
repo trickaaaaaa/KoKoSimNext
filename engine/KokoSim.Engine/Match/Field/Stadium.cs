@@ -34,6 +34,13 @@ public sealed record Stadium
     /// <summary>②環境用の箱（球場固有風）。今回未使用（設計書13-stadiums §5）。</summary>
     public string? Wind { get; init; }
 
+    /// <summary>
+    /// 3D表示に使う球場モデルの名前（<c>data/stadiums/&lt;Model&gt;.obj</c>。issue #904）。null なら汎用の
+    /// standard を判定寸法へ伸縮して描く。<b>表示専用</b>＝判定にも乱数にも使わない。同じ球場を使う複数の id
+    /// （神宮大会と東西東京の決勝）は同じモデル名を持つ。
+    /// </summary>
+    public string? Model { get; init; }
+
     /// <summary>寸法から判定用の <see cref="FieldGeometry"/> を生成する。</summary>
     public FieldGeometry ToFieldGeometry() => new()
     {
@@ -64,6 +71,23 @@ public sealed record Stadium
         RightM = 95.0,
         CenterM = 118.0,
         FenceHeightM = 2.6,
+    };
+
+    /// <summary>
+    /// 明治神宮野球場（issue #904）。明治神宮大会と、東京（東東京・西東京の夏、秋の都大会）の準決勝・決勝の球場。
+    /// <b>値は <c>data/stadiums.yaml</c> の <c>jingu</c> と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.JinguDefault_MatchesTheRepositoryYaml</c> が固定する）。
+    /// </summary>
+    public static Stadium Jingu { get; } = new()
+    {
+        Id = "jingu",
+        Name = "明治神宮野球場",
+        Tier = StadiumTier.National,
+        LeftM = 97.5,
+        RightM = 97.5,
+        CenterM = 120.0,
+        FenceHeightM = 3.3,
+        Model = "jingu",
     };
 
     /// <summary>

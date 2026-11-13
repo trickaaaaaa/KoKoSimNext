@@ -184,12 +184,14 @@ namespace KokoSim.Unity.Shell
             };
         }
 
-        internal static IBackgroundMatchResolver BackgroundResolver(int yearIndex)
+        /// <param name="kind">大会の種別。球場の寸法を自校の試合と揃える（<see cref="MatchStadium.For(TournamentKind)"/>。
+        /// 神宮大会は明治神宮野球場・issue #904。地区大会は従来どおり既定）。</param>
+        internal static IBackgroundMatchResolver BackgroundResolver(int yearIndex, TournamentKind kind = TournamentKind.Regional)
         {
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             return new MemoizingBackgroundResolver(
-                new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory()));
+                new BackgroundMatchResolver(NationService.Rosters, new GameContext { Field = MatchStadium.For(kind) }, yearIndex,
+                    stats: null, modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory()));
         }
 
         internal static string Title(string region, int yearIndex)

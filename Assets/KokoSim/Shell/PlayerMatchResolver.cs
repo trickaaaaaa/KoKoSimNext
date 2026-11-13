@@ -27,11 +27,11 @@ namespace KokoSim.Unity.Shell
         {
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
-            var (field, stadiumName) = Stadium(context, rng);
+            var (field, stadiumName, stadiumId) = Stadium(context, rng, manager.PrefectureId);
             var ctx = Rules.ApplyTo(
                 new GameContext
                 {
-                    MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName,
+                    MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName, StadiumId = stadiumId,
                     Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
@@ -55,14 +55,14 @@ namespace KokoSim.Unity.Shell
             // 一致する＝観戦しても大会結果は変わらない。
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
-            var (field, stadiumName) = Stadium(context, rng);
+            var (field, stadiumName, stadiumId) = Stadium(context, rng, manager.PrefectureId);
             var ctx = Rules.ApplyTo(
                 new GameContext
                 {
                     CaptureTimelines = true, CapturePitches = true,
                     // 自校の投手交代はプレイヤーの采配権にする（Resolve側＝観戦しない裏解決には付けない）。
                     PlayerControlsPitcherChanges = true,
-                    MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName,
+                    MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName, StadiumId = stadiumId,
                     Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
@@ -143,11 +143,12 @@ namespace KokoSim.Unity.Shell
         /// <see cref="MatchStadium.ForStadium(TournamentKind, int?, IRandomSource?)"/> を1回だけ呼ぶ
         /// （寸法用・名前用に2回呼ぶと Fork の乱数消費が二重になる）。
         /// </summary>
-        private static (KokoSim.Engine.Match.Field.FieldGeometry Field, string? Name) Stadium(
-            TournamentMatchContext? context, IRandomSource rng)
+        private static (KokoSim.Engine.Match.Field.FieldGeometry Field, string? Name, string? Id) Stadium(
+            TournamentMatchContext? context, IRandomSource rng, int prefectureId)
         {
-            var stadium = MatchStadium.ForStadium(GameSession.Current.Kind, context?.RoundsRemaining, rng.Fork(StadiumStreamId));
-            return (stadium?.ToFieldGeometry() ?? new KokoSim.Engine.Match.Field.FieldGeometry(), stadium?.Name);
+            var stadium = MatchStadium.ForStadium(GameSession.Current.Kind, context?.RoundsRemaining, rng.Fork(StadiumStreamId),
+                prefectureId);
+            return (stadium?.ToFieldGeometry() ?? new KokoSim.Engine.Match.Field.FieldGeometry(), stadium?.Name, stadium?.Id);
         }
 
         /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
