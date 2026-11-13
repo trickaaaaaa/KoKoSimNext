@@ -151,21 +151,31 @@ internal static class PreviewWriter
         return best;
     }
 
-    /// <summary>エースの特徴は球質タイプで決め、水準はその型の看板の値（本格派＝球速、技巧派＝制球…）で測る。</summary>
-    private static Pick AcePick(Player ace)
+    /// <summary>
+    /// エースの特徴は球質タイプで決め、水準はその型の看板の値（本格派＝球速、技巧派＝制球…）で測る。
+    /// 看板の値からは<b>その型の上乗せを差し引く</b>（issue #908）: 上乗せは球速 +10 に対し制球 +3・+2 と軸ごとに
+    /// 大きさが違い、素の値で打者と比べると本格派のエースばかり勝っていた（実測: 注目選手に選ばれたエースの91%が本格派）。
+    /// 差し引いた値＝その投手の地力の軸で、打者の特徴の水準（軸ごとのずれを差し引いた値）と同じ物差しになる。
+    /// </summary>
+    private static Pick AcePick(Player ace, PitcherArchetypeCoefficients? archetypes = null)
     {
+        var ac = archetypes ?? DefaultArchetypes;
         var a = ace.Pitching;
         var vel = PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh);
         var type = a.Archetype ?? PitcherArchetypes.Infer(vel, a.Control, a.PitchRank);
+        // 推定した型（生成時の型を持たない投手）は上乗せを受けていないので差し引かない。
+        var (dv, dc, _, dr) = a.Archetype is { } born ? PitcherArchetypes.Offsets(born, ac) : (0.0, 0.0, 0.0, 0.0);
         var (trait, level) = type switch
         {
-            PitcherArchetype.Power => ("ace.power", (double)vel),
-            PitcherArchetype.Finesse => ("ace.finesse", a.Control),
-            PitcherArchetype.SoftToss => ("ace.soft", (a.Control + a.PitchRank) / 2.0),
-            _ => ("ace.balanced", (vel + a.Control + a.PitchRank) / 3.0),
+            PitcherArchetype.Power => ("ace.power", vel - dv),
+            PitcherArchetype.Finesse => ("ace.finesse", a.Control - dc),
+            PitcherArchetype.SoftToss => ("ace.soft", (a.Control - dc + a.PitchRank - dr) / 2.0),
+            _ => ("ace.balanced", (vel - dv + a.Control - dc + a.PitchRank - dr) / 3.0),
         };
         return new Pick(ace, trait, level, level, Ace: true);
     }
+
+    private static readonly PitcherArchetypeCoefficients DefaultArchetypes = new();
 
     /// <summary>
     /// 水準。star は「{area}屈指」と書いてよい選手。基準は舞台が広いほど上げる

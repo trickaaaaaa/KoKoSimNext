@@ -126,9 +126,14 @@ public sealed record PitcherAttributes
 
     /// <summary>
     /// 継投人選のランキングスコア（issue #209 Phase B）。球速・制球・キレ・スタミナを等級（Level）に
-    /// 揃えた素点和。AiTeamBuilder.PitcherScore と同一の合成で、控え全員の投手能力を
-    /// 同じ土俵で比較する（球速単独で決まらない＝用語集 PitcherComposite の趣旨）。
+    /// 揃えた素点和から、<b>球質タイプの上乗せの合計を差し引いた</b>地力（issue #908）。AiTeamBuilder.PitcherScore と
+    /// 同一の合成で、控え全員の投手能力を同じ土俵で比較する（球速単独で決まらない＝用語集 PitcherComposite の趣旨）。
+    /// 上乗せは試合の失点が型によらず揃うよう校正してあり合計は揃っていない（本格 +6・技巧 −2・軟投 −5）ので、
+    /// 差し引かないと同じ実力でも本格派ばかりが継投に選ばれる。
     /// </summary>
-    public double ReliefScore()
-        => LevelFromVelocityKmh(MaxVelocityKmh) + Control + PitchRank + LevelFromStaminaPitches(StaminaPitches);
+    public double ReliefScore(PitcherArchetypeCoefficients? archetypes = null)
+        => LevelFromVelocityKmh(MaxVelocityKmh) + Control + PitchRank + LevelFromStaminaPitches(StaminaPitches)
+           - PitcherArchetypes.OffsetSum(Archetype, archetypes ?? DefaultArchetypes);
+
+    private static readonly PitcherArchetypeCoefficients DefaultArchetypes = new();
 }

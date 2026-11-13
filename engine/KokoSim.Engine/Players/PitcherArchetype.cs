@@ -88,6 +88,18 @@ public static class PitcherArchetypes
         _ => (0, 0, 0, 0),
     };
 
+    /// <summary>
+    /// 型の上乗せ（球速/制球/スタミナ/キレ）の合計。投手の4能力の合計からこれを差し引くと、型によらない地力の尺度になる。
+    /// 上乗せは「試合の失点が型によらず揃う」よう実測で校正した値で、合計は揃っていない（本格派 +6・技巧派 −2・軟投派 −5）。
+    /// 4能力をそのまま足して投手を比べると、同じ実力でも本格派が上に来る（issue #908）。型が無い（null）投手は 0。
+    /// </summary>
+    public static double OffsetSum(PitcherArchetype? a, PitcherArchetypeCoefficients c)
+    {
+        if (a is not { } type) return 0.0;
+        var (v, ctl, st, r) = Offsets(type, c);
+        return v + ctl + st + r;
+    }
+
     /// <summary>表示名（展望の寸評・選手詳細で使う）。</summary>
     public static string Label(PitcherArchetype a) => a switch
     {
