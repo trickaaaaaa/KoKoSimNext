@@ -1088,8 +1088,9 @@ public static class GameEngine
                     // 球は絵にする＝分岐させない。乱数不使用（BuildPickoff は既に確定した pickedOffFirst の写し）。
                     if (ctx.CaptureTimelines && paBaserunning.PickoffBaseProb > 0.0)
                         pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
-                            Timeline.TimelineBuilder.BuildPickoff(
-                                bases.First, currentPitcher, "first", pickedOffFirst, paBaserunning, ctx.Field));
+                            WithThrowScatter(Timeline.TimelineBuilder.BuildPickoff(
+                                bases.First, currentPitcher, "first", pickedOffFirst, paBaserunning, ctx.Field),
+                                System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(), defense, ctx, rng, (ulong)log.Count * 16 + 1)!);
                     if (pickedOffFirst)
                     {
                         offense.PickoffCount++;
@@ -1181,7 +1182,7 @@ public static class GameEngine
                                 Timeline.TimelineBuilder.BuildSteal(
                                     secondStealer, defense.Catcher, steal.Result,
                                     paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer,
-                                    steal.RunnerSeconds, steal.DefenseSeconds));
+                                    steal.RunnerSeconds, steal.DefenseSeconds, steal.ThrowScatter));
 
                         // 3アウト目の盗塁死でもこの球は投げる（issue #779）。成否はこの球の結果で決まる（下）。
                         if (outs >= 3) runnerOutEndsHalf = true;
@@ -1195,8 +1196,9 @@ public static class GameEngine
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
                     if (ctx.CaptureTimelines && ctx.Baserunning.PickoffBaseProb > 0.0)
                         pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
-                            Timeline.TimelineBuilder.BuildPickoff(
-                                bases.Second, currentPitcher, "second", pickedOffSecond, ctx.Baserunning, ctx.Field));
+                            WithThrowScatter(Timeline.TimelineBuilder.BuildPickoff(
+                                bases.Second, currentPitcher, "second", pickedOffSecond, ctx.Baserunning, ctx.Field),
+                                System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(), defense, ctx, rng, (ulong)log.Count * 16 + 7)!);
                     if (pickedOffSecond)
                     {
                         offense.PickoffCount++;
@@ -1235,7 +1237,7 @@ public static class GameEngine
                                 Timeline.TimelineBuilder.BuildSteal(
                                     thirdStealer, defense.Catcher, steal.Result,
                                     ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart,
-                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds));
+                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds, steal.ThrowScatter));
                         if (outs >= 3) runnerOutEndsHalf = true;   // issue #779: この球は投げる
                     }
                 }
@@ -1527,8 +1529,9 @@ public static class GameEngine
                             p.LastPitch = lpForBatteryMiss with
                             {
                                 BatteryMissPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
-                                    Timeline.TimelineBuilder.BuildBatteryMiss(
-                                        wpFirst, wpSecond, wpScorer, defense.Catcher, paBaserunning, ctx.Field)),
+                                    WithThrowScatter(Timeline.TimelineBuilder.BuildBatteryMiss(
+                                        wpFirst, wpSecond, wpScorer, defense.Catcher, paBaserunning, ctx.Field),
+                                        System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(), defense, ctx, rng, (ulong)log.Count * 16 + 2)!),
                             };
                     }
                 }
@@ -1644,6 +1647,11 @@ public static class GameEngine
                         bases.First, bases.Second, bases.Third,
                         paBaserunning, ctx.Field)
                     : null;
+                buntTimeline = WithThrowScatter(buntTimeline,
+                    res.BuntThrowScatter is { } buntThrow
+                        ? new[] { new Match.Timeline.ThrowScatterAssigner.JudgedThrow(BuntThrowBase(buntOutcome), buntThrow) }
+                        : System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(),
+                    defense, ctx, rng, (ulong)log.Count * 16 + 5);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
                     timeline: buntTimeline,
@@ -1724,6 +1732,11 @@ public static class GameEngine
                         bases.First, bases.Second, bases.Third,
                         paBaserunning, ctx.Field, isSqueeze: true)
                     : null;
+                sqTimeline = WithThrowScatter(sqTimeline,
+                    sq.BuntThrowScatter is { } sqThrow
+                        ? new[] { new Match.Timeline.ThrowScatterAssigner.JudgedThrow(BuntThrowBase(sq.Bunt), sqThrow) }
+                        : System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(),
+                    defense, ctx, rng, (ulong)log.Count * 16 + 4);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
                     pitcherRuns: sqOwnRuns,
@@ -2174,7 +2187,8 @@ public static class GameEngine
                         p.LastPitch = lpForDropThirdStrike with
                         {
                             DropThirdStrikePlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
-                                Timeline.TimelineBuilder.BuildDropThirdStrike(batter, defense.Catcher, paBaserunning, ctx.Field)),
+                                WithThrowScatter(Timeline.TimelineBuilder.BuildDropThirdStrike(batter, defense.Catcher, paBaserunning, ctx.Field),
+                                    System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(), defense, ctx, rng, (ulong)log.Count * 16 + 3)!),
                         };
                 }
             }
@@ -2239,6 +2253,9 @@ public static class GameEngine
             // ここで runs>0 を見るだけで「3アウト目ではない」ことも保証される＝AB非算入の対象を安全に絞れる。
             var isSacFly = res.Result == PlateAppearanceResult.InPlayOut && homePlay is { IsFly: true } && runs > 0;
 
+            timeline = WithThrowScatter(timeline,
+                Match.Timeline.ThrowScatterAssigner.FromBattedBall(res.Play, runnerMoves),
+                defense, ctx, rng, (ulong)log.Count * 16 + 6);
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
@@ -2281,6 +2298,33 @@ public static class GameEngine
     }
 
     /// <summary>速報・成績・動揺・伝令窓の更新（結果には影響しない共通後処理）。</summary>
+    /// <summary>
+    /// 打席の絵の送球へ逸れを載せる（issue #859。<see cref="Match.Timeline.ThrowScatterAssigner"/>）。判定が引いた逸れは
+    /// 同じ塁へ向かう送球へ、判定の無い送球は試合の乱数を進めない別の流れ（<see cref="IRandomSource.Fork"/>）から。
+    /// <paramref name="salt"/> はその打席・その絵で流れを変えるための値（同じ値なら同じ逸れ＝決定論）。
+    /// </summary>
+    private static Match.Timeline.PlayTimeline? WithThrowScatter(
+        Match.Timeline.PlayTimeline? timeline, IEnumerable<Match.Timeline.ThrowScatterAssigner.JudgedThrow> judged,
+        TeamState defense, GameContext ctx, IRandomSource rng, ulong salt)
+    {
+        if (timeline is null) return null;
+        return Match.Timeline.ThrowScatterAssigner.Assign(
+            timeline, judged, ctx.Field,
+            role => role is { } r && defense.PlayerAtPosition(r) is { } pl
+                ? pl.ToFielder(ctx.Baserunning.AbilityEffect).ThrowAccuracy
+                : 50,
+            rng.Fork(0x859_0000_0000UL ^ salt));
+    }
+
+    /// <summary>バント処理の送球の行き先（塁番号）。結果から決まる（封殺の塁／それ以外は一塁）。</summary>
+    private static int BuntThrowBase(BuntResult bunt) => bunt switch
+    {
+        BuntResult.ForceOutAtSecond => 2,
+        BuntResult.ForceOutAtThird => 3,
+        BuntResult.ForceOutAtHome => 4,
+        _ => 1,
+    };
+
     private static void FinishPlateAppearance(
         TeamState offense, TeamState defense, Player pitcher, Player batter,
         PlateAppearanceResult result, int runs, int outsThisPa, int pitches,

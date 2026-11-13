@@ -25,7 +25,10 @@ public enum StealTarget
 }
 
 /// <summary>盗塁1回分の判定と、<b>その判定が使った秒</b>（＝そのまま絵になる, issue verdict-margin-into-physical-layer）。</summary>
-public readonly record struct StealVerdict(StealResult Result, double RunnerSeconds, double DefenseSeconds)
+/// <param name="ThrowScatter">捕手の送球が実際に逸れた量（issue #859）。判定の遅れ・悪送球に使った値そのもの。
+/// 抽選しない経路（<see cref="StealResolver.Forced"/>）は null。</param>
+public readonly record struct StealVerdict(StealResult Result, double RunnerSeconds, double DefenseSeconds,
+    KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter? ThrowScatter = null)
 {
     public bool Safe => Result == StealResult.Safe;
 }
@@ -235,7 +238,7 @@ public static class StealResolver
 
         var u = rng.NextDouble();   // ゆらぎ＋勝敗（逆関数法）
         var safe = wild || u < p;
-        return Times(runnerSeconds, defenseSeconds, LuckSeconds(u, c), safe);
+        return Times(runnerSeconds, defenseSeconds, LuckSeconds(u, c), safe) with { ThrowScatter = scatter };
     }
 
     /// <summary>

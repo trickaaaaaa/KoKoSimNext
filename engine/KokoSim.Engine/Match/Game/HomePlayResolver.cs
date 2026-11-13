@@ -253,7 +253,29 @@ public static class HomePlayResolver
     /// （盗塁の <c>StealResolver</c> と同じ振り分け）。絵は <see cref="RunnerMove.ExtraStartDelaySeconds"/> に足して描く
     /// ＝「送球が届く前にアウト」が構造的に起きない。セーフ・送球が先に着く場面では0。
     /// </param>
-    public readonly record struct RaceVerdict(bool Safe, double RunnerDelaySeconds);
+    /// <param name="Scatter">この勝負の送球が実際に逸れた量（issue #859）。判定の遅れ・悪送球の判定に使った値そのもので、
+    /// 絵は受け手をこの値へ寄せて描く。勝負を抽選しない経路では null。</param>
+    public readonly record struct RaceVerdict(bool Safe, double RunnerDelaySeconds, ThrowScatterModel.Scatter? Scatter = null);
+
+    /// <summary>
+    /// 送球1本の逸れを引き、判定へ足す秒（ゼロ平均のゆらぎ）を返す（issue #859）。送球精度ごとの期待遅れは
+    /// <see cref="ResolveThrowPath"/> が既に足しているので、ここではその本の実際の遅れと期待値との差だけを返す
+    /// ＝送り判断（期待値で読む）と勝負の平均が一致する（盗塁送球 <c>StealResolver.ResolveVerdict</c> と同じ作法）。
+    /// 受け手は <see cref="ResolveThrowPath"/> と同じく Catching=50 固定。乱数は正規2つ（横・縦）。
+    /// </summary>
+    public static (ThrowScatterModel.Scatter Scatter, double NoiseSeconds) SampleThrowScatter(
+        int throwAccuracy, BaserunningCoefficients c, IRandomSource rng)
+    {
+        var sigmaCm = ThrowScatterModel.SigmaCmForAccuracy(throwAccuracy);
+        var scatter = ThrowScatterModel.Sample(sigmaCm, rng);
+        var noise = ThrowScatterModel.RecoverySeconds(scatter, receiverCatching: 50,
+                        c.ThrowScatterLateralSecPerCm, c.ThrowScatterHighSecPerCm, c.ThrowScatterShortHopSecPerCm,
+                        c.ThrowScatterCatchingReliefSlope, c.ThrowScatterCatchingReliefMinFactor)
+                    - ThrowScatterModel.ExpectedRecoverySeconds(sigmaCm, receiverCatching: 50,
+                        c.ThrowScatterLateralSecPerCm, c.ThrowScatterHighSecPerCm, c.ThrowScatterShortHopSecPerCm,
+                        c.ThrowScatterCatchingReliefSlope, c.ThrowScatterCatchingReliefMinFactor);
+        return (scatter, noise);
+    }
 
     /// <summary>
     /// 勝負の抽選（乱数1つ）。確率は margin の logistic そのもの＝<b>1%/99% でクランプしない</b>（issue #801）。
@@ -268,10 +290,11 @@ public static class HomePlayResolver
     /// 乱数の消費は従来の <see cref="MathUtil.Chance"/> と同じ1回。</para>
     /// </summary>
     private static RaceVerdict DrawRace(
-        double margin, double marginScale, double defenseMinusRunner, double quickSeconds, IRandomSource rng)
+        double margin, double marginScale, double defenseMinusRunner, double quickSeconds, IRandomSource rng,
+        ThrowScatterModel.Scatter? scatter = null)
     {
         var safe = MathUtil.Chance(MathUtil.Logistic(margin / marginScale), rng);
-        return new RaceVerdict(safe, safe ? 0.0 : Math.Max(0.0, defenseMinusRunner - quickSeconds));
+        return new RaceVerdict(safe, safe ? 0.0 : Math.Max(0.0, defenseMinusRunner - quickSeconds), scatter);
     }
 
     /// <summary>
@@ -297,11 +320,14 @@ public static class HomePlayResolver
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
         in BasePlayParams p, IRandomSource rng, double extraStartDelaySeconds = 0.0, double? transferSecondsOverride = null)
     {
-        // Margin と同じ式・同じ加算順（守備−走者＋バイアス）。
+        // 送球1本の逸れ（issue #859）: その本の実際の遅れと期待値の差を守備側へ足す（ゼロ平均）。
+        var (scatter, noise) = SampleThrowScatter(s.ThrowerThrowAccuracy, c, rng);
+        // Margin と同じ式・同じ加算順（守備−走者＋バイアス）に、逸れのゆらぎを足す。
         var defenseMinusRunner = DefenseTimeSeconds(s, p.TargetPoint, p.TagSeconds, c, transferSecondsOverride)
             - RunnerTimeSeconds(runner, fromBase, p.TargetBase, field, c, extraStartDelaySeconds);
-        return DrawRace(defenseMinusRunner + p.SuccessBias, p.MarginScale, defenseMinusRunner,
-            QuickHandlingSeconds(s, p.TargetPoint, c, transferSecondsOverride), rng);
+        // 走者の出遅れ（絵）は、絵の送球の秒（期待値）より速く刺したことにならないよう、ゆらぎの遅い側だけで測る。
+        return DrawRace(defenseMinusRunner + noise + p.SuccessBias, p.MarginScale, defenseMinusRunner + Math.Max(0.0, noise),
+            QuickHandlingSeconds(s, p.TargetPoint, c, transferSecondsOverride), rng, scatter);
     }
 
     /// <summary>到達レースを解決（Safe=到達 or false=憤死）。塁は <paramref name="p"/> で指定。</summary>
@@ -334,13 +360,18 @@ public static class HomePlayResolver
     /// Ac=50 で <see cref="BaserunningCoefficients.RelayThrowErrorBaseProb"/> と恒等。
     /// <see cref="BaserunningCoefficients.RelayThrowErrorBaseProb"/>≤0 なら常にfalse（rng非消費＝旧経路と完全一致）。</summary>
     public static bool IsWildThrow(int throwAccuracy, BaserunningCoefficients c, IRandomSource rng)
+        => c.RelayThrowErrorBaseProb > 0.0
+           && IsWildThrow(throwAccuracy, c, ThrowScatterModel.Sample(ThrowScatterModel.SigmaCmForAccuracy(throwAccuracy), rng));
+
+    /// <summary>引き済みの逸れ（勝負に使った同じ1本, issue #859）が悪送球か。乱数を消費しない。</summary>
+    public static bool IsWildThrow(int throwAccuracy, BaserunningCoefficients c, ThrowScatterModel.Scatter scatter)
     {
         if (c.RelayThrowErrorBaseProb <= 0.0) return false;
         var prob = MathUtil.Clamp(
             c.RelayThrowErrorBaseProb - (throwAccuracy - 50) * c.RelayThrowErrorAccuracySlope, 0.0, 1.0);
         var sigmaCm = ThrowScatterModel.SigmaCmForAccuracy(throwAccuracy);
         var thresholdCm = ThrowScatterModel.WildThresholdCmForProbability(sigmaCm, prob);
-        return ThrowScatterModel.IsWild(ThrowScatterModel.Sample(sigmaCm, rng), thresholdCm);
+        return ThrowScatterModel.IsWild(scatter, thresholdCm);
     }
 
     /// <summary>送球逸れの回収レース（design-12 §3.8）: 逸れ幅をサンプルし、拾い直しロス[s]を返す。
@@ -371,12 +402,12 @@ public static class HomePlayResolver
 
     /// <summary><see cref="ResolveWithWildThrow(Player,int,HomePlaySituation,FieldGeometry,BaserunningCoefficients,in BasePlayParams,IRandomSource,double)"/>
     /// に、アウトのときの走者の出遅れ秒（<see cref="RaceVerdict.RunnerDelaySeconds"/>, issue #801）を添えて返す。</summary>
-    public static (HomeThrowOutcome Outcome, double RunnerDelaySeconds) ResolveWithWildThrowVerdict(
+    public static (HomeThrowOutcome Outcome, double RunnerDelaySeconds, ThrowScatterModel.Scatter? Scatter) ResolveWithWildThrowVerdict(
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
         in BasePlayParams p, IRandomSource rng, double extraStartDelaySeconds = 0.0)
     {
         var race = ResolveRace(runner, fromBase, s, field, c, p, rng, extraStartDelaySeconds);
-        if (race.Safe) return (HomeThrowOutcome.Safe, 0.0);
+        if (race.Safe) return (HomeThrowOutcome.Safe, 0.0, race.Scatter);
         return ResolveWildThrowAfter(race, s, p, c, rng, Margin(runner, fromBase, s, field, c, p, extraStartDelaySeconds));
     }
 
@@ -386,18 +417,20 @@ public static class HomePlayResolver
     /// もう一度同じ margin/logistic を評価する。2回目の抽選もクランプしない（<see cref="DrawRace"/> と同じ理由）。
     /// 悪送球でもアウトのままなら、絵は普通の送球アウト＝走者の出遅れは1回目の秒をそのまま使う。
     /// </summary>
-    private static (HomeThrowOutcome Outcome, double RunnerDelaySeconds) ResolveWildThrowAfter(
+    private static (HomeThrowOutcome Outcome, double RunnerDelaySeconds, ThrowScatterModel.Scatter? Scatter) ResolveWildThrowAfter(
         RaceVerdict race, HomePlaySituation s, in BasePlayParams p, BaserunningCoefficients c, IRandomSource rng,
         double margin)
     {
-        if (!IsWildThrow(s.ThrowerThrowAccuracy, c, rng)) return (HomeThrowOutcome.OutAtHome, race.RunnerDelaySeconds);
+        // 悪送球かどうかは、勝負に使った同じ1本の逸れで決める（issue #859: 送球は1本＝逸れも1つ）。
+        var wild = race.Scatter is { } sc ? IsWildThrow(s.ThrowerThrowAccuracy, c, sc) : IsWildThrow(s.ThrowerThrowAccuracy, c, rng);
+        if (!wild) return (HomeThrowOutcome.OutAtHome, race.RunnerDelaySeconds, race.Scatter);
 
         var recovery = SampleRecoveryPenaltySeconds(s, p.TargetPoint, p.TargetBase, c, rng);
         var penalizedMargin = margin + recovery;
         var stillSafe = MathUtil.Chance(MathUtil.Logistic(penalizedMargin / p.MarginScale), rng);
         return stillSafe
-            ? (HomeThrowOutcome.SafeOnWildThrow, 0.0)
-            : (HomeThrowOutcome.OutAtHome, race.RunnerDelaySeconds);
+            ? (HomeThrowOutcome.SafeOnWildThrow, 0.0, race.Scatter)
+            : (HomeThrowOutcome.OutAtHome, race.RunnerDelaySeconds, race.Scatter);
     }
 
     /// <summary>本塁クロスプレーを解決（後方互換: HomeParams 固定）。悪送球を区別する<see cref="ResolveWithWildThrow(Player,int,HomePlaySituation,FieldGeometry,BaserunningCoefficients,in BasePlayParams,IRandomSource,double)"/>の便宜オーバーロード。</summary>
@@ -458,11 +491,13 @@ public static class HomePlayResolver
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
         in BasePlayParams p, IRandomSource rng)
     {
-        // TagUpMargin と同じ式・同じ加算順。
+        // 送球1本の逸れ（issue #859。ResolveRace と同じ）。
+        var (scatter, noise) = SampleThrowScatter(s.ThrowerThrowAccuracy, c, rng);
+        // TagUpMargin と同じ式・同じ加算順に、逸れのゆらぎを足す（出遅れの扱いは ResolveRace と同じ）。
         var defenseMinusRunner = DefenseTimeSeconds(s, p.TargetPoint, p.TagSeconds, c)
             - TagUpRunnerTimeSeconds(runner, fromBase, p.TargetBase, s, field, c);
-        return DrawRace(defenseMinusRunner + p.SuccessBias, p.MarginScale, defenseMinusRunner,
-            QuickHandlingSeconds(s, p.TargetPoint, c), rng);
+        return DrawRace(defenseMinusRunner + noise + p.SuccessBias, p.MarginScale, defenseMinusRunner + Math.Max(0.0, noise),
+            QuickHandlingSeconds(s, p.TargetPoint, c), rng, scatter);
     }
 
     /// <summary>タッチアップの到達レースを解決（true=生還 / false=本塁憤死）。塁は <paramref name="p"/> で指定。</summary>
@@ -478,12 +513,12 @@ public static class HomePlayResolver
         => TagUpResolveWithWildThrowVerdict(runner, fromBase, s, field, c, p, rng).Outcome;
 
     /// <summary><see cref="TagUpResolveWithWildThrow"/> に、アウトのときの走者の出遅れ秒（issue #801）を添えて返す。</summary>
-    public static (HomeThrowOutcome Outcome, double RunnerDelaySeconds) TagUpResolveWithWildThrowVerdict(
+    public static (HomeThrowOutcome Outcome, double RunnerDelaySeconds, ThrowScatterModel.Scatter? Scatter) TagUpResolveWithWildThrowVerdict(
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
         in BasePlayParams p, IRandomSource rng)
     {
         var race = TagUpResolveRace(runner, fromBase, s, field, c, p, rng);
-        if (race.Safe) return (HomeThrowOutcome.Safe, 0.0);
+        if (race.Safe) return (HomeThrowOutcome.Safe, 0.0, race.Scatter);
         return ResolveWildThrowAfter(race, s, p, c, rng, TagUpMargin(runner, fromBase, s, field, c, p));
     }
 }

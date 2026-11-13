@@ -1177,7 +1177,8 @@ public static class TimelineBuilder
     public static PlayTimeline BuildSteal(
         Player runner, Player catcher, StealResult result, BaserunningCoefficients c, FieldGeometry field,
         StealTarget target = StealTarget.Second, bool pitchout = false, Tactics.StartType startType = Tactics.StartType.Normal,
-        Player? doubleStealScorer = null, double? runnerSeconds = null, double? defenseSeconds = null)
+        Player? doubleStealScorer = null, double? runnerSeconds = null, double? defenseSeconds = null,
+        Fielding.ThrowScatterModel.Scatter? throwScatter = null)
     {
         if (target == StealTarget.Home)
             throw new ArgumentException("単独の本盗は採用しない（issue #788）。重盗の三塁走者は doubleStealScorer で描く。", nameof(target));
@@ -1224,6 +1225,7 @@ public static class TimelineBuilder
                 // 受け手は下の Moves でベースカバーに入る野手と同一（Issue E1・単一ソース）
                 Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = Home, To = toPt,
                 FromRole = FieldPosition.Catcher, ToRole = receiver, ToBase = toName,
+                ThrowScatter = throwScatter,   // 判定に使った逸れ（issue #859）
             });
             moves.Add(new FielderMove
             {

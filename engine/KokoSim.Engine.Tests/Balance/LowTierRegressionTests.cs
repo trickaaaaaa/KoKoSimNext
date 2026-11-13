@@ -88,7 +88,10 @@ public sealed class LowTierRegressionTests
         if (!targets.ManagerShutoutRateVsD50.Contains(cells[1].AwayShutoutRate)) failures.Add("完封され率vsD50");
         if (!targets.ManagerShutoutRateVsC60.Contains(cells[2].AwayShutoutRate)) failures.Add("完封され率vsC60");
 
-        Assert.True(failures.Count >= 2,
+        // 1つ以上（2026-11-13 オーナー判断・#859）。以前は2つ以上だったが、得点vsD50 は効きを外しても
+        // 帯の下限 2.8 の際（main でも1200試合で 2.72〜2.76）に留まり、乱数の流れ次第で通る／落ちるだけだった。
+        // 完封され率vsC60 は効きを外すと 54〜60%（上限32%）と大きく外れる＝見張りはこれで十分働く。
+        Assert.True(failures.Count >= 1,
             "効きを恒等に戻しても帯が緑のまま＝帯が広すぎて何も守っていない。"
             + $"実測: 得点vsD50={cells[1].AwayRunsPerGame:F2} / 完封vsD50={cells[1].AwayShutoutRate:P1}"
             + $" / 完封vsC60={cells[2].AwayShutoutRate:P1}");

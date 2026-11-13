@@ -5,7 +5,11 @@ using KokoSim.Engine.Players;
 namespace KokoSim.Engine.Match.Game;
 
 /// <summary>スクイズの結果。</summary>
-public readonly record struct SqueezeOutcome(int Runs, bool BatterOut, bool RunnerOut, BuntResult Bunt);
+public readonly record struct SqueezeOutcome(int Runs, bool BatterOut, bool RunnerOut, BuntResult Bunt)
+{
+    /// <summary>バントを処理した野手の送球の逸れ（issue #859。判定に使った値そのもの）。送球まで行かなければ null。</summary>
+    public KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter? BuntThrowScatter { get; init; }
+}
 
 /// <summary>
 /// スクイズの解決（設計書02 §4.4）。バント成功率 × 三塁走者スタート(走塁判断) × ウエスト判定。
@@ -33,7 +37,7 @@ public static class SqueezeResolver
         // 独立に解くため、BuntResolver側の本塁封殺判定と二重にしない（issue bunt-no-take-on-ball-pitches）。
         var bunt = BuntResolver.Resolve(
             batter, pitcher, pitchStuff, courseDifficulty, safety: false,
-            firstRunner, secondRunner, thirdRunner: null, field, c, rng);
+            firstRunner, secondRunner, thirdRunner: null, field, c, rng, out var buntScatter);
         switch (bunt)
         {
             case BuntResult.SacrificeSuccess:
@@ -49,17 +53,17 @@ public static class SqueezeResolver
                     rng);
                 // 打者は犠打成功なら1アウト、内野安打/一塁封殺/二塁封殺（打者以外が封殺されただけ）なら生きる。
                 var batterOut = bunt == BuntResult.SacrificeSuccess;
-                return runnerSafe
+                return (runnerSafe
                     ? new SqueezeOutcome(1, BatterOut: batterOut, RunnerOut: false, bunt)
-                    : new SqueezeOutcome(0, BatterOut: batterOut, RunnerOut: true, bunt);
+                    : new SqueezeOutcome(0, BatterOut: batterOut, RunnerOut: true, bunt)) with { BuntThrowScatter = buntScatter };
             case BuntResult.PopOut:
             case BuntResult.PopOutDoubledOff:
                 // 小フライ→三塁走者は動かず釘付けのまま（RunnerOutは三塁走者専用のフィールドなのでfalse固定）。
                 // 一塁走者が併殺で刺された場合（PopOutDoubledOff）は GameEngine 側が bunt の値そのものを見て
                 // 一塁走者の退場・追加アウトを別途処理する（本塁封殺の危険は依然スコープ外）。
-                return new SqueezeOutcome(0, BatterOut: true, RunnerOut: false, bunt);
+                return new SqueezeOutcome(0, BatterOut: true, RunnerOut: false, bunt) with { BuntThrowScatter = buntScatter };
             default: // Foul / MissedBunt: 三塁走者が飛び出していれば挟殺。
-                return new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, bunt);
+                return new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, bunt) with { BuntThrowScatter = buntScatter };
         }
     }
 }
