@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- デバッグ試合 画面（issue #905・A案「球場リスト＋右に設定」2026-11-14 監督選定）。
+     左＝球場の一覧（区分ごとの見出し＋寸法）、右＝選んだ球場の要約と試合の設定と試合開始。
+     開発用ビルドだけでタイトルから来る。セーブ無しで試合画面を開き、結果はどこにも残さない。
+
+     共通ナビ（TopBar）は出さない: タイトル画面・新規ゲーム設定と同じく、シェルサービスが未初期化で
+     スコアボードに載せる値が存在しないため。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="Components/scorebook.uss" />
+    <Style src="DebugMatchSetup.uss" />
+
+    <ui:VisualElement class="root ui-root dm-root sbk">
+      <ui:VisualElement class="dm-main">
+
+        <ui:VisualElement class="dm-masthead">
+          <ui:VisualElement class="rule-head dm-masthead__title">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="デバッグ試合" />
+          </ui:VisualElement>
+          <ui:Button name="dm-back" class="tool-btn f-body-md" text="◀ タイトルへ" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="dm-body">
+
+          <!-- 左: 球場の一覧 -->
+          <ui:VisualElement class="card dm-list-card">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="球場" />
+              <ui:Label name="dm-count" class="card__hd-sub" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body card__body--fill">
+              <ui:VisualElement class="dm-th">
+                <ui:Label class="dm-th__name" text="球場" />
+                <ui:Label class="dm-th__num dm-col-wing" text="両翼" />
+                <ui:Label class="dm-th__num dm-col-center" text="中堅" />
+                <ui:Label class="dm-th__num dm-col-fence" text="フェンス" />
+                <ui:VisualElement class="dm-th__gutter" />
+              </ui:VisualElement>
+              <ui:ScrollView name="dm-list" class="dm-list" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <!-- 右: 選択中の球場と設定 -->
+          <ui:VisualElement class="card dm-side-card">
+            <ui:VisualElement class="card__hd card__hd--dirt">
+              <ui:Label class="card__hd-title" text="選択中" />
+              <ui:Label name="dm-tier" class="card__hd-sub" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body">
+
+              <ui:Label name="dm-sel-name" class="f-display dm-sel-name" text="" />
+              <ui:VisualElement class="dm-dims">
+                <ui:VisualElement class="dm-dim">
+                  <ui:Label class="dm-dim__lbl" text="両翼" />
+                  <ui:Label name="dm-sel-wing" class="f-num dm-dim__val" text="" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dm-dim">
+                  <ui:Label class="dm-dim__lbl" text="中堅" />
+                  <ui:Label name="dm-sel-center" class="f-num dm-dim__val" text="" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dm-dim">
+                  <ui:Label class="dm-dim__lbl" text="フェンス" />
+                  <ui:Label name="dm-sel-fence" class="f-num dm-dim__val" text="" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+
+              <ui:VisualElement class="dm-line">
+                <ui:Label class="dm-lbl" text="観客" />
+                <ui:VisualElement name="dm-crowd" class="sbk-seg" />
+              </ui:VisualElement>
+              <ui:VisualElement class="dm-line">
+                <ui:Label class="dm-lbl" text="場面" />
+                <ui:DropdownField name="dm-scene" class="dm-drop" />
+              </ui:VisualElement>
+              <ui:VisualElement class="dm-line">
+                <ui:Label class="dm-lbl" text="采配" />
+                <ui:VisualElement name="dm-side" class="sbk-seg" />
+              </ui:VisualElement>
+              <ui:VisualElement class="dm-line">
+                <ui:Label class="dm-lbl" text="シード" />
+                <ui:TextField name="dm-seed" class="dm-seed" max-length="16" />
+              </ui:VisualElement>
+              <ui:VisualElement class="dm-line">
+                <ui:Label class="dm-lbl" text="応援" />
+                <ui:VisualElement name="dm-band" class="sbk-seg" />
+              </ui:VisualElement>
+
+              <ui:Label name="dm-error" class="dm-error" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="tp-cta-wrap">
+              <ui:Button name="dm-start" class="tp-cta" text="試合開始 ▶" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+        </ui:VisualElement>
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

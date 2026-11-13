@@ -3620,6 +3620,16 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static KokoSim.Engine.Match.Field.FieldGeometry InitialField { get; set; }
 
+        /// <summary>
+        /// 生成前に一度だけ渡す試合の球場ID（<c>GameContext.StadiumId</c>。issue #905）。<see cref="InitialField"/> と
+        /// 同じ静的窓で、使ったら呼び出し側が閉じる。どの球場の3Dメッシュを使うかの選択は #904 が担う
+        /// （それまでは受け取って保持するだけ＝どの球場も standard の伸縮で描く）。null＝割当なし。
+        /// </summary>
+        public static string InitialStadiumId { get; set; }
+
+        /// <summary>この試合の球場ID（<see cref="InitialStadiumId"/> の写し）。</summary>
+        public string StadiumId { get; private set; }
+
         /// <summary>この球場の判定寸法（フェンス距離・高さ）。3D のフェンスはここから描く＝判定と食い違わない。</summary>
         private KokoSim.Engine.Match.Field.FieldGeometry _field = new KokoSim.Engine.Match.Field.FieldGeometry();
 

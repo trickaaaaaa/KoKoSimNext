@@ -28,6 +28,7 @@
             <ui:VisualElement class="ts-menu">
                 <ui:Button name="ts-new-game" text="▶ はじめから" class="f-body-bd ts-menu-item ts-menu-item--cta" />
                 <ui:Button name="ts-continue" text="▶ つづきから" class="f-body-bd ts-menu-item" />
+                <ui:Button name="ts-debug-match" text="▶ デバッグ試合" class="f-body-bd ts-menu-item" style="display: none;" />
                 <ui:Button name="ts-quit" text="▶ 終了" class="f-body-bd ts-menu-item" />
             </ui:VisualElement>
         </ui:VisualElement>

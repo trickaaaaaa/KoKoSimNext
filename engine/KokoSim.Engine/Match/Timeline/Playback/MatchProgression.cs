@@ -125,6 +125,9 @@ public sealed class MatchProgression
     /// </summary>
     public Field.FieldGeometry Field => _ctx.Field;
 
+    /// <summary>この試合の球場ID（<see cref="GameContext.StadiumId"/>。issue #905）。3D がどの球場の形を描くかの選択用。</summary>
+    public string? StadiumId => _ctx.StadiumId;
+
     /// <param name="scenarioStart">
     /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
     /// 注入した試合は <see cref="GameResult.ScenarioId"/> が立ち、digest・統計集計から外れる。
