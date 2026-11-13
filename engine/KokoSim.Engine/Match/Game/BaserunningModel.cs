@@ -29,6 +29,18 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     public double ExtraStartDelaySeconds { get; init; }
 
     /// <summary>
+    /// この走者へのプレーで投げた送球の逸れ（issue #859）。判定（遅れ・悪送球）に使った値そのもの＝絵は受け手を
+    /// この逸れへ寄せて描く。勝負を抽選しない送球・送球の無い移動は null（絵の側が別に決める）。
+    /// </summary>
+    public Fielding.ThrowScatterModel.Scatter? ThrowScatter { get; init; }
+
+    /// <summary>
+    /// この封殺のあと一塁へ転送した送球（併殺のピボット・本封→一封・自己封殺→一塁）の逸れ（issue #859）。
+    /// 判定に使った値そのもの。転送しない／勝負を抽選しない経路は null。
+    /// </summary>
+    public Fielding.ThrowScatterModel.Scatter? RelayThrowScatter { get; init; }
+
+    /// <summary>
     /// タイムライン表示専用: タッチアップ（フライ捕球を待ってから走る）の走者なら、その**捕球時刻**[s]
     /// （接触基準＝<see cref="HomePlaySituation.BallFieldedAtSeconds"/>）。null＝タッチアップでない。
     ///
@@ -304,29 +316,29 @@ public static class BaserunningModel
         // CloseCall（判定オーバーレイ, Issue #59）は物理レース（home!=null）で決着した場合のみ算出する
         // 純計算（rng非消費）で、乱数消費順・結果には一切影響しない。
         // Delay＝憤死のとき走者が引き受けた出遅れ[s]（issue #801。送球より先に着く絵にしない）。
-        (HomeVerdict Verdict, bool CloseCall, double Delay) TryHome(Player runner, int fromBase, double tableProb, bool tableUnconditional)
+        (HomeVerdict Verdict, bool CloseCall, double Delay, Fielding.ThrowScatterModel.Scatter? Scatter) TryHome(Player runner, int fromBase, double tableProb, bool tableUnconditional)
         {
-            if (currentOuts + extraOuts >= 3) return (HomeVerdict.Held, false, 0.0); // 既に3アウト＝以降は進めない
+            if (currentOuts + extraOuts >= 3) return (HomeVerdict.Held, false, 0.0, null); // 既に3アウト＝以降は進めない
             if (home is not { } h)
                 return (tableUnconditional || MathUtil.Chance(P(tableProb, coeff.AbilityEffect.Running(runner.Baserunning), coeff), rng)
-                    ? HomeVerdict.Scored : HomeVerdict.Held, false, 0.0);
+                    ? HomeVerdict.Scored : HomeVerdict.Held, false, 0.0, null);
 
             // F2: 送り判定（勝てる時だけ送る）→ 時間の勝負（外野中継 vs 走者）。
             var prob = HomePlayResolver.SuccessProbability(runner, fromBase, h.Situation, h.Field, coeff);
             if (!HomeSendDecision.ShouldSend(prob, currentOuts + extraOuts, h.Aggression, h.Tactics))
-                return (HomeVerdict.Held, false, 0.0); // 自重（RNG消費なし）
+                return (HomeVerdict.Held, false, 0.0, null); // 自重（RNG消費なし）
             var margin = HomePlayResolver.Margin(runner, fromBase, h.Situation, h.Field, coeff);
             var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
-            var (outcome, delay) = HomePlayResolver.ResolveWithWildThrowVerdict(
+            var (outcome, delay, scatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
                 runner, fromBase, h.Situation, h.Field, coeff, HomePlayResolver.HomeParams(coeff), rng);
-            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall, 0.0);
+            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall, 0.0, scatter);
             outThrowUsed = true;
             if (outcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
             {
                 homeWildThrowOccurred = true;
-                return (HomeVerdict.Scored, closeCall, 0.0);
+                return (HomeVerdict.Scored, closeCall, 0.0, scatter);
             }
-            return (HomeVerdict.OutAtHome, closeCall, delay);
+            return (HomeVerdict.OutAtHome, closeCall, delay, scatter);
         }
 
         // 三塁走者（先行）: テーブル時は無条件生還。フォース時（満塁）は自重不可＝RNGを消費せず確定生還
@@ -340,11 +352,11 @@ public static class BaserunningModel
             }
             else
             {
-                var (verdict3, closeCall3, delay3) = TryHome(r3, 3, 0.0, tableUnconditional: true);
+                var (verdict3, closeCall3, delay3, scatter3) = TryHome(r3, 3, 0.0, tableUnconditional: true);
                 switch (verdict3)
                 {
-                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = closeCall3 }); break;
-                    case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = closeCall3, ExtraStartDelaySeconds = delay3 }); break;
+                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = closeCall3, ThrowScatter = scatter3 }); break;
+                    case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = closeCall3, ExtraStartDelaySeconds = delay3, ThrowScatter = scatter3 }); break;
                     default: third = r3; break; // 自重＝三塁で止まる（移動なし）
                 }
             }
@@ -355,11 +367,11 @@ public static class BaserunningModel
         // r3Forced により三塁は必ず空いている（上のブロックで確定済み）。
         if (r2 is not null)
         {
-            var (verdict2, closeCall2, delay2) = TryHome(r2, 2, coeff.SecondToHomeOnSingle, tableUnconditional: isDouble);
+            var (verdict2, closeCall2, delay2, scatter2) = TryHome(r2, 2, coeff.SecondToHomeOnSingle, tableUnconditional: isDouble);
             switch (verdict2)
             {
-                case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r2, 2, 4, false) { CloseCall = closeCall2 }); break;
-                case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r2, 2, 4, Out: true) { CloseCall = closeCall2, ExtraStartDelaySeconds = delay2 }); break;
+                case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r2, 2, 4, false) { CloseCall = closeCall2, ThrowScatter = scatter2 }); break;
+                case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r2, 2, 4, Out: true) { CloseCall = closeCall2, ExtraStartDelaySeconds = delay2, ThrowScatter = scatter2 }); break;
                 default:
                     if (r2Forced || third is null) { third = r2; mv?.Add(new RunnerMove(r2, 2, 3, false)); }
                     else second = r2; // 三塁が塞がっていれば（非フォース）二塁に留まる
@@ -373,11 +385,11 @@ public static class BaserunningModel
             if (isDouble)
             {
                 // 二塁打では打者が二塁を占有する＝一塁走者は一塁にも二塁にも戻れない（#88）。
-                var (verdict1, closeCall1, delay1) = TryHome(r1, 1, coeff.FirstToHomeOnDouble, tableUnconditional: false);
+                var (verdict1, closeCall1, delay1, scatter1) = TryHome(r1, 1, coeff.FirstToHomeOnDouble, tableUnconditional: false);
                 switch (verdict1)
                 {
-                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r1, 1, 4, false) { CloseCall = closeCall1 }); break;
-                    case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r1, 1, 4, Out: true) { CloseCall = closeCall1, ExtraStartDelaySeconds = delay1 }); break;
+                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r1, 1, 4, false) { CloseCall = closeCall1, ThrowScatter = scatter1 }); break;
+                    case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r1, 1, 4, Out: true) { CloseCall = closeCall1, ExtraStartDelaySeconds = delay1, ThrowScatter = scatter1 }); break;
                     default:
                         if (third is null) { third = r1; mv?.Add(new RunnerMove(r1, 1, 3, false)); }
                         else if (currentOuts + extraOuts < 3)
@@ -419,13 +431,13 @@ public static class BaserunningModel
                     if (race3.Safe)
                     {
                         third = r1;
-                        mv?.Add(new RunnerMove(r1, 1, 3, false) { CloseCall = closeCall });
+                        mv?.Add(new RunnerMove(r1, 1, 3, false) { CloseCall = closeCall, ThrowScatter = race3.Scatter });
                     }
                     else
                     {
                         extraOuts++; thirdOuts++; outThrowUsed = true; // 三塁で刺殺（走者はアウト＝塁上に残らない）
                         mv?.Add(new RunnerMove(r1, 1, 3, Out: true)
-                            { CloseCall = closeCall, ExtraStartDelaySeconds = race3.RunnerDelaySeconds });
+                            { CloseCall = closeCall, ExtraStartDelaySeconds = race3.RunnerDelaySeconds, ThrowScatter = race3.Scatter });
                     }
                 }
             }
@@ -654,12 +666,13 @@ public static class BaserunningModel
             var doMargin = DoubledOffResolver.Margin(r1, catchAt, catchToFirstM, arm, coeff, fielding, extraLead);
             var doCloseCall = Math.Abs(doMargin) < coeff.CloseCallMarginSeconds;
             r1RacedBack = true;
-            if (DoubledOffResolver.Resolve(r1, catchAt, catchToFirstM, arm, coeff, rng, fielding, extraLead)
+            if (DoubledOffResolver.Resolve(r1, catchAt, catchToFirstM, arm, coeff, rng, fielding, extraLead,
+                    liner.Situation.ThrowerThrowAccuracy, out var doScatter)
                 == DoubledOffResult.DoubledOff)
             {
                 extraOuts++;
                 mv?.Add(new RunnerMove(r1, 1, 1, Out: true) // 一塁へ戻れず憤死
-                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM });
+                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM, ThrowScatter = doScatter });
                 bases.First = null;
                 r1 = null;
             }
@@ -668,7 +681,7 @@ public static class BaserunningModel
                 // 帰塁セーフ。塁上は不変だが「飛び出して戻った」絵を出すため move を積む（表示専用・
                 // ToBase==FromBase なので得点・封殺・先頭走者の判定はどれも拾わない）。
                 mv?.Add(new RunnerMove(r1, 1, 1, Out: false)
-                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM });
+                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM, ThrowScatter = doScatter });
             }
         }
 
@@ -691,12 +704,12 @@ public static class BaserunningModel
                 var delay = coeff.HomeGrounderStartDelaySeconds;
                 var forceHomeMargin = HomePlayResolver.Margin(r3, 3, hforce.Situation, hforce.Field, coeff, delay);
                 var forceHomeCloseCall = Math.Abs(forceHomeMargin) < coeff.CloseCallMarginSeconds;
-                var (forceHomeOutcome, forceHomeLate) = HomePlayResolver.ResolveWithWildThrowVerdict(
+                var (forceHomeOutcome, forceHomeLate, forceHomeScatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
                     r3, 3, hforce.Situation, hforce.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, delay);
                 if (forceHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                 {
                     runs++;
-                    mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay });
+                    mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay, ThrowScatter = forceHomeScatter });
                     if (forceHomeOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
                     {
                         bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
@@ -710,9 +723,14 @@ public static class BaserunningModel
                     // 捕手の一塁転送が要る。二死はここへ来ない（打者の一塁アウトで既にチェンジ＝上の早期 return）。
                     // 転送レースは併殺の二段目と同じ作法。乱数はこの分岐（満塁×内野前進×本塁封殺成立）でだけ1回引く。
                     var relayed = hforce.BatterToFirstSeconds is not null;
+                    // 捕手の一塁転送1本の逸れ（issue #859。捕手の送球精度は未配線＝50）。転送したときだけ引く。
+                    var (homeRelayScatter, homeRelayNoise) = relayed
+                        ? HomePlayResolver.SampleThrowScatter(50, coeff, rng)
+                        : (default(Fielding.ThrowScatterModel.Scatter), 0.0);
                     mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
-                        { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay + forceHomeLate, Force = true, HomeForceRelay = relayed });
-                    if (relayed && MathUtil.Chance(HomeForceRelayBatterSafeProbability(hforce, coeff), rng))
+                        { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay + forceHomeLate, Force = true, HomeForceRelay = relayed, ThrowScatter = forceHomeScatter,
+                          RelayThrowScatter = relayed ? homeRelayScatter : null });
+                    if (relayed && MathUtil.Chance(HomeForceRelayBatterSafeProbability(hforce, coeff, homeRelayNoise), rng))
                     {
                         // 野選: 本塁は封殺したが転送が打者に間に合わない＝打者は一塁で生きる。一塁走者・二塁走者は
                         // この先のフォース進塁カスケードが押し上げる（一塁の後始末は r1 自身が居るときだけ＝打者は残る）。
@@ -751,12 +769,12 @@ public static class BaserunningModel
                 {
                     var backHomeMargin = HomePlayResolver.Margin(r3, 3, hi.Situation, hi.Field, coeff, delay);
                     var backHomeCloseCall = Math.Abs(backHomeMargin) < coeff.CloseCallMarginSeconds;
-                    var (backHomeOutcome, backHomeLate) = HomePlayResolver.ResolveWithWildThrowVerdict(
+                    var (backHomeOutcome, backHomeLate, backHomeScatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
                         r3, 3, hi.Situation, hi.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, delay);
                     if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                     {
                         runs++;
-                        mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay });
+                        mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay, ThrowScatter = backHomeScatter });
                         if (backHomeOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
                         {
                             bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
@@ -767,7 +785,7 @@ public static class BaserunningModel
                     {
                         extraOuts++; homeOuts++; // バックホーム憤死（本塁で刺殺）
                         mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
-                            { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay + backHomeLate });
+                            { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay + backHomeLate, ThrowScatter = backHomeScatter });
                     }
                     // 返球が逸れた分岐は押し上げ済みの三塁（元の二塁走者）を消さない（issue #830 と同じ不具合）
                     if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow) bases.Third = null;
@@ -788,13 +806,13 @@ public static class BaserunningModel
                     var tagCloseCall = Math.Abs(tagMargin) < coeff.CloseCallMarginSeconds;
                     // 絵も判定と同じ「捕球を待ってから走る」時計にする（issue score-display-before-home-touch）。
                     var tagCatchAt = hfly.Situation.BallFieldedAtSeconds;
-                    var (tagOutcome, tagLate) = HomePlayResolver.TagUpResolveWithWildThrowVerdict(
+                    var (tagOutcome, tagLate, tagScatter) = HomePlayResolver.TagUpResolveWithWildThrowVerdict(
                         r3, 3, hfly.Situation, hfly.Field, coeff, tagUp, rng);
                     if (tagOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                     {
                         runs++;
                         mv?.Add(new RunnerMove(r3, 3, 4, false)
-                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt });
+                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt, ThrowScatter = tagScatter });
                         if (tagOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
                         {
                             bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
@@ -805,7 +823,7 @@ public static class BaserunningModel
                     {
                         extraOuts++; homeOuts++; // タッチアップ失敗＝本塁での走塁死
                         mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
-                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt, ExtraStartDelaySeconds = tagLate });
+                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt, ExtraStartDelaySeconds = tagLate, ThrowScatter = tagScatter });
                     }
                     // 返球が逸れた分岐は、三塁を空けた後で二塁走者を三塁へ押し上げ済み＝ここで空にすると
                     // 押し上げた走者が消える（issue #830 の Heavy で走者保存則違反として表に出た）
@@ -967,14 +985,14 @@ public static class BaserunningModel
         if (race.Safe)
         {
             mv?.Add(new RunnerMove(runner, fromBase, toBase, false)
-                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt });
+                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt, ThrowScatter = race.Scatter });
             if (toBase == 3) bases.Third = runner; else bases.Second = runner;
         }
         else
         {
             extraOuts++; // タッチアップ失敗＝進塁先での走塁死
             mv?.Add(new RunnerMove(runner, fromBase, toBase, Out: true)
-                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt, ExtraStartDelaySeconds = race.RunnerDelaySeconds });
+                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt, ExtraStartDelaySeconds = race.RunnerDelaySeconds, ThrowScatter = race.Scatter });
         }
         if (fromBase == 2) bases.Second = null; else bases.First = null;
     }
@@ -988,14 +1006,14 @@ public static class BaserunningModel
         var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
         if (race.Safe)
         {
-            mv?.Add(new RunnerMove(r2, 2, 3, false) { CloseCall = closeCall, ExtraStartDelaySeconds = delay });
+            mv?.Add(new RunnerMove(r2, 2, 3, false) { CloseCall = closeCall, ExtraStartDelaySeconds = delay, ThrowScatter = race.Scatter });
             bases.Third = r2;
         }
         else
         {
             extraOuts++; // 三塁での走塁死
             mv?.Add(new RunnerMove(r2, 2, 3, Out: true)
-                { CloseCall = closeCall, ExtraStartDelaySeconds = delay + race.RunnerDelaySeconds });
+                { CloseCall = closeCall, ExtraStartDelaySeconds = delay + race.RunnerDelaySeconds, ThrowScatter = race.Scatter });
         }
         bases.Second = null;
     }
@@ -1073,12 +1091,18 @@ public static class BaserunningModel
     /// 秒と確率の作りは併殺の二段目（<see cref="ResolveDoublePlaySelfForce"/>）と同じ。絵（TimelineBuilder）も
     /// <see cref="HomeForceRelayArriveSeconds"/> で同じ秒を使う。
     /// </summary>
-    public static double HomeForceRelayBatterSafeProbability(HomePlayContext home, BaserunningCoefficients coeff)
+    public static double HomeForceRelayBatterSafeProbability(HomePlayContext home, BaserunningCoefficients coeff,
+        double throwNoiseSeconds = 0.0)
     {
         var margin = HomeForceRelayArriveSeconds(home.Situation, home.Field, coeff)
                      - home.BatterToFirstSeconds!.Value + coeff.DoublePlayRelayBias;
-        return MathUtil.Clamp(MathUtil.Logistic(margin / coeff.DoublePlayRelayMarginScale), 0.01, 0.99);
+        return RelayBatterSafeProbability(margin + throwNoiseSeconds, coeff);
     }
+
+    /// <summary>一塁への転送と打者の勝負の確率（margin＝守備所要−打者所要＋バイアス。正＝打者生存）。
+    /// 併殺の二段目・自己封殺→一塁・本封→一封が共有する式。</summary>
+    private static double RelayBatterSafeProbability(double batterMargin, BaserunningCoefficients coeff)
+        => MathUtil.Clamp(MathUtil.Logistic(batterMargin / coeff.DoublePlayRelayMarginScale), 0.01, 0.99);
 
     /// <summary>本封→一封の転送が一塁に着いて打者に触れる時刻[s]（接触基準・issue #741）。判定と絵の共通の秒。</summary>
     public static double HomeForceRelayArriveSeconds(
@@ -1149,11 +1173,14 @@ public static class BaserunningModel
         var leadMargin = HomePlayResolver.Margin(
             leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
         var leadClose = Math.Abs(leadMargin) < coeff.CloseCallMarginSeconds;
+        // 一塁への転送1本の逸れ（issue #859）: その本の遅れと期待値の差を転送の秒へ足して勝負を引く（ゼロ平均）。
+        // 投げ手は自己封殺した処理野手自身。
+        var (relayScatter, relayNoise) = HomePlayResolver.SampleThrowScatter(home.Situation.ThrowerThrowAccuracy, coeff, rng);
         mv?.Add(new RunnerMove(leadRunner, leadFromBase, force.TargetBase, Out: true)
-            { CloseCall = leadClose, Force = true, SelfForceDoublePlayLead = true });
+            { CloseCall = leadClose, Force = true, SelfForceDoublePlayLead = true, RelayThrowScatter = relayScatter });
         if (leadFromBase == 2) bases.Second = null; else bases.Third = null;
 
-        if (MathUtil.Chance(pBatterSafe, rng))
+        if (MathUtil.Chance(RelayBatterSafeProbability(batterMargin + relayNoise, coeff), rng))
         {
             // B) 野選: 代替を狙ったが打者が転送を上回って一塁生存。対象走者(r2/r3)は本塁封殺と違い r1
             // 自身ではないので r1 は生存し続け、この先の一塁走者カスケード（ApplyInPlayOut）が
@@ -1225,6 +1252,7 @@ public static class BaserunningModel
             //    転送はしない＝打者は一塁に生きる（野選には数えない）。RNG非消費。
             if (!allowForceOnly || pR1Safe > coeff.DoublePlayForceOnlyMaxRunnerSuccess) return (0, false);
             var onlyMargin = HomePlayResolver.Margin(r1, 1, home.Situation, home.Field, coeff, force, delay);
+            // 封殺は幾何で確定＝判定に使う逸れは無い（乱数を引かない）。絵の逸れは ThrowScatterAssigner が別の流れから付ける。
             mv?.Add(new RunnerMove(r1, 1, 2, Out: true)
                 { CloseCall = Math.Abs(onlyMargin) < coeff.CloseCallMarginSeconds, Force = true, ForceOnly = true });
             bases.First = batter;
@@ -1235,10 +1263,16 @@ public static class BaserunningModel
         // 二塁封殺は成立（一塁走者アウト）。#318 と同様に一段目のアウトは幾何で確定させ、際どさは表示のみ（RNG非消費）。
         var forceMargin = HomePlayResolver.Margin(r1, 1, home.Situation, home.Field, coeff, force, delay);
         var forceClose = Math.Abs(forceMargin) < coeff.CloseCallMarginSeconds;
-        mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { CloseCall = forceClose, Force = true }); // 二塁封殺
+        // 送球2本の逸れ（issue #859）: 二塁への送球（処理野手）と一塁への転送（ピボット。送球精度は未配線＝50）。
+        // 封殺は幾何で確定のまま、両方の遅れと期待値の差を転送の秒へ足して打者との勝負を引く（ゼロ平均）。
+        // 二塁への送球が逸れればピボットが遅れる＝一本目の逸れも打者の勝負に効く。
+        var (feedScatter, feedNoise) = HomePlayResolver.SampleThrowScatter(home.Situation.ThrowerThrowAccuracy, coeff, rng);
+        var (pivotScatter, pivotNoise) = HomePlayResolver.SampleThrowScatter(50, coeff, rng);
+        mv?.Add(new RunnerMove(r1, 1, 2, Out: true)
+            { CloseCall = forceClose, Force = true, ThrowScatter = feedScatter, RelayThrowScatter = pivotScatter }); // 二塁封殺
         bases.First = null;
 
-        if (MathUtil.Chance(pBatterSafe, rng))
+        if (MathUtil.Chance(RelayBatterSafeProbability(batterMargin + feedNoise + pivotNoise, coeff), rng))
         {
             // B) 野選: 併殺を狙ったが打者が転送を上回って一塁生存（一塁は封殺した一塁走者が空けた＝衝突しない）。
             bases.First = batter;

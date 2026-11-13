@@ -1309,6 +1309,8 @@ namespace KokoSim.Unity.Match
             /// 球は予定どおりこの野手のグラブへ入る（倒れたまま掴む絵になる）。</para>
             /// </summary>
             public bool SkipClip;
+            /// <summary>クリップの頭を捨てる量[s]（送球の捕球だけ。<see cref="ThrowCatchLeadSeconds"/>）。</summary>
+            public float ClipHead;
             public bool Fired;
         }
 
@@ -1573,6 +1575,18 @@ namespace KokoSim.Unity.Match
                 float h = isThrow ? ThrowCatchHeightM
                     : CatchHeightFor(eb != null ? eb.Kind
                         : (seg is RollSegment ? BallSegmentKind.Roll : BallSegmentKind.Flight));
+                // 送球の逸れ（issue #859・案B）: 受け手は逸れに合わせて捕る。高さは逸れた球が届く高さ
+                // （浮けば頭上・低ければ掬う。ショートバウンドは地面際）で選ぶ。横の逸れは「走り込む」収録を
+                // 使わず、その場の捕球＋体の寄せ（下の bodyShift）で出す＝走る収録は頭出しが長く、
+                // 捕る前に大きく動いて見えた（試作の粗）。
+                bool scattered = isThrow && eb != null && eb.HasScatter && kind == FieldCatchKind.Catch;
+                if (scattered)
+                {
+                    // 小さな上下の逸れ（±15cm 未満）は胸の高さの収録のまま（一塁手の伸びて捕る形を崩さない）。
+                    if (eb.ScatterIsShortHop || Mathf.Abs((float)eb.ScatterVerticalM) >= ThrowScatterHeightPickM)
+                        h = (float)eb.ScatterArrivalHeightM;
+                    app = CatchApproach.Still;
+                }
                 int anchor;
                 if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
                 else if (kind == FieldCatchKind.Miss)
@@ -1705,7 +1719,10 @@ namespace KokoSim.Unity.Match
                     GloveErrM = -1f,
                     Pos = who,
                     TCatch = tc,
-                    TStart = tc - an.Moment,
+                    // 送球の捕球は構えてから捕るまでを短く切る（issue #859）。頭上・掬う収録は捕る1秒前から
+                    // グラブが動き出し、逸れた送球を「投げる前から知っていた」ように見えた（試作の粗）。
+                    TStart = tc - (isThrow ? Mathf.Min(an.Moment, ThrowCatchLeadSeconds) : an.Moment),
+                    ClipHead = isThrow ? Mathf.Max(0f, an.Moment - ThrowCatchLeadSeconds) : 0f,
                     Kind = kind,
                     Anchor = anchor,
                     Point = pt,
@@ -1813,6 +1830,18 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private const float ThrowCatchHeightM = 1.15f;
 
+        /// <summary>
+        /// 送球を捕る収録を、捕る何秒前から流すか（issue #859）。収録の構え〜捕球（Moment）がこれより長いものは
+        /// 頭を捨てる。球が見えてから受け手が反応する間（送球の飛ぶ時間の後半）に収める。
+        /// </summary>
+        private const float ThrowCatchLeadSeconds = 0.45f;
+
+        /// <summary>【撮影専用】守備ビューのカメラを固定する（ルート相対の位置・注視点・縦に収める実寸[m]）。null＝通常のカメラ。</summary>
+        public static (Vector3 Pos, Vector3 Look, float FrameH)? FieldCameraOverrideForCapture;
+
+        /// <summary>送球の上下の逸れがこれ[m]以上なら、受け手の捕球の収録を逸れた高さで選び直す（issue #859）。</summary>
+        private const float ThrowScatterHeightPickM = 0.15f;
+
         /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
         private const float CatchBallBlendSeconds = 0.30f;
 
@@ -1874,7 +1903,7 @@ namespace KokoSim.Unity.Match
                     //    「まだ沈んでいないはずの量」だけ根が下がった状態から始まる
                     if (a.Animator != null) a.Animator.applyRootMotion = false;
                     a.RootDrivenY = false;
-                    SetActorClip(a, clip, t - e.TStart, endAt);
+                    SetActorClip(a, clip, t - e.TStart + e.ClipHead, endAt);
                     a.Speed = 1f;                       // 走りの倍率を持ち越さない
                     a.HoldSeconds = CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
                     FielderMotion st;
@@ -2271,10 +2300,10 @@ namespace KokoSim.Unity.Match
             {
                 if (!HoldsBall(e.Kind)) continue;
                 var an = AnchorOf(e.Kind, e.Anchor);
-                sb.AppendLine(string.Format(ci, "{0}\t{1}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F3}\t{8}",
+                sb.AppendLine(string.Format(ci, "{0}\t{1}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F3}\t{8}\tグラブ高{9:F2}",
                     e.Pos, e.Rolling ? "roll" : "air", e.LineOffM, e.FielderGapM, e.PulledM, e.GloveErrM,
                     e.BodyShift.magnitude, new Vector2(an.GloveX, an.GloveZ).magnitude,
-                    an.Clip.Replace("AA_Baseball_Defender_", "")));
+                    an.Clip.Replace("AA_Baseball_Defender_", ""), e.Point.y));
             }
             return sb.ToString();
         }
@@ -4908,6 +4937,8 @@ namespace KokoSim.Unity.Match
             }
 
             ApplyFieldCamera(t, dt);
+            // 撮影専用（issue #859 の確認）: 守備ビューのカメラを固定する。null の間は何もしない
+            if (FieldCameraOverrideForCapture is { } co) FramePreview(co.Pos, co.Look, co.FrameH);
             // びっくりマーク（issue #439 ②）はカメラを動かした後＝このフレームの視点へ正対させる
             UpdateErrorMark(t);
             if (_ball != null && _ball.activeSelf) ApplyBallReadability();

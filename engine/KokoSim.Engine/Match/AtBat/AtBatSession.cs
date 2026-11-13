@@ -357,7 +357,8 @@ public sealed class AtBatSession
             // bases.Third を無条件に渡す）なので、通常バント（非スクイズ）でもそのまま満塁の本塁封殺判定に使える。
             var bunt = BuntResolver.Resolve(
                 _batterPlayer, pitcher, plan.Stuff, courseDifficulty, safety,
-                _runnersNow.First, _runnersNow.Second, _runnersNow.Third, ctx.Field, ctx.Baserunning, rng);
+                _runnersNow.First, _runnersNow.Second, _runnersNow.Third, ctx.Field, ctx.Baserunning, rng,
+                out _buntThrowScatter);
             switch (bunt)
             {
                 case BuntResult.MissedBunt:
@@ -674,9 +675,12 @@ public sealed class AtBatSession
     /// バント試行で打席を確定させる（設計書15 Phase D-2b）。<see cref="AtBatResult.BuntOutcome"/> に詳細結果を
     /// 残し、GameEngine 側が PopOut/SacrificeSuccess/InfieldHit を区別して進塁（AdvanceOnBunt）を分岐できるようにする。
     /// </summary>
+    /// <summary>直近のバント処理の送球の逸れ（issue #859。<see cref="AtBatResult.BuntThrowScatter"/> へ写す）。</summary>
+    private Fielding.ThrowScatterModel.Scatter? _buntThrowScatter;
+
     private PitchResolution FinishBunt(PlateAppearanceResult result, BuntResult bunt)
     {
-        _result = new AtBatResult(result, _pitchCount) { PitchLog = _pitchLog, BuntOutcome = bunt };
+        _result = new AtBatResult(result, _pitchCount) { PitchLog = _pitchLog, BuntOutcome = bunt, BuntThrowScatter = _buntThrowScatter };
         return new PitchResolution(EndsPlateAppearance: true);
     }
 

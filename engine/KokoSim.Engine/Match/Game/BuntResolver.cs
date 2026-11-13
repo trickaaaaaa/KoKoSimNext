@@ -1,4 +1,6 @@
+using System;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Players;
 
@@ -51,6 +53,10 @@ public static class BuntResolver
     /// 犠打は構え遅延が大きく、走力が低いとほぼ0%（＝従来挙動）だが、快足×好バントは送りでも数%生きる。
     /// </summary>
     public static double InfieldHitProbability(Player batter, bool safety, BaserunningCoefficients c)
+        => InfieldHitProbability(batter, safety, c, 0.0);
+
+    /// <summary><paramref name="throwNoiseSeconds"/>＝一塁送球の逸れによる遅れ（期待値との差, issue #859）を守備側へ足した確率。</summary>
+    private static double InfieldHitProbability(Player batter, bool safety, BaserunningCoefficients c, double throwNoiseSeconds)
     {
         var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
             ? c.BuntLeftFirstStepBonusSeconds : 0.0;
@@ -58,7 +64,7 @@ public static class BuntResolver
         var batterTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                          + c.BuntRunnerReactionSeconds + squareDelay - handednessBonus;
         var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
-        var margin = defenseTime - batterTime;
+        var margin = defenseTime - batterTime + throwNoiseSeconds;
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.BuntInfieldHitTimeScale), 0.01, 0.95);
     }
 
@@ -123,7 +129,20 @@ public static class BuntResolver
         Player batter, PitcherAttributes pitcher, double pitchStuff, double courseDifficulty, bool safety,
         Player? firstRunner, Player? secondRunner, Player? thirdRunner, FieldGeometry? field,
         BaserunningCoefficients c, IRandomSource rng)
+        => Resolve(batter, pitcher, pitchStuff, courseDifficulty, safety, firstRunner, secondRunner, thirdRunner,
+            field, c, rng, out _);
+
+    /// <summary>
+    /// <see cref="Resolve(Player,PitcherAttributes,double,double,bool,Player?,Player?,Player?,FieldGeometry?,BaserunningCoefficients,IRandomSource)"/>
+    /// に、処理野手の送球の逸れ（issue #859。判定に使った値そのもの）を添えて返す。送球まで行かなかった
+    /// （空振り・ファウル・小フライ）なら null。
+    /// </summary>
+    public static BuntResult Resolve(
+        Player batter, PitcherAttributes pitcher, double pitchStuff, double courseDifficulty, bool safety,
+        Player? firstRunner, Player? secondRunner, Player? thirdRunner, FieldGeometry? field,
+        BaserunningCoefficients c, IRandomSource rng, out ThrowScatterModel.Scatter? throwScatter)
     {
+        throwScatter = null;
         var veloPenalty = VelocityPenalty(pitcher, c);
         var skillEffect = c.AbilityEffect.Batting(batter.Bunt) - 50;
         var stuffPenalty = System.Math.Max(0.0, pitchStuff - c.BuntStuffRefValue);
@@ -150,18 +169,27 @@ public static class BuntResolver
             return PopOutOrDoubledOff(firstRunner, field, c, rng); // 転がしそこねの凡打
 
         var infieldHitP = InfieldHitProbability(batter, safety, c);
+        // 処理野手の送球1本の逸れ（issue #859）。どの塁へ投げるかは期待値（下の比較）で選び、
+        // 選んだ塁との勝負にだけその本の遅れ（期待値との差＝ゼロ平均）を足す。
+        var (scatter, noise) = HomePlayResolver.SampleThrowScatter((int)c.BuntFielderThrowAccuracyLevel, c, rng);
+        throwScatter = scatter;
 
         // 封殺の候補（Q31=BaserunningModel.ResolveDoublePlay と同じ比較原則）: 一塁送球・二塁封殺・三塁封殺
         // （1・2塁の真のフォース）・本塁封殺（満塁の真のフォース）のうち、一番アウトになりやすい
         // （safe確率が低い）ものを守備は選ぶ。乱数消費は常に1回（どの分岐でも）。
         double? bestSafeP = null;
         var bestResult = BuntResult.ForceOutAtSecond;
+        Func<double>? realizedSafeP = null;   // 選んだ封殺の、逸れの遅れ込みの確率
         if (firstRunner is not null && field is not null)
         {
             var r1SafeP = HomePlayResolver.SuccessProbability(
                 firstRunner, fromBase: 1, FieldedSituation(c), field, c,
                 HomePlayResolver.SecondForceParams(field, c), c.BuntForceR1StartDelaySeconds);
-            if (r1SafeP < infieldHitP) { bestSafeP = r1SafeP; bestResult = BuntResult.ForceOutAtSecond; }
+            if (r1SafeP < infieldHitP)
+            {
+                bestSafeP = r1SafeP; bestResult = BuntResult.ForceOutAtSecond;
+                realizedSafeP = () => ForceSafeP(firstRunner, 1, HomePlayResolver.SecondForceParams(field, c), c.BuntForceR1StartDelaySeconds);
+            }
 
             if (secondRunner is not null)
             {
@@ -172,6 +200,7 @@ public static class BuntResolver
                 {
                     bestSafeP = r2SafeP;
                     bestResult = BuntResult.ForceOutAtThird;
+                    realizedSafeP = () => ForceSafeP(secondRunner, 2, HomePlayResolver.ThirdForceParams(field, c), c.BuntForceR2StartDelaySeconds);
                 }
 
                 if (thirdRunner is not null)
@@ -183,15 +212,21 @@ public static class BuntResolver
                     {
                         bestSafeP = r3SafeP;
                         bestResult = BuntResult.ForceOutAtHome;
+                        realizedSafeP = () => ForceSafeP(thirdRunner, 3, HomePlayResolver.HomeForceParams(c), c.BuntForceR3StartDelaySeconds);
                     }
                 }
             }
         }
-        if (bestSafeP is double safeP)
-            return MathUtil.Chance(safeP, rng) ? BuntResult.InfieldHit : bestResult;
+        if (bestSafeP is not null && realizedSafeP is not null)
+            return MathUtil.Chance(realizedSafeP(), rng) ? BuntResult.InfieldHit : bestResult;
 
         // 犠打・セーフティ共通の内野安打判定（時間軸）。セーフティは構え遅延が小さく生きやすい。
-        if (MathUtil.Chance(infieldHitP, rng)) return BuntResult.InfieldHit;
+        if (MathUtil.Chance(InfieldHitProbability(batter, safety, c, noise), rng)) return BuntResult.InfieldHit;
         return BuntResult.SacrificeSuccess;
+
+        double ForceSafeP(Player runner, int fromBase, HomePlayResolver.BasePlayParams bp, double delay)
+            => MathUtil.Clamp(MathUtil.Logistic(
+                (HomePlayResolver.Margin(runner, fromBase, FieldedSituation(c), field!, c, bp, delay) + noise) / bp.MarginScale),
+                0.01, 0.99);
     }
 }

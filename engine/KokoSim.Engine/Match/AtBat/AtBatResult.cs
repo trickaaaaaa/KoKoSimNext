@@ -35,6 +35,9 @@ public sealed record AtBatResult(PlateAppearanceResult Result, int Pitches)
     /// </summary>
     public BuntResult? BuntOutcome { get; init; }
 
+    /// <summary>バントを処理した野手の送球の逸れ（issue #859。判定に使った値そのもの）。送球まで行かなければ null。</summary>
+    public Fielding.ThrowScatterModel.Scatter? BuntThrowScatter { get; init; }
+
     /// <summary>
     /// スクイズ試行で確定した打席の詳細結果（設計書15 Phase D-2c）。null=スクイズ経路ではない。
     /// ウエストを読まれて三塁走者だけが挟殺された場合はここではなく打席継続のまま

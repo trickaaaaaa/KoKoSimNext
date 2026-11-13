@@ -147,7 +147,48 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
             FromRole = s.FromRole, ToRole = s.ToRole, ToBase = s.ToBase,
             // 捕り損ね（issue #812）
             MissedBy = s.MissedBy, MissAfter = (s.T1 - s.T0) * Math.Clamp(s.MissFraction, 0.0, 1.0), WildThrow = s.WildThrow,
+            // 送球の逸れ（issue #859）。悪送球（MissedBy）は外れ方を別に持つので載せない
+            ScatterLateralM = s.Kind == BallSegmentKind.Throw && s.MissedBy is null ? (s.ThrowScatter?.LateralCm ?? 0.0) / 100.0 : 0.0,
+            ScatterVerticalM = s.Kind == BallSegmentKind.Throw && s.MissedBy is null ? (s.ThrowScatter?.VerticalCm ?? 0.0) / 100.0 : 0.0,
         };
+
+    /// <summary>
+    /// 送球の逸れ[m]（issue #859）。横は進行方向の左が正、縦は＋が浮き・−が低い（<see cref="ShortHopMinDropM"/>
+    /// 以下はショートバウンド）。0＝逸れなし（従来の絵）。球の終点は塁でなく、塁の受け手の捕球点からこの分ずれた点。
+    /// 受け手の芝居（寄る・伸び上がる・掬う）は表示側がこの値から選ぶ。
+    /// </summary>
+    public double ScatterLateralM { get; init; }
+    /// <inheritdoc cref="ScatterLateralM"/>
+    public double ScatterVerticalM { get; init; }
+
+    /// <summary>逸れがあるか（受け手が合わせる必要があるか）。</summary>
+    public bool HasScatter => ScatterLateralM != 0.0 || ScatterVerticalM != 0.0;
+
+    /// <summary>逸れた送球の終点の高さ[m]の基準（受け手の胸の高さ＝3D守備ビューの送球の捕球高さと同じ値）。</summary>
+    public const double ScatterCatchHeightM = 1.15;
+
+    /// <summary>この値[m]以上低い送球はショートバウンド（受け手の手前で一度弾む）。</summary>
+    public const double ShortHopMinDropM = 0.30;
+
+    /// <summary>ショートバウンドの弾む位置（区間の進み u）と、弾んだ後の山の高さ[m]。</summary>
+    private const double ShortHopBounceU = 0.82, ShortHopReboundM = 0.45;
+
+    /// <summary>ショートバウンドか。</summary>
+    public bool ScatterIsShortHop => ScatterVerticalM <= -ShortHopMinDropM;
+
+    /// <summary>逸れによる終点のずれ（XY＝進行方向の左を正とする横ずれの成分）[m]。</summary>
+    public (double Dx, double Dy) ScatterEndOffset()
+    {
+        var dx = _tx - _fx; var dy = _ty - _fy;
+        var len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) return (0, 0);
+        return (-dy / len * ScatterLateralM, dx / len * ScatterLateralM);
+    }
+
+    /// <summary>逸れた送球が受け手に届く高さ[m]（ショートバウンドは弾んだ後の終点＝低い位置）。</summary>
+    public double ScatterArrivalHeightM => ScatterIsShortHop
+        ? 0.0
+        : Math.Max(0.05, ScatterCatchHeightM + ScatterVerticalM);
 
     public override PlaybackBall At(double tt)
     {
@@ -156,6 +197,21 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         var x = _fx + (_tx - _fx) * u;
         var y = _fy + (_ty - _fy) * u;
         var h = Height(u);
+        if (HasScatter && _kind == BallSegmentKind.Throw && _hops == null && _passU == null)
+        {
+            // 逸れた送球（issue #859）: 終点を横へずらし、高さは受け手の胸の高さ＋縦の逸れへ寄せる。
+            // 低すぎる送球は手前で一度弾む（ショートバウンド）。
+            var (ox, oy) = ScatterEndOffset();
+            x += ox * u; y += oy * u;
+            if (ScatterIsShortHop)
+            {
+                h = u < ShortHopBounceU
+                    ? h * (1 - Math.Pow(u / ShortHopBounceU, 3))
+                    : ShortHopReboundM * 4 * ((u - ShortHopBounceU) / (1 - ShortHopBounceU)) * (1 - (u - ShortHopBounceU) / (1 - ShortHopBounceU));
+            }
+            else
+                h = Math.Max(0.0, h + (ScatterCatchHeightM + ScatterVerticalM - ThrowReleaseHeightM) * u * u);
+        }
         return new PlaybackBall(x, y, h);
     }
 

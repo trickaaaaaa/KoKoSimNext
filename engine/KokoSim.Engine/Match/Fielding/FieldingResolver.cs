@@ -195,6 +195,12 @@ public sealed record FieldingPlay
     public double? CatchErrorScatterM { get; init; }
 
     /// <summary>
+    /// 内野ゴロ→一塁送球の逸れ（issue #859）。送球の秒（遅れ）と悪送球の判定に使った値そのもの＝絵は受け手を
+    /// この逸れへ寄せて描く。一塁送球を判定しない打球（外野・フライ・悪送球ロール無効）は null。
+    /// </summary>
+    public ThrowScatterModel.Scatter? FirstThrowScatter { get; init; }
+
+    /// <summary>
     /// 捕球ミスが拾い直せず確定した打席で、処理野手がこぼれ球を拾い直して次の送球に移れる時刻[s]
     /// （接触基準。issue #816）。<see cref="FieldedAtSeconds"/> は最初に球へ触れた時刻（=こぼれた瞬間）の
     /// ままなので、塁上の走者が次塁を狙うかどうかの判断（<see cref="KokoSim.Engine.Match.Game.HomePlayResolver"/>）
@@ -466,6 +472,22 @@ public static class FieldingResolver
             // 無効化された呼び出し）では0固定＝「送球精度がこの送球に一切効かない」という従来の恒等を保つ
             // （ThrowAccuracyErrorTests.ThrowErrorDisabled_IsIdenticalToCatchOnly が精度だけ振って完全一致を要求する）。
             var throwScatterBias = coeff.ThrowErrorBaseProb > 0.0 ? ThrowScatterCenteredBiasSeconds(throwAccuracy, coeff) : 0.0;
+            // 一塁送球1本の逸れ（issue #859）: 送球は1本＝逸れも1つ。ここで引いた値を ①その本の遅れ（期待値との差＝
+            // ゼロ平均のゆらぎ）として送球の秒へ足し ②悪送球かどうかの判定（MaybeInfieldError）にもそのまま使い
+            // ③絵（受け手の寄せ）にも渡す。悪送球ロールが無効（ThrowErrorBaseProb<=0）のときは引かない＝上と同じ恒等。
+            ThrowScatterModel.Scatter? firstThrowScatter = null;
+            if (coeff.ThrowErrorBaseProb > 0.0)
+            {
+                var sigmaCm = ThrowScatterModel.SigmaCmForAccuracy(throwAccuracy);
+                var sampled = ThrowScatterModel.Sample(sigmaCm, rng);
+                firstThrowScatter = sampled;
+                throwScatterBias += ThrowScatterModel.RecoverySeconds(sampled, receiverCatching: 50,
+                                        coeff.ThrowScatterLateralSecPerCm, coeff.ThrowScatterHighSecPerCm, coeff.ThrowScatterShortHopSecPerCm,
+                                        coeff.ThrowScatterCatchingReliefSlope, coeff.ThrowScatterCatchingReliefMinFactor)
+                                    - ThrowScatterModel.ExpectedRecoverySeconds(sigmaCm, receiverCatching: 50,
+                                        coeff.ThrowScatterLateralSecPerCm, coeff.ThrowScatterHighSecPerCm, coeff.ThrowScatterShortHopSecPerCm,
+                                        coeff.ThrowScatterCatchingReliefSlope, coeff.ThrowScatterCatchingReliefMinFactor);
+            }
             var throwTime = fieldTime + coeff.InfieldPlayOverheadSeconds
                             + transfer + handleJitter + throwDist / infielder.Attributes.ThrowSpeedMps
                             + throwScatterBias;
@@ -497,7 +519,7 @@ public static class FieldingResolver
                 // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
                 var (result, errorKind) = MaybeInfieldError(
-                    fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy);
+                    fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy, firstThrowScatter);
                 double? recoveredScatterM = null, recoveredOutSeconds = null, wildScatterM = null;
                 double? recoveredCatchScatterM = null, recoveredCatchOutSeconds = null;
                 double? catchErrorScatterM = null, catchErrorReadyAtSeconds = null;
@@ -609,6 +631,7 @@ public static class FieldingResolver
                     RecoveredCatchOutSeconds = recoveredCatchOutSeconds,
                     CatchErrorScatterM = catchErrorScatterM,
                     CatchErrorReadyAtSeconds = catchErrorReadyAtSeconds,
+                    FirstThrowScatter = firstThrowScatter,
                 };
             }
             // お手玉の失策（2026-11-03 監督報告「あれだけファンブルしたら内野安打じゃなくて普通にエラーでは？」）:
@@ -635,6 +658,7 @@ public static class FieldingResolver
                     ErrorKind = FieldingErrorKind.Bobble,
                     ErrorFielderRole = infielder.Position,
                     ErrorAtSeconds = fieldTime,   // 「エラー」は弾いた瞬間（捕球直後）に出す
+                    FirstThrowScatter = firstThrowScatter,
                 };
             }
             // 間に合わず内野安打（失策ロールは引かない＝main の校正モデルを保つ）。
@@ -652,6 +676,7 @@ public static class FieldingResolver
                 FielderFielding = infielder.Attributes.Fielding,
                 FielderThrowAccuracy = throwAccuracy,
                 JudgementMarginSeconds = judgementMargin,
+                FirstThrowScatter = firstThrowScatter,
             };
         }
 
@@ -1179,7 +1204,8 @@ public static class FieldingResolver
     /// </summary>
     private static (BattedBallResult Result, FieldingErrorKind? ErrorKind) MaybeInfieldError(
         IReadOnlyList<Fielder> fielders, Vector3D landing, Fielder infielder,
-        FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0, int? throwAccuracy = null)
+        FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0, int? throwAccuracy = null,
+        ThrowScatterModel.Scatter? throwScatter = null)
     {
         if (CatchErrorOccurs(fielders, landing, coeff, rng, extraProb))
         {
@@ -1203,7 +1229,8 @@ public static class FieldingResolver
             // clampedProb から逆算＝確率カーブは完全に不変（rng消費だけが1→2系統に増える。決定論baseline再生成）。
             var sigmaCm = ThrowScatterModel.SigmaCmForAccuracy(accuracy);
             var thresholdCm = ThrowScatterModel.WildThresholdCmForProbability(sigmaCm, clampedProb);
-            if (ThrowScatterModel.IsWild(ThrowScatterModel.Sample(sigmaCm, rng), thresholdCm))
+            // 逸れは呼び出し側で引き済み（issue #859: 送球の秒にも絵にも同じ1本を使う）。無ければここで引く。
+            if (ThrowScatterModel.IsWild(throwScatter ?? ThrowScatterModel.Sample(sigmaCm, rng), thresholdCm))
             {
                 return (BattedBallResult.Error, FieldingErrorKind.Throw);
             }

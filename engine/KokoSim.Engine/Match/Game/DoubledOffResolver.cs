@@ -82,4 +82,21 @@ public static class DoubledOffResolver
                 SuccessProbability(runner, caughtAtSeconds, catchToBaseM, throwSpeedMps, c, fielderFielding, extraLeadM), rng)
             ? DoubledOffResult.Safe
             : DoubledOffResult.DoubledOff;
+
+    /// <summary>
+    /// 戻し送球1本の逸れ（issue #859）を引き、その本の遅れ（期待値との差＝ゼロ平均）を守備側へ足して勝負を引く。
+    /// 逸れは判定に使った値そのものを <paramref name="throwScatter"/> で返す（絵の受け手の寄せに使う）。
+    /// </summary>
+    public static DoubledOffResult Resolve(
+        Player runner, double caughtAtSeconds, double catchToBaseM, double throwSpeedMps,
+        BaserunningCoefficients c, IRandomSource rng, int fielderFielding, double extraLeadM, int throwAccuracy,
+        out KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter throwScatter)
+    {
+        var (scatter, noise) = HomePlayResolver.SampleThrowScatter(throwAccuracy, c, rng);
+        throwScatter = scatter;
+        var margin = Margin(runner, caughtAtSeconds, catchToBaseM, throwSpeedMps, c, fielderFielding, extraLeadM) + noise;
+        return MathUtil.Chance(MathUtil.Clamp(MathUtil.Logistic(margin / c.DoubledOffMarginScale), 0.01, 0.99), rng)
+            ? DoubledOffResult.Safe
+            : DoubledOffResult.DoubledOff;
+    }
 }

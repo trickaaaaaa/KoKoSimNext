@@ -74,6 +74,14 @@ public sealed record BallSegment
     /// </summary>
     public FieldPosition? FromRole { get; init; }
 
+    /// <summary>
+    /// 送球（<see cref="BallSegmentKind.Throw"/>）の逸れ[cm]（issue #859・表示専用）。横は進行方向の左が正、
+    /// 縦は＋が浮き・−が低い（ショートバウンド側）。判定が引いた送球は判定に使った値そのもの、判定の無い送球
+    /// （返球・中継の受け渡し等）は絵のための別ストリームの値。null＝逸れなし（球はベースへ正確に届く）。
+    /// 悪送球（<see cref="MissedBy"/>）の外れ方とは別物＝悪送球の区間には載せない。
+    /// </summary>
+    public Fielding.ThrowScatterModel.Scatter? ThrowScatter { get; init; }
+
     /// <summary>この送球を受ける野手（同上）。中継のカットマンもここに入る。</summary>
     public FieldPosition? ToRole { get; init; }
 
