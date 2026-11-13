@@ -37,6 +37,18 @@ namespace KokoSim.Unity.Debugging.EditorTools
         [MenuItem(Root + "HUD を隠す", priority = 2)]
         private static void HideHud() => Log(DebugBridge.ToggleHud(false));
 
+        [MenuItem(Root + "デバッグ試合を開く（球場を選ぶ）", priority = 10)]
+        private static void OpenDebugMatch()
+        {
+            // セーブ無しで好きな球場の試合画面を開く選択画面（issue #905）。Play 中のみ。
+            if (!Application.isPlaying || KokoSim.Unity.Shell.ScreenRouter.Instance == null)
+            {
+                UnityEngine.Debug.LogWarning("[KokoSim/Debug] デバッグ試合は Play 中のみ開けます。");
+                return;
+            }
+            KokoSim.Unity.Shell.ScreenRouter.Instance.ShowDeferred(DebugMatchSetupController.ScreenName);
+        }
+
         [MenuItem(Root + "試合を起こす/9回裏2死満塁", priority = 20)]
         private static void StartBasesLoaded() => Start("bases-loaded-9th");
 

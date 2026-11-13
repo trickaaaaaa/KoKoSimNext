@@ -1,0 +1,152 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   DebugMatchSetup.uss — デバッグ試合 画面の配置のみ（issue #905・A案）
+   ───────────────────────────────────────────────────────────────────────
+   器（.card / .rule-head / .sbk-seg / .tool-btn / .tp-cta）は部品辞書のまま使う。
+   ここに置くのは「左の一覧と右の設定の並べ方」と「一覧の列合わせ」だけ。
+   色・寸法は tokens.uss / scorebook.uss の変数のみ（UI原則⑤）。gap/grid は使わない。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.dm-root { flex-grow: 1; }
+
+.dm-root Label { margin: 0; padding: 0; }
+
+.dm-main {
+    flex-grow: 1;
+    min-height: 0;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-2);
+}
+
+.dm-masthead {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+.dm-masthead__title { flex-grow: 1; }
+
+.dm-body {
+    flex-direction: row;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+/* ── 左: 球場の一覧 ─────────────────────────────────────────── */
+
+.dm-list-card {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-width: 0;
+    min-height: 0;
+    margin-right: var(--sp-3);
+}
+
+.dm-th, .dm-row {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+}
+.dm-th {
+    height: 26px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--sbk-rule);
+}
+.dm-th__name, .dm-th__num { font-size: var(--fs-cap); color: var(--tx-3); }
+.dm-th__name { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.dm-th__num { -unity-text-align: middle-right; flex-shrink: 0; }
+/* ScrollView のスクロールバーぶん、見出しの右端を空けて列を揃える */
+.dm-th__gutter { width: var(--scrollbar-w); flex-shrink: 0; }
+
+.dm-col-wing { width: var(--col-dm-wing); }
+.dm-col-center { width: var(--col-dm-center); }
+.dm-col-fence { width: var(--col-dm-fence); }
+
+.dm-list { flex-grow: 1; min-height: 0; }
+
+/* 区分の見出し（全国／架空／県大会決勝）。線でなく余白と淡色で区切る（UI原則④） */
+.dm-group {
+    height: var(--h-dm-row);
+    flex-shrink: 0;
+    padding-left: var(--sp-3);
+    -unity-text-align: lower-left;
+    padding-bottom: var(--sp-1);
+    font-size: var(--fs-cap);
+    color: var(--sbk-sub);
+}
+
+.dm-row {
+    height: var(--h-dm-row);
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: var(--sbk-r-chip);
+}
+.dm-row:hover { background-color: var(--sbk-rule-soft); }
+/* 選択は墨の2px枠（UI原則②） */
+.dm-row--selected, .dm-row--selected:hover {
+    background-color: var(--sbk-card);
+    border-color: var(--sbk-ink);
+}
+.dm-row__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--fs-label);
+    color: var(--tx-1);
+}
+.dm-row__num {
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+}
+
+/* ── 右: 選択中の球場と設定 ─────────────────────────────────── */
+
+.dm-side-card {
+    width: var(--col-dm-side);
+    flex-shrink: 0;
+    margin-right: 0;
+}
+
+.dm-sel-name {
+    font-size: var(--fs-page);
+    color: var(--tx-1);
+    margin-bottom: var(--sp-2);
+}
+
+.dm-dims {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-3);
+}
+.dm-dim { flex-grow: 1; flex-basis: 0; }
+.dm-dim__lbl { font-size: var(--fs-cap); color: var(--sbk-sub); }
+.dm-dim__val { font-size: var(--fs-num-lg); color: var(--tx-1); }
+
+.dm-line {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    flex-shrink: 0;
+}
+.dm-lbl {
+    width: var(--col-dm-lbl);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--sbk-sub);
+}
+.dm-drop { flex-grow: 1; margin: 0; }
+.dm-seed { width: var(--col-dm-seed); flex-shrink: 0; margin: 0; }
+
+/* 試合を組めない理由だけを警告色で出す（UI原則②: 本当の警告だけ） */
+.dm-error {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-label);
+    color: var(--color-warn);
+}

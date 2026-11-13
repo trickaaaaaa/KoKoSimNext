@@ -53,9 +53,10 @@ namespace KokoSim.Unity.Shell
         // （SaveSlotsController 参照）。
         // NewGameSetup はタイトルの「はじめから」からのみ来る新設校の作成画面（issue #585）。
         // タブは持たず、確定するとホームへ渡して二度と戻らない＝ExtraScreens 止まりでよい。
+        // DebugMatchSetup はタイトルの「デバッグ試合」（開発用ビルドだけ）から来る（issue #905）。
         private static readonly string[] ExtraScreens =
             { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TitleScreen",
-              "NewGameSetup" };
+              "NewGameSetup", "DebugMatchSetup" };
 
         // 起動時の既定画面（issue #482 でタイトルへ差し替え）。ホームは「はじめから／つづきから」の後に出す。
         private const string DefaultScreen = "TitleScreen";

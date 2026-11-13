@@ -1229,6 +1229,7 @@ namespace KokoSim.Unity.Match
             _root.transform.position = StageOrigin;
             // 球場の寸法は地面を組む前に確定させる（焼いた球場メッシュをこの寸法へ変形する。issue #771）
             _field = InitialField ?? new KokoSim.Engine.Match.Field.FieldGeometry();
+            StadiumId = InitialStadiumId;   // issue #905（メッシュの選択は #904）
             BuildGround(layer);
 
             // チーム配色は素体を作る前に確定させる（SpawnActor がマテリアルを焼くため）。

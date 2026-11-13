@@ -43,6 +43,13 @@ public sealed record GameContext
     /// </summary>
     public string? StadiumName { get; init; }
 
+    /// <summary>
+    /// その試合の球場ID（<c>data/stadiums.yaml</c> の id。issue #905）。<b>観測専用</b>＝判定にも乱数にも使わない
+    /// （判定は <see cref="Field"/> の寸法だけが決める）。3D 表示がどの球場の形を描くかを選ぶために Unity へ渡す。
+    /// 球場割当が未配線の試合は null。
+    /// </summary>
+    public string? StadiumId { get; init; }
+
     public Players.FormCoefficients Form { get; init; } = new();
     public Players.SkillCoefficients Skills { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();

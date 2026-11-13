@@ -29,13 +29,34 @@ namespace KokoSim.Unity.Title
 
             // セーブが1件も無ければ押せない見た目にする（issue #508）。
             _continueBtn?.SetEnabled(SaveSlots.AnySaveExists());
+
+            // デバッグ試合（issue #905）は開発用ビルドだけに出す。UXML では隠してあり、製品ビルドでは一切触らない。
+#if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+            _debugMatch = root.Q<Button>("ts-debug-match");
+            if (_debugMatch != null)
+            {
+                _debugMatch.style.display = DisplayStyle.Flex;
+                _debugMatch.clicked -= OnDebugMatch;
+                _debugMatch.clicked += OnDebugMatch;
+            }
+#endif
         }
+
+#if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+        private Button _debugMatch;
+
+        private static void OnDebugMatch()
+            => ScreenRouter.Instance?.ShowDeferred(Unity.Debugging.DebugMatchSetupController.ScreenName);
+#endif
 
         private void OnDisable()
         {
             if (_newGame != null) _newGame.clicked -= OnNewGame;
             if (_quit != null) _quit.clicked -= OnQuit;
             if (_continueBtn != null) _continueBtn.clicked -= OnContinue;
+#if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (_debugMatch != null) _debugMatch.clicked -= OnDebugMatch;
+#endif
         }
 
         // クリック配信中に同期 Show すると UITK のイベント木が壊れるため、遷移は必ず遅延切替を使う
