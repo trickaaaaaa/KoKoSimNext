@@ -1,0 +1,65 @@
+# stadium materials (Kd only, sRGB)
+newmtl turf
+Kd 0.2470 0.5412 0.2274
+newmtl turfLight
+Kd 0.2902 0.5882 0.2589
+newmtl warning
+Kd 0.4313 0.3529 0.2823
+newmtl dirt
+Kd 0.2942 0.2393 0.2000
+newmtl paving
+Kd 0.6079 0.5686 0.5373
+newmtl archDark
+Kd 0.1803 0.1842 0.2000
+newmtl trim
+Kd 0.9137 0.8902 0.8235
+newmtl steel
+Kd 0.5020 0.5216 0.5451
+newmtl chalk
+Kd 0.9608 0.9490 0.9098
+newmtl fenceYellow
+Kd 0.9490 0.7843 0.1177
+newmtl fenceGreen
+Kd 0.1177 0.2902 0.2157
+newmtl seatGreen
+Kd 0.1726 0.3725 0.2862
+newmtl seatFront
+Kd 0.1372 0.2981 0.2274
+newmtl stepGray
+Kd 0.6549 0.6667 0.6393
+newmtl seatGreenOut
+Kd 0.1842 0.4156 0.2981
+newmtl eyeGreen
+Kd 0.0861 0.2078 0.1530
+newmtl concrete
+Kd 0.8118 0.7725 0.6784
+newmtl glassDark
+Kd 0.1216 0.1803 0.2274
+newmtl roofSilver
+Kd 0.8745 0.8902 0.9020
+newmtl roofPanel
+Kd 0.3648 0.4196 0.4706
+newmtl brick
+Kd 0.6039 0.4156 0.3137
+newmtl ivy
+Kd 0.1842 0.4196 0.2038
+newmtl ivyLight
+Kd 0.2981 0.5412 0.2432
+newmtl boardDark
+Kd 0.1018 0.1649 0.1334
+newmtl screenBlack
+Kd 0.0271 0.0349 0.0473
+newmtl screenVideo
+Kd 0.1097 0.2470 0.4509
+newmtl screenGlow
+Kd 1.0000 0.9137 0.6588
+newmtl adWhite
+Kd 0.9098 0.9020 0.8706
+newmtl towerSteel
+Kd 0.7255 0.7451 0.7608
+newmtl floodlight
+Kd 1.0000 0.9647 0.8471
+newmtl std_dirt
+Kd 0.6314 0.4706 0.3294
+newmtl std_white
+Kd 0.8392 0.8392 0.8392

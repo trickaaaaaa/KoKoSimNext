@@ -71,6 +71,7 @@ public sealed record Stadium
         RightM = 95.0,
         CenterM = 118.0,
         FenceHeightM = 2.6,
+        Model = "koshien",
     };
 
     /// <summary>
