@@ -42,8 +42,8 @@ public sealed class CoefficientsLoaderTests
     [Fact]
     public void ParsesWeatherBlock()
     {
-        // Issue #120/#803: weather ブロック（季節別）が読めること。ブロック無しなら null（無効・従来挙動）。
-        // 季節サブブロックを省略した場合はその季節の既定（WeatherModel.Spring/Autumn）へ丸ごと差し替わる。
+        // Issue #120/#803/#971: weather ブロック（base＋月別の表）が読めること。ブロック無しなら null（無効・従来挙動）。
+        // months を省略した場合は月別の既定表（WeatherModel.DefaultMonths）へ丸ごと差し替わる。
         const string yaml = """
             version: 1
             aerodynamics:
@@ -56,7 +56,7 @@ public sealed class CoefficientsLoaderTests
                 slope_cm_per_point: 0.20
                 min_sigma_cm: 3.0
             weather:
-              summer:
+              base:
                 enabled: true
                 mean_temperature_c: 32.0
                 density_damping: 0.5
@@ -65,13 +65,12 @@ public sealed class CoefficientsLoaderTests
 
         var bundle = CoefficientsLoader.Parse(yaml);
         Assert.NotNull(bundle.Weather);
-        Assert.True(bundle.Weather!.Summer.Enabled);
-        Assert.Equal(32.0, bundle.Weather.Summer.MeanTemperatureC, 6);
-        Assert.Equal(0.5, bundle.Weather.Summer.DensityDamping, 6);
-        Assert.Equal(0.01, bundle.Weather.Summer.FatigueAlphaPerDegree, 6);
-        // spring ブロックを書かなかったので春の既定（WeatherModel.Spring）がそのまま入る。
-        Assert.Equal(KokoSim.Engine.Match.Game.WeatherModel.Spring, bundle.Weather.Spring);
-        Assert.Equal(KokoSim.Engine.Match.Game.WeatherModel.Autumn, bundle.Weather.Autumn);
+        Assert.True(bundle.Weather!.Base.Enabled);
+        Assert.Equal(32.0, bundle.Weather.Base.MeanTemperatureC, 6);
+        Assert.Equal(0.5, bundle.Weather.Base.DensityDamping, 6);
+        Assert.Equal(0.01, bundle.Weather.Base.FatigueAlphaPerDegree, 6);
+        // months を書かなかったので月別の既定表がそのまま入る。
+        Assert.Equal(KokoSim.Engine.Match.Game.WeatherModel.DefaultMonths, bundle.Weather.Months);
 
         // weather ブロック無し → null（従来挙動）。
         var noWeather = CoefficientsLoader.Parse("""

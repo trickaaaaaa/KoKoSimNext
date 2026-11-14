@@ -7,6 +7,7 @@ using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
 namespace KokoSim.Unity.Shell
@@ -97,7 +98,7 @@ namespace KokoSim.Unity.Shell
             int excludePrefectureId, ulong seed, IEnemyBrainFactory brains, bool collectGarbage = true)
         {
             var rng = new Xoshiro256Random(seed ^ 0x41A2_0000UL);
-            var ctx = new GameContext { Weather = WeatherModel.ForSeason(WeatherSeason.Autumn) };   // Issue #803
+            var ctx = new GameContext { Weather = WeatherModel.ForTournament(schedule, TournamentKind.Autumn) };   // Issue #803/#971
             // 他46県（自校非関与）は優勝校＋順位のみ集計モデルで即決する（夏の背景シムと同じ理由）。
             var run = AutumnNationEngine.BeginAutumn(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,

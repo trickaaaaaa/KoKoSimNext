@@ -1,6 +1,8 @@
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Pitching;
+using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Season;
 using Xunit;
 
@@ -229,43 +231,96 @@ public sealed class WeatherModelTests
         Assert.Null(applied.ResolvedWeather);
     }
 
-    // ===== Issue #803: 季節別プリセットと季節判定 =====
-
-    [Theory]
-    [InlineData(3)] [InlineData(4)] [InlineData(5)]
-    public void SeasonFor_SpringMonths_ReturnSpring(int month)
-        => Assert.Equal(WeatherSeason.Spring, WeatherModel.SeasonFor(month));
-
-    [Theory]
-    [InlineData(6)] [InlineData(7)] [InlineData(8)]
-    public void SeasonFor_SummerMonths_ReturnSummer(int month)
-        => Assert.Equal(WeatherSeason.Summer, WeatherModel.SeasonFor(month));
-
-    [Theory]
-    [InlineData(9)] [InlineData(10)] [InlineData(11)]
-    public void SeasonFor_AutumnMonths_ReturnAutumn(int month)
-        => Assert.Equal(WeatherSeason.Autumn, WeatherModel.SeasonFor(month));
-
-    [Theory]
-    [InlineData(TournamentKind.Summer, WeatherSeason.Summer)]
-    [InlineData(TournamentKind.SummerKoshien, WeatherSeason.Summer)]
-    [InlineData(TournamentKind.SenbatsuKoshien, WeatherSeason.Spring)]
-    [InlineData(TournamentKind.Autumn, WeatherSeason.Autumn)]
-    [InlineData(TournamentKind.AutumnDistrict, WeatherSeason.Autumn)]
-    [InlineData(TournamentKind.Regional, WeatherSeason.Autumn)]
-    [InlineData(TournamentKind.Jingu, WeatherSeason.Autumn)]
-    public void SeasonFor_TournamentKind_MapsToExpectedSeason(TournamentKind kind, WeatherSeason expected)
-        => Assert.Equal(expected, WeatherModel.SeasonFor(kind));
+    // ===== Issue #971: 月別の表（試合日の月で引く）=====
 
     [Fact]
-    public void ForSeason_ReturnsDistinctTemperatureProfilesPerSeason()
+    public void ForMonth_AugustIsTheSummerKoshienDistribution_UnchangedFromBefore()
     {
-        // 決定4: 季節別分布・地域差なし。平均気温は 春 < 秋 < 夏。
-        var spring = WeatherModel.ForSeason(WeatherSeason.Spring);
-        var summer = WeatherModel.ForSeason(WeatherSeason.Summer);
-        var autumn = WeatherModel.ForSeason(WeatherSeason.Autumn);
-        Assert.True(spring.MeanTemperatureC < autumn.MeanTemperatureC);
-        Assert.True(autumn.MeanTemperatureC < summer.MeanTemperatureC);
-        Assert.True(spring.Enabled && summer.Enabled && autumn.Enabled);
+        // games_10k_summer が測る8月・甲子園の 32℃・σ2.5・28〜36℃ は動かさない（帯を動かさない決定）。
+        var aug = WeatherModel.ForMonth(8);
+        Assert.Equal(32.0, aug.MeanTemperatureC, 6);
+        Assert.Equal(2.5, aug.TemperatureStdDevC, 6);
+        Assert.Equal(28.0, aug.MinTemperatureC, 6);
+        Assert.Equal(36.0, aug.MaxTemperatureC, 6);
+        Assert.Equal(0.15, aug.RainProb, 6);
+        Assert.Equal(WeatherModel.Base, aug);
+    }
+
+    [Fact]
+    public void ForMonth_AutumnMonthsFollowTheCalendar_SeptemberHotterThanOctoberThanNovember()
+    {
+        // 9月は約27℃・10月は約22℃・11月は約17℃（気象庁の平年値・日最高）。秋を1つの分布（22℃）にしていた不具合の回帰。
+        Assert.True(WeatherModel.ForMonth(9).MeanTemperatureC > WeatherModel.ForMonth(10).MeanTemperatureC);
+        Assert.True(WeatherModel.ForMonth(10).MeanTemperatureC > WeatherModel.ForMonth(11).MeanTemperatureC);
+        Assert.Equal(27.0, WeatherModel.ForMonth(9).MeanTemperatureC, 6);
+        Assert.Equal(22.0, WeatherModel.ForMonth(10).MeanTemperatureC, 6);
+        Assert.Equal(17.0, WeatherModel.ForMonth(11).MeanTemperatureC, 6);
+    }
+
+    [Fact]
+    public void ForMonth_MidSeptemberMedianTemperature_IsNearDaytimeNormal()
+    {
+        // 完了条件: 9月中旬の秋季県大会の試合の気温の中央値が日中の平年値（約27℃前後）に近い。
+        // 曇り・雨の平均ずれ込みでも 25〜28℃ に収まる。
+        var c = WeatherModel.ForMonth(9);
+        var temps = Enumerable.Range(0, 4001)
+            .Select(i => WeatherModel.SampleWeather(new Xoshiro256Random((ulong)(i + 1)), c).TemperatureC)
+            .OrderBy(t => t).ToArray();
+        var median = temps[temps.Length / 2];
+        Assert.InRange(median, 25.0, 28.0);
+    }
+
+    [Fact]
+    public void ForMonth_TwelveMonthsCoverTheYear_NoGapAndSensibleBounds()
+    {
+        Assert.Equal(Enumerable.Range(1, 12), WeatherModel.DefaultMonths.Select(m => m.Month));
+        for (var m = 1; m <= 12; m++)
+        {
+            var c = WeatherModel.ForMonth(m);
+            Assert.True(c.Enabled);
+            Assert.InRange(c.MeanTemperatureC, c.MinTemperatureC, c.MaxTemperatureC);
+            Assert.True(c.TemperatureStdDevC > 0);
+        }
+        // 冬は涼しく、夏は暑い（1年を通して月の表）。6月は8月より涼しい（6月の練習試合が32℃だった件）。
+        Assert.True(WeatherModel.ForMonth(1).MeanTemperatureC < WeatherModel.ForMonth(4).MeanTemperatureC);
+        Assert.True(WeatherModel.ForMonth(6).MeanTemperatureC < WeatherModel.ForMonth(7).MeanTemperatureC);
+        Assert.True(WeatherModel.ForMonth(7).MeanTemperatureC < WeatherModel.ForMonth(8).MeanTemperatureC);
+    }
+
+    [Theory]
+    [InlineData(0, 12)] [InlineData(13, 1)] [InlineData(-1, 11)] [InlineData(5, 5)]
+    public void NormalizeMonth_WrapsOutOfRangeMonths(int input, int expected)
+        => Assert.Equal(expected, WeatherModel.NormalizeMonth(input));
+
+    [Fact]
+    public void ForMonth_PhysicsConstantsDoNotDependOnMonth()
+    {
+        var jan = WeatherModel.ForMonth(1);
+        var aug = WeatherModel.ForMonth(8);
+        Assert.Equal(aug.BaselineTemperatureC, jan.BaselineTemperatureC);
+        Assert.Equal(aug.DensityDamping, jan.DensityDamping);
+        Assert.Equal(aug.FatigueAlphaPerDegree, jan.FatigueAlphaPerDegree);
+        Assert.Equal(aug.CloudyTemperatureOffsetC, jan.CloudyTemperatureOffsetC);
+    }
+
+    [Theory]
+    [InlineData(TournamentKind.Summer, 7)]
+    [InlineData(TournamentKind.SummerKoshien, 8)]
+    [InlineData(TournamentKind.SenbatsuKoshien, 3)]
+    [InlineData(TournamentKind.Autumn, 9)]
+    [InlineData(TournamentKind.AutumnDistrict, 9)]
+    [InlineData(TournamentKind.Regional, 10)]
+    [InlineData(TournamentKind.Jingu, 11)]
+    public void ForTournament_UsesTheOpeningMonth(TournamentKind kind, int expectedMonth)
+        => Assert.Equal(WeatherModel.ForMonth(expectedMonth), WeatherModel.ForTournament(new TournamentSchedule(), kind));
+
+    [Fact]
+    public void TemperatureRange_CoversEveryMonthsClamp()
+    {
+        for (var m = 1; m <= 12; m++)
+        {
+            Assert.True(WeatherModel.CoolestTemperatureC <= WeatherModel.ForMonth(m).MinTemperatureC);
+            Assert.True(WeatherModel.HottestTemperatureC >= WeatherModel.ForMonth(m).MaxTemperatureC);
+        }
     }
 }

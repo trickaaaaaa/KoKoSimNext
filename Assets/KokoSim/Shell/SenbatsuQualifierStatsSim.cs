@@ -7,6 +7,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
 namespace KokoSim.Unity.Shell
@@ -113,8 +114,8 @@ namespace KokoSim.Unity.Shell
             IReadOnlyList<int> pending, IReadOnlyDictionary<int, IReadOnlyList<TournamentMatchRecord>> matchesByRegion,
             NationTournamentStats stats, IRandomSource rng, int yearIndex, int calendarYear, IEnemyBrainFactory brains)
         {
-            // 地区大会（秋）成績の打ち直し＝秋季節（Issue #803）。
-            var weatherCtx = new GameContext { Weather = WeatherModel.ForSeason(WeatherSeason.Autumn) };
+            // 地区大会（秋）成績の打ち直し＝地区大会の開幕月の気温（Issue #803/#971）。
+            var weatherCtx = new GameContext { Weather = WeatherModel.ForTournament(TournamentEntry.Schedule, TournamentKind.Regional) };
             var resolver = new BackgroundMatchResolver(
                 NationService.Rosters, weatherCtx, yearIndex, stats: null,
                 modernRules: null, calendarYear: calendarYear, brains: brains);
