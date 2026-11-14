@@ -327,7 +327,7 @@ public sealed class SkillReviewTests
         // 旧版のセーブを再現: 流し打ち→広角打法の旧名、削除した守備系・存在しない名前を混ぜる。
         var old = json.Replace("\"OppositeFieldHitter\"", "\"SprayHitter\"")
             .Replace("\"Grinder\"", "\"Grinder\",\"DoublePlayArtist\",\"MasterCatcher\",\"NoSuchSkill\",\"3\"")
-            .Replace("\"Monster\"", "\"Monster\",\"MasterCatcher\"");
+            .Replace("\"Monster\"", "\"Monster\",\"MasterCatcher\",\"SubmarineMastery\"");
 
         Assert.True(SaveCodec.TryDeserialize(old, out var loaded, out var err), err);
         var skills = loaded!.Roster[4].Skills;
@@ -342,6 +342,7 @@ public sealed class SkillReviewTests
     [InlineData("OppositeFieldHitter", true, Skill.OppositeFieldHitter)]
     [InlineData("DoublePlayArtist", false, default(Skill))]
     [InlineData("MasterCatcher", false, default(Skill))]
+    [InlineData("SubmarineMastery", false, default(Skill))]
     [InlineData("0", false, default(Skill))]
     [InlineData("", false, default(Skill))]
     public void TryParseSaved_RenamesOrSkips(string name, bool ok, Skill expected)

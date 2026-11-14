@@ -13,9 +13,8 @@ public static class SkillGenerator
     /// <summary>
     /// 隠しスキルになり得ない（issue skills-yaml-not-data-driven）。data/skills.yaml の
     /// <c>hidden_eligible: false</c> と一致させる（<see cref="Engine.Tests.Players.SkillTests"/> の
-    /// 一致テストで固定）。<see cref="Skill.Monster"/>/<see cref="Skill.SubmarineMastery"/> は
-    /// <see cref="TryAdd"/> を経由せず常に visible へ直接足すため、この表には含めない
-    /// （SubmarineMastery は yaml上 hidden_eligible: true だが、この不一致自体は監督判断で追わない）。
+    /// 一致テストで固定）。<see cref="Skill.Monster"/> は
+    /// <see cref="TryAdd"/> を経由せず常に visible へ直接足すため、この表には含めない。
     /// </summary>
     internal static readonly HashSet<Skill> HiddenIneligible = new()
     {
@@ -107,9 +106,8 @@ public static class SkillGenerator
         // 精神的支柱: 統率傾向が高い選手が持ちやすい（設計書09 §8）。
         if (leadership >= c.PillarLeadershipThreshold) TryAdd(Skill.SpiritualPillar, c.PillarBonusProb);
 
-        // 目玉（極稀・1プレイに何度も会わない華）。怪物はどの選手にも、投法の妙は投手寄りほど。
+        // 目玉（極稀・1プレイに何度も会わない華）。怪物はどの選手にも。
         if (MathUtil.Chance(c.MarqueeSkillProb, rng)) visible.Add(Skill.Monster);
-        if (MathUtil.Chance(c.MarqueeSkillProb * w, rng)) visible.Add(Skill.SubmarineMastery);
 
         if (visible.Count == 0 && hidden.Count == 0) return SkillSet.Empty;
         return new SkillSet(visible, hidden);

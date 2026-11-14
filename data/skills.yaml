@@ -164,8 +164,3 @@ skills:
     hidden_eligible: false
     name: 怪物
     description: 複数分野に強力な補正を持つ超レア素質
-  - id: SubmarineMastery
-    category: special
-    hidden_eligible: true
-    name: アンダースローの妙
-    description: 特定投法×球質の職人技
