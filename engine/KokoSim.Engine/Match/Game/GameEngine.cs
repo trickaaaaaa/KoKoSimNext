@@ -782,13 +782,16 @@ public static class GameEngine
                         defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.CoachingReceptivity(currentPitcher.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
-                            ctx.Tactics, ctx.Personalities, defense.Captain)));
+                            ctx.Tactics, ctx.Personalities, defense.Captain)
+                        // 結束（設計書23 §3.4）: 伝令の効きに 1 + c1×(U−50)/50。U=50 で恒等。
+                        * Cohesion.MessengerMultiplier(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion)));
                 if (offense.OffenseCalmPa > 0)
                     bat = PressureModel.ApplyBatter(bat, PressureModel.CalmMultiplier(pressureIdx,
                         offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.CoachingReceptivity(batter.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
-                            ctx.Tactics, ctx.Personalities, offense.Captain)));
+                            ctx.Tactics, ctx.Personalities, offense.Captain)
+                        * Cohesion.MessengerMultiplier(offense.CohesionValue(ctx.Cohesion), ctx.Cohesion)));
 
                 // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
                 // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。
@@ -2376,7 +2379,9 @@ public static class GameEngine
         // 省略時は runs 全部＝走者の由来を持たない経路（バント等・得点なし）向け。
         defense.RecordPitching(pitcher, result, pitcherRuns ?? runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
         // 動揺からの立ち直り（設計書23 §2.4）: 相性 K が高いバッテリーは自然回復に要るアウトが1つ少ない。
-        defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
+        // 結束（設計書23 §3.4）: 動揺の発生閾値に ±1 の段（U≥70 で動揺しにくく、U<30 でしやすい）。
+        defense.NotePitchingResult(result, Math.Max(1, ctx.Tactics.RattledThresholdFor(pitcher.Mental)
+                + Cohesion.RattledThresholdStep(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion)),
             outsThisPa, BatteryChemistry.RecoveryOuts(ctx.Tactics.RattledRecoveryOuts,
                 defense.BatteryK(pitcher, ctx.Chemistry), ctx.Chemistry));
         defense.NoteBatteryOuts(pitcher, outsThisPa);

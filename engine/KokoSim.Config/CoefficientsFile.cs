@@ -37,6 +37,8 @@ public sealed record CoefficientsBundle
     public KokoSim.Engine.Players.PersonalityCoefficients Personalities { get; init; } = new();
     /// <summary>バッテリーの相性（設計書23 §2・issue #933）。</summary>
     public BatteryChemistryCoefficients BatteryChemistry { get; init; } = new();
+    /// <summary>チームの結束（設計書23 §3・issue #934）。</summary>
+    public CohesionCoefficients Cohesion { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();
     /// <summary>チームの勢い（issue #863）。<see cref="Team.MomentumLevel"/> が0のチームには恒等＝帯不変。</summary>
     public MomentumCoefficients Momentum { get; init; } = new();
@@ -108,6 +110,7 @@ public static class CoefficientsLoader
         public SkillsDto? Skills { get; set; }
         public PersonalitiesDto? Personalities { get; set; }
         public BatteryChemistryDto? BatteryChemistry { get; set; }
+        public CohesionDto? Cohesion { get; set; }
         public PressureDto? Pressure { get; set; }
         public MomentumDto? Momentum { get; set; }
         public TacticsDto? Tactics { get; set; }
@@ -152,6 +155,7 @@ public static class CoefficientsLoader
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
             Personalities = Personalities?.ToModel() ?? new KokoSim.Engine.Players.PersonalityCoefficients(),
             BatteryChemistry = BatteryChemistry?.ToModel() ?? new BatteryChemistryCoefficients(),
+            Cohesion = Cohesion?.ToModel() ?? new CohesionCoefficients(),
             Pressure = Pressure?.ToModel() ?? new PressureCoefficients(),
             Momentum = Momentum?.ToModel() ?? new MomentumCoefficients(),
             Tactics = Tactics?.ToModel() ?? new TacticsCoefficients(),
@@ -2001,6 +2005,43 @@ public static class CoefficientsLoader
             RattledRecoveryMinK = RattledRecoveryMinK,
             PinchControlPerK = PinchControlPerK,
             PinchPressureFrom = PinchPressureFrom,
+        };
+    }
+
+    private sealed class CohesionDto
+    {
+        private static readonly CohesionCoefficients D = new();
+        public double CaptainPowerWeight { get; set; } = D.CaptainPowerWeight;
+        public int LeaderThreshold { get; set; } = D.LeaderThreshold;
+        public double LeaderWeight { get; set; } = D.LeaderWeight;
+        public int LeaderCap { get; set; } = D.LeaderCap;
+        public double SelfishShareWeight { get; set; } = D.SelfishShareWeight;
+        public double LoneWolfWeight { get; set; } = D.LoneWolfWeight;
+        public double SummerCampDelta { get; set; } = D.SummerCampDelta;
+        public double WinterCampDelta { get; set; } = D.WinterCampDelta;
+        public double EventImproveDelta { get; set; } = D.EventImproveDelta;
+        public double EventWorsenDelta { get; set; } = D.EventWorsenDelta;
+        public double WeeklyDecay { get; set; } = D.WeeklyDecay;
+        public double HighThreshold { get; set; } = D.HighThreshold;
+        public double LowThreshold { get; set; } = D.LowThreshold;
+        public double MessengerPerCohesion { get; set; } = D.MessengerPerCohesion;
+
+        public CohesionCoefficients ToModel() => new()
+        {
+            CaptainPowerWeight = CaptainPowerWeight,
+            LeaderThreshold = LeaderThreshold,
+            LeaderWeight = LeaderWeight,
+            LeaderCap = LeaderCap,
+            SelfishShareWeight = SelfishShareWeight,
+            LoneWolfWeight = LoneWolfWeight,
+            SummerCampDelta = SummerCampDelta,
+            WinterCampDelta = WinterCampDelta,
+            EventImproveDelta = EventImproveDelta,
+            EventWorsenDelta = EventWorsenDelta,
+            WeeklyDecay = WeeklyDecay,
+            HighThreshold = HighThreshold,
+            LowThreshold = LowThreshold,
+            MessengerPerCohesion = MessengerPerCohesion,
         };
     }
 

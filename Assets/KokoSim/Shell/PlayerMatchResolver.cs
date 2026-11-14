@@ -238,6 +238,8 @@ namespace KokoSim.Unity.Shell
                 MomentumLevel = GameSession.Current.MomentumLevel,
                 // バッテリーの積み重ね（設計書23 §2.3・issue #933）も自校だけが持つ（AI校は学年で近似）。
                 BatteryInnings = GameSession.Current.BatteryInningsForMatch(),
+                // 結束の上下（設計書23 §3.3・issue #934）も自校だけ（AI校は顔ぶれの土台だけ）。
+                CohesionDelta = GameSession.Current.CohesionDelta,
             };
         }
 

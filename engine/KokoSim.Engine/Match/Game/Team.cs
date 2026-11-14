@@ -77,6 +77,12 @@ public sealed record Team
     /// </summary>
     public IReadOnlyDictionary<(int PitcherId, int CatcherId), double>? BatteryInnings { get; init; }
 
+    /// <summary>
+    /// 結束の出来事による上下 ΔU（設計書23 §3.3・issue #934）。合宿・選手間イベントで動き、週ごとに0へ戻る。
+    /// 自校だけが持つ（Unity側 GameSession が渡す）。AI校・裏試合・統計シムは既定0（顔ぶれの土台 U0 だけ＝Q40）。
+    /// </summary>
+    public double CohesionDelta { get; init; }
+
     /// <summary>DH制か。</summary>
     public bool UsesDh => DhSlot >= 0;
 

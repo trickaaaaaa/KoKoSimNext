@@ -237,4 +237,10 @@ public sealed class SaveState
     /// 旧セーブは記録が無い＝空（全組0イニングから）で補う。
     /// </summary>
     public List<Season.BatteryInningsEntry> BatteryInnings { get; set; } = new();
+
+    /// <summary>
+    /// 自校の結束の出来事による上下 ΔU（設計書23 §3.3・issue #934・v29）。合宿・選手間イベントで動き週ごとに0へ戻る。
+    /// 旧セーブは結束という値が存在しえない＝0で補う。
+    /// </summary>
+    public double CohesionDelta { get; set; }
 }

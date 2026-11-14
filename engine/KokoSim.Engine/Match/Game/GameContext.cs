@@ -78,6 +78,8 @@ public sealed record GameContext
     public Players.PersonalityCoefficients Personalities { get; init; } = new();
     /// <summary>バッテリーの相性（設計書23 §2・issue #933）。K=0 の組には恒等。</summary>
     public BatteryChemistryCoefficients Chemistry { get; init; } = new();
+    /// <summary>チームの結束（設計書23 §3・issue #934）。U=50 のチームには恒等。</summary>
+    public CohesionCoefficients Cohesion { get; init; } = new();
 
     /// <summary>在フィールド野手の緊急登板時の backfill 経路判定係数（issue #209 Phase C path②）。</summary>
     public ReliefBackfillCoefficients ReliefBackfill { get; init; } = new();
