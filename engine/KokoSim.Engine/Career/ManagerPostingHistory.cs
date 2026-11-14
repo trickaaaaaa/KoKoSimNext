@@ -42,8 +42,11 @@ public sealed class ManagerPostingHistory
     public int BaselineSummerAppearances { get; private set; }
     public int BaselineSpringAppearances { get; private set; }
 
-    /// <summary>セーブ復元専用（<see cref="Saves.ManagerPostingSaves"/> だけが使う）。</summary>
-    internal void Restore(
+    /// <summary>
+    /// セーブ復元用。Shell 側（<c>GameSession.Restore</c>）がセーブDTOの素のリスト・基準値から
+    /// このインスタンスへ据える（DTO は <see cref="ManagerPostingHistory"/> 自体を保存しないため）。
+    /// </summary>
+    public void Restore(
         IEnumerable<ManagerPosting> closed,
         int baselineWins, int baselineLosses, int baselineSummerAppearances, int baselineSpringAppearances)
     {
