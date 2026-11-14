@@ -604,6 +604,7 @@ public static class GameEngine
                 PitcherThrows = pit.Throws,
                 PitcherNumber = pit.UniformNumber,
                 PitcherConditionValue = pit.ConditionValue,
+                BatterIsPinchHitter = offense.IsFreshPinchHitter(b),
             };
 
             // 打席の頭の采配窓（まだ1球も投げていない窓）。**投手・打者を束縛する前**に開く（2026-08-15）。
@@ -614,7 +615,11 @@ public static class GameEngine
             // **打席の頭でも埋まる**のが肝で、これが無いとUIは1球目を投げるまで打者を知れず、打席の頭で
             // サインを受け付けられない。
             if (ctx.CapturePitches)
+            {
+                // この窓までに起きた交代（AIの守備固め・代打・代走・継投）を交代ログへ（issue #920。観測専用）。
+                p.ObserveSubstitutions(inning, isTop);
                 p.LiveAtBat = LiveAtBatOf(offense.PeekBatter(), defense.CurrentPitcher, pendingBalls, pendingStrikes, 1);
+            }
             yield return Pitch();
 
             var batter = offense.PeekBatter();
@@ -2720,6 +2725,46 @@ public sealed class GameProgress
             PitchingChanges.Add(new PitchingChangeEvent(Inning, isTop, ReferenceEquals(defense, Away), change));
     }
 
+    /// <summary>
+    /// 選手交代のログ（issue #920 交代テロップ）。代打・代走・守備交代・継投・守備位置の変更・DH解除を、
+    /// 起きた瞬間ごと・チームごとに1件ずつ積む。<see cref="GameContext.CapturePitches"/> が真のときだけ記録する
+    /// 観測専用＝乱数を使わず、試合結果・決定論digest・統計帯に影響しない。
+    /// </summary>
+    public List<SubstitutionEvent> Substitutions { get; } = new();
+
+    // 前回見たときの両校の出場選手（交代の差分取りの基準）。CapturePitches のときだけ持つ。
+    private LineupPicture? _awayPicture, _homePicture;
+
+    /// <summary>
+    /// 前回からの交代を <see cref="Substitutions"/> へ積む（<paramref name="inning"/>/<paramref name="isTop"/> は
+    /// これから進む半イニング）。エンジンは打席の頭の采配窓の直前（AIの交代の後）、交代コマンドは適用の直後に呼ぶ。
+    /// </summary>
+    public void ObserveSubstitutions(int inning, bool isTop)
+    {
+        if (_awayPicture is null || _homePicture is null) return;
+        _awayPicture = Observe(Away, _awayPicture, inning, isTop, teamIsAway: true);
+        _homePicture = Observe(Home, _homePicture, inning, isTop, teamIsAway: false);
+    }
+
+    /// <summary>
+    /// 打席境界・采配窓で行った交代を積む（半イニングは直近の打席から導く＝3アウト直後は次の半イニング）。
+    /// </summary>
+    public void ObserveSubstitutions()
+    {
+        var halfEnded = CurrentOuts >= 3;
+        var isTop = halfEnded ? !CurrentIsTop : CurrentIsTop;
+        var inning = halfEnded && !CurrentIsTop ? Inning + 1 : Inning;
+        ObserveSubstitutions(inning, isTop);
+    }
+
+    private LineupPicture Observe(TeamState team, LineupPicture prev, int inning, bool isTop, bool teamIsAway)
+    {
+        var cur = LineupPicture.Of(team);
+        var entries = LineupPicture.Diff(prev, cur, team);
+        if (entries.Count > 0) Substitutions.Add(new SubstitutionEvent(inning, isTop, teamIsAway, entries));
+        return cur;
+    }
+
     public GameProgress(Team awayTeam, Team homeTeam, TeamState away, TeamState home,
         GameContext ctx, IRandomSource rng)
     {
@@ -2729,6 +2774,11 @@ public sealed class GameProgress
         Home = home;
         Ctx = ctx;
         Rng = rng;
+        if (ctx.CapturePitches)
+        {
+            _awayPicture = LineupPicture.Of(away);
+            _homePicture = LineupPicture.Of(home);
+        }
     }
 
     /// <summary>攻撃側の TeamState（isTop=true なら先攻 away）。対話采配の適用先判定に使う。</summary>

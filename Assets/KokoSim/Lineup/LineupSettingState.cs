@@ -749,12 +749,11 @@ namespace KokoSim.Unity.Lineup
             if (index < 0 || index >= _roster.Count) return new CompareCardView { Present = false };
             var p = _roster[index];
             var topKmh = (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(p.Level(AbilityKind.Velocity)));
-            var space = p.Name.IndexOfAny(new[] { ' ', '　' });
             return new CompareCardView
             {
                 Present = true,
                 Name = p.Name,
-                ShortName = space > 0 ? p.Name.Substring(0, space) : p.Name,
+                ShortName = KokoSim.Engine.Season.PlayerNameGenerator.Surname(p.Name),
                 GradeLabel = p.Grade + "年",
                 RoleText = RoleOf(index),
                 // カテゴリ別ランク（打撃力/走力/守備力/投手力）。メンバー設定の比較カードと同じ部品・同じ係数。

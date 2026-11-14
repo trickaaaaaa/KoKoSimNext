@@ -1881,6 +1881,79 @@
     color: var(--sb-ink-1);
 }
 
+/* SubTelop：交代テロップ（issue #920）。交代を確定した瞬間に試合を止め、盤面の下に大きく出す
+   （クリックか数秒で再開。C# の SubTelopView が中身を組む）。1枚＝1チームの同じ間合いの交代。
+   入る選手の名前を明朝で大きく、背番号・打順・いま就いた位置・退く選手を同じ行に並べる。
+   盤面（緑）の上の暗い島なので、文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-*（sub-call と同じ作法）。
+   位置は盤面右下の投手HUD（.mhud-corner--right）より上＝帯と重ならない（2026-11-14 監督決定）。
+   下端は --sub-telop-bottom、帯がそれより高いときは C# が帯の実高＋余白へ持ち上げる。上へ伸びる＝行が増えても帯に掛からない。 */
+.sub-telop {
+    position: absolute;
+    left: 0; right: 0; bottom: var(--sub-telop-bottom);
+    flex-direction: row;
+    justify-content: center;
+    display: none;
+}
+.sub-telop__panel {
+    background-color: rgba(14, 26, 19, 0.9);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-3) var(--sp-4);
+}
+.sub-telop__team {
+    font-size: var(--fs-body);
+    color: var(--sb-ink-1);
+    margin: 0 0 var(--sp-2) 0;
+    padding: 0;
+}
+.sub-telop__row {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: var(--sp-1);
+}
+.sub-telop__kind {
+    font-size: var(--fs-label);
+    -unity-text-align: middle-center;
+    color: var(--sb-ink-1);
+    background-color: var(--sb-board-line);
+    border-radius: var(--radius-chip);
+    padding: var(--sp-1) var(--sp-2);
+    margin: 0 var(--sp-3) 0 0;
+    flex-shrink: 0;
+}
+.sub-telop__order {
+    font-size: var(--fs-label);
+    color: var(--sb-ink-2);
+    margin: 0 var(--sp-2) 0 0;
+    padding: 0;
+    flex-shrink: 0;
+}
+.sub-telop__row .num-badge {
+    margin-right: var(--sp-2);
+    flex-shrink: 0;
+}
+.sub-telop__name {
+    font-size: var(--fs-callout);
+    color: var(--sb-ink-1);
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+}
+.sub-telop__pos {
+    font-size: var(--fs-body);
+    color: var(--sb-ink-1);
+    margin: 0 0 0 var(--sp-3);
+    padding: 0;
+    flex-shrink: 0;
+}
+.sub-telop__out {
+    font-size: var(--fs-label);
+    color: var(--sb-ink-2);
+    margin: 0 0 0 var(--sp-4);
+    padding: 0;
+    flex-shrink: 0;
+}
+
 /* ── BoxRow：ボックススコア表の1行（試合結果画面のイニングスコア／打撃／投手／打席結果に共通）──
    密度は正義（UI原則①）。行高32px・数値は右揃え・列幅は種別クラスで固定してヘッダーとデータを揃える。
    罫線は「機能のある線」として引く（issue #649・ユーザー指示）＝列の境目が見えないと横に長い表で

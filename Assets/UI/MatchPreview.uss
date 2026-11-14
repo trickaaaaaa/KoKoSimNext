@@ -96,13 +96,22 @@
 /* ── フッター：主要操作は「試合開始」1つだけ・大きく（UI原則⑦） ── */
 .mp-foot {
     flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
     padding-left: var(--sp-4);
     padding-right: var(--sp-4);
     padding-top: var(--sp-3);
     padding-bottom: var(--sp-4);
 }
+/* 場内放送の切り替え（issue #919）は試合開始の左。試合開始は残りの幅いっぱい（主要操作は大きく）。 */
+.mp-foot .chip-btn {
+    flex-shrink: 0;
+    margin-left: 0;
+    margin-right: var(--sp-3);
+}
 .mp-cta {
     height: 56px;
+    flex-grow: 1;
     flex-shrink: 0;
     background-color: var(--color-cta);
     color: var(--color-ink);

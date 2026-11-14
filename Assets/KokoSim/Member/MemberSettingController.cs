@@ -480,13 +480,7 @@ namespace KokoSim.Unity.Member
                 tight: true));
         }
 
-        private static string Surname(string name)
-        {
-            var n = name ?? "";
-            var i = n.IndexOf('\u3000');
-            if (i < 0) i = n.IndexOf(' ');
-            return i > 0 ? n.Substring(0, i) : n;
-        }
+        private static string Surname(string name) => KokoSim.Engine.Season.PlayerNameGenerator.Surname(name);
 
         // ── 部品ヘルパ ──
 
