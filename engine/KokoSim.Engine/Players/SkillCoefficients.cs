@@ -27,11 +27,11 @@ public sealed record SkillCoefficients
     /// <summary>変化球打ち: 変化球に対する選球眼の加算[能力点]（ボール球を振りにくい）。</summary>
     public double BreakingBallHitterDisciplineBonus { get; init; } = 6.0;
     /// <summary>つなぎの打撃: 走者ありの打席で打球方向を右方向（一塁側＝＋）へずらす量[deg]。打者の左右に依らない。</summary>
-    public double TeamBattingBearingShiftDeg { get; init; } = 10.0;
+    public double TeamBattingBearingShiftDeg { get; init; } = 5.0;
     /// <summary>つなぎの打撃: 走者ありの打席で打球角をずらす量[deg]（負＝低く＝ゴロ寄り）。</summary>
-    public double TeamBattingLaunchShiftDeg { get; init; } = -3.0;
+    public double TeamBattingLaunchShiftDeg { get; init; } = -2.0;
     /// <summary>つなぎの打撃: 走者ありの打席でコンタクト品質へ足す量（負＝打球が弱くなりヒットになりにくい）。</summary>
-    public double TeamBattingQualityShift { get; init; } = -0.015;
+    public double TeamBattingQualityShift { get; init; } = -0.005;
     /// <summary>初球から振る: 初球にスイングを仕掛ける確率。</summary>
     public double FirstPitchSwingProb { get; init; } = 0.62;
     /// <summary>粘り打ち: ファウル率の拡大倍率（球数を吐かせる）。</summary>

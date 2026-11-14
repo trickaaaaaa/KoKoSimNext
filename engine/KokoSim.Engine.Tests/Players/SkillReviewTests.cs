@@ -160,7 +160,7 @@ public sealed class SkillReviewTests
         // 進塁打の形＝右方向（一塁側）のゴロ。
         static double RightGrounders(Tally t)
             => (double)t.Balls.Count(x => x.Ball.BearingDeg > 0 && x.Ball.LaunchAngleDeg < 10) / t.Balls.Count;
-        Assert.True(RightGrounders(skilled) > RightGrounders(plain) + 0.03,
+        Assert.True(RightGrounders(skilled) > RightGrounders(plain) + 0.015,
             $"右方向のゴロ {RightGrounders(skilled):P1} > {RightGrounders(plain):P1}");
         Assert.True(skilled.Avg < plain.Avg, $"打率 {skilled.Avg:F3} < {plain.Avg:F3}");
     }

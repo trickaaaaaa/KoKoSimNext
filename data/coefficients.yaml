@@ -748,9 +748,9 @@ skills:
   fastball_hitter_contact_bonus: 6.0     # 速球打ち: ストレート系（ストレート・ツーシーム）へのミート加算
   breaking_ball_hitter_contact_bonus: 5.0    # 変化球打ち: 変化球へのミート加算（空振り減）
   breaking_ball_hitter_discipline_bonus: 6.0 # 変化球打ち: 変化球への選球眼加算（ボール球振り減）
-  team_batting_bearing_shift_deg: 10.0   # つなぎの打撃: 走者ありで打球方向を右方向へ[deg]
-  team_batting_launch_shift_deg: -3.0    # つなぎの打撃: 走者ありで打球角を低く[deg]（ゴロ寄り）
-  team_batting_quality_shift: -0.015     # つなぎの打撃: 走者ありでコンタクト品質を下げる（ヒットになりにくい）
+  team_batting_bearing_shift_deg: 5.0   # つなぎの打撃: 走者ありで打球方向を右方向へ[deg]
+  team_batting_launch_shift_deg: -2.0    # つなぎの打撃: 走者ありで打球角を低く[deg]（ゴロ寄り）
+  team_batting_quality_shift: -0.005     # つなぎの打撃: 走者ありでコンタクト品質を下げる（ヒットになりにくい）
   first_pitch_swing_prob: 0.62           # 初球から振る
   grinder_foul_factor: 1.30              # 粘り打ち: ファウル率拡大（球数を吐かせる）
   streaky_variance_factor: 1.7           # ムラっけ: 当日の出来の振れ幅拡大
