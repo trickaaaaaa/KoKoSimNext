@@ -610,7 +610,7 @@ namespace KokoSim.Unity.Match
             bool haveSide = false;
             if (moving)
             {
-                var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
+                var ball = LookTargetOf(_fieldPlay, pos, t);
                 if (ball.HasValue)
                 {
                     var toBall = new Vector2((float)(ball.Value.X - cur.Pos.X), (float)(ball.Value.Y - cur.Pos.Y));
@@ -728,7 +728,12 @@ namespace KokoSim.Unity.Match
             //    engine のサンプルは捕球と送球が同じ瞬間だが、実データは球を持って待つ場面がある。
             //    そこで本塁向きへ流すと、捕球中に開いておいた向きが投げる前に捨てられる
             float pending;
-            if (want < 0 && TryPendingThrowYaw(pos, t, out pending)) targetYaw = pending;
+            // 本塁打の外野手は、止まっている間ずっと打球の**落ちる先**を向いて見送る（issue #921）。
+            // 下の「いま球がある方」だと、頭上を越える前の球＝本塁側を向いてしまい、
+            // 柵越えの瞬間にカメラへ顔を向けて立つ絵になる（実測: 着地1秒前に本塁を真っ直ぐ向き、
+            // 球が頭上を越えたコマで180°振り向いていた）
+            if (want < 0 && TryHomeRunWatchYaw(pos, cur.Pos, out pending)) targetYaw = pending;
+            else if (want < 0 && TryPendingThrowYaw(pos, t, out pending)) targetYaw = pending;
             // 停止中、まだ生きている球（飛んでいる／転がっている／保持中）があればその方向を向く。
             // 追いつけず立ち止まった野手が本塁（≈カメラの向き）へフォールバックし、打球を見送るはずの
             // 瞬間にこちらを向いてしまう不自然さの対策（issue fence-camera-zoom-and-outfielder-facing）
@@ -740,14 +745,22 @@ namespace KokoSim.Unity.Match
 
             // クリップの差し替え。**位相を保って移る**（0へ戻すと足が跳ぶ）。
             // 発進の一発物からの引き継ぎだけは位相が対応しないのでクロスフェード
-            if (want != st.Ladder || wantTable != st.LadderTable)
+            // 本塁打で見送る外野手は、止まった時点で待機を低い構えへ替える（issue #921）。
+            // 走りの段が変わらなくても（＝一歩も動かずに見送る）替える必要があるので条件に足す
+            bool watchingHr = WatchingHomeRun(pos);
+            var idleClip = watchingHr ? HomeRunWatchIdleClip() ?? IdleClipFor(pos) : IdleClipFor(pos);
+            if (want != st.Ladder || wantTable != st.LadderTable
+                || (watchingHr && want < 0 && idleClip != null && a.Clip != idleClip))
             {
-                var clip = want < 0 ? IdleClipFor(pos) : LoadClip(wantTable[want].Name);
+                var clip = want < 0 ? idleClip : LoadClip(wantTable[want].Name);
                 if (clip != null && clip != a.Clip)
                 {
                     float phase = a.Clip != null && a.Clip.length > 0.01f
                         ? Mathf.Repeat(a.Time / a.Clip.length, 1f) : 0f;
-                    if (handoffFromStart && want >= 0)
+                    // 直立→構えは別の姿勢へ移るので、位相合わせでなく短くクロスフェードする（体が跳ばない）
+                    if (want < 0 && clip != IdleClipFor(pos) && clip.name != a.Clip?.name)
+                        CrossfadeActorToClip(a, clip, 0f, 0f, HomeRunCrouchFadeSeconds);
+                    else if (handoffFromStart && want >= 0)
                         CrossfadeActorToClip(a, clip, 0f, 0f, StartHandoffFadeSeconds);
                     else
                         SetActorClip(a, clip, phase * clip.length, 0f);
@@ -923,7 +936,7 @@ namespace KokoSim.Unity.Match
 
                     // 向きは球の方向で決める（走りの段と同じ材料・同じ規約）
                     var facing = LocoFacing.Forward;
-                    var ball = PlaybackEvaluator.BallAt(play, m.T0 + 0.1);
+                    var ball = LookTargetOf(play, pos, m.T0 + 0.1);
                     if (ball.HasValue)
                     {
                         var toBall = new Vector2((float)(ball.Value.X - from.X), (float)(ball.Value.Y - from.Y));
@@ -2140,6 +2153,55 @@ namespace KokoSim.Unity.Match
         /// 「本塁向きへ流れ戻るのを防ぐ」作法で、対象を送球予定でなく球そのものに広げたもの。
         /// 距離が近すぎる（自分がちょうど居る位置＝球を持っている本人）ときは向きが数値的に決まらないので拾わない。
         /// </summary>
+        /// <summary>
+        /// 本塁打のとき、外野手が見送る先＝球が最後に止まる点（スタンドに当たって止まる点・engine 座標）。
+        /// 本塁打でなければ null（issue #921）。
+        /// </summary>
+        private PlaybackVec? _hrWatchPoint;
+
+        /// <summary>本塁打の構えへ移るクロスフェードの長さ[s]。**絵で決める値**。</summary>
+        public static float HomeRunCrouchFadeSeconds = 0.35f;
+
+        private static PlaybackVec? HomeRunWatchPoint(PlaybackPlay play)
+        {
+            if (!IsHomeRun(play) || play.Ball == null || play.Ball.Count == 0) return null;
+            double end = 0;
+            foreach (var s in play.Ball) if (s.T1 > end) end = s.T1;
+            var b = PlaybackEvaluator.BallAt(play, end);
+            return b.HasValue ? new PlaybackVec(b.Value.X, b.Value.Y) : null;
+        }
+
+        /// <summary>
+        /// 走りの向き（背走・見ながら走る・前向き）を選ぶときに「見ている先」とする点（issue #921）。
+        /// 通常はいまの球。本塁打の外野手だけは**落ちる先**＝フェンスへ下がる間も前を向いて走る。
+        /// いまの球だと、まだ本塁側を飛んでいる球を正面に見る背走が選ばれ、
+        /// こちらを向いて下がってからフェンスへ振り向く絵になる（実測: 背走の2秒間、本塁から17〜19°）。
+        /// </summary>
+        private PlaybackVec? LookTargetOf(PlaybackPlay play, FieldPosition pos, double t)
+        {
+            if (WatchingHomeRun(pos)) return _hrWatchPoint;
+            var b = PlaybackEvaluator.BallAt(play, t);
+            return b.HasValue ? new PlaybackVec(b.Value.X, b.Value.Y) : (PlaybackVec?)null;
+        }
+
+        /// <summary>この野手が本塁打を見送る役か（本塁打の打球で、外野手）。</summary>
+        private bool WatchingHomeRun(FieldPosition pos) => _hrWatchPoint.HasValue && IsOutfield(pos);
+
+        /// <summary>見送るときの待機＝低い構え（内野の待機と同じ収録）。</summary>
+        private AnimationClip HomeRunWatchIdleClip() => LoadClip(InfielderIdleClipName);
+
+        /// <summary>本塁打を見送る外野手の向き[度]＝見送る先の方向（issue #921）。</summary>
+        private bool TryHomeRunWatchYaw(FieldPosition pos, PlaybackVec here, out float yaw)
+        {
+            yaw = 0f;
+            if (!WatchingHomeRun(pos)) return false;
+            var p = _hrWatchPoint.Value;
+            var to = new Vector2((float)(p.X - here.X), (float)(p.Y - here.Y));
+            if (to.magnitude < FacingMinBallDistM) return false;
+            yaw = Mathf.Atan2(to.x, to.y) * Mathf.Rad2Deg;
+            return true;
+        }
+
         private bool TryFacingLiveBall(float t, PlaybackVec here, out float yaw)
         {
             yaw = 0f;
@@ -4688,6 +4750,7 @@ namespace KokoSim.Unity.Match
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             BuildFieldTagPlan(play);           // ⚠ 捕球の後（タッチする野手を捕球の予定表から引く。issue #489）
             PlanHomeRunStandHit(play);         // 本塁打の球が外野スタンドに当たる点（issue #704）
+            _hrWatchPoint = HomeRunWatchPoint(play);   // 外野手が見送る先（issue #921）
 
             // 立ち位置の不連続を控える。engine の言う定位置と実際の立ち位置の差を
             // **プレーの頭で1回だけ**採り、0.3秒かけて 0 へ落とす（投手1.347m・捕手1.200m）
@@ -4809,6 +4872,7 @@ namespace KokoSim.Unity.Match
             _hrHit = false;
             _hrFence = false;
             _hrStyle = KokoSim.Engine.Match.Timeline.HomeRunStyle.Standard;
+            _hrWatchPoint = null;
             _fieldStationCuts.Clear();
             _loco.Clear();
             _catchEvents.Clear();
