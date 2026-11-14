@@ -34,9 +34,15 @@ namespace KokoSim.Unity.Components
 
         public VisualElement Host => _host;
 
-        /// <summary>1枚を描いて出す。<paramref name="teamName"/> は交代したチームの校名。</summary>
-        public void Show(TelopCard card, string teamName)
+        /// <summary>
+        /// 1枚を描いて出す。<paramref name="teamName"/> は交代したチームの校名。
+        /// <paramref name="clearBottom"/> は避けたい下の帯（投手HUD）の上端までの高さ[px]。
+        /// 負なら USS の既定（--sub-telop-bottom）のまま。
+        /// </summary>
+        public void Show(TelopCard card, string teamName, float clearBottom = -1f)
         {
+            if (clearBottom > 0f && !float.IsNaN(clearBottom)) _host.style.bottom = clearBottom;
+            else _host.style.bottom = StyleKeyword.Null;
             _team.text = teamName ?? "";
             _rows.Clear();
             foreach (var r in card.Rows) _rows.Add(Row(r));

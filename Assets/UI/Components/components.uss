@@ -1884,10 +1884,12 @@
 /* SubTelop：交代テロップ（issue #920）。交代を確定した瞬間に試合を止め、盤面の下に大きく出す
    （クリックか数秒で再開。C# の SubTelopView が中身を組む）。1枚＝1チームの同じ間合いの交代。
    入る選手の名前を明朝で大きく、背番号・打順・いま就いた位置・退く選手を同じ行に並べる。
-   盤面（緑）の上の暗い島なので、文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-*（sub-call と同じ作法）。 */
+   盤面（緑）の上の暗い島なので、文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-*（sub-call と同じ作法）。
+   位置は盤面右下の投手HUD（.mhud-corner--right）より上＝帯と重ならない（2026-11-14 監督決定）。
+   下端は --sub-telop-bottom、帯がそれより高いときは C# が帯の実高＋余白へ持ち上げる。上へ伸びる＝行が増えても帯に掛からない。 */
 .sub-telop {
     position: absolute;
-    left: 0; right: 0; bottom: var(--sp-4);
+    left: 0; right: 0; bottom: var(--sub-telop-bottom);
     flex-direction: row;
     justify-content: center;
     display: none;

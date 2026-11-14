@@ -2158,9 +2158,22 @@ namespace KokoSim.Unity.Match
             HideScoreCall();
             HideSubCall();
             _subTelopFreezeRig = _stage == LiveStage.Pitch || _stage == LiveStage.Play;
-            _subTelop.Show(card, card.TeamIsAway ? _awayDisp : _homeDisp);
+            _subTelop.Show(card, card.TeamIsAway ? _awayDisp : _homeDisp, PitcherHudClearance());
             _subTelopOn = true;
             _subTelopClock = 0f;
+        }
+
+        /// <summary>
+        /// 盤面右下の投手HUD（.mhud-corner--right）の上端までの高さ＋余白。テロップをこれより上に出す（issue #920・
+        /// 2026-11-14 監督決定）。HUD が隠れている・まだ測れないときは -1（USS の既定位置のまま）。
+        /// </summary>
+        private float PitcherHudClearance()
+        {
+            var corner = _hudPitcherSlot?.parent;
+            if (corner == null || corner.resolvedStyle.display == DisplayStyle.None) return -1f;
+            var h = corner.layout.height;
+            if (float.IsNaN(h) || h <= 0f) return -1f;
+            return h + 8f;   // --sp-2 ぶん離す
         }
 
         // 時間で明ける／クリックで明ける、の共通出口。次の1枚があれば続けて出す。
