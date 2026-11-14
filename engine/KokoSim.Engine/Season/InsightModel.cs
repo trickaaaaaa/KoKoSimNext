@@ -10,7 +10,7 @@ public enum InsightTopic
     HighGrowthDomain,  // 「〜はまだ伸びる余地がありそうだ」（伸びしろ高の示唆）
     LowGrowthDomain,   // 「〜の伸びしろはないかもしれない」（伸びしろ低の示唆）
     GrowthType,        // 「大器晩成かもしれない」（成長タイプの示唆）
-    Personality,       // 「〜という性格かもしれない」（性格タイプの示唆, 設計書01 §1.1）
+    Personality,       // 「〜な性格かもしれない」（性格の軸1つの示唆, 設計書23 §1.5。4軸そろうとタイプ名が判明）
 }
 
 /// <summary>
@@ -28,6 +28,17 @@ public sealed record InsightNotice(DevelopingPlayer Player, InsightTopic Topic, 
     /// （この話題では Domain は分野名ではなく型名＝既存の流儀を保つ）。他の話題では未使用（""）。
     /// </summary>
     public string GrowthField { get; init; } = "";
+
+    /// <summary>
+    /// <see cref="InsightTopic.Personality"/> のとき、どの軸についての示唆か（設計書23 §1.5・Q37）。
+    /// <see cref="Domain"/> には示唆された側の言い方（「素直」「目立ちたがり」等）が入る。他の話題では未使用。
+    /// </summary>
+    public Players.PersonalityAxis PersonalityAxis { get; init; }
+
+    /// <summary>
+    /// この気づきで4軸の読みがそろったとき、読みから導出したタイプ（誤認込み）。そろっていなければ null。
+    /// </summary>
+    public Players.Personality? RevealedType { get; init; }
 }
 
 /// <summary>気づきの係数（設計書03 §5.6）。🟡頻度・精度カーブは検証で調整。</summary>
@@ -58,7 +69,7 @@ public sealed record InsightCoefficients
 public static class InsightModel
 {
     /// <summary>
-    /// 週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は変更しない（通知のみ）。
+    /// 週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は性格の読み（DevelopingPlayer.PersonalityReading）を記録するだけで、能力等は変更しない。
     /// <paramref name="probFactor"/>／<paramref name="accuracyAdd"/> はビデオ・分析機材などの備品由来
     /// （1.0／0.0＝備品なし＝従来一致）。精度の上限は <see cref="InsightCoefficients.AccuracyMax"/> のまま。
     /// </summary>
@@ -95,11 +106,20 @@ public static class InsightModel
             return new InsightNotice(p, InsightTopic.RecentGrowth, "", accurate);
         }
 
-        // 性格の兆し（設計書01 §1.1 / 03 §5.6）: たまに性格に触れる。読み違え時は別タイプを示唆する。
+        // 性格の兆し（設計書23 §1.5・Q37）: たまに性格の軸1つに触れる（「素直な子のようだ」）。読み違え時は逆の側に見える。
+        // 読みは部員の PersonalityReading に記録し、4軸そろうとタイプ名が判明する（誤認込みの見立て）。
         if (p.Personality != Players.Personality.Normal && rng.NextDouble() < 0.30)
         {
-            var shown = accurate ? p.Personality : WrongPersonality(p.Personality, rng);
-            return new InsightNotice(p, InsightTopic.Personality, Players.Personalities.DisplayName(shown), accurate);
+            var axis = (Players.PersonalityAxis)rng.NextInt(0, 4);
+            var trueHigh = Players.Personalities.High(AxisValue(p, axis));
+            var shownHigh = accurate ? trueHigh : !trueHigh;
+            p.PersonalityReading = p.PersonalityReading.With(axis, shownHigh);
+            return new InsightNotice(p, InsightTopic.Personality,
+                Players.Personalities.AxisSideName(axis, shownHigh), accurate)
+            {
+                PersonalityAxis = axis,
+                RevealedType = p.PersonalityReading.KnownType,
+            };
         }
 
         // 成長タイプの兆し（設計書03 §5.6・issue #614、分野別化・issue #866）。
@@ -140,15 +160,14 @@ public static class InsightModel
         return others[rng.NextInt(0, others.Length)];
     }
 
-    /// <summary>読み違え用: 本当の性格と異なる生成対象タイプを1つ選ぶ。</summary>
-    private static Players.Personality WrongPersonality(Players.Personality actual, IRandomSource rng)
+    /// <summary>性格の軸の値（①統率は Leadership）。</summary>
+    private static int AxisValue(DevelopingPlayer p, Players.PersonalityAxis axis) => axis switch
     {
-        var pool = Players.Personalities.Spawnable;
-        var idx = rng.NextInt(0, pool.Length);
-        // actual と一致したら隣へずらす（別タイプを保証）。
-        if (pool[idx] == actual) idx = (idx + 1) % pool.Length;
-        return pool[idx];
-    }
+        Players.PersonalityAxis.Leadership => p.Leadership,
+        Players.PersonalityAxis.Receptiveness => p.Receptiveness,
+        Players.PersonalityAxis.Diligence => p.Diligence,
+        _ => p.Selflessness,
+    };
 
     private static (string High, string Low) GrowthExtremes(DevelopingPlayer p)
     {

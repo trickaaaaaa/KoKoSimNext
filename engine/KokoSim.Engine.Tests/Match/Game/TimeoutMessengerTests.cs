@@ -17,7 +17,7 @@ public sealed class TimeoutMessengerTests
     private static readonly PersonalityCoefficients Pc = new();
 
     private static Player P(string name, int grade = 2, int leadership = 50, Personality pers = Personality.Normal)
-        => new() { Name = name, Grade = grade, Leadership = leadership, Personality = pers };
+        => new Player { Name = name, Grade = grade, Leadership = leadership }.WithAxes(pers);
 
     private static readonly Player Receiver = P("受け手", grade: 2);
 

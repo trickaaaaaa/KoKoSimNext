@@ -123,13 +123,19 @@ public static class TransferRosterConversion
         // この後の推定抽選列（性格・精神系・才能上限）を1ビットも乱さない（不変条件#2）。
         var (pitchingGrowthType, battingGrowthType, defenseGrowthType) =
             ProspectGenerator.SampleGrowthDomains(growth, rng.Fork(ConversionSalt ^ 0x1F9AUL), c);
-        var personality = pc.Sample(rng);
-        var profile = pc.Profile(personality);
+        // 性格（設計書23 §1.4）: AI校の選手は既に②③④の軸を持っている（StrengthTeamFactory が生成）。転任先の部員は
+        // その値をそのまま引き継ぐ（性格は生まれつき固定・設計書03 §3.3）。旧来の種タイプ抽選と自主成長ジッタの
+        // 2回の乱数は、後続の推定抽選列（成長率・怪我耐性）を動かさないよう消費数だけ保つ。
+        _ = pc.Sample(rng);
         // 晩成の上乗せ（issue #866）はその分野自身の成長タイプで判定する（基本タイプではない）。
         double GrowthRoll(GrowthType domainType) => MathUtil.Clamp(
             rng.NextGaussian(c.GrowthMean, c.GrowthSd) + (domainType == GrowthType.Late ? c.LateGrowthBonus : 0),
             c.GrowthMin, c.GrowthMax);
 
+        var pitchingGrowth = GrowthRoll(pitchingGrowthType);
+        var battingGrowth = GrowthRoll(battingGrowthType);
+        var defenseGrowth = GrowthRoll(defenseGrowthType);
+        _ = rng.NextGaussian(0, 1); // 旧 PersonalityFactor のジッタ（消費数だけ保つ）
         var dp = new DevelopingPlayer
         {
             Name = s.Name,
@@ -141,12 +147,12 @@ public static class TransferRosterConversion
             IsProdigy = ai.Phenom != PhenomType.None,
             Throws = s.Throws,
             Bats = s.Bats,
-            PitchingGrowth = GrowthRoll(pitchingGrowthType),
-            BattingGrowth = GrowthRoll(battingGrowthType),
-            DefenseGrowth = GrowthRoll(defenseGrowthType),
-            PersonalityFactor = MathUtil.Clamp(
-                profile.SelfGrowthFactor + rng.NextGaussian(0, pc.FactorJitterSd), pc.FactorMin, pc.FactorMax),
-            Personality = personality,
+            PitchingGrowth = pitchingGrowth,
+            BattingGrowth = battingGrowth,
+            DefenseGrowth = defenseGrowth,
+            Receptiveness = s.Receptiveness,
+            Diligence = s.Diligence,
+            Selflessness = s.Selflessness,
             Mental = s.Mental,
             Leadership = s.Leadership,
             Lead = s.Lead,

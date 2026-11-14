@@ -10,6 +10,9 @@ namespace KokoSim.Engine.Season;
 /// </summary>
 public static class DevelopmentModel
 {
+    /// <summary>性格係数を渡さない呼び出しの自主成長（③勤勉さ）に使う既定の式（不変）。</summary>
+    private static readonly Players.PersonalityCoefficients DefaultPersonalities = new();
+
     /// <summary>
     /// 1週間の練習を「練習時間配分（複数メニュー×分）」で適用する（設計書03 §3.1）。
     /// 各メニューの成長は common × (配分分 ÷ 基準週時間) に線形スケール。休養メニューは効果なし。
@@ -36,7 +39,9 @@ public static class DevelopmentModel
         if (p.Injury != Players.InjurySeverity.None) return;
 
         // ②素直さ（性格, 設計書01 §1.1）: 指導寄与を倍率補正。personalities=null または Normal は 1.0＝従来と一致。
-        var receptivity = personalities?.Profile(p.Personality).CoachingReceptivity ?? 1.0;
+        var receptivity = personalities?.CoachingReceptivity(p.Receptiveness) ?? 1.0;
+        // ③勤勉さ→自主成長（設計書23 §1.2）。旧 PersonalityFactor。personalities=null でも既定の式で効く（従来どおり常時）。
+        var selfGrowth = (personalities ?? DefaultPersonalities).SelfGrowthFactor(p.Diligence);
         // 基準指導力（中立点）を common に焼き込む＝従来と同じ乗算列。分野別指導力（#115）は
         // 能力ごとに「中立点との比」を後段で掛ける（比＝1.0 のとき1ビット一致・不変条件#2）。
         var baselineFactor = 1.0 + c.CoachingLevel * c.CoachingSlope * receptivity;
@@ -52,7 +57,7 @@ public static class DevelopmentModel
         // 成長段階係数（設計書02 §5.2・issue #866）は能力の分野ごとに別のタイプで変わるので、
         // common からは外し能力ごとに掛ける（全分野が同じタイプなら従来と1ビット一致）。
         var common = c.BaseMainExp * c.FacilityCoef * baselineFactor
-                     * p.PersonalityFactor * campMultiplier * skillExp;
+                     * selfGrowth * campMultiplier * skillExp;
         // 守備位置適性は守備・走塁分野（Defense 指導力）で駆動する（Fielding が代表）。
         var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
         var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
@@ -141,7 +146,9 @@ public static class DevelopmentModel
         if (p.Injury != Players.InjurySeverity.None) return;
 
         // ②素直さ（性格, 設計書01 §1.1）: 指導寄与を倍率補正。personalities=null または Normal は 1.0＝従来と一致。
-        var receptivity = personalities?.Profile(p.Personality).CoachingReceptivity ?? 1.0;
+        var receptivity = personalities?.CoachingReceptivity(p.Receptiveness) ?? 1.0;
+        // ③勤勉さ→自主成長（設計書23 §1.2）。旧 PersonalityFactor。personalities=null でも既定の式で効く（従来どおり常時）。
+        var selfGrowth = (personalities ?? DefaultPersonalities).SelfGrowthFactor(p.Diligence);
         // 基準指導力（中立点）を common に焼き込む＝従来と同じ乗算列（分野別指導力の比は後段, #115）。
         var baselineFactor = 1.0 + c.CoachingLevel * c.CoachingSlope * receptivity;
 
@@ -159,7 +166,7 @@ public static class DevelopmentModel
         // 成長段階係数（設計書02 §5.2・issue #866）は能力の分野ごとに別のタイプで変わるので、
         // common からは外し能力ごとに掛ける（全分野が同じタイプなら従来と1ビット一致）。
         var common = c.BaseMainExp * c.FacilityCoef * baselineFactor
-                     * p.PersonalityFactor * campMultiplier * skillExp;
+                     * selfGrowth * campMultiplier * skillExp;
         var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
         var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
 

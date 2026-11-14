@@ -13,7 +13,10 @@ public sealed class CaptainEffectTiersTests
     private static DevelopingPlayer Guy(int leadership, int mental, int grade = 3,
         Personality personality = Personality.Normal) => new()
     {
-        Name = "X", Grade = grade, Leadership = leadership, Mental = mental, Personality = personality,
+        Name = "X", Grade = grade, Leadership = leadership, Mental = mental,
+        Receptiveness = PersonalityFixture.Axes(personality).Receptiveness,
+        Diligence = PersonalityFixture.Axes(personality).Diligence,
+        Selflessness = PersonalityFixture.Axes(personality).Selflessness,
     };
 
     [Fact]
@@ -39,8 +42,8 @@ public sealed class CaptainEffectTiersTests
         var c = new TacticsCoefficients();
         var pc = new PersonalityCoefficients();
         var p = Guy(90, 80);
-        var f = (TimeoutMessenger.FactorOf(90, 80, 3, p.Personality, 0, true, true, c, pc)
-               + TimeoutMessenger.FactorOf(90, 80, 3, p.Personality, 0, false, true, c, pc)) / 2.0;
+        var f = (TimeoutMessenger.FactorOf(90, 80, 3, p.Selflessness, 0, true, true, c, pc)
+               + TimeoutMessenger.FactorOf(90, 80, 3, p.Selflessness, 0, false, true, c, pc)) / 2.0;
         var expected = (f - c.MessengerFactorMin) / (c.CaptainMessengerFactorMax - c.MessengerFactorMin) * 100.0;
         Assert.Equal(expected, CaptainEffectTiers.BenchScore(p, c, pc), 6);
     }
@@ -54,10 +57,10 @@ public sealed class CaptainEffectTiersTests
         var receiver = new Player { Name = "R", Grade = 3 };
         Assert.Equal(
             TimeoutMessenger.Factor(messenger, receiver, true, c, pc, messenger),
-            TimeoutMessenger.FactorOf(70, 60, 3, messenger.Personality, 3, true, true, c, pc), 9);
+            TimeoutMessenger.FactorOf(70, 60, 3, messenger.Selflessness, 3, true, true, c, pc), 9);
         Assert.Equal(
             TimeoutMessenger.Factor(messenger, receiver, false, c, pc),
-            TimeoutMessenger.FactorOf(70, 60, 3, messenger.Personality, 3, false, false, c, pc), 9);
+            TimeoutMessenger.FactorOf(70, 60, 3, messenger.Selflessness, 3, false, false, c, pc), 9);
     }
 
     [Fact]

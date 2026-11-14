@@ -307,8 +307,8 @@ public static class RosterTeamBuilder
             return new Player { Name = "選手", Position = pos };
         }
 
-        // 性格④（設計書01 §1.1）: タイプ→試合効果スカラーを投影時に解決し Player へ焼き込む（ホットパスでのテーブル引き回し回避）。
-        var pProfile = (personalityCoeff ?? new Players.PersonalityCoefficients()).Profile(dp.Personality);
+        // 性格④（設計書23 §1.2）: 姿勢の軸→試合効果スカラーを投影時に解決し Player へ焼き込む（ホットパスでの係数引き回し回避）。
+        var pCoeff = personalityCoeff ?? new Players.PersonalityCoefficients();
 
         // 怪我の一律係数（健常=1.0）。表示層で乗算してから物理層変換に通す（パイプライン不変）。
         // スランプ中（設計書03 §5.5）は追加の一時係数（怪我より軽く、期間で解ける）。
@@ -364,9 +364,11 @@ public static class RosterTeamBuilder
             Baserunning = L(AbilityKind.Baserunning),
             Mental = dp.Mental,           // 精神系は怪我係数の対象外
             Leadership = dp.Leadership,
-            Personality = dp.Personality,
-            BuntSuccessBonus = pProfile.BuntSuccessBonus,
-            ChanceHitFactor = pProfile.ChanceHitFactor,
+            Receptiveness = dp.Receptiveness,
+            Diligence = dp.Diligence,
+            Selflessness = dp.Selflessness,
+            BuntSuccessBonus = pCoeff.BuntSuccessBonus(dp.Selflessness),
+            ChanceHitFactor = pCoeff.ChanceHitFactor(dp.Selflessness),
             Lead = dp.Lead,               // 捕手リード（設計書01 §2①）。怪我係数の対象外
             Skills = dp.Skills,           // スキルはフラグなので怪我係数の対象外
             Condition = FormModel.Quantize(dp.ConditionValue),

@@ -21,13 +21,15 @@ public sealed class DevelopingPlayerCloneTests
             PitchingGrowthType = GrowthType.Early,
             BattingGrowthType = GrowthType.Standard,
             DefenseGrowthType = GrowthType.Late,
-            PersonalityFactor = 1.2,
             IsProdigy = true,
             Leadership = 77,
-            Personality = Personality.HotBlood,
+            Receptiveness = 33,
+            Diligence = 81,
+            Selflessness = 64,
             InjuryResistance = 42.5,
         };
         p.Id = 123;
+        p.PersonalityReading = new PersonalityReading(0b0101, 0b0001);
         p.Grade = 2;
         p.LearnedPitches.Add(new LearnedPitch(PitchType.Slider, 5, -3));
         p.LearnedPitches.Add(new LearnedPitch(PitchType.Fork, -2, 8));
@@ -88,7 +90,6 @@ public sealed class DevelopingPlayerCloneTests
         Assert.Equal(original.PitchingGrowthType, clone.PitchingGrowthType);
         Assert.Equal(original.BattingGrowthType, clone.BattingGrowthType);
         Assert.Equal(original.DefenseGrowthType, clone.DefenseGrowthType);
-        Assert.Equal(original.PersonalityFactor, clone.PersonalityFactor);
         Assert.Equal(original.IsProdigy, clone.IsProdigy);
         Assert.Equal(original.Mental, clone.Mental);
         Assert.Equal(original.MentalExp, clone.MentalExp);
@@ -98,6 +99,10 @@ public sealed class DevelopingPlayerCloneTests
         Assert.Equal(original.LeadCap, clone.LeadCap);
         Assert.Equal(original.Leadership, clone.Leadership);
         Assert.Equal(original.Personality, clone.Personality);
+        Assert.Equal(original.Receptiveness, clone.Receptiveness);
+        Assert.Equal(original.Diligence, clone.Diligence);
+        Assert.Equal(original.Selflessness, clone.Selflessness);
+        Assert.Equal(original.PersonalityReading, clone.PersonalityReading);
         Assert.Equal(original.IsCaptain, clone.IsCaptain);
         Assert.Equal(original.IsRetired, clone.IsRetired);
         Assert.Equal(original.UniformNumber, clone.UniformNumber);

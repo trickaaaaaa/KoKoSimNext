@@ -36,8 +36,8 @@ public static class CaptainEffectTiers
     {
         var c = tactics ?? new TacticsCoefficients();
         var pc = personalities ?? new PersonalityCoefficients();
-        var toPitcher = TimeoutMessenger.FactorOf(p.Leadership, p.Mental, p.Grade, p.Personality, 0, true, true, c, pc);
-        var toBatter = TimeoutMessenger.FactorOf(p.Leadership, p.Mental, p.Grade, p.Personality, 0, false, true, c, pc);
+        var toPitcher = TimeoutMessenger.FactorOf(p.Leadership, p.Mental, p.Grade, p.Selflessness, 0, true, true, c, pc);
+        var toBatter = TimeoutMessenger.FactorOf(p.Leadership, p.Mental, p.Grade, p.Selflessness, 0, false, true, c, pc);
         var f = (toPitcher + toBatter) / 2.0;
         var span = c.CaptainMessengerFactorMax - c.MessengerFactorMin;
         return span <= 0 ? 0.0 : Math.Clamp((f - c.MessengerFactorMin) / span * 100.0, 0.0, 100.0);

@@ -59,8 +59,20 @@ public sealed record Player
     /// <summary>統率傾向（性格の一部, CHANGELOG 22b）。主将の統率力 = 統率傾向×精神力（設計書09 §8）。</summary>
     public int Leadership { get; init; } = 50;
 
-    /// <summary>性格タイプ（設計書01 §1.1）。表示・采配AI用のラベル。試合効果は下の解決済みスカラーに焼き込む。</summary>
-    public Personality Personality { get; init; } = Personality.Normal;
+    /// <summary>性格②素直さ（設計書23 §1.1。1〜99・50が中立）。指導の入りやすさ・伝令の落ち着きに効く。</summary>
+    public int Receptiveness { get; init; } = 50;
+
+    /// <summary>性格③勤勉さ（設計書23 §1.1）。試合層では効かない（自主成長＝育成層だけ）。表示と導出ラベル用に持つ。</summary>
+    public int Diligence { get; init; } = 50;
+
+    /// <summary>性格④試合での姿勢（設計書23 §1.1。高い＝献身／低い＝目立ちたがり）。伝令役の得意場面・相性・結束に効く。</summary>
+    public int Selflessness { get; init; } = 50;
+
+    /// <summary>
+    /// 性格タイプ（設計書23 §1.3）。4軸から導出するラベルで、別には保存しない。②③④がすべて50なら Normal。
+    /// 犠打・チャンスの効きは下の解決済みスカラーに投影時に焼き込む（ホットパスでの係数引き回し回避）。
+    /// </summary>
+    public Personality Personality => Personalities.Classify(Leadership, Receptiveness, Diligence, Selflessness);
 
     /// <summary>性格④の犠打/進塁打 成功率加算（自己犠牲+/目立ち−）。投影時に性格表から解決。既定0＝無補正。</summary>
     public double BuntSuccessBonus { get; init; }

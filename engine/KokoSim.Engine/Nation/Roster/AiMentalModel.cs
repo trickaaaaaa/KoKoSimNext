@@ -89,6 +89,8 @@ public static class AiMentalModel
         {
             var (mental, leadership, lead) = Roll(
                 center, bonus, deps.Personality.Profile(p.Snapshot.Personality), rc, root.Fork((ulong)(uint)p.Id));
+            // ↑ 種タイプは保存していないので、導出ラベルの表を引く（設計書23 で増えた8タイプは表に無い＝ずらし0）。
+            //   旧セーブ（精神系未設定の世代）の後埋めだけの経路。
             p.Snapshot = WithGradeArc(
                 p.Snapshot with { Mental = mental, Leadership = leadership, Lead = lead }, p.Grade, rc);
         }
