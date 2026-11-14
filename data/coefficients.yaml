@@ -434,7 +434,7 @@ baserunning:
   steal_margin_scale: 0.22         # margin→成功確率のlogistic幅（Step4再校正: 肩差が効く幅に拡張）
   steal_success_bias: 0.0          # リーグ平均成功率の校正項（🟡）。2026-08-14 に 0.38→0.0＝中身を物理層の秒（steal_jump_credit_seconds 0.19 ＋ catcher_pop_rise_seconds 0.19）へ移した。判定の秒だけを動かして絵の秒に出ない項なので、0以外にすると「送球が先に届いた絵なのにセーフ」が戻る（実測: 成功50%の場面で送球が0.48秒先着）。平均成功率を動かすときは移した先の2項を動かす
   catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
-  steal_third_success_bias: -0.35  # 三盗の成功率バイアス（design-14「三盗は成功率下方」）
+  steal_third_lead_m: 6.0          # 三盗の二塁走者のリード[m]（issue #949）。走る距離＝塁間27.43m−これ。旧 steal_third_success_bias −0.35（判定にだけ効き絵に出ない補正）を撤去し物理だけで決める。「同じ走力・同じ捕手で二盗より少し下」に校正（起票時の3〜4mでは二盗の4〜6割にしかならず、監督決定で6.0mに改訂・2026-11-14）
   steal_home_distance_m: 21.5      # 三塁走者が本塁を突くときの残り距離[m]（issue #637）。三塁→本塁27.43mからリード約6mを引く。単独本盗は採用しない（issue #788）ので一・三塁重盗の絵の到達時刻にだけ使う
   double_steal_third_break_prob: 0.4  # 一・三塁重盗（design-14 P1-4）: 三塁走者も同時スタート（2026-07-17校正）
   pickoff_base_prob: 0.0           # 牽制アウト（design-14 P1-5）の基準確率。issue #661 でオフ（0.05→0）＝牽制は盗塁企図の球にしか出ず、映った瞬間に盗塁が読めるため。0の間は判定も絵も出ない
@@ -926,10 +926,11 @@ tactics:
   steal_attempt_logistic_steepness: 40.0
   # 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。塁状況が排他のため
   # 一・三塁の重盗（baserunning.double_steal_third_break_prob）とは競合しない。
-  # 三盗: issue steal-thresholds-unreachable（2026-08-27）: 旧コメントの想定天井（俊足×弱肩でも≈0.4〜0.65）
-  # は実測と食い違い、実際の到達可能上限は p99=6.4%・max=7.9%（実ロスター11200件）。旧0.30は死にコード
-  # だった。0.045は概ねp85相当（詳細はTacticsCoefficients.StealThirdMinSuccessのコメント参照）。
-  steal_third_min_success: 0.045
+  # 三盗: issue #949（2026-11-14）で三盗を物理だけで決める形にし（二塁走者のリード6.0m・補正−0.35撤去）、
+  # 成功見込みが二盗の少し下まで上がったので 0.045→0.45 に引き直した。企図は main の約2.3倍
+  # （10000試合 --tactics seed42: 379→870、成功率 11.3%→58.5%）。監督決定「mainの2〜3倍まで」の範囲。
+  # 0.40=1574回（4.2倍）・0.50=437回（1.2倍）・0.60=34回＝閾値に敏感（詳細は TacticsCoefficients のコメント）。
+  steal_third_min_success: 0.45
   steal_third_prob: 0.25
   steal_third_max_outs: 0          # 無死のみ
   steal_third_max_diff_abs: 3      # 大差では狙わない
