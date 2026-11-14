@@ -23,13 +23,14 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         BaserunningCoefficients? baserunning = null,
         EnemyAiCoefficients? aiCoeff = null,
         Players.FormCoefficients? form = null,
-        Nation.LineupCoefficients? lineup = null)
+        Nation.LineupCoefficients? lineup = null,
+        Players.SkillCoefficients? skills = null)
     {
         _profile = profile;
         _ai = aiCoeff ?? new EnemyAiCoefficients();
         // ③ 校風で采配係数を偏らせ、その係数で共通の基準采配を構成する。
         var styled = ApplyStyle(baseCoeff ?? new TacticsCoefficients(), profile.Style, _ai);
-        _inner = new StandardTacticsBrain(styled, baserunning, form, lineup);
+        _inner = new StandardTacticsBrain(styled, baserunning, form, lineup, skills);
         // ① 采配能力→最適解選択率。
         _optimalProb = MathUtil.Clamp(
             _ai.OptimalBase + profile.TacticalSense * _ai.OptimalPerSense, _ai.OptimalFloor, _ai.OptimalCap);
@@ -247,7 +248,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         // 人選だけ横断ランキングに載せ替える（issue #209 Phase B。RNG非依存＝決定論）。
         if (_inner.CallPitchingChange(s, rng) is { } basic)
         {
-            var basicReliever = PickReliever(s);
+            var basicReliever = PickReliever(s, _inner.Skills);
             return basic with { Reliever = basicReliever, ConvertTo = ConvertTargetFor(s, basicReliever) };
         }
 
@@ -260,7 +261,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
 
         // ①能力値: 最適な継投の好機を掴む確率（専用Fork由来の rng を消費）。外すと続投＝好機を逃す。
         if (!MathUtil.Chance(_optimalProb, rng)) return null;
-        var reliever = PickReliever(s);
+        var reliever = PickReliever(s, _inner.Skills);
         return new PitchingChangeDecision(reason.Value, reliever, ConvertTargetFor(s, reliever));
     }
 
@@ -308,15 +309,17 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// <see cref="Players.PitcherAttributes.ReliefScore"/> は整数和なので同点は実際に起きる
     /// （実測: 校力35で最大3.63%・校力50以上では0%）。
     /// 候補が無ければ null（engine 既定＝控えの先頭にフォールバック）。
+    /// <para>火消し（issue #907・設計書10 §2.2）を持つ候補は比較値に <see cref="Players.SkillCoefficients.FiremanReliefScoreBonus"/>
+    /// を足す＝能力が少し劣っても火消しを優先して送る。</para>
     /// </summary>
-    private static Players.Player? PickReliever(in PitchingChangeSituation s)
+    internal static Players.Player? PickReliever(in PitchingChangeSituation s, Players.SkillCoefficients skills)
     {
         Players.Player? bestPlaced = null; var bestPlacedScore = double.NegativeInfinity;
         Players.Player? bestOther = null; var bestOtherScore = double.NegativeInfinity;
         foreach (var c in s.ReliefCandidates)
         {
             // 全選手が投手能力を持つ（#381）＝ランク不能で除外される候補はもう無い。
-            var score = c.Pitching.ReliefScore();
+            var score = c.Pitching.ReliefScore() + Game.SkillModel.ReliefScoreBonus(c.Skills, skills);
             if (c.Position == Field.FieldPosition.Pitcher)
             {
                 if (score > bestPlacedScore) { bestPlacedScore = score; bestPlaced = c; }

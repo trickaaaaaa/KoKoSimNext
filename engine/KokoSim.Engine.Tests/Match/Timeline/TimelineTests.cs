@@ -785,7 +785,7 @@ public sealed class TimelineTests
         var pivotRole = tlDefault.Ball.First(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "second").ToRole!.Value;
 
         var tlSlow = TimelineBuilder.AppendDoublePlayThrows(
-            baseTl, play, field, batterArrive, coefficients: null, pivotBonusSeconds: 0.0,
+            baseTl, play, field, batterArrive, coefficients: null,
             pivotSprintSpeedByRole: new Dictionary<FieldPosition, double> { [pivotRole] = 3.0 });
 
         double MoveEnd(PlayTimeline t) => t.Moves.Single(m => m.Task == FielderTask.CoverBase
@@ -819,11 +819,11 @@ public sealed class TimelineTests
         }
 
         var tlWeakArm = TimelineBuilder.AppendDoublePlayThrows(
-            baseTl, play, field, batterArrive, coefficients: null, pivotBonusSeconds: 0.0,
+            baseTl, play, field, batterArrive, coefficients: null,
             pivotSprintSpeedByRole: null, batterOut: true,
             pivotThrowSpeedByRole: new Dictionary<FieldPosition, double> { [pivotRole] = 15.0 });
         var tlStrongArm = TimelineBuilder.AppendDoublePlayThrows(
-            baseTl, play, field, batterArrive, coefficients: null, pivotBonusSeconds: 0.0,
+            baseTl, play, field, batterArrive, coefficients: null,
             pivotSprintSpeedByRole: null, batterOut: true,
             pivotThrowSpeedByRole: new Dictionary<FieldPosition, double> { [pivotRole] = 45.0 });
 

@@ -18,15 +18,21 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     private readonly BaserunningCoefficients _br;
     private readonly FormCoefficients _form;
     private readonly Nation.LineupCoefficients _lineup;
+    private readonly SkillCoefficients _skills;
 
+    /// <param name="skills">特殊能力の係数（クイック◎×を盗塁の見込みへ読む・issue #907）。既定＝C#既定（YAML と一致）。</param>
     public StandardTacticsBrain(TacticsCoefficients? coefficients = null, BaserunningCoefficients? baserunning = null,
-        FormCoefficients? form = null, Nation.LineupCoefficients? lineup = null)
+        FormCoefficients? form = null, Nation.LineupCoefficients? lineup = null, SkillCoefficients? skills = null)
     {
         _c = coefficients ?? new TacticsCoefficients();
         _br = baserunning ?? new BaserunningCoefficients();
         _form = form ?? new FormCoefficients();
         _lineup = lineup ?? new Nation.LineupCoefficients();
+        _skills = skills ?? new SkillCoefficients();
     }
+
+    /// <summary>この采配が読む特殊能力の係数（継投の人選で火消しを読む AiTacticsBrain と共有）。</summary>
+    internal SkillCoefficients Skills => _skills;
 
     public OffensiveSign CallOffense(in TacticsSituation s, IRandomSource rng)
     {
@@ -224,7 +230,9 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     {
         // 読まれる（ピッチアウト）確率まで込みの見込み（issue #838）。読まれない場合だけの見込みで判断すると、
         // 盗塁のうまい走者ほど読まれて実成功が見込みを7ポイントほど下回り、損益分岐を守っても損をしていた。
-        var estimate = StealResolver.ExpectedSuccessProbability(runner, catcher, pitcher, _br, target: target);
+        // クイック◎×（issue #907）: 投手のクイックの差も見込みへ入れる＝判定（GameEngine）と同じ秒で読む。
+        var estimate = StealResolver.ExpectedSuccessProbability(runner, catcher, pitcher, _br, target: target,
+            pitcherQuickOffsetSeconds: SkillModel.QuickDeliveryOffsetSeconds(pitcher.Skills, _skills));
         var margin = estimate - minSuccess;
         if (margin < 0.0) return null;
         var p = StealAttemptProbability(margin, attemptProb, _c.StealAttemptLogisticSteepness);

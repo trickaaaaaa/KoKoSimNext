@@ -25,9 +25,6 @@ namespace KokoSim.Engine.Match.Game;
 /// 出塁/凡打を決めたのと同じ正典値（<see cref="Fielding.FieldingPlay.BatterToFirstSeconds"/>）。併殺の二段目＝
 /// 二塁→一塁の転送送球 vs 打者走者の秒勝負（Issue #369）に使う。null＝内野ゴロでない/幾何が組めない経路
 /// ＝物理レースは組めず従来の確率テーブル（<see cref="BaserunningCoefficients.DoublePlayProb"/>）へフォールバック。</param>
-/// <param name="DoublePlayPivotBonusSeconds">「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）
-/// による二塁経由の転送握り替えの短縮量[s]（時間の短縮＝確率でなく, Issue #369）。守備側の遊撃手/二塁手が
-/// スキルを持つとき正値。既定0＝短縮なし（帯不変）。</param>
 /// <param name="DoublePlayPivotArmMps">併殺の二塁→一塁転送を投げる野手（二塁カバーに実際に入った
 /// 遊撃手/二塁手）の送球速度[m/s]（<c>FielderAttributes.ThrowSpeedMps</c>）。null＝呼び出し側が未対応
 /// （単体テスト等）＝ <see cref="BaserunningCoefficients.RelayThrowSpeedMps"/>（カットマン用の共通定数の
@@ -46,6 +43,5 @@ public readonly record struct HomePlayContext(
     bool IsFly,
     double? ThrowArriveSeconds = null,
     double? BatterToFirstSeconds = null,
-    double DoublePlayPivotBonusSeconds = 0.0,
     double? DoublePlayPivotArmMps = null,
     FieldPosition? FielderRole = null);

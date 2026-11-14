@@ -1178,14 +1178,15 @@ public static class TimelineBuilder
         Player runner, Player catcher, StealResult result, BaserunningCoefficients c, FieldGeometry field,
         StealTarget target = StealTarget.Second, bool pitchout = false, Tactics.StartType startType = Tactics.StartType.Normal,
         Player? doubleStealScorer = null, double? runnerSeconds = null, double? defenseSeconds = null,
-        Fielding.ThrowScatterModel.Scatter? throwScatter = null)
+        Fielding.ThrowScatterModel.Scatter? throwScatter = null, double pitcherQuickOffsetSeconds = 0.0)
     {
         if (target == StealTarget.Home)
             throw new ArgumentException("単独の本盗は採用しない（issue #788）。重盗の三塁走者は doubleStealScorer で描く。", nameof(target));
         // 秒は判定が使ったものをそのまま写す（表示専用・新規計算ゼロ）。持たない呼び出しだけ組み直す。
         var play = runnerSeconds is { } rs && defenseSeconds is { } ds
             ? new StealVerdict(result, rs, ds)
-            : StealResolver.Forced(runner, catcher, c, result, pitchout, startType, target);
+            : StealResolver.Forced(runner, catcher, c, result, pitchout, startType, target,
+                pitcherQuickOffsetSeconds: pitcherQuickOffsetSeconds);
         var runnerTime = play.RunnerSeconds;
         var defenseTime = play.DefenseSeconds;
         var safe = result == StealResult.Safe;
@@ -1201,7 +1202,7 @@ public static class TimelineBuilder
         var runnerArrive = runnerTime;
 
         var pitchStart = 0.0;
-        var pitchArrive = c.PitcherQuickSeconds;                       // クイック（投球が捕手へ）
+        var pitchArrive = c.PitcherQuickSeconds + pitcherQuickOffsetSeconds; // クイック（投球が捕手へ。クイック◎×で±・issue #907）
         var resolvedAt = Math.Max(runnerArrive, defenseTime);
 
         var ball = new List<BallSegment>
@@ -2581,7 +2582,6 @@ public static class TimelineBuilder
     /// batterArriveAnchor=打者走者の一塁到達時刻[s]（食い違いのガードにのみ使う。Issue #301③と同じ
     /// <see cref="GuardAgainstVerdict"/> 方式＝物理を基本にし、確定判定と矛盾するときだけ寄せる）。
     /// coefficients=null なら既定係数（Unity 実プレーが使う C# 既定と同一、判定と同じ既定）。
-    /// pivotBonusSeconds=「併殺の名手」スキルによるピボット握り替え短縮[s]（判定側と同じ値を渡す）。
     /// pivotSprintSpeedByRole=二塁カバー野手のスプリント速度[m/s]（Role→値。無ければ既定の走力で代用）。
     ///
     /// <para>batterOut=打者が実際にアウトか（既定true）。二塁は封殺できても一塁への転送が僅かに間に合わない
@@ -2593,7 +2593,7 @@ public static class TimelineBuilder
     /// </summary>
     public static PlayTimeline AppendDoublePlayThrows(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
-        BaserunningCoefficients? coefficients = null, double pivotBonusSeconds = 0.0,
+        BaserunningCoefficients? coefficients = null,
         IReadOnlyDictionary<FieldPosition, double>? pivotSprintSpeedByRole = null, bool batterOut = true,
         IReadOnlyDictionary<FieldPosition, double>? pivotThrowSpeedByRole = null, bool relayToFirst = true)
     {
@@ -2651,7 +2651,7 @@ public static class TimelineBuilder
         // 二塁手/遊撃手の地肩が併殺成立率に一切効かない不整合があった）。渡されない/該当が無ければ
         // 従来の定数へフォールバック（帯を動かす変更なので判定側 BaserunningModel.ResolveDoublePlay と
         // 必ず同じ値を使う＝呼び出し側 GameEngine が同一のソースから両方へ渡す）。
-        var pivotTransfer = Math.Max(0.0, c.DoublePlayPivotTransferSeconds - pivotBonusSeconds);
+        var pivotTransfer = c.DoublePlayPivotTransferSeconds;
         var pivotArm = pivotRole is { } pivotArmRole && pivotThrowSpeedByRole != null
             && pivotThrowSpeedByRole.TryGetValue(pivotArmRole, out var pArm) ? pArm : c.RelayThrowSpeedMps;
         var pivotSituation = new HomePlaySituation(

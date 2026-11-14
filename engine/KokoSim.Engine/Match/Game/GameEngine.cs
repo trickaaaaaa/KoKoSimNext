@@ -739,22 +739,34 @@ public static class GameEngine
                 // 表示→物理の効き（設計書21）は ToBatter の中＝ここが打者側の唯一の入口。
                 var bat = Players.FormModel.ApplyBatter(batter.ToBatter(ctx.Batting.AbilityEffect), batter.Condition, offense.DayFormOf(batter), ctx.Form);
 
-                // スキル（設計書10）: 尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
+                // スキル（設計書10）: 目慣れ/尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
+                // 立ち上がり難はイニング、火消しは途中登板（この試合で継投済み＝いまの投手は先発でない。再出場禁止なので
+                // 先発がマウンドへ戻ることはない）、つなぎの打撃は走者の有無で効く（issue #907）。
                 var priorPa = offense.PriorPlateAppearances(batter);
                 var priorBf = defense.PriorBattersFaced(currentPitcher);
+                var inRelief = defense.PitcherChanges > 0;
                 bat = SkillModel.ApplyBatter(bat, batter.Skills, priorPa, ctx.Skills);
-                pit = SkillModel.ApplyPitcher(pit, currentPitcher.Skills, priorBf, ctx.Skills);
-                var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
+                pit = SkillModel.ApplyPitcher(pit, currentPitcher.Skills, priorBf, ctx.Skills, inning, inRelief);
+                var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills,
+                    inning, inRelief, runnersOn: bases.RunnerCount > 0);
+
+                // チャンス◎×（得点圏）・ピンチ◎×（得点圏 or 終盤の接戦）: プレッシャー倍率の振れに掛かる側
+                // （設計書10 §0.1・issue #907）。場面外・スキルなしは None＝従来と1ビットも変わらない。
+                var risp = bases.Second is not null || bases.Third is not null;
+                var pinch = risp || (inning >= ctx.Pressure.LateInningFrom
+                                     && Math.Abs(offense.Runs - defense.Runs) <= ctx.Pressure.CloseScoreDiff);
+                var batterTrait = risp ? SkillModel.BatterPressureTrait(batter.Skills) : PressureTrait.None;
+                var pitcherTrait = pinch ? SkillModel.PitcherPressureTrait(currentPitcher.Skills) : PressureTrait.None;
 
                 // プレッシャー×精神力（設計書02 §3）: 緩和=伝令、負側増幅=疲労・動揺。精神力50なら恒等。
                 var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
                 pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
                     currentPitcher.Mental, pressureIdx, ctx.Pressure,
                     defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
-                    defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0));
+                    defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills));
                 bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
                     batter.Mental, pressureIdx, ctx.Pressure,
-                    offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
+                    offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills));
 
                 // 主将（設計書09 §8.1, issue #860 A）: 在場なら常時チーム全員を底上げ。退場すると次打席で消える。
                 // ベンチでも底上げの3割（CaptainBenchFactor）は残る＝Bの伝令ボーナスと両取り可（2026-11-10 監督決定）。
@@ -881,9 +893,8 @@ public static class GameEngine
                 var directive = defTactics.Policy == PitchPolicy.Auto
                     ? (PitchDirective?)null
                     : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
-                // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。名捕手（設計書10）は実効リードを底上げ。
-                var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead)
-                    + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
+                // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。
+                var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead);
                 return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
@@ -1115,17 +1126,19 @@ public static class GameEngine
                         // 非強制時 paBaserunning は ctx.Baserunning と同一参照＝従来の乱数順・結果に不変。
                         // 送球の逸れ（issue #841）の受け手＝二塁カバーの遊撃手（BuildSteal の二盗送球と同じ約束）。
                         var secondBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.Shortstop);
+                        // クイック◎×（issue #907）: 投手ごとのクイックの秒の差。スキルなしは0＝従来と同じ。
+                        var quickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
                         var steal = force switch
                         {
                             Debugging.ForcedOutcome.StealSuccess => StealResolver.Forced(
                                 bases.First, defense.Catcher, paBaserunning, StealResult.Safe, pitchout, stealStart,
-                                receiver: secondBaseReceiver),
+                                receiver: secondBaseReceiver, pitcherQuickOffsetSeconds: quickOffset),
                             Debugging.ForcedOutcome.StealCaught => StealResolver.Forced(
                                 bases.First, defense.Catcher, paBaserunning, StealResult.CaughtStealing, pitchout, stealStart,
-                                receiver: secondBaseReceiver),
+                                receiver: secondBaseReceiver, pitcherQuickOffsetSeconds: quickOffset),
                             _ => StealResolver.ResolveVerdict(
                                 bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart,
-                                receiver: secondBaseReceiver),
+                                receiver: secondBaseReceiver, pitcherQuickOffsetSeconds: quickOffset),
                         };
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.First, safe);
@@ -1182,7 +1195,7 @@ public static class GameEngine
                                 Timeline.TimelineBuilder.BuildSteal(
                                     secondStealer, defense.Catcher, steal.Result,
                                     paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer,
-                                    steal.RunnerSeconds, steal.DefenseSeconds, steal.ThrowScatter));
+                                    steal.RunnerSeconds, steal.DefenseSeconds, steal.ThrowScatter, quickOffset));
 
                         // 3アウト目の盗塁死でもこの球は投げる（issue #779）。成否はこの球の結果で決まる（下）。
                         if (outs >= 3) runnerOutEndsHalf = true;
@@ -1214,9 +1227,10 @@ public static class GameEngine
                             bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
                         // 送球の逸れ（issue #841）の受け手＝三塁カバーの三塁手（BuildSteal の三盗送球と同じ約束）。
                         var thirdBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.ThirdBase);
+                        var thirdQuickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
                         var steal = StealResolver.ResolveVerdict(
                             bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart, StealTarget.Third,
-                            receiver: thirdBaseReceiver);
+                            receiver: thirdBaseReceiver, pitcherQuickOffsetSeconds: thirdQuickOffset);
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.Second, safe);
                         stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
@@ -1237,7 +1251,8 @@ public static class GameEngine
                                 Timeline.TimelineBuilder.BuildSteal(
                                     thirdStealer, defense.Catcher, steal.Result,
                                     ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart,
-                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds, steal.ThrowScatter));
+                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds, steal.ThrowScatter,
+                                    thirdQuickOffset));
                         if (outs >= 3) runnerOutEndsHalf = true;   // issue #779: この球は投げる
                     }
                 }
@@ -1387,7 +1402,8 @@ public static class GameEngine
                     var caughtRunner = bases.First;
                     var stealSafeProb = StealResolver.SuccessProbability(
                             bases.First, defense.Catcher, paBaserunning,
-                            receiver: defense.PlayerAtPosition(Field.FieldPosition.Shortstop))
+                            receiver: defense.PlayerAtPosition(Field.FieldPosition.Shortstop),
+                            pitcherQuickOffsetSeconds: SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills))
                             - ctx.Tactics.HitAndRunCaughtPenalty;
                     var caughtSafe = bases.Second is null
                         && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng);
@@ -1791,10 +1807,6 @@ public static class GameEngine
                 // 守備の内野深さ（G1）＝ゴロ凡打の三塁走者判定へ「前進で刺す/後退で献上」を反映。
                 // ThrowArriveSeconds（一塁送球到達時刻）はゴロ凡打の進塁打（Issue #318）分岐Cの転送起点。
                 // BatterToFirstSeconds（打者走者の一塁到達）は併殺の転送レース（Issue #369）の二段目。
-                // 「併殺の名手」（design-10）: 二塁経由の転送が速い＝守備側の遊撃手/二塁手が持つとき転送時間を短縮。
-                var dpPivotBonus = (defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.Skills.Has(Skill.DoublePlayArtist) == true
-                                    || defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.Skills.Has(Skill.DoublePlayArtist) == true)
-                    ? ctx.Skills.DoublePlayArtistBonus : 0.0;
                 // 併殺ピボットの中継球速（issue⑦: 従来 RelayThrowSpeedMps 固定で二塁手/遊撃手の地肩が
                 // 併殺成立率に無効だった）。二塁カバーへ実際に入るのは「処理した側と逆の中堅手」
                 // （FormationTable の全ゾーンでこの対応＝遊撃手/三塁手が処理→二塁手がカバー、それ以外
@@ -1805,7 +1817,7 @@ public static class GameEngine
                 var dpPivotArm = defense.PlayerAtPosition(dpPivotRole)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps;
                 homePlay = new HomePlayContext(
                     ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
-                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus, dpPivotArm,
+                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotArm,
                     FielderRole: fp.FielderRole);
             }
 
@@ -1963,10 +1975,6 @@ public static class GameEngine
                         }
                         // 判定側（BaserunningModel.ResolveDoublePlay）と同じ値を渡す＝絵と判定が同じ秒で組まれる
                         // （issue double-play-throw-pace-and-second-out-call 案B/C）。
-                        var dpPivotBonusForDisplay =
-                            (defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.Skills.Has(Skill.DoublePlayArtist) == true
-                             || defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.Skills.Has(Skill.DoublePlayArtist) == true)
-                            ? ctx.Skills.DoublePlayArtistBonus : 0.0;
                         var pivotSprintSpeedByRole = new Dictionary<Field.FieldPosition, double>
                         {
                             [Field.FieldPosition.SecondBase] =
@@ -1991,7 +1999,7 @@ public static class GameEngine
                                     ?? new FielderAttributes().ThrowSpeedMps,
                         };
                         timeline = Match.Timeline.TimelineBuilder.AppendDoublePlayThrows(
-                            timeline, dpPlay, ctx.Field, batterArrive, ctx.Baserunning, dpPivotBonusForDisplay,
+                            timeline, dpPlay, ctx.Field, batterArrive, ctx.Baserunning,
                             pivotSprintSpeedByRole, batterOut: !batterSafeOnFc,
                             pivotThrowSpeedByRole: pivotThrowSpeedByRole, relayToFirst: !forceOnlyDraw);
                     }

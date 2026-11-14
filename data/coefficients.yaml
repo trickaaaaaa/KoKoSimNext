@@ -740,9 +740,17 @@ form:
 # スキルの定義（id・カテゴリ・説明）は data/skills.yaml。ここは効果の強さと生成率だけ。
 skills:
   # 打撃系（試合内・行動特性）
-  slow_starter_bat_contact_per_pa: 1.6   # 尻上がり: 打席数あたりのミート増
+  slow_starter_bat_contact_per_pa: 1.6   # 目慣れ（旧 尻上がり・野手）: 打席数あたりのミート増
   slow_starter_bat_max_bonus: 6.0
-  spray_pull_factor: 0.55                # 広角打法: 引っ張りバイアスの縮小倍率（issue #262。旧 spray_bearing_factor＝σ拡大は廃止）
+  opposite_field_pull_factor: 0.55       # 流し打ち（旧 広角打法 spray_pull_factor・issue #907）: 引っ張りバイアスの縮小倍率（issue #262）
+  opposite_field_exit_bonus: 0.04        # 流し打ち: 逆方向へ飛んだ打球の初速 +4%
+  opposite_field_min_bearing_deg: 10.0   # 流し打ち: 中堅からこれ以上逆方向へ寄った打球を「逆方向」とみなす[deg]
+  fastball_hitter_contact_bonus: 6.0     # 速球打ち: ストレート系（ストレート・ツーシーム）へのミート加算
+  breaking_ball_hitter_contact_bonus: 5.0    # 変化球打ち: 変化球へのミート加算（空振り減）
+  breaking_ball_hitter_discipline_bonus: 6.0 # 変化球打ち: 変化球への選球眼加算（ボール球振り減）
+  team_batting_bearing_shift_deg: 10.0   # つなぎの打撃: 走者ありで打球方向を右方向へ[deg]
+  team_batting_launch_shift_deg: -3.0    # つなぎの打撃: 走者ありで打球角を低く[deg]（ゴロ寄り）
+  team_batting_quality_shift: -0.015     # つなぎの打撃: 走者ありでコンタクト品質を下げる（ヒットになりにくい）
   first_pitch_swing_prob: 0.62           # 初球から振る
   grinder_foul_factor: 1.30              # 粘り打ち: ファウル率拡大（球数を吐かせる）
   streaky_variance_factor: 1.7           # ムラっけ: 当日の出来の振れ幅拡大
@@ -755,9 +763,19 @@ skills:
   effectively_wild_control_penalty: 7.0  # 荒れ球: 制球↓（四球増）だが…
   effectively_wild_stuff_bonus: 0.13     # …打ちにくい
   deceptive_ball_stuff_bonus: 0.18       # クセ球: 球速に依らない空振り誘発
-  # 守備系
-  double_play_artist_bonus: 0.06
-  master_catcher_lead_bonus: 10          # 名捕手: 実効リード+10（設計書10, 01 §2①）
+  shaky_start_innings: 2                 # 立ち上がり難: 1〜2回は…
+  shaky_start_control_penalty: 6.0       # …制球↓
+  shaky_start_stuff_penalty: 0.08        # …球威↓
+  quick_delivery_seconds: 0.10           # クイック◎: 盗塁の守備側の秒を短縮[s]
+  slow_delivery_seconds: 0.10            # クイック×: 盗塁の守備側の秒を延長[s]
+  fireman_batters: 3                     # 火消し: 途中登板から対戦打者3人まで…
+  fireman_control_bonus: 6.0             # …制球↑
+  fireman_stuff_bonus: 0.08              # …球威↑
+  fireman_relief_score_bonus: 12.0       # 火消し: 継投AIのリリーフ選びで比較値（4能力の和）へ加算
+  # チャンス◎×・ピンチ◎×（設計書10 §0.1）: プレッシャー倍率の振れ raw＝(精神力−50)/50×slope×P に掛かる側
+  clutch_floor_per_pressure: 0.004       # ◎: raw の下限 +0.004×P（圧による低下を消し、わずかにプラス）
+  choke_negative_amplify: 2.0            # ×: raw<0 を2倍に拡大
+  choke_ceiling_per_pressure: 0.008      # ×: raw の上限 −0.008×P（精神力が高くても圧で少し落ちる）
   # チーム系
   spiritual_pillar_captain_factor: 1.4   # 精神的支柱: 主将の緩和量拡大（設計書09 §8）
   moodmaker_mitigation_bonus: 0.06       # ムードメーカー: 出場中なら緩和量へ加算（主将とは別枠、複数人でも重複しない）
@@ -775,7 +793,8 @@ skills:
   monster_stuff_bonus: 0.10
   # 生成（0〜数個、目玉は極稀、一部は隠し）
   max_skills_per_player: 3
-  common_skill_prob: 0.16
+  common_skill_prob: 0.16                # チーム系・体質系1種の付与確率
+  play_skill_prob: 0.10                  # 打撃系・投手系1種の付与確率（投手寄せ重みで振り分け・負スキルは半分。issue #907 でプール拡充に合わせて別立て）
   hidden_share: 0.22
   marquee_skill_prob: 0.008
   pillar_leadership_threshold: 68
