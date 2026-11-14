@@ -84,6 +84,11 @@ public sealed class TeamState
     public int LeadRunnerForceOnlyCount { get; set; }
     public int DroppedThirdStrikeCount { get; set; }
     public int ErrorExtraAdvanceCount { get; set; }
+    /// <summary>失策の打席の走者アウト・捕球ミス時の二塁走者の帰趨（issue #903。統計参考値）。</summary>
+    public int ErrorPlayRunnerOuts { get; set; }
+    public int CatchErrorSecondRunnerCount { get; set; }
+    public int CatchErrorSecondRunnerOutAtThird { get; set; }
+    public int CatchErrorSecondRunnerHeld { get; set; }
     public int PickoffCount { get; set; }
     public int IntentionalWalkCount { get; set; }
     public int DoubleStealThirdBreakCount { get; set; }
@@ -392,6 +397,25 @@ public sealed class TeamState
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
                 a.HBP, a.SB, a.CS, a.R, a.SF, a.SH);
+    }
+
+    /// <summary>
+    /// 1人ぶんの今日の打撃成績（打席に立っていなければ null）。試合中の能力ビューアの詳細欄（issue #923）が引く
+    /// 観測データ＝読むだけで状態を変えない。守備位置は帰属キーの実体のもの（表示には使わない）。
+    /// </summary>
+    public BattingLine? TodayBattingOf(Player p)
+    {
+        if (p is null || !_bat.TryGetValue(KeyOf(p), out var a)) return null;
+        return new BattingLine(0, p.Position, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO,
+            p.SourceId, a.HBP, a.SB, a.CS, a.R, a.SF, a.SH);
+    }
+
+    /// <summary>1人ぶんの今日の投手成績（登板していなければ null）。観測データ（issue #923）。</summary>
+    public PitchingLine? TodayPitchingOf(Player p)
+    {
+        if (p is null || !_pit.TryGetValue(KeyOf(p), out var a)) return null;
+        return new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB,
+            p.UniformNumber, a.HRA, null, a.EarnedRuns);
     }
 
     /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>
@@ -1202,6 +1226,22 @@ public sealed class TeamState
 
     /// <summary>DHが入っている打順スロット（0始まり。DH制のときだけ意味を持つ）。</summary>
     public int DhSlot => _dhSlot;
+
+    /// <summary>成績の帰属キー（守備位置の書き換えで変わらない本人）。交代の差分取り（<see cref="LineupPicture"/>）用。</summary>
+    internal Player AccountKey(Player p) => KeyOf(p);
+
+    /// <summary>打順スロット slot（0始まり）の表示上の守備位置（DHの枠は DH）。<see cref="LiveLineup"/> と同じ規則。</summary>
+    internal FieldPosition DisplayPositionAt(int slot)
+        => _usesDh && slot == _dhSlot ? FieldPosition.DesignatedHitter : _lineup[slot].Position;
+
+    /// <summary>途中出場の入り方（代打・代走・守備交代）。スタメン・継投・ベンチからの補充は null。</summary>
+    internal BoxEntry? EntryKindOf(Player p) => _entry.TryGetValue(KeyOf(p), out var e) ? e.Kind : null;
+
+    /// <summary>
+    /// 代打で入ってまだ打席を終えていない選手か（場内放送の「バッター、◯◯くん」・issue #919）。
+    /// 代打で入った後に守備に就いて次の打席が回ってきた選手は、普通の打者として紹介する。観測専用。
+    /// </summary>
+    public bool IsFreshPinchHitter(Player p) => EntryKindOf(p) == BoxEntry.PinchHit && PriorPlateAppearances(p) == 0;
 
     /// <summary>テスト用: 打順スロット指定で代打の入り方を作る（<see cref="PinchHitNext"/> は次打者固定のため）。</summary>
     internal bool SubstituteForTest(int slot, Player sub) => SubstituteAtSlot(slot, sub, BoxEntry.PinchHit);

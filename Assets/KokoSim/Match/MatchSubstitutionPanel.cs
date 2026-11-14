@@ -462,7 +462,8 @@ namespace KokoSim.Unity.Match
                     var b = BaseOf(p);
                     if (b >= 0) { selectable = true; tag = BaseName(b); picked = _baseIndex == b; if (picked) preview = inName; }
                 }
-                var row = LineupRow(i + 1, p, PosJp(p.Position), selectable, picked, tag, chipActive: false,
+                // 位置は「いま試合で就いている位置」＝DH の枠は「指」（Player.Position には本来の位置が残る・issue #931）。
+                var row = LineupRow(i + 1, p, PosJp(MatchScoutView.LineupPosition(_opt, i)), selectable, picked, tag, chipActive: false,
                     previewTo: preview, onCancel: preview == null ? null : CancelOffensePick);
                 if (selectable)
                     row.RegisterCallback<ClickEvent>(e =>

@@ -29,12 +29,13 @@ namespace KokoSim.Unity.Match
         private Transform _setGlove;   // 投手の prop-glove（初回に探して持つ）
 
         /// <summary>
-        /// セット補正の効きをプレー時間で進める（Tick の頭で毎フレーム）。駆動はクリップ内時刻でなく状態＝
-        /// 「セットで静止しているか」（<see cref="PitcherAwaitsWindup"/>）。クリップ差し替えのコマで飛ばないため。
+        /// セット補正の効きをプレー時間で進める（Tick の頭で毎フレーム）。駆動は「セット姿勢にいるか」
+        /// （<see cref="PitcherAtSet"/>＝投球クリップの頭）。旧実装は <see cref="PitcherAwaitsWindup"/> だったため、
+        /// 同じセット姿勢でも生成直後（試合開始直後）と最後の1球の後・終局では効いていなかった（issue #912 で首と揃えた）。
         /// </summary>
         private void AdvanceSetGloveWeight(float dt)
         {
-            float target = PitcherAwaitsWindup ? 1f : 0f;
+            float target = PitcherAtSet ? 1f : 0f;
             _setGloveW = Mathf.MoveTowards(_setGloveW, target, dt / CrossfadeSeconds);
         }
 
@@ -49,6 +50,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void FixPitcherSetGlove()
         {
+            _setGloveApplied = _setGloveW;
             if (_setGloveW <= 0f || _pitcher == null || _pitcher.Animator == null) return;
             var anim = _pitcher.Animator;
             var hand = anim.GetBoneTransform(HumanBodyBones.LeftHand);
@@ -80,7 +82,7 @@ namespace KokoSim.Unity.Match
             SetGloveFlexDeg = flexDeg;
             SetGloveRollDeg = rollDeg;
             if (_pitcher == null) return "no pitcher";
-            _pitcher.Graph.Evaluate(0f);
+            EvaluateGraph(_pitcher, 0f);
             _setGloveW = 1f;
             FixPitcherSetGlove();
             return SetGloveDiagForCapture();

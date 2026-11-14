@@ -56,6 +56,8 @@
 
         <!-- 主要操作は1つだけ・大きく（UI原則⑦）。アクセントもここだけ（UI原則②）。 -->
         <ui:VisualElement class="mp-foot">
+            <!-- 場内放送のオン/オフ（issue #919）。試合中の操作列と同じ切り替え・同じアプリ設定。 -->
+            <ui:Button name="mp-announce" text="場内放送" class="chip-btn" />
             <ui:Button name="mp-start" text="試合開始" class="mp-cta" />
         </ui:VisualElement>
 

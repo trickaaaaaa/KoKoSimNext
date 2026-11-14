@@ -915,6 +915,55 @@ namespace KokoSim.Unity.Components
             return row;
         }
 
+        // ===== StatTable（成績表：指標×スコープ） =====
+
+        /// <summary>
+        /// 成績表（components.uss の .stat-table）。ラベルを左に1列だけ置き、スコープ（例「今日」「通算」）を
+        /// 横に並べる。値は数字か「—」だけ＝数字の書体（f-num）・列ごとに右揃えで桁が縦に揃う（UI原則③）。
+        /// 形はスタメン設定の比較カードの成績表（issue #388）と同じ。
+        /// </summary>
+        public static VisualElement StatTable(IReadOnlyList<string> scopes,
+                                              IEnumerable<(string Label, IReadOnlyList<string> Values)> rows)
+        {
+            var table = new VisualElement();
+            table.AddToClassList("stat-table");
+
+            var head = new VisualElement();
+            head.AddToClassList("stat-table__row");
+            head.AddToClassList("stat-table__row--head");
+            var corner = new Label(string.Empty);
+            corner.AddToClassList("stat-table__lab");
+            head.Add(corner);
+            if (scopes != null)
+                foreach (var scope in scopes)
+                {
+                    var sc = new Label(scope);
+                    sc.AddToClassList("stat-table__scope");
+                    head.Add(sc);
+                }
+            table.Add(head);
+
+            if (rows == null) return table;
+            foreach (var (label, values) in rows)
+            {
+                var tr = new VisualElement();
+                tr.AddToClassList("stat-table__row");
+                var lab = new Label(label);
+                lab.AddToClassList("stat-table__lab");
+                tr.Add(lab);
+                if (values != null)
+                    foreach (var value in values)
+                    {
+                        var val = new Label(value);
+                        val.AddToClassList("stat-table__val");
+                        val.AddToClassList("f-num");
+                        tr.Add(val);
+                    }
+                table.Add(tr);
+            }
+            return table;
+        }
+
         // ===== BoxRow（ボックススコア表の1行） =====
 
         /// <summary>

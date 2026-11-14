@@ -8,7 +8,7 @@ namespace KokoSim.Unity.Match
 {
     /// <summary>
     /// 【開発用・エディタ限定】試合中の選手能力ビューア（issue #602）のスクショ確認用。使い捨て。
-    /// タイムの導線 →［野手能力］→［投手能力］→ 交代を挟んだ後（交代後の実体が出ること）を撮る。
+    /// タイムの導線 →［野手能力］→ 行に当てた詳細 →［投手能力］→［相手］→ 交代を挟んだ後（交代後の実体が出ること）を撮る。
     /// </summary>
     public sealed class MatchScoutShooter : MonoBehaviour
     {
@@ -39,14 +39,26 @@ namespace KokoSim.Unity.Match
             ctrl.CloseScoutForCapture();
             yield return Capture(ctrl, "scout-0-pause-menu");
 
-            // ② 野手能力（既定タブ）。両校の打線・現投手・控えが左右に並ぶ。
+            // ② 野手能力（既定タブ）・自校。何も当てていない＝詳細欄は1番打者。
             ctrl.OpenScoutForCapture();
             ctrl.SelectScoutTabForCapture(0);
             yield return Capture(ctrl, "scout-1-fielder");
 
-            // ③ 投手能力（両校まとめて列が入れ替わる）。
+            // ②' 4番の行に当てた（DH制なら DH の枠＝位置は「指」・issue #931）。
+            ctrl.HoverScoutRowForCapture(3);
+            yield return Capture(ctrl, "scout-1b-fielder-hover");
+
+            // ③ 投手能力（一覧の列と詳細欄がまとめて入れ替わる）。打線の最後の行（投手）に当てる。
             ctrl.SelectScoutTabForCapture(1);
+            ctrl.HoverScoutRowForCapture(9);
             yield return Capture(ctrl, "scout-2-pitcher");
+
+            // ③' 相手校（持ち球チャートは出る・特殊能力は出ない）。
+            ctrl.SelectScoutTeamForCapture(false);
+            ctrl.HoverScoutRowForCapture(9);
+            yield return Capture(ctrl, "scout-2b-opponent-pitcher");
+            ctrl.SelectScoutTabForCapture(0);
+            yield return Capture(ctrl, "scout-2c-opponent-fielder");
             ctrl.CloseScoutForCapture();
 
             // ④ 交代を挟んでから開き直す＝**交代後の実体**が出ていること（完了条件）。

@@ -329,14 +329,15 @@
 }
 .tmo-back:hover { background-color: var(--sbk-rule-soft); }
 
-/* ── 選手能力ビューア（issue #602・監督決定A案） ──
-   タイムから開く両校の名簿。左＝自校・右＝相手を同時に出し、行の右へ能力をランクチップで並べる。
-   器は部品の modal-scrim / modal-card、ヘッダは交代モーダルの msub-* を流用し、
-   ここでは「2カラムの割り付け」と「行の列合わせ」だけを足す。**読むだけ**の画面なので操作系は
+/* ── 選手能力ビューア（issue #602 → #923・監督決定B案） ──
+   タイムから開く名簿。左＝自校/相手をタブで切り替える一覧（行の右へ能力をランクチップで並べる）、
+   右＝カーソルを当てた1人の詳細（部品 AbilityRow・PitchChartView・StatTable）。
+   器は部品の modal-scrim / modal-card / panel、ヘッダは交代モーダルの msub-* を流用し、
+   ここでは「左右の割り付け」と「行の列合わせ」だけを足す。**読むだけ**の画面なので操作系は
    タブと閉じるだけ＝CTA 色は持たない（UI原則⑦）。 */
 .mscout-card {
     width: 94%;
-    max-height: 94%;
+    height: 94%;
     padding-left: var(--sp-4);
     padding-right: var(--sp-4);
     padding-top: var(--sp-3);
@@ -345,19 +346,46 @@
 .mscout-head { flex-direction: row; align-items: center; flex-shrink: 0; margin-bottom: var(--sp-2); }
 .mscout-tabs { margin-left: var(--sp-4); }
 
-/* 両校を等幅で左右に。あふれは各カラムのスクロールに収める（カード全体は伸ばさない）。 */
+/* 一覧（野手11列が入る幅）を伸ばし、詳細欄は残りを取る。あふれは各欄のスクロールに収める。 */
 .mscout-body { flex-direction: row; align-items: stretch; flex-grow: 1; min-height: 0; }
-.mscout-team {
-    flex-grow: 1;
+.mscout-list {
+    flex-grow: 3;
     flex-basis: 0;
     min-width: 0;
     margin-right: var(--sp-4);
 }
-.mscout-team--last { margin-right: 0; }
-.mscout-team__hd { flex-direction: row; align-items: center; flex-shrink: 0; margin-bottom: var(--sp-1); }
-.mscout-team__name { font-size: var(--fs-body); color: var(--color-chalk); margin: 0; padding: 0; }
-.mscout-team__tag { margin-left: var(--sp-2); }
+.mscout-list__hd { flex-direction: row; align-items: center; flex-shrink: 0; margin-bottom: var(--sp-1); }
+.mscout-team__name { font-size: var(--fs-body); color: var(--color-chalk); margin: 0 0 0 var(--sp-3); padding: 0; }
 .mscout-scroll { flex-grow: 1; min-height: 0; }
+
+/* 詳細欄（右）。 */
+.mscout-detail {
+    flex-grow: 2;
+    flex-basis: 0;
+    min-width: 0;
+    padding: var(--sp-2) var(--sp-3);
+}
+.mscout-detail__head { flex-shrink: 0; margin-bottom: var(--sp-1); }
+.mscout-detail__namerow { flex-direction: row; align-items: center; }
+.mscout-detail__no {
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+    margin: 0 var(--sp-2) 0 0;
+    padding: 0;
+}
+.mscout-detail__skills { flex-shrink: 0; margin-bottom: var(--sp-1); }
+.mscout-detail__abil { flex-shrink: 0; }
+/* 能力名（「スタミナ」の4文字）が Label の既定余白でランクチップに食い込むのを防ぐ（画面側のリセット）。 */
+.mscout-detail__abil .abil-row__label { margin: 0; padding: 0; }
+/* 持ち球のミニ球種変化チャート（Painter2D 描画のため固定高）。スタメン設定の比較欄と同じ高さ。 */
+.mscout-detail__pitch { height: 150px; flex-shrink: 0; }
+.mscout-detail__stats { flex-shrink: 0; }
+/* 成績表の Label は既定の余白（margin 4/2・padding 4）を持ったまま 22px の行に入ると、ラベル（左上揃え）と
+   値（中央揃え）で縦位置がずれる＝画面側で余白を落として行の中央に揃える。 */
+.mscout-detail__stats .stat-table__lab,
+.mscout-detail__stats .stat-table__scope,
+.mscout-detail__stats .stat-table__val { margin: 0; padding: 0; }
+.mscout-detail__stats .stat-table__lab { -unity-text-align: middle-left; }
 
 /* 区分（打線 / 投手 / 控え）。切替ではないので帯にせず小さく置く（UI原則④）。 */
 .mscout-section {
@@ -371,7 +399,11 @@
 }
 
 /* 行（行高32px基準・UI原則①）。 */
-.mscout-row { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+/* 全行に透明な2pxの枠を持たせる＝詳細に出している行（.mscout-row--shown）だけ枠に色が付いても列がずれない。 */
+.mscout-row {
+    flex-direction: row; align-items: center; height: 32px; flex-shrink: 0;
+    border-width: 2px; border-color: rgba(0, 0, 0, 0);
+}
 .mscout-row--head { height: 24px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
 .mscout-row--head .msc__ord,
 .mscout-row--head .msc__pos,
@@ -382,6 +414,8 @@
 .mscout-row--head .msc__cell { font-size: var(--fs-cap); color: var(--color-faint); }
 /* いま出ている選手（次打者・現投手）は面で示す。盤面の状態色とは別の「注目」なので線も色も足さない。 */
 .mscout-row--now { background-color: var(--color-panel-deep); }
+/* 詳細欄に出している行（当てた行／既定の1番打者）。選択は墨の枠で示す（UI原則②）。 */
+.mscout-row--shown { border-color: var(--color-line-focus); }
 /* もう使えない控え（出場済み・登板済み＝リエントリー禁止）は沈める。 */
 .mscout-row--used .msc__name,
 .mscout-row--used .msc__pos,

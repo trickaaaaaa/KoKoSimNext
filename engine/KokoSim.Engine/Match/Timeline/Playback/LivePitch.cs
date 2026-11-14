@@ -43,6 +43,8 @@ public sealed record LiveAtBat
     public FieldPosition BatterPosition { get; init; }
     public int BatterNumber { get; init; }
     public double BatterConditionValue { get; init; }
+    /// <summary>代打で入ってまだ打席を終えていない打者か（場内放送の「バッター、◯◯くん」・issue #919）。</summary>
+    public bool BatterIsPinchHitter { get; init; }
     public required string PitcherName { get; init; }
     public int? PitcherSourceId { get; init; }
     public Handedness PitcherThrows { get; init; }

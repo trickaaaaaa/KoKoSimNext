@@ -245,6 +245,7 @@ public sealed class MatchProgression
     private void RecordSubstitution(GameDecision d)
     {
         _decisions.Add(d);
+        _p.ObserveSubstitutions();   // 交代ログ（issue #920）。再生（GameReplay）も同じ位置で積む
         RefreshLiveMatchupAfterSubstitution();
     }
 
@@ -261,6 +262,7 @@ public sealed class MatchProgression
             BatterName = batter.Name, BatterSourceId = batter.SourceId, BatterBats = batter.Bats,
             BatterPosition = batter.Position, BatterNumber = batter.UniformNumber,
             BatterConditionValue = batter.ConditionValue,
+            BatterIsPinchHitter = offense.IsFreshPinchHitter(batter),
             PitcherName = pitcher.Name, PitcherSourceId = pitcher.SourceId, PitcherThrows = pitcher.Throws,
             PitcherNumber = pitcher.UniformNumber, PitcherConditionValue = pitcher.ConditionValue,
         };
@@ -306,6 +308,31 @@ public sealed class MatchProgression
             UsedReserves = Unavailable(team.RosterReserves, team.AvailableReserves),
             ReliefCandidates = team.ReliefRankingCandidates,
         };
+    }
+
+    /// <summary>
+    /// 選手1人ぶんの今日の打撃成績（打席に立っていなければ null）。試合中の能力ビューア（issue #923）の
+    /// 詳細欄が引く観測データ＝状態を変えず乱数も引かない（不変条件#2）。
+    /// </summary>
+    public BattingLine? TodayBattingOf(bool teamIsAway, Player player)
+        => _p.OffenseOf(teamIsAway).TodayBattingOf(player);
+
+    /// <summary>
+    /// 選手1人ぶんの今日の投手成績（登板していなければ null）。守備中の現投手には進行中の打席で投げた球数
+    /// （<see cref="PendingPitchIndex"/>）を足す＝HUD の球数（<see cref="Snapshot"/>）と食い違わない（issue #397 と同じ扱い）。
+    /// 観測データ（issue #923）。
+    /// </summary>
+    public PitchingLine? TodayPitchingOf(bool teamIsAway, Player player)
+    {
+        var team = _p.OffenseOf(teamIsAway);
+        var line = team.TodayPitchingOf(player);
+        var liveAtBat = _p.LiveAtBat;
+        var defending = liveAtBat is not null && liveAtBat.IsTop != teamIsAway;
+        if (!defending || PendingPitchIndex <= 0 || player is null || !player.Equals(team.CurrentPitcher)) return line;
+        return line is null
+            ? new PitchingLine(player.Name, 0, 0, 0, 0, 0, 0, PendingPitchIndex, player.SourceId,
+                UniformNumber: player.UniformNumber)
+            : line with { Pitches = line.Pitches + PendingPitchIndex };
     }
 
     /// <summary>代打: 次打者を控え sub に代える。控えに sub が居なければ false。</summary>
@@ -805,6 +832,12 @@ public sealed class MatchProgression
 
     /// <summary>継投ログ（issue #209 表現。継投・投野交代・野手登板）。交代パネルの表示に使う。観測専用。</summary>
     public System.Collections.Generic.IReadOnlyList<PitchingChangeEvent> PitchingChanges => _p.PitchingChanges;
+
+    /// <summary>
+    /// 選手交代のログ（issue #920 交代テロップ）。両校の代打・代走・守備交代・継投・守備位置の変更・DH解除。
+    /// 交代の下書きを取り消すと再生し直すので、件数が減ることがある。観測専用。
+    /// </summary>
+    public System.Collections.Generic.IReadOnlyList<SubstitutionEvent> Substitutions => _p.Substitutions;
 
     /// <summary>
     /// スキップ: 以降の采配を委任AI（設計書11・自分の采配能力＝TacticalSense）へ委ね、残りを一括解決して
