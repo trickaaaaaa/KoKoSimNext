@@ -1055,6 +1055,10 @@ namespace KokoSim.Unity.Match
         public int BatTrailSuppressedForCapture { get; private set; }
         /// <summary>【実測プローブ用】カウンタを0へ戻す。</summary>
         public void ResetBatTrailCountersForCapture() { BatTrailSampledForCapture = 0; BatTrailSuppressedForCapture = 0; }
+        /// <summary>撮影用（issue #938）: バットの軸（ノブ→バレル。ワールド）。バットを出していなければ零。</summary>
+        public Vector3 BatAxisForCapture => _bat != null && _bat.activeSelf ? _bat.transform.up : Vector3.zero;
+        /// <summary>撮影用（issue #938）: 真にするとバントの水平固定を切る＝修正前の絵と比べるため。</summary>
+        public static bool BuntFlatDisabledForCapture;
 #endif
 
         private sealed class Actor
@@ -1611,6 +1615,38 @@ namespace KokoSim.Unity.Match
         /// 理由は<see cref="DuelCalibration.BuntTransitionYawDeg"/>のコメント参照） / それ以外＝
         /// 購入AA打撃系の既定（<see cref="_cal"/>.BatterYawDeg）。
         /// </summary>
+        /// <summary>
+        /// バットを真横へ寝かせる重み（issue #938）。バントの待機・当てる・空振りは1、構えへの移行は進みに応じて0→1。
+        /// クロスフェード中は退場側の重みから入場側の重みへ補間する（通常構え⇔バント構えの切り替えで飛ばないため）。
+        /// </summary>
+        private float BuntBatFlatWeight()
+        {
+            float W(AnimationClip clip, float time)
+            {
+                if (clip == null) return 0f;
+                if (clip == _buntLoopClip || clip == _buntHitClip || clip == _buntMissClip) return 1f;
+                if (clip == _buntIdleToStanceClip && clip.length > 1e-4f)
+                    return Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(time / clip.length));
+                return 0f;
+            }
+            float into = W(_batter.Clip, _batter.Time);
+            if (_batter.FadeRemaining > 0f && _batter.FadeDuration > 1e-4f && _batter.FadeFromClip != null)
+            {
+                float f = 1f - Mathf.Clamp01(_batter.FadeRemaining / _batter.FadeDuration);
+                // 移行クリップから抜けるときは寝かせ切った状態（1）から渡す
+                float from = _batter.FadeFromClip == _buntIdleToStanceClip ? 1f : W(_batter.FadeFromClip, 0f);
+                return Mathf.Lerp(from, into, f);
+            }
+            return into;
+        }
+
+        /// <summary>
+        /// バントの水平軸（ノブ→バレル）。向きは利き打ちだけで決める（+x＝一塁側。右打者はバレルが本塁の上＝+x、左打者は −x）。
+        /// 握り線の x 成分の符号から採ると、当てる動作の途中で握り線が投手方向を横切ったコマで符号が裏返り、
+        /// バットが1コマで180°反転した（2026-11-14 実測: Bunt_Hitting の 0.67秒目）。
+        /// </summary>
+        private Vector3 BuntFlatAxis() => new Vector3(_batterLeft ? -1f : 1f, 0f, 0f);
+
         private float YawForBatterClip(AnimationClip clip)
         {
             // Mixamo素材（gitignore）が無い環境では _swingMissClip が _batterOwnIdle と同一クリップへ
@@ -5340,6 +5376,15 @@ namespace KokoSim.Unity.Match
                 // 実測すると、トップから接触までに 上向き0.69→**真上0.99**→0.87→0.74→接触の瞬間は
                 // **捕手向き(0.18)** と暴れており、肝心の接触の姿勢が「芯が捕手を向く」＝軌道にならない。
                 // 収録の手首は道具を持たない前提の振りなので、そもそもバット軸の情報を持っていない。
+                // ---- バントの構え・結果の間はバットを真横（水平・一塁⇔三塁）に固定する（issue #938・監督決定 案A）----
+                // 握り線は Bunt_Loop の呼吸ぶん手が揺れるたびに上下へ振れる＝構えとして気持ち悪い。
+                // 握り点（両掌の中点）は下で今どおり手に追従させるので、バットは手から離れない。
+                // 移行（Idle_To_Bunt）は進みに応じて寝かせ、クロスフェード中は重みを補間する＝1コマで寝る／起きる飛びを出さない。
+                float buntFlat = BuntBatFlatWeight();
+#if UNITY_EDITOR
+                if (BuntFlatDisabledForCapture) buntFlat = 0f;
+#endif
+                if (buntFlat > 0.001f) axis = Vector3.Slerp(axis, BuntFlatAxis(), buntFlat).normalized;
                 bool onIdleLoop = _batter.Clip == _batter.IdleClip;
                 // 見逃しのタイミング取り（トップ）→構えへ戻るクロスフェードの間は、混ざりかけの両手から
                 // 合成軸を採り直さない（握り線の水平方向が混合の途中で回り、バットが1コマ横に寝る＝2026-08-18 実測）。
