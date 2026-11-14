@@ -160,8 +160,8 @@ public sealed record PitcherAttributes
     /// 差し引かないと同じ実力でも本格派ばかりが継投に選ばれる。
     /// </summary>
     public double ReliefScore(PitcherArchetypeCoefficients? archetypes = null)
-        => LevelFromVelocityKmh(MaxVelocityKmh) + Control + PitchRank + LevelFromStaminaPitches(StaminaPitches)
-           - PitcherArchetypes.OffsetSum(Archetype, archetypes ?? DefaultArchetypes);
+        => PitcherArchetypes.StrengthSum(Archetype, LevelFromVelocityKmh(MaxVelocityKmh), Control,
+            LevelFromStaminaPitches(StaminaPitches), PitchRank, archetypes ?? DefaultArchetypes);
 
     private static readonly PitcherArchetypeCoefficients DefaultArchetypes = new();
 }

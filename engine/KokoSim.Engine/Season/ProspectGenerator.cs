@@ -746,7 +746,10 @@ public static class ProspectGenerator
             // 全員が通るようになると野手の制球が OffSpecialtyFloor(8) を割る（実測3件/1635）。
             int Adjusted(AbilityKind k, double delta) => Math.Max(pitchingFloor, Lv(p.Level(k) + delta));
             veloLevel = Lv(veloLevel + dv * wRole);
-            AdjustLevel(p, AbilityKind.Control, Adjusted(AbilityKind.Control, dc * wRole));
+            // 剛腕の制球は割合（issue #908）。割合も wRole で薄める＝投手として読めない選手ほど 1 に近い。
+            var controlFactor = 1.0 + (PitcherArchetypes.ControlFactor(archetype, c.Archetypes) - 1.0) * wRole;
+            AdjustLevel(p, AbilityKind.Control,
+                Math.Max(pitchingFloor, Lv(p.Level(AbilityKind.Control) * controlFactor + dc * wRole)));
             // スタミナは上限なし（issue #356）＝軟投派等の正オフセットを100で頭打ちにしない。
             AdjustLevel(p, AbilityKind.Stamina,
                 Math.Max(pitchingFloor, LvStamina(p.Level(AbilityKind.Stamina) + ds * wRole)));

@@ -170,6 +170,9 @@ internal static class PreviewWriter
             PitcherArchetype.Power => ("ace.power", vel - dv),
             PitcherArchetype.Finesse => ("ace.finesse", a.Control - dc),
             PitcherArchetype.SoftToss => ("ace.soft", (a.Control - dc + a.PitchRank - dr) / 2.0),
+            PitcherArchetype.Flamethrower => ("ace.flamethrower", vel - dv),
+            PitcherArchetype.Pinpoint => ("ace.pinpoint", a.Control - dc),
+            PitcherArchetype.BreakingBallArtist => ("ace.artist", a.PitchRank - dr),
             _ => ("ace.balanced", (vel - dv + a.Control - dc + a.PitchRank - dr) / 3.0),
         };
         return new Pick(ace, trait, level, level, Ace: true);

@@ -57,8 +57,7 @@ public sealed class AceArchetypeShareTests
 
     private void Print(string label, List<PitcherArchetype> xs)
         => _out.WriteLine($"{label,-8} n={xs.Count,5} " + string.Join(" ",
-            new[] { PitcherArchetype.Power, PitcherArchetype.Balanced, PitcherArchetype.Finesse, PitcherArchetype.SoftToss }
-                .Select(a => $"{PitcherArchetypes.Label(a)} {100 * Share(xs, a),5:F1}%")));
+            Enum.GetValues<PitcherArchetype>().Select(a => $"{PitcherArchetypes.Label(a)} {100 * Share(xs, a),5:F1}%")));
 
     [Fact]
     public void Aces_FollowTheArchetypeSharesOfTheMound()
@@ -68,7 +67,7 @@ public sealed class AceArchetypeShareTests
         Print("エース", aces);
         // 実測（2026-11-14）: 修正前 本格35.0/技巧18.3/軟投4.7%（ベンチ投手 29.3/20.9/6.9）→ 修正後 22.6/23.7/8.7%
         // （ベンチ投手 23.4/23.5/8.8）。帯は「エース選びが型で底上げ・底下げしない」ことを見る。
-        foreach (var a in new[] { PitcherArchetype.Power, PitcherArchetype.Finesse, PitcherArchetype.SoftToss })
+        foreach (var a in Enum.GetValues<PitcherArchetype>())
             Assert.True(Math.Abs(Share(aces, a) - Share(pool, a)) < 0.04,
                 $"{PitcherArchetypes.Label(a)}: エース {Share(aces, a):P1} vs ベンチ投手 {Share(pool, a):P1}");
     }
@@ -83,7 +82,7 @@ public sealed class AceArchetypeShareTests
         var deps = new AiRosterDeps();
         var groups = nation.Schools.GroupBy(s => s.PrefectureId).ToList();
         var years = new[] { 3, 4, 5, 6, 7 };
-        var labels = new[] { PitcherArchetype.Power, PitcherArchetype.Balanced, PitcherArchetype.Finesse, PitcherArchetype.SoftToss };
+        var labels = Enum.GetValues<PitcherArchetype>();
         var per = new List<PitcherArchetype>[groups.Count * years.Length];
         Parallel.For(0, per.Length, k =>
         {
@@ -108,7 +107,7 @@ public sealed class AceArchetypeShareTests
         Assert.True(notable.Count >= 100, $"展望で紹介されたエースが少なすぎて判定できない: {notable.Count}");
         // 展望が「エースの中でさらに型を選り好みしない」ことを見る（実測 2026-11-14: 本格23.0/技巧20.4/軟投10.2%）。
         // エース選び自体の偏りは上の Aces_FollowTheArchetypeSharesOfTheMound が見る。
-        foreach (var a in new[] { PitcherArchetype.Power, PitcherArchetype.Finesse, PitcherArchetype.SoftToss })
+        foreach (var a in Enum.GetValues<PitcherArchetype>())
             Assert.True(Math.Abs(Share(notable, a) - Share(aces, a)) < 0.10,
                 $"{PitcherArchetypes.Label(a)}: 展望のエース {Share(notable, a):P1} vs エース全体 {Share(aces, a):P1}");
     }

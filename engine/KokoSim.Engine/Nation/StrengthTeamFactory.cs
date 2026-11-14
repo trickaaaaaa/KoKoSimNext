@@ -411,11 +411,12 @@ public static class StrengthTeamFactory
 
             // 球質タイプで配分を振り替える（総合はほぼ不変・Fork＝主RNG非消費）。
             var archetype = PitcherArchetypes.Sample(rng.Fork(archetypeSalt), ac);
-            var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(archetype, ac);
-            var velocityLevel = rc.VelocitySoftCap(Math.Max(10.0, velocityRaw + dv));
-            control = Lv(control + dc);
-            staminaLevel = Lv(staminaLevel + ds);
-            pitchRank = Lv(pitchRank + dr);
+            // 型の当て方は PitcherArchetypes.Apply が単一ソース（剛腕の制球は割合・issue #908）。
+            var (av, ac2, as2, ar) = PitcherArchetypes.Apply(archetype, velocityRaw, control, staminaLevel, pitchRank, ac);
+            var velocityLevel = rc.VelocitySoftCap(Math.Max(10.0, av));
+            control = Lv(ac2);
+            staminaLevel = Lv(as2);
+            pitchRank = Lv(ar);
 
             pitching = new PitcherAttributes
             {

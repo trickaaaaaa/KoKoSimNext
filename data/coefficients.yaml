@@ -1839,7 +1839,11 @@ roster:
   # 制球の振れ幅は±5程度が中立の上限。本格派は設計書02「球速とキレで押し込む」に沿ってキレを+へ戻した。
   archetype_power_share: 0.25        # 本格派
   archetype_finesse_share: 0.22      # 技巧派
-  archetype_soft_toss_share: 0.08    # 軟投派（残りはバランス型）
+  archetype_soft_toss_share: 0.08    # 軟投派
+  # 尖った型（issue #908・オーナー決定 2026-11-14: 各3%）。残りはバランス型（45%→36%）
+  archetype_flamethrower_share: 0.03          # 剛腕（150km/h・制球壊滅）
+  archetype_pinpoint_share: 0.03              # 精密機械
+  archetype_breaking_ball_artist_share: 0.03  # 変化球の魔術師
   # #578 Step 3: 球速の価値が2倍になったので球速オフセットを寝かせて型の中立性を回復（12/−10/−14 → 8/−7/−10）。
   # 制球・スタミナ・キレでの代償は実測で効かない（軟投派は制球を上げると失点が増える＝打たせて取る型の宿命）。
   # 2026-08-16（issue matchup-gap-saturation-k-rate ＋ fatigue-gradual-before-threshold）: 投打差の soft-cap で高球速の
@@ -1866,6 +1870,29 @@ roster:
   archetype_soft_toss_control: 2
   archetype_soft_toss_stamina: 2
   archetype_soft_toss_pitch_rank: 2
+  # 尖った型のオフセット（issue #908）。「平均の失点は他の型と揃える（オーナー決定 2026-11-14）」を実測で校正
+  # （Archetypes_AreBalanceNeutral_InActualGames）。試合ごとの振れ幅は大きくてよい。
+  # 実測（2026-11-14・1200試合・基準＝バランス型 失点4.36/3.50/2.64・K17.8%・BB6.9%＠Lv55/68/80）:
+  #   剛腕     制球G〜E（割合0.55）で球速+30・キレ+30: 失点＠Lv45/55/68/80 = 5.54/4.82/3.79/3.37（基準 5.19/4.36/3.50/2.64）・
+  #            K27.1%・BB10.3%＠Lv68。制球G・Fでは球速もキレもほぼ上限まで上げても揃わない＝**剛腕だけ中立の例外**
+  #            （オーナー決定 2026-11-14「平均すると少し弱いが当たる日は三振の山」。強すぎるより弱い側に倒す）
+  #   精密機械 失点4.10/3.30/2.62・K13.2%・BB6.0%（制球は高価値＝球速を大きく削って釣り合う）
+  #   魔術師   失点4.41/3.47/2.78・K16.3%・BB7.2%（キレは奪三振にほとんど効かない＝いまの物理モデルの性質）
+  archetype_flamethrower_velocity: 30
+  # 剛腕の制球は割合（オーナー決定「1＋2」2026-11-14）: 制球＝地力×factor＋control。足し算だと強豪校は地力が99へ溢れて
+  # 制球77（B）になり荒れ球にならなかった。割合なら地力45→G・68→F・99→D（その学校で一番荒れている）。
+  archetype_flamethrower_control_factor: 0.55
+  archetype_flamethrower_control: 0
+  archetype_flamethrower_stamina: 0
+  archetype_flamethrower_pitch_rank: 30
+  archetype_pinpoint_velocity: -24
+  archetype_pinpoint_control: 12
+  archetype_pinpoint_stamina: 2
+  archetype_pinpoint_pitch_rank: -4
+  archetype_breaking_ball_artist_velocity: -8
+  archetype_breaking_ball_artist_control: -4
+  archetype_breaking_ball_artist_stamina: 0
+  archetype_breaking_ball_artist_pitch_rank: 20
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0

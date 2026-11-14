@@ -289,14 +289,23 @@ public static class AiRosterCycle
         // 膝より下は旧来の Up と同じ整数の足し算。
         var vRaw = rc.VelocitySoftCapInverse(PitcherAttributes.LevelFromVelocityKmhExact(a.MaxVelocityKmh));
         var vl = rc.VelocitySoftCap(Math.Max(10.0, vRaw + d));
-        var sl = Up(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches));
+        // 制球・キレ・スタミナは型の上乗せを外した地力に足して 99 で切り詰め、上乗せを戻す（issue #908）。
+        // 旧実装は上乗せ込みの値に足して切り詰めていたので、強豪校（毎年最大 +40）では型の個性が 99 に潰れ、
+        // 剛腕の「制球 −22」も帳消しになっていた（実測: 全国の150km/h以上が全員 制球99）。
+        // 剛腕の制球は割合（地力×0.55）なので、地力側に足して 99 で切ってから掛け直す＝溢れた分は制球に回らない
+        // （オーナー決定「1＋2」）。型の当て方は PitcherArchetypes.Apply が単一ソース。
+        var (_, _, os, or) = a.Archetype is { } type ? PitcherArchetypes.Offsets(type, rc.Archetypes) : (0.0, 0.0, 0.0, 0.0);
+        int UpKeep(int v, double off) => (int)MathUtil.Clamp(Math.Round(MathUtil.Clamp(v - off + d, 10, 99) + off), 10, 99);
+        var baseControl = MathUtil.Clamp(PitcherArchetypes.BaseControl(a.Archetype, a.Control, rc.Archetypes) + d, 10, 99);
+        var (_, grownControl, _, _) = PitcherArchetypes.Apply(a.Archetype, 0, baseControl, 0, 0, rc.Archetypes);
+        var sl = UpKeep(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches), os);
         return r with
         {
             Pitching = a with
             {
                 MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(vl),
-                Control = Up(a.Control),
-                PitchRank = Up(a.PitchRank),
+                Control = (int)MathUtil.Clamp(Math.Round(grownControl), 10, 99),
+                PitchRank = UpKeep(a.PitchRank, or),
                 StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(sl),
             },
         };

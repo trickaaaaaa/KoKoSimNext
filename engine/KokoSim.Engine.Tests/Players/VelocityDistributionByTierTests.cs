@@ -75,7 +75,9 @@ public sealed class VelocityDistributionByTierTests
         // 各ティア帯（Cなら 60〜70）の中の密度が平たくなり、C校が帯の上寄りへ寄る＝エースの裾が少し伸びた
         // （実測 10%→11%。中央値は 140.3→140.6 でほぼ不動＝「C校が強くなった」のではなく帯内の分布の話）。
         // 併せて先頭600校の内訳も変わっている（校数テーブルを高野連の実加盟校数へ差し替えたため）。
-        Assert.True(byTier[Tier.C].Count(x => x >= 145) <= byTier[Tier.C].Count * 0.13,
+        // 上限 0.13→0.17（issue #908・2026-11-14）: 尖った型の剛腕（全投手の3%・球速+28）を足し、C校のエースにも
+        // 145km/h 超の剛腕が出るようになった（実測 9%→15%。剛腕は「その学校の水準より明らかに速い」のが定義）。
+        Assert.True(byTier[Tier.C].Count(x => x >= 145) <= byTier[Tier.C].Count * 0.17,
             $"C校の 145+ 率 {100.0 * byTier[Tier.C].Count(x => x >= 145) / byTier[Tier.C].Count:F0}%");
         // issue #908: Lv90 から上を伸ばして Lv100＝158（150km/h超を作れるように）。人数は AI校の天井で合わせる。
         Assert.Equal(158.0, PitcherAttributes.VelocityKmhFromLevel(100), 9);

@@ -281,9 +281,8 @@ public static class AiTeamBuilder
     internal static double PitcherScore(AiPlayer p, PitcherArchetypeCoefficients ac)
     {
         var a = p.Snapshot.Pitching;
-        return PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh) + a.Control + a.PitchRank
-            + PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches)
-            - PitcherArchetypes.OffsetSum(a.Archetype, ac);
+        return PitcherArchetypes.StrengthSum(a.Archetype, PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh), a.Control,
+            PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches), a.PitchRank, ac);
     }
 
     /// <summary>野手の起用序列スコア（打撃＋守備＋走の素点和）。ランク付け専用（帯には効かない）。</summary>

@@ -4,6 +4,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Players;
 using Xunit;
 
@@ -47,7 +48,7 @@ public sealed class PitcherArchetypeTests
         PitcherArchetype a, GameContext ctx, int games, int defenseLevel = 55, int baseLv = 68)
     {
         var c = new PitcherArchetypeCoefficients();
-        var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(a, c);
+        var (av, ac, ast, ar) = PitcherArchetypes.Apply(a, baseLv, baseLv, baseLv, baseLv, c);   // 生成と同じ当て方
         int L(double x) => (int)MathUtil.Clamp(System.Math.Round(x), 10, 99);
 
         long runs = 0, k = 0, bf = 0;
@@ -55,7 +56,7 @@ public sealed class PitcherArchetypeTests
             () => (Runs: 0L, K: 0L, Bf: 0L),
             (i, _, local) =>
             {
-                var mine = FixedTeam(L(baseLv + dv), L(baseLv + dc), L(baseLv + ds), L(baseLv + dr), "自", defenseLevel);
+                var mine = FixedTeam(L(av), L(ac), L(ast), L(ar), "自", defenseLevel);
                 var foe = FixedTeam(baseLv, baseLv, baseLv, baseLv, "敵");
                 var r = GameEngine.Play(foe, mine, ctx, new Xoshiro256Random((ulong)(i * 7919 + 13)));
                 local.Runs += r.AwayRuns;
@@ -159,6 +160,49 @@ public sealed class PitcherArchetypeTests
         Assert.InRange(Share(PitcherArchetype.Power), c.PowerShare - 0.06, c.PowerShare + 0.06);
         Assert.InRange(Share(PitcherArchetype.Finesse), c.FinesseShare - 0.06, c.FinesseShare + 0.06);
         Assert.InRange(Share(PitcherArchetype.SoftToss), c.SoftTossShare - 0.05, c.SoftTossShare + 0.05);
+        // 尖った型（issue #908・各3%）
+        Assert.InRange(Share(PitcherArchetype.Flamethrower), c.FlamethrowerShare - 0.025, c.FlamethrowerShare + 0.025);
+        Assert.InRange(Share(PitcherArchetype.Pinpoint), c.PinpointShare - 0.025, c.PinpointShare + 0.025);
+        Assert.InRange(Share(PitcherArchetype.BreakingBallArtist), c.BreakingBallArtistShare - 0.025, c.BreakingBallArtistShare + 0.025);
+    }
+
+    /// <summary>
+    /// ★issue #908（オーナー決定「1＋2」）: 剛腕の制球は学校の水準に連動しつつ、どこでも荒れ球（G〜E）。
+    /// 足し算（旧 −22）だと強豪校は地力が 99 に溢れて制球77（B）になっていた。
+    /// </summary>
+    [Theory]
+    [InlineData(45, "G")]
+    [InlineData(68, "F")]
+    [InlineData(80, "E")]
+    [InlineData(99, "D")]
+    public void Flamethrower_Control_IsWildAtEverySchoolLevel(int baseLevel, string rank)
+    {
+        var (_, control, _, _) = PitcherArchetypes.Apply(PitcherArchetype.Flamethrower, baseLevel, baseLevel, baseLevel, baseLevel,
+            new PitcherArchetypeCoefficients());
+        Assert.Equal(rank, Tiers.FromStrength(control).ToString());
+    }
+
+    [Fact]
+    public void Flamethrower_Control_DoesNotOverflowThroughAiGrowth()
+    {
+        // 強豪校の逆算配分は毎年最大 +40 を積む。地力側に足して 99 で切ってから割合を掛け直すので、制球は 99×0.55 を超えない。
+        var rc = new KokoSim.Engine.Season.RosterCoefficients();
+        var p = new Player
+        {
+            Name = "剛腕", Position = FieldPosition.Pitcher,
+            Contact = 50, Power = 50, LaunchTendency = 50, Discipline = 50, Speed = 50, ArmStrength = 50,
+            ThrowAccuracy = 50, Fielding = 50, Catching = 50, Bunt = 50, Steal = 50, Baserunning = 50,
+            Pitching = new PitcherAttributes
+            {
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(95), Control = 44, PitchRank = 99,
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(80), Archetype = PitcherArchetype.Flamethrower,
+            },
+        };
+        var grown = AiRosterCycle.BumpTo(AiRosterCycle.BumpTo(p, 40, rc), 40, rc);
+        Assert.InRange(grown.Pitching.Control, 50, (int)System.Math.Round(99 * rc.Archetypes.FlamethrowerControlFactor));
+        // 型を持たない投手は従来どおり 99 まで伸びる
+        var plain = AiRosterCycle.BumpTo(p with { Pitching = p.Pitching with { Archetype = null } }, 80, rc);
+        Assert.Equal(99, plain.Pitching.Control);
     }
 
     [Fact]
@@ -207,11 +251,16 @@ public sealed class PitcherArchetypeTests
         var runsAllowed = new Dictionary<PitcherArchetype, double>();
         foreach (PitcherArchetype a in System.Enum.GetValues(typeof(PitcherArchetype)))
             runsAllowed[a] = MeasureArchetype(a, ctx, games: 400).RunsAllowed;
+        var text = string.Join(" / ", runsAllowed.Select(kv => $"{PitcherArchetypes.Label(kv.Key)}{kv.Value:F2}"));
 
-        var spread = runsAllowed.Values.Max() - runsAllowed.Values.Min();
-        Assert.True(spread < 0.70,
-            "型ごとの失点差が大きすぎる（実戦でバランス中立でない）: "
-            + string.Join(" / ", runsAllowed.Select(kv => $"{PitcherArchetypes.Label(kv.Key)}{kv.Value:F2}")));
+        // 剛腕だけは中立の例外（issue #908・オーナー決定 2026-11-14）: 制球G・F（割合0.55）では球速もキレもほぼ上限まで
+        // 上げても揃わない＝「平均すると少し弱いが、当たる日は三振の山」。強すぎず・弱すぎずを別に見張る
+        // （実測 Lv68: 基準3.50 / 剛腕3.79）。
+        var neutral = runsAllowed.Where(kv => kv.Key != PitcherArchetype.Flamethrower).Select(kv => kv.Value).ToList();
+        var spread = neutral.Max() - neutral.Min();
+        Assert.True(spread < 0.70, "型ごとの失点差が大きすぎる（実戦でバランス中立でない）: " + text);
+        var flameGap = runsAllowed[PitcherArchetype.Flamethrower] - runsAllowed[PitcherArchetype.Balanced];
+        Assert.True(flameGap is > -0.10 and < 0.80, $"剛腕の失点がバランス型から外れすぎ（{flameGap:+0.00;-0.00}）: " + text);
     }
 
     /// <summary>
@@ -247,6 +296,47 @@ public sealed class PitcherArchetypeTests
             + (softToss.RunsAllowed - softTossStrong.RunsAllowed)) / 2.0;
         Assert.True(contactSwing > powerSwing + 0.10,
             $"打たせて取る型の守備依存が本格派より大きくない: 技巧/軟投{contactSwing:F3} vs 本格{powerSwing:F3}");
+    }
+
+    /// <summary>
+    /// ★issue #908: 剛腕は「四球も三振も多い」＝試合が荒れる。精密機械は四球が少ない。
+    /// 実測（2026-11-14・Lv68・1200試合）: 基準 K17.8%/BB6.9% ／ 剛腕 K27.1%/BB10.3% ／ 精密機械 K13.2%/BB6.0%。
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Heavy")]   // 型3種×800試合のフルエンジン実測
+    public void Flamethrowers_WalkAndStrikeOutMore_PinpointsWalkLess()
+    {
+        var ctx = YamlContext();
+        var balanced = MeasureRates(PitcherArchetype.Balanced, ctx, 800);
+        var flame = MeasureRates(PitcherArchetype.Flamethrower, ctx, 800);
+        var pin = MeasureRates(PitcherArchetype.Pinpoint, ctx, 800);
+        Assert.True(flame.K > balanced.K + 0.05, $"剛腕の奪三振率 {flame.K:P1} vs 基準 {balanced.K:P1}");
+        Assert.True(flame.Bb > balanced.Bb + 0.015, $"剛腕の四球率 {flame.Bb:P1} vs 基準 {balanced.Bb:P1}");
+        Assert.True(pin.Bb < balanced.Bb - 0.005, $"精密機械の四球率 {pin.Bb:P1} vs 基準 {balanced.Bb:P1}");
+    }
+
+    private static (double K, double Bb) MeasureRates(PitcherArchetype a, GameContext ctx, int games, int baseLv = 68)
+    {
+        var (av, ac, ast, ar) = PitcherArchetypes.Apply(a, baseLv, baseLv, baseLv, baseLv, new PitcherArchetypeCoefficients());
+        int L(double x) => (int)MathUtil.Clamp(System.Math.Round(x), 10, 99);
+        long k = 0, bb = 0, bf = 0;
+        System.Threading.Tasks.Parallel.For(0, games,
+            () => (K: 0L, Bb: 0L, Bf: 0L),
+            (i, _, local) =>
+            {
+                var mine = FixedTeam(L(av), L(ac), L(ast), L(ar), "自");
+                var foe = FixedTeam(baseLv, baseLv, baseLv, baseLv, "敵");
+                var r = GameEngine.Play(foe, mine, ctx, new Xoshiro256Random((ulong)(i * 7919 + 13)));
+                foreach (var line in r.HomePitching) { local.K += line.StrikeOuts; local.Bb += line.Walks; local.Bf += line.BattersFaced; }
+                return local;
+            },
+            local =>
+            {
+                System.Threading.Interlocked.Add(ref k, local.K);
+                System.Threading.Interlocked.Add(ref bb, local.Bb);
+                System.Threading.Interlocked.Add(ref bf, local.Bf);
+            });
+        return ((double)k / bf, (double)bb / bf);
     }
 
     // 能力を指定した投手＋固定打線のチーム（実測の対照条件をそろえるため）。

@@ -283,7 +283,7 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 球速 / コントロール / スタミナ | Velocity / Control / Stamina | |
 | キレ（球種ランク） | PitchRank | 変化球の有効軸（Sharpness→rpm→変化量）。変化球練習(BreakingBall)の主効果。ストレートでは未使用 |
 | 球威（ストレートホップ） | Stuff | ストレートの有効軸（Power→rpm→ホップ量）。球速練習(VelocityTraining)の副効果。変化球では未使用（Issue #274 で新設） |
-| 球質タイプ | PitcherArchetype(Power/Finesse/SoftToss/Balanced) | 本格派/技巧派/軟投派/バランス型。投手総合を変えず球速・制球・キレの配分だけ振り替える（`data/coefficients.yaml` の `roster: archetype_*`） |
+| 球質タイプ | PitcherArchetype(Power/Finesse/SoftToss/Balanced/Flamethrower/Pinpoint/BreakingBallArtist) | 本格派/技巧派/軟投派/バランス型＋尖った型の剛腕/精密機械/変化球の魔術師（各3%・issue #908）。実戦の失点が型によらず揃うよう球速・制球・キレの配分だけ振り替える（`data/coefficients.yaml` の `roster: archetype_*`）。投手を比べるときは型の上乗せの合計（`PitcherArchetypes.OffsetSum`）を差し引く |
 | 投手総合 | PitcherComposite | 球速.40/制球.25/スタミナ.15/キレ.20（TeamStrengthCoefficients）。球速を最大要素にしつつ、他3つの合計(0.60)が球速(0.40)を上回る＝**球速単独では決まらない** |
 | 投手役の導出 | PitcherRoleResolver.LeansPitcher | **選手は「投手である」属性を持たない**（design-01 §1.1a・#366）。投手適性>最良守備適性（＋供給バイアス）で毎回導出する。判定式はこのクラスにしか置かない |
 | 投手寄せ重み / 投手らしさ | PitcherWeight(w) / RoleWeight(wRole) | w＝**バイアス無し**・能力の配分（打撃⇔投球）用。wRole＝**バイアス込み**で判定境界が0.5・持ち物（変化球本数・球質タイプ・投法）用。混ぜると全野手の打撃が下がり帯が動く |
