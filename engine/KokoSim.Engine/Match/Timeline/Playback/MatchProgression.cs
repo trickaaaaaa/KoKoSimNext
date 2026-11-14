@@ -245,6 +245,7 @@ public sealed class MatchProgression
     private void RecordSubstitution(GameDecision d)
     {
         _decisions.Add(d);
+        _p.ObserveSubstitutions();   // 交代ログ（issue #920）。再生（GameReplay）も同じ位置で積む
         RefreshLiveMatchupAfterSubstitution();
     }
 
@@ -805,6 +806,12 @@ public sealed class MatchProgression
 
     /// <summary>継投ログ（issue #209 表現。継投・投野交代・野手登板）。交代パネルの表示に使う。観測専用。</summary>
     public System.Collections.Generic.IReadOnlyList<PitchingChangeEvent> PitchingChanges => _p.PitchingChanges;
+
+    /// <summary>
+    /// 選手交代のログ（issue #920 交代テロップ）。両校の代打・代走・守備交代・継投・守備位置の変更・DH解除。
+    /// 交代の下書きを取り消すと再生し直すので、件数が減ることがある。観測専用。
+    /// </summary>
+    public System.Collections.Generic.IReadOnlyList<SubstitutionEvent> Substitutions => _p.Substitutions;
 
     /// <summary>
     /// スキップ: 以降の采配を委任AI（設計書11・自分の采配能力＝TacticalSense）へ委ね、残りを一括解決して

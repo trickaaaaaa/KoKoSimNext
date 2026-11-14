@@ -103,6 +103,10 @@
                         <ui:Instance template="LineScorePanel" />
                         <ui:Label class="inning-break__hint f-body" text="クリックで続ける" />
                     </ui:VisualElement>
+
+                    <!-- 交代テロップ（issue #920）。交代を確定した瞬間に試合を止めて盤面の下に出す
+                         （クリックか数秒で再開）。中身は SubTelopView が組む。 -->
+                    <ui:VisualElement name="sub-telop" class="sub-telop" />
                 </ui:VisualElement>
 
                 <!-- 采配指示の手札（試合画面改修）。盤面の直下・中央寄せ。中身の TacticsCardDeck は
