@@ -502,16 +502,15 @@ public sealed class SkillTests
 
     /// <summary>
     /// issue skills-yaml-not-data-driven ①: <see cref="SkillGenerator.HiddenIneligible"/>（C#側の隠し不可表）が
-    /// data/skills.yaml の <c>hidden_eligible: false</c> と一致すること。<see cref="Skill.Monster"/>/
-    /// <see cref="Skill.SubmarineMastery"/> は TryAdd を経由しない特別枠なので比較から除く
-    /// （後者は yaml上 hidden_eligible: true とすでに不一致で、それ自体は追わない対象外）。
+    /// data/skills.yaml の <c>hidden_eligible: false</c> と一致すること。<see cref="Skill.Monster"/> は
+    /// TryAdd を経由しない特別枠なので比較から除く。
     /// </summary>
     [Fact]
     public void SkillGenerator_HiddenIneligible_MatchesSkillsYaml()
     {
         var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("skills.yaml");
         var catalog = KokoSim.Config.SkillsCatalogLoader.LoadFromFile(path);
-        var exempt = new HashSet<Skill> { Skill.Monster, Skill.SubmarineMastery };
+        var exempt = new HashSet<Skill> { Skill.Monster };
         var expected = catalog.Where(e => !e.HiddenEligible && !exempt.Contains(e.Id)).Select(e => e.Id).ToHashSet();
 
         Assert.Equal(expected, SkillGenerator.HiddenIneligible);

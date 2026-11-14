@@ -63,7 +63,6 @@ public enum Skill
 
     // --- 目玉（極稀） ---
     Monster,           // 怪物: 複数分野に強力補正の超レア
-    SubmarineMastery,  // アンダースローの妙: 特定投法×質の職人技
 }
 
 /// <summary>
