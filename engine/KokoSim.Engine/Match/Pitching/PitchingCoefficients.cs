@@ -108,7 +108,7 @@ public sealed record PitchingCoefficients
         new() { Type = PitchType.Cutter,   TiltDeg = -20.0, RpmScale = 0.95 }, // 小さく横滑り
         new() { Type = PitchType.Slider,   TiltDeg = -70.0, RpmScale = 1.10 }, // 横〜斜めの大きな変化（実測はストレート以上の回転数のことが多い）
         new() { Type = PitchType.Curve,    TiltDeg = 170.0, RpmScale = 1.15 }, // 縦の大変化（真性スピンが大きい）
-        new() { Type = PitchType.Fork,     TiltDeg = 0.0,   RpmScale = 0.45 }, // 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。トップスピンで下に曲げる球ではない）
+        new() { Type = PitchType.Fork,     TiltDeg = 180.0, RpmScale = 0.90 }, // 低回転の縦落ち（ストレートよりやや低回転。落差の符号が完全に逆＝トップスピン方向で、縦の変化量そのものは大きい）
         new() { Type = PitchType.Changeup, TiltDeg = 150.0, RpmScale = 0.85 }, // 沈み＋緩急
         new() { Type = PitchType.Shuuto,   TiltDeg = 110.0, RpmScale = 0.95 }, // 打者の内側へ食い込む
         new() { Type = PitchType.Sinker,   TiltDeg = 145.0, RpmScale = 0.95 }, // 内側へ沈む

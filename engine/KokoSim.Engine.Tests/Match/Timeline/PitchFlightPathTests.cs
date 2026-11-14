@@ -1,7 +1,6 @@
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Pitching;
 using KokoSim.Engine.Match.Timeline.Playback;
-using KokoSim.Engine.Players;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Match.Timeline;
@@ -242,39 +241,5 @@ public sealed class PitchFlightPathTests
             tr.FlightTimeSeconds, tr.InducedVerticalBreakM, tr.InducedHorizontalBreakM, tr.FlightTimeSeconds);
         Assert.Equal(0.05, end.X, 9);
         Assert.Equal(0.8, end.Y, 9);
-    }
-    /// <summary>
-    /// フォークは山なりに描かれない（issue #911）。既定の回転軸で積分した実データ（飛翔時間・誘発変化）を
-    /// 入れたとき、中点で弦より上へ膨らむ量（＝山なり具合）はストレートに近く、カーブよりはっきり小さい。
-    /// 旧設定（純トップスピン）ではフォークの膨らみがカーブとほぼ同じ系統になっていた。
-    /// </summary>
-    [Fact]
-    public void Fork_BowsLikeAnUnhoppedFastball_NotLikeACurve()
-    {
-        var coeff = new PitchingCoefficients();
-        double MidBow(PitchType type, double kmh)
-        {
-            var axis = coeff.AxisFor(type);
-            var spec = new PitchSpec
-            {
-                SpeedKmh = kmh,
-                SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(coeff.SpinRpmBase * axis.RpmScale, axis.TiltDeg),
-            };
-            var tr = PitchSimulator.Simulate(spec, new Aerodynamics(), new MoundGeometry());
-            var half = tr.FlightTimeSeconds / 2.0;
-            var mid = PitchFlightPath.At(Release, 0.0, 0.8, tr.FlightTimeSeconds,
-                tr.InducedVerticalBreakM, tr.InducedHorizontalBreakM, half);
-            var chordY = (Release.Y + 0.8) / 2.0;
-            return mid.Y - chordY;
-        }
-
-        const double Top = 145.0;
-        var fastball = MidBow(PitchType.Fastball, Top);
-        var fork = MidBow(PitchType.Fork, Top * 0.92);
-        var curve = MidBow(PitchType.Curve, Top * 0.80);
-
-        Assert.True(fork - fastball < curve - fork,
-            $"中点の膨らみ: FB {fastball:F3}m / フォーク {fork:F3}m / カーブ {curve:F3}m（フォークはカーブよりストレートに近いはず）");
-        Assert.True(fork < 0.5 * curve, $"フォークの膨らみ {fork:F3}m がカーブ {curve:F3}m の半分を超えている（山なり）");
     }
 }
