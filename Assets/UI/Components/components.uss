@@ -2947,3 +2947,27 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 }
 .mhud-skills .skill-chip { font-size: var(--hud-fs-pa); color: #FFFFFF; border-color: var(--hud-divider); background-color: var(--hud-chip-dim); }
 .mhud-skills .skill-chip--more { color: var(--hud-label); background-color: rgba(0, 0, 0, 0); }
+
+/* ── ChoiceButton：同じ重みの選択肢1つ（issue #945・イベントの3択） ─────────────
+   白地＋墨1px枠。hover／選択は墨2px（太らせた分だけ padding を1px詰めて文字を動かさない）。
+   応援団赤（主ボタン）は使わない＝選択肢は全部同じ重み（UI原則②）。確率・説明文は添えない（#731）。
+   並べ方は使う側の器が決める（イベント画面は会話ボックスの中に縦並び＝.ev__choices）。 */
+.choice-btn {
+    background-color: var(--sf-card);
+    color: var(--ink);
+    border-color: var(--ink);
+    border-width: 1px;
+    border-radius: 0;
+    font-size: var(--fs-body);
+    -unity-text-align: middle-left;
+    white-space: normal;
+    padding: 7px 15px;
+    margin: 0 0 var(--sp-2) 0;
+}
+.choice-btn:hover,
+.choice-btn--selected {
+    border-width: 2px;
+    padding: 6px 14px;
+    background-color: var(--sf-card);
+}
+.choice-btn:active { background-color: var(--sf-card); }

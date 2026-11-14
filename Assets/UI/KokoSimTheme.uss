@@ -1447,6 +1447,11 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 }
 .ev__progress { font-size: var(--fs-cap); color: var(--day-tx-3); }
 .ev__hint { font-size: var(--fs-cap); color: var(--day-tx-2); letter-spacing: 2px; }
+/* 監督の対応の3択（issue #945・案A）。最後の台詞の下に縦並び。出していないときは消す（空の余白を残さない）。
+   ボタンの見た目は部品辞書の .choice-btn（components.uss）。 */
+.ev__choices { flex-shrink: 0; margin-top: var(--sp-3); display: none; }
+.ev__choices--open { display: flex; }
+.ev__hint--none { display: none; }
 
 /* 結果行（監督指示 2026-08-19。旧・案A2 の右下の帯は廃止）。会話の最終行に
    「山田 のミートが ＋5 上がった！」を太字＋色で言い切る。色は通知フィードの Up/Warn と
