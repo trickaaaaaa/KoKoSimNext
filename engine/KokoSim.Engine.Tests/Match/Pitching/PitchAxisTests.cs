@@ -64,7 +64,7 @@ public sealed class PitchAxisTests
     [InlineData(PitchType.Cutter, 1, -1)]    // 小さく横滑り（グラブ側）
     [InlineData(PitchType.Slider, 1, -1)]    // 横〜斜めの大きな変化（グラブ側）
     [InlineData(PitchType.Curve, -1, 1)]     // 縦の大変化（落ちる）
-    [InlineData(PitchType.Fork, -1, 0)]      // 低回転の縦落ち
+    [InlineData(PitchType.Fork, 1, 0)]       // 低回転の縦落ち＝弱いバックスピン（ホップはあるがストレートより小さい。issue #911）
     [InlineData(PitchType.Changeup, -1, 1)]  // 沈み（アーム側へのフェード）
     [InlineData(PitchType.Shuuto, -1, 1)]    // 打者の内側へ食い込む（横成分が主）
     [InlineData(PitchType.Sinker, -1, 1)]    // 内側へ沈む（縦成分が主）
@@ -103,6 +103,64 @@ public sealed class PitchAxisTests
 
         Assert.True(Magnitude(fork) < Magnitude(curve),
             $"フォーク({Magnitude(fork):F3}m) < カーブ({Magnitude(curve):F3}m) のはず（低回転の縦落ち）");
+    }
+
+    /// <summary>
+    /// フォークは「ホップしない速球」（issue #911）。誘発縦変化は弱いプラス（バックスピン寄り）で、
+    /// カーブのような大きなマイナス（トップスピンで下へ曲げる球）にならない。ストレートとの差は
+    /// ホップが無い分の落差で、同じ球速・同じ能力（50）で 15cm 以上沈む。旧設定（純トップスピン 180°・
+    /// 0.90）は IVB≈−0.42m で「少し速いカーブ」になり、対決ビューで山なりに描かれていた。
+    /// </summary>
+    [Theory]
+    [InlineData(145.0)]
+    [InlineData(133.4)] // 145km/h × フォークの球速比 0.92
+    [InlineData(120.0)]
+    public void Fork_IsUnhoppedFastball_NotCurveLike(double speedKmh)
+    {
+        PitchTrajectory TrajFor(PitchType type)
+        {
+            var axis = Coeff.AxisFor(type);
+            var rpm = Coeff.SpinRpmBase * axis.RpmScale; // 能力=50相当
+            var spec = new PitchSpec { SpeedKmh = speedKmh, SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(rpm, axis.TiltDeg) };
+            return PitchSimulator.Simulate(spec, Aero, Mound);
+        }
+
+        var fork = TrajFor(PitchType.Fork);
+        var fastball = TrajFor(PitchType.Fastball);
+        var curve = TrajFor(PitchType.Curve);
+
+        // カーブのような大きなマイナスにならない（弱いバックスピン＝ゼロ〜小さなプラス）。
+        Assert.InRange(fork.InducedVerticalBreakM, -0.05, 0.30);
+        Assert.True(curve.InducedVerticalBreakM < -0.40, $"比較対象のカーブは大きく落ちるはず: {curve.InducedVerticalBreakM:F3}");
+        // ストレートより小さく、ホップが無い分だけ 15cm 以上沈む。
+        Assert.True(fastball.InducedVerticalBreakM - fork.InducedVerticalBreakM >= 0.15,
+            $"ストレート({fastball.InducedVerticalBreakM:F3}m)とフォーク({fork.InducedVerticalBreakM:F3}m)の落差が15cm未満");
+        // 横には曲げない（縦落ちの球）。
+        Assert.InRange(System.Math.Abs(fork.InducedHorizontalBreakM), 0.0, 0.01);
+    }
+
+    /// <summary>
+    /// フォークの到達時間はストレートに近い（同じ球速なら回転の差で到達時間はほとんど変わらない）＝
+    /// カーブのように「遅く山なりに来る」球ではない（issue #911）。実球速の差（球速比）で比べる。
+    /// </summary>
+    [Fact]
+    public void Fork_FlightTime_IsCloserToFastballThanCurve()
+    {
+        PitchTrajectory TrajFor(PitchType type, double kmh)
+        {
+            var axis = Coeff.AxisFor(type);
+            var rpm = Coeff.SpinRpmBase * axis.RpmScale;
+            var spec = new PitchSpec { SpeedKmh = kmh, SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(rpm, axis.TiltDeg) };
+            return PitchSimulator.Simulate(spec, Aero, Mound);
+        }
+
+        const double Top = 145.0;
+        var fastball = TrajFor(PitchType.Fastball, Top);
+        var fork = TrajFor(PitchType.Fork, Top * 0.92);
+        var curve = TrajFor(PitchType.Curve, Top * 0.80);
+
+        Assert.True(fork.FlightTimeSeconds - fastball.FlightTimeSeconds < curve.FlightTimeSeconds - fork.FlightTimeSeconds,
+            $"FB {fastball.FlightTimeSeconds:F3}s / フォーク {fork.FlightTimeSeconds:F3}s / カーブ {curve.FlightTimeSeconds:F3}s");
     }
 
     /// <summary>球種ごとの実効回転数倍率（issue #835）: RpmForPlan 相当の計算が球種で変わること（単調性ではなく分岐確認）。</summary>

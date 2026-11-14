@@ -459,11 +459,11 @@ public sealed class AtBatSession
         // CaptureTrace が偽なら1回も呼ばない＝既定パスはゼロコスト。
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
-                inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting,
+                inZone, distanceOutsideM, PitchDeception.BreakM(_lastPitchFeatures!.Value, batting), batter, batting,
                 swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)
             : 0.0;
         if (!forcedSwing && (forcedTake
-            || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng,
+            || !BatterDecision.DecideSwing(inZone, distanceOutsideM, PitchDeception.BreakM(_lastPitchFeatures!.Value, batting), batter, batting, rng,
                 swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)))
         {
             if (inZone)
@@ -620,53 +620,72 @@ public sealed class AtBatSession
 
     /// <summary>
     /// 弾道は観測専用（設計書15 §0.1 Q12-5）。<see cref="PitchSimulator"/> はRNGを使わない決定論積分で、
-    /// 判定には使わない（Phase E で接続）。回転数はキレ(Sharpness)の線形写像（暫定式・観測専用のため帯に無関係）。
-    /// 回転軸は球種ごとに固定（<see cref="PitchingCoefficients.AxisFor"/>・issue #835で全球種バックスピン固定を解消）。
+    /// 判定には使わない（判定は <see cref="ComputeFeatures"/> の表引き）。回転は判定と同じ <see cref="SpinForPlan"/>
+    /// （<see cref="PitchSpinModel"/>）＝対決ビューの曲がりと判定が同じ回転から出る。
     /// </summary>
     private PitchTrajectory ComputeTrajectory(PitchPlan plan)
     {
-        var rpm = RpmForPlan(plan);
-        var tiltDeg = _ctx.Pitching.AxisFor(plan.Type).TiltDeg;
-        var spec = new PitchSpec { SpeedKmh = plan.VelocityKmh, SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(rpm, tiltDeg) };
+        var spec = new PitchSpec { SpeedKmh = plan.VelocityKmh, SpinRadPerSec = SpinForPlan(plan.Type) };
         return PitchSimulator.Simulate(spec, _ctx.Aerodynamics, _ctx.Mound);
     }
 
     /// <summary>
     /// 判定用弾道特徴量を <see cref="TrajectoryFeatureTable"/> の補間で求める（設計書15 Phase E-1）。
     /// 毎球呼ぶが O(1) の配列参照のみ・RNG非消費。<see cref="ComputeTrajectory"/>（観測専用・毎回RK4）とは別経路。
-    /// 回転軸ごとに別テーブル（<see cref="TrajectoryFeatureTable.GetOrBuild"/> がキャッシュ）を参照する（issue #835）。
+    /// 回転軸は連続値（キレで回転の向きも動く, issue #911）＝回転軸の節点の表を補間する。
     /// </summary>
     private PitchTrajectoryFeatures ComputeFeatures(PitchPlan plan)
     {
-        var rpm = RpmForPlan(plan);
-        var tiltDeg = _ctx.Pitching.AxisFor(plan.Type).TiltDeg;
         // 天候で密度が変わった試合は節点の表の補間（表の作り直しをしない）。
-        return TrajectoryFeatureTable.LookupFeatures(_ctx.Aerodynamics, _ctx.Mound, tiltDeg, plan.VelocityKmh, rpm);
+        var features = TrajectoryFeatureTable.LookupFeatures(
+            _ctx.Aerodynamics, _ctx.Mound, SpinForPlan(plan.Type), plan.VelocityKmh);
+        if (plan.Type == PitchType.Fastball) return features;
+
+        // 変化球は同じ投手のストレートからの外れで判定する（issue #911・Batting.PitchDeception）。比べるストレートは
+        // この1球と同じ球速サンプル（球種の球速比を掛ける前）・その投手の球威で投げた1球＝球速差は飛翔時間の差で入る。
+        // 表引きだけ（RNG非消費）。
+        var fastballKmh = plan.VelocityKmh / SpeedRatioOf(plan.Type);
+        var fb = TrajectoryFeatureTable.LookupFeatures(
+            _ctx.Aerodynamics, _ctx.Mound, PitchSpinModel.FastballSpin(_ctx.Pitching, FastballPower()), fastballKmh);
+        return features with
+        {
+            Fastball = new FastballReference(fb.InducedVerticalBreakM, fb.InducedHorizontalBreakM, fb.FlightTimeSeconds),
+        };
+    }
+
+    /// <summary>この投手の持ち球にある球種の球速比（無ければ球種の既定）。</summary>
+    private double SpeedRatioOf(PitchType type)
+    {
+        foreach (var slot in _pitcher.EffectiveRepertoire)
+            if (slot.Type == type) return slot.SpeedRatio;
+        return new Players.PitchSlot { Type = type, Power = 50, Sharpness = 50 }.SpeedRatio;
+    }
+
+    /// <summary>この投手のストレートの球威（持っていなければ50）。</summary>
+    private int FastballPower()
+    {
+        foreach (var slot in _pitcher.EffectiveRepertoire)
+            if (slot.Type == PitchType.Fastball) return slot.Power;
+        return 50;
     }
 
     /// <summary>
-    /// 球種別の有効軸 → rpm の写像（Issue #274・設計書15 §0.1 Q12-5、観測用ComputeTrajectoryと判定用ComputeFeaturesで共有）。
-    /// ストレートは球威(Power)→ SpinRpmPerPower、変化球はキレ(Sharpness)→ SpinRpmPerSharpness。
-    /// 球種ごとの実効回転数倍率（<see cref="PitchingCoefficients.AxisFor"/>.RpmScale、issue #835）を最後に掛ける
-    /// （フォークは低回転・カーブは高回転など、球種の「持ち味」を乗せる）。
+    /// 球種の回転ベクトル（観測用 <see cref="ComputeTrajectory"/> と判定用 <see cref="ComputeFeatures"/> で共有）。
+    /// 式は <see cref="PitchSpinModel.SpinFor"/>: ストレートは球威(Power)、変化球はキレ(Sharpness)＝ストレートからの
+    /// 回転の外れの大きさ（issue #274/#911）。能力は <see cref="PitcherAttributes.EffectiveRepertoire"/>（寝かせ済み）から読む。
     /// </summary>
-    private double RpmForPlan(PitchPlan plan)
+    private Core.Vector3D SpinForPlan(PitchType type)
     {
-        var rank = 50;
+        var sharpness = 50;
         foreach (var slot in _pitcher.EffectiveRepertoire)
         {
-            if (slot.Type == plan.Type)
+            if (slot.Type == type)
             {
-                // Issue #274: ストレートは球威(Power)、変化球はキレ(Sharpness)を有効軸として使う。
-                rank = Players.PitchSlot.IsSpinByPower(slot.Type) ? slot.Power : slot.Sharpness;
+                sharpness = slot.Sharpness;
                 break;
             }
         }
-        var slope = Players.PitchSlot.IsSpinByPower(plan.Type)
-            ? _ctx.Pitching.SpinRpmPerPower
-            : _ctx.Pitching.SpinRpmPerSharpness;
-        var raw = _ctx.Pitching.SpinRpmBase + (rank - 50) * slope;
-        return raw * _ctx.Pitching.AxisFor(plan.Type).RpmScale;
+        return PitchSpinModel.SpinFor(_ctx.Pitching, type, sharpness, FastballPower());
     }
 
     /// <summary>enum 結果で打席を確定させる（三振/四球）。従来ループの early return と同一。</summary>

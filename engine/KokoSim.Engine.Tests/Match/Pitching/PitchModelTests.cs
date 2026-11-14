@@ -473,8 +473,8 @@ public sealed class PitchModelTests
     }
 
     /// <summary>
-    /// 変化球のキレ(Sharpness)が高いほど変化量が大きくなること（単調性）を確認する。
-    /// Issue #274: 変化球の有効軸=キレ(Sharpness)。未使用軸(Power)は固定して変化がSharpness起因であることを担保。
+    /// 変化球のキレ(Sharpness)が高いほどストレートとの変化の差が大きくなること（単調性）を確認する。
+    /// Issue #274: 変化球の有効軸=キレ(Sharpness)。issue #911: キレ＝ストレートからの回転の外れの大きさ。
     /// </summary>
     [Fact]
     public void BreakingBall_Sharpness_IsSpinAxis_HighSharpnessGivesMoreBreak()
@@ -483,69 +483,51 @@ public sealed class PitchModelTests
         var aero = new Aerodynamics();
         var coeffs = new PitchingCoefficients();
 
-        // 変化球の有効軸=Sharpness。Power=50固定。
-        double RpmForSharpness(int sharpness) => coeffs.SpinRpmBase + (sharpness - 50) * coeffs.SpinRpmPerSharpness;
+        PitchTrajectory Sim(PitchType type, int sharpness) => PitchSimulator.Simulate(
+            new PitchSpec { SpeedKmh = 125, SpinRadPerSec = PitchSpinModel.SpinFor(coeffs, type, sharpness, 50) }, aero, mound);
+        var fb = Sim(PitchType.Fastball, 50);
+        double Diff(PitchTrajectory t) => System.Math.Sqrt(
+            System.Math.Pow(t.InducedVerticalBreakM - fb.InducedVerticalBreakM, 2)
+            + System.Math.Pow(t.InducedHorizontalBreakM - fb.InducedHorizontalBreakM, 2));
 
-        var rpmLow = RpmForSharpness(20);
-        var rpmHigh = RpmForSharpness(80);
-
-        var specLow = new PitchSpec { SpeedKmh = 125, SpinRadPerSec = PitchSpec.BackspinFromRpm(rpmLow) };
-        var specHigh = new PitchSpec { SpeedKmh = 125, SpinRadPerSec = PitchSpec.BackspinFromRpm(rpmHigh) };
-
-        var trajLow = PitchSimulator.Simulate(specLow, aero, mound);
-        var trajHigh = PitchSimulator.Simulate(specHigh, aero, mound);
-
-        // キレが高いほど誘発縦変化（ホップ＝バックスピン系）が大きくなる
-        Assert.True(trajHigh.InducedVerticalBreakM > trajLow.InducedVerticalBreakM,
-            $"キレ80の変化量({trajHigh.InducedVerticalBreakM:F3}m) > キレ20({trajLow.InducedVerticalBreakM:F3}m)");
+        var low = Diff(Sim(PitchType.Slider, 20));
+        var high = Diff(Sim(PitchType.Slider, 80));
+        Assert.True(high > low, $"キレ80のストレートとの差({high:F3}m) > キレ20({low:F3}m)");
     }
 
     /// <summary>
-    /// ストレートの未使用軸(Sharpness)を変えても rpm が変わらない（完全に無視される）ことを確認する。
-    /// Issue #274: ストレートの有効軸はPower。Sharpnessを変えても rpm=一定。
+    /// ストレートの未使用軸(Sharpness)を変えても回転が変わらない（完全に無視される）ことを確認する。
+    /// Issue #274: ストレートの有効軸はPower。
     /// </summary>
     [Fact]
     public void Fastball_UnusedAxis_Sharpness_DoesNotAffectRpm()
     {
         var coeffs = new PitchingCoefficients();
-
-        // ストレートは IsSpinByPower=true → Power を使う → Sharpness は無視
-        // Sharpness の値にかかわらず rpm は Power=50 由来の同じ値になる。
-        const int fixedPower = 50;
-        var expectedRpm = coeffs.SpinRpmBase + (fixedPower - 50) * coeffs.SpinRpmPerPower;
-
-        // Sharpness を変えても rpm は不変（係数 SpinRpmPerSharpness は使われない）
-        double RpmFastball(int sharpness) => coeffs.SpinRpmBase + (fixedPower - 50) * coeffs.SpinRpmPerPower;
-
-        Assert.Equal(expectedRpm, RpmFastball(20), 10);
-        Assert.Equal(expectedRpm, RpmFastball(80), 10);
-        Assert.Equal(expectedRpm, RpmFastball(1), 10);
-        Assert.Equal(expectedRpm, RpmFastball(100), 10);
-        // より直接的: IsSpinByPower の仕様確認
+        var expected = PitchSpinModel.FastballSpin(coeffs, 50);
+        foreach (var sharpness in new[] { 1, 20, 80, 100 })
+            Assert.Equal(expected, PitchSpinModel.SpinFor(coeffs, PitchType.Fastball, sharpness, 50));
         Assert.True(PitchSlot.IsSpinByPower(PitchType.Fastball), "ストレートの有効軸はPower");
         Assert.False(PitchSlot.IsSpinByPower(PitchType.Slider), "変化球の有効軸はSharpness");
     }
 
     /// <summary>
-    /// 変化球の未使用軸(Power)を変えても rpm が変わらない（完全に無視される）ことを確認する。
-    /// Issue #274: 変化球の有効軸はSharpness。Powerを変えても試合結果は不変。
+    /// 変化球はキレ50なら球種の基準回転（基準回転数×rpm_scale・球種の回転軸）そのもので、ストレートの球威に左右されない
+    /// （g=1＝外れをそのまま足す）。キレ以外の軸（変化球自身の Power）は入力に無い（issue #274/#911）。
     /// </summary>
     [Fact]
-    public void BreakingBall_UnusedAxis_Power_DoesNotAffectRpm()
+    public void BreakingBall_AtSharpness50_IsTheNominalSpin_RegardlessOfFastballPower()
     {
         var coeffs = new PitchingCoefficients();
-
-        // 変化球は IsSpinByPower=false → Sharpness を使う → Power は無視
-        const int fixedSharpness = 50;
-        var expectedRpm = coeffs.SpinRpmBase + (fixedSharpness - 50) * coeffs.SpinRpmPerSharpness;
-
-        double RpmBreaking(int power) => coeffs.SpinRpmBase + (fixedSharpness - 50) * coeffs.SpinRpmPerSharpness;
-
-        Assert.Equal(expectedRpm, RpmBreaking(20), 10);
-        Assert.Equal(expectedRpm, RpmBreaking(80), 10);
-        Assert.Equal(expectedRpm, RpmBreaking(1), 10);
-        Assert.Equal(expectedRpm, RpmBreaking(100), 10);
-        // 球種確認
+        foreach (var type in new[] { PitchType.Curve, PitchType.Fork, PitchType.Slider })
+        {
+            var nominal = PitchSpinModel.NominalSpin(coeffs, type);
+            foreach (var power in new[] { 20, 50, 80 })
+            {
+                var spin = PitchSpinModel.SpinFor(coeffs, type, 50, power);
+                Assert.Equal(nominal.X, spin.X, 9);
+                Assert.Equal(nominal.Y, spin.Y, 9);
+            }
+        }
         Assert.False(PitchSlot.IsSpinByPower(PitchType.Curve), "カーブの有効軸はSharpness");
         Assert.False(PitchSlot.IsSpinByPower(PitchType.Fork), "フォークの有効軸はSharpness");
     }

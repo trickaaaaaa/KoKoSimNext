@@ -436,7 +436,8 @@ public static class CoefficientsLoader
         public double SpinRpmBase { get; set; } = D.SpinRpmBase;
         /// <summary>ストレートの球威(Power-50)あたりの回転数傾き（Issue #274）。</summary>
         public double SpinRpmPerPower { get; set; } = D.SpinRpmPerPower;
-        public double SpinRpmPerSharpness { get; set; } = D.SpinRpmPerSharpness;
+        /// <summary>キレ→ストレートからの回転の外れの伸び縮み（issue #911）。</summary>
+        public double SharpnessDeviationPerLevel { get; set; } = D.SharpnessDeviationPerLevel;
         // 球種ごとの回転軸・実効回転数倍率（設計書02 §2.1・issue #835）
         public List<PitchAxisDto>? PitchAxis { get; set; }
         // 投手ギア（設計書02 §1.1f）
@@ -466,7 +467,7 @@ public static class CoefficientsLoader
                 LeadPitchWeightMaxExponent = LeadPitchWeightMaxExponent,
                 SpinRpmBase = SpinRpmBase,
                 SpinRpmPerPower = SpinRpmPerPower,
-                SpinRpmPerSharpness = SpinRpmPerSharpness,
+                SharpnessDeviationPerLevel = SharpnessDeviationPerLevel,
                 PitchAxis = PitchAxis is null ? D.PitchAxis : PitchAxis.Select(a => a.ToModel()).ToList(),
                 GearPushVelocityBonusKmh = GearPushVelocityBonusKmh,
                 GearPushStaminaFactor = GearPushStaminaFactor,
@@ -561,6 +562,8 @@ public static class CoefficientsLoader
         public double LaunchAngleSigmaContactFloor { get; set; } = D.LaunchAngleSigmaContactFloor;
         public double LaunchAnglePerVerticalBreakM { get; set; } = D.LaunchAnglePerVerticalBreakM;
         public double LaunchAngleBreakRefM { get; set; } = D.LaunchAngleBreakRefM;
+        public double LaunchAnglePerRelativeDropM { get; set; } = D.LaunchAnglePerRelativeDropM;
+        public double RelativeBreakWeight { get; set; } = D.RelativeBreakWeight;
         public double BearingSigma { get; set; } = D.BearingSigma;
         // ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）
         public double TimingSigma { get; set; } = D.TimingSigma;
@@ -641,6 +644,8 @@ public static class CoefficientsLoader
             LaunchAngleSigmaContactFloor = LaunchAngleSigmaContactFloor,
             LaunchAnglePerVerticalBreakM = LaunchAnglePerVerticalBreakM,
             LaunchAngleBreakRefM = LaunchAngleBreakRefM,
+            LaunchAnglePerRelativeDropM = LaunchAnglePerRelativeDropM,
+            RelativeBreakWeight = RelativeBreakWeight,
             BearingSigma = BearingSigma,
             TimingSigma = TimingSigma,
             TimingRefKmh = TimingRefKmh,

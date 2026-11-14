@@ -112,7 +112,7 @@ public sealed record BattingCoefficients
     /// ＝A投手が格下打線から平均24三振・四球ゼロを取る「線形で飽和しない効き」を止める。0 以下＝無効（従来の線形）。
     /// 既定 1.2: P80(146km/h) vs B30 の d≈2.4 → 1.15、P50 vs B45（d≈0.15）は不変。平均同士（atbat_10k）は帯内のまま。
     /// </summary>
-    public double WhiffMatchupCap { get; init; } = 1.5;
+    public double WhiffMatchupCap { get; init; } = 1.3;
 
     /// <summary>
     /// 誘発変化合成量[m]の欺瞞効果を実球速で割り引く基準球速[km/h]（issue #837・設計書21 §3.5。
@@ -211,7 +211,7 @@ public sealed record BattingCoefficients
     /// 同日、投手の打球品質寄与 ×3（issue pitcher-barely-affects-contact-quality）で母集団の打率が −.009 動く分を
     /// 0.63 で戻す（AVG .240〜.250。0.64 だと夏場帯 4.90–5.80 を 5.90 で越える）。
     /// </summary>
-    public double QualityMean { get; init; } = 0.63;
+    public double QualityMean { get; init; } = 0.635;
     /// <summary>コンタクト品質へのミート寄与((Contact−50)あたり)。</summary>
     public double QualityContactSlope { get; init; } = 0.0020;
     /// <summary>コンタクト品質の標準偏差。</summary>
@@ -247,6 +247,17 @@ public sealed record BattingCoefficients
     /// 多い母集団全体の平均打球角度が恒常的に下がり、本塁打率が校正前の帯から大きく外れる（issue #835 実測）。
     /// </summary>
     public double LaunchAngleBreakRefM { get; init; } = 0.20;
+    /// <summary>
+    /// 変化球の打球角度シフト[deg/m]（issue #911・<see cref="PitchDeception.LaunchAngleShiftDeg"/>）: 同じ投手のストレートからの
+    /// 本塁での縦の外れ（誘発縦変化の差＋球速差による重力落下の差）1mあたり。ストレートより沈む球はボールの上を叩いて
+    /// ゴロになる。ストレート自身には効かない。
+    /// </summary>
+    public double LaunchAnglePerRelativeDropM { get; init; } = 10.0;
+    /// <summary>
+    /// 変化球の判定量の重み（issue #911・<see cref="PitchDeception.BreakM"/>）: 判定量＝そのストレートの誘発変化の合成量＋
+    /// これ×ストレートからの外れ[m]。空振り・チェイス・打球質・タイミング・慣れの割引がすべてこの判定量を読む。
+    /// </summary>
+    public double RelativeBreakWeight { get; init; } = 0.16;
     /// <summary>方位角の残差（引っ張り/流しを引いた後のばらつき）の標準偏差[deg]。</summary>
     public double BearingSigma { get; init; } = 19.0;
     /// <summary>芯を外すと初速が落ちる度合い（品質1で満初速, 0で係数分だけ残る）。</summary>
@@ -296,7 +307,7 @@ public sealed record BattingCoefficients
     /// （打球の質が落ちる）側へ −0.0050 に置き、打球あたりの質を球速に対して平坦〜微減にする＝球速+10 ≈ 制球+10（AVG −.017）。</para>
     public double ContactQualityPerKmh { get; init; } = -0.0050;
     /// <summary>投手コントロール(−50)あたりのコンタクト品質寄与。負＝制球が良いほど芯を外させる。</summary>
-    public double ContactQualityPerControl { get; init; } = -0.0030;
+    public double ContactQualityPerControl { get; init; } = -0.0020;
     /// <summary>コンタクト品質への誘発変化合成量の基準[m]（リーグ平均球速×平均キレ＝この変化量で寄与0）。</summary>
     public double ContactQualityBreakRefM { get; init; } = 0.47;
     /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>
