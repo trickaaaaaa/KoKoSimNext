@@ -99,7 +99,7 @@ public sealed class RegionalStadiumTierTests
         Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), kanagawa, summer: false));
         Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), kanagawa));
         // 他県・県不明は夏でも県営級、東京は夏秋とも神宮
-        foreach (var pref in new int?[] { null, 0, 11, 14, 46 })
+        foreach (var pref in new int?[] { null, 11, 14, 46 })
             Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), pref, summer: true));
         Assert.Same(Stadium.Jingu, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 12, summer: true));
         Assert.Same(Stadium.Jingu, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 12, summer: false));
@@ -124,6 +124,47 @@ public sealed class RegionalStadiumTierTests
         var before = new Xoshiro256Random(99).NextInt(0, int.MaxValue);
         var rng = new Xoshiro256Random(99);
         RegionalStadiumTier.ForStadium(1, rng, 13, summer: true);
+        Assert.Equal(before, rng.NextInt(0, int.MaxValue));
+    }
+
+    /// <summary>北海道（北北海道・南北海道）の夏の準決勝・決勝は北海道ボールパーク。秋・他県・県不明は従来どおり（issue #959）。</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void HokkaidoSummerFinalRounds_UseHokkaidoBallpark_OthersUnchanged(int roundsRemaining)
+    {
+        const int hokkaido = 0;
+        Assert.Same(Stadium.HokkaidoBallpark, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido, summer: true));
+        // 秋（地区予選は県を渡さない）は汎用の県営級のまま
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido, summer: false));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), null, summer: true));
+        // 他県の夏は変わらない
+        Assert.Same(Stadium.Yokohama, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 13, summer: true));
+        Assert.Same(Stadium.Jingu, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 12, summer: true));
+        foreach (var pref in new int?[] { 1, 11, 14, 46 })
+            Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), pref, summer: true));
+    }
+
+    [Fact]
+    public void HokkaidoSummerBallpark_UsesAsymmetricDimensions()
+    {
+        var geom = RegionalStadiumTier.For(1, new Xoshiro256Random(1), prefectureId: 0, summer: true);
+        Assert.Equal(97.0, geom.LeftFenceM, 6);
+        Assert.Equal(99.0, geom.RightFenceM, 6);
+        Assert.Equal(121.0, geom.CenterFenceM, 6);
+        Assert.Equal(2.8, geom.FenceHeightM, 6);
+    }
+
+    [Fact]
+    public void HokkaidoSummerEarlyRounds_DrawTheSameAsOtherPrefectures_AndFinalsDoNotConsumeRandomness()
+    {
+        for (ulong seed = 1; seed <= 10; seed++)
+            Assert.Same(RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), 12, summer: true),
+                        RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), 0, summer: true));
+        var before = new Xoshiro256Random(99).NextInt(0, int.MaxValue);
+        var rng = new Xoshiro256Random(99);
+        RegionalStadiumTier.ForStadium(1, rng, 0, summer: true);
         Assert.Equal(before, rng.NextInt(0, int.MaxValue));
     }
 

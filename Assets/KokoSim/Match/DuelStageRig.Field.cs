@@ -3701,8 +3701,10 @@ namespace KokoSim.Unity.Match
 
         // 焼いた球場メッシュの寸法。ここを基準に、試合の球場寸法へ外野側を変形する。
         // 値は使う球場メッシュの資産が持つ（issue #904。standard＝95/118/3.2、神宮＝97.5/120/3.5）。
+        // 左右非対称の球場（北海道ボールパーク＝左97・右99）は左右別（issue #959）。
         // DuelStadiumBaker.Verify が両翼・中堅を engine の弧と照合している。
-        private float BakedWingM = 95f;
+        private float BakedLeftM = 95f;
+        private float BakedRightM = 95f;
         private float BakedCenterM = 118f;
         private float BakedFenceHeightM = 3.2f;
 
@@ -3745,7 +3747,8 @@ namespace KokoSim.Unity.Match
                 return false;
             }
 
-            BakedWingM = asset.BakedWingM;
+            BakedLeftM = asset.BakedLeftM;
+            BakedRightM = asset.EffectiveBakedRightM;
             BakedCenterM = asset.BakedCenterM;
             BakedFenceHeightM = asset.BakedFenceHeightM;
 
@@ -3838,8 +3841,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>焼いたメッシュのままの寸法か（変形が要らない）。</summary>
         private bool FieldIsBaked =>
-            Mathf.Approximately((float)_field.LeftFenceM, BakedWingM)
-            && Mathf.Approximately((float)_field.RightFenceM, BakedWingM)
+            Mathf.Approximately((float)_field.LeftFenceM, BakedLeftM)
+            && Mathf.Approximately((float)_field.RightFenceM, BakedRightM)
             && Mathf.Approximately((float)_field.CenterFenceM, BakedCenterM)
             && Mathf.Approximately((float)_field.FenceHeightM, BakedFenceHeightM);
 
@@ -3857,7 +3860,7 @@ namespace KokoSim.Unity.Match
             if (r < WarpInnerM) return p;
             float th = Mathf.Atan2(p.x, p.z);
             float thc = Mathf.Clamp(th, -Mathf.PI / 4f, Mathf.PI / 4f);
-            float r0 = (float)FieldDiagramGeometry.FenceRadius(thc, BakedWingM, BakedCenterM);
+            float r0 = (float)FieldDiagramGeometry.FenceRadius(thc, BakedLeftM, BakedRightM, BakedCenterM);
             float delta = FenceR(thc) - r0;
             float wa = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(Mathf.PI / 4f, WarpFoulFadeRad, Mathf.Abs(th)));
             float wr = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(WarpInnerM, r0 - WarpFullBeforeFenceM, r));

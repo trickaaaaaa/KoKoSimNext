@@ -146,7 +146,7 @@ stadiums:
   `higashi_tokyo_final`・`nishi_tokyo_final`）は同じモデル名を持つ。`model` の無い球場は従来どおり standard の変形
 - **経路**: `GameContext.StadiumId`（観測専用・#905）→ `DuelStageRig.InitialStadiumId` → `StadiumCatalogProvider` で
   model を引く → `Resources/DuelStadiumMesh_<model>`（無ければ standard へ落ちて警告1回）
-- **焼いた寸法は資産が持つ**: `DuelStadiumMesh.BakedWingM/BakedCenterM/BakedFenceHeightM`。モデルも判定と違う
+- **焼いた寸法は資産が持つ**: `DuelStadiumMesh.BakedLeftM/BakedRightM/BakedCenterM/BakedFenceHeightM`（左右別・issue #959）。モデルも判定と違う
   寸法の試合では 6.2 と同じ式で変形される（standard＝95/118/3.2、神宮＝97.5/120/3.5）
 - **外部で作ったモデルの取り込み**は `tools/stadium-import.py` に集約（手作業で直さない）:
   本塁を原点へ／地面の層を2mm刻みに詰める（外部モデルは数cm積むが選手の足は y=0）／判定と照合する部品
@@ -166,6 +166,12 @@ stadiums:
   秋の準決勝・決勝（実際は保土ケ谷）と秋季地区予選は汎用の県営級のまま＝秋の会場は別 issue で決める。
   この球場で初めて出た部位は取り込みツールで寄せる: `*_seat_fronts`・`wing_seat_*`（外野上段の張り出し）は
   `stand_*` に統合（本塁打の球が当たる・ネット裏スタンドを隠すとき残らない）。ウィング席は座席列を作らない＝空席のまま
+- **北海道ボールパーク（2026-11-15・issue #959）**: 北海道（北北海道・南北海道）の**夏**の準決勝・決勝だけ
+  （`FinalStadiumFor(pref, summer)`。実在はエスコンフィールドHOKKAIDO・命名権を外した名前）。秋の全道大会の決勝は
+  札幌ドームだが今回は汎用の県営級のまま。**左右非対称**（左97・右99・中堅121）の最初の外部モデル:
+  取り込みは `--left 97 --right 99`（`--wing` 単独は従来どおり）で、OBJ 先頭は `# kokosim: left=97 right=99 ...`
+  （左右同値は従来の `wing=`）。+X 側＝一塁側＝右翼で、engine の `FenceDistance` と同じ cos(2θ) 補間。
+  Unity の変形・「球場メッシュを検証する」も左右別の式（`FieldDiagramGeometry.FenceRadius(θ, 左, 右, 中堅)`）
 - **観客の重さ**: 観客は球場ごとの座席の列から撒くので、大きい球場ほど重い（甲子園は2万9千人）。
   人数は減らさず、①四角形の頂点を共有（6→4）②本塁から 40m より遠い客は左右の面を省き、そのぶん正面を広げる
   （省くだけだと斜めの構図で隙間が空いて満員に見えない）、で三角形を約4割減らした（`DuelCrowdBaker`）

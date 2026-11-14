@@ -54,16 +54,24 @@ stadiums:
 # ── 47県 夏の決勝クラス主会場（実測ベース・命名権除去済み）─────────
 # 確度⚠の寸法は現代標準122m帯でほぼ外れない（stadiums-research.md §傾向）。
 prefecture_finals:
+  # 北海道ボールパーク（エスコン・命名権を外した名前）。2025〜2027年は南北とも準決勝・決勝をここで開催（ファイターズ公式）。
+  # 夏だけ（秋の全道大会の決勝は札幌ドーム＝今回は汎用のまま）。左右非対称。
   - id: kita_hokkaido_final
-    name: 旭川スタルヒン球場
-    left: 99.5
-    center: 122
+    name: 北海道ボールパーク
+    left: 97
+    right: 99
+    center: 121
+    fence_height: 2.8
     tier: prefectural
+    model: hokkaido_ballpark   # 3Dモデル data/stadiums/hokkaido_ballpark.obj（issue #959）
   - id: minami_hokkaido_final
-    name: 円山球場
-    left: 99
-    center: 122
+    name: 北海道ボールパーク
+    left: 97
+    right: 99
+    center: 121
+    fence_height: 2.8
     tier: prefectural
+    model: hokkaido_ballpark   # 3Dモデル data/stadiums/hokkaido_ballpark.obj（issue #959）
   - id: aomori_final
     name: はるか夢球場
     left: 99.5

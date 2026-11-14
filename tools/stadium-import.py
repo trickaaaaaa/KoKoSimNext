@@ -5,6 +5,8 @@
 
     python3 -I tools/stadium-import.py <src.obj> <out_base> --wing 97.5 --center 120 [--std data/stadiums/standard]
     例: python3 -I tools/stadium-import.py ~/Downloads/jingu-stadium.obj data/stadiums/jingu --wing 97.5 --center 120
+    左右非対称（issue #959）: --wing の代わりに --left 97 --right 99（+X 側＝一塁側＝右翼）
+    例: python3 -I tools/stadium-import.py ~/Downloads/hokkaido-ballpark.obj data/stadiums/hokkaido_ballpark --left 97 --right 99 --center 121
 
 出力: <out_base>.obj / .mtl / .seats.tsv（tools/stadium-gen.py と同じ書式＝DuelStadiumBaker がそのまま焼ける）
 
@@ -23,7 +25,8 @@
   7. 座席の列（.seats.tsv）を、本塁からの光線と座面の交差で作る（観客を座らせる場所）
   8. 頂点・法線を共有して書き出す（面ごとの法線＝フラットシェード）
 
-焼いた寸法（判定と同じ両翼・中堅と、モデルのフェンス高）は OBJ 先頭の `# kokosim:` 行に書く。
+焼いた寸法（判定と同じ両翼・中堅と、モデルのフェンス高）は OBJ 先頭の `# kokosim:` 行に書く
+（左右同値は `wing=`、非対称は `left=` `right=`）。
 Unity 側はこれを基準に、試合の球場寸法へ外野を変形する。
 """
 
@@ -149,10 +152,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
     ap.add_argument("out")
-    ap.add_argument("--wing", type=float, required=True, help="判定の両翼[m]（data/stadiums.yaml と同じ）")
+    ap.add_argument("--wing", type=float, help="判定の両翼[m]（左右同じ。data/stadiums.yaml と同じ）")
+    ap.add_argument("--left", type=float, help="判定の左翼[m]（--right と組。-X 側）")
+    ap.add_argument("--right", type=float, help="判定の右翼[m]（--left と組。+X 側＝一塁側）")
     ap.add_argument("--center", type=float, required=True, help="判定の中堅[m]")
     ap.add_argument("--std", default=os.path.join(os.path.dirname(__file__), "..", "data", "stadiums", "standard"))
     a = ap.parse_args()
+    if a.wing is not None:
+        if a.left is not None or a.right is not None:
+            ap.error("--wing と --left/--right は同時に使えない")
+        a.left = a.right = a.wing
+    elif a.left is None or a.right is None:
+        ap.error("--wing か、--left と --right の両方が要る")
 
     V, groups, mtllib = parse_obj(a.src)
     mtl = parse_mtl(os.path.join(os.path.dirname(a.src), mtllib) if mtllib else os.path.splitext(a.src)[0] + ".mtl")
@@ -180,7 +191,7 @@ def main():
     # 2b. フェンスの曲線を判定（engine の弧）に合わせる。外部モデルは両翼・中堅だけ合っていて
     #     間が丸く膨らんでいることがある（神宮は 22.5° で +2.2m）。絵と判定がずれると
     #     「フェンス手前に落ちたのに本塁打」が起きるので、フェンスから外を半径方向に寄せる
-    V, fence_fix = warp_fence_to_engine(V, groups, a.wing, a.center)
+    V, fence_fix = warp_fence_to_engine(V, groups, a.left, a.right, a.center)
 
     # 出力の部位: name -> list of (mat, (p0,p1,p2) 座標)
     out = collections.OrderedDict()
@@ -219,7 +230,7 @@ def main():
     seat_rows = build_seat_rows(groups, V)
 
     # 8. 書き出し
-    write_obj(a.out, out, a.wing, a.center, fence_height(out))
+    write_obj(a.out, out, a.left, a.right, a.center, fence_height(out))
     write_mtl(a.out, used_mats, mtl, smtl)
     write_seats(a.out, seat_rows)
 
@@ -236,9 +247,11 @@ WARP_FULL_BEFORE_FENCE_M = 6.0
 WARP_FOUL_FADE_DEG = 70.0
 
 
-def engine_fence(th_deg, wing, center):
-    """engine の外野フェンス（FieldDiagramGeometry.FenceRadius）。|θ|>45° はポールの値。"""
+def engine_fence(th_deg, left, right, center):
+    """engine の外野フェンス（FieldGeometry.FenceDistance / FieldDiagramGeometry.FenceRadius）。
+    +X 側（θ≥0）は右翼、−X 側は左翼で cos(2θ) 補間。|θ|>45° はポールの値。"""
     t = max(-45.0, min(45.0, th_deg))
+    wing = right if t >= 0 else left
     return wing + (center - wing) * math.cos(math.radians(2 * t))
 
 
@@ -249,7 +262,7 @@ def smoothstep(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
-def warp_fence_to_engine(V, groups, wing, center):
+def warp_fence_to_engine(V, groups, left, right, center):
     # モデルのフェンス内面＝地面の高さのフェンスの辺（両端が y≈0 の辺）を、本塁からの光線で測った最小距離。
     # 頂点の半径を方位で補間すると、フェンスの内面と外面（厚み約0.3m）の頂点が混ざって曲線がジグザグになる
     segs = []
@@ -274,7 +287,7 @@ def warp_fence_to_engine(V, groups, wing, center):
             u = (ax * dz - az * dx) / den
             if -1e-9 <= u <= 1 + 1e-9 and t > 0 and (best is None or t < best):
                 best = t
-        return best if best is not None else engine_fence(th, wing, center)
+        return best if best is not None else engine_fence(th, left, right, center)
 
     cache = {}
 
@@ -293,12 +306,12 @@ def warp_fence_to_engine(V, groups, wing, center):
         th = theta_deg(x, z)
         thc = max(-45.0, min(45.0, th))
         rm = model_fence_cached(thc)
-        delta = engine_fence(thc, wing, center) - rm
+        delta = engine_fence(thc, left, right, center) - rm
         wa = 1 - smoothstep(45.0, WARP_FOUL_FADE_DEG, abs(th))
         wr = smoothstep(WARP_INNER_M, rm - WARP_FULL_BEFORE_FENCE_M, r)
         k = (r + delta * wa * wr) / r
         out.append((x * k, y, z * k))
-    report = [(d, model_fence(d), engine_fence(d, wing, center)) for d in (0, 11.25, 22.5, 33.75, 45)]
+    report = [(d, model_fence(d), engine_fence(d, left, right, center)) for d in (-45, -33.75, -22.5, -11.25, 0, 11.25, 22.5, 33.75, 45)]
     return out, report
 
 
@@ -398,7 +411,7 @@ def runs_to_rows(g, k, y, samples):
 
 # ── 書き出し ───────────────────────────────────────────────
 
-def write_obj(base, out, wing, center, fence_h):
+def write_obj(base, out, left, right, center, fence_h):
     vidx, nidx = {}, {}
     V, N = [], []
     body = []
@@ -438,7 +451,8 @@ def write_obj(base, out, wing, center, fence_h):
                 body.append("f %d//%d %d//%d %d//%d" % (a, n, b, n, c, n))
 
     head = ["# generated by tools/stadium-import.py (issue #904)",
-            "# kokosim: wing=%g center=%g fence_h=%g" % (wing, center, fence_h),
+            ("# kokosim: wing=%g center=%g fence_h=%g" % (left, center, fence_h)) if left == right
+            else ("# kokosim: left=%g right=%g center=%g fence_h=%g" % (left, right, center, fence_h)),
             "mtllib %s.mtl" % os.path.basename(base)]
     with open(base + ".obj", "w") as fh:
         fh.write("\n".join(head) + "\n")

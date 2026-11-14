@@ -160,6 +160,36 @@ public sealed class StadiumLoaderTests
     }
 
     /// <summary>
+    /// 北海道ボールパークの C#既定（<see cref="Stadium.HokkaidoBallpark"/>）と data/stadiums.yaml の
+    /// 北北海道・南北海道の決勝が一致すること（不変条件#4・issue #959）。左右非対称（97/99）。
+    /// 3Dモデル（model）の実体 data/stadiums/hokkaido_ballpark.obj が在り、焼いた寸法も判定と同じであること。
+    /// </summary>
+    [Theory]
+    [InlineData("kita_hokkaido_final")]
+    [InlineData("minami_hokkaido_final")]
+    public void HokkaidoBallparkDefault_MatchesTheRepositoryYaml(string id)
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("stadiums.yaml");
+        var yaml = StadiumCatalogLoader.LoadCatalog(path)[id];
+        var code = Stadium.HokkaidoBallpark;
+
+        Assert.Equal(yaml.Name, code.Name);
+        Assert.Equal(yaml.Tier, code.Tier);
+        Assert.Equal(yaml.Model, code.Model);
+        Assert.Equal("hokkaido_ballpark", code.Model);
+        Assert.Equal(yaml.LeftM, code.LeftM, 6);
+        Assert.Equal(yaml.RightM, code.RightM, 6);
+        Assert.Equal(yaml.CenterM, code.CenterM, 6);
+        Assert.Equal(yaml.FenceHeightM, code.FenceHeightM, 6);
+        Assert.NotEqual(code.LeftM, code.RightM);
+
+        var dataDir = System.IO.Path.GetDirectoryName(path)!;
+        var obj = System.IO.Path.Combine(dataDir, "stadiums", "hokkaido_ballpark.obj");
+        Assert.True(System.IO.File.Exists(obj));
+        Assert.Contains(System.IO.File.ReadLines(obj).Take(3), l => l.StartsWith("# kokosim: left=97 right=99 center=121 "));
+    }
+
+    /// <summary>
     /// 汎用ティア球場（<see cref="Stadium.MunicipalSmall01"/>/<see cref="Stadium.MunicipalSmall02"/>/
     /// <see cref="Stadium.PrefLarge"/>）の C#既定と data/stadiums.yaml が一致すること（不変条件#4）。
     /// 実ゲーム（<c>RegionalStadiumTier</c> 経由）は YAML を読まず C#既定で走るので、片方だけ動かすと
