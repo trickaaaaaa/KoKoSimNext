@@ -1779,6 +1779,14 @@ roster:
   ai_star_hitters_per_cohort: 1    # 永続ロスター: 1学年あたりの主軸打者（3学年で Create と同数）
   ai_star_pitchers_per_cohort: 1   # 永続ロスター: 1学年あたりのエース格（投手適性順）
   ai_star_cast_drop: 0.30          # 使い捨て生成: 脇役の中心を lift×これ 下げてチーム総合を圧縮後の尺度に留める（実測: 0.25で+0.7・0.35で−0.6）
+  # AI校の球速の天井（issue #908）: 99 での切り詰め（＝上限 149.6km/h への張り付き）をやめ、膝から上を2本の線分＋100への漸近で寝かせる。
+  # 強豪は逆算配分で毎年最大 +40 を積むので素の値は 190 前後まで伸びる。3年生で最速150km/h以上が年10〜15人・1位154〜158km/h
+  # （現実の実数）に合うよう実測で決めた（seed2026・3/5/7年目: 150km/h以上 11/12/13人・1位 154.8〜158.0km/h。158 は怪物）。
+  ai_velocity_cap_knee: 90.0         # 膝（これ以下は恒等）
+  ai_velocity_cap_mid_raw: 165.0     # 1本目の終点の素の値（全国の3年生でおよそ12位）
+  ai_velocity_cap_mid_level: 92.5    # 同・球速Lv（149.3km/h）
+  ai_velocity_cap_top_raw: 185.0     # 2本目の終点の素の値（およそ1〜3位）
+  ai_velocity_cap_top_level: 97.0    # 同・球速Lv（154.5km/h）。この先は 100（158km/h）へ漸近
   # 投打の利き（§1.1c）
   throw_left_prob: 0.12
   switch_prob: 0.03
@@ -1831,7 +1839,11 @@ roster:
   # 制球の振れ幅は±5程度が中立の上限。本格派は設計書02「球速とキレで押し込む」に沿ってキレを+へ戻した。
   archetype_power_share: 0.25        # 本格派
   archetype_finesse_share: 0.22      # 技巧派
-  archetype_soft_toss_share: 0.08    # 軟投派（残りはバランス型）
+  archetype_soft_toss_share: 0.08    # 軟投派
+  # 尖った型（issue #908・オーナー決定 2026-11-14: 各3%）。残りはバランス型（45%→36%）
+  archetype_flamethrower_share: 0.03          # 剛腕（150km/h・制球壊滅）
+  archetype_pinpoint_share: 0.03              # 精密機械
+  archetype_breaking_ball_artist_share: 0.03  # 変化球の魔術師
   # #578 Step 3: 球速の価値が2倍になったので球速オフセットを寝かせて型の中立性を回復（12/−10/−14 → 8/−7/−10）。
   # 制球・スタミナ・キレでの代償は実測で効かない（軟投派は制球を上げると失点が増える＝打たせて取る型の宿命）。
   # 2026-08-16（issue matchup-gap-saturation-k-rate ＋ fatigue-gradual-before-threshold）: 投打差の soft-cap で高球速の
@@ -1858,6 +1870,29 @@ roster:
   archetype_soft_toss_control: 2
   archetype_soft_toss_stamina: 2
   archetype_soft_toss_pitch_rank: 2
+  # 尖った型のオフセット（issue #908）。「平均の失点は他の型と揃える（オーナー決定 2026-11-14）」を実測で校正
+  # （Archetypes_AreBalanceNeutral_InActualGames）。試合ごとの振れ幅は大きくてよい。
+  # 実測（2026-11-14・1200試合・基準＝バランス型 失点4.36/3.50/2.64・K17.8%・BB6.9%＠Lv55/68/80）:
+  #   剛腕     制球G〜E（割合0.55）で球速+30・キレ+30: 失点＠Lv45/55/68/80 = 5.54/4.82/3.79/3.37（基準 5.19/4.36/3.50/2.64）・
+  #            K27.1%・BB10.3%＠Lv68。制球G・Fでは球速もキレもほぼ上限まで上げても揃わない＝**剛腕だけ中立の例外**
+  #            （オーナー決定 2026-11-14「平均すると少し弱いが当たる日は三振の山」。強すぎるより弱い側に倒す）
+  #   精密機械 失点4.10/3.30/2.62・K13.2%・BB6.0%（制球は高価値＝球速を大きく削って釣り合う）
+  #   魔術師   失点4.41/3.47/2.78・K16.3%・BB7.2%（キレは奪三振にほとんど効かない＝いまの物理モデルの性質）
+  archetype_flamethrower_velocity: 30
+  # 剛腕の制球は割合（オーナー決定「1＋2」2026-11-14）: 制球＝地力×factor＋control。足し算だと強豪校は地力が99へ溢れて
+  # 制球77（B）になり荒れ球にならなかった。割合なら地力45→G・68→F・99→D（その学校で一番荒れている）。
+  archetype_flamethrower_control_factor: 0.55
+  archetype_flamethrower_control: 0
+  archetype_flamethrower_stamina: 0
+  archetype_flamethrower_pitch_rank: 30
+  archetype_pinpoint_velocity: -24
+  archetype_pinpoint_control: 12
+  archetype_pinpoint_stamina: 2
+  archetype_pinpoint_pitch_rank: -4
+  archetype_breaking_ball_artist_velocity: -8
+  archetype_breaking_ball_artist_control: -4
+  archetype_breaking_ball_artist_stamina: 0
+  archetype_breaking_ball_artist_pitch_rank: 20
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0

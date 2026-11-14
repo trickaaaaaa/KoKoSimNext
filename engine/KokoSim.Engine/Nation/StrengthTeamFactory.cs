@@ -405,15 +405,18 @@ public static class StrengthTeamFactory
             var pitchRank = Ability(pitchingCenter, rng);
             // 球速も他能力と同じく個体差を持つ（旧実装は強さの決定関数で、同じ強さの学校のエースが全員同じ球速＝
             // AI校に技巧派が存在できなかった）。自校（RosterTeamBuilder）と同じ「球速Level→km/h」の形に揃える。
-            var velocityLevel = Ability(pitchingCenter, rng);
+            // 球速だけは 99 で切り詰めず、やわらかい天井（RosterCoefficients.VelocitySoftCap）で上側を寝かせる（issue #908）。
+            // 乱数は Ability と同じく正規分布を1回だけ引く＝主RNGの消費列は変わらない。膝より下は旧値と同じ整数Lv。
+            var velocityRaw = Math.Max(10.0, Math.Round(rng.NextGaussian(pitchingCenter, 6)));
 
             // 球質タイプで配分を振り替える（総合はほぼ不変・Fork＝主RNG非消費）。
             var archetype = PitcherArchetypes.Sample(rng.Fork(archetypeSalt), ac);
-            var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(archetype, ac);
-            velocityLevel = Lv(velocityLevel + dv);
-            control = Lv(control + dc);
-            staminaLevel = Lv(staminaLevel + ds);
-            pitchRank = Lv(pitchRank + dr);
+            // 型の当て方は PitcherArchetypes.Apply が単一ソース（剛腕の制球は割合・issue #908）。
+            var (av, ac2, as2, ar) = PitcherArchetypes.Apply(archetype, velocityRaw, control, staminaLevel, pitchRank, ac);
+            var velocityLevel = rc.VelocitySoftCap(Math.Max(10.0, av));
+            control = Lv(ac2);
+            staminaLevel = Lv(as2);
+            pitchRank = Lv(ar);
 
             pitching = new PitcherAttributes
             {

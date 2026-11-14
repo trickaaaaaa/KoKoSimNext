@@ -202,7 +202,7 @@ public static class AiTeamBuilder
     {
         // 投手能力の降順。同点は Id 昇順で決定論に倒す。
         var ranked = active
-            .OrderByDescending(PitcherScore).ThenBy(p => p.Id)
+            .OrderByDescending(p => PitcherScore(p, rc.Archetypes)).ThenBy(p => p.Id)
             .ToList();
 
         var leaning = ranked.Count(p => PitcherRoleResolver.IsNaturalPitcher(
@@ -272,11 +272,17 @@ public static class AiTeamBuilder
     };
 
     /// <summary>投手の起用序列スコア（球速レベル＋制球＋キレ＋スタミナレベル）。</summary>
-    private static double PitcherScore(AiPlayer p)
+    /// <summary>
+    /// 投手の起用序列スコア＝4能力の合計から<b>型の上乗せの合計を差し引いた</b>地力（issue #908）。
+    /// 上乗せは試合の失点が型によらず揃うよう校正してあり合計は揃っていないので、素の合計で並べると
+    /// 同じ実力でも本格派（+6）が技巧派（−2）・軟投派（−5）より上に来て、エースが本格派に偏っていた
+    /// （実測: 生成 本格25%/技巧22%/軟投8% に対しエース 35%/18%/4.5%）。ランク付け専用（乱数不使用）。
+    /// </summary>
+    internal static double PitcherScore(AiPlayer p, PitcherArchetypeCoefficients ac)
     {
         var a = p.Snapshot.Pitching;
-        return PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh) + a.Control + a.PitchRank
-            + PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches);
+        return PitcherArchetypes.StrengthSum(a.Archetype, PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh), a.Control,
+            PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches), a.PitchRank, ac);
     }
 
     /// <summary>野手の起用序列スコア（打撃＋守備＋走の素点和）。ランク付け専用（帯には効かない）。</summary>

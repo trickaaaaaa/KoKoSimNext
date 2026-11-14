@@ -32,7 +32,8 @@ public sealed class PreviewPhrasesTests
         { "balanced.strong", "balanced.weak", "spike.bat", "spike.pitch", "spike.def", "hole.bat", "hole.pitch", "hole.def" };
     private static readonly string[] Styles = { "smallball", "power", "defense", "total", "ace", "standard" };
     private static readonly string[] Traits =
-        { "power", "contact", "speed", "arm", "eye", "glove", "ace.power", "ace.finesse", "ace.soft", "ace.balanced" };
+        { "power", "contact", "speed", "arm", "eye", "glove", "ace.power", "ace.finesse", "ace.soft", "ace.balanced",
+          "ace.flamethrower", "ace.pinpoint", "ace.artist" };   // 尖った型（issue #908）
     private static readonly string[] Levels = { "star", "solid", "modest" };
 
     /// <summary>組み立てが参照しうる置き場の全部。</summary>

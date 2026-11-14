@@ -96,7 +96,7 @@ public static class AiRosterCycle
         foreach (var p in roster.Players.Where(p => p.Phenom.IsPhenom() && p.Grade >= 2))
         {
             var w = p.Grade == 3 ? pc.SeniorGrowthFactor : 1.0;
-            p.Snapshot = BumpTo(p.Snapshot, pc.AnnualGrowth * 0.5 * w);
+            p.Snapshot = BumpTo(p.Snapshot, pc.AnnualGrowth * 0.5 * w, deps.Roster);
         }
 
         // 非怪物の在校生を逆算配分で成長。
@@ -144,7 +144,7 @@ public static class AiRosterCycle
             if (node == AiGrowthNode.Winter)
             {
                 // 残り全額（頭打ちで溜まった残差・丸めで消える端数も含む）を使い切って必ず0へ。
-                p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget);
+                p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget, deps.Roster);
                 p.PendingBudget = 0;
                 continue;
             }
@@ -165,7 +165,7 @@ public static class AiRosterCycle
             var delta = (int)Math.Round(requested);
             if (delta <= 0) continue;   // 丸めで0なら今節目では何もせず、予算はそのまま次節目へ残す。
 
-            p.Snapshot = BumpTo(p.Snapshot, delta);
+            p.Snapshot = BumpTo(p.Snapshot, delta, deps.Roster);
             p.PendingBudget -= delta;
         }
     }
@@ -231,7 +231,7 @@ public static class AiRosterCycle
 
         void ApplyG(double g)
         {
-            foreach (var (p, b) in bases) p.Snapshot = BumpTo(b, gradeFactor(p.Grade) * g);
+            foreach (var (p, b) in bases) p.Snapshot = BumpTo(b, gradeFactor(p.Grade) * g, deps.Roster);
         }
 
         // Overall は g に対し単調非減少。g の最大値でも届かなければ上限で打ち切り（強豪はキャップで頭打ち＝許容）。
@@ -260,7 +260,7 @@ public static class AiRosterCycle
     }
 
     /// <summary>スナップショットの中核能力を <paramref name="amount"/> だけ底上げする（弾道傾向・精神は伸ばさない）。</summary>
-    internal static Player BumpTo(Player b, double amount)
+    internal static Player BumpTo(Player b, double amount, RosterCoefficients rc)
     {
         var d = (int)Math.Round(amount);
         if (d <= 0) return b;
@@ -285,15 +285,27 @@ public static class AiRosterCycle
         // 6指標（<see cref="ScoutedTeamProfile"/>）は投手として置かれた選手しか投手力に数えないので、
         // 逆算配分（<see cref="SettleToTarget"/>）のターゲット尺度は動かない＝校の総合力は不変。
         var a = b.Pitching;
-        var vl = Up(PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh));
-        var sl = Up(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches));
+        // 球速はやわらかい天井の手前（素の値）で底上げしてから天井を通す（issue #908）＝99 に張り付かない。
+        // 膝より下は旧来の Up と同じ整数の足し算。
+        var vRaw = rc.VelocitySoftCapInverse(PitcherAttributes.LevelFromVelocityKmhExact(a.MaxVelocityKmh));
+        var vl = rc.VelocitySoftCap(Math.Max(10.0, vRaw + d));
+        // 制球・キレ・スタミナは型の上乗せを外した地力に足して 99 で切り詰め、上乗せを戻す（issue #908）。
+        // 旧実装は上乗せ込みの値に足して切り詰めていたので、強豪校（毎年最大 +40）では型の個性が 99 に潰れ、
+        // 剛腕の「制球 −22」も帳消しになっていた（実測: 全国の150km/h以上が全員 制球99）。
+        // 剛腕の制球は割合（地力×0.55）なので、地力側に足して 99 で切ってから掛け直す＝溢れた分は制球に回らない
+        // （オーナー決定「1＋2」）。型の当て方は PitcherArchetypes.Apply が単一ソース。
+        var (_, _, os, or) = a.Archetype is { } type ? PitcherArchetypes.Offsets(type, rc.Archetypes) : (0.0, 0.0, 0.0, 0.0);
+        int UpKeep(int v, double off) => (int)MathUtil.Clamp(Math.Round(MathUtil.Clamp(v - off + d, 10, 99) + off), 10, 99);
+        var baseControl = MathUtil.Clamp(PitcherArchetypes.BaseControl(a.Archetype, a.Control, rc.Archetypes) + d, 10, 99);
+        var (_, grownControl, _, _) = PitcherArchetypes.Apply(a.Archetype, 0, baseControl, 0, 0, rc.Archetypes);
+        var sl = UpKeep(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches), os);
         return r with
         {
             Pitching = a with
             {
                 MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(vl),
-                Control = Up(a.Control),
-                PitchRank = Up(a.PitchRank),
+                Control = (int)MathUtil.Clamp(Math.Round(grownControl), 10, 99),
+                PitchRank = UpKeep(a.PitchRank, or),
                 StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(sl),
             },
         };

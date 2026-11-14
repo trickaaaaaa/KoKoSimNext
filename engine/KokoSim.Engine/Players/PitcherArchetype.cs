@@ -17,6 +17,13 @@ public enum PitcherArchetype
     Finesse,
     /// <summary>軟投派: 球速を捨て、抜群の制球と変化球で幻惑する。</summary>
     SoftToss,
+    // --- 尖った型（issue #908・各3%）: 平均の失点は他の型と揃え、試合ごとの振れ幅は大きくてよい ---
+    /// <summary>剛腕: 全国屈指の球速だが制球は壊滅的（四球も三振も多く試合が荒れる）。</summary>
+    Flamethrower,
+    /// <summary>精密機械: 球は遅いが四球をほとんど出さない。</summary>
+    Pinpoint,
+    /// <summary>変化球の魔術師: 球は遅いが決め球のキレが突出している。</summary>
+    BreakingBallArtist,
 }
 
 /// <summary>
@@ -41,6 +48,9 @@ public sealed record PitcherArchetypeCoefficients
     public double PowerShare { get; init; } = 0.25;
     public double FinesseShare { get; init; } = 0.22;
     public double SoftTossShare { get; init; } = 0.08;
+    public double FlamethrowerShare { get; init; } = 0.03;
+    public double PinpointShare { get; init; } = 0.03;
+    public double BreakingBallArtistShare { get; init; } = 0.03;
 
     // --- 本格派: 球速↑・キレ↑（代償は制球とスタミナ） ---
     public double PowerVelocity { get; init; } = 10;
@@ -59,6 +69,31 @@ public sealed record PitcherArchetypeCoefficients
     public double SoftTossControl { get; init; } = 2;
     public double SoftTossStamina { get; init; } = 2;
     public double SoftTossPitchRank { get; init; } = 2;
+
+    // --- 剛腕: 全国屈指の球速だが制球は壊滅的（四球も三振も多く試合が荒れる）（issue #908。実戦の失点が他の型と揃うよう実測で校正） ---
+    public double FlamethrowerVelocity { get; init; } = 30;
+    /// <summary>
+    /// 剛腕の制球は足し算でなく<b>割合</b>で決める（issue #908・オーナー決定 2026-11-14「1＋2」）: 制球＝地力×これ＋<see cref="FlamethrowerControl"/>。
+    /// 足し算（旧 −22）だと強豪校は地力が上限 99 に溢れて制球77（B）になり「荒れ球」にならなかった。割合なら学校の水準に
+    /// 連動しつつ、いつも「その学校で一番荒れている」投手になる（地力45→G・68→F・99→D）。成長も地力側に足してから掛け直すので、
+    /// 溢れた分は制球に回らない（<see cref="PitcherArchetypes.Apply"/>）。
+    /// </summary>
+    public double FlamethrowerControlFactor { get; init; } = 0.55;
+    public double FlamethrowerControl { get; init; } = 0;
+    public double FlamethrowerStamina { get; init; } = 0;
+    public double FlamethrowerPitchRank { get; init; } = 30;
+
+    // --- 精密機械: 球は遅いが四球をほとんど出さない（issue #908。実戦の失点が他の型と揃うよう実測で校正） ---
+    public double PinpointVelocity { get; init; } = -24;
+    public double PinpointControl { get; init; } = 12;
+    public double PinpointStamina { get; init; } = 2;
+    public double PinpointPitchRank { get; init; } = -4;
+
+    // --- 変化球の魔術師: 球は遅いが決め球のキレが突出している（issue #908。実戦の失点が他の型と揃うよう実測で校正） ---
+    public double BreakingBallArtistVelocity { get; init; } = -8;
+    public double BreakingBallArtistControl { get; init; } = -4;
+    public double BreakingBallArtistStamina { get; init; } = 0;
+    public double BreakingBallArtistPitchRank { get; init; } = 20;
 }
 
 /// <summary>球質タイプの抽選・オフセット適用・表示名（純関数）。</summary>
@@ -75,7 +110,13 @@ public static class PitcherArchetypes
         r -= c.PowerShare;
         if (r < c.FinesseShare) return PitcherArchetype.Finesse;
         r -= c.FinesseShare;
-        return r < c.SoftTossShare ? PitcherArchetype.SoftToss : PitcherArchetype.Balanced;
+        if (r < c.SoftTossShare) return PitcherArchetype.SoftToss;
+        r -= c.SoftTossShare;
+        if (r < c.FlamethrowerShare) return PitcherArchetype.Flamethrower;
+        r -= c.FlamethrowerShare;
+        if (r < c.PinpointShare) return PitcherArchetype.Pinpoint;
+        r -= c.PinpointShare;
+        return r < c.BreakingBallArtistShare ? PitcherArchetype.BreakingBallArtist : PitcherArchetype.Balanced;
     }
 
     /// <summary>型ごとのレベル配分オフセット（球速/制球/スタミナ/キレ）。</summary>
@@ -85,8 +126,59 @@ public static class PitcherArchetypes
         PitcherArchetype.Power => (c.PowerVelocity, c.PowerControl, c.PowerStamina, c.PowerPitchRank),
         PitcherArchetype.Finesse => (c.FinesseVelocity, c.FinesseControl, c.FinesseStamina, c.FinessePitchRank),
         PitcherArchetype.SoftToss => (c.SoftTossVelocity, c.SoftTossControl, c.SoftTossStamina, c.SoftTossPitchRank),
+        PitcherArchetype.Flamethrower => (c.FlamethrowerVelocity, c.FlamethrowerControl, c.FlamethrowerStamina, c.FlamethrowerPitchRank),
+        PitcherArchetype.Pinpoint => (c.PinpointVelocity, c.PinpointControl, c.PinpointStamina, c.PinpointPitchRank),
+        PitcherArchetype.BreakingBallArtist => (c.BreakingBallArtistVelocity, c.BreakingBallArtistControl, c.BreakingBallArtistStamina, c.BreakingBallArtistPitchRank),
         _ => (0, 0, 0, 0),
     };
+
+    /// <summary>
+    /// 型の上乗せ（球速/制球/スタミナ/キレ）の合計。投手の4能力の合計からこれを差し引くと、型によらない地力の尺度になる。
+    /// 上乗せは「試合の失点が型によらず揃う」よう実測で校正した値で、合計は揃っていない（本格派 +6・技巧派 −2・軟投派 −5）。
+    /// 4能力をそのまま足して投手を比べると、同じ実力でも本格派が上に来る（issue #908）。型が無い（null）投手は 0。
+    /// </summary>
+    public static double OffsetSum(PitcherArchetype? a, PitcherArchetypeCoefficients c)
+    {
+        if (a is not { } type) return 0.0;
+        var (v, ctl, st, r) = Offsets(type, c);
+        return v + ctl + st + r;
+    }
+
+    /// <summary>制球の割合（剛腕だけ 1 未満・ほかの型は 1＝割合を掛けない）。</summary>
+    public static double ControlFactor(PitcherArchetype? a, PitcherArchetypeCoefficients c)
+        => a == PitcherArchetype.Flamethrower ? c.FlamethrowerControlFactor : 1.0;
+
+    /// <summary>
+    /// 地力（型を当てる前の4能力の Level）に型を当てる。制球は 地力×割合＋上乗せ、ほかは 地力＋上乗せ。
+    /// 丸め・切り詰めは呼び出し側（AI校は球速だけ天井、ほかは 10〜99）。生成と毎年の成長が同じ式を通る（単一ソース）。
+    /// </summary>
+    public static (double Velocity, double Control, double Stamina, double PitchRank) Apply(
+        PitcherArchetype? a, double velocity, double control, double stamina, double pitchRank, PitcherArchetypeCoefficients c)
+    {
+        if (a is not { } type) return (velocity, control, stamina, pitchRank);
+        var (dv, dc, ds, dr) = Offsets(type, c);
+        return (velocity + dv, control * ControlFactor(type, c) + dc, stamina + ds, pitchRank + dr);
+    }
+
+    /// <summary><see cref="Apply"/> の制球だけの逆（成長を地力側に足すため）。</summary>
+    public static double BaseControl(PitcherArchetype? a, double control, PitcherArchetypeCoefficients c)
+    {
+        if (a is not { } type) return control;
+        var (_, dc, _, _) = Offsets(type, c);
+        return (control - dc) / ControlFactor(type, c);
+    }
+
+    /// <summary>
+    /// 投手を比べるための地力の合計＝4能力から型の影響を外した和（issue #908）。エース選び・継投の人選が使う。
+    /// 型の上乗せは試合の失点が型によらず揃うよう校正してあり合計は揃っていないので、素の合計で並べると型で選り好みが起きる。
+    /// </summary>
+    public static double StrengthSum(PitcherArchetype? a, double velocity, double control, double stamina, double pitchRank,
+        PitcherArchetypeCoefficients c)
+    {
+        if (a is not { } type) return velocity + control + stamina + pitchRank;
+        var (dv, _, ds, dr) = Offsets(type, c);
+        return velocity - dv + BaseControl(type, control, c) + stamina - ds + pitchRank - dr;
+    }
 
     /// <summary>表示名（展望の寸評・選手詳細で使う）。</summary>
     public static string Label(PitcherArchetype a) => a switch
@@ -94,6 +186,9 @@ public static class PitcherArchetypes
         PitcherArchetype.Power => "本格派",
         PitcherArchetype.Finesse => "技巧派",
         PitcherArchetype.SoftToss => "軟投派",
+        PitcherArchetype.Flamethrower => "剛腕",
+        PitcherArchetype.Pinpoint => "精密機械",
+        PitcherArchetype.BreakingBallArtist => "変化球の魔術師",
         _ => "バランス型",
     };
 

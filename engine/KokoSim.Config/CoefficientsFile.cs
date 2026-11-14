@@ -2520,6 +2520,11 @@ public static class CoefficientsLoader
         public int AiStarHitters { get; set; } = D.AiStarHitters;
         public int AiStarHittersPerCohort { get; set; } = D.AiStarHittersPerCohort;
         public int AiStarPitchersPerCohort { get; set; } = D.AiStarPitchersPerCohort;
+        public double AiVelocityCapKnee { get; set; } = D.AiVelocityCapKnee;
+        public double AiVelocityCapMidRaw { get; set; } = D.AiVelocityCapMidRaw;
+        public double AiVelocityCapMidLevel { get; set; } = D.AiVelocityCapMidLevel;
+        public double AiVelocityCapTopRaw { get; set; } = D.AiVelocityCapTopRaw;
+        public double AiVelocityCapTopLevel { get; set; } = D.AiVelocityCapTopLevel;
         public double AiStarCastDrop { get; set; } = D.AiStarCastDrop;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
@@ -2565,6 +2570,9 @@ public static class CoefficientsLoader
         public double ArchetypePowerShare { get; set; } = AD.PowerShare;
         public double ArchetypeFinesseShare { get; set; } = AD.FinesseShare;
         public double ArchetypeSoftTossShare { get; set; } = AD.SoftTossShare;
+        public double ArchetypeFlamethrowerShare { get; set; } = AD.FlamethrowerShare;
+        public double ArchetypePinpointShare { get; set; } = AD.PinpointShare;
+        public double ArchetypeBreakingBallArtistShare { get; set; } = AD.BreakingBallArtistShare;
         public double ArchetypePowerVelocity { get; set; } = AD.PowerVelocity;
         public double ArchetypePowerControl { get; set; } = AD.PowerControl;
         public double ArchetypePowerStamina { get; set; } = AD.PowerStamina;
@@ -2577,6 +2585,19 @@ public static class CoefficientsLoader
         public double ArchetypeSoftTossControl { get; set; } = AD.SoftTossControl;
         public double ArchetypeSoftTossStamina { get; set; } = AD.SoftTossStamina;
         public double ArchetypeSoftTossPitchRank { get; set; } = AD.SoftTossPitchRank;
+        public double ArchetypeFlamethrowerVelocity { get; set; } = AD.FlamethrowerVelocity;
+        public double ArchetypeFlamethrowerControl { get; set; } = AD.FlamethrowerControl;
+        public double ArchetypeFlamethrowerControlFactor { get; set; } = AD.FlamethrowerControlFactor;
+        public double ArchetypeFlamethrowerStamina { get; set; } = AD.FlamethrowerStamina;
+        public double ArchetypeFlamethrowerPitchRank { get; set; } = AD.FlamethrowerPitchRank;
+        public double ArchetypePinpointVelocity { get; set; } = AD.PinpointVelocity;
+        public double ArchetypePinpointControl { get; set; } = AD.PinpointControl;
+        public double ArchetypePinpointStamina { get; set; } = AD.PinpointStamina;
+        public double ArchetypePinpointPitchRank { get; set; } = AD.PinpointPitchRank;
+        public double ArchetypeBreakingBallArtistVelocity { get; set; } = AD.BreakingBallArtistVelocity;
+        public double ArchetypeBreakingBallArtistControl { get; set; } = AD.BreakingBallArtistControl;
+        public double ArchetypeBreakingBallArtistStamina { get; set; } = AD.BreakingBallArtistStamina;
+        public double ArchetypeBreakingBallArtistPitchRank { get; set; } = AD.BreakingBallArtistPitchRank;
         // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。自校・AI校で共有する。
         public double LineupLeadoffDisciplineWeight { get; set; } = LD.LeadoffDisciplineWeight;
         public double LineupLeadoffContactWeight { get; set; } = LD.LeadoffContactWeight;
@@ -2598,6 +2619,9 @@ public static class CoefficientsLoader
                 PowerShare = ArchetypePowerShare,
                 FinesseShare = ArchetypeFinesseShare,
                 SoftTossShare = ArchetypeSoftTossShare,
+                FlamethrowerShare = ArchetypeFlamethrowerShare,
+                PinpointShare = ArchetypePinpointShare,
+                BreakingBallArtistShare = ArchetypeBreakingBallArtistShare,
                 PowerVelocity = ArchetypePowerVelocity,
                 PowerControl = ArchetypePowerControl,
                 PowerStamina = ArchetypePowerStamina,
@@ -2610,6 +2634,19 @@ public static class CoefficientsLoader
                 SoftTossControl = ArchetypeSoftTossControl,
                 SoftTossStamina = ArchetypeSoftTossStamina,
                 SoftTossPitchRank = ArchetypeSoftTossPitchRank,
+                FlamethrowerVelocity = ArchetypeFlamethrowerVelocity,
+                FlamethrowerControl = ArchetypeFlamethrowerControl,
+                FlamethrowerControlFactor = ArchetypeFlamethrowerControlFactor,
+                FlamethrowerStamina = ArchetypeFlamethrowerStamina,
+                FlamethrowerPitchRank = ArchetypeFlamethrowerPitchRank,
+                PinpointVelocity = ArchetypePinpointVelocity,
+                PinpointControl = ArchetypePinpointControl,
+                PinpointStamina = ArchetypePinpointStamina,
+                PinpointPitchRank = ArchetypePinpointPitchRank,
+                BreakingBallArtistVelocity = ArchetypeBreakingBallArtistVelocity,
+                BreakingBallArtistControl = ArchetypeBreakingBallArtistControl,
+                BreakingBallArtistStamina = ArchetypeBreakingBallArtistStamina,
+                BreakingBallArtistPitchRank = ArchetypeBreakingBallArtistPitchRank,
             },
             Lineup = new LineupCoefficients
             {
@@ -2668,6 +2705,11 @@ public static class CoefficientsLoader
             AiStarLiftPerPoint = AiStarLiftPerPoint,
             AiStarHitters = AiStarHitters,
             AiStarHittersPerCohort = AiStarHittersPerCohort,
+            AiVelocityCapKnee = AiVelocityCapKnee,
+            AiVelocityCapMidRaw = AiVelocityCapMidRaw,
+            AiVelocityCapMidLevel = AiVelocityCapMidLevel,
+            AiVelocityCapTopRaw = AiVelocityCapTopRaw,
+            AiVelocityCapTopLevel = AiVelocityCapTopLevel,
             AiStarPitchersPerCohort = AiStarPitchersPerCohort,
             AiStarCastDrop = AiStarCastDrop,
             ThrowLeftProb = ThrowLeftProb,

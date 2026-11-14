@@ -278,6 +278,56 @@ public sealed record RosterCoefficients
     /// <summary>使い捨て生成で脇役の中心を lift×これ だけ下げ、チーム総合（6指標）を圧縮後の尺度に留める。</summary>
     public double AiStarCastDrop { get; init; } = 0.30;
 
+    // --- AI校の球速の天井（issue #908） ---
+    // 旧実装は球速Lvを 99 で切り詰めていたため、全国の3年生の 123〜155人が上限 149.6km/h に張り付いていた
+    // （上限を伸ばすだけだと 150km/h 超が現実の年10〜15人の約10倍になる）。強豪校は逆算配分（AiRosterCycle.SolveGrowthG）
+    // で全能力に最大 +40 を毎年積むので、切り詰めない「素の値」は最大 190 前後まで伸び、上位ほど間隔が開く
+    // （実測 seed2026・3年生: 1位 186〜196／12位 158〜162／100位 101〜104／200位 93〜95）。
+    // この形は1本のなめらかな曲線では合わせられない（指数型だと150km/h超14人でも1位が152km/hで頭打ち）ので、
+    // 膝から上を2本の線分＋100への漸近で寝かせる。膝より下は恒等＝ほとんどの投手の球速は1ビットも変わらない。
+    // 目標（現実の実数・issue #908）: 3年生で最速150km/h以上が年10〜15人・1位が154〜158km/h。
+
+    /// <summary>天井の膝（素の値＝球速Lv。これ以下は恒等）。</summary>
+    public double AiVelocityCapKnee { get; init; } = 90.0;
+    /// <summary>1本目の線分の終点の素の値（全国の3年生でおよそ12位）。</summary>
+    public double AiVelocityCapMidRaw { get; init; } = 165.0;
+    /// <summary>1本目の線分の終点の球速Lv（92.5≒149.3km/h＝ここから上が150km/h台）。</summary>
+    public double AiVelocityCapMidLevel { get; init; } = 92.5;
+    /// <summary>2本目の線分の終点の素の値（全国の3年生でおよそ1〜3位）。</summary>
+    public double AiVelocityCapTopRaw { get; init; } = 185.0;
+    /// <summary>2本目の線分の終点の球速Lv（97≒154.5km/h）。この先は 100（158km/h）へ漸近する。</summary>
+    public double AiVelocityCapTopLevel { get; init; } = 97.0;
+
+    /// <summary>
+    /// AI校の球速の天井（素の値→球速Lv）。膝以下は恒等、膝から2本の線分、その先は 2本目の傾きのまま 100 へ指数的に漸近する
+    /// （どれだけ大きな値も 100 未満＝上限への張り付きが起きない）。単調増加。
+    /// </summary>
+    public double VelocitySoftCap(double raw)
+    {
+        double k = AiVelocityCapKnee, rm = AiVelocityCapMidRaw, lm = AiVelocityCapMidLevel,
+            rt = AiVelocityCapTopRaw, lt = AiVelocityCapTopLevel;
+        if (raw <= k) return raw;
+        if (raw <= rm) return k + (raw - k) * (lm - k) / (rm - k);
+        var slope = (lt - lm) / (rt - rm);
+        if (raw <= rt) return lm + (raw - rm) * slope;
+        var span = 100.0 - lt;
+        return lt + span * (1.0 - Math.Exp(-(raw - rt) * slope / span));
+    }
+
+    /// <summary><see cref="VelocitySoftCap"/> の逆関数（毎年の底上げを天井の手前の「素の値」で足すため）。</summary>
+    public double VelocitySoftCapInverse(double level)
+    {
+        double k = AiVelocityCapKnee, rm = AiVelocityCapMidRaw, lm = AiVelocityCapMidLevel,
+            rt = AiVelocityCapTopRaw, lt = AiVelocityCapTopLevel;
+        if (level <= k) return level;
+        if (level <= lm) return k + (level - k) * (rm - k) / (lm - k);
+        var slope = (lt - lm) / (rt - rm);
+        if (level <= lt) return rm + (level - lm) / slope;
+        var span = 100.0 - lt;
+        var frac = Math.Min((level - lt) / span, 1.0 - 1e-9);
+        return rt - span * Math.Log(1.0 - frac) / slope;
+    }
+
     /// <summary>スターの上乗せ量＝(強さ − ピボット)×lift_per_point×share。ピボット（40）より弱い学校は 0。</summary>
     public double StarLift(double strength)
         => Math.Max(0.0, strength - TierCompressionPivot) * AiStarLiftPerPoint * AiStarShare;
@@ -696,7 +746,10 @@ public static class ProspectGenerator
             // 全員が通るようになると野手の制球が OffSpecialtyFloor(8) を割る（実測3件/1635）。
             int Adjusted(AbilityKind k, double delta) => Math.Max(pitchingFloor, Lv(p.Level(k) + delta));
             veloLevel = Lv(veloLevel + dv * wRole);
-            AdjustLevel(p, AbilityKind.Control, Adjusted(AbilityKind.Control, dc * wRole));
+            // 剛腕の制球は割合（issue #908）。割合も wRole で薄める＝投手として読めない選手ほど 1 に近い。
+            var controlFactor = 1.0 + (PitcherArchetypes.ControlFactor(archetype, c.Archetypes) - 1.0) * wRole;
+            AdjustLevel(p, AbilityKind.Control,
+                Math.Max(pitchingFloor, Lv(p.Level(AbilityKind.Control) * controlFactor + dc * wRole)));
             // スタミナは上限なし（issue #356）＝軟投派等の正オフセットを100で頭打ちにしない。
             AdjustLevel(p, AbilityKind.Stamina,
                 Math.Max(pitchingFloor, LvStamina(p.Level(AbilityKind.Stamina) + ds * wRole)));
