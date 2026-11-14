@@ -246,7 +246,8 @@ public sealed class AtBatSession
         IReadOnlyList<Fielder>? fieldersOverride = null,
         Player? thirdRunnerOverride = null,
         double? squeezeWasteOverride = null,
-        Game.BaseState? basesNow = null)
+        Game.BaseState? basesNow = null,
+        bool pitchout = false)
     {
         // この球を投げる時点の塁上（issue #740 の統計回帰で発覚）。打席頭のスナップショットのままだと、打席中に
         // 盗塁した走者を元の塁の走者として扱う（例: 二塁へ盗んだ走者をバントの小フライで「一塁走者の飛び出し」にして
@@ -297,6 +298,19 @@ public sealed class AtBatSession
         var plan = PitchSelection.Select(pitcher, ctx.StrikeZone, batting, ctx.Pitching, rng, gear, directive, ctx.CatcherLead);
         // クセ球/荒れ球（設計書10）: 球速に依らない球威の上乗せ（空振り誘発の質的個性）。
         if (ctx.Skills.StuffBonus != 0.0) plan = plan with { Stuff = plan.Stuff + ctx.Skills.StuffBonus };
+
+        // ピッチアウト（issue #986・2026-11-15 監督決定）: 盗塁を読んで外した球はボール1つとして数える（3ボールなら四球）。
+        // 球種と球速は通常どおり決める（配球の乱数は消費済み）が、着弾は打者の届かない高め外へ固定する＝散布・打者判断・
+        // 死球の抽選は引かない（打者は見送る・当たらない）。球種の慣れは進めない（打者が見ていない球）。
+        if (pitchout)
+        {
+            _lastPitchFeatures = ComputeFeatures(plan);
+            var wide = new ControlScatter.Location(ctx.StrikeZone.HalfWidthM + PitchoutOffsetM, ctx.StrikeZone.TopM + PitchoutOffsetM);
+            _balls++;
+            RecordPitch(PitchKind.Ball, plan, wide, inZone: false, pitchout: true);
+            if (_balls >= 4) return Finish(PlateAppearanceResult.Walk);
+            return Continue();
+        }
 
         // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: この球を履歴へ畳み込む前の見慣れ度を読み（＝この球の
         // 判定にはまだ含めない）、読んだ直後に Advance で畳み込む（毎球必ず1回＝球種が決まった実球すべてに効く。
@@ -521,6 +535,9 @@ public sealed class AtBatSession
         return Continue();
     }
 
+    /// <summary>ピッチアウトの着弾位置＝ゾーンの外縁（外角・高め）からの距離[m]。判定に使わない表示用の位置。</summary>
+    private const double PitchoutOffsetM = 0.45;
+
     /// <summary>ファウルフライ（issue #830）の打球の Fork 用ストリーム番号（本流の乱数順を変えないための分岐）。</summary>
     private const ulong FoulFlyStreamId = 0x830F0F1UL;
 
@@ -575,14 +592,14 @@ public sealed class AtBatSession
     private void RecordPitch(
         PitchKind kind, PitchPlan plan, ControlScatter.Location loc,
         bool inZone, double swingProbability = 0.0, bool swung = false, Batting.BattedBall? ball = null,
-        Tactics.PitchBattingOverride? sign = null)
+        Tactics.PitchBattingOverride? sign = null, bool pitchout = false)
     {
         // 弾道積分は毎球RK4×2本(スピンあり/なし)とコストが高いため、Timeline同様CaptureTimeline時のみ
         // （観戦する試合だけ）計算する。既定（統計シム・裏試合）はゼロコスト（設計書15 §4「Phase Bの作業」）。
         var trajectory = _ctx.CaptureTimeline ? ComputeTrajectory(plan) : null;
         _pitchLog.Add(new PitchRecord(
             kind, _balls, _strikes, plan.Type, loc.X, loc.Y, plan.VelocityKmh, plan.AimX, plan.AimY, trajectory, ball,
-            sign));
+            sign, pitchout));
 
         if (_pitchTraces is null) return;
         var f = _lastPitchFeatures ?? default;

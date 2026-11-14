@@ -36,6 +36,12 @@ public static class StealReadModel
         return MathUtil.Clamp(readSkill * expectedness, 0.0, c.MaxPitchoutProb);
     }
 
+    /// <summary>ピッチアウトを投げられる最大のボールカウント。次の1球が四球になる3ボールでは外さない（issue #986）。</summary>
+    public const int MaxBallsForPitchout = 2;
+
+    /// <summary>このボールカウントでピッチアウトを投げられるか。3ボールで外すと四球＝守備側は投げない。</summary>
+    public static bool CanPitchout(int balls) => balls <= MaxBallsForPitchout;
+
     /// <summary>ピッチアウトが出たか（＝守備が読み切ったか）。決定論・乱数注入。</summary>
     public static bool RollPitchout(
         Player runner, Player catcher, Player pitcher, StartType startType,

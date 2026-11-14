@@ -27,6 +27,7 @@ public enum PitchKind
 /// <see cref="Sign"/>（issue #490）はこの球に出ていた打者への1球指示（<see cref="Tactics.PitchBattingOverride"/>
 /// の写し）。バント/セーフティバント/スクイズの構えを対決ビューに出すための表示専用データで、
 /// 判定・帯には一切関与しない（バント/スクイズ判定自体は従来どおり <see cref="AtBatSession"/> 内で完結）。
+/// <see cref="Pitchout"/> は盗塁を読んで外した球（<see cref="Kind"/> は常に <see cref="PitchKind.Ball"/>）。
 /// </summary>
 public readonly record struct PitchRecord(
     PitchKind Kind,
@@ -40,4 +41,5 @@ public readonly record struct PitchRecord(
     double AimY,
     Pitching.PitchTrajectory? Trajectory = null,
     Batting.BattedBall? BattedBall = null,
-    Tactics.PitchBattingOverride? Sign = null);
+    Tactics.PitchBattingOverride? Sign = null,
+    bool Pitchout = false);
