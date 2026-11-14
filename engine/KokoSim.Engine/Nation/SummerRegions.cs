@@ -21,7 +21,8 @@ public sealed record SummerRegion(int PrefectureId, string Name, int? Split)
 public static class SummerRegions
 {
     // JIS順Id（data/prefectures.yaml）。
-    private const int HokkaidoId = 0;
+    /// <summary>北海道の県ID（夏の準決勝/決勝の北海道ボールパーク＝<see cref="Match.Field.RegionalStadiumTier"/>。北北海道・南北海道とも同じ県ID）。</summary>
+    internal const int HokkaidoId = 0;
     /// <summary>東京都の県ID（夏の東西分割・準決勝/決勝の神宮＝<see cref="Match.Field.RegionalStadiumTier"/>）。</summary>
     internal const int TokyoId = 12;
     /// <summary>神奈川県の県ID（夏の準決勝/決勝の横浜スタジアム＝<see cref="Match.Field.RegionalStadiumTier"/>）。</summary>

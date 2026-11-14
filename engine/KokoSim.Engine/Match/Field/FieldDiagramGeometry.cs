@@ -53,6 +53,13 @@ public static class FieldDiagramGeometry
         => wingM + (centerM - wingM) * System.Math.Cos(2.0 * bearingRad);
 
     /// <summary>
+    /// 左右別の両翼版（issue #959）。+X 側（bearing ≥ 0）は右翼、−X 側は左翼で cos(2θ) 補間する
+    /// （<see cref="FieldGeometry.FenceDistance"/> と同じ式。左右同値なら上のオーバーロードと一致）。
+    /// </summary>
+    public static double FenceRadius(double bearingRad, double leftM, double rightM, double centerM)
+        => FenceRadius(bearingRad, bearingRad >= 0 ? rightM : leftM, centerM);
+
+    /// <summary>
     /// 試合2D俯瞰再生の標準守備位置[m]（mock DEF）。試合ビュー（Playback）が参照する単一ソース。
     /// ※ メンバー画面はより詰めた表示専用配置（<see cref="MemberFieldLayout.DefensivePosition"/>）を使う
     ///   （端の見切れ回避の framing が異なるため。両者を1つに寄せるかは要設計判断）。

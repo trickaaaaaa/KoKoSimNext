@@ -68,7 +68,8 @@ namespace KokoSim.UnityEditorTools
             var asset = ScriptableObject.CreateInstance<DuelStadiumMesh>();
             asset.SourceObj = $"{SourceDirRel}/{model}.obj";
             asset.Model = model;
-            asset.BakedWingM = obj.BakedWingM;
+            asset.BakedLeftM = obj.BakedLeftM;
+            asset.BakedRightM = obj.BakedRightM;
             asset.BakedCenterM = obj.BakedCenterM;
             asset.BakedFenceHeightM = obj.BakedFenceHeightM;
             var parts = new List<DuelStadiumMesh.Part>();
@@ -93,7 +94,7 @@ namespace KokoSim.UnityEditorTools
             foreach (var p in asset.Parts) AssetDatabase.AddObjectToAsset(p.Mesh, asset);
 
             Debug.Log($"球場メッシュを焼いた［{model}］: {asset.Parts.Length} 部位 / {tris} 三角形"
-                      + $"（うち観客 {people} 人・{crowdTris} 三角形）／焼いた寸法 {obj.BakedWingM}/{obj.BakedCenterM}/{obj.BakedFenceHeightM} → {assetPath}");
+                      + $"（うち観客 {people} 人・{crowdTris} 三角形）／焼いた寸法 {obj.BakedLeftM}/{obj.BakedRightM}/{obj.BakedCenterM}/{obj.BakedFenceHeightM} → {assetPath}");
         }
 
         /// <summary>焼いた球場メッシュを全部検証する。</summary>
@@ -116,7 +117,7 @@ namespace KokoSim.UnityEditorTools
             // ---- フェンス弧（本塁打判定の距離そのもの）。焼いた両翼・中堅で engine の弧と照合する ----
             foreach (var deg in FenceCheckDeg)
             {
-                var want = FieldDiagramGeometry.FenceRadius(deg * Mathf.Deg2Rad, asset.BakedWingM, asset.BakedCenterM);
+                var want = FieldDiagramGeometry.FenceRadius(deg * Mathf.Deg2Rad, asset.BakedLeftM, asset.EffectiveBakedRightM, asset.BakedCenterM);
                 var got = RadiusAt(asset, deg);
                 var d = System.Math.Abs(got - want);
                 if (d > TolM) bad++;
@@ -261,8 +262,8 @@ namespace KokoSim.UnityEditorTools
             public readonly List<Vector3> N = new List<Vector3>();
             public readonly List<Group> Groups = new List<Group>();
             public readonly Dictionary<string, Color> Mtl = new Dictionary<string, Color>();
-            // 焼いた寸法（`# kokosim: wing=.. center=.. fence_h=..`。無ければ standard の値）
-            public float BakedWingM = 95f, BakedCenterM = 118f, BakedFenceHeightM = 3.2f;
+            // 焼いた寸法（`# kokosim: wing=.. center=.. fence_h=..`、左右非対称は `left=.. right=..`。無ければ standard の値）
+            public float BakedLeftM = 95f, BakedRightM = 95f, BakedCenterM = 118f, BakedFenceHeightM = 3.2f;
         }
 
         private sealed class Group
@@ -299,7 +300,9 @@ namespace KokoSim.UnityEditorTools
                     {
                         var pair = kv.Split('=');
                         if (pair.Length != 2) continue;
-                        if (pair[0] == "wing") o.BakedWingM = F(pair[1]);
+                        if (pair[0] == "wing") o.BakedLeftM = o.BakedRightM = F(pair[1]);
+                        else if (pair[0] == "left") o.BakedLeftM = F(pair[1]);
+                        else if (pair[0] == "right") o.BakedRightM = F(pair[1]);
                         else if (pair[0] == "center") o.BakedCenterM = F(pair[1]);
                         else if (pair[0] == "fence_h") o.BakedFenceHeightM = F(pair[1]);
                     }

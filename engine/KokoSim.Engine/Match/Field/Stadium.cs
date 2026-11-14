@@ -109,6 +109,24 @@ public sealed record Stadium
     };
 
     /// <summary>
+    /// 北海道ボールパーク（issue #959。実在はエスコンフィールドHOKKAIDO・命名権を外した名前）。
+    /// 北海道（北北海道・南北海道）の夏の準決勝・決勝の球場（秋は汎用の県営級）。左右非対称（左97・右99）。
+    /// <b>値は <c>data/stadiums.yaml</c> の <c>kita_hokkaido_final</c> と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.HokkaidoBallparkDefault_MatchesTheRepositoryYaml</c> が固定する）。
+    /// </summary>
+    public static Stadium HokkaidoBallpark { get; } = new()
+    {
+        Id = "kita_hokkaido_final",
+        Name = "北海道ボールパーク",
+        Tier = StadiumTier.Prefectural,
+        LeftM = 97.0,
+        RightM = 99.0,
+        CenterM = 121.0,
+        FenceHeightM = 2.8,
+        Model = "hokkaido_ballpark",
+    };
+
+    /// <summary>
     /// 地方大会（県大会）の汎用ティア球場（設計書13 §1・issue #41系「地方大会の球場割当」）。
     /// 47県固有の実在球場は追わず、data/stadiums.yaml の汎用タイプ3種を序盤/準決勝・決勝で使い分ける
     /// （<see cref="RegionalStadiumTier"/>）。<b>値は data/stadiums.yaml と一致させること</b>（不変条件#4。

@@ -63,4 +63,24 @@ public sealed class FieldDiagramGeometryTests
             prev = r;
         }
     }
+
+    /// <summary>左右別の FenceRadius（issue #959）は engine の判定式 FenceDistance と全方位で一致し、左右同値なら従来式と一致する。</summary>
+    [Theory]
+    [InlineData(97.0, 99.0, 121.0)]
+    [InlineData(95.0, 95.0, 118.0)]
+    [InlineData(101.0, 100.0, 122.0)]
+    public void FenceRadius_LeftRight_MatchesFieldGeometryFenceDistance(double left, double right, double center)
+    {
+        var geom = new FieldGeometry { LeftFenceM = left, RightFenceM = right, CenterFenceM = center };
+        for (var deg = -45; deg <= 45; deg += 5)
+        {
+            var rad = deg * System.Math.PI / 180.0;
+            Assert.Equal(geom.FenceDistance(rad), FieldDiagramGeometry.FenceRadius(rad, left, right, center), 9);
+        }
+        Assert.Equal(left, FieldDiagramGeometry.FenceRadius(-Deg45, left, right, center), 9);
+        Assert.Equal(right, FieldDiagramGeometry.FenceRadius(Deg45, left, right, center), 9);
+        Assert.Equal(center, FieldDiagramGeometry.FenceRadius(0, left, right, center), 9);
+        if (left == right)
+            Assert.Equal(FieldDiagramGeometry.FenceRadius(0.3, left, center), FieldDiagramGeometry.FenceRadius(0.3, left, right, center), 12);
+    }
 }

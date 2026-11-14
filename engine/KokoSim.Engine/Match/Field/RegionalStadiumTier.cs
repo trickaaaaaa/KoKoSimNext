@@ -23,7 +23,7 @@ public static class RegionalStadiumTier
     /// 大会を戦う県（<see cref="FinalStadiumFor"/>）。null なら県に依らない汎用（県営級）。
     /// </param>
     /// <param name="summer">
-    /// 夏の県大会か（issue #956）。神奈川の横浜スタジアムは夏の準決勝・決勝だけ（秋は汎用の県営級）。
+    /// 夏の県大会か（issue #956・#959）。神奈川の横浜スタジアム・北海道の北海道ボールパークは夏の準決勝・決勝だけ（秋は汎用の県営級）。
     /// 東京の神宮は夏秋とも。乱数の引き方には関わらない。
     /// </param>
     public static FieldGeometry For(int? roundsRemaining, IRandomSource? rng, int? prefectureId = null, bool summer = false)
@@ -42,7 +42,8 @@ public static class RegionalStadiumTier
 
     /// <summary>
     /// その県の準決勝・決勝の球場（issue #904）。東京（東東京・西東京の夏、秋の都大会）は明治神宮野球場、
-    /// それ以外は汎用の県営級。神奈川の夏だけ横浜スタジアム（issue #956。秋は汎用のまま）。
+    /// それ以外は汎用の県営級。神奈川の夏だけ横浜スタジアム（issue #956）、北海道の夏だけ北海道ボールパーク
+    /// （北北海道・南北海道とも。issue #959）。どちらも秋は汎用のまま。
     /// 47県の決勝球場（data/stadiums.yaml の <c>prefecture_finals</c>）へ広げるときはここに足す。
     /// </summary>
     public static Stadium FinalStadiumFor(int? prefectureId, bool summer = false)
@@ -50,6 +51,7 @@ public static class RegionalStadiumTier
         {
             Nation.SummerRegions.TokyoId => Stadium.Jingu,
             Nation.SummerRegions.KanagawaId when summer => Stadium.Yokohama,
+            Nation.SummerRegions.HokkaidoId when summer => Stadium.HokkaidoBallpark,
             _ => Stadium.PrefLarge,
         };
 
