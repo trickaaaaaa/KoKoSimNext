@@ -4741,7 +4741,12 @@ namespace KokoSim.Unity.Match
             // 後もその続きが再生され続ける（守備ビューへ切り替わった後もモーションが止まらない実害）。
             // 対決ビュー据え置きの送球が実際に発火した投げ手だけ、アイドルへすり替えて控える。
             _pitcherSnap = _duelThrowFiredPitcher ? IdleSnapshot(_pitcher) : Snapshot(_pitcher);
-            _catcherSnap = _duelThrowFiredCatcher ? IdleSnapshot(_catcher) : Snapshot(_catcher);
+            // 振り逃げ・暴投・捕逸は投球の途中（捕手が逸らしている最中）で守備ビューへ切り替わる＝
+            // 逸らしクリップの途中を控えると、戻った後にその続きが再生される。戻り先は待機の姿勢（issue #972）。
+            _catcherSnap = _duelThrowFiredCatcher || IsPassedBallClipPlaying()
+                ? IdleSnapshot(_catcher) : Snapshot(_catcher);
+            _passedBallCountdown = -1f;
+            _passedBallIndex = -1;
             _duelThrowFiredPitcher = false;
             _duelThrowFiredCatcher = false;
 
@@ -4927,6 +4932,14 @@ namespace KokoSim.Unity.Match
         /// <see cref="Snapshot"/> の亜種＝いま再生中のクリップではなく、その役者のアイドル姿勢を
         /// 「対決ビューへ戻る先」として控える（対決ビュー据え置きの送球が発火した投げ手専用。上の項）。
         /// </summary>
+        private bool IsPassedBallClipPlaying()
+        {
+            if (_catcher == null || _passedBallClips == null) return false;
+            for (int i = 0; i < _passedBallClips.Length; i++)
+                if (_passedBallClips[i] != null && _catcher.Clip == _passedBallClips[i]) return true;
+            return false;
+        }
+
         private static DuelActorSnapshot IdleSnapshot(Actor a)
         {
             if (a == null || a.Go == null) return default;

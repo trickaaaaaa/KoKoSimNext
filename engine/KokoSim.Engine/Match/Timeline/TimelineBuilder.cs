@@ -59,11 +59,14 @@ public static class TimelineBuilder
     /// <see cref="BaserunningCoefficients.DropThirdStrikeReachProb"/> は成否のみの単純なベルヌーイ試行で、
     /// 暴投・牽制と同じく距離・速度を持たないため、絵の秒はここで新規に組む）。</summary>
     private const double DropThirdStrikeReactionSeconds = 0.12;
-    /// <summary>振り逃げ: 落球が転がって止まるまでの所要秒（暴投の後逸より短い＝本塁付近で収まる）。</summary>
-    private const double DropThirdStrikeRollSeconds = 0.30;
+    /// <summary>振り逃げ: 落球が転がって止まるまでの所要秒の下限・上限[s]。実際の秒は「送球が打者走者の一塁到達に
+    /// 合う拾い時刻」から逆算して両端の間に収める（捕手は拾ったらすぐ投げる＝待ちを持ち替えでなく
+    /// 「遠くへ転がる球を追う時間」で作る。issue #972）。</summary>
+    private const double DropThirdStrikeRollMinSeconds = 1.0;
+    private const double DropThirdStrikeRollMaxSeconds = 3.0;
     /// <summary>振り逃げ: 落球が転がって止まる位置＝本塁からバックネット側（-Z）へこの距離[m]
-    /// （暴投の <see cref="BatteryMissBackstopM"/> より短い＝三振球はバックネットまで飛ばない）。</summary>
-    private const double DropThirdStrikeMissDistanceM = 2.2;
+    /// （暴投の <see cref="BatteryMissBackstopM"/> より遠い＝弾いた球が離れた所まで転がり、拾いに手間取る絵）。</summary>
+    private const double DropThirdStrikeMissDistanceM = 9.0;
     /// <summary>振り逃げ: 打者走者の反応[s]（打球の"打"レッグ(0.10, <see cref="BuildBattedBall"/>)より一拍長い
     /// ＝振り逃げに気づいてから走り出すぶん）。</summary>
     private const double DropThirdStrikeBatterReactionSeconds = 0.15;
@@ -1472,15 +1475,25 @@ public static class TimelineBuilder
         var firstPt = BasePoint(field, "first");
         var missPt = new TimelinePoint(0, -DropThirdStrikeMissDistanceM);
 
+        var catcherAbility = catcher.ToFielder(c.AbilityEffect);
+        var transfer = c.PopTransferSeconds * catcherAbility.TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var throwFlight = Distance(missPt, firstPt) / catcherAbility.ThrowSpeedMps;
+        var batterArrive = DropThirdStrikeBatterReactionSeconds
+            + Distance(Home, firstPt) / batter.ToFielder(c.AbilityEffect).SprintSpeedMps;
+
+        // 出塁は確定済み＝送球が走者を追い越して見える絵にしない（矛盾ガード）。ただし待ちを「拾ってから持つ時間」
+        // にせず、球が転がり続ける時間（捕手が追って拾うまで）へ回す。拾ったらすぐ（持ち替え秒だけで）投げる。
+        var wantedPickupAt = batterArrive + DropThirdStrikeThrowGuardSeconds - transfer - throwFlight;
+        var rollSeconds = Math.Clamp(wantedPickupAt, DropThirdStrikeRollMinSeconds, DropThirdStrikeRollMaxSeconds);
+
         var ball = new List<BallSegment>
         {
-            new() { Kind = BallSegmentKind.Roll, T0 = 0.0, T1 = DropThirdStrikeRollSeconds, From = Home, To = missPt },
+            new() { Kind = BallSegmentKind.Roll, T0 = 0.0, T1 = rollSeconds, From = Home, To = missPt },
         };
 
-        // 捕手が追って拾う（issue #487 の暴投・捕逸と同じ組み立て。落球位置が近いぶん往復は短い）。
-        var catcherArrive = DropThirdStrikeReactionSeconds
-            + Distance(Home, missPt) / catcher.ToFielder(c.AbilityEffect).SprintSpeedMps;
-        var pickupAt = Math.Max(DropThirdStrikeRollSeconds, catcherArrive);
+        // 捕手が追って拾う（issue #487 の暴投・捕逸と同じ組み立て）。
+        var catcherArrive = DropThirdStrikeReactionSeconds + Distance(Home, missPt) / catcherAbility.SprintSpeedMps;
+        var pickupAt = Math.Max(rollSeconds, catcherArrive);
         var moves = new List<FielderMove>
         {
             new()
@@ -1490,13 +1503,8 @@ public static class TimelineBuilder
             },
         };
 
-        var throwStart = pickupAt
-            + c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-        var throwFlight = Distance(missPt, firstPt) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
-        var batterArrive = DropThirdStrikeBatterReactionSeconds
-            + Distance(Home, firstPt) / batter.ToFielder(c.AbilityEffect).SprintSpeedMps;
-
-        // 出塁は確定済み＝送球が走者を追い越して見える絵にしない（矛盾ガード）。
+        var throwStart = pickupAt + transfer;
+        // 上限で収まらないほど鈍足の打者でだけ、残りを送球の遅れで合わせる（矛盾ガード）。
         var throwArrive = Math.Max(throwStart + throwFlight, batterArrive + DropThirdStrikeThrowGuardSeconds);
         ball.Add(new BallSegment
         {
