@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Game;
@@ -68,6 +69,13 @@ public sealed record Team
     /// （帯不変）＝<see cref="MomentumModel"/> は0のとき恒等。
     /// </summary>
     public int MomentumLevel { get; init; } = 0;
+
+    /// <summary>
+    /// バッテリーの積み重ね（設計書23 §2.3・issue #933）: 投手ID×捕手ID（<see cref="Player.SourceId"/>）ごとの
+    /// 一緒に守ったイニング数（重み付き）。自校だけが持つ（Unity側 GameSession が <c>BatteryLedger</c> から渡す）。
+    /// null＝記録を持たない（AI校・裏試合・統計シム）＝同じ学校で過ごした年数（学年）から近似する（Q39）。
+    /// </summary>
+    public IReadOnlyDictionary<(int PitcherId, int CatcherId), double>? BatteryInnings { get; init; }
 
     /// <summary>DH制か。</summary>
     public bool UsesDh => DhSlot >= 0;

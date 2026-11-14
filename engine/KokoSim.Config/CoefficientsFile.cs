@@ -35,6 +35,8 @@ public sealed record CoefficientsBundle
     public KokoSim.Engine.Players.FormCoefficients Form { get; init; } = new();
     public KokoSim.Engine.Players.SkillCoefficients Skills { get; init; } = new();
     public KokoSim.Engine.Players.PersonalityCoefficients Personalities { get; init; } = new();
+    /// <summary>バッテリーの相性（設計書23 §2・issue #933）。</summary>
+    public BatteryChemistryCoefficients BatteryChemistry { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();
     /// <summary>チームの勢い（issue #863）。<see cref="Team.MomentumLevel"/> が0のチームには恒等＝帯不変。</summary>
     public MomentumCoefficients Momentum { get; init; } = new();
@@ -105,6 +107,7 @@ public static class CoefficientsLoader
         public FormDto? Form { get; set; }
         public SkillsDto? Skills { get; set; }
         public PersonalitiesDto? Personalities { get; set; }
+        public BatteryChemistryDto? BatteryChemistry { get; set; }
         public PressureDto? Pressure { get; set; }
         public MomentumDto? Momentum { get; set; }
         public TacticsDto? Tactics { get; set; }
@@ -148,6 +151,7 @@ public static class CoefficientsLoader
             Form = Form?.ToModel() ?? new KokoSim.Engine.Players.FormCoefficients(),
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
             Personalities = Personalities?.ToModel() ?? new KokoSim.Engine.Players.PersonalityCoefficients(),
+            BatteryChemistry = BatteryChemistry?.ToModel() ?? new BatteryChemistryCoefficients(),
             Pressure = Pressure?.ToModel() ?? new PressureCoefficients(),
             Momentum = Momentum?.ToModel() ?? new MomentumCoefficients(),
             Tactics = Tactics?.ToModel() ?? new TacticsCoefficients(),
@@ -1960,6 +1964,43 @@ public static class CoefficientsLoader
             MaxIndex = MaxIndex,
             MultiplierSlope = MultiplierSlope,
             FatigueNegativeAmplify = FatigueNegativeAmplify,
+        };
+    }
+
+    private sealed class BatteryChemistryDto
+    {
+        private static readonly BatteryChemistryCoefficients D = new();
+        public double LeadershipWeight { get; set; } = D.LeadershipWeight;
+        public double ReceptivenessWeight { get; set; } = D.ReceptivenessWeight;
+        public double ClashWeight { get; set; } = D.ClashWeight;
+        public double WifeRoleWeight { get; set; } = D.WifeRoleWeight;
+        public double StartWeight { get; set; } = D.StartWeight;
+        public double BondWeight { get; set; } = D.BondWeight;
+        public double BondTauInnings { get; set; } = D.BondTauInnings;
+        public double OfficialInningWeight { get; set; } = D.OfficialInningWeight;
+        public double PracticeInningWeight { get; set; } = D.PracticeInningWeight;
+        public double AiInningsPerYear { get; set; } = D.AiInningsPerYear;
+        public double LeadFactorPerK { get; set; } = D.LeadFactorPerK;
+        public double RattledRecoveryMinK { get; set; } = D.RattledRecoveryMinK;
+        public double PinchControlPerK { get; set; } = D.PinchControlPerK;
+        public int PinchPressureFrom { get; set; } = D.PinchPressureFrom;
+
+        public BatteryChemistryCoefficients ToModel() => new()
+        {
+            LeadershipWeight = LeadershipWeight,
+            ReceptivenessWeight = ReceptivenessWeight,
+            ClashWeight = ClashWeight,
+            WifeRoleWeight = WifeRoleWeight,
+            StartWeight = StartWeight,
+            BondWeight = BondWeight,
+            BondTauInnings = BondTauInnings,
+            OfficialInningWeight = OfficialInningWeight,
+            PracticeInningWeight = PracticeInningWeight,
+            AiInningsPerYear = AiInningsPerYear,
+            LeadFactorPerK = LeadFactorPerK,
+            RattledRecoveryMinK = RattledRecoveryMinK,
+            PinchControlPerK = PinchControlPerK,
+            PinchPressureFrom = PinchPressureFrom,
         };
     }
 

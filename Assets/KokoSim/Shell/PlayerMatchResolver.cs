@@ -236,6 +236,8 @@ namespace KokoSim.Unity.Shell
             {
                 ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                 MomentumLevel = GameSession.Current.MomentumLevel,
+                // バッテリーの積み重ね（設計書23 §2.3・issue #933）も自校だけが持つ（AI校は学年で近似）。
+                BatteryInnings = GameSession.Current.BatteryInningsForMatch(),
             };
         }
 
