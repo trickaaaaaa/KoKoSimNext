@@ -90,6 +90,47 @@ public sealed class SchoolRenameTests
     }
 
     [Fact]
+    public void Save_RoundTripsManagerGeneratedName_AndOmitsItWhenNotRenamed()
+    {
+        var plain = SaveCodec.Serialize(new SaveState());
+        Assert.DoesNotContain("managerGeneratedName", plain);
+
+        var state = new SaveState { SchoolName = "港北" };
+        state.NationOverlay.ManagerGeneratedName = "桜丘";
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var back, out var err), err);
+        Assert.Equal("桜丘", back!.NationOverlay.ManagerGeneratedName);
+        Assert.Equal("港北", back.SchoolName);
+    }
+
+    [Fact]
+    public void BracketView_RenamedResolvesMatchesSlotsAndChampionById()
+    {
+        var schools = MakePrefecture(300, 4);
+        var runner = new TournamentRunner(
+            schools, schools[0], new NationCoefficients(), new Xoshiro256Random(11), new TournamentSchedule(), "テスト大会");
+        while (!runner.Finished) runner.PlayNextPlayerMatch();
+        runner.DrainBracketResolution();
+
+        var view = runner.BuildBracketView();
+        Assert.NotNull(view.ChampionName);
+        var champion = schools.Single(s => s.Name == view.ChampionName);
+        Assert.Equal(champion.Id, view.ChampionId);
+
+        // 記録した校名は ID→「新N」へ引き直される（記録そのものは書き換わらない）。
+        var renamed = view.Renamed((id, stored) => "新" + id);
+        Assert.Equal("新" + champion.Id, renamed.ChampionName);
+        Assert.All(renamed.Matches, m =>
+        {
+            Assert.Equal("新" + m.WinnerId, m.WinnerName);
+            Assert.Equal("新" + m.LoserId, m.LoserName);
+        });
+        Assert.All(renamed.Rounds.SelectMany(r => r.Cards).SelectMany(c => new[] { c.Top, c.Bottom })
+                .Where(x => x.IsDetermined),
+            x => Assert.Equal("新" + x.SchoolId, x.TeamName));
+        Assert.Equal(view.ChampionName, runner.BuildBracketView().ChampionName);
+    }
+
+    [Fact]
     public void Rename_DoesNotChangeTournamentResults()
     {
         Assert.Equal(Run(rename: false), Run(rename: true));

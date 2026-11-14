@@ -31,6 +31,14 @@ namespace KokoSim.Unity.Saves
         private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo, _saveBtn, _advanceBtn;
         private Button _titleBtn, _titleYes, _titleNo;
 
+        // 画面内タブ（issue #946）: 0＝セーブデータ／1＝校名の編集。ゲーム中（タブ経由）だけ出す。
+        private static readonly string[] PageLabels = { "セーブデータ", "校名の編集" };
+        private int _page;
+        private SchoolRenamePage _rename;
+
+        /// <summary>校名の編集ページ（撮影ハーネス用。ゲーム中に開いたときだけ非null）。</summary>
+        public SchoolRenamePage RenamePage => _rename;
+
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
@@ -52,7 +60,36 @@ namespace KokoSim.Unity.Saves
 
             _selected = DefaultSlot(_inGame);
             _errorText = "";
-            Render();
+            // 校名の編集はゲーム中だけ（タイトル経由は全国がまだ生成されていない＝引いた時点で生成が走る）。
+            _rename = _inGame ? new SchoolRenamePage(_root, OnSchoolRenamed) : null;
+            _rename?.Bind();
+            ShowPage(0);
+        }
+
+        /// <summary>画面内タブを切り替える（0＝セーブデータ／1＝校名の編集）。撮影ハーネスからも呼ぶ。</summary>
+        public void ShowPage(int page)
+        {
+            _page = _rename != null ? page : 0;
+            var tabs = _root.Q<VisualElement>("ss-tabs");
+            if (tabs != null)
+            {
+                tabs.Clear();
+                if (_rename != null) tabs.Add(UiComponents.SegTabs(PageLabels, _page, ShowPage));
+            }
+            SetText("ss-heading", PageLabels[_page]);
+            SetShown("ss-page-saves", _page == 0);
+            SetShown("ss-page-rename", _page == 1);
+            if (_page == 1) _rename.Open();
+            else Render();
+        }
+
+        /// <summary>改名の後: 自校名が変わるとトップバーの校名も変わる（編集ページはタブ経由＝トップバーが出ている）。</summary>
+        private void OnSchoolRenamed() => TopBarMeters.Fill(_root);
+
+        private void SetShown(string name, bool shown)
+        {
+            var e = _root.Q<VisualElement>(name);
+            if (e != null) e.style.display = shown ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         // ScreenRouter は同じ GameObject を SetActive で付け外しするだけなので、外さないと
@@ -68,6 +105,7 @@ namespace KokoSim.Unity.Saves
             if (_titleYes != null) _titleYes.clicked -= OnTitleConfirm;
             if (_titleNo != null) _titleNo.clicked -= OnTitleCancel;
             if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
+            _rename?.Unbind();
         }
 
         /// <summary>

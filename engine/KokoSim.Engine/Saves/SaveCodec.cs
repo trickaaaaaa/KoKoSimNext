@@ -505,10 +505,13 @@ public static class SaveCodec
         ids.Sort();
         foreach (var id in ids)
             renames.Add(new JsonArray().Add(JsonValue.Of(id)).Add(JsonValue.Of(o.Renames[id])));
-        return new JsonObject()
+        var json = new JsonObject()
             .Add("managedSchoolId", o.ManagedSchoolId.HasValue ? JsonValue.Of(o.ManagedSchoolId.Value) : JsonNull.Instance)
             .Add("added", arr)
             .Add("renames", renames);
+        // 自校の改名前の名前（v31・issue #946）。自校を改名していないときは書かない。
+        if (o.ManagerGeneratedName is { } g) json.Add("managerGeneratedName", g);
+        return json;
     }
 
     private static NationOverlay NationOverlayFromJson(JsonObject obj)
@@ -532,6 +535,7 @@ public static class SaveCodec
                 var t = v.AsArray();
                 o.Renames[((JsonNumber)t[0]).AsInt()] = ((JsonString)t[1]).Value;
             }
+        if (obj.Has("managerGeneratedName")) o.ManagerGeneratedName = obj.Str("managerGeneratedName");
         return o;
     }
 

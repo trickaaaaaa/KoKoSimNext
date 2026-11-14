@@ -98,7 +98,7 @@ namespace KokoSim.Unity.Tournament
             {
                 case ViewMode.Preview: RenderPreview(); break;
                 case ViewMode.Detail: RenderDetail(); break;
-                default: RenderBracket(display.Runner.BuildBracketView()); break;
+                default: RenderBracket(NationService.DisplayBracket(display.Runner.BuildBracketView())); break;
             }
         }
 
@@ -494,7 +494,7 @@ namespace KokoSim.Unity.Tournament
             }
             else
             {
-                var bracket = NewspaperBracketLayout.Build(display.Runner.BuildBracketView(), TournamentPamphletHtml.Metrics);
+                var bracket = NewspaperBracketLayout.Build(NationService.DisplayBracket(display.Runner.BuildBracketView()), TournamentPamphletHtml.Metrics);
                 var schools = TournamentPreviewState.BuildPamphletSchools(v, bracket);
                 html = TournamentPamphletHtml.Render(v, bracket, schools);
             }

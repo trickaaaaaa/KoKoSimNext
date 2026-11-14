@@ -163,3 +163,44 @@
 /* 画面の高さいっぱいに紙色を敷く（ルートが伸びず下半分が白く抜けていた）。 */
 .ss-root { flex-grow: 1; }
 .ss-root .ss-body { flex-grow: 0; }   /* カードは中身の高さで止める（監督判断 2026-08-10・上の注記） */
+
+/* ── ヘッダ右端（画面内タブ＋「タイトルへ戻る」）・issue #946 ─────────── */
+.ss-header__end { flex-direction: row; align-items: center; }
+.ss-tabs { flex-shrink: 0; margin-right: var(--sp-3); }
+
+/* ═══ 校名の編集（issue #946・A案）═══════════════════════════════════
+   左＝県の切り替え＋学校一覧（行パネル）／右＝選んだ学校の名前の編集（詳細ペインは ss-d__* を共用）。
+   一覧は県の全校（多い県で100校超）なので、こちらのページだけ画面の高さまで伸ばして中をスクロールする。 */
+.ss-root .sr-body { flex-grow: 1; min-height: 0; }
+.sr-list { flex-direction: column; }
+.sr-line {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+.sr-lbl {
+    margin: 0;
+    padding: 0;
+    margin-right: var(--sp-3);
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+}
+.sr-drop { width: var(--w-sr-pref); flex-shrink: 0; margin: 0; }
+.sr-scroll { flex-grow: 1; min-height: 0; }
+.sr-row__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+}
+.sr-row .chip { flex-shrink: 0; margin-left: var(--sp-2); }
+
+.sr-d__gen { margin: 0; padding: 0; font-size: var(--fs-body); color: var(--color-chalk); }
+.sr-input { flex-shrink: 0; margin-top: var(--sp-3); }
+.sr-input .ss-d__row-k { margin: 0 0 var(--sp-1) 0; padding: 0; }
+.sr-input__line { flex-direction: row; align-items: center; }
+.sr-text { flex-grow: 1; flex-basis: 0; min-width: 0; margin: 0; }

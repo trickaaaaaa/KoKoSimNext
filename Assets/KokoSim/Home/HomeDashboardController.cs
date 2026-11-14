@@ -518,7 +518,7 @@ namespace KokoSim.Unity.Home
                 headline.EnableInClassList("tm-result__headline--win", win);
                 headline.EnableInClassList("tm-result__headline--lose", !win);
             }
-            SetText("tm-result-score", "桜丘 " + o.ManagerScore + " － " + o.OpponentScore + " " + o.OpponentName);
+            SetText("tm-result-score", KokoSim.Unity.Shell.NationService.ManagerSchoolName + " " + o.ManagerScore + " － " + o.OpponentScore + " " + o.OpponentName);
 
             _result.style.display = DisplayStyle.Flex;
             _result.BringToFront();

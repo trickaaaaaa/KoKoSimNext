@@ -3,6 +3,7 @@ using KokoSim.Engine.Career;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
+using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
@@ -47,6 +48,96 @@ namespace KokoSim.Unity.Shell
             _prefecture = null;
             _away = null;
         }
+
+        // ===== 校名の編集（issue #946）=====
+        // 改名はこのセーブだけに効く。他校は全国への差分（NationOverlay.Renames）、自校は自校名そのもの
+        // （ManagerSchoolName）を差し替え、改名前の名前を NationOverlay.ManagerGeneratedName に控える。
+        // 記録（大会結果・優勝校の履歴・転任候補）が持つ校名の文字列は書き換えず、表示のときに
+        // DisplayName で ID から今の名前を引く＝改名を取り消せば記録も元の名前で出る。
+        // 校名は乱数・シード・指紋に入れない（不変条件#2）。チームカラー・応援曲は学校ID基準のまま。
+
+        /// <summary>自校の生成時の名前（幹）。改名していなければ今の自校名。「元に戻す」の戻り先。</summary>
+        public static string ManagerSchoolGeneratedName => _overlay.ManagerGeneratedName ?? ManagerSchoolName;
+
+        /// <summary>自校を改名しているか。</summary>
+        public static bool ManagerSchoolRenamed => _overlay.ManagerGeneratedName != null;
+
+        /// <summary>他校を改名しているか（全国に無い学校は false）。</summary>
+        public static bool IsRenamed(int schoolId)
+            => schoolId == ManagerSchoolId ? ManagerSchoolRenamed : _overlay.Renames.ContainsKey(schoolId);
+
+        /// <summary>
+        /// 校名を変える（issue #946）。<paramref name="input"/> は幹（末尾の「高校」・前後の空白は落とす）。
+        /// 空なら改名の取り消し＝生成時の名前に戻す。生成時の名前と同じ名前も取り消しとして扱う
+        /// （改名表に「元と同じ名前」を残さない）。上限超え・全国に無い学校は false で何もしない。
+        /// </summary>
+        public static bool RenameSchool(int schoolId, string input)
+        {
+            if (!SchoolNames.TryNormalizeStem(input, out var stem)) return false;
+            if (stem != null && IsNameTaken(schoolId, stem)) return false;
+            if (schoolId == ManagerSchoolId)
+            {
+                var original = ManagerSchoolGeneratedName;
+                var next = stem ?? original;
+                _overlay.ManagerGeneratedName = next == original ? null : original;
+                ManagerSchoolName = next;
+                GameSession.Current.RenameManagerSchoolInstances(next);
+                return true;
+            }
+            var school = SchoolById(schoolId);
+            if (school == null) return false;
+            if (stem != null && stem == SchoolNames.Stem(school.GeneratedName)) stem = null;
+            _overlay.SetRename(school, stem);
+            return true;
+        }
+
+        /// <summary>
+        /// その幹が同じ県のほかの学校の今の名前と重なるか（新規作成画面と同じ約束＝県内で同名を作らない）。
+        /// 大会の表・校別詳細は校名で学校を引く箇所があり、県内の同名は見分けが付かなくなる。
+        /// </summary>
+        public static bool IsNameTaken(int schoolId, string stem)
+        {
+            if (string.IsNullOrEmpty(stem)) return false;
+            int prefectureId;
+            if (schoolId == ManagerSchoolId) prefectureId = PrefectureId;
+            else
+            {
+                var school = SchoolById(schoolId);
+                if (school == null) return false;
+                prefectureId = school.PrefectureId;
+            }
+            if (schoolId != ManagerSchoolId && prefectureId == PrefectureId && SchoolNames.Stem(ManagerSchoolName) == stem)
+                return true;
+            foreach (var s in Nation.InPrefecture(prefectureId))
+                if (s.Id != schoolId && SchoolNames.Stem(s.Name) == stem) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// 記録した校名を、学校IDから引いた<b>今の名前</b>にして返す（issue #946「過去の記録も新しい名前に揃える」）。
+        /// 表記は記録した文字列に合わせる（「〜高校」込みで記録した欄は「〜高校」、幹で記録した欄は幹）。
+        /// 自校（ID -1、および監督がいま率いている生成校の ID）は今の自校名、全国に無い ID は記録した名前のまま。
+        /// <para>転任前の自校の記録も ID -1 で残っているので、今の自校名で出る（自校の記録＝学校の記録と見なす）。</para>
+        /// </summary>
+        public static string DisplayName(int schoolId, string storedName)
+        {
+            if (string.IsNullOrEmpty(storedName)) return storedName;
+            string current;
+            if (schoolId == ManagerSchoolId || schoolId == _overlay.ManagedSchoolId)
+                current = ManagerSchoolName;
+            else
+            {
+                var school = SchoolById(schoolId);
+                if (school == null) return storedName;
+                current = school.Name;
+            }
+            var stem = SchoolNames.Stem(current);
+            return SchoolNames.Stem(storedName).Length != storedName.Length ? SchoolNames.Full(stem) : stem;
+        }
+
+        /// <summary>トーナメント表の校名（試合行・枠・優勝校）を今の名前へ引き直す（表示専用・<see cref="DisplayName"/>）。</summary>
+        public static TournamentBracketView DisplayBracket(TournamentBracketView view)
+            => view?.Renamed(DisplayName);
 
         private static readonly NationCoefficients Coeff = new NationCoefficients();
         private static Nation _generated;
@@ -108,8 +199,15 @@ namespace KokoSim.Unity.Shell
             int yearIndex, int nextPlayerId)
         {
             _ = Nation;   // 保留中の年次進化を当ててから差分を動かす
+            // 改名（issue #946）は学校に付いて回る: 自校の改名は全国へ残る旧校へ、転任先の改名は新しい自校名へ。
+            // 旧校は改名前の名前（departing.Name）で全国へ戻し、今の名前は改名表に載せる＝「元に戻す」が効く。
+            var departingRename = ManagerSchoolRenamed ? ManagerSchoolName : null;
+            var targetRenamed = _overlay.Renames.Remove(target.Id);
             var result = SchoolTransfer.Execute(_overlay, GeneratedNation, Rosters, departing, departingActive,
                 target, yearIndex, nextPlayerId, GameSeed.Master);
+            if (departingRename != null) _overlay.Renames[result.OldSchoolId] = departingRename;
+            else _overlay.Renames.Remove(result.OldSchoolId);
+            _overlay.ManagerGeneratedName = targetRenamed ? SchoolNames.Stem(target.GeneratedName) : null;
             _nation = null;
             _prefecture = null;
             _away = null;

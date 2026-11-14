@@ -500,13 +500,25 @@
 .sbk .radar-axis__l,
 .sbk .radar-axis__v { margin: 0; padding: 0; }
 
-/* 入力欄（新規作成の都道府県・地区・校名）：Unity 既定の灰色を白地＋淡い1px枠へ。 */
+/* 入力欄（新規作成の都道府県・地区・校名）：Unity 既定の灰色を白地＋淡い1px枠へ。
+   部品 SbkField＝`.sbk-field` を TextField / DropdownField に付ければ同じ見た目になる（校名の編集 #946 で辞書化）。 */
 .sbk .ngs-drop .unity-base-field__input,
-.sbk .ngs-text .unity-base-field__input {
+.sbk .ngs-text .unity-base-field__input,
+.sbk .sbk-field .unity-base-field__input {
     background-color: var(--sbk-card);
     border-width: 1px;
     border-color: var(--sbk-card-line-hover);
     border-radius: var(--sbk-r-chip);
     color: var(--sbk-text);
 }
-.sbk .ngs-drop .unity-base-popup-field__arrow { -unity-background-image-tint-color: var(--sbk-sub); }
+.sbk .ngs-drop .unity-base-popup-field__arrow,
+.sbk .sbk-field .unity-base-popup-field__arrow { -unity-background-image-tint-color: var(--sbk-sub); }
+.sbk .sbk-field { margin: 0; }
+/* 部品 SbkFieldSuffix：入力欄の右に固定表示する接尾（校名欄の「高校」）。明朝で校名の一部として読ませる。 */
+.sbk .sbk-field-suffix {
+    margin: 0 0 0 var(--sp-2);
+    padding: 0;
+    font-size: var(--fs-page);
+    color: var(--sbk-text);
+    flex-shrink: 0;
+}

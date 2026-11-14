@@ -217,8 +217,8 @@ public sealed class BlockLeagueRunner : ITournamentRunner
                 var played = res is not null;
                 var aWon = played && res!.AScore > res.BScore;
                 cards.Add(new BracketCard(r, c.Index, name,
-                    new BracketSlot(c.A.Name, c.A.Id == _managerId, aWon, played ? res!.AScore : null),
-                    new BracketSlot(c.B.Name, c.B.Id == _managerId, played && !aWon, played ? res!.BScore : null),
+                    new BracketSlot(c.A.Name, c.A.Id == _managerId, aWon, played ? res!.AScore : null, c.A.Id),
+                    new BracketSlot(c.B.Name, c.B.Id == _managerId, played && !aWon, played ? res!.BScore : null, c.B.Id),
                     IsBye: false, IsPlayed: played, MercyEnded: res?.MercyEnded ?? false));
             }
             rounds.Add(new BracketRound(r, name, cards));

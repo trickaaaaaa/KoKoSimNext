@@ -48,10 +48,11 @@ public static class SchoolNames
         => stem.EndsWith(Suffix, StringComparison.Ordinal) ? stem : stem + Suffix;
 
     /// <summary>
-    /// 改名の入力（幹）の文字数の上限（issue #946）。画面で切れない長さとして暫定 10 字（全国生成の校名の幹の最長と
-    /// 校名の出る欄の実測で詰める）。
+    /// 改名の入力（幹）の文字数の上限（issue #946）。<b>全国生成の校名の幹の最長（8字＝6字の地名＋2字の接尾。
+    /// 例「いちき串木野中央」）に揃える</b>＝校名の出る欄はどれも生成校名の最長で組んであるので、それより長い名前は
+    /// どこかで切れる（トーナメント表の端の校名欄は 168px・19px の明朝で「〜高校」込み約9字）。
     /// </summary>
-    public const int MaxStemLength = 10;
+    public const int MaxStemLength = 8;
 
     /// <summary>
     /// 改名の入力を幹へ整える（issue #946）。前後の空白（全角を含む）を落とし、末尾の「高校」は外す。
@@ -92,6 +93,13 @@ public sealed class NationOverlay
     /// 記録（大会結果の校名の文字列）は書き換えず、表示のときに ID から今の名前を引く＝取り消せば元に戻る。
     /// </summary>
     public Dictionary<int, string> Renames { get; } = new();
+
+    /// <summary>
+    /// 自校（全国の外の専用ID）の<b>改名前の名前</b>（幹・issue #946）。自校を改名しているときだけ入る＝null なら
+    /// 今の自校名がそのまま「生成時の名前」（新規ゲームで付けた名前／転任先の生成時の名前）。自校名そのものは
+    /// セーブの schoolName が持つので、ここは「元に戻す」の戻り先だけを持つ。
+    /// </summary>
+    public string? ManagerGeneratedName { get; set; }
 
     public bool IsEmpty => Added.Count == 0 && ManagedSchoolId is null && Renames.Count == 0;
 

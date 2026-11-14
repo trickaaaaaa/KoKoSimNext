@@ -84,6 +84,18 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public IReadOnlyList<School> Field { get; private set; } = Array.Empty<School>();
 
+        /// <summary>
+        /// 自校の改名（issue #946）を、開催中の大会が抱えている自校の School 実体へ当てる。
+        /// 自校は専用ID の使い捨て実体（<see cref="NationService.ManagerSchool"/>）で出場校に入るので、
+        /// 大会の途中で改名すると展望・メンバー表だけ旧名で残る（トーナメント表は ID から引き直すので揃う）。
+        /// </summary>
+        public void RenameManagerSchoolInstances(string stem)
+        {
+            foreach (var field in new[] { Field, KoshienField, SenbatsuField })
+                foreach (var s in field)
+                    if (s != null && s.Id == NationService.ManagerSchoolId) s.Rename(stem);
+        }
+
         /// <summary>大会内経過日（開幕=0日目）。日送りで +1。</summary>
         public int TournamentDay { get; private set; }
         /// <summary>開幕演出をUIが未表示か（表示したら ConsumeBanner で下ろす）。</summary>

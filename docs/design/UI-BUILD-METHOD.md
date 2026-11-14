@@ -122,6 +122,7 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `.sbk-seg` | 2択切替（土台＋選ばれた側だけ白地＋1px枠）。`ms-tab` / `seg-tab` / `filter-chip` も `.sbk` の中ではこの見た目 |
 | `LineIcon` | 線画アイコン（Painter2D・24座標・線幅2）。拡声器/左右矢印/名簿/早送り/再生。色は要素の `color` を継承（絵文字はSDFに無いので使わない） |
 | `ConditionFace.SetEstimated` | 調子の推定表示（顔の色55%＋同系色の点線の縁）。相手校の選手（`MatchLiveStatsProvider.IsConditionEstimated`）に使う |
+| `SbkField` / `SbkFieldSuffix` | 入力欄（`.sbk-field` を TextField / DropdownField に付ける＝白地＋淡い1px枠）と、その右に固定表示する接尾（`.sbk-field-suffix`・校名欄の「高校」を明朝で）。校名の編集（issue #946）で新規作成画面の入力欄から辞書化 |
 | `SchoolAccent` | スクールカラー（`acc-fg/bg/bd/bd-top` の付いた要素へ流し込む）。使うのは比較表の自チーム側とオーダー画面だけ |
 | `ChoiceButton` | 同じ重みの選択肢1つ（`UiComponents.ChoiceButton`・`.choice-btn`）。白地＋墨1px枠、hover／選択は墨2px。応援団赤は使わない・確率や説明文は添えない。イベントの3択（issue #945）は会話ボックスの中に縦並び（`.ev__choices`） |
 

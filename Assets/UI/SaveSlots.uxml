@@ -25,12 +25,16 @@
             <ui:VisualElement class="ss-header">
                 <ui:VisualElement class="rule-head">
                     <ui:VisualElement class="rule-head__rule" />
-                    <ui:Label class="rule-head__text f-display" text="セーブデータ" />
+                    <ui:Label name="ss-heading" class="rule-head__text f-display" text="セーブデータ" />
                 </ui:VisualElement>
-                <ui:Button name="ss-title" class="dlg-btn dlg-btn--ghost" text="タイトルへ戻る" />
+                <ui:VisualElement class="ss-header__end">
+                    <!-- ゲーム中だけ出す画面内タブ（セーブデータ／校名の編集・issue #946）。部品は SegTabs。 -->
+                    <ui:VisualElement name="ss-tabs" class="ss-tabs" />
+                    <ui:Button name="ss-title" class="dlg-btn dlg-btn--ghost" text="タイトルへ戻る" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement class="ss-body">
+            <ui:VisualElement name="ss-page-saves" class="ss-body">
 
                 <!-- 左：スロット一覧（手動1〜3＋オート・32px行） -->
                 <ui:VisualElement class="card card--list">
@@ -61,6 +65,55 @@
                             <ui:Button name="ss-save" class="dlg-btn dlg-btn--primary" text="保存" style="display: none;" />
                             <ui:Button name="ss-load" class="dlg-btn dlg-btn--primary" text="読込" />
                             <ui:Button name="ss-delete" class="dlg-btn dlg-btn--warn" text="削除" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+
+            <!-- 校名の編集（issue #946・監督決定のA案）。左＝県の切り替え＋その県の学校一覧（自校は先頭に固定・
+                 改名済みには印）、右＝選んだ学校の元の名前・新しい名前（幹だけ入力し「高校」は固定表示）・元に戻す／確定。
+                 中身は SchoolRenamePage が組む。 -->
+            <ui:VisualElement name="ss-page-rename" class="ss-body sr-body" style="display: none;">
+
+                <ui:VisualElement class="card card--list sr-list">
+                    <ui:VisualElement class="card__hd">
+                        <ui:Label class="card__hd-title" text="学校" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card__body card__body--fill">
+                        <ui:VisualElement class="sr-line">
+                            <ui:Label class="sr-lbl" text="都道府県" />
+                            <ui:DropdownField name="sr-pref" class="sbk-field sr-drop" />
+                        </ui:VisualElement>
+                        <ui:ScrollView name="sr-scroll" mode="Vertical" class="sr-scroll scroll">
+                            <ui:VisualElement name="sr-rows" class="row-well" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="card card--detail">
+                    <ui:VisualElement class="card__hd">
+                        <ui:Label class="card__hd-title" text="校名" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card__body card__body--fill">
+                        <ui:Label name="sr-d-name" class="ss-d__name f-display-lg" text="" />
+                        <ui:Label name="sr-d-sub" class="ss-d__sub f-body" text="" />
+                        <ui:VisualElement class="ss-d__row">
+                            <ui:Label class="ss-d__row-k" text="元の名前" />
+                            <ui:Label name="sr-d-gen" class="sr-d__gen f-display" text="" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="sr-input">
+                            <ui:Label class="ss-d__row-k" text="新しい名前" />
+                            <ui:VisualElement class="sr-input__line">
+                                <ui:TextField name="sr-name" class="sbk-field sr-text" />
+                                <ui:Label class="sbk-field-suffix f-display" text="高校" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <!-- 県内の学校と重なる名前のときだけ出す（新規作成画面と同じ文言）。 -->
+                        <ui:Label name="sr-d-note" class="ss-d__note ss-d__note--warn f-body" text="その校名は県内の学校と重複しています" style="display: none;" />
+                        <ui:VisualElement class="ss-d__foot">
+                            <ui:Button name="sr-revert" class="dlg-btn dlg-btn--ghost" text="元に戻す" />
+                            <ui:Button name="sr-confirm" class="dlg-btn dlg-btn--primary" text="確定" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
