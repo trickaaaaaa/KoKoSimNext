@@ -41,7 +41,7 @@
 
             <ui:VisualElement class="ngs-line">
               <ui:Label class="ngs-lbl" text="校名" />
-              <ui:TextField name="ngs-name" class="ngs-text" max-length="12" />
+              <ui:TextField name="ngs-name" class="ngs-text" max-length="8" />
               <ui:Label class="ngs-suffix f-display" text="高校" />
               <ui:Label class="ngs-lbl ngs-lbl--2nd" text="候補" />
               <ui:VisualElement name="ngs-suggest" class="ngs-suggest" />

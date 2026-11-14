@@ -23,8 +23,12 @@ namespace KokoSim.Unity.NewGame
     [RequireComponent(typeof(UIDocument))]
     public sealed class NewGameSetupController : MonoBehaviour
     {
-        /// <summary>校名の上限文字数（UXML の max-length と一致させる）。</summary>
-        private const int MaxNameLength = 12;
+        /// <summary>
+        /// 校名の上限文字数。校名の編集（issue #946）と同じ上限＝全国生成の校名の幹の最長
+        /// （<see cref="KokoSim.Engine.Nation.SchoolNames.MaxStemLength"/>）を参照する。入力欄の max-length もここから入れる。
+        /// 既存の12字のセーブはそのまま読める（改名するときに8字まで）。
+        /// </summary>
+        private const int MaxNameLength = KokoSim.Engine.Nation.SchoolNames.MaxStemLength;
 
         /// <summary>
         /// 校名候補として並べる数。校名と同じ行に置くので**折り返さない本数**に抑える
@@ -63,6 +67,7 @@ namespace KokoSim.Unity.NewGame
             _district = _root.Q<DropdownField>("ngs-district");
             _districtLabel = _root.Q<Label>("ngs-district-lbl");
             _name = _root.Q<TextField>("ngs-name");
+            if (_name != null) _name.maxLength = MaxNameLength;
             _suggestHost = _root.Q<VisualElement>("ngs-suggest");
             _summary = _root.Q<Label>("ngs-summary-text");
             _error = _root.Q<Label>("ngs-error");
