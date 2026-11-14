@@ -519,7 +519,7 @@ public static class FieldingResolver
                 // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
                 var (result, errorKind) = MaybeInfieldError(
-                    fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy, firstThrowScatter);
+                    fielders, infielder, coeff, rng, errorBonus, throwAccuracy, firstThrowScatter);
                 double? recoveredScatterM = null, recoveredOutSeconds = null, wildScatterM = null;
                 double? recoveredCatchScatterM = null, recoveredCatchOutSeconds = null;
                 double? catchErrorScatterM = null, catchErrorReadyAtSeconds = null;
@@ -1156,13 +1156,11 @@ public static class FieldingResolver
         return Math.Min(hangTime * coeff.CatchReachFactor, coeff.CatchReachCapSeconds) * routeFactor;
     }
 
-    /// <summary>捕球エラー（Catching）ロール。rng を1回消費（守備力連動, issue #123）。
+    /// <summary>捕球エラー（Catching）ロール。実際に捕った野手 <paramref name="f"/> の Catching で引く（issue #985）。rng を1回消費（守備力連動, issue #123）。
     /// extraProb はイレギュラーバウンド等の失策確率への加算（Issue #63・既定0で恒等）。</summary>
     private static bool CatchErrorOccurs(
-        IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff, IRandomSource rng,
-        double extraProb = 0.0)
+        Fielder f, FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0)
     {
-        var f = NearestFielder(fielders, landing);
         // 守備力連動は非対称: 平均(50)より下（弱小）は急傾斜で大量失策へ、上（精鋭）は緩傾斜で
         // 「守備を上げるほど失策が減る」勾配を残す（下限へ潰さない, issue #123）。
         var catchingDelta = f.Attributes.Catching - 50;
@@ -1203,11 +1201,11 @@ public static class FieldingResolver
     /// 捕球ロールへ加算する（Issue #63・既定0で恒等）。
     /// </summary>
     private static (BattedBallResult Result, FieldingErrorKind? ErrorKind) MaybeInfieldError(
-        IReadOnlyList<Fielder> fielders, Vector3D landing, Fielder infielder,
+        IReadOnlyList<Fielder> fielders, Fielder infielder,
         FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0, int? throwAccuracy = null,
         ThrowScatterModel.Scatter? throwScatter = null)
     {
-        if (CatchErrorOccurs(fielders, landing, coeff, rng, extraProb))
+        if (CatchErrorOccurs(infielder, coeff, rng, extraProb))
         {
             // 捕球エラーの内訳（issue #632）: 一定割合は股・脇を抜けて外野へ行く＝トンネル。
             // 失策の総数は変えない（お手玉が減ってトンネルが増える）＝#123/#532 の失策率校正を保つ。
