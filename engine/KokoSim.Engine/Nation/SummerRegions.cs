@@ -25,6 +25,8 @@ public static class SummerRegions
     internal const int HokkaidoId = 0;
     /// <summary>宮城県の県ID（夏の準決勝/決勝の宮城球場＝<see cref="Match.Field.RegionalStadiumTier"/>）。</summary>
     internal const int MiyagiId = 3;
+    /// <summary>広島県の県ID（夏の準決勝/決勝の広島市民球場＝<see cref="Match.Field.RegionalStadiumTier"/>）。</summary>
+    internal const int HiroshimaId = 33;
     /// <summary>東京都の県ID（夏の東西分割・準決勝/決勝の神宮＝<see cref="Match.Field.RegionalStadiumTier"/>）。</summary>
     internal const int TokyoId = 12;
     /// <summary>神奈川県の県ID（夏の準決勝/決勝の横浜スタジアム＝<see cref="Match.Field.RegionalStadiumTier"/>）。</summary>

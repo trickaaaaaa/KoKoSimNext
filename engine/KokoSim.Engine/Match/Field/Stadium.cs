@@ -145,6 +145,24 @@ public sealed record Stadium
     };
 
     /// <summary>
+    /// 広島市民球場（issue #963。カープの本拠地・命名権を外した名前）。広島の夏の準決勝・決勝の球場（秋は汎用の県営級）。
+    /// 左右非対称（左101・右100）。フェンス高は代表値の3.0m（監督決定）。
+    /// <b>値は <c>data/stadiums.yaml</c> の <c>hiroshima_final</c> と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.HiroshimaDefault_MatchesTheRepositoryYaml</c> が固定する）。
+    /// </summary>
+    public static Stadium Hiroshima { get; } = new()
+    {
+        Id = "hiroshima_final",
+        Name = "広島市民球場",
+        Tier = StadiumTier.Prefectural,
+        LeftM = 101.0,
+        RightM = 100.0,
+        CenterM = 122.0,
+        FenceHeightM = 3.0,
+        Model = "hiroshima",
+    };
+
+    /// <summary>
     /// 地方大会（県大会）の汎用ティア球場（設計書13 §1・issue #41系「地方大会の球場割当」）。
     /// 47県固有の実在球場は追わず、data/stadiums.yaml の汎用タイプ3種を序盤/準決勝・決勝で使い分ける
     /// （<see cref="RegionalStadiumTier"/>）。<b>値は data/stadiums.yaml と一致させること</b>（不変条件#4。
