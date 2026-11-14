@@ -41,6 +41,7 @@ stadiums:
     center: 118
     fence_height: 2.6
     tier: national
+    model: koshien
     # wind: 浜風  # ②用の箱。今回未使用
   - id: jingu
     name: 明治神宮野球場

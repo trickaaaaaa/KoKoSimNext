@@ -99,6 +99,7 @@ public sealed class StadiumLoaderTests
         Assert.Equal(yaml.Id, code.Id);
         Assert.Equal(yaml.Name, code.Name);
         Assert.Equal(yaml.Tier, code.Tier);
+        Assert.Equal(yaml.Model, code.Model);
         Assert.Equal(yaml.LeftM, code.LeftM, 6);
         Assert.Equal(yaml.RightM, code.RightM, 6);
         Assert.Equal(yaml.CenterM, code.CenterM, 6);

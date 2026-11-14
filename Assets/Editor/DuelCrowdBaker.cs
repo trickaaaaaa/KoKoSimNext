@@ -31,6 +31,11 @@ namespace KokoSim.UnityEditorTools
         private const float SeatPitch = 0.52f;
         /// <summary>満員でも空けておく割合（通路際・ばらけ）。</summary>
         private const float AlwaysEmpty = 0.08f;
+        /// <summary>
+        /// これより本塁から遠い客は左右の面を省く[m]。客は全員本塁を向いて座るので、遠い客の側面は
+        /// 試合のどの構図でもほぼ写らない（寄りの絵が入るネット裏・内野の前列だけ箱のまま残す）。
+        /// </summary>
+        private const float SidesWithinM = 40f;
 
         // 服の色（sRGB）。重みは「白・紺・灰が多く、原色は少し」。地方球場の夏の客席の見た目で選ぶ
         private static readonly (Color c, float w)[] Shirts =
@@ -90,7 +95,7 @@ namespace KokoSim.UnityEditorTools
                     var f = (s + 0.5f) / n;
                     var th = r.T0 + dT * f;
                     var rBack = Mathf.Lerp(r.R0, r.R1, f) + r.Tread - r.BackIn;   // 背もたれの前面
-                    Place(builders[layer], th, rBack, r.Y, h);
+                    Place(builders[layer], th, rBack, r.Y, h, rBack <= SidesWithinM);
                     people++;
                 }
             }
@@ -106,7 +111,7 @@ namespace KokoSim.UnityEditorTools
         }
 
         /// <summary>1人ぶん。th=方位、rBack=背もたれ前面の半径、y=踏面の高さ。顔は本塁側を向く。</summary>
-        private static void Place(MeshBuilder b, float th, float rBack, float y, ulong h)
+        private static void Place(MeshBuilder b, float th, float rBack, float y, ulong h, bool sides)
         {
             var radial = new Vector3(Mathf.Sin(th), 0f, Mathf.Cos(th));      // 外向き
             var tangent = new Vector3(Mathf.Cos(th), 0f, -Mathf.Sin(th));
@@ -119,12 +124,14 @@ namespace KokoSim.UnityEditorTools
             // 胴（座った上半身）: 踏面+0.40（座面）〜+0.98
             var torsoH = 0.58f * size;
             var torso = basePos - radial * 0.17f + Vector3.up * (y + 0.40f + torsoH * 0.5f);
-            b.Box(torso, radial, tangent, 0.42f * size, torsoH, 0.26f, shirt, shirt);
+            // 側面を省いた客は、斜めから見たときに側面が稼いでいた幅のぶん正面を広げる（隙間が空いて満員に見えなくなるため）
+            var torsoW = (sides ? 0.42f : 0.50f) * size;
+            b.Box(torso, radial, tangent, torsoW, torsoH, 0.26f, shirt, shirt, sides);
             // 頭（のっぺらぼう: 正面は肌一色。天面だけ髪か帽子）
-            var head = 0.21f * size;
+            var head = (sides ? 0.21f : 0.24f) * size;
             var hc = basePos - radial * 0.19f + Vector3.up * (y + 0.40f + torsoH + 0.03f + head * 0.5f);
             var top = U01(h, 4) < CapShare ? Pick(Caps, U01(h, 5)) : Hair;
-            b.Box(hc, radial, tangent, head, head, head, Skin, top);
+            b.Box(hc, radial, tangent, head, head, head, Skin, top, sides);
         }
 
         private static List<Row> Read(string path)
@@ -187,34 +194,36 @@ namespace KokoSim.UnityEditorTools
             /// <summary>
             /// 本塁側を向いた箱。正面・左右・天面だけ（背面と底は写らないので省く）。
             /// radial=外向き・tangent=横。<paramref name="topColor"/> は天面の色。
+            /// <paramref name="sides"/>=false なら左右も省く（遠い客＝<see cref="SidesWithinM"/>）。
             /// </summary>
-            public void Box(Vector3 c, Vector3 radial, Vector3 tangent, float w, float hgt, float d, Color body, Color topColor)
+            public void Box(Vector3 c, Vector3 radial, Vector3 tangent, float w, float hgt, float d, Color body, Color topColor, bool sides)
             {
                 var hx = tangent * (w * 0.5f);
                 var hy = Vector3.up * (hgt * 0.5f);
                 var hz = radial * (d * 0.5f);
                 var front = c - hz;          // 本塁側の面の中心
                 Quad(front - hx - hy, front + hx - hy, front + hx + hy, front - hx + hy, -radial, body);
-                Quad(c - hx - hz - hy, c - hx + hz - hy, c - hx + hz + hy, c - hx - hz + hy, -tangent, body);
-                Quad(c + hx - hz - hy, c + hx + hz - hy, c + hx + hz + hy, c + hx - hz + hy, tangent, body);
+                if (sides)
+                {
+                    Quad(c - hx - hz - hy, c - hx + hz - hy, c - hx + hz + hy, c - hx - hz + hy, -tangent, body);
+                    Quad(c + hx - hz - hy, c + hx + hz - hy, c + hx + hz + hy, c + hx - hz + hy, tangent, body);
+                }
                 Quad(c - hx - hz + hy, c + hx - hz + hy, c + hx + hz + hy, c - hx + hz + hy, Vector3.up, topColor);
             }
 
+            /// <summary>
+            /// 平らな四角形1枚＝頂点4つ・三角形2つ（頂点は面の中で共有する。法線は面で同じなので見た目は変わらない）。
+            /// 生成スクリプトの tri() と同じ約束: (b−a)×(c−a) が normal を向くよう巻き順をそろえる。
+            /// </summary>
             private void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, Color color)
             {
-                Tri(a, b, c, normal, color);
-                Tri(a, c, d, normal, color);
-            }
-
-            /// <summary>生成スクリプトの tri() と同じ約束: (b−a)×(c−a) が normal を向くよう巻き順をそろえる。</summary>
-            private void Tri(Vector3 a, Vector3 b, Vector3 c, Vector3 normal, Color color)
-            {
-                if (Vector3.Dot(Vector3.Cross(b - a, c - a), normal) < 0f) (b, c) = (c, b);
+                if (Vector3.Dot(Vector3.Cross(b - a, c - a), normal) < 0f) (b, d) = (d, b);
                 var sub = Sub(color);
                 var i = _v.Count;
-                _v.Add(a); _v.Add(b); _v.Add(c);
-                _n.Add(normal); _n.Add(normal); _n.Add(normal);
+                _v.Add(a); _v.Add(b); _v.Add(c); _v.Add(d);
+                for (var k = 0; k < 4; k++) _n.Add(normal);
                 sub.Add(i); sub.Add(i + 1); sub.Add(i + 2);
+                sub.Add(i); sub.Add(i + 2); sub.Add(i + 3);
             }
 
             private List<int> Sub(Color color)
