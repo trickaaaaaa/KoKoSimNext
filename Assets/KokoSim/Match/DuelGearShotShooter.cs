@@ -19,6 +19,15 @@ namespace KokoSim.Unity.Match
         /// <summary>出力ファイル名（拡張子なし）。連続検証で上書きしないよう起動側が変える。</summary>
         public static string FileName = "i-duel-gear-0";
 
+        /// <summary>
+        /// true でセットポジション（采配窓の静止）の投手を撮る（issue #927 握りの隠し）。
+        /// 撮る直前に打席の仕切り直しを呼んで投手をセット姿勢へ戻し、見えている握りの頂点数をログへ出す。
+        /// </summary>
+        public static bool SetPose;
+
+        /// <summary>SetPose のとき投手を左投げ（鏡映）にして撮る。</summary>
+        public static bool SetPosePitcherLeft;
+
         /// <summary>寄りカットの注視点[m]（本塁=原点・+z=マウンド）とFOV[度]。</summary>
         private struct Zoom
         {
@@ -51,7 +60,10 @@ namespace KokoSim.Unity.Match
             if (!ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();
             ctrl.RestartCurrentPaForCapture();
             for (int i = 0; i < 24; i++) yield return null;   // 量子化2コマぶん進めて初期ポーズを安定させる
+            if (SetPose) yield return HoldSet();
             yield return Capture(FileName);
+            if (SetPose && DuelStageRig.Live != null)
+                Debug.Log("[GearShot] SET\n" + DuelStageRig.Live.SetGloveDiagForCapture());
             if (DuelStageRig.Live != null)
                 Debug.Log("[GearShot] GLOVE\n" + DuelStageRig.Live.GloveDiagForCapture());
 
@@ -66,12 +78,30 @@ namespace KokoSim.Unity.Match
                 DuelStageRig.CalibrationOverride = cal;
                 if (DuelStageRig.Live != null) DuelStageRig.Live.ApplyCalibration(cal);
                 for (int i = 0; i < 24; i++) yield return null;
+                if (SetPose) yield return HoldSet();
                 yield return Capture(FileName + "-" + z.Name);
             }
             DuelStageRig.CalibrationOverride = prev;
             if (DuelStageRig.Live != null)
                 DuelStageRig.Live.ApplyCalibration(prev ?? DuelCalibration.Default);
+            if (SetPose) FindController()?.FreezeLiveForCapture(false);
             Debug.Log("[GearShot] DONE");
+        }
+
+        /// <summary>
+        /// 試合の時計を止めて投手をセット姿勢へ戻し、クロスフェード（0.25秒）が終わるまで手で進めて描く。
+        /// 止めないと采配窓が明けて次の投球へ進んでしまう（撮れたのはリリース直後だった）。
+        /// </summary>
+        private static IEnumerator HoldSet()
+        {
+            var live = DuelStageRig.Live;
+            if (live == null) yield break;
+            FindController()?.FreezeLiveForCapture(true);
+            live.SetHandedness(false, SetPosePitcherLeft);
+            live.ResetForNewPlateAppearance();
+            for (int i = 0; i < 8; i++) live.Tick(0.1f);
+            live.RenderNow();
+            yield return null;
         }
 
         private IEnumerator Capture(string file)

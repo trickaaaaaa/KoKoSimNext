@@ -3262,6 +3262,7 @@ namespace KokoSim.Unity.Match
         public void Tick(float deltaTime)
         {
             if (!Available) return;
+            AdvanceSetGloveWeight(deltaTime);   // セットで握りを隠す補正の効き（issue #927）
 
             // カットバック予約（アンカー同期のプリロール）。量子化と独立にプレー時間で数える
             if (_cutCountdown >= 0f)
@@ -3381,6 +3382,8 @@ namespace KokoSim.Unity.Match
                 AlignBat();            // バットは骨から毎コマ組み直す純関数＝二度当てが無いので常に呼ぶ
                 if (_catcher != null && _catcher.PoseAdvanced)
                     FixCatcherPose();  // ミットを実着弾点へ寄せる（5方向クリップの残差を吸収）
+                if (_pitcher != null && _pitcher.PoseAdvanced)
+                    FixPitcherSetGlove();   // セットでグラブが握りを覆う（issue #927）
                 SampleBatTrail();      // AlignBat の**後**＝組み上がったバットの端点を採る
             }
         }

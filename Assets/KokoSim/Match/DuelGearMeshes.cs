@@ -67,6 +67,8 @@ namespace KokoSim.Unity.Match
         /// art-src/vendor-glove-a/glove-b.fbx（gitignore）。姿勢は最初から「正面 -Y・上 +Z・親指 -X」で回転不要。
         /// 22部品・60万tri を remesh 0.002m → 5,000tri へ。紐の垂れ（細長い島5本）はデシメート時に除いてある
         /// （tools/aigear-decimate.py の drop_thin＝残すとトゲに見える）。寸法は素のまま（幅0.232 / 高0.300 / 奥行0.191）。
+        /// ウェブ（部品 afsas001）は内野手用の H 型で穴あきだったので、デシメート時に裏へ板を当てて塞いである
+        /// （plate 引数・issue #927。投手用は握りを見せないために閉じたウェブを使う）。引数は aigear-decimate.py の頭に書いた。
         /// </summary>
         private static Mesh VendorGlove() => GetAt(VendorDir + "CGT_Glove_lo.fbx", m =>
         {
@@ -139,6 +141,15 @@ namespace KokoSim.Unity.Match
             mesh.hideFlags = HideFlags.HideAndDontSave;
             // FBXノードのインポート姿勢（スケール100等）を頂点へ焼き、1unit=1mにする
             Apply(mesh, prefab.transform.worldToLocalMatrix * mf.transform.localToWorldMatrix);
+            // サブメッシュを1つにまとめる。装備は1マテリアルで描くので、2つ目以降のサブメッシュは**描かれない**。
+            // 購入グラブは部品ごとのマテリアル枠が12個残っていて、ウェブと掌の一部が丸ごと消えていた
+            // （2026-11-14 監督指摘「おもっきしウェブなくない？」。Blender の絵では全部見えるので気づけない）
+            if (mesh.subMeshCount > 1)
+            {
+                var all = mesh.triangles;   // 全サブメッシュの三角形を連結して返す
+                mesh.subMeshCount = 1;
+                mesh.SetTriangles(all, 0);
+            }
             return mesh;
 #else
             return null;

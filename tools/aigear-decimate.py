@@ -2,7 +2,13 @@
 #
 # 使い方:
 #   blender --background --python tools/aigear-decimate.py -- \
-#       <input.fbx> <output.fbx> <target_tris> <target_size_m> [weld_m]
+#       <input.fbx|.glb> <output.fbx> <target_tris> <target_size_m> [weld_m] [remesh_m] [rx,ry,rz]
+#       [core rx,ry,rz,cx,cy,cz | -] [exclude 部品名,... | -] [drop_thin 細さ上限,対角下限 | -]
+#       [plate 部品名,...,厚み,縮め,取り込み距離 | -]
+#
+# 購入グラブ（issue #927 のウェブ塞ぎ込み）の再現:
+#   ... art-src/vendor-glove-a/glove-b.fbx Assets/DuelSpike/Vendor/Gear/CGT_Glove_lo.fbx \
+#       5000 0.30 0 0.002 0,0,0 - - 0.2,0.09 afsas001,0.010,0.012,0.035
 #
 # 処理: FBXインポート → メッシュ統合 → 実寸正規化 → 距離マージ（溶接） →
 #       Decimate(Collapse)で目標三角形数へ → 原点をバウンズ中心へ → FBX出力。
@@ -94,6 +100,115 @@ def drop_thin_islands(obj, thin_max: float, diag_min: float) -> None:
     print(f"AIGEAR_DROP_THIN dropped={dropped}islands")
 
 
+PLATE_GROUP = "aigear_plate"
+
+
+def mark_plate_parts(meshes, names) -> None:
+    """板を張る部品の頂点に印（頂点グループ）を付ける。結合・削除を経ても印は頂点に付いて残る。"""
+    for o in meshes:
+        if o.name in names:
+            g = o.vertex_groups.new(name=PLATE_GROUP)
+            g.add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
+
+
+def add_plate(obj, thickness: float, inset: float, grow: float = 0.0) -> None:
+    """
+    印の付いた部品（グラブのウェブ）の穴を、1枚の板で裏から塞ぐ（issue #927）。
+
+    購入グラブのウェブは H 型のはしご状で、もともと穴が開いている（内野手用の形）。投手用グラブは
+    握りを見せないために閉じたウェブを使うので、ウェブの頂点に平面を当てはめ（主成分の最小軸＝法線）、
+    頂点をその面へ投影した輪郭（凸包）を少し内側へ縮めて、厚み thickness の板を作る。
+    grow>0 なら、ウェブの頂点から面内で grow[m] 以内・面の厚み範囲内にある**他の部品の頂点**も輪郭に入れる
+    （ウェブと人差し指の袋の間にも隙間がある＝ウェブだけの輪郭では塞ぎきれない。2026-11-14 実測）。
+    輪郭を一律に広げると、物の無いウェブの上端から板が突き出る。
+    板は後段の voxel remesh で本体と一体になる。厚みはボクセル径の2倍以上ないと remesh で溶ける。
+    """
+    from mathutils import Matrix, Vector
+    from mathutils.geometry import convex_hull_2d
+
+    g = obj.vertex_groups.get(PLATE_GROUP)
+    if g is None:
+        print("AIGEAR_PLATE skipped (no marked part)")
+        return
+    pts = [obj.matrix_world @ v.co for v in obj.data.vertices
+           if any(e.group == g.index for e in v.groups)]
+    if len(pts) < 3:
+        print("AIGEAR_PLATE skipped (too few verts)")
+        return
+    c = sum(pts, Vector()) / len(pts)
+    cov = Matrix(((0.0,) * 3,) * 3)
+    for p in pts:
+        d = p - c
+        for i in range(3):
+            for j in range(3):
+                cov[i][j] += d[i] * d[j]
+    # 3x3 共分散の固有ベクトルはべき乗法で取る（最大→次点の順に取り、法線は外積）
+    def power(m, seed):
+        v = Vector(seed).normalized()
+        for _ in range(64):
+            v = (m @ v).normalized()
+        return v
+    a = power(cov, (1.0, 0.3, 0.2))
+    lam = a.dot(cov @ a)
+    cov2 = cov - lam * Matrix(((a.x * a.x, a.x * a.y, a.x * a.z),
+                                (a.y * a.x, a.y * a.y, a.y * a.z),
+                                (a.z * a.x, a.z * a.y, a.z * a.z)))
+    b = power(cov2, (0.2, 1.0, 0.3))
+    b = (b - b.dot(a) * a).normalized()
+    n = a.cross(b).normalized()
+    uv = [((p - c).dot(a), (p - c).dot(b)) for p in pts]
+    off0 = [(p - c).dot(n) for p in pts]
+    if grow > 0.0:
+        from mathutils.kdtree import KDTree
+        kd = KDTree(len(uv))
+        for i, (u, w) in enumerate(uv):
+            kd.insert((u, w, 0.0), i)
+        kd.balance()
+        lo_n, hi_n = min(off0) - grow * 0.5, max(off0) + grow * 0.5
+        mark = set(i for i, v in enumerate(obj.data.vertices) if any(e.group == g.index for e in v.groups))
+        added = 0
+        for i, v in enumerate(obj.data.vertices):
+            if i in mark:
+                continue
+            q = obj.matrix_world @ v.co
+            d = q - c
+            h = d.dot(n)
+            if h < lo_n or h > hi_n:
+                continue
+            u, w = d.dot(a), d.dot(b)
+            if kd.find((u, w, 0.0))[2] <= grow:
+                uv.append((u, w))
+                added += 1
+        print(f"AIGEAR_PLATE grow={grow:.3f}m added={added}verts")
+    hull = convex_hull_2d(uv)
+    ring = []
+    for i in hull:
+        u, w = uv[i]
+        r = (u * u + w * w) ** 0.5
+        k = max(0.0, r - inset) / r if r > 1e-9 else 0.0
+        ring.append(c + a * (u * k) + b * (w * k))
+    # 板の中心面はウェブの頂点の法線方向の中央（はしごの桟の厚みの真ん中）
+    off = sorted((p - c).dot(n) for p in pts)
+    mid = (off[0] + off[-1]) * 0.5
+    half = thickness * 0.5
+    verts = [p + n * (mid - half) for p in ring] + [p + n * (mid + half) for p in ring]
+    m = len(ring)
+    faces = [tuple(reversed(range(m))), tuple(range(m, 2 * m))]
+    faces += [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+    me = bpy.data.meshes.new("plate")
+    me.from_pydata([tuple(v) for v in verts], [], faces)
+    me.update()
+    plate = bpy.data.objects.new("plate", me)
+    bpy.context.scene.collection.objects.link(plate)
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    plate.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.join()
+    print(f"AIGEAR_PLATE verts={len(pts)} hull={m} normal=({n.x:.2f},{n.y:.2f},{n.z:.2f}) "
+          f"spread={off[-1] - off[0]:.4f}m thickness={thickness:.4f}m")
+
+
 def add_core(obj, core) -> None:
     """外形バウンズの比率で楕円体の芯を作り、obj へ結合する（融合は後段の voxel remesh が行う）。"""
     from mathutils import Vector
@@ -123,7 +238,9 @@ def main() -> None:
     rot = [float(a) for a in argv[6].split(",")] if len(argv) > 6 else [0.0, 0.0, 0.0]
     core = [float(a) for a in argv[7].split(",")] if len(argv) > 7 and argv[7] != "-" else None
     exclude = set(argv[8].split(",")) - {"-"} if len(argv) > 8 else set()
-    drop_thin = [float(a) for a in argv[9].split(",")] if len(argv) > 9 else None
+    drop_thin = [float(a) for a in argv[9].split(",")] if len(argv) > 9 and argv[9] != "-" else None
+    # 板で塞ぐ部品名（カンマ区切り）,厚み[m],内側への縮め[m],周りの部品を取り込む距離[m]（issue #927 グラブのウェブ）
+    plate = argv[10].split(",") if len(argv) > 10 and argv[10] != "-" else None
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     # Meshy は FBX、Tripo（2026-11〜）は GLB で書き出す
@@ -138,6 +255,8 @@ def main() -> None:
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     if not meshes:
         raise SystemExit(f"no mesh in {src}")
+    if plate is not None:
+        mark_plate_parts(meshes, set(plate[:-3]))
 
     # 3ds Max 由来の購入 FBX は部品が空オブジェクト（親）の下にぶら下がる（2026-11-14 CGTrader のグラブ＝22部品）。
     # 親の変換を焼き込んで外さないと、結合後の transform_apply が親の分を取りこぼし、書き出しの向き・寸法が狂う
@@ -170,6 +289,8 @@ def main() -> None:
     merged = weld(obj, weld_m) if weld_m > 0.0 else 0
     if drop_thin is not None:
         drop_thin_islands(obj, drop_thin[0], drop_thin[1])
+    if plate is not None:
+        add_plate(obj, float(plate[-3]), float(plate[-2]), float(plate[-1]))
     if core is not None:
         add_core(obj, core)
     if remesh_m > 0.0:
@@ -189,6 +310,9 @@ def main() -> None:
     bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
     obj.location = (0.0, 0.0, 0.0)
 
+    # マテリアル枠を空にして1サブメッシュで書き出す。Unity は装備を1マテリアルで描くので、枠が複数残ると
+    # 2つ目以降のサブメッシュが描かれない（2026-11-14 購入グラブ: 部品の枠12個が残りウェブが消えていた）
+    obj.data.materials.clear()
     result_tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
     bpy.ops.export_scene.fbx(
         filepath=dst,
