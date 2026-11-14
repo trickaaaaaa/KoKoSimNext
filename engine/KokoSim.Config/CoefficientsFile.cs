@@ -2238,7 +2238,6 @@ public static class CoefficientsLoader
         public double HitAndRunLaunchPenalty { get; set; } = D.HitAndRunLaunchPenalty;
         public double HitAndRunCaughtPenalty { get; set; } = D.HitAndRunCaughtPenalty;
         // 打撃姿勢（采配カードの拡充）
-        public double WorkCountSwingFactor { get; set; } = D.WorkCountSwingFactor;
         public double GroundBallLaunchPenalty { get; set; } = D.GroundBallLaunchPenalty;
         public double GroundBallContactBoost { get; set; } = D.GroundBallContactBoost;
         public double GroundBallPowerPenalty { get; set; } = D.GroundBallPowerPenalty;
@@ -2375,7 +2374,6 @@ public static class CoefficientsLoader
             HitAndRunPowerPenalty = HitAndRunPowerPenalty,
             HitAndRunLaunchPenalty = HitAndRunLaunchPenalty,
             HitAndRunCaughtPenalty = HitAndRunCaughtPenalty,
-            WorkCountSwingFactor = WorkCountSwingFactor,
             GroundBallLaunchPenalty = GroundBallLaunchPenalty,
             GroundBallContactBoost = GroundBallContactBoost,
             GroundBallPowerPenalty = GroundBallPowerPenalty,

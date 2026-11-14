@@ -22,15 +22,14 @@ public enum OffensiveSign
 /// こちらは「どう打ちにいくか」＝解除するまで続く構え。打席頭に一度だけ効き、打席内では変わらない。
 ///
 /// <para>効果は表示能力→物理層の変換の<b>前段</b>で実効能力へ載せる（エンドラン/バスターと同じ流儀＝
-/// パイプライン不変・不変条件#1）。<see cref="WorkCount"/> だけは能力でなくスイング判断の頻度に効く
-/// （<see cref="AtBat.AtBatContext.SwingProbabilityFactor"/>）。既定 <see cref="Normal"/> は恒等＝
+/// パイプライン不変・不変条件#1）。<see cref="WorkCount"/> だけは能力でなく、2ストライクまでの見送りに効く。既定 <see cref="Normal"/> は恒等＝
 /// AI駆動のシムは一切変わらない（統計帯不変）。</para>
 /// </summary>
 public enum BattingApproach
 {
     /// <summary>指示なし（従来の挙動と完全一致）。</summary>
     Normal,
-    /// <summary>待球策: 球数を投げさせる。スイング頻度を落として深いカウントへ持ち込む。</summary>
+    /// <summary>待球策: 2ストライクになるまで振らない（ゾーン内も見送る）。</summary>
     WorkCount,
     /// <summary>転がせ: ゴロ狙い（弾道↓・ミート↑・パワー↓）。</summary>
     GroundBall,

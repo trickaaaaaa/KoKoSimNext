@@ -28,7 +28,6 @@ public sealed class TacticsCardWindowsTests
         var c = new TacticsCoefficients();
         var b = BatterAttributes.LeagueAverage;
         Assert.Equal(b, BattingApproachModel.Apply(b, BattingApproach.Normal, c));
-        Assert.Equal(1.0, BattingApproachModel.SwingFactor(BattingApproach.Normal, c));
     }
 
     [Fact]
@@ -52,9 +51,8 @@ public sealed class TacticsCardWindowsTests
         Assert.True(put.Power < b.Power, "当てに行けでパワーが下がっていない");
         Assert.Equal(b.LaunchTendency, put.LaunchTendency);   // 弾道には触らない軸
 
-        // 待球策は能力を動かさず、スイング頻度だけを落とす。
+        // 待球策は能力を動かさない（見送りは GameEngine が1球ごとに指示する）。
         Assert.Equal(b, BattingApproachModel.Apply(b, BattingApproach.WorkCount, c));
-        Assert.True(BattingApproachModel.SwingFactor(BattingApproach.WorkCount, c) < 1.0);
     }
 
     /// <summary>待球策の倍率はスイング確率へそのまま掛かる（確率を作り直さない＝二層構造の一貫性）。</summary>
@@ -202,6 +200,53 @@ public sealed class TacticsCardWindowsTests
         var workRate = (double)workSwings / workPitches;
         Assert.True(workRate < plainRate,
             $"待球策でスイング率が下がっていない（通常{plainRate:P1} → 待球策{workRate:P1}）");
+    }
+
+    /// <summary>
+    /// 待球策は2ストライクになるまで振らない: 0〜1ストライクの球はゾーン内でも（3ボールでも）見送り、
+    /// 2ストライクからは振る。
+    /// </summary>
+    [Fact]
+    public void WorkCount_NeverSwingsBeforeTwoStrikes_ButSwingsWithTwo()
+    {
+        var swingsBeforeTwo = 0;
+        var swingsWithTwo = 0;
+        foreach (var seed in new ulong[] { 1UL, 7UL, 42UL, 99UL, 2026UL, 314UL })
+        {
+            var prog = NewGame(seed);
+            prog.SetBattingApproach(true, BattingApproach.WorkCount);
+            while (prog.Advance())
+            {
+                if (!prog.Current!.IsTop) continue;
+                var strikes = 0;
+                foreach (var p in prog.Current.PitchSeq.Pitches)
+                {
+                    var swung = p.Kind is PitchKind.SwingingStrike or PitchKind.Foul or PitchKind.InPlay;
+                    if (strikes < 2 && swung) swingsBeforeTwo++;
+                    if (strikes >= 2 && swung) swingsWithTwo++;
+                    if (p.Kind is PitchKind.CalledStrike or PitchKind.SwingingStrike
+                        || (p.Kind == PitchKind.Foul && strikes < 2)) strikes++;
+                }
+            }
+        }
+        Assert.Equal(0, swingsBeforeTwo);
+        Assert.True(swingsWithTwo > 0, "2ストライクからも振っていない");
+    }
+
+    /// <summary>1球指示（強制スイング）は待球策より優先する＝待球策でも初球を振らせられる。</summary>
+    [Fact]
+    public void WorkCount_YieldsToForcedSwing()
+    {
+        var prog = NewGame();
+        prog.SetBattingApproach(true, BattingApproach.WorkCount);
+        Assert.Equal(AdvancePitchResult.Pitch, prog.AdvancePitch());
+        prog.SetPitchBattingOverride(true, PitchBattingOverride.ForceSwing);
+        // 打席が終わる球（インプレー）なら Current の投球列、続くなら LastPitch に出る。
+        var thrown = prog.AdvancePitch() == AdvancePitchResult.PlateAppearance
+            ? prog.Current!.PitchSeq.Pitches[0]
+            : prog.LastPitch!.Pitch;
+        Assert.Contains(thrown.Kind,
+            new[] { PitchKind.SwingingStrike, PitchKind.Foul, PitchKind.InPlay });
     }
 
     private static (int Swings, int Pitches) SwingShare(BattingApproach? approach)
