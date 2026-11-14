@@ -68,9 +68,10 @@ pitching:
     - type: curve        # 縦の大変化（真性スピンが大きい）
       tilt_deg: 170.0
       rpm_scale: 1.15
-    - type: fork         # 低回転の縦落ち（ストレートよりやや低回転。落差の符号が完全に逆＝トップスピン方向で、縦の変化量そのものは大きい）
-      tilt_deg: 180.0
-      rpm_scale: 0.90
+    - type: fork         # 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。ストレートとの差はホップが無い分の落差で、トップスピンで下に曲げる球ではない）
+      tilt_deg: 0.0
+      rpm_scale: 0.45
+      sharpness_rpm_factor: -1.0  # 良いフォークほど回転が少ない（キレ→回転数の向きを反転, issue #911）
     - type: changeup     # 沈み＋緩急
       tilt_deg: 150.0
       rpm_scale: 0.85
@@ -210,6 +211,10 @@ batting:
   # 校正前の帯（2.0–4.0%）を大きく割る。
   launch_angle_per_vertical_break_m: 15.0
   launch_angle_break_ref_m: 0.20
+  # 変化球の判定は同じ投手のストレートからの外れで効かせる（issue #911・PitchDeception）。外れ＝本塁での
+  # 縦（誘発縦変化の差＋球速差による重力落下の差）と横（誘発横変化の差）の合成。ストレート自身は従来どおり。
+  launch_angle_per_relative_drop_m: 10.0   # 縦の外れ1mあたりの打球角度[deg]（沈む球ほどゴロ）
+  relative_break_weight: 0.16              # 判定量＝ストレートの合成量＋これ×外れ[m]
   bearing_sigma: 19.0            # 打球方向の「残差」σ（引っ張り/流しを引いた後のばらつき）
   min_quality_velo_factor: 0.55
   # 芯を外した当たり（issue #759）: 品質がこれ未満の裾だけ初速カーブを下へ折る（品質0.05で満初速×floor）。

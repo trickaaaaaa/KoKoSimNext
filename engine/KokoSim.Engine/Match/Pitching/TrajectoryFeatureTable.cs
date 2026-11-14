@@ -7,10 +7,25 @@ namespace KokoSim.Engine.Match.Pitching;
 /// swing/contact 判定が読む最小限の値だけを持つ。
 /// </summary>
 public readonly record struct PitchTrajectoryFeatures(
-    double InducedVerticalBreakM, double InducedHorizontalBreakM, double FlightTimeSeconds)
+    double InducedVerticalBreakM, double InducedHorizontalBreakM, double FlightTimeSeconds,
+    FastballReference? Fastball = null)
 {
     /// <summary>誘発変化の合成量（縦横合成, 設計書15 Phase E-2）。球種ごとの回転軸（issue #835）で
     /// 横成分・縦成分の配分が変わるため、判定側は常にこの合成量を読む。</summary>
+    public double BreakMagnitudeM => System.Math.Sqrt(
+        InducedVerticalBreakM * InducedVerticalBreakM + InducedHorizontalBreakM * InducedHorizontalBreakM);
+}
+
+/// <summary>
+/// 同じ投手のストレートの弾道特徴量（issue #911）。打者はストレートの軌道に合わせて待つので、変化球の判定は
+/// 「そのストレートからどれだけ外れたか」で効かせる（<see cref="Batting.PitchDeception"/>）。同じ1球の球速
+/// サンプル（球種の球速比を掛ける前）で投げたストレートの値＝球速差は飛翔時間の差として入る。
+/// ストレート自身の特徴量には付けない（null＝従来どおり無回転からの変化量で判定）。
+/// </summary>
+public readonly record struct FastballReference(
+    double InducedVerticalBreakM, double InducedHorizontalBreakM, double FlightTimeSeconds)
+{
+    /// <summary>ストレートの誘発変化の合成量（<see cref="PitchTrajectoryFeatures.BreakMagnitudeM"/> と同じ定義）。</summary>
     public double BreakMagnitudeM => System.Math.Sqrt(
         InducedVerticalBreakM * InducedVerticalBreakM + InducedHorizontalBreakM * InducedHorizontalBreakM);
 }
