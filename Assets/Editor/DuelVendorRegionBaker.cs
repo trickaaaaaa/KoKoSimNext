@@ -150,6 +150,12 @@ namespace KokoSim.EditorTools
                 var outPath = OutDir + "/" + r.name + "_Regions.asset";
                 AssetDatabase.DeleteAsset(outPath);
                 AssetDatabase.CreateAsset(copy, outPath);
+                // 実行時に三角形を読めるようにしておく。グラブをはめた手を抜く処理
+                // （DuelStageRig.HideGloveHand・issue #913）が読む。元 FBX の「読めない」設定を
+                // そのまま引き継ぐと、エラーも出ずに手が残るだけになる
+                var so = new SerializedObject(copy);
+                so.FindProperty("m_IsReadable").boolValue = true;
+                so.ApplyModifiedPropertiesWithoutUndo();
                 sb.AppendLine(r.name + ": " + note);
             }
 

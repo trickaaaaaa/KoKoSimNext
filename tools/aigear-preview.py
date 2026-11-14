@@ -34,7 +34,11 @@ def main() -> None:
     px = int(argv[2]) if len(argv) > 2 else 420
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.fbx(filepath=src)
+    # Meshy は FBX、Tripo（2026-11〜）は GLB で書き出す
+    if src.lower().endswith((".glb", ".gltf")):
+        bpy.ops.import_scene.gltf(filepath=src)
+    else:
+        bpy.ops.import_scene.fbx(filepath=src)
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     if not meshes:
         raise SystemExit(f"no mesh in {src}")
