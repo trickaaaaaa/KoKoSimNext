@@ -247,6 +247,8 @@ prefecture_finals:
     left: 99.5
     center: 122
     tier: prefectural
+  # 広島市民球場（カープの本拠地・命名権を外した名前）。夏の準決勝・決勝だけ（秋の決勝会場は未確認＝今回は汎用のまま）。
+  # フェンス高は代表値の3.0m（モデルは2.9m・Unityが判定の高さへ変形する。監督決定）。
   - id: hiroshima_final
     name: 広島市民球場
     left: 101
@@ -254,6 +256,7 @@ prefecture_finals:
     center: 122
     fence_height: 3.0
     tier: prefectural
+    model: hiroshima   # 3Dモデル data/stadiums/hiroshima.obj（issue #963）
   - id: yamaguchi_final
     name: 西京スタジアム
     left: 100
