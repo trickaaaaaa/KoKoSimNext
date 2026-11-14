@@ -62,17 +62,22 @@ public sealed class PersonalityTests
         Assert.DoesNotContain(Personality.Normal, seen);
     }
 
+    /// <summary>
+    /// 16タイプの分布の下限（Q44 決着 2026-11-14: どのタイプもそれぞれ3%以上は出る）。新入生約1万人で測る。
+    /// 種の出やすさ（努力家・マイペースが多く天才肌は少ない）は残す。
+    /// </summary>
     [Fact]
-    public void Intake_SpawnDistribution_KeepsTodaysFlavour()
+    public void Intake_EveryOneOf16Types_AppearsAtLeast3Percent()
     {
-        // 種の出やすさ（Q36）: 努力家・マイペースの種は天才肌の種より明確に多い。ラベルは統率・揺らぎで
-        // 隣のマスへ移るが、天才肌のマス（↓統率↓素直↑勤勉・目立ち）は稀なまま。
-        var cohort = Cohort();
-        var counts = cohort.GroupBy(p => p.Personality).ToDictionary(g => g.Key, g => g.Count());
-        double Freq(Personality t) => counts.TryGetValue(t, out var n) ? (double)n / cohort.Count : 0.0;
+        var pop = new List<DevelopingPlayer>();
+        for (var s = 0; pop.Count < 10_000; s++)
+            pop.AddRange(ProspectGenerator.Intake(1, Roster, new Xoshiro256Random((ulong)(70_000 + s))));
+        var counts = pop.GroupBy(p => p.Personality).ToDictionary(g => g.Key, g => g.Count());
+        double Freq(Personality t) => counts.TryGetValue(t, out var n) ? (double)n / pop.Count : 0.0;
         foreach (var t in Personalities.All16) _out.WriteLine($"{Personalities.DisplayName(t)}: {Freq(t):P1}");
-        Assert.True(Freq(Personality.MyPace) > Freq(Personality.Genius));
-        Assert.InRange(Freq(Personality.Genius), 0.005, 0.10);
+        foreach (var t in Personalities.All16)
+            Assert.True(Freq(t) >= 0.03, $"{Personalities.DisplayName(t)} が {Freq(t):P1}（下限3%）");
+        Assert.True(PC.Profile(Personality.Hardworker).SpawnWeight > PC.Profile(Personality.Genius).SpawnWeight);
     }
 
     // ===== 母集団平均（帯は選手の生成を通らない＝ここが安全網。設計書23 §1.4） =====

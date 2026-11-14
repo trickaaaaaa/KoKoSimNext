@@ -112,15 +112,15 @@ public sealed class BatteryChemistryTests
     [Fact]
     public void Effects_FollowK()
     {
-        Assert.Equal(69, BatteryChemistry.ApplyToLead(60, 1.0, C));    // 60×1.15＝69
-        Assert.Equal(46, BatteryChemistry.ApplyToLead(50, -0.5, C));   // 50×0.925＝46.25→46
+        Assert.Equal(78, BatteryChemistry.ApplyToLead(60, 1.0, C));    // 60×1.30＝78
+        Assert.Equal(51, BatteryChemistry.ApplyToLead(60, -0.5, C));   // 60×0.85＝51
         Assert.Equal(1, BatteryChemistry.RecoveryOuts(2, 0.6, C));
         Assert.Equal(2, BatteryChemistry.RecoveryOuts(2, 0.59, C));
         Assert.Equal(1, BatteryChemistry.RecoveryOuts(1, 1.0, C));     // 1未満にしない
-        // ピンチの制球: 圧が低い場面は効かない、最大圧で +3%×K
-        Assert.Equal(1.0, BatteryChemistry.PinchControlMultiplier(1.0, 2, 8, C));
-        Assert.Equal(1.03, BatteryChemistry.PinchControlMultiplier(1.0, 8, 8, C), 12);
-        Assert.Equal(1.0 - 0.03 * 0.5 * 0.5, BatteryChemistry.PinchControlMultiplier(-0.5, 4, 8, C), 12);
+        // ピンチの制球: 圧が低い場面（指数2未満）は効かない、最大圧で +20%×K
+        Assert.Equal(1.0, BatteryChemistry.PinchControlMultiplier(1.0, 1, 8, C));
+        Assert.Equal(1.20, BatteryChemistry.PinchControlMultiplier(1.0, 8, 8, C), 12);
+        Assert.Equal(1.0 - 0.20 * 0.5 * 0.5, BatteryChemistry.PinchControlMultiplier(-0.5, 4, 8, C), 12);
     }
 
     // ===== 試合への配線 =====

@@ -817,17 +817,23 @@ personalities:
   chance_slope_high: 0.03          # ④→チャンスの長打質 献身側（端 0.97）
   chance_slope_low: 0.10           #                     目立ち側（端 1.10）
   messenger_slope: 0.06            # ④→伝令役の得意場面（#716）: 投手へ +d×slope／打者へ −d×slope
-  # 生成の種（今の8タイプ・出やすさは spawn_weight＝Q36）。代表値は旧表の効きを軸の式で再現する位置（マスの側にある）。
+  # 生成の種（今の8タイプ＋出にくいマスの5タイプ・出やすさは spawn_weight＝Q36/Q44）。代表値は旧表の効きを軸の式で再現する位置（マスの側にある）。
   profiles:
     #                  weight            ①統率ずらし                ②素直             ③勤勉          ④献身
-    - { type: HotBlood,     spawn_weight: 1.0, leadership_mean_offset:  14, receptiveness: 45, diligence: 85, selflessness: 95 }
-    - { type: Hardworker,   spawn_weight: 1.4, leadership_mean_offset:   4, receptiveness: 80, diligence: 92, selflessness: 95 }
+    - { type: HotBlood,     spawn_weight: 1.0, leadership_mean_offset:  14, receptiveness: 45, diligence: 80, selflessness: 95 }
+    - { type: Hardworker,   spawn_weight: 1.4, leadership_mean_offset:   4, receptiveness: 80, diligence: 85, selflessness: 95 }
     - { type: Genius,       spawn_weight: 0.5, leadership_mean_offset:   0, receptiveness:  5, diligence: 95, selflessness:  5 }
     - { type: HonorStudent, spawn_weight: 1.0, leadership_mean_offset:  12, receptiveness: 95, diligence: 52, selflessness: 95 }
-    - { type: MyPace,       spawn_weight: 1.4, leadership_mean_offset:   0, receptiveness: 30, diligence: 28, selflessness: 55 }
+    - { type: MyPace,       spawn_weight: 1.4, leadership_mean_offset:   0, receptiveness: 30, diligence: 28, selflessness: 88 }
     - { type: MoodMaker,    spawn_weight: 1.2, leadership_mean_offset:   4, receptiveness: 58, diligence: 12, selflessness:  5 }
     - { type: LoneWolf,     spawn_weight: 0.8, leadership_mean_offset: -16, receptiveness: 18, diligence: 42, selflessness:  8 }
-    - { type: Introvert,    spawn_weight: 1.2, leadership_mean_offset: -14, receptiveness: 88, diligence: 28, selflessness: 90 }
+    - { type: Introvert,    spawn_weight: 1.2, leadership_mean_offset: -14, receptiveness: 88, diligence: 28, selflessness: 93 }
+    # 新しいマスの種（Q44 決着: 16タイプがそれぞれ3%以上出るように。既存8タイプの重み・統率のずらしは据え置き）
+    - { type: Star,         spawn_weight: 0.55, leadership_mean_offset:  14, receptiveness: 70, diligence: 60, selflessness: 22 }
+    - { type: Ambitious,    spawn_weight: 0.6,  leadership_mean_offset: -12, receptiveness: 70, diligence: 60, selflessness: 22 }
+    - { type: Craftsman,    spawn_weight: 0.55, leadership_mean_offset:  -8, receptiveness: 30, diligence: 60, selflessness: 92 }
+    - { type: GangLeader,   spawn_weight: 0.2,  leadership_mean_offset:  14, receptiveness: 30, diligence: 60, selflessness: 22 }
+    - { type: Rowdy,        spawn_weight: 0.25, leadership_mean_offset:  14, receptiveness: 30, diligence: 35, selflessness: 20 }
 
 # --- バッテリーの相性（設計書23 §2・issue #933）🟡 K = wS×S0 + wB×B。K=0 で効き先はすべて恒等。乱数不使用 ---
 # S0 = a1×d捕手① + a2×d投手② − a3×min(d投④,0)×min(d捕④,0) + a4×max(−d投④,0)×max(d捕④,0)（−1〜+1）
@@ -843,10 +849,10 @@ battery_chemistry:
   official_inning_weight: 1.0
   practice_inning_weight: 0.5
   ai_innings_per_year: 30       # AI校: 同じ学校で過ごした1年＝30イニングぶん
-  lead_factor_per_k: 0.15       # 捕手のリードの効き 1 + k1×K
+  lead_factor_per_k: 0.30       # 捕手のリードの効き 1 + k1×K（Q52 決着で 0.15→0.30）
   rattled_recovery_min_k: 0.6   # K≥これで動揺の自然回復に要るアウト−1
-  pinch_control_per_k: 0.03     # ピンチの制球 1 + k2×K×(圧/最大圧)（最大+3%・勢い#863の+6%より小さく）
-  pinch_pressure_from: 3        # この指数以上の場面だけ
+  pinch_control_per_k: 0.20     # ピンチの制球 1 + k2×K×(圧/最大圧)（Q52 決着で 0.03→0.20。K=±1 で相手得点 ∓0.13点/試合）
+  pinch_pressure_from: 2        # この指数以上の場面だけ（Q52 決着で 3→2）
 
 # --- チームの結束（設計書23 §3・issue #934）🟡 U = U0 + ΔU（0〜100・50がふつう）。効き先は精神面だけ。U=50 で恒等。乱数不使用 ---
 # U0 = 50 + b1×主将の統率力 + b2×min(引っ張る人数,3) − b3×max(0, 目立ちたがりの割合−0.5) − b4×一匹狼の人数
