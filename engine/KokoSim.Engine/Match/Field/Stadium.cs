@@ -127,6 +127,24 @@ public sealed record Stadium
     };
 
     /// <summary>
+    /// 宮城球場（issue #961。楽天の本拠地・命名権を外した名前）。宮城の夏の準決勝・決勝の球場（秋は汎用の県営級）。
+    /// フェンス高は資料が割れて未確認のため2.8m（監督決定）。
+    /// <b>値は <c>data/stadiums.yaml</c> の <c>miyagi_final</c> と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.MiyagiDefault_MatchesTheRepositoryYaml</c> が固定する）。
+    /// </summary>
+    public static Stadium Miyagi { get; } = new()
+    {
+        Id = "miyagi_final",
+        Name = "宮城球場",
+        Tier = StadiumTier.Prefectural,
+        LeftM = 100.1,
+        RightM = 100.1,
+        CenterM = 122.0,
+        FenceHeightM = 2.8,
+        Model = "miyagi",
+    };
+
+    /// <summary>
     /// 地方大会（県大会）の汎用ティア球場（設計書13 §1・issue #41系「地方大会の球場割当」）。
     /// 47県固有の実在球場は追わず、data/stadiums.yaml の汎用タイプ3種を序盤/準決勝・決勝で使い分ける
     /// （<see cref="RegionalStadiumTier"/>）。<b>値は data/stadiums.yaml と一致させること</b>（不変条件#4。

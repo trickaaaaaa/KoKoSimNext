@@ -190,6 +190,34 @@ public sealed class StadiumLoaderTests
     }
 
     /// <summary>
+    /// 宮城球場の C#既定（<see cref="Stadium.Miyagi"/>）と data/stadiums.yaml の <c>miyagi_final</c> が
+    /// 一致すること（不変条件#4・issue #961）。3Dモデル（model）の実体 data/stadiums/miyagi.obj が在り、
+    /// 焼いた寸法も判定と同じであること。
+    /// </summary>
+    [Fact]
+    public void MiyagiDefault_MatchesTheRepositoryYaml()
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("stadiums.yaml");
+        var yaml = StadiumCatalogLoader.LoadCatalog(path)["miyagi_final"];
+        var code = Stadium.Miyagi;
+
+        Assert.Equal(yaml.Id, code.Id);
+        Assert.Equal(yaml.Name, code.Name);
+        Assert.Equal(yaml.Tier, code.Tier);
+        Assert.Equal(yaml.Model, code.Model);
+        Assert.Equal("miyagi", code.Model);
+        Assert.Equal(yaml.LeftM, code.LeftM, 6);
+        Assert.Equal(yaml.RightM, code.RightM, 6);
+        Assert.Equal(yaml.CenterM, code.CenterM, 6);
+        Assert.Equal(yaml.FenceHeightM, code.FenceHeightM, 6);
+
+        var dataDir = System.IO.Path.GetDirectoryName(path)!;
+        var obj = System.IO.Path.Combine(dataDir, "stadiums", "miyagi.obj");
+        Assert.True(System.IO.File.Exists(obj));
+        Assert.Contains(System.IO.File.ReadLines(obj).Take(3), l => l.StartsWith("# kokosim: wing=100.1 center=122 "));
+    }
+
+    /// <summary>
     /// 汎用ティア球場（<see cref="Stadium.MunicipalSmall01"/>/<see cref="Stadium.MunicipalSmall02"/>/
     /// <see cref="Stadium.PrefLarge"/>）の C#既定と data/stadiums.yaml が一致すること（不変条件#4）。
     /// 実ゲーム（<c>RegionalStadiumTier</c> 経由）は YAML を読まず C#既定で走るので、片方だけ動かすと

@@ -168,6 +168,48 @@ public sealed class RegionalStadiumTierTests
         Assert.Equal(before, rng.NextInt(0, int.MaxValue));
     }
 
+    /// <summary>宮城の夏の準決勝・決勝は宮城球場。秋・他県・県不明は従来どおり（issue #961）。</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void MiyagiSummerFinalRounds_UseMiyagi_OthersUnchanged(int roundsRemaining)
+    {
+        const int miyagi = 3;
+        Assert.Same(Stadium.Miyagi, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi, summer: true));
+        // 秋（決勝は仙台市民球場だが今回は汎用のまま）・県不明は県営級
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi, summer: false));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), null, summer: true));
+        // 他県の夏は変わらない
+        Assert.Same(Stadium.HokkaidoBallpark, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 0, summer: true));
+        Assert.Same(Stadium.Yokohama, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 13, summer: true));
+        Assert.Same(Stadium.Jingu, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 12, summer: true));
+        foreach (var pref in new int?[] { 1, 2, 4, 11, 14, 46 })
+            Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), pref, summer: true));
+    }
+
+    [Fact]
+    public void MiyagiSummerStadium_UsesItsDimensions()
+    {
+        var geom = RegionalStadiumTier.For(1, new Xoshiro256Random(1), prefectureId: 3, summer: true);
+        Assert.Equal(100.1, geom.LeftFenceM, 6);
+        Assert.Equal(100.1, geom.RightFenceM, 6);
+        Assert.Equal(122.0, geom.CenterFenceM, 6);
+        Assert.Equal(2.8, geom.FenceHeightM, 6);
+    }
+
+    [Fact]
+    public void MiyagiSummerEarlyRounds_DrawTheSameAsOtherPrefectures_AndFinalsDoNotConsumeRandomness()
+    {
+        for (ulong seed = 1; seed <= 10; seed++)
+            Assert.Same(RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), 12, summer: true),
+                        RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), 3, summer: true));
+        var before = new Xoshiro256Random(99).NextInt(0, int.MaxValue);
+        var rng = new Xoshiro256Random(99);
+        RegionalStadiumTier.ForStadium(1, rng, 3, summer: true);
+        Assert.Equal(before, rng.NextInt(0, int.MaxValue));
+    }
+
     [Fact]
     public void TokyoEarlyRounds_StayMunicipal_AndDrawTheSameAsOtherPrefectures()
     {

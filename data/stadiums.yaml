@@ -82,11 +82,15 @@ prefecture_finals:
     left: 99.5
     center: 122
     tier: prefectural
+  # 宮城球場（楽天の本拠地・命名権を外した名前）。夏の準決勝・決勝だけ（秋の決勝は仙台市民球場＝今回は汎用のまま）。
+  # フェンス高は資料が2.8mと1.65mに割れて未確認＝監督決定で2.8m（モデルは2.7m・Unityが判定の高さへ変形する）。
   - id: miyagi_final
     name: 宮城球場
     left: 100.1
     center: 122
+    fence_height: 2.8
     tier: prefectural
+    model: miyagi   # 3Dモデル data/stadiums/miyagi.obj（issue #961）
   - id: akita_final
     name: 秋田県立野球場（こまち）
     left: 100
