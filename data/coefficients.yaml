@@ -68,9 +68,9 @@ pitching:
     - type: curve        # 縦の大変化（真性スピンが大きい）
       tilt_deg: 170.0
       rpm_scale: 1.15
-    - type: fork         # 低回転の縦落ち（ストレートよりやや低回転。落差の符号が完全に逆＝トップスピン方向で、縦の変化量そのものは大きい）
-      tilt_deg: 180.0
-      rpm_scale: 0.90
+    - type: fork         # 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。ストレートとの差はホップが無い分の落差で、トップスピンで下に曲げる球ではない）
+      tilt_deg: 0.0
+      rpm_scale: 0.45
     - type: changeup     # 沈み＋緩急
       tilt_deg: 150.0
       rpm_scale: 0.85
