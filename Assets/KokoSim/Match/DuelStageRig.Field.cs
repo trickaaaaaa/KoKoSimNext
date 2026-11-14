@@ -3281,9 +3281,9 @@ namespace KokoSim.Unity.Match
                 a.IdleClip = idle;
                 StepActor(a, 0.001f);
                 GroundFix(a);
-                if (!useVendor)
-                    AttachGear(a, GearKind.Cap, Vector3.zero, _offenseColors.Cap, layer,
-                        _offenseColors.CapVisor);
+                // 走者は打者と同じヘルメット。購入素体は帽子を素で持つので、打者・捕手と同じく落としてから被せる
+                if (useVendor) SetChildActive(a.Go, VendorCapMeshName, false);
+                AttachGear(a, GearKind.Helmet, Vector3.zero, _offenseColors.Cap, layer);
                 CollectTeamMats(a, _offenseColors.Cap);
                 a.Go.SetActive(false);
                 a.Enabled = false;

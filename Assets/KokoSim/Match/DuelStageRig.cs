@@ -803,7 +803,7 @@ namespace KokoSim.Unity.Match
             if (offense != null)
             {
                 _offenseColors = UniformPalette.From(offense);
-                Repaint(_batter, _offenseColors);   // 打者ヘルメットは暗紺固定＝チーム色の装備は無い
+                Repaint(_batter, _offenseColors);   // 打者ヘルメットもチーム色
                 foreach (var a in _runnerCast) Repaint(a, _offenseColors);   // 走者プールも同じ理由で塗り替える
             }
         }
@@ -958,6 +958,7 @@ namespace KokoSim.Unity.Match
         private float _acc;
         private int _poseGen;
         private float _fovBaseDeg = 2.9f;   // 16:9時の垂直FOV（ApplyCalibrationが上書き。既定=R-comp60）
+        private readonly List<Transform> _runnerHelmetMounts = new List<Transform>();   // 走者のヘルメット枠（打者と同じ較正を流す）
         private Transform _capMount, _helmetMount;   // 被り物の位置オフセット枠（gear-head直下・実寸[m]）
         private Transform _cHelmetMount, _cMaskMount;   // 捕手のヘルメット・マスク（同上）
         private Transform _cChestMount;                 // 捕手の胸プロテクター（gear-chest直下）
@@ -1391,11 +1392,10 @@ namespace KokoSim.Unity.Match
             // 差し替え前は全球が振りかぶりだったので紛れていたが、セット投球にしたら露見した 2026-07-30）
             _pitcher.Time = 0f;
             _pitcher.Holding = true;
-            // ヘルメットはチーム色でなく暗紺: 実際の高校野球のヘルメットは黒/紺が大半で、
-            // チーム色（えんじ等）だと肌の顔と並んで「髪」に見える（2026-07-28 スクショで実害）
-            // ヘルメットの紺は壁(0.12,0.20,0.16)と同輝度だと頭が背景に溶けて「頭が無い」絵になる
-            // （2026-07-28監督指摘）。ポスタライズ6段で2段ぶん明るい紺にして輪郭を立てる
-            AttachGear(_batter, GearKind.Helmet, mound, new Color(0.28f, 0.31f, 0.45f), layer);
+            // ヘルメットはチーム色（2026-11-15 監督決定。2026-07-28 の暗紺固定を覆す）。プリミティブの殻だった頃は
+            // 肌の顔と並んで「髪」に見えたが、生成メッシュは両耳フラップ・つば・通気孔で形が読める
+            AttachGear(_batter, GearKind.Helmet, mound, _offenseColors.Cap, layer);
+            CollectTeamMats(_batter, _offenseColors.Cap);
             // 捕手防具（ヘルメット殻・胸当て・レガース）は全校共通の黒（issue #659）。実物も黒が多数派で、
             // 校色だと白い帽子の高校で防具が白い塊になり形が読めなかった。マスクのケージは中の dark のまま
             AttachGear(_catcher, GearKind.CatcherGear, mound, UniformPalette.PaletteBlack, layer);
@@ -1453,6 +1453,18 @@ namespace KokoSim.Unity.Match
         /// カメラ位置は「注視点(0, AimY, AimZ)から俯角・横角の方向へ後退」の逆算で、
         /// 既定値なら従来のハードコード定数（-dz*0.0668 / +dz*0.0782）と同じ位置になる。
         /// </summary>
+        /// <summary>
+        /// 被り角は**殻の中心**を軸に回す。枠の原点（頭ボーン＝首の付け根）で回すと
+        /// 角度を1度いじるたびにヘルメットが弧を描いて位置まで動き、
+        /// 「位置は決まったので向きだけ直す」ができない。中心を保つぶんを位置で打ち消す
+        /// </summary>
+        private static void PoseHelmetMount(Transform mount, DuelCalibration cal)
+        {
+            var helmetRot = Quaternion.Euler(cal.HelmetEuler);
+            mount.localRotation = helmetRot;
+            mount.localPosition = cal.HelmetOffset + HelmetPivot - helmetRot * HelmetPivot;
+        }
+
         public void ApplyCalibration(DuelCalibration cal)
         {
             if (_camera == null) return;
@@ -1484,16 +1496,8 @@ namespace KokoSim.Unity.Match
             SetActorXZ(_catcher, cal.CatcherX * BatterSideSign, cal.CatcherZ);
             SetActorXZ(_umpire, cal.UmpireX * BatterSideSign, cal.UmpireZ);
             if (_capMount != null) _capMount.localPosition = cal.CapOffset;
-            if (_helmetMount != null)
-            {
-                // 被り角は**殻の中心**を軸に回す。枠の原点（頭ボーン＝首の付け根）で回すと
-                // 角度を1度いじるたびにヘルメットが弧を描いて位置まで動き、
-                // 「位置は決まったので向きだけ直す」ができない。中心を保つぶんを位置で打ち消す
-                var helmetRot = Quaternion.Euler(cal.HelmetEuler);
-                _helmetMount.localRotation = helmetRot;
-                _helmetMount.localPosition =
-                    cal.HelmetOffset + HelmetPivot - helmetRot * HelmetPivot;
-            }
+            if (_helmetMount != null) PoseHelmetMount(_helmetMount, cal);
+            foreach (var m in _runnerHelmetMounts) if (m != null) PoseHelmetMount(m, cal);
             if (_cHelmetMount != null) _cHelmetMount.localPosition = cal.CatcherHelmetOffset;
             if (_cMaskMount != null) _cMaskMount.localPosition = cal.CatcherMaskOffset;
             if (_cChestTilt != null) _cChestTilt.Offset = cal.CatcherChestOffset;
@@ -5611,6 +5615,9 @@ namespace KokoSim.Unity.Match
         /// <summary>打者ヘルメットの被り角の回転中心（殻 helmet-shell の中心。AttachGear の配置と一致させる）。</summary>
         private static readonly Vector3 HelmetPivot = new(0f, 0.13f, 0.02f);
 
+        /// <summary>生成ヘルメットの中心を殻の中心（<see cref="HelmetPivot"/>）からずらす量[m]。絵で合わせた値。</summary>
+        private static readonly Vector3 HelmetMeshShift = new(0f, 0f, 0f);
+
         /// <summary>
         /// 装備をボーンへ装着する。呼び出しは**初期ポーズ評価後**（コンストラクタ末尾のStepActor後）限定。
         ///
@@ -5665,7 +5672,12 @@ namespace KokoSim.Unity.Match
                     mount = new GameObject("gear-offset");
                     mount.transform.SetParent(c.transform, false);
                     if (kind == GearKind.Cap) _capMount = mount.transform;
-                    else _helmetMount = mount.transform;
+                    else if (actor == _batter) _helmetMount = mount.transform;
+                    else
+                    {
+                        _runnerHelmetMounts.Add(mount.transform);
+                        PoseHelmetMount(mount.transform, _cal);   // 走者は ApplyCalibration の後に生まれる
+                    }
                 }
                 switch (kind)
                 {
@@ -5705,10 +5717,17 @@ namespace KokoSim.Unity.Match
                         }
                         break;
                     case GearKind.Helmet:
-                        // ヘルメットはAIメッシュ不採用（2026-07-28確定）: 生成殻は開口・付属タブの向きが
-                        // 制御できず、頭が開口を突き抜け＋タブが後ろ髪に見える「おかっぱ」事故になった
-                        // （helm-closeup-0.png）。マスク（FaceCage）と同じ結論で、殻＋つば＋両耳フラップの
-                        // **構造がある装備はプリミティブ構成**で作る。
+                        // 生成メッシュ（Meshy・両耳フラップ＋つば＋通気孔）。2026-07-28 に一度テキスト生成の殻を
+                        // 試して「おかっぱ」事故で不採用にしたが、画像生成版で覆した（2026-11-15 監督決定）。
+                        // 殻の中心を HelmetPivot に置く＝被り角の較正（PoseHelmetMount）はプリミティブ版と共通。
+                        // メッシュが無い環境は従来のプリミティブ構成へ落ちる
+                        var batHelmet = DuelGearMeshes.BatterHelmet();
+                        if (batHelmet != null)
+                        {
+                            GearMeshPart(mount, batHelmet, "helmet-mesh", HelmetPivot + HelmetMeshShift,
+                                Quaternion.identity, accent, layer);
+                            break;
+                        }
                         // 帽子より低く深く被る（額は眉まで覆い、顔だけ出す）。初版は帽子と同じ高さに置いて
                         // 額が露出し「赤い髪」に見えた → 中心を下げ縦径を拡大
                         GearPart(mount, PrimitiveType.Sphere, "helmet-shell", new Vector3(0f, 0.13f, 0.02f),

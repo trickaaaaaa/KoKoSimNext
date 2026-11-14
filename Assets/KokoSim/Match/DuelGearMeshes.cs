@@ -39,6 +39,14 @@ namespace KokoSim.Unity.Match
             m => CanonicalizeMeshy(m, new Vector3(0.205f, 0.195f, 0.265f)));
 
         /// <summary>
+        /// 打者ヘルメット（両耳フラップ型）。原点=バウンズ中心、正面（つば）+Z・上+Y。
+        /// Meshy（画像→3D）生成物を 4,000tri へ（89,614tri → Collapse のみ・通気孔4つでも頭打ちせず形も崩れない）。
+        /// 素の寸法は幅0.215 / 高0.205 / 奥行0.300（つば込み）で頭より大きいので、非一様に詰める。
+        /// </summary>
+        public static Mesh BatterHelmet() => Get("AIGear_BatterHelmet0_lo",
+            m => CanonicalizeMeshy(m, new Vector3(0.200f, 0.185f, 0.270f)));
+
+        /// <summary>
         /// 胸プロテクター。原点=中心、正面+Z・上+Y。非一様フィット（幅0.40 / 高0.44 / 奥行0.15）。
         /// 生成物は肩当て・Yストラップ・パッドの段まで持つので、装着側の別置き肩当ては不要になる。
         /// 素の奥行0.242は胸当てとしては厚すぎる（体から浮く）ため、奥行だけ強めに詰めて胸に沿わせる。
