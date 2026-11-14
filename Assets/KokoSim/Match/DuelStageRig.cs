@@ -684,7 +684,7 @@ namespace KokoSim.Unity.Match
         private const string VendorCapMeshName = "A_Players_0001_Cap_0001";
 
         /// <summary>
-        /// 役割別の領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[8] に流し込む）。
+        /// 役割別の領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[10] に流し込む）。
         /// 実データはエンジンの <see cref="KokoSim.Engine.Nation.TeamColors"/>（data/team-colors.yaml 由来）で、
         /// ここは Unity の Color へ移した表現＋肌・シューズの固定色。
         ///
@@ -700,7 +700,14 @@ namespace KokoSim.Unity.Match
             /// <summary>肌の固定色（全役割共通）。</summary>
             private static readonly Color SkinTone = new(0.85f, 0.68f, 0.55f);
 
-            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Belt;
+            /// <summary>
+            /// 坊主頭の髪の固定色（全役割共通・issue #916）。チーム色ではない。購入素体の顔テクスチャに描かれた
+            /// 短髪（輝度0.26〜0.31）より一段暗い黒茶＝短髪の下に地肌が透ける色を、照明とポスタライズを通して
+            /// 「黒髪の坊主」に読める明るさにした。肌との混ぜ具合は頂点ごとの髪の濃さ（ベイク）で決まる。
+            /// </summary>
+            internal static readonly Color HairTone = new(0.16f, 0.13f, 0.11f);
+
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Belt, Hair;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
             /// <summary>縞の本数[本/m]。シェーダへはアクターのスケールを掛けて渡す（RegionMaterial）。</summary>
@@ -718,6 +725,7 @@ namespace KokoSim.Unity.Match
                 // つばの指定が無ければクラウンと同色＝従来どおりの1色帽子（issue #621）。
                 CapVisor = capVisor ?? cap;
                 Skin = SkinTone;
+                Hair = HairTone;
                 // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。値はパレット表の「黒」#23242A と
                 // 揃える＝画面で選べる黒と同じ黒になる。**わずかでも赤に寄せると濃い臙脂に見える**
                 // （ポスタライズが暖色側のバケットへ落とす。2026-07-29 実測）
@@ -4370,6 +4378,9 @@ namespace KokoSim.Unity.Match
             // つばはクラウンと別領域（issue #621）。領域を持たない古い焼き資産では帽子が丸ごと
             // Cap 領域なので、つばの色は単に使われない＝落ちない・黙って1色に戻るだけ。
             colors[(int)DuelUniformMeshBuilder.Region.CapVisor] = pal.CapVisor;
+            // 髪（issue #916）。頭部だけ肌色とこの色を髪の濃さで混ぜる。髪を焼いていない古い資産・U2素体
+            // （球審）の頭は肌の領域のままなので使われない＝黙って従来のスキンヘッドへ戻るだけ
+            colors[(int)DuelUniformMeshBuilder.Region.Hair] = pal.Hair;
             // **ガンマ→リニア変換を自分でやる**。プロジェクトはリニア色空間で、Properties に宣言した
             // Color（_BaseColor・_StripeColor）は SetColor が自動変換してくれるが、_RegionColors は
             // 配列＝Properties に宣言できず SetColorArray が素通しする。素通しすると sRGB値を
