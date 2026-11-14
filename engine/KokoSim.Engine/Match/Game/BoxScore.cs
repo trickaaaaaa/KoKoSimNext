@@ -57,3 +57,6 @@ public sealed record PitchTypeBattingLine(int AtBats, int Hits, int HomeRuns)
     /// <summary>被打率（対象打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;
 }
+
+/// <summary>バッテリー（投手ID×捕手ID）が一緒に取った守備アウト数（設計書23 §2.3・issue #933）。</summary>
+public sealed record BatteryOutsLine(int PitcherId, int CatcherId, int Outs);

@@ -61,6 +61,39 @@ public sealed class TeamState
     public Player Catcher => _lineup.FirstOrDefault(p => p.Position == FieldPosition.Catcher)
                              ?? _lineup[0];
 
+    /// <summary>
+    /// いまのバッテリー（<paramref name="pitcher"/>×<see cref="Catcher"/>）の相性 K（設計書23 §2.4）。乱数不使用。
+    /// 自校（<see cref="Team.BatteryInnings"/> あり）は記録のイニング数、無ければ同じ学校の年数で近似する。
+    /// </summary>
+    public double BatteryK(Player pitcher, BatteryChemistryCoefficients c)
+    {
+        var catcher = Catcher;
+        double? innings = null;
+        if (_team.BatteryInnings is { } ledger)
+        {
+            innings = pitcher.SourceId is int pid && catcher.SourceId is int cid
+                      && ledger.TryGetValue((pid, cid), out var v) ? v : 0.0;
+        }
+        return BatteryChemistry.For(pitcher, catcher, innings, c);
+    }
+
+    // バッテリーごとの守備アウト数（設計書23 §2.3。自校の積み重ねの記録の材料）。ID を持つ選手だけ数える。
+    private readonly Dictionary<(int PitcherId, int CatcherId), int> _batteryOuts = new();
+
+    /// <summary>打席で取ったアウトを、いまのバッテリーに付ける（観測のみ＝結果・乱数順に影響しない）。</summary>
+    public void NoteBatteryOuts(Player pitcher, int outs)
+    {
+        if (outs <= 0 || pitcher.SourceId is not int pid || Catcher.SourceId is not int cid) return;
+        if (ReferenceEquals(pitcher, Catcher)) return;
+        _batteryOuts.TryGetValue((pid, cid), out var n);
+        _batteryOuts[(pid, cid)] = n + outs;
+    }
+
+    /// <summary>バッテリーごとの守備アウト数（投手ID→捕手IDの昇順＝決定論）。</summary>
+    public IReadOnlyList<BatteryOutsLine> BuildBatteryOutsLines()
+        => _batteryOuts.OrderBy(kv => kv.Key.PitcherId).ThenBy(kv => kv.Key.CatcherId)
+            .Select(kv => new BatteryOutsLine(kv.Key.PitcherId, kv.Key.CatcherId, kv.Value)).ToList();
+
     /// <summary>その守備位置に就いている選手（不在なら null）。観測用＝結果・乱数順に影響しない。</summary>
     public Player? PlayerAtPosition(FieldPosition pos)
         => pos == FieldPosition.Pitcher

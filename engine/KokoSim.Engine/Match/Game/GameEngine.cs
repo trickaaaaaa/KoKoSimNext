@@ -71,6 +71,13 @@ public sealed record GameResult
     public IReadOnlyList<FieldingLine> AwayFielding { get; init; } = Array.Empty<FieldingLine>();
     public IReadOnlyList<FieldingLine> HomeFielding { get; init; } = Array.Empty<FieldingLine>();
 
+    /// <summary>
+    /// バッテリーごとの守備アウト数（設計書23 §2.3・issue #933。ID を持つ選手だけ）。自校の積み重ねの記録
+    /// （<see cref="Season.BatteryLedger.AddGame"/>）の材料。観測データ＝決定論digestには含めない。
+    /// </summary>
+    public IReadOnlyList<BatteryOutsLine> AwayBatteryOuts { get; init; } = Array.Empty<BatteryOutsLine>();
+    public IReadOnlyList<BatteryOutsLine> HomeBatteryOuts { get; init; } = Array.Empty<BatteryOutsLine>();
+
     /// <summary>采配の集計（盗塁・犠打・スクイズ。無指示＝全ゼロ）。設計書09/11。</summary>
     public TacticsTally AwayTactics { get; init; } = new();
     public TacticsTally HomeTactics { get; init; } = new();
@@ -403,6 +410,8 @@ public static class GameEngine
             HomePitching = home.BuildPitchingLines(),
             AwayFielding = away.BuildFieldingLines(),
             HomeFielding = home.BuildFieldingLines(),
+            AwayBatteryOuts = away.BuildBatteryOutsLines(),
+            HomeBatteryOuts = home.BuildBatteryOutsLines(),
             AwayTactics = TallyOf(away),
             HomeTactics = TallyOf(home),
             Injuries = p.Injuries,
@@ -813,6 +822,11 @@ public static class GameEngine
                 // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
                 // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。
                 // 段階0（AI校・裏試合・統計シムは常にこちら）なら恒等＝帯不変。
+                // バッテリーの相性（設計書23 §2.4）: ピンチ（プレッシャー指数が高い場面）だけ制球に小さな倍率（最大+3%）。
+                // 勢い（#863・最大+6%）より小さく、K=0・圧が低い場面では恒等。乱数不使用。
+                pit = PressureModel.ApplyPitcher(pit, BatteryChemistry.PinchControlMultiplier(
+                    defense.BatteryK(currentPitcher, ctx.Chemistry), pressureIdx, ctx.Pressure.MaxIndex, ctx.Chemistry));
+
                 if (offenseMomentum > 0) bat = MomentumModel.ApplyBatter(bat, offenseMomentum, ctx.Momentum);
                 if (defenseMomentum > 0) pit = MomentumModel.ApplyPitcher(pit, defenseMomentum, ctx.Momentum);
 
@@ -912,6 +926,8 @@ public static class GameEngine
                     : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
                 // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。
                 var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead);
+                // バッテリーの相性（設計書23 §2.4）: 実効リードに 1 + k1×K。K=0 で恒等・乱数不使用。
+                catcherLead = BatteryChemistry.ApplyToLead(catcherLead, defense.BatteryK(currentPitcher, ctx.Chemistry), ctx.Chemistry);
                 return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
@@ -2406,8 +2422,11 @@ public static class GameEngine
         // pitcherRuns＝この打席の投手に付ける失点（引き継ぎ走者の分は呼び出し側が責任投手へ付けた後）。
         // 省略時は runs 全部＝走者の由来を持たない経路（バント等・得点なし）向け。
         defense.RecordPitching(pitcher, result, pitcherRuns ?? runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
+        // 動揺からの立ち直り（設計書23 §2.4）: 相性 K が高いバッテリーは自然回復に要るアウトが1つ少ない。
         defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
-            outsThisPa, ctx.Tactics.RattledRecoveryOuts);
+            outsThisPa, BatteryChemistry.RecoveryOuts(ctx.Tactics.RattledRecoveryOuts,
+                defense.BatteryK(pitcher, ctx.Chemistry), ctx.Chemistry));
+        defense.NoteBatteryOuts(pitcher, outsThisPa);
         offense.TickOffenseCalm();
         defense.TickDefenseCalm();
         log.Add(new PlayLogEntry(inning, isTop, batter.Name, result, runs, timeline,

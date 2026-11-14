@@ -231,4 +231,10 @@ public sealed class SaveState
     /// 旧セーブは勢いという概念が存在しえない＝既定0で補う。
     /// </summary>
     public int MomentumLevel { get; set; }
+
+    /// <summary>
+    /// 自校のバッテリーの積み重ね（設計書23 §2.3・issue #933・v28）。投手ID×捕手IDの組ごとの一緒に守ったイニング数。
+    /// 旧セーブは記録が無い＝空（全組0イニングから）で補う。
+    /// </summary>
+    public List<Season.BatteryInningsEntry> BatteryInnings { get; set; } = new();
 }

@@ -155,6 +155,29 @@ namespace KokoSim.Unity.Shell
         public int MomentumLevel { get; private set; }
 
         private static readonly MomentumCoefficients MomentumCoeff = new();
+
+        /// <summary>
+        /// 自校のバッテリーの積み重ね（設計書23 §2.3・issue #933）。投手ID×捕手IDの組ごとに一緒に守ったイニング数
+        /// （公式戦1・練習試合0.5）。**セーブに載る**（v28）。卒業・転校した選手の組は試合へ渡す前と保存の前に消す。
+        /// </summary>
+        public BatteryLedger BatteryLedger { get; private set; } = new BatteryLedger();
+
+        private static readonly BatteryChemistryCoefficients ChemistryCoeff = new BatteryChemistryCoefficients();
+
+        /// <summary>在籍していない選手を含む組を消す（卒業・転校・新チーム）。</summary>
+        private void PruneBatteryLedger()
+            => BatteryLedger.Prune(RosterService.Roster.Select(p => p.Id));
+
+        /// <summary>試合へ渡すバッテリーの記録（在籍者だけ）。<see cref="PlayerMatchResolver.BuildManagerTeam"/> が使う。</summary>
+        public IReadOnlyDictionary<(int PitcherId, int CatcherId), double> BatteryInningsForMatch()
+        {
+            PruneBatteryLedger();
+            return BatteryLedger.Snapshot();
+        }
+
+        /// <summary>自校の1試合ぶんのバッテリーのイニングを積む（公式戦1・練習試合0.5＝Q38）。</summary>
+        private void ApplyBatteryInnings(GameResult detail, bool managerWasAway, bool isOfficial)
+            => BatteryLedger.AddGame(detail, managerWasAway, isOfficial, ChemistryCoeff);
         private readonly List<int> _momentumNotices = new List<int>();
 
         /// <summary>
@@ -640,6 +663,7 @@ namespace KokoSim.Unity.Shell
             ApplyMatchGrowth(result, managerIsAway);
             ApplyMatchCondition(result, managerIsAway);
             ApplyMatchInjuries(result, managerIsAway);
+            ApplyBatteryInnings(result, managerIsAway, isOfficial: false);
             ClearPracticeMatchFlow();
         }
 
@@ -658,6 +682,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
@@ -704,6 +729,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
@@ -1017,6 +1043,8 @@ namespace KokoSim.Unity.Shell
             s.LastJinguChampionId = LastJinguChampionId;
             s.LastLineup = LastLineup;
             s.MomentumLevel = MomentumLevel;
+            PruneBatteryLedger();
+            s.BatteryInnings = new List<BatteryInningsEntry>(BatteryLedger.Entries());
         }
 
         /// <summary>観るだけのセンバツを DTO へ（<see cref="CaptureSpectatedKoshien"/> と同型）。</summary>
@@ -1090,6 +1118,7 @@ namespace KokoSim.Unity.Shell
             ClearTransient();
             LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
             MomentumLevel = s.MomentumLevel;   // 同上（v24・issue #863）
+            BatteryLedger = BatteryLedger.From(s.BatteryInnings ?? new List<BatteryInningsEntry>());   // 同上（v28・issue #933）
             PendingSenbatsuFieldIds = s.PendingSenbatsuFieldIds != null
                 ? new List<int>(s.PendingSenbatsuFieldIds) : new List<int>();
             PendingSenbatsuJinguRegion = s.PendingSenbatsuJinguRegion ?? "";
@@ -1137,6 +1166,7 @@ namespace KokoSim.Unity.Shell
             History = new TournamentHistory();
             Year = 1;
             MomentumLevel = 0;
+            BatteryLedger = new BatteryLedger();
             ClearTransient();
         }
 

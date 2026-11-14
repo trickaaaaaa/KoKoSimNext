@@ -829,6 +829,25 @@ personalities:
     - { type: LoneWolf,     spawn_weight: 0.8, leadership_mean_offset: -16, receptiveness: 18, diligence: 42, selflessness:  8 }
     - { type: Introvert,    spawn_weight: 1.2, leadership_mean_offset: -14, receptiveness: 88, diligence: 28, selflessness: 90 }
 
+# --- バッテリーの相性（設計書23 §2・issue #933）🟡 K = wS×S0 + wB×B。K=0 で効き先はすべて恒等。乱数不使用 ---
+# S0 = a1×d捕手① + a2×d投手② − a3×min(d投④,0)×min(d捕④,0) + a4×max(−d投④,0)×max(d捕④,0)（−1〜+1）
+# B = 1 − exp(−イニング/τ)。自校は組ごとの記録（公式戦1・練習試合0.5）、AI校は同じ学校の年数×ai_innings_per_year で近似（Q38/Q39）
+battery_chemistry:
+  leadership_weight: 0.35       # a1 捕手の統率
+  receptiveness_weight: 0.35    # a2 投手の素直さ
+  clash_weight: 0.30            # a3 2人とも目立ちたがり＝ぶつかる
+  wife_role_weight: 0.30        # a4 目立ちたがりの投手×献身的な捕手＝女房役
+  start_weight: 0.5             # wS
+  bond_weight: 0.5              # wB
+  bond_tau_innings: 60          # τ（エース級が1シーズン組んで0.7前後）
+  official_inning_weight: 1.0
+  practice_inning_weight: 0.5
+  ai_innings_per_year: 30       # AI校: 同じ学校で過ごした1年＝30イニングぶん
+  lead_factor_per_k: 0.15       # 捕手のリードの効き 1 + k1×K
+  rattled_recovery_min_k: 0.6   # K≥これで動揺の自然回復に要るアウト−1
+  pinch_control_per_k: 0.03     # ピンチの制球 1 + k2×K×(圧/最大圧)（最大+3%・勢い#863の+6%より小さく）
+  pinch_pressure_from: 3        # この指数以上の場面だけ
+
 # --- プレッシャー指数×精神力（設計書02 §3.1-3.2）🟡 精神力50は常に恒等（帯不変） ---
 pressure:
   late_inning_from: 8        # 8回以降 +1
