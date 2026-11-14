@@ -1234,6 +1234,8 @@ namespace KokoSim.Unity.Match
             if (_subPanel != null && _subPanel.IsOpen) return;
             if (_scoutPanel != null && _scoutPanel.IsOpen) return;
             if (IsPauseExempt(evt.target as VisualElement)) return;
+            // 交代テロップ中の盤面クリック＝テロップを明ける（issue #920。中断は開かない）
+            if (_subTelopOn) { EndSubTelop(); return; }
             OpenPauseMenu();
         }
 
