@@ -5615,8 +5615,8 @@ namespace KokoSim.Unity.Match
         /// <summary>打者ヘルメットの被り角の回転中心（殻 helmet-shell の中心。AttachGear の配置と一致させる）。</summary>
         private static readonly Vector3 HelmetPivot = new(0f, 0.13f, 0.02f);
 
-        /// <summary>生成ヘルメットの中心を殻の中心（<see cref="HelmetPivot"/>）からずらす量[m]。絵で合わせた値。</summary>
-        private static readonly Vector3 HelmetMeshShift = new(0f, 0f, 0f);
+        /// <summary>生成ヘルメットの中心を殻の中心（<see cref="HelmetPivot"/>）からずらす量[m]。絵で合わせた値（既定の HelmetOffset と合わせて頭頂が突き抜けず、つばが眉の上に来る位置。2026-11-15）。</summary>
+        private static readonly Vector3 HelmetMeshShift = new(0f, 0.006f, 0.052f);
 
         /// <summary>
         /// 装備をボーンへ装着する。呼び出しは**初期ポーズ評価後**（コンストラクタ末尾のStepActor後）限定。
