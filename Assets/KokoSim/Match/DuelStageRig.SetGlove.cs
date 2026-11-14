@@ -80,7 +80,7 @@ namespace KokoSim.Unity.Match
             SetGloveFlexDeg = flexDeg;
             SetGloveRollDeg = rollDeg;
             if (_pitcher == null) return "no pitcher";
-            _pitcher.Graph.Evaluate(0f);
+            EvaluateGraph(_pitcher, 0f);
             _setGloveW = 1f;
             FixPitcherSetGlove();
             return SetGloveDiagForCapture();
