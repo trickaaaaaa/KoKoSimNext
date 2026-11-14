@@ -2983,19 +2983,34 @@ namespace KokoSim.Unity.Match
         /// ミットIKは腕の長さで頭打ちになる（<see cref="DuelCatcherPose.ReachMitt"/>・ReachGuard）ので、
         /// 大きく外れた球はミットの外に残る。そのまま手の子にすると宙に浮いた球が据え置き窓のあいだ
         /// 映り続けるため、この距離を超えたら捕球の瞬間に球を消す。
-        /// 値は捕球の受け入れ基準（≦0.12m＝ミットの半径。<see cref="CatchDiagForCapture"/>）と同じ。
         /// 実測（2026-11-08・CatcherFaceShooter WildOnly）: 普通の球と体寄せで届く左右の大外れは
-        /// 0.003〜0.025m。0.136m（左下へ外れた球）は球がミットの下縁からはみ出し、0.154m（高め）は
-        /// 上縁に乗って見えた＝0.15m では縁にぶら下がる球が残る。届かない球は 0.219〜0.478m。
+        /// 0.003〜0.025m、左下へ外れた球 0.136m、高め 0.154m。届かない球は 0.219〜0.478m。
+        /// 当初は 0.12m（ミットの半径）だった＝球を実位置のまま置いていたので 0.136/0.154m の球は
+        /// ミットの縁にぶら下がって見えた。issue #928 で球をポケットへ置き直すようにしたので縁の問題は無くなり、
+        /// 届く球（ゾーン高めの 0.154m を含む）は見せ、届かない球（0.219m〜）だけ消す 0.20m にした
+        /// （0.12m のままだとゾーン内の高めの球が捕った瞬間に消えていた）。
         /// </summary>
-        private const float MittMissHideDistanceM = 0.12f;
+        private const float MittMissHideDistanceM = 0.20f;
 
         /// <summary>直近の捕球の瞬間のミット中心〜球心[m]（実測の出口。負＝未計測）。</summary>
         private float _lastCatchMittGapM = -1f;
 
         /// <summary>
-        /// 球をミット（捕手の左手ボーン）の子へ移す。位置は**捕球面での実位置のまま**焼き付ける
-        /// （ミット中心へ寄せ直さない＝IKでミットを球へ寄せてあるので、そのままで噛み合う）。
+        /// 捕球後の球心を置く位置（ミットのメッシュ座標＝原点がミット中心・ポケット開口が+Z。issue #928）。
+        /// ミットのポケットの底（内面）は中心の柱で z≈−0.035〜−0.046、背面は z≈−0.07
+        /// （2026-11-14 実測・<see cref="DuelGearMeshes.Mitt"/>）。底に球（半径0.037m）を載せ、
+        /// 革が沈むぶん 0.01m 埋める＝球の上半分がポケットから覗く。
+        /// 捕球の瞬間の実位置（手の中心）のまま置くと z≈−0.08〜−0.10 ＝ミットの背面より奥に入り、
+        /// 中継視点（ポケット側から見る）では捕った瞬間に球が消えて見えていた。
+        /// </summary>
+        private static readonly Vector3 MittPocketBallLocal = new(0f, -0.02f, -0.008f);
+
+        /// <summary>
+        /// 球をミットのポケットへ入れる。位置は捕球面の実位置でなく<b>ミットのポケット</b>
+        /// （<see cref="MittPocketBallLocal"/>）へ置き直す＝IKが合わせるのは手の中心で、ミットのメッシュは
+        /// そこから <see cref="MittForward"/> ぶん前にあるため（issue #928）。置き直しは数cmで、球は
+        /// 1コマに0.6m以上進むので跳びは見えない。ミットの子にするので、捕球後の芝居でミットが動いても
+        /// 球はポケットに収まったまま。
         /// ミットが届いていない球（<see cref="MittMissHideDistanceM"/> 超）はミットへ入れずその場で消す。
         /// 捕手の芝居・捕球音・判定表示は変えない（球の見せ方だけ。issue #805）。
         /// </summary>
@@ -3010,11 +3025,27 @@ namespace KokoSim.Unity.Match
             // ミットIKの重み・体寄せの据え置きは球の時計で決まるので、ここで止めると
             // 捕手のミットが据え置き中に構えへ戻ってしまう。隠すのは見た目だけ。
             if (_lastCatchMittGapM > MittMissHideDistanceM) _ball.SetActive(false);
-            _ball.transform.SetParent(hand, true);
+            var mitt = FindCatcherMitt();
+            if (mitt != null)
+            {
+                _ball.transform.SetParent(mitt, false);
+                _ball.transform.localPosition = MittPocketBallLocal;
+            }
+            else
+                _ball.transform.SetParent(hand, true);   // ミットが無い（装備なしの素体）＝従来どおり実位置で手に付ける
             _ballInMitt = true;
             _ballInMittRemaining = CatcherLingerSeconds(_catchIsStrike);   // 判定表示が消えるまでミットの中に見せる
             KokoSim.Unity.Audio.MatchSfx.PlayCatch(_ballVelocityKmh);
             return true;
+        }
+
+        /// <summary>捕手のミットのメッシュ（prop-glove）。無ければ null。</summary>
+        private Transform FindCatcherMitt()
+        {
+            if (_catcher?.Go == null) return null;
+            foreach (var t in _catcher.Go.GetComponentsInChildren<Transform>(true))
+                if (t.name == "prop-glove") return t;
+            return null;
         }
 
         /// <summary>
