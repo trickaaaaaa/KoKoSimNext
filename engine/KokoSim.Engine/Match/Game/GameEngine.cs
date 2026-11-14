@@ -34,6 +34,14 @@ public sealed record GameResult
     public int LeadRunnerForceOnlyCount { get; init; }
     public int DroppedThirdStrikeCount { get; init; }
     public int ErrorExtraAdvanceCount { get; init; }
+    /// <summary>失策出塁の打席で塁上の走者がアウトになった数（両軍計・issue #903。統計参考値）。</summary>
+    public int ErrorPlayRunnerOuts { get; init; }
+    /// <summary>拾い直せず確定した捕球ミスで、非フォースの二塁走者がいた打席数（両軍計・issue #903。統計参考値）。</summary>
+    public int CatchErrorSecondRunnerCount { get; init; }
+    /// <summary>うち二塁走者が三塁を狙って刺された数（issue #903）。</summary>
+    public int CatchErrorSecondRunnerOutAtThird { get; init; }
+    /// <summary>うち二塁走者が二塁に留まった数（issue #903）。</summary>
+    public int CatchErrorSecondRunnerHeld { get; init; }
     public int PickoffCount { get; init; }
     public int IntentionalWalkCount { get; init; }
     public int DoubleStealThirdBreakCount { get; init; }
@@ -373,6 +381,10 @@ public static class GameEngine
             LeadRunnerForceOnlyCount = away.LeadRunnerForceOnlyCount + home.LeadRunnerForceOnlyCount,
             DroppedThirdStrikeCount = away.DroppedThirdStrikeCount + home.DroppedThirdStrikeCount,
             ErrorExtraAdvanceCount = away.ErrorExtraAdvanceCount + home.ErrorExtraAdvanceCount,
+            ErrorPlayRunnerOuts = away.ErrorPlayRunnerOuts + home.ErrorPlayRunnerOuts,
+            CatchErrorSecondRunnerCount = away.CatchErrorSecondRunnerCount + home.CatchErrorSecondRunnerCount,
+            CatchErrorSecondRunnerOutAtThird = away.CatchErrorSecondRunnerOutAtThird + home.CatchErrorSecondRunnerOutAtThird,
+            CatchErrorSecondRunnerHeld = away.CatchErrorSecondRunnerHeld + home.CatchErrorSecondRunnerHeld,
             PickoffCount = away.PickoffCount + home.PickoffCount,
             IntentionalWalkCount = away.IntentionalWalkCount + home.IntentionalWalkCount,
             DoubleStealThirdBreakCount = away.DoubleStealThirdBreakCount + home.DoubleStealThirdBreakCount,
@@ -1806,7 +1818,9 @@ public static class GameEngine
                 homePlay = new HomePlayContext(
                     ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
                     fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus, dpPivotArm,
-                    FielderRole: fp.FielderRole);
+                    FielderRole: fp.FielderRole,
+                    // 拾い直せず確定した捕球ミス（issue #903）: 二塁走者が三塁を狙うかを時間勝負で決める合図。
+                    UnrecoveredCatchError: fp.CatchErrorReadyAtSeconds is not null);
             }
 
             // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で
@@ -1885,6 +1899,20 @@ public static class GameEngine
                 }
             }
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
+            if (res.Result == PlateAppearanceResult.ReachedOnError)
+            {
+                // 失策の打席の走者の帰趨（issue #903。統計参考値・判定には使わない）
+                offense.ErrorPlayRunnerOuts += extraOuts;
+                if (res.Play?.CatchErrorReadyAtSeconds is not null && preSecondPlayer is not null && preFirstPlayer is null)
+                {
+                    offense.CatchErrorSecondRunnerCount++;
+                    RunnerMove? r2Move = null;
+                    foreach (var m in runnerMoves)
+                        if (ReferenceEquals(m.Runner, preSecondPlayer)) { r2Move = m; break; }
+                    if (r2Move is null) offense.CatchErrorSecondRunnerHeld++;
+                    else if (r2Move.Out && r2Move.ToBase == 3) offense.CatchErrorSecondRunnerOutAtThird++;
+                }
+            }
 
             // 本塁クロスプレー（設計書03 §3.5・設計書12 §3）: 走者と捕手の接触。どちらが負傷するかも
             // Fork した専用ストリームで決める（本体の乱数順に触れない）。
@@ -2146,6 +2174,12 @@ public static class GameEngine
                     }
                     timeline = Match.Timeline.TimelineBuilder.AppendErrorReturnThrow(
                         timeline, errPlay, ctx.Field, outAtOtherBaseName, outAtOtherBaseArrive);
+                    // 刺した送球が走者より遅れて着く分は、走者を送球の到達へ揃える（issue #903。#801/#685 と同じ）。
+                    // 捕球ミスで二塁走者が三塁を狙って刺される場面は、絵の拾い直し（追いかけの脚）が判定の時計
+                    // （CatchErrorReadyAtSeconds）より遅れることがあり、揃えないと「球が届く前にアウト」になる。
+                    if (outAtOtherBaseName is not null)
+                        timeline = Match.Timeline.TimelineBuilder.AlignTaggedRunnerToThrow(
+                            timeline, outAtOtherBaseName, errReturn.AnchorLabel);
                 }
             }
 
