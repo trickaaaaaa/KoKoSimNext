@@ -197,8 +197,6 @@ public sealed record TacticsCoefficients
     // ===== 打撃姿勢（2026-07-31・采配カードの拡充。BattingApproach）=====
     // プレイヤーが選んだ打席にだけ載る（既定 Normal は恒等）＝AI駆動のシム・統計帯は不変。
     // エンドラン（上）と同じく実効能力への倍率で表し、確率へ直接触らない（不変条件#1）。
-    /// <summary>待球策: スイング確率の倍率（＜1＝見送りが増え、球数を投げさせる）。</summary>
-    public double WorkCountSwingFactor { get; init; } = 0.82;
     /// <summary>転がせ: ゴロ狙い（弾道↓・ミート↑・パワー↓）。</summary>
     public double GroundBallLaunchPenalty { get; init; } = 0.30;
     public double GroundBallContactBoost { get; init; } = 0.05;

@@ -226,9 +226,6 @@ public sealed class AtBatSession
     /// へ渡した能力＝従来と完全一致。値が変わっても乱数消費順は不変（DecideSwing/ContactModel は確率値に
     /// よらず必ず引く）＝無指示なら1ビットも変わらない。
     /// </param>
-    /// <param name="swingFactorOverride">
-    /// この球だけのスイング頻度倍率（issue #492: 待球策を毎球評価）。null=打席頭の <see cref="AtBatContext.SwingProbabilityFactor"/>。
-    /// </param>
     /// <param name="fieldersOverride">
     /// この球だけの守備配置（issue #492: 陣形＝前進守備/長打警戒を毎球評価）。null=打席頭の <see cref="AtBatContext.Fielders"/>。
     /// 打球解決（<see cref="FieldingResolver.ResolveDetailed"/>）とタイムライン生成が読む野手配列を差し替える。
@@ -246,7 +243,6 @@ public sealed class AtBatSession
         Tactics.PitchDirective? pitchOverride = null,
         PitcherGear? gearOverride = null,
         BatterAttributes? batterOverride = null,
-        double? swingFactorOverride = null,
         IReadOnlyList<Fielder>? fieldersOverride = null,
         Player? thirdRunnerOverride = null,
         double? squeezeWasteOverride = null,
@@ -285,7 +281,7 @@ public sealed class AtBatSession
 
         var ctx = _ctx;
         var batter = batterOverride ?? _batter;
-        var swingFactor = swingFactorOverride ?? ctx.SwingProbabilityFactor;
+        var swingFactor = ctx.SwingProbabilityFactor;
         var fielders = fieldersOverride ?? ctx.Fielders;
         var pitcher = _pitcher;
         var batting = _batting;

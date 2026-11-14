@@ -937,7 +937,6 @@ public static class GameEngine
                 return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
-                    swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics),
                     // 慣れ（設計書02 §2.3b）: この打者がこの試合でこの投手と対戦した打席数。継投で0へ戻る。
                     familiarityPa: offense.PriorPlateAppearancesAgainst(batter, currentPitcher),
                     // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: この打者×この投手の球種ごとの見慣れ度。
@@ -1339,7 +1338,14 @@ public static class GameEngine
                 // 無指示なら打席頭の値とビット単位で一致（BatterFor は同じ純関数・DecideSwing/ContactModel は
                 // 確率値によらず必ず引く）＝AI駆動のシム・統計帯は不変。
                 var batterAttrsPitch = BatterFor(offense.BattingApproach, endrunThisPitch);
-                var swingFactorPitch = BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics);
+
+                // 待球策: ストライクが2つ未満のあいだは、ゾーン内でも必ず見送る（2ストライクから通常）。
+                // 優先順は 1球指示（強制スイング/見送り）＞サイン（バント・スクイズ・エンドラン・バスター）＞待球策。
+                // 上の指示が何か決めていれば battingOverride が非nullなので触らない。バスターは battingOverride を
+                // 持たないサインなので sign で除く。見送りは既存の forcedTake と同じ経路＝乱数を引かない。
+                if (offense.BattingApproach == BattingApproach.WorkCount
+                    && battingOverride is null && sign != OffensiveSign.Buster && session.Strikes < 2)
+                    battingOverride = PitchBattingOverride.ForceTake;
 
                 // 陣形（前進守備/長打警戒）を毎球評価（issue #492）: 深さ上書きがあればこの球だけ野手配列を
                 // 基準配置から組み直す。上書きなしなら打席頭の fielders を使う（＝従来と完全一致）。
@@ -1385,7 +1391,7 @@ public static class GameEngine
                 if (battingOverride == PitchBattingOverride.Squeeze && bases.Third is not null) runnersStartedMask |= 1 << 3;
 
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,
-                    batterOverride: batterAttrsPitch, swingFactorOverride: swingFactorPitch,
+                    batterOverride: batterAttrsPitch,
                     fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
                     squeezeWasteOverride: sqWasteOverride, basesNow: bases);
 

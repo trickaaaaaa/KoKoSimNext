@@ -5,8 +5,8 @@ namespace KokoSim.Engine.Match.Tactics;
 
 /// <summary>
 /// 打撃姿勢（<see cref="BattingApproach"/>）の効果（2026-07-31・采配カードの拡充）。
-/// 打席頭に一度だけ効く純関数で、効果は次の2つにしか落ちない:
-/// ① 実効能力（ミート/パワー/弾道）への倍率 ② スイング頻度の倍率。
+/// 打席頭に一度だけ効く純関数で、効果は実効能力（ミート/パワー/弾道）への倍率にしか落ちない。
+/// 待球策だけは能力を動かさず、ストライクが2つ未満の球を見送る（GameEngine が1球ごとに見送りを指示する）。
 ///
 /// <para>確率へ直接触らず、表示能力→物理層の変換の前段で能力を動かすだけ（不変条件#1）。
 /// エンドラン（<see cref="TacticsCoefficients.HitAndRunContactBoost"/> 等）とまったく同じ流儀で、
@@ -37,10 +37,6 @@ public static class BattingApproachModel
             },
             _ => batter,   // Normal / WorkCount は能力を動かさない
         };
-
-    /// <summary>スイング頻度の倍率（待球策だけ 1 未満・他は 1.0＝恒等）。</summary>
-    public static double SwingFactor(BattingApproach approach, TacticsCoefficients c)
-        => approach == BattingApproach.WorkCount ? c.WorkCountSwingFactor : 1.0;
 
     private static int Clamp(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
 }
