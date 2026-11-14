@@ -236,6 +236,7 @@ namespace KokoSim.Unity.Home
             var mental = new Label(c.Mental.ToString()); mental.AddToClassList("nt-c-mental"); row.Add(mental);
             row.Add(TierCell(c.StarterTier));
             row.Add(TierCell(c.BenchTier));
+            row.Add(TierCell(c.CohesionTier));
 
             var index = c.ActiveIndex;
             row.RegisterCallback<ClickEvent>(_ => OnPickCandidate(index));

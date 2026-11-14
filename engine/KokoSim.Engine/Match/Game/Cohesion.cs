@@ -96,6 +96,21 @@ public static class Cohesion
     /// <summary>結束 U ＝ U0 ＋ ΔU（0〜100）。</summary>
     public static double Value(double baseValue, double delta) => MathUtil.Clamp(baseValue + delta, 0.0, 100.0);
 
+    /// <summary>
+    /// チームの結束 U（試合と画面の単一ソース・issue #935）。顔ぶれ＝打順＋控え＋DHの先発投手、主将は
+    /// <see cref="Team.Captain"/>、上下は <see cref="Team.CohesionDelta"/>。
+    /// </summary>
+    public static double ForTeam(Team team, CohesionCoefficients c) => ForTeam(team, team.Captain, c);
+
+    /// <summary>主将を差し替えた場合の結束（主将指名画面の「指名したら」の見込み・issue #935）。</summary>
+    public static double ForTeam(Team team, Player? captain, CohesionCoefficients c)
+    {
+        var members = new List<Player>(team.BattingOrder);
+        members.AddRange(team.Reserves);
+        if (team.UsesDh && team.StartingPitcher is not null) members.Add(team.StartingPitcher);
+        return Value(BaseValue(members, captain, c), team.CohesionDelta);
+    }
+
     /// <summary>効き先①: 動揺の発生閾値の段（U≥高 で+1、U&lt;低 で−1、それ以外0）。</summary>
     public static int RattledThresholdStep(double u, CohesionCoefficients c)
         => u >= c.HighThreshold ? 1 : u < c.LowThreshold ? -1 : 0;

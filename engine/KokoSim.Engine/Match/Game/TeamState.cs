@@ -88,10 +88,7 @@ public sealed class TeamState
     public double CohesionValue(CohesionCoefficients c)
     {
         if (_cohesion is { } u && ReferenceEquals(_cohesionCoeff, c)) return u;
-        var members = new List<Player>(_team.BattingOrder);
-        members.AddRange(_team.Reserves);
-        if (_team.UsesDh && _team.StartingPitcher is not null) members.Add(_team.StartingPitcher);
-        var value = Cohesion.Value(Cohesion.BaseValue(members, _team.Captain, c), _team.CohesionDelta);
+        var value = Cohesion.ForTeam(_team, c);
         _cohesion = value;
         _cohesionCoeff = c;
         return value;

@@ -1003,6 +1003,12 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 
 /* --- 隠しパラメータ --- */
 .pd2-hidden-row { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+/* 性格の行＋4軸の見立て（issue #935）。塊ごとに下の余白を取り、中の行どうしは詰める。 */
+.pd2-hidden-block { margin-bottom: 10px; }
+.pd2-hidden-block > .pd2-hidden-row { margin-bottom: 2px; }
+/* チーム総合力パネル: 精神力の行の右に並べる結束のランク（issue #935）。 */
+.tsp-cohesion { flex-direction: row; align-items: center; width: 64px; flex-shrink: 0; margin-left: var(--sp-3); }
+.tsp-cohesion__k { font-size: var(--fs-cap); color: var(--color-muted); margin: 0 var(--sp-1) 0 0; padding: 0; }
 .pd2-hidden-k { font-size: var(--fs-label); color: var(--color-muted); }
 .pd2-hidden-v { font-size: 18px; color: var(--color-chalk); }
 .pd2-hidden-v--unknown { font-size: 19px; color: var(--color-faint); }

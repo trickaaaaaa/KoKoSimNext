@@ -273,7 +273,15 @@ namespace KokoSim.Unity.Players
             var val = new Label(h.Known ? h.Value : "？");
             val.AddToClassList(h.Known ? "pd2-hidden-v" : "pd2-hidden-v--unknown");
             row.Add(val);
-            return row;
+            if (h.Axes == null) return row;
+
+            // 性格の行は、その下に4軸の見立てを並べる（設計書23 §4・issue #935）
+            var block = new VisualElement();
+            block.AddToClassList("pd2-hidden-block");
+            block.Add(row);
+            foreach (var a in h.Axes)
+                block.Add(UiComponents.LeanRow(a.AxisName, a.HighWord, a.LowWord, a.SeenHigh));
+            return block;
         }
 
         // ===== 球種変化チャート（プロスピ風） =====

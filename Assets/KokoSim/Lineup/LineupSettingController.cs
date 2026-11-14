@@ -238,6 +238,10 @@ namespace KokoSim.Unity.Lineup
             StatPair(stats, "振", v.StartingPitcherStrikeoutsText);
             card.Add(stats);
             card.Add(Cell("lu-c-cond", Face(v.StartingPitcherCondition, "cond-face--26")));
+            // 先発投手と、いま捕手に就いている選手との相性（設計書23 §4・issue #935 レイアウトA）。
+            // 打順の行に欄を足すと名前の欄が縮むので、空きのある先発の行の右端に置く。
+            if (v.BatteryGrade != null)
+                card.Add(Cell("lu-c-bat", UiComponents.BatteryChemistry(v.BatteryGrade, v.BatteryBond)));
 
             var spIdx = v.StartingPitcherIndex;
             card.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _state.ClickStartingPitcher(); Render(); });

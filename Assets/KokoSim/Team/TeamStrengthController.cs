@@ -67,7 +67,14 @@ namespace KokoSim.Unity.Squad
             if (list != null)
             {
                 list.Clear();
-                foreach (var f in v.Factors) list.Add(BuildFactor(f));
+                foreach (var f in v.Factors)
+                {
+                    var row = BuildFactor(f);
+                    // 精神力の行の右に結束のランクを並べる（設計書23 §4・issue #935 レイアウトA）。
+                    // ほかの行には同じ幅の空き枠を置く＝棒と数値の列がそろう（UI原則①）。
+                    row.Add(CohesionTag(f.Label == "精神力" ? v.CohesionGrade : null));
+                    list.Add(row);
+                }
             }
 
             // 分析コメント（弱点を強調色＋太字、助言は通常）。リッチテキストで部分装飾。
@@ -83,6 +90,18 @@ namespace KokoSim.Unity.Squad
             // レーダー描画データ（軸ラベル＋数値の生成/配置は共通部品に委ねる）。
             _factors.Clear(); _factors.AddRange(v.Factors);
             _radar.SetData(v.Radar, v.OverallGrade);
+        }
+
+        private static VisualElement CohesionTag(string grade)
+        {
+            var tag = new VisualElement();
+            tag.AddToClassList("tsp-cohesion");
+            if (grade == null) return tag;
+            var k = new Label("結束");
+            k.AddToClassList("tsp-cohesion__k");
+            tag.Add(k);
+            tag.Add(UiComponents.RankChip(grade, RankChipSize.Small));
+            return tag;
         }
 
         // ===== 右カラムの指標バー（内訳＋ランク連動色） =====

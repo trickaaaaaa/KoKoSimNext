@@ -200,3 +200,6 @@
 }
 .msub-btn--go:hover { background-color: var(--color-cta-hi); }
 .msub-btn--go:disabled { background-color: var(--color-panel-deep); color: var(--color-faint); }
+
+/* 投・捕の枠を選んでいるときの候補の相性（issue #935）。行の右端に置く。 */
+.bench-row__chem { margin-left: auto; padding-left: var(--sp-2); }
