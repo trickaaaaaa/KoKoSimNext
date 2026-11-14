@@ -243,38 +243,83 @@ public sealed class PitchFlightPathTests
         Assert.Equal(0.05, end.X, 9);
         Assert.Equal(0.8, end.Y, 9);
     }
-    /// <summary>
-    /// フォークは山なりに描かれない（issue #911）。既定の回転軸で積分した実データ（飛翔時間・誘発変化）を
-    /// 入れたとき、中点で弦より上へ膨らむ量（＝山なり具合）はストレートに近く、カーブよりはっきり小さい。
-    /// 旧設定（純トップスピン）ではフォークの膨らみがカーブとほぼ同じ系統になっていた。
-    /// </summary>
-    [Fact]
-    public void Fork_BowsLikeAnUnhoppedFastball_NotLikeACurve()
+    /// <summary>球種・キレ（ストレートの球威50）の観測弾道（対決ビューが描く PitchFlightPath の入力と同じ回転＝PitchSpinModel）。</summary>
+    private static PitchTrajectory Traj(PitchType type, double topKmh, int sharpness = 50)
     {
-        var coeff = new PitchingCoefficients();
-        double MidBow(PitchType type, double kmh)
+        var slot = new PitchSlot { Type = type, Power = 50, Sharpness = sharpness };
+        var spec = new PitchSpec
         {
-            var axis = coeff.AxisFor(type);
-            var spec = new PitchSpec
-            {
-                SpeedKmh = kmh,
-                SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(coeff.SpinRpmBase * axis.RpmScale, axis.TiltDeg),
-            };
-            var tr = PitchSimulator.Simulate(spec, new Aerodynamics(), new MoundGeometry());
-            var half = tr.FlightTimeSeconds / 2.0;
-            var mid = PitchFlightPath.At(Release, 0.0, 0.8, tr.FlightTimeSeconds,
-                tr.InducedVerticalBreakM, tr.InducedHorizontalBreakM, half);
-            var chordY = (Release.Y + 0.8) / 2.0;
-            return mid.Y - chordY;
-        }
+            SpeedKmh = topKmh * slot.SpeedRatio,
+            SpinRadPerSec = PitchSpinModel.SpinFor(new PitchingCoefficients(), type, sharpness, 50),
+        };
+        return PitchSimulator.Simulate(spec, new Aerodynamics(), new MoundGeometry());
+    }
 
+    /// <summary>弦（リリース点→着弾点 (0, 0.8)）からの高さの逸れ[m]（正＝弦より上＝山なり）。u は飛翔時間の割合。</summary>
+    private static double BowAt(PitchTrajectory tr, double u)
+    {
+        var t = tr.FlightTimeSeconds * u;
+        var p = PitchFlightPath.At(Release, 0.0, 0.8, tr.FlightTimeSeconds, tr.InducedVerticalBreakM, tr.InducedHorizontalBreakM, t);
+        var chordY = Release.Y + (0.8 - Release.Y) * u;
+        return p.Y - chordY;
+    }
+
+    /// <summary>
+    /// フォークは山なりに描かれない（issue #911）。既定の回転（PitchSpinModel）で積分した実データ（飛翔時間・誘発変化）を
+    /// 入れたとき、中点で弦より上へ膨らむ量（＝山なり具合）はストレートに近く、カーブよりはっきり小さい。
+    /// 旧設定（純トップスピン）ではフォークの膨らみがカーブとほぼ同じ系統になっていた。フォークのキレを変えても（20/50/80）同じ。
+    /// </summary>
+    [Theory]
+    [InlineData(20)]
+    [InlineData(50)]
+    [InlineData(80)]
+    public void Fork_BowsLikeAnUnhoppedFastball_NotLikeACurve(int sharpness)
+    {
         const double Top = 145.0;
-        var fastball = MidBow(PitchType.Fastball, Top);
-        var fork = MidBow(PitchType.Fork, Top * 0.92);
-        var curve = MidBow(PitchType.Curve, Top * 0.80);
+        var fastball = BowAt(Traj(PitchType.Fastball, Top), 0.5);
+        var fork = BowAt(Traj(PitchType.Fork, Top, sharpness), 0.5);
+        var curve = BowAt(Traj(PitchType.Curve, Top), 0.5);   // 比べるカーブはキレ50
 
         Assert.True(fork - fastball < curve - fork,
             $"中点の膨らみ: FB {fastball:F3}m / フォーク {fork:F3}m / カーブ {curve:F3}m（フォークはカーブよりストレートに近いはず）");
         Assert.True(fork < 0.5 * curve, $"フォークの膨らみ {fork:F3}m がカーブ {curve:F3}m の半分を超えている（山なり）");
+        // 弦より上への膨らみは無回転の球（重力だけ＝g/8·T²）を超えない＝トップスピンで山なりにしていない。
+        var fork50 = Traj(PitchType.Fork, Top, sharpness);
+        Assert.True(fork <= PitchFlightPath.GravityMps2 / 8.0 * fork50.FlightTimeSeconds * fork50.FlightTimeSeconds + 1e-9);
     }
+
+    /// <summary>
+    /// 対決ビューの絵の比較表（issue #911。親が Unity で見る絵と数値で突き合わせる用）: ストレート・フォーク（キレ20/50/80）・
+    /// カーブの、弦からの高さの逸れの時系列[cm]。最速145km/h・着弾 (0, 0.8m)。表は失敗メッセージではなく出力に出す。
+    /// フォークの逸れは時系列のどこでもカーブより小さい。
+    /// </summary>
+    [Fact]
+    public void HeightSeries_ForkStaysBetweenFastballAndCurve()
+    {
+        const double Top = 145.0;
+        var rows = new (string Name, PitchTrajectory Tr)[]
+        {
+            ("ストレート", Traj(PitchType.Fastball, Top)),
+            ("フォーク キレ20", Traj(PitchType.Fork, Top, 20)),
+            ("フォーク キレ50", Traj(PitchType.Fork, Top, 50)),
+            ("フォーク キレ80", Traj(PitchType.Fork, Top, 80)),
+            ("カーブ キレ50", Traj(PitchType.Curve, Top, 50)),
+        };
+        var us = new[] { 0.1, 0.25, 0.5, 0.75, 0.9 };
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("| 球 | 飛翔[s] | 誘発縦[cm] | " + string.Join(" | ", System.Linq.Enumerable.Select(us, u => $"u={u:0.##}")) + " |");
+        foreach (var (name, tr) in rows)
+            sb.AppendLine($"| {name} | {tr.FlightTimeSeconds:F3} | {tr.InducedVerticalBreakM * 100:F1} | "
+                          + string.Join(" | ", System.Linq.Enumerable.Select(us, u => $"{BowAt(tr, u) * 100:F1}")) + " |");
+        _output?.WriteLine(sb.ToString());
+
+        var curve = rows[4].Tr;
+        foreach (var (name, tr) in rows[1..4])
+            foreach (var u in us)
+                Assert.True(BowAt(tr, u) < BowAt(curve, u), $"{name} u={u}: {BowAt(tr, u):F3} ≥ カーブ {BowAt(curve, u):F3}\n{sb}");
+    }
+
+    private readonly Xunit.Abstractions.ITestOutputHelper? _output;
+
+    public PitchFlightPathTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
 }

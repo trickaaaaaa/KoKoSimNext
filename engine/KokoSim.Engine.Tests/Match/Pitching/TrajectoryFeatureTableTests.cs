@@ -125,7 +125,7 @@ public sealed class TrajectoryFeatureTableTests
 
     [Theory]
     [InlineData(0.0, 146.0, 2210.0)]
-    [InlineData(-70.0, 128.0, 2450.0)]
+    [InlineData(60.0, 128.0, 2450.0)]
     [InlineData(180.0, 132.0, 1700.0)]
     public void LookupFeatures_WithoutWeather_IsBitIdenticalToTable(double tilt, double speed, double rpm)
     {
@@ -136,12 +136,12 @@ public sealed class TrajectoryFeatureTableTests
 
     [Theory]
     [InlineData(1.1834, 0.0)]     // 夏の上限 36℃ 相当
-    [InlineData(1.2271, -70.0)]   // 秋の下限 14℃ 相当
-    [InlineData(1.2400, 170.0)]   // 春の下限 8℃ 相当
+    [InlineData(1.2271, -60.0)]   // 秋の下限 14℃ 相当（負の軸＝鏡映）
+    [InlineData(1.2400, 150.0)]   // 春の下限 8℃ 相当
     public void LookupFeatures_OffNode_MatchesTableBuiltAtExactDensity(double density, double tilt)
     {
         var aero = Aero with { AirDensity = density };
-        var exact = TrajectoryFeatureTable.Build(aero, Mound, tiltDeg: tilt, rpmMin: 600.0, rpmMax: 3000.0, rpmStep: 100.0)
+        var exact = TrajectoryFeatureTable.Build(aero, Mound, tiltDeg: tilt, rpmMin: 0.0, rpmMax: TrajectoryFeatureTable.CachedRpmMax, rpmStep: TrajectoryFeatureTable.CachedRpmStep)
             .Lookup(140.0, 2300.0);
         var interp = TrajectoryFeatureTable.LookupFeatures(aero, Mound, tilt, 140.0, 2300.0);
         // 補間誤差は 0.5mm／0.1ms 未満（変化量そのものは数十cm・到達時間は約0.45秒）。
@@ -162,5 +162,40 @@ public sealed class TrajectoryFeatureTableTests
         for (var i = 0; i < 40; i++)
             TrajectoryFeatureTable.LookupFeatures(Aero with { AirDensity = 1.1801 + i * 0.001 }, Mound, tilt, 140.0, 2200.0);
         Assert.Equal(before, cache.Count);   // 1.175〜1.225 の節点2枚で賄える＝増えない
+    }
+
+    // --- 連続した回転軸（issue #911: キレで回転軸も動く）。節点の表を回転の座標系で補間しても積分器と一致する ---
+
+    [Theory]
+    [InlineData(-170.0, 118.0, 2730.0)]
+    [InlineData(-70.0, 128.0, 2450.0)]
+    [InlineData(-20.0, 137.0, 2090.0)]
+    [InlineData(15.0, 141.0, 1210.0)]
+    [InlineData(25.0, 140.0, 2090.0)]
+    [InlineData(110.0, 136.0, 2090.0)]
+    [InlineData(145.0, 120.0, 2090.0)]
+    [InlineData(170.0, 112.0, 3650.0)]
+    [InlineData(176.4, 112.0, 420.0)]
+    public void LookupFeatures_ContinuousTilt_MatchesIntegrator(double tilt, double speedKmh, double rpm)
+    {
+        var expected = PitchSimulator.Simulate(
+            new PitchSpec { SpeedKmh = speedKmh, SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(rpm, tilt) }, Aero, Mound);
+        var actual = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, tilt, speedKmh, rpm);
+        // 回転軸の補間誤差は 2mm 未満・到達時間 0.2ms 未満（変化量は数十cm、到達時間は約0.45秒）。
+        Assert.InRange(actual.InducedVerticalBreakM - expected.InducedVerticalBreakM, -0.002, 0.002);
+        Assert.InRange(actual.InducedHorizontalBreakM - expected.InducedHorizontalBreakM, -0.002, 0.002);
+        Assert.InRange(actual.FlightTimeSeconds - expected.FlightTimeSeconds, -0.0002, 0.0002);
+    }
+
+    /// <summary>回転ベクトル版の入口は (回転数, 回転軸) 版と同じ値を返す。</summary>
+    [Fact]
+    public void LookupFeatures_BySpinVector_EqualsByRpmAndTilt()
+    {
+        var spin = PitchSpec.SpinFromRpmAndTilt(2380.0, -55.0);
+        var a = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, spin, 131.0);
+        var b = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, -55.0, 131.0, 2380.0);
+        Assert.Equal(a.InducedVerticalBreakM, b.InducedVerticalBreakM, 9);
+        Assert.Equal(a.InducedHorizontalBreakM, b.InducedHorizontalBreakM, 9);
+        Assert.Equal(a.FlightTimeSeconds, b.FlightTimeSeconds, 9);
     }
 }

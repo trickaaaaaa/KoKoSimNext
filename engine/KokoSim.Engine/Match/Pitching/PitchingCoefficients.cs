@@ -77,18 +77,20 @@ public sealed record PitchingCoefficients
     /// </summary>
     public double LeadPitchWeightMaxExponent { get; init; } = 1.0;
 
-    // === 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式） ===
-    // Trajectory（弾道）は観測専用（判定に未接続, Phase E で本接続）。回転軸は全球種バックスピン固定
-    // （横変化は現状モデル化しない）。
+    // === 回転のマッピング（設計書02 §2.1・設計書15 Phase E。式は PitchSpinModel に集約） ===
     // Issue #274: 球種分岐で有効軸を切り替える。
     //   ストレート: 球威(Power) → SpinRpmBase + (Power-50) × SpinRpmPerPower
-    //   変化球:     キレ(Sharpness) → SpinRpmBase + (Sharpness-50) × SpinRpmPerSharpness
+    //   変化球:     キレ(Sharpness) → ストレートからの回転の外れ（ベクトル）を g = 1 + (Sharpness−50)×SharpnessDeviationPerLevel 倍
+    //               （issue #911・2026-11-14 監督決定「キレ＝ストレートからの回転の外れの大きさ」）
     /// <summary>基準回転数[rpm]（能力=50 のとき・145km/h・2200rpm はCLAUDE.md検証値）。</summary>
     public double SpinRpmBase { get; init; } = 2200.0;
     /// <summary>ストレート: 球威(Power-50)あたりの回転数の傾き[rpm/能力1]（Issue #274）。</summary>
     public double SpinRpmPerPower { get; init; } = 6.0;
-    /// <summary>変化球: キレ(Sharpness-50)あたりの回転数の傾き[rpm/能力1]。</summary>
-    public double SpinRpmPerSharpness { get; init; } = 7.0;
+    /// <summary>
+    /// 変化球: キレ(Sharpness−50)1あたりの「ストレートからの回転の外れ」の伸び縮み（issue #911・<see cref="PitchSpinModel"/>）。
+    /// 回転ベクトル＝ストレート＋g×(球種の基準回転−ストレート)、g＝1＋(キレ−50)×これ（下限0）。
+    /// </summary>
+    public double SharpnessDeviationPerLevel { get; init; } = 0.015;
 
     // === 球種ごとの回転軸（設計書02 §2.1・issue #835） ===
     // 「全球種バックスピン固定」だった穴（issue #835）を塞ぐ。各球種に回転軸（tilt）と実効回転数倍率
@@ -108,7 +110,7 @@ public sealed record PitchingCoefficients
         new() { Type = PitchType.Cutter,   TiltDeg = -20.0, RpmScale = 0.95 }, // 小さく横滑り
         new() { Type = PitchType.Slider,   TiltDeg = -70.0, RpmScale = 1.10 }, // 横〜斜めの大きな変化（実測はストレート以上の回転数のことが多い）
         new() { Type = PitchType.Curve,    TiltDeg = 170.0, RpmScale = 1.15 }, // 縦の大変化（真性スピンが大きい）
-        new() { Type = PitchType.Fork,     TiltDeg = 0.0,   RpmScale = 0.45, SharpnessRpmFactor = -1.0 }, // 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。トップスピンで下に曲げる球ではない）
+        new() { Type = PitchType.Fork,     TiltDeg = 0.0,   RpmScale = 0.45 }, // 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。トップスピンで下に曲げる球ではない。キレが高いほどストレートから離れる＝回転が減る）
         new() { Type = PitchType.Changeup, TiltDeg = 150.0, RpmScale = 0.85 }, // 沈み＋緩急
         new() { Type = PitchType.Shuuto,   TiltDeg = 110.0, RpmScale = 0.95 }, // 打者の内側へ食い込む
         new() { Type = PitchType.Sinker,   TiltDeg = 145.0, RpmScale = 0.95 }, // 内側へ沈む
@@ -156,11 +158,4 @@ public sealed record PitchAxisCoefficients
 
     /// <summary>基準回転数（<see cref="PitchingCoefficients.SpinRpmBase"/> 系）に対する実効回転数の倍率。</summary>
     public double RpmScale { get; init; } = 1.0;
-
-    /// <summary>
-    /// キレ→回転数の向き（<see cref="PitchingCoefficients.SpinRpmPerSharpness"/> に掛ける, issue #911）。既定1＝キレが高いほど
-    /// 回転が多い（曲がる）。フォークは −1＝<b>良いフォークほど回転が少ない</b>（ホップが消えてストレートから沈む）。
-    /// ストレート（球威→回転数）には効かない。
-    /// </summary>
-    public double SharpnessRpmFactor { get; init; } = 1.0;
 }

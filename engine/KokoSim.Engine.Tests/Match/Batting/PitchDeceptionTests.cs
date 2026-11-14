@@ -19,14 +19,11 @@ public sealed class PitchDeceptionTests
     /// <summary>能力50・最速 <paramref name="topKmh"/> の投手が投げた球種 <paramref name="type"/> の特徴量（判定と同じ表引き）。</summary>
     private static PitchTrajectoryFeatures Features(PitchType type, double topKmh = 140.0, int sharpness = 50)
     {
-        var axis = Pitching.AxisFor(type);
         var slot = new PitchSlot { Type = type, Power = 50, Sharpness = sharpness };
-        var rank = PitchSlot.IsSpinByPower(type) ? 50 : sharpness;
-        var slope = PitchSlot.IsSpinByPower(type) ? Pitching.SpinRpmPerPower : Pitching.SpinRpmPerSharpness * axis.SharpnessRpmFactor;
-        var rpm = (Pitching.SpinRpmBase + (rank - 50) * slope) * axis.RpmScale;
-        var f = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, axis.TiltDeg, topKmh * slot.SpeedRatio, rpm);
+        var f = TrajectoryFeatureTable.LookupFeatures(
+            Aero, Mound, PitchSpinModel.SpinFor(Pitching, type, sharpness, 50), topKmh * slot.SpeedRatio);
         if (type == PitchType.Fastball) return f;
-        var fb = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, 0.0, topKmh, Pitching.SpinRpmBase);
+        var fb = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, PitchSpinModel.FastballSpin(Pitching, 50), topKmh);
         return f with { Fastball = new FastballReference(fb.InducedVerticalBreakM, fb.InducedHorizontalBreakM, fb.FlightTimeSeconds) };
     }
 
@@ -73,27 +70,62 @@ public sealed class PitchDeceptionTests
         Assert.True(PitchDeception.LaunchAngleShiftDeg(fork, Batting) < PitchDeception.LaunchAngleShiftDeg(fb, Batting));
     }
 
-    /// <summary>キレが高いほど判定量が大きい（逆向きにならない）。フォークは回転を減らす向き＝ストレートから離れる。</summary>
+    /// <summary>
+    /// キレ＝ストレートからの回転の外れの大きさ（2026-11-14 監督決定）: 全変化球で、キレを上げるとストレートからの外れ
+    /// （本塁での縦横の合成）が単調に増え、判定量も単調に増える（逆向きにならない）。
+    /// </summary>
     [Theory]
-    [InlineData(PitchType.Fork)]
+    [InlineData(PitchType.TwoSeam)]
+    [InlineData(PitchType.Cutter)]
     [InlineData(PitchType.Slider)]
     [InlineData(PitchType.Curve)]
+    [InlineData(PitchType.Fork)]
     [InlineData(PitchType.Changeup)]
-    public void HigherSharpness_IncreasesDeception(PitchType type)
+    [InlineData(PitchType.Shuuto)]
+    [InlineData(PitchType.Sinker)]
+    public void HigherSharpness_MonotonicallyWidensTheGapFromTheFastball(PitchType type)
     {
-        var low = PitchDeception.BreakM(Features(type, sharpness: 20), Batting);
-        var high = PitchDeception.BreakM(Features(type, sharpness: 80), Batting);
-        Assert.True(high > low, $"{type}: キレ20 {low:F3} / キレ80 {high:F3}");
+        var prevGap = double.NegativeInfinity;
+        var prevBreak = double.NegativeInfinity;
+        for (var sharpness = 1; sharpness <= 99; sharpness += 7)
+        {
+            var f = Features(type, sharpness: sharpness);
+            var gap = PitchDeception.RelativeMagnitudeM(f);
+            var brk = PitchDeception.BreakM(f, Batting);
+            Assert.True(gap > prevGap, $"{type} キレ{sharpness}: 外れ {gap:F4} ≤ 前 {prevGap:F4}");
+            Assert.True(brk > prevBreak, $"{type} キレ{sharpness}: 判定量 {brk:F4} ≤ 前 {prevBreak:F4}");
+            prevGap = gap;
+            prevBreak = brk;
+        }
     }
 
-    /// <summary>フォークはキレが高いほど回転が少ない（良いフォークほどホップが消える, issue #911）。</summary>
+    /// <summary>フォークはキレが高いほど回転が少ない（良いフォークほどホップが消える, issue #911）＝ストレートから離れる向き。</summary>
     [Fact]
     public void Fork_SharpnessReducesSpin()
     {
-        Assert.Equal(-1.0, Pitching.AxisFor(PitchType.Fork).SharpnessRpmFactor);
-        Assert.Equal(1.0, Pitching.AxisFor(PitchType.Slider).SharpnessRpmFactor);
-        var low = Features(PitchType.Fork, sharpness: 20);
-        var high = Features(PitchType.Fork, sharpness: 80);
-        Assert.True(high.InducedVerticalBreakM < low.InducedVerticalBreakM);
+        var low = PitchSpinModel.ToRpmAndTilt(PitchSpinModel.SpinFor(Pitching, PitchType.Fork, 20, 50)).Rpm;
+        var high = PitchSpinModel.ToRpmAndTilt(PitchSpinModel.SpinFor(Pitching, PitchType.Fork, 80, 50)).Rpm;
+        Assert.True(high < low, $"キレ80 {high:F0}rpm / キレ20 {low:F0}rpm");
+        Assert.True(Features(PitchType.Fork, sharpness: 80).InducedVerticalBreakM
+                    < Features(PitchType.Fork, sharpness: 20).InducedVerticalBreakM);
+    }
+
+    /// <summary>
+    /// フォークは「ホップしない速球」: 誘発縦変化はストレートより小さいが、カーブのような大きなマイナス（トップスピンで
+    /// 下へ曲げる）にはならない（issue #911 の症状＝対決ビューでフォークがカーブのような山なりに見えた）。
+    /// </summary>
+    [Theory]
+    [InlineData(20)]
+    [InlineData(50)]
+    [InlineData(80)]
+    public void Fork_HasLessHopThanTheFastball_ButIsNotACurve(int sharpness)
+    {
+        var fb = Features(PitchType.Fastball);
+        var fork = Features(PitchType.Fork, sharpness: sharpness);
+        var curve = Features(PitchType.Curve);   // 比べるカーブはキレ50
+        Assert.True(fork.InducedVerticalBreakM < fb.InducedVerticalBreakM);
+        Assert.True(fork.InducedVerticalBreakM > -0.05, $"フォークの誘発縦変化 {fork.InducedVerticalBreakM:F3}m");
+        Assert.True(curve.InducedVerticalBreakM < -0.2, $"カーブの誘発縦変化 {curve.InducedVerticalBreakM:F3}m");
+        Assert.True(System.Math.Abs(fork.InducedHorizontalBreakM) < 0.01);
     }
 }

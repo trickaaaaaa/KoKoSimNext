@@ -169,6 +169,9 @@ public interface IPitchTacticsBrain {
 > **判定量の定義の改訂（issue #911, 2026-11-14）**: 変化球の判定量は `BreakMagnitudeM`（無回転からの合成量）ではなく、
 > **同じ投手のストレートからの外れ**で測る（`Batting.PitchDeception.BreakM`。`AtBatSession.ComputeFeatures` が変化球の
 > 特徴量へストレートの参照 `FastballReference` を添える）。ストレート自身は従来どおり。定義と係数は設計書02 §2.1 の注記。
+> あわせてキレの効き方を「キレ＝ストレートからの回転の外れの大きさ」に改訂し（`PitchSpinModel`）、回転軸がキレで連続に
+> 動くため `TrajectoryFeatureTable` は回転軸の節点（0〜180°・30°刻み）の表を回転の座標系で補間する形に作り直した
+> （Phase E-1 の「球種ごとに1枚」は廃止。入口は `LookupFeatures(aero, mound, 回転ベクトル, 球速)`）。
 
 **Phase E-3 完了（2026-07-20）**: `BatterDecision.DecideSwing` を `SwingProbability`（テスト用に分離）へ拡張し、`PitchTrajectoryFeatures.BreakMagnitudeM` を**単一係数 `ChaseBreakSlope` の符号反転**で対称に効かせた（ゾーン外+＝釣られる／ゾーン内−＝見誤って見送る、ユーザー承認の1変数原則）。追加で `StrikeZone.DistanceOutsideM`（ゾーン外への距離）と係数 `ChaseDistanceSlope` を新設し、ゾーン外側にのみ距離減衰を掛けた（ゾーン内は距離=0で常に無効なので対称性は崩れない）。**設計時の発見**: 着手前は「既存の距離減衰構造を保存する」という前提だったが、実際の `DecideSwing` は inZone 二値のみで距離減衰自体が存在しなかった。ユーザーに確認の上、本スライスで `StrikeZone.DistanceOutsideM` を新設して初めて距離減衰を導入した（「保存」ではなく「新設」）。物理妥当性テスト（`BatterDecisionTests`）: 対称性（ゾーン内外の変化量デルタが符号反転のみで一致）、ゾーン外距離に対する非増加（クランプ域では等号、非クランプ域では厳密減少）、固定距離での変化量↑→チェイス確率↑、ゾーン内は距離が無関係、を固定。
 係数校正: `ChaseBreakSlope`（新設・初期見積り0.15）と `ChaseDistanceSlope`（新設・初期見積り0.6）の2ノブが強く絡み合う（distanceガードが弱いとBB↓＋K↑寄り、strongいとBB↑寄り）ため、両方を実測しながら追い込んだ。最終値: `ChaseBreakSlope=0.02` / `ChaseDistanceSlope=0.15`（`WhiffIntercept`等E-2の値は再校正不要でそのまま）。実測（Balance CLI, 10000試合）: 三振19.83%/19.88%・四球8.59%/8.59%・本塁打2.79%/2.79%・得点4.09/4.06（tactics, seed42/2024）、三振20.57%・四球9.31%・本塁打2.75%・得点4.19（no-tactics, seed42）。全て帯内。既存切片（ChaseBase/ZoneSwingBase）は変更不要だった。`!Heavy 652`（新規5件 `BatterDecisionTests`）・`Heavy 20/20` 全緑。digestは想定通り全4カード再ベースライン。
