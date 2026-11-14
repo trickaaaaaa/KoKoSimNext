@@ -4452,9 +4452,9 @@ namespace KokoSim.Unity.Match
 
             row.Add(MakeLabel(s.Order.ToString(), "mlineup-row__ord", "f-num"));
             row.Add(MakeLabel(MatchLiveStatsProvider.PosAbbr(s.Position), "mlineup-row__pos"));
+            // 退いた選手（←旧選手名）は出さない＝名前の幅を食って入った選手の名前が切れるため。
+            // 交代は交代テロップ（#920）と実況の履歴で見せる（issue #947・監督決定）。
             row.Add(MakeLabel(s.Name, "mlineup-row__name"));   // フルネーム
-            if (!string.IsNullOrEmpty(s.ReplacedName))
-                row.Add(MakeLabel("←" + s.ReplacedName, "mlineup-row__replaced"));
             row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm", "f-num"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
