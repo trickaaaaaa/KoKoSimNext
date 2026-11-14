@@ -73,6 +73,22 @@ namespace KokoSim.Unity.Shell
             MarkDirtyRepaint();
         }
 
+        // 推定表示（相手校の調子＝監督の目で見た値。設計書02 §3.3・#47 の誤認モデルを通した値）。
+        // 顔の色を55%に透かし、縁を同系色の点線にする＝「真値ではない」を字なしで示す。
+        private const float EstimatedAlpha = 0.55f;
+        private const float EstimatedRingDarken = 0.78f;   // 縁＝顔色を暗くした同系色
+        private bool _estimated;
+
+        /// <summary>推定表示の切り替え（相手校の選手＝true。自校は常に真値なので false）。</summary>
+        public void SetEstimated(bool estimated)
+        {
+            if (_estimated == estimated) return;
+            _estimated = estimated;
+            MarkDirtyRepaint();
+        }
+
+        public bool Estimated => _estimated;
+
         private Color ResolvedFaceColor(Condition c)
         {
             var i = c switch
@@ -113,13 +129,23 @@ namespace KokoSim.Unity.Shell
             var rad = Mathf.Min(r.width, r.height) * 0.45f;
 
             // 顔の丸（状態色で塗り）。装飾（影/グロー）は付けない（UI原則③）。
-            p.fillColor = ResolvedFaceColor(c);
+            var faceColor = ResolvedFaceColor(c);
+            p.fillColor = _estimated ? new Color(faceColor.r, faceColor.g, faceColor.b, EstimatedAlpha) : faceColor;
             p.BeginPath();
             p.Arc(new Vector2(cx, cy), rad, 0f, 360f);
             p.Fill();
 
+            // 推定＝同系色の点線の縁（実線の輪郭 --face-ring より優先）。
+            if (_estimated)
+            {
+                StrokeDashedCircle(p, new Vector2(cx, cy), rad,
+                    new Color(faceColor.r * EstimatedRingDarken, faceColor.g * EstimatedRingDarken,
+                        faceColor.b * EstimatedRingDarken, 1f),
+                    Mathf.Max(1f, rad * 0.09f));
+            }
+
             // 明地スキンのインク輪郭（--face-ring 指定時のみ）。灰系の「普通」も地から立つ。
-            if (_ring.a > 0f)
+            if (_ring.a > 0f && !_estimated)
             {
                 p.strokeColor = _ring;
                 p.lineWidth = Mathf.Max(1.5f, rad * 0.14f);
@@ -166,6 +192,25 @@ namespace KokoSim.Unity.Shell
                     new Vector2(cx + mouthW, mouthY - curve * rad * 0.12f));
             }
             p.Stroke();
+        }
+
+        // 点線の円。Painter2D に破線が無いので、円周を「線・間」の等長に割って弧を1本ずつ引く
+        // （本数は円周から決める＝寸法が変わっても線と間の長さが保たれる）。
+        private static void StrokeDashedCircle(Painter2D p, Vector2 c, float radius, Color color, float width)
+        {
+            var dash = Mathf.Max(1.5f, radius * 0.18f);
+            var count = Mathf.Max(6, Mathf.RoundToInt(2f * Mathf.PI * radius / (dash * 2f)));
+            var step = 360f / count;
+            p.strokeColor = color;
+            p.lineWidth = width;
+            p.lineCap = LineCap.Butt;
+            for (var i = 0; i < count; i++)
+            {
+                var a0 = i * step;
+                p.BeginPath();
+                p.Arc(c, radius, a0, a0 + step * 0.5f);
+                p.Stroke();
+            }
         }
     }
 }

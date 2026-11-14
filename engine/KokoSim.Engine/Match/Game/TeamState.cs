@@ -473,7 +473,7 @@ public sealed class TeamState
             a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
             p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches + pendingPitches),
             pendingPitches, a?.BB ?? 0, a?.HB ?? 0, a?.EarnedRuns ?? 0,
-            EffectiveBaseStamina(p), PriorWeekPitchesOf(p), _weeklyPitchLimit);
+            EffectiveBaseStamina(p), PriorWeekPitchesOf(p), _weeklyPitchLimit, p.Bats);
     }
 
     /// <summary>ライブ観戦の控え（未出場の交代候補・背番号順）。打順は持たないので Order=0。観測データ。</summary>
@@ -506,7 +506,7 @@ public sealed class TeamState
                 p.SourceId, p.UniformNumber, p.Name, p.Throws,
                 a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
                 p.Grade, PitcherChanges + 2, 1.0, Walks: a?.BB ?? 0, HitByPitch: a?.HB ?? 0,
-                EarnedRuns: a?.EarnedRuns ?? 0));
+                EarnedRuns: a?.EarnedRuns ?? 0, Bats: p.Bats));
         }
         return list;
     }
@@ -682,8 +682,13 @@ public sealed class TeamState
     }
 
     /// <summary>伝令の残回数（攻守各3回, §3）。延長は回の頭で <see cref="ResetExtraInningTimeouts"/> が1へ置き直す。</summary>
-    public int OffenseTimeoutsLeft { get; private set; } = 3;
-    public int DefenseTimeoutsLeft { get; private set; } = 3;
+    public int OffenseTimeoutsLeft { get; private set; } = TimeoutsPerGame;
+    public int DefenseTimeoutsLeft { get; private set; } = TimeoutsPerGame;
+
+    /// <summary>伝令の枠（規定回まで）＝攻守それぞれ1試合3回（特別規則 15(2)①(3)①）。</summary>
+    public const int TimeoutsPerGame = 3;
+    /// <summary>延長回の伝令の枠＝1イニングにつき1回（特別規則 15(2)②(3)②）。</summary>
+    public const int TimeoutsPerExtraInning = 1;
 
     /// <summary>
     /// 延長回の頭で伝令の残りを攻守とも1にする（高校野球特別規則 15(2)②(3)②「延長回に入った場合は、
@@ -692,8 +697,8 @@ public sealed class TeamState
     /// </summary>
     public void ResetExtraInningTimeouts()
     {
-        OffenseTimeoutsLeft = 1;
-        DefenseTimeoutsLeft = 1;
+        OffenseTimeoutsLeft = TimeoutsPerExtraInning;
+        DefenseTimeoutsLeft = TimeoutsPerExtraInning;
     }
 
     public bool TryUseOffenseTimeout()

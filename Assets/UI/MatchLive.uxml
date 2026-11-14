@@ -5,6 +5,7 @@
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
+    <Style src="Components/scorebook.uss" />
     <Style src="MatchDetail.uss" />
     <Style src="MatchLive.uss" />
     <Style src="MatchSubstitution.uss" />
@@ -139,34 +140,126 @@
 
         </ui:VisualElement>
 
-        <!-- クリック中断ポップアップ（issue #289・案P1）。盤面のどこをクリックしても進行を一時停止して開く。
-             クリック中断は演出の停止だけ＝エンジンに触れない（伝令は消費しない。消費は中の「伝令を送る」だけ）。
-             選手交代は伝令なしで可（設計書09 §3 改・issue #289）。sub-modal より前に置く＝交代モーダルが上に重なる。
-             器は部品の modal-scrim / modal-card、ボタンは交代モーダルと同じ msub-btn 系を流用。 -->
-        <ui:VisualElement name="pause-modal" class="ui-root modal-scrim">
-            <ui:VisualElement class="modal-card pausem-card">
-                <ui:Label class="pausem-title" text="タイム" />
-                <ui:Label name="pm-situation" class="pausem-situation" text="" />
-                <ui:VisualElement name="pm-menu">
-                    <ui:VisualElement class="pausem-row">
-                        <ui:Button name="pm-timeout" class="msub-btn msub-btn--ghost pausem-btn" text="📣 伝令を送る" />
-                        <ui:Button name="pm-sub" class="msub-btn msub-btn--ghost pausem-btn" text="⇄ 選手交代" />
+        <!-- クリック中断ポップアップ「タイム」（issue #289・案P1 → 2026-11-14 スコアブック調へ作り直し）。
+             盤面のどこをクリックしても進行を一時停止して開く。クリック中断は演出の停止だけ＝エンジンに触れない
+             （伝令は消費しない。消費は中の「伝令を送る」だけ）。選手交代は伝令なしで可（設計書09 §3 改）。
+             sub-modal より前に置く＝交代モーダルが上に重なる。試合中の画面だが、このポップアップだけは
+             スコアブックの見た目（scorebook.uss の sbk スコープ）で、差し色は臙脂に固定（スクールカラーで替えない）。
+             値は TimeoutPopupView が TimeoutPopupModel から流し込む。ボタンの name は従来どおり。 -->
+        <ui:VisualElement name="pause-modal" class="ui-root modal-scrim sbk tmo-scrim">
+            <ui:VisualElement class="tmo-card">
+                <ui:VisualElement name="pm-menu" class="tmo-body">
+
+                    <ui:VisualElement class="tmo-head">
+                        <ui:VisualElement class="tmo-head__bar" />
+                        <ui:Label class="tmo-title f-display" text="タイム" />
+                        <ui:VisualElement class="tmo-spacer" />
+                        <ui:Label name="pm-phase" class="tmo-pill f-body" text="守備中" />
                     </ui:VisualElement>
-                    <ui:VisualElement class="pausem-row">
-                        <ui:Button name="pm-scout" class="msub-btn msub-btn--ghost pausem-btn" text="🔍 選手能力" />
-                        <ui:Button name="pm-skip" class="msub-btn msub-btn--ghost pausem-btn" text="⏭ スキップ（委任）" />
+
+                    <ui:VisualElement class="tmo-situ">
+                        <ui:VisualElement class="tmo-situ__inning">
+                            <ui:Label class="tmo-cap f-body" text="イニング" />
+                            <ui:VisualElement class="tmo-inning">
+                                <ui:Label name="pm-inning-n" class="tmo-inning__n f-display" text="1" />
+                                <ui:Label name="pm-inning-half" class="tmo-inning__half f-display" text="回表" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="tmo-situ__mid">
+                            <ui:VisualElement class="tmo-situ__group">
+                                <ui:Label class="tmo-cap f-body" text="アウト" />
+                                <ui:VisualElement class="tmo-outs">
+                                    <ui:VisualElement name="pm-out-1" class="tmo-out" />
+                                    <ui:VisualElement name="pm-out-2" class="tmo-out" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="tmo-situ__group tmo-situ__group--bases">
+                                <ui:Label class="tmo-cap f-body" text="走者" />
+                                <ui:VisualElement class="tmo-bases">
+                                    <ui:VisualElement name="pm-base-2" class="tmo-base tmo-base--second" />
+                                    <ui:VisualElement name="pm-base-1" class="tmo-base tmo-base--first" />
+                                    <ui:VisualElement name="pm-base-3" class="tmo-base tmo-base--third" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="tmo-situ__score">
+                            <ui:VisualElement class="tmo-team tmo-team--away">
+                                <ui:VisualElement name="pm-away-name-row" class="tmo-team__name-row" />
+                                <ui:Label name="pm-away-score" class="tmo-team__score f-display" text="0" />
+                            </ui:VisualElement>
+                            <ui:Label class="tmo-score-sep f-body" text="–" />
+                            <ui:VisualElement class="tmo-team tmo-team--home">
+                                <ui:VisualElement name="pm-home-name-row" class="tmo-team__name-row" />
+                                <ui:Label name="pm-home-score" class="tmo-team__score f-display" text="0" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:VisualElement class="pausem-row">
-                        <ui:Button name="pm-resume" class="msub-btn msub-btn--go pausem-btn pausem-btn--wide" text="▶ 再開" />
+
+                    <ui:VisualElement class="tmo-matchup">
+                        <ui:VisualElement name="pm-batter-row" class="tmo-mrow" />
+                        <ui:VisualElement name="pm-pitcher-row" class="tmo-mrow tmo-mrow--last" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="tmo-actions">
+                        <ui:Button name="pm-timeout" class="tmo-action tmo-action--wide">
+                            <ui:VisualElement class="tmo-action__head">
+                                <ui:VisualElement name="pm-timeout-icon" class="tmo-tile tmo-tile--accent" />
+                                <ui:Label class="tmo-action__title f-body-bd" text="伝令を送る" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="tmo-to">
+                                <ui:VisualElement class="tmo-to__row">
+                                    <ui:Label name="pm-to-cur-side" class="tmo-to__side f-body-bd" text="守備" />
+                                    <ui:VisualElement name="pm-to-cur-dots" class="tmo-to__dots" />
+                                    <ui:Label name="pm-to-cur-text" class="tmo-to__text f-body" text="残り3回" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="tmo-to__row tmo-to__row--other">
+                                    <ui:Label name="pm-to-oth-side" class="tmo-to__side f-body" text="攻撃" />
+                                    <ui:VisualElement name="pm-to-oth-dots" class="tmo-to__dots" />
+                                    <ui:Label name="pm-to-oth-text" class="tmo-to__text f-body" text="攻撃時に使用" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                        </ui:Button>
+                        <ui:Button name="pm-sub" class="tmo-action">
+                            <ui:VisualElement name="pm-sub-icon" class="tmo-tile" />
+                            <ui:VisualElement class="tmo-action__text">
+                                <ui:Label class="tmo-action__title f-body-bd" text="選手交代" />
+                                <ui:Label class="tmo-action__sub f-body" text="継投・代打・守備固め" />
+                            </ui:VisualElement>
+                        </ui:Button>
+                        <ui:Button name="pm-scout" class="tmo-action">
+                            <ui:VisualElement name="pm-scout-icon" class="tmo-tile" />
+                            <ui:VisualElement class="tmo-action__text">
+                                <ui:Label class="tmo-action__title f-body-bd" text="選手能力" />
+                                <ui:Label class="tmo-action__sub f-body" text="両チームの出場選手" />
+                            </ui:VisualElement>
+                        </ui:Button>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="tmo-foot">
+                        <ui:Button name="pm-skip" class="tmo-skip">
+                            <ui:VisualElement name="pm-skip-icon" class="tmo-skip__icon" />
+                            <ui:VisualElement class="tmo-skip__text">
+                                <ui:Label class="tmo-skip__title f-body-bd" text="スキップ（委任）" />
+                                <ui:Label class="tmo-skip__sub f-body" text="以降の采配を任せて結果へ" />
+                            </ui:VisualElement>
+                        </ui:Button>
+                        <ui:Button name="pm-resume" class="tmo-resume">
+                            <ui:VisualElement name="pm-resume-icon" class="tmo-resume__icon" />
+                            <ui:Label class="tmo-resume__label f-body-bd" text="再開" />
+                        </ui:Button>
                     </ui:VisualElement>
                 </ui:VisualElement>
-                <!-- 伝令役の人選（issue #716・A案）: 「伝令を送る」を押すとメニューと入れ替わる。
+
+                <!-- 伝令役の人選（issue #716・A案）: 「伝令を送る」を押すと本体と入れ替わる。
                      行を押すとその控えを伝令に出して閉じる。効き目の数字・状態は出さない（名前・学年・性格だけ）。 -->
-                <ui:VisualElement name="pm-messenger" class="pausem-messenger" style="display: none;">
-                    <ui:Label name="pm-messenger-cap" class="pausem-messenger__cap" text="誰を伝令に？" />
-                    <ui:ScrollView name="pm-messenger-list" class="pausem-messenger__list" />
-                    <ui:VisualElement class="pausem-row">
-                        <ui:Button name="pm-messenger-back" class="msub-btn msub-btn--ghost pausem-btn pausem-btn--wide" text="もどる" />
+                <ui:VisualElement name="pm-messenger" class="tmo-messenger" style="display: none;">
+                    <ui:VisualElement class="tmo-head">
+                        <ui:VisualElement class="tmo-head__bar" />
+                        <ui:Label name="pm-messenger-cap" class="tmo-messenger__cap f-display" text="誰を伝令に？" />
+                    </ui:VisualElement>
+                    <ui:ScrollView name="pm-messenger-list" class="tmo-messenger__list" />
+                    <ui:VisualElement class="tmo-foot">
+                        <ui:Button name="pm-messenger-back" class="tmo-back f-body-bd" text="もどる" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

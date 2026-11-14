@@ -53,6 +53,12 @@ namespace KokoSim.Unity.Match
                 : FormModel.Observe(conditionValue, ManagerService.Manager.TalentEye,
                     _observeRng.Fork(NameStreamId(name)), _formCoeff);
 
+        /// <summary>
+        /// その校の選手の調子が推定（監督の目で見た値）か。自校は常に真値＝false、相手校は誤認モデルを通す＝true
+        /// （<see cref="ConditionOf"/> と同じ校IDの判定）。表示では顔を透かし縁を点線にする。
+        /// </summary>
+        public bool IsConditionEstimated(int schoolId) => !_lookup.IsManagerSchool(schoolId);
+
         // 選手名 → Fork streamId（FNV-1a 64bit）。相手校の選手IDは校ごとに1から振られ校をまたいで
         // 一意でないため、名前を安定キーとして使う（同一試合の同一選手なら常に同じ streamId）。
         private static ulong NameStreamId(string name)

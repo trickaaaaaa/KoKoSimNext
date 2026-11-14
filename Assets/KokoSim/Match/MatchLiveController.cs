@@ -106,6 +106,13 @@ namespace KokoSim.Unity.Match
         public static bool? ManagerIsAwayOverrideForCapture;
 
         /// <summary>
+        /// 【開発用・エディタ限定】デモ試合で監督側の校IDを自校（<see cref="NationService.ManagerSchoolId"/>）にする口。
+        /// デモは校IDを持たない＝両校とも「相手校」扱いになり、調子が全員推定表示になる。実試合と同じ
+        /// 「自校＝真値・相手＝推定」の見え方を撮るときだけ真にする。既定 false＝従来と完全一致。
+        /// </summary>
+        public static bool ManagerSchoolIdForCapture;
+
+        /// <summary>
         /// 【開発用・エディタ限定】デモ試合の自校（home）の組み方の差し替え口。デモは能力順の自動編成
         /// （<c>RosterTeamBuilder.Build</c>）で組むので**必ず非DH**になり、DH制でしか出ない操作
         /// （DH解除・DH下の投野交代）が絵にも一巡確認にも一度も出てこない（issue #452 の残件）。
@@ -180,7 +187,7 @@ namespace KokoSim.Unity.Match
         // 旧「タイム（伝令）中断」（issue #173）との2種別は、交代が伝令不要になったことで
         // ボタン可否の差が消えたため 1本の _paused に統合した（伝令は中断中に押せる1アクションへ降格）。
         private VisualElement _pauseModal;
-        private Label _pmSituation;
+        private TimeoutPopupView _timeoutView;   // 値の流し込み（見た目は MatchLive.uss の tmo-*）
         private Button _pmTimeout, _pmSub, _pmSkip, _pmResume;
         // 伝令役の人選（issue #716・A案）: 「伝令を送る」でメニューと入れ替わる控え一覧。
         private VisualElement _pmMenu, _pmMessenger;
@@ -536,7 +543,7 @@ namespace KokoSim.Unity.Match
             // クリック中断ポップアップ（issue #289）。盤面クリックの検出はルートで拾い、
             // 残置した操作列・指示パネル・モーダル内のクリックは除外する（IsPauseExempt）。
             _pauseModal = _root.Q<VisualElement>("pause-modal");
-            _pmSituation = _root.Q<Label>("pm-situation");
+            _timeoutView = _pauseModal != null ? new TimeoutPopupView(_pauseModal) : null;
             _pmTimeout = _root.Q<Button>("pm-timeout");
             if (_pmTimeout != null) _pmTimeout.clicked += OnSendTimeout;
             _pmMenu = _root.Q<VisualElement>("pm-menu");
@@ -823,6 +830,11 @@ namespace KokoSim.Unity.Match
             _homeSchoolId = int.MinValue;
 #if UNITY_EDITOR
             if (ManagerIsAwayOverrideForCapture is { } mia) _managerIsAway = mia;
+            if (ManagerSchoolIdForCapture)
+            {
+                if (_managerIsAway) _awaySchoolId = NationService.ManagerSchoolId;
+                else _homeSchoolId = NationService.ManagerSchoolId;
+            }
 #endif
             _onComplete = null;
             _rematchOnTie = true;
@@ -1229,28 +1241,99 @@ namespace KokoSim.Unity.Match
             SetVisible(_pauseModal, true);
         }
 
-        // ポップアップ内ボタンの活性と表示。打席解決中（BackgroundGameOp）はエンジンを触る操作
+        // ポップアップの中身（状況・対戦・伝令の残り）とボタンの活性。打席解決中（BackgroundGameOp）はエンジンを触る操作
         //（伝令・交代・スキップ）を伏せ、解決完了時の UpdateControlState 経由で復帰する（issue #278 と同じ守り）。
         private void UpdatePauseMenu()
         {
             if (_prog == null) return;
-            if (_pmSituation != null) _pmSituation.text = PauseSituationText();
+            _timeoutView?.Render(BuildTimeoutModel());
+        }
+
+        /// <summary>
+        /// タイムのポップアップの ViewModel を組む。値はすべてエンジンの観測（采配窓 <see cref="LiveAtBat"/>・
+        /// スナップショット・伝令の残り/枠）と Shell の単一ソース（通算成績・調子の誤認）から引き、ここでは並べるだけ。
+        /// 状況は「いま映している局面」＝解決済みの得点を先に見せない（<see cref="PauseSituationText"/> と同じ導出）。
+        /// </summary>
+        private TimeoutPopupModel BuildTimeoutModel()
+        {
             // 振りかぶりで先に解決した球を預かっている間（issue #696）も、エンジンが画面より先にいる
             // ＝伝令・交代・能力ビューアは「投げ終わった後」の状態に効く／見えてしまうので伏せる。
             var resolving = BackgroundGameOp.Running || EngineAheadOfScreen;
-            if (_pmTimeout != null)
+            var m = new TimeoutPopupModel
             {
-                var off = _prog.OffenseTimeoutsLeft(_managerIsAway);
-                var def = _prog.DefenseTimeoutsLeft(_managerIsAway);
-                _pmTimeout.text = _timeoutSentThisPause
-                    ? "📣 伝令を送った"
-                    : "📣 伝令を送る\n攻" + off + " / 守" + def;
-                SetEnabled(_pmTimeout,
-                    !resolving && !_timeoutSentThisPause && _prog.CanCallTimeout(_managerIsAway));
+                AwayName = _awayDisp,
+                HomeName = _homeDisp,
+                ManagerIsAway = _managerIsAway,
+                ManagerOnOffense = _prog.IsTeamOnOffense(_managerIsAway),
+                TimeoutCap = _prog.TimeoutsPerPeriod,
+                OffenseTimeoutsLeft = _prog.OffenseTimeoutsLeft(_managerIsAway),
+                DefenseTimeoutsLeft = _prog.DefenseTimeoutsLeft(_managerIsAway),
+                TimeoutSent = _timeoutSentThisPause,
+                TimeoutEnabled = !resolving && !_timeoutSentThisPause && _prog.CanCallTimeout(_managerIsAway),
+                ActionsEnabled = !resolving,
+            };
+
+            if (_atBat is { } at)
+            {
+                m.Inning = at.Inning; m.IsTop = at.IsTop; m.Outs = at.Outs;
+                m.OnFirst = at.BaseFirst; m.OnSecond = at.BaseSecond; m.OnThird = at.BaseThird;
+                m.AwayScore = at.AwayScore; m.HomeScore = at.HomeScore;
             }
-            SetEnabled(_pmSub, !resolving);
-            SetEnabled(_pmScout, !resolving);
-            SetEnabled(_pmSkip, !resolving);
+            else if (_current is { } cur)
+            {
+                m.Inning = cur.Inning; m.IsTop = cur.IsTop; m.Outs = cur.OutsBefore;
+                m.OnFirst = cur.BaseFirstBefore; m.OnSecond = cur.BaseSecondBefore; m.OnThird = cur.BaseThirdBefore;
+                // 打席前スコアへ巻き戻す（LivePlateAppearance のスコアは解決後。BeginScoreCall と同じ導出）。
+                m.AwayScore = cur.IsTop ? cur.AwayScore - cur.RunsScored : cur.AwayScore;
+                m.HomeScore = cur.IsTop ? cur.HomeScore : cur.HomeScore - cur.RunsScored;
+            }
+            else
+            {
+                m.Inning = 1; m.IsTop = true;
+            }
+
+            if (_statsProvider == null) return m;
+            var mu = _atBat != null ? new Matchup(_atBat) : _current != null ? new Matchup(_current) : (Matchup?)null;
+            if (mu is not { } who) return m;
+
+            // 対戦は HUD と同じ源（RefreshPanel）＝画面に映っている打者・投手。
+            var snap = _preStep is { } pre ? pre.SnapshotBefore : _prog.Snapshot();
+            var offenseIsTop = _atBat?.IsTop ?? snap.OffenseIsTop;
+            var offense = offenseIsTop ? snap.Away.Lineup : snap.Home.Lineup;
+            var def = offenseIsTop ? snap.Home.Pitcher : snap.Away.Pitcher;
+            var offenseSchoolId = offenseIsTop ? _awaySchoolId : _homeSchoolId;
+            var defenseSchoolId = offenseIsTop ? _homeSchoolId : _awaySchoolId;
+            var slot = who.BatterOrder >= 1 && who.BatterOrder <= offense.Count ? offense[who.BatterOrder - 1] : null;
+
+            var career = _statsProvider.CareerBatting(offenseSchoolId, who.BatterSourceId);
+            m.Batter = new TimeoutPopupModel.PlayerLine
+            {
+                Number = NumText(who.BatterNumber),
+                Name = who.BatterName,
+                Detail = TimeoutPopupModel.BatterDetail(who.BatterOrder, slot?.Position ?? who.BatterPosition,
+                    slot?.Grade ?? 0, slot?.Throws ?? Handedness.Right, slot?.Bats ?? who.BatterBats),
+                Stats = new List<(string, string)>
+                {
+                    ("打率", MatchLiveStatsProvider.LiveAvg(career, slot?.AtBats ?? 0, slot?.Hits ?? 0)),
+                    ("本", career == null ? "—" : career.HomeRuns.ToString()),
+                },
+                Condition = _statsProvider.ConditionOf(offenseSchoolId, who.BatterConditionValue, who.BatterName),
+                ConditionEstimated = _statsProvider.IsConditionEstimated(offenseSchoolId),
+            };
+            if (def != null)
+            {
+                m.Pitcher = new TimeoutPopupModel.PlayerLine
+                {
+                    Number = NumText(def.Number),
+                    Name = def.Name,
+                    Detail = TimeoutPopupModel.PitcherDetail(def.Grade, def.Throws, def.Bats),
+                    // 球数だけ（目安投球数・ゲージは出さない）。確定球数＋進行中の打席ぶん（issue #397）。
+                    Stats = new List<(string, string)> { ("球数", (def.Pitches + def.PendingPitches).ToString()) },
+                    Condition = _statsProvider.ConditionOf(defenseSchoolId, def.ConditionValue, def.Name),
+                    ConditionEstimated = _statsProvider.IsConditionEstimated(defenseSchoolId),
+                };
+            }
+            return m;
         }
 
         // 局面サマリ（ポップアップ見出し）。いま映している局面だけを出す＝解決済みスコアのネタバレを
@@ -4295,9 +4378,11 @@ namespace KokoSim.Unity.Match
             public readonly int? BatterSourceId;
             public readonly double BatterConditionValue;
             public readonly FieldPosition BatterPosition;
+            public readonly Handedness BatterBats;
 
             public Matchup(LiveAtBat a)
             {
+                BatterBats = a.BatterBats;
                 BatterOrder = a.BatterOrder; BatterNumber = a.BatterNumber;
                 BatterName = a.BatterName;
                 BatterSourceId = a.BatterSourceId;
@@ -4306,6 +4391,7 @@ namespace KokoSim.Unity.Match
 
             public Matchup(LivePlateAppearance p)
             {
+                BatterBats = p.BatterBats;
                 BatterOrder = p.BatterOrder; BatterNumber = p.BatterNumber;
                 BatterName = p.BatterName;
                 BatterSourceId = p.BatterSourceId;
@@ -4884,6 +4970,11 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 能力ビューアを開く／閉じる／タブを切り替える（issue #602 の受け入れ絵）。</summary>
         /// <summary>スクショ用（issue #716）: タイムを開いて「伝令を送る」を押した状態（伝令役の一覧）にする。</summary>
         internal void OpenMessengerPickerForCapture() { OpenPauseMenu(); OnSendTimeout(); }
+        /// <summary>タイムのポップアップの今の ViewModel（撮影ハーネスが状態を書き換えて <see cref="RenderTimeoutForCapture"/> へ渡す）。</summary>
+        internal TimeoutPopupModel TimeoutModelForCapture() => _prog == null ? null : BuildTimeoutModel();
+        /// <summary>表示だけを差し替える（エンジンに触れない）。アウト・走者・伝令0回などの見え方の確認用。</summary>
+        internal void RenderTimeoutForCapture(TimeoutPopupModel m) => _timeoutView?.Render(m);
+        internal VisualElement PauseModalForCapture => _pauseModal;
         /// <summary>スクショ用（issue #716）: 伝令役の一覧で i 番目（背番号順でなく控えの添字）を選んで送る。</summary>
         internal void PickMessengerForCapture(int i) => SendTimeout(i);
         public void OpenScoutForCapture() { _paused = true; SetVisible(_pauseModal, true); _scoutPanel?.Open(); }

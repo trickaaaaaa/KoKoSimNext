@@ -58,6 +58,14 @@
     --sbk-line-sel: 2px;
     --sbk-line-patch: 1.5px;
 
+    /* ダイアログ（試合中のタイム・2026-11-14） */
+    --sbk-dialog: #F7F4EE;         /* ダイアログの地（画面の紙色より一段明るい） */
+    --sbk-scrim: rgba(26, 23, 19, 0.52);   /* 背後の試合画面に敷く暗幕 */
+    --sbk-r-dialog: 16px;
+    --sbk-mute: #8C867B;           /* 空き塁・アウトの枠・区切りの記号 */
+    --sbk-mute-soft: #B5AFA4;      /* 使えない側の伝令の丸 */
+    --sbk-accent-soft: rgba(122, 31, 43, 0.10);   /* 臙脂の10%（アイコンの地） */
+
     background-color: var(--sbk-paper);
     color: var(--sbk-text);
 }
