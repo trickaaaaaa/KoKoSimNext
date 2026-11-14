@@ -66,6 +66,35 @@ public sealed class LowTierRegressionTests
     }
 
     /// <summary>
+    /// コールドありの負け方の見張り（issue #983・Q29）。上の帯も games_10k 系も9回制の測定で、実戦（県大会の決勝以外）の
+    /// コールドを一度も回していない。係数は動かさず、E(45) 相手のコールド負けなどが悪化したら赤くなる。
+    /// </summary>
+    [Theory]
+    [InlineData(42UL)]
+    [InlineData(2024UL)]
+    public void LowTierMercyMatchups_StayWithinTargetBands(ulong seed)
+    {
+        var targets = BalanceTargetsLoader.LoadLowTierMercyFromFile(
+            BalanceRegressionTests.FindDataFile("balance-targets.yaml"));
+        var coeffPath = BalanceRegressionTests.FindDataFile("coefficients.yaml");
+
+        var cells = TierMatchupSimulation.MeasureManagerLadder(
+            games: 800, seed, coeffPath, new RosterCoefficients(), new[] { 40.0, 45.0, 50.0 }, mercy: true);
+        var e40 = cells[0];
+        var e45 = cells[1];
+        var d50 = cells[2];
+
+        Assert.True(targets.MercyLossRateVsE40.Contains(e40.AwayMercyLossRate),
+            $"自校のコールド負け率 vs E(40) {e40.AwayMercyLossRate:P1} が帯外");
+        Assert.True(targets.MercyLossRateVsE45.Contains(e45.AwayMercyLossRate),
+            $"自校のコールド負け率 vs E(45) {e45.AwayMercyLossRate:P1} が帯外");
+        Assert.True(targets.MercyLossRateVsD50.Contains(d50.AwayMercyLossRate),
+            $"自校のコールド負け率 vs D(50) {d50.AwayMercyLossRate:P1} が帯外");
+        Assert.True(targets.MercyShutoutLossRateVsE45.Contains(e45.AwayMercyShutoutLossRate),
+            $"自校の完封コールド負け率 vs E(45) {e45.AwayMercyShutoutLossRate:P1} が帯外");
+    }
+
+    /// <summary>
     /// 帯の意味を固定する: <b>表示→物理の効き（設計書21）を恒等に戻すと赤くなる</b>こと。帯を置いただけで実は何も
     /// 守っていない（どんな係数でも通る幅だった）という失敗を防ぐ回帰。
     /// 2026-08-19 以前は「ティア圧縮を外す」で同じことを確かめていたが、圧縮は恒等が既定になり、勾配を寝かせる役は
