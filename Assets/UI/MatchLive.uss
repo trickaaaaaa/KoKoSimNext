@@ -375,9 +375,17 @@
 }
 .mscout-detail__skills { flex-shrink: 0; margin-bottom: var(--sp-1); }
 .mscout-detail__abil { flex-shrink: 0; }
+/* 能力名（「スタミナ」の4文字）が Label の既定余白でランクチップに食い込むのを防ぐ（画面側のリセット）。 */
+.mscout-detail__abil .abil-row__label { margin: 0; padding: 0; }
 /* 持ち球のミニ球種変化チャート（Painter2D 描画のため固定高）。スタメン設定の比較欄と同じ高さ。 */
 .mscout-detail__pitch { height: 150px; flex-shrink: 0; }
 .mscout-detail__stats { flex-shrink: 0; }
+/* 成績表の Label は既定の余白（margin 4/2・padding 4）を持ったまま 22px の行に入ると、ラベル（左上揃え）と
+   値（中央揃え）で縦位置がずれる＝画面側で余白を落として行の中央に揃える。 */
+.mscout-detail__stats .stat-table__lab,
+.mscout-detail__stats .stat-table__scope,
+.mscout-detail__stats .stat-table__val { margin: 0; padding: 0; }
+.mscout-detail__stats .stat-table__lab { -unity-text-align: middle-left; }
 
 /* 区分（打線 / 投手 / 控え）。切替ではないので帯にせず小さく置く（UI原則④）。 */
 .mscout-section {
