@@ -40,6 +40,7 @@ internal static class PlayerSaves
             .Add("receptiveness", p.Receptiveness)
             .Add("diligence", p.Diligence)
             .Add("selflessness", p.Selflessness)
+            .Add("growthJitter", p.SelfGrowthJitter)
             .Add("buntBonus", p.BuntSuccessBonus)
             .Add("chanceHit", p.ChanceHitFactor)
             .Add("skills", SkillSetToJson(p.Skills))
@@ -80,6 +81,8 @@ internal static class PlayerSaves
         Receptiveness = PersonalitySaveMigration.Axes(o).Receptiveness,
         Diligence = PersonalitySaveMigration.Axes(o).Diligence,
         Selflessness = PersonalitySaveMigration.Axes(o).Selflessness,
+        // 自主成長の隠れた個人差（v30・Q47）。旧セーブの AI校の選手は持っていない＝0（乱数不使用）。
+        SelfGrowthJitter = o.Has("growthJitter") ? o.Double("growthJitter") : 0.0,
         BuntSuccessBonus = o.Double("buntBonus"),
         ChanceHitFactor = o.Double("chanceHit"),
         Skills = SkillSetFromJson(o.Obj("skills")),

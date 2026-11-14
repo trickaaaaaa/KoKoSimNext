@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 29;
+    public const int CurrentVersion = 30;
 
     // ===== Serialize =====
 
@@ -322,6 +322,8 @@ public static class SaveCodec
         if (version < 28 && !root.Has("batteryInnings")) root.Add("batteryInnings", new JsonArray());
         // v29（issue #934・設計書23 §3.3）: 自校の結束の上下 ΔU。旧セーブは0で補う。
         if (version < 29 && !root.Has("cohesionDelta")) root.Add("cohesionDelta", 0.0);
+        // v30（OPEN-QUESTIONS Q47）: 部員・AI校の選手の自主成長の隠れた個人差 growthJitter。選手1人ぶんのキーなので
+        // ここでは補わず、PlayerSaves / DevelopingPlayerSaves が読む（v26 以前の部員は旧 personalityFactor の残り、それ以外は0）。
         return root;
     }
 

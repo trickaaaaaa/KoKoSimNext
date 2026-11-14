@@ -12,18 +12,28 @@ namespace KokoSim.Engine.Match.Game;
 /// </summary>
 public sealed record CohesionCoefficients
 {
-    /// <summary>U0: 主将の統率力（統率傾向×精神力/100＝0〜100）1あたりの上乗せ b1。主将不在は0。</summary>
-    public double CaptainPowerWeight { get; init; } = 0.15;
-    /// <summary>U0: 「引っ張る」選手（統率傾向がこの値以上）の人数を数える閾値（design-23 §3.2 「①が65以上」）。</summary>
+    // ---- U0（顔ぶれの土台）。OPEN-QUESTIONS Q54 決着（2026-11-14）: 各項を「ふつうの部」の値からの差で測る形にし、
+    //      顔ぶれだけで U0≥70 の部が上位約15%・U0<30 の部が下位約15% になるよう校正した（AI校の母集団で実測）。
+    //      基準値（*Neutral）は全国の AI校のベンチ入りメンバーの平均＝ふつうの部で各項が0、U0≈50。
+
+    /// <summary>U0: 主将の統率力（統率傾向×精神力/100）が基準を上回る1あたりの上乗せ b1（下回れば減点）。主将不在は0。</summary>
+    public double CaptainPowerWeight { get; init; } = 0.9;
+    /// <summary>U0: 主将の統率力の基準（ふつうの部の主将）。</summary>
+    public double CaptainPowerNeutral { get; init; } = 46.0;
+    /// <summary>U0: 「引っ張る」選手（統率傾向がこの値以上）の閾値（design-23 §3.2 「①が65以上」）。</summary>
     public int LeaderThreshold { get; init; } = 65;
-    /// <summary>U0: 引っ張る選手1人あたりの上乗せ b2。</summary>
-    public double LeaderWeight { get; init; } = 2.0;
-    /// <summary>U0: 引っ張る選手を数える上限（3人まで）。</summary>
-    public int LeaderCap { get; init; } = 3;
-    /// <summary>U0: 目立ちたがり（④&lt;50）の割合が0.5を超えた分に掛ける減点 b3。</summary>
-    public double SelfishShareWeight { get; init; } = 40.0;
-    /// <summary>U0: 一匹狼（①↓②↓④目立ち）1人あたりの減点 b4。</summary>
-    public double LoneWolfWeight { get; init; } = 3.0;
+    /// <summary>U0: 引っ張る選手の割合（ベンチ入りに占める）が基準を上回る分に掛ける上乗せ b2（下回れば減点）。</summary>
+    public double LeaderShareWeight { get; init; } = 80.0;
+    /// <summary>U0: 引っ張る選手の割合の基準（ふつうの部）。</summary>
+    public double LeaderShareNeutral { get; init; } = 0.24;
+    /// <summary>U0: 目立ちたがり（④&lt;50）の割合が基準を上回る分に掛ける減点 b3（下回れば上乗せ）。</summary>
+    public double SelfishShareWeight { get; init; } = 70.0;
+    /// <summary>U0: 目立ちたがりの割合の基準（ふつうの部）。</summary>
+    public double SelfishShareNeutral { get; init; } = 0.385;
+    /// <summary>U0: 一匹狼（①↓②↓③↓④目立ち）の割合が基準を上回る分に掛ける減点 b4（下回れば上乗せ）。</summary>
+    public double LoneWolfShareWeight { get; init; } = 120.0;
+    /// <summary>U0: 一匹狼の割合の基準（ふつうの部）。</summary>
+    public double LoneWolfShareNeutral { get; init; } = 0.06;
 
     /// <summary>ΔU: 夏合宿（通常）の上乗せ（design-04 §4「結束↑」）。</summary>
     public double SummerCampDelta { get; init; } = 6.0;
@@ -55,23 +65,31 @@ public static class Cohesion
     /// <summary>
     /// 顔ぶれの土台 U0（0〜100）。<paramref name="members"/>＝ベンチ入りの部員（試合では打順＋控え）。
     /// 主将の統率力は design-09 §8 の 統率傾向×精神力/100。
+    /// <code>
+    /// U0 = 50 + b1×(主将の統率力 − 基準)
+    ///         + b2×(引っ張る選手の割合 − 基準) − b3×(目立ちたがりの割合 − 基準) − b4×(一匹狼の割合 − 基準)
+    /// </code>
+    /// 割合の分母はベンチ入り全員。性格を持たない手組みの選手（<see cref="Personality.Normal"/>）は顔ぶれに数えない＝
+    /// どの項も基準どおりとみなす（主将が手組みなら主将の項も0）。全員が手組みのチームは 50 ちょうど（Q57）。
     /// </summary>
     public static double BaseValue(IReadOnlyCollection<Player> members, Player? captain, CohesionCoefficients c)
     {
         if (members.Count == 0) return Neutral;
         var u = Neutral;
-        if (captain is not null) u += c.CaptainPowerWeight * (captain.Leadership * captain.Mental / 100.0);
-        int leaders = 0, selfish = 0, loneWolves = 0;
+        if (captain is not null && captain.Personality != Personality.Normal)
+            u += c.CaptainPowerWeight * (captain.Leadership * captain.Mental / 100.0 - c.CaptainPowerNeutral);
+        double leaders = 0, selfish = 0, loneWolves = 0;
         foreach (var p in members)
         {
-            if (p.Leadership >= c.LeaderThreshold) leaders++;
-            if (p.Personality == Personality.Normal) continue;   // 手組みの無補正の選手は顔ぶれの減点に数えない
-            if (!Personalities.High(p.Selflessness)) selfish++;
-            if (p.Personality == Personality.LoneWolf) loneWolves++;
+            if (p.Personality == Personality.Normal) continue;   // 手組みの無補正の選手は顔ぶれに数えない（Q57）
+            leaders += (p.Leadership >= c.LeaderThreshold ? 1 : 0) - c.LeaderShareNeutral;
+            selfish += (Personalities.High(p.Selflessness) ? 0 : 1) - c.SelfishShareNeutral;
+            loneWolves += (p.Personality == Personality.LoneWolf ? 1 : 0) - c.LoneWolfShareNeutral;
         }
-        u += c.LeaderWeight * Math.Min(leaders, c.LeaderCap);
-        u -= c.SelfishShareWeight * Math.Max(0.0, (double)selfish / members.Count - 0.5);
-        u -= c.LoneWolfWeight * loneWolves;
+        var n = (double)members.Count;
+        u += c.LeaderShareWeight * leaders / n;
+        u -= c.SelfishShareWeight * selfish / n;
+        u -= c.LoneWolfShareWeight * loneWolves / n;
         return MathUtil.Clamp(u, 0.0, 100.0);
     }
 

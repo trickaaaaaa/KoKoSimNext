@@ -40,8 +40,8 @@ public static class DevelopmentModel
 
         // ②素直さ（性格, 設計書01 §1.1）: 指導寄与を倍率補正。personalities=null または Normal は 1.0＝従来と一致。
         var receptivity = personalities?.CoachingReceptivity(p.Receptiveness) ?? 1.0;
-        // ③勤勉さ→自主成長（設計書23 §1.2）。旧 PersonalityFactor。personalities=null でも既定の式で効く（従来どおり常時）。
-        var selfGrowth = (personalities ?? DefaultPersonalities).SelfGrowthFactor(p.Diligence);
+        // ③勤勉さ＋隠れた個人差（Q47）→自主成長（設計書23 §1.2）。旧 PersonalityFactor。personalities=null でも既定の式で効く（従来どおり常時）。
+        var selfGrowth = (personalities ?? DefaultPersonalities).SelfGrowthFactor(p.Diligence, p.SelfGrowthJitter);
         // 基準指導力（中立点）を common に焼き込む＝従来と同じ乗算列。分野別指導力（#115）は
         // 能力ごとに「中立点との比」を後段で掛ける（比＝1.0 のとき1ビット一致・不変条件#2）。
         var baselineFactor = 1.0 + c.CoachingLevel * c.CoachingSlope * receptivity;
@@ -147,8 +147,8 @@ public static class DevelopmentModel
 
         // ②素直さ（性格, 設計書01 §1.1）: 指導寄与を倍率補正。personalities=null または Normal は 1.0＝従来と一致。
         var receptivity = personalities?.CoachingReceptivity(p.Receptiveness) ?? 1.0;
-        // ③勤勉さ→自主成長（設計書23 §1.2）。旧 PersonalityFactor。personalities=null でも既定の式で効く（従来どおり常時）。
-        var selfGrowth = (personalities ?? DefaultPersonalities).SelfGrowthFactor(p.Diligence);
+        // ③勤勉さ＋隠れた個人差（Q47）→自主成長（設計書23 §1.2）。旧 PersonalityFactor。personalities=null でも既定の式で効く（従来どおり常時）。
+        var selfGrowth = (personalities ?? DefaultPersonalities).SelfGrowthFactor(p.Diligence, p.SelfGrowthJitter);
         // 基準指導力（中立点）を common に焼き込む＝従来と同じ乗算列（分野別指導力の比は後段, #115）。
         var baselineFactor = 1.0 + c.CoachingLevel * c.CoachingSlope * receptivity;
 

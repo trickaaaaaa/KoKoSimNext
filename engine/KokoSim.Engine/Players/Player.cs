@@ -69,6 +69,12 @@ public sealed record Player
     public int Selflessness { get; init; } = 50;
 
     /// <summary>
+    /// 自主成長の隠れた個人差（隠しパラメータ・OPEN-QUESTIONS Q47）。試合層では効かない。AI校の選手が転任で部員になるとき
+    /// そのまま引き継ぐために持つ（<see cref="PersonalityDraw.SelfGrowthJitter"/>）。既定0。
+    /// </summary>
+    public double SelfGrowthJitter { get; init; }
+
+    /// <summary>
     /// 性格タイプ（設計書23 §1.3）。4軸から導出するラベルで、別には保存しない。②③④がすべて50なら Normal。
     /// 犠打・チャンスの効きは下の解決済みスカラーに投影時に焼き込む（ホットパスでの係数引き回し回避）。
     /// </summary>

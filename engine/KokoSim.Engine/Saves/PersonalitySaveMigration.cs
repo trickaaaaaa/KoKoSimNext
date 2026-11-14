@@ -1,5 +1,3 @@
-using System;
-using KokoSim.Engine.Core;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves.Json;
 
@@ -12,9 +10,12 @@ namespace KokoSim.Engine.Saves;
 /// 無ければ、旧タイプのマスの<b>代表値</b>（<see cref="PersonalityCoefficients"/> の種の表）へ置き換える。
 /// 統率傾向（<c>leadership</c>）は既に個人の値を持っているので触らない。</para>
 ///
-/// <para>自校部員（<see cref="Season.DevelopingPlayer"/>）は旧 <c>personalityFactor</c>（自主成長の個人倍率）を持っていたので、
-/// 勤勉さはその値から<b>逆算</b>する（自主成長の効きが移行で変わらないように）。ただし逆算した値がタイプのマスの反対側へ
-/// またいだら、マスの側の端（50 か 49）で止める＝旧タイプの名前（②③④の側）を保つ。</para>
+/// <para>自校部員（<see cref="Season.DevelopingPlayer"/>）は旧 <c>personalityFactor</c>（自主成長の個人倍率＝タイプ中心＋σ0.06 の
+/// ジッタ）を持っていた。勤勉さは他の軸と同じく<b>旧タイプの代表値</b>に置き、代表値の勤勉さで説明できない残り
+/// （<c>personalityFactor − SelfGrowthFactor(代表値)</c>）を<b>隠れた個人差</b>（<c>SelfGrowthJitter</c>・v30・Q47）に入れる。
+/// 旧ジッタと新しい個人差は同じもの（タイプとは別の、画面に出ない個人差）なので、これで旧 personalityFactor をそのまま再現する
+/// （上下限 0.75〜1.25 も旧と同じ）。勤勉さへ逆算する旧方式（v27〜v29 の実装）は、個人差を勤勉さへ押し込むので
+/// 生成では出ない端の値になり、マスをまたぐ個体の効きを保てなかった。</para>
 /// </summary>
 internal static class PersonalitySaveMigration
 {
@@ -30,34 +31,26 @@ internal static class PersonalitySaveMigration
         return (pp.Receptiveness, pp.Diligence, pp.Selflessness);
     }
 
-    /// <summary>自校部員の②③④（③は旧 personalityFactor から逆算）。</summary>
-    public static (int Receptiveness, int Diligence, int Selflessness) DevelopingAxes(JsonObject o)
-    {
-        if (o.Has("receptiveness"))
-            return (o.Int("receptiveness"), o.Int("diligence"), o.Int("selflessness"));
-        var legacy = Legacy(o);
-        var pp = Defaults.Profile(legacy);
-        var diligence = pp.Diligence;
-        if (o.Has("personalityFactor"))
-            diligence = DiligenceFromFactor(o.Double("personalityFactor"), legacy, Defaults);
-        return (pp.Receptiveness, diligence, pp.Selflessness);
-    }
+    /// <summary>自校部員の②③④（旧セーブは旧タイプの代表値。旧 personalityFactor は個人差の側へ＝<see cref="DevelopingSelfGrowthJitter"/>）。</summary>
+    public static (int Receptiveness, int Diligence, int Selflessness) DevelopingAxes(JsonObject o) => Axes(o);
 
     /// <summary>
-    /// 旧 PersonalityFactor → 勤勉さ（<see cref="PersonalityCoefficients.SelfGrowthFactor"/> の逆関数）。
-    /// 旧タイプが Normal（中立）なら 50 のまま（手組み・未設定の安全弁を保つ）。
+    /// 自校部員の自主成長の隠れた個人差（Q47）。v30 以降は保存値。v26 以前（<c>personalityFactor</c> を持つ）は
+    /// 旧倍率から代表値の勤勉さの効きを引いた残り＝<c>SelfGrowthFactor(代表値, 残り)</c> が旧倍率と一致する。
+    /// 旧タイプが Normal（手組み・未設定）なら 0（無補正の安全弁を保つ）。v27〜v29 は個人差を持たない＝0。
     /// </summary>
-    internal static int DiligenceFromFactor(double factor, Personality legacy, PersonalityCoefficients pc)
+    public static double DevelopingSelfGrowthJitter(JsonObject o)
     {
-        if (legacy == Personality.Normal) return Personalities.AxisNeutral;
-        var delta = factor - 1.0;
-        var d = delta >= 0 ? delta / pc.DiligenceSlopeHigh : delta / pc.DiligenceSlopeLow;
-        var v = (int)MathUtil.Clamp(Math.Round(Personalities.AxisNeutral + d * 50.0), 1, 99);
-        // 旧タイプのマスの側を保つ（またいだらマスの側の端で止める）。
-        return Personalities.CellHigh(legacy, PersonalityAxis.Diligence)
-            ? Math.Max(v, Personalities.AxisThreshold)
-            : Math.Min(v, Personalities.AxisThreshold - 1);
+        if (o.Has("growthJitter")) return o.Double("growthJitter");
+        if (o.Has("receptiveness") || !o.Has("personalityFactor")) return 0.0;
+        var legacy = Legacy(o);
+        if (legacy == Personality.Normal) return 0.0;
+        return JitterFromLegacyFactor(o.Double("personalityFactor"), Defaults.Profile(legacy).Diligence, Defaults);
     }
+
+    /// <summary>旧 PersonalityFactor − 勤勉さ <paramref name="diligence"/> の効き（上下限で切る前の値）。</summary>
+    internal static double JitterFromLegacyFactor(double factor, int diligence, PersonalityCoefficients pc)
+        => factor - pc.SelfGrowthFactor(diligence);
 
     private static Personality Legacy(JsonObject o)
         => o.Has("personality") ? EnumJson.Read<Personality>(o.Str("personality")) : Personality.Normal;

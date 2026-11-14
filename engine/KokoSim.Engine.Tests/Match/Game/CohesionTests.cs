@@ -31,24 +31,38 @@ public sealed class CohesionTests
     [Fact]
     public void BaseValue_FollowsDesignTerms()
     {
-        var neutral = Enumerable.Range(0, 20).Select(_ => M()).ToList();
-        // 主将の統率力（統率80×精神力50/100＝40）× b1
-        var captain = M(leadership: 80);
-        var withCaptain = new List<Player>(neutral.Skip(1)) { captain };
-        Assert.Equal(50.0 + C.CaptainPowerWeight * 40 + C.LeaderWeight, Cohesion.BaseValue(withCaptain, captain, C), 12);
+        // 土台: 献身・控えめな20人（引っ張る0・目立ちたがり0・一匹狼0）＝各割合の基準からの差がそのまま出る。
+        List<Player> Base() => Enumerable.Range(0, 20).Select(_ => M(30, Personality.Hardworker)).ToList();
+        var u = 50.0 - C.LeaderShareWeight * C.LeaderShareNeutral + C.SelfishShareWeight * C.SelfishShareNeutral
+                + C.LoneWolfShareWeight * C.LoneWolfShareNeutral;
+        Assert.Equal(u, Cohesion.BaseValue(Base(), null, C), 9);
 
-        // 引っ張る選手（統率65以上）は3人まで
-        var leaders = neutral.Take(15).Concat(Enumerable.Range(0, 5).Select(_ => M(leadership: 70))).ToList();
-        Assert.Equal(50.0 + 3 * C.LeaderWeight, Cohesion.BaseValue(leaders, null, C), 12);
+        // 引っ張る選手（統率65以上）1人＝割合 1/20 ぶん上乗せ（人数の上限は無い）
+        var leaders = Base();
+        leaders[0] = M(70, Personality.Hardworker);
+        leaders[1] = M(70, Personality.Hardworker);
+        Assert.Equal(u + 2 * C.LeaderShareWeight / 20, Cohesion.BaseValue(leaders, null, C), 9);
 
-        // 目立ちたがりの割合が半分を超えた分だけ減点（15/20＝0.75 → 0.25×b3）
-        var selfish = Enumerable.Range(0, 15).Select(_ => M(type: Personality.Genius))
-            .Concat(Enumerable.Range(0, 5).Select(_ => M(type: Personality.Hardworker))).ToList();
-        Assert.Equal(50.0 - C.SelfishShareWeight * 0.25, Cohesion.BaseValue(selfish, null, C), 9);
+        // 目立ちたがり（④<50）1人＝割合 1/20 ぶん減点
+        var selfish = Base();
+        selfish[0] = M(30, Personality.Genius);
+        Assert.Equal(u - C.SelfishShareWeight / 20, Cohesion.BaseValue(selfish, null, C), 9);
 
-        // 一匹狼（①↓②↓④目立ち）の人数ぶん減点
-        var wolves = neutral.Take(18).Concat(new[] { M(30, Personality.LoneWolf), M(30, Personality.LoneWolf) }).ToList();
-        Assert.Equal(50.0 - 2 * C.LoneWolfWeight, Cohesion.BaseValue(wolves, null, C), 12);
+        // 一匹狼は目立ちたがりでもある＝両方の減点
+        var wolves = Base();
+        wolves[0] = M(30, Personality.LoneWolf);
+        Assert.Equal(u - (C.SelfishShareWeight + C.LoneWolfShareWeight) / 20, Cohesion.BaseValue(wolves, null, C), 9);
+
+        // 主将の統率力（統率80×精神力50/100＝40）の基準からの差 × b1
+        var withCaptain = Base();
+        var captain = M(80, Personality.HonorStudent);
+        withCaptain[0] = captain;
+        Assert.Equal(u + C.LeaderShareWeight / 20 + C.CaptainPowerWeight * (40 - C.CaptainPowerNeutral),
+            Cohesion.BaseValue(withCaptain, captain, C), 9);
+
+        // 性格を持たない手組みの選手は顔ぶれに数えない（主将でも）＝全員手組みなら主将がいても50（Q57）
+        var handMade = Enumerable.Range(0, 20).Select(_ => M(80)).ToList();
+        Assert.Equal(50.0, Cohesion.BaseValue(handMade, handMade[0], C), 12);
     }
 
     // ===== 効き先（U=50 で恒等） =====

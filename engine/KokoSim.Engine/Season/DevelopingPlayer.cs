@@ -124,6 +124,12 @@ public sealed class DevelopingPlayer
     public int Selflessness { get; init; } = 50;
 
     /// <summary>
+    /// 自主成長の隠れた個人差（隠しパラメータ・画面に出さない。OPEN-QUESTIONS Q47）。勤勉さの効きに足す平均0の値で、
+    /// 同じ性格タイプの中の自主成長のばらつきを旧 PersonalityFactor 相当（σ≈0.06）に保つ。既定0＝勤勉さの効きだけ。
+    /// </summary>
+    public double SelfGrowthJitter { get; init; }
+
+    /// <summary>
     /// 性格タイプ（設計書23 §1.3）。4軸（①は <see cref="Leadership"/>）から導出するラベルで、別には保存しない。
     /// ②③④がすべて50（既定）なら Normal＝無補正。
     /// </summary>
@@ -268,6 +274,7 @@ public sealed class DevelopingPlayer
             Receptiveness = Receptiveness,
             Diligence = Diligence,
             Selflessness = Selflessness,
+            SelfGrowthJitter = SelfGrowthJitter,
             PersonalityReading = PersonalityReading,
             IsCaptain = IsCaptain,
             IsRetired = IsRetired,

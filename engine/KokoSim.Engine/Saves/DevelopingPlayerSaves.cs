@@ -68,6 +68,7 @@ internal static class DevelopingPlayerSaves
             .Add("receptiveness", p.Receptiveness)
             .Add("diligence", p.Diligence)
             .Add("selflessness", p.Selflessness)
+            .Add("growthJitter", p.SelfGrowthJitter)
             .Add("persKnown", p.PersonalityReading.KnownMask)
             .Add("persHigh", p.PersonalityReading.HighMask)
             .Add("isCaptain", p.IsCaptain)
@@ -111,10 +112,13 @@ internal static class DevelopingPlayerSaves
             DefenseGrowthType = o.Has("defenseGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("defenseGrowthType")) : null,
             IsProdigy = o.Bool("isProdigy"),
             Leadership = o.Int("leadership"),
-            // 性格の4軸（設計書23 §1.5・v27）。旧セーブは8タイプ＋PersonalityFactor＝代表値と勤勉さの逆算へ。
+            // 性格の4軸（設計書23 §1.5・v27）。旧セーブは8タイプ＋PersonalityFactor＝代表値＋隠れた個人差へ（Q47）。
             Receptiveness = PersonalitySaveMigration.DevelopingAxes(o).Receptiveness,
             Diligence = PersonalitySaveMigration.DevelopingAxes(o).Diligence,
             Selflessness = PersonalitySaveMigration.DevelopingAxes(o).Selflessness,
+            // 自主成長の隠れた個人差（v30・Q47）。v26 以前は旧 personalityFactor の残り（代表値の勤勉さで説明できない分）、
+            // v27〜v29 は持っていない＝0。
+            SelfGrowthJitter = PersonalitySaveMigration.DevelopingSelfGrowthJitter(o),
             PersonalityReading = o.Has("persKnown")
                 ? new PersonalityReading(o.Int("persKnown"), o.Int("persHigh")) : default,
             InjuryResistance = o.Double("injuryRes"),
