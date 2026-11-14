@@ -129,6 +129,7 @@
                     <ui:VisualElement class="md-group">
                         <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
                         <ui:Button name="duel-view" class="chip-btn" text="2D俯瞰（デバッグ）" />
+                        <ui:Button name="announce" class="chip-btn" text="場内放送" />
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
                 </ui:VisualElement>

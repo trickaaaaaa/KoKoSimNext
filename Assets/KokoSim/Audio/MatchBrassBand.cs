@@ -64,6 +64,14 @@ namespace KokoSim.Unity.Audio
             if (_host != null) _host.SetTheme(null);
         }
 
+        /// <summary>
+        /// 場内放送の間は応援を絞る（issue #919）。真で絞り、偽で戻す。曲は止めない（音量だけ）。
+        /// </summary>
+        public static void SetDucked(bool ducked)
+        {
+            if (_host != null) _host.SetDucked(ducked);
+        }
+
         /// <summary>試合が終わった。<paramref name="immediate"/> なら即座に、そうでなければ絞って止める。</summary>
         public static void End(bool immediate)
         {
@@ -117,16 +125,20 @@ namespace KokoSim.Unity.Audio
     /// </summary>
     internal sealed class BrassBandHost : MonoBehaviour
     {
-        private const float ThemeVolume = 0.45f;     // 打球音・審判の声が埋もれない大きさ
+        private const float ThemeVolume = 0.45f;     // 打球音・場内放送が埋もれない大きさ
         private const float FanfareVolume = 0.55f;
         private const float SwitchFadeSeconds = 0.6f;
         private const float FanfareSeconds = 10f;    // 得点の曲は頭のこの秒数だけ流す
         private const float FanfareFadeSeconds = 1.5f;
+        private const float DuckLevel = 0.3f;        // 場内放送の間の音量（元の音量に対する割合。issue #919）
+        private const float DuckSeconds = 0.25f;     // 絞る・戻すのにかける時間
 
         private AudioSource _theme, _fanfare;
         private AudioClip _wanted;        // いま流したい攻撃の曲（null＝止める）
         private float _fanfareClock = -1f; // 得点の曲の経過秒（<0＝鳴らしていない）
         private bool _fadingAll;
+        private bool _ducked;
+        private float _duck = 1f;          // いまの絞り（1＝元の音量）
 
         private void Awake()
         {
@@ -155,13 +167,15 @@ namespace KokoSim.Unity.Audio
             _fadingAll = false;
             _fanfare.Stop();
             _fanfare.clip = clip;
-            _fanfare.volume = FanfareVolume;
+            _fanfare.volume = FanfareVolume * _duck;
             _fanfare.Play();
             _fanfareClock = 0f;
             // 攻撃の曲は止めて、得点の曲が終わったら頭から流し直す
             _theme.Stop();
             _theme.clip = null;
         }
+
+        public void SetDucked(bool ducked) => _ducked = ducked;
 
         public void FadeAll()
         {
@@ -182,6 +196,10 @@ namespace KokoSim.Unity.Audio
         {
             float dt = Time.unscaledDeltaTime;
             float step = dt / SwitchFadeSeconds;
+            float prevDuck = _duck;
+            _duck = Mathf.MoveTowards(_duck, _ducked ? DuckLevel : 1f, dt / DuckSeconds * (1f - DuckLevel));
+            if (_fanfareClock >= 0f && !_fadingAll && prevDuck > 0f)
+                _fanfare.volume *= _duck / prevDuck;   // 得点の曲も同じ割合で絞る・戻す
 
             if (_fanfareClock >= 0f)
             {
@@ -189,7 +207,7 @@ namespace KokoSim.Unity.Audio
                 float fadeFrom = FanfareSeconds - FanfareFadeSeconds;
                 if (_fadingAll) _fanfare.volume = Mathf.MoveTowards(_fanfare.volume, 0f, step * FanfareVolume);
                 else if (_fanfareClock > fadeFrom)
-                    _fanfare.volume = FanfareVolume * Mathf.Clamp01((FanfareSeconds - _fanfareClock) / FanfareFadeSeconds);
+                    _fanfare.volume = FanfareVolume * _duck * Mathf.Clamp01((FanfareSeconds - _fanfareClock) / FanfareFadeSeconds);
                 if (_fanfareClock >= FanfareSeconds || !_fanfare.isPlaying || _fanfare.volume <= 0f)
                 {
                     _fanfare.Stop();
@@ -212,9 +230,13 @@ namespace KokoSim.Unity.Audio
                 _theme.volume = 0f;
                 if (_wanted != null) _theme.Play();
             }
-            else if (_theme.clip != null && _theme.volume < ThemeVolume)
+            else if (_theme.clip != null)
             {
-                _theme.volume = Mathf.MoveTowards(_theme.volume, ThemeVolume, step * ThemeVolume);
+                // 場内放送の間は絞った音量へ（issue #919）。絞り・戻しは _duck が時間をかけて動く
+                float target = ThemeVolume * _duck;
+                if (_theme.volume < target)
+                    _theme.volume = Mathf.MoveTowards(_theme.volume, target, step * ThemeVolume);
+                else _theme.volume = target;
             }
         }
     }

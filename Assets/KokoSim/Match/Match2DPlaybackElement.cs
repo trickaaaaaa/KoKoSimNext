@@ -155,7 +155,7 @@ namespace KokoSim.Unity.Match
         // 直前フレームで判定が出ていたか。出ていない→出た の**変わり目でだけ**跳ねの演出を仕込む
         // （UpdateJudgement は毎フレーム呼ばれるので、毎回仕込むと出っぱなしで一度も跳ねない）。
         private bool _judgementShown;
-        // 審判の声を出した判定（プレー＋表示時刻）。同じ判定で毎フレーム鳴らさないため
+        // 歓声を鳴らした判定（プレー＋表示時刻）。同じ判定で毎フレーム鳴らさないため
         private object _voicedPlay;
         private double _voicedAt;
 
@@ -368,20 +368,18 @@ namespace KokoSim.Unity.Match
                 _judgementHost.style.display = DisplayStyle.None;
                 _judgementHost.RemoveFromClassList("is-enter");
                 _judgementShown = false;
-                _voicedPlay = null;   // 巻き戻して再生し直したら、同じ判定でもまた声を出す
+                _voicedPlay = null;   // 巻き戻して再生し直したら、同じ判定でもまた鳴らす
                 return;
             }
 
             var kind = found.Value.Kind;
-            // 審判の声は「新しい判定が出た瞬間」に1回だけ（併殺は2つ目のアウトでも呼ぶ）。
-            // 表示の出入り（_judgementShown）では足りない＝併殺は判定が途切れずに次へ切り替わる
+            // ホームランの歓声は「新しい判定が出た瞬間」に1回だけ（審判の声は issue #919 でやめた）。
+            // 表示の出入り（_judgementShown）では足りない＝判定が途切れずに次へ切り替わることがある
             if (!ReferenceEquals(_voicedPlay, _play) || _voicedAt != found.Value.T1)
             {
                 _voicedPlay = _play;
                 _voicedAt = found.Value.T1;
-                if (kind == JudgementKind.Out || kind == JudgementKind.Safe)
-                    KokoSim.Unity.Audio.MatchSfx.PlayUmpireCall(kind == JudgementKind.Out);
-                else if (kind == JudgementKind.HomeRun)
+                if (kind == JudgementKind.HomeRun)
                     KokoSim.Unity.Audio.MatchSfx.PlayCheer();   // 得点テロップでもう一度鳴って重なる（意図どおり）
             }
             // 併殺の2つ目のアウト（常に打者）は「ダブルプレー」（issue

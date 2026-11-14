@@ -592,6 +592,7 @@ public static class GameEngine
                 PitcherThrows = pit.Throws,
                 PitcherNumber = pit.UniformNumber,
                 PitcherConditionValue = pit.ConditionValue,
+                BatterIsPinchHitter = offense.IsFreshPinchHitter(b),
             };
 
             // 打席の頭の采配窓（まだ1球も投げていない窓）。**投手・打者を束縛する前**に開く（2026-08-15）。

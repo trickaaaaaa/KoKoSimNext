@@ -1213,6 +1213,12 @@ public sealed class TeamState
     /// <summary>途中出場の入り方（代打・代走・守備交代）。スタメン・継投・ベンチからの補充は null。</summary>
     internal BoxEntry? EntryKindOf(Player p) => _entry.TryGetValue(KeyOf(p), out var e) ? e.Kind : null;
 
+    /// <summary>
+    /// 代打で入ってまだ打席を終えていない選手か（場内放送の「バッター、◯◯くん」・issue #919）。
+    /// 代打で入った後に守備に就いて次の打席が回ってきた選手は、普通の打者として紹介する。観測専用。
+    /// </summary>
+    public bool IsFreshPinchHitter(Player p) => EntryKindOf(p) == BoxEntry.PinchHit && PriorPlateAppearances(p) == 0;
+
     /// <summary>テスト用: 打順スロット指定で代打の入り方を作る（<see cref="PinchHitNext"/> は次打者固定のため）。</summary>
     internal bool SubstituteForTest(int slot, Player sub) => SubstituteAtSlot(slot, sub, BoxEntry.PinchHit);
 

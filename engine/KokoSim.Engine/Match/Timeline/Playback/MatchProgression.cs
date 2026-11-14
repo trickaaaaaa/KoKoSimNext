@@ -262,6 +262,7 @@ public sealed class MatchProgression
             BatterName = batter.Name, BatterSourceId = batter.SourceId, BatterBats = batter.Bats,
             BatterPosition = batter.Position, BatterNumber = batter.UniformNumber,
             BatterConditionValue = batter.ConditionValue,
+            BatterIsPinchHitter = offense.IsFreshPinchHitter(batter),
             PitcherName = pitcher.Name, PitcherSourceId = pitcher.SourceId, PitcherThrows = pitcher.Throws,
             PitcherNumber = pitcher.UniformNumber, PitcherConditionValue = pitcher.ConditionValue,
         };

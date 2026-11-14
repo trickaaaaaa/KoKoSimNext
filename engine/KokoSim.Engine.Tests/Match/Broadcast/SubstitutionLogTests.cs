@@ -78,6 +78,7 @@ public sealed class SubstitutionLogTests
         var prog = new MatchProgression(Team("A"), Team("H"), Ctx(), 7UL);
         var head = ToTopHead(prog);
         Assert.Empty(prog.Substitutions);
+        Assert.False(head.BatterIsPinchHitter);
 
         var sub = prog.SubstitutionOptions(teamIsAway: true).Reserves.First(x => x.Name == "A控1");
         Assert.True(prog.PinchHit(teamIsAway: true, sub));
@@ -92,6 +93,8 @@ public sealed class SubstitutionLogTests
         Assert.Equal("A控1", entry.In.Name);
         Assert.Equal(13, entry.In.Number);
         Assert.Equal(head.BatterName, entry.Out!.Name);
+        // 代打の打者は「バッター、◯◯くん」で紹介する（打席を終えるまで）
+        Assert.True(prog.CurrentAtBat!.BatterIsPinchHitter);
     }
 
     [Fact]

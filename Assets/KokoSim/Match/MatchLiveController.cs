@@ -224,6 +224,10 @@ namespace KokoSim.Unity.Match
         private VisualElement _miniDiaHost;
         private MiniDiamondElement _miniDia;
         private const int MaxDuelFieldLabels = 6;
+        // 場内放送（issue #919）の切り替え（表示グループの chip-btn）と、同じ打席で二度言わないための鍵。
+        private Button _announceBtn;
+        private System.Action _unbindAnnounce;
+        private string _announcedKey;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
         // 選手能力ビューア（issue #602）。タイムから開く両校の名簿＝**読むだけ**でエンジンに触れない。
@@ -590,6 +594,8 @@ namespace KokoSim.Unity.Match
             _duelImg = null;
             _duelBtn = _root.Q<Button>("duel-view");
             if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
+            _announceBtn = _root.Q<Button>("announce");
+            _unbindAnnounce = KokoSim.Unity.Audio.MatchAnnouncer.BindToggle(_announceBtn);
             // ⚠ 対決ステージの生成（InitDuelViewDefault）はここではなく BuildGame の**後ろ**。
             //    生成時に配色をマテリアルへ焼くので、両校の配色が入る前に立てると前試合の色で焼ける。
 
@@ -710,6 +716,9 @@ namespace KokoSim.Unity.Match
             if (_backHome != null) _backHome.clicked -= OnBackHome;
             if (_camWork != null) _camWork.clicked -= OnToggleCameraWork;
             if (_duelBtn != null) _duelBtn.clicked -= OnToggleDuelView;
+            _unbindAnnounce?.Invoke();
+            _unbindAnnounce = null;
+            KokoSim.Unity.Audio.MatchAnnouncer.Stop();
             _duelRig?.Dispose();
             _duelRig = null;
             _duelImg = null;
@@ -778,6 +787,7 @@ namespace KokoSim.Unity.Match
             _subTelopOn = false;
             _subTelopFreezeRig = false;
             _subTelopPumpAfter = false;
+            _announcedKey = null;
             _pitchBattingChoice = null;
             _signChoice = null;
             _stealChoice = null;
@@ -1534,6 +1544,9 @@ namespace KokoSim.Unity.Match
             // 利き腕がこの打席のあいだ古いまま＝「交代したのに前の投手が投げている」に見える（2026-08-15）。
             if (_stage == LiveStage.Window && _atBat != null && _prog?.CurrentAtBat is { } at)
             {
+                // 打席の頭で代打を送った＝前の打者の放送は止めて、新しい打者で言い直す（issue #919）。
+                if (_announcedKey != null && AnnouncementKeyOf(at) != _announcedKey)
+                    KokoSim.Unity.Audio.MatchAnnouncer.Stop();
                 _atBat = at;
                 ApplyWindowSituation();     // HUD・スタメン列・カードの可否
                 ApplyDuelHandedness();      // 継投後の利き腕・代打の左右で立たせ替える（issue #337 と同じ入口）
@@ -1576,6 +1589,7 @@ namespace KokoSim.Unity.Match
             if (_duelRig != null && _duelRig.Available) _duelRig.FreezeForGameEnd();
             _view.HideJudgement();
             KokoSim.Unity.Audio.MatchBrassBand.End(immediate: false);
+            KokoSim.Unity.Audio.MatchAnnouncer.Stop();
             _gameOver = true;
             _stage = LiveStage.Over;
             _inPitchPhase = false;
@@ -2020,6 +2034,40 @@ namespace KokoSim.Unity.Match
             _pitchFirstPending = false;
             BeginPitchBall(index);
         }
+
+        // ── 場内放送（issue #919）──
+        // 打席の頭の采配窓で「4番、キャッチャー、田中くん。」（代打は「バッター、田中くん。」）。何を言うかは
+        // engine の PaAnnouncement が決め、ここは打順表のいまの位置を渡して鳴らすだけ。×4・高速試合モード・
+        // オフでは流さない。素材が無ければ黙って鳴らさない（その場合は待たない）。
+
+        /// <summary>
+        /// 打席の頭なら放送を始め（同じ打席では一度だけ）、放送中は真を返す＝1球目を待たせる。
+        /// </summary>
+        private bool HoldForAnnouncement()
+        {
+            var at = _atBat;
+            if (at == null || at.PitchNumberInPa > 1 || _prog == null || CaptureMode) return false;
+            if (!KokoSim.Unity.Audio.MatchAnnouncer.Enabled || _fastMode || _speed >= 4f) return false;
+            var key = AnnouncementKeyOf(at);
+            if (key != _announcedKey)
+            {
+                _announcedKey = key;
+                // 守備位置は打順表のいまの位置（DHの枠は DH）。LiveAtBat.BatterPosition は DH の打者でも
+                // 本来の守備位置のままなので使わない。
+                var snap = _prog.Snapshot();
+                var lineup = at.IsTop ? snap.Away.Lineup : snap.Home.Lineup;
+                var order = at.BatterOrder;
+                var pos = order >= 1 && order <= lineup.Count ? lineup[order - 1].Position : at.BatterPosition;
+                KokoSim.Unity.Audio.MatchAnnouncer.Play(
+                    KokoSim.Engine.Match.Broadcast.PaAnnouncement.Clips(order, pos, at.BatterName, at.BatterIsPinchHitter));
+            }
+            return KokoSim.Unity.Audio.MatchAnnouncer.IsPlaying;
+        }
+
+        /// <summary>同じ打席で二度言わない鍵（回・表裏・打順・打席数＋打者）。</summary>
+        private string AnnouncementKeyOf(LiveAtBat at)
+            => KokoSim.Engine.Match.Broadcast.PaAnnouncement.Key(
+                at.Inning, at.IsTop, at.BatterOrder, _prog?.PlayLog.Count ?? 0, at.BatterSourceId, at.BatterName);
 
         // ── イニング間のスコア画面（試合画面改修）──
         // 攻守が入れ替わった瞬間に挟む。次の采配窓は EndInningBreak まで保留する。
@@ -2985,8 +3033,11 @@ namespace KokoSim.Unity.Match
                 // 入ってから寿命が切れると「畳めず次の判定表示まで残留する」（寿命を2.1sへ延ばした
                 // 2026-08-05 に顕在化する並び。従来は寿命0.6s＜窓1.0sで構造的に起きなかった）
                 if (_gameTelopOn) return;
+                // 打席の頭の場内放送（issue #919）。打者を見る間と並行して流し、終わるまで1球目を待たせる。
+                var announcing = HoldForAnnouncement();
                 _windowClock += Time.deltaTime * _speed;
                 if (_windowClock < _windowHold) return;
+                if (announcing) { _windowClock = _windowHold; return; }   // 待った分を次の球へ持ち越さない
                 _windowCarry = _windowClock - _windowHold;
                 ThrowFromWindow();
                 return;
@@ -3745,6 +3796,7 @@ namespace KokoSim.Unity.Match
             System.Action handler = () =>
             {
                 _speed = speed;
+                if (speed >= 4f) KokoSim.Unity.Audio.MatchAnnouncer.Stop();   // ×4では場内放送を流さない（issue #919）
                 SetFastMode(false);   // 数値速度を選び直す＝高速試合モードの解除操作を兼ねる（専用の「戻る」ボタンは作らない）
                 foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
             };
@@ -3791,6 +3843,7 @@ namespace KokoSim.Unity.Match
             if (on)
             {
                 KokoSim.Unity.Audio.MatchBrassBand.Rest();   // 高速試合モードは音を出さない
+                KokoSim.Unity.Audio.MatchAnnouncer.Stop();   // 場内放送も（issue #919）
                 // 振りかぶりで先に解決した球（issue #696）はエンジン側では投げ終わっている＝描かずに捨てる。
                 _preStep = null;
                 HideRunnerGo();
