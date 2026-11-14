@@ -247,6 +247,17 @@ public sealed record BattingCoefficients
     /// 多い母集団全体の平均打球角度が恒常的に下がり、本塁打率が校正前の帯から大きく外れる（issue #835 実測）。
     /// </summary>
     public double LaunchAngleBreakRefM { get; init; } = 0.20;
+    /// <summary>
+    /// 変化球の打球角度シフト[deg/m]（issue #911・<see cref="PitchDeception.LaunchAngleShiftDeg"/>）: 同じ投手のストレートからの
+    /// 本塁での縦の外れ（誘発縦変化の差＋球速差による重力落下の差）1mあたり。ストレートより沈む球はボールの上を叩いて
+    /// ゴロになる。ストレート自身には効かない。
+    /// </summary>
+    public double LaunchAnglePerRelativeDropM { get; init; } = 10.0;
+    /// <summary>
+    /// 変化球の判定量の重み（issue #911・<see cref="PitchDeception.BreakM"/>）: 判定量＝そのストレートの誘発変化の合成量＋
+    /// これ×ストレートからの外れ[m]。空振り・チェイス・打球質・タイミング・慣れの割引がすべてこの判定量を読む。
+    /// </summary>
+    public double RelativeBreakWeight { get; init; } = 0.16;
     /// <summary>方位角の残差（引っ張り/流しを引いた後のばらつき）の標準偏差[deg]。</summary>
     public double BearingSigma { get; init; } = 19.0;
     /// <summary>芯を外すと初速が落ちる度合い（品質1で満初速, 0で係数分だけ残る）。</summary>

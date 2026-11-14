@@ -474,12 +474,14 @@ public static class CoefficientsLoader
         public string Type { get; set; } = "fastball";
         public double TiltDeg { get; set; }
         public double RpmScale { get; set; } = 1.0;
+        public double SharpnessRpmFactor { get; set; } = 1.0;
 
         public PitchAxisCoefficients ToModel() => new()
         {
             Type = ParseType(Type),
             TiltDeg = TiltDeg,
             RpmScale = RpmScale,
+            SharpnessRpmFactor = SharpnessRpmFactor,
         };
 
         private static PitchType ParseType(string s) => s switch
@@ -553,6 +555,8 @@ public static class CoefficientsLoader
         public double LaunchAngleSigmaContactFloor { get; set; } = D.LaunchAngleSigmaContactFloor;
         public double LaunchAnglePerVerticalBreakM { get; set; } = D.LaunchAnglePerVerticalBreakM;
         public double LaunchAngleBreakRefM { get; set; } = D.LaunchAngleBreakRefM;
+        public double LaunchAnglePerRelativeDropM { get; set; } = D.LaunchAnglePerRelativeDropM;
+        public double RelativeBreakWeight { get; set; } = D.RelativeBreakWeight;
         public double BearingSigma { get; set; } = D.BearingSigma;
         // ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）
         public double TimingSigma { get; set; } = D.TimingSigma;
@@ -633,6 +637,8 @@ public static class CoefficientsLoader
             LaunchAngleSigmaContactFloor = LaunchAngleSigmaContactFloor,
             LaunchAnglePerVerticalBreakM = LaunchAnglePerVerticalBreakM,
             LaunchAngleBreakRefM = LaunchAngleBreakRefM,
+            LaunchAnglePerRelativeDropM = LaunchAnglePerRelativeDropM,
+            RelativeBreakWeight = RelativeBreakWeight,
             BearingSigma = BearingSigma,
             TimingSigma = TimingSigma,
             TimingRefKmh = TimingRefKmh,

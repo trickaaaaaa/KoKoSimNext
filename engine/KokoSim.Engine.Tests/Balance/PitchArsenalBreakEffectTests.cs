@@ -129,7 +129,7 @@ public sealed class PitchArsenalBreakEffectTests
         Assert.True(withBreaking.Ops < straight.Ops,
             $"変化球持ち投手の被OPS({withBreaking.Ops:0.000})がストレートのみ({straight.Ops:0.000})より低くなっていない（issue #835）");
 
-        // 完了条件②: 同一投手内でもフォークのほうがゴロ率が高い（誘発縦変化の符号が逆のため）。
+        // 完了条件②: 同一投手内でもフォークのほうがゴロ率が高い（誘発縦変化がストレートより小さい＝ホップしない分だけ打球角度が下がるため。issue #911）。
         Assert.True(withBreaking.BreakingBip > 200 && withBreaking.FastballBip > 200,
             "ゴロ率比較に十分な打球数が無い");
         Assert.True(withBreaking.BreakingGroundBallRate > withBreaking.FastballGroundBallRate,

@@ -455,11 +455,11 @@ public sealed class AtBatSession
         // CaptureTrace が偽なら1回も呼ばない＝既定パスはゼロコスト。
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
-                inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting,
+                inZone, distanceOutsideM, PitchDeception.BreakM(_lastPitchFeatures!.Value, batting), batter, batting,
                 swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)
             : 0.0;
         if (!forcedSwing && (forcedTake
-            || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng,
+            || !BatterDecision.DecideSwing(inZone, distanceOutsideM, PitchDeception.BreakM(_lastPitchFeatures!.Value, batting), batter, batting, rng,
                 swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)))
         {
             if (inZone)
@@ -636,7 +636,37 @@ public sealed class AtBatSession
         var rpm = RpmForPlan(plan);
         var tiltDeg = _ctx.Pitching.AxisFor(plan.Type).TiltDeg;
         // 天候で密度が変わった試合は節点の表の補間（表の作り直しをしない）。
-        return TrajectoryFeatureTable.LookupFeatures(_ctx.Aerodynamics, _ctx.Mound, tiltDeg, plan.VelocityKmh, rpm);
+        var features = TrajectoryFeatureTable.LookupFeatures(_ctx.Aerodynamics, _ctx.Mound, tiltDeg, plan.VelocityKmh, rpm);
+        if (plan.Type == PitchType.Fastball) return features;
+
+        // 変化球は同じ投手のストレートからの外れで判定する（issue #911・Batting.PitchDeception）。比べるストレートは
+        // この1球と同じ球速サンプル（球種の球速比を掛ける前）・その投手の球威で投げた1球＝球速差は飛翔時間の差で入る。
+        // 表引きだけ（RNG非消費）。
+        var fastballKmh = plan.VelocityKmh / SpeedRatioOf(plan.Type);
+        var fastballAxis = _ctx.Pitching.AxisFor(PitchType.Fastball);
+        var fastballRpm = RpmFor(PitchType.Fastball, FastballRank());
+        var fb = TrajectoryFeatureTable.LookupFeatures(
+            _ctx.Aerodynamics, _ctx.Mound, fastballAxis.TiltDeg, fastballKmh, fastballRpm);
+        return features with
+        {
+            Fastball = new FastballReference(fb.InducedVerticalBreakM, fb.InducedHorizontalBreakM, fb.FlightTimeSeconds),
+        };
+    }
+
+    /// <summary>この投手の持ち球にある球種の球速比（無ければ球種の既定）。</summary>
+    private double SpeedRatioOf(PitchType type)
+    {
+        foreach (var slot in _pitcher.EffectiveRepertoire)
+            if (slot.Type == type) return slot.SpeedRatio;
+        return new Players.PitchSlot { Type = type, Power = 50, Sharpness = 50 }.SpeedRatio;
+    }
+
+    /// <summary>この投手のストレートの球威（持っていなければ50）。</summary>
+    private int FastballRank()
+    {
+        foreach (var slot in _pitcher.EffectiveRepertoire)
+            if (slot.Type == PitchType.Fastball) return slot.Power;
+        return 50;
     }
 
     /// <summary>
@@ -657,11 +687,19 @@ public sealed class AtBatSession
                 break;
             }
         }
-        var slope = Players.PitchSlot.IsSpinByPower(plan.Type)
+        return RpmFor(plan.Type, rank);
+    }
+
+    /// <summary>球種と有効軸の値 → 実効回転数（<see cref="RpmForPlan"/> の本体）。キレの向きは球種ごと
+    /// （<see cref="PitchAxisCoefficients.SharpnessRpmFactor"/>。フォークは −1＝良いフォークほど回転が少ない, issue #911）。</summary>
+    private double RpmFor(PitchType type, int rank)
+    {
+        var axis = _ctx.Pitching.AxisFor(type);
+        var slope = Players.PitchSlot.IsSpinByPower(type)
             ? _ctx.Pitching.SpinRpmPerPower
-            : _ctx.Pitching.SpinRpmPerSharpness;
+            : _ctx.Pitching.SpinRpmPerSharpness * axis.SharpnessRpmFactor;
         var raw = _ctx.Pitching.SpinRpmBase + (rank - 50) * slope;
-        return raw * _ctx.Pitching.AxisFor(plan.Type).RpmScale;
+        return raw * axis.RpmScale;
     }
 
     /// <summary>enum 結果で打席を確定させる（三振/四球）。従来ループの early return と同一。</summary>

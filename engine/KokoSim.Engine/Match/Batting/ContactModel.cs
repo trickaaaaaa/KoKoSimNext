@@ -34,7 +34,7 @@ public static class ContactModel
     {
         // 誘発変化量の欺瞞効果は実球速で割り引く（issue #837・設計書21 §3.5）。遅い球ほど見る時間が長く、
         // 大きなホップに欺かれにくい＝球威・タイミング・打球質の球速項（反応球速で寝かせ済み）と対称に扱う。
-        var effectiveBreak = features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff);
+        var effectiveBreak = PitchDeception.BreakM(features, coeff) * BreakDeceptionFactor(plan.VelocityKmh, coeff);
 
         // 投打差 d＝球威（腕の振り＋捕手リード）− ミート項。差の効きは soft-cap で飽和させる
         // （issue matchup-gap-saturation-k-rate）: 互角近傍は線形のまま、大差で頭打ち。
@@ -116,7 +116,7 @@ public static class ContactModel
         => coeff.ContactQualityPerKmh * (plan.ReactionKmh - coeff.ContactQualityVelocityRefKmh)
            + coeff.ContactQualityPerControl * (plan.ControlLevel - 50.0)
            + coeff.ContactQualityPerBreakM
-               * (features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.ContactQualityBreakRefM)
+               * (PitchDeception.BreakM(features, coeff) * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.ContactQualityBreakRefM)
            + coeff.ContactQualityPerEdge * ((plan.EdgeProximity ?? coeff.ContactQualityEdgeRef) - coeff.ContactQualityEdgeRef);
 
     /// <summary>
@@ -128,7 +128,7 @@ public static class ContactModel
         BatterAttributes batter, PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
         => coeff.TimingPerKmh * (plan.ReactionKmh - coeff.TimingRefKmh)
            + coeff.TimingPerBreakM
-               * (features.BreakMagnitudeM * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.TimingBreakRefM)
+               * (PitchDeception.BreakM(features, coeff) * BreakDeceptionFactor(plan.VelocityKmh, coeff) - coeff.TimingBreakRefM)
            - coeff.TimingPerContact * (batter.Contact - 50);
 
     /// <summary>
@@ -192,7 +192,7 @@ public static class ContactModel
             : 1.0;
         var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality)) * contactTighten;
         // 球種の縦変化で角度が動く（issue #835）: 縦に落ちる球（フォーク等）ほど角度が下がりゴロが増える。
-        var breakAngleShift = coeff.LaunchAnglePerVerticalBreakM * (features.InducedVerticalBreakM - coeff.LaunchAngleBreakRefM);
+        var breakAngleShift = PitchDeception.LaunchAngleShiftDeg(features, coeff);
         var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + breakAngleShift + rng.NextGaussian(0, angleSigma);
 
         // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。
