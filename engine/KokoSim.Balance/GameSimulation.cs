@@ -87,6 +87,8 @@ public static partial class GameSimulation
         public long TotalWildPitches { get; init; }
         public long TotalStealAttempts { get; init; }
         public long TotalStealSuccesses { get; init; }
+        public long TotalStealThirdAttempts { get; init; }
+        public long TotalStealThirdSuccesses { get; init; }
         public long TotalSacrificeBunts { get; init; }
         public long TotalSacrificeBuntSuccesses { get; init; }
         /// <summary>バント経路（犠打/セーフティ）での封殺（ForceOutAtSecond/Third/Home 合算,
@@ -181,6 +183,10 @@ public static partial class GameSimulation
         public double WildPitchesPerGame => Games > 0 ? (double)TotalWildPitches / Games : 0;
         public double StealAttemptsPerGame => Games > 0 ? (double)TotalStealAttempts / Games : 0;
         public double StealSuccessRate => TotalStealAttempts > 0 ? (double)TotalStealSuccesses / TotalStealAttempts : 0;
+        public double StealThirdSuccessRate => TotalStealThirdAttempts > 0 ? (double)TotalStealThirdSuccesses / TotalStealThirdAttempts : 0;
+        public long TotalStealSecondAttempts => TotalStealAttempts - TotalStealThirdAttempts;
+        public double StealSecondSuccessRate => TotalStealSecondAttempts > 0
+            ? (double)(TotalStealSuccesses - TotalStealThirdSuccesses) / TotalStealSecondAttempts : 0;
         public double SacrificeBuntsPerGame => Games > 0 ? (double)TotalSacrificeBunts / Games : 0;
         public double SacrificeBuntSuccessRate =>
             TotalSacrificeBunts > 0 ? (double)TotalSacrificeBuntSuccesses / TotalSacrificeBunts : 0;
@@ -266,7 +272,7 @@ public static partial class GameSimulation
         public long TotalFc, TotalDropThird, TotalErrorExtra, TotalPickoffs, TotalIntentionalWalks, TotalDoubleSteal;
         public long TotalErrorRunnerOuts, TotalCeR2, TotalCeR2Out, TotalCeR2Held;
         public long TotalWildPitches;
-        public long TotalStealAttempts, TotalStealSuccesses;
+        public long TotalStealAttempts, TotalStealSuccesses, TotalStealThirdAttempts, TotalStealThirdSuccesses;
         public long TotalSacrificeBunts, TotalSacrificeBuntSuccesses;
         public long TotalBuntForceOuts, TotalSqueezeBallInPlay, TotalSqueezeRunnerOutAtHome;
         public long TotalStrikeOuts, TotalWalks, TotalHitBatters, TotalHomeRuns, TotalPlateAppearances;
@@ -310,6 +316,8 @@ public static partial class GameSimulation
             TotalWildPitches += r.WildPitchCount;
             TotalStealAttempts += r.AwayTactics.StealAttempts + r.HomeTactics.StealAttempts;
             TotalStealSuccesses += r.AwayTactics.StealSuccesses + r.HomeTactics.StealSuccesses;
+            TotalStealThirdAttempts += r.AwayTactics.StealThirdAttempts + r.HomeTactics.StealThirdAttempts;
+            TotalStealThirdSuccesses += r.AwayTactics.StealThirdSuccesses + r.HomeTactics.StealThirdSuccesses;
             TotalSacrificeBunts += r.AwayTactics.SacrificeBunts + r.HomeTactics.SacrificeBunts;
             TotalSacrificeBuntSuccesses += r.AwayTactics.SacrificeBuntSuccesses + r.HomeTactics.SacrificeBuntSuccesses;
             TotalBuntForceOuts += r.AwayTactics.BuntForceOuts + r.HomeTactics.BuntForceOuts;
@@ -396,6 +404,8 @@ public static partial class GameSimulation
             TotalWildPitches += o.TotalWildPitches;
             TotalStealAttempts += o.TotalStealAttempts;
             TotalStealSuccesses += o.TotalStealSuccesses;
+            TotalStealThirdAttempts += o.TotalStealThirdAttempts;
+            TotalStealThirdSuccesses += o.TotalStealThirdSuccesses;
             TotalSacrificeBunts += o.TotalSacrificeBunts;
             TotalSacrificeBuntSuccesses += o.TotalSacrificeBuntSuccesses;
             TotalBuntForceOuts += o.TotalBuntForceOuts;
@@ -468,6 +478,8 @@ public static partial class GameSimulation
             TotalWildPitches = TotalWildPitches,
             TotalStealAttempts = TotalStealAttempts,
             TotalStealSuccesses = TotalStealSuccesses,
+            TotalStealThirdAttempts = TotalStealThirdAttempts,
+            TotalStealThirdSuccesses = TotalStealThirdSuccesses,
             TotalSacrificeBunts = TotalSacrificeBunts,
             TotalSacrificeBuntSuccesses = TotalSacrificeBuntSuccesses,
             TotalBuntForceOuts = TotalBuntForceOuts,
@@ -636,6 +648,8 @@ public static partial class GameSimulation
         sb.AppendLine(c, $"| 一・三塁重盗 | {s.DoubleStealThirdBreaksPerGame:F3} |");
         sb.AppendLine(c, $"| 暴投・パスボール | {s.WildPitchesPerGame:F3} |");
         sb.AppendLine(c, $"| 盗塁成功率（参考） | {s.StealSuccessRate:P1}（試行 {s.TotalStealAttempts}） |");
+        sb.AppendLine(c, $"| うち二盗 | {s.StealSecondSuccessRate:P1}（試行 {s.TotalStealSecondAttempts}） |");
+        sb.AppendLine(c, $"| うち三盗 | {s.StealThirdSuccessRate:P1}（試行 {s.TotalStealThirdAttempts}） |");
         sb.AppendLine(c, $"| 犠打成功率（参考） | {s.SacrificeBuntSuccessRate:P1}（試行 {s.TotalSacrificeBunts}） |");
         sb.AppendLine(c, $"| バント封殺率（参考） | {s.BuntForceOutRate:P1}（試行 {s.TotalSacrificeBunts}） |");
         sb.AppendLine(c, $"| スクイズ本塁封殺率（参考） | {s.SqueezeRunnerOutAtHomeRate:P1}（試行 {s.TotalSqueezeBallInPlay}） |");

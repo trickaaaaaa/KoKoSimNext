@@ -140,8 +140,21 @@ public sealed record BaserunningCoefficients
     public double StealSuccessBias { get; init; } = 0.0;
     /// <summary>本塁→三塁の送球距離[m]（design-14 P1-4、三盗）。</summary>
     public double CatchThrowToThirdDistanceM { get; init; } = 27.4;
-    /// <summary>三盗の成功率バイアス（design-14「三盗は成功率下方」）。StealSuccessBiasに加算。</summary>
-    public double StealThirdSuccessBias { get; init; } = -0.35;
+    /// <summary>
+    /// 三盗の二塁走者のリード[m]（issue #949）。走る距離は塁間27.43mからこれを引いた分。
+    ///
+    /// <para>二塁は牽制で付かれにくく、走者は一塁（<see cref="StealLeadDistanceM"/> 23.5m＝リード約3.9m）より
+    /// 大きく出られる。以前は二盗の距離を流用し、判定にだけ効く補正 −0.35秒（旧 <c>StealThirdSuccessBias</c>）で
+    /// 「三盗は二盗より下」を作っていたが、補正は絵に出ないので三盗の約17%で判定と絵を寄せ直していた。
+    /// 補正を外して<b>物理だけで決める</b>＝この距離と本塁→三塁の送球距離（<see cref="CatchThrowToThirdDistanceM"/>）の
+    /// 勝負。値は「同じ走力・同じ捕手で二盗より少し下」に校正した（2026-11-14 監督決定）。</para>
+    ///
+    /// <para>issue 起票時は「実物どおり3〜4m」としていたが、3〜4mでは三盗の成功率が二盗の4〜6割にしかならない
+    /// （本塁→三塁の送球が二塁より約0.36秒速い）。「二盗より少し下」に届くのが6.0mで、監督決定で6.0mに改訂した
+    /// （二塁走者は牽制で付かれにくく実物でも5〜6m出る。三塁走者のリード約6m＝<see cref="StealHomeDistanceM"/> とも揃う）。
+    /// 走力50/70/90・肩50の捕手で 二盗 50/71/85% に対し 三盗 42/62/78%。</para>
+    /// </summary>
+    public double StealThirdLeadM { get; init; } = 6.0;
     /// <summary>
     /// 三塁走者が本塁を突くときの残り走塁距離[m]（issue #637）。三塁→本塁 27.43m からリード（約6m）を引いた距離。
     /// 単独の本盗は採用しない（issue #788）ので、いまは<b>一・三塁の重盗で生還する三塁走者の絵</b>の到達時刻にだけ使う。

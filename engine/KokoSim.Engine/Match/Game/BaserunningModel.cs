@@ -311,12 +311,20 @@ public static class BaserunningModel
         Player? second = null;
         Player? first = null;
 
+        // 捕球ミスの失策（拾い直せず確定, issue #903/#950）では、走者は打った瞬間には走れない（ゴロを読む）。
+        // 2アウトだけは打った瞬間に走る＝遅れ0。三塁を狙う側（ResolveCatchErrorAdvanceToThird）と同じ値を使う。
+        // それ以外の打球（安打の返球との勝負）は従来どおり遅れ0＝恒等。
+        var catchErrorStartDelay = home is { UnrecoveredCatchError: true }
+            ? CatchErrorStartDelaySeconds(currentOuts, coeff) : 0.0;
+
         // 本塁突入の裁定。home=null は従来の確率テーブル（決定論・乱数消費順を保存）。
         // tableUnconditional=true は「テーブル時は無条件生還」（三塁走者・二塁打の二塁走者）。
         // CloseCall（判定オーバーレイ, Issue #59）は物理レース（home!=null）で決着した場合のみ算出する
         // 純計算（rng非消費）で、乱数消費順・結果には一切影響しない。
-        // Delay＝憤死のとき走者が引き受けた出遅れ[s]（issue #801。送球より先に着く絵にしない）。
-        (HomeVerdict Verdict, bool CloseCall, double Delay, Fielding.ThrowScatterModel.Scatter? Scatter) TryHome(Player runner, int fromBase, double tableProb, bool tableUnconditional)
+        // Delay＝走者が引き受けた出遅れ[s]（issue #801。送球より先に着く絵にしない）。捕球ミスの読みの遅れ
+        // （#950）は生還・憤死のどちらでも絵の走り出しに乗る。
+        // sendProbCap＝送り判断に使う見込みの上限（#950: 捕球ミスの二塁走者は三塁の見込みを超えない）。
+        (HomeVerdict Verdict, bool CloseCall, double Delay, Fielding.ThrowScatterModel.Scatter? Scatter) TryHome(Player runner, int fromBase, double tableProb, bool tableUnconditional, double sendProbCap = 1.0)
         {
             if (currentOuts + extraOuts >= 3) return (HomeVerdict.Held, false, 0.0, null); // 既に3アウト＝以降は進めない
             if (home is not { } h)
@@ -324,21 +332,23 @@ public static class BaserunningModel
                     ? HomeVerdict.Scored : HomeVerdict.Held, false, 0.0, null);
 
             // F2: 送り判定（勝てる時だけ送る）→ 時間の勝負（外野中継 vs 走者）。
-            var prob = HomePlayResolver.SuccessProbability(runner, fromBase, h.Situation, h.Field, coeff);
+            var startDelay = catchErrorStartDelay;
+            var prob = Math.Min(
+                HomePlayResolver.SuccessProbability(runner, fromBase, h.Situation, h.Field, coeff, startDelay), sendProbCap);
             if (!HomeSendDecision.ShouldSend(prob, currentOuts + extraOuts, h.Aggression, h.Tactics))
                 return (HomeVerdict.Held, false, 0.0, null); // 自重（RNG消費なし）
-            var margin = HomePlayResolver.Margin(runner, fromBase, h.Situation, h.Field, coeff);
+            var margin = HomePlayResolver.Margin(runner, fromBase, h.Situation, h.Field, coeff, startDelay);
             var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
             var (outcome, delay, scatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
-                runner, fromBase, h.Situation, h.Field, coeff, HomePlayResolver.HomeParams(coeff), rng);
-            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall, 0.0, scatter);
+                runner, fromBase, h.Situation, h.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, startDelay);
+            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall, startDelay, scatter);
             outThrowUsed = true;
             if (outcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
             {
                 homeWildThrowOccurred = true;
-                return (HomeVerdict.Scored, closeCall, 0.0, scatter);
+                return (HomeVerdict.Scored, closeCall, startDelay, scatter);
             }
-            return (HomeVerdict.OutAtHome, closeCall, delay, scatter);
+            return (HomeVerdict.OutAtHome, closeCall, startDelay + delay, scatter);
         }
 
         // 三塁走者（先行）: テーブル時は無条件生還。フォース時（満塁）は自重不可＝RNGを消費せず確定生還
@@ -355,7 +365,7 @@ public static class BaserunningModel
                 var (verdict3, closeCall3, delay3, scatter3) = TryHome(r3, 3, 0.0, tableUnconditional: true);
                 switch (verdict3)
                 {
-                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = closeCall3, ThrowScatter = scatter3 }); break;
+                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = closeCall3, ExtraStartDelaySeconds = delay3, ThrowScatter = scatter3 }); break;
                     case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = closeCall3, ExtraStartDelaySeconds = delay3, ThrowScatter = scatter3 }); break;
                     default: third = r3; break; // 自重＝三塁で止まる（移動なし）
                 }
@@ -367,10 +377,15 @@ public static class BaserunningModel
         // r3Forced により三塁は必ず空いている（上のブロックで確定済み）。
         if (r2 is not null)
         {
-            var (verdict2, closeCall2, delay2, scatter2) = TryHome(r2, 2, coeff.SecondToHomeOnSingle, tableUnconditional: isDouble);
+            // 捕球ミスの非フォースの二塁走者（#950）: 本塁へ回す見込みは、同じ打席で三塁に間に合う見込みを超えない
+            // （内野でこぼれた球は本塁にも近い。外野の返球で校正した本塁の係数をそのまま使うと、拾い直しが遅い
+            // 打席で本塁の方が三塁より安全に見えてしまう）。判定・絵の秒は変えず、送り判断の見込みだけに効く。
+            var homeCap2 = !r2Forced && home is { UnrecoveredCatchError: true } ceCap
+                ? CatchErrorThirdProbability(r2, ceCap, currentOuts, coeff) : 1.0;
+            var (verdict2, closeCall2, delay2, scatter2) = TryHome(r2, 2, coeff.SecondToHomeOnSingle, tableUnconditional: isDouble, homeCap2);
             switch (verdict2)
             {
-                case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r2, 2, 4, false) { CloseCall = closeCall2, ThrowScatter = scatter2 }); break;
+                case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r2, 2, 4, false) { CloseCall = closeCall2, ExtraStartDelaySeconds = delay2, ThrowScatter = scatter2 }); break;
                 case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r2, 2, 4, Out: true) { CloseCall = closeCall2, ExtraStartDelaySeconds = delay2, ThrowScatter = scatter2 }); break;
                 default:
                     if (!r2Forced && third is null && !outThrowUsed && currentOuts + extraOuts < 3
@@ -396,7 +411,7 @@ public static class BaserunningModel
                 var (verdict1, closeCall1, delay1, scatter1) = TryHome(r1, 1, coeff.FirstToHomeOnDouble, tableUnconditional: false);
                 switch (verdict1)
                 {
-                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r1, 1, 4, false) { CloseCall = closeCall1, ThrowScatter = scatter1 }); break;
+                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r1, 1, 4, false) { CloseCall = closeCall1, ExtraStartDelaySeconds = delay1, ThrowScatter = scatter1 }); break;
                     case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r1, 1, 4, Out: true) { CloseCall = closeCall1, ExtraStartDelaySeconds = delay1, ThrowScatter = scatter1 }); break;
                     default:
                         if (third is null) { third = r1; mv?.Add(new RunnerMove(r1, 1, 3, false)); }
@@ -494,10 +509,39 @@ public static class BaserunningModel
     }
 
     /// <summary>
+    /// 捕球ミスの失策（拾い直せず確定）で塁上の走者が走り出すまでの遅れ[s]（issue #950・design-14 P1-6）。
+    /// 打球が内野にある＝走者はゴロを読んでから走る（<see cref="BaserunningCoefficients.GrounderAdvanceStartDelaySeconds"/>）。
+    /// <b>2アウトでは打った瞬間に走る＝0</b>（打者がアウトになれば攻撃が終わるので、読む理由が無い）。
+    /// 三塁を狙う側も本塁を狙う側もこの1か所を引く。
+    /// </summary>
+    /// <param name="outsAtContact">打った時点のアウト数（この打席の前のアウト数）。</param>
+    public static double CatchErrorStartDelaySeconds(int outsAtContact, BaserunningCoefficients coeff)
+        => outsAtContact >= 2 ? 0.0 : coeff.GrounderAdvanceStartDelaySeconds;
+
+    /// <summary>
+    /// 捕球ミスの失策で、二塁走者が三塁に間に合う見込み（issue #903/#950）。三塁へ回す判断と、
+    /// 本塁へ回す見込みの上限（本塁の見込み≦三塁の見込み）の両方がこの値を使う。乱数は引かない。
+    /// </summary>
+    public static double CatchErrorThirdProbability(
+        Player r2, HomePlayContext h, int outsAtContact, BaserunningCoefficients coeff)
+        => HomePlayResolver.SuccessProbability(r2, 2, h.Situation, h.Field, coeff,
+            HomePlayResolver.AdvanceParams(h.Field, coeff), CatchErrorStartDelaySeconds(outsAtContact, coeff));
+
+    /// <summary>
+    /// 捕球ミスの失策で、二塁走者を本塁へ回す判断に使う見込み（issue #950）。本塁の見込み（読みの遅れ込み）を、
+    /// 同じ打席の三塁の見込み（<see cref="CatchErrorThirdProbability"/>）で頭打ちにした値。乱数は引かない。
+    /// </summary>
+    public static double CatchErrorHomeSendProbability(
+        Player r2, HomePlayContext h, int outsAtContact, BaserunningCoefficients coeff)
+        => Math.Min(
+            HomePlayResolver.SuccessProbability(r2, 2, h.Situation, h.Field, coeff, CatchErrorStartDelaySeconds(outsAtContact, coeff)),
+            CatchErrorThirdProbability(r2, h, outsAtContact, coeff));
+
+    /// <summary>
     /// 捕球ミスの失策（拾い直せず確定, issue #903・design-14 P1-6）で、非フォースの二塁走者が三塁を狙うかを
     /// 拾い直した野手との時間勝負で解く。<b>新しい走者の式は作らない</b>: 走者・守備の秒は
     /// <see cref="HomePlayResolver"/>（ゴロ進塁打と同じ <see cref="HomePlayResolver.AdvanceParams"/>＝送球先は三塁・
-    /// 走者はゴロを読む遅れ <see cref="BaserunningCoefficients.GrounderAdvanceStartDelaySeconds"/> を引き受ける）、
+    /// 走者はゴロを読む遅れ <see cref="CatchErrorStartDelaySeconds"/> を引き受ける＝2アウトは0, #950）、
     /// 守備の時計は <see cref="HomePlayContext.Situation"/>（GameEngine が拾い直しを終えた時刻
     /// <c>CatchErrorReadyAtSeconds</c> を起点に組んだもの）。送り判断は単打の一塁→三塁と同じ
     /// <see cref="HomeSendDecision.ShouldSendThird"/>（三塁へ回すかの判断。2アウト緩和あり）。
@@ -510,8 +554,8 @@ public static class BaserunningModel
         ref Player? third, ref Player? second)
     {
         var advance = HomePlayResolver.AdvanceParams(h.Field, coeff);
-        var delay = coeff.GrounderAdvanceStartDelaySeconds;
-        var prob = HomePlayResolver.SuccessProbability(r2, 2, h.Situation, h.Field, coeff, advance, delay);
+        var delay = CatchErrorStartDelaySeconds(currentOuts, coeff);
+        var prob = CatchErrorThirdProbability(r2, h, currentOuts, coeff);
         if (!HomeSendDecision.ShouldSendThird(prob, currentOuts + extraOuts, h.Aggression, h.Tactics))
         {
             second = r2; // 自重＝二塁に留まる（移動なし・RNG非消費）

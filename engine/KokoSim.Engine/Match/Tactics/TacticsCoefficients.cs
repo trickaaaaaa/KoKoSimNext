@@ -63,17 +63,19 @@ public sealed record TacticsCoefficients
     // ===== 三盗（issue #67, design-14 未決A）: 二塁のみ在塁でのみ判定。 =====
     // 一・三塁の重盗（DoubleStealThirdBreakProb）とは塁状況が排他（重盗は一塁+三塁）のため優先順位の
     // 競合はない。単独の本盗は採用しない（issue #788・2026-11-08 監督決定）。
-    /// <summary>三盗: 二盗より選別的な成功見込み閾値。
+    /// <summary>三盗: 読まれる確率込みの成功見込みがこの値以上で仕掛ける。
     ///
-    /// <para>issue steal-thresholds-unreachable（2026-08-27）: 旧コメントは「俊足×弱肩でも≈0.4〜0.65」と
-    /// 仮定していたが、実ロスター11200件の実測では <b>p99=6.4%・観測max=7.9%</b> しか無く、旧値 0.30 は
-    /// 二盗以上に到達不能だった（StealThirdSuccessBias の下方補正＋捕手からの短い送球でも、走者側の
-    /// 塁間走破そのものが重い）。現行値 0.045 は概ね p85 相当（実測 p75=3.9%・p90=4.9%）＝「解決式が返す
-    /// 実現可能レンジの中で上位のみ」という元の相対的な選別線の意図を保ったまま、いまの物理層で実際に
-    /// 到達できる値に引き直したもの。天井自体が低いレアプレーである点は変えていない（それ自体を動かすなら
-    /// StealThirdSuccessBias か走者側の距離モデルを触る、別の判断が要る＝design-02 §4.2 の
-    /// 「リーグ平均成功率を動かしたいときは jump/pop time を動かす」と同種のバランス判断）。</para></summary>
-    public double StealThirdMinSuccess { get; init; } = 0.045;
+    /// <para>issue #949（2026-11-14）: 三盗を物理だけで決める形（二塁走者のリード
+    /// <see cref="KokoSim.Engine.Match.Game.BaserunningCoefficients.StealThirdLeadM"/> 6.0m・判定だけに効く補正 −0.35 を撤去）にし、
+    /// 成功見込みが「二盗の少し下」まで上がったので 0.045→0.45 に引き直した。旧値のままだと三盗の企図が
+    /// mainの約10倍（10000試合 --tactics seed42: 379→3707・成功率47.8%）に膨らんだ。監督決定「mainの2〜3倍まで」
+    /// に合わせ、0.45＝870回（2.3倍・成功率58.5%）を採った。閾値に敏感（0.40=1574回／0.50=437回／0.60=34回／0.70=0回）。
+    /// 二盗（<see cref="StealMinSuccess"/> 0.65）より低いのは、読まれる確率込みの見込みが三盗では
+    /// 0.6を超える場面が稀（快足×弱肩に限られる）なため＝0.65 にすると三盗が実質消える。</para>
+    ///
+    /// <para>旧経緯（issue steal-thresholds-unreachable 2026-08-27）: 補正 −0.35 があった頃は到達可能上限が
+    /// p99=6.4% しか無く、0.30→0.045 に下げていた。</para></summary>
+    public double StealThirdMinSuccess { get; init; } = 0.45;
     public double StealThirdProb { get; init; } = 0.25;
     /// <summary>三盗を考えるアウトカウント上限（0=無死のみ）と、大差では狙わない点差上限。</summary>
     public int StealThirdMaxOuts { get; init; } = 0;

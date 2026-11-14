@@ -422,12 +422,11 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
                 StealProb = Clamp01(b.StealProb * ai.SmallBallStealFactor),
                 StealMinSuccess = MathUtil.Clamp(b.StealMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.4, 0.99),
                 // issue #67: 機動力校は三盗も同じ重みで多用する（狙う塁ごとに専用係数は設けない）。
-                // 三盗は解決式の実現可能レンジ自体が二盗よりずっと低い（StealThirdMinSuccess のコメント参照）ため、下限クランプは二盗と同じ0.4を流用しない
-                // （0.4だと素の既定値より緩和後の値が高くなり、校風で"渋くなる"逆転が起きる）。
-                // issue steal-thresholds-unreachable（2026-08-27）で素の既定値を0.30→0.045へ下げたのに合わせ、
-                // 下限も0.05→0.01へ下げる（0.05のままだと 0.045-0.08 の緩和後がまた既定値を上回って同じ逆転が起きる）。
+                // 下限クランプ: issue #949 で素の既定値を 0.045→0.45 に引き直したのに合わせ 0.01→0.30。
+                // 素の既定値より緩和後が高くなる逆転は起きず（0.45−0.08＝0.37≧0.30）、緩め幅を大きくしても
+                // 「3回に1回も生きない三盗」は選ばない（二盗の下限0.4と同じ役割。三盗は見込みの天井が低いぶん一段下）。
                 StealThirdProb = Clamp01(b.StealThirdProb * ai.SmallBallStealFactor),
-                StealThirdMinSuccess = MathUtil.Clamp(b.StealThirdMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.01, 0.99),
+                StealThirdMinSuccess = MathUtil.Clamp(b.StealThirdMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.30, 0.99),
                 GambleStartProb = Clamp01(b.GambleStartProb * ai.SmallBallGambleStartFactor),
                 SacBuntProb = Clamp01(b.SacBuntProb * ai.SmallBallBuntFactor),
                 SacBuntFromInning = System.Math.Max(1, b.SacBuntFromInning - ai.SmallBallBuntInningEarlier),

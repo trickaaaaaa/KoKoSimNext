@@ -173,6 +173,9 @@ public sealed class TeamState
     // ===== 采配の集計（設計書09。記録のみ＝試合結果には影響しない。無指示なら常に0） =====
     public int StealAttempts { get; private set; }
     public int StealSuccesses { get; private set; }
+    /// <summary>うち三盗の企図・成功（issue #949 の実測用。<see cref="StealAttempts"/> の内数）。</summary>
+    public int StealThirdAttempts { get; private set; }
+    public int StealThirdSuccesses { get; private set; }
     public int SacrificeBunts { get; private set; }
     public int SacrificeBuntSuccesses { get; private set; }
     public int Squeezes { get; private set; }
@@ -182,10 +185,11 @@ public sealed class TeamState
     public int SqueezeRunnerOutAtHome { get; private set; }
 
     /// <summary>盗塁企図を走者個人＋チーム計へ記録する（issue #91）。</summary>
-    public void RecordSteal(Player runner, bool success)
+    public void RecordSteal(Player runner, bool success, bool third = false)
     {
         StealAttempts++;
         if (success) StealSuccesses++;
+        if (third) { StealThirdAttempts++; if (success) StealThirdSuccesses++; }
         var key = KeyOf(runner);
         if (!_bat.TryGetValue(key, out var a)) { a = new BatAccum(); _bat[key] = a; }
         if (success) a.SB++; else a.CS++;
@@ -197,10 +201,11 @@ public sealed class TeamState
     /// だったと判るのは記録の後になる。乱数消費順を動かさないために<b>解決はそのまま走らせて記録だけ戻す</b>
     /// （<see cref="RecordSteal"/> と対称。ここで乱数も試合状態も動かさない）。</para>
     /// </summary>
-    public void UndoSteal(Player runner, bool success)
+    public void UndoSteal(Player runner, bool success, bool third = false)
     {
         StealAttempts--;
         if (success) StealSuccesses--;
+        if (third) { StealThirdAttempts--; if (success) StealThirdSuccesses--; }
         if (!_bat.TryGetValue(KeyOf(runner), out var a)) return;
         if (success) a.SB--; else a.CS--;
     }

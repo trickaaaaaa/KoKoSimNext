@@ -121,7 +121,9 @@ public sealed record TacticsTally(
     // 封殺率の実測用（issue bunt-no-take-on-ball-pitches）: BuntForceOuts はバント経路
     // （ForceOutAtSecond/Third/Home）の合算、SqueezeBallInPlay/SqueezeRunnerOutAtHome はスクイズで
     // ボールが実際にプレーされた回数とそのうち三塁走者が本塁で刺された回数。
-    int BuntForceOuts = 0, int SqueezeBallInPlay = 0, int SqueezeRunnerOutAtHome = 0);
+    int BuntForceOuts = 0, int SqueezeBallInPlay = 0, int SqueezeRunnerOutAtHome = 0,
+    // 三盗の内数（issue #949 の実測用）。
+    int StealThirdAttempts = 0, int StealThirdSuccesses = 0);
 
 /// <summary>
 /// 試合エンジン（設計書01 §3）。イニング進行・走塁・得点・継投・疲労・采配（設計書09）を統括する。
@@ -423,7 +425,8 @@ public static class GameEngine
 
     private static TacticsTally TallyOf(TeamState t)
         => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes,
-            t.BuntForceOuts, t.SqueezeBallInPlay, t.SqueezeRunnerOutAtHome);
+            t.BuntForceOuts, t.SqueezeBallInPlay, t.SqueezeRunnerOutAtHome,
+            t.StealThirdAttempts, t.StealThirdSuccesses);
 
     /// <summary>
     /// 打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。
@@ -1106,6 +1109,7 @@ public static class GameEngine
                 // 盗塁は打球・ファウルで巻き戻しても「走った」事実は残る＝巻き戻しでは消さない。
                 var runnersStartedMask = 0;
                 var stealRecSuccess = false;
+                var stealRecThird = false;          // 取り消し対象が三盗か（集計の内数を対で戻すため）
                 Player? stealRecScorer = null;      // 重盗で得点した走者（帰属の取り消し対象）
                 // 走者の憤死で3アウト目になった球（issue #779）。盗塁死・エンドランの憤死は投球と同時に
                 // 起きる＝その球は実際に投げる。半回はこの球の観測（LivePitch）を出してから終える。
@@ -1268,8 +1272,8 @@ public static class GameEngine
                             bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart, StealTarget.Third,
                             receiver: thirdBaseReceiver, pitcherQuickOffsetSeconds: thirdQuickOffset);
                         var safe = steal.Safe;
-                        offense.RecordSteal(bases.Second, safe);
-                        stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
+                        offense.RecordSteal(bases.Second, safe, third: true);
+                        stealRecRunner = thirdStealer; stealRecSuccess = safe; stealRecThird = true;   // issue #626: 巻き戻し対象
                         runnersStartedMask |= 1 << 2;
                         if (bases.Second is { } thirdSlider)
                         {
@@ -1407,7 +1411,7 @@ public static class GameEngine
                     outs = steal0Outs;
                     offense.Runs = steal0Runs;
                     runsThisHalf = steal0RunsThisHalf;
-                    offense.UndoSteal(stealRecRunner, stealRecSuccess);
+                    offense.UndoSteal(stealRecRunner, stealRecSuccess, stealRecThird);
                     // 盗塁死を上で投球回に計上済みなら、それも対で戻す（outs は steal0Outs へ戻している）。
                     if (!stealRecSuccess) defense.RecordRunnerOut(currentPitcher, -1);
                     if (stealRecScorer is not null)

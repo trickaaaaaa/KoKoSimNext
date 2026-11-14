@@ -27,8 +27,11 @@ public enum StealTarget
 /// <summary>盗塁1回分の判定と、<b>その判定が使った秒</b>（＝そのまま絵になる, issue verdict-margin-into-physical-layer）。</summary>
 /// <param name="ThrowScatter">捕手の送球が実際に逸れた量（issue #859）。判定の遅れ・悪送球に使った値そのもの。
 /// 抽選しない経路（<see cref="StealResolver.Forced"/>）は null。</param>
+/// <param name="NudgedToMatchCall">引いたゆらぎが結果と食い違い、秒を結果へ寄せ直したか（観測専用・判定には使わない）。
+/// 寄せ直すのは確率のクランプ（1%/99%）が効く極端な場面と悪送球（無条件セーフ）だけ＝それ以外で立てば
+/// 「判定にだけ効いて絵に出ない項」が紛れ込んでいる合図（issue #949 で三盗の補正 −0.35 を外した根拠の実測）。</param>
 public readonly record struct StealVerdict(StealResult Result, double RunnerSeconds, double DefenseSeconds,
-    KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter? ThrowScatter = null)
+    KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter? ThrowScatter = null, bool NudgedToMatchCall = false)
 {
     public bool Safe => Result == StealResult.Safe;
 }
@@ -89,8 +92,13 @@ public static class StealResolver
     /// 通常の場面では一切効かない＝従来の「表示側ガード」はここに畳み込まれて消えた。</para></summary>
     private const double MinMarginSeconds = 0.05;
 
+    /// <summary>塁間[m]（90ft）。三盗の走る距離＝これ−二塁走者のリード（<see cref="BaserunningCoefficients.StealThirdLeadM"/>）。
+    /// 判定は球場の寸法を受け取らないが、塁間は公認野球規則で全球場共通（<see cref="KokoSim.Engine.Match.Field.FieldGeometry.BaseDistanceM"/> と同値）。</summary>
+    public const double BasePathM = 27.43;
+
     /// <summary>走者所要時間[s]。ギャンブル始動(<see cref="StartType.Gamble"/>)は好ジャンプで短縮（G3）。
-    /// 塁間距離は二盗・三盗を同一と近似（<see cref="BaserunningCoefficients.StealLeadDistanceM"/>）。<see cref="StealTarget.Home"/>
+    /// 二盗は<see cref="BaserunningCoefficients.StealLeadDistanceM"/>、三盗は塁間−二塁走者のリード
+    /// （<see cref="BaserunningCoefficients.StealThirdLeadM"/>・issue #949）。<see cref="StealTarget.Home"/>
     /// （一・三塁の重盗で本塁を突く三塁走者）は三塁からの距離（<see cref="BaserunningCoefficients.StealHomeDistanceM"/>・issue #637）。</summary>
     public static double RunnerTimeSeconds(Player runner, BaserunningCoefficients c, StartType startType = StartType.Normal,
         StealTarget target = StealTarget.Second)
@@ -100,7 +108,12 @@ public static class StealResolver
         // ジャンプ（投手の始動を読んで既に動き出している分）。床の**後**に引く＝全走者から同じ秒だけ
         // 引かれる（理由は StealJumpCreditSeconds のコメント）。
         startDelay -= c.StealJumpCreditSeconds;
-        var distance = target == StealTarget.Home ? c.StealHomeDistanceM : c.StealLeadDistanceM;
+        var distance = target switch
+        {
+            StealTarget.Home => c.StealHomeDistanceM,
+            StealTarget.Third => BasePathM - c.StealThirdLeadM,   // 二塁走者は一塁より大きく出られる（issue #949）
+            _ => c.StealLeadDistanceM,
+        };
         return distance / runner.ToFielder(c.AbilityEffect).SprintSpeedMps + startDelay;
     }
 
@@ -164,7 +177,8 @@ public static class StealResolver
         => RawExpectedScatterDelaySeconds(sigmaCm, receiverCatching, c) - LeagueAverageExpectedScatterDelaySeconds(c);
 
     /// <summary>盗塁成功確率（走塁と同式のlogistic）。pitchout=読み切り, startType=始動種別（G3）。
-    /// 三盗は<see cref="BaserunningCoefficients.StealThirdSuccessBias"/> で成功率を下方補正する（design-14「三盗は成功率下方」）。
+    /// 三盗も二盗と同じく<b>物理の秒だけ</b>で決まる（issue #949 で判定だけに効く補正 −0.35 を撤去。
+    /// 「三盗は二盗より下」は二塁走者のリードと送球距離の差で出る）。
     /// <paramref name="receiver"/>（二塁カバー＝遊撃手／三塁カバー＝三塁手）の送球精度・捕球の効きを
     /// 判定と揃える（issue #841「判定と読みを一致させる」）。</summary>
     public static double SuccessProbability(
@@ -172,7 +186,7 @@ public static class StealResolver
         bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
         Player? receiver = null, double pitcherQuickOffsetSeconds = 0.0)
     {
-        var bias = target == StealTarget.Third ? c.StealSuccessBias + c.StealThirdSuccessBias : c.StealSuccessBias;
+        var bias = c.StealSuccessBias;
         var margin = DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver, pitcherQuickOffsetSeconds)
                      - RunnerTimeSeconds(runner, c, startType, target) + bias;
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.StealMarginScale), 0.01, 0.99);
@@ -236,7 +250,7 @@ public static class StealResolver
         var wild = ThrowScatterModel.IsWild(scatter, c.StealThrowWildThresholdCm);
 
         var runnerSeconds = RunnerTimeSeconds(runner, c, startType, target);
-        var bias = target == StealTarget.Third ? c.StealSuccessBias + c.StealThirdSuccessBias : c.StealSuccessBias;
+        var bias = c.StealSuccessBias;
         var p = MathUtil.Clamp(MathUtil.Logistic((defenseSeconds - runnerSeconds + bias) / c.StealMarginScale), 0.01, 0.99);
 
         var u = rng.NextDouble();   // ゆらぎ＋勝敗（逆関数法）
@@ -271,8 +285,9 @@ public static class StealResolver
         var margin = defenseTime - runnerTime + luck;   // >0 なら走者が先着＝セーフ
         // 確率のクランプ(1%/99%)が効く極端な場面だけ、引いたゆらぎが結果と食い違う。結果に合う
         // 最小の秒へ寄せる（通常は不発）。
-        if (safe && margin <= 0.0) luck += MinMarginSeconds - margin;
-        else if (!safe && margin >= 0.0) luck -= margin + MinMarginSeconds;
+        var nudged = false;
+        if (safe && margin <= 0.0) { luck += MinMarginSeconds - margin; nudged = true; }
+        else if (!safe && margin >= 0.0) { luck -= margin + MinMarginSeconds; nudged = true; }
 
         double toRunner, toDefense;
         if (luck >= 0.0)
@@ -289,6 +304,6 @@ public static class StealResolver
         }
         return new StealVerdict(
             safe ? StealResult.Safe : StealResult.CaughtStealing,
-            runnerTime - toRunner, defenseTime + toDefense);
+            runnerTime - toRunner, defenseTime + toDefense, NudgedToMatchCall: nudged);
     }
 }

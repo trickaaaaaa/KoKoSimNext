@@ -44,8 +44,9 @@ public sealed record EnemyAiCoefficients
     public int SmallBallBuntInningEarlier { get; init; } = 2;   // 送りバント開始回を早める
     public double SmallBallHitAndRunFactor { get; init; } = 1.8;
     // issue #838 やること#3（2026-11-10実測・確認のみ、変更なし）: 強肩捕手（肩80）に対して相手が
-    // 低い成功率で盗塁する場面を計測したが、内訳は①三盗（StealThirdMinSuccess=0.045が緩め幅を引いても
-    // クランプ下限0.01に飽和し、本係数の値に無関係＝issue steal-thresholds-unreachable 2026-08-27 の既知事項）
+    // 低い成功率で盗塁する場面を計測したが、内訳は①三盗（当時の StealThirdMinSuccess=0.045が緩め幅を引いても
+    // クランプ下限0.01に飽和し、本係数の値に無関係＝issue steal-thresholds-unreachable 2026-08-27 の既知事項。
+    // issue #949 で三盗の閾値は0.45・下限0.30に引き直した）
     // と②RecklessOnMissProb（①能力値ミス層。閾値を見ずに走る別メカニズムで③校風層とは無関係）の合算で、
     // 本係数（StealMinSuccessの緩め）を 0.04 に変えても同じ実測値（0.09/試合・4.4%）になり無関係だった。
     // ＝③校風層の緩めは「損をする盗塁」を増やしていないと確認（0.08のまま）。

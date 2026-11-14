@@ -894,7 +894,7 @@ public static class CoefficientsLoader
         public double StealMarginScale { get; set; } = D.StealMarginScale;
         public double StealSuccessBias { get; set; } = D.StealSuccessBias;
         public double CatchThrowToThirdDistanceM { get; set; } = D.CatchThrowToThirdDistanceM;
-        public double StealThirdSuccessBias { get; set; } = D.StealThirdSuccessBias;
+        public double StealThirdLeadM { get; set; } = D.StealThirdLeadM;
         public double StealHomeDistanceM { get; set; } = D.StealHomeDistanceM;
         public double DoubleStealThirdBreakProb { get; set; } = D.DoubleStealThirdBreakProb;
         public double PickoffBaseProb { get; set; } = D.PickoffBaseProb;
@@ -1076,7 +1076,7 @@ public static class CoefficientsLoader
             StealMarginScale = StealMarginScale,
             StealSuccessBias = StealSuccessBias,
             CatchThrowToThirdDistanceM = CatchThrowToThirdDistanceM,
-            StealThirdSuccessBias = StealThirdSuccessBias,
+            StealThirdLeadM = StealThirdLeadM,
             StealHomeDistanceM = StealHomeDistanceM,
             DoubleStealThirdBreakProb = DoubleStealThirdBreakProb,
             PickoffBaseProb = PickoffBaseProb,
