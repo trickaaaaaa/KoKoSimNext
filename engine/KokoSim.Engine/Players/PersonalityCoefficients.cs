@@ -138,7 +138,7 @@ public sealed record PersonalityCoefficients
     }
 
     /// <summary>
-    /// 既定の種の表（8タイプ）。data/coefficients.yaml personalities.profiles と一致（issue #402・
+    /// 既定の種の表（既存8タイプ＋出にくいマスの5タイプ）。data/coefficients.yaml personalities.profiles と一致（issue #402・
     /// CoefficientsDefaultsConsistencyTests）。代表値は旧タイプ表の効き（指導・自主成長・犠打・チャンス）を
     /// 軸の式で再現する位置に置き、σ12 で引いた母集団の平均効果が旧表の重み付き平均
     /// （指導 1.0085／自主成長 1.0052／犠打 +0.0089／チャンス 1.0134）と許容差内に入るよう合わせた
@@ -147,13 +147,19 @@ public sealed record PersonalityCoefficients
     private static IReadOnlyList<PersonalityProfile> DefaultProfiles() => new PersonalityProfile[]
     {
         //                                        w     ①Lead  ②素直 ③勤勉 ④献身
-        new() { Type = Personality.HotBlood,     SpawnWeight = 1.0, LeadershipMeanOffset =  14, Receptiveness = 45, Diligence = 85, Selflessness = 95 },
-        new() { Type = Personality.Hardworker,   SpawnWeight = 1.4, LeadershipMeanOffset =   4, Receptiveness = 80, Diligence = 92, Selflessness = 95 },
+        new() { Type = Personality.HotBlood,     SpawnWeight = 1.0, LeadershipMeanOffset =  14, Receptiveness = 45, Diligence = 80, Selflessness = 95 },
+        new() { Type = Personality.Hardworker,   SpawnWeight = 1.4, LeadershipMeanOffset =   4, Receptiveness = 80, Diligence = 85, Selflessness = 95 },
         new() { Type = Personality.Genius,       SpawnWeight = 0.5, LeadershipMeanOffset =   0, Receptiveness =  5, Diligence = 95, Selflessness =  5 },
         new() { Type = Personality.HonorStudent, SpawnWeight = 1.0, LeadershipMeanOffset =  12, Receptiveness = 95, Diligence = 52, Selflessness = 95 },
-        new() { Type = Personality.MyPace,       SpawnWeight = 1.4, LeadershipMeanOffset =   0, Receptiveness = 30, Diligence = 28, Selflessness = 55 },
+        new() { Type = Personality.MyPace,       SpawnWeight = 1.4, LeadershipMeanOffset =   0, Receptiveness = 30, Diligence = 28, Selflessness = 88 },
         new() { Type = Personality.MoodMaker,    SpawnWeight = 1.2, LeadershipMeanOffset =   4, Receptiveness = 58, Diligence = 12, Selflessness =  5 },
         new() { Type = Personality.LoneWolf,     SpawnWeight = 0.8, LeadershipMeanOffset = -16, Receptiveness = 18, Diligence = 42, Selflessness =  8 },
-        new() { Type = Personality.Introvert,    SpawnWeight = 1.2, LeadershipMeanOffset = -14, Receptiveness = 88, Diligence = 28, Selflessness = 90 },
+        new() { Type = Personality.Introvert,    SpawnWeight = 1.2, LeadershipMeanOffset = -14, Receptiveness = 88, Diligence = 28, Selflessness = 93 },
+        // 設計書23 §1.3 の新しいマスの種（Q44 決着 2026-11-14: 16タイプがそれぞれ3%以上出るように。既存8タイプの重みと統率のずらしは据え置き）
+        new() { Type = Personality.Star,         SpawnWeight = 0.55, LeadershipMeanOffset =  14, Receptiveness = 70, Diligence = 60, Selflessness = 22 },
+        new() { Type = Personality.Ambitious,    SpawnWeight = 0.6,  LeadershipMeanOffset = -12, Receptiveness = 70, Diligence = 60, Selflessness = 22 },
+        new() { Type = Personality.Craftsman,    SpawnWeight = 0.55, LeadershipMeanOffset =  -8, Receptiveness = 30, Diligence = 60, Selflessness = 92 },
+        new() { Type = Personality.GangLeader,   SpawnWeight = 0.2,  LeadershipMeanOffset =  14, Receptiveness = 30, Diligence = 60, Selflessness = 22 },
+        new() { Type = Personality.Rowdy,        SpawnWeight = 0.25, LeadershipMeanOffset =  14, Receptiveness = 30, Diligence = 35, Selflessness = 20 },
     };
 }

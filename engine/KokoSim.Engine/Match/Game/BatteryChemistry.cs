@@ -34,13 +34,13 @@ public sealed record BatteryChemistryCoefficients
     public double AiInningsPerYear { get; init; } = 30.0;
 
     /// <summary>効き先①: 捕手のリードの効きに掛ける 1 + k1 × K の k1。</summary>
-    public double LeadFactorPerK { get; init; } = 0.15;
+    public double LeadFactorPerK { get; init; } = 0.30;
     /// <summary>効き先②: K がこの値以上なら動揺からの自然回復に要るアウトを1つ減らす。</summary>
     public double RattledRecoveryMinK { get; init; } = 0.6;
-    /// <summary>効き先③: ピンチの制球 1 + k2 × K × (圧/最大圧) の k2（最大+3%）。</summary>
-    public double PinchControlPerK { get; init; } = 0.03;
+    /// <summary>効き先③: ピンチの制球 1 + k2 × K × (圧/最大圧) の k2（Q52 決着: 相性の良し悪しで1試合 ±0.1〜0.2点に届く大きさ）。</summary>
+    public double PinchControlPerK { get; init; } = 0.20;
     /// <summary>効き先③を効かせるプレッシャー指数の下限（これ未満の場面では効かない＝「ピンチだけ」）。</summary>
-    public int PinchPressureFrom { get; init; } = 3;
+    public int PinchPressureFrom { get; init; } = 2;
 }
 
 /// <summary>

@@ -166,7 +166,7 @@ public sealed class CoefficientsLoaderTests
 
         // 性格（設計書23 §1）: 種の8タイプが読み込まれ、代表値と軸の傾きが反映される。
         var spawnable = bundle.Personalities.Profiles.Where(p => p.SpawnWeight > 0).ToList();
-        Assert.Equal(8, spawnable.Count);
+        Assert.Equal(13, spawnable.Count);   // 既存8タイプ＋出にくいマスの5タイプ（Q44）
         Assert.Equal(95, bundle.Personalities.Profile(Personality.HonorStudent).Receptiveness);
         Assert.Equal(5, bundle.Personalities.Profile(Personality.Genius).Selflessness);
         Assert.Equal(0.06, bundle.Personalities.BuntSlopeLow, 6);

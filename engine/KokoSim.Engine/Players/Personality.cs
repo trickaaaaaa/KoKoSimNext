@@ -49,13 +49,14 @@ public static class Personalities
     public const int AxisNeutral = 50;
 
     /// <summary>
-    /// 生成の「種」になる既存8タイプ（Normal を除く。設計書23 §1.4: 今の8タイプを spawn_weight で引き、
-    /// その代表値の周りに軸をばらつかせる）。
+    /// 生成の「種」になるタイプ（設計書23 §1.4: 種を spawn_weight で引き、その代表値の周りに軸をばらつかせる）。
+    /// 既存8タイプに、揺らぎだけではほぼ出ないマスの5タイプを足した（Q44 決着: 16タイプがそれぞれ3%以上出る）。
     /// </summary>
     public static readonly Personality[] Spawnable =
     {
         Personality.HotBlood, Personality.Hardworker, Personality.Genius, Personality.HonorStudent,
         Personality.MyPace, Personality.MoodMaker, Personality.LoneWolf, Personality.Introvert,
+        Personality.Star, Personality.Ambitious, Personality.Craftsman, Personality.GangLeader, Personality.Rowdy,
     };
 
     /// <summary>4軸から導出される16タイプ（Normal を除く）。</summary>
