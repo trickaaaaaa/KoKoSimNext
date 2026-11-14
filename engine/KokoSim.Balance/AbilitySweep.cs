@@ -108,6 +108,9 @@ public static class AbilitySweep
     private static IReadOnlyList<PitchSlot> MapRepertoire(PitcherAttributes a, Func<PitchSlot, PitchSlot> f)
         => a.EffectiveRepertoire.Select(f).ToArray();
 
+    /// <summary>性格の効き（C#既定＝実ゲームと同じ）。姿勢の掃引で犠打・チャンスの焼き込み値を作る。</summary>
+    private static readonly PersonalityCoefficients PersonalityEffect = new();
+
     private static Condition C(string id, string label, Scope scope, Func<Player, double, Player> apply,
         double low = LowLevel, double high = HighLevel, string unit = "Lv", Func<Player, Player>? prelude = null)
         => new(id, label, scope, low, high, unit, apply, prelude);
@@ -146,6 +149,16 @@ public static class AbilitySweep
         {
             var cv = (v - BaseLevel) / 30.0;   // 20→-1（絶不調）／80→+1（絶好調）
             return p with { Condition = FormModel.Quantize(cv), ConditionValue = cv };
+        }),
+        // 性格の4軸（設計書23 §1・issue #932）。統率は主将・伝令でだけ効く既存の値なので掃引しない。
+        // 素直さ＝伝令の落ち着き、姿勢＝犠打・チャンスの長打（投影時に焼き込む値も一緒に置く）、勤勉さ＝自主成長だけ（試合では効かない）。
+        C("receptiveness", "性格:素直さ", Scope.AllPlayers, (p, v) => p with { Receptiveness = (int)v }),
+        C("diligence", "性格:勤勉さ", Scope.AllPlayers, (p, v) => p with { Diligence = (int)v }),
+        C("selflessness", "性格:試合での姿勢（献身）", Scope.AllPlayers, (p, v) => p with
+        {
+            Selflessness = (int)v,
+            BuntSuccessBonus = PersonalityEffect.BuntSuccessBonus((int)v),
+            ChanceHitFactor = PersonalityEffect.ChanceHitFactor((int)v),
         }),
         C("catcher_lead", "捕手:リード", Scope.Catcher, (p, v) => p with { Lead = (int)v }),
         C("catcher_arm", "捕手:肩", Scope.Catcher, (p, v) => p with { ArmStrength = (int)v }),

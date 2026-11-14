@@ -800,13 +800,13 @@ public static class GameEngine
                 if (defense.DefenseCalmPa > 0)
                     pit = PressureModel.ApplyPitcher(pit, PressureModel.CalmMultiplier(pressureIdx,
                         defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
-                        ctx.Personalities.Profile(currentPitcher.Personality).CoachingReceptivity, ctx.Tactics,
+                        ctx.Personalities.CoachingReceptivity(currentPitcher.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
                             ctx.Tactics, ctx.Personalities, defense.Captain)));
                 if (offense.OffenseCalmPa > 0)
                     bat = PressureModel.ApplyBatter(bat, PressureModel.CalmMultiplier(pressureIdx,
                         offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
-                        ctx.Personalities.Profile(batter.Personality).CoachingReceptivity, ctx.Tactics,
+                        ctx.Personalities.CoachingReceptivity(batter.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
                             ctx.Tactics, ctx.Personalities, offense.Captain)));
 

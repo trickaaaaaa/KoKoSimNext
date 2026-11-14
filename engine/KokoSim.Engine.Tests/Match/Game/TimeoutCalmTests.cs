@@ -39,8 +39,8 @@ public sealed class TimeoutCalmTests
     public void Calm_ScalesWithReceptivity()
     {
         var pc = new PersonalityCoefficients();
-        var honor = PressureModel.CalmMultiplier(5, 50, pc.Profile(Personality.HonorStudent).CoachingReceptivity, C);
-        var genius = PressureModel.CalmMultiplier(5, 50, pc.Profile(Personality.Genius).CoachingReceptivity, C);
+        var honor = PressureModel.CalmMultiplier(5, 50, pc.CoachingReceptivity(PersonalityFixture.Axes(Personality.HonorStudent).Receptiveness), C);
+        var genius = PressureModel.CalmMultiplier(5, 50, pc.CoachingReceptivity(PersonalityFixture.Axes(Personality.Genius).Receptiveness), C);
         Assert.True(honor > genius, $"素直な性格ほど伝令がよく効くはず（優等生{honor} vs 天才肌{genius}）");
     }
 

@@ -1916,9 +1916,18 @@ public static class CoefficientsLoader
     private sealed class PersonalitiesDto
     {
         private static readonly KokoSim.Engine.Players.PersonalityCoefficients D = new();
-        public double FactorJitterSd { get; set; } = D.FactorJitterSd;
+        public double AxisSd { get; set; } = D.AxisSd;
         public double FactorMin { get; set; } = D.FactorMin;
         public double FactorMax { get; set; } = D.FactorMax;
+        public double ReceptivenessSlopeHigh { get; set; } = D.ReceptivenessSlopeHigh;
+        public double ReceptivenessSlopeLow { get; set; } = D.ReceptivenessSlopeLow;
+        public double DiligenceSlopeHigh { get; set; } = D.DiligenceSlopeHigh;
+        public double DiligenceSlopeLow { get; set; } = D.DiligenceSlopeLow;
+        public double BuntSlopeHigh { get; set; } = D.BuntSlopeHigh;
+        public double BuntSlopeLow { get; set; } = D.BuntSlopeLow;
+        public double ChanceSlopeHigh { get; set; } = D.ChanceSlopeHigh;
+        public double ChanceSlopeLow { get; set; } = D.ChanceSlopeLow;
+        public double MessengerSlope { get; set; } = D.MessengerSlope;
         public List<PersonalityProfileDto>? Profiles { get; set; }
 
         public KokoSim.Engine.Players.PersonalityCoefficients ToModel()
@@ -1929,9 +1938,18 @@ public static class CoefficientsLoader
                 : new KokoSim.Engine.Players.PersonalityCoefficients().Profiles;
             return new KokoSim.Engine.Players.PersonalityCoefficients
             {
-                FactorJitterSd = FactorJitterSd,
+                AxisSd = AxisSd,
                 FactorMin = FactorMin,
                 FactorMax = FactorMax,
+                ReceptivenessSlopeHigh = ReceptivenessSlopeHigh,
+                ReceptivenessSlopeLow = ReceptivenessSlopeLow,
+                DiligenceSlopeHigh = DiligenceSlopeHigh,
+                DiligenceSlopeLow = DiligenceSlopeLow,
+                BuntSlopeHigh = BuntSlopeHigh,
+                BuntSlopeLow = BuntSlopeLow,
+                ChanceSlopeHigh = ChanceSlopeHigh,
+                ChanceSlopeLow = ChanceSlopeLow,
+                MessengerSlope = MessengerSlope,
                 Profiles = profiles,
             };
         }
@@ -1941,26 +1959,20 @@ public static class CoefficientsLoader
     {
         public string Type { get; set; } = "Normal";
         public double SpawnWeight { get; set; }
-        public double CoachingReceptivity { get; set; } = 1.0;
-        public double SelfGrowthFactor { get; set; } = 1.0;
-        public double BuntSuccessBonus { get; set; }
-        public double ChanceHitFactor { get; set; } = 1.0;
         public double LeadershipMeanOffset { get; set; }
-        public double MessengerToPitcher { get; set; }
-        public double MessengerToBatter { get; set; }
+        public int Receptiveness { get; set; } = 50;
+        public int Diligence { get; set; } = 50;
+        public int Selflessness { get; set; } = 50;
 
         public KokoSim.Engine.Players.PersonalityProfile ToModel() => new()
         {
             Type = Enum.TryParse<KokoSim.Engine.Players.Personality>(Type, ignoreCase: true, out var t)
                 ? t : KokoSim.Engine.Players.Personality.Normal,
             SpawnWeight = SpawnWeight,
-            CoachingReceptivity = CoachingReceptivity,
-            SelfGrowthFactor = SelfGrowthFactor,
-            BuntSuccessBonus = BuntSuccessBonus,
-            ChanceHitFactor = ChanceHitFactor,
             LeadershipMeanOffset = LeadershipMeanOffset,
-            MessengerToPitcher = MessengerToPitcher,
-            MessengerToBatter = MessengerToBatter,
+            Receptiveness = Receptiveness,
+            Diligence = Diligence,
+            Selflessness = Selflessness,
         };
     }
 

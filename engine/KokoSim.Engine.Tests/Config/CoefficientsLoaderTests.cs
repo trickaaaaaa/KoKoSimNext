@@ -164,11 +164,13 @@ public sealed class CoefficientsLoaderTests
             bundle.Aerodynamics, bundle.Mound);
         Assert.InRange(traj.InducedVerticalBreakM, 0.30, 0.55);
 
-        // 性格（設計書01 §1.1）: 8タイプが読み込まれ、代表値が反映される。
+        // 性格（設計書23 §1）: 種の8タイプが読み込まれ、代表値と軸の傾きが反映される。
         var spawnable = bundle.Personalities.Profiles.Where(p => p.SpawnWeight > 0).ToList();
         Assert.Equal(8, spawnable.Count);
-        Assert.Equal(1.10, bundle.Personalities.Profile(Personality.HonorStudent).CoachingReceptivity, 6);
-        Assert.Equal(-0.06, bundle.Personalities.Profile(Personality.Genius).BuntSuccessBonus, 6);
+        Assert.Equal(95, bundle.Personalities.Profile(Personality.HonorStudent).Receptiveness);
+        Assert.Equal(5, bundle.Personalities.Profile(Personality.Genius).Selflessness);
+        Assert.Equal(0.06, bundle.Personalities.BuntSlopeLow, 6);
+        Assert.Equal(12.0, bundle.Personalities.AxisSd, 6);
 
         // 本塁クロスプレー係数（F2, 設計書12 §3）が YAML から実際に束縛される
         // （IgnoreUnmatchedProperties のため綴り違いは黙って既定値になる＝ここで実値を固定して検出する）。

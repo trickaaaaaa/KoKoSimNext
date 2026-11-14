@@ -135,10 +135,10 @@ public static class DeterminismCards
             order.Add(t.BattingOrder[i] with { Grade = grades[i], Mental = 40 });
         var reserves = new List<Player>
         {
-            t.Reserves[0] with { Grade = 1, Leadership = 30, Personality = Personality.Introvert },
-            t.Reserves[1] with { Grade = 2, Leadership = 55, Personality = Personality.MoodMaker },
-            t.Reserves[2] with { Grade = 3, Leadership = 80, Personality = Personality.HotBlood },
-            t.Reserves[3] with { Grade = 2, Leadership = 45, Personality = Personality.LoneWolf },
+            (t.Reserves[0] with { Grade = 1, Leadership = 30 }).WithAxes(Personality.Introvert),
+            (t.Reserves[1] with { Grade = 2, Leadership = 55 }).WithAxes(Personality.MoodMaker),
+            (t.Reserves[2] with { Grade = 3, Leadership = 80 }).WithAxes(Personality.HotBlood),
+            (t.Reserves[3] with { Grade = 2, Leadership = 45 }).WithAxes(Personality.LoneWolf),
         };
         return t with { BattingOrder = order, Reserves = reserves };
     }

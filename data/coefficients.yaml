@@ -800,23 +800,34 @@ skills:
   pillar_leadership_threshold: 68
   pillar_bonus_prob: 0.35
 
-# --- 性格（設計書01 §1.1, CHANGELOG 22b）🟡 母集団平均が中立になるよう重みと係数を対称化（帯ドリフト最小化） ---
-# 内部4傾向値: ①統率(leadership_mean_offset) ②素直さ(coaching_receptivity) ③勤勉さ(self_growth_factor)
-# ④自己犠牲⇔目立ちたがり(bunt_success_bonus 加算 / chance_hit_factor 得点圏強攻の長打質倍率)。各軸の効き先は1つ。
+# --- 性格の4軸（設計書23 §1・issue #932）🟡 母集団平均の効きを旧8タイプ表の重み付き平均と一致させる（PersonalityAxesTests） ---
+# 4軸: ①統率 Leadership（既存）②素直さ Receptiveness ③勤勉さ Diligence ④試合での姿勢 Selflessness（1〜99・50が中立）。
+# タイプは4軸の導出ラベル（16タイプ）。効きは d=(軸−50)/50 の片側ごとの一次式（d≥0 は *_high、d<0 は *_low。50で恒等・端で旧表の幅）。
+# ④の犠打とチャンスは旧表で献身側／目立ち側の幅が非対称なので、単一傾きでは旧表の母集団平均を同時に満たせない（OPEN-QUESTIONS Q41）。
 personalities:
-  factor_jitter_sd: 0.06     # PersonalityFactor のタイプ内個体差σ（タイプが中心）
-  factor_min: 0.75
+  axis_sd: 12                # 生成: 種タイプの代表値の周りに②③④を引くσ（設計書23 §1.4）
+  factor_min: 0.75           # 自主成長（③勤勉さ）の下限・上限
   factor_max: 1.25
+  receptiveness_slope_high: 0.10   # ②→指導の入りやすさ 素直側（端 1.10）
+  receptiveness_slope_low: 0.12    #                     頑固側（端 0.88）
+  diligence_slope_high: 0.10       # ③→自主成長 コツコツ側（端 1.10）
+  diligence_slope_low: 0.08        #             気分屋側（端 0.92）
+  bunt_slope_high: 0.05            # ④→犠打の成功加算 献身側（端 +0.05）
+  bunt_slope_low: 0.06             #                   目立ち側（端 −0.06）
+  chance_slope_high: 0.03          # ④→チャンスの長打質 献身側（端 0.97）
+  chance_slope_low: 0.10           #                     目立ち側（端 1.10）
+  messenger_slope: 0.06            # ④→伝令役の得意場面（#716）: 投手へ +d×slope／打者へ −d×slope
+  # 生成の種（今の8タイプ・出やすさは spawn_weight＝Q36）。代表値は旧表の効きを軸の式で再現する位置（マスの側にある）。
   profiles:
-    #                  weight  coaching  growth  bunt    chance  lead  伝令役の得意場面（issue #716: 投手へ／打者へ）
-    - { type: HotBlood,     spawn_weight: 1.0, coaching_receptivity: 1.00, self_growth_factor: 1.08, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:  14, messenger_to_pitcher:  0.10, messenger_to_batter:  0.05 }
-    - { type: Hardworker,   spawn_weight: 1.4, coaching_receptivity: 1.06, self_growth_factor: 1.10, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:   4, messenger_to_pitcher:  0.03, messenger_to_batter:  0.03 }
-    - { type: Genius,       spawn_weight: 0.5, coaching_receptivity: 0.88, self_growth_factor: 1.10, bunt_success_bonus: -0.06, chance_hit_factor: 1.10, leadership_mean_offset:   0, messenger_to_pitcher: -0.05, messenger_to_batter: -0.05 }
-    - { type: HonorStudent, spawn_weight: 1.0, coaching_receptivity: 1.10, self_growth_factor: 1.00, bunt_success_bonus:  0.05, chance_hit_factor: 0.98, leadership_mean_offset:  12, messenger_to_pitcher:  0.05, messenger_to_batter:  0.03 }
-    - { type: MyPace,       spawn_weight: 1.4, coaching_receptivity: 0.94, self_growth_factor: 0.95, bunt_success_bonus:  0.00, chance_hit_factor: 1.00, leadership_mean_offset:   0, messenger_to_pitcher: -0.03, messenger_to_batter: -0.03 }
-    - { type: MoodMaker,    spawn_weight: 1.2, coaching_receptivity: 1.00, self_growth_factor: 0.92, bunt_success_bonus: -0.06, chance_hit_factor: 1.08, leadership_mean_offset:   4, messenger_to_pitcher:  0.00, messenger_to_batter:  0.10 }
-    - { type: LoneWolf,     spawn_weight: 0.8, coaching_receptivity: 0.92, self_growth_factor: 1.00, bunt_success_bonus: -0.05, chance_hit_factor: 1.06, leadership_mean_offset: -16, messenger_to_pitcher: -0.10, messenger_to_batter: -0.10 }
-    - { type: Introvert,    spawn_weight: 1.2, coaching_receptivity: 1.08, self_growth_factor: 0.95, bunt_success_bonus:  0.04, chance_hit_factor: 0.97, leadership_mean_offset: -14, messenger_to_pitcher: -0.10, messenger_to_batter: -0.10 }
+    #                  weight            ①統率ずらし                ②素直             ③勤勉          ④献身
+    - { type: HotBlood,     spawn_weight: 1.0, leadership_mean_offset:  14, receptiveness: 45, diligence: 85, selflessness: 95 }
+    - { type: Hardworker,   spawn_weight: 1.4, leadership_mean_offset:   4, receptiveness: 80, diligence: 92, selflessness: 95 }
+    - { type: Genius,       spawn_weight: 0.5, leadership_mean_offset:   0, receptiveness:  5, diligence: 95, selflessness:  5 }
+    - { type: HonorStudent, spawn_weight: 1.0, leadership_mean_offset:  12, receptiveness: 95, diligence: 52, selflessness: 95 }
+    - { type: MyPace,       spawn_weight: 1.4, leadership_mean_offset:   0, receptiveness: 30, diligence: 28, selflessness: 55 }
+    - { type: MoodMaker,    spawn_weight: 1.2, leadership_mean_offset:   4, receptiveness: 58, diligence: 12, selflessness:  5 }
+    - { type: LoneWolf,     spawn_weight: 0.8, leadership_mean_offset: -16, receptiveness: 18, diligence: 42, selflessness:  8 }
+    - { type: Introvert,    spawn_weight: 1.2, leadership_mean_offset: -14, receptiveness: 88, diligence: 28, selflessness: 90 }
 
 # --- プレッシャー指数×精神力（設計書02 §3.1-3.2）🟡 精神力50は常に恒等（帯不変） ---
 pressure:

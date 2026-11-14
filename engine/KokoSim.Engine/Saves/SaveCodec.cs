@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 26;
+    public const int CurrentVersion = 27;
 
     // ===== Serialize =====
 
@@ -313,6 +313,9 @@ public static class SaveCodec
         // 中学生リストは持ち越せない＝次の秋に新しいスカウト候補で作り直す）。scouting は null で補う。
         if (version < 26 && !root.Has("scouting")) root.Add("scouting", JsonNull.Instance);
         if (version < 26 && !root.Has("scoutFieldSelection")) root.Add("scoutFieldSelection", "Omakase");
+        // v27（issue #932・設計書23 §1.5）: 性格を8タイプの列挙から4軸（素直さ・勤勉さ・姿勢＋既存の統率）へ。
+        // 部員・AI校の選手1人ぶんのキーなので、ここでは補わず PlayerSaves / DevelopingPlayerSaves が
+        // PersonalitySaveMigration で読む（旧タイプのマスの代表値・勤勉さは旧 personalityFactor から逆算。乱数不使用）。
         return root;
     }
 

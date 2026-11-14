@@ -20,7 +20,8 @@ public sealed class IndividualCoachingInsightTrustTests
 
     private static DevelopingPlayer Guy(bool nominated)
     {
-        var p = new DevelopingPlayer { IndividualCoaching = nominated, Personality = Personality.HotBlood };
+        var p = PersonalityFixture.Developing(Personality.HotBlood);
+        p.IndividualCoaching = nominated;
         PitcherRoleResolver.SeedAptitudeForRole(p, false);
         return p;
     }
