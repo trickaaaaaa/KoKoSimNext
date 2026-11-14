@@ -302,6 +302,8 @@ public static class GameReplay
                     SubstitutionCommands.CallTimeout(p, d.OffenseIsAway, d.TargetIndex >= 0 ? d.TargetIndex : null);
                     break;
             }
+            // 交代ログ（issue #920）。ライブ操作（MatchProgression.RecordSubstitution）と同じ位置で積む。
+            p.ObserveSubstitutions();
         }
     }
 }

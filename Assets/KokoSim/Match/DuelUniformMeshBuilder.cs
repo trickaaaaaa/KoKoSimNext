@@ -50,10 +50,14 @@ namespace KokoSim.Unity.Match
             Cap = 6,         // 帽子クラウン（購入素体の Cap メッシュのうち、つばを除いた部分）
             Belt = 7,        // ベルト（購入素体の Pants メッシュ内の帯＋バックル。固定暗色・2026-07-29）
             CapVisor = 8,    // 帽子つば（Cap メッシュを幾何で二分した前下の帯・issue #621）
+            // 頭（肌＋坊主頭の髪・issue #916）。購入素体の頭メッシュの頭部だけに焼く。UV1.y＝髪の濃さ（0=肌〜1=髪）で、
+            // シェーダが肌色（Skin）と髪色（この領域の色）を混ぜる＝生え際がぼける。頭部の頂点は全部この領域なので、
+            // 生え際で領域IDが補間されて別の領域の色の帯が出ることは無い（補間されるのは濃さだけ）
+            Hair = 9,
         }
 
         /// <summary>領域数（_RegionColors の要素数と一致させる）。</summary>
-        public const int RegionCount = 9;
+        public const int RegionCount = 10;
 
         /// <summary>領域ID → UV1.x（焼き側と読み側で同じ式を使うための単一ソース）。</summary>
         public static float RegionUv(int region) => (region + 0.5f) / 8f;

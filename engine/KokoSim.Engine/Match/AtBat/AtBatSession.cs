@@ -174,7 +174,7 @@ public sealed class AtBatSession
 
     /// <summary>
     /// スキルの打球挙動補正（設計書10）を反映した打撃係数の1打席コピー。行動特性・球質だけをここで反映
-    /// （数値補正は実効能力側で適用済み）。広角打法（引っ張りバイアスの縮小, issue #262）・粘り打ち（ファウル率）。
+    /// （数値補正は実効能力側で適用済み）。流し打ち（旧 広角打法＝引っ張りバイアスの縮小, issue #262/#907）・粘り打ち（ファウル率）。
     /// スキルなしなら共有係数のまま。RNG非消費（従来 <see cref="Begin"/> のインラインと同一）。
     /// </summary>
     private static BattingCoefficients BattingFor(AtBatContext ctx)
@@ -305,6 +305,10 @@ public sealed class AtBatSession
         // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: この球を履歴へ畳み込む前の見慣れ度を読み（＝この球の
         // 判定にはまだ含めない）、読んだ直後に Advance で畳み込む（毎球必ず1回＝球種が決まった実球すべてに効く。
         // 敬遠・強制発動はこの行より前で return 済みなので対象外＝ RNG 非消費のまま）。
+        // 速球打ち・変化球打ち（設計書10 §2.1・issue #907）: 球種が決まったこの球だけ実効ミート・選球眼を補正する。
+        // 乱数非消費＝判定の乱数順は不変。スキルなしは同じインスタンス＝恒等。
+        batter = ctx.Skills.ForPitch(batter, plan.Type);
+
         var pitchFamiliarityLevel = ctx.PitchFamiliarity?.Level(plan.Type);
         ctx.PitchFamiliarity?.Advance(plan.Type, batting.PitchFamiliarityDecay);
 
@@ -478,9 +482,10 @@ public sealed class AtBatSession
             return Continue();
         }
 
-        // ④ コンタクト判定 → ⑤ 打球生成（広角打法/粘り打ちは batting コピーへ反映済み）
+        // ④ コンタクト判定 → ⑤ 打球生成（流し打ちの方向/粘り打ちは batting コピーへ、打球の質は ctx.Skills.BattedBall）
         var (outcome, ball) = ContactModel.Resolve(
-            batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes, pitchFamiliarityLevel);
+            batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes, pitchFamiliarityLevel,
+            ctx.Skills.BattedBall);
         switch (outcome)
         {
             case ContactOutcome.Whiff:

@@ -684,7 +684,7 @@ namespace KokoSim.Unity.Match
         private const string VendorCapMeshName = "A_Players_0001_Cap_0001";
 
         /// <summary>
-        /// 役割別の領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[8] に流し込む）。
+        /// 役割別の領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[10] に流し込む）。
         /// 実データはエンジンの <see cref="KokoSim.Engine.Nation.TeamColors"/>（data/team-colors.yaml 由来）で、
         /// ここは Unity の Color へ移した表現＋肌・シューズの固定色。
         ///
@@ -700,7 +700,14 @@ namespace KokoSim.Unity.Match
             /// <summary>肌の固定色（全役割共通）。</summary>
             private static readonly Color SkinTone = new(0.85f, 0.68f, 0.55f);
 
-            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Belt;
+            /// <summary>
+            /// 坊主頭の髪の固定色（全役割共通・issue #916）。チーム色ではない。購入素体の顔テクスチャに描かれた
+            /// 短髪（輝度0.26〜0.31）より一段暗い黒茶＝短髪の下に地肌が透ける色を、照明とポスタライズを通して
+            /// 「黒髪の坊主」に読める明るさにした。肌との混ぜ具合は頂点ごとの髪の濃さ（ベイク）で決まる。
+            /// </summary>
+            internal static readonly Color HairTone = new(0.16f, 0.13f, 0.11f);
+
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Belt, Hair;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
             /// <summary>縞の本数[本/m]。シェーダへはアクターのスケールを掛けて渡す（RegionMaterial）。</summary>
@@ -718,6 +725,7 @@ namespace KokoSim.Unity.Match
                 // つばの指定が無ければクラウンと同色＝従来どおりの1色帽子（issue #621）。
                 CapVisor = capVisor ?? cap;
                 Skin = SkinTone;
+                Hair = HairTone;
                 // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。値はパレット表の「黒」#23242A と
                 // 揃える＝画面で選べる黒と同じ黒になる。**わずかでも赤に寄せると濃い臙脂に見える**
                 // （ポスタライズが暖色側のバケットへ落とす。2026-07-29 実測）
@@ -1094,7 +1102,8 @@ namespace KokoSim.Unity.Match
             public readonly List<Material> VisorMats = new(); // つばの色で塗った装備（帽子つば・issue #621）
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
-            public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+            public bool Mirrored;                    // 鏡映親ノードが反転中か（EvaluateGraph が評価の間だけ鏡映を外す）
+            public Transform MirrorNode;             // 鏡映親ノード（ApplyMirror が控える。無い役者は null）
             /// <summary>
             /// いま**上下をクリップ（ルートモーション）に預けている**か（横っ飛び・スライディング）。
             /// 立っている収録は足を地面へ吸わせる（<c>GroundFix</c>）のが正しいが、足が上がって胴が下がる
@@ -1151,46 +1160,52 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// Humanoid Foot IK をミラー状態に同期する（ミラー中はOFF・非ミラーは既定どおりON）。
-        /// AnimationClipPlayable は既定で Foot IK 有効で、足ゴールを**ワールド空間の鏡映盲な回転数学**で
-        /// 解くため、負スケール祖先の下では両足が「鏡映されない側」のゴールへ引っ張られ、
-        /// 脚だけ頭の高さまで折り畳まれる（issue #337 受け入れ撮影で実害: ズボン・靴が胴に隠れて
-        /// 「腰から下が消えた」ように見える）。Playable は差し替えで作り直されるので、
+        /// Humanoid Foot IK を有効にする（ミラー中も含めて常にON）。Playable は差し替えで作り直されるので、
         /// 生成した直後にも必ず呼ぶこと。
+        ///
+        /// 2026-11-14（issue #914）まではミラー中だけOFFにしていた。負スケール祖先の下で Foot IK を解くと、
+        /// 足ゴールが**ワールド空間の鏡映盲な回転数学**で解かれて両脚が頭の高さまで折り畳まれるため
+        /// （issue #337）。今はグラフの評価そのものを鏡映を外した空間で行う（<see cref="EvaluateGraph"/>）
+        /// ので、Foot IK は右と同じ空間で解かれ、折り畳みは構造的に起きない。
         /// </summary>
         private static void SyncFootIk(Actor a)
         {
             if (a == null) return;
-            if (a.Playable.IsValid()) a.Playable.SetApplyFootIK(!a.Mirrored);
-            if (a.FadeFrom.IsValid()) a.FadeFrom.SetApplyFootIK(!a.Mirrored);
+            if (a.Playable.IsValid()) a.Playable.SetApplyFootIK(true);
+            if (a.FadeFrom.IsValid()) a.FadeFrom.SetApplyFootIK(true);
         }
 
         /// <summary>
-        /// ルートモーションを伴う Graph.Evaluate（Foot IK と同根の鏡映盲対策・issue #447）。
-        /// Unity 組み込みのルートモーション適用は、deltaPosition（ワールド空間）を localPosition へ
-        /// 積むときに**祖先の負スケール（鏡映）を無視する**らしく、ミラー中も非ミラーと同じ符号の x が
-        /// 積まれ続ける。ポーズ（各ボーン）は鏡映親ノードのスケールで正しく鏡映されるのに、ルート自体の
-        /// 横移動だけ鏡映されない＝体が接地とずれて横へ滑りながら投げる絵になる（左投手のみ発症・
-        /// 恒等スケールの右投手は無関係）。ここで適用前後の localPosition.x 差分を読み直し、
-        /// 鏡映面（x=0）で反転して当て直す。回転（`localRotation *= deltaRotation`）は祖先スケールに
-        /// 一切依存しない純粋なクォータニオン合成で、鏡映後の見え方は描画時に祖先スケールが正しく
-        /// 効くため触らない（回転だけ直すと今度は回転が二重に鏡映されて壊れる）。
-        /// 非ミラー（a.Mirrored=false）は分岐なしで従来の Evaluate 呼び出しと完全に同じ経路＝
-        /// 右投手の絵はビット一致のまま。
+        /// グラフを評価する（ポーズ・ルートモーション・Foot IK）。**評価はすべてここを通す**。
+        ///
+        /// 鏡映中（左投手・左打者・左投げの野手）は、評価の間だけ鏡映親ノードのスケールを恒等へ戻す。
+        /// ポーズ（骨のローカル姿勢）もルートモーション（素体GOのローカル位置・向き）も鏡映親の**ローカル**に
+        /// 書かれる値なので、恒等の空間で解いた値をそのまま鏡に映せば、絵は右の完全な鏡写しになる。
+        ///
+        /// 負スケールの空間のまま評価すると Unity の内部が2か所で破綻する（どちらも絵でしか気づけない）:
+        /// <list type="number">
+        /// <item>ルートモーション: 毎評価の移動量が**向きごとに裏返る**。issue #447 の旧対策は x だけ反転し直して
+        ///   いたが、z も向きに応じて食い違っていて、左投手は踏み込むたびに**本塁と逆へ 0.9m 下がりながら**
+        ///   投げていた（右は前へ 1.2m。2026-11-14 実測・issue #914）。軸足は地面の上を1コマ最大0.26m滑る
+        ///   （右は0.01m未満）＝左投手だけカクカクして見えた原因</item>
+        /// <item>Foot IK: 両脚が頭の高さまで折り畳まれる（issue #337）。旧対策はミラー中だけ Foot IK を切ることで、
+        ///   代わりに収録の足の滑りがそのまま出ていた</item>
+        /// </list>
+        /// 非ミラーは従来の <c>Graph.Evaluate</c> と完全に同じ＝右の絵はビット一致のまま。
         /// </summary>
-        private static void EvaluateWithMirrorFix(Actor a, float dt)
+        private static void EvaluateGraph(Actor a, float dt)
         {
             if (a == null || !a.Graph.IsValid()) return;
-            if (!a.Mirrored || a.Animator == null || !a.Animator.applyRootMotion)
+            var node = a.Mirrored ? a.MirrorNode : null;
+            if (node == null)
             {
                 a.Graph.Evaluate(dt);
                 return;
             }
-            float xBefore = a.Go.transform.localPosition.x;
-            a.Graph.Evaluate(dt);
-            var pos = a.Go.transform.localPosition;
-            pos.x = 2f * xBefore - pos.x;   // 観測した x デルタを反転して当て直す
-            a.Go.transform.localPosition = pos;
+            var mirrored = node.localScale;
+            node.localScale = Vector3.one;
+            try { a.Graph.Evaluate(dt); }
+            finally { node.localScale = mirrored; }
         }
 
         public DuelStageRig()
@@ -1357,6 +1372,9 @@ namespace KokoSim.Unity.Match
             // 投手だけはセット姿勢の顔が投球方向と約68°ずれる（PitcherYawの経緯と同じ収録特性）ため、
             // 顔が確実に本塁を向くリリース時刻の姿勢で焼き、初期姿勢へ巻き戻す
             var mound = new Vector3(0f, MoundHeight, MoundDistance);
+            // セットで待つ間の首の補正（issue #912）の行き先＝投球の切り口の首・頭を控える
+            SeekActor(_pitcher, DeliveryStartTime);
+            CaptureDeliveryHeadPose();
             SeekActor(_pitcher, ReleaseTime);
             // 購入素体は帽子を素で持っている（頭ボーン直付けの剛体メッシュ）ので生成帽子は載せない＝二重帽子を避ける
             if (!useVendor)
@@ -1406,6 +1424,12 @@ namespace KokoSim.Unity.Match
             // ワールド行列が変わらない＝右打者・右投手の絵は従来と一致（回帰の根拠）
             _batterMirror = WrapInMirrorNode(_batter, "mirror-batter");
             _pitcherMirror = WrapInMirrorNode(_pitcher, "mirror-pitcher");
+
+            // 生成直後はセット姿勢で静止している（Holding）＝セット補正は最初から効かせておく。
+            // Tick で0から寄せると、試合開始直後の最初の数コマだけ首が曲がって見える（issue #912）
+            _setGloveW = _setHeadW = 1f;
+            FixPitcherSetGlove();
+            FixPitcherSetHead();
 
             Available = true;
             Live = this;
@@ -3294,6 +3318,7 @@ namespace KokoSim.Unity.Match
         {
             if (!Available) return;
             AdvanceSetGloveWeight(deltaTime);   // セットで握りを隠す補正の効き（issue #927）
+            AdvanceSetHeadWeight(deltaTime);    // セットで待つ間の首の補正の効き（issue #912）
 
             // カットバック予約（アンカー同期のプリロール）。量子化と独立にプレー時間で数える
             if (_cutCountdown >= 0f)
@@ -3413,8 +3438,12 @@ namespace KokoSim.Unity.Match
                 AlignBat();            // バットは骨から毎コマ組み直す純関数＝二度当てが無いので常に呼ぶ
                 if (_catcher != null && _catcher.PoseAdvanced)
                     FixCatcherPose();  // ミットを実着弾点へ寄せる（5方向クリップの残差を吸収）
+                RefreshHeldPitcherForSetFixes();   // 静止中に補正の効きが動いたら評価し直す（issue #912）
                 if (_pitcher != null && _pitcher.PoseAdvanced)
+                {
                     FixPitcherSetGlove();   // セットでグラブが握りを覆う（issue #927）
+                    FixPitcherSetHead();    // セットで待つ間の首を投球の切り口へ揃える（issue #912）
+                }
                 SampleBatTrail();      // AlignBat の**後**＝組み上がったバットの端点を採る
             }
         }
@@ -4349,6 +4378,9 @@ namespace KokoSim.Unity.Match
             // つばはクラウンと別領域（issue #621）。領域を持たない古い焼き資産では帽子が丸ごと
             // Cap 領域なので、つばの色は単に使われない＝落ちない・黙って1色に戻るだけ。
             colors[(int)DuelUniformMeshBuilder.Region.CapVisor] = pal.CapVisor;
+            // 髪（issue #916）。頭部だけ肌色とこの色を髪の濃さで混ぜる。髪を焼いていない古い資産・U2素体
+            // （球審）の頭は肌の領域のままなので使われない＝黙って従来のスキンヘッドへ戻るだけ
+            colors[(int)DuelUniformMeshBuilder.Region.Hair] = pal.Hair;
             // **ガンマ→リニア変換を自分でやる**。プロジェクトはリニア色空間で、Properties に宣言した
             // Color（_BaseColor・_StripeColor）は SetColor が自動変換してくれるが、_RegionColors は
             // 配列＝Properties に宣言できず SetColorArray が素通しする。素通しすると sRGB値を
@@ -4522,7 +4554,7 @@ namespace KokoSim.Unity.Match
             float target = Mathf.Clamp(clipTime, 0f, a.Clip.length - 0.001f);
             int steps = Mathf.Max(1, Mathf.CeilToInt(target * 60f));
             float dt = target / steps;
-            for (int i = 0; i < steps; i++) EvaluateWithMirrorFix(a, dt);
+            for (int i = 0; i < steps; i++) EvaluateGraph(a, dt);
             a.Time = target;
             a.PoseAdvanced = true;   // 頭出しもポーズを書き直す＝補正を当て直す回
         }
@@ -4618,7 +4650,7 @@ namespace KokoSim.Unity.Match
             if (a.Mixer.IsValid()) a.Mixer.SetInputWeight(1, 1f);
             if (wasFading && a.Animator != null)
             {
-                a.Graph.Evaluate(0f);
+                EvaluateGraph(a, 0f);
                 a.Animator.applyRootMotion = true;
             }
         }
@@ -4635,7 +4667,7 @@ namespace KokoSim.Unity.Match
             bool rm = a.Animator.applyRootMotion;
             a.Animator.applyRootMotion = false;
             a.Playable.SetTime(0);
-            a.Graph.Evaluate(0f);
+            EvaluateGraph(a, 0f);
             a.Animator.applyRootMotion = rm;
             a.PoseAdvanced = true;   // 巻き戻しもポーズを書き直す＝補正を当て直す回
         }
@@ -4702,7 +4734,7 @@ namespace KokoSim.Unity.Match
                     float rest = end - before;
                     if (rest > 1e-4f)
                     {
-                        EvaluateWithMirrorFix(a, rest);
+                        EvaluateGraph(a, rest);
                         a.PoseAdvanced = true;
                     }
                     a.Time = end;
@@ -4729,7 +4761,7 @@ namespace KokoSim.Unity.Match
             // 0.18秒遅れて出る＝「振りが遅くて球と合っていない」。倍率を上げても、それまでは
             // 「クリップを早く打ち切る」だけでポーズは常に1倍速だった。
             // グラフはアクター別なので、他の役（Speed=1）の見え方は変わらない
-            EvaluateWithMirrorFix(a, adv);
+            EvaluateGraph(a, adv);
             a.PoseAdvanced = true;
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
@@ -6071,9 +6103,9 @@ namespace KokoSim.Unity.Match
         {
             node.localScale = new Vector3(on ? -1f : 1f, 1f, 1f);
             if (a == null) return;
-            // Humanoid Foot IK はミラー中OFF（SyncFootIk のコメント参照。両脚が頭の高さへ折り畳まれる）
+            // 評価は鏡映を外した空間で行う（EvaluateGraph）＝Foot IK もルートモーションも右と同じ式で解ける
             a.Mirrored = on;
-            SyncFootIk(a);
+            a.MirrorNode = node;
             // 負スケール祖先の下では SMR の自動バウンズが狂い、寄りのカメラで一部メッシュ（購入素体の
             // ズボン等）がフラスタムカリングで消える（スパイク実測: 遠景は出るが近接で脚が消える）。
             // ミラー中だけ固定バウンズへ切り替えてカリングを黙らせる。箱は「バインド箱の3倍」ではダメ:

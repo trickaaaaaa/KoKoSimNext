@@ -4,11 +4,11 @@ using UnityEngine;
 namespace KokoSim.Unity.Audio
 {
     /// <summary>
-    /// 試合の効果音（打球音・捕手の捕球音）と審判コールの声。表示専用＝判定・帯には一切関与しない。
+    /// 試合の効果音（打球音・捕手の捕球音）と観客の歓声。表示専用＝判定・帯には一切関与しない。
     ///
     /// 効果音は On-Jin ～音人～（https://on-jin.com/）の野球SE。規約で「素材のまま第三者が取得できる状態」
     /// が禁止なので Git 管理外（.gitignore の Assets/KokoSim/Audio/Vendor/）に置き、Resources から読む。
-    /// 審判の声は VOICEVOX:No.7 で生成したもの（tools/voicevox-umpire-calls.py で作り直せる）。同じく Git 管理外。
+    /// 審判の声は 2026-11-14 にやめた（issue #919。声は場内放送 MatchAnnouncer だけ）。
     /// **素材が無い環境では黙って鳴らさない**（購入素体と同じ流儀＝ゲームは動く）。
     ///
     /// 強さは「段（どのクリップ群か）」と「音量・ピッチ」の2つで出す。素材は段ごとに数本しか無いので、
@@ -17,7 +17,6 @@ namespace KokoSim.Unity.Audio
     public static class MatchSfx
     {
         private const string SfxDir = "Sfx/OnJin/";
-        private const string VoiceDir = "Voice/No7/";
         private const string CheerDir = "Sfx/Cheer/";
 
         // 捕球音の段の境目[km/h]。高校生の球速帯（110〜150）を3つに割る
@@ -66,12 +65,6 @@ namespace KokoSim.Unity.Audio
             // 素材は控えめな音量で収録されているので、強い当たりは上限まで出す
             Play(SfxDir + bank, Mathf.Lerp(0.45f, 1.0f, s), Mathf.Lerp(0.92f, 1.03f, s));
         }
-
-        /// <summary>
-        /// 審判のコール（「アウトォ！」／「セーフ！」）。判定テロップが出る瞬間に鳴らす。
-        /// </summary>
-        public static void PlayUmpireCall(bool isOut)
-            => Play(VoiceDir + (isOut ? "umpire_out" : "umpire_safe"), 1f, 1f);
 
         /// <summary>
         /// いまの試合が甲子園か（歓声の種類を選ぶ）。試合の頭で MatchLiveController が設定する。

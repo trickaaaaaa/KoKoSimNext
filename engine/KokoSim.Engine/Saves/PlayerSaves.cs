@@ -163,10 +163,14 @@ internal static class PlayerSaves
 
     public static SkillSet SkillSetFromJson(JsonObject o)
     {
+        // 削除したスキル（併殺の名手・名捕手など）や知らない名前は読み飛ばし、置き換えた旧名（広角打法→流し打ち）は
+        // 読み替える（issue #907）。EnumJson.Read は未知名を既定値へ落とす＝目慣れに化けるので使わない。
         var visible = new List<Skill>();
-        foreach (var v in o.Arr("visible").Items) visible.Add(EnumJson.Read<Skill>(((JsonString)v).Value));
+        foreach (var v in o.Arr("visible").Items)
+            if (SkillNames.TryParseSaved(((JsonString)v).Value, out var s)) visible.Add(s);
         var hidden = new List<Skill>();
-        foreach (var v in o.Arr("hidden").Items) hidden.Add(EnumJson.Read<Skill>(((JsonString)v).Value));
+        foreach (var v in o.Arr("hidden").Items)
+            if (SkillNames.TryParseSaved(((JsonString)v).Value, out var s)) hidden.Add(s);
         return new SkillSet(visible, hidden);
     }
 }

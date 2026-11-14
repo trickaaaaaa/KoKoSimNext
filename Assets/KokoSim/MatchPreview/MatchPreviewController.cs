@@ -20,6 +20,7 @@ namespace KokoSim.Unity.MatchPreview
         private VisualElement _root;
         private RadarChartView _leftRadar, _rightRadar;
         private Button _start;
+        private System.Action _unbindAnnounce;   // 場内放送の切り替え（issue #919）
 
         // 準備中の二重起動防止（「試合開始」の連打・BackgroundGameOp 完了前の再入をブロックする）。
         private bool _starting;
@@ -36,6 +37,7 @@ namespace KokoSim.Unity.MatchPreview
 
             _start = _root.Q<Button>("mp-start");
             if (_start != null) _start.clicked += OnStart;
+            _unbindAnnounce = KokoSim.Unity.Audio.MatchAnnouncer.BindToggle(_root.Q<Button>("mp-announce"));
 
             // レーダーは部品辞書の共通部品。軸の並び・塗り色はチーム総合力パネルと同一。
             _leftRadar = new RadarChartView(_root.Q<VisualElement>("mp-left-radar"), RadiusFactor, LabelOffset);
@@ -50,6 +52,8 @@ namespace KokoSim.Unity.MatchPreview
         {
             if (_start != null) _start.clicked -= OnStart;
             _start = null;
+            _unbindAnnounce?.Invoke();
+            _unbindAnnounce = null;
         }
 
         private void Render()

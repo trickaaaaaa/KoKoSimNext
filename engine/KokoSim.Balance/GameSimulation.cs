@@ -76,6 +76,11 @@ public static partial class GameSimulation
         public long TotalFieldersChoice { get; init; }
         public long TotalDroppedThirdStrike { get; init; }
         public long TotalErrorExtraAdvance { get; init; }
+        /// <summary>失策の打席の走者アウト・捕球ミス時の二塁走者の帰趨（両軍計・全試合計。issue #903）。</summary>
+        public long TotalErrorPlayRunnerOuts { get; init; }
+        public long TotalCatchErrorSecondRunner { get; init; }
+        public long TotalCatchErrorSecondRunnerOutAtThird { get; init; }
+        public long TotalCatchErrorSecondRunnerHeld { get; init; }
         public long TotalPickoffs { get; init; }
         public long TotalIntentionalWalks { get; init; }
         public long TotalDoubleStealThirdBreaks { get; init; }
@@ -169,6 +174,7 @@ public static partial class GameSimulation
         public double FieldersChoicePerGame => Games > 0 ? (double)TotalFieldersChoice / Games : 0;
         public double DroppedThirdStrikePerGame => Games > 0 ? (double)TotalDroppedThirdStrike / Games : 0;
         public double ErrorExtraAdvancePerGame => Games > 0 ? (double)TotalErrorExtraAdvance / Games : 0;
+        public double ErrorPlayRunnerOutsPerGame => Games > 0 ? (double)TotalErrorPlayRunnerOuts / Games : 0;
         public double PickoffsPerGame => Games > 0 ? (double)TotalPickoffs / Games : 0;
         public double IntentionalWalksPerGame => Games > 0 ? (double)TotalIntentionalWalks / Games : 0;
         public double DoubleStealThirdBreaksPerGame => Games > 0 ? (double)TotalDoubleStealThirdBreaks / Games : 0;
@@ -258,6 +264,7 @@ public static partial class GameSimulation
         public long TotalRuns, TotalPitches, TotalInnings, TotalChanges, TotalHomePlayOuts, TotalThirdPlayOuts, TotalErrors;
         public long TotalDoublePlays;
         public long TotalFc, TotalDropThird, TotalErrorExtra, TotalPickoffs, TotalIntentionalWalks, TotalDoubleSteal;
+        public long TotalErrorRunnerOuts, TotalCeR2, TotalCeR2Out, TotalCeR2Held;
         public long TotalWildPitches;
         public long TotalStealAttempts, TotalStealSuccesses;
         public long TotalSacrificeBunts, TotalSacrificeBuntSuccesses;
@@ -293,6 +300,10 @@ public static partial class GameSimulation
             TotalFc += r.FieldersChoiceCount;
             TotalDropThird += r.DroppedThirdStrikeCount;
             TotalErrorExtra += r.ErrorExtraAdvanceCount;
+            TotalErrorRunnerOuts += r.ErrorPlayRunnerOuts;
+            TotalCeR2 += r.CatchErrorSecondRunnerCount;
+            TotalCeR2Out += r.CatchErrorSecondRunnerOutAtThird;
+            TotalCeR2Held += r.CatchErrorSecondRunnerHeld;
             TotalPickoffs += r.PickoffCount;
             TotalIntentionalWalks += r.IntentionalWalkCount;
             TotalDoubleSteal += r.DoubleStealThirdBreakCount;
@@ -375,6 +386,10 @@ public static partial class GameSimulation
             TotalFc += o.TotalFc;
             TotalDropThird += o.TotalDropThird;
             TotalErrorExtra += o.TotalErrorExtra;
+            TotalErrorRunnerOuts += o.TotalErrorRunnerOuts;
+            TotalCeR2 += o.TotalCeR2;
+            TotalCeR2Out += o.TotalCeR2Out;
+            TotalCeR2Held += o.TotalCeR2Held;
             TotalPickoffs += o.TotalPickoffs;
             TotalIntentionalWalks += o.TotalIntentionalWalks;
             TotalDoubleSteal += o.TotalDoubleSteal;
@@ -443,6 +458,10 @@ public static partial class GameSimulation
             TotalFieldersChoice = TotalFc,
             TotalDroppedThirdStrike = TotalDropThird,
             TotalErrorExtraAdvance = TotalErrorExtra,
+            TotalErrorPlayRunnerOuts = TotalErrorRunnerOuts,
+            TotalCatchErrorSecondRunner = TotalCeR2,
+            TotalCatchErrorSecondRunnerOutAtThird = TotalCeR2Out,
+            TotalCatchErrorSecondRunnerHeld = TotalCeR2Held,
             TotalPickoffs = TotalPickoffs,
             TotalIntentionalWalks = TotalIntentionalWalks,
             TotalDoubleStealThirdBreaks = TotalDoubleSteal,
@@ -610,6 +629,8 @@ public static partial class GameSimulation
         sb.AppendLine(c, $"| 野選（FC） | {s.FieldersChoicePerGame:F3} |");
         sb.AppendLine(c, $"| 振り逃げ | {s.DroppedThirdStrikePerGame:F3} |");
         sb.AppendLine(c, $"| 失策連鎖 | {s.ErrorExtraAdvancePerGame:F3} |");
+        sb.AppendLine(c, $"| 失策の打席の走者アウト | {s.ErrorPlayRunnerOutsPerGame:F3} |");
+        sb.AppendLine(c, $"| 捕球ミス×非フォース二塁走者（件数: 計/三塁で刺殺/二塁に留まる） | {s.TotalCatchErrorSecondRunner}/{s.TotalCatchErrorSecondRunnerOutAtThird}/{s.TotalCatchErrorSecondRunnerHeld} |");
         sb.AppendLine(c, $"| 牽制アウト | {s.PickoffsPerGame:F3} |");
         sb.AppendLine(c, $"| 敬遠 | {s.IntentionalWalksPerGame:F3} |");
         sb.AppendLine(c, $"| 一・三塁重盗 | {s.DoubleStealThirdBreaksPerGame:F3} |");

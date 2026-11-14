@@ -11,7 +11,7 @@ namespace KokoSim.Unity.Match
 {
     /// <summary>
     /// 【開発用・エディタ限定】試合 HUD の特殊能力チップを場面で絞る（issue #781）の確認撮影。
-    /// 自校の部員全員に打撃（尻上がり・粘り）＋投手（尻上がり・球持ち）＋守備＋チームの能力を見えている状態で
+    /// 自校の部員全員に打撃（目慣れ・粘り・チャンス○）＋投手（尻上がり・クセ球・クイック○）＋チームの能力を見えている状態で
     /// 持たせ、守備中（投手帯＝投手だけ）と攻撃中（打者帯＝打撃だけ）を撮る。チップの文字はログにも出す。
     /// </summary>
     public sealed class HudSkillFilterShooter : MonoBehaviour
@@ -23,7 +23,7 @@ namespace KokoSim.Unity.Match
         private static readonly Skill[] Given =
         {
             Skill.SlowStarterBat, Skill.Grinder, Skill.SlowStarterPitch, Skill.DeceptiveBall,
-            Skill.DoublePlayArtist, Skill.Moodmaker,
+            Skill.ClutchHitter, Skill.QuickDelivery, Skill.Moodmaker,
         };
 
         private IEnumerator Start()

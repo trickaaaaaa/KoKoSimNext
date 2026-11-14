@@ -373,7 +373,15 @@ public static class BaserunningModel
                 case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r2, 2, 4, false) { CloseCall = closeCall2, ThrowScatter = scatter2 }); break;
                 case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r2, 2, 4, Out: true) { CloseCall = closeCall2, ExtraStartDelaySeconds = delay2, ThrowScatter = scatter2 }); break;
                 default:
-                    if (r2Forced || third is null) { third = r2; mv?.Add(new RunnerMove(r2, 2, 3, false)); }
+                    if (!r2Forced && third is null && !outThrowUsed && currentOuts + extraOuts < 3
+                        && home is { UnrecoveredCatchError: true } ce)
+                    {
+                        // 捕球ミスの失策（拾い直せず確定, issue #903）: 内野でこぼれた球は近くにある＝三塁は
+                        // 単打のように無条件では取れない。拾い直した野手との時間勝負で、狙う／自重するを決める。
+                        ResolveCatchErrorAdvanceToThird(r2, ce, currentOuts, coeff, rng, mv,
+                            ref extraOuts, ref thirdOuts, ref outThrowUsed, ref third, ref second);
+                    }
+                    else if (r2Forced || third is null) { third = r2; mv?.Add(new RunnerMove(r2, 2, 3, false)); }
                     else second = r2; // 三塁が塞がっていれば（非フォース）二塁に留まる
                     break;
             }
@@ -483,6 +491,50 @@ public static class BaserunningModel
         mv?.Add(new RunnerMove(batter, 0, isDouble ? 2 : 1, false));
 
         return (runs, extraOuts, homeOuts, thirdOuts);
+    }
+
+    /// <summary>
+    /// 捕球ミスの失策（拾い直せず確定, issue #903・design-14 P1-6）で、非フォースの二塁走者が三塁を狙うかを
+    /// 拾い直した野手との時間勝負で解く。<b>新しい走者の式は作らない</b>: 走者・守備の秒は
+    /// <see cref="HomePlayResolver"/>（ゴロ進塁打と同じ <see cref="HomePlayResolver.AdvanceParams"/>＝送球先は三塁・
+    /// 走者はゴロを読む遅れ <see cref="BaserunningCoefficients.GrounderAdvanceStartDelaySeconds"/> を引き受ける）、
+    /// 守備の時計は <see cref="HomePlayContext.Situation"/>（GameEngine が拾い直しを終えた時刻
+    /// <c>CatchErrorReadyAtSeconds</c> を起点に組んだもの）。送り判断は単打の一塁→三塁と同じ
+    /// <see cref="HomeSendDecision.ShouldSendThird"/>（三塁へ回すかの判断。2アウト緩和あり）。
+    /// 自重は二塁に留まり乱数を消費しない（本塁・三塁レースの流儀, 不変条件#2）。
+    /// 呼び出し前提: 非フォースの二塁走者・三塁は空き・送球は未使用・3アウト未満。
+    /// </summary>
+    private static void ResolveCatchErrorAdvanceToThird(
+        Player r2, HomePlayContext h, int currentOuts, BaserunningCoefficients coeff, IRandomSource rng,
+        List<RunnerMove>? mv, ref int extraOuts, ref int thirdOuts, ref bool outThrowUsed,
+        ref Player? third, ref Player? second)
+    {
+        var advance = HomePlayResolver.AdvanceParams(h.Field, coeff);
+        var delay = coeff.GrounderAdvanceStartDelaySeconds;
+        var prob = HomePlayResolver.SuccessProbability(r2, 2, h.Situation, h.Field, coeff, advance, delay);
+        if (!HomeSendDecision.ShouldSendThird(prob, currentOuts + extraOuts, h.Aggression, h.Tactics))
+        {
+            second = r2; // 自重＝二塁に留まる（移動なし・RNG非消費）
+            return;
+        }
+        var margin = HomePlayResolver.Margin(r2, 2, h.Situation, h.Field, coeff, advance, delay);
+        var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
+        var race = HomePlayResolver.ResolveRace(r2, 2, h.Situation, h.Field, coeff, advance, rng, delay);
+        if (race.Safe)
+        {
+            third = r2;
+            mv?.Add(new RunnerMove(r2, 2, 3, false)
+                { CloseCall = closeCall, ExtraStartDelaySeconds = delay, ThrowScatter = race.Scatter });
+        }
+        else
+        {
+            extraOuts++; thirdOuts++; outThrowUsed = true; // 三塁で刺殺（走者はアウト＝塁上に残らない）
+            mv?.Add(new RunnerMove(r2, 2, 3, Out: true)
+                {
+                    CloseCall = closeCall, ExtraStartDelaySeconds = delay + race.RunnerDelaySeconds,
+                    ThrowScatter = race.Scatter,
+                });
+        }
     }
 
     /// <summary>三塁で自重していた先行走者を、後続走者に追い越されるため本塁へ押し出す（#88）。
@@ -1224,11 +1276,11 @@ public static class BaserunningModel
         if (pR1Safe > coeff.DoublePlayForceMaxRunnerSuccess) return (0, false);
 
         // 二段目の見積り: 二塁ベース経由の転送（ピボット）で打者を一塁で刺せるか（P_relay_out）。二塁への送球到達
-        // 時刻を起点に、二塁手/遊撃手の転送握り替え（DoublePlayPivotTransferSeconds − 名手短縮）で一塁へ転送する。
+        // 時刻を起点に、二塁手/遊撃手の転送握り替え（DoublePlayPivotTransferSeconds）で一塁へ転送する。
         // 打者走者の一塁到達は守備解決の正典値（home.BatterToFirstSeconds）＝出塁/凡打を決めたのと同じ時計。
         var arriveAtSecond = HomePlayResolver
             .ResolveThrowPath(home.Situation, home.Field.SecondBase, coeff).ArriveAtSeconds;
-        var pivotTransfer = Math.Max(0.0, coeff.DoublePlayPivotTransferSeconds - home.DoublePlayPivotBonusSeconds);
+        var pivotTransfer = coeff.DoublePlayPivotTransferSeconds;
         // 中継球速は二塁カバーに実際に入った野手の地肩（issue⑦。渡されなければ従来のカットマン用
         // 共通定数 RelayThrowSpeedMps へフォールバック＝旧挙動と恒等）。
         var pivotArm = home.DoublePlayPivotArmMps ?? coeff.RelayThrowSpeedMps;

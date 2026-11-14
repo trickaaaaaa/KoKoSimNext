@@ -476,9 +476,7 @@ public sealed record BaserunningCoefficients
     /// </summary>
     public double DoublePlayForceOnlyMaxRunnerSuccess { get; init; } = 0.20;
     /// <summary>二塁ベース経由の転送（ピボット）握り替え[s]。一塁手の中継 <see cref="RelayTransferSeconds"/> とは別値
-    /// （捕って踏み替えて投げ返す連携動作＝中継より長い。#318 が外野値と分けたのと同じ扱い）。
-    /// 「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）はこの時間を短縮する
-    /// ＝確率への加算でなく時間の短縮（Skill.cs:39「二塁経由の送球が速い」通りの効き方, Issue #369）。</summary>
+    /// （捕って踏み替えて投げ返す連携動作＝中継より長い。#318 が外野値と分けたのと同じ扱い）。</summary>
     public double DoublePlayPivotTransferSeconds { get; init; } = 0.90;
     /// <summary>二塁→一塁の転送送球 margin→打者生存（野選）確率の logistic 幅[s]（一塁の際どい封殺＝狭め）。</summary>
     public double DoublePlayRelayMarginScale { get; init; } = 0.20;

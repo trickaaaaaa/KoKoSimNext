@@ -65,6 +65,17 @@ public static class PlayerNameGenerator
     /// <summary>同一チーム内で下の名前が被ったときのリロール上限（超えたら未使用語彙を走査して確定）。</summary>
     private const int MaxGivenRerolls = 24;
 
+    /// <summary>
+    /// フルネームから苗字を取り出す（全角・半角どちらの空白でも区切る）。空白が無ければ名前そのまま。
+    /// 画面の短い名前と場内放送（issue #919）の単一ソース。
+    /// </summary>
+    public static string Surname(string? fullName)
+    {
+        var n = fullName ?? "";
+        var i = n.IndexOfAny(new[] { '　', ' ' });
+        return i > 0 ? n.Substring(0, i) : n;
+    }
+
     /// <summary>「苗字　名前」（全角スペース区切り）を返す。</summary>
     public static string Generate(PlayerNameVocab v, IRandomSource rng)
         => Generate(v, rng, null);

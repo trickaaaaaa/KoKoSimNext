@@ -115,6 +115,18 @@ public static class AbilitySweep
         double low = LowLevel, double high = HighLevel, string unit = "Lv", Func<Player, Player>? prelude = null)
         => new(id, label, scope, low, high, unit, apply, prelude);
 
+    /// <summary>特殊能力の有無を振る条件の単位（低=なし／高=あり。issue #907）。</summary>
+    public const string SkillUnit = "skill";
+
+    /// <summary>
+    /// 特殊能力の有無（issue #907）。低い側＝持たない／高い側＝持つ。<paramref name="prelude"/> は能力の下ごしらえ
+    /// （例: チャンス○×は精神力の低い打線でないと差が出ない）。
+    /// </summary>
+    private static Condition S(string id, string label, Scope scope, Skill skill, Func<Player, Player>? prelude = null)
+        => new(id, label, scope, 0, 1, SkillUnit,
+            (p, v) => v > 0 ? p with { Skills = new SkillSet(p.Skills.Visible.Append(skill), p.Skills.Hidden) } : p,
+            prelude);
+
     /// <summary>掃引する能力の一覧（Id は balance-targets.yaml の ability_sensitivity.abilities の鍵と一致）。</summary>
     public static readonly IReadOnlyList<Condition> Conditions = new[]
     {
@@ -169,6 +181,19 @@ public static class AbilitySweep
             Repertoire = MapRepertoire(a, s => s.Type != PitchType.Fastball ? s with { Sharpness = (int)v } : s),
         })),
         C("pitcher_fielding", "投手:守備", Scope.Pitchers, (p, v) => p with { Fielding = (int)v }),
+        // 特殊能力の有無（issue #907）。精神力の下ごしらえは、チャンス/ピンチ○×が精神力50では低下が小さく差が見えにくいため。
+        S("skill_clutch_hitter", "特:チャンス○（精神力20）", Scope.AllPlayers, Skill.ClutchHitter, p => p with { Mental = LowLevel }),
+        S("skill_choke_hitter", "特:チャンス×", Scope.AllPlayers, Skill.ChokeHitter),
+        S("skill_fastball_hitter", "特:速球打ち", Scope.AllPlayers, Skill.FastballHitter),
+        S("skill_breaking_ball_hitter", "特:変化球打ち", Scope.AllPlayers, Skill.BreakingBallHitter),
+        S("skill_opposite_field_hitter", "特:流し打ち", Scope.AllPlayers, Skill.OppositeFieldHitter),
+        S("skill_team_batting", "特:つなぎの打撃", Scope.AllPlayers, Skill.TeamBatting),
+        S("skill_clutch_pitcher", "特:ピンチ○（精神力20）", Scope.Pitchers, Skill.ClutchPitcher, p => p with { Mental = LowLevel }),
+        S("skill_choke_pitcher", "特:ピンチ×", Scope.Pitchers, Skill.ChokePitcher),
+        S("skill_quick_delivery", "特:クイック○", Scope.Pitchers, Skill.QuickDelivery),
+        S("skill_slow_delivery", "特:クイック×", Scope.Pitchers, Skill.SlowDelivery),
+        S("skill_fireman", "特:火消し", Scope.Pitchers, Skill.Fireman),
+        S("skill_shaky_start", "特:立ち上がり難", Scope.Pitchers, Skill.ShakyStart),
     };
 
     // ── チーム ──
@@ -444,8 +469,8 @@ public static class AbilitySweep
         AppendRow(sb, r.Baseline, "基準（全員50）");
         foreach (var (cond, low, high) in r.Abilities)
         {
-            AppendRow(sb, low, $"{cond.Label} {Fmt(cond.Low)}{UnitSuffix(cond)}");
-            AppendRow(sb, high, $"{cond.Label} {Fmt(cond.High)}{UnitSuffix(cond)}");
+            AppendRow(sb, low, $"{cond.Label} {ValueLabel(cond, cond.Low)}");
+            AppendRow(sb, high, $"{cond.Label} {ValueLabel(cond, cond.High)}");
         }
         sb.AppendLine();
 
@@ -504,6 +529,9 @@ public static class AbilitySweep
     }
 
     private static string UnitSuffix(Condition cond) => cond.Unit == "Lv" ? "" : cond.Unit;
+
+    private static string ValueLabel(Condition cond, double v)
+        => cond.Unit == SkillUnit ? (v > 0 ? "あり" : "なし") : $"{Fmt(v)}{UnitSuffix(cond)}";
 
     private static string Fmt(double v) => v.ToString("0", CultureInfo.InvariantCulture);
 

@@ -28,6 +28,8 @@ namespace KokoSim.EditorTools
             "Assets/DuelSpike/Vendor/SchoolBaseballPlayer0001/Texture/I_Players_0001_Suit_Co_0001.jpg";
         private const string PantsTex =
             "Assets/DuelSpike/Vendor/SchoolBaseballPlayer0001/Texture/I_Players_0001_Pants_Co_0001.jpg";
+        private const string FaceTex =
+            "Assets/DuelSpike/Vendor/SchoolBaseballPlayer0001/Texture/I_YM7M_Fb_AR_Face_Co_0001.jpg";
         private const string OutDir = "Assets/DuelSpike/Vendor/Generated";
 
         /// <summary>
@@ -51,7 +53,7 @@ namespace KokoSim.EditorTools
             { "A_Players_0001_Shoes_0001", Region.Shoes },
             // バックルは帯と同じ領域＝ベルト1本として読ませる（高校球児のベルトは黒が多数派）
             { "A_Players_0001_Beltbuckle_0001", Region.Belt },
-            { "A_JM7M_AC_0001_Head_0001", Region.Skin },
+            // 頭メッシュ（A_JM7M_AC_0001_Head_0001）は頭部と両手が同居している＝ClassifyHead で振り分ける
             { "LeftEye_Ball_Geo", Region.Skin },
             { "RightEye_Ball_Geo", Region.Skin },
             // 帽子は独立領域（2026-07-29。チームカラーをプレイヤーが領域ごとに決めるため、
@@ -61,6 +63,7 @@ namespace KokoSim.EditorTools
         };
 
         private const string CapMeshName = "A_Players_0001_Cap_0001";
+        internal const string HeadMeshName = "A_JM7M_AC_0001_Head_0001";
 
         private const string SuitMeshName = "A_Players_0001_Suit_0001";
         private const string PantsMeshName = "A_Players_0001_Pants_0001";
@@ -83,6 +86,12 @@ namespace KokoSim.EditorTools
             if (suitTex == null) return "FAILED: Suit テクスチャが読めない " + SuitTex;
             var pantsTex = LoadReadable(PantsTex);
             if (pantsTex == null) { Object.DestroyImmediate(suitTex); return "FAILED: Pants テクスチャが読めない " + PantsTex; }
+            var faceTex = LoadReadable(FaceTex);
+            if (faceTex == null)
+            {
+                Object.DestroyImmediate(suitTex); Object.DestroyImmediate(pantsTex);
+                return "FAILED: 顔テクスチャが読めない " + FaceTex;
+            }
 
             Directory.CreateDirectory(OutDir);
 
@@ -101,8 +110,13 @@ namespace KokoSim.EditorTools
                 copy.name = mesh.name;
 
                 int[] regionPerVertex;
+                float[] hairWeight = null;
                 string note;
-                if (r.name == SuitMeshName)
+                if (r.name == HeadMeshName)
+                {
+                    regionPerVertex = ClassifyHead(copy, HeadSubmesh(r), faceTex, out hairWeight, out note);
+                }
+                else if (r.name == SuitMeshName)
                 {
                     regionPerVertex = ClassifySuit(copy, suitTex, out note);
                     note += " / " + FlareSleeves(copy, regionPerVertex, r as SkinnedMeshRenderer, anim);
@@ -145,6 +159,10 @@ namespace KokoSim.EditorTools
                         KokoSim.Unity.Match.DuelUniformMeshBuilder.RegionUv(regionPerVertex[i]), rest[i].x);
                 if (r.name == SuitMeshName)
                     note += " / " + SleeveStripeAlongArm(copy, regionPerVertex, r as SkinnedMeshRenderer, anim, uv1);
+                // 髪の領域では UV1.y を髪の濃さに使う（縞は地色の領域にしか乗らないので刻み座標は要らない）
+                if (hairWeight != null)
+                    for (int i = 0; i < uv1.Length; i++)
+                        if (regionPerVertex[i] == (int)Region.Hair) uv1[i].y = hairWeight[i];
                 copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
 
                 var outPath = OutDir + "/" + r.name + "_Regions.asset";
@@ -162,6 +180,7 @@ namespace KokoSim.EditorTools
             Object.DestroyImmediate(inst);
             Object.DestroyImmediate(suitTex);
             Object.DestroyImmediate(pantsTex);
+            Object.DestroyImmediate(faceTex);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             return sb.ToString();
@@ -214,6 +233,137 @@ namespace KokoSim.EditorTools
             note = "三角形 クラウン=" + triCrown + " つば=" + triVisor
                  + " / 頂点の領域またぎ=" + conflicts + "（多い＝境界がギザつく）";
             return outRegion;
+        }
+
+        // ---- 坊主頭の髪（issue #916） ------------------------------------------------------------
+        //
+        // 購入素体の顔テクスチャ（Face_Co）には**坊主頭（短髪＋額・もみあげ・襟足の生え際）が最初から描かれている**。
+        // 領域シェーダはテクスチャを読まず領域ごとの単色で塗るので、頭を丸ごと肌にするとスキンヘッドに見えていた。
+        // 髪は別ジオメトリではなく頭蓋の面そのもので、頭・顔・耳・首が1つのUV島に入っている（＝島では分けられない）。
+        // 色相は髪も肌も約27°で、**輝度だけで分かれる**（sRGB: 髪0.26〜0.31／生え際のぼかし0.37〜0.45／肌0.50〜0.60）。
+        // 幾何で切ると生え際の高さが方位ごとに違う（境界箱の高さ比で 額0.65／耳上0.64／襟足0.34）ので襟足が欠ける。
+        //
+        // 焼き方: 頭部の頂点は**全部 Hair 領域**にし、UV1.y に髪の濃さ（0=肌〜1=髪）を焼く。シェーダが肌色と髪色を
+        // 濃さで混ぜる＝生え際がぼける（監督決定）。髪と肌で領域IDを分けると、頭は溶接メッシュなので境界の頂点が
+        // 両側の三角形に共有され、UV1.x が 4.5/8→9.5/8 へ補間されて**途中の領域（靴・帽子・ベルト・つば）の色の帯**が出る。
+
+        /// <summary>これより上（uv.y）は歯・舌の島。髪にしない。</summary>
+        internal const float MouthIslandMinV = 0.815f;
+
+        /// <summary>髪の濃さ1とみなす輝度（sRGB）。描かれた短髪は0.26〜0.31。</summary>
+        internal const float HairLumaFull = 0.32f;
+
+        /// <summary>髪の濃さ0とみなす輝度（sRGB）。肌は0.50〜0.60、生え際のぼかしは0.37〜0.45。</summary>
+        internal const float HairLumaNone = 0.48f;
+
+        /// <summary>赤/緑がこれを超える画素は唇・眼窩の影（髪ではない）。顔の前半分（<see cref="LipFrontShare"/>）でだけ見る。</summary>
+        internal const float LipRedOverGreen = 1.3f;
+
+        /// <summary>
+        /// 唇・眼窩の除外を効かせる前方の範囲（境界箱の前後比）。髪自体も赤茶で、後頭部の正中には赤/緑1.31〜1.35の
+        /// 髪がある＝頭全体で除外すると襟足の真ん中に肌の筋が1本通る（2026-11-14 実測）。唇・眼窩は顔の前にしか無い。
+        /// </summary>
+        internal const float LipFrontShare = 0.5f;
+
+        /// <summary>眉を除く: 前方（境界箱の前後幅に対する比）。</summary>
+        internal const float BrowFrontShare = 0.25f;
+
+        /// <summary>眉を除く: 高さ（境界箱の高さに対する比）がこれ未満の前方は髪にしない（額の生え際は0.65より上）。</summary>
+        internal const float BrowHeightShare = 0.68f;
+
+        /// <summary>
+        /// 1頂点の髪の濃さ（0〜1）。<paramref name="frontRatio"/> は頭部の境界箱で前端0〜後端1、
+        /// <paramref name="heightRatio"/> は下端0〜上端1。色は頂点のUVで顔テクスチャを引いた sRGB。
+        /// </summary>
+        internal static float HairWeight(Color c, float uvY, float frontRatio, float heightRatio)
+        {
+            if (uvY >= MouthIslandMinV) return 0f;
+            if (frontRatio < LipFrontShare && c.r > c.g * LipRedOverGreen) return 0f;
+            if (frontRatio < BrowFrontShare && heightRatio < BrowHeightShare) return 0f;
+            float luma = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+            float t = Mathf.Clamp01((luma - HairLumaFull) / (HairLumaNone - HairLumaFull));
+            return 1f - t * t * (3f - 2f * t);
+        }
+
+        /// <summary>頂点の色を引くときの箱の半径（UV）。頭皮の面は粗い（平均辺長2.8cm）ので1画素だと毛の筋を拾う。</summary>
+        private const float HairSampleRadiusUv = 0.004f;
+
+        /// <summary>
+        /// 頭メッシュを振り分ける。<paramref name="headSubmesh"/> の頂点は <see cref="Region.Hair"/>（髪の濃さを
+        /// <paramref name="hairWeight"/> へ）、それ以外（同居している両手）は <see cref="Region.Skin"/>。
+        /// 頭部と手の両方の三角形に使われる頂点は手の側（Skin）に倒す＝手に髪の色が乗らない（件数を報告する）。
+        /// </summary>
+        internal static int[] ClassifyHead(Mesh mesh, int headSubmesh, Texture2D faceTex,
+            out float[] hairWeight, out string note)
+        {
+            int vcount = mesh.vertexCount;
+            var region = new int[vcount];
+            hairWeight = new float[vcount];
+            for (int i = 0; i < vcount; i++) region[i] = (int)Region.Skin;
+            if (headSubmesh < 0 || headSubmesh >= mesh.subMeshCount)
+            {
+                note = "頭部のサブメッシュが見つからない＝全体=Skin（スキンヘッドのまま）";
+                return region;
+            }
+
+            var inHead = new bool[vcount];
+            var inOther = new bool[vcount];
+            for (int sm = 0; sm < mesh.subMeshCount; sm++)
+                foreach (var i in mesh.GetTriangles(sm))
+                    if (sm == headSubmesh) inHead[i] = true; else inOther[i] = true;
+
+            var v = mesh.vertices;
+            var uv = mesh.uv;
+            var min = Vector3.positiveInfinity;
+            var max = Vector3.negativeInfinity;
+            for (int i = 0; i < vcount; i++)
+                if (inHead[i]) { min = Vector3.Min(min, v[i]); max = Vector3.Max(max, v[i]); }
+            var size = Vector3.Max(max - min, Vector3.one * 1e-6f);
+
+            int head = 0, shared = 0, full = 0, partial = 0;
+            for (int i = 0; i < vcount; i++)
+            {
+                if (!inHead[i]) continue;
+                if (inOther[i]) { shared++; continue; }
+                head++;
+                region[i] = (int)Region.Hair;
+                // メッシュ空間は Z-up・顔が -y 側（帽子と同じ。ClassifyCap の実測）
+                float front = (v[i].y - min.y) / size.y;
+                float height = (v[i].z - min.z) / size.z;
+                var c = SampleBox(faceTex, uv[i], HairSampleRadiusUv);
+                float w = HairWeight(c, uv[i].y, front, height);
+                hairWeight[i] = w;
+                if (w >= 0.99f) full++;
+                else if (w > 0.01f) partial++;
+            }
+            note = "頭部の頂点=" + head + "（髪=" + full + " 生え際=" + partial + " 肌=" + (head - full - partial)
+                 + "）/ 手と共有で肌に倒した頂点=" + shared + "（0なら頭部と手は完全に分離）"
+                 + " / 頭部の境界箱 " + min.ToString("F3") + "〜" + max.ToString("F3");
+            return region;
+        }
+
+        /// <summary>顔テクスチャのマテリアルを持つサブメッシュ（無ければ0）。</summary>
+        private static int HeadSubmesh(Renderer r)
+        {
+            var mats = r.sharedMaterials;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                var m = mats[i];
+                if (m == null) continue;
+                var tex = m.mainTexture;
+                if ((tex != null && tex.name.Contains("Face")) || m.name.Contains("Face")) return i;
+            }
+            return 0;
+        }
+
+        /// <summary>uv を中心に 5×5 点の平均色（sRGB のまま）。</summary>
+        private static Color SampleBox(Texture2D tex, Vector2 uv, float radius)
+        {
+            var sum = Color.clear;
+            for (int y = -2; y <= 2; y++)
+                for (int x = -2; x <= 2; x++)
+                    sum += tex.GetPixelBilinear(uv.x + x * radius * 0.5f, uv.y + y * radius * 0.5f);
+            return sum / 25f;
         }
 
         /// <summary>つばと判定する前方の割合（境界箱の y 幅に対する比）。</summary>

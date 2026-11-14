@@ -19,21 +19,34 @@ public static class SkillGenerator
     /// </summary>
     internal static readonly HashSet<Skill> HiddenIneligible = new()
     {
-        Skill.SprayHitter, Skill.FirstPitchSwinger, Skill.Grinder, Skill.EffectivelyWild,
-        Skill.DoublePlayArtist, Skill.Moodmaker, Skill.PracticeLeader, Skill.Diligent,
+        Skill.OppositeFieldHitter, Skill.FirstPitchSwinger, Skill.Grinder, Skill.EffectivelyWild,
+        Skill.Moodmaker, Skill.PracticeLeader, Skill.Diligent,
+        Skill.FastballHitter, Skill.BreakingBallHitter, Skill.TeamBatting,
+        Skill.QuickDelivery, Skill.SlowDelivery, Skill.Fireman,
     };
 
-    // 投手が持ちうる挙動系。
+    // 投手寄りの選手が持ちうる挙動系（issue #907 で拡充）。
     private static readonly Skill[] PitchingPool =
     {
-        Skill.SlowStarterPitch, Skill.SecondTimeThrough, Skill.EffectivelyWild, Skill.DeceptiveBall,
+        Skill.SlowStarterPitch, Skill.EffectivelyWild, Skill.DeceptiveBall,
+        Skill.ClutchPitcher, Skill.QuickDelivery, Skill.Fireman,
     };
 
-    // 野手が持ちうる打撃・守備系。
+    private static readonly Skill[] PitchingNegative =
+    {
+        Skill.SecondTimeThrough, Skill.ChokePitcher, Skill.SlowDelivery, Skill.ShakyStart,
+    };
+
+    // 野手寄りの選手が持ちうる打撃系（守備系は issue #907 で廃止）。
     private static readonly Skill[] BattingPool =
     {
-        Skill.SlowStarterBat, Skill.Streaky, Skill.SprayHitter, Skill.FirstPitchSwinger, Skill.Grinder,
-        Skill.DoublePlayArtist, Skill.MasterCatcher,
+        Skill.SlowStarterBat, Skill.Streaky, Skill.OppositeFieldHitter, Skill.FirstPitchSwinger, Skill.Grinder,
+        Skill.ClutchHitter, Skill.FastballHitter, Skill.BreakingBallHitter, Skill.TeamBatting,
+    };
+
+    private static readonly Skill[] BattingNegative =
+    {
+        Skill.ChokeHitter,
     };
 
     // 全員が持ちうるチーム・体質系（負スキルは確率を下げる）。
@@ -73,15 +86,20 @@ public static class SkillGenerator
             // RNG消費は hidden_eligible に関わらず常に1回（乱数消費順を変えない）。
             // 隠し不可のスキルは、隠し行きを引いた結果を無視して visible へ回す。
             var wantsHidden = MathUtil.Chance(c.HiddenShare, rng);
+            // 正負ペア（○⇔×, issue #907）は同時に持たない。後から引いた方を捨てる（乱数は引いた後＝消費順は固定）。
+            if (SkillNames.OppositeOf(s) is { } opposite && (visible.Contains(opposite) || hidden.Contains(opposite))) return;
             if (wantsHidden && !HiddenIneligible.Contains(s)) hidden.Add(s);
             else visible.Add(s);
             count++;
         }
 
-        // カテゴリ適合プール（順序固定＝決定論）。二択せず両方を走査し、確率だけ w で振り分ける。
+        // カテゴリ適合プール（順序固定＝決定論）。二択せず両方を走査し、確率だけ w で振り分ける
+        // （投手系＝投手寄りの選手、打撃系＝野手寄りの選手に付く。issue #907）。負スキルは半分の確率。
         var w = MathUtil.Clamp(pitcherWeight, 0.0, 1.0);
-        foreach (var s in PitchingPool) TryAdd(s, c.CommonSkillProb * w);
-        foreach (var s in BattingPool) TryAdd(s, c.CommonSkillProb * (1.0 - w));
+        foreach (var s in PitchingPool) TryAdd(s, c.PlaySkillProb * w);
+        foreach (var s in PitchingNegative) TryAdd(s, c.PlaySkillProb * 0.5 * w);
+        foreach (var s in BattingPool) TryAdd(s, c.PlaySkillProb * (1.0 - w));
+        foreach (var s in BattingNegative) TryAdd(s, c.PlaySkillProb * 0.5 * (1.0 - w));
         foreach (var s in ConstitutionPositive) TryAdd(s, c.CommonSkillProb);
         foreach (var s in TeamPool) TryAdd(s, c.CommonSkillProb);
         foreach (var s in ConstitutionNegative) TryAdd(s, c.CommonSkillProb * 0.5); // 負スキルは控えめ

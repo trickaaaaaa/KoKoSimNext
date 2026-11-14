@@ -103,6 +103,10 @@
                         <ui:Instance template="LineScorePanel" />
                         <ui:Label class="inning-break__hint f-body" text="クリックで続ける" />
                     </ui:VisualElement>
+
+                    <!-- 交代テロップ（issue #920）。交代を確定した瞬間に試合を止めて盤面の下に出す
+                         （クリックか数秒で再開）。中身は SubTelopView が組む。 -->
+                    <ui:VisualElement name="sub-telop" class="sub-telop" />
                 </ui:VisualElement>
 
                 <!-- 采配指示の手札（試合画面改修）。盤面の直下・中央寄せ。中身の TacticsCardDeck は
@@ -125,6 +129,7 @@
                     <ui:VisualElement class="md-group">
                         <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
                         <ui:Button name="duel-view" class="chip-btn" text="2D俯瞰（デバッグ）" />
+                        <ui:Button name="announce" class="chip-btn" text="場内放送" />
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
                 </ui:VisualElement>
@@ -265,10 +270,10 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 選手能力ビューア（issue #602）。タイム（pause-modal）から開き、閉じるとポップアップへ戻る。
-             両校の打線・現投手・控えを左右に並べ、行の右に能力をランクチップで出す（監督決定 A案）。
+        <!-- 選手能力ビューア（issue #602 → #923 で作り直し・監督決定B案）。タイム（pause-modal）から開き、閉じるとポップアップへ戻る。
+             左＝自校/相手をタブで切り替える一覧（打線・現投手・控え）、右＝カーソルを当てた1人の詳細（能力・持ち球・今日と通算の成績）。
              **読むだけ**＝エンジンに一切触れない（伝令を消費しない・乱数を引かない・決定論不変）。
-             骨組みだけ置き、行は MatchScoutPanel が部品辞書で動的生成する。 -->
+             骨組みだけ置き、行と詳細は MatchScoutPanel が部品辞書で動的生成する。 -->
         <ui:VisualElement name="scout-modal" class="ui-root modal-scrim">
             <ui:VisualElement class="modal-card mscout-card">
 
@@ -281,8 +286,16 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement class="mscout-body">
-                    <ui:VisualElement name="mscout-left" class="mscout-team" />
-                    <ui:VisualElement name="mscout-right" class="mscout-team mscout-team--last" />
+                    <ui:VisualElement class="mscout-list">
+                        <ui:VisualElement class="mscout-list__hd">
+                            <ui:VisualElement name="mscout-teams" class="seg-tabs" />
+                            <ui:Label name="mscout-school" text="" class="mscout-team__name f-display" />
+                        </ui:VisualElement>
+                        <ui:ScrollView name="mscout-rows" mode="Vertical" class="mscout-scroll" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="mscout-detail panel">
+                        <ui:ScrollView name="mscout-detail" mode="Vertical" class="mscout-scroll" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
             </ui:VisualElement>

@@ -156,7 +156,8 @@ public static class ContactModel
         IRandomSource rng,
         int familiarityPa = 0,
         int strikes = 0,
-        double? pitchFamiliarityLevel = null)
+        double? pitchFamiliarityLevel = null,
+        BattedBallSkillMods skillMods = default)
     {
         var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff, familiarityPa, pitchFamiliarityLevel);
         if (MathUtil.Chance(whiffProb, rng))
@@ -179,6 +180,8 @@ public static class ContactModel
             coeff.QualityMean + coeff.QualityContactSlope * (batter.Contact - 50)
                 + PitcherContactQualityBias(plan, features, coeff)
                 + coeff.PitchFamiliarityQualityPerLevel * PitchFamiliarityEffect(pitchFamiliarityLevel, plan.PitchRank, coeff)
+                // つなぎの打撃（設計書10 §2.1・issue #907）: 走者ありで打球が少し弱くなる。スキルなしは0＝恒等。
+                + skillMods.QualityShift
                 + rng.NextGaussian(0, coeff.QualitySigma),
             QualityMin, 1.05);
 
@@ -193,11 +196,18 @@ public static class ContactModel
         var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality)) * contactTighten;
         // 球種の縦変化で角度が動く（issue #835）: 縦に落ちる球（フォーク等）ほど角度が下がりゴロが増える。
         var breakAngleShift = coeff.LaunchAnglePerVerticalBreakM * (features.InducedVerticalBreakM - coeff.LaunchAngleBreakRefM);
-        var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + breakAngleShift + rng.NextGaussian(0, angleSigma);
+        // つなぎの打撃（issue #907）: 走者ありで打球角を低く（ゴロ寄り）。スキルなしは0＝恒等。
+        var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + breakAngleShift + skillMods.LaunchShiftDeg
+                          + rng.NextGaussian(0, angleSigma);
 
         // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。
         var timing = TimingOffsetMean(batter, plan, features, coeff) + rng.NextGaussian(0, coeff.TimingSigma);
-        var bearing = BearingDeg(batter, timing, launchAngle, coeff, rng);
+        var bearing = BearingDeg(batter, timing, launchAngle, coeff, rng)
+                      // つなぎの打撃（issue #907）: 走者ありで右方向（一塁側）へ寄せる＝進塁打。スキルなしは0＝恒等。
+                      + skillMods.BearingShiftDeg;
+        // 流し打ち（issue #907）: 逆方向へ飛んだ打球は初速が落ちない＝強い打球になる。乱数は引かない。
+        if (skillMods.OppositeFieldExitBonus != 0.0 && skillMods.IsOppositeField(bearing, batter.Bats))
+            exitMps *= 1.0 + skillMods.OppositeFieldExitBonus;
 
         // ポップフライ（issue #830 ②）: 芯の下を叩いた当たりは真上に近く上がる遅い打球になる。品質が低いほど
         // なりやすい。方向は上で決めたまま。本流から Fork した専用ストリームで引く（Fork は親を進めない＝

@@ -162,6 +162,8 @@ namespace KokoSim.Unity.Match
         // 両校の学校ID（成績の帰属キーの校側, issue #634）。既定はどちらの校とも一致しない値＝成績なし。
         private int _awaySchoolId = int.MinValue;
         private int _homeSchoolId = int.MinValue;
+        /// <summary>自校（監督のチーム）の校ID。</summary>
+        private int OwnSchoolId => _managerIsAway ? _awaySchoolId : _homeSchoolId;
         private bool? _duelColorsOffenseIsTop;   // 対決ビューへ最後に流した攻守（null=未適用）
         private System.Action<GameResult> _onComplete;
         private GameResult _finalResult;
@@ -224,6 +226,10 @@ namespace KokoSim.Unity.Match
         private VisualElement _miniDiaHost;
         private MiniDiamondElement _miniDia;
         private const int MaxDuelFieldLabels = 6;
+        // 場内放送（issue #919）の切り替え（表示グループの chip-btn）と、同じ打席で二度言わないための鍵。
+        private Button _announceBtn;
+        private System.Action _unbindAnnounce;
+        private string _announcedKey;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
         // 選手能力ビューア（issue #602）。タイムから開く両校の名簿＝**読むだけ**でエンジンに触れない。
@@ -463,6 +469,20 @@ namespace KokoSim.Unity.Match
         private float _subCallClock;
         private bool _subCallOn;
 
+        // 交代テロップ（issue #920）。交代を確定した瞬間（自校は交代パネルを閉じて再開した瞬間、AI は次の球の前）に
+        // 進行を止めて盤面の下へ出す。止め方はイニング間画面（_inningBreakOn）と同じ型＝PumpEngine に入らせず
+        // Update で早期に抜け、時間かクリックで明ける。同じ間合いの交代はチームごとに1枚（SubstitutionTelop）。
+        // 高速試合モードでは出さない（実況履歴の1行だけ）。
+        [SerializeField] private float subTelopHoldSeconds = 3f;
+        private SubTelopView _subTelop;
+        private readonly Queue<KokoSim.Engine.Match.Broadcast.TelopCard> _subTelopQueue = new();
+        private float _subTelopClock;
+        private bool _subTelopOn;
+        // 投球・打球の描画の途中で出したか（そのときは対決ビューの芝居も止める＝明けたら続きから）。
+        private bool _subTelopFreezeRig;
+        // テロップが明けたら次の采配窓を取りに行く（球数制限の強制交代から戻る途中で出した場合）。
+        private bool _subTelopPumpAfter;
+
         // 試合開始/終了テロップ「プレイボール」「ゲームセット」（issue #442）。器は判定テロップ
         // （judgement-call。#59/#354）を流用し、新規の見た目部品は作らない。寿命は PitchCall と同じ
         // 「Update() の専用クロック」方式だが、判定オーバーレイ（#236）と同じく実時間で数える
@@ -476,7 +496,7 @@ namespace KokoSim.Unity.Match
         private bool _gameTelopOn;
         // 終局後「ゲームセット」を掲げる予約。得点テロップ（#60）の演出が済むのを Update 側で待つ。
         private bool _gameSetPending;
-        private int _subLogCount;   // 既に取り込んだ継投ログ件数（_prog.PitchingChanges との差分検知）
+        private int _subLogCount;   // 既に取り込んだ交代ログ件数（_prog.Substitutions との差分検知。issue #920）
 
         // イニング間のスコア画面（試合画面改修）。攻守が入れ替わった瞬間、次の打席の再生を保留して
         // ラインスコアを大写しにする。寿命は他のオーバーレイと同じく Update() の専用クロックだが、
@@ -576,6 +596,8 @@ namespace KokoSim.Unity.Match
             _duelImg = null;
             _duelBtn = _root.Q<Button>("duel-view");
             if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
+            _announceBtn = _root.Q<Button>("announce");
+            _unbindAnnounce = KokoSim.Unity.Audio.MatchAnnouncer.BindToggle(_announceBtn);
             // ⚠ 対決ステージの生成（InitDuelViewDefault）はここではなく BuildGame の**後ろ**。
             //    生成時に配色をマテリアルへ焼くので、両校の配色が入る前に立てると前試合の色で焼ける。
 
@@ -634,13 +656,20 @@ namespace KokoSim.Unity.Match
             _ibCaption = _root.Q<Label>("ib-caption");
             _inningBreak?.RegisterCallback<PointerDownEvent>(OnInningBreakDown);
 
+            var subTelopHost = _root.Q<VisualElement>("sub-telop");
+            _subTelop = subTelopHost != null ? new SubTelopView(subTelopHost) : null;
+            subTelopHost?.RegisterCallback<PointerDownEvent>(OnSubTelopDown);
+
             ResetPerMatchVisuals();
             // 守備適性は Player に無く名簿側にあるので、通算成績と同じ join（SourceId）を注入する（issue #452）。
+            // 交代パネルは自校の選手だけを扱う＝自校の校IDで引く（選手IDは校ごとに1から振る・issue #923）。
+            // 校IDは試合ごとに変わるので、呼ばれた時点の値を読む。
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied,
-                _statsProvider.AptitudeGradesOf, _statsProvider.PitchChartOf);
+                sid => _statsProvider.AptitudeGradesOf(OwnSchoolId, sid),
+                p => _statsProvider.PitchChartOf(OwnSchoolId, p));
             _subPanel.Bind();
-            // 能力ビューア（issue #602）。局面文はポップアップと同じ単一ソースを渡す。
-            _scoutPanel = new MatchScoutPanel(_root, PauseSituationText);
+            // 能力ビューア（issue #602/#923）。局面文はポップアップと同じ単一ソースを渡す。
+            _scoutPanel = new MatchScoutPanel(_root, _statsProvider, PauseSituationText);
             _scoutPanel.Bind();
             BuildGame();
             // 対決ビューの生成は BuildGame の後（＝両校の配色と進行体が入った後）でなければならない。
@@ -651,7 +680,7 @@ namespace KokoSim.Unity.Match
             InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
             ApplyDuelViewState();
             _subPanel.SetMatch(_prog, _managerIsAway);
-            _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp);
+            _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp, _awaySchoolId, _homeSchoolId);
             // 指示パネルの初期フェーズ（1打席目の攻守）。以降は采配窓ごとに OpenWindow が追従させる。
             if (_prog != null) _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
             // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
@@ -686,11 +715,15 @@ namespace KokoSim.Unity.Match
             if (_pmSkip != null) _pmSkip.clicked -= OnSkip;
             _pauseModal?.UnregisterCallback<PointerDownEvent>(OnPauseScrimDown);
             _inningBreak?.UnregisterCallback<PointerDownEvent>(OnInningBreakDown);
+            _subTelop?.Host.UnregisterCallback<PointerDownEvent>(OnSubTelopDown);
             _root?.UnregisterCallback<PointerDownEvent>(OnRootPointerDown);
             _subPanel?.Close();
             if (_backHome != null) _backHome.clicked -= OnBackHome;
             if (_camWork != null) _camWork.clicked -= OnToggleCameraWork;
             if (_duelBtn != null) _duelBtn.clicked -= OnToggleDuelView;
+            _unbindAnnounce?.Invoke();
+            _unbindAnnounce = null;
+            KokoSim.Unity.Audio.MatchAnnouncer.Stop();
             _duelRig?.Dispose();
             _duelRig = null;
             _duelImg = null;
@@ -754,6 +787,12 @@ namespace KokoSim.Unity.Match
             _inningBreakClock = 0f;
             _inningBreakOn = false;
             _subLogCount = 0;
+            _subTelopQueue.Clear();
+            _subTelopClock = 0f;
+            _subTelopOn = false;
+            _subTelopFreezeRig = false;
+            _subTelopPumpAfter = false;
+            _announcedKey = null;
             _pitchBattingChoice = null;
             _signChoice = null;
             _stealChoice = null;
@@ -784,6 +823,7 @@ namespace KokoSim.Unity.Match
             _signPad?.ClearSelection();
             SetVisible(_pauseModal, false);   // 前試合の中断ポップアップを持ち越さない
             SetVisible(_inningBreak, false);  // 前試合のイニング間画面を持ち越さない
+            _subTelop?.Hide();                // 前試合の交代テロップも持ち越さない
             _lineScorePosted = false;
             SetCount(0, 0);
             SetOuts(0);
@@ -973,7 +1013,7 @@ namespace KokoSim.Unity.Match
 
         private void PumpEngine(bool commitTactics)
         {
-            if (_gameOver || _paused || _inningBreakOn || CaptureMode) return;
+            if (_gameOver || _paused || _inningBreakOn || _subTelopOn || CaptureMode) return;
             if (_prog == null) return;
             if (_subPanel != null && _subPanel.IsOpen) return;   // 交代モーダルを開いている間は待つ
             if (_scoutPanel != null && _scoutPanel.IsOpen) return;   // 能力ビューアも同じ（issue #602）
@@ -1209,6 +1249,8 @@ namespace KokoSim.Unity.Match
             if (_subPanel != null && _subPanel.IsOpen) return;
             if (_scoutPanel != null && _scoutPanel.IsOpen) return;
             if (IsPauseExempt(evt.target as VisualElement)) return;
+            // 交代テロップ中の盤面クリック＝テロップを明ける（issue #920。中断は開かない）
+            if (_subTelopOn) { EndSubTelop(); return; }
             OpenPauseMenu();
         }
 
@@ -1222,6 +1264,7 @@ namespace KokoSim.Unity.Match
                 if (v.ClassListContains("tcards")) return true;   // 采配の手札。押した指示と中断が二重反応しない
                 if (v.ClassListContains("modal-scrim")) return true;
                 if (v.ClassListContains("inning-break")) return true;   // クリック＝スキップ。中断は開かない
+                if (v.ClassListContains("sub-telop")) return true;      // 交代テロップも同じ（issue #920）
             }
             return false;
         }
@@ -1454,6 +1497,9 @@ namespace KokoSim.Unity.Match
             SetVisible(_pauseModal, false);
             _paused = false;
             UpdateControlState();
+            // 中断中に確定した交代は、再開したその場でテロップにして止める（issue #920。次の球を投げる前）。
+            // テロップが明けたら EndSubTelop が続きを起こす。
+            DrainSubstitutionEvents();
             // 再生・投球・采配窓の途中で止めていたなら Update が続きを流す。どこにも居ない（打席の
             // 切れ目で止めていた）場合だけ、次の采配窓を取りに行く。
             if (_stage == LiveStage.Idle) AdvanceToNextWindow();
@@ -1503,6 +1549,9 @@ namespace KokoSim.Unity.Match
             // 利き腕がこの打席のあいだ古いまま＝「交代したのに前の投手が投げている」に見える（2026-08-15）。
             if (_stage == LiveStage.Window && _atBat != null && _prog?.CurrentAtBat is { } at)
             {
+                // 打席の頭で代打を送った＝前の打者の放送は止めて、新しい打者で言い直す（issue #919）。
+                if (_announcedKey != null && AnnouncementKeyOf(at) != _announcedKey)
+                    KokoSim.Unity.Audio.MatchAnnouncer.Stop();
                 _atBat = at;
                 ApplyWindowSituation();     // HUD・スタメン列・カードの可否
                 ApplyDuelHandedness();      // 継投後の利き腕・代打の左右で立たせ替える（issue #337 と同じ入口）
@@ -1545,6 +1594,7 @@ namespace KokoSim.Unity.Match
             if (_duelRig != null && _duelRig.Available) _duelRig.FreezeForGameEnd();
             _view.HideJudgement();
             KokoSim.Unity.Audio.MatchBrassBand.End(immediate: false);
+            KokoSim.Unity.Audio.MatchAnnouncer.Stop();
             _gameOver = true;
             _stage = LiveStage.Over;
             _inPitchPhase = false;
@@ -1564,6 +1614,7 @@ namespace KokoSim.Unity.Match
             _inningBreakClock = 0f;
             _afterInningBreak = null;
             SetVisible(_inningBreak, false);
+            ClearSubTelop();   // 交代テロップも同じ（明けるのを待つと結果画面への遷移を人質に取る）
             _finalResult = result;
             UpdateScoreboardFinal(result);
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }
@@ -1989,6 +2040,40 @@ namespace KokoSim.Unity.Match
             BeginPitchBall(index);
         }
 
+        // ── 場内放送（issue #919）──
+        // 打席の頭の采配窓で「4番、キャッチャー、田中くん。」（代打は「バッター、田中くん。」）。何を言うかは
+        // engine の PaAnnouncement が決め、ここは打順表のいまの位置を渡して鳴らすだけ。×4・高速試合モード・
+        // オフでは流さない。素材が無ければ黙って鳴らさない（その場合は待たない）。
+
+        /// <summary>
+        /// 打席の頭なら放送を始め（同じ打席では一度だけ）、放送中は真を返す＝1球目を待たせる。
+        /// </summary>
+        private bool HoldForAnnouncement()
+        {
+            var at = _atBat;
+            if (at == null || at.PitchNumberInPa > 1 || _prog == null || CaptureMode) return false;
+            if (!KokoSim.Unity.Audio.MatchAnnouncer.Enabled || _fastMode || _speed >= 4f) return false;
+            var key = AnnouncementKeyOf(at);
+            if (key != _announcedKey)
+            {
+                _announcedKey = key;
+                // 守備位置は打順表のいまの位置（DHの枠は DH）。LiveAtBat.BatterPosition は DH の打者でも
+                // 本来の守備位置のままなので使わない。
+                var snap = _prog.Snapshot();
+                var lineup = at.IsTop ? snap.Away.Lineup : snap.Home.Lineup;
+                var order = at.BatterOrder;
+                var pos = order >= 1 && order <= lineup.Count ? lineup[order - 1].Position : at.BatterPosition;
+                KokoSim.Unity.Audio.MatchAnnouncer.Play(
+                    KokoSim.Engine.Match.Broadcast.PaAnnouncement.Clips(order, pos, at.BatterName, at.BatterIsPinchHitter));
+            }
+            return KokoSim.Unity.Audio.MatchAnnouncer.IsPlaying;
+        }
+
+        /// <summary>同じ打席で二度言わない鍵（回・表裏・打順・打席数＋打者）。</summary>
+        private string AnnouncementKeyOf(LiveAtBat at)
+            => KokoSim.Engine.Match.Broadcast.PaAnnouncement.Key(
+                at.Inning, at.IsTop, at.BatterOrder, _prog?.PlayLog.Count ?? 0, at.BatterSourceId, at.BatterName);
+
         // ── イニング間のスコア画面（試合画面改修）──
         // 攻守が入れ替わった瞬間に挟む。次の采配窓は EndInningBreak まで保留する。
         // ここは「1球ぶんの描画が終わった後・次の窓を開く前」なので、再生も進行も走っていない
@@ -2041,22 +2126,95 @@ namespace KokoSim.Unity.Match
             evt.StopPropagation();
         }
 
-        // ── 交代ポップアップ（issue #209 表現）──
-        // 直前の進行で増えた継投ログ（_prog.PitchingChanges）を取り込み、実況履歴に1行ずつ残しつつ
-        // 最新の1件を数秒のポップアップで盤面へ浮かせる。観測データの表示のみ＝試合結果に影響しない。
+        // ── 交代テロップ（issue #920。旧・交代ポップアップ issue #209 の置き換え）──
+        // 直前の進行で増えた交代ログ（_prog.Substitutions＝代打・代走・守備交代・継投・DH解除）を取り込み、
+        // 実況履歴に1行ずつ残しつつ、同じ間合いの交代をチームごとに1枚のテロップにして進行を止める。
+        // 高速試合モード中は履歴だけ（止めない）。観測データの表示のみ＝試合結果に影響しない。
         private void DrainSubstitutionEvents()
         {
-            var log = _prog?.PitchingChanges;
+            var log = _prog?.Substitutions;
             if (log == null) return;
-            KokoSim.Engine.Match.Game.PitchingChangeEvent latest = null;
+            // 交代の下書きを取り消すと engine は再生し直す＝ログが短くなることがある。
+            if (_subLogCount > log.Count) _subLogCount = log.Count;
+            if (_subLogCount == log.Count) return;
+            var fresh = new List<KokoSim.Engine.Match.Game.SubstitutionEvent>();
             for (var i = _subLogCount; i < log.Count; i++)
             {
-                var e = log[i];
-                PushHistory("⇄ " + SubEventText(e));
-                latest = e;
+                fresh.Add(log[i]);
+                PushHistory("⇄ " + KokoSim.Engine.Match.Broadcast.SubstitutionTelop.HistoryLine(log[i]));
             }
             _subLogCount = log.Count;
-            if (latest != null) BeginSubCall(latest);
+            if (_fastMode || _gameOver || CaptureMode || _subTelop == null) return;
+            foreach (var card in KokoSim.Engine.Match.Broadcast.SubstitutionTelop.Build(fresh)) _subTelopQueue.Enqueue(card);
+            TryBeginSubTelop();
+        }
+
+        /// <summary>
+        /// 溜まっている交代テロップを1枚出す。イニング間画面・中断・高速試合モードの間は待つ
+        /// （イニング間画面が明けた後の Update で出る＝新しい半回の最初の球の前）。
+        /// </summary>
+        private void TryBeginSubTelop()
+        {
+            if (_subTelopOn || _subTelopQueue.Count == 0 || _subTelop == null) return;
+            if (_inningBreakOn || _paused || _fastMode || _gameOver) return;
+            var card = _subTelopQueue.Dequeue();
+            // 判定・得点・旧ポップアップが残っていると重なって読みづらいので先に畳む。
+            HidePitchCall();
+            HideScoreCall();
+            HideSubCall();
+            _subTelopFreezeRig = _stage == LiveStage.Pitch || _stage == LiveStage.Play;
+            _subTelop.Show(card, card.TeamIsAway ? _awayDisp : _homeDisp, PitcherHudClearance());
+            _subTelopOn = true;
+            _subTelopClock = 0f;
+        }
+
+        /// <summary>
+        /// 盤面右下の投手HUD（.mhud-corner--right）の上端までの高さ＋余白。テロップをこれより上に出す（issue #920・
+        /// 2026-11-14 監督決定）。HUD が隠れている・まだ測れないときは -1（USS の既定位置のまま）。
+        /// </summary>
+        private float PitcherHudClearance()
+        {
+            var corner = _hudPitcherSlot?.parent;
+            if (corner == null || corner.resolvedStyle.display == DisplayStyle.None) return -1f;
+            var h = corner.layout.height;
+            if (float.IsNaN(h) || h <= 0f) return -1f;
+            return h + 8f;   // --sp-2 ぶん離す
+        }
+
+        // 時間で明ける／クリックで明ける、の共通出口。次の1枚があれば続けて出す。
+        private void EndSubTelop()
+        {
+            if (!_subTelopOn) return;
+            _subTelopOn = false;
+            _subTelopClock = 0f;
+            _subTelopFreezeRig = false;
+            _subTelop?.Hide();
+            TryBeginSubTelop();
+            if (_subTelopOn) return;
+            // 打席の切れ目で止めていた（どこにも居ない）なら、次の采配窓を取りに行く。窓・再生の途中なら Update が続きを流す。
+            var pump = _subTelopPumpAfter;
+            _subTelopPumpAfter = false;
+            if (_gameOver || _paused) return;
+            if (pump || _stage == LiveStage.Idle) AdvanceToNextWindow();
+        }
+
+        // テロップのクリック＝その場で明ける。StopPropagation で中断ポップアップと二重反応させない。
+        private void OnSubTelopDown(PointerDownEvent evt)
+        {
+            if (!_subTelopOn) return;
+            EndSubTelop();
+            evt.StopPropagation();
+        }
+
+        /// <summary>交代テロップを全部畳む（高速試合モードへ入る・終局）。溜まっている分も捨てる。</summary>
+        private void ClearSubTelop()
+        {
+            _subTelopQueue.Clear();
+            _subTelopOn = false;
+            _subTelopClock = 0f;
+            _subTelopFreezeRig = false;
+            _subTelopPumpAfter = false;
+            _subTelop?.Hide();
         }
 
         private void BeginSubCall(KokoSim.Engine.Match.Game.PitchingChangeEvent e)
@@ -2795,7 +2953,9 @@ namespace KokoSim.Unity.Match
 
             // 対決ビューはポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
             // 打球プレー中は俯瞰を出していても回す＝トグルで切り替えた瞬間に3Dが止まっていない（F9）。
-            if (!_paused && (_duelOn || FieldPlayActive)) _duelRig?.Tick(Time.deltaTime * _speed);
+            // 投球・打球の途中で出した交代テロップ（issue #920）の間も止める＝明けたら同じ場面から続く。
+            if (!_paused && !(_subTelopOn && _subTelopFreezeRig) && (_duelOn || FieldPlayActive))
+                _duelRig?.Tick(Time.deltaTime * _speed);
             RefreshDuelFieldLabels();   // 頭上フルネームラベル（issue #393）。ポーズ中も現在位置のまま表示を保つ
             RefreshMiniDiamond();       // 走者の小ダイヤ（issue #595）。同じくポーズ中も現在位置のまま残す
             RefreshHudVisibility();     // 打球プレー中はマッチアップHUDを引っ込める（下の説明を参照）
@@ -2807,7 +2967,9 @@ namespace KokoSim.Unity.Match
             {
                 _forcedSubPause = false;
                 _paused = false;
-                AdvanceToNextWindow();
+                DrainSubstitutionEvents();   // 継投の交代テロップ（issue #920）。出したら明けてから進む
+                if (_subTelopOn) _subTelopPumpAfter = true;
+                else AdvanceToNextWindow();
                 return;
             }
 
@@ -2821,6 +2983,15 @@ namespace KokoSim.Unity.Match
             {
                 _inningBreakClock += Time.deltaTime * _speed;
                 if (_inningBreakClock >= inningBreakHoldSeconds) EndInningBreak();
+                return;
+            }
+
+            // 交代テロップ（issue #920）。イニング間画面と同じく進行を止めて待つ。溜まっていれば次の1枚を出す。
+            if (!_subTelopOn) TryBeginSubTelop();
+            if (_subTelopOn)
+            {
+                _subTelopClock += Time.deltaTime * _speed;
+                if (_subTelopClock >= subTelopHoldSeconds) EndSubTelop();
                 return;
             }
 
@@ -2880,8 +3051,11 @@ namespace KokoSim.Unity.Match
                 // 入ってから寿命が切れると「畳めず次の判定表示まで残留する」（寿命を2.1sへ延ばした
                 // 2026-08-05 に顕在化する並び。従来は寿命0.6s＜窓1.0sで構造的に起きなかった）
                 if (_gameTelopOn) return;
+                // 打席の頭の場内放送（issue #919）。打者を見る間と並行して流し、終わるまで1球目を待たせる。
+                var announcing = HoldForAnnouncement();
                 _windowClock += Time.deltaTime * _speed;
                 if (_windowClock < _windowHold) return;
+                if (announcing) { _windowClock = _windowHold; return; }   // 待った分を次の球へ持ち越さない
                 _windowCarry = _windowClock - _windowHold;
                 ThrowFromWindow();
                 return;
@@ -3640,6 +3814,7 @@ namespace KokoSim.Unity.Match
             System.Action handler = () =>
             {
                 _speed = speed;
+                if (speed >= 4f) KokoSim.Unity.Audio.MatchAnnouncer.Stop();   // ×4では場内放送を流さない（issue #919）
                 SetFastMode(false);   // 数値速度を選び直す＝高速試合モードの解除操作を兼ねる（専用の「戻る」ボタンは作らない）
                 foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
             };
@@ -3686,6 +3861,7 @@ namespace KokoSim.Unity.Match
             if (on)
             {
                 KokoSim.Unity.Audio.MatchBrassBand.Rest();   // 高速試合モードは音を出さない
+                KokoSim.Unity.Audio.MatchAnnouncer.Stop();   // 場内放送も（issue #919）
                 // 振りかぶりで先に解決した球（issue #696）はエンジン側では投げ終わっている＝描かずに捨てる。
                 _preStep = null;
                 HideRunnerGo();
@@ -3702,6 +3878,7 @@ namespace KokoSim.Unity.Match
                 HideSubCall();
                 if (_scoreCallOn) { _scoreCallOn = false; if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None; }
                 if (_inningBreakOn) { _inningBreakOn = false; _inningBreakClock = 0f; _afterInningBreak = null; SetVisible(_inningBreak, false); }
+                ClearSubTelop();   // 交代テロップも畳む（高速中の交代は実況履歴の1行だけ。issue #920）
                 PostFastModeBoard();
             }
             else
@@ -3723,6 +3900,7 @@ namespace KokoSim.Unity.Match
             if (_fastModeClock < fastModeHalfInningSeconds) return;
             _fastModeClock -= fastModeHalfInningSeconds;
             _prog.AdvanceUntilInningEnd();
+            DrainSubstitutionEvents();   // 高速中の交代は実況履歴の1行だけ（止めない。issue #920）
             if (_prog.IsFinished) { EndGame(_prog.BuildResult()); return; }
             // 球数制限で投手交代待ちになった＝早送り中でも必ず一旦止めてプレイヤーに選ばせる。
             // 高速試合モードを解いて通常速度へ戻すと、直後の AdvanceToNextWindow が窓を開き直す
@@ -4980,6 +5158,8 @@ namespace KokoSim.Unity.Match
         public void OpenScoutForCapture() { _paused = true; SetVisible(_pauseModal, true); _scoutPanel?.Open(); }
         public void CloseScoutForCapture() => _scoutPanel?.Close();
         public void SelectScoutTabForCapture(int tab) => _scoutPanel?.SelectTabForCapture(tab);
+        public void SelectScoutTeamForCapture(bool own) => _scoutPanel?.SelectTeamForCapture(own);
+        public void HoverScoutRowForCapture(int index) => _scoutPanel?.HoverRowForCapture(index);
         public bool ScoutOpenForCapture => _scoutPanel != null && _scoutPanel.IsOpen;
 
         public void OpenSubstitutionForCapture() => _subPanel?.Open();
