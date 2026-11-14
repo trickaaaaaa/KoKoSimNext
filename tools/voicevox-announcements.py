@@ -64,6 +64,11 @@ READINGS = {
     "土本": "ツチモト", "中窪": "ナカクボ", "松林": "マツバヤシ", "山腰": "ヤマコシ", "角": "スミ",
     "菅": "スガ", "野上": "ノガミ", "尾上": "オノウエ", "田上": "タガミ", "長谷": "ハセ",
     "萩原": "ハギワラ", "土田": "ツチダ",
+    # 2026-11-14 監督決定: 別の読みもあり得るが一般的な読みに揃える
+    "野崎": "ノザキ", "角田": "カクタ", "西島": "ニシジマ", "浅川": "アサカワ", "豊島": "トヨシマ",
+    "新居": "アライ", "早田": "ハヤタ", "菅田": "スダ", "熊沢": "クマザワ", "伊沢": "イザワ",
+    "深田": "フカダ", "花田": "ハナダ", "曽田": "ソダ", "須崎": "スザキ", "杉崎": "スギザキ",
+    "有賀": "アルガ", "北畑": "キタハタ",
 }
 
 
@@ -105,7 +110,7 @@ def post(path, params, body=None):
         return r.read()
 
 
-def query(text):
+def query(text, merge=False):
     q = json.loads(post("/audio_query", {"text": text, "speaker": SPEAKER}))
     q["speedScale"] = 0.95       # 場内放送らしく少しゆっくり
     q["intonationScale"] = 1.0
@@ -113,6 +118,24 @@ def query(text):
     q["volumeScale"] = 1.3
     q["prePhonemeLength"] = 0.05
     q["postPhonemeLength"] = 0.1
+    if merge:
+        q = one_word(q)
+    return q
+
+
+def one_word(q):
+    """読みを指定した苗字（READINGS）が2つのアクセント句に割れたら1語にまとめる（「モテ/ギクン」→「モテギクン」）。
+    アクセント核は最初の句の位置。まとめた後の音の高さは /mora_pitch で付け直す。"""
+    ap = q["accent_phrases"]
+    if len(ap) < 2:
+        return q
+    merged = dict(ap[0])
+    merged["moras"] = [m for a in ap for m in a["moras"]]
+    merged["accent"] = ap[0]["accent"]
+    merged["pause_mora"] = ap[-1].get("pause_mora")
+    merged["is_interrogative"] = ap[-1].get("is_interrogative", False)
+    q["accent_phrases"] = json.loads(post("/mora_pitch", {"speaker": SPEAKER}, [merged]))
+    q["kana"] = "".join(m["text"] for m in merged["moras"]) + "(1語)"
     return q
 
 
@@ -131,8 +154,8 @@ def trim(samples, rate):
     return out
 
 
-def synth(text, path):
-    q = query(text)
+def synth(text, path, merge=False):
+    q = query(text, merge)
     raw = post("/synthesis", {"speaker": SPEAKER}, q)
     with wave.open(io.BytesIO(raw)) as w:
         rate, ch = w.getframerate(), w.getnchannels()
@@ -172,9 +195,9 @@ def main():
         if os.path.exists(path) and not a.force and not a.report:
             continue
         if os.path.exists(path) and not a.force:
-            kana = query(text).get("kana", "")   # 読みだけ取り直す
+            kana = query(text, surname in READINGS).get("kana", "")   # 読みだけ取り直す
         else:
-            kana = synth(text, path)
+            kana = synth(text, path, surname in READINGS)
             made += 1
         if surname is not None:
             report.append((surname, name, kana))
