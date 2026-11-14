@@ -159,6 +159,8 @@ namespace KokoSim.Unity.Shell
             if (t.NewTeam != null)
             {
                 NewTeamService.Open(t.NewTeam);
+                // 引退で枠の大半が穴になった前チームのスタメンは捨てる＝初試合は背番号どおりの既定で組む（issue #955）。
+                GameSession.Current.LastLineup = null;
                 // AI校も夏後に代替わり: 進行中の全国裏試合を完了させてから3年生を引退させる（#80・秋は下級生のみ）。
                 NationBackgroundSim.EnsureCompleted();
                 BracketFinishSim.EnsureCompleted();   // issue #529: 同じロスターを読むため同様に完了を待つ。

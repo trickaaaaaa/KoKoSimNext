@@ -272,13 +272,13 @@ namespace KokoSim.Unity.Lineup
             Array.Fill(_idx, -1);
             _usesDh = false;
 
-            // 9番＝投手（背番号1）。**打順より先に押さえる**＝穴埋めが役割で候補を絞らなくなったので
-            // （#379）、先に打順を埋めると投手力上位が野手枠に吸われて投手枠へ2番手が回る。
+            // 投手（背番号1）と野手8人（背番号2〜9）を背番号から拾う。守備位置は背番号の慣例どおりで動かさない。
+            // 投手を先に押さえる＝穴埋めが役割で候補を絞らなくなったので（#379）、先に野手を埋めると
+            // 投手力上位が野手枠に吸われて投手枠へ2番手が回る。
             var pit = IndexOfUniform(1);
-            _idx[8] = pit >= 0 ? pit : FallbackPitcher();
-            _pos[8] = FieldPosition.Pitcher;
+            if (pit < 0) pit = FallbackPitcher();
+            _idx[8] = pit;   // 野手の穴埋め（FallbackFielder）が投手を拾わないための仮押さえ。下で並べ直す。
 
-            // 8野手を背番号2〜9で拾い、守備位置を付ける。
             var fielders = new List<(int Idx, FieldPosition Pos)>(8);
             for (var i = 0; i < 8; i++)
             {
@@ -286,18 +286,15 @@ namespace KokoSim.Unity.Lineup
                 if (idx < 0) idx = FallbackFielder(fielders);
                 fielders.Add((idx, FielderPositions[i]));
             }
-            // 打撃力（ミート＋パワー）降順に並べ、強打者を 3→4→2→5→1→6→7→8 番の順に配置（典型的な強打順）。
-            fielders.Sort((a, b) => Hitting(_roster[b.Idx]).CompareTo(Hitting(_roster[a.Idx])));
-            var slotFor = new[] { 2, 3, 1, 4, 0, 5, 6, 7 };   // k番目に強い打者を置く打順スロット（0基点）
-            for (var k = 0; k < 8; k++)
+
+            // 打順だけ AI と同じ規則で並べる（issue #955・engine DefaultLineupOrder が単一ソース）。
+            var ordered = DefaultLineupOrder.Arrange(_roster, fielders.Select(f => (f.Idx, f.Pos)).ToList(), pit);
+            for (var k = 0; k < 9; k++)
             {
-                _idx[slotFor[k]] = fielders[k].Idx;
-                _pos[slotFor[k]] = fielders[k].Pos;
+                _idx[k] = ordered[k].RosterIndex;
+                _pos[k] = ordered[k].Position;
             }
         }
-
-        // 打撃力の簡易指標（打順並べ替え用）。ミート＋パワー。
-        private static int Hitting(DevelopingPlayer p) => p.Level(AbilityKind.Contact) + p.Level(AbilityKind.Power);
 
         private int IndexOfUniform(int number)
         {

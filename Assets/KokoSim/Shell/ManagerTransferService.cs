@@ -172,6 +172,9 @@ namespace KokoSim.Unity.Shell
             // 候補の校名は全国の表記（「〜高校」込み）。自校の校名は幹で持つ（表示側で「高校」を付ける）。
             NationService.SetSchoolIdentity(SchoolNames.Stem(targetName), target.PrefectureId, target.DistrictId);
 
+            // 部員が丸ごと入れ替わるので前校のスタメンは意味を持たない（issue #955）。
+            GameSession.Current.LastLineup = null;
+
             Clear();
             return true;
         }
