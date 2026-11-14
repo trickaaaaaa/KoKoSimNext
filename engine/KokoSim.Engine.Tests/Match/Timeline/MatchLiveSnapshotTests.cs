@@ -433,6 +433,18 @@ public sealed class MatchLiveSnapshotTests
         }
     }
 
+    // タイムのポップアップが投手の左右打を出す（DH制では投手が打順に居ない＝打順の行から引けない）。
+    [Fact]
+    public void LivePitcherLine_And_ReservePitchers_CarryBats()
+    {
+        var team = Team("A", withSourceIds: false, withBench: false);
+        var state = new TeamState(team);
+        Assert.Equal(state.CurrentPitcher.Bats, state.LivePitcherLine().Bats);
+        var reservePitcher = team.Reserves.Single(p => p.Position == FieldPosition.Pitcher);
+        Assert.Equal(reservePitcher.Bats,
+            state.LiveReservePitchers().Single(p => p.Name == reservePitcher.Name).Bats);
+    }
+
     // ===== issue #449: 対決ビューHUDの防御率ライブ更新（LivePitcherToday.EarnedRuns）=====
     // TeamState の個人成績集計（_pit accumulator）は issue #69 から自責点を追跡済み。ここでは
     // ライブ観戦スナップショットへ正しく配管されることだけを確認する（失点=Runsと自責点=EarnedRunsを

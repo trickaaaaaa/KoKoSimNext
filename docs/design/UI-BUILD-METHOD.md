@@ -119,6 +119,8 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `StatBarRow` | 能力の3点セット（ランク22＋数値＋横棒）。自チーム側＝差し色、比較相手＝墨、負け＝淡色 |
 | `CompareTable` | 2選手の比較表（見出し・能力行・守備適性・持ち球チャートを同じ列に乗せる）。オーダー画面とメンバー設定で共有 |
 | `.sbk-seg` | 2択切替（土台＋選ばれた側だけ白地＋1px枠）。`ms-tab` / `seg-tab` / `filter-chip` も `.sbk` の中ではこの見た目 |
+| `LineIcon` | 線画アイコン（Painter2D・24座標・線幅2）。拡声器/左右矢印/名簿/早送り/再生。色は要素の `color` を継承（絵文字はSDFに無いので使わない） |
+| `ConditionFace.SetEstimated` | 調子の推定表示（顔の色55%＋同系色の点線の縁）。相手校の選手（`MatchLiveStatsProvider.IsConditionEstimated`）に使う |
 | `SchoolAccent` | スクールカラー（`acc-fg/bg/bd/bd-top` の付いた要素へ流し込む）。使うのは比較表の自チーム側とオーダー画面だけ |
 
 - 主ボタンは応援団赤（`--color-cta`）のまま・文字は白

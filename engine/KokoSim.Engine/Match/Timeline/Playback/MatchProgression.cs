@@ -471,11 +471,18 @@ public sealed class MatchProgression
     /// </summary>
     public bool IsTeamOnOffense(bool teamIsAway) => SubstitutionCommands.IsOnOffense(_p, teamIsAway);
 
-    /// <summary>自校（teamIsAway）の攻撃伝令の残り回数（攻各3回・延長で+1, 設計書09 §3）。</summary>
+    /// <summary>自校（teamIsAway）の攻撃伝令の残り回数（攻3回・延長は1イニング1回, 設計書09 §3）。</summary>
     public int OffenseTimeoutsLeft(bool teamIsAway) => _p.OffenseOf(teamIsAway).OffenseTimeoutsLeft;
 
-    /// <summary>自校（teamIsAway）の守備伝令の残り回数（守各3回・延長で+1, 設計書09 §3）。</summary>
+    /// <summary>自校（teamIsAway）の守備伝令の残り回数（守3回・延長は1イニング1回, 設計書09 §3）。</summary>
     public int DefenseTimeoutsLeft(bool teamIsAway) => _p.OffenseOf(teamIsAway).DefenseTimeoutsLeft;
+
+    /// <summary>
+    /// いまの回で使える伝令の枠（攻守共通）。規定回までは1試合3回、延長回は1イニング1回（特別規則 15）。
+    /// タイムのポップアップが残りを「枠のうち何回」で描くための値＝UI が規則を持たないよう engine から渡す。
+    /// </summary>
+    public int TimeoutsPerPeriod =>
+        _p.Inning > _p.Ctx.RegulationInnings ? TeamState.TimeoutsPerExtraInning : TeamState.TimeoutsPerGame;
 
     /// <summary>
     /// いまこの局面で自校（teamIsAway）が伝令をかけられるか（攻撃中なら攻撃伝令、守備中なら守備伝令の

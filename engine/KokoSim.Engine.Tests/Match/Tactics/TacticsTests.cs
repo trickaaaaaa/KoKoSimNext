@@ -413,7 +413,7 @@ public sealed class TacticsTests
     }
 
     [Fact]
-    public void Timeouts_ThreePerGame_ExtraInningGrantsMore()
+    public void Timeouts_ThreePerGame()
     {
         var st = new TeamState(TeamOf("A"));
         Assert.True(st.TryUseDefenseTimeout());
@@ -421,8 +421,28 @@ public sealed class TacticsTests
         Assert.True(st.TryUseDefenseTimeout());
         Assert.False(st.TryUseDefenseTimeout()); // 3回で尽きる
         Assert.True(st.TryUseOffenseTimeout());  // 攻守は別勘定
-        st.GrantExtraInningTimeouts();
-        Assert.True(st.TryUseDefenseTimeout());  // 延長で1回追加
+    }
+
+    // 高校野球特別規則 15(2)②(3)②: 延長回は「それ以前の回数に関係なく、1イニングにつき1回だけ」。
+    // 9回までの残りは持ち越さず、延長の回で使わなかった分も次の回へ繰り越さない＝残りは常に1以下。
+    [Fact]
+    public void Timeouts_ExtraInning_OnePerInning_RegardlessOfEarlierCount()
+    {
+        var unused = new TeamState(TeamOf("A"));   // 9回まで1回も使っていない
+        unused.ResetExtraInningTimeouts();
+        Assert.Equal(1, unused.OffenseTimeoutsLeft);
+        Assert.Equal(1, unused.DefenseTimeoutsLeft);
+        unused.ResetExtraInningTimeouts();         // 延長の回で使わなくても次の回は1のまま
+        Assert.Equal(1, unused.OffenseTimeoutsLeft);
+        Assert.Equal(1, unused.DefenseTimeoutsLeft);
+
+        var spent = new TeamState(TeamOf("B"));    // 9回までに使い切った
+        for (var i = 0; i < 3; i++) { spent.TryUseDefenseTimeout(); spent.TryUseOffenseTimeout(); }
+        spent.ResetExtraInningTimeouts();
+        Assert.True(spent.TryUseDefenseTimeout());
+        Assert.False(spent.TryUseDefenseTimeout()); // その回は1回だけ
+        spent.ResetExtraInningTimeouts();
+        Assert.Equal(1, spent.DefenseTimeoutsLeft); // 次の回でまた1回
     }
 
     [Fact]

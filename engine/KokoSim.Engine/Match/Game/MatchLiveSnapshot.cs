@@ -72,12 +72,15 @@ public sealed record LiveBatterSlot(
 /// 週間球数の上限（<see cref="GameContext.WeeklyPitchLimit"/> の写し）。int.MaxValue＝制限なし
 /// ＝UI は残り球数を出さない。
 /// </param>
+/// <param name="Bats">左右打（タイムのポップアップが「右投左打」を出すのに使う）。DH制では投手が打順に
+/// 居ないので、打順の行から引けない＝ここに持つ。</param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,
     int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0,
     int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0, int PendingPitches = 0,
     int Walks = 0, int HitByPitch = 0, int EarnedRuns = 0,
-    double StaminaTarget = 0.0, int WeeklyPitchesPrior = 0, int WeeklyPitchLimit = int.MaxValue);
+    double StaminaTarget = 0.0, int WeeklyPitchesPrior = 0, int WeeklyPitchLimit = int.MaxValue,
+    Handedness Bats = Handedness.Right);
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。

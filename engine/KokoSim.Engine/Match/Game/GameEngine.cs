@@ -280,11 +280,11 @@ public static class GameEngine
         var ctx = p.Ctx;
         for (; ; p.Inning++)
         {
-            // 延長は伝令が1イニングごとに1回追加される（設計書09 §3, 現実ルール準拠）。
+            // 延長は伝令がそれ以前の回数に関係なく1イニングにつき1回だけ（設計書09 §3, 高校野球特別規則 15）。
             if (p.Inning > ctx.RegulationInnings)
             {
-                p.Away.GrantExtraInningTimeouts();
-                p.Home.GrantExtraInningTimeouts();
+                p.Away.ResetExtraInningTimeouts();
+                p.Home.ResetExtraInningTimeouts();
             }
 
             // 表: 先攻(away)攻撃 / 後攻(home)守備

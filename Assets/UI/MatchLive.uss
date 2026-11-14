@@ -92,42 +92,242 @@
    1球指示は盤面直下の采配カード（components.uss の .tcard*）へ、タイム系操作は pause-modal へ移した。
    実況ログはロジックのみ存続（MatchLiveController._capHist）＝描画スタイルは持たない。 */
 
-/* ── クリック中断ポップアップ（issue #289・案P1） ──
-   器は部品の modal-scrim / modal-card、ボタンは交代モーダルの msub-btn 系（MatchSubstitution.uss）を
-   流用し、ここでは寸法・整列だけを足す。主操作は「再開」1つ＝CTA 色はそこだけ（UI原則⑦/②）。 */
-.pausem-card {
-    width: 560px;
-    padding: var(--sp-4);
+/* ── タイム（クリック中断ポップアップ。issue #289 → 2026-11-14 スコアブック調へ作り直し） ──
+   ルートは modal-scrim＋sbk（scorebook.uss のトークンをこの中だけで読む）。差し色は臙脂固定
+   （--color-accent の既定値。SchoolAccent の acc-* クラスは付けない＝スクールカラーで替わらない）。
+   主操作は「再開」1つ。gap/grid は使えないので間隔は margin で作る。 */
+.tmo-scrim.sbk { background-color: var(--sbk-scrim); }
+/* Label の既定余白を消す（詳細度 11）。余白を持たせる Label は下で .tmo-scrim を前置して勝たせる（詳細度 20）。 */
+.tmo-scrim Label { margin: 0; padding: 0; }
+.tmo-card {
+    width: 800px;
+    flex-shrink: 0;
+    background-color: var(--sbk-dialog);
+    border-radius: var(--sbk-r-dialog);
+    padding: 28px 32px;
 }
-.pausem-title {
-    font-size: var(--fs-page);
-    color: var(--color-chalk);
+.tmo-spacer { flex-grow: 1; }
+
+/* 1. ヘッダー */
+.tmo-head { flex-direction: row; align-items: center; flex-shrink: 0; }
+.tmo-head__bar {
+    width: 10px; height: 28px; flex-shrink: 0;
+    border-radius: 3px;
+    background-color: var(--color-accent);
+    margin-right: 14px;
+}
+.tmo-title { font-size: 32px; letter-spacing: 7.7px; color: var(--sbk-text); }
+.tmo-scrim .tmo-pill {
+    font-size: 14px;
+    color: var(--sbk-info);
+    background-color: var(--sbk-rule-soft);
+    border-radius: 999px;
+    padding: 4px 14px;
+}
+
+/* 2. 状況欄（罫線で区切った3列：170 / 可変 / 300） */
+.tmo-situ {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-top: 22px;
+    border-top-width: 2px; border-top-color: var(--sbk-ink);
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule);
+}
+.tmo-cap { font-size: 12px; color: var(--sbk-sub); }
+.tmo-situ__inning {
+    width: 170px; flex-shrink: 0;
+    padding: 14px 18px 14px 4px;
+    border-right-width: 1px; border-right-color: var(--sbk-rule);
+}
+.tmo-inning { flex-direction: row; align-items: flex-end; margin-top: 2px; }
+.tmo-inning__n { font-size: 34px; color: var(--sbk-text); }
+.tmo-scrim .tmo-inning__half { font-size: 20px; color: var(--sbk-text); margin-left: 4px; margin-bottom: 5px; }
+.tmo-situ__mid {
+    flex-grow: 1; flex-basis: 0; min-width: 0;
+    flex-direction: row; align-items: center;
+    padding: 14px 22px;
+    border-right-width: 1px; border-right-color: var(--sbk-rule);
+}
+.tmo-situ__group--bases { margin-left: 28px; }
+.tmo-outs { flex-direction: row; margin-top: 8px; }
+.tmo-out {
+    width: 14px; height: 14px; flex-shrink: 0;
+    border-radius: 7px;
+    border-width: 1.5px; border-color: var(--sbk-mute);
+    margin-right: 6px;
+}
+.tmo-out--on { background-color: var(--sbk-ink); border-color: var(--sbk-ink); }
+/* 塁：二塁が上・一塁が右・三塁が左。45°回した正方形を 40×30 の箱へ絶対配置。 */
+.tmo-bases { width: 40px; height: 30px; flex-shrink: 0; margin-top: 4px; }
+.tmo-base {
+    position: absolute;
+    width: 9px; height: 9px;
+    rotate: 45deg;
+    background-color: var(--sbk-patch-bg);
+    border-width: 1.5px; border-color: var(--sbk-mute);
+}
+.tmo-base--second { left: 15.5px; top: 3.5px; }
+.tmo-base--first { left: 27.3px; top: 14.4px; }
+.tmo-base--third { left: 3.7px; top: 14.4px; }
+.tmo-base--on { background-color: var(--color-accent); border-color: var(--color-accent); }
+.tmo-situ__score {
+    width: 300px; flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    padding: 14px 4px 14px 22px;
+}
+.tmo-team { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.tmo-team--away { align-items: flex-end; }
+.tmo-team--home { align-items: flex-start; }
+.tmo-team__name-row { flex-direction: row; align-items: center; margin-bottom: 2px; }
+.tmo-team__name { font-size: 13px; color: var(--sbk-sub); }
+.tmo-team__name--own { color: var(--sbk-text); }
+.tmo-scrim .tmo-own-badge {
+    font-size: 10px;
+    color: #FFFFFF;
+    background-color: var(--color-accent);
+    border-radius: 3px;
+    padding: 0 4px;
+    height: 16px;
     -unity-text-align: middle-center;
-    margin-bottom: var(--sp-1);
+    margin-left: 6px;
 }
-.pausem-situation {
-    font-size: var(--fs-body);
-    color: var(--color-muted);
-    -unity-text-align: middle-center;
-    margin-bottom: var(--sp-2);
+.tmo-team__score { font-size: 36px; color: var(--sbk-text); }
+.tmo-team__score--own { color: var(--color-accent); }
+/* 「–」は点数の数字の高さに合わせる（校名の行ぶん下げる）。 */
+.tmo-scrim .tmo-score-sep { font-size: 18px; color: var(--sbk-mute); margin: 22px 14px 0 14px; }
+
+/* 3. 対戦欄（列 64 / 32 / 132 / 可変 / 196 / 30・行の高さ54・列間14） */
+.tmo-matchup { flex-shrink: 0; margin-top: 22px; }
+.tmo-mrow {
+    flex-direction: row; align-items: center;
+    height: 54px; flex-shrink: 0;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft);
 }
-.pausem-row { flex-direction: row; margin-top: var(--sp-2); }
-/* 伝令役の人選（issue #716）: 控え一覧。行は部品辞書の bench-row（背番号・名前・学年・性格）。 */
-.pausem-messenger__cap {
-    font-size: var(--fs-body);
-    color: var(--color-chalk);
-    margin-bottom: var(--sp-1);
+.tmo-mrow--last { border-bottom-width: 0; }
+.tmo-mrow__role { width: 64px; flex-shrink: 0; font-size: 12px; color: var(--sbk-sub); }
+.tmo-mrow__num { width: 32px; flex-shrink: 0; margin-left: 14px; align-items: center; }
+.tmo-scrim .tmo-mrow__name {
+    width: 132px; flex-shrink: 0; margin-left: 14px;
+    font-size: 20px; letter-spacing: 1.6px; color: var(--sbk-text);
+    white-space: nowrap; overflow: hidden;
 }
-.pausem-messenger__list { max-height: 360px; flex-shrink: 0; }
-.pausem-messenger .bench-row .num-badge { margin-right: var(--sp-2); }
-.pausem-messenger .bench-row__tag { flex-shrink: 0; }
-.pausem-btn {
-    flex-grow: 1;
-    flex-basis: 0;
-    height: 56px;
-    /* 伝令ボタンは2行（残数を2行目に出す）。既定の nowrap だと改行が効かない。 */
+.tmo-scrim .tmo-mrow__detail {
+    flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 14px;
+    font-size: 14px; color: var(--sbk-info);
+    white-space: nowrap; overflow: hidden;
+}
+.tmo-mrow__stats {
+    width: 196px; flex-shrink: 0; margin-left: 14px;
+    flex-direction: row; justify-content: flex-end; align-items: flex-end;
+}
+.tmo-scrim .tmo-stat__label { font-size: 13px; color: var(--sbk-sub); margin-left: 12px; margin-bottom: 2px; }
+.tmo-scrim .tmo-stat__value { font-size: 17px; color: var(--sbk-text); margin-left: 4px; -unity-text-align: lower-right; }
+.tmo-mrow__cond { width: 30px; flex-shrink: 0; margin-left: 14px; align-items: center; }
+.tmo-mrow__cond .cond-face { width: 26px; height: 26px; }
+
+/* 4. 操作カード（1.35 : 1 : 1・間隔12・高さ128以上） */
+.tmo-actions { flex-direction: row; flex-shrink: 0; margin-top: 22px; }
+.tmo-action {
+    flex-grow: 1; flex-basis: 0; min-width: 0;
+    min-height: 128px;
+    margin: 0 0 0 12px;
+    padding: 18px 20px;
+    background-color: var(--sbk-card);
+    border-width: 1px; border-color: var(--sbk-card-line);
+    border-radius: 12px;
+    flex-direction: column; align-items: flex-start; justify-content: flex-start;
+    -unity-text-align: upper-left;
     white-space: normal;
 }
+.tmo-action:hover { background-color: var(--sbk-card); border-color: var(--sbk-card-line-hover); }
+.tmo-action:active { background-color: var(--sbk-patch-bg); }
+.tmo-action:disabled { opacity: 0.45; }
+.tmo-action--wide { flex-grow: 1.35; margin-left: 0; }
+.tmo-action__head { flex-direction: row; align-items: center; }
+.tmo-action__head .tmo-action__title { margin-left: 12px; }
+.tmo-action__text { margin-top: 12px; }
+.tmo-action__title { font-size: 18px; color: var(--sbk-text); }
+.tmo-scrim .tmo-action__sub { font-size: 13px; color: var(--sbk-sub); margin-top: 2px; }
+.tmo-tile {
+    width: 40px; height: 40px; flex-shrink: 0;
+    border-radius: 10px;
+    background-color: var(--sbk-rule-soft);
+    color: var(--sbk-ink);
+    align-items: center; justify-content: center;
+}
+.tmo-tile--accent { background-color: var(--sbk-accent-soft); color: var(--color-accent); }
+.tmo-tile .licon { width: 22px; height: 22px; }
+.tmo-to { margin-top: 12px; align-self: stretch; }
+.tmo-to__row { flex-direction: row; align-items: center; height: 19px; }
+.tmo-to__row--other { margin-top: 6px; }
+.tmo-to__side { width: 28px; flex-shrink: 0; font-size: 13px; color: var(--sbk-text); }
+.tmo-to__row--other .tmo-to__side { color: var(--sbk-mute); }
+.tmo-to__dots { flex-direction: row; margin-left: 10px; }
+.tmo-to__dot {
+    width: 10px; height: 10px; flex-shrink: 0;
+    border-radius: 5px;
+    margin-right: 5px;
+    border-width: 1.5px; border-color: var(--sbk-mute-soft);
+}
+.tmo-to__dot--on { background-color: var(--color-accent); border-width: 0; }
+.tmo-scrim .tmo-to__text { font-size: 13px; color: var(--sbk-info); margin-left: 5px; }
+.tmo-to__row--other .tmo-to__text { color: var(--sbk-mute); }
+
+/* 5. フッター（控えめなスキップ＋主ボタン「再開」） */
+.tmo-foot { flex-direction: row; align-items: center; flex-shrink: 0; margin-top: 26px; }
+.tmo-skip {
+    height: 60px; flex-shrink: 0;
+    margin: 0 16px 0 0;
+    padding: 0 20px 0 16px;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 1px; border-color: var(--sbk-rule);
+    border-radius: 12px;
+    flex-direction: row; align-items: center;
+    color: var(--sbk-info);
+}
+.tmo-skip:hover { background-color: var(--sbk-rule-soft); border-color: var(--sbk-rule); }
+.tmo-skip:disabled { opacity: 0.45; }
+.tmo-skip__icon { width: 22px; height: 22px; flex-shrink: 0; }
+.tmo-skip__text { margin-left: 12px; }
+.tmo-skip__title { font-size: 15px; color: var(--sbk-text); }
+.tmo-scrim .tmo-skip__sub { font-size: 12px; color: var(--sbk-sub); margin-top: 1px; }
+.tmo-resume {
+    flex-grow: 1;
+    height: 60px;
+    margin: 0;
+    background-color: var(--color-accent);
+    border-width: 0;
+    border-radius: 12px;
+    flex-direction: row; align-items: center; justify-content: center;
+    color: #FFFFFF;
+}
+.tmo-resume:hover { background-color: var(--color-accent); }
+.tmo-resume__icon { width: 18px; height: 18px; flex-shrink: 0; margin-right: 12px; }
+.tmo-resume__label { font-size: 20px; letter-spacing: 6px; color: #FFFFFF; }
+
+/* 伝令役の人選（issue #716）: 控え一覧。行は部品辞書の bench-row（背番号・名前・学年・性格）。 */
+.tmo-messenger__cap { font-size: 24px; color: var(--sbk-text); }
+.tmo-messenger__list {
+    max-height: 420px; flex-shrink: 0;
+    margin-top: 22px;
+    background-color: var(--sbk-card);
+    border-width: 1px; border-color: var(--sbk-card-line);
+    border-radius: 12px;
+}
+.tmo-messenger .bench-row { min-height: 44px; }
+.tmo-messenger .bench-row .num-badge { margin-right: var(--sp-2); }
+.tmo-messenger .bench-row__tag { flex-shrink: 0; }
+.tmo-back {
+    flex-grow: 1;
+    height: 60px;
+    margin: 0;
+    font-size: 16px;
+    color: var(--sbk-text);
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 1px; border-color: var(--sbk-rule);
+    border-radius: 12px;
+}
+.tmo-back:hover { background-color: var(--sbk-rule-soft); }
 
 /* ── 選手能力ビューア（issue #602・監督決定A案） ──
    タイムから開く両校の名簿。左＝自校・右＝相手を同時に出し、行の右へ能力をランクチップで並べる。

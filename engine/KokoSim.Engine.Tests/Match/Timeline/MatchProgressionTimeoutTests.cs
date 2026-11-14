@@ -135,4 +135,36 @@ public sealed class MatchProgressionTimeoutTests
 
         Assert.Equal(Run(seed), Run(seed));
     }
+
+    // ===== 5. 延長の枠（特別規則 15(2)②(3)②: それ以前の回数に関係なく1イニングにつき1回だけ） =====
+
+    // 規定回を1回にして延長へ入りやすくし、延長回の打席境界では枠が1・残りも1以下（持ち越さない）を見る。
+    // 規定回の間は枠3。延長に1度も入らなかったら検査が空振りなのでシードを足す。
+    [Fact]
+    public void TimeoutsPerPeriod_IsThreeInRegulation_AndOneInExtraInnings()
+    {
+        var sawExtra = false;
+        for (var seed = 1UL; seed <= 40UL && !sawExtra; seed++)
+        {
+            var prog = new MatchProgression(Team("A"), Team("H"),
+                new GameContext { CaptureTimelines = true, RegulationInnings = 1 }, seed);
+            while (prog.Advance())
+            {
+                if (prog.Current is not { } pa) continue;
+                if (pa.Inning <= 1)
+                {
+                    Assert.Equal(TeamState.TimeoutsPerGame, prog.TimeoutsPerPeriod);
+                    continue;
+                }
+                sawExtra = true;
+                Assert.Equal(TeamState.TimeoutsPerExtraInning, prog.TimeoutsPerPeriod);
+                foreach (var away in new[] { true, false })
+                {
+                    Assert.True(prog.OffenseTimeoutsLeft(away) <= 1);
+                    Assert.True(prog.DefenseTimeoutsLeft(away) <= 1);
+                }
+            }
+        }
+        Assert.True(sawExtra, "延長に入る試合が1つも無かった");
+    }
 }
