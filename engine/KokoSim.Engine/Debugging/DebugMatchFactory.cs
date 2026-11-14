@@ -2,6 +2,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Debugging;
 
@@ -52,12 +53,53 @@ public static class DebugMatchFactory
         {
             // 場面ジャンプは受け取った文脈を with で引き継ぐ＝球場は保たれ、ScenarioId が立つ（統計から除外）。
             var built = ScenarioBuilder.Build(scenario, ctx, seed);
-            return new Built(built.Away, built.Home, built.Ctx, built.Start, built.Seed);
+            return new Built(WithAllPitchTypes(built.Away), WithAllPitchTypes(built.Home), built.Ctx, built.Start, built.Seed);
         }
 
         var rng = new Xoshiro256Random(seed);
         var away = StrengthTeamFactory.Create(TeamStrength, "遠征校", rng.Fork(1));
         var home = StrengthTeamFactory.Create(TeamStrength, "地元校", rng.Fork(2));
-        return new Built(away, home, ctx, null, seed);
+        return new Built(WithAllPitchTypes(away), WithAllPitchTypes(home), ctx, null, seed);
+    }
+
+    /// <summary>
+    /// 全員に全9球種を持たせる（デバッグ試合で球種ごとの絵を確かめるため）。持っていた球種のランクはそのまま、
+    /// 足りない球種は球種の素質（<see cref="PitcherAttributes.PitchRank"/>）で埋める。乱数は使わない。
+    /// 主将・先発投手は打順・控えと同じ実体なので、変換結果も同じ実体を使い回す（レパートリーの List は参照比較
+    /// なので、別々に変換すると record の等価が崩れ「主将が打順に居ない」扱いになる）。
+    /// </summary>
+    public static Team WithAllPitchTypes(Team team)
+    {
+        var done = new Dictionary<Player, Player>(ByReference.Instance);
+        Player Full(Player p)
+        {
+            if (done.TryGetValue(p, out var hit)) return hit;
+            var have = p.Pitching.EffectiveRepertoire;
+            var slots = new List<PitchSlot>();
+            foreach (PitchType type in Enum.GetValues(typeof(PitchType)))
+            {
+                var own = have.FirstOrDefault(s => s.Type == type);
+                slots.Add(own ?? new PitchSlot { Type = type, Power = p.Pitching.PitchRank, Sharpness = p.Pitching.PitchRank });
+            }
+            var full = p with { Pitching = p.Pitching with { Repertoire = slots } };
+            done[p] = full;
+            return full;
+        }
+
+        return team with
+        {
+            BattingOrder = team.BattingOrder.Select(Full).ToList(),
+            Reserves = team.Reserves.Select(Full).ToList(),
+            StartingPitcher = team.StartingPitcher is { } sp ? Full(sp) : null,
+            Captain = team.Captain is { } c ? Full(c) : null,
+        };
+    }
+
+    /// <summary>実体の同一性で比べる（netstandard2.1 には ReferenceEqualityComparer が無い）。</summary>
+    private sealed class ByReference : IEqualityComparer<Player>
+    {
+        public static readonly ByReference Instance = new();
+        public bool Equals(Player? x, Player? y) => ReferenceEquals(x, y);
+        public int GetHashCode(Player obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
     }
 }
