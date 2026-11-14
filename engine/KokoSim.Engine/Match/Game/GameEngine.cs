@@ -750,7 +750,7 @@ public static class GameEngine
                 var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills,
                     inning, inRelief, runnersOn: bases.RunnerCount > 0);
 
-                // チャンス◎×（得点圏）・ピンチ◎×（得点圏 or 終盤の接戦）: プレッシャー倍率の振れに掛かる側
+                // チャンス○×（得点圏）・ピンチ○×（得点圏 or 終盤の接戦）: プレッシャー倍率の振れに掛かる側
                 // （設計書10 §0.1・issue #907）。場面外・スキルなしは None＝従来と1ビットも変わらない。
                 var risp = bases.Second is not null || bases.Third is not null;
                 var pinch = risp || (inning >= ctx.Pressure.LateInningFrom
@@ -1126,7 +1126,7 @@ public static class GameEngine
                         // 非強制時 paBaserunning は ctx.Baserunning と同一参照＝従来の乱数順・結果に不変。
                         // 送球の逸れ（issue #841）の受け手＝二塁カバーの遊撃手（BuildSteal の二盗送球と同じ約束）。
                         var secondBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.Shortstop);
-                        // クイック◎×（issue #907）: 投手ごとのクイックの秒の差。スキルなしは0＝従来と同じ。
+                        // クイック○×（issue #907）: 投手ごとのクイックの秒の差。スキルなしは0＝従来と同じ。
                         var quickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
                         var steal = force switch
                         {

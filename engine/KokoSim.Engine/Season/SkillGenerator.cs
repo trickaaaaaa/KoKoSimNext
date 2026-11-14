@@ -86,7 +86,7 @@ public static class SkillGenerator
             // RNG消費は hidden_eligible に関わらず常に1回（乱数消費順を変えない）。
             // 隠し不可のスキルは、隠し行きを引いた結果を無視して visible へ回す。
             var wantsHidden = MathUtil.Chance(c.HiddenShare, rng);
-            // 正負ペア（◎⇔×, issue #907）は同時に持たない。後から引いた方を捨てる（乱数は引いた後＝消費順は固定）。
+            // 正負ペア（○⇔×, issue #907）は同時に持たない。後から引いた方を捨てる（乱数は引いた後＝消費順は固定）。
             if (SkillNames.OppositeOf(s) is { } opposite && (visible.Contains(opposite) || hidden.Contains(opposite))) return;
             if (wantsHidden && !HiddenIneligible.Contains(s)) hidden.Add(s);
             else visible.Add(s);

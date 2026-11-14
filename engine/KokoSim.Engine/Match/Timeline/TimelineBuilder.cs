@@ -1202,7 +1202,7 @@ public static class TimelineBuilder
         var runnerArrive = runnerTime;
 
         var pitchStart = 0.0;
-        var pitchArrive = c.PitcherQuickSeconds + pitcherQuickOffsetSeconds; // クイック（投球が捕手へ。クイック◎×で±・issue #907）
+        var pitchArrive = c.PitcherQuickSeconds + pitcherQuickOffsetSeconds; // クイック（投球が捕手へ。クイック○×で±・issue #907）
         var resolvedAt = Math.Max(runnerArrive, defenseTime);
 
         var ball = new List<BallSegment>

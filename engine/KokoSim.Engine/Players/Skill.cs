@@ -18,7 +18,7 @@ public enum SkillCategory
 /// 特殊能力（設計書10）。**有無のみ（ランクなし）** で、強弱は連続パラメータが担う。
 /// パラメータ・精神力システムで表現できるものは含めない（二重計上禁止の鉄則）:
 /// 走塁の巧拙・肩/送球精度・左右相性・守備の巧拙などは能力値が担当。
-/// チャンス/ピンチ◎×は状況補正そのものでなく、PressureModel の倍率の振れに掛かる側（設計書10 §0.1・issue #907）。
+/// チャンス/ピンチ○×は状況補正そのものでなく、PressureModel の倍率の振れに掛かる側（設計書10 §0.1・issue #907）。
 /// 残すのは非線形挙動・質的スタイル・チーム波及・体質だけ。効果は控えめ。
 /// <para>セーブはスキルを<b>名前</b>で持つ（<see cref="Saves.PlayerSaves"/>）。削除したメンバ名は読み飛ばし、
 /// 置き換えたメンバ名（広角打法→流し打ち）は読み替える。並び順は自由に変えてよい。</para>
@@ -30,7 +30,7 @@ public enum Skill
     Streaky,           // ムラっけ: 好不調の振れ幅が大きい（両刃）
     FirstPitchSwinger, // 初球から振る: 初球スイング傾向（積極性）
     Grinder,           // 粘り打ち: ファウルで粘り球数を稼ぐ（行動特性）
-    ClutchHitter,      // チャンス◎: 得点圏で圧による低下が消え、わずかに上がる（§0.1）
+    ClutchHitter,      // チャンス○: 得点圏で圧による低下が消え、わずかに上がる（§0.1）
     ChokeHitter,       // チャンス×: 得点圏で圧による低下が大きい（§0.1）
     FastballHitter,    // 速球打ち: ストレート系の球に対してミートが上がる
     BreakingBallHitter,// 変化球打ち: 変化球に対してミート・選球眼が上がる
@@ -42,9 +42,9 @@ public enum Skill
     SecondTimeThrough, // 打者一巡: 2巡目以降に崩れやすい（対戦回数依存の癖・負）
     EffectivelyWild,   // 荒れ球: 軌道が不安定で打ちにくいが四球も増える（両刃）
     DeceptiveBall,     // クセ球: 見た目より打ちにくい球質（物理では出しにくい質的個性）
-    ClutchPitcher,     // ピンチ◎: ピンチで圧による低下が消え、わずかに上がる（§0.1）
+    ClutchPitcher,     // ピンチ○: ピンチで圧による低下が消え、わずかに上がる（§0.1）
     ChokePitcher,      // ピンチ×: ピンチで圧による低下が大きい（§0.1）
-    QuickDelivery,     // クイック◎: 走者ありのクイックが速い＝盗塁されにくい
+    QuickDelivery,     // クイック○: 走者ありのクイックが速い＝盗塁されにくい
     SlowDelivery,      // クイック×: クイックが遅い＝盗塁されやすい（負）
     Fireman,           // 火消し: 途中登板の直後の打者に制球・球威が上乗せ。継投AIのリリーフ選びに使う
     ShakyStart,        // 立ち上がり難: 1〜2回は制球・球威が落ちる（負）
@@ -132,7 +132,7 @@ public static class SkillNames
         return System.Enum.TryParse(name, out skill) && System.Enum.IsDefined(typeof(Skill), skill);
     }
 
-    /// <summary>同時に持たない正負ペア（◎⇔×）。ペアが無ければ null。</summary>
+    /// <summary>同時に持たない正負ペア（○⇔×）。ペアが無ければ null。</summary>
     public static Skill? OppositeOf(Skill s) => s switch
     {
         Skill.ClutchHitter => Skill.ChokeHitter,

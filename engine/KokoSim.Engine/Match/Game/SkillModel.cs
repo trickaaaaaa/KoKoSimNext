@@ -134,8 +134,8 @@ public static class SkillModel
         => inRelief && priorBf < c.FiremanBatters && skills.Has(Skill.Fireman);
 
     /// <summary>
-    /// クイック◎×（issue #907）: 盗塁の守備側の秒（<c>BaserunningCoefficients.PitcherQuickSeconds</c>）へ足す投手ごとの差[s]。
-    /// ◎は負（速い＝盗塁されにくい）、×は正。スキルなしは0。
+    /// クイック○×（issue #907）: 盗塁の守備側の秒（<c>BaserunningCoefficients.PitcherQuickSeconds</c>）へ足す投手ごとの差[s]。
+    /// ○は負（速い＝盗塁されにくい）、×は正。スキルなしは0。
     /// </summary>
     public static double QuickDeliveryOffsetSeconds(SkillSet pitcherSkills, SkillCoefficients c)
     {
@@ -151,11 +151,11 @@ public static class SkillModel
     public static double ReliefScoreBonus(SkillSet skills, SkillCoefficients c)
         => skills.Has(Skill.Fireman) ? c.FiremanReliefScoreBonus : 0.0;
 
-    /// <summary>打者のチャンス◎×（得点圏で効く。設計書10 §0.1）。両方持つ場合は打ち消し合う。</summary>
+    /// <summary>打者のチャンス○×（得点圏で効く。設計書10 §0.1）。両方持つ場合は打ち消し合う。</summary>
     public static PressureTrait BatterPressureTrait(SkillSet skills)
         => TraitOf(skills.Has(Skill.ClutchHitter), skills.Has(Skill.ChokeHitter));
 
-    /// <summary>投手のピンチ◎×（得点圏 or 終盤の接戦で効く。設計書10 §0.1）。両方持つ場合は打ち消し合う。</summary>
+    /// <summary>投手のピンチ○×（得点圏 or 終盤の接戦で効く。設計書10 §0.1）。両方持つ場合は打ち消し合う。</summary>
     public static PressureTrait PitcherPressureTrait(SkillSet skills)
         => TraitOf(skills.Has(Skill.ClutchPitcher), skills.Has(Skill.ChokePitcher));
 

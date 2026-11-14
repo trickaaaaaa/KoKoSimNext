@@ -27,13 +27,13 @@ public sealed record PressureCoefficients
 }
 
 /// <summary>
-/// プレッシャーの受け止め方の癖（チャンス◎×・ピンチ◎×＝設計書10 §0.1・issue #907）。
+/// プレッシャーの受け止め方の癖（チャンス○×・ピンチ○×＝設計書10 §0.1・issue #907）。
 /// 精神力の倍率の振れ raw に掛かる側＝精神力とは別の軸で、二重計上しない。
 /// </summary>
 public enum PressureTrait
 {
     None,
-    /// <summary>◎: 圧による低下を消し、わずかなプラスにする。</summary>
+    /// <summary>○: 圧による低下を消し、わずかなプラスにする。</summary>
     Clutch,
     /// <summary>×: 圧による低下を拡大し、精神力が高くても少しは落ちる。</summary>
     Choke,
@@ -73,7 +73,7 @@ public static class PressureModel
     /// fatigueOver=true（疲労閾値超過）と negativeAmplify（動揺, 設計書09 §3）は負側のみ増幅。
     /// 精神力50なら常に1.0。
     /// </summary>
-    /// <para>trait（チャンス◎×・ピンチ◎×, 設計書10 §0.1）は raw へ先に掛かる: ◎＝raw を +ClutchFloor×P 以上へ、
+    /// <para>trait（チャンス○×・ピンチ○×, 設計書10 §0.1）は raw へ先に掛かる: ○＝raw を +ClutchFloor×P 以上へ、
     /// ×＝負の raw を拡大し −ChokeCeiling×P 以下へ。その後の緩和・増幅は従来どおり負側に効く。
     /// trait=None（既定）なら従来と1ビットも変わらない。</para>
     public static double Multiplier(int mental, int pressureIndex, PressureCoefficients c,
@@ -94,7 +94,7 @@ public static class PressureModel
 
     private static readonly SkillCoefficients DefaultSkills = new();
 
-    /// <summary>チャンス◎×・ピンチ◎×を倍率の振れ raw へ掛ける（設計書10 §0.1）。</summary>
+    /// <summary>チャンス○×・ピンチ○×を倍率の振れ raw へ掛ける（設計書10 §0.1）。</summary>
     public static double ApplyTrait(double raw, int pressureIndex, PressureTrait trait, SkillCoefficients s)
         => trait switch
         {

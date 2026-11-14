@@ -57,7 +57,7 @@ public sealed record SkillCoefficients
     public int ShakyStartInnings { get; init; } = 2;
     public double ShakyStartControlPenalty { get; init; } = 6.0;
     public double ShakyStartStuffPenalty { get; init; } = 0.08;
-    /// <summary>クイック◎: 走者ありのクイックの秒の短縮[s]（盗塁の守備側の秒から引く）。</summary>
+    /// <summary>クイック○: 走者ありのクイックの秒の短縮[s]（盗塁の守備側の秒から引く）。</summary>
     public double QuickDeliverySeconds { get; init; } = 0.10;
     /// <summary>クイック×: 走者ありのクイックの秒の延長[s]（盗塁の守備側の秒へ足す）。</summary>
     public double SlowDeliverySeconds { get; init; } = 0.10;
@@ -68,8 +68,8 @@ public sealed record SkillCoefficients
     /// <summary>火消し: 継投AIのリリーフ選びで、火消し持ちの候補の比較値（4能力の和）へ足す量。</summary>
     public double FiremanReliefScoreBonus { get; init; } = 12.0;
 
-    // --- チャンス◎×・ピンチ◎×（設計書10 §0.1・issue #907）: PressureModel の倍率の振れ raw に掛かる側 ---
-    /// <summary>◎: raw の下限＝+この値×プレッシャー指数（圧による低下を消し、わずかなプラスにする）。</summary>
+    // --- チャンス○×・ピンチ○×（設計書10 §0.1・issue #907）: PressureModel の倍率の振れ raw に掛かる側 ---
+    /// <summary>○: raw の下限＝+この値×プレッシャー指数（圧による低下を消し、わずかなプラスにする）。</summary>
     public double ClutchFloorPerPressure { get; init; } = 0.004;
     /// <summary>×: raw が負のときの拡大倍率（圧による低下を大きくする）。</summary>
     public double ChokeNegativeAmplify { get; init; } = 2.0;

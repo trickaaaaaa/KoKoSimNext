@@ -766,14 +766,14 @@ skills:
   shaky_start_innings: 2                 # 立ち上がり難: 1〜2回は…
   shaky_start_control_penalty: 6.0       # …制球↓
   shaky_start_stuff_penalty: 0.08        # …球威↓
-  quick_delivery_seconds: 0.10           # クイック◎: 盗塁の守備側の秒を短縮[s]
+  quick_delivery_seconds: 0.10           # クイック○: 盗塁の守備側の秒を短縮[s]
   slow_delivery_seconds: 0.10            # クイック×: 盗塁の守備側の秒を延長[s]
   fireman_batters: 3                     # 火消し: 途中登板から対戦打者3人まで…
   fireman_control_bonus: 6.0             # …制球↑
   fireman_stuff_bonus: 0.08              # …球威↑
   fireman_relief_score_bonus: 12.0       # 火消し: 継投AIのリリーフ選びで比較値（4能力の和）へ加算
-  # チャンス◎×・ピンチ◎×（設計書10 §0.1）: プレッシャー倍率の振れ raw＝(精神力−50)/50×slope×P に掛かる側
-  clutch_floor_per_pressure: 0.004       # ◎: raw の下限 +0.004×P（圧による低下を消し、わずかにプラス）
+  # チャンス○×・ピンチ○×（設計書10 §0.1）: プレッシャー倍率の振れ raw＝(精神力−50)/50×slope×P に掛かる側
+  clutch_floor_per_pressure: 0.004       # ○: raw の下限 +0.004×P（圧による低下を消し、わずかにプラス）
   choke_negative_amplify: 2.0            # ×: raw<0 を2倍に拡大
   choke_ceiling_per_pressure: 0.008      # ×: raw の上限 −0.008×P（精神力が高くても圧で少し落ちる）
   # チーム系

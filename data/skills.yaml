@@ -1,6 +1,6 @@
 # 特殊能力カタログ（設計書10）。純化後: パラメータ・精神力で出せるものは含めない（二重計上禁止）。
 # 走塁の巧拙/肩・送球精度/左右相性/守備の巧拙/逆境・大舞台 は能力値と PressureModel が担当しスキル化しない。
-# チャンス◎×・ピンチ◎×は PressureModel の倍率の振れに掛かる側（設計書10 §0.1・issue #907）。
+# チャンス○×・ピンチ○×は PressureModel の倍率の振れに掛かる側（設計書10 §0.1・issue #907）。
 # 残すのは 非線形挙動・質的スタイル・チーム波及・体質 だけ。効果量は data/coefficients.yaml の skills: で調整する。
 # 削除したスキル（併殺の名手・名捕手・広角打法）は古いセーブから読むとき読み飛ばす／読み替える（SkillNames.TryParseSaved）。
 #
@@ -34,7 +34,7 @@ skills:
   - id: ClutchHitter
     category: batting
     hidden_eligible: true
-    name: チャンス◎
+    name: チャンス○
     description: 得点圏でも当たりが落ちない（わずかに上がる）
   - id: ChokeHitter
     category: batting
@@ -86,7 +86,7 @@ skills:
   - id: ClutchPitcher
     category: pitching
     hidden_eligible: true
-    name: ピンチ◎
+    name: ピンチ○
     description: ピンチでも制球が落ちない（わずかに上がる）
   - id: ChokePitcher
     category: pitching
@@ -96,7 +96,7 @@ skills:
   - id: QuickDelivery
     category: pitching
     hidden_eligible: false
-    name: クイック◎
+    name: クイック○
     description: 走者がいるときのクイックが速い（盗塁されにくい）
   - id: SlowDelivery
     category: pitching

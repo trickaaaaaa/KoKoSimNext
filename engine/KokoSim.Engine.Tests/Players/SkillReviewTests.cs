@@ -18,7 +18,7 @@ namespace KokoSim.Engine.Tests.Players;
 /// <summary>
 /// 特殊能力の見直し第1弾（issue #907・設計書10 §0.1/§2.1〜2.3）。新しいスキルごとに「持っていると狙った向きに
 /// 結果が動く」こと、削除・置き換えたスキル名を含む古いセーブが読めること、生成の約束（投手系＝投手寄り・
-/// 野手系＝野手寄り・◎と×は同時に付かない）を固定する。
+/// 野手系＝野手寄り・○と×は同時に付かない）を固定する。
 /// </summary>
 public sealed class SkillReviewTests
 {
@@ -172,7 +172,7 @@ public sealed class SkillReviewTests
         Assert.True(mods.IsIdentity);
     }
 
-    // ===== チャンス◎×・ピンチ◎×（設計書10 §0.1） =====
+    // ===== チャンス○×・ピンチ○×（設計書10 §0.1） =====
 
     [Fact]
     public void ClutchTrait_LiftsTheLowMentalDropToASmallPlus()
@@ -211,7 +211,7 @@ public sealed class SkillReviewTests
     [Fact]
     public void ChanceSkills_MoveTheBattingAverage_UnderPressure()
     {
-        // 得点圏・P=4 の精神力20の打者: ◎は低下が消え、×は低下が倍になる＝打率が ◎ > なし > ×。
+        // 得点圏・P=4 の精神力20の打者: ○は低下が消え、×は低下が倍になる＝打率が ○ > なし > ×。
         var b = new BatterAttributes { Contact = 60, Power = 55 };
         BatterAttributes Under(PressureTrait t)
             => PressureModel.ApplyBatter(b, PressureModel.Multiplier(20, 4, P, trait: t, skills: C));
@@ -219,7 +219,7 @@ public sealed class SkillReviewTests
         var clutch = Run(Under(PressureTrait.Clutch), PitcherAttributes.LeagueAverage, SkillPlayMods.None);
         var choke = Run(Under(PressureTrait.Choke), PitcherAttributes.LeagueAverage, SkillPlayMods.None);
         Assert.True(clutch.Avg > none.Avg && none.Avg > choke.Avg,
-            $"打率 ◎{clutch.Avg:F3} > なし{none.Avg:F3} > ×{choke.Avg:F3}");
+            $"打率 ○{clutch.Avg:F3} > なし{none.Avg:F3} > ×{choke.Avg:F3}");
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public sealed class SkillReviewTests
         var b = BatterAttributes.LeagueAverage;
         var clutch = Run(b, Under(PressureTrait.Clutch), SkillPlayMods.None);
         var choke = Run(b, Under(PressureTrait.Choke), SkillPlayMods.None);
-        Assert.True(clutch.Obp < choke.Obp, $"被出塁率 ◎{clutch.Obp:F3} < ×{choke.Obp:F3}");
+        Assert.True(clutch.Obp < choke.Obp, $"被出塁率 ○{clutch.Obp:F3} < ×{choke.Obp:F3}");
     }
 
     // ===== 立ち上がり難・火消し =====
@@ -284,7 +284,7 @@ public sealed class SkillReviewTests
         Assert.Same(better, AiTacticsBrain.PickReliever(s, C with { FiremanReliefScoreBonus = 0 }));
     }
 
-    // ===== クイック◎× =====
+    // ===== クイック○× =====
 
     [Fact]
     public void QuickDelivery_LowersStealSuccess_SlowDeliveryRaisesIt()
@@ -306,9 +306,9 @@ public sealed class SkillReviewTests
         var quick = Rate(Skill.QuickDelivery);
         var plain = Rate(null);
         var slow = Rate(Skill.SlowDelivery);
-        Assert.True(quick < plain - 0.03 && plain < slow - 0.03, $"盗塁成功率 ◎{quick:P1} < なし{plain:P1} < ×{slow:P1}");
+        Assert.True(quick < plain - 0.03 && plain < slow - 0.03, $"盗塁成功率 ○{quick:P1} < なし{plain:P1} < ×{slow:P1}");
 
-        // 采配AIの見込みも同じ秒で読む＝クイック◎の投手には走りにくい。
+        // 采配AIの見込みも同じ秒で読む＝クイック○の投手には走りにくい。
         var pitcher = new Player { Position = FieldPosition.Pitcher };
         Assert.True(StealResolver.ExpectedSuccessProbability(runner, catcher, pitcher, br,
                         pitcherQuickOffsetSeconds: -C.QuickDeliverySeconds)

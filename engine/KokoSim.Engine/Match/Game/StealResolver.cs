@@ -114,7 +114,7 @@ public static class StealResolver
     /// （不変条件#5、TransferFactor等と同じ「50が恒等」の作法）。実際の1本ごとの判定
     /// （<see cref="ResolveVerdict"/>）は、ここに<b>サンプリングした逸れの実際の期待値からの差分</b>を
     /// 別途乗せる＝平均はこの関数の値のまま、本番だけ本物のばらつきを持つ。</para></summary>
-    /// <param name="pitcherQuickOffsetSeconds">投手ごとのクイックの差[s]（クイック◎×・issue #907。
+    /// <param name="pitcherQuickOffsetSeconds">投手ごとのクイックの差[s]（クイック○×・issue #907。
     /// <see cref="SkillModel.QuickDeliveryOffsetSeconds"/>）。既定0＝従来と同じ。</param>
     public static double DefenseTimeSeconds(
         Player catcher, BaserunningCoefficients c, bool pitchout = false, StartType startType = StartType.Normal,
