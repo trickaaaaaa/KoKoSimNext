@@ -47,26 +47,59 @@ namespace KokoSim.Unity.Match
             m => CanonicalizeMeshy(m, new Vector3(0.400f, 0.440f, 0.150f)));
 
         /// <summary>
-        /// 野手グラブ。原点=中心、指が上（+Y）・ポケット開口が+Z（＝装着側で相手を向く）。
-        /// 非一様フィット（幅0.245 / 高0.295 / 奥行0.125）＝生成物は写真どおりポケットが開いた状態で
-        /// 奥行0.185あり、そのままだと握った手より分厚い塊になる。ただし薄くしすぎると手が収まらない
-        /// （実測: 指先は掌側へ最大4.6cm出る）。奥行は装着側の実測に合わせた最小限にとどめる。
-        /// **捕手ミットは別物**（指の区切りが無く縁が厚い）なので、これは流用しない。
+        /// 野手・投手グラブ（左手用）。原点=中心、指が上（+Y）・ポケット開口が+Z（＝装着側で相手を向く）・親指が+X。
+        /// **購入品があればそれを使い、無ければ Tripo 生成物へ落ちる**（issue #913）。購入品は再配布NG＝gitignore
+        /// （design-18 §3.1。購入素体と同じ扱い）なので、他端末・CI では Tripo 版になる。どちらを読んだかは
+        /// <see cref="GloveIsVendor"/> で分かる（装着の前後位置が形で違うため）。
         /// </summary>
-        public static Mesh Glove() => Get("AIGear_Glove1_lo", m =>
+        public static Mesh Glove()
         {
-            CanonicalizeMeshyFromBack(m, new Vector3(0.245f, 0.295f, 0.125f));
-            PaintPocket(m);
+            var vendor = VendorGlove();
+            GloveIsVendor = vendor != null;
+            return vendor ?? TripoGlove();
+        }
+
+        /// <summary>直近の <see cref="Glove"/> が購入品を返したか。</summary>
+        public static bool GloveIsVendor { get; private set; }
+
+        /// <summary>
+        /// 購入グラブ（CGTrader「baseball glove」Legendexpert 作・Royalty Free・2026-11-14 購入）。元の FBX は
+        /// art-src/vendor-glove-a/glove-b.fbx（gitignore）。姿勢は最初から「正面 -Y・上 +Z・親指 -X」で回転不要。
+        /// 22部品・60万tri を remesh 0.002m → 5,000tri へ。紐の垂れ（細長い島5本）はデシメート時に除いてある
+        /// （tools/aigear-decimate.py の drop_thin＝残すとトゲに見える）。寸法は素のまま（幅0.232 / 高0.300 / 奥行0.191）。
+        /// </summary>
+        private static Mesh VendorGlove() => GetAt(VendorDir + "CGT_Glove_lo.fbx", m =>
+        {
+            CanonicalizeMeshy(m, new Vector3(0.232f, 0.300f, 0.191f));
+            Unpainted(m);
         });
 
         /// <summary>
-        /// 捕手ミット。原点=中心、ポケット開口が+Z。非一様フィット（幅0.30 / 高0.33 / 奥行0.145）。
-        /// 生成物は 0.330×0.324×0.317 のほぼ球で、実物の「丸くて薄い」比率と大きく違うため奥行を強く詰める。
-        /// **6,000tri と装備中で最も重い**が、これは削れないぶん（下の経緯）であって余裕ではない。
+        /// Tripo（H2.5・画像→3D）の生成物（購入品が無い環境用）。Tripo はこのグラブを「指先が上・ポケットが横（-X）」で
+        /// 立てて出したので、デシメート時に Z+90° で Meshy と同じ姿勢（正面 -Y・上 +Z）へ回してある
+        /// （tools/aigear-decimate.py の rot 引数。ミットは仰向けで出てきて X+90°＝**向きは生成物ごとに違う**）。
+        /// 背面の手首口が貫通していて手と奥の景色が見えたので、内側に芯（core）を入れて塞いである。
+        /// 生成物は閉じかけの形で奥行 0.263m・親指が開いて幅 0.300m あるので、奥行を 0.16m・幅を 0.25m へ詰める。
         /// </summary>
-        public static Mesh Mitt() => Get("AIGear_Mitt1_lo", m =>
+        private static Mesh TripoGlove() => Get("AIGear_GloveT_lo", m =>
         {
-            CanonicalizeMeshyFromBack(m, new Vector3(0.300f, 0.330f, 0.145f));
+            CanonicalizeMeshy(m, new Vector3(0.250f, 0.291f, 0.160f));
+            // 塗り分けはしない（PaintPocket の「+Z を向く中心＝ポケットの内側」という読みが、閉じかけの
+            // このグラブでは背面の指袋に乗ってしまう）。紐・指袋は形として出ているので革の一色で足りる。
+            Unpainted(m);
+        });
+
+        /// <summary>
+        /// 捕手ミット（左手用）。原点=中心、ポケット開口が+Z。Tripo（H2.5・画像→3D）の生成物（issue #915）。
+        /// 元写真は**ポケット側の正面**（Assets/_AIGearRaw/ref-mitt-front.png）＝開いたポケット・縁の土手・左上のウェブが
+        /// 生成の時点で出ている。Tripo は物を仰向けに寝かせて出すので、デシメート時に X+90° で Meshy と同じ姿勢
+        /// （正面 -Y・上 +Z）へ回してある（tools/aigear-decimate.py の rot 引数）＝ここは CanonicalizeMeshy をそのまま通す。
+        /// 生成物は奥行 0.205m とかなり椀状なので、奥行だけ 0.15m へ軽く詰める（旧 Meshy 版は 0.317→0.145 と
+        /// 半分以下へ潰してポケットが消えていた）。紐通し穴が縁を一周するのは旧版と同じ＝remesh 0.0015m → 6,000tri。
+        /// </summary>
+        public static Mesh Mitt() => Get("AIGear_MittT_lo", m =>
+        {
+            CanonicalizeMeshy(m, new Vector3(0.258f, 0.300f, 0.150f));
             PaintPocket(m);
         });
 
@@ -80,23 +113,29 @@ namespace KokoSim.Unity.Match
         // ---- ロード ------------------------------------------------------------
 
         private static Mesh Get(string file, System.Action<Mesh> canonicalize)
+            => GetAt(Dir + file + ".fbx", canonicalize);
+
+        /// <summary>購入装備の置き場（gitignore。design-18 §3.1）。無い環境では各 getter が生成物へ落ちる。</summary>
+        private const string VendorDir = "Assets/DuelSpike/Vendor/Gear/";
+
+        private static Mesh GetAt(string path, System.Action<Mesh> canonicalize)
         {
-            if (Cache.TryGetValue(file, out var hit)) return hit;
-            var mesh = LoadMeters(file);
+            if (Cache.TryGetValue(path, out var hit)) return hit;
+            var mesh = LoadMeters(path);
             if (mesh != null) canonicalize(mesh);
-            Cache[file] = mesh;   // null もキャッシュ（毎フレームのロード再試行を避ける）
+            Cache[path] = mesh;   // null もキャッシュ（毎フレームのロード再試行を避ける）
             return mesh;
         }
 
-        private static Mesh LoadMeters(string file)
+        private static Mesh LoadMeters(string path)
         {
 #if UNITY_EDITOR
-            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Dir + file + ".fbx");
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) return null;
             var mf = prefab.GetComponentInChildren<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return null;
             var mesh = Object.Instantiate(mf.sharedMesh);
-            mesh.name = file + " (gear)";
+            mesh.name = System.IO.Path.GetFileNameWithoutExtension(path) + " (gear)";
             mesh.hideFlags = HideFlags.HideAndDontSave;
             // FBXノードのインポート姿勢（スケール100等）を頂点へ焼き、1unit=1mにする
             Apply(mesh, prefab.transform.worldToLocalMatrix * mf.transform.localToWorldMatrix);
@@ -218,19 +257,6 @@ namespace KokoSim.Unity.Match
             mesh.RecalculateNormals();   // 非一様スケールでは法線が面へ直交しなくなるため取り直す
         }
 
-        /// <summary>
-        /// グラブ・ミット用。元写真（Assets/_AIGearRaw/ref-glove.png / ref-mitt.png）が**背面**
-        /// （ロゴと人差し指の穴がある側）なので、生成物の「正面」は背面＝そのままだとポケットが
-        /// 掌側（-Z）へ向き、相手から見えるのが甲側になる（2026-11-08 監督指摘「中継視点でずっと
-        /// ミットの甲が見えている」。単体レンダで -Z 側に網が出ることを確認）。
-        /// 上下軸まわりに180°回してポケットを+Zへ向ける。回転なので左右の手の形は変わらない（鏡映ではない）。
-        /// </summary>
-        private static void CanonicalizeMeshyFromBack(Mesh mesh, Vector3 targetSize)
-        {
-            Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(0f, 0f, 180f)));   // 生成姿勢の上軸(+Z)まわり
-            CanonicalizeMeshy(mesh, targetSize);
-        }
-
         /// <summary>縁の革ひも（黄土色）。sRGB で書いてリニアへ直す（頂点色は SetColor の自動変換を通らない）。</summary>
         private static readonly Color RimLace = new Color(0.80f, 0.62f, 0.30f).linear;
 
@@ -260,9 +286,18 @@ namespace KokoSim.Unity.Match
                 float inside = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.15f, 0.55f, nz))
                     * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.60f, 0.80f, r)));
                 var c = rim >= inside ? RimLace : PocketDark;
-                c.a = Mathf.Max(rim, inside);
+                // 重みは #822 当時より弱める（2026-11-14）。旧メッシュは凹みが無く色で凹みを装う必要があったが、
+                // Tripo 製は凹み・縁が形として出ている＝強く塗ると「的」の輪に見えた
+                c.a = Mathf.Max(rim * 0.6f, inside * 0.5f);
                 colors[i] = c;
             }
+            mesh.colors = colors;
+        }
+
+        /// <summary>頂点色を「重み0」（＝素の革色のまま）で埋める。</summary>
+        private static void Unpainted(Mesh mesh)
+        {
+            var colors = new Color[mesh.vertexCount];   // 既定値 (0,0,0,0)＝重み0
             mesh.colors = colors;
         }
 

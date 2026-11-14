@@ -125,7 +125,7 @@ namespace KokoSim.Unity.Match
                 CollectTeamMats(a, _defenseColors.Cap);
                 // グラブは投手と同じ左手・同じメッシュ。視線ターゲットは本塁（＝ステージ原点）
                 AttachGlove(a, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal,
-                    Vector3.zero, GloveSize, layer, DuelGearMeshes.Glove());
+                    Vector3.zero, GloveSize, layer, DuelGearMeshes.Glove(), GloveForwardForLoaded, GloveLeatherColor);
 
                 _fieldCast[pos] = a;
                 _fieldIdleClip[pos] = clip;

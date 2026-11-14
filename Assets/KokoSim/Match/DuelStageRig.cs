@@ -1393,9 +1393,9 @@ namespace KokoSim.Unity.Match
             // 投手は 2026-07-29 まで**グラブを持っていなかった**（AttachMitt が捕手専用だった）
             // 捕手ミットは野手グラブと別メッシュ（指の区切りが無く縁が厚い＝流用すると捕手に見えない）
             AttachGlove(_catcher, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal,
-                mound, MittSize, layer, DuelGearMeshes.Mitt());
+                mound, MittSize, layer, DuelGearMeshes.Mitt(), MittForward);
             AttachGlove(_pitcher, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal,
-                Vector3.zero, GloveSize, layer, DuelGearMeshes.Glove());
+                Vector3.zero, GloveSize, layer, DuelGearMeshes.Glove(), GloveForwardForLoaded, GloveLeatherColor);
 
             // 絵作り一式（構図R-comp60・夏空・ライト・被り物オフセット）。数値の実体は
             // DuelCalibration.Default に集約し、キャリブレーションツール（DuelCalibrationWindow）が
@@ -5339,13 +5339,50 @@ namespace KokoSim.Unity.Match
         private static readonly Color LeatherColor = new(0.45f, 0.27f, 0.15f);
 
         /// <summary>
+        /// 投手・野手グラブの革色（issue #913）。実物の投手グラブ（見比べ写真）は明るい黄土〜タンでほぼ一色。
+        /// 捕手ミットは焦げ茶（<see cref="LeatherColor"/>）のまま＝同じ画面でグラブとミットの見分けもつく。
+        /// </summary>
+        private static readonly Color GloveLeatherColor = new(0.72f, 0.52f, 0.30f);
+
+        /// <summary>
         /// 手からポケット面へ出す量[m]（コンテナ+Z＝掌の法線）。実物のグラブは掌の側へ張り出す。
         /// **手がポケットの空洞に入らないだけ出す**のが要点。生成メッシュの+Z面は開いたポケット＝
         /// えぐれた空洞なので、寄せすぎると指がそこから前へ突き抜けて見える（2026-07-29 監督指摘）。
         /// 実測（グラブ座標系）: 指先 z≈+0.035〜+0.046・手の甲 z≈-0.010。
         /// 中心を +0.035 に置くと奥行0.125（±0.0625）の中へ手が丸ごと収まる。
+        /// **2026-11-14 改定（issue #913・Tripo 生成グラブへ差し替え）: -0.005**。新グラブは閉じかけの形で奥行0.16、
+        /// 指袋は背面（手の甲側）に並ぶ。BakeMesh した手の皮膚の頂点で測ると、0.035 では 61 頂点が背面から
+        /// 最大 10cm 出ていた（指袋のすき間から手が見えた）。4cm 手の甲側へ寄せると背面へ出るのは 6 頂点まで減り、
+        /// 代わりにポケット側へ 29 頂点出る。投手は背中側から映りグラブも背面が見える＝背面を優先した。
         /// </summary>
-        private const float GloveForward = 0.035f;
+        private const float GloveForward = -0.005f;
+
+        /// <summary>
+        /// 購入グラブ（<see cref="DuelGearMeshes.GloveIsVendor"/>）の <see cref="GloveForward"/> 相当（issue #913）。
+        /// 購入品はポケットが約10cmと深く、中心の殻は 4.8cm しかない。立ち姿の手（手首から先・指を軽く曲げて
+        /// 奥行 9.5cm）はどこに置いても前後どちらかへ出る＝**映る側を優先**する。投手は背中側から映りグラブも
+        /// 背面が見えるので、背面へ出る手の頂点が0になる一番前（実測: 0.025 で背面0・+0.04 から背面へ出始める）。
+        /// 曲げた指はポケット側へ出るが、ポケットは本塁を向き中継視点に映らない。
+        /// 測るのは**手首から先の骨に重みがある頂点だけ**（半径で拾うと前腕が混ざる＝前腕は手首口から
+        /// 外へ出ているのが正しい）。
+        /// </summary>
+        private const float VendorGloveForward = 0.025f;
+
+        /// <summary>直前に <see cref="DuelGearMeshes.Glove"/> で読んだグラブに合う前後位置。</summary>
+        private static float GloveForwardForLoaded => DuelGearMeshes.GloveIsVendor ? VendorGloveForward : GloveForward;
+
+        /// <summary>
+        /// 捕手ミットの <see cref="GloveForward"/> 相当（issue #915）。Tripo 生成のミットは**薄い革の椀**で、
+        /// ポケットの底が中心で 13〜35mm しかない＝手を厚みの中へ収める作りではない。中継視点のカメラは
+        /// ポケット側しか見ないので、「手を丸ごとポケットの底の後ろへ隠す」所まで前へ出す。
+        /// 実測（捕手の構えの手・ミット座標系・2026-11-14）: 0.035 では指先がポケットから 22mm 突き抜け、
+        /// 前へ出した分だけ 1:1 で引っ込む。
+        /// **骨でなく皮膚の頂点で測ること**: 骨（指の中心線）で 13mm の余裕に見えた 0.070 は、BakeMesh した手の
+        /// 頂点で測ると 108 頂点が最大 16mm ポケットから出ていた（監督指摘「左手が透けて見える」）。指の肉の厚みぶん
+        /// 骨より手前に皮膚がある。皮膚の最大はみ出し 16mm＋余裕 6mm を足して 0.092。
+        /// 手の甲は背面から出るが、背面は中継視点に映らない。
+        /// </summary>
+        private const float MittForward = 0.092f;
 
         /// <summary>
         /// 手の長さ（手首→指先）を中指付け根までの距離から見積もる倍率。
@@ -5369,7 +5406,8 @@ namespace KokoSim.Unity.Match
         /// グラブの広い面（0.245×0.295m）が手のひらの面と重なる。
         /// </summary>
         private void AttachGlove(Actor actor, HumanBodyBones handBone, HumanBodyBones knuckleBone,
-            Vector3 gazeLocal, Vector3 size, int layer, Mesh mesh = null)
+            Vector3 gazeLocal, Vector3 size, int layer, Mesh mesh = null, float forward = GloveForward,
+            Color? leather = null)
         {
             if (actor == null || actor.Animator == null) return;
             var hand = actor.Animator.GetBoneTransform(handBone);
@@ -5423,14 +5461,15 @@ namespace KokoSim.Unity.Match
                 lp.y = (knuckle.position - hand.position).magnitude * HandLengthFromKnuckle * 0.5f;
             else
                 lp.y = (mesh != null ? mesh.bounds.size.y : size.y) * 0.25f;
-            lp.z += GloveForward;   // 掌の上に重ねると手に飲まれる＝ポケットぶん前へ出す
+            lp.z += forward;   // 掌の上に重ねると手に飲まれる＝ポケットぶん前へ出す（量は道具ごと）
             if (mesh != null)
             {
-                var part = GearMeshPart(c, mesh, "prop-glove", lp, Quaternion.identity, LeatherColor, layer);
+                var part = GearMeshPart(c, mesh, "prop-glove", lp, Quaternion.identity, leather ?? LeatherColor, layer);
                 part.GetComponent<MeshRenderer>().sharedMaterial.SetFloat("_UseVertexColor", 1f);
             }
             else
-                GearPart(c, PrimitiveType.Sphere, "prop-glove", lp, size, LeatherColor, layer);
+                GearPart(c, PrimitiveType.Sphere, "prop-glove", lp, size, leather ?? LeatherColor, layer);
+            HideGloveHand(actor, hand);   // 手は描かない＝深いポケットから指が覗かない（issue #913）
         }
 
         // ---- 被り物・防具（design-18 §3.3。役割ごとに出し分け＝打者ヘルメット/守備帽子） --------
