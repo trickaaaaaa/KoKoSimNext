@@ -627,7 +627,7 @@ public static class ProspectGenerator
         // SetWithCap（足のcap圧縮免除）と ApplyExp（trainability減衰免除）が p.IsProdigy を参照する。
         var isProdigy = rng.Fork(ProdigyStreamId(year, index)).NextDouble() < c.ProdigyProb;
 
-        // 旧 PersonalityFactor のタイプ内ジッタ（σ0.06）は勤勉さの連続値が引き受けた（設計書23 §1.2）。
+        // 旧 PersonalityFactor のタイプ内ジッタ（σ0.06）は、勤勉さの連続値＋隠れた個人差（SampleAxes が性格の Fork の末尾で引く・Q47）が引き受けた。
         // 主ストリームの NextGaussian 消費数だけは従来どおり1回保つ＝後続の能力ロール列（怪我耐性ほか）を1ビットも動かさない。
         _ = rng.NextGaussian(0, 1);
 
@@ -650,6 +650,7 @@ public static class ProspectGenerator
             Receptiveness = personality.Receptiveness,
             Diligence = personality.Diligence,
             Selflessness = personality.Selflessness,
+            SelfGrowthJitter = personality.SelfGrowthJitter,
             Mental = mental,
             MentalCap = mentalCap,
             Leadership = leadership,

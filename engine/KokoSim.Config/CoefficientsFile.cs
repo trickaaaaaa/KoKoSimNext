@@ -1927,6 +1927,7 @@ public static class CoefficientsLoader
         public double AxisSd { get; set; } = D.AxisSd;
         public double FactorMin { get; set; } = D.FactorMin;
         public double FactorMax { get; set; } = D.FactorMax;
+        public double SelfGrowthJitterSd { get; set; } = D.SelfGrowthJitterSd;
         public double ReceptivenessSlopeHigh { get; set; } = D.ReceptivenessSlopeHigh;
         public double ReceptivenessSlopeLow { get; set; } = D.ReceptivenessSlopeLow;
         public double DiligenceSlopeHigh { get; set; } = D.DiligenceSlopeHigh;
@@ -1949,6 +1950,7 @@ public static class CoefficientsLoader
                 AxisSd = AxisSd,
                 FactorMin = FactorMin,
                 FactorMax = FactorMax,
+                SelfGrowthJitterSd = SelfGrowthJitterSd,
                 ReceptivenessSlopeHigh = ReceptivenessSlopeHigh,
                 ReceptivenessSlopeLow = ReceptivenessSlopeLow,
                 DiligenceSlopeHigh = DiligenceSlopeHigh,
@@ -2050,11 +2052,14 @@ public static class CoefficientsLoader
     {
         private static readonly CohesionCoefficients D = new();
         public double CaptainPowerWeight { get; set; } = D.CaptainPowerWeight;
+        public double CaptainPowerNeutral { get; set; } = D.CaptainPowerNeutral;
         public int LeaderThreshold { get; set; } = D.LeaderThreshold;
-        public double LeaderWeight { get; set; } = D.LeaderWeight;
-        public int LeaderCap { get; set; } = D.LeaderCap;
+        public double LeaderShareWeight { get; set; } = D.LeaderShareWeight;
+        public double LeaderShareNeutral { get; set; } = D.LeaderShareNeutral;
         public double SelfishShareWeight { get; set; } = D.SelfishShareWeight;
-        public double LoneWolfWeight { get; set; } = D.LoneWolfWeight;
+        public double SelfishShareNeutral { get; set; } = D.SelfishShareNeutral;
+        public double LoneWolfShareWeight { get; set; } = D.LoneWolfShareWeight;
+        public double LoneWolfShareNeutral { get; set; } = D.LoneWolfShareNeutral;
         public double SummerCampDelta { get; set; } = D.SummerCampDelta;
         public double WinterCampDelta { get; set; } = D.WinterCampDelta;
         public double EventImproveDelta { get; set; } = D.EventImproveDelta;
@@ -2067,11 +2072,14 @@ public static class CoefficientsLoader
         public CohesionCoefficients ToModel() => new()
         {
             CaptainPowerWeight = CaptainPowerWeight,
+            CaptainPowerNeutral = CaptainPowerNeutral,
             LeaderThreshold = LeaderThreshold,
-            LeaderWeight = LeaderWeight,
-            LeaderCap = LeaderCap,
+            LeaderShareWeight = LeaderShareWeight,
+            LeaderShareNeutral = LeaderShareNeutral,
             SelfishShareWeight = SelfishShareWeight,
-            LoneWolfWeight = LoneWolfWeight,
+            SelfishShareNeutral = SelfishShareNeutral,
+            LoneWolfShareWeight = LoneWolfShareWeight,
+            LoneWolfShareNeutral = LoneWolfShareNeutral,
             SummerCampDelta = SummerCampDelta,
             WinterCampDelta = WinterCampDelta,
             EventImproveDelta = EventImproveDelta,

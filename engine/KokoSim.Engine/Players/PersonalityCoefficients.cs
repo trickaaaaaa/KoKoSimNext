@@ -23,8 +23,12 @@ public sealed record PersonalityProfile
     public int Selflessness { get; init; } = Personalities.AxisNeutral;
 }
 
-/// <summary>生成で引いた性格（種タイプ＋②③④の軸）。①統率は精神系の生成と一緒に引く（種タイプのずらしを使う）。</summary>
-public readonly record struct PersonalityDraw(Personality SeedType, int Receptiveness, int Diligence, int Selflessness);
+/// <summary>
+/// 生成で引いた性格（種タイプ＋②③④の軸＋自主成長の隠れた個人差）。①統率は精神系の生成と一緒に引く（種タイプのずらしを使う）。
+/// <see cref="SelfGrowthJitter"/> は勤勉さとは別の隠しパラメータ（画面に出さない・OPEN-QUESTIONS Q47）。
+/// </summary>
+public readonly record struct PersonalityDraw(
+    Personality SeedType, int Receptiveness, int Diligence, int Selflessness, double SelfGrowthJitter = 0.0);
 
 /// <summary>
 /// 性格の係数（設計書23 §1・YAML駆動 data/coefficients.yaml personalities:）。
@@ -43,6 +47,13 @@ public sealed record PersonalityCoefficients
     /// <summary>自主成長（<see cref="SelfGrowthFactor"/>）の下限・上限。</summary>
     public double FactorMin { get; init; } = 0.75;
     public double FactorMax { get; init; } = 1.25;
+
+    /// <summary>
+    /// 自主成長の隠れた個人差のσ（OPEN-QUESTIONS Q47 決着 2026-11-14）。勤勉さの連続値だけだと同じタイプ内の
+    /// 自主成長のばらつきが σ≈0.024 に縮むので、勤勉さとは別に平均0の個人差を足し、同タイプ内で旧 PersonalityFactor
+    /// （タイプ中心＋σ0.06）相当の σ≈0.06 に戻す（√(0.06²−勤勉さぶん²)≈0.055）。
+    /// </summary>
+    public double SelfGrowthJitterSd { get; init; } = 0.055;
 
     /// <summary>②素直さ→指導の入りやすさ: 素直側（d≥0）の傾き（端で 1.10）。</summary>
     public double ReceptivenessSlopeHigh { get; init; } = 0.10;
@@ -78,9 +89,12 @@ public sealed record PersonalityCoefficients
     public double CoachingReceptivity(int receptiveness)
         => 1.0 + Piecewise(receptiveness, ReceptivenessSlopeHigh, ReceptivenessSlopeLow);
 
-    /// <summary>③勤勉さ→自主成長（練習効率の個人倍率）。50で1。</summary>
-    public double SelfGrowthFactor(int diligence)
-        => MathUtil.Clamp(1.0 + Piecewise(diligence, DiligenceSlopeHigh, DiligenceSlopeLow), FactorMin, FactorMax);
+    /// <summary>
+    /// ③勤勉さ→自主成長（練習効率の個人倍率）。勤勉さ50・個人差0で1。<paramref name="jitter"/> は選手ごとの
+    /// 隠れた個人差（<see cref="PersonalityDraw.SelfGrowthJitter"/>・Q47）で、勤勉さの効きに足してから上下限で切る。
+    /// </summary>
+    public double SelfGrowthFactor(int diligence, double jitter = 0.0)
+        => MathUtil.Clamp(1.0 + Piecewise(diligence, DiligenceSlopeHigh, DiligenceSlopeLow) + jitter, FactorMin, FactorMax);
 
     /// <summary>④姿勢→犠打の成功率への加算。50で0。</summary>
     public double BuntSuccessBonus(int selflessness) => Piecewise(selflessness, BuntSlopeHigh, BuntSlopeLow);
@@ -124,7 +138,9 @@ public sealed record PersonalityCoefficients
 
     /// <summary>
     /// 生成（設計書23 §1.4・Q36）: 種タイプを重みで1つ引き、その代表値を中心に②③④を正規分布（σ<see cref="AxisSd"/>）で引く。
-    /// <paramref name="rng"/> から 1+3 回だけ引く（消費数固定＝決定論）。呼び出し側は専用 Fork を渡す。
+    /// 最後に自主成長の隠れた個人差（σ<see cref="SelfGrowthJitterSd"/>・Q47）を引く。
+    /// <paramref name="rng"/> から 1+3+1 回だけ引く（消費数固定＝決定論）。呼び出し側は専用 Fork を渡す
+    /// （個人差は Fork の末尾で引く＝②③④の値も主RNGの列も変えない）。
     /// </summary>
     public PersonalityDraw SampleAxes(IRandomSource rng)
     {
@@ -134,7 +150,8 @@ public sealed record PersonalityCoefficients
         var r = Axis(pp.Receptiveness);
         var d = Axis(pp.Diligence);
         var s = Axis(pp.Selflessness);
-        return new PersonalityDraw(seed, r, d, s);
+        var jitter = rng.NextGaussian(0, SelfGrowthJitterSd);
+        return new PersonalityDraw(seed, r, d, s, jitter);
     }
 
     /// <summary>

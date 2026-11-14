@@ -367,6 +367,7 @@ public static class RosterTeamBuilder
             Receptiveness = dp.Receptiveness,
             Diligence = dp.Diligence,
             Selflessness = dp.Selflessness,
+            SelfGrowthJitter = dp.SelfGrowthJitter,
             BuntSuccessBonus = pCoeff.BuntSuccessBonus(dp.Selflessness),
             ChanceHitFactor = pCoeff.ChanceHitFactor(dp.Selflessness),
             Lead = dp.Lead,               // 捕手リード（設計書01 §2①）。怪我係数の対象外

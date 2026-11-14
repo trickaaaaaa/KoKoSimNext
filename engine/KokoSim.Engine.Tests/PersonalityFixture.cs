@@ -38,7 +38,7 @@ internal static class PersonalityFixture
         => p.WithAxes(t) with { Leadership = Leadership(t) };
 
     /// <summary>そのタイプの育成選手（統率もマスの側）。</summary>
-    public static DevelopingPlayer Developing(Personality t, int? leadership = null)
+    public static DevelopingPlayer Developing(Personality t, int? leadership = null, double selfGrowthJitter = 0.0)
     {
         var (r, d, s) = Axes(t);
         return new DevelopingPlayer
@@ -47,6 +47,7 @@ internal static class PersonalityFixture
             Receptiveness = r,
             Diligence = d,
             Selflessness = s,
+            SelfGrowthJitter = selfGrowthJitter,
         };
     }
 }
