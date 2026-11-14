@@ -26,6 +26,19 @@ public sealed record PressureCoefficients
     public double FatigueNegativeAmplify { get; init; } = 1.5;
 }
 
+/// <summary>
+/// プレッシャーの受け止め方の癖（チャンス○×・ピンチ○×＝設計書10 §0.1・issue #907）。
+/// 精神力の倍率の振れ raw に掛かる側＝精神力とは別の軸で、二重計上しない。
+/// </summary>
+public enum PressureTrait
+{
+    None,
+    /// <summary>○: 圧による低下を消し、わずかなプラスにする。</summary>
+    Clutch,
+    /// <summary>×: 圧による低下を拡大し、精神力が高くても少しは落ちる。</summary>
+    Choke,
+}
+
 /// <summary>プレッシャー算出に必要な試合状況（試合エンジンが打席ごとに構成）。</summary>
 public readonly record struct PressureSituation(
     int StageBonus,          // 大会段階（練習試合0 / 予選+1 / 甲子園+2 / 決勝+3）
@@ -60,10 +73,16 @@ public static class PressureModel
     /// fatigueOver=true（疲労閾値超過）と negativeAmplify（動揺, 設計書09 §3）は負側のみ増幅。
     /// 精神力50なら常に1.0。
     /// </summary>
+    /// <para>trait（チャンス○×・ピンチ○×, 設計書10 §0.1）は raw へ先に掛かる: ○＝raw を +ClutchFloor×P 以上へ、
+    /// ×＝負の raw を拡大し −ChokeCeiling×P 以下へ。その後の緩和・増幅は従来どおり負側に効く。
+    /// trait=None（既定）なら従来と1ビットも変わらない。</para>
     public static double Multiplier(int mental, int pressureIndex, PressureCoefficients c,
-        double mitigation = 0.0, bool fatigueOver = false, double negativeAmplify = 1.0)
+        double mitigation = 0.0, bool fatigueOver = false, double negativeAmplify = 1.0,
+        PressureTrait trait = PressureTrait.None, SkillCoefficients? skills = null)
     {
         var raw = (mental - 50) / 50.0 * c.MultiplierSlope * pressureIndex;
+        if (trait != PressureTrait.None && pressureIndex > 0)
+            raw = ApplyTrait(raw, pressureIndex, trait, skills ?? DefaultSkills);
         if (raw < 0)
         {
             raw *= 1.0 - MathUtil.Clamp(mitigation, 0.0, 1.0);
@@ -72,6 +91,18 @@ public static class PressureModel
         }
         return 1.0 + raw;
     }
+
+    private static readonly SkillCoefficients DefaultSkills = new();
+
+    /// <summary>チャンス○×・ピンチ○×を倍率の振れ raw へ掛ける（設計書10 §0.1）。</summary>
+    public static double ApplyTrait(double raw, int pressureIndex, PressureTrait trait, SkillCoefficients s)
+        => trait switch
+        {
+            PressureTrait.Clutch => Math.Max(raw, s.ClutchFloorPerPressure * pressureIndex),
+            PressureTrait.Choke => Math.Min(raw < 0 ? raw * s.ChokeNegativeAmplify : raw,
+                -s.ChokeCeilingPerPressure * pressureIndex),
+            _ => raw,
+        };
 
     /// <summary>
     /// 伝令の「落ち着き」倍率（issue #714）。効果窓の中だけ呼ぶ。精神力に関係なく 1 以上。

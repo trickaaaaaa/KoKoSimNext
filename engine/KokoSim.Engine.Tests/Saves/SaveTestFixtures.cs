@@ -50,7 +50,7 @@ internal static class SaveTestFixtures
         list[2].ConditionValue = 0.4275;
         list[3].LearnedPitches.Add(new LearnedPitch(PitchType.Slider, 3, 5));
         list[3].LearnedPitches.Add(new LearnedPitch(PitchType.Fork, -2, 4));
-        list[4].Skills = new SkillSet(new[] { Skill.Grinder, Skill.SprayHitter }, new[] { Skill.Monster });
+        list[4].Skills = new SkillSet(new[] { Skill.Grinder, Skill.OppositeFieldHitter }, new[] { Skill.Monster });
         list[5].Plan = new TrainingPlan
         {
             Preset = TrainingPreset.Custom,

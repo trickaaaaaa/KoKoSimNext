@@ -1276,11 +1276,11 @@ public static class BaserunningModel
         if (pR1Safe > coeff.DoublePlayForceMaxRunnerSuccess) return (0, false);
 
         // 二段目の見積り: 二塁ベース経由の転送（ピボット）で打者を一塁で刺せるか（P_relay_out）。二塁への送球到達
-        // 時刻を起点に、二塁手/遊撃手の転送握り替え（DoublePlayPivotTransferSeconds − 名手短縮）で一塁へ転送する。
+        // 時刻を起点に、二塁手/遊撃手の転送握り替え（DoublePlayPivotTransferSeconds）で一塁へ転送する。
         // 打者走者の一塁到達は守備解決の正典値（home.BatterToFirstSeconds）＝出塁/凡打を決めたのと同じ時計。
         var arriveAtSecond = HomePlayResolver
             .ResolveThrowPath(home.Situation, home.Field.SecondBase, coeff).ArriveAtSeconds;
-        var pivotTransfer = Math.Max(0.0, coeff.DoublePlayPivotTransferSeconds - home.DoublePlayPivotBonusSeconds);
+        var pivotTransfer = coeff.DoublePlayPivotTransferSeconds;
         // 中継球速は二塁カバーに実際に入った野手の地肩（issue⑦。渡されなければ従来のカットマン用
         // 共通定数 RelayThrowSpeedMps へフォールバック＝旧挙動と恒等）。
         var pivotArm = home.DoublePlayPivotArmMps ?? coeff.RelayThrowSpeedMps;

@@ -114,9 +114,11 @@ public static class StealResolver
     /// （不変条件#5、TransferFactor等と同じ「50が恒等」の作法）。実際の1本ごとの判定
     /// （<see cref="ResolveVerdict"/>）は、ここに<b>サンプリングした逸れの実際の期待値からの差分</b>を
     /// 別途乗せる＝平均はこの関数の値のまま、本番だけ本物のばらつきを持つ。</para></summary>
+    /// <param name="pitcherQuickOffsetSeconds">投手ごとのクイックの差[s]（クイック○×・issue #907。
+    /// <see cref="SkillModel.QuickDeliveryOffsetSeconds"/>）。既定0＝従来と同じ。</param>
     public static double DefenseTimeSeconds(
         Player catcher, BaserunningCoefficients c, bool pitchout = false, StartType startType = StartType.Normal,
-        StealTarget target = StealTarget.Second, Player? receiver = null)
+        StealTarget target = StealTarget.Second, Player? receiver = null, double pitcherQuickOffsetSeconds = 0.0)
     {
         if (target == StealTarget.Home)
             throw new ArgumentException("単独の本盗は採用しない（issue #788）。", nameof(target));
@@ -130,7 +132,7 @@ public static class StealResolver
             // 立ち上がり（守備力で縮まない固定部分）＋握り替え（守備力で伸縮）＋送球。
             var popTime = c.CatcherPopRiseSeconds + popTransfer + throwTime;
             var receiverCatching = receiver?.ToFielder(c.AbilityEffect).Catching ?? 50;
-            defense = c.PitcherQuickSeconds + popTime + c.TagSeconds
+            defense = c.PitcherQuickSeconds + pitcherQuickOffsetSeconds + popTime + c.TagSeconds
                       + CenteredExpectedScatterDelaySeconds(catcherFielder.ThrowScatterSigmaCm, receiverCatching, c);
         }
         if (pitchout)
@@ -168,10 +170,10 @@ public static class StealResolver
     public static double SuccessProbability(
         Player runner, Player catcher, BaserunningCoefficients c,
         bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
-        Player? receiver = null)
+        Player? receiver = null, double pitcherQuickOffsetSeconds = 0.0)
     {
         var bias = target == StealTarget.Third ? c.StealSuccessBias + c.StealThirdSuccessBias : c.StealSuccessBias;
-        var margin = DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver)
+        var margin = DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver, pitcherQuickOffsetSeconds)
                      - RunnerTimeSeconds(runner, c, startType, target) + bias;
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.StealMarginScale), 0.01, 0.99);
     }
@@ -184,20 +186,21 @@ public static class StealResolver
     /// </summary>
     public static double ExpectedSuccessProbability(
         Player runner, Player catcher, Player pitcher, BaserunningCoefficients c,
-        StartType startType = StartType.Normal, StealTarget target = StealTarget.Second, Player? receiver = null)
+        StartType startType = StartType.Normal, StealTarget target = StealTarget.Second, Player? receiver = null,
+        double pitcherQuickOffsetSeconds = 0.0)
     {
         var q = StealReadModel.PitchoutProbability(
             catcher, pitcher, StealReadModel.Expectedness(runner, startType, c), c);
-        var plain = SuccessProbability(runner, catcher, c, pitchout: false, startType, target, receiver);
-        var read = SuccessProbability(runner, catcher, c, pitchout: true, startType, target, receiver);
+        var plain = SuccessProbability(runner, catcher, c, pitchout: false, startType, target, receiver, pitcherQuickOffsetSeconds);
+        var read = SuccessProbability(runner, catcher, c, pitchout: true, startType, target, receiver, pitcherQuickOffsetSeconds);
         return (1.0 - q) * plain + q * read;
     }
 
     public static StealResult Resolve(
         Player runner, Player catcher, BaserunningCoefficients c, IRandomSource rng,
         bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
-        Player? receiver = null)
-        => ResolveVerdict(runner, catcher, c, rng, pitchout, startType, target, receiver).Result;
+        Player? receiver = null, double pitcherQuickOffsetSeconds = 0.0)
+        => ResolveVerdict(runner, catcher, c, rng, pitchout, startType, target, receiver, pitcherQuickOffsetSeconds).Result;
 
     /// <summary>
     /// 盗塁1回を解決し、<b>判定に使った秒</b>（ゆらぎ込み）も返す。絵はこの秒をそのまま描く。
@@ -213,7 +216,7 @@ public static class StealResolver
     public static StealVerdict ResolveVerdict(
         Player runner, Player catcher, BaserunningCoefficients c, IRandomSource rng,
         bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
-        Player? receiver = null)
+        Player? receiver = null, double pitcherQuickOffsetSeconds = 0.0)
     {
         var catcherFielder = catcher.ToFielder(c.AbilityEffect);
         var sigmaCm = catcherFielder.ThrowScatterSigmaCm;
@@ -228,7 +231,7 @@ public static class StealResolver
             c.StealThrowScatterLateralSecPerCm, c.StealThrowScatterHighSecPerCm, c.StealThrowScatterShortHopSecPerCm,
             c.StealThrowScatterCatchingReliefSlope, c.StealThrowScatterCatchingReliefMinFactor);
         var ownExpectedDelay = RawExpectedScatterDelaySeconds(sigmaCm, receiverCatching, c);
-        var defenseSeconds = DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver)
+        var defenseSeconds = DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver, pitcherQuickOffsetSeconds)
                               + (sampledDelay - ownExpectedDelay);
         var wild = ThrowScatterModel.IsWild(scatter, c.StealThrowWildThresholdCm);
 
@@ -249,10 +252,10 @@ public static class StealResolver
     public static StealVerdict Forced(
         Player runner, Player catcher, BaserunningCoefficients c, StealResult result,
         bool pitchout = false, StartType startType = StartType.Normal, StealTarget target = StealTarget.Second,
-        Player? receiver = null)
+        Player? receiver = null, double pitcherQuickOffsetSeconds = 0.0)
         => Times(
             RunnerTimeSeconds(runner, c, startType, target),
-            DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver),
+            DefenseTimeSeconds(catcher, c, pitchout, startType, target, receiver, pitcherQuickOffsetSeconds),
             0.0, result == StealResult.Safe);
 
     /// <summary>ゆらぎ[s]（+で走者有利）。logistic(0, StealMarginScale) の逆関数法。</summary>

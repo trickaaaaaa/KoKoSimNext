@@ -23,7 +23,7 @@ public sealed class SkillCategoryFilterTests
         visible: new[]
         {
             Skill.SlowStarterBat, Skill.SlowStarterPitch, Skill.Grinder, Skill.DeceptiveBall,
-            Skill.DoublePlayArtist, Skill.Moodmaker, Skill.Durable,
+            Skill.Moodmaker, Skill.Durable,
         },
         hidden: new[] { Skill.Streaky, Skill.EffectivelyWild });
 

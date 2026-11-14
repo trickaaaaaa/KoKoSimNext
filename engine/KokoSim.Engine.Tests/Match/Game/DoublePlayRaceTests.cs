@@ -27,14 +27,14 @@ public sealed class DoublePlayRaceTests
 
     // 内野ゴロ（捕球点・処理時刻・肩・打者一塁到達時刻を指定）。BatterToFirstSeconds を渡すと物理レースが効く。
     private static HomePlayContext Grounder(
-        double x, double z, double fieldedAt, double batterToFirst, int arm = 55, double pivotBonus = 0.0,
+        double x, double z, double fieldedAt, double batterToFirst, int arm = 55,
         FieldPosition? fielderRole = null)
     {
         var situation = new HomePlaySituation(
             new Vector3D(x, 0, z), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps);
         return new HomePlayContext(
             Field, situation, new TacticsCoefficients(), 0.5, DefenseDepth.Normal, IsFly: false,
-            ThrowArriveSeconds: null, BatterToFirstSeconds: batterToFirst, DoublePlayPivotBonusSeconds: pivotBonus,
+            ThrowArriveSeconds: null, BatterToFirstSeconds: batterToFirst,
             FielderRole: fielderRole);
     }
 
@@ -49,7 +49,7 @@ public sealed class DoublePlayRaceTests
     private static double PBatterSafe(HomePlayContext home, double? pivotArmMps = null)
     {
         var arriveAtSecond = HomePlayResolver.ResolveThrowPath(home.Situation, Field.SecondBase, C).ArriveAtSeconds;
-        var pivotTransfer = Math.Max(0.0, C.DoublePlayPivotTransferSeconds - home.DoublePlayPivotBonusSeconds);
+        var pivotTransfer = C.DoublePlayPivotTransferSeconds;
         var pivot = new HomePlaySituation(
             Field.SecondBase, arriveAtSecond, pivotArmMps ?? C.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
         var relayToFirst = HomePlayResolver
@@ -236,32 +236,6 @@ public sealed class DoublePlayRaceTests
         }
         Assert.True(fc > 0 && dp > 0, $"併殺狙いのうち野選が残差として出るはず（DP={dp}, FC={fc}）");
         Assert.InRange((double)fc / 3000, 0.10, 0.45);
-    }
-
-    // ================= 「併殺の名手」スキル: 転送時間の短縮（確率でなく時間）=================
-
-    [Fact]
-    public void DoublePlayArtist_ShortensPivot_RaisesDoublePlayChance()
-    {
-        // 併殺を狙う域の打者で、名手ボーナス（転送短縮）が打者生存（野選）を下げる＝併殺成立を押し上げる。
-        var plain = Grounder(x: -6, z: 37, fieldedAt: 1.4, batterToFirst: 4.45, pivotBonus: 0.0);
-        var artist = Grounder(x: -6, z: 37, fieldedAt: 1.4, batterToFirst: 4.45, pivotBonus: C.DoublePlayPivotTransferSeconds);
-        Assert.True(1.0 - PBatterSafe(plain) >= C.DoublePlayAttemptMinRelaySuccess, "素の守備でも併殺を狙う域のはず");
-        Assert.True(PBatterSafe(artist) < PBatterSafe(plain),
-            $"名手（転送短縮）は打者生存確率を下げる（＝併殺しやすい）はず: artist={PBatterSafe(artist):F3} < plain={PBatterSafe(plain):F3}");
-
-        int Dp(HomePlayContext h, ulong seed)
-        {
-            var rng = new Xoshiro256Random(seed);
-            var dp = 0;
-            for (var i = 0; i < 3000; i++)
-            {
-                var (_, _, batterSafeOnFc, moves) = RunOnce(h, new Player { Speed = 50, Baserunning = 50 }, new Player(), rng);
-                if (!batterSafeOnFc && ForceOutAtSecond(moves)) dp++;
-            }
-            return dp;
-        }
-        Assert.True(Dp(artist, 505) > Dp(plain, 505), "名手のいる守備は併殺成立が多いはず");
     }
 
     // ================= 中継の地肩（issue⑦: 従来 RelayThrowSpeedMps 固定で二塁手/遊撃手の肩が無効だった）=================
