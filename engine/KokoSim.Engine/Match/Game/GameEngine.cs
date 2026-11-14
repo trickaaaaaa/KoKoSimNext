@@ -1115,6 +1115,7 @@ public static class GameEngine
                 // 起きる＝その球は実際に投げる。半回はこの球の観測（LivePitch）を出してから終える。
                 var runnerOutEndsHalf = false;
                 var stealDoubleBreak = false;       // 重盗の三塁ブレイクを数えたか
+                var pitchoutThisPitch = false;      // この球が盗塁を読んだピッチアウトか（issue #986: ボール1つとして数える）
                 StartType? stealStartApplied = null; // 実際に走った始動種別（打球の球でだけ活かす）
 
                 // 盗塁/牽制/重盗（設計書02 §4.2・設計書09 §1・design-14 P1-4/P1-5・設計書15 Phase D-2d）:
@@ -1159,8 +1160,11 @@ public static class GameEngine
                         // G3: 守備の読み → ピッチアウト（設計書09 §1, 12 §5）。捕手リード＋投手センス vs 意外性で
                         // 読み切れば捕手が優位に立ち刺されやすい。始動種別は采配（G3b）＝ギャンブルは好ジャンプだが
                         // 意表ゆえ読まれにくい一方、読まれると最も無防備。
+                        // 抽選は常に引く（乱数順を動かさない）が、3ボールなら外せない（四球になるため・issue #986）。
                         var pitchout = StealReadModel.RollPitchout(
-                            bases.First, defense.Catcher, currentPitcher, stealStart, paBaserunning, rng);
+                            bases.First, defense.Catcher, currentPitcher, stealStart, paBaserunning, rng)
+                            && StealReadModel.CanPitchout(session.Balls);
+                        pitchoutThisPitch = pitchout;
                         // 強制発動（F4）は抽選をスキップして成否を固定する。ここだけ乱数の消費順が変わるが、
                         // 強制した試合は HasForcedOutcomes で digest・統計から丸ごと外れるので影響が漏れない。
                         // 非強制時 paBaserunning は ctx.Baserunning と同一参照＝従来の乱数順・結果に不変。
@@ -1264,7 +1268,9 @@ public static class GameEngine
                     {
                         var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
-                            bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
+                            bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng)
+                            && StealReadModel.CanPitchout(session.Balls);
+                        pitchoutThisPitch = pitchout;
                         // 送球の逸れ（issue #841）の受け手＝三塁カバーの三塁手（BuildSteal の三盗送球と同じ約束）。
                         var thirdBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.ThirdBase);
                         var thirdQuickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
@@ -1393,7 +1399,7 @@ public static class GameEngine
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,
                     batterOverride: batterAttrsPitch,
                     fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
-                    squeezeWasteOverride: sqWasteOverride, basesNow: bases);
+                    squeezeWasteOverride: sqWasteOverride, basesNow: bases, pitchout: pitchoutThisPitch);
 
                 // 盗塁の取り消し（issue #626）: 投げた球が「盗塁が成立しない球」だったら、上で適用した
                 // 盗塁の結果だけを巻き戻す。乱数は既に引き終わっており順序も量も変えない（不変条件#2）。
@@ -1551,7 +1557,8 @@ public static class GameEngine
                 // だけ＝ゾーン内の捕れる球では起きない（issue #525・下の CanBatteryMiss ゲート）。
                 // 暴投=投手責/パスボール=捕手責は意味上分けるが、記録は合算1カウントに簡略化（design-14の割り切り）。
                 // 既定0（WildPitchProb=PassedBallProb=0）では走者の有無・投球結果によらず分岐自体に入らずrng消費ゼロ。
-                if (bases.RunnerCount > 0
+                // ピッチアウトは捕手が立って構えた球＝後逸の対象にしない（issue #986）。
+                if (bases.RunnerCount > 0 && !pitchoutThisPitch
                     && session.LastPitchKind is PitchKind.Ball or PitchKind.CalledStrike or PitchKind.SwingingStrike
                     && (paBaserunning.WildPitchProb > 0.0 || paBaserunning.PassedBallProb > 0.0))
                 {
