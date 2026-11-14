@@ -84,6 +84,11 @@ public sealed class TeamState
     public int LeadRunnerForceOnlyCount { get; set; }
     public int DroppedThirdStrikeCount { get; set; }
     public int ErrorExtraAdvanceCount { get; set; }
+    /// <summary>失策の打席の走者アウト・捕球ミス時の二塁走者の帰趨（issue #903。統計参考値）。</summary>
+    public int ErrorPlayRunnerOuts { get; set; }
+    public int CatchErrorSecondRunnerCount { get; set; }
+    public int CatchErrorSecondRunnerOutAtThird { get; set; }
+    public int CatchErrorSecondRunnerHeld { get; set; }
     public int PickoffCount { get; set; }
     public int IntentionalWalkCount { get; set; }
     public int DoubleStealThirdBreakCount { get; set; }

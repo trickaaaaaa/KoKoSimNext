@@ -1984,7 +1984,9 @@ public static class TimelineBuilder
             var outTo = BasePoint(field, outAtOtherBaseName);
             var outToRole = CoverRoleAt(timeline, outTo, DefaultBaseGuard(outAtOtherBaseName));
             var outPhysicalArrive = t0 + LegSeconds(Distance(from, outTo), ThrowSpeedOf(play));
-            var outArrive = GuardAgainstVerdict(outPhysicalArrive, t0, outAtOtherBaseArriveAnchor, runnerOut: true);
+            // 最速は「拾ってから物理どおりに飛ばした到達」（issue #903: t0 を渡すと飛翔0秒＝球が瞬間移動していた）。
+            // それでも刺された走者より遅れて着く分は、呼び出し側が AlignTaggedRunnerToThrow で走者を送球へ揃える。
+            var outArrive = GuardAgainstVerdict(outPhysicalArrive, outPhysicalArrive, outAtOtherBaseArriveAnchor, runnerOut: true);
             // 拾った野手が既にその塁の持ち主自身（三塁付近で拾い直してそのままタッチ等）なら送球でなく
             // 保持運び（Carry）で描く。それ以外は距離やお手玉の投手であっても必ず送球を描く。
             var outKind = outToRole == fromRole ? BallSegmentKind.Carry : BallSegmentKind.Throw;
