@@ -831,14 +831,14 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
            justify-content: space-between; margin: 0; padding: 0 var(--sp-2) 0 0; }
 /* 長い姓名でも数値が押し出されないよう、縮むのは名前側だけにする。 */
 .hm-rk-e__n { font-size: var(--fs-label); color: var(--tx-1); overflow: hidden; flex-shrink: 1; min-width: 0; }
-.hm-rk-e__v { font-size: var(--fs-num); color: var(--tx-1); -unity-text-align: middle-right; flex-shrink: 0; }
+.hm-rk-e__v { width: var(--col-hm-rk-v); font-size: var(--fs-num); color: var(--tx-1); -unity-text-align: middle-right; flex-shrink: 0; margin: 0; padding: 0; }
 .hm-rk-e--none { color: var(--tx-3); font-size: var(--fs-label); }
 
 /* --- 故障者（部位・程度・復帰まで。重度だけ警告色＝UI原則②） --- */
 .hm-inj { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
 .hm-inj__no { width: var(--col-hm-inj-no); flex-shrink: 0; font-size: var(--fs-cap); color: var(--tx-3); margin: 0; padding: 0; -unity-text-align: middle-right; }
 .hm-inj__n { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--tx-1); margin: 0 0 0 var(--sp-3); padding: 0; overflow: hidden; }
-.hm-inj__st { width: var(--col-hm-inj-st); flex-shrink: 0; font-size: var(--fs-label); color: var(--tx-2); margin: 0; padding: 0; }
+.hm-inj__st { width: var(--col-hm-inj-st); flex-shrink: 0; font-size: var(--fs-cap); color: var(--tx-2); margin: 0; padding: 0; }
 .hm-inj__st--severe { color: var(--color-warn); }
 .hm-inj__bk { width: var(--col-hm-inj-bk); flex-shrink: 0; font-size: var(--fs-num); color: var(--tx-2); margin: 0; padding: 0; -unity-text-align: middle-right; }
 .hm-inj--none { font-size: var(--fs-label); color: var(--tx-3); padding: var(--sp-2) 0; }

@@ -641,6 +641,72 @@ namespace KokoSim.Unity.Components
                 label.parent?.RegisterCallback<GeometryChangedEvent>(__ => Fit()));
         }
 
+        /// <summary>
+        /// <see cref="ShrinkToFit"/> の「全員同じ倍率」版（issue #970）。複数の Label のうち一番入らないものに合わせて、
+        /// 全部を同じ大きさへ縮める（1つだけ小さい字が混ざらない）。全部入るなら USS の大きさのまま。
+        /// 空き幅の出し方は <see cref="ShrinkToFit"/> と同じ。<paramref name="host"/> は再計算を予約する先。
+        /// </summary>
+        public static void ShrinkGroupToFit(IReadOnlyList<Label> labels, VisualElement host, float minFontPx = 11f)
+        {
+            if (labels == null || labels.Count == 0 || host == null) return;
+            var baseSizes = new float[labels.Count];
+            var pending = false;
+
+            void Fit()
+            {
+                pending = false;
+                var target = float.MaxValue;
+                for (var i = 0; i < labels.Count; i++)
+                {
+                    var label = labels[i];
+                    var parent = label.parent;
+                    if (parent == null || float.IsNaN(parent.contentRect.width)) return;
+                    if (baseSizes[i] <= 0f)
+                    {
+                        if (label.style.fontSize.keyword != StyleKeyword.Null) return;
+                        baseSizes[i] = label.resolvedStyle.fontSize;
+                        if (baseSizes[i] <= 0f) return;
+                    }
+                    var avail = parent.contentRect.width - label.resolvedStyle.marginLeft - label.resolvedStyle.marginRight;
+                    foreach (var sib in parent.Children())
+                    {
+                        if (sib == label || sib.resolvedStyle.display == DisplayStyle.None) continue;
+                        avail -= sib.layout.width + sib.resolvedStyle.marginLeft + sib.resolvedStyle.marginRight;
+                    }
+                    var need = label.MeasureTextSize(label.text, 0, VisualElement.MeasureMode.Undefined,
+                        0, VisualElement.MeasureMode.Undefined).x * baseSizes[i] / Mathf.Max(1f, label.resolvedStyle.fontSize);
+                    var fit = need > avail && avail > 0f
+                        ? Mathf.Max(minFontPx, Mathf.Floor(baseSizes[i] * avail / need))
+                        : baseSizes[i];
+                    target = Mathf.Min(target, fit);
+                }
+                for (var i = 0; i < labels.Count; i++)
+                {
+                    var label = labels[i];
+                    var current = label.style.fontSize.keyword == StyleKeyword.Null ? baseSizes[i] : label.style.fontSize.value.value;
+                    var next = Mathf.Min(target, baseSizes[i]);
+                    if (Mathf.Abs(next - current) < 0.5f) continue;
+                    label.style.fontSize = Mathf.Approximately(next, baseSizes[i])
+                        ? new StyleLength(StyleKeyword.Null)
+                        : new StyleLength(next);
+                }
+            }
+
+            void Schedule()
+            {
+                if (pending) return;
+                pending = true;
+                host.schedule.Execute(Fit);
+            }
+
+            foreach (var label in labels)
+            {
+                label.RegisterCallback<GeometryChangedEvent>(_ => Schedule());
+                label.RegisterCallback<AttachToPanelEvent>(_ =>
+                    label.parent?.RegisterCallback<GeometryChangedEvent>(__ => Schedule()));
+            }
+        }
+
         // ===== NumUnit（数字＋和文単位の混植セル）=====
 
         /// <summary>
