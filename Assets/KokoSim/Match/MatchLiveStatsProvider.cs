@@ -93,12 +93,15 @@ namespace KokoSim.Unity.Match
         /// 守備適性の9ポジション（投捕一二三遊左中右）のランク（issue #452）。名簿（RosterService）へ
         /// <see cref="Player.SourceId"/> で join して引く。試合中の <see cref="Player"/> は適性配列を持たない
         /// （<c>Position</c> と <c>Fielding</c> だけ）ので、通算成績と同じ seam を通す。
-        /// <para>相手校のように SourceId が無い／名簿に居ない選手は <b>null</b>。呼び出し側は「—」を出す。</para>
+        /// <para><b>自校の選手だけ</b>（<paramref name="schoolId"/> で判定・issue #923）。名簿は自校のものしか無く、
+        /// 選手IDは校ごとに1から振るので、校IDを見ずに引くと相手校の選手に<b>同じ番号の自校選手</b>の適性が出る。
+        /// 相手校・名簿に居ない選手は <b>null</b>。呼び出し側は「—」を出す。</para>
         /// <para>値は<b>実効守備力ランク</b>＝ Fielding × 適性補正（issue #371 でメンバー設定・スタメン設定が
         /// 採った定義と同じ）。生の適性ランクは出さない＝3画面で同じものを見せる。</para>
         /// </summary>
-        public IReadOnlyList<string> AptitudeGradesOf(int? sourceId)
+        public IReadOnlyList<string> AptitudeGradesOf(int schoolId, int? sourceId)
         {
+            if (!_lookup.IsManagerSchool(schoolId)) return null;
             var found = FindDeveloping(sourceId);
             if (found == null) return null;
 
@@ -109,20 +112,31 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 持ち球のミニ球種チャート用データ（issue #452）。守備適性と同じく名簿へ <see cref="Player.SourceId"/> で
-        /// join して引く。生成は選手詳細・メンバー設定・スタメン設定と同一（<see cref="PlayerDetailState.BuildPitchData"/>）
-        /// ＝4画面で同じ絵になる（単一ソース, issue #94 案C）。名簿に居ない選手は null。
-        /// <para>この絵<b>だけ</b>は育成レイヤの値で描く（怪我補正の乗った試合用の値ではない）。見るのは球種の
-        /// 構成と変化の形であって能力の大小ではなく、能力の行（＝試合用の実値）とは役割が違う。</para>
+        /// 持ち球のミニ球種チャート用データ（issue #452）。
+        /// <para><b>自校</b>の選手は名簿へ <see cref="Player.SourceId"/> で join し、選手詳細・メンバー設定・
+        /// スタメン設定と同一の生成（<see cref="PlayerDetailState.BuildPitchData(DevelopingPlayer)"/>）で描く
+        /// ＝4画面で同じ絵になる（単一ソース, issue #94 案C）。この絵<b>だけ</b>は育成レイヤの値で描く
+        /// （怪我補正の乗った試合用の値ではない）。見るのは球種の構成と変化の形であって能力の大小ではない。</para>
+        /// <para><b>相手校</b>の選手は育成選手を持たないので、試合用のレパートリーから同じ部品の絵を作る（issue #923）。
+        /// 自校か否かは<b>校ID</b>で決める（選手IDは校ごとに1から振る＝校IDを見ずに引くと、相手校の選手に
+        /// 同じ番号の自校選手のチャートが出る）。</para>
         /// </summary>
-        public List<PitchChartDatum> PitchChartOf(Player player)
+        public List<PitchChartDatum> PitchChartOf(int schoolId, Player player)
         {
-            var found = FindDeveloping(player?.SourceId);
-            if (found == null) return null;
+            if (player == null) return null;
             // 添える km/h は試合用の実値（怪我補正込み）を使う。比較表から球速の行を落として
             // ここが唯一の球速表示になったので（issue #560）、育成レイヤの Level から出すと
             // 同じ画面の他の行（すべて実値）と食い違う。
-            var topKmh = (int)System.Math.Round(player?.Pitching != null
+            if (!_lookup.IsManagerSchool(schoolId))
+            {
+                if (player.Pitching == null) return null;
+                return PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(player),
+                    (int)System.Math.Round(player.Pitching.MaxVelocityKmh));
+            }
+
+            var found = FindDeveloping(player.SourceId);
+            if (found == null) return null;
+            var topKmh = (int)System.Math.Round(player.Pitching != null
                 ? player.Pitching.MaxVelocityKmh
                 : PitcherAttributes.VelocityKmhFromLevel(found.Level(AbilityKind.Velocity)));
             return PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(found), topKmh);

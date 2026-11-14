@@ -162,6 +162,8 @@ namespace KokoSim.Unity.Match
         // 両校の学校ID（成績の帰属キーの校側, issue #634）。既定はどちらの校とも一致しない値＝成績なし。
         private int _awaySchoolId = int.MinValue;
         private int _homeSchoolId = int.MinValue;
+        /// <summary>自校（監督のチーム）の校ID。</summary>
+        private int OwnSchoolId => _managerIsAway ? _awaySchoolId : _homeSchoolId;
         private bool? _duelColorsOffenseIsTop;   // 対決ビューへ最後に流した攻守（null=未適用）
         private System.Action<GameResult> _onComplete;
         private GameResult _finalResult;
@@ -636,11 +638,14 @@ namespace KokoSim.Unity.Match
 
             ResetPerMatchVisuals();
             // 守備適性は Player に無く名簿側にあるので、通算成績と同じ join（SourceId）を注入する（issue #452）。
+            // 交代パネルは自校の選手だけを扱う＝自校の校IDで引く（選手IDは校ごとに1から振る・issue #923）。
+            // 校IDは試合ごとに変わるので、呼ばれた時点の値を読む。
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied,
-                _statsProvider.AptitudeGradesOf, _statsProvider.PitchChartOf);
+                sid => _statsProvider.AptitudeGradesOf(OwnSchoolId, sid),
+                p => _statsProvider.PitchChartOf(OwnSchoolId, p));
             _subPanel.Bind();
-            // 能力ビューア（issue #602）。局面文はポップアップと同じ単一ソースを渡す。
-            _scoutPanel = new MatchScoutPanel(_root, PauseSituationText);
+            // 能力ビューア（issue #602/#923）。局面文はポップアップと同じ単一ソースを渡す。
+            _scoutPanel = new MatchScoutPanel(_root, _statsProvider, PauseSituationText);
             _scoutPanel.Bind();
             BuildGame();
             // 対決ビューの生成は BuildGame の後（＝両校の配色と進行体が入った後）でなければならない。
@@ -651,7 +656,7 @@ namespace KokoSim.Unity.Match
             InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
             ApplyDuelViewState();
             _subPanel.SetMatch(_prog, _managerIsAway);
-            _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp);
+            _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp, _awaySchoolId, _homeSchoolId);
             // 指示パネルの初期フェーズ（1打席目の攻守）。以降は采配窓ごとに OpenWindow が追従させる。
             if (_prog != null) _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
             // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
@@ -4980,6 +4985,8 @@ namespace KokoSim.Unity.Match
         public void OpenScoutForCapture() { _paused = true; SetVisible(_pauseModal, true); _scoutPanel?.Open(); }
         public void CloseScoutForCapture() => _scoutPanel?.Close();
         public void SelectScoutTabForCapture(int tab) => _scoutPanel?.SelectTabForCapture(tab);
+        public void SelectScoutTeamForCapture(bool own) => _scoutPanel?.SelectTeamForCapture(own);
+        public void HoverScoutRowForCapture(int index) => _scoutPanel?.HoverRowForCapture(index);
         public bool ScoutOpenForCapture => _scoutPanel != null && _scoutPanel.IsOpen;
 
         public void OpenSubstitutionForCapture() => _subPanel?.Open();

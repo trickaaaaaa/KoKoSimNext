@@ -308,6 +308,31 @@ public sealed class MatchProgression
         };
     }
 
+    /// <summary>
+    /// 選手1人ぶんの今日の打撃成績（打席に立っていなければ null）。試合中の能力ビューア（issue #923）の
+    /// 詳細欄が引く観測データ＝状態を変えず乱数も引かない（不変条件#2）。
+    /// </summary>
+    public BattingLine? TodayBattingOf(bool teamIsAway, Player player)
+        => _p.OffenseOf(teamIsAway).TodayBattingOf(player);
+
+    /// <summary>
+    /// 選手1人ぶんの今日の投手成績（登板していなければ null）。守備中の現投手には進行中の打席で投げた球数
+    /// （<see cref="PendingPitchIndex"/>）を足す＝HUD の球数（<see cref="Snapshot"/>）と食い違わない（issue #397 と同じ扱い）。
+    /// 観測データ（issue #923）。
+    /// </summary>
+    public PitchingLine? TodayPitchingOf(bool teamIsAway, Player player)
+    {
+        var team = _p.OffenseOf(teamIsAway);
+        var line = team.TodayPitchingOf(player);
+        var liveAtBat = _p.LiveAtBat;
+        var defending = liveAtBat is not null && liveAtBat.IsTop != teamIsAway;
+        if (!defending || PendingPitchIndex <= 0 || player is null || !player.Equals(team.CurrentPitcher)) return line;
+        return line is null
+            ? new PitchingLine(player.Name, 0, 0, 0, 0, 0, 0, PendingPitchIndex, player.SourceId,
+                UniformNumber: player.UniformNumber)
+            : line with { Pitches = line.Pitches + PendingPitchIndex };
+    }
+
     /// <summary>代打: 次打者を控え sub に代える。控えに sub が居なければ false。</summary>
     public bool PinchHit(bool teamIsAway, Player sub)
     {
