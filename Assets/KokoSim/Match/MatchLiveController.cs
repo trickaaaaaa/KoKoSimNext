@@ -4210,7 +4210,25 @@ namespace KokoSim.Unity.Match
             if (FieldPlayActive) return;
             if (!TryDuelHandedness(out var batterLeft, out var pitcherLeft)) return;
             _duelRig.SetHandedness(batterLeft, pitcherLeft);
+            ApplyBatFinish();
             ApplyFielderHandedness();
+        }
+
+        /// <summary>現打者のバットの仕上げ（選手ID→銀/黒/金の決定論）。代打で打者が替われば色も替わる。</summary>
+        private bool TryBatFinish(out KokoSim.Engine.Nation.BatFinish finish)
+        {
+            finish = KokoSim.Engine.Nation.BatFinish.Silver;
+            if (_atBat is { } at)
+                finish = KokoSim.Engine.Nation.BatFinishes.For(at.BatterSourceId, at.BatterName);
+            else if (_current != null)
+                finish = KokoSim.Engine.Nation.BatFinishes.For(_current.BatterSourceId, _current.BatterName);
+            else return false;
+            return true;
+        }
+
+        private void ApplyBatFinish()
+        {
+            if (TryBatFinish(out var finish)) _duelRig.SetBatFinish(finish);
         }
 
         /// <summary>
@@ -4240,7 +4258,8 @@ namespace KokoSim.Unity.Match
         private bool DuelHandednessStale()
             => _duelRig != null && _duelRig.Available
                && TryDuelHandedness(out var batterLeft, out var pitcherLeft)
-               && _duelRig.HandednessDiffers(batterLeft, pitcherLeft);
+               && (_duelRig.HandednessDiffers(batterLeft, pitcherLeft)
+                   || (TryBatFinish(out var finish) && _duelRig.BatFinishForCapture != finish));
 
         /// <summary>
         /// 守備側の各位置の選手の投げる手を3D守備ビューへ渡す（issue #795）。いま守っている9人の位置は

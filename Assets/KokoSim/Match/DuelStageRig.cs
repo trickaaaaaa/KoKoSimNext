@@ -4923,28 +4923,68 @@ namespace KokoSim.Unity.Match
             var batMesh = BuildBatMesh();
             _meshes.Add(batMesh);
             bat.AddComponent<MeshFilter>().sharedMesh = batMesh;
-            bat.AddComponent<MeshRenderer>().sharedMaterial = FlatMaterial(new Color(0.78f, 0.62f, 0.42f));
+            _batMat = FlatMaterial(BatBarrelColor(_batFinish));
+            _batMat.SetFloat("_UseVertexColor", 1f);   // グリップテープは頂点色（リニア値で焼いてある）
+            bat.AddComponent<MeshRenderer>().sharedMaterial = _batMat;
             bat.layer = layer;
             return bat;
         }
 
-        /// <summary>BatProfile を軸まわりに回した実寸メッシュ（軸+Y・原点が中央・localScaleは1のまま使う）。</summary>
+        // 金属バットのバレル色（監督決定 2026-11-15: 銀・黒・金）。黒は固定の黒（パレット表 #23242A）に揃える。
+        // _BaseColor はプロパティ宣言済みの Color なので SetColor がガンマ→リニアを自動で掛ける
+        private static Color BatBarrelColor(KokoSim.Engine.Nation.BatFinish f) => f switch
+        {
+            KokoSim.Engine.Nation.BatFinish.Black => UniformPalette.PaletteBlack,
+            KokoSim.Engine.Nation.BatFinish.Gold => new Color(0.84f, 0.66f, 0.18f),
+            _ => new Color(0.80f, 0.82f, 0.85f),
+        };
+
+        private Material _batMat;
+        private KokoSim.Engine.Nation.BatFinish _batFinish = KokoSim.Engine.Nation.BatFinish.Silver;
+
+        /// <summary>バットのバレル色の仕上げ（現在の打者から決めて渡す。グリップテープは黒で固定）。</summary>
+        public KokoSim.Engine.Nation.BatFinish BatFinishForCapture => _batFinish;
+
+        /// <summary>打者が替わったときの切り替え（代打を含む）。同じ仕上げなら何もしない。</summary>
+        public void SetBatFinish(KokoSim.Engine.Nation.BatFinish finish)
+        {
+            if (_batFinish == finish) return;
+            _batFinish = finish;
+            if (_batMat != null) _batMat.SetColor("_BaseColor", BatBarrelColor(finish));
+        }
+
+        private const int BatGripRings = 4;   // BatProfile の先頭4リング（ノブ端〜t=0.45）がテープ巻き
+
+        /// <summary>
+        /// BatProfile を軸まわりに回した実寸メッシュ（軸+Y・原点が中央・localScaleは1のまま使う）。
+        /// グリップ区間は頂点色（a=1・黒）、バレル側は a=0（マテリアル色）。境目は同位置のリングを重ねて
+        /// 頂点を割り、補間でぼけない硬い縁にする。
+        /// </summary>
         private static Mesh BuildBatMesh()
         {
-            int rings = BatProfile.Length;
+            int rings = BatProfile.Length + 1;   // 境目のリングを1本重ねる
             var verts = new Vector3[rings * BatSides];
+            var cols = new Color[rings * BatSides];
+            var tape = UniformPalette.PaletteBlack.linear;
+            tape.a = 1f;
+            var none = new Color(0f, 0f, 0f, 0f);
             var tris = new List<int>((rings - 1) * BatSides * 6 + (BatSides - 2) * 6);
             for (int r = 0; r < rings; r++)
             {
-                float y = Mathf.Lerp(-BatHalfLength, BatHalfLength, BatProfile[r].x);
-                float rad = BatProfile[r].y;
+                // r=0..BatGripRings-1 はそのまま、r=BatGripRings は BatGripRings-1 の複製、以降は1つずつ後ろへ
+                int pi = r < BatGripRings ? r : r - 1;
+                float y = Mathf.Lerp(-BatHalfLength, BatHalfLength, BatProfile[pi].x);
+                float rad = BatProfile[pi].y;
                 for (int s = 0; s < BatSides; s++)
                 {
                     float a = s * Mathf.PI * 2f / BatSides;
                     verts[r * BatSides + s] = new Vector3(Mathf.Cos(a) * rad, y, Mathf.Sin(a) * rad);
+                    cols[r * BatSides + s] = r < BatGripRings ? tape : none;
                 }
             }
             for (int r = 0; r < rings - 1; r++)
+            {
+                if (r == BatGripRings - 1) continue;   // 重ねたリング同士の面は潰れている
                 for (int s = 0; s < BatSides; s++)
                 {
                     int s2 = (s + 1) % BatSides;
@@ -4953,6 +4993,7 @@ namespace KokoSim.Unity.Match
                     tris.Add(a); tris.Add(c); tris.Add(b);
                     tris.Add(b); tris.Add(c); tris.Add(d);
                 }
+            }
             // 両端の蓋（扇状）。開いたままだと内側が抜けて見える
             for (int s = 1; s < BatSides - 1; s++)
             {
@@ -4962,6 +5003,7 @@ namespace KokoSim.Unity.Match
             }
             var mesh = new Mesh { name = "prop-bat (generated)", hideFlags = HideFlags.HideAndDontSave };
             mesh.vertices = verts;
+            mesh.colors = cols;
             mesh.triangles = tris.ToArray();
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
