@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Season.Events;
+using KokoSim.Unity.Components;
 using KokoSim.Unity.Shell;
 using UnityEngine.UIElements;
 
@@ -21,6 +22,7 @@ namespace KokoSim.Unity.Home
         private readonly VisualElement _root;       // ev-novel
         private readonly VisualElement _portrait;
         private readonly VisualElement _portraitImage;
+        private readonly VisualElement _choices;    // 監督の対応の3択（issue #945）
         private readonly Label _eyebrow, _role, _speaker, _say, _progress, _hint;
         private readonly System.Action _onClosed;
         private readonly EventCallback<PointerDownEvent> _click;
@@ -40,6 +42,7 @@ namespace KokoSim.Unity.Home
             _say = root?.Q<Label>("ev-say");
             _progress = root?.Q<Label>("ev-progress");
             _hint = root?.Q<Label>("ev-hint");
+            _choices = root?.Q<VisualElement>("ev-choices");
 
             _click = _ => Advance();
             if (_root != null) _root.RegisterCallback(_click);
@@ -76,6 +79,10 @@ namespace KokoSim.Unity.Home
         private void Advance()
         {
             if (_event == null) return;
+            // 3択を出している間は面のクリックで進めない（選ぶまで待つ）。選択肢のボタンの押下も
+            // 面へ伝わってくるが、選んだ時点で AwaitingChoice が落ちるのでここでは止まらない＝二重送りはしない
+            // （ボタン側は Clickable＝押して離したときに発火するので、面の PointerDown が先に来てここで止まる）。
+            if (ShowingChoices) return;
             _line++;
             if (_line < _event.Lines.Count) { RenderLine(); return; }
 
@@ -90,6 +97,36 @@ namespace KokoSim.Unity.Home
             _event = null;
             if (_root != null) _root.style.display = DisplayStyle.None;
             if (_onClosed != null) _onClosed();
+        }
+
+        /// <summary>最後の台詞まで来て、まだ対応を選んでいない（3択を出す段）か。</summary>
+        private bool ShowingChoices
+            => _event != null && _event.AwaitingChoice && _line >= _event.Lines.Count - 1;
+
+        /// <summary>
+        /// 対応を選んだ（issue #945）。結束を動かして結果の会話と結果行を会話の後ろに足し、次の行（結果の会話の頭）へ進む。
+        /// </summary>
+        private void Choose(KokoSim.Engine.Season.Events.EventStance stance)
+        {
+            if (_event == null || !_event.AwaitingChoice) return;
+            EventService.Choose(_event, stance);
+            _line++;
+            if (_line < _event.Lines.Count) { RenderLine(); return; }
+            Advance();
+        }
+
+        private void RenderChoices()
+        {
+            if (_choices == null) return;
+            _choices.Clear();
+            var open = ShowingChoices;
+            _choices.EnableInClassList("ev__choices--open", open);
+            if (!open) return;
+            foreach (var c in _event.Choices)
+            {
+                var stance = c.Stance;
+                _choices.Add(UiComponents.ChoiceButton(c.Label, () => Choose(stance)));
+            }
         }
 
         private void RenderLine()
@@ -135,6 +172,9 @@ namespace KokoSim.Unity.Home
                 _hint.text = _line + 1 < _event.Lines.Count || EventService.Pending.Count > 1
                     ? "クリックで次へ"
                     : "クリックで閉じる";
+            // 3択を出している間は「クリックで次へ」を消す（面を押しても進まないので嘘になる）。
+            if (_hint != null) _hint.EnableInClassList("ev__hint--none", ShowingChoices);
+            RenderChoices();
         }
     }
 

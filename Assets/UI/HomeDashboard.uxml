@@ -181,6 +181,8 @@
         <ui:VisualElement class="ev__box">
           <ui:Label name="ev-speaker" class="ev__speaker f-display" text="コーチ" />
           <ui:Label name="ev-say" class="ev__say" text="" />
+          <!-- 監督の対応の3択（issue #945・案A＝最後の台詞の下に縦並び）。中身は EventNovelView が部品辞書の ChoiceButton で組む。 -->
+          <ui:VisualElement name="ev-choices" class="ev__choices" />
           <ui:VisualElement class="ev__foot">
             <ui:Label name="ev-progress" class="ev__progress f-num" text="" />
             <ui:Label name="ev-hint" class="ev__hint" text="クリックで次へ" />

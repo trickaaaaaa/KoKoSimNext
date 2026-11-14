@@ -39,10 +39,48 @@ public sealed record CohesionCoefficients
     public double SummerCampDelta { get; init; } = 6.0;
     /// <summary>ΔU: 冬合宿（強化）の上乗せ（「結束↑↑」）。</summary>
     public double WinterCampDelta { get; init; } = 10.0;
-    /// <summary>ΔU: 選手間イベントが好転したとき（不和解消など）。</summary>
-    public double EventImproveDelta { get; init; } = 4.0;
-    /// <summary>ΔU: 不和・サボりイベントが悪化したとき。</summary>
-    public double EventWorsenDelta { get; init; } = -4.0;
+    /// <summary>ΔU: 選手間イベントが好転したとき（不和解消など）。issue #945 監督決定で +3（合宿より小さく）。</summary>
+    public double EventImproveDelta { get; init; } = 3.0;
+    /// <summary>ΔU: 不和・サボりイベントが悪化したとき。issue #945 監督決定で −5（悪化を重く）。</summary>
+    public double EventWorsenDelta { get; init; } = -5.0;
+    // ---- 選択肢つき選手間イベントの好転の確率（issue #945・設計書23 §3.3。式は EventChoiceResolver）----
+
+    /// <summary>選択肢つきイベントの好転の確率の下限（どの対応でも1割は好転する）。</summary>
+    public double ChoiceProbMin { get; init; } = 0.10;
+
+    /// <summary>好転の確率の上限（どの対応でも1割は悪化する）。</summary>
+    public double ChoiceProbMax { get; init; } = 0.90;
+
+    /// <summary>全対応共通: 当事者の勤勉さ d（(軸−50)/50）に掛ける重み（コツコツ型は立ち直りやすい）。</summary>
+    public double ChoiceDiligenceWeight { get; init; } = 0.10;
+
+    /// <summary>厳しく叱る: 基準（当事者の性格が中立のときの好転率）。</summary>
+    public double ScoldBase { get; init; } = 0.50;
+
+    /// <summary>厳しく叱る: 素直さ d の重み（素直なら効く・頑固なら反発）。</summary>
+    public double ScoldReceptivenessWeight { get; init; } = 0.35;
+
+    /// <summary>話を聞く: 基準。</summary>
+    public double ListenBase { get; init; } = 0.55;
+
+    /// <summary>話を聞く: 素直さ d の重み（負＝頑固な当事者ほど効く）。</summary>
+    public double ListenReceptivenessWeight { get; init; } = -0.15;
+
+    /// <summary>話を聞く: 試合での姿勢 d の重み（負＝目立ちたがりほど効く＝聞いてもらいたい）。</summary>
+    public double ListenSelflessnessWeight { get; init; } = -0.10;
+
+    /// <summary>主将に任せる: 基準（主将の統率力がふつうのとき）。</summary>
+    public double CaptainBase { get; init; } = 0.45;
+
+    /// <summary>主将に任せる: 主将の統率力の d主将（−1〜+1）の重み。主将不在は d主将=−1。</summary>
+    public double CaptainPowerSlope { get; init; } = 0.40;
+
+    /// <summary>主将に任せる: d主将＝(統率力−captain_power_neutral)/この幅。</summary>
+    public double ChoiceCaptainPowerScale { get; init; } = 25.0;
+
+    /// <summary>主将に任せる: 当事者の統率傾向 d の重み（負＝「引っ張る」当事者は同輩に任されるのを嫌う）。</summary>
+    public double CaptainSubjectLeadershipWeight { get; init; } = -0.15;
+
     /// <summary>ΔU が週ごとに0へ戻る割合（10%）。</summary>
     public double WeeklyDecay { get; init; } = 0.10;
 

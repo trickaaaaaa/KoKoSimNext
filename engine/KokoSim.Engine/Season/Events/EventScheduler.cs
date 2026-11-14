@@ -1,3 +1,4 @@
+using System;
 using KokoSim.Engine.Core;
 
 namespace KokoSim.Engine.Season.Events;
@@ -118,8 +119,16 @@ public sealed class EventScheduler
         return fired;
     }
 
+    /// <summary>
+    /// 当事者を立てられるか（issue #945）。選択肢つきの選手間イベントは「目立ちたがり」「1年生」のように
+    /// 当事者の条件を持つので、条件に合う部員が居ない週は抽選に載せない。<b>null（既定）は判定しない</b>＝
+    /// ロスターを渡さないヘッドレスシムでは従来どおり全部が抽選に載る（帯・ゴールデンの抽選プールは不変）。
+    /// </summary>
+    public Func<GameEvent, bool>? CastFilter { get; set; }
+
     private bool CanFire(GameEvent e)
     {
+        if (CastFilter is { } cast && e.Cast != EventCast.Default && !cast(e)) return false;
         if (e.RequiresRegion is { } need && Region != need) return false;
         if (e.RequiresNotAnnualFlag is { } f && _annualFlags.Contains(f)) return false;
         if (_lastFiredWeek.TryGetValue(e.Id, out var last) && _absoluteWeek - last < e.CooldownWeeks) return false;
@@ -149,11 +158,17 @@ public sealed class EventScheduler
     {
         if (e.Variants.Count == 0) return EventScript.Single(EventRoles.Narration, e.Text);
         if (e.Variants.Count == 1) return e.Variants[0];
-        var stream = Fnv1a(e.Id)
-                     ^ ((ulong)absoluteWeek * 0x9E3779B97F4A7C15UL)
-                     ^ ((ulong)(uint)salt * 0xD1B54A32D192ED03UL);
-        return e.Variants[rng.Fork(stream).NextInt(0, e.Variants.Count)];
+        return e.Variants[rng.Fork(StreamOf(e.Id, absoluteWeek, salt)).NextInt(0, e.Variants.Count)];
     }
+
+    /// <summary>
+    /// (イベントID, 通算週, 塩) から Fork のストリーム識別子を作る（会話の抽選と、選択肢の結果の抽選
+    /// <see cref="EventChoiceResolver"/> が共有する。後者はさらに固有の塩を混ぜて別の列にする）。
+    /// </summary>
+    public static ulong StreamOf(string eventId, int absoluteWeek, int salt)
+        => Fnv1a(eventId)
+           ^ ((ulong)absoluteWeek * 0x9E3779B97F4A7C15UL)
+           ^ ((ulong)(uint)salt * 0xD1B54A32D192ED03UL);
 
     private static ulong Fnv1a(string s)
     {

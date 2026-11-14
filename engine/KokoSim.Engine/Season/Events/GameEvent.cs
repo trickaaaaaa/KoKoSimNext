@@ -84,4 +84,19 @@ public sealed record GameEvent
     /// （文言だけのイベントはこのまま）。
     /// </summary>
     public EventEffect Effect { get; init; } = EventEffect.None;
+
+    /// <summary>
+    /// 監督の対応の選択肢（issue #945）。空なら選択肢なし（読むだけのイベント）。あれば会話の最後に3択を出し、
+    /// 選んだ対応と当事者の性格・主将の統率力で好転/悪化を引き、<see cref="Outcomes"/> の会話を続けて結束を動かす。
+    /// </summary>
+    public IReadOnlyList<EventChoice> Choices { get; init; } = System.Array.Empty<EventChoice>();
+
+    /// <summary>選択肢の結果の会話（対応×好転/悪化）。</summary>
+    public IReadOnlyList<EventOutcome> Outcomes { get; init; } = System.Array.Empty<EventOutcome>();
+
+    /// <summary>当事者（{player}）と相手（{other}）の選び方（issue #945）。既定＝誰でも・相手なし。</summary>
+    public EventCast Cast { get; init; } = EventCast.Default;
+
+    /// <summary>選択肢を持つか。</summary>
+    public bool HasChoices => Choices.Count > 0;
 }

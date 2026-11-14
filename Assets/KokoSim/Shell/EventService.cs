@@ -77,6 +77,38 @@ namespace KokoSim.Unity.Shell
         public IReadOnlyList<PresentedLine> Lines;
         /// <summary>結果（null＝結果行なし）。色分けの参照用で、文そのものは <see cref="Lines"/> の末尾に入っている。</summary>
         public PresentedEffect Effect;
+
+        /// <summary>
+        /// 監督の対応の選択肢（issue #945。差し込み語を展開済み）。null＝選択肢なし（読むだけ）。
+        /// 会話の最後の行まで送ったらこれを出し、選ばれたら <see cref="EventService.Choose"/> を呼ぶ。
+        /// 選んだ後は null に戻り、結果の会話と結果行が <see cref="Lines"/> の後ろに足される。
+        /// </summary>
+        public IReadOnlyList<PresentedChoice> Choices;
+
+        /// <summary>選択肢を出す段か（まだ選んでいない）。</summary>
+        public bool AwaitingChoice => Choices != null && Choices.Count > 0;
+
+        /// <summary>発火時に確定させた抽選の材料（選ぶまで画面には出さない）。</summary>
+        internal PendingChoice Pending;
+    }
+
+    /// <summary>選択肢1つ（画面に出す言い回しと、engine の対応）。</summary>
+    public sealed class PresentedChoice
+    {
+        public EventStance Stance;
+        public string Label;
+    }
+
+    /// <summary>
+    /// 選択肢つきイベントの抽選の材料（issue #945）。<b>発火時に全部確定させる</b>＝提示がキューで次の週へ
+    /// 持ち越されても、暦から作る乱数が変わって結果が動くことが無い。
+    /// </summary>
+    internal sealed class PendingChoice
+    {
+        public int SubjectId;
+        public double Roll;
+        public Dictionary<string, string> Values;
+        public Dictionary<(EventStance, bool), EventScript> Outcomes;
     }
 
     /// <summary>
@@ -109,7 +141,11 @@ namespace KokoSim.Unity.Shell
             get
             {
                 if (_scheduler == null)
-                    _scheduler = new EventScheduler(EventTableProvider.Events, Coefficients);
+                    _scheduler = new EventScheduler(EventTableProvider.Events, Coefficients)
+                    {
+                        // 当事者の条件（目立ちたがり・1年生など）に合う部員が居ない週は抽選に載せない（issue #945）。
+                        CastFilter = e => e.Cast.TryPick(RosterService.Active, CastIndex(), CaptainId(), out _, out _),
+                    };
                 // 自校の地方（issue #616）。転校（新規ゲーム・転任）で変わるので毎回据える＝
                 // 一度きりの初期化にすると、県を変えて始めた進行に前の県のイベントが出る。
                 _scheduler.Region = KokoSim.Engine.Nation.PrefectureRegions.RegionOf(NationService.PrefectureId);
@@ -130,10 +166,20 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static IReadOnlyList<string> RunWeek()
         {
-            var fired = Scheduler.Week(GameClock.Week, Rng());
+            var rng = Rng();
+            var fired = Scheduler.Week(GameClock.Week, rng);
             var feed = new List<string>(fired.Count);
             foreach (var f in fired)
             {
+                if (f.Event.HasChoices)
+                {
+                    var c = BuildChoiceEvent(f, rng);
+                    if (c == null) continue;           // 当事者を立てられない（抽選の後で部員が変わった等）＝出さない
+                    _pending.Add(c);
+                    _queuedThisWeek++;
+                    feed.Add(c.FeedText);
+                    continue;
+                }
                 var values = BuildValues();
                 var effect = ApplyEffect(f.Event.Effect, f.Event.Id, SubjectId(), SubjectName());
                 var e = new PresentedEvent
@@ -255,6 +301,127 @@ namespace KokoSim.Unity.Shell
 
             var sentence = string.Join("、", parts.ToArray()) + (bad ? "" : "！");
             return bad ? PresentedEffect.Bad(sentence) : PresentedEffect.Good(sentence);
+        }
+
+        /// <summary>
+        /// 選択肢つきイベント（issue #945）を組む。当事者 {player}・相手 {other} を <see cref="EventCast"/> で選び、
+        /// 好転/悪化の乱数と6通りの結果の会話を<b>ここで確定させる</b>（選ぶまでは出さない）。
+        /// </summary>
+        /// <summary>
+        /// 選択肢つきイベントを週次抽選を通さずにキューへ積む（撮影ハーネス・デバッグ用。issue #945）。
+        /// <paramref name="rollOverride"/> を渡すと好転/悪化の乱数をその値に差し替える
+        /// （0＝どの対応でも好転・0.999＝どの対応でも悪化。確率は下限0.10・上限0.90に丸めてあるため）。
+        /// 当事者を立てられない・選択肢を持たないイベントなら false。
+        /// </summary>
+        public static bool PushChoiceEvent(string eventId, double? rollOverride = null)
+        {
+            var e = Scheduler.Find(eventId);
+            if (e == null || !e.HasChoices) return false;
+            var rng = Rng();
+            var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, rng);
+            var c = BuildChoiceEvent(new FiredEvent(e, GameClock.Week, script), rng);
+            if (c == null) return false;
+            if (rollOverride.HasValue) c.Pending.Roll = rollOverride.Value;
+            _pending.Add(c);
+            return true;
+        }
+
+        private static PresentedEvent BuildChoiceEvent(FiredEvent f, IRandomSource rng)
+        {
+            KokoSim.Engine.Season.DevelopingPlayer subject, other;
+            if (!f.Event.Cast.TryPick(RosterService.Active, CastIndex(), CaptainId(), out subject, out other))
+                return null;
+
+            var values = BuildValues();
+            values["player"] = subject.Name;
+            if (other != null) values["other"] = other.Name;
+
+            var week = Scheduler.AbsoluteWeek;
+            var salt = subject.Id;
+            var outcomes = new Dictionary<(EventStance, bool), EventScript>();
+            foreach (EventStance stance in System.Enum.GetValues(typeof(EventStance)))
+                foreach (var improved in new[] { true, false })
+                {
+                    var script = EventChoiceResolver.PickOutcome(f.Event, stance, improved, week, salt, rng);
+                    if (script != null) outcomes[(stance, improved)] = script;
+                }
+
+            var choices = new List<PresentedChoice>(f.Event.Choices.Count);
+            foreach (var c in f.Event.Choices)
+                choices.Add(new PresentedChoice { Stance = c.Stance, Label = EventTextFormat.Apply(c.Label, values) });
+
+            return new PresentedEvent
+            {
+                Id = f.Event.Id,
+                FeedText = EventTextFormat.Apply(f.Event.Text, values),
+                Lines = ResolveLines(f.Script, values),
+                Effect = null,
+                Choices = choices,
+                Pending = new PendingChoice
+                {
+                    SubjectId = subject.Id,
+                    Roll = EventChoiceResolver.Roll(f.Event, week, salt, rng),
+                    Values = values,
+                    Outcomes = outcomes,
+                },
+            };
+        }
+
+        /// <summary>
+        /// 監督が対応を選んだ（issue #945）。好転の確率を<b>いまの</b>当事者の性格と主将の統率力で出し、発火時に引いた
+        /// 乱数と比べて好転/悪化を決め、結束を動かし（好転 +3／悪化 −5）、結果の会話と結果行を会話の後ろに足す。
+        /// 2回目以降の呼び出し・選択肢の無いイベントは何もしない（二重に結束を動かさない）。戻り値＝好転したか。
+        /// </summary>
+        public static bool Choose(PresentedEvent e, EventStance stance)
+        {
+            if (e == null || !e.AwaitingChoice || e.Pending == null) return false;
+            var pending = e.Pending;
+
+            var subject = FindActive(pending.SubjectId);
+            var axes = subject != null ? PersonalityAxes.Of(subject) : PersonalityAxes.Neutral;
+            var captainPower = EventChoiceResolver.CaptainPower(Captain());
+            var p = EventChoiceResolver.ImproveProbability(stance, axes, captainPower, GameSession.CohesionCoefficientsInUse);
+            var improved = EventChoiceResolver.Improved(pending.Roll, p);
+
+            GameSession.Current.ApplyCohesionEvent(improved);
+
+            var effect = improved
+                ? PresentedEffect.Good("チームの結束が強まった！")
+                : PresentedEffect.Bad("チームの結束が揺らいだ");
+            var lines = new List<PresentedLine>(e.Lines);
+            EventScript script;
+            if (pending.Outcomes.TryGetValue((stance, improved), out script))
+                lines.AddRange(ResolveLines(script, pending.Values));
+            e.Lines = WithResult(lines, effect);
+            e.Effect = effect;
+            e.Choices = null;
+            e.Pending = null;
+            return improved;
+        }
+
+        /// <summary>当事者選びの番号（暦で決まる＝同じ週なら同じ人。<see cref="Subject"/> と同じ作法）。</summary>
+        private static int CastIndex() => GameClock.YearIndex * 100 + GameClock.Week;
+
+        private static KokoSim.Engine.Season.DevelopingPlayer Captain()
+        {
+            var roster = RosterService.Active;
+            if (roster == null) return null;
+            foreach (var p in roster) if (p.IsCaptain) return p;
+            return null;
+        }
+
+        private static int CaptainId()
+        {
+            var c = Captain();
+            return c == null ? int.MinValue : c.Id;
+        }
+
+        private static KokoSim.Engine.Season.DevelopingPlayer FindActive(int id)
+        {
+            var roster = RosterService.Active;
+            if (roster == null) return null;
+            foreach (var p in roster) if (p.Id == id) return p;
+            return null;
         }
 
         /// <summary>会話の末尾に結果行を1本足す（結果が無ければそのまま）。</summary>

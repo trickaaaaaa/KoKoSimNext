@@ -1341,5 +1341,17 @@ namespace KokoSim.Unity.Components
             }
             return wrap;
         }
+
+        /// <summary>
+        /// 選択肢ボタン1つ（issue #945・イベントの3択）。白地＋墨1px枠・hover は墨2px（components.uss .choice-btn）。
+        /// 同じ重みの選択肢を並べる部品なので応援団赤（主ボタン）は使わない。押されたら <paramref name="onClick"/>。
+        /// </summary>
+        public static Button ChoiceButton(string label, System.Action onClick)
+        {
+            var b = new Button(onClick) { text = label ?? "" };
+            b.AddToClassList("choice-btn");
+            b.AddToClassList("f-body-md");
+            return b;
+        }
     }
 }
