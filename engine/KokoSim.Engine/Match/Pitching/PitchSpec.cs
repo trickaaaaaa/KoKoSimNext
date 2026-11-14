@@ -42,7 +42,7 @@ public sealed record PitchSpec
     /// rpm・回転軸角度[deg]から角速度ベクトル[rad/s]を作る（設計書02 §2.1・issue #835で全球種バックスピン
     /// 固定を解消）。角速度ベクトルは本塁方向(Z)に垂直なX-Y平面内に収まる（野球の投球スピンは進行方向まわりの
     /// ジャイロ成分が力を生まないため、物理層では「有効な」スピンだけをここで表現すれば十分）。
-    /// tiltDeg=0 は純バックスピン（ホップ）。+90°で純サイドスピン（+X方向＝design-18「+x=一塁側」の規約）、
+    /// tiltDeg=0 は純バックスピン（ホップ）。+90°で純サイドスピン（+X方向＝design-18「+x=一塁側」。左投手の腕側。右投手は呼び出し側が <see cref="PitchSpinModel.ForThrower"/> で反転する）、
     /// 180°で純トップスピン（バックスピンの逆＝重力に加えて落下方向を強める）。
     /// </summary>
     public static Vector3D SpinFromRpmAndTilt(double rpm, double tiltDeg)

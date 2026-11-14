@@ -104,7 +104,7 @@ public sealed record PitchingCoefficients
     private static readonly PitchAxisCoefficients[] DefaultPitchAxis =
     {
         // tiltDeg: 0=純バックスピン(ホップ) / 180=純トップスピン(落下方向を強める) / ±90=純サイドスピン
-        //          (+で design-18「+x=一塁側」方向)。
+        //          (+ ＝ 投げ腕の側。左投手の+x＝一塁側、右投手は PitchSpinModel.ForThrower で反転して−x＝三塁側。issue #962)。
         new() { Type = PitchType.Fastball, TiltDeg = 0.0,   RpmScale = 1.00 }, // バックスピンによるホップ成分
         new() { Type = PitchType.TwoSeam,  TiltDeg = 25.0,  RpmScale = 0.95 }, // 微シュート＋微沈
         new() { Type = PitchType.Cutter,   TiltDeg = -20.0, RpmScale = 0.95 }, // 小さく横滑り
