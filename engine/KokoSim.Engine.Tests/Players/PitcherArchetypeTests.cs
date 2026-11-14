@@ -89,8 +89,9 @@ public sealed class PitcherArchetypeTests
         var top = PitcherAttributes.VelocityKmhFromLevel(99);
 
         Assert.InRange(lo, 112, 122);    // 弱小校の投手
-        // 全国級の剛腕: 149〜151（issue velocity-kmh-mapping-flatten-top で 155→149.6。甲子園の 150+ は年に数人）
-        Assert.InRange(top, 148, 152);
+        // 全国級の剛腕: Lv99＝156.8（issue #908 で Lv90 から上を伸ばし Lv100＝158。現実の高校生の最速は 154〜158）。
+        // 何人がそこへ届くかは生成側（AI校の天井）で合わせる＝VelocityDistributionByTierTests。
+        Assert.InRange(top, 155, 158);
         // 上限に張り付かず最上位帯でも差が残る（旧式は Lv80 以上が全部155で潰れていた）。
         Assert.True(PitcherAttributes.VelocityKmhFromLevel(99) > PitcherAttributes.VelocityKmhFromLevel(85));
         Assert.True(PitcherAttributes.VelocityKmhFromLevel(85) > PitcherAttributes.VelocityKmhFromLevel(70));
@@ -122,7 +123,9 @@ public sealed class PitcherArchetypeTests
 
         // 同じ強さでも球速はばらつく（＝同じ強さの学校のエースが全員同じ球速にならない）。
         Assert.True(aces.Distinct().Count() > 20, $"球速の種類が少なすぎる: {aces.Distinct().Count()}");
-        Assert.True(aces.Max() - aces.Min() > 15, $"球速の幅が狭すぎる: {aces.Max() - aces.Min():F1}km/h");
+        // 下限 15→12（issue #908・2026-11-14）: AI校の球速の天井で Lv90（146.4km/h）より上を寝かせた＝強さ70の校で
+        // まれに出ていた 149.6km/h が 146〜147 に収まり、幅が 15 超→13.8 に縮んだ（150km/h超は全国で年10人台の狙い）。
+        Assert.True(aces.Max() - aces.Min() > 12, $"球速の幅が狭すぎる: {aces.Max() - aces.Min():F1}km/h");
     }
 
     [Fact]

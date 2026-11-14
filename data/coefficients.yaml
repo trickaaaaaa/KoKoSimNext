@@ -1779,6 +1779,14 @@ roster:
   ai_star_hitters_per_cohort: 1    # 永続ロスター: 1学年あたりの主軸打者（3学年で Create と同数）
   ai_star_pitchers_per_cohort: 1   # 永続ロスター: 1学年あたりのエース格（投手適性順）
   ai_star_cast_drop: 0.30          # 使い捨て生成: 脇役の中心を lift×これ 下げてチーム総合を圧縮後の尺度に留める（実測: 0.25で+0.7・0.35で−0.6）
+  # AI校の球速の天井（issue #908）: 99 での切り詰め（＝上限 149.6km/h への張り付き）をやめ、膝から上を2本の線分＋100への漸近で寝かせる。
+  # 強豪は逆算配分で毎年最大 +40 を積むので素の値は 190 前後まで伸びる。3年生で最速150km/h以上が年10〜15人・1位154〜158km/h
+  # （現実の実数）に合うよう実測で決めた（seed2026・3/5/7年目: 150km/h以上 11/12/13人・1位 154.8〜158.0km/h。158 は怪物）。
+  ai_velocity_cap_knee: 90.0         # 膝（これ以下は恒等）
+  ai_velocity_cap_mid_raw: 165.0     # 1本目の終点の素の値（全国の3年生でおよそ12位）
+  ai_velocity_cap_mid_level: 92.5    # 同・球速Lv（149.3km/h）
+  ai_velocity_cap_top_raw: 185.0     # 2本目の終点の素の値（およそ1〜3位）
+  ai_velocity_cap_top_level: 97.0    # 同・球速Lv（154.5km/h）。この先は 100（158km/h）へ漸近
   # 投打の利き（§1.1c）
   throw_left_prob: 0.12
   switch_prob: 0.03

@@ -77,7 +77,8 @@ public sealed class VelocityDistributionByTierTests
         // 併せて先頭600校の内訳も変わっている（校数テーブルを高野連の実加盟校数へ差し替えたため）。
         Assert.True(byTier[Tier.C].Count(x => x >= 145) <= byTier[Tier.C].Count * 0.13,
             $"C校の 145+ 率 {100.0 * byTier[Tier.C].Count(x => x >= 145) / byTier[Tier.C].Count:F0}%");
-        Assert.InRange(PitcherAttributes.VelocityKmhFromLevel(99), 149.0, 151.0);
+        // issue #908: Lv90 から上を伸ばして Lv100＝158（150km/h超を作れるように）。人数は AI校の天井で合わせる。
+        Assert.Equal(158.0, PitcherAttributes.VelocityKmhFromLevel(100), 9);
     }
 
     [Fact]
@@ -86,11 +87,63 @@ public sealed class VelocityDistributionByTierTests
         Assert.Equal(132.0, PitcherAttributes.VelocityKmhFromLevel(50), 9);
         Assert.Equal(108.5 + 0.47 * 30, PitcherAttributes.VelocityKmhFromLevel(30), 9);   // Lv≦50 は従来どおり
         Assert.Equal(132.0 + 0.36 * 20, PitcherAttributes.VelocityKmhFromLevel(70), 9);
+        Assert.Equal(146.4, PitcherAttributes.VelocityKmhFromLevel(90), 9);                 // 上位の境（issue #908）
+        Assert.Equal(146.4 + 1.16 * 5, PitcherAttributes.VelocityKmhFromLevel(95), 9);      // 境から上は 1.16 km/h/Lv
+        Assert.Equal(158.0, PitcherAttributes.VelocityKmhFromLevel(100), 9);
+        // 端数つきの逆変換も往復する（AI校の天井が端数の球速Lvを作る）
+        foreach (var x in new[] { 12.3, 49.9, 50.0, 67.25, 90.0, 91.7, 99.4 })
+            Assert.Equal(x, PitcherAttributes.LevelFromVelocityKmhExact(PitcherAttributes.VelocityKmhFromLevel(x)), 6);
         // 単調増加・境で連続
         for (var lv = 1; lv < 100; lv++)
             Assert.True(PitcherAttributes.VelocityKmhFromLevel(lv + 1) > PitcherAttributes.VelocityKmhFromLevel(lv));
         // 往復一致（1〜100 全て）
         for (var lv = 1; lv <= 100; lv++)
             Assert.Equal(lv, PitcherAttributes.LevelFromVelocityKmh(PitcherAttributes.VelocityKmhFromLevel(lv)));
+    }
+    [Fact]
+    public void AiVelocityCap_IsIdentityBelowKnee_Monotone_AndNeverReaches100()
+    {
+        var c = new KokoSim.Engine.Season.RosterCoefficients();
+        for (var x = 10.0; x <= c.AiVelocityCapKnee; x += 0.5)
+            Assert.Equal(x, c.VelocitySoftCap(x), 9);                       // 膝以下は1ビットも変えない
+        var prev = c.VelocitySoftCap(c.AiVelocityCapKnee);
+        for (var x = c.AiVelocityCapKnee + 0.25; x <= 400; x += 0.25)
+        {
+            var y = c.VelocitySoftCap(x);
+            Assert.True(y > prev, $"単調でない: raw {x}");
+            Assert.True(y < 100.0, $"100 に届いた: raw {x}");              // 上限への張り付きが起きない
+            Assert.Equal(x, c.VelocitySoftCapInverse(y), 6);                 // 逆関数（毎年の底上げに使う）
+            prev = y;
+        }
+        // 折れ目は係数どおり（YAML ai_velocity_cap_*）
+        Assert.Equal(c.AiVelocityCapMidLevel, c.VelocitySoftCap(c.AiVelocityCapMidRaw), 9);
+        Assert.Equal(c.AiVelocityCapTopLevel, c.VelocitySoftCap(c.AiVelocityCapTopRaw), 9);
+    }
+
+    /// <summary>
+    /// 全国の3年生の最速（issue #908）。現実の高校生は最速150km/h以上が年7〜18人（2021〜2026・ドラフト・レポート）・
+    /// その年の1位が 153〜158km/h。旧実装は球速Lvを 99 で切り詰め、123〜155人が 149.6km/h に張り付いていた
+    /// （150km/h 以上は 0人）。全国 seed 2026 を 3/5/7年目で実体化して数える。
+    /// 実測（2026-11-14）: 150km/h以上 11/12/13人・1位 154.8/156.5/158.0km/h。
+    /// </summary>
+    [Fact]   // 全国4000校×3年ぶんの実体化だが並列で約2秒（fast に置く）
+    public void ThirdYears_Over150Kmh_MatchRealHighSchoolCounts()
+    {
+        var nation = NationGenerator.Generate(new SchoolNameVocab(), new NationCoefficients(), new Xoshiro256Random(2026));
+        var deps = new AiRosterDeps();
+        foreach (var year in new[] { 3, 5, 7 })
+        {
+            var tops = new System.Collections.Concurrent.ConcurrentBag<double>();
+            System.Threading.Tasks.Parallel.ForEach(nation.Schools, school =>
+            {
+                foreach (var p in AiRosterFactory.Bootstrap(school, year, deps).Players.Where(p => p.Grade == 3))
+                    tops.Add(p.Snapshot.Pitching.MaxVelocityKmh);
+            });
+            var xs = tops.ToList();
+            var over150 = xs.Count(x => Math.Round(x) >= 150);
+            _out.WriteLine($"{year}年目: 3年生 {xs.Count}人 ／ 150km/h以上 {over150}人 ／ 145km/h以上 {xs.Count(x => Math.Round(x) >= 145)}人 ／ 最速 {xs.Max():F1}");
+            Assert.InRange(over150, 7, 18);
+            Assert.InRange(xs.Max(), 153.0, 158.0);
+        }
     }
 }

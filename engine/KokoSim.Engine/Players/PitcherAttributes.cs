@@ -98,6 +98,11 @@ public sealed record PitcherAttributes
     // 同じ Lv 分布で C 140／B 144／A 148／S 149.6 に来る（現実の目安: 甲子園常連 A/S 140〜148・150+ は年に数人）。
     // Lv≦50 は従来どおり（E以下の一般母集団は妥当だった）。逆変換は同じ区分の逆関数（往復一致をテストで固定）。
     // 球速の物理効果（stuff_per_kmh 等）は km/h で効くので、上位では「Lv1 の価値」が 0.47→0.36 km/h ぶんに下がる。
+    //
+    // Lv90 から上を急にする（issue #908・2026-11-14）: 現実の高校生は最速150km/h以上が年10〜15人・最速158前後
+    // （ドラフト・レポート 2021〜2025）。旧式は Lv99＝149.6 が上限で150km/h超が作れなかった。Lv90（146.4）から
+    // 1.16 km/h/Lv で Lv100＝158.0 に届かせる（Lv93≒149.9・Lv95≒152.2）。人数は生成側（AI校のやわらかい天井
+    // RosterCoefficients.VelocitySoftCap）で合わせる＝この式は「上位の1Lvの重み」だけを決める。
     private const double VelocityInterceptKmh = 108.5;
     private const double VelocitySlopeKmhPerLevel = 0.47;
     /// <summary>区分の境（この Lv までは従来の傾き）。</summary>
@@ -105,21 +110,44 @@ public sealed record PitcherAttributes
     /// <summary>境から上の傾き[km/h per Lv]。</summary>
     public const double VelocitySlopeAboveKneeKmhPerLevel = 0.36;
     private const double VelocityKneeKmh = VelocityInterceptKmh + VelocityKneeLevel * VelocitySlopeKmhPerLevel;   // 132.0
+    /// <summary>上位の境（ここから上は150km/h超へ伸ばす傾き）。</summary>
+    public const int VelocityTopKneeLevel = 90;
+    /// <summary>上位の境から上の傾き[km/h per Lv]（Lv100＝158.0km/h）。</summary>
+    public const double VelocitySlopeAboveTopKneeKmhPerLevel = 1.16;
+    private const double VelocityTopKneeKmh =
+        VelocityKneeKmh + (VelocityTopKneeLevel - VelocityKneeLevel) * VelocitySlopeAboveKneeKmhPerLevel;   // 146.4
 
-    /// <summary>育成レイヤの球速Level(1〜100)→最高球速[km/h]の変換（Lv50 を境に上位を寝かせる区分線形）。</summary>
-    public static double VelocityKmhFromLevel(int level)
+    /// <summary>育成レイヤの球速Level(1〜100)→最高球速[km/h]の変換（Lv50・Lv90 を境にした区分線形）。</summary>
+    public static double VelocityKmhFromLevel(int level) => VelocityKmhFromLevel((double)level);
+
+    /// <summary>
+    /// 連続版（AI校のやわらかい天井が端数の球速Lvを作るため）。整数を渡せば <see cref="VelocityKmhFromLevel(int)"/> と同値。
+    /// </summary>
+    public static double VelocityKmhFromLevel(double level)
         => level <= VelocityKneeLevel
             ? VelocityInterceptKmh + level * VelocitySlopeKmhPerLevel
-            : VelocityKneeKmh + (level - VelocityKneeLevel) * VelocitySlopeAboveKneeKmhPerLevel;
+            : level <= VelocityTopKneeLevel
+                ? VelocityKneeKmh + (level - VelocityKneeLevel) * VelocitySlopeAboveKneeKmhPerLevel
+                : VelocityTopKneeKmh + (level - VelocityTopKneeLevel) * VelocitySlopeAboveTopKneeKmhPerLevel;
 
-    /// <summary>最高球速[km/h]→球速Level の逆変換（表示・選出で「球速の等級」を復元する用。順変換と同じ区分の逆関数）。</summary>
-    public static int LevelFromVelocityKmh(double kmh)
+    /// <summary>
+    /// 最高球速[km/h]→球速Level の逆変換（端数つき・下限1でだけ丸める）。AI校の毎年の底上げが
+    /// 「天井の手前の素の値」へ戻すのに使う。
+    /// </summary>
+    public static double LevelFromVelocityKmhExact(double kmh)
     {
         var lv = kmh <= VelocityKneeKmh
             ? (kmh - VelocityInterceptKmh) / VelocitySlopeKmhPerLevel
-            : VelocityKneeLevel + (kmh - VelocityKneeKmh) / VelocitySlopeAboveKneeKmhPerLevel;
-        return (int)Math.Round(Math.Clamp(lv, 1, 100));
+            : kmh <= VelocityTopKneeKmh
+                ? VelocityKneeLevel + (kmh - VelocityKneeKmh) / VelocitySlopeAboveKneeKmhPerLevel
+                : VelocityTopKneeLevel + (kmh - VelocityTopKneeKmh) / VelocitySlopeAboveTopKneeKmhPerLevel;
+        // 往復の浮動小数の誤差（整数Lv→km/h→Lv が 89.99999999 になる等）で別の値を作らないよう丸める。
+        return Math.Max(1.0, Math.Round(lv, 9));
     }
+
+    /// <summary>最高球速[km/h]→球速Level の逆変換（表示・選出で「球速の等級」を復元する用。順変換と同じ区分の逆関数）。</summary>
+    public static int LevelFromVelocityKmh(double kmh)
+        => (int)Math.Round(Math.Clamp(LevelFromVelocityKmhExact(kmh), 1, 100));
 
     /// <summary>リーグ平均的な投手（球速132km/h, 各50 = D帯, 目安100.5球 = Lv50, issue #408）。</summary>
     public static PitcherAttributes LeagueAverage => new();

@@ -2520,6 +2520,11 @@ public static class CoefficientsLoader
         public int AiStarHitters { get; set; } = D.AiStarHitters;
         public int AiStarHittersPerCohort { get; set; } = D.AiStarHittersPerCohort;
         public int AiStarPitchersPerCohort { get; set; } = D.AiStarPitchersPerCohort;
+        public double AiVelocityCapKnee { get; set; } = D.AiVelocityCapKnee;
+        public double AiVelocityCapMidRaw { get; set; } = D.AiVelocityCapMidRaw;
+        public double AiVelocityCapMidLevel { get; set; } = D.AiVelocityCapMidLevel;
+        public double AiVelocityCapTopRaw { get; set; } = D.AiVelocityCapTopRaw;
+        public double AiVelocityCapTopLevel { get; set; } = D.AiVelocityCapTopLevel;
         public double AiStarCastDrop { get; set; } = D.AiStarCastDrop;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
@@ -2668,6 +2673,11 @@ public static class CoefficientsLoader
             AiStarLiftPerPoint = AiStarLiftPerPoint,
             AiStarHitters = AiStarHitters,
             AiStarHittersPerCohort = AiStarHittersPerCohort,
+            AiVelocityCapKnee = AiVelocityCapKnee,
+            AiVelocityCapMidRaw = AiVelocityCapMidRaw,
+            AiVelocityCapMidLevel = AiVelocityCapMidLevel,
+            AiVelocityCapTopRaw = AiVelocityCapTopRaw,
+            AiVelocityCapTopLevel = AiVelocityCapTopLevel,
             AiStarPitchersPerCohort = AiStarPitchersPerCohort,
             AiStarCastDrop = AiStarCastDrop,
             ThrowLeftProb = ThrowLeftProb,
