@@ -808,6 +808,7 @@ personalities:
   axis_sd: 12                # 生成: 種タイプの代表値の周りに②③④を引くσ（設計書23 §1.4）
   factor_min: 0.75           # 自主成長（③勤勉さ）の下限・上限
   factor_max: 1.25
+  self_growth_jitter_sd: 0.055     # 自主成長の隠れた個人差（勤勉さとは別・Q47 決着）。同タイプ内の自主成長σ≈0.06（旧 PersonalityFactor 相当）
   receptiveness_slope_high: 0.10   # ②→指導の入りやすさ 素直側（端 1.10）
   receptiveness_slope_low: 0.12    #                     頑固側（端 0.88）
   diligence_slope_high: 0.10       # ③→自主成長 コツコツ側（端 1.10）
@@ -858,12 +859,17 @@ battery_chemistry:
 # U0 = 50 + b1×主将の統率力 + b2×min(引っ張る人数,3) − b3×max(0, 目立ちたがりの割合−0.5) − b4×一匹狼の人数
 # ΔU は自校だけ（合宿・選手間イベント）。週ごとに10%ずつ0へ戻す（Q40）。チームの勢い（#863）とは別物で二重に効かせない
 cohesion:
-  captain_power_weight: 0.15    # b1（主将の統率力＝統率傾向×精神力/100）
+  # U0（顔ぶれの土台）＝50＋各項の「ふつうの部」からの差（Q54 決着: 顔ぶれだけで U0≥70 が上位約15%・U0<30 が下位約15%）。
+  # 基準（*_neutral）は全国の AI校のベンチ入りメンバーの平均。割合の分母はベンチ入り全員・性格を持たない手組みの選手は数えない。
+  captain_power_weight: 0.9     # b1: 主将の統率力（統率傾向×精神力/100）の基準からの差1あたり
+  captain_power_neutral: 46
   leader_threshold: 65          # 「引っ張る」＝統率傾向がこれ以上
-  leader_weight: 2.0            # b2
-  leader_cap: 3
-  selfish_share_weight: 40      # b3
-  lone_wolf_weight: 3.0         # b4
+  leader_share_weight: 80       # b2: 引っ張る選手の割合の基準からの差（1人/20人ぶん＝+4）
+  leader_share_neutral: 0.24
+  selfish_share_weight: 70      # b3: 目立ちたがり（④<50）の割合の基準からの差（1人/20人ぶん＝−3.5）
+  selfish_share_neutral: 0.385
+  lone_wolf_share_weight: 120   # b4: 一匹狼の割合の基準からの差（1人/20人ぶん＝−6）
+  lone_wolf_share_neutral: 0.06
   summer_camp_delta: 6          # 夏合宿（通常）
   winter_camp_delta: 10         # 冬合宿（強化）
   event_improve_delta: 4        # 選手間イベントの好転（不和解消など）

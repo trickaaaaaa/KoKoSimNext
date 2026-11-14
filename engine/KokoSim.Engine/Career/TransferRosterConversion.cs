@@ -153,6 +153,7 @@ public static class TransferRosterConversion
             Receptiveness = s.Receptiveness,
             Diligence = s.Diligence,
             Selflessness = s.Selflessness,
+            SelfGrowthJitter = s.SelfGrowthJitter, // 自主成長の隠れた個人差もそのまま（Q47）
             Mental = s.Mental,
             Leadership = s.Leadership,
             Lead = s.Lead,

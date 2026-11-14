@@ -140,6 +140,104 @@ public sealed class PersonalityTests
         AssertPopulationMeans("AI校", pop);
     }
 
+    // ===== 自主成長の同タイプ内の個人差（Q47 決着 2026-11-14: 旧 PersonalityFactor の σ0.06 相当に戻す） =====
+
+    /// <summary>タイプごとの自主成長の標準偏差を人数で重み付けした平均（同タイプ内のσ）と、母集団平均。</summary>
+    private (double WithinSd, double Mean) SelfGrowthSpread(string label, IReadOnlyList<(Personality T, int D, double J)> pop)
+    {
+        var sumSq = 0.0;
+        var n = 0;
+        foreach (var g in pop.GroupBy(p => p.T))
+        {
+            var xs = g.Select(p => PC.SelfGrowthFactor(p.D, p.J)).ToList();
+            var m = xs.Average();
+            sumSq += xs.Sum(x => (x - m) * (x - m));
+            n += xs.Count - 1;
+        }
+        var within = System.Math.Sqrt(sumSq / n);
+        var mean = pop.Average(p => PC.SelfGrowthFactor(p.D, p.J));
+        var axisOnly = pop.Average(p => PC.SelfGrowthFactor(p.D));
+        _out.WriteLine($"{label} n={pop.Count}: 同タイプ内σ {within:F4} 平均 {mean:F4}（勤勉さだけ {axisOnly:F4}）");
+        return (within, mean);
+    }
+
+    private static void AssertOldSpread((double WithinSd, double Mean) r)
+    {
+        Assert.InRange(r.WithinSd, 0.055, 0.065);              // 旧 PersonalityFactor のタイプ内ジッタ σ0.06 相当
+        Assert.InRange(r.Mean, OldGrowth - 0.005, OldGrowth + 0.005); // 個人差は平均0＝母集団平均は旧表のまま
+    }
+
+    [Fact]
+    public void SelfGrowth_WithinTypeSpread_MatchesOldJitter_Intake()
+    {
+        var pop = new List<(Personality, int, double)>();
+        for (var s = 0; pop.Count < 10_000; s++)
+            foreach (var p in ProspectGenerator.Intake(1, Roster, new Xoshiro256Random((ulong)(70_000 + s))))
+                pop.Add((p.Personality, p.Diligence, p.SelfGrowthJitter));
+        AssertOldSpread(SelfGrowthSpread("新入生", pop));
+    }
+
+    [Fact]
+    public void SelfGrowth_WithinTypeSpread_MatchesOldJitter_AiSchools()
+    {
+        var pop = new List<(Personality, int, double)>(10_000);
+        for (var i = 0; i < 10_000; i++)
+        {
+            var p = StrengthTeamFactory.PositionPlayer(FieldPosition.CenterField, 55, new Xoshiro256Random((ulong)(i + 1)),
+                PC, (ulong)(i * 7919 + 13), "a");
+            pop.Add((p.Personality, p.Diligence, p.SelfGrowthJitter));
+        }
+        AssertOldSpread(SelfGrowthSpread("AI校", pop));
+    }
+
+    [Fact]
+    public void SelfGrowthJitter_DoesNotDisturbAxesOrMainStream()
+    {
+        // 個人差は性格の Fork の末尾で引く＝②③④の値は個人差が無いとき（σ0）と同じ、主RNGの列も同じ。
+        var noJitter = PC with { SelfGrowthJitterSd = 0.0 };
+        var a = ProspectGenerator.Intake(1, Roster, new Xoshiro256Random(77), personalities: PC);
+        var b = ProspectGenerator.Intake(1, Roster, new Xoshiro256Random(77), personalities: noJitter);
+        Assert.Equal(a.Count, b.Count);
+        for (var i = 0; i < a.Count; i++)
+        {
+            Assert.Equal((a[i].Receptiveness, a[i].Diligence, a[i].Selflessness), (b[i].Receptiveness, b[i].Diligence, b[i].Selflessness));
+            Assert.Equal(a[i].InjuryResistance, b[i].InjuryResistance);
+            Assert.Equal(0.0, b[i].SelfGrowthJitter);
+        }
+        Assert.Contains(a, p => p.SelfGrowthJitter != 0.0);
+    }
+
+    [Fact]
+    public void SelfGrowthJitter_CarriesThroughProjectionAndTransfer()
+    {
+        var dp = PersonalityFixture.Developing(Personality.Genius, selfGrowthJitter: 0.05);
+        Assert.Equal(0.05, RosterTeamBuilder.ToPlayer(dp, FieldPosition.LeftField).SelfGrowthJitter, 12);
+        Assert.Equal(0.05, dp.Clone().SelfGrowthJitter, 12);
+        // 転任: 自校→AI校→自校の往復でも個人差は引き継ぐ（性格と同じく生まれつき・Q45/Q47）。
+        var ai = KokoSim.Engine.Career.TransferRosterConversion.ToAiPlayer(dp, 3);
+        Assert.Equal(0.05, ai.Snapshot.SelfGrowthJitter, 12);
+        var back = KokoSim.Engine.Career.TransferRosterConversion.ToDevelopingPlayer(
+            ai, new Xoshiro256Random(5), Roster, PC);
+        Assert.Equal(0.05, back.SelfGrowthJitter, 12);
+        Assert.Equal(dp.Diligence, back.Diligence);
+    }
+
+    [Fact]
+    public void SelfGrowth_JitterRaisesGrowth()
+    {
+        int Grown(double jitter)
+        {
+            var p = new DevelopingPlayer { Diligence = 50, SelfGrowthJitter = jitter };
+            p.SetLevel(AbilityKind.Contact, 30);
+            p.SetCap(AbilityKind.Contact, 99);
+            for (var w = 0; w < 30; w++)
+                DevelopmentModel.TrainWeek(p, TrainingMenu.Batting, 1, 1.0, new GrowthStageTable(), new TrainingCoefficients());
+            return p.Level(AbilityKind.Contact);
+        }
+        Assert.True(Grown(+0.10) > Grown(0.0));
+        Assert.True(Grown(0.0) > Grown(-0.10));
+    }
+
     // ===== 軸の効き（50で恒等・端で旧表の幅） =====
 
     [Fact]
@@ -322,7 +420,7 @@ public sealed class PersonalityTests
         var o = new JsonObject();
         foreach (var k in now.Keys)
         {
-            if (k is "receptiveness" or "diligence" or "selflessness" or "persKnown" or "persHigh") continue;
+            if (k is "receptiveness" or "diligence" or "selflessness" or "persKnown" or "persHigh" or "growthJitter") continue;
             o.Add(k, now[k]);
         }
         o.Add("personality", legacy.ToString());
@@ -339,9 +437,10 @@ public sealed class PersonalityTests
     [InlineData(Personality.MoodMaker, 0.92)]
     [InlineData(Personality.LoneWolf, 1.00)]
     [InlineData(Personality.Introvert, 0.95)]
-    // タイプ内ジッタで中心から外れた旧個体（勤勉さのマスをまたぐ値）でもタイプ名は保つ。
+    // タイプ内ジッタで中心から外れた旧個体（勤勉さのマスをまたぐ値）でも、タイプ名と自主成長の効きをどちらも保つ。
     [InlineData(Personality.Genius, 0.97)]
     [InlineData(Personality.MoodMaker, 1.04)]
+    [InlineData(Personality.Hardworker, 1.22)]
     public void LegacySave_DevelopingPlayer_MigratesToRepresentative_AndKeepsTypeName(Personality legacy, double factor)
     {
         var now = new DevelopingPlayer { Name = "旧", Leadership = PersonalityFixture.Leadership(legacy) };
@@ -352,12 +451,13 @@ public sealed class PersonalityTests
 
         Assert.Equal(legacy, a.Personality);
         Assert.Equal(pp.Receptiveness, a.Receptiveness);
+        Assert.Equal(pp.Diligence, a.Diligence);
         Assert.Equal(pp.Selflessness, a.Selflessness);
         Assert.Equal(now.Leadership, a.Leadership); // 統率は触らない
-        Assert.Equal((a.Receptiveness, a.Diligence, a.Selflessness), (b.Receptiveness, b.Diligence, b.Selflessness));
-        // 勤勉さは旧 PersonalityFactor の逆算: マスをまたがない限り自主成長の効きはそのまま。
-        if (Personalities.CellHigh(legacy, PersonalityAxis.Diligence) == (factor >= 1.0) || factor == 1.0)
-            Assert.Equal(factor, PC.SelfGrowthFactor(a.Diligence), 2);
+        Assert.Equal((a.Receptiveness, a.Diligence, a.Selflessness, a.SelfGrowthJitter),
+            (b.Receptiveness, b.Diligence, b.Selflessness, b.SelfGrowthJitter));
+        // 旧 PersonalityFactor は「代表値の勤勉さ＋隠れた個人差」で丸ごと再現する（Q47）。
+        Assert.Equal(factor, PC.SelfGrowthFactor(a.Diligence, a.SelfGrowthJitter), 12);
     }
 
     [Fact]
@@ -366,7 +466,24 @@ public sealed class PersonalityTests
         var json = AsLegacy(DevelopingPlayerSaves.ToJson(new DevelopingPlayer { Name = "旧" }), Personality.Normal, 1.0);
         var p = DevelopingPlayerSaves.FromJson(json);
         Assert.Equal(Personality.Normal, p.Personality);
-        Assert.Equal(1.0, PC.SelfGrowthFactor(p.Diligence), 12);
+        Assert.Equal(0.0, p.SelfGrowthJitter);
+        Assert.Equal(1.0, PC.SelfGrowthFactor(p.Diligence, p.SelfGrowthJitter), 12);
+    }
+
+    [Fact]
+    public void Save_V27ToV29_WithoutJitter_ReadsZero()
+    {
+        // v27〜v29（軸はあるが個人差の鍵が無い）の部員・AI校の選手は個人差0で読む。
+        var dpJson = DevelopingPlayerSaves.ToJson(PersonalityFixture.Developing(Personality.Genius));
+        var o = new JsonObject();
+        foreach (var k in dpJson.Keys) if (k != "growthJitter") o.Add(k, dpJson[k]);
+        Assert.Equal(0.0, DevelopingPlayerSaves.FromJson(o).SelfGrowthJitter);
+
+        var pJson = PlayerSaves.ToJson(new Player { Name = "旧", SelfGrowthJitter = 0.04 });
+        var po = new JsonObject();
+        foreach (var k in pJson.Keys) if (k != "growthJitter") po.Add(k, pJson[k]);
+        Assert.Equal(0.0, PlayerSaves.PlayerFromJson(po).SelfGrowthJitter);
+        Assert.Equal(0.04, PlayerSaves.PlayerFromJson(pJson).SelfGrowthJitter, 12);
     }
 
     [Fact]
@@ -388,10 +505,11 @@ public sealed class PersonalityTests
     [Fact]
     public void NewSave_RoundTripsAxesAndReading()
     {
-        var p = PersonalityFixture.Developing(Personality.Craftsman);
+        var p = PersonalityFixture.Developing(Personality.Craftsman, selfGrowthJitter: -0.037);
         p.PersonalityReading = new PersonalityReading().With(PersonalityAxis.Diligence, true);
         var back = DevelopingPlayerSaves.FromJson(DevelopingPlayerSaves.ToJson(p));
         Assert.Equal((p.Receptiveness, p.Diligence, p.Selflessness), (back.Receptiveness, back.Diligence, back.Selflessness));
+        Assert.Equal(-0.037, back.SelfGrowthJitter, 12);
         Assert.Equal(Personality.Craftsman, back.Personality);
         Assert.Equal(p.PersonalityReading, back.PersonalityReading);
     }

@@ -471,6 +471,7 @@ public static class StrengthTeamFactory
             Receptiveness = personality.Receptiveness,
             Diligence = personality.Diligence,
             Selflessness = personality.Selflessness,
+            SelfGrowthJitter = personality.SelfGrowthJitter,
             BuntSuccessBonus = pc.BuntSuccessBonus(personality.Selflessness),
             ChanceHitFactor = pc.ChanceHitFactor(personality.Selflessness),
             Mental = mentalLv,
