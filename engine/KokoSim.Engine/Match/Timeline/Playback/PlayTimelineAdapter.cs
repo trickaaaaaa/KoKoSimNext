@@ -164,6 +164,22 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
     /// <summary>逸れがあるか（受け手が合わせる必要があるか）。</summary>
     public bool HasScatter => ScatterLateralM != 0.0 || ScatterVerticalM != 0.0;
 
+    /// <summary>
+    /// 逸れた送球を受け手が捕り直してからタッチ／踏塁へ移るまでに加わる遅れ[s]（issue #979）。判定が「逸れたぶん
+    /// 遅れる」と言っている秒と同じ式（<see cref="Fielding.ThrowScatterModel.RecoverySeconds"/>・盗塁送球の係数・
+    /// 受け手 Catching=50）。絵はこの秒だけタッチの瞬間を後ろへずらして、捕る形を見せてからタッチへつなぐ。
+    /// 表示専用＝判定には使わない。逸れなしは 0。
+    /// </summary>
+    public double ScatterRecoverySeconds => HasScatter
+        ? Fielding.ThrowScatterModel.RecoverySeconds(
+            new Fielding.ThrowScatterModel.Scatter(ScatterLateralM * 100.0, ScatterVerticalM * 100.0), receiverCatching: 50,
+            RecoveryCoefficients.StealThrowScatterLateralSecPerCm, RecoveryCoefficients.StealThrowScatterHighSecPerCm,
+            RecoveryCoefficients.StealThrowScatterShortHopSecPerCm,
+            RecoveryCoefficients.StealThrowScatterCatchingReliefSlope, RecoveryCoefficients.StealThrowScatterCatchingReliefMinFactor)
+        : 0.0;
+
+    private static readonly Game.BaserunningCoefficients RecoveryCoefficients = new();
+
     /// <summary>逸れた送球の終点の高さ[m]の基準（受け手の胸の高さ＝3D守備ビューの送球の捕球高さと同じ値）。</summary>
     public const double ScatterCatchHeightM = 1.15;
 
