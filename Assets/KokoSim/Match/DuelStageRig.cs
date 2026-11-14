@@ -1057,6 +1057,7 @@ namespace KokoSim.Unity.Match
         /// <summary>【実測プローブ用】カウンタを0へ戻す。</summary>
         public void ResetBatTrailCountersForCapture() { BatTrailSampledForCapture = 0; BatTrailSuppressedForCapture = 0; }
         /// <summary>撮影用（issue #938）: バットの軸（ノブ→バレル。ワールド）。バットを出していなければ零。</summary>
+        public Vector3 BatCenterForCapture => _bat != null && _bat.activeSelf ? _bat.transform.localPosition : Vector3.zero;
         public Vector3 BatAxisForCapture => _bat != null && _bat.activeSelf ? _bat.transform.up : Vector3.zero;
         /// <summary>撮影用（issue #938）: 真にするとバントの水平固定を切る＝修正前の絵と比べるため。</summary>
         public static bool BuntFlatDisabledForCapture;
