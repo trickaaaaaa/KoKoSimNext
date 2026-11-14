@@ -39,6 +39,19 @@ public sealed class SchoolNamesLoaderTests
         }
     }
 
+    /// <summary>
+    /// 改名の入力上限（<see cref="SchoolNames.MaxStemLength"/>・issue #946）は「全国生成の校名の幹の最長」に揃えてある。
+    /// 語彙を足して生成校名がこれより長くなったら、校名の出る欄の幅と上限を見直す合図。
+    /// </summary>
+    [Fact]
+    public void RealFile_GeneratedStemsFitRenameLimit()
+    {
+        var nation = NationGenerator.Generate(LoadVocab(), new NationCoefficients(), new Xoshiro256Random(2026));
+        var longest = nation.Schools.Max(s => SchoolNames.Stem(s.Name).Length);
+        Assert.True(longest <= SchoolNames.MaxStemLength,
+            $"生成校名の幹の最長 {longest} 字が改名の上限 {SchoolNames.MaxStemLength} 字を超えた");
+    }
+
     [Fact]
     public void RealFile_GeneratesNation_WithoutOrdinalFallback()
     {

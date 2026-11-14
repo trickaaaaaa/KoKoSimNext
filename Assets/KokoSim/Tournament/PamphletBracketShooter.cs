@@ -95,7 +95,7 @@ namespace KokoSim.Unity.Tournament
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var v = new TournamentPreviewState().Build();
-            var bracket = NewspaperBracketLayout.Build(GameSession.Current.Display.Runner.BuildBracketView(), TournamentPamphletHtml.Metrics);
+            var bracket = NewspaperBracketLayout.Build(NationService.DisplayBracket(GameSession.Current.Display.Runner.BuildBracketView()), TournamentPamphletHtml.Metrics);
             var schools = TournamentPreviewState.BuildPamphletSchools(v, bracket);
             var html = TournamentPamphletHtml.Render(v, bracket, schools);
             File.WriteAllText(Path.Combine(Dir, name + ".html"), html, new System.Text.UTF8Encoding(false));

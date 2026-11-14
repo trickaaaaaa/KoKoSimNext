@@ -113,7 +113,8 @@ namespace KokoSim.Unity.Shell
                 view.Rows.Add(new TransferOfferRow
                 {
                     SchoolId = c.SchoolId,
-                    SchoolName = c.SchoolName,
+                    // 候補はオファーの時点の校名を持っている＝その後の改名（issue #946）を ID から引き直す。
+                    SchoolName = NationService.DisplayName(c.SchoolId, c.SchoolName),
                     PrefectureName = NationService.PrefectureName(c.PrefectureId),
                     Strength = c.Strength,
                     Fame = c.Fame,
@@ -150,11 +151,14 @@ namespace KokoSim.Unity.Shell
             // 部員は学校に所属する（issue #641）: 旧校は AI校として全国に残り旧部員もそこに残る。
             // 転任先 AI校の部員を引き継ぎ、転任先は全国から外れる（自校＝専用ID で大会に出る）。
             var targetSchool = NationService.SchoolById(target.SchoolId);
+            // 転任先の今の名前（改名していればその名前・issue #946）。全国から外すと生成時の名前へ戻るので先に取る。
+            var targetName = targetSchool != null ? targetSchool.Name : target.SchoolName;
             if (targetSchool != null)
             {
                 var active = RosterService.Active;
+                // 旧校は改名前の名前で全国へ戻す（自校の改名は NationService.TransferManager が改名表へ移す）。
                 var departing = new DepartingSchool(
-                    NationService.ManagerSchoolName, NationService.PrefectureId, NationService.DistrictId,
+                    NationService.ManagerSchoolGeneratedName, NationService.PrefectureId, NationService.DistrictId,
                     TeamOverall.Of(active));
                 var result = NationService.TransferManager(
                     departing, active, targetSchool, GameClock.YearIndex, RosterService.NextPlayerId);
@@ -166,7 +170,7 @@ namespace KokoSim.Unity.Shell
                 RosterService.ResetForTransfer(GameClock.YearIndex);
             }
             // 候補の校名は全国の表記（「〜高校」込み）。自校の校名は幹で持つ（表示側で「高校」を付ける）。
-            NationService.SetSchoolIdentity(SchoolNames.Stem(target.SchoolName), target.PrefectureId, target.DistrictId);
+            NationService.SetSchoolIdentity(SchoolNames.Stem(targetName), target.PrefectureId, target.DistrictId);
 
             Clear();
             return true;

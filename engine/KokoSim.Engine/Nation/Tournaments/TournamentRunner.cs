@@ -241,9 +241,9 @@ public sealed record BracketMatch(
 
 /// <summary>
 /// 樹形図の1スロット（カードの上側/下側）。まだ校名が確定していない枠は TeamName=null（「Aブロック勝者」待ち）。
-/// Score は当該カードが消化済みのときだけ非null。
+/// Score は当該カードが消化済みのときだけ非null。SchoolId は校名を今の名前へ引き直すための学校ID（issue #946）。
 /// </summary>
-public sealed record BracketSlot(string? TeamName, bool IsManager, bool IsWinner, int? Score)
+public sealed record BracketSlot(string? TeamName, bool IsManager, bool IsWinner, int? Score, int? SchoolId = null)
 {
     /// <summary>校名が確定しているか（未消化ラウンドの空枠は false）。</summary>
     public bool IsDetermined => TeamName is not null;
@@ -266,14 +266,43 @@ public sealed record BracketCard(
 /// <summary>樹形図の1ラウンド（カード列）。Round は0基点。</summary>
 public sealed record BracketRound(int Round, string RoundName, IReadOnlyList<BracketCard> Cards);
 
-/// <summary>大会概要（ブラケット状態＋自校の状況）。UIの「大会・全国」タブが描画する。</summary>
+/// <summary>
+/// 大会概要（ブラケット状態＋自校の状況）。UIの「大会・全国」タブが描画する。
+/// ChampionId は優勝校の学校ID（決勝が未消化なら null。issue #946＝校名を今の名前へ引き直すため）。
+/// </summary>
 public sealed record TournamentBracketView(
     string Title,
     IReadOnlyList<BracketMatch> Matches,
     string? ChampionName,
     bool ManagerIsChampion,
     bool ManagerEliminated,
-    IReadOnlyList<BracketRound> Rounds);
+    IReadOnlyList<BracketRound> Rounds,
+    int? ChampionId = null)
+{
+    /// <summary>
+    /// 校名を学校IDから引き直した写しを返す（issue #946・表示専用）。<paramref name="nameOf"/> は
+    /// (学校ID, 記録した校名) → 表示する校名。記録した文字列（セーブに載る試合行・優勝校名）は書き換えない
+    /// ＝改名を取り消せば元の名前に戻る。ID を持たない枠（旧版で作った枠）はそのまま。
+    /// </summary>
+    public TournamentBracketView Renamed(System.Func<int, string, string> nameOf)
+    {
+        var matches = new List<BracketMatch>(Matches.Count);
+        foreach (var m in Matches)
+            matches.Add(m with { WinnerName = nameOf(m.WinnerId, m.WinnerName), LoserName = nameOf(m.LoserId, m.LoserName) });
+        var rounds = new List<BracketRound>(Rounds.Count);
+        foreach (var r in Rounds)
+        {
+            var cards = new List<BracketCard>(r.Cards.Count);
+            foreach (var c in r.Cards) cards.Add(c with { Top = RenameSlot(c.Top, nameOf), Bottom = RenameSlot(c.Bottom, nameOf) });
+            rounds.Add(r with { Cards = cards });
+        }
+        var champion = ChampionName is { } cn && ChampionId is int cid ? nameOf(cid, cn) : ChampionName;
+        return this with { Matches = matches, Rounds = rounds, ChampionName = champion };
+    }
+
+    private static BracketSlot RenameSlot(BracketSlot s, System.Func<int, string, string> nameOf)
+        => s.TeamName is { } n && s.SchoolId is int id ? s with { TeamName = nameOf(id, n) } : s;
+}
 
 /// <summary>
 /// 自校の大会進行体（大会モードの中核）。シード付きシングルエリミネーション（設計書05 §1.2）を、
@@ -701,7 +730,8 @@ public sealed class TournamentRunner : ITournamentRunner
         => _pending?.Live ?? throw new InvalidOperationException("進行中のライブ自校戦がありません。");
 
     public TournamentBracketView BuildBracketView()
-        => new(Title, _matches.ToList(), ChampionName, IsChampion, !PlayerActive, BuildRounds());
+        => new(Title, _matches.ToList(), ChampionName, IsChampion, !PlayerActive, BuildRounds(),
+            ChampionId: ChampionName is not null && _current.Length == 1 ? _current[0]?.Id : null);
 
     /// <summary>
     /// 樹形図（ラウンド×スロット）を組み立てる。未到達ラウンドのカードは空枠（TeamName=null）として返し、
@@ -736,7 +766,7 @@ public sealed class TournamentRunner : ITournamentRunner
     }
 
     private BracketSlot SlotOf(School? school, bool isWinner, int? score)
-        => new(school?.Name, school is not null && school.Id == _managerId, isWinner, score);
+        => new(school?.Name, school is not null && school.Id == _managerId, isWinner, score, school?.Id);
 
     /// <summary>残存校配列のサイズからラウンド添字（0基点）を導く。_roundIndex とは独立＝背景消化でも正しい。</summary>
     private int RoundIndexOf(School?[] cur) => _totalRounds - TournamentRecorder.RoundsRemaining(cur.Length);

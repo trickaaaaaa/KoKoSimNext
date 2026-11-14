@@ -163,3 +163,62 @@
 /* 画面の高さいっぱいに紙色を敷く（ルートが伸びず下半分が白く抜けていた）。 */
 .ss-root { flex-grow: 1; }
 .ss-root .ss-body { flex-grow: 0; }   /* カードは中身の高さで止める（監督判断 2026-08-10・上の注記） */
+
+/* ── ヘッダ右端（画面内タブ＋「タイトルへ戻る」）・issue #946 ─────────── */
+.ss-header__end { flex-direction: row; align-items: center; }
+.ss-tabs { flex-shrink: 0; margin-right: var(--sp-3); }
+
+/* ═══ 校名の編集（issue #946・A案）═══════════════════════════════════
+   左＝県の切り替え＋学校一覧（行パネル）／右＝選んだ学校の名前の編集（詳細ペインは ss-d__* を共用）。
+   一覧は県の全校（多い県で100校超）なので、こちらのページだけ画面の高さまで伸ばして中をスクロールする。 */
+.ss-root .sr-body { flex-grow: 1; min-height: 0; }
+.sr-list { flex-direction: column; }
+.sr-line {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+.sr-lbl {
+    margin: 0;
+    padding: 0;
+    margin-right: var(--sp-3);
+    font-size: var(--fs-body);
+    color: var(--color-muted);
+}
+.sr-drop { width: var(--w-sr-pref); flex-shrink: 0; margin: 0; }
+/* 県名の文字はラベル「都道府県」と同じ本文サイズ（既定テーマの 13px を上書き）。 */
+.sr-drop .unity-base-field__input,
+.sr-drop .unity-text-element { font-size: var(--fs-body); }
+.sr-scroll { flex-grow: 1; min-height: 0; }
+.sr-row__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+}
+.sr-row .chip { flex-shrink: 0; margin-left: var(--sp-2); }
+
+/* 今の名前＝右ペインの見出し（明朝・一覧の行の校名より一段大きい）。 */
+.sr-d__name { margin: 0; padding: 0; font-size: var(--fs-page); color: var(--color-chalk); }
+/* 「元の名前」の1行：ラベル左・値右で同じ行にそろえる。線は引かない（区切りは余白）。 */
+.sr-kv {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    flex-shrink: 0;
+}
+.sr-kv__k { margin: 0; padding: 0; font-size: var(--fs-label); color: var(--color-muted); }
+.sr-kv__v { margin: 0; padding: 0; font-size: var(--fs-body); color: var(--color-chalk); -unity-text-align: middle-right; }
+.sr-input { flex-shrink: 0; margin-top: var(--sp-3); }
+.sr-input .sr-kv__k { margin-bottom: var(--sp-1); }
+.sr-input__line { flex-direction: row; align-items: center; }
+.sr-text { flex-grow: 1; flex-basis: 0; min-width: 0; margin: 0; }
+/* 入力の文字は校名＝明朝・一覧の行と同じサイズ（横の固定「高校」もこのサイズ）。 */
+.sr-text .unity-base-field__input,
+.sr-text .unity-text-element { font-size: var(--fs-body); }
+.sr-input__line .sbk-field-suffix { font-size: var(--fs-body); }

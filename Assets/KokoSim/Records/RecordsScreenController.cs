@@ -111,7 +111,9 @@ namespace KokoSim.Unity.Records
                 row.Add(Cell(TournamentResultLabel.For(e), "rc-th__res"));
 
                 var hasChampion = !string.IsNullOrEmpty(e.ChampionName);
-                var champ = Cell(hasChampion ? e.ChampionName : "―", "rc-th__champ", display: true);
+                // 優勝校は記録した時点の名前を持っている＝改名（issue #946）は ID から今の名前へ引き直す。
+                var champ = Cell(hasChampion ? NationService.DisplayName(e.ChampionId, e.ChampionName) : "―",
+                    "rc-th__champ", display: true);
                 if (!hasChampion) champ.AddToClassList("rc-th__champ--none");
                 row.Add(champ);
 
