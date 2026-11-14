@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 30;
+    public const int CurrentVersion = 31;
 
     // ===== Serialize =====
 
@@ -324,6 +324,9 @@ public static class SaveCodec
         if (version < 29 && !root.Has("cohesionDelta")) root.Add("cohesionDelta", 0.0);
         // v30（OPEN-QUESTIONS Q47）: 部員・AI校の選手の自主成長の隠れた個人差 growthJitter。選手1人ぶんのキーなので
         // ここでは補わず、PlayerSaves / DevelopingPlayerSaves が読む（v26 以前の部員は旧 personalityFactor の残り、それ以外は0）。
+        // v31（issue #946）: 校名の改名表（全国への差分 nationOverlay の renames）。旧セーブは改名なし＝空で補う。
+        if (version < 31 && root["nationOverlay"] is JsonObject overlay && !overlay.Has("renames"))
+            overlay.Add("renames", new JsonArray());
         return root;
     }
 
@@ -496,9 +499,16 @@ public static class SaveCodec
                 .Add(JsonValue.Of(a.Id)).Add(JsonValue.Of(a.Name)).Add(JsonValue.Of(a.PrefectureId))
                 .Add(a.DistrictId.HasValue ? JsonValue.Of(a.DistrictId.Value) : JsonNull.Instance)
                 .Add(JsonValue.Of(a.Strength)).Add(JsonValue.Of(a.Fame)));
+        // 改名（v31・issue #946）: [[id, 幹], ...] を校ID順で。
+        var renames = new JsonArray();
+        var ids = new List<int>(o.Renames.Keys);
+        ids.Sort();
+        foreach (var id in ids)
+            renames.Add(new JsonArray().Add(JsonValue.Of(id)).Add(JsonValue.Of(o.Renames[id])));
         return new JsonObject()
             .Add("managedSchoolId", o.ManagedSchoolId.HasValue ? JsonValue.Of(o.ManagedSchoolId.Value) : JsonNull.Instance)
-            .Add("added", arr);
+            .Add("added", arr)
+            .Add("renames", renames);
     }
 
     private static NationOverlay NationOverlayFromJson(JsonObject obj)
@@ -515,6 +525,13 @@ public static class SaveCodec
                 t[3] is JsonNull ? (int?)null : ((JsonNumber)t[3]).AsInt(),
                 ((JsonNumber)t[4]).AsDouble(), ((JsonNumber)t[5]).AsDouble()));
         }
+        // 改名（v31・issue #946）。旧セーブには無い＝改名なしで読む。
+        if (obj.Has("renames"))
+            foreach (var v in obj.Arr("renames").Items)
+            {
+                var t = v.AsArray();
+                o.Renames[((JsonNumber)t[0]).AsInt()] = ((JsonString)t[1]).Value;
+            }
         return o;
     }
 

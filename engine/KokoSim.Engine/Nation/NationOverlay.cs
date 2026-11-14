@@ -46,6 +46,26 @@ public static class SchoolNames
     /// <summary>幹から全国の表記（「〜高校」）へ（既に付いていればそのまま）。</summary>
     public static string Full(string stem)
         => stem.EndsWith(Suffix, StringComparison.Ordinal) ? stem : stem + Suffix;
+
+    /// <summary>
+    /// 改名の入力（幹）の文字数の上限（issue #946）。画面で切れない長さとして暫定 10 字（全国生成の校名の幹の最長と
+    /// 校名の出る欄の実測で詰める）。
+    /// </summary>
+    public const int MaxStemLength = 10;
+
+    /// <summary>
+    /// 改名の入力を幹へ整える（issue #946）。前後の空白（全角を含む）を落とし、末尾の「高校」は外す。
+    /// 空なら null＝改名の取り消し（生成時の名前に戻す）。上限を超えたら false。
+    /// </summary>
+    public static bool TryNormalizeStem(string? input, out string? stem)
+    {
+        var t = (input ?? "").Trim().Trim('\u3000').Trim();
+        t = Stem(t).Trim().Trim('\u3000').Trim();
+        if (t.Length == 0) { stem = null; return true; }
+        if (t.Length > MaxStemLength) { stem = null; return false; }
+        stem = t;
+        return true;
+    }
 }
 
 /// <summary>
@@ -67,11 +87,32 @@ public sealed class NationOverlay
 
     public int? ManagedSchoolId { get; set; }
 
-    public bool IsEmpty => Added.Count == 0 && ManagedSchoolId is null;
+    /// <summary>
+    /// プレイヤーの改名（issue #946）: 学校 ID → 幹（「高校」を含まない）。このセーブだけに効く。
+    /// 記録（大会結果の校名の文字列）は書き換えず、表示のときに ID から今の名前を引く＝取り消せば元に戻る。
+    /// </summary>
+    public Dictionary<int, string> Renames { get; } = new();
+
+    public bool IsEmpty => Added.Count == 0 && ManagedSchoolId is null && Renames.Count == 0;
+
+    /// <summary>
+    /// 改名を記録して、その学校の実体にも当てる（issue #946）。<paramref name="stem"/> が null なら取り消し。
+    /// </summary>
+    public void SetRename(School school, string? stem)
+    {
+        if (string.IsNullOrEmpty(stem)) Renames.Remove(school.Id);
+        else Renames[school.Id] = stem!;
+        ApplyName(school);
+    }
+
+    private void ApplyName(School school)
+        => school.Rename(Renames.TryGetValue(school.Id, out var stem) ? SchoolNames.Full(stem) : null);
 
     /// <summary>生成済みの全国へ差分を当てた全国を返す（生成校の順序を保ち、追加校は末尾に ID 順）。</summary>
     public Nation Apply(Nation generated)
     {
+        // 改名は全校へ当て直す（改名の無い校は生成時の名前に戻る＝前に読んだセーブの改名が残らない）。
+        foreach (var s in generated.Schools) ApplyName(s);
         if (IsEmpty) return generated;
         var schools = new List<School>(generated.Schools.Count + Added.Count);
         foreach (var s in generated.Schools)
@@ -83,6 +124,7 @@ public sealed class NationOverlay
             if (a.Id == ManagedSchoolId) continue;
             if (!_materialized.TryGetValue(a.Id, out var school))
                 _materialized[a.Id] = school = a.ToSchool();
+            ApplyName(school);
             schools.Add(school);
         }
         return generated with { Schools = schools };

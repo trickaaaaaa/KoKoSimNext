@@ -15,7 +15,24 @@ public enum Tradition { Storied, Midlevel, Emerging } // 古豪 / 中堅 / 新�
 public sealed class School
 {
     public required int Id { get; init; }
-    public required string Name { get; init; }
+    private string _name = "";
+
+    /// <summary>
+    /// 校名（全国生成の校は「〜高校」込み）。作るときに入れた名前が<see cref="GeneratedName"/>になり、
+    /// プレイヤーの改名（issue #946）は <see cref="Rename"/> で差し替える＝生成時の名前はいつでも戻せる。
+    /// 校名は乱数・シード・指紋に入れない（改名の前後で試合結果は同じ）。
+    /// </summary>
+    public required string Name
+    {
+        get => _name;
+        init { _name = value; GeneratedName = value; }
+    }
+
+    /// <summary>作ったとき（全国生成・転任で追加）の名前。改名を取り消すとこれに戻る。</summary>
+    public string GeneratedName { get; private set; } = "";
+
+    /// <summary>改名する（issue #946）。null なら生成時の名前に戻す。</summary>
+    public void Rename(string? fullName) => _name = string.IsNullOrEmpty(fullName) ? GeneratedName : fullName;
     public required int PrefectureId { get; init; }
     public Establishment Establishment { get; init; }
     public Tradition Tradition { get; init; }
