@@ -5,7 +5,7 @@ public sealed record CareerCoefficients
 {
     // --- 指導力の成長（采配経験, 設計書04 §1.1） ---
     public double CoachingGrowthPerYear { get; init; } = 3.0;
-    public double CoachingGrowthPerWin { get; init; } = 0.8;
+    public double CoachingGrowthPerWin { get; init; } = 0.4;
     public double CoachingCap { get; init; } = 99.0;
 
     // --- 監督→学校強さ（指導力がチーム力を押し上げる） ---
@@ -56,11 +56,11 @@ public sealed record CareerCoefficients
     // のが原因だが、勝数の数え方は変えずに**上げ方の形**で寝かせる（out/issues-pending/fame-rises-too-fast.md）。
     /// <summary>
     /// 逓減の基準となる名声の上限（案C）。<b>上昇側だけ</b>に <c>(1 − 名声/この値)</c> を掛け、
-    /// 上限に近いほど上がりにくくする。定常値が <c>100g/(20+g)</c>（g＝年間の上昇量）になり
+    /// 上限に近いほど上がりにくくする。定常値が <c>110g/(22+g)</c>（g＝年間の上昇量）になり
     /// 100 に張り付かない＝A・S は甲子園を積み重ねた監督のために空いたままになる。
     /// 下降側（取りこぼしの負デルタ）には掛けない（名声が高いほど負けの罰が軽くなるのは逆）。
     /// </summary>
-    public double FameGainCeiling { get; init; } = 100.0;
+    public double FameGainCeiling { get; init; } = 110.0;
     /// <summary>
     /// 1年に上がれる名声の上限（案D）。逓減（<see cref="FameGainCeiling"/>）だけでは県制覇の年に
     /// 2段飛ぶ（52→86）ので、<b>正味の上昇量</b>をここで頭打ちにする。下降側には効かない
@@ -94,7 +94,7 @@ public sealed record CareerCoefficients
 
     // --- 信頼度（設計書04 §1.2, 校内・転任でリセット） ---
     public double TrustReset { get; init; } = 50.0;
-    public double TrustPerWin { get; init; } = 4.0;
+    public double TrustPerWin { get; init; } = 2.0;
     public double TrustKoshien { get; init; } = 20.0;
     /// <summary>1勝もできない不振シーズンの信頼度低下。</summary>
     public double TrustPoorSeasonPenalty { get; init; } = 12.0;

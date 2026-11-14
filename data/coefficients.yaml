@@ -1568,7 +1568,7 @@ practice_match:
 # --- 監督キャリア（設計書04 §1） ---
 career:
   coaching_growth_per_year: 3.0     # 采配経験による指導力上昇
-  coaching_growth_per_win: 0.8
+  coaching_growth_per_win: 0.4      # 2026-11-15 0.8→0.4（trust_per_win と同じ理由＝実ゲームは秋の勝ちも数える）
   coaching_cap: 99.0
   # 指導力→チーム力の押し上げ。0.78→0.88（issue prefecture-high-rank-distribution・2026-09-05）:
   # 母集団の strength_sd を 13→15 に広げると県1位が 80.1→85.5 に上がるので、プレイヤー側の上限も追従させる。
@@ -1591,7 +1591,7 @@ career:
   # 2026-08-26（案C+D）: 加算だけだと ①名声のレンジが強さ60台で使い切られる（実ゲームの年間公式戦勝数は
   # 強さ65で約5勝＝定常99＝S に張り付く）②県大会を制した年は名声がいくつでも1年でSへ飛ぶ（+91.7）。
   # 上げ方の形で寝かせる（勝数の数え方は変えない）。out/issues-pending/fame-rises-too-fast.md
-  fame_gain_ceiling: 100.0        # 逓減の基準（上昇側にだけ ×(1−名声/この値)。定常＝100g/(20+g)）
+  fame_gain_ceiling: 110.0        # 逓減の基準（上昇側にだけ ×(1−名声/この値)。定常＝110g/(22+g)。2026-11-15 100→110＝漸近値を上へ開けてSが出る余地を作る。名声自体の上限は100のまま）
   fame_season_rise_cap: 12.0      # 1年に上がれる正味の名声（等級の帯幅10なので1年1段強。下降側には効かない）
   # 2026-11-10（issue #868）: 名声は「上げるより維持するのが難しい」。60を超えた分は保持率0.70（以下は fame_decay）。
   fame_decay_high_threshold: 60.0
@@ -1602,7 +1602,7 @@ career:
   fame_upset_loss_fame_scale: 50.0 # 取りこぼしの低下に ×(1+名声/この値)（名声0で×1・50で×2・100で×3。上昇側の逓減は受けず別枠で引く）
   fame_upset_season_cap: 8.0      # 1シーズンの金星上昇の頭打ち（短期で急上昇させない）
   trust_reset: 50.0                 # 転任で信頼度リセット
-  trust_per_win: 4.0
+  trust_per_win: 2.0                # 2026-11-15 4.0→2.0（実ゲームは秋の大会の勝ちも数えるので想定の約2倍で伸びていた）
   trust_koshien: 20.0
   trust_poor_season_penalty: 12.0
   annual_budget_base: 80.0
