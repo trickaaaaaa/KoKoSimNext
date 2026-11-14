@@ -646,7 +646,8 @@ public sealed class AtBatSession
         // 表引きだけ（RNG非消費）。
         var fastballKmh = plan.VelocityKmh / SpeedRatioOf(plan.Type);
         var fb = TrajectoryFeatureTable.LookupFeatures(
-            _ctx.Aerodynamics, _ctx.Mound, PitchSpinModel.FastballSpin(_ctx.Pitching, FastballPower()), fastballKmh);
+            _ctx.Aerodynamics, _ctx.Mound, PitchSpinModel.ForThrower(PitchSpinModel.FastballSpin(_ctx.Pitching, FastballPower()), _ctx.PitcherThrows),
+            fastballKmh);
         return features with
         {
             Fastball = new FastballReference(fb.InducedVerticalBreakM, fb.InducedHorizontalBreakM, fb.FlightTimeSeconds),
@@ -685,7 +686,8 @@ public sealed class AtBatSession
                 break;
             }
         }
-        return PitchSpinModel.SpinFor(_ctx.Pitching, type, sharpness, FastballPower());
+        return PitchSpinModel.ForThrower(
+            PitchSpinModel.SpinFor(_ctx.Pitching, type, sharpness, FastballPower()), _ctx.PitcherThrows);
     }
 
     /// <summary>enum 結果で打席を確定させる（三振/四球）。従来ループの early return と同一。</summary>

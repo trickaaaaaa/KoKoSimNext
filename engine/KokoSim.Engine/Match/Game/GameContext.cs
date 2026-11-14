@@ -165,8 +165,10 @@ public sealed record GameContext
         PitcherGear gear = PitcherGear.Normal, Tactics.PitchDirective? directive = null,
         bool takeFirstPitch = false, SkillPlayMods? skills = null, int catcherLead = 50,
         bool intentionalWalk = false, double swingProbabilityFactor = 1.0, int familiarityPa = 0,
-        Batting.PitchFamiliarityTracker? pitchFamiliarity = null) => new()
+        Batting.PitchFamiliarityTracker? pitchFamiliarity = null,
+        Players.Handedness pitcherThrows = Players.Handedness.Right) => new()
     {
+        PitcherThrows = pitcherThrows,
         FamiliarityPa = familiarityPa,
         PitchFamiliarity = pitchFamiliarity,
         Aerodynamics = Aerodynamics,

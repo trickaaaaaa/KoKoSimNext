@@ -80,6 +80,12 @@ public sealed record AtBatContext
     /// <summary>守備陣形ルール表（CHANGELOG 33）。null なら既定表。</summary>
     public Match.Timeline.FormationTable? Formations { get; init; }
 
+    /// <summary>
+    /// 対戦投手の投げ手。変化球の横の曲がる向きだけに効く（<see cref="Pitching.PitchSpinModel.ForThrower"/>）。
+    /// 判定は変化の大きさ・ストレートとの差しか見ないので試合結果は動かない。既定は右（<see cref="Players.Player.Throws"/> の既定と同じ）。
+    /// </summary>
+    public Handedness PitcherThrows { get; init; } = Handedness.Right;
+
     /// <summary>塁上に走者がいるか（陣形ルールのキー）。試合エンジンが打席ごとに設定。</summary>
     public bool RunnersOn { get; init; }
 }

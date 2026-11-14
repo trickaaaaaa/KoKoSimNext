@@ -53,6 +53,15 @@ public static class PitchSpinModel
         return fb + (NominalSpin(c, type) - fb) * g;
     }
 
+    /// <summary>
+    /// 回転ベクトルを投げ手に合わせる（<b>投げ手の反転はここだけ</b>）。<c>pitch_axis</c> の tilt は
+    /// 「+ ＝ 投げ腕の側へ曲がる」で書いた表で、物理層の +x（一塁側）は左投手の腕側にあたる＝左投手はそのまま、
+    /// 右投手は横成分（Y）の符号を反転する（右投手のシュート系は三塁側＝右打者の内側へ、スライダー系は一塁側へ）。
+    /// 縦成分（バックスピン・トップスピン）は不変。<see cref="Handedness.Switch"/> は投げ手に使わないので右扱い。
+    /// </summary>
+    public static Vector3D ForThrower(Vector3D spin, Handedness throws)
+        => throws == Handedness.Left ? spin : new Vector3D(spin.X, -spin.Y, spin.Z);
+
     /// <summary>回転ベクトル → (回転数[rpm], 回転軸[deg])。<see cref="PitchSpec.SpinFromRpmAndTilt"/> の逆
     /// （回転0は軸0）。</summary>
     public static (double Rpm, double TiltDeg) ToRpmAndTilt(Vector3D spin)
