@@ -1119,6 +1119,73 @@ namespace KokoSim.Unity.Components
             return wrap;
         }
 
+        // ===== LeanRow（性格の軸の傾き: 選手詳細の性格の欄。設計書23 §4・issue #935） =====
+
+        /// <summary>
+        /// 性格の軸1本の「どちら側に見えるか」を、両端の言葉と6マスの升目で示す（見立てた側の3マスを墨で塗る）。
+        /// 値は出さない＝見極めで分かるのは高い側か低い側かだけで、見誤ることもある（設計書23 §1.5・監督決定 2026-11-14）。
+        /// <paramref name="seenHigh"/> が null（未判明）なら軸の名前と「？」だけを出す。
+        /// </summary>
+        public static VisualElement LeanRow(string axisName, string highWord, string lowWord, bool? seenHigh)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("lean-row");
+            if (seenHigh == null)
+            {
+                var name = new Label(axisName);
+                name.AddToClassList("lean-row__word");
+                name.AddToClassList("lean-row__word--high");
+                row.Add(name);
+                var q = new Label("？");
+                q.AddToClassList("lean-row__unknown");
+                row.Add(q);
+                return row;
+            }
+            bool high = seenHigh.Value;
+            var hi = new Label(highWord);
+            hi.AddToClassList("lean-row__word");
+            hi.AddToClassList("lean-row__word--high");
+            if (!high) hi.AddToClassList("lean-row__word--off");
+            row.Add(hi);
+            var pips = new VisualElement();
+            pips.AddToClassList("lean-row__pips");
+            for (var i = 0; i < 6; i++)
+            {
+                var pip = new VisualElement();
+                pip.AddToClassList("lean-row__pip");
+                if (high ? i < 3 : i >= 3) pip.AddToClassList("lean-row__pip--on");
+                pips.Add(pip);
+            }
+            row.Add(pips);
+            var lo = new Label(lowWord);
+            lo.AddToClassList("lean-row__word");
+            if (high) lo.AddToClassList("lean-row__word--off");
+            row.Add(lo);
+            return row;
+        }
+
+        // ===== BatteryChemistry（バッテリーの相性: スタメン設定・交代パネル。設計書23 §4・issue #935） =====
+
+        /// <summary>
+        /// バッテリーの相性＝ランクチップ（G〜S）＋積み重ね（一緒に守ったイニング）の短いバー。数字と説明文は出さない（#731）。
+        /// <paramref name="grade"/> が null（相手が決まっていない・同じ選手）なら同じ幅の空き枠だけを返す＝列をそろえる。
+        /// </summary>
+        public static VisualElement BatteryChemistry(string grade, float bond01)
+        {
+            var wrap = new VisualElement();
+            wrap.AddToClassList("bat-chem");
+            if (string.IsNullOrEmpty(grade)) return wrap;
+            wrap.Add(RankChip(grade, RankChipSize.Small));
+            var track = new VisualElement();
+            track.AddToClassList("bat-chem__bar");
+            var fill = new VisualElement();
+            fill.AddToClassList("bat-chem__fill");
+            fill.style.width = Length.Percent(Mathf.Clamp01(bond01) * 100f);
+            track.Add(fill);
+            wrap.Add(track);
+            return wrap;
+        }
+
         // ===== Timeline（キャリア年表の縦軸＋節点。設計書16 §10.2 の穴#7・issue #586） =====
 
         /// <summary>キャリア年表の1節点。</summary>

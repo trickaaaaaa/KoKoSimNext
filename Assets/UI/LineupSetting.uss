@@ -64,6 +64,7 @@
 .lu-root .lu-c-hr { width: 30px; flex-shrink: 0; margin-left: 10px; -unity-text-align: middle-right; }
 .lu-root .lu-c-rbi { width: 30px; flex-shrink: 0; margin-left: 10px; -unity-text-align: middle-right; }
 .lu-root .lu-c-cond { width: 26px; flex-shrink: 0; margin-left: 10px; align-items: center; }
+.lu-root .lu-c-bat { width: 64px; flex-shrink: 0; margin-left: 10px; }   /* 先発の行の右端に先発投手と捕手の相性（issue #935） */
 
 /* スタメン行（高さ52・白カード・行間6・左右余白16） */
 .lu-root .lu-rows { flex-shrink: 0; }

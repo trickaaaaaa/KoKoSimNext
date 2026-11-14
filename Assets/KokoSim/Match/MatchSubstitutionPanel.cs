@@ -607,10 +607,21 @@ namespace KokoSim.Unity.Match
             _inRows.Clear();
             if (_insCap != null) _insCap.text = "控え（背番号順）";
 
+            // 投か捕の枠を選んでいるときは、候補ごとに相手（捕手か投手）との相性を出す（設計書23 §4・issue #935）。
+            var chemFor = ChemistryPartner();
             for (var i = 0; i < _cands.Count; i++)
             {
                 var idx = i;
                 var row = BenchRow(_cands[i], dim: false, picked: _defInIndex == i, note: "");
+                if (chemFor.HasValue)
+                {
+                    var chem = chemFor.Value.CandidateIsPitcher
+                        ? ChemistryDisplay.Battery(_cands[i], chemFor.Value.Partner)
+                        : ChemistryDisplay.Battery(chemFor.Value.Partner, _cands[i]);
+                    var cell = UiComponents.BatteryChemistry(chem?.Grade, chem?.Bond ?? 0f);
+                    cell.AddToClassList("bench-row__chem");
+                    row.Add(cell);
+                }
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickCandidate(idx); Render(); });
                 _inRows.Add(row);
             }
@@ -628,6 +639,23 @@ namespace KokoSim.Unity.Match
             var a = Picked(_pickedSlot);
             if (a is { Role: SlotRole.Pitcher } && _defInIndex >= 0) BuildConvertChoices();
             else if (a is { Role: SlotRole.Dh }) BuildDhWithdrawChoice();
+        }
+
+        /// <summary>
+        /// 相性を出す相手。投の枠なら候補は投手・相手は今の捕手、捕の枠なら候補は捕手・相手は今の投手。それ以外は null。
+        /// </summary>
+        private (Player Partner, bool CandidateIsPitcher)? ChemistryPartner()
+        {
+            if (Picked(_pickedSlot) is not { } a) return null;
+            if (a.Role == SlotRole.Pitcher)
+            {
+                foreach (var s in _slots)
+                    if (s.Pos == FieldPosition.Catcher && s.Player != null) return (s.Player, true);
+                return null;
+            }
+            if (a.Role == SlotRole.Fielder && a.Pos == FieldPosition.Catcher && _opt.CurrentPitcher != null)
+                return (_opt.CurrentPitcher, false);
+            return null;
         }
 
         // 控え→枠／枠→控え のどちらの順でもよい（issue #718）。枠が未選択なら控えを選んだまま待ち、

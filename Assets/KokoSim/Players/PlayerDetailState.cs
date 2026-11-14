@@ -33,6 +33,17 @@ namespace KokoSim.Unity.Players
         public string Key = "";
         public string Value = "";
         public bool Known;
+        /// <summary>性格の行だけ: 4軸の見立て（設計書23 §4・issue #935）。他の行は null。</summary>
+        public List<LeanAxis> Axes;
+    }
+
+    /// <summary>性格の軸1本の見立て（見極めで分かった側。未判明は SeenHigh=null）。値は持たない＝画面に出さない。</summary>
+    public sealed class LeanAxis
+    {
+        public string AxisName = "";
+        public string HighWord = "";
+        public string LowWord = "";
+        public bool? SeenHigh;
     }
 
     /// <summary>球種1つ（プロスピ風 変化チャート用。中心=ボール、方向=変化方向、距離=変化量、チップ=キレ）。</summary>
@@ -236,13 +247,22 @@ namespace KokoSim.Unity.Players
             // 隠しパラメータ（推定）: 精神力のみ判明扱い、他はスカウト/面談で段階判明＝？。
             v.Hidden.Add(new HiddenParam { Key = "才能上限", Value = "？", Known = false });
             v.Hidden.Add(new HiddenParam { Key = "成長タイプ", Value = "？", Known = false });
-            // 性格（設計書01 §1.1）: 一部は隠し。ここでは起用・面談が進む上級生ほど判明する近似
-            // （2年以上＝判明でタイプ名、1年＝？）。実接続時は Insight（気づき）で段階開示。
+            // 性格（設計書23 §4・issue #935）: 見極め（InsightModel）で軸ごとに開示された見立てを出す。
+            // タイプ名は4軸そろったときだけ（見立てから導く＝見誤りも含む）。軸は高い側か低い側かだけで値は出さない。
+            var reading = p.PersonalityReading;
+            var knownType = reading.KnownType;
             v.Hidden.Add(new HiddenParam
             {
                 Key = "性格",
-                Value = Personalities.DisplayName(p.Personality),
-                Known = p.Grade >= 2,
+                Value = knownType.HasValue ? Personalities.DisplayName(knownType.Value) : "？",
+                Known = knownType.HasValue,
+                Axes = new List<LeanAxis>
+                {
+                    Lean(reading, PersonalityAxis.Receptiveness, "素直さ"),
+                    Lean(reading, PersonalityAxis.Diligence, "勤勉さ"),
+                    Lean(reading, PersonalityAxis.Selflessness, "姿勢"),
+                    Lean(reading, PersonalityAxis.Leadership, "統率"),
+                },
             });
             v.Hidden.Add(new HiddenParam { Key = "精神力", Value = p.Mental.ToString(), Known = true });
             v.Hidden.Add(new HiddenParam { Key = "統率傾向", Value = p.Leadership.ToString(), Known = p.IsCaptain });
@@ -268,6 +288,14 @@ namespace KokoSim.Unity.Players
         }
 
         // ===== 補助 =====
+
+        private static LeanAxis Lean(PersonalityReading reading, PersonalityAxis axis, string name) => new LeanAxis
+        {
+            AxisName = name,
+            HighWord = Personalities.AxisSideName(axis, true),
+            LowWord = Personalities.AxisSideName(axis, false),
+            SeenHigh = reading.SeenHigh(axis),
+        };
 
         private static AbilityBar Bar(DevelopingPlayer p, AbilityKind k, string label)
         {

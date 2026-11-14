@@ -2696,6 +2696,35 @@
 }
 .lv-pip--on { background-color: var(--ink); }
 
+/* LeanRow（性格の軸の傾き・issue #935）: 両端の言葉＋6マス。見立てた側の3マスを墨で塗る＝値は出さない。
+   言葉の列は固定幅（最長の「人を引っ張る」6字）で、4本の升目が縦にそろう（UI原則①）。 */
+.lean-row { flex-direction: row; align-items: center; height: 24px; }
+.lean-row__word {
+    width: 96px;
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--ink);
+    margin: 0;
+    padding: 0;
+}
+.lean-row__word--high { -unity-text-align: middle-right; margin-right: var(--sp-2); }
+.lean-row__word--off { color: var(--color-faint); }
+.lean-row__unknown { font-size: var(--fs-cap); color: var(--color-faint); margin: 0; padding: 0; }
+.lean-row__pips { flex-direction: row; align-items: center; flex-shrink: 0; margin-right: var(--sp-2); }
+.lean-row__pip {
+    width: 12px;
+    height: 12px;
+    margin-right: 2px;
+    background-color: var(--sf-inset);
+}
+.lean-row__pip--on { background-color: var(--ink); }
+
+/* BatteryChemistry（バッテリーの相性・issue #935）: 小ランクチップ＋積み重ねの短いバー（墨の塗り）。
+   相手が決まっていない行も同じ幅を取る＝列がそろう。 */
+.bat-chem { flex-direction: row; align-items: center; width: 64px; flex-shrink: 0; }
+.bat-chem__bar { width: 30px; height: 6px; margin-left: var(--sp-1); background-color: var(--sf-inset); }
+.bat-chem__fill { height: 100%; background-color: var(--ink); }
+
 /* ═══════════════════════════════════════════════════════════════════════
    UniformColorPicker（配色の領域行・部品辞書 / 設計書18 §3.5.1・issue #585）
    ───────────────────────────────────────────────────────────────────────
