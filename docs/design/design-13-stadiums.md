@@ -138,6 +138,28 @@ stadiums:
 - 左右非対称（`LeftFenceM`≠`RightFenceM`）も方位ごとに写るのでそのまま描ける
 - 2D俯瞰（デバッグ表示）は固定寸法のまま
 
+### 6.3 球場ごとの3Dモデル（issue #904, 2026-11-14）
+
+6.2 の「1式を変形」に、**固有の3Dモデルを持つ球場**を足した（最初は神宮。長期目標は47県の決勝球場）。
+
+- **割当はデータ**: `data/stadiums.yaml` の `model:`（例 `model: jingu`）。同じ球場を使う複数の id（`jingu`・
+  `higashi_tokyo_final`・`nishi_tokyo_final`）は同じモデル名を持つ。`model` の無い球場は従来どおり standard の変形
+- **経路**: `GameContext.StadiumId`（観測専用・#905）→ `DuelStageRig.InitialStadiumId` → `StadiumCatalogProvider` で
+  model を引く → `Resources/DuelStadiumMesh_<model>`（無ければ standard へ落ちて警告1回）
+- **焼いた寸法は資産が持つ**: `DuelStadiumMesh.BakedWingM/BakedCenterM/BakedFenceHeightM`。モデルも判定と違う
+  寸法の試合では 6.2 と同じ式で変形される（standard＝95/118/3.2、神宮＝97.5/120/3.5）
+- **外部で作ったモデルの取り込み**は `tools/stadium-import.py` に集約（手作業で直さない）:
+  本塁を原点へ／地面の層を2mm刻みに詰める（外部モデルは数cm積むが選手の足は y=0）／判定と照合する部品
+  （マウンド・投手板・塁・本塁）を standard の検証済み部品に差し替え／透過の部位を捨てる（シェーダは不透明）／
+  ゲームが名前で探す部位（`fence_outfield`・`stand_*`・`backscreen`・`scoreboard`）を揃える／色を線形→sRGB／
+  **フェンスの曲線を engine の弧へ寄せる**／座席の列（観客の位置）を本塁からの光線と座面の交差で作る
+- **外部モデルのフェンスは両翼・中堅だけ合っていることがある**（神宮は22.5°で外へ2.2m膨らんでいた）。絵と判定が
+  ずれると「フェンス手前に落ちたのに本塁打」になるので、取り込みで寄せ、「球場メッシュを検証する」で照合する。
+  検証はフェンスの**内面＝打球が当たる面**を本塁からの光線で測る（頂点の半径で測ると、厚いフェンスの外面を拾う）
+- **大会への割当**: 明治神宮大会＝神宮（`MatchStadium`）。県大会の準決勝・決勝は `RegionalStadiumTier.FinalStadiumFor`
+  （東京＝神宮、他県＝県営級）。準決勝・決勝はもともと乱数を引かない分岐なので、県ごとに差し替えても乱数列は不変。
+  47県へ広げるときは `FinalStadiumFor` を `prefecture_finals` から引く形にする
+
 ## フェンス直撃の跳ね返り（issue fence-carom-and-over-the-head-cues, 2026-08-14）
 
 エンジンは「転がりがフェンスまで届くか」を以前から知っていた（`ExtraBaseResolver.RollPath.ReachedFence`）が、

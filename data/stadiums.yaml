@@ -2,6 +2,7 @@
 # 寸法: left/right=両翼[m], center=中堅[m], fence_height=フェンス高[m]
 #   right 省略時は left にフォールバック（左右対称）。fence_height 省略時は 2.5m。
 # tier: municipal（市営級・序盤）/ prefectural（県営級・準決勝決勝）/ national（聖地）
+# model: 3D表示のモデル名（data/stadiums/<model>.obj）。省略時は standard を寸法へ伸縮（issue #904）。
 # wind: ②環境用の箱。今回未使用（設計書13-stadiums §5）。将来の風雨システムで有効化。
 # 表示名は命名権（企業名）除去済みの施設名（stadiums-research.md）。甲子園は商標配慮で「甲子園」表記。
 
@@ -47,6 +48,7 @@ stadiums:
     center: 120
     fence_height: 3.3
     tier: national
+    model: jingu          # 3Dモデル data/stadiums/jingu.obj（issue #904）
 
 # ── 47県 夏の決勝クラス主会場（実測ベース・命名権除去済み）─────────
 # 確度⚠の寸法は現代標準122m帯でほぼ外れない（stadiums-research.md §傾向）。
@@ -122,12 +124,14 @@ prefecture_finals:
     center: 120
     fence_height: 3.3
     tier: prefectural
+    model: jingu          # 3Dモデル data/stadiums/jingu.obj（issue #904）
   - id: nishi_tokyo_final
     name: 明治神宮野球場
     left: 97.5
     center: 120
     fence_height: 3.3
     tier: prefectural
+    model: jingu          # 3Dモデル data/stadiums/jingu.obj（issue #904）
   - id: kanagawa_final
     name: 横浜スタジアム
     left: 94.2

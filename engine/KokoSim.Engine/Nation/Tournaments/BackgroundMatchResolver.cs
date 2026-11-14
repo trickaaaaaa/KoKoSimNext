@@ -76,7 +76,8 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
             PitchRecoveryLookup.AllPlayers(awayTeam), p => PitcherLedgerKey.ForOpponent(away.Id, p.UniformNumber),
             PitchRecoveryLookup.AllPlayers(homeTeam), p => PitcherLedgerKey.ForOpponent(home.Id, p.UniformNumber));
         var ctx = _useRegionalStadiumTier
-            ? _ctx with { Field = RegionalStadiumTier.For(context?.RoundsRemaining, rng.Fork(StadiumStreamId)) }
+            // 県大会は両校とも同じ県＝後攻校の県で準決勝・決勝の球場を決める（東京は神宮・issue #904）
+            ? _ctx with { Field = RegionalStadiumTier.For(context?.RoundsRemaining, rng.Fork(StadiumStreamId), home.PrefectureId) }
             : _ctx;
         var result = GameEngine.Play(
             awayTeam, homeTeam, ctx, rng.Fork(2), awayPitchRecovery: awayRecovery, homePitchRecovery: homeRecovery);

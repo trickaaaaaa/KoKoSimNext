@@ -22,7 +22,8 @@ public static class SummerRegions
 {
     // JIS順Id（data/prefectures.yaml）。
     private const int HokkaidoId = 0;
-    private const int TokyoId = 12;
+    /// <summary>東京都の県ID（夏の東西分割・準決勝/決勝の神宮＝<see cref="Match.Field.RegionalStadiumTier"/>）。</summary>
+    internal const int TokyoId = 12;
 
     // Split順(0,1)の区画名。唯一のソース＝Build()とSplitDistrictNames()の両方がこれを見る。
     private static readonly string[] HokkaidoSplitNames = { "北北海道", "南北海道" };

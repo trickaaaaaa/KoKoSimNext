@@ -59,7 +59,7 @@ namespace KokoSim.Unity.Shell
                 var manager = RegionalEntry.ManagerSchool();
                 var runner = new TournamentRunner(
                     field, manager, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule,
-                    title, new PlayerMatchResolver(), RegionalEntry.BackgroundResolver(yearIndex));
+                    title, new PlayerMatchResolver(), RegionalEntry.BackgroundResolver(yearIndex, TournamentKind.Jingu));
                 GameSession.Current.EnterTournament(TournamentKind.Jingu, title, runner, field);
                 GameSession.Current.Year = yearIndex;
                 return true;

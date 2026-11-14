@@ -75,4 +75,35 @@ public sealed class RegionalStadiumTierTests
         Assert.Equal(a.LeftFenceM, b.LeftFenceM, 6);
         Assert.Equal(a.CenterFenceM, b.CenterFenceM, 6);
     }
+
+    /// <summary>東京の準決勝・決勝は明治神宮野球場、それ以外の県は県営級（issue #904）。序盤は県に依らない。</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void TokyoFinalRounds_UseJingu_OthersPrefLarge(int roundsRemaining)
+    {
+        Assert.Same(Stadium.Jingu, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), prefectureId: 12));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), prefectureId: 13));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1)));
+    }
+
+    [Fact]
+    public void TokyoEarlyRounds_StayMunicipal_AndDrawTheSameAsOtherPrefectures()
+    {
+        // 序盤の抽選は県に依らない＝東京を足しても乱数の引き方・結果が他県と同じ
+        for (ulong seed = 1; seed <= 10; seed++)
+            Assert.Same(RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), prefectureId: 13),
+                        RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), prefectureId: 12));
+    }
+
+    [Fact]
+    public void FinalRounds_DoNotConsumeRandomness()
+    {
+        // 準決勝・決勝は乱数を引かない＝県ごとの球場に差し替えても乱数列が変わらない
+        var rng = new Xoshiro256Random(99);
+        var before = rng.NextInt(0, int.MaxValue);
+        var rng2 = new Xoshiro256Random(99);
+        RegionalStadiumTier.ForStadium(1, rng2, prefectureId: 12);
+        Assert.Equal(before, rng2.NextInt(0, int.MaxValue));
+    }
 }

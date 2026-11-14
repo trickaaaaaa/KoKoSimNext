@@ -1,0 +1,61 @@
+# stadium materials (Kd only, sRGB)
+newmtl turf
+Kd 0.1842 0.4902 0.2902
+newmtl turfLight
+Kd 0.2235 0.5412 0.3177
+newmtl turfBrown
+Kd 0.5412 0.3529 0.2353
+newmtl archDark
+Kd 0.1803 0.1842 0.2000
+newmtl trim
+Kd 0.9373 0.9137 0.8549
+newmtl steel
+Kd 0.5020 0.5216 0.5451
+newmtl chalk
+Kd 0.9608 0.9490 0.9098
+newmtl moundClay
+Kd 0.4313 0.2902 0.2000
+newmtl fenceYellow
+Kd 0.9490 0.7843 0.1177
+newmtl fenceNavy
+Kd 0.1061 0.2235 0.3137
+newmtl stepGray
+Kd 0.7059 0.6941 0.6588
+newmtl seatBlue
+Kd 0.1688 0.3607 0.6118
+newmtl brick
+Kd 0.5451 0.3529 0.2706
+newmtl brickDark
+Kd 0.4667 0.2902 0.2235
+newmtl glass
+Kd 0.1410 0.2235 0.3019
+newmtl roofWhite
+Kd 0.9098 0.9177 0.9255
+newmtl towerWhite
+Kd 0.9137 0.9255 0.9333
+newmtl eyeGreen
+Kd 0.1018 0.2195 0.1609
+newmtl boardBlack
+Kd 0.0824 0.0939 0.1097
+newmtl screenBlack
+Kd 0.0271 0.0349 0.0473
+newmtl screenVideo
+Kd 0.1097 0.2470 0.4509
+newmtl screenGlow
+Kd 1.0000 0.9137 0.6588
+newmtl adRed
+Kd 0.7686 0.2078 0.1688
+newmtl floodlight
+Kd 1.0000 0.9647 0.8471
+newmtl asphalt
+Kd 0.5530 0.5608 0.5647
+newmtl treeTrunk
+Kd 0.3568 0.2744 0.2038
+newmtl treeLeaf
+Kd 0.2393 0.4196 0.2078
+newmtl treeLeafLight
+Kd 0.3529 0.5412 0.2353
+newmtl std_dirt
+Kd 0.6314 0.4706 0.3294
+newmtl std_white
+Kd 0.8392 0.8392 0.8392

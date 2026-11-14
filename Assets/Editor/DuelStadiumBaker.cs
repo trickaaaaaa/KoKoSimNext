@@ -10,9 +10,9 @@ using UnityEngine;
 namespace KokoSim.UnityEditorTools
 {
     /// <summary>
-    /// <c>data/stadiums/&lt;name&gt;.obj</c> ＋ <c>.mtl</c> を <see cref="DuelStadiumMesh"/> へ焼く。
-    /// 形の単一ソースは <c>tools/stadium-gen.py</c>（パラメトリック）で、ここはその出力を
-    /// Unity の Mesh へ写すだけ。**寸法をここで足したり丸めたりしない。**
+    /// <c>data/stadiums/&lt;name&gt;.obj</c> ＋ <c>.mtl</c> を <see cref="DuelStadiumMesh"/> へ焼く（全モデル。issue #904）。
+    /// 形の単一ソースは <c>tools/stadium-gen.py</c>（standard）／<c>tools/stadium-import.py</c>（外部モデルの変換）で、
+    /// ここはその出力を Unity の Mesh へ写すだけ。**寸法をここで足したり丸めたりしない。**
     ///
     /// OBJ は自前で読む（Unity のモデルインポータを通さない）。理由は <see cref="DuelStadiumMesh"/> の説明。
     /// 書式は生成側が出す形に限定してよい: <c>v</c> / <c>vn</c> / <c>o</c> / <c>usemtl</c> /
@@ -24,8 +24,8 @@ namespace KokoSim.UnityEditorTools
     /// </summary>
     public static class DuelStadiumBaker
     {
-        private const string SourceRelPath = "data/stadiums/standard.obj";
-        private const string AssetPath = "Assets/KokoSim/Resources/DuelStadiumMesh.asset";
+        private const string SourceDirRel = "data/stadiums";
+        private const string AssetDir = "Assets/KokoSim/Resources";
 
         /// <summary>フェンス弧を照合する方位[度]（+Z=センターから+X側が正）。生成側の報告と同じ9点。</summary>
         private static readonly double[] FenceCheckDeg = { 0, 11.25, 22.5, 33.75, 45, -11.25, -22.5, -33.75, -45 };
@@ -33,24 +33,44 @@ namespace KokoSim.UnityEditorTools
         /// <summary>照合の許容[m]。生成側は倍精度・OBJ は %g（6桁）なので丸めぶんだけ見る。</summary>
         private const double TolM = 0.01;
 
+        private static string AssetPathFor(string model) => $"{AssetDir}/{DuelStadiumMesh.ResourceNameFor(model)}.asset";
+
+        /// <summary>
+        /// <c>data/stadiums/*.obj</c> を全部焼く（issue #904）。ファイル名がモデル名（standard / jingu …）。
+        /// standard は tools/stadium-gen.py、ほかは tools/stadium-import.py の出力。
+        /// </summary>
         [MenuItem("KokoSim/Duel/球場メッシュを焼く")]
         public static void Bake()
         {
-            var src = FullPath(SourceRelPath);
-            if (!File.Exists(src))
+            var dir = FullPath(SourceDirRel);
+            var objs = Directory.Exists(dir) ? Directory.GetFiles(dir, "*.obj") : new string[0];
+            if (objs.Length == 0)
             {
-                Debug.LogError($"球場OBJが無い: {src}\n先に `python3 tools/stadium-gen.py data/stadiums/standard` を回す");
+                Debug.LogError($"球場OBJが無い: {dir}\n先に `python3 tools/stadium-gen.py data/stadiums/standard` を回す");
                 return;
             }
+            System.Array.Sort(objs, System.StringComparer.Ordinal);
+            foreach (var src in objs) BakeOne(src);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Verify();
+        }
 
+        private static void BakeOne(string src)
+        {
+            var model = Path.GetFileNameWithoutExtension(src);
             var obj = Parse(src);
-            var dir = Path.GetDirectoryName(AssetPath);
-            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            if (AssetDatabase.LoadAssetAtPath<DuelStadiumMesh>(AssetPath) != null)
-                AssetDatabase.DeleteAsset(AssetPath);   // サブメッシュの残骸を持ち越さない
+            var assetPath = AssetPathFor(model);
+            if (!Directory.Exists(AssetDir)) Directory.CreateDirectory(AssetDir);
+            if (AssetDatabase.LoadAssetAtPath<DuelStadiumMesh>(assetPath) != null)
+                AssetDatabase.DeleteAsset(assetPath);   // サブメッシュの残骸を持ち越さない
 
             var asset = ScriptableObject.CreateInstance<DuelStadiumMesh>();
-            asset.SourceObj = SourceRelPath;
+            asset.SourceObj = $"{SourceDirRel}/{model}.obj";
+            asset.Model = model;
+            asset.BakedWingM = obj.BakedWingM;
+            asset.BakedCenterM = obj.BakedCenterM;
+            asset.BakedFenceHeightM = obj.BakedFenceHeightM;
             var parts = new List<DuelStadiumMesh.Part>();
             var tris = 0;
             foreach (var g in obj.Groups)
@@ -69,31 +89,35 @@ namespace KokoSim.UnityEditorTools
             asset.CrowdPeople = people;
             asset.CrowdTriangles = crowdTris;
 
-            AssetDatabase.CreateAsset(asset, AssetPath);
+            AssetDatabase.CreateAsset(asset, assetPath);
             foreach (var p in asset.Parts) AssetDatabase.AddObjectToAsset(p.Mesh, asset);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
 
-            Debug.Log($"球場メッシュを焼いた: {asset.Parts.Length} 部位 / {tris} 三角形（うち観客 {people} 人・{crowdTris} 三角形） → {AssetPath}");
-            Verify();
+            Debug.Log($"球場メッシュを焼いた［{model}］: {asset.Parts.Length} 部位 / {tris} 三角形"
+                      + $"（うち観客 {people} 人・{crowdTris} 三角形）／焼いた寸法 {obj.BakedWingM}/{obj.BakedCenterM}/{obj.BakedFenceHeightM} → {assetPath}");
         }
 
+        /// <summary>焼いた球場メッシュを全部検証する。</summary>
         [MenuItem("KokoSim/Duel/球場メッシュを検証する")]
         public static void Verify()
         {
-            var asset = AssetDatabase.LoadAssetAtPath<DuelStadiumMesh>(AssetPath);
-            if (asset == null) { Debug.LogError("球場メッシュがまだ焼かれていない"); return; }
+            var guids = AssetDatabase.FindAssets("t:DuelStadiumMesh", new[] { AssetDir });
+            if (guids.Length == 0) { Debug.LogError("球場メッシュがまだ焼かれていない"); return; }
+            foreach (var guid in guids)
+                VerifyOne(AssetDatabase.LoadAssetAtPath<DuelStadiumMesh>(AssetDatabase.GUIDToAssetPath(guid)));
+        }
 
+        private static void VerifyOne(DuelStadiumMesh asset)
+        {
+            if (asset == null) return;
             var sb = new StringBuilder();
-            sb.AppendLine($"球場メッシュ検証 — {asset.Parts.Length} 部位 / {asset.Triangles} 三角形");
+            sb.AppendLine($"球場メッシュ検証［{asset.Model}］ — {asset.Parts.Length} 部位 / {asset.Triangles} 三角形");
             var bad = 0;
 
-            // ---- フェンス弧（本塁打判定の距離そのもの） ----
-            var fence = Points(asset, "fence_outfield", y => y < 0.01f);
+            // ---- フェンス弧（本塁打判定の距離そのもの）。焼いた両翼・中堅で engine の弧と照合する ----
             foreach (var deg in FenceCheckDeg)
             {
-                var want = FieldDiagramGeometry.FenceRadius(deg * Mathf.Deg2Rad, 95.0, 118.0);
-                var got = RadiusAt(fence, deg);
+                var want = FieldDiagramGeometry.FenceRadius(deg * Mathf.Deg2Rad, asset.BakedWingM, asset.BakedCenterM);
+                var got = RadiusAt(asset, deg);
                 var d = System.Math.Abs(got - want);
                 if (d > TolM) bad++;
                 sb.AppendLine($"  フェンス {deg,7:F2}°  実測 {got,8:F3} m / engine {want,8:F3} m  差 {d:F4}"
@@ -129,7 +153,7 @@ namespace KokoSim.UnityEditorTools
             else { bad++; sb.AppendLine("  マウンドの部位が無い"); }
 
             if (bad == 0) Debug.Log(sb.ToString());
-            else Debug.LogError(sb.ToString() + $"\n{bad} 件ずれている。tools/stadium-gen.py の寸法と engine の値を突き合わせること");
+            else Debug.LogError(sb.ToString() + $"\n{bad} 件ずれている。生成側（tools/stadium-gen.py / stadium-import.py）の寸法と engine の値を突き合わせること");
         }
 
         /// <summary>
@@ -183,26 +207,39 @@ namespace KokoSim.UnityEditorTools
 
         /// <summary>
         /// 方位[度]における、フェンスの**打球が当たる面**までの本塁からの距離。
+        /// 本塁からその方位へ光線を出し、フェンスの地面の辺（両端が y≈0 の辺）に**最初に当たる**距離を採る。
         ///
-        /// ⚠ 同じ方位に頂点が2つ以上ある（内側の面と、外へ 0.3m 出た天板の外縁）。
-        /// 「方位がいちばん近い1点」を採ると**どちらを拾うかが頂点の並び順で決まり、0.3m 揺れる**
-        /// （2026-08-01 実測: 9点中4点だけ +0.300 とずれて出た）。判定に効くのは内側なので、
-        /// 方位が一致する頂点のうち**最小半径**を採る。
+        /// ⚠ 頂点の半径で測らない。standard は内面と外面の頂点が同じ方位に並ぶが、外部モデル（神宮）は
+        /// 厚み0.86mのフェンスの内面と外面の頂点が別の方位に並ぶ＝「方位がいちばん近い頂点」は外面を拾い、
+        /// 正しく置いたフェンスが0.9mずれて見えた（2026-11-14 実測・issue #904）。光線なら形に依らない。
         /// </summary>
-        private static double RadiusAt(List<Vector3> pts, double deg)
+        private static double RadiusAt(DuelStadiumMesh a, double deg)
         {
-            const double eps = 0.05;                       // 同一方位とみなす角度[度]
+            var dx = System.Math.Sin(deg * System.Math.PI / 180.0);
+            var dz = System.Math.Cos(deg * System.Math.PI / 180.0);
             var best = double.MaxValue;
-            foreach (var v in pts)
-                best = System.Math.Min(best, System.Math.Abs(Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg - deg));
-
-            var r = double.MaxValue;
-            foreach (var v in pts)
+            foreach (var part in a.Parts)
             {
-                if (System.Math.Abs(Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg - deg) > best + eps) continue;
-                r = System.Math.Min(r, System.Math.Sqrt(v.x * v.x + v.z * v.z));
+                if (part.Name != "fence_outfield" || part.Mesh == null) continue;
+                var v = part.Mesh.vertices;
+                var t = part.Mesh.triangles;
+                for (var i = 0; i < t.Length; i += 3)
+                {
+                    for (var k = 0; k < 3; k++)
+                    {
+                        var p0 = v[t[i + k]];
+                        var p1 = v[t[i + (k + 1) % 3]];
+                        if (p0.y > 0.01f || p1.y > 0.01f) continue;
+                        double ex = p1.x - p0.x, ez = p1.z - p0.z;
+                        var den = dx * ez - dz * ex;
+                        if (System.Math.Abs(den) < 1e-12) continue;
+                        var along = (p0.x * ez - p0.z * ex) / den;
+                        var u = (p0.x * dz - p0.z * dx) / den;
+                        if (u >= -1e-6 && u <= 1 + 1e-6 && along > 0 && along < best) best = along;
+                    }
+                }
             }
-            return r;
+            return best;
         }
 
         private static List<Vector3> Points(DuelStadiumMesh a, string group, System.Func<float, bool> yFilter)
@@ -224,6 +261,8 @@ namespace KokoSim.UnityEditorTools
             public readonly List<Vector3> N = new List<Vector3>();
             public readonly List<Group> Groups = new List<Group>();
             public readonly Dictionary<string, Color> Mtl = new Dictionary<string, Color>();
+            // 焼いた寸法（`# kokosim: wing=.. center=.. fence_h=..`。無ければ standard の値）
+            public float BakedWingM = 95f, BakedCenterM = 118f, BakedFenceHeightM = 3.2f;
         }
 
         private sealed class Group
@@ -254,6 +293,18 @@ namespace KokoSim.UnityEditorTools
             string mat = null;
             foreach (var raw in File.ReadAllLines(objPath))
             {
+                if (raw.StartsWith("# kokosim:"))
+                {
+                    foreach (var kv in raw.Substring(10).Split(' '))
+                    {
+                        var pair = kv.Split('=');
+                        if (pair.Length != 2) continue;
+                        if (pair[0] == "wing") o.BakedWingM = F(pair[1]);
+                        else if (pair[0] == "center") o.BakedCenterM = F(pair[1]);
+                        else if (pair[0] == "fence_h") o.BakedFenceHeightM = F(pair[1]);
+                    }
+                    continue;
+                }
                 if (raw.Length == 0 || raw[0] == '#') continue;
                 var t = raw.Split(' ');
                 switch (t[0])
