@@ -135,6 +135,31 @@ public sealed class StadiumLoaderTests
     }
 
     /// <summary>
+    /// 横浜スタジアムの C#既定（<see cref="Stadium.Yokohama"/>）と data/stadiums.yaml の <c>kanagawa_final</c> が
+    /// 一致すること（不変条件#4・issue #956）。3Dモデル名（model）の実体 data/stadiums/yokohama.obj も在ること。
+    /// </summary>
+    [Fact]
+    public void YokohamaDefault_MatchesTheRepositoryYaml()
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("stadiums.yaml");
+        var yaml = StadiumCatalogLoader.LoadCatalog(path)["kanagawa_final"];
+        var code = Stadium.Yokohama;
+
+        Assert.Equal(yaml.Id, code.Id);
+        Assert.Equal(yaml.Name, code.Name);
+        Assert.Equal(yaml.Tier, code.Tier);
+        Assert.Equal(yaml.Model, code.Model);
+        Assert.Equal("yokohama", code.Model);
+        Assert.Equal(yaml.LeftM, code.LeftM, 6);
+        Assert.Equal(yaml.RightM, code.RightM, 6);
+        Assert.Equal(yaml.CenterM, code.CenterM, 6);
+        Assert.Equal(yaml.FenceHeightM, code.FenceHeightM, 6);
+
+        var dataDir = System.IO.Path.GetDirectoryName(path)!;
+        Assert.True(System.IO.File.Exists(System.IO.Path.Combine(dataDir, "stadiums", "yokohama.obj")));
+    }
+
+    /// <summary>
     /// 汎用ティア球場（<see cref="Stadium.MunicipalSmall01"/>/<see cref="Stadium.MunicipalSmall02"/>/
     /// <see cref="Stadium.PrefLarge"/>）の C#既定と data/stadiums.yaml が一致すること（不変条件#4）。
     /// 実ゲーム（<c>RegionalStadiumTier</c> 経由）は YAML を読まず C#既定で走るので、片方だけ動かすと

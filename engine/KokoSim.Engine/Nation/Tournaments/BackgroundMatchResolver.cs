@@ -24,6 +24,7 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
     private readonly System.Action<int, int, GameResult>? _onMatch;
     private readonly System.Action? _afterMatch;
     private readonly bool _useRegionalStadiumTier;
+    private readonly bool _summerStadiums;
 
     /// <summary>
     /// 球場抽選の専用ストリームid（設計書13）。自校の試合（Shell の PlayerMatchResolver）と同じ値＝
@@ -46,11 +47,14 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
     /// 自校の試合と同じラウンドで同じティアの球場を使う。既定 false＝<paramref name="ctx"/> の Field のまま
     /// （甲子園・センバツ・地区大会・神宮・展望用の打ち直しなど、県大会の本戦でない呼び出し）。
     /// </param>
+    /// <param name="summerStadiums">
+    /// 夏の県大会か（issue #956）。<see cref="RegionalStadiumTier"/> へそのまま渡す＝神奈川の横浜スタジアムは夏だけ。
+    /// </param>
     public BackgroundMatchResolver(
         NationRosters rosters, GameContext ctx, int yearIndex,
         NationTournamentStats? stats = null, ModernRules? modernRules = null, int? calendarYear = null,
         IEnemyBrainFactory? brains = null, System.Action<int, int, GameResult>? onMatch = null,
-        System.Action? afterMatch = null, bool useRegionalStadiumTier = false)
+        System.Action? afterMatch = null, bool useRegionalStadiumTier = false, bool summerStadiums = false)
     {
         _rosters = rosters;
         _ctx = ctx;
@@ -62,6 +66,7 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
         _onMatch = onMatch;
         _afterMatch = afterMatch;
         _useRegionalStadiumTier = useRegionalStadiumTier;
+        _summerStadiums = summerStadiums;
     }
 
     public GameResult Resolve(School away, School home, IRandomSource rng, TournamentMatchContext? context = null)
@@ -76,8 +81,8 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
             PitchRecoveryLookup.AllPlayers(awayTeam), p => PitcherLedgerKey.ForOpponent(away.Id, p.UniformNumber),
             PitchRecoveryLookup.AllPlayers(homeTeam), p => PitcherLedgerKey.ForOpponent(home.Id, p.UniformNumber));
         var ctx = _useRegionalStadiumTier
-            // 県大会は両校とも同じ県＝後攻校の県で準決勝・決勝の球場を決める（東京は神宮・issue #904）
-            ? _ctx with { Field = RegionalStadiumTier.For(context?.RoundsRemaining, rng.Fork(StadiumStreamId), home.PrefectureId) }
+            // 県大会は両校とも同じ県＝後攻校の県で準決勝・決勝の球場を決める（東京は神宮・issue #904、神奈川の夏は横浜スタジアム・issue #956）
+            ? _ctx with { Field = RegionalStadiumTier.For(context?.RoundsRemaining, rng.Fork(StadiumStreamId), home.PrefectureId, _summerStadiums) }
             : _ctx;
         var result = GameEngine.Play(
             awayTeam, homeTeam, ctx, rng.Fork(2), awayPitchRecovery: awayRecovery, homePitchRecovery: homeRecovery);

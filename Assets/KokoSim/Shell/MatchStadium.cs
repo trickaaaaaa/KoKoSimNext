@@ -29,14 +29,10 @@ namespace KokoSim.Unity.Shell
         /// （null可＝ラウンド不明・rng不要な呼び出しは序盤の固定球場へ落ちる）。
         /// 夏・秋以外の種別は<see cref="For(TournamentKind)"/>と同じ結果（甲子園はそのまま／それ以外は既定）。
         /// </summary>
-        /// <param name="prefectureId">自校の県。県大会の準決勝・決勝の球場を決める（東京は神宮・issue #904）。</param>
+        /// <param name="prefectureId">自校の県。県大会の準決勝・決勝の球場を決める（東京は神宮・issue #904、神奈川の夏は横浜スタジアム・issue #956）。
+        /// 秋季地区予選は県の決勝球場へ流さず汎用に戻す（#956）。</param>
         public static FieldGeometry For(TournamentKind kind, int? roundsRemaining, IRandomSource? rng, int? prefectureId = null)
-            => kind switch
-            {
-                TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict
-                    => RegionalStadiumTier.For(roundsRemaining, rng, prefectureId),
-                _ => For(kind),
-            };
+            => ForStadium(kind, roundsRemaining, rng, prefectureId)?.ToFieldGeometry() ?? Default;
 
         /// <summary>
         /// <see cref="For(TournamentKind)"/> と同じ判定で、寸法だけでなく球場そのもの（名称を含む）を返す
@@ -59,8 +55,10 @@ namespace KokoSim.Unity.Shell
         public static Stadium? ForStadium(TournamentKind kind, int? roundsRemaining, IRandomSource? rng, int? prefectureId = null)
             => kind switch
             {
-                TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict
-                    => RegionalStadiumTier.ForStadium(roundsRemaining, rng, prefectureId),
+                TournamentKind.Summer or TournamentKind.Autumn
+                    => RegionalStadiumTier.ForStadium(roundsRemaining, rng, prefectureId, summer: kind == TournamentKind.Summer),
+                TournamentKind.AutumnDistrict
+                    => RegionalStadiumTier.ForStadium(roundsRemaining, rng, prefectureId: null),
                 _ => ForStadium(kind),
             };
 

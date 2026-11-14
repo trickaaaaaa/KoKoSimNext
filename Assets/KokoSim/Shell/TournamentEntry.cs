@@ -76,7 +76,7 @@ namespace KokoSim.Unity.Shell
                 new BackgroundMatchResolver(NationService.Rosters, weatherCtx, yearIndex, stats: null,
                     modernRules: null, calendarYear: calendarYear, brains: brains,
                     // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
-                    useRegionalStadiumTier: true));
+                    useRegionalStadiumTier: true, summerStadiums: actualKind == TournamentKind.Summer));
 
             // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
             // 秋季地区予選がブロックリーグ戦の県（神奈川・issue #772）は、地区を夏の順位でシード分散した
@@ -187,7 +187,7 @@ namespace KokoSim.Unity.Shell
                 new BackgroundMatchResolver(NationService.Rosters, weatherCtx, yearIndex, stats: null,
                     modernRules: null, calendarYear: calendarYear, brains: brains,
                     // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
-                    useRegionalStadiumTier: true));
+                    useRegionalStadiumTier: true, summerStadiums: t.Kind == TournamentKind.Summer));
 
             // リーグ戦の状態が載っていればリーグ戦（issue #772）。v22 以前の地区予選の途中は勝ち抜き戦のまま続く
             var runner = TournamentRunners.FromSaved(t.Runner, field, manager, NationCoeff, Schedule,
