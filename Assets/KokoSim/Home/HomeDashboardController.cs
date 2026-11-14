@@ -601,9 +601,7 @@ namespace KokoSim.Unity.Home
                 }
                 else
                 {
-                    var injNames = new List<Label>();
-                    foreach (var r in v.Injured) injList.Add(BuildInjured(r, injNames));
-                    UiComponents.ShrinkGroupToFit(injNames, _root);   // 名前の大きさは全行そろえる（issue #970）
+                    foreach (var r in v.Injured) injList.Add(BuildInjured(r));
                 }
             }
 
@@ -708,14 +706,14 @@ namespace KokoSim.Unity.Home
         }
 
         /// <summary>故障者の1行（背番号／名前／傷病名・部位・程度／復帰まで。重度だけ警告色＝UI原則②）。</summary>
-        private static VisualElement BuildInjured(InjuredRow r, List<Label> names)
+        private static VisualElement BuildInjured(InjuredRow r)
         {
             var row = new VisualElement();
             row.AddToClassList("hm-inj");
 
             var no = new Label(r.Number); no.AddToClassList("hm-inj__no"); row.Add(no);
             var name = new Label(r.Name); name.AddToClassList("hm-inj__n"); row.Add(name);
-            names.Add(name);
+            UiComponents.ShrinkToFit(name);   // 傷病名の欄を固定にした残りに入らない名前だけ縮める（issue #970）
 
             // 傷病名は data/injuries.yaml 由来（種類なしの旧データは部位・程度だけになる）。
             var diagnosis = string.IsNullOrEmpty(r.Type) ? r.Site : r.Type + "・" + r.Site;
