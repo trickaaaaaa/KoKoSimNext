@@ -394,6 +394,25 @@ public sealed class TeamState
                 a.HBP, a.SB, a.CS, a.R, a.SF, a.SH);
     }
 
+    /// <summary>
+    /// 1人ぶんの今日の打撃成績（打席に立っていなければ null）。試合中の能力ビューアの詳細欄（issue #923）が引く
+    /// 観測データ＝読むだけで状態を変えない。守備位置は帰属キーの実体のもの（表示には使わない）。
+    /// </summary>
+    public BattingLine? TodayBattingOf(Player p)
+    {
+        if (p is null || !_bat.TryGetValue(KeyOf(p), out var a)) return null;
+        return new BattingLine(0, p.Position, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO,
+            p.SourceId, a.HBP, a.SB, a.CS, a.R, a.SF, a.SH);
+    }
+
+    /// <summary>1人ぶんの今日の投手成績（登板していなければ null）。観測データ（issue #923）。</summary>
+    public PitchingLine? TodayPitchingOf(Player p)
+    {
+        if (p is null || !_pit.TryGetValue(KeyOf(p), out var a)) return null;
+        return new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB,
+            p.UniformNumber, a.HRA, null, a.EarnedRuns);
+    }
+
     /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>
     public IReadOnlyList<FieldingLine> BuildFieldingLines()
     {

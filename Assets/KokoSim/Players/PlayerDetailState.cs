@@ -448,12 +448,24 @@ namespace KokoSim.Unity.Players
         /// （育成でキレを上げてもチャートが動かない）。UI 側で式を再実装しない（不変条件#1, 2026-08-17）。</para></summary>
         public static List<PitchData> BuildPitchData(DevelopingPlayer p)
         {
-            var list = new List<PitchData>();
             // 能力表（Bar(p, PitchRank/Stuff)）と同じ素のレベルを渡す＝チップと能力表の等級が一致する。
             // 試合用（RosterTeamBuilder 内部）は怪我補正込みだが、表示は能力表に合わせる。
-            var repertoire = RosterTeamBuilder.BuildRepertoire(
-                p, p.Level(AbilityKind.PitchRank), p.Level(AbilityKind.Stuff));
+            return BuildPitchData(RosterTeamBuilder.BuildRepertoire(
+                p, p.Level(AbilityKind.PitchRank), p.Level(AbilityKind.Stuff)));
+        }
 
+        /// <summary>
+        /// 試合用の選手（engine <see cref="Player"/>）の持ち球→球種チャート用 PitchData 一覧（issue #923）。
+        /// 相手校の選手は育成選手（DevelopingPlayer）を持たないので、試合用のレパートリー
+        /// （<see cref="PitcherAttributes.EffectiveRepertoire"/>）から同じ絵を作る。
+        /// </summary>
+        public static List<PitchData> BuildPitchData(Player p)
+            => p?.Pitching == null ? new List<PitchData>() : BuildPitchData(p.Pitching.EffectiveRepertoire);
+
+        /// <summary>レパートリー（球種の枠の並び）→球種チャート用 PitchData 一覧。上の2つの入口の共通部。</summary>
+        public static List<PitchData> BuildPitchData(IEnumerable<PitchSlot> repertoire)
+        {
+            var list = new List<PitchData>();
             foreach (var slot in repertoire)
             {
                 var isFast = slot.Type == PitchType.Fastball;
