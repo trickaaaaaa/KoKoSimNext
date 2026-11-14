@@ -172,6 +172,9 @@ namespace KokoSim.Unity.Shell
 
         private static readonly CohesionCoefficients CohesionCoeff = new CohesionCoefficients();
 
+        /// <summary>結束の係数（C#既定＝data/coefficients.yaml cohesion:）。選手間イベントの好転の確率（issue #945）も読む。</summary>
+        public static CohesionCoefficients CohesionCoefficientsInUse => CohesionCoeff;
+
         /// <summary>週送りで1週ぶん進める（<see cref="GameClock"/> の EnterWeek が呼ぶ。合宿週なら上乗せ）。</summary>
         public void AdvanceCohesionWeek(int week, SeasonCalendar calendar)
             => CohesionDelta = Cohesion.AdvanceWeek(CohesionDelta, week, calendar, CohesionCoeff);

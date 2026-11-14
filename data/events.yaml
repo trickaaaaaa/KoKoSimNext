@@ -26,6 +26,7 @@
 # ■ 差し込み語（EventTextFormat が展開。未知の語はそのまま残る＝データ側の書き間違いが絵に出る）
 #   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 1年生の人数（新入部員）
 #   {injury} 故障名の話し言葉（「足首の捻挫」）／ {weeks} 全治までの週数 …… injury_occurred だけが渡す（issue #695）
+#   {other} 選手間イベントの相手（cast: other: で選ぶ。issue #945）
 #   ※ {player} はいまは「在籍部員から暦で決まる1人」。System イベント（issue #610〜）では
 #     実際に起きた出来事の主役が渡される。
 #
@@ -1246,6 +1247,13 @@ events:
           - who: team_manager
             say: "……外されたくないんでしょうね。どうします。"
 
+  # --- 選手間イベント（選択肢つき・issue #945・設計書23 §3.3） ---
+  # 会話の最後に監督の対応を3択で出す（choices:）。監督は選ぶだけで、台詞は持たない。
+  # 好転か悪化かは「選んだ対応×当事者（{player}）の性格4軸×主将の統率力」の確率で引き
+  # （EventChoiceResolver・係数は coefficients.yaml cohesion:）、outcomes: の会話を続けて結束を上下させる
+  # （好転 +3／悪化 −5）。結果行（結束が動いた1文）は yaml に書かない＝提示層が足す。
+  # cast: は当事者 {player} と相手 {other} の選び方。条件に合う部員が居ない週は抽選に載らない。
+  # 主将は当事者にも相手にもならない（「主将に任せる」の相手が本人になる会話を作らない）。
   - id: skipping_practice
     kind: Choice
     weight: 1.0
@@ -1254,18 +1262,330 @@ events:
     variants:
       - lines:
           - who: team_manager
-            say: "監督、{player} が今週も途中で抜けています。"
-          - who: manager
-            say: "叱る前に、まず話を聞こう。"
+            say: "監督、{player} くんがまた練習の途中で消えました。今週3回目です。"
+          - who: player
+            say: "さっき裏門のほうに走っていくの見ましたよ。めっちゃいいフォームで。"
           - who: team_manager
-            say: "そうしましょう。放課後、呼んでおきます。"
+            say: "その足、ベースランニングで使ってほしいんですけどね。"
       - lines:
           - who: captain
-            say: "あいつ、最近来ないんです。俺が言っても聞かなくて。"
-          - who: manager
-            say: "主将が抱え込む話じゃない。俺が話す。"
+            say: "監督、{player} なんですけど、最近ずっと『腹が痛い』って言って帰るんです。"
+          - who: captain
+            say: "でも昨日、駅前のラーメン屋に並んでました。大盛りの食券握って。"
+          - who: team_manager
+            say: "お腹、むしろ強いじゃないですか。"
       - lines:
           - who: narration
-            say: "全体練習の輪に、いるはずの背番号が見当たらない。"
+            say: "全体練習の輪に {player} の姿が無い。ベンチにグラブだけが置いてある。"
+          - who: player
+            say: "あいつ、グラブ置いとけば居ることになると思ってるんすよ。"
           - who: team_manager
-            say: "サボりで片づく話なら楽なんですけどね。"
+            say: "出席を取りたいのは、グラブじゃなくて本人なんですけどね。"
+    choices:
+      - stance: scold
+        label: "呼び出して、きっちり叱る"
+      - stance: listen
+        label: "まずはサボる理由を聞いてみる"
+      - stance: captain
+        label: "主将に任せる"
+    outcomes:
+      - stance: scold
+        result: improved
+        lines:
+          - who: player
+            name: "{player}"
+            say: "……すみませんでした。明日から、ちゃんと来ます。"
+          - who: narration
+            say: "翌朝、{player} は誰よりも早くグラウンドにいた。トンボがけまで終わっていた。"
+          - who: team_manager
+            say: "え、こわ。急にどうしたんですか。"
+      - stance: scold
+        result: worsened
+        lines:
+          - who: player
+            name: "{player}"
+            say: "はいはい、分かりましたよ。"
+          - who: narration
+            say: "返事だけは良かった。次の日、{player} は来なかった。"
+          - who: player
+            say: "あいつ、部室で『めっちゃ怒られた』ってずっと言ってます。それだけ言って帰りました。"
+          - who: team_manager
+            say: "練習より先に、部室の空気が重くなりましたね。"
+      - stance: listen
+        result: improved
+        lines:
+          - who: player
+            name: "{player}"
+            say: "実は、バイトのシフトが勝手に増やされてて。店長に言えなくて……。"
+          - who: team_manager
+            say: "それ、言えばいいだけじゃないですか！ 一緒に言いに行きましょう。"
+          - who: narration
+            say: "次の週から、{player} は最後まで練習に残るようになった。店長は意外と話の分かる人だった。"
+      - stance: listen
+        result: worsened
+        lines:
+          - who: player
+            name: "{player}"
+            say: "別に、理由とかないっす。なんとなくっす。"
+          - who: narration
+            say: "30分話して、分かったのは「なんとなく」だけだった。"
+          - who: team_manager
+            say: "今日も『なんとなく』で帰りました。ブレないですね、あの子。"
+      - stance: captain
+        result: improved
+        lines:
+          - who: captain
+            say: "おい {player}、明日から朝練は俺と行くぞ。家まで迎えに行くから。"
+          - who: player
+            name: "{player}"
+            say: "え、家まで？ ちょっと怖いんですけど。"
+          - who: narration
+            say: "主将は本当に毎朝迎えに来た。{player} はそれから一度もサボっていない。"
+      - stance: captain
+        result: worsened
+        lines:
+          - who: captain
+            say: "{player}、頼むから来てくれよ。な？ な？"
+          - who: player
+            name: "{player}"
+            say: "主将、それ毎日言ってますよね。"
+          - who: narration
+            say: "主将の頼み方は日に日に弱くなり、最後はジュースをおごる話になっていた。"
+          - who: team_manager
+            say: "交渉、完全に負けてますね。"
+
+  - id: grade_friction
+    kind: Choice
+    weight: 1.0
+    cooldown_weeks: 12
+    text: "上級生と1年生がもめているらしい。"
+    cast:
+      subject: upper_grade
+      other: first_year
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、1年の {other} くん、毎日 {player} くんのスパイクを磨かされてるみたいです。"
+          - who: player
+            name: "{other}"
+            say: "いえ、自分は全然大丈夫です。磨くの、ちょっと楽しくなってきたんで。"
+          - who: team_manager
+            say: "楽しくなっちゃダメなんですよ、それ。"
+      - lines:
+          - who: player
+            name: "{player}"
+            say: "監督、1年の {other} が、俺のことを先輩って呼ばないんですよ。"
+          - who: player
+            name: "{other}"
+            say: "だって {player} さん、ノックで俺より捕ってないじゃないですか。"
+          - who: captain
+            say: "どっちもやめろ。部室の酸素が薄くなる。"
+      - lines:
+          - who: narration
+            say: "部室の冷蔵庫に紙が貼ってある。『2年生以上専用』。その下に小さく『1年も金出してます』。"
+          - who: team_manager
+            say: "{player} くんと {other} くん、冷蔵庫の件で3日口きいてないです。"
+          - who: player
+            say: "麦茶ひとつでここまで揉めるの、うちくらいですよ。"
+    choices:
+      - stance: scold
+        label: "二人まとめて叱る"
+      - stance: listen
+        label: "両方から言い分を聞く"
+      - stance: captain
+        label: "主将に収めてもらう"
+    outcomes:
+      - stance: scold
+        result: improved
+        lines:
+          - who: player
+            name: "{player}"
+            say: "すんません。ちょっと先輩風、吹かしすぎました。"
+          - who: player
+            name: "{other}"
+            say: "自分も、言い方が悪かったです。"
+          - who: team_manager
+            say: "帰りにコンビニで、二人が同じアイス買ってるの見ました。仲良しか。"
+      - stance: scold
+        result: worsened
+        lines:
+          - who: player
+            name: "{player}"
+            say: "なんで俺まで怒られるんですか。"
+          - who: player
+            name: "{other}"
+            say: "自分、何も悪くないっす。"
+          - who: narration
+            say: "二人そろって不満顔。叱られた不満だけは、仲良く分け合っていた。"
+          - who: team_manager
+            say: "キャッチボールの相手、今日もお互い避けてます。"
+      - stance: listen
+        result: improved
+        lines:
+          - who: player
+            name: "{other}"
+            say: "{player} さん、自分のこと嫌いなんだと思ってました。"
+          - who: player
+            name: "{player}"
+            say: "いや、お前がうまいから焦ってただけだって。言わせんなよ。"
+          - who: team_manager
+            say: "はい、言わせました。仲直りです。"
+      - stance: listen
+        result: worsened
+        lines:
+          - who: player
+            name: "{player}"
+            say: "だいたい最近の1年は、"
+          - who: player
+            name: "{other}"
+            say: "その『最近の1年』って言い方が、もう、"
+          - who: narration
+            say: "言い分を聞くつもりが、2時間の言い合いを聞くことになった。"
+          - who: team_manager
+            say: "外、もう真っ暗です。"
+      - stance: captain
+        result: improved
+        lines:
+          - who: captain
+            say: "今日から上も下も無し。文句があるなら俺に言え。以上。"
+          - who: player
+            name: "{player}"
+            say: "……はい。"
+          - who: player
+            name: "{other}"
+            say: "はい！"
+          - who: narration
+            say: "主将の一声で、部室の空気が少しだけ軽くなった。"
+      - stance: captain
+        result: worsened
+        lines:
+          - who: captain
+            say: "まあまあまあ、二人とも、ここはひとつ、な？"
+          - who: player
+            name: "{player}"
+            say: "主将はどっちの味方なんすか。"
+          - who: player
+            name: "{other}"
+            say: "そうですよ、はっきりしてください。"
+          - who: narration
+            say: "なぜか最後は、主将が二人から責められて終わった。"
+
+  - id: selfish_clash
+    kind: Choice
+    weight: 1.0
+    cooldown_weeks: 12
+    text: "チャンスでの打撃をめぐって、部員同士が言い合いになった。"
+    cast:
+      subject: selfish
+      other: selfless
+    variants:
+      - lines:
+          - who: narration
+            say: "紅白戦の7回、一死三塁。サインはスクイズ。{player} はフルスイングで空振りした。"
+          - who: player
+            name: "{other}"
+            say: "なんで振るんだよ！ バントのサイン出てただろ！"
+          - who: player
+            name: "{player}"
+            say: "いや、来た球がホームランの球だったから。"
+          - who: team_manager
+            say: "ホームランの球って、何色なんですかね。"
+      - lines:
+          - who: player
+            name: "{other}"
+            say: "監督、{player} がまた『俺が決める』って、走者いるのに初球から大振りしたんです。"
+          - who: player
+            name: "{player}"
+            say: "でも当たってたら、今ごろ俺ヒーローですよ。"
+          - who: player
+            name: "{other}"
+            say: "当たってないだろ！"
+      - lines:
+          - who: team_manager
+            say: "練習試合のあと、{other} くんが {player} くんの打席にずっと文句言ってます。"
+          - who: player
+            say: "{player} のやつ、ベンチで『次の打席、見とけよ』って言ってからの三球三振でした。"
+          - who: team_manager
+            say: "見とけって言われたので、ちゃんと見ました。"
+    choices:
+      - stance: scold
+        label: "{player} を呼んで叱る"
+      - stance: listen
+        label: "{player} の言い分を聞く"
+      - stance: captain
+        label: "主将に任せる"
+    outcomes:
+      - stance: scold
+        result: improved
+        lines:
+          - who: player
+            name: "{player}"
+            say: "はい。次からサイン、ちゃんと見ます。"
+          - who: narration
+            say: "次の紅白戦、{player} は送りバントをきっちり決めた。ベンチに戻ると、ちょっとだけ照れていた。"
+          - who: player
+            name: "{other}"
+            say: "やればできるじゃん。"
+      - stance: scold
+        result: worsened
+        lines:
+          - who: player
+            name: "{player}"
+            say: "打てばいいんでしょ、打てば。"
+          - who: narration
+            say: "{player} はその日から、さらに大きく振るようになった。"
+          - who: player
+            name: "{other}"
+            say: "悪化してるじゃん……。"
+      - stance: listen
+        result: improved
+        lines:
+          - who: player
+            name: "{player}"
+            say: "スカウトの人が見に来てるって聞いて、つい目立ちたくなって。"
+          - who: player
+            name: "{other}"
+            say: "来てねえよ。誰に聞いたんだよ。"
+          - who: player
+            name: "{player}"
+            say: "マネージャー。"
+          - who: team_manager
+            say: "すみません、冗談のつもりでした。"
+          - who: narration
+            say: "誤解が解けて、{player} のスイングは少しだけコンパクトになった。"
+      - stance: listen
+        result: worsened
+        lines:
+          - who: player
+            name: "{player}"
+            say: "だって、バントってテレビに映らないじゃないですか。"
+          - who: narration
+            say: "言い分を最後まで聞いた。最後まで聞いても、同じだった。"
+          - who: player
+            name: "{other}"
+            say: "こいつ、ずっとこれなんですよ。"
+      - stance: captain
+        result: improved
+        lines:
+          - who: captain
+            say: "{player}、お前の一発はみんな期待してる。だからサインのときは、サインだ。"
+          - who: player
+            name: "{player}"
+            say: "主将、それちょっと名言っぽいっすね。"
+          - who: captain
+            say: "だろ。昨日の夜、考えてきた。"
+          - who: narration
+            say: "{player} と {other} は、次の打順の相談をしながら帰っていった。"
+      - stance: captain
+        result: worsened
+        lines:
+          - who: captain
+            say: "打ちたい気持ちも分かる。でもバントも大事だ。でも打つのも大事で、"
+          - who: player
+            name: "{other}"
+            say: "主将、どっちなんですか。"
+          - who: player
+            name: "{player}"
+            say: "じゃあ打っていいってことですね！"
+          - who: narration
+            say: "主将の話は、いちばん都合のいいところだけ持っていかれた。"

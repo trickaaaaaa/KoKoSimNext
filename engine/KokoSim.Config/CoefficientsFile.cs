@@ -2068,6 +2068,18 @@ public static class CoefficientsLoader
         public double HighThreshold { get; set; } = D.HighThreshold;
         public double LowThreshold { get; set; } = D.LowThreshold;
         public double MessengerPerCohesion { get; set; } = D.MessengerPerCohesion;
+        public double ChoiceProbMin { get; set; } = D.ChoiceProbMin;
+        public double ChoiceProbMax { get; set; } = D.ChoiceProbMax;
+        public double ChoiceDiligenceWeight { get; set; } = D.ChoiceDiligenceWeight;
+        public double ScoldBase { get; set; } = D.ScoldBase;
+        public double ScoldReceptivenessWeight { get; set; } = D.ScoldReceptivenessWeight;
+        public double ListenBase { get; set; } = D.ListenBase;
+        public double ListenReceptivenessWeight { get; set; } = D.ListenReceptivenessWeight;
+        public double ListenSelflessnessWeight { get; set; } = D.ListenSelflessnessWeight;
+        public double CaptainBase { get; set; } = D.CaptainBase;
+        public double CaptainPowerSlope { get; set; } = D.CaptainPowerSlope;
+        public double ChoiceCaptainPowerScale { get; set; } = D.ChoiceCaptainPowerScale;
+        public double CaptainSubjectLeadershipWeight { get; set; } = D.CaptainSubjectLeadershipWeight;
 
         public CohesionCoefficients ToModel() => new()
         {
@@ -2088,6 +2100,18 @@ public static class CoefficientsLoader
             HighThreshold = HighThreshold,
             LowThreshold = LowThreshold,
             MessengerPerCohesion = MessengerPerCohesion,
+            ChoiceProbMin = ChoiceProbMin,
+            ChoiceProbMax = ChoiceProbMax,
+            ChoiceDiligenceWeight = ChoiceDiligenceWeight,
+            ScoldBase = ScoldBase,
+            ScoldReceptivenessWeight = ScoldReceptivenessWeight,
+            ListenBase = ListenBase,
+            ListenReceptivenessWeight = ListenReceptivenessWeight,
+            ListenSelflessnessWeight = ListenSelflessnessWeight,
+            CaptainBase = CaptainBase,
+            CaptainPowerSlope = CaptainPowerSlope,
+            ChoiceCaptainPowerScale = ChoiceCaptainPowerScale,
+            CaptainSubjectLeadershipWeight = CaptainSubjectLeadershipWeight,
         };
     }
 

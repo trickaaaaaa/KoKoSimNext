@@ -27,6 +27,19 @@ namespace KokoSim.Engine.Season.Events;
 ///           - who: manager
 ///             name: "監督"                 # 省略時は役割の既定名（EventRoles.DefaultName）
 ///             say: "無理をさせすぎたか。"
+///     # ── 選択肢つき（issue #945）。3つとも書き、結果は対応×好転/悪化の6通り ──
+///     cast:
+///       subject: selfish       # 当事者 {player}: any / selfish / selfless / upper_grade / first_year
+///       other: selfless        # 相手 {other}（省略＝相手なし）
+///     choices:
+///       - stance: scold        # scold / listen / captain
+///         label: "呼び出して叱る"
+///     outcomes:
+///       - stance: scold
+///         result: improved     # improved / worsened
+///         lines:
+///           - who: player
+///             say: "すみませんでした。"
 /// </code>
 /// </summary>
 public static class EventTableParser
@@ -46,6 +59,16 @@ public static class EventTableParser
         int effTrainingWeeks = 0;
         bool effTrainingPlayer = false;
         var variants = new List<EventScript>();
+        var choices = new List<EventChoice>();
+        var outcomes = new List<EventOutcome>();
+        EventCastRule castSubject = EventCastRule.Any;
+        EventCastRule? castOther = null;
+        // いま読んでいるリスト（variants / outcomes / choices）と、その要素1つぶんの素。
+        string listKind = "";
+        EventStance? elemStance = null;
+        bool? elemImproved = null;
+        string? elemLabel = null;
+        var elemOpen = false;
         List<EventLine>? currentLines = null;
         string? lineWho = null, lineName = null, lineSay = null;
 
@@ -60,9 +83,33 @@ public static class EventTableParser
         void FlushVariant()
         {
             FlushLine();
-            if (currentLines is null) return;
-            if (currentLines.Count > 0) variants.Add(new EventScript(currentLines));
+            var kind = listKind;
+            var open = elemOpen;
+            elemOpen = false;
+            if (kind == "choices")
+            {
+                if (open)
+                {
+                    if (elemStance is null) throw new FormatException($"{id}: choices の要素に stance がありません。");
+                    choices.Add(new EventChoice(elemStance.Value, elemLabel ?? ""));
+                }
+            }
+            else if (kind == "outcomes")
+            {
+                if (open)
+                {
+                    if (elemStance is null || elemImproved is null)
+                        throw new FormatException($"{id}: outcomes の要素に stance と result が要ります。");
+                    outcomes.Add(new EventOutcome(elemStance.Value, elemImproved.Value,
+                        new EventScript(currentLines ?? new List<EventLine>())));
+                }
+            }
+            else if (currentLines is not null && currentLines.Count > 0)
+            {
+                variants.Add(new EventScript(currentLines));
+            }
             currentLines = null;
+            elemStance = null; elemImproved = null; elemLabel = null;
         }
 
         void FlushEvent()
@@ -83,6 +130,9 @@ public static class EventTableParser
                 Variants = variants.ToArray(),
                 Effect = new EventEffect(
                     effFunds, effFacilityFund, effTrainingMult, effTrainingWeeks, effTrainingPlayer),
+                Choices = choices.ToArray(),
+                Outcomes = outcomes.ToArray(),
+                Cast = new EventCast(castSubject, castOther),
             });
             id = kind = text = setsFlag = requiresNotFlag = region = null;
             calendarWeek = null;
@@ -91,6 +141,10 @@ public static class EventTableParser
             effFunds = effFacilityFund = 0.0;
             effTrainingMult = 1.0; effTrainingWeeks = 0; effTrainingPlayer = false;
             variants = new List<EventScript>();
+            choices = new List<EventChoice>();
+            outcomes = new List<EventOutcome>();
+            castSubject = EventCastRule.Any; castOther = null;
+            listKind = "";
         }
 
         // 「- 」で始まる行がどの階層の要素かは<b>インデントで決める</b>。直前に読んだ状態で決めると、
@@ -134,8 +188,9 @@ public static class EventTableParser
                 }
                 else if (variantsKeyIndent >= 0 && indent > variantsKeyIndent)
                 {
-                    FlushVariant();                                 // variants: 直下＝会話1通り
-                    currentLines = new List<EventLine>();
+                    FlushVariant();                                 // variants/outcomes/choices 直下＝要素1つ
+                    if (listKind != "choices") currentLines = new List<EventLine>();
+                    elemOpen = true;
                     linesKeyIndent = -1;
                 }
                 if (body.Length == 0) continue;
@@ -163,7 +218,16 @@ public static class EventTableParser
                 case "training_mult": effTrainingMult = ParseDouble(value, 1.0); break;
                 case "training_weeks": effTrainingWeeks = ParseInt(value) ?? 0; break;
                 case "training_target": effTrainingPlayer = value == "player"; break;
-                case "variants": FlushVariant(); variantsKeyIndent = keyIndent; linesKeyIndent = -1; break;
+                case "variants":
+                case "outcomes":
+                case "choices":
+                    FlushVariant(); listKind = key; variantsKeyIndent = keyIndent; linesKeyIndent = -1; break;
+                // 選択肢（issue #945）。cast: の下の subject/other、choices/outcomes の要素の stance/label/result。
+                case "subject": castSubject = ParseCast(value); break;
+                case "other": castOther = ParseCast(value); break;
+                case "stance": elemStance = ParseStance(value); break;
+                case "label": elemLabel = value; break;
+                case "result": elemImproved = ParseResult(value); break;
                 case "lines": currentLines ??= new List<EventLine>(); linesKeyIndent = keyIndent; break;
                 case "who": lineWho = value; break;
                 case "name": lineName = value; break;
@@ -183,6 +247,32 @@ public static class EventTableParser
         "Choice" => EventKind.Choice,
         "System" => EventKind.System,
         _ => EventKind.Random,
+    };
+
+    // 選択肢の語は未知なら例外＝綴りを間違えた選択肢が黙って消えたり別の対応に化けたりしない。
+    private static EventStance ParseStance(string v) => v switch
+    {
+        "scold" => EventStance.Scold,
+        "listen" => EventStance.Listen,
+        "captain" => EventStance.Captain,
+        _ => throw new FormatException($"stance に未知の語: {v}"),
+    };
+
+    private static bool ParseResult(string v) => v switch
+    {
+        "improved" => true,
+        "worsened" => false,
+        _ => throw new FormatException($"result に未知の語: {v}"),
+    };
+
+    private static EventCastRule ParseCast(string v) => v switch
+    {
+        "any" => EventCastRule.Any,
+        "selfish" => EventCastRule.Selfish,
+        "selfless" => EventCastRule.Selfless,
+        "upper_grade" => EventCastRule.UpperGrade,
+        "first_year" => EventCastRule.FirstYear,
+        _ => throw new FormatException($"cast に未知の語: {v}"),
     };
 
     // 未知の地方名は「指定なし」に落とさず**例外**にする。落とすと、綴りを間違えた雪国イベントが

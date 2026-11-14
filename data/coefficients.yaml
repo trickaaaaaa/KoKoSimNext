@@ -872,8 +872,24 @@ cohesion:
   lone_wolf_share_neutral: 0.06
   summer_camp_delta: 6          # 夏合宿（通常）
   winter_camp_delta: 10         # 冬合宿（強化）
-  event_improve_delta: 4        # 選手間イベントの好転（不和解消など）
-  event_worsen_delta: -4        # 不和・サボりの悪化
+  event_improve_delta: 3        # 選手間イベントの好転（不和解消など）。#945 監督決定 +3（合宿より小さく）
+  event_worsen_delta: -5        # 不和・サボりの悪化。#945 監督決定 −5（悪化を重く）
+  # 選択肢つき選手間イベントの好転の確率（#945・設計書23 §3.3。d軸＝(軸−50)/50、式は EventChoiceResolver）
+  #   叱る = scold_base + scold_receptiveness_weight×d素直 ／ 聞く = listen_base + …×d素直 + …×d姿勢
+  #   任せる = captain_base + captain_power_slope×d主将 + captain_subject_leadership_weight×d統率（d主将＝(統率力−46)/幅・主将不在は−1）
+  #   全対応に choice_diligence_weight×d勤勉 を足し、[choice_prob_min, choice_prob_max] に丸める
+  choice_prob_min: 0.10
+  choice_prob_max: 0.90
+  choice_diligence_weight: 0.10
+  scold_base: 0.50
+  scold_receptiveness_weight: 0.35
+  listen_base: 0.55
+  listen_receptiveness_weight: -0.15
+  listen_selflessness_weight: -0.10
+  captain_base: 0.45
+  captain_power_slope: 0.40
+  choice_captain_power_scale: 25
+  captain_subject_leadership_weight: -0.15
   weekly_decay: 0.10
   high_threshold: 70            # U≥これで動揺の発生閾値 +1
   low_threshold: 30             # U<これで −1
