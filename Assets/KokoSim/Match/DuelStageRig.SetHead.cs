@@ -3,7 +3,7 @@ using UnityEngine;
 namespace KokoSim.Unity.Match
 {
     /// <summary>
-    /// セット姿勢で待つ投手の首（issue #912）。
+    /// セット姿勢で待つ投手の首（issue #912）と、投球中もその形を保つ首（issue #973）。
     /// </summary>
     public sealed partial class DuelStageRig
     {
@@ -17,8 +17,17 @@ namespace KokoSim.Unity.Match
         /// <summary>投球クリップ（セット姿勢の判定用。プレビューで直立ループへ差し替えた投手は対象外）。</summary>
         private AnimationClip _pitchClip;
 
-        /// <summary>首の補正の効き（0〜1）。セットで待っている間は1へ、投球へ入ったら0へ、<see cref="CrossfadeSeconds"/>で寄せる。</summary>
+        /// <summary>首の補正の効き（0〜1）。セットで待っている間と投球中（リリースまで）は1へ、それ以外は0へ、<see cref="CrossfadeSeconds"/>で寄せる。</summary>
         private float _setHeadW;
+
+        /// <summary>
+        /// 顔の向きの行き先を「収録のひねり（セット）」から「顔が捕手を向くひねり（投球中）」へ寄せる割合（0〜1）。
+        /// 投球中は胴が大きく回るので、収録のひねりに戻すと顔が本塁から外れる（issue #973）。
+        /// </summary>
+        private float _headLookW;
+
+        /// <summary>顔が向く先（捕手の頭の高さ）の高さ[m]。</summary>
+        private const float HeadLookHeightM = 1.0f;
 
         /// <summary>補正を最後に当てたときの効き（静止中に効きが動いたら評価し直して当て直すため）。</summary>
         private float _setHeadApplied = -1f, _setGloveApplied = -1f;
@@ -52,8 +61,12 @@ namespace KokoSim.Unity.Match
         /// <summary>首の補正の効きをプレー時間で進める（Tick の頭で毎フレーム）。駆動はクリップ内時刻の窓（状態）。</summary>
         private void AdvanceSetHeadWeight(float dt)
         {
-            float target = PitcherAtSet ? 1f : 0f;
-            _setHeadW = Mathf.MoveTowards(_setHeadW, target, dt / CrossfadeSeconds);
+            // セットで待つ間（issue #912）に加え、投球の頭出しからリリース（<see cref="ReleaseTime"/>）まで保つ（issue #973）。
+            // リリースを過ぎたら CrossfadeSeconds かけて収録のフォロースルーへ返す
+            bool inDelivery = _pitcher != null && _pitcher.Clip != null && _pitcher.Clip == _pitchClip
+                && _pitcher.Time <= ReleaseTime;
+            _setHeadW = Mathf.MoveTowards(_setHeadW, inDelivery ? 1f : 0f, dt / CrossfadeSeconds);
+            _headLookW = Mathf.MoveTowards(_headLookW, PitcherAtSet ? 0f : 1f, dt / CrossfadeSeconds);
         }
 
         /// <summary>
@@ -94,7 +107,10 @@ namespace KokoSim.Unity.Match
                 neck.localRotation = Quaternion.Slerp(Quaternion.identity, lift, w) * neck.localRotation;
             }
             if (!TryHeadTurn(out float uprightTurn0, out _)) return;
-            float targetTurn = Mathf.LerpAngle(uprightTurn0, rawTurn, w);
+            // 投球中は収録のひねりでなく「顔が捕手を向く」ひねりへ（胴が回っても顔は本塁を見たまま）
+            float wantTurn = rawTurn;
+            if (_headLookW > 0f && TryLookTurn(out float lookTurn)) wantTurn = Mathf.LerpAngle(rawTurn, lookTurn, _headLookW);
+            float targetTurn = Mathf.LerpAngle(uprightTurn0, wantTurn, w);
             // ひねりは**頭の上方向の軸まわり**で戻す。背骨の軸で回すと、うつむいた頭（切り口で19°）が横へ振られて
             // 傾きが−8°→−14°へ悪化した（2026-11-14 実測）。頭の上方向まわりなら上方向は動かない＝傾き・うつむきは
             // ①のまま保たれる。ひねりは背骨に垂直な面で測るので軸が少しずれる＝2回寄せて合わせる
@@ -135,6 +151,34 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 顔が捕手を向くときの頭のひねり[度]（<see cref="TryHeadTurn"/> と同じ測り方＝胴の正面に対する、背骨の軸まわりの角度）。
+        /// 向く先のワールド位置を首の親のローカル空間へ引くので、左投手（鏡映親）でも同じ式で効く。
+        /// </summary>
+        private bool TryLookTurn(out float turn)
+        {
+            turn = 0f;
+            if (_catcher == null || _catcher.Go == null) return false;
+            var anim = _pitcher.Animator;
+            var neck = anim.GetBoneTransform(HumanBodyBones.Neck);
+            var head = anim.GetBoneTransform(HumanBodyBones.Head);
+            var lu = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var ru = anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            if (neck == null || head == null || lu == null || ru == null || neck.parent == null) return false;
+            var frame = neck.parent;
+            var spine = frame.InverseTransformPoint(neck.position).normalized;
+            if (spine.sqrMagnitude < 1e-6f) return false;
+            var shoulder = Vector3.ProjectOnPlane(
+                frame.InverseTransformPoint(ru.position) - frame.InverseTransformPoint(lu.position), spine);
+            var chestFwd = Vector3.Cross(shoulder, spine);
+            var target = _catcher.Go.transform.position + new Vector3(0f, HeadLookHeightM, 0f);
+            var toTarget = Vector3.ProjectOnPlane(
+                frame.InverseTransformPoint(target) - frame.InverseTransformPoint(head.position), spine);
+            if (chestFwd.sqrMagnitude < 1e-8f || toTarget.sqrMagnitude < 1e-8f) return false;
+            turn = Vector3.SignedAngle(chestFwd, toTarget, spine);
+            return true;
+        }
+
+        /// <summary>
         /// 静止中（<see cref="Actor.Holding"/>＝生成直後・最後の1球の後）はポーズを評価しないので、補正の効きが
         /// 動いても絵に出ない。効きが前回当てたときから動いていたら、同じ時刻を評価し直して当て直させる
         /// （時刻は進めない＝ルートモーションは乗らない）。
@@ -169,6 +213,7 @@ namespace KokoSim.Unity.Match
                 float nod = Mathf.Atan2(Vector3.Dot(up, chestFwd), Vector3.Dot(up, spine)) * Mathf.Rad2Deg;
                 pose = " turn=" + turn.ToString("F1") + " tilt=" + tilt.ToString("F1") + " nod=" + nod.ToString("F1");
             }
+            if (TryLookTurn(out float lookTurn)) pose += " look=" + lookTurn.ToString("F1");
             return "clipT=" + _pitcher.Time.ToString("F2") + " w=" + _setHeadW.ToString("F2")
                 + " neckΔ=" + Quaternion.Angle(neck.localRotation, _deliveryNeckLocal).ToString("F1")
                 + " headΔ=" + Quaternion.Angle(head.localRotation, _deliveryHeadLocal).ToString("F1") + pose;
