@@ -109,6 +109,23 @@ public sealed record NationDominanceTargets
     public Band TopTwoWinProbabilityMean { get; init; } = new(0.55, 0.78);
 }
 
+/// <summary>
+/// コールドあり（県大会の決勝以外と同じ MercyRuleEnabled）での自校の負け方（issue #983・OPEN-QUESTIONS Q29）。
+/// 既存の帯はすべて9回制の測定でコールドを一度も回していない。<b>係数は動かさず、悪くなったら気づけるようにする見張り</b>。
+/// 自校＝ProspectGenerator の開始直後ロスターを先攻に置く（<see cref="LowTierTargets"/> と同じ経路）。
+/// </summary>
+public sealed record LowTierMercyTargets
+{
+    /// <summary>自校がコールドで負ける率（ほぼ互角の相手＝強度40）。</summary>
+    public Band MercyLossRateVsE40 { get; init; } = new(0.02, 0.12);
+    /// <summary>自校がコールドで負ける率（強度45）。issue の例＝「E(45) 相手のコールド負け ≤15%」。</summary>
+    public Band MercyLossRateVsE45 { get; init; } = new(0.05, 0.15);
+    /// <summary>自校がコールドで負ける率（1ティア上＝強度50）。</summary>
+    public Band MercyLossRateVsD50 { get; init; } = new(0.12, 0.27);
+    /// <summary>自校が完封されたコールドで負ける率（「8−0」型・強度45）。</summary>
+    public Band MercyShutoutLossRateVsE45 { get; init; } = new(0.01, 0.07);
+}
+
 public sealed record LowTierTargets
 {
     /// <summary>自校の得点（ほぼ互角の相手＝強度40）。</summary>
@@ -331,6 +348,22 @@ public static class BalanceTargetsLoader
         };
     }
 
+    public static LowTierMercyTargets LoadLowTierMercyFromFile(string path) => ParseLowTierMercy(File.ReadAllText(path));
+
+    public static LowTierMercyTargets ParseLowTierMercy(string yaml)
+    {
+        var t = Root(yaml).TiersLowMercy;
+        if (t is null) return new LowTierMercyTargets();
+        var d = new LowTierMercyTargets();
+        return new LowTierMercyTargets
+        {
+            MercyLossRateVsE40 = t.MercyLossRateVsE40?.ToBand() ?? d.MercyLossRateVsE40,
+            MercyLossRateVsE45 = t.MercyLossRateVsE45?.ToBand() ?? d.MercyLossRateVsE45,
+            MercyLossRateVsD50 = t.MercyLossRateVsD50?.ToBand() ?? d.MercyLossRateVsD50,
+            MercyShutoutLossRateVsE45 = t.MercyShutoutLossRateVsE45?.ToBand() ?? d.MercyShutoutLossRateVsE45,
+        };
+    }
+
     public static MatchupGridTargets LoadMatchupGridFromFile(string path) => ParseMatchupGrid(File.ReadAllText(path));
 
     public static MatchupGridTargets ParseMatchupGrid(string yaml)
@@ -388,6 +421,8 @@ public static class BalanceTargetsLoader
 
         [YamlMember(Alias = "tiers_low")]
         public TiersLowDto? TiersLow { get; set; }
+        [YamlMember(Alias = "tiers_low_mercy")]
+        public TiersLowMercyDto? TiersLowMercy { get; set; }
 
         [YamlMember(Alias = "matchup_grid")]
         public MatchupGridDto? MatchupGrid { get; set; }
@@ -447,6 +482,14 @@ public static class BalanceTargetsLoader
         public BandDto? WalkRateP80B30 { get; set; }
         public BandDto? WalkRateP90B75 { get; set; }
         public BandDto? WalkRateP50B45 { get; set; }
+    }
+
+    private sealed class TiersLowMercyDto
+    {
+        public BandDto? MercyLossRateVsE40 { get; set; }
+        public BandDto? MercyLossRateVsE45 { get; set; }
+        public BandDto? MercyLossRateVsD50 { get; set; }
+        public BandDto? MercyShutoutLossRateVsE45 { get; set; }
     }
 
     private sealed class TiersLowDto

@@ -60,6 +60,12 @@ public static partial class GameSimulation
         public int AwayShutoutGames { get; init; }
         /// <summary>後攻が0点に抑えられた試合数。</summary>
         public int HomeShutoutGames { get; init; }
+        /// <summary>先攻がコールドで負けた試合数（MercyRuleEnabled の試合だけ非0・Q29）。</summary>
+        public int AwayMercyLossGames { get; init; }
+        /// <summary>先攻が完封されたコールド負けの試合数（「8−0」型・Q29）。</summary>
+        public int AwayMercyShutoutLossGames { get; init; }
+        /// <summary>先攻がコールドで勝った試合数。</summary>
+        public int AwayMercyWinGames { get; init; }
         /// <summary>先攻の総安打。</summary>
         public long TotalAwayHits { get; init; }
         /// <summary>後攻の総安打。</summary>
@@ -282,6 +288,7 @@ public static partial class GameSimulation
         // 後攻の「得点」は TotalHomeRunsScored と名を分ける。
         public long TotalAwayRuns, TotalHomeRunsScored, TotalAwayHits, TotalHomeHits;
         public int AwayShutouts, HomeShutouts;
+        public int AwayMercyLosses, AwayMercyShutoutLosses, AwayMercyWins;
         // 球種別（設計書15 Phase E-4）: enum 添字。
         public readonly long[] Swings = new long[PitchTypeCount];
         public readonly long[] Whiffs = new long[PitchTypeCount];
@@ -374,6 +381,15 @@ public static partial class GameSimulation
             TotalHomeRunsScored += r.HomeRuns;
             if (r.AwayRuns == 0) AwayShutouts++;
             if (r.HomeRuns == 0) HomeShutouts++;
+            if (r.MercyEnded)
+            {
+                if (r.AwayRuns < r.HomeRuns)
+                {
+                    AwayMercyLosses++;
+                    if (r.AwayRuns == 0) AwayMercyShutoutLosses++;
+                }
+                else if (r.AwayRuns > r.HomeRuns) AwayMercyWins++;
+            }
             TotalAwayHits += r.AwayHits;
             TotalHomeHits += r.HomeHits;
             Hist[Math.Min(r.AwayRuns, Hist.Length - 1)]++;
@@ -441,6 +457,9 @@ public static partial class GameSimulation
             TotalHomeHits += o.TotalHomeHits;
             AwayShutouts += o.AwayShutouts;
             HomeShutouts += o.HomeShutouts;
+            AwayMercyLosses += o.AwayMercyLosses;
+            AwayMercyShutoutLosses += o.AwayMercyShutoutLosses;
+            AwayMercyWins += o.AwayMercyWins;
         }
 
         public Stats ToStats(int games) => new()
@@ -458,6 +477,9 @@ public static partial class GameSimulation
             TotalHomeTeamRuns = TotalHomeRunsScored,
             AwayShutoutGames = AwayShutouts,
             HomeShutoutGames = HomeShutouts,
+            AwayMercyLossGames = AwayMercyLosses,
+            AwayMercyShutoutLossGames = AwayMercyShutoutLosses,
+            AwayMercyWinGames = AwayMercyWins,
             TotalAwayHits = TotalAwayHits,
             TotalHomeHits = TotalHomeHits,
             TotalPitcherChanges = TotalChanges,

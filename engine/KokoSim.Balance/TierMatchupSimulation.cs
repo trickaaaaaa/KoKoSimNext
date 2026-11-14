@@ -34,14 +34,19 @@ public static class TierMatchupSimulation
         double AwayRunsPerGame, double HomeRunsPerGame,
         double AwayShutoutRate, double HomeShutoutRate,
         double AwayHitsPerGame, double HomeHitsPerGame,
-        double StrikeoutRate, double WalkRate, double HomeWinRate);
+        double StrikeoutRate, double WalkRate, double HomeWinRate,
+        double AwayMercyLossRate = 0, double AwayMercyShutoutLossRate = 0, double AwayMercyWinRate = 0);
 
     private static Cell Measure(string awayLabel, string homeLabel, int games, ulong seed,
         string? coefficientsPath, Func<IRandomSource, string, bool, Team> factory,
-        AbilityEffectCoefficients? effect = null)
+        AbilityEffectCoefficients? effect = null, bool mercy = false)
     {
         var s = GameSimulation.Run(games, seed, coefficientsPath, teamFactory: factory,
-            contextTransform: effect is null ? null : ctx => ctx.WithAbilityEffect(effect));
+            contextTransform: effect is null && !mercy ? null : ctx =>
+            {
+                if (effect is not null) ctx = ctx.WithAbilityEffect(effect);
+                return mercy ? ctx with { MercyRuleEnabled = true } : ctx;
+            });
         return new Cell(
             awayLabel, homeLabel, games,
             (double)s.TotalAwayTeamRuns / games,
@@ -50,7 +55,10 @@ public static class TierMatchupSimulation
             (double)s.HomeShutoutGames / games,
             (double)s.TotalAwayHits / games,
             (double)s.TotalHomeHits / games,
-            s.StrikeoutRate, s.WalkRate, s.HomeWinRate);
+            s.StrikeoutRate, s.WalkRate, s.HomeWinRate,
+            (double)s.AwayMercyLossGames / games,
+            (double)s.AwayMercyShutoutLossGames / games,
+            (double)s.AwayMercyWinGames / games);
     }
 
     // ── チーム生成の差し替え口 ──
@@ -91,11 +99,12 @@ public static class TierMatchupSimulation
     /// 通るよう公開している＝帯が守っているものとレポートが見せているものを一致させる。
     /// 自校は先攻に置く（<c>AwayRunsPerGame</c>／<c>AwayShutoutRate</c> が自校の得点・完封され率）。
     /// </summary>
+    /// <param name="mercy">true＝コールドあり（県大会の決勝以外と同じルール・Q29）。既定 false＝従来の9回制。</param>
     /// <param name="effect">表示→物理の効き（設計書21）を係数ファイルの値から差し替える（null＝係数どおり）。
     /// 帯の意味を固定する回帰（恒等＝寝かせない世界なら赤くなる）が使う。</param>
     public static IReadOnlyList<Cell> MeasureManagerLadder(
         int games, ulong seed, string? coefficientsPath, RosterCoefficients coeff, IReadOnlyList<double> strengths,
-        AbilityEffectCoefficients? effect = null)
+        AbilityEffectCoefficients? effect = null, bool mercy = false)
     {
         var cells = new List<Cell>(strengths.Count);
         foreach (var h in strengths)
@@ -103,7 +112,7 @@ public static class TierMatchupSimulation
             var opp = h;
             cells.Add(Measure("自校", Label(h), games, seed + 9000 + (ulong)h, coefficientsPath,
                 (rng, name, isAway) => isAway ? ManagerTeam(rng, name, coeff) : StrengthTeam(rng, name, opp, coeff),
-                effect));
+                effect, mercy));
         }
         return cells;
     }
@@ -182,6 +191,19 @@ public static class TierMatchupSimulation
             sb.AppendLine(c,
                 $"| 自校 vs {cell.HomeLabel} | {cell.AwayRunsPerGame:F2} | {cell.AwayShutoutRate:P1} "
                 + $"| {cell.HomeRunsPerGame:F2} | {cell.AwayHitsPerGame:F2} | {cell.StrikeoutRate:P1} | {cell.WalkRate:P1} |");
+        }
+        sb.AppendLine();
+
+        // ── ②b コールドあり（県大会の決勝以外と同じルール・Q29） ──
+        sb.AppendLine("## ②b 実プレイの組み合わせ・コールドあり（MercyRuleEnabled）");
+        sb.AppendLine();
+        sb.AppendLine("| 自校 vs 相手強度 | 自校のコールド負け | うち完封コールド負け | 自校のコールド勝ち | 自校の完封され率 |");
+        sb.AppendLine("|---|---|---|---|---|");
+        foreach (var cell in MeasureManagerLadder(games, seed, coefficientsPath, coeff, strengths, mercy: true))
+        {
+            sb.AppendLine(c,
+                $"| 自校 vs {cell.HomeLabel} | {cell.AwayMercyLossRate:P1} | {cell.AwayMercyShutoutLossRate:P1} "
+                + $"| {cell.AwayMercyWinRate:P1} | {cell.AwayShutoutRate:P1} |");
         }
         sb.AppendLine();
 
