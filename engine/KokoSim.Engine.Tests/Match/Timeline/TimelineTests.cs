@@ -1712,6 +1712,34 @@ public sealed class TimelineTests
         Assert.True(leg.T1 <= throwSeg.T1, "セーフなのに走者が送球より後に一塁へ着いている");
     }
 
+    [Theory]
+    [InlineData(40, 50)]
+    [InlineData(60, 50)]
+    [InlineData(80, 50)]
+    [InlineData(60, 95)]
+    [InlineData(80, 20)]
+    public void DropThirdStrikeTimeline_CatcherThrowsRightAfterPickup_WaitIsInTheChaseNotTheHold(int batterSpeed, int catcherAbility)
+    {
+        // issue #972: 出塁の絵に合わせる待ちを「拾ってから球を持ったまま止まる」時間にしない。
+        // 拾い（捕手の追いかけが終わる時刻）から送球開始までは持ち替え秒（PopTransferSeconds×能力補正）だけ。
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var batter = new Player { Name = "打者", Speed = batterSpeed };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = catcherAbility, Fielding = catcherAbility };
+
+        var tl = TimelineBuilder.BuildDropThirdStrike(batter, catcher, c, field);
+
+        var chase = tl.Moves.Single(m => m.Role == FieldPosition.Catcher && m.Task == FielderTask.FieldBall);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        var transfer = c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        Assert.InRange(throwSeg.T0 - chase.T1, transfer - 1e-6, transfer + 1e-6);
+        // 球は遠くへ転がる（拾いに手間取る絵）
+        Assert.True(Distance(tl.Ball[0].From, tl.Ball[0].To) >= 6.0, "落球が近すぎる");
+    }
+
+    private static double Distance(TimelinePoint a, TimelinePoint b)
+        => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z));
+
     [Fact]
     public void DropThirdStrikeTimeline_ConsumesNoRandomSource()
     {
