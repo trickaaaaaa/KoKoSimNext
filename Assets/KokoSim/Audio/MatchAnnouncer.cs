@@ -13,8 +13,7 @@ namespace KokoSim.Unity.Audio
     /// Git 管理外（.gitignore の Assets/KokoSim/Audio/Vendor/）に置き、Resources の <c>Voice/No7/Announce/</c> から読む。
     /// <b>部品が1つでも無ければ黙って鳴らさない</b>（購入素体・効果音と同じ流儀＝ゲームは動く）。
     ///
-    /// 部品は <see cref="AudioSource.PlayScheduled"/> で dspTime に合わせて隙間なくつなぐ（フレームの粒に左右されない）。
-    /// 鳴っている間は応援（<see cref="MatchBrassBand"/>）を絞る。
+    /// 部品は1本のクリップにつなぎ、場内放送らしい残響とエコーをかける（尾が消えるまで応援を絞る）。
     /// オン/オフはセーブでなくアプリ設定（PlayerPrefs）＝次の試合・別のセーブでも同じ。オフにしたらその場で止める。
     /// </summary>
     public static class MatchAnnouncer
@@ -59,8 +58,7 @@ namespace KokoSim.Unity.Audio
             }
             var host = Host();
             if (host == null) return false;
-            host.Play(list);
-            return true;
+            return host.Play(list);
         }
 
         /// <summary>鳴っている放送をその場で止める（オフにした・高速試合モード・×4・代打で言い直す等）。</summary>
@@ -107,55 +105,115 @@ namespace KokoSim.Unity.Audio
         }
     }
 
-    /// <summary>放送の部品を dspTime で並べて鳴らす口。部品ごとに AudioSource を1本使う（同時に予約するため）。</summary>
+    /// <summary>
+    /// 放送の部品を1本のクリップにつないで鳴らす口。部品の間は無音、末尾に残響の尾ぶんの無音を足す。
+    /// 1本の AudioSource に残響（AudioReverbFilter）とエコー（AudioEchoFilter）をかけるので、部品の
+    /// つなぎ目で残響が途切れず、尾も末尾の無音の中で最後まで鳴る。止めたら尾も一緒に消える。
+    /// </summary>
     internal sealed class AnnouncerHost : MonoBehaviour
     {
         private const double LeadSeconds = 0.05;   // 予約の頭の余裕（今すぐ鳴らすと頭が欠けることがある）
-        private const double GapSeconds = 0.18;    // 部品と部品の間（「4番、」「キャッチャー、」の読点の間）
+        private const float GapSeconds = 0.18f;    // 部品と部品の間（「4番、」「キャッチャー、」の読点の間）
+        private const float TailSeconds = 2.5f;    // 残響の尾（末尾に足す無音。ダッキングもここまで続く）
         private const float Volume = 1f;
 
-        private readonly List<AudioSource> _sources = new();
-        private double _endDsp = -1;
+        private AudioSource _source;
+        private AudioClip _merged;
+        private double _voiceEndDsp = -1;
+        private double _tailEndDsp = -1;
 
-        public bool IsPlaying => _endDsp >= 0 && AudioSettings.dspTime < _endDsp;
+        /// <summary>声が終わるまで（残響の尾は含まない。采配窓が1球目を待つ長さ）。</summary>
+        public bool IsPlaying => _voiceEndDsp >= 0 && AudioSettings.dspTime < _voiceEndDsp;
 
-        public void Play(List<AudioClip> clips)
+        private void Awake()
+        {
+            _source = gameObject.AddComponent<AudioSource>();
+            _source.playOnAwake = false;
+            _source.spatialBlend = 0f;
+            _source.volume = Volume;
+
+            var echo = gameObject.AddComponent<AudioEchoFilter>();
+            echo.delay = 230f;
+            echo.decayRatio = 0.3f;
+            echo.dryMix = 1f;
+            echo.wetMix = 0.35f;
+
+            var reverb = gameObject.AddComponent<AudioReverbFilter>();
+            reverb.reverbPreset = AudioReverbPreset.User;
+            reverb.dryLevel = 0f;
+            reverb.room = -1000f;
+            reverb.roomHF = -1800f;
+            reverb.decayTime = 2.2f;
+            reverb.decayHFRatio = 0.5f;
+            reverb.reflectionsLevel = -1200f;
+            reverb.reflectionsDelay = 0.05f;
+            reverb.reverbLevel = 0f;
+            reverb.reverbDelay = 0.04f;
+            reverb.diffusion = 100f;
+            reverb.density = 100f;
+            reverb.hfReference = 5000f;
+        }
+
+        public bool Play(List<AudioClip> clips)
         {
             StopNow();
-            while (_sources.Count < clips.Count)
-            {
-                var s = gameObject.AddComponent<AudioSource>();
-                s.playOnAwake = false;
-                s.spatialBlend = 0f;
-                s.volume = Volume;
-                _sources.Add(s);
-            }
-            var t = AudioSettings.dspTime + LeadSeconds;
-            for (var i = 0; i < clips.Count; i++)
-            {
-                var s = _sources[i];
-                s.clip = clips[i];
-                s.PlayScheduled(t);
-                t += clips[i].length + (i + 1 < clips.Count ? GapSeconds : 0);
-            }
-            _endDsp = t;
+            _merged = Merge(clips, out var voiceSeconds);
+            if (_merged == null) return false;
+            _source.clip = _merged;
+            var start = AudioSettings.dspTime + LeadSeconds;
+            _source.PlayScheduled(start);
+            _voiceEndDsp = start + voiceSeconds;
+            _tailEndDsp = start + _merged.length;
             MatchBrassBand.SetDucked(true);
+            return true;
         }
 
         public void StopNow()
         {
-            foreach (var s in _sources) { s.Stop(); s.clip = null; }
-            if (_endDsp >= 0) MatchBrassBand.SetDucked(false);
-            _endDsp = -1;
+            _source.Stop();
+            _source.clip = null;
+            if (_merged != null) { Destroy(_merged); _merged = null; }
+            if (_tailEndDsp >= 0) MatchBrassBand.SetDucked(false);
+            _voiceEndDsp = -1;
+            _tailEndDsp = -1;
         }
 
         private void Update()
         {
-            if (_endDsp >= 0 && AudioSettings.dspTime >= _endDsp)
+            if (_tailEndDsp >= 0 && AudioSettings.dspTime >= _tailEndDsp)
             {
-                _endDsp = -1;
+                _voiceEndDsp = -1;
+                _tailEndDsp = -1;
                 MatchBrassBand.SetDucked(false);
             }
+        }
+
+        private static AudioClip Merge(List<AudioClip> clips, out float voiceSeconds)
+        {
+            voiceSeconds = 0f;
+            var first = clips[0];
+            int ch = first.channels, hz = first.frequency;
+            int gap = Mathf.RoundToInt(GapSeconds * hz);
+            int tail = Mathf.RoundToInt(TailSeconds * hz);
+            int voiceFrames = 0;
+            for (var i = 0; i < clips.Count; i++)
+            {
+                if (clips[i].channels != ch || clips[i].frequency != hz) return null;
+                voiceFrames += clips[i].samples + (i + 1 < clips.Count ? gap : 0);
+            }
+            var data = new float[(voiceFrames + tail) * ch];
+            int at = 0;
+            for (var i = 0; i < clips.Count; i++)
+            {
+                var part = new float[clips[i].samples * ch];
+                if (!clips[i].GetData(part, 0)) return null;
+                System.Array.Copy(part, 0, data, at, part.Length);
+                at += part.Length + (i + 1 < clips.Count ? gap * ch : 0);
+            }
+            var merged = AudioClip.Create("AnnounceMerged", voiceFrames + tail, ch, hz, false);
+            merged.SetData(data, 0);
+            voiceSeconds = (float)voiceFrames / hz;
+            return merged;
         }
     }
 }

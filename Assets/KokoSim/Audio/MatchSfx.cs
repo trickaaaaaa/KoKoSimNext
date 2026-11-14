@@ -22,6 +22,8 @@ namespace KokoSim.Unity.Audio
         // 捕球音の段の境目[km/h]。高校生の球速帯（110〜150）を3つに割る
         private const float CatchMidKmh = 120f;
         private const float CatchStrongKmh = 140f;
+        // 速い球の捕球音の上限（155km/h）。120km/h 以下は従来の直線のまま、そこから上限へ寄せる（耳で決める値）
+        private const float CatchFastMaxVolume = 0.8f;
 
         // 打球の強さ 0..1 に写す打ち出し直後の速さ[m/s]（≒90〜160km/h）
         private const float BatWeakMps = 25f;
@@ -46,7 +48,13 @@ namespace KokoSim.Unity.Audio
                 : kmh >= CatchMidKmh ? "catch_mid"
                 : "catch_light";
             float s = Mathf.InverseLerp(100f, 155f, kmh);
-            Play(SfxDir + bank, Mathf.Lerp(0.65f, 1.0f, s), Mathf.Lerp(0.97f, 1.04f, s));
+            float volume = Mathf.Lerp(0.65f, 1.0f, s);
+            if (kmh > CatchMidKmh)
+            {
+                float atMid = Mathf.Lerp(0.65f, 1.0f, Mathf.InverseLerp(100f, 155f, CatchMidKmh));
+                volume = Mathf.Lerp(atMid, CatchFastMaxVolume, Mathf.InverseLerp(CatchMidKmh, 155f, kmh));
+            }
+            Play(SfxDir + bank, volume, Mathf.Lerp(0.97f, 1.04f, s));
         }
 
         /// <summary>
