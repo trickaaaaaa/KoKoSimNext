@@ -439,6 +439,36 @@ public static class HomePlayResolver
         IRandomSource rng, double extraStartDelaySeconds = 0.0)
         => ResolveWithWildThrow(runner, fromBase, s, field, c, HomeParams(c), rng, extraStartDelaySeconds);
 
+    // === 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2）===
+    // 1人目を本塁で刺した直後、同じボールを持った捕手がそのまま2人目にもタッチできるかを物理層（到達時刻）
+    // で解く。新しい送球は引かない（同じ球）＝守備所要は「1人目のタッチ完了時刻＋タッチの切り替え秒
+    // (HomeDoubleTagSeconds)」だけ。走者所要は通常の本塁到達レースと同じ（二次リード・反応遅延込み）。
+    // 1プレー1送球(outThrowUsed)の例外は本塁の2人目だけ＝他塁(三塁等)で送球を使った後続は従来どおり
+    // 無条件生還のまま（<see cref="BaserunningModel"/> 側で分岐）。
+
+    /// <summary>
+    /// 本塁2人目タッチのmargin[s]（守備所要−走者所要＋バイアス）。<paramref name="firstTagCompleteAtSeconds"/>は
+    /// 1人目のタッチが完了した時刻（接触基準・<see cref="DefenseTimeSeconds(HomePlaySituation,BaserunningCoefficients)"/>と同じ秒軸）。
+    /// </summary>
+    public static double DoubleTagMargin(
+        Player runner, int fromBase, double firstTagCompleteAtSeconds, FieldGeometry field, BaserunningCoefficients c,
+        double extraStartDelaySeconds = 0.0)
+        => firstTagCompleteAtSeconds + c.HomeDoubleTagSeconds
+           - RunnerTimeSeconds(runner, fromBase, 4, field, c, extraStartDelaySeconds) + c.HomeDoubleTagSuccessBias;
+
+    /// <summary>
+    /// 本塁2人目タッチの勝負を1回解く（判定＋アウト時の走者の出遅れ秒, issue #801と同じ流儀）。
+    /// 送球を新たに引かない（同じ球）ため <see cref="RaceVerdict.Scatter"/> は常に null。
+    /// </summary>
+    public static RaceVerdict ResolveDoubleTagAtHome(
+        Player runner, int fromBase, double firstTagCompleteAtSeconds, FieldGeometry field, BaserunningCoefficients c,
+        IRandomSource rng, double extraStartDelaySeconds = 0.0)
+    {
+        var defenseMinusRunner = firstTagCompleteAtSeconds + c.HomeDoubleTagSeconds
+            - RunnerTimeSeconds(runner, fromBase, 4, field, c, extraStartDelaySeconds);
+        return DrawRace(defenseMinusRunner + c.HomeDoubleTagSuccessBias, c.HomeMarginScale, defenseMinusRunner, 0.0, rng);
+    }
+
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは本塁クロスプレー（安打・ゴロの本塁レース）と1点だけ違う: 走者の時計の起点が
     // 「打球の到達」ではなく「捕球の瞬間」＝離塁は捕球後。守備も同じ捕球時刻から送球する（DefenseTimeSeconds

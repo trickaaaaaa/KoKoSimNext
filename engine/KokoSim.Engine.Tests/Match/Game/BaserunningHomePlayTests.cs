@@ -49,6 +49,51 @@ public sealed class BaserunningHomePlayTests
         Assert.Equal(homeOuts, outMoves); // 追加アウトは本塁Outレッグと一致
     }
 
+    // --- 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2, 監督決定2026-11-15）---
+    // 2塁・3塁に走者がいる単打で3塁走者が本塁で憤死した直後、2塁走者も同じ球でタッチされうる
+    // （捕手は送球を再び引かず、同じボールのまま2人目へタッチを切り替える）。
+    // 修正前は「送球は既に使用済み(outThrowUsed)」の例外で、2塁走者が無条件に生還していた
+    // （Q27の症状そのもの＝捕手がボールを持っていても止まらない）。
+    //
+    // ⚠ 2塁走者は3塁走者より1塁分(約27m)多く走る必要があり、その所要の差（トップスピードでも
+    // 3秒前後）は2人目のタッチ切り替え秒(HomeDoubleTagSeconds)より常に大きい。よって本塁へ送る/
+    // 自重するかの送り判定（HomeSendDecision、本修正の対象外＝既存のまま）は、3塁走者の憤死頻度が
+    // テストで観測できる程度にある場面では、2塁走者の「素の（送球が無かった場合の）独走レース」を
+    // ほぼ必ず自重させる＝この塁の組み合わせでは「送って、ダブルタッチアウトで刺される」絵より
+    // 「最初から送らず3塁打者より手前で止まる」絵の方が常に起きる（2塁コーチが賭けに出ない）。
+    // ダブルタッチアウトの判定そのもの（送られた場合にタッチが物理で間に合うか）は
+    // HomePlayResolverTests の純関数テストで直接検証する。ここでは「送球使用済みの例外で無条件に
+    // 生還する」というQ27の症状が再現しないことだけを固定する（Runner比較はPlayerがrecord＝値等価
+    // なので同一属性の走者同士を取り違えないよう ReferenceEquals で見る）。
+
+    [Fact]
+    public void DoubleTag_LeadRunnerOutAtHome_TrailingRunnerNeverScoresForFree()
+    {
+        var home = Context(distanceM: 15, fieldedAt: 0.7, arm: 60, aggression: 1.0);
+        var rng = new Xoshiro256Random(5);
+        var leadOutCount = 0;
+        var trailingScoredForFree = 0;
+        for (var i = 0; i < 5000; i++)
+        {
+            var r2 = new Player { Name = "R2", Speed = 50, Baserunning = 50 };
+            var r3 = new Player { Name = "R3", Speed = 50, Baserunning = 50 };
+            var bases = new BaseState { Second = r2, Third = r3 };
+            var (_, _, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.Single, new Player(), 0, C, rng, collectMoves: true, home);
+
+            var leadLeg = moves.FirstOrDefault(m => ReferenceEquals(m.Runner, r3) && m.FromBase == 3 && m.ToBase == 4);
+            if (leadLeg is not { Out: true }) continue;
+            leadOutCount++;
+
+            // Q27の症状（修正前）: ここで trailingLeg が常に {ToBase:4, Out:false}（無条件生還）になっていた。
+            var trailingLeg = moves.FirstOrDefault(m => ReferenceEquals(m.Runner, r2) && m.ToBase == 4);
+            if (trailingLeg is { Out: false }) trailingScoredForFree++;
+        }
+
+        Assert.True(leadOutCount > 500, $"3塁走者の本塁憤死が少なすぎる＝テストが空回り: {leadOutCount}/5000");
+        Assert.Equal(0, trailingScoredForFree);
+    }
+
     // --- バックホーム悪送球（2026-08-30, design-14 P1-6型の二値ロールをバックホームへ拡張）---
     // 「外野からのバックホームが毎回ドンピシャで届く」違和感の是正。RelayThrowErrorBaseProb=1.0（極端値）で
     // 「守備が勝つ場面は必ず悪送球に転じる」ことを固定し、既存の WithHomeContext_ContestedPlay_... と

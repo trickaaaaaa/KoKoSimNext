@@ -415,6 +415,17 @@ public sealed record BaserunningCoefficients
     /// 1.55 で「内野前進は生還率を抑える(通常より下)＝AIの前進判断が正しく報われる」。</summary>
     public double HomeGrounderStartDelaySeconds { get; init; } = 1.55;
 
+    // === 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2, 監督決定2026-11-15）===
+    // 本塁で1人目を刺した直後、同じボールを持った捕手がそのまま2人目にもタッチできるかを物理層で解く。
+    // 新しい送球は引かない（同じ球）＝守備所要は「1人目のタッチ完了時刻＋タッチの切り替え秒」だけ
+    // （<see cref="HomePlayResolver.ResolveDoubleTagAtHome"/>）。1プレー1送球(outThrowUsed)の例外で、
+    // 本塁の2人目だけこの経路を通る（他塁で送球を使った後続は従来どおり無条件生還）。
+    /// <summary>1人目のタッチ完了から2人目へタッチを切り替えるまでの秒[s]（同じボール・新しい送球なし）。</summary>
+    public double HomeDoubleTagSeconds { get; init; } = 0.25;
+    /// <summary>2人目タッチの到達確率バイアス[s]（校正項。<see cref="HomeMarginScale"/> と同軸のlogisticで解くため
+    /// margin→確率の幅は本塁レースと共有し、この1本だけで頻度を校正する）。既定0.0＝物理のみ（未校正）。</summary>
+    public double HomeDoubleTagSuccessBias { get; init; } = 0.0;
+
     // === 三塁への進塁レース（単打の一塁→三塁, Issue #89, 設計書12 §3.5/§4.6）===
     // 本塁と同じ「走者(走力＋走塁判断) vs 外野処理＋中継＋三塁送球」を三塁ベースで解く。
     // 走者反応・二次リード・外野処理/中継の各係数は本塁と共有し、塁固有はタッチ・バイアス・幅の3つだけ分離する。

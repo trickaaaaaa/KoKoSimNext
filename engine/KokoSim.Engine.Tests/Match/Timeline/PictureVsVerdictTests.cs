@@ -36,8 +36,14 @@ public sealed class PictureVsVerdictTests
     /// 生還だけのプレー（本塁憤死なし）では、送球は<b>最後に還る走者</b>より後に着く。
     ///
     /// <para>⚠ 本塁憤死を含むプレーは対象外。送球は刺した走者に紐付くのが正しく、その球が
-    /// 後続の生還より先に着くのは絵として正しい（＝別の問題。<c>OPEN-QUESTIONS.md</c> Q27 に
-    /// 「走塁死の直後に後続が生還する場面をどう扱うか」として記録した。実測 368件中1件）。</para>
+    /// 後続の生還より先に着くのは絵として正しい場合がある（<c>OPEN-QUESTIONS.md</c> Q27）。
+    /// issue #984 でQ27選択肢2（ダブルタッチアウトの判定）を実装した後も、この除外は<b>別の理由で</b>
+    /// 引き続き有効: 後続走者は先行走者より常に1塁分(約27m)多く走る必要があり、その所要の差は
+    /// 2人目のタッチ切り替え秒（<see cref="BaserunningCoefficients.HomeDoubleTagSeconds"/>）より
+    /// 常に大きい＝「送球が先に着いたのに生還」が本当に起こる場面は、2人目が実際に本塁へ送られた
+    /// 場合（既存の送り判定 <c>HomeSendDecision</c> 次第・既定係数ではほぼ発生しない）だけで、
+    /// 「刺した走者に紐付く送球」自体は依然絵として正しい。この除外を外すべきかは
+    /// <c>HomePlayResolverTests</c> の `DoubleTag*` 系テスト（判定の物理そのもの）で別途担保する。</para>
     /// </summary>
     [Fact]
     public void HomeThrow_NeverArrivesBeforeAScoringRunner()

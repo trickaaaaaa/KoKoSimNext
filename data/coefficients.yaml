@@ -556,6 +556,11 @@ baserunning:
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅
   home_success_bias: 1.57                    # #316: 走者の加速をモデル化した分(-0.43s)を引いて 2.00→1.57
+  # 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2, 監督決定2026-11-15）: 1人目を本塁で
+  # 刺した直後、同じボールを持った捕手がそのまま2人目にもタッチできるかを物理層で解く。新しい送球は
+  # 引かない＝守備所要は「1人目のタッチ完了時刻＋タッチの切り替え秒」だけ（home_margin_scaleと同軸）。
+  home_double_tag_seconds: 0.25               # タッチの切り替え秒[s]（同じボール・新しい送球なし）
+  home_double_tag_success_bias: 0.0           # 校正項[s]。既定0.0＝物理のみ（未校正）
   # 三塁への進塁レース（単打の一塁→三塁, Issue #89, 設計書12 §3.5/§4.6）: 本塁と同型で三塁ベースへ解く
   third_tag_seconds: 0.10                     # 三塁でのベースタッチ（本塁クロスプレーより短い）
   third_margin_scale: 0.45                    # margin→確率のlogistic幅（本塁より広め＝打球の深さ・外野の肩を効かせる）

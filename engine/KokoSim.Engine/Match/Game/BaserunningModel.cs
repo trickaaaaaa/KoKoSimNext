@@ -298,6 +298,10 @@ public static class BaserunningModel
         // バックホーム悪送球（2026-08-30）: 本塁への送球が逸れ、アウトのはずの走者が生還したか。
         // 発生時は末尾で残る走者を1つずつ押し上げる（design-14 P1-6型の連鎖、全走者+1進塁）。
         var homeWildThrowOccurred = false;
+        // ダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2）: 本塁で1人目を刺した
+        // 「タッチ完了時刻」（送球到達＋1人目のタッチ秒）。null＝まだ誰も本塁で刺していない
+        // （outThrowUsed が三塁等で立った場合はここは null のまま＝後続は従来どおり無条件生還）。
+        double? homeOutTagCompleteAtSeconds = null;
 
         // 打者の到達塁（単打/野選=1塁、二塁打=2塁）。先行走者から順にこの塁を明け渡す義務があるかを決める。
         var batterBase = isDouble ? 2 : 1;
@@ -341,13 +345,34 @@ public static class BaserunningModel
             var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
             var (outcome, delay, scatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
                 runner, fromBase, h.Situation, h.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, startDelay);
-            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall, startDelay, scatter);
+            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe) return (HomeVerdict.Scored, closeCall, startDelay, scatter);
+            if (outThrowUsed)
+            {
+                // ダブルタッチアウト（issue #984）: 送球は既に使用済み。直前の本塁タッチが完了していれば
+                // （homeOutTagCompleteAtSeconds!=null＝1人目が本塁で憤死済み）、同じ捕手がそのまま
+                // タッチを続けられるかを物理（到達時刻）で解く。別の塁(三塁等)で使用済みなら
+                // 本塁には誰もいない＝従来どおり無条件生還。
+                if (homeOutTagCompleteAtSeconds is { } tagAt)
+                {
+                    var dblMargin = HomePlayResolver.DoubleTagMargin(runner, fromBase, tagAt, h.Field, coeff, startDelay);
+                    var dblCloseCall = Math.Abs(dblMargin) < coeff.CloseCallMarginSeconds;
+                    var dbl = HomePlayResolver.ResolveDoubleTagAtHome(runner, fromBase, tagAt, h.Field, coeff, rng, startDelay);
+                    return dbl.Safe
+                        ? (HomeVerdict.Scored, dblCloseCall, startDelay, null)
+                        : (HomeVerdict.OutAtHome, dblCloseCall, startDelay + dbl.RunnerDelaySeconds, null);
+                }
+                return (HomeVerdict.Scored, closeCall, startDelay, scatter);
+            }
             outThrowUsed = true;
             if (outcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
             {
                 homeWildThrowOccurred = true;
                 return (HomeVerdict.Scored, closeCall, startDelay, scatter);
             }
+            // 本塁での憤死（outcome == OutAtHome）: この1人目のタッチ完了時刻を記録する（issue #984）。
+            // 以降に本塁を試みる走者は、この時刻から HomeDoubleTagSeconds 後まで捕手がタッチを
+            // 続けられるかの勝負になる（上の if (outThrowUsed) 分岐）。
+            homeOutTagCompleteAtSeconds = HomePlayResolver.DefenseTimeSeconds(h.Situation, coeff);
             return (HomeVerdict.OutAtHome, closeCall, startDelay + delay, scatter);
         }
 
