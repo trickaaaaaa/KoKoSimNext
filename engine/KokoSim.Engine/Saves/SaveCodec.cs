@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 31;
+    public const int CurrentVersion = 32;
 
     // ===== Serialize =====
 
@@ -94,7 +94,12 @@ public static class SaveCodec
             .Add("lastLineup", LineupSaves.ToJson(s.LastLineup))
             .Add("momentumLevel", s.MomentumLevel)
             .Add("batteryInnings", BatteryInningsToJson(s.BatteryInnings))
-            .Add("cohesionDelta", s.CohesionDelta);
+            .Add("cohesionDelta", s.CohesionDelta)
+            .Add("managerPostings", ManagerPostingSaves.ClosedToJson(s.ManagerPostings))
+            .Add("managerPostingBaselineWins", s.ManagerPostingBaselineWins)
+            .Add("managerPostingBaselineLosses", s.ManagerPostingBaselineLosses)
+            .Add("managerPostingBaselineSummerApp", s.ManagerPostingBaselineSummerAppearances)
+            .Add("managerPostingBaselineSpringApp", s.ManagerPostingBaselineSpringAppearances);
         return root.ToString();
     }
 
@@ -327,6 +332,16 @@ public static class SaveCodec
         // v31（issue #946）: 校名の改名表（全国への差分 nationOverlay の renames）。旧セーブは改名なし＝空で補う。
         if (version < 31 && root["nationOverlay"] is JsonObject overlay && !overlay.Has("renames"))
             overlay.Add("renames", new JsonArray());
+        // v32（issue #980）: 監督の赴任履歴（歴任校・学校ごとの戦績）。旧セーブは転任の区切りを記録して
+        // いない＝退任済みの赴任なし（空配列）・基準値0（＝今の自校通算がそのまま今の赴任ぶん）で補う。
+        if (version < 32)
+        {
+            if (!root.Has("managerPostings")) root.Add("managerPostings", new JsonArray());
+            if (!root.Has("managerPostingBaselineWins")) root.Add("managerPostingBaselineWins", 0);
+            if (!root.Has("managerPostingBaselineLosses")) root.Add("managerPostingBaselineLosses", 0);
+            if (!root.Has("managerPostingBaselineSummerApp")) root.Add("managerPostingBaselineSummerApp", 0);
+            if (!root.Has("managerPostingBaselineSpringApp")) root.Add("managerPostingBaselineSpringApp", 0);
+        }
         return root;
     }
 
@@ -429,6 +444,12 @@ public static class SaveCodec
             BatteryInnings = BatteryInningsFromJson(root.Arr("batteryInnings")),
             // 結束の上下は v29 で追加。Migrate が旧セーブへ0を補うので素直に読む。
             CohesionDelta = root.Double("cohesionDelta"),
+            // 監督の赴任履歴は v32 で追加。Migrate が旧セーブへ空配列/0を補うので素直に読む。
+            ManagerPostings = ManagerPostingSaves.ClosedFromJson(root.Arr("managerPostings")),
+            ManagerPostingBaselineWins = root.Int("managerPostingBaselineWins"),
+            ManagerPostingBaselineLosses = root.Int("managerPostingBaselineLosses"),
+            ManagerPostingBaselineSummerAppearances = root.Int("managerPostingBaselineSummerApp"),
+            ManagerPostingBaselineSpringAppearances = root.Int("managerPostingBaselineSpringApp"),
         };
 
         s.TournamentStats = new NationTournamentStats();

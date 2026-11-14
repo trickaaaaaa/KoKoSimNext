@@ -146,6 +146,20 @@ namespace KokoSim.Unity.Shell
             foreach (var c in _candidates) if (c.SchoolId == schoolId.Value) { target = c; break; }
             if (target == null) return false;
 
+            // 歴任校の記録（issue #980）。ApplyDecision が Manager.YearsAtSchool を0へリセットする前に、
+            // 旧校ぶんの在任区間・校名を確定して台帳へ積む（通算戦績バケットは転任をまたいでも単一=
+            // 校ID固定＝issue #641 の方式なので、ここで基準値からの差分として切り出す）。
+            // 転任判定は年度末（3月）に行われ、この Confirm 時点では GameClock.YearIndex は既に
+            // 新年度へ進んでいる（GameClock.AdvanceWeek が年度境界で先に YearIndex を進めてから
+            // ManagerService.ApplyYearlyGrowth(終わった年度) を呼ぶため）。
+            var endedYearIndex = GameClock.YearIndex - 1;
+            var startYearIndex = endedYearIndex - ManagerService.Manager.YearsAtSchool + 1;
+            GameSession.Current.PostingHistory.Close(
+                TopBarMeters.SchoolDisplayName(),
+                SeasonClock.SeasonBaseYear + (startYearIndex - 1),
+                SeasonClock.SeasonBaseYear + (endedYearIndex - 1),
+                GameSession.Current.Records.For(NationService.ManagerSchoolId));
+
             ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: true, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();
             // 部員は学校に所属する（issue #641）: 旧校は AI校として全国に残り旧部員もそこに残る。

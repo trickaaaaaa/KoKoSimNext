@@ -243,4 +243,19 @@ public sealed class SaveState
     /// 旧セーブは結束という値が存在しえない＝0で補う。
     /// </summary>
     public double CohesionDelta { get; set; }
+
+    /// <summary>
+    /// 退任済みの赴任履歴（issue #980・v32）。<see cref="ManagerPostingHistory.Closed"/>。
+    /// 旧セーブは転任が一度も記録されていない＝空で補う。
+    /// </summary>
+    public List<ManagerPosting> ManagerPostings { get; set; } = new();
+
+    /// <summary>
+    /// 今の赴任が始まった時点の自校通算戦績（<see cref="ManagerPostingHistory"/> の基準値、issue #980・v32）。
+    /// 旧セーブは転任という区切りが存在しえない＝0（＝通算そのものが今の赴任ぶん）で補う。
+    /// </summary>
+    public int ManagerPostingBaselineWins { get; set; }
+    public int ManagerPostingBaselineLosses { get; set; }
+    public int ManagerPostingBaselineSummerAppearances { get; set; }
+    public int ManagerPostingBaselineSpringAppearances { get; set; }
 }

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using KokoSim.Engine.Career;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
@@ -139,6 +140,12 @@ namespace KokoSim.Unity.Shell
         /// 大会終了時にブラケット全試合（自校戦＋裏試合）を <see cref="ExitTournamentIfFinished"/> で畳み込む。
         /// </summary>
         public SchoolRecordBook Records { get; private set; } = new SchoolRecordBook();
+
+        /// <summary>
+        /// 監督の赴任履歴（歴任校。issue #980）。<see cref="Records"/> の自校バケットは転任をまたいでも
+        /// 単一の累計のままなので、ここで赴任ごとの基準値・退任済みの戦績を別に持つ。
+        /// </summary>
+        public ManagerPostingHistory PostingHistory { get; private set; } = new ManagerPostingHistory();
 
         /// <summary>
         /// 自校の歴代大会結果（issue #600・設計書06 §3.9）。<see cref="Records"/> が累計へ畳んで捨てる
@@ -1052,6 +1059,11 @@ namespace KokoSim.Unity.Shell
             s.SessionYear = Year;
             s.Stats = Stats;
             s.Records = Records;
+            s.ManagerPostings = new List<ManagerPosting>(PostingHistory.Closed);
+            s.ManagerPostingBaselineWins = PostingHistory.BaselineWins;
+            s.ManagerPostingBaselineLosses = PostingHistory.BaselineLosses;
+            s.ManagerPostingBaselineSummerAppearances = PostingHistory.BaselineSummerAppearances;
+            s.ManagerPostingBaselineSpringAppearances = PostingHistory.BaselineSpringAppearances;
             s.TournamentHistory = History;
             s.Tournament = CaptureTournament();
             s.Koshien = CaptureSpectatedKoshien();
@@ -1146,6 +1158,10 @@ namespace KokoSim.Unity.Shell
             Year = s.SessionYear;
             Stats = s.Stats;
             Records = s.Records;
+            PostingHistory.Restore(
+                s.ManagerPostings ?? new List<ManagerPosting>(),
+                s.ManagerPostingBaselineWins, s.ManagerPostingBaselineLosses,
+                s.ManagerPostingBaselineSummerAppearances, s.ManagerPostingBaselineSpringAppearances);
             History = s.TournamentHistory;
             ClearTransient();
             LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
@@ -1196,6 +1212,7 @@ namespace KokoSim.Unity.Shell
         {
             Stats = new PlayerStatStore();
             Records = new SchoolRecordBook();
+            PostingHistory.ResetForNewGame();
             History = new TournamentHistory();
             Year = 1;
             MomentumLevel = 0;
