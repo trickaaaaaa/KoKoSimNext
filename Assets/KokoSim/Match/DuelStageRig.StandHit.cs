@@ -45,6 +45,9 @@ namespace KokoSim.Unity.Match
         /// <summary>柵を越える何秒前から寄せ始めるか／寄せ切るか[s]。</summary>
         public static float WallBlendStartSeconds = 0.9f;
         public static float WallBlendFullSeconds = 0.35f;
+        /// <summary>寄せを抜き始める時刻＝着弾から（スタンドに当たらないときは柵を越えてから）の据え置き[s]と、抜けきるまでの秒数[s]。</summary>
+        public static float WallNoHitHoldSeconds = 0.5f;
+        public static float WallReleaseSeconds = 0.55f;
 
         private bool _hrHit;
         private float _hrHitT;
@@ -131,7 +134,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 当たりの種類ごとに守備カメラの枠を上書きする（<see cref="ComputeFieldFrame"/> の最後に呼ぶ）。
-        /// ・ぎりぎり: 柵を越える瞬間へ寄り、柵の上をかすめるのを見せる
+        /// ・ぎりぎり: 柵を越える瞬間へ寄り、柵の上をかすめるのを見せる（着弾後は抜けて走者の一周を追う）
         /// ・高々と: 落ちてくる間も頂点ぶんの縦枠を保つ（寄らずに弧の高さを見せる）
         /// 打った瞬間（対決ビューでの見送り）とライナー（追従の速さ）は別の場所で効かせる。
         /// </summary>
@@ -144,6 +147,9 @@ namespace KokoSim.Unity.Match
                 {
                     float w = Mathf.InverseLerp(_hrFenceT - WallBlendStartSeconds, _hrFenceT - WallBlendFullSeconds, t);
                     w = w * w * (3f - 2f * w);
+                    float releaseT = _hrHit ? _hrHitT : _hrFenceT + WallNoHitHoldSeconds;
+                    float r = Mathf.Clamp01((t - releaseT) / Mathf.Max(1e-3f, WallReleaseSeconds));
+                    w *= 1f - r * r * (3f - 2f * r);
                     if (w <= 0f) return;
                     var fenceAim = new Vector3(_hrFenceLocal.x, Mathf.Max(FieldAimYMin, FenceHeightM * 0.6f), _hrFenceLocal.z);
                     aim = Vector3.Lerp(aim, fenceAim, w);
