@@ -1364,6 +1364,9 @@ namespace KokoSim.Unity.Match
             // 投手だけはセット姿勢の顔が投球方向と約68°ずれる（PitcherYawの経緯と同じ収録特性）ため、
             // 顔が確実に本塁を向くリリース時刻の姿勢で焼き、初期姿勢へ巻き戻す
             var mound = new Vector3(0f, MoundHeight, MoundDistance);
+            // セットで待つ間の首の補正（issue #912）の行き先＝投球の切り口の首・頭を控える
+            SeekActor(_pitcher, DeliveryStartTime);
+            CaptureDeliveryHeadPose();
             SeekActor(_pitcher, ReleaseTime);
             // 購入素体は帽子を素で持っている（頭ボーン直付けの剛体メッシュ）ので生成帽子は載せない＝二重帽子を避ける
             if (!useVendor)
@@ -1413,6 +1416,12 @@ namespace KokoSim.Unity.Match
             // ワールド行列が変わらない＝右打者・右投手の絵は従来と一致（回帰の根拠）
             _batterMirror = WrapInMirrorNode(_batter, "mirror-batter");
             _pitcherMirror = WrapInMirrorNode(_pitcher, "mirror-pitcher");
+
+            // 生成直後はセット姿勢で静止している（Holding）＝セット補正は最初から効かせておく。
+            // Tick で0から寄せると、試合開始直後の最初の数コマだけ首が曲がって見える（issue #912）
+            _setGloveW = _setHeadW = 1f;
+            FixPitcherSetGlove();
+            FixPitcherSetHead();
 
             Available = true;
             Live = this;
@@ -3301,6 +3310,7 @@ namespace KokoSim.Unity.Match
         {
             if (!Available) return;
             AdvanceSetGloveWeight(deltaTime);   // セットで握りを隠す補正の効き（issue #927）
+            AdvanceSetHeadWeight(deltaTime);    // セットで待つ間の首の補正の効き（issue #912）
 
             // カットバック予約（アンカー同期のプリロール）。量子化と独立にプレー時間で数える
             if (_cutCountdown >= 0f)
@@ -3420,8 +3430,12 @@ namespace KokoSim.Unity.Match
                 AlignBat();            // バットは骨から毎コマ組み直す純関数＝二度当てが無いので常に呼ぶ
                 if (_catcher != null && _catcher.PoseAdvanced)
                     FixCatcherPose();  // ミットを実着弾点へ寄せる（5方向クリップの残差を吸収）
+                RefreshHeldPitcherForSetFixes();   // 静止中に補正の効きが動いたら評価し直す（issue #912）
                 if (_pitcher != null && _pitcher.PoseAdvanced)
+                {
                     FixPitcherSetGlove();   // セットでグラブが握りを覆う（issue #927）
+                    FixPitcherSetHead();    // セットで待つ間の首を投球の切り口へ揃える（issue #912）
+                }
                 SampleBatTrail();      // AlignBat の**後**＝組み上がったバットの端点を採る
             }
         }
