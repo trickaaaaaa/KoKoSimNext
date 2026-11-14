@@ -17,6 +17,12 @@ namespace KokoSim.Unity.Match
 
         private DuelStageRig _rig;
 
+        /// <summary>較正の試し打ち用（null なら既定）。</summary>
+        public static Vector3? Offset;
+        public static Vector3? Euler;
+        public static string Tag = "";
+        public static bool OnlyRight;
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
@@ -24,9 +30,14 @@ namespace KokoSim.Unity.Match
             _rig = new DuelStageRig();
             if (!_rig.Available) { Debug.LogError("[i966] rig が組めない"); yield break; }
             _rig.EnsureSize(W, H);
+            var cal = DuelCalibration.Default;
+            if (Offset.HasValue) cal.HelmetOffset = Offset.Value;
+            if (Euler.HasValue) cal.HelmetEuler = Euler.Value;
+            _rig.ApplyCalibration(cal);
             for (int i = 0; i < 8; i++) { _rig.Tick(1f / 60f); yield return null; }
 
             yield return Batter("r", false);
+            if (OnlyRight) { Debug.Log("[i966] DONE"); yield break; }
             yield return Batter("l", true);
 
             if (_rig.RunnerHelmetFrameForCapture(new Vector3(6f, 0f, 6f), out var c, out var f, out var r))
@@ -73,7 +84,7 @@ namespace KokoSim.Unity.Match
             tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
             tex.Apply();
             RenderTexture.active = prev;
-            File.WriteAllBytes(Path.Combine(Dir, name + ".png"), tex.EncodeToPNG());
+            File.WriteAllBytes(Path.Combine(Dir, Tag + name + ".png"), tex.EncodeToPNG());
             Destroy(tex);
             Debug.Log("[i966] wrote " + name);
         }
