@@ -92,6 +92,23 @@ public sealed record Stadium
     };
 
     /// <summary>
+    /// 横浜スタジアム（issue #956）。神奈川の夏の準決勝・決勝の球場（秋は今まで通り汎用の県営級）。
+    /// <b>値は <c>data/stadiums.yaml</c> の <c>kanagawa_final</c> と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.YokohamaDefault_MatchesTheRepositoryYaml</c> が固定する）。
+    /// </summary>
+    public static Stadium Yokohama { get; } = new()
+    {
+        Id = "kanagawa_final",
+        Name = "横浜スタジアム",
+        Tier = StadiumTier.Prefectural,
+        LeftM = 94.2,
+        RightM = 94.2,
+        CenterM = 117.7,
+        FenceHeightM = 5.0,
+        Model = "yokohama",
+    };
+
+    /// <summary>
     /// 地方大会（県大会）の汎用ティア球場（設計書13 §1・issue #41系「地方大会の球場割当」）。
     /// 47県固有の実在球場は追わず、data/stadiums.yaml の汎用タイプ3種を序盤/準決勝・決勝で使い分ける
     /// （<see cref="RegionalStadiumTier"/>）。<b>値は data/stadiums.yaml と一致させること</b>（不変条件#4。

@@ -166,7 +166,7 @@ public static class NationalTournamentEngine
         IBackgroundMatchResolver? bg = resolution == SummerResolution.ChampionsOnly
             ? null
             : new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
-                afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier);
+                afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier, summerStadiums: true);
         // 北海道・東京の分割区画は forkキーへ分割位置を足して別ストリーム化（無分割の県は従来キーのまま不変）。
         var splitBit = region.Split is { } sp ? (uint)(sp + 1) << 24 : 0u;
         var prefRng = rng.Fork(0xF00D_0000UL ^ (uint)region.PrefectureId ^ splitBit);

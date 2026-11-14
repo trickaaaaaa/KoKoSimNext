@@ -22,26 +22,36 @@ public static class RegionalStadiumTier
     /// <param name="prefectureId">
     /// 大会を戦う県（<see cref="FinalStadiumFor"/>）。null なら県に依らない汎用（県営級）。
     /// </param>
-    public static FieldGeometry For(int? roundsRemaining, IRandomSource? rng, int? prefectureId = null)
-        => ForStadium(roundsRemaining, rng, prefectureId).ToFieldGeometry();
+    /// <param name="summer">
+    /// 夏の県大会か（issue #956）。神奈川の横浜スタジアムは夏の準決勝・決勝だけ（秋は汎用の県営級）。
+    /// 東京の神宮は夏秋とも。乱数の引き方には関わらない。
+    /// </param>
+    public static FieldGeometry For(int? roundsRemaining, IRandomSource? rng, int? prefectureId = null, bool summer = false)
+        => ForStadium(roundsRemaining, rng, prefectureId, summer).ToFieldGeometry();
 
     /// <summary>
     /// <see cref="For"/> と同じ判定で、寸法だけでなく球場そのもの（名称を含む）を返す
     /// （issue #803・電光掲示板の球場名表示。rng の引き方は一字一句同じ＝乱数消費は変わらない）。
     /// </summary>
-    public static Stadium ForStadium(int? roundsRemaining, IRandomSource? rng, int? prefectureId = null)
+    public static Stadium ForStadium(int? roundsRemaining, IRandomSource? rng, int? prefectureId = null, bool summer = false)
     {
         // 準決勝・決勝は乱数を引かない（県ごとの球場に差し替えても乱数列は1ビットも変わらない）
-        if (roundsRemaining is >= 1 and <= 2) return FinalStadiumFor(prefectureId);
+        if (roundsRemaining is >= 1 and <= 2) return FinalStadiumFor(prefectureId, summer);
         return rng is null ? Stadium.MunicipalSmall01 : Pick(rng);
     }
 
     /// <summary>
     /// その県の準決勝・決勝の球場（issue #904）。東京（東東京・西東京の夏、秋の都大会）は明治神宮野球場、
-    /// それ以外は汎用の県営級。47県の決勝球場（data/stadiums.yaml の <c>prefecture_finals</c>）へ広げるときはここに足す。
+    /// それ以外は汎用の県営級。神奈川の夏だけ横浜スタジアム（issue #956。秋は汎用のまま）。
+    /// 47県の決勝球場（data/stadiums.yaml の <c>prefecture_finals</c>）へ広げるときはここに足す。
     /// </summary>
-    public static Stadium FinalStadiumFor(int? prefectureId)
-        => prefectureId == Nation.SummerRegions.TokyoId ? Stadium.Jingu : Stadium.PrefLarge;
+    public static Stadium FinalStadiumFor(int? prefectureId, bool summer = false)
+        => prefectureId switch
+        {
+            Nation.SummerRegions.TokyoId => Stadium.Jingu,
+            Nation.SummerRegions.KanagawaId when summer => Stadium.Yokohama,
+            _ => Stadium.PrefLarge,
+        };
 
     private static Stadium Pick(IRandomSource rng)
         => rng.NextInt(0, 2) == 0 ? Stadium.MunicipalSmall01 : Stadium.MunicipalSmall02;

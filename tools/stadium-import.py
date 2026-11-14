@@ -66,8 +66,10 @@ RENAME = {
 }
 
 # 方位で分けるスタンド（面の重心の方位で決める）
-INFIELD_STANDS = {"infield_seats", "infield_steps"}
-OUTFIELD_STANDS = {"outfield_seats", "outfield_steps"}
+# 座席前面（*_seat_fronts）と外野上段のウィング席（wing_seat_*・横浜）も同じ stand_* へ寄せる
+# （寄せないと、ネット裏スタンドを隠しても残る／本塁打の球が当たらない）。ウィング席の座席列は作らない＝空席のまま
+INFIELD_STANDS = {"infield_seats", "infield_steps", "infield_seat_fronts"}
+OUTFIELD_STANDS = {"outfield_seats", "outfield_steps", "outfield_seat_fronts", "wing_seat_deck", "wing_seat_structure"}
 SEAT_GROUPS = {"infield_seats", "outfield_seats"}
 BACKSTOP_DEG = 110.0   # standard の座席TSVと同じ境目（|θ|≥110°＝ネット裏）
 

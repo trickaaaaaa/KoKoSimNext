@@ -139,6 +139,7 @@ prefecture_finals:
     center: 117.7
     fence_height: 5.0
     tier: prefectural
+    model: yokohama       # 3Dモデル data/stadiums/yokohama.obj（issue #956）
   - id: yamanashi_final
     name: 小瀬スポーツ公園野球場
     left: 99
