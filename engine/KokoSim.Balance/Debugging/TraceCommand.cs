@@ -31,39 +31,66 @@ public static class TraceCommand
         public bool MeasureOverhead { get; init; }
     }
 
-    public sealed record Summary(int Games, long Lines, double TracedMs, double UntracedMs)
-    {
-        public double OverheadRatio => UntracedMs > 0 ? TracedMs / UntracedMs - 1.0 : 0.0;
-    }
+    /// <summary>
+    /// <paramref name="OverheadRatio"/> は観測オン/オフの塊ごとの比の中央値−1（<c>--measure</c> のときだけ。
+    /// 塊を交互に回すので、周りの負荷は両側に同じだけ乗る）。<paramref name="TracedMs"/>/<paramref name="UntracedMs"/> は
+    /// 計測した塊の合計で、表示用。
+    /// </summary>
+    public sealed record Summary(int Games, long Lines, double TracedMs, double UntracedMs, double OverheadRatio);
+
+    /// <summary>計測の塊の試合数。塊が短いほど、周りの負荷の波がオン・オフ両方に同じだけ乗る。</summary>
+    internal const int MeasureChunkGames = 5;
 
     public static Summary Run(Options o)
     {
         var ctx = GameSimulation.BuildContext(o.CoefficientsPath, o.Field);
         var brain = o.UseTacticsBrain ? new StandardTacticsBrain(ctx.Tactics, ctx.Baserunning) : null;
 
-        double untracedMs = 0, tracedRep = double.MaxValue;
-        if (o.MeasureOverhead)
+        using var sink = JsonlTraceSink.OpenFile(o.OutPath, o.Only);
+        if (!o.MeasureOverhead)
         {
-            // ウォームアップ（JIT・TrajectoryFeatureTable の初回構築）を計測から外す。
-            // これを省くと1回目の実行だけ桁違いに遅く、オーバーヘッド比が意味を成さない。
-            PlayAll(o with { Games = 1 }, ctx, brain, sink: null);
-
-            // 観測オフ／オンを交互に2回ずつ回して各々の最小値を採る。単発計測は GC とスレッド割り当ての
-            // ゆらぎが観測コスト（数%想定）より大きく、符号が反転することすらあるため。
-            untracedMs = Measure(() => PlayAll(o, ctx, brain, sink: null));
-            using (var probe = JsonlTraceSink.OpenFile(o.OutPath, o.Only))
-            {
-                tracedRep = Measure(() => PlayAll(o, ctx, brain, probe));
-            }
-            untracedMs = System.Math.Min(untracedMs, Measure(() => PlayAll(o, ctx, brain, sink: null)));
+            var sw = Stopwatch.StartNew();
+            PlayAll(o, ctx, brain, sink, 0, o.Games);
+            return new Summary(o.Games, sink.Lines, sw.Elapsed.TotalMilliseconds, 0, 0);
         }
 
-        using var sink = JsonlTraceSink.OpenFile(o.OutPath, o.Only);
-        var sw = Stopwatch.StartNew();
-        PlayAll(o, ctx, brain, sink);
-        var tracedMs = System.Math.Min(sw.Elapsed.TotalMilliseconds, tracedRep);
+        // 同じ試合（同じ Fork 添字）を塊ごとに観測オフ／オンで1回ずつ回し、塊ごとの比の中央値を採る。
+        // 全試合をオフ→オンと通しで回す方式は、オンの計測中だけ周りのテスト／プロセスが重なると
+        // オンだけが何倍も遅く出た（CI の Heavy 並列で 53514ms vs 8475ms＝issue #969）。
+        // 交互に細かく回せば負荷の波は両側に乗り、中央値が重なった塊の外れ値を捨てる。
+        // 先頭の塊はオフ→オンの順に回して JIT・TrajectoryFeatureTable の初回構築を吸収し、計測から外す
+        // （オンの分はそのまま出力へ書く＝出力は全試合ぶんが試合順に並ぶ）。
+        var chunk = System.Math.Min(MeasureChunkGames, System.Math.Max(1, o.Games));
+        double onMs = 0, offMs = 0;
+        var ratios = new List<double>();
+        for (var first = 0; first < o.Games; first += chunk)
+        {
+            var n = System.Math.Min(chunk, o.Games - first);
+            var onFirst = first / chunk % 2 == 1;
+            double off, on;
+            if (onFirst)
+            {
+                on = Measure(() => PlayAll(o, ctx, brain, sink, first, n));
+                off = Measure(() => PlayAll(o, ctx, brain, null, first, n));
+            }
+            else
+            {
+                off = Measure(() => PlayAll(o, ctx, brain, null, first, n));
+                on = Measure(() => PlayAll(o, ctx, brain, sink, first, n));
+            }
+            if (first == 0) continue;
+            onMs += on; offMs += off;
+            if (off > 0) ratios.Add(on / off);
+        }
 
-        return new Summary(o.Games, sink.Lines, tracedMs, untracedMs);
+        return new Summary(o.Games, sink.Lines, onMs, offMs, ratios.Count > 0 ? Median(ratios) - 1.0 : 0.0);
+    }
+
+    private static double Median(List<double> values)
+    {
+        values.Sort();
+        var m = values.Count / 2;
+        return values.Count % 2 == 1 ? values[m] : (values[m - 1] + values[m]) / 2.0;
     }
 
     private static double Measure(System.Action action)
@@ -73,7 +100,7 @@ public static class TraceCommand
         return sw.Elapsed.TotalMilliseconds;
     }
 
-    private static void PlayAll(Options o, GameContext ctx, ITacticsBrain? brain, JsonlTraceSink? sink)
+    private static void PlayAll(Options o, GameContext ctx, ITacticsBrain? brain, JsonlTraceSink? sink, int firstGame, int count)
     {
         // 観測は逐次実行（JSONL の行順を試合順に保つため）。統計シムのような並列化はしない。
         GameContext Traced(GameContext c) => sink is null ? c : c with { CaptureTrace = true, TraceSink = sink };
@@ -101,7 +128,7 @@ public static class TraceCommand
         }
 
         var root = new Xoshiro256Random(scenario?.Seed ?? o.Seed);
-        for (var i = 0; i < o.Games; i++)
+        for (var i = firstGame; i < firstGame + count; i++)
         {
             // simulate-games と同じ Fork 規約（i→ストリーム）。同じシードなら同じ対戦・同じ展開になる。
             var g = root.Fork((ulong)i);
@@ -151,7 +178,7 @@ public static class TraceCommand
         if (o.MeasureOverhead)
         {
             sb.AppendLine(string.Create(c,
-                $"  観測オン {s.TracedMs:F0}ms / オフ {s.UntracedMs:F0}ms / オーバーヘッド {s.OverheadRatio:P1}"));
+                $"  観測オン {s.TracedMs:F0}ms / オフ {s.UntracedMs:F0}ms（先頭の塊を除く計測分）/ オーバーヘッド {s.OverheadRatio:P1}（塊ごとの比の中央値）"));
         }
         return sb.ToString();
     }

@@ -509,7 +509,7 @@ return KokoSim.Unity.Debugging.DebugBridge.DumpState();   // JSON が返る
 | `determinism-baseline.txt` | 再ベースライン無しで緑 |
 | `dotnet test --filter "Category!=Heavy"` | 856緑 |
 | `-c Release --filter "Category=Heavy"` | 統計帯すべて緑 |
-| **観測オンのオーバーヘッド** | **5.4〜7.3%**（300試合・`trace --measure` を単独実行。目標 +10% 未満）※ xUnit の Heavy は並列実行で CPU を取り合うため、目標値の判定には使わない |
+| **観測オンのオーバーヘッド** | **5.4〜7.3%**（300試合・`trace --measure` を単独実行。目標 +10% 未満）※ CI の Heavy テスト（`Trace_OverheadDoesNotBlowUp`）は同じ試合を5試合ずつの塊で観測オフ／オンと交互に回し、塊ごとの比の中央値で測る（並列の CPU 取り合いが両側に乗る。issue #969）。負荷を足しても 2〜6%・上限 15% は桁違いの悪化止めで、目標値の判定には使わない |
 | `trace-diff` | 係数（`straight_share` +0.02）を1つ変えたトレースの最初の食い違い球（1回裏 0-0 1球目・通算40球目・`plan.ty` が Fork→Fastball）を正しく指した |
 | F0 Fork注入の Save/Restore | digest 一致。既存セーブ（`RngState=null`）も従来どおり復元 |
 | F2 全シナリオ | 6件すべて宣言どおりの局面（イニング・表裏・アウト・走者・カウント・得点・打順・球数）で起動 |
