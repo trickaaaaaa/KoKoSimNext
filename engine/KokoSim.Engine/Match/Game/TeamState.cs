@@ -77,6 +77,26 @@ public sealed class TeamState
         return BatteryChemistry.For(pitcher, catcher, innings, c);
     }
 
+    // 結束（設計書23 §3）。顔ぶれは試合開始時の打順＋控え（＝ベンチ入り）で決め、試合中は変えない。
+    private double? _cohesion;
+    private CohesionCoefficients? _cohesionCoeff;
+
+    /// <summary>
+    /// このチームの結束 U（0〜100）＝顔ぶれの土台 U0（打順＋控え＋DHの先発投手・主将）＋ΔU（<see cref="Team.CohesionDelta"/>）。
+    /// 係数ごとに一度だけ計算する（乱数不使用）。
+    /// </summary>
+    public double CohesionValue(CohesionCoefficients c)
+    {
+        if (_cohesion is { } u && ReferenceEquals(_cohesionCoeff, c)) return u;
+        var members = new List<Player>(_team.BattingOrder);
+        members.AddRange(_team.Reserves);
+        if (_team.UsesDh && _team.StartingPitcher is not null) members.Add(_team.StartingPitcher);
+        var value = Cohesion.Value(Cohesion.BaseValue(members, _team.Captain, c), _team.CohesionDelta);
+        _cohesion = value;
+        _cohesionCoeff = c;
+        return value;
+    }
+
     // バッテリーごとの守備アウト数（設計書23 §2.3。自校の積み重ねの記録の材料）。ID を持つ選手だけ数える。
     private readonly Dictionary<(int PitcherId, int CatcherId), int> _batteryOuts = new();
 

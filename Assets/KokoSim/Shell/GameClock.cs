@@ -95,6 +95,9 @@ namespace KokoSim.Unity.Shell
         {
             var t = SeasonTransitions.OnWeekEntered(RosterService.Roster, Week, Calendar);
 
+            // チームの結束の上下（設計書23 §3.3・issue #934）: 週ごとに10%戻し、合宿の週なら上乗せする。
+            GameSession.Current.AdvanceCohesionWeek(Week, Calendar);
+
             // 年度の総括＋入部予定者の確定（3月・設計書04 §2.1 / issue #587）。
             // 総括を4月でなくここで回すのは順序のため: この年度の夏・秋の結果はもう出ているので、
             // 上がった名声をその場で来年度の新入生の質へ効かせられる（4月に総括すると1年遅れる）。

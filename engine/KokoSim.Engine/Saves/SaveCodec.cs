@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 28;
+    public const int CurrentVersion = 29;
 
     // ===== Serialize =====
 
@@ -93,7 +93,8 @@ public static class SaveCodec
             .Add("lastJinguChampionId", NullableIntToJson(s.LastJinguChampionId))
             .Add("lastLineup", LineupSaves.ToJson(s.LastLineup))
             .Add("momentumLevel", s.MomentumLevel)
-            .Add("batteryInnings", BatteryInningsToJson(s.BatteryInnings));
+            .Add("batteryInnings", BatteryInningsToJson(s.BatteryInnings))
+            .Add("cohesionDelta", s.CohesionDelta);
         return root.ToString();
     }
 
@@ -319,6 +320,8 @@ public static class SaveCodec
         // PersonalitySaveMigration で読む（旧タイプのマスの代表値・勤勉さは旧 personalityFactor から逆算。乱数不使用）。
         // v28（issue #933・設計書23 §2.3）: 自校のバッテリーの積み重ね（組ごとのイニング数）。旧セーブは記録が無い＝空。
         if (version < 28 && !root.Has("batteryInnings")) root.Add("batteryInnings", new JsonArray());
+        // v29（issue #934・設計書23 §3.3）: 自校の結束の上下 ΔU。旧セーブは0で補う。
+        if (version < 29 && !root.Has("cohesionDelta")) root.Add("cohesionDelta", 0.0);
         return root;
     }
 
@@ -419,6 +422,8 @@ public static class SaveCodec
             MomentumLevel = root.Int("momentumLevel"),
             // バッテリーの積み重ねは v28 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             BatteryInnings = BatteryInningsFromJson(root.Arr("batteryInnings")),
+            // 結束の上下は v29 で追加。Migrate が旧セーブへ0を補うので素直に読む。
+            CohesionDelta = root.Double("cohesionDelta"),
         };
 
         s.TournamentStats = new NationTournamentStats();
