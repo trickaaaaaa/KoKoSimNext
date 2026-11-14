@@ -320,8 +320,17 @@
     font-size: var(--fs-label);
     margin-right: var(--sp-2);
 }
-.abil-row__name { width: 78px; flex-shrink: 0; }
-.abil-row__label { font-size: var(--fs-label); color: var(--color-chalk); }
+.abil-row__name { width: 84px; flex-shrink: 0; }   /* 「スタミナ」76px＋チップまでの間（issue #948） */
+/* 左右の既定余白（.unity-label）を外す: 名前列（旧78px）に「スタミナ」（19px×4字＝76px）がちょうど入る幅しかなく、
+   既定余白が乗るとランクチップに食い込んでいた（issue #948）。縦の余白は行ごとの調整（--compact 等）に任せる。 */
+.abil-row__label {
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
 .abil-row__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
 .abil-row .rank-chip { margin-right: var(--sp-3); }
 .abil-row__chip-slot { width: 30px; flex-shrink: 0; margin-right: var(--sp-3); }   /* ランク無しの軸（球速, issue #736）でバー位置をそろえる空き */
@@ -1264,20 +1273,11 @@
    スタメン一覧は .mlineup-row__name を共有クラスのまま伸縮利用しており、名前の右で学年/投打を
    右寄せしているため直接固定幅化できない → .mlineup-row--compact モディファイアで限定する。
    控え行（.mlineup-benchrow）も同じサイド列なので幅を揃える。
-   width ではなく max-width にする（flex-grow:1/flex-basis:0 は base ルールのまま維持）:
-   交代済みスロットの ←旧選手名（.mlineup-row__replaced・flex-shrink:0）が同じ行に並ぶとき、
-   名前セルが残り幅ぶんだけ自分から縮む自己均衡が効かなくなり、背番号・調子顔が列の外へ
-   押し出されて見切れる（実機スクショで確認）。 */
+   width ではなく max-width にする（flex-grow:1/flex-basis:0 は base ルールのまま維持）。
+   退いた選手名（旧 .mlineup-row__replaced）は名前を切っていたため出さない（issue #947）。 */
 .mlineup-row--compact .mlineup-row__name,
 .mlineup-benchrow .mlineup-row__name {
     max-width: 133px;
-}
-.mlineup-row__replaced {
-    font-size: 13px;
-    color: var(--color-faint);
-    margin-right: var(--sp-1);
-    white-space: nowrap;
-    flex-shrink: 0;
 }
 .mlineup-row__pos {
     width: 24px;
