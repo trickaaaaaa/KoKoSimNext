@@ -681,13 +681,19 @@ public sealed class TeamState
         return (start, target);
     }
 
-    /// <summary>伝令の残回数（攻守各3回, §3）。延長は1イニングごとに1回追加。</summary>
+    /// <summary>伝令の残回数（攻守各3回, §3）。延長は回の頭で <see cref="ResetExtraInningTimeouts"/> が1へ置き直す。</summary>
     public int OffenseTimeoutsLeft { get; private set; } = 3;
     public int DefenseTimeoutsLeft { get; private set; } = 3;
-    public void GrantExtraInningTimeouts()
+
+    /// <summary>
+    /// 延長回の頭で伝令の残りを攻守とも1にする（高校野球特別規則 15(2)②(3)②「延長回に入った場合は、
+    /// それ以前の回数に関係なく、1イニングにつき1回だけ」）。9回までの残りも、延長の回で使わなかった分も
+    /// 次へ持ち越さない＝足し込まずに代入する（旧実装は +1 で、使わずに延長へ入ると4回・5回と増えていた）。
+    /// </summary>
+    public void ResetExtraInningTimeouts()
     {
-        OffenseTimeoutsLeft++;
-        DefenseTimeoutsLeft++;
+        OffenseTimeoutsLeft = 1;
+        DefenseTimeoutsLeft = 1;
     }
 
     public bool TryUseOffenseTimeout()
