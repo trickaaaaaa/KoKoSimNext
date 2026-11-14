@@ -1741,6 +1741,7 @@ namespace KokoSim.Unity.Match
                     GloveErrM = -1f,
                     ScatterShown = scattered && (eb.ScatterIsShortHop
                         || Mathf.Abs((float)eb.ScatterVerticalM) >= ThrowScatterHeightPickM
+                        || Mathf.Abs((float)eb.ScatterLateralM) >= ThrowScatterShownLateralM
                         || bodyShift.magnitude > ThrowScatterShownBodyShiftM),
                     ScatterRecoverySeconds = scattered ? (float)eb.ScatterRecoverySeconds : 0f,
                     Pos = who,
@@ -1870,6 +1871,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>横の逸れで体を寄せる量がこれを超えたら「逸れを捕る形が絵に出ている」とみなす[m]（issue #979）。</summary>
         private const float ThrowScatterShownBodyShiftM = 0.05f;
+
+        /// <summary>横の逸れがこれ以上なら、体を寄せなくても逸れを追って捕る形が出ているとみなす[m]（issue #979）。</summary>
+        private const float ThrowScatterShownLateralM = 0.35f;
 
         /// <summary>
         /// タッチプレーで逸れを捕った形を見せる最短の秒（捕球の瞬間から。12fps で約1コマ強）と、そこからタッチの
