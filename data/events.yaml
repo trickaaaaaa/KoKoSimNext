@@ -228,7 +228,7 @@ events:
     kind: Random
     weight: 1.5
     cooldown_weeks: 8
-    text: "マスコミの取材が入った。名声が上がる。"
+    text: "マスコミの取材が入った。部員の笑顔が、ぎこちない。"
     variants:
       - lines:
           - who: narration

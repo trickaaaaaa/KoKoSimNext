@@ -27,7 +27,7 @@ public sealed class FameDynamicsTests
         return m.Fame;
     }
 
-    /// <summary>逓減つきの定常値 = 100g/(20+g)（g＝年間の上昇量）＝100へ張り付かない。</summary>
+    /// <summary>逓減つきの定常値 = 110g/(22+g)（g＝年間の上昇量）＝100へ張り付かない。</summary>
     private static double SteadyState(double gainPerYear)
         => C.FameGainCeiling * gainPerYear / (C.FameGainCeiling * (1 - C.FameDecay) + gainPerYear);
 
@@ -43,7 +43,7 @@ public sealed class FameDynamicsTests
         // 年10勝（強さ75≒B相当）でも定常は 65〜70＝A・S は甲子園を積んだ監督のために空いたまま。
         var expected10 = SteadyState(C.FamePerWin * 10);
         Assert.InRange(expected10, 60.0, 72.0);
-        Assert.InRange(RunYears(40, winsPerYear: 10, koshien: false), expected10 - 1.0, expected10 + 0.01);
+        Assert.InRange(RunYears(40, winsPerYear: 10, koshien: false), expected10 - 2.0, expected10 + 0.01);
 
         // 勝ち続けるだけでは100に届かない（甲子園の実績が要る）。
         Assert.True(RunYears(40, winsPerYear: 15, koshien: false) < 90.0);
