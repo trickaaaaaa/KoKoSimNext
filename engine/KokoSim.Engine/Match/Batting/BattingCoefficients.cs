@@ -112,7 +112,7 @@ public sealed record BattingCoefficients
     /// ＝A投手が格下打線から平均24三振・四球ゼロを取る「線形で飽和しない効き」を止める。0 以下＝無効（従来の線形）。
     /// 既定 1.2: P80(146km/h) vs B30 の d≈2.4 → 1.15、P50 vs B45（d≈0.15）は不変。平均同士（atbat_10k）は帯内のまま。
     /// </summary>
-    public double WhiffMatchupCap { get; init; } = 1.5;
+    public double WhiffMatchupCap { get; init; } = 1.3;
 
     /// <summary>
     /// 誘発変化合成量[m]の欺瞞効果を実球速で割り引く基準球速[km/h]（issue #837・設計書21 §3.5。
@@ -211,7 +211,7 @@ public sealed record BattingCoefficients
     /// 同日、投手の打球品質寄与 ×3（issue pitcher-barely-affects-contact-quality）で母集団の打率が −.009 動く分を
     /// 0.63 で戻す（AVG .240〜.250。0.64 だと夏場帯 4.90–5.80 を 5.90 で越える）。
     /// </summary>
-    public double QualityMean { get; init; } = 0.63;
+    public double QualityMean { get; init; } = 0.635;
     /// <summary>コンタクト品質へのミート寄与((Contact−50)あたり)。</summary>
     public double QualityContactSlope { get; init; } = 0.0020;
     /// <summary>コンタクト品質の標準偏差。</summary>
@@ -307,7 +307,7 @@ public sealed record BattingCoefficients
     /// （打球の質が落ちる）側へ −0.0050 に置き、打球あたりの質を球速に対して平坦〜微減にする＝球速+10 ≈ 制球+10（AVG −.017）。</para>
     public double ContactQualityPerKmh { get; init; } = -0.0050;
     /// <summary>投手コントロール(−50)あたりのコンタクト品質寄与。負＝制球が良いほど芯を外させる。</summary>
-    public double ContactQualityPerControl { get; init; } = -0.0030;
+    public double ContactQualityPerControl { get; init; } = -0.0020;
     /// <summary>コンタクト品質への誘発変化合成量の基準[m]（リーグ平均球速×平均キレ＝この変化量で寄与0）。</summary>
     public double ContactQualityBreakRefM { get; init; } = 0.47;
     /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>

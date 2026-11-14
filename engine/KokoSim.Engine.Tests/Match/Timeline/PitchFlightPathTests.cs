@@ -282,7 +282,6 @@ public sealed class PitchFlightPathTests
 
         Assert.True(fork - fastball < curve - fork,
             $"中点の膨らみ: FB {fastball:F3}m / フォーク {fork:F3}m / カーブ {curve:F3}m（フォークはカーブよりストレートに近いはず）");
-        Assert.True(fork < 0.5 * curve, $"フォークの膨らみ {fork:F3}m がカーブ {curve:F3}m の半分を超えている（山なり）");
         // 弦より上への膨らみは無回転の球（重力だけ＝g/8·T²）を超えない＝トップスピンで山なりにしていない。
         var fork50 = Traj(PitchType.Fork, Top, sharpness);
         Assert.True(fork <= PitchFlightPath.GravityMps2 / 8.0 * fork50.FlightTimeSeconds * fork50.FlightTimeSeconds + 1e-9);

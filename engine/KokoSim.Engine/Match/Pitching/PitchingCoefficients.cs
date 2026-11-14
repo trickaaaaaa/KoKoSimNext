@@ -90,7 +90,7 @@ public sealed record PitchingCoefficients
     /// 変化球: キレ(Sharpness−50)1あたりの「ストレートからの回転の外れ」の伸び縮み（issue #911・<see cref="PitchSpinModel"/>）。
     /// 回転ベクトル＝ストレート＋g×(球種の基準回転−ストレート)、g＝1＋(キレ−50)×これ（下限0）。
     /// </summary>
-    public double SharpnessDeviationPerLevel { get; init; } = 0.015;
+    public double SharpnessDeviationPerLevel { get; init; } = 0.02;
 
     // === 球種ごとの回転軸（設計書02 §2.1・issue #835） ===
     // 「全球種バックスピン固定」だった穴（issue #835）を塞ぐ。各球種に回転軸（tilt）と実効回転数倍率
