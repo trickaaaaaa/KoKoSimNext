@@ -82,7 +82,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="card__body card__body--fill">
                         <ui:VisualElement class="sr-line">
-                            <ui:Label class="sr-lbl" text="都道府県" />
+                            <ui:Label class="sr-lbl f-body" text="都道府県" />
                             <ui:DropdownField name="sr-pref" class="sbk-field sr-drop" />
                         </ui:VisualElement>
                         <ui:ScrollView name="sr-scroll" mode="Vertical" class="sr-scroll scroll">
@@ -96,16 +96,16 @@
                         <ui:Label class="card__hd-title" text="校名" />
                     </ui:VisualElement>
                     <ui:VisualElement class="card__body card__body--fill">
-                        <ui:Label name="sr-d-name" class="ss-d__name f-display-lg" text="" />
+                        <ui:Label name="sr-d-name" class="sr-d__name f-display" text="" />
                         <ui:Label name="sr-d-sub" class="ss-d__sub f-body" text="" />
-                        <ui:VisualElement class="ss-d__row">
-                            <ui:Label class="ss-d__row-k" text="元の名前" />
-                            <ui:Label name="sr-d-gen" class="sr-d__gen f-display" text="" />
+                        <ui:VisualElement class="sr-kv">
+                            <ui:Label class="sr-kv__k f-body" text="元の名前" />
+                            <ui:Label name="sr-d-gen" class="sr-kv__v f-display" text="" />
                         </ui:VisualElement>
                         <ui:VisualElement class="sr-input">
-                            <ui:Label class="ss-d__row-k" text="新しい名前" />
+                            <ui:Label class="sr-kv__k f-body" text="新しい名前" />
                             <ui:VisualElement class="sr-input__line">
-                                <ui:TextField name="sr-name" class="sbk-field sr-text" />
+                                <ui:TextField name="sr-name" class="sbk-field sr-text f-display" />
                                 <ui:Label class="sbk-field-suffix f-display" text="高校" />
                             </ui:VisualElement>
                         </ui:VisualElement>
