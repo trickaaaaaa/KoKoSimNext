@@ -1324,6 +1324,13 @@ namespace KokoSim.Unity.Match
             public bool SkipClip;
             /// <summary>クリップの頭を捨てる量[s]（送球の捕球だけ。<see cref="ThrowCatchLeadSeconds"/>）。</summary>
             public float ClipHead;
+            /// <summary>
+            /// 逸れた送球を、逸れに合わせた形（掬う・伸び上がる・横へ寄る）で捕る予定か（issue #979）。
+            /// タッチプレーではこの形をタッチの収録が上書きしないよう、タッチの組み立てが読む。
+            /// </summary>
+            public bool ScatterShown;
+            /// <summary>判定が「逸れたぶん遅れる」と言う捕り直しの秒（engine の <c>ScatterRecoverySeconds</c>）。逸れ無しは 0。</summary>
+            public float ScatterRecoverySeconds;
             public bool Fired;
         }
 
@@ -1359,6 +1366,8 @@ namespace KokoSim.Unity.Match
             public float TTag;          // 走者がアウトになる時刻（プレーの時計）
             public float TStart;        // クリップを始める時刻＝TTag − Moment/Rate
             public float Rate;          // 再生倍率（球を持ってからの猶予が足りない時だけ 1 を超える）
+            public float Shifted;       // 判定（走者の到達）からタッチの瞬間を後ろへずらした量[s]（実測用。逸れ無しは 0）
+            public float Head;          // 収録の頭を捨てる量[s]（逸れを捕る形を見せた後の短い猶予に収める時だけ。issue #979）
             public Vector3 RunnerAt;    // タッチの瞬間の走者の位置（体を向ける先）
             /// <summary>タッチの瞬間の「野手の立ち位置 → 走者」の水平距離[m]（実測用）。
             /// 収録のグラブは体から <c>|gh|</c>＝0.446m の所にあるので、これが大きいほど
@@ -1730,6 +1739,10 @@ namespace KokoSim.Unity.Match
                     LineOffM = lineOff,
                     Rolling = !isThrow && (eb != null ? eb.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce : seg is RollSegment),
                     GloveErrM = -1f,
+                    ScatterShown = scattered && (eb.ScatterIsShortHop
+                        || Mathf.Abs((float)eb.ScatterVerticalM) >= ThrowScatterHeightPickM
+                        || bodyShift.magnitude > ThrowScatterShownBodyShiftM),
+                    ScatterRecoverySeconds = scattered ? (float)eb.ScatterRecoverySeconds : 0f,
                     Pos = who,
                     TCatch = tc,
                     // 送球の捕球は構えてから捕るまでを短く切る（issue #859）。頭上・掬う収録は捕る1秒前から
@@ -1854,6 +1867,16 @@ namespace KokoSim.Unity.Match
 
         /// <summary>送球の上下の逸れがこれ[m]以上なら、受け手の捕球の収録を逸れた高さで選び直す（issue #859）。</summary>
         private const float ThrowScatterHeightPickM = 0.15f;
+
+        /// <summary>横の逸れで体を寄せる量がこれを超えたら「逸れを捕る形が絵に出ている」とみなす[m]（issue #979）。</summary>
+        private const float ThrowScatterShownBodyShiftM = 0.05f;
+
+        /// <summary>
+        /// タッチプレーで逸れを捕った形を見せる最短の秒（捕球の瞬間から。12fps で約1コマ強）と、そこからタッチの
+        /// 瞬間まで収録を等速で流す最短の秒（issue #979）。判定の遅れ（<c>ScatterRecoverySeconds</c>）だけでは
+        /// 足りないときの下限＝収録は短く切って（頭を捨てて）つなぎ、**倍率は上げない**。**絵で決める値**。
+        /// </summary>
+        public static float ScatterTagShowSeconds = 0.10f, ScatterTagRunUpSeconds = 0.12f;
 
         /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
         private const float CatchBallBlendSeconds = 0.30f;
@@ -2028,19 +2051,41 @@ namespace KokoSim.Unity.Match
                 var recv = _catchEvents[best];
                 // 球を持ってからタッチまでの猶予。足りなければ再生倍率で詰める（頭出しは負にしない）。
                 float avail = Mathf.Max(1e-3f, t1 - recv.TCatch);
-                float rate = Mathf.Clamp(DefenderTagOut.Moment / avail, 1f, TagMaxRate);
-                _tagRateMax = Mathf.Max(_tagRateMax, DefenderTagOut.Moment / avail);
+                float tTag = t1, tagStart, rate, head = 0f;
+                if (recv.ScatterShown)
+                {
+                    // 逸れを捕る形を見せてからタッチへ移る（issue #979）。タッチの収録で上書きすると、捕る形が
+                    // 絵に出る前に消える（猶予は TagSeconds＝0.10s しかなく、倍率を上げて詰めると捕球の前から始まる）。
+                    // ① タッチの瞬間を、判定が加えた「逸れの遅れ」ぶん後ろへずらす（案b）
+                    // ② それでも捕る形を見せる秒が足りなければ、収録の頭を捨てて短くつなぐ（案a・倍率は等速のまま）
+                    float window = Mathf.Max(avail + recv.ScatterRecoverySeconds,
+                        ScatterTagShowSeconds + ScatterTagRunUpSeconds);
+                    tTag = recv.TCatch + window;
+                    float runUp = Mathf.Min(DefenderTagOut.Moment, window - ScatterTagShowSeconds);
+                    rate = 1f;
+                    tagStart = tTag - runUp;
+                    head = DefenderTagOut.Moment - runUp;
+                    _tagRateMax = Mathf.Max(_tagRateMax, 1f);
+                }
+                else
+                {
+                    rate = Mathf.Clamp(DefenderTagOut.Moment / avail, 1f, TagMaxRate);
+                    tagStart = t1 - DefenderTagOut.Moment / rate;
+                    _tagRateMax = Mathf.Max(_tagRateMax, DefenderTagOut.Moment / avail);
+                }
                 _tagCount++;
 
-                var stand = PlaybackEvaluator.FielderAt(play, recv.Pos, t1).Pos;
+                var stand = PlaybackEvaluator.FielderAt(play, recv.Pos, tTag).Pos;
                 float gap = new Vector2(bag.x - (float)stand.X, bag.y - (float)stand.Y).magnitude;
 
                 _tagEvents.Add(new FieldTagEvent
                 {
                     Pos = recv.Pos,
-                    TTag = t1,
-                    TStart = t1 - DefenderTagOut.Moment / rate,
+                    TTag = tTag,
+                    TStart = tagStart,
                     Rate = rate,
+                    Head = head,
+                    Shifted = tTag - t1,
                     RunnerAt = new Vector3(bag.x, 0f, bag.y),
                     GapM = gap,
                 });
@@ -2062,7 +2107,7 @@ namespace KokoSim.Unity.Match
                 if (a != null && clip != null)
                 {
                     // 頭出しは Max(0,…) で潰さない（上の t < TStart で降りている＝必ず 0 以上）
-                    SetActorClip(a, clip, (t - e.TStart) * e.Rate,
+                    SetActorClip(a, clip, (t - e.TStart) * e.Rate + e.Head,
                         DefenderTagOut.Moment + TagHoldSeconds * e.Rate);
                     a.Speed = e.Rate;
                     a.HoldSeconds = TagHoldSeconds;
@@ -2338,11 +2383,11 @@ namespace KokoSim.Unity.Match
             sb.AppendLine(string.Format(ci,
                 "タッチ予定={0}件\t収録の届き={1:F3}m\t要求倍率の最悪={2:F2}",
                 _tagEvents.Count, reach, _tagRateMax));
-            sb.AppendLine("守備位置\tTタッチ\tT開始\t猶予\t倍率\t間合い\t発火");
+            sb.AppendLine("守備位置\tTタッチ\tT開始\t猶予\t倍率\t間合い\t発火\t頭を捨てる\t判定からのずれ");
             foreach (var e in _tagEvents)
-                sb.AppendLine(string.Format(ci, "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F3}\t{6}",
-                    e.Pos, e.TTag, e.TStart, DefenderTagOut.Moment / e.Rate, e.Rate, e.GapM,
-                    e.Fired ? "済" : "未"));
+                sb.AppendLine(string.Format(ci, "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F3}\t{6}\t{7:F2}\t{8:F2}",
+                    e.Pos, e.TTag, e.TStart, (DefenderTagOut.Moment - e.Head) / e.Rate, e.Rate, e.GapM,
+                    e.Fired ? "済" : "未", e.Head, e.Shifted));
             return sb.ToString();
         }
 

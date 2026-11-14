@@ -176,4 +176,23 @@ public class ThrowScatterJudgedPictureTests
         Assert.True(low.ScatterIsShortHop);
         Assert.True(Enumerable.Range(60, 30).Select(i => low.At(i / 100.0).H).Min() < 0.02, "手前で弾んでいない");
     }
+
+    [Fact]
+    public void PlaybackThrow_CarriesTheRecoverySecondsTheVerdictUses()
+    {
+        // 絵が捕る形を見せてからタッチへつなぐ秒（issue #979）は、判定が「逸れたぶん遅れる」と言う秒と同じ式。
+        var seg = new BallSegment
+        {
+            Kind = BallSegmentKind.Throw, T0 = 0, T1 = 1, From = new TimelinePoint(0, 0), To = new TimelinePoint(0, 38),
+            ThrowScatter = new ThrowScatterModel.Scatter(10, -50),
+        };
+        var p = EndpointBallSegment.From(seg);
+        var expected = ThrowScatterModel.RecoverySeconds(
+            new ThrowScatterModel.Scatter(10, -50), 50,
+            C.StealThrowScatterLateralSecPerCm, C.StealThrowScatterHighSecPerCm, C.StealThrowScatterShortHopSecPerCm,
+            C.StealThrowScatterCatchingReliefSlope, C.StealThrowScatterCatchingReliefMinFactor);
+        Assert.Equal(expected, p.ScatterRecoverySeconds, 9);
+        Assert.True(p.ScatterRecoverySeconds > 0.1, "ショートバウンドの捕り直しは0.1秒を超える");
+        Assert.Equal(0.0, EndpointBallSegment.From(seg with { ThrowScatter = null }).ScatterRecoverySeconds);
+    }
 }
