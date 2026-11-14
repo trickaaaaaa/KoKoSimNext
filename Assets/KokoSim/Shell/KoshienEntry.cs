@@ -200,7 +200,7 @@ namespace KokoSim.Unity.Shell
             var ctx = new GameContext
             {
                 Field = MatchStadium.For(TournamentKind.SummerKoshien),
-                Weather = WeatherModel.ForSeason(WeatherModel.SeasonFor(TournamentKind.SummerKoshien)),   // Issue #803
+                Weather = WeatherModel.ForTournament(TournamentEntry.Schedule, TournamentKind.SummerKoshien),   // Issue #803/#971
             };
             return new MemoizingBackgroundResolver(
                 new BackgroundMatchResolver(NationService.Rosters, ctx, yearIndex, stats: null,

@@ -1,5 +1,8 @@
+using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Pitching;
+using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Season;
 
 namespace KokoSim.Engine.Match.Game;
@@ -9,10 +12,10 @@ namespace KokoSim.Engine.Match.Game;
 /// 気温という物理量を経由して弾道（空気密度ρ）と投手消耗という既存の物理層パラメータを動かす（不変条件#1）。
 /// 表示能力値や確率は直接いじらない。
 ///
-/// <para>既定は「夏（<see cref="Enabled"/>=true）」。<see cref="GameContext.Weather"/> が null または無効の間は
+/// <para>既定は「8月（夏の甲子園）」（<see cref="Enabled"/>=true）。<see cref="GameContext.Weather"/> が null または無効の間は
 /// 試合挙動・統計帯は一切変わらない（従来と完全一致）。data/coefficients.yaml の weather ブロックで差し替える。
-/// 季節別の分布は <see cref="WeatherModel.Spring"/>/<see cref="WeatherModel.Summer"/>/<see cref="WeatherModel.Autumn"/>
-/// （Issue #803, オーナー決定2026-11-09）。</para>
+/// 気温の分布は試合日の月で引く（<see cref="WeatherModel.ForMonth"/>・Issue #971, オーナー決定2026-11-15。
+/// 季節3つ→12か月の表）。</para>
 /// </summary>
 public sealed record WeatherCoefficients
 {
@@ -64,18 +67,41 @@ public enum WeatherState { Sunny, Cloudy, Rainy }
 /// <summary>1試合分の天気の抽選結果（状態＋気温）。</summary>
 public sealed record WeatherSample(WeatherState State, double TemperatureC);
 
-/// <summary>季節（Issue #803 決定4: 気温分布は季節別・地域差なし）。</summary>
-public enum WeatherSeason { Spring, Summer, Autumn }
+/// <summary>
+/// 1か月ぶんの気温の分布と雨の確率（Issue #971）。物理変換の定数（基準気温・減衰係数・消耗係数・雨/曇りのずれ）は
+/// 月に依らないので <see cref="MonthlyWeatherCoefficients.Base"/> から取り、月で変わるのはこの5つだけ。
+/// </summary>
+public sealed record WeatherMonthProfile(
+    int Month, double MeanTemperatureC, double TemperatureStdDevC, double MinTemperatureC, double MaxTemperatureC,
+    double RainProb);
 
 /// <summary>
-/// 季節別の天気係数一式（Issue #803）。<see cref="GameContext.Weather"/> には試合の季節で選んだ
-/// 1つ（<see cref="WeatherModel.ForSeason"/>）だけを通す＝解決式は季節を知らなくてよい。
+/// 月別の天気係数一式（Issue #971・オーナー決定2026-11-15: 試合日の月で引く・1年を通して12か月の表・地域差なし）。
+/// <see cref="GameContext.Weather"/> には試合日の月で選んだ1つ（<see cref="ForMonth"/>）だけを通す＝解決式は月を知らなくてよい。
 /// </summary>
-public sealed record SeasonalWeatherCoefficients
+public sealed record MonthlyWeatherCoefficients
 {
-    public WeatherCoefficients Spring { get; init; } = WeatherModel.Spring;
-    public WeatherCoefficients Summer { get; init; } = WeatherModel.Summer;
-    public WeatherCoefficients Autumn { get; init; } = WeatherModel.Autumn;
+    /// <summary>物理変換の定数と、表に無い月の既定（8月＝夏の甲子園の分布）。</summary>
+    public WeatherCoefficients Base { get; init; } = WeatherModel.Base;
+
+    /// <summary>1〜12月の気温の分布（月ごとに1件）。</summary>
+    public IReadOnlyList<WeatherMonthProfile> Months { get; init; } = WeatherModel.DefaultMonths;
+
+    /// <summary>暦月（1〜12。範囲外は折り返す）→その月の係数。表に無い月は <see cref="Base"/>。</summary>
+    public WeatherCoefficients ForMonth(int calendarMonth)
+    {
+        var month = WeatherModel.NormalizeMonth(calendarMonth);
+        foreach (var m in Months)
+        {
+            if (m.Month != month) continue;
+            return Base with
+            {
+                MeanTemperatureC = m.MeanTemperatureC, TemperatureStdDevC = m.TemperatureStdDevC,
+                MinTemperatureC = m.MinTemperatureC, MaxTemperatureC = m.MaxTemperatureC, RainProb = m.RainProb,
+            };
+        }
+        return Base;
+    }
 }
 
 /// <summary>
@@ -90,57 +116,53 @@ public static class WeatherModel
     // 摂氏→ケルビンのオフセット。
     private const double KelvinOffset = 273.15;
 
-    // ===== 季節別プリセット（Issue #803 決定4: 季節別・地域差なし）=====
-    // 気温分布（平均/σ/下限/上限）と雨の確率だけが季節で変わる。物理変換（基準気温・減衰係数・消耗係数・雨/曇りの気温のずれ）は
-    // 季節に依らない定数なので、既定（夏）から mean/std/min/max だけを差し替える。
+    // ===== 月別の表（Issue #971）=====
+    // 平均は日最高気温の平年値（試合は日中）。夏の甲子園（8月）は従来どおり 32℃・σ2.5・28〜36℃＝games_10k_summer の帯は動かさない。
+    // σ3 の月は平均±8℃で切る（従来の春・秋と同じ幅）。雨の確率は従来の季節値（春25%・夏15%・秋20%）のまま月へ割り当てた。
 
-    /// <summary>夏（既定）。data/coefficients.yaml <c>weather.summer</c> と同値（夏の甲子園を想定, 28〜36℃）。</summary>
-    public static WeatherCoefficients Summer { get; } = new();
+    /// <summary>基準（既定）。data/coefficients.yaml <c>weather.base</c> と同値（8月・夏の甲子園, 28〜36℃・平均32℃）。</summary>
+    public static WeatherCoefficients Base { get; } = new();
 
-    /// <summary>春。data/coefficients.yaml <c>weather.spring</c> と同値（センバツ期を想定, 8〜24℃）。</summary>
-    public static WeatherCoefficients Spring { get; } = Summer with
+    /// <summary>月別の表の既定。data/coefficients.yaml <c>weather.months</c> と同値。</summary>
+    public static IReadOnlyList<WeatherMonthProfile> DefaultMonths { get; } = new WeatherMonthProfile[]
     {
-        MeanTemperatureC = 16.0, TemperatureStdDevC = 3.0, MinTemperatureC = 8.0, MaxTemperatureC = 24.0,
-        RainProb = 0.25,
+        new(1, 10.0, 3.0, 2.0, 18.0, 0.25),
+        new(2, 11.0, 3.0, 3.0, 19.0, 0.25),
+        new(3, 14.0, 3.0, 6.0, 22.0, 0.25),
+        new(4, 19.0, 3.0, 11.0, 27.0, 0.25),
+        new(5, 23.0, 3.0, 15.0, 31.0, 0.25),
+        new(6, 26.0, 3.0, 18.0, 34.0, 0.15),
+        new(7, 30.0, 2.5, 26.0, 34.0, 0.15),
+        new(8, 32.0, 2.5, 28.0, 36.0, 0.15),
+        new(9, 27.0, 3.0, 19.0, 35.0, 0.20),
+        new(10, 22.0, 3.0, 14.0, 30.0, 0.20),
+        new(11, 17.0, 3.0, 9.0, 25.0, 0.20),
+        new(12, 12.0, 3.0, 4.0, 20.0, 0.25),
     };
 
-    /// <summary>秋。data/coefficients.yaml <c>weather.autumn</c> と同値（秋季大会期を想定, 14〜30℃）。</summary>
-    public static WeatherCoefficients Autumn { get; } = Summer with
-    {
-        MeanTemperatureC = 22.0, TemperatureStdDevC = 3.0, MinTemperatureC = 14.0, MaxTemperatureC = 30.0,
-        RainProb = 0.20,
-    };
+    private static readonly MonthlyWeatherCoefficients Default = new();
 
-    /// <summary>季節→係数の単一入口。GameContext.Weather へ通すのは常にこの戻り値（1季節ぶん）。</summary>
-    public static WeatherCoefficients ForSeason(WeatherSeason season) => season switch
-    {
-        WeatherSeason.Spring => Spring,
-        WeatherSeason.Autumn => Autumn,
-        _ => Summer,
-    };
+    /// <summary>暦月を 1〜12 へ折り返す（0→12, 13→1）。</summary>
+    public static int NormalizeMonth(int calendarMonth) => ((calendarMonth - 1) % 12 + 12) % 12 + 1;
 
     /// <summary>
-    /// 大会種別→季節（Issue #803）。センバツ本戦は春、夏系（県大会・甲子園）は夏、
-    /// それ以外（秋季県大会・秋季地区予選・秋季地区大会・神宮）は秋。
+    /// 試合日の月→係数の単一入口（Issue #971）。大会も練習試合もここを通る＝GameContext.Weather へ通すのは
+    /// 常にこの戻り値（1か月ぶん）。
     /// </summary>
-    public static WeatherSeason SeasonFor(TournamentKind kind) => kind switch
-    {
-        TournamentKind.SenbatsuKoshien => WeatherSeason.Spring,
-        TournamentKind.Summer or TournamentKind.SummerKoshien => WeatherSeason.Summer,
-        _ => WeatherSeason.Autumn,   // Autumn, AutumnDistrict, Regional, Jingu
-    };
+    public static WeatherCoefficients ForMonth(int calendarMonth) => Default.ForMonth(calendarMonth);
 
     /// <summary>
-    /// 暦月（1〜12）→季節。大会に紐付かない試合（練習試合等）向け。3〜5月=春, 6〜8月=夏, 9〜11月=秋。
-    /// オフシーズン（12〜2月, 公式戦が無い期間）は最も涼しい季節帯＝春を流用する。
+    /// 大会の天気係数（背景で解く裏試合など、試合ごとの日付を持たない呼び出し向け）。大会の開幕月で引く
+    /// （夏の県大会＝7月・甲子園＝8月・秋季県大会＝9月・地区大会＝10月・神宮＝11月・センバツ＝3月）。
     /// </summary>
-    public static WeatherSeason SeasonFor(int calendarMonth) => calendarMonth switch
-    {
-        3 or 4 or 5 => WeatherSeason.Spring,
-        6 or 7 or 8 => WeatherSeason.Summer,
-        9 or 10 or 11 => WeatherSeason.Autumn,
-        _ => WeatherSeason.Spring,
-    };
+    public static WeatherCoefficients ForTournament(TournamentSchedule schedule, TournamentKind kind)
+        => ForMonth(TournamentDate.OpeningOf(schedule, kind).Month);
+
+    /// <summary>月別の表（既定）に出てくる最低気温[℃]。弾道表の先読み範囲用。</summary>
+    public static double CoolestTemperatureC => DefaultMonths.Min(m => m.MinTemperatureC);
+
+    /// <summary>月別の表（既定）に出てくる最高気温[℃]。弾道表の先読み範囲用。</summary>
+    public static double HottestTemperatureC => DefaultMonths.Max(m => m.MaxTemperatureC);
 
     /// <summary>
     /// 試合気温[℃]を生成する。<paramref name="weatherRng"/> は試合本体とは別の専用ストリームを渡すこと。

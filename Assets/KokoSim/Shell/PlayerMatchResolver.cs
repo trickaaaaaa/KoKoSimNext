@@ -32,7 +32,7 @@ namespace KokoSim.Unity.Shell
                 new GameContext
                 {
                     MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName, StadiumId = stadiumId,
-                    Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
+                    Weather = CurrentWeatherCoefficients(),   // Issue #803/#971: 試合日の月で引く気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -63,7 +63,7 @@ namespace KokoSim.Unity.Shell
                     // 自校の投手交代はプレイヤーの采配権にする（Resolve側＝観戦しない裏解決には付けない）。
                     PlayerControlsPitcherChanges = true,
                     MercyRuleEnabled = mercyRuleEnabled, Field = field, StadiumName = stadiumName, StadiumId = stadiumId,
-                    Weather = CurrentWeatherCoefficients(),   // Issue #803: 季節別の気温モデルを実ゲームへ配線
+                    Weather = CurrentWeatherCoefficients(),   // Issue #803/#971: 試合日の月で引く気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -157,17 +157,23 @@ namespace KokoSim.Unity.Shell
         private static readonly SeasonCalendar Calendar = new SeasonCalendar();
 
         /// <summary>
-        /// 今週の季節（Issue #803）。大会に紐付かない試合（練習試合等）もここを通るので、暦月から導く
-        /// （<see cref="SeasonClock"/> と同じ <see cref="SeasonCalendar.DateOf"/> を単一ソースにする）。
+        /// 自校の次の試合の暦月（Issue #971）。大会中は大会の実月日（<see cref="TournamentDate"/>・ホームの「9月18日 試合」と同じ
+        /// 単一ソース）の次戦日、大会に紐付かない試合（練習試合等）は今週の暦月（<see cref="SeasonCalendar.DateOf"/>）。
         /// </summary>
-        private static WeatherSeason CurrentSeason() => WeatherModel.SeasonFor(Calendar.DateOf(GameClock.Week).Month);
+        private static int MatchMonth()
+        {
+            var s = GameSession.Current;
+            if (s.InTournament && !s.Runner.Finished)
+                return TournamentDate.DateOf(TournamentEntry.Schedule, s.Kind, s.Runner.NextMatchDay).Month;
+            return Calendar.DateOf(GameClock.Week).Month;
+        }
 
         /// <summary>
-        /// 今週の天気係数（Issue #803）。<see cref="Resolve"/>/<see cref="BeginLive"/> が試合へ渡す値と
+        /// 次の試合の天気係数（Issue #803/#971）。<see cref="Resolve"/>/<see cref="BeginLive"/> が試合へ渡す値と
         /// 同一の入口＝ホーム画面の対戦カードが <c>ITournamentRunner.PeekNextMatchWeather</c> で覗く天気も、
         /// 必ずこの係数で引く（覗いた値と実際に試合へ適用される値が食い違わない）。
         /// </summary>
-        public static WeatherCoefficients CurrentWeatherCoefficients() => WeatherModel.ForSeason(CurrentSeason());
+        public static WeatherCoefficients CurrentWeatherCoefficients() => WeatherModel.ForMonth(MatchMonth());
 
         /// <summary>
         /// 相手校ラインナップを「校ID＋年度」から決定論生成する。大会展望が同じ入口で同じチームを引くので、
