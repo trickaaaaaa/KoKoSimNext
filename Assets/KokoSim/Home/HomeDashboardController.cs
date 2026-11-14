@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
@@ -600,7 +601,9 @@ namespace KokoSim.Unity.Home
                 }
                 else
                 {
-                    foreach (var r in v.Injured) injList.Add(BuildInjured(r));
+                    var injNames = new List<Label>();
+                    foreach (var r in v.Injured) injList.Add(BuildInjured(r, injNames));
+                    UiComponents.ShrinkGroupToFit(injNames, _root);   // 名前の大きさは全行そろえる（issue #970）
                 }
             }
 
@@ -662,15 +665,18 @@ namespace KokoSim.Unity.Home
             if (bat != null) bat.Clear();
             if (pit != null) pit.Clear();
 
+            var names = new List<Label>();
             foreach (var r in KokoSim.Unity.Shell.TeamStatsService.Rankings())
             {
                 var host = r.Section == "投手" ? pit : bat;
-                if (host != null) host.Add(BuildRankRow(r));
+                if (host != null) host.Add(BuildRankRow(r, names));
             }
+            // 名前の大きさはカード内で全員そろえる（入らない人がいれば全員同じ倍率で縮む・issue #970）。
+            UiComponents.ShrinkGroupToFit(names, _root);
         }
 
         /// <summary>チーム内ランキングの1部門（1〜3位。該当なしの枠は淡色の「—」で必ず埋める）。</summary>
-        private static VisualElement BuildRankRow(KokoSim.Unity.Shell.RankRow r)
+        private static VisualElement BuildRankRow(KokoSim.Unity.Shell.RankRow r, List<Label> names)
         {
             var row = new VisualElement();
             row.AddToClassList("hm-rrow");
@@ -693,7 +699,7 @@ namespace KokoSim.Unity.Home
                 var cell = new VisualElement();
                 cell.AddToClassList("hm-rk-e");
                 var name = new Label(e.Name); name.AddToClassList("hm-rk-e__n");
-                UiComponents.ShrinkToFit(name);   // 入らない長さの名前だけ縮める（issue #730）
+                names.Add(name);
                 var val = new Label(e.Value); val.AddToClassList("hm-rk-e__v"); val.AddToClassList("f-num");
                 cell.Add(name); cell.Add(val);
                 row.Add(cell);
@@ -702,13 +708,14 @@ namespace KokoSim.Unity.Home
         }
 
         /// <summary>故障者の1行（背番号／名前／傷病名・部位・程度／復帰まで。重度だけ警告色＝UI原則②）。</summary>
-        private static VisualElement BuildInjured(InjuredRow r)
+        private static VisualElement BuildInjured(InjuredRow r, List<Label> names)
         {
             var row = new VisualElement();
             row.AddToClassList("hm-inj");
 
             var no = new Label(r.Number); no.AddToClassList("hm-inj__no"); row.Add(no);
             var name = new Label(r.Name); name.AddToClassList("hm-inj__n"); row.Add(name);
+            names.Add(name);
 
             // 傷病名は data/injuries.yaml 由来（種類なしの旧データは部位・程度だけになる）。
             var diagnosis = string.IsNullOrEmpty(r.Type) ? r.Site : r.Type + "・" + r.Site;

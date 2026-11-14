@@ -114,7 +114,7 @@ namespace KokoSim.Unity.Shell
 
             var rows = new List<RankRow>();
 
-            // 打撃。率系（打率・出塁率・OPS）は規定打席、数系（本塁打・打点・安打）は1以上で載せる。
+            // 打撃。率系（打率・出塁率・OPS）は規定打席、数系（本塁打・打点）は1以上で載せる。
             rows.Add(Build(book, names, "打撃", "打率", descending: true,
                 qualify: s => s.Batting.PlateAppearances >= paNeeded && s.Batting.AtBats > 0,
                 key: s => s.Batting.Average,
@@ -127,10 +127,6 @@ namespace KokoSim.Unity.Shell
                 qualify: s => s.Batting.Rbi > 0,
                 key: s => s.Batting.Rbi,
                 text: s => s.Batting.Rbi.ToString()));
-            rows.Add(Build(book, names, "打撃", "安打", descending: true,
-                qualify: s => s.Batting.Hits > 0,
-                key: s => s.Batting.Hits,
-                text: s => s.Batting.Hits.ToString()));
             rows.Add(Build(book, names, "打撃", "出塁率", descending: true,
                 qualify: s => s.Batting.PlateAppearances >= paNeeded && s.Batting.AtBats > 0,
                 key: s => s.Batting.Obp,
@@ -139,10 +135,6 @@ namespace KokoSim.Unity.Shell
                 qualify: s => s.Batting.PlateAppearances >= paNeeded && s.Batting.AtBats > 0,
                 key: s => s.Batting.Ops,
                 text: s => Avg3(s.Batting.Ops)));
-            rows.Add(Build(book, names, "打撃", "盗塁", descending: true,
-                qualify: s => s.Batting.StolenBases > 0,
-                key: s => s.Batting.StolenBases,
-                text: s => s.Batting.StolenBases.ToString()));
 
             // 投手。率系（防御率・WHIP）は規定投球回、数系（奪三振・投球回）は1以上。
             // 勝敗投手は概念ごと撤去（高校野球では主役でない・監督判断2026-08-27）＝
