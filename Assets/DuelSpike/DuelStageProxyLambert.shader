@@ -4,9 +4,12 @@
 //
 // 領域塗り分け（design-18 §3.5 U2着衣メッシュ用・2026-07-28）:
 // _UseRegions=1 のとき、UV1.x（DuelUniformMeshBuilder が載せた領域ID (id+0.5)/8）で
-// _RegionColors[9]（SetColorArray でスクリプトから設定・Properties宣言不可）を引く。
+// _RegionColors[10]（SetColorArray でスクリプトから設定・Properties宣言不可）を引く。
 // **刻み幅は /8 のまま**で、領域を足すときは 8番以降＝UV1.x が 1 を超える側へ伸ばす
 // （割る数を変えると既に焼いた資産の領域IDが全部ずれる。issue #621）。
+// 髪（領域9・issue #916）: 頭部の頂点は全部この領域で、UV1.y に髪の濃さ（0=肌〜1=髪）を持つ。
+// 肌色（領域4）と髪色（領域9）を濃さで混ぜる＝生え際がぼける。領域IDは頭部で一定なので補間されない
+// （領域IDを髪/肌で分けると、境界の頂点で UV1.x が補間されて別の領域の色の帯が出る）。
 // _UseRegions=0（既定）は従来どおり _BaseColor 一色＝地形・小道具の既存呼び出しは無改修で動く。
 // 1アクター1マテリアルを維持する（サブメッシュ分割にしない）＝DuelMotionCatalog.BakeRig の
 // sharedMaterial（単数）前提を壊さない。
@@ -55,7 +58,7 @@ Shader "KokoSim/DuelStageProxyLambert"
             float4 _LightDir;
             float _Ambient;
             float _UseRegions;
-            float4 _RegionColors[9];
+            float4 _RegionColors[10];
             float _StripeOn;
             fixed4 _StripeColor;
             float _StripeFreq;
@@ -75,7 +78,7 @@ Shader "KokoSim/DuelStageProxyLambert"
                 float4 pos : SV_POSITION;
                 float3 normal : TEXCOORD0;
                 float region : TEXCOORD1;
-                float restX : TEXCOORD2;   // 縦縞の刻み座標（バインドポーズの左右座標。UV1.y に焼いてある）
+                float restX : TEXCOORD2;   // 縦縞の刻み座標（バインドポーズの左右座標。UV1.y に焼いてある）／髪の領域では髪の濃さ
                 fixed4 color : COLOR;
             };
 
@@ -113,6 +116,8 @@ Shader "KokoSim/DuelStageProxyLambert"
                 {
                     int region = (int)(i.region * 8.0);
                     baseCol = _RegionColors[region].rgb;
+                    if (region == 9)
+                        baseCol = lerp(_RegionColors[4].rgb, baseCol, saturate(i.restX));
                     // 縞が乗るのは地色の領域だけ（0=ユニ上 / 1=ズボン）。アンダー・ソックス・帽子・肌は無地。
                     // 実物のストライプもユニフォーム本体にしか入らない
                     if (_StripeOn > 0.5 && region <= 1)
