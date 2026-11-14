@@ -313,6 +313,15 @@ ability_sensitivity:
     pitcher_control:  { defense: { expect: down, min_runs: 2.0 } }
     pitcher_stuff:    { defense: { expect: down, min_runs: 0.25 } }
     pitcher_sharpness: { defense: { expect: down, min_runs: 0.25 } }
+    # 性格の3軸（設計書23 §1・issue #932）。効きは小さく（設計書03「効果は小さな補正」）、1000試合の揺れ（±0.1）に埋もれる大きさ。
+    # 「はっきり逆向きでないこと」だけ見る（mental の打者側と同じ流儀）。2026-11-14 seed42/1000試合の実測を併記。
+    receptiveness:    { offense: { expect: up, min_runs: -0.15 } }     # 伝令の落ち着きだけに効く（実測 −0.01）
+    diligence:        { offense: { expect: up, min_runs: -0.15 } }     # 試合では効かない＝自主成長だけ（実測 0.00）
+    selflessness:     { offense: { expect: down, min_runs: -0.15 } }
+    # バッテリーの相性（#933・Q52 決着で強化）: K=±1 にそろえた測定（3000試合）で相手得点 +0.13／−0.14。ただしこの掃引の振れ幅
+    # （捕手の統率×投手の素直さ 20→80）は K −0.21→+0.21 しかなく、効きは約 −0.06 点＝1000試合の揺れ（±0.1）と同程度。
+    # はっきり逆向きでないことだけ見る。向きと大きさは BatteryChemistryTests（K に単調）と OPEN-QUESTIONS Q52 の実測で固定。
+    battery_affinity: { defense: { expect: down, min_runs: -0.15 } }   # 献身ほどチャンスの長打が下がり、犠打の上乗せより大きい（実測 −0.13）
   # 既知の不具合で今は満たせない項目（除外リスト）。直ったら**外す**（外し忘れは Heavy が「もう通っている」と赤くする）。
   known_defects:
     - { ability: catcher_arm,     side: defense, issue: 838, note: "向きは直った（肩20で相手得点+0.23）が min_runs 0.3 に届かない" }

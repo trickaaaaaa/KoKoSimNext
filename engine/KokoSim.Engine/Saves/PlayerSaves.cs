@@ -37,7 +37,9 @@ internal static class PlayerSaves
             .Add("baserun", p.Baserunning)
             .Add("mental", p.Mental)
             .Add("leadership", p.Leadership)
-            .Add("personality", EnumJson.Write(p.Personality))
+            .Add("receptiveness", p.Receptiveness)
+            .Add("diligence", p.Diligence)
+            .Add("selflessness", p.Selflessness)
             .Add("buntBonus", p.BuntSuccessBonus)
             .Add("chanceHit", p.ChanceHitFactor)
             .Add("skills", SkillSetToJson(p.Skills))
@@ -74,7 +76,10 @@ internal static class PlayerSaves
         Baserunning = o.Int("baserun"),
         Mental = o.Int("mental"),
         Leadership = o.Int("leadership"),
-        Personality = EnumJson.Read<Personality>(o.Str("personality")),
+        // 性格の4軸（設計書23 §1.5・v27）。旧セーブは8タイプの列挙だけ＝そのマスの代表値へ（乱数不使用）。
+        Receptiveness = PersonalitySaveMigration.Axes(o).Receptiveness,
+        Diligence = PersonalitySaveMigration.Axes(o).Diligence,
+        Selflessness = PersonalitySaveMigration.Axes(o).Selflessness,
         BuntSuccessBonus = o.Double("buntBonus"),
         ChanceHitFactor = o.Double("chanceHit"),
         Skills = SkillSetFromJson(o.Obj("skills")),

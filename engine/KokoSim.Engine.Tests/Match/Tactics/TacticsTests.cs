@@ -552,17 +552,18 @@ public sealed class TacticsTests
         // issue #860 B: 伝令役が主将なら通常上限(MessengerFactorMax=1.4)を超えて効く。
         var captain = new Player
         {
-            Name = "主将", Grade = 3, Leadership = 80, Mental = 80, Personality = Personality.HotBlood,
-        };
+            Name = "主将", Grade = 3, Leadership = 80, Mental = 80,
+        }.WithAxes(Personality.HotBlood);
         var twin = captain with { Name = "双子" }; // 同じ能力値でも「主将本人」でなければボーナス無し
         var receiver = new Player { Name = "r", Grade = 1 }; // 学年を外して同学年ボーナスを避ける
         var pc = new PersonalityCoefficients();
 
         var withoutCaptainArg = TimeoutMessenger.Factor(captain, receiver, toPitcher: true, C, pc);
-        Assert.Equal(1.36, withoutCaptainArg, 10); // 1 + 0.18(統率) + 0.08(3年) + 0.10(熱血→投手) = 1.36（通常上限1.4未満）
+        // 1 + 0.18(統率) + 0.08(3年) + 0.054(熱血＝献身95→投手 d0.9×0.06) = 1.314（通常上限1.4未満）
+        Assert.Equal(1.314, withoutCaptainArg, 10);
 
         var withCaptainArg = TimeoutMessenger.Factor(captain, receiver, toPitcher: true, C, pc, captain);
-        Assert.Equal(2.32, withCaptainArg, 10); // 1.36 + 統率力64×0.015 = 2.32（通常上限1.4を超える）
+        Assert.Equal(2.274, withCaptainArg, 10); // 1.314 + 統率力64×0.015 = 2.274（通常上限1.4を超える）
         Assert.True(withCaptainArg > C.MessengerFactorMax);
 
         // 同じ能力値でも主将本人でなければボーナスは乗らない。
@@ -575,7 +576,7 @@ public sealed class TacticsTests
         // issue #860 B: AiPickはFactorの比較だけで選ぶので、主将ボーナスが乗れば自動でベンチの主将を選ぶ
         // （AI監督側の特別分岐は不要＝「AiPickが係数最大の控えを選ぶので自動で主将を走らせる」の検証）。
         var captain = new Player { Name = "主将", Grade = 2, Leadership = 55, Mental = 70 }; // 単体では平凡な係数
-        var rival = new Player { Name = "ライバル", Grade = 3, Leadership = 99, Personality = Personality.HotBlood };
+        var rival = new Player { Name = "ライバル", Grade = 3, Leadership = 99 }.WithAxes(Personality.HotBlood);
         var receiver = new Player { Name = "r", Grade = 1 };
         var pc = new PersonalityCoefficients();
 

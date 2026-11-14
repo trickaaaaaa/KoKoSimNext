@@ -35,7 +35,7 @@ public static class AbilitySweep
     public static readonly double[] VelocityLadderKmh = { 100, 110, 120, 130, 140, 150 };
 
     /// <summary>変えたい対象の範囲。</summary>
-    public enum Scope { AllPlayers, Catcher, Pitchers }
+    public enum Scope { AllPlayers, Catcher, Pitchers, Battery }
 
     /// <summary>
     /// 1能力の掃引条件。値の単位は能力によって Lv か km/h。<paramref name="Prelude"/> は 20 / 80 を振る前に
@@ -108,6 +108,9 @@ public static class AbilitySweep
     private static IReadOnlyList<PitchSlot> MapRepertoire(PitcherAttributes a, Func<PitchSlot, PitchSlot> f)
         => a.EffectiveRepertoire.Select(f).ToArray();
 
+    /// <summary>性格の効き（C#既定＝実ゲームと同じ）。姿勢の掃引で犠打・チャンスの焼き込み値を作る。</summary>
+    private static readonly PersonalityCoefficients PersonalityEffect = new();
+
     private static Condition C(string id, string label, Scope scope, Func<Player, double, Player> apply,
         double low = LowLevel, double high = HighLevel, string unit = "Lv", Func<Player, Player>? prelude = null)
         => new(id, label, scope, low, high, unit, apply, prelude);
@@ -147,7 +150,21 @@ public static class AbilitySweep
             var cv = (v - BaseLevel) / 30.0;   // 20→-1（絶不調）／80→+1（絶好調）
             return p with { Condition = FormModel.Quantize(cv), ConditionValue = cv };
         }),
+        // 性格の4軸（設計書23 §1・issue #932）。統率は主将・伝令でだけ効く既存の値なので掃引しない。
+        // 素直さ＝伝令の落ち着き、姿勢＝犠打・チャンスの長打（投影時に焼き込む値も一緒に置く）、勤勉さ＝自主成長だけ（試合では効かない）。
+        C("receptiveness", "性格:素直さ", Scope.AllPlayers, (p, v) => p with { Receptiveness = (int)v }),
+        C("diligence", "性格:勤勉さ", Scope.AllPlayers, (p, v) => p with { Diligence = (int)v }),
+        C("selflessness", "性格:試合での姿勢（献身）", Scope.AllPlayers, (p, v) => p with
+        {
+            Selflessness = (int)v,
+            BuntSuccessBonus = PersonalityEffect.BuntSuccessBonus((int)v),
+            ChanceHitFactor = PersonalityEffect.ChanceHitFactor((int)v),
+        }),
         C("catcher_lead", "捕手:リード", Scope.Catcher, (p, v) => p with { Lead = (int)v }),
+        // バッテリーの相性の出発点（設計書23 §2.2・issue #933）: 捕手の統率と投手の素直さを同時に振る＝S0 だけが動く
+        // （均一チームは学年0＝積み重ね B は0）。
+        C("battery_affinity", "バッテリー:相性（捕手の統率×投手の素直さ）", Scope.Battery, (p, v) =>
+            p.Position == FieldPosition.Catcher ? p with { Leadership = (int)v } : p with { Receptiveness = (int)v }),
         C("catcher_arm", "捕手:肩", Scope.Catcher, (p, v) => p with { ArmStrength = (int)v }),
         C("catcher_catching", "捕手:捕球", Scope.Catcher, (p, v) => p with { Catching = (int)v }),
         C("pitcher_velocity", "投手:最速", Scope.Pitchers,
@@ -232,6 +249,7 @@ public static class AbilitySweep
         Scope.AllPlayers => true,
         Scope.Catcher => p.Position == FieldPosition.Catcher,
         Scope.Pitchers => p.Position == FieldPosition.Pitcher,
+        Scope.Battery => p.Position is FieldPosition.Pitcher or FieldPosition.Catcher,
         _ => false,
     };
 

@@ -231,4 +231,16 @@ public sealed class SaveState
     /// 旧セーブは勢いという概念が存在しえない＝既定0で補う。
     /// </summary>
     public int MomentumLevel { get; set; }
+
+    /// <summary>
+    /// 自校のバッテリーの積み重ね（設計書23 §2.3・issue #933・v28）。投手ID×捕手IDの組ごとの一緒に守ったイニング数。
+    /// 旧セーブは記録が無い＝空（全組0イニングから）で補う。
+    /// </summary>
+    public List<Season.BatteryInningsEntry> BatteryInnings { get; set; } = new();
+
+    /// <summary>
+    /// 自校の結束の出来事による上下 ΔU（設計書23 §3.3・issue #934・v29）。合宿・選手間イベントで動き週ごとに0へ戻る。
+    /// 旧セーブは結束という値が存在しえない＝0で補う。
+    /// </summary>
+    public double CohesionDelta { get; set; }
 }

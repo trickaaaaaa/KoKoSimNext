@@ -511,6 +511,8 @@ public static partial class GameSimulation
             Pressure = b.Pressure,
             Tactics = b.Tactics,
             Personalities = b.Personalities,
+            Chemistry = b.BatteryChemistry,
+            Cohesion = b.Cohesion,
             MatchInjury = b.MatchInjury,   // 試合中の受傷（Fork隔離＝結果・帯には影響しない観測データ）
             Field = geom,
         };

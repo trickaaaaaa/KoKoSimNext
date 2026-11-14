@@ -616,16 +616,20 @@ public static class ProspectGenerator
                 + (growth == GrowthType.Late ? c.LateCapBonus : 0)
                 + (mental - 50) * c.LeadCapMentalCorr), lead + 2, 99);
 
-        // 性格タイプ（設計書01 §1.1, CHANGELOG 22b）: 専用フォークストリームで抽選（能力・精神ロール列を1ビットも乱さない）。
-        // タイプ先決め: 抽選したタイプが①統率傾向の生成平均偏りと③自主成長(PersonalityFactor)の中心を与える。
-        var personality = personalityCoeff.Sample(rng.Fork(PersonalityStreamId(year, index)));
-        var profile = personalityCoeff.Profile(personality);
+        // 性格（設計書23 §1.4）: 専用フォークストリームで、種タイプ（今の8タイプを重みで）→②③④の軸を代表値の周りに
+        // σ12 で引く（能力・精神ロール列を1ビットも乱さない）。①統率は種タイプのずらしを今どおり足す。
+        var personality = personalityCoeff.SampleAxes(rng.Fork(PersonalityStreamId(year, index)));
+        var profile = personalityCoeff.Profile(personality.SeedType);
         leadership = (int)MathUtil.Clamp(leadership + profile.LeadershipMeanOffset, 1, 99);
 
         // 逸材（隠しフラグ, Issue #114 / Q20）: 専用Forkストリームで低確率ロール＝既存の能力ロール列を1ビットも
         // 乱さない（不変条件#2）。ProdigyProb=0 なら常に false（既定は 0.02＝YAML と一致, issue #402）。
         // SetWithCap（足のcap圧縮免除）と ApplyExp（trainability減衰免除）が p.IsProdigy を参照する。
         var isProdigy = rng.Fork(ProdigyStreamId(year, index)).NextDouble() < c.ProdigyProb;
+
+        // 旧 PersonalityFactor のタイプ内ジッタ（σ0.06）は勤勉さの連続値が引き受けた（設計書23 §1.2）。
+        // 主ストリームの NextGaussian 消費数だけは従来どおり1回保つ＝後続の能力ロール列（怪我耐性ほか）を1ビットも動かさない。
+        _ = rng.NextGaussian(0, 1);
 
         var p = new DevelopingPlayer
         {
@@ -643,11 +647,9 @@ public static class ProspectGenerator
             PitchingGrowth = pitchingGrowth,
             BattingGrowth = battingGrowth,
             DefenseGrowth = defenseGrowth,
-            // ③勤勉さ: タイプ中心＋個体ジッタ。主ストリームの NextGaussian 消費は従来と同数＝能力ロール列不変。
-            PersonalityFactor = MathUtil.Clamp(
-                profile.SelfGrowthFactor + rng.NextGaussian(0, personalityCoeff.FactorJitterSd),
-                personalityCoeff.FactorMin, personalityCoeff.FactorMax),
-            Personality = personality,
+            Receptiveness = personality.Receptiveness,
+            Diligence = personality.Diligence,
+            Selflessness = personality.Selflessness,
             Mental = mental,
             MentalCap = mentalCap,
             Leadership = leadership,

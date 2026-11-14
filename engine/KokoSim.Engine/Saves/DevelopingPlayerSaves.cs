@@ -57,7 +57,6 @@ internal static class DevelopingPlayerSaves
             .Add("pitchingGrowthType", EnumJson.WriteNullable(p.PitchingGrowthType))
             .Add("battingGrowthType", EnumJson.WriteNullable(p.BattingGrowthType))
             .Add("defenseGrowthType", EnumJson.WriteNullable(p.DefenseGrowthType))
-            .Add("personalityFactor", p.PersonalityFactor)
             .Add("isProdigy", p.IsProdigy)
             .Add("mental", p.Mental)
             .Add("mentalExp", p.MentalExp)
@@ -66,7 +65,11 @@ internal static class DevelopingPlayerSaves
             .Add("leadExp", p.LeadExp)
             .Add("leadCap", p.LeadCap)
             .Add("leadership", p.Leadership)
-            .Add("personality", EnumJson.Write(p.Personality))
+            .Add("receptiveness", p.Receptiveness)
+            .Add("diligence", p.Diligence)
+            .Add("selflessness", p.Selflessness)
+            .Add("persKnown", p.PersonalityReading.KnownMask)
+            .Add("persHigh", p.PersonalityReading.HighMask)
             .Add("isCaptain", p.IsCaptain)
             .Add("isRetired", p.IsRetired)
             .Add("num", p.UniformNumber)
@@ -106,10 +109,14 @@ internal static class DevelopingPlayerSaves
             PitchingGrowthType = o.Has("pitchingGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("pitchingGrowthType")) : null,
             BattingGrowthType = o.Has("battingGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("battingGrowthType")) : null,
             DefenseGrowthType = o.Has("defenseGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("defenseGrowthType")) : null,
-            PersonalityFactor = o.Double("personalityFactor"),
             IsProdigy = o.Bool("isProdigy"),
             Leadership = o.Int("leadership"),
-            Personality = EnumJson.Read<Personality>(o.Str("personality")),
+            // 性格の4軸（設計書23 §1.5・v27）。旧セーブは8タイプ＋PersonalityFactor＝代表値と勤勉さの逆算へ。
+            Receptiveness = PersonalitySaveMigration.DevelopingAxes(o).Receptiveness,
+            Diligence = PersonalitySaveMigration.DevelopingAxes(o).Diligence,
+            Selflessness = PersonalitySaveMigration.DevelopingAxes(o).Selflessness,
+            PersonalityReading = o.Has("persKnown")
+                ? new PersonalityReading(o.Int("persKnown"), o.Int("persHigh")) : default,
             InjuryResistance = o.Double("injuryRes"),
             // --- set 可の可変状態 ---
             Id = o.Int("id"),

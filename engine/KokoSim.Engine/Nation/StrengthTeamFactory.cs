@@ -435,9 +435,9 @@ public static class StrengthTeamFactory
             };
         }
 
-        // 性格（Fork＝親状態非消費）: 上の能力ロール列に影響しない。
-        var personality = pc.Sample(rng.Fork(salt));
-        var pp = pc.Profile(personality);
+        // 性格（設計書23 §1.4。Fork＝親状態非消費）: 種タイプ→②③④の軸。上の能力ロール列に影響しない。
+        var personality = pc.SampleAxes(rng.Fork(salt));
+        var pp = pc.Profile(personality.SeedType);
         // 投手能力は全選手が持つ（issue #209 Phase B → #381）。マウンドに置かない選手は主RNGから
         // 投手4能力を引かず、肩から推定して埋める。専用 Fork（性格の salt と別ストリーム）＝主RNG非消費。
         // 呼ぶ位置も条件も旧 LatentPitching と同じなので、生成される値・乱数消費列ともに完全に同一。
@@ -468,9 +468,11 @@ public static class StrengthTeamFactory
             Steal = speed,
             Baserunning = speed,
             Pitching = pitching,
-            Personality = personality,
-            BuntSuccessBonus = pp.BuntSuccessBonus,
-            ChanceHitFactor = pp.ChanceHitFactor,
+            Receptiveness = personality.Receptiveness,
+            Diligence = personality.Diligence,
+            Selflessness = personality.Selflessness,
+            BuntSuccessBonus = pc.BuntSuccessBonus(personality.Selflessness),
+            ChanceHitFactor = pc.ChanceHitFactor(personality.Selflessness),
             Mental = mentalLv,
             Leadership = leadershipLv,
             Lead = leadLv,

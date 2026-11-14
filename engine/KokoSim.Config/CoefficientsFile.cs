@@ -35,6 +35,10 @@ public sealed record CoefficientsBundle
     public KokoSim.Engine.Players.FormCoefficients Form { get; init; } = new();
     public KokoSim.Engine.Players.SkillCoefficients Skills { get; init; } = new();
     public KokoSim.Engine.Players.PersonalityCoefficients Personalities { get; init; } = new();
+    /// <summary>バッテリーの相性（設計書23 §2・issue #933）。</summary>
+    public BatteryChemistryCoefficients BatteryChemistry { get; init; } = new();
+    /// <summary>チームの結束（設計書23 §3・issue #934）。</summary>
+    public CohesionCoefficients Cohesion { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();
     /// <summary>チームの勢い（issue #863）。<see cref="Team.MomentumLevel"/> が0のチームには恒等＝帯不変。</summary>
     public MomentumCoefficients Momentum { get; init; } = new();
@@ -105,6 +109,8 @@ public static class CoefficientsLoader
         public FormDto? Form { get; set; }
         public SkillsDto? Skills { get; set; }
         public PersonalitiesDto? Personalities { get; set; }
+        public BatteryChemistryDto? BatteryChemistry { get; set; }
+        public CohesionDto? Cohesion { get; set; }
         public PressureDto? Pressure { get; set; }
         public MomentumDto? Momentum { get; set; }
         public TacticsDto? Tactics { get; set; }
@@ -148,6 +154,8 @@ public static class CoefficientsLoader
             Form = Form?.ToModel() ?? new KokoSim.Engine.Players.FormCoefficients(),
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
             Personalities = Personalities?.ToModel() ?? new KokoSim.Engine.Players.PersonalityCoefficients(),
+            BatteryChemistry = BatteryChemistry?.ToModel() ?? new BatteryChemistryCoefficients(),
+            Cohesion = Cohesion?.ToModel() ?? new CohesionCoefficients(),
             Pressure = Pressure?.ToModel() ?? new PressureCoefficients(),
             Momentum = Momentum?.ToModel() ?? new MomentumCoefficients(),
             Tactics = Tactics?.ToModel() ?? new TacticsCoefficients(),
@@ -1916,9 +1924,18 @@ public static class CoefficientsLoader
     private sealed class PersonalitiesDto
     {
         private static readonly KokoSim.Engine.Players.PersonalityCoefficients D = new();
-        public double FactorJitterSd { get; set; } = D.FactorJitterSd;
+        public double AxisSd { get; set; } = D.AxisSd;
         public double FactorMin { get; set; } = D.FactorMin;
         public double FactorMax { get; set; } = D.FactorMax;
+        public double ReceptivenessSlopeHigh { get; set; } = D.ReceptivenessSlopeHigh;
+        public double ReceptivenessSlopeLow { get; set; } = D.ReceptivenessSlopeLow;
+        public double DiligenceSlopeHigh { get; set; } = D.DiligenceSlopeHigh;
+        public double DiligenceSlopeLow { get; set; } = D.DiligenceSlopeLow;
+        public double BuntSlopeHigh { get; set; } = D.BuntSlopeHigh;
+        public double BuntSlopeLow { get; set; } = D.BuntSlopeLow;
+        public double ChanceSlopeHigh { get; set; } = D.ChanceSlopeHigh;
+        public double ChanceSlopeLow { get; set; } = D.ChanceSlopeLow;
+        public double MessengerSlope { get; set; } = D.MessengerSlope;
         public List<PersonalityProfileDto>? Profiles { get; set; }
 
         public KokoSim.Engine.Players.PersonalityCoefficients ToModel()
@@ -1929,9 +1946,18 @@ public static class CoefficientsLoader
                 : new KokoSim.Engine.Players.PersonalityCoefficients().Profiles;
             return new KokoSim.Engine.Players.PersonalityCoefficients
             {
-                FactorJitterSd = FactorJitterSd,
+                AxisSd = AxisSd,
                 FactorMin = FactorMin,
                 FactorMax = FactorMax,
+                ReceptivenessSlopeHigh = ReceptivenessSlopeHigh,
+                ReceptivenessSlopeLow = ReceptivenessSlopeLow,
+                DiligenceSlopeHigh = DiligenceSlopeHigh,
+                DiligenceSlopeLow = DiligenceSlopeLow,
+                BuntSlopeHigh = BuntSlopeHigh,
+                BuntSlopeLow = BuntSlopeLow,
+                ChanceSlopeHigh = ChanceSlopeHigh,
+                ChanceSlopeLow = ChanceSlopeLow,
+                MessengerSlope = MessengerSlope,
                 Profiles = profiles,
             };
         }
@@ -1941,26 +1967,20 @@ public static class CoefficientsLoader
     {
         public string Type { get; set; } = "Normal";
         public double SpawnWeight { get; set; }
-        public double CoachingReceptivity { get; set; } = 1.0;
-        public double SelfGrowthFactor { get; set; } = 1.0;
-        public double BuntSuccessBonus { get; set; }
-        public double ChanceHitFactor { get; set; } = 1.0;
         public double LeadershipMeanOffset { get; set; }
-        public double MessengerToPitcher { get; set; }
-        public double MessengerToBatter { get; set; }
+        public int Receptiveness { get; set; } = 50;
+        public int Diligence { get; set; } = 50;
+        public int Selflessness { get; set; } = 50;
 
         public KokoSim.Engine.Players.PersonalityProfile ToModel() => new()
         {
             Type = Enum.TryParse<KokoSim.Engine.Players.Personality>(Type, ignoreCase: true, out var t)
                 ? t : KokoSim.Engine.Players.Personality.Normal,
             SpawnWeight = SpawnWeight,
-            CoachingReceptivity = CoachingReceptivity,
-            SelfGrowthFactor = SelfGrowthFactor,
-            BuntSuccessBonus = BuntSuccessBonus,
-            ChanceHitFactor = ChanceHitFactor,
             LeadershipMeanOffset = LeadershipMeanOffset,
-            MessengerToPitcher = MessengerToPitcher,
-            MessengerToBatter = MessengerToBatter,
+            Receptiveness = Receptiveness,
+            Diligence = Diligence,
+            Selflessness = Selflessness,
         };
     }
 
@@ -1986,6 +2006,80 @@ public static class CoefficientsLoader
             MaxIndex = MaxIndex,
             MultiplierSlope = MultiplierSlope,
             FatigueNegativeAmplify = FatigueNegativeAmplify,
+        };
+    }
+
+    private sealed class BatteryChemistryDto
+    {
+        private static readonly BatteryChemistryCoefficients D = new();
+        public double LeadershipWeight { get; set; } = D.LeadershipWeight;
+        public double ReceptivenessWeight { get; set; } = D.ReceptivenessWeight;
+        public double ClashWeight { get; set; } = D.ClashWeight;
+        public double WifeRoleWeight { get; set; } = D.WifeRoleWeight;
+        public double StartWeight { get; set; } = D.StartWeight;
+        public double BondWeight { get; set; } = D.BondWeight;
+        public double BondTauInnings { get; set; } = D.BondTauInnings;
+        public double OfficialInningWeight { get; set; } = D.OfficialInningWeight;
+        public double PracticeInningWeight { get; set; } = D.PracticeInningWeight;
+        public double AiInningsPerYear { get; set; } = D.AiInningsPerYear;
+        public double LeadFactorPerK { get; set; } = D.LeadFactorPerK;
+        public double RattledRecoveryMinK { get; set; } = D.RattledRecoveryMinK;
+        public double PinchControlPerK { get; set; } = D.PinchControlPerK;
+        public int PinchPressureFrom { get; set; } = D.PinchPressureFrom;
+
+        public BatteryChemistryCoefficients ToModel() => new()
+        {
+            LeadershipWeight = LeadershipWeight,
+            ReceptivenessWeight = ReceptivenessWeight,
+            ClashWeight = ClashWeight,
+            WifeRoleWeight = WifeRoleWeight,
+            StartWeight = StartWeight,
+            BondWeight = BondWeight,
+            BondTauInnings = BondTauInnings,
+            OfficialInningWeight = OfficialInningWeight,
+            PracticeInningWeight = PracticeInningWeight,
+            AiInningsPerYear = AiInningsPerYear,
+            LeadFactorPerK = LeadFactorPerK,
+            RattledRecoveryMinK = RattledRecoveryMinK,
+            PinchControlPerK = PinchControlPerK,
+            PinchPressureFrom = PinchPressureFrom,
+        };
+    }
+
+    private sealed class CohesionDto
+    {
+        private static readonly CohesionCoefficients D = new();
+        public double CaptainPowerWeight { get; set; } = D.CaptainPowerWeight;
+        public int LeaderThreshold { get; set; } = D.LeaderThreshold;
+        public double LeaderWeight { get; set; } = D.LeaderWeight;
+        public int LeaderCap { get; set; } = D.LeaderCap;
+        public double SelfishShareWeight { get; set; } = D.SelfishShareWeight;
+        public double LoneWolfWeight { get; set; } = D.LoneWolfWeight;
+        public double SummerCampDelta { get; set; } = D.SummerCampDelta;
+        public double WinterCampDelta { get; set; } = D.WinterCampDelta;
+        public double EventImproveDelta { get; set; } = D.EventImproveDelta;
+        public double EventWorsenDelta { get; set; } = D.EventWorsenDelta;
+        public double WeeklyDecay { get; set; } = D.WeeklyDecay;
+        public double HighThreshold { get; set; } = D.HighThreshold;
+        public double LowThreshold { get; set; } = D.LowThreshold;
+        public double MessengerPerCohesion { get; set; } = D.MessengerPerCohesion;
+
+        public CohesionCoefficients ToModel() => new()
+        {
+            CaptainPowerWeight = CaptainPowerWeight,
+            LeaderThreshold = LeaderThreshold,
+            LeaderWeight = LeaderWeight,
+            LeaderCap = LeaderCap,
+            SelfishShareWeight = SelfishShareWeight,
+            LoneWolfWeight = LoneWolfWeight,
+            SummerCampDelta = SummerCampDelta,
+            WinterCampDelta = WinterCampDelta,
+            EventImproveDelta = EventImproveDelta,
+            EventWorsenDelta = EventWorsenDelta,
+            WeeklyDecay = WeeklyDecay,
+            HighThreshold = HighThreshold,
+            LowThreshold = LowThreshold,
+            MessengerPerCohesion = MessengerPerCohesion,
         };
     }
 

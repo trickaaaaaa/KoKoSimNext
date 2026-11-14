@@ -87,8 +87,6 @@ public sealed class DevelopingPlayer
         _ => GrowthType,
     };
 
-    public double PersonalityFactor { get; init; } = 1.0; // 練習効率 0.8〜1.2
-
     /// <summary>
     /// 逸材（隠しフラグ, Issue #114 / OPEN-QUESTIONS Q20）。素質固定能力（足）の才能上限圧縮・
     /// trainability 減衰を免除される稀な外れ値＝「規格外の俊足」等。生成時に低確率でロールする
@@ -116,11 +114,27 @@ public sealed class DevelopingPlayer
     /// <summary>統率傾向（性格の一部, CHANGELOG 22b）。主将選定の軸（設計書09 §8）。</summary>
     public int Leadership { get; init; } = 50;
 
+    /// <summary>性格②素直さ（設計書23 §1.1。1〜99・50が中立）。個別指導・伝令の落ち着きの効き。</summary>
+    public int Receptiveness { get; init; } = 50;
+
+    /// <summary>性格③勤勉さ（設計書23 §1.1）。自主成長（<see cref="Players.PersonalityCoefficients.SelfGrowthFactor"/>）。</summary>
+    public int Diligence { get; init; } = 50;
+
+    /// <summary>性格④試合での姿勢（設計書23 §1.1。高い＝献身／低い＝目立ちたがり）。犠打・チャンス・伝令役の得意場面。</summary>
+    public int Selflessness { get; init; } = 50;
+
     /// <summary>
-    /// 性格タイプ（設計書01 §1.1, CHANGELOG 22b）。②素直さ→指導の効き、③勤勉さ→PersonalityFactor、
-    /// ④自己犠牲⇔目立ちたがり→試合姿勢へ効く。①統率は Leadership が担う。既定 Normal は無補正。
+    /// 性格タイプ（設計書23 §1.3）。4軸（①は <see cref="Leadership"/>）から導出するラベルで、別には保存しない。
+    /// ②③④がすべて50（既定）なら Normal＝無補正。
     /// </summary>
-    public Players.Personality Personality { get; init; } = Players.Personality.Normal;
+    public Players.Personality Personality
+        => Players.Personalities.Classify(Leadership, Receptiveness, Diligence, Selflessness);
+
+    /// <summary>
+    /// 見極めで開示された性格の軸（設計書23 §1.5・Q37）。軸ごとに「高い側と見えた／低い側と見えた／未開示」を持つ
+    /// （誤認もあり得る＝本当の値とずれていてよい）。4軸そろうとタイプ名が判明する（<see cref="Players.PersonalityReading.KnownType"/>）。
+    /// </summary>
+    public Players.PersonalityReading PersonalityReading { get; set; }
 
     /// <summary>
     /// 主将か（設計書09 §8）。ロスター上で1名のみ true。年度替わりで3年生が抜けたら選び直す（CaptainSelector）。
@@ -243,7 +257,6 @@ public sealed class DevelopingPlayer
             PitchingGrowthType = PitchingGrowthType,
             BattingGrowthType = BattingGrowthType,
             DefenseGrowthType = DefenseGrowthType,
-            PersonalityFactor = PersonalityFactor,
             IsProdigy = IsProdigy,
             Mental = Mental,
             MentalExp = MentalExp,
@@ -252,7 +265,10 @@ public sealed class DevelopingPlayer
             LeadExp = LeadExp,
             LeadCap = LeadCap,
             Leadership = Leadership,
-            Personality = Personality,
+            Receptiveness = Receptiveness,
+            Diligence = Diligence,
+            Selflessness = Selflessness,
+            PersonalityReading = PersonalityReading,
             IsCaptain = IsCaptain,
             IsRetired = IsRetired,
             UniformNumber = UniformNumber,
