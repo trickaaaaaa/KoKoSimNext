@@ -233,7 +233,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 25;
+        private const int CurrentVersion = 26;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -255,7 +255,10 @@ namespace KokoSim.Unity.Match
             CatcherX = -0.02f, CatcherZ = -1.0f,
             UmpireX = 0.18f, UmpireZ = -1.88f,   // #291のスロット位置から微調整
             CapOffset = Vector3.zero,
-            HelmetOffset = new Vector3(-0.003f, -0.014f, -0.052f),
+            // 打者ヘルメットの被り（v26: 2026-11-15 監督指摘「被りが浅い」で -0.014→-0.035。
+            // つばの縁が旧・眉の高さまで下り、耳フラップの穴が耳に重なり、後ろの縁が襟足に届く深さ。
+            // 比較: -0.030（やや浅い）/ -0.040（最も深い・つばが目の高さ近く））
+            HelmetOffset = new Vector3(-0.003f, -0.035f, -0.052f),
             CatcherHelmetOffset = Vector3.zero,
             CatcherMaskOffset = Vector3.zero,
             CatcherChestOffset = Vector3.zero,
@@ -598,6 +601,11 @@ namespace KokoSim.Unity.Match
             if (c.Version < 25)   // v25: 足上げ〜トップの再生倍率（issue batter-timing-load-earlier・新項目）
             {
                 c.LoadSpeed = d.LoadSpeed;
+            }
+            if (c.Version < 26)   // v26: 打者ヘルメットを深く被せる（2026-11-15 監督指摘「被りが浅い」）
+            {
+                // 新項目ではないが、調整済みJSONの値を残すと浅い被りがそのまま生き続ける
+                c.HelmetOffset = d.HelmetOffset;
             }
             c.Version = CurrentVersion;
             return c;
@@ -5658,7 +5666,7 @@ namespace KokoSim.Unity.Match
         /// <summary>打者ヘルメットの被り角の回転中心（殻 helmet-shell の中心。AttachGear の配置と一致させる）。</summary>
         private static readonly Vector3 HelmetPivot = new(0f, 0.13f, 0.02f);
 
-        /// <summary>生成ヘルメットの中心を殻の中心（<see cref="HelmetPivot"/>）からずらす量[m]。絵で合わせた値（既定の HelmetOffset と合わせて頭頂が突き抜けず、つばが眉の上に来る位置。2026-11-15）。</summary>
+        /// <summary>生成ヘルメットの中心を殻の中心（<see cref="HelmetPivot"/>）からずらす量[m]。絵で合わせた値（頭頂が突き抜けない位置。2026-11-15）。被りの深さは較正の HelmetOffset.y で決める（v26）。</summary>
         private static readonly Vector3 HelmetMeshShift = new(0f, 0.006f, 0.052f);
 
         /// <summary>

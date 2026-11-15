@@ -127,5 +127,93 @@ namespace KokoSim.EditorTests
             Object.DestroyImmediate(mesh);
             Object.DestroyImmediate(tex);
         }
+
+        // ---- のっぺらぼう（FlattenFace） ----
+
+        /// <summary>なめらかな顔面（左右対称の放物面）。</summary>
+        private static float SmoothFace(float x, float z) => -0.10f + 4f * x * x + 1.5f * z * z;
+
+        [Test]
+        public void FitFaceSurface_TrimsNoseAndSockets_RecoversSmoothFace()
+        {
+            // 格子の顔面に、前へ出る「鼻」と奥へ凹む「眼窩」を足す。刈り込みで両方が外れ、元の面が出ること
+            var pts = new System.Collections.Generic.List<Vector3>();
+            for (int i = -6; i <= 6; i++)
+                for (int k = -8; k <= 10; k++)
+                {
+                    float x = i * 0.01f, z = k * 0.01f;
+                    float y = SmoothFace(x, z);
+                    if (Mathf.Abs(x) < 0.012f && z > -0.02f && z < 0.03f) y -= 0.02f;            // 鼻（前＝-y）
+                    if (Mathf.Abs(Mathf.Abs(x) - 0.03f) < 0.011f && Mathf.Abs(z - 0.05f) < 0.011f) y += 0.008f;   // 眼窩
+                    pts.Add(new Vector3(x, y, z));
+                }
+            var coef = DuelVendorRegionBaker.FitFaceSurface(pts, 0.06f, 0.08f, 0.0025f, 4, out int kept);
+
+            Assert.That(coef, Is.Not.Null);
+            Assert.That(kept, Is.LessThan(pts.Count), "鼻・眼窩は外れ値として刈られる");
+            foreach (var (x, z) in new[] { (0f, 0f), (0.03f, 0.05f), (-0.04f, -0.06f), (0.05f, 0.09f) })
+                Assert.That(DuelVendorRegionBaker.EvalFace(coef, x / 0.06f, z / 0.08f),
+                    Is.EqualTo(SmoothFace(x, z)).Within(0.001f), $"({x},{z}) で目鼻の跡が残っている");
+        }
+
+        [Test]
+        public void FaceMask_FullInsideWindow_ZeroOutside_Continuous()
+        {
+            Assert.That(DuelVendorRegionBaker.FaceMask(0f, 0f), Is.EqualTo(1f));
+            Assert.That(DuelVendorRegionBaker.FaceMask(DuelVendorRegionBaker.FaceFlatHalfWidth, 0f), Is.EqualTo(1f));
+            Assert.That(DuelVendorRegionBaker.FaceMask(DuelVendorRegionBaker.FaceFadeHalfWidth, 0f), Is.EqualTo(0f));
+            Assert.That(DuelVendorRegionBaker.FaceMask(0f, DuelVendorRegionBaker.FaceFadeTop), Is.EqualTo(0f));
+            Assert.That(DuelVendorRegionBaker.FaceMask(0f, DuelVendorRegionBaker.FaceFadeBottom), Is.EqualTo(0f));
+            // 縁で段を作らない: 細かく刻んで隣同士の差が小さい
+            float prev = 1f;
+            for (float dx = 0f; dx <= 0.08f; dx += 0.0005f)
+            {
+                float w = DuelVendorRegionBaker.FaceMask(dx, 0f);
+                Assert.That(Mathf.Abs(w - prev), Is.LessThan(0.06f));
+                prev = w;
+            }
+        }
+
+        [Test]
+        public void FlattenFace_RemovesNose_KeepsBackOfHead_AndDropsBlendShapes()
+        {
+            // 前面（-y）に鼻のある格子＋後頭部の点。鼻先は前面の最前点＝窓の基準
+            var verts = new System.Collections.Generic.List<Vector3>();
+            for (int i = -6; i <= 6; i++)
+                for (int k = -8; k <= 10; k++)
+                {
+                    float x = i * 0.01f, z = k * 0.01f;
+                    float y = SmoothFace(x, z);
+                    if (i == 0 && k == 0) y -= 0.02f;   // 鼻先
+                    verts.Add(new Vector3(x, y, 1.6f + z));
+                }
+            int back = verts.Count;
+            verts.Add(new Vector3(0f, 0.10f, 1.6f));   // 後頭部（同じ x,z）
+            int nose = 6 * 19 + 8;
+            var tris = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < 12; i++)
+                for (int k = 0; k < 18; k++)
+                {
+                    int a = i * 19 + k;
+                    tris.AddRange(new[] { a, a + 1, a + 19, a + 1, a + 20, a + 19 });
+                }
+            tris.AddRange(new[] { back, 0, 1 });
+            var normals = new Vector3[verts.Count];
+            for (int i = 0; i < normals.Length; i++) normals[i] = Vector3.down;
+            normals[back] = Vector3.up;
+            var mesh = new Mesh { vertices = verts.ToArray(), normals = normals, uv = new Vector2[verts.Count] };
+            mesh.SetTriangles(tris, 0);
+            var delta = new Vector3[verts.Count];
+            mesh.AddBlendShapeFrame("Smile", 100f, delta, null, null);
+
+            DuelVendorRegionBaker.FlattenFace(mesh, 0);
+
+            var v = mesh.vertices;
+            Assert.That(v[nose].y, Is.EqualTo(SmoothFace(0f, 0f)).Within(0.002f), "鼻が面へ均される");
+            Assert.That(v[back], Is.EqualTo(new Vector3(0f, 0.10f, 1.6f)), "後頭部は動かさない");
+            Assert.That(mesh.normals[nose].y, Is.LessThan(-0.99f), "鼻先の法線は面の法線（正面）");
+            Assert.That(mesh.blendShapeCount, Is.EqualTo(0), "表情で目鼻口が戻らない");
+            Object.DestroyImmediate(mesh);
+        }
     }
 }

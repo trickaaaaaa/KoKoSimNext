@@ -23,6 +23,24 @@ namespace KokoSim.Unity.Match
             return HelmetFrame(_runnerHelmetMounts[0], out center, out fwd, out right);
         }
 
+        /// <summary>
+        /// 顔の寄りの狙い用（のっぺらぼうの確認）。0=打者 / 1=投手 / 2=捕手 / 3=走者枠0（RunnerHelmetFrameForCapture で立てた後）。
+        /// 中心は頭ボーンから頭蓋の上へ 0.09m、向きは素立ちで実測した顔の前（Actor.HeadFwdLocal）。
+        /// </summary>
+        internal bool HeadFrameForCapture(int who, out Vector3 center, out Vector3 fwd, out Vector3 up)
+        {
+            center = fwd = up = Vector3.zero;
+            var a = who == 0 ? _batter : who == 1 ? _pitcher : who == 2 ? _catcher
+                : (_runnerCast.Count > 0 ? _runnerCast[0] : null);
+            if (a == null || a.Animator == null) return false;
+            var head = a.Animator.GetBoneTransform(HumanBodyBones.Head);
+            if (head == null) return false;
+            up = _root.transform.InverseTransformDirection(head.TransformDirection(a.HeadUpLocal)).normalized;
+            fwd = _root.transform.InverseTransformDirection(head.TransformDirection(a.HeadFwdLocal)).normalized;
+            center = _root.transform.InverseTransformPoint(head.position) + up * 0.09f;
+            return true;
+        }
+
         private bool HelmetFrame(Transform mount, out Vector3 center, out Vector3 fwd, out Vector3 right)
         {
             center = fwd = right = Vector3.zero;
