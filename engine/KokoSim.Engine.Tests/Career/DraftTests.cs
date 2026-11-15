@@ -124,14 +124,30 @@ public sealed class DraftTests
     }
 
     [Fact]
-    public void Prospect_AnyGrade_CanBecomeCandidate()
+    public void Prospect_Freshman_IsNeverCandidate_ButSophomoreWithSameAbilityIs()
     {
         var c = new DraftCoefficients();
-        // 1年生でも能力＋成績が高ければ候補入りしうる（設計書20 §1）。
+        var stats = BattingStats(7, 12, 48, 45, 30, 10);
         var freshman = Batter(7, grade: 1, level: 92, cap: 98, name: "1年怪物");
-        var e = DraftEngine.Evaluate(freshman, BattingStats(7, 12, 48, 45, 30, 10), c, S);
-        Assert.True(e.Band.IsCandidate());
-        Assert.Equal(1, e.Grade);
+        var e1 = DraftEngine.Evaluate(freshman, stats, c, S);
+        Assert.Equal(DraftRankBand.None, e1.Band);
+        Assert.Equal(1, e1.Grade);
+        Assert.True(e1.Notability >= c.CandidateThreshold);   // 注目度の値は計算したまま
+        Assert.True(NotabilityModel.MeetsCandidateFloor(freshman, S, c));
+
+        var sophomore = Batter(7, grade: 2, level: 92, cap: 98, name: "2年怪物");
+        var e2 = DraftEngine.Evaluate(sophomore, stats, c, S);
+        Assert.True(e2.Band.IsCandidate());
+        Assert.Equal(e1.Notability, e2.Notability, 6);
+    }
+
+    [Fact]
+    public void CandidateMinGrade_IsCoefficientDriven()
+    {
+        var freshman = Batter(7, grade: 1, level: 92, cap: 98);
+        var stats = BattingStats(7, 12, 48, 45, 30, 10);
+        var c = new DraftCoefficients { CandidateMinGrade = 1 };
+        Assert.True(DraftEngine.Evaluate(freshman, stats, c, S).Band.IsCandidate());
     }
 
     [Fact]

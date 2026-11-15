@@ -18,6 +18,7 @@ public sealed class DraftLoaderTests
               ceiling_blend: 0.5
               candidate_threshold: 55.0
               candidate_min_tier: C
+              candidate_min_grade: 3
               nomination_midpoint: 62.0
             """;
 
@@ -28,6 +29,7 @@ public sealed class DraftLoaderTests
         Assert.Equal(0.5, c.CeilingBlend, 6);
         Assert.Equal(55.0, c.CandidateThreshold, 6);
         Assert.Equal(KokoSim.Engine.Nation.Tier.C, c.CandidateMinTier);
+        Assert.Equal(3, c.CandidateMinGrade);
         Assert.Equal(62.0, c.NominationMidpoint, 6);
     }
 
@@ -47,6 +49,7 @@ public sealed class DraftLoaderTests
         Assert.Equal(def.PerformanceWeight, c.PerformanceWeight, 6);
         Assert.Equal(def.FirstRoundThreshold, c.FirstRoundThreshold, 6);
         Assert.Equal(def.CandidateMinTier, c.CandidateMinTier);
+        Assert.Equal(def.CandidateMinGrade, c.CandidateMinGrade);
         Assert.Equal(def.NominationSpread, c.NominationSpread, 6);
     }
 

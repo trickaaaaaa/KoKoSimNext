@@ -49,6 +49,8 @@ public sealed record DraftCoefficients
     /// 注目度がいくつでも圏外。隠し上限や成績で「打者ランクDの4位指名」が出ないための床。
     /// </summary>
     public Tier CandidateMinTier { get; init; } = Tier.B;
+    /// <summary>候補入りの最低学年。これ未満（入部直後の1年）は注目度が閾値を超えても圏外（注目度の値は計算したまま）。</summary>
+    public int CandidateMinGrade { get; init; } = 2;
 
     // --- 指名確定（10月最終週・3年のみ, 設計書20 §3.2） ---
     /// <summary>指名確率ロジスティックの中点（この注目度で指名確率50%）。</summary>
