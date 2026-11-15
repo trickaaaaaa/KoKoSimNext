@@ -18,8 +18,9 @@ namespace KokoSim.Unity.CareerMeta
     /// <para>表示専用＝ロジックを持たない（UI-BUILD-METHOD 大原則④）。通算成績は
     /// <see cref="GameSession.Records"/> の既存集計を読むだけで、ここで新しい集計を作らない。</para>
     ///
-    /// <para><b>歴任校は現状かならず1行</b>（転任＝設計書04 §1.2 が未実装のため）。転任が入ったら
-    /// <see cref="BuildPostings"/> が返す行が増えるだけで、表側は触らなくてよい形にしてある。</para>
+    /// <para>歴任校は転任（設計書04 §1.3・issue #641）のたびに1行増える（issue #980）。
+    /// <see cref="BuildPostings"/> が <see cref="GameSession.PostingHistory"/>（赴任ごとの基準値・
+    /// 退任済みの戦績）から組む。</para>
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class CareerScreenController : MonoBehaviour
@@ -83,8 +84,8 @@ namespace KokoSim.Unity.CareerMeta
         /// 氏名を決める導線（新規ゲーム設定の入力欄）は<b>足さない</b>と決めたので、見出しは校名に差し替える。
         /// 偽の氏名を勝手に生成はしない（<c>m.Status</c> の教員/フリーは氏名なしでも意味のある事実なので残す）。</para>
         ///
-        /// <para>⚠ 転任（設計書04 §1.2）が入ると校名は変わる＝そのときは「歴任校のうち今の1校」に
-        /// 意味が変わる。主役の据え直しはその実装とセットで考える。</para>
+        /// <para>転任（設計書04 §1.3）が入ると校名は変わる＝見出しは「歴任校のうち今の1校」を指す
+        /// ようになる（issue #980 で歴任校に前任校の行が増えた）。</para>
         /// </summary>
         private void RenderIdentity(Manager m)
         {
@@ -144,7 +145,8 @@ namespace KokoSim.Unity.CareerMeta
         /// <summary>
         /// 年表の節点は<b>既にある記録からしか作らない</b>（就任・甲子園出場・ドラフト指名・現在）。
         /// 年ごとの県大会成績は「その年の成績」を残す記録がまだ無いため出さない（新しい集計を作らない・
-        /// issue #586 の方針）。転任が入ったら赴任ごとの就任節点が増える。
+        /// issue #586 の方針）。「就任」節点は<b>今の学校</b>の1つだけ（転任前の学校の就任節点は出さない・
+        /// 前任校の在籍期間と戦績は歴任校の表（<see cref="RenderPostings"/>）が持つ・issue #980）。
         /// </summary>
         private void RenderTimeline(SchoolRecord r)
         {
@@ -250,18 +252,38 @@ namespace KokoSim.Unity.CareerMeta
         // ── 歴任校 ──────────────────────────────────────────────
 
         /// <summary>
-        /// 歴任した学校の行（転任が入ったら赴任ごとに増える）。今は就任中の1校だけで、その戦績は
-        /// 自校の通算戦績と同じ＝赴任が1つしか無いあいだは通算＝この赴任ぶんになる。
+        /// 歴任した学校の行（issue #980）。先頭が在任中の1行、続けて新しい順に退任済みの赴任。
+        /// 在任中ぶんの戦績は自校の通算（<paramref name="r"/>）から
+        /// <see cref="GameSession.PostingHistory"/> の基準値を差し引いた差分＝今の赴任が始まってからの分。
         /// </summary>
         private static IReadOnlyList<(string Year, string School, string Term, string Wl, string Ko)>
-            BuildPostings(SchoolRecord r) => new[]
+            BuildPostings(SchoolRecord r)
         {
-            (StartYear + "-",
-             TopBarMeters.SchoolDisplayName(),
-             TenureYears + "年目",
-             r.OfficialWins + "勝 " + r.OfficialLosses + "敗",
-             r.TotalAppearances > 0 ? "夏" + r.SummerAppearances + "・春" + r.SpringAppearances : "―"),
-        };
+            var history = GameSession.Current.PostingHistory;
+            var (wins, losses, summer, spring) = history.CurrentDelta(r);
+
+            var rows = new List<(string Year, string School, string Term, string Wl, string Ko)>
+            {
+                (StartYear + "-",
+                 TopBarMeters.SchoolDisplayName(),
+                 TenureYears + "年目",
+                 wins + "勝 " + losses + "敗",
+                 summer + spring > 0 ? "夏" + summer + "・春" + spring : "―"),
+            };
+
+            for (var i = history.Closed.Count - 1; i >= 0; i--)
+            {
+                var p = history.Closed[i];
+                rows.Add((
+                    FiscalYear(p.StartYearIndex) + "-" + FiscalYear(p.EndYearIndex),
+                    p.SchoolName,
+                    p.TenureYears + "年間",
+                    p.Wins + "勝 " + p.Losses + "敗",
+                    p.SummerAppearances + p.SpringAppearances > 0
+                        ? "夏" + p.SummerAppearances + "・春" + p.SpringAppearances : "―"));
+            }
+            return rows;
+        }
 
         private void RenderPostings(SchoolRecord r)
         {
@@ -292,13 +314,19 @@ namespace KokoSim.Unity.CareerMeta
         // ── 共通 ────────────────────────────────────────────────
 
         /// <summary>
-        /// 就任からの年数（1始まり）。転任が未実装なので<b>年度＝在任年数</b>で足りる。
-        /// 転任が入ったらここが「今の赴任の開始年度からの差」になる（呼び出し側は触らない）。
+        /// <b>今の学校</b>に就任してからの年数（1始まり・年度で数える）。就任年度は
+        /// <see cref="GameSession.PostingHistory"/> に保存した値を読む＝<see cref="Manager.YearsAtSchool"/>
+        /// （3月の総括週で増え転任で0へ戻る）や暦年（1月に繰り上がる）から逆算しない（issue #980・夜間レビュー #1013）。
         /// </summary>
-        private static int TenureYears => GameClock.YearIndex;
+        private static int TenureYears => ManagerPostingYears.CurrentTenureYears(
+            GameClock.YearIndex, GameSession.Current.PostingHistory.CurrentStartYearIndex);
 
-        /// <summary>就任した暦年。</summary>
-        private static int StartYear => SeasonClock.SeasonBaseYear;
+        /// <summary>今の学校に就任した年度の表記（年度の開始暦年。転任すればその翌年度に更新される）。</summary>
+        private static int StartYear => FiscalYear(GameSession.Current.PostingHistory.CurrentStartYearIndex);
+
+        /// <summary>年度 → 表記の年（年度の開始暦年）。歴任校の年はすべてこれを通す。</summary>
+        private static int FiscalYear(int yearIndex)
+            => ManagerPostingYears.FiscalYearLabel(SeasonClock.SeasonBaseYear, yearIndex);
 
         /// <summary>今の暦年（4月始まりの繰り上がりを含む）。</summary>
         private static int CurrentYear => SeasonClock.CalendarYear(GameClock.YearIndex, GameClock.Week);
