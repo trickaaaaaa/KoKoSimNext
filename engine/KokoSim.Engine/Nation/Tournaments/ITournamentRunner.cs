@@ -35,6 +35,11 @@ public interface ITournamentRunner
     int TotalRounds { get; }
     /// <summary>次戦の呼び名（「準決勝」「リーグ第2戦」等）。</summary>
     string RoundName { get; }
+    /// <summary>
+    /// 次戦の残りラウンド数（決勝=1・準決勝=2…。試合に渡す <see cref="TournamentMatchContext.RoundsRemaining"/> と同じ値）。
+    /// 次戦が無ければ null。ホーム画面が次戦の球場（屋内なら天気を出さない・issue #1020）を引くのに使う。
+    /// </summary>
+    int? NextMatchRoundsRemaining { get; }
 
     PlayerMatchOutcome PlayNextPlayerMatch();
     LivePlayerMatch BeginNextPlayerMatch();

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace KokoSim.Engine.Match.Field;
 
 /// <summary>球場の格（設計書13-stadiums §1）。序盤=市営級、準決勝/決勝=県営級、聖地=全国級。</summary>
@@ -41,6 +43,13 @@ public sealed record Stadium
     /// </summary>
     public string? Model { get; init; }
 
+    /// <summary>
+    /// 屋内（ドーム）か（issue #1020・data/stadiums.yaml の <c>indoor: true</c>）。true なら天候・気温
+    /// （<see cref="Game.WeatherModel"/>・#971 の月の表）を効かせない＝空気密度も投手の消耗も基準のまま。
+    /// <see cref="ToFieldGeometry"/> で <see cref="FieldGeometry.Indoor"/> へ写す。
+    /// </summary>
+    public bool Indoor { get; init; }
+
     /// <summary>寸法から判定用の <see cref="FieldGeometry"/> を生成する。</summary>
     public FieldGeometry ToFieldGeometry() => new()
     {
@@ -48,6 +57,7 @@ public sealed record Stadium
         RightFenceM = RightM,
         CenterFenceM = CenterM,
         FenceHeightM = FenceHeightM,
+        Indoor = Indoor,
     };
 
     /// <summary>
@@ -92,7 +102,7 @@ public sealed record Stadium
     };
 
     /// <summary>
-    /// 横浜スタジアム（issue #956）。神奈川の夏の準決勝・決勝の球場（秋は今まで通り汎用の県営級）。
+    /// 横浜スタジアム（issue #956）。神奈川の夏の準決勝・決勝の球場（秋は保土ケ谷＝<see cref="AutumnFinals"/>・issue #1020）。
     /// <b>値は <c>data/stadiums.yaml</c> の <c>kanagawa_final</c> と一致させること</b>（不変条件#4。
     /// <c>StadiumLoaderTests.YokohamaDefault_MatchesTheRepositoryYaml</c> が固定する）。
     /// </summary>
@@ -110,7 +120,7 @@ public sealed record Stadium
 
     /// <summary>
     /// 北海道ボールパーク（issue #959。実在はエスコンフィールドHOKKAIDO・命名権を外した名前）。
-    /// 北海道（北北海道・南北海道）の夏の準決勝・決勝の球場（秋は汎用の県営級）。左右非対称（左97・右99）。
+    /// 北海道（北北海道・南北海道）の夏の準決勝・決勝の球場（秋は札幌ドーム＝<see cref="AutumnFinals"/>）。左右非対称（左97・右99）。
     /// <b>値は <c>data/stadiums.yaml</c> の <c>kita_hokkaido_final</c> と一致させること</b>（不変条件#4。
     /// <c>StadiumLoaderTests.HokkaidoBallparkDefault_MatchesTheRepositoryYaml</c> が固定する）。
     /// </summary>
@@ -127,7 +137,7 @@ public sealed record Stadium
     };
 
     /// <summary>
-    /// 宮城球場（issue #961。楽天の本拠地・命名権を外した名前）。宮城の夏の準決勝・決勝の球場（秋は汎用の県営級）。
+    /// 宮城球場（issue #961。楽天の本拠地・命名権を外した名前）。宮城の夏の準決勝・決勝の球場（秋は仙台市民球場＝<see cref="AutumnFinals"/>）。
     /// フェンス高は資料が割れて未確認のため2.8m（監督決定）。
     /// <b>値は <c>data/stadiums.yaml</c> の <c>miyagi_final</c> と一致させること</b>（不変条件#4。
     /// <c>StadiumLoaderTests.MiyagiDefault_MatchesTheRepositoryYaml</c> が固定する）。
@@ -145,7 +155,7 @@ public sealed record Stadium
     };
 
     /// <summary>
-    /// 広島市民球場（issue #963。カープの本拠地・命名権を外した名前）。広島の夏の準決勝・決勝の球場（秋は汎用の県営級）。
+    /// 広島市民球場（issue #963。カープの本拠地・命名権を外した名前）。広島の夏の準決勝・決勝の球場（秋はみよし＝<see cref="AutumnFinals"/>）。
     /// 左右非対称（左101・右100）。フェンス高は代表値の3.0m（監督決定）。
     /// <b>値は <c>data/stadiums.yaml</c> の <c>hiroshima_final</c> と一致させること</b>（不変条件#4。
     /// <c>StadiumLoaderTests.HiroshimaDefault_MatchesTheRepositoryYaml</c> が固定する）。
@@ -160,6 +170,47 @@ public sealed record Stadium
         CenterM = 122.0,
         FenceHeightM = 3.0,
         Model = "hiroshima",
+    };
+
+    /// <summary>
+    /// 秋季県大会の準決勝・決勝の球場（issue #1020・2026-11-15 監督決定）。県ID → 球場。夏と会場が違う県だけを持ち、
+    /// 載っていない県の秋は汎用の県営級（<see cref="PrefLarge"/>。東京は夏秋とも <see cref="Jingu"/>）。
+    /// 3D モデルを持たない会場は standard を判定寸法へ伸縮して描く（見た目は汎用・名前と寸法は実在の会場）。
+    /// <b>値は <c>data/stadiums.yaml</c> の <c>&lt;県&gt;_autumn_final</c> と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.AutumnFinalDefaults_MatchTheRepositoryYaml</c> が全件を固定する）。
+    /// 札幌ドームは屋内（<see cref="Indoor"/>）。
+    /// </summary>
+    public static IReadOnlyDictionary<int, Stadium> AutumnFinals { get; } = new Dictionary<int, Stadium>
+    {
+        [0] = AutumnFinal("hokkaido_autumn_final", "札幌ドーム", 100, 122, 5.75) with { Indoor = true },   // 秋季全道大会
+        [3] = AutumnFinal("miyagi_autumn_final", "仙台市民球場", 100, 122),
+        [6] = AutumnFinal("fukushima_autumn_final", "いわきグリーンスタジアム", 100, 122),
+        [7] = AutumnFinal("ibaraki_autumn_final", "ひたちなか市民球場", 100, 122),
+        [8] = AutumnFinal("tochigi_autumn_final", "宇都宮清原球場", 100, 122),
+        [9] = AutumnFinal("gunma_autumn_final", "桐生球場", 100, 122),
+        [11] = AutumnFinal("chiba_autumn_final", "千葉県総合スポーツセンター野球場", 98, 122),
+        [13] = AutumnFinal("kanagawa_autumn_final", "保土ケ谷球場", 95, 120),
+        [19] = AutumnFinal("nagano_autumn_final", "長野オリンピックスタジアム", 99.1, 122, 4.0),
+        [22] = AutumnFinal("aichi_autumn_final", "小牧市民球場", 92, 120),
+        [23] = AutumnFinal("mie_autumn_final", "津市営球場", 91, 119),
+        [27] = AutumnFinal("hyogo_autumn_final", "明石公園第一野球場", 100, 122),
+        [30] = AutumnFinal("tottori_autumn_final", "米子市民球場", 99.1, 122),
+        [33] = AutumnFinal("hiroshima_autumn_final", "みよし運動公園野球場", 100, 122),
+        [34] = AutumnFinal("yamaguchi_autumn_final", "下関球場", 100, 122),
+        [39] = AutumnFinal("fukuoka_autumn_final", "久留米市野球場", 98, 122),
+        [46] = AutumnFinal("okinawa_autumn_final", "名護市営球場", 100, 122),
+    };
+
+    /// <summary>秋の決勝会場（左右対称・県営級・3Dモデルなし）。フェンス高の資料が無い会場は YAML と同じ既定 2.5m。</summary>
+    private static Stadium AutumnFinal(string id, string name, double wing, double center, double fenceHeight = 2.5) => new()
+    {
+        Id = id,
+        Name = name,
+        Tier = StadiumTier.Prefectural,
+        LeftM = wing,
+        RightM = wing,
+        CenterM = center,
+        FenceHeightM = fenceHeight,
     };
 
     /// <summary>

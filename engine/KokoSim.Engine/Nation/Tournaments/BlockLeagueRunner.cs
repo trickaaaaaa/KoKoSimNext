@@ -83,6 +83,9 @@ public sealed class BlockLeagueRunner : ITournamentRunner
     public int FieldSize => _fieldSize;
     public int TotalRounds => _totalRounds;
     public string RoundName => RoundNameFor(_roundIndex);
+
+    /// <inheritdoc/>
+    public int? NextMatchRoundsRemaining => _nextOpponent is null ? null : LeagueRoundsRemaining;
     /// <summary>各ブロックから県大会へ進む校数。</summary>
     public int AdvancePerBlock => _advancePerBlock;
     /// <summary>消化済みの節数。</summary>

@@ -255,11 +255,13 @@ public static class WeatherModel
     /// 試合開始時に一度だけ呼ぶ配線点（GameEngine.NewProgress から）。専用ストリームを Fork して気温を生成し、
     /// 空気密度・投手消耗を差し替えた <see cref="GameContext"/> を返す。<paramref name="matchRng"/> は Fork のみで
     /// 消費しない（xoshiro の Fork は親状態を進めない）ため、試合本体の乱数順・決定論は不変（不変条件#2）。
-    /// Weather が null／無効なら <paramref name="ctx"/> をそのまま返す。
+    /// Weather が null／無効、または屋内の球場（<see cref="Field.FieldGeometry.Indoor"/>・issue #1020）なら
+    /// <paramref name="ctx"/> をそのまま返す（屋内は気温の影響なし＝基準の空気密度・消耗。天気も出さない）。
     /// </summary>
     public static GameContext ApplyForMatch(GameContext ctx, IRandomSource matchRng)
     {
         if (ctx.Weather is not { Enabled: true } c) return ctx;
+        if (ctx.Field.Indoor) return ctx;
         var sample = SampleForMatch(matchRng, c);
         return ApplyTo(ctx, sample.TemperatureC) with { ResolvedWeather = sample };
     }

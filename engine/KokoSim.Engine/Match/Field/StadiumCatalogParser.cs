@@ -15,7 +15,7 @@ namespace KokoSim.Engine.Match.Field;
 ///   - 項目は <c>- id: …</c> で始まり、続く <c>key: value</c> 行がその項目に属する
 ///
 /// 既定値は Config 側と同じ（right 省略＝left、fence_height 省略＝2.5m、center 省略＝118m、left 省略＝95m、
-/// tier 省略＝県営級）。id の無い項目と未知の tier の項目は捨てる（Config 側は例外にする＝Unity は止めない）。
+/// tier 省略＝県営級、indoor 省略＝屋外）。id の無い項目と未知の tier の項目は捨てる（Config 側は例外にする＝Unity は止めない）。
 /// </summary>
 public static class StadiumCatalogParser
 {
@@ -84,6 +84,7 @@ public static class StadiumCatalogParser
             FenceHeightM = Num(map, "fence_height", 2.5),
             Wind = map.TryGetValue("wind", out var wind) && wind.Length > 0 ? wind : null,
             Model = map.TryGetValue("model", out var model) && model.Length > 0 ? model : null,
+            Indoor = map.TryGetValue("indoor", out var indoor) && string.Equals(indoor, "true", System.StringComparison.OrdinalIgnoreCase),
         };
         return true;
     }

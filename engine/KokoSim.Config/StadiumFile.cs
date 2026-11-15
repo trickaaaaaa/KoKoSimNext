@@ -64,6 +64,7 @@ public static class StadiumCatalogLoader
                 FenceHeightM = e.FenceHeight,
                 Wind = e.Wind,
                 Model = string.IsNullOrEmpty(e.Model) ? null : e.Model,
+                Indoor = e.Indoor,
             });
         }
     }
@@ -94,5 +95,6 @@ public static class StadiumCatalogLoader
         public string? Tier { get; set; }
         public string? Wind { get; set; }
         public string? Model { get; set; }
+        public bool Indoor { get; set; }
     }
 }

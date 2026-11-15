@@ -245,6 +245,46 @@ public sealed class StadiumLoaderTests
     }
 
     /// <summary>
+    /// 秋季県大会の準決勝・決勝の会場の C#既定（<see cref="Stadium.AutumnFinals"/>）と data/stadiums.yaml の
+    /// <c>&lt;県&gt;_autumn_final</c> が全件一致すること（不変条件#4・issue #1020）。実ゲームは YAML を読まず C#既定で走る。
+    /// 屋内（<c>indoor</c>）も揃える＝片方だけ屋内だと実ゲームだけ札幌ドームに気温が効く。
+    /// </summary>
+    [Fact]
+    public void AutumnFinalDefaults_MatchTheRepositoryYaml()
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("stadiums.yaml");
+        var catalog = StadiumCatalogLoader.LoadCatalog(path);
+        var yamlIds = catalog.Keys.Where(k => k.EndsWith("_autumn_final")).OrderBy(k => k).ToList();
+        var codeIds = Stadium.AutumnFinals.Values.Select(s => s.Id).OrderBy(k => k).ToList();
+        Assert.Equal(yamlIds, codeIds);   // YAML に足した秋の会場を C# が取りこぼさない（逆も）
+
+        foreach (var code in Stadium.AutumnFinals.Values)
+        {
+            var yaml = catalog[code.Id];
+            Assert.Equal(yaml, code);   // record の値等価＝id・名前・tier・寸法・風・モデル・屋内の全部
+        }
+        Assert.True(catalog["hokkaido_autumn_final"].Indoor);
+        Assert.Single(catalog.Values, s => s.Indoor);
+    }
+
+    /// <summary>
+    /// 秋の会場の県（<see cref="Stadium.AutumnFinals"/> のキー）が YAML の id の県名と一致すること。
+    /// 県IDは data/prefectures.yaml の JIS 順（0基点）。北海道は秋季全道大会＝<c>hokkaido_autumn_final</c>。
+    /// </summary>
+    [Fact]
+    public void AutumnFinals_AreKeyedByTheMatchingPrefecture()
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("prefectures.yaml");
+        var names = System.IO.File.ReadLines(path)
+            .Select(l => System.Text.RegularExpressions.Regex.Match(l, @"id:\s*(\d+),\s*name:\s*(\w+)"))
+            .Where(m => m.Success)
+            .ToDictionary(m => int.Parse(m.Groups[1].Value), m => m.Groups[2].Value);
+        Assert.Equal(47, names.Count);
+        foreach (var (pref, st) in Stadium.AutumnFinals)
+            Assert.Equal(names[pref] + "_autumn_final", st.Id);
+    }
+
+    /// <summary>
     /// 汎用ティア球場（<see cref="Stadium.MunicipalSmall01"/>/<see cref="Stadium.MunicipalSmall02"/>/
     /// <see cref="Stadium.PrefLarge"/>）の C#既定と data/stadiums.yaml が一致すること（不変条件#4）。
     /// 実ゲーム（<c>RegionalStadiumTier</c> 経由）は YAML を読まず C#既定で走るので、片方だけ動かすと

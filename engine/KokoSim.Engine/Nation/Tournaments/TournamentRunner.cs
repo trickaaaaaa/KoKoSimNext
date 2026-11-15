@@ -623,6 +623,10 @@ public sealed class TournamentRunner : ITournamentRunner
     /// <summary>次戦のラウンド名（決勝/準決勝/…/N回戦）。</summary>
     public string RoundName => RoundNameFor(TournamentRecorder.RoundsRemaining(_current.Length));
 
+    /// <inheritdoc/>
+    public int? NextMatchRoundsRemaining
+        => _nextOpponent is null ? null : TournamentRecorder.RoundsRemaining(_current.Length);
+
     /// <summary>自校の次戦を自動消化する。勝てば次戦へ進み、負ければ大会終了（残りは背景消化）。</summary>
     public PlayerMatchOutcome PlayNextPlayerMatch()
     {
