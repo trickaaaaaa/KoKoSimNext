@@ -282,6 +282,12 @@ public sealed class AtBatSession
 
         var ctx = _ctx;
         var batter = batterOverride ?? _batter;
+        // スイッチヒッターは投手の逆の打席に立つ（issue #1019）。以降の引っ張り・死球の窓・一塁までの近さはこの打席側で見る。
+        // 継投（RebindMatchup）で ctx.PitcherThrows が替われば次の1球から立ち替える。
+        if (batter.Bats == Handedness.Switch) batter = batter with { Bats = batter.Bats.EffectiveBats(ctx.PitcherThrows) };
+        var batterPlayer = _batterPlayer is { Bats: Handedness.Switch } sp
+            ? sp with { Bats = sp.Bats.EffectiveBats(ctx.PitcherThrows) }
+            : _batterPlayer;
         var swingFactor = ctx.SwingProbabilityFactor;
         var fielders = fieldersOverride ?? ctx.Fielders;
         var pitcher = _pitcher;
@@ -346,7 +352,7 @@ public sealed class AtBatSession
         // （PitchSelection/ControlScatterは通常どおり消費済み）、結果自体は BuntResolver が決める。
         if (battingOverride is Tactics.PitchBattingOverride.Bunt or Tactics.PitchBattingOverride.SafetyBunt)
         {
-            if (_batterPlayer is null)
+            if (batterPlayer is null)
                 throw new System.InvalidOperationException(
                     "バント指示を受けましたが AtBatSession.Begin に batterPlayer が渡されていません。");
 
@@ -355,7 +361,7 @@ public sealed class AtBatSession
             if (!inZone)
             {
                 var takeDistanceM = ctx.StrikeZone.DistanceOutsideM(loc.X, loc.Y);
-                if (MathUtil.Chance(BuntResolver.TakeProbability(takeDistanceM, _batterPlayer, ctx.Baserunning), rng))
+                if (MathUtil.Chance(BuntResolver.TakeProbability(takeDistanceM, batterPlayer, ctx.Baserunning), rng))
                 {
                     _balls++;
                     RecordPitch(PitchKind.Ball, plan, loc, inZone, sign: battingOverride);
@@ -369,7 +375,7 @@ public sealed class AtBatSession
             // _thirdBaseRunner はスクイズ専用ではなく打席頭の三塁走者スナップショット（GameEngineが
             // bases.Third を無条件に渡す）なので、通常バント（非スクイズ）でもそのまま満塁の本塁封殺判定に使える。
             var bunt = BuntResolver.Resolve(
-                _batterPlayer, pitcher, plan.Stuff, courseDifficulty, safety,
+                batterPlayer, pitcher, plan.Stuff, courseDifficulty, safety,
                 _runnersNow.First, _runnersNow.Second, _runnersNow.Third, ctx.Field, ctx.Baserunning, rng,
                 out _buntThrowScatter);
             switch (bunt)
@@ -419,7 +425,7 @@ public sealed class AtBatSession
         // （2ストライク未満は継続するバントと異なり、呼び出し側は最初の1球にしかこの上書きを渡さない）。
         if (battingOverride == Tactics.PitchBattingOverride.Squeeze)
         {
-            if (_batterPlayer is null)
+            if (batterPlayer is null)
                 throw new System.InvalidOperationException(
                     "スクイズ指示を受けましたが AtBatSession.Begin に batterPlayer が渡されていません。");
             // issue #492 C: 三塁走者は毎球取り直す（thirdRunnerOverride）。打席途中に三塁へ来た走者でも例外を
@@ -431,7 +437,7 @@ public sealed class AtBatSession
             var wasteProb = squeezeWasteOverride ?? _squeezeWasteProbability;
             var squeezeCourseDifficulty = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y);
             var sq = SqueezeResolver.Resolve(
-                _batterPlayer, thirdRunner, pitcher, plan.Stuff, squeezeCourseDifficulty,
+                batterPlayer, thirdRunner, pitcher, plan.Stuff, squeezeCourseDifficulty,
                 _runnersNow.First, _runnersNow.Second, ctx.Field, wasteProb, ctx.Baserunning, rng);
 
             // バントが不成立（ウエストを読まれた、または空振り/ファウル）: 三塁走者が飛び出していれば挟殺

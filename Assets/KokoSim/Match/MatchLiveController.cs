@@ -4197,8 +4197,7 @@ namespace KokoSim.Unity.Match
         /// 現打席の左右（打者の打席・投手の利き腕）を対決ビューへ流し込む（issue #337）。
         /// 左右のデータは PlayLogEntry 由来で HUD（左打/左投バッジ）と同じ単一ソース＝絵と表示が食い違わない。
         /// スイッチヒッターは対戦投手の逆に立つ（右投手→左打席／左投手→右打席）。
-        /// engine 側は Switch を Left 扱いのままなので、左投手との対戦では「絵は右打席／内部の引っ張りは
-        /// 左打者」と食い違うが、engine の追随は issue #337 のスコープ外（本文に明記あり）。
+        /// 打席側は engine の <see cref="HandednessExtensions.EffectiveBats"/> と同じ関数で決める（issue #1019）。
         /// </summary>
         private void ApplyDuelHandedness()
         {
@@ -4250,7 +4249,7 @@ namespace KokoSim.Unity.Match
             }
             else return false;
             pitcherLeft = throws == Handedness.Left;
-            batterLeft = bats == Handedness.Left || (bats == Handedness.Switch && !pitcherLeft);
+            batterLeft = bats.EffectiveBats(throws) == Handedness.Left;   // engine と同じ打席側（issue #1019）
             return true;
         }
 

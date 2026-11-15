@@ -47,6 +47,10 @@ public static class BuntResolver
             0.05, 0.98);
     }
 
+    /// <summary>左打席の一塁への一歩目の有利[s]。打席側（<see cref="HandednessExtensions.EffectiveBats"/> 解決済み）で見る。</summary>
+    public static double FirstStepBonusSeconds(Handedness side, BaserunningCoefficients c)
+        => side.IsLeftSide() ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+
     /// <summary>
     /// バント内野安打確率（設計書02 §4.1b, Step4-②）。犠打・セーフティ共通で
     /// 「打者走者→一塁」対「バント処理→一塁送球」の秒勝負を logistic に通す。
@@ -58,8 +62,7 @@ public static class BuntResolver
     /// <summary><paramref name="throwNoiseSeconds"/>＝一塁送球の逸れによる遅れ（期待値との差, issue #859）を守備側へ足した確率。</summary>
     private static double InfieldHitProbability(Player batter, bool safety, BaserunningCoefficients c, double throwNoiseSeconds)
     {
-        var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
-            ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+        var handednessBonus = FirstStepBonusSeconds(batter.Bats, c);
         var squareDelay = safety ? c.SafetyBuntSquareDelaySeconds : c.SacrificeBuntSquareDelaySeconds;
         var batterTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                          + c.BuntRunnerReactionSeconds + squareDelay - handednessBonus;

@@ -367,7 +367,7 @@ public sealed record TacticsCoefficients
         PitchPolicy.BreakingHeavy => PitchDirective.Identity with { StraightShareDelta = BreakingHeavyShareDelta },
         PitchPolicy.ControlFirst => PitchDirective.Identity with { AimSigmaFactor = ControlFirstAimSigmaFactor },
         PitchPolicy.KeepLow => PitchDirective.Identity with { AimYOffsetM = KeepLowAimYOffsetM },
-        // 右打者の内角は三塁側(−X)、左打者は一塁側(+X)。スイッチは左打席想定。
+        // 右打席の内角は三塁側(−X)、左打席は一塁側(+X)。スイッチは投手の逆の打席（EffectiveBats で解決済みの値が来る）。
         PitchPolicy.InsideAttack => PitchDirective.Identity with
         {
             AimXOffsetM = batterBats.InsideSign() * InsideAimXOffsetM,

@@ -22,12 +22,12 @@ public readonly record struct BattedBallSkillMods(
         => OppositeFieldExitBonus == 0.0 && BearingShiftDeg == 0.0 && LaunchShiftDeg == 0.0 && QualityShift == 0.0;
 
     /// <summary>
-    /// 打球方向[deg]（−＝左翼／＋＝右翼）が打者から見て逆方向か。右打者は＋側（右翼）、左打者・スイッチは−側（左翼）が逆方向
+    /// 打球方向[deg]（−＝左翼／＋＝右翼）が打者から見て逆方向か。右打席は＋側（右翼）、左打席は−側（左翼）が逆方向
     /// （<see cref="ContactModel.BearingDeg"/> と同じ左右の規約）。
     /// </summary>
     public bool IsOppositeField(double bearingDeg, Players.Handedness bats)
     {
-        var pullSign = bats is Players.Handedness.Left or Players.Handedness.Switch ? 1.0 : -1.0;
+        var pullSign = Players.HandednessExtensions.IsLeftSide(bats) ? 1.0 : -1.0;
         return -pullSign * bearingDeg >= OppositeFieldMinBearingDeg;
     }
 }

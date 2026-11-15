@@ -1257,8 +1257,7 @@ public static class FieldingResolver
     /// <summary>本塁→一塁の実戦タイム（設計書02 §4.1b）: 天井速度での距離÷速度＋実戦オフセット−左打者短縮。</summary>
     public static double BatterToFirstSeconds(FieldGeometry field, BatterAttributes batter, FieldingCoefficients coeff)
     {
-        var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
-            ? coeff.LeftBatterFirstStepBonusSeconds : 0.0;
+        var handednessBonus = batter.Bats.IsLeftSide() ? coeff.LeftBatterFirstStepBonusSeconds : 0.0;
         return field.BaseDistanceM / batter.SpeedToFirstMps() + coeff.RunnerReactionSeconds - handednessBonus;
     }
 
