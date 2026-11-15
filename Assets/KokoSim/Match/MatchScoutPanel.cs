@@ -246,8 +246,8 @@ namespace KokoSim.Unity.Match
                 if (skills != null) _detailHost.Add(skills);
             }
 
-            // 持ち球チャート（投手能力の見方のときだけ・両校）。球速はストレートに添えて出るので、
-            // チャートが出るときは能力の行から球速を落とす（交代モーダルと同じ・issue #560）。
+            // 持ち球チャート（投手能力の見方のときだけ・両校）。球速・球威はストレートに出るので、
+            // チャートが出るときは能力の行から落とす（交代モーダルと同じ・issue #560 / #1033）。
             List<PitchChartDatum> chart = null;
             if (d.ShowPitchChart) chart = _stats?.PitchChartOf(schoolId, p);
             var hasChart = chart != null && chart.Count > 0;
@@ -256,7 +256,7 @@ namespace KokoSim.Unity.Match
             abil.AddToClassList("mscout-detail__abil");
             foreach (var c in pitcherView ? MatchAbilityColumns.Pitcher : MatchAbilityColumns.Fielder)
             {
-                if (c.Kind == AbilityColumnKind.Unit && hasChart) continue;
+                if (c.OnPitchChart && hasChart) continue;
                 abil.Add(AbilityRowOf(c, p));
             }
             _detailHost.Add(abil);
