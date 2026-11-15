@@ -67,6 +67,7 @@ stadiums:
 #   ＝47県すべての配線はしない（設計書13 §1）。使う項目は C#既定（Stadium.*／Stadium.AutumnFinals）と一致させる。
 #   3D モデルの無い会場は standard を判定寸法へ伸縮して描く（見た目は汎用・名前と寸法は実在の会場）。
 # 寸法は ja.wikipedia の各球場記事。fence_height が無いものは資料に記載なし（既定2.5m）。
+# ただし秋の会場（<県>_autumn_final）で資料の無いものは 3.0m を明記している（2026-11-15 監督決定・下の秋の節）。
 prefecture_finals:
   # 北海道ボールパーク（エスコン・命名権を外した名前）。2025〜2027年は南北とも準決勝・決勝をここで開催（ファイターズ公式）。
   # 夏だけ（秋の全道大会の準決勝・決勝は札幌ドーム＝hokkaido_autumn_final）。左右非対称。2024年だけ旭川スタルヒン
@@ -362,7 +363,9 @@ prefecture_finals:
     center: 122
     tier: prefectural
 
-  # ── 秋季県大会の決勝（夏と会場が違う県だけ）──
+  # ── 秋季県大会の準決勝・決勝（夏と会場が違う県だけ・issue #1020）──
+  # フェンス高の資料が無い会場は 3.0m（汎用の県営級 pref_large_01 と同じ。2026-11-15 監督決定）。
+  # 上の夏の会場の「省略時 2.5m」とは別の扱い＝秋の会場は fence_height を必ず明記する。
   # 秋季全道大会（北北海道・南北海道の共通）
   - id: hokkaido_autumn_final
     name: 札幌ドーム
@@ -375,38 +378,45 @@ prefecture_finals:
     name: 仙台市民球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   # 持ち回り（2023・2026 いわき／2024 あいづ／2025 あづま）
   - id: fukushima_autumn_final
     name: いわきグリーンスタジアム
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   - id: ibaraki_autumn_final
     name: ひたちなか市民球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   - id: tochigi_autumn_final
     name: 宇都宮清原球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   - id: gunma_autumn_final
     name: 桐生球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   - id: chiba_autumn_final
     name: 千葉県総合スポーツセンター野球場
     left: 98
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   # 2024年は横浜スタジアム
   - id: kanagawa_autumn_final
     name: 保土ケ谷球場
     left: 95
     center: 120
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   # 2023-24 上田／2025-26 長野
   - id: nagano_autumn_final
@@ -419,43 +429,51 @@ prefecture_finals:
     name: 小牧市民球場
     left: 92
     center: 120
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   - id: mie_autumn_final
     name: 津市営球場
     left: 91
     center: 119
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   # 姫路（奇数年）と明石（偶数年）が毎年交互
   - id: hyogo_autumn_final
     name: 明石公園第一野球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   # 夏と逆の球場
   - id: tottori_autumn_final
     name: 米子市民球場
     left: 99.1
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   # 2025年だけ呉二河
   - id: hiroshima_autumn_final
     name: みよし運動公園野球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   - id: yamaguchi_autumn_final
     name: 下関球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   - id: fukuoka_autumn_final
     name: 久留米市野球場
     left: 98
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural
   # 2024年は沖縄市野球場
   - id: okinawa_autumn_final
     name: 名護市営球場
     left: 100
     center: 122
+    fence_height: 3.0     # 資料に記載なし＝監督決定の既定 3.0m（2026-11-15）
     tier: prefectural

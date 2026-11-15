@@ -340,8 +340,21 @@ public sealed class RegionalStadiumTierTests
         Assert.Equal(95.0, geom.LeftFenceM, 6);
         Assert.Equal(95.0, geom.RightFenceM, 6);
         Assert.Equal(120.0, geom.CenterFenceM, 6);
-        Assert.Equal(2.5, geom.FenceHeightM, 6);
+        Assert.Equal(3.0, geom.FenceHeightM, 6);   // 資料なし＝監督決定の 3.0m（県営級と同じ）
         Assert.False(geom.Indoor);
+    }
+
+    /// <summary>
+    /// フェンス高の資料が無い秋の会場（札幌ドーム 5.75・長野OS 4.0 以外の15か所）は 3.0m＝汎用の県営級と同じ
+    /// （2026-11-15 監督決定）。夏の会場の「省略時 2.5m」を秋へ持ち込まない。
+    /// </summary>
+    [Fact]
+    public void AutumnVenuesWithoutDocumentedFence_UseThePrefecturalDefault()
+    {
+        var documented = new System.Collections.Generic.Dictionary<int, double> { [0] = 5.75, [19] = 4.0 };
+        foreach (var (pref, st) in Stadium.AutumnFinals)
+            Assert.Equal(documented.TryGetValue(pref, out var h) ? h : Stadium.PrefLarge.FenceHeightM, st.FenceHeightM, 6);
+        Assert.Equal(15, Stadium.AutumnFinals.Count - documented.Count);
     }
 
     [Fact]

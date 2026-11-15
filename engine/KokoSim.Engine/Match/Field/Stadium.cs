@@ -201,8 +201,11 @@ public sealed record Stadium
         [46] = AutumnFinal("okinawa_autumn_final", "名護市営球場", 100, 122),
     };
 
-    /// <summary>秋の決勝会場（左右対称・県営級・3Dモデルなし）。フェンス高の資料が無い会場は YAML と同じ既定 2.5m。</summary>
-    private static Stadium AutumnFinal(string id, string name, double wing, double center, double fenceHeight = 2.5) => new()
+    /// <summary>
+    /// 秋の決勝会場（左右対称・県営級・3Dモデルなし）。フェンス高の資料が無い会場は 3.0m＝汎用の県営級（<see cref="PrefLarge"/>）と同じ
+    /// （2026-11-15 監督決定。YAML 側も 3.0m を明記している）。
+    /// </summary>
+    private static Stadium AutumnFinal(string id, string name, double wing, double center, double fenceHeight = 3.0) => new()
     {
         Id = id,
         Name = name,
