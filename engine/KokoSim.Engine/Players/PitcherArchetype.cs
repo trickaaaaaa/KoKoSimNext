@@ -81,7 +81,12 @@ public sealed record PitcherArchetypeCoefficients
     public double FlamethrowerControlFactor { get; init; } = 0.55;
     public double FlamethrowerControl { get; init; } = 0;
     public double FlamethrowerStamina { get; init; } = 0;
-    public double FlamethrowerPitchRank { get; init; } = 30;
+    /// <summary>
+    /// 剛腕のキレの上乗せ。issue #908 では +30 だったが、issue #976（本塁打の校正）で三振の多い型ほど相対的に失点が減り、
+    /// 剛腕がバランス型より強くなった（Lv68 で −0.07〜−0.21）。オーナー決定（2026-11-15）「平均すると少し弱い」に戻すため +3 へ
+    /// （実測 1200試合: 剛腕−バランス型 Lv55 +0.15・Lv68 +0.15・Lv80 +0.54。球速 +30・荒れ球はそのまま＝三振の山は残る）。
+    /// </summary>
+    public double FlamethrowerPitchRank { get; init; } = 3;
 
     // --- 精密機械: 球は遅いが四球をほとんど出さない（issue #908。実戦の失点が他の型と揃うよう実測で校正） ---
     public double PinpointVelocity { get; init; } = -24;

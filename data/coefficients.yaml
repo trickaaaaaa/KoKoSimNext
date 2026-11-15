@@ -110,6 +110,11 @@ ability_effect:
   # （球威・タイミング・打球質・バント難度）に使う反応球速だけを Lv50=132km/h 軸で寝かせる。スタミナ（目安球数）も据え置き。
   # 案A（オーナー決定 2026-08-19）: 投手を寝かせないと 80vs80 が 1.3−1.3 の投手戦（実測）。全員一律≈0.55 で 2.4−2.4。
   pitching_scale: 0.50
+  # 外野手の守備の上位の頭打ち（issue #976 追補・オーナー決定 2026-11-15 ③）: 外野手の守備/捕球/送球精度は表示Lvが膝を超えた分を
+  # 傾き倍に寝かせてから fielding_scale を掛ける（上位ほど伸びが逓減）。最強校の外野手（Lv85〜90）が壁際を一瞬で処理し甲子園の三塁打が
+  # 0.03% だった。内野手（名手の握り替え #765）と肩（送球 km/h #764）は対象外。膝より下は1ビット不変。0＝無効。
+  outfield_defense_top_knee: 70.0
+  outfield_defense_top_slope: 0.5
   # issue #833（2026-11-09）: 0.55/0.45 → 0.50/0.41（全員一律のまま約1割寝かせ直し）。#835/#837 で変化球が効くようになり、
   # 低ティアの自校が2ティア上（C60）に得点1.54〜1.60・完封され率33〜36%と帯外だった。2000試合×seed42/2024 で
   # C60 得点 1.79/1.81・完封され率 29.0/29.6%・1ティアあたり得点比 0.571/0.589。投手だけ0.45も帯に入るが「投手も一律」に逆行。
@@ -201,6 +206,13 @@ batting:
   launch_angle_at_lt1: -5.0      # 弾道1の平均打球角
   launch_angle_at_lt100: 26.0    # 弾道100の平均打球角
   launch_angle_sigma: 12.0
+  # 芯を食った当たりの角度の上側の締まり（issue #976・2026-11-15 監督決定 案c）: 初速係数（満初速に対する比）が膝を
+  # 超えた分だけ、角度の上側（平均より上へ振れた分）を (1−slope×超過) 倍に締める（下限 floor）。強い当たりは打ち上げ
+  # 過ぎず同じ強さのままフェンス際・外野の間の長打に、弱い外野フライ（アウト）は不変＝打率を上げずに本塁打を削る。
+  # 初速の膝（二塁打まで削れた）・全打球一律の上側の締め（フライのアウトが単打になり打率が上がった）は採らない。0＝無効。
+  launch_angle_upper_hard_knee: 0.83
+  launch_angle_upper_hard_slope: 6.0
+  launch_angle_upper_hard_floor: 0.2
   # ミートによる打球角度σの締まり（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）: σ×(1−これ×(Contact−50))、下限 floor。
   # ミートが良いほどゴロ・ポップが減ってライナー帯（安打）に集まり、本塁打帯（25〜35°）からは外れる＝「パワーは本塁打・ミートは安打」の分業。
   # C90 で AVG .353→.380／HR 4.2→1.9%（P60・D投手）。母集団は AVG .249→.252・HR 1.67→1.60%。
@@ -269,7 +281,13 @@ batting:
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
   fly_apex_threshold_m: 2.5
-  catch_reach_factor: 0.895    # issue #740: 1.00→0.93（4秒上限撤去で増えたアウトを打率帯へ戻す）→0.92（#830: ファウルフライのアウト新設で下がった得点 4.37→4.51 を戻す）→0.895（#830②: ポップフライ新設で下がった得点を戻す。本塁打率を動かさない手段として）
+  catch_reach_factor: 0.895    # issue #740: 1.00→0.93（4秒上限撤去で増えたアウトを打率帯へ戻す）→0.92（#830: ファウルフライのアウト新設で下がった得点 4.37→4.51 を戻す）→0.895（#830②: ポップフライ新設で下がった得点を戻す。本塁打率を動かさない手段として）。#976 で一度 0.845 にしたが外野フライ全般が落ちて打率が上がったので戻した
+  # フェンス際の捕りにくさ（issue #976・2026-11-15 監督決定 案c）: 落下点がフェンスから wall_catch_zone_m 以内だと、
+  # 壁を探して減速するぶん空中捕球に使える時間が wall_catch_penalty_seconds×(1−距離/ゾーン) 減る（フェンス上で最大）。
+  # 本塁打を削った大飛球を外野フライのアウトでなくフェンス際の長打へ振り替え、打率を上げずに得点を戻す。0＝無効。
+  # 10m・3.0s: フェンス上で3秒・5m手前で1.5秒減る。catch_reach_factor を下げる案より同じ得点の戻しで打率の上がりが小さい。
+  wall_catch_zone_m: 10.0
+  wall_catch_penalty_seconds: 3.0
   throw_transfer_seconds: 0.70
   throw_transfer_fielding_slope: 0.004 # 握り替えの守備連動（Issue #36）: 倍率=max(min,1−(守備−50)×これ)。守備50で×1.0＝恒等
   throw_transfer_factor_min: 0.70      # トランスファー倍率の下限（最速側クランプ, Issue #36）
@@ -350,7 +368,7 @@ fielding:
   roll_decel_mps2: 2.60          # 着地後の転がりの減速度（芝・土の摩擦＋バウンド損失）
   roll_retention_flat: 0.72      # 水平に近いライナーがバウンドで保持する前進速度の割合（滑って伸びる）
   roll_retention_steep: 0.25     # 真上から落ちる大飛球が保持する割合（失速して死ぬ）
-  fence_carom_seconds: 0.40      # フェンス到達打球の跳ね返り処理の追加時間
+  fence_carom_seconds: 1.00      # フェンス到達打球の跳ね返り処理の追加時間（壁際の回収は「当たってから これ 秒後」より早くならない。#976 追補まで判定に乗っていなかった。オーナー決定 ④ で 0.40→1.00）
   fence_restitution: 0.35        # フェンスの反発係数（跳ね返り初速＝到達時の残速×これ。表示専用・判定不変）
   outfield_pickup_seconds: 0.30  # 転がる打球を拾い上げる時間
   # 外野手のファンブル（回収時に弾く・後逸, issue #811 / design-14 P1-6 追記）。安打の記録は変えず失策だけ外野手に付く。
@@ -981,6 +999,9 @@ tactics:
   infield_in_from_inning: 8
   infield_in_max_lead: 1
   outfield_deep_min_power: 72
+  # 外野後退の相対基準（issue #976 追補・オーナー決定 2026-11-15 ①）: パワー≥上の値 かつ 打線の平均＋これ 以上の打者だけに外野を下げる。
+  # 各県の最強校は打者の81%がパワー72以上で、全打席で外野が下がり三塁打がほぼ消えていた（甲子園 0.03%）。0以下＝相対基準なし。
+  outfield_deep_above_lineup_mean: 10.0
   control_first_max_control: 38
   keep_low_min_power: 75
   gear_push_innings_left: 1
@@ -1032,7 +1053,7 @@ tactics:
   infield_in_factor: 0.82
   infield_deep_factor: 1.12
   outfield_in_factor: 0.88
-  outfield_deep_factor: 1.10
+  outfield_deep_factor: 1.05   # issue #976 追補（オーナー決定 ②）: 1.10→1.05
   bunt_shift_corner_charge_factor: 0.60
   # 配球方針の重み（§2.2）
   fastball_heavy_share_delta: 0.25
@@ -1979,7 +2000,9 @@ roster:
   archetype_flamethrower_control_factor: 0.55
   archetype_flamethrower_control: 0
   archetype_flamethrower_stamina: 0
-  archetype_flamethrower_pitch_rank: 30
+  # issue #976（2026-11-15 オーナー決定「剛腕は平均すると少し弱い」を戻す）: キレ +30→+3。本塁打の校正で三振の多い型ほど
+  # 相対的に失点が減り剛腕がバランス型より強くなった（Lv68 −0.21）。実測（1200試合）剛腕−バランス型 Lv55 +0.15・Lv68 +0.15・Lv80 +0.54。
+  archetype_flamethrower_pitch_rank: 3
   archetype_pinpoint_velocity: -24
   archetype_pinpoint_control: 12
   archetype_pinpoint_stamina: 2

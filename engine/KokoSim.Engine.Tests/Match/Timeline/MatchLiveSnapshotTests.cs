@@ -61,10 +61,11 @@ public sealed class MatchLiveSnapshotTests
 
     // 代打シナリオ専用の進行（「7回到達後に代打の打順が回る」局面のシード）。
     // Issue #24 で 42→43、Issue #169 の送球エラー2段階化で rng 消費が変わり 43→1 に更新。
+    // issue #976 追補（外野後退の相対基準・壁際の跳ね返りの秒）で試合の流れが変わり 1→2 に更新。
     private static MatchProgression NewPinchHitProg() =>
         new(Team("A", withSourceIds: false, withBench: true),
             Team("H", withSourceIds: true, withBench: true),
-            new GameContext { CaptureTimelines = true }, 1UL);
+            new GameContext { CaptureTimelines = true }, 2UL);
 
     // スタメン列は打順1〜9で、名前・守備位置・SourceId が現ラインナップと一致する。
     [Fact]

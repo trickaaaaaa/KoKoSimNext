@@ -255,12 +255,15 @@ public sealed class PitcherArchetypeTests
 
         // 剛腕だけは中立の例外（issue #908・オーナー決定 2026-11-14）: 制球G・F（割合0.55）では球速もキレもほぼ上限まで
         // 上げても揃わない＝「平均すると少し弱いが、当たる日は三振の山」。強すぎず・弱すぎずを別に見張る
-        // （実測 Lv68: 基準3.50 / 剛腕3.79）。
+        // （実測 Lv68: 基準3.50 / 剛腕3.79。issue #976 後: 基準3.39 / 剛腕3.63）。
         var neutral = runsAllowed.Where(kv => kv.Key != PitcherArchetype.Flamethrower).Select(kv => kv.Value).ToList();
         var spread = neutral.Max() - neutral.Min();
         Assert.True(spread < 0.70, "型ごとの失点差が大きすぎる（実戦でバランス中立でない）: " + text);
         var flameGap = runsAllowed[PitcherArchetype.Flamethrower] - runsAllowed[PitcherArchetype.Balanced];
-        Assert.True(flameGap is > -0.10 and < 0.80, $"剛腕の失点がバランス型から外れすぎ（{flameGap:+0.00;-0.00}）: " + text);
+        // 符号を固定する（issue #976・オーナー決定 2026-11-15）: 剛腕はバランス型より**少し弱い**（失点が多い）こと。
+        // 本塁打の校正で三振の多い型が相対的に強くなり −0.07 まで来ていたので、キレの上乗せ +30→+3 で戻した
+        // （実測 400試合 +0.25・旧下限 −0.10 は「強い側」を許していた）。
+        Assert.True(flameGap is > 0.05 and < 0.80, $"剛腕の失点がバランス型から外れすぎ（{flameGap:+0.00;-0.00}・少し弱い＝正であること）: " + text);
     }
 
     /// <summary>

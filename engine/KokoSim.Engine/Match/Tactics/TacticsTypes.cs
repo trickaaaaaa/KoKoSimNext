@@ -115,7 +115,14 @@ public readonly record struct TacticsSituation(
     bool PitcherRattled,
     int OffenseTimeoutsLeft,
     int DefenseTimeoutsLeft,
-    bool TieBreak);
+    bool TieBreak)
+{
+    /// <summary>
+    /// 攻撃側の打順（いまの9人）のパワーの平均（表示能力）。敵AIの外野後退を「その打線の中で抜けた強打者」に絞る
+    /// 相対基準に使う（issue #976 追補・<see cref="TacticsCoefficients.OutfieldDeepAboveLineupMean"/>）。0＝未設定（絶対基準だけ）。
+    /// </summary>
+    public double OffenseLineupMeanPower { get; init; }
+}
 
 /// <summary>
 /// 選手交代の判断に渡す状況（設計書09 §6）。ScoreDiff は判断するチーム視点の得失点差（正=リード）。

@@ -197,8 +197,11 @@ public static class ContactModel
         // 球種の縦変化で角度が動く（issue #835）: 縦に落ちる球（フォーク等）ほど角度が下がりゴロが増える。
         var breakAngleShift = PitchDeception.LaunchAngleShiftDeg(features, coeff);
         // つなぎの打撃（issue #907）: 走者ありで打球角を低く（ゴロ寄り）。スキルなしは0＝恒等。
+        // 芯を食った当たりは角度の上側だけ締める（issue #976）: 打ち上げ過ぎず、柵越えでなくフェンス際の長打へ。乱数は同じ1本。
+        var angleNoise = rng.NextGaussian(0, angleSigma);
+        if (angleNoise > 0.0) angleNoise *= coeff.UpperAngleFactor(veloFactor);
         var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + breakAngleShift + skillMods.LaunchShiftDeg
-                          + rng.NextGaussian(0, angleSigma);
+                          + angleNoise;
 
         // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。
         var timing = TimingOffsetMean(batter, plan, features, coeff) + rng.NextGaussian(0, coeff.TimingSigma);

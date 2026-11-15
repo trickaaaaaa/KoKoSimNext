@@ -197,9 +197,13 @@ public static class CoefficientsLoader
         public double ArmScale { get; set; } = D.ArmScale;
         public double RunningScale { get; set; } = D.RunningScale;
         public double PitchingScale { get; set; } = D.PitchingScale;
+        public double OutfieldDefenseTopKnee { get; set; } = D.OutfieldDefenseTopKnee;
+        public double OutfieldDefenseTopSlope { get; set; } = D.OutfieldDefenseTopSlope;
 
         public KokoSim.Engine.Players.AbilityEffectCoefficients ToModel() => new()
         {
+            OutfieldDefenseTopKnee = OutfieldDefenseTopKnee,
+            OutfieldDefenseTopSlope = OutfieldDefenseTopSlope,
             Pivot = Pivot,
             BattingScale = BattingScale,
             FieldingScale = FieldingScale,
@@ -558,6 +562,9 @@ public static class CoefficientsLoader
         public double LaunchAngleAtLt1 { get; set; } = D.LaunchAngleAtLt1;
         public double LaunchAngleAtLt100 { get; set; } = D.LaunchAngleAtLt100;
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
+        public double LaunchAngleUpperHardKnee { get; set; } = D.LaunchAngleUpperHardKnee;
+        public double LaunchAngleUpperHardSlope { get; set; } = D.LaunchAngleUpperHardSlope;
+        public double LaunchAngleUpperHardFloor { get; set; } = D.LaunchAngleUpperHardFloor;
         public double LaunchAngleSigmaPerContact { get; set; } = D.LaunchAngleSigmaPerContact;
         public double LaunchAngleSigmaContactFloor { get; set; } = D.LaunchAngleSigmaContactFloor;
         public double LaunchAnglePerVerticalBreakM { get; set; } = D.LaunchAnglePerVerticalBreakM;
@@ -640,6 +647,9 @@ public static class CoefficientsLoader
             LaunchAngleAtLt1 = LaunchAngleAtLt1,
             LaunchAngleAtLt100 = LaunchAngleAtLt100,
             LaunchAngleSigma = LaunchAngleSigma,
+            LaunchAngleUpperHardKnee = LaunchAngleUpperHardKnee,
+            LaunchAngleUpperHardSlope = LaunchAngleUpperHardSlope,
+            LaunchAngleUpperHardFloor = LaunchAngleUpperHardFloor,
             LaunchAngleSigmaPerContact = LaunchAngleSigmaPerContact,
             LaunchAngleSigmaContactFloor = LaunchAngleSigmaContactFloor,
             LaunchAnglePerVerticalBreakM = LaunchAnglePerVerticalBreakM,
@@ -684,6 +694,8 @@ public static class CoefficientsLoader
         private static readonly FieldingCoefficients D = new();
         public double FlyApexThresholdM { get; set; } = D.FlyApexThresholdM;
         public double CatchReachFactor { get; set; } = D.CatchReachFactor;
+        public double WallCatchZoneM { get; set; } = D.WallCatchZoneM;
+        public double WallCatchPenaltySeconds { get; set; } = D.WallCatchPenaltySeconds;
         public double ThrowTransferSeconds { get; set; } = D.ThrowTransferSeconds;
         public double ThrowTransferFieldingSlope { get; set; } = D.ThrowTransferFieldingSlope;
         public double ThrowTransferFactorMin { get; set; } = D.ThrowTransferFactorMin;
@@ -773,6 +785,8 @@ public static class CoefficientsLoader
         {
             FlyApexThresholdM = FlyApexThresholdM,
             CatchReachFactor = CatchReachFactor,
+            WallCatchZoneM = WallCatchZoneM,
+            WallCatchPenaltySeconds = WallCatchPenaltySeconds,
             ThrowTransferSeconds = ThrowTransferSeconds,
             ThrowTransferFieldingSlope = ThrowTransferFieldingSlope,
             ThrowTransferFactorMin = ThrowTransferFactorMin,
@@ -2209,6 +2223,7 @@ public static class CoefficientsLoader
         public int InfieldInFromInning { get; set; } = D.InfieldInFromInning;
         public int InfieldInMaxLead { get; set; } = D.InfieldInMaxLead;
         public int OutfieldDeepMinPower { get; set; } = D.OutfieldDeepMinPower;
+        public double OutfieldDeepAboveLineupMean { get; set; } = D.OutfieldDeepAboveLineupMean;
         public int ControlFirstMaxControl { get; set; } = D.ControlFirstMaxControl;
         public int KeepLowMinPower { get; set; } = D.KeepLowMinPower;
         public int GearPushInningsLeft { get; set; } = D.GearPushInningsLeft;
@@ -2350,6 +2365,7 @@ public static class CoefficientsLoader
             InfieldInFromInning = InfieldInFromInning,
             InfieldInMaxLead = InfieldInMaxLead,
             OutfieldDeepMinPower = OutfieldDeepMinPower,
+            OutfieldDeepAboveLineupMean = OutfieldDeepAboveLineupMean,
             ControlFirstMaxControl = ControlFirstMaxControl,
             KeepLowMinPower = KeepLowMinPower,
             GearPushInningsLeft = GearPushInningsLeft,

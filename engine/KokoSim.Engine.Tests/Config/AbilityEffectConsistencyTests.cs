@@ -1,5 +1,6 @@
 using KokoSim.Config;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Tests.Balance;
@@ -29,6 +30,27 @@ public sealed class AbilityEffectConsistencyTests
         Assert.Equal(new AbilityEffectCoefficients(), ctx.Batting.AbilityEffect);
         Assert.Equal(ctx.Batting.AbilityEffect, ctx.Fielding.AbilityEffect);
         Assert.Equal(ctx.Batting.AbilityEffect, ctx.Baserunning.AbilityEffect);
+    }
+
+    /// <summary>
+    /// 外野手の守備の上位の頭打ち（issue #976 追補・オーナー決定 ③）: 膝より下は内野手（頭打ちなし）と1ビット一致、上は伸びが
+    /// 逓減するが単調増加（守備が上がれば物理の値も下がらない＝能力の向きは保つ）。内野手・肩は頭打ちしない。
+    /// </summary>
+    [Fact]
+    public void OutfieldDefenseTopKnee_IsIdentityBelowTheKnee_MonotoneAbove_AndOutfieldOnly()
+    {
+        var e = new AbilityEffectCoefficients();
+        for (var lv = 1; lv <= (int)e.OutfieldDefenseTopKnee; lv++) Assert.Equal(e.Fielding(lv), e.OutfieldFielding(lv));
+        for (var lv = 2; lv <= 100; lv++) Assert.True(e.OutfieldFielding(lv) >= e.OutfieldFielding(lv - 1), $"守備 {lv}");
+        Assert.True(e.OutfieldFielding(90) < e.Fielding(90));
+        Assert.True(e.OutfieldFielding(90) > e.OutfieldFielding(70));
+
+        Player Star(FieldPosition pos) => new() { Position = pos, Fielding = 90, Catching = 90, ThrowAccuracy = 90, ArmStrength = 90 };
+        var of = Star(FieldPosition.CenterField).ToFielder(e);
+        var inf = Star(FieldPosition.Shortstop).ToFielder(e);
+        Assert.Equal(e.OutfieldFielding(90), of.Fielding);
+        Assert.Equal(e.Fielding(90), inf.Fielding);
+        Assert.Equal(inf.ArmStrength, of.ArmStrength);   // 肩は頭打ちしない（#764）
     }
 
     [Fact]

@@ -508,6 +508,7 @@ internal static class CommandLine
                 case "--seed": o = o with { Seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture) }; break;
                 case "--save": o = o with { SavePath = RequireValue(args, ref i) }; break;
                 case "--only": o = o with { Only = new System.Collections.Generic.HashSet<string>(RequireValue(args, ref i).Split(',')) }; break;
+                case "--coefficients": o = o with { CoefficientsPath = RequireValue(args, ref i) }; break;
                 case "--report": reportPath = RequireValue(args, ref i); break;
                 default: return Fail($"未知のオプション: {args[i]}");
             }
@@ -732,7 +733,7 @@ internal static class CommandLine
         Console.WriteLine("使い方:");
         Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram] [--apex] [--by-pitcher-rank] [--matchup-grid] [--pa-per-game 76]");
         Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--weather] [--tactics]");
-        Console.WriteLine("  hr-measure      [--games N]   [--seed S] [--report path] [--save path/to.sav] [--only id,id]");
+        Console.WriteLine("  hr-measure      [--games N]   [--seed S] [--report path] [--save path/to.sav] [--only id,id] [--coefficients path]");
         Console.WriteLine("                  # 本塁打の実測（issue #1014・計測のみ）: 帯の条件／球場別／季節の気温／実ゲーム条件（県大会・甲子園）／ティア格子／監督の試合");
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
         Console.WriteLine("  simulate-tiers  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--compress-slope X] [--compress-pivot Y]");

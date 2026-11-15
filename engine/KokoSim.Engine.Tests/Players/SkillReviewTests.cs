@@ -127,8 +127,10 @@ public sealed class SkillReviewTests
     {
         var b = new BatterAttributes { Contact = 60, Power = 60, Bats = Handedness.Right };
         var mods = BatterMods(Skill.OppositeFieldHitter);
-        var plain = Run(b, PitcherAttributes.LeagueAverage, SkillPlayMods.None);
-        var skilled = Run(b, PitcherAttributes.LeagueAverage, mods);
+        // 打率差は小さい（逆方向の打球だけ・初速+数km/h）ので 6000 打席では同値に張り付くことがある（issue #976 の
+        // 角度の上側の締めでライナーが増えた後、6000打席で .341 同士）。打席を増やして差を拾う。
+        var plain = Run(b, PitcherAttributes.LeagueAverage, SkillPlayMods.None, pas: 20000);
+        var skilled = Run(b, PitcherAttributes.LeagueAverage, mods, pas: 20000);
 
         double OppoExit(Tally t) => t.Balls.Where(x => mods.BattedBall.IsOppositeField(x.Ball.BearingDeg, b.Bats))
             .Average(x => x.Ball.ExitVelocityKmh);

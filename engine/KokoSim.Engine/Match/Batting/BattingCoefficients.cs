@@ -203,7 +203,6 @@ public sealed record BattingCoefficients
     public double ExitVeloInterceptKmh { get; init; } = 141.0;
     /// <summary>打球初速上限[km/h] のパワー1あたり係数。</summary>
     public double ExitVeloPerPower { get; init; } = 0.50;
-
     /// <summary>
     /// コンタクト品質(0〜1)の平均（互角時）。issue #262 で打球が野手の間を抜けやすくなった分を 0.62→0.60 で吸収していたが、
     /// issue homerun-rate-explodes-at-high-power（2026-08-18）で本塁打判定の正し＋初速上限の上位圧縮により本塁打が
@@ -222,6 +221,30 @@ public sealed record BattingCoefficients
     public double LaunchAngleAtLt100 { get; init; } = 26.0;
     /// <summary>打球角度の標準偏差[deg]。</summary>
     public double LaunchAngleSigma { get; init; } = 12.0;
+    /// <summary>
+    /// 芯を食った当たりの角度の上側の締まり（issue #976・2026-11-15 監督決定 案c）: 初速係数（満初速に対する比・
+    /// <see cref="MinQualityVeloFactor"/> 〜 1.05 弱）がこの膝を超えた分だけ、角度のばらつきの<b>上側</b>（平均角より上へ
+    /// 振れた分）を (1 − <see cref="LaunchAngleUpperHardSlope"/>×超過) 倍に締める（下限 <see cref="LaunchAngleUpperHardFloor"/>）。
+    /// 下側（ゴロ側）と、膝より弱い当たりの角度は変えない。乱数の引き方も変えない（同じ1本を引いて符号で倍率を選ぶ）。
+    /// <para>狙い: 強い当たりは打ち上げ過ぎず低く鋭い打球になる＝柵を越える高さには上がらず、<b>同じ強さのまま</b>
+    /// フェンス際・外野の間へ届く長打になる。弱い外野フライ（アウト）はライナーの単打に変わらない＝打率を上げない。
+    /// 初速そのものを削る案（初速の膝）は外野の間を抜く二塁打まで単打・凡打に落とし（二塁打率 4.5→3.3%）、
+    /// 全打球一律に上側を締める案はフライのアウトがライナーの単打になって打率が上がった（.253→.282）ので採らない。</para>
+    /// <para>校正値 膝 0.83・傾き 6・下限 0.2: 品質の平均（初速係数≈0.84）の少し上から効き、満初速の当たり（≈1.0）で上側×0.2。
+    /// 実測は issue #976 の PR（hr-measure 2000試合×seed42）。0以下＝無効（対称）。</para>
+    /// </summary>
+    public double LaunchAngleUpperHardKnee { get; init; } = 0.83;
+    /// <summary>膝を超えた初速係数1あたりの上側の締まり。<see cref="LaunchAngleUpperHardKnee"/> 参照。</summary>
+    public double LaunchAngleUpperHardSlope { get; init; } = 6.0;
+    /// <summary>芯を食った当たりの上側の倍率の下限。<see cref="LaunchAngleUpperHardKnee"/> 参照。</summary>
+    public double LaunchAngleUpperHardFloor { get; init; } = 0.2;
+
+    /// <summary>角度の上側（平均より上へ振れた分）に掛ける倍率（1＝対称）。<paramref name="veloFactor"/> は初速係数。</summary>
+    public double UpperAngleFactor(double veloFactor)
+        => LaunchAngleUpperHardKnee > 0.0 && LaunchAngleUpperHardSlope > 0.0 && veloFactor > LaunchAngleUpperHardKnee
+            ? Math.Max(LaunchAngleUpperHardFloor, 1.0 - LaunchAngleUpperHardSlope * (veloFactor - LaunchAngleUpperHardKnee))
+            : 1.0;
+
     /// <summary>
     /// ミートによる打球角度σの締まり（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）。
     /// σ × (1 − これ×(Contact−50))（下限 <see cref="LaunchAngleSigmaContactFloor"/>）。ミートが良いほど角度のばらつきが小さく

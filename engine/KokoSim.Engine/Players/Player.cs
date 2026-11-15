@@ -157,13 +157,19 @@ public sealed record Player
     /// <see cref="AbilityEffectCoefficients.Running"/> の効きを通す。捕手リードは投手側の能力なので
     /// <see cref="AbilityEffectCoefficients.Pitching"/> の効きを通す（配球の球威上乗せ・盗塁の読み）。
     /// </summary>
-    public FielderAttributes ToFielder(AbilityEffectCoefficients e) => new()
+    public FielderAttributes ToFielder(AbilityEffectCoefficients e)
     {
-        Speed = e.Running(Speed),
-        ArmStrength = e.Arm(ArmStrength),
-        ThrowAccuracy = e.Fielding(ThrowAccuracy),
-        Fielding = e.Fielding(Fielding),
-        Catching = e.Fielding(Catching),
-        Lead = e.Pitching(Lead),
-    };
+        // 外野手の守備3能力は上位の頭打ちを通す（issue #976 追補・AbilityEffectCoefficients.OutfieldDefenseTopKnee）。
+        var outfield = Position is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField;
+        int Def(int lv) => outfield ? e.OutfieldFielding(lv) : e.Fielding(lv);
+        return new()
+        {
+            Speed = e.Running(Speed),
+            ArmStrength = e.Arm(ArmStrength),
+            ThrowAccuracy = Def(ThrowAccuracy),
+            Fielding = Def(Fielding),
+            Catching = Def(Catching),
+            Lead = e.Pitching(Lead),
+        };
+    }
 }

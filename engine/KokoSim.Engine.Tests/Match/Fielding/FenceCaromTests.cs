@@ -18,12 +18,55 @@ namespace KokoSim.Engine.Tests.Match.Fielding;
 /// record の宣言以外に参照が1つも無く、絵では球がフェンス際でそのまま静止して 0.40 秒の「無」があるだけだった。
 /// 実測（400試合）: <b>二塁打の 92.9% ／ 三塁打の 100%</b> が該当＝長打のほぼ全部で出番がある。</para>
 ///
-/// <para>⚠ <b>表示専用</b>。判定（回収野手・回収時刻・塁打数・送球到達）は1ビットも変えない
-/// ＝跳ね返りは <see cref="ExtraBaseResolver.RollPath.PositionAt"/> を触らない別の純関数で解く。</para>
+/// <para>⚠ 跳ね返りの<b>向き・距離</b>は表示専用（<see cref="ExtraBaseResolver.RollPath.PositionAt"/> を触らない別の純関数）。
+/// 判定に乗るのは跳ね返りの処理の<b>秒</b>（<see cref="FieldingCoefficients.FenceCaromSeconds"/>）だけ（issue #976 追補で配線）。</para>
 /// </summary>
 public sealed class FenceCaromTests
 {
     private static readonly FieldingCoefficients C = new();
+
+    // ---- 跳ね返りの処理の秒（判定・issue #976 追補） ----
+
+    /// <summary>
+    /// 野手が壁際で待っていても、フェンスに当たった球は跳ね返りの処理（<see cref="FieldingCoefficients.FenceCaromSeconds"/>）
+    /// の分だけ回収が遅れる。旧実装は球をフェンス上に置いたまま「着いた瞬間に拾う」だったので、この秒が判定に一度も乗らなかった。
+    /// </summary>
+    [Fact]
+    public void Retrieve_AtTheWall_WaitsForTheCarom()
+    {
+        // 中堅フェンス手前8mに速く落ちた球（すぐ壁に当たる）と、前寄りに守っていて壁際へ追う中堅手。
+        var roll = ExtraBaseResolver.RollFrom(
+            new Vector3D(0, 0, 110), new Vector3D(0, 0, 1), speedMps: 30.0, startSeconds: 3.0,
+            fenceDistanceM: 118.0, C);
+        Assert.True(roll.ReachedFence);
+        var hitAt = ExtraBaseResolver.ComputeFenceCarom(roll, C)!.Value.HitAtSeconds;
+        var chaser = new[] { new Fielder(FieldPosition.CenterField, new Vector3D(0, 0, 60), FielderAttributes.LeagueAverage) };
+
+        // 跳ね返りの秒が無ければ、壁に着いた瞬間に拾う（当たった後に着くので回収＞当たった時刻）。
+        var (_, arrive) = ExtraBaseResolver.Retrieve(chaser, roll, C with { FenceCaromSeconds = 0.0 });
+        Assert.True(arrive > hitAt, $"壁に着く前に拾っている（{arrive:F2} ≤ {hitAt:F2}）");
+        // 跳ね返りの処理が長ければ、着いてからもその分待たされる（＝判定に乗る）。
+        var longCarom = C with { FenceCaromSeconds = arrive - hitAt + 1.0 };
+        var (_, at) = ExtraBaseResolver.Retrieve(chaser, roll, longCarom);
+        Assert.Equal(hitAt + longCarom.FenceCaromSeconds, at, 6);
+        // 跳ね返りが野手の到着より先に済めば、到着時刻のまま。
+        var (_, atShort) = ExtraBaseResolver.Retrieve(chaser, roll, C with { FenceCaromSeconds = 0.01 });
+        Assert.Equal(arrive, atShort, 3);
+    }
+
+    /// <summary>壁に届く前に転がり途中で回収した球には、跳ね返りの秒は乗らない。</summary>
+    [Fact]
+    public void Retrieve_BeforeTheWall_IsNotDelayedByTheCarom()
+    {
+        var roll = ExtraBaseResolver.RollFrom(
+            new Vector3D(0, 0, 80), new Vector3D(0, 0, 1), speedMps: 20.0, startSeconds: 3.0,
+            fenceDistanceM: 118.0, C);
+        var near = new[] { new Fielder(FieldPosition.CenterField, new Vector3D(0, 0, 85), FielderAttributes.LeagueAverage) };
+        var (_, at) = ExtraBaseResolver.Retrieve(near, roll, C);
+        var (_, at0) = ExtraBaseResolver.Retrieve(near, roll, C with { FenceCaromSeconds = 0.0 });
+        Assert.Equal(at0, at, 6);
+        Assert.True(at < ExtraBaseResolver.ComputeFenceCarom(roll, C)!.Value.HitAtSeconds);
+    }
 
     // ---- 跳ね返りの物理 ----
 

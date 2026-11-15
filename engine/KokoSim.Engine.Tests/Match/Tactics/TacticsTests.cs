@@ -248,6 +248,24 @@ public sealed class TacticsTests
         Assert.Equal(PitchPolicy.KeepLow, d.Policy); // 強打者には低め徹底
     }
 
+    /// <summary>
+    /// 外野後退の相対基準（issue #976 追補・オーナー決定 ①）: 強打者ぞろいの打線（平均パワー84）では、絶対基準（72）を超えていても
+    /// その打線の中で抜けていない打者には下がらない。打線の中で抜けた強打者（平均＋10以上）には下がる。打線の平均が無い（0）ときは従来どおり。
+    /// </summary>
+    [Fact]
+    public void Brain_Defense_OutfieldDeep_IsRelativeToTheLineup()
+    {
+        var brain = new StandardTacticsBrain(C);
+        var strongLineup = Situation(batter: P(power: 85)) with { OffenseLineupMeanPower = 84.0 };
+        Assert.Equal(DefenseDepth.Normal, brain.CallDefense(strongLineup, new Xoshiro256Random(1)).Outfield);
+        var standout = Situation(batter: P(power: 95)) with { OffenseLineupMeanPower = 84.0 };
+        Assert.Equal(DefenseDepth.Deep, brain.CallDefense(standout, new Xoshiro256Random(1)).Outfield);
+        var averageLineup = Situation(batter: P(power: 75)) with { OffenseLineupMeanPower = 50.0 };
+        Assert.Equal(DefenseDepth.Deep, brain.CallDefense(averageLineup, new Xoshiro256Random(1)).Outfield);
+        var belowAbsolute = Situation(batter: P(power: 70)) with { OffenseLineupMeanPower = 40.0 };
+        Assert.Equal(DefenseDepth.Normal, brain.CallDefense(belowAbsolute, new Xoshiro256Random(1)).Outfield);
+    }
+
     [Fact]
     public void Brain_Defense_GearPushInCrunch_CoastWithBigLead()
     {
