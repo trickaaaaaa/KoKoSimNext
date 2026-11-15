@@ -298,6 +298,10 @@ public static class BaserunningModel
         // バックホーム悪送球（2026-08-30）: 本塁への送球が逸れ、アウトのはずの走者が生還したか。
         // 発生時は末尾で残る走者を1つずつ押し上げる（design-14 P1-6型の連鎖、全走者+1進塁）。
         var homeWildThrowOccurred = false;
+        // ダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2）: 本塁で1人目を刺した
+        // 「タッチ完了時刻」（接触＝0秒基準）。null＝まだ誰も本塁で刺していない
+        // （outThrowUsed が三塁等で立った場合はここは null のまま＝後続は従来どおり無条件生還）。
+        double? homeOutTagCompleteAtSeconds = null;
 
         // 打者の到達塁（単打/野選=1塁、二塁打=2塁）。先行走者から順にこの塁を明け渡す義務があるかを決める。
         var batterBase = isDouble ? 2 : 1;
@@ -337,10 +341,23 @@ public static class BaserunningModel
                 HomePlayResolver.SuccessProbability(runner, fromBase, h.Situation, h.Field, coeff, startDelay), sendProbCap);
             if (!HomeSendDecision.ShouldSend(prob, currentOuts + extraOuts, h.Aggression, h.Tactics))
                 return (HomeVerdict.Held, false, 0.0, null); // 自重（RNG消費なし）
+            if (homeOutTagCompleteAtSeconds is { } tagAt)
+            {
+                // ダブルタッチアウト（issue #984, Q27選択肢2）: 本塁で1人目を刺した捕手は、ボールを持ったまま
+                // 本塁に居る＝2人目は新しい送球との勝負ではなく「1人目のタッチ完了＋切り替え秒」との勝負。
+                // 送球は既に捕られている（悪送球・逸れは引かない）＝1回だけ引く。
+                var dblMargin = HomePlayResolver.DoubleTagMargin(runner, fromBase, tagAt, h.Field, coeff, startDelay);
+                var dblCloseCall = Math.Abs(dblMargin) < coeff.CloseCallMarginSeconds;
+                var dbl = HomePlayResolver.ResolveDoubleTagAtHome(runner, fromBase, tagAt, h.Field, coeff, rng, startDelay);
+                return dbl.Safe
+                    ? (HomeVerdict.Scored, dblCloseCall, startDelay, null)
+                    : (HomeVerdict.OutAtHome, dblCloseCall, startDelay + dbl.RunnerDelaySeconds, null);
+            }
             var margin = HomePlayResolver.Margin(runner, fromBase, h.Situation, h.Field, coeff, startDelay);
             var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
             var (outcome, delay, scatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
                 runner, fromBase, h.Situation, h.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, startDelay);
+            // 送球を他の塁（三塁等）で使い切っていれば本塁には球が無い＝従来どおり無条件生還（乱数の消費順も従来どおり）。
             if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall, startDelay, scatter);
             outThrowUsed = true;
             if (outcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
@@ -348,6 +365,11 @@ public static class BaserunningModel
                 homeWildThrowOccurred = true;
                 return (HomeVerdict.Scored, closeCall, startDelay, scatter);
             }
+            // 本塁での憤死: 1人目のタッチが済む時刻＝送球到達＋タッチと、走者が実際に着く時刻（出遅れ込み）の遅い方。
+            // 走者が送球より後に着くなら、捕手は走者が来るまでタッチできない（絵の判定もそのレッグ終端に立つ）。
+            homeOutTagCompleteAtSeconds = Math.Max(
+                HomePlayResolver.DefenseTimeSeconds(h.Situation, coeff),
+                HomePlayResolver.RunnerTimeSeconds(runner, fromBase, 4, h.Field, coeff, startDelay + delay));
             return (HomeVerdict.OutAtHome, closeCall, startDelay + delay, scatter);
         }
 

@@ -49,6 +49,110 @@ public sealed class BaserunningHomePlayTests
         Assert.Equal(homeOuts, outMoves); // 追加アウトは本塁Outレッグと一致
     }
 
+    // --- 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2, 監督決定2026-11-15）---
+    // 二・三塁の単打で三塁走者を本塁で刺した直後、本塁へ送られた二塁走者は「新しい送球」でなく
+    // 「ボールを持って本塁に居る捕手（1人目のタッチ完了＋切り替え秒）」との勝負になる。
+    // 修正前は送球使用済み（outThrowUsed）の例外で、二塁走者は判定を通らず無条件に生還していた。
+    //
+    // 既定係数では「三塁走者が刺される浅い当たり」と「二塁走者が送られる深い当たり」がほぼ重ならない
+    // （2人の到達差は約2.8秒・margin→確率の幅は0.25秒）。場面を作るため、判定の幅（HomeMarginScale）を
+    // 2.0秒へ広げ、送り判定の閾値を下限まで下げた「全部回す」采配にする。ダブルタッチの式そのものは既定のまま。
+    private static readonly BaserunningCoefficients Wide = C with { HomeMarginScale = 2.0 };
+
+    private static HomePlayContext SendEveryoneContext(double distanceM, double fieldedAt, int arm)
+    {
+        var situation = new HomePlaySituation(
+            new Vector3D(0, 0, distanceM), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps);
+        var sendAll = new TacticsCoefficients { SendHomeMinSuccess = 0.0, SendHomeAggressionSpan = 0.0 };
+        return new HomePlayContext(Field, situation, sendAll, 1.0, DefenseDepth.Normal, false);
+    }
+
+    private static (int DoubleOuts, int LeadOutTrailingScored, int Checked) RunDoubleTagPlays(ulong seed, int trials)
+    {
+        // 外野前ヒット・強肩: 鈍足の三塁走者は刺されうるし、俊足の二塁走者は送られる。
+        var home = SendEveryoneContext(distanceM: 40, fieldedAt: 2.2, arm: 90);
+        var rng = new Xoshiro256Random(seed);
+        int doubleOuts = 0, trailingScored = 0, checkedPlays = 0;
+        for (var i = 0; i < trials; i++)
+        {
+            var r2 = new Player { Name = "R2", Speed = 95, Baserunning = 90 };
+            var r3 = new Player { Name = "R3", Speed = 5, Baserunning = 10 };
+            var bases = new BaseState { Second = r2, Third = r3 };
+            var (_, extraOuts, baseOuts, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.Single, new Player(), 0, Wide, rng, collectMoves: true, home);
+
+            var lead = moves.FirstOrDefault(m => ReferenceEquals(m.Runner, r3) && m.ToBase == 4);
+            if (lead is not { Out: true }) continue;
+            var trailing = moves.FirstOrDefault(m => ReferenceEquals(m.Runner, r2) && m.ToBase == 4);
+            if (trailing is null) continue; // 送られなかった（このプレーでは起きない）
+            checkedPlays++;
+
+            var leadArrive = HomePlayResolver.RunnerTimeSeconds(r3, 3, 4, Field, Wide, lead.ExtraStartDelaySeconds);
+            var trailingArrive = HomePlayResolver.RunnerTimeSeconds(r2, 2, 4, Field, Wide, trailing.ExtraStartDelaySeconds);
+            if (trailing.Out)
+            {
+                doubleOuts++;
+                Assert.Equal(2, extraOuts);
+                Assert.Equal(2, baseOuts.Home);
+                // 判定＝絵（#316）: 2人目は1人目のタッチの後、切り替え秒を置いてから刺される。
+                Assert.True(trailingArrive >= leadArrive + C.HomeDoubleTagSeconds - 1e-9,
+                    $"2人目が1人目のタッチより前に刺されている: lead={leadArrive:F3} trailing={trailingArrive:F3}");
+                Assert.Null(trailing.ThrowScatter); // 新しい送球は無い
+            }
+            else
+            {
+                trailingScored++;
+            }
+        }
+        return (doubleOuts, trailingScored, checkedPlays);
+    }
+
+    [Fact]
+    public void DoubleTag_LeadOutAtHome_TrailingRunnerCanAlsoBeTaggedOut()
+    {
+        var (doubleOuts, trailingScored, checkedPlays) = RunDoubleTagPlays(seed: 5, trials: 5000);
+        Assert.True(checkedPlays > 200, $"三塁走者憤死＋二塁走者突入の場面が少なすぎる＝テストが空回り: {checkedPlays}");
+        // 成立する場面（捕手が2人目にも間に合う）と、成立しない場面（2人目が先に還る）の両方が出る。
+        Assert.True(doubleOuts > 0, $"ダブルタッチアウトが一度も出ない（checked={checkedPlays}）");
+        Assert.True(trailingScored > 0, $"2人目が一度も還らない＝切り替え秒が判定に効いていない（checked={checkedPlays}）");
+    }
+
+    [Fact]
+    public void DoubleTag_SameSeed_SameResult()
+    {
+        Assert.Equal(RunDoubleTagPlays(seed: 77, trials: 800), RunDoubleTagPlays(seed: 77, trials: 800));
+    }
+
+    [Fact]
+    public void DoubleTag_LongerSwitchSeconds_LetsMoreTrailingRunnersScore()
+    {
+        // 切り替え秒（物理層の係数）が判定に効いている: 捕手の持ち替えが遅いほど2人目は還る。
+        double ScoreShare(double switchSeconds)
+        {
+            var c = Wide with { HomeDoubleTagSeconds = switchSeconds };
+            var home = SendEveryoneContext(distanceM: 40, fieldedAt: 2.2, arm: 90);
+            var rng = new Xoshiro256Random(9);
+            int scored = 0, n = 0;
+            for (var i = 0; i < 5000; i++)
+            {
+                var r2 = new Player { Speed = 95, Baserunning = 90 };
+                var r3 = new Player { Speed = 5, Baserunning = 10 };
+                var (_, _, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+                    new BaseState { Second = r2, Third = r3 }, PlateAppearanceResult.Single, new Player(), 0, c, rng,
+                    collectMoves: true, home);
+                if (moves.FirstOrDefault(m => ReferenceEquals(m.Runner, r3) && m.ToBase == 4) is not { Out: true }) continue;
+                if (moves.FirstOrDefault(m => ReferenceEquals(m.Runner, r2) && m.ToBase == 4) is not { } t) continue;
+                n++;
+                if (!t.Out) scored++;
+            }
+            Assert.True(n > 100, $"場面が少なすぎる: {n}");
+            return (double)scored / n;
+        }
+        var quick = ScoreShare(0.0);
+        var slow = ScoreShare(2.0);
+        Assert.True(slow > quick + 0.10, $"切り替え秒を延ばしても2人目の生還が増えない: quick={quick:F3} slow={slow:F3}");
+    }
+
     // --- バックホーム悪送球（2026-08-30, design-14 P1-6型の二値ロールをバックホームへ拡張）---
     // 「外野からのバックホームが毎回ドンピシャで届く」違和感の是正。RelayThrowErrorBaseProb=1.0（極端値）で
     // 「守備が勝つ場面は必ず悪送球に転じる」ことを固定し、既存の WithHomeContext_ContestedPlay_... と

@@ -2026,6 +2026,10 @@ namespace KokoSim.Unity.Match
             _tagCount = 0;
             if (play?.Runners == null) return;
 
+            // 同じ捕球で2人にタッチする（本塁のダブルタッチアウト・issue #984）とき、逸れを捕る形を見せるのは
+            // 1人目だけ。2人目は球を持ったまま向き直るだけ＝逸れの遅れをもう一度足さない。
+            // 走者は先行→後続の順に並ぶ（engine の RunnerMove の順）ので、先に見た方が1人目。
+            var catchesUsedForTag = new HashSet<int>();
             foreach (var r in play.Runners)
             {
                 float t1;
@@ -2053,10 +2057,11 @@ namespace KokoSim.Unity.Match
                 if (best < 0) continue;                        // 誰も受けていない塁でのアウトは芝居を作らない
 
                 var recv = _catchEvents[best];
+                bool firstTagOnCatch = catchesUsedForTag.Add(best);
                 // 球を持ってからタッチまでの猶予。足りなければ再生倍率で詰める（頭出しは負にしない）。
                 float avail = Mathf.Max(1e-3f, t1 - recv.TCatch);
                 float tTag = t1, tagStart, rate, head = 0f;
-                if (recv.ScatterShown)
+                if (recv.ScatterShown && firstTagOnCatch)
                 {
                     // 逸れを捕る形を見せてからタッチへ移る（issue #979）。タッチの収録で上書きすると、捕る形が
                     // 絵に出る前に消える（猶予は TagSeconds＝0.10s しかなく、倍率を上げて詰めると捕球の前から始まる）。

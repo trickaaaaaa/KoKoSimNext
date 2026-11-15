@@ -988,6 +988,9 @@ public static class CoefficientsLoader
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
         public double HomeGrounderStartDelaySeconds { get; set; } = D.HomeGrounderStartDelaySeconds;
+        // 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2）
+        public double HomeDoubleTagSeconds { get; set; } = D.HomeDoubleTagSeconds;
+        public double HomeDoubleTagSuccessBias { get; set; } = D.HomeDoubleTagSuccessBias;
         // 三塁への進塁レース（単打の一塁→三塁, Issue #89）
         public double ThirdTagSeconds { get; set; } = D.ThirdTagSeconds;
         public double ThirdMarginScale { get; set; } = D.ThirdMarginScale;
@@ -1161,6 +1164,8 @@ public static class CoefficientsLoader
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,
             HomeGrounderStartDelaySeconds = HomeGrounderStartDelaySeconds,
+            HomeDoubleTagSeconds = HomeDoubleTagSeconds,
+            HomeDoubleTagSuccessBias = HomeDoubleTagSuccessBias,
             ThirdTagSeconds = ThirdTagSeconds,
             ThirdMarginScale = ThirdMarginScale,
             ThirdSuccessBias = ThirdSuccessBias,

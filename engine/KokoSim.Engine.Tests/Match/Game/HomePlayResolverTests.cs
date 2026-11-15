@@ -295,4 +295,82 @@ public sealed class HomePlayResolverTests
         Assert.Equal(HomePlayResult.Safe, plain);
         Assert.Equal(a.NextDouble(), b.NextDouble()); // 以降のrng列も一致＝追加ロールを引いていない
     }
+
+    // --- 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2）---
+    // 1人目を本塁で刺した直後、同じボールのまま2人目にタッチできるかの純関数。送球は新たに引かない
+    // （1人目のタッチ完了時刻を直接渡す）＝盗塁・本塁クロスプレーと同型の「時間の勝負」。
+
+    private static double DoubleTagScoreRate(
+        Player runner, int fromBase, double firstTagCompleteAtSeconds, int trials = 4000, ulong seed = 5)
+    {
+        var rng = new Xoshiro256Random(seed);
+        var safe = 0;
+        for (var i = 0; i < trials; i++)
+            if (HomePlayResolver.ResolveDoubleTagAtHome(runner, fromBase, firstTagCompleteAtSeconds, Field, C, rng).Safe)
+                safe++;
+        return (double)safe / trials;
+    }
+
+    [Fact]
+    public void DoubleTag_RunnerArrivingLongAfterFirstTag_IsOutAlmostAlways()
+    {
+        // 1人目のタッチ完了(t=3.0s)から十分遅れて着く走者＝ほぼ確実にタッチアウト。
+        var rate = DoubleTagScoreRate(Runner(speed: 50, baserunning: 50), fromBase: 2, firstTagCompleteAtSeconds: 3.0);
+        Assert.True(rate < 0.05, $"大きく遅れて着く2人目の生還率が高すぎる: {rate}");
+    }
+
+    [Fact]
+    public void DoubleTag_FirstTagCompletesLongAfterRunnerArrives_IsSafeAlmostAlways()
+    {
+        // 1人目のタッチ完了が走者自身の本塁到達よりずっと後（=1人目を刺すのに手間取った）なら、
+        // 2人目は捕手がタッチへ回る前にとうに還っている＝ほぼ確実に生還。
+        var runner = Runner(speed: 85, baserunning: 80);
+        var ownArrival = HomePlayResolver.RunnerTimeSeconds(runner, 2, 4, Field, C);
+        var rate = DoubleTagScoreRate(runner, fromBase: 2, firstTagCompleteAtSeconds: ownArrival + 5.0);
+        Assert.True(rate > 0.95, $"1人目のタッチが大きく遅れているのに2人目の生還率が低すぎる: {rate}");
+    }
+
+    [Fact]
+    public void DoubleTag_FasterRunner_ScoresMoreThanSlow()
+    {
+        // 1人目のタッチ完了ちょうど際どい時刻を選び、走力差で生還率が単調に動くこと。
+        var ownArrival = HomePlayResolver.RunnerTimeSeconds(Runner(speed: 50, baserunning: 50), 2, 4, Field, C);
+        var slow = DoubleTagScoreRate(Runner(speed: 20, baserunning: 30), 2, ownArrival);
+        var fast = DoubleTagScoreRate(Runner(speed: 90, baserunning: 85), 2, ownArrival);
+        Assert.True(fast > slow + 0.05, $"走力で2人目の生還率が上がっていない: slow={slow} fast={fast}");
+    }
+
+    [Fact]
+    public void DoubleTagMargin_MatchesResolveDoubleTagAtHome_ViaLogistic()
+    {
+        var runner = Runner(60, 55);
+        var tagAt = 2.8;
+        var margin = HomePlayResolver.DoubleTagMargin(runner, 2, tagAt, Field, C);
+        var rateAtMargin = DoubleTagScoreRate(runner, 2, tagAt, trials: 20000, seed: 11);
+        var expected = MathUtil.Logistic(margin / C.HomeMarginScale);
+        Assert.True(Math.Abs(rateAtMargin - expected) < 0.02,
+            $"ResolveDoubleTagAtHome の生還率がmarginのlogisticと食い違う: rate={rateAtMargin} expected={expected}");
+    }
+
+    [Fact]
+    public void ResolveDoubleTagAtHome_IsDeterministic_ForSameSeed()
+    {
+        var runner = Runner(60, 55);
+        var a = DoubleTagScoreRate(runner, 2, 2.8, trials: 500, seed: 42);
+        var b = DoubleTagScoreRate(runner, 2, 2.8, trials: 500, seed: 42);
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void ResolveDoubleTagAtHome_NeverDrawsThrowScatter()
+    {
+        // 新しい送球を引かない（同じボール）＝Scatterは常にnull。
+        var runner = Runner();
+        var rng = new Xoshiro256Random(5);
+        for (var i = 0; i < 50; i++)
+        {
+            var verdict = HomePlayResolver.ResolveDoubleTagAtHome(runner, 2, 2.5, Field, C, rng);
+            Assert.Null(verdict.Scatter);
+        }
+    }
 }
