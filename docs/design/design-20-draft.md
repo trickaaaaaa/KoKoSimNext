@@ -13,7 +13,7 @@
 
 | 概念 | いつ | 対象 | 何が起きる |
 |---|---|---|---|
-| **ドラフト候補（Candidate）** | 在学中いつでも | 1〜3年の全員が対象 | 能力＋成績で算出する**注目度**が閾値を超えると「候補入り」。注目度は成績・能力に応じて随時上下する。候補入り／注目度変化を通知フィードへ流す |
+| **ドラフト候補（Candidate）** | 在学中いつでも | **2〜3年**の全員が対象（入部直後の1年は候補にならない） | 能力＋成績で算出する**注目度**が閾値を超えると「候補入り」。注目度は成績・能力に応じて随時上下する。候補入り／注目度変化を通知フィードへ流す |
 | **ドラフト指名（Nomination）** | **引退後の10月最終週に一度だけ** | **3年生のみ** | 候補ステータスと注目度をもとに、指名有無・指名順位を確定する。確定を通知フィードへ流す |
 
 - 候補ステータスは「注目されている」という**予想・見込み**。確定情報ではない。
@@ -91,7 +91,7 @@ YAML は sim/テスト調整用（既存の sim-vs-unity 係数分割に倣う�
 | ≥ `CandidateThreshold`(58) | `LowerRound` | 下位・育成（8位） | 「下位／育成で名前が挙がる」 |
 | < 58 | `None` | 圏外 | （候補でない） |
 
-- **候補入り＝ Notability ≥ CandidateThreshold(58)** かつ **§3.1a の足切りを通過**＝予想が `None` 以外。学年を問わない。
+- **候補入り＝ Notability ≥ CandidateThreshold(58)** かつ **§3.1a の足切りを通過**かつ **2年生以上**（`CandidateMinGrade`＝2）＝予想が `None` 以外。入部直後の1年は実績が無いのに隠し上限だけで閾値を超えうるので、注目度の値は計算したままバンドだけ `None` にする（2026-11-15 ユーザー決定・issue #1030）。2年に上がった週に閾値を超えていれば「候補入り」として通知に出る。
 - 閾値・バンド境界は `data/draft.yaml` 駆動。
 
 ### 3.1a 候補入りの足切り（カテゴリランク B 以上・2026-08-15）
@@ -102,7 +102,7 @@ YAML は sim/テスト調整用（既存の sim-vs-unity 係数分割に倣う�
 
 ```
 best = max( 打撃力チップ, 投手力チップ )        # PlayerStrengthProfile の現在値合成（隠し上限を混ぜない）
-候補入り ⇔ Tier(best) ≥ CandidateMinTier(B) かつ Notability ≥ CandidateThreshold
+候補入り ⇔ Grade ≥ CandidateMinGrade(2) かつ Tier(best) ≥ CandidateMinTier(B) かつ Notability ≥ CandidateThreshold
 ```
 
 - 判定に使う合成は**選手画面のカテゴリランクチップと同じ式・同じ係数**（`TeamStrengthCoefficients`）。
@@ -113,7 +113,7 @@ best = max( 打撃力チップ, 投手力チップ )        # PlayerStrengthProf
   （`DraftEvaluation.Notability`）＝将来の候補一覧画面で「注目度は高いがランク不足」を出せる。
 - 判定は `NotabilityModel.MeetsCandidateFloor` の1箇所。`DraftEngine` の3入口（`Evaluate` / `EvaluateRoster` /
   `RunNomination`）はすべて足切り込みの `BandOf(player, n, strength, c)` を通す。
-- `CandidateMinTier` は `data/draft.yaml` の `candidate_min_tier`（G〜S）で調整（C# 既定＝B が実プレイの真値）。
+- `CandidateMinTier` は `data/draft.yaml` の `candidate_min_tier`（G〜S）で調整（C# 既定＝B が実プレイの真値）。学年の下限 `CandidateMinGrade` も同じ `candidate_min_grade`（既定2）。
 
 > 併せて挙がっていた「甘さ」の要因のうち、①中位一律4位→§3.2 の按分（4〜7位）で対応、③打者の規定打席→100 へ
 > （2026-08-15）。②指名確率の中点（64）が中位下限（66）より低く中位候補はほぼ確実に指名される点は
@@ -183,7 +183,7 @@ round = バンド内で注目度に応じて按分（DraftRankBands.RoundOf）
 
 ## 6. ドラフト画面（③・IA。着手前にワイヤー3案を提示）
 
-- **候補選手一覧**（在校の候補＝1〜3年）: 名前（明朝）・学年・ポジション・注目度バンド（RankChip 相当の色チップ）・
+- **候補選手一覧**（在校の候補＝2〜3年）: 名前（明朝）・学年・ポジション・注目度バンド（RankChip 相当の色チップ）・
   予想順位文言・主要成績。数字は Oswald 右揃え（書体3役）。
   主要成績は**出場実績で選ぶ**（登板があれば ERA/K、打席があれば OPS/HR、二刀流は両方）＝
   役割で切り替えない（設計書01 §1.1a、#379 でスタメン画面に入れたのと同じ作法）。

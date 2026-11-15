@@ -131,12 +131,15 @@ public static class NotabilityModel
     }
 
     /// <summary>
-    /// 足切り込みの予想バンド。床に届かない選手は注目度に関わらず <see cref="DraftRankBand.None"/>。
+    /// 足切り込みの予想バンド。床に届かない選手・<see cref="DraftCoefficients.CandidateMinGrade"/> 未満の学年は
+    /// 注目度に関わらず <see cref="DraftRankBand.None"/>。
     /// 候補判定はすべてここを通す（<see cref="DraftEngine"/> の3入口で共通）。
     /// </summary>
     public static DraftRankBand BandOf(
         DevelopingPlayer player, double notability, TeamStrengthCoefficients strength, DraftCoefficients c)
-        => MeetsCandidateFloor(player, strength, c) ? BandOf(notability, c) : DraftRankBand.None;
+        => player.Grade >= c.CandidateMinGrade && MeetsCandidateFloor(player, strength, c)
+            ? BandOf(notability, c)
+            : DraftRankBand.None;
 
     private static double Clamp(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
 }
