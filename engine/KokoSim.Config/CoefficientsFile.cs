@@ -2671,7 +2671,8 @@ public static class CoefficientsLoader
         public double TalentSd { get; set; } = D.TalentSd;
         public double TalentMin { get; set; } = D.TalentMin;
         public double TalentMax { get; set; } = D.TalentMax;
-        // 名声→talentCenterフィードバック（Issue #127）
+        // 名声→talentCenterフィードバック（Issue #127・#1031で写像を再校正）
+        public double FameTalentCenterKnee { get; set; } = D.FameTalentCenterKnee;
         public double FameTalentCenterSpan { get; set; } = D.FameTalentCenterSpan;
         public double FameTalentCenterTau { get; set; } = D.FameTalentCenterTau;
         // ティア→能力の圧縮（issue #578・Q24 確定2）
@@ -2869,6 +2870,7 @@ public static class CoefficientsLoader
             TalentSd = TalentSd,
             TalentMin = TalentMin,
             TalentMax = TalentMax,
+            FameTalentCenterKnee = FameTalentCenterKnee,
             FameTalentCenterSpan = FameTalentCenterSpan,
             FameTalentCenterTau = FameTalentCenterTau,
             TierCompressionPivot = TierCompressionPivot,

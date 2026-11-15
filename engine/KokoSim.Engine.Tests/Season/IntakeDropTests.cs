@@ -36,11 +36,14 @@ public sealed class IntakeDropTests
     [Fact]
     public void DropFor_IsFullAtDefault_ZeroAtFameCeiling_LinearBetween()
     {
+        // issue #1031: 名声→talentCenter写像を再校正した後も、下げ幅の物差し（下端Default・上端Cap）は
+        // そのまま＝参照先を FameTalentCenterSpan（写像の頭打ち幅）から FameTalentCenterCap（上端そのもの）へ。
+        var mid = (C.TalentCenterDefault + C.FameTalentCenterCap) / 2;
         Assert.Equal(C.IntakeDrop, C.IntakeDropFor(C.TalentCenterDefault), 9);
         Assert.Equal(C.IntakeDrop, C.IntakeDropFor(C.TalentCenterDefault - 5), 9);
-        Assert.Equal(0.0, C.IntakeDropFor(C.TalentCenterDefault + C.FameTalentCenterSpan), 9);
-        Assert.Equal(0.0, C.IntakeDropFor(C.TalentCenterDefault + C.FameTalentCenterSpan + 10), 9);
-        Assert.Equal(C.IntakeDrop / 2, C.IntakeDropFor(C.TalentCenterDefault + C.FameTalentCenterSpan / 2), 9);
+        Assert.Equal(0.0, C.IntakeDropFor(C.FameTalentCenterCap), 9);
+        Assert.Equal(0.0, C.IntakeDropFor(C.FameTalentCenterCap + 10), 9);
+        Assert.Equal(C.IntakeDrop / 2, C.IntakeDropFor(mid), 9);
     }
 
     [Fact]
