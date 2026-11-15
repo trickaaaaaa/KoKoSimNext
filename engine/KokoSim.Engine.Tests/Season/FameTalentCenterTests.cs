@@ -18,9 +18,18 @@ public sealed class FameTalentCenterTests
         // issue #1031: knee以下は恒等（center=fame）＝名声のランクと中心値のランクが厳密に一致する。
         // Fame=0（または未注入）が TalentCenterDefault と一致するという旧要件は、実際には名声未注入(null)の
         // 別経路でしか使われない一致だったので撤回した（SeasonEngine は Fame=null のときこの関数を呼ばない）。
-        Assert.Equal(0.0, C.TalentCenterFromFame(0), 9);
-        foreach (var fame in new double[] { 10, 20, 30, 40, 50, 55, 60, C.FameTalentCenterKnee })
+        foreach (var fame in new double[] { C.TalentCenterDefault, 40, 50, 55, 60, C.FameTalentCenterKnee })
             Assert.Equal(fame, C.TalentCenterFromFame(fame), 9);
+    }
+
+    [Fact]
+    public void TalentCenter_HasFloorAtDefault_ForLowFame()
+    {
+        // issue #1043: 名声0〜Default は中心 Default(32)＝F相当。新規ゲームの初期名声10でも中心10にならない。
+        foreach (var fame in new double[] { 0, 10, 20, 31.9, -5 })
+            Assert.Equal(C.TalentCenterDefault, C.TalentCenterFromFame(fame), 9);
+        Assert.Equal(Tier.F, Tiers.FromStrength(C.TalentCenterFromFame(10)));
+        Assert.InRange(C.TalentCenterFromFame(55), 50.0, 59.999);
     }
 
     [Fact]
@@ -30,6 +39,8 @@ public sealed class FameTalentCenterTests
         foreach (var fame in new double[] { 10, 25, 50, 75, 100 })
         {
             var cur = C.TalentCenterFromFame(fame);
+            // 下限(Default)の区間は平らなので、下限を超えた名声から狭義に増えることを見る
+            if (fame <= C.TalentCenterDefault) { Assert.True(cur >= prev); prev = cur; continue; }
             Assert.True(cur > prev, $"Fame={fame} でtalentCenterが増えていない（{prev}→{cur}）");
             prev = cur;
         }
@@ -52,7 +63,7 @@ public sealed class FameTalentCenterTests
     {
         // issue #1031 の完了条件: 名声の各ランクの中央の値の中心値が、同じランクの範囲に入る。
         // knee(65)以下は恒等なので自明に一致するが、ランク境界をまたぐ値でも明示的に固定する。
-        Assert.Equal(Tier.G, Tiers.FromStrength(C.TalentCenterFromFame(20)));   // G: 0-29
+        Assert.Equal(Tier.F, Tiers.FromStrength(C.TalentCenterFromFame(20)));   // 下限(32)でF（issue #1043。素のままならG）
         Assert.Equal(Tier.F, Tiers.FromStrength(C.TalentCenterFromFame(35)));   // F: 30-39
         Assert.Equal(Tier.E, Tiers.FromStrength(C.TalentCenterFromFame(45)));   // E: 40-49
         Assert.Equal(Tier.D, Tiers.FromStrength(C.TalentCenterFromFame(55)));   // D: 50-59（issue本文の例示）
@@ -83,7 +94,7 @@ public sealed class FameTalentCenterTests
     public void TalentCenter_DiminishingReturns_MarginalGainShrinks()
     {
         // 逓減カーブ（線形→漸近）: 名声が上がるほど、同じ+25の伸びに対するtalentCenter増分は小さくなる。
-        var gainLow = C.TalentCenterFromFame(25) - C.TalentCenterFromFame(0);
+        var gainLow = C.TalentCenterFromFame(57) - C.TalentCenterFromFame(32);
         var gainHigh = C.TalentCenterFromFame(100) - C.TalentCenterFromFame(75);
         Assert.True(gainHigh < gainLow, $"逓減していない（低名声帯+{gainLow:F2} vs 高名声帯+{gainHigh:F2}）");
     }
