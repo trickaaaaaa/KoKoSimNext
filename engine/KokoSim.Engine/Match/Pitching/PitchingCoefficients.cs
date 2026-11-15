@@ -34,7 +34,7 @@ public sealed record PitchingCoefficients
 
     // === 死球（HBP, design-14 未決F・2026-07-20）🟡 ===
     // 散布結果（本塁面の着弾位置）が打者の体側ウィンドウへ入り、回避に失敗した球は死球。
-    // 打者の立ち位置は X 負側の固定（左右打者の区別は現モデルに無い）。物理層駆動（不変条件#1）。
+    // 窓は打者の内角側（右打者は X 負側・左打者は X 正側。符号は HandednessExtensions.InsideSign）。物理層駆動（不変条件#1）。
     /// <summary>体側ウィンドウの内縁 |X|[m]（本塁中心から。ゾーン半幅0.216+ボックス余白）。</summary>
     public double HbpBodyEdgeM { get; init; } = 0.45;
     /// <summary>体側ウィンドウの下端[m]（足元。これ未満はワンバウンド球としてボール扱い）。</summary>
@@ -43,6 +43,13 @@ public sealed record PitchingCoefficients
     public double HbpBodyTopM { get; init; } = 1.60;
     /// <summary>体側ウィンドウに入った球を打者が避けられる確率。</summary>
     public double HbpDodgeProb { get; init; } = 0.85;
+
+    /// <summary>
+    /// 着弾位置 (x, y)[m] が打者の体側ウィンドウ（内角側の |X|≥内縁・高さ帯）に入るか。
+    /// 内角側の符号は <see cref="HandednessExtensions.InsideSign"/>（配球の内角攻め・縁狙いと同じ式。issue #987）。
+    /// </summary>
+    public bool IsInHbpWindow(Handedness bats, double x, double y) =>
+        bats.InsideSign() * x >= HbpBodyEdgeM && y >= HbpBodyBottomM && y <= HbpBodyTopM;
 
     // === 毎球の球速ばらつき（設計書02 §1.1d。最速=天井、常時は−3〜5km/h） 🟡 ===
     /// <summary>最速からの平均落差[km/h]。</summary>

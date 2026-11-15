@@ -10,3 +10,12 @@ public enum Handedness
     Left,
     Switch, // 両打ち（打ち手のみ。投げ手には使わない）
 }
+
+public static class HandednessExtensions
+{
+    /// <summary>
+    /// 打者の内角側の符号（捕手から見て +x＝一塁側）。右打者は三塁側(−x)に立ち内角も −x、左打者（スイッチは左打席想定）は +x。
+    /// 内角攻め・くさい所の縁狙い・死球の窓は、すべてこの符号から出す。
+    /// </summary>
+    public static double InsideSign(this Handedness bats) => bats == Handedness.Right ? -1.0 : 1.0;
+}
