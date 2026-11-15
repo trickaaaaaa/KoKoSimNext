@@ -59,30 +59,32 @@ pitching:
     - type: fastball    # バックスピンによるホップ成分
       tilt_deg: 0.0
       rpm_scale: 1.00
-    - type: two_seam     # 微シュート＋微沈
-      tilt_deg: 25.0
-      rpm_scale: 0.95
-    - type: cutter       # 小さく横滑り
-      tilt_deg: -20.0
-      rpm_scale: 0.95
-    - type: slider       # 横〜斜めの大きな変化（実測はストレート以上の回転数のことが多い）
-      tilt_deg: -70.0
-      rpm_scale: 1.10
-    - type: curve        # 縦の大変化（真性スピンが大きい）
-      tilt_deg: 170.0
-      rpm_scale: 1.15
+    # issue #1016: 縦・横は能力50・最速140km/h・球種の球速比での誘発変化（PitchSimulator.Simulate）。+横＝投げ腕の側。
+    #   シンカー・チェンジアップ・シュートは弱いバックスピン（ストレートより浮かない分だけ沈む）。カーブはスライダーと同じ側。
+    - type: two_seam     # 微シュート＋微沈（縦+20/横+20cm）
+      tilt_deg: 45.0
+      rpm_scale: 0.62
+    - type: cutter       # 小さく横滑り（縦+20/横−10cm）
+      tilt_deg: -27.0
+      rpm_scale: 0.48
+    - type: slider       # 横の大きな変化（縦+5/横−30cm。生回転はストレート以上でもジャイロが多く実効は小さい）
+      tilt_deg: -80.0
+      rpm_scale: 0.62
+    - type: curve        # 縦の大変化＋スライダーと同じ側（縦−30/横−20cm）
+      tilt_deg: -146.0
+      rpm_scale: 0.64
     - type: fork         # 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。ストレートとの差はホップが無い分の落差で、トップスピンで下に曲げる球ではない）
       tilt_deg: 0.0
       rpm_scale: 0.45    # キレが高いほどストレートから離れる＝回転が減る（良いフォークほど回転が少ない）
-    - type: changeup     # 沈み＋緩急
-      tilt_deg: 150.0
-      rpm_scale: 0.85
-    - type: shuuto       # 打者の内側へ食い込む
-      tilt_deg: 110.0
-      rpm_scale: 0.95
-    - type: sinker       # 内側へ沈む
-      tilt_deg: 145.0
-      rpm_scale: 0.95
+    - type: changeup     # 弱いバックスピン＋腕側＋緩急（縦+15/横+25cm）
+      tilt_deg: 59.0
+      rpm_scale: 0.56
+    - type: shuuto       # 打者の内側へ食い込む（縦+18/横+40cm）
+      tilt_deg: 66.0
+      rpm_scale: 0.94
+    - type: sinker       # 弱いバックスピン＋腕側（縦+20/横+30cm）
+      tilt_deg: 56.0
+      rpm_scale: 0.73
   # 投手ギア「飛ばす/流す」（設計書02 §1.1f）🟡
   gear_push_velocity_bonus_kmh: 2.0
   gear_push_stamina_factor: 1.6

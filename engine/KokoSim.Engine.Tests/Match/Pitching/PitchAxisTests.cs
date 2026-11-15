@@ -63,11 +63,11 @@ public sealed class PitchAxisTests
     [InlineData(PitchType.TwoSeam, 1, 1)]    // 微シュート(横+)＋微沈(FBより弱いホップ)
     [InlineData(PitchType.Cutter, 1, -1)]    // 小さく横滑り（グラブ側）
     [InlineData(PitchType.Slider, 1, -1)]    // 横〜斜めの大きな変化（グラブ側）
-    [InlineData(PitchType.Curve, -1, 1)]     // 縦の大変化（落ちる）
+    [InlineData(PitchType.Curve, -1, -1)]    // 縦の大変化（落ちる）＋スライダーと同じ側（腕と反対側。issue #1016）
     [InlineData(PitchType.Fork, 1, 0)]       // 低回転の縦落ち＝弱いバックスピン（ホップはあるがストレートより小さい。issue #911）
-    [InlineData(PitchType.Changeup, -1, 1)]  // 沈み（アーム側へのフェード）
-    [InlineData(PitchType.Shuuto, -1, 1)]    // 打者の内側へ食い込む（横成分が主）
-    [InlineData(PitchType.Sinker, -1, 1)]    // 内側へ沈む（縦成分が主）
+    [InlineData(PitchType.Changeup, 1, 1)]   // 弱いバックスピン＋アーム側へのフェード（浮かない分だけ沈む。issue #1016）
+    [InlineData(PitchType.Shuuto, 1, 1)]     // 弱いバックスピン＋打者の内側へ食い込む（横成分が主。issue #1016）
+    [InlineData(PitchType.Sinker, 1, 1)]     // 弱いバックスピン＋腕側（浮かない分だけ沈む。issue #1016）
     public void EachPitchType_MatchesDesignedBreakSign(PitchType type, int expectedVerticalSign, int expectedHorizontalSign)
     {
         var axis = Coeff.AxisFor(type);
@@ -131,7 +131,9 @@ public sealed class PitchAxisTests
 
         // カーブのような大きなマイナスにならない（弱いバックスピン＝ゼロ〜小さなプラス）。
         Assert.InRange(fork.InducedVerticalBreakM, -0.05, 0.30);
-        Assert.True(curve.InducedVerticalBreakM < -0.40, $"比較対象のカーブは大きく落ちるはず: {curve.InducedVerticalBreakM:F3}");
+        Assert.True(curve.InducedVerticalBreakM < -0.15, $"比較対象のカーブは落ちるはず: {curve.InducedVerticalBreakM:F3}");
+        Assert.True(fork.InducedVerticalBreakM - curve.InducedVerticalBreakM >= 0.30,
+            $"フォーク({fork.InducedVerticalBreakM:F3}m)はカーブ({curve.InducedVerticalBreakM:F3}m)より 30cm 以上浮く（トップスピンの球ではない）");
         // ストレートより小さく、ホップが無い分だけ 15cm 以上沈む。
         Assert.True(fastball.InducedVerticalBreakM - fork.InducedVerticalBreakM >= 0.15,
             $"ストレート({fastball.InducedVerticalBreakM:F3}m)とフォーク({fork.InducedVerticalBreakM:F3}m)の落差が15cm未満");
@@ -161,6 +163,81 @@ public sealed class PitchAxisTests
 
         Assert.True(fork.FlightTimeSeconds - fastball.FlightTimeSeconds < curve.FlightTimeSeconds - fork.FlightTimeSeconds,
             $"FB {fastball.FlightTimeSeconds:F3}s / フォーク {fork.FlightTimeSeconds:F3}s / カーブ {curve.FlightTimeSeconds:F3}s");
+    }
+
+    /// <summary>能力50・ストレート最速140km/h・球種の球速比で投げたときの弾道（issue #1016 の表と同じ測り方）。</summary>
+    private static (PitchTrajectory Pitch, PitchTrajectory Fastball) AtTop140(PitchType type)
+    {
+        const double Top = 140.0;
+        PitchTrajectory Sim(PitchType t, double kmh)
+        {
+            var axis = Coeff.AxisFor(t);
+            var spec = new PitchSpec { SpeedKmh = kmh, SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(Coeff.SpinRpmBase * axis.RpmScale, axis.TiltDeg) };
+            return PitchSimulator.Simulate(spec, Aero, Mound);
+        }
+        var ratio = new PitchSlot { Type = type, Power = 50, Sharpness = 50 }.SpeedRatio;
+        return (Sim(type, Top * ratio), Sim(PitchType.Fastball, Top));
+    }
+
+    /// <summary>
+    /// 各球種の誘発変化の大きさが実物の目安（MLB の代表値を高校野球の球速へ寄せた範囲）に入る（issue #1016）。
+    /// 能力50・最速140km/h・球種の球速比。縦＝回転による浮き(+)／沈み(−)［重力ぶんを除く］、横＝+が投げ腕の側。
+    /// シンカー・チェンジアップ・シュートは弱いバックスピン（縦プラス）、カーブは −20〜−40cm でスライダーと同じ側、
+    /// ツーシーム・カットは +20cm 前後（ストレートの +44cm より浮かない）。
+    /// </summary>
+    [Theory]
+    [InlineData(PitchType.Fastball, 35, 50, -1, 1)]
+    [InlineData(PitchType.TwoSeam, 12, 28, 10, 30)]
+    [InlineData(PitchType.Cutter, 12, 28, -20, -3)]
+    [InlineData(PitchType.Slider, -5, 12, -45, -20)]
+    [InlineData(PitchType.Curve, -40, -20, -30, -10)]
+    [InlineData(PitchType.Fork, 12, 30, -1, 1)]
+    [InlineData(PitchType.Changeup, 8, 25, 15, 35)]
+    [InlineData(PitchType.Shuuto, 10, 25, 30, 50)]
+    [InlineData(PitchType.Sinker, 12, 28, 20, 40)]
+    public void EachPitchType_InducedBreak_IsInRealisticRange(PitchType type, double vMinCm, double vMaxCm, double hMinCm, double hMaxCm)
+    {
+        var (p, _) = AtTop140(type);
+        Assert.InRange(p.InducedVerticalBreakM * 100.0, vMinCm, vMaxCm);
+        Assert.InRange(p.InducedHorizontalBreakM * 100.0, hMinCm, hMaxCm);
+    }
+
+    /// <summary>
+    /// 本塁でのストレートとの高さの差（誘発縦変化の差＋飛翔時間の差による重力落下の差）。
+    /// シンカー・チェンジアップ・シュートは「ストレートより浮かない分だけ沈む」球＝ストレートより低いが、
+    /// トップスピンで下へ曲げるカーブよりずっと浅い（直す前は −70〜−123cm で山なりに描かれていた。issue #1016）。
+    /// </summary>
+    [Theory]
+    [InlineData(PitchType.Sinker)]
+    [InlineData(PitchType.Changeup)]
+    [InlineData(PitchType.Shuuto)]
+    [InlineData(PitchType.TwoSeam)]
+    [InlineData(PitchType.Cutter)]
+    public void SinkingFastballFamily_DropsBelowFastball_ButFarLessThanCurve(PitchType type)
+    {
+        double DropBelowFastballM(PitchType t)
+        {
+            var (p, fb) = AtTop140(t);
+            return (p.InducedVerticalBreakM - fb.InducedVerticalBreakM)
+                - Aero.Gravity / 2.0 * (p.FlightTimeSeconds * p.FlightTimeSeconds - fb.FlightTimeSeconds * fb.FlightTimeSeconds);
+        }
+
+        var drop = DropBelowFastballM(type);
+        var curve = DropBelowFastballM(PitchType.Curve);
+        Assert.InRange(drop, -0.75, -0.10);
+        Assert.True(drop - curve >= 0.50, $"{type}: ストレートとの高さの差 {drop:F3}m がカーブ {curve:F3}m に近すぎる");
+    }
+
+    /// <summary>カーブの横はスライダーと同じ側（腕と反対側）。スライダーより横が小さく、縦は大きく落ちる（issue #1016）。</summary>
+    [Fact]
+    public void Curve_BreaksToGloveSide_LikeSlider_ButMoreVertical()
+    {
+        var (curve, _) = AtTop140(PitchType.Curve);
+        var (slider, _) = AtTop140(PitchType.Slider);
+
+        Assert.True(curve.InducedHorizontalBreakM < 0.0, $"カーブの横 {curve.InducedHorizontalBreakM:F3}m は腕と反対側（−）のはず");
+        Assert.True(System.Math.Abs(curve.InducedHorizontalBreakM) < System.Math.Abs(slider.InducedHorizontalBreakM));
+        Assert.True(curve.InducedVerticalBreakM < slider.InducedVerticalBreakM - 0.20);
     }
 
     /// <summary>球種ごとの実効回転数倍率（issue #835）: RpmForPlan 相当の計算が球種で変わること（単調性ではなく分岐確認）。</summary>
