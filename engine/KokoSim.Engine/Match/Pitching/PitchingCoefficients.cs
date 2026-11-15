@@ -113,14 +113,14 @@ public sealed record PitchingCoefficients
         // tiltDeg: 0=純バックスピン(ホップ) / 180=純トップスピン(落下方向を強める) / ±90=純サイドスピン
         //          (+ ＝ 投げ腕の側。左投手の+x＝一塁側、右投手は PitchSpinModel.ForThrower で反転して−x＝三塁側。issue #962)。
         new() { Type = PitchType.Fastball, TiltDeg = 0.0,   RpmScale = 1.00 }, // バックスピンによるホップ成分
-        new() { Type = PitchType.TwoSeam,  TiltDeg = 25.0,  RpmScale = 0.95 }, // 微シュート＋微沈
-        new() { Type = PitchType.Cutter,   TiltDeg = -20.0, RpmScale = 0.95 }, // 小さく横滑り
-        new() { Type = PitchType.Slider,   TiltDeg = -70.0, RpmScale = 1.10 }, // 横〜斜めの大きな変化（実測はストレート以上の回転数のことが多い）
-        new() { Type = PitchType.Curve,    TiltDeg = 170.0, RpmScale = 1.15 }, // 縦の大変化（真性スピンが大きい）
+        new() { Type = PitchType.TwoSeam,  TiltDeg = 45.0,  RpmScale = 0.62 }, // 微シュート＋微沈（縦+20/横+20cm。issue #1016）
+        new() { Type = PitchType.Cutter,   TiltDeg = -27.0, RpmScale = 0.48 }, // 小さく横滑り（縦+20/横−10cm。issue #1016）
+        new() { Type = PitchType.Slider,   TiltDeg = -80.0, RpmScale = 0.62 }, // 横の大きな変化（縦+5/横−30cm。生回転はストレート以上でもジャイロが多く実効は小さい。issue #1016）
+        new() { Type = PitchType.Curve,    TiltDeg = -146.0, RpmScale = 0.64 }, // 縦の大変化＋スライダーと同じ側（縦−30/横−20cm。issue #1016）
         new() { Type = PitchType.Fork,     TiltDeg = 0.0,   RpmScale = 0.45 }, // 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。トップスピンで下に曲げる球ではない。キレが高いほどストレートから離れる＝回転が減る）
-        new() { Type = PitchType.Changeup, TiltDeg = 150.0, RpmScale = 0.85 }, // 沈み＋緩急
-        new() { Type = PitchType.Shuuto,   TiltDeg = 110.0, RpmScale = 0.95 }, // 打者の内側へ食い込む
-        new() { Type = PitchType.Sinker,   TiltDeg = 145.0, RpmScale = 0.95 }, // 内側へ沈む
+        new() { Type = PitchType.Changeup, TiltDeg = 59.0,  RpmScale = 0.56 }, // 弱いバックスピン＋腕側＋緩急（縦+15/横+25cm。浮かない分だけ沈む。issue #1016）
+        new() { Type = PitchType.Shuuto,   TiltDeg = 66.0,  RpmScale = 0.94 }, // 打者の内側へ食い込む（縦+18/横+40cm。issue #1016）
+        new() { Type = PitchType.Sinker,   TiltDeg = 56.0,  RpmScale = 0.73 }, // 弱いバックスピン＋腕側（縦+20/横+30cm。浮かない分だけ沈む。issue #1016）
     };
 
     /// <summary>球種→回転軸。見つからなければストレート相当（フォールバック、通常は発生しない）。</summary>
