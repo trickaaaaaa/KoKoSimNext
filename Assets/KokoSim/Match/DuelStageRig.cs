@@ -255,10 +255,11 @@ namespace KokoSim.Unity.Match
             CatcherX = -0.02f, CatcherZ = -1.0f,
             UmpireX = 0.18f, UmpireZ = -1.88f,   // #291のスロット位置から微調整
             CapOffset = Vector3.zero,
-            // 打者ヘルメットの被り（v26: 2026-11-15 監督指摘「被りが浅い」で -0.014→-0.035。
-            // つばの縁が旧・眉の高さまで下り、耳フラップの穴が耳に重なり、後ろの縁が襟足に届く深さ。
-            // 比較: -0.030（やや浅い）/ -0.040（最も深い・つばが目の高さ近く））
-            HelmetOffset = new Vector3(-0.003f, -0.035f, -0.052f),
+            // 打者ヘルメットの被り（v26: 2026-11-15 監督指摘「被りが浅い」で -0.014→-0.055）。
+            // つばの縁が目の高さ近くまで下り、耳フラップが耳を覆って下端が顎の線、後ろの縁が襟足に届く深さ。
+            // -0.035〜-0.055 を撮り比べ、めり込みの実測（HelmetClipDiagForCapture・構え／空振り／インプレーの振り抜き）で
+            // 肌・襟が殻を突き抜ける所が無い一番深い値を採った（殻に触れる深さは殻の厚み≈5mm以内で頭打ち）
+            HelmetOffset = new Vector3(-0.003f, -0.055f, -0.052f),
             CatcherHelmetOffset = Vector3.zero,
             CatcherMaskOffset = Vector3.zero,
             CatcherChestOffset = Vector3.zero,

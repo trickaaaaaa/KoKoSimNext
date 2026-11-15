@@ -71,6 +71,27 @@ namespace KokoSim.EditorTools
         public static string BakeAll() => BakeAll(SleeveFlare);
 
         /// <summary>
+        /// メニューから1クリックで焼き直す（顔ののっぺらぼう化・髪・袖など、このベイカの変更を取り込む時）。
+        /// 焼き直しは資産を作り直す＝GUID が変わるので、ビルド同梱の索引（F8）が既にあれば続けて焼き直す
+        /// （古い索引のままだと Player ビルドでだけ領域メッシュが外れる）。
+        /// </summary>
+        [MenuItem("KokoSim/Duel/選手の顔と領域を作り直す")]
+        public static void BakeAllFromMenu()
+        {
+            var report = BakeAll();
+            if (report.StartsWith("FAILED"))
+            {
+                Debug.LogError("[DuelVendorRegionBaker] " + report);
+                EditorUtility.DisplayDialog("選手の顔と領域を作り直す", report, "OK");
+                return;
+            }
+            Debug.Log("[DuelVendorRegionBaker]\n" + report);
+            if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(
+                    "Assets/KokoSim/Resources/" + KokoSim.Unity.Match.DuelAssetCatalog.ResourceName + ".asset") != null)
+                KokoSim.UnityEditorTools.DuelAssetCatalogBaker.Bake();
+        }
+
+        /// <summary>
         /// 袖の張り出し倍率を指定してベイクする（issue #368-② の切り分け用）。
         /// 「袖が目立つ」のが袖メッシュのせいか腕の向きのせいかは、<c>1.0</c>（＝張り出しなし）で
         /// 焼いた絵と並べれば1枚で判る。**確認が済んだら必ず既定へ焼き直すこと**。
@@ -169,14 +190,17 @@ namespace KokoSim.EditorTools
                 copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
 
                 var outPath = OutDir + "/" + r.name + "_Regions.asset";
-                AssetDatabase.DeleteAsset(outPath);
-                AssetDatabase.CreateAsset(copy, outPath);
                 // 実行時に三角形を読めるようにしておく。グラブをはめた手を抜く処理
                 // （DuelStageRig.HideGloveHand・issue #913）が読む。元 FBX の「読めない」設定を
-                // そのまま引き継ぐと、エラーも出ずに手が残るだけになる
+                // そのまま引き継ぐと、エラーも出ずに手が残るだけになる。
+                // **資産にする前に**立てる: 作った後に SerializedObject で立てても dirty が付かず、
+                // 最後の SaveAssets で書かれない資産が出ていた（2026-11-15 実測: 9枚中7枚が 0 のまま）
                 var so = new SerializedObject(copy);
                 so.FindProperty("m_IsReadable").boolValue = true;
                 so.ApplyModifiedPropertiesWithoutUndo();
+                AssetDatabase.DeleteAsset(outPath);
+                AssetDatabase.CreateAsset(copy, outPath);
+                EditorUtility.SetDirty(copy);
                 sb.AppendLine(r.name + ": " + note);
             }
 
