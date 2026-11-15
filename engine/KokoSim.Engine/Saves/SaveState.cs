@@ -87,6 +87,15 @@ public sealed class SaveState
     // --- 新チーム発足待ち ---
     public bool NewTeamPending { get; set; }
     public List<string> NewTeamRetiredNames { get; set; } = new();
+    /// <summary>
+    /// 主将指名の次の「新チームの背番号決定」待ちか（issue #954・v33）。確定するまで週を進められない。
+    /// </summary>
+    public bool UniformNumberPending { get; set; }
+    /// <summary>
+    /// 新チームを発足させた年度（YearIndex。0＝今年度はまだ）（issue #954・v33）。夏の敗退直後に発足させた年は
+    /// 第18週の固定フックを安全網として素通りさせる（二度目の引退・主将の選び直しをしない）判定に使う。
+    /// </summary>
+    public int NewTeamStartedYear { get; set; }
 
     // --- 監督オファー待ち（設計書04 §1.3・転任システム。v18 で追加） ---
     /// <summary>年度末の転任判定の結果、プレイヤーの選択待ちか。</summary>

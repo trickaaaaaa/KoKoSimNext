@@ -104,6 +104,17 @@
 .ms-cmp-scroll { flex-grow: 1; }
 .ms-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: var(--sp-1); }
 .ms-cmp-apt.ms-hidden { display: none; }
+
+/* ── 新チームの背番号決定の上部帯（issue #954・案C）。部品は Banner＋DialogButton(primary) ── */
+.ms-newteam {
+    flex-shrink: 0;
+    margin-left: var(--sp-4);
+    margin-right: var(--sp-4);
+    margin-top: var(--sp-3);
+}
+.ms-newteam.ms-hidden { display: none; }
+.ms-newteam__lead { font-size: var(--fs-body); }
+.ms-newteam__ok { margin-right: 0; }
 /* 比較表は共通部品（scorebook.uss の .sbk-cmp*）。この画面の比較列は狭い（2人並べると片側約135px）ので、
    見出しの「打走守投」4組を1行に収めるためチップだけ18pxに詰める。 */
 .sbk .ms-compare .sbk-cmp-pl .cat-rank-chips .grade { min-width: 18px; width: 18px; height: 18px; padding: 0; margin: 0; }

@@ -16,6 +16,14 @@
         <!-- 共通トップバー（スコアボード＋ナビ・単一ソース） -->
         <ui:Instance template="TopBar" class="topbar-slot" />
 
+        <!-- 新チームの背番号決定（issue #954・案C）。主将指名の確定後にこの画面へ直行したときだけ出す上部帯。
+             主ボタン「背番号を確定」でホームへ戻る（このときトップバーの週送りは隠す＝主ボタンは1画面1つ）。 -->
+        <ui:VisualElement name="ms-newteam" class="banner ms-newteam ms-hidden">
+            <ui:Label name="ms-newteam-lead" class="ms-newteam__lead f-body-bd" />
+            <ui:VisualElement class="ms-head__spacer" />
+            <ui:Button name="ms-newteam-ok" text="背番号を確定" class="dlg-btn dlg-btn--primary ms-newteam__ok" />
+        </ui:VisualElement>
+
         <ui:VisualElement class="ms-body">
 
             <!-- 左：背番号割当（ダイヤ＋控え＋プール） -->

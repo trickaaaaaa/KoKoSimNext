@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 32;
+    public const int CurrentVersion = 33;
 
     // ===== Serialize =====
 
@@ -63,6 +63,8 @@ public static class SaveCodec
             .Add("records", RecordBookSaves.ToJson(s.Records))
             .Add("newTeamPending", s.NewTeamPending)
             .Add("newTeamRetired", RetiredToJson(s.NewTeamRetiredNames))
+            .Add("uniformNumberPending", s.UniformNumberPending)
+            .Add("newTeamStartedYear", s.NewTeamStartedYear)
             .Add("managerTransferPending", s.ManagerTransferPending)
             .Add("managerTransferKind", s.ManagerTransferKind)
             .Add("managerTransferCandidates", TransferCandidatesToJson(s.ManagerTransferCandidates))
@@ -352,6 +354,19 @@ public static class SaveCodec
             if (!root.Has("managerPostingBaselineSummerApp")) root.Add("managerPostingBaselineSummerApp", 0);
             if (!root.Has("managerPostingBaselineSpringApp")) root.Add("managerPostingBaselineSpringApp", 0);
         }
+        // v33（issue #954）: 夏の敗退直後の引退＝背番号決定待ち（uniformNumberPending）と新チームを発足させた
+        // 年度（newTeamStartedYear）。旧セーブは背番号決定待ちなし。発足年度は、第18週の固定フックを
+        // もう通過していれば（週が引退週より後）その年度＝発足済み、まだなら 0（未発足）で補う。
+        if (version < 33)
+        {
+            if (!root.Has("uniformNumberPending")) root.Add("uniformNumberPending", false);
+            if (!root.Has("newTeamStartedYear"))
+            {
+                var week = root.Has("week") ? root.Int("week") : 0;
+                var yearIndex = root.Has("yearIndex") ? root.Int("yearIndex") : 1;
+                root.Add("newTeamStartedYear", week > new SeasonCalendar().SummerRetireWeek ? yearIndex : 0);
+            }
+        }
         return root;
     }
 
@@ -409,6 +424,9 @@ public static class SaveCodec
             SessionYear = root.Int("sessionYear"),
             NewTeamPending = root.Bool("newTeamPending"),
             NewTeamRetiredNames = RetiredFromJson(root.Arr("newTeamRetired")),
+            // 背番号決定待ち・新チーム発足年度は v33 で追加。Migrate が旧セーブへ補うので素直に読む。
+            UniformNumberPending = root.Bool("uniformNumberPending"),
+            NewTeamStartedYear = root.Int("newTeamStartedYear"),
             // 監督オファー待ちは v18 で追加。Migrate が旧セーブへ false/0/空配列を補うので素直に読む。
             ManagerTransferPending = root.Bool("managerTransferPending"),
             ManagerTransferKind = root.Int("managerTransferKind"),

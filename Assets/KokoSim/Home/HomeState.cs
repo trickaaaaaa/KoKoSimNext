@@ -837,6 +837,11 @@ namespace KokoSim.Unity.Home
                 {
                     new FeedItem { When = "大会", Text = summary, Kind = good ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
                 });
+                // 自校の夏がここで終わった（県予選で敗退／甲子園で敗退／甲子園で優勝）なら、負けた翌日に3年が
+                // 引退して新チームが発足する（issue #954）。時計送りの**前**に済ませる＝引退した3年は
+                // 消費週ぶんの練習をしない。県大会で優勝した年は甲子園へ進むので何もしない（甲子園の後で来る）。
+                KokoSim.Unity.Shell.SummerRetirementService.OnTournamentEnded(w.Kind, w.IsChampion);
+
                 // 大会が消費した週ぶん共有週を進める（大会モードは既に抜けているのでここでは時計だけ）。
                 // 大会が消費した週数＝最終日がどの週に入るか（切り捨てで正しい: 18日目は開幕週+2週の
                 // 範囲 14〜20日に入る）。A案の日程（issue #583）で8ラウンド県18日＝2週・9ラウンド県21日＝3週。

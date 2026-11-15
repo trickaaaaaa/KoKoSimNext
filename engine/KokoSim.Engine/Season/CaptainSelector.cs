@@ -106,6 +106,15 @@ public static class CaptainSelector
     public static bool IsDesignationWindow(int week, SeasonCalendar calendar)
         => week > calendar.SummerRetireWeek && week < calendar.AutumnTournamentStartWeek;
 
+    /// <summary>
+    /// <see cref="IsDesignationWindow(int, SeasonCalendar)"/> に「その年度の新チームを夏の敗退直後に発足させた」
+    /// （issue #954）を足した版。県予選で早く負けた年は第18週より前に新チームが発足するので、
+    /// 発足した時点から秋季県大会の前週まで指名を受け付ける。<paramref name="newTeamStarted"/>=false は従来と一致。
+    /// </summary>
+    public static bool IsDesignationWindow(int week, SeasonCalendar calendar, bool newTeamStarted)
+        => IsDesignationWindow(week, calendar)
+           || (newTeamStarted && week < calendar.AutumnTournamentStartWeek);
+
     /// <summary>新チームの構成員（3年生は夏で引退済み＝除外）。順序は元ロスターのまま（決定論）。</summary>
     public static IReadOnlyList<DevelopingPlayer> NewTeamMembers(IReadOnlyList<DevelopingPlayer> roster)
         => roster.Where(p => !p.IsRetired && p.Grade < 3).ToList();
@@ -139,4 +148,13 @@ public static class CaptainSelector
     public static bool CanDesignate(
         IReadOnlyList<DevelopingPlayer> roster, DevelopingPlayer candidate, int week, SeasonCalendar calendar)
         => IsDesignationWindow(week, calendar) && DesignationCandidates(roster).Contains(candidate);
+
+    /// <summary>
+    /// <see cref="CanDesignate(IReadOnlyList{DevelopingPlayer}, DevelopingPlayer, int, SeasonCalendar)"/> の
+    /// 敗退直後発足版（issue #954）。指名期間の判定に <see cref="IsDesignationWindow(int, SeasonCalendar, bool)"/> を使う。
+    /// </summary>
+    public static bool CanDesignate(
+        IReadOnlyList<DevelopingPlayer> roster, DevelopingPlayer candidate, int week, SeasonCalendar calendar,
+        bool newTeamStarted)
+        => IsDesignationWindow(week, calendar, newTeamStarted) && DesignationCandidates(roster).Contains(candidate);
 }

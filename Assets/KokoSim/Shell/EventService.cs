@@ -229,6 +229,24 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void Push(string eventId, string subjectName, PresentedEffect effect, int salt,
             IReadOnlyDictionary<string, string> extra)
+            => Push(eventId, subjectName, effect, salt, extra, capped: true);
+
+        /// <summary>
+        /// 節目の出来事（夏の3年引退など・issue #954）を<b>週の件数上限を通さずに</b>積む。上限で落ちると、
+        /// その後に続く導線（引退 → 主将指名 → 背番号決定）の入口の場面ごと消えるため。結果行は付けない。
+        /// </summary>
+        public static void PushMilestone(string eventId)
+            => Push(eventId, null, null, 0, null, capped: false);
+
+        /// <summary>未提示のキューに指定条件のイベントが残っているか（導線の順序判定用・issue #954）。</summary>
+        public static bool HasPendingWhere(System.Func<string, bool> idMatches)
+        {
+            foreach (var e in _pending) if (idMatches(e.Id)) return true;
+            return false;
+        }
+
+        private static void Push(string eventId, string subjectName, PresentedEffect effect, int salt,
+            IReadOnlyDictionary<string, string> extra, bool capped)
         {
             var e = Scheduler.Find(eventId);
             if (e == null)
@@ -237,8 +255,11 @@ namespace KokoSim.Unity.Shell
                 UnityEngine.Debug.LogWarning("[イベント] " + eventId + " が events.yaml に無い（提示を飛ばす）");
                 return;
             }
-            if (_queuedThisWeek >= MaxNovelPerWeek) return;
-            _queuedThisWeek++;
+            if (capped)
+            {
+                if (_queuedThisWeek >= MaxNovelPerWeek) return;
+                _queuedThisWeek++;
+            }
 
             var values = BuildValues();
             if (!string.IsNullOrEmpty(subjectName)) values["player"] = subjectName;
