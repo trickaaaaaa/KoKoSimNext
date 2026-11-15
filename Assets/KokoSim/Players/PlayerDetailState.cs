@@ -219,14 +219,14 @@ namespace KokoSim.Unity.Players
             // 投手能力・野手能力（両方表示：モック準拠）。
             // 球速はこの表に出さない＝すぐ下の持ち球チャートのストレートが km/h で出しているので、
             // 同じ値が同じカードに二度並んでいた（監督決定 2026-08-09, issue #560）。
-            // 比較3画面（メンバー設定・スタメン設定・試合中の選手交代）も同じ扱いにしてある。
+            // 球威もストレートのランクと同じ値なので出さない（issue #1033）。キレは変化球ごとにオフセットが乗り
+            // チャートの値と一致しないので残す。比較3画面（メンバー設定・スタメン設定・試合中の選手交代）も同じ扱い。
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Control, AbilityLabels.Jp(AbilityKind.Control)));
-            // 項目と並びはエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる。
+            // 項目と並びはエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる
+            // （球速・球威だけはチャートに出るので例外）。
             // スタミナは目安投球数でなく Level で出す＝比較パネル3画面と同じもの（監督決定 2026-08-09, issue #561）。
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Stamina, AbilityLabels.Jp(AbilityKind.Stamina)));
             v.PitcherAbilities.Add(Bar(p, AbilityKind.PitchRank, AbilityLabels.Jp(AbilityKind.PitchRank)));
-            // 球威（issue #274）はこの画面にだけ無かった＝新設時の取りこぼし（issue #561）。
-            v.PitcherAbilities.Add(Bar(p, AbilityKind.Stuff, AbilityLabels.Jp(AbilityKind.Stuff)));
 
             v.FielderAbilities.Add(Bar(p, AbilityKind.LaunchTendency, "弾道"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Contact, "ミート"));

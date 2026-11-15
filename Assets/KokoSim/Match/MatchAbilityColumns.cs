@@ -28,6 +28,13 @@ namespace KokoSim.Unity.Match
 
         public AbilityColumnKind Kind = AbilityColumnKind.Rank;
 
+        /// <summary>
+        /// 持ち球チャートのストレートに同じ値が出る列（球速・球威, issue #560 / #1033）。
+        /// チャートが出る所（交代モーダルの比較表・チャート付きの詳細）では表から落とし、
+        /// チャートの無い一覧では出す。
+        /// </summary>
+        public bool OnPitchChart;
+
         /// <summary>値の取り方（値を持たないときは -1）。</summary>
         public Func<Player, int> Get = _ => -1;
     }
@@ -72,16 +79,17 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 投手能力の列。並び・項目はエンジンの単一ソース <c>AbilityKinds.Pitching</c>
         /// （球速/制球/スタミナ/キレ/球威）に合わせ、精神力（AbilityKind 外）を末尾に足す。
-        /// <b>球速だけは <see cref="AbilityColumnKind.Unit"/></b>＝交代モーダルの比較表には出さず
-        /// （持ち球チャートのストレートに添える・issue #560）、一覧にはチャートが無いので km/h で出す。
+        /// <b>球速・球威は <see cref="AbilityColumn.OnPitchChart"/></b>＝交代モーダルの比較表には出さず
+        /// （持ち球チャートのストレートに添える球速 km/h・ストレートのランク＝球威, issue #560 / #1033）、
+        /// 一覧にはチャートが無いので出す。
         /// </summary>
         public static readonly IReadOnlyList<AbilityColumn> Pitcher = new[]
         {
-            Col(AbilityKind.Velocity, "球速", AbilityColumnKind.Unit, VelocityKmh),
+            OnChart(Col(AbilityKind.Velocity, "球速", AbilityColumnKind.Unit, VelocityKmh)),
             Col(AbilityKind.Control, "制", p => p?.Pitching?.Control ?? -1),
             Col(AbilityKind.Stamina, "ス", Stamina),
             Col(AbilityKind.PitchRank, "キ", p => p?.Pitching?.PitchRank ?? -1),
-            Col(AbilityKind.Stuff, "威", Stuff),
+            OnChart(Col(AbilityKind.Stuff, "威", Stuff)),
             Raw("精神力", "精", p => p?.Mental ?? -1),
         };
 
@@ -91,6 +99,12 @@ namespace KokoSim.Unity.Match
         private static AbilityColumn Col(AbilityKind kind, string head, AbilityColumnKind columnKind,
             Func<Player, int> get)
             => new AbilityColumn { Label = AbilityLabels.Jp(kind), Head = head, Kind = columnKind, Get = get };
+
+        private static AbilityColumn OnChart(AbilityColumn c)
+        {
+            c.OnPitchChart = true;
+            return c;
+        }
 
         /// <summary>AbilityKind に無い項目（精神力）。</summary>
         private static AbilityColumn Raw(string label, string head, Func<Player, int> get)
@@ -125,15 +139,15 @@ namespace KokoSim.Unity.Match
         // ── 比較表（交代モーダル用） ──────────────────────────────
 
         /// <summary>
-        /// 2人ぶんの比較行（<c>msub-cmp-rows</c> が引く）。<see cref="AbilityColumnKind.Unit"/> の列は
-        /// 落とす＝球速はカードの持ち球チャートが担当し、表に二度出さない（issue #560）。
+        /// 2人ぶんの比較行（<c>msub-cmp-rows</c> が引く）。<see cref="AbilityColumn.OnPitchChart"/> の列は
+        /// 落とす＝球速・球威はカードの持ち球チャートが担当し、表に二度出さない（issue #560 / #1033）。
         /// </summary>
         public static IEnumerable<(string Label, int A, int B, bool TypeAxis)> CompareRows(
             Player a, Player b, bool pitcherView)
         {
             foreach (var c in pitcherView ? Pitcher : Fielder)
             {
-                if (c.Kind == AbilityColumnKind.Unit) continue;
+                if (c.OnPitchChart) continue;
                 yield return (c.Label, c.Get(a), c.Get(b), c.Kind == AbilityColumnKind.Type);
             }
         }

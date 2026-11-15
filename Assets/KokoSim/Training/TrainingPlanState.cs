@@ -589,11 +589,11 @@ namespace KokoSim.Unity.Training
                 });
         }
 
-        // 能力タブの表示順（issue #327③）。投手は伸びる能力一覧と同順（球威まで含む・CLAUDE.md用語集順）、
-        // 野手は選手詳細（PlayerDetailState）と同順。
+        // 能力タブの表示順（issue #327③）。投手は伸びる能力一覧と同順だが、球威は下の持ち球チャートの
+        // ストレートのランクと同じ値なので外す（issue #1033）。野手は選手詳細（PlayerDetailState）と同順。
         private static readonly AbilityKind[] PitcherAbilityOrder =
         {
-            AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank, AbilityKind.Stuff,
+            AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank,
         };
         private static readonly AbilityKind[] FielderAbilityOrder =
         {

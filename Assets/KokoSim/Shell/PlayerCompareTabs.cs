@@ -62,9 +62,10 @@ namespace KokoSim.Unity.Shell
             var list = new List<(string, Func<DevelopingPlayer, int>)>();
             foreach (var k in AbilityCompareTabs.PitcherAbilities)
             {
-                // 球速はこの表に出さず、持ち球チャートのストレートに km/h で添える（監督決定 2026-08-09, issue #560）。
-                // 同じ値が表とチャートに二度出るのをやめ、球速はチャート側の1箇所で読ませる。
-                if (k == AbilityKind.Velocity) continue;
+                // 球速・球威はこの表に出さず、持ち球チャートのストレートに出す（球速＝km/h で添える・
+                // 監督決定 2026-08-09, issue #560／球威＝ストレートのランクと同じ値, issue #1033）。
+                // 同じ値が表とチャートに二度出るのをやめ、チャート側の1箇所で読ませる。
+                if (k == AbilityKind.Velocity || k == AbilityKind.Stuff) continue;
                 var kind = k;
                 list.Add((AbilityLabels.Jp(kind), p => p.Level(kind)));
             }
