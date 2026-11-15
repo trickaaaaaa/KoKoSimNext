@@ -179,8 +179,9 @@ events:
             var e = events[id];
             Assert.Equal(EventKind.System, e.Kind);
             var all = string.Concat(e.Variants.SelectMany(v => v.Lines).Select(l => l.Say));
-            Assert.Contains("土", all);
             Assert.Contains("背番号", all);
+            // 土の持ち帰りは甲子園の場面だけ（県予選の土の会話は 2026-11-15 監督判断で削除）
+            if (id != SummerRetirement.PrefectureLossEventId) Assert.Contains("土", all);
         }
 
         // 優勝の年に敗戦の台詞を出さない。

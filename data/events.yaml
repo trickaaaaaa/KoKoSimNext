@@ -1100,19 +1100,6 @@ events:
     variants:
       - lines:
           - who: narration
-            say: "試合のあと、ベンチの前。三年生が、誰に言われるでもなく球場の土を袋に詰めはじめた。"
-          - who: player
-            name: "三年生"
-            say: "この土、持って帰っていいですか。"
-          - who: team_manager
-            say: "いいですけど、県営球場の土ですよ。ご利益は県の中だけです。"
-          - who: player
-            name: "三年生"
-            say: "十分です。"
-          - who: narration
-            say: "背番号を外した三年生は、少しだけ身軽そうに見えた。"
-      - lines:
-          - who: narration
             say: "最後のミーティング。三年生が一人ずつ、背番号を返しに来た。"
           - who: player
             name: "三年生"
@@ -1127,6 +1114,21 @@ events:
             say: "受験生にそれ言う？"
           - who: narration
             say: "最後のミーティングは、だいたい笑って終わった。"
+      - lines:
+          - who: narration
+            say: "球場から戻ったグラウンド。三年生が、誰に言われるでもなくトンボを手に取った。"
+          - who: player
+            name: "二年生"
+            say: "今日くらい、俺らがやりますよ。"
+          - who: player
+            name: "三年生"
+            say: "最後くらいやらせてよ。"
+          - who: player
+            name: "二年生"
+            say: "……先輩、トンボの跡がまっすぐじゃないです。"
+          - who: player
+            name: "三年生"
+            say: "最後の日まで言われるのか。"
 
   - id: summer_retirement_koshien
     kind: System
