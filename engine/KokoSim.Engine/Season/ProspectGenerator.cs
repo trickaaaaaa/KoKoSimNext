@@ -47,7 +47,10 @@ public sealed record RosterCoefficients
 
     // --- 総合力（名声由来）。既定は一般校相当。名声接続は SeasonEngine 側で talentCenter を渡す ---
     /// <summary>
-    /// 総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する（<see cref="TalentCenterFromFame"/>）。
+    /// 総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声が注入されている（<c>GameContext.Fame</c> が
+    /// null でない）間は <see cref="TalentCenterFromFame"/> が決める値に置き換わり、この値は使われない。
+    /// 使われるのは名声を追跡しない経路（<c>ctx.Fame is null</c>）のときの既定値と、<see cref="IntakeDropFor"/>・
+    /// <see cref="PhysicalCenterFor"/> の下端アンカーだけ（issue #1031 で写像を再校正した後もこの2つの役割は不変）。
     /// issue #865 で入学時を下げたのはこの値ではなく <see cref="IntakeDrop"/>（練習で伸びる能力だけを下げる）。
     /// AI校（<see cref="Nation.Roster.AiRosterFactory.RecruitCenter"/>）はこの値を参照しない別経路。
     /// </summary>
@@ -67,13 +70,15 @@ public sealed record RosterCoefficients
 
     /// <summary>
     /// 中心値 <paramref name="talentCenter"/> の新入生が、練習で伸びる能力を入学時にどれだけ下げて入るか。
-    /// <see cref="TalentCenterDefault"/> で満額、名声で届く上限（<see cref="TalentCenterDefault"/>＋<see cref="FameTalentCenterSpan"/>）で0、
-    /// その間は線形（実測: 名声0/30/60/90 の定常チーム総合が改定前と ±0.8 以内。issue #865）。
+    /// <see cref="TalentCenterDefault"/> 以下で満額、名声で届く上限（<see cref="FameTalentCenterCap"/>）で0、
+    /// その間は線形（issue #865）。issue #1031 で写像の形を変えた後も、この下げ幅の"物差し"（下端
+    /// <see cref="TalentCenterDefault"/>・上端 <see cref="FameTalentCenterCap"/>）は変えていない。
     /// </summary>
     public double IntakeDropFor(double talentCenter)
     {
-        if (FameTalentCenterSpan <= 0) return talentCenter <= TalentCenterDefault ? IntakeDrop : 0.0;
-        var fade = (TalentCenterDefault + FameTalentCenterSpan - talentCenter) / FameTalentCenterSpan;
+        var span = FameTalentCenterCap - TalentCenterDefault;
+        if (span <= 0) return talentCenter <= TalentCenterDefault ? IntakeDrop : 0.0;
+        var fade = (FameTalentCenterCap - talentCenter) / span;
         return IntakeDrop * MathUtil.Clamp(fade, 0.0, 1.0);
     }
     public double TalentSd { get; init; } = 8.0;
@@ -81,31 +86,48 @@ public sealed record RosterCoefficients
     public double TalentMax { get; init; } = 90.0;
 
     /// <summary>
-    /// 名声(Fame, 0-100)由来のtalentCenter上振れ幅の上限（頭打ち, issue #127・設計書04 §2.1）。
-    /// 2026-08-15（案D）に 8→50。旧値は Fame最大でも 32→40（E境界）で、自校の新入生が AI C校（強度60）の
-    /// 新入生にも届かず、自校が D 以上へ行く経路が実質閉じていた。新値は名声20→48(E)/40→59(D)/60→67(C)/
-    /// 80→72(B)/100→75(B。SD8 なので上位個体は A)。頭打ち自体は残す＝暴走防止の要件は維持し、
-    /// 名声は <c>CareerCoefficients.FameDecay</c> で自己制限する。
+    /// 名声(Fame, 0-100)→talentCenter写像で、恒等（center=fame）からの頭打ちが始まる名声値（issue #1031）。
+    /// これ以下は名声そのものが中心値＝「名声のランク≒新入生の中心のランク」が厳密に成り立つ
+    /// （2026-08-15案D〜2026-11-15改定前は指数飽和カーブが低〜中名声帯で立ち上がりすぎ、名声D(50〜59)の学校に
+    /// AI B校相当の新入生が入っていた＝名声より1〜2段強い新入生が入る不具合。実測は issue #1031 参照）。
     /// </summary>
-    public double FameTalentCenterSpan { get; init; } = 50.0;
+    public double FameTalentCenterKnee { get; init; } = 65.0;
 
     /// <summary>
-    /// 名声由来の上振れが頭打ちへ漸近する速さ（指数飽和の時定数, issue #127）。
-    /// 小さいほど低い名声でも早く頭打ちに近づき、大きいほど線形に近い緩やかな伸びになる。
+    /// 頭打ち（<see cref="FameTalentCenterKnee"/> 超）の上振れ幅。頭打ちの上限（cap）は
+    /// <see cref="FameTalentCenterCap"/>＝Knee＋これ。2026-11-15（issue #1031）に 50→13 へ再校正
+    /// （旧値はDefaultからの全幅だったため、低〜中名声帯の立ち上がりが速すぎた）。
+    /// 「名声を極めればB/Aの新入生が入ってよい」というオーナー決定（2026-08-15案D）自体は変えていない＝
+    /// 頭打ちの値は Knee=65 のときcap=78（B帯）で、名声100でも75前後（SD8なので上位個体はA）に収まる。
     /// </summary>
-    public double FameTalentCenterTau { get; init; } = 50.0;
+    public double FameTalentCenterSpan { get; init; } = 13.0;
 
     /// <summary>
-    /// 名声(Fame, 0-100)から新入生の総合力中心(talentCenter)を求める（設計書04 §2.1・issue #127）。
-    /// TalentCenterDefault を基準に、名声が高いほど指数飽和カーブ（線形→漸近）で上振れる。
-    /// 上限は TalentCenterDefault + FameTalentCenterSpan に頭打ち＝「勝つ→怪物→また勝つ」の暴走防止が必須要件。
-    /// Fame=0（または未注入）で TalentCenterDefault と厳密に一致する（不変条件#2: 名声フィードバックoffは従来一致）。
+    /// 名声由来の上振れが頭打ちへ漸近する速さ（指数飽和の時定数, issue #127・#1031で再校正）。
+    /// 小さいほど Knee 直後から早く頭打ちに近づき、大きいほど線形に近い緩やかな伸びになる。
+    /// </summary>
+    public double FameTalentCenterTau { get; init; } = 20.0;
+
+    /// <summary>
+    /// 名声が頭打ちへ漸近していった先の上限値（<see cref="IntakeDropFor"/> の「下げ0になる上端」としても使う）。
+    /// </summary>
+    public double FameTalentCenterCap => FameTalentCenterKnee + FameTalentCenterSpan;
+
+    /// <summary>
+    /// 名声(Fame, 0-100)から新入生の総合力中心(talentCenter)を求める（設計書04 §2.1・issue #127・#1031）。
+    /// <see cref="FameTalentCenterKnee"/> 以下は恒等（center=fame）＝名声のランクと中心値のランクが一致する。
+    /// それを超えた分だけ指数飽和カーブで <see cref="FameTalentCenterCap"/> へ頭打ちする＝
+    /// 「勝つ→怪物→また勝つ」の暴走防止（2026-08-15案Dのオーナー決定）は上側だけに残す。
+    /// 2026-11-15（issue #1031）改定前は <c>TalentCenterDefault + Span×(1−e^(−fame/tau))</c> という
+    /// Default基準の形で、低〜中名声帯の立ち上がりが速すぎ名声より1〜2段強い中心値になっていた（Fame=0で
+    /// 厳密にDefaultと一致させる旧要件は、実際には名声未注入(null)の別経路でしか使われない一致だったので
+    /// 撤回した＝<see cref="TalentCenterDefault"/> は名声未注入時の既定値としてだけ残す）。
     /// </summary>
     public double TalentCenterFromFame(double fame)
     {
         var f = Math.Max(0.0, fame);
-        var shift = FameTalentCenterSpan * (1.0 - Math.Exp(-f / FameTalentCenterTau));
-        return TalentCenterDefault + shift;
+        if (f <= FameTalentCenterKnee) return f;
+        return FameTalentCenterCap - FameTalentCenterSpan * Math.Exp(-(f - FameTalentCenterKnee) / FameTalentCenterTau);
     }
 
     // --- ティア→能力の圧縮（issue #578 Step 1・OPEN-QUESTIONS Q24 の確定2） ---

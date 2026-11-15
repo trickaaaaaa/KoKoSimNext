@@ -5,7 +5,7 @@ using Xunit;
 namespace KokoSim.Engine.Tests.Season;
 
 /// <summary>
-/// 監督の名声→新入生の質(talentCenter)フィードバック（issue #127・設計書04 §2.1）。
+/// 監督の名声→新入生の質(talentCenter)フィードバック（issue #127・設計書04 §2.1、issue #1031で写像を再校正）。
 /// 「勝つ→名声→良い新入生」の正フィードバックに、暴走防止の頭打ち（cap）が効いていることを検証する。
 /// </summary>
 public sealed class FameTalentCenterTests
@@ -13,10 +13,14 @@ public sealed class FameTalentCenterTests
     private static readonly RosterCoefficients C = new();
 
     [Fact]
-    public void Fame_Zero_MatchesDefault()
+    public void TalentCenter_IsIdentity_BelowKnee()
     {
-        // 不変条件#2: 名声フィードバックoff(Fame=0)は従来のtalentCenter既定値と厳密一致する。
-        Assert.Equal(C.TalentCenterDefault, C.TalentCenterFromFame(0), 9);
+        // issue #1031: knee以下は恒等（center=fame）＝名声のランクと中心値のランクが厳密に一致する。
+        // Fame=0（または未注入）が TalentCenterDefault と一致するという旧要件は、実際には名声未注入(null)の
+        // 別経路でしか使われない一致だったので撤回した（SeasonEngine は Fame=null のときこの関数を呼ばない）。
+        Assert.Equal(0.0, C.TalentCenterFromFame(0), 9);
+        foreach (var fame in new double[] { 10, 20, 30, 40, 50, 55, 60, C.FameTalentCenterKnee })
+            Assert.Equal(fame, C.TalentCenterFromFame(fame), 9);
     }
 
     [Fact]
@@ -34,31 +38,41 @@ public sealed class FameTalentCenterTests
     [Fact]
     public void TalentCenter_CapsNearSpan_AtMaxFame()
     {
-        // 頭打ち（cap）は実装の必須要件（issue #127）。Fame=100でも既定+span を超えない。
+        // 頭打ち（cap）は実装の必須要件（issue #127）。Fame=100でもcap(knee+span)を超えない。
         var atMax = C.TalentCenterFromFame(100);
-        Assert.True(atMax <= C.TalentCenterDefault + C.FameTalentCenterSpan,
-            $"Fame=100のtalentCenter({atMax})が上限({C.TalentCenterDefault + C.FameTalentCenterSpan})を超えた");
-        // 2026-08-15（案D・オーナー決定）: 名声を極めた学校には B/A の新入生が入る＝Fame=100 で中心 B 帯（70〜79）。
-        // 旧決定 1-A「控えめ（32→40）」は撤回。
+        Assert.True(atMax <= C.FameTalentCenterCap,
+            $"Fame=100のtalentCenter({atMax})が上限({C.FameTalentCenterCap})を超えた");
+        // 2026-08-15（案D・オーナー決定、issue #1031でも維持）: 名声を極めた学校には B/A の新入生が入る＝
+        // Fame=100 で中心 B 帯（70〜79）。
         Assert.InRange(atMax, 70.0, 79.0);
     }
 
     [Fact]
-    public void TalentCenter_LadderByFame_MatchesOwnerDecision()
+    public void TalentCenter_TracksFameTier_ForLowAndMidFame()
     {
-        // 案D の目標帯（2026-08-15）: 名声20→E / 40→D / 60→C / 80→B。名声は減衰（CareerCoefficients.FameDecay）で
-        // 自己制限するので、この帯に「居続ける」には勝ち続ける必要がある＝暴走防止は減衰側が担う。
-        Assert.Equal(Tier.E, Tiers.FromStrength(C.TalentCenterFromFame(20)));
-        Assert.Equal(Tier.D, Tiers.FromStrength(C.TalentCenterFromFame(40)));
-        Assert.Equal(Tier.C, Tiers.FromStrength(C.TalentCenterFromFame(60)));
+        // issue #1031 の完了条件: 名声の各ランクの中央の値の中心値が、同じランクの範囲に入る。
+        // knee(65)以下は恒等なので自明に一致するが、ランク境界をまたぐ値でも明示的に固定する。
+        Assert.Equal(Tier.G, Tiers.FromStrength(C.TalentCenterFromFame(20)));   // G: 0-29
+        Assert.Equal(Tier.F, Tiers.FromStrength(C.TalentCenterFromFame(35)));   // F: 30-39
+        Assert.Equal(Tier.E, Tiers.FromStrength(C.TalentCenterFromFame(45)));   // E: 40-49
+        Assert.Equal(Tier.D, Tiers.FromStrength(C.TalentCenterFromFame(55)));   // D: 50-59（issue本文の例示）
+        Assert.Equal(Tier.C, Tiers.FromStrength(C.TalentCenterFromFame(60)));   // C: 60-69
+    }
+
+    [Fact]
+    public void TalentCenter_StaysCappedAtB_ForHighFame()
+    {
+        // 2026-08-15案Dのオーナー決定（暴走防止）は knee を超えた帯でだけ残す＝名声80〜100でも B帯に留まる。
         Assert.Equal(Tier.B, Tiers.FromStrength(C.TalentCenterFromFame(80)));
+        Assert.Equal(Tier.B, Tiers.FromStrength(C.TalentCenterFromFame(100)));
     }
 
     [Fact]
     public void PhysicalCenter_FollowsTalentCenter_WithSlope()
     {
-        // 身体系中心の名声連動（案D・設計書01 §1.1b-2 但し書き）: 名声0 では PhysicalMean のまま、
+        // 身体系中心の名声連動（案D・設計書01 §1.1b-2 但し書き）: talentCenterがDefaultのとき PhysicalMean のまま、
         // 中心が上がったぶんの slope 倍だけ上がる。slope=0 なら旧来の名声独立に戻る（1ビット一致の口）。
+        // このテストは TalentCenterFromFame の形を直接参照しない（talentCenterを手で与える）＝写像の再校正(#1031)で変わらない。
         Assert.Equal(C.PhysicalMean, C.PhysicalCenterFor(C.TalentCenterDefault), 9);
         Assert.Equal(C.PhysicalMean + 40 * C.PhysicalTalentSlope, C.PhysicalCenterFor(C.TalentCenterDefault + 40), 9);
         var independent = C with { PhysicalTalentSlope = 0 };
@@ -79,6 +93,6 @@ public sealed class FameTalentCenterTests
     {
         // Fameは仕様上0-100だが、式自体もFameの想定域を超えて暴走しないことを確認（安全側）。
         var beyond = C.TalentCenterFromFame(1000);
-        Assert.True(beyond <= C.TalentCenterDefault + C.FameTalentCenterSpan + 1e-9);
+        Assert.True(beyond <= C.FameTalentCenterCap + 1e-9);
     }
 }

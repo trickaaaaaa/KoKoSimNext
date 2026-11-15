@@ -1813,21 +1813,22 @@ roster:
   # 入学時の下げ（issue #865・監督決定「入学時を下げて3年夏は同じ」）。練習で伸びる能力だけを intake_drop 下げて
   # 入学させ、強めた育成式（training.base_main_exp）で取り戻す。お任せ練習で伸びない能力（盗塁・送球精度・走塁・
   # 球速・キレ・球威・バント）は下げない＝下げると卒業まで戻らず定常のチーム総合だけが落ちる（実測: 無名校 38.0→36.0）。
-  # 下げ幅は中心値 talent_center_default で満額、名声で届く上限（talent_center_default＋fame_talent_center_span）で0（線形）。
+  # 下げ幅は中心値 talent_center_default で満額、名声で届く上限（fame_talent_center_cap＝knee＋span）で0（線形）。
   # 高い能力ほど伸びにくい育成式なので、強豪の入学時を一律に下げると3年で取り戻せない（実測: 名声60 63.0→58.5）。
-  # この形で名声0/30/60/90 の定常チーム総合は改定前と ±0.8 以内（出典: ProspectGenerator.IntakeDropFor）。
+  # 出典: ProspectGenerator.IntakeDropFor（issue #1031 で写像を再校正した後も、下げ幅の物差し自体は変えていない）。
   intake_drop: 12.0
   talent_sd: 8.0
   talent_min: 10.0
   talent_max: 90.0
-  # 名声→talentCenterフィードバック（issue #127・設計書04 §2.1）: 監督の名声が高いほど良い新入生が集まる。
-  # 上振れは指数飽和カーブ（線形→漸近）で頭打ち＝「勝つ→怪物→また勝つ」の暴走ループ防止が必須要件。
-  # 2026-08-15（案D）: 8/30 → 50/50。旧値は Fame最大でも 32→40（E境界）で、自校の新入生は名声を極めても
-  # AI C校（強度60）の新入生に届かず、自校がD以上へ行く経路が実質閉じていた。
-  # 頭打ち（span）は残す＝暴走防止の要件は維持。名声は fame_decay(0.80) で自己制限するので、
-  # 勝ち続けないと中心も落ちる。
-  fame_talent_center_span: 50.0
-  fame_talent_center_tau: 50.0
+  # 名声→talentCenterフィードバック（issue #127・#1031・設計書04 §2.1）: 監督の名声が高いほど良い新入生が集まる。
+  # knee（65）以下は恒等＝center=fame（名声のランク≒新入生の中心のランクが一致する）。knee超だけ指数飽和カーブで
+  # cap（knee+span=78）へ頭打ち＝「勝つ→怪物→また勝つ」の暴走ループ防止（2026-08-15案Dのオーナー決定）は
+  # 上側だけに残す。2026-11-15（issue #1031）改定前は Default(32)基準の指数飽和（span50/tau50）で、
+  # 低〜中名声帯の立ち上がりが速すぎ、名声D(50〜59)の学校にAI B校相当（1〜2段強い）の新入生が入っていた。
+  # 名声は fame_decay(0.80) で自己制限するので、勝ち続けないと中心も落ちる。
+  fame_talent_center_knee: 65.0
+  fame_talent_center_span: 13.0
+  fame_talent_center_tau: 20.0
   # ティア→能力の圧縮（issue #578・OPEN-QUESTIONS Q24 の確定2）。AI校の「強度→能力中心」だけを寝かせ、
   # 格差マッチの一方的さを緩める。#536 の実測では実力差10ポイントごとに得点が約0.4倍になっていた。
   # 自校（ProspectGenerator）は対象外なので、ピボットを平均帯(50)に置くと自校との差が縮まらず効果が出ない
