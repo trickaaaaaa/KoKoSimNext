@@ -116,6 +116,8 @@ public sealed record RosterCoefficients
     /// <summary>
     /// 名声(Fame, 0-100)から新入生の総合力中心(talentCenter)を求める（設計書04 §2.1・issue #127・#1031）。
     /// <see cref="FameTalentCenterKnee"/> 以下は恒等（center=fame）＝名声のランクと中心値のランクが一致する。
+    /// ただし下限は <see cref="TalentCenterDefault"/>（2026-11-16・issue #1043）＝名声0〜Default は中心Default（F相当）。
+    /// 下限が無いと初期名声10の新規ゲームで中心10（総合力抽選の下限に張り付く）の新入生が入り、「Fから抜け出せない」が戻る。
     /// それを超えた分だけ指数飽和カーブで <see cref="FameTalentCenterCap"/> へ頭打ちする＝
     /// 「勝つ→怪物→また勝つ」の暴走防止（2026-08-15案Dのオーナー決定）は上側だけに残す。
     /// 2026-11-15（issue #1031）改定前は <c>TalentCenterDefault + Span×(1−e^(−fame/tau))</c> という
@@ -126,7 +128,7 @@ public sealed record RosterCoefficients
     public double TalentCenterFromFame(double fame)
     {
         var f = Math.Max(0.0, fame);
-        if (f <= FameTalentCenterKnee) return f;
+        if (f <= FameTalentCenterKnee) return Math.Max(TalentCenterDefault, f);
         return FameTalentCenterCap - FameTalentCenterSpan * Math.Exp(-(f - FameTalentCenterKnee) / FameTalentCenterTau);
     }
 
