@@ -9,17 +9,20 @@
 # ── 架空基礎タイプ（序盤ラウンド）＋聖地 ─────────────────────────
 stadiums:
   # 架空タイプ: 統計検証（狭>標準>広の順序）と序盤ラウンドに使用
+  # issue #976（2026-11-15）: 市営級2種を 両翼+1m・中堅+1m・フェンス高 2.0→3.0m。県大会の試合の98%以上がこの2種で、
+  # 本塁打の出すぎの最大の源だった。「狭い」性格（標準95/118より狭い）は残し、主にフェンスを上げる＝柵越えをフェンス直撃の長打へ。
+  # 汎用の球場（model 無し）なので 3D は standard を寸法へ伸縮して描く（フェンス高も追従する）。
   - id: municipal_small_01
     name: 市営球場（狭い）
-    left: 91
-    center: 115
-    fence_height: 2.0
+    left: 92
+    center: 116
+    fence_height: 3.0
     tier: municipal
   - id: municipal_small_02
     name: 市営球場（やや狭い）
-    left: 93
-    center: 116
-    fence_height: 2.0
+    left: 94
+    center: 117
+    fence_height: 3.0
     tier: municipal
   - id: standard_01
     name: 標準球場

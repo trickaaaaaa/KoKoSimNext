@@ -33,6 +33,8 @@ public static class HomeRunMeasurement
         public string? SavePath { get; init; }
         /// <summary>回す条件の id（null＝全部）。</summary>
         public HashSet<string>? Only { get; init; }
+        /// <summary>係数YAML（null＝C#既定＝実ゲームと同じ）。校正中の試し打ち用（issue #976）。</summary>
+        public string? CoefficientsPath { get; init; }
     }
 
     /// <summary>1条件の実測。</summary>
@@ -59,7 +61,8 @@ public static class HomeRunMeasurement
         var rows = new List<Row>();
         var notes = new List<string>();
         bool Want(string id) => o.Only is null || o.Only.Contains(id);
-        var baseCtx = GameSimulation.BuildContext(coefficientsPath: null);   // C#既定＝実ゲームと同じ係数
+        // 既定は C#既定＝実ゲームと同じ。YAML を渡したときも天候は剥がす（気温は条件ごとに明示で足す）。
+        var baseCtx = GameSimulation.BuildContext(o.CoefficientsPath) with { Weather = null };
         var seed = o.Seed;
         ulong Next() => seed += 1000;
 
@@ -404,7 +407,9 @@ public static class HomeRunMeasurement
         sb.AppendLine("# 本塁打の実測レポート（issue #1014・#976 の前段・計測のみ）");
         sb.AppendLine();
         sb.AppendLine(c, $"- シード: {o.Seed}（条件ごとに +1000）／基本 {o.Games} 試合（球場別・気温別・ティア格子は半分、監督の試合は2倍）");
-        sb.AppendLine("- 係数: C#既定（実ゲームと同じ）。**係数・帯・解決式は変更していない**");
+        sb.AppendLine(o.CoefficientsPath is null
+            ? "- 係数: C#既定（実ゲームと同じ）"
+            : $"- 係数: {o.CoefficientsPath}（試し打ち。実ゲームは C#既定）");
         sb.AppendLine("- 本塁打/試合・5本以上・10本以上は**両軍計**。得点はチームあたり");
         sb.AppendLine();
 

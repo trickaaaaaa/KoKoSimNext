@@ -167,16 +167,19 @@ public sealed record Stadium
     /// 47県固有の実在球場は追わず、data/stadiums.yaml の汎用タイプ3種を序盤/準決勝・決勝で使い分ける
     /// （<see cref="RegionalStadiumTier"/>）。<b>値は data/stadiums.yaml と一致させること</b>（不変条件#4。
     /// <c>StadiumLoaderTests.RegionalTierDefaults_MatchTheRepositoryYaml</c> が固定する）。
+    /// <para>issue #976（2026-11-15）: 市営級2種を 両翼+1m・中堅+1m・フェンス高 2.0→3.0m（旧 91/115/2.0・93/116/2.0）。
+    /// 県大会の試合の大半を占めるこの2種が本塁打の出すぎの最大の源だったため、柵越えの一部をフェンス直撃の長打へ振り替える。
+    /// 「狭い」性格（標準 95/118 より狭い）は残す。</para>
     /// </summary>
     public static Stadium MunicipalSmall01 { get; } = new()
     {
         Id = "municipal_small_01",
         Name = "市営球場（狭い）",
         Tier = StadiumTier.Municipal,
-        LeftM = 91.0,
-        RightM = 91.0,
-        CenterM = 115.0,
-        FenceHeightM = 2.0,
+        LeftM = 92.0,
+        RightM = 92.0,
+        CenterM = 116.0,
+        FenceHeightM = 3.0,
     };
 
     /// <summary>同上（序盤ラウンドのもう一方）。</summary>
@@ -185,10 +188,10 @@ public sealed record Stadium
         Id = "municipal_small_02",
         Name = "市営球場（やや狭い）",
         Tier = StadiumTier.Municipal,
-        LeftM = 93.0,
-        RightM = 93.0,
-        CenterM = 116.0,
-        FenceHeightM = 2.0,
+        LeftM = 94.0,
+        RightM = 94.0,
+        CenterM = 117.0,
+        FenceHeightM = 3.0,
     };
 
     /// <summary>同上（準決勝・決勝＝県営級。地方の県営級の実測基準として design-02/13 で参照される寸法）。</summary>

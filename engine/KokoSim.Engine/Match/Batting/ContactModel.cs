@@ -186,7 +186,8 @@ public static class ContactModel
             QualityMin, 1.05);
 
         var maxExitKmh = coeff.ExitVeloInterceptKmh + batter.Power * coeff.ExitVeloPerPower;
-        var veloFactor = VeloFactor(quality, coeff);
+        // 上側の寝かせ（issue #976）: 芯を食った当たりの伸びだけ縮める。
+        var veloFactor = coeff.SoftenVeloFactor(VeloFactor(quality, coeff));
         var exitMps = maxExitKmh * veloFactor / 3.6;
 
         // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。ミートが良いほど締まる（安打の分業。issue ai-roster-power-top-tier-all-sluggers）。
@@ -197,8 +198,11 @@ public static class ContactModel
         // 球種の縦変化で角度が動く（issue #835）: 縦に落ちる球（フォーク等）ほど角度が下がりゴロが増える。
         var breakAngleShift = PitchDeception.LaunchAngleShiftDeg(features, coeff);
         // つなぎの打撃（issue #907）: 走者ありで打球角を低く（ゴロ寄り）。スキルなしは0＝恒等。
+        // 角度の上側だけ締める（issue #976）: 平均より上へ振れた分にだけ倍率を掛ける。乱数は同じ1本。
+        var angleNoise = rng.NextGaussian(0, angleSigma);
+        if (angleNoise > 0.0) angleNoise *= coeff.LaunchAngleUpperSigmaFactor;
         var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + breakAngleShift + skillMods.LaunchShiftDeg
-                          + rng.NextGaussian(0, angleSigma);
+                          + angleNoise;
 
         // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。
         var timing = TimingOffsetMean(batter, plan, features, coeff) + rng.NextGaussian(0, coeff.TimingSigma);
