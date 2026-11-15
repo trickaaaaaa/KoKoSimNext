@@ -15,7 +15,6 @@ namespace KokoSim.Unity.Shell
         public string PrefectureName = "";
         public string TierLetter = "";
         public double Strength;
-        public double Fame;
     }
 
     /// <summary>監督オファー画面に表示する一式（スナップショット）。</summary>
@@ -105,7 +104,6 @@ namespace KokoSim.Unity.Shell
                     SchoolName = NationService.ManagerSchoolName,
                     PrefectureName = NationService.PrefectureName(NationService.PrefectureId),
                     Strength = self.Strength,
-                    Fame = ManagerService.Manager.Fame,
                     TierLetter = Tiers.FromStrength(self.Strength).ToString(),
                 });
             }
@@ -119,7 +117,6 @@ namespace KokoSim.Unity.Shell
                     SchoolName = NationService.DisplayName(c.SchoolId, c.SchoolName),
                     PrefectureName = NationService.PrefectureName(c.PrefectureId),
                     Strength = c.Strength,
-                    Fame = c.Fame,
                     TierLetter = Tiers.FromStrength(c.Strength).ToString(),
                 });
             }
