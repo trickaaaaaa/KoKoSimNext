@@ -1296,6 +1296,27 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .xt-foot__note { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; white-space: normal; }
 .xt-ok { min-width: 200px; margin-right: 0; }
 
+/* ===== 年契約の更新モーダル（設計書04 §1.4a・issue #1034） =====
+   部品辞書の modal-scrim / modal-card / dlg-btn / TierChoice を使う。主ボタンは足元の1つだけ（UI原則②⑦）。
+   本文域は固定高＝ページをめくっても足元のボタンが動かない。 */
+.cr-card { width: 700px; padding: 20px 24px 18px 24px; }
+.cr-hd { font-size: var(--fs-page); color: var(--color-chalk); letter-spacing: 2px; flex-shrink: 0; margin-bottom: 12px; }
+.cr-body { height: 300px; flex-shrink: 0; }
+.cr-name { font-size: 26px; color: var(--color-chalk); flex-shrink: 0; }
+.cr-sub { font-size: var(--fs-label); color: var(--color-muted); margin-top: 2px; margin-bottom: 14px; flex-shrink: 0; }
+.cr-foot { flex-direction: row; justify-content: flex-end; align-items: center; margin-top: 14px; flex-shrink: 0; }
+
+.cr-row { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.cr-row__name { flex-grow: 1; flex-basis: 0; min-width: 0; margin: 0; padding: 0; font-size: var(--fs-body); color: var(--color-chalk); }
+.cr-row__lv { width: 110px; flex-shrink: 0; margin: 0; padding: 0; font-size: var(--fs-label); color: var(--color-muted); }
+.cr-row__cost { width: 110px; flex-shrink: 0; justify-content: flex-end; }
+.cr-row__cost .nu-num { font-size: var(--fs-body); color: var(--color-chalk); }
+.cr-row__cost .nu-unit { font-size: var(--fs-label); color: var(--color-chalk); }
+.cr-row--changed .cr-row__lv { color: var(--color-chalk); }
+.cr-sep { height: 1px; flex-shrink: 0; background-color: var(--color-line); margin-top: 8px; margin-bottom: 8px; }
+.cr-arrow { width: 36px; flex-shrink: 0; margin: 0; padding: 0; -unity-text-align: middle-center; font-size: var(--fs-label); color: var(--color-muted); }
+.cr-warn .nu-num, .cr-warn .nu-unit { color: var(--color-warn); }
+
 /* ═══════════════════════════════════════════════════════════════════════
    design-19 G1 昼スキン上書き（TopBar/nav/CTA）。tokens 反転で全面が昼になった後、
    「スコアボードは昼でも黒」「nav は白地インク枠・選択=空青」「CTA=応援団赤」を上書きする。

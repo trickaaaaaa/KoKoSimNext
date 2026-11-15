@@ -45,6 +45,9 @@ namespace KokoSim.Unity.Home
         private EventNovelView _novel;
         private VisualElement _hero, _dash;
 
+        // 年契約の更新モーダル（issue #1034）。会話（ノベル）を読み終えたあとに開く。
+        private ContractRenewalModal _renewal;
+
         private void OnEnable()
         {
             // セッション常駐（画面往復で通知フィードと成長が消えないよう、単一の状態を使い回す）。
@@ -82,6 +85,7 @@ namespace KokoSim.Unity.Home
             _hero = _root.Q<VisualElement>("home-hero");
             _dash = _root.Q<VisualElement>("home-dash");
             _novel = new EventNovelView(_root.Q<VisualElement>("ev-novel"), OnNovelClosed);
+            _renewal = new ContractRenewalModal(_root, OnRenewalClosed);
             // 本文域は必ず見える状態から始める。UIDocument のツリーは画面を離れても生き残るので、
             // ノベルを開いたまま他タブへ移ると、隠したインライン指定が残って空のホームになる。
             SetBodyVisible(true);
@@ -95,6 +99,8 @@ namespace KokoSim.Unity.Home
             else if (KokoSim.Unity.Shell.UniformNumberService.Pending) GoToUniformNumbers();
             else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();
             else if (_state.BannerPending) ShowBanner();
+            // 年契約の更新の待ち（別画面へ出ていて戻ってきた場合も、ここで会話→更新の画面へ戻す）。
+            else if (KokoSim.Unity.Shell.ContractRenewalService.Pending) ContinueRenewal();
             // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
             else TryShowEvent();
 
@@ -125,6 +131,7 @@ namespace KokoSim.Unity.Home
             if (_tsRow != null && _tsRowClick != null) _tsRow.UnregisterCallback(_tsRowClick);
             _tsRowClick = null;
             if (_novel != null) { _novel.Dispose(); _novel = null; }
+            if (_renewal != null) { _renewal.Dispose(); _renewal = null; }
 
         }
 
@@ -137,6 +144,8 @@ namespace KokoSim.Unity.Home
             if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;
             // 新チームの背番号を確定するまで週を進めない（issue #954）。確定の画面へ戻す。
             if (KokoSim.Unity.Shell.UniformNumberService.Pending) { GoToUniformNumbers(); return; }
+            // 年契約の更新を確定するまで週を進めない（総括が選んだ段の年額を引くため）。
+            if (KokoSim.Unity.Shell.ContractRenewalService.Pending) { ContinueRenewal(); return; }
             if (_state.InTournament)
             {
                 _state.AdvanceDay();
@@ -150,6 +159,7 @@ namespace KokoSim.Unity.Home
                 if (KokoSim.Unity.Shell.NewTeamService.Pending) ContinueNewTeamFlow();  // 引退週＝新チーム発足（設計書09 §8）
                 else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();  // 転任判定（設計書04 §1.3）
                 else if (_state.BannerPending) ShowBanner();    // 大会開幕演出（要件1・2）
+                else if (KokoSim.Unity.Shell.ContractRenewalService.Pending) ContinueRenewal();   // 年契約の更新（issue #1034）
                 else TryShowEvent();                            // 週次イベントのノベル提示（issue #609）
             }
         }
@@ -179,6 +189,33 @@ namespace KokoSim.Unity.Home
             // スカウトの節目の会話（分野選び・候補リスト到着・念押し）を読み終えたらスカウト画面へ（issue #1035）。
             else if (KokoSim.Unity.Shell.ScoutService.TakeNavigation())
                 KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("ScoutScreen");
+            // 年契約の更新の会話を読み終えたら、段を選び直す画面へ（issue #1034）。
+            else if (KokoSim.Unity.Shell.ContractRenewalService.Pending) OpenRenewal();
+        }
+
+        /// <summary>年契約の更新を進める。会話が残っていれば先に出し（読み終えたら <see cref="OnNovelClosed"/> が画面を開く）、無ければ画面を開く。</summary>
+        private void ContinueRenewal()
+        {
+            if (KokoSim.Unity.Shell.EventService.HasPendingWhere(id => id == KokoSim.Engine.Career.ContractRenewal.EventId)
+                && _novel != null && _novel.OpenNext())
+            {
+                SetBodyVisible(false);
+                return;
+            }
+            OpenRenewal();
+        }
+
+        private void OpenRenewal()
+        {
+            if (_renewal != null && _renewal.OpenIfPending()) SetBodyVisible(false);
+        }
+
+        /// <summary>更新を確定した＝本文域を戻し、持ち越したイベントがあれば続けて出す。</summary>
+        private void OnRenewalClosed()
+        {
+            SetBodyVisible(true);
+            Render();
+            TryShowEvent();
         }
 
         /// <summary>

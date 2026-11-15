@@ -1419,5 +1419,31 @@ namespace KokoSim.Unity.Components
             b.AddToClassList("f-body-md");
             return b;
         }
+
+        /// <summary>
+        /// 段の選択肢1行（年契約の更新・issue #1034）。<see cref="ChoiceButton"/> と同じ器（白地＋墨1px枠、選択は墨2px）に、
+        /// 段名・年額（数字は右揃えの NumUnit）・効果の1文を列で並べる。選ばれている段は <c>choice-btn--selected</c>。
+        /// 年額0（やめる）は「0 万」と出す＝払わなくなることを数字で読ませる。
+        /// </summary>
+        public static Button TierChoice(string levelLabel, double annualCost, string effect, bool selected, System.Action onClick)
+        {
+            var b = new Button(onClick);
+            b.AddToClassList("choice-btn");
+            b.AddToClassList("tier-choice");
+            if (selected) b.AddToClassList("choice-btn--selected");
+
+            var lv = new Label(levelLabel ?? "");
+            lv.AddToClassList("tier-choice__lv");
+            lv.AddToClassList("f-body-md");
+            b.Add(lv);
+
+            b.Add(NumUnit(annualCost.ToString("0"), "万", false, "tier-choice__cost"));
+
+            var eff = new Label(effect ?? "");
+            eff.AddToClassList("tier-choice__eff");
+            eff.AddToClassList("f-body-md");
+            b.Add(eff);
+            return b;
+        }
     }
 }

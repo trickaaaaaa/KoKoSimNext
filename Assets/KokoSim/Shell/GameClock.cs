@@ -133,6 +133,10 @@ namespace KokoSim.Unity.Shell
             // 未契約の年は何も出ない。判定は engine の ScoutMilestones に1箇所。
             ScoutService.RaiseForWeek();
 
+            // 年契約の更新（issue #1034）。総括（第46週）の前週に会話を積み、読み終えたら段の選び直しの画面を出す。
+            // 契約中の年契約が無い年は何も出ない。判定は engine の ContractRenewal に1箇所。
+            ContractRenewalService.RaiseForWeek();
+
             // ドラフト（設計書20 §4・issue #586）。注目度の再評価は毎週（候補入り／評価の増減を拾うため）、
             // 指名の確定は10月最終週だけ。どちらも母種由来の独立ストリームで、本編の乱数列は進めない＝帯不変。
             DraftService.RefreshBands();

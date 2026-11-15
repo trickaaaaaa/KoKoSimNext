@@ -3001,6 +3001,15 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 }
 .choice-btn:active { background-color: var(--sf-card); }
 
+/* ── TierChoice：段の選択肢1行（年契約の更新・issue #1034） ─────────────────
+   .choice-btn の器に「段名｜年額（右揃え）｜効果」を列で並べる。列幅は行どうしで揃える。 */
+.tier-choice { flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
+.tier-choice__lv { width: 88px; flex-shrink: 0; margin: 0; padding: 0; color: var(--ink); }
+.tier-choice__cost { width: 96px; flex-shrink: 0; justify-content: flex-end; margin-right: var(--sp-4); }
+.tier-choice__cost .nu-num { color: var(--ink); }
+.tier-choice__cost .nu-unit { color: var(--ink); }
+.tier-choice__eff { flex-grow: 1; flex-basis: 0; min-width: 0; margin: 0; padding: 0; color: var(--ink); white-space: normal; }
+
 /* ===== GrowthChart（成長推移の折れ線・issue #1027） =====
    左＝描画面（縦軸の目盛り＋線）、下＝学年の区切り、右＝凡例（色見本＋名前＋今の値）。
    線の色は凡例の色見本の背景色を C# が読む＝色はここ（tokens.uss の練習メニュー色）だけで決める。 */

@@ -186,6 +186,7 @@ namespace KokoSim.Unity.Shell
             _pendingUpsetDeltas.Clear();
             if (s.ManagerPendingUpsetDeltas != null) _pendingUpsetDeltas.AddRange(s.ManagerPendingUpsetDeltas);
             _practice = null;
+            ContractRenewalService.Clear();
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
 
@@ -196,6 +197,7 @@ namespace KokoSim.Unity.Shell
             _facilities = null;
             _contracts = null;
             _practice = null;
+            ContractRenewalService.Clear();
             ResetGrowth();
         }
 

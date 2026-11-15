@@ -113,7 +113,7 @@ namespace KokoSim.Unity.Shell
             // 該当のモーダル/オファー画面を出して下ろす。
             if (_pending == null
                 && (NewTeamService.Pending || GameSession.Current.BannerPending || ManagerTransferService.Pending
-                    || ScoutService.NavigatePending)
+                    || ScoutService.NavigatePending || ContractRenewalService.Pending)
                 && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
                 _pending = HomeScreen;
 

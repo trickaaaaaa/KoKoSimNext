@@ -212,6 +212,22 @@ public static class CareerEngine
         return (reachedKoshien, nationalChampion, managerWins, upsetMatches);
     }
 
+    /// <summary>部費の年間収入[万円]＝学校予算＋信頼度ぶん。経営タブ・年契約の更新の見込みと総括が同じ式を使う。</summary>
+    public static double AnnualBudgetIncome(double trust, CareerCoefficients c)
+        => c.AnnualBudgetBase + c.BudgetPerTrust * trust;
+
+    /// <summary>部費の年間固定支出[万円]＝合宿（夏冬）＋年契約の年額。</summary>
+    public static double AnnualFixedExpense(double contractCost, CareerCoefficients c)
+        => c.SummerCampCost + c.WinterCampCost + contractCost;
+
+    /// <summary>部費の年間差引[万円]（収入−固定支出）。経営タブの「部費 年間差引」。</summary>
+    public static double AnnualFundsNet(double trust, double contractCost, CareerCoefficients c)
+        => AnnualBudgetIncome(trust, c) - AnnualFixedExpense(contractCost, c);
+
+    /// <summary>総括のあとの部費の見込み[万円]（総括と同じく0で止める）。信頼度は総括前の値＝見込み。</summary>
+    public static double ProjectedFunds(double funds, double trust, double contractCost, CareerCoefficients c)
+        => Math.Max(0, funds + AnnualFundsNet(trust, contractCost, c));
+
     /// <param name="contracts">
     /// 年契約の実効値（設計書04 §1.4a）。null なら従来どおり <see cref="CareerCoefficients.ScoutCost"/> を
     /// 固定で引く＝年契約を持たないキャリアシムは1ビットも変わらない（不変条件#2）。
@@ -249,8 +265,8 @@ public static class CareerEngine
         // 部費（運営費）。年間予算を加算し、合宿費と年契約の年額を差し引く（Issue #128・設計書04 §1.4a）。
         // 年契約を持たない経路（キャリアシム）は従来どおりスカウト費だけを固定で引く。
         // 資金は下限0で止める（借金しない）。
-        m.Funds += c.AnnualBudgetBase + c.BudgetPerTrust * m.Trust;
-        m.Funds -= c.SummerCampCost + c.WinterCampCost + (contracts?.AnnualCost ?? c.ScoutCost);
+        m.Funds += AnnualBudgetIncome(m.Trust, c);
+        m.Funds -= AnnualFixedExpense(contracts?.AnnualCost ?? c.ScoutCost, c);
         if (m.Funds < 0) m.Funds = 0;
 
         // 施設基金（設計書04 §1.4）。学校の設備投資＋名声に比例する後援会・OB寄付が積み上がり、
