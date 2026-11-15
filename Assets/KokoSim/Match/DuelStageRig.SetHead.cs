@@ -92,7 +92,28 @@ namespace KokoSim.Unity.Match
             bool afterRelease = !inDelivery && _pitcher != null && _pitcher.Clip == _pitchClip;
             float fadeSeconds = afterRelease ? PostReleaseReturnSeconds : CrossfadeSeconds;
             _setHeadW = Mathf.MoveTowards(_setHeadW, inDelivery ? 1f : 0f, dt / fadeSeconds);
+            // 入る側（セット・投球）は補正をポーズの切り替えと一緒に効かせる（下の SetFixEnterProgress）
+            if (inDelivery) _setHeadW = Mathf.Max(_setHeadW, SetFixEnterProgress);
+            if (PitcherAtSet) _headLookW = Mathf.Min(_headLookW, 1f - SetFixEnterProgress);
             _headLookW = Mathf.MoveTowards(_headLookW, PitcherAtSet ? 0f : 1f, dt / CrossfadeSeconds);
+        }
+
+        /// <summary>
+        /// 投手のポーズがセット（または次球の投球）へ入るときの切り替えの進み（0〜1。補正の効きの下限に使う）。
+        /// 補正の効きを独立に0.25秒かけて上げると、最後の1球の後のように**ポーズが一瞬でセットへ戻る**ときは
+        /// 補正前のうつむいた首・寝かせたグラブが先に映り、そこから首とグラブをぐいっと起こす動きが見えた
+        /// （2026-11-15 監督指摘「次のセットは最初から完璧な首とグラブの角度で入ってほしい」）。
+        /// ポーズが一瞬で切り替わる（クロスフェード無し）なら1＝補正も即座に満額。クロスフェード中はその進み
+        /// （u。ミキサーの重みは smoothstep(u)）＝セットの形と補正が同じ速さで寄る。
+        /// </summary>
+        private float SetFixEnterProgress
+        {
+            get
+            {
+                if (_pitcher == null) return 0f;
+                if (_pitcher.FadeRemaining <= 0f || _pitcher.FadeDuration <= 1e-4f) return 1f;
+                return Mathf.Clamp01(1f - _pitcher.FadeRemaining / _pitcher.FadeDuration);
+            }
         }
 
         /// <summary>
@@ -113,6 +134,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void FixPitcherSetHead()
         {
+            // 効きの下限（ポーズの切り替えの進み）は、いま評価したポーズで取り直す。Tick の頭で進めた値は
+            // ポーズを進める前の状態（一瞬でセットへ戻ったコマでは0のまま）で、補正前の首が1コマ映る
+            AdvanceSetHeadWeight(0f);
             _setHeadApplied = _setHeadW;
             if (_setHeadW <= 0f || !_deliveryHeadReady || _pitcher == null || _pitcher.Animator == null) return;
             var anim = _pitcher.Animator;

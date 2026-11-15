@@ -37,6 +37,13 @@ namespace KokoSim.Unity.Match
         {
             float target = PitcherAtSet ? 1f : 0f;
             _setGloveW = Mathf.MoveTowards(_setGloveW, target, dt / CrossfadeSeconds);
+            // セットへ入る側はポーズの切り替えと一緒に効かせる（SetFixEnterProgress。首と同じ理由）。
+            // グラブは効きを線形に掛けるので、ミキサーと同じ smoothstep で合わせる
+            if (PitcherAtSet)
+            {
+                float u = SetFixEnterProgress;
+                _setGloveW = Mathf.Max(_setGloveW, u * u * (3f - 2f * u));
+            }
         }
 
         /// <summary>
@@ -50,6 +57,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void FixPitcherSetGlove()
         {
+            AdvanceSetGloveWeight(0f);   // 効きの下限をいま評価したポーズで取り直す（首と同じ理由）
             _setGloveApplied = _setGloveW;
             if (_setGloveW <= 0f || _pitcher == null || _pitcher.Animator == null) return;
             var anim = _pitcher.Animator;

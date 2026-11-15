@@ -21,6 +21,60 @@ namespace KokoSim.UnityEditorTools
         [UnityEditor.MenuItem("KokoSim/Duel/#973 投球中の首を測る（左投手）")]
         public static void RunLeft() => Run(true);
 
+        [UnityEditor.MenuItem("KokoSim/Duel/#973 投げ終わり→次のセットを測る（右投手）")]
+        public static void RunReturnToSet()
+        {
+            Directory.CreateDirectory(Dir);
+            Directory.CreateDirectory(ShotDir);
+            var rig = new DuelStageRig();
+            if (!rig.Available) { Debug.LogError("[#973Probe] DuelStageRig が組めない"); return; }
+            rig.EnsureSize(960, 540);
+            rig.SetHandedness(false, false);
+            float dt = 1f / 60f;
+            var log = new StringBuilder("phase\tt\tglove\thead\n");
+            for (int i = 0; i < 30; i++) rig.Tick(dt);
+            rig.OnPitchWindup();
+            float t = 0f;
+            bool released = false;
+            int shot = 0;
+            // 最後の1球（nextReleaseIn=0）: フォロースルーを末尾まで→セット姿勢で止まる
+            while (t < DuelStageRig.WindupSeconds + 4.0f)
+            {
+                if (!released && t >= DuelStageRig.WindupSeconds - 0.001f)
+                {
+                    released = true;
+                    rig.OnPitchReleased(0f, DuelPitchOutcome.CalledStrike);
+                }
+                rig.Tick(dt);
+                t += dt;
+                if (released)
+                    log.Append("post\t").Append(t.ToString("F3")).Append('\t').Append(GloveW(rig)).Append('\t')
+                       .Append(Diag(rig)).Append('\n');
+                if (released && t > DuelStageRig.WindupSeconds + 1.6f && shot < 6 && ((int)(t * 60f)) % 10 == 0)
+                    Shoot(rig, "ret-" + (shot++) + "-t" + t.ToString("F2"));
+            }
+            // 新しい打席の頭（ResetForNewPlateAppearance）でもセットへ寄せる
+            rig.ResetForNewPlateAppearance();
+            for (int i = 0; i < 30; i++)
+            {
+                rig.Tick(dt);
+                log.Append("reset\t").Append((i * dt).ToString("F3")).Append('\t').Append(GloveW(rig)).Append('\t')
+                   .Append(Diag(rig)).Append('\n');
+            }
+            File.WriteAllText(Path.Combine(Dir, "return-to-set.tsv"), log.ToString());
+            Debug.Log("[#973Probe] return-to-set done");
+            rig.Dispose();
+        }
+
+        private static string GloveW(DuelStageRig rig)
+        {
+            var f = typeof(DuelStageRig).GetField("_setGloveW",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var a = typeof(DuelStageRig).GetField("_setGloveApplied",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            return "gw=" + ((float)f.GetValue(rig)).ToString("F2") + " ga=" + ((float)a.GetValue(rig)).ToString("F2");
+        }
+
         private static void Run(bool left)
         {
             Directory.CreateDirectory(Dir);
