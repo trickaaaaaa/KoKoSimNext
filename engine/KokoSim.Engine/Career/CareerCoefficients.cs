@@ -21,7 +21,7 @@ public sealed record CareerCoefficients
 
     // --- フリー化資格（設計書04 §1.3） ---
     public int FreeKoshienThreshold { get; init; } = 1;   // 甲子園1回でフリー資格
-    public double FreeFameThreshold { get; init; } = 52;  // または名声
+    public double FreeFameThreshold { get; init; } = 40;  // または名声（#981: 52→40）
 
     // --- 強制転任（教員監督, 設計書04 §1.3） ---
     /// <summary>
