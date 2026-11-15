@@ -534,6 +534,8 @@ namespace KokoSim.Unity.Match
             public float StartUntil;
             /// <summary>いま流している発進の添字（-1=無し）。</summary>
             public int StartClip;
+            /// <summary>本塁打の一周の待機中に、目で追う先へ体を回している最中か（issue #978・不感帯のヒステリシス）。</summary>
+            public bool PostHrTurning;
         }
 
         private readonly Dictionary<FieldPosition, FielderMotion> _loco = new();
@@ -728,18 +730,33 @@ namespace KokoSim.Unity.Match
             //    engine のサンプルは捕球と送球が同じ瞬間だが、実データは球を持って待つ場面がある。
             //    そこで本塁向きへ流すと、捕球中に開いておいた向きが投げる前に捨てられる
             float pending;
+            float yawRate = FielderYawRateDegPerSec;
+            // 本塁打で球が死んだ後の待機（issue #978）。外野手は着弾点を少し見てから打者走者へ、
+            // 内野手は打者走者を目で追う。#921 の見送り（球が飛んでいる間）より後の時刻だけ効く
+            bool postHr = want < 0 && InPostHomeRunIdle(pos, t);
+            if (postHr)
+            {
+                float goal = PostHomeRunFacingYaw(pos, cur.Pos, t, st.Yaw);
+                float off = Mathf.Abs(Mathf.DeltaAngle(st.Yaw, goal));
+                // 少しのずれでは体を回さない（走者を追ってずっと回り続けると、その場で滑って見える）
+                if (off > PostHrTurnStartDeg) st.PostHrTurning = true;
+                else if (off < PostHrTurnStopDeg) st.PostHrTurning = false;
+                targetYaw = st.PostHrTurning ? goal : st.Yaw;
+                yawRate = PostHrYawRateDegPerSec;
+            }
             // 本塁打の外野手は、止まっている間ずっと打球の**落ちる先**を向いて見送る（issue #921）。
             // 下の「いま球がある方」だと、頭上を越える前の球＝本塁側を向いてしまい、
             // 柵越えの瞬間にカメラへ顔を向けて立つ絵になる（実測: 着地1秒前に本塁を真っ直ぐ向き、
             // 球が頭上を越えたコマで180°振り向いていた）
-            if (want < 0 && TryHomeRunWatchYaw(pos, cur.Pos, out pending)) targetYaw = pending;
+            if (postHr) { }
+            else if (want < 0 && TryHomeRunWatchYaw(pos, cur.Pos, out pending)) targetYaw = pending;
             else if (want < 0 && TryPendingThrowYaw(pos, t, out pending)) targetYaw = pending;
             // 停止中、まだ生きている球（飛んでいる／転がっている／保持中）があればその方向を向く。
             // 追いつけず立ち止まった野手が本塁（≈カメラの向き）へフォールバックし、打球を見送るはずの
             // 瞬間にこちらを向いてしまう不自然さの対策（issue fence-camera-zoom-and-outfielder-facing）
             else if (want < 0 && TryFacingLiveBall(t, cur.Pos, out pending)) targetYaw = pending;
             st.Yaw = st.Started
-                ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
+                ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, yawRate * Mathf.Max(0f, dt))
                 : targetYaw;
             st.Started = true;
 
@@ -748,17 +765,31 @@ namespace KokoSim.Unity.Match
             // 本塁打で見送る外野手は、止まった時点で待機を低い構えへ替える（issue #921）。
             // 走りの段が変わらなくても（＝一歩も動かずに見送る）替える必要があるので条件に足す
             bool watchingHr = WatchingHomeRun(pos);
-            var idleClip = watchingHr ? HomeRunWatchIdleClip() ?? IdleClipFor(pos) : IdleClipFor(pos);
+            // 球が死んだ後は守備位置ごとの「立って待つ」へ替える（issue #978）。止まっている野手だけ
+            var postIdle = postHr ? PostHomeRunIdleClip(pos) : null;
+            var idleClip = postIdle
+                ?? (watchingHr ? HomeRunWatchIdleClip() ?? IdleClipFor(pos) : IdleClipFor(pos));
             if (want != st.Ladder || wantTable != st.LadderTable
-                || (watchingHr && want < 0 && idleClip != null && a.Clip != idleClip))
+                || ((watchingHr || postIdle != null) && want < 0 && idleClip != null && a.Clip != idleClip))
             {
                 var clip = want < 0 ? idleClip : LoadClip(wantTable[want].Name);
                 if (clip != null && clip != a.Clip)
                 {
                     float phase = a.Clip != null && a.Clip.length > 0.01f
                         ? Mathf.Repeat(a.Time / a.Clip.length, 1f) : 0f;
+                    // 構え→立って待つ。頭出しを守備位置ごとにずらす＝同じ収録でも動きが揃わない（issue #978）
+                    if (postIdle != null && clip == postIdle)
+                    {
+                        CrossfadeActorToClip(a, clip, PostHomeRunIdlePhase(pos) * clip.length, 0f,
+                            PostHrStandFadeSeconds);
+                        // ⚠ 投手は対決の「末尾で頭姿勢のまま止まる」を持ったまま来る＝待機が1周したところで
+                        //    固まる（実測: 本塁到達のコマで投手だけクリップ内時刻 0.00 に張り付いていた）。
+                        //    ここでループに戻す。対決の値は EndFieldPlay の Restore が控えから戻す
+                        a.HoldAtEnd = false;
+                        a.Holding = false;
+                    }
                     // 直立→構えは別の姿勢へ移るので、位相合わせでなく短くクロスフェードする（体が跳ばない）
-                    if (want < 0 && clip != IdleClipFor(pos) && clip.name != a.Clip?.name)
+                    else if (want < 0 && clip != IdleClipFor(pos) && clip.name != a.Clip?.name)
                         CrossfadeActorToClip(a, clip, 0f, 0f, HomeRunCrouchFadeSeconds);
                     else if (handoffFromStart && want >= 0)
                         CrossfadeActorToClip(a, clip, 0f, 0f, StartHandoffFadeSeconds);
@@ -2256,6 +2287,139 @@ namespace KokoSim.Unity.Match
             return true;
         }
 
+        // ---- 本塁打の一周の間の待機（issue #978・監督決定「A＋向き1」2026-11-15） ----------------
+        //
+        // 球がスタンドで止まった（死んだ）少し後から、野手を「構え」→「立って待つ」へ替える。
+        // 収録・頭出し・切り替え時刻・振り返る時刻は**守備位置から決定論で引く**（乱数を使わない＝
+        // 同じ試合を再生し直すと同じ絵）。投手も他の野手と同じ待ち姿勢（うなだれない）。
+        // 飛んでいる間の見送り（#921）は触らない＝ここが効くのは球が死んだ後の時刻だけ。
+
+        /// <summary>立って待つ収録（購入パック）。守備位置ごとに Type01〜04 を振り分ける。</summary>
+        public static readonly string[] PostHomeRunIdleClipNames =
+        {
+            "AA_Baseball_Defender_Standing_Idle_Loop_Type01",
+            "AA_Baseball_Defender_Standing_Idle_Loop_Type02",
+            "AA_Baseball_Defender_Standing_Idle_Loop_Type03",
+            "AA_Baseball_Defender_Standing_Idle_Loop_Type04",
+        };
+
+        /// <summary>
+        /// 守備位置ごとの割り当て（<see cref="AllFieldPositions"/> と同じ並び: 投・捕・一・二・三・遊・左・中・右）。
+        /// 隣り合う守備位置（同じ画角に並ぶ人）で収録が重ならないように並べてある。**絵で決める値**。
+        /// </summary>
+        private static readonly int[] PostHrClipIndex = { 1, 2, 3, 0, 2, 3, 1, 0, 2 };
+        /// <summary>頭出しの位置（収録の長さに対する比）。同じ収録でも動きが揃わないようにずらす。</summary>
+        private static readonly float[] PostHrPhase = { 0.10f, 0.55f, 0.30f, 0.80f, 0.45f, 0.05f, 0.65f, 0.25f, 0.90f };
+        /// <summary>球が死んでから立って待つへ替えるまで[s]（0.5〜1.0を守備位置でずらす。監督決定の既定案）。</summary>
+        private static readonly float[] PostHrDelay = { 0.55f, 0.80f, 0.95f, 0.65f, 0.75f, 0.60f, 0.85f, 0.70f, 0.90f };
+        /// <summary>外野手が立ってから着弾点を見続ける秒数[s]。その後で打者走者の方へ振り返る（左・中・右）。</summary>
+        private static readonly float[] PostHrOutfieldLookHold = { 1.0f, 1.4f, 0.8f };
+
+        /// <summary>構え→立って待つのクロスフェード[s]。**絵で決める値**。</summary>
+        public static float PostHrStandFadeSeconds = 0.6f;
+        /// <summary>待機中に体を回す速さ[度/秒]。走りの回頭（540°/s）より遅く、その場で向き直る程度。</summary>
+        private const float PostHrYawRateDegPerSec = 160f;
+        /// <summary>目で追う先とのずれがこれを超えたら体を回し始め、<see cref="PostHrTurnStopDeg"/> 未満で止める[度]。</summary>
+        private const float PostHrTurnStartDeg = 35f;
+        private const float PostHrTurnStopDeg = 4f;
+
+        /// <summary>本塁打の球が死ぬ時刻（プレーの時計）。本塁打でなければ +∞。</summary>
+        private float _hrDeadT = float.PositiveInfinity;
+
+        private static int FieldIndexOf(FieldPosition pos) => System.Array.IndexOf(AllFieldPositions, pos);
+
+        /// <summary>本塁打の球が死ぬ時刻＝スタンドに当たって跳ね終わる時刻（当たらなければ engine の打球区間の終わり）。</summary>
+        private float HomeRunDeadTime(PlaybackPlay play)
+        {
+            if (!IsHomeRun(play) || play.Ball == null || play.Ball.Count == 0) return float.PositiveInfinity;
+            if (_hrHit) return _hrHitT + StandHopSeconds;
+            double end = 0;
+            foreach (var s in play.Ball) if (s.T1 > end) end = s.T1;
+            return (float)end;
+        }
+
+        /// <summary>時刻 t のこの野手が「本塁打の一周を立って待つ」段にいるか。</summary>
+        private bool InPostHomeRunIdle(FieldPosition pos, float t)
+        {
+            if (float.IsPositiveInfinity(_hrDeadT)) return false;
+            int i = FieldIndexOf(pos);
+            return i >= 0 && t >= _hrDeadT + PostHrDelay[i];
+        }
+
+        private AnimationClip PostHomeRunIdleClip(FieldPosition pos)
+        {
+            int i = FieldIndexOf(pos);
+            return i < 0 ? null : LoadClip(PostHomeRunIdleClipNames[PostHrClipIndex[i]]);
+        }
+
+        private static float PostHomeRunIdlePhase(FieldPosition pos)
+        {
+            int i = FieldIndexOf(pos);
+            return i < 0 ? 0f : PostHrPhase[i];
+        }
+
+        /// <summary>
+        /// 待機中に向く先[度]。外野手は立ってから少しの間は着弾点、その後は打者走者。内野手（投手・捕手を含む）は
+        /// 最初から打者走者を目で追う。打者走者が近すぎる・居ないときは今の向きのまま。
+        /// </summary>
+        private float PostHomeRunFacingYaw(FieldPosition pos, PlaybackVec here, float t, float curYaw)
+        {
+            int i = FieldIndexOf(pos);
+            if (IsOutfield(pos) && i >= 0)
+            {
+                float lookUntil = _hrDeadT + PostHrDelay[i] + PostHrOutfieldLookHold[i - 6];
+                if (t < lookUntil && TryHomeRunWatchYaw(pos, here, out var watchYaw)) return watchYaw;
+            }
+            var br = BatterRunnerAt(t);
+            if (br.HasValue)
+            {
+                var to = new Vector2((float)(br.Value.X - here.X), (float)(br.Value.Y - here.Y));
+                if (to.magnitude >= FacingMinBallDistM) return Mathf.Atan2(to.x, to.y) * Mathf.Rad2Deg;
+            }
+            return curYaw;
+        }
+
+        /// <summary>【撮影ハーネス用】本塁打の球が死ぬ時刻（本塁打でなければ +∞。issue #978）。</summary>
+        public float HomeRunDeadTimeForCapture => _hrDeadT;
+
+        /// <summary>
+        /// 【撮影ハーネス用】野手9人のいまのクリップ・クリップ内時刻・向き（issue #978）。
+        /// 「全員同じ収録・同じ位相・同じ向き」になっていないかは静止画では読み切れないので数で見る。
+        /// </summary>
+        public string FielderIdleDiagForCapture()
+        {
+            var sb = new StringBuilder();
+            foreach (var pos in AllFieldPositions)
+            {
+                var a = FielderActor(pos);
+                _loco.TryGetValue(pos, out var st);
+                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}\t{1}\t{2:F2}\tyaw={3:F0}",
+                    pos, a?.Clip != null ? a.Clip.name.Replace("AA_Baseball_Defender_", "") : "-",
+                    a?.Time ?? 0f, st.Yaw));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>【撮影ハーネス用】野手の立ち位置（ステージ基準）。寄りの絵を撮る狙点に使う。</summary>
+        public Vector3? FielderStagePosForCapture(FieldPosition pos)
+        {
+            var a = FielderActor(pos);
+            return a?.Go == null ? (Vector3?)null : StagePos(a);
+        }
+
+        /// <summary>時刻 t の打者走者の位置（engine 座標）。本塁に還った後はその位置のまま。</summary>
+        private PlaybackVec? BatterRunnerAt(float t)
+        {
+            if (_fieldPlay?.Runners == null) return null;
+            foreach (var r in _fieldPlay.Runners)
+            {
+                if (r?.Label != "打" || r.Segs == null || r.Segs.Count == 0) continue;
+                return PlaybackEvaluator.RunnerAt(r, t, respectHideAt: false);
+            }
+            return null;
+        }
+
         private bool TryFacingLiveBall(float t, PlaybackVec here, out float yaw)
         {
             yaw = 0f;
@@ -3699,6 +3863,7 @@ namespace KokoSim.Unity.Match
             // 守備（F2・F4・F5・F6）
             yield return InfielderIdleClipName;
             yield return OutfielderIdleClipName;
+            foreach (var n in PostHomeRunIdleClipNames) yield return n;   // 本塁打の一周の待機（issue #978）
             foreach (var l in LocoLadder) yield return l.Name;
             foreach (var a in FieldCatchAnchors) yield return a.Clip;
             foreach (var a in FieldThrowAnchors) yield return a.Clip;
@@ -4813,6 +4978,7 @@ namespace KokoSim.Unity.Match
             BuildFieldTagPlan(play);           // ⚠ 捕球の後（タッチする野手を捕球の予定表から引く。issue #489）
             PlanHomeRunStandHit(play);         // 本塁打の球が外野スタンドに当たる点（issue #704）
             _hrWatchPoint = HomeRunWatchPoint(play);   // 外野手が見送る先（issue #921）
+            _hrDeadT = HomeRunDeadTime(play);          // ⚠ PlanHomeRunStandHit の後（当たった時刻を使う。issue #978）
 
             // 立ち位置の不連続を控える。engine の言う定位置と実際の立ち位置の差を
             // **プレーの頭で1回だけ**採り、0.3秒かけて 0 へ落とす（投手1.347m・捕手1.200m）
@@ -4935,6 +5101,7 @@ namespace KokoSim.Unity.Match
             _hrFence = false;
             _hrStyle = KokoSim.Engine.Match.Timeline.HomeRunStyle.Standard;
             _hrWatchPoint = null;
+            _hrDeadT = float.PositiveInfinity;
             _fieldStationCuts.Clear();
             _loco.Clear();
             _catchEvents.Clear();
