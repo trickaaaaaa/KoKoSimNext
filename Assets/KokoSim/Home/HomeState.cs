@@ -173,9 +173,11 @@ namespace KokoSim.Unity.Home
             RunFormWeek();                              // 調子の週次の波（設計書02 §3.3）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
-            RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
+            RunDraftFeed();                             // ドラフト候補入り・評価変化（設計書20 §5）
             RunKoshienFeed();                           // 観るだけの甲子園の決着（設計書05 §1.1a）
             RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
+            // 指名結果は週次イベントの後＝同じ週の「ドラフト会議」の固定イベントより先に結果が出る順序逆転を避ける（issue #1029）。
+            RunDraftResultFeed();
             // 練習効率の補正を1週ぶん減らす（issue #615）。**練習を適用した後**に呼ぶ＝
             // 「N週」と言われた週にちゃんとN回効く（先に減らすと1週ぶん短くなる）。
             KokoSim.Unity.Shell.TrainingBoostService.Tick();
@@ -413,6 +415,17 @@ namespace KokoSim.Unity.Home
                 });
             }
 
+            if (items.Count > 0) PushFeed(items);
+        }
+
+        /// <summary>
+        /// 指名確定（10月最終週）の結果を通知フィードとノベルへ流す。週次イベント（<c>draft_meeting</c>＝
+        /// 「ドラフト会議」の固定イベント）より<b>後</b>に呼ぶ＝同じ週の中で会議 → 指名結果の順に並ぶ（issue #1029）。
+        /// </summary>
+        private void RunDraftResultFeed()
+        {
+            var items = new List<FeedItem>();
+
             var result = KokoSim.Unity.Shell.DraftService.LastNomination;
             if (result != null)
             {
@@ -437,7 +450,8 @@ namespace KokoSim.Unity.Home
 
                     // 指名の可否はどちらもノベルで見せる（issue #617）。指名漏れを黙って流すと、
                     // 三年間見てきた選手の最後が通知1行で終わる。
-                    KokoSim.Unity.Shell.EventService.Push(
+                    // 上限を通さない: 会議の固定イベントが先に枠を使うので、指名の可否が上限で落ちないようにする。
+                    KokoSim.Unity.Shell.EventService.PushUncapped(
                         pick.Nominated ? "draft_nominated" : "draft_missed", pick.Name,
                         pick.Nominated
                             ? KokoSim.Unity.Shell.PresentedEffect.Good(pick.Name + " が NPB " + pick.Round + " 位で指名された！")

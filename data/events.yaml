@@ -147,9 +147,11 @@ events:
           - who: manager
             say: "その意気だ。じゃあ、まず一本目。"
 
+  # 指名の確定と同じ週（SeasonCalendar.DraftWeek＝28）。EventTableTests が DraftWeek との一致を固定している
+  # ＝片方だけ動かすと赤になる。同じ週の中では、会議の場面が指名結果のノベルより先に並ぶ（HomeState.AdvanceWeek）。
   - id: draft_meeting
     kind: Fixed
-    calendar_week: 30
+    calendar_week: 28
     text: "ドラフト会議。教え子に指名がかかるか。"
     variants:
       - lines:

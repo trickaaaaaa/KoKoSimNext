@@ -220,6 +220,19 @@ events:
     }
 
     /// <summary>
+    /// ドラフト会議の固定イベントが指名の週（<see cref="SeasonCalendar.DraftWeek"/>）に出ること（issue #1029）。
+    /// 週がずれると、指名結果のノベルを見たあとに会議当日の場面が来る順序逆転になる。
+    /// 片方だけ動かすと赤になる。
+    /// </summary>
+    [Fact]
+    public void DraftMeeting_FiresOnDraftWeek()
+    {
+        var e = RepositoryEvents().First(x => x.Id == "draft_meeting");
+        Assert.Equal(EventKind.Fixed, e.Kind);
+        Assert.Equal(new SeasonCalendar().DraftWeek, e.CalendarWeek);
+    }
+
+    /// <summary>
     /// 主役つき提示は<b>同じ週でも人が違えば別の会話</b>になること（issue #610）。
     /// 同じ週に2人が同時に故障したとき、一字一句同じ会話が2回続くと「バグに見える」。
     /// </summary>

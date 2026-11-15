@@ -238,6 +238,12 @@ namespace KokoSim.Unity.Shell
         public static void PushMilestone(string eventId)
             => Push(eventId, null, null, 0, null, capped: false);
 
+        /// <summary>
+        /// 週の件数上限を通さずに主役つきで積む（結果行つき）。落ちると困る結果の提示用（ドラフト指名など・issue #1029）。
+        /// </summary>
+        public static void PushUncapped(string eventId, string subjectName, PresentedEffect effect, int salt = 0)
+            => Push(eventId, subjectName, effect, salt, null, capped: false);
+
         /// <summary>未提示のキューに指定条件のイベントが残っているか（導線の順序判定用・issue #954）。</summary>
         public static bool HasPendingWhere(System.Func<string, bool> idMatches)
         {
