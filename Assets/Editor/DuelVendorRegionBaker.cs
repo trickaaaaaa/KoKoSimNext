@@ -71,6 +71,27 @@ namespace KokoSim.EditorTools
         public static string BakeAll() => BakeAll(SleeveFlare);
 
         /// <summary>
+        /// メニューから1クリックで焼き直す（顔ののっぺらぼう化・髪・袖など、このベイカの変更を取り込む時）。
+        /// 焼き直しは資産を作り直す＝GUID が変わるので、ビルド同梱の索引（F8）が既にあれば続けて焼き直す
+        /// （古い索引のままだと Player ビルドでだけ領域メッシュが外れる）。
+        /// </summary>
+        [MenuItem("KokoSim/Duel/選手の顔と領域を作り直す")]
+        public static void BakeAllFromMenu()
+        {
+            var report = BakeAll();
+            if (report.StartsWith("FAILED"))
+            {
+                Debug.LogError("[DuelVendorRegionBaker] " + report);
+                EditorUtility.DisplayDialog("選手の顔と領域を作り直す", report, "OK");
+                return;
+            }
+            Debug.Log("[DuelVendorRegionBaker]\n" + report);
+            if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(
+                    "Assets/KokoSim/Resources/" + KokoSim.Unity.Match.DuelAssetCatalog.ResourceName + ".asset") != null)
+                KokoSim.UnityEditorTools.DuelAssetCatalogBaker.Bake();
+        }
+
+        /// <summary>
         /// 袖の張り出し倍率を指定してベイクする（issue #368-② の切り分け用）。
         /// 「袖が目立つ」のが袖メッシュのせいか腕の向きのせいかは、<c>1.0</c>（＝張り出しなし）で
         /// 焼いた絵と並べれば1枚で判る。**確認が済んだら必ず既定へ焼き直すこと**。
@@ -114,7 +135,10 @@ namespace KokoSim.EditorTools
                 string note;
                 if (r.name == HeadMeshName)
                 {
-                    regionPerVertex = ClassifyHead(copy, HeadSubmesh(r), faceTex, out hairWeight, out note);
+                    int headSm = HeadSubmesh(r);
+                    regionPerVertex = ClassifyHead(copy, headSm, faceTex, out hairWeight, out note);
+                    // 髪の濃さは元の形で引いた後に顔を均す（均した後だと前後比・高さ比がずれる）
+                    note += " / " + FlattenFace(copy, headSm);
                 }
                 else if (r.name == SuitMeshName)
                 {
@@ -166,14 +190,17 @@ namespace KokoSim.EditorTools
                 copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
 
                 var outPath = OutDir + "/" + r.name + "_Regions.asset";
-                AssetDatabase.DeleteAsset(outPath);
-                AssetDatabase.CreateAsset(copy, outPath);
                 // 実行時に三角形を読めるようにしておく。グラブをはめた手を抜く処理
                 // （DuelStageRig.HideGloveHand・issue #913）が読む。元 FBX の「読めない」設定を
-                // そのまま引き継ぐと、エラーも出ずに手が残るだけになる
+                // そのまま引き継ぐと、エラーも出ずに手が残るだけになる。
+                // **資産にする前に**立てる: 作った後に SerializedObject で立てても dirty が付かず、
+                // 最後の SaveAssets で書かれない資産が出ていた（2026-11-15 実測: 9枚中7枚が 0 のまま）
                 var so = new SerializedObject(copy);
                 so.FindProperty("m_IsReadable").boolValue = true;
                 so.ApplyModifiedPropertiesWithoutUndo();
+                AssetDatabase.DeleteAsset(outPath);
+                AssetDatabase.CreateAsset(copy, outPath);
+                EditorUtility.SetDirty(copy);
                 sb.AppendLine(r.name + ": " + note);
             }
 
@@ -364,6 +391,208 @@ namespace KokoSim.EditorTools
                 for (int x = -2; x <= 2; x++)
                     sum += tex.GetPixelBilinear(uv.x + x * radius * 0.5f, uv.y + y * radius * 0.5f);
             return sum / 25f;
+        }
+
+        // ---- のっぺらぼう（顔の起伏を均す） -----------------------------------------------------
+        //
+        // 眼球を消しても顔に目鼻口の「跡」が残っていた（2026-11-15 監督指摘「不気味」）。原因は**形そのもの**:
+        // 領域シェーダはテクスチャも法線マップも読まず、頂点法線の Lambert だけで陰影を付ける。顔テクスチャの
+        // 塗り潰し（領域色）は効いていても、まぶた・鼻・唇・眼窩は**頭メッシュの起伏**として作り込まれていて
+        // （鼻先は頬より約2.5cm前、まぶたは眼窩の縁に沿って盛り上がる）、法線が光を拾って目鼻口が浮かぶ。
+        // 実測で髪の濃さ（UV1.y）は顔の前面で全て0＝色の漏れではない。
+        //
+        // 均し方: 顔の前面を**なめらかな面（左右対称の多項式 y=P(x,z)）で近似**し、窓の中の頂点をその面へ寄せ、
+        // 法線も面の法線へ置き換える。面は頬・額・あごの頂点に当てはめ、鼻（面より前）と眼窩（面より奥）は
+        // 外れ値として刈り込みながら当て直す＝目鼻口だけが消えて輪郭・あごの丸みは残る。
+        // 窓の縁は smoothstep で元の形へ戻す（境目に段を作らない）。
+        // 法線は RecalculateNormals を使わない（非溶接メッシュで UV の境目がハードエッジになる。design-18 §3.5.1b）。
+        // 口の中（歯・舌の島と口腔）も同じ面へ潰れる＝前面から覗かない。表情のブレンドシェイプは落とす
+        // （重みを入れた瞬間に目鼻口が戻るため。対決ビューは表情を使っていない）。
+
+        /// <summary>均す窓の横幅（鼻筋からの |x|[m]）: ここまでは完全に均す。目尻は約0.045（0.045 だと目尻の外の窪みが斜めの光で薄く残った）。</summary>
+        internal const float FaceFlatHalfWidth = 0.052f;
+        /// <summary>同・ここで元の形へ戻り切る（頬が横を向き始める手前）。</summary>
+        internal const float FaceFadeHalfWidth = 0.068f;
+        /// <summary>均す窓の上端（鼻先からの高さ[m]）: 眉の上まで。生え際（約+0.10）は髪の濃さが乗るので残す。</summary>
+        internal const float FaceFlatTop = 0.080f;
+        internal const float FaceFadeTop = 0.100f;
+        /// <summary>均す窓の下端（鼻先からの高さ[m]、負）: 下唇の下まで。あご先（約-0.06）の丸みは残す。</summary>
+        internal const float FaceFlatBottom = -0.045f;
+        internal const float FaceFadeBottom = -0.062f;
+        /// <summary>前面とみなす前後比（境界箱の前端0〜後端1）。後頭部の同じ (x,z) の頂点を動かさない。</summary>
+        internal const float FaceFrontShare = 0.42f;
+        /// <summary>当てはめの外れ値（目鼻口）とみなす残差[m]。</summary>
+        private const float FaceFitTrim = 0.0025f;
+
+        /// <summary>多項式の基底（左右対称＝x は偶数次だけ）。座標は鼻先中心・おおむね ±1 に正規化して渡す。</summary>
+        internal static void FaceBasis(float x, float z, float[] b)
+        {
+            float x2 = x * x;
+            b[0] = 1f; b[1] = z; b[2] = z * z; b[3] = z * z * z;
+            b[4] = x2; b[5] = x2 * z; b[6] = x2 * z * z; b[7] = x2 * x2;
+        }
+
+        internal const int FaceBasisCount = 8;
+
+        /// <summary>
+        /// 前面の点群 (x,z)→y に左右対称の多項式を最小二乗で当て、残差が <paramref name="trim"/> を超える点
+        /// （鼻・眼窩）を外して当て直す。座標は <paramref name="sx"/>/<paramref name="sz"/> で割って正規化済みとして扱う。
+        /// 解けなければ null。
+        /// </summary>
+        internal static float[] FitFaceSurface(List<Vector3> pts, float sx, float sz, float trim, int rounds, out int kept)
+        {
+            var use = new bool[pts.Count];
+            for (int i = 0; i < use.Length; i++) use[i] = true;
+            float[] coef = null;
+            kept = pts.Count;
+            var b = new float[FaceBasisCount];
+            for (int round = 0; round <= rounds; round++)
+            {
+                var ata = new double[FaceBasisCount, FaceBasisCount];
+                var aty = new double[FaceBasisCount];
+                int n = 0;
+                for (int i = 0; i < pts.Count; i++)
+                {
+                    if (!use[i]) continue;
+                    FaceBasis(pts[i].x / sx, pts[i].z / sz, b);
+                    for (int r = 0; r < FaceBasisCount; r++)
+                    {
+                        aty[r] += b[r] * pts[i].y;
+                        for (int c = 0; c < FaceBasisCount; c++) ata[r, c] += b[r] * b[c];
+                    }
+                    n++;
+                }
+                if (n < FaceBasisCount * 2) return coef;
+                var sol = SolveSymmetric(ata, aty);
+                if (sol == null) return coef;
+                coef = sol;
+                kept = n;
+                if (round == rounds) break;
+                for (int i = 0; i < pts.Count; i++)
+                    use[i] = Mathf.Abs(pts[i].y - EvalFace(coef, pts[i].x / sx, pts[i].z / sz)) <= trim;
+            }
+            return coef;
+        }
+
+        internal static float EvalFace(float[] coef, float x, float z)
+        {
+            var b = new float[FaceBasisCount];
+            FaceBasis(x, z, b);
+            float y = 0f;
+            for (int i = 0; i < FaceBasisCount; i++) y += coef[i] * b[i];
+            return y;
+        }
+
+        /// <summary>ガウス消去（部分ピボット）。特異なら null。</summary>
+        private static float[] SolveSymmetric(double[,] a, double[] y)
+        {
+            int n = y.Length;
+            var m = new double[n, n + 1];
+            for (int r = 0; r < n; r++) { for (int c = 0; c < n; c++) m[r, c] = a[r, c]; m[r, n] = y[r]; }
+            for (int p = 0; p < n; p++)
+            {
+                int best = p;
+                for (int r = p + 1; r < n; r++) if (System.Math.Abs(m[r, p]) > System.Math.Abs(m[best, p])) best = r;
+                if (System.Math.Abs(m[best, p]) < 1e-12) return null;
+                if (best != p) for (int c = 0; c <= n; c++) { var t = m[p, c]; m[p, c] = m[best, c]; m[best, c] = t; }
+                for (int r = p + 1; r < n; r++)
+                {
+                    double f = m[r, p] / m[p, p];
+                    for (int c = p; c <= n; c++) m[r, c] -= f * m[p, c];
+                }
+            }
+            var x = new float[n];
+            for (int r = n - 1; r >= 0; r--)
+            {
+                double s = m[r, n];
+                for (int c = r + 1; c < n; c++) s -= m[r, c] * x[c];
+                x[r] = (float)(s / m[r, r]);
+            }
+            return x;
+        }
+
+        /// <summary>窓の重み（1=完全に均す〜0=元の形）。dx=|x|、dz=鼻先からの高さ。</summary>
+        internal static float FaceMask(float dx, float dz)
+        {
+            float wx = 1f - Smooth01((dx - FaceFlatHalfWidth) / (FaceFadeHalfWidth - FaceFlatHalfWidth));
+            float wTop = 1f - Smooth01((dz - FaceFlatTop) / (FaceFadeTop - FaceFlatTop));
+            float wBot = 1f - Smooth01((FaceFlatBottom - dz) / (FaceFlatBottom - FaceFadeBottom));
+            return wx * wTop * wBot;
+        }
+
+        private static float Smooth01(float t)
+        {
+            t = Mathf.Clamp01(t);
+            return t * t * (3f - 2f * t);
+        }
+
+        /// <summary>
+        /// 頭部（<paramref name="headSubmesh"/>）の顔の前面を均す。メッシュ空間は Z-up・顔が -y 側（ClassifyCap の実測）。
+        /// 鼻先＝頭部で最も前（y 最小）の頂点を窓の基準にする（歯・舌の島は除く）。
+        /// </summary>
+        internal static string FlattenFace(Mesh mesh, int headSubmesh)
+        {
+            if (headSubmesh < 0 || headSubmesh >= mesh.subMeshCount) return "顔の均し=SKIP（頭部サブメッシュなし）";
+            var v = mesh.vertices;
+            var n = mesh.normals;
+            var uv = mesh.uv;
+            if (n == null || n.Length != v.Length) return "顔の均し=SKIP（法線なし）";
+            var inHead = new HashSet<int>(mesh.GetTriangles(headSubmesh));
+
+            var min = Vector3.positiveInfinity;
+            var max = Vector3.negativeInfinity;
+            int tip = -1;
+            foreach (var i in inHead)
+            {
+                min = Vector3.Min(min, v[i]); max = Vector3.Max(max, v[i]);
+                if (uv[i].y >= MouthIslandMinV) continue;
+                if (tip < 0 || v[i].y < v[tip].y) tip = i;
+            }
+            if (tip < 0) return "顔の均し=SKIP（鼻先が見つからない）";
+            float frontY = min.y + (max.y - min.y) * FaceFrontShare;
+            var nose = v[tip];
+
+            // 当てはめ: 窓より一回り広く取る（縁の外も面が実物に沿っていないと縁で段になる）
+            var pts = new List<Vector3>();
+            foreach (var i in inHead)
+            {
+                if (uv[i].y >= MouthIslandMinV || v[i].y > frontY) continue;
+                float dx = v[i].x - nose.x, dz = v[i].z - nose.z;
+                if (Mathf.Abs(dx) > FaceFadeHalfWidth + 0.01f || dz > FaceFadeTop + 0.01f || dz < FaceFadeBottom - 0.01f) continue;
+                pts.Add(new Vector3(dx, v[i].y, dz));
+            }
+            const float sx = 0.06f, sz = 0.08f;
+            int kept;
+            var coef = FitFaceSurface(pts, sx, sz, FaceFitTrim, 4, out kept);
+            if (coef == null) return "顔の均し=SKIP（当てはめが解けない 点=" + pts.Count + "）";
+
+            int moved = 0;
+            float maxShift = 0f;
+            foreach (var i in inHead)
+            {
+                if (v[i].y > frontY) continue;
+                float dx = v[i].x - nose.x, dz = v[i].z - nose.z;
+                float w = FaceMask(Mathf.Abs(dx), dz);
+                if (w <= 0f) continue;
+                float y = EvalFace(coef, dx / sx, dz / sz);
+                // 面の法線（前＝-y）。F = y - P(x,z) の勾配の逆向き
+                const float h = 1e-3f;
+                float py = (EvalFace(coef, (dx + h) / sx, dz / sz) - EvalFace(coef, (dx - h) / sx, dz / sz)) / (2f * h);
+                float pz = (EvalFace(coef, dx / sx, (dz + h) / sz) - EvalFace(coef, dx / sx, (dz - h) / sz)) / (2f * h);
+                var nf = new Vector3(py, -1f, pz).normalized;
+                float shift = Mathf.Abs(y - v[i].y) * w;
+                maxShift = Mathf.Max(maxShift, shift);
+                v[i] = new Vector3(v[i].x, Mathf.Lerp(v[i].y, y, w), v[i].z);
+                n[i] = Vector3.Slerp(n[i].normalized, nf, w).normalized;
+                moved++;
+            }
+            mesh.vertices = v;
+            mesh.normals = n;
+            mesh.ClearBlendShapes();
+            mesh.RecalculateBounds();
+            return "顔の均し: 当てはめ点=" + kept + "/" + pts.Count + " 動かした頂点=" + moved
+                 + " 最大移動=" + (maxShift * 1000f).ToString("F1") + "mm / 鼻先 " + nose.ToString("F3")
+                 + " / ブレンドシェイプを落とした";
         }
 
         /// <summary>つばと判定する前方の割合（境界箱の y 幅に対する比）。</summary>
