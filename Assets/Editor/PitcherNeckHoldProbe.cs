@@ -81,6 +81,8 @@ namespace KokoSim.UnityEditorTools
             Save(rig, file + "-front");
             rig.FramePreview(new Vector3(-4.2f, 1.6f, 17.6f), look, 2.4f);
             Save(rig, file + "-side");
+            rig.FramePreview(new Vector3(0.3f, 2.0f, 24.5f), new Vector3(0f, 1.4f, 17.6f), 2.6f);
+            Save(rig, file + "-back");
             rig.ClearPreviewFrame();
         }
 

@@ -21,10 +21,34 @@ namespace KokoSim.Unity.Match
         private float _setHeadW;
 
         /// <summary>
-        /// 顔の向きの行き先を「収録のひねり（セット）」から「顔が捕手を向くひねり（投球中）」へ寄せる割合（0〜1）。
-        /// 投球中は胴が大きく回るので、収録のひねりに戻すと顔が本塁から外れる（issue #973）。
+        /// 顔の向きの行き先を「その時点の収録のひねり」から「セットで止まっていたときのひねり」へ寄せる割合（0〜1）。
+        /// 投球中も首の角度（胴に対するひねり）をセットのまま保つ（issue #973・2026-11-15 監督指摘:
+        /// 当初の「顔が捕手を向くひねり」は胴が回るぶん首が本塁側へ回りすぎて見えた）。
         /// </summary>
         private float _headLookW;
+
+        /// <summary>セットで止まっていたときの頭のひねり[度]（<see cref="TryHeadTurn"/> の測り方）。セットの間に毎回控える。</summary>
+        private float _setTurn;
+        private bool _setTurnReady;
+
+        /// <summary>
+        /// セットで止まっていたときの「胴→捕手の角度のうち、首でひねっていた割合」（右投手の実測 −61°÷−92°≈0.66）。
+        /// 投球中はこの割合のまま首をひねる。胴に対するひねり（度）をそのまま保つと、胴が約180°回るフィニッシュで
+        /// 顔が二塁側（中継カメラ側）を向き、背中越しに顔が見えた（2026-11-15 監督指摘・実測: リリース時 胴→捕手 +93°）。
+        /// 割合で保てば顔は常に胴と捕手の間にあり、背中側へは回らない。
+        /// </summary>
+        private float _setTurnRatio;
+        private bool _setRatioReady;
+
+        /// <summary>【診断用】最後に当てたときの収録のひねり・行き先のひねり[度]。</summary>
+        private float _diagRawTurn, _diagTargetTurn;
+
+        /// <summary>
+        /// リリース後に首を収録のフォロースルーへ返す時間[秒]。胴が一気に回るリリース直後に 0.25秒（<see cref="CrossfadeSeconds"/>）で
+        /// 返すと、保っていたセットのひねりと収録のひねりの差が一度に出て頭が振られて見えた（2026-11-15 監督指摘）。
+        /// 胴の回転に紛れるよう長めにほどく。
+        /// </summary>
+        private const float PostReleaseReturnSeconds = 0.6f;
 
         /// <summary>顔が向く先（捕手の頭の高さ）の高さ[m]。</summary>
         private const float HeadLookHeightM = 1.0f;
@@ -62,10 +86,12 @@ namespace KokoSim.Unity.Match
         private void AdvanceSetHeadWeight(float dt)
         {
             // セットで待つ間（issue #912）に加え、投球の頭出しからリリース（<see cref="ReleaseTime"/>）まで保つ（issue #973）。
-            // リリースを過ぎたら CrossfadeSeconds かけて収録のフォロースルーへ返す
+            // リリースを過ぎたら PostReleaseReturnSeconds かけて収録のフォロースルーへ返す
             bool inDelivery = _pitcher != null && _pitcher.Clip != null && _pitcher.Clip == _pitchClip
                 && _pitcher.Time <= ReleaseTime;
-            _setHeadW = Mathf.MoveTowards(_setHeadW, inDelivery ? 1f : 0f, dt / CrossfadeSeconds);
+            bool afterRelease = !inDelivery && _pitcher != null && _pitcher.Clip == _pitchClip;
+            float fadeSeconds = afterRelease ? PostReleaseReturnSeconds : CrossfadeSeconds;
+            _setHeadW = Mathf.MoveTowards(_setHeadW, inDelivery ? 1f : 0f, dt / fadeSeconds);
             _headLookW = Mathf.MoveTowards(_headLookW, PitcherAtSet ? 0f : 1f, dt / CrossfadeSeconds);
         }
 
@@ -107,10 +133,22 @@ namespace KokoSim.Unity.Match
                 neck.localRotation = Quaternion.Slerp(Quaternion.identity, lift, w) * neck.localRotation;
             }
             if (!TryHeadTurn(out float uprightTurn0, out _)) return;
-            // 投球中は収録のひねりでなく「顔が捕手を向く」ひねりへ（胴が回っても顔は本塁を見たまま）
+            // 投球中は収録のひねりでなく、セットで止まっていたときのひねりのまま（首の角度を胴に対して保つ）
+            bool haveLook = TryLookTurn(out float lookTurn);
+            if (PitcherAtSet)
+            {
+                _setTurn = rawTurn; _setTurnReady = true;
+                if (haveLook && Mathf.Abs(lookTurn) > 10f) { _setTurnRatio = Mathf.Clamp01(rawTurn / lookTurn); _setRatioReady = true; }
+            }
             float wantTurn = rawTurn;
-            if (_headLookW > 0f && TryLookTurn(out float lookTurn)) wantTurn = Mathf.LerpAngle(rawTurn, lookTurn, _headLookW);
+            if (_headLookW > 0f && _setTurnReady)
+            {
+                // 胴→捕手の角度のうちセットと同じ割合だけひねる（顔が背中側へ回らない）
+                float holdTurn = haveLook && _setRatioReady ? _setTurnRatio * lookTurn : _setTurn;
+                wantTurn = Mathf.LerpAngle(rawTurn, holdTurn, _headLookW);
+            }
             float targetTurn = Mathf.LerpAngle(uprightTurn0, wantTurn, w);
+            _diagRawTurn = rawTurn; _diagTargetTurn = targetTurn;
             // ひねりは**頭の上方向の軸まわり**で戻す。背骨の軸で回すと、うつむいた頭（切り口で19°）が横へ振られて
             // 傾きが−8°→−14°へ悪化した（2026-11-14 実測）。頭の上方向まわりなら上方向は動かない＝傾き・うつむきは
             // ①のまま保たれる。ひねりは背骨に垂直な面で測るので軸が少しずれる＝2回寄せて合わせる
@@ -211,7 +249,7 @@ namespace KokoSim.Unity.Match
                 var up = frame.InverseTransformDirection(head.TransformDirection(_pitcher.HeadUpLocal));
                 float tilt = Mathf.Atan2(Vector3.Dot(up, shoulder), Vector3.Dot(up, spine)) * Mathf.Rad2Deg;
                 float nod = Mathf.Atan2(Vector3.Dot(up, chestFwd), Vector3.Dot(up, spine)) * Mathf.Rad2Deg;
-                pose = " turn=" + turn.ToString("F1") + " tilt=" + tilt.ToString("F1") + " nod=" + nod.ToString("F1");
+                pose = " raw=" + _diagRawTurn.ToString("F1") + " tgt=" + _diagTargetTurn.ToString("F1") + " turn=" + turn.ToString("F1") + " tilt=" + tilt.ToString("F1") + " nod=" + nod.ToString("F1");
             }
             if (TryLookTurn(out float lookTurn)) pose += " look=" + lookTurn.ToString("F1");
             return "clipT=" + _pitcher.Time.ToString("F2") + " w=" + _setHeadW.ToString("F2")
