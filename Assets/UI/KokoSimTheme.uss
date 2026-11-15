@@ -998,7 +998,10 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .ts-overall-line { flex-direction: row; align-items: center; }
 .ts-overall-value { font-size: 34px; color: var(--color-chalk); margin-left: 8px; }
 .grade--xl { font-size: 40px; min-width: 60px; height: 60px; padding: 8px 18px; margin-right: 0; }
-.pd2-growth { flex-grow: 1; min-height: 180px; align-items: center; justify-content: center; }
+.pd2-growth { flex-grow: 1; min-height: 180px; }
+/* 成長推移の分野タブ（issue #1027）: 成績タブのスコープ切替と同じ見た目を、見出し帯に収まる寸法で。 */
+.pd2-scope--hd { margin-bottom: 0; }
+.pd2-scope--hd .pd2-scope__item { padding: 2px 10px; margin-right: 0; margin-left: 4px; }
 .pd2-empty { font-size: var(--fs-cap); color: var(--color-faint); -unity-text-align: middle-center; white-space: normal; padding: 20px; }
 
 /* --- 隠しパラメータ --- */

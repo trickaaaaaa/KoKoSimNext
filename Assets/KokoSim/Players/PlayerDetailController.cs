@@ -9,7 +9,7 @@ namespace KokoSim.Unity.Players
     /// <summary>
     /// 選手詳細のコントローラ（設計書06 §3.3、mock「選手詳細」）。
     /// PlayerSelection.Index の1名を PlayerDetailState から整形してバインドする。
-    /// 能力バランスは Painter2D で実描画（現在能力から）。成長推移・公式戦成績はエンジン未接続で空状態。
+    /// 能力バランスは Painter2D で実描画（現在能力から）。成長推移は月の頭の記録＋今の値の折れ線（issue #1027）。
     /// マスターディテール化（issue #131）: 独立画面ではなく、PlayerList と同じ GameObject・同じ
     /// UIDocument（PlayerList.uxml の右ペイン）に同居させる。切替入口は <see cref="RenderForSelection"/>
     /// （PlayerListController が行ホバーのたびに呼ぶ）。
@@ -20,6 +20,10 @@ namespace KokoSim.Unity.Players
         private PlayerDetailState _state;
         private VisualElement _root;
         private RadarChartView _radar;
+        private GrowthChartView _growth;
+        // 成長推移の分野タブ（0=打撃/1=投手/2=守備・走塁）。選手を替えても選んだ分野を保つ。
+        private int _growthTab;
+        private static readonly string[] GrowthTabNames = { "growth-tab-batting", "growth-tab-pitching", "growth-tab-defense" };
 
         // 成績タブ（issue #77）: 0=能力 / 1=成績。スコープ: 0=通算 / 1=公式戦 / 2=大会別。
         private int _tab;
@@ -46,6 +50,13 @@ namespace KokoSim.Unity.Players
                 labelSize: RadarLabelSize.None);
 
             _pitchChart = new PitchChartView(_root.Q<VisualElement>("pitch-chart"));
+
+            _growth = new GrowthChartView(_root.Q<VisualElement>("growth"), new[] { "1年", "2年", "3年" });
+            for (var i = 0; i < GrowthTabNames.Length; i++)
+            {
+                var idx = i;
+                WireClick(GrowthTabNames[i], () => { _growthTab = idx; ApplyGrowth(); });
+            }
 
             // タブ（能力/成績）・スコープ（通算/公式戦/大会別）の切替（issue #77）。
             WireClick("tab-abilities-btn", () => { _tab = 0; ApplyTab(); });
@@ -99,6 +110,16 @@ namespace KokoSim.Unity.Players
 
             // レーダー描画データ更新（塗り色は総合ランク連動＝部品辞書の既定）。
             _radar.SetData(v.Radar, v.OverallGrade);
+
+            ApplyGrowth();
+        }
+
+        private void ApplyGrowth()
+        {
+            for (var i = 0; i < GrowthTabNames.Length; i++)
+                Toggle(GrowthTabNames[i], "pd2-scope__item--on", _growthTab == i);
+            if (_view != null && _growthTab < _view.GrowthTabs.Count)
+                _growth.SetData(_view.GrowthTabs[_growthTab]);
         }
 
         // ===== 成績タブ（issue #77） =====

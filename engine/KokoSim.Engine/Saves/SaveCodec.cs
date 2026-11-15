@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 33;
+    public const int CurrentVersion = 34;
 
     // ===== Serialize =====
 
@@ -367,6 +367,8 @@ public static class SaveCodec
                 root.Add("newTeamStartedYear", week > new SeasonCalendar().SummerRetireWeek ? yearIndex : 0);
             }
         }
+        // v33→v34（issue #1027）: 部員ごとの成長推移 "hist" が増えた。キーは記録がある選手にしか書かないので
+        // 欠けているのが正常＝ここでは何も埋めない（DevelopingPlayerSaves が欠けたら空として読む）。
         return root;
     }
 

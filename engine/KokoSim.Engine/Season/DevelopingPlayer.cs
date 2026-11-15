@@ -162,6 +162,12 @@ public sealed class DevelopingPlayer
     /// </summary>
     public int UniformNumber { get; set; }
 
+    /// <summary>
+    /// 成長推移（設計書06 §3.2・issue #1027）。毎月の頭の全能力レベル。記録は <see cref="AbilityHistory"/> だけが行い、
+    /// 自校の部員にしか付かない（AI校の選手は空のまま）。観測だけで乱数・能力には触れない。
+    /// </summary>
+    public List<AbilitySample> History { get; } = new();
+
     /// <summary>特殊能力（設計書10）。生成時保有＋後天取得。set 可（習得・気づきイベント）。</summary>
     public Players.SkillSet Skills { get; set; } = Players.SkillSet.Empty;
 
@@ -308,6 +314,7 @@ public sealed class DevelopingPlayer
             clone._aptitudeCap[i] = _aptitudeCap[i];
         }
         clone.LearnedPitches.AddRange(LearnedPitches);
+        clone.History.AddRange(History);   // 点は不変 record なので浅い複製で足りる
 
         return clone;
     }

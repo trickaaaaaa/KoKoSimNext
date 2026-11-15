@@ -222,6 +222,8 @@ namespace KokoSim.Unity.Shell
             _roster = roster;
             _graduates = new List<DevelopingPlayer>();
             _nextId = nextId;
+            // 転任先の部員はAI校の選手から作り直したもの＝推移はここから始まる（issue #1027）。
+            AbilityHistory.EnsureStarted(_roster, GameClock.Week);
             _newSchool = false;
             ProspectService.Reset();   // 旧校の入部予定者は同行しない
             ScoutService.Reset();    // 旧校でスカウト中だった候補リストも同様
@@ -259,6 +261,10 @@ namespace KokoSim.Unity.Shell
             // 主将（設計書09 §8）: ゲーム開始時点で必ず1名決まっている（最上級生の統率力最大）。
             // プレイヤーが選び直せるのは夏の3年引退後＝新チーム発足時だけ（CaptainSelector.IsDesignationWindow）。
             CaptainSelector.EnsureCaptain(list);
+
+            // 成長推移の始点（issue #1027）。2・3年生は入学からでなくゲーム開始時点から線が始まる
+            // （PreTrain は能力だけを作り、過去の推移は持っていない）。
+            AbilityHistory.EnsureStarted(list, GameClock.Week);
             return list;
         }
     }
