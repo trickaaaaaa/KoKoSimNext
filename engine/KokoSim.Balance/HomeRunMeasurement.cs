@@ -426,6 +426,19 @@ public static class HomeRunMeasurement
         }
         sb.AppendLine();
 
+        sb.AppendLine("## 安打の内訳（打率・二塁打率・三塁打率）");
+        sb.AppendLine();
+        sb.AppendLine("打率は 安打÷打数（四死球を除く打席。犠打・犠飛も打数に含める近似）。二塁打率・三塁打率は打席あたり。");
+        sb.AppendLine();
+        sb.AppendLine("| 条件 | 打率 | 二塁打率 | 三塁打率 | 本塁打率 |");
+        sb.AppendLine("|---|---:|---:|---:|---:|");
+        foreach (var r in rows)
+        {
+            var p = r.Profile;
+            sb.AppendLine(c, $"| {r.Label} | {p.BattingAverage:F3} | {p.DoubleRate:P2} | {p.TripleRate:P2} | {p.HomeRunRate:P2} |");
+        }
+        sb.AppendLine();
+
         sb.AppendLine("## 1試合（両軍計）の本塁打数の分布");
         sb.AppendLine();
         sb.AppendLine("| 条件 | 0本 | 1本 | 2本 | 3本 | 4本 | 5本以上 | 二項近似の5本以上 |");

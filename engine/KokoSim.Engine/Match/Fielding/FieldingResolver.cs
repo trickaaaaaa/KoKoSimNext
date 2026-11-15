@@ -360,7 +360,9 @@ public static class FieldingResolver
         if (isFly)
         {
             var (catcher, reach) = NearestReach(fielders, landing);
-            var catchBudget = CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff);
+            // フェンス際の捕りにくさ（issue #976）: 壁を探して減速するぶん、捕球に使える時間が減る（乱数不使用）。
+            var catchBudget = CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff)
+                              - coeff.WallCatchPenalty(fenceDist - range);
             // 捕球余裕（正=余裕あり、負=間に合わず）。判定オーバーレイ「フェア」（Issue #328②）の表示だけでなく、
             // フライ落球の難度連動（issue #532）にも使う＝平凡な飛球ほど落球確率が下限へ落ちる物理量。
             var catchMargin = catchBudget - reach;

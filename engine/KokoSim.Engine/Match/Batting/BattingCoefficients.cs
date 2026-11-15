@@ -204,24 +204,6 @@ public sealed record BattingCoefficients
     /// <summary>打球初速上限[km/h] のパワー1あたり係数。</summary>
     public double ExitVeloPerPower { get; init; } = 0.50;
     /// <summary>
-    /// 打球初速の上側の寝かせ（issue #976）: 初速係数（満初速＝<see cref="ExitVeloInterceptKmh"/>＋パワー×傾き に対する比）が
-    /// この膝を超えた分だけ <see cref="ExitVeloSoftSlope"/> 倍に縮める。膝は満初速に対する比なので、パワーの差
-    /// （満初速の差）はそのまま残る＝芯を食った当たりの伸びだけを削る。膝より弱い当たりは恒等。0以下＝無効。
-    /// <para>校正値（issue #976・監督決定「実ゲーム条件で本塁打 0.9〜1.0%・平均得点優先」）: 膝 0.87・倍率 0.25。
-    /// 品質の平均（初速係数≈0.84）の少し上から効く＝P50 の満初速 166km/h で 144km/h 超の当たりの伸びを 1/4 に。
-    /// 膝を km/h の絶対値で置くとパワーの差まで潰れる（パワー 20→80 の得点差 +2.75→+0.92）ので比で置く。</para>
-    /// </summary>
-    public double ExitVeloSoftKnee { get; init; } = 0.87;
-    /// <summary>膝を超えた分に掛ける倍率（1＝恒等）。</summary>
-    public double ExitVeloSoftSlope { get; init; } = 0.25;
-
-    /// <summary>初速係数に上側の寝かせを掛ける（<see cref="ExitVeloSoftKnee"/>）。</summary>
-    public double SoftenVeloFactor(double veloFactor)
-        => ExitVeloSoftKnee > 0.0 && veloFactor > ExitVeloSoftKnee
-            ? ExitVeloSoftKnee + (veloFactor - ExitVeloSoftKnee) * ExitVeloSoftSlope
-            : veloFactor;
-
-    /// <summary>
     /// コンタクト品質(0〜1)の平均（互角時）。issue #262 で打球が野手の間を抜けやすくなった分を 0.62→0.60 で吸収していたが、
     /// issue homerun-rate-explodes-at-high-power（2026-08-18）で本塁打判定の正し＋初速上限の上位圧縮により本塁打が
     /// 安打から抜けた分（AVG .253→.235〜.243＝帯の床）を 0.62 へ戻して補う（AVG .242〜.253＝改定前と同水準）。
@@ -240,15 +222,29 @@ public sealed record BattingCoefficients
     /// <summary>打球角度の標準偏差[deg]。</summary>
     public double LaunchAngleSigma { get; init; } = 12.0;
     /// <summary>
-    /// 打球角度のばらつきの上側だけの倍率（issue #976）。平均角より上へ振れた分にだけ掛ける（下＝ゴロ側は
-    /// <see cref="LaunchAngleSigma"/> のまま）。打ち上げた当たり（本塁打・外野フライ）を減らしてライナーへ寄せる。
-    /// 1＝左右対称（従来）。乱数の引き方は変えない（同じ1本を引いて符号で倍率を選ぶ）。
-    /// 0.85 は issue #976 の校正値: 本塁打の角度帯（20〜35°）は平均角（弾道50で約10°）から上へ1σ前後の所にあり、
-    /// 上側を締めると本塁打が減る一方、ゴロ側は動かず、上がり切らなかった当たりはライナー（安打）になる。
-    /// 強く締めるほど外野フライが低く・少なくなる（0.5 で外野フライの頂点 p50 22→18m・本数半減＝issue #451 の
-    /// 実物オーダー 20m を割る）ので、主役は初速の膝（<see cref="ExitVeloSoftKnee"/>）に置き、こちらは控えめに。
+    /// 芯を食った当たりの角度の上側の締まり（issue #976・2026-11-15 監督決定 案c）: 初速係数（満初速に対する比・
+    /// <see cref="MinQualityVeloFactor"/> 〜 1.05 弱）がこの膝を超えた分だけ、角度のばらつきの<b>上側</b>（平均角より上へ
+    /// 振れた分）を (1 − <see cref="LaunchAngleUpperHardSlope"/>×超過) 倍に締める（下限 <see cref="LaunchAngleUpperHardFloor"/>）。
+    /// 下側（ゴロ側）と、膝より弱い当たりの角度は変えない。乱数の引き方も変えない（同じ1本を引いて符号で倍率を選ぶ）。
+    /// <para>狙い: 強い当たりは打ち上げ過ぎず低く鋭い打球になる＝柵を越える高さには上がらず、<b>同じ強さのまま</b>
+    /// フェンス際・外野の間へ届く長打になる。弱い外野フライ（アウト）はライナーの単打に変わらない＝打率を上げない。
+    /// 初速そのものを削る案（初速の膝）は外野の間を抜く二塁打まで単打・凡打に落とし（二塁打率 4.5→3.3%）、
+    /// 全打球一律に上側を締める案はフライのアウトがライナーの単打になって打率が上がった（.253→.282）ので採らない。</para>
+    /// <para>校正値 膝 0.83・傾き 6・下限 0.2: 品質の平均（初速係数≈0.84）の少し上から効き、満初速の当たり（≈1.0）で上側×0.2。
+    /// 実測は issue #976 の PR（hr-measure 2000試合×seed42）。0以下＝無効（対称）。</para>
     /// </summary>
-    public double LaunchAngleUpperSigmaFactor { get; init; } = 0.85;
+    public double LaunchAngleUpperHardKnee { get; init; } = 0.83;
+    /// <summary>膝を超えた初速係数1あたりの上側の締まり。<see cref="LaunchAngleUpperHardKnee"/> 参照。</summary>
+    public double LaunchAngleUpperHardSlope { get; init; } = 6.0;
+    /// <summary>芯を食った当たりの上側の倍率の下限。<see cref="LaunchAngleUpperHardKnee"/> 参照。</summary>
+    public double LaunchAngleUpperHardFloor { get; init; } = 0.2;
+
+    /// <summary>角度の上側（平均より上へ振れた分）に掛ける倍率（1＝対称）。<paramref name="veloFactor"/> は初速係数。</summary>
+    public double UpperAngleFactor(double veloFactor)
+        => LaunchAngleUpperHardKnee > 0.0 && LaunchAngleUpperHardSlope > 0.0 && veloFactor > LaunchAngleUpperHardKnee
+            ? Math.Max(LaunchAngleUpperHardFloor, 1.0 - LaunchAngleUpperHardSlope * (veloFactor - LaunchAngleUpperHardKnee))
+            : 1.0;
+
     /// <summary>
     /// ミートによる打球角度σの締まり（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）。
     /// σ × (1 − これ×(Contact−50))（下限 <see cref="LaunchAngleSigmaContactFloor"/>）。ミートが良いほど角度のばらつきが小さく

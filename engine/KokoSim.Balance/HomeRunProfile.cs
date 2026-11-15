@@ -45,6 +45,9 @@ public sealed class HomeRunProfile
     public long HomeRuns { get; private set; }
     public long Doubles { get; private set; }
     public long Triples { get; private set; }
+    /// <summary>安打（単打〜本塁打）と打数（四死球を除く打席。犠打・犠飛は区別せず含める＝近似）。打率の比較用（issue #976）。</summary>
+    public long Hits { get; private set; }
+    public long AtBats { get; private set; }
     public long TeamRuns { get; private set; }
     public int MaxHomeRunsInGame { get; private set; }
 
@@ -70,9 +73,11 @@ public sealed class HomeRunProfile
 
     /// <summary>1試合ぶんの数を積む。</summary>
     public void AddGame(int homeRunsInGame, int awayRuns, int homeRuns, int plateAppearances,
-        int doubles = 0, int triples = 0)
+        int doubles = 0, int triples = 0, int hits = 0, int atBats = 0)
     {
         Games++;
+        Hits += hits;
+        AtBats += atBats;
         PlateAppearances += plateAppearances;
         HomeRuns += homeRunsInGame;
         Doubles += doubles;
@@ -111,9 +116,11 @@ public sealed class HomeRunProfile
     /// </summary>
     public void AddGame(GameResult r, FieldGeometry field)
     {
-        int hr = 0, doubles = 0, triples = 0;
+        int hr = 0, doubles = 0, triples = 0, hits = 0, atBats = 0;
         foreach (var e in r.Log)
         {
+            if (e.Result.IsHit()) hits++;
+            if (e.Result.IsAtBat()) atBats++;
             switch (e.Result)
             {
                 case PlateAppearanceResult.Double: doubles++; break;
@@ -126,7 +133,7 @@ public sealed class HomeRunProfile
                     break;
             }
         }
-        AddGame(hr, r.AwayRuns, r.HomeRuns, r.Log.Count, doubles, triples);
+        AddGame(hr, r.AwayRuns, r.HomeRuns, r.Log.Count, doubles, triples, hits, atBats);
     }
 
     public void Merge(HomeRunProfile o)
@@ -136,6 +143,8 @@ public sealed class HomeRunProfile
         HomeRuns += o.HomeRuns;
         Doubles += o.Doubles;
         Triples += o.Triples;
+        Hits += o.Hits;
+        AtBats += o.AtBats;
         TeamRuns += o.TeamRuns;
         if (o.MaxHomeRunsInGame > MaxHomeRunsInGame) MaxHomeRunsInGame = o.MaxHomeRunsInGame;
         Add(PerGame, o.PerGame);
@@ -155,6 +164,9 @@ public sealed class HomeRunProfile
     public double HomeRunsPerGame => Games > 0 ? (double)HomeRuns / Games : 0;
     public double RunsPerTeamAverage => Games > 0 ? (double)TeamRuns / (2.0 * Games) : 0;
     public double PlateAppearancesPerGame => Games > 0 ? (double)PlateAppearances / Games : 0;
+    public double BattingAverage => AtBats > 0 ? (double)Hits / AtBats : 0;
+    public double DoubleRate => PlateAppearances > 0 ? (double)Doubles / PlateAppearances : 0;
+    public double TripleRate => PlateAppearances > 0 ? (double)Triples / PlateAppearances : 0;
     public double DoublesPerHomeRun => HomeRuns > 0 ? (double)Doubles / HomeRuns : 0;
     public double MeanEvKmh => WithBall > 0 ? EvSumDeci / 10.0 / WithBall : 0;
     public double MeanLaDeg => WithBall > 0 ? LaSumDeci / 10.0 / WithBall : 0;

@@ -186,8 +186,7 @@ public static class ContactModel
             QualityMin, 1.05);
 
         var maxExitKmh = coeff.ExitVeloInterceptKmh + batter.Power * coeff.ExitVeloPerPower;
-        // 上側の寝かせ（issue #976）: 芯を食った当たりの伸びだけ縮める。
-        var veloFactor = coeff.SoftenVeloFactor(VeloFactor(quality, coeff));
+        var veloFactor = VeloFactor(quality, coeff);
         var exitMps = maxExitKmh * veloFactor / 3.6;
 
         // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。ミートが良いほど締まる（安打の分業。issue ai-roster-power-top-tier-all-sluggers）。
@@ -198,9 +197,9 @@ public static class ContactModel
         // 球種の縦変化で角度が動く（issue #835）: 縦に落ちる球（フォーク等）ほど角度が下がりゴロが増える。
         var breakAngleShift = PitchDeception.LaunchAngleShiftDeg(features, coeff);
         // つなぎの打撃（issue #907）: 走者ありで打球角を低く（ゴロ寄り）。スキルなしは0＝恒等。
-        // 角度の上側だけ締める（issue #976）: 平均より上へ振れた分にだけ倍率を掛ける。乱数は同じ1本。
+        // 芯を食った当たりは角度の上側だけ締める（issue #976）: 打ち上げ過ぎず、柵越えでなくフェンス際の長打へ。乱数は同じ1本。
         var angleNoise = rng.NextGaussian(0, angleSigma);
-        if (angleNoise > 0.0) angleNoise *= coeff.LaunchAngleUpperSigmaFactor;
+        if (angleNoise > 0.0) angleNoise *= coeff.UpperAngleFactor(veloFactor);
         var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + breakAngleShift + skillMods.LaunchShiftDeg
                           + angleNoise;
 

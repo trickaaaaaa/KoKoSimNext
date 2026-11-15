@@ -552,15 +552,15 @@ public static class CoefficientsLoader
         public double StuffPerKmh { get; set; } = D.StuffPerKmh;
         public double ExitVeloInterceptKmh { get; set; } = D.ExitVeloInterceptKmh;
         public double ExitVeloPerPower { get; set; } = D.ExitVeloPerPower;
-        public double ExitVeloSoftKnee { get; set; } = D.ExitVeloSoftKnee;
-        public double ExitVeloSoftSlope { get; set; } = D.ExitVeloSoftSlope;
         public double QualityMean { get; set; } = D.QualityMean;
         public double QualityContactSlope { get; set; } = D.QualityContactSlope;
         public double QualitySigma { get; set; } = D.QualitySigma;
         public double LaunchAngleAtLt1 { get; set; } = D.LaunchAngleAtLt1;
         public double LaunchAngleAtLt100 { get; set; } = D.LaunchAngleAtLt100;
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
-        public double LaunchAngleUpperSigmaFactor { get; set; } = D.LaunchAngleUpperSigmaFactor;
+        public double LaunchAngleUpperHardKnee { get; set; } = D.LaunchAngleUpperHardKnee;
+        public double LaunchAngleUpperHardSlope { get; set; } = D.LaunchAngleUpperHardSlope;
+        public double LaunchAngleUpperHardFloor { get; set; } = D.LaunchAngleUpperHardFloor;
         public double LaunchAngleSigmaPerContact { get; set; } = D.LaunchAngleSigmaPerContact;
         public double LaunchAngleSigmaContactFloor { get; set; } = D.LaunchAngleSigmaContactFloor;
         public double LaunchAnglePerVerticalBreakM { get; set; } = D.LaunchAnglePerVerticalBreakM;
@@ -637,15 +637,15 @@ public static class CoefficientsLoader
             StuffPerKmh = StuffPerKmh,
             ExitVeloInterceptKmh = ExitVeloInterceptKmh,
             ExitVeloPerPower = ExitVeloPerPower,
-            ExitVeloSoftKnee = ExitVeloSoftKnee,
-            ExitVeloSoftSlope = ExitVeloSoftSlope,
             QualityMean = QualityMean,
             QualityContactSlope = QualityContactSlope,
             QualitySigma = QualitySigma,
             LaunchAngleAtLt1 = LaunchAngleAtLt1,
             LaunchAngleAtLt100 = LaunchAngleAtLt100,
             LaunchAngleSigma = LaunchAngleSigma,
-            LaunchAngleUpperSigmaFactor = LaunchAngleUpperSigmaFactor,
+            LaunchAngleUpperHardKnee = LaunchAngleUpperHardKnee,
+            LaunchAngleUpperHardSlope = LaunchAngleUpperHardSlope,
+            LaunchAngleUpperHardFloor = LaunchAngleUpperHardFloor,
             LaunchAngleSigmaPerContact = LaunchAngleSigmaPerContact,
             LaunchAngleSigmaContactFloor = LaunchAngleSigmaContactFloor,
             LaunchAnglePerVerticalBreakM = LaunchAnglePerVerticalBreakM,
@@ -690,6 +690,8 @@ public static class CoefficientsLoader
         private static readonly FieldingCoefficients D = new();
         public double FlyApexThresholdM { get; set; } = D.FlyApexThresholdM;
         public double CatchReachFactor { get; set; } = D.CatchReachFactor;
+        public double WallCatchZoneM { get; set; } = D.WallCatchZoneM;
+        public double WallCatchPenaltySeconds { get; set; } = D.WallCatchPenaltySeconds;
         public double ThrowTransferSeconds { get; set; } = D.ThrowTransferSeconds;
         public double ThrowTransferFieldingSlope { get; set; } = D.ThrowTransferFieldingSlope;
         public double ThrowTransferFactorMin { get; set; } = D.ThrowTransferFactorMin;
@@ -779,6 +781,8 @@ public static class CoefficientsLoader
         {
             FlyApexThresholdM = FlyApexThresholdM,
             CatchReachFactor = CatchReachFactor,
+            WallCatchZoneM = WallCatchZoneM,
+            WallCatchPenaltySeconds = WallCatchPenaltySeconds,
             ThrowTransferSeconds = ThrowTransferSeconds,
             ThrowTransferFieldingSlope = ThrowTransferFieldingSlope,
             ThrowTransferFactorMin = ThrowTransferFactorMin,

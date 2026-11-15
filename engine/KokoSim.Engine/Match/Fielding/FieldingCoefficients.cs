@@ -34,8 +34,29 @@ public sealed record FieldingCoefficients
     /// <summary>空中捕球に許容する到達時間の倍率（滞空時間×この値まで間に合えば捕球）。
     /// issue #740 で 1.00→0.93（4秒上限の撤去で増えたアウトを打率帯へ戻す校正）。着地の直前（滞空の7%以内）に届く打球は
     /// 捕れず、捕球余裕が小さい負になる＝3Dでは「背走ジャンピングで届かない」芝居で描かれる（棒立ちで落ちる絵にならない）。
-    /// issue #976: 0.895→0.845（本塁打を削った分の得点を、外野の間・頭上に落ちる安打で戻す。本塁打率は動かさない）。</summary>
-    public double CatchReachFactor { get; init; } = 0.845;
+    /// issue #976 で一度 0.845 にしたが、外野フライ全般が落ちて打率が .253→.272 に上がったため 0.895 へ戻した
+    /// （本塁打を削った分の得点は <see cref="WallCatchZoneM"/> のフェンス際の捕りにくさで戻す）。</summary>
+    public double CatchReachFactor { get; init; } = 0.895;
+
+    /// <summary>
+    /// フェンス際の捕りにくさ（issue #976・2026-11-15 監督決定 案c）: 落下点がフェンスからこの距離[m]より内側だと、
+    /// 外野手は壁を探して減速する（フェンス手前で全力では走り込めない）ぶん、空中捕球に使える時間が減る。
+    /// 減る秒＝<see cref="WallCatchPenaltySeconds"/>×(1 − フェンスまでの距離/この値)（フェンス上で最大・ゾーンの縁で0）。
+    /// 本塁打を削った打球（柵を越えなかった大飛球・フェンス直撃）を<b>外野フライのアウトではなくフェンス際の長打</b>へ
+    /// 振り替えるための物理量。浅い外野フライ・外野の間の打球は変わらない。0以下＝無効。
+    /// <para>校正値 10m・3.0s（issue #976）: フェンス上で3秒・5m手前で1.5秒減る。全外野フライに効く
+    /// <see cref="CatchReachFactor"/> を下げる案（0.845）より、同じ得点の戻しで打率の上がりが小さい。</para>
+    /// </summary>
+    public double WallCatchZoneM { get; init; } = 10.0;
+
+    /// <summary>フェンス上（フェンスまでの距離0）での空中捕球の時間の減り[s]。<see cref="WallCatchZoneM"/> 参照。</summary>
+    public double WallCatchPenaltySeconds { get; init; } = 3.0;
+
+    /// <summary>フェンスまでの距離 <paramref name="distanceToFenceM"/>[m] の落下点で空中捕球の時間から引く秒（0以上）。</summary>
+    public double WallCatchPenalty(double distanceToFenceM)
+        => WallCatchZoneM > 0.0 && WallCatchPenaltySeconds > 0.0
+            ? WallCatchPenaltySeconds * Math.Clamp(1.0 - Math.Max(0.0, distanceToFenceM) / WallCatchZoneM, 0.0, 1.0)
+            : 0.0;
 
     /// <summary>
     /// 空中捕球の到達可否に効く守備力の傾き（打球判断＝走路取りの巧拙）。

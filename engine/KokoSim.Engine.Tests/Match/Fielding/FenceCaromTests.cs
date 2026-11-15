@@ -122,18 +122,14 @@ public sealed class FenceCaromTests
         // ⚠ issue 本文の「二塁打の92.9%」は `ReachedFence`（＝放っておけばフェンスまで転がる）の割合。
         // 実際に**当たる**のは外野手が手前で回収できなかったぶんだけで、実測 93/149＝62%。
         // 残りは球が壁に届く前に回収されている＝跳ね返りを描かないのが正しい。
-        // issue #976（本塁打を削った校正）で 0.55→0.35: 本塁打が減った分を外野の間・頭上に落ちる安打で戻した
-        // （catch_reach_factor 0.895→0.845）ので、壁まで届かず外野の間で回収される二塁打が増えた（実測 44%）。
-        Assert.True((double)doubles.Fence / doubles.Total >= 0.35,
+        Assert.True((double)doubles.Fence / doubles.Total >= 0.55,
             $"長打の {(double)doubles.Fence / doubles.Total:P0} にしか跳ね返りが付いていない");
         Assert.True((double)singles.Fence / singles.Total <= 0.05,
             $"単打の {(double)singles.Fence / singles.Total:P0} に跳ね返りが付いている（フェンス手前で止まるはず）");
         // ⚠ issue 本文の「二塁打の92.9%」は `ReachedFence`（＝放っておけばフェンスまで転がる）の割合。
         // 実際に**当たる**のは外野手が手前で回収できなかったぶんだけで、実測 93/149＝62%。
         // 残りは球が壁に届く前に回収されている＝跳ね返りを描かないのが正しい。
-        // issue #976（本塁打を削った校正）で 0.55→0.35: 本塁打が減った分を外野の間・頭上に落ちる安打で戻した
-        // （catch_reach_factor 0.895→0.845）ので、壁まで届かず外野の間で回収される二塁打が増えた（実測 44%）。
-        Assert.True((double)doubles.Fence / doubles.Total >= 0.35,
+        Assert.True((double)doubles.Fence / doubles.Total >= 0.55,
             $"長打の {(double)doubles.Fence / doubles.Total:P0} にしか跳ね返りが付いていない");
         Assert.True((double)singles.Fence / singles.Total <= 0.05,
             $"単打の {(double)singles.Fence / singles.Total:P0} に跳ね返りが付いている（フェンス手前で止まるはず）");
