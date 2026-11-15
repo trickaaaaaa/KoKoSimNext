@@ -436,7 +436,6 @@ namespace KokoSim.Unity.Home
             {
                 facts.Clear();
                 facts.Add(XtFact("総合", ((int)System.Math.Round(picked.Strength)).ToString()));
-                facts.Add(XtFact("名声", ((int)System.Math.Round(picked.Fame)).ToString()));
             }
 
             if (_xtOk != null) _xtOk.text = picked.IsStay ? "残留する" : "この学校へ赴任する";
