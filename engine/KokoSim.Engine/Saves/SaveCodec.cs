@@ -96,6 +96,7 @@ public static class SaveCodec
             .Add("batteryInnings", BatteryInningsToJson(s.BatteryInnings))
             .Add("cohesionDelta", s.CohesionDelta)
             .Add("managerPostings", ManagerPostingSaves.ClosedToJson(s.ManagerPostings))
+            .Add("managerPostingStartYearIndex", s.ManagerPostingStartYearIndex)
             .Add("managerPostingBaselineWins", s.ManagerPostingBaselineWins)
             .Add("managerPostingBaselineLosses", s.ManagerPostingBaselineLosses)
             .Add("managerPostingBaselineSummerApp", s.ManagerPostingBaselineSummerAppearances)
@@ -337,6 +338,15 @@ public static class SaveCodec
         if (version < 32)
         {
             if (!root.Has("managerPostings")) root.Add("managerPostings", new JsonArray());
+            // 今の赴任の就任年度は旧セーブに無い＝在任年数（監督の yearsAtSchool）と暦から推定する。
+            if (!root.Has("managerPostingStartYearIndex"))
+            {
+                var yearsAtSchool = root["manager"] is JsonObject mgr && mgr.Has("yearsAtSchool") ? mgr.Int("yearsAtSchool") : 0;
+                var yearIndex = root.Has("yearIndex") ? root.Int("yearIndex") : 1;
+                var week = root.Has("week") ? root.Int("week") : 0;
+                root.Add("managerPostingStartYearIndex",
+                    ManagerPostingYears.EstimateCurrentStartYearIndex(yearIndex, week, yearsAtSchool, new SeasonCalendar()));
+            }
             if (!root.Has("managerPostingBaselineWins")) root.Add("managerPostingBaselineWins", 0);
             if (!root.Has("managerPostingBaselineLosses")) root.Add("managerPostingBaselineLosses", 0);
             if (!root.Has("managerPostingBaselineSummerApp")) root.Add("managerPostingBaselineSummerApp", 0);
@@ -446,6 +456,7 @@ public static class SaveCodec
             CohesionDelta = root.Double("cohesionDelta"),
             // 監督の赴任履歴は v32 で追加。Migrate が旧セーブへ空配列/0を補うので素直に読む。
             ManagerPostings = ManagerPostingSaves.ClosedFromJson(root.Arr("managerPostings")),
+            ManagerPostingStartYearIndex = root.Int("managerPostingStartYearIndex"),
             ManagerPostingBaselineWins = root.Int("managerPostingBaselineWins"),
             ManagerPostingBaselineLosses = root.Int("managerPostingBaselineLosses"),
             ManagerPostingBaselineSummerAppearances = root.Int("managerPostingBaselineSummerApp"),

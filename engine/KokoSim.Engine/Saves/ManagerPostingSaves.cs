@@ -13,8 +13,8 @@ internal static class ManagerPostingSaves
         foreach (var p in closed)
             arr.Add(new JsonObject()
                 .Add("school", p.SchoolName)
-                .Add("startYear", p.StartYear)
-                .Add("endYear", p.EndYear)
+                .Add("startYearIndex", p.StartYearIndex)
+                .Add("endYearIndex", p.EndYearIndex)
                 .Add("wins", p.Wins)
                 .Add("losses", p.Losses)
                 .Add("summerApp", p.SummerAppearances)
@@ -31,8 +31,8 @@ internal static class ManagerPostingSaves
             list.Add(new ManagerPosting
             {
                 SchoolName = o.Str("school")!,
-                StartYear = o.Int("startYear"),
-                EndYear = o.Int("endYear"),
+                StartYearIndex = o.Int("startYearIndex"),
+                EndYearIndex = o.Int("endYearIndex"),
                 Wins = o.Int("wins"),
                 Losses = o.Int("losses"),
                 SummerAppearances = o.Int("summerApp"),

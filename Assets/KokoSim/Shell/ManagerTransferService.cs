@@ -39,6 +39,8 @@ namespace KokoSim.Unity.Shell
         public static bool Pending { get; private set; }
 
         private static TransferEventKind _kind = TransferEventKind.None;
+        private static readonly KokoSim.Engine.Season.SeasonCalendar SeasonCalendarInstance =
+            new KokoSim.Engine.Season.SeasonCalendar();
         private static List<TransferCandidate> _candidates = new List<TransferCandidate>();
 
         /// <summary>年度末の転任判定フックから呼ぶ。Kind=None（残留・オファーなし）なら何もしない。</summary>
@@ -146,18 +148,15 @@ namespace KokoSim.Unity.Shell
             foreach (var c in _candidates) if (c.SchoolId == schoolId.Value) { target = c; break; }
             if (target == null) return false;
 
-            // 歴任校の記録（issue #980）。ApplyDecision が Manager.YearsAtSchool を0へリセットする前に、
-            // 旧校ぶんの在任区間・校名を確定して台帳へ積む（通算戦績バケットは転任をまたいでも単一=
-            // 校ID固定＝issue #641 の方式なので、ここで基準値からの差分として切り出す）。
-            // 転任判定は年度末（3月）に行われ、この Confirm 時点では GameClock.YearIndex は既に
-            // 新年度へ進んでいる（GameClock.AdvanceWeek が年度境界で先に YearIndex を進めてから
-            // ManagerService.ApplyYearlyGrowth(終わった年度) を呼ぶため）。
-            var endedYearIndex = GameClock.YearIndex - 1;
-            var startYearIndex = endedYearIndex - ManagerService.Manager.YearsAtSchool + 1;
+            // 歴任校の記録（issue #980）。転任先へ切り替える前に、旧校ぶんの在任区間・校名・戦績を確定して
+            // 台帳へ積み、次の赴任の就任年度（退任年度+1）も同時に確定する（通算戦績バケットは転任をまたいでも
+            // 単一＝校ID固定・issue #641 の方式なので、ここで基準値からの差分として切り出す）。
+            // 退任年度は「いつ確定したか」で決まる: 通常は3月の総括週（週46）に ApplyYearlyGrowth(YearIndex) の
+            // 中で開き、その週のうちに確定する＝YearIndex がまだ終わる年度。年度替わり側で開いた取りこぼし経路や、
+            // 選ばないまま4月を越えた場合は YearIndex が繰り上がっている＝その前年度（夜間レビュー #1013）。
             GameSession.Current.PostingHistory.Close(
                 TopBarMeters.SchoolDisplayName(),
-                SeasonClock.SeasonBaseYear + (startYearIndex - 1),
-                SeasonClock.SeasonBaseYear + (endedYearIndex - 1),
+                ManagerPostingYears.EndedYearIndexAtConfirm(GameClock.YearIndex, GameClock.Week, SeasonCalendarInstance),
                 GameSession.Current.Records.For(NationService.ManagerSchoolId));
 
             ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: true, ManagerService.Coefficients);

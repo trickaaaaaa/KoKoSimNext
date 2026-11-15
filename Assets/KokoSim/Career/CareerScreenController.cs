@@ -275,9 +275,9 @@ namespace KokoSim.Unity.CareerMeta
             {
                 var p = history.Closed[i];
                 rows.Add((
-                    p.StartYear + "-" + p.EndYear,
+                    FiscalYear(p.StartYearIndex) + "-" + FiscalYear(p.EndYearIndex),
                     p.SchoolName,
-                    (p.EndYear - p.StartYear + 1) + "年間",
+                    p.TenureYears + "年間",
                     p.Wins + "勝 " + p.Losses + "敗",
                     p.SummerAppearances + p.SpringAppearances > 0
                         ? "夏" + p.SummerAppearances + "・春" + p.SpringAppearances : "―"));
@@ -314,13 +314,19 @@ namespace KokoSim.Unity.CareerMeta
         // ── 共通 ────────────────────────────────────────────────
 
         /// <summary>
-        /// <b>今の学校</b>に就任してからの年数（1始まり）。<see cref="Manager.YearsAtSchool"/>（転任のたび
-        /// 0へリセットされる・issue #980）から組む＝転任をまたいでも今の赴任ぶんだけを指す。
+        /// <b>今の学校</b>に就任してからの年数（1始まり・年度で数える）。就任年度は
+        /// <see cref="GameSession.PostingHistory"/> に保存した値を読む＝<see cref="Manager.YearsAtSchool"/>
+        /// （3月の総括週で増え転任で0へ戻る）や暦年（1月に繰り上がる）から逆算しない（issue #980・夜間レビュー #1013）。
         /// </summary>
-        private static int TenureYears => ManagerService.Manager.YearsAtSchool + 1;
+        private static int TenureYears => ManagerPostingYears.CurrentTenureYears(
+            GameClock.YearIndex, GameSession.Current.PostingHistory.CurrentStartYearIndex);
 
-        /// <summary>今の学校に就任した暦年（issue #980。転任が入ればその年に更新される）。</summary>
-        private static int StartYear => CurrentYear - ManagerService.Manager.YearsAtSchool;
+        /// <summary>今の学校に就任した年度の表記（年度の開始暦年。転任すればその翌年度に更新される）。</summary>
+        private static int StartYear => FiscalYear(GameSession.Current.PostingHistory.CurrentStartYearIndex);
+
+        /// <summary>年度 → 表記の年（年度の開始暦年）。歴任校の年はすべてこれを通す。</summary>
+        private static int FiscalYear(int yearIndex)
+            => ManagerPostingYears.FiscalYearLabel(SeasonClock.SeasonBaseYear, yearIndex);
 
         /// <summary>今の暦年（4月始まりの繰り上がりを含む）。</summary>
         private static int CurrentYear => SeasonClock.CalendarYear(GameClock.YearIndex, GameClock.Week);

@@ -251,6 +251,13 @@ public sealed class SaveState
     public List<ManagerPosting> ManagerPostings { get; set; } = new();
 
     /// <summary>
+    /// 今の赴任の就任年度（<see cref="ManagerPostingHistory.CurrentStartYearIndex"/>・issue #980・v32）。
+    /// 旧セーブは <c>Manager.YearsAtSchool</c> と暦から推定して補う
+    /// （<see cref="ManagerPostingYears.EstimateCurrentStartYearIndex"/>）。
+    /// </summary>
+    public int ManagerPostingStartYearIndex { get; set; } = 1;
+
+    /// <summary>
     /// 今の赴任が始まった時点の自校通算戦績（<see cref="ManagerPostingHistory"/> の基準値、issue #980・v32）。
     /// 旧セーブは転任という区切りが存在しえない＝0（＝通算そのものが今の赴任ぶん）で補う。
     /// </summary>

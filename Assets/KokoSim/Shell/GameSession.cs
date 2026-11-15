@@ -1060,6 +1060,7 @@ namespace KokoSim.Unity.Shell
             s.Stats = Stats;
             s.Records = Records;
             s.ManagerPostings = new List<ManagerPosting>(PostingHistory.Closed);
+            s.ManagerPostingStartYearIndex = PostingHistory.CurrentStartYearIndex;
             s.ManagerPostingBaselineWins = PostingHistory.BaselineWins;
             s.ManagerPostingBaselineLosses = PostingHistory.BaselineLosses;
             s.ManagerPostingBaselineSummerAppearances = PostingHistory.BaselineSummerAppearances;
@@ -1160,6 +1161,7 @@ namespace KokoSim.Unity.Shell
             Records = s.Records;
             PostingHistory.Restore(
                 s.ManagerPostings ?? new List<ManagerPosting>(),
+                s.ManagerPostingStartYearIndex,
                 s.ManagerPostingBaselineWins, s.ManagerPostingBaselineLosses,
                 s.ManagerPostingBaselineSummerAppearances, s.ManagerPostingBaselineSpringAppearances);
             History = s.TournamentHistory;
