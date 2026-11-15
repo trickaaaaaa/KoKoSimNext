@@ -27,6 +27,7 @@ namespace KokoSim.Unity.Member
         private MemberSettingState _state;
         private VisualElement _root;
         private Button _advanceBtn;
+        private Button _newTeamOk;               // 新チームの背番号決定の「背番号を確定」（issue #954）
         private VisualElement _fieldHost;
         private BaseballFieldElement _field;
         private FieldMarkersElement _markers;   // 立ち位置点＋引き出し線
@@ -63,12 +64,34 @@ namespace KokoSim.Unity.Member
             _advanceBtn = _root.Q<Button>("advance");
             if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
 
+            _newTeamOk = _root.Q<Button>("ms-newteam-ok");
+            if (_newTeamOk != null) _newTeamOk.clicked += OnConfirmUniformNumbers;
+
             Render();
         }
 
         private void OnDisable()
         {
             if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
+            if (_newTeamOk != null) _newTeamOk.clicked -= OnConfirmUniformNumbers;
+        }
+
+        // 新チームの背番号を確定してホームへ戻る（issue #954・案C）。割当は画面で編集済み＝待ちを下ろすだけ。
+        private void OnConfirmUniformNumbers()
+        {
+            if (!KokoSim.Unity.Shell.UniformNumberService.Pending) return;
+            KokoSim.Unity.Shell.UniformNumberService.Confirm();
+            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+        }
+
+        // 背番号決定待ちの間だけ上部帯を出し、トップバーの週送りを隠す（主ボタンは「背番号を確定」の1つだけ）。
+        private void RenderNewTeamBand()
+        {
+            var pending = KokoSim.Unity.Shell.UniformNumberService.Pending;
+            var band = _root.Q<VisualElement>("ms-newteam");
+            if (band != null) band.EnableInClassList("ms-hidden", !pending);
+            SetText("ms-newteam-lead", KokoSim.Unity.Shell.UniformNumberService.Lead);
+            if (_advanceBtn != null) _advanceBtn.style.display = pending ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         // 全タブ共通の進週処理へ集約（大会モード中はホームへ回送して日送りへ引き継ぐ）。
@@ -86,6 +109,8 @@ namespace KokoSim.Unity.Member
                 rank.Clear();
                 rank.Add(UiComponents.RankChip(v.TeamRankGrade));
             }
+
+            RenderNewTeamBand();
 
             SetText("ms-pool-title",
                 "部員　登録 " + v.AssignedCount + " / 20　・　ベンチ外 " + v.BenchOutCount);

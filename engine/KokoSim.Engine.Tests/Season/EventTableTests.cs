@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Season;
 using KokoSim.Engine.Season.Events;
 using Xunit;
 
@@ -148,6 +149,9 @@ events:
             "insight_growth_type",
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
             "koshien_berth_donation", "koshien_draw",
+            // 夏の敗退直後の3年引退（issue #954）。IDは SummerRetirement の定数で引く。
+            SummerRetirement.PrefectureLossEventId, SummerRetirement.KoshienLossEventId,
+            SummerRetirement.KoshienChampionEventId,
             "senbatsu_berth_donation", "senbatsu_draw", "senbatsu_not_selected",
             "booster_club_fund", "gear_broken", "local_company_support",
             "outside_coach_visit", "self_practice_awakened", "exam_week_slump",
@@ -155,6 +159,35 @@ events:
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
+    }
+
+    /// <summary>
+    /// 卒業式（3月）は「送り出す」場面だけ（issue #954）。土の持ち帰り・背番号の返上は夏の敗退直後の
+    /// 引退の場面（summer_retirement_*）のもの＝背番号は夏に返上済みなので、3月に返しに来ると矛盾する。
+    /// </summary>
+    [Fact]
+    public void Graduation_HasNoRetirementScene_AndRetirementScenesCarryIt()
+    {
+        var events = RepositoryEvents().ToDictionary(e => e.Id);
+        var graduation = string.Concat(events["graduation"].Variants.SelectMany(v => v.Lines).Select(l => l.Say));
+        Assert.DoesNotContain("土", graduation);
+        Assert.DoesNotContain("背番号", graduation);
+
+        foreach (var id in new[] { SummerRetirement.PrefectureLossEventId, SummerRetirement.KoshienLossEventId,
+                     SummerRetirement.KoshienChampionEventId })
+        {
+            var e = events[id];
+            Assert.Equal(EventKind.System, e.Kind);
+            var all = string.Concat(e.Variants.SelectMany(v => v.Lines).Select(l => l.Say));
+            Assert.Contains("土", all);
+            Assert.Contains("背番号", all);
+        }
+
+        // 優勝の年に敗戦の台詞を出さない。
+        var champion = string.Concat(events[SummerRetirement.KoshienChampionEventId].Variants
+            .SelectMany(v => v.Lines).Select(l => l.Say));
+        Assert.DoesNotContain("負けた試合", champion);
+        Assert.DoesNotContain("敗退", champion);
     }
 
     [Fact]

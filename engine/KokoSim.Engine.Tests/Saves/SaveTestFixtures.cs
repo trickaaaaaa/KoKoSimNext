@@ -176,6 +176,9 @@ internal static class SaveTestFixtures
             Records = records,
             NewTeamPending = true,
             NewTeamRetiredNames = new List<string> { "卒業太郎", "卒業次郎" },
+            // 夏の敗退直後の新チーム発足（v33・issue #954）。背番号決定待ちと発足した年度。
+            UniformNumberPending = true,
+            NewTeamStartedYear = 2,
             // 監督オファー待ち（v18・転任システム）。地区なし候補と地区ありの候補を両方混ぜて往復を試す。
             ManagerTransferPending = true,
             ManagerTransferKind = (int)TransferEventKind.FreeAgentOffer,

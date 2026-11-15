@@ -91,7 +91,8 @@ namespace KokoSim.Unity.Home
             // 他画面（練習・大会・練習試合・選手・メンバー）で週を進めて引退週／大会開幕週に入った場合は
             // ここへ回送されてくる（ScreenRouter が Pending/BannerPending を見て回送する, issue #134）。
             // その回送分もこの1箇所で受けて指名モーダル／開幕バナーを出す（演出の導線をホームに集約する）。
-            if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            if (KokoSim.Unity.Shell.NewTeamService.Pending) ContinueNewTeamFlow();
+            else if (KokoSim.Unity.Shell.UniformNumberService.Pending) GoToUniformNumbers();
             else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();
             else if (_state.BannerPending) ShowBanner();
             // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
@@ -134,6 +135,8 @@ namespace KokoSim.Unity.Home
             // issue #138: 試合後処理をバックグラウンドで回している間は週送りを受け付けない
             // （メインスレッドの GameClock/ロスター変更が背景処理と競合するのを防ぐ）。
             if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;
+            // 新チームの背番号を確定するまで週を進めない（issue #954）。確定の画面へ戻す。
+            if (KokoSim.Unity.Shell.UniformNumberService.Pending) { GoToUniformNumbers(); return; }
             if (_state.InTournament)
             {
                 _state.AdvanceDay();
@@ -144,7 +147,7 @@ namespace KokoSim.Unity.Home
             {
                 _state.AdvanceWeek();
                 Render();
-                if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();  // 引退週＝新チーム発足（設計書09 §8）
+                if (KokoSim.Unity.Shell.NewTeamService.Pending) ContinueNewTeamFlow();  // 引退週＝新チーム発足（設計書09 §8）
                 else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();  // 転任判定（設計書04 §1.3）
                 else if (_state.BannerPending) ShowBanner();    // 大会開幕演出（要件1・2）
                 else TryShowEvent();                            // 週次イベントのノベル提示（issue #609）
@@ -170,7 +173,29 @@ namespace KokoSim.Unity.Home
         {
             SetBodyVisible(true);
             Render();
+            // 夏の引退の会話を読み終えたら主将指名へ続ける（issue #954: 引退の会話 → 主将指名 → 背番号決定）。
+            if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            else if (KokoSim.Unity.Shell.UniformNumberService.Pending) GoToUniformNumbers();
         }
+
+        /// <summary>
+        /// 新チーム発足の導線を進める（issue #954）。夏の敗退直後の引退なら、まず引退の会話を出し
+        /// （読み終えたら <see cref="OnNovelClosed"/> が主将指名を開く）、無ければすぐ主将指名を開く。
+        /// </summary>
+        private void ContinueNewTeamFlow()
+        {
+            if (KokoSim.Unity.Shell.EventService.HasPendingWhere(KokoSim.Engine.Season.SummerRetirement.IsRetirementEvent)
+                && _novel != null && _novel.OpenNext())
+            {
+                SetBodyVisible(false);
+                return;
+            }
+            ShowNewTeam();
+        }
+
+        /// <summary>新チームの背番号決定（メンバー設定画面・案C）へ直行する（issue #954）。</summary>
+        private static void GoToUniformNumbers()
+            => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred(KokoSim.Unity.Shell.ScreenRouter.UniformNumberScreen);
 
         /// <summary>
         /// 本文域（ヒーロー帯＋3カラム）の表示。ノベルを出している間は隠す。
@@ -196,8 +221,9 @@ namespace KokoSim.Unity.Home
             var view = KokoSim.Unity.Shell.NewTeamService.BuildView();
             if (view.Candidates.Count == 0)
             {
-                // 新チームが空（下級生ゼロ）＝指名しようがない。導線を閉じて通常進行へ戻す。
-                KokoSim.Unity.Shell.NewTeamService.Clear();
+                // 新チームが空（下級生ゼロ）＝指名しようがない。導線を閉じて通常進行へ戻す
+                // （発足済みの印は残す＝第18週の安全網に二度目の発足をさせない・issue #954）。
+                KokoSim.Unity.Shell.NewTeamService.Skip();
                 return;
             }
 
@@ -450,7 +476,9 @@ namespace KokoSim.Unity.Home
             KokoSim.Unity.Shell.NewTeamService.Confirm(_ntPick);
             if (_newTeam != null) _newTeam.style.display = DisplayStyle.None;
             Render();
-            if (_state.BannerPending) ShowBanner();   // 指名の後に大会開幕演出が残っていれば続けて出す
+            // 主将の次は新チームの背番号決定（issue #954・案C: メンバー設定画面へ直行）。
+            if (KokoSim.Unity.Shell.UniformNumberService.Pending) GoToUniformNumbers();
+            else if (_state.BannerPending) ShowBanner();   // 指名の後に大会開幕演出が残っていれば続けて出す
             else TryShowEvent();                      // 開幕が無ければ持ち越したイベントを続けて出す（issue #609）
         }
 
@@ -533,7 +561,12 @@ namespace KokoSim.Unity.Home
             // 全国背景シムへの join（NationBackgroundSim.EnsureCompleted の t.Wait）が走ってメインスレッドを固める。
             // ここも Task.Run で別スレッドへ載せ替え（フリーズ源B, Q1(a)）、完了後にメインスレッドで再描画する。
             // 通常の結果（未終了＝週送りなし）は即返るので体感は変わらない。
-            KokoSim.Unity.Shell.BackgroundGameOp.Run(() => _state.DismissResult(), Render);
+            // 夏の敗退直後は後始末の中で3年が引退する（issue #954）＝終わったらその場で引退の会話 → 主将指名へ続ける。
+            KokoSim.Unity.Shell.BackgroundGameOp.Run(() => _state.DismissResult(), () =>
+            {
+                Render();
+                if (KokoSim.Unity.Shell.NewTeamService.Pending) ContinueNewTeamFlow();
+            });
         }
 
         private void Render()

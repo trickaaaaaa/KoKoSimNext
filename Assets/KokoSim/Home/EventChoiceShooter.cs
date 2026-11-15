@@ -46,6 +46,7 @@ namespace KokoSim.Unity.Home
             Application.runInBackground = true;
             Directory.CreateDirectory(Dir);
             NewTeamService.Clear();     // 指名モーダルが先に出てノベルが隠れるのを避ける
+            UniformNumberService.Clear();   // 背番号決定待ち（issue #954）も畳む
 
             foreach (var c in Cases)
             {

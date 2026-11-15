@@ -31,12 +31,16 @@ public static class SeasonTransitions
     /// 週 <paramref name="week"/> に入った直後の遷移を返す。大会開幕週なら種別を、新チーム発足週なら
     /// 引退＋暫定主将選出（<see cref="RosterLifecycle.OnWeekEntered"/>）を含める。夏の大会（第15週）と
     /// 引退（第18週）は別週なので、同一週に両方が同時に立つことはない。
+    ///
+    /// <para><paramref name="newTeamAlreadyStarted"/>＝その年度の新チームを夏の敗退直後にもう発足させている
+    /// （issue #954・<see cref="SummerRetirement"/>）。そのときの第18週は安全網として何もしない＝引退も
+    /// 暫定主将の選び直しもしない（指名済みの主将を上書きせず、指名を二度開かない）。既定 false＝従来一致。</para>
     /// </summary>
     public static SeasonWeekTransition OnWeekEntered(
-        IReadOnlyList<DevelopingPlayer> roster, int week, SeasonCalendar calendar)
+        IReadOnlyList<DevelopingPlayer> roster, int week, SeasonCalendar calendar, bool newTeamAlreadyStarted = false)
     {
         var tournament = calendar.TournamentStartingAt(week);
-        var newTeam = RosterLifecycle.OnWeekEntered(roster, week, calendar);
+        var newTeam = newTeamAlreadyStarted ? null : RosterLifecycle.OnWeekEntered(roster, week, calendar);
         return new SeasonWeekTransition(tournament, newTeam);
     }
 }

@@ -170,6 +170,8 @@ events:
           - who: team_manager
             say: "順位はどうでも、行けるかどうかですね。"
 
+  # 卒業式＝「送り出す」場面（issue #954）。引退の場面（土の持ち帰り・背番号の返上・最後のミーティング）は
+  # 夏の敗退直後の summer_retirement_* へ移した＝背番号は夏に返上済みなので、ここで返しに来ない。
   - id: graduation
     kind: Fixed
     calendar_week: 49
@@ -177,23 +179,39 @@ events:
     variants:
       - lines:
           - who: narration
-            say: "卒業式。三年生が、最後にグラウンドへ寄っていった。"
+            say: "卒業式のあと、三年生がグラウンドへ寄っていった。引退してから半年ぶりのグラウンドだ。"
           - who: player
+            name: "三年生"
             say: "……監督。ありがとうございました。"
-          - who: manager
-            say: "こちらこそ。元気でな。"
+          - who: player
+            name: "一年生"
+            say: "先輩、第二ボタンください！"
+          - who: player
+            name: "三年生"
+            say: "野球部の第二ボタンって、もらってどうするの？"
       - lines:
+          - who: team_manager
+            say: "卒業おめでとうございます。花束は部費で買いました。領収書もあります。"
+          - who: player
+            name: "三年生"
+            say: "それ今言わなくてよくない？"
           - who: captain
-            say: "この土、持って帰っていいですか。"
-          - who: team_manager
-            say: "好きなだけ持っていっていいですよ。来週には均されちゃいますから。"
+            say: "先輩方、一列に並んでください。在校生から一言ずつあります。"
+          - who: narration
+            say: "一言のはずが、だいたい三言になった。"
       - lines:
           - who: narration
-            say: "背番号を返しに来た三年生の手が、少しだけ震えていた。"
+            say: "卒業式の日の放課後。三年生が、後輩の練習をネット裏から眺めていた。"
+          - who: player
+            name: "三年生"
+            say: "キャッチボール、俺らの頃よりうまくない？"
           - who: team_manager
-            say: "三年間、よく続けましたね。"
+            say: "先輩方が見てないところで、ずっと練習してましたから。"
+          - who: player
+            name: "三年生"
+            say: "見てるところでやってよ。"
           - who: narration
-            say: "返事の代わりに、深く頭を下げた。"
+            say: "春から、それぞれ別の場所へ行く。グラウンドの声は、いつもどおりだった。"
 
   # --- ランダムイベント（重み付き抽選） ---
   - id: rain_week
@@ -1073,6 +1091,104 @@ events:
             say: "謝ることじゃない。"
           - who: captain
             say: "そうだぞ。呼ばれるところまで来たんだ。"
+
+  # 夏の敗退直後の3年引退（issue #954）。終わり方の3通りで会話を分ける（優勝の年に敗戦の台詞を出さない）。
+  # 呼び出し元は大会の後始末（HomeState.DismissResult）。この会話を読んだあとに主将指名 → 背番号決定へ進む。
+  - id: summer_retirement_prefecture
+    kind: System
+    text: "夏の県予選で敗退。3年生が引退した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "試合のあと、ベンチの前。三年生が、誰に言われるでもなく球場の土を袋に詰めはじめた。"
+          - who: player
+            name: "三年生"
+            say: "この土、持って帰っていいですか。"
+          - who: team_manager
+            say: "いいですけど、県営球場の土ですよ。ご利益は県の中だけです。"
+          - who: player
+            name: "三年生"
+            say: "十分です。"
+          - who: narration
+            say: "背番号を外した三年生は、少しだけ身軽そうに見えた。"
+      - lines:
+          - who: narration
+            say: "最後のミーティング。三年生が一人ずつ、背番号を返しに来た。"
+          - who: player
+            name: "三年生"
+            say: "アイロンはかけてきました。ほつれも自分で直しました。"
+          - who: team_manager
+            say: "直したところ、ガタガタですね。……三年分の味ってことにしておきます。"
+          - who: player
+            name: "二年生"
+            say: "先輩、明日も練習来ていいですからね。"
+          - who: player
+            name: "三年生"
+            say: "受験生にそれ言う？"
+          - who: narration
+            say: "最後のミーティングは、だいたい笑って終わった。"
+
+  - id: summer_retirement_koshien
+    kind: System
+    text: "甲子園で敗退。3年生が引退した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "甲子園のベンチの前。三年生がしゃがみこんで、黒い土をかき集めている。"
+          - who: player
+            name: "三年生"
+            say: "これ、どのくらい持って帰っていいんですかね。"
+          - who: team_manager
+            say: "袋一つまでです。ポケットに入れてるのも見えてますよ。"
+          - who: player
+            name: "三年生"
+            say: "……ばれてた。"
+          - who: narration
+            say: "宿舎へ戻るバスの中、三年生の靴からは、ずっと甲子園の砂がこぼれていた。"
+      - lines:
+          - who: narration
+            say: "宿舎での最後のミーティング。背番号が一枚ずつ、机の上に戻ってきた。"
+          - who: player
+            name: "三年生"
+            say: "甲子園の土がしみ込んでるんで、このまま返していいですか。"
+          - who: team_manager
+            say: "きれいにしてから返してください。"
+          - who: player
+            name: "二年生"
+            say: "先輩たちの続き、来年もここでやりますから。"
+          - who: narration
+            say: "背番号は結局、全部きれいになってから返ってきた。"
+
+  - id: summer_retirement_champion
+    kind: System
+    text: "甲子園で優勝。3年生が最後まで勝って引退した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "閉会式のあと。三年生が、ベンチの前で土を袋に詰めている。"
+          - who: player
+            name: "三年生"
+            say: "勝った年も、土って持って帰っていいんでしたっけ。"
+          - who: team_manager
+            say: "いいと思います。負けた人より堂々と持って帰ってください。"
+          - who: player
+            name: "二年生"
+            say: "先輩、来年の分も少し残しておいてください。"
+          - who: narration
+            say: "最後まで一度も負けなかった夏が、こうして終わった。"
+      - lines:
+          - who: narration
+            say: "宿舎での最後のミーティング。三年生が、優勝した背番号を一枚ずつ返しに来た。"
+          - who: player
+            name: "三年生"
+            say: "これ、額に入れて飾るとかじゃないんですか。"
+          - who: team_manager
+            say: "来年も使うんです。次に着る子が泣いて喜びますよ。"
+          - who: player
+            name: "二年生"
+            say: "プレッシャーしかないです。"
+          - who: narration
+            say: "負けずに引退した三年生たちは、最後まで少し落ち着かない顔をしていた。"
 
   # 夏の甲子園（設計書05 §1.1a）。県大会を勝ち抜いた直後に、激励金 → 抽選会 の順で出る。
   # どちらも効果の数値は yaml に書かない＝呼び出し元（KoshienEntry）が実際に動いた額・

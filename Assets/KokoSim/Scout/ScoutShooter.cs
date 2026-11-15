@@ -94,6 +94,7 @@ namespace KokoSim.Unity.Scout
                 GameClock.Advance(1);
                 if (GameSession.Current.Mode != GameMode.Normal) GameSession.Current.ResetForNewGame();
                 NewTeamService.Clear();   // 主将指名モーダルを開いたままにしない
+                UniformNumberService.Clear();   // 背番号決定待ち（issue #954）も畳む
                 yield return null;
             }
         }

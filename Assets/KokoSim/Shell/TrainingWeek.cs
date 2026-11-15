@@ -68,7 +68,8 @@ namespace KokoSim.Unity.Shell
         public static void Apply(
             DevelopingPlayer p, int week, double extraMult = 1.0, IReadOnlyList<DevelopingPlayer>? roster = null)
         {
-            if (!Calendar.CanTrain(p.Grade, week)) return;
+            // 夏の敗退直後に引退した3年（issue #954）は第18週を待たずに練習から外れる。
+            if (p.IsRetired || !Calendar.CanTrain(p.Grade, week)) return;
 
             var plan = p.Plan ?? TrainingPlan.Default;   // 未設定は全員バランス型（issue #680）
             var alloc = TrainingPresets.Resolve(plan, Budget);

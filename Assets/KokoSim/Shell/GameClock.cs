@@ -93,7 +93,10 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         private static void EnterWeek()
         {
-            var t = SeasonTransitions.OnWeekEntered(RosterService.Roster, Week, Calendar);
+            // 夏の敗退直後に新チームを発足させた年（issue #954・SummerRetirementService）は、第18週の引退は
+            // 安全網として素通りする（指名済みの主将を自動選出で上書きせず、指名モーダルを二度開かない）。
+            var t = SeasonTransitions.OnWeekEntered(RosterService.Roster, Week, Calendar,
+                newTeamAlreadyStarted: NewTeamService.IsStartedThisYear);
 
             // チームの結束の上下（設計書23 §3.3・issue #934）: 週ごとに10%戻し、合宿の週なら上乗せする。
             GameSession.Current.AdvanceCohesionWeek(Week, Calendar);
@@ -155,12 +158,17 @@ namespace KokoSim.Unity.Shell
             // 観るだけのセンバツ（自校が選ばれていない年）を1週ぶん進める（AdvanceSpectatedKoshien と同型）。
             GameSession.Current.AdvanceSpectatedSenbatsu(7);
 
-            // 新チーム発足（夏の3年引退の翌週）: 主将指名の導線（NewTeamService）を開き、AI校も代替わりさせる。
+            // 新チーム発足（夏の3年引退の翌週）: 自校がまだ発足していなければ主将指名の導線（NewTeamService）を
+            // 開く（安全網。通常は夏の敗退直後に SummerRetirementService が済ませている・issue #954）。
             if (t.NewTeam != null)
             {
                 NewTeamService.Open(t.NewTeam);
                 // 引退で枠の大半が穴になった前チームのスタメンは捨てる＝初試合は背番号どおりの既定で組む（issue #955）。
                 GameSession.Current.LastLineup = null;
+            }
+            // AI校の代替わりは第18週のまま（自校の発足時期とは無関係。全国裏試合の完了待ちと結びついている）。
+            if (CaptainSelector.IsNewTeamStartWeek(Week, Calendar))
+            {
                 // AI校も夏後に代替わり: 進行中の全国裏試合を完了させてから3年生を引退させる（#80・秋は下級生のみ）。
                 NationBackgroundSim.EnsureCompleted();
                 BracketFinishSim.EnsureCompleted();   // issue #529: 同じロスターを読むため同様に完了を待つ。

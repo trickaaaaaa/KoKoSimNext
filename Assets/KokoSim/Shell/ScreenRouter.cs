@@ -69,6 +69,12 @@ namespace KokoSim.Unity.Shell
         // タイトルへ弾き返され、押しても無反応にしか見えなかった。定数を用途ごとに分ける。
         private const string HomeScreen = "HomeDashboard";
 
+        /// <summary>
+        /// 新チームの背番号決定（issue #954・案C）の画面。主将指名の確定後にここへ直行し、確定するまで
+        /// 他の画面へ出られない（<see cref="UniformNumberService.Pending"/> の間、ナビの遷移を握りつぶす）。
+        /// </summary>
+        public const string UniformNumberScreen = "MemberSetting";
+
         // ホーム以外で「今週を進める」を持つ画面。ここで引退週／大会開幕週に入ったら、主将指名モーダル／
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
@@ -109,6 +115,23 @@ namespace KokoSim.Unity.Shell
                 && (NewTeamService.Pending || GameSession.Current.BannerPending || ManagerTransferService.Pending)
                 && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
                 _pending = HomeScreen;
+
+            // 新チームの背番号決定待ち（issue #954）: 主将指名が済んでいれば、ホーム・週を進められる画面から
+            // メンバー設定画面へ直行させ、確定するまでそこから出さない（ナビのクリックを握りつぶす）。
+            // 主将指名がまだなら先にホームで指名させる（上の回送が先）。
+            if (UniformNumberService.Pending && !NewTeamService.Pending)
+            {
+                if (_current == UniformNumberScreen)
+                {
+                    if (_pending != null && _pending != UniformNumberScreen) _pending = null;
+                }
+                else if (_pending == null
+                         && (_current == HomeScreen || System.Array.IndexOf(WeekAdvancers, _current) >= 0))
+                    _pending = UniformNumberScreen;
+                else if (_pending != null && _pending != UniformNumberScreen
+                         && System.Array.IndexOf(WeekAdvancers, _pending) >= 0)
+                    _pending = UniformNumberScreen;
+            }
 
             if (_pending == null) return;
             var target = _pending;

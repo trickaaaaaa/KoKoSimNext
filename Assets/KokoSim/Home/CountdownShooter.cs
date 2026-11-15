@@ -41,10 +41,12 @@ namespace KokoSim.Unity.Home
             {
                 GameClock.Reset();
                 NewTeamService.Clear();
+                UniformNumberService.Clear();   // 背番号決定待ち（issue #954）も畳む
                 GameClock.Advance(t.Week);
                 // 引退週(17)以降は次期主将の指名待ちでホームがモーダルに覆われる。撮りたいのは
                 // トップバーなので、待ちが立っていたら先頭候補で確定して素のホームへ戻す。
                 if (NewTeamService.Pending) NewTeamService.Confirm(0);
+                UniformNumberService.Clear();   // 主将の次の背番号決定（issue #954）へ飛ばない
                 // 週送りで大会開幕週(13/23)を跨ぐと大会モードへ入り、以後 GameSession は戻らない
                 // ＝ホームが「次戦まで N日」の大会ビューになる。本 issue で見たいのは**通常週**の
                 // カウントダウンなので、進めた後に通常モードへ戻す（撮影用の細工）。

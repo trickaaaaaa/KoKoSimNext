@@ -37,6 +37,7 @@ namespace KokoSim.Unity.Home
             GameClock.Reset();          // 週0＝入学式（固定イベント）。抽選を通さず必ず出る
             EventService.Clear();
             NewTeamService.Clear();     // 引退週（週18）を踏むと指名モーダルが先に出てノベルが隠れる
+            UniformNumberService.Clear();   // 背番号決定待ち（issue #954）も畳む
             Debug.Log("[EV] table=" + EventTableProvider.Events.Count + " 件"
                 + " roster=" + RosterService.Active.Count);
 

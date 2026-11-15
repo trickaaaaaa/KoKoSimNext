@@ -1183,4 +1183,34 @@ public sealed class SaveCodecTests
                 Assert.Equal(p.GrowthType, p.GrowthTypeFor(k));
         }
     }
+
+    /// <summary>
+    /// 背番号決定待ち（issue #954・v33）と新チームを発足させた年度が往復すること。
+    /// 旧セーブ（v32以前）は背番号決定待ちなし。発足年度は「第18週を過ぎていればその年度」で補う
+    /// （第18週の固定フックは通過済み＝二度と発足させない側に倒す）。
+    /// </summary>
+    [Fact]
+    public void UniformNumberPending_RoundTrips_AndV32SaveMigrates()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.True(s.UniformNumberPending);
+        Assert.Equal(2, s.NewTeamStartedYear);
+
+        var cal = new SeasonCalendar();
+        foreach (var (week, expected) in new[] { (cal.SummerRetireWeek, 0), (cal.SummerRetireWeek + 1, state.YearIndex) })
+        {
+            var v32 = Regex.Replace(json, "\"uniformNumberPending\":(true|false),", "");
+            v32 = Regex.Replace(v32, "\"newTeamStartedYear\":-?[0-9]+,", "");
+            v32 = new Regex("\"week\":[0-9]+,").Replace(v32, $"\"week\":{week},", 1);   // 先頭の暦の週だけ
+            v32 = v32.Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":32");
+            Assert.DoesNotContain("uniformNumberPending", v32);
+            Assert.DoesNotContain("newTeamStartedYear", v32);
+
+            Assert.True(SaveCodec.TryDeserialize(v32, out var old, out var err2), err2);
+            Assert.False(old.UniformNumberPending);
+            Assert.Equal(expected, old.NewTeamStartedYear);
+        }
+    }
 }

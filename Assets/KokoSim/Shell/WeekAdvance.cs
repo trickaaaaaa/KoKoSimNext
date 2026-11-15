@@ -15,6 +15,12 @@ namespace KokoSim.Unity.Shell
         /// <summary>側画面の「今週を進める」共通処理。<paramref name="render"/> は進週後の再描画（省略可）。</summary>
         public static void FromSideScreen(System.Action render)
         {
+            // 新チームの背番号を確定するまでは週を進めない（issue #954）。メンバー設定画面へ戻す。
+            if (UniformNumberService.Pending)
+            {
+                ScreenRouter.Instance?.ShowDeferred(ScreenRouter.UniformNumberScreen);
+                return;
+            }
             if (GameSession.Current.InTournament)
             {
                 ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
