@@ -349,7 +349,7 @@ public sealed record FieldingCoefficients
     /// <summary>フェンスに達した打球の跳ね返り処理に要する追加時間[s]（カロムの方向は当面無視）。
     /// 壁際での回収は「フェンスに当たってからこの秒数後」より早くならない（<see cref="ExtraBaseResolver.Retrieve"/>）。
     /// issue #976 追補まで、野手が先に壁際へ着いていると当たった瞬間に拾えてしまい、この秒は判定に乗っていなかった。</summary>
-    public double FenceCaromSeconds { get; init; } = 0.40;
+    public double FenceCaromSeconds { get; init; } = 1.00;
 
     /// <summary>
     /// フェンスの反発係数（issue fence-carom-and-over-the-head-cues）。跳ね返り初速＝

@@ -292,6 +292,15 @@ public static class GameEngine
     /// バッチ Play はこれを drain するだけ。yield は乱数を消費しないので、drain 結果は従来 Play と一致する。
     /// 将来は打席途中（投球単位のサイン・伝令）へ境界を細分化できるよう GameStep を拡張する。
     /// </summary>
+    /// <summary>打順のパワーの平均（表示能力・敵AIの外野後退の相対基準用。issue #976 追補）。乱数不使用。</summary>
+    private static double MeanPower(IReadOnlyList<Player> lineup)
+    {
+        if (lineup.Count == 0) return 0.0;
+        var sum = 0;
+        foreach (var p in lineup) sum += p.Power;
+        return (double)sum / lineup.Count;
+    }
+
     public static IEnumerable<GameStep> Steps(GameProgress p)
     {
         var ctx = p.Ctx;
@@ -698,7 +707,10 @@ public static class GameEngine
                     inning, ctx.RegulationInnings, outs, offense.Runs - defense.Runs,
                     bases.First, bases.Second, bases.Third, batter, currentPitcher, defense.Catcher,
                     pressureIdx, defense.PitcherRattled,
-                    offense.OffenseTimeoutsLeft, defense.DefenseTimeoutsLeft, tieBreak);
+                    offense.OffenseTimeoutsLeft, defense.DefenseTimeoutsLeft, tieBreak)
+                {
+                    OffenseLineupMeanPower = MeanPower(offense.CurrentLineup),
+                };
 
                 if (defense.Tactics is not null)
                 {

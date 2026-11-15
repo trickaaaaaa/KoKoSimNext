@@ -140,6 +140,13 @@ public sealed record TacticsCoefficients
     /// <summary>この点差以内で守っている（0=同点/負け含む）とき前進守備を考える。</summary>
     public int InfieldInMaxLead { get; init; } = 1;
     public int OutfieldDeepMinPower { get; init; } = 72;
+    /// <summary>
+    /// 外野後退の相対基準（issue #976 追補・オーナー決定 2026-11-15 ①）: 打者のパワーが <see cref="OutfieldDeepMinPower"/> 以上
+    /// <b>かつ</b> その打線の平均（<see cref="TacticsSituation.OffenseLineupMeanPower"/>）＋これ 以上のときだけ外野を下げる。
+    /// 強打者ぞろいの打線（各県の最強校＝打者の81%がパワー72以上）に全打席で後退していたのを、その打線の中で抜けた
+    /// 強打者だけに絞る。平均的な打線（平均≈50）では 72 の絶対基準がそのまま効く。0以下＝相対基準なし（従来）。
+    /// </summary>
+    public double OutfieldDeepAboveLineupMean { get; init; } = 10.0;
     public int ControlFirstMaxControl { get; init; } = 38;
     public int KeepLowMinPower { get; init; } = 75;
     /// <summary>ギア「飛ばせ」: 残りイニング数がこの値以下＋接戦＋得点圏。</summary>
@@ -222,7 +229,8 @@ public sealed record TacticsCoefficients
     public double InfieldInFactor { get; init; } = 0.82;
     public double InfieldDeepFactor { get; init; } = 1.12;
     public double OutfieldInFactor { get; init; } = 0.88;
-    public double OutfieldDeepFactor { get; init; } = 1.10;
+    /// <summary>外野後退の深さ（標準位置からの距離の倍率）。issue #976 追補（オーナー決定 ②）で 1.10→1.05。</summary>
+    public double OutfieldDeepFactor { get; init; } = 1.05;
     /// <summary>バントシフト: 一・三塁手が本塁方向へチャージする距離倍率。</summary>
     public double BuntShiftCornerChargeFactor { get; init; } = 0.60;
 

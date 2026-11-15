@@ -92,7 +92,11 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             : DefenseDepth.Normal;
 
         // 外野: 強打者に後退、最終回同点で決勝走者が二塁なら前進（本塁バックアップ）。
-        var outfield = s.Batter.Power >= _c.OutfieldDeepMinPower ? DefenseDepth.Deep
+        // 強打者は絶対基準（OutfieldDeepMinPower）と、打線の中で抜けているか（相対基準・issue #976 追補）の両方で見る。
+        var slugger = s.Batter.Power >= _c.OutfieldDeepMinPower
+                      && (_c.OutfieldDeepAboveLineupMean <= 0.0 || s.OffenseLineupMeanPower <= 0.0
+                          || s.Batter.Power >= s.OffenseLineupMeanPower + _c.OutfieldDeepAboveLineupMean);
+        var outfield = slugger ? DefenseDepth.Deep
             : s.Inning >= s.RegulationInnings && s.ScoreDiff == 0 && s.OnSecond is not null ? DefenseDepth.In
             : DefenseDepth.Normal;
 

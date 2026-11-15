@@ -197,9 +197,13 @@ public static class CoefficientsLoader
         public double ArmScale { get; set; } = D.ArmScale;
         public double RunningScale { get; set; } = D.RunningScale;
         public double PitchingScale { get; set; } = D.PitchingScale;
+        public double OutfieldDefenseTopKnee { get; set; } = D.OutfieldDefenseTopKnee;
+        public double OutfieldDefenseTopSlope { get; set; } = D.OutfieldDefenseTopSlope;
 
         public KokoSim.Engine.Players.AbilityEffectCoefficients ToModel() => new()
         {
+            OutfieldDefenseTopKnee = OutfieldDefenseTopKnee,
+            OutfieldDefenseTopSlope = OutfieldDefenseTopSlope,
             Pivot = Pivot,
             BattingScale = BattingScale,
             FieldingScale = FieldingScale,
@@ -2219,6 +2223,7 @@ public static class CoefficientsLoader
         public int InfieldInFromInning { get; set; } = D.InfieldInFromInning;
         public int InfieldInMaxLead { get; set; } = D.InfieldInMaxLead;
         public int OutfieldDeepMinPower { get; set; } = D.OutfieldDeepMinPower;
+        public double OutfieldDeepAboveLineupMean { get; set; } = D.OutfieldDeepAboveLineupMean;
         public int ControlFirstMaxControl { get; set; } = D.ControlFirstMaxControl;
         public int KeepLowMinPower { get; set; } = D.KeepLowMinPower;
         public int GearPushInningsLeft { get; set; } = D.GearPushInningsLeft;
@@ -2360,6 +2365,7 @@ public static class CoefficientsLoader
             InfieldInFromInning = InfieldInFromInning,
             InfieldInMaxLead = InfieldInMaxLead,
             OutfieldDeepMinPower = OutfieldDeepMinPower,
+            OutfieldDeepAboveLineupMean = OutfieldDeepAboveLineupMean,
             ControlFirstMaxControl = ControlFirstMaxControl,
             KeepLowMinPower = KeepLowMinPower,
             GearPushInningsLeft = GearPushInningsLeft,

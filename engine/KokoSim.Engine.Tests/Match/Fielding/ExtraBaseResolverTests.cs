@@ -39,7 +39,8 @@ public sealed class ExtraBaseResolverTests
         var gap = Resolve(LeftCenterGapDeg);
         var atFielder = Resolve(AtLeftFielderDeg);
 
-        Assert.Equal(BattedBallResult.Double, gap);
+        // 間を抜けた側は長打（issue #976 追補で壁際の跳ね返りの秒 1.0 が判定に乗り、この打球は三塁打になった）。
+        Assert.Contains(gap, new[] { BattedBallResult.Double, BattedBallResult.Triple });
         Assert.Equal(BattedBallResult.Single, atFielder);
     }
 

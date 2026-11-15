@@ -56,11 +56,28 @@ public sealed record AbilityEffectCoefficients
     /// </summary>
     public double PitchingScale { get; init; } = 0.50;
 
+    /// <summary>
+    /// 外野手の守備の上位の頭打ち（issue #976 追補・オーナー決定 2026-11-15 ③）: <b>外野手</b>の守備3能力（守備/捕球/送球精度）は
+    /// 表示Lvがこの膝を超えた分を <see cref="OutfieldDefenseTopSlope"/> 倍に寝かせてから <see cref="FieldingScale"/> を掛ける
+    /// （<see cref="OutfieldFielding(int)"/>・上位ほど伸びが逓減）。各県の最強校の外野手（表示Lv 85〜90）が壁際の打球を一瞬で処理し、
+    /// 夏の甲子園の三塁打が 0.03% だった（外野の守備系を神奈川並みに落とすと 2.98%）。内野手は対象外（名手の握り替えの速さ＝#765 を保つ）。
+    /// 肩は送球の km/h で語る量（#764）なので寝かせない。膝より下は従来と1ビット一致。0以下＝無効。
+    /// </summary>
+    public double OutfieldDefenseTopKnee { get; init; } = 70.0;
+    /// <summary>外野手の守備3能力の膝より上の傾き（1＝恒等）。<see cref="OutfieldDefenseTopKnee"/> 参照。</summary>
+    public double OutfieldDefenseTopSlope { get; init; } = 0.5;
+
     /// <summary>恒等（従来と1ビット一致）。テストと非物理経路の既定。</summary>
-    public static readonly AbilityEffectCoefficients Identity = new() { BattingScale = 1.0, FieldingScale = 1.0, ArmScale = 1.0, RunningScale = 1.0, PitchingScale = 1.0 };
+    public static readonly AbilityEffectCoefficients Identity = new()
+    {
+        BattingScale = 1.0, FieldingScale = 1.0, ArmScale = 1.0, RunningScale = 1.0, PitchingScale = 1.0,
+        OutfieldDefenseTopKnee = 0.0,
+    };
 
     public int Batting(int lv) => Scale(lv, BattingScale);
     public int Fielding(int lv) => Scale(lv, FieldingScale);
+    /// <summary>外野手の守備3能力の効き（上位の頭打ち＋<see cref="FieldingScale"/>）。<see cref="OutfieldDefenseTopKnee"/> 参照。</summary>
+    public int OutfieldFielding(int lv) => Scale(TopKnee(lv, OutfieldDefenseTopKnee, OutfieldDefenseTopSlope), FieldingScale);
     public int Arm(int lv) => Scale(lv, ArmScale);
     public int Running(int lv) => Scale(lv, RunningScale);
     public int Pitching(int lv) => Scale(lv, PitchingScale);
@@ -99,6 +116,13 @@ public sealed record AbilityEffectCoefficients
             Repertoire = rep ?? p.Repertoire,
             ReactionVelocityOffsetKmh = PitchingKmh(p.MaxVelocityKmh) - p.MaxVelocityKmh,
         };
+    }
+
+    /// <summary>表示Lvの上位の頭打ち（膝より上を slope 倍）。膝0以下・傾き1は恒等（整数のまま返す＝従来と1ビット一致）。</summary>
+    private static int TopKnee(int lv, double knee, double slope)
+    {
+        if (knee <= 0.0 || slope == 1.0 || lv <= knee) return lv;
+        return (int)Math.Round(knee + slope * (lv - knee));
     }
 
     private int Scale(int lv, double s)
