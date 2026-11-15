@@ -188,6 +188,23 @@ namespace KokoSim.Unity.Audio
             }
         }
 
+        /// <summary>
+        /// <c>GetData</c> の前に波形を読み込む。素材は Preload Audio Data オフ（.meta の preloadAudioData: 0）なので、
+        /// <c>Resources.Load</c> 直後は Unloaded のまま＝従来は <c>PlayScheduled</c> が再生時に読んでいたが、
+        /// つなぐには再生前に中身が要る。素材は Load In Background オフ（Decompress On Load）なので
+        /// <c>LoadAudioData</c> はその場で読み終わる（同期）。素材は Git 管理外で .meta を直せないためコードで読む。
+        /// 誰かが Load In Background をオンにして読み込み中のまま返ってきた場合は、今回は鳴らさずに警告する
+        /// （読み込みは裏で進むので次の打席からは鳴る）。
+        /// </summary>
+        private static bool EnsureLoaded(AudioClip clip)
+        {
+            if (clip.loadState == AudioDataLoadState.Loaded) return true;
+            if (clip.loadState != AudioDataLoadState.Loading) clip.LoadAudioData();
+            if (clip.loadState == AudioDataLoadState.Loaded) return true;
+            Debug.LogWarning($"[MatchAnnouncer] 部品の波形がまだ読み込まれていないので放送を鳴らさない: {clip.name} (loadState={clip.loadState})");
+            return false;
+        }
+
         private static AudioClip Merge(List<AudioClip> clips, out float voiceSeconds)
         {
             voiceSeconds = 0f;
@@ -198,7 +215,12 @@ namespace KokoSim.Unity.Audio
             int voiceFrames = 0;
             for (var i = 0; i < clips.Count; i++)
             {
-                if (clips[i].channels != ch || clips[i].frequency != hz) return null;
+                if (clips[i].channels != ch || clips[i].frequency != hz)
+                {
+                    Debug.LogWarning($"[MatchAnnouncer] 部品の形式が揃っていないので放送を鳴らさない: {clips[i].name} ({clips[i].channels}ch/{clips[i].frequency}Hz) vs {first.name} ({ch}ch/{hz}Hz)");
+                    return null;
+                }
+                if (!EnsureLoaded(clips[i])) return null;
                 voiceFrames += clips[i].samples + (i + 1 < clips.Count ? gap : 0);
             }
             var data = new float[(voiceFrames + tail) * ch];
@@ -206,7 +228,11 @@ namespace KokoSim.Unity.Audio
             for (var i = 0; i < clips.Count; i++)
             {
                 var part = new float[clips[i].samples * ch];
-                if (!clips[i].GetData(part, 0)) return null;
+                if (!clips[i].GetData(part, 0))
+                {
+                    Debug.LogWarning($"[MatchAnnouncer] 部品の波形を読めないので放送を鳴らさない: {clips[i].name} (loadState={clips[i].loadState}, loadType={clips[i].loadType})");
+                    return null;
+                }
                 System.Array.Copy(part, 0, data, at, part.Length);
                 at += part.Length + (i + 1 < clips.Count ? gap * ch : 0);
             }
