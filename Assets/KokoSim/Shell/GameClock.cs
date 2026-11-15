@@ -98,6 +98,10 @@ namespace KokoSim.Unity.Shell
             var t = SeasonTransitions.OnWeekEntered(RosterService.Roster, Week, Calendar,
                 newTeamAlreadyStarted: NewTeamService.IsStartedThisYear);
 
+            // 成長推移（設計書06 §3.2・issue #1027）: 月の頭に部員の能力を1点残す。観測だけ＝乱数・能力に触れない。
+            // 引退フラグ（上の OnWeekEntered）の後に呼ぶ＝引退した週の3年生は引退時の値で線を閉じる。
+            AbilityHistory.OnWeekEntered(RosterService.Roster, Week, Calendar);
+
             // チームの結束の上下（設計書23 §3.3・issue #934）: 週ごとに10%戻し、合宿の週なら上乗せする。
             GameSession.Current.AdvanceCohesionWeek(Week, Calendar);
 

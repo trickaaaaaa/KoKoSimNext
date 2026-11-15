@@ -3000,3 +3000,36 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
     background-color: var(--sf-card);
 }
 .choice-btn:active { background-color: var(--sf-card); }
+
+/* ===== GrowthChart（成長推移の折れ線・issue #1027） =====
+   左＝描画面（縦軸の目盛り＋線）、下＝学年の区切り、右＝凡例（色見本＋名前＋今の値）。
+   線の色は凡例の色見本の背景色を C# が読む＝色はここ（tokens.uss の練習メニュー色）だけで決める。 */
+.gchart { flex-direction: row; flex-grow: 1; align-self: stretch; padding: 18px 14px 8px 4px; }
+.gchart__main { flex-grow: 1; flex-basis: 0; flex-direction: column; }
+.gchart__body { flex-grow: 1; flex-direction: row; min-height: 140px; }
+.gchart__yaxis { width: 34px; flex-shrink: 0; }
+.gchart__y {
+    position: absolute; right: 6px;
+    font-size: var(--fs-cap); color: var(--color-faint);
+    -unity-text-align: middle-right; margin: 0; padding: 0;
+}
+.gchart__plot { flex-grow: 1; color: var(--color-line); }   /* color＝グリッド線の色 */
+.gchart__xaxis { flex-direction: row; margin-left: 34px; margin-top: 4px; flex-shrink: 0; }
+.gchart__x { flex-grow: 1; flex-basis: 0; font-size: var(--fs-cap); color: var(--color-faint); margin: 0; padding: 0 0 0 4px; }
+.gchart__legend { width: 150px; flex-shrink: 0; margin-left: 12px; justify-content: center; }
+.gchart__lg { flex-direction: row; align-items: center; height: 26px; }
+.gchart__sw { width: 14px; height: 3px; margin-right: 8px; flex-shrink: 0; }
+.gchart__lg-name { flex-grow: 1; font-size: var(--fs-cap); color: var(--color-muted); margin: 0; padding: 0; }
+.gchart__lg-val { font-size: var(--fs-cap); color: var(--color-chalk); -unity-text-align: middle-right; margin: 0; padding: 0; }
+.gchart__sw--batting    { background-color: var(--tm-batting); }
+.gchart__sw--power      { background-color: var(--tm-power); }
+.gchart__sw--discipline { background-color: var(--tm-discipline); }
+.gchart__sw--velocity   { background-color: var(--tm-velocity); }
+.gchart__sw--pitching   { background-color: var(--tm-pitching); }
+.gchart__sw--running    { background-color: var(--tm-running); }
+.gchart__sw--breaking   { background-color: var(--tm-breaking); }
+.gchart__sw--strength   { background-color: var(--tm-strength); }
+.gchart__sw--baserun    { background-color: var(--tm-baserun); }
+.gchart__sw--throwing   { background-color: var(--tm-throwing); }
+.gchart__sw--defense    { background-color: var(--tm-defense); }
+.gchart__sw--defpos     { background-color: var(--tm-defpos); }

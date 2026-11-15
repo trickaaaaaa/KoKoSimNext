@@ -111,23 +111,32 @@
             </ui:VisualElement>
           </ui:VisualElement>
 
-          <!-- ===== レーダー / 成長推移 / 隠しパラメータ ===== -->
+          <!-- ===== レーダー / 隠しパラメータ ===== -->
           <ui:VisualElement class="pd2-row">
             <ui:VisualElement class="card card--radar">
               <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="能力バランス" /></ui:VisualElement>
               <ui:VisualElement name="radar" class="pd2-radar" />
             </ui:VisualElement>
             <ui:VisualElement class="card card--col">
-              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="成長推移" /></ui:VisualElement>
-              <ui:VisualElement name="growth" class="pd2-growth">
-                <ui:Label class="pd2-empty" text="成長履歴は次シーズンから記録されます" />
-              </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:VisualElement class="card card--hidden">
               <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="隠しパラメータ（推定）" /></ui:VisualElement>
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="hidden-list" />
               </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <!-- ===== 成長推移（issue #1027・3年間を横に読むので1行を占める） ===== -->
+          <ui:VisualElement class="pd2-row">
+            <ui:VisualElement class="card card--col">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="成長推移" />
+                <ui:VisualElement class="pd2-scope pd2-scope--hd">
+                  <ui:Label name="growth-tab-batting" class="pd2-scope__item pd2-scope__item--on" text="打撃" />
+                  <ui:Label name="growth-tab-pitching" class="pd2-scope__item" text="投手" />
+                  <ui:Label name="growth-tab-defense" class="pd2-scope__item" text="守備・走塁" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+              <ui:VisualElement name="growth" class="pd2-growth" />
             </ui:VisualElement>
           </ui:VisualElement>
 

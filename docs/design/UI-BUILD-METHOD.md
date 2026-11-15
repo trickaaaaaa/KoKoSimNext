@@ -124,6 +124,7 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `ConditionFace.SetEstimated` | 調子の推定表示（顔の色55%＋同系色の点線の縁）。相手校の選手（`MatchLiveStatsProvider.IsConditionEstimated`）に使う |
 | `SbkField` / `SbkFieldSuffix` | 入力欄（`.sbk-field` を TextField / DropdownField に付ける＝白地＋淡い1px枠）と、その右に固定表示する接尾（`.sbk-field-suffix`・校名欄の「高校」を明朝で）。校名の編集（issue #946）で新規作成画面の入力欄から辞書化 |
 | `SchoolAccent` | スクールカラー（`acc-fg/bg/bd/bd-top` の付いた要素へ流し込む）。使うのは比較表の自チーム側とオーダー画面だけ |
+| `GrowthChart` | 成長推移の折れ線（`GrowthChartView`・`.gchart`・issue #1027）。左に目盛り＋線、下に区切りラベル、右に凡例（色見本＋名前＋今の値）。**線の色は凡例の色見本（`.gchart__sw--*`＝`--tm-*`）の解決済み背景色を読む**＝C# に色を持たない。横軸は呼び出し側が渡す区切りで等分（選手詳細では「1年／2年／3年」） |
 | `ChoiceButton` | 同じ重みの選択肢1つ（`UiComponents.ChoiceButton`・`.choice-btn`）。白地＋墨1px枠、hover／選択は墨2px。応援団赤は使わない・確率や説明文は添えない。イベントの3択（issue #945）は会話ボックスの中に縦並び（`.ev__choices`） |
 
 - 主ボタンは応援団赤（`--color-cta`）のまま・文字は白

@@ -117,6 +117,8 @@ namespace KokoSim.Unity.Players
         public List<AbilityBar> PitcherAbilities = new List<AbilityBar>();
         public List<AbilityBar> FielderAbilities = new List<AbilityBar>();
         public List<RadarAxis> Radar = new List<RadarAxis>();
+        /// <summary>成長推移（issue #1027）。分野タブ（0=打撃/1=投手/2=守備・走塁）ごとの折れ線。</summary>
+        public List<List<GrowthSeries>> GrowthTabs = new List<List<GrowthSeries>>();
         public List<HiddenParam> Hidden = new List<HiddenParam>();
         public List<PitchData> Pitches = new List<PitchData>();
         public List<SkillInfo> Skills = new List<SkillInfo>();
@@ -244,6 +246,8 @@ namespace KokoSim.Unity.Players
             v.Radar.Add(CategoryAxis("投手力", strength.Pitching));
             v.Radar.Add(new RadarAxis { Label = "精神", Value01 = p.Mental / 100f });
 
+            BuildGrowth(v, p);
+
             // 隠しパラメータ（推定）: 精神力のみ判明扱い、他はスカウト/面談で段階判明＝？。
             v.Hidden.Add(new HiddenParam { Key = "才能上限", Value = "？", Known = false });
             v.Hidden.Add(new HiddenParam { Key = "成長タイプ", Value = "？", Known = false });
@@ -285,6 +289,50 @@ namespace KokoSim.Unity.Players
             // 役割でUIを切り替えず打撃・投手の両方を全選手で出す（Issue #93）。記録が無ければ空状態を正直に表示。
             BuildStats(v, p.Id);
             return v;
+        }
+
+        // ===== 成長推移（設計書06 §3.2・issue #1027） =====
+
+        /// <summary>
+        /// 分野タブの中身。並びと顔ぶれは左の能力表と同じ（弾道は優劣の軸でないので線にしない）。
+        /// どの分野を見るかはプレイヤーが選ぶ＝投手/野手の判定でタブや線を出し分けない（Issue #93）。
+        /// 色は練習メニュー色（その能力を伸ばす練習と同じ色）。
+        /// </summary>
+        private static readonly (AbilityKind Kind, string Color)[][] GrowthFields =
+        {
+            new[] { (AbilityKind.Contact, "batting"), (AbilityKind.Power, "power"), (AbilityKind.Discipline, "discipline") },
+            new[] { (AbilityKind.Velocity, "velocity"), (AbilityKind.Control, "pitching"), (AbilityKind.Stamina, "running"),
+                    (AbilityKind.PitchRank, "breaking"), (AbilityKind.Stuff, "strength") },
+            new[] { (AbilityKind.Speed, "baserun"), (AbilityKind.ArmStrength, "throwing"), (AbilityKind.Fielding, "defense"),
+                    (AbilityKind.Catching, "defpos") },
+        };
+
+        private static readonly SeasonCalendar Calendar = new SeasonCalendar();
+
+        private static void BuildGrowth(PlayerDetailView v, DevelopingPlayer p)
+        {
+            var samples = AbilityHistory.SeriesWithCurrent(p, GameClock.Week);
+            foreach (var field in GrowthFields)
+            {
+                var tab = new List<GrowthSeries>();
+                foreach (var (kind, color) in field)
+                {
+                    var s = new GrowthSeries
+                    {
+                        Label = AbilityLabels.Jp(kind),
+                        // 球速だけは画面のどこでも km/h で出している。線は他と同じ能力値の目盛りに乗せる。
+                        ValueText = kind == AbilityKind.Velocity
+                            ? Kmh(p.Level(kind)).ToString(Ci) + "km/h"
+                            : p.Level(kind).ToString(Ci),
+                        ColorKey = color,
+                    };
+                    foreach (var smp in samples)
+                        s.Points.Add(new UnityEngine.Vector2(
+                            (float)AbilityHistory.CareerFraction(smp.Grade, smp.Week, Calendar), smp.Level(kind)));
+                    tab.Add(s);
+                }
+                v.GrowthTabs.Add(tab);
+            }
         }
 
         // ===== 補助 =====

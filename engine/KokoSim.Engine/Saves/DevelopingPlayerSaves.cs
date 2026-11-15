@@ -46,7 +46,7 @@ internal static class DevelopingPlayerSaves
                 .Add("powerOff", lp.PowerOffset)
                 .Add("sharpOff", lp.SharpnessOffset));
 
-        return new JsonObject()
+        var obj = new JsonObject()
             .Add("id", p.Id)
             .Add("name", p.Name)
             .Add("grade", p.Grade)
@@ -95,6 +95,40 @@ internal static class DevelopingPlayerSaves
             .Add("aptExp", aptExp)
             .Add("aptCap", aptCap)
             .Add("learned", learned);
+        // 成長推移（v34・issue #1027）。1点＝[学年, 週, 全能力レベル…]。記録があるときだけ書く
+        // ＝AI校の選手（空）にキーを足してセーブを膨らませない。
+        if (p.History.Count > 0) obj.Add("hist", HistoryToJson(p.History));
+        return obj;
+    }
+
+    private static JsonArray HistoryToJson(List<AbilitySample> history)
+    {
+        var arr = new JsonArray();
+        foreach (var s in history)
+        {
+            var row = new JsonArray();
+            row.Add(JsonValue.Of(s.Grade));
+            row.Add(JsonValue.Of(s.Week));
+            foreach (var v in s.Levels) row.Add(JsonValue.Of(v));
+            arr.Add(row);
+        }
+        return arr;
+    }
+
+    private static void HistoryFromJson(JsonObject o, DevelopingPlayer p)
+    {
+        // v33 以前には無い＝空（次の週送りで記録が始まる）。
+        if (!o.Has("hist")) return;
+        var n = AbilityKinds.All.Length;
+        foreach (var v in o.Arr("hist").Items)
+        {
+            var row = (JsonArray)v;
+            var levels = new int[n];
+            // 能力の列挙は末尾追加のみ。保存時より能力が増えていたら、増えた能力は今の値で埋める。
+            for (var i = 0; i < n; i++)
+                levels[i] = i + 2 < row.Count ? ((JsonNumber)row[i + 2]).AsInt() : p.Level(AbilityKinds.All[i]);
+            p.History.Add(new AbilitySample(((JsonNumber)row[0]).AsInt(), ((JsonNumber)row[1]).AsInt(), levels));
+        }
     }
 
     public static DevelopingPlayer FromJson(JsonObject o)
@@ -178,6 +212,7 @@ internal static class DevelopingPlayerSaves
                 EnumJson.Read<PitchType>(lo.Str("type")), lo.Int("powerOff"), lo.Int("sharpOff")));
         }
 
+        HistoryFromJson(o, p);   // 能力を復元した後（欠けた列を今の値で埋めるため）
         return p;
     }
 
