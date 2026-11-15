@@ -1307,6 +1307,43 @@ public sealed class TimelineTests
     }
 
     [Fact]
+    public void BackHomeThrows_DoubleTagAtHome_AddsSecondTagCaptionAtTrailingArrival()
+    {
+        // ダブルタッチアウト（issue #984）: 本塁で刺した後に続く走者も本塁で刺された。送球は1本のまま、
+        // 2人目の到達（判定の時刻）に2つ目のタッチの実況が乗る。
+        var field = new FieldGeometry();
+        var play = OutfieldHit(40);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var home = new TimelinePoint(0, 0);
+        baseTl = baseTl with
+        {
+            Runners = new List<RunnerLeg>(baseTl.Runners)
+            {
+                new() { Label = "走1", T0 = 0.0, T1 = 6.5, From = new TimelinePoint(-19.4, 19.4), To = home, OutAtEnd = true },
+                new() { Label = "走2", T0 = 0.0, T1 = 7.1, From = new TimelinePoint(-19.4, 19.4), To = home, OutAtEnd = true },
+            },
+        };
+
+        var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, homeArriveAnchor: 6.5, runnerOut: true);
+
+        Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw && b.ToBase == "home"); // 新しい送球は無い
+        var second = Assert.Single(tl.Captions, c => c.Text.Contains("2つ目のアウト"));
+        Assert.Equal(7.1, second.T, 9);
+    }
+
+    [Fact]
+    public void BackHomeThrows_SingleOutAtHome_HasNoSecondTagCaption()
+    {
+        var field = new FieldGeometry();
+        var play = OutfieldHit(40);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, homeArriveAnchor: 6.5, runnerOut: true);
+        Assert.DoesNotContain(tl.Captions, c => c.Text.Contains("2つ目のアウト"));
+    }
+
+    [Fact]
     public void BackHomeThrows_ShallowBall_DrawsDirectThrowToHome()
     {
         var field = new FieldGeometry();

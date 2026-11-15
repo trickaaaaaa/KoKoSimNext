@@ -422,8 +422,10 @@ public sealed record BaserunningCoefficients
     // 本塁の2人目だけこの経路を通る（他塁で送球を使った後続は従来どおり無条件生還）。
     /// <summary>1人目のタッチ完了から2人目へタッチを切り替えるまでの秒[s]（同じボール・新しい送球なし）。</summary>
     public double HomeDoubleTagSeconds { get; init; } = 0.25;
-    /// <summary>2人目タッチの到達確率バイアス[s]（校正項。<see cref="HomeMarginScale"/> と同軸のlogisticで解くため
-    /// margin→確率の幅は本塁レースと共有し、この1本だけで頻度を校正する）。既定0.0＝物理のみ（未校正）。</summary>
+    /// <summary>2人目タッチの到達確率バイアス[s]（校正項。margin→確率の幅は本塁レースの <see cref="HomeMarginScale"/> を共有）。
+    /// 既定0.0＝物理のみ。本塁レースの <see cref="HomeSuccessBias"/>（1.57s）は流用しない: あちらは絵の側で送球の到達を
+    /// ずらして吸収できる（<c>GuardAgainstVerdict</c>）が、2人目には新しい送球が無く、捕手は1人目のタッチの時刻に
+    /// 本塁で球を持って立っている＝バイアスを足すと「捕手が待っているのに1秒以上遅れて還った」絵になる。</summary>
     public double HomeDoubleTagSuccessBias { get; init; } = 0.0;
 
     // === 三塁への進塁レース（単打の一塁→三塁, Issue #89, 設計書12 §3.5/§4.6）===

@@ -3008,6 +3008,17 @@ public static class TimelineBuilder
             new(ball[ball.Count - (cutoff is null ? 1 : 2)].T0, "本塁へ突っ込む——送球！"),
             new(homeArrive, runnerOut ? "タッチアウト！ 本塁で憤死" : "際どいセーフ、還った！"),
         };
+        // ダブルタッチアウト（issue #984）: 本塁で刺した後、球を持ったままの捕手が続く走者にもタッチした。
+        // 新しい送球は無い（同じ球）＝2人目は走者レッグの終端（判定の到達時刻）に実況だけ足す。
+        if (runnerOut)
+        {
+            foreach (var leg in timeline.Runners)
+            {
+                var toHome = System.Math.Abs(leg.To.X) < 0.5 && System.Math.Abs(leg.To.Z) < 0.5;
+                if (toHome && leg.OutAtEnd && leg.T1 > homeArriveAnchor + 1e-6)
+                    captions.Add(new TimelineCaption(leg.T1, "続く走者にもタッチ！ 本塁で2つ目のアウト"));
+            }
+        }
 
         var duration = Math.Max(timeline.Duration, homeArrive + 1.0);
         return timeline with { Ball = ball, Captions = captions, Duration = duration };
