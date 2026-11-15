@@ -4,6 +4,7 @@ using System.Text;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Nation.Tournaments;
@@ -161,6 +162,59 @@ public static class HomeRunMeasurement
                 }));
         }
 
+        // ── ⑤' 甲子園の切り分け（issue #976 追補・甲子園の三塁打の少なさ）: 球場とチームを入れ替える ──
+        if (Want("koshien-teams-at-default") || Want("koshien-split"))
+        {
+            var teams = BuildTeams(rosters, prefTops, rules, SeasonBaseYear, log);
+            var ctxD = rules.ApplyTo(baseCtx with { Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
+            rows.Add(Measure("koshien-teams-at-default", "切り分け: 甲子園の2校×既定球場",
+                "47都道府県の最強校から2校・永続ロスター＋敵AI・既定球場（両翼95/中堅118/フェンス4m）・8月の気温",
+                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxD); }));
+            var ctxP = rules.ApplyTo(baseCtx with { Field = Stadium.PrefLarge.ToFieldGeometry(), Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
+            rows.Add(Measure("koshien-teams-at-pref", "切り分け: 甲子園の2校×県営球場（広い）",
+                "47都道府県の最強校から2校・永続ロスター＋敵AI・県営級（広い）・8月の気温",
+                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxP); }));
+        }
+        if (Want("koshien-no-deep") || Want("koshien-split"))
+        {
+            // 強打者（パワー≥outfield_deep_min_power）への外野後退を切った敵AI。
+            var noDeep = new TacticsCoefficients() with { OutfieldDeepMinPower = 999 };
+            var teams = BuildTeams(rosters, prefTops, rules, SeasonBaseYear, log, noDeep);
+            var ctxK = rules.ApplyTo(baseCtx with { Field = Stadium.Koshien.ToFieldGeometry(), Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
+            rows.Add(Measure("koshien-no-deep", "切り分け: 甲子園の2校×甲子園・外野後退なし",
+                "夏の甲子園と同じ（最強校2校・甲子園・8月）で、敵AIの「強打者に外野後退」だけ切る",
+                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxK); }));
+            // さらに外野手の守備系（走力・肩・守備・捕球・送球精度）を神奈川の外野手の平均へ落とす（打者としての走力も落ちる）。
+            var kanaOf = KanaTeams().SelectMany(t => t.BattingOrder).Where(IsOf).ToList();
+            int Avg(Func<Player, int> f) => (int)Math.Round(kanaOf.Average(f));
+            var ofAvg = (Speed: Avg(p => p.Speed), Arm: Avg(p => p.ArmStrength), Fld: Avg(p => p.Fielding), Cat: Avg(p => p.Catching), Acc: Avg(p => p.ThrowAccuracy));
+            var weakOf = teams.Select(t => t with
+            {
+                BattingOrder = t.BattingOrder.Select(p => IsOf(p)
+                    ? p with { Speed = ofAvg.Speed, ArmStrength = ofAvg.Arm, Fielding = ofAvg.Fld, Catching = ofAvg.Cat, ThrowAccuracy = ofAvg.Acc }
+                    : p).ToList(),
+            }).ToArray();
+            rows.Add(Measure("koshien-no-deep-of-kana", "切り分け: 甲子園・外野後退なし・外野手の守備を神奈川並みに",
+                string.Create(CultureInfo.InvariantCulture, $"上の条件で、外野手の走力/肩/守備/捕球/送球精度を神奈川の外野手の平均（{ofAvg.Speed}/{ofAvg.Arm}/{ofAvg.Fld}/{ofAvg.Cat}/{ofAvg.Acc}）へ"),
+                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, weakOf.Length); return (weakOf[a], weakOf[h], ctxK); }));
+            var kana = KanaTeams();
+            notes.Add(string.Create(CultureInfo.InvariantCulture,
+                $"打順のうちパワー≥{new TacticsCoefficients().OutfieldDeepMinPower}（敵AIが外野を後退させる打者）の割合: 甲子園の2校（最強校）{PowerShare(teams):P0}／神奈川の学校 {PowerShare(kana):P0}"));
+            notes.Add(string.Create(CultureInfo.InvariantCulture,
+                $"外野手の平均（最強校 / 神奈川）: 走速 {OfAvg(teams, f => f.SprintSpeedMps):F2} / {OfAvg(kana, f => f.SprintSpeedMps):F2} m/s・反応 {OfAvg(teams, f => f.ReactionDelaySeconds):F3} / {OfAvg(kana, f => f.ReactionDelaySeconds):F3} s・送球 {OfAvg(teams, f => f.ThrowSpeedMps):F2} / {OfAvg(kana, f => f.ThrowSpeedMps):F2} m/s・守備 {OfAvg(teams, f => f.Fielding):F1} / {OfAvg(kana, f => f.Fielding):F1}"));
+            notes.Add(string.Create(CultureInfo.InvariantCulture,
+                $"打者の平均（最強校 / 神奈川）: 走力 {BatAvg(teams, b => b.Speed):F1} / {BatAvg(kana, b => b.Speed):F1}・パワー {BatAvg(teams, b => b.Power):F1} / {BatAvg(kana, b => b.Power):F1}"));
+        }
+
+        if (Want("kanagawa-at-koshien") || Want("koshien-split"))
+        {
+            var teams = KanaTeams();
+            var ctxK = rules.ApplyTo(baseCtx with { Field = Stadium.Koshien.ToFieldGeometry(), Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
+            rows.Add(Measure("kanagawa-at-koshien", "切り分け: 神奈川の2校×甲子園",
+                "神奈川の学校から2校を一様に抽選・永続ロスター＋敵AI・甲子園・8月の気温・コールドなし",
+                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxK); }));
+        }
+
         // ── ⑥ ティア格子（実ゲームの夏の県大会の条件で、強さを指定した2校） ──
         var lattice = new[] { 35.0, 50.0, 65.0, 80.0 };
         for (var x = 0; x < lattice.Length; x++)
@@ -302,19 +356,41 @@ public static class HomeRunMeasurement
     /// 永続ロスター→<see cref="AiTeamBuilder"/>→敵AIの打順の並べ替え→采配ブレイン）。年度1。
     /// </summary>
     private static Team[] BuildTeams(NationRosters rosters, IReadOnlyList<School> schools, ModernRules rules,
-        int calendarYear, Action<string> log)
+        int calendarYear, Action<string> log, TacticsCoefficients? tactics = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var teams = new Team[schools.Count];
-        for (var i = 0; i < schools.Count; i++) teams[i] = OpponentTeam(rosters, schools[i], 1, rules, calendarYear);
+        for (var i = 0; i < schools.Count; i++) teams[i] = OpponentTeam(rosters, schools[i], 1, rules, calendarYear, tactics);
         log(string.Create(CultureInfo.InvariantCulture, $"[hr-measure] {schools.Count}校のロスターを生成（{sw.Elapsed.TotalSeconds:F0}秒）"));
         return teams;
     }
 
-    private static Team OpponentTeam(NationRosters rosters, School school, int yearIndex, ModernRules rules, int calendarYear)
+    private static double PowerShare(Team[] teams)
+    {
+        var th = new TacticsCoefficients().OutfieldDeepMinPower;
+        var all = teams.SelectMany(t => t.BattingOrder).ToList();
+        return all.Count == 0 ? 0 : (double)all.Count(p => p.Power >= th) / all.Count;
+    }
+
+    private static bool IsOf(Player p)
+        => p.Position is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField;
+
+    private static double BatAvg(Team[] teams, Func<Player, double> f)
+        => teams.SelectMany(t => t.BattingOrder).Average(f);
+
+    private static double OfAvg(Team[] teams, Func<FielderAttributes, double> f)
+    {
+        var effect = new AbilityEffectCoefficients();
+        return teams.SelectMany(t => t.BattingOrder)
+            .Where(x => x.Position is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField)
+            .Average(x => f(x.ToFielder(effect)));
+    }
+
+    private static Team OpponentTeam(NationRosters rosters, School school, int yearIndex, ModernRules rules, int calendarYear,
+        TacticsCoefficients? tactics = null)
     {
         var team = rosters.PeekTeamFor(school, yearIndex, rules, calendarYear);
-        var brain = EnemyAiFactory.BrainFor(school);
+        var brain = EnemyAiFactory.BrainFor(school, tactics);
         var orderRng = AiRosterFactory.CohortSeed(school.Id, yearIndex).Fork(0x0BDE_0000UL);
         return team.WithBattingOrder(brain.ComposeBattingOrder(team.BattingOrder, orderRng)) with { Tactics = brain };
     }

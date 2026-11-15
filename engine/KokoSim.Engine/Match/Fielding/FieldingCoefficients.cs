@@ -346,7 +346,9 @@ public sealed record FieldingCoefficients
     /// <summary>真上から落ちる打球（大飛球）が最初のバウンドで保持する前進速度の割合。失速して死ぬ。</summary>
     public double RollRetentionSteep { get; init; } = 0.25;
 
-    /// <summary>フェンスに達した打球の跳ね返り処理に要する追加時間[s]（カロムの方向は当面無視）。</summary>
+    /// <summary>フェンスに達した打球の跳ね返り処理に要する追加時間[s]（カロムの方向は当面無視）。
+    /// 壁際での回収は「フェンスに当たってからこの秒数後」より早くならない（<see cref="ExtraBaseResolver.Retrieve"/>）。
+    /// issue #976 追補まで、野手が先に壁際へ着いていると当たった瞬間に拾えてしまい、この秒は判定に乗っていなかった。</summary>
     public double FenceCaromSeconds { get; init; } = 0.40;
 
     /// <summary>

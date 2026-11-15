@@ -363,7 +363,7 @@ fielding:
   roll_decel_mps2: 2.60          # 着地後の転がりの減速度（芝・土の摩擦＋バウンド損失）
   roll_retention_flat: 0.72      # 水平に近いライナーがバウンドで保持する前進速度の割合（滑って伸びる）
   roll_retention_steep: 0.25     # 真上から落ちる大飛球が保持する割合（失速して死ぬ）
-  fence_carom_seconds: 0.40      # フェンス到達打球の跳ね返り処理の追加時間
+  fence_carom_seconds: 0.40      # フェンス到達打球の跳ね返り処理の追加時間（壁際の回収は「当たってから これ 秒後」より早くならない。#976 追補まで判定に乗っていなかった）
   fence_restitution: 0.35        # フェンスの反発係数（跳ね返り初速＝到達時の残速×これ。表示専用・判定不変）
   outfield_pickup_seconds: 0.30  # 転がる打球を拾い上げる時間
   # 外野手のファンブル（回収時に弾く・後逸, issue #811 / design-14 P1-6 追記）。安打の記録は変えず失策だけ外野手に付く。
@@ -1992,7 +1992,9 @@ roster:
   archetype_flamethrower_control_factor: 0.55
   archetype_flamethrower_control: 0
   archetype_flamethrower_stamina: 0
-  archetype_flamethrower_pitch_rank: 30
+  # issue #976（2026-11-15 オーナー決定「剛腕は平均すると少し弱い」を戻す）: キレ +30→+3。本塁打の校正で三振の多い型ほど
+  # 相対的に失点が減り剛腕がバランス型より強くなった（Lv68 −0.21）。実測（1200試合）剛腕−バランス型 Lv55 +0.15・Lv68 +0.15・Lv80 +0.54。
+  archetype_flamethrower_pitch_rank: 3
   archetype_pinpoint_velocity: -24
   archetype_pinpoint_control: 12
   archetype_pinpoint_stamina: 2

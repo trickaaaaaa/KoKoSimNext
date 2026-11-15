@@ -202,13 +202,31 @@ public static class ExtraBaseResolver
         var hi = Math.Max(Math.Max(bestToStop, path.SettleAtSeconds), lo);
         // g(t) = 「時刻 t の打球位置へ野手が到達する時刻」− t。g(lo)≤0 なら着地と同時に処理できる。
         var chosen = best;
-        if (ReachTime(chosen, path.PositionAt(lo)) - lo <= 0) return (chosen, lo);
+        if (ReachTime(chosen, path.PositionAt(lo)) - lo <= 0) return (chosen, WithCarom(path, lo, c));
         for (var i = 0; i < 24; i++)
         {
             var mid = 0.5 * (lo + hi);
             if (ReachTime(chosen, path.PositionAt(mid)) - mid <= 0) hi = mid; else lo = mid;
         }
-        return (chosen, hi);
+        return (chosen, WithCarom(path, hi, c));
+    }
+
+    /// <summary>
+    /// フェンスに当たった打球の回収時刻に跳ね返りの処理（<see cref="FieldingCoefficients.FenceCaromSeconds"/>）を載せる。
+    /// <see cref="RollPath.PositionAt"/> はフェンス到達後も球をフェンス上に置くので、野手が先に壁際へ着いていると
+    /// 「当たった瞬間に拾う」になり、跳ね返りの処理の秒が判定に一度も乗っていなかった（issue #976 追補の実測:
+    /// fence_carom_seconds を 0.4→2.0 にしても三塁打率がほぼ動かない）。回収点がフェンス上のときだけ、
+    /// 回収を「フェンスに当たってから carom 秒後」より早くしない。乱数不使用。
+    /// </summary>
+    private static double WithCarom(in RollPath path, double retrieveAt, FieldingCoefficients c)
+    {
+        if (!path.ReachedFence || c.FenceCaromSeconds <= 0.0) return retrieveAt;
+        var decel = Math.Max(0.1, path.DecelMps2);
+        var disc = Math.Max(0.0, path.InitialSpeedMps * path.InitialSpeedMps - 2.0 * decel * path.RollDistanceM);
+        var hitAt = path.HangTimeSeconds + (path.InitialSpeedMps - Math.Sqrt(disc)) / decel;
+        // 壁に当たる前に（転がり途中で）回収できたなら跳ね返りは起きない。
+        if (retrieveAt < hitAt - 1e-9) return retrieveAt;
+        return Math.Max(retrieveAt, hitAt + c.FenceCaromSeconds);
     }
 
     /// <summary>
