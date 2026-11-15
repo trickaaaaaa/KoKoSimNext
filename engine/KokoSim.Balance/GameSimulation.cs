@@ -115,6 +115,9 @@ public static partial class GameSimulation
         public long TotalHomeRuns { get; init; }
         public long TotalPlateAppearances { get; init; }
 
+        /// <summary>本塁打の出方（issue #1014）: 1試合（両軍計）の本塁打数の分布・打球の初速/角度・フェンス上の余裕。</summary>
+        public HomeRunProfile HomeRunProfile { get; init; } = new();
+
         // ===== 球種別の空振り率・チェイス率（設計書15 Phase E-4）=====
         // PitchType の enum 添字（長さ = PitchTypeCount）。すべて整数集計＝並列マージ順に依らず決定論。
         // 空振り率 = 空振り(SwingingStrike) / スイング(SwingingStrike+Foul+InPlay)。
@@ -261,7 +264,7 @@ public static partial class GameSimulation
                 var home = (teamFactory is null ? GenerateTeam(g, "地元校") : teamFactory(g, "地元校", false))
                     with { Tactics = brain };
                 var r = GameEngine.Play(away, home, ctx, g);
-                local.Add(r, ctx.RegulationInnings, ctx.StrikeZone);
+                local.Add(r, ctx.RegulationInnings, ctx.StrikeZone, ctx.Field);
                 return local;
             },
             local => { lock (total) total.Merge(local); });
@@ -299,9 +302,12 @@ public static partial class GameSimulation
         public readonly long[] FlyErrors = new long[FieldPositionCount];
         public readonly long[] GroundChances = new long[FieldPositionCount];
         public readonly long[] GroundErrors = new long[FieldPositionCount];
+        // 本塁打の出方（issue #1014）。
+        public readonly HomeRunProfile Hr = new();
 
-        public void Add(GameResult r, int regulationInnings, StrikeZone zone)
+        public void Add(GameResult r, int regulationInnings, StrikeZone zone, FieldGeometry field)
         {
+            Hr.AddGame(r, field);
             TotalRuns += r.AwayRuns + r.HomeRuns;
             TotalPitches += r.TotalPitches;
             TotalInnings += r.InningsPlayed;
@@ -460,6 +466,7 @@ public static partial class GameSimulation
             AwayMercyLosses += o.AwayMercyLosses;
             AwayMercyShutoutLosses += o.AwayMercyShutoutLosses;
             AwayMercyWins += o.AwayMercyWins;
+            Hr.Merge(o.Hr);
         }
 
         public Stats ToStats(int games) => new()
@@ -521,6 +528,7 @@ public static partial class GameSimulation
             FlyErrorsByPos = FlyErrors,
             GroundChancesByPos = GroundChances,
             GroundErrorsByPos = GroundErrors,
+            HomeRunProfile = Hr,
         };
     }
 
@@ -655,6 +663,14 @@ public static partial class GameSimulation
         sb.AppendLine(c, $"| 四球率（打席あたり） | {s.WalkRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 死球率（打席あたり） | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率（打席あたり） | {s.HomeRunRate:P2} | 参考 |");
+        sb.AppendLine();
+        sb.AppendLine("## 1試合（両軍計）の本塁打数の分布（issue #1014）");
+        sb.AppendLine();
+        sb.Append(s.HomeRunProfile.PerGameMarkdown());
+        sb.AppendLine();
+        sb.AppendLine("### 本塁打の打球（初速・角度・フェンス上の余裕）");
+        sb.AppendLine();
+        sb.Append(s.HomeRunProfile.BattedBallMarkdown());
         sb.AppendLine();
         sb.AppendLine("## design-14 第1段（P1）新プレー発生率（両軍計/試合）");
         sb.AppendLine();

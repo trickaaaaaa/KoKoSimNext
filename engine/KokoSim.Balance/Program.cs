@@ -36,6 +36,7 @@ internal static class CommandLine
             "trace" => RunTrace(args[1..]),
             "trace-diff" => RunTraceDiff(args[1..]),
             "captain-usage" => RunCaptainUsage(args[1..]),
+            "hr-measure" => RunHrMeasure(args[1..]),
             _ => Fail($"未知のコマンド: {args[0]}"),
         };
     }
@@ -494,6 +495,29 @@ internal static class CommandLine
         return 0;
     }
 
+    /// <summary>本塁打の実測（issue #1014）。係数・帯・解決式は一切変えない計測専用コマンド。</summary>
+    private static int RunHrMeasure(string[] args)
+    {
+        var o = new HomeRunMeasurement.Options();
+        string? reportPath = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--games": o = o with { Games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture) }; break;
+                case "--seed": o = o with { Seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture) }; break;
+                case "--save": o = o with { SavePath = RequireValue(args, ref i) }; break;
+                case "--only": o = o with { Only = new System.Collections.Generic.HashSet<string>(RequireValue(args, ref i).Split(',')) }; break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        var text = HomeRunMeasurement.Run(o, msg => Console.Error.WriteLine(msg));
+        Console.Write(text);
+        WriteReport(reportPath, text);
+        return 0;
+    }
+
     private static void WriteReport(string? reportPath, string text)
     {
         if (reportPath is null) return;
@@ -582,6 +606,8 @@ internal static class CommandLine
         var byPitcherRank = false;
         var apex = false;
         var matchupGrid = false;
+        // issue #1014: 1試合（両軍計）の本塁打数の二項近似に使う打席数/試合（simulate-games の実測 ≈76）。
+        var paPerGame = 76;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -596,6 +622,9 @@ internal static class CommandLine
                     break;
                 case "--histogram":
                     histogram = true;
+                    break;
+                case "--pa-per-game":
+                    paPerGame = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
                     break;
                 case "--apex":
                     // issue #451: 打球の頂点/滞空/4分類の分布診断（フライがフライっぽく見えないの before/after）。
@@ -625,6 +654,13 @@ internal static class CommandLine
         var stadium = ResolveStadium(stadiumId);
         var stats = AtBatSimulation.Run(atBats, seed, coefficientsPath, stadium, histogram);
         var text = AtBatSimulation.Report(stats, seed);
+        {
+            // issue #1014: 本塁打の打球の上側（初速・角度・フェンス上の余裕）と、1試合あたりの本塁打数の二項近似。
+            var hr = AtBatSimulation.RunHomeRunProfile(atBats, seed, coefficientsPath, stadium);
+            text += "\n## 1試合（両軍計）の本塁打数（issue #1014・打席シムなので二項近似）\n\n"
+                + AtBatSimulation.PerGameBinomialMarkdown(stats.HomeRunRate, paPerGame)
+                + "\n## 本塁打の打球（初速・角度・フェンス上の余裕）\n\n" + hr.BattedBallMarkdown();
+        }
         if (byPitcherRank)
         {
             // issue #402 検証: 投手ランク別の三振率（E・F投手の奪三振是正の確認）。
@@ -694,8 +730,10 @@ internal static class CommandLine
         Console.WriteLine("KokoSim.Balance — ヘッドレスシミュレーションCLI");
         Console.WriteLine();
         Console.WriteLine("使い方:");
-        Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram] [--apex] [--by-pitcher-rank] [--matchup-grid]");
-        Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--tactics]");
+        Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram] [--apex] [--by-pitcher-rank] [--matchup-grid] [--pa-per-game 76]");
+        Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--weather] [--tactics]");
+        Console.WriteLine("  hr-measure      [--games N]   [--seed S] [--report path] [--save path/to.sav] [--only id,id]");
+        Console.WriteLine("                  # 本塁打の実測（issue #1014・計測のみ）: 帯の条件／球場別／季節の気温／実ゲーム条件（県大会・甲子園）／ティア格子／監督の試合");
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
         Console.WriteLine("  simulate-tiers  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--compress-slope X] [--compress-pivot Y]");
         Console.WriteLine("                  # ティア格子（強度30〜60の総当たり）＋実プレイの自校vs相手校＋ランク式の食い違い（issue #536・計測のみ）");
