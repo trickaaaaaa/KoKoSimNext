@@ -35,7 +35,8 @@ public static class TierMatchupSimulation
         double AwayShutoutRate, double HomeShutoutRate,
         double AwayHitsPerGame, double HomeHitsPerGame,
         double StrikeoutRate, double WalkRate, double HomeWinRate,
-        double AwayMercyLossRate = 0, double AwayMercyShutoutLossRate = 0, double AwayMercyWinRate = 0);
+        double AwayMercyLossRate = 0, double AwayMercyShutoutLossRate = 0, double AwayMercyWinRate = 0,
+        double HrPerGame = 0, double FivePlusHrShare = 0);
 
     private static Cell Measure(string awayLabel, string homeLabel, int games, ulong seed,
         string? coefficientsPath, Func<IRandomSource, string, bool, Team> factory,
@@ -58,7 +59,10 @@ public static class TierMatchupSimulation
             s.StrikeoutRate, s.WalkRate, s.HomeWinRate,
             (double)s.AwayMercyLossGames / games,
             (double)s.AwayMercyShutoutLossGames / games,
-            (double)s.AwayMercyWinGames / games);
+            (double)s.AwayMercyWinGames / games,
+            // issue #1014: 本塁打/試合（両軍計）と「両軍計5本以上」の試合の割合。
+            s.HomeRunProfile.HomeRunsPerGame,
+            s.HomeRunProfile.ShareAtLeast(5));
     }
 
     // ── チーム生成の差し替え口 ──
@@ -167,14 +171,36 @@ public static class TierMatchupSimulation
         sb.AppendLine();
         sb.AppendLine("### 対角（同格同士）と1ティア差の抜き出し");
         sb.AppendLine();
-        sb.AppendLine("| 組み合わせ | 先攻の得点 | 先攻の完封され率 | 先攻の安打 | 三振率 | 四球率 |");
-        sb.AppendLine("|---|---|---|---|---|---|");
+        sb.AppendLine("| 組み合わせ | 先攻の得点 | 先攻の完封され率 | 先攻の安打 | 三振率 | 四球率 | 本塁打/試合（両軍計） | 両軍計5本以上 |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|");
         foreach (var cell in cells)
         {
             if (cell.AwayLabel != cell.HomeLabel && !IsOneTier(cell)) continue;
             sb.AppendLine(c,
                 $"| {cell.AwayLabel} vs {cell.HomeLabel} | {cell.AwayRunsPerGame:F2} | {cell.AwayShutoutRate:P1} "
-                + $"| {cell.AwayHitsPerGame:F2} | {cell.StrikeoutRate:P1} | {cell.WalkRate:P1} |");
+                + $"| {cell.AwayHitsPerGame:F2} | {cell.StrikeoutRate:P1} | {cell.WalkRate:P1} "
+                + $"| {cell.HrPerGame:F2} | {cell.FivePlusHrShare:P2} |");
+        }
+        sb.AppendLine();
+
+        // ── ①b 本塁打の格子（issue #1014） ──
+        sb.AppendLine("### ①b 本塁打/試合（両軍計）／両軍計5本以上の割合（issue #1014）");
+        sb.AppendLine();
+        sb.Append("| away＼home |");
+        foreach (var h in strengths) sb.Append(c, $" {Label(h)} |");
+        sb.AppendLine();
+        sb.Append("|---|");
+        foreach (var _ in strengths) sb.Append("---|");
+        sb.AppendLine();
+        for (var ai = 0; ai < strengths.Length; ai++)
+        {
+            sb.Append(c, $"| **{Label(strengths[ai])}** |");
+            for (var hi = 0; hi < strengths.Length; hi++)
+            {
+                var cell = cells[ai * strengths.Length + hi];
+                sb.Append(c, $" {cell.HrPerGame:F2} / {cell.FivePlusHrShare:P1} |");
+            }
+            sb.AppendLine();
         }
         sb.AppendLine();
 
@@ -184,13 +210,14 @@ public static class TierMatchupSimulation
         sb.AppendLine(c,
             $"自校はゲーム開始直後のロスター（才能中心 {coeff.TalentCenterDefault:F1}・1〜3年）。**自校を先攻に置く**。");
         sb.AppendLine();
-        sb.AppendLine("| 自校 vs 相手強度 | 自校の得点 | 自校の完封され率 | 相手の得点 | 自校の安打 | 三振率 | 四球率 |");
-        sb.AppendLine("|---|---|---|---|---|---|---|");
+        sb.AppendLine("| 自校 vs 相手強度 | 自校の得点 | 自校の完封され率 | 相手の得点 | 自校の安打 | 三振率 | 四球率 | 本塁打/試合（両軍計） | 両軍計5本以上 |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|");
         foreach (var cell in MeasureManagerLadder(games, seed, coefficientsPath, coeff, strengths))
         {
             sb.AppendLine(c,
                 $"| 自校 vs {cell.HomeLabel} | {cell.AwayRunsPerGame:F2} | {cell.AwayShutoutRate:P1} "
-                + $"| {cell.HomeRunsPerGame:F2} | {cell.AwayHitsPerGame:F2} | {cell.StrikeoutRate:P1} | {cell.WalkRate:P1} |");
+                + $"| {cell.HomeRunsPerGame:F2} | {cell.AwayHitsPerGame:F2} | {cell.StrikeoutRate:P1} | {cell.WalkRate:P1} "
+                + $"| {cell.HrPerGame:F2} | {cell.FivePlusHrShare:P2} |");
         }
         sb.AppendLine();
 

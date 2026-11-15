@@ -2467,7 +2467,9 @@ public static class GameEngine
             // 球を回収するのが外野手なので、ErrorFielderRole を優先しないと「左失」（＝外野失策）になる。
             play?.ErrorFielderRole ?? play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
             outsThisPa, isSacFly, isSacBunt,
-            play?.ErrorKind, play?.WildThrowScatterM, play?.RecoveredThrowScatterM is not null));
+            play?.ErrorKind, play?.WildThrowScatterM, play?.RecoveredThrowScatterM is not null,
+            // issue #1014: 本塁打のフェンス上の通過高さ（写すだけ＝判定・乱数順・digest不変）。
+            play?.FenceCrossHeightM));
     }
 
     /// <summary>バント処理時の進塁: 一・二塁走者が1つ進む（三塁走者は自重）。batter 非null なら打者一塁へ。</summary>
