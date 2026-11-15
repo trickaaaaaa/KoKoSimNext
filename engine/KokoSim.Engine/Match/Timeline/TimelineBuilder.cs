@@ -1567,12 +1567,14 @@ public static class TimelineBuilder
     /// スクイズは三塁走者が生還する（<paramref name="preThird"/>≠<paramref name="postThird"/>）ため、
     /// 同じ突き合わせ方でバント・スクイズ両方を1つの関数でまかなえる。</para></summary>
     /// <param name="isSqueeze">実況キャプションの文言だけを変える（表示専用）。</param>
+    /// <param name="batterSide">この打席で立つ打席側（<see cref="HandednessExtensions.EffectiveBats"/> 解決済み。null＝打者の <c>Bats</c>）。</param>
     public static PlayTimeline BuildBunt(
         Player batter, IReadOnlyList<Fielder> fielders, BuntResult result,
         Player? preFirst, Player? preSecond, Player? preThird,
         Player? postFirst, Player? postSecond, Player? postThird,
-        BaserunningCoefficients c, FieldGeometry field, bool isSqueeze = false)
+        BaserunningCoefficients c, FieldGeometry field, bool isSqueeze = false, Handedness? batterSide = null)
     {
+        var side = batterSide ?? batter.Bats;
         var firstPt = BasePoint(field, "first");
         var ball = new List<BallSegment>
         {
@@ -1644,8 +1646,7 @@ public static class TimelineBuilder
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
             var throwArrive = ContactAt + HomePlayResolver.ResolveThrowPath(situation, field.SecondBase, c).ArriveAtSeconds;
 
-            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
-                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
             var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                 + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
             var batterArrive = ContactAt + battingTime;
@@ -1700,8 +1701,7 @@ public static class TimelineBuilder
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
             var throwArrive = ContactAt + HomePlayResolver.ResolveThrowPath(situation, field.ThirdBase, c).ArriveAtSeconds;
 
-            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
-                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
             var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                 + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
             var batterArrive = ContactAt + battingTime;
@@ -1756,8 +1756,7 @@ public static class TimelineBuilder
             var throwArrive = ContactAt
                 + HomePlayResolver.ResolveThrowPath(situation, new Core.Vector3D(0, 0, 0), c).ArriveAtSeconds;
 
-            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
-                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
             var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                 + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
             var batterArrive = ContactAt + battingTime;
@@ -1806,8 +1805,7 @@ public static class TimelineBuilder
             var fieldPt = new TimelinePoint(0, BuntFieldPointM);
             // BuntResolver.InfieldHitProbability と同じ内訳（安全側でセーフティではなく犠打の構え遅延を使う。
             // 呼び出し元は safety フラグを保持していないため、既定として犠打側で揃える＝絵の近似）。
-            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
-                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
             var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                 + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
             var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;

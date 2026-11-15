@@ -941,7 +941,7 @@ public static class GameEngine
             {
                 var directive = defTactics.Policy == PitchPolicy.Auto
                     ? (PitchDirective?)null
-                    : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
+                    : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats.EffectiveBats(currentPitcher.Throws));
                 // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。
                 var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead);
                 // バッテリーの相性（設計書23 §2.4）: 実効リードに 1 + k1×K。K=0 で恒等・乱数不使用。
@@ -1084,7 +1084,7 @@ public static class GameEngine
                         pSituation, rng.Fork(PitchStreamId(inning, isTop, log.Count, session.PitchCount, 0xDEF5_0000UL)));
                     if (d?.Policy is { } policyOverride)
                     {
-                        pitchOverride = ctx.Tactics.DirectiveFor(policyOverride, batter.Bats);
+                        pitchOverride = ctx.Tactics.DirectiveFor(policyOverride, batter.Bats.EffectiveBats(currentPitcher.Throws));
                         tracePolicy = policyOverride; // 観測専用
                     }
                     gearOverride = d?.Gear;
@@ -1324,7 +1324,7 @@ public static class GameEngine
                 var (manualPolicy, manualGear, manualInfield, manualOutfield) = defense.ConsumePendingPitchDefenseOverride();
                 if (manualPolicy is { } mp)
                 {
-                    pitchOverride = ctx.Tactics.DirectiveFor(mp, batter.Bats);
+                    pitchOverride = ctx.Tactics.DirectiveFor(mp, batter.Bats.EffectiveBats(currentPitcher.Throws));
                     tracePolicy = mp; // 観測専用
                 }
                 if (manualGear is { } mg) gearOverride = mg;
@@ -1333,7 +1333,7 @@ public static class GameEngine
                 if (defTactics.PitchAround || defense.PitchAround)
                 {
                     pitchOverride = (pitchOverride ?? abCtx.Directive ?? PitchDirective.Identity)
-                        with { Edge = ctx.Tactics.EdgeAimFor(batter.Bats) };
+                        with { Edge = ctx.Tactics.EdgeAimFor(batter.Bats.EffectiveBats(currentPitcher.Throws)) };
                     tracePolicy ??= defTactics.Policy;
                 }
 
@@ -1727,7 +1727,8 @@ public static class GameEngine
                         batter, fielders, buntOutcome,
                         buntPreFirst, buntPreSecond, buntPreThird,
                         bases.First, bases.Second, bases.Third,
-                        paBaserunning, ctx.Field)
+                        paBaserunning, ctx.Field,
+                        batterSide: batter.Bats.EffectiveBats(currentPitcher.Throws))
                     : null;
                 buntTimeline = WithThrowScatter(buntTimeline,
                     res.BuntThrowScatter is { } buntThrow
@@ -1812,7 +1813,8 @@ public static class GameEngine
                         batter, fielders, sq.Bunt,
                         sqPreFirst, sqPreSecond, sqPreThird,
                         bases.First, bases.Second, bases.Third,
-                        paBaserunning, ctx.Field, isSqueeze: true)
+                        paBaserunning, ctx.Field, isSqueeze: true,
+                        batterSide: batter.Bats.EffectiveBats(currentPitcher.Throws))
                     : null;
                 sqTimeline = WithThrowScatter(sqTimeline,
                     sq.BuntThrowScatter is { } sqThrow

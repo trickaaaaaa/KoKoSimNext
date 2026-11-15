@@ -142,8 +142,8 @@ public static class ContactModel
         BattingCoefficients coeff, IRandomSource rng)
     {
         var pull = coeff.BearingPullPerTiming * -timingOffset + coeff.LaunchAnglePullDeg(launchAngleDeg);
-        // スイッチは左打ち扱い（FieldingResolver の一塁到達ボーナスと同じ規約にそろえる）。
-        var pullSign = batter.Bats is Handedness.Left or Handedness.Switch ? 1.0 : -1.0;
+        // batter.Bats は打席側（スイッチは AtBatSession が投手の逆へ解決済み。issue #1019）。
+        var pullSign = batter.Bats.IsLeftSide() ? 1.0 : -1.0;
         return pullSign * pull + rng.NextGaussian(0, coeff.BearingSigma);
     }
 
