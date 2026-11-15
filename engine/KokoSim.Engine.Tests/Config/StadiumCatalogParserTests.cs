@@ -48,10 +48,15 @@ public sealed class StadiumCatalogParserTests
                 center: 122
                 fence_height: 3.0
                 model: some_model
+              - id: c
+                name: 屋内
+                indoor: true
             """;
 
         var list = StadiumCatalogParser.Parse(yaml)!;
-        Assert.Equal(new[] { "a", "b" }, list.Select(s => s.Id));
+        Assert.Equal(new[] { "a", "b", "c" }, list.Select(s => s.Id));
+        Assert.True(list[2].Indoor);    // indoor: true（issue #1020）
+        Assert.False(list[1].Indoor);   // 省略＝屋外
         Assert.Equal(StadiumCatalogLoader.Parse(yaml), list);
 
         var a = list[0];

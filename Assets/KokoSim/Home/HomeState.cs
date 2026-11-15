@@ -919,7 +919,9 @@ namespace KokoSim.Unity.Home
 
                 // 次戦に実際に効く天気を、試合を解決せずに覗く（issue #803・オーナー決定2026-11-09）。
                 // Resolve/BeginLive が後で辿るのと同一のFork鎖を辿るだけ＝ここで抽選し直さない。
-                if (r.PeekNextMatchWeather(PlayerMatchResolver.CurrentWeatherCoefficients()) is { } weather)
+                // 屋内の球場（札幌ドーム等）は天候・気温が効かない＝天気欄を出さない（issue #1020・試合中の電光掲示板と同じ）。
+                if (!MatchStadium.IsIndoor(s.Kind, r.NextMatchRoundsRemaining, NationService.PrefectureId)
+                    && r.PeekNextMatchWeather(PlayerMatchResolver.CurrentWeatherCoefficients()) is { } weather)
                 {
                     view.WeatherLabel = WeatherLabels.Jp(weather.State);
                     view.WeatherTempValue = Math.Round(weather.TemperatureC).ToString();

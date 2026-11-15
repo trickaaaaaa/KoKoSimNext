@@ -118,6 +118,53 @@ public sealed class WeatherModelTests
         Assert.Same(ctx, WeatherModel.ApplyForMatch(ctx, new Xoshiro256Random(1)));
     }
 
+    /// <summary>
+    /// 屋内の球場（札幌ドーム・issue #1020）は天候・気温を効かせない＝ctx をそのまま返す（基準の空気密度・消耗、
+    /// ResolvedWeather も null＝天気欄を出さない）。真夏の分布を渡しても同じ。
+    /// </summary>
+    [Fact]
+    public void ApplyForMatch_IndoorStadium_IgnoresWeather()
+    {
+        var dome = KokoSim.Engine.Match.Field.Stadium.AutumnFinals[0];
+        Assert.True(dome.Indoor);
+        foreach (var month in new[] { 1, 8, 9 })
+        {
+            var ctx = new GameContext { Weather = WeatherModel.ForMonth(month), Field = dome.ToFieldGeometry() };
+            for (ulong seed = 1; seed <= 20; seed++)
+            {
+                var applied = WeatherModel.ApplyForMatch(ctx, new Xoshiro256Random(seed));
+                Assert.Same(ctx, applied);
+                Assert.Null(applied.ResolvedWeather);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 屋内の試合は「天候なし」の試合と1ビットも違わない（気温の分布が何であっても）。屋外では違う＝球場の屋内フラグが効いている。
+    /// </summary>
+    [Fact]
+    public void IndoorMatch_IsIdenticalToAMatchWithoutWeather()
+    {
+        var dome = KokoSim.Engine.Match.Field.Stadium.AutumnFinals[0].ToFieldGeometry();
+        var outdoor = dome with { Indoor = false };
+        var hot = new WeatherCoefficients { MeanTemperatureC = 36, MinTemperatureC = 36, MaxTemperatureC = 36 };
+        string Play(GameContext ctx, ulong seed)
+        {
+            var g = new Xoshiro256Random(seed);
+            var away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(60, "先攻", g.Fork(1));
+            var home = KokoSim.Engine.Nation.StrengthTeamFactory.Create(60, "後攻", g.Fork(2));
+            return GameResultDigest.Sha256Of(GameEngine.Play(away, home, ctx, g.Fork(3)));
+        }
+        var outdoorDiffers = false;
+        for (ulong seed = 1; seed <= 4; seed++)
+        {
+            var none = Play(new GameContext { Field = dome }, seed);
+            Assert.Equal(none, Play(new GameContext { Field = dome, Weather = hot }, seed));
+            outdoorDiffers |= Play(new GameContext { Field = outdoor }, seed) != Play(new GameContext { Field = outdoor, Weather = hot }, seed);
+        }
+        Assert.True(outdoorDiffers, "屋外で36℃を渡しても4試合とも結果が同じ＝気温が効いていない疑い");
+    }
+
     [Fact]
     public void ApplyForMatch_WhenEnabled_AdjustsAeroAndFatigue()
     {

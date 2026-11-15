@@ -83,7 +83,7 @@ public sealed class RegionalStadiumTierTests
     public void TokyoFinalRounds_UseJingu_OthersPrefLarge(int roundsRemaining)
     {
         Assert.Same(Stadium.Jingu, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), prefectureId: 12));
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), prefectureId: 13));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), prefectureId: 10));   // 埼玉（秋の会場が夏と同じ県）
         Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1)));
     }
 
@@ -95,9 +95,10 @@ public sealed class RegionalStadiumTierTests
     {
         const int kanagawa = 13;
         Assert.Same(Stadium.Yokohama, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), kanagawa, summer: true));
-        // 秋（地区予選を含む）は汎用の県営級のまま
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), kanagawa, summer: false));
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), kanagawa));
+        // 秋は保土ケ谷球場（issue #1020。地区予選は県を渡さない＝県営級）
+        Assert.Same(Stadium.AutumnFinals[kanagawa], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), kanagawa, summer: false));
+        Assert.Same(Stadium.AutumnFinals[kanagawa], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), kanagawa));
+        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), null, summer: false));
         // 他県・県不明は夏でも県営級、東京は夏秋とも神宮
         foreach (var pref in new int?[] { null, 11, 14, 46 })
             Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), pref, summer: true));
@@ -135,9 +136,9 @@ public sealed class RegionalStadiumTierTests
     {
         const int hokkaido = 0;
         Assert.Same(Stadium.HokkaidoBallpark, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido, summer: true));
-        // 秋（地区予選は県を渡さない）は汎用の県営級のまま
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido, summer: false));
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido));
+        // 秋は札幌ドーム（issue #1020。地区予選は県を渡さない＝県営級）
+        Assert.Same(Stadium.AutumnFinals[hokkaido], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido, summer: false));
+        Assert.Same(Stadium.AutumnFinals[hokkaido], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hokkaido));
         Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), null, summer: true));
         // 他県の夏は変わらない
         Assert.Same(Stadium.Yokohama, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 13, summer: true));
@@ -176,9 +177,9 @@ public sealed class RegionalStadiumTierTests
     {
         const int miyagi = 3;
         Assert.Same(Stadium.Miyagi, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi, summer: true));
-        // 秋（決勝は仙台市民球場だが今回は汎用のまま）・県不明は県営級
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi, summer: false));
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi));
+        // 秋は仙台市民球場（issue #1020）・県不明は県営級
+        Assert.Same(Stadium.AutumnFinals[miyagi], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi, summer: false));
+        Assert.Same(Stadium.AutumnFinals[miyagi], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), miyagi));
         Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), null, summer: true));
         // 他県の夏は変わらない
         Assert.Same(Stadium.HokkaidoBallpark, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 0, summer: true));
@@ -218,9 +219,9 @@ public sealed class RegionalStadiumTierTests
     {
         const int hiroshima = 33;
         Assert.Same(Stadium.Hiroshima, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hiroshima, summer: true));
-        // 秋（決勝会場は未確認）・県不明は県営級
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hiroshima, summer: false));
-        Assert.Same(Stadium.PrefLarge, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hiroshima));
+        // 秋はみよし運動公園野球場（issue #1020）
+        Assert.Same(Stadium.AutumnFinals[hiroshima], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hiroshima, summer: false));
+        Assert.Same(Stadium.AutumnFinals[hiroshima], RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), hiroshima));
         // 他県の夏は変わらない
         Assert.Same(Stadium.Miyagi, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 3, summer: true));
         Assert.Same(Stadium.Yokohama, RegionalStadiumTier.ForStadium(roundsRemaining, new Xoshiro256Random(1), 13, summer: true));
@@ -269,5 +270,105 @@ public sealed class RegionalStadiumTierTests
         var rng2 = new Xoshiro256Random(99);
         RegionalStadiumTier.ForStadium(1, rng2, prefectureId: 12);
         Assert.Equal(before, rng2.NextInt(0, int.MaxValue));
+    }
+
+    // ── 秋季県大会の準決勝・決勝（issue #1020・2026-11-15 監督決定 (a)）──
+
+    /// <summary>
+    /// 秋の準決勝・決勝の会場の表（県ID → 期待する球場名。null＝汎用の県営級）。調査（stadiums-research.md・data/stadiums.yaml の
+    /// <c>&lt;県&gt;_autumn_final</c>）で夏と会場が違った17県だけが実在の会場、東京は神宮、残りは県営級。
+    /// </summary>
+    public static TheoryData<int, string?> AutumnVenues() => new()
+    {
+        { 0, "札幌ドーム" }, { 1, null }, { 2, null }, { 3, "仙台市民球場" }, { 4, null }, { 5, null },
+        { 6, "いわきグリーンスタジアム" }, { 7, "ひたちなか市民球場" }, { 8, "宇都宮清原球場" }, { 9, "桐生球場" },
+        { 10, null }, { 11, "千葉県総合スポーツセンター野球場" }, { 12, "明治神宮野球場" }, { 13, "保土ケ谷球場" },
+        { 14, null }, { 15, null }, { 16, null }, { 17, null }, { 18, null }, { 19, "長野オリンピックスタジアム" },
+        { 20, null }, { 21, null }, { 22, "小牧市民球場" }, { 23, "津市営球場" }, { 24, null }, { 25, null }, { 26, null },
+        { 27, "明石公園第一野球場" }, { 28, null }, { 29, null }, { 30, "米子市民球場" }, { 31, null }, { 32, null },
+        { 33, "みよし運動公園野球場" }, { 34, "下関球場" }, { 35, null }, { 36, null }, { 37, null }, { 38, null },
+        { 39, "久留米市野球場" }, { 40, null }, { 41, null }, { 42, null }, { 43, null }, { 44, null }, { 45, null },
+        { 46, "名護市営球場" },
+    };
+
+    [Theory]
+    [MemberData(nameof(AutumnVenues))]
+    public void AutumnFinalRounds_UseThePrefecturesAutumnVenue(int prefectureId, string? expectedName)
+    {
+        foreach (var rr in new[] { 1, 2 })
+        {
+            var st = RegionalStadiumTier.ForStadium(rr, new Xoshiro256Random(1), prefectureId, summer: false);
+            if (expectedName is null) Assert.Same(Stadium.PrefLarge, st);
+            else Assert.Equal(expectedName, st.Name);
+        }
+    }
+
+    /// <summary>秋の会場を足しても夏は変わらない（夏に実在の会場を使うのは東京・神奈川・北海道・宮城・広島だけ）。</summary>
+    [Fact]
+    public void SummerFinalRounds_AreUnchangedByTheAutumnVenues()
+    {
+        for (var pref = 0; pref < 47; pref++)
+        {
+            var st = RegionalStadiumTier.FinalStadiumFor(pref, summer: true);
+            var expected = pref switch
+            {
+                0 => Stadium.HokkaidoBallpark, 3 => Stadium.Miyagi, 12 => Stadium.Jingu,
+                13 => Stadium.Yokohama, 33 => Stadium.Hiroshima, _ => Stadium.PrefLarge,
+            };
+            Assert.Same(expected, st);
+        }
+    }
+
+    /// <summary>札幌ドームだけが屋内。秋の会場は 3D モデルを持たない（standard を判定寸法へ伸縮して描く）。</summary>
+    [Fact]
+    public void AutumnVenues_OnlySapporoDomeIsIndoor_AndNoneHasAModel()
+    {
+        foreach (var (pref, st) in Stadium.AutumnFinals)
+        {
+            Assert.Equal(pref == 0, st.Indoor);
+            Assert.Null(st.Model);
+            Assert.Equal(StadiumTier.Prefectural, st.Tier);
+            Assert.Equal(st.Indoor, st.ToFieldGeometry().Indoor);
+        }
+        Assert.Equal(17, Stadium.AutumnFinals.Count);
+    }
+
+    [Fact]
+    public void KanagawaAutumnHodogaya_UsesItsDimensions()
+    {
+        var geom = RegionalStadiumTier.For(1, new Xoshiro256Random(1), prefectureId: 13, summer: false);
+        Assert.Equal(95.0, geom.LeftFenceM, 6);
+        Assert.Equal(95.0, geom.RightFenceM, 6);
+        Assert.Equal(120.0, geom.CenterFenceM, 6);
+        Assert.Equal(3.0, geom.FenceHeightM, 6);   // 資料なし＝監督決定の 3.0m（県営級と同じ）
+        Assert.False(geom.Indoor);
+    }
+
+    /// <summary>
+    /// フェンス高の資料が無い秋の会場（札幌ドーム 5.75・長野OS 4.0 以外の15か所）は 3.0m＝汎用の県営級と同じ
+    /// （2026-11-15 監督決定）。夏の会場の「省略時 2.5m」を秋へ持ち込まない。
+    /// </summary>
+    [Fact]
+    public void AutumnVenuesWithoutDocumentedFence_UseThePrefecturalDefault()
+    {
+        var documented = new System.Collections.Generic.Dictionary<int, double> { [0] = 5.75, [19] = 4.0 };
+        foreach (var (pref, st) in Stadium.AutumnFinals)
+            Assert.Equal(documented.TryGetValue(pref, out var h) ? h : Stadium.PrefLarge.FenceHeightM, st.FenceHeightM, 6);
+        Assert.Equal(15, Stadium.AutumnFinals.Count - documented.Count);
+    }
+
+    [Fact]
+    public void AutumnEarlyRounds_DrawTheSameAsBefore_AndFinalsDoNotConsumeRandomness()
+    {
+        foreach (var pref in Stadium.AutumnFinals.Keys)
+        {
+            for (ulong seed = 1; seed <= 5; seed++)
+                Assert.Same(RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), null),
+                            RegionalStadiumTier.ForStadium(6, new Xoshiro256Random(seed), pref, summer: false));
+            var before = new Xoshiro256Random(99).NextInt(0, int.MaxValue);
+            var rng = new Xoshiro256Random(99);
+            RegionalStadiumTier.ForStadium(1, rng, pref, summer: false);
+            Assert.Equal(before, rng.NextInt(0, int.MaxValue));
+        }
     }
 }

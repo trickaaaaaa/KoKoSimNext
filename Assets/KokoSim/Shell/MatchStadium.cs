@@ -29,8 +29,8 @@ namespace KokoSim.Unity.Shell
         /// （null可＝ラウンド不明・rng不要な呼び出しは序盤の固定球場へ落ちる）。
         /// 夏・秋以外の種別は<see cref="For(TournamentKind)"/>と同じ結果（甲子園はそのまま／それ以外は既定）。
         /// </summary>
-        /// <param name="prefectureId">自校の県。県大会の準決勝・決勝の球場を決める（東京は神宮・issue #904、神奈川の夏は横浜スタジアム・issue #956）。
-        /// 秋季地区予選は県の決勝球場へ流さず汎用に戻す（#956）。</param>
+        /// <param name="prefectureId">自校の県。県大会の準決勝・決勝の球場を決める（東京は神宮・issue #904、神奈川の夏は横浜スタジアム・issue #956、
+        /// 秋は夏と会場が違う県の実在の会場・issue #1020）。秋季地区予選は県の決勝球場へ流さず汎用に戻す（#956・決定27）。</param>
         public static FieldGeometry For(TournamentKind kind, int? roundsRemaining, IRandomSource? rng, int? prefectureId = null)
             => ForStadium(kind, roundsRemaining, rng, prefectureId)?.ToFieldGeometry() ?? Default;
 
@@ -61,6 +61,13 @@ namespace KokoSim.Unity.Shell
                     => RegionalStadiumTier.ForStadium(roundsRemaining, rng, prefectureId: null),
                 _ => ForStadium(kind),
             };
+
+        /// <summary>
+        /// 次戦の球場が屋内（ドーム）か（issue #1020）。屋内は天候・気温が効かない＝ホーム画面の天気欄を出さない。
+        /// 屋内の会場は準決勝・決勝の球場（乱数を引かない）にしか無いので rng 無しで引いてよい（序盤の市営級は屋外）。
+        /// </summary>
+        public static bool IsIndoor(TournamentKind kind, int? roundsRemaining, int? prefectureId)
+            => ForStadium(kind, roundsRemaining, rng: null, prefectureId)?.Indoor == true;
 
         /// <summary>既定（球場割当が未配線の大会＝地区大会・神宮大会。従来どおり）。</summary>
         private static readonly FieldGeometry Default = new FieldGeometry();

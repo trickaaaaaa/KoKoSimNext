@@ -20,10 +20,11 @@ public sealed class BackgroundStadiumTierTests
     private static readonly School Away = new() { Id = 901, Name = "先攻", PrefectureId = 13, Strength = 55 };
     private static readonly School Home = new() { Id = 902, Name = "後攻", PrefectureId = 13, Strength = 58 };
 
-    private static string Resolve(GameContext ctx, bool useTier, int roundsRemaining, ulong seed)
+    private static string Resolve(GameContext ctx, bool useTier, int roundsRemaining, ulong seed,
+        bool prefectureFinalStadiums = true)
     {
         var bg = new BackgroundMatchResolver(new NationRosters(new AiRosterDeps()), ctx, yearIndex: 1,
-            useRegionalStadiumTier: useTier);
+            useRegionalStadiumTier: useTier, prefectureFinalStadiums: prefectureFinalStadiums);
         var context = new TournamentMatchContext(roundsRemaining, MatchDay: 1, new TournamentPitchLedger());
         return GameResultDigest.Sha256Of(bg.Resolve(Away, Home, new Xoshiro256Random(seed), context));
     }
@@ -38,7 +39,8 @@ public sealed class BackgroundStadiumTierTests
     {
         for (ulong seed = 1; seed <= 6; seed++)
         {
-            var expectedField = RegionalStadiumTier.For(roundsRemaining, new Xoshiro256Random(seed).Fork(13));
+            // 秋（summer 既定 false）・後攻校の県（神奈川）＝準決勝・決勝は保土ケ谷球場（issue #1020）
+            var expectedField = RegionalStadiumTier.For(roundsRemaining, new Xoshiro256Random(seed).Fork(13), prefectureId: 13);
             var expected = Resolve(new GameContext { Field = expectedField }, useTier: false, roundsRemaining, seed);
             Assert.Equal(expected, Resolve(new GameContext(), useTier: true, roundsRemaining, seed));
         }
@@ -57,5 +59,21 @@ public sealed class BackgroundStadiumTierTests
         for (ulong seed = 1; seed <= 10 && !differs; seed++)
             differs = Resolve(koshien, useTier: false, 1, seed) != Resolve(koshien, useTier: true, 1, seed);
         Assert.True(differs, "県営級と甲子園で10シードとも結果が同じ＝球場が効いていない疑い");
+    }
+
+    /// <summary>
+    /// 秋季地区予選（prefectureFinalStadiums: false）は県の決勝球場を使わず汎用の県営級（決定27・issue #1020）
+    /// ＝自校側の MatchStadium（AutumnDistrict は県を渡さない）と同じ球場で解く。
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void DistrictQualifiers_UseTheGenericFinalStadium(int roundsRemaining)
+    {
+        for (ulong seed = 1; seed <= 4; seed++)
+        {
+            var generic = Resolve(new GameContext { Field = Stadium.PrefLarge.ToFieldGeometry() }, useTier: false, roundsRemaining, seed);
+            Assert.Equal(generic, Resolve(new GameContext(), useTier: true, roundsRemaining, seed, prefectureFinalStadiums: false));
+        }
     }
 }

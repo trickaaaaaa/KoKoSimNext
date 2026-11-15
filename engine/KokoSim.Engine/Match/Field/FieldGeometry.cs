@@ -65,6 +65,13 @@ public sealed record FieldGeometry
 
     public double FenceHeightM { get; init; } = 4.0;
 
+    /// <summary>
+    /// 屋内（ドーム）の球場か（issue #1020・<see cref="Stadium.Indoor"/> の写し）。true なら
+    /// <see cref="Game.WeatherModel.ApplyForMatch"/> が天候・気温を効かせない（空気密度・投手の消耗は基準のまま、
+    /// <see cref="Game.GameContext.ResolvedWeather"/> も null＝天気欄を出さない）。既定 false（屋外）。
+    /// </summary>
+    public bool Indoor { get; init; }
+
     /// <summary>塁間27.43m（90ft）。一塁は45°右。</summary>
     public double BaseDistanceM { get; init; } = 27.43;
 

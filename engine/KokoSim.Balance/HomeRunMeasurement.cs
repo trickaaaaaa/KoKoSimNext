@@ -77,7 +77,7 @@ public static class HomeRunMeasurement
         // 夏の県大会（神奈川）: 単純トーナメント n 校＝n−1 試合のうち準決勝・決勝の3試合だけが決勝球場。
         var summerFinalShare = 3.0 / (kanagawa.Count - 1);
         // 秋の県大会（神奈川・data/pref-formats/kanagawa.yaml）: 7地区の4校ブロック総当たり（1ブロック6試合）＋
-        // 上位2校＋夏代表の推薦で県大会トーナメント。準決勝・決勝の3試合だけが決勝球場（秋は県営級）。
+        // 上位2校＋夏代表の推薦で県大会トーナメント。準決勝・決勝の3試合だけが決勝球場（秋は保土ケ谷球場・issue #1020）。
         var blocks = (int)Math.Ceiling(kanagawa.Count / 4.0);
         var autumnGames = blocks * 6 + (blocks * 2 + 1 - 1);
         var autumnFinalShare = 3.0 / autumnGames;
@@ -141,7 +141,7 @@ public static class HomeRunMeasurement
             var teams = KanaTeams();
             rows.Add(Measure("real-autumn", "実ゲーム: 秋の県大会（神奈川）",
                 string.Create(CultureInfo.InvariantCulture,
-                    $"同上の2校・9月の気温・市営級2種（準決勝・決勝 {autumnFinalShare:P1} は県営級）・コールドあり（決勝以外）"),
+                    $"同上の2校・9月の気温・市営級2種（準決勝・決勝 {autumnFinalShare:P1} は保土ケ谷球場）・コールドあり（決勝以外）"),
                 o.Games, Next(), log, (i, g) =>
                 {
                     var (a, h) = PickPair(g, teams.Length);
@@ -276,6 +276,37 @@ public static class HomeRunMeasurement
                 }));
         }
 
+        // ── ⑧ 秋の県大会の準決勝・決勝だけ（issue #1020: 秋の決勝会場を実在の会場の寸法へ）──
+        // 末尾に置く＝既存の条件のシード（+1000 刻み）をずらさない。
+        if (Want("real-autumn-finals"))
+        {
+            var teams = KanaTeams();
+            var st = RegionalStadiumTier.FinalStadiumFor(KanagawaId, summer: false);
+            rows.Add(Measure("real-autumn-finals", "実ゲーム: 秋の県大会の準決勝・決勝だけ（神奈川）",
+                string.Create(CultureInfo.InvariantCulture,
+                    $"神奈川の2校・9月の気温・{st.Name}（両翼{st.LeftM:F0}/{st.RightM:F0}m 中堅{st.CenterM:F0}m フェンス{st.FenceHeightM:F1}m）・決勝以外はコールドあり"),
+                o.Games, Next(), log, (i, g) =>
+                {
+                    var (a, h) = PickPair(g, teams.Length);
+                    var (ctx, _) = PrefCtx(baseCtx, g, summer: false, finalShare: 1.0, month: 9, calendarYear: SeasonBaseYear, rules);
+                    return (teams[a], teams[h], ctx);
+                }));
+        }
+        if (Want("autumn-finals-nation"))
+        {
+            var teams = KanaTeams();
+            var prefIds = nation.Prefectures.Select(p => p.Id).ToArray();
+            rows.Add(Measure("autumn-finals-nation", "全国の秋の県大会の準決勝・決勝（47県を一様に）",
+                "神奈川の2校（強さの物差し）・県を一様に抽選し、その県の秋の準決勝・決勝の球場・9月の気温（屋内は気温なし）・決勝以外はコールドあり",
+                o.Games, Next(), log, (i, g) =>
+                {
+                    var (a, h) = PickPair(g, teams.Length);
+                    var pref = prefIds[g.Fork(PairingStreamId + 2).NextInt(0, prefIds.Length)];
+                    var (ctx, _) = PrefCtx(baseCtx, g, summer: false, finalShare: 1.0, month: 9, calendarYear: SeasonBaseYear, rules, pref);
+                    return (teams[a], teams[h], ctx);
+                }));
+        }
+
         return Report(rows, notes, o, kanagawa.Count, summerFinalShare, autumnGames, autumnFinalShare);
     }
 
@@ -326,12 +357,12 @@ public static class HomeRunMeasurement
     /// コールドは決勝以外あり（Q29）。気温はその月の表（#971）。
     /// </summary>
     private static (GameContext Ctx, Stadium Stadium) PrefCtx(GameContext baseCtx, IRandomSource g, bool summer,
-        double finalShare, int month, int calendarYear, ModernRules rules)
+        double finalShare, int month, int calendarYear, ModernRules rules, int prefectureId = KanagawaId)
     {
         var u = g.Fork(PairingStreamId + 1).NextDouble();
         // 準決勝(2)・決勝(1)を finalShare で、それ以外は序盤（5回戦相当＝市営級の抽選）。
         int roundsRemaining = u < finalShare / 3.0 ? 1 : u < finalShare ? 2 : 5;
-        var stadium = RegionalStadiumTier.ForStadium(roundsRemaining, g.Fork(StadiumStreamId), KanagawaId, summer);
+        var stadium = RegionalStadiumTier.ForStadium(roundsRemaining, g.Fork(StadiumStreamId), prefectureId, summer);
         var ctx = rules.ApplyTo(baseCtx with
         {
             Field = stadium.ToFieldGeometry(),
@@ -563,11 +594,11 @@ public static class HomeRunMeasurement
         sb.AppendLine();
         sb.AppendLine("- **球場**: 自校戦は `Assets/KokoSim/Shell/PlayerMatchResolver.Stadium` → `MatchStadium.ForStadium` → "
             + "engine `RegionalStadiumTier.ForStadium`。夏・秋の県大会は**準決勝・決勝（残りラウンド≤2）だけ**決勝球場"
-            + "（神奈川の夏＝横浜スタジアム、秋＝県営級 `pref_large_01`）、**それ以外は市営級2種（`municipal_small_01`/`02`）を1/2ずつ**抽選"
+            + "（神奈川の夏＝横浜スタジアム、秋＝保土ケ谷球場 `kanagawa_autumn_final`（issue #1020））、**それ以外は市営級2種（`municipal_small_01`/`02`）を1/2ずつ**抽選"
             + "（乱数は試合の Fork 13）。甲子園は `Stadium.Koshien`。裏試合（`TournamentEntry`）も `useRegionalStadiumTier: true` で同じ判定。");
         sb.AppendLine(c, $"- **球場の比率**: 神奈川は {kanagawaCount} 校（`NationGenerator` の県別校数）。夏は単純トーナメント {kanagawaCount - 1} 試合のうち"
             + $"準決勝・決勝の3試合＝{summerFinalShare:P1} が横浜スタジアム、残りは市営級。秋は `data/pref-formats/kanagawa.yaml`"
-            + $"（地区予選＝4校ブロック総当たり＋県大会トーナメント）で約 {autumnGames} 試合のうち3試合＝{autumnFinalShare:P1} が県営級。"
+            + $"（地区予選＝4校ブロック総当たり＋県大会トーナメント）で約 {autumnGames} 試合のうち3試合＝{autumnFinalShare:P1} が保土ケ谷球場。"
             + $"＝**県大会の試合はほぼ全部が市営級**（大会全体の試合数で重み付け。自校が勝ち進むほど決勝球場の比率は上がる）。");
         sb.AppendLine("- **気温**: `PlayerMatchResolver.CurrentWeatherCoefficients` → `WeatherModel.ForMonth(試合日の月)`（#971）。"
             + "開幕月は `TournamentSchedule`（夏の県大会 7/10・甲子園 8/6・秋季県大会 9/12・地区大会 10/18）。"

@@ -4,7 +4,7 @@ namespace KokoSim.Engine.Match.Field;
 
 /// <summary>
 /// 地方大会（夏・秋の県大会）の球場ティア判定（設計書13 §1・「地方大会の球場割当」issue）。
-/// 47県固有の実在球場は追わず、汎用ティア方式で寸法差を実際の判定へ反映する:
+/// 47県固有の実在球場は追わず（決勝会場の例外は <see cref="FinalStadiumFor"/>）、汎用ティア方式で寸法差を実際の判定へ反映する:
 /// 序盤ラウンド＝市営級（<see cref="Stadium.MunicipalSmall01"/>/<see cref="Stadium.MunicipalSmall02"/>
 /// から決定論抽選）、準決勝・決勝＝県営級（<see cref="Stadium.PrefLarge"/>）。純関数・決定論。
 /// </summary>
@@ -23,8 +23,8 @@ public static class RegionalStadiumTier
     /// 大会を戦う県（<see cref="FinalStadiumFor"/>）。null なら県に依らない汎用（県営級）。
     /// </param>
     /// <param name="summer">
-    /// 夏の県大会か（issue #956・#959）。神奈川の横浜スタジアム・北海道の北海道ボールパーク・宮城の宮城球場・広島の広島市民球場は夏の準決勝・決勝だけ（秋は汎用の県営級）。
-    /// 東京の神宮は夏秋とも。乱数の引き方には関わらない。
+    /// 夏の県大会か（issue #956・#959）。神奈川の横浜スタジアム・北海道の北海道ボールパーク・宮城の宮城球場・広島の広島市民球場は夏の準決勝・決勝だけ。
+    /// 秋は <see cref="Stadium.AutumnFinals"/> の会場（issue #1020）。東京の神宮は夏秋とも。乱数の引き方には関わらない。
     /// </param>
     public static FieldGeometry For(int? roundsRemaining, IRandomSource? rng, int? prefectureId = null, bool summer = false)
         => ForStadium(roundsRemaining, rng, prefectureId, summer).ToFieldGeometry();
@@ -41,21 +41,27 @@ public static class RegionalStadiumTier
     }
 
     /// <summary>
-    /// その県の準決勝・決勝の球場（issue #904）。東京（東東京・西東京の夏、秋の都大会）は明治神宮野球場、
-    /// それ以外は汎用の県営級。神奈川の夏だけ横浜スタジアム（issue #956）、北海道の夏だけ北海道ボールパーク
-    /// （北北海道・南北海道とも。issue #959）、宮城の夏だけ宮城球場（issue #961）、広島の夏だけ広島市民球場（issue #963）。いずれも秋は汎用のまま。
-    /// 47県の決勝球場（data/stadiums.yaml の <c>prefecture_finals</c>）へ広げるときはここに足す。
+    /// その県の準決勝・決勝の球場（issue #904）。東京（東東京・西東京の夏、秋の都大会）は明治神宮野球場。
+    /// 夏は神奈川＝横浜スタジアム（issue #956）、北海道（北北海道・南北海道とも）＝北海道ボールパーク（issue #959）、
+    /// 宮城＝宮城球場（issue #961）、広島＝広島市民球場（issue #963）。
+    /// 秋は夏と会場が違う県（<see cref="Stadium.AutumnFinals"/>・issue #1020）が実在の会場（保土ケ谷・札幌ドーム・
+    /// 仙台市民・みよし など17か所）。それ以外は夏・秋とも汎用の県営級（47県すべての配線はしない＝設計書13 §1）。
+    /// 秋季地区予選は県を渡さない（呼び出し側。決定27）＝ここへは来ない。
     /// </summary>
     public static Stadium FinalStadiumFor(int? prefectureId, bool summer = false)
-        => prefectureId switch
+    {
+        if (prefectureId == Nation.SummerRegions.TokyoId) return Stadium.Jingu;
+        if (!summer)
+            return prefectureId is { } id && Stadium.AutumnFinals.TryGetValue(id, out var autumn) ? autumn : Stadium.PrefLarge;
+        return prefectureId switch
         {
-            Nation.SummerRegions.TokyoId => Stadium.Jingu,
-            Nation.SummerRegions.KanagawaId when summer => Stadium.Yokohama,
-            Nation.SummerRegions.HokkaidoId when summer => Stadium.HokkaidoBallpark,
-            Nation.SummerRegions.MiyagiId when summer => Stadium.Miyagi,
-            Nation.SummerRegions.HiroshimaId when summer => Stadium.Hiroshima,
+            Nation.SummerRegions.KanagawaId => Stadium.Yokohama,
+            Nation.SummerRegions.HokkaidoId => Stadium.HokkaidoBallpark,
+            Nation.SummerRegions.MiyagiId => Stadium.Miyagi,
+            Nation.SummerRegions.HiroshimaId => Stadium.Hiroshima,
             _ => Stadium.PrefLarge,
         };
+    }
 
     private static Stadium Pick(IRandomSource rng)
         => rng.NextInt(0, 2) == 0 ? Stadium.MunicipalSmall01 : Stadium.MunicipalSmall02;
