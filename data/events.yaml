@@ -1055,6 +1055,83 @@ events:
           - who: team_manager
             say: "……三人目ですね、今週。"
 
+  # スカウトの節目（issue #1035）。操作が要る場面を見落とさせないための強制イベント。
+  # 出すかどうかと週は ScoutMilestones（engine）が1箇所で決める。会話の後はスカウト画面へ移る。
+  # IDは ScoutMilestones の定数と一致させる（EventTableTests が固定）。
+  - id: scout_choose_field
+    kind: System
+    text: "スカウトが、探す分野を聞きに来た。"
+    variants:
+      - lines:
+          - who: scout
+            say: "監督、今年はどんな子を探しましょう。投球でも、打撃でも、足でも。"
+          - who: manager
+            say: "うちに足りない所から頼む。"
+          - who: scout
+            say: "それが分かれば、苦労しないんですけどね。"
+      - lines:
+          - who: narration
+            say: "スカウトが、ぶ厚い手帳を机に広げた。ページの半分は、去年の言い訳だった。"
+          - who: scout
+            say: "今年こそ当てます。まず、どの分野を中心に見るか決めてください。"
+          - who: team_manager
+            say: "決めないと、全部見ることになります。つまり、全部が浅くなります。"
+      - lines:
+          - who: scout
+            say: "分野を決めてもらえれば、そこを重点的に回ります。決めなければ、おまかせです。"
+          - who: team_manager
+            say: "おまかせって、スカウトさんの好みですよね。"
+          - who: scout
+            say: "……否定はしません。"
+
+  - id: scout_list_arrived
+    kind: System
+    text: "スカウトが候補のリストを持ってきた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "スカウトが、封筒の束を抱えて部室に駆け込んできた。"
+          - who: scout
+            say: "監督、リストが届きました。今年の候補です。"
+          - who: team_manager
+            say: "誰から会いに行くか、決めないといけませんね。"
+      - lines:
+          - who: scout
+            say: "お待たせしました。中学生のリスト、ここに全部あります。"
+          - who: manager
+            say: "多いな。"
+          - who: team_manager
+            say: "全員は口説けませんからね。枠があるので。"
+      - lines:
+          - who: narration
+            say: "机に置かれたリストの端に、コーヒーのしみがついている。"
+          - who: scout
+            say: "しみのところの子は、たぶん大丈夫です。"
+          - who: team_manager
+            say: "たぶん、ですか。"
+
+  - id: scout_deadline
+    kind: System
+    text: "スカウトが、訪問の期限を知らせに来た。"
+    variants:
+      - lines:
+          - who: scout
+            say: "監督、そろそろ決めないと、三月に間に合いません。"
+          - who: team_manager
+            say: "三月は、思っているより早く来ます。"
+      - lines:
+          - who: narration
+            say: "カレンダーの三月に、スカウトが赤丸をつけた。丸は三重だった。"
+          - who: scout
+            say: "訪問できる時間も、あとわずかです。"
+          - who: manager
+            say: "今日、決める。"
+      - lines:
+          - who: scout
+            say: "口説き残しはありませんか。中学生は待ってくれても、三月は待ってくれません。"
+          - who: team_manager
+            say: "どっちも待ってくれない気がします。"
+
   - id: draft_nominated
     kind: System
     text: "教え子に指名がかかった。"

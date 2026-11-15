@@ -179,7 +179,7 @@ namespace KokoSim.Unity.Scout
         /// <summary>探す分野を切り替える（候補リストが生成済みなら無視＝凍結）。</summary>
         public void SelectField(int fieldIndex)
         {
-            if (ScoutService.Current != null) return;   // 既に今年ぶんのリストが出ていれば変えられない
+            if (!ScoutService.FieldChoosable) return;   // 今年ぶんのリストが出ていれば変えられない
             if (fieldIndex < 0 || fieldIndex >= FieldValues.Length) return;
             ScoutService.SelectedField = FieldValues[fieldIndex];
         }
@@ -203,7 +203,7 @@ namespace KokoSim.Unity.Scout
 
             v.MilestoneWord = "次の節目: " + ConfirmMonthWord() + " 入部確定（あと " + WeeksUntilConfirm() + " 週）";
 
-            v.CanChooseField = ScoutService.Current == null;
+            v.CanChooseField = ScoutService.FieldChoosable;
             var idx = System.Array.IndexOf(FieldValues, ScoutService.SelectedField);
             v.FieldIndex = idx < 0 ? 0 : idx;
         }

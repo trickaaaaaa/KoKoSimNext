@@ -176,6 +176,9 @@ namespace KokoSim.Unity.Home
             // 夏の引退の会話を読み終えたら主将指名へ続ける（issue #954: 引退の会話 → 主将指名 → 背番号決定）。
             if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
             else if (KokoSim.Unity.Shell.UniformNumberService.Pending) GoToUniformNumbers();
+            // スカウトの節目の会話（分野選び・候補リスト到着・念押し）を読み終えたらスカウト画面へ（issue #1035）。
+            else if (KokoSim.Unity.Shell.ScoutService.TakeNavigation())
+                KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("ScoutScreen");
         }
 
         /// <summary>
@@ -224,6 +227,7 @@ namespace KokoSim.Unity.Home
                 // 新チームが空（下級生ゼロ）＝指名しようがない。導線を閉じて通常進行へ戻す
                 // （発足済みの印は残す＝第18週の安全網に二度目の発足をさせない・issue #954）。
                 KokoSim.Unity.Shell.NewTeamService.Skip();
+                TryShowEvent();   // 発足の流れが終わった＝スカウトの分野選びの会話が積まれていれば出す（issue #1035）
                 return;
             }
 

@@ -129,6 +129,10 @@ namespace KokoSim.Unity.Shell
                 NationService.ApplyAiGrowthNode(AiGrowthNode.Autumn);
             }
 
+            // スカウトの節目の強制イベント（候補リスト到着・締切前の念押し・issue #1035）。リスト生成の後に判定する。
+            // 未契約の年は何も出ない。判定は engine の ScoutMilestones に1箇所。
+            ScoutService.RaiseForWeek();
+
             // ドラフト（設計書20 §4・issue #586）。注目度の再評価は毎週（候補入り／評価の増減を拾うため）、
             // 指名の確定は10月最終週だけ。どちらも母種由来の独立ストリームで、本編の乱数列は進めない＝帯不変。
             DraftService.RefreshBands();

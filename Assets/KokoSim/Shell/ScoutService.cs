@@ -48,6 +48,12 @@ namespace KokoSim.Unity.Shell
         /// <summary>探す分野（次のリスト生成に使う。いつでも変えられる＝生成時に凍結）。</summary>
         public static ScoutField SelectedField { get; set; } = ScoutField.Omakase;
 
+        /// <summary>
+        /// 探す分野を選べるか。今年ぶんの候補リスト（合流年度＝今年度＋1）が出ると凍結される。
+        /// 前年度のリストが残っているだけなら選べる（リストの有無でなく年度で見る）。
+        /// </summary>
+        public static bool FieldChoosable => ScoutMilestones.CanChooseField(Current, GameClock.YearIndex);
+
         /// <summary>解禁されている枠数（スカウト網の契約段から。0＝スカウトできない）。</summary>
         public static int Slots => ManagerService.ContractEffects.ScoutSlots;
 
@@ -105,6 +111,55 @@ namespace KokoSim.Unity.Shell
             return ScoutModel.Visit(p, Coeff, rng) ? VisitResult.VisitedWithRivalMove : VisitResult.Visited;
         }
 
+        // ── 節目の強制イベント（issue #1035。判定は engine の ScoutMilestones に1箇所） ──
+
+        /// <summary>節目の会話を読み終えたらスカウト画面へ移る待ち（ホームが会話の消化後に見る）。</summary>
+        public static bool NavigatePending { get; private set; }
+
+        private static bool _landOnCandidates;
+
+        /// <summary>新チーム発足の流れ（引退→主将指名→背番号決定）が終わった直後に呼ぶ。分野選びの会話を積む。</summary>
+        public static void RaiseAfterNewTeamStarted()
+        {
+            var m = ScoutMilestones.AfterNewTeamStarted(Calendar, GameClock.Week, GameClock.YearIndex, Slots, Current);
+            if (m == ScoutMilestone.None) return;
+            SelectedField = ScoutField.Omakase;   // 選ばずに閉じたらお任せ（前年の選択を引きずらない）
+            Raise(m);
+        }
+
+        /// <summary>週に入った直後（候補リスト生成の後）に呼ぶ。リスト到着・念押しの会話を積む。</summary>
+        public static void RaiseForWeek()
+        {
+            var m = ScoutMilestones.AtWeek(Calendar, GameClock.Week, GameClock.YearIndex, Slots, Current);
+            if (m != ScoutMilestone.None) Raise(m);
+        }
+
+        private static void Raise(ScoutMilestone m)
+        {
+            var id = ScoutMilestones.EventId(m);
+            // 表に無いイベントで待ちだけ立てると、ホームが消化できず回送が居座る＝先に存在を確かめる。
+            if (id == null || EventService.Scheduler.Find(id) == null) return;
+            EventService.PushMilestone(id);
+            NavigatePending = true;
+            _landOnCandidates = m != ScoutMilestone.ChooseField;
+        }
+
+        /// <summary>待ちを下ろして、スカウト画面へ移ってよいか返す（ホームが会話を読み終えたとき呼ぶ）。</summary>
+        public static bool TakeNavigation()
+        {
+            var was = NavigatePending;
+            NavigatePending = false;
+            return was;
+        }
+
+        /// <summary>スカウト画面が開いた直後に呼ぶ。候補タブから始めるか（分野選びは上部帯なのでタブ不問）。</summary>
+        public static bool TakeLandOnCandidates()
+        {
+            var was = _landOnCandidates;
+            _landOnCandidates = false;
+            return was;
+        }
+
         /// <summary>訪問1回の費用[万円]。</summary>
         public static double VisitCost(int index)
         {
@@ -152,6 +207,7 @@ namespace KokoSim.Unity.Shell
             Current = s.Scouting;
             SelectedField = s.ScoutFieldSelection;
             _visitCounter = 0;
+            NavigatePending = false; _landOnCandidates = false;
         }
 
         /// <summary>新規ゲームの完全リセット。</summary>
@@ -160,6 +216,7 @@ namespace KokoSim.Unity.Shell
             Current = null;
             SelectedField = ScoutField.Omakase;
             _visitCounter = 0;
+            NavigatePending = false; _landOnCandidates = false;
         }
     }
 }

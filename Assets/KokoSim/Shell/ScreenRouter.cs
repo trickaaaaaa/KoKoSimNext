@@ -112,7 +112,8 @@ namespace KokoSim.Unity.Shell
             // 「週を進められる画面」だけに限る（試合中フローの画面から引き剥がさない）。各 Pending はホームが
             // 該当のモーダル/オファー画面を出して下ろす。
             if (_pending == null
-                && (NewTeamService.Pending || GameSession.Current.BannerPending || ManagerTransferService.Pending)
+                && (NewTeamService.Pending || GameSession.Current.BannerPending || ManagerTransferService.Pending
+                    || ScoutService.NavigatePending)
                 && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
                 _pending = HomeScreen;
 
