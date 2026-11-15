@@ -277,7 +277,7 @@ public sealed record TacticsCoefficients
     /// <summary>くさい所の縁狙い。右打者の外角は一塁側(+X)、左打者は三塁側(−X)（<see cref="DirectiveFor"/> の内角と対）。</summary>
     public PitchEdgeAim EdgeAimFor(Handedness batterBats) => new(
         PitchAroundOvershootM, PitchAroundWeightLow, PitchAroundWeightOutside, PitchAroundWeightHigh, PitchAroundWeightInside,
-        batterBats == Handedness.Right ? 1.0 : -1.0);
+        -batterBats.InsideSign());
 
     // ===== 伝令効果・動揺・主将（設計書09 §3/§8） =====
     /// <summary>伝令1回の負補正緩和量（0〜1）とその継続打席数。</summary>
@@ -362,7 +362,7 @@ public sealed record TacticsCoefficients
         // 右打者の内角は三塁側(−X)、左打者は一塁側(+X)。スイッチは左打席想定。
         PitchPolicy.InsideAttack => PitchDirective.Identity with
         {
-            AimXOffsetM = batterBats == Handedness.Right ? -InsideAimXOffsetM : InsideAimXOffsetM,
+            AimXOffsetM = batterBats.InsideSign() * InsideAimXOffsetM,
         },
         _ => PitchDirective.Identity,
     };
