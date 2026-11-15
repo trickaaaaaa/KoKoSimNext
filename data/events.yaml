@@ -1132,6 +1132,35 @@ events:
           - who: team_manager
             say: "どっちも待ってくれない気がします。"
 
+  # 年契約の更新（issue #1034）。年額が引かれる年度の総括の前週に、契約中の年契約の段を選び直させる。
+  # 出すかどうかと週は ContractRenewal（engine）が1箇所で決める。会話の後は更新の画面（段を1枚ずつ選ぶ）へ。
+  # IDは ContractRenewal.EventId と一致させる（EventTableTests が固定）。
+  - id: contract_renewal
+    kind: System
+    text: "年契約の更新の季節になった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、今年も契約の更新の時期です。去年の領収書、見ましたか。"
+          - who: scout
+            say: "見ない方が、幸せなことも世の中にはあります。"
+          - who: team_manager
+            say: "見てください。部費の話です。"
+      - lines:
+          - who: narration
+            say: "マネージャーが、年契約の書類をクリアファイルごと机に置いた。ファイルの角が少し折れている。"
+          - who: team_manager
+            say: "続けるのも、見直すのも、今日決められます。何も決めなければ、今のまま続きます。"
+          - who: scout
+            say: "つまり、黙っていても払うってことですね。"
+      - lines:
+          - who: scout
+            say: "更新ですか。うちは今のままで、お願いしたいところですが。"
+          - who: manager
+            say: "順番に見ていく。"
+          - who: team_manager
+            say: "お願いする相手は、スカウトさんじゃなくて部費です。"
+
   - id: draft_nominated
     kind: System
     text: "教え子に指名がかかった。"

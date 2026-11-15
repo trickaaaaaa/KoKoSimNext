@@ -149,6 +149,8 @@ events:
             "insight_growth_type",
             // スカウトの節目（issue #1035）。IDは ScoutMilestones の定数で引く。
             ScoutMilestones.ChooseFieldEventId, ScoutMilestones.ListArrivedEventId, ScoutMilestones.DeadlineEventId,
+            // 年契約の更新（issue #1034）。IDは ContractRenewal の定数で引く。
+            KokoSim.Engine.Career.ContractRenewal.EventId,
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
             "koshien_berth_donation", "koshien_draw",
             // 夏の敗退直後の3年引退（issue #954）。IDは SummerRetirement の定数で引く。
@@ -245,6 +247,15 @@ events:
             Assert.Equal(EventKind.System, e.Kind);
             Assert.All(e.Variants, v => Assert.Contains(v.Lines, l => l.Who == EventRoles.Scout));
         }
+    }
+
+    /// <summary>年契約の更新の会話（issue #1034）は週次抽選に載らない System。出すのは判定（ContractRenewal）。</summary>
+    [Fact]
+    public void ContractRenewalEvent_IsSystemKind_AndFiresFromEngineJudgementOnly()
+    {
+        var e = RepositoryEvents().Single(x => x.Id == KokoSim.Engine.Career.ContractRenewal.EventId);
+        Assert.Equal(EventKind.System, e.Kind);
+        Assert.False(e.HasChoices);   // 段の選択は専用の画面（会話の後）で行う
     }
 
     /// <summary>

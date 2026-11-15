@@ -51,10 +51,10 @@ namespace KokoSim.Unity.Management
     public sealed class ManagementView
     {
         public double Funds;
-        /// <summary>年度頭に入る収入[万円]（学校予算＋信頼度連動）。</summary>
+        /// <summary>年度末の総括で入る収入[万円]（学校予算＋信頼度連動）。</summary>
         public double Income;
         public string IncomeNote = "";
-        /// <summary>年度頭に出る固定支出[万円]（夏合宿・冬合宿・スカウト）。</summary>
+        /// <summary>年度末の総括で出る固定支出[万円]（夏合宿・冬合宿・スカウト）。</summary>
         public double Expense;
         public string ExpenseNote = "";
         public double Net;
@@ -110,11 +110,11 @@ namespace KokoSim.Unity.Management
             var set = ManagerService.Facilities;
 
             var contracts = ManagerService.ContractEffects;
-            var income = Career.AnnualBudgetBase + Career.BudgetPerTrust * m.Trust;
+            var income = CareerEngine.AnnualBudgetIncome(m.Trust, Career);
             // 固定支出＝合宿（年2回）＋年契約の年額合計。スカウト費は年契約「スカウト網」に含まれる
             // （engine 側 CareerEngine.ApplyResults も同じ数え方＝二重には引かない）。
             var camps = Career.SummerCampCost + Career.WinterCampCost;
-            var expense = camps + contracts.AnnualCost;
+            var expense = CareerEngine.AnnualFixedExpense(contracts.AnnualCost, Career);
             var donation = Career.FacilityFundDonationPerFame * m.Fame;
             var fundIncome = Career.FacilityFundSchoolBase + donation;
 
@@ -206,13 +206,13 @@ namespace KokoSim.Unity.Management
                 var next = def.Tiers[lv + 1];
                 row.NextEffect = ContractEffectText(next);
                 row.NextCost = next.AnnualCost;
-                row.Affordable = true;   // 契約時の前払いは無い（年度頭にまとめて引かれる）
+                row.Affordable = true;   // 契約時の前払いは無い（年度末の総括でまとめて引かれる）
             }
             return row;
         }
 
         /// <summary>年契約1段の効果の1行表記。効果ゼロ（未契約・据え置きの段）は「—」。</summary>
-        private static string ContractEffectText(ContractTier t)
+        public static string ContractEffectText(ContractTier t)
         {
             var parts = new List<string>();
             if (t.ScoutTalentAdd > 0) parts.Add("新入生の質 +" + t.ScoutTalentAdd.ToString("0"));

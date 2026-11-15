@@ -294,6 +294,18 @@
         </ui:VisualElement>
       </ui:VisualElement>
 
+      <!-- 年契約の更新（設計書04 §1.4a）。契約中の系統を1枚ずつめくって段を選び、最後に年額合計と部費の見込みを確かめる。 -->
+      <ui:VisualElement name="cr-modal" class="ui-root modal-scrim">
+        <ui:VisualElement class="modal-card cr-card">
+          <ui:Label name="cr-title" class="cr-hd" text="" />
+          <ui:VisualElement name="cr-body" class="cr-body" />
+          <ui:VisualElement class="cr-foot">
+            <ui:Button name="cr-back" class="dlg-btn dlg-btn--ghost" text="戻る" />
+            <ui:Button name="cr-next" class="dlg-btn dlg-btn--primary" text="次へ" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
       <!-- 大会モード: 試合結果（自動消化）。 -->
       <ui:VisualElement name="tm-result" class="ui-root tm-scrim">
         <ui:VisualElement class="tm-card tm-result__card">
