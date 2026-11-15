@@ -39,6 +39,9 @@ namespace KokoSim.Unity.Scout
             var visit = _root.Q<Button>("sc-visit");
             if (visit != null) visit.clicked += Visit;
 
+            // 節目の会話（候補リスト到着・念押し）から来たときは候補のタブから始める（issue #1035）。
+            if (ScoutService.TakeLandOnCandidates()) _state.Tab = ScoutTab.Candidates;
+
             _selected = 0;
             Render();
         }

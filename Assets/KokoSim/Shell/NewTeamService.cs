@@ -72,7 +72,11 @@ namespace KokoSim.Unity.Shell
         /// 指名できる候補が居ない（新チームが空）ときに導線を閉じる。発足済みの印は残す
         /// （<see cref="Clear"/> と違い、第18週の安全網に二度目の発足をさせない）。
         /// </summary>
-        public static void Skip() => Pending = false;
+        public static void Skip()
+        {
+            Pending = false;
+            ScoutService.RaiseAfterNewTeamStarted();   // 新チーム発足の流れはここで終わり（issue #1035）
+        }
 
         /// <summary>テスト・リセット用（週を巻き戻したときなど）。新規ゲームの完全リセットも兼ねる。</summary>
         public static void Clear()
@@ -172,10 +176,15 @@ namespace KokoSim.Unity.Shell
         internal static void Open()
         {
             Pending = CaptainSelector.NewTeamMembers(RosterService.Roster).Count > 0;
+            if (!Pending) ScoutService.RaiseAfterNewTeamStarted();   // 決める背番号が無い＝流れの終わり（issue #1035）
         }
 
         /// <summary>プレイヤーが「背番号を確定」を押した。割当はメンバー設定画面で編集済み＝ここでは待ちを下ろすだけ。</summary>
-        public static void Confirm() => Pending = false;
+        public static void Confirm()
+        {
+            Pending = false;
+            ScoutService.RaiseAfterNewTeamStarted();   // 引退→主将指名→背番号決定の終わり＝スカウトが分野を聞きに来る（issue #1035）
+        }
 
         /// <summary>テスト・新規ゲーム用。</summary>
         public static void Clear() => Pending = false;

@@ -147,6 +147,8 @@ events:
             "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
             "insight_growth_type",
+            // スカウトの節目（issue #1035）。IDは ScoutMilestones の定数で引く。
+            ScoutMilestones.ChooseFieldEventId, ScoutMilestones.ListArrivedEventId, ScoutMilestones.DeadlineEventId,
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
             "koshien_berth_donation", "koshien_draw",
             // 夏の敗退直後の3年引退（issue #954）。IDは SummerRetirement の定数で引く。
@@ -230,6 +232,19 @@ events:
         var e = RepositoryEvents().First(x => x.Id == "draft_meeting");
         Assert.Equal(EventKind.Fixed, e.Kind);
         Assert.Equal(new SeasonCalendar().DraftWeek, e.CalendarWeek);
+    }
+
+    /// <summary>スカウトの節目の会話（issue #1035）は週次抽選に載らない System で、スカウトが話す。出すのは判定（ScoutMilestones）。</summary>
+    [Fact]
+    public void ScoutMilestoneEvents_AreSystemKind_WithScoutVoice()
+    {
+        var events = RepositoryEvents();
+        foreach (var m in new[] { ScoutMilestone.ChooseField, ScoutMilestone.ListArrived, ScoutMilestone.DeadlineReminder })
+        {
+            var e = events.Single(x => x.Id == ScoutMilestones.EventId(m));
+            Assert.Equal(EventKind.System, e.Kind);
+            Assert.All(e.Variants, v => Assert.Contains(v.Lines, l => l.Who == EventRoles.Scout));
+        }
     }
 
     /// <summary>
