@@ -118,6 +118,70 @@ public sealed class SubstitutionTacticsTests
         Assert.Null(brain.CallPinchHit(sit, Rng));
     }
 
+    // ===== 代打の判断入力の拡張: 打力の総合・左右の相性・場面（設計書11 §4, issue #1046） =====
+
+    [Fact]
+    public void PinchHit_PlatoonBonus_PrefersOppositeHandedBenchVsPitcher()
+    {
+        // 右投手に対し、生ミートが同じでも逆打ち（左）の控えを優先する＝左右の相性（設計書11 §4）。
+        var c = new TacticsCoefficients { PinchHitContactCeiling = 60, PinchHitImprovement = 1, PinchHitPlatoonBonus = 6 };
+        var brain = new StandardTacticsBrain(c);
+        var weak = P("弱", contact: 40) with { Bats = Handedness.Right };
+        var sameSide = P("右の控え", contact: 55) with { Bats = Handedness.Right };
+        var oppSide = P("左の控え", contact: 55) with { Bats = Handedness.Left };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, weak, false,
+            new List<Player> { weak }, new List<Player> { sameSide, oppSide }) { PitcherThrows = Handedness.Right };
+
+        Assert.Equal("左の控え", brain.CallPinchHit(sit, Rng)!.Name);
+    }
+
+    [Fact]
+    public void PinchHit_PlatoonBonus_Zero_IgnoresHandedness()
+    {
+        // 相性ボーナス0（既定）なら利き腕を見ず、控え順の先頭（同ミート）を選ぶ＝従来と一致。
+        var c = new TacticsCoefficients { PinchHitContactCeiling = 60, PinchHitImprovement = 1 };
+        var brain = new StandardTacticsBrain(c);
+        var weak = P("弱", contact: 40) with { Bats = Handedness.Right };
+        var sameSide = P("右の控え", contact: 55) with { Bats = Handedness.Right };
+        var oppSide = P("左の控え", contact: 55) with { Bats = Handedness.Left };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, weak, false,
+            new List<Player> { weak }, new List<Player> { sameSide, oppSide }) { PitcherThrows = Handedness.Right };
+
+        Assert.Equal("右の控え", brain.CallPinchHit(sit, Rng)!.Name);
+    }
+
+    [Fact]
+    public void PinchHit_PowerWeight_PrefersSluggerOverHigherContactSoftBat()
+    {
+        // パワー重みを入れると、ミートは少し低くても長打力のある控えを選ぶ＝打力の総合（設計書11 §4）。
+        var c = new TacticsCoefficients { PinchHitContactCeiling = 60, PinchHitImprovement = 1, PinchHitPowerWeight = 1.0 };
+        var brain = new StandardTacticsBrain(c);
+        var weak = P("弱", contact: 40) with { Power = 40 };
+        var contactBat = P("当て屋", contact: 58) with { Power = 30 };   // 値=58+(30-50)=38
+        var slugger = P("長距離", contact: 52) with { Power = 90 };       // 値=52+(90-50)=92
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, weak, false,
+            new List<Player> { weak }, new List<Player> { contactBat, slugger });
+
+        Assert.Equal("長距離", brain.CallPinchHit(sit, Rng)!.Name);
+    }
+
+    [Fact]
+    public void PinchHit_RispCeilingBonus_MakesMidBatterEligibleOnlyInScoringPosition()
+    {
+        // 得点圏（場面）ではミート上限を緩め、普段は代打対象外の中堅打者も好機では替える（設計書11 §4）。
+        var c = new TacticsCoefficients { PinchHitContactCeiling = 46, PinchHitRispCeilingBonus = 10, PinchHitImprovement = 1 };
+        var brain = new StandardTacticsBrain(c);
+        var mid = P("中堅打者", contact: 52);   // 基準上限46超だが、得点圏では 46+10=56 以下で候補になる
+        var bench = new List<Player> { P("代打", contact: 70) };
+
+        var noRisp = new SubstitutionSituation(8, 9, 0, 0, null, null, null, mid, false, new List<Player> { mid }, bench);
+        Assert.Null(brain.CallPinchHit(noRisp, Rng));   // 走者なし＝上限46のまま＝対象外
+
+        var runner = P("二塁走者");
+        var risp = new SubstitutionSituation(8, 9, 0, 0, null, runner, null, mid, false, new List<Player> { mid }, bench);
+        Assert.Equal("代打", brain.CallPinchHit(risp, Rng)!.Name);   // 得点圏＝上限56＝代打が出る
+    }
+
     // ===== オーダー編成: StandardTacticsBrain（設計書11 §4, issue #48） =====
 
     [Fact]

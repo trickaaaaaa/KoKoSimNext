@@ -74,23 +74,37 @@ public sealed class PitchingChangeTacticsTests
         Assert.Equal(before, rng.CaptureState());
     }
 
-    // ===== AI: 既定係数では高度トリガーは無効（帯・決定論baseline 不変の担保） =====
+    // ===== AI: 既定係数で高度トリガーが有効（issue #1046 で実戦投入） =====
 
     [Fact]
-    public void Ai_DefaultCoefficients_NeverFireAdvancedTriggers_AndDrawNoRng()
+    public void Ai_DefaultCoefficients_EnableAdvancedTriggers_ByTier()
     {
-        // 最上位ティア・最高采配能力・守り勝つ校風でも、既定係数（MinTier=99）なら高度トリガーは発火しない。
-        var ai = new AiTacticsBrain(new AiProfile(100, 7, SchoolStyle.DefensiveMinded));
-        var rng = new Xoshiro256Random(3);
-        var before = rng.CaptureState();
+        // #1046: 既定を崩れ=0(G-F)・僅差終盤=2(E)・動揺=2(E) へ下げて実戦投入した。
+        // 崩れは最下位ティアでも発火する（基本の火消し。既定 BlowupRunsInInning=5）。
+        var g = new AiTacticsBrain(new AiProfile(100, 0, SchoolStyle.Standard));
+        Assert.True(CountFires(g, Sit(runsThisInning: 5)) > 240, "既定で崩れ火消しが発火するはず（崩れ=0）");
 
-        // 崩れ・動揺・僅差終盤の条件が全て揃った状況でも、既定では続投（＝null）かつ RNG は不消費。
-        Assert.Null(ai.CallPitchingChange(
+        // 動揺・僅差終盤は E(2) 以上の引き出し。F(1) は持たない＝発火しない。
+        var e = new AiTacticsBrain(new AiProfile(100, 2, SchoolStyle.Standard));
+        var f = new AiTacticsBrain(new AiProfile(100, 1, SchoolStyle.Standard));
+        Assert.True(CountFires(e, Sit(rattled: true, runsThisInning: 0)) > 240, "E は動揺で継投するはず");
+        Assert.Equal(0, CountFires(f, Sit(rattled: true, runsThisInning: 0)));  // F は動揺の引き出しを持たない
+
+        // 基本トリガー（疲労）は従来どおり全ティアで尊重（RNG不使用）。
+        Assert.NotNull(f.CallPitchingChange(Sit(fatigueTriggered: true), new Xoshiro256Random(3)));
+    }
+
+    [Fact]
+    public void Standard_HasNoAdvancedTriggers_SoTacticsBandsUnaffected()
+    {
+        // 帯の担保は「AI既定が99」ではなく「StandardTacticsBrain は高度トリガーを持たない」になった（#1046）。
+        // games_10k/games_10k_tactics は StandardTacticsBrain 駆動＝崩れ・動揺・僅差終盤では一切継投せず RNG も引かない。
+        var std = new StandardTacticsBrain();
+        var rng = new Xoshiro256Random(5);
+        var before = rng.CaptureState();
+        Assert.Null(std.CallPitchingChange(
             Sit(runsThisInning: 12, rattled: true, inning: 9, scoreDiff: 1, fatiguePitches: 200), rng));
         Assert.Equal(before, rng.CaptureState());
-
-        // 基本トリガー（疲労）は既定でも尊重（Standard と同じ・RNG不使用）。
-        Assert.NotNull(ai.CallPitchingChange(Sit(fatigueTriggered: true), rng));
     }
 
     // ===== AI: 崩れ（連打・大量失点の火消し） =====
@@ -111,8 +125,8 @@ public sealed class PitchingChangeTacticsTests
         var gated = new EnemyAiCoefficients { BlowupReliefMinTier = 3, BlowupRunsInInning = 4 };
         Assert.Equal(0, CountFires(new AiTacticsBrain(new AiProfile(100, 0, SchoolStyle.Standard), aiCoeff: gated), s));
 
-        // 既定（無効）→ 発火しない。
-        Assert.Equal(0, CountFires(new AiTacticsBrain(new AiProfile(100, 7, SchoolStyle.Standard)), s));
+        // 既定係数でも崩れは発火する（#1046 で実戦投入。既定 BlowupRunsInInning=5 なので runs=5 で発火）。
+        Assert.True(CountFires(new AiTacticsBrain(new AiProfile(100, 7, SchoolStyle.Standard)), s) > 240);
 
         // 失点が閾値未満 → 発火しない。
         Assert.Equal(0, CountFires(ok, Sit(runsThisInning: 3)));

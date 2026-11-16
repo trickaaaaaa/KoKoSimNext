@@ -61,6 +61,10 @@ public sealed record GameResult
     /// <summary>継投ログ（issue #209 表現。継投・投野交代・野手登板）。観測専用＝決定論digestには含めない。</summary>
     public IReadOnlyList<PitchingChangeEvent> PitchingChangeLog { get; init; } = Array.Empty<PitchingChangeEvent>();
 
+    /// <summary>交代ログ（代打・代走・守備固め・投手交代・コンバート・DH解除を種別付きで, issue #920）。
+    /// 観測専用＝決定論digest・統計帯には含めない（<see cref="GameProgress.Substitutions"/> の差分観測）。</summary>
+    public IReadOnlyList<SubstitutionEvent> SubstitutionLog { get; init; } = Array.Empty<SubstitutionEvent>();
+
     /// <summary>個人打撃成績（打順順9人）。</summary>
     public IReadOnlyList<BattingLine> AwayBatting { get; init; } = Array.Empty<BattingLine>();
     public IReadOnlyList<BattingLine> HomeBatting { get; init; } = Array.Empty<BattingLine>();
@@ -415,6 +419,7 @@ public static class GameEngine
             HomeErrors = home.Errors,
             Log = p.Log,
             PitchingChangeLog = p.PitchingChanges,
+            SubstitutionLog = p.Substitutions,
             AwayBatting = away.BuildBattingLines(),
             HomeBatting = home.BuildBattingLines(),
             AwayPitching = away.BuildPitchingLines(),
@@ -2708,7 +2713,10 @@ public static class GameEngine
         return new SubstitutionSituation(
             inning, ctx.RegulationInnings, outs, team.Runs - opponent.Runs,
             bases.First, bases.Second, bases.Third, upcoming, upcomingIsPitcher,
-            team.CurrentLineup, team.Reserves);
+            team.CurrentLineup, team.Reserves)
+        {
+            PitcherThrows = opponent.CurrentPitcher?.Throws,   // 左右の相性（プラトーン）判断用
+        };
     }
 
     /// <summary>コールドゲーム（マーシールール）判定（設計書05 §1.3, OPEN-QUESTIONS Q18）。internal はテスト専用。</summary>

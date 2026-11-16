@@ -31,8 +31,8 @@ public sealed record EnemyAiCoefficients
     public int GearMinTier { get; init; } = 4;         // C: ギアの先読み運用
     public int TimeoutMinTier { get; init; } = 2;      // E: 伝令の運用
     // 選手交代（設計書09 §6, C-2）: ベンチ運用の巧拙もティアで出る。
-    public int PinchHitMinTier { get; init; } = 2;     // E: 代打の基本運用
-    public int PinchRunMinTier { get; init; } = 4;     // C: 代走の使いどころ
+    public int PinchHitMinTier { get; init; } = 0;     // G: 代打は初級校も持つ基本の引き出し（設計書11 §2・#1046）
+    public int PinchRunMinTier { get; init; } = 2;     // E: 代走の使いどころ（#1046 で C→E へ緩和＝G/F だけ据え置き）
     public int DefensiveSubMinTier { get; init; } = 3; // D: 守備固め
     // 1球采配（設計書15 §2.3, Phase C）: カウントを読んだ球単位の判断は上級の引き出し。
     public int PitchTacticsMinTier { get; init; } = 2; // E: カウント別の基本判断（追い込まれ矯正/3-0待て等）
@@ -123,19 +123,21 @@ public sealed record EnemyAiCoefficients
     /// <summary>全員野球: 選手層を使い回す方針の一環でローテにも積極的。</summary>
     public double AceRestTotalBaseballFactor { get; init; } = 1.4;
 
-    // === ⑥ 高度な継投層（issue #209, 設計書11 §4） ===
+    // === ⑥ 高度な継投層（issue #209 で配線 → issue #1046 で実戦投入） ===
     // 疲労/球数上限を超えた「高度な継投トリガー」（崩れ・僅差終盤・動揺）の②ティア引き出し。
-    // 既定はいずれも到達不能(99)＝発火しない＝games_10k/tactics 帯・決定論baseline を1ビットも動かさない
-    // （issue #209 D1=(A) 帯不変維持。三層AIの効果は AI vs AI 専用テストで検証）。将来 (B) で帯を再校正して
-    // 実戦投入する際は、崩れ=0(G-F基本)・僅差終盤=2(E)・動揺=2(E) などの設計値へ YAML で下げる。
-    /// <summary>崩れ（イニング内の大量失点）による火消し継投の最低ティア（既定99=無効）。</summary>
-    public int BlowupReliefMinTier { get; init; } = 99;
-    /// <summary>僅差終盤（点差×イニング）の早め継投の最低ティア（既定99=無効）。</summary>
-    public int CloseLateReliefMinTier { get; init; } = 99;
-    /// <summary>動揺（連続出塁）による投手切替の最低ティア（既定99=無効）。</summary>
-    public int RattledReliefMinTier { get; init; } = 99;
+    // #209 では既定99＝無効で配線した（2段運用の①）。#1046 で設計値（崩れ=0 G-F基本・僅差終盤=2 E・動揺=2 E）へ
+    // 下げて実戦投入した＝相手校が疲労以外の理由でも継投するようになる（現実の高校野球並みの積極さ）。
+    // 通るのは AiTacticsBrain（相手校・委任采配・裏試合フルシム）だけで、StandardTacticsBrain 駆動の
+    // games_10k/games_10k_tactics 帯・決定論baseline の「素の采配」経路は高度トリガーを一切持たない＝不変。
+    // BrainFor を使う帯（ホームラン帯）と AI games の決定論baseline は動くので再測/再生成する。
+    /// <summary>崩れ（イニング内の大量失点）による火消し継投の最低ティア（0=G-F も持つ基本の引き出し）。</summary>
+    public int BlowupReliefMinTier { get; init; } = 0;
+    /// <summary>僅差終盤（点差×イニング）の早め継投の最低ティア（2=E・状況判断の引き出し）。</summary>
+    public int CloseLateReliefMinTier { get; init; } = 2;
+    /// <summary>動揺（連続出塁）による投手切替の最低ティア（2=E・状況判断の引き出し）。</summary>
+    public int RattledReliefMinTier { get; init; } = 2;
     /// <summary>崩れ判定: 当該半イニングの失点がこの数以上で火消し継投の候補。</summary>
-    public int BlowupRunsInInning { get; init; } = 4;
+    public int BlowupRunsInInning { get; init; } = 5;
     /// <summary>僅差終盤とみなす回（この回以降）。</summary>
     public int CloseLateFromInning { get; init; } = 7;
     /// <summary>僅差とみなす得失点差の絶対値の上限（守備側視点）。</summary>
@@ -146,6 +148,30 @@ public sealed record EnemyAiCoefficients
     public int AceDependentReliefTierPenalty { get; init; } = 2;
     /// <summary>③校風・守り勝つ: 高度継投の実効ティアをこの段だけ上げる（厚め・早め）。</summary>
     public int DefensiveMindedReliefTierBonus { get; init; } = 1;
+
+    // === ⑥b 相手校の代打・代走 baseline（issue #1046） ===
+    // StandardTacticsBrain 素の交代条件は「現実の高校野球より控えめ」で、強豪校だと候補が一人も出ない
+    // （ミート上限46を全員超える）。相手校（AiTacticsBrain）だけ、全校一律で条件を現実並みに引き上げる
+    // baseline（AiTacticsBrain.ApplyAiBaseline）。校風・監督傾向はこの上にさらに掛かる。既定の
+    // StandardTacticsBrain・games_10k(_tactics) 帯は素のままで不変＝この baseline を通らない。
+    /// <summary>代打を考え始める回を前倒し（7→6）。</summary>
+    public int AiPinchHitInningEarlier { get; init; } = 1;
+    /// <summary>代打候補にする打者ミート上限を引き上げ（46→74＝強豪の不調打者も候補に）。</summary>
+    public int AiPinchHitCeilingRelax { get; init; } = 28;
+    /// <summary>控えに求める上積みを下げる（12→8）。</summary>
+    public int AiPinchHitImprovementRelax { get; init; } = 4;
+    /// <summary>代打評価にパワーを混ぜる重み（打力の総合, 設計書11 §4）。</summary>
+    public double AiPinchHitPowerWeight { get; init; } = 0.6;
+    /// <summary>代打評価の左右の相性ボーナス（設計書11 §4）。</summary>
+    public double AiPinchHitPlatoonBonus { get; init; } = 6.0;
+    /// <summary>得点圏（場面）でミート上限をさらに緩める幅（設計書11 §4）。</summary>
+    public int AiPinchHitRispCeilingBonus { get; init; } = 8;
+    /// <summary>代走を考え始める回を前倒し（8→7）。</summary>
+    public int AiPinchRunInningEarlier { get; init; } = 1;
+    /// <summary>代走候補にする走者の走力上限を引き上げ（44→52）。</summary>
+    public int AiPinchRunSpeedCeilingRelax { get; init; } = 8;
+    /// <summary>代走に求める走力の上積みを下げる（22→12）。</summary>
+    public int AiPinchRunImprovementRelax { get; init; } = 10;
 
     // === ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2・設計書11） ===
     // AIが「守備位置の入替（無料）」と「コンバート継投」を打てるようにする層。#209 と同じ2段運用で

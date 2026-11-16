@@ -2244,6 +2244,9 @@ public static class CoefficientsLoader
         public int PinchHitImprovement { get; set; } = D.PinchHitImprovement;
         public int PinchHitMinDiff { get; set; } = D.PinchHitMinDiff;
         public int PinchHitMaxDiff { get; set; } = D.PinchHitMaxDiff;
+        public double PinchHitPowerWeight { get; set; } = D.PinchHitPowerWeight;
+        public double PinchHitPlatoonBonus { get; set; } = D.PinchHitPlatoonBonus;
+        public int PinchHitRispCeilingBonus { get; set; } = D.PinchHitRispCeilingBonus;
         public int PinchRunFromInning { get; set; } = D.PinchRunFromInning;
         public int PinchRunSpeedCeiling { get; set; } = D.PinchRunSpeedCeiling;
         public int PinchRunImprovement { get; set; } = D.PinchRunImprovement;
@@ -2381,6 +2384,9 @@ public static class CoefficientsLoader
             PinchHitFromInning = PinchHitFromInning,
             PinchHitContactCeiling = PinchHitContactCeiling,
             PinchHitImprovement = PinchHitImprovement,
+            PinchHitPowerWeight = PinchHitPowerWeight,
+            PinchHitPlatoonBonus = PinchHitPlatoonBonus,
+            PinchHitRispCeilingBonus = PinchHitRispCeilingBonus,
             PinchHitMinDiff = PinchHitMinDiff,
             PinchHitMaxDiff = PinchHitMaxDiff,
             PinchRunFromInning = PinchRunFromInning,
@@ -2541,6 +2547,16 @@ public static class CoefficientsLoader
         public double CloseLateReliefMarginFactor { get; set; } = D.CloseLateReliefMarginFactor;
         public int AceDependentReliefTierPenalty { get; set; } = D.AceDependentReliefTierPenalty;
         public int DefensiveMindedReliefTierBonus { get; set; } = D.DefensiveMindedReliefTierBonus;
+        // ⑥b 相手校の代打・代走 baseline（issue #1046）
+        public int AiPinchHitInningEarlier { get; set; } = D.AiPinchHitInningEarlier;
+        public int AiPinchHitCeilingRelax { get; set; } = D.AiPinchHitCeilingRelax;
+        public int AiPinchHitImprovementRelax { get; set; } = D.AiPinchHitImprovementRelax;
+        public double AiPinchHitPowerWeight { get; set; } = D.AiPinchHitPowerWeight;
+        public double AiPinchHitPlatoonBonus { get; set; } = D.AiPinchHitPlatoonBonus;
+        public int AiPinchHitRispCeilingBonus { get; set; } = D.AiPinchHitRispCeilingBonus;
+        public int AiPinchRunInningEarlier { get; set; } = D.AiPinchRunInningEarlier;
+        public int AiPinchRunSpeedCeilingRelax { get; set; } = D.AiPinchRunSpeedCeilingRelax;
+        public int AiPinchRunImprovementRelax { get; set; } = D.AiPinchRunImprovementRelax;
         // ⑦ 守備位置操作層（issue #255）
         public int DefenseSwapMinTier { get; set; } = D.DefenseSwapMinTier;
         public int DefenseSwapFromInning { get; set; } = D.DefenseSwapFromInning;
@@ -2637,6 +2653,15 @@ public static class CoefficientsLoader
             CloseLateReliefMarginFactor = CloseLateReliefMarginFactor,
             AceDependentReliefTierPenalty = AceDependentReliefTierPenalty,
             DefensiveMindedReliefTierBonus = DefensiveMindedReliefTierBonus,
+            AiPinchHitInningEarlier = AiPinchHitInningEarlier,
+            AiPinchHitCeilingRelax = AiPinchHitCeilingRelax,
+            AiPinchHitImprovementRelax = AiPinchHitImprovementRelax,
+            AiPinchHitPowerWeight = AiPinchHitPowerWeight,
+            AiPinchHitPlatoonBonus = AiPinchHitPlatoonBonus,
+            AiPinchHitRispCeilingBonus = AiPinchHitRispCeilingBonus,
+            AiPinchRunInningEarlier = AiPinchRunInningEarlier,
+            AiPinchRunSpeedCeilingRelax = AiPinchRunSpeedCeilingRelax,
+            AiPinchRunImprovementRelax = AiPinchRunImprovementRelax,
             DefenseSwapMinTier = DefenseSwapMinTier,
             DefenseSwapFromInning = DefenseSwapFromInning,
             DefenseSwapMaxScoreDiff = DefenseSwapMaxScoreDiff,

@@ -140,7 +140,15 @@ public readonly record struct SubstitutionSituation(
     Player UpcomingBatter,
     bool UpcomingBatterIsPitcher,
     IReadOnlyList<Player> Lineup,
-    IReadOnlyList<Player> Reserves);
+    IReadOnlyList<Player> Reserves)
+{
+    /// <summary>対戦投手の利き腕（左右の相性＝プラトーン判断用, 設計書11 §4）。null＝不明でプラトーン無効
+    /// （＝既定係数の StandardTacticsBrain は読まない＝恒等）。</summary>
+    public Players.Handedness? PitcherThrows { get; init; }
+
+    /// <summary>得点圏（二塁 or 三塁に走者）か＝代打の「場面」入力（設計書11 §4）。</summary>
+    public bool RunnerInScoringPosition => OnSecond is not null || OnThird is not null;
+}
 
 /// <summary>
 /// 継投判断に渡す状況（issue #209, 設計書11 §4）。守備側（＝投げている側）視点で組む。
