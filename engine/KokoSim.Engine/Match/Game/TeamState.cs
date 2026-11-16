@@ -923,10 +923,10 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// チーム別の投手疲労係数（issue #55, 監督傾向, 決定4: B-1）。null=既定＝呼び出し側が ctx.Fatigue を使う。
-    /// GameEngine は継投判定・実効能力の算出で <c>defense.Fatigue ?? ctx.Fatigue</c> を渡す。
+    /// このチームの投手疲労係数（issue #55, 監督傾向, 決定4: B-1）＝試合の係数に継投の余裕の倍率を掛けたもの
+    /// （<see cref="Team.FatigueFor"/>。issue #1047）。GameEngine は継投判定・実効能力の算出でこれを使う。
     /// </summary>
-    public FatigueCoefficients? Fatigue => _team.Fatigue;
+    public FatigueCoefficients FatigueFor(FatigueCoefficients contextFatigue) => _team.FatigueFor(contextFatigue);
 
     /// <summary>ギア重み込みの実効消費球数（設計書02 §1.1e-f）。疲労判定はこちらを使う。</summary>
     public double FatiguePitches { get; private set; }

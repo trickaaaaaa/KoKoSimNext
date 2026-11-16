@@ -763,10 +763,10 @@ public static class GameEngine
                 PitcherGear.Coast => ctx.Pitching.GearCoastStaminaFactor,
                 _ => 1.0,
             };
-            // チーム別疲労係数（issue #55, 監督傾向, 決定4: B-1）。傾向なしのチームは null＝ctx.Fatigue に落ちる
-            // （＝従来と完全一致・帯不変）。減衰カーブ（VelocityDrop/ControlDrop）は共通なので、エース酷使でも
+            // チーム別疲労係数（issue #55, 監督傾向, 決定4: B-1）。傾向なしのチームは ctx.Fatigue そのもの
+            // （＝従来と完全一致・帯不変）。変えるのは継投の余裕の倍率だけ（issue #1047）なので、エース酷使でも
             // 実効能力の算出結果は ctx.Fatigue と同値＝変わるのは継投「時期」（ShouldRelieve）だけ。
-            var fatigue = defense.Fatigue ?? ctx.Fatigue;
+            var fatigue = defense.FatigueFor(ctx.Fatigue);
             // 投手・打者の実効能力（疲労→調子→スキル→プレッシャー）。**純関数の連鎖で乱数非消費**。
             // 打席頭と、采配窓で継投・代打が入ったときの束縛し直し（RebindMatchup）が同じ式を通る＝一箇所に置く。
             (PitcherAttributes Pitcher, BatterAttributes BatterBase, SkillPlayMods PlayMods) EffectiveMatchup()
@@ -2568,7 +2568,7 @@ public static class GameEngine
         GameProgress p, TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng,
         int inning, bool isTop, int paIndex, int runsThisHalf, int outs)
     {
-        var fatigue = defense.Fatigue ?? ctx.Fatigue;
+        var fatigue = defense.FatigueFor(ctx.Fatigue);
         var staminaTarget = defense.EffectiveBaseStamina(defense.CurrentPitcher);
         var fatigueTriggered = PitchingFatigue.ShouldRelieve(
             defense.CurrentPitcher, defense.FatiguePitches, fatigue, staminaTarget);

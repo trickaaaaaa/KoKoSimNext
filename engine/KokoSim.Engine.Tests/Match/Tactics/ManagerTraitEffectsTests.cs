@@ -13,6 +13,7 @@ namespace KokoSim.Engine.Tests.Match.Tactics;
 public sealed class ManagerTraitEffectsTests
 {
     private static readonly EnemyAiCoefficients Ai = new();
+    private static readonly Team EmptyTeam = new() { BattingOrder = Array.Empty<KokoSim.Engine.Players.Player>() };
 
     [Fact]
     public void NoTraits_IsIdentity_ForTacticsAndFatigue()
@@ -20,8 +21,11 @@ public sealed class ManagerTraitEffectsTests
         var baseC = new TacticsCoefficients();
         Assert.Equal(baseC, ManagerTraitEffects.ApplyTactics(baseC, Array.Empty<ManagerTrait>(), Ai));
         Assert.Equal(baseC, ManagerTraitEffects.ApplyTactics(baseC, null, Ai));
-        Assert.Null(ManagerTraitEffects.FatigueOverride(new FatigueCoefficients(), Array.Empty<ManagerTrait>(), Ai));
-        Assert.Null(ManagerTraitEffects.FatigueOverride(new FatigueCoefficients(), null, Ai));
+        Assert.Equal(1.0, ManagerTraitEffects.RelieveMarginFactor(Array.Empty<ManagerTrait>(), Ai));
+        Assert.Equal(1.0, ManagerTraitEffects.RelieveMarginFactor(null, Ai));
+        // 倍率1のチームは試合の係数を同一参照のまま使う（＝帯不変）。
+        var ctxF = new FatigueCoefficients();
+        Assert.Same(ctxF, EmptyTeam.FatigueFor(ctxF));
     }
 
     [Fact]
@@ -103,9 +107,9 @@ public sealed class ManagerTraitEffectsTests
     public void AceOveruse_RaisesRelieveMargin_KeepsDecayCurve()
     {
         var baseF = new FatigueCoefficients();
-        var f = ManagerTraitEffects.FatigueOverride(baseF, new[] { ManagerTrait.AceOveruse }, Ai);
-        Assert.NotNull(f);
-        Assert.True(f!.RelievePitchMargin > baseF.RelievePitchMargin);   // エースを引っ張る（margin だけで表現, issue #356）
+        var team = ManagerTraitEffects.Apply(EmptyTeam, new[] { ManagerTrait.AceOveruse }, Ai);
+        var f = team.FatigueFor(baseF);
+        Assert.True(f.RelievePitchMargin > baseF.RelievePitchMargin);   // エースを引っ張る（margin だけで表現, issue #356）
         // 疲労の減衰カーブは物理として不変＝諸刃（引っ張ると被打率上昇）が既存モデルで自然に出る。
         Assert.Equal(baseF.VelocityDropPerOverPitch, f.VelocityDropPerOverPitch);
         Assert.Equal(baseF.ControlDropPerOverPitch, f.ControlDropPerOverPitch);
@@ -115,9 +119,22 @@ public sealed class ManagerTraitEffectsTests
     public void QuickHook_LowersRelieveMargin()
     {
         var baseF = new FatigueCoefficients();
-        var f = ManagerTraitEffects.FatigueOverride(baseF, new[] { ManagerTrait.QuickHook }, Ai);
-        Assert.NotNull(f);
-        Assert.True(f!.RelievePitchMargin < baseF.RelievePitchMargin);
+        var team = ManagerTraitEffects.Apply(EmptyTeam, new[] { ManagerTrait.QuickHook }, Ai);
+        Assert.True(team.FatigueFor(baseF).RelievePitchMargin < baseF.RelievePitchMargin);
+    }
+
+    /// <summary>
+    /// issue #1047: 監督の癖は試合の係数（天候で変わる消耗の勾配）を潰さない。旧実装はチームが既定の
+    /// 疲労係数を丸ごと持ち、夏場の消耗が癖のある学校だけ消えていた。
+    /// </summary>
+    [Fact]
+    public void RelieveMargin_KeepsContextDecayCurve_FromWeather()
+    {
+        var hot = new FatigueCoefficients() with { VelocityDropPerOverPitch = 0.09, ControlDropPerOverPitch = 0.2 };
+        var f = ManagerTraitEffects.Apply(EmptyTeam, new[] { ManagerTrait.AceOveruse }, Ai).FatigueFor(hot);
+        Assert.Equal(hot.VelocityDropPerOverPitch, f.VelocityDropPerOverPitch);
+        Assert.Equal(hot.ControlDropPerOverPitch, f.ControlDropPerOverPitch);
+        Assert.Equal(hot.RelievePitchMargin * Ai.AceOveruseRelieveMarginFactor, f.RelievePitchMargin, 9);
     }
 
     [Fact]

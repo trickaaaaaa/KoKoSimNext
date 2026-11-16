@@ -55,12 +55,18 @@ public sealed record Team
     public Player? StartingPitcher { get; init; }
 
     /// <summary>
-    /// チーム別の投手疲労係数（issue #55, 監督傾向「エース酷使／継投早め」, 決定4: B-1）。
-    /// null=既定＝<c>GameContext.Fatigue</c> をそのまま使う（従来挙動・帯不変）。非nullなら
-    /// このチームの継投しきい値（<see cref="PitchingFatigue.ShouldRelieve"/>）に適用される。
-    /// 疲労の減衰カーブは <c>GameContext.Fatigue</c> と共通＝監督は継投「時期」だけを変える。
+    /// 継投の余裕（<see cref="FatigueCoefficients.RelievePitchMargin"/>）に掛ける倍率
+    /// （issue #55, 監督傾向「エース酷使／継投早め」, 決定4: B-1）。既定 1.0＝<c>GameContext.Fatigue</c> そのまま（帯不変）。
+    /// 係数を丸ごと持たず倍率だけを持つのは、試合の係数（天候で消耗の勾配が変わる・#803/#971）を
+    /// 監督の癖で上書きしないため（issue #1047）。疲労の減衰カーブは試合の係数のまま＝監督は継投「時期」だけを変える。
     /// </summary>
-    public FatigueCoefficients? Fatigue { get; init; }
+    public double RelieveMarginFactor { get; init; } = 1.0;
+
+    /// <summary>このチームが使う投手疲労係数＝試合の係数に継投の余裕の倍率だけを掛けたもの（倍率1なら同一参照）。</summary>
+    public FatigueCoefficients FatigueFor(FatigueCoefficients contextFatigue)
+        => RelieveMarginFactor == 1.0
+            ? contextFatigue
+            : contextFatigue with { RelievePitchMargin = contextFatigue.RelievePitchMargin * RelieveMarginFactor };
 
     /// <summary>
     /// チームの勢い段階（0〜MomentumCoefficients.MaxLevel、既定3。issue #863・design-05想定節）。
