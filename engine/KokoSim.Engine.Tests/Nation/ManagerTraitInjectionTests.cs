@@ -185,7 +185,7 @@ public sealed class ManagerTraitInjectionTests
     [Trait("Category", "Heavy")]
     public void AceOveruse_ThrowsAceLongerThanQuickHook()
     {
-        // 同Id＝同一ロースター。差は継投しきい値（Team.Fatigue, 決定4: B-1）だけ。
+        // 同Id＝同一ロースター。差は継投しきい値（Team.RelieveMarginFactor, 決定4: B-1）だけ。
         var overuse = Sch(500, 70, ManagerTrait.AceOveruse);
         var quick = Sch(500, 70, ManagerTrait.QuickHook);
         var oppSchool = Sch(501, 60);

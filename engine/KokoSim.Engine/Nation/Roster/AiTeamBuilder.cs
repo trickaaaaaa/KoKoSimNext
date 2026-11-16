@@ -69,9 +69,12 @@ public static class AiTeamBuilder
         // 背番号の採番表（AiUniformNumbers）。(校ID, 年度) 固定＝大会を跨いでも同じ番号。
         var numbers = AiUniformNumbers.For(school.Id, yearIndex);
 
+        // 調子は (校ID, 年度, 選手ID) の Fork から引く純関数（Fork は親を進めない）＝何度引いても同じ値。
+        double ConditionValueOf(AiPlayer p) => FormModel.SampleInitialCondition(conditionRoot.Fork((ulong)(uint)p.Id), deps.Form);
+
         Player Snap(AiPlayer p, int number)
         {
-            var v = FormModel.SampleInitialCondition(conditionRoot.Fork((ulong)(uint)p.Id), deps.Form);
+            var v = ConditionValueOf(p);
             return p.Snapshot with
             {
                 UniformNumber = number,
@@ -105,7 +108,20 @@ public static class AiTeamBuilder
         // 先発野手8人＝実効守備力＋打撃の総和が最大になる割当（issue #384）。守備位置ごとに独立で最良を採ると
         // 「捕手も遊撃もこなせる1人」を先に取られた枠が総崩れするので、8枠を同時に解く。
         // 自校（RosterTeamBuilder）は同じ問題を 8! 全探索で解いており、本ソルバは同じ最適解を返す。
-        var assignment = AssignFieldPositions(fieldCandidates, deps.Fielding, deps.Roster.Lineup, deps.Persistent);
+        //
+        // 監督傾向・抜擢型（issue #55 → #1047）: 好調（Good 以上）な選手の重みに調子の段×重みを足す＝控えでも
+        // 調子が良ければ先発に入る（押し出された正位置選手は控えへ回り、守備固め・代打の候補になる）。
+        // 永続ロスターの選手は当季の調子（Q21）を本当に持っているので、使い捨て生成のように調子を振り直さない。
+        // 背番号は選抜後に守備位置から振る規則（AiUniformNumbers）なので、抜擢された選手はその位置の番号を着ける。
+        var promoter = Match.Tactics.ManagerTraitEffects.HasPromoter(school.ManagerTraits);
+        double PromoterBonus(AiPlayer p)
+        {
+            if (!promoter) return 0.0;
+            var step = FormModel.Step(FormModel.Quantize(ConditionValueOf(p)));
+            return step >= deps.EnemyAi.PromoterMinConditionStep ? deps.EnemyAi.PromoterConditionWeight * step : 0.0;
+        }
+        var assignment = AssignFieldPositions(fieldCandidates, deps.Fielding, deps.Roster.Lineup, deps.Persistent,
+            PromoterBonus);
         for (var slot = 0; slot < FieldSlots.Length; slot++)
         {
             var idx = assignment[slot];
@@ -181,7 +197,9 @@ public static class AiTeamBuilder
         var composed = LineupOrderer.Compose(team, deps.Roster.Lineup, modernRules, calendarYear);
         // 主将（設計書09 §8）: 自校と同じ規則（最上級生の統率力最大）で AI 校にも置く（issue ai-school-mental-fixed-50）。
         // ベンチ入り20人の中から選ぶ（Compose 後の参照＝Team.Captain の在場判定は参照一致）。
-        return composed with { Captain = CaptainSelector.SelectFromPlayers(StrengthTeamFactory.AllPlayers(composed)) };
+        var withCaptain = composed with { Captain = CaptainSelector.SelectFromPlayers(StrengthTeamFactory.AllPlayers(composed)) };
+        // 監督傾向・継投系（エース酷使／継投早め, issue #55 → #1047）。使い捨て生成と同じ関数を通す。
+        return Match.Tactics.ManagerTraitEffects.Apply(withCaptain, school.ManagerTraits, deps.EnemyAi);
     }
 
     /// <summary>
@@ -222,11 +240,12 @@ public static class AiTeamBuilder
     /// <see cref="Season.EffectiveFielding"/> と同じ式）に、<b>打撃総合×係数</b>を足したもの
     /// （issue ai-two-way-hitting-pitchers-start-as-fielders）。打撃は候補ごとの定数なので「どの枠に置くか」は
     /// 守備で、「誰を出すか」は守備＋打撃で決まる＝守備だけで先発を選び打てる選手を座らせる偏りを直す。
-    /// 戻り値は枠→候補の添字（候補不足なら −1）。
+    /// 戻り値は枠→候補の添字（候補不足なら −1）。<paramref name="bonus"/> は候補ごとの定数の上乗せ
+    /// （監督傾向・抜擢型の調子。枠に依らない＝「誰を出すか」だけに効く。issue #1047）。
     /// </summary>
     private static int[] AssignFieldPositions(
         IReadOnlyList<AiPlayer> fielders, Match.Fielding.FieldingCoefficients coeff,
-        LineupCoefficients lineup, PersistentRosterCoefficients pc)
+        LineupCoefficients lineup, PersistentRosterCoefficients pc, System.Func<AiPlayer, double>? bonus = null)
     {
         var empty = new int[FieldSlots.Length];
         for (var i = 0; i < empty.Length; i++) empty[i] = -1;
@@ -235,7 +254,8 @@ public static class AiTeamBuilder
         var w = new double[FieldSlots.Length, fielders.Count];
         for (var i = 0; i < fielders.Count; i++)
         {
-            var batting = LineupOrderer.BattingScore(fielders[i].Snapshot, lineup) * pc.FieldSlotBattingWeight;
+            var batting = LineupOrderer.BattingScore(fielders[i].Snapshot, lineup) * pc.FieldSlotBattingWeight
+                          + (bonus?.Invoke(fielders[i]) ?? 0.0);
             for (var slot = 0; slot < FieldSlots.Length; slot++)
             {
                 var raw = Season.EffectiveFielding.Raw(

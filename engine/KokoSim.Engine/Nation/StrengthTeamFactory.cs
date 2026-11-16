@@ -163,13 +163,9 @@ public static class StrengthTeamFactory
         // 主将（設計書09 §8）: 自校と同じ規則（最上級生の統率力最大）で AI 校にも置く（issue ai-school-mental-fixed-50）。
         // 参照は Compose 後の打順・控えの実体から選ぶ（Team.Captain の在場判定は参照一致）。
         var captain = CaptainSelector.SelectFromPlayers(AllPlayers(composed));
-        // 監督傾向・継投系（issue #55, 決定4: B-1）: エース酷使/継投早めのチームだけ継投しきい値を差し替える。
-        // 傾向なしは null＝GameContext.Fatigue に落ちる（従来と完全一致・帯不変）。
-        return composed with
-        {
-            Captain = captain,
-            Fatigue = ManagerTraitEffects.FatigueOverride(new FatigueCoefficients(), traits, ai),
-        };
+        // 監督傾向・継投系（issue #55, 決定4: B-1）: エース酷使/継投早めのチームだけ継投の余裕に倍率を掛ける。
+        // 傾向なしは倍率1＝GameContext.Fatigue そのまま（従来と完全一致・帯不変）。永続ロスター（AiTeamBuilder）も同じ関数を通す（#1047）。
+        return ManagerTraitEffects.Apply(composed with { Captain = captain }, traits, ai);
     }
 
     /// <summary>主将候補＝打順＋控え＋（DH制の）先発投手の全員（Compose 後の参照）。</summary>
