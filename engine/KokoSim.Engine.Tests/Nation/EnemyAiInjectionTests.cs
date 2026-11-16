@@ -54,7 +54,9 @@ public sealed class EnemyAiInjectionTests
     [Trait("Category", "Heavy")] // 数十〜数百試合のフルシム集計（数十秒）
     public void HighTierSchool_SubstitutesOverManyGames_LowTierSchool_Never()
     {
-        // S(7): 代打・代走・守備固めすべて引き出しにある。G(0): どれも PinchHitMinTier(2) 未満で運用しない。
+        // S(7): 代打・代走・守備固め・動揺/僅差終盤の継投すべて引き出しにある。
+        // G(0): 代打と崩れ火消しは「初級校も持つ基本の引き出し」（設計書11 §2・#1046）なので行うが、
+        // 代走(min_tier2)・守備固め(min_tier3)・動揺/僅差終盤の継投(min_tier2)は引き出しに無い＝行わない。
         // ロースターは両者同一（上のWeakBattingTeamWithBench）にして、差が純粋にティアゲートから来ることを保証する。
         var high = Sch(301, strength: 95);
         var low = Sch(302, strength: 20);
@@ -71,8 +73,10 @@ public sealed class EnemyAiInjectionTests
             lowSubs += GameEngine.Play(lowTeam, opponent, new GameContext(), new Xoshiro256Random(6000 + i)).AwaySubstitutions;
         }
 
-        Assert.Equal(0, lowSubs); // ②ティアの引き出しにない＝偶発でも起きない
-        Assert.True(highSubs > 0, $"高ティア校が{games}試合で一度も選手交代を使わなかった");
+        // 低ティア校も基本の交代（代打・崩れ火消し）は行う＝「引き出しの差」はあっても交代ゼロではない（#1046）。
+        Assert.True(lowSubs > 0, $"低ティア校が{games}試合で基本の交代（代打・崩れ火消し）を一度も使わなかった");
+        // 高ティアほど引き出しが多い（代走・守備固め・高度継投が加わる）＝明確に交代が多い（設計書11 §2）。
+        Assert.True(highSubs > lowSubs, $"高ティア校({highSubs})が低ティア校({lowSubs})より交代が多いはず");
     }
 
     /// <summary>

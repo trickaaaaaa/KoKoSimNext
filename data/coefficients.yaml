@@ -1024,6 +1024,9 @@ tactics:
   pinch_hit_improvement: 12          # 控えがこれだけミート上なら送る
   pinch_hit_min_diff: -3             # 代打を出す得失点差レンジ（僅差〜小ビハインド）
   pinch_hit_max_diff: 2
+  pinch_hit_power_weight: 0.0        # 代打評価にパワーを混ぜる重み（0=ミートのみ・素の挙動。設計書11 §4）
+  pinch_hit_platoon_bonus: 0.0       # 左右の相性ボーナス（0=相性を見ない・素の挙動）
+  pinch_hit_risp_ceiling_bonus: 0    # 得点圏でミート上限を緩める幅（0=場面を見ない・素の挙動）
   pinch_run_from_inning: 8
   pinch_run_speed_ceiling: 44        # この走力以下の走者を代走候補に
   pinch_run_improvement: 22          # 控えがこれだけ走力上なら送る
@@ -1135,8 +1138,8 @@ enemy_ai:
   inside_policy_min_tier: 5         # B: 内角・釣り球
   gear_min_tier: 4                  # C: ギア先読み
   timeout_min_tier: 2              # E: 伝令運用
-  pinch_hit_min_tier: 2             # E: 代打の基本運用
-  pinch_run_min_tier: 4             # C: 代走の使いどころ
+  pinch_hit_min_tier: 0             # G: 代打は初級校も持つ基本の引き出し（設計書11 §2・#1046）
+  pinch_run_min_tier: 2             # E: 代走の使いどころ（#1046 で C→E へ緩和＝G/F だけ据え置き）
   defensive_sub_min_tier: 3         # D: 守備固め
   pitch_tactics_min_tier: 2        # E: 1球采配（カウント別の基本判断, 設計書15 §2.3）
   # ③ 校風層: 采配傾向の重み
@@ -1188,6 +1191,30 @@ enemy_ai:
   ace_rest_ace_dependent_factor: 0.2          # 豪腕依存: 打線は水物＝エースにほぼ常に頼る
   ace_rest_defensive_minded_factor: 1.6       # 守り勝つ野球: ローテ管理に積極的
   ace_rest_total_baseball_factor: 1.4         # 全員野球: 選手層を使い回す方針の一環
+  # ⑥ 高度な継投層（issue #209 で配線 → #1046 で実戦投入）。疲労/球数上限以外の継投トリガー。
+  # 通るのは AiTacticsBrain（相手校・委任・裏試合フルシム）だけ＝StandardTacticsBrain 駆動の
+  # games_10k/games_10k_tactics は高度トリガーを持たないので不変。C#既定と一致させる（不変条件#4）。
+  blowup_relief_min_tier: 0                    # 崩れ（大量失点の火消し）: G-F も持つ基本の引き出し
+  close_late_relief_min_tier: 2               # 僅差終盤の早め継投: E（状況判断）
+  rattled_relief_min_tier: 2                  # 動揺（連続出塁）の投手切替: E（状況判断）
+  blowup_runs_in_inning: 5                    # この失点数以上で火消し候補
+  close_late_from_inning: 7                   # 僅差終盤とみなす回（この回以降）
+  close_late_max_score_diff: 2               # 僅差とみなす得失点差の絶対値（守備側視点）
+  close_late_relief_margin_factor: 0.6       # 疲労margin をこの倍率まで前倒しして早発火（<1.0=早め）
+  ace_dependent_relief_tier_penalty: 2       # 豪腕依存: 高度継投の実効ティアをこの段下げる（引っ張る）
+  defensive_minded_relief_tier_bonus: 1      # 守り勝つ: 高度継投の実効ティアをこの段上げる（厚め・早め）
+  # ⑥b 相手校の代打・代走 baseline（issue #1046）。素の StandardTacticsBrain は現実より控えめなので、
+  # 相手校（AiTacticsBrain）だけ全校一律で条件を現実並みへ引き上げる。校風・監督傾向はこの上に掛かる。
+  # games_10k(_tactics) 帯の素の采配はこの baseline を通らないので不変。C#既定と一致させる（不変条件#4）。
+  ai_pinch_hit_inning_earlier: 1             # 代打を考え始める回を前倒し（7→6）
+  ai_pinch_hit_ceiling_relax: 28             # 代打候補の打者ミート上限を上げる（46→74＝強豪の不調打者も候補に）
+  ai_pinch_hit_improvement_relax: 4          # 控えに求める上積みを下げる（12→8）
+  ai_pinch_hit_power_weight: 0.6             # 代打評価にパワーを混ぜる重み（打力の総合, 設計書11 §4）
+  ai_pinch_hit_platoon_bonus: 6.0            # 代打評価の左右の相性ボーナス（設計書11 §4）
+  ai_pinch_hit_risp_ceiling_bonus: 8         # 得点圏（場面）でミート上限をさらに緩める幅（設計書11 §4）
+  ai_pinch_run_inning_earlier: 1             # 代走を考え始める回を前倒し（8→7）
+  ai_pinch_run_speed_ceiling_relax: 8        # 代走候補にする走者の走力上限を上げる（44→52）
+  ai_pinch_run_improvement_relax: 10         # 代走に求める走力の上積みを下げる（22→12）
   # ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2）🟡実測校正
   # AIが「守備位置の入替（交代回数を消費しない無料の手）」と「コンバート継投」を打てるようにする層。
   # ⑥ 高度な継投層と同じ2段運用（①既定オフで配線 → ②有効化して帯を実測 → 採否）で入れ、

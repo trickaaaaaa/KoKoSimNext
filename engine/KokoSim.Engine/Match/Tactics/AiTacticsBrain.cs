@@ -28,9 +28,10 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     {
         _profile = profile;
         _ai = aiCoeff ?? new EnemyAiCoefficients();
-        // ③ 校風で采配係数を偏らせ、その係数で共通の基準采配を構成する。
+        // ③ 校風で采配係数を偏らせ、⑥b 相手校一律の交代 baseline を重ねて、共通の基準采配を構成する。
         var styled = ApplyStyle(baseCoeff ?? new TacticsCoefficients(), profile.Style, _ai);
-        _inner = new StandardTacticsBrain(styled, baserunning, form, lineup, skills);
+        var withBaseline = ApplyAiBaseline(styled, _ai);
+        _inner = new StandardTacticsBrain(withBaseline, baserunning, form, lineup, skills);
         // ① 采配能力→最適解選択率。
         _optimalProb = MathUtil.Clamp(
             _ai.OptimalBase + profile.TacticalSense * _ai.OptimalPerSense, _ai.OptimalFloor, _ai.OptimalCap);
@@ -413,6 +414,27 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     }
 
     // --- ③ 校風: 采配係数の重み付け（同じ局面でも手が変わる） ---
+
+    /// <summary>
+    /// ⑥b 相手校一律の交代 baseline（issue #1046・設計書11 §4）。StandardTacticsBrain 素の交代条件は
+    /// 現実の高校野球より控えめ（強豪校だと代打候補が一人も出ない）なので、相手校だけ条件を現実並みへ
+    /// 引き上げる＝代打はミート上限を上げ求める上積みを下げ、打力の総合・左右の相性・場面を評価に入れる。
+    /// 代走は回・走力上限・上積みを緩める。校風（<see cref="ApplyStyle"/>）・監督傾向はこの上にさらに掛かる。
+    /// StandardTacticsBrain 素（games_10k/tactics 帯）はこの baseline を通らないので不変。
+    /// </summary>
+    private static TacticsCoefficients ApplyAiBaseline(TacticsCoefficients b, EnemyAiCoefficients ai)
+        => b with
+        {
+            PinchHitFromInning = System.Math.Max(1, b.PinchHitFromInning - ai.AiPinchHitInningEarlier),
+            PinchHitContactCeiling = b.PinchHitContactCeiling + ai.AiPinchHitCeilingRelax,
+            PinchHitImprovement = System.Math.Max(1, b.PinchHitImprovement - ai.AiPinchHitImprovementRelax),
+            PinchHitPowerWeight = ai.AiPinchHitPowerWeight,
+            PinchHitPlatoonBonus = ai.AiPinchHitPlatoonBonus,
+            PinchHitRispCeilingBonus = ai.AiPinchHitRispCeilingBonus,
+            PinchRunFromInning = System.Math.Max(1, b.PinchRunFromInning - ai.AiPinchRunInningEarlier),
+            PinchRunSpeedCeiling = b.PinchRunSpeedCeiling + ai.AiPinchRunSpeedCeilingRelax,
+            PinchRunImprovement = System.Math.Max(1, b.PinchRunImprovement - ai.AiPinchRunImprovementRelax),
+        };
 
     private static TacticsCoefficients ApplyStyle(TacticsCoefficients b, SchoolStyle style, EnemyAiCoefficients ai)
         => style switch

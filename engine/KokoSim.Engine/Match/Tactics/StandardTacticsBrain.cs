@@ -269,16 +269,43 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         if (s.UpcomingBatterIsPitcher) return null;                       // 投手枠代打は継投結合のため後続（C-2対象外）
         if (s.Inning < _c.PinchHitFromInning) return null;
         if (s.ScoreDiff < _c.PinchHitMinDiff || s.ScoreDiff > _c.PinchHitMaxDiff) return null;
-        var upcomingContact = EffectiveContact(s.UpcomingBatter);
-        if (upcomingContact > _c.PinchHitContactCeiling) return null;
 
-        var best = BestBy(s.Reserves, EffectiveContact);
-        if (best is null || EffectiveContact(best) < upcomingContact + _c.PinchHitImprovement) return null;
+        // 代打候補にする打者ミート上限は、得点圏（場面）ではこの分だけ緩める（設計書11 §4）。
+        var ceiling = _c.PinchHitContactCeiling + (s.RunnerInScoringPosition ? _c.PinchHitRispCeilingBonus : 0);
+        if (EffectiveContact(s.UpcomingBatter) > ceiling) return null;
+
+        // 評価は調子込みミートを土台に、打力の総合（パワー）と左右の相性（対戦投手）を混ぜる（設計書11 §4）。
+        // 既定（重み0）では EffectiveContact のみ＝従来と一致。in 引数は捕捉できないのでローカルへ退避する。
+        var pitcherThrows = s.PitcherThrows;
+        double Value(Player p) => PinchHitValue(p, pitcherThrows);
+        var upcoming = Value(s.UpcomingBatter);
+
+        var best = BestBy(s.Reserves, p => (int)System.Math.Round(Value(p) * 100));
+        if (best is null || Value(best) < upcoming + _c.PinchHitImprovement) return null;
         return best;
     }
 
+    /// <summary>代打評価値（設計書11 §4）: 調子込みミート＋パワー重み×(実効パワー−50)＋左右の相性ボーナス。
+    /// 既定の重み0では調子込みミートそのもの（＝従来の比較と恒等）。</summary>
+    private double PinchHitValue(Player p, Players.Handedness? pitcherThrows)
+    {
+        var value = (double)EffectiveContact(p);
+        if (_c.PinchHitPowerWeight != 0.0)
+            value += _c.PinchHitPowerWeight * (EffectivePower(p) - 50);
+        if (_c.PinchHitPlatoonBonus != 0.0 && pitcherThrows is { } throws)
+            value += _c.PinchHitPlatoonBonus * PlatoonSign(p.Bats, throws);
+        return value;
+    }
+
+    /// <summary>左右の相性の符号: 対戦投手と逆の打席（スイッチは常に有利）なら+1、同じ側なら−1。</summary>
+    private static int PlatoonSign(Players.Handedness bats, Players.Handedness pitcherThrows)
+        => bats == Players.Handedness.Switch ? 1 : bats != pitcherThrows ? 1 : -1;
+
     /// <summary>調子込みのミート実効値（設計書11 §4, issue #48）。当日の出来（dayForm）は含まない。</summary>
     private int EffectiveContact(Player p) => FormModel.EffectiveAbility(p.Contact, p.Condition, _form.ContactPerStep);
+
+    /// <summary>調子込みのパワー実効値（打力の総合評価用, 設計書11 §4）。</summary>
+    private int EffectivePower(Player p) => FormModel.EffectiveAbility(p.Power, p.Condition, _form.PowerPerStep);
 
     /// <summary>
     /// 打順の並べ替え（設計書11 §4「オーダー編成」, issue #48）。守備位置は変えず、調子（のみ）で

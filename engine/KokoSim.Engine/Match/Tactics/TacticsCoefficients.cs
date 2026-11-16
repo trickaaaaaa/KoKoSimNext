@@ -179,6 +179,15 @@ public sealed record TacticsCoefficients
     /// <summary>代打を出す得失点差レンジ（僅差〜小ビハインドで打線を厚くする。大差では出さない）。</summary>
     public int PinchHitMinDiff { get; init; } = -3;
     public int PinchHitMaxDiff { get; init; } = 2;
+    // 代打の判断入力を「ミートだけ」から設計書11 §4（打力の総合・左右の相性・場面）へ広げる係数（issue #1046）。
+    // いずれも既定0＝従来どおり（調子込みミートのみ）で、StandardTacticsBrain 素の挙動・games_10k(_tactics) 帯は不変。
+    // 相手校（AiTacticsBrain）だけ enemy_ai: の ai_pinch_hit_* で正へ引き上げる。
+    /// <summary>代打評価にパワー（調子込み実効値、基準50からの差）を混ぜる重み（0=ミートのみ）。</summary>
+    public double PinchHitPowerWeight { get; init; } = 0.0;
+    /// <summary>左右の相性ボーナス: 対戦投手と逆の打席（スイッチ含む）なら評価に+、同じ側なら−（0=相性を見ない）。</summary>
+    public double PinchHitPlatoonBonus { get; init; } = 0.0;
+    /// <summary>得点圏（場面）のときミート上限をこの分だけ緩める＝好機では一枚上の打者へ替えやすくする（0=場面を見ない）。</summary>
+    public int PinchHitRispCeilingBonus { get; init; } = 0;
 
     /// <summary>代走を考え始めるイニング／代走候補にする走者の走力上限／控えがこれだけ走力上なら送る。</summary>
     public int PinchRunFromInning { get; init; } = 8;
