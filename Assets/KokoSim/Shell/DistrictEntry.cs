@@ -78,9 +78,12 @@ namespace KokoSim.Unity.Shell
                 return false;
             }
 
+            // 今大会スコープをリセットしてから積む（地区予選の成績を秋季県大会の「今大会」に残さない）。
+            NationService.TournamentStats.StartTournament();
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed),
-                TournamentEntry.Schedule, title, new PlayerMatchResolver(), RegionalEntry.BackgroundResolver(yearIndex),
-                onBackgroundMatch: (awayId, homeId, g) => NationService.TournamentStats.FoldMatch(awayId, homeId, g));
+                TournamentEntry.Schedule, title, new PlayerMatchResolver(),
+                TournamentEntry.BackgroundResolverFor(TournamentKind.Autumn, yearIndex),
+                onBackgroundMatch: TournamentEntry.FoldBackgroundMatch);
             GameSession.Current.EnterTournament(TournamentKind.Autumn, title, runner, field);
             GameSession.Current.Year = yearIndex;
             return true;

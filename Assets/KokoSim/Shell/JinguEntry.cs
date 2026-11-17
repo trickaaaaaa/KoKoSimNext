@@ -57,9 +57,12 @@ namespace KokoSim.Unity.Shell
             if (championIsManager)
             {
                 var manager = RegionalEntry.ManagerSchool();
+                // 今大会スコープをリセットしてから積む（前の秋季県大会・地区大会の成績を「今大会」に残さない）。
+                NationService.TournamentStats.StartTournament();
                 var runner = new TournamentRunner(
                     field, manager, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule,
-                    title, new PlayerMatchResolver(), RegionalEntry.BackgroundResolver(yearIndex, TournamentKind.Jingu));
+                    title, new PlayerMatchResolver(), TournamentEntry.BackgroundResolverFor(TournamentKind.Jingu, yearIndex),
+                    onBackgroundMatch: TournamentEntry.FoldBackgroundMatch);
                 GameSession.Current.EnterTournament(TournamentKind.Jingu, title, runner, field);
                 GameSession.Current.Year = yearIndex;
                 return true;

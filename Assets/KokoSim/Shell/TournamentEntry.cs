@@ -71,14 +71,7 @@ namespace KokoSim.Unity.Shell
             //   全国成績への畳み込みはランナーが裏カードを**記録した瞬間**に行う（下の onBackgroundMatch）。
             //   計算時に畳むと、大会中セーブ（issue #565）を挟んだときにメモ化キャッシュが消え、
             //   同じカードがロード後にもう一度畳まれる＝二重計上になる。
-            var weatherCtx = new GameContext { Weather = WeatherModel.ForTournament(Schedule, actualKind) };   // Issue #803/#971
-            var homeBg = new MemoizingBackgroundResolver(
-                new BackgroundMatchResolver(NationService.Rosters, weatherCtx, yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: brains,
-                    // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
-                    useRegionalStadiumTier: true, summerStadiums: actualKind == TournamentKind.Summer,
-                    // 秋季地区予選は県の決勝球場を使わない（決定27・MatchStadium と同じ・issue #1020）
-                    prefectureFinalStadiums: actualKind != TournamentKind.AutumnDistrict));
+            var homeBg = BackgroundResolverFor(actualKind, yearIndex, brains);
 
             // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
             // 秋季地区予選がブロックリーグ戦の県（神奈川・issue #772）は、地区を夏の順位でシード分散した
@@ -88,10 +81,10 @@ namespace KokoSim.Unity.Shell
                 ? new BlockLeagueRunner(DistrictEntry.DrawBlocks(field, manager.PrefectureId, seed), manager,
                     DistrictPlanProvider.AdvancePerBlockOf(manager.PrefectureId), NationCoeff,
                     new Xoshiro256Random(seed), Schedule, TournamentTitle(actualKind), new PlayerMatchResolver(), homeBg,
-                    onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g))
+                    onBackgroundMatch: FoldBackgroundMatch)
                 : new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
                     TournamentTitle(actualKind), new PlayerMatchResolver(), homeBg,
-                    onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
+                    onBackgroundMatch: FoldBackgroundMatch);
             // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
             GameSession.Current.EnterTournament(actualKind, TournamentTitle(actualKind), runner, field);
             GameSession.Current.Year = yearIndex;
@@ -160,6 +153,42 @@ namespace KokoSim.Unity.Shell
             => GameSeed.Master ^ (ulong)(9000 + yearIndex * 10 + (int)kind);
 
         /// <summary>
+        /// 大会種別ごとの裏カード resolver（球場・天候・メモ化）の<b>唯一の組み立て口</b>。
+        /// 最初から始めるとき（各 Entry）とセーブから復帰するとき（<see cref="RestoreRunner"/>）が同じ種別なら
+        /// 同じ resolver になる＝ロードを挟んでも球場・天候が変わらない（issue #1107）。
+        /// <b>ここでは成績を畳まない</b>（畳み込みはランナーが裏カードを記録した瞬間に
+        /// <see cref="FoldBackgroundMatch"/> で行う。計算時に畳むと中断・復帰で二重計上になる）。
+        /// </summary>
+        internal static IBackgroundMatchResolver BackgroundResolverFor(
+            TournamentKind kind, int yearIndex, IEnemyBrainFactory? brains = null)
+        {
+            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
+            brains ??= new EnemyAiBrainFactory();
+            if (kind is TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict)
+            {
+                var weatherCtx = new GameContext { Weather = WeatherModel.ForTournament(Schedule, kind) };   // Issue #803/#971
+                return new MemoizingBackgroundResolver(
+                    new BackgroundMatchResolver(NationService.Rosters, weatherCtx, yearIndex, stats: null,
+                        modernRules: null, calendarYear: calendarYear, brains: brains,
+                        // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
+                        useRegionalStadiumTier: true, summerStadiums: kind == TournamentKind.Summer,
+                        // 秋季地区予選は県の決勝球場を使わない（決定27・MatchStadium と同じ・issue #1020）
+                        prefectureFinalStadiums: kind != TournamentKind.AutumnDistrict));
+            }
+
+            // 甲子園・センバツ・地区大会・神宮＝自校戦と同じ球場（設計書13 §1）。天候は夏の甲子園だけ（Issue #803/#971）。
+            var ctx = new GameContext { Field = MatchStadium.For(kind) };
+            if (kind == TournamentKind.SummerKoshien) ctx = ctx with { Weather = WeatherModel.ForTournament(Schedule, kind) };
+            return new MemoizingBackgroundResolver(
+                new BackgroundMatchResolver(NationService.Rosters, ctx, yearIndex, stats: null,
+                    modernRules: null, calendarYear: calendarYear, brains: brains));
+        }
+
+        /// <summary>裏カード（自校非関与）の成績を全国の今大会・通算スコープへ積む。全大会共通の唯一の口。</summary>
+        internal static void FoldBackgroundMatch(int awayId, int homeId, GameResult g)
+            => NationService.TournamentStats.FoldMatch(awayId, homeId, g);
+
+        /// <summary>
         /// セーブから大会モードへ復帰する（issue #565 F1）。<see cref="Enter"/> と同じ部品で resolver を
         /// 組み直し、進行体だけをセーブの状態から作る。
         ///
@@ -184,18 +213,12 @@ namespace KokoSim.Unity.Shell
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             var brains = new EnemyAiBrainFactory();
             var stats = NationService.TournamentStats;   // 復元済み＝StartTournament は呼ばない
-            var weatherCtx = new GameContext { Weather = WeatherModel.ForTournament(Schedule, t.Kind) };   // Issue #803/#971
-            var homeBg = new MemoizingBackgroundResolver(
-                new BackgroundMatchResolver(NationService.Rosters, weatherCtx, yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: brains,
-                    // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
-                    useRegionalStadiumTier: true, summerStadiums: t.Kind == TournamentKind.Summer,
-                    prefectureFinalStadiums: t.Kind != TournamentKind.AutumnDistrict));
+            var homeBg = BackgroundResolverFor(t.Kind, yearIndex, brains);
 
             // リーグ戦の状態が載っていればリーグ戦（issue #772）。v22 以前の地区予選の途中は勝ち抜き戦のまま続く
             var runner = TournamentRunners.FromSaved(t.Runner, field, manager, NationCoeff, Schedule,
                 new PlayerMatchResolver(), homeBg,
-                onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
+                onBackgroundMatch: FoldBackgroundMatch);
             GameSession.Current.RestoreTournament(t, runner, field);
 
             // 秋の連鎖（県大会→地区大会→明治神宮）の途中で復帰したときは、47県ぶんの秋季県大会を
