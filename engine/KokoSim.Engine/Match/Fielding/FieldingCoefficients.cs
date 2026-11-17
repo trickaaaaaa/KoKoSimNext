@@ -323,6 +323,18 @@ public sealed record FieldingCoefficients
     public double FoulFlyBearingMinDeg { get; init; } = 46.0;
     public double FoulFlyBearingMaxDeg { get; init; } = 160.0;
 
+    // 守備ビューで見せるファウル（issue #1074・表示専用。判定・乱数には効かない）。
+    /// <summary>
+    /// 「野手が追ったが届かなかった」ファウルフライとして守備ビューで見せる、到達の遅れの上限[s]
+    /// （一番早い野手が落下点に着く時刻 − 球の落下時刻 ≤ この値。オーナー決定 2026-11-17）。
+    /// </summary>
+    public double FoulViewChaseSeconds { get; init; } = 0.5;
+    /// <summary>
+    /// 「ポール際の大ファウル」として守備ビューで見せる、ファウルラインからの角度の幅[度]
+    /// （|方位角| ≤ 45 + この値 で、両翼フェンスの距離より遠くまで飛ぶ打球）。
+    /// </summary>
+    public double FoulViewPoleMarginDeg { get; init; } = 8.0;
+
     /// <summary>
     /// トンネル（股・脇を抜けて球が外野へ行く失策, issue #632）の割合。
     /// <b>捕球エラーの内訳</b>＝失策の総数は変えず、お手玉が減ってトンネルが増える

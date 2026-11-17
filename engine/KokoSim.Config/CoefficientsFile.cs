@@ -737,6 +737,8 @@ public static class CoefficientsLoader
         public double FoulFlyExitSigmaKmh { get; set; } = D.FoulFlyExitSigmaKmh;
         public double FoulFlyBearingMinDeg { get; set; } = D.FoulFlyBearingMinDeg;
         public double FoulFlyBearingMaxDeg { get; set; } = D.FoulFlyBearingMaxDeg;
+        public double FoulViewChaseSeconds { get; set; } = D.FoulViewChaseSeconds;
+        public double FoulViewPoleMarginDeg { get; set; } = D.FoulViewPoleMarginDeg;
         public double TunnelShareProb { get; set; } = D.TunnelShareProb;
         public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
         public double CatchReachCapSeconds { get; set; } = D.CatchReachCapSeconds;
@@ -828,6 +830,8 @@ public static class CoefficientsLoader
             FoulFlyExitSigmaKmh = FoulFlyExitSigmaKmh,
             FoulFlyBearingMinDeg = FoulFlyBearingMinDeg,
             FoulFlyBearingMaxDeg = FoulFlyBearingMaxDeg,
+            FoulViewChaseSeconds = FoulViewChaseSeconds,
+            FoulViewPoleMarginDeg = FoulViewPoleMarginDeg,
             TunnelShareProb = TunnelShareProb,
             CatchReachFieldingSlope = CatchReachFieldingSlope,
             CatchReachCapSeconds = CatchReachCapSeconds,

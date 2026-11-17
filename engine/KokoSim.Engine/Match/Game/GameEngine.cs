@@ -962,7 +962,7 @@ public static class GameEngine
                 var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead);
                 // バッテリーの相性（設計書23 §2.4）: 実効リードに 1 + k1×K。K=0 で恒等・乱数不使用。
                 catcherLead = BatteryChemistry.ApplyToLead(catcherLead, defense.BatteryK(currentPitcher, ctx.Chemistry), ctx.Chemistry);
-                return paCtx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
+                var built = paCtx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
                     // 慣れ（設計書02 §2.3b）: この打者がこの試合でこの投手と対戦した打席数。継投で0へ戻る。
@@ -971,6 +971,10 @@ public static class GameEngine
                     // 投手が変われば新しいトラッカー＝0から（PitchFamiliarityTrackerFor が継投リセットを担う）。
                     pitchFamiliarity: offense.PitchFamiliarityTrackerFor(batter, currentPitcher),
                     pitcherThrows: currentPitcher.Throws);
+                // 初球を指定のファウルにする強制（issue #1074 の撮影用）。それ以外は同一参照＝乱数順・結果は不変
+                return force is Debugging.ForcedOutcome.ChasedFoulFly or Debugging.ForcedOutcome.BigFoul
+                    ? built with { ForcedFoul = force }
+                    : built;
             }
             var abCtx = BuildAtBatContext();
 

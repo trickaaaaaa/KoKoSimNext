@@ -179,7 +179,7 @@ namespace KokoSim.Unity.Debugging
                     yield return null;
                 }
 
-                var play = ctrl.CurrentPa?.Play;
+                var play = ctrl.PlayingForCapture;   // 打席途中のプレー（ファウル等）も撮れる
                 _result = play?.Result;
                 ComputeAnchors(play);
                 var shots = new List<(string Label, double T)>();

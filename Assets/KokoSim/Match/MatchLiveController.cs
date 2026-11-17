@@ -402,6 +402,13 @@ namespace KokoSim.Unity.Match
         private PlaybackPlay _batteryMissPlay;
         private double _batteryMissEndAt;
 
+        // 守備ビューで見せるファウル（issue #1074）。あと一歩届かなかったファウルフライ・ポール際の大ファウルだけ
+        // （判定は engine の FoulView.Classify＝PlaybackPlay.FoulView）。暴投・捕逸と同じく「この球そのものの結果」で、
+        // 見せ終えたら打席の続きへ戻る。_battedHoldFoul は対決ビューで打球が画面から出るのを待っている間の控え。
+        private PlaybackPlay _foulFieldPlay;
+        private double _foulFieldEndAt;
+        private PlaybackPlay _battedHoldFoul;
+
         // 打席途中のスクイズ不成立（ウエスト／バント空振り）で三塁走者が挟殺される再生（issue #1061）。
         // 暴投・捕逸と同型で「この球そのものの結果」として起きるため、盗塁の後・暴投/捕逸の前に連結する。
         private PlaybackPlay _squeezeRundownPlay;
@@ -769,6 +776,8 @@ namespace KokoSim.Unity.Match
             _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
             _pickoffPlay = null;     // 打席途中の牽制再生（issue #486）も同様
             _batteryMissPlay = null; // 打席途中の暴投・捕逸再生（issue #487）も同様
+            _foulFieldPlay = null;   // 守備ビューで見せるファウル（issue #1074）も同様
+            _battedHoldFoul = null;
             _squeezeRundownPlay = null; // 打席途中のスクイズ挟殺再生（issue #1061）も同様
             _dropThirdStrikePlay = null; // 打席途中の振り逃げ再生（issue #488）も同様
             _preStep = null;             // 振りかぶりで先に解決した球（issue #696）も試合をまたがない
@@ -2880,6 +2889,67 @@ namespace KokoSim.Unity.Match
             AdvanceToNextWindow();
         }
 
+        // ── 守備ビューで見せるファウル（issue #1074） ──
+        // 暴投・捕逸（EnterBatteryMissPlay）と同型。違いは始まり方だけで、ファウルは打球なので
+        // インプレーと同じく「対決ビューで見せた打球の続き」から再生する（ContactMomentOf）。
+
+        private void EnterFoulFieldPlay(PlaybackPlay foul)
+        {
+            _inPitchPhase = false;
+            _pitchBallVisible = false;
+            _stage = LiveStage.Play;
+            _windowCarry = 0f;
+            // 対決ビューが打球を見せていた秒数は BeginFieldPlay で消えるので先に採る（同じ区間を二度描かない）
+            var shown = _duelRig?.BattedElapsedSeconds ?? -1f;
+            _foulFieldPlay = foul;
+            _t = ContactMomentOf(foul, shown);
+            _foulFieldEndAt = FoulFieldEndTime(foul);
+            _view.SetPlay(foul);
+            if (_duelRig != null && _duelRig.Available)
+            {
+                if (_prog != null && _current != null)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                _duelRig.BeginFieldPlay(foul, (float)_t);
+            }
+            RenderFoulFieldFrame();
+        }
+
+        private void RenderFoulFieldFrame()
+        {
+            if (_foulFieldPlay == null) return;
+            _view.SetTime(_t);
+            if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
+            if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_foulFieldPlay, _t);
+        }
+
+        /// <summary>ファウルの再生を打ち切る時刻＝球が落ちる／追った野手が着くの遅いほう＋余韻。</summary>
+        private static double FoulFieldEndTime(PlaybackPlay play)
+        {
+            var lastEvent = play.ResAt;
+            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
+            if (play.Moves != null) foreach (var kv in play.Moves)
+                foreach (var m in kv.Value)
+                    if (m.T1 > lastEvent) lastEvent = m.T1;
+            return System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
+        }
+
+        /// <summary>ファウルの再生が終わった: 対決構図へ戻し、次の球を振りかぶりから投げる（打席の続き）。</summary>
+        private void FinishFoulFieldView()
+        {
+            EndFieldPlay();
+            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696。暴投・捕逸と同じ）
+            _view.HideJudgement();
+            _foulFieldPlay = null;
+            _foulFlightHoldSeconds = null;
+            _windowCarry = 0f;
+            _pitchCallDone = false;
+            _inPitchPhase = false;
+            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
+            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
+            _stage = LiveStage.Idle;
+            AdvanceToNextWindow();
+        }
+
         // ── 打席途中のスクイズ挟殺の3D再生（issue #1061） ──
         // EnterBatteryMissPlay 系（issue #487）と同型。三塁走者が三本間で挟まれてタッチアウトになる絵は
         // engine の <see cref="PlaybackPlay"/>（<c>BuildSqueezeRundown</c> の出力）が単一ソース。
@@ -3159,6 +3229,18 @@ namespace KokoSim.Unity.Match
                 if (_battedHoldActive)
                 {
                     _battedHoldClock += Time.deltaTime * _speed;
+                    // 守備ビューで見せるファウル（issue #1074）もインプレーと同じく、球が画面から出たら切り替える
+                    if (_battedHoldFoul != null)
+                    {
+                        if ((_duelRig?.BattedOutOfFrame ?? true) || _battedHoldClock >= BattedHoldSafetyCapSeconds)
+                        {
+                            _battedHoldActive = false;
+                            var foul = _battedHoldFoul;
+                            _battedHoldFoul = null;
+                            EnterFoulFieldPlay(foul);
+                        }
+                        return;
+                    }
                     // 「打った瞬間」の本塁打は、球が画面から出ても打者を映したまま見送る（issue #704。
                     // 監督決定: 当たりの違いはカメラだけで見せる）。守備ビューへはこの秒数が経ってから切り替える
                     if (IsNoDoubtHomeRun)
@@ -3256,6 +3338,24 @@ namespace KokoSim.Unity.Match
                         EnterBattedBallOrHold();   // 打席を終わらせた球は判定直後に打球再生／結果保持へ
                         return;
                     }
+                    // 見どころのあるファウル（issue #1074: あと一歩届かなかったファウルフライ・ポール際の大ファウル）は
+                    // 守備ビューで見せる。インプレーと同じく、打球が対決ビューの画面から出るまで据え置いてから切り替える。
+                    // 俯瞰固定（対決ビューを使わない）中は従来どおり盤面で流すだけ。
+                    if (_pendingFoulFlight != null && _pendingFoulFlight.FoulView != KokoSim.Engine.Match.Fielding.FoulViewKind.None
+                        && DuelPacingActive && _duelRig != null && _duelRig.Available)
+                    {
+                        var foul = _pendingFoulFlight;
+                        _pendingFoulFlight = null;
+                        if (!_duelRig.BattedOutOfFrame)
+                        {
+                            _battedHoldActive = true;
+                            _battedHoldClock = 0f;
+                            _battedHoldFoul = foul;
+                            return;
+                        }
+                        EnterFoulFieldPlay(foul);
+                        return;
+                    }
                     if (_pendingFoulFlight != null)
                     {
                         // ファウルは**守備が一切解決されない**（BuildFoulFlight は打者走者も野手の動きも
@@ -3341,6 +3441,13 @@ namespace KokoSim.Unity.Match
             {
                 RenderBatteryMissFrame();
                 if (_t > _batteryMissEndAt + FinishGraceSeconds) FinishBatteryMissView();
+                return;
+            }
+            // 守備ビューで見せるファウル（issue #1074）
+            if (_foulFieldPlay != null)
+            {
+                RenderFoulFieldFrame();
+                if (_t > _foulFieldEndAt + FinishGraceSeconds) FinishFoulFieldView();
                 return;
             }
             // 打席途中の振り逃げの再生（issue #488）: 盗塁・牽制・暴投/捕逸の再生（あれば）が
@@ -5062,6 +5169,12 @@ namespace KokoSim.Unity.Match
         /// <summary>3Dの守備ビューが走っているか。</summary>
         public bool FieldPlayActiveForCapture => FieldPlayActive;
 
+        /// <summary>スクショ用: 守備ビューで再生中のプレー。打席途中のプレー（ファウル・盗塁・牽制・暴投/捕逸等）を
+        /// 先に見て、無ければ打席の打球（<c>_current.Play</c>）。撮影の節目はこのプレーの時刻で解く。</summary>
+        public PlaybackPlay PlayingForCapture =>
+            _foulFieldPlay ?? _stealPlay ?? _pickoffPlay ?? _batteryMissPlay ?? _squeezeRundownPlay ?? _dropThirdStrikePlay
+            ?? _current?.Play;
+
         /// <summary>
         /// 判定オーバーレイが**画面に出ているか**。
         /// ⚠ 「<c>JudgementAt</c> が値を返すか」ではなく<b>要素の表示状態</b>を見ること。
@@ -5127,6 +5240,7 @@ namespace KokoSim.Unity.Match
             _stealPlay != null ? "steal"
             : _pickoffPlay != null ? "pickoff"
             : _batteryMissPlay != null ? "battery-miss"
+            : _foulFieldPlay != null ? "foul"
             : _squeezeRundownPlay != null ? "squeeze-rundown"
             : _dropThirdStrikePlay != null ? "drop-third"
             : null;

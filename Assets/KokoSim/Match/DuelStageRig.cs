@@ -3436,6 +3436,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public float BattedElapsedSeconds => _battedT;
 
+        /// <summary>検査用: 打球を見せ始めてから <paramref name="t"/> 秒の球の位置（ステージローカル）。打球でなければ null。</summary>
+        public Vector3? BattedPointForCapture(float t) => _batted == null ? (Vector3?)null : BattedPointAt(t);
+
         /// <summary>
         /// 打球が対決構図のビューポートから出たか（issue #481）。呼び出し側（<c>MatchLiveController</c>）は
         /// 接触後、これが立つまで守備ビューへの切替を据え置く＝「打球の行方を一瞬だけ見せる」

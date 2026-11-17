@@ -28,6 +28,8 @@ public enum PitchKind
 /// の写し）。バント/セーフティバント/スクイズの構えを対決ビューに出すための表示専用データで、
 /// 判定・帯には一切関与しない（バント/スクイズ判定自体は従来どおり <see cref="AtBatSession"/> 内で完結）。
 /// <see cref="Pitchout"/> は盗塁を読んで外した球（<see cref="Kind"/> は常に <see cref="PitchKind.Ball"/>）。
+/// <see cref="FoulChase"/>（issue #1074）は捕れなかったファウルフライを一番早く追える野手の写し（表示専用・観戦する
+/// 試合だけ。乱数不使用）。守備ビューで「追ったが届かなかった」ファウルを見せるのに使う。
 /// </summary>
 public readonly record struct PitchRecord(
     PitchKind Kind,
@@ -42,4 +44,5 @@ public readonly record struct PitchRecord(
     Pitching.PitchTrajectory? Trajectory = null,
     Batting.BattedBall? BattedBall = null,
     Tactics.PitchBattingOverride? Sign = null,
-    bool Pitchout = false);
+    bool Pitchout = false,
+    Fielding.FoulChase? FoulChase = null);

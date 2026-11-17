@@ -205,6 +205,9 @@ public sealed record PlaybackPlay
     /// <summary>本塁打の当たりの種類（<see cref="KokoSim.Engine.Match.Timeline.PlayTimeline.HomeRunStyle"/> の写し。
     /// 3D の守備ビューがカメラの見せ方を選ぶ唯一の入力・issue #704）。本塁打以外は null。</summary>
     public KokoSim.Engine.Match.Timeline.HomeRunStyle? HomeRun { get; init; }
+    /// <summary>ファウルの見せ方（<see cref="KokoSim.Engine.Match.Timeline.PlayTimeline.FoulView"/> の写し。issue #1074）。
+    /// None 以外なら対決ビューのままにせず守備ビューで見せる。</summary>
+    public KokoSim.Engine.Match.Fielding.FoulViewKind FoulView { get; init; }
     public IReadOnlyList<PlaybackCaption> Caps { get; init; } = Array.Empty<PlaybackCaption>();
     /// <summary>判定イベント列（Issue #260）。<see cref="PlaybackEvaluator.JudgementAt"/> の単一ソース。</summary>
     public IReadOnlyList<PlaybackJudgement> Judgements { get; init; } = Array.Empty<PlaybackJudgement>();

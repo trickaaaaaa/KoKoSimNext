@@ -164,7 +164,7 @@ public static class PitchTokenFactory
         // 着地までの短い再生を添える。守備解決は経由しない＝BuildFoulFlight は純関数で乱数を消費しない。
         PlaybackPlay? foulFlight = p.Kind == PitchKind.Foul && p.BattedBall is { } fb
             ? PlayTimelineAdapter.ToPlaybackPlay(TimelineBuilder.BuildFoulFlight(
-                fb, ctx.Aerodynamics, ctx.Fielding, ctx.Field, runnerOnFirst, runnerOnSecond, runnerOnThird))
+                fb, ctx.Aerodynamics, ctx.Fielding, ctx.Field, runnerOnFirst, runnerOnSecond, runnerOnThird, p.FoulChase))
             : null;
         // コース・弾道（Issue #332）: 判定に使われた実着弾位置と観測専用弾道をそのまま渡す（新規抽選なし）。
         // 狙い位置（Issue #396）: PitchPlan.AimX/AimY の写し。捕手は投球前からこの狙いを知っているため
