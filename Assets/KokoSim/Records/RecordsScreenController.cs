@@ -136,8 +136,9 @@ namespace KokoSim.Unity.Records
         /// 過去の大会は当時の県で出す必要があるので、そのときに歴代大会結果へ県を焼く。
         /// </summary>
         private static string CupName(TournamentKind kind)
-            => (kind == TournamentKind.Summer ? "夏 " : "秋 ")
-               + PrefectureNames.ShortOf(NationService.PrefectureId);
+            => TournamentKindNames.IsPrefectural(kind)
+                ? TournamentKindNames.Of(kind) + " " + PrefectureNames.ShortOf(NationService.PrefectureId)
+                : TournamentKindNames.Of(kind);
 
         // ── 学校の通算 ───────────────────────────────────────────
 

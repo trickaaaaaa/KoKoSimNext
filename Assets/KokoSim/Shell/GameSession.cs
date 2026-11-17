@@ -464,11 +464,7 @@ namespace KokoSim.Unity.Shell
             !InTournament ? "" : TournamentDate.Label(TournamentEntry.Schedule, Kind, TournamentDay);
 
         /// <summary>大会種別の短い呼び名（小書き用）。</summary>
-        private static string KindLabel(TournamentKind kind)
-        {
-            if (kind == TournamentKind.SummerKoshien) return "甲子園";
-            return (kind == TournamentKind.Summer ? "夏" : "秋") + "の大会";
-        }
+        private static string KindLabel(TournamentKind kind) => TournamentKindNames.Short(kind);
 
         /// <summary>大会中の次戦日の実月日（"7月16日"）。大会外・終了済みは空文字（issue #583）。</summary>
         public string NextMatchDateLabel =>
