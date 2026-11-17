@@ -104,7 +104,9 @@ internal sealed class LineupPicture
             var outKey = prev._key[i];
             if (!inKey.Equals(outKey))
             {
-                var outRef = cur.InGame(outKey) ? null : Ref(prev._player[i]);
+                // 非DHで投手に代打・代走を送ると、退いた投手は次の継投まで「今の投手」のまま写しに残る
+                // （CurrentPitcher）。退場済みなら試合に残っていない＝退いた選手として出す（issue #1052）。
+                var outRef = cur.InGame(outKey) && !t.IsRetired(outKey) ? null : Ref(prev._player[i]);
                 SubstitutionEntryKind kind;
                 if (!prev.InGame(inKey))
                 {
@@ -135,6 +137,14 @@ internal sealed class LineupPicture
                 list.Add((new SubstitutionEntry(
                     relief ? SubstitutionEntryKind.Relief : SubstitutionEntryKind.PositionChange,
                     i + 1, Ref(cur._player[i]), outRef, cur._pos[i]), outRef is null ? null : prev._pitcherKey));
+            }
+            else if (pitcherChanged && inKey.Equals(cur._pitcherKey))
+            {
+                // 同じ選手・同じ位置のまま投手になった＝投手の打順に入っていた代打・代走がそのまま投手に就いた
+                // （守備に就く半回の頭・issue #1052）。代打は投手の位置を引き継いで入るので位置は動かない。
+                // 退いた投手は代打の行で既に出ている＝ここは「ピッチャーに入る」の守備位置の変更だけ。
+                list.Add((new SubstitutionEntry(SubstitutionEntryKind.PositionChange, i + 1, Ref(cur._player[i]), null,
+                    FieldPosition.Pitcher), null));
             }
         }
         // DH制の投手（打順外）の交代。

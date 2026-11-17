@@ -1054,6 +1054,36 @@ public sealed class TeamState
         return true;
     }
 
+    /// <summary>
+    /// 攻撃中に投手へ代打・代走を送っていたら、守備に就く半回の頭でその選手がそのまま投手に就く（issue #1052）。
+    /// 非DHで、今の投手が退場済み（代打・代走で退いた）かつ投手の打順に別の選手が入っているときだけ動く。
+    /// 代打は退いた投手の守備位置（投手）を引き継いで入っているので、マウンドへ上げるのは「今の投手」の付け替えだけ。
+    /// 回の頭から別の投手にするなら、この後の継投判断（<see cref="ChangePitcherTo"/> 等）がこの選手を退かせる。
+    /// 乱数を使わない。成立したら true（<see cref="LastPitchingChange"/> を更新）。
+    /// </summary>
+    public bool TakeMoundFromPinchHitter()
+    {
+        if (_usesDh || !IsRetired(CurrentPitcher)) return false;
+        var occupant = _lineup[_pitcherSlot];
+        if (KeyOf(occupant).Equals(KeyOf(CurrentPitcher)) || IsRetired(occupant)) return false;
+        var outgoing = CurrentPitcher;
+        var mound = occupant.Position == FieldPosition.Pitcher
+            ? occupant
+            : Rekey(occupant, occupant with { Position = FieldPosition.Pitcher });
+        _lineup[_pitcherSlot] = mound;
+        CurrentPitcher = mound;
+        SaveStintOf(outgoing);
+        LoadStintOf(mound);
+        PitcherChanges++;
+        LastPitchingChange = new PitchingChangeOutcome(
+            PitchingChangeKind.ReserveRelief,
+            outgoing.Name, outgoing.UniformNumber, outgoing.SourceId,
+            mound.Name, mound.UniformNumber, mound.SourceId,
+            null, null, 0, null);
+        ClearRattled();
+        return true;
+    }
+
     /// <summary>まだ使っていない控え（名簿順＝背番号順）。交代UIの指名候補。</summary>
     public IReadOnlyList<Player> AvailableReserves => _reserves;
 
