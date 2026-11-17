@@ -70,6 +70,7 @@ namespace KokoSim.Unity.Shell
             EnsureCompleted();   // 前年ぶんが残っていたら先に畳む（同じ帳簿を2本の走りが触らない）
 
             var stats = NationService.TournamentStats;
+            stats.ClearRegionalQualifier();   // 去年の地区大会成績を残さない（残ると下の「実測あり」判定で今年が積まれない）
 
             // 校ID→その校が実際に出場した地区のブラケット記録。自地区（otherRegions に含まれない）は
             // データを持ち帰れないので対象外（クラス冒頭の「対象外」参照）。
