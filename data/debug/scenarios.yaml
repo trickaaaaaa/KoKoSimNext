@@ -232,3 +232,14 @@ scenarios:
     top: true
     outs: 0
     seed: 20263000
+
+  # 内野ゴロの一塁送球（issue #1095: 送球の振りかぶりで体を閉じる補正の確認）。最初の打席がサードゴロ。
+  # チームは呼び出し側シード 1 で組む前提（ThrowWindupScenarioTests と同じ。撮影時は GameSeedOverrideForCapture = 1）
+  - id: if-grounder-3b-lab
+    name: 守備検証・サードゴロを一塁へ送球（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20263036
