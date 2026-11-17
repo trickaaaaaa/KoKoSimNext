@@ -1,0 +1,53 @@
+# 撮影レシピ（3Dの対決・守備ビューの確認用）。1件の確認＝1項目。専用の *Shooter は新しく書かない。
+#
+# 実行（Unity Editor・Play していない状態で。MCP execute_code からも呼べる）:
+#   KokoSim.UnityEditorTools.CaptureRunner.Run("bunt-throw-1089")            # 複数 id を並べると続けて撮る
+# 終わると screenshots/<id>/ に DONE か FAILED と summary.json（節目の時刻・撮った絵・エラー）、
+# probes.jsonl（毎コマの実測）、*.png（shots）、video/f000.png…（video）が出る。全体の結果は screenshots/_capture-run.txt。
+#
+# このディレクトリ（data/debug/）はデバッグ専有でリリースから除外する（scenarios.yaml と同じ）。
+# 書式は scenarios.yaml と同じ部分集合（- key: value の連なり／{a: 1} のフロー・マップ／[a, b] のフロー・シーケンス）。
+#
+# フィールド:
+#   id / name   : 識別子（出力フォルダ名）と説明（説明に " #" を含むなら "" で囲む。囲まないと # 以降がコメントになる）
+#   scenario    : 場面（scenarios.yaml の id）。必須
+#   seed        : 試合のシード（既定 1）。attempts 回まで 1 ずつ進めて撮り直す（既定 3）
+#   timeout     : 1回あたり守備ビューの再生を待つ上限[s]（既定 90）
+#   force       : 最初の打席に予約する強制発動（ForcedOutcome の名前。シナリオの force より優先）
+#                 欲しい結果が強制で作れないときは、シードを回さず ForcedOutcome に種類を足す
+#   sign        : 監督の攻撃中、毎球の采配窓で押す打撃の指示（PitchBattingOverride の名前。例: Bunt）
+#   manager     : away / home（監督が先攻か後攻か。省略＝既定）
+#   duel_view   : 3Dの対決・守備ビューを点けるか（既定 true）
+#   view        : board＝盤面だけ / panel＝画面全体 / rig＝3Dの描画先そのまま（既定 board）
+#   size        : {w: 1600, h: 900}（既定）
+#   shots       : 撮る瞬間。守備ビューの再生の時計[s]か、節目±秒
+#                 節目: start / catch（送球の直前の区間の終わり）/ release（最初の送球）/ flight_end（最初の飛球の着地）
+#                       judgement（最初の判定）/ result / end（再生が閉じる直前＝長さの0.15秒手前）
+#   video       : {from: catch-0.8, to: release+0.9, fps: 30}＝その区間を連番で撮る
+#   probes      : 毎コマ probes.jsonl に書く実測（DuelStageRig の *ForCapture。ForCapture は省略可）
+#   overrides   : 見比べ用の切り替え（{DuelStageRig.Xxx: true} の形。static のフィールド/プロパティ）。終わったら戻す
+# 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
+
+captures:
+  - id: bunt-throw-1089
+    name: "バント処理の送球が低く速い（issue #1089）"
+    scenario: steal-sign-lab
+    manager: away
+    force: BuntInPlay
+    sign: Bunt
+    shots: [release-0.1, release+0.15, release+0.3, release+0.45, end]
+    probes: [BallHoldDiag]
+
+  - id: throw-video-lf-before
+    name: "左翼ゴロの送球・振りかぶりで体を閉じない（issue #1079 / #1095 の見比べ・旧）"
+    scenario: of-grounder-runner-lf-lab
+    manager: home
+    video: {from: catch-0.8, to: release+0.9, fps: 30}
+    overrides: {DuelStageRig.ThrowClosedWindupOffForCapture: true}
+
+  - id: throw-video-lf-after
+    name: "左翼ゴロの送球・振りかぶりで体を閉じる（issue #1079 / #1095 の見比べ・新）"
+    scenario: of-grounder-runner-lf-lab
+    manager: home
+    video: {from: catch-0.8, to: release+0.9, fps: 30}
+    overrides: {DuelStageRig.ThrowClosedWindupOffForCapture: false}

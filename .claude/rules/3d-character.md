@@ -5,6 +5,9 @@ paths:
   - "Assets/Editor/{Duel,Catcher,Pitcher,Field}*"
   - "Assets/Editor/*Probe*"
   - "Assets/Editor/Tests/Duel*"
+  - "Assets/Editor/CaptureRunner.cs"
+  - "Assets/KokoSim/Debug/{RecipeShooter,CaptureRecipe}.cs"
+  - "data/debug/captures.yaml"
   - "Assets/Motions/**"
   - "Assets/_AIGearRaw/**"
   - "Assets/**/*.{shader,shadergraph,hlsl,fbx,FBX}"
@@ -17,6 +20,11 @@ paths:
   CI には Unity のライセンスが無く回らない。`DuelStageGuardTests` は「絵でしか気づけない」実害の見張りで、
   どれも実装を1つずつ壊して赤くなることを確かめてある。新しい実害を見つけたら、段落を足す前に検査にできないか考え、
   足した検査は**一度実装を壊して赤くなるのを確かめてから**残す（壊しても緑の検査は誤った安心を生む）
+- **絵の確認は撮影レシピで撮る。専用の *Shooter を新しく書かない**。`data/debug/captures.yaml` に1項目足し、
+  `KokoSim.UnityEditorTools.CaptureRunner.Run("id")`（MCP execute_code 可）で「Play→場面→撮る・測る→Play を抜ける」まで1回で進む。
+  結果は `screenshots/<id>/`（DONE/FAILED・summary.json の節目の時刻・probes.jsonl の毎コマ実測・*.png）。
+  場面はシナリオ＋強制発動で作り、**シードを回して待たない**。欲しい結果が強制で作れなければ `ForcedOutcome` に種類を足す
+  （例: `BuntInPlay`）。レシピで足りない撮り方（打席の途中の対決ビューの瞬間など）は RecipeShooter を広げる
 - URPは品質設定（Quality）ごとに別RenderPipelineAssetを持つ。Render Feature追加・シェーダ設定は
   Graphics / Quality 両方のRenderPipelineAsset整合を確認してから行う（design-18 §2）
 - 左打者・左投手は素体GOでなく**x=0面の無回転な鏡映親ノード**の `localScale.x=-1` で作る

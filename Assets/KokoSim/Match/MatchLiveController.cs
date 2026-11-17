@@ -127,6 +127,13 @@ namespace KokoSim.Unity.Match
         /// ＝撮りたい場面（ゲームセットの瞬間など）を確実に作る。"player" 側はデモの自校で解決する。既定 null＝従来と完全一致。
         /// </summary>
         public static string ScenarioIdForCapture;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】<see cref="ScenarioIdForCapture"/> で始めた試合の最初の打席に予約する強制発動を、
+        /// シナリオの <c>force</c> の代わりに使う（撮影レシピ <c>data/debug/captures.yaml</c> の <c>force</c>）。
+        /// ForcedOutcome の enum 名。既定 null＝シナリオの指定どおり。
+        /// </summary>
+        public static string ForceOverrideForCapture;
 #endif
 
         [SerializeField] private ulong gameSeed = 20260718UL;
@@ -930,7 +937,8 @@ namespace KokoSim.Unity.Match
                 var built = KokoSim.Engine.Debugging.ScenarioBuilder.Build(scenario, ctx, seed, home);
                 _homeTeam = built.Home;
                 _prog = new MatchProgression(built.Away, built.Home, built.Ctx, built.Seed, built.Start);
-                if (KokoSim.Engine.Debugging.ForcedOutcomes.TryParse(scenario.Force, out var force)) _prog.ForceNext(force);
+                var forceName = string.IsNullOrEmpty(ForceOverrideForCapture) ? scenario.Force : ForceOverrideForCapture;
+                if (KokoSim.Engine.Debugging.ForcedOutcomes.TryParse(forceName, out var force)) _prog.ForceNext(force);
                 return;
             }
 #endif

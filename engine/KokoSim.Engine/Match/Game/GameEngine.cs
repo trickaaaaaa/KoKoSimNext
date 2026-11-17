@@ -691,6 +691,9 @@ public static class GameEngine
                 ? Debugging.ForcedOutcomes.Apply(ctx.Baserunning, force)
                 : ctx.Baserunning;
             var forcedPaResult = Debugging.ForcedOutcomes.ToPlateAppearance(force);
+            // バントの解決は打席の中（AtBatSession→BuntResolver）で打席文脈の走塁係数を読むので、
+            // BuntInPlay だけは強制した係数を打席文脈へ渡す。それ以外は従来どおり同一参照＝乱数順・結果は不変。
+            var paCtx = force == Debugging.ForcedOutcome.BuntInPlay ? ctx with { Baserunning = paBaserunning } : ctx;
 
             // プレッシャー指数（設計書02 §3）: 状況から自動算出。采配判断にも渡す。
             var pressureIdx = PressureModel.Compute(new PressureSituation(
@@ -959,7 +962,7 @@ public static class GameEngine
                 var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead);
                 // バッテリーの相性（設計書23 §2.4）: 実効リードに 1 + k1×K。K=0 で恒等・乱数不使用。
                 catcherLead = BatteryChemistry.ApplyToLead(catcherLead, defense.BatteryK(currentPitcher, ctx.Chemistry), ctx.Chemistry);
-                return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
+                return paCtx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
                     // 慣れ（設計書02 §2.3b）: この打者がこの試合でこの投手と対戦した打席数。継投で0へ戻る。
