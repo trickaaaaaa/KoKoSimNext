@@ -13,9 +13,11 @@ namespace KokoSim.Engine.Match.AtBat;
 /// （PitchRecord/Trajectory の露出は Phase B。ここで無理に前借りしない）。</summary>
 /// <param name="EndsPlateAppearance">この投球で打席が確定したか。</param>
 /// <param name="SqueezeRunnerCaughtAtThird">
-/// スクイズのウエストを読まれ、三塁走者だけが挟殺された（設計書15 Phase D-2c）。打席は確定しない
-/// （<see cref="PitchResolution.EndsPlateAppearance"/> は false のまま）。呼び出し側（GameEngine）が
-/// 三塁走者を除去しアウトを1つ加算した上で、打者の打席続行（強攻フォールバック）へ進める。
+/// スクイズのウエストを読まれた、または打者がバントを空振りして、飛び出した三塁走者が挟殺された
+/// （設計書15 Phase D-2c・issue #1061）。打席は原則確定しない（<see cref="PitchResolution.EndsPlateAppearance"/> は
+/// false のまま）。呼び出し側（GameEngine）が三塁走者を除去しアウトを1つ加算した上で、打者の打席続行
+/// （強攻フォールバック）へ進める。2ストライクからの空振りは三振で打席が確定する（このとき true と両立）。
+/// バントファウルはボールデッドで走者は三塁へ戻る＝この値は false。
 /// </param>
 public readonly record struct PitchResolution(bool EndsPlateAppearance, bool SqueezeRunnerCaughtAtThird = false);
 
@@ -440,15 +442,37 @@ public sealed class AtBatSession
                 batterPlayer, thirdRunner, pitcher, plan.Stuff, squeezeCourseDifficulty,
                 _runnersNow.First, _runnersNow.Second, ctx.Field, wasteProb, ctx.Baserunning, rng);
 
-            // バントが不成立（ウエストを読まれた、または空振り/ファウル）: 三塁走者が飛び出していれば挟殺
-            // される。打席は確定せず、以降は強攻へフォールバックする。issue bunt-no-take-on-ball-pitches で
-            // 三塁走者が本塁で刺されるケース（ボールは実際にプレーされた）が新設され、そちらは
-            // BatterOut/Runs/RunnerOut の組み合わせだけでは区別できなくなったため、判定条件を
-            // 「バントが不成立か」（sq.Bunt）に変更した。
-            if (sq.Bunt is BuntResult.MissedBunt or BuntResult.Foul)
+            // バントが不成立（sq.Bunt が MissedBunt / Foul）。issue #1061 で3つに分けた:
+            //  ① ウエスト（外された球）: ボール。打者はバットを出せず、飛び出した三塁走者は挟殺される。
+            //  ② 打者の空振り: ストライク（2ストライクからなら三振）。三塁走者は挟殺される。
+            //  ③ ファウル: ストライク（2ストライクからのバントファウルは三振）。ボールデッド＝走者は三塁へ戻り、アウトにならない。
+            // 打席は確定しない（①②の三振・四球を除く）。以降は強攻へフォールバックする。issue
+            // bunt-no-take-on-ball-pitches で三塁走者が本塁で刺されるケース（ボールは実際にプレーされた）が
+            // 新設され、BatterOut/Runs/RunnerOut の組み合わせだけでは区別できなくなったため、判定条件は
+            // 「バントが不成立か」（sq.Bunt）にしている。
+            if (sq.Bunt == BuntResult.Foul)
             {
-                _balls++;
-                RecordPitch(PitchKind.Ball, plan, loc, inZone, sign: battingOverride);
+                _strikes++;
+                RecordPitch(PitchKind.Foul, plan, loc, inZone, swung: true, sign: battingOverride);
+                if (_strikes >= 3) return Finish(PlateAppearanceResult.Strikeout);
+                return Continue();
+            }
+            if (sq.Bunt == BuntResult.MissedBunt)
+            {
+                if (sq.Wasted)
+                {
+                    _balls++;
+                    RecordPitch(PitchKind.Ball, plan, loc, inZone, sign: battingOverride);
+                    // 4球目のウエスト＝四球。打者は出塁し、走者は挟殺ではなく四球の進塁（強制のみ）で扱う。
+                    if (_balls >= 4) return Finish(PlateAppearanceResult.Walk);
+                }
+                else
+                {
+                    _strikes++;
+                    RecordPitch(PitchKind.SwingingStrike, plan, loc, inZone, swung: true, sign: battingOverride);
+                    if (_strikes >= 3)
+                        return Finish(PlateAppearanceResult.Strikeout) with { SqueezeRunnerCaughtAtThird = true };
+                }
                 return new PitchResolution(EndsPlateAppearance: false, SqueezeRunnerCaughtAtThird: true);
             }
 

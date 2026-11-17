@@ -13,8 +13,8 @@ namespace KokoSim.Engine.Tests.Match.AtBat;
 
 /// <summary>
 /// 設計書15 Phase D-2c の合否テスト。スクイズを AtBatSession の投球ループへ統一したことで
-/// (1) 三塁走者が挟殺される（RunnerOut=true）場合は理由（ウエストを読まれた／送りバント自体が
-///     Foul・MissedBuntで不成立）を問わず必ず打席を確定させず打者続行させる（<see cref="PitchResolution.SqueezeRunnerCaughtAtThird"/>）、
+/// (1) 三塁走者が挟殺される場合（ウエストを読まれた／打者がバントを空振り）は打席を確定させず
+///     打者続行させる（<see cref="PitchResolution.SqueezeRunnerCaughtAtThird"/>）。バントファウルは走者が戻る別経路（SqueezeFailureTests）、
 /// (2) SacrificeSuccess/InfieldHit/PopOut は <see cref="AtBatResult.Squeeze"/> で打席を確定・区別できる、
 /// (3) 実球（PitchSelection→ControlScatter）を経て実PitchLogが残る、
 /// (4) GameEngine 側で bases.Third の消去（生還時のみ）と進塁が正しく分岐する、ことを固定する。
@@ -57,9 +57,9 @@ public sealed class SqueezeUnificationTests
     }
 
     /// <summary>
-    /// ウエスト確率0でも、送りバント自体が Foul/MissedBunt で不成立なら三塁走者は挟殺され（RunnerOut=true）、
-    /// これもウエストを読まれた場合と全く同じ「打席は確定せず打者続行」の経路（<see cref="PitchResolution.SqueezeRunnerCaughtAtThird"/>）
-    /// を通る（設計書02 §4.4: 挟殺の原因を問わず打席は続く）。
+    /// ウエスト確率0でも、打者がバントを空振りすれば三塁走者は挟殺され、ウエストを読まれた場合と同じ
+    /// 「打席は確定せず打者続行」の経路（<see cref="PitchResolution.SqueezeRunnerCaughtAtThird"/>）を通る。
+    /// ただしカウントはストライク（issue #1061: 空振りはボールではない）。
     /// </summary>
     [Fact]
     public void NoWasteButBuntFails_RunnerCaughtAtThird_SameContinuePathAsWaste()
@@ -75,8 +75,9 @@ public sealed class SqueezeUnificationTests
 
             Assert.False(res.EndsPlateAppearance);
             Assert.False(session.IsComplete);
-            Assert.Equal(1, session.Balls);
-            Assert.Equal(PitchKind.Ball, session.PitchLog[0].Kind);
+            Assert.Equal(0, session.Balls);
+            Assert.Equal(1, session.Strikes);
+            Assert.Equal(PitchKind.SwingingStrike, session.PitchLog[0].Kind);
             found = true;
         }
         Assert.True(found, "ウエストなしでバントが不成立（挟殺）になるケースが見つからなかった");
@@ -98,7 +99,7 @@ public sealed class SqueezeUnificationTests
             var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: Bunter,
                 thirdBaseRunner: ThirdRunner, squeezeWasteProbability: 0.0);
             var res = session.ThrowNextPitch(rng, PitchBattingOverride.Squeeze);
-            if (res.SqueezeRunnerCaughtAtThird) continue; // 打席未確定（別テストでカバー）
+            if (!res.EndsPlateAppearance) continue; // 打席未確定（挟殺・ファウル。別テストでカバー）
 
             Assert.True(res.EndsPlateAppearance);
             Assert.True(session.IsComplete);
@@ -150,7 +151,7 @@ public sealed class SqueezeUnificationTests
             var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: Bunter,
                 thirdBaseRunner: ThirdRunner, firstBaseRunner: slowFirstRunner, squeezeWasteProbability: 0.0);
             var res = session.ThrowNextPitch(rng, PitchBattingOverride.Squeeze);
-            if (res.SqueezeRunnerCaughtAtThird) continue;
+            if (!res.EndsPlateAppearance) continue;
 
             var sq = session.Result.Squeeze!.Value;
             if (sq.Bunt == BuntResult.PopOutDoubledOff)

@@ -130,6 +130,15 @@ public sealed record LivePitch
     public PlaybackPlay? BatteryMissPlay { get; init; }
 
     /// <summary>
+    /// スクイズが不成立（ウエスト／バント空振り）で、飛び出した三塁走者が三本間で挟殺された再生データ（issue #1061）。
+    /// <see cref="BatteryMissPlay"/> と同じく「この球そのものの結果」として起きるため、球を投げ終えた後に載る。
+    /// この球の塁・アウト（<see cref="BaseThird"/>・<see cref="Outs"/>）は挟殺後の実状態。
+    /// <see cref="TimelineBuilder.BuildSqueezeRundown"/> の出力を <see cref="PlayTimelineAdapter.ToPlaybackPlay"/> で
+    /// 変換した純関数の写し＝乱数消費ゼロ・帯不変。<see cref="GameContext.CaptureTimelines"/> が真のときだけ非null。
+    /// </summary>
+    public PlaybackPlay? SqueezeRundownPlay { get; init; }
+
+    /// <summary>
     /// この球で起きた振り逃げ（第3ストライク不捕球, design-14 P1-2, issue #488）の再生データ。
     /// <see cref="BatteryMissPlay"/> と同様「この球の前」ではなく「この球そのものの結果」として起きる。
     /// 三振が確定した直後（イニング後処理の前）にしか判定しないため、盗塁・牽制・暴投/捕逸のいずれよりも
