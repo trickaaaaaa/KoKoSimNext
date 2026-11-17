@@ -85,9 +85,12 @@ namespace KokoSim.Unity.Shell
 
             // 自校が出場枠内＝対話プレイ。
             var manager = ManagerSchool();
+            // 今大会スコープをリセットしてから積む（前の秋季県大会の成績を「今大会」に残さない）。
+            NationService.TournamentStats.StartTournament();
             var playerRunner = new TournamentRunner(
                 field, manager, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule,
-                title, new PlayerMatchResolver(), BackgroundResolver(yearIndex));
+                title, new PlayerMatchResolver(), TournamentEntry.BackgroundResolverFor(TournamentKind.Regional, yearIndex),
+                onBackgroundMatch: TournamentEntry.FoldBackgroundMatch);
             GameSession.Current.EnterTournament(TournamentKind.Regional, title, playerRunner, field);
             GameSession.Current.Year = yearIndex;
             return true;
@@ -182,16 +185,6 @@ namespace KokoSim.Unity.Shell
                 DistrictId = NationService.DistrictId,
                 Strength = trainable.Count == 0 ? 40.0 : TeamOverall.Of(trainable),
             };
-        }
-
-        /// <param name="kind">大会の種別。球場の寸法を自校の試合と揃える（<see cref="MatchStadium.For(TournamentKind)"/>。
-        /// 神宮大会は明治神宮野球場・issue #904。地区大会は従来どおり既定）。</param>
-        internal static IBackgroundMatchResolver BackgroundResolver(int yearIndex, TournamentKind kind = TournamentKind.Regional)
-        {
-            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
-            return new MemoizingBackgroundResolver(
-                new BackgroundMatchResolver(NationService.Rosters, new GameContext { Field = MatchStadium.For(kind) }, yearIndex,
-                    stats: null, modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory()));
         }
 
         internal static string Title(string region, int yearIndex)
