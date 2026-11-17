@@ -138,8 +138,7 @@ public sealed class PurchaseCatalogTests
     {
         foreach (var f in Catalog.Facilities)
         {
-            // 財布は区分で決まる（建物＝施設基金／道具・備品＝部費）ので両方に積んでおく。
-            var m = new KokoSim.Engine.Career.Manager { Funds = 10_000, FacilityFund = 1_000_000 };
+            var m = new KokoSim.Engine.Career.Manager { Funds = 1_000_000 };
             var set = new FacilitySet();
             for (var lv = 1; lv <= f.MaxLevel; lv++)
                 Assert.Equal(KokoSim.Engine.Career.FacilityPurchaseResult.Ok,

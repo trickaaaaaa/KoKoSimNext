@@ -55,7 +55,7 @@ public static class EventTableParser
         int? calendarWeek = null;
         double weight = 1.0;
         int cooldown = 4;
-        double effFunds = 0.0, effFacilityFund = 0.0, effTrainingMult = 1.0;
+        double effFunds = 0.0, effTrainingMult = 1.0;
         int effTrainingWeeks = 0;
         bool effTrainingPlayer = false;
         var variants = new List<EventScript>();
@@ -129,7 +129,7 @@ public static class EventTableParser
                 Text = text ?? "",
                 Variants = variants.ToArray(),
                 Effect = new EventEffect(
-                    effFunds, effFacilityFund, effTrainingMult, effTrainingWeeks, effTrainingPlayer),
+                    effFunds, effTrainingMult, effTrainingWeeks, effTrainingPlayer),
                 Choices = choices.ToArray(),
                 Outcomes = outcomes.ToArray(),
                 Cast = new EventCast(castSubject, castOther),
@@ -138,7 +138,7 @@ public static class EventTableParser
             calendarWeek = null;
             weight = 1.0;
             cooldown = 4;
-            effFunds = effFacilityFund = 0.0;
+            effFunds = 0.0;
             effTrainingMult = 1.0; effTrainingWeeks = 0; effTrainingPlayer = false;
             variants = new List<EventScript>();
             choices = new List<EventChoice>();
@@ -214,7 +214,6 @@ public static class EventTableParser
                 case "text": text = value; break;
                 // 効果（issue #613）。`effects:` の下に書くが、キー名で拾うので入れ子の深さは問わない。
                 case "funds": effFunds = ParseDouble(value, 0.0); break;
-                case "facility_fund": effFacilityFund = ParseDouble(value, 0.0); break;
                 case "training_mult": effTrainingMult = ParseDouble(value, 1.0); break;
                 case "training_weeks": effTrainingWeeks = ParseInt(value) ?? 0; break;
                 case "training_target": effTrainingPlayer = value == "player"; break;

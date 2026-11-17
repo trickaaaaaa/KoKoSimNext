@@ -116,11 +116,14 @@ public static class ManagerTransferModel
     /// <summary>
     /// 転任に伴う監督メタの更新（設計書04 §1.3「監督能力と名声は持ち越し」）。信頼度は転任でリセットし、
     /// 在任年数も新しい学校での0に戻す（最低在任年数の下限はここから再カウント）。
+    /// 部費は <see cref="CareerCoefficients.TransferFundsCarryOverRatio"/> だけ持ち越し、残りは前の学校に残る
+    /// （issue #1082）。
     /// </summary>
     public static void ApplyTransfer(Manager m, CareerCoefficients c)
     {
         m.Trust = c.TrustReset;
         m.YearsAtSchool = 0;
+        m.Funds *= c.TransferFundsCarryOverRatio;
     }
 
     /// <summary>

@@ -208,10 +208,9 @@
     weight: 1.0
     cooldown_weeks: 16
     requires_region: Kyushu # その地方でだけ（省略＝全国。未知の地方名はパースで落とす）
-    text: "後援会が施設基金に寄付してくれた。"
+    text: "後援会が部費に寄付してくれた。"
     effects:
-      funds: 30             # 部費（運営費）の増減・万円
-      facility_fund: 120    # 施設基金（建物専用）の増減・万円
+      funds: 60             # 部費の増減・万円（財布は部費1つ・issue #1082）
       training_mult: 1.10   # 練習効率の倍率
       training_weeks: 4     #   … が効く週数（倍率と両方書かないと効かない）
       training_target: team # team（既定・部全体）/ player（会話の主役ひとり）

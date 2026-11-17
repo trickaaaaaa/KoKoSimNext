@@ -295,15 +295,14 @@ events:
             say: "……はい。ありがとうございます。"
 
   # 設備・資金イベント（設計書04 §1.4・issue #613）。
-  # **財布は2つ**＝部費（運営費）と施設基金（建物にしか使えない）。イベントもその区別を守る
-  # （後援会・OB寄付は建物へ、備品の破損は運営費から）。効果は effects: に書くだけで足せる。
+  # 財布は部費1つ（issue #1082 で施設基金を統合）。寄付も破損の出費も部費で動く。効果は effects: に書くだけで足せる。
   - id: booster_club_fund
     kind: Random
     weight: 1.0
     cooldown_weeks: 16
-    text: "後援会が施設基金に寄付してくれた。"
+    text: "後援会が部費に寄付してくれた。"
     effects:
-      facility_fund: 120
+      funds: 60
     variants:
       - lines:
           - who: local
@@ -315,7 +314,7 @@ events:
           - who: narration
             say: "職員室に呼ばれると、後援会名義の書類が机に置いてあった。"
           - who: team_manager
-            say: "施設基金ですね。部費では建たないものに使えます。"
+            say: "部費に入れておきますね。道具にも設備にも使えます。"
       - lines:
           - who: ob
             say: "室内が無いと、雪の日に何もできんでしょう。少しですが。"

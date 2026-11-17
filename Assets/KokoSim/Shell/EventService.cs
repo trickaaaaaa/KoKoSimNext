@@ -333,14 +333,6 @@ namespace KokoSim.Unity.Shell
                 parts.Add("部費 " + Signed(d) + " 万");
                 if (d < 0) bad = true;
             }
-            if (effect.FacilityFund != 0.0)
-            {
-                var before = m.FacilityFund;
-                m.FacilityFund = System.Math.Max(0.0, m.FacilityFund + effect.FacilityFund);
-                var d = m.FacilityFund - before;
-                parts.Add("施設基金 " + Signed(d) + " 万");
-                if (d < 0) bad = true;
-            }
             if (effect.HasTrainingBoost)
             {
                 // 対象が「主役の1人」なら選手Id、そうでなければ 0＝部全体（issue #615）。

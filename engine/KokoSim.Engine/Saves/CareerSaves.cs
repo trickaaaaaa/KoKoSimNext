@@ -26,7 +26,6 @@ internal static class CareerSaves
         .Add("fame", m.Fame)
         .Add("trust", m.Trust)
         .Add("funds", m.Funds)
-        .Add("facilityFund", m.FacilityFund)
         .Add("careerYears", m.CareerYears)
         .Add("yearsAtSchool", m.YearsAtSchool)
         .Add("koshienApp", m.KoshienAppearances);
@@ -43,8 +42,6 @@ internal static class CareerSaves
         Fame = o.Double("fame"),
         Trust = o.Double("trust"),
         Funds = o.Double("funds"),
-        // 施設基金は v3 で追加。旧セーブ（v1/v2）には無いので 0 で読む＝建物は買えないが壊れない。
-        FacilityFund = o.Has("facilityFund") ? o.Double("facilityFund") : 0,
         CareerYears = o.Int("careerYears"),
         // 在任年数（最低在任年数ガード）は今回追加。旧セーブには無いので0で読む＝赴任したてとして
         // 猶予から数え直す（安全側＝いきなり転任対象になることはない）。

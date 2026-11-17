@@ -447,10 +447,9 @@ events:
     {
         var events = EventTableParser.Parse(
             "events:\n  - id: donation\n    kind: Random\n    text: \"寄付。\"\n"
-            + "    effects:\n      funds: 30\n      facility_fund: -12.5\n");
+            + "    effects:\n      funds: 30\n");
 
         Assert.Equal(30.0, events[0].Effect.Funds, 6);
-        Assert.Equal(-12.5, events[0].Effect.FacilityFund, 6);
         Assert.False(events[0].Effect.IsEmpty);
     }
 
@@ -477,19 +476,15 @@ events:
     }
 
     /// <summary>
-    /// 財布の区別（設計書04 §1.4）。後援会・OB寄付は<b>施設基金</b>（建物にしか使えない）へ、
-    /// 道具の破損は<b>部費</b>から。ここが入れ替わると、寄付で道具が買えてしまう。
+    /// 資金イベントの向き（設計書04 §1.4）。財布は部費1つ（issue #1082）。寄付は部費に入り、道具の破損は部費から出る。
     /// </summary>
     [Fact]
-    public void RepositoryTable_FundEvents_UseTheRightWallet()
+    public void RepositoryTable_FundEvents_MoveFundsInTheRightDirection()
     {
         var byId = RepositoryEvents().ToDictionary(e => e.Id);
 
-        Assert.True(byId["booster_club_fund"].Effect.FacilityFund > 0, "後援会の寄付が施設基金へ入っていない");
-        Assert.Equal(0.0, byId["booster_club_fund"].Effect.Funds, 6);
-
+        Assert.True(byId["booster_club_fund"].Effect.Funds > 0, "後援会の寄付が部費へ入っていない");
         Assert.True(byId["gear_broken"].Effect.Funds < 0, "道具の破損が部費から出ていない");
-        Assert.Equal(0.0, byId["gear_broken"].Effect.FacilityFund, 6);
 
         Assert.True(byId["ob_donation"].Effect.Funds > 0);
         Assert.True(byId["local_company_support"].Effect.Funds > 0);

@@ -200,6 +200,29 @@ public sealed class ManagerTransferModelTests
         Assert.Equal(40, m.CoachingBatting);
     }
 
+    // 転任したときに持ち越せる部費は3割（残り7割は前の学校に残る・issue #1082）。
+    [Fact]
+    public void ApplyTransfer_CarriesOverOnlyPartOfTheFunds()
+    {
+        Assert.Equal(0.3, C.TransferFundsCarryOverRatio, 9);
+        var m = new Manager { Funds = 1000 };
+
+        ManagerTransferModel.ApplyTransfer(m, C);
+
+        Assert.Equal(300, m.Funds, 9);
+    }
+
+    // 残留（転任しない）なら部費は減らない。
+    [Fact]
+    public void ApplyDecision_Stay_KeepsAllFunds()
+    {
+        var m = new Manager { Funds = 1000 };
+
+        ManagerTransferModel.ApplyDecision(m, TransferEventKind.ForcedTransfer, transferred: false, C);
+
+        Assert.Equal(1000, m.Funds, 9);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

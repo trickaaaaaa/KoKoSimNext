@@ -116,30 +116,33 @@ public sealed record CareerCoefficients
     /// </summary>
     public double ScoutCost { get; init; } = 30.0;
 
-    // --- 施設基金（設計書04 §1.4「OB・後援会寄付」, 万円）。部費とは別会計で、建物だけに使う。
-    // 現実の高校でも寮・室内練習場・ナイターは部費でなく学校法人の設備投資と後援会の寄付で建つ。
-    // 既定を全て0にすると施設基金が一切増えない＝従来（部費で建物を買う）とは別世界になるので、
-    // 実ゲームの既定として稼働する値を入れる。 ---
+    // --- 寄付・一時金（設計書04 §1.4, 万円）。年度末に部費へ入る（issue #1082 で施設基金を部費へ統合）。
+    // 統合前の施設基金の収入をそのまま流すと道具・合宿・年契約が実質タダになるので、額は統合前の半分
+    // （オーナー決定 2026-11-17・案A）。 ---
     /// <summary>
     /// 学校の設備投資[万円/年]。実績によらず毎年入る土台。名声由来の寄付を主役にするため小さく置く
-    /// （名声10で寄付200万＝土台の2倍、名声100で2000万＝20倍）。
+    /// （名声10で寄付100万＝土台の2倍、名声100で1000万＝20倍）。
     /// </summary>
-    public double FacilityFundSchoolBase { get; init; } = 100.0;
-    /// <summary>後援会・OB寄付の名声1あたりの年額[万円]（名声に比例。名声100で年2000万）。</summary>
-    public double FacilityFundDonationPerFame { get; init; } = 20.0;
+    public double SchoolInvestment { get; init; } = 50.0;
+    /// <summary>後援会・OB寄付の名声1あたりの年額[万円]（名声に比例。名声100で年1000万）。</summary>
+    public double BoosterDonationPerFame { get; init; } = 10.0;
     /// <summary>甲子園出場の年に後援会から入る一時金[万円]。</summary>
-    public double FacilityFundKoshienBonus { get; init; } = 1000.0;
+    public double KoshienYearBonus { get; init; } = 500.0;
 
     // --- 甲子園出場が決まった日の激励金（設計書05 §1.1a・OB/卒業生の募金） ---
-    // 上の FacilityFundKoshienBonus（施設基金・年度末に無言で入る）とは<b>別の財布・別のタイミング</b>。
-    // こちらは**部費**＝遠征・宿泊・応援バスに使う運営費で、出場が決まったその場でイベントとして見える形で入る
-    // （オーナー決定 2026-08-21）。二重計上ではない（建物の金と遠征の金は現実でも別勘定）。
+    // 上の KoshienYearBonus（年度末に無言で入る）とは<b>別のタイミング</b>。こちらは出場が決まったその場で
+    // イベントとして見える形で入る（オーナー決定 2026-08-21）。どちらも部費に入る（issue #1082）。
     /// <summary>甲子園出場が決まった日にOB・卒業生から入る激励金の土台[万円]。</summary>
     public double KoshienBerthDonationBase { get; init; } = 120.0;
     /// <summary>同・名声1あたりの上乗せ[万円]（名声100で +150万＝年間予算の2倍強）。</summary>
     public double KoshienBerthDonationPerFame { get; init; } = 1.5;
     /// <summary>全国優勝の年に入る一時金[万円]（甲子園出場ぶんとは別に上乗せ）。</summary>
-    public double FacilityFundNationalTitleBonus { get; init; } = 5000.0;
+    public double NationalTitleBonus { get; init; } = 2500.0;
+
+    /// <summary>
+    /// 転任したときに持ち越せる部費の割合（issue #1082・オーナー決定 2026-11-17）。残りは前の学校に残る。
+    /// </summary>
+    public double TransferFundsCarryOverRatio { get; init; } = 0.3;
 
     // --- 赴任校（教員監督は弱小校に飛ばされがち） ---
     public double NewSchoolStrengthMean { get; init; } = 34.0;

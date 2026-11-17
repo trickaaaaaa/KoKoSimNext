@@ -45,14 +45,12 @@ namespace KokoSim.Unity.Management
             yield return Capture(doc, "01-after-buy");
 
             // ③ 資金不足と最大レベルが同時に出る状態。
-            // 施設基金が育った強豪期（照明Lv2 / 室内Lv1 / トレLv3＝最大 / 基金2500万）と、
-            // 部費が乏しく道具が買えない状態（部費20万）を同時に見る。
+            // 施設が育った強豪期（照明Lv2 / 室内Lv1 / トレLv3＝最大）で、部費が乏しく買えない状態（部費20万）を見る。
             ManagerService.Facilities.SetLevel("lighting", 2);
             ManagerService.Facilities.SetLevel("indoor", 1);
             ManagerService.Facilities.SetLevel("weight", 3);
             ManagerService.Facilities.SetLevel("gear_batting", 2);
             ManagerService.Manager.Funds = 20;
-            ManagerService.Manager.FacilityFund = 2500;
             ManagerService.Manager.Fame = 60;
             doc = Open("ManagementScreen");   // OnEnable から組み直す
             yield return null; yield return null;
@@ -82,7 +80,6 @@ namespace KokoSim.Unity.Management
         {
             var f = ManagerService.Facilities;
             Debug.Log("[MN] " + tag + " funds=" + ManagerService.Manager.Funds
-                + " fund=" + ManagerService.Manager.FacilityFund
                 + " lighting=" + f.LevelOf("lighting") + " indoor=" + f.LevelOf("indoor")
                 + " dorm=" + f.LevelOf("dorm") + " weight=" + f.LevelOf("weight")
                 + " budget=" + TrainingWeek.Budget + "分");

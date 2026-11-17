@@ -156,11 +156,13 @@ public sealed class ContractRenewalTests
     public void AnnualFundsNet_IsIncomeMinusCampsAndContracts()
     {
         var c = new CareerCoefficients();
-        var net = CareerEngine.AnnualFundsNet(trust: 50, contractCost: 140, c);
-        Assert.Equal(c.AnnualBudgetBase + c.BudgetPerTrust * 50 - (c.SummerCampCost + c.WinterCampCost + 140), net, 9);
+        var net = CareerEngine.AnnualFundsNet(trust: 50, fame: 40, contractCost: 140, c);
+        var income = c.AnnualBudgetBase + c.BudgetPerTrust * 50                 // 学校予算＋信頼度ぶん
+                     + c.SchoolInvestment + c.BoosterDonationPerFame * 40;      // 設備投資＋後援会・OB寄付（issue #1082）
+        Assert.Equal(income - (c.SummerCampCost + c.WinterCampCost + 140), net, 9);
     }
 
-    /// <summary>見込みは総括が実際に出す値と一致する（信頼度が総括で動かない・勝数0の年で突き合わせる）。</summary>
+    /// <summary>見込みは総括が実際に出す値と一致する（勝数0の年で、総括後の信頼度・名声を前提に突き合わせる）。</summary>
     [Fact]
     public void ProjectedFunds_MatchesTheSummaryWhenTrustDoesNotMove()
     {
@@ -172,13 +174,47 @@ public sealed class ContractRenewalTests
         var m = new Manager { Funds = 500, Trust = 50, Fame = 10 };
         ManagerSeasonUpdate.Apply(m, false, false, 0, new Xoshiro256Random(7), contracts: Catalog.Aggregate(set));
 
-        Assert.Equal(m.Funds, CareerEngine.ProjectedFunds(500, m.Trust, contractCost, c), 6);
+        Assert.Equal(m.Funds, CareerEngine.ProjectedFunds(500, m.Trust, m.Fame, contractCost, c), 6);
     }
 
     [Fact]
     public void ProjectedFunds_NeverGoesNegative()
     {
         var c = new CareerCoefficients();
-        Assert.Equal(0, CareerEngine.ProjectedFunds(funds: 0, trust: 0, contractCost: 1000, c), 9);
+        Assert.Equal(0, CareerEngine.ProjectedFunds(funds: 0, trust: 0, fame: 0, contractCost: 5000, c), 9);
+    }
+
+    // ── 年度末の寄付・一時金（issue #1082: 施設基金を部費へ統合・額は半分） ──────────────
+
+    [Fact]
+    public void AnnualDonationIncome_UsesTheHalvedAmounts()
+    {
+        var c = new CareerCoefficients();
+        Assert.Equal(50 + 10 * 50, CareerEngine.AnnualDonationIncome(50, false, false, c), 9);
+        Assert.Equal(50 + 10 * 50 + 500, CareerEngine.AnnualDonationIncome(50, true, false, c), 9);
+        Assert.Equal(50 + 10 * 50 + 500 + 2500, CareerEngine.AnnualDonationIncome(50, true, true, c), 9);
+    }
+
+    /// <summary>総括で寄付・一時金が部費に入る（甲子園・全国優勝の年は一時金が乗る）。</summary>
+    [Fact]
+    public void Summary_PutsDonationsIntoFunds()
+    {
+        var c = new CareerCoefficients();
+        var contracts = Catalog.Aggregate(Signed(("scouting", 1)));
+
+        double FundsAfter(bool koshien, bool champion)
+        {
+            var m = new Manager { Funds = 0, Trust = 50, Fame = 50 };
+            ManagerSeasonUpdate.Apply(m, koshien, champion, 5, new Xoshiro256Random(7), contracts: contracts);
+            return m.Funds;
+        }
+
+        var plain = FundsAfter(false, false);
+        Assert.True(plain > 0);
+        // 名声は総括で動くので、一時金だけを差で取り出す（同じシード・同じ勝数＝それ以外は同じ）
+        var koshienYear = FundsAfter(true, false);
+        var titleYear = FundsAfter(true, true);
+        Assert.True(koshienYear - plain >= c.KoshienYearBonus - 1e-6, $"甲子園の年の差 {koshienYear - plain}");
+        Assert.True(titleYear - koshienYear >= c.NationalTitleBonus - 1e-6, $"全国優勝の年の差 {titleYear - koshienYear}");
     }
 }

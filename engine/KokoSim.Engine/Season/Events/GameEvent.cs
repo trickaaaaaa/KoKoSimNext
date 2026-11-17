@@ -15,14 +15,12 @@ public enum EventKind
 ///
 /// <para>0 の軸は「動かさない」。金額は万円単位（<c>Manager.Funds</c> と同じ）。</para>
 /// </summary>
-/// <param name="Funds">部費の増減（万円）。運営費の財布。</param>
-/// <param name="FacilityFund">施設基金の増減（万円）。建物にしか使えない財布（design-04 §1.4）。</param>
+/// <param name="Funds">部費の増減（万円）。財布はこれ1つ（design-04 §1.4・issue #1082）。</param>
 /// <param name="TrainingMult">練習効率の倍率（1.0＝変化なし）。issue #615。</param>
 /// <param name="TrainingWeeks">練習効率の補正が効く週数（0＝補正なし）。</param>
 /// <param name="TrainingTargetIsPlayer">true＝主役の1人だけ／false＝部全体。</param>
 public sealed record EventEffect(
     double Funds = 0.0,
-    double FacilityFund = 0.0,
     double TrainingMult = 1.0,
     int TrainingWeeks = 0,
     bool TrainingTargetIsPlayer = false)
@@ -34,7 +32,7 @@ public sealed record EventEffect(
     public bool HasTrainingBoost => TrainingWeeks > 0 && TrainingMult != 1.0;
 
     /// <summary>1つでも動く軸があるか。</summary>
-    public bool IsEmpty => Funds == 0.0 && FacilityFund == 0.0 && !HasTrainingBoost;
+    public bool IsEmpty => Funds == 0.0 && !HasTrainingBoost;
 }
 
 /// <summary>

@@ -71,7 +71,7 @@ namespace KokoSim.Unity.NewGame
                       + $" 部員={roster.Count}人 1年={roster.Count(p => p.Grade == 1)}"
                       + $" 2年={roster.Count(p => p.Grade == 2)} 3年={roster.Count(p => p.Grade == 3)}"
                       + $" 投手役={pitchers} 捕手={catchers}"
-                      + $" 部費={ManagerService.Manager.Funds} 基金={ManagerService.Manager.FacilityFund}"
+                      + $" 部費={ManagerService.Manager.Funds}"
                       + $" 名声={ManagerService.Manager.Fame} 信頼={ManagerService.Manager.Trust}");
 
             var home = Open("HomeDashboard");

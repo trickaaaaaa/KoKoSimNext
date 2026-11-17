@@ -127,8 +127,8 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 才能上限 / 成長タイプ | PotentialCap / GrowthType(Early/Standard/Late) | 隠しパラメータ |
 | 見極め | Insight | 隠しパラメータの推定精度 |
 | 名声 / 信頼度 | Fame / Trust | 監督メタの二軸 |
-| 部費 / 施設基金 | Manager.Funds / Manager.FacilityFund | **財布は2つ**（design-04 §1.4）。部費＝運営費（道具・備品・合宿・スカウト）／施設基金＝学校の設備投資＋後援会・OB寄付で建物だけに使う。現実でも寮・室内練習場は部費では建たない |
-| 買えるものの区分 / 支払いの財布 | PurchaseKind(Facility/Equipment/Gear) / PurchaseWallet | 施設（Lv1-3）／練習道具（効果小・大の2段）／備品（買い切り）。どの財布から出るかは `FacilityPurchase.WalletOf` にしか置かない |
+| 部費 | Manager.Funds | **財布は1つ**（design-04 §1.4・issue #1082 で施設基金を統合）。学校予算・信頼度ぶん・学校の設備投資・後援会/OB寄付・甲子園/全国優勝の一時金が入り、施設・道具・備品・合宿・年契約・遠征すべてに使う。転任では3割だけ持ち越す |
+| 買えるものの区分 | PurchaseKind(Facility/Equipment/Gear) | 施設（Lv1-3）／練習道具（効果小・大の2段）／備品（買い切り）。どれも部費から払う |
 | 年契約 | ContractCatalog / ContractSet / ContractEffects | スカウト網・遠征・専門コーチ（design-04 §1.4a）。買い切りの施設と違い**効果が累積せず**「いまの段」だけが効き、年額を毎年部費から払い、段を0へ戻せば解約できる。既定はスカウト網Lv1＝従来の `ScoutCost` と同額・同効果 |
 | 練習分野 / 練習道具 | TrainingField(Batting/Defense/BaseRunning/Pitching) / EquipmentBonus | 施設の効率係数が全メニュー一律なのに対し、道具は**振っているメニューの分野にだけ**効く。メニュー→分野の写像は `TrainingFields` が単一ソース |
 | 指導力（打撃/投手/守備走塁） | Coaching.Batting/.Pitching/.Defense | |
