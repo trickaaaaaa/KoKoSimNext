@@ -155,3 +155,17 @@ scenarios:
     outs: 0
     bases: [1]
     seed: 20260736
+
+  # ── 外野手が背走して、あと一歩届かない飛球（issue #1075 追記3）。最初の打席の打球が中堅手の頭を越え、
+  # 捕球余裕 −0.08s で落ちる（落下点 106m・中堅の定位置 82m）。3Dでは「届かない」芝居＝背走ジャンプが出る。
+  # 強制発動は使わず自然な解決をシードで固定（打球の軌道が要る）。チームは呼び出し側シード 1 で組む前提
+  # （FlyNearMissScenarioTests と同じ。撮影時は MatchLiveController.GameSeedOverrideForCapture = 1）。
+  # 係数変更で崩れたらテストが赤くなる→ seed を選び直す。
+  - id: fly-near-miss-back-lab
+    name: 守備検証・背走してあと一歩届かない（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20261560

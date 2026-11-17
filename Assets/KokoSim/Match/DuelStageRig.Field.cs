@@ -1121,14 +1121,25 @@ namespace KokoSim.Unity.Match
             /// </summary>
             public readonly bool RootDrivenY;
 
+            /// <summary>
+            /// **届かなかったとき**に収録を打ち切るクリップ内時刻[s]（issue #1075 追記3）。負＝打ち切らない。
+            ///
+            /// <para>捕球の収録は、捕る瞬間の後に「グラブを胸へ引き寄せて押さえ込む」「向き直って構える」まで
+            /// 入っている。届かなかった芝居（<see cref="FieldCatchKind.DiveMiss"/>）は球をグラブへ吸わせないだけで
+            /// 体は同じ尺を流していたので、球が後ろへ転がっているのに本人は「捕った」形で立っていた。
+            /// 瞬間の定義はクリップごとに違う（design-18 §4.5-③）ので、一律の秒でなく収録ごとの実測値で持つ。</para>
+            /// </summary>
+            public readonly float MissEndSeconds;
+
             public FieldCatchAnchor(string clip, float moment, float gloveY,
                 float gloveX, float gloveZ, CatchApproach approach, float postCatchFollowSeconds = -1f,
-                bool rootDrivenY = false)
+                bool rootDrivenY = false, float missEndSeconds = -1f)
             {
                 Clip = clip; Moment = moment; GloveY = gloveY;
                 GloveX = gloveX; GloveZ = gloveZ; Approach = approach;
                 PostCatchFollowSeconds = postCatchFollowSeconds;
                 RootDrivenY = rootDrivenY;
+                MissEndSeconds = missEndSeconds;
             }
         }
 
@@ -1175,8 +1186,11 @@ namespace KokoSim.Unity.Match
         private static readonly FieldCatchAnchor[] FieldDiveAnchors =
         {
             // 背走ジャンピング。1.36s（跳躍の頂点。足が上がるだけで胴は下がらない＝接地は従来どおり足で解ける）
+            // 届かなかったときは 1.70s（両足が着いた瞬間）で打ち切る（issue #1075 追記3）。実測（2026-11-17・
+            // 足の対地高 1/60s 刻み）: 左足の接地 1.58s／右足 1.73s／腰の沈み切り 1.75s。グラブは 1.33s の
+            // 頂点（2.06m）から下がり、1.67〜2.00s で胸へ引き寄せて押さえ込み、2.17s〜 向き直って構える
             new("AA_Baseball_Defender_Movement_Run_Back_To_Jumping_Catch", 1.36f, 1.581f, -0.252f, 0.287f,
-                CatchApproach.Back),
+                CatchApproach.Back, missEndSeconds: 1.70f),
             // 【廃止 issue #674】横っ飛び（Sprint_Diving_Catch 0.80s）とスライディング（Sprint_Sliding_Catch 0.88s）。
             // どちらも体が空中で横に伸びて地面から浮いたように見え、捕ったあとは体を丸めて転がって立ち上がる
             // ＝外野手の飛びつきが不恰好（オーナー指摘）。収録は購入モーションで中身は直せないので出さない。
@@ -1225,6 +1239,28 @@ namespace KokoSim.Unity.Match
         {
             var clip = LoadClip(anchor.Clip);
             return clip == null ? 0f : Mathf.Min(DiveTailMaxSeconds, clip.length - anchor.Moment);
+        }
+
+        /// <summary>
+        /// 届かなかった収録を打ち切った後の据え置き[s]（issue #1075 追記3）。打ち切りには必ず据え置きを添える
+        /// （design-18 §4.5-⑬⑭。無いと打ち切った瞬間に待機へ戻る）。据え置きが済むと走りの段へ戻り、
+        /// 落ちた球を拾いに向かう（engine の回収レッグ）。
+        /// </summary>
+        private const float MissHoldSeconds = 0.15f;
+
+        /// <summary>届かなかった芝居を収録の途中で打ち切るか（その収録に打ち切り時刻があるか）。</summary>
+        private static bool CutsOnMiss(FieldCatchKind kind, FieldCatchAnchor anchor)
+            => kind == FieldCatchKind.DiveMiss && anchor.MissEndSeconds > anchor.Moment;
+
+        /// <summary>
+        /// 捕球の予定が走りの段を止めておく尺[s]（捕る瞬間より後）。窓の長さと、同じ野手の次の予定に
+        /// クリップを譲らせる範囲の**単一ソース**。
+        /// </summary>
+        private static float CatchTailSeconds(FieldCatchKind kind, FieldCatchAnchor anchor)
+        {
+            if (kind is FieldCatchKind.Catch or FieldCatchKind.Drop) return CatchHoldSeconds;
+            if (CutsOnMiss(kind, anchor)) return anchor.MissEndSeconds - anchor.Moment + MissHoldSeconds;
+            return DiveTailSeconds(anchor);
         }
 
         /// <summary>
@@ -1496,6 +1532,10 @@ namespace KokoSim.Unity.Match
         private FieldPosition? _lastFiredPos;
 
         /// <summary>【撮影ハーネス用】このプレーの芝居の予定表（誰が・いつ・何を）。</summary>
+        /// <summary>【撮影ハーネス用】直近のプレーで「届かない」芝居の候補がどう扱われたか（issue #1075）。</summary>
+        public string MissDiagForCapture => _missDiag ?? "-";
+        private string _missDiag;
+
         public string FieldCatchPlanForCapture()
         {
             var sb = new System.Text.StringBuilder();
@@ -1526,6 +1566,7 @@ namespace KokoSim.Unity.Match
         private void BuildFieldCatchPlan(PlaybackPlay play)
         {
             _catchEvents.Clear();
+            _missDiag = null;
             _catchGloveErrMax = _catchWristErrMax = _catchMittErrMax = 0f;
             _catchCount = 0;
             _catchHoldDriftMax = 0f;
@@ -1620,7 +1661,11 @@ namespace KokoSim.Unity.Match
                     // 終点に誰も居なければ（フェンス際・本塁打）捕球ではない。
                     // ⚠ 役が判っている送球はこの足切りをしない＝engine が「この人が受ける」と
                     //    言っている以上、離れていても受けに行くのが正しい
-                    if (bestD > CatchOwnerRadiusM) continue;
+                    if (bestD > CatchOwnerRadiusM)
+                    {
+                        if (kind == FieldCatchKind.DiveMiss) _missDiag = $"届かない候補を見送り: 最寄り={who} 距離={bestD:F2}m（>{CatchOwnerRadiusM}m）";
+                        continue;
+                    }
                 }
 
                 // 近づき方は**クリップが始まる少し前**の速度で決める（捕る瞬間は easeIO で0に落ちている）
@@ -1656,6 +1701,7 @@ namespace KokoSim.Unity.Match
                     // 横っ飛びを廃止した（#674）ので、届かなかった絵は背走ジャンプだけ。前進・横は従来の
                     // 「完全に抜けた当たり」と同じく誰も芝居をしない（落球に捕球クリップを流さない）
                     anchor = app == CatchApproach.Back ? DiveAnchorBackJump : -1;
+                    _missDiag = $"届かない候補: {who} 距離={bestD:F2}m 近づき方={app}" + (anchor < 0 ? "→芝居なし" : "→背走ジャンプ");
                     if (anchor < 0) continue;
                 }
                 else
@@ -1805,7 +1851,7 @@ namespace KokoSim.Unity.Match
             {
                 var body = _catchEvents[i];
                 if (body.Kind is FieldCatchKind.Catch or FieldCatchKind.Drop) continue;
-                var tail = body.TCatch + DiveTailSeconds(AnchorOf(body.Kind, body.Anchor));
+                var tail = body.TCatch + CatchTailSeconds(body.Kind, AnchorOf(body.Kind, body.Anchor));
                 for (int j = 0; j < _catchEvents.Count; j++)
                 {
                     if (j == i) continue;
@@ -1968,6 +2014,9 @@ namespace KokoSim.Unity.Match
                     //    上の t < TStart で降りており、ここへ来る時点で t − TStart ≥ 0 が保証されている
                     var endAt = anchor.PostCatchFollowSeconds >= 0f
                         ? anchor.Moment + anchor.PostCatchFollowSeconds : 0f;
+                    // 届かなかったときは「押さえ込む」「向き直って構える」を流さない（issue #1075 追記3）
+                    bool cutOnMiss = CutsOnMiss(e.Kind, anchor);
+                    if (cutOnMiss) endAt = anchor.MissEndSeconds;
                     // 上下をクリップに持たせる収録（横っ飛び・スライディング）。
                     // ⚠ **頭出しの前に切って、置き直してから入れる**。SeekActor はルートモーションを
                     //    積みながら 0→頭出し位置まで進めるので、入れたまま頭出しすると
@@ -1976,7 +2025,7 @@ namespace KokoSim.Unity.Match
                     a.RootDrivenY = false;
                     SetActorClip(a, clip, t - e.TStart + e.ClipHead, endAt);
                     a.Speed = 1f;                       // 走りの倍率を持ち越さない
-                    a.HoldSeconds = CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
+                    a.HoldSeconds = cutOnMiss ? MissHoldSeconds : CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
                     FielderMotion st;
                     if (_loco.TryGetValue(e.Pos, out st))
                     {
@@ -1987,8 +2036,8 @@ namespace KokoSim.Unity.Match
                         // 0.35 秒で窓を閉じると走りの段がクリップを奪い、倒れた姿勢から待機へ瞬間移動する
                         // （打ち切りには必ず据え置きを添える＝design-18 §4.5-⑬⑭ と同じ失敗）。
                         // 落球（issue #813）も捕球の収録なので、尻尾まで流すと「捕った形」で立ち続ける＝短く切る
-                        st.CatchUntil = e.TCatch + (e.Kind is FieldCatchKind.Catch or FieldCatchKind.Drop
-                            ? CatchHoldSeconds : DiveTailSeconds(anchor));
+                        // 届かなかった芝居は着地で打ち切って短く据え置く（issue #1075 追記3）
+                        st.CatchUntil = e.TCatch + CatchTailSeconds(e.Kind, anchor);
                         st.CatchEvent = i;
                         // **グラブが球の来る方を向くように体を回す**。走る向きを速度ベクトルへ
                         // 合わせたのと同じ考え方で、今度は合わせる対象がグラブになる。
