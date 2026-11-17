@@ -3439,7 +3439,8 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 打球が対決構図のビューポートから出たか（issue #481）。呼び出し側（<c>MatchLiveController</c>）は
         /// 接触後、これが立つまで守備ビューへの切替を据え置く＝「打球の行方を一瞬だけ見せる」
-        /// （design-18 §4.5-④）。まだ打球でなければ（見せるものが無ければ）true＝待たせない。
+        /// （design-18 §4.5-④）。見せる打球が無ければ true＝待たせない。打球を仕込んだ球が接触前なら
+        /// false（これから打点＝画面の中に出る。issue #1099）。
         /// 保険は <see cref="BattedMaxSeconds"/>（1.5s。これより先は <see cref="UpdateBattedBall"/> が
         /// 自分で <see cref="HideBall"/> して畳む＝新しい据え置きは実測0.13〜0.22s程度なので十分長い）。
         /// </summary>
@@ -3447,7 +3448,12 @@ namespace KokoSim.Unity.Match
         {
             get
             {
-                if (_battedT < 0f || _camera == null) return true;
+                if (_camera == null) return true;
+                // 打球を仕込んだ球がまだ接触前（issue #1099）。呼び出し側の時計は rig の球の時計より
+                // 1フレーム未満先に進む（リリースのフレームで rig の Tick が先に回り、_ballT=0 から始まる）ので、
+                // 判定のフレームでまだ乗り換えていないことがある。ここを「画面外」と返すと据え置きが始まらず、
+                // 打球を1コマも描かずに守備ビューへ切り替わる＝これから打点（画面の中）に出る球として扱う。
+                if (_battedT < 0f) return _batted == null || _ballT < 0f;
                 var local = BattedPointAt(_battedT);
                 var vp = _camera.WorldToViewportPoint(_root.transform.TransformPoint(local));
                 bool inFrame = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;

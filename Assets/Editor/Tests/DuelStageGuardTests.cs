@@ -224,5 +224,49 @@ namespace KokoSim.EditorTests
             }
             Assert.That(loaded, Is.GreaterThan(0), "装備メッシュが1つも読めない（検査が空振りしている）");
         }
+
+        // ---- インプレー打球の据え置き（issue #481 / #1099） ----
+
+        /// <summary>
+        /// 打球を仕込んだ球が、接触の直前（まだ打球へ乗り換えていない）にあるとき、
+        /// <see cref="DuelStageRig.BattedOutOfFrame"/> は「画面外」を返してはいけない（issue #1099）。
+        /// 呼び出し側の時計（<c>MatchLiveController._pitchClock</c>）は rig の球の時計より
+        /// 1フレーム未満だけ先に進むので、判定のフレームでは接触前であることがある。
+        /// そこで「画面外」と返すと据え置きが始まらず、打球を1コマも描かずに守備ビューへ切り替わる。
+        /// </summary>
+        [Test]
+        public void BattedOutOfFrame_IsFalse_WhileBattedBallAwaitsContact()
+        {
+            var rig = Rig;
+            // センター返しのゴロ（本塁→中堅。打者の正面を転がる＝しばらく画面に残る打球）
+            var grounder = new KokoSim.Engine.Match.Timeline.Playback.RollSegment(
+                t0: 0, x0: 0, y0: 0, dx: 0, dy: 1, v0: 30, a: -6, dur: 2.0, hop: 0.3);
+            rig.OnPitchReleased(-1f, DuelPitchOutcome.InPlayContact, null, grounder);
+
+            // 接触（＝判定の瞬間）のわずか手前まで進める
+            float contact = rig.CallMomentSeconds;
+            float dt = 1f / 120f;
+            float t = 0f;
+            while (t + dt < contact - 0.002f) { rig.Tick(dt); t += dt; }
+
+            Assert.That(rig.BattedElapsedSeconds, Is.LessThan(0f), "前提: まだ打球へ乗り換えていない");
+            Assert.That(rig.BattedOutOfFrame, Is.False,
+                "接触前の打球を「もう画面外」と扱うと、据え置きが始まらず打球が1コマも描かれない");
+
+            // 接触を越えれば打球が始まり、打点は画面の中＝ここでも「画面内」
+            rig.Tick(0.02f);
+            Assert.That(rig.BattedElapsedSeconds, Is.GreaterThanOrEqualTo(0f), "前提: 接触を越えて打球が始まった");
+            Assert.That(rig.BattedOutOfFrame, Is.False, "打った直後の打球は画面の中にある");
+        }
+
+        /// <summary>打球の無い球（見送り）は見せるものが無い＝待たせない（従来どおり「画面外」扱い）。</summary>
+        [Test]
+        public void BattedOutOfFrame_IsTrue_WhenNoBattedBall()
+        {
+            var rig = Rig;
+            rig.OnPitchReleased(-1f, DuelPitchOutcome.Take, null, null);
+            rig.Tick(0.1f);
+            Assert.That(rig.BattedOutOfFrame, Is.True);
+        }
     }
 }
