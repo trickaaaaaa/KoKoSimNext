@@ -129,6 +129,9 @@ public enum MoveProfile
     /// <summary>巡航の速さのまま始まり、終わりの肩だけ減速して終点で止まる（RunIn の鏡。issue #1084:
     /// 届かなかった飛球を全力で追った野手が、そのまま転がる球を拾いに行く）。</summary>
     CruiseOut,
+    /// <summary>加速→等速→長めの減速で終点（フェンス際）に止まる（issue #1084: フェンス際で届かない処理野手が
+    /// 壁を探して減速する。台形より減速の肩が長い）。</summary>
+    WallSeek,
 }
 
 /// <summary>守備陣形ルール表の役割（設計書01 §2⑥）。</summary>

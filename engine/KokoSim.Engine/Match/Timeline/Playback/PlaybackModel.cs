@@ -253,6 +253,10 @@ public static class PlaybackEvaluator
     /// </summary>
     public const double MoveRampFraction = 0.15;
 
+    /// <summary>フェンス際で壁を探して減速する移動（<see cref="MoveProfile.WallSeek"/>）の減速の肩が区間長に占める割合
+    /// （台形の <see cref="MoveRampFraction"/> の2倍＝終点の手前で早めに緩める）。</summary>
+    public const double WallSeekDecelFraction = 0.30;
+
     /// <summary>
     /// 野手移動の進み方（台形速度プロファイル。両端 <see cref="MoveRampFraction"/> で加速/減速し、
     /// 中間は等速）。<see cref="EaseIO"/>（smoothstep）は**ピーク速度が平均の1.5倍**になり、
@@ -293,6 +297,15 @@ public static class PlaybackEvaluator
                 return u * (2 - u);
             case MoveProfile.CruiseOut:
                 return 1 - MoveEase(1 - u, MoveProfile.RunIn);
+            case MoveProfile.WallSeek:
+            {
+                const double a = MoveRampFraction, d = WallSeekDecelFraction;
+                var v = PeakSpeedFactor(MoveProfile.WallSeek);
+                if (u < a) return v * u * u / (2 * a);
+                if (u <= 1 - d) return v * (a / 2 + (u - a));
+                var w = 1 - u;
+                return 1 - v * w * w / (2 * d);
+            }
             default:
                 return MoveEase(u);
         }
@@ -306,6 +319,7 @@ public static class PlaybackEvaluator
     {
         MoveProfile.RunIn or MoveProfile.CruiseOut => 1.0 / (1.0 - MoveRampFraction / 2),
         MoveProfile.RunOut => 2.0,
+        MoveProfile.WallSeek => 1.0 / (1.0 - MoveRampFraction / 2 - WallSeekDecelFraction / 2),
         _ => 1.0 / (1.0 - MoveRampFraction),
     };
 
