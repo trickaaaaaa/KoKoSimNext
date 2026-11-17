@@ -1038,7 +1038,9 @@ public sealed class TeamState
         // 実況上の区別は「控えから出たか／守備に就いていた者が回ったか」。ここは常に控えからの登板。
         _retired.Add(KeyOf(outgoing));
         // 誰が上がっても本人の投手能力で投げる（#381。旧実装はここで潜在能力を詰め替えていた）。
-        CurrentPitcher = sub;
+        // 守備位置は「投手」へ揃える。控えの本来の守備位置（中堅など）のまま打順へ入れると、
+        // 打順の守備位置が重複して守備位置から打順を引く側（交代パネルの打順表）が同じ選手を2行出す（issue #1063）。
+        CurrentPitcher = Rekey(sub, sub with { Position = FieldPosition.Pitcher });
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
         if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;
         // 球数・疲労は選手単位（issue #235）。退場した投手は戻れないので従来と同じ見え方になる。
