@@ -23,7 +23,8 @@ internal static class TournamentHistorySaves
                 .Add("reached", e.ReachedRoundName)
                 .Add("champion", e.ManagerIsChampion)
                 .Add("championId", e.ChampionId)
-                .Add("championName", e.ChampionName));
+                .Add("championName", e.ChampionName)
+                .Add("pref", e.PrefectureId));
         }
         return arr;
     }
@@ -40,7 +41,9 @@ internal static class TournamentHistorySaves
                 o.Str("reached") ?? "",
                 o.Bool("champion"),
                 o.Int("championId"),
-                o.Str("championName") ?? ""));
+                o.Str("championName") ?? "",
+                // pref は issue #1112 で追加。旧セーブは項目ごと無い＝0（不明。表示側がいまの本拠県へフォールバック）。
+                o.Has("pref") ? o.Int("pref") : 0));
         }
     }
 }

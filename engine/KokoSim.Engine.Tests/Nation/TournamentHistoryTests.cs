@@ -133,6 +133,29 @@ public sealed class TournamentHistoryTests
         Assert.Null(new SchoolRecordBook().FoldTournament(matches, TournamentKind.Summer, 1));
     }
 
+    // ── 当時の本拠県（issue #1112） ──────────────────────────
+
+    /// <summary>当時の本拠県を行へ焼く。転任で県を跨いでも、この行の値は書き換わらない。</summary>
+    [Fact]
+    public void Fold_BakesThePrefectureIdAtTheTimeOfTheTournament()
+    {
+        var history = new TournamentHistory();
+        var e = history.Fold(LostInThirdRound(), TournamentKind.Summer, year: 1,
+            ManagerId, new TournamentChampion(20, "弘学学園"), prefectureId: 13); // 神奈川
+
+        Assert.Equal(13, e.PrefectureId);
+    }
+
+    /// <summary>省略時（旧い呼び出し互換）は 0＝不明。表示側がいまの本拠県へフォールバックする契約。</summary>
+    [Fact]
+    public void Fold_WithoutPrefectureId_DefaultsToUnknown()
+    {
+        var e = new TournamentHistory().Fold(LostInThirdRound(), TournamentKind.Summer, year: 1,
+            ManagerId, champion: null);
+
+        Assert.Equal(0, e.PrefectureId);
+    }
+
     // ── 積み上げ ────────────────────────────────────────
 
     /// <summary>年度をまたいで積み上がり、積んだ順（古い順）で読める。</summary>

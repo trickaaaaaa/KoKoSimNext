@@ -240,19 +240,20 @@ internal static class SaveTestFixtures
 
     /// <summary>
     /// 歴代大会結果3件（issue #600）。優勝／準優勝／優勝校が空欄の3通りを混ぜて往復を測る。
+    /// 1件目と3件目は異なる県（issue #1112・転任で本拠県を跨いだ想定）で当時の県の焼き込みも測る。
     /// </summary>
     public static TournamentHistory BuildTournamentHistory()
     {
         var history = new TournamentHistory();
         history.Add(new TournamentHistoryEntry(
             Year: 1, Kind: TournamentKind.Summer, ReachedRoundName: "3回戦",
-            ManagerIsChampion: false, ChampionId: 220, ChampionName: "弘学学園"));
+            ManagerIsChampion: false, ChampionId: 220, ChampionName: "弘学学園", PrefectureId: 12)); // 東京
         history.Add(new TournamentHistoryEntry(
             Year: 1, Kind: TournamentKind.Autumn, ReachedRoundName: "決勝",
-            ManagerIsChampion: true, ChampionId: 100, ChampionName: "北嶺"));
+            ManagerIsChampion: true, ChampionId: 100, ChampionName: "北嶺", PrefectureId: 12));
         history.Add(new TournamentHistoryEntry(
             Year: 2, Kind: TournamentKind.Summer, ReachedRoundName: "準々決勝",
-            ManagerIsChampion: false, ChampionId: 0, ChampionName: ""));
+            ManagerIsChampion: false, ChampionId: 0, ChampionName: "", PrefectureId: 13)); // 神奈川へ転任後
         return history;
     }
 

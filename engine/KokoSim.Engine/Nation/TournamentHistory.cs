@@ -14,6 +14,10 @@ namespace KokoSim.Engine.Nation;
 /// <para><see cref="ReachedRoundName"/> は自校が<b>最後に戦ったカードのラウンド名</b>（"3回戦"/"決勝"…）。
 /// 優勝でも決勝敗退でも "決勝" が入るので、表示文言は <see cref="TournamentResultLabel"/> が
 /// <see cref="ManagerIsChampion"/> と併せて決める。自校が1試合も関与しなかった大会は空文字。</para>
+///
+/// <para><see cref="PrefectureId"/> は<b>この大会の当時の自校の本拠県</b>（issue #1112）。転任で県を
+/// 跨ぐと「いまの本拠県」では過去の大会名が書き換わってしまうため、行ごとに当時の県を焼いておく。
+/// 0＝不明（issue #1112 より前のセーブ。表示側は「いまの本拠県」へフォールバックする）。</para>
 /// </summary>
 public sealed record TournamentHistoryEntry(
     int Year,
@@ -21,7 +25,8 @@ public sealed record TournamentHistoryEntry(
     string ReachedRoundName,
     bool ManagerIsChampion,
     int ChampionId,
-    string ChampionName);
+    string ChampionName,
+    int PrefectureId = 0);
 
 /// <summary>
 /// 歴代大会結果の「成績」表示文言を組み立てる純関数（issue #600）。UI側で文字列を組み立てない
@@ -71,7 +76,7 @@ public sealed class TournamentHistory
     /// </summary>
     public TournamentHistoryEntry Fold(
         IReadOnlyList<BracketMatch> matches, TournamentKind kind, int year,
-        int managerSchoolId, TournamentChampion? champion)
+        int managerSchoolId, TournamentChampion? champion, int prefectureId = 0)
     {
         // 自校が関与した最後のカードのラウンド名＝到達ラウンド。ブラケットは進行順に積まれる。
         var reached = "";
@@ -81,7 +86,7 @@ public sealed class TournamentHistory
         var isChampion = champion is { } c && c.Id == managerSchoolId;
         var entry = new TournamentHistoryEntry(
             year, kind, reached, isChampion,
-            champion?.Id ?? 0, champion?.Name ?? "");
+            champion?.Id ?? 0, champion?.Name ?? "", prefectureId);
         _entries.Add(entry);
         return entry;
     }

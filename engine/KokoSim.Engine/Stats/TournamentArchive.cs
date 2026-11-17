@@ -115,6 +115,28 @@ public sealed class TournamentArchive
     /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。全消去。</summary>
     internal void Clear() => _slots.Clear();
 
+    /// <summary>
+    /// この帳簿の中身を <paramref name="source"/> から複写する（元の中身は捨てる）。<see cref="StatBook.ReplaceWith"/>
+    /// と同じ作法＝値を複写するので、この後 <paramref name="source"/> を Clear してもここは残る。
+    /// 転任で退任する学校ぶんのアーカイブをスナップショットするのに使う（issue #1112・<see cref="PlayerStatStore.CloseForTransfer"/>）。
+    /// </summary>
+    public void ReplaceWith(TournamentArchive source)
+    {
+        _slots.Clear();
+        foreach (var kv in source._slots)
+        {
+            var copy = new Dictionary<int, ArchivedPlayerStats>();
+            foreach (var pkv in kv.Value)
+            {
+                var dst = new ArchivedPlayerStats { UniformNumber = pkv.Value.UniformNumber, Year = pkv.Value.Year };
+                dst.Batting.Merge(pkv.Value.Batting);
+                dst.Pitching.Merge(pkv.Value.Pitching);
+                copy[pkv.Key] = dst;
+            }
+            _slots[kv.Key] = copy;
+        }
+    }
+
     /// <summary>セーブ復元専用: 枠×選手の器を作って返す（成績は呼び出し側が据える）。</summary>
     internal ArchivedPlayerStats GetOrCreate(TournamentArchiveKey key, int sourceId)
     {

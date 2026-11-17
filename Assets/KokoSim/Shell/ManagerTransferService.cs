@@ -151,10 +151,16 @@ namespace KokoSim.Unity.Shell
             // 退任年度は「いつ確定したか」で決まる: 通常は3月の総括週（週46）に ApplyYearlyGrowth(YearIndex) の
             // 中で開き、その週のうちに確定する＝YearIndex がまだ終わる年度。年度替わり側で開いた取りこぼし経路や、
             // 選ばないまま4月を越えた場合は YearIndex が繰り上がっている＝その前年度（夜間レビュー #1013）。
+            var departingSchoolName = TopBarMeters.SchoolDisplayName();
+            var departingStartYearIndex = GameSession.Current.PostingHistory.CurrentStartYearIndex;
+            var departingEndYearIndex =
+                ManagerPostingYears.EndedYearIndexAtConfirm(GameClock.YearIndex, GameClock.Week, SeasonCalendarInstance);
             GameSession.Current.PostingHistory.Close(
-                TopBarMeters.SchoolDisplayName(),
-                ManagerPostingYears.EndedYearIndexAtConfirm(GameClock.YearIndex, GameClock.Week, SeasonCalendarInstance),
-                GameSession.Current.Records.For(NationService.ManagerSchoolId));
+                departingSchoolName, departingEndYearIndex, GameSession.Current.Records.For(NationService.ManagerSchoolId));
+            // 個人成績も旧校ぶんで区切る（issue #1112）。PostingHistory は集計値の差分で済むが、個人成績は
+            // 選手単位なので差分できず、複写してから現本体を空にする（新しい赴任先の記録タブに
+            // 旧校の選手が混ざらないようにする）。
+            GameSession.Current.Stats.CloseForTransfer(departingSchoolName, departingStartYearIndex, departingEndYearIndex);
 
             ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: true, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();

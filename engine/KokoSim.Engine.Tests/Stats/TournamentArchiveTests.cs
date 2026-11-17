@@ -129,6 +129,26 @@ public sealed class TournamentArchiveTests
     public void LastUniformNumber_UnknownPlayer_IsZero()
         => Assert.Equal(0, new PlayerStatStore().Archive.LastUniformNumber(999));
 
+    // issue #1112: 転任の退任スナップショット（PlayerStatStore.CloseForTransfer）が使う複写。
+    [Fact]
+    public void ReplaceWith_CopiesSlotsByValue_SoClearingTheSourceDoesNotAffectTheCopy()
+    {
+        var store = new PlayerStatStore();
+        store.StartTournament();
+        store.FoldGame(ManagerHomeGame(sourceId: 1, hits: 2, runs: 1), managerIsAway: false);
+        store.ArchiveCurrentTournament(TournamentSlot.SummerPref, Info(1, grade: 1, number: 7));
+
+        var copy = new TournamentArchive();
+        copy.ReplaceWith(store.Archive);
+        store.Archive.Clear();
+
+        Assert.Empty(store.Archive.Keys);
+        var a = copy.Get(new TournamentArchiveKey(1, TournamentSlot.SummerPref), 1);
+        Assert.NotNull(a);
+        Assert.Equal(2, a!.Batting.Hits);
+        Assert.Equal(7, a.UniformNumber);
+    }
+
     [Fact]
     public void Archive_SkipsPlayersWithUnknownGrade()
     {
