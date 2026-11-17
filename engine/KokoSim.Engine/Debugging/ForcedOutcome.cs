@@ -53,6 +53,17 @@ public enum ForcedOutcome
     /// 守備ビューのバント処理の絵（issue #1089 等）を、シードを回さずに撮るためのもの。
     /// </summary>
     BuntInPlay,
+    /// <summary>
+    /// 打席の初球を「野手が追ったがあと一歩届かなかったファウルフライ」にする（issue #1074 の撮影用）。
+    /// 初球は必ず振り、実際の守備位置で届かない打球を決まった順で探して当てる（乱数を引かない）。打席は続く。
+    /// </summary>
+    ChasedFoulFly,
+    /// <summary>打席の初球を「ポール際の大ファウル」にする（issue #1074 の撮影用。<see cref="ChasedFoulFly"/> と同じ作り）。</summary>
+    BigFoul,
+    /// <summary>打席の初球を「打者が叩きつけて足元に落ちるファウル」にする（issue #1074「足元で跳ねる」の撮影用）。</summary>
+    GroundFoul,
+    /// <summary>打席の初球を「バックネット方向へ高く上がるファウル」にする（issue #1074「画面端で跳ね返る」の撮影用）。</summary>
+    HighFoul,
 
     // ── 走塁（盗塁企図を強制したうえで成否を固定する） ──
     StealSuccess,

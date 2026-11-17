@@ -4697,6 +4697,13 @@ namespace KokoSim.Unity.Match
         public static float FieldMaxZoom = 40f;
 
         /// <summary>
+        /// ポール際の大ファウル（issue #1074）の寄りの上限。球だけを追って寄り切ると、スタンドへ入る前後で
+        /// 観客しか映らない絵になる（実測: 最後の1.5秒が観客の寄り）。ポールとスタンドが一緒に収まる広さで止める
+        /// （4倍＝縦およそ39m）。**絵で決める値**。
+        /// </summary>
+        public static float BigFoulMaxZoom = 4f;
+
+        /// <summary>
         /// 被写体まわりに残す余白[m]。**寄りの深さを決めているのは実はこちら**で、<see cref="FieldMaxZoom"/> ではない。
         ///
         /// <c>FitBox</c> は箱の縦横に 2×Margin を足してからズームを決めるので、箱が点まで縮んでも
@@ -4861,7 +4868,9 @@ namespace KokoSim.Unity.Match
         /// 食い違わないようにするための単一ソース。片方だけ直すと「直したはずが絵に出ない」が起きる。
         /// </summary>
         public static CameraFraming FieldFramingFor(PlaybackPlay play)
-            => new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
+            => new CameraFraming(
+                play?.FoulView == KokoSim.Engine.Match.Fielding.FoulViewKind.BigFoul ? BigFoulMaxZoom : FieldMaxZoom,
+                FieldMarginM, CameraFraming.Default.PitchZoom,
                 ThrowFollowsBall: !IsEndpointFramedThrow(play) && FieldThrowFollowsBall,
                 HeldBallFollowsRunner: true,
                 LooseBallFollowsChaser: true,

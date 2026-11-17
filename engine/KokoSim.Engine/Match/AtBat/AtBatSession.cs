@@ -488,7 +488,10 @@ public sealed class AtBatSession
         var forcedTake = battingOverride == Tactics.PitchBattingOverride.ForceTake
             || (battingOverride is null && ctx.TakeFirstPitch && pitchIndex == 0);
         // 初球から振る（設計書10）: 初球にスイングを仕掛ける（積極性の行動特性）。スキルなしは draw しない。
-        var forcedSwing = battingOverride == Tactics.PitchBattingOverride.ForceSwing
+        // 初球を指定のファウルにする強制（issue #1074 の撮影用）は初球を必ず振る
+        var forcedFoulNow = pitchIndex == 0 && ctx.ForcedFoul != Debugging.ForcedOutcome.None;
+        var forcedSwing = forcedFoulNow
+            || battingOverride == Tactics.PitchBattingOverride.ForceSwing
             || (battingOverride is null && !forcedTake && pitchIndex == 0 && ctx.Skills.FirstPitchSwingProb > 0.0
                 && MathUtil.Chance(ctx.Skills.FirstPitchSwingProb, rng));
         var distanceOutsideM = ctx.StrikeZone.DistanceOutsideM(loc.X, loc.Y);
@@ -521,6 +524,15 @@ public sealed class AtBatSession
             return Continue();
         }
 
+        // 初球を指定のファウルにする強制（issue #1074 の撮影用）: 接触判定の代わりに、条件に合う打球を当てる
+        if (forcedFoulNow && Debugging.ForcedFoulBall.For(ctx.ForcedFoul, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding) is { } forcedFoul)
+        {
+            if (_strikes < 2) _strikes++;
+            RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: forcedFoul,
+                foulChase: FoulChaseOf(forcedFoul, ctx, fielders));
+            return Continue();
+        }
+
         // ④ コンタクト判定 → ⑤ 打球生成（流し打ちの方向/粘り打ちは batting コピーへ、打球の質は ctx.Skills.BattedBall）
         var (outcome, ball) = ContactModel.Resolve(
             batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes, pitchFamiliarityLevel,
@@ -536,15 +548,21 @@ public sealed class AtBatSession
             case ContactOutcome.Foul:
                 // ファウルフライ（issue #830）: 打ち上がったファウルは弾道を与え、ファウルグラウンドで捕れればアウト。
                 // 弾道は打席の本流から Fork した専用ストリームで引く（Fork は親の状態を進めない＝本流の乱数順は不変）。
-                if (ctx.Fielding.FoulFlyShare > 0.0
-                    && FieldingResolver.FoulFlyBall(ctx.Fielding, rng.Fork(FoulFlyStreamId)) is { } foulBall
+                var foulBall = ctx.Fielding.FoulFlyShare > 0.0
+                    ? FieldingResolver.FoulFlyBall(ctx.Fielding, rng.Fork(FoulFlyStreamId))
+                    : null;
+                if (foulBall is not null
                     && FieldingResolver.ResolveFoulFly(foulBall, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding,
                         FieldingResolver.BatterToFirstSeconds(ctx.Field, batter, ctx.Fielding)) is { } foulOut)
                 {
                     return FinishBattedBall(foulOut, foulBall, plan, loc, inZone, swingProb, ctx, fielders);
                 }
                 if (_strikes < 2) _strikes++;
-                RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: ball);
+                // 捕れなかったファウルフライも打球（専用 Fork で引き済み）を記録に渡す＝守備ビューで見せられる（issue #1074）。
+                // 観測データの写しだけで、判定・本流の乱数順は変わらない（digest は打球を見ない）。
+                var foulRecorded = foulBall ?? ball;
+                RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: foulRecorded,
+                    foulChase: FoulChaseOf(foulRecorded, ctx, fielders));
                 return Continue();
 
             case ContactOutcome.InPlay:
@@ -554,7 +572,8 @@ public sealed class AtBatSession
                 if (play.Result == BattedBallResult.Foul)
                 {
                     if (_strikes < 2) _strikes++;
-                    RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: ball);
+                    RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: ball,
+                        foulChase: FoulChaseOf(ball, ctx, fielders));
                     return Continue();
                 }
                 return FinishBattedBall(play, ball!, plan, loc, inZone, swingProb, ctx, fielders);
@@ -566,6 +585,16 @@ public sealed class AtBatSession
 
     /// <summary>ピッチアウトの着弾位置＝ゾーンの外縁（外角・高め）からの距離[m]。判定に使わない表示用の位置。</summary>
     private const double PitchoutOffsetM = 0.45;
+
+    /// <summary>
+    /// 捕れなかったファウルを一番早く追える野手（issue #1074・表示専用）。観戦する試合（<c>CaptureTimeline</c>）
+    /// だけ弾道を積分する＝統計シム・裏試合はゼロコスト。乱数は使わない。
+    /// </summary>
+    private FoulChase? FoulChaseOf(
+        Batting.BattedBall? ball, AtBatContext ctx, IReadOnlyList<Fielder> fielders)
+        => ball is { } b && _ctx.CaptureTimeline
+            ? FoulView.Chase(b, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding)
+            : null;
 
     /// <summary>ファウルフライ（issue #830）の打球の Fork 用ストリーム番号（本流の乱数順を変えないための分岐）。</summary>
     private const ulong FoulFlyStreamId = 0x830F0F1UL;
@@ -621,14 +650,14 @@ public sealed class AtBatSession
     private void RecordPitch(
         PitchKind kind, PitchPlan plan, ControlScatter.Location loc,
         bool inZone, double swingProbability = 0.0, bool swung = false, Batting.BattedBall? ball = null,
-        Tactics.PitchBattingOverride? sign = null, bool pitchout = false)
+        Tactics.PitchBattingOverride? sign = null, bool pitchout = false, FoulChase? foulChase = null)
     {
         // 弾道積分は毎球RK4×2本(スピンあり/なし)とコストが高いため、Timeline同様CaptureTimeline時のみ
         // （観戦する試合だけ）計算する。既定（統計シム・裏試合）はゼロコスト（設計書15 §4「Phase Bの作業」）。
         var trajectory = _ctx.CaptureTimeline ? ComputeTrajectory(plan) : null;
         _pitchLog.Add(new PitchRecord(
             kind, _balls, _strikes, plan.Type, loc.X, loc.Y, plan.VelocityKmh, plan.AimX, plan.AimY, trajectory, ball,
-            sign, pitchout));
+            sign, pitchout, foulChase));
 
         if (_pitchTraces is null) return;
         var f = _lastPitchFeatures ?? default;

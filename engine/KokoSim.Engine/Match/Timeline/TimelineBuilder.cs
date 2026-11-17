@@ -1136,17 +1136,22 @@ public static class TimelineBuilder
     /// そのまま適用して求める（守備解決＝<see cref="FieldingResolver.ResolveDetailed"/> と同じ積分の使い回し。
     /// 乱数は一切消費しない＝決定論・帯に無関係、不変条件#2）。塁上の走者は（動かないので）その場に
     /// 静止表示する（<see cref="PitchPlaybackFactory.PitchOnly"/> と同じ扱い）。
+    ///
+    /// <para>守備ビューで見せるファウル（issue #1074・<see cref="FoulView.Classify"/>）は <see cref="PlayTimeline.FoulView"/>
+    /// を立て、「追ったが届かなかった」フライには一番早い野手（<paramref name="chase"/>）が落下点へ走るレッグを足す。
+    /// 野手の到達時刻は判定と同じ式の写し（<see cref="FoulChase.ReachSeconds"/>）＝絵のために別の秒を作らない。</para>
     /// </summary>
     public static PlayTimeline BuildFoulFlight(
         BattedBall ball, Aerodynamics aero, FieldingCoefficients coeff, FieldGeometry field,
-        bool runnerOnFirst, bool runnerOnSecond, bool runnerOnThird)
+        bool runnerOnFirst, bool runnerOnSecond, bool runnerOnThird, FoulChase? chase = null)
     {
         var ground = BallisticIntegrator.IntegrateToGround(
             ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
         var landing = new TimelinePoint(ground.LandingPosition.X, ground.LandingPosition.Z);
         var isFly = ground.ApexHeightM >= coeff.FlyApexThresholdM;
         var landAt = ContactAt + ground.HangTimeSeconds;
-        var duration = landAt + 0.6; // 着地後の一呼吸（対決ビュー復帰までの間）
+        var view = FoulView.Classify(ball.BearingDeg, FoulView.AlongLine(landing.X, landing.Z), chase, field, coeff);
+        if (view == FoulViewKind.ChasedFly && chase is null) view = FoulViewKind.None;
 
         var segments = new List<BallSegment>
         {
@@ -1162,6 +1167,38 @@ public static class TimelineBuilder
                 LaunchHeightM = isFly ? ball.ContactHeightM : 0.0,
             },
         };
+
+        var starts = StandardStarts();
+        var moves = new List<FielderMove>();
+        var end = landAt;
+        if (view == FoulViewKind.ChasedFly)
+        {
+            // 一番早い野手が落下点へ全力で走り、球が落ちた少し後に着く（届かなかった）。
+            // 出発点は判定が距離を測った実際の守備位置（陣形で動いていれば標準位置と違う）。
+            var c = chase!;
+            starts = new Dictionary<FieldPosition, TimelinePoint>(starts) { [c.Role] = new(c.StartX, c.StartZ) };
+            var arrive = ContactAt + c.ReachSeconds;
+            moves.Add(new FielderMove
+            {
+                Role = c.Role, T0 = ContactAt, T1 = arrive, To = landing, Task = FielderTask.Chase,
+                Profile = MoveProfile.RunIn,
+            });
+            end = Math.Max(end, arrive);
+        }
+
+        // 大ファウル（ポール際）は球がフェンスを越えてスタンドへ入ったところまでで十分。地面の高さの落下点まで
+        // 追うと、カメラがスタンドの中へ潜って観客しか映らない。水平は等速補間なので、ライン方向の距離が
+        // 両翼フェンスに届く割合＝越える時刻の割合
+        if (view == FoulViewKind.BigFoul)
+        {
+            var along = FoulView.AlongLine(landing.X, landing.Z);
+            var lineFence = ball.BearingDeg >= 0 ? field.RightFenceM : field.LeftFenceM;
+            var u = along > 1e-6 ? Math.Clamp(lineFence / along, 0.0, 1.0) : 1.0;
+            end = ContactAt + u * ground.HangTimeSeconds;
+        }
+
+        // 着地後の一呼吸（対決ビュー復帰までの間）。守備ビューで見せるファウルは行方を見届ける間を長めに取る
+        var duration = end + (view == FoulViewKind.None ? 0.6 : 1.2);
 
         var runners = new List<RunnerLeg>();
         void Held(bool occupied, string baseName, string label)
@@ -1179,10 +1216,15 @@ public static class TimelineBuilder
             Duration = duration,
             Result = "ファウル",
             ResolvedAt = landAt,
-            FielderStarts = StandardStarts(),
+            FielderStarts = starts,
             Ball = segments,
+            Moves = moves,
             Runners = runners,
             Captions = new[] { new TimelineCaption(ContactAt + 0.01, "ファウル！") },
+            FoulView = view,
+            // 追ったが届かなかった＝空中捕球の余裕は負（落下 − 到達）。3Dの守備はこの値で「届かない」芝居を選び、
+            // 球をグラブへ吸わせない（インプレーの落球と同じ入力。判定が決めた到達時刻の写し）
+            CatchMarginSeconds = view == FoulViewKind.ChasedFly ? -chase!.LateSeconds : null,
         };
     }
 

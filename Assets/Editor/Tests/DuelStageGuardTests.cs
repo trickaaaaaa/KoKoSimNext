@@ -259,6 +259,139 @@ namespace KokoSim.EditorTests
             Assert.That(rig.BattedOutOfFrame, Is.False, "打った直後の打球は画面の中にある");
         }
 
+        /// <summary>
+        /// 対決ビューのファウルの打球は、打点から離れていく一方で、途中で打点の側へ戻ってこない（issue #1074「跳ね返る」）。
+        /// engine が作るファウルの再生（BuildFoulFlight）の打球区間をそのまま乗せ、水平距離の推移を測る。
+        /// </summary>
+        [TestCase(30f, 2f, 60f)]     // 一塁側への低い当たり（転がり）
+        [TestCase(30f, 2f, -60f)]    // 三塁側への低い当たり
+        [TestCase(25f, -5f, 100f)]   // 後ろへのボテボテ
+        [TestCase(30f, 10f, 150f)]   // 真後ろへのライナー
+        [TestCase(28f, 35f, 120f)]   // 後ろへの飛球
+        [TestCase(20f, 5f, 50f)]     // ライン際の弱い当たり
+        public void FoulBall_NeverComesBackTowardTheBat(float exitMps, float launchDeg, float bearingDeg)
+        {
+            var rig = Rig;
+            var ball = new KokoSim.Engine.Match.Batting.BattedBall
+                { ExitVelocityMps = exitMps, LaunchAngleDeg = launchDeg, BearingDeg = bearingDeg };
+            var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball,
+                new KokoSim.Engine.Match.Pitching.Aerodynamics(), new KokoSim.Engine.Match.Fielding.FieldingCoefficients(),
+                new KokoSim.Engine.Match.Field.FieldGeometry(), false, false, false);
+            var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+            rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, null, play.Ball[1]);
+            // 接触まで進める（打点合わせの補正は接触の瞬間に決まる）
+            for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
+            Assert.That(rig.BattedElapsedSeconds, Is.GreaterThanOrEqualTo(0f), "前提: 打球になった");
+
+            var start = rig.BattedPointForCapture(0f).Value;
+            float prev = 0f, worst = 0f, worstAt = 0f;
+            for (float t = 0f; t <= 1.5f; t += 1f / 120f)
+            {
+                var p = rig.BattedPointForCapture(t).Value;
+                float d = new Vector2(p.x - start.x, p.z - start.z).magnitude;
+                if (prev - d > worst) { worst = prev - d; worstAt = t; }
+                prev = Mathf.Max(prev, d);
+            }
+            Assert.That(worst, Is.LessThan(0.05f),
+                $"打球が打点の側へ {worst:F2}m 戻った（t={worstAt:F2}s）");
+        }
+
+        /// <summary>
+        /// 同じ見張りを初速・角度・方向の格子で掃く（issue #1074「ファウルが画面内で跳ね返る」）。打球の進む向きに対して
+        /// 逆向きに動くコマが無いこと、物理の着地よりずっと早く地面に着いて跳ね上がらないこと
+        /// （上がっていく低いライナーを「転がり」で描いていて、打者の目の前で地面に当たり 2m 近く跳ね上がっていた）。
+        /// </summary>
+        [Test]
+        public void FoulBall_Sweep_NeverMovesAgainstItsDirection()
+        {
+            var rig = Rig;
+            var aero = new KokoSim.Engine.Match.Pitching.Aerodynamics();
+            var co = new KokoSim.Engine.Match.Fielding.FieldingCoefficients();
+            var fg = new KokoSim.Engine.Match.Field.FieldGeometry();
+            var bad = new System.Text.StringBuilder();
+            var heights = new System.Text.StringBuilder();
+            int n = 0;
+            foreach (var ev in new[] { 15f, 25f, 35f, 45f })
+            foreach (var la in new[] { -15f, -5f, 2f, 8f, 15f, 30f, 50f, 70f })
+            foreach (var br in new[] { 46f, 55f, 70f, 90f, 120f, 150f, 175f, -46f, -55f, -70f, -90f, -120f, -150f })
+            {
+                var ball = new KokoSim.Engine.Match.Batting.BattedBall { ExitVelocityMps = ev, LaunchAngleDeg = la, BearingDeg = br };
+                var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball, aero, co, fg, false, false, false);
+                var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+                rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, null, play.Ball[1]);
+                for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
+                if (rig.BattedElapsedSeconds < 0f) continue;
+                var p0 = rig.BattedPointForCapture(0f).Value;
+                var pEnd = rig.BattedPointForCapture(1.5f).Value;
+                var dir = new Vector2(pEnd.x - p0.x, pEnd.z - p0.z);
+                if (dir.magnitude < 0.01f) continue;
+                dir.Normalize();
+                var prev = p0;
+                float worst = 0f, worstT = 0f, minY = p0.y, rebound = 0f, reboundT = 0f, groundAt = float.NaN;
+                for (float t = 1f / 120f; t <= 1.5f; t += 1f / 120f)
+                {
+                    var p = rig.BattedPointForCapture(t).Value;
+                    float along = Vector2.Dot(new Vector2(p.x - prev.x, p.z - prev.z), dir);
+                    if (-along > worst) { worst = -along; worstT = t; }
+                    minY = Mathf.Min(minY, p.y);
+                    if (p.y < 0.12f && float.IsNaN(groundAt)) groundAt = t;
+                    if (!float.IsNaN(groundAt) && p.y - minY > rebound) { rebound = p.y - minY; reboundT = t; }
+                    prev = p;
+                }
+                n++;
+                // 物理の打球が地面に着く時刻より、絵の球がずっと早く地面に着いて跳ね上がる＝打者の目の前で
+                // 地面に当たって跳ね返って見える（物理は上がっていくライナーなのに「転がり」で描いていた）
+                float hang = (float)(play.Ball[1].T1 - play.Ball[1].T0);
+                if (!float.IsNaN(groundAt) && hang > 0.2f && groundAt < hang * 0.8f && rebound > 0.25f)
+                    heights.AppendLine($"ev={ev} la={la} br={br}: 物理の着地 {hang:F2}s より早い {groundAt:F2}s に地面へ着き {rebound:F2}m 跳ね上がる");
+                if (worst > 0.02f) bad.AppendLine($"ev={ev} la={la} br={br}: 逆向きに {worst:F3}m/コマ（t={worstT:F2}s）");
+            }
+            Debug.Log($"[1074] ファウル {n} 本を検査\n{bad}\n[1074-h]\n{heights}");
+            Assert.That(bad.Length, Is.EqualTo(0), bad.ToString());
+            Assert.That(heights.Length, Is.EqualTo(0), "空中で跳ね返る打球:\n" + heights);
+        }
+
+        /// <summary>
+        /// 一度画面の外へ出たファウルの打球が、見せている間（最長1.5秒）に画面の中へ戻ってこないこと
+        /// （issue #1074「高く上がったファウルが画面端で跳ね返る」の再現探し）。
+        /// </summary>
+        [Test]
+        public void FoulBall_Sweep_DoesNotReenterTheFrame()
+        {
+            var rig = Rig;
+            var aero = new KokoSim.Engine.Match.Pitching.Aerodynamics();
+            var co = new KokoSim.Engine.Match.Fielding.FieldingCoefficients();
+            var fg = new KokoSim.Engine.Match.Field.FieldGeometry();
+            var bad = new System.Text.StringBuilder();
+            foreach (var ev in new[] { 15f, 22f, 30f, 38f, 45f })
+            foreach (var la in new[] { -15f, -5f, 2f, 8f, 15f, 25f, 35f, 50f, 65f, 80f })
+            foreach (var br in new[] { 46f, 55f, 70f, 90f, 120f, 150f, 175f, -46f, -55f, -70f, -90f, -120f, -150f })
+            {
+                var ball = new KokoSim.Engine.Match.Batting.BattedBall { ExitVelocityMps = ev, LaunchAngleDeg = la, BearingDeg = br };
+                var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball, aero, co, fg, false, false, false);
+                var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+                rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, null, play.Ball[1]);
+                for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
+                if (rig.BattedElapsedSeconds < 0f) continue;
+                // 実際に描かれる球（rig を進めた結果）で見る。消えた球（null）は「画面の外」と同じ
+                bool wasOut = false;
+                for (float t = 0f; t <= 1.5f; t += 1f / 60f)
+                {
+                    rig.Tick(1f / 60f);
+                    var vpn = rig.BallViewportForCapture;
+                    bool inFrame = vpn is { } vp && vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
+                    if (!inFrame) wasOut = true;
+                    else if (wasOut)
+                    {
+                        bad.AppendLine($"ev={ev} la={la} br={br}: t={t:F2}s で画面へ戻る（vp=({vpn.Value.x:F2},{vpn.Value.y:F2})）");
+                        break;
+                    }
+                }
+                rig.HideBall();
+            }
+            Assert.That(bad.Length, Is.EqualTo(0), "画面へ戻るファウル:\n" + bad);
+        }
+
         /// <summary>打球の無い球（見送り）は見せるものが無い＝待たせない（従来どおり「画面外」扱い）。</summary>
         [Test]
         public void BattedOutOfFrame_IsTrue_WhenNoBattedBall()

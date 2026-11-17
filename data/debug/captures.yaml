@@ -51,3 +51,33 @@ captures:
     manager: home
     video: {from: catch-0.8, to: release+0.9, fps: 30}
     overrides: {DuelStageRig.ThrowClosedWindupOffForCapture: false}
+
+  - id: foul-chased-1074
+    name: "あと一歩届かなかったファウルフライを守備ビューで見せる（issue #1074 (a)）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: ChasedFoulFly
+    video: {from: start, to: end, fps: 10}
+
+  - id: foul-big-1074
+    name: "ポール際の大ファウルを守備ビューで見せる（issue #1074 (b)）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: BigFoul
+    video: {from: start, to: end, fps: 10}
+
+  - id: foul-ground-1074
+    name: "叩きつけたファウルが足元で跳ねる（issue #1074 の再現）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: GroundFoul
+    duel_seconds: 2.5
+    video: {from: start, to: end, fps: 20}
+
+  - id: foul-high-1074
+    name: "高く上がったファウルが画面端で跳ね返る（issue #1074 の再現）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: HighFoul
+    duel_seconds: 3.0
+    video: {from: start, to: end, fps: 20}

@@ -74,6 +74,7 @@ public static class PlayTimelineAdapter
             Fumbled = t.FumbledCatch,
             BobbleError = t.BobbleError,
             HomeRun = t.HomeRunStyle,
+            FoulView = t.FoulView,
             Caps = caps,
             Judgements = judgements,
         };
