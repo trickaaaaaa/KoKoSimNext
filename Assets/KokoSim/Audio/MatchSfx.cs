@@ -95,6 +95,10 @@ namespace KokoSim.Unity.Audio
         /// <param name="bank">Resources 内の連番クリップの頭（例 "Sfx/OnJin/bat_hit"）。</param>
         private static void Play(string bank, float volume, float pitch)
         {
+            // Edit mode（EditMode テスト・撮影・実測で対決ステージを回したとき）は鳴らさない。
+            // Edit mode の PlayOneShot は鳴らずに溜まり、次に再生ボタンを押した瞬間にまとめて「カキーン」と鳴っていた。
+            // 隠しオブジェクトのスピーカーもドメインリロードのたびに組み直されて溜まっていた（2026-11-17 実測で19組）
+            if (!Application.isPlaying) return;
             var clips = Bank(bank);
             if (clips.Length == 0) return;
             _rotation.TryGetValue(bank, out int i);
@@ -132,10 +136,7 @@ namespace KokoSim.Unity.Audio
             {
                 _voices.Clear();
                 _host = new GameObject("MatchSfx");
-                // DontDestroyOnLoad は Play 中しか呼べない（Edit mode の実測・テストで対決ステージを回すと例外で止まる）。
-                // Edit mode ではシーンに保存されない一時物として持つ
-                if (Application.isPlaying) Object.DontDestroyOnLoad(_host);
-                else _host.hideFlags = HideFlags.HideAndDontSave;
+                Object.DontDestroyOnLoad(_host);   // Play 中しか来ない（Play() が Edit mode を弾く）
                 for (int i = 0; i < 4; i++)
                 {
                     var s = _host.AddComponent<AudioSource>();
