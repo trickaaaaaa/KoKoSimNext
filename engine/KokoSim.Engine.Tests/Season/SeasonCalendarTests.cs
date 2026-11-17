@@ -77,6 +77,46 @@ public sealed class SeasonCalendarTests
         Assert.Equal((kind, weeksLeft), _cal.NextTournament(week));
     }
 
+    // --- 出場が決まった大会を数える（センバツ・地区大会・神宮） ---
+
+    [Theory]
+    [InlineData(24, 15)]   // 秋の後・選考待ちの冬のはじめ
+    [InlineData(30, 9)]
+    [InlineData(38, 1)]    // 選考発表の前週
+    [InlineData(39, 0)]    // 発表週＝センバツ開幕
+    public void NextTournament_SenbatsuBerth_CountsDownToAnnounceWeek(int week, int weeksLeft)
+    {
+        var entered = new[] { TournamentKind.SenbatsuKoshien };
+        Assert.Equal((TournamentKind.SenbatsuKoshien, weeksLeft), _cal.NextTournament(week, entered));
+    }
+
+    [Theory]
+    [InlineData(TournamentKind.Regional)]
+    [InlineData(TournamentKind.Jingu)]
+    public void NextTournament_ChainedTournament_IsLiveWhenEntered(TournamentKind kind)
+    {
+        Assert.Equal((kind, 0), _cal.NextTournament(24, new[] { kind }));
+    }
+
+    [Fact]
+    public void NextTournament_NothingEntered_FallsBackToSummerAndAutumn()
+    {
+        for (var w = 0; w < _cal.WeeksPerYear; w++)
+        {
+            Assert.Equal(_cal.NextTournament(w), _cal.NextTournament(w, System.Array.Empty<TournamentKind>()));
+            Assert.Equal(_cal.NextTournament(w), _cal.NextTournament(w, null));
+        }
+    }
+
+    [Fact]
+    public void NextTournament_EnteredOutsideTheWindow_IsIgnored()
+    {
+        var entered = new[] { TournamentKind.SenbatsuKoshien };
+        // 秋の開幕前・秋の開幕週・センバツ開幕後は、決まっていても従来どおり。
+        foreach (var w in new[] { 0, 13, 22, 23, 40, 49 })
+            Assert.Equal(_cal.NextTournament(w), _cal.NextTournament(w, entered));
+    }
+
     [Fact]
     public void NextTournament_NeverGoesNegative_AndCountsDownByOne()
     {

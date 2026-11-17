@@ -982,7 +982,7 @@ namespace KokoSim.Unity.Home
                 // 引き算はここに置かず SeasonCalendar.NextTournament を通す（トップバーと同じ単一ソース）。
                 // 「次の試合」カードは大会モード中だけ出す（通常週はダミーの対戦カードを出さない）。
                 view.TournamentMode = false;
-                var next = _calendar.NextTournament(week);
+                var next = _calendar.NextTournament(week, GameSession.Current.EnteredUpcomingKinds);
                 var left = next.WeeksLeft;
                 view.CountdownLabel = SeasonClock.CountdownLabel(next.Kind);
                 view.CountdownValue = left > 0 ? "残り " + left + " 週" : "開催中";

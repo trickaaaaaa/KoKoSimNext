@@ -283,6 +283,16 @@ namespace KokoSim.Unity.Shell
         /// <summary>選考発表を待つセンバツ32校（校ID・順位は問わない）。空＝未確定 or 発表済み。</summary>
         public List<int> PendingSenbatsuFieldIds { get; private set; } = new List<int>();
 
+        /// <summary>
+        /// 自校の出場が決まっていてまだ開幕していない大会（ホームのカウントダウン用・
+        /// <see cref="SeasonCalendar.NextTournament(int, IReadOnlyCollection{TournamentKind})"/> へ渡す）。
+        /// 地区大会・神宮大会は県大会の後始末から直接つながるので、待ちが残るのはセンバツだけ。
+        /// </summary>
+        public IReadOnlyCollection<TournamentKind> EnteredUpcomingKinds
+            => PendingSenbatsuFieldIds.Contains(NationService.ManagerSchoolId)
+                ? new[] { TournamentKind.SenbatsuKoshien }
+                : Array.Empty<TournamentKind>();
+
         /// <summary>選考発表時点の神宮枠地区（表示用）。空文字＝該当なし。</summary>
         public string PendingSenbatsuJinguRegion { get; private set; } = "";
 
