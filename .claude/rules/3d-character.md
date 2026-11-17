@@ -4,6 +4,7 @@ paths:
   - "Assets/KokoSim/Match/*{Shooter,Probe,Diag}*.cs"
   - "Assets/Editor/{Duel,Catcher,Pitcher,Field}*"
   - "Assets/Editor/*Probe*"
+  - "Assets/Editor/Tests/Duel*"
   - "Assets/Motions/**"
   - "Assets/_AIGearRaw/**"
   - "Assets/**/*.{shader,shadergraph,hlsl,fbx,FBX}"
@@ -12,6 +13,10 @@ paths:
 ---
 # 3Dキャラ制作の掟（設計書18。対決ビュー・守備ビューの3Dキャラの作業で常に従う）
 
+- **3Dのコードを触ったら EditMode テストを回す**（MCP `run_tests` mode=EditMode、または Test Runner。約2秒）。
+  CI には Unity のライセンスが無く回らない。`DuelStageGuardTests` は「絵でしか気づけない」実害の見張りで、
+  どれも実装を1つずつ壊して赤くなることを確かめてある。新しい実害を見つけたら、段落を足す前に検査にできないか考え、
+  足した検査は**一度実装を壊して赤くなるのを確かめてから**残す（壊しても緑の検査は誤った安心を生む）
 - URPは品質設定（Quality）ごとに別RenderPipelineAssetを持つ。Render Feature追加・シェーダ設定は
   Graphics / Quality 両方のRenderPipelineAsset整合を確認してから行う（design-18 §2）
 - 左打者・左投手は素体GOでなく**x=0面の無回転な鏡映親ノード**の `localScale.x=-1` で作る
@@ -26,18 +31,17 @@ paths:
   旧「Mirror ON時はアタッチ先ボーン反転」は本方式では不要になり廃止）
 - 購入モーションFBX（AA Basic Baseball等）**および購入素体FBX**（School Baseball Player 0001）を
   公開リポジトリに含めない（再配布NG。design-18 §3.1 / §3.2.1）
-- 素体はバインドポーズの顔向きが個体ごとに違う（UBC＝-Z／購入素体＝+Z）。取り違えても例外も
-  テスト失敗も出ず**帽子が後ろ被りになるだけ**なので、素体を足したら必ず絵で確かめる（design-18 §3.2.1）
+- 素体はバインドポーズの顔向きが個体ごとに違う（UBC・U2＝-Z／購入素体＝+Z）。取り違えると帽子が後ろ被りになる。
+  検査: `DuelStageGuardTests.*_Faces*`（捕手・投手・球審）。打者は首の補正が隠すので、素体を足したら絵でも確かめる（design-18 §3.2.1）
 - AI生成メッシュ（Meshy画像→3D）の出力姿勢は「正面 -Y・上 +Z」で一定。装着正位への変換は
   `DuelGearMeshes.CanonicalizeMeshy` に集約し、資産ごとに向きを推測しない（design-18 §3.3.1）。
   ただし「正面」は**元写真に写っていた面**（背面写真から作ると中継視点で甲が見え続ける＝2026-11-08 実害）。
   **Tripo（画像→3D）の出力姿勢は生成物ごとに違う**ので、デシメート時に rot 引数で Meshy と同じ姿勢へ回してから
   取り込む（design-18 §3.3.2）
-- **装備メッシュは1サブメッシュで描く**。複数のマテリアル枠を持つFBX（購入品など）は、2つ目以降のサブメッシュが
-  **黙って描かれない**（購入グラブのウェブが丸ごと消えていた）。Blender の絵では全部見えるので、形は Unity で描いて
-  確かめる（`DuelGearMeshes.LoadMeters` がまとめる。design-18 §3.3.2）
+- **装備メッシュは1サブメッシュで描く**（2つ目以降は黙って描かれない。`DuelGearMeshes.MergeSubmeshes`）。
+  検査: `DuelStageGuardTests.MergeSubmeshes_JoinsAllTrianglesIntoOne` / `GearMeshes_AreSingleSubmesh`（design-18 §3.3.2）
 - グラブ・ミットをはめた手は描かない（`DuelStageRig.HideGloveHand`＝体メッシュから手の三角形を抜く。骨は触らない）。
-  体メッシュが実行時に読めないと**エラーも出ずに手が残る**（design-18 §3.3.2）
+  検査: `DuelStageGuardTests.*GloveHandIsHidden` / `Catcher_MittHandIsHidden`（design-18 §3.3.2）
 - 生成メッシュはUnityに取り込む前に必ずデシメートする（50万tri級を取り込ませるとエディタが固まる）。
   形の確認は `tools/aigear-preview.py`（Blender単体の6面図）。Decimate(Collapse) は穴を保存するので、
   穴の多い生成物は voxel remesh を前置する。ただし細バーは溶けるので捕手マスクには使わない（design-18 §3.3.1）
@@ -67,10 +71,8 @@ paths:
 - 購入素体の領域は「メッシュ＝1領域」で足りない所がある。ベルトは `Pants` メッシュの中の帯で、
   塗り分けないと白ズボンに白いベルトが乗るだけになる。テクスチャの色で三角形単位に振り分ける
   （`DuelVendorRegionBaker`。UV島が分かれていれば頂点は割れているので領域またぎは0になる。design-18 §3.5.1b）
-- **色は自分でガンマ→リニア変換して渡す**。プロジェクトはリニア色空間で、Properties に宣言した Color は
-  `SetColor` が自動変換するが、配列（`_RegionColors` 等）は宣言できず `SetColorArray` が素通しする。
-  素通しすると暗い色ほど持ち上がり黒が中間グレーになる。固定の黒はパレット表の #23242A に揃える
-  （わずかでも赤に寄せるとポスタライズが濃い臙脂へ落とす。design-18 §3.5.1）
+- **配列で渡す色（`_RegionColors` 等）は自分でガンマ→リニア変換する**（`SetColorArray` は素通し＝黒が中間グレーになる）。
+  固定の黒はパレット表の #23242A（赤に寄せると臙脂に落ちる）。検査: `DuelStageGuardTests.RegionColors_ArePassedInLinearSpace`（design-18 §3.5.1）
 - 素体の形を変えるベイク（袖の張り出し等）で **`RecalculateNormals` を呼ばない**。非溶接メッシュでは
   UV島の境目が全部ハードエッジになり体が面取りされて見える。腕・脚の軸は**ボーンのバインドポーズ**から
   取る（素体はAポーズでメッシュ座標から軸を推測すると胴を巻き込む。design-18 §3.5.1b）

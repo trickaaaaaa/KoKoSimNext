@@ -132,7 +132,10 @@ namespace KokoSim.Unity.Audio
             {
                 _voices.Clear();
                 _host = new GameObject("MatchSfx");
-                Object.DontDestroyOnLoad(_host);
+                // DontDestroyOnLoad は Play 中しか呼べない（Edit mode の実測・テストで対決ステージを回すと例外で止まる）。
+                // Edit mode ではシーンに保存されない一時物として持つ
+                if (Application.isPlaying) Object.DontDestroyOnLoad(_host);
+                else _host.hideFlags = HideFlags.HideAndDontSave;
                 for (int i = 0; i < 4; i++)
                 {
                     var s = _host.AddComponent<AudioSource>();

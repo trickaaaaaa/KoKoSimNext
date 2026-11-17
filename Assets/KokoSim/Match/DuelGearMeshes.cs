@@ -152,16 +152,23 @@ namespace KokoSim.Unity.Match
             // サブメッシュを1つにまとめる。装備は1マテリアルで描くので、2つ目以降のサブメッシュは**描かれない**。
             // 購入グラブは部品ごとのマテリアル枠が12個残っていて、ウェブと掌の一部が丸ごと消えていた
             // （2026-11-14 監督指摘「おもっきしウェブなくない？」。Blender の絵では全部見えるので気づけない）
-            if (mesh.subMeshCount > 1)
-            {
-                var all = mesh.triangles;   // 全サブメッシュの三角形を連結して返す
-                mesh.subMeshCount = 1;
-                mesh.SetTriangles(all, 0);
-            }
+            MergeSubmeshes(mesh);
             return mesh;
 #else
             return null;
 #endif
+        }
+
+        /// <summary>
+        /// サブメッシュを1つにまとめる（全サブメッシュの三角形を連結）。装備は1マテリアルで描くので、
+        /// 2つ目以降のサブメッシュは**黙って描かれない**（上の LoadMeters の注記。EditMode テストが合成メッシュで見張る）。
+        /// </summary>
+        internal static void MergeSubmeshes(Mesh mesh)
+        {
+            if (mesh == null || mesh.subMeshCount <= 1) return;
+            var all = mesh.triangles;   // 全サブメッシュの三角形を連結して返す
+            mesh.subMeshCount = 1;
+            mesh.SetTriangles(all, 0);
         }
 
         // ---- 較正 --------------------------------------------------------------

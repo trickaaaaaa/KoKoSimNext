@@ -25,13 +25,22 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 顔の寄りの狙い用（のっぺらぼうの確認）。0=打者 / 1=投手 / 2=捕手 / 3=走者枠0（RunnerHelmetFrameForCapture で立てた後）。
+        /// 役者の Animator（EditMode テストの実測用）。0=打者 / 1=投手 / 2=捕手 / 4=球審。組めていなければ null。
+        /// </summary>
+        internal Animator ActorAnimatorForCapture(int who)
+        {
+            var a = who == 0 ? _batter : who == 1 ? _pitcher : who == 2 ? _catcher : who == 4 ? _umpire : null;
+            return a?.Animator;
+        }
+
+        /// <summary>
+        /// 顔の寄りの狙い用（のっぺらぼうの確認）。0=打者 / 1=投手 / 2=捕手 / 3=走者枠0（RunnerHelmetFrameForCapture で立てた後）/ 4=球審。
         /// 中心は頭ボーンから頭蓋の上へ 0.09m、向きは素立ちで実測した顔の前（Actor.HeadFwdLocal）。
         /// </summary>
         internal bool HeadFrameForCapture(int who, out Vector3 center, out Vector3 fwd, out Vector3 up)
         {
             center = fwd = up = Vector3.zero;
-            var a = who == 0 ? _batter : who == 1 ? _pitcher : who == 2 ? _catcher
+            var a = who == 0 ? _batter : who == 1 ? _pitcher : who == 2 ? _catcher : who == 4 ? _umpire
                 : (_runnerCast.Count > 0 ? _runnerCast[0] : null);
             if (a == null || a.Animator == null) return false;
             var head = a.Animator.GetBoneTransform(HumanBodyBones.Head);
