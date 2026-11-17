@@ -389,8 +389,10 @@ public sealed class PitchingChangeTacticsTests
         // 投手として置かれていない控えが登板しても、リーグ平均でなく本人の能力で投げる。
         Assert.Equal(strongLatent.MaxVelocityKmh, st.CurrentPitcher.Pitching.MaxVelocityKmh, 3);
         Assert.NotEqual(PitcherAttributes.LeagueAverage.MaxVelocityKmh, st.CurrentPitcher.Pitching.MaxVelocityKmh);
-        // 能力の詰め替え（旧 Materialize）が無くなったので、控えのインスタンスがそのままマウンドに立つ。
-        Assert.Same(superFielder, st.CurrentPitcher);
+        // 能力の詰め替え（旧 Materialize）は無い＝能力値の実体は本人のまま。変わるのは守備位置（投手）だけ（issue #1063）。
+        Assert.Same(superFielder.Pitching, st.CurrentPitcher.Pitching);
+        Assert.Equal(FieldPosition.Pitcher, st.CurrentPitcher.Position);
+        Assert.Equal(superFielder.Name, st.CurrentPitcher.Name);
     }
 
     /// <summary>
