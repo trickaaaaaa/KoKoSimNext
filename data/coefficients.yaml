@@ -1940,6 +1940,14 @@ roster:
   ai_velocity_cap_mid_level: 92.5    # 同・球速Lv（149.3km/h）
   ai_velocity_cap_top_raw: 185.0     # 2本目の終点の素の値（およそ1〜3位）
   ai_velocity_cap_top_level: 97.0    # 同・球速Lv（154.5km/h）。この先は 100（158km/h）へ漸近
+  # AI校の打者能力の天井（issue #1066）: 球速と同じ「膝から2本の線分＋100への漸近」。打者は Level 空間そのもの
+  # （km/h変換不要）なので1本の曲線を12能力（BatterAttribute）全部で共有する。上端は球速より低め（96→100漸近）
+  # に取り、整数丸めで99に達する入力をごく僅かにする（「99に張り付く能力は数%まで」）。
+  ai_batter_cap_knee: 85.0
+  ai_batter_cap_mid_raw: 120.0
+  ai_batter_cap_mid_level: 92.0
+  ai_batter_cap_top_raw: 165.0
+  ai_batter_cap_top_level: 96.0
   # 投打の利き（§1.1c）
   throw_left_prob: 0.12
   switch_prob: 0.03
@@ -2048,6 +2056,80 @@ roster:
   archetype_breaking_ball_artist_control: -4
   archetype_breaking_ball_artist_stamina: 0
   archetype_breaking_ball_artist_pitch_rank: 20
+  # 打者の型（issue #1066・オーナー承認 2026-11-17）: 打者総合は変えず、能力の伸び方の重みだけを変える。
+  # 現状は AI校の永続ロスターだけが持つ（自校の ProspectGenerator は未配線＝issue本文で別issue可とされた範囲）。
+  # 長所は正・短所は負のオフセットで、ai_batter_cap_* のやわらかい天井を通してから適用する（型の合計は揃えない＝
+  # 打撃総合は逆算配分の二分探索が毎年吸収するので、学校の強さとチーム総合の対応は変わらない）。
+  # 2026-11-17 実測で判明: スタメン選抜は打撃（ミート・パワー）の重みで8枠を解くため、ミート・パワーが短所の型は
+  # 生成母集団よりスタメンから強く弾かれる（サバイバーシップバイアス）。バランス型は一度も弾かれないので、
+  # 残り（Balanced）を絞るほどスタメンの「オールA」が減る。
+  batter_archetype_power_hitter_share: 0.125       # 長距離砲
+  batter_archetype_raw_slugger_share: 0.08         # 粗削りの強打者
+  batter_archetype_gap_hitter_share: 0.10          # 中距離ヒッター
+  batter_archetype_speedy_contact_share: 0.125     # 俊足巧打
+  batter_archetype_eye_hitter_share: 0.09          # 選球眼の鬼
+  batter_archetype_small_ball_share: 0.08          # 小技職人
+  batter_archetype_steal_specialist_share: 0.07    # 盗塁職人
+  batter_archetype_defense_specialist_share: 0.10  # 守備職人
+  batter_archetype_strong_arm_share: 0.08          # 強肩
+  batter_archetype_cerebral_catcher_share: 0.07    # 頭脳派捕手
+  batter_archetype_one_tool_share: 0.03            # 一芸（素材型）。残り5%がバランス型
+  # 一芸を 0.08→0.03 に絞り、長距離砲・俊足巧打へ回した（2026-11-17 実測）: 一芸は1人の総量を揃える正規化で
+  # 「ほか全部が低い」が薄まり（突出1つ＋ほかは並）、強豪校ではオールAの最大の出どころになっていた。
+  # 長所と短所のオフセットは非対称（長所は控えめ・短所は大きめ）。実測（strength90・60校）で判明: 強豪校の
+  # 逆算配分は1人あたり年間+80相当（3年生の追い上げぶん含む）という巨大な成長量を積むため、短所側は
+  # オフセット-18程度では「C以下」まで下がらず、-30〜-38まで下げてはじめて実測の目標（走力C以下の強打者が
+  # 強豪校にも一定数いる・1人の中の最大−最小20〜30・99張り付き数%）に収まった。
+  batter_archetype_power_hitter_power: 11
+  batter_archetype_power_hitter_speed: -30
+  batter_archetype_power_hitter_fielding: -13
+  batter_archetype_raw_slugger_power: 11
+  batter_archetype_raw_slugger_contact: -26
+  batter_archetype_raw_slugger_discipline: -16
+  batter_archetype_gap_hitter_contact: 10
+  batter_archetype_gap_hitter_power: 6
+  batter_archetype_gap_hitter_speed: -19
+  batter_archetype_speedy_contact_speed: 13
+  batter_archetype_speedy_contact_contact: 8
+  batter_archetype_speedy_contact_power: -26
+  batter_archetype_eye_hitter_discipline: 13
+  batter_archetype_eye_hitter_contact: 6
+  batter_archetype_eye_hitter_power: -24
+  batter_archetype_small_ball_bunt: 16
+  batter_archetype_small_ball_baserunning: 10
+  batter_archetype_small_ball_power: -26
+  batter_archetype_steal_specialist_speed: 11
+  batter_archetype_steal_specialist_steal: 16
+  batter_archetype_steal_specialist_contact: -16
+  batter_archetype_steal_specialist_power: -19
+  batter_archetype_steal_specialist_discipline: -11
+  batter_archetype_defense_specialist_fielding: 11
+  batter_archetype_defense_specialist_catching: 8
+  batter_archetype_defense_specialist_contact: -19
+  batter_archetype_defense_specialist_power: -22
+  batter_archetype_defense_specialist_discipline: -8
+  batter_archetype_strong_arm_arm_strength: 13
+  batter_archetype_strong_arm_throw_accuracy: 8
+  batter_archetype_strong_arm_contact: -24
+  batter_archetype_cerebral_catcher_lead: 13
+  batter_archetype_cerebral_catcher_catching: 8
+  batter_archetype_cerebral_catcher_speed: -24
+  batter_archetype_one_tool_focus_bonus: 14
+  batter_archetype_one_tool_other_penalty: -18
+  # オフセット1ポイントあたり毎年の成長重みに足す量。生成時のオフセットだけでは逆算配分の巨大な成長量
+  # （強豪校は1人年間+80相当まで＝3年生の追い上げぶん含む）に押し流されて長所・短所が消えるため、
+  # 毎年の成長そのものに重みを掛ける（成長量が大きいほど差が広がる）。
+  batter_archetype_growth_weight_per_offset_point: 0.035
+  batter_archetype_growth_weight_min: 0.15
+  batter_archetype_growth_weight_max: 1.9
+  # 尖り方の強さ（学校の強さで決まる）。弱い学校は0（実質バランス型）・強豪校ほど1を超えて強まる。
+  batter_archetype_intensity_pivot: 55.0
+  batter_archetype_intensity_span: 25.0   # 30→25（強さ80で尖り1.0。80〜85のオールAを減らす）
+  batter_archetype_intensity_max: 2.2
+  batter_archetype_intensity_above_one_slope: 3.0
+  # 打者能力の成長量を解き直すときの g の上限（AiRosterCycle.SolveGrowthG の2段目）。型ありの成長は天井で頭が寝るので
+  # 型なし（1段目・上限40）より大きな g が要る。40では強さ80〜85が目標を1〜3点下回った。
+  batter_archetype_growth_solve_max_g: 60.0
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0

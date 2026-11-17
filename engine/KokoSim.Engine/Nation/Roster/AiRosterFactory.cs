@@ -45,6 +45,8 @@ public static class AiRosterFactory
         var salt = 0x50A1_0000UL;
         var archSalt = 0x7B25_0000UL;
         var nameSalt = 0x4E27_0000UL;
+        // 打者の型（issue #1066）用の専用ソルト。既存ストリームと別の上位ビット（主RNG非消費）。
+        const ulong batterArchSalt = 0x3C44_0000UL;
         var rc = deps.Roster;
         // 精神力・統率・リードの中心＝圧縮前の学校強度と校風（issue ai-school-mental-fixed-50。AiMentalModel が単一ソース）。
         // 新入生は学年アーク前の値。進級（AiRosterCycle.AdvanceOneYear）とブートストラップの上級生でアークを載せる。
@@ -97,6 +99,17 @@ public static class AiRosterFactory
                         BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name, mental, rc,
                         battingLift: starHitters.Contains(i) ? lift : 0.0)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
+
+            // 打者の型（issue #1066）: 長所は伸び短所は伸びない成長配分を決める。マウンドに置かれるかに関わらず
+            // 全選手へ付与する（全選手が打席に立つ・#381 と同じ対称性）。専用 Fork＝主RNG非消費。
+            var batterRng = rng.Fork(batterArchSalt + (ulong)i);
+            var batterArchetype = BatterArchetypes.Sample(batterRng, rc.BatterArchetypes);
+            var batterFocus = batterArchetype == BatterArchetype.OneTool
+                ? BatterArchetypes.SampleFocus(batterRng)
+                : (BatterAttribute?)null;
+            var batterIntensity = BatterArchetypes.IntensityForStrength(school.Strength, rc.BatterArchetypes);
+            snap = ApplyBatterArchetype(snap, batterArchetype, batterFocus, batterIntensity, rc);
+
             players.Add(new AiPlayer(nextPlayerId++, enrollmentYearIndex, aptitudes, PhenomType.None, 1, snap));
         }
 
@@ -199,6 +212,38 @@ public static class AiRosterFactory
             best = pos;
         }
         return best;
+    }
+
+    /// <summary>
+    /// 打者の型のオフセットを、生成直後のスナップショットへ1回だけ適用する（issue #1066）。
+    /// オフセットは学校の強さで決まる尖り方の強さ（<see cref="BatterArchetypes.IntensityForStrength"/>）を
+    /// 掛けてから適用する＝弱い学校はほぼバランス型・強豪校ほど長所短所が尖る。尖り方は毎年の成長
+    /// （<see cref="Nation.Roster.AiRosterCycle.BumpTo"/>）でも使うので <see cref="Player.BatterArchetypeIntensity"/>
+    /// へ焼き込む（学年成長時は学校を参照できないため）。
+    /// </summary>
+    private static Player ApplyBatterArchetype(
+        Player p, BatterArchetype archetype, BatterAttribute? focus, double intensity, RosterCoefficients rc)
+    {
+        int Apply(int v, BatterAttribute attr)
+            => rc.ApplyBatterOffset(v, BatterArchetypes.NormalizedOffset(archetype, attr, focus, rc.BatterArchetypes) * intensity);
+        return p with
+        {
+            BatterArchetype = archetype,
+            BatterArchetypeFocus = focus,
+            BatterArchetypeIntensity = intensity,
+            Contact = Apply(p.Contact, BatterAttribute.Contact),
+            Power = Apply(p.Power, BatterAttribute.Power),
+            Discipline = Apply(p.Discipline, BatterAttribute.Discipline),
+            Speed = Apply(p.Speed, BatterAttribute.Speed),
+            ArmStrength = Apply(p.ArmStrength, BatterAttribute.ArmStrength),
+            ThrowAccuracy = Apply(p.ThrowAccuracy, BatterAttribute.ThrowAccuracy),
+            Fielding = Apply(p.Fielding, BatterAttribute.Fielding),
+            Catching = Apply(p.Catching, BatterAttribute.Catching),
+            Bunt = Apply(p.Bunt, BatterAttribute.Bunt),
+            Steal = Apply(p.Steal, BatterAttribute.Steal),
+            Baserunning = Apply(p.Baserunning, BatterAttribute.Baserunning),
+            Lead = Apply(p.Lead, BatterAttribute.Lead),
+        };
     }
 
     /// <summary>新入生の能力中心（未熟スタート＝Strength − FreshmanGap ＋ 名声上振れ）。</summary>

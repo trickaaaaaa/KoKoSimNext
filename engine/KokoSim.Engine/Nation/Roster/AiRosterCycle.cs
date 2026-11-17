@@ -125,9 +125,10 @@ public static class AiRosterCycle
         // 前年度の予算の消し残し（冬の節目を通らなかった等）は代替わりの前に使い切る＝予算を年度をまたいで持ち越さない。
         foreach (var p in roster.Players)
         {
-            if (p.PendingBudget <= 0) continue;
-            p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget, deps.Roster);
+            if (p.PendingBudget <= 0 && p.PendingPitchBudget <= 0) continue;
+            p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget, deps.Roster, pitchAmount: p.PendingPitchBudget);
             p.PendingBudget = 0;
+            p.PendingPitchBudget = 0;
         }
 
         Promote(roster, school, newYearIndex, deps);
@@ -162,9 +163,10 @@ public static class AiRosterCycle
         // 新方式では夏の節目の時点の予算は常に0（冬明け・4月で使い切る）＝ここは旧セーブの移行でしか動かない。
         foreach (var p in roster.Players)
         {
-            if (p.PendingBudget <= 0) continue;
-            p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget, deps.Roster);
+            if (p.PendingBudget <= 0 && p.PendingPitchBudget <= 0) continue;
+            p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget, deps.Roster, pitchAmount: p.PendingPitchBudget);
             p.PendingBudget = 0;
+            p.PendingPitchBudget = 0;
         }
 
         // 翌年度の学年に進めた写し（実体の Snapshot・学年は触らない）。
@@ -187,7 +189,10 @@ public static class AiRosterCycle
 
         // 怪物の固定成長（Q20 §1）。翌年度の学年で重みを引く。
         foreach (var (real, next) in pairs.Where(x => x.Real.Phenom.IsPhenom()))
+        {
             real.PendingBudget = pc.AnnualGrowth * 0.5 * (next.Grade == 3 ? pc.SeniorGrowthFactor : 1.0);
+            real.PendingPitchBudget = real.PendingBudget;
+        }
 
         // 非怪物は翌夏のチームでターゲットを逆算（学年係数は翌年度の学年）。
         var gradeFactor = NonPhenomGradeFactor(pc);
@@ -198,7 +203,8 @@ public static class AiRosterCycle
         foreach (var (real, next) in pairs)
         {
             if (real.Phenom.IsPhenom()) continue;
-            real.PendingBudget = gradeFactor(next.Grade) * gSolved;
+            real.PendingBudget = gradeFactor(next.Grade) * gSolved.Bat;
+            real.PendingPitchBudget = gradeFactor(next.Grade) * gSolved.Pitch;
         }
     }
 
@@ -229,13 +235,14 @@ public static class AiRosterCycle
         var pc = deps.Persistent;
         foreach (var p in roster.Players)
         {
-            if (p.PendingBudget <= 0) continue;
+            if (p.PendingBudget <= 0 && p.PendingPitchBudget <= 0) continue;
 
             if (node == AiGrowthNode.Winter)
             {
                 // 残り全額（頭打ちで溜まった残差・丸めで消える端数も含む）を使い切って必ず0へ。
-                p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget, deps.Roster);
+                p.Snapshot = BumpTo(p.Snapshot, p.PendingBudget, deps.Roster, pitchAmount: p.PendingPitchBudget);
                 p.PendingBudget = 0;
+                p.PendingPitchBudget = 0;
                 continue;
             }
 
@@ -251,12 +258,14 @@ public static class AiRosterCycle
                 ratio = remainingShare > 0 ? pc.AutumnNodeShare / remainingShare : 0.0;
             }
 
-            var requested = Math.Min(p.PendingBudget * ratio, pc.MaxResidualPerNode);
-            var delta = (int)Math.Round(requested);
-            if (delta <= 0) continue;   // 丸めで0なら今節目では何もせず、予算はそのまま次節目へ残す。
+            // 打者能力と投手能力（issue #1066）は別々の予算から同じ割合で引く。
+            var delta = p.PendingBudget > 0 ? (int)Math.Round(Math.Min(p.PendingBudget * ratio, pc.MaxResidualPerNode)) : 0;
+            var pitchDelta = p.PendingPitchBudget > 0 ? (int)Math.Round(Math.Min(p.PendingPitchBudget * ratio, pc.MaxResidualPerNode)) : 0;
+            if (delta <= 0 && pitchDelta <= 0) continue;   // 丸めで0なら今節目では何もせず、予算はそのまま次節目へ残す。
 
-            p.Snapshot = BumpTo(p.Snapshot, delta, deps.Roster);
-            p.PendingBudget -= delta;
+            p.Snapshot = BumpTo(p.Snapshot, Math.Max(0, delta), deps.Roster, pitchAmount: Math.Max(0, pitchDelta));
+            if (delta > 0) p.PendingBudget -= delta;
+            if (pitchDelta > 0) p.PendingPitchBudget -= pitchDelta;
         }
     }
 
@@ -304,21 +313,57 @@ public static class AiRosterCycle
     /// 総合は g に対し単調でない。最強豪（ターゲット 90 前後）は能力が 99 に張り付いてターゲットに届かず、年1回の逆算
     /// （参照実装・夏の節目の積み直し）は毎年上限まで伸ばす。4月の補正でもう一度上限を当てる（または二分探索が谷に落ちる）と、
     /// 打てる控え投手が野手へ回って（二刀流の選抜）6指標の選手層が崩れ、総合がかえって下がる（実測: 強さ90の学校で 89.9 → 85.2）。</para>
+    ///
+    /// <para><b>打者の型（issue #1066）が入ってからは2段で解く</b>。
+    /// <list type="number">
+    /// <item>型を無視した一律の成長（<c>ignoreBatterArchetype:true</c>・打者も投手も同じ g）で g を解く＝型の導入前と同じ解。
+    ///   <b>投手能力の成長量はこれで確定する</b>（Pitch）。</item>
+    /// <item>投手能力をその量に固定したまま、打者能力だけ型ありの成長（長所は伸び短所は伸びない・やわらかい天井）で
+    ///   チーム総合が目標に届く g を解き直す（Bat。上限 <c>GrowthSolveMaxG</c>）。</item>
+    /// </list>
+    /// 型ありの成長は天井で頭が寝るので、同じ g ではチーム総合が届かない（1段だけで解いた最初の実装は、強さ80で −2.9・
+    /// 強さ85で −4.0 と強豪校が弱くなっていた）。かといって型ありの成長で1つの g を解くと、大きくなった g が
+    /// 投手の球速にも同じ式で乗り、3年生の150km/h以上が 11人→34人に増えた（<c>VelocityDistributionByTierTests</c>）。
+    /// 打者と投手の成長量を分けることで、学校の強さとチーム総合の対応と、投手の分布の両方を型の導入前と揃える。</para>
     /// </summary>
-    private static double SolveGrowthG(AiSchoolRoster roster, School school, int yearIndex, AiRosterDeps deps,
+    private static (double Bat, double Pitch) SolveGrowthG(AiSchoolRoster roster, School school, int yearIndex, AiRosterDeps deps,
         List<(AiPlayer Player, Player Base)> bases, Func<int, double> gradeFactor, bool correction = false)
     {
         var target = GrowthTarget(school, deps);
+        double Overall() => ProjectedOverall(roster, school, yearIndex, deps);
 
-        void ApplyG(double g)
+        // 1段目: 型を無視した一律の成長（打者・投手とも同じ g）＝型の導入前と同じ解。投手能力の成長量はこれで決まる。
+        var gPitch = SolveG(g =>
         {
-            foreach (var (p, b) in bases) p.Snapshot = BumpTo(b, gradeFactor(p.Grade) * g, deps.Roster);
-        }
+            foreach (var (p, b) in bases)
+                p.Snapshot = BumpTo(b, gradeFactor(p.Grade) * g, deps.Roster, ignoreBatterArchetype: true);
+        }, Overall, target, correction);
 
+        // 型を持つ選手がいなければ（自校由来・旧セーブ）1段目で確定（適用済み）。
+        if (!bases.Any(x => x.Base.BatterArchetype is not null)) return (gPitch, gPitch);
+
+        // 2段目: 投手能力は1段目の量に固定し、打者能力だけ型ありの成長でチーム総合が目標に届く量を解き直す。
+        var gBat = SolveG(g =>
+        {
+            foreach (var (p, b) in bases)
+            {
+                var f = gradeFactor(p.Grade);
+                p.Snapshot = BumpTo(b, f * g, deps.Roster, pitchAmount: f * gPitch);
+            }
+        }, Overall, target, correction, deps.Roster.BatterArchetypes.GrowthSolveMaxG);
+        return (gBat, gPitch);
+    }
+
+    /// <summary>
+    /// <see cref="SolveGrowthG"/> の二分探索の本体。<paramref name="apply"/>(g) で成長を当て、<paramref name="overall"/>
+    /// でチーム総合を測る。終了時は返り値の g を当てた状態になっている。
+    /// </summary>
+    private static double SolveG(Action<double> apply, Func<double> overall, double target, bool correction, double maxG = 40.0)
+    {
         double OverallAt(double g)
         {
-            ApplyG(g);
-            return ProjectedOverall(roster, school, yearIndex, deps);
+            apply(g);
+            return overall();
         }
 
         var overallAtZero = 0.0;
@@ -329,7 +374,7 @@ public static class AiRosterCycle
         }
 
         // Overall は g に対しおおむね単調非減少。g の最大値でも届かなければ上限で打ち切り（強豪はキャップで頭打ち＝許容）。
-        double lo = 0.0, hi = 40.0;
+        double lo = 0.0, hi = maxG;
         var overallAtHi = OverallAt(hi);
         if (overallAtHi < target)
         {
@@ -343,7 +388,7 @@ public static class AiRosterCycle
                 if (o > bestOverall) { bestOverall = o; bestG = gi; }
             }
             if (overallAtHi > bestOverall) bestG = hi;
-            ApplyG(bestG);
+            apply(bestG);
             return bestG;
         }
 
@@ -355,10 +400,10 @@ public static class AiRosterCycle
         }
         if (correction && lo > 0 && OverallAt(lo) < overallAtZero)
         {
-            ApplyG(0);   // 谷に落ちた＝伸ばさないほうが高い。
+            apply(0);   // 谷に落ちた＝伸ばさないほうが高い。
             return 0;
         }
-        ApplyG(lo);   // target をわずかに下回る側（オーバーシュートしない）。
+        apply(lo);   // target をわずかに下回る側（オーバーシュートしない）。
         return lo;
     }
 
@@ -371,44 +416,63 @@ public static class AiRosterCycle
         return ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
     }
 
-    /// <summary>スナップショットの中核能力を <paramref name="amount"/> だけ底上げする（弾道傾向・精神は伸ばさない）。</summary>
-    internal static Player BumpTo(Player b, double amount, RosterCoefficients rc)
+    /// <summary>
+    /// スナップショットの中核能力を <paramref name="amount"/> だけ底上げする（弾道傾向・精神は伸ばさない）。
+    /// 投手能力は <paramref name="pitchAmount"/>（省略時は <paramref name="amount"/> と同じ）だけ伸ばす（issue #1066）。
+    /// <paramref name="ignoreBatterArchetype"/>=true は型を無視した旧来の一律成長（<c>Clamp(v+d,10,99)</c>）を使う
+    /// （<see cref="SolveGrowthG"/> の1段目専用）。
+    /// </summary>
+    internal static Player BumpTo(Player b, double amount, RosterCoefficients rc, bool ignoreBatterArchetype = false,
+        double? pitchAmount = null)
     {
-        var d = (int)Math.Round(amount);
-        if (d <= 0) return b;
-        int Up(int v) => (int)MathUtil.Clamp(v + d, 10, 99);
-        var r = b with
+        var d = Math.Max(0, (int)Math.Round(amount));
+        var dp = Math.Max(0, (int)Math.Round(pitchAmount ?? amount));
+        if (d <= 0 && dp <= 0) return b;
+        // 打者の型（issue #1066）: 型を持つ選手（AI校の永続ロスターだけ・自校/旧セーブは null）は、
+        // 長所ほど伸び短所はあまり伸びない配分＋やわらかい天井（RosterCoefficients.BatterSoftCap）で底上げする。
+        // 旧実装（型なし・全員同じ Up）は全能力が平行に 99 へ溜まり、型の長所・短所が消えていた（issue #1066 原因1）。
+        // 型を持たない選手・ignoreBatterArchetype=true の呼び出しは旧実装と1ビットも変えない（Up のまま）。
+        var archetype = ignoreBatterArchetype ? null : b.BatterArchetype;
+        int Up(int v, BatterAttribute attr)
         {
-            Contact = Up(b.Contact),
-            Power = Up(b.Power),
-            Discipline = Up(b.Discipline),
-            Speed = Up(b.Speed),
-            ArmStrength = Up(b.ArmStrength),
-            ThrowAccuracy = Up(b.ThrowAccuracy),
-            Fielding = Up(b.Fielding),
-            Catching = Up(b.Catching),
-            Bunt = Up(b.Bunt),
-            Steal = Up(b.Steal),
-            Baserunning = Up(b.Baserunning),
-            Lead = Up(b.Lead),
+            if (archetype is not { } a) return (int)MathUtil.Clamp(v + d, 10, 99);
+            var weight = BatterArchetypes.GrowthWeight(a, attr, b.BatterArchetypeFocus, b.BatterArchetypeIntensity, rc.BatterArchetypes);
+            return rc.GrowBatterAttribute(v, d, weight);
+        }
+        var r = d <= 0 ? b : b with
+        {
+            Contact = Up(b.Contact, BatterAttribute.Contact),
+            Power = Up(b.Power, BatterAttribute.Power),
+            Discipline = Up(b.Discipline, BatterAttribute.Discipline),
+            Speed = Up(b.Speed, BatterAttribute.Speed),
+            ArmStrength = Up(b.ArmStrength, BatterAttribute.ArmStrength),
+            ThrowAccuracy = Up(b.ThrowAccuracy, BatterAttribute.ThrowAccuracy),
+            Fielding = Up(b.Fielding, BatterAttribute.Fielding),
+            Catching = Up(b.Catching, BatterAttribute.Catching),
+            Bunt = Up(b.Bunt, BatterAttribute.Bunt),
+            Steal = Up(b.Steal, BatterAttribute.Steal),
+            Baserunning = Up(b.Baserunning, BatterAttribute.Baserunning),
+            Lead = Up(b.Lead, BatterAttribute.Lead),
         };
         // 投手能力も全選手ぶん伸ばす（#381）。旧実装は「投手能力を持つなら」＝マウンドに置かれた選手だけで、
         // 野手の投手能力は入学時のまま据え置かれていた（3年生が1年生と同じ肩で緊急登板する）。
         // 6指標（<see cref="ScoutedTeamProfile"/>）は投手として置かれた選手しか投手力に数えないので、
         // 逆算配分（<see cref="SettleToTarget"/>）のターゲット尺度は動かない＝校の総合力は不変。
+        if (dp <= 0) return r;
+        // 投手能力は pitchAmount（既定は amount と同じ量。issue #1066 で打者と分けた）で伸ばす。
         var a = b.Pitching;
         // 球速はやわらかい天井の手前（素の値）で底上げしてから天井を通す（issue #908）＝99 に張り付かない。
         // 膝より下は旧来の Up と同じ整数の足し算。
         var vRaw = rc.VelocitySoftCapInverse(PitcherAttributes.LevelFromVelocityKmhExact(a.MaxVelocityKmh));
-        var vl = rc.VelocitySoftCap(Math.Max(10.0, vRaw + d));
+        var vl = rc.VelocitySoftCap(Math.Max(10.0, vRaw + dp));
         // 制球・キレ・スタミナは型の上乗せを外した地力に足して 99 で切り詰め、上乗せを戻す（issue #908）。
         // 旧実装は上乗せ込みの値に足して切り詰めていたので、強豪校（毎年最大 +40）では型の個性が 99 に潰れ、
         // 剛腕の「制球 −22」も帳消しになっていた（実測: 全国の150km/h以上が全員 制球99）。
         // 剛腕の制球は割合（地力×0.55）なので、地力側に足して 99 で切ってから掛け直す＝溢れた分は制球に回らない
         // （オーナー決定「1＋2」）。型の当て方は PitcherArchetypes.Apply が単一ソース。
         var (_, _, os, or) = a.Archetype is { } type ? PitcherArchetypes.Offsets(type, rc.Archetypes) : (0.0, 0.0, 0.0, 0.0);
-        int UpKeep(int v, double off) => (int)MathUtil.Clamp(Math.Round(MathUtil.Clamp(v - off + d, 10, 99) + off), 10, 99);
-        var baseControl = MathUtil.Clamp(PitcherArchetypes.BaseControl(a.Archetype, a.Control, rc.Archetypes) + d, 10, 99);
+        int UpKeep(int v, double off) => (int)MathUtil.Clamp(Math.Round(MathUtil.Clamp(v - off + dp, 10, 99) + off), 10, 99);
+        var baseControl = MathUtil.Clamp(PitcherArchetypes.BaseControl(a.Archetype, a.Control, rc.Archetypes) + dp, 10, 99);
         var (_, grownControl, _, _) = PitcherArchetypes.Apply(a.Archetype, 0, baseControl, 0, 0, rc.Archetypes);
         var sl = UpKeep(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches), os);
         return r with
