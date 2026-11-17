@@ -191,3 +191,44 @@ scenarios:
     top: true
     outs: 0
     seed: 20261708
+
+  # ── 走者ありの外野ゴロを走りながら掬う（issue #1079）。最初の打席が外野前ヒットで、外野手が転がる球を捕る。
+  # 走者あり（一塁）は engine が捕りに行く移動を減速しない形（RunIn）にし、捕った後に勢いのまま運んでから投げる。
+  # 走者なしは同じシードの比較用（従来どおり捕球点で止まって捕る）。強制発動は使わず自然な解決をシードで固定。
+  # チームは呼び出し側シード 1 で組む前提（OutfieldRunThroughScenarioTests と同じ。撮影時は
+  # MatchLiveController.GameSeedOverrideForCapture = 1）。係数変更で崩れたらテストが赤くなる→ seed を選び直す。
+  - id: of-grounder-runner-lf-lab
+    name: 守備検証・走者一塁でレフトが転がる球を走りながら掬う（1回表無死一塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    seed: 20263000
+  - id: of-grounder-runner-cf-lab
+    name: 守備検証・走者一塁でセンターが転がる球を走りながら掬う（1回表無死一塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    seed: 20263013
+  - id: of-grounder-runner-rf-lab
+    name: 守備検証・走者一塁でライトが転がる球を走りながら掬う（1回表無死一塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    seed: 20263302
+  - id: of-grounder-norunner-lab
+    name: 守備検証・走者なしでレフトが転がる球を捕る（比較用・1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20263000

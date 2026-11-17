@@ -111,6 +111,21 @@ public sealed record FielderMove
     public required TimelinePoint To { get; init; }
     /// <summary>この移動の意図（打球処理/ベースカバー/中継/バックアップ）。UI表示・検証用。</summary>
     public required FielderTask Task { get; init; }
+    /// <summary>速さの付け方（表示専用。既定＝両端で加減速する台形。issue #1079）。</summary>
+    public MoveProfile Profile { get; init; } = MoveProfile.Trapezoid;
+}
+
+/// <summary>
+/// 野手の移動の速さの付け方（表示専用・判定には効かない。issue #1079）。端点の時刻・位置はどれも同じ。
+/// </summary>
+public enum MoveProfile
+{
+    /// <summary>加速→等速→減速して終点で止まる（既定）。</summary>
+    Trapezoid,
+    /// <summary>加速→等速のまま終点を通過する（走者ありで外野手がゴロを走りながら掬う）。</summary>
+    RunIn,
+    /// <summary>始点の速さ（巡航の2倍＝等減速）から終点で止まる（RunIn の後、勢いのまま運んで止まる）。</summary>
+    RunOut,
 }
 
 /// <summary>守備陣形ルール表の役割（設計書01 §2⑥）。</summary>

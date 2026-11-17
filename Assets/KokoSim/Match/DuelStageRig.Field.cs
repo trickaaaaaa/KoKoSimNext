@@ -841,7 +841,7 @@ namespace KokoSim.Unity.Match
                 if (dur < 1e-3f) continue;
                 var from = PlaybackEvaluator.FielderAt(_fieldPlay, pos, m.T0).Pos;
                 var d = new Vector2((float)(m.To.X - from.X), (float)(m.To.Y - from.Y));
-                return d.magnitude / dur / (1f - (float)PlaybackEvaluator.MoveRampFraction);
+                return d.magnitude / dur * (float)PlaybackEvaluator.PeakSpeedFactor(m.Profile);
             }
             return 0f;
         }
@@ -962,7 +962,7 @@ namespace KokoSim.Unity.Match
                     var d = new Vector2((float)(m.To.X - from.X), (float)(m.To.Y - from.Y));
                     if (d.magnitude < StartMinLegM) continue;
                     // 巡航速度＝台形プロファイルの平坦部（平均 ÷ (1−肩)）
-                    float cruise = d.magnitude / dur / (1f - (float)PlaybackEvaluator.MoveRampFraction);
+                    float cruise = d.magnitude / dur * (float)PlaybackEvaluator.PeakSpeedFactor(m.Profile);
                     if (cruise > StartMaxCruiseMps) continue;
 
                     // 向きは球の方向で決める（走りの段と同じ材料・同じ規約）
@@ -1237,6 +1237,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>捕った形を見せる据え置き[s]（打ち切りには必ず据え置きを添える＝design-18 §4.5-⑭）。</summary>
         private const float CatchHoldSeconds = 0.35f;
+        /// <summary>走りながら掬った収録を流し切った後、最後のコマで送球を待つ上限[s]（issue #1079。送球が来ればそこで替わる）。</summary>
+        private const float RunThroughEndHoldSeconds = 0.6f;
 
         /// <summary>
         /// 飛び込み・お手玉の後、収録の尻尾（着地〜起き上がり）を見せる上限[s]。
@@ -1343,6 +1345,50 @@ namespace KokoSim.Unity.Match
             return approach == CatchApproach.Back ? DiveAnchorBackJump : -1;
         }
 
+        /// <summary>
+        /// その野手が時刻 <paramref name="tc"/> に「減速せずに通過する」移動（<see cref="MoveProfile.RunIn"/>）を
+        /// 終えるか（issue #1079。engine が走者ありの外野ゴロにだけ付ける）。
+        /// </summary>
+        private static bool RunsThroughCatch(PlaybackPlay play, FieldPosition who, float tc)
+        {
+            IReadOnlyList<PlaybackMove> segs;
+            if (play?.Moves == null || !play.Moves.TryGetValue(who, out segs) || segs == null) return false;
+            foreach (var m in segs)
+                if (m.Profile == MoveProfile.RunIn && Mathf.Abs((float)m.T1 - tc) < 0.05f) return true;
+            return false;
+        }
+
+        /// <summary>走りながら掬う外野ゴロの捕球の収録の候補（issue #1079・見比べで選ぶ）。</summary>
+        public enum OutfieldRunThroughPick
+        {
+            /// <summary>現行の選び方のまま（近づき方×高さ＝前進なら Run_To_Catching_Type02）。</summary>
+            Current,
+            /// <summary>Catching_TypeF（低く構えて前へ踏み込みながら捕り、そのまま前へ出る）。</summary>
+            TypeF,
+            /// <summary>Run_To_Catching_Type02（走ってきて低く捕る。捕る瞬間はほぼ止まる）。</summary>
+            RunToType02,
+        }
+
+#if UNITY_EDITOR
+        /// <summary>スクショ用（issue #1079 の見比べ）: 走りながら掬う外野ゴロの収録。</summary>
+        public static OutfieldRunThroughPick OutfieldRunThroughPickForCapture = OutfieldRunThroughPick.TypeF;
+#endif
+
+        private static int OutfieldRunThroughAnchor(int current)
+        {
+            var pick = OutfieldRunThroughPick.TypeF;
+#if UNITY_EDITOR
+            pick = OutfieldRunThroughPickForCapture;
+#endif
+            string clip = pick == OutfieldRunThroughPick.TypeF ? "AA_Baseball_Defender_Catching_TypeF"
+                : pick == OutfieldRunThroughPick.RunToType02 ? "AA_Baseball_Defender_Movement_Run_To_Catching_Type02"
+                : null;
+            if (clip == null) return current;
+            for (int i = 0; i < FieldCatchAnchors.Length; i++)
+                if (FieldCatchAnchors[i].Clip == clip) return i;
+            return current;
+        }
+
         private static int SelectFieldCatch(float ballHeightM, CatchApproach approach)
         {
             int best = -1;
@@ -1389,6 +1435,8 @@ namespace KokoSim.Unity.Match
             /// </summary>
             public Vector2 BodyShift;
             public bool Rolling;      // 転がり（ゴロ）を捕る予定か（実測の仕分け用）
+            /// <summary>走りながら掬う外野ゴロ（issue #1079）。捕った形で止めず、収録を最後まで流して勢いのまま前へ出る。</summary>
+            public bool RunThrough;
             public float GloveErrM;   // 捕球直前のコマのミット中心→捕球点の距離[m]（実測用。未計測は −1）
             /// <summary>
             /// クリップを流さない（球の扱いだけ行う）。飛び込んだ本人が**そのまま拾う**ときに立つ。
@@ -1697,6 +1745,7 @@ namespace KokoSim.Unity.Match
                     app = CatchApproach.Still;
                 }
                 int anchor;
+                bool runThroughCatch = false;
                 if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
                 else if (kind == FieldCatchKind.Miss)
                     anchor = seg.WildThrow == WildThrowStyle.Sail ? MissAnchorJump : MissAnchorStretch;
@@ -1723,6 +1772,13 @@ namespace KokoSim.Unity.Match
                     else
                     {
                         anchor = SelectFieldCatch(h, app);
+                        // 走者ありの外野ゴロを走りながら掬う（issue #1079）。engine が捕球へ向かう移動を
+                        // 減速しない形（RunIn）にした打席だけ。走者なし・内野手・飛球は従来の選び方のまま
+                        if (!isThrow && IsOutfield(who) && RunsThroughCatch(play, who, tc))
+                        {
+                            anchor = OutfieldRunThroughAnchor(anchor);
+                            runThroughCatch = true;
+                        }
                         if (anchor < 0) continue;
                     }
                 }
@@ -1829,6 +1885,7 @@ namespace KokoSim.Unity.Match
                 {
                     BodyShift = bodyShift,
                     LineOffM = lineOff,
+                    RunThrough = runThroughCatch,
                     Rolling = !isThrow && (eb != null ? eb.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce : seg is RollSegment),
                     GloveErrM = -1f,
                     ScatterShown = scattered && (eb.ScatterIsShortHop
@@ -2038,9 +2095,13 @@ namespace KokoSim.Unity.Match
                     //    「まだ沈んでいないはずの量」だけ根が下がった状態から始まる
                     if (a.Animator != null) a.Animator.applyRootMotion = false;
                     a.RootDrivenY = false;
+                    // 走りながら掬う外野ゴロ（issue #1079）: 捕った形で止めず収録を最後まで流す＝TypeF は捕った後も
+                    // 前へ踏み出し続けるので、engine が勢いのまま運ぶ間（RunOut）に足が動く。最後のコマで送球まで待つ
+                    if (e.RunThrough) endAt = clip.length - 1e-3f;
                     SetActorClip(a, clip, t - e.TStart + e.ClipHead, endAt);
                     a.Speed = 1f;                       // 走りの倍率を持ち越さない
-                    a.HoldSeconds = cutOnMiss ? MissHoldSeconds : CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
+                    a.HoldSeconds = cutOnMiss ? MissHoldSeconds
+                        : e.RunThrough ? RunThroughEndHoldSeconds : CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
                     FielderMotion st;
                     if (_loco.TryGetValue(e.Pos, out st))
                     {
@@ -2052,7 +2113,9 @@ namespace KokoSim.Unity.Match
                         // （打ち切りには必ず据え置きを添える＝design-18 §4.5-⑬⑭ と同じ失敗）。
                         // 落球（issue #813）も捕球の収録なので、尻尾まで流すと「捕った形」で立ち続ける＝短く切る
                         // 届かなかった芝居は着地で打ち切って短く据え置く（issue #1075 追記3）
-                        st.CatchUntil = e.TCatch + CatchTailSeconds(e.Kind, anchor);
+                        st.CatchUntil = e.TCatch + (e.RunThrough
+                            ? clip.length - anchor.Moment + RunThroughEndHoldSeconds
+                            : CatchTailSeconds(e.Kind, anchor));
                         st.CatchEvent = i;
                         // **グラブが球の来る方を向くように体を回す**。走る向きを速度ベクトルへ
                         // 合わせたのと同じ考え方で、今度は合わせる対象がグラブになる。

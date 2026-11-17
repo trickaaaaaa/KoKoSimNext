@@ -2266,9 +2266,12 @@ public static class GameEngine
                     foreach (var leg in timeline.Runners)
                         if (leg.Label == returnTo.AnchorLabel && leg.T1 > runnerArrive) runnerArrive = leg.T1;
                     // 中継しきい値は肩連動（issue #526）＝判定と同じ係数を渡して絵と食い違わせない
+                    // 走者ありで外野手が転がる球を捕る打席は走りながら掬う（issue #1079・表示専用。塁上の走者＝打者走者以外）。
+                    // 捕る瞬間に球が転がっているかは AppendOutfieldReturnThrow が球の区間で見る（外野前で弾んだライナーも含む）
+                    var runThrough = runnerMoves.Any(m => m.FromBase > 0);
                     timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
                         timeline, ofHit, ctx.Field, returnTo.BaseName, runnerArrive, ctx.Fielding, paBaserunning,
-                        returnTo.RunnerOut);
+                        returnTo.RunnerOut, runThrough);
                     // 刺した送球が「間ゼロ」でも走者より遅れて着く分は、走者を送球の到達へ揃える（issue #801・#685 と同じ）。
                     if (returnTo.RunnerOut)
                         timeline = Match.Timeline.TimelineBuilder.AlignTaggedRunnerToThrow(

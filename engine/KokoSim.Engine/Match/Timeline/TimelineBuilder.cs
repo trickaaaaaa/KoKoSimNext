@@ -3543,10 +3543,15 @@ public static class TimelineBuilder
     /// 狙う塁で走者が憤死したか（issue #627）。<see cref="GuardAgainstVerdict"/> の向きが真逆になる
     /// ＝アウトなら送球は走者より**先に**着かねばならない。既定 false（セーフ）。
     /// </param>
+    /// <param name="runThrough">
+    /// 走者ありで外野手がゴロを捕る打席（issue #1079・オーナー決定）。処理野手は捕球点で止まらず走りながら掬い、
+    /// 握り替えの間に勢いのまま運んで止まり、そこから投げる（<see cref="ApplyOutfieldRunThrough"/>）。
+    /// 捕球・返球の到達の時刻は変えない＝判定・帯は不変。既定 false（従来どおり捕球点で止まって投げる）。
+    /// </param>
     public static PlayTimeline AppendOutfieldReturnThrow(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, string leadBaseName, double runnerArriveAnchor,
         FieldingCoefficients? coefficients = null, Game.BaserunningCoefficients? baserunning = null,
-        bool runnerOut = false)
+        bool runnerOut = false, bool runThrough = false)
     {
         // 外野へ抜けた打球のみ（バウンド抜けを含む, Issue #63）。ただし走者を刺した送球は着地の浅い打球
         // （外野手の前に落ちたライナー）でも実在する＝必ず描く（issue #801）。
@@ -3590,13 +3595,112 @@ public static class TimelineBuilder
         var arrive = GuardAgainstVerdict(
             physicalArrive, readyAt + leg1 + leg2, runnerArriveAnchor, runnerOut);
 
+        // 走りながら掬う（issue #1079）: 送球の起点だけが「運んで止まった点」へ移る。時刻（readyAt・arrive）は不変
+        var throwFrom = fieldPoint;
+        if (runThrough && play.FielderRole is { } runner && FieldedOnTheGround(timeline, fieldedAt)
+            && ApplyOutfieldRunThrough(timeline, runner, fieldPoint, fieldedAt, readyAt) is { } rt)
+        {
+            timeline = rt.Timeline;
+            throwFrom = rt.ThrowFrom;
+        }
+
         var ball = new List<BallSegment>(timeline.Ball);
-        AddThrowChain(ball, fieldPoint, target, cutoff, readyAt, arrive, leg1, leg2,
+        AddThrowChain(ball, throwFrom, target, cutoff, readyAt, arrive, leg1, leg2,
             play.FielderRole, FindCutoffFielderRole(timeline),
             CoverRoleAt(timeline, target, DefaultBaseGuard(leadBaseName)), leadBaseName);
 
         var duration = Math.Max(timeline.Duration, arrive + 1.0);
         return timeline with { Ball = ball, Duration = duration };
+    }
+
+    /// <summary>捕る瞬間の球が地面を転がって（弾んで）いるか＝捕球時刻に終わる球の区間がゴロ・バウンド（issue #1079）。
+    /// 外野前で弾んだライナーも含む（engine では飛球だが、外野手が掬うのは転がる球）。</summary>
+    private static bool FieldedOnTheGround(PlayTimeline timeline, double fieldedAt)
+    {
+        foreach (var b in timeline.Ball)
+            if (Math.Abs(b.T1 - fieldedAt) < 0.02)
+                return b.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce;
+        return false;
+    }
+
+    /// <summary>走りながら掬う絵にする最短の捕りに行く距離[m]（これより近い＝ほぼ定位置で待つ打球は従来どおり止まる）。</summary>
+    private const double RunThroughMinLegM = 3.0;
+    /// <summary>走りながら掬う絵にする最低の速さ[m/s]（捕球の瞬間の速さ。これ未満は歩いているのと同じ＝止まる）。</summary>
+    private const double RunThroughMinSpeedMps = 3.0;
+    /// <summary>捕った後に勢いのまま運ぶ距離の上限[m]（握り替えが長い＝守備の低い野手で運びすぎないため）。</summary>
+    private const double RunThroughMaxCarryM = 4.0;
+
+    /// <summary>
+    /// 走者ありの外野ゴロを「走りながら掬う」移動にする（issue #1079・オーナー決定＝engine の再生モデルで持つ）。
+    /// 表示専用・乱数不使用の純関数。
+    ///
+    /// <para>処理野手の捕球点へ向かう移動（終点＝捕球点・終わり＝捕球時刻）を <see cref="MoveProfile.RunIn"/>
+    /// （減速しないで通過）にし、捕球〜握り替えの終わり（＝投げ始め）を <see cref="MoveProfile.RunOut"/>
+    /// （捕球の瞬間の速さから等減速して止まる）で同じ向きへ運ぶ。運ぶ距離＝捕球の瞬間の速さ×握り替えの秒÷2
+    /// （等減速の距離）なので、捕球の前後で速さが途切れない。捕球の時刻・位置、送球の投げ始めと到達の時刻は
+    /// どれも変えない（判定は不変）。送球の起点だけが運んで止まった点になる。</para>
+    ///
+    /// 当てはまらない（捕りに行く移動が見つからない・近すぎる・遅すぎる・握り替えが無い）ときは null。
+    /// </summary>
+    public static (PlayTimeline Timeline, TimelinePoint ThrowFrom)? ApplyOutfieldRunThrough(
+        PlayTimeline timeline, FieldPosition role, TimelinePoint fieldPoint, double fieldedAt, double releaseAt)
+    {
+        var hold = releaseAt - fieldedAt;
+        if (hold <= 0.05) return null;
+
+        var moves = timeline.Moves;
+        int idx = -1;
+        for (var i = 0; i < moves.Count; i++)
+        {
+            var m = moves[i];
+            if (m.Role != role || m.Task != FielderTask.FieldBall) continue;
+            if (Math.Abs(m.T1 - fieldedAt) > 0.02 || Distance(m.To, fieldPoint) > 0.05) continue;
+            idx = i;
+        }
+        if (idx < 0) return null;
+
+        // 捕りに行く移動の始点＝それより前の同じ野手の移動の終点（無ければ守備開始位置）
+        var leg = moves[idx];
+        TimelinePoint? from = null;
+        double fromT1 = double.NegativeInfinity;
+        for (var i = 0; i < moves.Count; i++)
+        {
+            var m = moves[i];
+            if (i == idx || m.Role != role || m.T1 > leg.T0 + 1e-9 || m.T1 < fromT1) continue;
+            from = m.To;
+            fromT1 = m.T1;
+        }
+        if (from is null && timeline.FielderStarts is { } starts && starts.TryGetValue(role, out var s)) from = s;
+        if (from is not { } start) return null;
+
+        var dist = Distance(start, fieldPoint);
+        var dur = leg.T1 - leg.T0;
+        if (dist < RunThroughMinLegM || dur <= 0.05) return null;
+        var speed = dist / dur * Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.RunIn);
+        if (speed < RunThroughMinSpeedMps) return null;
+
+        var carry = Math.Min(RunThroughMaxCarryM, speed * hold / 2);
+        var dirX = (fieldPoint.X - start.X) / dist;
+        var dirZ = (fieldPoint.Z - start.Z) / dist;
+        var carryTo = new TimelinePoint(fieldPoint.X + dirX * carry, fieldPoint.Z + dirZ * carry);
+        // 上限で切った運び（carry < speed*hold/2）は等減速の秒も縮める＝始点の速さを捕球の瞬間の速さに揃える
+        var carryEnd = fieldedAt + Math.Min(hold, 2 * carry / speed);
+        // 同じ野手が運ぶ間に別の移動を持っているなら触らない（移動が重なると FielderAt の進みが混ざる）
+        for (var i = 0; i < moves.Count; i++)
+            if (i != idx && moves[i].Role == role && moves[i].T0 < carryEnd && moves[i].T1 > fieldedAt) return null;
+
+        var newMoves = new List<FielderMove>(moves.Count + 1);
+        for (var i = 0; i < moves.Count; i++)
+        {
+            newMoves.Add(i == idx ? moves[i] with { Profile = MoveProfile.RunIn } : moves[i]);
+            if (i == idx)
+                newMoves.Add(new FielderMove
+                {
+                    Role = role, T0 = fieldedAt, T1 = carryEnd, To = carryTo,
+                    Task = FielderTask.FieldBall, Profile = MoveProfile.RunOut,
+                });
+        }
+        return (timeline with { Moves = newMoves }, carryTo);
     }
 
     /// <summary>
