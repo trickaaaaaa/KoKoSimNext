@@ -141,9 +141,9 @@ public sealed class TournamentHistoryTests
     {
         var history = new TournamentHistory();
         var e = history.Fold(LostInThirdRound(), TournamentKind.Summer, year: 1,
-            ManagerId, new TournamentChampion(20, "弘学学園"), prefectureId: 14); // 神奈川
+            ManagerId, new TournamentChampion(20, "弘学学園"), prefectureId: 13); // 神奈川
 
-        Assert.Equal(14, e.PrefectureId);
+        Assert.Equal(13, e.PrefectureId);
     }
 
     /// <summary>省略時（旧い呼び出し互換）は 0＝不明。表示側がいまの本拠県へフォールバックする契約。</summary>

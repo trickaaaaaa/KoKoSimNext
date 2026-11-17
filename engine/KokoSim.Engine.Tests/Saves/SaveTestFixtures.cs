@@ -247,13 +247,13 @@ internal static class SaveTestFixtures
         var history = new TournamentHistory();
         history.Add(new TournamentHistoryEntry(
             Year: 1, Kind: TournamentKind.Summer, ReachedRoundName: "3回戦",
-            ManagerIsChampion: false, ChampionId: 220, ChampionName: "弘学学園", PrefectureId: 13)); // 東京
+            ManagerIsChampion: false, ChampionId: 220, ChampionName: "弘学学園", PrefectureId: 12)); // 東京
         history.Add(new TournamentHistoryEntry(
             Year: 1, Kind: TournamentKind.Autumn, ReachedRoundName: "決勝",
-            ManagerIsChampion: true, ChampionId: 100, ChampionName: "北嶺", PrefectureId: 13));
+            ManagerIsChampion: true, ChampionId: 100, ChampionName: "北嶺", PrefectureId: 12));
         history.Add(new TournamentHistoryEntry(
             Year: 2, Kind: TournamentKind.Summer, ReachedRoundName: "準々決勝",
-            ManagerIsChampion: false, ChampionId: 0, ChampionName: "", PrefectureId: 14)); // 神奈川へ転任後
+            ManagerIsChampion: false, ChampionId: 0, ChampionName: "", PrefectureId: 13)); // 神奈川へ転任後
         return history;
     }
 
