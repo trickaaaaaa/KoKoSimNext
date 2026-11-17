@@ -54,6 +54,13 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static bool FieldChoosable => ScoutMilestones.CanChooseField(Current, GameClock.YearIndex);
 
+        /// <summary>
+        /// 候補リストを待っている時期か（契約済みで、夏の大会の頃〜第24週の前）。スカウト画面はこの間、
+        /// 入部済みの1年生でなく「リストは10月に届く」を出す（issue #1064）。
+        /// </summary>
+        public static bool AwaitingList
+            => ScoutMilestones.AwaitingList(Calendar, GameClock.Week, GameClock.YearIndex, Slots, Current);
+
         /// <summary>解禁されている枠数（スカウト網の契約段から。0＝スカウトできない）。</summary>
         public static int Slots => ManagerService.ContractEffects.ScoutSlots;
 
@@ -118,13 +125,17 @@ namespace KokoSim.Unity.Shell
 
         private static bool _landOnCandidates;
 
-        /// <summary>新チーム発足の流れ（引退→主将指名→背番号決定）が終わった直後に呼ぶ。分野選びの会話を積む。</summary>
+        /// <summary>
+        /// 新チーム発足の流れ（引退→主将指名→背番号決定）が終わった直後に呼ぶ。スカウトの一年の入口の会話
+        /// （①スカウト網の契約 → ②探す分野・<see cref="ScoutPitchService"/>）を積む。未契約の学校にも聞く（issue #1064）。
+        /// 会話の中で決めて終わる＝読み終えてもスカウト画面へは移らない。
+        /// </summary>
         public static void RaiseAfterNewTeamStarted()
         {
-            var m = ScoutMilestones.AfterNewTeamStarted(Calendar, GameClock.Week, GameClock.YearIndex, Slots, Current);
+            var m = ScoutMilestones.AfterNewTeamStarted(Calendar, GameClock.Week, GameClock.YearIndex, Current);
             if (m == ScoutMilestone.None) return;
             SelectedField = ScoutField.Omakase;   // 選ばずに閉じたらお任せ（前年の選択を引きずらない）
-            Raise(m);
+            ScoutPitchService.Raise();
         }
 
         /// <summary>週に入った直後（候補リスト生成の後）に呼ぶ。リスト到着・念押しの会話を積む。</summary>
@@ -141,7 +152,7 @@ namespace KokoSim.Unity.Shell
             if (id == null || EventService.Scheduler.Find(id) == null) return;
             EventService.PushMilestone(id);
             NavigatePending = true;
-            _landOnCandidates = m != ScoutMilestone.ChooseField;
+            _landOnCandidates = true;
         }
 
         /// <summary>待ちを下ろして、スカウト画面へ移ってよいか返す（ホームが会話を読み終えたとき呼ぶ）。</summary>

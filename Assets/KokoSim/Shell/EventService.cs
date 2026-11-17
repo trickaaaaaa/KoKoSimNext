@@ -85,11 +85,28 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public IReadOnlyList<PresentedChoice> Choices;
 
+        /// <summary>
+        /// 値つきの選択肢（スカウトの契約・分野など、監督の対応（<see cref="Choices"/>）でないもの。issue #1064）。
+        /// 選ばれたら <see cref="OnMenuPick"/> が呼ばれ、結果の会話を <see cref="Lines"/> の後ろへ足して、
+        /// 続けて聞くことがあれば <see cref="Menu"/> を差し替える（無ければ null）。
+        /// </summary>
+        public IReadOnlyList<PresentedMenuItem> Menu;
+
+        /// <summary><see cref="Menu"/> の選択を受ける処理（引数＝選んだ項目の <see cref="PresentedMenuItem.Value"/>）。</summary>
+        internal System.Action<PresentedEvent, int> OnMenuPick;
+
         /// <summary>選択肢を出す段か（まだ選んでいない）。</summary>
-        public bool AwaitingChoice => Choices != null && Choices.Count > 0;
+        public bool AwaitingChoice => (Choices != null && Choices.Count > 0) || (Menu != null && Menu.Count > 0);
 
         /// <summary>発火時に確定させた抽選の材料（選ぶまで画面には出さない）。</summary>
         internal PendingChoice Pending;
+    }
+
+    /// <summary>値つきの選択肢1つ（<see cref="PresentedEvent.Menu"/>）。</summary>
+    public sealed class PresentedMenuItem
+    {
+        public int Value;
+        public string Label;
     }
 
     /// <summary>選択肢1つ（画面に出す言い回しと、engine の対応）。</summary>
@@ -243,6 +260,17 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void PushUncapped(string eventId, string subjectName, PresentedEffect effect, int salt = 0)
             => Push(eventId, subjectName, effect, salt, null, capped: false);
+
+        /// <summary>組み立て済みの会話を、週の件数上限を通さずにキューへ積む（スカウトの入口など・issue #1064）。</summary>
+        internal static void PushPresented(PresentedEvent e) => _pending.Add(e);
+
+        /// <summary>値つきの選択肢を選んだ（<see cref="PresentedEvent.Menu"/>）。選択肢が無い・二重の呼び出しは何もしない。</summary>
+        public static bool PickMenu(PresentedEvent e, int value)
+        {
+            if (e == null || e.Menu == null || e.Menu.Count == 0 || e.OnMenuPick == null) return false;
+            e.OnMenuPick(e, value);
+            return true;
+        }
 
         /// <summary>未提示のキューに指定条件のイベントが残っているか（導線の順序判定用・issue #954）。</summary>
         public static bool HasPendingWhere(System.Func<string, bool> idMatches)
@@ -452,7 +480,7 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>会話の末尾に結果行を1本足す（結果が無ければそのまま）。</summary>
-        private static IReadOnlyList<PresentedLine> WithResult(IReadOnlyList<PresentedLine> lines, PresentedEffect effect)
+        internal static IReadOnlyList<PresentedLine> WithResult(IReadOnlyList<PresentedLine> lines, PresentedEffect effect)
         {
             if (effect == null || !effect.HasSentence) return lines;
             var list = new List<PresentedLine>(lines.Count + 1);
@@ -508,7 +536,7 @@ namespace KokoSim.Unity.Shell
         /// <b>大会日を混ぜる</b>のは、大会中は <see cref="GameClock.Week"/> が進まず
         /// <see cref="GameSession.TournamentDay"/> だけが進むため（混ぜないと大会をまたぐ週が同じ抽選を引く）。
         /// </summary>
-        private static IRandomSource Rng()
+        internal static IRandomSource Rng()
         {
             var day = GameSession.Current.TournamentDay;
             var key = EventStream ^ ((ulong)day << 40) ^ (ulong)(GameClock.YearIndex * 100 + GameClock.Week);
@@ -519,7 +547,7 @@ namespace KokoSim.Unity.Shell
         /// 差し込み語の値。<b>未知の語はここに入れない</b>＝<c>{key}</c> のまま画面に残り、
         /// data/events.yaml の書き間違いが絵で分かる（<see cref="EventTextFormat"/>）。
         /// </summary>
-        private static Dictionary<string, string> BuildValues()
+        internal static Dictionary<string, string> BuildValues()
         {
             return new Dictionary<string, string>
             {
@@ -566,7 +594,7 @@ namespace KokoSim.Unity.Shell
             return n;
         }
 
-        private static IReadOnlyList<PresentedLine> ResolveLines(
+        internal static IReadOnlyList<PresentedLine> ResolveLines(
             EventScript script, Dictionary<string, string> values)
         {
             var lines = new List<PresentedLine>(script.Lines.Count);

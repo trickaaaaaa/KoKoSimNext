@@ -45,6 +45,14 @@ namespace KokoSim.Unity.Management
         public string ActionLabel = "購入";
         /// <summary>解約ボタンを出すか（年契約で1段以上契約中のときだけ）。</summary>
         public bool CanCancel;
+
+        /// <summary>
+        /// この画面では変えられない年契約か（スカウト網＝夏の大会後の会話でだけ決める・issue #1064）。
+        /// 段と年額を見せるだけで、<see cref="NextCost"/> は null・操作ボタンは出さない。
+        /// </summary>
+        public bool Locked;
+        /// <summary>いまの段の年額[万円]（<see cref="Locked"/> の行が費用の欄に出す）。</summary>
+        public double CurrentCost;
     }
 
     /// <summary>経営画面に表示する一式（スナップショット）。</summary>
@@ -201,6 +209,15 @@ namespace KokoSim.Unity.Management
                 ActionLabel = lv == 0 ? "契約" : "上げる",
             };
 
+            // スカウト網は見るだけ。変えられるのは夏の大会後のスカウトとの会話だけ（issue #1064）。
+            if (def.Id == ScoutPitch.ContractId)
+            {
+                row.Locked = true;
+                row.CanCancel = false;
+                row.CurrentCost = def.Tiers[lv].AnnualCost;
+                return row;
+            }
+
             if (lv < def.MaxLevel)
             {
                 var next = def.Tiers[lv + 1];
@@ -234,6 +251,13 @@ namespace KokoSim.Unity.Management
                 return;
             }
 
+            if (contractId == ScoutPitch.ContractId)
+            {
+                _status = def.Name + " は夏の大会後のスカウトとの会話で決める";
+                _statusWarn = true;
+                return;
+            }
+
             var set = ManagerService.Contracts;
             var lv = System.Math.Clamp(set.LevelOf(contractId), 0, def.MaxLevel);
             if (lv >= def.MaxLevel)
@@ -253,7 +277,7 @@ namespace KokoSim.Unity.Management
         public void Cancel(string contractId)
         {
             var def = ManagerService.ContractList.Find(contractId);
-            if (def == null) return;
+            if (def == null || contractId == ScoutPitch.ContractId) return;
             ManagerService.Contracts.SetLevel(contractId, 0);
             _status = def.Name + " を解約しました";
             _statusWarn = false;

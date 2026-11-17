@@ -115,6 +115,20 @@ namespace KokoSim.Unity.Home
             Advance();
         }
 
+        /// <summary>
+        /// 値つきの選択肢を選んだ（スカウトの契約・分野。issue #1064）。選んだ内容の結果の会話が足されるので、
+        /// 対応の選択（<see cref="Choose"/>）と同じく次の行（足された会話の頭）へ進む。
+        /// 続けて聞くことがあれば、足された会話の最後の行で次の選択肢が開く。
+        /// </summary>
+        private void ChooseMenu(int value)
+        {
+            if (_event == null || !_event.AwaitingChoice) return;
+            if (!EventService.PickMenu(_event, value)) return;
+            _line++;
+            if (_line < _event.Lines.Count) { RenderLine(); return; }
+            Advance();
+        }
+
         private void RenderChoices()
         {
             if (_choices == null) return;
@@ -122,6 +136,15 @@ namespace KokoSim.Unity.Home
             var open = ShowingChoices;
             _choices.EnableInClassList("ev__choices--open", open);
             if (!open) return;
+            if (_event.Menu != null && _event.Menu.Count > 0)
+            {
+                foreach (var item in _event.Menu)
+                {
+                    var value = item.Value;
+                    _choices.Add(UiComponents.ChoiceButton(item.Label, () => ChooseMenu(value)));
+                }
+                return;
+            }
             foreach (var c in _event.Choices)
             {
                 var stance = c.Stance;

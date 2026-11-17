@@ -149,6 +149,8 @@ events:
             "insight_growth_type",
             // スカウトの節目（issue #1035）。IDは ScoutMilestones の定数で引く。
             ScoutMilestones.ChooseFieldEventId, ScoutMilestones.ListArrivedEventId, ScoutMilestones.DeadlineEventId,
+            // スカウトの一年の入口（issue #1064）。契約→分野の会話。IDは ScoutPitch の定数で引く。
+            ScoutPitch.OfferEventId, ScoutPitch.DeclinedEventId, ScoutPitch.FieldAskEventId, ScoutPitch.FieldDoneEventId,
             // 年契約の更新（issue #1034）。IDは ContractRenewal の定数で引く。
             KokoSim.Engine.Career.ContractRenewal.EventId,
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
@@ -246,6 +248,31 @@ events:
             var e = events.Single(x => x.Id == ScoutMilestones.EventId(m));
             Assert.Equal(EventKind.System, e.Kind);
             Assert.All(e.Variants, v => Assert.Contains(v.Lines, l => l.Who == EventRoles.Scout));
+        }
+    }
+
+    /// <summary>
+    /// スカウトの一年の入口の会話（issue #1064）は週次抽選に載らない System で、スカウトが話す。
+    /// 選ぶのは監督だが台詞は持たない（選択肢は ScoutPitch が持ち、ここは会話だけ）。
+    /// </summary>
+    [Fact]
+    public void ScoutPitchEvents_AreSystemKind_ScoutSpeaks_ManagerSilent()
+    {
+        var events = RepositoryEvents();
+        foreach (var id in new[]
+                 {
+                     ScoutMilestones.ChooseFieldEventId, ScoutPitch.OfferEventId, ScoutPitch.DeclinedEventId,
+                     ScoutPitch.FieldAskEventId, ScoutPitch.FieldDoneEventId,
+                 })
+        {
+            var e = events.Single(x => x.Id == id);
+            Assert.Equal(EventKind.System, e.Kind);
+            Assert.False(e.HasChoices);
+            Assert.All(e.Variants, v =>
+            {
+                Assert.Contains(v.Lines, l => l.Who == EventRoles.Scout);
+                Assert.DoesNotContain(v.Lines, l => l.Who == EventRoles.Manager);
+            });
         }
     }
 

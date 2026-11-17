@@ -1056,24 +1056,89 @@ events:
             say: "……三人目ですね、今週。"
 
   # スカウトの節目（issue #1035）。操作が要る場面を見落とさせないための強制イベント。
-  # 出すかどうかと週は ScoutMilestones（engine）が1箇所で決める。会話の後はスカウト画面へ移る。
-  # IDは ScoutMilestones の定数と一致させる（EventTableTests が固定）。
+  # 出すかどうかと週は ScoutMilestones（engine）が1箇所で決める。
+  # IDは ScoutMilestones / ScoutPitch の定数と一致させる（EventTableTests が固定）。
+  #
+  # スカウトの一年の入口（issue #1064）。夏の大会後に、会話の中で①スカウト網の契約 → ②探す分野、の順に選ぶ。
+  # 選択肢（契約の段・分野）は ScoutPitch（engine）が持ち、ここには会話だけを書く。画面は移らない。
+  # 監督には台詞を持たせない（選ぶだけ）。
+  # scout_choose_field＝契約済みの学校への入口（契約を続けるか）／scout_contract_offer＝未契約の学校への入口。
   - id: scout_choose_field
+    kind: System
+    text: "スカウトが、今年の契約を聞きに来た。"
+    variants:
+      - lines:
+          - who: scout
+            say: "監督、今年もうちに任せてもらえます？ 去年の領収書は、見ないでおきましょう。"
+          - who: team_manager
+            say: "見てください。部費の話です。"
+      - lines:
+          - who: narration
+            say: "スカウトが、ぶ厚い手帳を机に広げた。ページの半分は、去年の言い訳だった。"
+          - who: scout
+            say: "今年こそ当てます。……その前に、契約はどうします？ 続けるなら、段も選べます。"
+      - lines:
+          - who: scout
+            say: "夏も終わりましたし、そろそろ今年の話をしましょう。まずは契約からです。"
+          - who: team_manager
+            say: "お金の話を、いちばん最初にするんですね。"
+          - who: scout
+            say: "大事なことは、先に言っておく主義です。"
+
+  - id: scout_contract_offer
+    kind: System
+    text: "スカウトが、契約の相談に来た。"
+    variants:
+      - lines:
+          - who: scout
+            say: "監督、うちもそろそろスカウトを雇いませんか。いい子は、待っていても来てくれません。"
+          - who: team_manager
+            say: "営業トークが、急に上手くなりましたね。"
+      - lines:
+          - who: narration
+            say: "スカウトが、知らない中学校の名前でびっしり埋まった手帳を机に置いた。"
+          - who: scout
+            say: "契約してもらえたら、ここを回ります。契約しませんか。"
+      - lines:
+          - who: scout
+            say: "今年こそ、スカウトを付けませんか。段は選べます。安い順に、足も短くなりますけど。"
+          - who: team_manager
+            say: "足の長さで、値段が決まるんですね。"
+
+  - id: scout_contract_declined
+    kind: System
+    text: "スカウト網は、今年は契約しないことになった。"
+    variants:
+      - lines:
+          - who: scout
+            say: "了解です。今年は、いつもどおり入ってくる子を待ちましょう。"
+          - who: team_manager
+            say: "いつもどおり、一番ありがたいやつですね。"
+      - lines:
+          - who: scout
+            say: "分かりました。リストは作りません。手帳は、しまっておきます。"
+          - who: narration
+            say: "手帳は、鞄の底へ戻っていった。"
+      - lines:
+          - who: scout
+            say: "そうですか。……来年、また聞きますからね。"
+          - who: team_manager
+            say: "しつこいですね。"
+
+  - id: scout_field_ask
     kind: System
     text: "スカウトが、探す分野を聞きに来た。"
     variants:
       - lines:
           - who: scout
-            say: "監督、今年はどんな子を探しましょう。投球でも、打撃でも、足でも。"
-          - who: manager
-            say: "うちに足りない所から頼む。"
+            say: "契約、ありがとうございます。どんな子を探しましょう。投球でも、打撃でも、足でも。"
+          - who: team_manager
+            say: "うちに足りない所から、でいいんじゃないでしょうか。"
           - who: scout
             say: "それが分かれば、苦労しないんですけどね。"
       - lines:
-          - who: narration
-            say: "スカウトが、ぶ厚い手帳を机に広げた。ページの半分は、去年の言い訳だった。"
           - who: scout
-            say: "今年こそ当てます。まず、どの分野を中心に見るか決めてください。"
+            say: "では、どの分野を中心に見るか決めてください。"
           - who: team_manager
             say: "決めないと、全部見ることになります。つまり、全部が浅くなります。"
       - lines:
@@ -1083,6 +1148,24 @@ events:
             say: "おまかせって、スカウトさんの好みですよね。"
           - who: scout
             say: "……否定はしません。"
+
+  - id: scout_field_done
+    kind: System
+    text: "スカウトが、10月にリストを持ってくることになった。"
+    variants:
+      - lines:
+          - who: scout
+            say: "承知しました。10月にリストを持ってきます。それまでは、足で稼ぎます。"
+      - lines:
+          - who: scout
+            say: "では、10月に。リストは、封筒に入れて持ってきます。"
+          - who: team_manager
+            say: "封筒じゃなくても、いいですよ。"
+      - lines:
+          - who: scout
+            say: "10月です。10月には、リストをお見せします。……たぶん。"
+          - who: team_manager
+            say: "たぶん、ですか。"
 
   - id: scout_list_arrived
     kind: System

@@ -193,7 +193,7 @@ namespace KokoSim.Unity.Scout
             var slots = ScoutService.Slots;
             if (slots <= 0)
             {
-                v.SlotWord = "スカウト枠 なし（経営でスカウト網を契約）";
+                v.SlotWord = "スカウト枠 なし（スカウト網は夏の大会後に決める）";
             }
             else
             {
@@ -206,6 +206,12 @@ namespace KokoSim.Unity.Scout
             v.CanChooseField = ScoutService.FieldChoosable;
             var idx = System.Array.IndexOf(FieldValues, ScoutService.SelectedField);
             v.FieldIndex = idx < 0 ? 0 : idx;
+        }
+
+        private string ListMonthWord()
+        {
+            var (month, _, _) = _calendar.DateOf(_calendar.RecruitListWeek);
+            return month + "月";
         }
 
         private string ConfirmMonthWord()
@@ -223,8 +229,11 @@ namespace KokoSim.Unity.Scout
             if (state == null || state.Candidates.Count == 0)
             {
                 v.ListSub = "未着";
-                v.EmptyText = "スカウト候補は秋（10月）に届く（あと " + WeeksUntilCandidates() + " 週）。\n"
-                              + "届いたら訪問を重ね、気に入った候補を口説く。";
+                v.EmptyText = ScoutService.AwaitingList
+                    ? "候補リストは" + ListMonthWord() + "（第" + _calendar.RecruitListWeek + "週）に届く（あと "
+                      + WeeksUntilCandidates() + " 週）。\n探す分野: " + ScoutPitch.FieldLabel(ScoutService.SelectedField)
+                    : "スカウト候補は秋（10月）に届く（あと " + WeeksUntilCandidates() + " 週）。\n"
+                      + "届いたら訪問を重ね、気に入った候補を口説く。";
                 return v;
             }
 

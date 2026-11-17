@@ -202,9 +202,11 @@ namespace KokoSim.Unity.Management
             // 最大レベルの行は数字が無いので NumUnitAuto に任せる（数字を含まない文字列は
             // 分割せず1枚の Label で返る＝Oswald に無い記号を載せて豆腐にしない）。
             // 年契約は買い切りと単位が違う（毎年かかる）ので「/年」を必ず添える。
-            var costText = r.NextCost.HasValue
-                ? r.NextCost.Value.ToString("0") + (r.IsContract ? "万/年" : "万")
-                : "—";
+            var costText = r.Locked
+                ? r.CurrentCost.ToString("0") + "万/年"
+                : r.NextCost.HasValue
+                    ? r.NextCost.Value.ToString("0") + (r.IsContract ? "万/年" : "万")
+                    : "—";
             var cost = UiComponents.NumUnitAuto(costText, false, "mn-cell--cost");
             if (r.NextCost.HasValue && !r.Affordable) cost.AddToClassList("mn-cell--cost-off");
             row.Add(cost);
@@ -212,7 +214,13 @@ namespace KokoSim.Unity.Management
             var act = new VisualElement();
             act.AddToClassList("mn-cell--act");
             var id = r.Id;   // クロージャ捕捉
-            if (r.NextCost.HasValue)
+            if (r.Locked)
+            {
+                var locked = new Label("夏の大会後に決める");
+                locked.AddToClassList("mn-maxed");
+                act.Add(locked);
+            }
+            else if (r.NextCost.HasValue)
             {
                 var buy = r.IsContract
                     ? new Button(() => Sign(id)) { text = r.ActionLabel }
