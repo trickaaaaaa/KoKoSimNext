@@ -1034,6 +1034,13 @@ public static class CoefficientsLoader
         public double HomeForceMarginScale { get; set; } = D.HomeForceMarginScale;
         public double HomeForceSuccessBias { get; set; } = D.HomeForceSuccessBias;
         public double DoublePlaySelfForceRelayTransferSeconds { get; set; } = D.DoublePlaySelfForceRelayTransferSeconds;
+        // 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）
+        public double FirstForceTagSeconds { get; set; } = D.FirstForceTagSeconds;
+        public double FirstForceMarginScale { get; set; } = D.FirstForceMarginScale;
+        public double FirstForceSuccessBias { get; set; } = D.FirstForceSuccessBias;
+        public double SecondTagSeconds { get; set; } = D.SecondTagSeconds;
+        public double SecondTagMarginScale { get; set; } = D.SecondTagMarginScale;
+        public double SecondTagSuccessBias { get; set; } = D.SecondTagSuccessBias;
         // 犠飛のタッチアップ（Issue #90）
         public double TagUpMarginScale { get; set; } = D.TagUpMarginScale;
         public double TagUpSuccessBias { get; set; } = D.TagUpSuccessBias;
@@ -1205,6 +1212,12 @@ public static class CoefficientsLoader
             HomeForceMarginScale = HomeForceMarginScale,
             HomeForceSuccessBias = HomeForceSuccessBias,
             DoublePlaySelfForceRelayTransferSeconds = DoublePlaySelfForceRelayTransferSeconds,
+            FirstForceTagSeconds = FirstForceTagSeconds,
+            FirstForceMarginScale = FirstForceMarginScale,
+            FirstForceSuccessBias = FirstForceSuccessBias,
+            SecondTagSeconds = SecondTagSeconds,
+            SecondTagMarginScale = SecondTagMarginScale,
+            SecondTagSuccessBias = SecondTagSuccessBias,
             TagUpMarginScale = TagUpMarginScale,
             TagUpSuccessBias = TagUpSuccessBias,
             TagUpThirdSuccessBias = TagUpThirdSuccessBias,

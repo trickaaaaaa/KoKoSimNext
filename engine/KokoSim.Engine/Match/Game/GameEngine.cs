@@ -2102,11 +2102,15 @@ public static class GameEngine
                     // で除外していたため、野選が「打者も一塁アウト＝併殺成立」に誤って見えていた）。
                     var hasForceAtSecond = false;
                     RunnerMove? selfForceLead = null;
+                    RunnerMove? firstBaseSelfForceTag = null;
                     var forceOnlyDraw = false;   // 先の走者を封殺するだけ＝一塁へ転送しない（issue #797）
                     foreach (var m in runnerMoves)
                     {
-                        if (m.Out && m.FromBase == 1 && m.ToBase == 2) hasForceAtSecond = true;
+                        // Force が立つのが標準の二塁封殺ルートのみ（issue 3-6-tag-double-play の二塁タッチは
+                        // 同じ FromBase=1/ToBase=2 でも Force=false）＝下の判定に Force を要求して区別する。
+                        if (m.Out && m.FromBase == 1 && m.ToBase == 2 && m.Force) hasForceAtSecond = true;
                         else if (m.SelfForceDoublePlayLead) selfForceLead = m;
+                        else if (m.FirstBaseSelfForceTag) firstBaseSelfForceTag = m;
                         if (m.ForceOnly) forceOnlyDraw = true;
                     }
                     if (hasForceAtSecond && res.Play is { IsFly: false } dpPlay)
@@ -2160,6 +2164,20 @@ public static class GameEngine
                         timeline = Match.Timeline.TimelineBuilder.AppendSelfForceDoublePlayThrows(
                             timeline, sfPlay, ctx.Field, batterArrive, sfl.ToBase, ctx.Baserunning,
                             batterOut: !batterSafeOnFc, relayToFirst: !forceOnlyDraw);
+                    }
+                    // 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）:
+                    // 一塁手が自打球を自分で一塁へ運んでフォース（送球なし）→二塁へ送球して一塁走者にタッチ。
+                    // 上の二塁封殺(hasForceAtSecond)・三塁/本塁の自己フォース(selfForceLead)とは互いに排他
+                    // （BaserunningModel.ResolveDoublePlay がどちらか一方の経路しか選ばないため）。
+                    else if (firstBaseSelfForceTag is { } fbt && res.Play is { IsFly: false } fbtPlay)
+                    {
+                        var batterArrive = timeline.Duration;
+                        foreach (var leg in timeline.Runners)
+                        {
+                            if (leg.Label == "打") { batterArrive = leg.T1; break; }
+                        }
+                        timeline = Match.Timeline.TimelineBuilder.AppendFirstBaseSelfForceTagThrows(
+                            timeline, fbtPlay, ctx.Field, batterArrive, ctx.Baserunning, runnerOut: fbt.Out);
                     }
 
                     // 飛び出しの勝負（フライ捕球→一塁走者が戻る vs 戻し送球）: 戻し送球を描く
