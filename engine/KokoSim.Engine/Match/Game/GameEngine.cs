@@ -555,6 +555,14 @@ public static class GameEngine
         // イニング頭は投手が落ち着いて入り直す（動揺はイニングを跨がない）。
         defense.ClearRattled();
 
+        // 守備に就く半回の頭の継投（issue #1052・2026-11-17 ユーザー確認）。3アウト直後には継投を判断せず
+        // （MaybeChangePitcher の outs>=3 は素通り）、ここ＝最初の打者を迎える前・この半回の乱数を引く前で判断する。
+        // ①攻撃中に投手へ代打を送っていたら、その代打がそのまま投手に就く（投手不在のまま半回を始めない）。
+        // ②続けて継投判断（回の頭から新しい投手）。チーム最初の守備（1回）は先発の頭なので判断しない。
+        if (defense.TakeMoundFromPinchHitter()) p.RecordPitchingChange(defense, isTop);
+        if (inning > 1)
+            MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf: 0, outs: 0, halfHead: true);
+
         // タイブレーク（設計書09 §7）: 無死一・二塁＋前打席からの継続打順で開始。
         var tieBreak = ctx.TieBreakEnabled && inning >= ctx.TieBreakStartInning;
         if (tieBreak)
@@ -2595,11 +2603,14 @@ public static class GameEngine
     /// に委ね（Standard＝従来の疲労球数トリガーそのまま／AI＝高度トリガー＋三層を被せる）、無指示（Brain=null）なら
     /// 従来の engine 直判定を完全に踏襲する（＝帯不変）。判断RNGは専用Forkストリームで引くため試合結果RNGを進めない
     /// （不変条件#2・裏試合帯不変）。人選は Phase A では bullpen 先頭のまま。
+    /// <para>3アウト直後（<paramref name="outs"/>≥3）は判断しない＝攻守交代（issue #1052・2026-11-17 ユーザー確認）。
+    /// 回の切れ目の継投は、そのチームが守備に就く半回の頭（<paramref name="halfHead"/>）で判断する。</para>
     /// </summary>
     private static void MaybeChangePitcher(
         GameProgress p, TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng,
-        int inning, bool isTop, int paIndex, int runsThisHalf, int outs)
+        int inning, bool isTop, int paIndex, int runsThisHalf, int outs, bool halfHead = false)
     {
+        if (outs >= 3) return;
         var fatigue = defense.FatigueFor(ctx.Fatigue);
         var staminaTarget = defense.EffectiveBaseStamina(defense.CurrentPitcher);
         var fatigueTriggered = PitchingFatigue.ShouldRelieve(
@@ -2619,7 +2630,7 @@ public static class GameEngine
                 fatigue.RelievePitchMargin, candidates.Count > 0, candidates,
                 // コンバート継投（issue #255 B-1）の判断材料。既定Brainは参照しない＝恒等。
                 defense.CurrentPitcher, defense.CurrentLineup, SwappableSlotsOf(defense), defense.UsesDh);
-            var forked = rng.Fork(ReliefStreamId(inning, isTop, paIndex));
+            var forked = rng.Fork(halfHead ? ReliefHeadStreamId(inning, isTop, paIndex) : ReliefStreamId(inning, isTop, paIndex));
             if (brain.CallPitchingChange(sit, forked) is { } decision)
             {
                 // ConvertTo 指定はコンバート継投＝元投手をその守備位置へ回して Reliever を登板（issue #255）。
@@ -2651,6 +2662,11 @@ public static class GameEngine
     /// <summary>継投判断RNG用Fork streamId（issue #209）。1球采配/怪我/天候とは別saltで衝突を避ける。</summary>
     private static ulong ReliefStreamId(int inning, bool isTop, int paIndex)
         => 0xC0FFEE_2090_0000UL ^ ((ulong)(uint)inning << 32) ^ ((isTop ? 1UL : 0UL) << 31) ^ (ulong)(uint)paIndex;
+
+    /// <summary>半回の頭の継投判断（issue #1052）のFork streamId。打席後の判断（<see cref="ReliefStreamId"/>）と
+    /// 同じ (inning, isTop, paIndex) でも重ならないよう、どちらも使わない最上位ビットを立てる。</summary>
+    private static ulong ReliefHeadStreamId(int inning, bool isTop, int paIndex)
+        => ReliefStreamId(inning, isTop, paIndex) ^ (1UL << 63);
 
     /// <summary>1球采配（設計書15 §2.3）の判断RNG用Fork streamId。inning/半イニング/PA添字/球数から
     /// 決定論的に導出し、末尾に攻守を分けるsaltを混ぜる（同じ球でも攻撃側・守備側で別ストリーム）。</summary>
