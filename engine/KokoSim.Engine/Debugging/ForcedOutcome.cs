@@ -46,6 +46,13 @@ public enum ForcedOutcome
     DoublePlay,
     PickoffOut,
     DoubleSteal,
+    /// <summary>
+    /// 送りバントを必ず転がす（空振り・ファウル・小フライ・ボール球の見送りを0にし、転がしの成功率を上限へ）。
+    /// バントの指示そのもの（<c>PitchBattingOverride.Bunt</c>）は別に出す＝これは「指示したバントが転がる」だけを固定する。
+    /// 転がしの成功率は式の上限 0.98 で頭打ちなので、約2%は転がしそこねの凡打になる（撮影側で撮り直す）。
+    /// 守備ビューのバント処理の絵（issue #1089 等）を、シードを回さずに撮るためのもの。
+    /// </summary>
+    BuntInPlay,
 
     // ── 走塁（盗塁企図を強制したうえで成否を固定する） ──
     StealSuccess,
@@ -104,6 +111,17 @@ public static class ForcedOutcomes
             PickoffPitcherSenseSlope = 0.0,
         },
         ForcedOutcome.DoubleSteal => c with { DoubleStealThirdBreakProb = 1.0 },
+        ForcedOutcome.BuntInPlay => c with
+        {
+            BuntTakeBase = 0.0, BuntTakeCap = 0.0,
+            BuntMissShare = 0.0, BuntMissFloor = 0.0, BuntMissSkillSlope = 0.0,
+            BuntMissVelocitySlope = 0.0, BuntMissStuffSlope = 0.0,
+            BuntFoulShare = 0.0, BuntFoulFloor = 0.0, BuntFoulSkillSlope = 0.0,
+            BuntPopShare = 0.0, BuntPopFloor = 0.0, BuntPopSkillSlope = 0.0,
+            BuntPopVelocitySlope = 0.0, BuntPopStuffSlope = 0.0,
+            // 転がしの成功率（SuccessRate）は Clamp(…, 0.05, 0.98)。基準を上げて上限へ張り付かせる
+            BuntBase = 1.0,
+        },
         _ => c,
     };
 
