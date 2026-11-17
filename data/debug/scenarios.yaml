@@ -169,3 +169,25 @@ scenarios:
     top: true
     outs: 0
     seed: 20261560
+
+  # 捕ったアウトの球が、打席が畳まれるまでグラブの中にあるかを見る（issue #1081）。打者が走らないファウルフライは
+  # 再生の長さ（play.Dur＝捕球の約1.9秒後）が短く、判定表示の窓で再生が play.Dur を越えたとき球が足元へ落ちて見えた。
+  # 強制発動は使わず自然な解決をシードで固定。チームは呼び出し側シード 1 で組む前提（FoulFlyOutScenarioTests と同じ。
+  # 撮影時は MatchLiveController.GameSeedOverrideForCapture = 1）。係数変更で崩れたらテストが赤くなる→ seed を選び直す。
+  - id: foul-fly-out-lab
+    name: 守備検証・サードのファウルフライを捕ってアウト（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20262281
+  # フェアのフライアウト（比較用・issue #1081）。打者走者が一塁へ走るぶん play.Dur が長い。
+  - id: fair-fly-out-lab
+    name: 守備検証・ライトフライを捕ってアウト（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20261708
