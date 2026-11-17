@@ -171,10 +171,14 @@ public sealed class MissedFlyChaseTests
     /// 母集団（40試合）: 落とした外野フライの安打のうち、処理野手が落下点へ着く時刻が着地より後になる割合。
     /// 直す前は遅れ −0.15〜−0.45s の球のほとんどが「落ちる前に着いている」絵だった。
     /// </summary>
+    /// <para>同じ母集団で、フライ安打のうち「届かない」絵がどれだけ出るかの表も出す（issue #1084）:
+    /// 弾ませて走りながら掬う（engine の弾みの区間）／届かない芝居（3D が追う向きで収録を選ぶ。捕球余裕 −0.5〜0s で
+    /// 弾みが無いもの）／芝居なし（抜けた当たり）。</para>
     [Fact]
     public void RealGames_MissedFlyHits_ChaserArrivesAfterTheLanding()
     {
         int n = 0, twoStage = 0, after = 0, tight = 0, tightAfter = 0;
+        int flyHits = 0, hop = 0, missAct = 0;
         for (ulong seed = 1; seed <= 40; seed++)
         {
             var r = GameEngine.Play(BuildTeam("A"), BuildTeam("H"),
@@ -182,10 +186,15 @@ public sealed class MissedFlyChaseTests
             foreach (var e in r.Log)
             {
                 var tl = e.Timeline;
-                if (tl?.CatchMarginSeconds is not { } m || m >= 0) continue;
+                if (tl is null) continue;
                 if (e.Result is not (PlateAppearanceResult.Single or PlateAppearanceResult.Double or PlateAppearanceResult.Triple)) continue;
                 var flight = tl.Ball.FirstOrDefault(b => b.Kind == BallSegmentKind.Flight);
                 if (flight is null) continue;
+                flyHits++;
+                var hopped = tl.Ball.Any(b => b.Kind == BallSegmentKind.Bounce && Math.Abs(b.T0 - flight.T1) < 1e-6);
+                if (hopped) hop++;
+                if (tl.CatchMarginSeconds is not { } m || m >= 0) continue;
+                if (!hopped && m > -0.5) missAct++;
                 var landAt = flight.T1;
                 n++;
                 var fielderRole = tl.Moves.FirstOrDefault(x => x.Task == FielderTask.FieldBall)?.Role;
@@ -199,6 +208,12 @@ public sealed class MissedFlyChaseTests
             }
         }
         _out.WriteLine($"落球安打 {n} 件・2段 {twoStage}・着地後に着く {after}・際どい(−0.5s以内) {tight}／うち着地後 {tightAfter}");
+        double Pct(int k) => 100.0 * k / Math.Max(1, flyHits);
+        _out.WriteLine($"フライ安打 {flyHits} 件: 弾ませて掬う {hop}（{Pct(hop):F1}%）・届かない芝居 {missAct}（{Pct(missAct):F1}%）"
+                       + $"・芝居なし {flyHits - hop - missAct}（{Pct(flyHits - hop - missAct):F1}%）");
+        // 表（2026-11-17・40試合）の帯。どちらかが消えたら芝居が死んでいる／増えすぎたら安っぽい
+        Assert.InRange(Pct(hop), 3.0, 40.0);
+        Assert.InRange(Pct(missAct), 3.0, 40.0);
         Assert.True(n >= 100, $"落球安打が {n} 件しか採れていない＝テストが空回り");
         Assert.True(tight >= 50, $"際どい落球が {tight} 件しか採れていない");
         Assert.Equal(n, after);                   // 落とした飛球で、落ちる前に落下点へ着いて待っている絵は無い
