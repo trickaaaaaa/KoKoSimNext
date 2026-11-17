@@ -135,8 +135,8 @@ public sealed record ThrowSegment : PlaybackBallSegment
     }
 }
 
-/// <summary>野手1人の移動（t0→t1 で現在地→to へ easeIO 補間）。mock: move。</summary>
-public sealed record PlaybackMove(double T0, double T1, PlaybackVec To);
+/// <summary>野手1人の移動（t0→t1 で現在地→to へ。進み方は <see cref="Profile"/>）。mock: move。</summary>
+public sealed record PlaybackMove(double T0, double T1, PlaybackVec To, MoveProfile Profile = MoveProfile.Trapezoid);
 
 /// <summary>走者1人の塁間レッグ（t0→t1 で from→to）。mock: run。</summary>
 public sealed record PlaybackRun(double T0, double T1, PlaybackVec From, PlaybackVec To)
@@ -269,6 +269,41 @@ public static class PlaybackEvaluator
         return 1 - v * w * w / (2 * a);                // 減速
     }
 
+    /// <summary>
+    /// 速さの付け方ごとの進み方（issue #1079）。<see cref="MoveProfile.Trapezoid"/> は <see cref="MoveEase(double)"/> と同一。
+    /// <see cref="MoveProfile.RunIn"/>＝加速の肩だけで終点を巡航速度のまま通過、<see cref="MoveProfile.RunOut"/>＝
+    /// 始点の速さから等減速して終点で止まる。どれも端点の進み 0→1 は同じ（判定・端点の時刻と位置は不変）。
+    /// </summary>
+    public static double MoveEase(double u, MoveProfile profile)
+    {
+        if (u <= 0) return 0;
+        if (u >= 1) return 1;
+        switch (profile)
+        {
+            case MoveProfile.RunIn:
+            {
+                const double a = MoveRampFraction;
+                var v = 1.0 / (1.0 - a / 2);
+                return u < a ? v * u * u / (2 * a) : v * (u - a / 2);
+            }
+            case MoveProfile.RunOut:
+                return u * (2 - u);
+            default:
+                return MoveEase(u);
+        }
+    }
+
+    /// <summary>
+    /// 区間の平均速度に対する最高速度の倍率（issue #1079）。巡航速度[m/s]＝距離÷尺×これ。
+    /// 台形は 1/(1−肩)、RunIn は 1/(1−肩/2)（終点の速さ）、RunOut は 2（始点の速さ）。
+    /// </summary>
+    public static double PeakSpeedFactor(MoveProfile profile) => profile switch
+    {
+        MoveProfile.RunIn => 1.0 / (1.0 - MoveRampFraction / 2),
+        MoveProfile.RunOut => 2.0,
+        _ => 1.0 / (1.0 - MoveRampFraction),
+    };
+
     /// <summary>時刻 t のボール位置。未投球なら直前の保持位置、セグメント間は最後の位置で保持。mock: ballAt。</summary>
     public static PlaybackBall? BallAt(PlaybackPlay play, double t)
     {
@@ -293,7 +328,7 @@ public static class PlaybackEvaluator
             foreach (var m in segs)
             {
                 if (t <= m.T0) break;
-                var u = MoveEase((t - m.T0) / (m.T1 - m.T0));
+                var u = MoveEase((t - m.T0) / (m.T1 - m.T0), m.Profile);
                 pos = new PlaybackVec(pos.X + (m.To.X - pos.X) * u, pos.Y + (m.To.Y - pos.Y) * u);
                 if (t < m.T1) moving = true;
             }

@@ -30,7 +30,7 @@ public static class PlayTimelineAdapter
         {
             moves[grp.Key] = grp
                 .OrderBy(m => m.T0)
-                .Select(m => new PlaybackMove(m.T0, m.T1, Vec(m.To)))
+                .Select(m => new PlaybackMove(m.T0, m.T1, Vec(m.To), m.Profile))
                 .ToArray();
         }
 
