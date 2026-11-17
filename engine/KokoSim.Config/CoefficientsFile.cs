@@ -1286,8 +1286,9 @@ public static class CoefficientsLoader
         public double MaxTemperatureC { get; set; } = D.MaxTemperatureC;
         public double BaselineTemperatureC { get; set; } = D.BaselineTemperatureC;
         public double DensityDamping { get; set; } = D.DensityDamping;
-        public double FatigueBaselineTemperatureC { get; set; } = D.FatigueBaselineTemperatureC;
-        public double FatigueAlphaPerDegree { get; set; } = D.FatigueAlphaPerDegree;
+        public double FatiguePitchBaselineTemperatureC { get; set; } = D.FatiguePitchBaselineTemperatureC;
+        public double FatiguePitchReferenceTemperatureC { get; set; } = D.FatiguePitchReferenceTemperatureC;
+        public double FatiguePitchReferenceReductionFraction { get; set; } = D.FatiguePitchReferenceReductionFraction;
         public double RainProb { get; set; } = D.RainProb;
         public double CloudyProb { get; set; } = D.CloudyProb;
         public double RainTemperatureOffsetC { get; set; } = D.RainTemperatureOffsetC;
@@ -1302,8 +1303,9 @@ public static class CoefficientsLoader
             MaxTemperatureC = MaxTemperatureC,
             BaselineTemperatureC = BaselineTemperatureC,
             DensityDamping = DensityDamping,
-            FatigueBaselineTemperatureC = FatigueBaselineTemperatureC,
-            FatigueAlphaPerDegree = FatigueAlphaPerDegree,
+            FatiguePitchBaselineTemperatureC = FatiguePitchBaselineTemperatureC,
+            FatiguePitchReferenceTemperatureC = FatiguePitchReferenceTemperatureC,
+            FatiguePitchReferenceReductionFraction = FatiguePitchReferenceReductionFraction,
             RainProb = RainProb,
             CloudyProb = CloudyProb,
             RainTemperatureOffsetC = RainTemperatureOffsetC,

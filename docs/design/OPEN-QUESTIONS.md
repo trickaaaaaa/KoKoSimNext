@@ -807,10 +807,17 @@ Issue: [#175](https://github.com/trickaaaaaa/KoKoSimNext/issues/175) →
 - `round_gap_days=3` でも8ラウンド×3日＝22日≒現実の3週間夏予選相当で既に妥当だったが、連戦感重視で中1日（gap=2）を採用。
 - 開幕週=13 は `MonthOrder`/`WeeksPerMonth` 換算で 7月1週目（週13〜17が7月）。`SeasonCalendarTests.DateOf_SummerTournamentStartWeek_IsEarlyJuly` で固定。
 
-## Q22. 夏場の気温連動オフェンス増加（乱打戦化）の実装方針（2026-07-22）→ **置き場所確定（2026-07-22）／実装・実ゲーム配線済み（#120・#803 closed）／秋の気温は #971 で決定（2026-11-15）**
+## Q22. 夏場の気温連動オフェンス増加（乱打戦化）の実装方針（2026-07-22）→ **置き場所確定（2026-07-22）／実装・実ゲーム配線済み（#120・#803 closed）／秋の気温は #971 で決定（2026-11-15）／投手消耗の効かせ方は #1071 で決定（2026-11-17）**
 
 Issue: [#120](https://github.com/trickaaaaaa/KoKoSimNext/issues/120)
 
+> **その後（2026-11-17 追記）**: 気温→投手消耗の決定2（下記）は [#1071](https://github.com/trickaaaaaa/KoKoSimNext/issues/1071) で
+> 「**実効の目安球数そのものを縮める**」方式へ置き換えた（オーナー決定2026-11-17）。旧方式（目安を超えた後の
+> 落ち方の傾きにだけ気温項）は36℃でも体感できない差（球速−3.0→−3.08km/h）しか出ず、二重取り回避のため撤去。
+> 新方式: 基準温30℃以下は不変、36℃で実効目安−10%（120球の投手なら108球）。縮めればバテ始め・継投判断
+> （`PitchingFatigue.ShouldRelieve`）も同じ式で全部ついてくる。係数は `WeatherCoefficients` の
+> `FatiguePitchBaselineTemperatureC`/`FatiguePitchReferenceTemperatureC`/`FatiguePitchReferenceReductionFraction`。
+>
 > **その後（2026-11-15 追記）**: 夏の気温連動は #120 で実装、#803 で実ゲームへ配線済み（両 issue closed）。
 > 秋の大会の気温（9月中旬で23℃など時期に合わない）は [#971](https://github.com/trickaaaaaa/KoKoSimNext/issues/971) で
 > 「**試合日の月で引く・年間を月の表にする・地域差は付けない**」と決定（2026-11-15・監督。実装は #971）。
@@ -837,9 +844,10 @@ Issue: [#120](https://github.com/trickaaaaaa/KoKoSimNext/issues/120)
    `data/coefficients.yaml` から一度だけ生成されるグローバル値（`CoefficientsFile.cs:174`）。
    試合ごとに変えるには、気温から `aero with { AirDensity = ... }` した派生インスタンスを
    試合単位で作る配線が要る（新規の口の追加ではなく既存レコードの試合単位差し替え）。
-2. 暑さ→投手消耗（`PitchingFatigue`, `engine/KokoSim.Engine/Match/Game/PitchingFatigue.cs`）の
-   `FatigueCoefficients`（`VelocityDropPerOverPitch`/`ControlDropPerOverPitch`）に気温項を加算し、
-   終盤の球速天井・制球低下を早める。**野手側の疲労概念は2026-07-17に廃止済みのため復活させない**。
+2. 暑さ→投手消耗（`PitchingFatigue`, `engine/KokoSim.Engine/Match/Game/PitchingFatigue.cs`）。当初は
+   `FatigueCoefficients`（`VelocityDropPerOverPitch`/`ControlDropPerOverPitch`）に気温項を加算する案だったが、
+   体感できないほど小さい差しか出ないため #1071 で「実効の目安球数そのものを縮める」方式へ置き換えた（上記追記）。
+   **野手側の疲労概念は2026-07-17に廃止済みのため復活させない**。
 
 **要判断**:
 - 天候（気温）という新概念の置き場所: カレンダー連動なら design-03、大会単位の味付けなら design-05

@@ -41,14 +41,26 @@ public sealed record WeatherCoefficients
     /// </summary>
     public double DensityDamping { get; init; } = 0.5;
 
-    // ===== 気温→投手消耗（Issue #120 決定2=案A: 加算・線形）=====
-    /// <summary>投手消耗の気温加算の基準気温[℃]。これ以下では気温項ゼロ（消耗は従来通り）。</summary>
-    public double FatigueBaselineTemperatureC { get; init; } = 28.0;
+    // ===== 気温→投手消耗（Issue #1071 オーナー決定2026-11-17: 「実効の目安球数」そのものを縮める方式に一本化）=====
+    // 旧実装（Issue #120 決定2=案A）は「目安を超えた後の落ち方の傾き」（VelocityDropPerOverPitch/ControlDropPerOverPitch）
+    // だけに気温項 ×(1+α×超過℃) を掛けていた。36℃（最大 +8%）でも目安を20球超えた時点の差が体感で分からない
+    // （球速−3.0→−3.08km/h・制球−7.4→−7.6）ため見送り、issue #1071 で「実効目安球数そのものを縮める」方式へ
+    // 置き換えた。目安を縮めればバテ始め（OnsetRatio）・目安到達時の低下量・ShouldRelieve（継投判断）が
+    // 同じ式で全部ついてくる＝「暑いと継投が早まる」が自然に出る。旧方式（FatigueBaselineTemperatureC /
+    // FatigueAlphaPerDegree）は二重取りを避けるため撤去＝このブロックの3定数だけが気温→投手消耗の入口。
+    /// <summary>実効目安球数の縮小が始まる基準気温[℃]。これ以下では気温項ゼロ（目安は従来通り）。</summary>
+    public double FatiguePitchBaselineTemperatureC { get; init; } = 30.0;
     /// <summary>
-    /// 投手消耗の気温係数 α[1/℃]（決定2=案A, 既定 0.01）。基準温からの超過1℃ごとに超過球数あたりの
-    /// 球速天井・制球低下量を α だけ増やす: drop' = drop × (1 + α×max(0, T-基準温))。36℃で +8%。
+    /// 基準気温の上側アンカー点[℃]（既定36℃＝月別の表の最高気温と同じ）。<see cref="FatiguePitchReferenceReductionFraction"/>
+    /// はこの気温での縮小率を直接指定する＝「36℃で−10%」のような決め方をそのままパラメータにできる。
     /// </summary>
-    public double FatigueAlphaPerDegree { get; init; } = 0.01;
+    public double FatiguePitchReferenceTemperatureC { get; init; } = 36.0;
+    /// <summary>
+    /// <see cref="FatiguePitchReferenceTemperatureC"/> における実効目安球数の縮小率（既定 0.10＝36℃で−10%。
+    /// 120球の投手なら108球）。基準気温からアンカー点まで線形に効き、アンカー点を超えても頭打ち
+    /// （月別の表の最高気温はこの既定と同じ36℃なので実質頭打ちには当たらない）。
+    /// </summary>
+    public double FatiguePitchReferenceReductionFraction { get; init; } = 0.10;
 
     // ===== 天気の状態（Issue #803 決定1・2026-11-09 改定: 気温と同じ専用ストリームで別に1回抽選する）=====
     /// <summary>雨の確率（試合ごと）。状態は気温より先に引き、雨・曇りは気温の平均を下げる＝暑い日の雨も低確率で出る。</summary>
@@ -220,35 +232,29 @@ public static class WeatherModel
         => aero with { AirDensity = AirDensityAt(temperatureC, aero.AirDensity, c) };
 
     /// <summary>
-    /// 気温[℃]で消耗係数を増やした派生 <see cref="FatigueCoefficients"/>（決定2=案A）。
-    /// 基準温以下では従来値そのまま。超過1℃ごとに球速天井・制球の低下量を α 倍で増やす。
+    /// 気温[℃]における実効目安球数の倍率（Issue #1071。基準温以下は1.0＝不変、基準温からアンカー点まで線形に
+    /// 下がり、<see cref="WeatherCoefficients.FatiguePitchReferenceReductionFraction"/> で頭打ち）。
+    /// <see cref="PitchingFatigue"/> の目安投球数（<see cref="TeamState.EffectiveBaseStamina"/>）へ掛ける。
     /// </summary>
-    public static FatigueCoefficients ApplyTo(FatigueCoefficients fatigue, double temperatureC, WeatherCoefficients c)
+    public static double StaminaPitchFactor(double temperatureC, WeatherCoefficients c)
     {
-        var over = System.Math.Max(0.0, temperatureC - c.FatigueBaselineTemperatureC);
-        var factor = 1.0 + c.FatigueAlphaPerDegree * over;
-        return fatigue with
-        {
-            VelocityDropPerOverPitch = fatigue.VelocityDropPerOverPitch * factor,
-            ControlDropPerOverPitch = fatigue.ControlDropPerOverPitch * factor,
-            // 目安の手前から効くカーブ（issue fatigue-gradual-before-threshold）の目安時低下量は気温で増やさない
-            // ＝夏場の上乗せは従来どおり「目安超過1球あたりの勾配」だけ。両方を増やすと夏場帯（games_10k_summer 4.9–5.8）を
-            // 超えた（実測 5.87・seed42）。夏場をもっと効かせるかは帯の張り直しと一緒に別途判断する。
-        };
+        var span = c.FatiguePitchReferenceTemperatureC - c.FatiguePitchBaselineTemperatureC;
+        if (span <= 0.0) return 1.0;
+        var over = System.Math.Max(0.0, temperatureC - c.FatiguePitchBaselineTemperatureC);
+        var ratio = System.Math.Min(1.0, over / span);
+        return 1.0 - c.FatiguePitchReferenceReductionFraction * ratio;
     }
 
     /// <summary>
-    /// 指定気温[℃]で空気密度・投手消耗を差し替えた派生 <see cref="GameContext"/>（純関数・テスト用）。
+    /// 指定気温[℃]で空気密度を差し替えた派生 <see cref="GameContext"/>（純関数・テスト用）。投手消耗は
+    /// 「実効目安球数」側（<see cref="StaminaPitchFactor"/>・<see cref="TeamState.SetWeatherStaminaFactor"/>）で
+    /// 効かせるため、<see cref="GameContext.Fatigue"/> 自体は気温で変えない（Issue #1071・二重取り回避）。
     /// <see cref="GameContext.Weather"/> が null または無効ならそのまま返す（従来挙動）。
     /// </summary>
     public static GameContext ApplyTo(GameContext ctx, double temperatureC)
     {
         if (ctx.Weather is not { Enabled: true } c) return ctx;
-        return ctx with
-        {
-            Aerodynamics = ApplyTo(ctx.Aerodynamics, temperatureC, c),
-            Fatigue = ApplyTo(ctx.Fatigue, temperatureC, c),
-        };
+        return ctx with { Aerodynamics = ApplyTo(ctx.Aerodynamics, temperatureC, c) };
     }
 
     /// <summary>

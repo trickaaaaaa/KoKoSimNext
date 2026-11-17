@@ -60,7 +60,7 @@ public sealed class CoefficientsLoaderTests
                 enabled: true
                 mean_temperature_c: 32.0
                 density_damping: 0.5
-                fatigue_alpha_per_degree: 0.01
+                fatigue_pitch_reference_reduction_fraction: 0.10
             """;
 
         var bundle = CoefficientsLoader.Parse(yaml);
@@ -68,7 +68,7 @@ public sealed class CoefficientsLoaderTests
         Assert.True(bundle.Weather!.Base.Enabled);
         Assert.Equal(32.0, bundle.Weather.Base.MeanTemperatureC, 6);
         Assert.Equal(0.5, bundle.Weather.Base.DensityDamping, 6);
-        Assert.Equal(0.01, bundle.Weather.Base.FatigueAlphaPerDegree, 6);
+        Assert.Equal(0.10, bundle.Weather.Base.FatiguePitchReferenceReductionFraction, 6);
         // months を書かなかったので月別の既定表がそのまま入る。
         Assert.Equal(KokoSim.Engine.Match.Game.WeatherModel.DefaultMonths, bundle.Weather.Months);
 

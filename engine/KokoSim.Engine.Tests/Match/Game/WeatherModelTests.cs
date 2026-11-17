@@ -59,27 +59,43 @@ public sealed class WeatherModelTests
         Assert.Equal(aero.BallMassKg, hot.BallMassKg);
     }
 
-    // ===== 決定2: 気温→投手消耗 =====
+    // ===== 決定2（issue #1071）: 気温→実効目安球数の縮小 =====
 
     [Fact]
-    public void Fatigue_AtOrBelowBaseline_IsUnchanged()
+    public void StaminaPitchFactor_AtOrBelowBaseline_IsUnchanged()
     {
-        var f = new FatigueCoefficients();
-        var cool = WeatherModel.ApplyTo(f, 28.0, Summer);   // 基準温＝加算ゼロ
-        Assert.Equal(f.VelocityDropPerOverPitch, cool.VelocityDropPerOverPitch, 12);
-        Assert.Equal(f.ControlDropPerOverPitch, cool.ControlDropPerOverPitch, 12);
-        var colder = WeatherModel.ApplyTo(f, 20.0, Summer); // 基準未満でも max(0,・) で加算ゼロ
-        Assert.Equal(f.VelocityDropPerOverPitch, colder.VelocityDropPerOverPitch, 12);
+        Assert.Equal(1.0, WeatherModel.StaminaPitchFactor(30.0, Summer), 12);   // 基準温＝縮小ゼロ
+        Assert.Equal(1.0, WeatherModel.StaminaPitchFactor(20.0, Summer), 12);   // 基準未満でも max(0,・) で縮小ゼロ
     }
 
     [Fact]
-    public void Fatigue_At36Degrees_IsEightPercentHigher()
+    public void StaminaPitchFactor_At36Degrees_IsTenPercentLower()
     {
-        // α=0.01/℃, 基準28℃ → 36℃で (1 + 0.01×8) = 1.08 倍。
-        var f = new FatigueCoefficients();
-        var hot = WeatherModel.ApplyTo(f, 36.0, Summer);
-        Assert.Equal(f.VelocityDropPerOverPitch * 1.08, hot.VelocityDropPerOverPitch, 12);
-        Assert.Equal(f.ControlDropPerOverPitch * 1.08, hot.ControlDropPerOverPitch, 12);
+        // 基準30℃・アンカー36℃で−10% → 36℃ちょうどでは0.90倍。120球の投手なら108球。
+        Assert.Equal(0.90, WeatherModel.StaminaPitchFactor(36.0, Summer), 12);
+    }
+
+    [Fact]
+    public void StaminaPitchFactor_IsLinearBetweenBaselineAndReference()
+    {
+        // 30→36℃の半分（33℃）では縮小も半分（−5%）。
+        Assert.Equal(0.95, WeatherModel.StaminaPitchFactor(33.0, Summer), 12);
+    }
+
+    [Fact]
+    public void StaminaPitchFactor_AboveReference_StaysCappedAtTheReferenceReduction()
+    {
+        // アンカー点（36℃）を超えても頭打ち＝これ以上は縮まない（月別の表の最高気温はこの既定と同じ36℃）。
+        Assert.Equal(0.90, WeatherModel.StaminaPitchFactor(40.0, Summer), 12);
+    }
+
+    [Fact]
+    public void ApplyTo_FatigueCoefficients_NeverChangesWithTemperature()
+    {
+        // issue #1071: 旧方式（目安超過後の勾配への気温項）は撤去＝一本化。GameContext.Fatigue 自体は気温で変えない。
+        var ctx = new GameContext { Weather = Summer };
+        Assert.Equal(ctx.Fatigue, WeatherModel.ApplyTo(ctx, 36.0).Fatigue);
+        Assert.Equal(ctx.Fatigue, WeatherModel.ApplyTo(ctx, 20.0).Fatigue);
     }
 
     // ===== 気温生成（決定論・クランプ） =====
@@ -166,12 +182,13 @@ public sealed class WeatherModelTests
     }
 
     [Fact]
-    public void ApplyForMatch_WhenEnabled_AdjustsAeroAndFatigue()
+    public void ApplyForMatch_WhenEnabled_AdjustsAero()
     {
         var ctx = new GameContext { Weather = Summer };
         var adjusted = WeatherModel.ApplyForMatch(ctx, new Xoshiro256Random(7));
         Assert.NotEqual(ctx.Aerodynamics.AirDensity, adjusted.Aerodynamics.AirDensity);
-        Assert.NotEqual(ctx.Fatigue.VelocityDropPerOverPitch, adjusted.Fatigue.VelocityDropPerOverPitch);
+        // issue #1071: 投手消耗は ctx.Fatigue 自体ではなく実効目安球数（StaminaPitchFactor）側で効く＝ここは不変。
+        Assert.Equal(ctx.Fatigue, adjusted.Fatigue);
     }
 
     [Fact]
@@ -346,7 +363,9 @@ public sealed class WeatherModelTests
         var aug = WeatherModel.ForMonth(8);
         Assert.Equal(aug.BaselineTemperatureC, jan.BaselineTemperatureC);
         Assert.Equal(aug.DensityDamping, jan.DensityDamping);
-        Assert.Equal(aug.FatigueAlphaPerDegree, jan.FatigueAlphaPerDegree);
+        Assert.Equal(aug.FatiguePitchBaselineTemperatureC, jan.FatiguePitchBaselineTemperatureC);
+        Assert.Equal(aug.FatiguePitchReferenceTemperatureC, jan.FatiguePitchReferenceTemperatureC);
+        Assert.Equal(aug.FatiguePitchReferenceReductionFraction, jan.FatiguePitchReferenceReductionFraction);
         Assert.Equal(aug.CloudyTemperatureOffsetC, jan.CloudyTemperatureOffsetC);
     }
 

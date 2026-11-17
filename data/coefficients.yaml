@@ -707,9 +707,12 @@ weather:
     # 気温→空気密度（決定1=案B: ρ(T)=ρ0×(273.15+基準温)/(273.15+T) の基準差分に減衰係数 k=0.5 を掛け効きを半減）
     baseline_temperature_c: 15.0   # この気温で aerodynamics.air_density の既定値になる基準
     density_damping: 0.5           # k（0=無効, 1=物理そのまま）。極端な乱打戦を避けるため 0.5
-    # 気温→投手消耗（決定2=案A: 加算・線形。基準28℃超過1℃ごとに超過球数あたりの低下量を α だけ増やす。36℃で+8%）
-    fatigue_baseline_temperature_c: 28.0
-    fatigue_alpha_per_degree: 0.01
+    # 気温→投手消耗（issue #1071 オーナー決定2026-11-17: 「実効の目安球数」そのものを縮める方式に一本化）
+    # 旧方式（目安超過後の落ち方の傾きに気温項）は体感で分からないほど小さく、二重取りを避けるため撤去。
+    # 30℃以下は不変、36℃で実効目安を−10%（120球の投手なら108球）。縮めればバテ始め・継投判断も同じ式でついてくる
+    fatigue_pitch_baseline_temperature_c: 30.0
+    fatigue_pitch_reference_temperature_c: 36.0
+    fatigue_pitch_reference_reduction_fraction: 0.10
     rain_prob: 0.15               # 天気の状態は試合ごとに別に1回抽選（#803 決定1・2026-11-09改定）
     cloudy_prob: 0.35
     rain_temperature_offset_c: -3.0  # 雨の日は気温の平均を下げる（暑い日の雨も低確率で出る）
