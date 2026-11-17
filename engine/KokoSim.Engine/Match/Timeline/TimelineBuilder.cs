@@ -854,7 +854,8 @@ public static class TimelineBuilder
                 if (isBallFielder && PlanMissedFlyChase(
                         play, landAt, fieldedAt, landing, ClampToFence(landing, field, play.BearingDeg, FenceBodyMarginM),
                         ballFielderTarget, moveFrom, speed, t0, fielderReachM, a.Position,
-                        ExtraBaseResolver.ReadySeconds(fieldedAt, play.FielderFielding, fieldingCoeff ?? new FieldingCoefficients()))
+                        ExtraBaseResolver.ReadySeconds(fieldedAt, play.FielderFielding, fieldingCoeff ?? new FieldingCoefficients()),
+                        IsNearWall(landing, field, play.BearingDeg, fieldingCoeff ?? new FieldingCoefficients()))
                         is { } chase)
                 {
                     // 落とした飛球（issue #1075）: 落下点へ追う→着地後に拾う点へ向かい直す、の2段。
@@ -3993,10 +3994,21 @@ public static class TimelineBuilder
     private static (FielderMove Chase, IReadOnlyList<FielderMove> After, BallSegment? Hop)? PlanMissedFlyChase(
         FieldingPlay play, double landAt, double fieldedAt, TimelinePoint landing, TimelinePoint chaseTarget,
         TimelinePoint pickupTarget, TimelinePoint from, double speed, double startT, double reachM, FieldPosition role,
-        double readyAt)
+        double readyAt, bool nearWall)
     {
-        if (PlanMissedFlyChaseCore(play, landAt, fieldedAt, chaseTarget, pickupTarget, from, speed, startT, reachM, role)
+        // 壁を探す減速（WallSeek）は台形よりピークが高い。脚力の上限（台形のピーク）を超えないよう、平均の速さを
+        // その比だけ落として計画する（LegSpeedTests）
+        var planSpeed = nearWall
+            ? speed * Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.Trapezoid)
+                / Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.WallSeek)
+            : speed;
+        if (PlanMissedFlyChaseCore(play, landAt, fieldedAt, chaseTarget, pickupTarget, from, planSpeed, startT, reachM, role)
             is not { } plan) return null;
+        // フェンス際（issue #1084）: 判定は壁を探して減速するぶん捕球の時間を減らしている（WallCatchPenalty）。
+        // 絵も全力で壁際へ突っ込まず、長めに減速して壁際で止まる。走りながら掬う・弾ませる絵は壁際では出さない
+        if (nearWall)
+            return (plan.Chase with { Profile = MoveProfile.WallSeek },
+                plan.Pickup is { } wallPickup ? new[] { wallPickup } : Array.Empty<FielderMove>(), null);
         // 全力のまま追う（issue #1084）: 減速して落下点で止まる台形だと、届かない球を「緩めて見送った」絵になる
         if (plan.Pickup is { } pickup)
             return FlowMissedFlyChase(plan.Chase, pickup, from, speed, fieldedAt, reachM) is { } flowed
@@ -4162,6 +4174,18 @@ public static class TimelineBuilder
         (s0, s1) = ArriveByFieldedAt(s0, s1, fieldedAt);
         var stop = StopWithinReach(from, pickupTarget, sPace * (s1 - s0), reachM);
         return (new FielderMove { Role = role, T0 = s0, T1 = s1, To = stop, Task = FielderTask.FieldBall }, null);
+    }
+
+    /// <summary>
+    /// 落下点がフェンス際（判定のフェンス際の減点 <see cref="FieldingCoefficients.WallCatchPenalty"/> が効く範囲）か。
+    /// 距離の測り方は判定と同じ（本塁→落下点の径方向でフェンスまで）。ファウルラインの外は柵をライン上の距離で頭打ちにする
+    /// （<see cref="ClampToFence"/> と同じ）。
+    /// </summary>
+    private static bool IsNearWall(TimelinePoint landing, FieldGeometry field, double bearingDeg, FieldingCoefficients coeff)
+    {
+        var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
+        var bearingRad = Math.Clamp(bearingDeg, -45.0, 45.0) * Math.PI / 180.0;
+        return coeff.WallCatchPenalty(field.FenceDistance(bearingRad) - range) > 0.0;
     }
 
     /// <summary>実捕球者の移動レッグの最短表示長[s]（瞬間移動に見せないための下限）。</summary>

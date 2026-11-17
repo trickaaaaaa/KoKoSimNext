@@ -167,6 +167,98 @@ public sealed class MissedFlyChaseTests
         Assert.Equal(82.0, hop.From.Z, 6);
     }
 
+    private static double FenceM => Field.FenceDistance(0.0);
+
+    /// <summary>落下点がフェンスの <paramref name="beforeFenceM"/>[m] 手前の、中堅への落とした飛球。</summary>
+    private static FieldingPlay MissedFlyAtWall(double margin, double beforeFenceM, double rollSeconds)
+    {
+        var z = FenceM - beforeFenceM;
+        return FieldingPlayFixtures.OutfieldHit(
+                FieldPosition.CenterField, landingX: 0, landingZ: z,
+                fieldedAtSeconds: Hang + rollSeconds, fieldedX: 0, fieldedZ: z - 0.5,
+                hangTimeSeconds: Hang, apexHeightM: 25, isFly: true)
+            with { CatchMarginSeconds = margin };
+    }
+
+    private static PlayTimeline BuildWithCoeff(FieldingPlay play) =>
+        TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false, TimelineBuilder.DescribeResult(play),
+            fieldingCoeff: new FieldingCoefficients());
+
+    [Fact]
+    public void WallSeek_RunsThenSlowsLongBeforeTheWall()
+    {
+        // フェンス際（issue #1084）: 加速→等速→台形より長い減速で終点に止まる＝壁を探して減速する
+        const double h = 1e-5;
+        Func<double, double> ease = u => KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.MoveEase(u, MoveProfile.WallSeek);
+        Func<double, double> trap = u => KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.MoveEase(u, MoveProfile.Trapezoid);
+        var peak = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.WallSeek);
+        Assert.Equal(0.0, ease(0), 9);
+        Assert.Equal(1.0, ease(1), 9);
+        Assert.Equal(0.0, (ease(h) - ease(0)) / h, 3);        // 止まった所から走り出す
+        Assert.Equal(0.0, (ease(1) - ease(1 - h)) / h, 3);    // 終点では止まる
+        Assert.Equal(peak, (ease(0.5 + h) - ease(0.5)) / h, 3);
+        for (var u = 0.0; u < 1.0; u += 0.01) Assert.True(ease(u + 0.01) >= ease(u));
+        // 終点の手前0.25の所では台形より遅い（もう緩めている）
+        Assert.True((ease(0.80 + h) - ease(0.80)) / h < (trap(0.80 + h) - trap(0.80)) / h * 0.9);
+    }
+
+    [Fact]
+    public void NearTheWall_ChaserSlowsIntoTheWall_AndStillArrivesAfterTheLanding()
+    {
+        var tl = BuildWithCoeff(MissedFlyAtWall(-0.35, beforeFenceM: 2.0, rollSeconds: 0.9));
+        var legs = Legs(tl, FieldPosition.CenterField);
+
+        Assert.Equal(MoveProfile.WallSeek, legs[0].Profile);
+        Assert.True(legs[0].T1 > LandAt, $"壁際への到着 {legs[0].T1:F2}s が着地 {LandAt:F2}s より前");
+        Assert.DoesNotContain(tl.Moves, m => m.Profile == MoveProfile.RunIn);
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Bounce);   // 走りながら掬う絵は壁際では出さない
+        Assert.True(legs[0].To.Z < FenceM);   // 壁へ入り込まない
+    }
+
+    [Fact]
+    public void NearTheWall_PickedUpAtTheLanding_DoesNotScoopOnTheRun()
+    {
+        // 着地の瞬間に拾う打球（壁から離れていれば弾ませて走りながら掬う）も、壁際では減速して壁際で止まる
+        var tl = BuildWithCoeff(MissedFlyAtWall(-0.25, beforeFenceM: 2.0, rollSeconds: 0.0));
+        var legs = Legs(tl, FieldPosition.CenterField);
+        Assert.All(legs.Where(l => l.Task == FielderTask.FieldBall), l => Assert.NotEqual(MoveProfile.RunIn, l.Profile));
+        Assert.Equal(MoveProfile.WallSeek, legs[0].Profile);
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Bounce);
+    }
+
+    [Fact]
+    public void AwayFromTheWall_DoesNotSeekTheWall()
+    {
+        // ゾーン（10m）の外は壁を探す減速にしない
+        var tl = BuildWithCoeff(MissedFlyAtWall(-0.35, beforeFenceM: 14.0, rollSeconds: 0.9));
+        Assert.DoesNotContain(tl.Moves, m => m.Profile == MoveProfile.WallSeek);
+    }
+
+    [Fact]
+    public void NearTheWall_NoLegIsFasterThanTheFielderCanRun()
+    {
+        var tl = BuildWithCoeff(MissedFlyAtWall(-0.35, beforeFenceM: 2.0, rollSeconds: 0.9));
+        var cf = Field.StandardAlignment().First(f => f.Position == FieldPosition.CenterField);
+        var cap = Math.Max(4.0, cf.Attributes.SprintSpeedMps) * 1.001;
+        var prev = new TimelinePoint(cf.Location.X, cf.Location.Z);
+        foreach (var leg in Legs(tl, FieldPosition.CenterField))
+        {
+            var d = Math.Sqrt(Math.Pow(leg.To.X - prev.X, 2) + Math.Pow(leg.To.Z - prev.Z, 2));
+            Assert.True(d / (leg.T1 - leg.T0) <= cap, $"{leg.Task} が {d / (leg.T1 - leg.T0):F2} m/s（上限 {cap:F2}）");
+            prev = leg.To;
+        }
+    }
+
+    [Fact]
+    public void CaughtFlyAtTheWall_IsUntouched()
+    {
+        // 捕れた飛球（アウト）はフェンス際でも1ビットも変えない
+        var caught = FieldingPlayFixtures.CaughtFly(FieldPosition.CenterField, landingX: 0, landingZ: FenceM - 2.0, hangTimeSeconds: Hang);
+        var tl = BuildWithCoeff(caught);
+        Assert.DoesNotContain(tl.Moves, m => m.Profile == MoveProfile.WallSeek);
+    }
+
     /// <summary>
     /// 母集団（40試合）: 落とした外野フライの安打のうち、処理野手が落下点へ着く時刻が着地より後になる割合。
     /// 直す前は遅れ −0.15〜−0.45s の球のほとんどが「落ちる前に着いている」絵だった。
