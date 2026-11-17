@@ -794,6 +794,125 @@ public static partial class AtBatSimulation
         };
     }
 
+    /// <summary>
+    /// 内野手がどの守備位置か（issue #1065）。<see cref="FieldingResolver"/> 内部の private 判定と揃える
+    /// （捕手は本塁付近のポップフライを捕るのでここでは内野扱いに含める）。
+    /// </summary>
+    private static bool IsInfieldPosition(FieldPosition pos) => pos
+        is FieldPosition.Pitcher or FieldPosition.Catcher or FieldPosition.FirstBase
+        or FieldPosition.SecondBase or FieldPosition.ThirdBase or FieldPosition.Shortstop;
+
+    /// <summary>
+    /// フライ/ライナーのアウトが内野手・外野手どちらに付いているかの分布（issue #1065）。
+    /// 「ポップフライ連発」の体感は内野フライのアウトの多さ（本塁打を減らした #976 以降、打球の上側が
+    /// 削られてフライが外野まで届かず内野に落ちた疑い）。母集団サンプリング・決定論並列・解決経路は
+    /// <see cref="RunApexProfile"/> と同一（＝同シードで <c>simulate</c> と同じ打者・投手・打球を引く）。
+    /// </summary>
+    public sealed record FlyOutShapeProfile
+    {
+        /// <summary>打席数（分母の算出に使う。1試合あたり換算は呼び出し側が PA/試合を掛ける）。</summary>
+        public int PlateAppearances { get; init; }
+        /// <summary>打球数（ファウルを除くフェア打球＝安打+アウト+失策+本塁打）。各シェアの分母。</summary>
+        public int BattedBalls { get; init; }
+        public int FlyBallsTotal { get; init; }
+        public int InfieldFlyOuts { get; init; }
+        public int OutfieldFlyOuts { get; init; }
+        public int InfieldLinerOuts { get; init; }
+        public int OutfieldLinerOuts { get; init; }
+        public int GroundOuts { get; init; }
+        /// <summary>初球（Pitches==1）で終わった打席のうち、内野フライのアウトだったもの。</summary>
+        public int FirstPitchInfieldFlyOuts { get; init; }
+
+        public double ShareOfBattedBalls(int n) => BattedBalls > 0 ? (double)n / BattedBalls : 0;
+        /// <summary>1試合（両軍計）あたりの本数（PA/試合の既定は <c>simulate-games</c> の実測≈76）。</summary>
+        public double PerGame(int n, int paPerGame = 76) => PlateAppearances > 0 ? (double)n / PlateAppearances * paPerGame : 0;
+
+        public string ToMarkdown(int paPerGame = 76)
+        {
+            var sb = new StringBuilder();
+            var c = CultureInfo.InvariantCulture;
+            sb.AppendLine("| 指標 | 1試合（両軍計） | 打球に占める割合 |");
+            sb.AppendLine("|---|---:|---:|");
+            void Row(string name, int n)
+            {
+                sb.AppendLine(c, $"| {name} | {PerGame(n, paPerGame):F1} | {ShareOfBattedBalls(n) * 100:F1}% |");
+            }
+            Row("内野フライのアウト", InfieldFlyOuts);
+            Row("外野フライのアウト", OutfieldFlyOuts);
+            Row("内野ライナーのアウト", InfieldLinerOuts);
+            Row("ゴロ・バウンドのアウト", GroundOuts);
+            Row("フライ打球（全体）", FlyBallsTotal);
+            Row("初球の内野フライ", FirstPitchInfieldFlyOuts);
+            return sb.ToString();
+        }
+    }
+
+    public static FlyOutShapeProfile RunFlyOutShapeProfile(
+        int atBats, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null)
+    {
+        var ctx = BuildContext(coefficientsPath, field);
+        var root = new Xoshiro256Random(seed);
+        var forks = new IRandomSource[atBats];
+        for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
+
+        // レイアウト: 0=打球数, 1=フライ総数, 2=内野フライアウト, 3=外野フライアウト,
+        // 4=内野ライナーアウト, 5=外野ライナーアウト, 6=ゴロ・バウンドアウト, 7=初球内野フライアウト。
+        const int Width = 8;
+        var total = new int[Width];
+        Parallel.For(0, atBats,
+            () => new int[Width],
+            (i, _, local) =>
+            {
+                var rng = forks[i];
+                var batter = SampleBatter(rng);
+                var pitcher = SamplePitcher(rng);
+                var detailed = AtBatResolver.ResolveDetailed(batter, pitcher, ctx, rng);
+                if (detailed.Play is not { } play || play.Result == BattedBallResult.Foul) return local;
+
+                local[0]++;
+                if (play.Class == BattedBallClass.Fly) local[1]++;
+
+                if (play.Result != BattedBallResult.Out || play.Class is not { } cls || play.FielderRole is not { } role)
+                    return local;
+
+                var infield = IsInfieldPosition(role);
+                switch (cls)
+                {
+                    case BattedBallClass.Fly when infield:
+                        local[2]++;
+                        if (detailed.Pitches == 1) local[7]++;
+                        break;
+                    case BattedBallClass.Fly:
+                        local[3]++;
+                        break;
+                    case BattedBallClass.Liner when infield:
+                        local[4]++;
+                        break;
+                    case BattedBallClass.Liner:
+                        local[5]++;
+                        break;
+                    case BattedBallClass.Grounder or BattedBallClass.Bouncer:
+                        local[6]++;
+                        break;
+                }
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < Width; k++) total[k] += local[k]; } });
+
+        return new FlyOutShapeProfile
+        {
+            PlateAppearances = atBats,
+            BattedBalls = total[0],
+            FlyBallsTotal = total[1],
+            InfieldFlyOuts = total[2],
+            OutfieldFlyOuts = total[3],
+            InfieldLinerOuts = total[4],
+            OutfieldLinerOuts = total[5],
+            GroundOuts = total[6],
+            FirstPitchInfieldFlyOuts = total[7],
+        };
+    }
+
     // ===== 投打差の格子（issue matchup-gap-saturation-k-rate） =====
 
     /// <summary>

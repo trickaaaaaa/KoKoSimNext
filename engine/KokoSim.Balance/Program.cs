@@ -606,6 +606,7 @@ internal static class CommandLine
         var histogram = false;
         var byPitcherRank = false;
         var apex = false;
+        var flyShape = false;
         var matchupGrid = false;
         // issue #1014: 1試合（両軍計）の本塁打数の二項近似に使う打席数/試合（simulate-games の実測 ≈76）。
         var paPerGame = 76;
@@ -630,6 +631,10 @@ internal static class CommandLine
                 case "--apex":
                     // issue #451: 打球の頂点/滞空/4分類の分布診断（フライがフライっぽく見えないの before/after）。
                     apex = true;
+                    break;
+                case "--fly-shape":
+                    // issue #1065: フライのアウトが内野/外野どちらに付くかの分布診断（内野フライ過多の校正用）。
+                    flyShape = true;
                     break;
                 case "--at-bats":
                 case "--games":
@@ -678,6 +683,12 @@ internal static class CommandLine
             // issue #451 検証: 打球の頂点/滞空/4分類の分布（外野フライ p50 が実物オーダー20m台に入るかの確認）。
             var profile = AtBatSimulation.RunApexProfile(atBats, seed, coefficientsPath, stadium);
             text += "\n## 打球の頂点/滞空 分布（issue #451 診断）\n\n" + profile.ToMarkdown();
+        }
+        if (flyShape)
+        {
+            // issue #1065: フライのアウトの内野/外野比（内野フライ過多の校正用）。
+            var shape = AtBatSimulation.RunFlyOutShapeProfile(atBats, seed, coefficientsPath, stadium);
+            text += "\n## フライのアウトの内野/外野比（issue #1065 診断）\n\n" + shape.ToMarkdown(paPerGame);
         }
         Console.Write(text);
 

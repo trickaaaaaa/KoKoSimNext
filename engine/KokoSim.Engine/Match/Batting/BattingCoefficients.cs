@@ -296,8 +296,9 @@ public sealed record BattingCoefficients
 
     // ポップフライ（issue #830 ②）。芯の下を叩いた打球は真上に近く上がって内野で捕られる。品質の低い当たりの一部を
     // ポップフライの角度・初速へ差し替える。判定は打席の本流から Fork した専用ストリームで引く＝本流の乱数順は不変。
-    /// <summary>ポップフライ（issue #830 ②）: 芯を外した当たりがポップフライ（真上に近く上がる遅い打球）になる割合の上限。品質が下限のとき満額、popup_quality_max で0。</summary>
-    public double PopupShare { get; init; } = 0.45;
+    /// <summary>ポップフライ（issue #830 ②）: 芯を外した当たりがポップフライ（真上に近く上がる遅い打球）になる割合の上限。品質が下限のとき満額、popup_quality_max で0。
+    /// issue #1065（2026-11-17）で 0.45→0.10＝内野フライのアウト過多（打球の12%超）を目標帯（4〜6%）へ校正（0.07 は夏場の得点帯を超える）。</summary>
+    public double PopupShare { get; init; } = 0.10;
     /// <summary>ポップフライ（issue #830 ②）: この品質未満の当たりだけポップフライになりうる。</summary>
     public double PopupQualityMax { get; init; } = 0.65;
     /// <summary>ポップフライ（issue #830 ②）: 元の打球角度がこれ以上の当たりだけポップフライになりうる[度]（球の下を叩いた当たり。
