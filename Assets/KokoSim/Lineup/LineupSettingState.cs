@@ -101,7 +101,7 @@ namespace KokoSim.Unity.Lineup
         public string GradeLabel = "";
         /// <summary>
         /// この画面での立場（例「スタメン 2番・左」「控え・背番号1」「先発投手」）。
-        /// 位置はプレイヤーが決めた配置だけを出す（CLAUDE.md UI原則の注記）。
+        /// 位置はプレイヤーが決めた配置だけを出す（.claude/rules/ui.md の注記）。
         /// </summary>
         public string RoleText = "";
         /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力）。選手個人の総合ランクは廃止（Issue #30/#270）。</summary>

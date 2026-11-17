@@ -105,12 +105,16 @@ command -v gh >/dev/null || { echo "gh が見つかりません" >&2; exit 1; }
 [ -n "$SKIP_REVIEW" ] || [ -f "$REVIEW_PROMPT_TEMPLATE" ] || { echo "レビュー用テンプレートがありません: $REVIEW_PROMPT_TEMPLATE" >&2; exit 1; }
 [ -x "$DOTNET" ] || { echo "dotnet が見つかりません: $DOTNET" >&2; exit 1; }
 
-# 処理対象: needs-human / agent-failed を除く、所有者本人の open issue。
-# 出力は "番号\tタイトル\tISUNITY"（ISUNITY=1 なら area:unity 付き）。bug を先に、あとは番号昇順。
+# 処理対象: needs-human / agent-failed / post-1.0 を除く、所有者本人の open issue。
+# post-1.0（1.0リリース後に回す）は拾わない＝バランスを揺らす新要素を夜間に入れない。
+# 出力は "番号\tタイトル\tISUNITY"（ISUNITY=1 なら area:unity 付き）。
+# 並びは ship-blocker（1.0までに必須）→ bug → その他、同じ段の中は番号昇順。
 fetch_issues() {
   gh issue list --state open --limit 100 --author "trickaaaaaa" --json number,title,labels --jq '
-    [ .[] | select( ( [.labels[].name] | (index("needs-human") or index("agent-failed")) ) | not ) ]
-    | sort_by( (if ([.labels[].name] | index("bug")) then 0 else 1 end), .number )
+    [ .[] | select( ( [.labels[].name] | (index("needs-human") or index("agent-failed") or index("post-1.0")) ) | not ) ]
+    | sort_by( ([.labels[].name]) as $l
+        | (if ($l | index("ship-blocker")) then 0 elif ($l | index("bug")) then 1 else 2 end),
+          .number )
     | .[] | "\(.number)\t\(.title)\t\(if ([.labels[].name] | index("area:unity")) then 1 else 0 end)"'
 }
 
@@ -645,6 +649,10 @@ done
   total_min="$(( ($(date +%s) - RUN_START) / 60 ))"
   echo "総所要時間: $(( total_min / 60 ))時間$(( total_min % 60 ))分（着手 $(count_now) 件・並列 ${ISSUE_WORKERS}）"
 } > "$SUMMARY"
+
+# 昼の作業やサブエージェントが残した worktree のうち、PR がマージ済みで変更も使用中のプロセスも無いものを片付ける。
+# 夜間分は上で都度消しているので、ここで拾うのは主に .claude/worktrees/agent-* の残骸（1個約400MB）。
+( cd "$REPO_DIR" && bash tools/prune-worktrees.sh --apply ) >> "$LOG_DIR/prune-worktrees.log" 2>&1 || true
 
 echo ""
 echo "===================================="
