@@ -3031,6 +3031,57 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 中継野手を「捕球点と送球先を結ぶ直線上」の <paramref name="point"/>（判定の <c>ThrowPath.CutoffPoint</c> と同じ位置）へ
+    /// 引き直す。陣形は送球先を知らず中継役の行き先を一律「二塁」にしている（打球と二塁の中間点）ので、
+    /// 本塁・三塁へ送る連鎖では絵の中継が送球線から外れていた。人は変えない（陣形が決めた中継役のまま）。
+    /// 出足・歩速は陣形が決めたもの（出発時刻 T0・移動の速さ）を保ち、行き先だけを替える。表示専用。
+    /// </summary>
+    private static PlayTimeline AimCutoffAtThrowLine(PlayTimeline timeline, TimelinePoint point)
+    {
+        var moves = new List<FielderMove>(timeline.Moves);
+        var outIdx = moves.FindIndex(m => m.Task == FielderTask.Cutoff);
+        if (outIdx < 0) return timeline;
+        var outMove = moves[outIdx];
+        if (timeline.FielderStarts is null || !timeline.FielderStarts.TryGetValue(outMove.Role, out var post)) return timeline;
+        // 惜しい打球へ寄るレッグ（Chase）を挟んだ野手は、そのレッグの終端から中継へ向かう。
+        for (var i = outIdx - 1; i >= 0; i--)
+        {
+            if (moves[i].Role != outMove.Role) continue;
+            post = moves[i].To;
+            break;
+        }
+
+        var oldDist = Distance(post, outMove.To);
+        var oldSeconds = outMove.T1 - outMove.T0;
+        if (oldDist < 1e-6 || oldSeconds < 1e-6) return timeline;
+        var pace = oldDist / oldSeconds;
+
+        var newDist = Distance(post, point);
+        var newT1 = outMove.T0 + Math.Max(newDist / pace, 0.05);
+        moves[outIdx] = outMove with { To = point, T1 = newT1 };
+
+        // 決着後の定位置復帰（同じ役の2本目）: 起点が変わるので、同じ速さで戻る長さへ引き直す。
+        var backIdx = moves.FindIndex(outIdx + 1, m => m.Task == FielderTask.Cutoff && m.Role == outMove.Role);
+        if (backIdx >= 0)
+        {
+            var back = moves[backIdx];
+            var oldBackDist = Distance(outMove.To, back.To);
+            var oldBackSeconds = back.T1 - back.T0;
+            var newBackDist = Distance(point, back.To);
+            if (newBackDist < 0.5)
+            {
+                moves.RemoveAt(backIdx);
+            }
+            else if (oldBackDist > 1e-6 && oldBackSeconds > 1e-6)
+            {
+                var rt0 = Math.Max(back.T0, newT1 + 0.3);
+                moves[backIdx] = back with { T0 = rt0, T1 = rt0 + newBackDist / (oldBackDist / oldBackSeconds) };
+            }
+        }
+        return timeline with { Moves = moves };
+    }
+
+    /// <summary>
     /// タイムラインに既に置かれている中継(カットオフ)野手の位置（<see cref="FielderTask.Cutoff"/>）を返す。
     /// 中継送球のボール経由点と野手の立ち位置を**単一の座標ソース**にするために使う（#136）。
     /// 陣形ルールにカットオフ割当が無い/野手が既にその場にいて移動が発生しない場合は null。
@@ -3074,7 +3125,10 @@ public static class TimelineBuilder
         var releaseAt = path.ReleaseAtSeconds;
 
         // 中継: カットマン位置は陣形ルールが実際に配置した中継野手と同一座標ソースにする（#136）。
+        // 陣形は送球先を知らず中継を二塁寄りに置くので、判定と同じ理論位置（捕球点→本塁の直線上）へ引き直す。
         // 割当が無い場合のみ、エンジン式の理論カットマン位置へフォールバックする。
+        if (path.HasRelay)
+            timeline = AimCutoffAtThrowLine(timeline, new TimelinePoint(path.CutoffPoint.X, path.CutoffPoint.Z));
         TimelinePoint? cutoff = path.HasRelay
             ? FindCutoffFielderPoint(timeline) ?? new TimelinePoint(path.CutoffPoint.X, path.CutoffPoint.Z)
             : null;
@@ -3366,7 +3420,16 @@ public static class TimelineBuilder
         // 中継に入るかは**判定と同じ関数**で決める（issue #526）。旧実装はここに 60m 固定の複製を
         // 持っていて「同値に保つ」というコメントで手当てしていたが、判定側が肩連動になった時点で
         // 距離固定の複製は必ず食い違う（強肩の直接返球に絵だけカットマンが入る）。
-        TimelinePoint? cutoff = Game.HomePlayResolver.NeedsRelay(straightDist, arm, baserunning ?? new Game.BaserunningCoefficients())
+        var needsRelay = Game.HomePlayResolver.NeedsRelay(straightDist, arm, baserunning ?? new Game.BaserunningCoefficients());
+        // 三塁へ返す連鎖は、本塁と同じく送球線上（三塁から CutoffFractionFromHome の位置）へ中継を引き直す。
+        // 二塁・一塁への返球は陣形の中継位置（二塁寄り）のまま＝絵は変えない。
+        if (needsRelay && leadBaseName == "third")
+        {
+            var frac = (baserunning ?? new Game.BaserunningCoefficients()).CutoffFractionFromHome;
+            timeline = AimCutoffAtThrowLine(timeline, new TimelinePoint(
+                target.X + (fieldPoint.X - target.X) * frac, target.Z + (fieldPoint.Z - target.Z) * frac));
+        }
+        TimelinePoint? cutoff = needsRelay
             ? FindCutoffFielderPoint(timeline)
               ?? new TimelinePoint((fieldPoint.X + target.X) * 0.5, (fieldPoint.Z + target.Z) * 0.5)
             : null;
