@@ -22,7 +22,10 @@ namespace KokoSim.Unity.Match
     public static class DuelBatterPose
     {
         /// <summary>補正の入口。clipTime はクリップ内秒（構え0〜スイング〜走り出し）。</summary>
-        public static void Apply(Animator anim, in DuelCalibration cal, float clipTime, Vector3 aimPoint)
+        /// <param name="gripWeight">握りを詰める補正（<see cref="FixGrip"/>）の効き 0..1。バント系のクリップでは0
+        /// （収録の「下の手はグリップ・上の手はバットの中ほど」を潰さない。issue #1087）。</param>
+        public static void Apply(Animator anim, in DuelCalibration cal, float clipTime, Vector3 aimPoint,
+            float gripWeight = 1f)
         {
             if (anim == null) return;
             FixKnee(anim, cal, clipTime);
@@ -30,7 +33,7 @@ namespace KokoSim.Unity.Match
             // 「回した後の体」を基準に当たり直す必要がある（逆順だと視線と握りが胴のぶんずれる）
             FixTorso(anim, cal, clipTime);
             FixHead(anim, cal, clipTime, aimPoint);
-            FixGrip(anim, cal, clipTime);
+            FixGrip(anim, cal, clipTime, gripWeight);
         }
 
         // ---------------------------------------------------------------- 部品
@@ -91,9 +94,9 @@ namespace KokoSim.Unity.Match
 
         // ---------------------------------------------------------------- 握り
 
-        private static void FixGrip(Animator anim, in DuelCalibration cal, float t)
+        private static void FixGrip(Animator anim, in DuelCalibration cal, float t, float weight)
         {
-            float w = 1f - Ramp(t, cal.GripEndSec - 0.15f, cal.GripEndSec);
+            float w = (1f - Ramp(t, cal.GripEndSec - 0.15f, cal.GripEndSec)) * Mathf.Clamp01(weight);
             if (w <= 0f) return;
             var lu = B(anim, HumanBodyBones.LeftUpperArm);
             var ll = B(anim, HumanBodyBones.LeftLowerArm);

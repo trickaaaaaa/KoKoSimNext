@@ -1070,6 +1070,8 @@ namespace KokoSim.Unity.Match
         public Vector3 BatAxisForCapture => _bat != null && _bat.activeSelf ? _bat.transform.up : Vector3.zero;
         /// <summary>撮影用（issue #938）: 真にするとバントの水平固定を切る＝修正前の絵と比べるため。</summary>
         public static bool BuntFlatDisabledForCapture;
+        /// <summary>スクショ用（issue #1087 の見比べ）: バント中も握りを詰め、バットを両手の中点で真横に持たせる旧挙動へ戻す。</summary>
+        public static bool BuntGripOldForCapture;
 #endif
 
         private sealed class Actor
@@ -1661,6 +1663,37 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private Vector3 BuntFlatAxis() => new Vector3(_batterLeft ? -1f : 1f, 0f, 0f);
 
+        /// <summary>バントでノブを握るのが左手か（issue #1087）: <see cref="BuntFlatAxis"/>（ノブ→バレル）に沿って後ろにある手。
+        /// 左右の手の名前でなく位置で選ぶ＝左打者（鏡映）でも同じ式で決まる。当てた後は呼ばずに据え置く（走り出しで手が交差する）。</summary>
+        private bool BuntKnobIsLeft(Vector3 lh, Vector3 rh)
+        {
+            var f = BuntFlatAxis();
+            return Vector3.Dot(lh, f) <= Vector3.Dot(rh, f);
+        }
+
+        private bool _buntKnobIsLeft = true;
+        /// <summary>バントで最後に両手から採ったバット軸（当てた後はこれで止めて運ぶ。issue #1087）。</summary>
+        private Vector3 _buntHeldAxis;
+        private bool _buntHeldValid;
+
+        /// <summary>
+        /// バントのバット軸（ノブ→バレル。issue #1087）: ノブ側の手→もう一方の手の線。両手が
+        /// <see cref="BuntHandsMinApartM"/> より近いとき（移行の頭など）は握り線が当てにならないので真横（#938）へ寄せる。
+        /// 向きは常に <see cref="BuntFlatAxis"/> 側＝1コマで180°裏返らない（#938 の実害と同じ罠を避ける）。
+        /// </summary>
+        private Vector3 BuntHandAxis(Vector3 knob, Vector3 other)
+        {
+            var f = BuntFlatAxis();
+            var line = other - knob;
+            float apart = line.magnitude;
+            if (apart < 1e-4f || Vector3.Dot(line, f) <= 0f) return f;
+            float w = Mathf.InverseLerp(BuntHandsMinApartM, BuntHandsMinApartM * 2f, apart);
+            return Vector3.Slerp(f, line / apart, w).normalized;
+        }
+
+        /// <summary>バントで握り線をバット軸に使い始める両手の間隔[m]（この2倍で握り線そのもの）。</summary>
+        private const float BuntHandsMinApartM = 0.12f;
+
         private float YawForBatterClip(AnimationClip clip)
         {
             // Mixamo素材（gitignore）が無い環境では _swingMissClip が _batterOwnIdle と同一クリップへ
@@ -1715,7 +1748,16 @@ namespace KokoSim.Unity.Match
             // 補正の窓（膝・胴・握り）はMixamoの時刻表。自作構えのときは別クリップの時刻が来るので
             // 構えを代表する固定秒で評価する（そのまま渡すと窓の境目が待機ループの途中に出る）
             float poseT = BatterOnOwnIdle ? OwnIdlePoseRefSec : _batter.Time;
-            DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim);
+            // バント系のクリップの間は握りを詰めない（issue #1087）。収録の Bunt_Loop は「下の手はグリップ・
+            // 上の手はバットの中ほど」の正しい構えなのに、スイング用の補正（両手を GripGapM 0.10m へ寄せる。
+            // 窓は GripEndSec 2.60s まで＝1.1〜1.8秒のバント系クリップは全区間）が潰していた。
+            // 重みはバットを寝かせる補正と同じ（移行の進み・クロスフェードの補間込み）＝手が1コマで飛ばない
+            float gripW = 1f;
+#if UNITY_EDITOR
+            if (!BuntGripOldForCapture)
+#endif
+                gripW = 1f - BuntBatFlatWeight();
+            DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim, gripW);
         }
 
         /// <summary>
@@ -2755,10 +2797,45 @@ namespace KokoSim.Unity.Match
             _passedBallIndex = index;
             if (index < 0) return;
             var clip = _passedBallClips[index];
-            float start = _ballArrival - PassedBallAnchors[index].Moment;
+            // 球が届く直前の反応時間ぶんだけ後逸クリップを流す（issue #1088）。旧実装は「捕り損ねる瞬間」を
+            // 到達に合わせる逆算だけで、Moment（0.24〜0.96s）が飛翔（約0.45s）より長い3本はリリースの瞬間から
+            // 横へ動き出していた＝最初から捕れないと分かっている絵。反応までは普段どおり構えて待ち、
+            // クリップは「捕り損ねる瞬間の反応時間前」から頭出しする（動き出しの区間を飛ばす）。
+            float react = Mathf.Min(PassedBallReactSeconds, PassedBallAnchors[index].Moment);
+#if UNITY_EDITOR
+            if (PassedBallOldForCapture) react = PassedBallAnchors[index].Moment;
+#endif
+            _passedBallSeek = PassedBallAnchors[index].Moment - react;
+            float start = _ballArrival - react;
             if (start > 0f) _passedBallCountdown = start;
-            else SetActorClip(_catcher, clip, -start, 0f);
+            else StartPassedBallClip(_passedBallSeek - start);
         }
+
+        /// <summary>後逸クリップへ乗り換える（構えからの短いクロスフェード。issue #1088）。</summary>
+        private void StartPassedBallClip(float seek)
+        {
+            if (_passedBallIndex < 0 || _catcher == null) return;
+            var clip = _passedBallClips[_passedBallIndex];
+            float fade = PassedBallFadeSeconds;
+#if UNITY_EDITOR
+            if (PassedBallOldForCapture) fade = 0f;
+#endif
+            CrossfadeActorToClip(_catcher, clip, Mathf.Max(0f, seek), 0f, fade);
+        }
+
+        /// <summary>
+        /// 捕れない球に捕手が反応し始める、球の到達の何秒前か（issue #1088）。0.15〜0.25秒を並べた見比べで選んだ。
+        /// 捕り損ねる瞬間（Moment）がこれより短いクリップは Moment をそのまま使う（頭から流す）。
+        /// </summary>
+        private const float PassedBallReactSeconds = 0.20f;
+        /// <summary>構え→後逸クリップのクロスフェード秒（12fps で1コマ。急に体が飛んで見えないため）。</summary>
+        private const float PassedBallFadeSeconds = 0.08f;
+        /// <summary>後逸クリップを頭出しするクリップ内秒（Moment − 反応時間）。</summary>
+        private float _passedBallSeek;
+#if UNITY_EDITOR
+        /// <summary>スクショ用（issue #1088 の見比べ）: 真にするとリリースの瞬間から後逸クリップを流す旧挙動へ戻す。</summary>
+        public static bool PassedBallOldForCapture;
+#endif
 
         /// <summary>
         /// コースに一番近い捕球クリップの添字（無ければ-1＝捕手は待機のまま）。
@@ -3493,7 +3570,7 @@ namespace KokoSim.Unity.Match
             {
                 _passedBallCountdown -= deltaTime;
                 if (_passedBallCountdown < 0f && _passedBallIndex >= 0)
-                    SetActorClip(_catcher, _passedBallClips[_passedBallIndex], 0f, 0f);
+                    StartPassedBallClip(_passedBallSeek);
             }
 
             // ボールはフルレート（design-18 §4.5-②「球筋の読みやすさはゲーム性なので量子化しない」）。
@@ -5501,7 +5578,33 @@ namespace KokoSim.Unity.Match
 #if UNITY_EDITOR
                 if (BuntFlatDisabledForCapture) buntFlat = 0f;
 #endif
-                if (buntFlat > 0.001f) axis = Vector3.Slerp(axis, BuntFlatAxis(), buntFlat).normalized;
+                // バントは「下の手＝ノブ、上の手がバットの中ほど」（issue #1087）。握りを詰めなくなったので両手は
+                // 収録どおり離れており、握り線（ノブ側の手→もう一方の手）がそのままバットの線になる。
+                bool buntHands = buntFlat > 0.001f;
+#if UNITY_EDITOR
+                if (BuntGripOldForCapture) buntHands = false;
+#endif
+                Vector3 knobHand = Vector3.zero;
+                if (buntHands)
+                {
+                    // 当てた後（Bunt_Hitting の走り出し）は両手がバットから離れて交差する＝握り線を軸に使うと
+                    // 1コマ50〜70°暴れる（実測）。当てた瞬間の軸とノブ側の手のまま止めて運ぶ（旧の真横固定と同じく
+                    // 安定）。構えへ戻るクロスフェードの間は止めた軸から握り線へ補間する＝構え直しで飛ばない
+                    bool afterContact = _batter.Clip == _buntHitClip && _batter.Time >= BuntHitContact;
+                    bool fadingFromHit = _batter.FadeRemaining > 0f && _batter.FadeDuration > 1e-4f
+                                         && _batter.FadeFromClip == _buntHitClip;
+                    if (!afterContact && !fadingFromHit) _buntKnobIsLeft = BuntKnobIsLeft(lh, rh);
+                    knobHand = _buntKnobIsLeft ? lh : rh;
+                    var handAxis = BuntHandAxis(knobHand, _buntKnobIsLeft ? rh : lh);
+                    if (afterContact && _buntHeldValid) handAxis = _buntHeldAxis;
+                    else if (fadingFromHit && _buntHeldValid)
+                        handAxis = Vector3.Slerp(_buntHeldAxis, handAxis,
+                            1f - Mathf.Clamp01(_batter.FadeRemaining / _batter.FadeDuration)).normalized;
+                    else { _buntHeldAxis = handAxis; _buntHeldValid = true; }
+                    axis = Vector3.Slerp(axis, handAxis, buntFlat).normalized;
+                }
+                else if (buntFlat > 0.001f)
+                    axis = Vector3.Slerp(axis, BuntFlatAxis(), buntFlat).normalized;
                 bool onIdleLoop = _batter.Clip == _batter.IdleClip;
                 // 見逃しのタイミング取り（トップ）→構えへ戻るクロスフェードの間は、混ざりかけの両手から
                 // 合成軸を採り直さない（握り線の水平方向が混合の途中で回り、バットが1コマ横に寝る＝2026-08-18 実測）。
@@ -5518,6 +5621,8 @@ namespace KokoSim.Unity.Match
                 }
                 if (freezeHeld) axis = _batHeldAxis;
                 var grip = (lh + rh) * 0.5f;
+                // バントの握り点はノブ側の手（両手の中点はバットの真ん中あたりになりノブが合わない。issue #1087）
+                if (buntHands) grip = Vector3.Lerp(grip, knobHand, buntFlat);
                 if (!onIdleLoop && battingClip && _batHeldValid) axis = SwingBatAxis(grip, RestFrameBone());
                 // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。
                 // 傾きは握り点まわりの回転＝ノブは手に残るので離れない。持ち上げは平行移動なので
