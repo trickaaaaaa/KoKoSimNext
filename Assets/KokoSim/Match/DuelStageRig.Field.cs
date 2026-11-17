@@ -569,8 +569,15 @@ namespace KokoSim.Unity.Match
             // 位置だけは engine の真値へ置き続ける＝捕球点と体がずれない
             if (t < st.CatchUntil)
             {
+                // 送球の振りかぶりは体を閉じてグラブの腕を的へ向け、リリースに向けて開く（issue #1095）
+                if (ThrowClosedYaw(pos, t, out float closedYaw))
+                {
+                    st.Yaw = Mathf.MoveTowardsAngle(st.Yaw, closedYaw,
+                        Mathf.Max(st.ThrowYawRate, ThrowOpenRateDegPerSec) * Mathf.Max(0f, dt));
+                    if (Mathf.Abs(Mathf.DeltaAngle(st.Yaw, closedYaw)) < 1e-3f) st.ThrowYawRate = 0f;
+                }
                 // 例外は送球の回頭（issue #505 ②）。捕球中に開き切れなかった残りをここで回す
-                if (st.ThrowYawRate > 0f)
+                else if (st.ThrowYawRate > 0f)
                 {
                     st.Yaw = Mathf.MoveTowardsAngle(st.Yaw, st.ThrowYawTo,
                         st.ThrowYawRate * Mathf.Max(0f, dt));
@@ -2791,12 +2798,25 @@ namespace KokoSim.Unity.Match
             public readonly float HandX, HandZ;
             /// <summary>この収録を使う送球距離の上限[m]。</summary>
             public readonly float MaxDistM;
+            /// <summary>
+            /// 振りかぶりで体を閉じる角度[度]（issue #1095）。この収録は胸を正面に向けたままグラブの腕を体の左へ
+            /// 開いて投げるので、胸を的へ向けるとグラブの腕が的から横へ外れ「別の方向へ投げそう」に見える。
+            /// 振りかぶりの間はこの角度だけ体を回してグラブの腕を的へ向け、リリースに向けて的へ開く。
+            /// 値は収録ごとの実測（グラブの腕が一番伸びた瞬間の、腕の向きと体の正面の差）。0＝閉じない。
+            /// </summary>
+            public readonly float ClosedYawDeg;
+            /// <summary>
+            /// 外野手が使うときの閉じる角度[度]。外野の返球は胸が的に対して真横になるまで深く閉じる
+            /// （実測ちょうどでは閉じが足りなく見えた・内野は実測のままがよかった＝2026-11-17 ユーザー確認）。
+            /// </summary>
+            public readonly float OutfieldClosedYawDeg;
 
             public FieldThrowAnchor(string clip, float release, float handY,
-                float handX, float handZ, float maxDistM)
+                float handX, float handZ, float maxDistM, float closedYawDeg = 0f, float outfieldClosedYawDeg = 0f)
             {
                 Clip = clip; Release = release; HandY = handY;
-                HandX = handX; HandZ = handZ; MaxDistM = maxDistM;
+                HandX = handX; HandZ = handZ; MaxDistM = maxDistM; ClosedYawDeg = closedYawDeg;
+                OutfieldClosedYawDeg = outfieldClosedYawDeg;
             }
         }
 
@@ -2812,8 +2832,14 @@ namespace KokoSim.Unity.Match
         private static readonly FieldThrowAnchor[] FieldThrowAnchors =
         {
             new("AA_Baseball_Defender_Pass_the_ball_type02", 0.68f, 0.765f, 0.247f, 0.466f, 15f),
-            new("AA_Baseball_Defender_Pass_the_ball_type01", 0.76f, 1.172f, 0.361f, 0.718f, 45f),
-            new("AA_Baseball_Defender_Pass_the_ball_type03", 1.36f, 1.436f, -0.122f, 0.655f, float.MaxValue),
+            // 閉じる角度（issue #1095）: type01＝グラブの腕 −34〜−67°（外野4場面の実測 2026-11-17）・
+            // type03＝−75〜−98°。トス（type02・15m以下）は胸を向けて渡す形のままでよい＝0。
+            // 内野は実測値（58/85）。外野の返球は実測値では胸の閉じが足りなく見えた（2026-11-17 ユーザー確認）＝
+            // 胸が的に対して真横になるまで閉じる（グラブの腕は的の少し先を指す）
+            new("AA_Baseball_Defender_Pass_the_ball_type01", 0.76f, 1.172f, 0.361f, 0.718f, 45f,
+                closedYawDeg: 58f, outfieldClosedYawDeg: 90f),
+            new("AA_Baseball_Defender_Pass_the_ball_type03", 1.36f, 1.436f, -0.122f, 0.655f, float.MaxValue,
+                closedYawDeg: 85f, outfieldClosedYawDeg: 110f),
         };
 
         /// <summary>捕手の送球（盗塁の二塁送球）。しゃがみから立ちながら投げる専用収録。</summary>
@@ -3282,6 +3308,44 @@ namespace KokoSim.Unity.Match
                 e.Fired = true;
                 _throwEvents[i] = e;
             }
+        }
+
+        /// <summary>リリースの何秒前から閉じた体を的へ開き始めるか（issue #1095。実物の肩の開きは最後の0.2秒前後）。</summary>
+        private const float ThrowOpenSeconds = 0.25f;
+        /// <summary>閉じる・開くときの体の回り方の上限[度/秒]（開きを ThrowOpenSeconds で回し切れる速さ＋余裕）。</summary>
+        private const float ThrowOpenRateDegPerSec = 720f;
+#if UNITY_EDITOR
+        /// <summary>スクショ用（issue #1095 の見比べ）: 真にすると閉じない（胸を的へ向けたまま投げる旧挙動）。</summary>
+        public static bool ThrowClosedWindupOffForCapture;
+#endif
+
+        /// <summary>
+        /// その野手が時刻 t に送球の振りかぶり中なら、描く体の向き（閉じた向き→的へ開く）を返す（issue #1095）。
+        /// 閉じる量は収録ごとの <see cref="FieldThrowAnchor.ClosedYawDeg"/>（外野手は <see cref="FieldThrowAnchor.OutfieldClosedYawDeg"/>）。
+        /// リリースの1コマ前に的の向き（e.Yaw）へ
+        /// 戻し切る＝球が手を離れる瞬間の向きは従来どおり（ThrowHandoffSeconds の寄せも変わらない）。
+        /// </summary>
+        private bool ThrowClosedYaw(FieldPosition pos, float t, out float yaw)
+        {
+            yaw = 0f;
+#if UNITY_EDITOR
+            if (ThrowClosedWindupOffForCapture) return false;
+#endif
+            for (int i = 0; i < _throwEvents.Count; i++)
+            {
+                var e = _throwEvents[i];
+                if (e.From != pos || !e.Fired || t < e.TFire || t >= e.TRelease) continue;
+                float closed = IsOutfield(pos) ? e.Anchor.OutfieldClosedYawDeg : e.Anchor.ClosedYawDeg;
+                if (Mathf.Abs(closed) < 1e-3f) return false;
+                // 左投げ（鏡映親の下）はグラブの腕が逆側へ開く＝閉じる向きも逆
+                closed *= MirrorSign(FielderActor(pos));
+                float openEnd = e.TRelease - 1f / PoseFps;
+                float u = Mathf.InverseLerp(openEnd - ThrowOpenSeconds, openEnd, t);
+                float w = 1f - u * u * (3f - 2f * u);
+                yaw = e.Yaw + closed * w;
+                return true;
+            }
+            return false;
         }
 
         /// <summary>

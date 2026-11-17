@@ -19,6 +19,10 @@ namespace KokoSim.Unity.Match
         private const string Dir = "screenshots/of-run-through-1079";
         private const int W = 1600, H = 900;
 
+        /// <summary>この文字列を含むシナリオだけ撮る（null＝全部）。</summary>
+        public static string Only;
+        /// <summary>真なら送球の振りかぶりで体を閉じない（issue #1095 の見比べ用の旧挙動）。</summary>
+        public static bool ClosedOff;
         /// <summary>外野手の送球の収録を強制する添字（−1＝距離で選ぶ通常どおり）。</summary>
         public static int ThrowAnchor = -1;
 
@@ -28,6 +32,8 @@ namespace KokoSim.Unity.Match
             ("of-grounder-runner-cf-lab", DuelStageRig.OutfieldRunThroughPick.TypeF),
             ("of-grounder-runner-rf-lab", DuelStageRig.OutfieldRunThroughPick.TypeF),
             ("of-grounder-norunner-lab", DuelStageRig.OutfieldRunThroughPick.Current),
+            // 内野ゴロの一塁送球（issue #1095: 送球の振りかぶりで体を閉じる補正の確認）
+            ("if-grounder-3b-lab", DuelStageRig.OutfieldRunThroughPick.Current),
         };
         /// <summary>捕る瞬間からの相対秒（最後の1枚は投げ始めの直前に別に撮る）。</summary>
         public static float[] Offsets = { -0.45f, -0.20f, 0f, 0.30f, 0.60f, 0.90f };
@@ -39,8 +45,10 @@ namespace KokoSim.Unity.Match
             Application.runInBackground = true;
             Directory.CreateDirectory(Dir);
             DuelStageRig.OutfieldThrowAnchorForCapture = ThrowAnchor;
+            DuelStageRig.ThrowClosedWindupOffForCapture = ClosedOff;
             foreach (var run in Runs)
             {
+                if (Only != null && !run.Scenario.Contains(Only)) continue;
                 DuelStageRig.OutfieldRunThroughPickForCapture = run.Pick;
                 MatchLiveController.ScenarioIdForCapture = run.Scenario;
                 MatchLiveController.GameSeedOverrideForCapture = 1;
@@ -54,7 +62,7 @@ namespace KokoSim.Unity.Match
                 if (!ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();
                 ctrl.SetSpeedForCapture(1f);
 
-                string tag = (ThrowAnchor >= 0 ? "throw" + ThrowAnchor + "-" : "") + run.Scenario.Replace("of-grounder-", "").Replace("-lab", "") + "-" + run.Pick;
+                string tag = (ClosedOff ? "open-" : "") + (ThrowAnchor >= 0 ? "throw" + ThrowAnchor + "-" : "") + run.Scenario.Replace("of-grounder-", "").Replace("-lab", "") + "-" + run.Pick;
                 float guard = 0f;
                 while (!ctrl.FieldPlayActiveForCapture && guard < 60f) { guard += Time.deltaTime; yield return null; }
                 var play = ctrl.CurrentPa?.Play;
@@ -98,6 +106,7 @@ namespace KokoSim.Unity.Match
             }
             DuelStageRig.OutfieldRunThroughPickForCapture = DuelStageRig.OutfieldRunThroughPick.TypeF;
             DuelStageRig.OutfieldThrowAnchorForCapture = -1;
+            DuelStageRig.ThrowClosedWindupOffForCapture = false;
             MatchLiveController.ScenarioIdForCapture = null;
             MatchLiveController.GameSeedOverrideForCapture = null;
             MatchLiveController.ManagerIsAwayOverrideForCapture = null;
