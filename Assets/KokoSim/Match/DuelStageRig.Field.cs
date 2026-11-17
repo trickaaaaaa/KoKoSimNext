@@ -570,10 +570,10 @@ namespace KokoSim.Unity.Match
             if (t < st.CatchUntil)
             {
                 // 送球の振りかぶりは体を閉じてグラブの腕を的へ向け、リリースに向けて開く（issue #1095）
-                if (ThrowClosedYaw(pos, t, out float closedYaw))
+                if (ThrowClosedYaw(pos, t, out float closedYaw, out float closeRate))
                 {
                     st.Yaw = Mathf.MoveTowardsAngle(st.Yaw, closedYaw,
-                        Mathf.Max(st.ThrowYawRate, ThrowOpenRateDegPerSec) * Mathf.Max(0f, dt));
+                        Mathf.Max(st.ThrowYawRate, closeRate) * Mathf.Max(0f, dt));
                     if (Mathf.Abs(Mathf.DeltaAngle(st.Yaw, closedYaw)) < 1e-3f) st.ThrowYawRate = 0f;
                 }
                 // 例外は送球の回頭（issue #505 ②）。捕球中に開き切れなかった残りをここで回す
@@ -1198,6 +1198,18 @@ namespace KokoSim.Unity.Match
             // 頂点（2.06m）から下がり、1.67〜2.00s で胸へ引き寄せて押さえ込み、2.17s〜 向き直って構える
             new("AA_Baseball_Defender_Movement_Run_Back_To_Jumping_Catch", 1.36f, 1.581f, -0.252f, 0.287f,
                 CatchApproach.Back, missEndSeconds: 1.70f),
+            // ── ここから下は「届かない」芝居（DiveMiss）専用（issue #1084）。捕れた側（Dive）では選ばない ──
+            // 前へ走り込む: 低く伸ばして捕る収録（落ちてくる球が足元のグラブの先へ落ちる）
+            new("AA_Baseball_Defender_Movement_Run_To_Catching_Type02", 0.76f, 0.253f, -0.020f, 0.110f,
+                CatchApproach.Forward, missEndSeconds: 0.90f),
+            // 横（右中間・左中間）: 球の方を見ながら走って伸ばす収録
+            new("AA_Baseball_Defender_Movement_Run_L90_To_Catching_Type01", 0.70f, 1.594f, -0.213f, 0.231f,
+                CatchApproach.Left, missEndSeconds: 0.84f),
+            new("AA_Baseball_Defender_Movement_Run_R90_To_Catching_Type01", 0.84f, 1.483f, -0.394f, 0.277f,
+                CatchApproach.Right, missEndSeconds: 0.98f),
+            // その場（フェンス際で待つ形）: 跳んで伸ばす収録
+            new("AA_Baseball_Defender_Catching_Jumping_Catch", 1.08f, 1.665f, -0.064f, 0.203f,
+                CatchApproach.Still, missEndSeconds: 1.30f),
             // 【廃止 issue #674】横っ飛び（Sprint_Diving_Catch 0.80s）とスライディング（Sprint_Sliding_Catch 0.88s）。
             // どちらも体が空中で横に伸びて地面から浮いたように見え、捕ったあとは体を丸めて転がって立ち上がる
             // ＝外野手の飛びつきが不恰好（オーナー指摘）。収録は購入モーションで中身は直せないので出さない。
@@ -1205,6 +1217,27 @@ namespace KokoSim.Unity.Match
         };
 
         private const int DiveAnchorBackJump = 0;
+        private const int MissAnchorForward = 1, MissAnchorLeft = 2, MissAnchorRight = 3, MissAnchorStill = 4;
+
+        /// <summary>「届かない」芝居の収録を近づき方で選ぶ純関数（issue #1084。乱数を引かない）。
+        /// 飛び込み（横っ飛び・スライディング）は使わない（#674 の廃止を維持・オーナー決定 2026-11-17）。</summary>
+        private static int SelectFieldMiss(CatchApproach approach) => approach switch
+        {
+            CatchApproach.Back => DiveAnchorBackJump,
+            CatchApproach.Forward => MissAnchorForward,
+            CatchApproach.Left => MissAnchorLeft,
+            CatchApproach.Right => MissAnchorRight,
+            _ => MissAnchorStill,
+        };
+
+        /// <summary>飛球の着地の直後に、球が弾む区間（engine の MissedFlyShortHop・issue #1084）が続くか。</summary>
+        private static bool FollowedByShortHop(PlaybackPlay play, PlaybackBallSegment flight)
+        {
+            foreach (var s in play.Ball)
+                if (s is EndpointBallSegment b && b.Kind == BallSegmentKind.Bounce && Mathf.Abs((float)(b.T0 - flight.T1)) < 1e-3f)
+                    return true;
+            return false;
+        }
 
         /// <summary>悪送球の捕り損ね（issue #812）に流す収録: 頭上を抜ける＝ジャンプ捕球／脇を抜ける＝一塁手の伸び。
         /// <see cref="FieldCatchAnchors"/> の添字。</summary>
@@ -1600,6 +1633,8 @@ namespace KokoSim.Unity.Match
         /// <summary>【撮影ハーネス用】このプレーの芝居の予定表（誰が・いつ・何を）。</summary>
         /// <summary>【撮影ハーネス用】直近のプレーで「届かない」芝居の候補がどう扱われたか（issue #1075）。</summary>
         public string MissDiagForCapture => _missDiag ?? "-";
+        /// <summary>【撮影用】届かない芝居で球が通る瞬間の、グラブと球の距離[m]（issue #1084）。負＝未計測。</summary>
+        public float MissGloveGapForCapture = -1f;
         private string _missDiag;
 
         public string FieldCatchPlanForCapture()
@@ -1765,11 +1800,13 @@ namespace KokoSim.Unity.Match
                 }
                 else if (kind == FieldCatchKind.DiveMiss)
                 {
-                    // 横っ飛びを廃止した（#674）ので、届かなかった絵は背走ジャンプだけ。前進・横は従来の
-                    // 「完全に抜けた当たり」と同じく誰も芝居をしない（落球に捕球クリップを流さない）
-                    anchor = app == CatchApproach.Back ? DiveAnchorBackJump : -1;
-                    _missDiag = $"届かない候補: {who} 距離={bestD:F2}m 近づき方={app}" + (anchor < 0 ? "→芝居なし" : "→背走ジャンプ");
-                    if (anchor < 0) continue;
+                    // 着地した球が野手の側へ弾み、それを走りながら掬う打球（engine が弾みの区間を足した＝issue #1084）は
+                    // 届かない芝居を出さない＝弾んだ球の捕球（走りながら掬う収録）に任せる
+                    if (FollowedByShortHop(play, seg)) { _missDiag = $"届かない候補: {who} →弾んだ球を掬う"; continue; }
+                    // 追う向きで収録を選ぶ（issue #1084）。横っ飛び・スライディングは使わない（#674）
+                    app = MissApproachAt(play, who, tc - 0.4f, seg, tLocal);
+                    anchor = SelectFieldMiss(app);
+                    _missDiag = $"届かない候補: {who} 距離={bestD:F2}m 近づき方={app}→{FieldDiveAnchors[anchor].Clip}";
                 }
                 else
                 {
@@ -1888,6 +1925,17 @@ namespace KokoSim.Unity.Match
 
                 // 捕り損ねは体を球へ寄せない（寄せると届いてしまう。外れる量は engine の幾何のまま）
                 if (kind == FieldCatchKind.Miss) bodyShift = Vector2.zero;
+                if (kind == FieldCatchKind.DiveMiss)
+                {
+                    // 届かない飛球（issue #1084）: 体を球へ寄せない・球へ向けない＝engine の立ち位置と走る向きのまま、
+                    // 球が落ちる瞬間に腕を伸ばす。グラブと球の間は engine の幾何（全力で追って判定の遅れぶん届かない）
+                    // そのもの。寄せると走る向きと逆へ引き戻す絵になった（ライナーは落下点の数m手前でグラブの高さを通る）
+                    bodyShift = Vector2.zero;
+                    pt = new Vector3((float)end.X, an.GloveY, (float)end.Y);
+                    pulled = 0f;
+                    lineOff = 0f;
+                    _missDiag += $" 余裕={catchMargin:F2}s 野手と落下点={bestD:F2}m";
+                }
                 _catchEvents.Add(new FieldCatchEvent
                 {
                     BodyShift = bodyShift,
@@ -2041,6 +2089,30 @@ namespace KokoSim.Unity.Match
         /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
         private const float CatchBallBlendSeconds = 0.30f;
 
+        /// <summary>
+        /// 届かない飛球（issue #1084）を追う向き。<see cref="ApproachAt"/> は走る向きと「野手→落下点」を比べるが、
+        /// 届かない野手は落下点へまっすぐ走る（PR #1083 の到着レッグ）ので常に「前」になる。こちらは
+        /// **球が飛んでくる向き**と比べる: 球へ向かって走る＝前／球と同じ向きへ走る＝背走（頭を越える）／
+        /// 横切る＝球が来る側（左右）。
+        /// </summary>
+        private static CatchApproach MissApproachAt(PlaybackPlay play, FieldPosition pos, float t,
+            PlaybackBallSegment seg, double tEnd)
+        {
+            float ta = Mathf.Max(0f, t - LocoSampleDt), tb = t + LocoSampleDt;
+            var pa = PlaybackEvaluator.FielderAt(play, pos, ta).Pos;
+            var pb = PlaybackEvaluator.FielderAt(play, pos, tb).Pos;
+            var v = new Vector2((float)(pb.X - pa.X), (float)(pb.Y - pa.Y)) / Mathf.Max(1e-4f, tb - ta);
+            if (v.magnitude < CatchApproachSpeedMps) return CatchApproach.Still;
+            var end = seg.At(tEnd);
+            var back = seg.At(System.Math.Max(0.0, tEnd - 0.1));
+            var fromBall = new Vector2((float)(back.X - end.X), (float)(back.Y - end.Y));   // 球が来る方
+            if (fromBall.sqrMagnitude < 1e-8f) return CatchApproach.Still;
+            float ang = Vector2.SignedAngle(v.normalized, fromBall.normalized);
+            if (Mathf.Abs(ang) < 45f) return CatchApproach.Forward;
+            if (Mathf.Abs(ang) > 135f) return CatchApproach.Back;
+            return ang > 0f ? CatchApproach.Left : CatchApproach.Right;
+        }
+
         /// <summary>時刻 t での近づき方（球へ向かって走っているか・横か・後ろか）。</summary>
         private static CatchApproach ApproachAt(PlaybackPlay play, FieldPosition pos, float t, PlaybackBall end)
         {
@@ -2134,7 +2206,8 @@ namespace KokoSim.Unity.Match
                         //    引き寄せた狙点はグラブの居場所そのものなので、**向きを合わせて初めて一致する**
                         // 左投げ（鏡映中・issue #795）はグラブが体の反対側＝横の符号を返す
                         var gh = new Vector2(anchor.GloveX * MirrorSign(a), anchor.GloveZ);
-                        if (gh.magnitude > 0.05f)
+                        // 届かない芝居（issue #1084）は走る向きのまま＝球へ向け直さない（向け直すと走る向きと食い違う）
+                        if (gh.magnitude > 0.05f && e.Kind != FieldCatchKind.DiveMiss)
                         {
                             var here = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, e.TCatch).Pos;
                             // 体を寄せる捕球（issue #782）は、寄せ切った位置から球を向く
@@ -2628,6 +2701,14 @@ namespace KokoSim.Unity.Match
                 // 「届かなかった」の表現そのものになる。外れる量は engine の幾何
                 // （その時刻の野手の位置と球の位置の差）がそのまま出る＝絵のために距離を発明しない
                 // フライ落球（issue #813）だけは例外: グラブは球に届いている（当てて落とす）
+                if (e.Kind == FieldCatchKind.DiveMiss && t <= e.TCatch + 1e-4f && t > e.TCatch - 1f / PoseFps)
+                {
+                    // 届かない芝居の実測（issue #1084）: 球が通る瞬間のグラブ（ミット中心）と球の距離
+                    var am = FielderActor(kv.Key);
+                    if (am?.Animator != null)
+                        MissGloveGapForCapture = Vector3.Distance(DuelCatcherPose.MittCenter(am.Animator),
+                            _root.transform.TransformPoint(e.Point));
+                }
                 if (!HoldsBall(e.Kind) && e.Kind != FieldCatchKind.Drop) continue;
                 var a = FielderActor(kv.Key);
                 if (a == null || a.Animator == null) continue;
@@ -2810,13 +2891,24 @@ namespace KokoSim.Unity.Match
             /// （実測ちょうどでは閉じが足りなく見えた・内野は実測のままがよかった＝2026-11-17 ユーザー確認）。
             /// </summary>
             public readonly float OutfieldClosedYawDeg;
+            /// <summary>
+            /// 閉じた体を的へ開く秒と、開き切るのがリリースちょうどか（偽＝リリースの1コマ前）。収録ごとに違う
+            /// （2026-11-17 ユーザー見比べ）: 上手投げ（type03）は投げる腕が前へ出るのが最後の一瞬なので、0.25 秒で
+            /// 早く開くと腕が後ろにあるうちに胸だけ的を向いた＝最後の 0.08 秒でリリースちょうどに開く。速い横手
+            /// （type01）は逆に、最後まで閉じたままだとグラブの腕が的の先を指し続けて「三塁ベンチへ投げそう」に
+            /// 見えた＝0.25 秒で1コマ前に開き切る（内野も同じ）。
+            /// </summary>
+            public readonly float OpenSeconds;
+            public readonly bool OpenAtRelease;
 
             public FieldThrowAnchor(string clip, float release, float handY,
-                float handX, float handZ, float maxDistM, float closedYawDeg = 0f, float outfieldClosedYawDeg = 0f)
+                float handX, float handZ, float maxDistM, float closedYawDeg = 0f, float outfieldClosedYawDeg = 0f,
+                float openSeconds = 0.25f, bool openAtRelease = false)
             {
                 Clip = clip; Release = release; HandY = handY;
                 HandX = handX; HandZ = handZ; MaxDistM = maxDistM; ClosedYawDeg = closedYawDeg;
                 OutfieldClosedYawDeg = outfieldClosedYawDeg;
+                OpenSeconds = openSeconds; OpenAtRelease = openAtRelease;
             }
         }
 
@@ -2838,8 +2930,10 @@ namespace KokoSim.Unity.Match
             // 胸が的に対して真横になるまで閉じる（グラブの腕は的の少し先を指す）
             new("AA_Baseball_Defender_Pass_the_ball_type01", 0.76f, 1.172f, 0.361f, 0.718f, 45f,
                 closedYawDeg: 58f, outfieldClosedYawDeg: 90f),
+            // 上手投げの外野は 110° だと収録自体の閉じ（約16°）と重なって胸が的から 126° 外れ、背を向けかけた
+            // ＝内野と同じ 85°（2026-11-17 見比べでユーザー選択）
             new("AA_Baseball_Defender_Pass_the_ball_type03", 1.36f, 1.436f, -0.122f, 0.655f, float.MaxValue,
-                closedYawDeg: 85f, outfieldClosedYawDeg: 110f),
+                closedYawDeg: 85f, outfieldClosedYawDeg: 85f, openSeconds: 0.08f, openAtRelease: true),
         };
 
         /// <summary>捕手の送球（盗塁の二塁送球）。しゃがみから立ちながら投げる専用収録。</summary>
@@ -3310,24 +3404,31 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        /// <summary>リリースの何秒前から閉じた体を的へ開き始めるか（issue #1095。実物の肩の開きは最後の0.2秒前後）。</summary>
-        private const float ThrowOpenSeconds = 0.25f;
-        /// <summary>閉じる・開くときの体の回り方の上限[度/秒]（開きを ThrowOpenSeconds で回し切れる速さ＋余裕）。</summary>
+#if UNITY_EDITOR
+        /// <summary>スクショ用: 開きの秒の上書き（負＝既定のまま）。</summary>
+        public static float ThrowOpenSecondsOverrideForCapture = -1f;
+        /// <summary>スクショ用: 開き切る時刻をリリースの何秒前にするか（負＝収録の表のまま）。</summary>
+        public static float ThrowOpenEndLeadOverrideForCapture = -1f;
+#endif
+        /// <summary>閉じる・開くときの体の回り方の上限[度/秒]（下限。実際は開く角度÷開きの秒から上げる）。</summary>
         private const float ThrowOpenRateDegPerSec = 720f;
 #if UNITY_EDITOR
         /// <summary>スクショ用（issue #1095 の見比べ）: 真にすると閉じない（胸を的へ向けたまま投げる旧挙動）。</summary>
         public static bool ThrowClosedWindupOffForCapture;
+        /// <summary>スクショ用: 外野手の閉じる角度を収録によらずこの値[度]にする（負＝表のまま）。</summary>
+        public static float OutfieldClosedYawOverrideForCapture = -1f;
 #endif
 
         /// <summary>
         /// その野手が時刻 t に送球の振りかぶり中なら、描く体の向き（閉じた向き→的へ開く）を返す（issue #1095）。
         /// 閉じる量は収録ごとの <see cref="FieldThrowAnchor.ClosedYawDeg"/>（外野手は <see cref="FieldThrowAnchor.OutfieldClosedYawDeg"/>）。
-        /// リリースの1コマ前に的の向き（e.Yaw）へ
-        /// 戻し切る＝球が手を離れる瞬間の向きは従来どおり（ThrowHandoffSeconds の寄せも変わらない）。
+        /// 閉じた構えを保ち、収録ごとの <see cref="FieldThrowAnchor.OpenSeconds"/> で的の向き（e.Yaw）へ開き切る
+        /// ＝球が手を離れる瞬間の向きは従来どおり。
         /// </summary>
-        private bool ThrowClosedYaw(FieldPosition pos, float t, out float yaw)
+        private bool ThrowClosedYaw(FieldPosition pos, float t, out float yaw, out float rate)
         {
             yaw = 0f;
+            rate = ThrowOpenRateDegPerSec;
 #if UNITY_EDITOR
             if (ThrowClosedWindupOffForCapture) return false;
 #endif
@@ -3336,13 +3437,23 @@ namespace KokoSim.Unity.Match
                 var e = _throwEvents[i];
                 if (e.From != pos || !e.Fired || t < e.TFire || t >= e.TRelease) continue;
                 float closed = IsOutfield(pos) ? e.Anchor.OutfieldClosedYawDeg : e.Anchor.ClosedYawDeg;
+#if UNITY_EDITOR
+                if (IsOutfield(pos) && OutfieldClosedYawOverrideForCapture >= 0f) closed = OutfieldClosedYawOverrideForCapture;
+#endif
                 if (Mathf.Abs(closed) < 1e-3f) return false;
                 // 左投げ（鏡映親の下）はグラブの腕が逆側へ開く＝閉じる向きも逆
                 closed *= MirrorSign(FielderActor(pos));
-                float openEnd = e.TRelease - 1f / PoseFps;
-                float u = Mathf.InverseLerp(openEnd - ThrowOpenSeconds, openEnd, t);
+                float openSec = e.Anchor.OpenSeconds;
+                float openEnd = e.Anchor.OpenAtRelease ? e.TRelease : e.TRelease - 1f / PoseFps;
+#if UNITY_EDITOR
+                if (ThrowOpenSecondsOverrideForCapture > 0f) openSec = ThrowOpenSecondsOverrideForCapture;
+                if (ThrowOpenEndLeadOverrideForCapture >= 0f) openEnd = e.TRelease - ThrowOpenEndLeadOverrideForCapture;
+#endif
+                float u = Mathf.InverseLerp(openEnd - openSec, openEnd, t);
                 float w = 1f - u * u * (3f - 2f * u);
                 yaw = e.Yaw + closed * w;
+                // 開きを openSec で回し切れる速さ（smoothstep の最大傾き 1.5 倍＋余裕）
+                rate = Mathf.Max(ThrowOpenRateDegPerSec, 1.6f * Mathf.Abs(closed) / openSec);
                 return true;
             }
             return false;

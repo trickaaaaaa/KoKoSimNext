@@ -849,15 +849,21 @@ public static class TimelineBuilder
                         : Math.Min(speed, need);
                 }
                 var t1 = t0 + dist / pace;
-                FielderMove? pickupLeg = null;
+                IReadOnlyList<FielderMove>? afterLegs = null;
+                var chaseProfile = MoveProfile.Trapezoid;
                 if (isBallFielder && PlanMissedFlyChase(
-                        play, landAt, fieldedAt, ClampToFence(landing, field, play.BearingDeg, FenceBodyMarginM),
-                        ballFielderTarget, moveFrom, speed, t0, fielderReachM, a.Position) is { } chase)
+                        play, landAt, fieldedAt, landing, ClampToFence(landing, field, play.BearingDeg, FenceBodyMarginM),
+                        ballFielderTarget, moveFrom, speed, t0, fielderReachM, a.Position,
+                        ExtraBaseResolver.ReadySeconds(fieldedAt, play.FielderFielding, fieldingCoeff ?? new FieldingCoefficients()))
+                        is { } chase)
                 {
                     // 落とした飛球（issue #1075）: 落下点へ追う→着地後に拾う点へ向かい直す、の2段。
-                    // 絵の到着を判定の遅れぶん着地より後へ置く＝「追いついたのに落ちた」絵を作らない
+                    // 絵の到着を判定の遅れぶん着地より後へ置く＝「追いついたのに落ちた」絵を作らない。
+                    // 追う段は全力のまま（issue #1084）。着地の瞬間に拾う打球は球を弾ませて拾い直す
                     (t0, t1, to) = (chase.Chase.T0, chase.Chase.T1, chase.Chase.To);
-                    pickupLeg = chase.Pickup;
+                    chaseProfile = chase.Chase.Profile;
+                    afterLegs = chase.After;
+                    if (chase.Hop is { } hop) ball.Add(hop);
                 }
                 else if (isBallFielder)
                 {
@@ -865,8 +871,8 @@ public static class TimelineBuilder
                     to = StopWithinReach(moveFrom, to, pace * (t1 - t0), fielderReachM);
                     if (a.Position == FieldPosition.FirstBase) firstBaseFieldEnd = to; // アンアシスト運びの起点（#400）
                 }
-                moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
-                if (pickupLeg is { } pl) moves.Add(pl);
+                moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task, Profile = chaseProfile });
+                if (afterLegs is not null) moves.AddRange(afterLegs);
 
                 // バックアップ/中継で持ち場を離れた野手は、決着後に定位置へ戻る（"寄ったまま"を防ぐ, #2）。
                 // ⚠ 戻り先は**出発した場所**（＝判定が距離を測った FieldGeometry の守備位置）。以前は
@@ -3942,7 +3948,129 @@ public static class TimelineBuilder
     /// </list>
     /// 遅れが無い（捕れた・余裕が正）ときは null＝呼び出し側が従来の1本レッグで描く。
     /// </summary>
-    private static (FielderMove Chase, FielderMove? Pickup)? PlanMissedFlyChase(
+    private static (FielderMove Chase, IReadOnlyList<FielderMove> After, BallSegment? Hop)? PlanMissedFlyChase(
+        FieldingPlay play, double landAt, double fieldedAt, TimelinePoint landing, TimelinePoint chaseTarget,
+        TimelinePoint pickupTarget, TimelinePoint from, double speed, double startT, double reachM, FieldPosition role,
+        double readyAt)
+    {
+        if (PlanMissedFlyChaseCore(play, landAt, fieldedAt, chaseTarget, pickupTarget, from, speed, startT, reachM, role)
+            is not { } plan) return null;
+        // 全力のまま追う（issue #1084）: 減速して落下点で止まる台形だと、届かない球を「緩めて見送った」絵になる
+        if (plan.Pickup is { } pickup)
+            return FlowMissedFlyChase(plan.Chase, pickup, from, speed, fieldedAt, reachM) is { } flowed
+                ? (flowed.Chase, flowed.After, null)
+                : (plan.Chase, new[] { pickup }, null);
+        // 着地の瞬間に拾う（1本レッグ）: 落下点で待って捕った絵になる＝球をグラブの先で弾ませて拾い直す
+        if (plan.Chase.Task == FielderTask.FieldBall && Math.Abs(fieldedAt - landAt) <= MissedFlyMinLateSeconds
+            && Distance(plan.Chase.To, pickupTarget) < 0.5 && Distance(landing, pickupTarget) < 0.5
+            && MissedFlyShortHop(play, landAt, landing, pickupTarget, from, speed, startT, role, readyAt) is { } hop)
+            return hop;
+        return (plan.Chase, Array.Empty<FielderMove>(), null);
+    }
+
+    /// <summary>落とした飛球を拾い直す前に、勢いのまま運ぶ距離の上限[m]・秒の目安（issue #1084）。</summary>
+    private const double MissedFlyCarryMaxM = 3.0, MissedFlyCarrySeconds = 0.5;
+    /// <summary>グラブの先で弾ませた球を拾う時刻の、着地からの遅れの下限・上限[s]（判定の遅れをこの幅へ収める）。</summary>
+    private const double MissedFlyHopMinSeconds = 0.10, MissedFlyHopMaxSeconds = 0.35;
+    /// <summary>弾ませた球を拾ってから勢いのまま運び終える、着地からの上限[s]（送球の握り替えより十分前）。</summary>
+    private const double MissedFlyHopCarryEndSeconds = 0.60;
+    /// <summary>グラブの先で弾む球の頂点[m]。</summary>
+    private const double MissedFlyHopApexM = 0.5;
+
+    /// <summary>
+    /// 2段（落下点へ追う→拾う点へ向かい直す）を、止まらずに流れる移動へ組み直す（issue #1084・表示専用）。
+    /// 追う段は減速しない（<see cref="MoveProfile.RunIn"/>）。拾う点がほぼ同じ向きの先なら、巡航の速さのまま入って
+    /// 最後だけ減速する（<see cref="MoveProfile.CruiseOut"/>）。向きが違えば勢いのまま少し運んで止まり
+    /// （<see cref="MoveProfile.RunOut"/>）、そこから拾いに向かう。拾う時刻（判定）に間に合わないなら null＝従来の2段。
+    /// </summary>
+    private static (FielderMove Chase, IReadOnlyList<FielderMove> After)? FlowMissedFlyChase(
+        FielderMove chase, FielderMove pickup, TimelinePoint from, double speed, double fieldedAt, double reachM)
+    {
+        var chaseDist = Distance(from, chase.To);
+        var chaseDur = chase.T1 - chase.T0;
+        if (chaseDist < RunThroughMinLegM || chaseDur <= 0.05) return null;
+        var vEnd = chaseDist / chaseDur * Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.RunIn);
+        if (vEnd < RunThroughMinSpeedMps) return null;
+        var flowChase = chase with { Profile = MoveProfile.RunIn };
+        var dir = new TimelinePoint((chase.To.X - from.X) / chaseDist, (chase.To.Z - from.Z) / chaseDist);
+
+        var pickDist = Distance(chase.To, pickup.To);
+        if (pickDist >= 0.5)
+        {
+            var cos = ((pickup.To.X - chase.To.X) * dir.X + (pickup.To.Z - chase.To.Z) * dir.Z) / pickDist;
+            var cruiseDur = pickDist * Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.CruiseOut) / vEnd;
+            if (cos >= 0.5 && chase.T1 + cruiseDur <= fieldedAt + 1e-9)
+                return (flowChase, new[] { pickup with { T0 = chase.T1, T1 = chase.T1 + cruiseDur, Profile = MoveProfile.CruiseOut } });
+        }
+
+        // 向きが違う（または巡航のままでは早すぎ・遅すぎ）: 勢いのまま運んで止まり、そこから拾いに向かう
+        var carry = Math.Min(MissedFlyCarryMaxM, vEnd * MissedFlyCarrySeconds / 2);
+        var carryEnd = chase.T1 + 2 * carry / vEnd;
+        var carryTo = new TimelinePoint(chase.To.X + dir.X * carry, chase.To.Z + dir.Z * carry);
+        var need = Distance(carryTo, pickup.To);
+        var (p0, p1) = ArriveByFieldedAt(carryEnd, carryEnd + need / speed, fieldedAt);
+        if (p0 < carryEnd - 1e-9 || need - speed * (p1 - p0) > reachM) return null;
+        var carryMove = new FielderMove
+        {
+            Role = chase.Role, T0 = chase.T1, T1 = carryEnd, To = carryTo, Task = chase.Task, Profile = MoveProfile.RunOut,
+        };
+        if (need < 0.5) return (flowChase, new[] { carryMove });
+        var pickupTo = StopWithinReach(carryTo, pickup.To, speed * (p1 - p0), reachM);
+        return (flowChase, new[] { carryMove, pickup with { T0 = p0, T1 = p1, To = pickupTo } });
+    }
+
+    /// <summary>
+    /// 着地の瞬間に拾う（判定の拾う時刻＝着地）落とした飛球を、「グラブの先で弾んだ球を走りながら掬う」絵にする
+    /// （issue #1084・表示専用）。球は落下点から野手の側へ1つ弾み、野手は減速せずに（<see cref="MoveProfile.RunIn"/>）
+    /// 弾んだ先で掬い、勢いのまま落下点まで運んで止まる（<see cref="MoveProfile.RunOut"/>）＝送球の起点・時刻は不変。
+    /// 掬う時刻は着地＋判定の遅れ（<see cref="MissedFlyHopMinSeconds"/>〜<see cref="MissedFlyHopMaxSeconds"/>へ収める）。
+    /// 乱数は引かない。間に合わない（送球の握り替えに食い込む）なら null＝従来の1本レッグ。
+    /// </summary>
+    private static (FielderMove Chase, IReadOnlyList<FielderMove> After, BallSegment? Hop)? MissedFlyShortHop(
+        FieldingPlay play, double landAt, TimelinePoint landing, TimelinePoint target, TimelinePoint from,
+        double speed, double startT, FieldPosition role, double readyAt)
+    {
+        if (play.CatchMarginSeconds is not { } margin) return null;
+        var total = Distance(from, target);
+        if (total < RunThroughMinLegM) return null;
+        var ux = (target.X - from.X) / total;
+        var uz = (target.Z - from.Z) / total;
+        var factor = Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.RunIn);
+        var carryEndAt = Math.Min(landAt + MissedFlyHopCarryEndSeconds, readyAt - 0.15);
+
+        // 掬う時刻 tp と運ぶ距離 c を同時に決める: 終点の速さ vEnd で運ぶ等減速の距離 c = vEnd·(carryEnd−tp)/2、
+        // vEnd = (total−c)/(tp−t0)·factor。全力（平均＝脚力）で間に合うならその出足、間に合わなければ遅れて掬う
+        var tp = landAt + Math.Clamp(-margin, MissedFlyHopMinSeconds, MissedFlyHopMaxSeconds);
+        double c = 0, t0 = startT;
+        for (var iter = 0; iter < 3; iter++)
+        {
+            t0 = Math.Max(startT, tp - (total - c) / speed);
+            var run = tp - t0;
+            if (run <= 0.05) return null;
+            if ((total - c) / run > speed + 1e-9) tp = startT + (total - c) / speed;   // 全力でも間に合わない
+            var k = factor * Math.Max(0, carryEndAt - tp) / 2 / (tp - t0);
+            c = Math.Min(MissedFlyCarryMaxM, k * total / (1 + k));
+        }
+        if (carryEndAt - tp < 0.15 || c < 0.3) return null;
+        var vEnd = (total - c) / (tp - t0) * factor;
+        var p = new TimelinePoint(target.X - ux * c, target.Z - uz * c);
+        var chase = new FielderMove
+        {
+            Role = role, T0 = t0, T1 = tp, To = p, Task = FielderTask.FieldBall, Profile = MoveProfile.RunIn,
+        };
+        var carryMove = new FielderMove
+        {
+            Role = role, T0 = tp, T1 = tp + 2 * c / vEnd, To = target, Task = FielderTask.FieldBall,
+            Profile = MoveProfile.RunOut,
+        };
+        var hop = new BallSegment
+        {
+            Kind = BallSegmentKind.Bounce, T0 = landAt, T1 = tp, From = landing, To = p, ApexHeightM = MissedFlyHopApexM,
+        };
+        return (chase, new[] { carryMove }, hop);
+    }
+
+    private static (FielderMove Chase, FielderMove? Pickup)? PlanMissedFlyChaseCore(
         FieldingPlay play, double landAt, double fieldedAt, TimelinePoint chaseTarget, TimelinePoint pickupTarget,
         TimelinePoint from, double speed, double startT, double reachM, FieldPosition role)
     {

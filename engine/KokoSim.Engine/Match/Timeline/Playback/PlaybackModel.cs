@@ -288,6 +288,8 @@ public static class PlaybackEvaluator
             }
             case MoveProfile.RunOut:
                 return u * (2 - u);
+            case MoveProfile.CruiseOut:
+                return 1 - MoveEase(1 - u, MoveProfile.RunIn);
             default:
                 return MoveEase(u);
         }
@@ -299,7 +301,7 @@ public static class PlaybackEvaluator
     /// </summary>
     public static double PeakSpeedFactor(MoveProfile profile) => profile switch
     {
-        MoveProfile.RunIn => 1.0 / (1.0 - MoveRampFraction / 2),
+        MoveProfile.RunIn or MoveProfile.CruiseOut => 1.0 / (1.0 - MoveRampFraction / 2),
         MoveProfile.RunOut => 2.0,
         _ => 1.0 / (1.0 - MoveRampFraction),
     };
