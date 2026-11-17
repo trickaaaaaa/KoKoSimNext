@@ -89,7 +89,7 @@ public sealed record SeasonCalendar
     /// <summary>
     /// AI校の節目成長・冬明けノードの週（冬合宿（<see cref="WinterCampWeek"/>=38）の直後 ≒ 第39週。
     /// 設計書05 §2.3・issue #843）。年間成長予算（<see cref="Nation.Roster.AiPlayer.PendingBudget"/>）の
-    /// 残り全額をここで使い切る＝4月の年度替わりより前に今年度の成長を完了させる
+    /// 残り全額をここで使い切る＝4月の年度替わりより前に、前の夏の節目で翌夏に向けて積んだ成長を完了させる（issue #1058）
     /// （<see cref="SenbatsuAnnounceWeek"/> と同週になるが、互いに無関係な処理なので衝突しない）。
     /// </summary>
     public int WinterGrowthNodeWeek { get; init; } = 39;

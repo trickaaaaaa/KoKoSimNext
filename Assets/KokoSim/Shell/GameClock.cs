@@ -126,7 +126,7 @@ namespace KokoSim.Unity.Shell
                 NationBackgroundSim.EnsureCompleted();
                 BracketFinishSim.EnsureCompleted();
                 KoshienQualifierStatsSim.EnsureCompleted();
-                NationService.ApplyAiGrowthNode(AiGrowthNode.Autumn);
+                NationService.ApplyAiGrowthNode(AiGrowthNode.Autumn, YearIndex);
             }
 
             // スカウトの節目の強制イベント（候補リスト到着・締切前の念押し・issue #1035）。リスト生成の後に判定する。
@@ -157,14 +157,14 @@ namespace KokoSim.Unity.Shell
             if (Calendar.IsSenbatsuAnnounceWeek(Week) && GameSession.Current.Mode == GameMode.Normal)
                 SenbatsuEntry.Announce();
 
-            // AI校の節目成長・冬明け（issue #843・Phase C）。4月の年度替わりより前に今年度ぶんの
-            // 成長予算（PendingBudget）を使い切る。センバツ選考発表と同週だが互いに無関係。
+            // AI校の節目成長・冬明け（issue #843・Phase C）。4月の年度替わりより前に、夏の節目で翌夏に向けて
+            // 積んだ成長予算（PendingBudget）を使い切る（issue #1058）。センバツ選考発表と同週だが互いに無関係。
             if (Calendar.IsWinterGrowthNodeWeek(Week))
             {
                 NationBackgroundSim.EnsureCompleted();
                 BracketFinishSim.EnsureCompleted();
                 KoshienQualifierStatsSim.EnsureCompleted();
-                NationService.ApplyAiGrowthNode(AiGrowthNode.Winter);
+                NationService.ApplyAiGrowthNode(AiGrowthNode.Winter, YearIndex);
             }
 
             // 観るだけのセンバツ（自校が選ばれていない年）を1週ぶん進める（AdvanceSpectatedKoshien と同型）。
@@ -186,9 +186,9 @@ namespace KokoSim.Unity.Shell
                 BracketFinishSim.EnsureCompleted();   // issue #529: 同じロスターを読むため同様に完了を待つ。
                 KoshienQualifierStatsSim.EnsureCompleted();   // 設計書05 §1.4b: 同上。
                 NationService.RetireAiGraduates();
-                // AI校の節目成長・夏大会後（issue #843・Phase C）。引退（代替わり）の直後＝
-                // 新チームに残る1・2年だけへ成長が乗る（退く3年の予算は引退と一緒に消える）。
-                NationService.ApplyAiGrowthNode(AiGrowthNode.Summer);
+                // AI校の節目成長・夏大会後（issue #843・Phase C）。引退（代替わり）の直後＝新チームに残る1・2年について、
+                // 翌夏のチームがターゲットに届くよう年間予算を逆算して積み直し、夏の割合ぶんを乗せる（issue #1058）。
+                NationService.ApplyAiGrowthNode(AiGrowthNode.Summer, YearIndex);
             }
         }
 
