@@ -1727,8 +1727,12 @@ namespace KokoSim.Unity.Match
                     }
                 }
 
-                // 次のセグメントが始まるまでは球を捕球点に留める（engine の保持位置は高さ0のため）
-                float holdUntil = (float)play.Dur;
+                // 次のセグメントが始まるまでは球を捕球点に留める（engine の保持位置は高さ0のため）。
+                // 次のセグメントが無ければ**打席が畳まれるまで**留める（play.Dur で切らない）。再生は判定表示・
+                // 得点テロップの窓で play.Dur を越えて続きうる（PlayEndTime は Dur でクランプしない）ので、
+                // play.Dur で切ると越えた瞬間に球が捕球点の真下の地面へ落ちる（issue #1081 で見つけた穴。
+                // 2026-11-17 の実測ではフライアウトは捕球の約0.9秒後に畳まれ、Dur に届く前に終わっていた）。
+                float holdUntil = float.PositiveInfinity;
                 foreach (var nxt in play.Ball)
                     if (nxt.T0 >= seg.T1 - 1e-4 && nxt.T0 < holdUntil) holdUntil = (float)nxt.T0;
                 // 捕っていない芝居は球に触らせない（窓を開かない）＝球は engine の位置のまま
@@ -2648,6 +2652,28 @@ namespace KokoSim.Unity.Match
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 【撮影用】球の高さと、最後に球を捕った野手のグラブ（ミット中心）との距離（issue #1081）。
+        /// 捕ったアウトの球が打席が畳まれるまでグラブの中にあるか（足元へ落ちないか）をコマごとに見る。
+        /// </summary>
+        public string BallHoldDiagForCapture()
+        {
+            if (_ball == null || _root == null) return "ball=-";
+            var p = _root.transform.InverseTransformPoint(_ball.transform.position);
+            string glove = "捕球なし";
+            for (int i = _catchEvents.Count - 1; i >= 0; i--)
+            {
+                var e = _catchEvents[i];
+                if (!HoldsBall(e.Kind)) continue;
+                glove = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0} グラブ距離={1:F2}m 捕球={2:F2}s 保持まで={3}", e.Pos, (CatchGloveNow(e) - p).magnitude, e.TCatch,
+                    float.IsPositiveInfinity(e.HoldUntil) ? "畳むまで" : e.HoldUntil.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+                break;
+            }
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, "球高={0:F2}m 表示={1} 影={2} {3}",
+                p.y, _ball.activeInHierarchy, _ballShadow != null && _ballShadow.activeSelf, glove);
+        }
+
         public string FieldCatchDiagForCapture()
         {
             var sb = new StringBuilder();
@@ -3187,8 +3213,16 @@ namespace KokoSim.Unity.Match
         ///   ② 寄せ  … リリース直後、手と engine の送球線の差を <see cref="ThrowHandoffSeconds"/> で 0 へ
         ///   ③ 受け  … 捕球点（F5）
         /// </summary>
+        /// <summary>
+        /// この時刻の球が野手の手・グラブに収まっているか（<see cref="FieldBallPoint"/> が毎コマ決める）。
+        /// 収まっている間は球の影を消す（issue #1081）。影は飛んでいる球の高さを読む手がかり（#401①）で、
+        /// 実寸・ほぼ黒の丸なので、捕った後もグラブの真下＝足元に残ると「球が地面に落ちた」ように見えた。
+        /// </summary>
+        private bool _ballHeldNow;
+
         private Vector3 FieldBallPoint(Vector3 enginePos, float t)
         {
+            _ballHeldNow = false;
             // 本塁打はスタンドに当たったら、そこで跳ねて止まる（issue #704。engine の弾道は地面まで沈む）
             if (StandHitBallPoint(t) is { } onStand) return onStand;
             for (int i = 0; i < _throwEvents.Count; i++)
@@ -3202,6 +3236,7 @@ namespace KokoSim.Unity.Match
                     var h = ThrowHandNow(e);
                     e.HandAtRelease = h;
                     _throwEvents[i] = e;
+                    _ballHeldNow = true;
                     return h;
                 }
                 if (t >= e.TRelease && t < e.TRelease + ThrowHandoffSeconds)
@@ -5319,7 +5354,10 @@ namespace KokoSim.Unity.Match
                     //    2026-08-06 実測で両方とも一致）。これを大きく超えたら送球そのものに
                     //    線が積まれている（IsThrowAt の取りこぼし）
                     if (onThrow && _trail.Count >= 2) _trailOnThrowFrames++;
-                    UpdateBallShadow(p.x, p.z);
+                    // 手・グラブに収まっている球には影を落とさない（issue #1081）。本塁打のスタンドの球は
+                    // onStand で FieldBallPoint を通らない＝前のコマの値が残らないよう、ここで改めて見る
+                    if (onStand == null && _ballHeldNow) { if (_ballShadow != null) _ballShadow.SetActive(false); }
+                    else UpdateBallShadow(p.x, p.z);
                 }
                 else
                 {
@@ -5543,7 +5581,11 @@ namespace KokoSim.Unity.Match
                     continue;
                 }
                 if (t > e.HoldUntil) continue;
-                if (t >= e.TCatch) return CatchGloveNow(e) + JuggleOffset(e, t);   // 捕ってから次の区間まではグラブに追従
+                if (t >= e.TCatch)   // 捕ってから次の区間まではグラブに追従
+                {
+                    _ballHeldNow = true;
+                    return CatchGloveNow(e) + JuggleOffset(e, t);
+                }
                 if (t < e.TCatch - CatchBallBlendSeconds) continue;
                 float u = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
                 return Vector3.Lerp(enginePos, e.Point, u * u * (3f - 2f * u));
