@@ -535,6 +535,29 @@ public sealed record BaserunningCoefficients
     /// （受け取り動作が無いぶん短い）。</summary>
     public double DoublePlaySelfForceRelayTransferSeconds { get; init; } = 0.70;
 
+    // === 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）===
+    // 一塁ベース付近で捕った一塁ゴロは、一塁手が二塁へ投げて封殺する（3-6-3型）代わりに、自分で一塁を
+    // 踏んで打者をフォースアウトにしてから二塁へ送球する選択肢を持つ（一塁を先に踏むと二塁のフォースが
+    // 外れるため、二塁はタッチプレーになる）。実際に一塁を処理した一塁手だけがこのルートを検討でき
+    // （BaserunningModel.ResolveDoublePlay のゲート）、一塁走者の到達見込みが二塁封殺ルートより低い
+    // （＝守備に有利）ときだけ選ばれる。Q31（三塁/本塁の自己フォース）と同じ流儀。
+
+    /// <summary>一塁での自己フォースのタッチ/捕球[s]（<see cref="SecondForceTagSeconds"/> と同軸）。</summary>
+    public double FirstForceTagSeconds { get; init; } = 0.10;
+    /// <summary>一塁での自己フォース margin→到達確率の logistic 幅[s]（<see cref="SecondForceMarginScale"/> と同軸）。</summary>
+    public double FirstForceMarginScale { get; init; } = 0.45;
+    /// <summary>一塁での自己フォース 到達確率バイアス[s]（校正項。物理のみ＝<see cref="ThirdForceSuccessBias"/>と
+    /// 同じ既定）。</summary>
+    public double FirstForceSuccessBias { get; init; } = 0.00;
+    /// <summary>二塁タッチ（一塁の自己フォース後に一塁手が自ら送球）のタッチ[s]（<see cref="SecondForceTagSeconds"/>
+    /// と同軸だが、フォースでなく実際に走者へタッチする分の遅れを別係数として分離できるよう独立させる）。</summary>
+    public double SecondTagSeconds { get; init; } = 0.10;
+    /// <summary>二塁タッチ margin→到達確率の logistic 幅[s]（<see cref="SecondForceMarginScale"/> と同軸）。</summary>
+    public double SecondTagMarginScale { get; init; } = 0.45;
+    /// <summary>二塁タッチ 到達確率バイアス[s]（校正項。<see cref="SecondForceSuccessBias"/> とは別＝
+    /// フォースでなくタッチプレーの校正を独立して動かせるようにする）。</summary>
+    public double SecondTagSuccessBias { get; init; } = 0.00;
+
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは走者の時計の起点が「捕球の瞬間」である点だけが本塁クロスプレーと異なる。走者は捕球時刻に
     // スタート（二次リードなし＝全塁間 27.4m を走る）、守備も同じ捕球時刻から送球する＝共通起点が捕球時刻。

@@ -620,6 +620,16 @@ baserunning:
   home_force_margin_scale: 0.45              # 本塁での自己フォース margin→到達確率のlogistic幅
   home_force_success_bias: 0.00              # 本塁での自己フォースの校正項[s]
   double_play_self_force_relay_transfer_seconds: 0.70  # 自己フォース側の一塁への転送握り替え[s]（受け取り動作が無いぶん double_play_pivot_transfer_seconds より短い）
+  # 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）: 一塁手が自打球を自分で
+  # 一塁へ運んでフォース（送球なし）→二塁へ送球して一塁走者にタッチ。一塁を先に踏むと二塁のフォースが外れる
+  # ため、二塁はタッチプレーになる。実際に一塁を処理した一塁手だけが検討でき、二塁封殺より到達見込みが
+  # 低い（守備に有利）ときだけ選ばれる（BaserunningModel.ResolveDoublePlay のゲート）。
+  first_force_tag_seconds: 0.10              # 一塁での自己フォースのタッチ/捕球[s]（second_force_tag_seconds と同軸）
+  first_force_margin_scale: 0.45             # 一塁での自己フォース margin→到達確率のlogistic幅
+  first_force_success_bias: 0.00             # 一塁での自己フォースの校正項[s]
+  second_tag_seconds: 0.10                   # 二塁タッチのタッチ/捕球[s]（second_force_tag_seconds と同軸だがフォースでなくタッチ固有に分離）
+  second_tag_margin_scale: 0.45              # 二塁タッチ margin→到達確率のlogistic幅
+  second_tag_success_bias: 0.00              # 二塁タッチの校正項[s]
   # 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）: 走者は捕球時刻にスタート（二次リードなし＝全塁間27.4mを走る）、
   # 守備も同じ捕球時刻から送球＝共通起点が捕球時刻。深い外野フライは送球が長く生還、浅いフライは自重/憤死。
   tag_up_margin_scale: 0.40                   # margin→生還確率のlogistic幅（本塁クロスプレーより広め＝深さ・肩を効かせる）

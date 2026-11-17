@@ -1147,6 +1147,139 @@ public sealed class TimelineTests
         Assert.True(throwSeg.T0 >= carry.T1 - 1e-6, "自己送球が対象塁への到達より前に始まっている");
     }
 
+    // --- 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）の絵。
+    //     表示専用・結果不変・乱数不使用。 ---
+
+    private static FieldingPlay FirstBaseSelfForceGrounder()
+        => FieldingPlayFixtures.InfieldGrounder(FieldPosition.FirstBase, fieldedX: 26.0, fieldedZ: 10.0);
+
+    [Fact]
+    public void FirstBaseSelfForceTagThrows_ReplacesSingleThrowWithCarryAndThrowToSecond()
+    {
+        var field = new FieldGeometry();
+        var play = FirstBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        Assert.Single(baseTl.Ball, b => b.Kind == BallSegmentKind.Throw || b.Kind == BallSegmentKind.Carry);
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendFirstBaseSelfForceTagThrows(baseTl, play, field, batterArrive);
+
+        var first = new TimelinePoint(field.FirstBase.X, field.FirstBase.Z);
+        var second = new TimelinePoint(field.SecondBase.X, field.SecondBase.Z);
+        var carry = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Carry);
+        Assert.Equal(play.FieldedX!.Value, carry.From.X, 6);
+        Assert.Equal(play.FieldedZ!.Value, carry.From.Z, 6);
+        Assert.Equal(first.X, carry.To.X, 6);
+        Assert.Equal(first.Z, carry.To.Z, 6);
+        var throwSeg = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(first.X, throwSeg.From.X, 6);
+        Assert.Equal(first.Z, throwSeg.From.Z, 6);
+        Assert.Equal(second.X, throwSeg.To.X, 6);
+        Assert.Equal(second.Z, throwSeg.To.Z, 6);
+        Assert.True(carry.T1 <= throwSeg.T0 + 1e-6, "自己送球が一塁を踏む前に始まっている");
+    }
+
+    [Fact]
+    public void FirstBaseSelfForceTagThrows_CarryAndThrowSameFielderRole_ReceiverIsSecondBaseCover()
+    {
+        // 中継（ピボット）が無い＝自己フォースした一塁手自身がそのまま二塁へ投げる。受け手は二塁カバー。
+        var field = new FieldGeometry();
+        var play = FirstBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendFirstBaseSelfForceTagThrows(baseTl, play, field, batterArrive);
+
+        var carry = tl.Ball.Single(b => b.Kind == BallSegmentKind.Carry);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(FieldPosition.FirstBase, carry.FromRole);
+        Assert.Equal(FieldPosition.FirstBase, carry.ToRole);
+        Assert.Equal("first", carry.ToBase);
+        Assert.Equal(FieldPosition.FirstBase, throwSeg.FromRole); // 投げ手は自己フォースした本人（中継なし）
+        Assert.Equal("second", throwSeg.ToBase);
+    }
+
+    [Fact]
+    public void FirstBaseSelfForceTagThrows_FlyBall_LeavesTimelineUnchanged()
+    {
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.CaughtFly(FieldPosition.FirstBase);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+
+        var tl = TimelineBuilder.AppendFirstBaseSelfForceTagThrows(baseTl, play, field, batterArriveAnchor: 5.0);
+
+        Assert.Same(baseTl, tl);
+    }
+
+    [Fact]
+    public void FirstBaseSelfForceTagThrows_BatterOutJudgementMatchesCarryArrival()
+    {
+        var field = new FieldGeometry();
+        var play = FirstBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendFirstBaseSelfForceTagThrows(baseTl, play, field, batterArrive);
+
+        var carryArrive = tl.Ball.Single(b => b.Kind == BallSegmentKind.Carry).T1;
+        var batterOutJudgement = tl.Judgements.Single(j => j.Label == "打" && j.Kind == JudgementKind.Out);
+        Assert.Equal(carryArrive, batterOutJudgement.T, 9);
+        Assert.Equal(carryArrive, tl.ResolvedAt, 9);
+    }
+
+    [Fact]
+    public void FirstBaseSelfForceTagThrows_RunnerSafe_PatchesSecondLegToSafeJudgement()
+    {
+        // タッチ失敗（BaserunningModel.ResolveDoublePlayFirstBaseTag の走者セーフ分岐）では、二塁への
+        // レッグ・判定を実際の結末（セーフ）へ差し替える（AppendDoublePlayThrows の野選パッチと同じ規約）。
+        var field = new FieldGeometry();
+        var play = FirstBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        // BaserunningModel.ResolveDoublePlayFirstBaseTag が実際に積む形（走者セーフ＝Out:false）。CloseCall=true
+        // にすると AppendRunnerLegs が判定オーバーレイ（Safeの JudgementEvent）を事前に積む＝以下の再配置対象になる
+        // （際どくない安全な進塁は判定オーバーレイ自体を出さない規約＝本テストの対象外）。
+        var move = new RunnerMove(new Player { Speed = 50 }, 1, 2, Out: false) { FirstBaseSelfForceTag = true, CloseCall = true };
+        var withRunner = TimelineBuilder.AppendRunnerLegs(
+            baseTl, new[] { move }, field, new BaserunningCoefficients(), new FieldingCoefficients());
+
+        var tl = TimelineBuilder.AppendFirstBaseSelfForceTagThrows(withRunner, play, field, batterArrive, runnerOut: false);
+
+        var second = new TimelinePoint(field.SecondBase.X, field.SecondBase.Z);
+        var throwArrive = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw).T1;
+        var runnerLeg = tl.Runners.Last(r => r.Label != "打" && !r.OutAtEnd && Near(r.To, second));
+        Assert.False(runnerLeg.OutAtEnd);
+        var runnerSafeJudgement = tl.Judgements.Single(j => j.Label == runnerLeg.Label && j.Kind == JudgementKind.Safe);
+        Assert.Equal(throwArrive, runnerSafeJudgement.T, 9);
+    }
+
+    [Fact]
+    public void FirstBaseSelfForceTagThrows_TimesAreContinuousAndMonotonic()
+    {
+        var field = new FieldGeometry();
+        var play = FirstBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendFirstBaseSelfForceTagThrows(baseTl, play, field, batterArrive);
+
+        var carry = tl.Ball.Single(b => b.Kind == BallSegmentKind.Carry);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.True(throwSeg.T0 >= carry.T1 - 1e-6, "自己送球が一塁到達より前に始まっている");
+        foreach (var b in tl.Ball)
+        {
+            Assert.True(b.T1 >= b.T0, $"区間が逆行: {b.Kind}");
+            Assert.True(b.T1 <= tl.Duration + 1e-6, $"区間が Duration を超過: {b.Kind}");
+        }
+    }
+
     // --- F1 Slice 3: GameEngine 結線（併殺で二塁→一塁の2連続送球が描かれる） ---
 
     private static bool Near(TimelinePoint a, TimelinePoint b) =>

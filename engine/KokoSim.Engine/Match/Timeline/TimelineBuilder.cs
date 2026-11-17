@@ -3031,6 +3031,125 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）の送球連鎖を描く。
+    /// 既存の「野手→一塁」1本の送球/保持運びを、「処理点→一塁（自己フォース, Carry）→二塁（送球, Throw）」
+    /// の2本に差し替える。結果不変・乱数不使用の表示専用。判定モデル
+    /// （<see cref="Game.BaserunningModel"/> の <c>ResolveDoublePlayFirstBaseTag</c>）と<b>同じ入力・同じ式</b>
+    /// （<see cref="HomePlayResolver.ResolveThrowPath"/>）で秒を組む＝<see cref="AppendSelfForceDoublePlayThrows"/>
+    /// と同じ設計だが、対象の向きが逆（打者を一塁で自己フォース→一塁走者を二塁でタッチ）。
+    ///
+    /// <para>一段目（処理点→一塁）は送球ではなく<see cref="BallSegmentKind.Carry"/>（グラブに収めたまま走って
+    /// ベースを踏む）＝<see cref="FieldingPlay.UnassistedPutout"/>（3U）と同じ表現。二段目（一塁→二塁）は同じ
+    /// 野手がそのまま投げる自己送球（中継〈ピボット〉なし）。二塁はフォースでなくタッチプレーだが、
+    /// レッグ・判定の描き方自体は <see cref="AppendDoublePlayThrows"/> の二塁封殺パッチと同型（タッチ秒は
+    /// 判定モデルと同じ <see cref="BaserunningCoefficients.SecondTagSeconds"/> を使う）。</para>
+    ///
+    /// runnerOut=一塁走者が実際に二塁でアウトか（判定モデルの戻り値どおり。false＝タッチ失敗で走者セーフ）。
+    /// 打者はこの代替では常にアウト（選ばれるのは自己フォースが確実な場面だけ＝判定モデルのA-1ゲート）。
+    /// </summary>
+    public static PlayTimeline AppendFirstBaseSelfForceTagThrows(
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
+        BaserunningCoefficients? coefficients = null, bool runnerOut = true)
+    {
+        if (play.IsFly || play.RangeM > 46.0) return timeline; // ゲート自体が内野ゴロ限定（issue 3-6-tag-double-play）＝保守的に同じ条件
+
+        // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す（AppendSelfForceDoublePlayThrows と同型）。
+        BallSegment? existingThrow = null;
+        var ball = new List<BallSegment>(timeline.Ball.Count + 1);
+        foreach (var seg in timeline.Ball)
+        {
+            var isFirstCarry = seg.Kind == BallSegmentKind.Carry && seg.ToBase == "first"
+                && play.FielderRole == FieldPosition.FirstBase;
+            if ((seg.Kind == BallSegmentKind.Throw || isFirstCarry) && existingThrow is null)
+            {
+                existingThrow = seg;
+                continue;
+            }
+            ball.Add(seg);
+        }
+        if (existingThrow is null) return timeline;
+
+        var c = coefficients ?? new BaserunningCoefficients();
+        var fieldPoint = FieldPointOf(play);
+        var arm = ThrowSpeedOf(play);
+        var fieldedAtSeconds = play.FieldedAtSeconds ?? play.HangTimeSeconds;
+        var first = BasePoint(field, "first");
+        var second = BasePoint(field, "second");
+        var secondRole = CoverRoleAt(timeline, second, FieldPosition.SecondBase);
+
+        // 一段目（処理点→一塁）: 送球ではなく自分で運ぶ（UnassistedPutout と同じ Carry 表現）。判定モデルと
+        // 同じ式・transferSecondsOverride: 0.0（握り替えなし＝その場でベースへ踏み込むだけ）。
+        var situation = new HomePlaySituation(
+            new Core.Vector3D(fieldPoint.X, 0, fieldPoint.Z), fieldedAtSeconds, arm, play.FielderFielding);
+        var pathToFirst = HomePlayResolver.ResolveThrowPath(situation, field.FirstBase, c, transferSecondsOverride: 0.0);
+        var carryStart = ContactAt + pathToFirst.ReleaseAtSeconds;
+        var firstArrive = ContactAt + pathToFirst.ArriveAtSeconds + c.FirstForceTagSeconds;
+
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Carry, T0 = carryStart, T1 = firstArrive,
+            From = fieldPoint, To = first,
+            FromRole = play.FielderRole, ToRole = play.FielderRole, ToBase = "first",
+        });
+
+        // 二段目（一塁→二塁）: 同じ野手がそのまま投げる自己送球（中継なし）。起点は一塁ベース・時刻は判定
+        // モデルと同じ基準（BallFieldedAtSeconds＝一段目と同じ捕球時刻。ResolveDoublePlayFirstBaseTag 参照）、
+        // 握り替えは自己フォース専用の DoublePlaySelfForceRelayTransferSeconds。
+        var selfForceSituation = new HomePlaySituation(field.FirstBase, fieldedAtSeconds, arm, play.FielderFielding);
+        var pathToSecond = HomePlayResolver.ResolveThrowPath(
+            selfForceSituation, field.SecondBase, c, transferSecondsOverride: c.DoublePlaySelfForceRelayTransferSeconds);
+        // 判定モデルの握り替え起点は一段目と同じ捕球時刻（一塁到達＝firstArrive を待たない）なので、表示だけ
+        // 「一塁へ着くまでは投げ始めない」下限で詰める（AppendSelfForceDoublePlayThrows と同型のガード）。
+        var throwStart = Math.Max(ContactAt + pathToSecond.ReleaseAtSeconds, firstArrive);
+        var secondArrivePhysical = ContactAt + pathToSecond.ArriveAtSeconds + c.SecondTagSeconds;
+
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = secondArrivePhysical,
+            From = first, To = second,
+            FromRole = play.FielderRole, ToRole = secondRole, ToBase = "second",
+        });
+
+        // 打者のアウト判定: 自己フォース（一塁への Carry）の到達へ合わせる（この代替では打者は常にアウト）。
+        var judgements = timeline.Judgements;
+        var judgements2 = new List<JudgementEvent>(judgements.Count);
+        foreach (var j in judgements)
+            judgements2.Add(j.Label == "打" && j.Kind == JudgementKind.Out ? j with { T = firstArrive } : j);
+        judgements = judgements2;
+
+        // 一塁走者の判定時刻・レッグを、実際に描いた二塁への到達へ差し替える（AppendDoublePlayThrows の
+        // 二塁封殺パッチと同型）。アウトならタッチ、セーフならそのまま到達（いずれも乱数不使用・絵のみ）。
+        var runners = timeline.Runners;
+        foreach (var leg in timeline.Runners)
+        {
+            if (leg.Label == "打" || Distance(leg.To, second) >= 0.5) continue;
+            if (leg.OutAtEnd != runnerOut) continue;
+
+            var updatedJudgements = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+            {
+                updatedJudgements.Add(
+                    j.Label == leg.Label && Math.Abs(j.T - leg.T1) < 1e-9
+                        ? j with { T = secondArrivePhysical }
+                        : j);
+            }
+            judgements = updatedJudgements;
+            break;
+        }
+
+        // 受け手の二塁カバーは、除いた直接送球（もっと遅く着く）を期限に歩いている＝二段目の到達へ急ぎ度を引き直す。
+        var moves = secondRole is { } sr
+            ? RepaceCoverLeg(timeline, timeline.Moves, sr, second, secondArrivePhysical, new FielderAttributes().SprintSpeedMps)
+            : timeline.Moves;
+        var duration = Math.Max(timeline.Duration, secondArrivePhysical + 1.0);
+        return timeline with
+        {
+            Ball = ball, Moves = moves, Duration = duration, Runners = runners, Judgements = judgements,
+            ResolvedAt = firstArrive,
+        };
+    }
+
+    /// <summary>
     /// 中継野手を「捕球点と送球先を結ぶ直線上」の <paramref name="point"/>（判定の <c>ThrowPath.CutoffPoint</c> と同じ位置）へ
     /// 引き直す。陣形は送球先を知らず中継役の行き先を一律「二塁」にしている（打球と二塁の中間点）ので、
     /// 本塁・三塁へ送る連鎖では絵の中継が送球線から外れていた。人は変えない（陣形が決めた中継役のまま）。
