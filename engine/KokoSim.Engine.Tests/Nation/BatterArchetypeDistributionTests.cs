@@ -20,12 +20,11 @@ namespace KokoSim.Engine.Tests.Nation;
 ///   強さ80〜90でもスタメンの「オールA」は1〜2人まで／走力C以下のスラッガー等が一定数いる／
 ///   1人の中の最大−最小は強さによらず20〜30程度／99に張り付く能力は数%まで。
 ///
-/// <b>強さ90（最上位）だけ残る既知のギャップ</b>: 「オールA」が目標1〜2人に対し実測約2.5〜3人/校（旧98%→38%程度まで
-/// 改善）。原因はスタメン選抜（<see cref="AiTeamBuilder"/> の <c>AssignFieldPositions</c>）がミート・パワーの重みで
-/// 8枠を解くため、ミート・パワーが短所の型（粗削りの強打者・守備職人・強肩・盗塁職人 等）はスタメンから
-/// 生成母集団より強く弾かれる一方、型なし（バランス型）は一度も弾かれない＝サバイバーシップバイアス。
-/// 他の3指標（spread・99張り付き・長所短所の実在）は強さ90でも目標内。残課題は別issueで
-/// スタメン選抜ロジック自体の見直しが要る（本issueの範囲を超える）。
+/// <b>強さ85以上は目標に届かない（既知・次の issue）</b>。この作品のチーム総合は、総合の高い学校ほど能力の平均も
+/// 高くないと出ない（強さ85で6能力平均≈90）。学校の強さとチーム総合の対応（下の <see cref="StrengthToOverall_IsKept"/>）
+/// を保つ限り、強さ85でオールA約2.7人/校・強さ90で約3人/校・99張り付き2〜3割が残る（main はそれぞれ 4.1人・7.9人・
+/// 9割超）。オーナー判断（2026-11-17）は「個性を優先し、弱い学校も下げて差を保つ」＝AI校全体の物差しを下げる別作業。
+/// 強さ90の学校（全国で数校）は全員ほぼ99でないと総合が届かず、型を入れると総合が目標を約4点下回る。
 /// </summary>
 public sealed class BatterArchetypeDistributionTests
 {
@@ -89,16 +88,42 @@ public sealed class BatterArchetypeDistributionTests
             + $"／ spread平均 {spreadAvg:F1} ／ 99張り付き率 {pinnedRate:F1}% "
             + $"／ 走力C未満の強打者 {powerSluggerLowSpeed} ／ パワーD未満の俊足 {speedsterLowPower}");
 
-        // 強さ90だけ「オールA」の上限を緩める（クラス冒頭コメントの既知のギャップ）。他の強さは目標どおり1〜2人まで。
+        // 強さ80までは目標（オールA 1〜2人まで・99張り付き数%）。強さ90はクラス冒頭の既知のギャップ（main は
+        // オールA 7.9人/校・張り付き9割超）＝悪化していないことだけ固定する。
         var allACap = strength >= 90 ? 3.5 : 2.0;
+        var pinnedCap = strength >= 90 ? 40.0 : 5.0;
         Assert.True(allAPerSchoolAvg <= allACap, $"オールAが多すぎる: {allAPerSchoolAvg:F2}人/校（強さ{strength}・上限{allACap}）");
-        Assert.InRange(spreadAvg, 14.0, 38.0);
-        Assert.True(pinnedRate <= 20.0, $"99への張り付き率が高すぎる: {pinnedRate:F1}%（強さ{strength}）");
+        Assert.InRange(spreadAvg, 20.0, 36.0);
+        Assert.True(pinnedRate <= pinnedCap, $"99への張り付き率が高すぎる: {pinnedRate:F1}%（強さ{strength}・上限{pinnedCap}）");
         if (strength >= 80)
         {
             Assert.True(powerSluggerLowSpeed > 0, "強豪校に「走力C未満の強打者」が居ない");
             Assert.True(speedsterLowPower > 0, "強豪校に「パワーD未満の俊足」が居ない");
         }
+    }
+
+    /// <summary>
+    /// 学校の強さとチーム総合の対応を、型の導入前（main: 各強さで平均 −0.2 前後）から崩さない（issue #1066 の「守るもの」）。
+    /// 型ありの成長はやわらかい天井で頭が寝るので、成長量を型なしで解いたままだと強豪校が弱くなる
+    /// （最初の実装: 強さ80で −2.9・85で −4.0）。<c>AiRosterCycle.SolveGrowthG</c> の2段目（打者だけ型ありで解き直す）が守る。
+    /// </summary>
+    [Theory]
+    [InlineData(60.0, 31001)]
+    [InlineData(70.0, 31101)]
+    [InlineData(80.0, 31201)]
+    [InlineData(85.0, 31301)]
+    public void StrengthToOverall_IsKept(double strength, int idBase)
+    {
+        var deps = new AiRosterDeps();
+        var diffs = new List<double>();
+        for (var i = 1; i <= 40; i++)
+        {
+            var school = new School { Id = idBase + i, Name = $"校{idBase}-{i}", PrefectureId = 0, Strength = strength, Fame = 50 };
+            var team = new NationRosters(deps).TeamFor(school, 3);
+            diffs.Add(ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall - deps.Roster.CompressStrength(strength));
+        }
+        _out.WriteLine($"強さ{strength}: 総合−目標 平均{diffs.Average():F2} 最小{diffs.Min():F2}");
+        Assert.True(diffs.Average() >= -0.6, $"強さ{strength}の学校が目標より弱い: 平均 {diffs.Average():F2}");
     }
 
     /// <summary>

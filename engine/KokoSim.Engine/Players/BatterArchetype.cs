@@ -62,17 +62,17 @@ public sealed record BatterArchetypeCoefficients
     // ミート・パワーが短所の型（粗削りの強打者/守備職人/強肩/盗塁職人 等）は生成母集団より強くスタメンから
     // 弾かれる（生き残るのは短所があまり響かなかった個体＝実質サバイバーシップバイアス）。バランス型（型なしの
     // 代わり）は逆に一度も弾かれないので、残り（Balanced）の出現割合を絞るほどスタメンの「オールA」が減る。
-    public double PowerHitterShare { get; init; } = 0.10;
+    public double PowerHitterShare { get; init; } = 0.125;
     public double RawSluggerShare { get; init; } = 0.08;
     public double GapHitterShare { get; init; } = 0.10;
-    public double SpeedyContactShare { get; init; } = 0.10;
+    public double SpeedyContactShare { get; init; } = 0.125;
     public double EyeHitterShare { get; init; } = 0.09;
     public double SmallBallShare { get; init; } = 0.08;
     public double StealSpecialistShare { get; init; } = 0.07;
     public double DefenseSpecialistShare { get; init; } = 0.10;
     public double StrongArmShare { get; init; } = 0.08;
     public double CerebralCatcherShare { get; init; } = 0.07;
-    public double OneToolShare { get; init; } = 0.08;
+    public double OneToolShare { get; init; } = 0.03;
 
     // --- 長距離砲: パワー↑ 走力・守備↓ ---
     // 長所と短所のオフセットは非対称（長所は控えめ・短所は大きめ）。issue #1066 の実測で判明した事情:
@@ -158,7 +158,7 @@ public sealed record BatterArchetypeCoefficients
     /// <summary>尖り方が0になる学校の強さ（これ以下は型を持っていても効果なし）。</summary>
     public double IntensityPivot { get; init; } = 55.0;
     /// <summary>尖り方が1.0になるまでの強さの幅（Pivot+これ で1.0）。</summary>
-    public double IntensitySpan { get; init; } = 30.0;
+    public double IntensitySpan { get; init; } = 25.0;
     /// <summary>尖り方の上限（強豪校ほど1を超えて強くなるが、ここで頭打ち）。</summary>
     public double IntensityMax { get; init; } = 2.2;
     /// <summary>
@@ -167,6 +167,13 @@ public sealed record BatterArchetypeCoefficients
     /// 尖りを強めないと「オールA」が減らない。1.0未満は不可（Pivot+Span以下の挙動は変えない）。
     /// </summary>
     public double IntensityAboveOneSlope { get; init; } = 3.0;
+
+    /// <summary>
+    /// 打者能力の成長量を解き直すときの g の上限（issue #1066。<c>AiRosterCycle.SolveGrowthG</c> の2段目）。
+    /// 型ありの成長はやわらかい天井で頭が寝るぶん、型なしの成長（1段目・上限40）より大きな g でないと
+    /// 同じチーム総合に届かない。40のままだと強さ80〜85の学校が目標を1〜3点下回った（実測 2026-11-17）。
+    /// </summary>
+    public double GrowthSolveMaxG { get; init; } = 60.0;
 }
 
 /// <summary>打者の型の抽選・オフセット適用・表示名（純関数）。</summary>

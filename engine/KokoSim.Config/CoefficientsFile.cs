@@ -2882,6 +2882,7 @@ public static class CoefficientsLoader
         public double BatterArchetypeIntensitySpan { get; set; } = BAD.IntensitySpan;
         public double BatterArchetypeIntensityMax { get; set; } = BAD.IntensityMax;
         public double BatterArchetypeIntensityAboveOneSlope { get; set; } = BAD.IntensityAboveOneSlope;
+        public double BatterArchetypeGrowthSolveMaxG { get; set; } = BAD.GrowthSolveMaxG;
         // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。自校・AI校で共有する。
         public double LineupLeadoffDisciplineWeight { get; set; } = LD.LeadoffDisciplineWeight;
         public double LineupLeadoffContactWeight { get; set; } = LD.LeadoffContactWeight;
@@ -2989,6 +2990,7 @@ public static class CoefficientsLoader
                 IntensitySpan = BatterArchetypeIntensitySpan,
                 IntensityMax = BatterArchetypeIntensityMax,
                 IntensityAboveOneSlope = BatterArchetypeIntensityAboveOneSlope,
+                GrowthSolveMaxG = BatterArchetypeGrowthSolveMaxG,
             },
             Lineup = new LineupCoefficients
             {

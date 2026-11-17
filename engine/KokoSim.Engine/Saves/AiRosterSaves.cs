@@ -67,6 +67,7 @@ internal static class AiRosterSaves
             .Add("phenom", EnumJson.Write(p.Phenom))
             .Add("grade", p.Grade)
             .Add("pendingBudget", p.PendingBudget)
+            .Add("pendingPitchBudget", p.PendingPitchBudget)
             .Add("snapshot", PlayerSaves.ToJson(p.Snapshot));
     }
 
@@ -85,6 +86,8 @@ internal static class AiRosterSaves
             PlayerSaves.PlayerFromJson(o.Obj("snapshot")))
         {
             PendingBudget = o.Double("pendingBudget"),
+            // issue #1066。旧セーブは打者と同じ予算（従来どおり打者・投手へ同じ量）。
+            PendingPitchBudget = o.Has("pendingPitchBudget") ? o.Double("pendingPitchBudget") : o.Double("pendingBudget"),
         };
         return p;
     }

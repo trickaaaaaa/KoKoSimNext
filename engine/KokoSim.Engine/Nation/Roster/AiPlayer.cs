@@ -50,6 +50,14 @@ public sealed class AiPlayer
     /// </summary>
     internal double PendingBudget { get; set; }
 
+    /// <summary>
+    /// 投手能力（球速・制球・キレ・スタミナ）の未適用成長予算（issue #1066）。打者の型を入れてから、打者能力の予算
+    /// （<see cref="PendingBudget"/>）は型ありの成長でチーム総合を目標へ届かせる量に解き直すため、投手能力は型の
+    /// 導入前と同じ量を別に持つ（同じ量を投手へ乗せると球速の分布が崩れる）。旧セーブ（項目なし）は
+    /// <see cref="PendingBudget"/> と同じ値で読む＝従来と同じ動き。
+    /// </summary>
+    internal double PendingPitchBudget { get; set; }
+
     // 適性配列の長さは FieldPosition 全要素ぶん（自校 DevelopingPlayer と同じ）。AptitudeRoller.Roll が返すのは
     // **実在する9守備位置ぶんだけ**なので、そのまま持つと Aptitude(DesignatedHitter) が範囲外で落ちる。
     // DH は守備位置でなく打順枠なので、自校と同じく既定50を置いて長さを揃える（#377 と同じ罠）。

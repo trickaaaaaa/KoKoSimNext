@@ -39,21 +39,12 @@ public sealed class ManagerTraitPersistentRosterTests
 
     /// <summary>
     /// 抜擢型: 同じ学校（同じロスター・同じ当季の調子）で、傾向なしの先発から外れていた好調な選手が先発に入る年がある。
-    /// 新しく先発に入る選手は<b>ほとんど</b>好調（Good 以上）＝不調・普通の控えを抜擢しない。
-    ///
-    /// <para>「ほとんど」とするのは既知の誤検出があるため: <see cref="ManagerTrait.Promoter"/> の有無は
-    /// <see cref="Nation.Roster.AiRosterCycle.SolveGrowthG"/> が逆算配分のターゲット計測（<c>ProjectedOverall</c>→
-    /// <see cref="AiTeamBuilder.BuildFrom"/>）でも参照され、抜擢ボーナス自体が選抜へ入るため、傾向の有無だけで
-    /// 全選手の能力値が ±1 前後ずれる（plain/pro は別個体ではないのに1ビット一致しない）。この1点差が守備8枠の
-    /// 割当（ハンガリアン法）のニアタイを突く巡り合わせの校では、抜擢ボーナスを受けていない不調選手が
-    /// 「plainに居ない」という意味だけの偽の newcomer になる（issue #1066 で個体差を増やす前から main に存在する
-    /// 既存の挙動。60校中1校程度で発生）。</para>
+    /// 新しく先発に入る選手は必ず好調（Good 以上）＝不調・普通の控えを抜擢しない。
     /// </summary>
     [Fact]
     public void Promoter_PutsInFormBenchPlayerIntoLineup_OnPersistentRosterTeam()
     {
         var promotedYears = 0;
-        var falsePositives = 0;
         for (var id = 700; id < 760; id++)
         {
             // 同じ Id ＝同じロスター・同じ調子。傾向の有無だけが違う。
@@ -64,10 +55,11 @@ public sealed class ManagerTraitPersistentRosterTests
             var newcomers = pro.BattingOrder.Where(p => !plainIds.Contains(p.SourceId)).ToList();
             if (newcomers.Count == 0) continue;
             promotedYears++;
-            falsePositives += newcomers.Count(p => FormModel.Step(p.Condition) < Ai.PromoterMinConditionStep);
+            Assert.All(newcomers, p =>
+                Assert.True(FormModel.Step(p.Condition) >= Ai.PromoterMinConditionStep,
+                    $"抜擢されるのは好調な選手だけのはず: 校{id} {p.Name} {p.Condition}"));
         }
         Assert.True(promotedYears > 0, "60校のうち1校も抜擢が起きていない＝抜擢型が効いていない");
-        Assert.True(falsePositives <= 3, $"不調の偽newcomerが多すぎる（既知の±1ずれ由来を超える件数）: {falsePositives}");
     }
 
     [Fact]
