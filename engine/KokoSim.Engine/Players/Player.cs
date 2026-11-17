@@ -97,6 +97,27 @@ public sealed record Player
     /// </summary>
     public PhenomType Phenom { get; init; } = PhenomType.None;
 
+    /// <summary>
+    /// 打者の型（隠しフラグ, issue #1066）。能力の伸び方の重み（長所は伸び短所は伸びない）だけを決める。
+    /// 守備位置・適性とは無関係＝UIに出すときは CLAUDE.md の守備位置ルールに注意すること。
+    /// 既定 null＝型なし（自校の<c>ProspectGenerator</c>・旧セーブは未配線のため常に null）。
+    /// AI校の永続ロスター生成（<see cref="Nation.Roster.AiRosterFactory.NewcomerCohort"/>）だけが付与する。
+    /// </summary>
+    public BatterArchetype? BatterArchetype { get; init; }
+
+    /// <summary>
+    /// <see cref="BatterArchetype.OneTool"/>（一芸・素材型）が突出させる1能力。他の型では null で無視する。
+    /// </summary>
+    public BatterAttribute? BatterArchetypeFocus { get; init; }
+
+    /// <summary>
+    /// 打者の型の尖り方の強さ（生成時の学校の強さから決まる・<see cref="Players.BatterArchetypes.IntensityForStrength"/>）。
+    /// 弱い学校ほど0に近づき型の効果が目立たない（バランス型に見える＝issue #1066「弱い学校はバランス型・素材型が多め」）。
+    /// 強豪校ほど1を超えて大きくなる（「強豪校ほど長所の尖り方を大きく」）。学年成長時（<c>AiRosterCycle.BumpTo</c>）は
+    /// 学校を参照できないので、生成時にこの値へ焼き込んでおく。既定1.0＝型なしの選手には無関係。
+    /// </summary>
+    public double BatterArchetypeIntensity { get; init; } = 1.0;
+
     /// <summary>調子（設計書02 §3.3）。週次の波を Season 層が更新し、投影時に載せる。試合中は補正係数として作用。</summary>
     public Condition Condition { get; init; } = Condition.Normal;
 

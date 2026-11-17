@@ -356,6 +356,84 @@ public sealed record RosterCoefficients
     public double StarLift(double strength)
         => Math.Max(0.0, strength - TierCompressionPivot) * AiStarLiftPerPoint * AiStarShare;
 
+    // --- AI校の打者能力の天井（issue #1066） ---
+    // 旧実装は打者の全能力を 99 で切り詰めるだけだったため、強豪校（毎年最大 +40 の逆算配分）は
+    // 在校生の全能力が平行に伸びて 99 に溜まり、型（<see cref="Players.BatterArchetype"/>）の長所まで
+    // 潰れていた（issue #908 がストレートの球速で踏んだのと同じ罠）。球速と同じ「膝から2本の線分＋
+    // 100への漸近」でなめらかに寝かせる。打者の能力は Level 空間そのもの（km/h 変換不要）なので
+    // 球速と違い1本の曲線を全12能力（<see cref="Players.BatterAttribute"/>）で共有できる。
+    // 上端は球速（97→100漸近）より低め（91→100漸近）に取り、整数丸めで 99 に達する入力がごく僅かになるようにする
+    // （「99に張り付く能力は数%まで」が目標・issue #1066）。
+
+    /// <summary>天井の膝（素の値＝能力Lv。これ以下は恒等）。</summary>
+    public double AiBatterCapKnee { get; init; } = 85.0;
+    /// <summary>1本目の線分の終点の素の値。</summary>
+    public double AiBatterCapMidRaw { get; init; } = 120.0;
+    /// <summary>1本目の線分の終点の能力Lv。</summary>
+    public double AiBatterCapMidLevel { get; init; } = 92.0;
+    /// <summary>2本目の線分の終点の素の値。</summary>
+    public double AiBatterCapTopRaw { get; init; } = 165.0;
+    /// <summary>2本目の線分の終点の能力Lv。この先は 100 へ指数的に漸近する。</summary>
+    public double AiBatterCapTopLevel { get; init; } = 96.0;
+
+    /// <summary>
+    /// AI校の打者能力の天井（素の値→能力Lv）。<see cref="VelocitySoftCap"/> と同じ形
+    /// （膝以下は恒等、膝から2本の線分、その先は2本目の傾きのまま100へ指数的に漸近）。単調増加。
+    /// </summary>
+    public double BatterSoftCap(double raw)
+    {
+        double k = AiBatterCapKnee, rm = AiBatterCapMidRaw, lm = AiBatterCapMidLevel,
+            rt = AiBatterCapTopRaw, lt = AiBatterCapTopLevel;
+        if (raw <= k) return raw;
+        if (raw <= rm) return k + (raw - k) * (lm - k) / (rm - k);
+        var slope = (lt - lm) / (rt - rm);
+        if (raw <= rt) return lm + (raw - rm) * slope;
+        var span = 100.0 - lt;
+        return lt + span * (1.0 - Math.Exp(-(raw - rt) * slope / span));
+    }
+
+    /// <summary><see cref="BatterSoftCap"/> の逆関数（毎年の底上げを天井の手前の「素の値」で足すため）。</summary>
+    public double BatterSoftCapInverse(double level)
+    {
+        double k = AiBatterCapKnee, rm = AiBatterCapMidRaw, lm = AiBatterCapMidLevel,
+            rt = AiBatterCapTopRaw, lt = AiBatterCapTopLevel;
+        if (level <= k) return level;
+        if (level <= lm) return k + (level - k) * (rm - k) / (lm - k);
+        var slope = (lt - lm) / (rt - rm);
+        if (level <= lt) return rm + (level - lm) / slope;
+        var span = 100.0 - lt;
+        var frac = Math.Min((level - lt) / span, 1.0 - 1e-9);
+        return rt - span * Math.Log(1.0 - frac) / slope;
+    }
+
+    /// <summary>
+    /// 打者の型のオフセットを、生成直後の素のロール値 <paramref name="rolled"/> へ1回だけ適用する（issue #1066）。
+    /// 以降はこの結果（<see cref="BatterSoftCap"/> 越しの値）がそのまま「これまでの成長を含む基準値」になり、
+    /// 毎年の成長（<see cref="GrowBatterAttribute"/>）はオフセットを再適用しない＝型は生成時に1回だけ基準を
+    /// ずらし、以後は <see cref="BatterArchetypes.GrowthWeight"/> （長所は多く短所は少なく育つ重み）だけで効く。
+    /// </summary>
+    public int ApplyBatterOffset(int rolled, double offset)
+    {
+        var raw = BatterSoftCapInverse(Math.Max(10.0, rolled));
+        return (int)MathUtil.Clamp(Math.Round(BatterSoftCap(Math.Max(10.0, raw + offset))), 10, 99);
+    }
+
+    /// <summary>
+    /// <paramref name="displayed"/> を <paramref name="growthDelta"/>×<paramref name="weight"/> だけ伸ばす
+    /// （<see cref="BatterSoftCap"/> 越しに底上げ＝99への張り付きを避ける）。<paramref name="weight"/> は
+    /// <see cref="BatterArchetypes.GrowthWeight"/>（長所は1より大きく・短所は1より小さい）。
+    /// 旧実装（型なし・全能力へ同じ量を足す）は <paramref name="weight"/>=1 に一致（issue #1066 原因1）。
+    /// </summary>
+    public int GrowBatterAttribute(int displayed, double growthDelta, double weight)
+    {
+        var raw = BatterSoftCapInverse(Math.Max(10.0, displayed));
+        var level = BatterSoftCap(Math.Max(10.0, raw + growthDelta * weight));
+        return (int)MathUtil.Clamp(Math.Round(level), 10, 99);
+    }
+
+    /// <summary>打者の型（出現割合と配分オフセット）。AI校の永続ロスターだけが使う（issue #1066）。</summary>
+    public Players.BatterArchetypeCoefficients BatterArchetypes { get; init; } = new();
+
     // --- 投打の利き（設計書01 §1.1c） ---
     public double ThrowLeftProb { get; init; } = 0.12;
     public double SwitchProb { get; init; } = 0.03;

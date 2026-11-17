@@ -45,6 +45,10 @@ internal static class PlayerSaves
             .Add("chanceHit", p.ChanceHitFactor)
             .Add("skills", SkillSetToJson(p.Skills))
             .Add("phenom", EnumJson.Write(p.Phenom))
+            // 打者の型（issue #1066）。AI校の永続ロスターだけが持つ（自校/旧セーブは null）。
+            .Add("batterArchetype", EnumJson.WriteNullable(p.BatterArchetype))
+            .Add("batterArchetypeFocus", EnumJson.WriteNullable(p.BatterArchetypeFocus))
+            .Add("batterArchetypeIntensity", p.BatterArchetypeIntensity)
             .Add("cond", EnumJson.Write(p.Condition))
             .Add("condVal", p.ConditionValue)
             .Add("injury", EnumJson.Write(p.Injury))
@@ -87,6 +91,10 @@ internal static class PlayerSaves
         ChanceHitFactor = o.Double("chanceHit"),
         Skills = SkillSetFromJson(o.Obj("skills")),
         Phenom = EnumJson.Read<PhenomType>(o.Str("phenom")),
+        // 打者の型（issue #1066・v34以降）。旧セーブは無い＝null（型なし・旧実装と同じ成長）。
+        BatterArchetype = o.Has("batterArchetype") ? EnumJson.ReadNullable<BatterArchetype>(o.Str("batterArchetype")) : null,
+        BatterArchetypeFocus = o.Has("batterArchetypeFocus") ? EnumJson.ReadNullable<BatterAttribute>(o.Str("batterArchetypeFocus")) : null,
+        BatterArchetypeIntensity = o.Has("batterArchetypeIntensity") ? o.Double("batterArchetypeIntensity") : 1.0,
         Condition = EnumJson.Read<Condition>(o.Str("cond")),
         ConditionValue = o.Double("condVal"),
         Injury = EnumJson.Read<InjurySeverity>(o.Str("injury")),

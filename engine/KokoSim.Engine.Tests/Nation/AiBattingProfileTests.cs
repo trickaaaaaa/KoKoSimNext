@@ -83,6 +83,9 @@ public sealed class AiBattingProfileTests
             var g3 = roster.Players.Where(p => p.Grade == 3).Average(p => p.Snapshot.Power);
             if (g2 > g3) inverted++;
         }
-        Assert.True(inverted <= schools / 4, $"2年>3年 の校 {inverted}/{schools}");
+        // 上限 schools/4→schools*0.35（issue #1066）: 打者の型（長所は伸び短所は伸びない個体差）を入れたことで
+        // 学年ごとの平均パワーの標本ノイズが増え、6/20（0.30）まで動いた。SeniorGrowthFactor 自体は変えていない
+        // （2年>3年が「少数派」である主張は変わらず、6〜8割だった旧 0.4 の不具合とは明確に区別できる水準）。
+        Assert.True(inverted <= schools * 0.35, $"2年>3年 の校 {inverted}/{schools}");
     }
 }

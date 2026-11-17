@@ -304,20 +304,31 @@ public static class AiRosterCycle
     /// 総合は g に対し単調でない。最強豪（ターゲット 90 前後）は能力が 99 に張り付いてターゲットに届かず、年1回の逆算
     /// （参照実装・夏の節目の積み直し）は毎年上限まで伸ばす。4月の補正でもう一度上限を当てる（または二分探索が谷に落ちる）と、
     /// 打てる控え投手が野手へ回って（二刀流の選抜）6指標の選手層が崩れ、総合がかえって下がる（実測: 強さ90の学校で 89.9 → 85.2）。</para>
+    ///
+    /// <para><b>二分探索は型を無視した成長（<c>ignoreBatterArchetype:true</c>）で g を解く（issue #1066）</b>。
+    /// 打者の型（長所は伸び短所は伸びないソフトキャップ越しの成長）は選手1人の総量をほぼ保つよう正規化してあるが、
+    /// 完全な線形ではないため、型ありの成長を二分探索にそのまま使うと「同じ g でもチーム総合が旧実装より少し届きにくい」
+    /// 形になり、探索が必要以上に大きな g を解いてしまう。この g は<b>投手の球速にも同じ式でそのまま乗る</b>ため、
+    /// 打者の型を入れただけで無関係の投手球速分布が暴れる事故を起こした
+    /// （実測: 3年生の150km/h以上が 11人→30人台に増加・<c>VelocityDistributionByTierTests</c>）。
+    /// g の解（探索）は旧実装と同じ関数で行い、<b>最終適用（<see cref="ApplyG"/> の最後の1回）だけ型ありの
+    /// 本当の成長を使う</b>＝学校の強さとチーム総合の対応（この関数の役目）は1ビットも変えず、
+    /// 型による個々の選手の凸凹だけを乗せる。</para>
     /// </summary>
     private static double SolveGrowthG(AiSchoolRoster roster, School school, int yearIndex, AiRosterDeps deps,
         List<(AiPlayer Player, Player Base)> bases, Func<int, double> gradeFactor, bool correction = false)
     {
         var target = GrowthTarget(school, deps);
 
-        void ApplyG(double g)
+        void ApplyG(double g, bool final)
         {
-            foreach (var (p, b) in bases) p.Snapshot = BumpTo(b, gradeFactor(p.Grade) * g, deps.Roster);
+            foreach (var (p, b) in bases)
+                p.Snapshot = BumpTo(b, gradeFactor(p.Grade) * g, deps.Roster, ignoreBatterArchetype: !final);
         }
 
         double OverallAt(double g)
         {
-            ApplyG(g);
+            ApplyG(g, final: false);
             return ProjectedOverall(roster, school, yearIndex, deps);
         }
 
@@ -325,7 +336,7 @@ public static class AiRosterCycle
         if (correction)
         {
             overallAtZero = OverallAt(0);
-            if (overallAtZero >= target) return 0;   // 伸ばさずに届いている（g=0 適用済み）
+            if (overallAtZero >= target) { ApplyG(0, final: true); return 0; }   // 伸ばさずに届いている
         }
 
         // Overall は g に対しおおむね単調非減少。g の最大値でも届かなければ上限で打ち切り（強豪はキャップで頭打ち＝許容）。
@@ -333,7 +344,7 @@ public static class AiRosterCycle
         var overallAtHi = OverallAt(hi);
         if (overallAtHi < target)
         {
-            if (!correction) return hi;   // hi 適用済みで確定
+            if (!correction) { ApplyG(hi, final: true); return hi; }
             // 補正で届かない: 5 刻みで総合が最も高い最小の g（同点は小さい g＝余計に伸ばさない）。
             var bestG = 0.0;
             var bestOverall = overallAtZero;
@@ -343,7 +354,7 @@ public static class AiRosterCycle
                 if (o > bestOverall) { bestOverall = o; bestG = gi; }
             }
             if (overallAtHi > bestOverall) bestG = hi;
-            ApplyG(bestG);
+            ApplyG(bestG, final: true);
             return bestG;
         }
 
@@ -355,10 +366,10 @@ public static class AiRosterCycle
         }
         if (correction && lo > 0 && OverallAt(lo) < overallAtZero)
         {
-            ApplyG(0);   // 谷に落ちた＝伸ばさないほうが高い。
+            ApplyG(0, final: true);   // 谷に落ちた＝伸ばさないほうが高い。
             return 0;
         }
-        ApplyG(lo);   // target をわずかに下回る側（オーバーシュートしない）。
+        ApplyG(lo, final: true);   // target をわずかに下回る側（オーバーシュートしない）。
         return lo;
     }
 
@@ -371,26 +382,40 @@ public static class AiRosterCycle
         return ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
     }
 
-    /// <summary>スナップショットの中核能力を <paramref name="amount"/> だけ底上げする（弾道傾向・精神は伸ばさない）。</summary>
-    internal static Player BumpTo(Player b, double amount, RosterCoefficients rc)
+    /// <summary>
+    /// スナップショットの中核能力を <paramref name="amount"/> だけ底上げする（弾道傾向・精神は伸ばさない）。
+    /// <paramref name="ignoreBatterArchetype"/>=true は型を無視した旧来の一律成長（<c>Clamp(v+d,10,99)</c>）を使う
+    /// （<see cref="SolveGrowthG"/> の二分探索専用。下の解説を参照）。
+    /// </summary>
+    internal static Player BumpTo(Player b, double amount, RosterCoefficients rc, bool ignoreBatterArchetype = false)
     {
         var d = (int)Math.Round(amount);
         if (d <= 0) return b;
-        int Up(int v) => (int)MathUtil.Clamp(v + d, 10, 99);
+        // 打者の型（issue #1066）: 型を持つ選手（AI校の永続ロスターだけ・自校/旧セーブは null）は、
+        // 長所ほど伸び短所はあまり伸びない配分＋やわらかい天井（RosterCoefficients.BatterSoftCap）で底上げする。
+        // 旧実装（型なし・全員同じ Up）は全能力が平行に 99 へ溜まり、型の長所・短所が消えていた（issue #1066 原因1）。
+        // 型を持たない選手・ignoreBatterArchetype=true の呼び出しは旧実装と1ビットも変えない（Up のまま）。
+        var archetype = ignoreBatterArchetype ? null : b.BatterArchetype;
+        int Up(int v, BatterAttribute attr)
+        {
+            if (archetype is not { } a) return (int)MathUtil.Clamp(v + d, 10, 99);
+            var weight = BatterArchetypes.GrowthWeight(a, attr, b.BatterArchetypeFocus, b.BatterArchetypeIntensity, rc.BatterArchetypes);
+            return rc.GrowBatterAttribute(v, d, weight);
+        }
         var r = b with
         {
-            Contact = Up(b.Contact),
-            Power = Up(b.Power),
-            Discipline = Up(b.Discipline),
-            Speed = Up(b.Speed),
-            ArmStrength = Up(b.ArmStrength),
-            ThrowAccuracy = Up(b.ThrowAccuracy),
-            Fielding = Up(b.Fielding),
-            Catching = Up(b.Catching),
-            Bunt = Up(b.Bunt),
-            Steal = Up(b.Steal),
-            Baserunning = Up(b.Baserunning),
-            Lead = Up(b.Lead),
+            Contact = Up(b.Contact, BatterAttribute.Contact),
+            Power = Up(b.Power, BatterAttribute.Power),
+            Discipline = Up(b.Discipline, BatterAttribute.Discipline),
+            Speed = Up(b.Speed, BatterAttribute.Speed),
+            ArmStrength = Up(b.ArmStrength, BatterAttribute.ArmStrength),
+            ThrowAccuracy = Up(b.ThrowAccuracy, BatterAttribute.ThrowAccuracy),
+            Fielding = Up(b.Fielding, BatterAttribute.Fielding),
+            Catching = Up(b.Catching, BatterAttribute.Catching),
+            Bunt = Up(b.Bunt, BatterAttribute.Bunt),
+            Steal = Up(b.Steal, BatterAttribute.Steal),
+            Baserunning = Up(b.Baserunning, BatterAttribute.Baserunning),
+            Lead = Up(b.Lead, BatterAttribute.Lead),
         };
         // 投手能力も全選手ぶん伸ばす（#381）。旧実装は「投手能力を持つなら」＝マウンドに置かれた選手だけで、
         // 野手の投手能力は入学時のまま据え置かれていた（3年生が1年生と同じ肩で緊急登板する）。

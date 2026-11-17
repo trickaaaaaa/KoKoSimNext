@@ -189,12 +189,15 @@ public sealed class AiRosterTests
         var school = MakeSchool(strength: 70);
         var roster = AiRosterFactory.Bootstrap(school, 1, deps);
         foreach (var p in roster.Players) p.PendingBudget = 6.0;   // 旧方式の消し残し（3年が残ったまま呼ばれても安全）
-        var before = roster.Players.ToDictionary(p => p.Id, p => p.Snapshot.Contact);
+        var before = roster.Players.ToDictionary(p => p.Id, p => p.Snapshot);
 
         AiRosterCycle.PlanNextYear(roster, school, 1, deps);
 
-        Assert.All(roster.Players.Where(p => before[p.Id] <= 93),
-            p => Assert.Equal(before[p.Id] + 6, p.Snapshot.Contact));   // 消し残しは能力へ
+        // 消し残しは能力へ一度だけ乗る（BumpTo(before, 6.0, rc) と一致＝二重に乗らない）。
+        // 打者の型（issue #1066）により型ごとに伸び方が違うので、期待値は同じ関数で算出する
+        // （固定の「+6」ではなく「BumpTo を1回通した結果」と比較する＝二重適用の検査に変わりは無い）。
+        Assert.All(roster.Players,
+            p => Assert.Equal(AiRosterCycle.BumpTo(before[p.Id], 6.0, deps.Roster).Contact, p.Snapshot.Contact));
         Assert.All(roster.InGrade(3), p => Assert.Equal(0, p.PendingBudget));
 
         AiRosterCycle.RetireGraduates(roster);
