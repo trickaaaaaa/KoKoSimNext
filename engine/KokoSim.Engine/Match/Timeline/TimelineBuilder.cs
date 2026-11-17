@@ -852,13 +852,24 @@ public static class TimelineBuilder
                         : Math.Min(speed, need);
                 }
                 var t1 = t0 + dist / pace;
-                if (isBallFielder)
+                FielderMove? pickupLeg = null;
+                if (isBallFielder && PlanMissedFlyChase(
+                        play, landAt, fieldedAt, ClampToFence(landing, field, play.BearingDeg, FenceBodyMarginM),
+                        ballFielderTarget, moveFrom, speed, t0, fielderReachM, a.Position) is { } chase)
+                {
+                    // 落とした飛球（issue #1075）: 落下点へ追う→着地後に拾う点へ向かい直す、の2段。
+                    // 絵の到着を判定の遅れぶん着地より後へ置く＝「追いついたのに落ちた」絵を作らない
+                    (t0, t1, to) = (chase.Chase.T0, chase.Chase.T1, chase.Chase.To);
+                    pickupLeg = chase.Pickup;
+                }
+                else if (isBallFielder)
                 {
                     (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
                     to = StopWithinReach(moveFrom, to, pace * (t1 - t0), fielderReachM);
                     if (a.Position == FieldPosition.FirstBase) firstBaseFieldEnd = to; // アンアシスト運びの起点（#400）
                 }
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
+                if (pickupLeg is { } pl) moves.Add(pl);
 
                 // バックアップ/中継で持ち場を離れた野手は、決着後に定位置へ戻る（"寄ったまま"を防ぐ, #2）。
                 // ⚠ 戻り先は**出発した場所**（＝判定が距離を測った FieldGeometry の守備位置）。以前は
@@ -3789,6 +3800,74 @@ public static class TimelineBuilder
         if (t1 <= fieldedAt) return (t0, t1);   // 既に間に合っている（フライを待つ等）
         var start = Math.Min(t0, Math.Max(ContactAt, fieldedAt - MinFieldLegSeconds));
         return (start, Math.Max(start, fieldedAt));
+    }
+
+    /// <summary>落とした飛球の「届かない」到着を着地より後に置く最小の幅[s]。これ未満しか置けないなら追う段と拾う段に分けない。</summary>
+    private const double MissedFlyMinLateSeconds = 0.05;
+
+    /// <summary>
+    /// 落とした飛球（安打になった飛球）の処理野手のレッグ（issue #1075・表示専用）。
+    /// 判定は捕球に使える時間を割り引いている（<c>CatchReachFactor</c>・フェンス際の減点）のに、絵は野手が全力で
+    /// 着く時刻をそのまま使っていたので、遅れた球でも「落ちる前に落下点へ入っている」絵のまま安打になっていた。
+    /// 到着を判定の遅れ <c>−CatchMarginSeconds</c> ぶん着地より後へ置く（乱数は引かない・判定は読むだけ）:
+    /// <list type="bullet">
+    /// <item>着地後に球が転がってから拾う（拾う時刻が着地の後）なら、①落下点へ追う（到着＝着地＋遅れ）
+    /// →②着地後に拾う点へ向かい直す、の2段。</item>
+    /// <item>転がらず着地の瞬間に拾う（判定の拾う時刻＝着地）なら、拾う点へ向かう1本のレッグを
+    /// 拾う時刻ちょうどに着かせる＝落ちる前に着いて待っている絵にしない（拾う時刻は判定が決めた値＝それより後へは動かせない）。</item>
+    /// </list>
+    /// 遅れが無い（捕れた・余裕が正）ときは null＝呼び出し側が従来の1本レッグで描く。
+    /// </summary>
+    private static (FielderMove Chase, FielderMove? Pickup)? PlanMissedFlyChase(
+        FieldingPlay play, double landAt, double fieldedAt, TimelinePoint chaseTarget, TimelinePoint pickupTarget,
+        TimelinePoint from, double speed, double startT, double reachM, FieldPosition role)
+    {
+        if (!play.IsFly || play.CatchMarginSeconds is not { } margin || margin >= 0.0) return null;
+        if (play.Result is not (BattedBallResult.Single or BattedBallResult.Double or BattedBallResult.Triple)) return null;
+
+        // 走りの速さ: 到着に間に合う速さ（歩き〜脚力）。小走りへ切り上げて早く着いてしまうときは、
+        // 出足を遅らせて到着を合わせる。歩きと走りの収録の隙間の速さは足が滑る
+        (double T0, double T1, double Pace) Run(TimelinePoint target, double arrive)
+        {
+            var dist = Distance(from, target);
+            var need = dist / Math.Max(1e-6, arrive - startT);
+            var pace = need <= EasyPaceMinMps ? EasyPaceMinMps
+                : need < EasyJogMps ? Math.Min(speed, EasyJogMps)
+                : Math.Min(speed, need);
+            var t0 = Math.Max(startT, arrive - dist / pace);
+            return (t0, t0 + dist / pace, pace);
+        }
+
+        // ①落下点へ追う→②拾う点へ向かい直す。拾う段は脚力で走れる長さを残す（守備範囲 reachM ぶんは手が埋める
+        // ＝StopWithinReach と同じ考え方）。残さないと拾う段が詰まって脚力を超える（LegSpeedTests）。
+        // 残せない（遅れの見せ方が頭打ち・追う段が拾う時刻へ食い込む）ときは1本レッグへ落とす
+        var chaseDist = Distance(from, chaseTarget);
+        var pickupNeed = Math.Max(MinFieldLegSeconds, (Distance(chaseTarget, pickupTarget) - reachM) / speed);
+        var lateArrive = Math.Min(landAt - margin, fieldedAt - pickupNeed);
+        if (chaseDist >= 0.5 && lateArrive - landAt >= MissedFlyMinLateSeconds)
+        {
+            var (t0, t1, pace) = Run(chaseTarget, lateArrive);
+            if (t1 <= fieldedAt - MinFieldLegSeconds + 1e-9)
+            {
+                var chaseTo = StopWithinReach(from, chaseTarget, pace * (t1 - t0), reachM);
+                var pickupDist = Distance(chaseTo, pickupTarget);
+                var chase = new FielderMove { Role = role, T0 = t0, T1 = t1, To = chaseTo, Task = FielderTask.Chase };
+                if (pickupDist < 0.5) return (chase with { Task = FielderTask.FieldBall }, null);
+                var (p0, p1) = ArriveByFieldedAt(t1, t1 + pickupDist / speed, fieldedAt);
+                if (pickupDist - speed * (p1 - p0) <= reachM)
+                {
+                    var pickupTo = StopWithinReach(chaseTo, pickupTarget, speed * (p1 - p0), reachM);
+                    return (chase, new FielderMove { Role = role, T0 = p0, T1 = p1, To = pickupTo, Task = FielderTask.FieldBall });
+                }
+            }
+        }
+
+        // 1本: 拾う点へ向かうレッグを、拾う時刻（判定が決めた値＝それより後へは動かせない）か遅れの先の早いほうに着かせる
+        if (Distance(from, pickupTarget) < 0.5) return null;
+        var (s0, s1, sPace) = Run(pickupTarget, Math.Min(landAt - margin, fieldedAt));
+        (s0, s1) = ArriveByFieldedAt(s0, s1, fieldedAt);
+        var stop = StopWithinReach(from, pickupTarget, sPace * (s1 - s0), reachM);
+        return (new FielderMove { Role = role, T0 = s0, T1 = s1, To = stop, Task = FielderTask.FieldBall }, null);
     }
 
     /// <summary>実捕球者の移動レッグの最短表示長[s]（瞬間移動に見せないための下限）。</summary>

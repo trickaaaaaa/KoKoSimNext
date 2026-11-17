@@ -49,6 +49,13 @@ namespace KokoSim.Unity.Match
         public static double SlideMargin0 = 0.10, SlideMargin1 = 0.20;
         /// <summary>出力ファイル名の頭（帯ごとに撮り分ける）。</summary>
         public static string SlideTag = "slide";
+        /// <summary>
+        /// true＝「届かない」芝居（背走ジャンプ）の後半だけを撮る（issue #1075 追記3）。捕る瞬間の前後を
+        /// <see cref="MissTailOffsets"/> の時刻で撮り、そのときの収録名とクリップ内時刻を TSV に残す
+        /// ＝「押さえ込む」「向き直って構える」まで流れていないかを数字で見る。撮る場面数は <see cref="SlideScenes"/>。
+        /// </summary>
+        public static bool MissTailOnly;
+        private static readonly double[] MissTailOffsets = { -0.20, 0.0, 0.17, 0.34, 0.42, 0.55, 0.75, 1.00, 1.40 };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoSpawn()
@@ -113,7 +120,8 @@ namespace KokoSim.Unity.Match
             }
 
             _log = new StringBuilder("場面\t捕球余裕[s]\t再生時計[s]\t実況\t内訳と接地\n");
-            var todo = SlideOnly ? new HashSet<Want> { Want.Dive } : new HashSet<Want> { Want.Dive, Want.DiveMiss, Want.Fumble };
+            var todo = MissTailOnly ? new HashSet<Want> { Want.DiveMiss }
+                : SlideOnly ? new HashSet<Want> { Want.Dive } : new HashSet<Want> { Want.Dive, Want.DiveMiss, Want.Fumble };
             var slideLeft = SlideScenes;
             if (FirstBaseCoverOnly) todo = new HashSet<Want> { Want.Dive };
 
@@ -147,6 +155,36 @@ namespace KokoSim.Unity.Match
                     var want = Classify(play);
                     if (play == null || want == null || !todo.Contains(want.Value))
                     {
+                        _ctrl.FreezeCurrentAtResult();
+                        yield return null;
+                        continue;
+                    }
+                    if (MissTailOnly)
+                    {
+                        if (want != Want.DiveMiss) { _ctrl.FreezeCurrentAtResult(); yield return null; continue; }
+                        var tm = FirstFlightEnd(play);
+                        var tagM = "miss-" + (SlideScenes - slideLeft + 1);
+                        Debug.Log($"[守備の芝居] {tagM} 余裕={play.CatchMargin:F2}s 接触={tm:F2}s");
+                        var fired = false;
+                        for (var k = 0; k < MissTailOffsets.Length; k++)
+                        {
+                            yield return PlayUntil(tm + MissTailOffsets[k]);
+                            yield return Shoot($"{tagM}-f{k}", $"{tagM} t={MissTailOffsets[k]:+0.00;-0.00}", play);
+                            fired |= (_ctrl.DuelRigForCapture?.FieldDiveDiagForCapture() ?? "").Contains("(DiveMiss)");
+                            // 外野3人の今の収録（打ち切り後に走りへ戻ったか）
+                            foreach (var of in new[] { KokoSim.Engine.Match.Field.FieldPosition.LeftField,
+                                         KokoSim.Engine.Match.Field.FieldPosition.CenterField, KokoSim.Engine.Match.Field.FieldPosition.RightField })
+                                if (_ctrl.DuelRigForCapture != null && _ctrl.DuelRigForCapture.FielderClipForCapture(of, out var oc, out _, out _, out _))
+                                    _log.Append("\t").Append(of).Append('=').Append(oc);
+                            _log.Append('\n');
+                        }
+                        // 発火したかと芝居の予定表を残す（背走以外の「届かない」は芝居が無い＝前進・横は誰も触らない）。
+                        // 場面は発火の有無によらず数える＝シナリオで作った場面を次の打席で上書きしない
+                        _log.Append(tagM).Append("\t発火=").Append(fired).Append("\t予定=")
+                            .Append(_ctrl.DuelRigForCapture?.FieldCatchPlanForCapture() ?? "-")
+                            .Append("\t").Append(_ctrl.DuelRigForCapture?.MissDiagForCapture ?? "-").Append('\n');
+                        Debug.Log($"[守備の芝居] {tagM} 発火={fired} {_ctrl.DuelRigForCapture?.MissDiagForCapture}");
+                        if (--slideLeft <= 0) todo.Clear();
                         _ctrl.FreezeCurrentAtResult();
                         yield return null;
                         continue;
@@ -200,8 +238,9 @@ namespace KokoSim.Unity.Match
             if (play.Fumbled) return Want.Fumble;
             if (play.CatchMargin is not { } m) return null;
             const double dive = 0.20;   // DuelStageRig.DiveMarginSeconds と同値
+            const double miss = 0.50;   // DuelStageRig.MissMarginSeconds と同値
             if (m >= 0 && m < dive) return Want.Dive;
-            if (m < 0 && m > -dive) return Want.DiveMiss;
+            if (m < 0 && m > -miss) return Want.DiveMiss;
             return null;
         }
 
