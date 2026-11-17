@@ -28,12 +28,12 @@ public sealed class DoublePlayRaceTests
     // 内野ゴロ（捕球点・処理時刻・肩・打者一塁到達時刻を指定）。BatterToFirstSeconds を渡すと物理レースが効く。
     private static HomePlayContext Grounder(
         double x, double z, double fieldedAt, double batterToFirst, int arm = 55,
-        FieldPosition? fielderRole = null)
+        FieldPosition? fielderRole = null, DefenseDepth depth = DefenseDepth.Normal)
     {
         var situation = new HomePlaySituation(
             new Vector3D(x, 0, z), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps);
         return new HomePlayContext(
-            Field, situation, new TacticsCoefficients(), 0.5, DefenseDepth.Normal, IsFly: false,
+            Field, situation, new TacticsCoefficients(), 0.5, depth, IsFly: false,
             ThrowArriveSeconds: null, BatterToFirstSeconds: batterToFirst,
             FielderRole: fielderRole);
     }
@@ -811,5 +811,104 @@ public sealed class DoublePlayRaceTests
         }
         Assert.Equal(Count(42), Count(42));
         Assert.True(Count(42) > 0, "この設定では一塁代替の併殺が出るはず");
+    }
+
+    // ---- 二塁・三塁に走者がいる場面（PR #1076 レビュー: タッチ失敗で走者の状態が壊れていた） ----
+
+    /// <summary>走者の保存則: 打席開始時の人数（打者＋走者）＝塁上＋得点＋この打席のアウト。</summary>
+    private static void AssertRunnersConserved(int before, BaseState bases, int runs, int outs, string label)
+    {
+        var onBase = (bases.First is null ? 0 : 1) + (bases.Second is null ? 0 : 1) + (bases.Third is null ? 0 : 1);
+        Assert.True(before == onBase + runs + outs,
+            $"{label}: 走者の数が合わない（開始 {before} ＝ 塁上 {onBase} ＋ 得点 {runs} ＋ アウト {outs} のはず）");
+        // Player は値で等価な record＝同じ能力の別人を同一視しないよう参照で比べる
+        var people = new[] { bases.First, bases.Second, bases.Third }.Where(p => p is not null).ToList();
+        Assert.True(people.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Count() == people.Count,
+            $"{label}: 同じ走者が2つの塁に立っている");
+    }
+
+    [Fact]
+    public void FirstBaseTag_TagFails_WithRunnerOnSecond_OneMovePerRunner_AndRunnersConserved()
+    {
+        // 一・二塁で一塁手の代替（一塁自己フォース→二塁タッチ）がタッチに失敗した場合。
+        // 修正前は bases.Second を一塁走者で上書きし、二塁走者のカスケードがそれを外し、一塁走者の
+        // カスケードが 1→2 をもう1本積んでいた（move の二重）。
+        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var rng = new Xoshiro256Random(1066);
+        int fails = 0, dps = 0;
+        for (var i = 0; i < 3000; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var r2 = new Player { Speed = 50, Baserunning = 50 };
+            var bases = new BaseState { First = r1, Second = r2 };
+            var (runs, extraOuts, _, batterSafeOnFc, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, home);
+            Assert.False(batterSafeOnFc);
+            AssertRunnersConserved(3, bases, runs, 1 + extraOuts, $"試行{i}");
+            Assert.Equal(1, moves.Count(m => ReferenceEquals(m.Runner, r1)));   // 一塁走者の move は1本だけ
+            Assert.Equal(1, moves.Count(m => ReferenceEquals(m.Runner, r2)));   // 二塁走者も1本（2→3 の押し出し）
+            Assert.Same(r2, bases.Third);
+            Assert.Null(bases.First);
+            if (FirstBaseTagOutAt(moves, outAtEnd: false))
+            {
+                fails++;
+                Assert.Equal(0, extraOuts);
+                Assert.Same(r1, bases.Second);
+            }
+            else if (FirstBaseTagOutAt(moves, outAtEnd: true))
+            {
+                dps++;
+                Assert.Null(bases.Second);
+            }
+        }
+        Assert.True(fails > 0 && dps > 0, $"タッチ失敗と併殺の両方が出るはず（失敗={fails}, 併殺={dps}）");
+    }
+
+    [Fact]
+    public void FirstBaseTag_TagFails_BasesLoadedNormalDepth_RunnerScoresAndOthersAdvanceOnce()
+    {
+        // 満塁・通常守備: 三塁走者は押し出されて生還、二塁走者は三塁、一塁走者は二塁（タッチ失敗）。
+        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var rng = new Xoshiro256Random(1067);
+        var fails = 0;
+        for (var i = 0; i < 3000; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var r2 = new Player { Speed = 50, Baserunning = 50 };
+            var r3 = new Player { Speed = 50, Baserunning = 50 };
+            var bases = new BaseState { First = r1, Second = r2, Third = r3 };
+            var (runs, extraOuts, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, home);
+            AssertRunnersConserved(4, bases, runs, 1 + extraOuts, $"試行{i}");
+            foreach (var r in new[] { r1, r2, r3 })
+                Assert.Equal(1, moves.Count(m => ReferenceEquals(m.Runner, r)));
+            if (!FirstBaseTagOutAt(moves, outAtEnd: false)) continue;
+            fails++;
+            Assert.Equal(1, runs);
+            Assert.Same(r1, bases.Second);
+            Assert.Same(r2, bases.Third);
+        }
+        Assert.True(fails > 0, "満塁でもタッチ失敗の場面が出るはず");
+    }
+
+    [Fact]
+    public void FirstBaseTag_NotChosen_WhenBasesLoadedInfieldIn_HomeIsTheMainLine()
+    {
+        // 満塁・内野前進は本塁封殺が本筋。一塁を踏んでから二塁へ投げる代替は選ばない
+        // （選ぶとタッチ失敗のあとに本塁封殺の勝負がもう一度走り、守備が二重になる）。
+        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.FirstBase, depth: DefenseDepth.In);
+        var rng = new Xoshiro256Random(1068);
+        for (var i = 0; i < 1000; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var r2 = new Player { Speed = 50, Baserunning = 50 };
+            var r3 = new Player { Speed = 50, Baserunning = 50 };
+            var bases = new BaseState { First = r1, Second = r2, Third = r3 };
+            var (runs, extraOuts, _, batterSafeOnFc, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, home);
+            Assert.False(FirstBaseTagOutAt(moves), "満塁・内野前進では一塁の自己フォース代替を選ばないはず");
+            AssertRunnersConserved(4, bases, runs, (batterSafeOnFc ? 0 : 1) + extraOuts, $"試行{i}");
+        }
     }
 }
