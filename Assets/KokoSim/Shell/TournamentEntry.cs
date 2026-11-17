@@ -141,6 +141,34 @@ namespace KokoSim.Unity.Shell
                 SummerBackgroundSeed(yearIndex), brains, foldLedger, collectGarbage);
         }
 
+        /// <summary>
+        /// ロード復帰で、保存されない全国裏試合の結果（夏の49代表）を手元に戻して完了まで待つ。
+        /// 同じシードなら結果が一致するので再計算で戻す（<see cref="RestoreRunner"/> と同じ作法・勝数は積まない）。
+        /// 代表校の県予選成績の積み直し（<see cref="QualifierStatsRecovery"/>）が結果を読むために使う。
+        /// </summary>
+        internal static void EnsureSummerBackgroundResults(int yearIndex)
+        {
+            if (!NationBackgroundSim.HasResultsFor(SummerBackgroundSeed(yearIndex)))
+            {
+                var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
+                StartSummerBackgroundSim(yearIndex, calendarYear, NationService.TournamentStats,
+                    new EnemyAiBrainFactory(), foldLedger: false, collectGarbage: false);
+            }
+            NationBackgroundSim.EnsureCompleted();
+        }
+
+        /// <summary>秋季全国裏試合の結果（他県の地区順位）を手元に戻して完了まで待つ。夏の版と同じ理由。</summary>
+        internal static void EnsureAutumnBackgroundResults(int yearIndex)
+        {
+            if (!AutumnBackgroundSim.HasResultsFor(AutumnBackgroundSeed(yearIndex)))
+            {
+                var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
+                StartAutumnBackgroundSim(yearIndex, calendarYear, NationService.TournamentStats,
+                    new EnemyAiBrainFactory(), collectGarbage: false);
+            }
+            AutumnBackgroundSim.EnsureCompleted();
+        }
+
         /// <summary>夏の全国裏試合のシード。<b>大会シードそのもの</b>（自校の進行体と同じ値）なので
         /// <see cref="TournamentSeed"/> から引く＝<see cref="Enter"/> と食い違いようがない形にしておく。</summary>
         private static ulong SummerBackgroundSeed(int yearIndex)

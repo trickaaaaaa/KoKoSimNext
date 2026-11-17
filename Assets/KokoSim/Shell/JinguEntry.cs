@@ -115,7 +115,7 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>自地区以外の9地区の地区大会を解決する（<see cref="RegionalNationEngine.RunOtherRegions"/>）。
         /// 自県は対話プレイ済み（<c>GameSession.LastAutumnPlacementIds</c>）、他県は背景シムの結果を使う。</summary>
-        private static IReadOnlyList<RegionalResult> ComputeOtherRegions(string myRegion, int yearIndex)
+        internal static IReadOnlyList<RegionalResult> ComputeOtherRegions(string myRegion, int yearIndex)
         {
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             var placements = new Dictionary<int, IReadOnlyList<int>>();
