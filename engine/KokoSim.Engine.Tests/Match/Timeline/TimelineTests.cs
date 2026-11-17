@@ -1306,6 +1306,92 @@ public sealed class TimelineTests
         Assert.Contains(tl.Captions, c => c.Text.Contains("タッチアウト"));
     }
 
+    // --- issue #1062: 中継の野手は判定と同じ送球線上（捕球点→送球先）に入る ---
+
+    private static bool OnSegment(TimelinePoint p, TimelinePoint a, TimelinePoint b, double tol = 0.05)
+    {
+        var abx = b.X - a.X; var abz = b.Z - a.Z;
+        var len2 = abx * abx + abz * abz;
+        var t = ((p.X - a.X) * abx + (p.Z - a.Z) * abz) / len2;
+        var cx = a.X + abx * t; var cz = a.Z + abz * t;
+        var off = System.Math.Sqrt((p.X - cx) * (p.X - cx) + (p.Z - cz) * (p.Z - cz));
+        return off <= tol && t >= -1e-6 && t <= 1 + 1e-6;
+    }
+
+    [Theory]
+    [InlineData(FieldPosition.LeftField, -35.0, 78.0)]
+    [InlineData(FieldPosition.CenterField, 0.0, 95.0)]
+    [InlineData(FieldPosition.RightField, 40.0, 80.0)]
+    public void BackHomeThrows_RelayFielderStandsOnTheCatchToHomeLine_SameAsTheJudgement(
+        FieldPosition role, double landingX, double landingZ)
+    {
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.OutfieldHit(
+            role, landingX: landingX, landingZ: landingZ, fieldedAtSeconds: 3.2);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+
+        var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, homeArriveAnchor: 7.5, runnerOut: true);
+
+        var fieldPt = new TimelinePoint(play.LandingX, play.LandingZ);
+        var home = new TimelinePoint(0, 0);
+        var c = new KokoSim.Engine.Match.Game.BaserunningCoefficients();
+        var cutoffMove = tl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
+        // 判定の理論位置（本塁から CutoffFractionFromHome・捕球点→本塁の直線上）と一致
+        var expected = new TimelinePoint(
+            fieldPt.X * c.CutoffFractionFromHome, fieldPt.Z * c.CutoffFractionFromHome);
+        Assert.Equal(expected.X, cutoffMove.To.X, 6);
+        Assert.Equal(expected.Z, cutoffMove.To.Z, 6);
+        Assert.True(OnSegment(cutoffMove.To, fieldPt, home), "中継野手が捕球点→本塁の線上に居ない");
+
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        Assert.Equal(2, throws.Count);
+        Assert.True(Near(throws[0].To, cutoffMove.To), "ボールの中継点が中継野手の立ち位置と一致しない");
+        Assert.True(OnSegment(throws[0].To, fieldPt, home), "ボールの経由点が本塁への線上に無い");
+        Assert.True(cutoffMove.T1 > cutoffMove.T0);
+        // 中継野手は返球が来る前に着いている
+        Assert.True(cutoffMove.T1 <= throws[0].T1 + 1e-6, "中継野手が送球より遅れて着く");
+    }
+
+    [Fact]
+    public void OutfieldReturnThrow_ToThird_RelayFielderStandsOnTheCatchToThirdLine()
+    {
+        var field = new FieldGeometry();
+        var third = new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z);
+        var play = FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.RightField, landingX: 40, landingZ: 100, fieldedAtSeconds: 3.2,
+            result: BattedBallResult.Triple);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var tl = TimelineBuilder.AppendOutfieldReturnThrow(baseTl, play, field, "third", runnerArriveAnchor: 13.0);
+
+        var fieldPt = new TimelinePoint(play.LandingX, play.LandingZ);
+        var cutoffMove = tl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
+        Assert.True(OnSegment(cutoffMove.To, fieldPt, third), "中継野手が捕球点→三塁の線上に居ない");
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        Assert.Equal(2, throws.Count);
+        Assert.True(OnSegment(throws[0].To, fieldPt, third), "ボールの経由点が三塁への線上に無い");
+    }
+
+    [Fact]
+    public void OutfieldReturnThrow_ToSecond_KeepsTheFormationRelayPosition()
+    {
+        // 二塁へ返す連鎖は陣形の中継位置（打球と二塁の中間点）のまま＝絵は変わらない
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.CenterField, landingX: 0, landingZ: 100, fieldedAtSeconds: 3.2, result: BattedBallResult.Double);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+        var before = baseTl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
+
+        var tl = TimelineBuilder.AppendOutfieldReturnThrow(baseTl, play, field, "second", runnerArriveAnchor: 9.0);
+
+        var after = tl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
+        Assert.Equal(before, after);
+        Assert.Equal(baseTl.Moves, tl.Moves);
+    }
+
     [Fact]
     public void BackHomeThrows_DoubleTagAtHome_AddsSecondTagCaptionAtTrailingArrival()
     {
@@ -1955,9 +2041,9 @@ public sealed class TimelineTests
 
         // カットオフ役は「中継点へ出る」動きと「決着後に定位置へ戻る」動きの2つを持ちうる（#2）。
         // 中継点への往路（T0が早い方）を中継野手の立ち位置として検証する。
-        var cutoffMove = baseTl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
-
         var tl = TimelineBuilder.AppendOutfieldReturnThrow(baseTl, play, field, "third", runnerArriveAnchor: 13.0);
+        // 三塁へ返す連鎖は中継野手を送球線上へ引き直すので、立ち位置は連鎖を積んだ後のタイムラインから読む。
+        var cutoffMove = tl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
 
         var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
         Assert.Equal(2, throws.Count); // 外野→カット→三塁
@@ -2429,11 +2515,12 @@ public sealed class TimelineTests
         var baseTl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
 
-        // カットオフ役は「中継点へ出る」動きと「決着後に定位置へ戻る」動きの2つを持ちうる（#2）。
-        // 中継点への往路（T0が早い方）を中継野手の立ち位置として検証する。
-        var cutoffMove = baseTl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
-
         var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, homeArriveAnchor: 7.5, runnerOut: true);
+
+        // カットオフ役は「中継点へ出る」動きと「決着後に定位置へ戻る」動きの2つを持ちうる（#2）。
+        // 中継点への往路（T0が早い方）を中継野手の立ち位置として検証する。本塁への連鎖は中継野手を
+        // 送球線上へ引き直す（issue #1062）ので、連鎖を積んだ後のタイムラインから読む。
+        var cutoffMove = tl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
 
         var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
         Assert.Equal(2, throws.Count); // 外野→カット→本塁
