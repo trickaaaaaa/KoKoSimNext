@@ -1661,6 +1661,12 @@ public static class GameEngine
                 defense.AddPitches(session.PitchCount, gearWeight);
                 defense.RecordUnresolvedPitches(currentPitcher, session.PitchCount);
                 p.TotalPitches += session.PitchCount;
+                // 局面スナップショットも3アウトで締める（issue #1050）。打席未決着で半回を抜けるこの経路は Pa() を
+                // 通らないため、更新しないと次の半回の最初の打席が決着するまで「前の半回の途中」のまま残り、
+                // 交代パネル（SubstitutionOptions/IsOnOffense）が攻守を逆に判定していた。観測のみ・乱数非消費。
+                p.CurrentBases = bases;
+                p.CurrentOuts = outs;
+                p.CurrentIsTop = isTop;
                 continue;
             }
 
