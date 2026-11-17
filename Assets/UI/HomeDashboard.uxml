@@ -12,7 +12,7 @@
 
       <!-- ===== 主役ブロック: 直近の予定（全幅ヒーロー帯・design-16 §5 / 決定1-A）=====
            均等3カラムを破って本文最上部に横断で載る主役。大会週は「次の試合」（対戦カード）、
-           通常週は「夏予選まで残りN週」（前向きの予定表はエンジン未実装のためカウントダウンで代替）。
+           通常週は「夏予選まで残りN週」（出場が決まったセンバツ等はその大会名で数える）。
            コントローラが hm-hero-match / hm-hero-plain を display で二者択一する。 -->
       <ui:VisualElement name="home-hero" class="hm-hero">
         <ui:VisualElement class="rule-head hm-hero__eyebrow">

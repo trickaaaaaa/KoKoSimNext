@@ -130,6 +130,27 @@ public sealed record SeasonCalendar
     }
 
     /// <summary>
+    /// <see cref="NextTournament(int)"/> に「自校の出場が決まっていてまだ開幕していない大会」を加味した版
+    /// （センバツ・地区大会・神宮大会）。秋の県大会の後〜センバツ選考発表週までが対象で、
+    /// 出場が決まっていなければ従来どおり夏・秋の県大会を数える。
+    ///
+    /// <para>センバツは選考発表週（<see cref="SenbatsuAnnounceWeek"/>）に開幕する＝そこまでの残り週。
+    /// 地区大会・神宮大会は暦の週を持たず県大会の後始末から直接つながる（開幕待ちが週をまたがない）ので、
+    /// 決まっていれば残り0＝開催中として返す。</para>
+    /// </summary>
+    public (TournamentKind Kind, int WeeksLeft) NextTournament(int week, IReadOnlyCollection<TournamentKind>? entered)
+    {
+        if (entered != null && week > AutumnTournamentStartWeek && week <= SenbatsuAnnounceWeek)
+        {
+            if (entered.Contains(TournamentKind.Regional)) return (TournamentKind.Regional, 0);
+            if (entered.Contains(TournamentKind.Jingu)) return (TournamentKind.Jingu, 0);
+            if (entered.Contains(TournamentKind.SenbatsuKoshien))
+                return (TournamentKind.SenbatsuKoshien, SenbatsuAnnounceWeek - week);
+        }
+        return NextTournament(week);
+    }
+
+    /// <summary>
     /// その週に開幕する大会があれば種別を返す（なければ null）。大会モードへの遷移判定に使う。
     ///
     /// <para><b><see cref="TournamentKind.SummerKoshien"/> は決して返さない。</b> 甲子園は暦の週でなく

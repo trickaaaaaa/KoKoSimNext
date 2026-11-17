@@ -241,8 +241,9 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 次の公式戦と開幕までの残り週（残り0＝開催中）。トップバーのカウントダウンの単一ソース。
-        /// 判定は <see cref="SeasonCalendar.NextTournament"/> にしかない（画面ごとに引き算を書かない）。
+        /// 自校の出場が決まった大会（センバツ等）も数える。判定は <see cref="SeasonCalendar.NextTournament(int, System.Collections.Generic.IReadOnlyCollection{TournamentKind})"/> にしかない（画面ごとに引き算を書かない）。
         /// </summary>
-        public static (TournamentKind Kind, int WeeksLeft) NextTournament => Calendar.NextTournament(Week);
+        public static (TournamentKind Kind, int WeeksLeft) NextTournament
+            => Calendar.NextTournament(Week, GameSession.Current.EnteredUpcomingKinds);
     }
 }
