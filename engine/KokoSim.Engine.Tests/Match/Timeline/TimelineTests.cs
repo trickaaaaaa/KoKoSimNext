@@ -2071,6 +2071,66 @@ public sealed class TimelineTests
         Assert.Empty(tl.Judgements);
     }
 
+    /// <summary>
+    /// issue #1089: バント処理の送球は「距離÷バント処理野手の送球速度」で飛ぶ（判定の秒の残りや握り替えの秒を
+    /// 飛翔に入れると約1.7秒の山なりになっていた）。送球は処理（転がりの終わり）より後に投げ始める。
+    /// </summary>
+    [Theory]
+    [InlineData(BuntResult.SacrificeSuccess)]
+    [InlineData(BuntResult.InfieldHit)]
+    [InlineData(BuntResult.ForceOutAtSecond)]
+    [InlineData(BuntResult.ForceOutAtThird)]
+    [InlineData(BuntResult.ForceOutAtHome)]
+    [InlineData(BuntResult.PopOutDoubledOff)]
+    public void BuntTimeline_ThrowFlight_IsDistanceOverThrowSpeed(BuntResult result)
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, result,
+            Runner("R1"), Runner("R2"), Runner("R3"), null, null, null, c, field);
+
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        var dist = Math.Sqrt(Math.Pow(throwSeg.To.X - throwSeg.From.X, 2) + Math.Pow(throwSeg.To.Z - throwSeg.From.Z, 2));
+        var expected = dist / c.BuntFielderThrowSpeedMps;
+        Assert.True(Math.Abs((throwSeg.T1 - throwSeg.T0) - expected) < 1e-9,
+            $"{result}: 送球の飛翔 {throwSeg.T1 - throwSeg.T0:F3}s ≠ 距離÷送球速度 {expected:F3}s");
+        // 一番遠い二塁送球（約31m）でも約1.04秒。旧実装の一塁送球は約1.67秒だった。
+        Assert.True(expected < 1.2, $"{result}: 送球が1.2秒を超えて飛んでいる（{expected:F3}s）");
+
+        // 送球は捕ってから投げる（転がり・小フライの終わり ≤ 投げ始め）。
+        var fielded = tl.Ball.Where(b => b.Kind is BallSegmentKind.Roll or BallSegmentKind.Flight).Max(b => b.T1);
+        Assert.True(fielded <= throwSeg.T0 + 1e-9, $"{result}: 捕る前（{fielded:F3}s）に投げ始めている（{throwSeg.T0:F3}s）");
+    }
+
+    /// <summary>issue #1089: 犠打成功の送球の到達時刻（＝判定の秒）は直す前と同じ＝接触＋守備所要。
+    /// 浮いた時間は転がりを長くして吸収し、転がりは封殺の処理時刻より短くならない。</summary>
+    [Fact]
+    public void BuntTimeline_SacrificeSuccess_ThrowArrivalUnchanged_RollAbsorbsSlack()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.SacrificeSuccess,
+            null, null, null, null, null, null, c, field);
+
+        var contactAt = tl.Ball.Single(b => b.Kind == BallSegmentKind.Pitch).T1;
+        var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(contactAt + defenseTime, throwSeg.T1, 9);
+
+        var roll = tl.Ball.Single(b => b.Kind == BallSegmentKind.Roll);
+        Assert.True(roll.T1 - contactAt >= c.BuntFieldedAtSeconds - 1e-9);
+        // 処理から投げ始めまでは握り替え（封殺の送球と同じ OutfieldTransferSeconds・守備50で×1.0）。
+        Assert.Equal(c.OutfieldTransferSeconds, throwSeg.T0 - roll.T1, 9);
+    }
+
     [Fact]
     public void BuntTimeline_RunnerReferenceChanged_AddsAdvanceLeg()
     {

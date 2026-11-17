@@ -91,9 +91,6 @@ public static class TimelineBuilder
     /// へ昇格済み（issue bunt-no-take-on-ball-pitches。判定層のライナー併殺判定と共有する単一ソース＝判定と絵を
     /// 食い違わせない）。</summary>
     private const double BuntPopApexM = 3.0;
-    /// <summary>バント: 守備所要（<see cref="BaserunningCoefficients.BuntFieldThrowBaseSeconds"/> 由来）のうち、
-    /// 捕球（処理点到達）に割く比率。残りを送球区間に割く（内訳を持たないため均等に近い比率で分ける演出用の固定値）。</summary>
-    private const double BuntFieldShareOfDefenseTime = 0.55;
     /// <summary>バント: 結果と矛盾しないための到達順の最小マージン[s]（矛盾ガード。他ビルダーと同じ作法）。</summary>
     private const double BuntThrowGuardSeconds = 0.15;
 
@@ -1714,11 +1711,15 @@ public static class TimelineBuilder
                 // ライナー併殺（design-09「小フライ併殺」）: 判定層と同じ捕球点・滞空秒（BuntResolver.PopFieldedPoint/
                 // BaserunningCoefficients.BuntPopHangSeconds）＋DoubledOffResolverの秒をそのまま使う
                 // （判定＝絵。design-18原則と同型）。
+                var catchToFirstM = (field.FirstBase - popFielded).Length;
                 var throwArrive = catchAt + DoubledOffResolver.DefenseReturnSeconds(
-                    (field.FirstBase - popFielded).Length, c.BuntFielderThrowSpeedMps, c, (int)c.BuntFielderFieldingLevel);
+                    catchToFirstM, c.BuntFielderThrowSpeedMps, c, (int)c.BuntFielderFieldingLevel);
+                // 飛翔は距離÷送球速度だけ（issue #1089: 握り替え・タッチの秒まで飛ばすと山なりになる）。
+                // 到達時刻＝判定の秒は不変で、握り替えの間は捕った手に持つ。
+                var throwFlight = catchToFirstM / c.BuntFielderThrowSpeedMps;
                 ball.Add(new BallSegment
                 {
-                    Kind = BallSegmentKind.Throw, T0 = catchAt, T1 = throwArrive, From = popPt, To = firstPt,
+                    Kind = BallSegmentKind.Throw, T0 = throwArrive - throwFlight, T1 = throwArrive, From = popPt, To = firstPt,
                     FromRole = FieldPosition.Catcher, ToRole = FieldPosition.FirstBase, ToBase = "first",
                 });
                 moves.Add(new FielderMove
@@ -1746,7 +1747,11 @@ public static class TimelineBuilder
             var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
             var secondPt = BasePoint(field, "second");
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
-            var throwArrive = ContactAt + HomePlayResolver.ResolveThrowPath(situation, field.SecondBase, c).ArriveAtSeconds;
+            var throwPath = HomePlayResolver.ResolveThrowPath(situation, field.SecondBase, c);
+            var throwArrive = ContactAt + throwPath.ArriveAtSeconds;
+            // 送球は握り替え（ReleaseAtSeconds）の後に投げ始める（issue #1089: 処理の瞬間から投げると握り替えの秒まで
+            // 飛翔に入り山なりになる）。到達時刻＝判定の秒は不変。
+            var throwRelease = ContactAt + throwPath.ReleaseAtSeconds;
 
             var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
             var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
@@ -1761,7 +1766,7 @@ public static class TimelineBuilder
             ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
             ball.Add(new BallSegment
             {
-                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = secondPt,
+                Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = secondPt,
                 FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.SecondBase, ToBase = "second",
             });
             moves.Add(new FielderMove
@@ -1801,7 +1806,9 @@ public static class TimelineBuilder
             var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
             var thirdPt = BasePoint(field, "third");
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
-            var throwArrive = ContactAt + HomePlayResolver.ResolveThrowPath(situation, field.ThirdBase, c).ArriveAtSeconds;
+            var throwPath = HomePlayResolver.ResolveThrowPath(situation, field.ThirdBase, c);
+            var throwArrive = ContactAt + throwPath.ArriveAtSeconds;
+            var throwRelease = ContactAt + throwPath.ReleaseAtSeconds; // 握り替えの後に投げる（issue #1089）
 
             var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
             var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
@@ -1816,7 +1823,7 @@ public static class TimelineBuilder
             ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
             ball.Add(new BallSegment
             {
-                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = thirdPt,
+                Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = thirdPt,
                 FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.ThirdBase, ToBase = "third",
             });
             moves.Add(new FielderMove
@@ -1855,8 +1862,9 @@ public static class TimelineBuilder
             var situation = BuntResolver.FieldedSituation(c);
             var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
-            var throwArrive = ContactAt
-                + HomePlayResolver.ResolveThrowPath(situation, new Core.Vector3D(0, 0, 0), c).ArriveAtSeconds;
+            var throwPath = HomePlayResolver.ResolveThrowPath(situation, new Core.Vector3D(0, 0, 0), c);
+            var throwArrive = ContactAt + throwPath.ArriveAtSeconds;
+            var throwRelease = ContactAt + throwPath.ReleaseAtSeconds; // 握り替えの後に投げる（issue #1089）
 
             var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
             var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
@@ -1871,7 +1879,7 @@ public static class TimelineBuilder
             ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
             ball.Add(new BallSegment
             {
-                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = Home,
+                Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = Home,
                 FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.Catcher, ToBase = "home",
             });
             moves.Add(new FielderMove
@@ -1912,19 +1920,31 @@ public static class TimelineBuilder
                 + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
             var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
 
-            var fieldAt = ContactAt + defenseTime * BuntFieldShareOfDefenseTime;
             var throwArriveRaw = ContactAt + defenseTime;
             var batterArrive = ContactAt + battingTime;
             var safe = result == BuntResult.InfieldHit;
             // 矛盾ガード（BuildDropThirdStrikeと同じ考え方）: 確定済みの結果と食い違う到達順にしない。
             var throwArrive = safe
                 ? Math.Max(throwArriveRaw, batterArrive + BuntThrowGuardSeconds)
-                : Math.Max(fieldAt + 0.05, Math.Min(throwArriveRaw, batterArrive - BuntThrowGuardSeconds));
+                : Math.Min(throwArriveRaw, batterArrive - BuntThrowGuardSeconds);
+
+            // 送球の秒は速さから出す（issue #1089）。判定の秒（defenseTime）は内訳を持たないので、旧実装は残りを
+            // 全部送球の飛翔に割り当てており、約1.7秒の山なりになっていた。到達時刻（＝判定の秒・打者との先着順）は
+            // そのままに、飛翔＝距離÷バント処理野手の送球速度・その前に握り替え（封殺の送球と同じ
+            // ResolveThrowPath の握り替え秒）を置き、残りの時間は転がり（処理点に着くまで）を長くして吸収する。
+            var throwFlight = Distance(fieldPt, firstPt) / c.BuntFielderThrowSpeedMps;
+            var transfer = c.OutfieldTransferSeconds * new Players.FielderAttributes { Fielding = (int)c.BuntFielderFieldingLevel }
+                .TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+            // 転がりは封殺の処理時刻（BuntFieldedAtSeconds）より短くしない。届かないほど到達が早い場合だけ
+            // 到達を後ろへずらす（犠打成功の矛盾ガードより処理の物理を優先する旧実装の fieldAt+0.05 と同じ考え方）。
+            var fieldAt = Math.Max(ContactAt + c.BuntFieldedAtSeconds, throwArrive - throwFlight - transfer);
+            throwArrive = Math.Max(throwArrive, fieldAt + transfer + throwFlight);
+            var throwRelease = throwArrive - throwFlight;
 
             ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
             ball.Add(new BallSegment
             {
-                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = firstPt,
+                Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = firstPt,
                 FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.FirstBase, ToBase = "first",
             });
             moves.Add(new FielderMove
