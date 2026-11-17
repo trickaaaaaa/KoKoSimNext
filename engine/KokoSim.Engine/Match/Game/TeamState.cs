@@ -955,10 +955,23 @@ public sealed class TeamState
     public void SetPitchRecovery(IReadOnlyDictionary<Player, double>? effectiveStaminaPitches)
         => _pitchRecovery = effectiveStaminaPitches;
 
-    /// <summary>その投手の実効目安投球数（連戦の消耗を反映済み。上書きが無ければ素の目安投球数）。</summary>
+    // ===== 気温による実効目安球数の縮小（design-05, issue #1071） =====
+    private double _weatherStaminaFactor = 1.0;
+
+    /// <summary>
+    /// 気温による実効目安球数の倍率（<see cref="WeatherModel.StaminaPitchFactor"/>・<see cref="GameEngine.NewProgress"/>
+    /// から試合開始時に一度だけ注入）。既定1.0＝従来挙動と完全一致（Weather null/無効/屋内は常にこちら）。
+    /// </summary>
+    public void SetWeatherStaminaFactor(double factor) => _weatherStaminaFactor = factor;
+
+    /// <summary>
+    /// その投手の実効目安投球数（連戦の消耗＋気温による縮小を反映済み。上書きが無ければ素の目安投球数）。
+    /// これを縮めるだけで、バテ始め（OnsetRatio）・目安到達時の低下量・<see cref="PitchingFatigue.ShouldRelieve"/>
+    /// （継投判断）が同じ式で全部ついてくる（issue #1071）。
+    /// </summary>
     public double EffectiveBaseStamina(Player pitcher)
-        => _pitchRecovery is not null && _pitchRecovery.TryGetValue(pitcher, out var v)
-            ? v : pitcher.Pitching.StaminaPitches;
+        => (_pitchRecovery is not null && _pitchRecovery.TryGetValue(pitcher, out var v)
+            ? v : pitcher.Pitching.StaminaPitches) * _weatherStaminaFactor;
 
     // ===== 試合限りの好不調 dayForm（設計書02 §3.3b, issue dayform-dictionary-shared-across-teams） =====
     private IReadOnlyDictionary<Player, double>? _dayForm;

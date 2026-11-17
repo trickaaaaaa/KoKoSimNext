@@ -209,6 +209,13 @@ public static class GameEngine
         // 試合間の回復モデル（設計書02 §1.1e-2）。既定 null＝素の目安投球数のまま＝従来挙動と完全一致。
         away.SetPitchRecovery(awayPitchRecovery);
         home.SetPitchRecovery(homePitchRecovery);
+        // 気温による実効目安球数の縮小（issue #1071）。ResolvedWeather が立つのは Weather が有効かつ屋外のときだけ
+        // （WeatherModel.ApplyForMatch）＝それ以外は既定1.0のまま＝従来挙動と完全一致。両チーム同じ気温なので同じ倍率。
+        var weatherStaminaFactor = ctx.ResolvedWeather is { } weatherSample
+            ? WeatherModel.StaminaPitchFactor(weatherSample.TemperatureC, ctx.Weather!)
+            : 1.0;
+        away.SetWeatherStaminaFactor(weatherStaminaFactor);
+        home.SetWeatherStaminaFactor(weatherStaminaFactor);
 
         // 試合限りの好不調（設計書02 §3.3b）: 試合開始時に全選手へ当日の揺らぎを付与。
         // 大半は微小・スパイクは十数試合に一度。事前に見えない（投げて/打って初めて分かる）。
