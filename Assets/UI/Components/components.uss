@@ -1423,9 +1423,11 @@
     flex-shrink: 0;
     margin-left: var(--sp-1);
 }
-/* 名前行の右端に置くもの（打者=調子の顔／投手=球数）。この spacer が押し出す。 */
+/* 名前行の右端に置くもの（打者=調子の顔／投手=球数＋調子の顔）。この spacer が押し出す。 */
 .mhud-spacer { flex-grow: 1; }
 .mhud-face { width: 18px; height: 18px; flex-shrink: 0; --face-ring: rgba(255, 255, 255, 0.55); }
+/* 投手HUD＝球数の右に顔（issue #1053）。球数と学年チップの間隔（.mhud-pc の margin-left）に揃える。 */
+.mhud-face--after-pc { margin-left: var(--sp-2); }
 /* 球数＝継投判断の主指標。ラベルは持たず「6球」だけ。学年チップより目立つ級数・太さで出す。 */
 .mhud-pc {
     flex-direction: row;

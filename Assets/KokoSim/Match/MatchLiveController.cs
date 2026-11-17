@@ -4649,6 +4649,13 @@ namespace KokoSim.Unity.Match
             // 球数は「今 / この試合で投げられる最大」の分母つき。分母は週間球数制限（設計書05 §1.3）の
             // 上限から持ち越しを引いた値＝試合開始時点で固定（目安投球数は出さない）。
             idn.Add(HudPitchCount(totalPitches.ToString(), pcMod, MaxPitchesThisGameText(def)));
+            // 調子の顔は打者HUDと右端を揃える＝球数のさらに右（issue #1053）。番手・球数と同じ
+            // LivePitcherToday から引く＝継投直後も新しい投手の調子になる（issue #528 と同じ理由）。
+            var face = new ConditionFace();
+            face.AddToClassList("mhud-face");
+            face.AddToClassList("mhud-face--after-pc");
+            face.Set(_statsProvider.ConditionOf(schoolId, def.ConditionValue, def.Name));
+            idn.Add(face);
             band.Add(idn);
 
             // 2段目＝通算防御率・本日の奪三振・与四死球の等幅3セル（打者HUDと同構造）。奪三振と与四死球は
