@@ -9,6 +9,10 @@ public readonly record struct SqueezeOutcome(int Runs, bool BatterOut, bool Runn
 {
     /// <summary>バントを処理した野手の送球の逸れ（issue #859。判定に使った値そのもの）。送球まで行かなければ null。</summary>
     public KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter? BuntThrowScatter { get; init; }
+
+    /// <summary>ウエスト（外された球）で打者がバントできなかったか。<see cref="BuntResult.MissedBunt"/> のうち
+    /// 打者がバットを出さなかった側＝ボールのカウント。打者が空振りした側は false（ストライクのカウント）。</summary>
+    public bool Wasted { get; init; }
 }
 
 /// <summary>
@@ -30,7 +34,7 @@ public static class SqueezeResolver
         // ウエストを読まれた場合: 打者はバントできず、飛び出した三塁走者が挟殺される大惨事。
         if (MathUtil.Chance(MathUtil.Clamp(wasteProbability, 0.0, 1.0), rng))
         {
-            return new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, BuntResult.MissedBunt);
+            return new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, BuntResult.MissedBunt) { Wasted = true };
         }
 
         // thirdRunner は常に null（本塁封殺は判定しない）: 三塁走者はこのメソッド自身が下で本塁レースを
@@ -62,7 +66,10 @@ public static class SqueezeResolver
                 // 一塁走者が併殺で刺された場合（PopOutDoubledOff）は GameEngine 側が bunt の値そのものを見て
                 // 一塁走者の退場・追加アウトを別途処理する（本塁封殺の危険は依然スコープ外）。
                 return new SqueezeOutcome(0, BatterOut: true, RunnerOut: false, bunt) with { BuntThrowScatter = buntScatter };
-            default: // Foul / MissedBunt: 三塁走者が飛び出していれば挟殺。
+            case BuntResult.Foul:
+                // ファウルはボールデッド: 三塁走者は三塁へ戻る（アウトにならない）。カウントはストライク（AtBatSession）。
+                return new SqueezeOutcome(0, BatterOut: false, RunnerOut: false, bunt) with { BuntThrowScatter = buntScatter };
+            default: // MissedBunt（打者の空振り）: 飛び出した三塁走者は挟殺される。
                 return new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, bunt) with { BuntThrowScatter = buntScatter };
         }
     }

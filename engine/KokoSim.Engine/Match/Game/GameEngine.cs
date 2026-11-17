@@ -1519,6 +1519,31 @@ public static class GameEngine
                     if (outs >= 3) runnerOutEndsHalf = true;   // 観測を出してから半回を終える（issue #779）
                 }
 
+                // スクイズ不成立（ウエスト／バント空振り）で飛び出した三塁走者の挟殺（設計書15 Phase D-2c・issue #1061）:
+                // 三塁走者を除去しアウトを足す。**1球観測（p.LastPitch）を組む前**に済ませる＝その球の観測に
+                // 挟殺後の塁・アウトが載る。結果は従来どおりアウト確定（三塁へ戻れる確率は帯に響くので別件）。
+                // 打席は原則続行（次球からは強攻）。2ストライクからの空振りで三振が確定した球では、三振が
+                // 3アウト目になるなら走者のアウトは起きない（エンドランの憤死・issue #779 と同じく打席の決着が先）。
+                // ファウルはボールデッドで走者は三塁へ戻る＝ここへは来ない（AtBatSession が通知しない）。
+                // 再生データは乱数を引かず組む（BuildSqueezeRundown は純関数）。
+                Timeline.Playback.PlaybackPlay? squeezeRundownPlay = null;
+                var squeezeEndsHalf = false;
+                if (pitchRes.SqueezeRunnerCaughtAtThird && bases.Third is { } rundownRunner
+                    && !(outs >= 2 && pitchRes.EndsPlateAppearance))
+                {
+                    bases.Third = null;
+                    outs++;
+                    defense.RecordRunnerOut(currentPitcher); // スクイズ挟殺も投球回に数える
+                    if (ctx.CaptureTimelines)
+                    {
+                        squeezeRundownPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                            Timeline.TimelineBuilder.BuildSqueezeRundown(
+                                rundownRunner, defense.Catcher, waste: session.LastPitchKind == AtBat.PitchKind.Ball,
+                                paBaserunning, ctx.Field));
+                    }
+                    squeezeEndsHalf = outs >= 3;
+                }
+
                 // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
                 // 打席が確定する前に1球ずつ絵にするための供給口で、MatchProgression.AdvancePitch と対で使う。
                 // 既に解決済みの値の写しだけ＝乱数を1回も追加消費しない（EmitPitchTrace と同じ位置・同じ流儀）。
@@ -1546,6 +1571,8 @@ public static class GameEngine
                         RunnersStarted = runnersStartedMask,
                         // この球の前に牽制が発火していれば、その再生データを載せる（issue #486）。
                         PickoffPlay = pickoffPlay,
+                        // スクイズ不成立で三塁走者が挟殺された再生データ（issue #1061）。
+                        SqueezeRundownPlay = squeezeRundownPlay,
                     };
                 }
 
@@ -1585,16 +1612,9 @@ public static class GameEngine
                 // 旧実装は投球より前に半回を抜けていたため、UI へ1球も届かず、いきなり攻守交代していた。
                 if (runnerOutEndsHalf && outs >= 3) { stealEndedHalf = true; EmitPitchTrace(); break; }
 
-                if (pitchRes.SqueezeRunnerCaughtAtThird)
-                {
-                    // スクイズのウエストを読まれた（設計書15 Phase D-2c）: 三塁走者が挟殺され、打者は
-                    // 打席続行（次球からは方針なし＝強攻）。3アウト目ならこの打席は未決着のまま次イニングへ
-                    // （盗塁死で3アウトになる場合と同じ扱い＝この打者は次イニング先頭）。
-                    bases.Third = null;
-                    outs++;
-                    defense.RecordRunnerOut(currentPitcher); // スクイズ挟殺も投球回に数える
-                    if (outs >= 3) { squeezeAbandoned = true; EmitPitchTrace(); break; }
-                }
+                // 3アウト目になった挟殺（issue #1061）: 投げた球の観測（挟殺の再生データ込み）を載せてから半回を終える。
+                // 打席は未決着＝この打者が次の回の先頭（盗塁死で3アウトになる場合と同じ扱い）。
+                if (squeezeEndsHalf) { squeezeAbandoned = true; EmitPitchTrace(); break; }
 
                 // 暴投・パスボール（design-14 P2-8, 設計書15 Phase D-3）: 走者ありの各投球のうち、実際に
                 // キャッチャーへ到達/通過した球（Ball/CalledStrike/SwingingStrike。Foul/InPlayは打者が

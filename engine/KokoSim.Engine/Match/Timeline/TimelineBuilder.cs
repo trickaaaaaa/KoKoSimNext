@@ -55,6 +55,13 @@ public static class TimelineBuilder
     private const double BatteryMissRollSeconds = 0.55;
     /// <summary>暴投・捕逸: ボールが転がって止まる位置＝本塁からバックネット側（-Z）へこの距離[m]（演出用の固定値）。</summary>
     private const double BatteryMissBackstopM = 6.0;
+    /// <summary>スクイズ不成立の挟殺（issue #1061）: 三塁走者が球の到達時点で三塁→本塁線上のどこまで出ているか
+    /// （三塁を0・本塁を1とする割合。演出用の固定値。<see cref="SqueezeResolver"/> は走者の位置を持たない）。</summary>
+    private const double RundownRunnerStartFraction = 0.20;
+    /// <summary>挟殺: 走者が捕手の捕球に気づいて急停止・切り返すまでに前へ流れる秒（演出用の固定値）。</summary>
+    private const double RundownRunnerOvershootSeconds = 0.25;
+    /// <summary>挟殺: 三塁手が送球を受けてタッチする位置（三塁を0・本塁を1とする割合。演出用の固定値）。</summary>
+    private const double RundownReceiveFraction = 0.10;
     /// <summary>振り逃げ（issue #488）: 捕手が三振球を落としてから動き出すまでの反応[s]（演出用の固定値。
     /// <see cref="BaserunningCoefficients.DropThirdStrikeReachProb"/> は成否のみの単純なベルヌーイ試行で、
     /// 暴投・牽制と同じく距離・速度を持たないため、絵の秒はここで新規に組む）。</summary>
@@ -1456,6 +1463,90 @@ public static class TimelineBuilder
             Moves = moves.ToArray(),
             Runners = runners.ToArray(),
             Captions = captions.ToArray(),
+        };
+    }
+
+    /// <summary>スクイズ不成立（ウエスト／バント空振り）で、飛び出した三塁走者が三本間で挟まれてタッチアウトになる
+    /// タイムライン（issue #1061）。乱数不使用——アウトは呼び出し元で確定済み（今回は挟殺を確定アウトとして扱う）。
+    ///
+    /// <para>捕手が球を捕ったところから始まる（投球は対決ビューで見せ終わっている＝<see cref="BuildBatteryMiss"/> と同じ）。
+    /// 走者は本塁へ向かう途中で切り返し、捕手が持ち替えて三塁手へ送球、三塁手が受けてタッチする。
+    /// 判定が時間の勝負を持たない（確定アウト）ので、秒（持ち替え・送球・走者の戻り）は捕手の持ち替え/肩・走者の脚から組む。</para></summary>
+    /// <param name="waste">ウエスト（外された球）か。false は打者の空振り。実況の文言だけが変わる。</param>
+    public static PlayTimeline BuildSqueezeRundown(
+        Player runner, Player catcher, bool waste, BaserunningCoefficients c, FieldGeometry field)
+    {
+        var thirdPt = BasePoint(field, "third");
+        TimelinePoint OnLine(double f) =>
+            new(thirdPt.X + (Home.X - thirdPt.X) * f, thirdPt.Z + (Home.Z - thirdPt.Z) * f);
+        var lineM = Math.Max(1e-6, Distance(thirdPt, Home));
+
+        var catcherAbility = catcher.ToFielder(c.AbilityEffect);
+        var runnerSpeed = runner.ToFielder(c.AbilityEffect).SprintSpeedMps;
+
+        // 捕手: 捕って持ち替え（球は手元に据え置く＝Carry の Home→Home）→三塁手へ送球。
+        var transfer = c.PopTransferSeconds * catcherAbility.TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var receivePt = OnLine(RundownReceiveFraction);
+        var throwArrive = transfer + Distance(Home, receivePt) / catcherAbility.ThrowSpeedMps;
+        var tagAt = throwArrive + c.TagSeconds;
+
+        var ball = new List<BallSegment>
+        {
+            new()
+            {
+                Kind = BallSegmentKind.Carry, T0 = 0.0, T1 = transfer, From = Home, To = Home,
+                FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Catcher,
+            },
+            new()
+            {
+                Kind = BallSegmentKind.Throw, T0 = transfer, T1 = throwArrive, From = Home, To = receivePt,
+                FromRole = FieldPosition.Catcher, ToRole = FieldPosition.ThirdBase, ToBase = "third",
+            },
+        };
+
+        // 三塁手は三塁から本塁寄りへ出て送球を受ける。
+        var moves = new[]
+        {
+            new FielderMove
+            {
+                Role = FieldPosition.ThirdBase, T0 = 0.0, T1 = Math.Max(0.3, throwArrive - 0.1), To = receivePt,
+                Task = FielderTask.CoverBase,
+            },
+        };
+
+        // 走者: 球の到達時点で本塁線上の startPt。少し前へ流れてから切り返し、三塁手のいる所へ戻る（挟まれる）。
+        var startPt = OnLine(RundownRunnerStartFraction);
+        var turnFraction = Math.Min(0.60, RundownRunnerStartFraction + runnerSpeed * RundownRunnerOvershootSeconds / lineM);
+        var turnPt = OnLine(turnFraction);
+        var turnAt = Math.Min(RundownRunnerOvershootSeconds, tagAt - 0.1);
+        var runners = new[]
+        {
+            new RunnerLeg
+                { Label = "走三", T0 = 0.0, T1 = turnAt, From = startPt, To = turnPt, OutAtEnd = false, Runner = runner },
+            // 挟殺は常にタッチプレー（フォース無し）。
+            new RunnerLeg
+                { Label = "走三", T0 = turnAt, T1 = tagAt, From = turnPt, To = receivePt, OutAtEnd = true, Runner = runner },
+        };
+        var judgements = new[] { new JudgementEvent { Label = "走三", T = tagAt, Kind = JudgementKind.Out } };
+
+        var captions = new[]
+        {
+            new TimelineCaption(0.0, waste ? "ウエスト！ 三塁走者が飛び出した——" : "バントを空振り！ 三塁走者が飛び出した——"),
+            new TimelineCaption(transfer, "キャッチャー、三塁へ送球——"),
+            new TimelineCaption(tagAt, "タッチアウト！ 三塁走者が挟殺"),
+        };
+
+        return new PlayTimeline
+        {
+            Duration = tagAt + 1.2,
+            Result = "スクイズ失敗",
+            ResolvedAt = tagAt,
+            FielderStarts = StandardStarts(),
+            Ball = ball.ToArray(),
+            Moves = moves,
+            Runners = runners,
+            Judgements = judgements,
+            Captions = captions,
         };
     }
 
