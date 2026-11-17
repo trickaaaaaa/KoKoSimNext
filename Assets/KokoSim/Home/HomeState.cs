@@ -707,7 +707,7 @@ namespace KokoSim.Unity.Home
             get
             {
                 var year = SeasonBaseDisplayYear();
-                return year + "年　" + (GameSession.Current.Kind == TournamentKind.Summer ? "夏" : "秋");
+                return year + "年　" + TournamentKindNames.Of(GameSession.Current.Kind);
             }
         }
         /// <summary>開幕バナー中段（大会名）。</summary>
