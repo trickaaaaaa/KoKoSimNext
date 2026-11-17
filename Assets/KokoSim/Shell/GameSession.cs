@@ -925,7 +925,9 @@ namespace KokoSim.Unity.Shell
             var managerPlayed = false;
             foreach (var m in matches) if (m.ManagerInvolved) { managerPlayed = true; break; }
             if (managerPlayed && kind != TournamentKind.AutumnDistrict)
-                History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion);
+                // 当時の本拠県を行へ焼く（issue #1112）。転任で県を跨いでも、歴代大会結果の大会名は
+                // 「いまの本拠県」で書き換わらない。
+                History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion, NationService.PrefectureId);
             // AI校の年次進化の材料（issue wire-ai-school-evolve-into-game）: 自県ブラケットの校別勝数を台帳へ。
             // 自校の勝ちも積まれるが Nation に自校は居ないので進化には効かない（自校の強さは共有ロスター由来）。
             NationService.YearLedger.AddMatches(matches);

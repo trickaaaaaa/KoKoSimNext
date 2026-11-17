@@ -105,7 +105,7 @@ namespace KokoSim.Unity.Records
                 if (e.ManagerIsChampion) row.AddToClassList("rc-th--own");
 
                 row.Add(Cell(CalendarYear(e.Year).ToString(), "rc-th__year", numeric: true));
-                row.Add(Cell(CupName(e.Kind), "rc-th__cup"));
+                row.Add(Cell(CupName(e), "rc-th__cup"));
 
                 // 優勝の年は行の面で示す（.rc-th--own）。文字色は足さない＝アクセントを増やさない（UI原則②）。
                 row.Add(Cell(TournamentResultLabel.For(e), "rc-th__res"));
@@ -132,13 +132,15 @@ namespace KokoSim.Unity.Records
         }
 
         /// <summary>
-        /// 大会名（「夏 神奈川」）。県は<b>いまの本拠県</b>から引く。転任（設計書04 §1.2）が入ったら
-        /// 過去の大会は当時の県で出す必要があるので、そのときに歴代大会結果へ県を焼く。
+        /// 大会名（「夏 神奈川」）。県は<b>その大会当時の本拠県</b>（<see cref="TournamentHistoryEntry.PrefectureId"/>・
+        /// issue #1112）から引く＝転任で県を跨いでも過去の大会名は書き換わらない。0（不明＝issue #1112 より
+        /// 前のセーブ）だけ「いまの本拠県」へフォールバックする。
         /// </summary>
-        private static string CupName(TournamentKind kind)
-            => TournamentKindNames.IsPrefectural(kind)
-                ? TournamentKindNames.Of(kind) + " " + PrefectureNames.ShortOf(NationService.PrefectureId)
-                : TournamentKindNames.Of(kind);
+        private static string CupName(TournamentHistoryEntry e)
+            => TournamentKindNames.IsPrefectural(e.Kind)
+                ? TournamentKindNames.Of(e.Kind) + " " +
+                  PrefectureNames.ShortOf(e.PrefectureId > 0 ? e.PrefectureId : NationService.PrefectureId)
+                : TournamentKindNames.Of(e.Kind);
 
         // ── 学校の通算 ───────────────────────────────────────────
 

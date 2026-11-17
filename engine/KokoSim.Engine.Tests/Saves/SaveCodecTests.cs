@@ -731,7 +731,24 @@ public sealed class SaveCodecTests
             Assert.Equal(a[i].ManagerIsChampion, b[i].ManagerIsChampion);
             Assert.Equal(a[i].ChampionId, b[i].ChampionId);
             Assert.Equal(a[i].ChampionName, b[i].ChampionName);
+            Assert.Equal(a[i].PrefectureId, b[i].PrefectureId);
         }
+    }
+
+    // issue #1112: 当時の本拠県（pref）が無い旧セーブでも読める。県は0（不明）で補われ、
+    // 歴代大会結果タブはそこだけ「いまの本拠県」へフォールバックする（SaveCodec.CurrentVersion は
+    // 上げない＝Has() 分岐で素通りに読めるので移行ブロックが要らない。他の optional フィールドと同じ作法）。
+    [Fact]
+    public void OldSave_WithoutPrefectureId_StillLoads_WithUnknownPrefecture()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.Contains("\"pref\":", json);
+        var stripped = System.Text.RegularExpressions.Regex.Replace(json, ",\"pref\":\\d+", "");
+        Assert.DoesNotContain("\"pref\"", stripped);
+
+        Assert.True(SaveCodec.TryDeserialize(stripped, out var s, out var err), err);
+        Assert.NotEmpty(s.TournamentHistory.Entries);
+        Assert.All(s.TournamentHistory.Entries, e => Assert.Equal(0, e.PrefectureId));
     }
 
     // 全国の学校別成績（issue #634・v9）が2スコープとも往復すること。通算は大会をまたいで積むので、
@@ -789,6 +806,46 @@ public sealed class SaveCodecTests
         state.TournamentHistory = new KokoSim.Engine.Nation.TournamentHistory();
         Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
         Assert.Empty(s.TournamentHistory.Entries);
+    }
+
+    // issue #1112: 転任で退任した学校ぶんの個人成績（PlayerStatStore.ClosedSchools）が往復すること。
+    // 今の赴任先ぶん（Career）と前任校ぶん（ClosedSchools）が別々に残ることも併せて測る。
+    [Fact]
+    public void ClosedSchools_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var stats = new KokoSim.Engine.Stats.PlayerStatStore();
+        stats.StartTournament();
+        stats.FoldGame(SaveTestFixtures.SyntheticGame(), managerIsAway: true, isOfficial: true);
+        stats.CloseForTransfer("前任校", startYearIndex: 1, endYearIndex: 2);
+        stats.StartTournament();
+        stats.FoldGame(SaveTestFixtures.SyntheticGame(), managerIsAway: true, isOfficial: true);
+        state.Stats = stats;
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Single(s.Stats.ClosedSchools);
+        var closed = s.Stats.ClosedSchools[0];
+        Assert.Equal("前任校", closed.SchoolName);
+        Assert.Equal(1, closed.StartYearIndex);
+        Assert.Equal(2, closed.EndYearIndex);
+        Assert.NotEmpty(closed.Career.Players);
+        Assert.NotEmpty(s.Stats.Career.Players); // 今の赴任先ぶんも別に積まれている
+    }
+
+    // 旧セーブ（closedSchools が無い）も読めること。転任の区切りをまだ記録していないだけで、
+    // いま Career/Archive に乗っている成績はそのまま「今の赴任先」のものとして読める。
+    [Fact]
+    public void OldSave_WithoutClosedSchools_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.Contains("\"closedSchools\":", json);
+        var stripped = System.Text.RegularExpressions.Regex.Replace(json, ",\"closedSchools\":\\[\\]", "");
+        Assert.DoesNotContain("\"closedSchools\"", stripped);
+
+        Assert.True(SaveCodec.TryDeserialize(stripped, out var s, out var err), err);
+        Assert.Empty(s.Stats.ClosedSchools);
+        Assert.NotEmpty(s.Stats.Career.Players);   // 他の項目は素通りで読めている
     }
 
     // 大会別アーカイブの年度（issue #600・v8）が往復すること。学年キーは年を持たないので、

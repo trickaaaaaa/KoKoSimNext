@@ -21,7 +21,8 @@ internal static class StatsSaves
         .Add("current", BookToJson(s.CurrentTournament))
         .Add("prefQualifier", BookToJson(s.PrefQualifier))
         .Add("regionalQualifier", BookToJson(s.RegionalQualifier))
-        .Add("archive", ArchiveToJson(s.Archive));
+        .Add("archive", ArchiveToJson(s.Archive))
+        .Add("closedSchools", ClosedSchoolsToJson(s.ClosedSchools));
 
     public static void RestoreInto(PlayerStatStore target, JsonObject o)
     {
@@ -36,6 +37,47 @@ internal static class StatsSaves
         if (o.Has("regionalQualifier")) RestoreBookInto(target.RegionalQualifier, o.Obj("regionalQualifier"));
         else target.RegionalQualifier.Clear();
         RestoreArchiveInto(target.Archive, o.Arr("archive"));
+        // closedSchools は issue #1112 で追加。旧セーブは転任のたびに区切っていない＝退任済みの赴任なし
+        // （空リスト）で読む。いま Career/Archive に乗っている成績はそのまま「今の赴任先」のものとして扱う
+        // （過去の転任を遡って選手ごとに学校を割り直す情報は元から保存されていない）。
+        target.RestoreClosedSchools(o.Has("closedSchools") ? ClosedSchoolsFromJson(o.Arr("closedSchools")) : new List<ClosedSchoolStats>());
+    }
+
+    // ===== PlayerStatStore.ClosedSchools（issue #1112） =====
+
+    private static JsonArray ClosedSchoolsToJson(IReadOnlyList<ClosedSchoolStats> closed)
+    {
+        var arr = new JsonArray();
+        foreach (var c in closed)
+            arr.Add(new JsonObject()
+                .Add("school", c.SchoolName)
+                .Add("startYearIndex", c.StartYearIndex)
+                .Add("endYearIndex", c.EndYearIndex)
+                .Add("career", BookToJson(c.Career))
+                .Add("archive", ArchiveToJson(c.Archive)));
+        return arr;
+    }
+
+    private static List<ClosedSchoolStats> ClosedSchoolsFromJson(JsonArray arr)
+    {
+        var list = new List<ClosedSchoolStats>();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            var career = new StatBook();
+            RestoreBookInto(career, o.Obj("career"));
+            var archive = new TournamentArchive();
+            RestoreArchiveInto(archive, o.Arr("archive"));
+            list.Add(new ClosedSchoolStats
+            {
+                SchoolName = o.Str("school") ?? "",
+                StartYearIndex = o.Int("startYearIndex"),
+                EndYearIndex = o.Int("endYearIndex"),
+                Career = career,
+                Archive = archive,
+            });
+        }
+        return list;
     }
 
     // ===== NationTournamentStats（校ID→StatBook） =====
