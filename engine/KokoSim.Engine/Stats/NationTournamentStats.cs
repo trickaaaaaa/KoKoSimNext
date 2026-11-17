@@ -161,8 +161,11 @@ public sealed class NationTournamentStats
         lock (_gate) return BookFor(_regionalQualifierBySchool, schoolId);
     }
 
-    /// <summary>セーブ復元専用。地区大会スコープだけを全消去する。</summary>
-    internal void ClearRegionalQualifier() { lock (_gate) _regionalQualifierBySchool.Clear(); }
+    /// <summary>
+    /// 地区大会スコープだけを全消去する。セーブ復元と、センバツ選考の打ち直し（積む前）が呼ぶ
+    /// ＝去年の地区大会成績は残さない（<see cref="SnapshotPrefQualifier"/> の県予選と同じ作法）。
+    /// </summary>
+    public void ClearRegionalQualifier() { lock (_gate) _regionalQualifierBySchool.Clear(); }
 
     /// <summary>
     /// 1試合ぶんを両校へ畳み込む。away=先攻校ID・home=後攻校ID。相手校の生成選手も SourceId（校内ID）を

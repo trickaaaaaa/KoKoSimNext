@@ -229,4 +229,23 @@ public sealed class SchoolStatsLookupTests
         Assert.Equal(2, lookup.PrefQualifier(OpponentSchoolId, SharedPlayerId)!.Batting.Hits);
         Assert.Equal(1, lookup.PrefQualifier(OtherSchoolId, SharedPlayerId)!.Batting.Hits);
     }
+
+    /// <summary>
+    /// 地区大会の帳簿は毎年センバツ選考の積み前に全消去する＝2年続けて選ばれた校に去年の数字が残らず、
+    /// 「実測あり」で今年の積み直しが飛ばされることもない。
+    /// </summary>
+    [Fact]
+    public void ClearRegionalQualifier_DropsLastYearBeforeThisYearIsFolded()
+    {
+        var (_, nation, lookup) = Setup();
+        nation.FoldRegionalQualifier(OpponentSchoolId, Game(3, 2), schoolIsAway: true);   // 去年
+        Assert.NotNull(nation.RegionalQualifierForSchool(OpponentSchoolId));
+
+        nation.ClearRegionalQualifier();                                                  // 今年の選考・積み前
+        Assert.Null(nation.RegionalQualifierForSchool(OpponentSchoolId));
+        Assert.Empty(nation.RegionalQualifierSchools);
+
+        nation.FoldRegionalQualifier(OpponentSchoolId, Game(1, 1), schoolIsAway: true);   // 今年
+        Assert.Equal(1, lookup.RegionalQualifierBook(OpponentSchoolId)!.Players[SharedPlayerId].Batting.Hits);
+    }
 }
