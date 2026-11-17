@@ -2896,6 +2896,13 @@ namespace KokoSim.Unity.Match
             public float MeasHipsRelDeg;     // リリースの瞬間の腰の向きと的の差[度]
             public float MeasChestRelDeg;    // 同・胸
             public float MeasHipsSwingDeg;   // 投げ始め→リリースで腰が回った量[度]（＝「くるっと向く」量）
+            public float MeasHipsMidMaxDeg;  // 投げ始め〜リリースの途中で腰が的から最も外れた量[度]（符号つき。毎ポーズ測る）
+            public float MeasChestMidMaxDeg; // 同・胸
+            public float MeasMidMaxT;        // 腰が最も外れたプレー時刻
+            public Vector3 MeasBodyAtRel;    // リリースの瞬間に描かれている野手の足元（stage-local。送球の始点との差を見る）
+            public float MeasGloveArmDeg;    // 振りかぶりでグラブの腕が一番伸びた瞬間の腕（左肩→左手）の向きと的の差[度]
+            public float MeasGloveArmLen;    // その水平の長さ[m]
+            public float MeasStrideDeg;      // リリースの瞬間の踏み出し（右足→左足）の向きと的の差[度]
             public float MeasHipsPreDeg;     // 投げ始めの**直前のコマ**の腰の向きと的の差[度]
             public float MeasPreT;           // ↑を採った時刻（TFire との差が「見えていた長さ」）
             public bool MeasHasFire, MeasHasRel, MeasHasPre;
@@ -2907,9 +2914,17 @@ namespace KokoSim.Unity.Match
         /// 送球クリップを選ぶ**純関数**（乱数を引かない）。主軸は距離＝実測の手の速さの段。
         /// 捕手だけは専用収録（しゃがみから立って投げる）を使う。
         /// </summary>
+#if UNITY_EDITOR
+        /// <summary>スクショ用（issue #1079 の見比べ）: 0 以上なら外野手の送球を距離によらずこの添字の収録にする。</summary>
+        public static int OutfieldThrowAnchorForCapture = -1;
+#endif
+
         private static FieldThrowAnchor SelectFieldThrow(FieldPosition pos, float distM)
         {
             if (pos == FieldPosition.Catcher) return CatcherThrowAnchor;
+#if UNITY_EDITOR
+            if (OutfieldThrowAnchorForCapture >= 0 && IsOutfield(pos)) return FieldThrowAnchors[OutfieldThrowAnchorForCapture];
+#endif
             for (int i = 0; i < FieldThrowAnchors.Length; i++)
                 if (distM <= FieldThrowAnchors[i].MaxDistM) return FieldThrowAnchors[i];
             return FieldThrowAnchors[FieldThrowAnchors.Length - 1];
@@ -3369,10 +3384,32 @@ namespace KokoSim.Unity.Match
                 bool wantPre = !e.MeasHasFire && t < e.TFire && t >= e.TFire - 1.0f;
                 bool wantFire = e.Fired && !e.MeasHasFire && t >= e.TFire;
                 bool wantRel = e.Fired && !e.MeasHasRel && t >= e.TRelease;
-                if (!wantPre && !wantFire && !wantRel) continue;
+                bool wantMid = e.Fired && !e.MeasHasRel && t >= e.TFire && t < e.TRelease;
+                if (!wantPre && !wantFire && !wantRel && !wantMid) continue;
 
                 float hips, chest;
                 if (!DrawnBodyYaw(FielderActor(e.From), out hips, out chest)) continue;
+                if (wantMid)
+                {
+                    var ga = FielderActor(e.From)?.Animator;
+                    var ls = ga != null ? ga.GetBoneTransform(HumanBodyBones.LeftUpperArm) : null;
+                    var lh = ga != null ? ga.GetBoneTransform(HumanBodyBones.LeftHand) : null;
+                    if (ls != null && lh != null)
+                    {
+                        var v = _root.transform.InverseTransformDirection(lh.position - ls.position);
+                        v.y = 0f;
+                        if (v.magnitude > e.MeasGloveArmLen)
+                        {
+                            e.MeasGloveArmLen = v.magnitude;
+                            e.MeasGloveArmDeg = Mathf.DeltaAngle(e.Yaw, Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg);
+                        }
+                    }
+                    // 振りかぶりの途中（端の2点だけでは「途中で大きく開いてから戻る」が見えない）
+                    float hd = Mathf.DeltaAngle(e.Yaw, hips), cd = Mathf.DeltaAngle(e.Yaw, chest);
+                    if (Mathf.Abs(hd) > Mathf.Abs(e.MeasHipsMidMaxDeg)) { e.MeasHipsMidMaxDeg = hd; e.MeasMidMaxT = t; }
+                    if (Mathf.Abs(cd) > Mathf.Abs(e.MeasChestMidMaxDeg)) e.MeasChestMidMaxDeg = cd;
+                    if (!wantFire && !wantRel) { _throwEvents[i] = e; continue; }
+                }
                 if (wantPre)
                 {
                     e.MeasHipsPreDeg = Mathf.DeltaAngle(e.Yaw, hips);
@@ -3389,6 +3426,17 @@ namespace KokoSim.Unity.Match
                 }
                 if (wantRel)
                 {
+                    var actor = FielderActor(e.From);
+                    if (actor != null && actor.Go != null)
+                        e.MeasBodyAtRel = _root.transform.InverseTransformPoint(actor.Go.transform.position);
+                    var lf = actor?.Animator != null ? actor.Animator.GetBoneTransform(HumanBodyBones.LeftFoot) : null;
+                    var rf = actor?.Animator != null ? actor.Animator.GetBoneTransform(HumanBodyBones.RightFoot) : null;
+                    if (lf != null && rf != null)
+                    {
+                        var v = _root.transform.InverseTransformDirection(lf.position - rf.position);
+                        v.y = 0f;
+                        if (v.sqrMagnitude > 1e-6f) e.MeasStrideDeg = Mathf.DeltaAngle(e.Yaw, Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg);
+                    }
                     e.MeasHipsRelDeg = Mathf.DeltaAngle(e.Yaw, hips);
                     e.MeasChestRelDeg = Mathf.DeltaAngle(e.Yaw, chest);
                     e.MeasHipsSwingDeg = e.MeasHasFire
@@ -3469,16 +3517,19 @@ namespace KokoSim.Unity.Match
                 + _throwTurnRateMax.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "°/s）"
                 + "\t送球中に残像が写ったコマ=" + _trailOnThrowFrames);
             sb.AppendLine("from\tto\ttRelease\ttStart\ttFire\tdistM\thandY\taimErrDeg"
-                + "\thipsPre\tpreT\thipsFire\tchestFire\thipsRel\tchestRel\thipsSwing\tclip");
+                + "\thipsPre\tpreT\thipsFire\tchestFire\thipsRel\tchestRel\thipsSwing\thipsMidMax\tchestMidMax\tmidMaxT\tbody-segStart\tgloveArm\tarmLen\tstride\tclip");
             foreach (var e in _throwEvents)
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                     "{0}\t{1}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F2}\t{7:F1}"
-                    + "\t{8:F1}\t{9:F2}\t{10:F1}\t{11:F1}\t{12:F1}\t{13:F1}\t{14:F1}\t{15}",
+                    + "\t{8:F1}\t{9:F2}\t{10:F1}\t{11:F1}\t{12:F1}\t{13:F1}\t{14:F1}\t{16:F1}\t{17:F1}\t{18:F2}\t({19:F2},{20:F2})\t{21:F0}\t{22:F2}\t{23:F0}\t{15}",
                     e.From, e.To, e.TRelease, e.TStart, e.TFire, e.DistM, e.HandAtRelease.y, e.AimErrDeg,
                     e.MeasHipsPreDeg, e.MeasPreT,
                     e.MeasHipsFireDeg, e.MeasChestFireDeg, e.MeasHipsRelDeg, e.MeasChestRelDeg,
                     e.MeasHipsSwingDeg,
-                    e.Anchor.Clip.Replace("AA_Baseball_Defender_", "").Replace("AA_Baseball_", "")));
+                    e.Anchor.Clip.Replace("AA_Baseball_Defender_", "").Replace("AA_Baseball_", ""),
+                    e.MeasHipsMidMaxDeg, e.MeasChestMidMaxDeg, e.MeasMidMaxT,
+                    e.MeasBodyAtRel.x - e.SegStart.x, e.MeasBodyAtRel.z - e.SegStart.z,
+                    e.MeasGloveArmDeg, e.MeasGloveArmLen, e.MeasStrideDeg));
             return sb.ToString();
         }
 
@@ -5084,7 +5135,10 @@ namespace KokoSim.Unity.Match
                 var kept = new List<PlaybackMove>(segs.Count);
                 foreach (var m in segs)
                 {
-                    if (m.T0 >= resAt) { changed = true; continue; }
+                    // 走りながら掬った後に勢いのまま運ぶ移動（RunOut。issue #1079）は定位置への戻りではない＝
+                    // 捕球の瞬間（決着の後）に始まっても剥がさない。剥がすと野手が捕球点に残り、送球の始点
+                    // （運んで止まった点）から最大4m離れた所で投げていた
+                    if (m.T0 >= resAt && m.Profile != MoveProfile.RunOut) { changed = true; continue; }
                     kept.Add(m);
                 }
                 if (kept.Count > 0) filtered[kv.Key] = kept;

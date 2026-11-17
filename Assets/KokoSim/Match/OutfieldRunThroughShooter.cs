@@ -19,6 +19,9 @@ namespace KokoSim.Unity.Match
         private const string Dir = "screenshots/of-run-through-1079";
         private const int W = 1600, H = 900;
 
+        /// <summary>外野手の送球の収録を強制する添字（−1＝距離で選ぶ通常どおり）。</summary>
+        public static int ThrowAnchor = -1;
+
         public static (string Scenario, DuelStageRig.OutfieldRunThroughPick Pick)[] Runs =
         {
             ("of-grounder-runner-lf-lab", DuelStageRig.OutfieldRunThroughPick.TypeF),
@@ -35,6 +38,7 @@ namespace KokoSim.Unity.Match
         {
             Application.runInBackground = true;
             Directory.CreateDirectory(Dir);
+            DuelStageRig.OutfieldThrowAnchorForCapture = ThrowAnchor;
             foreach (var run in Runs)
             {
                 DuelStageRig.OutfieldRunThroughPickForCapture = run.Pick;
@@ -50,7 +54,7 @@ namespace KokoSim.Unity.Match
                 if (!ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();
                 ctrl.SetSpeedForCapture(1f);
 
-                string tag = run.Scenario.Replace("of-grounder-", "").Replace("-lab", "") + "-" + run.Pick;
+                string tag = (ThrowAnchor >= 0 ? "throw" + ThrowAnchor + "-" : "") + run.Scenario.Replace("of-grounder-", "").Replace("-lab", "") + "-" + run.Pick;
                 float guard = 0f;
                 while (!ctrl.FieldPlayActiveForCapture && guard < 60f) { guard += Time.deltaTime; yield return null; }
                 var play = ctrl.CurrentPa?.Play;
@@ -85,12 +89,15 @@ namespace KokoSim.Unity.Match
                         releaseShot = true;
                         yield return Capture(ctrl, tag + "-9-release");
                     }
-                    if (shot >= Offsets.Length && releaseShot) break;
+                    if (shot >= Offsets.Length && releaseShot && clock > release + 0.4) break;
                     yield return null;
                 }
+                // 送球の体の向きの実測（腰・胸と的の差、投げ始め→リリースで腰が回った量）
+                _log.Append(ctrl.DuelRigForCapture?.FieldThrowDiagForCapture());
                 File.WriteAllText(Path.Combine(Dir, "log.txt"), _log.ToString());
             }
             DuelStageRig.OutfieldRunThroughPickForCapture = DuelStageRig.OutfieldRunThroughPick.TypeF;
+            DuelStageRig.OutfieldThrowAnchorForCapture = -1;
             MatchLiveController.ScenarioIdForCapture = null;
             MatchLiveController.GameSeedOverrideForCapture = null;
             MatchLiveController.ManagerIsAwayOverrideForCapture = null;
