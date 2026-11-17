@@ -1470,10 +1470,12 @@ public static class GameEngine
                     && !(outs >= 2 && pitchRes.EndsPlateAppearance))
                 {
                     var caughtRunner = bases.First;
+                    var hrReceiver = defense.PlayerAtPosition(Field.FieldPosition.Shortstop);
+                    var hrQuickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
                     var stealSafeProb = StealResolver.SuccessProbability(
                             bases.First, defense.Catcher, paBaserunning,
-                            receiver: defense.PlayerAtPosition(Field.FieldPosition.Shortstop),
-                            pitcherQuickOffsetSeconds: SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills))
+                            receiver: hrReceiver,
+                            pitcherQuickOffsetSeconds: hrQuickOffset)
                             - ctx.Tactics.HitAndRunCaughtPenalty;
                     var caughtSafe = bases.Second is null
                         && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng);
@@ -1487,6 +1489,25 @@ public static class GameEngine
                         defense.RecordRunnerOut(currentPitcher);
                     }
                     bases.First = null;
+
+                    // 再生データ（issue #1051）: 憤死・進塁の走塁勝負を普通の二盗と同じ絵で見せる。成否は上の抽選で
+                    // 確定済み＝ここは乱数を引かない。秒は判定の期待値（StealResolver.Forced＝ゆらぎ0・送球の逸れは
+                    // 期待値）から組み、確定した結果と食い違うときだけ最小の差へ寄せる（アウトなら送球が先、
+                    // セーフなら走者が先）。スタートはエンドラン＝打者の始動に合わせた StartType.Contact。
+                    if (ctx.CaptureTimelines)
+                    {
+                        var hrResult = caughtSafe ? StealResult.Safe : StealResult.CaughtStealing;
+                        var hrTimes = StealResolver.Forced(
+                            caughtRunner, defense.Catcher, paBaserunning, hrResult,
+                            startType: StartType.Contact, receiver: hrReceiver, pitcherQuickOffsetSeconds: hrQuickOffset);
+                        stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                            Timeline.TimelineBuilder.BuildSteal(
+                                caughtRunner, defense.Catcher, hrResult,
+                                paBaserunning, ctx.Field, StealTarget.Second, pitchout: false, StartType.Contact,
+                                doubleStealScorer: null, hrTimes.RunnerSeconds, hrTimes.DefenseSeconds,
+                                throwScatter: null, hrQuickOffset));
+                    }
+
                     if (outs >= 3) runnerOutEndsHalf = true;   // 観測を出してから半回を終える（issue #779）
                 }
 
