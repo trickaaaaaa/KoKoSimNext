@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 34;
+    public const int CurrentVersion = 35;
 
     // ===== Serialize =====
 
@@ -314,7 +314,7 @@ public static class SaveCodec
             root.Add("momentumLevel", 0);
         // v25（issue #866）: 成長タイプの分野別化（投球/打撃/守備）。部員1人ぶんの新規キー3つは
         // 安全な既定（null＝基本タイプに従う＝旧セーブと1ビット一致）が決まっているので、ここでは補わず
-        // DevelopingPlayerSaves.FromJson の Has 分岐で読む（CareerSaves.FacilityFund と同じ作法）。
+        // DevelopingPlayerSaves.FromJson の Has 分岐で読む（旧セーブに無いキーは Has で分岐する作法）。
         // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
         // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
         // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。
@@ -369,6 +369,12 @@ public static class SaveCodec
         }
         // v33→v34（issue #1027）: 部員ごとの成長推移 "hist" が増えた。キーは記録がある選手にしか書かないので
         // 欠けているのが正常＝ここでは何も埋めない（DevelopingPlayerSaves が欠けたら空として読む）。
+        // v35（issue #1082）: 財布を部費1つにまとめた。旧セーブの施設基金（v3〜v34 の "facilityFund"）は部費へ足す
+        // （キーは残るが読む側はもう見ない）。
+        if (version < 35 && root["manager"] is JsonObject mgr35 && mgr35.Has("facilityFund"))
+        {
+            mgr35.Add("funds", mgr35.Double("funds") + mgr35.Double("facilityFund"));
+        }
         return root;
     }
 

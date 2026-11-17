@@ -61,9 +61,8 @@ public sealed class SaveCodecTests
         Assert.Equal(18, s.Roster[7].UniformNumber);
         Assert.Equal(InjurySite.Elbow, s.Roster[1].InjurySite);
 
-        // 監督メタ・施設・年契約（財布は2つ＝部費と施設基金の両方が往復すること）
+        // 監督メタ・施設・年契約（財布は部費1つ・issue #1082）
         Assert.Equal(137.5, s.Manager.Funds, 6);
-        Assert.Equal(8642.5, s.Manager.FacilityFund, 6);
         Assert.Equal("テスト監督", s.Manager.Name);
         Assert.Equal(2, s.Facilities.LevelOf("lighting"));
         Assert.Equal(3, s.Contracts.LevelOf("scouting"));
@@ -170,14 +169,13 @@ public sealed class SaveCodecTests
     // ===== 財布2つ・年契約の追加分（設計書04 §1.4a） =====
 
     // v2（財布が1つ・年契約が無かった版）のセーブは facilityFund / contracts を持たない。
-    // 読めて、施設基金0・スカウト網Lv1（＝従来のスカウト費と同額・同効果）で始まること。
+    // 読めて、部費はそのまま・スカウト網Lv1（＝従来のスカウト費と同額・同効果）で始まること。
     [Fact]
     public void V2Save_WithoutFacilityFundAndContracts_StillLoads_WithSafeDefaults()
     {
         var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
         var v2 = json
-            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":2")
-            .Replace(",\"facilityFund\":8642.5", "");
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":2");
         // contracts ブロックは丸ごと落とす（値は fixture 由来で固定）。
         var start = v2.IndexOf(",\"contracts\":{", System.StringComparison.Ordinal);
         Assert.True(start >= 0, "contracts ブロックが見つからない");
@@ -187,11 +185,29 @@ public sealed class SaveCodecTests
         Assert.DoesNotContain("\"contracts\"", v2);
 
         Assert.True(SaveCodec.TryDeserialize(v2, out var s, out var err), err);
-        Assert.Equal(0, s.Manager.FacilityFund, 9);
         Assert.Equal(1, s.Contracts.LevelOf("scouting"));
         Assert.Equal(0, s.Contracts.LevelOf("coach_pitching"));
         Assert.Equal(137.5, s.Manager.Funds, 6);   // 他の項目は素通りで読めている
         Assert.Equal(2, s.Facilities.LevelOf("lighting"));
+    }
+
+    // v34 以前のセーブは財布が2つ（部費 funds ＋施設基金 facilityFund）。読むと施設基金は部費へ足される（issue #1082）。
+    [Fact]
+    public void V34Save_FacilityFund_IsMergedIntoFunds()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.DoesNotContain("\"facilityFund\"", json);   // 今の版はもう書かない
+        var v34 = json
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":34")
+            .Replace("\"funds\":137.5", "\"funds\":137.5,\"facilityFund\":8642.5");
+        Assert.Contains("\"facilityFund\":8642.5", v34);
+
+        Assert.True(SaveCodec.TryDeserialize(v34, out var s, out var err), err);
+        Assert.Equal(137.5 + 8642.5, s.Manager.Funds, 6);
+
+        // 移行後に保存し直しても二重には足されない（今の版として読む）
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(s), out var again, out err), err);
+        Assert.Equal(137.5 + 8642.5, again.Manager.Funds, 6);
     }
 
     // ===== 自校の同定（新設校スタート・issue #585） =====

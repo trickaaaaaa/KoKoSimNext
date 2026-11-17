@@ -59,7 +59,8 @@ namespace KokoSim.Unity.Management
     public sealed class ManagementView
     {
         public double Funds;
-        /// <summary>年度末の総括で入る収入[万円]（学校予算＋信頼度連動）。</summary>
+        /// <summary>年度末の総括で入る収入[万円]（学校予算＋信頼度連動＋学校の設備投資＋後援会・OB寄付）。
+        /// 甲子園・全国優勝の一時金は結果しだいなので見込みに入れない（issue #1082）。</summary>
         public double Income;
         public string IncomeNote = "";
         /// <summary>年度末の総括で出る固定支出[万円]（夏合宿・冬合宿・スカウト）。</summary>
@@ -81,12 +82,6 @@ namespace KokoSim.Unity.Management
         /// <summary>いまの週練習時間[分]と、全系統を最大まで上げたときの値。</summary>
         public int MinutesNow;
         public int MinutesMax;
-
-        /// <summary>施設基金の残高[万円]（建物専用の別会計）。</summary>
-        public double FacilityFund;
-        /// <summary>施設基金の年間収入[万円]（学校の設備投資＋後援会・OB寄付）。</summary>
-        public double FundIncome;
-        public string FundNote = "";
 
         /// <summary>直近の操作結果（購入の成否）。空＝メッセージなし。</summary>
         public string StatusText = "";
@@ -118,13 +113,13 @@ namespace KokoSim.Unity.Management
             var set = ManagerService.Facilities;
 
             var contracts = ManagerService.ContractEffects;
-            var income = CareerEngine.AnnualBudgetIncome(m.Trust, Career);
+            var budget = CareerEngine.AnnualBudgetIncome(m.Trust, Career);
+            var donation = CareerEngine.AnnualDonationIncome(m.Fame, false, false, Career);
+            var income = budget + donation;
             // 固定支出＝合宿（年2回）＋年契約の年額合計。スカウト費は年契約「スカウト網」に含まれる
             // （engine 側 CareerEngine.ApplyResults も同じ数え方＝二重には引かない）。
             var camps = Career.SummerCampCost + Career.WinterCampCost;
             var expense = CareerEngine.AnnualFixedExpense(contracts.AnnualCost, Career);
-            var donation = Career.FacilityFundDonationPerFame * m.Fame;
-            var fundIncome = Career.FacilityFundSchoolBase + donation;
 
             var (coefAdd, minutesAdd) = catalog.Aggregate(set);
             var (coefMaxAdd, minutesMaxAdd) = catalog.Aggregate(MaxedSet(catalog));
@@ -135,15 +130,13 @@ namespace KokoSim.Unity.Management
                 Income = income,
                 // 内訳は金額の右へ並べるので短く保つ（単位はカード見出しの「単位: 万円」に集約）。
                 IncomeNote = "学校予算 " + Career.AnnualBudgetBase.ToString("0")
-                             + " ＋ 信頼度 " + (Career.BudgetPerTrust * m.Trust).ToString("0"),
+                             + " ＋ 信頼度 " + (Career.BudgetPerTrust * m.Trust).ToString("0")
+                             + " ＋ 設備投資 " + Career.SchoolInvestment.ToString("0")
+                             + " ＋ 後援会・OB " + (Career.BoosterDonationPerFame * m.Fame).ToString("0"),
                 Expense = expense,
                 ExpenseNote = "合宿 " + camps.ToString("0")
                               + " ／ 年契約 " + contracts.AnnualCost.ToString("0"),
                 Net = income - expense,
-                FacilityFund = m.FacilityFund,
-                FundIncome = fundIncome,
-                FundNote = "学校の設備投資 " + Career.FacilityFundSchoolBase.ToString("0")
-                           + " ＋ 後援会・OB " + donation.ToString("0"),
                 CoefNow = Training.FacilityCoef + coefAdd,
                 CoefMax = Training.FacilityCoef + coefMaxAdd,
                 MinutesNow = Training.DefaultBudgetMinutes + minutesAdd,
@@ -153,10 +146,9 @@ namespace KokoSim.Unity.Management
             };
 
             // 区分はタブで排他に切り替える（縦に積むと19行になって1画面に入らない）。
-            // 購入の操作はどの区分でも同じで、支払いに使う財布だけが区分で決まる
-            // （FacilityPurchase.WalletOf が単一ソース）。
+            // 購入の操作はどの区分でも同じで、どれも部費から払う（財布は1つ・issue #1082）。
             AddGroup(v, catalog, set, m, PurchaseKind.Facility, "施設",
-                "施設基金から支払う");
+                "部費から支払う");
             AddGroup(v, catalog, set, m, PurchaseKind.Equipment, "練習道具",
                 "部費から支払う");
             AddGroup(v, catalog, set, m, PurchaseKind.Gear, "備品",
@@ -286,8 +278,8 @@ namespace KokoSim.Unity.Management
         private static void AddGroup(ManagementView v, FacilityCatalog catalog, FacilitySet set,
                                      Manager m, PurchaseKind kind, string label, string note)
         {
-            // 買えるかどうかは「その区分の財布の残高」で決まる（部費が潤沢でも建物は建たない）。
-            var balance = FacilityPurchase.BalanceOf(m, FacilityPurchase.WalletOf(kind));
+            // 買えるかどうかは部費の残高で決まる（財布は1つ・issue #1082）。
+            var balance = m.Funds;
             var group = new LedgerGroup { Kind = kind, Label = label, Note = note };
             foreach (var def in catalog.Facilities)
                 if (def.Kind == kind)
@@ -309,11 +301,7 @@ namespace KokoSim.Unity.Management
                     _statusWarn = false;
                     break;
                 case FacilityPurchaseResult.InsufficientFunds:
-                    // どちらの財布が足りないかを出す（部費が潤沢でも建物は建たないため）。
-                    var def = ManagerService.Catalog.Find(facilityId);
-                    var wallet = def is null || FacilityPurchase.WalletOf(def.Kind) == PurchaseWallet.Funds
-                        ? "部費" : "施設基金";
-                    _status = wallet + "が足りません（" + name + "）";
+                    _status = "部費が足りません（" + name + "）";
                     _statusWarn = true;
                     break;
                 case FacilityPurchaseResult.AlreadyMaxLevel:

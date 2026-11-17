@@ -186,9 +186,9 @@ namespace KokoSim.Unity.Shell
             }
 
             v.TotalCost = _draft.AnnualCost(set);
-            v.Net = CareerEngine.AnnualFundsNet(m.Trust, v.TotalCost, Career);
+            v.Net = CareerEngine.AnnualFundsNet(m.Trust, m.Fame, v.TotalCost, Career);
             v.Funds = m.Funds;
-            v.ProjectedFunds = CareerEngine.ProjectedFunds(m.Funds, m.Trust, v.TotalCost, Career);
+            v.ProjectedFunds = CareerEngine.ProjectedFunds(m.Funds, m.Trust, m.Fame, v.TotalCost, Career);
             return v;
         }
     }

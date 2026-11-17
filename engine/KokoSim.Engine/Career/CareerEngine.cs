@@ -127,6 +127,7 @@ public static class CareerEngine
                 schoolsServed++;
                 transferred = true;
                 manager.YearsAtSchool = 0;
+                manager.Funds *= c.TransferFundsCarryOverRatio;   // 部費は一部だけ持ち越す（issue #1082）
             }
             // 最低在任年数（設計書04 §1.3追記）。赴任した年に採った1年生が卒業する（3年）までは
             // 強制転任の抽選そのものを行わない＝必ず残留（ManagerTransferModel.Evaluate と同じ判定式）。
@@ -145,6 +146,7 @@ public static class CareerEngine
                     baseStrength = rng.NextGaussian(c.NewSchoolStrengthMean, c.NewSchoolStrengthSd);
                     manager.Trust = c.TrustReset; // 信頼度は転任でリセット
                     manager.YearsAtSchool = 0;
+                    manager.Funds *= c.TransferFundsCarryOverRatio;   // 部費は一部だけ持ち越す（issue #1082）
                     schoolsServed++;
                     transferred = true;
                 }
@@ -220,13 +222,26 @@ public static class CareerEngine
     public static double AnnualFixedExpense(double contractCost, CareerCoefficients c)
         => c.SummerCampCost + c.WinterCampCost + contractCost;
 
-    /// <summary>部費の年間差引[万円]（収入−固定支出）。経営タブの「部費 年間差引」。</summary>
-    public static double AnnualFundsNet(double trust, double contractCost, CareerCoefficients c)
-        => AnnualBudgetIncome(trust, c) - AnnualFixedExpense(contractCost, c);
+    /// <summary>
+    /// 年度末に部費へ入る寄付・一時金[万円]＝学校の設備投資＋後援会・OB寄付（名声比例）＋甲子園出場・全国優勝の一時金
+    /// （設計書04 §1.4・issue #1082 で施設基金から部費へ統合）。総括と経営タブの見込みが同じ式を使う。
+    /// </summary>
+    public static double AnnualDonationIncome(double fame, bool reachedKoshien, bool nationalChampion, CareerCoefficients c)
+        => c.SchoolInvestment
+           + c.BoosterDonationPerFame * fame
+           + (reachedKoshien ? c.KoshienYearBonus : 0)
+           + (nationalChampion ? c.NationalTitleBonus : 0);
 
-    /// <summary>総括のあとの部費の見込み[万円]（総括と同じく0で止める）。信頼度は総括前の値＝見込み。</summary>
-    public static double ProjectedFunds(double funds, double trust, double contractCost, CareerCoefficients c)
-        => Math.Max(0, funds + AnnualFundsNet(trust, contractCost, c));
+    /// <summary>
+    /// 部費の年間差引[万円]（予算＋寄付−固定支出）。経営タブの「年間差引」。甲子園・全国優勝の一時金は
+    /// 結果しだいなので見込みに入れない。信頼度・名声は総括前の値＝見込み。
+    /// </summary>
+    public static double AnnualFundsNet(double trust, double fame, double contractCost, CareerCoefficients c)
+        => AnnualBudgetIncome(trust, c) + AnnualDonationIncome(fame, false, false, c) - AnnualFixedExpense(contractCost, c);
+
+    /// <summary>総括のあとの部費の見込み[万円]（総括と同じく0で止める）。信頼度・名声は総括前の値＝見込み。</summary>
+    public static double ProjectedFunds(double funds, double trust, double fame, double contractCost, CareerCoefficients c)
+        => Math.Max(0, funds + AnnualFundsNet(trust, fame, contractCost, c));
 
     /// <param name="contracts">
     /// 年契約の実効値（設計書04 §1.4a）。null なら従来どおり <see cref="CareerCoefficients.ScoutCost"/> を
@@ -262,20 +277,15 @@ public static class CareerEngine
         if (wins == 0) trust -= c.TrustPoorSeasonPenalty;
         m.Trust = MathUtil.Clamp(trust, 0, 100);
 
-        // 部費（運営費）。年間予算を加算し、合宿費と年契約の年額を差し引く（Issue #128・設計書04 §1.4a）。
+        // 部費（設計書04 §1.4・issue #1082 で財布は1つ）。年間予算と寄付・一時金を加算し、
+        // 合宿費と年契約の年額を差し引く（Issue #128・設計書04 §1.4a）。
         // 年契約を持たない経路（キャリアシム）は従来どおりスカウト費だけを固定で引く。
+        // 寄付の名声は上の更新後の値を使う＝「勝った年の寄付はその年から増える」。
         // 資金は下限0で止める（借金しない）。
         m.Funds += AnnualBudgetIncome(m.Trust, c);
+        m.Funds += AnnualDonationIncome(m.Fame, reachedKoshien, nationalChampion, c);
         m.Funds -= AnnualFixedExpense(contracts?.AnnualCost ?? c.ScoutCost, c);
         if (m.Funds < 0) m.Funds = 0;
-
-        // 施設基金（設計書04 §1.4）。学校の設備投資＋名声に比例する後援会・OB寄付が積み上がり、
-        // 甲子園に出た年は一時金が乗る。支出は施設の購入だけ（FacilityPurchase）なのでここでは引かない。
-        // 名声は上の更新後の値を使う＝「勝った年の寄付はその年から増える」。
-        m.FacilityFund += c.FacilityFundSchoolBase
-                          + c.FacilityFundDonationPerFame * m.Fame
-                          + (reachedKoshien ? c.FacilityFundKoshienBonus : 0)
-                          + (nationalChampion ? c.FacilityFundNationalTitleBonus : 0);
     }
 
     /// <summary>

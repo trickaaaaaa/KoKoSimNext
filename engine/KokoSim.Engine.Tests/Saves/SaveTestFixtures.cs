@@ -159,7 +159,6 @@ internal static class SaveTestFixtures
                 Fame = 22.0,
                 Trust = 61.0,
                 Funds = 137.5,
-                FacilityFund = 8642.5,
                 CareerYears = 3,
                 KoshienAppearances = 1,
             },

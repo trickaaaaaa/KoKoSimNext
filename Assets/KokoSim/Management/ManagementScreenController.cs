@@ -81,14 +81,12 @@ namespace KokoSim.Unity.Management
             var host = _root.Q<VisualElement>("mn-ledger");
             if (host == null) return;
             host.Clear();
-            // 財布は2つ（設計書04 §1.4）。部費＝道具・備品・合宿・スカウトの運営費、
-            // 施設基金＝学校の設備投資と後援会・OB寄付で積む建物専用の別会計。
+            // 財布は部費1つ（設計書04 §1.4・issue #1082）。残高・年間収入・年間支出・差引の4枠。
             host.Add(Kv("部費 残高", v.Funds, "", signed: false));
+            host.Add(Kv("年間収入", v.Income, v.IncomeNote, signed: true));
+            host.Add(Kv("年間支出", -v.Expense, v.ExpenseNote, signed: true));
             // 差引だけが警告になりうる枠（毎年部費が目減りする＝本当の警告, UI原則②）。
-            host.Add(Kv("部費 年間差引", v.Net,
-                v.IncomeNote + " − " + v.ExpenseNote, signed: true, warnIfNegative: true));
-            host.Add(Kv("施設基金 残高", v.FacilityFund, "", signed: false));
-            host.Add(Kv("施設基金 年間収入", v.FundIncome, v.FundNote, signed: true));
+            host.Add(Kv("年間差引", v.Net, "", signed: true, warnIfNegative: true));
         }
 
         /// <summary>

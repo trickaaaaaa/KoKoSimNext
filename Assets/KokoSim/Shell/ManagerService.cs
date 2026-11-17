@@ -25,15 +25,15 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 監督（資金は万円単位）。**新設校スタート水準**（issue #585 確定事項5）＝
-        /// 部費60万・施設基金0・名声0・信頼30。
+        /// 部費60万・名声0・信頼30。
         ///
-        /// 施設基金0は「初年度は建物が一切買えない」を意味する（最安の医務室Lv1でも150万）。
+        /// 部費60万では初年度に建物はまず買えない（最安の医務室Lv1でも150万）。
         /// 名声0は実績ゼロの新任＝新入生の質（talentCenter）も底から始まる。信頼30は
         /// 中立(50)より下＝学校からも選手からもまだ信用されていない状態。以降は名声と戦績で増える
-        /// （学校の設備投資100万＋名声×20万＋甲子園1000万＋全国優勝5000万）。
+        /// （年度末に学校予算・信頼度ぶん・学校の設備投資50万・名声×10万・甲子園500万・全国優勝2500万が部費へ入る。issue #1082）。
         /// </summary>
         public static Manager Manager =>
-            _manager ?? (_manager = new Manager { Funds = 60, FacilityFund = 0, Fame = 0, Trust = 30 });
+            _manager ?? (_manager = new Manager { Funds = 60, Fame = 0, Trust = 30 });
 
         /// <summary>
         /// 学校の施設保有状態（Issue #128）の単一ソース。funds→施設購入はここを更新し、
@@ -46,13 +46,12 @@ namespace KokoSim.Unity.Shell
         public static FacilityCatalog Catalog { get; } = FacilityCatalog.Default;
 
         /// <summary>
-        /// 転任時: 施設は学校資産＝置いていく（設計書04 §4、OPEN-QUESTIONS Q6）。施設基金も学校の設備投資・
-        /// 寄付の積み上げなので同様にゼロへ戻す。部費・名声は監督個人の実績として持ち越す（ここでは触らない）。
+        /// 転任時: 施設は学校資産＝置いていく（設計書04 §4、OPEN-QUESTIONS Q6）。部費は一部だけ持ち越す
+        /// （<see cref="ManagerTransferModel.ApplyTransfer"/>・issue #1082）。名声は監督個人の実績として持ち越す。
         /// </summary>
         internal static void ResetFacilitiesForTransfer()
         {
             _facilities = new FacilitySet();
-            Manager.FacilityFund = 0;
         }
 
         /// <summary>
