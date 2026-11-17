@@ -35,6 +35,8 @@ namespace KokoSim.Unity.Shell
         /// <item>大会終了の後始末待ち（<c>PendingTournamentWrapUp</c>）＝週送りと通知フィードがここで走る</item>
         /// <item>残りブラケットの背景消化中（<c>BracketFoldPending</c>, issue #529）＝通算戦績が未確定</item>
         /// <item>試合開始フローの途中（<c>AwaitingMatchStart</c>・練習試合フロー）＝スタメンを保存しないため</item>
+        /// <item>見せていないイベントの場面がある（<c>EventService.HasPending</c>・issue #1115）＝キューはセーブに載らない。
+        /// 選択肢つきイベント・スカウトの分野選び・ドラフト結果の場面が、ロードで選ばれないまま消える</item>
         /// </list>
         /// </summary>
         public static bool CanSave
@@ -44,6 +46,7 @@ namespace KokoSim.Unity.Shell
                 var s = GameSession.Current;
                 if (s.BracketFoldPending || s.ResultPending || s.PendingTournamentWrapUp != null) return false;
                 if (s.AwaitingMatchStart || s.PendingMatchIsPractice) return false;
+                if (EventService.HasPending) return false;
                 if (s.Mode == GameMode.Tournament && (s.Runner == null || !s.Runner.CanCaptureState)) return false;
                 return true;
             }
@@ -64,6 +67,8 @@ namespace KokoSim.Unity.Shell
                 return "試合結果を確認するとセーブできます。";
             if (s.AwaitingMatchStart || s.PendingMatchIsPractice)
                 return "試合の準備中はセーブできません（ホームに戻るとセーブできます）。";
+            if (EventService.HasPending)
+                return "イベントの場面が残っています（ホームで見終えるとセーブできます）。";
             return "";
         }
 
