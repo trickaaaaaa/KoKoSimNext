@@ -510,7 +510,8 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// セーブ復元: クールダウンと年次フラグを押し戻す。<b>キューは載せない</b>＝
-        /// 「見せる直前の1件」はセーブできない地点（結果確認中）にしか存在しないので、復元時は必ず空。
+        /// 未提示の場面が残っている間は <see cref="SaveGameIO.CanSave"/> が false（issue #1115）で、
+        /// セーブ時のキューは必ず空。だから復元時も空に戻すだけでよい。
         /// </summary>
         public static void Restore(SaveState s)
         {
