@@ -126,6 +126,9 @@ public enum MoveProfile
     RunIn,
     /// <summary>始点の速さ（巡航の2倍＝等減速）から終点で止まる（RunIn の後、勢いのまま運んで止まる）。</summary>
     RunOut,
+    /// <summary>巡航の速さのまま始まり、終わりの肩だけ減速して終点で止まる（RunIn の鏡。issue #1084:
+    /// 届かなかった飛球を全力で追った野手が、そのまま転がる球を拾いに行く）。</summary>
+    CruiseOut,
 }
 
 /// <summary>守備陣形ルール表の役割（設計書01 §2⑥）。</summary>

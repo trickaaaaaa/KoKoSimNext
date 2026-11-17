@@ -156,8 +156,12 @@ scenarios:
     bases: [1]
     seed: 20260736
 
-  # ── 外野手が背走して、あと一歩届かない飛球（issue #1075 追記3）。最初の打席の打球が中堅手の頭を越え、
-  # 捕球余裕 −0.08s で落ちる（落下点 106m・中堅の定位置 82m）。3Dでは「届かない」芝居＝背走ジャンプが出る。
+  # ── 外野手があと一歩届かない飛球（issue #1075 追記3・#1084）。追う向きごとに1つ。最初の打席の打球が
+  # 捕球余裕 −0.5〜0s で外野に落ちる＝3Dでは追う向きに合った「届かない」芝居（グラブの先を球が抜ける）が出る。
+  #   back  … 右翼手の頭を越える（ライトへの三塁打・余裕 −0.32s）→ 背走ジャンプ
+  #   front … 中堅手の前に落ちる（センター前ヒット・−0.26s）→ 走り込んで低く伸ばす
+  #   left / right … 横切って追う（左＝ライト前 −0.26s／右＝レフト前 −0.30s）→ L90/R90 で伸ばす
+  #   fence … 左翼のフェンス際（レフトへの二塁打・−0.35s）
   # 強制発動は使わず自然な解決をシードで固定（打球の軌道が要る）。チームは呼び出し側シード 1 で組む前提
   # （FlyNearMissScenarioTests と同じ。撮影時は MatchLiveController.GameSeedOverrideForCapture = 1）。
   # 係数変更で崩れたらテストが赤くなる→ seed を選び直す。
@@ -168,7 +172,43 @@ scenarios:
     inning: 1
     top: true
     outs: 0
-    seed: 20261560
+    seed: 20263062
+
+  - id: fly-near-miss-front-lab
+    name: 守備検証・前へ走り込んであと一歩届かない（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20263124
+
+  - id: fly-near-miss-left-lab
+    name: 守備検証・横へ追ってあと一歩届かない・球は左手側（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20263541
+
+  - id: fly-near-miss-right-lab
+    name: 守備検証・横へ追ってあと一歩届かない・球は右手側（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20263545
+
+  - id: fly-near-miss-fence-lab
+    name: 守備検証・フェンス際であと一歩届かない（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20265021
 
   # 捕ったアウトの球が、打席が畳まれるまでグラブの中にあるかを見る（issue #1081）。打者が走らないファウルフライは
   # 再生の長さ（play.Dur＝捕球の約1.9秒後）が短く、判定表示の窓で再生が play.Dur を越えたとき球が足元へ落ちて見えた。

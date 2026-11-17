@@ -29,6 +29,9 @@ namespace KokoSim.Unity.Match
         };
         /// <summary>捕球の何秒前から撮るか／送球のリリースの何秒後まで撮るか。</summary>
         public static float LeadSeconds = 0.8f, TailSeconds = 0.9f;
+        /// <summary>真＝送球でなく**最初の飛球の着地**の前後を撮る（issue #1084 の届かない飛球）。
+        /// 着地の LeadSeconds 前〜TailSeconds 後。</summary>
+        public static bool AroundFlightEnd;
 
         private IEnumerator Start()
         {
@@ -52,7 +55,13 @@ namespace KokoSim.Unity.Match
                 while (!ctrl.FieldPlayActiveForCapture && guard < 60f) { guard += Time.deltaTime; yield return null; }
                 var play = ctrl.CurrentPa?.Play;
                 double tc = -1, release = -1;
-                if (play != null)
+                if (play != null && AroundFlightEnd)
+                {
+                    foreach (var s in play.Ball)
+                        if (s is EndpointBallSegment fb && fb.Kind == KokoSim.Engine.Match.Timeline.BallSegmentKind.Flight)
+                        { tc = s.T1; release = s.T1; break; }
+                }
+                else if (play != null)
                     for (int i = 0; i < play.Ball.Count; i++)
                     {
                         var s = play.Ball[i];
@@ -83,7 +92,9 @@ namespace KokoSim.Unity.Match
                 Time.captureDeltaTime = 0f;
                 File.WriteAllText(Path.Combine(outDir, "info.txt"),
                     "frames=" + n + " catch=" + tc.ToString("F2", CultureInfo.InvariantCulture)
-                    + " release=" + release.ToString("F2", CultureInfo.InvariantCulture) + " result=" + play?.Result);
+                    + " release=" + release.ToString("F2", CultureInfo.InvariantCulture) + " result=" + play?.Result
+                    + "\nmiss=" + (ctrl.DuelRigForCapture?.MissDiagForCapture ?? "-")
+                    + "\ngloveGap=" + (ctrl.DuelRigForCapture?.MissGloveGapForCapture ?? -1f).ToString("F2", CultureInfo.InvariantCulture));
             }
             DuelStageRig.ThrowClosedWindupOffForCapture = false;
             MatchLiveController.ScenarioIdForCapture = null;

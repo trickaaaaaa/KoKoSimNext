@@ -114,17 +114,57 @@ public sealed class MissedFlyChaseTests
         Assert.Equal(a.Moves, b.Moves);
     }
 
-    [Theory]
-    [InlineData(0.0)]
-    [InlineData(0.1)]
-    public void PickedUpAtTheLanding_OneLegArrivesWhenTheBallLands(double rollSeconds)
+    [Fact]
+    public void CruiseOut_StartsAtCruiseSpeedAndStopsAtTheEnd()
     {
-        // 判定の拾う時刻が着地の瞬間（転がらない）: 拾う時刻より後へは動かせないので、着地ちょうどに着かせる
+        // 巡航のまま入って最後だけ減速する（issue #1084）＝RunIn の鏡。始点の速さ＝RunIn の終点の速さ
+        const double h = 1e-5;
+        var ease = (double u) => KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.MoveEase(u, MoveProfile.CruiseOut);
+        Assert.Equal(0.0, ease(0), 9);
+        Assert.Equal(1.0, ease(1), 9);
+        var peak = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.CruiseOut);
+        Assert.Equal(peak, (ease(h) - ease(0)) / h, 3);
+        Assert.Equal(0.0, (ease(1) - ease(1 - h)) / h, 3);
+        for (var u = 0.0; u < 1.0; u += 0.01) Assert.True(ease(u + 0.01) >= ease(u));
+    }
+
+    [Fact]
+    public void PickedUpShortlyAfterTheLanding_OneLegArrivesWhenTheBallIsPickedUp()
+    {
+        // 判定の拾う時刻が着地の少し後: 拾う時刻より後へは動かせないので、拾う時刻ちょうどに着かせる
         // （落ちる前に着いて待っている絵にしない）
-        var play = MissedFly(-0.5, rollSeconds) with { FieldedX = 10, FieldedZ = 82 };
+        var play = MissedFly(-0.5, 0.1) with { FieldedX = 10, FieldedZ = 82 };
         var legs = Legs(Build(play), FieldPosition.CenterField);
         Assert.Single(legs);
-        Assert.Equal(LandAt + rollSeconds, legs[0].T1, 6);
+        Assert.Equal(LandAt + 0.1, legs[0].T1, 6);
+    }
+
+    [Fact]
+    public void PickedUpAtTheLanding_BallHopsPastTheGloveAndIsScoopedOnTheRun()
+    {
+        // 判定の拾う時刻が着地の瞬間（issue #1084）: 1本で着地ちょうどに着かせると「落下点で待って捕った」絵になる。
+        // 球を落下点から野手の側へ1つ弾ませ、野手は減速せずに弾んだ先で掬い、勢いのまま落下点まで運んで止まる
+        var play = MissedFly(-0.25, 0.0) with { FieldedX = 10, FieldedZ = 82 };
+        var tl = Build(play);
+        var legs = Legs(tl, FieldPosition.CenterField);
+
+        Assert.Equal(2, legs.Length);
+        var (scoop, carry) = (legs[0], legs[1]);
+        Assert.Equal(MoveProfile.RunIn, scoop.Profile);     // 落下点の手前で緩めない
+        Assert.Equal(MoveProfile.RunOut, carry.Profile);    // 掬った勢いのまま運んで止まる
+        Assert.Equal(LandAt + 0.25, scoop.T1, 6);           // 掬うのは着地＋判定の遅れ
+        Assert.Equal(carry.T0, scoop.T1, 6);
+        Assert.Equal(10.0, carry.To.X, 6);                  // 止まるのは判定の拾う点＝送球の起点
+        Assert.Equal(82.0, carry.To.Z, 6);
+        Assert.True(carry.T1 <= LandAt + 0.6 + 1e-9, $"運び終わり {carry.T1:F2}s が遅い");
+
+        // 球は着地の瞬間から掬う点まで1つ弾む
+        var hop = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Bounce);
+        Assert.Equal(LandAt, hop.T0, 6);
+        Assert.Equal(scoop.T1, hop.T1, 6);
+        Assert.Equal(scoop.To, hop.To);
+        Assert.Equal(10.0, hop.From.X, 6);
+        Assert.Equal(82.0, hop.From.Z, 6);
     }
 
     /// <summary>
