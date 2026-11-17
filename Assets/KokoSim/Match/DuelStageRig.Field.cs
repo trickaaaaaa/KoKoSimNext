@@ -2891,13 +2891,24 @@ namespace KokoSim.Unity.Match
             /// （実測ちょうどでは閉じが足りなく見えた・内野は実測のままがよかった＝2026-11-17 ユーザー確認）。
             /// </summary>
             public readonly float OutfieldClosedYawDeg;
+            /// <summary>
+            /// 閉じた体を的へ開く秒と、開き切るのがリリースちょうどか（偽＝リリースの1コマ前）。収録ごとに違う
+            /// （2026-11-17 ユーザー見比べ）: 上手投げ（type03）は投げる腕が前へ出るのが最後の一瞬なので、0.25 秒で
+            /// 早く開くと腕が後ろにあるうちに胸だけ的を向いた＝最後の 0.08 秒でリリースちょうどに開く。速い横手
+            /// （type01）は逆に、最後まで閉じたままだとグラブの腕が的の先を指し続けて「三塁ベンチへ投げそう」に
+            /// 見えた＝0.25 秒で1コマ前に開き切る（内野も同じ）。
+            /// </summary>
+            public readonly float OpenSeconds;
+            public readonly bool OpenAtRelease;
 
             public FieldThrowAnchor(string clip, float release, float handY,
-                float handX, float handZ, float maxDistM, float closedYawDeg = 0f, float outfieldClosedYawDeg = 0f)
+                float handX, float handZ, float maxDistM, float closedYawDeg = 0f, float outfieldClosedYawDeg = 0f,
+                float openSeconds = 0.25f, bool openAtRelease = false)
             {
                 Clip = clip; Release = release; HandY = handY;
                 HandX = handX; HandZ = handZ; MaxDistM = maxDistM; ClosedYawDeg = closedYawDeg;
                 OutfieldClosedYawDeg = outfieldClosedYawDeg;
+                OpenSeconds = openSeconds; OpenAtRelease = openAtRelease;
             }
         }
 
@@ -2922,7 +2933,7 @@ namespace KokoSim.Unity.Match
             // 上手投げの外野は 110° だと収録自体の閉じ（約16°）と重なって胸が的から 126° 外れ、背を向けかけた
             // ＝内野と同じ 85°（2026-11-17 見比べでユーザー選択）
             new("AA_Baseball_Defender_Pass_the_ball_type03", 1.36f, 1.436f, -0.122f, 0.655f, float.MaxValue,
-                closedYawDeg: 85f, outfieldClosedYawDeg: 85f),
+                closedYawDeg: 85f, outfieldClosedYawDeg: 85f, openSeconds: 0.08f, openAtRelease: true),
         };
 
         /// <summary>捕手の送球（盗塁の二塁送球）。しゃがみから立ちながら投げる専用収録。</summary>
@@ -3393,22 +3404,14 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        /// <summary>
-        /// 閉じた体を的へ開く秒（リリースの瞬間に開き切る。issue #1095）。収録は投げる腕が前へ出るのが最後の一瞬で、
-        /// 0.25 秒かけて1コマ前に開き切っていたときは、腕がまだ後ろにあるうちに胸だけ的を向き、グラブの腕が横へ
-        /// 突き出した「横へ投げそう」な形になった（2026-11-17 見比べで 0.08 秒・リリースちょうどをユーザーが選択）。
-        /// </summary>
-        private static float ThrowOpenSeconds = 0.08f;
 #if UNITY_EDITOR
         /// <summary>スクショ用: 開きの秒の上書き（負＝既定のまま）。</summary>
         public static float ThrowOpenSecondsOverrideForCapture = -1f;
-        /// <summary>スクショ用: 開き切る時刻をリリースの何秒前にするか（負＝既定のリリースちょうど）。</summary>
+        /// <summary>スクショ用: 開き切る時刻をリリースの何秒前にするか（負＝収録の表のまま）。</summary>
         public static float ThrowOpenEndLeadOverrideForCapture = -1f;
 #endif
-        /// <summary>閉じる・開くときの体の回り方の上限[度/秒]（開きを ThrowOpenSeconds で回し切れる速さ＋余裕）。</summary>
+        /// <summary>閉じる・開くときの体の回り方の上限[度/秒]（下限。実際は開く角度÷開きの秒から上げる）。</summary>
         private const float ThrowOpenRateDegPerSec = 720f;
-        /// <summary>捕ってから投げ始めるまでがこれ[s]より長い捕球は、閉じ始めの起点にしない（別のプレーの捕球を拾わない）。</summary>
-        private const float ThrowCloseLeadMaxSeconds = 2.0f;
 #if UNITY_EDITOR
         /// <summary>スクショ用（issue #1095 の見比べ）: 真にすると閉じない（胸を的へ向けたまま投げる旧挙動）。</summary>
         public static bool ThrowClosedWindupOffForCapture;
@@ -3419,32 +3422,20 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// その野手が時刻 t に送球の振りかぶり中なら、描く体の向き（閉じた向き→的へ開く）を返す（issue #1095）。
         /// 閉じる量は収録ごとの <see cref="FieldThrowAnchor.ClosedYawDeg"/>（外野手は <see cref="FieldThrowAnchor.OutfieldClosedYawDeg"/>）。
-        /// 閉じた構えをリリースの直前まで保ち、最後の <see cref="ThrowOpenSeconds"/> で的の向き（e.Yaw）へ開き切る
+        /// 閉じた構えを保ち、収録ごとの <see cref="FieldThrowAnchor.OpenSeconds"/> で的の向き（e.Yaw）へ開き切る
         /// ＝球が手を離れる瞬間の向きは従来どおり。
         /// </summary>
         private bool ThrowClosedYaw(FieldPosition pos, float t, out float yaw, out float rate)
         {
             yaw = 0f;
             rate = ThrowOpenRateDegPerSec;
-            float openSec = ThrowOpenSeconds;
-#if UNITY_EDITOR
-            if (ThrowOpenSecondsOverrideForCapture > 0f) openSec = ThrowOpenSecondsOverrideForCapture;
-#endif
 #if UNITY_EDITOR
             if (ThrowClosedWindupOffForCapture) return false;
 #endif
             for (int i = 0; i < _throwEvents.Count; i++)
             {
                 var e = _throwEvents[i];
-                if (e.From != pos || t >= e.TRelease) continue;
-                // 閉じ始めは投げ始めでなく**捕った瞬間**から（捕ってから投げ始めるまでの持ち替えの間も閉じた向きへ回す）。
-                // 投げ始めから閉じると、持ち替えの間に一度的へ向いた胸が、投げ始めで横へ振れ戻って
-                // 「一瞬ライトを向く」絵になった（外野は持ち替えが約1秒ある。2026-11-17 ユーザー指摘）
-                float closeFrom = e.TFire;
-                foreach (var c in _catchEvents)
-                    if (c.Pos == pos && c.TCatch <= e.TFire + 1e-3f && e.TFire - c.TCatch <= ThrowCloseLeadMaxSeconds)
-                        closeFrom = Mathf.Min(closeFrom, c.TCatch);
-                if (t < closeFrom) continue;
+                if (e.From != pos || !e.Fired || t < e.TFire || t >= e.TRelease) continue;
                 float closed = IsOutfield(pos) ? e.Anchor.OutfieldClosedYawDeg : e.Anchor.ClosedYawDeg;
 #if UNITY_EDITOR
                 if (IsOutfield(pos) && OutfieldClosedYawOverrideForCapture >= 0f) closed = OutfieldClosedYawOverrideForCapture;
@@ -3452,8 +3443,10 @@ namespace KokoSim.Unity.Match
                 if (Mathf.Abs(closed) < 1e-3f) return false;
                 // 左投げ（鏡映親の下）はグラブの腕が逆側へ開く＝閉じる向きも逆
                 closed *= MirrorSign(FielderActor(pos));
-                float openEnd = e.TRelease;
+                float openSec = e.Anchor.OpenSeconds;
+                float openEnd = e.Anchor.OpenAtRelease ? e.TRelease : e.TRelease - 1f / PoseFps;
 #if UNITY_EDITOR
+                if (ThrowOpenSecondsOverrideForCapture > 0f) openSec = ThrowOpenSecondsOverrideForCapture;
                 if (ThrowOpenEndLeadOverrideForCapture >= 0f) openEnd = e.TRelease - ThrowOpenEndLeadOverrideForCapture;
 #endif
                 float u = Mathf.InverseLerp(openEnd - openSec, openEnd, t);
