@@ -71,6 +71,8 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.ManagerLastGrownYear);
         // 番狂わせ名声デルタの持ち越し（v12）: 試合ごとの値と並びがそのまま往復すること。
         Assert.Equal(new[] { 6.0, -3.5, 0.0 }, s.ManagerPendingUpsetDeltas);
+        // 練習試合の最終消化週（v36・issue #1114）が往復すること。
+        Assert.Equal(23, s.PracticeLastPlayedWeek);
 
         // 成績（private set の集計器＋球種別内訳が復元されている）
         var p1 = s.Stats.Career.Get(1);
@@ -442,6 +444,32 @@ public sealed class SaveCodecTests
         Assert.True(SaveCodec.TryDeserialize(v11, out var s, out var err), err);
         Assert.Empty(s.ManagerPendingUpsetDeltas);
         Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
+    // v35 以前のセーブは practiceLastPlayedWeek を持たない。読めて「記録なし」になること（issue #1114）。
+    [Fact]
+    public void V35Save_WithoutPracticeLastPlayedWeek_StillLoads_AsNull()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.Contains("\"practiceLastPlayedWeek\":23", json);
+        var v35 = json
+            .Replace(",\"practiceLastPlayedWeek\":23", "")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":35");
+        Assert.DoesNotContain("practiceLastPlayedWeek", v35);
+
+        Assert.True(SaveCodec.TryDeserialize(v35, out var s, out var err), err);
+        Assert.Null(s.PracticeLastPlayedWeek);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
+    // 練習試合を一度もしていないセーブも往復できる（null のまま）。
+    [Fact]
+    public void PracticeLastPlayedWeek_Null_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.PracticeLastPlayedWeek = null;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Null(s.PracticeLastPlayedWeek);
     }
 
     // ===== 前回スタメンの記憶（issue lineup-carry-over-previous-game・v14） =====
