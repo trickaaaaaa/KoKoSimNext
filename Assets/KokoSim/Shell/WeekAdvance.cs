@@ -5,7 +5,8 @@ namespace KokoSim.Unity.Shell
     /// どのタブでも同一挙動にするための単一ソース。以前は各画面が個別に配線しており、選手/メンバータブは
     /// 一切配線されず（＝死にボタン）、他タブは大会モードでも週を丸ごと進めて大会日程を飛び越していた。
     ///
-    /// ・通常週: 共有クロックを1週進める（大会開幕週の大会モード遷移は <see cref="GameClock.EnterWeek"/> に
+    /// ・通常週: ホームと同じ <see cref="KokoSim.Unity.Home.HomeState.AdvanceWeek"/> で週を進める（練習・怪我・成長・調子・
+    ///   週次イベント・フィードもここで回る。大会開幕週の大会モード遷移は <see cref="GameClock.EnterWeek"/> に
     ///   集約済みなので、ここに大会判定は要らない。開幕時は BannerPending が立ち <see cref="ScreenRouter"/> が
     ///   ホームへ回送して開幕演出→日送りへ引き継ぐ）。
     /// ・大会モード中: 日送り・試合ダイアログはホームが担うため、側画面からはホームへ回送する。
@@ -26,7 +27,17 @@ namespace KokoSim.Unity.Shell
                 ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
                 return;
             }
-            GameClock.Advance(+1);
+            // 背景の試合後処理中は、ホームと同じく週を進めない（メインスレッドの GameClock/ロスター変更と競合する, issue #138）。
+            if (BackgroundGameOp.Running) return;
+            // 年契約の更新が未確定なら、ホームへ戻して更新の画面から続ける（ホームの週送りと同じ待ち）。
+            if (ContractRenewalService.Pending)
+            {
+                ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+                return;
+            }
+            // 週の中身（練習・怪我・成長・調子・週次イベント・各種フィード）はホームの「今週を進める」と同じ
+            // 入口 HomeState.AdvanceWeek を通す（issue #1113）。クロックだけ進めると中身が丸ごと飛ぶ。
+            KokoSim.Unity.Home.HomeState.Current.AdvanceWeek();
             render?.Invoke();
         }
     }
