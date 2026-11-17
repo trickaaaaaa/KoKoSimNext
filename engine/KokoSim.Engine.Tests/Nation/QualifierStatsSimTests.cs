@@ -235,4 +235,53 @@ public sealed class QualifierStatsSimTests
         Assert.NotNull(stats.PrefQualifierForSchool(1000));
         Assert.Null(stats.RegionalQualifierForSchool(1000));
     }
+
+    /// <summary>
+    /// 積みかけのままセーブ→ロードしても、積み直しで全代表校の成績が揃い、積んだ校は二重に積まれない（issue #1116）。
+    /// セーブ時点で1校ぶんしか無い帳簿を JSON 往復で復元し、足りない校だけを打ち直す。
+    /// 全校を一気に積んだ場合と digest が一致する。
+    /// </summary>
+    [Fact]
+    public void PartialStats_SaveLoad_ThenResume_CompletesWithoutDoubleCounting()
+    {
+        var fieldA = Field(1000, 8);
+        var fieldB = Field(2000, 8);
+        var byId = fieldA.Concat(fieldB).ToDictionary(s => s.Id);
+        PrefectureResult ResultOf(IReadOnlyList<School> f, int prefId) => Result(f) with { PrefectureId = prefId, PrefectureName = $"県{prefId}" };
+        var results = new[] { ResultOf(fieldA, 1), ResultOf(fieldB, 2) };
+        var resolver = new BackgroundMatchResolver(
+            new NationRosters(new AiRosterDeps()), new GameContext(), yearIndex: 1, stats: null);
+        var rounds = QualifierStatsSim.RoundsFor(8);
+
+        void ReplayPending(NationTournamentStats stats)
+        {
+            var rng = new Xoshiro256Random(77);
+            foreach (var r in QualifierStatsSim.PendingRepresentatives(results, stats))
+                QualifierStatsSim.ReplayChampionPath(
+                    r, id => byId.TryGetValue(id, out var s) ? s : null, resolver, stats, Schedule, rounds, 1, rng);
+        }
+
+        var full = new NationTournamentStats();
+        ReplayPending(full);
+        Assert.Equal(2, full.PrefQualifierSchools.Count);
+
+        // 途中でセーブ＝1校ぶんだけ積んだ帳簿。
+        var partial = new NationTournamentStats();
+        QualifierStatsSim.ReplayChampionPath(
+            results[0], id => byId.TryGetValue(id, out var s) ? s : null, resolver, partial, Schedule, rounds, 1,
+            new Xoshiro256Random(77));
+        var json = KokoSim.Engine.Saves.StatsSaves.NationPrefQualifierToJson(partial);
+
+        // ロード＝復元。足りない校（B）だけが積み直しの対象になる。
+        var loaded = new NationTournamentStats();
+        KokoSim.Engine.Saves.StatsSaves.RestorePrefQualifierInto(loaded, json);
+        var pending = QualifierStatsSim.PendingRepresentatives(results, loaded);
+        Assert.Single(pending);
+        Assert.Equal(results[1].ChampionId, pending[0].ChampionId);
+
+        ReplayPending(loaded);
+
+        Assert.Equal(Digest(full), Digest(loaded));
+        Assert.Empty(QualifierStatsSim.PendingRepresentatives(results, loaded));
+    }
 }

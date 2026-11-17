@@ -130,6 +130,8 @@ namespace KokoSim.Unity.Shell
             if (s.Koshien != null) KoshienEntry.RestoreSpectated(s.Koshien);
             // 観るだけのセンバツ（自校が選ばれていない年）。同上。
             if (s.Senbatsu != null) SenbatsuEntry.RestoreSpectated(s.Senbatsu);
+            // 代表校の県予選／地区大会成績の積み残しを背景で積み直す（issue #1116）。進行体を組み直した後。
+            QualifierStatsRecovery.ResumeAfterLoad(s);
         }
 
         /// <summary>
@@ -179,11 +181,17 @@ namespace KokoSim.Unity.Shell
         /// 待たずに保存すると、他46県の途中結果を焼いたセーブができる。ロード後に背景シムを
         /// 再開する手立ては無い（進捗を保存していない）ので、その県の成績は<b>永久に欠ける</b>。
         /// 待ち時間が出るのはこのためで、単なる作法ではない。</para>
+        ///
+        /// <para>甲子園・センバツの代表校の県予選／地区大会成績を積む背景（<see cref="KoshienQualifierStatsSim"/> /
+        /// <see cref="SenbatsuQualifierStatsSim"/>）も同じ理由で待つ。待たないと積みかけの帳簿を写し、
+        /// 積む側のスレッドと読む側が同じ帳簿を同時に触る（issue #1116）。</para>
         /// </summary>
         public static bool Save(string path)
         {
             if (!CanSave) return false;
             NationBackgroundSim.EnsureCompleted();
+            KoshienQualifierStatsSim.EnsureCompleted();
+            SenbatsuQualifierStatsSim.EnsureCompleted();
             var raw = Encoding.UTF8.GetBytes(SaveCodec.Serialize(Capture()));
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
