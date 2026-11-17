@@ -4,7 +4,7 @@ namespace KokoSim.Engine.Season;
 public enum ScoutMilestone
 {
     None,
-    /// <summary>探す分野を選ぶ（新チーム発足の流れのあと）。</summary>
+    /// <summary>スカウトの一年の入口（契約→探す分野）を決める（新チーム発足の流れのあと）。</summary>
     ChooseField,
     /// <summary>候補リストが届いた（第24週）。</summary>
     ListArrived,
@@ -14,7 +14,7 @@ public enum ScoutMilestone
 
 /// <summary>
 /// スカウトの節目イベントを「出すか・いつ出すか」の判定（設計書04 §2.4「年間の流れ」・issue #1035）。
-/// スカウト網が未契約（枠0）の年は、どの節目も出さない。判定はここ1箇所に集め、乱数も時刻も使わない純関数。
+/// 候補リスト到着・念押しは、スカウト網が未契約（枠0）の年は出さない（分野選びの入口は未契約にも出す）。判定はここ1箇所に集め、乱数も時刻も使わない純関数。
 /// </summary>
 public static class ScoutMilestones
 {
@@ -35,16 +35,24 @@ public static class ScoutMilestones
     };
 
     /// <summary>
-    /// 新チーム発足の流れ（引退→主将指名→背番号決定）が終わった直後に分野を選ばせるか。
-    /// 契約済み（枠あり）で、今年ぶんの候補リストがまだ無い（＝分野を選べる）ときだけ。
+    /// 新チーム発足の流れ（引退→主将指名→背番号決定）が終わった直後に、スカウトの一年の入口の会話
+    /// （①スカウト網の契約 → ②探す分野・<see cref="ScoutPitch"/>）を出すか。
+    /// <b>未契約の学校にも聞く</b>（issue #1064）。今年ぶんの候補リストがまだ無い（＝決められる）ときだけ。
     /// </summary>
-    public static ScoutMilestone AfterNewTeamStarted(
-        SeasonCalendar calendar, int week, int yearIndex, int slots, ScoutingState? list)
+    public static ScoutMilestone AfterNewTeamStarted(SeasonCalendar calendar, int week, int yearIndex, ScoutingState? list)
     {
-        if (slots <= 0) return ScoutMilestone.None;
         if (week >= calendar.RecruitListWeek) return ScoutMilestone.None;
         return HasListFor(list, yearIndex) ? ScoutMilestone.None : ScoutMilestone.ChooseField;
     }
+
+    /// <summary>
+    /// 候補リストを待っている時期か（夏の大会の頃〜第24週の前）。契約済みで今年ぶんのリストがまだ無いとき、
+    /// スカウト画面は入部済みの1年生の一覧でなく「リストは10月に届く」を出す（issue #1064）。
+    /// </summary>
+    public static bool AwaitingList(SeasonCalendar calendar, int week, int yearIndex, int slots, ScoutingState? list)
+        => slots > 0
+           && week >= calendar.SummerTournamentStartWeek && week < calendar.RecruitListWeek
+           && !HasListFor(list, yearIndex);
 
     /// <summary>
     /// 週に入った直後に出す節目（候補リスト到着の週・念押しの週）。リスト生成（第24週）の<b>後</b>に呼ぶこと。

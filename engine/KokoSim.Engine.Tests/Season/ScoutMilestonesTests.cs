@@ -28,31 +28,27 @@ public sealed class ScoutMilestonesTests
 
     // ── 分野選び（新チーム発足のあと） ─────────────────────────
 
+    /// <summary>契約の有無に依らず出す（未契約の学校にも「契約しませんか」と聞く・issue #1064）。</summary>
     [Fact]
-    public void ChooseField_ContractedAndNoListYet_Fires()
+    public void ChooseField_NoListYet_FiresRegardlessOfContract()
         => Assert.Equal(ScoutMilestone.ChooseField,
-            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, slots: 2, list: null));
-
-    [Fact]
-    public void ChooseField_Uncontracted_NeverFires()
-        => Assert.Equal(ScoutMilestone.None,
-            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, slots: 0, list: null));
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: null));
 
     /// <summary>前年度のリスト（合流年度＝今年度）が残っていても、今年ぶんは未生成＝分野は選べる。</summary>
     [Fact]
     public void ChooseField_LastYearsListStillStored_StillFires()
         => Assert.Equal(ScoutMilestone.ChooseField,
-            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, slots: 2, list: List(2, 1, 1, year: Year)));
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: List(2, 1, 1, year: Year)));
 
     [Fact]
     public void ChooseField_ListAlreadyBuiltForThisYear_DoesNotFire()
         => Assert.Equal(ScoutMilestone.None,
-            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, slots: 2, list: List(2, 0, 0)));
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: List(2, 0, 0)));
 
     [Fact]
     public void ChooseField_AfterListWeek_DoesNotFire()
         => Assert.Equal(ScoutMilestone.None,
-            ScoutMilestones.AfterNewTeamStarted(Cal, Cal.RecruitListWeek, Year, slots: 2, list: null));
+            ScoutMilestones.AfterNewTeamStarted(Cal, Cal.RecruitListWeek, Year, list: null));
 
     [Fact]
     public void CanChooseField_FreezesOnlyWhenThisYearsListExists()
@@ -60,6 +56,34 @@ public sealed class ScoutMilestonesTests
         Assert.True(ScoutMilestones.CanChooseField(null, Year));
         Assert.True(ScoutMilestones.CanChooseField(List(2, 0, 0, year: Year), Year));
         Assert.False(ScoutMilestones.CanChooseField(List(2, 0, 0), Year));
+    }
+
+    // ── 候補リストを待つ時期（スカウト画面の出し分け・issue #1064） ─────────
+
+    [Fact]
+    public void AwaitingList_ContractedBetweenSummerAndListWeek_IsTrue()
+    {
+        foreach (var w in Enumerable.Range(Cal.SummerTournamentStartWeek, Cal.RecruitListWeek - Cal.SummerTournamentStartWeek))
+            Assert.True(ScoutMilestones.AwaitingList(Cal, w, Year, slots: 2, list: null));
+    }
+
+    [Fact]
+    public void AwaitingList_Uncontracted_IsFalse()
+        => Assert.False(ScoutMilestones.AwaitingList(Cal, 18, Year, slots: 0, list: null));
+
+    [Fact]
+    public void AwaitingList_OutsideTheWindow_IsFalse()
+    {
+        Assert.False(ScoutMilestones.AwaitingList(Cal, Cal.SummerTournamentStartWeek - 1, Year, slots: 2, list: null));
+        Assert.False(ScoutMilestones.AwaitingList(Cal, Cal.RecruitListWeek, Year, slots: 2, list: null));
+    }
+
+    /// <summary>前年度のリストが残っているだけなら待ち＝今年ぶんはまだ来ていない。</summary>
+    [Fact]
+    public void AwaitingList_LastYearsListOnly_IsTrue_ThisYearsList_IsFalse()
+    {
+        Assert.True(ScoutMilestones.AwaitingList(Cal, 18, Year, slots: 2, List(2, 0, 0, year: Year)));
+        Assert.False(ScoutMilestones.AwaitingList(Cal, 18, Year, slots: 2, List(2, 0, 0)));
     }
 
     // ── 候補リスト到着（第24週） ─────────────────────────────

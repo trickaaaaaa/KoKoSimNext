@@ -11,8 +11,8 @@ namespace KokoSim.Unity.Scout
     /// 左＝名簿（入部予定者／スカウト候補のタブ切替）、右＝選んだ1人の詳細
     /// （監督選択のB案＝選手一覧と同じマスターディテール）。
     /// 表示するのは <see cref="ProspectService"/> / <see cref="ScoutService"/> が持つ確定済みの状態だけで、
-    /// ここでは何も抽選しない。スカウト網の契約・探す分野の生成後の変更はここでは行わない
-    /// （買い物の唯一の場所は経営タブ・分野は生成前だけ切り替えられる）。
+    /// ここでは何も抽選しない。スカウト網の契約は夏の大会後のスカウトとの会話で決める
+    /// （経営タブは見るだけ・issue #1064）。探す分野は候補リストの生成前だけここでも切り替えられる。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class ScoutScreenController : MonoBehaviour
@@ -40,7 +40,10 @@ namespace KokoSim.Unity.Scout
             if (visit != null) visit.clicked += Visit;
 
             // 節目の会話（候補リスト到着・念押し）から来たときは候補のタブから始める（issue #1035）。
-            if (ScoutService.TakeLandOnCandidates()) _state.Tab = ScoutTab.Candidates;
+            // 候補リストを待っている時期（夏〜第24週）に自分で開いたときも同じ＝入部済みの1年生の
+            // 答え合わせ（この時期は意味が通らない）でなく「リストは10月に届く」を最初に見せる（issue #1064）。
+            var landOnCandidates = ScoutService.TakeLandOnCandidates();
+            if (landOnCandidates || ScoutService.AwaitingList) _state.Tab = ScoutTab.Candidates;
 
             _selected = 0;
             Render();

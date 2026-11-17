@@ -20,12 +20,16 @@ public static class ContractRenewal
     /// </summary>
     public static int RenewalWeek(SeasonCalendar calendar) => calendar.ProspectConfirmWeek - 1;
 
-    /// <summary>いま契約中（段≧1）の年契約。更新で見せる対象で、カタログの並び順。</summary>
+    /// <summary>
+    /// いま契約中（段≧1）の年契約。更新で見せる対象で、カタログの並び順。
+    /// <b>スカウト網は入らない</b>＝スカウトの一年の頭（夏の大会後）の会話で決める（<see cref="ScoutPitch"/>・issue #1064）。
+    /// 年額は同じ年度の総括（第46週）で引かれる。
+    /// </summary>
     public static IReadOnlyList<ContractDef> ActiveContracts(ContractCatalog catalog, ContractSet set)
     {
         var list = new List<ContractDef>();
         foreach (var d in catalog.Contracts)
-            if (d.MaxLevel > 0 && Math.Clamp(set.LevelOf(d.Id), 0, d.MaxLevel) >= 1) list.Add(d);
+            if (d.Id != ScoutPitch.ContractId && d.MaxLevel > 0 && Math.Clamp(set.LevelOf(d.Id), 0, d.MaxLevel) >= 1) list.Add(d);
         return list;
     }
 

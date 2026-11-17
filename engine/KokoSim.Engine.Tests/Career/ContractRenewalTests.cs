@@ -36,7 +36,7 @@ public sealed class ContractRenewalTests
     [Fact]
     public void ShouldRaise_OnlyOnRenewalWeek()
     {
-        var set = Signed(("scouting", 2));
+        var set = Signed(("expedition", 1));
         for (var w = 0; w < Cal.WeeksPerYear; w++)
             Assert.Equal(w == ContractRenewal.RenewalWeek(Cal), ContractRenewal.ShouldRaise(Cal, w, Catalog, set));
     }
@@ -49,12 +49,17 @@ public sealed class ContractRenewalTests
         Assert.False(ContractRenewal.ShouldRaise(Cal, w, Catalog, Signed(("scouting", 0), ("coach_batting", 0))));
     }
 
+    /// <summary>スカウト網だけを契約している年は、更新を出さない（スカウト網は夏の会話で決める・issue #1064）。</summary>
+    [Fact]
+    public void ShouldRaise_OnlyScoutingContracted_DoesNotFire()
+        => Assert.False(ContractRenewal.ShouldRaise(Cal, ContractRenewal.RenewalWeek(Cal), Catalog, Signed(("scouting", 3))));
+
     [Fact]
     public void ActiveContracts_AreOnlyThoseWithLevelOneOrMore_InCatalogOrder()
     {
-        var set = Signed(("coach_defense", 1), ("scouting", 3), ("expedition", 0));
+        var set = Signed(("coach_defense", 1), ("scouting", 3), ("expedition", 0), ("coach_batting", 1));
         var ids = ContractRenewal.ActiveContracts(Catalog, set).Select(d => d.Id).ToArray();
-        Assert.Equal(new[] { "scouting", "coach_defense" }, ids);
+        Assert.Equal(new[] { "coach_batting", "coach_defense" }, ids);   // スカウト網は入らない（issue #1064）
     }
 
     // ── 下書き ────────────────────────────────────────────────────
@@ -66,43 +71,42 @@ public sealed class ContractRenewalTests
         var set = Signed(("scouting", 3), ("coach_batting", 1));
         var draft = new ContractRenewalDraft(Catalog, set);
 
-        Assert.Equal(3, draft.LevelOf("scouting"));
+        Assert.Equal(0, draft.LevelOf("scouting"));   // 更新の対象外
         Assert.Equal(1, draft.LevelOf("coach_batting"));
-        Assert.Equal(Catalog.Aggregate(set).AnnualCost, draft.AnnualCost(set), 9);
+        Assert.Equal(Catalog.Aggregate(set).AnnualCost, draft.AnnualCost(set), 9);   // 対象外のスカウト網の年額も含む
 
         draft.ApplyTo(set);
-        Assert.Equal(3, set.LevelOf("scouting"));
+        Assert.Equal(3, set.LevelOf("scouting"));   // 触らない
         Assert.Equal(1, set.LevelOf("coach_batting"));
     }
 
     [Fact]
     public void Draft_ChangingLevels_ChangesCost_ButNotTheSetUntilApplied()
     {
-        var set = Signed(("scouting", 3), ("coach_batting", 1));
+        var set = Signed(("scouting", 3), ("coach_batting", 1), ("expedition", 1));
         var draft = new ContractRenewalDraft(Catalog, set);
 
-        draft.SetLevel("scouting", 1);     // 140 → 30
         draft.SetLevel("coach_batting", 0); // 50 → 0
+        draft.SetLevel("scouting", 1);      // 対象外＝無視される
 
-        Assert.Equal(30, draft.AnnualCost(set), 9);
-        Assert.Equal(3, set.LevelOf("scouting"));   // 決めるまで契約は動かない
-        Assert.Equal(1, set.LevelOf("coach_batting"));
+        Assert.Equal(140 + 20, draft.AnnualCost(set), 9);
+        Assert.Equal(1, set.LevelOf("coach_batting"));   // 決めるまで契約は動かない
 
         draft.ApplyTo(set);
-        Assert.Equal(1, set.LevelOf("scouting"));
         Assert.Equal(0, set.LevelOf("coach_batting"));
+        Assert.Equal(3, set.LevelOf("scouting"));
     }
 
     [Fact]
     public void Draft_ClampsLevel_AndIgnoresContractsThatWereNotActive()
     {
-        var set = Signed(("scouting", 2));
+        var set = Signed(("expedition", 1));
         var draft = new ContractRenewalDraft(Catalog, set);
 
-        draft.SetLevel("scouting", 99);
-        Assert.Equal(Catalog.Find("scouting")!.MaxLevel, draft.LevelOf("scouting"));
-        draft.SetLevel("scouting", -4);
-        Assert.Equal(0, draft.LevelOf("scouting"));
+        draft.SetLevel("expedition", 99);
+        Assert.Equal(Catalog.Find("expedition")!.MaxLevel, draft.LevelOf("expedition"));
+        draft.SetLevel("expedition", -4);
+        Assert.Equal(0, draft.LevelOf("expedition"));
 
         draft.SetLevel("coach_pitching", 1);   // 契約していなかった系統は、この場で新しく契約できない
         Assert.Equal(0, draft.LevelOf("coach_pitching"));
@@ -123,15 +127,15 @@ public sealed class ContractRenewalTests
     [Fact]
     public void Summary_ChargesTheRenewedLevel()
     {
-        var set = Signed(("scouting", 3), ("coach_batting", 1));
+        var set = Signed(("scouting", 3), ("coach_batting", 1), ("expedition", 1));
         var asIs = FundsAfterSummary(set);
 
         var draft = new ContractRenewalDraft(Catalog, set);
-        draft.SetLevel("scouting", 1);      // −110
+        draft.SetLevel("expedition", 0);    // −20
         draft.SetLevel("coach_batting", 0); // −50
         draft.ApplyTo(set);
 
-        Assert.Equal(asIs + 160, FundsAfterSummary(set), 6);
+        Assert.Equal(asIs + 70, FundsAfterSummary(set), 6);
     }
 
     /// <summary>何も変えなければ、総括で引かれる額は更新イベントが無かった年と同じ。</summary>
