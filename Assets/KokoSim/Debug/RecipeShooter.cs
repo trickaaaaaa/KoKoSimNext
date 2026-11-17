@@ -164,6 +164,32 @@ namespace KokoSim.Unity.Debugging
                 if (ctrl.DuelViewOnForCapture != _r.DuelView) ctrl.ToggleDuelViewForCapture();
                 ctrl.SetSpeedForCapture(_r.Speed);
 
+                // 対決ビューのまま撮る（duel_seconds）: 最初の球が投げられた瞬間から決まった秒数だけ連番で撮る
+                if (_r.DuelSeconds > 0f)
+                {
+                    float waitedDuel = 0f;
+                    while (!ctrl.InPitchPhaseForCapture)
+                    {
+                        if (ctrl.IsGameOver || waitedDuel > _r.TimeoutSeconds) { yield return false; yield break; }
+                        waitedDuel += Time.unscaledDeltaTime;
+                        yield return null;
+                    }
+                    var ddir = Path.Combine(_dir, "video");
+                    Directory.CreateDirectory(ddir);
+                    Time.captureDeltaTime = 1f / _r.VideoFps;
+                    int frames = Mathf.CeilToInt(_r.DuelSeconds * _r.VideoFps);
+                    for (int f = 0; f < frames; f++)
+                    {
+                        WriteProbes(f / (double)_r.VideoFps, ctrl.DuelRigForCapture);
+                        yield return Capture(ctrl, Path.Combine(ddir, "f" + _videoFrames.ToString("000", CultureInfo.InvariantCulture) + ".png"));
+                        _videoFrames++;
+                        yield return null;
+                    }
+                    Time.captureDeltaTime = 0f;
+                    yield return true;
+                    yield break;
+                }
+
                 PitchBattingOverride sign = default;
                 bool hasSign = !string.IsNullOrEmpty(_r.Sign) && Enum.TryParse(_r.Sign, true, out sign);
                 float waited = 0f;

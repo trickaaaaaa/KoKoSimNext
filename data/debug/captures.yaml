@@ -65,3 +65,19 @@ captures:
     manager: home
     force: BigFoul
     video: {from: start, to: end, fps: 10}
+
+  - id: foul-ground-1074
+    name: "叩きつけたファウルが足元で跳ねる（issue #1074 の再現）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: GroundFoul
+    duel_seconds: 2.5
+    video: {from: start, to: end, fps: 20}
+
+  - id: foul-high-1074
+    name: "高く上がったファウルが画面端で跳ね返る（issue #1074 の再現）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: HighFoul
+    duel_seconds: 3.0
+    video: {from: start, to: end, fps: 20}

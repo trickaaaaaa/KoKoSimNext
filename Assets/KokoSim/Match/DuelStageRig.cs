@@ -1035,6 +1035,7 @@ namespace KokoSim.Unity.Match
         private float _battedFade;           // 上を解消するまでの秒数＝打点からの自由落下時間
         /// <summary>打球プロファイルが地面（h(0)=0）から始まるか（<see cref="BeginBattedBall"/> で判定）。</summary>
         private bool _battedFromGround;
+        private bool _battedLeftFrame;   // 打球が一度画面の外へ出たか（出たら戻さない・issue #1074）
         private readonly List<Vector4> _trail = new();   // 残像（xyz=ステージローカル / w=残像時計[s]）
         /// <summary>
         /// 残像の「現在時刻」（<see cref="DrawBattedTrail"/> のフェード計算の基準）。対決ビューは
@@ -3008,6 +3009,7 @@ namespace KokoSim.Unity.Match
             _batted = _pendingBatted;   // 仕込むだけ＝接触（＝球の到達）まで乗り換えない
             _pendingBatted = null;
             _battedT = -1f;
+            _battedLeftFrame = false;   // 前の球の「画面から出た」を持ち越さない（#1099 の接触前判定を壊さない）
             _trail.Clear();
             _trailNow = -1f;
 
@@ -3302,6 +3304,7 @@ namespace KokoSim.Unity.Match
             // 打点から地面までの自由落下時間。左右のずれ（±0.4m程度）もこの時間で解消する
             _battedFade = Mathf.Sqrt(2f * Mathf.Max(0.05f, Mathf.Abs(_battedOffset.y)) / 9.8f);
             _battedT = 0f;
+            _battedLeftFrame = false;
             _trail.Clear();
             _ball.SetActive(true);
             UpdateBattedBall(Mathf.Max(0f, overshoot));
@@ -3317,6 +3320,22 @@ namespace KokoSim.Unity.Match
             _battedT += deltaTime;
             if (_battedT > BattedMaxSeconds) { HideBall(); return; }
             var p = BattedPointAt(_battedT);
+            // 一度画面の外へ出た打球は戻さない（issue #1074）。真後ろへの弱い飛球は画面の上へ抜けたあと落ちてきて
+            // 上端から入り直し、叩きつけた速いファウルは横の端から入り直して、固定の構図では「画面の端で跳ね返った」
+            // ように見えた。行方は画面の外＝そこで描くのをやめる。
+            // ⚠ HideBall は呼ばない: 打球の時計（_battedT）は守備ビューが「対決ビューで見せたぶん」として続きから
+            //    再生するのに使う（BattedElapsedSeconds）。消すと守備ビューが接触の瞬間から同じ打球を二度描く
+            if (_camera != null && !_battedLeftFrame)
+            {
+                var vp = _camera.WorldToViewportPoint(_root.transform.TransformPoint(p));
+                if (!(vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f)) _battedLeftFrame = true;
+            }
+            if (_battedLeftFrame)
+            {
+                if (_ball.activeSelf) _ball.SetActive(false);
+                TrimTrail(_battedT, _cal.BattedTrailSeconds);   // 残像は時間で自然に消えていく
+                return;
+            }
             _ball.transform.localPosition = p;
             PushTrailPoint(p, _battedT, _cal.BattedTrailSeconds);
         }
@@ -3439,6 +3458,16 @@ namespace KokoSim.Unity.Match
         /// <summary>検査用: 打球を見せ始めてから <paramref name="t"/> 秒の球の位置（ステージローカル）。打球でなければ null。</summary>
         public Vector3? BattedPointForCapture(float t) => _batted == null ? (Vector3?)null : BattedPointAt(t);
 
+        /// <summary>検査用: 打球を見せ始めてから <paramref name="t"/> 秒の球の、対決カメラのビューポート座標（z=奥行き）。</summary>
+        public Vector3? BallViewportForCapture
+            => _ball == null || !_ball.activeSelf || _camera == null ? (Vector3?)null
+                : _camera.WorldToViewportPoint(_ball.transform.position);
+
+        /// <summary>検査用: 打球の計算上の位置のビューポート座標（描くかどうかに関係なく）。</summary>
+        public Vector3? BattedViewportForCapture(float t)
+            => _batted == null || _camera == null ? (Vector3?)null
+                : _camera.WorldToViewportPoint(_root.transform.TransformPoint(BattedPointAt(t)));
+
         /// <summary>
         /// 打球が対決構図のビューポートから出たか（issue #481）。呼び出し側（<c>MatchLiveController</c>）は
         /// 接触後、これが立つまで守備ビューへの切替を据え置く＝「打球の行方を一瞬だけ見せる」
@@ -3451,7 +3480,7 @@ namespace KokoSim.Unity.Match
         {
             get
             {
-                if (_camera == null) return true;
+                if (_camera == null || _battedLeftFrame) return true;   // 一度出た打球は戻ってきても「出た」まま
                 // 打球を仕込んだ球がまだ接触前（issue #1099）。呼び出し側の時計は rig の球の時計より
                 // 1フレーム未満先に進む（リリースのフレームで rig の Tick が先に回り、_ballT=0 から始まる）ので、
                 // 判定のフレームでまだ乗り換えていないことがある。ここを「画面外」と返すと据え置きが始まらず、
@@ -3473,6 +3502,7 @@ namespace KokoSim.Unity.Match
             _ballInMitt = false;
             _battedT = -1f;
             _batted = null;
+            _battedLeftFrame = false;
             _trail.Clear();
             _trailNow = -1f;
             if (_ball != null)

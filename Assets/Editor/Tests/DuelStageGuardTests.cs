@@ -351,6 +351,47 @@ namespace KokoSim.EditorTests
             Assert.That(heights.Length, Is.EqualTo(0), "空中で跳ね返る打球:\n" + heights);
         }
 
+        /// <summary>
+        /// 一度画面の外へ出たファウルの打球が、見せている間（最長1.5秒）に画面の中へ戻ってこないこと
+        /// （issue #1074「高く上がったファウルが画面端で跳ね返る」の再現探し）。
+        /// </summary>
+        [Test]
+        public void FoulBall_Sweep_DoesNotReenterTheFrame()
+        {
+            var rig = Rig;
+            var aero = new KokoSim.Engine.Match.Pitching.Aerodynamics();
+            var co = new KokoSim.Engine.Match.Fielding.FieldingCoefficients();
+            var fg = new KokoSim.Engine.Match.Field.FieldGeometry();
+            var bad = new System.Text.StringBuilder();
+            foreach (var ev in new[] { 15f, 22f, 30f, 38f, 45f })
+            foreach (var la in new[] { -15f, -5f, 2f, 8f, 15f, 25f, 35f, 50f, 65f, 80f })
+            foreach (var br in new[] { 46f, 55f, 70f, 90f, 120f, 150f, 175f, -46f, -55f, -70f, -90f, -120f, -150f })
+            {
+                var ball = new KokoSim.Engine.Match.Batting.BattedBall { ExitVelocityMps = ev, LaunchAngleDeg = la, BearingDeg = br };
+                var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball, aero, co, fg, false, false, false);
+                var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+                rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, null, play.Ball[1]);
+                for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
+                if (rig.BattedElapsedSeconds < 0f) continue;
+                // 実際に描かれる球（rig を進めた結果）で見る。消えた球（null）は「画面の外」と同じ
+                bool wasOut = false;
+                for (float t = 0f; t <= 1.5f; t += 1f / 60f)
+                {
+                    rig.Tick(1f / 60f);
+                    var vpn = rig.BallViewportForCapture;
+                    bool inFrame = vpn is { } vp && vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
+                    if (!inFrame) wasOut = true;
+                    else if (wasOut)
+                    {
+                        bad.AppendLine($"ev={ev} la={la} br={br}: t={t:F2}s で画面へ戻る（vp=({vpn.Value.x:F2},{vpn.Value.y:F2})）");
+                        break;
+                    }
+                }
+                rig.HideBall();
+            }
+            Assert.That(bad.Length, Is.EqualTo(0), "画面へ戻るファウル:\n" + bad);
+        }
+
         /// <summary>打球の無い球（見送り）は見せるものが無い＝待たせない（従来どおり「画面外」扱い）。</summary>
         [Test]
         public void BattedOutOfFrame_IsTrue_WhenNoBattedBall()

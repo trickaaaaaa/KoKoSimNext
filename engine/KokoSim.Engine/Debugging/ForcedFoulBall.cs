@@ -18,6 +18,10 @@ public static class ForcedFoulBall
         {
             ForcedOutcome.ChasedFoulFly => ChasedFly(field, aero, fielders, coeff),
             ForcedOutcome.BigFoul => BigFoul(field, aero, coeff),
+            // 叩きつけて三塁側のファウルグラウンドへ（下向き・速い）
+            ForcedOutcome.GroundFoul => new BattedBall { ExitVelocityMps = 30.0, LaunchAngleDeg = -12.0, BearingDeg = -60.0 },
+            // バックネットを越えて後ろのスタンドへ（守備ビューへは移らない＝対決ビューのまま）
+            ForcedOutcome.HighFoul => new BattedBall { ExitVelocityMps = 33.0, LaunchAngleDeg = 62.0, BearingDeg = 135.0 },
             _ => null,
         };
 

@@ -38,6 +38,9 @@ namespace KokoSim.Unity.Debugging
         /// <summary>連番で撮る区間（例: from catch-0.8 to release+0.9 fps 30）。From が空なら撮らない。</summary>
         public string VideoFrom, VideoTo;
         public int VideoFps = 30;
+        /// <summary>対決ビューのまま撮る秒数（0＝使わない）。最初の球が投げられた瞬間から video の fps で連番を撮る
+        /// （守備ビューへ移らない場面＝ファウルの打球など。issue #1074）。</summary>
+        public float DuelSeconds;
         /// <summary>毎コマ記録する実測（DuelStageRig の *ForCapture のメンバー名）。</summary>
         public List<string> Probes = new List<string>();
         /// <summary>見比べ用の切り替え（"DuelStageRig.Xxx": 値）。終わったら元へ戻す。</summary>
@@ -138,6 +141,7 @@ namespace KokoSim.Unity.Debugging
                     return false;
                 case "duel_view": return bool.TryParse(v, out r.DuelView);
                 case "speed": return TryFloat(v, out r.Speed) && r.Speed > 0;
+                case "duel_seconds": return TryFloat(v, out r.DuelSeconds) && r.DuelSeconds > 0;
                 case "view":
                     r.View = Unquote(v);
                     return r.View == "board" || r.View == "panel" || r.View == "rig";

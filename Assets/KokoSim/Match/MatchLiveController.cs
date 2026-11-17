@@ -5290,6 +5290,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: いま采配窓で止まっているか（打席の途中＝球間を含む）。</summary>
         public bool AtWindowForCapture => _stage == LiveStage.Window;
+        /// <summary>スクショ用: 投球フェーズ（振りかぶり〜判定〜次の窓の手前）か。対決ビューのまま撮るレシピの起点。</summary>
+        public bool InPitchPhaseForCapture => _inPitchPhase;
 
         /// <summary>
         /// 診断用: いま一塁に走者が居るか（盗塁カード <c>run-steal</c> の <c>EnabledIf</c> と同じ条件）。
