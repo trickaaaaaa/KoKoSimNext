@@ -44,7 +44,10 @@ public sealed class AiPlayer
     /// <summary>現在の能力スナップショット（試合投影用の <see cref="Player"/>）。節目成長で差し替える。</summary>
     public Player Snapshot { get; internal set; }
 
-    /// <summary>逆算配分の未適用成長予算（BeginYear で設定・各節目で消費）。怪物は常に0（予算外, Q20 §1）。</summary>
+    /// <summary>
+    /// 逆算配分の未適用成長予算。夏の節目（<see cref="AiRosterCycle.PlanNextYear"/>）で翌夏に向けて上書きで積み、
+    /// 夏・秋・冬の節目で消費する（issue #843 / #1058）。怪物は逆算配分の外の固定成長（Q20 §1）を積む。
+    /// </summary>
     internal double PendingBudget { get; set; }
 
     // 適性配列の長さは FieldPosition 全要素ぶん（自校 DevelopingPlayer と同じ）。AptitudeRoller.Roll が返すのは

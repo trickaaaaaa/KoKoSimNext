@@ -186,8 +186,9 @@ public sealed class NationRosters
 
     /// <summary>
     /// 年度替わり（4月）: 既にブートストラップ済みの学校だけ進める（<see cref="AdvanceExistingYear"/> と同じ対象選定）。
-    /// 代替わり（進級・新入生加入・3年引退）は即座に適用するが、年間成長予算は節目（<see cref="ApplyGrowthNodeExisting"/>）
-    /// まで <see cref="AiPlayer.PendingBudget"/> に積んで待たせる（issue #843・Phase C）。
+    /// 代替わり（進級・新入生加入・3年引退）を適用し、ずれた分（学校の進化・新入生の先読みとの差・丸め）だけを
+    /// その場で逆算配分で補正する。年間の成長は前年の夏の節目（<see cref="ApplyGrowthNodeExisting"/>）で積んだ予算を
+    /// 夏・秋・冬で消費済み（issue #843 / #1058。<see cref="AiRosterCycle.BeginYear"/>）。
     /// </summary>
     public void BeginExistingYear(System.Func<int, School?> schoolById, int newYearIndex)
     {
@@ -206,12 +207,20 @@ public sealed class NationRosters
     /// <summary>
     /// 年3節目（<see cref="AiGrowthNode"/>）の1つを、既にブートストラップ済みの全校に適用する
     /// （全国の未生成校は今どおり触らない＝遅延生成を崩さない。issue #843）。
-    /// カレンダー節目（メインスレッド）でのみ呼ぶ。
+    /// 夏の節目（3年引退の後）は、まず翌年度（<paramref name="yearIndex"/>+1）の夏に向けた年間予算を
+    /// 学校ごとに逆算して積み直す（<see cref="AiRosterCycle.PlanNextYear"/>・issue #1058）。ターゲットを引くので
+    /// <paramref name="schoolById"/> が要る（解決できない学校は積み直さず、残っている予算の消費だけ行う）。
+    /// 秋・冬は積んだ予算を消費するだけ。カレンダー節目（メインスレッド）でのみ呼ぶ。
     /// </summary>
-    public void ApplyGrowthNodeExisting(AiGrowthNode node)
+    public void ApplyGrowthNodeExisting(AiGrowthNode node, System.Func<int, School?> schoolById, int yearIndex)
     {
         List<AiSchoolRoster> snapshot;
         lock (_gate) snapshot = new List<AiSchoolRoster>(_rosters.Values);
-        foreach (var r in snapshot) AiRosterCycle.ApplyGrowthNode(r, _deps, node);
+        foreach (var r in snapshot)
+        {
+            if (node == AiGrowthNode.Summer && schoolById(r.SchoolId) is { } s)
+                AiRosterCycle.PlanNextYear(r, s, yearIndex, _deps);
+            AiRosterCycle.ApplyGrowthNode(r, _deps, node);
+        }
     }
 }

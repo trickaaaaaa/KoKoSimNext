@@ -415,15 +415,18 @@ namespace KokoSim.Unity.Shell
         public static void RetireAiGraduates() => Rosters.RetireGraduatesAll();
 
         /// <summary>
-        /// 年度替わり（4月）: 生成済み全校で進級・新入生加入を適用する。年間成長予算は節目
-        /// （<see cref="ApplyAiGrowthNode"/>）まで積んで待たせる＝即時成長しない（issue #843・Phase C）。
+        /// 年度替わり（4月）: 生成済み全校で進級・新入生加入を適用し、ずれた分（学校の進化・新入生・丸め）だけ
+        /// その場で逆算配分で補正する。年間の成長は前年の夏の節目（<see cref="ApplyAiGrowthNode"/>）で翌夏に向けて
+        /// 積んだ予算を夏・秋・冬で消費済み（issue #843 / #1058）。
         /// </summary>
         public static void AdvanceAiYear(int newYearIndex) => Rosters.BeginExistingYear(SchoolById, newYearIndex);
 
         /// <summary>
         /// 年3節目（夏大会後／秋大会後／冬明け）の1つを、生成済み全校へ適用する（<see cref="GameClock"/> が
-        /// カレンダー節目で呼ぶ・issue #843）。<see cref="AdvanceAiYear"/> が積んだ成長予算を消費する。
+        /// カレンダー節目で呼ぶ・issue #843）。夏の節目は翌年度（<paramref name="yearIndex"/>+1）の夏に向けた
+        /// 成長予算を学校ごとに逆算して積み直してから消費する（issue #1058）。秋・冬は積んだ予算を消費する。
         /// </summary>
-        public static void ApplyAiGrowthNode(AiGrowthNode node) => Rosters.ApplyGrowthNodeExisting(node);
+        public static void ApplyAiGrowthNode(AiGrowthNode node, int yearIndex)
+            => Rosters.ApplyGrowthNodeExisting(node, SchoolById, yearIndex);
     }
 }

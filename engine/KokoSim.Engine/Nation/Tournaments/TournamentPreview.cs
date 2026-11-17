@@ -367,7 +367,7 @@ public static class TournamentPreviewBuilder
             : $"{period} 打率{avgText}・{s.Rbi}打点";
     }
 
-    private static TeamRating Rate(School s)
+    internal static TeamRating Rate(School s)
     {
         var (ob, op, od) = StyleOffset(s.Style);
         // 校ごとの個体差（Fork＝強さ・校風の生成列と独立、同校なら決定論）。
