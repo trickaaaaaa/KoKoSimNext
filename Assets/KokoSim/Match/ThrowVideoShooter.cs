@@ -32,13 +32,26 @@ namespace KokoSim.Unity.Match
         /// <summary>真＝送球でなく**最初の飛球の着地**の前後を撮る（issue #1084 の届かない飛球）。
         /// 着地の LeadSeconds 前〜TailSeconds 後。</summary>
         public static bool AroundFlightEnd;
+        /// <summary>Runs と同じ並びで、外野手の閉じる角度の上書き[度]（null または負＝表のまま）。見比べ用。</summary>
+        public static float[] OutfieldClosedOverrides;
+        /// <summary>Runs と同じ並びで、送球の開きの秒の上書き（null または負＝既定のまま）。見比べ用。</summary>
+        public static float[] OpenSecondsOverrides;
+        /// <summary>Runs と同じ並びで、開き切る時刻のリリースからの前倒し[s]の上書き（null または負＝既定）。</summary>
+        public static float[] OpenEndLeadOverrides;
 
         private IEnumerator Start()
         {
             Application.runInBackground = true;
-            foreach (var run in Runs)
+            for (int ri = 0; ri < Runs.Length; ri++)
             {
+                var run = Runs[ri];
                 DuelStageRig.ThrowClosedWindupOffForCapture = run.ClosedOff;
+                DuelStageRig.OutfieldClosedYawOverrideForCapture =
+                    OutfieldClosedOverrides != null && ri < OutfieldClosedOverrides.Length ? OutfieldClosedOverrides[ri] : -1f;
+                DuelStageRig.ThrowOpenSecondsOverrideForCapture =
+                    OpenSecondsOverrides != null && ri < OpenSecondsOverrides.Length ? OpenSecondsOverrides[ri] : -1f;
+                DuelStageRig.ThrowOpenEndLeadOverrideForCapture =
+                    OpenEndLeadOverrides != null && ri < OpenEndLeadOverrides.Length ? OpenEndLeadOverrides[ri] : -1f;
                 MatchLiveController.ScenarioIdForCapture = run.Scenario;
                 MatchLiveController.GameSeedOverrideForCapture = 1;
                 MatchLiveController.ManagerIsAwayOverrideForCapture = false;
@@ -97,6 +110,9 @@ namespace KokoSim.Unity.Match
                     + "\ngloveGap=" + (ctrl.DuelRigForCapture?.MissGloveGapForCapture ?? -1f).ToString("F2", CultureInfo.InvariantCulture));
             }
             DuelStageRig.ThrowClosedWindupOffForCapture = false;
+            DuelStageRig.OutfieldClosedYawOverrideForCapture = -1f;
+            DuelStageRig.ThrowOpenSecondsOverrideForCapture = -1f;
+            DuelStageRig.ThrowOpenEndLeadOverrideForCapture = -1f;
             MatchLiveController.ScenarioIdForCapture = null;
             MatchLiveController.GameSeedOverrideForCapture = null;
             MatchLiveController.ManagerIsAwayOverrideForCapture = null;

@@ -570,10 +570,10 @@ namespace KokoSim.Unity.Match
             if (t < st.CatchUntil)
             {
                 // 送球の振りかぶりは体を閉じてグラブの腕を的へ向け、リリースに向けて開く（issue #1095）
-                if (ThrowClosedYaw(pos, t, out float closedYaw))
+                if (ThrowClosedYaw(pos, t, out float closedYaw, out float closeRate))
                 {
                     st.Yaw = Mathf.MoveTowardsAngle(st.Yaw, closedYaw,
-                        Mathf.Max(st.ThrowYawRate, ThrowOpenRateDegPerSec) * Mathf.Max(0f, dt));
+                        Mathf.Max(st.ThrowYawRate, closeRate) * Mathf.Max(0f, dt));
                     if (Mathf.Abs(Mathf.DeltaAngle(st.Yaw, closedYaw)) < 1e-3f) st.ThrowYawRate = 0f;
                 }
                 // 例外は送球の回頭（issue #505 ②）。捕球中に開き切れなかった残りをここで回す
@@ -2919,8 +2919,10 @@ namespace KokoSim.Unity.Match
             // 胸が的に対して真横になるまで閉じる（グラブの腕は的の少し先を指す）
             new("AA_Baseball_Defender_Pass_the_ball_type01", 0.76f, 1.172f, 0.361f, 0.718f, 45f,
                 closedYawDeg: 58f, outfieldClosedYawDeg: 90f),
+            // 上手投げの外野は 110° だと収録自体の閉じ（約16°）と重なって胸が的から 126° 外れ、背を向けかけた
+            // ＝内野と同じ 85°（2026-11-17 見比べでユーザー選択）
             new("AA_Baseball_Defender_Pass_the_ball_type03", 1.36f, 1.436f, -0.122f, 0.655f, float.MaxValue,
-                closedYawDeg: 85f, outfieldClosedYawDeg: 110f),
+                closedYawDeg: 85f, outfieldClosedYawDeg: 85f),
         };
 
         /// <summary>捕手の送球（盗塁の二塁送球）。しゃがみから立ちながら投げる専用収録。</summary>
@@ -3391,39 +3393,74 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        /// <summary>リリースの何秒前から閉じた体を的へ開き始めるか（issue #1095。実物の肩の開きは最後の0.2秒前後）。</summary>
-        private const float ThrowOpenSeconds = 0.25f;
+        /// <summary>
+        /// 閉じた体を的へ開く秒（リリースの瞬間に開き切る。issue #1095）。収録は投げる腕が前へ出るのが最後の一瞬で、
+        /// 0.25 秒かけて1コマ前に開き切っていたときは、腕がまだ後ろにあるうちに胸だけ的を向き、グラブの腕が横へ
+        /// 突き出した「横へ投げそう」な形になった（2026-11-17 見比べで 0.08 秒・リリースちょうどをユーザーが選択）。
+        /// </summary>
+        private static float ThrowOpenSeconds = 0.08f;
+#if UNITY_EDITOR
+        /// <summary>スクショ用: 開きの秒の上書き（負＝既定のまま）。</summary>
+        public static float ThrowOpenSecondsOverrideForCapture = -1f;
+        /// <summary>スクショ用: 開き切る時刻をリリースの何秒前にするか（負＝既定のリリースちょうど）。</summary>
+        public static float ThrowOpenEndLeadOverrideForCapture = -1f;
+#endif
         /// <summary>閉じる・開くときの体の回り方の上限[度/秒]（開きを ThrowOpenSeconds で回し切れる速さ＋余裕）。</summary>
         private const float ThrowOpenRateDegPerSec = 720f;
+        /// <summary>捕ってから投げ始めるまでがこれ[s]より長い捕球は、閉じ始めの起点にしない（別のプレーの捕球を拾わない）。</summary>
+        private const float ThrowCloseLeadMaxSeconds = 2.0f;
 #if UNITY_EDITOR
         /// <summary>スクショ用（issue #1095 の見比べ）: 真にすると閉じない（胸を的へ向けたまま投げる旧挙動）。</summary>
         public static bool ThrowClosedWindupOffForCapture;
+        /// <summary>スクショ用: 外野手の閉じる角度を収録によらずこの値[度]にする（負＝表のまま）。</summary>
+        public static float OutfieldClosedYawOverrideForCapture = -1f;
 #endif
 
         /// <summary>
         /// その野手が時刻 t に送球の振りかぶり中なら、描く体の向き（閉じた向き→的へ開く）を返す（issue #1095）。
         /// 閉じる量は収録ごとの <see cref="FieldThrowAnchor.ClosedYawDeg"/>（外野手は <see cref="FieldThrowAnchor.OutfieldClosedYawDeg"/>）。
-        /// リリースの1コマ前に的の向き（e.Yaw）へ
-        /// 戻し切る＝球が手を離れる瞬間の向きは従来どおり（ThrowHandoffSeconds の寄せも変わらない）。
+        /// 閉じた構えをリリースの直前まで保ち、最後の <see cref="ThrowOpenSeconds"/> で的の向き（e.Yaw）へ開き切る
+        /// ＝球が手を離れる瞬間の向きは従来どおり。
         /// </summary>
-        private bool ThrowClosedYaw(FieldPosition pos, float t, out float yaw)
+        private bool ThrowClosedYaw(FieldPosition pos, float t, out float yaw, out float rate)
         {
             yaw = 0f;
+            rate = ThrowOpenRateDegPerSec;
+            float openSec = ThrowOpenSeconds;
+#if UNITY_EDITOR
+            if (ThrowOpenSecondsOverrideForCapture > 0f) openSec = ThrowOpenSecondsOverrideForCapture;
+#endif
 #if UNITY_EDITOR
             if (ThrowClosedWindupOffForCapture) return false;
 #endif
             for (int i = 0; i < _throwEvents.Count; i++)
             {
                 var e = _throwEvents[i];
-                if (e.From != pos || !e.Fired || t < e.TFire || t >= e.TRelease) continue;
+                if (e.From != pos || t >= e.TRelease) continue;
+                // 閉じ始めは投げ始めでなく**捕った瞬間**から（捕ってから投げ始めるまでの持ち替えの間も閉じた向きへ回す）。
+                // 投げ始めから閉じると、持ち替えの間に一度的へ向いた胸が、投げ始めで横へ振れ戻って
+                // 「一瞬ライトを向く」絵になった（外野は持ち替えが約1秒ある。2026-11-17 ユーザー指摘）
+                float closeFrom = e.TFire;
+                foreach (var c in _catchEvents)
+                    if (c.Pos == pos && c.TCatch <= e.TFire + 1e-3f && e.TFire - c.TCatch <= ThrowCloseLeadMaxSeconds)
+                        closeFrom = Mathf.Min(closeFrom, c.TCatch);
+                if (t < closeFrom) continue;
                 float closed = IsOutfield(pos) ? e.Anchor.OutfieldClosedYawDeg : e.Anchor.ClosedYawDeg;
+#if UNITY_EDITOR
+                if (IsOutfield(pos) && OutfieldClosedYawOverrideForCapture >= 0f) closed = OutfieldClosedYawOverrideForCapture;
+#endif
                 if (Mathf.Abs(closed) < 1e-3f) return false;
                 // 左投げ（鏡映親の下）はグラブの腕が逆側へ開く＝閉じる向きも逆
                 closed *= MirrorSign(FielderActor(pos));
-                float openEnd = e.TRelease - 1f / PoseFps;
-                float u = Mathf.InverseLerp(openEnd - ThrowOpenSeconds, openEnd, t);
+                float openEnd = e.TRelease;
+#if UNITY_EDITOR
+                if (ThrowOpenEndLeadOverrideForCapture >= 0f) openEnd = e.TRelease - ThrowOpenEndLeadOverrideForCapture;
+#endif
+                float u = Mathf.InverseLerp(openEnd - openSec, openEnd, t);
                 float w = 1f - u * u * (3f - 2f * u);
                 yaw = e.Yaw + closed * w;
+                // 開きを openSec で回し切れる速さ（smoothstep の最大傾き 1.5 倍＋余裕）
+                rate = Mathf.Max(ThrowOpenRateDegPerSec, 1.6f * Mathf.Abs(closed) / openSec);
                 return true;
             }
             return false;
