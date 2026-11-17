@@ -2529,6 +2529,7 @@ namespace KokoSim.Unity.Match
             var hitClip = useBunt ? _buntHitClip : _swingHitClip;
             var hitAnchor = useBunt ? BuntHitContact : SwingHitContact;
 
+            _lastPitchOutcome = outcome;   // 撮影用の見逃しの記録（issue #1078）
             switch (outcome)
             {
                 // どのスイングも**振り抜いた所で止めて据え置く**（design-18 §4.5-⑭）。
@@ -3053,18 +3054,71 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 捕球の瞬間に、球がミットに届いていないとみなす距離[m]（ミット中心〜球心。issue #805）。
-        /// ミットIKは腕の長さで頭打ちになる（<see cref="DuelCatcherPose.ReachMitt"/>・ReachGuard）ので、
-        /// 大きく外れた球はミットの外に残る。そのまま手の子にすると宙に浮いた球が据え置き窓のあいだ
-        /// 映り続けるため、この距離を超えたら捕球の瞬間に球を消す。
-        /// 実測（2026-11-08・CatcherFaceShooter WildOnly）: 普通の球と体寄せで届く左右の大外れは
-        /// 0.003〜0.025m、左下へ外れた球 0.136m、高め 0.154m。届かない球は 0.219〜0.478m。
-        /// 当初は 0.12m（ミットの半径）だった＝球を実位置のまま置いていたので 0.136/0.154m の球は
-        /// ミットの縁にぶら下がって見えた。issue #928 で球をポケットへ置き直すようにしたので縁の問題は無くなり、
-        /// 届く球（ゾーン高めの 0.154m を含む）は見せ、届かない球（0.219m〜）だけ消す 0.20m にした
-        /// （0.12m のままだとゾーン内の高めの球が捕った瞬間に消えていた）。
+        /// 捕った球をポケットへ置き直すときに動かしてよい距離[m]（捕球の瞬間の球→ポケット。issue #1078）。
+        /// これを超える球（ミットが届かない球）はミットへ入れずに消す。
+        /// 経緯: issue #805 では「ミット中心〜球心 0.20m 超を消す」だった（届く球 0.003〜0.154m・届かない球 0.219m〜）。
+        /// 当時のミットIKは手の中心を球に合わせており、#928 で球をポケットへ置き直すようにした結果、
+        /// ①届く球でもポケットとのずれ（中央値5.6cm）だけ球が動き、低めのストライクが枠の下へ外れて見え、
+        /// ②高めの届かない球（7〜19cm）がポケットへ引き下ろされ、ゾーンの外のボールが枠の中に見えていた
+        /// （2026-11-17 実測・見逃し150球で、見えた位置とコールが逆の球 26）。IK の狙いをポケットにした上で、
+        /// 動かす距離そのもので切る。
+        /// 値（2026-11-17 実測・見逃し150球。IK の狙いをポケットにした後）: 動かす距離は中央値3.2cm・90%で6.6cm・最大19cm。
+        /// 6cm で切ると22球（15%）消え、8cm で8球（5%・直す前と同水準）。8cm を超えて動く球は判定点が
+        /// 0.3m 前後の低め・1.2m 超の高め＝見せてもゾーンの外に見えるので、しきい値を広げても「見えた位置と
+        /// コールが逆」は増えない（6〜20cm で同じ6球・うち5球は球の半径以内のかすり）。
         /// </summary>
-        private const float MittMissHideDistanceM = 0.20f;
+        private const float MittPocketMoveHideM = 0.08f;
+
+        /// <summary>直近の捕球で、置き直しで球を動かした距離[m]（実測の出口。負＝未計測）。</summary>
+        private float _lastCatchPocketMoveM = -1f;
+
+        // ---- 見逃しの見え方の実測（issue #1078・撮影用） ----
+        private DuelPitchOutcome _lastPitchOutcome;
+
+        /// <summary>【撮影用】見逃し1球の記録。位置はすべて「カメラから見て本塁面（z=0）のどこに見えるか」（ゾーン座標[m]）。</summary>
+        public struct TakenPitchSample
+        {
+            public bool CalledStrike;    // 球審のコール（見逃しストライク=true／ボール=false）
+            public Vector2 Plate;        // 判定に使った点（engine の LocationX/Y。本塁面そのもの）
+            public Vector2 SeenPlate;    // 判定点をカメラから見た位置（視差の確認用。Plate とほぼ同じはず）
+            public Vector2 SeenCatch;    // 捕球の瞬間の球（判定面の奥まで運んだ点）の見かけの位置
+            public Vector2 SeenMitt;     // ミットのポケットへ置き直した後の球の見かけの位置
+            public float GapM;           // 捕球の瞬間のミット中心〜球心[m]
+            public float MoveM;          // 置き直しで球を動かした距離[m]
+            public bool Hidden;          // ミットが届かないとして球を消したか
+        }
+
+        /// <summary>【撮影用】true の間、捕手が捕った見逃しの球を <see cref="TakenPitchSamplesForCapture"/> へ積む。</summary>
+        public static bool RecordTakenPitchesForCapture;
+        public static readonly List<TakenPitchSample> TakenPitchSamplesForCapture = new List<TakenPitchSample>();
+
+        private void RecordTakenPitch()
+        {
+            if (_lastPitchOutcome != DuelPitchOutcome.Take && _lastPitchOutcome != DuelPitchOutcome.CalledStrike) return;
+            if (_camera == null || _root == null) return;
+            TakenPitchSamplesForCapture.Add(new TakenPitchSample
+            {
+                CalledStrike = _lastPitchOutcome == DuelPitchOutcome.CalledStrike,
+                Plate = _ballPlate,
+                SeenPlate = SeenOnPlate(new Vector3(_ballPlate.x, _ballPlate.y, 0f)),
+                SeenCatch = SeenOnPlate(_ballCatchPoint),
+                SeenMitt = SeenOnPlate(_root.transform.InverseTransformPoint(_ball.transform.position)),
+                GapM = _lastCatchMittGapM,
+                MoveM = _lastCatchPocketMoveM,
+                Hidden = !_ball.activeSelf,
+            });
+        }
+
+        /// <summary>ステージ座標の点を、カメラから見て本塁面（z=0）のどこに重なって見えるかへ直す（視線と z=0 面の交点）。</summary>
+        private Vector2 SeenOnPlate(Vector3 local)
+        {
+            var c = _root.transform.InverseTransformPoint(_camera.transform.position);
+            var d = local - c;
+            if (Mathf.Abs(d.z) < 1e-5f) return new Vector2(local.x, local.y);
+            float k = -c.z / d.z;
+            var q = c + d * k;
+            return new Vector2(q.x, q.y);
+        }
 
         /// <summary>直近の捕球の瞬間のミット中心〜球心[m]（実測の出口。負＝未計測）。</summary>
         private float _lastCatchMittGapM = -1f;
@@ -3085,7 +3139,7 @@ namespace KokoSim.Unity.Match
         /// そこから <see cref="MittForward"/> ぶん前にあるため（issue #928）。置き直しは数cmで、球は
         /// 1コマに0.6m以上進むので跳びは見えない。ミットの子にするので、捕球後の芝居でミットが動いても
         /// 球はポケットに収まったまま。
-        /// ミットが届いていない球（<see cref="MittMissHideDistanceM"/> 超）はミットへ入れずその場で消す。
+        /// ミットが届いていない球（置き直しで <see cref="MittPocketMoveHideM"/> を超えて動く球）はミットへ入れずその場で消す。
         /// 捕手の芝居・捕球音・判定表示は変えない（球の見せ方だけ。issue #805）。
         /// </summary>
         private bool TryPutBallInMitt()
@@ -3095,11 +3149,16 @@ namespace KokoSim.Unity.Match
             if (hand == null) return false;
             _ball.transform.localPosition = _ballCatchPoint;
             _lastCatchMittGapM = Vector3.Distance(_ball.transform.position, DuelCatcherPose.MittCenter(_catcher.Animator));
+            var mitt = FindCatcherMitt();
+            // 置き直しで球を動かす距離（捕球の瞬間の球→ポケット）。ミットIKはポケットを球へ合わせるので、
+            // 届く球はほぼ0。届かない球（高め・大外れ）だけ大きく動く＝その球は見せずに消す（issue #1078）。
             // 届かない球も「ミットの中」と同じ扱いで時計は進める（_ballT を止めない）。
             // ミットIKの重み・体寄せの据え置きは球の時計で決まるので、ここで止めると
             // 捕手のミットが据え置き中に構えへ戻ってしまう。隠すのは見た目だけ。
-            if (_lastCatchMittGapM > MittMissHideDistanceM) _ball.SetActive(false);
-            var mitt = FindCatcherMitt();
+            _lastCatchPocketMoveM = mitt != null
+                ? Vector3.Distance(_ball.transform.position, mitt.TransformPoint(MittPocketBallLocal))
+                : _lastCatchMittGapM;
+            if (_lastCatchPocketMoveM > MittPocketMoveHideM) _ball.SetActive(false);
             if (mitt != null)
             {
                 _ball.transform.SetParent(mitt, false);
@@ -3109,6 +3168,7 @@ namespace KokoSim.Unity.Match
                 _ball.transform.SetParent(hand, true);   // ミットが無い（装備なしの素体）＝従来どおり実位置で手に付ける
             _ballInMitt = true;
             _ballInMittRemaining = CatcherLingerSeconds(_catchIsStrike);   // 判定表示が消えるまでミットの中に見せる
+            if (RecordTakenPitchesForCapture) RecordTakenPitch();
             KokoSim.Unity.Audio.MatchSfx.PlayCatch(_ballVelocityKmh);
             return true;
         }
@@ -3615,8 +3675,9 @@ namespace KokoSim.Unity.Match
             if (_ballT < 0f) return;
             float w = DuelCatcherPose.Weight(_ballT, _ballArrival);
             if (w <= 0f) return;
+            // 狙うのは手の中心でなくミットのポケット＝捕った球を置き直さずに済む位置（issue #1078）
             DuelCatcherPose.ReachMitt(_catcher.Animator,
-                _root.transform.TransformPoint(_ballCatchPoint), w);
+                _root.transform.TransformPoint(_ballCatchPoint), w, FindCatcherMitt(), MittPocketBallLocal);
         }
 
         /// <summary>

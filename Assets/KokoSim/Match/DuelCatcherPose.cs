@@ -68,6 +68,16 @@ namespace KokoSim.Unity.Match
         /// ボールが手首に刺さる。design-18 §3.3.1 の掟）を <paramref name="target"/> へ寄せる。
         /// </summary>
         internal static void ReachMitt(Animator anim, Vector3 target, float weight)
+            => ReachMitt(anim, target, weight, null, Vector3.zero);
+
+        /// <summary>
+        /// <paramref name="mitt"/> があれば、手の中心でなく<b>ミットのポケット</b>（ミットの座標で
+        /// <paramref name="pocketLocal"/>）を <paramref name="target"/> へ寄せる（issue #1078）。
+        /// 捕った球はポケットへ置き直すので、手の中心を球に合わせるとポケットとの差（手から前へ
+        /// <c>MittForward</c> 出た分と向き）だけ球が動き、低めのストライクが枠の下へ外れて見えていた。
+        /// ポケットのずれは手の向きで変わり、腕を動かすと手の向きも少し変わるので、2回当てて詰める。
+        /// </summary>
+        internal static void ReachMitt(Animator anim, Vector3 target, float weight, Transform mitt, Vector3 pocketLocal)
         {
             if (anim == null || weight <= 0f) return;
             var upper = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
@@ -76,10 +86,17 @@ namespace KokoSim.Unity.Match
             if (upper == null || lower == null || hand == null) return;
 
             float w = Mathf.Clamp01(weight);
-            var wrist = target - MittCenterOffset(anim, hand);
+            var start = hand.position;
+            var wrist = target - (mitt != null ? mitt.TransformPoint(pocketLocal) - hand.position : MittCenterOffset(anim, hand));
             LeanTorso(anim, upper, lower, hand, wrist, w);
             var goal = Vector3.Lerp(hand.position, wrist, w);
             goal = DuelIk.ClampReach(upper, lower, hand, hand.position, goal, ReachGuard);
+            DuelIk.TwoBoneIk(upper, lower, hand, goal, 0f);
+            if (mitt == null) return;
+            // 2回目: 腕が動いて変わった手の向きでのポケットのずれで、手首の目標を引き直す（胴はもう倒さない）
+            wrist = target - (mitt.TransformPoint(pocketLocal) - hand.position);
+            goal = Vector3.Lerp(start, wrist, w);
+            goal = DuelIk.ClampReach(upper, lower, hand, start, goal, ReachGuard);
             DuelIk.TwoBoneIk(upper, lower, hand, goal, 0f);
         }
 
