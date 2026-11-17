@@ -171,9 +171,10 @@ namespace KokoSim.Unity.Shell
             s.ManagerGrownWinsBaseline = _grownWinsBaseline;
             s.ManagerGrownKoshienBaseline = _grownKoshienBaseline;
             s.ManagerPendingUpsetDeltas = new List<double>(_pendingUpsetDeltas);
+            s.PracticeLastPlayedWeek = _practice?.LastPlayedWeek;
         }
 
-        /// <summary>セーブ復元: 監督メタ・施設・年契約・成長ガードを据える（練習スケジューラは作り直し）。</summary>
+        /// <summary>セーブ復元: 監督メタ・施設・年契約・成長ガードを据える（練習スケジューラは作り直して最終消化週だけ戻す）。</summary>
         public static void Restore(KokoSim.Engine.Saves.SaveState s)
         {
             _manager = s.Manager;
@@ -185,6 +186,7 @@ namespace KokoSim.Unity.Shell
             _pendingUpsetDeltas.Clear();
             if (s.ManagerPendingUpsetDeltas != null) _pendingUpsetDeltas.AddRange(s.ManagerPendingUpsetDeltas);
             _practice = null;
+            if (s.PracticeLastPlayedWeek.HasValue) Practice.Restore(s.PracticeLastPlayedWeek);
             ContractRenewalService.Clear();
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }

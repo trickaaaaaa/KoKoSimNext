@@ -54,6 +54,11 @@ public sealed class SaveState
     /// 年度末の監督成長で畳み込んで消費する。v12 で追加（2026-08-15・番狂わせ加点の実ゲーム配線）。
     /// </summary>
     public List<double> ManagerPendingUpsetDeltas { get; set; } = new();
+    /// <summary>
+    /// 最後に練習試合を消化した絶対週（未消化は null）。「週1回まで」の判定を保存→読込で消さないための値。
+    /// v36 で追加（issue #1114）。
+    /// </summary>
+    public int? PracticeLastPlayedWeek { get; set; }
 
     // --- 全国（materialize 済みロスターのみ。学校・県は再生成） ---
     public List<AiSchoolRoster> NationRosters { get; set; } = new();

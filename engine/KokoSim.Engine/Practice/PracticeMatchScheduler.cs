@@ -52,6 +52,9 @@ public sealed class PracticeMatchScheduler
     /// <summary>最後に練習試合を消化した週（絶対週番号。未消化は null）。</summary>
     public int? LastPlayedWeek { get; private set; }
 
+    /// <summary>セーブから戻す（週1回の判定が保存→読込で消えないように。未消化は null）。</summary>
+    public void Restore(int? lastPlayedWeek) => LastPlayedWeek = lastPlayedWeek;
+
     /// <summary>費用[万円]。</summary>
     public double Cost => _c.Cost;
 

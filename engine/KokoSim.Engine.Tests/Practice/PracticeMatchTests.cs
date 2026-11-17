@@ -72,6 +72,24 @@ public sealed class PracticeMatchTests
         Assert.True(nextWeek.Played);               // 週が変われば再び申込可能
     }
 
+    // 練習試合をした週にセーブ→ロードしても、同じ週にもう1回は組めない（issue #1114）。
+    [Fact]
+    public void SaveLoad_KeepsWeeklySlot_SoSameWeekStaysBlocked()
+    {
+        var s = new PracticeMatchScheduler(C);
+        var manager = new Manager { Fame = 100, Funds = 10 };
+        Assert.True(s.Request(manager, School(60), School(40), week: 3, new StubResolver(), Rng(1)).Played);
+
+        var state = new KokoSim.Engine.Saves.SaveState { PracticeLastPlayedWeek = s.LastPlayedWeek };
+        Assert.True(KokoSim.Engine.Saves.SaveCodec.TryDeserialize(
+            KokoSim.Engine.Saves.SaveCodec.Serialize(state), out var loaded, out var err), err);
+
+        var restored = new PracticeMatchScheduler(C);
+        restored.Restore(loaded.PracticeLastPlayedWeek);
+        Assert.Equal(PracticeMatchRejection.AlreadyPlayedThisWeek, restored.CanRequest(manager, week: 3));
+        Assert.Equal(PracticeMatchRejection.None, restored.CanRequest(manager, week: 4));
+    }
+
     [Fact]
     public void Request_InsufficientFunds_IsRejectedByEngine()
     {

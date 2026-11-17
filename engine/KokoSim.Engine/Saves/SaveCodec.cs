@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 35;
+    public const int CurrentVersion = 36;
 
     // ===== Serialize =====
 
@@ -50,6 +50,7 @@ public static class SaveCodec
             .Add("managerGrownWinsBaseline", s.ManagerGrownWinsBaseline)
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
             .Add("managerPendingUpsetDeltas", DoublesToJson(s.ManagerPendingUpsetDeltas))
+            .Add("practiceLastPlayedWeek", s.PracticeLastPlayedWeek.HasValue ? JsonValue.Of(s.PracticeLastPlayedWeek.Value) : JsonNull.Instance)
             .Add("nationRosters", NationRostersToJson(s.NationRosters))
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
             .Add("nationCareerStats", StatsSaves.NationCareerToJson(s.TournamentStats))
@@ -375,6 +376,8 @@ public static class SaveCodec
         {
             mgr35.Add("funds", mgr35.Double("funds") + mgr35.Double("facilityFund"));
         }
+        // v36（issue #1114）: 練習試合を最後に消化した絶対週（practiceLastPlayedWeek）。旧セーブは「記録なし」＝null で補う。
+        if (version < 36 && !root.Has("practiceLastPlayedWeek")) root.Add("practiceLastPlayedWeek", JsonNull.Instance);
         return root;
     }
 
@@ -423,6 +426,8 @@ public static class SaveCodec
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),
             // 番狂わせデルタは v12 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             ManagerPendingUpsetDeltas = DoublesFromJson(root.Arr("managerPendingUpsetDeltas")),
+            // 練習試合の最終消化週は v36 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            PracticeLastPlayedWeek = root.IsNull("practiceLastPlayedWeek") ? null : root.Int("practiceLastPlayedWeek"),
             NationRosters = NationRostersFromJson(root.Arr("nationRosters")),
             // AI校の進化状態・年間勝数は v13 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             NationSchools = NationSchoolsFromJson(root.Arr("nationSchools")),
