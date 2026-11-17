@@ -395,6 +395,11 @@ namespace KokoSim.Unity.Match
         private PlaybackPlay _batteryMissPlay;
         private double _batteryMissEndAt;
 
+        // 打席途中のスクイズ不成立（ウエスト／バント空振り）で三塁走者が挟殺される再生（issue #1061）。
+        // 暴投・捕逸と同型で「この球そのものの結果」として起きるため、盗塁の後・暴投/捕逸の前に連結する。
+        private PlaybackPlay _squeezeRundownPlay;
+        private double _squeezeRundownEndAt;
+
         // 打席途中の振り逃げの再生（issue #488）。暴投・捕逸と同型だが、三振確定後の後処理として
         // 判定されるため、盗塁・牽制・暴投/捕逸のいずれよりも後にチェックする（＝この球の最後の連結先）。
         // 再生経路は盗塁・牽制・暴投/捕逸と共有（EnterStealPlay と同型）。
@@ -757,6 +762,7 @@ namespace KokoSim.Unity.Match
             _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
             _pickoffPlay = null;     // 打席途中の牽制再生（issue #486）も同様
             _batteryMissPlay = null; // 打席途中の暴投・捕逸再生（issue #487）も同様
+            _squeezeRundownPlay = null; // 打席途中のスクイズ挟殺再生（issue #1061）も同様
             _dropThirdStrikePlay = null; // 打席途中の振り逃げ再生（issue #488）も同様
             _preStep = null;             // 振りかぶりで先に解決した球（issue #696）も試合をまたがない
             _windupAfterFieldPlay = false;
@@ -1056,7 +1062,7 @@ namespace KokoSim.Unity.Match
             if (next.IsTop != _atBat.IsTop || next.Inning != _atBat.Inning) return;
             var live = _paQueue[_pitchIdx].Live;
             if (live == null || live.StealPlay != null || live.BatteryMissPlay != null
-                || live.DropThirdStrikePlay != null) return;
+                || live.SqueezeRundownPlay != null || live.DropThirdStrikePlay != null) return;
             if (_prog.PendingForcedPitcherChange) return;
             if (_subPanel != null && _subPanel.IsOpen) return;
             if (_scoutPanel != null && _scoutPanel.IsOpen) return;
@@ -2654,6 +2660,11 @@ namespace KokoSim.Unity.Match
             _view.HideJudgement();
             _stealPlay = null;
             var q = _paQueue[_pitchIdx];
+            if (q.Live?.SqueezeRundownPlay is { } squeezeRundownPlay)
+            {
+                EnterSqueezeRundownPlay(squeezeRundownPlay);
+                return;
+            }
             if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
             {
                 EnterBatteryMissPlay(batteryMissPlay);
@@ -2839,6 +2850,75 @@ namespace KokoSim.Unity.Match
             _view.HideJudgement();
             _batteryMissPlay = null;
             var q = _paQueue[_pitchIdx];
+            if (q.Live?.DropThirdStrikePlay is { } dropThirdStrikePlay)
+            {
+                EnterDropThirdStrikePlay(dropThirdStrikePlay);
+                return;
+            }
+            if (q.Live != null)
+            {
+                SetOuts(q.Live.Outs);
+                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
+            }
+            _foulFlightHoldSeconds = null;
+            _windowCarry = 0f;
+            _pitchCallDone = false;
+            _inPitchPhase = false;
+            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
+            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
+            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
+            _stage = LiveStage.Idle;
+            AdvanceToNextWindow();
+        }
+
+        // ── 打席途中のスクイズ挟殺の3D再生（issue #1061） ──
+        // EnterBatteryMissPlay 系（issue #487）と同型。三塁走者が三本間で挟まれてタッチアウトになる絵は
+        // engine の <see cref="PlaybackPlay"/>（<c>BuildSqueezeRundown</c> の出力）が単一ソース。
+        // 同じ球で暴投・捕逸／振り逃げも解決していれば、盤面を動かす前にその再生へ連結する。
+
+        private void EnterSqueezeRundownPlay(PlaybackPlay rundown)
+        {
+            _inPitchPhase = false;
+            _pitchBallVisible = false;
+            _stage = LiveStage.Play;
+            _windowCarry = 0f;
+            _squeezeRundownPlay = rundown;
+            // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
+            _t = FieldCutMomentOf(rundown);
+            _squeezeRundownEndAt = BatteryMissPlayEndTime(rundown);
+            _view.SetPlay(rundown);
+            if (_duelRig != null && _duelRig.Available)
+            {
+                if (_prog != null && _current != null)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                _duelRig.BeginFieldPlay(rundown, (float)_t);
+            }
+            RenderSqueezeRundownFrame();
+        }
+
+        private void RenderSqueezeRundownFrame()
+        {
+            if (_squeezeRundownPlay == null) return;
+            _view.SetTime(_t);
+            if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
+            if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_squeezeRundownPlay, _t);
+        }
+
+        /// <summary>挟殺再生が終わった: 対決構図へ戻し、挟殺後の塁・アウトを反映してから打席の続きへ
+        /// （<see cref="FinishBatteryMissView"/> と同型。3アウト目なら次の窓が攻守交代を開く）。</summary>
+        private void FinishSqueezeRundownView()
+        {
+            EndFieldPlay();
+            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
+            _view.HideJudgement();
+            _squeezeRundownPlay = null;
+            var q = _paQueue[_pitchIdx];
+            if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
+            {
+                EnterBatteryMissPlay(batteryMissPlay);
+                return;
+            }
             if (q.Live?.DropThirdStrikePlay is { } dropThirdStrikePlay)
             {
                 EnterDropThirdStrikePlay(dropThirdStrikePlay);
@@ -3120,6 +3200,13 @@ namespace KokoSim.Unity.Match
                         EnterStealPlay(stealPlay);
                         return;
                     }
+                    // スクイズ不成立の挟殺（issue #1061）: 暴投・捕逸と同じく「この球そのものの結果」。
+                    // 球の落ち先（捕手が捕る）から始まる挟殺を先に見せ、同じ球で暴投・捕逸も起きていれば続けて連結する。
+                    if (q.Live?.SqueezeRundownPlay is { } squeezeRundownPlay)
+                    {
+                        EnterSqueezeRundownPlay(squeezeRundownPlay);
+                        return;
+                    }
                     // 打席途中の暴投・捕逸（issue #487）: 盗塁・牽制と違い「この球の前」ではなく
                     // 「この球そのものの結果」として起きるため、盗塁・牽制の判定を終えたこの位置でチェックする。
                     if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
@@ -3231,6 +3318,13 @@ namespace KokoSim.Unity.Match
             {
                 RenderStealFrame();
                 if (_t > _stealEndAt + FinishGraceSeconds) FinishStealView();
+                return;
+            }
+            // 打席途中のスクイズ挟殺の再生（issue #1061）: 盗塁の再生（あれば）が終わった後に連結される。
+            if (_squeezeRundownPlay != null)
+            {
+                RenderSqueezeRundownFrame();
+                if (_t > _squeezeRundownEndAt + FinishGraceSeconds) FinishSqueezeRundownView();
                 return;
             }
             // 打席途中の暴投・捕逸の再生（issue #487）: 盗塁の再生（あれば）が終わった後に連結される
@@ -5025,6 +5119,7 @@ namespace KokoSim.Unity.Match
             _stealPlay != null ? "steal"
             : _pickoffPlay != null ? "pickoff"
             : _batteryMissPlay != null ? "battery-miss"
+            : _squeezeRundownPlay != null ? "squeeze-rundown"
             : _dropThirdStrikePlay != null ? "drop-third"
             : null;
 
@@ -5032,7 +5127,7 @@ namespace KokoSim.Unity.Match
         /// 種類（<see cref="MidPaPlayForCapture"/>）だけでは盗塁の成否＝タッチアウトの有無が分からない。</summary>
         public string MidPaPlayResultForCapture =>
             _stealPlay?.Result ?? _pickoffPlay?.Result
-            ?? _batteryMissPlay?.Result ?? _dropThirdStrikePlay?.Result;
+            ?? _batteryMissPlay?.Result ?? _squeezeRundownPlay?.Result ?? _dropThirdStrikePlay?.Result;
 
         /// <summary>スクショ用: 1球進行のいまの段（Idle/Window/Pitch/Play/Over）。
         /// 録画ハーネスが「打席が確定した瞬間」を段の縁で拾うのに使う。</summary>
