@@ -32,8 +32,8 @@ public sealed class FlyNearMissScenarioTests
 
         var tl = prog.PlayLog[^1].Timeline;
         Assert.NotNull(tl);
-        // 3D の「届かない」芝居が出る幅（DuelStageRig.DiveMarginSeconds = 0.20）の内側で、捕れていない
-        Assert.True(tl!.CatchMarginSeconds is { } m && m < 0 && m > -0.20,
+        // 3D の「届かない」芝居が出る幅（DuelStageRig.MissMarginSeconds = 0.50）の内側で、捕れていない
+        Assert.True(tl!.CatchMarginSeconds is { } m && m < 0 && m > -0.50,
             $"捕球余裕が「あと一歩届かない」幅に無い（{tl.CatchMarginSeconds}）");
 
         // 外野手の頭を越えた（＝背走で追う）打球であること

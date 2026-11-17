@@ -1214,6 +1214,17 @@ namespace KokoSim.Unity.Match
         public const float DiveMarginSeconds = 0.20f;
 
         /// <summary>
+        /// 「届かない」芝居（<see cref="FieldCatchKind.DiveMiss"/>）を出す、捕球余裕の負側の幅[s]（issue #1075 追記2）。
+        /// 捕れた側の <see cref="DiveMarginSeconds"/> と別に持つ＝落球は engine の絵（落下点への到着＝着地＋遅れ）が
+        /// 遅れぶんだけ着地の後になったので、遅れが大きくても「あと一歩届かない」に見える。
+        /// </summary>
+        public const float MissMarginSeconds = 0.50f;
+
+        /// <summary>届かない芝居の持ち主を、着地の瞬間に落下点から何m以内の野手とみなすか。到着が着地より後なので
+        /// 捕球（<see cref="CatchOwnerRadiusM"/>）より広く取る。</summary>
+        private const float MissOwnerRadiusM = 4.0f;
+
+        /// <summary>
         /// 近づき方を切り替える速さ[m/s]。これ未満は「その場」。
         /// <see cref="FielderIdleSpeedMps"/> と別に持つのは、走りの段の切替と捕球クリップの選択が
         /// **同じ閾値である必要はない**ため（歩き程度で近づくならその場の捕球で足りる）。
@@ -1634,7 +1645,7 @@ namespace KokoSim.Unity.Match
                     aerialResolved = true;
                     if (catchMargin < 0f)
                     {
-                        if (catchMargin <= -DiveMarginSeconds) continue;   // 抜けた当たり＝誰も触らない
+                        if (catchMargin <= -MissMarginSeconds) continue;   // 抜けた当たり＝誰も触らない
                         kind = FieldCatchKind.DiveMiss;
                     }
                 }
@@ -1661,9 +1672,9 @@ namespace KokoSim.Unity.Match
                     // 終点に誰も居なければ（フェンス際・本塁打）捕球ではない。
                     // ⚠ 役が判っている送球はこの足切りをしない＝engine が「この人が受ける」と
                     //    言っている以上、離れていても受けに行くのが正しい
-                    if (bestD > CatchOwnerRadiusM)
+                    if (bestD > (kind == FieldCatchKind.DiveMiss ? MissOwnerRadiusM : CatchOwnerRadiusM))
                     {
-                        if (kind == FieldCatchKind.DiveMiss) _missDiag = $"届かない候補を見送り: 最寄り={who} 距離={bestD:F2}m（>{CatchOwnerRadiusM}m）";
+                        if (kind == FieldCatchKind.DiveMiss) _missDiag = $"届かない候補を見送り: 最寄り={who} 距離={bestD:F2}m（>{MissOwnerRadiusM}m）";
                         continue;
                     }
                 }

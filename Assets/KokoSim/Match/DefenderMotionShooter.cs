@@ -238,8 +238,9 @@ namespace KokoSim.Unity.Match
             if (play.Fumbled) return Want.Fumble;
             if (play.CatchMargin is not { } m) return null;
             const double dive = 0.20;   // DuelStageRig.DiveMarginSeconds と同値
+            const double miss = 0.50;   // DuelStageRig.MissMarginSeconds と同値
             if (m >= 0 && m < dive) return Want.Dive;
-            if (m < 0 && m > -dive) return Want.DiveMiss;
+            if (m < 0 && m > -miss) return Want.DiveMiss;
             return null;
         }
 
