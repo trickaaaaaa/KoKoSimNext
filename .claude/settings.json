@@ -157,7 +157,6 @@
       "Bash(awk '{o+=gsub\\(/{/,\"{\"\\); c+=gsub\\(/}/,\"}\"\\)} END{print \"open=\"o\" close=\"c}' Assets/UI/KokoSimTheme.uss)",
       "Bash(awk '{o+=gsub\\(/{/,\"{\"\\); c+=gsub\\(/}/,\"}\"\\)} END{print \"open=\"o\" close=\"c}' Assets/UI/Components/components.uss)",
       "mcp__UnityMCP__create_script",
-      "Bash(/Users/seiya.oda/Unity/KoKoSimNext/.claude/hooks/ui-reminder.sh)",
       "Bash(open /Users/seiya.oda/Unity/KoKoSimNext/screenshots/member-field2.png /Users/seiya.oda/Unity/KoKoSimNext/screenshots/member-field3.png)",
       "Bash(sips -c 520 480 --cropOffset 560 660 member-park2.png --out field-crop.png)",
       "Bash(sips -c 460 470 --cropOffset 620 0 member-park2.png --out field-crop.png)",
@@ -220,20 +219,6 @@
       "/Users/seiya.oda/Unity/KoKoSimNext/engine/KokoSim.Engine.Tests",
       "/Users/seiya.oda/Unity/KoKoSimNext/screenshots/match2d-live",
       "/private/tmp"
-    ]
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/ui-reminder.sh\"",
-            "statusMessage": "UI原則リマインド確認中..."
-          }
-        ]
-      }
     ]
   }
 }

@@ -5,7 +5,7 @@ namespace KokoSim.Unity.Components
     /// <summary>
     /// 守備位置チップ（スコアブック試作スキン・scorebook.uss の .sbk-pos）。
     /// 系統で色分けする：投手／捕手／内野（一二三遊）／外野（左中右）／指名打者。
-    /// 出してよいのは「プレイヤーが決めた配置」か「試合で実際に就いた位置」だけ（CLAUDE.md UI原則の注記）。
+    /// 出してよいのは「プレイヤーが決めた配置」か「試合で実際に就いた位置」だけ（.claude/rules/ui.md の注記）。
     /// 押せるチップにするときは <see cref="Clickable"/> を true にする（ホバーで枠が出る）。
     /// </summary>
     public sealed class PositionChip : Label
