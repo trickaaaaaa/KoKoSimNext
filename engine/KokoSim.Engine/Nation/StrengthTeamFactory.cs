@@ -74,6 +74,9 @@ public static class StrengthTeamFactory
         var lift = rc.StarLift(rawStrength);
         var castCenter = strength - rc.AiStarCastDrop * lift;
         var starLift = lift * (1.0 + rc.AiStarCastDrop);   // 脇役の中心から見た上乗せ＝圧縮後 + lift
+        // issue #1080: 投手の中心だけ下げ幅（StrengthTargetDrop）を打ち消す。打者の個性（オールAの緩和）を
+        // 狙った下げ幅は打撃側だけに効かせる＝球速の分布（VelocityDistributionByTierTests・design #908）を崩さない。
+        var pitchingCastCenter = castCenter + rc.StrengthTargetDrop;
         var starSlots = PickStarSlots(rng.Fork(StarSalt), FieldSlots.Length, rc.AiStarHitters);
         var ac = rc.Archetypes;   // 球質タイプ係数は自校生成と同じ RosterCoefficients に同居
         var archSalt = 0x7B15_0000UL;   // 球質タイプ用の Fork ソルト（主RNG非消費）
@@ -106,7 +109,7 @@ public static class StrengthTeamFactory
 
         var acePr = Profile(rc, rng, ref profileSalt, starter: true);
         order.Add(AiMentalModel.WithGradeArc(
-            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc, mental,
+            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), pitchingCastCenter, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc, mental,
                     pitchingLift: starLift)
                 with { UniformNumber = 1, Throws = acePr.Throws, Bats = acePr.Bats, Grade = acePr.Grade },
             acePr.Grade, rc));
@@ -117,7 +120,7 @@ public static class StrengthTeamFactory
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
             bullpen.Add(AiMentalModel.WithGradeArc(
-                Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental)
+                Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), pitchingCastCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental)
                     with { UniformNumber = number, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
                 pr.Grade, rc));
         }
@@ -125,7 +128,7 @@ public static class StrengthTeamFactory
         var reliefTail = rng.Fork(0x9A20_0000UL);
         var pr20 = Profile(rc, rng, ref profileSalt, starter: false);
         bullpen.Add(AiMentalModel.WithGradeArc(
-            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental)
+            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), pitchingCastCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental)
                 with { UniformNumber = numbers.Mound[3], Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade },
             pr20.Grade, rc));
 

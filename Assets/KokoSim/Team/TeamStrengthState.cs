@@ -37,7 +37,7 @@ namespace KokoSim.Unity.Squad
             var v = new TeamStrengthView
             {
                 OverallValue = (int)Math.Round(s.Overall),
-                OverallGrade = Tiers.FromStrength(s.Overall).ToString(),
+                OverallGrade = s.Tier.ToString(),
             };
 
             // レーダーの頂点順（上から時計回り）＝右の指標バー順。両者を1対1に揃える。

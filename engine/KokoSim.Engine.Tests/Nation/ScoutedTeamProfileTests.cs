@@ -55,7 +55,9 @@ public sealed class ScoutedTeamProfileTests
         var team = StrengthTeamFactory.ForSchool(s, yearIndex: 0);
         var overall = ScoutedTeamProfile.Compute(team, C).Overall;
 
-        Assert.Equal(Tiers.FromStrength(overall), ScoutedTeamProfile.OverallTier(team, C));
+        // issue #1080: 総合(Overall)は生成目標ごと下がったが、ランク判定は overall_tier_boost で打ち消す
+        // ＝見た目のランクは「下げる前のOverallから判定した場合」と一致する。
+        Assert.Equal(Tiers.FromStrength(overall + C.OverallTierBoost), ScoutedTeamProfile.OverallTier(team, C));
         Assert.NotEqual(s.Tier, ScoutedTeamProfile.OverallTier(team, C));
     }
 }

@@ -166,20 +166,36 @@ public sealed record RosterCoefficients
     public double TierCompressionKnee { get; init; } = 100.0;
 
     /// <summary>
+    /// 強さ→能力中心の目標を一律に下げる量（issue #1080・オーナー決定2026-11-17）。<see cref="CompressStrength"/>
+    /// の出力からこれだけ差し引く。強さ85〜90の学校は、チーム総合を目標へ届かせるため全員ほぼ99まで積む必要があり、
+    /// 打者の型（<see cref="BatterArchetypes"/>・issue #1066）を入れても個性が死ぬ（強さ90でオールA7.9人/校・
+    /// 99張り付き9割超、実測はissue #1080本文）。目標そのものを下げて「オールA2人以下」の余地を作る＝
+    /// 「個性を優先し、弱い学校も下げて差を保つ」（学校どうしの差は<see cref="Nation.AggregateMatch"/>が常に
+    /// <c>CompressStrength(A)−CompressStrength(B)</c> の差分だけを見るので、一律の下げ幅は差分で相殺され
+    /// 学校どうしの勝率は変わらない）。<see cref="Nation.TeamStrengthCoefficients.OverallTierBoost"/> が表示
+    /// ランク（S〜G）側でこれと同じ量を打ち消す＝中身の能力値だけが下がり、見た目の総合ランク（最上位はS・
+    /// 弱小はG）は変わらない。値は実測（<c>BatterArchetypeDistributionTests</c>）で選ぶ。
+    /// </summary>
+    public double StrengthTargetDrop { get; init; } = 7.0;
+
+    /// <summary>
     /// 学校の強度（<see cref="Nation.School.Strength"/>）を能力中心へ写す（issue #578）。
     /// **表示ランクは元の強度のまま**（Q24 の確定4＝表示は直さない）で、生成だけがこの写像を通る。
     /// 呼ぶのは「ティアが能力中心に変わる入口」だけ＝<see cref="Nation.StrengthTeamFactory.Create"/> と
     /// <c>AiRosterFactory.RecruitCenter</c> の2箇所。個々の能力ロール（<c>Ability()</c>）側では呼ばない
     /// （そこには打撃中心などの派生値も流れるため、二重に圧縮される）。
+    /// 2026-11-17（issue #1080）: 末尾で <see cref="StrengthTargetDrop"/> を一律に引く（AI校全体の物差しを下げる）。
     /// </summary>
     public double CompressStrength(double strength)
     {
         var knee = TierCompressionKnee;
         var below = TierCompressionPivot + TierCompressionSlope * (Math.Min(strength, knee) - TierCompressionPivot);
-        if (strength <= knee || knee >= 100.0) return below;
-        // 膝から上は「100 で元の尺度に戻る」傾きで起こす＝上位校の絶対能力を保ったまま
-        // 低ティアだけ寝かせる。代わりに中〜上位の勾配は元より急になる（そこは苦情の対象ではない）。
-        return below + (100.0 - below) / (100.0 - knee) * (strength - knee);
+        var raw = strength <= knee || knee >= 100.0
+            ? below
+            // 膝から上は「100 で元の尺度に戻る」傾きで起こす＝上位校の絶対能力を保ったまま
+            // 低ティアだけ寝かせる。代わりに中〜上位の勾配は元より急になる（そこは苦情の対象ではない）。
+            : below + (100.0 - below) / (100.0 - knee) * (strength - knee);
+        return raw - StrengthTargetDrop;
     }
 
     // --- 凸凹配分（設計書04 §2.1: 総ポイントをランダム重みで配分・偏り自体もばらつく） ---
@@ -581,7 +597,10 @@ public static class ProspectGenerator
         var skillCoeff = skills ?? new SkillCoefficients();
         var personalityCoeff = personalities ?? new PersonalityCoefficients();
         var formCoeff = form ?? new FormCoefficients();
-        var center = talentCenter ?? c.TalentCenterDefault;
+        // 自校もAI校と同じ物差しで下げる（issue #1080・オーナー決定2026-11-17「自校は新入生の生成だけで合わせる」）。
+        // TalentCenterFromFame 自体は変えない（名声のランク≒中心のランクという issue #1031 の一致はそのまま保つ）。
+        // ここで引くのは実際の生成（Create）に渡る値だけ＝AI校の CompressStrength と対称。
+        var center = (talentCenter ?? c.TalentCenterDefault) - c.StrengthTargetDrop;
         var count = fixedCount is { } fc
             ? Math.Max(0, fc)
             : (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.IntakeMean, c.IntakeSd)), c.IntakeMin, c.IntakeMax);

@@ -77,6 +77,8 @@ public sealed class AiArmByPositionTests
         var allSsAfter = ssAfter.Values.SelectMany(v => v).ToList();
         Assert.True(Median(allSsAfter) >= Median(allSsBefore) + 4, $"遊撃 p50 {Median(allSsBefore)} → {Median(allSsAfter)}");
         // 中位校（D）にも強肩の遊撃手がいる（肩75＝127km/h 以上。σ6・位置重み付きでは 4%）。
-        Assert.True(Share(ssAfter[Tier.D], 75) >= 0.20, $"D校の遊撃手で肩75以上 {Share(ssAfter[Tier.D], 75):P1}");
+        // 0.20→0.12（2026-11-17 issue #1080）: AI校全体の強さ→総合目標を一律に下げたぶん、肩（ArmStrength）も
+        // 他のオールA対象能力と同じく中心が下がり、75+の裾が実測14.2%まで薄くなった（消えてはいない）。
+        Assert.True(Share(ssAfter[Tier.D], 75) >= 0.12, $"D校の遊撃手で肩75以上 {Share(ssAfter[Tier.D], 75):P1}");
     }
 }

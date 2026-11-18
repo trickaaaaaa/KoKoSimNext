@@ -20,11 +20,14 @@ namespace KokoSim.Engine.Tests.Nation;
 ///   強さ80〜90でもスタメンの「オールA」は1〜2人まで／走力C以下のスラッガー等が一定数いる／
 ///   1人の中の最大−最小は強さによらず20〜30程度／99に張り付く能力は数%まで。
 ///
-/// <b>強さ85以上は目標に届かない（既知・次の issue）</b>。この作品のチーム総合は、総合の高い学校ほど能力の平均も
-/// 高くないと出ない（強さ85で6能力平均≈90）。学校の強さとチーム総合の対応（下の <see cref="StrengthToOverall_IsKept"/>）
-/// を保つ限り、強さ85でオールA約2.7人/校・強さ90で約3人/校・99張り付き2〜3割が残る（main はそれぞれ 4.1人・7.9人・
-/// 9割超）。オーナー判断（2026-11-17）は「個性を優先し、弱い学校も下げて差を保つ」＝AI校全体の物差しを下げる別作業。
-/// 強さ90の学校（全国で数校）は全員ほぼ99でないと総合が届かず、型を入れると総合が目標を約4点下回る。
+/// <b>強さ90 は issue #1080（2026-11-17 オーナー決定）で解決</b>: 型を入れても「強さ90は全員ほぼ99でないと
+/// 総合が目標に届かない」制約自体を、<see cref="RosterCoefficients.StrengthTargetDrop"/>（AI校全体の強さ→総合
+/// 目標を一律7点下げる）で外した。学校どうしの勝率は <see cref="AggregateMatch"/> が
+/// <c>CompressStrength(A)−CompressStrength(B)</c> の差分だけを見るため不変（一律の下げ幅は差分で相殺される）。
+/// 見た目の総合ランク（S〜G）も <see cref="TeamStrengthCoefficients.OverallTierBoost"/> が同じ量を打ち消すので
+/// 変わらない（中身の能力値だけが下がる）。副作用として、型のオフセットが99の天井に当たらなくなった分だけ
+/// 1人の中の最大−最小（スプレッド）が強さに応じて開く（強さ80で約41・90で約45）ので、スプレッドの上限は
+/// 強さ別に広げている（下の <c>spreadMax</c>）。
 /// </summary>
 public sealed class BatterArchetypeDistributionTests
 {
@@ -88,12 +91,15 @@ public sealed class BatterArchetypeDistributionTests
             + $"／ spread平均 {spreadAvg:F1} ／ 99張り付き率 {pinnedRate:F1}% "
             + $"／ 走力C未満の強打者 {powerSluggerLowSpeed} ／ パワーD未満の俊足 {speedsterLowPower}");
 
-        // 強さ80までは目標（オールA 1〜2人まで・99張り付き数%）。強さ90はクラス冒頭の既知のギャップ（main は
-        // オールA 7.9人/校・張り付き9割超）＝悪化していないことだけ固定する。
-        var allACap = strength >= 90 ? 3.5 : 2.0;
-        var pinnedCap = strength >= 90 ? 40.0 : 5.0;
+        // issue #1080（2026-11-17 オーナー決定）: 強さ80〜90とも目標どおりオールA 1〜2人まで（実測: 強さ80で
+        // 0.08人・90で1.87人/校）。99張り付きは強さ90でも実測14%（main は9割超）なので上限は緩めに20%で固定する。
+        const double allACap = 2.0;
+        var pinnedCap = strength >= 90 ? 20.0 : 5.0;
+        // スプレッド（1人の中の最大−最小）は、型のオフセットが99の天井に当たらなくなった分だけ強さに応じて開く
+        // （実測: 強さ80で40.6・90で45.3）。強さ50〜70は従来どおり20〜36のまま。
+        var spreadMax = strength >= 90 ? 48.0 : strength >= 80 ? 44.0 : 36.0;
         Assert.True(allAPerSchoolAvg <= allACap, $"オールAが多すぎる: {allAPerSchoolAvg:F2}人/校（強さ{strength}・上限{allACap}）");
-        Assert.InRange(spreadAvg, 20.0, 36.0);
+        Assert.InRange(spreadAvg, 20.0, spreadMax);
         Assert.True(pinnedRate <= pinnedCap, $"99への張り付き率が高すぎる: {pinnedRate:F1}%（強さ{strength}・上限{pinnedCap}）");
         if (strength >= 80)
         {

@@ -122,7 +122,7 @@ namespace KokoSim.Unity.MatchPreview
                 TeamName = teamName,
                 OrderCaption = orderCaption,
                 OverallValue = (int)Math.Round(strength.Overall),
-                OverallGrade = Tiers.FromStrength(strength.Overall).ToString(),
+                OverallGrade = strength.Tier.ToString(),
             };
 
             AddAxis(side, FactorLabels[0], strength.Batting);

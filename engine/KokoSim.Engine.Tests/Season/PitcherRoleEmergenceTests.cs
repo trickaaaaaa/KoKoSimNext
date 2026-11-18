@@ -113,7 +113,10 @@ public sealed class PitcherRoleEmergenceTests
         var fielders = all.Where(p => !PitcherRoleResolver.LeansPitcher(p)).Select(BattingLevel).ToList();
 
         var pitcherSd = Math.Sqrt(pitchers.Sum(v => Math.Pow(v - pitchers.Average(), 2)) / pitchers.Count);
-        Assert.True(pitcherSd > 5.0, $"投手の打撃分布が狭すぎる（崖の疑い）: sd={pitcherSd:F2}");
+        // 5.0→4.5（2026-11-17 issue #1080）: talentCenter未指定（名声非注入の既定32）に自校の下げ幅
+        // （RosterCoefficients.StrengthTargetDrop・既定7）も乗り、入学時の下げ(IntakeDrop)後のtrainedCenter
+        // （32-7-12=13）が総合力の下限（TalentMin=10）に寄るぶん、分布がわずかに圧縮される（実測 sd=4.88）。
+        Assert.True(pitcherSd > 4.5, $"投手の打撃分布が狭すぎる（崖の疑い）: sd={pitcherSd:F2}");
 
         // 野手の分布と十分に重なる（完全に分離＝崖）。
         var fielderMedian = fielders.OrderBy(v => v).ElementAt(fielders.Count / 2);

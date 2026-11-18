@@ -180,7 +180,7 @@ namespace KokoSim.Unity.Practice
             {
                 Name = s.Name,
                 Overall = (int)Math.Round(strength.Overall),
-                TierLetter = Tiers.FromStrength(strength.Overall).ToString(),
+                TierLetter = strength.Tier.ToString(),
                 AcceptPercent = Percent(ManagerService.Practice.AcceptChance(ManagerService.Manager, own, s)),
             };
 
@@ -222,7 +222,7 @@ namespace KokoSim.Unity.Practice
         {
             SchoolId = s.Id,
             Name = s.Name,
-            TierLetter = Tiers.FromStrength(Profile(s).Overall).ToString(),
+            TierLetter = Profile(s).Tier.ToString(),
             Overall = (int)Math.Round(Profile(s).Overall),
             Tradition = TraditionLabel(s.Tradition),
             AcceptPercent = Percent(scheduler.AcceptChance(manager, own, s)),

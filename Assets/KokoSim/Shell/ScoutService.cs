@@ -200,7 +200,7 @@ namespace KokoSim.Unity.Shell
         public static bool HasDorm => ManagerService.Facilities.LevelOf("dorm") > 0;
 
         /// <summary>自校の格（競合校の格と比べる基準）。</summary>
-        private static Tier HomeTier() => Tiers.FromStrength(TeamOverall.Of(RosterService.Active));
+        private static Tier HomeTier() => TeamOverall.TierOf(RosterService.Active);
 
         private static ScoutCandidate At(int index)
             => Current != null && index >= 0 && index < Current.Candidates.Count ? Current.Candidates[index] : null;

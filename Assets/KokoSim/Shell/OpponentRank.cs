@@ -26,6 +26,6 @@ namespace KokoSim.Unity.Shell
             return strength;
         }
 
-        public static Tier Of(School school) => Tiers.FromStrength(ProfileOf(school).Overall);
+        public static Tier Of(School school) => ProfileOf(school).Tier;
     }
 }

@@ -144,7 +144,10 @@ public sealed class PitchLimitTests
 
         Assert.True(limited.HomePitching[0].Pitches < 45,
             $"AI采配の先発が上限で降りていない: {limited.HomePitching[0].Pitches}");
-        Assert.True(free.HomePitching[0].Pitches > limited.HomePitching[0].Pitches + 30,
+        // +30→+20（2026-11-17 issue #1080）: AI校全体の強さ→総合目標を一律に下げたぶん、相手（away）打線が
+        // わずかに弱くなり、上限なしの完投級の球数も実測48まで下がった（従来は60台）。狙いは「上限が無ければ
+        // 十分多く投げる」の確認で、閾値は余裕を少し削って揃える。
+        Assert.True(free.HomePitching[0].Pitches > limited.HomePitching[0].Pitches + 20,
             $"持ち越しなし({free.HomePitching[0].Pitches})と差が出ていない({limited.HomePitching[0].Pitches})");
         Assert.True(limited.HomePitching.Count >= 2, "継投が発生していない（先発のみ）");
     }

@@ -301,7 +301,7 @@ namespace KokoSim.Unity.Scout
             _ => "地元でプレーしたいようだ",
         };
 
-        private static Tier HomeTier() => Tiers.FromStrength(TeamOverall.Of(RosterService.Active));
+        private static Tier HomeTier() => TeamOverall.TierOf(RosterService.Active);
 
         private int WeeksUntilCandidates()
         {

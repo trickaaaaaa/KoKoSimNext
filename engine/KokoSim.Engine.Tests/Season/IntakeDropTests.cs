@@ -61,7 +61,11 @@ public sealed class IntakeDropTests
         {
             var diff = with.Zip(without, (a, b) => a.Level(k) - b.Level(k)).Average();
             // 下げない。差は総合力の下限クランプ（TalentMin）と丸めの分だけ（実測 最大+0.36）。
-            Assert.True(diff > -0.5 && diff < 0.5, $"{k} が動いた（平均差 {diff:F2}）");
+            // 2026-11-17（issue #1080）: talentCenter 未指定（名声非注入の既定 32）に自校の下げ幅
+            // （RosterCoefficients.StrengthTargetDrop・既定7）も乗るため、入学時の下げ(IntakeDrop)後の
+            // trainedCenter（32-7-12=13）が総合力の下限（TalentMin=10）に寄り、クランプの非対称が「お任せで
+            // 伸びない能力」側にもわずかに染みる（実測: Steal 平均差 1.34）。許容を ±0.5→±2.0 に広げる。
+            Assert.True(diff > -2.0 && diff < 2.0, $"{k} が動いた（平均差 {diff:F2}）");
         }
         foreach (var k in GrownByDefault)
         {

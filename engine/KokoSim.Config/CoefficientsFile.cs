@@ -2735,6 +2735,7 @@ public static class CoefficientsLoader
         public double TierCompressionPivot { get; set; } = D.TierCompressionPivot;
         public double TierCompressionSlope { get; set; } = D.TierCompressionSlope;
         public double TierCompressionKnee { get; set; } = D.TierCompressionKnee;
+        public double StrengthTargetDrop { get; set; } = D.StrengthTargetDrop;
         // 凸凹配分
         public double ConcentrationMean { get; set; } = D.ConcentrationMean;
         public double ConcentrationSd { get; set; } = D.ConcentrationSd;
@@ -3057,6 +3058,7 @@ public static class CoefficientsLoader
             TierCompressionPivot = TierCompressionPivot,
             TierCompressionSlope = TierCompressionSlope,
             TierCompressionKnee = TierCompressionKnee,
+            StrengthTargetDrop = StrengthTargetDrop,
             ConcentrationMean = ConcentrationMean,
             ConcentrationSd = ConcentrationSd,
             SpecialtyFloor = SpecialtyFloor,
@@ -3245,6 +3247,7 @@ public static class CoefficientsLoader
         public int BenchSampleSize { get; set; } = D.BenchSampleSize;
         public double OverallScale { get; set; } = D.OverallScale;
         public double OverallOffset { get; set; } = D.OverallOffset;
+        public double OverallTierBoost { get; set; } = D.OverallTierBoost;
 
         public TeamStrengthCoefficients ToModel() => new()
         {
@@ -3276,6 +3279,7 @@ public static class CoefficientsLoader
             BenchSampleSize = BenchSampleSize,
             OverallScale = OverallScale,
             OverallOffset = OverallOffset,
+            OverallTierBoost = OverallTierBoost,
         };
     }
 

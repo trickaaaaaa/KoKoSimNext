@@ -38,6 +38,10 @@ public static class AiRosterFactory
         var rng = CohortSeed(school.Id, enrollmentYearIndex);
         var pc = deps.Persistent;
         var center = RecruitCenter(school, pc, deps.Roster);
+        // 投手は issue #1080 の下げ幅（StrengthTargetDrop）を打ち消した中心を使う。打者の個性（オールAの緩和）を
+        // 狙った下げ幅は打撃側の生成だけに効かせる＝球速の分布（VelocityDistributionByTierTests・design #908）を
+        // 崩さない。AiRosterCycle.SolveGrowthG の1段目（gPitch を解く側）も同じ下げ幅を打ち消して解く。
+        var pitchingCenter = center + deps.Roster.StrengthTargetDrop;
 
         var usedGiven = new HashSet<string>();
         var players = new List<AiPlayer>();
@@ -91,7 +95,7 @@ public static class AiRosterFactory
             // 打撃は w の連続量（#377）。投手として育っている者だけが投手能力を主RNGから引き、
             // それ以外は肩からの推定で埋まる（#381）＝「全員が投手能力を持つが、投げ慣れた者が上」。
             var snap = leansPitcher
-                ? StrengthTeamFactory.Pitcher(name, center, weight, rng, deps.Personality,
+                ? StrengthTeamFactory.Pitcher(name, pitchingCenter, weight, rng, deps.Personality,
                         salt++, rc.Archetypes, archSalt++, rc, mental,
                         pitchingLift: starPitchers.Contains(i) ? lift : 0.0)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats }

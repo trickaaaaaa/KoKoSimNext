@@ -135,7 +135,10 @@ public sealed class ProspectGenerationTests
         Assert.InRange(Mean(high, AbilityKind.Speed) - Mean(low, AbilityKind.Speed), expected - 3.0, expected + 3.0);
         Assert.InRange(Mean(high, AbilityKind.ArmStrength) - Mean(low, AbilityKind.ArmStrength), expected - 3.0, expected + 3.0);
         // ばらつき（SD 12）は残る＝弱小校（中心20→身体系36）にも E 以上（40+）の俊足が一定数出る。
-        Assert.True(low.Count(p => p.Level(AbilityKind.Speed) >= 50) > low.Count * 0.08,
+        // 2026-11-17（issue #1080）: 自校もAI校と同じ下げ幅（RosterCoefficients.StrengthTargetDrop・既定7）だけ
+        // talentCenter が下がり、弱小校の身体系中心も連動して下がる（36→30.75）ぶん閾値50を超える裾が薄くなる
+        // （実測 約5〜6%）。0.08→0.04 に下げる（裾が残っていること自体の確認が目的で、消えてはいない）。
+        Assert.True(low.Count(p => p.Level(AbilityKind.Speed) >= 50) > low.Count * 0.04,
             "弱小校の俊足が消えている（身体系のSDが潰れている）");
 
         // 一方、専門能力（ミート）は総合力に明確に連動する。

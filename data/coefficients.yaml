@@ -1562,6 +1562,9 @@ team_strength:
   # 実測フィット（TeamOverallCalibrationTests, 残差<0.6）。表示・シードとも同一値になる。
   overall_scale: 1.037
   overall_offset: -6.6
+  # 総合(Overall)からS〜G判定するときだけ加算する補正（issue #1080）。roster.strength_target_drop と同じ値にして、
+  # 生成目標を下げた分だけランク境界側で打ち消す＝見た目の総合ランクは変えない（中身の能力値だけが下がる）。
+  overall_tier_boost: 7.0
 
 nation:
   strength_mean: 44.0
@@ -1904,6 +1907,10 @@ roster:
   # 一様0.55: 80vs75 63% / 80vs70 75% / 80vs65 86% / 80vs60 92% / 80vs50 98%（フルシム実測）。代償として強度85の校の
   # 能力中心は 64.75（表示A・中身B−）まで落ちる＝オーナー承認済み（表示ランクは raw のまま。展望の能力バーとは乖離する）。
   tier_compression_knee: 100.0
+  # 強さ→能力中心の目標を一律に下げる量（issue #1080・オーナー決定2026-11-17）。強さ85〜90の学校は全員ほぼ99まで
+  # 積まないとチーム総合が目標に届かず、打者の型(issue #1066)を入れても個性が死ぬ。学校どうしの勝率は
+  # AggregateMatch が差分だけを見るので変わらない（team_strength.overall_tier_boost が見た目のランクを打ち消す）。
+  strength_target_drop: 7.0
 
   # 凸凹配分（総ポイントをランダム重みで配分・偏り自体もばらつく＝金太郎飴回避）
   concentration_mean: 0.35    # 偏り強度σ。大きいほど内訳が凸凹

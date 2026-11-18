@@ -13,6 +13,11 @@ namespace KokoSim.Engine.Tests.Season;
 /// （強度10ポイント＝表示1ティアごとに得点が約0.4倍）だった。ここでは写像そのものの性質
 /// （恒等・単調・ピボット不動・上位帯の差が縮む）を固定する。2026-08-19（設計書21）から既定は恒等＝
 /// 寝かせる役は表示→物理の効き <c>ability_effect</c> に移り、圧縮は比較・実験用の式として残る。</para>
+///
+/// <para>2026-11-17（issue #1080）: <see cref="RosterCoefficients.CompressStrength"/> の末尾に
+/// <see cref="RosterCoefficients.StrengthTargetDrop"/>（AI校全体の強さ→総合目標を一律に下げる・既定7.0）が
+/// 加わった。このクラスは「ティア圧縮（pivot/slope/knee）」そのものの性質を見るテストなので、
+/// <c>StrengthTargetDrop = 0.0</c> を明示して新しい下げ幅の影響を外す。</para>
 /// </summary>
 public sealed class TierCompressionTests
 {
@@ -25,7 +30,7 @@ public sealed class TierCompressionTests
     [InlineData(100.0)]
     public void Slope1_IsIdentity(double strength)
     {
-        var c = new RosterCoefficients { TierCompressionSlope = 1.0, TierCompressionKnee = 100.0 };
+        var c = new RosterCoefficients { TierCompressionSlope = 1.0, TierCompressionKnee = 100.0, StrengthTargetDrop = 0.0 };
         Assert.Equal(strength, c.CompressStrength(strength), 9);
     }
 
@@ -33,19 +38,20 @@ public sealed class TierCompressionTests
     [Fact]
     public void Pivot_IsFixedPoint()
     {
-        var c = new RosterCoefficients();
+        var c = new RosterCoefficients { StrengthTargetDrop = 0.0 };
         Assert.Equal(c.TierCompressionPivot, c.CompressStrength(c.TierCompressionPivot), 9);
     }
 
     /// <summary>
     /// 既定は<b>恒等</b>（slope 1.0・knee 100。設計書21・2026-08-19）。AI校だけを生成で寝かせる圧縮は表示ランクと中身を
     /// 乖離させたので廃止し、勾配を寝かせる役は表示→物理の効き（<c>ability_effect</c>）が全員対称に担う。
-    /// 式は比較・実験用に残す（slope 0.55＝一様圧縮／knee 60＝旧既定の膝）ので、その性質も固定しておく。
+    /// 式は比較・実験用に残す（slope 0.55＝一様圧縮／knee 60＝旧既定の膝）ので、その性質も固定しておく
+    /// （issue #1080 の StrengthTargetDrop は 0 にして外す＝このテストの対象外）。
     /// </summary>
     [Fact]
     public void Default_IsIdentity_AndTheFormulaStillWorksForExperiments()
     {
-        var c = new RosterCoefficients();
+        var c = new RosterCoefficients { StrengthTargetDrop = 0.0 };
         Assert.Equal(1.0, c.TierCompressionSlope, 9);
         Assert.Equal(100.0, c.TierCompressionKnee, 6);
         foreach (var s in new[] { 10.0, 40.0, 65.0, 80.0, 99.0 })

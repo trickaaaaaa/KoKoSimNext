@@ -47,7 +47,9 @@ public sealed class DualTalentIntakeTests
         var on = BothTopShare(new RosterCoefficients(), center);
         // 1.8→1.7（2026-11-12 issue #865）: 中心32は入学時の下げ（IntakeDrop）が満額で、制球が「下げた尺度」で
         // 作られるぶん二刀流の上乗せの絶対量が縮む（実測 1.78倍）。中心50は 1.8 を満たす。
-        Assert.True(on >= off * 1.7, $"on={on} off={off}");
+        // 1.7→1.65（2026-11-17 issue #1080）: 自校もAI校と同じ下げ幅（RosterCoefficients.StrengthTargetDrop）だけ
+        // 生成中心を下げたぶん、中心32（下げの満額側）の比が実測 1.694倍まで縮んだ（中心50は 2.37倍で余裕あり）。
+        Assert.True(on >= off * 1.65, $"on={on} off={off}");
     }
 
     [Fact]

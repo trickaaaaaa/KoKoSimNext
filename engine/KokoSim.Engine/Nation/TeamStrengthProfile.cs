@@ -16,11 +16,8 @@ public sealed record TeamStrength(
     double Mobility,
     double Depth,
     double Mental,
-    double Overall)
-{
-    /// <summary>総合力からティアを導出（学校のティアと同体系）。</summary>
-    public Tier Tier => Tiers.FromStrength(Overall);
-}
+    double Overall,
+    Tier Tier);
 
 /// <summary>
 /// 6指標の重み（不変条件#4: バランス係数は data/coefficients.yaml の team_strength: 駆動）。
@@ -78,6 +75,15 @@ public sealed record TeamStrengthCoefficients
     //     線形較正。実測フィット（TeamOverallCalibrationTests, 残差<0.6）。表示・シードとも同一値になる。 ---
     public double OverallScale { get; init; } = 1.037;
     public double OverallOffset { get; init; } = -6.6;
+
+    /// <summary>
+    /// <see cref="TeamStrength.Tier"/>（総合からのS〜G判定）だけに加算する補正（issue #1080）。
+    /// <see cref="Season.RosterCoefficients.StrengthTargetDrop"/> と同じ量を既定にし、AI校・自校とも生成目標を
+    /// 下げた分だけランク境界側で打ち消す＝<see cref="Overall"/> の数値そのもの（表示・<see cref="AggregateMatch"/>・
+    /// 逆算配分の目標追随）は下げたまま、見た目の総合ランク（最上位はS・弱小はG）だけ変えない
+    /// （オーナー決定2026-11-17「中身の能力値だけが下がる」）。
+    /// </summary>
+    public double OverallTierBoost { get; init; } = RosterCoefficients.Default.StrengthTargetDrop;
 }
 
 /// <summary>
@@ -104,7 +110,8 @@ public static class TeamStrengthProfile
         var mental = MentalStrength(regulars, pitchers);
 
         var overall = WeightedOverall(batting, pitching, defense, mobility, depth, mental, c);
-        return new TeamStrength(batting, pitching, defense, mobility, depth, mental, overall);
+        var tier = Tiers.FromStrength(overall + c.OverallTierBoost);
+        return new TeamStrength(batting, pitching, defense, mobility, depth, mental, overall, tier);
     }
 
     // --- 1選手の合成（サブ重み合計1.0）。PlayerStrengthProfile（選手個人のカテゴリ別ランク）も同じ式を共有する ---
