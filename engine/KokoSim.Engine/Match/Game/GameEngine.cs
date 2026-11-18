@@ -2364,6 +2364,7 @@ public static class GameEngine
             // した「捕れる球」では起きない。暴投・捕逸と同じく rng（Chance）は従来どおり対象三振ごとに1回引き、
             // コースのゲートは Chance の後段（&& の第2項）に置く＝乱数消費の位置と回数を従来と揃える。
             var droppedThirdStrikeReached = false;
+            Player? dtsFirst = null, dtsSecond = null, dtsThird = null;
             if (res.Result == PlateAppearanceResult.Strikeout && (bases.First is null || outs == 2)
                 && paBaserunning.DropThirdStrikeReachProb > 0.0)
             {
@@ -2377,15 +2378,24 @@ public static class GameEngine
                         session.PitchLog[^1].LocationX, session.PitchLog[^1].LocationY, ctx.StrikeZone, paBaserunning))
                 {
                     droppedThirdStrikeReached = true;
-                    // 一塁を与える＝**押し出しを伴う**（issue #525）。2アウトの振り逃げは一塁が埋まっていても
-                    // 成立するので、bases.First へ直に代入すると一塁走者が消える（走者保存則違反。400試合中4件を
-                    // Heavy が検出。旧確率 0.001 では滅多に踏まなかった経路が、着弾コースゲートに伴う再校正
-                    // 0.39 で表に出た）。四球・死球と同じ規則を使う＝満塁なら三塁走者が生還する。
-                    // 乱数は引かない（AwardFirstBase は純粋な塁の付け替え）。
-                    // 走者の脚は timeline に足さない＝振り逃げの絵は BuildDropThirdStrike（打者→一塁と捕手の
-                    // 処理）が担当で、押し出される走者の描画は別途（この打席の timeline は既に確定済み）。
-                    var (dtsRuns, _) = BaserunningModel.AwardFirstBase(bases, batter);
-                    runs += dtsRuns;
+                    // 振り逃げは捕手が球を逸らしたときにしか成立しない（上のコースのゲート＝暴投・捕逸と同じ）ので、
+                    // 先に暴投と同じ ApplyBatteryMiss で走者を1つずつ進め（三塁走者は生還）、そのあと打者を一塁へ置く
+                    // （issue #1142）。ApplyBatteryMiss は一塁を空けるので、2アウトで一塁が埋まっていても
+                    // 走者は消えない（issue #525 の走者保存則）。満塁なら押し出しと同じ結果になり二重には進まない。
+                    // 得点は暴投の分岐と同じ帰属（RecordRun・責任投手の失点）。この打席の打点には数えない。
+                    // 乱数は引かない（どちらも純粋な塁の付け替え）。
+                    dtsFirst = bases.First;
+                    dtsSecond = bases.Second;
+                    dtsThird = bases.Third;
+                    var dtsRuns = BaserunningModel.ApplyBatteryMiss(bases);
+                    BaserunningModel.AwardFirstBase(bases, batter);
+                    if (dtsRuns > 0 && dtsThird is not null)
+                    {
+                        offense.Runs += dtsRuns;
+                        runsThisHalf += dtsRuns;
+                        offense.RecordRun(dtsThird);
+                        ChargeRunnerScored(dtsThird);
+                    }
                     offense.DroppedThirdStrikeCount++;
                     // 再生データ（issue #488）: この球は三振確定後の後処理として判定されるため p.LastPitch を
                     // 既に構築済み（この打席の最終球＝CapturePitches ブロックで既に控えている）＝with で追加する。
@@ -2394,7 +2404,8 @@ public static class GameEngine
                         p.LastPitch = lpForDropThirdStrike with
                         {
                             DropThirdStrikePlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
-                                WithThrowScatter(Timeline.TimelineBuilder.BuildDropThirdStrike(batter, defense.Catcher, paBaserunning, ctx.Field),
+                                WithThrowScatter(Timeline.TimelineBuilder.BuildDropThirdStrike(batter, defense.Catcher, paBaserunning, ctx.Field,
+                                    dtsFirst, dtsSecond, dtsThird),
                                     System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(), defense, ctx, rng, (ulong)log.Count * 16 + 3)!),
                         };
                 }
