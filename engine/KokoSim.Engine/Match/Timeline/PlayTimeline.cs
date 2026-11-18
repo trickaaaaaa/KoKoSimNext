@@ -192,8 +192,10 @@ public sealed record TimelineCaption(double T, string Text);
 /// HomeRun=柵越えの着地の瞬間（飛距離を <see cref="JudgementEvent.DistanceM"/> に併記する）。
 /// Error=失策で出塁が確定した瞬間（捕球エラー＝弾いた時刻／悪送球＝送球が届くはずだった時刻）。
 /// 「アウトの絵に見えるのに黙って出塁する」を防ぐため、エラーは常時表示（セーフと違い際どさ条件なし）。
+/// Foul=守備ビューで見せるファウル（issue #1074）がファウルと確定した瞬間（ファウルゾーンへ落ちた／スタンドへ入った時刻）。
+/// 対決ビューのまま流れるふつうのファウルには積まない（球審コールが出るので二重になる, issue #1134）。
 /// </summary>
-public enum JudgementKind { Out, Safe, Fair, HomeRun, Error }
+public enum JudgementKind { Out, Safe, Fair, HomeRun, Error, Foul }
 
 /// <summary>
 /// 判定イベント1件（判定オーバーレイ, Issue #260）。走者レッグの副産物（終端T1・OutAtEnd/CloseCall流用）
