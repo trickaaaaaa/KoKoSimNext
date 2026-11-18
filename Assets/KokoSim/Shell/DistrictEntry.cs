@@ -146,10 +146,13 @@ namespace KokoSim.Unity.Shell
             return s => rank.TryGetValue(s.Id, out var r) ? r : (int?)null;
         }
 
-        /// <summary>他地区の消化を背景で始める（自校の地区予選に入るとき・その途中でロード復帰したとき）。</summary>
+        /// <summary>他地区の消化を背景で始める（自校の地区予選に入るとき・その途中でロード復帰したとき）。
+        /// <para><b>大会モードかどうかを見ない</b>。呼ばれるのはどれも自校が地区予選の大会モードに入った後
+        /// （<see cref="TournamentEntry.Enter"/> は EnterTournament の後、ロード復帰は RestoreTournament の後）で、
+        /// <see cref="EnterAfterDistrictTournament"/> と同じ「Normal でなければ戻る」を置くと一度も起動せず、
+        /// 県大会へ入る瞬間に全地区を同期で解く（神奈川で237試合・エディタ実測で約37秒止まる）ことになっていた（PR #1117 のレビュー）。</para></summary>
         public static void StartOtherDistrictSim()
         {
-            if (GameSession.Current.Mode != GameMode.Normal) return;
             var prefectureId = NationService.PrefectureId;
             var districtCount = DistrictPlanProvider.AutumnDistrictsOf(prefectureId);
             if (districtCount <= 0) return;
@@ -164,7 +167,7 @@ namespace KokoSim.Unity.Shell
             int prefectureId, int districtCount, int advance, int yearIndex)
         {
             if (!OtherDistrictBackgroundSim.IsFor(OtherDistrictKey(yearIndex))) StartOtherDistrictSim();
-            var results = OtherDistrictBackgroundSim.WaitForResults();
+            var results = OtherDistrictBackgroundSim.WaitForResults(OtherDistrictKey(yearIndex));
 
             // 解けなかった地区（背景の失敗）は同期で解き直す。決定論なので同じ結果になる。
             var jobs = BuildOtherDistrictJobs(prefectureId, districtCount, advance, yearIndex);
@@ -178,6 +181,10 @@ namespace KokoSim.Unity.Shell
             OtherDistrictBackgroundSim.FoldInto(NationService.TournamentStats, results);
             return results;
         }
+
+        /// <summary>今年の他地区の背景フルシムがもう始まっているか（開発用の通し確認 DistrictFlowCheck が見る）。</summary>
+        public static bool OtherDistrictSimStartedThisYear
+            => OtherDistrictBackgroundSim.IsFor(OtherDistrictKey(GameClock.YearIndex));
 
         private static ulong OtherDistrictKey(int yearIndex) => GameSeed.Master ^ (9500UL + (ulong)yearIndex);
 

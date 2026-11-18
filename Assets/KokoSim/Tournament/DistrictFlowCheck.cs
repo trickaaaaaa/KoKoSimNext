@@ -64,6 +64,8 @@ namespace KokoSim.Unity.Tournament
                 districtFieldCount > 0 && districtFieldCount < NationService.PrefectureSchools.Count + 1,
                 "district=" + districtFieldCount + " pref=" + (NationService.PrefectureSchools.Count + 1));
             GameSession.Current.ConsumeBanner();
+            // issue #1106: 他地区は自校の地区予選を遊んでいる間に背景でフルシムする＝地区予選の頭で始まっている
+            Check("他地区の背景フルシムが地区予選の頭で始まった", DistrictEntry.OtherDistrictSimStartedThisYear);
 
             // ブロックリーグ戦の県（神奈川・issue #772）: 進行体がリーグ戦で、自校はブロックの全校と1回ずつ戦う
             var prefId = NationService.PrefectureId;
@@ -99,7 +101,13 @@ namespace KokoSim.Unity.Tournament
                     GameSession.Current.LastSummerPlacementIds is { Count: > 0 });
             }
 
-            HomeState.Current.DismissResult();
+            // 後始末の前の通算（夏の県大会ぶんを既に持っている＝前後で増えたかを見る）
+            var before = new System.Collections.Generic.Dictionary<int, int>();
+            foreach (var x in NationService.PrefectureSchools) before[x.Id] = CareerGames(x.Id);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            HomeState.Current.DismissResult();   // ここで地区予選の後始末→秋季県大会へ（他地区の結果を受け取る）
+            sw.Stop();
+            Note("地区予選の後始末にかかった時間: " + sw.ElapsedMilliseconds + "ms");
             yield return null;
 
             // 地区予選の上位N校（YAML の advance_per_group・issue #688）は優勝しなくても県大会へ進む。
@@ -140,6 +148,17 @@ namespace KokoSim.Unity.Tournament
             if (isLeague)
                 Check("リーグ戦の県は進出校の合計とほぼ一致する（推薦が重複したぶん以内）",
                     prefFieldCount >= maxField - seedExtra, "pref大会=" + prefFieldCount + " 上限=" + maxField);
+            // issue #1106: 他地区から勝ち上がってきた学校にも、地区予選の選手成績が積まれている
+            var myDistrict = NationService.DistrictId ?? 0;
+            int others = 0, withStats = 0;
+            foreach (var s in GameSession.Current.Field)
+            {
+                if (s.Id == -1 || s.DistrictId == myDistrict) continue;
+                others++;
+                if (CareerGames(s.Id) > (before.TryGetValue(s.Id, out var b0) ? b0 : 0)) withStats++;
+            }
+            Check("他地区から来た学校に地区予選の選手成績が積まれた（後始末の前後で通算の出場が増えた）", others > 0 && withStats == others,
+                withStats + "/" + others + "校");
             GameSession.Current.ConsumeBanner();
 
             yield return PlayOutCurrentTournament();
@@ -169,6 +188,16 @@ namespace KokoSim.Unity.Tournament
                 yield return null;
             }
             played?.Invoke(games);
+        }
+
+        /// <summary>学校の通算帳簿の出場試合数の合計（未登録は0）。</summary>
+        private static int CareerGames(int schoolId)
+        {
+            var book = NationService.TournamentStats.CareerForSchool(schoolId);
+            if (book == null) return 0;
+            var n = 0;
+            foreach (var kv in book.Players) n += kv.Value.Batting.Games;
+            return n;
         }
 
         /// <summary>自校の部員を上限まで引き上げる（大会を確実に勝ち抜かせるための検証用の細工）。</summary>

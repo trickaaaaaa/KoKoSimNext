@@ -21,7 +21,10 @@ namespace KokoSim.Unity.Shell
     {
         private const int PausedPollMs = 16;
         private const int StepSleepMs = 2;
-        private static readonly int MaxWorkers = Math.Max(1, Math.Min(2, Environment.ProcessorCount - 2));
+        // 地区ごとに1本（神奈川で6地区・237試合＝直列で約37秒、1地区4〜8秒・エディタ実測）。2本に絞ると全地区が揃うまで
+        // 約24秒かかり、自校の地区予選を早く終えると県大会へ入る瞬間にその分止まる。本数は地区数で頭打ち（Start）。
+        // ライブ観戦中は PauseGate で止まるので、観戦の滑らかさには響かない。
+        private static readonly int MaxWorkers = Math.Max(1, Environment.ProcessorCount - 2);
 
         private static readonly object Gate = new object();
         private static readonly Dictionary<int, OtherDistrictResult> Results = new Dictionary<int, OtherDistrictResult>();
@@ -86,11 +89,16 @@ namespace KokoSim.Unity.Shell
                 Thread.Sleep(PausedPollMs);
         }
 
-        /// <summary>消化を完了まで待って、地区番号→結果を返す（未開始なら空）。</summary>
-        public static IReadOnlyDictionary<int, OtherDistrictResult> WaitForResults()
+        /// <summary>消化を完了まで待って、地区番号→結果を返す。手元の結果が <paramref name="key"/> の大会のもの
+        /// でなければ（未開始・前年の走りが残っている）空を返す＝前年の結果を今年へ混ぜない。</summary>
+        public static IReadOnlyDictionary<int, OtherDistrictResult> WaitForResults(ulong key)
         {
             Task t;
-            lock (Gate) t = _task;
+            lock (Gate)
+            {
+                if (!_keySet || _key != key) return new Dictionary<int, OtherDistrictResult>();
+                t = _task;
+            }
             if (t != null)
             {
                 _forceRun = true;
