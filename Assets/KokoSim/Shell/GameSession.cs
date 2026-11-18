@@ -434,6 +434,9 @@ namespace KokoSim.Unity.Shell
         /// <see cref="MyRegionPlacementIds"/> が <see cref="LastAutumnPlacementIds"/> へ自動で落ちる。</summary>
         public IReadOnlyList<int> LastRegionalPlacementIds { get; private set; }
 
+        /// <summary>センバツの選考発表で出場判定に使ったあと、次の年へ持ち越さないよう空に戻す。</summary>
+        public void ClearRegionalPlacement() => LastRegionalPlacementIds = null;
+
         /// <summary>自地区の順位付き出場校ID。単独県開催の地区（東京・北海道）は地区大会を開かないため
         /// 秋季県大会の順位をそのまま使う（<see cref="RegionalEntry"/> と同じフォールバック規則）。</summary>
         public IReadOnlyList<int> MyRegionPlacementIds => LastRegionalPlacementIds ?? LastAutumnPlacementIds;

@@ -1430,7 +1430,7 @@ events:
           - who: captain
             say: "……引きました。"
           - who: team_manager
-            say: "監督、番号が出ます。"
+            say: "監督、甲子園の初戦の番号が出ます。"
       - lines:
           - who: team_manager
             say: "組み合わせ、出ましたよ。"
@@ -1489,7 +1489,7 @@ events:
           - who: captain
             say: "……出ました。"
           - who: team_manager
-            say: "監督、初戦の相手です。"
+            say: "監督、センバツの初戦の相手です。"
       - lines:
           - who: team_manager
             say: "組み合わせ出ましたよ、監督。"
@@ -1509,21 +1509,21 @@ events:
     variants:
       - lines:
           - who: narration
-            say: "発表の紙に、自分たちの校名は無かった。部室はしばらく静かだった。"
+            say: "センバツの出場校の発表。紙に、自分たちの校名は無かった。部室はしばらく静かだった。"
           - who: captain
             say: "……夏で見返します。"
           - who: team_manager
             say: "その言葉、忘れないでくださいね。"
       - lines:
           - who: team_manager
-            say: "監督、選外でした。"
+            say: "監督、センバツは選外でした。"
           - who: manager
             say: "次で取り返す。"
           - who: player
             say: "はい。"
       - lines:
           - who: narration
-            say: "掲示板の前で部員が肩を落としている横を、他校の歓声が通り過ぎていった。"
+            say: "センバツの選考発表。掲示板の前で部員が肩を落としている横を、他校の歓声が通り過ぎていった。"
           - who: captain
             say: "悔しいです、正直。"
           - who: team_manager

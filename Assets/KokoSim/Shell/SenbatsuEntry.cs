@@ -72,13 +72,17 @@ namespace KokoSim.Unity.Shell
             GameSession.Current.SetPendingSenbatsuField(new List<int>(), "");   // 発表済み＝消費する
 
             var selected = fieldIds.Contains(ManagerSchoolId);
+            var entered = ManagerEnteredRegional();
+            GameSession.Current.ClearRegionalPlacement();   // 次の年へ持ち越さない（出場判定が前年の値に化けるのを防ぐ）
             var title = Title(yearIndex);
             var seed = GameSeed.Master ^ (ulong)(9700 + yearIndex * 10 + (int)TournamentKind.SenbatsuKoshien);
 
             if (!selected)
             {
-                EventService.Push("senbatsu_not_selected", subjectName: null,
-                    PresentedEffect.Bad("今年は選外だった。"));
+                // 選外のイベントは「候補だった（秋季地区大会に出た）年」だけ。出ていない年は観るだけのセンバツへ入る。
+                if (entered)
+                    EventService.Push("senbatsu_not_selected", subjectName: null,
+                        PresentedEffect.Bad("センバツ出場ならず。"));
                 var spectated = BuildSpectatedRunner(field, title, seed, yearIndex);
                 GameSession.Current.EnterSpectatedSenbatsu(title, spectated, field);
                 return;
@@ -89,6 +93,18 @@ namespace KokoSim.Unity.Shell
             PushDraw(runner, jinguRegion);
             GameSession.Current.EnterTournament(TournamentKind.SenbatsuKoshien, title, runner, field);
             GameSession.Current.Year = yearIndex;
+        }
+
+        /// <summary>自校が今年の秋季地区大会に出場したか（＝センバツの候補だったか）。地区大会を開く地区は
+        /// 自校が対話で戦った地区大会の順位に自校が入っているか。単独県開催の地区（東京・北海道）は
+        /// 県大会が地区大会を兼ねるので県大会の順位で見る（設計書05 §1.5・§4）。</summary>
+        internal static bool ManagerEnteredRegional()
+        {
+            var fmt = RegionalFormatProvider.ForRegion(PrefectureNames.RegionOf(NationService.PrefectureId));
+            var placement = fmt != null && fmt.SinglePrefecture
+                ? GameSession.Current.LastAutumnPlacementIds
+                : GameSession.Current.LastRegionalPlacementIds;
+            return placement != null && placement.Contains(ManagerSchoolId);
         }
 
         /// <summary>セーブから観るだけのセンバツへ復帰する（<see cref="TournamentEntry.RestoreRunner"/> のセンバツ版）。</summary>
