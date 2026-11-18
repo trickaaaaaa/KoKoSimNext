@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using KokoSim.Engine.Nation.Tournaments;
 
@@ -94,6 +95,17 @@ namespace KokoSim.Unity.Tournament
                   == "file:///C:/Users/%E5%B1%B1%E7%94%B0%20%E5%A4%AA%E9%83%8E/AppData/1-Summer.html",
                 "file URL（Windows・ドライブ／区切り）");
 
+            var reordered = TournamentPreviewState.ManagerFirst(new List<TournamentPamphletHtml.School>(schools));
+            Check(reordered.Count == 4 && reordered[0].IsManager && reordered[1].Block.SchoolName == "A&B高"
+                  && reordered[2].Block.SchoolName == "丙高" && reordered[3].Block.SchoolName == "丁高",
+                "自校を先頭へ（残りの並びは保つ）");
+            var htmlFirst = TournamentPamphletHtml.Render(view, bracket, reordered);
+            Check(htmlFirst.Contains("<ol class=\"idx-schools\">\n<li class=\"own\"><a href=\"#s-0\">"), "索引の出場校一覧の1番目が自校");
+            Check(htmlFirst.Contains("class=\"school own\" id=\"s-0\""), "登録メンバーの1校目が自校");
+            var noOwn = new List<TournamentPamphletHtml.School> { schools[0], schools[2], schools[3] };
+            Check(TournamentPreviewState.ManagerFirst(new List<TournamentPamphletHtml.School>(noOwn)).SequenceEqual(noOwn),
+                "自校が出場しない大会は並びが変わらない");
+
             RunLeague(Check);
 
             log.Insert(0, fail == 0 ? "ALL PASS\n" : "FAILED " + fail + "\n");
@@ -168,7 +180,10 @@ namespace KokoSim.Unity.Tournament
                         });
                     schools.Add(new TournamentPamphletHtml.School { Block = block, IsManager = st.IsManager });
                 }
+                schools = TournamentPreviewState.ManagerFirst(schools);
                 var html = TournamentPamphletHtml.RenderLeague(view, tables, schools);
+                check(html.Contains("<ol class=\"idx-schools\">\n<li class=\"own\"><a href=\"#s-0\">")
+                      && html.Contains("class=\"school own\" id=\"s-0\""), tag + ": 索引・登録メンバーの先頭が自校");
                 System.IO.Directory.CreateDirectory("out");
                 System.IO.File.WriteAllText("out/pamphlet-league-" + tag + ".html", html, new UTF8Encoding(false));
 
