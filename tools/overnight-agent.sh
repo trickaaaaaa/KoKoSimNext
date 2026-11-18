@@ -105,15 +105,18 @@ command -v gh >/dev/null || { echo "gh が見つかりません" >&2; exit 1; }
 [ -n "$SKIP_REVIEW" ] || [ -f "$REVIEW_PROMPT_TEMPLATE" ] || { echo "レビュー用テンプレートがありません: $REVIEW_PROMPT_TEMPLATE" >&2; exit 1; }
 [ -x "$DOTNET" ] || { echo "dotnet が見つかりません: $DOTNET" >&2; exit 1; }
 
-# 処理対象: needs-human / agent-failed / post-1.0 を除く、所有者本人の open issue。
-# post-1.0（1.0リリース後に回す）は拾わない＝バランスを揺らす新要素を夜間に入れない。
+# 処理対象: needs-human / agent-failed を除く、所有者本人の open issue。
+# post-1.0（1.0リリース後に回す）も拾う（2026-11-18 オーナー決定「全部夜間で回す」。ship-blocker が
+# 尽きるのを待つと永遠に始まらないため）。ただし並びの最後＝必須の件を先に片付けてから着手する。
+# バランスを揺らす件を並列で回すと互いの帯を壊し合うので、post-1.0 を流す夜は ISSUE_WORKERS=1 を推奨。
 # 出力は "番号\tタイトル\tISUNITY"（ISUNITY=1 なら area:unity 付き）。
-# 並びは ship-blocker（1.0までに必須）→ bug → その他、同じ段の中は番号昇順。
+# 並びは ship-blocker（1.0までに必須）→ bug → その他 → post-1.0、同じ段の中は番号昇順。
 fetch_issues() {
   gh issue list --state open --limit 100 --author "trickaaaaaa" --json number,title,labels --jq '
-    [ .[] | select( ( [.labels[].name] | (index("needs-human") or index("agent-failed") or index("post-1.0")) ) | not ) ]
+    [ .[] | select( ( [.labels[].name] | (index("needs-human") or index("agent-failed")) ) | not ) ]
     | sort_by( ([.labels[].name]) as $l
-        | (if ($l | index("ship-blocker")) then 0 elif ($l | index("bug")) then 1 else 2 end),
+        | (if ($l | index("ship-blocker")) then 0 elif ($l | index("post-1.0")) then 3
+           elif ($l | index("bug")) then 1 else 2 end),
           .number )
     | .[] | "\(.number)\t\(.title)\t\(if ([.labels[].name] | index("area:unity")) then 1 else 0 end)"'
 }
