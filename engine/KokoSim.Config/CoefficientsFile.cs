@@ -792,6 +792,8 @@ public static class CoefficientsLoader
         public double IrregularBounceLateralDeg { get; set; } = D.IrregularBounceLateralDeg;
         public double IrregularBounceRestitutionSwing { get; set; } = D.IrregularBounceRestitutionSwing;
         public double ErrorIrregularBonus { get; set; } = D.ErrorIrregularBonus;
+        public double LineDriveReachHeightM { get; set; } = D.LineDriveReachHeightM;
+        public double LineDriveScanStepSeconds { get; set; } = D.LineDriveScanStepSeconds;
 
         public FieldingCoefficients ToModel() => new()
         {
@@ -884,6 +886,8 @@ public static class CoefficientsLoader
             IrregularBounceLateralDeg = IrregularBounceLateralDeg,
             IrregularBounceRestitutionSwing = IrregularBounceRestitutionSwing,
             ErrorIrregularBonus = ErrorIrregularBonus,
+            LineDriveReachHeightM = LineDriveReachHeightM,
+            LineDriveScanStepSeconds = LineDriveScanStepSeconds,
         };
     }
 

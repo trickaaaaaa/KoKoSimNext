@@ -299,8 +299,53 @@ public static class FieldingResolver
 
         var bearingRad = ball.BearingDeg * Math.PI / 180.0;
         var fenceDist = field.FenceDistance(bearingRad);
+        // 飛行経路の標本（issue #1135）。LineDriveReachHeightM<=0 なら記録しない＝従来と完全に同じ積分コスト。
+        var trackFlightPath = coeff.LineDriveReachHeightM > 0.0;
+        var flightSamples = trackFlightPath ? new List<BallisticIntegrator.FlightSample>() : null;
         var ground = BallisticIntegrator.IntegrateToGround(
-            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, fenceDistanceM: fenceDist);
+            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, fenceDistanceM: fenceDist,
+            sampleStepSeconds: coeff.LineDriveScanStepSeconds, samples: flightSamples);
+
+        // 通り道のライナー捕球（issue #1135）: 着地点（本塁打／フェンス直撃の判定より先）を待たず、
+        // 飛行経路の途中で野手が正面にいればノーバウンド捕球でアウトにする。遊撃手の胸の高さを通って
+        // 外野に落ちるライナー（頂点は高いが着地点基準では遊撃手が候補に出てこない）と、低いライナー
+        // （頂点<FlyApexThresholdMでゴロ経路に入り、着地前の空中が一切判定されていなかった）の両方に効く。
+        // 本塁打コースの打球も対象＝野手は結果を知らずに追う（物理的に正面で捕れるなら捕る）。
+        // フェンス際の捕りにくさ（issue #976）は「この打球が柵の近くへ向かっているか」で決まる1つの値
+        // （着地点基準の既存判定と同じ）。標本ごとの位置で引き直すと、同じ打球の捕球機会なのに
+        // 「柵ゾーンの外縁をたまたま通る標本」だけペナルティが0になり、着地点では正しく際どい落球と
+        // 判定される打球が経路の途中で楽に捕れてしまう（実害: フェンス際の「あと一歩届かない」シナリオが
+        // 壊れた）。着地点（柵で打ち切る前の自然な到達点）までの距離で1回だけ決める。
+        var naturalLanding = ground.LandingPosition;
+        var naturalRange = Math.Sqrt(naturalLanding.X * naturalLanding.X + naturalLanding.Z * naturalLanding.Z);
+        var lineDriveWallPenalty = coeff.WallCatchPenalty(fenceDist - naturalRange);
+        if (flightSamples is { Count: > 0 }
+            && TryLineDriveCatch(fielders, flightSamples, ground.HangTimeSeconds, lineDriveWallPenalty, coeff) is { } ldc)
+        {
+            var catchMargin = ldc.BudgetSeconds - ldc.ReachSeconds;
+            var result = MaybeFlyError(ldc.Fielder, catchMargin, coeff, rng);
+            return new FieldingPlay
+            {
+                Result = result,
+                LandingX = ldc.Point.X,
+                LandingZ = ldc.Point.Z,
+                HangTimeSeconds = ldc.TimeSeconds,
+                ApexHeightM = TruncatedApexHeightM(flightSamples, ldc.TimeSeconds, ball.ContactHeightM),
+                LaunchHeightM = ball.ContactHeightM,
+                RangeM = Math.Sqrt(ldc.Point.X * ldc.Point.X + ldc.Point.Z * ldc.Point.Z),
+                BearingDeg = ball.BearingDeg,
+                BatterToFirstSeconds = runnerTime,
+                Class = BattedBallClass.Liner,
+                IsFly = true,
+                FielderRole = ldc.Fielder.Position,
+                FieldedAtSeconds = ldc.TimeSeconds,
+                FielderThrowSpeedMps = ldc.Fielder.Attributes.ThrowSpeedMps,
+                FielderFielding = ldc.Fielder.Attributes.Fielding,
+                FielderThrowAccuracy = ldc.Fielder.Attributes.ThrowAccuracy,
+                CatchMarginSeconds = catchMargin,
+                ErrorKind = result == BattedBallResult.Error ? FieldingErrorKind.Catch : null,
+            };
+        }
 
         // 本塁打: **フェンス上での高さ**がフェンス高以上（issue homerun-rate-explodes-at-high-power）。
         // 旧判定「着地距離≥フェンス距離 かつ 頂点≥フェンス高」は、柵の0〜6m先に落ちる低い当たり
@@ -1330,6 +1375,91 @@ public static class FieldingResolver
     {
         var dist = (target - f.Location).Length;
         return dist / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
+    }
+
+    /// <summary>
+    /// 通り道のライナー捕球（issue #1135）の捕球者・時刻・点・その到達所要[s]・捕球予算[s]。
+    /// <see cref="BudgetSeconds"/> − <see cref="ReachSeconds"/> が着地点基準の捕球余裕
+    /// （<c>catchMargin</c>）と同じ意味＝<b>標本時刻そのもの（滞空時間）ではない</b>
+    /// （実害: 一度 <c>TimeSeconds − ReachSeconds</c> を margin として使い、際どい捕球が
+    /// すべて「余裕たっぷり」に化けるバグを作った）。
+    /// </summary>
+    private readonly record struct LineDriveCatch(
+        Fielder Fielder, double TimeSeconds, Vector3D Point, double ReachSeconds, double BudgetSeconds);
+
+    /// <summary>
+    /// 打球の飛行経路を時間で走査し、着地点を待たずに野手が正面でノーバウンド捕球できる最初の
+    /// (時刻・野手)を返す（issue #1135）。到達可否は<b>着地点の空中捕球判定（<see cref="CatchTimeBudget"/>＋
+    /// <see cref="FieldingCoefficients.WallCatchPenalty"/>）と同じ式</b>を経路上の各標本時刻へ適用する＝素の
+    /// 「距離÷脚力＋反応遅延 ≤ 標本時刻」ではなく「同じ ≤ CatchTimeBudget(標本時刻,…) − フェンス際の減算」で見る。
+    /// 素の式のままだと着地点判定より緩く（<see cref="FieldingCoefficients.CatchReachFactor"/> の間合い・走路の
+    /// 巧拙・上限秒・フェンス際ペナルティを一切効かせない）なり、着地点では正しく安打／フェンス際の際どい落球と
+    /// 判定される打球まで経路の途中で捕れてしまう（実害: 標準守備位置の正面へ強く抜けていく打球／フェンス際で
+    /// あと一歩届かないシナリオのテスト群が全滅した。ウォールペナルティ抜けが原因）。標本時刻＝その点までの
+    /// 滞空時間とみなして同じ式へ通すことで、ちょうど着地点（標本時刻=全体の滞空時間）に一致したとき既存の
+    /// 判定と完全に同じ基準になる。<paramref name="wallPenaltySeconds"/> は着地点1つから決めた値をそのまま渡す
+    /// （標本ごとに引き直すと、柵ゾーンの外縁を通る標本だけペナルティが消えてしまう＝この打球は柵の近くへ
+    /// 向かっているか否かという1つの性質であるべき）。投手はフォロースルー直後の追加反応遅延
+    /// （<see cref="FieldingCoefficients.PitcherFieldingReactionPenaltySeconds"/>）を他の判定と同様に負う。
+    /// 乱数は消費しない（決定論）。見つからなければ null。
+    /// </summary>
+    private static LineDriveCatch? TryLineDriveCatch(
+        IReadOnlyList<Fielder> fielders,
+        IReadOnlyList<BallisticIntegrator.FlightSample> samples,
+        double hangTimeSeconds,
+        double wallPenaltySeconds,
+        FieldingCoefficients coeff)
+    {
+        foreach (var s in samples)
+        {
+            // t=0（接触点そのもの）と最終着地点は既存の判定（本塁打／着地点基準の空中捕球／ゴロ経路）に任せる。
+            if (s.TimeSeconds <= 0.0 || s.TimeSeconds >= hangTimeSeconds - 1e-9) continue;
+            if (s.Position.Y > coeff.LineDriveReachHeightM) continue; // グラブの届く高さを越える
+
+            Fielder? best = null;
+            var bestReach = double.PositiveInfinity;
+            var bestBudget = 0.0;
+            foreach (var f in fielders)
+            {
+                // 地上に立つ野手の移動は水平距離だけで決まる（グラブを高さ方向へ伸ばす分は走らない）。
+                // 3D距離（.Length）で引くと、球の高さぶんまで「走って詰める」距離に混ざり込み、
+                // 正面に立っているだけの野手まで届かなくなる（実害: 標準守備位置の正面を通る打球が
+                // 捕れないままだった）。<see cref="FieldingCoefficients.LineDriveReachHeightM"/> の
+                // 高さ制限が「グラブで届くか」を既に担っているので、ここは水平距離のみで良い。
+                var dx = s.Position.X - f.Location.X;
+                var dz = s.Position.Z - f.Location.Z;
+                var dist = Math.Sqrt(dx * dx + dz * dz);
+                var reach = dist / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
+                if (f.Position == FieldPosition.Pitcher) reach += coeff.PitcherFieldingReactionPenaltySeconds;
+                var budget = CatchTimeBudget(s.TimeSeconds, f, coeff) - wallPenaltySeconds;
+                if (reach <= budget && reach < bestReach)
+                {
+                    bestReach = reach;
+                    bestBudget = budget;
+                    best = f;
+                }
+            }
+            if (best is not null) return new LineDriveCatch(best, s.TimeSeconds, s.Position, bestReach, bestBudget);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 捕球時刻までに打球が達した最高到達点[m]（issue #1135。タイムライン／3D描画が「捕球時刻までの弧」を
+    /// 元の滞空時間ではなく捕球時刻を基準に再構成するため、頂点も同じ基準で切り詰める。元の
+    /// ApexHeightM（全飛行の頂点）をそのまま使うと、短く切り詰めた経路の中点へ過大な頂点を押し込み、
+    /// 平たいライナーが途中で急上昇する絵になる）。
+    /// </summary>
+    private static double TruncatedApexHeightM(
+        IReadOnlyList<BallisticIntegrator.FlightSample> samples, double catchTimeSeconds, double launchHeightM)
+    {
+        var apex = launchHeightM;
+        foreach (var s in samples)
+        {
+            if (s.TimeSeconds > catchTimeSeconds) break;
+            if (s.Position.Y > apex) apex = s.Position.Y;
+        }
+        return apex;
     }
 
     private static (Fielder Fielder, double Time) NearestReach(IReadOnlyList<Fielder> fielders, Vector3D target)

@@ -19,7 +19,12 @@ public sealed class MessengerDeterminismWatchTests
         {
             Tactics = new TacticsCoefficients { MessengerFactorMin = 1.0, MessengerFactorMax = 1.0 },
         };
-        var changed = DeterminismCards.Seeds()
+        // 決定論ゲート共通の50シード（DeterminismCards.Seeds）だけに固定すると、伝令役と無関係な
+        // エンジン変更（打球判定の校正等）が試合全体のRNG消費列をずらすだけで「たまたまこの50本には
+        // 伝令役が利く分岐点が無い」という偽陰性になりうる（issue #1135対応時に実際に発生・幅を広げた
+        // 500シードでは34本が分岐=見張り自体は健全）。見張りの対象はこのテスト専用に広く取る。
+        var changed = Enumerable.Range(1, 500)
+            .Select(i => (ulong)i)
             .AsParallel()
             .Count(seed => GameResultDigest.Sha256Of(DeterminismCards.RunMessenger(seed, new GameContext()))
                         != GameResultDigest.Sha256Of(DeterminismCards.RunMessenger(seed, neutral)));
