@@ -203,4 +203,50 @@ public sealed class StealOnDeadBallTests
         }
         Assert.True(hits >= 5, $"初球がファウルになるシードが足りない（{hits} 件）");
     }
+    /// <summary>
+    /// issue #1144: 死球もボールデッド＝その球の盗塁は成立しない。走者は元の塁へ戻り、打者に一塁が与えられる
+    /// （押し出しで進むのは塁が詰まっている走者だけ）。SB/CS も残らない。
+    ///
+    /// <para>強制発動の死球は打席結果を直に決めて1球の流れを通らないので、初球が死球になるシードを探して
+    /// 狙い撃ちする（<see cref="StealRecord_IsErasedWhenPitchIsFoul"/> と同じ作法）。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(StealTarget.Third)]    // 走者二塁の三盗 → 死球で一・二塁（一・三塁ではない）
+    [InlineData(StealTarget.Second)]   // 走者一塁の二盗 → 死球で一・二塁（押し出し）、盗塁は記録しない
+    public void StealIsRolledBackWhenPitchHitsBatter(StealTarget target)
+    {
+        var hits = 0;
+        for (ulong seed = 1; seed <= 20000 && hits < 3; seed++)
+        {
+            var prog = new MatchProgression(Team("A"), Team("H"),
+                new GameContext { CaptureTimelines = true, CapturePitches = true }, seed,
+                new KokoSim.Engine.Debugging.ScenarioStart
+                {
+                    Inning = 1, IsTop = true, Outs = 0,
+                    OnFirst = target == StealTarget.Second,
+                    OnSecond = target == StealTarget.Third,
+                });
+            if (prog.AdvancePitch() != AdvancePitchResult.Pitch) continue;
+            prog.SetStealAttempt(offenseIsAway: true, StartType.Gamble, target);
+            prog.AdvancePitch();
+
+            var lp = prog.LastPitch;
+            if (lp is null || lp.Pitch.Kind != PitchKind.HitByPitch) continue;
+            hits++;
+
+            Assert.Null(lp.StealPlay);
+            while (prog.AdvancePitch() != AdvancePitchResult.Finished) { }
+            var r = prog.BuildResult();
+            Assert.Equal(0, r.AwayTactics.StealAttempts);
+            Assert.Equal(0, r.AwayTactics.StealSuccesses);
+
+            // 死球の打席（この試合の最初の打席）の解決後の塁。
+            var pa = r.Log[0];
+            Assert.Equal(PlateAppearanceResult.HitByPitch, pa.Result);
+            Assert.True(pa.BaseFirstAfter, $"seed {seed}: 一塁が空いている");
+            Assert.True(pa.BaseSecondAfter, $"seed {seed}: 二塁が空いている（{target}）");
+            Assert.False(pa.BaseThirdAfter, $"seed {seed}: 盗塁が成立したまま三塁に走者がいる（{target}）");
+        }
+        Assert.True(hits >= 3, $"初球が死球になるシードが足りない（{hits} 件）");
+    }
 }

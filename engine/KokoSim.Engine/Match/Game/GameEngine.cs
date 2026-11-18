@@ -1452,10 +1452,12 @@ public static class GameEngine
                 // 当面 Foul へ一括する（2026-08-13 監督判断。OPEN-QUESTIONS 参照）。
                 // 三盗・本盗を打球の球で巻き戻した場合の「スタートの有利」は、走塁モデルが一塁走者の始動しか
                 // 受け取らないため表現しない（走者は通常の始動で進む＝有利を捨てる保守側に倒す）。
+                //  - HitByPitch … 死球はその時点でボールデッド（issue #1144）。ファウルと同じく走者は元の塁へ戻り、
+                //             打者への一塁の付与（押し出し）だけで塁が動く。四球はインプレー＝盗塁は成立しうるので戻さない
                 //  - 3アウト目の盗塁死で、この球が打席を終わらせた（三振・四球・死球）… 打席の決着が先に立つ
                 //             （三振が3アウト目／四球・死球は走者に安全進塁権）＝盗塁死は成立しない（issue #779）
                 if (stealRecRunner is not null
-                    && (session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay
+                    && (session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay or AtBat.PitchKind.HitByPitch
                         || (runnerOutEndsHalf && pitchRes.EndsPlateAppearance)))
                 {
                     bases.First = steal0First;
