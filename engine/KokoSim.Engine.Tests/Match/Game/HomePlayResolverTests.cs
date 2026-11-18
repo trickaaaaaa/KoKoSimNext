@@ -15,7 +15,9 @@ namespace KokoSim.Engine.Tests.Match.Game;
 public sealed class HomePlayResolverTests
 {
     // 単体は接戦帯で単調性を見るため、生産校正値(HomeSuccessBias)に依存しない固定バイアスに固定する。
-    private static readonly BaserunningCoefficients C = new() { HomeSuccessBias = 0.6 };
+    // issue #1139: HomeTagSeconds が 0.12→0.28（+0.16）になり margin が一様にシフトしたため、
+    // この単体固有のバイアスも同じ作法（増分を差し引く）で 0.6→0.44 にして探索域の意味を保つ。
+    private static readonly BaserunningCoefficients C = new() { HomeSuccessBias = 0.44 };
     private static readonly FieldGeometry Field = new();
 
     /// <summary>外野の処理点（方位0=センター方向, 距離d）。</summary>

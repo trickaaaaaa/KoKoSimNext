@@ -98,7 +98,9 @@ public sealed record BaserunningCoefficients
     /// ちょうど同じ秒だけ引かれる。床の前に引くと快足走者だけ床に当たって引きが浅くなり、
     /// 「校正項を移しただけ（帯不変）」でなくなる。</para>
     /// </summary>
-    public double StealJumpCreditSeconds { get; init; } = 0.19;
+    /// <para>issue #1139: <see cref="TagSeconds"/> を 0.10→0.22 に伸ばした増分(+0.12)をここから引いて 0.19→0.07。
+    /// 盗塁の判定の差（守備−走者）は不変のまま、絵では捕球からタッチまでの間が見える。</para>
+    public double StealJumpCreditSeconds { get; init; } = 0.07;
     /// <summary>投手クイック[s]（投法補正は後回し, §2.2）。</summary>
     public double PitcherQuickSeconds { get; init; } = 1.40;
     /// <summary>捕手の握り替え[s]（ポップタイム＝これ＋送球時間）。</summary>
@@ -123,8 +125,11 @@ public sealed record BaserunningCoefficients
     public double TransferFieldingSlope { get; init; } = 0.004;
     /// <summary>トランスファー倍率の下限（最速側クランプ, Issue #36）。</summary>
     public double TransferFactorMin { get; init; } = 0.70;
-    /// <summary>タッチ[s]。</summary>
-    public double TagSeconds { get; init; } = 0.10;
+    /// <summary>二塁タッチ[s]（捕球からグラブを走者の足元へ下ろすまでの遅れ）。
+    /// issue #1139: 0.10→0.22。フォース（<see cref="SecondForceTagSeconds"/> 等＝塁に触れるだけ）と同じ秒だと、
+    /// 送球到達＝判定になり際どいタッチが無くなる。増分(+0.12)は <see cref="StealJumpCreditSeconds"/> から
+    /// 同じだけ引いて判定の差を不変に保つ（<see cref="StealSuccessBias"/> は0のまま＝絵と判定を食い違わせない）。</summary>
+    public double TagSeconds { get; init; } = 0.22;
     /// <summary>margin→成功確率のlogistic幅[s]（Step4再校正: 反応係数を上げ絶対タイムを現実化した分、
     /// グリッドが飽和しないよう幅を広げ、肩差が効くようにする）。</summary>
     public double StealMarginScale { get; init; } = 0.22;
@@ -400,16 +405,21 @@ public sealed record BaserunningCoefficients
     /// 受け手・バックアップ共通）。返球速度は<see cref="RelayThrowSpeedMps"/>（リーグ平均内野肩）を流用する。</summary>
     public double RecoverySprintSpeedMps { get; init; } = 6.5;
 
-    /// <summary>本塁でのタッチ[s]。</summary>
-    public double HomeTagSeconds { get; init; } = 0.12;
+    /// <summary>本塁でのタッチ[s]（捕手がグラブを走者へ下ろすまでの遅れ。本塁は捕手のブロック体勢が絡むぶん
+    /// 他塁よりやや長め）。issue #1139: 0.10→0.28（フォース・従来の0.10〜0.12と区別）。
+    /// <see cref="HomeSuccessBias"/> と <see cref="TagUpSuccessBias"/>（本塁を共有）を増分(0.16)ぶん差し引いて
+    /// margin（＝帯）を不変に保つ（#316と同じ作法）。</summary>
+    public double HomeTagSeconds { get; init; } = 0.28;
     /// <summary>margin→生還確率の logistic 幅[s]。</summary>
     public double HomeMarginScale { get; init; } = 0.25;
     /// <summary>生還確率バイアス[s]（憤死頻度・得点帯を現実値へ寄せる校正項）。
     /// 走者物理の保守性をこの秒オフセットで吸収する。
     /// Issue #316 で走者の加速ランプ（トップスピード係数）をモデル化し、三塁→本塁が 0.43s 速くなったため、
     /// 吸収していたぶんを差し引いて 2.00 → 1.57（実測に合わせたのではなく、直した秒数をそのまま引いた値）。
+    /// Issue #1139 で <see cref="HomeTagSeconds"/> を 0.12→0.28（+0.16）にした分をさらに差し引いて 1.57 → 1.41
+    /// （同じ作法＝直した秒数をそのまま引く。margin は不変＝帯は動かない）。
     /// Heavy 実測: 本塁憤死 0.324–0.338/試合・得点 6.64–6.66/チーム（いずれも帯内）。</summary>
-    public double HomeSuccessBias { get; init; } = 1.57;
+    public double HomeSuccessBias { get; init; } = 1.41;
     /// <summary>ゴロ凡打で三塁走者が本塁を狙う際の追加スタート遅延[s]（G1, 設計書12 §4）。
     /// ヒットの走者(既に進行中)と違い、打球を読んでから走り出すぶん遅い＝内野前進で刺せる余地を作る。
     /// 1.55 で「内野前進は生還率を抑える(通常より下)＝AIの前進判断が正しく報われる」。</summary>
@@ -431,8 +441,11 @@ public sealed record BaserunningCoefficients
     // === 三塁への進塁レース（単打の一塁→三塁, Issue #89, 設計書12 §3.5/§4.6）===
     // 本塁と同じ「走者(走力＋走塁判断) vs 外野処理＋中継＋三塁送球」を三塁ベースで解く。
     // 走者反応・二次リード・外野処理/中継の各係数は本塁と共有し、塁固有はタッチ・バイアス・幅の3つだけ分離する。
-    /// <summary>三塁でのタッチ[s]（ベースタッチ。本塁のクロスプレーより短い）。</summary>
-    public double ThirdTagSeconds { get; init; } = 0.10;
+    /// <summary>三塁でのタッチ[s]（ベースタッチでなく、実際に走者へグラブを下ろす遅れ。フォース
+    /// <see cref="ThirdForceTagSeconds"/> と区別）。issue #1139: 0.10→0.22（+0.12）。
+    /// <see cref="ThirdSuccessBias"/> と <see cref="TagUpThirdSuccessBias"/>（三塁を共有）を増分ぶん差し引いて
+    /// margin（＝帯）を不変に保つ（#316と同じ作法）。</summary>
+    public double ThirdTagSeconds { get; init; } = 0.22;
     /// <summary>三塁到達 margin→確率の logistic 幅[s]。本塁より広め＝打球の深さ・外野の肩が
     /// 送り/自重の境界を跨ぐよう感度を持たせる（Issue #89 の主眼）。</summary>
     public double ThirdMarginScale { get; init; } = 0.45;
@@ -440,8 +453,10 @@ public sealed record BaserunningCoefficients
     /// 走者物理の保守性を吸収する。
     /// Issue #316 で加速ランプとベースを回る損失をモデル化し、一塁→三塁が 0.62s 速くなったため、
     /// 吸収していたぶんを差し引いて 1.50 → 0.88（直した秒数をそのまま引いた値）。
+    /// Issue #1139 で <see cref="ThirdTagSeconds"/> を 0.10→0.22（+0.12）にした分をさらに差し引いて 0.88 → 0.76
+    /// （同じ作法。margin は不変＝帯は動かない）。
     /// Heavy 実測: 三塁憤死 0.219–0.239/試合＝#316 前（0.222–0.234）とほぼ同値に戻る。</summary>
-    public double ThirdSuccessBias { get; init; } = 0.88;
+    public double ThirdSuccessBias { get; init; } = 0.76;
 
     // === ゴロ凡打の進塁打レース（二塁→三塁, Issue #318, 設計書12 §3.5）===
     // ゴロ凡打×二塁走者あり×一塁走者なし×三塁空きの1場面（＝典型的な進塁打）を 18%固定テーブル
@@ -450,12 +465,14 @@ public sealed record BaserunningCoefficients
     /// <summary>ゴロを読んでから走り出す追加スタート遅延[s]（G1のゴロ本塁レース HomeGrounderStartDelaySeconds=1.55
     /// より短い＝進塁は生還ほど慎重に見極めない）。</summary>
     public double GrounderAdvanceStartDelaySeconds { get; init; } = 0.90;
-    /// <summary>進塁先（三塁）でのタッチ[s]（<see cref="ThirdTagSeconds"/> と同軸）。</summary>
-    public double AdvanceTagSeconds { get; init; } = 0.10;
+    /// <summary>進塁先（三塁）でのタッチ[s]（<see cref="ThirdTagSeconds"/> と同軸）。issue #1139: 0.10→0.22
+    /// （+0.12）。<see cref="AdvanceSuccessBias"/> を増分ぶん差し引いて margin（＝帯）を不変に保つ。</summary>
+    public double AdvanceTagSeconds { get; init; } = 0.22;
     /// <summary>進塁到達 margin→確率の logistic 幅[s]（三塁レースと同軸）。</summary>
     public double AdvanceMarginScale { get; init; } = 0.45;
-    /// <summary>進塁到達確率バイアス[s]（校正項）。帯校正はこの1本だけで行う（Issue #318）。</summary>
-    public double AdvanceSuccessBias { get; init; } = 0.00;
+    /// <summary>進塁到達確率バイアス[s]（校正項）。帯校正はこの1本だけで行う（Issue #318）。
+    /// Issue #1139 で <see cref="AdvanceTagSeconds"/> を +0.12 にした分を差し引いて 0.00 → −0.12（margin不変）。</summary>
+    public double AdvanceSuccessBias { get; init; } = -0.12;
     /// <summary>一塁手の転送握り替え[s]（一塁を取ってから三塁へ転送する経路 P_relay 用。
     /// <see cref="RelayTransferSeconds"/> と同軸）。</summary>
     public double AdvanceRelayTransferSeconds { get; init; } = 0.55;
@@ -471,7 +488,8 @@ public sealed record BaserunningCoefficients
     /// <summary>一塁走者がゴロを読んでから二塁へ走り出す追加スタート遅延[s]（RunnerContext の反応に上乗せ。
     /// フォース走者は打球を見てから走るぶん、盗塁のような好スタートは切れない）。</summary>
     public double DoublePlayR1StartDelaySeconds { get; init; } = 0.30;
-    /// <summary>二塁封殺のタッチ/捕球[s]（<see cref="ThirdTagSeconds"/> と同軸）。</summary>
+    /// <summary>二塁封殺のタッチ/捕球[s]。フォース（塁に触れるだけ）なので、走者へ実際にタッチする
+    /// <see cref="ThirdTagSeconds"/> 等（issue #1139 で 0.22〜0.28 へ分離）より短いまま 0.10 を保つ。</summary>
     public double SecondForceTagSeconds { get; init; } = 0.10;
     /// <summary>二塁封殺 margin→到達確率の logistic 幅[s]（三塁・進塁レースと同軸＝打球の深さ・肩を効かせる）。</summary>
     public double SecondForceMarginScale { get; init; } = 0.45;
@@ -551,12 +569,15 @@ public sealed record BaserunningCoefficients
     public double FirstForceSuccessBias { get; init; } = 0.00;
     /// <summary>二塁タッチ（一塁の自己フォース後に一塁手が自ら送球）のタッチ[s]（<see cref="SecondForceTagSeconds"/>
     /// と同軸だが、フォースでなく実際に走者へタッチする分の遅れを別係数として分離できるよう独立させる）。</summary>
-    public double SecondTagSeconds { get; init; } = 0.10;
+    /// issue #1139: 0.10→0.22（+0.12。フォースの <see cref="SecondForceTagSeconds"/> とは別に、
+    /// タッチ固有の遅れを持たせる）。<see cref="SecondTagSuccessBias"/> を増分ぶん差し引いて margin を不変に保つ。</summary>
+    public double SecondTagSeconds { get; init; } = 0.22;
     /// <summary>二塁タッチ margin→到達確率の logistic 幅[s]（<see cref="SecondForceMarginScale"/> と同軸）。</summary>
     public double SecondTagMarginScale { get; init; } = 0.45;
     /// <summary>二塁タッチ 到達確率バイアス[s]（校正項。<see cref="SecondForceSuccessBias"/> とは別＝
-    /// フォースでなくタッチプレーの校正を独立して動かせるようにする）。</summary>
-    public double SecondTagSuccessBias { get; init; } = 0.00;
+    /// フォースでなくタッチプレーの校正を独立して動かせるようにする）。
+    /// Issue #1139 で <see cref="SecondTagSeconds"/> を +0.12 にした分を差し引いて 0.00 → −0.12（margin不変）。</summary>
+    public double SecondTagSuccessBias { get; init; } = -0.12;
 
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは走者の時計の起点が「捕球の瞬間」である点だけが本塁クロスプレーと異なる。走者は捕球時刻に
@@ -570,8 +591,10 @@ public sealed record BaserunningCoefficients
     /// <summary>タッチアップ生還確率バイアス[s]（生還率・本塁憤死頻度を現実値へ寄せる校正項）。
     /// 走者物理の保守性（二次リードなし・加速ランプ非モデル化・スプリント下限）をこの秒オフセットで吸収する。
     /// Heavy 実測で校正（Issue #90）: 1.50 で 得点≈5.1/チーム・本塁憤死≈0.365/試合（帯内）かつ球質タイプの
-    /// 実戦バランス中立（Archetypes_AreBalanceNeutral_InActualGames）を維持。</summary>
-    public double TagUpSuccessBias { get; init; } = 1.50;
+    /// 実戦バランス中立（Archetypes_AreBalanceNeutral_InActualGames）を維持。
+    /// Issue #1139 で本塁タッチ秒を共有する <see cref="HomeTagSeconds"/> を 0.12→0.28（+0.16）にした分を
+    /// さらに差し引いて 1.50 → 1.34（同じ作法。margin は不変＝帯は動かない）。</summary>
+    public double TagUpSuccessBias { get; init; } = 1.34;
 
     // === 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）===
     // 犠飛（三塁→本塁）と同じ機構を目標塁だけ替えて使う（走者の式・幅は共有し、塁固有はバイアスだけ分離）。
@@ -585,8 +608,10 @@ public sealed record BaserunningCoefficients
     /// <para>1.30 まで上げると 95m から動き出すが、<b>球場の広さと結び付いて帯を割る</b>——広い球場ほど
     /// 外野が深い位置で捕る＝タッチアップが増えるため、広い球場の得点が上がって
     /// <c>StadiumRegressionTests</c> の「標準 &gt; 広」順序が崩れ、<c>PitcherArchetypeTests</c> の守備依存差も
-    /// 詰まる（どちらも差 0.03〜0.04 の僅差比較）。0.85 では両方とも緑。</para></summary>
-    public double TagUpThirdSuccessBias { get; init; } = 0.85;
+    /// 詰まる（どちらも差 0.03〜0.04 の僅差比較）。0.85 では両方とも緑。</para>
+    /// <para>Issue #1139 で三塁タッチ秒を共有する <see cref="ThirdTagSeconds"/> を 0.10→0.22（+0.12）にした分を
+    /// さらに差し引いて 0.85 → 0.73（同じ作法でmarginを不変に保つ＝上の僅差比較を動かさない）。</para></summary>
+    public double TagUpThirdSuccessBias { get; init; } = 0.73;
     /// <summary>タッチアップ（一塁→二塁）の到達確率バイアス[s]（校正項）。二塁への送球は最短＝実物でも
     /// 一塁走者のタッチアップはごく稀。<see cref="TagUpThirdSuccessBias"/> と同役で塁だけ違う。
     /// 実測（走者50・肩50・中堅方向）: 105m まで0%・115m から動く＝<b>最深部のフライでだけ走る</b>。
@@ -614,12 +639,14 @@ public sealed record BaserunningCoefficients
     public double DoubledOffReverseSeconds { get; init; } = 0.35;
     /// <summary>捕球した野手の捕球→送球（グラブ離し）[s]（内野寄りの打球なので外野より短い）。</summary>
     public double DoubledOffTransferSeconds { get; init; } = 0.30;
-    /// <summary>塁でのタッチ[s]。</summary>
-    public double DoubledOffTagSeconds { get; init; } = 0.10;
+    /// <summary>塁でのタッチ[s]。issue #1139: 0.10→0.20（+0.10。帰塁した走者へグラブを下ろす遅れ）。
+    /// <see cref="DoubledOffSuccessBias"/> を増分ぶん差し引いて margin を不変に保つ。</summary>
+    public double DoubledOffTagSeconds { get; init; } = 0.20;
     /// <summary>margin→塁へ戻れる(Safe)確率の logistic 幅[s]。</summary>
     public double DoubledOffMarginScale { get; init; } = 0.20;
-    /// <summary>戻れる確率バイアス[s]（Heavy実測で校正, 🟡）。</summary>
-    public double DoubledOffSuccessBias { get; init; } = 0.0;
+    /// <summary>戻れる確率バイアス[s]（Heavy実測で校正, 🟡）。
+    /// Issue #1139 で <see cref="DoubledOffTagSeconds"/> を +0.10 にした分を差し引いて 0.0 → −0.10（margin不変）。</summary>
+    public double DoubledOffSuccessBias { get; init; } = -0.10;
     /// <summary>盗塁で投球と同時に走っていた一塁走者（issue #626 の巻き戻し）が、接触の時点で既に稼いでいた
     /// リード[m]。飛び出しの勝負（<see cref="DoubledOffResolver"/>）で戻りの距離にそのまま乗る
     /// （issue fly-out-runner-dp-table-and-doubled-off-depiction）。投手の始動〜接触≈1.1s × 基準走力から。</summary>
