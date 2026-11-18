@@ -624,6 +624,11 @@ public sealed record BaserunningCoefficients
     /// リード[m]。飛び出しの勝負（<see cref="DoubledOffResolver"/>）で戻りの距離にそのまま乗る
     /// （issue fly-out-runner-dp-table-and-doubled-off-depiction）。投手の始動〜接触≈1.1s × 基準走力から。</summary>
     public double StealBreakExtraLeadM { get; init; } = 6.0;
+    /// <summary>盗塁（二塁走者の三盗・重盗で本塁へ向かった三塁走者）で投球と同時に走っていた走者が、その球をゴロに打たれたときの
+    /// 追加スタート遅延[s]（issue #1138）。通常は打球を読んでから走る遅れ（<see cref="GrounderAdvanceStartDelaySeconds"/>・
+    /// <see cref="HomeGrounderStartDelaySeconds"/>）が乗るが、既に走っている走者には読む遅れが無い＝接触と同時の走り出し（0）。
+    /// 2アウトの全走者が接触と同時に走る扱い（<c>BaserunningModel.CatchErrorStartDelaySeconds</c>）と同じ立て付け。</summary>
+    public double StealBreakGrounderStartDelaySeconds { get; init; } = 0.0;
     /// <summary>飛び出した走者が「盲目的に走る」上限（<see cref="LinerCommitCapSeconds"/>）を過ぎてから捕球までの間に、
     /// 打球を見ながら塁の方へ戻る速さ[m/s]（歩き〜小走り）。長い滞空ほど捕球時点のリードが縮む＝深いフライで
     /// 盗塁・エンドランの走者が刺されない現実（issue fly-out-runner-dp-table-and-doubled-off-depiction）。</summary>

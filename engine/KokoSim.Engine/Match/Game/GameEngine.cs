@@ -951,6 +951,10 @@ public static class GameEngine
             // 一塁走者が投球と同時に走っていた（盗塁企図が打球で巻き戻された。issue #626）か。打球が空中で
             // 捕られると始動種別によらず飛び出しの勝負になる（issue fly-out-runner-dp-table-and-doubled-off-depiction）。
             var r1StealBreak = false;
+            // 二塁走者の三盗・重盗で本塁へ走った三塁走者も同じ（issue #1138）。打球が内野ゴロなら読む遅れ無しで
+            // 次塁へ向かい、空中で捕られれば元の塁へ戻れるかの勝負になる。
+            var r2StealBreak = false;
+            var r3StealBreak = false;
 
             // 打順消費（設計書15 Phase D-2e）: 打席が実際に確定した時点まで遅らせる（下の squeezeAbandoned/
             // stealEndedHalf ガード直後）。ここでは進めない＝Peekのみでこの打者を握ったまま投球ループへ入る。
@@ -1375,6 +1379,8 @@ public static class GameEngine
                 var endrunThisPitch = (brainHitAndRun || manualEndrun) && bases.First is not null;
                 r1Start = endrunThisPitch ? StartType.Contact : StartType.Normal;
                 r1StealBreak = false;
+                r2StealBreak = false;
+                r3StealBreak = false;
                 // 「打者は必ず当てにいく」（設計書09 §1）: 見送りを許さない強制スイング。squeeze/bunt・
                 // brain/手動の1球指示が既に何か決めていればそちらを優先し、無指示のときだけ埋める
                 // （既存のbuntSign既定と同じ「値がある時だけ上書き」の流儀）。
@@ -1450,8 +1456,8 @@ public static class GameEngine
                 //
                 // ファウルチップ（実ルールではインプレーで盗塁が成立する）は PitchKind に区別が無いため
                 // 当面 Foul へ一括する（2026-08-13 監督判断。OPEN-QUESTIONS 参照）。
-                // 三盗・本盗を打球の球で巻き戻した場合の「スタートの有利」は、走塁モデルが一塁走者の始動しか
-                // 受け取らないため表現しない（走者は通常の始動で進む＝有利を捨てる保守側に倒す）。
+                // 三盗（二塁走者）・重盗で本塁へ走った三塁走者も、投球と同時に走っていた事実を r2StealBreak /
+                // r3StealBreak で走塁モデルへ渡す（issue #1138）。ゴロなら読む遅れ無しで進塁し、空中で捕られれば飛び出しの勝負になる。
                 //  - HitByPitch … 死球はその時点でボールデッド（issue #1144）。ファウルと同じく走者は元の塁へ戻り、
                 //             打者への一塁の付与（押し出し）だけで塁が動く。四球はインプレー＝盗塁は成立しうるので戻さない
                 //  - 3アウト目の盗塁死で、この球が打席を終わらせた（三振・四球・死球）… 打席の決着が先に立つ
@@ -1482,6 +1488,11 @@ public static class GameEngine
                     {
                         r1Start = appliedStart;
                         r1StealBreak = true;   // stealStartApplied は二盗（一塁走者）でだけ立つ
+                    }
+                    if (session.LastPitchKind == AtBat.PitchKind.InPlay)
+                    {
+                        if (stealRecThird) r2StealBreak = true;          // 三盗の二塁走者
+                        if (stealDoubleBreak) r3StealBreak = true;       // 重盗で本塁へ走った三塁走者（巻き戻しで三塁へ戻っている）
                     }
                 }
 
@@ -1991,7 +2002,7 @@ public static class GameEngine
             // 走塁係数は paBaserunning（設計書17 §6.1, F4）。非強制時は ctx.Baserunning と同一参照＝従来と不変。
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, paBaserunning, rng, collectMoves: true,
-                homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak);
+                homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak, r2StealBreak, r3StealBreak);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             // サヨナラの打ち切り（issue #642・公認野球規則 5.08(b)）: 最終回以降の裏は、勝ち越しの走者が

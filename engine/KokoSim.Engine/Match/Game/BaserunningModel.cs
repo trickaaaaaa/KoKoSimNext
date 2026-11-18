@@ -165,7 +165,8 @@ public static class BaserunningModel
         BaseState bases, PlateAppearanceResult result, Player batter,
         int currentOuts, BaserunningCoefficients coeff, IRandomSource rng, bool collectMoves = true,
         HomePlayContext? home = null, StartType r1Start = StartType.Normal, int errorThrowAccuracy = 50,
-        Fielding.FieldingErrorKind? errorKind = null, bool r1StealBreak = false)
+        Fielding.FieldingErrorKind? errorKind = null, bool r1StealBreak = false,
+        bool r2StealBreak = false, bool r3StealBreak = false)
     {
         var mv = collectMoves ? new List<RunnerMove>() : null;
         var r1 = bases.First;
@@ -236,7 +237,7 @@ public static class BaserunningModel
 
             case PlateAppearanceResult.InPlayOut:
             {
-                var (runs, outs, homeOuts, batterSafeOnFc) = ApplyInPlayOut(bases, batter, r1, r2, r3, currentOuts, coeff, rng, mv, home, r1Start, r1StealBreak);
+                var (runs, outs, homeOuts, batterSafeOnFc) = ApplyInPlayOut(bases, batter, r1, r2, r3, currentOuts, coeff, rng, mv, home, r1Start, r1StealBreak, r2StealBreak, r3StealBreak);
                 return (runs, outs, (homeOuts, 0), batterSafeOnFc, false, Moves(mv)); // 凡打の塁上憤死は本塁のみ
             }
 
@@ -697,10 +698,15 @@ public static class BaserunningModel
 
     /// <param name="r1StealBreak">一塁走者が投球と同時に走っていた（盗塁企図が打球で巻き戻された。issue #626）か。
     /// 打球が空中で捕られると<b>始動種別によらず</b>飛び出しの勝負になる（<see cref="DoubledOffResolver"/>）。</param>
+    /// <param name="r2StealBreak">二塁走者が三盗で投球と同時に走っていた（issue #1138）か。一塁走者と同じく、
+    /// ゴロなら読む遅れ無しで三塁へ向かい（<see cref="BaserunningCoefficients.StealBreakGrounderStartDelaySeconds"/>）、
+    /// 空中で捕られれば二塁へ戻れるかの飛び出しの勝負になる。</param>
+    /// <param name="r3StealBreak">三塁走者が重盗で本塁へ走っていた（issue #1138）か。二塁走者と同じ扱い（ゴロの本塁レース・三塁への帰塁）。</param>
     private static (int, int, int, bool) ApplyInPlayOut(
         BaseState bases, Player batter, Player? r1, Player? r2, Player? r3, int currentOuts,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, HomePlayContext? home = null,
-        StartType r1Start = StartType.Normal, bool r1StealBreak = false)
+        StartType r1Start = StartType.Normal, bool r1StealBreak = false,
+        bool r2StealBreak = false, bool r3StealBreak = false)
     {
         if (currentOuts >= 2) return (0, 0, 0, false); // この凡打が3アウト目。進塁なし。
 
@@ -814,6 +820,21 @@ public static class BaserunningModel
             }
         }
 
+        // 三盗（二塁走者）・重盗の本塁突入（三塁走者）で走っていた走者も、空中で捕られれば同じ飛び出しの勝負（issue #1138）。
+        // 一塁走者の勝負の後に二塁・三塁の順で引く（盗塁が重なるのは二塁走者単独の三盗か、一・三塁の重盗だけ）。
+        var r2RacedBack = false;
+        var r3RacedBack = false;
+        if (r2 is not null && r2StealBreak && home is { IsFly: true } liner2)
+        {
+            r2RacedBack = true;
+            if (ResolveStealBreakReturn(bases, r2, 2, liner2, coeff, rng, mv, ref extraOuts)) r2 = null;
+        }
+        if (r3 is not null && r3StealBreak && home is { IsFly: true } liner3)
+        {
+            r3RacedBack = true;
+            if (ResolveStealBreakReturn(bases, r3, 3, liner3, coeff, rng, mv, ref extraOuts)) r3 = null;
+        }
+
         // 打者自身がこの打席でアウトになるか。野選（FC）成立時は打者は生存するため0（design-14 P1-1）。
         var battersOwnOut = batterSafeOnFc ? 0 : 1;
         if (currentOuts + battersOwnOut + extraOuts >= 3) return (0, extraOuts, homeOuts, batterSafeOnFc); // イニング終了。
@@ -822,7 +843,7 @@ public static class BaserunningModel
         // 3塁走者の生還。内野ゴロ(併殺なし)は守備深さ駆動の本塁レース（G1, 設計書12 §4/§5）、
         // フライ(犠飛)は捕球時刻起点のタッチアップ物理レース（Issue #90, 設計書12 §3.5）、
         // home無し（単体テスト・純テーブル経路）は従来の SacFlyScoreProb テーブル。
-        if (r3 is not null)
+        if (r3 is not null && !r3RacedBack)
         {
             // フォースの三塁走者（満塁ゴロ）: 自重できない（後続に押し出される）。
             // 内野前進×併殺なしは本塁封殺の勝負（送り判定なしで必ず走る）、それ以外は守備が
@@ -892,7 +913,8 @@ public static class BaserunningModel
             {
                 // 内野前進＝本塁で時間の勝負。ゴロ走者は打球を読んでから走る分だけ遅い（delay）。
                 // 際どければ自重（三塁残留＝無得点）、行けば生還 or 憤死。
-                var delay = coeff.HomeGrounderStartDelaySeconds;
+                // 重盗で本塁へ走っていた三塁走者は打球を読む遅れが無い（issue #1138）。
+                var delay = r3StealBreak ? coeff.StealBreakGrounderStartDelaySeconds : coeff.HomeGrounderStartDelaySeconds;
                 var prob = HomePlayResolver.SuccessProbability(r3, 3, hi.Situation, hi.Field, coeff, delay);
                 if (HomeSendDecision.ShouldSend(prob, currentOuts, hi.Aggression, hi.Tactics))
                 {
@@ -983,11 +1005,11 @@ public static class BaserunningModel
             ? (double?)flyAdv.Situation.BallFieldedAtSeconds
             : null;
 
-        if (r2 is not null && bases.Third is null)
+        if (r2 is not null && !r2RacedBack && bases.Third is null)
         {
             if (!r2Forced && extraOuts == 0 && home is { IsFly: false } adv)
             {
-                ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts);
+                ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts, r2StealBreak);
                 r2 = null; // 進塁・憤死・自重のいずれでも二塁走者の帰趨はここで確定（自重時は bases.Second のまま）。
             }
             else if (extraOuts == 0 && home is { IsFly: true } fly2)
@@ -1051,10 +1073,11 @@ public static class BaserunningModel
     private static void ResolveGrounderAdvance(
         BaseState bases, Player r2, HomePlayContext home,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
-        ref int extraOuts)
+        ref int extraOuts, bool stealBreak = false)
     {
         var advance = HomePlayResolver.AdvanceParams(home.Field, coeff);
-        var delay = coeff.GrounderAdvanceStartDelaySeconds;
+        // 三盗で投球と同時に走っていた二塁走者は、ゴロを読んでから走る遅れが無い（issue #1138）。
+        var delay = stealBreak ? coeff.StealBreakGrounderStartDelaySeconds : coeff.GrounderAdvanceStartDelaySeconds;
 
         if (home.ThrowArriveSeconds is not { } arriveAtFirst)
         {
@@ -1082,6 +1105,36 @@ public static class BaserunningModel
         var race = HomePlayResolver.ResolveRace(
             r2, 2, relay, home.Field, coeff, advance, rng, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
         ResolveAdvanceRace(bases, r2, race, relayMargin, delay, coeff, mv, ref extraOuts);
+    }
+
+    /// <summary>
+    /// 盗塁で投球と同時に走っていた二塁・三塁走者が、打球を空中で捕られたときの飛び出しの勝負（issue #1138）。
+    /// 一塁走者（<c>ApplyInPlayOut</c> 内）と同じ <see cref="DoubledOffResolver"/> を、捕球点→その塁の距離で引く。
+    /// 返り値は憤死したか（憤死なら塁から外し extraOuts を足す）。帰塁セーフは「飛び出して戻った」絵のための move だけ積む。
+    /// </summary>
+    private static bool ResolveStealBreakReturn(
+        BaseState bases, Player runner, int baseNo, HomePlayContext liner,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, ref int extraOuts)
+    {
+        var catchAt = liner.Situation.BallFieldedAtSeconds;
+        var basePoint = baseNo == 2 ? liner.Field.SecondBase : liner.Field.ThirdBase;
+        var catchToBaseM = (basePoint - liner.Situation.BallFieldedPoint).Length;
+        var extraLead = coeff.StealBreakExtraLeadM;
+        var arm = liner.Situation.OutfielderThrowSpeedMps;
+        var fielding = liner.Situation.OutfielderFielding;
+        var throwArrive = catchAt + DoubledOffResolver.DefenseReturnSeconds(catchToBaseM, arm, coeff, fielding);
+        var leadM = DoubledOffResolver.LeadGainedM(catchAt, coeff, extraLead);
+        var maxLeadM = DoubledOffResolver.MaxLeadM(catchAt, coeff, extraLead);
+        var margin = DoubledOffResolver.Margin(runner, catchAt, catchToBaseM, arm, coeff, fielding, extraLead);
+        var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
+        var doubledOff = DoubledOffResolver.Resolve(runner, catchAt, catchToBaseM, arm, coeff, rng, fielding, extraLead,
+            liner.Situation.ThrowerThrowAccuracy, out var scatter) == DoubledOffResult.DoubledOff;
+        mv?.Add(new RunnerMove(runner, baseNo, baseNo, Out: doubledOff)
+            { CloseCall = closeCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM, ThrowScatter = scatter });
+        if (!doubledOff) return false;
+        extraOuts++;
+        if (baseNo == 2) bases.Second = null; else bases.Third = null;
+        return true;
     }
 
     /// <summary>

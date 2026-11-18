@@ -359,6 +359,12 @@ Heavy統計回帰（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯
 - **テスト**: `DoubledOffResolverTests`（純関数の単調性・契約）、`BaserunningHomePlayTests`のG2節（配線: Contact+フライ捕球でのみ発火、Normal始動やゴロでは非発火）。係数はYAMLラウンドトリップで固定（`CoefficientsLoaderTests`）。
 - **残**: Gamble（盗塁好ジャンプ・無防備）はG3で読み/ピッチアウトモデルと合わせて配線。
 
+#### 4.7.1 三盗・重盗の走者も、盗塁の球を打球にされたときスタートの有利を持つ（issue #1138）
+- 盗塁を企図した球が打球になると盗塁は取り消され（issue #626）走者は打球の走塁で進む。一塁走者（二盗）は `r1StealBreak` でライナー併殺の勝負に乗っていたが、**二塁走者（三盗）・一・三塁の重盗で本塁へ走った三塁走者**は通常始動に戻されていた（打球を見てから走る扱い）。`ApplyDetailed` に `r2StealBreak` / `r3StealBreak` を足し、同じ考え方で扱う。
+- **ゴロ**: 打球を読む遅れ（二塁→三塁 `grounder_advance_start_delay_seconds` 0.90s／三塁→本塁 `home_grounder_start_delay_seconds` 1.55s）が無い＝`steal_break_grounder_start_delay_seconds`（既定0.0・2アウトの全走者が接触と同時に走る扱いと同じ立て付け）。
+- **空中で捕られた打球**: 一塁走者と同じ `DoubledOffResolver` を、捕球点→その塁（二塁/三塁）の距離で引く（`StealBreakExtraLeadM` ぶんのリード付き）。憤死なら `RunnerMove(n,n,Out)`、帰塁セーフならタッチアップはしない。絵は `AppendDoubledOffLegs/Throw` が一塁固定をやめ、走者の塁へ戻る。
+- 乱数: フラグが立つのは盗塁の球が打球になったときだけ＝それ以外の経路は消費が変わらない（不変条件#2）。決定論ベースライン250試合は不変。
+
 ### 4.8 実装（G3a 完了, 2026-07-17）
 - **守備の読み/ピッチアウトモデル**（Q10 (b) 本体・「セオリー vs 意表」の対称完成）: `StealReadModel`（純関数）。
   - **意外性 E∈[0,1]** `Expectedness`: `StealExpectednessIntercept + (Steal−50)×slope`。快足の盗塁屋がセオリー通りに走るほど高い（＝予想され読まれやすい）。ギャンブル始動は `GambleUnexpectednessReduction` で下げる（意表＝読まれにくい, 値は G3b で発火）。
