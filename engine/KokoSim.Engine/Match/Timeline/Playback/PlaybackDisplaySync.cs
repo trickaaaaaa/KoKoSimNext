@@ -111,21 +111,34 @@ public static class PlaybackDisplaySync
     }
 
     /// <summary>
-    /// 得点を1点ずつ加算する時刻（昇順）。各走者の本塁到達レッグ（To が本塁・終端セーフ）の T1。
+    /// 得点を1点ずつ加算する時刻（昇順）。各走者の本塁到達レッグ（To が本塁・終端セーフ）の T1 を、
+    /// 次の下限で繰り下げる（issue #1131。走者は打った瞬間に走り出すので、深いフライでは着弾より前に
+    /// 本塁へ着き、点が打球の行方より先に出てしまう）。
+    /// <list type="bullet">
+    /// <item>打球の行方が決まった時刻（<see cref="PlaybackPlay.ResAt"/>＝捕球・着地・ゴロの処理）</item>
+    /// <item>2アウトのときだけ、打者走者が一塁に生きた時刻（アウトなら3アウトで点は入らない）。
+    /// 2アウト未満は打者がアウトでも点が入る（犠飛・内野ゴロの間の生還）ので下限にしない</item>
+    /// </list>
+    /// 下限は全員一律＝昇順（1点ずつの順）は保たれる。
     /// 生還数より本塁到達が多い場合（第3アウトと同時のタイムプレー等）は先着から
     /// <paramref name="runsScored"/> 本だけ数える。足りない場合（保険。実測30試合で0件）は
     /// 最後の既知時刻から <paramref name="fallbackStepSeconds"/> 間隔で続ける＝従来の等間隔挙動へ縮退。
     /// </summary>
-    public static IReadOnlyList<double> RunScoreTimes(PlaybackPlay play, int runsScored, double fallbackStepSeconds)
+    /// <param name="outsBefore">打席開始時のアウト数（<c>LivePlateAppearance.OutsBefore</c>）。</param>
+    public static IReadOnlyList<double> RunScoreTimes(PlaybackPlay play, int runsScored, double fallbackStepSeconds,
+        int outsBefore = 0)
     {
         if (play is null || runsScored <= 0) return Array.Empty<double>();
+        var floor = play.ResAt;
+        if (outsBefore >= 2 && BatterFirstArrival(play) is { } firstArrival && firstArrival > floor) floor = firstArrival;
+
         var arrivals = new List<double>();
         foreach (var r in play.Runners)
         {
             var leg = FinalMovingLeg(r);
             if (leg is null || leg.OutAtEnd) continue;
             var to = leg.To;
-            if (to.X * to.X + to.Y * to.Y < NearHomeSq) arrivals.Add(leg.T1);
+            if (to.X * to.X + to.Y * to.Y < NearHomeSq) arrivals.Add(double.IsFinite(floor) ? Math.Max(leg.T1, floor) : leg.T1);
         }
         arrivals.Sort();
         if (arrivals.Count > runsScored) arrivals.RemoveRange(runsScored, arrivals.Count - runsScored);
@@ -136,6 +149,23 @@ public static class PlaybackDisplaySync
             arrivals.Add(last);
         }
         return arrivals;
+    }
+
+    /// <summary>打者走者が最初の塁へ生きて着いた時刻（最初に動くレッグの T1。アウトなら null）。</summary>
+    private static double? BatterFirstArrival(PlaybackPlay play)
+    {
+        foreach (var r in play.Runners)
+        {
+            if (r.Label != "打" || r.Segs is null) continue;
+            foreach (var s in r.Segs)
+            {
+                var dx = s.To.X - s.From.X;
+                var dy = s.To.Y - s.From.Y;
+                if (dx * dx + dy * dy < 0.25) continue;
+                return s.OutAtEnd ? null : s.T1;
+            }
+        }
+        return null;
     }
 
     /// <summary>

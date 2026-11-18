@@ -3623,7 +3623,7 @@ namespace KokoSim.Unity.Match
             // 掲げる点は打席の得点（RunsScored）でなく「まだ掲示板に出していない点」で数える（issue #628）。
             // ①打席途中に暴投・本盗で入って既に掲げた点を二度祝わない ②RunsScored に乗らない得点
             //（暴投での生還・重盗の生還。MatchProgression のコメント参照）を取りこぼさない。
-            _runScoreShowAt = PlaybackDisplaySync.RunScoreTimes(play, RunsNotYetPosted(item.IsTop), scoreCallStepSeconds);
+            _runScoreShowAt = PlaybackDisplaySync.RunScoreTimes(play, RunsNotYetPosted(item.IsTop), scoreCallStepSeconds, item.OutsBefore);
             _lineScorePostAt = _runScoreShowAt.Count > 0
                 ? System.Math.Max(_resultShowAt, _runScoreShowAt[_runScoreShowAt.Count - 1])
                 : _resultShowAt;

@@ -113,6 +113,63 @@ public sealed class PlaybackDisplaySyncTests
         Assert.Equal(new[] { 4.8, 5.3 }, PlaybackDisplaySync.RunScoreTimes(none, 2, 0.5));
     }
 
+    // 深いフライの安打（2アウト未満）: 三塁走者は打った瞬間に出て着弾（ResAt）より先に本塁へ着く
+    // → 点は打球の行方が決まる時刻まで繰り下げる（issue #1131）。
+    [Fact]
+    public void RunScore_DeepFlyHit_WaitsForBallToLand()
+    {
+        var third = new PlaybackVec(-19.4, 19.4);
+        var play = Play(5.2, new[]
+        {
+            Runner("打", new PlaybackRun(0.55, 4.8, Home, First)),
+            Runner("走1", new PlaybackRun(0.4, 3.9, third, Home)),
+        });
+        Assert.Equal(new[] { 5.2 }, PlaybackDisplaySync.RunScoreTimes(play, 1, 0.5, outsBefore: 1));
+    }
+
+    // 2アウトの内野安打: 打者が一塁に生きてから点（ResAt=送球より前でも、一塁到達より後）。
+    [Fact]
+    public void RunScore_TwoOuts_WaitsForBatterToReachFirst()
+    {
+        var third = new PlaybackVec(-19.4, 19.4);
+        var play = Play(3.0, new[]
+        {
+            Runner("打", new PlaybackRun(0.55, 4.3, Home, First)),
+            Runner("走1", new PlaybackRun(0.4, 3.5, third, Home)),
+        });
+        Assert.Equal(new[] { 4.3 }, PlaybackDisplaySync.RunScoreTimes(play, 1, 0.5, outsBefore: 2));
+        // 2アウト未満なら打者の到達は待たない（内野ゴロの間の生還・犠飛と同じ）
+        Assert.Equal(new[] { 3.5 }, PlaybackDisplaySync.RunScoreTimes(play, 1, 0.5, outsBefore: 1));
+    }
+
+    // 犠飛: 捕球（ResAt）のあとにタッチアップで走る＝もともと本塁到達の方が遅く、時刻は今のまま。
+    [Fact]
+    public void RunScore_SacFly_Unchanged()
+    {
+        var third = new PlaybackVec(-19.4, 19.4);
+        var play = Play(4.0, new[]
+        {
+            Runner("打", new PlaybackRun(0.55, 4.3, Home, First)),
+            Runner("走1", new PlaybackRun(4.0, 6.5, third, Home)),
+        }, new PlaybackJudgement(4.0, JudgementKind.Out, false, "打"));
+        Assert.Equal(new[] { 6.5 }, PlaybackDisplaySync.RunScoreTimes(play, 1, 0.5, outsBefore: 1));
+    }
+
+    // 2アウトの複数得点: 下限は全員一律＝順番は保たれる。
+    [Fact]
+    public void RunScore_Floor_KeepsOrder()
+    {
+        var third = new PlaybackVec(-19.4, 19.4);
+        var play = Play(5.0, new[]
+        {
+            Runner("打", new PlaybackRun(0.55, 4.3, Home, First)),
+            Runner("走1", new PlaybackRun(0.4, 3.9, third, Home)),
+            Runner("走2", new PlaybackRun(0.4, 6.1, Second, Home)),
+        });
+        var times = PlaybackDisplaySync.RunScoreTimes(play, 2, 0.5, outsBefore: 2);
+        Assert.Equal(new[] { 5.0, 6.1 }, times);
+    }
+
     // 終端アウトの本塁突入（本塁憤死）は加算しない。
     [Fact]
     public void RunScore_OutAtHome_NotCounted()
