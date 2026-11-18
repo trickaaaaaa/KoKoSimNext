@@ -101,6 +101,10 @@ namespace KokoSim.Unity.Shell
             // 秋季県大会は地区大会の出場枠判定に順位（優勝校だけでなく）が要るため、47県ぶんを別途
             // 順位付きで背景シムする（設計書05 §1.5b・RegionalEntry が読む）。夏は使わない。
             if (kind == TournamentKind.Autumn) StartAutumnBackgroundSim(yearIndex, calendarYear, stats, brains);
+
+            // 秋季地区予選なら、同じ県の他地区も自校の地区予選を遊んでいる間に背景でフルシムしておく
+            // （勝ち上がってきた相手校の選手成績を積むため・issue #1106）。成績は地区予選の後始末で1回だけ積む。
+            if (actualKind == TournamentKind.AutumnDistrict) DistrictEntry.StartOtherDistrictSim();
         }
 
         /// <summary>
@@ -257,6 +261,10 @@ namespace KokoSim.Unity.Shell
             // 同じ結果を読むため。**待たない**のが要点で、通常経路（Enter）も大会入場時に背景起動して
             // 待つのは県大会が終わる瞬間の EnsureCompleted() だけ。復帰時点ではまだ試合が残っているので、
             // 試合を1つ消化する間に終わる＝ロード時間は伸びない（47県で実測80ms）。
+            // 秋季地区予選の途中で復帰したときは、他地区の背景フルシムも回し直す（結果はセーブに載らない。
+            // 成績はまだ積んでいない＝回し直しても二重計上にならない・issue #1106）。
+            if (t.Kind == TournamentKind.AutumnDistrict) DistrictEntry.StartOtherDistrictSim();
+
             if (t.Kind == TournamentKind.AutumnDistrict || t.Kind == TournamentKind.Autumn
                 || t.Kind == TournamentKind.Regional || t.Kind == TournamentKind.Jingu)
             {

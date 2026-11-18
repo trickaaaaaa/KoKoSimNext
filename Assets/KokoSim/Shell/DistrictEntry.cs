@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Season;
@@ -17,10 +18,9 @@ namespace KokoSim.Unity.Shell
     /// 直接つなぐ（夏の甲子園と同じ理由＝暦の開幕週を作らない）。</para>
     ///
     /// <para>自校の地区は <see cref="TournamentEntry"/> が対話プレイで消化する（1つの
-    /// <see cref="TournamentRunner"/>）。同じ県の他地区は数校規模のブラケットなので専用の背景シムを
-    /// 新設せず、<see cref="TournamentRunner.Spectated"/>＋<see cref="TournamentRunner.DrainBracketResolution"/>
-    /// でその場・同期に解決する（<see cref="RegionalEntry"/> が「自校が出場枠外」のときに使うのと
-    /// 同じパターンの再利用。全国46〜48県ぶんを回す <see cref="AutumnBackgroundSim"/> ほどの規模ではない）。</para>
+    /// <see cref="TournamentRunner"/>）。同じ県の他地区は、自校の地区予選を遊んでいる間に
+    /// <see cref="OtherDistrictBackgroundSim"/> が<b>1球フルシム</b>で解いておく（issue #1106）＝勝ち上がってきた
+    /// 相手校の選手成績が全国の成績帳に積まれる。解いた結果はここ（地区予選の後始末）で受け取り、成績を1回だけ積む。</para>
     /// </summary>
     public static class DistrictEntry
     {
@@ -48,7 +48,8 @@ namespace KokoSim.Unity.Shell
             // 自地区の進出校。旧セーブ（v21以前）は一覧が無く優勝校1校だけが残っているのでそれを使う。
             var myQualifierIds = GameSession.Current.LastDistrictQualifierIds is { Count: > 0 } ids
                 ? ids : new[] { myChampionId.Value };
-            var field = CollectDistrictQualifiers(prefectureId, districtCount, advance, myQualifierIds, yearIndex);
+            var otherDistricts = ResolveOtherDistricts(prefectureId, districtCount, advance, yearIndex);
+            var field = CollectDistrictQualifiers(districtCount, myQualifierIds, otherDistricts);
             AddSummerChampionSeed(field, prefectureId);
             if (field.Count < 2)
             {
@@ -89,15 +90,13 @@ namespace KokoSim.Unity.Shell
             return true;
         }
 
-        /// <summary>
-        /// 自校の地区の進出校＋他地区の進出校（同期解決）を集める。district 0..districtCount-1 の並びで
-        /// 決定論（他地区の解決順が結果に影響しないよう、シードは地区番号ごとに分ける）。
-        /// </summary>
+        /// <summary>自校の地区の進出校＋他地区の進出校を、地区番号 0..districtCount-1 の並びで集める。</summary>
         private static List<School> CollectDistrictQualifiers(
-            int prefectureId, int districtCount, int advance, IReadOnlyList<int> myQualifierIds, int yearIndex)
+            int districtCount, IReadOnlyList<int> myQualifierIds,
+            IReadOnlyDictionary<int, OtherDistrictResult> otherDistricts)
         {
             var manager = ManagerSchool();
-            var field = new List<School>(districtCount * advance);
+            var field = new List<School>();
             for (var d = 0; d < districtCount; d++)
             {
                 if (d == (manager.DistrictId ?? 0))
@@ -110,7 +109,7 @@ namespace KokoSim.Unity.Shell
                     continue;
                 }
 
-                field.AddRange(ResolveOtherDistrict(prefectureId, d, advance, yearIndex));
+                if (otherDistricts.TryGetValue(d, out var other)) field.AddRange(other.Qualifiers);
             }
             return field;
         }
@@ -147,36 +146,104 @@ namespace KokoSim.Unity.Shell
             return s => rank.TryGetValue(s.Id, out var r) ? r : (int?)null;
         }
 
-        /// <summary>自校が居ない地区の進出校（上位 advance 校）を同期解決する（自校IDを混ぜないので Spectated でよい）。</summary>
-        private static IReadOnlyList<School> ResolveOtherDistrict(
-            int prefectureId, int districtId, int advance, int yearIndex)
+        /// <summary>他地区の消化を背景で始める（自校の地区予選に入るとき・その途中でロード復帰したとき）。
+        /// <para><b>大会モードかどうかを見ない</b>。呼ばれるのはどれも自校が地区予選の大会モードに入った後
+        /// （<see cref="TournamentEntry.Enter"/> は EnterTournament の後、ロード復帰は RestoreTournament の後）で、
+        /// <see cref="EnterAfterDistrictTournament"/> と同じ「Normal でなければ戻る」を置くと一度も起動せず、
+        /// 県大会へ入る瞬間に全地区を同期で解く（神奈川で237試合・エディタ実測で約37秒止まる）ことになっていた（PR #1117 のレビュー）。</para></summary>
+        public static void StartOtherDistrictSim()
         {
-            var entrants = NationService.PrefectureSchools.Where(s => s.DistrictId == districtId).ToList();
-            var seed = GameSeed.Master ^ (9600UL + (ulong)yearIndex * 10 + (ulong)districtId * 1000
-                + (ulong)prefectureId);
+            var prefectureId = NationService.PrefectureId;
+            var districtCount = DistrictPlanProvider.AutumnDistrictsOf(prefectureId);
+            if (districtCount <= 0) return;
+            var yearIndex = GameClock.YearIndex;
+            OtherDistrictBackgroundSim.Start(OtherDistrictKey(yearIndex),
+                BuildOtherDistrictJobs(prefectureId, districtCount, DistrictPlanProvider.AdvancePerDistrictOf(prefectureId),
+                    yearIndex));
+        }
 
-            // ブロックリーグ戦の県（神奈川・issue #772）: 自校の地区と同じ規則（夏の順位でシード分散・
-            // 各ブロック上位 N 校）で解く。集計モデル＝数十試合を同期で済ませる（自校の地区だけフルシム）。
-            if (DistrictPlanProvider.IsBlockLeagueOf(prefectureId))
+        /// <summary>他地区の結果（背景で解いた分）を揃える。背景が走っていなければここで始め、同期で解く（異常系の保険）。</summary>
+        private static IReadOnlyDictionary<int, OtherDistrictResult> ResolveOtherDistricts(
+            int prefectureId, int districtCount, int advance, int yearIndex)
+        {
+            if (!OtherDistrictBackgroundSim.IsFor(OtherDistrictKey(yearIndex))) StartOtherDistrictSim();
+            var results = OtherDistrictBackgroundSim.WaitForResults(OtherDistrictKey(yearIndex));
+
+            // 解けなかった地区（背景の失敗）は同期で解き直す。決定論なので同じ結果になる。
+            var jobs = BuildOtherDistrictJobs(prefectureId, districtCount, advance, yearIndex);
+            if (jobs.Any(j => !results.ContainsKey(j.Key)))
             {
-                if (entrants.Count < 2) return entrants;
-                var league = BlockLeagueRunner.Spectated(DrawBlocks(entrants, prefectureId, seed),
-                    DistrictPlanProvider.AdvancePerBlockOf(prefectureId), NationCoeff, new Xoshiro256Random(seed),
-                    TournamentEntry.Schedule, "秋季地区予選代表決定");
-                league.DrainBracketResolution();
-                return league.Qualifiers();
+                var filled = new Dictionary<int, OtherDistrictResult>(results);
+                foreach (var j in jobs) if (!filled.ContainsKey(j.Key)) filled[j.Key] = j.Value();
+                results = filled;
             }
 
-            if (entrants.Count <= advance) return entrants;
-            var title = "秋季地区予選代表決定";
-            var runner = TournamentRunner.Spectated(
-                entrants, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule, title);
-            runner.DrainBracketResolution();
-
-            var byId = entrants.ToDictionary(s => s.Id);
-            return KnockoutPlacement.FromMatches(runner.BuildBracketView().Matches, id => byId[id])
-                .Take(advance).ToList();
+            OtherDistrictBackgroundSim.FoldInto(NationService.TournamentStats, results);
+            return results;
         }
+
+        /// <summary>今年の他地区の背景フルシムがもう始まっているか（開発用の通し確認 DistrictFlowCheck が見る）。</summary>
+        public static bool OtherDistrictSimStartedThisYear
+            => OtherDistrictBackgroundSim.IsFor(OtherDistrictKey(GameClock.YearIndex));
+
+        private static ulong OtherDistrictKey(int yearIndex) => GameSeed.Master ^ (9500UL + (ulong)yearIndex);
+
+        /// <summary>
+        /// 自校が居ない各地区を解く処理を組む（地区番号→処理）。出場校・ブロック分けはここ（メインスレッド）で決める
+        /// ＝夏の順位など <see cref="GameSession"/> の状態を背景スレッドから読まない。シードは地区ごとに独立。
+        /// </summary>
+        private static IReadOnlyList<KeyValuePair<int, Func<OtherDistrictResult>>> BuildOtherDistrictJobs(
+            int prefectureId, int districtCount, int advance, int yearIndex)
+        {
+            var jobs = new List<KeyValuePair<int, Func<OtherDistrictResult>>>();
+            var myDistrict = ManagerSchool().DistrictId ?? 0;
+            var blockLeague = DistrictPlanProvider.IsBlockLeagueOf(prefectureId);
+            for (var d = 0; d < districtCount; d++)
+            {
+                if (d == myDistrict) continue;
+                var districtId = d;
+                var entrants = NationService.PrefectureSchools.Where(s => s.DistrictId == districtId).ToList();
+                var seed = GameSeed.Master ^ (9600UL + (ulong)yearIndex * 10 + (ulong)districtId * 1000
+                    + (ulong)prefectureId);
+                const string title = "秋季地区予選代表決定";
+
+                // ブロックリーグ戦の県（神奈川・issue #772）: 自校の地区と同じ規則（夏の順位でシード分散・
+                // 各ブロック上位 N 校）で解く。
+                if (blockLeague)
+                {
+                    if (entrants.Count < 2)
+                    {
+                        jobs.Add(Job(districtId, () => new OtherDistrictResult(entrants, Array.Empty<OtherDistrictGame>())));
+                        continue;
+                    }
+                    var blocks = DrawBlocks(entrants, prefectureId, seed);
+                    var advancePerBlock = DistrictPlanProvider.AdvancePerBlockOf(prefectureId);
+                    jobs.Add(Job(districtId, () => OtherDistrictSim.RunBlockLeague(blocks, advancePerBlock, NationCoeff,
+                        new Xoshiro256Random(seed), TournamentEntry.Schedule, title, NewResolver(yearIndex))));
+                    continue;
+                }
+
+                jobs.Add(Job(districtId, () => OtherDistrictSim.RunKnockout(entrants, advance, NationCoeff,
+                    new Xoshiro256Random(seed), TournamentEntry.Schedule, title, NewResolver(yearIndex))));
+            }
+            return jobs;
+        }
+
+        private static KeyValuePair<int, Func<OtherDistrictResult>> Job(int districtId, Func<OtherDistrictResult> run)
+            => new KeyValuePair<int, Func<OtherDistrictResult>>(districtId, run);
+
+        /// <summary>
+        /// 他地区の裏試合の解決器。自校の地区予選（<see cref="TournamentEntry.Enter"/>）と同じ作り
+        /// （県の汎用ティア球場・決勝球場なし）。成績は自前で畳まない＝<see cref="OtherDistrictSim"/> が試合結果を返し、
+        /// <see cref="OtherDistrictBackgroundSim.FoldInto"/> が1回だけ積む。
+        /// </summary>
+        private static BackgroundMatchResolver NewResolver(int yearIndex)
+            => new BackgroundMatchResolver(NationService.Rosters,
+                new GameContext { Weather = WeatherModel.ForTournament(TournamentEntry.Schedule, TournamentKind.AutumnDistrict) },
+                yearIndex, stats: null, modernRules: null,
+                calendarYear: SeasonClock.SeasonBaseYear + (yearIndex - 1), brains: new EnemyAiBrainFactory(),
+                afterMatch: OtherDistrictBackgroundSim.PauseGate,
+                useRegionalStadiumTier: true, summerStadiums: false, prefectureFinalStadiums: false);
 
         private static School ManagerSchool() => RegionalEntry.ManagerSchool();
     }
