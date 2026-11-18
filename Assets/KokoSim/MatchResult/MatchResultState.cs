@@ -24,7 +24,7 @@ namespace KokoSim.Unity.MatchResult
     }
 
     /// <summary>
-    /// 投手成績の1行（名前／球数／投球回／奪三振／失点／四球）。勝敗投手は概念ごと撤去
+    /// 投手成績の1行（名前／球数／投球回／被安打／奪三振／四球／失点）。勝敗投手は概念ごと撤去
     /// （高校野球では主役でない・監督判断2026-08-27。旧 Mark 列＝勝/敗マークは削除）。
     /// </summary>
     public sealed class MatchResultPitchingRow
@@ -32,9 +32,10 @@ namespace KokoSim.Unity.MatchResult
         public string Name = "";
         public string Pitches = "0";
         public string Innings = "0";
+        public string Hits = "0";
         public string StrikeOuts = "0";
-        public string Runs = "0";
         public string Walks = "0";
+        public string Runs = "0";
     }
 
     /// <summary>打席結果グリッドの1行（打者×打席番号）。</summary>
@@ -156,9 +157,10 @@ namespace KokoSim.Unity.MatchResult
                     Name = p.Name,
                     Pitches = p.Pitches.ToString(),
                     Innings = p.InningsText,
+                    Hits = p.Hits.ToString(),
                     StrikeOuts = p.StrikeOuts.ToString(),
-                    Runs = p.Runs.ToString(),
                     Walks = p.Walks.ToString(),
+                    Runs = p.Runs.ToString(),
                 });
             }
 
