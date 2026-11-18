@@ -141,7 +141,7 @@ namespace KokoSim.Unity.MatchResult
                 pit.Add(UiComponents.BoxRow(new[]
                 {
                     ("投手", "name"), ("球数", "num"), ("回", "inn"),
-                    ("奪三", "num"), ("失点", "num"), ("四球", "num"),
+                    ("被安", "num"), ("奪三", "num"), ("四球", "num"), ("失点", "num"),
                 }, header: true));
                 for (var i = 0; i < side.Pitching.Count; i++)
                 {
@@ -149,7 +149,7 @@ namespace KokoSim.Unity.MatchResult
                     pit.Add(UiComponents.BoxRow(new[]
                     {
                         (p.Name, "name"), (p.Pitches, "num"), (p.Innings, "inn"),
-                        (p.StrikeOuts, "num"), (p.Runs, "num"), (p.Walks, "num"),
+                        (p.Hits, "num"), (p.StrikeOuts, "num"), (p.Walks, "num"), (p.Runs, "num"),
                     }));
                 }
                 UiComponents.BoxTable(pit);
