@@ -169,6 +169,24 @@ public sealed record BattingCoefficients
     /// <summary>見慣れ度の効き1単位あたりの打球品質の加点。</summary>
     public double PitchFamiliarityQualityPerLevel { get; init; } = 0.01;
 
+    // --- 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072） ---
+    // §2.3b の試合内の慣れ（同一投手との対戦回数）とは別レイヤーの恒久寄りの個人差。
+    // 加重打席数（公式戦1.0／練習試合0.5・Q38と同じ重み分け）で蓄積し、§2.3bと同じ「ロジットへの加減算」の
+    // 形で空振り・追いかけ率へ乗せる。右投手には一切効かない（呼び出し側が deficit=0 を渡す・不変条件#1）。
+    /// <summary>対左投手の経験不足1点（deficit∈[0,1]、1＝未経験）あたりの空振り対数オッズ上昇。</summary>
+    public double LeftInexperienceWhiffPerDeficit { get; init; } = 0.19;
+    /// <summary>対左投手の経験不足1点あたりの追いかけ率（ゾーン外スイング確率）上昇。</summary>
+    public double LeftInexperienceChasePerDeficit { get; init; } = 0.045;
+    /// <summary>
+    /// 経験不足が0になる加重打席数（<see cref="Batting.ContactModel.LeftExperienceDeficit"/> は線形）。
+    /// 既定100＝50打席で半分・100打席でほぼ克服（オーナー決定2026-11-17）。
+    /// </summary>
+    public double LeftExperienceFullPa { get; init; } = 100.0;
+    /// <summary>対左投手経験の蓄積: 公式戦の1打席の重み（Q38と同じ重み分けの流儀）。</summary>
+    public double LeftExperienceOfficialPaWeight { get; init; } = 1.0;
+    /// <summary>対左投手経験の蓄積: 練習試合・紅白戦の1打席の重み（Q38と同じ流儀）。</summary>
+    public double LeftExperiencePracticePaWeight { get; init; } = 0.5;
+
     /// <summary>
     /// コンタクトのうちファウルになる割合。方位角が±45°を越えて幾何的にファウルになる分は別枠で、
     /// issue #262 で打球方向が広がった結果その別枠が増えたため、ここを 0.40→0.35 に下げて総ファウル率を保つ。

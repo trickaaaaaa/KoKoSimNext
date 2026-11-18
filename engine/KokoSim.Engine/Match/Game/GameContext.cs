@@ -166,11 +166,13 @@ public sealed record GameContext
         bool takeFirstPitch = false, SkillPlayMods? skills = null, int catcherLead = 50,
         bool intentionalWalk = false, double swingProbabilityFactor = 1.0, int familiarityPa = 0,
         Batting.PitchFamiliarityTracker? pitchFamiliarity = null,
-        Players.Handedness pitcherThrows = Players.Handedness.Right) => new()
+        Players.Handedness pitcherThrows = Players.Handedness.Right,
+        double leftExperienceDeficit = 0.0) => new()
     {
         PitcherThrows = pitcherThrows,
         FamiliarityPa = familiarityPa,
         PitchFamiliarity = pitchFamiliarity,
+        LeftExperienceDeficit = leftExperienceDeficit,
         Aerodynamics = Aerodynamics,
         Mound = Mound,
         StrikeZone = StrikeZone,

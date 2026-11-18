@@ -285,8 +285,17 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         return best;
     }
 
-    /// <summary>代打評価値（設計書11 §4）: 調子込みミート＋パワー重み×(実効パワー−50)＋左右の相性ボーナス。
-    /// 既定の重み0では調子込みミートそのもの（＝従来の比較と恒等）。</summary>
+    /// <summary>
+    /// 代打評価値（設計書11 §4）: 調子込みミート＋パワー重み×(実効パワー−50)＋左右の相性ボーナス。
+    /// 既定の重み0では調子込みミートそのもの（＝従来の比較と恒等）。
+    ///
+    /// <para>対左投手経験（issue #1072）との整合レビュー: このボーナスは打席側(Bats)と対戦投手(Throws)の
+    /// 一致/不一致だけを見る<b>静的</b>な相性で、経験（<see cref="Players.Player.LeftExperiencePa"/>）という
+    /// <b>時間蓄積</b>の概念は見ていない。左投手に対しては元から機能する（右打者を出す＝同じ理由で正しい）ため、
+    /// このまま変更なしで整合する。「左腕には特に左腕慣れした打者を」まで踏み込む（経験量で代打の評価を強める）
+    /// 拡張は、AI采配の新しい判断軸を増やす大きめの変更になるため今回は対象外（issue #1072「見直す」の結論・
+    /// オーナー要望があれば別issue）。</para>
+    /// </summary>
     private double PinchHitValue(Player p, Players.Handedness? pitcherThrows)
     {
         var value = (double)EffectiveContact(p);

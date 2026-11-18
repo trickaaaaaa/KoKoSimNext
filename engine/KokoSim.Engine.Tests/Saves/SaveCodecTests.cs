@@ -1314,4 +1314,35 @@ public sealed class SaveCodecTests
             Assert.Equal(expected, old.NewTeamStartedYear);
         }
     }
+
+    // ===== 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072） =====
+
+    [Fact]
+    public void LeftExperiencePa_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Roster[0].LeftExperiencePa = 37.5;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+
+        for (var i = 0; i < state.Roster.Count; i++)
+            Assert.Equal(state.Roster[i].LeftExperiencePa, s.Roster[i].LeftExperiencePa, 9);
+    }
+
+    /// <summary>
+    /// 旧セーブ（部員ごとの leftExpPa キーが無い）は0（蓄積なしから）で読める（他の新規追加キーと同じ
+    /// Has 分岐の作法。<see cref="SaveCodec.CurrentVersion"/> は動かさない）。
+    /// </summary>
+    [Fact]
+    public void OldSave_WithoutLeftExpPa_StillLoads_AsZero()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Roster[0].LeftExperiencePa = 42.0;
+        var json = Regex.Replace(SaveCodec.Serialize(state), "\"leftExpPa\":-?[0-9.eE+]+,", "");
+        Assert.DoesNotContain("leftExpPa", json);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(state.Roster.Count, s.Roster.Count);
+        foreach (var p in s.Roster) Assert.Equal(0.0, p.LeftExperiencePa);
+    }
 }

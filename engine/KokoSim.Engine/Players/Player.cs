@@ -33,6 +33,15 @@ public sealed record Player
     public Handedness Throws { get; init; } = Handedness.Right;
     public Handedness Bats { get; init; } = Handedness.Right;
 
+    /// <summary>
+    /// 対左投手の経験（加重打席数。設計書02 §2.3「左のプレミア」・issue #1072）。自校は
+    /// <see cref="Season.DevelopingPlayer.LeftExperiencePa"/> を投影、AI校は学年から近似（<see cref="Nation.Roster.AiTeamBuilder"/>）。
+    /// 既定 <see cref="double.PositiveInfinity"/>＝「経験は十分（恒等）」で、この値を明示的に投影しない
+    /// 既存のテスト素体・統計シムの生成はすべて従来どおり対左の不利が無い（<see cref="Match.Batting.ContactModel.LeftExperienceDeficit"/>
+    /// が常に0を返す）。実際に効くのは試合エンジンが対戦投手が左投げのときだけ読む値（右投手には使わない）。
+    /// </summary>
+    public double LeftExperiencePa { get; init; } = double.PositiveInfinity;
+
     public int Contact { get; init; } = 50;
     public int Power { get; init; } = 50;
     public int LaunchTendency { get; init; } = 50;

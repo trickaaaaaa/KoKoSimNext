@@ -72,6 +72,16 @@ public static class AiTeamBuilder
         // 調子は (校ID, 年度, 選手ID) の Fork から引く純関数（Fork は親を進めない）＝何度引いても同じ値。
         double ConditionValueOf(AiPlayer p) => FormModel.SampleInitialCondition(conditionRoot.Fork((ulong)(uint)p.Id), deps.Form);
 
+        // 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072）: AI校は実戦の対左打席を記録しないため、
+        // 個人差（中学での経験, 校ID×選手IDの決定論Fork＝調子と同じ流儀）＋学年（経験年数）から近似する
+        // （オーナー決定2026-11-17）。何度呼んでも同じ値（Fork は親を進めない・不変条件#2）。
+        double LeftExperiencePaOf(AiPlayer p)
+        {
+            var initial = System.Math.Max(0.0, conditionRoot.Fork(0x1E57_0000UL ^ (ulong)(uint)p.Id)
+                .NextGaussian(deps.Roster.LeftExperienceInitialMeanPa, deps.Roster.LeftExperienceInitialSpreadPa));
+            return initial + System.Math.Max(0, p.Grade - 1) * deps.Roster.LeftExperienceAiPaPerYear;
+        }
+
         Player Snap(AiPlayer p, int number)
         {
             var v = ConditionValueOf(p);
@@ -81,6 +91,7 @@ public static class AiTeamBuilder
                 Grade = p.Grade,
                 ConditionValue = v,
                 Condition = FormModel.Quantize(v),
+                LeftExperiencePa = LeftExperiencePaOf(p),
             };
         }
 

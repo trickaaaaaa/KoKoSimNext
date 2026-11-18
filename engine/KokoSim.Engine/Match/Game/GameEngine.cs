@@ -981,7 +981,13 @@ public static class GameEngine
                     // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: この打者×この投手の球種ごとの見慣れ度。
                     // 投手が変われば新しいトラッカー＝0から（PitchFamiliarityTrackerFor が継投リセットを担う）。
                     pitchFamiliarity: offense.PitchFamiliarityTrackerFor(batter, currentPitcher),
-                    pitcherThrows: currentPitcher.Throws);
+                    pitcherThrows: currentPitcher.Throws,
+                    // 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072）: 対戦投手が左投げのときだけ、
+                    // 打者の永続的な対左経験（Player.LeftExperiencePa）から経験不足を計算する。右投手は常に0
+                    // ＝1ビットも変わらない（issue 完了条件）。
+                    leftExperienceDeficit: currentPitcher.Throws == Handedness.Left
+                        ? Batting.ContactModel.LeftExperienceDeficit(batter.LeftExperiencePa, ctx.Batting)
+                        : 0.0);
                 // 初球を指定のファウルにする強制（issue #1074 の撮影用）。それ以外は同一参照＝乱数順・結果は不変
                 return force is Debugging.ForcedOutcome.ChasedFoulFly or Debugging.ForcedOutcome.BigFoul
                                or Debugging.ForcedOutcome.GroundFoul or Debugging.ForcedOutcome.HighFoul

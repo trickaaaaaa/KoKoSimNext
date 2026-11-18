@@ -187,6 +187,14 @@ batting:
   pitch_familiarity_rank_discount_per_point: 0.01
   pitch_familiarity_whiff_per_level: 0.05
   pitch_familiarity_quality_per_level: 0.01
+  # 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072）: §2.3bの試合内の慣れ（上）とは別レイヤーの
+  # 恒久寄りの個人差。加重打席数（公式戦1.0／練習試合0.5）で蓄積し、同じ「ロジットへの加減算」の形で
+  # 空振り・追いかけ率へ乗せる。右投手には常に0＝1ビットも変わらない（呼び出し側のゲート）。
+  left_inexperience_whiff_per_deficit: 0.19
+  left_inexperience_chase_per_deficit: 0.045
+  left_experience_full_pa: 100.0
+  left_experience_official_pa_weight: 1.0
+  left_experience_practice_pa_weight: 0.5
   foul_share: 0.35               # コンタクト中のファウル割合（方位角±45°超の幾何ファウルは別枠, issue #262）
   # 球速→球威。基準はリーグ平均投手の平均リリース球速（最速132 − 平均ドロップ4）に置き、
   # 傾きは「球速1レベル ≈ ミート1レベル」になるよう 0.030 ÷ 0.47(km/h per level) ≈ 0.064 とする。
@@ -1971,6 +1979,10 @@ roster:
   switch_prob: 0.03
   bat_left_given_right_throw: 0.40   # 右投→左打（右投左打を意図的に量産）
   bat_left_given_left_throw: 0.98    # 左投→ほぼ左打（左投右打は絶滅危惧種）
+  # 対左投手経験の初期値・AI近似（設計書02 §2.3「左のプレミア」・issue #1072）。
+  left_experience_initial_mean_pa: 20.0
+  left_experience_initial_spread_pa: 15.0
+  left_experience_ai_pa_per_year: 12.0
   # 投手球速 = 地肩 ＋ 投手センス（§1.1b-3。km/h校正は Slice 2D）
   pitcher_sense_bonus: 10.0
   non_pitcher_sense_factor: 0.45

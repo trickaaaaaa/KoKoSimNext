@@ -37,6 +37,11 @@ public static class BatterDecision
     /// 意味を持つ）で <see cref="BattingCoefficients.ThreeZeroSwingFactor"/> をスイング確率へ掛ける。既定 0 は
     /// 3-0 に該当しないため恒等（balls未指定の既存呼び出しに影響しない）。
     /// </param>
+    /// <param name="leftExperienceDeficit">
+    /// 対左投手の経験不足（設計書02 §2.3「左のプレミア」・issue #1072、<see cref="ContactModel.LeftExperienceDeficit"/>
+    /// が返す [0,1]）。ゾーン外でだけ追いかけ率を上げる（見極めの不利）。呼び出し側（右投手・経験十分な打者）は
+    /// 常に0を渡す＝既定0は恒等。
+    /// </param>
     public static double SwingProbability(
         bool inZone,
         double distanceOutsideM,
@@ -47,7 +52,8 @@ public static class BatterDecision
         double zoneEdgeProximity = 0.0,
         int familiarityPa = 0,
         int strikes = 0,
-        int balls = 0)
+        int balls = 0,
+        double leftExperienceDeficit = 0.0)
     {
         double p;
         if (inZone)
@@ -63,7 +69,9 @@ public static class BatterDecision
             p = coeff.ChaseBase - (batter.Discipline - 50) * coeff.ChaseDisciplineSlope
                 + coeff.ChaseBreakSlope * breakMagnitudeM
                 - coeff.ChaseDistanceSlope * distanceOutsideM
-                - coeff.FamiliarityChasePerPa * ContactModel.FamiliarityEffect(familiarityPa, breakMagnitudeM, coeff);
+                - coeff.FamiliarityChasePerPa * ContactModel.FamiliarityEffect(familiarityPa, breakMagnitudeM, coeff)
+                // 対左投手経験（issue #1072）: 左腕を見慣れていないほど釣られやすい（見極めの不利）。
+                + coeff.LeftInexperienceChasePerDeficit * leftExperienceDeficit;
         }
 
         if (strikes >= 2) p += coeff.TwoStrikeSwingBoost;
@@ -79,7 +87,7 @@ public static class BatterDecision
         return MathUtil.Clamp(p * swingFactor, 0.02, 0.98);
     }
 
-    /// <summary>スイングするか。<paramref name="swingFactor"/>・<paramref name="zoneEdgeProximity"/>・<paramref name="strikes"/>・<paramref name="balls"/> の意味は <see cref="SwingProbability"/> を参照。</summary>
+    /// <summary>スイングするか。<paramref name="swingFactor"/>・<paramref name="zoneEdgeProximity"/>・<paramref name="strikes"/>・<paramref name="balls"/>・<paramref name="leftExperienceDeficit"/> の意味は <see cref="SwingProbability"/> を参照。</summary>
     public static bool DecideSwing(
         bool inZone,
         double distanceOutsideM,
@@ -91,7 +99,9 @@ public static class BatterDecision
         double zoneEdgeProximity = 0.0,
         int familiarityPa = 0,
         int strikes = 0,
-        int balls = 0)
+        int balls = 0,
+        double leftExperienceDeficit = 0.0)
         => MathUtil.Chance(
-            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor, zoneEdgeProximity, familiarityPa, strikes, balls), rng);
+            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor, zoneEdgeProximity,
+                familiarityPa, strikes, balls, leftExperienceDeficit), rng);
 }

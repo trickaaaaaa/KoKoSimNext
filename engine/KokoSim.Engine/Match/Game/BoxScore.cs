@@ -26,6 +26,13 @@ public sealed record BattingLine(
     /// <summary>途中出場の選手が実際に守備に就いた最後の位置。守備に就かなかった（代打・代走のみ）なら null。選手本来の適性ではない。</summary>
     public FieldPosition? FieldedAt { get; init; }
 
+    /// <summary>
+    /// このうち対左投手の打席数（設計書02 §2.3「左のプレミア」・issue #1072）。試合後、自校の部員の
+    /// <see cref="KokoSim.Engine.Season.DevelopingPlayer.LeftExperiencePa"/> を重み付きで伸ばす材料になる
+    /// （<see cref="KokoSim.Engine.Season.LeftExperienceGrowthModel"/>）。既定0（旧セーブ相当・互換のため末尾追加）。
+    /// </summary>
+    public int PlateAppearancesVsLeft { get; init; }
+
     /// <summary>打率（打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;
 }

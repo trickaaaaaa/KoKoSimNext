@@ -30,7 +30,8 @@ public static class ContactModel
         bool inZone,
         BattingCoefficients coeff,
         int familiarityPa = 0,
-        double? pitchFamiliarityLevel = null)
+        double? pitchFamiliarityLevel = null,
+        double leftExperienceDeficit = 0.0)
     {
         // 誘発変化量の欺瞞効果は実球速で割り引く（issue #837・設計書21 §3.5）。遅い球ほど見る時間が長く、
         // 大きなホップに欺かれにくい＝球威・タイミング・打球質の球速項（反応球速で寝かせ済み）と対称に扱う。
@@ -46,7 +47,10 @@ public static class ContactModel
                 - coeff.FamiliarityWhiffPerPa * FamiliarityEffect(familiarityPa, effectiveBreak, coeff)
                 // 球種の慣れ（設計書02 §2.3b 案A・issue #836）: 同じ球種が連投されるほど空振りにくくなる。
                 // 持ち球が少ない投手ほど自然に強く効く（追加の特徴量なし・慣れの蓄積だけで表現）。
-                - coeff.PitchFamiliarityWhiffPerLevel * PitchFamiliarityEffect(pitchFamiliarityLevel, plan.PitchRank, coeff);
+                - coeff.PitchFamiliarityWhiffPerLevel * PitchFamiliarityEffect(pitchFamiliarityLevel, plan.PitchRank, coeff)
+                // 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072）: 左腕を見慣れていないほど空振りが増える。
+                // 呼び出し側（右投手・経験十分）は常に0＝恒等。
+                + coeff.LeftInexperienceWhiffPerDeficit * leftExperienceDeficit;
         if (!inZone)
         {
             z += coeff.WhiffOutOfZonePenalty;
@@ -94,6 +98,19 @@ public static class ContactModel
         if (level is null) return 0.0;
         var discount = MathUtil.Clamp(coeff.PitchFamiliarityRankDiscountPerPoint * (pitchRank - 50), 0.0, 1.0);
         return (level.Value - coeff.PitchFamiliarityBaselineLevel) * (1.0 - discount);
+    }
+
+    /// <summary>
+    /// 対左投手の経験不足（設計書02 §2.3「左のプレミア」・issue #1072）。加重打席数（<see cref="Players.Player.LeftExperiencePa"/>、
+    /// 公式戦/練習試合の対左打席を重み付き加算）が増えるほど0へ近づく線形カーブ（§2.3bの慣れと同じ「上限で飽和」の流儀）。
+    /// <see cref="BattingCoefficients.LeftExperienceFullPa"/> の半分で0.5（50打席で半分）、同値以上で0（≈100打席でほぼ克服）。
+    /// 呼び出し側（<see cref="Match.Game.GameEngine"/>）は対戦投手が右投げなら常に0を渡す＝右投手は1ビットも変わらない。
+    /// </summary>
+    public static double LeftExperienceDeficit(double weightedPa, BattingCoefficients coeff)
+    {
+        if (coeff.LeftExperienceFullPa <= 0.0) return 0.0;
+        if (double.IsPositiveInfinity(weightedPa)) return 0.0;
+        return MathUtil.Clamp(1.0 - weightedPa / coeff.LeftExperienceFullPa, 0.0, 1.0);
     }
 
     /// <summary>
@@ -157,9 +174,11 @@ public static class ContactModel
         int familiarityPa = 0,
         int strikes = 0,
         double? pitchFamiliarityLevel = null,
-        BattedBallSkillMods skillMods = default)
+        BattedBallSkillMods skillMods = default,
+        double leftExperienceDeficit = 0.0)
     {
-        var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff, familiarityPa, pitchFamiliarityLevel);
+        var whiffProb = WhiffProbability(
+            batter, plan, features, inZone, coeff, familiarityPa, pitchFamiliarityLevel, leftExperienceDeficit);
         if (MathUtil.Chance(whiffProb, rng))
         {
             return (ContactOutcome.Whiff, null);
