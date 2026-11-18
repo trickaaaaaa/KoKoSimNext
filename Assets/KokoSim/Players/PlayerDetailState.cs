@@ -234,6 +234,7 @@ namespace KokoSim.Unity.Players
             v.FielderAbilities.Add(Bar(p, AbilityKind.Discipline, "選球眼"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Speed, "走力"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.ArmStrength, "肩"));
+            v.FielderAbilities.Add(Bar(p, AbilityKind.ThrowAccuracy, AbilityLabels.Jp(AbilityKind.ThrowAccuracy)));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Fielding, "守備"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Catching, "捕球"));
 
@@ -303,8 +304,8 @@ namespace KokoSim.Unity.Players
             new[] { (AbilityKind.Contact, "batting"), (AbilityKind.Power, "power"), (AbilityKind.Discipline, "discipline") },
             new[] { (AbilityKind.Velocity, "velocity"), (AbilityKind.Control, "pitching"), (AbilityKind.Stamina, "running"),
                     (AbilityKind.PitchRank, "breaking"), (AbilityKind.Stuff, "strength") },
-            new[] { (AbilityKind.Speed, "baserun"), (AbilityKind.ArmStrength, "throwing"), (AbilityKind.Fielding, "defense"),
-                    (AbilityKind.Catching, "defpos") },
+            new[] { (AbilityKind.Speed, "baserun"), (AbilityKind.ArmStrength, "throwing"), (AbilityKind.ThrowAccuracy, "bunt"),
+                    (AbilityKind.Fielding, "defense"), (AbilityKind.Catching, "defpos") },
         };
 
         private static readonly SeasonCalendar Calendar = new SeasonCalendar();
