@@ -173,14 +173,14 @@ public sealed class CoefficientsLoaderTests
 
         // 本塁クロスプレー係数（F2, 設計書12 §3）が YAML から実際に束縛される
         // （IgnoreUnmatchedProperties のため綴り違いは黙って既定値になる＝ここで実値を固定して検出する）。
-        Assert.Equal(1.57, bundle.Baserunning.HomeSuccessBias, 6);   // #316 で 2.00 から引き下げ
+        Assert.Equal(1.41, bundle.Baserunning.HomeSuccessBias, 6);   // #316 で 2.00→1.57、issue #1139 で HomeTagSeconds+0.16 を引いて 1.41
         Assert.Equal(0.25, bundle.Baserunning.HomeMarginScale, 6);
         // 走者の物理（Issue #316）: 打者走者側（fielding）と同値でなければならない。
         Assert.Equal(1.15, bundle.Baserunning.RunnerTopSpeedFactor, 6);
         Assert.Equal(0.30, bundle.Baserunning.RunnerBaseTurnSeconds, 6);
         Assert.Equal(bundle.Fielding.RunningTopSpeedFactor, bundle.Baserunning.RunnerTopSpeedFactor, 6);
         Assert.Equal(bundle.Fielding.BaseTurnSeconds, bundle.Baserunning.RunnerBaseTurnSeconds, 6);
-        Assert.Equal(0.88, bundle.Baserunning.ThirdSuccessBias, 6);   // #316 で 1.50 から引き下げ
+        Assert.Equal(0.76, bundle.Baserunning.ThirdSuccessBias, 6);   // #316 で 1.50→0.88、issue #1139 で ThirdTagSeconds+0.12 を引いて 0.76
         Assert.Equal(32.0, bundle.Baserunning.RelayThrowSpeedMps, 6);
         Assert.Equal(1.88, bundle.Baserunning.CutoffThrowSeconds, 6);   // issue #526 で距離固定60mから肩連動へ
         Assert.Equal(0.06, bundle.Baserunning.FieldersChoiceProb, 6); // 野選（FC, design-14 P1-1）帯再校正済み値（2026-07-17）
@@ -223,7 +223,7 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(1.00, bundle.Baserunning.LinerCommitCapSeconds, 6);
         Assert.Equal(7.25, bundle.Baserunning.LinerReferenceSprintSpeedMps, 6);
         Assert.Equal(0.30, bundle.Baserunning.DoubledOffTransferSeconds, 6);
-        Assert.Equal(0.0, bundle.Baserunning.DoubledOffSuccessBias, 6);
+        Assert.Equal(-0.10, bundle.Baserunning.DoubledOffSuccessBias, 6);   // issue #1139 で DoubledOffTagSeconds+0.10 を引いて 0.0→-0.10
 
         // 守備の読み/ピッチアウト（G3, 設計書12 §5）の係数も YAML から束縛される。
         Assert.Equal(0.42, bundle.Baserunning.StealExpectednessIntercept, 6);

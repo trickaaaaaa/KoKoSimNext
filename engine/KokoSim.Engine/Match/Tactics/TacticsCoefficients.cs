@@ -41,8 +41,14 @@ public sealed record TacticsCoefficients
     /// 見込みで比べると、盗塁のうまい走者ほど読まれて実成功が見込みを約7ポイント下回っていた。0.65 で走った盗塁の
     /// 実成功は 69〜72%（simulate-games tactics 2000試合×2シード）。得点期待値表（run expectancy）は持たず、
     /// アウト数別の固定オフセット（<see cref="StealMinSuccessOneOutOffset"/>/<see cref="StealMinSuccessTwoOutOffset"/>）で
-    /// 近似する（表の自前構築はオーナー決定で対象外）。</para></summary>
-    public double StealMinSuccess { get; init; } = 0.65;
+    /// 近似する（表の自前構築はオーナー決定で対象外）。</para>
+    /// <para>issue #1139（タッチプレーのタッチ秒分離）: 盗塁のタッチ秒（<see cref="Game.BaserunningCoefficients.TagSeconds"/>）
+    /// を 0.10→0.13（+0.03s）にした分、margin が全走者で一様に+0.03シフトし、この閾値ちょうどに積んでいた
+    /// 走者が一斉に閾値を超えて盗塁企図/試合が帯(0.05〜0.60)を 0.83〜0.91 まで超えて暴走した
+    /// （<c>GameRegressionTests.TacticsGames_StayWithinTargetBands</c>）。#316/#1139 の作法どおり、増やした秒数ぶんの
+    /// margin シフトを打ち消すよう、確率側の閾値を同じ margin 分だけ押し上げて 0.65 → 0.68（logit(0.65)+0.03/StealMarginScale
+    /// をlogisticで戻した値）。盗塁のタッチの絵だけ直し、損益分岐の判断そのものは変えない。</para></summary>
+    public double StealMinSuccess { get; init; } = 0.68;
     /// <summary>1アウトの損益分岐オフセット（<see cref="StealMinSuccess"/>への加算）。残り打席を気にせず
     /// 先の塁を取りに行く価値が無死よりやや下がるため負（issue #838・セイバーメトリクス近似の目安 -0.03）。</summary>
     public double StealMinSuccessOneOutOffset { get; init; } = -0.03;
