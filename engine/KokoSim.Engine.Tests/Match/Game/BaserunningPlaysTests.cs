@@ -861,6 +861,54 @@ public sealed class BaserunningPlaysTests
     }
 
     /// <summary>
+    /// issue #1142: 振り逃げが成立すると、暴投と同じく走者が1つずつ進む（三塁走者は生還・二塁走者は三塁へ）。
+    /// 2アウトで一塁が埋まっていても走者は消えず、得点は暴投と同じ規則でスコアに入る。
+    /// </summary>
+    [Fact]
+    public void DropThirdStrike_AdvancesRunnersLikeAWildPitch()
+    {
+        // 暴投・捕逸の得点は打席ログに載らない＝切って、ログの得点＋振り逃げの生還でスコアが合うかを見る。
+        var on = new GameContext
+        {
+            Baserunning = C with
+            {
+                DropThirdStrikeReachProb = 0.9, DropThirdStrikeCatchingSlope = 0.0,
+                WildPitchProb = 0.0, PassedBallProb = 0.0,
+            },
+        };
+        var dropsWithThird = 0;
+        var dropsWithSecond = 0;
+        var dropsWithFirst = 0;
+        for (ulong seed = 1; seed <= 60; seed++)
+        {
+            var r = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(seed));
+            var expectedAway = 0;
+            var expectedHome = 0;
+            foreach (var e in r.Log)
+            {
+                var dropped = e.Result == PlateAppearanceResult.Strikeout && e.OutsThisPa == 0;
+                if (dropped && e.BaseThirdBefore) Assert.Equal(1, e.RunsScored); // 打席ログの得点に数える（走者保存則）
+                if (dropped)
+                {
+                    Assert.True(e.BaseFirstAfter, "振り逃げの打者が一塁にいない");
+                    Assert.Equal(e.BaseSecondBefore, e.BaseThirdAfter);
+                    Assert.Equal(e.BaseFirstBefore, e.BaseSecondAfter);
+                    if (e.BaseThirdBefore) dropsWithThird++;
+                    if (e.BaseSecondBefore) dropsWithSecond++;
+                    if (e.BaseFirstBefore) dropsWithFirst++;
+                }
+                if (e.IsTop) expectedAway += e.RunsScored;
+                else expectedHome += e.RunsScored;
+            }
+            Assert.Equal(expectedAway, r.AwayRuns);
+            Assert.Equal(expectedHome, r.HomeRuns);
+        }
+        Assert.True(dropsWithThird > 0, "三塁走者ありの振り逃げが一度も起きなかった（検証になっていない）");
+        Assert.True(dropsWithSecond > 0, "二塁走者ありの振り逃げが一度も起きなかった");
+        Assert.True(dropsWithFirst > 0, "2アウト一塁ありの振り逃げが一度も起きなかった");
+    }
+
+    /// <summary>
     /// issue #488: 振り逃げが成立した球の <see cref="LivePitch.DropThirdStrikePlay"/> に再生データが載る
     /// （CaptureTimelines+CapturePitches のとき）。打席途中の振り逃げを絵にする唯一の運び口。
     /// </summary>

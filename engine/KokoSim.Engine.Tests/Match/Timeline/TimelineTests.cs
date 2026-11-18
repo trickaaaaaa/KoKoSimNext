@@ -1968,6 +1968,32 @@ public sealed class TimelineTests
         Assert.True(leg.T1 <= throwSeg.T1, "セーフなのに走者が送球より後に一塁へ着いている");
     }
 
+    /// <summary>issue #1142: 後逸した振り逃げでは走者も1つ進む（暴投・捕逸と同じ）。三塁走者は本塁へ還る絵になる。</summary>
+    [Fact]
+    public void DropThirdStrikeTimeline_RunnersAdvanceOneBase_ThirdRunnerScores()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var batter = new Player { Name = "打者", Speed = 60 };
+        var r1 = new Player { Name = "一走", Speed = 55 };
+        var r2 = new Player { Name = "二走", Speed = 55 };
+        var r3 = new Player { Name = "三走", Speed = 55 };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 };
+
+        var tl = TimelineBuilder.BuildDropThirdStrike(batter, catcher, c, field, r1, r2, r3);
+
+        Assert.Equal(4, tl.Runners.Count);
+        var leg3 = tl.Runners.Single(l => ReferenceEquals(l.Runner, r3));
+        Assert.True(Near(leg3.To, new TimelinePoint(0, 0)), "三塁走者が本塁へ向かっていない");
+        Assert.False(leg3.OutAtEnd);
+        var leg2 = tl.Runners.Single(l => ReferenceEquals(l.Runner, r2));
+        Assert.True(Near(leg2.To, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)), "二塁走者が三塁へ向かっていない");
+        var leg1 = tl.Runners.Single(l => ReferenceEquals(l.Runner, r1));
+        Assert.True(Near(leg1.To, new TimelinePoint(field.SecondBase.X, field.SecondBase.Z)), "一塁走者が二塁へ向かっていない");
+        Assert.Contains(tl.Captions, cap => cap.Text == "生還！");
+        Assert.True(tl.ResolvedAt >= leg3.T1);
+    }
+
     [Theory]
     [InlineData(40, 50)]
     [InlineData(60, 50)]

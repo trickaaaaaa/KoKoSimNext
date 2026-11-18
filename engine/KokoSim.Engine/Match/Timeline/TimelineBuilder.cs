@@ -1626,8 +1626,12 @@ public static class TimelineBuilder
     /// なので、絵の秒（落球の転がり・捕手の反応/送球・打者走者の一塁到達）は新規に組む。出塁が確定済みの
     /// ため、送球到達は走者到達より先に見えないよう詰める（矛盾ガード。<see cref="GuardAgainstVerdict"/>
     /// と同じ「物理優先＋矛盾ガード」の考え方）。</para></summary>
+    /// <param name="first">進塁前の一塁走者（2アウトで一塁が埋まっているとき。issue #1142）。二塁への走者レッグになる。</param>
+    /// <param name="second">進塁前の二塁走者。三塁への走者レッグになる。</param>
+    /// <param name="third">進塁前の三塁走者。生還レッグになる。</param>
     public static PlayTimeline BuildDropThirdStrike(
-        Player batter, Player catcher, BaserunningCoefficients c, FieldGeometry field)
+        Player batter, Player catcher, BaserunningCoefficients c, FieldGeometry field,
+        Player? first = null, Player? second = null, Player? third = null)
     {
         var firstPt = BasePoint(field, "first");
         var missPt = new TimelinePoint(0, -DropThirdStrikeMissDistanceM);
@@ -1677,22 +1681,48 @@ public static class TimelineBuilder
             Task = FielderTask.CoverBase,
         });
 
-        var runners = new[]
+        var runners = new List<RunnerLeg>
         {
-            new RunnerLeg
+            new()
             {
                 Label = "打", T0 = 0.0, T1 = batterArrive, From = Home, To = firstPt, OutAtEnd = false,
                 Runner = batter,
             },
         };
 
-        // セーフは際どさを未評価のため判定オーバーレイは積まない（盗塁・牽制と同じ表示条件, Issue #59）。
+        // 後逸したので走者も1つ進む（暴投・捕逸と同じ＝BuildBatteryMiss の走者レッグ。三塁走者は生還）。
         var resolvedAt = Math.Max(batterArrive, throwArrive);
-        var captions = new[]
+        double? scoreAt = null;
+        if (first is not null)
         {
-            new TimelineCaption(0.0, "振り逃げ——キャッチャーが弾いた！"),
-            new TimelineCaption(resolvedAt, "セーフ！ 振り逃げで出塁"),
+            var t1 = HomePlayResolver.RunnerTimeSeconds(first, 1, 2, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走一", T0 = 0.0, T1 = t1, From = firstPt, To = BasePoint(field, "second"), OutAtEnd = false, Runner = first });
+            resolvedAt = Math.Max(resolvedAt, t1);
+        }
+        if (second is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(second, 2, 3, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走二", T0 = 0.0, T1 = t1, From = BasePoint(field, "second"), To = BasePoint(field, "third"), OutAtEnd = false, Runner = second });
+            resolvedAt = Math.Max(resolvedAt, t1);
+        }
+        if (third is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(third, 3, 4, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走三", T0 = 0.0, T1 = t1, From = BasePoint(field, "third"), To = Home, OutAtEnd = false, Runner = third });
+            resolvedAt = Math.Max(resolvedAt, t1);
+            scoreAt = t1;
+        }
+
+        // セーフは際どさを未評価のため判定オーバーレイは積まない（盗塁・牽制と同じ表示条件, Issue #59）。
+        var captions = new List<TimelineCaption>
+        {
+            new(0.0, "振り逃げ——キャッチャーが弾いた！"),
+            new(Math.Max(batterArrive, throwArrive), "セーフ！ 振り逃げで出塁"),
         };
+        if (scoreAt is { } sa) captions.Add(new TimelineCaption(sa, "生還！"));
 
         return new PlayTimeline
         {
@@ -1702,8 +1732,8 @@ public static class TimelineBuilder
             FielderStarts = StandardStarts(),
             Ball = ball.ToArray(),
             Moves = moves.ToArray(),
-            Runners = runners,
-            Captions = captions,
+            Runners = runners.ToArray(),
+            Captions = captions.ToArray(),
         };
     }
 
