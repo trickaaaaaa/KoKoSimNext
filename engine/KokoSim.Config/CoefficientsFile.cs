@@ -1062,6 +1062,7 @@ public static class CoefficientsLoader
         public double DoubledOffMarginScale { get; set; } = D.DoubledOffMarginScale;
         public double DoubledOffSuccessBias { get; set; } = D.DoubledOffSuccessBias;
         public double StealBreakExtraLeadM { get; set; } = D.StealBreakExtraLeadM;
+        public double StealBreakGrounderStartDelaySeconds { get; set; } = D.StealBreakGrounderStartDelaySeconds;
         public double DoubledOffRetreatSpeedMps { get; set; } = D.DoubledOffRetreatSpeedMps;
         // 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）
         public double StealExpectednessIntercept { get; set; } = D.StealExpectednessIntercept;
@@ -1236,6 +1237,7 @@ public static class CoefficientsLoader
             DoubledOffMarginScale = DoubledOffMarginScale,
             DoubledOffSuccessBias = DoubledOffSuccessBias,
             StealBreakExtraLeadM = StealBreakExtraLeadM,
+            StealBreakGrounderStartDelaySeconds = StealBreakGrounderStartDelaySeconds,
             DoubledOffRetreatSpeedMps = DoubledOffRetreatSpeedMps,
             StealExpectednessIntercept = StealExpectednessIntercept,
             StealExpectednessStealSlope = StealExpectednessStealSlope,

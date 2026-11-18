@@ -118,6 +118,31 @@ public sealed class DoubledOffDepictionTests
         Assert.Equal(before, tl.Ball.Count);
     }
 
+    [Theory]
+    [InlineData(2, "second")]
+    [InlineData(3, "third")]
+    public void StealBreakRunnerOnSecondOrThird_ReturnsToItsOwnBase(int baseNo, string baseName)
+    {
+        // 三盗の二塁走者・重盗で本塁へ走った三塁走者（issue #1138）: 一塁走者と同じ飛び出し→反転→帰塁の絵。
+        var runner = new Player { Speed = 40 };
+        var moves = new List<RunnerMove>
+        {
+            new(runner, baseNo, baseNo, Out: true)
+                { DoubledOffThrowArriveSeconds = 2.2 + 1.2, DoubledOffLeadM = 10.0, DoubledOffMaxLeadM = 12.0 },
+        };
+        var tl = TimelineBuilder.AppendRunnerLegs(FlyTimeline(), moves, Field, Baserunning, Fielding, flyCaughtAtSeconds: 2.2);
+        tl = TimelineBuilder.AppendDoubledOffThrow(tl, ShallowFlyOut(), moves, Field, Baserunning);
+
+        var ownBase = baseNo == 2 ? new TimelinePoint(Field.SecondBase.X, Field.SecondBase.Z)
+                                  : new TimelinePoint(Field.ThirdBase.X, Field.ThirdBase.Z);
+        var back = tl.Runners.Where(l => l.Label == "走1").OrderBy(l => l.T0).Last();
+        Assert.True(back.Returning);
+        Assert.True(back.OutAtEnd);
+        Assert.Equal(ownBase, back.To);
+        var thr = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw && b.ToBase == baseName);
+        Assert.Equal(ownBase, thr.To);
+    }
+
     private static double Dist(TimelinePoint a, TimelinePoint b)
         => System.Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z));
 }

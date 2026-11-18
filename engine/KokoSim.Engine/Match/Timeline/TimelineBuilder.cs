@@ -2318,7 +2318,7 @@ public static class TimelineBuilder
             // 飛び出しの勝負（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 一塁走者が二塁方向へ
             // 飛び出し→捕球で反転→一塁へ戻る（憤死 or 帰塁セーフ）。ToBase==FromBase なので下の塁間ループは
             // 1本も積まない＝以前は憤死も帰塁も描かれず「描写なしでツーアウト」に見えていた。
-            if (m.FromBase == 1 && m.ToBase == 1 && m.DoubledOffThrowArriveSeconds is { } doThrowArrive)
+            if (m.FromBase is >= 1 and <= 3 && m.ToBase == m.FromBase && m.DoubledOffThrowArriveSeconds is { } doThrowArrive)
             {
                 AppendDoubledOffLegs(legs, judgements, m, label, speed, field, baserunning,
                     flyCaughtAtSeconds, doThrowArrive);
@@ -2411,15 +2411,16 @@ public static class TimelineBuilder
         FieldGeometry field, BaserunningCoefficients baserunning,
         double? flyCaughtAtSeconds, double throwArriveSeconds)
     {
-        var first = BasePoint(field, "first");
+        // 走者の塁（一塁走者のほか、三盗の二塁走者・重盗で本塁へ走った三塁走者も同じ勝負・issue #1138）。
+        var first = BasePoint(field, BaseName(m.FromBase));
         // 飛び出す走者は二次リードを取っている（タッチアップ文脈ではない）。
         var ctx = HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
         var lead = Math.Max(0.0, ctx.LeadDistanceM);
-        var leadPt = LeadPoint(field, 1, lead);
+        var leadPt = LeadPoint(field, m.FromBase, lead);
         var leadM = Math.Max(0.0, m.DoubledOffLeadM);                       // 捕球時点の距離（判定の戻り距離）
         var maxLeadM = Math.Max(leadM, m.DoubledOffMaxLeadM);                // 折り返し点（コミット上限まで走った点）
-        var farPt = LeadPoint(field, 1, lead + maxLeadM);
-        var catchPt = LeadPoint(field, 1, lead + leadM);
+        var farPt = LeadPoint(field, m.FromBase, lead + maxLeadM);
+        var catchPt = LeadPoint(field, m.FromBase, lead + leadM);
         // 捕球時刻（接触基準）。判定側は捕球点の時刻をそのまま使うので、絵も同じ起点にする。
         var caughtAt = flyCaughtAtSeconds ?? baserunning.LinerCommitCapSeconds;
         var catchAt = ContactAt + caughtAt;
@@ -2460,7 +2461,7 @@ public static class TimelineBuilder
 
     /// <summary>
     /// 飛び出しの勝負の戻し送球（捕球点→一塁）を描く（issue fly-out-runner-dp-table-and-doubled-off-depiction）。
-    /// 対象は <c>FromBase == ToBase == 1</c> かつ <see cref="RunnerMove.DoubledOffThrowArriveSeconds"/> を持つ move
+    /// 対象は <c>FromBase == ToBase</c>（1〜3）かつ <see cref="RunnerMove.DoubledOffThrowArriveSeconds"/> を持つ move
     /// （憤死・帰塁セーフとも）。到達時刻は判定の守備所要（握り替え＋送球＋タッチ）＝タッチぶんだけ手前で球が着く。
     /// 同じ打球で本塁へ還る走者が居る（外野手が本塁へ投げる）場合は積まない（<c>AppendBackHomeThrows</c> が投げる）。
     /// 表示専用・乱数不使用。
@@ -2473,12 +2474,18 @@ public static class TimelineBuilder
         foreach (var m in moves)
         {
             if (m.ToBase >= 4 && !m.Out) return timeline; // 本塁へ還る走者あり＝返球は本塁へ
-            if (m.FromBase == 1 && m.ToBase == 1 && m.DoubledOffThrowArriveSeconds is not null) target = m;
+            if (m.FromBase is >= 1 and <= 3 && m.ToBase == m.FromBase && m.DoubledOffThrowArriveSeconds is not null) target = m;
         }
         if (target is null || !play.IsFly) return timeline;
 
         var fieldPoint = FieldPointOf(play);
-        var first = BasePoint(field, "first");
+        var first = BasePoint(field, BaseName(target.FromBase));
+        var coverPos = target.FromBase switch
+        {
+            2 => FieldPosition.SecondBase,
+            3 => FieldPosition.ThirdBase,
+            _ => FieldPosition.FirstBase,
+        };
         var catchAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
         var t1 = ContactAt + target.DoubledOffThrowArriveSeconds!.Value - baserunning.DoubledOffTagSeconds;
         var t0 = Math.Min(t1 - 0.05, catchAt + baserunning.DoubledOffTransferSeconds);
@@ -2487,8 +2494,8 @@ public static class TimelineBuilder
             new()
             {
                 Kind = BallSegmentKind.Throw, T0 = t0, T1 = t1, From = fieldPoint, To = first,
-                FromRole = play.FielderRole, ToRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase),
-                ToBase = "first",
+                FromRole = play.FielderRole, ToRole = CoverRoleAt(timeline, first, coverPos),
+                ToBase = BaseName(target.FromBase),
             },
         };
         return timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, t1 + 0.6) };
