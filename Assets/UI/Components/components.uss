@@ -1376,9 +1376,11 @@
 
 /* コーナー：画面座標の固定オーバーレイ（設計書18 §7-1）。面は持たない＝ただの位置決め。
    打席開始前は中身が空になるので、地を持たせると黒い矩形だけが残ってしまう。 */
+/* 幅は最小34%・中身に合わせて左へ伸びる（issue #1145）。折り返す段（本日の打席・特殊能力）は
+   width:0＋min-width:100% で幅の計測から外す＝並べた分だけ帯が伸びることはない。 */
 .mhud-corner {
     position: absolute;
-    width: var(--hud-band-w);
+    min-width: var(--hud-band-w);
 }
 .mhud-corner--right { right: 0; bottom: 0; }
 /* 打者は右上＝盤面の打者に近い側（2026-07-31）。 */
@@ -1534,6 +1536,8 @@
     padding-bottom: 4px;
     border-top-width: 1px;
     border-top-color: var(--hud-divider);
+    width: 0;
+    min-width: 100%;
 }
 .mhud-pa {
     flex-shrink: 0;
@@ -2972,6 +2976,8 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 .skill-chip--more { color: var(--color-muted); border-color: var(--color-line); }
 /* 試合中HUD（黒半透明の帯）では帯の段として置く: 区切りは段間の1px線だけ（.mhud-pas と同じ作法）。 */
 .mhud-skills {
+    width: 0;
+    min-width: 100%;
     padding: 4px var(--sp-2) 0 var(--sp-2);
     border-top-width: 1px;
     border-top-color: var(--hud-divider);
