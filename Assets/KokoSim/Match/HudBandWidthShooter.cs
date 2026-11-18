@@ -22,6 +22,7 @@ namespace KokoSim.Unity.Match
 
         [SerializeField] private float speed = 8f;
         [SerializeField] private int weeklyLimitForCapture = 140;
+        [SerializeField] private string tag = "";
 
         private IEnumerator Start()
         {
@@ -59,6 +60,23 @@ namespace KokoSim.Unity.Match
 
             SetNames(root, ShortName);
             yield return Capture(ctrl, "04-short-name-after");
+
+            // 折り返す段（本日の打席）が幅の計測に入らないこと＝8打席ぶん並べても帯が伸びない。
+            var band = root.Q<VisualElement>(className: "mhud-corner--topright").Q<VisualElement>(className: "mhud-band");
+            var pas = new VisualElement { pickingMode = PickingMode.Ignore };
+            pas.AddToClassList("mhud-pas");
+            for (var i = 0; i < 8; i++)
+            {
+                var pa = new VisualElement { pickingMode = PickingMode.Ignore };
+                pa.AddToClassList("mhud-pa");
+                pa.AddToClassList("mhud-pa--hit");
+                var t = new Label("中安") { pickingMode = PickingMode.Ignore };
+                t.AddToClassList("mhud-pa__t");
+                pa.Add(t);
+                pas.Add(pa);
+            }
+            band.Add(pas);
+            yield return Capture(ctrl, "05-pa-row");
 
             Debug.Log("[hudband] DONE");
         }
@@ -127,7 +145,7 @@ namespace KokoSim.Unity.Match
             yield return null;
             yield return new WaitForEndOfFrame();
 
-            LogWidths(ctrl.GetComponent<UIDocument>().rootVisualElement, file);
+            LogWidths(ctrl.GetComponent<UIDocument>().rootVisualElement, tag + file);
             Texture2D tex = null;
             try
             {
@@ -137,7 +155,7 @@ namespace KokoSim.Unity.Match
                 tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
                 tex.Apply();
                 RenderTexture.active = prevActive;
-                File.WriteAllBytes(Path.Combine(Dir, file + ".png"), tex.EncodeToPNG());
+                File.WriteAllBytes(Path.Combine(Dir, tag + file + ".png"), tex.EncodeToPNG());
                 Debug.Log("[hudband] wrote " + file);
             }
             finally
