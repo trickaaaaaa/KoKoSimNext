@@ -809,7 +809,8 @@ public static class ProspectGenerator
             SetWithCap(p, k, level, c, rng);
         }
 
-        // 弾道は型属性（練習で伸びない）。中庸に振る。
+        // 弾道は型属性（ゴロ型〜フライ型、優劣軸ではない）。中庸に振る。入学時の分布は型の決まり方であり、
+        // 専用メニュー（issue #1166・TrainingMenu.FlyBallHitting/GroundBallHitting）で練習で少しだけ両方向に動く。
         {
             var lt = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(50, 15)), 1, 99);
             SetWithCap(p, AbilityKind.LaunchTendency, lt, c, rng);

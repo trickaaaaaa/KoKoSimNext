@@ -1499,14 +1499,16 @@ training:
     pitch_rank: 1.20
     bunt: 1.30
     contact: 1.15
-    # 以下は現状維持（1.0固定・明示）: 肩/球速/スタミナ/パワー/盗塁/走塁判断/弾道
+    # 以下は現状維持（1.0固定・明示）: 肩/球速/スタミナ/パワー/盗塁/走塁判断
     arm_strength: 1.0
     velocity: 1.0        # 球速は素質で伸ばさない。「+20km/h」は環境倍率が担う（#115）
     stamina: 1.0
     power: 1.0
     steal: 1.0
     baserunning: 1.0
-    launch_tendency: 1.0 # 型属性（触らない）
+    # 弾道は型属性だが issue #1166 で専用メニューから両方向に少し動けるようにした。
+    # 「そんなには伸びない」監督方針のため0.5に絞る（他の技術系より低い）。たたき台（PRで確認）。
+    launch_tendency: 0.5
   summer_camp_mult: 2.0       # 設計書04 §4
   winter_camp_mult: 2.5
   tournament_practice_mult: 0.5   # 大会モード中は練習効果が落ちる（設計書03/05）。<1.0で低下

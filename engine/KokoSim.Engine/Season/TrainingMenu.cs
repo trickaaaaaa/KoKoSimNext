@@ -29,17 +29,31 @@ public enum TrainingMenu
     DefenseRF,    // 右翼守備
     DefenseInfield,  // 内野汎用守備: 内野4ポジの適性を薄く全上げ（ユーティリティ育成）
     DefenseOutfield, // 外野汎用守備: 外野3ポジの適性を薄く全上げ（ユーティリティ育成）
+    // 弾道専用メニュー（設計書03 §3.1・issue #1166）: 弾道(LaunchTendency)を両方向に少し動かす。
+    // Rest の前に足す（列挙は名前で保存するため、Rest より後ろに足すとセーブへの影響は無いが
+    // 並び自体は見た目の都合でここに置く＝保存は壊れない）。
+    FlyBallHitting,    // フライ打撃（仮称: 上げる打撃）: 主効果=弾道（フライ方向）、副効果=パワー
+    GroundBallHitting, // ゴロ打撃（仮称: 転がす打撃）: 主効果=弾道（ゴロ方向）、副効果=ミート
     Rest,         // 休養
+}
+
+/// <summary>弾道(LaunchTendency)専用メニューの成長方向（設計書03 §3.1・issue #1166）。他の能力は常に Up。</summary>
+public enum GrowthDirection
+{
+    Up,
+    Down,
 }
 
 /// <summary>
 /// 練習メニューの効果（設計書03 §3.1）。能力値（Main/Subs）と守備位置適性（Aptitudes）の両レイヤーを持つ。
 /// Aptitudes の Weight は主効果基礎値への倍率（1.0=専念、汎用は薄く）。
+/// MainDirection は Main が弾道のときだけ意味を持つ（他の能力は常に Up）。
 /// </summary>
 public readonly record struct MenuEffect(
     AbilityKind? Main,
     AbilityKind[] Subs,
-    (FieldPosition Pos, double Weight)[] Aptitudes);
+    (FieldPosition Pos, double Weight)[] Aptitudes,
+    GrowthDirection MainDirection = GrowthDirection.Up);
 
 public static class TrainingMenus
 {
@@ -93,6 +107,11 @@ public static class TrainingMenus
             FieldPosition.FirstBase, FieldPosition.SecondBase, FieldPosition.ThirdBase, FieldPosition.Shortstop),
         TrainingMenu.DefenseOutfield => Group(
             FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField),
+        // 弾道専用メニュー（issue #1166）: 主効果は弾道（方向つき）、副効果はそれぞれ打撃系を少し。
+        TrainingMenu.FlyBallHitting => new(AbilityKind.LaunchTendency, new[] { AbilityKind.Power },
+            NoPos, GrowthDirection.Up),
+        TrainingMenu.GroundBallHitting => new(AbilityKind.LaunchTendency, new[] { AbilityKind.Contact },
+            NoPos, GrowthDirection.Down),
         _ => new(null, None, NoPos), // Rest
     };
 }

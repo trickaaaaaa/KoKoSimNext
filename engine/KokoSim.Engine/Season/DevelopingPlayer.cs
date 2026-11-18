@@ -219,6 +219,8 @@ public sealed class DevelopingPlayer
     public void AddExp(AbilityKind k, double value) => _exp[(int)k] += value;
     public void ConsumeExp(AbilityKind k, double value) => _exp[(int)k] -= value;
     public void IncrementLevel(AbilityKind k) => _level[(int)k]++;
+    /// <summary>弾道(LaunchTendency)専用の下げ向き成長（issue #1166）が使う。他の能力は呼ばない。</summary>
+    public void DecrementLevel(AbilityKind k) => _level[(int)k]--;
 
     public int Aptitude(FieldPosition pos) => _aptitude[(int)pos];
     public void SetAptitude(FieldPosition pos, int value) => _aptitude[(int)pos] = value;
@@ -239,8 +241,10 @@ public sealed class DevelopingPlayer
         return BattingGrowth; // 打撃・走塁系は打撃分野の伸びしろに紐づける（2Bで細分化可）
     }
 
-    // 育成曲線の観測に使う「実際に練習で伸びる中核能力」。
-    // 弾道・選球眼は練習メニューに伸長経路が無い型属性のため平均から除く（OPEN-QUESTIONS Q4）。
+    // 育成曲線の観測＝強さに使う「優劣が意味を持つ中核能力」。
+    // 選球眼は練習メニューに伸長経路が無い型属性のため平均から除く（OPEN-QUESTIONS Q4）。
+    // 弾道は issue #1166 で専用メニューから少し動けるようになったが、ゴロ型〜フライ型のタイプ軸で
+    // 優劣軸ではない（design-01 §1.2）ため、伸長経路の有無に関わらずそもそも「強さ」の平均には含めない。
     private static readonly AbilityKind[] BatterCore =
     {
         AbilityKind.Contact, AbilityKind.Power, AbilityKind.Speed,
