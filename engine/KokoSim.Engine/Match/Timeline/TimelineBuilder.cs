@@ -1198,6 +1198,14 @@ public static class TimelineBuilder
             end = ContactAt + u * ground.HangTimeSeconds;
         }
 
+        // 守備ビューで見せるファウルだけ「ファール」の判定を積む（issue #1134）。対決ビューは守備ビューへ
+        // 切り替わる時点で球審コールを消すので、ここが無いと一度も出ない。確定は落ちた／スタンドへ入った瞬間。
+        // ふつうのファウル（None）は対決ビューのコールが出るので積まない（二重表示の回避）。
+        // 大ファウルは尺の端（スタンドへ入った時刻）、追ったフライは落ちた時刻（野手の到達はその後）。
+        var judgements = view == FoulViewKind.None
+            ? System.Array.Empty<JudgementEvent>()
+            : new[] { new JudgementEvent { Label = "打", T = view == FoulViewKind.BigFoul ? end : landAt, Kind = JudgementKind.Foul } };
+
         // 着地後の一呼吸（対決ビュー復帰までの間）。守備ビューで見せるファウルは行方を見届ける間を長めに取る
         var duration = end + (view == FoulViewKind.None ? 0.6 : 1.2);
 
@@ -1222,6 +1230,7 @@ public static class TimelineBuilder
             Moves = moves,
             Runners = runners,
             Captions = new[] { new TimelineCaption(ContactAt + 0.01, "ファウル！") },
+            Judgements = judgements,
             FoulView = view,
             // 追ったが届かなかった＝空中捕球の余裕は負（落下 − 到達）。3Dの守備はこの値で「届かない」芝居を選び、
             // 球をグラブへ吸わせない（インプレーの落球と同じ入力。判定が決めた到達時刻の写し）

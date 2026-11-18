@@ -2923,14 +2923,17 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>ファウルの再生を打ち切る時刻＝球が落ちる／追った野手が着くの遅いほう＋余韻。</summary>
-        private static double FoulFieldEndTime(PlaybackPlay play)
+        private double FoulFieldEndTime(PlaybackPlay play)
         {
             var lastEvent = play.ResAt;
             foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
             if (play.Moves != null) foreach (var kv in play.Moves)
                 foreach (var m in kv.Value)
                     if (m.T1 > lastEvent) lastEvent = m.T1;
-            return System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
+            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
+            // 「ファール」の判定（issue #1134）が消え終わるまでは切らない（Dur でクランプ）
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            return judged.HasValue ? System.Math.Min(play.Dur, System.Math.Max(end, judged.Value)) : end;
         }
 
         /// <summary>ファウルの再生が終わった: 対決構図へ戻し、次の球を振りかぶりから投げる（打席の続き）。</summary>
@@ -3369,7 +3372,9 @@ namespace KokoSim.Unity.Match
                         // 予約済み。下で間合いを打球の飛行時間まで延ばし、時計も接触時刻へ巻き戻すので、
                         // 次のリリースまでの残りが変わった分だけ予約もずらす（issue #770）。
                         var releaseRemainBefore = duelPitchIntervalSeconds - _pitchClock;
-                        _view.SetPlay(_pendingFoulFlight);
+                        // 「ファール」の判定は守備ビューで見せるための物（issue #1134）。ここは対決の構図のまま
+                        // 球審コール（ShowPitchCall）が出る経路なので、外して二重に出さない。
+                        _view.SetPlay(_pendingFoulFlight with { Judgements = System.Array.Empty<PlaybackJudgement>() });
                         _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
                         _pitchBallVisible = true;
                         // 対決ビューから来た場合は接触の瞬間から（投球セグメントの二重表示を避ける,

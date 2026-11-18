@@ -89,7 +89,10 @@ public sealed class FoulViewTests
         Assert.True(t.Duration > move.T1);
         // 出発点は判定が測った実際の守備位置
         Assert.Equal(new TimelinePoint(19.0, 24.0), t.FielderStarts![FieldPosition.FirstBase]);
-        Assert.Empty(t.Judgements);   // ファウルはボールデッド＝判定オーバーレイは出さない
+        // 守備ビューで見せるファウルは「ファール」の判定を1つ積む（issue #1134）。確定は球が落ちた時刻
+        var foulJudge = Assert.Single(t.Judgements);
+        Assert.Equal(JudgementKind.Foul, foulJudge.Kind);
+        Assert.Equal(landAt, foulJudge.T, 6);
         Assert.Equal(-0.3, t.CatchMarginSeconds!.Value, 6);   // 届かなかった＝余裕は負（3Dが「届かない」芝居を選ぶ）
     }
 
@@ -103,6 +106,7 @@ public sealed class FoulViewTests
 
         Assert.Equal(FoulViewKind.None, t.FoulView);
         Assert.Empty(t.Moves);
+        Assert.Empty(t.Judgements);   // 対決ビューのまま流れるファウルは球審コールが出る＝二重にしない
     }
 
     [Fact]
@@ -119,6 +123,10 @@ public sealed class FoulViewTests
         Assert.Empty(t.Moves);
         // スタンドへ入ったところで終わる（地面の高さの落下点まで追わない）
         Assert.True(t.Duration < t.Ball[1].T1, $"再生が落下点まで続いている（尺 {t.Duration:F2} / 落下 {t.Ball[1].T1:F2}）");
+        // 「ファール」はスタンドへ入った時刻に1つ（尺の余韻より前＝見える）
+        var foulJudge = Assert.Single(t.Judgements);
+        Assert.Equal(JudgementKind.Foul, foulJudge.Kind);
+        Assert.True(foulJudge.T < t.Duration && foulJudge.T < t.Ball[1].T1);
     }
 
     // ── 判定（乱数を引かない・捕れる打球は対象外） ──

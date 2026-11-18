@@ -391,6 +391,7 @@ namespace KokoSim.Unity.Match
                 JudgementKind.Fair => "フェア",
                 JudgementKind.HomeRun => "ホームラン",
                 JudgementKind.Error => "エラー",
+                JudgementKind.Foul => "ファール",
                 _ => "セーフ",
             });
             _judgementLabel.EnableInClassList("pitch-call__judge--out", kind == JudgementKind.Out);
@@ -398,6 +399,8 @@ namespace KokoSim.Unity.Match
             _judgementLabel.EnableInClassList("pitch-call__judge--safe",
                 kind == JudgementKind.Safe || kind == JudgementKind.Error);
             _judgementLabel.EnableInClassList("pitch-call__judge--fair", kind == JudgementKind.Fair);
+            // ファールは対決ビューの球審コールと同じストライク系の色（issue #1134）
+            _judgementLabel.EnableInClassList("pitch-call__judge--strike", kind == JudgementKind.Foul);
             _judgementLabel.EnableInClassList("pitch-call__judge--homerun", kind == JudgementKind.HomeRun);
 
             // 下段の飛距離（本塁打のみ。engine が判定に使った着地距離をそのまま出す, issue #354）。
