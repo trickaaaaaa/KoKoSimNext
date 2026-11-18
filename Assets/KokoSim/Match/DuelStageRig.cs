@@ -2183,6 +2183,15 @@ namespace KokoSim.Unity.Match
         private const float BuntHitContact = 0.55f;
 
         /// <summary>
+        /// バントを当てた後（インプレー・ファウル）に打ち切る時刻[クリップ秒]。**当てた形（収まり）で止める**
+        /// （issue #1141 オーナー決定）。スイングと同じ <see cref="SwingFinishSec"/>(1.433) だと、当ててから約0.9秒先の
+        /// 一塁への走り出しまで再生し、左打者は鏡映で**三塁へ走って見えた**。打者走者の一塁への走りは守備ビューが担当する。
+        /// 実測（Bunt_Hitting len=1.83・0.05s刻み）: 右手速度は 0.55〜0.65 でピーク（当て）→0.7 で落ち着く／
+        /// 腰の速度は 0.65 から加速（走り出し）。0.70 は走り出しの手前＝当てた後の収まり。
+        /// </summary>
+        private const float BuntHitFinishSec = 0.70f;
+
+        /// <summary>
         /// スイングを打ち切る時刻[クリップ秒]。**振り抜いた所で止める**（2026-07-31 監督判断
         /// 「バットを戻す動作も消して欲しい／スイングして振り抜いた時点で止める」）。
         ///
@@ -2584,10 +2593,10 @@ namespace KokoSim.Unity.Match
                 // 当てる球は判定面でなく**捌く瞬間**（_ballArrival＝判定面の ContactAheadM 手前）で合わせる。
                 // flight を渡すと、前で捌くぶんバットが遅れて着く（0.30m/40m·s⁻¹ ≒ 8ms）
                 case DuelPitchOutcome.FoulContact:
-                    SetSwing(hitClip, hitAnchor, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    SetSwing(hitClip, hitAnchor, _ballArrival, useBunt ? EffectiveBuntHitFinishSec() : EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 case DuelPitchOutcome.InPlayContact:
-                    SetSwing(hitClip, hitAnchor, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    SetSwing(hitClip, hitAnchor, _ballArrival, useBunt ? EffectiveBuntHitFinishSec() : EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 // 見逃し（Take／CalledStrike）: 旧 #291 は待機のまま何もしなかった（呆然と見送る）。
                 // 実物は見逃す球でも足を上げてトップを作り、振らないと決めて止める＝同じ打撃クリップの
@@ -5272,6 +5281,8 @@ namespace KokoSim.Unity.Match
 #if UNITY_EDITOR
         /// <summary>【実測プローブ用】<see cref="SwingFinishSec"/> を差し替える（負＝既定のまま）。</summary>
         internal static float SwingFinishOverrideForCapture = -1f;
+        /// <summary>【実測プローブ用】<see cref="BuntHitFinishSec"/> を差し替える（負＝既定のまま）。</summary>
+        internal static float BuntHitFinishOverrideForCapture = -1f;
         /// <summary>【実測プローブ用】<see cref="BatWrapFrames"/> を差し替える（負＝既定のまま）。</summary>
         internal static float BatWrapFramesOverrideForCapture = -1f;
 #endif
@@ -5281,6 +5292,15 @@ namespace KokoSim.Unity.Match
             float v = SwingFinishSec;
 #if UNITY_EDITOR
             if (SwingFinishOverrideForCapture > 0f) v = SwingFinishOverrideForCapture;
+#endif
+            return v;
+        }
+
+        private static float EffectiveBuntHitFinishSec()
+        {
+            float v = BuntHitFinishSec;
+#if UNITY_EDITOR
+            if (BuntHitFinishOverrideForCapture > 0f) v = BuntHitFinishOverrideForCapture;
 #endif
             return v;
         }
