@@ -61,6 +61,34 @@ public sealed class BuntUnificationTests
         Assert.True(found, "2球連続でバントが決着しないシードが見つからなかった（探索範囲を広げる必要あり）");
     }
 
+    /// <summary>2ストライクからのバントのファウル・空振りは三振（スリーバント失敗）で打席が終わる（issue #1140）。</summary>
+    [Fact]
+    public void BuntFoulOrMissWithTwoStrikes_IsStrikeout()
+    {
+        var foulChecked = false;
+        var missChecked = false;
+        for (ulong seed = 1; seed <= 3000 && !(foulChecked && missChecked); seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: BunterPlayer);
+            while (!session.IsComplete && session.Strikes < 2)
+                session.ThrowNextPitch(rng, PitchBattingOverride.Bunt);
+            if (session.IsComplete || session.Strikes != 2) continue;
+
+            var res = session.ThrowNextPitch(rng, PitchBattingOverride.Bunt);
+            var kind = session.PitchLog[^1].Kind;
+            if (kind == PitchKind.Foul) foulChecked = true;
+            else if (kind == PitchKind.SwingingStrike) missChecked = true;
+            else continue;
+
+            Assert.True(res.EndsPlateAppearance);
+            Assert.True(session.IsComplete);
+            Assert.Equal(PlateAppearanceResult.Strikeout, session.Result.Result);
+        }
+        Assert.True(foulChecked, "2ストライクからのバントファウルが見つからなかった");
+        Assert.True(missChecked, "2ストライクからのバント空振りが見つからなかった");
+    }
+
     /// <summary>PopOut は打席を凡打（InPlayOut）で確定し、BuntOutcome にその区別を残す。</summary>
     [Fact]
     public void PopOut_EndsAtBat_WithBuntOutcomeSet()

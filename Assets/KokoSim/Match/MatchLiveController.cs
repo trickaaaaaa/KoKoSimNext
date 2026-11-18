@@ -3987,7 +3987,7 @@ namespace KokoSim.Unity.Match
                 case KokoSim.Engine.Match.AtBat.PitchKind.Ball: return pt.BallsAfter >= 4 ? "フォアボール" : "ボール";
                 case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return pt.StrikesAfter >= 3 ? "三振" : "ストライク";
                 case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return pt.StrikesAfter >= 3 ? "三振" : "ストライク";
-                case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return "ファール";
+                case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return pt.StrikesAfter >= 3 ? "三振" : "ファール";   // 2ストライクからのバントファウル＝スリーバント失敗（issue #1140）
                 case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "";   // 打球再生と結果ラベルに任せる
                 case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "デッドボール";
                 default: return "";

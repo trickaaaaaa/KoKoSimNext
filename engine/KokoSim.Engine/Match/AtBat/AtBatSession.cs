@@ -385,11 +385,13 @@ public sealed class AtBatSession
                 case BuntResult.MissedBunt:
                     _strikes++;
                     RecordPitch(PitchKind.SwingingStrike, plan, loc, inZone, swung: true, sign: battingOverride);
+                    if (_strikes >= 3) return Finish(PlateAppearanceResult.Strikeout);
                     return Continue();
 
                 case BuntResult.Foul:
                     _strikes++;
                     RecordPitch(PitchKind.Foul, plan, loc, inZone, swung: true, sign: battingOverride);
+                    if (_strikes >= 3) return Finish(PlateAppearanceResult.Strikeout);
                     return Continue();
 
                 case BuntResult.PopOut:
