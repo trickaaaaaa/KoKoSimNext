@@ -274,12 +274,23 @@ namespace KokoSim.Unity.Tournament
                 if (block == null) continue;
                 list.Add(new TournamentPamphletHtml.School { Block = block, IsManager = st.IsManager });
             }
+            return ManagerFirst(list);
+        }
+
+        /// <summary>自校（IsManager）を先頭へ移す。残りの並びは保つ。自校が居なければそのまま。</summary>
+        public static List<TournamentPamphletHtml.School> ManagerFirst(List<TournamentPamphletHtml.School> list)
+        {
+            var idx = list.FindIndex(s => s.IsManager);
+            if (idx <= 0) return list;
+            var own = list[idx];
+            list.RemoveAt(idx);
+            list.Insert(0, own);
             return list;
         }
 
         /// <summary>
-        /// 大会パンフレット（HTML・issue #645）に載せる出場全校の登録メンバー。並びは甲子園・センバツが出場校名簿
-        /// （北から南）、県大会はトーナメント表の端の上から（紙面の索引が表の並びと一致する）。
+        /// 大会パンフレット（HTML・issue #645）に載せる出場全校の登録メンバー。並びは自校が出場していれば自校が先頭、
+        /// 残りは甲子園・センバツが出場校名簿（北から南）、県大会はトーナメント表の端の上から。
         /// 成績スコープは画面の既定と同じ＝甲子園は県予選、センバツは地区大会、それ以外は今大会。
         /// </summary>
         public static List<TournamentPamphletHtml.School> BuildPamphletSchools(
@@ -307,7 +318,7 @@ namespace KokoSim.Unity.Tournament
                 if (block == null) continue;
                 list.Add(new TournamentPamphletHtml.School { Block = block, Region = region, IsManager = name == managerName });
             }
-            return list;
+            return ManagerFirst(list);
         }
 
         /// <summary>
