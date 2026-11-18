@@ -220,6 +220,18 @@ namespace KokoSim.Unity.Shell
         /// <summary>自校の1試合ぶんのバッテリーのイニングを積む（公式戦1・練習試合0.5＝Q38）。</summary>
         private void ApplyBatteryInnings(GameResult detail, bool managerWasAway, bool isOfficial)
             => BatteryLedger.AddGame(detail, managerWasAway, isOfficial, ChemistryCoeff);
+
+        // 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072）用の係数。実戦成長と同じ既定値運用。
+        private static readonly KokoSim.Engine.Match.Batting.BattingCoefficients LeftExperienceCoeff =
+            new KokoSim.Engine.Match.Batting.BattingCoefficients();
+
+        /// <summary>
+        /// 対左投手経験の実戦蓄積（issue #1072）。実戦成長（<see cref="ApplyMatchGrowth"/>）・バッテリーの積み重ね
+        /// （<see cref="ApplyBatteryInnings"/>）と同じ合流点・同じ公式戦/練習試合の区分で適用する。
+        /// </summary>
+        private void ApplyLeftExperienceGrowth(GameResult detail, bool managerWasAway, bool isOfficial)
+            => KokoSim.Engine.Season.LeftExperienceGrowthModel.Apply(
+                detail, managerWasAway, RosterService.Roster, isOfficial, LeftExperienceCoeff);
         private readonly List<int> _momentumNotices = new List<int>();
 
         /// <summary>
@@ -715,6 +727,7 @@ namespace KokoSim.Unity.Shell
             ApplyMatchCondition(result, managerIsAway);
             ApplyMatchInjuries(result, managerIsAway);
             ApplyBatteryInnings(result, managerIsAway, isOfficial: false);
+            ApplyLeftExperienceGrowth(result, managerIsAway, isOfficial: false);
             ClearPracticeMatchFlow();
         }
 
@@ -734,6 +747,7 @@ namespace KokoSim.Unity.Shell
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
+                ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
@@ -781,6 +795,7 @@ namespace KokoSim.Unity.Shell
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
+                ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
             ResultPending = true;
             ExitTournamentIfFinished();

@@ -52,6 +52,9 @@ internal static class DevelopingPlayerSaves
             .Add("grade", p.Grade)
             .Add("throws", EnumJson.Write(p.Throws))
             .Add("bats", EnumJson.Write(p.Bats))
+            // 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072）。旧セーブ（キー欠損）は0で読む
+            // （FromJson側の Has 分岐）＝蓄積なしからのスタート（従来は効果自体が存在しなかったので挙動は近い）。
+            .Add("leftExpPa", p.LeftExperiencePa)
             .Add("growthType", EnumJson.Write(p.GrowthType))
             // 成長タイプの分野別化（設計書02 §5.2・issue #866）。null=基本タイプに従う（旧セーブ相当）。
             .Add("pitchingGrowthType", EnumJson.WriteNullable(p.PitchingGrowthType))
@@ -138,6 +141,8 @@ internal static class DevelopingPlayerSaves
             Name = o.Str("name")!,
             Throws = EnumJson.Read<Handedness>(o.Str("throws")),
             Bats = EnumJson.Read<Handedness>(o.Str("bats")),
+            // 旧セーブ（キー欠損）は0＝蓄積なしから（issue #1072）。
+            LeftExperiencePa = o.Has("leftExpPa") ? o.Double("leftExpPa") : 0.0,
             GrowthType = EnumJson.Read<GrowthType>(o.Str("growthType")),
             // 成長タイプの分野別化（issue #866）: 旧セーブ（キー欠損）・null（意図的な「基本タイプに従う」）
             // のどちらも null として読む＝全分野が基本タイプ1つという旧来の挙動のまま（安全な既定・Has分岐）。

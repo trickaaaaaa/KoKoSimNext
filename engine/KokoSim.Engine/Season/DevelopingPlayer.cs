@@ -46,6 +46,14 @@ public sealed class DevelopingPlayer
     public Handedness Bats { get; init; } = Handedness.Right;
 
     /// <summary>
+    /// 対左投手の経験（加重打席数。設計書02 §2.3「左のプレミア」・issue #1072）。入学時は個人差あり
+    /// （<see cref="Season.ProspectGenerator.Intake"/> が中学での経験を独立Forkで抽選）。公式戦/練習試合で
+    /// 左投手と対戦した打席ぶん、重み付き（公式戦1.0／練習試合0.5）で増える（<see cref="LeftExperienceGrowthModel"/>）。
+    /// 試合投影時に <see cref="Players.Player.LeftExperiencePa"/> へそのまま写す。既定0＝未生成（旧セーブ相当）。
+    /// </summary>
+    public double LeftExperiencePa { get; set; }
+
+    /// <summary>
     /// 習得済み変化球（ストレートは必修のため含めない, 設計書02 §2.2）。
     /// 投手1〜3球種／野手0〜1（投手経歴持ちは上振れ）。習得イベントで後から増える。
     /// </summary>
@@ -265,6 +273,7 @@ public sealed class DevelopingPlayer
             Grade = Grade,
             Throws = Throws,
             Bats = Bats,
+            LeftExperiencePa = LeftExperiencePa,
             GrowthType = GrowthType,
             PitchingGrowthType = PitchingGrowthType,
             BattingGrowthType = BattingGrowthType,

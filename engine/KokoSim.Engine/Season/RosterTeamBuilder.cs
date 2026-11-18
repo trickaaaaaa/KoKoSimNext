@@ -350,6 +350,7 @@ public static class RosterTeamBuilder
             Position = pos,
             Throws = dp.Throws,
             Bats = dp.Bats,
+            LeftExperiencePa = dp.LeftExperiencePa,   // 対左投手経験（設計書02 §2.3・issue #1072）
             Contact = L(AbilityKind.Contact),
             Power = L(AbilityKind.Power),
             LaunchTendency = dp.Level(AbilityKind.LaunchTendency), // 弾道は型属性（怪我で変わらない）

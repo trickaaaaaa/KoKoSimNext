@@ -551,6 +551,11 @@ public static class CoefficientsLoader
         public double PitchFamiliarityRankDiscountPerPoint { get; set; } = D.PitchFamiliarityRankDiscountPerPoint;
         public double PitchFamiliarityWhiffPerLevel { get; set; } = D.PitchFamiliarityWhiffPerLevel;
         public double PitchFamiliarityQualityPerLevel { get; set; } = D.PitchFamiliarityQualityPerLevel;
+        public double LeftInexperienceWhiffPerDeficit { get; set; } = D.LeftInexperienceWhiffPerDeficit;
+        public double LeftInexperienceChasePerDeficit { get; set; } = D.LeftInexperienceChasePerDeficit;
+        public double LeftExperienceFullPa { get; set; } = D.LeftExperienceFullPa;
+        public double LeftExperienceOfficialPaWeight { get; set; } = D.LeftExperienceOfficialPaWeight;
+        public double LeftExperiencePracticePaWeight { get; set; } = D.LeftExperiencePracticePaWeight;
         public double FoulShare { get; set; } = D.FoulShare;
         public double StuffBaseVelocityKmh { get; set; } = D.StuffBaseVelocityKmh;
         public double StuffPerKmh { get; set; } = D.StuffPerKmh;
@@ -636,6 +641,11 @@ public static class CoefficientsLoader
             PitchFamiliarityRankDiscountPerPoint = PitchFamiliarityRankDiscountPerPoint,
             PitchFamiliarityWhiffPerLevel = PitchFamiliarityWhiffPerLevel,
             PitchFamiliarityQualityPerLevel = PitchFamiliarityQualityPerLevel,
+            LeftInexperienceWhiffPerDeficit = LeftInexperienceWhiffPerDeficit,
+            LeftInexperienceChasePerDeficit = LeftInexperienceChasePerDeficit,
+            LeftExperienceFullPa = LeftExperienceFullPa,
+            LeftExperienceOfficialPaWeight = LeftExperienceOfficialPaWeight,
+            LeftExperiencePracticePaWeight = LeftExperiencePracticePaWeight,
             FoulShare = FoulShare,
             StuffBaseVelocityKmh = StuffBaseVelocityKmh,
             StuffPerKmh = StuffPerKmh,
@@ -2781,6 +2791,10 @@ public static class CoefficientsLoader
         public double SwitchProb { get; set; } = D.SwitchProb;
         public double BatLeftGivenRightThrow { get; set; } = D.BatLeftGivenRightThrow;
         public double BatLeftGivenLeftThrow { get; set; } = D.BatLeftGivenLeftThrow;
+        // 対左投手経験の初期値・AI近似（issue #1072）
+        public double LeftExperienceInitialMeanPa { get; set; } = D.LeftExperienceInitialMeanPa;
+        public double LeftExperienceInitialSpreadPa { get; set; } = D.LeftExperienceInitialSpreadPa;
+        public double LeftExperienceAiPaPerYear { get; set; } = D.LeftExperienceAiPaPerYear;
         // 投手球速（地肩＋投手センス）
         public double PitcherSenseBonus { get; set; } = D.PitcherSenseBonus;
         public double NonPitcherSenseFactor { get; set; } = D.NonPitcherSenseFactor;
@@ -3087,6 +3101,9 @@ public static class CoefficientsLoader
             SwitchProb = SwitchProb,
             BatLeftGivenRightThrow = BatLeftGivenRightThrow,
             BatLeftGivenLeftThrow = BatLeftGivenLeftThrow,
+            LeftExperienceInitialMeanPa = LeftExperienceInitialMeanPa,
+            LeftExperienceInitialSpreadPa = LeftExperienceInitialSpreadPa,
+            LeftExperienceAiPaPerYear = LeftExperienceAiPaPerYear,
             PitcherSenseBonus = PitcherSenseBonus,
             NonPitcherSenseFactor = NonPitcherSenseFactor,
             VelocityArmWeight = VelocityArmWeight,

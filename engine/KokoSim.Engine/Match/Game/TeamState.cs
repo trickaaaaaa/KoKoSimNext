@@ -225,7 +225,12 @@ public sealed class TeamState
     }
 
     // ===== 個人成績（ボックススコア） =====
-    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF, SH; }
+    private sealed class BatAccum
+    {
+        public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF, SH;
+        /// <summary>このうち対左投手の打席数（対左経験の蓄積の材料, 設計書02 §2.3・issue #1072）。</summary>
+        public int PaVsLeft;
+    }
     private sealed class PitAccum
     {
         public int BF, H, Runs, EarnedRuns, SO, BB, Outs, Pitches, HB, HRA;
@@ -387,8 +392,18 @@ public sealed class TeamState
     /// <summary>打席の確定で対戦回数を1つ進める（<see cref="RecordBatting"/> と同じ打席境界で呼ぶ）。</summary>
     public void RecordMatchup(Player batter, Player pitcher)
     {
-        var key = (KeyOf(batter), KeyOf(pitcher));
+        var bkey = KeyOf(batter);
+        var key = (bkey, KeyOf(pitcher));
         _matchupPa[key] = (_matchupPa.TryGetValue(key, out var n) ? n : 0) + 1;
+
+        // 対左投手経験の蓄積の材料（設計書02 §2.3・issue #1072）: この打席が左投手との対戦だったか。
+        // 実際の加重蓄積・反映は試合後（Unity側 GameSession の LeftExperienceGrowthModel.Apply）が行う＝
+        // ここはボックススコアへ数えるだけで、試合結果・乱数順には影響しない（観測のみ）。
+        if (pitcher.Throws == Handedness.Left)
+        {
+            if (!_bat.TryGetValue(bkey, out var a)) { a = new BatAccum(); _bat[bkey] = a; }
+            a.PaVsLeft++;
+        }
     }
 
     // 打者×投手の球種の慣れ（設計書02 §2.3b 案A・issue #836）。試合内（打席をまたいで）持続し、
@@ -451,7 +466,7 @@ public sealed class TeamState
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
-                a.HBP, a.SB, a.CS, a.R, a.SF, a.SH);
+                a.HBP, a.SB, a.CS, a.R, a.SF, a.SH) { PlateAppearancesVsLeft = a.PaVsLeft };
     }
 
     /// <summary>
@@ -462,7 +477,7 @@ public sealed class TeamState
     {
         if (p is null || !_bat.TryGetValue(KeyOf(p), out var a)) return null;
         return new BattingLine(0, p.Position, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO,
-            p.SourceId, a.HBP, a.SB, a.CS, a.R, a.SF, a.SH);
+            p.SourceId, a.HBP, a.SB, a.CS, a.R, a.SF, a.SH) { PlateAppearancesVsLeft = a.PaVsLeft };
     }
 
     /// <summary>1人ぶんの今日の投手成績（登板していなければ null）。観測データ（issue #923）。</summary>

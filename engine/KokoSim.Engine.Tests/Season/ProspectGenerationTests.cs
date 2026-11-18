@@ -512,4 +512,31 @@ public sealed class ProspectGenerationTests
         Assert.True(avgStuffHigh > avgStuffLow,
             $"高Velocity群の平均Stuff({avgStuffHigh:F1}) <= 低Velocity群({avgStuffLow:F1}): 相関が逆転している");
     }
+
+    // --- 対左投手経験の初期値（設計書02 §2.3「左のプレミア」・issue #1072） ---
+
+    [Fact]
+    public void LeftExperiencePa_IsNonNegative_AndDeterministic()
+    {
+        var a = ProspectGenerator.Intake(1, C, new Xoshiro256Random(7));
+        var b = ProspectGenerator.Intake(1, C, new Xoshiro256Random(7));
+        Assert.Equal(a.Count, b.Count);
+        for (var i = 0; i < a.Count; i++)
+        {
+            Assert.True(a[i].LeftExperiencePa >= 0.0);
+            Assert.Equal(a[i].LeftExperiencePa, b[i].LeftExperiencePa, 9);
+        }
+    }
+
+    [Fact]
+    public void LeftExperiencePa_HasIndividualVariance_AroundTheConfiguredMean()
+    {
+        var pop = Cohort(C.TalentCenterDefault);
+        Assert.True(pop.Count > 50);
+        var mean = pop.Average(p => p.LeftExperiencePa);
+        // 個人差あり＝全員が同じ値ではない。
+        Assert.True(pop.Select(p => p.LeftExperiencePa).Distinct().Count() > pop.Count / 2);
+        // 中心は設定値の近辺（クランプで下に偏るぶん、やや高めに出るのは許容）。
+        Assert.InRange(mean, C.LeftExperienceInitialMeanPa * 0.5, C.LeftExperienceInitialMeanPa * 1.5);
+    }
 }

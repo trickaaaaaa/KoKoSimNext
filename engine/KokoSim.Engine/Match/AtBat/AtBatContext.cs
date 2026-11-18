@@ -70,6 +70,13 @@ public sealed record AtBatContext
     /// </summary>
     public Batting.PitchFamiliarityTracker? PitchFamiliarity { get; init; }
 
+    /// <summary>
+    /// 対左投手の経験不足（設計書02 §2.3「左のプレミア」・issue #1072、<see cref="Batting.ContactModel.LeftExperienceDeficit"/>
+    /// が返す [0,1]）。試合エンジンが対戦投手が左投げのときだけ打者の <see cref="Players.Player.LeftExperiencePa"/> から
+    /// 計算して渡す（右投手のときは常に0）。既定0＝恒等＝この値を渡さない既存の呼び出し・統計シムは1ビットも変わらない。
+    /// </summary>
+    public double LeftExperienceDeficit { get; init; }
+
     /// <summary>スキルによる1打席の挙動補正（設計書10）。既定は無効果（スキルなしと同一）。</summary>
     public SkillPlayMods Skills { get; init; } = SkillPlayMods.None;
 

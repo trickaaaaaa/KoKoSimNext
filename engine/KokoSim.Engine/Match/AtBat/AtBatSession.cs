@@ -504,11 +504,11 @@ public sealed class AtBatSession
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
                 inZone, distanceOutsideM, PitchDeception.BreakM(_lastPitchFeatures!.Value, batting), batter, batting,
-                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)
+                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls, ctx.LeftExperienceDeficit)
             : 0.0;
         if (!forcedSwing && (forcedTake
             || !BatterDecision.DecideSwing(inZone, distanceOutsideM, PitchDeception.BreakM(_lastPitchFeatures!.Value, batting), batter, batting, rng,
-                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)))
+                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls, ctx.LeftExperienceDeficit)))
         {
             if (inZone)
             {
@@ -538,7 +538,7 @@ public sealed class AtBatSession
         // ④ コンタクト判定 → ⑤ 打球生成（流し打ちの方向/粘り打ちは batting コピーへ、打球の質は ctx.Skills.BattedBall）
         var (outcome, ball) = ContactModel.Resolve(
             batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes, pitchFamiliarityLevel,
-            ctx.Skills.BattedBall);
+            ctx.Skills.BattedBall, ctx.LeftExperienceDeficit);
         switch (outcome)
         {
             case ContactOutcome.Whiff:

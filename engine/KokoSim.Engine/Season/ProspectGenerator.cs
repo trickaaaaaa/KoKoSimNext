@@ -440,6 +440,17 @@ public sealed record RosterCoefficients
     public double BatLeftGivenRightThrow { get; init; } = 0.40;
     public double BatLeftGivenLeftThrow { get; init; } = 0.98;
 
+    // --- 対左投手経験の初期値・AI近似（設計書02 §2.3「左のプレミア」・issue #1072） ---
+    /// <summary>入学時の対左投手経験（加重打席数）の個人差: 中心（中学での経験の平均）。</summary>
+    public double LeftExperienceInitialMeanPa { get; init; } = 20.0;
+    /// <summary>入学時の対左投手経験の個人差: 標準偏差（0未満はクランプ）。</summary>
+    public double LeftExperienceInitialSpreadPa { get; init; } = 15.0;
+    /// <summary>
+    /// AI校の近似（オーナー決定2026-11-17）: AI校は実戦の対左打席を記録しないため、学年（経験年数）に
+    /// この値を掛けて加算する（<see cref="Nation.Roster.AiTeamBuilder"/>）。1年の学年差ぶんの加重打席見込み。
+    /// </summary>
+    public double LeftExperienceAiPaPerYear { get; init; } = 12.0;
+
     // --- 投手球速（地肩＋投手センス, 設計書01 §1.1b-3 / 02 §1.2）。level層で連動、km/h校正は後続 ---
     public double PitcherSenseBonus { get; init; } = 10.0;      // 投手は投手センスが上振れ
     public double NonPitcherSenseFactor { get; init; } = 0.45;  // 野手の投手センスは低い
@@ -729,6 +740,11 @@ public static class ProspectGenerator
         // SetWithCap（足のcap圧縮免除）と ApplyExp（trainability減衰免除）が p.IsProdigy を参照する。
         var isProdigy = rng.Fork(ProdigyStreamId(year, index)).NextDouble() < c.ProdigyProb;
 
+        // 対左投手経験（設計書02 §2.3「左のプレミア」・issue #1072）: 入学時の個人差（中学での経験）を
+        // 専用Forkストリームで抽選し、既存の能力ロール列を1ビットも乱さない（不変条件#2）。
+        var leftExperiencePa = Math.Max(0.0, rng.Fork(LeftExperienceStreamId(year, index))
+            .NextGaussian(c.LeftExperienceInitialMeanPa, c.LeftExperienceInitialSpreadPa));
+
         // 旧 PersonalityFactor のタイプ内ジッタ（σ0.06）は、勤勉さの連続値＋隠れた個人差（SampleAxes が性格の Fork の末尾で引く・Q47）が引き受けた。
         // 主ストリームの NextGaussian 消費数だけは従来どおり1回保つ＝後続の能力ロール列（怪我耐性ほか）を1ビットも動かさない。
         _ = rng.NextGaussian(0, 1);
@@ -746,6 +762,7 @@ public static class ProspectGenerator
             IsProdigy = isProdigy,
             Throws = throws,
             Bats = bats,
+            LeftExperiencePa = leftExperiencePa,
             PitchingGrowth = pitchingGrowth,
             BattingGrowth = battingGrowth,
             DefenseGrowth = defenseGrowth,
@@ -1025,6 +1042,9 @@ public static class ProspectGenerator
 
     /// <summary>成長タイプの分野別化抽選の独立ストリームID（能力ロール列を1ビットも乱さない, issue #866）。</summary>
     private static ulong GrowthDomainStreamId(int year, int index) => 0x1F9A_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>対左投手経験の初期値（issue #1072）用の専用Forkストリームキー。</summary>
+    private static ulong LeftExperienceStreamId(int year, int index) => 0x1E57_0000UL ^ (ulong)(year * 1000 + index + 1);
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
     private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
