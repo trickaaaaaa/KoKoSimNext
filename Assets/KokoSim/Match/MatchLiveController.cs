@@ -685,7 +685,8 @@ namespace KokoSim.Unity.Match
             // 校IDは試合ごとに変わるので、呼ばれた時点の値を読む。
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied,
                 sid => _statsProvider.AptitudeGradesOf(OwnSchoolId, sid),
-                p => _statsProvider.PitchChartOf(OwnSchoolId, p));
+                p => _statsProvider.PitchChartOf(OwnSchoolId, p),
+                p => _statsProvider.ConditionOf(OwnSchoolId, p.ConditionValue, p.Name));
             _subPanel.Bind();
             // 能力ビューア（issue #602/#923）。局面文はポップアップと同じ単一ソースを渡す。
             _scoutPanel = new MatchScoutPanel(_root, _statsProvider, PauseSituationText);

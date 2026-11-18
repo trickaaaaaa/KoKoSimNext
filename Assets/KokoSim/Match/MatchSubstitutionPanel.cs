@@ -75,16 +75,20 @@ namespace KokoSim.Unity.Match
         /// </param>
         public MatchSubstitutionPanel(VisualElement root, System.Action onApplied,
             System.Func<int?, IReadOnlyList<string>> aptitudeGrades = null,
-            System.Func<Player, List<PitchChartDatum>> pitchChart = null)
+            System.Func<Player, List<PitchChartDatum>> pitchChart = null,
+            System.Func<Player, Condition> conditionOf = null)
         {
             _root = root;
             _onApplied = onApplied;
             _aptitudeGrades = aptitudeGrades;
             _pitchChart = pitchChart;
+            _conditionOf = conditionOf;
         }
 
         private readonly System.Func<int?, IReadOnlyList<string>> _aptitudeGrades;
         private readonly System.Func<Player, List<PitchChartDatum>> _pitchChart;
+        // 調子の顔（試合中の HUD と同じ源＝MatchLiveStatsProvider.ConditionOf）。交代画面は自校だけなので真値で出す。
+        private readonly System.Func<Player, Condition> _conditionOf;
 
         /// <summary>モーダルを開いている間は裏の進行（自動再生・次の打席へ）を止める。</summary>
         public bool IsOpen => _open;
@@ -1119,6 +1123,9 @@ namespace KokoSim.Unity.Match
                 row.Add(info);
             }
 
+            var rowFace = CondFace(p, "msub-cond");
+            if (rowFace != null) row.Add(rowFace);
+
             if (onCancel != null)
             {
                 var x = new Button(() => onCancel()) { text = "✕" };
@@ -1128,6 +1135,15 @@ namespace KokoSim.Unity.Match
             }
 
             return row;
+        }
+
+        private ConditionFace CondFace(Player p, string cls)
+        {
+            if (_conditionOf == null || p == null) return null;
+            var face = new ConditionFace();
+            face.AddToClassList(cls);
+            face.Set(_conditionOf(p));
+            return face;
         }
 
         private static VisualElement ChoiceRow(string text, bool picked)
@@ -1163,6 +1179,8 @@ namespace KokoSim.Unity.Match
                 n.AddToClassList("bench-row__tag");
                 row.Add(n);
             }
+            var benchFace = CondFace(p, "msub-cond");
+            if (benchFace != null) row.Add(benchFace);
             return row;
         }
 
@@ -1187,6 +1205,8 @@ namespace KokoSim.Unity.Match
             var hand = new Label(HandLabel(p));
             hand.AddToClassList("bench-row__tag");
             meta.Add(hand);
+            var cardFace = CondFace(p, "msub-cond--card");
+            if (cardFace != null) meta.Add(cardFace);
             el.Add(meta);
 
             // 持ち球のミニ球種チャート（部品 PitchChartView・compact）。メンバー設定・スタメン設定と同じく

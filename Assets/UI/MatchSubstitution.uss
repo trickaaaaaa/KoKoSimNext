@@ -203,3 +203,7 @@
 
 /* 投・捕の枠を選んでいるときの候補の相性（issue #935）。行の右端に置く。 */
 .bench-row__chem { margin-left: auto; padding-left: var(--sp-2); }
+
+/* 調子の顔（issue #1143）。伝令画面（.tmo-mrow__cond）と同じく行の右端の固定幅セルに置く。説明の文字は足さない。 */
+.msub-cond { width: 26px; height: 26px; flex-shrink: 0; margin-left: var(--sp-2); }
+.msub-cond--card { width: 20px; height: 20px; flex-shrink: 0; margin-left: auto; }
