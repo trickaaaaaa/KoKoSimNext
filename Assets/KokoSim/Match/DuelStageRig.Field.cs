@@ -2302,7 +2302,7 @@ namespace KokoSim.Unity.Match
                 if (recv.ScatterShown && firstTagOnCatch)
                 {
                     // 逸れを捕る形を見せてからタッチへ移る（issue #979）。タッチの収録で上書きすると、捕る形が
-                    // 絵に出る前に消える（猶予は TagSeconds＝0.10s しかなく、倍率を上げて詰めると捕球の前から始まる）。
+                    // 絵に出る前に消える（猶予は TagSeconds＝盗塁0.22s・三塁0.22s 程度しかなく、倍率を上げて詰めると捕球の前から始まる）。
                     // ① タッチの瞬間を、判定が加えた「逸れの遅れ」ぶん後ろへずらす（案b）
                     // ② それでも捕る形を見せる秒が足りなければ、収録の頭を捨てて短くつなぐ（案a・倍率は等速のまま）
                     float window = Mathf.Max(avail + recv.ScatterRecoverySeconds,

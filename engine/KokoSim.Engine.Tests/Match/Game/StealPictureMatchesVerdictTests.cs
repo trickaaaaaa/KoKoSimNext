@@ -133,11 +133,13 @@ public sealed class StealPictureMatchesVerdictTests
     /// 校正項は<b>移しただけ</b>で成功率を変えていない: 旧係数（バイアス0.38・ジャンプ0・立ち上がり0）と
     /// 新係数（バイアス0・ジャンプ0.19・立ち上がり0.19）で <see cref="StealResolver.SuccessProbability"/> が
     /// 完全一致する（二盗・三盗）。＝帯も決定論ダイジェストも動かないことの根拠。
+    /// issue #1139 でタッチ 0.10→0.22（+0.12）にした分はジャンプ 0.19→0.07 から引いたので、旧係数側は
+    /// タッチ 0.10 で比べる（守備+0.19+0.12・走者の差し引き0.07＝合計0.38 で旧バイアスと一致）。
     /// </summary>
     [Fact]
     public void MovingTheBias_DoesNotChangeAnySuccessProbability()
     {
-        var old = C with { StealSuccessBias = 0.38, StealJumpCreditSeconds = 0.0, CatcherPopRiseSeconds = 0.0 };
+        var old = C with { StealSuccessBias = 0.38, StealJumpCreditSeconds = 0.0, CatcherPopRiseSeconds = 0.0, TagSeconds = 0.10 };
         foreach (var legs in new[] { 20, 40, 55, 70, 90, 100 })
             foreach (var arm in new[] { 20, 50, 75, 95 })
                 foreach (var fielding in new[] { 20, 50, 90 })

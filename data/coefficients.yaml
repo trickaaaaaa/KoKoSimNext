@@ -469,16 +469,13 @@ baserunning:
   catch_throw_distance_m: 38.8
   steal_reaction_intercept: 0.95   # スタート遅延[s] = intercept − steal×slope。issue #838 で 0.90→0.95（傾き倍化に合わせ、平均的な走者の遅延を 0.70→0.55 へ）
   steal_reaction_slope: 0.008   # issue #838: 盗塁能力の差が秒に出るよう倍化（盗塁50の遅延は 0.95−0.40＝0.55）
-  steal_jump_credit_seconds: 0.19  # ジャンプ[s]。走者は投手の始動を読んで既に動き出している＝遅延から差し引く（床の後に引く）。steal_success_bias 0.38 を物理層へ移した半分（2026-08-14）。走力50/盗塁50の二塁到達 3.94→3.75秒（高校生の実測3.6〜3.8秒へ）
+  steal_jump_credit_seconds: 0.07  # issue #1139: tag_seconds の増分(+0.12)を引いて 0.19→0.07。 # ジャンプ[s]。走者は投手の始動を読んで既に動き出している＝遅延から差し引く（床の後に引く）。steal_success_bias 0.38 を物理層へ移した半分（2026-08-14）。走力50/盗塁50の二塁到達 3.94→3.75秒（高校生の実測3.6〜3.8秒へ）
   pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
   pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋立ち上がり＋送球時間）
   catcher_pop_rise_seconds: 0.19   # 捕手の立ち上がり[s]（守備力で縮まない固定部分）。steal_success_bias 0.38 を物理層へ移した残り半分（2026-08-14）。肩50のポップタイム 1.91→2.10秒（高校生の実測2.0〜2.3秒へ）。⚠ pop_transfer_seconds へ足し込むと守備力で伸縮して「移しただけ」でなくなる
   transfer_fielding_slope: 0.004   # 走塁系トランスファーの守備連動（Issue #36）。fielding.throw_transfer_fielding_slope と揃える
   transfer_factor_min: 0.70        # 走塁系トランスファー倍率の下限（Issue #36）
-  tag_seconds: 0.13                           # 二塁タッチ[s]（issue #1139: 0.10→0.13・フォースと区別。steal_success_bias は0のまま＝絵と判定を食い違わせない。
-                                               # 他塁より増分を小さく(+0.03)留めた: +0.10だとSteal_LeagueAverage_IsPlausible（0.30-0.60）を0.608で超え、
-                                               # +0.06でもHeavyのdouble_steal_third_break_per_game（参考帯0.0-0.05）とAbilitySensitivityTests
-                                               # のmental/defense（最低0.10点）を割る。+0.03ならいずれも緑）
+  tag_seconds: 0.22                           # 二塁タッチ[s]（issue #1139: 0.10→0.22・フォースと区別。増分+0.12は steal_jump_credit_seconds から同じだけ引いて判定の差を不変に保つ）
   steal_margin_scale: 0.22         # margin→成功確率のlogistic幅（Step4再校正: 肩差が効く幅に拡張）
   steal_success_bias: 0.0          # リーグ平均成功率の校正項（🟡）。2026-08-14 に 0.38→0.0＝中身を物理層の秒（steal_jump_credit_seconds 0.19 ＋ catcher_pop_rise_seconds 0.19）へ移した。判定の秒だけを動かして絵の秒に出ない項なので、0以外にすると「送球が先に届いた絵なのにセーフ」が戻る（実測: 成功50%の場面で送球が0.48秒先着）。平均成功率を動かすときは移した先の2項を動かす
   catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
@@ -988,9 +985,7 @@ tactics:
   # issue steal-thresholds-unreachable（2026-08-27）: 旧0.72は実ロスター実測の到達可能上限（p99=60.7%・
   # max=65.8%）を超えていて原理的に一度も通らない死にコードだった。0.50は概ねp70相当（詳細は
   # TacticsCoefficients.StealMinSuccess のコメント参照）。
-  steal_min_success: 0.68          # 読まれる確率込みの成功見込みがこの値以上で仕掛ける（issue #838: 0アウトの損益分岐の近似）。
-                                    # issue #1139: tag_secondsの+0.03sでmarginが一様にシフトし盗塁企図/試合が暴走したため、
-                                    # margin相当分だけ閾値を0.65→0.68へ押し上げて打ち消した（StealMinSuccessのXMLコメント参照）
+  steal_min_success: 0.65          # 読まれる確率込みの成功見込みがこの値以上で仕掛ける（issue #838: 0アウトの損益分岐の近似）。
   steal_prob: 0.45
   # issue #838: 損益分岐のアウト数別オフセット（セイバーメトリクス近似）と、閾値直上の崖をなだらかにする傾き。
   steal_min_success_one_out_offset: -0.03

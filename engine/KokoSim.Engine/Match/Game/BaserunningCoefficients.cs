@@ -98,7 +98,9 @@ public sealed record BaserunningCoefficients
     /// ちょうど同じ秒だけ引かれる。床の前に引くと快足走者だけ床に当たって引きが浅くなり、
     /// 「校正項を移しただけ（帯不変）」でなくなる。</para>
     /// </summary>
-    public double StealJumpCreditSeconds { get; init; } = 0.19;
+    /// <para>issue #1139: <see cref="TagSeconds"/> を 0.10→0.22 に伸ばした増分(+0.12)をここから引いて 0.19→0.07。
+    /// 盗塁の判定の差（守備−走者）は不変のまま、絵では捕球からタッチまでの間が見える。</para>
+    public double StealJumpCreditSeconds { get; init; } = 0.07;
     /// <summary>投手クイック[s]（投法補正は後回し, §2.2）。</summary>
     public double PitcherQuickSeconds { get; init; } = 1.40;
     /// <summary>捕手の握り替え[s]（ポップタイム＝これ＋送球時間）。</summary>
@@ -124,18 +126,10 @@ public sealed record BaserunningCoefficients
     /// <summary>トランスファー倍率の下限（最速側クランプ, Issue #36）。</summary>
     public double TransferFactorMin { get; init; } = 0.70;
     /// <summary>二塁タッチ[s]（捕球からグラブを走者の足元へ下ろすまでの遅れ）。
-    /// issue #1139: 0.10→0.13。フォース（<see cref="SecondForceTagSeconds"/> 等＝塁に触れるだけ）と同じ秒だと、
-    /// 送球到達＝判定になり際どいタッチが無くなる。<see cref="StealSuccessBias"/> は0のまま（判定の秒だけを
-    /// 動かして絵の秒に出ない項なので、ここを増分で動かすと視覚と判定が食い違う＝この増分だけはバイアスで
-    /// 打ち消さず物理の秒として帯に効かせる）。
-    /// <para>目安0.2〜0.3秒より小さい+0.03に留めた理由（他塁の0.12〜0.16より小さい）: 盗塁だけはバイアスで
-    /// 打ち消せないため、増分がそのまま盗塁絡みの帯・感度テストへ効く。+0.10（0.20）だと
-    /// <see cref="BaserunningPlaysTests.Steal_LeagueAverage_IsPlausible"/>（0.30〜0.60）を0.608で超え、
-    /// +0.06（0.16）でもHeavyの <c>double_steal_third_break_per_game</c>（参考帯0.0〜0.05）を0.055〜0.058で超え、
-    /// さらに <c>AbilitySensitivityTests.EveryAbility_MovesTheResult_InTheExpectedDirection</c> の
-    /// mental/defense（最低0.10点、既存は±0.1程度で揺れる既知の繊細な指標）が+0.02まで沈んで新しい穴になる。
-    /// +0.03（0.13）ではいずれも緑＝「タッチはフォースより長い」を満たす最小限の増分に留めた。</para></summary>
-    public double TagSeconds { get; init; } = 0.13;
+    /// issue #1139: 0.10→0.22。フォース（<see cref="SecondForceTagSeconds"/> 等＝塁に触れるだけ）と同じ秒だと、
+    /// 送球到達＝判定になり際どいタッチが無くなる。増分(+0.12)は <see cref="StealJumpCreditSeconds"/> から
+    /// 同じだけ引いて判定の差を不変に保つ（<see cref="StealSuccessBias"/> は0のまま＝絵と判定を食い違わせない）。</summary>
+    public double TagSeconds { get; init; } = 0.22;
     /// <summary>margin→成功確率のlogistic幅[s]（Step4再校正: 反応係数を上げ絶対タイムを現実化した分、
     /// グリッドが飽和しないよう幅を広げ、肩差が効くようにする）。</summary>
     public double StealMarginScale { get; init; } = 0.22;
