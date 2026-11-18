@@ -121,13 +121,22 @@ public static class BallisticIntegrator
     /// <see cref="GroundResult"/> に載せる（守備解決の本塁打／フェンス直撃判定用）。既定＝追跡しない。
     /// 追跡は観測だけで積分そのものは変えない＝着地・頂点・滞空時間は引数の有無で1ビットも変わらない。
     /// </param>
+    /// <param name="sampleStepSeconds">
+    /// 飛行経路の標本を記録する時間刻み[s]（issue #1135。<paramref name="samples"/> と組で使う）。0以下＝記録しない。
+    /// </param>
+    /// <param name="samples">
+    /// 非nullのとき、t=0（接触点）から着地まで <paramref name="sampleStepSeconds"/> おきの (時刻, 位置) を
+    /// 時刻順に追加する。積分そのものは1ビットも変えない＝観測の記録だけ（不変条件#1/#2に影響なし）。
+    /// </param>
     public static GroundResult IntegrateToGround(
         Vector3D contactPoint,
         Vector3D initialVelocity,
         Vector3D spin,
         Aerodynamics aero,
         double dt = 0.001,
-        double fenceDistanceM = double.PositiveInfinity)
+        double fenceDistanceM = double.PositiveInfinity,
+        double sampleStepSeconds = 0.0,
+        List<FlightSample>? samples = null)
     {
         var state = new State(contactPoint, initialVelocity);
         var time = 0.0;
@@ -138,6 +147,14 @@ public static class BallisticIntegrator
         var crossPos = Vector3D.Zero;
         var crossVel = Vector3D.Zero;
 
+        var trackSamples = samples is not null && sampleStepSeconds > 0.0;
+        var nextSampleT = 0.0;
+        if (trackSamples)
+        {
+            samples!.Add(new FlightSample(0.0, contactPoint));
+            nextSampleT = sampleStepSeconds;
+        }
+
         const int maxSteps = 200_000;
         for (var step = 0; step < maxSteps; step++)
         {
@@ -145,6 +162,19 @@ public static class BallisticIntegrator
             if (next.Position.Y > apex)
             {
                 apex = next.Position.Y;
+            }
+
+            if (trackSamples)
+            {
+                // 1歩(dt)の中で複数の標本境界を跨ぐことは無い（sampleStepSeconds≫dt前提）が、
+                // 念のため while で跨いだ分すべてを拾う。
+                while (nextSampleT <= time + dt + 1e-12)
+                {
+                    var frac = dt > 0.0 ? Math.Clamp((nextSampleT - time) / dt, 0.0, 1.0) : 1.0;
+                    var pos = state.Position + (next.Position - state.Position) * frac;
+                    samples!.Add(new FlightSample(nextSampleT, pos));
+                    nextSampleT += sampleStepSeconds;
+                }
             }
 
             if (trackFence && !crossed)
@@ -184,6 +214,13 @@ public static class BallisticIntegrator
 
         throw new InvalidOperationException("打球が着地しませんでした（初期条件が異常です）。");
     }
+
+    /// <summary>
+    /// 飛行経路の1標本（issue #1135）。打球が着地するまでの通り道を、野手が正面でノーバウンド捕球できるかの
+    /// 走査（<see cref="Fielding.FieldingResolver"/>）に使う。<see cref="IntegrateToGround"/> が1回の積分の
+    /// ついでに記録するだけ＝再積分なし（決定論・性能とも既存の着地判定と同コスト）。
+    /// </summary>
+    public readonly record struct FlightSample(double TimeSeconds, Vector3D Position);
 
     private static double HorizontalRange(Vector3D p) => Math.Sqrt(p.X * p.X + p.Z * p.Z);
 

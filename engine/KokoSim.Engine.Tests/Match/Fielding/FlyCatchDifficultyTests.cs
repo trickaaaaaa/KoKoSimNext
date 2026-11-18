@@ -40,9 +40,14 @@ public sealed class FlyCatchDifficultyTests
 
     private static (Vector3D Landing, double HangTime, double ApexHeight) ProbeFly()
     {
-        // 着地点・滞空・頂点は打球の弾道積分だけで決まる（野手に依らない）。標準配置で1回だけ解いて読む。
+        // 着地点・滞空・頂点は打球の弾道積分だけで決まる（野手に依らない）… だったが、issue #1135の通り道
+        // 捕球は着地点より手前でも捕れるようになったため、**野手が本当に誰も届かない配置でなければ
+        // この前提が崩れる**。BearingDeg=0.0（センター方向）は投手・二塁手・遊撃手が立つ中心線そのもので、
+        // Field.StandardAlignment() で解くと通り道のどこかで彼らに捕まり、自然な（着地点まで飛ぶ）弾道が
+        // 得られなかった（実害: 本来70m超飛ぶはずの打球が3.78sで打ち切られていた）。誰も届かない遠方に
+        // 1人だけ置いて解くことで、純粋な弾道積分の結果だけを読む。
         var p = FieldingResolver.ResolveDetailed(
-            Fly, Field, Aero, BatterAttributes.LeagueAverage, Field.StandardAlignment(), Coeff,
+            Fly, Field, Aero, BatterAttributes.LeagueAverage, WithCenterFielderAt(new Vector3D(0, 0, 10_000.0)), Coeff,
             new Xoshiro256Random(1));
         return (new Vector3D(p.LandingX, 0, p.LandingZ), p.HangTimeSeconds, p.ApexHeightM);
     }
@@ -79,7 +84,11 @@ public sealed class FlyCatchDifficultyTests
         var budget = Math.Min(hang * Coeff.CatchReachFactor, Coeff.CatchReachCapSeconds); // Fielding50→routeFactor 1.0
         var travel = (budget - attr.ReactionDelaySeconds - 0.05) * attr.SprintSpeedMps;   // 到達所要が予算−0.05秒になる距離
         Assert.True(travel > 0, "際どい配置を作れる滞空がない");
-        var tight = DropRate(new Vector3D(landing.X, 0, landing.Z - travel));
+        // 横（X）へ travel だけ外して置く（issue #1135: 打球の通り道そのもの＝Zを短くする配置だと、
+        // 通り道のライナー捕球が「着地点より手前・まさに野手の立ち位置を通る瞬間」を見つけてしまい、
+        // 着地点基準の「際どい」margin を作れない。横offsetなら経路上の最接近距離は常にtravel以上で、
+        // 着地点以外のどの時刻でも経路判定に捕まらない＝着地点のmarginだけを厳密に作れる）。
+        var tight = DropRate(new Vector3D(landing.X + travel, 0, landing.Z));
 
         Assert.True(routine < tight,
             $"平凡フライの落球率 {routine:P2} が際どいフライ {tight:P2} 以上（難度連動していない）");
@@ -98,7 +107,8 @@ public sealed class FlyCatchDifficultyTests
         var attr = new FielderAttributes { Fielding = 50 };
         var budget = Math.Min(hang * Coeff.CatchReachFactor, Coeff.CatchReachCapSeconds);
         var travel = (budget - attr.ReactionDelaySeconds - 0.05) * attr.SprintSpeedMps;
-        var loc = new Vector3D(landing.X, 0, landing.Z - travel);
+        // 横offset配置にする理由は RoutineFly_DropsFarLessThanTightFly 冒頭のコメント参照（issue #1135）。
+        var loc = new Vector3D(landing.X + travel, 0, landing.Z);
 
         double DropWithCatching(int catching)
         {

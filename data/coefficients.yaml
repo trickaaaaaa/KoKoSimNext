@@ -433,6 +433,10 @@ fielding:
   irregular_bounce_lateral_deg: 12.0     # イレギュラーの横ぶれ最大角[deg]
   irregular_bounce_restitution_swing: 0.60  # イレギュラーの反発係数の揺らぎ幅
   error_irregular_bonus: 0.10       # イレギュラーバウンド処理時のエラー確率加算
+  # 通り道のライナー捕球（issue #1135）: 着地点だけでなく打球の飛行経路を時間で走査し、野手が正面で
+  # ノーバウンド捕球できるかを判定する。0以下＝無効（従来どおり着地点基準の判定だけ）。
+  line_drive_reach_height_m: 2.20     # グラブ＋跳んで届く高さの上限（infielder_reach_height_mと同基準・全野手に適用）
+  line_drive_scan_step_seconds: 0.02  # 飛行経路の走査刻み（infield_intercept_step_secondsと同趣旨・独立）
   # 守備位置適性→実効守備力の補正（設計書01 §1.1）。基準50で×1.0、本職＝高適性でボーナス、慣れないポジでペナルティ。
   aptitude_neutral: 50.0
   aptitude_slope_per_point: 0.006

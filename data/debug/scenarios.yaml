@@ -282,4 +282,5 @@ scenarios:
     inning: 1
     top: true
     outs: 0
-    seed: 20263036
+    # issue #1135（通り道のライナー捕球）で旧シードの第1打席の結果が動いたため再選定。
+    seed: 20263040

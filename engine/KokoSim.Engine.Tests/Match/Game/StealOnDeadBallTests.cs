@@ -76,7 +76,7 @@ public sealed class StealOnDeadBallTests
     /// </summary>
     [Theory]
     [InlineData(1UL, StealTarget.Second)]
-    [InlineData(7UL, StealTarget.Third)]
+    [InlineData(8UL, StealTarget.Third)]   // issue #1135 で打球判定が変わり seed 7 は三盗が起きなくなった（前提が崩れる）ため 8 へ
     [InlineData(42UL, StealTarget.Second)]
     public void PickoffIsOffByDefault_NoPickoffPlayNorPickoffOut(ulong seed, StealTarget target)
     {

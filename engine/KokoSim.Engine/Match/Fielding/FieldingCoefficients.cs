@@ -541,4 +541,21 @@ public sealed record FieldingCoefficients
 
     /// <summary>イレギュラーバウンドで処理する打球のエラー確率への加算。</summary>
     public double ErrorIrregularBonus { get; init; } = 0.10;
+
+    // --- 通り道のライナー捕球（issue #1135） ---
+    // 従来は空中捕球（isFly）を着地点だけで判定していた。遊撃手の胸の高さを通って外野へ落ちる
+    // ライナーは、着地点（外野）基準の NearestReach には遊撃手が候補として出てこず安打になっていた。
+    // 低いライナー（頂点<FlyApexThresholdM）はゴロ経路で、着地（最初のバウンド）前の空中は一切判定して
+    // いなかった。ここで打球の飛行経路を時間で走査し、野手がその時刻までにその点へ届き、球がグラブの
+    // 届く高さにあれば、着地点を待たずにノーバウンド捕球（アウト）とする（design-12 §4.7 の前提）。
+
+    /// <summary>
+    /// 飛行経路のノーバウンド捕球で野手の届く高さの上限[m]（<see cref="InfielderReachHeightM"/> と同じ
+    /// 「グラブ＋跳んで届く」基準を、内野・外野を問わず全野手に適用する）。0以下＝この判定を無効化し
+    /// 従来どおり着地点基準の判定だけに戻す（恒等）。
+    /// </summary>
+    public double LineDriveReachHeightM { get; init; } = 2.20;
+
+    /// <summary>飛行経路を走査する時間刻み[s]（<see cref="InfieldInterceptStepSeconds"/> と同趣旨・独立の値）。</summary>
+    public double LineDriveScanStepSeconds { get; init; } = 0.02;
 }
