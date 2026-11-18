@@ -197,6 +197,19 @@ events:
         Assert.DoesNotContain("敗退", champion);
     }
 
+    /// <summary>センバツ選外のイベント（issue #1136）は、どの会話を引いても何の選外かが分かる＝冒頭2行以内に「センバツ」が入る。</summary>
+    [Fact]
+    public void SenbatsuNotSelected_EveryVariantNamesTheSenbatsuEarly()
+    {
+        var e = RepositoryEvents().Single(x => x.Id == "senbatsu_not_selected");
+        Assert.Contains("センバツ", e.Text);
+        foreach (var v in e.Variants)
+        {
+            var head = string.Concat(v.Lines.Take(2).Select(l => l.Say));
+            Assert.Contains("センバツ", head);
+        }
+    }
+
     [Fact]
     public void RepositoryTable_WeeklyEventsHaveSeveralVariants()
     {
