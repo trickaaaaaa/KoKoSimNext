@@ -3049,5 +3049,6 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 .gchart__sw--strength   { background-color: var(--tm-strength); }
 .gchart__sw--baserun    { background-color: var(--tm-baserun); }
 .gchart__sw--throwing   { background-color: var(--tm-throwing); }
+.gchart__sw--bunt       { background-color: var(--tm-bunt); }
 .gchart__sw--defense    { background-color: var(--tm-defense); }
 .gchart__sw--defpos     { background-color: var(--tm-defpos); }
