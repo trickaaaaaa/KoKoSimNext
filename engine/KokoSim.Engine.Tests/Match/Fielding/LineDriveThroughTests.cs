@@ -87,8 +87,13 @@ public sealed class LineDriveThroughTests
     private static readonly BattedBall DeepLinerToTheGap =
         new() { ExitVelocityMps = 42.0, LaunchAngleDeg = 14.0, BearingDeg = 0.0 };
 
+    /// <summary>
+    /// 落ちてくる区間の深いライナーは経路の途中で先取りしない（着地点の判定に任せる）。浅く守った中堅手が
+    /// 背走して頭の高さで捕る余地は、着地点判定の捕球予算（CatchReachFactor 等）に校正済み＝ここで拾うと二重計上。
+    /// 機能のオン・オフで結果が一致することを固定する。
+    /// </summary>
     [Fact]
-    public void CenterFielder_PlayingShallow_CatchesTheLinerBeforeItCarriesPastHim()
+    public void CenterFielder_DescendingDeepLiner_IsLeftToTheLandingJudgement()
     {
         var centerField = new Vector3D(0, 0, 68.0);
         var on = FieldingResolver.ResolveDetailed(
@@ -98,19 +103,10 @@ public sealed class LineDriveThroughTests
             DeepLinerToTheGap, Field, Aero, BatterAttributes.LeagueAverage,
             WithOneFielderAt(FieldPosition.CenterField, centerField), Disabled, new Xoshiro256Random(1));
 
-        _out.WriteLine(
-            $"on: {on.Result} fielder={on.FielderRole} fieldedAt={on.FieldedAtSeconds:F3}s hang={on.HangTimeSeconds:F3}s range={on.RangeM:F1}m "
-            + $"/ off: {off.Result} hang={off.HangTimeSeconds:F3}s range={off.RangeM:F1}m");
+        _out.WriteLine($"on: {on.Result} hang={on.HangTimeSeconds:F3}s range={on.RangeM:F1}m / off: {off.Result}");
 
-        Assert.Equal(BattedBallResult.Out, on.Result);
-        Assert.Equal(FieldPosition.CenterField, on.FielderRole);
-        Assert.True(on.IsFly);
-        // 自然な滞空（約2.86秒・87m）より明確に前で判定が終わっている。
-        Assert.True(on.HangTimeSeconds < 2.8, $"自然な着地点まで飛んでから判定している（{on.HangTimeSeconds:F3}s）");
-        Assert.True(on.RangeM < 85.0, $"着地点基準の捕球点のまま（{on.RangeM:F1}m）");
-
-        // 機能OFF（回帰確認）: 着地点(約87m)は外野手の立ち位置(80m)より深く、着地点基準では届かない＝安打。
-        Assert.NotEqual(BattedBallResult.Out, off.Result);
+        Assert.Equal(off.Result, on.Result);
+        Assert.Equal(off.HangTimeSeconds, on.HangTimeSeconds, 9);
     }
 
     // ===== ③ 横を抜けるライナーは今どおり抜ける =====

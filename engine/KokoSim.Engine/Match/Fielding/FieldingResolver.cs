@@ -320,7 +320,7 @@ public static class FieldingResolver
         var naturalRange = Math.Sqrt(naturalLanding.X * naturalLanding.X + naturalLanding.Z * naturalLanding.Z);
         var lineDriveWallPenalty = coeff.WallCatchPenalty(fenceDist - naturalRange);
         if (flightSamples is { Count: > 0 }
-            && TryLineDriveCatch(fielders, flightSamples, ground.HangTimeSeconds, lineDriveWallPenalty, coeff) is { } ldc)
+            && TryLineDriveCatch(fielders, flightSamples, ground.HangTimeSeconds, ground.ApexHeightM, lineDriveWallPenalty, coeff) is { } ldc)
         {
             var catchMargin = ldc.BudgetSeconds - ldc.ReachSeconds;
             var result = MaybeFlyError(ldc.Fielder, catchMargin, coeff, rng);
@@ -335,7 +335,11 @@ public static class FieldingResolver
                 RangeM = Math.Sqrt(ldc.Point.X * ldc.Point.X + ldc.Point.Z * ldc.Point.Z),
                 BearingDeg = ball.BearingDeg,
                 BatterToFirstSeconds = runnerTime,
-                Class = BattedBallClass.Liner,
+                // 分類は着地点基準の飛球と同じ式（頂点÷自然な到達距離）で決める。経路の途中で捕っても、
+                // 打球そのものがフライならフライ（内野フライ・外野フライの集計を崩さない）。一律 Liner にすると
+                // 落ちてくる途中で捕った普通のフライがライナーに化け、内野フライ率が帯 3.5〜6.5% を 2.5% へ割った。
+                Class = ground.ApexHeightM / Math.Max(naturalRange, 1e-6) <= coeff.LinerApexRangeRatio
+                    ? BattedBallClass.Liner : BattedBallClass.Fly,
                 IsFly = true,
                 FielderRole = ldc.Fielder.Position,
                 FieldedAtSeconds = ldc.TimeSeconds,
@@ -1407,11 +1411,20 @@ public static class FieldingResolver
         IReadOnlyList<Fielder> fielders,
         IReadOnlyList<BallisticIntegrator.FlightSample> samples,
         double hangTimeSeconds,
+        double apexHeightM,
         double wallPenaltySeconds,
         FieldingCoefficients coeff)
     {
+        // 飛球（頂点 ≥ FlyApexThresholdM）は**上昇区間だけ**を走査する。頂点を過ぎて落ちてくる区間で
+        // グラブの届く高さを通る点は着地点のすぐ手前＝着地点の空中捕球判定が既に担っている（その「着地の
+        // 手前で高く捕れる分」は CatchReachFactor 等で校正済み）。ここでも拾うと同じ分を二重に数え、
+        // 背走して頭の高さで捕る打球まで先取りして打率が帯（.235〜）を .230 へ割った。低いライナーは全区間。
+        var flyOnlyAscending = apexHeightM >= coeff.FlyApexThresholdM;
+        var prevY = double.NegativeInfinity;
         foreach (var s in samples)
         {
+            if (flyOnlyAscending && s.Position.Y < prevY) break;   // 頂点を過ぎた
+            prevY = s.Position.Y;
             // t=0（接触点そのもの）と最終着地点は既存の判定（本塁打／着地点基準の空中捕球／ゴロ経路）に任せる。
             if (s.TimeSeconds <= 0.0 || s.TimeSeconds >= hangTimeSeconds - 1e-9) continue;
             if (s.Position.Y > coeff.LineDriveReachHeightM) continue; // グラブの届く高さを越える
