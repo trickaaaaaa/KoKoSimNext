@@ -104,10 +104,15 @@ namespace KokoSim.Unity.Tournament
             // 後始末の前の通算（夏の県大会ぶんを既に持っている＝前後で増えたかを見る）
             var before = new System.Collections.Generic.Dictionary<int, int>();
             foreach (var x in NationService.PrefectureSchools) before[x.Id] = CareerGames(x.Id);
+            EventService.Clear();                // 通過の会話だけを測れるように（issue #1133）
             var sw = System.Diagnostics.Stopwatch.StartNew();
             HomeState.Current.DismissResult();   // ここで地区予選の後始末→秋季県大会へ（他地区の結果を受け取る）
             sw.Stop();
             Note("地区予選の後始末にかかった時間: " + sw.ElapsedMilliseconds + "ms");
+            if (league != null)
+                Check("リーグ戦の通過／敗退に応じてマネージャーの会話が積まれた（通過のときだけ・issue #1133）",
+                    EventService.HasPendingWhere(id => id == "district_league_qualified") == league.ManagerQualified,
+                    "qualified=" + league.ManagerQualified);
             yield return null;
 
             // 地区予選の上位N校（YAML の advance_per_group・issue #688）は優勝しなくても県大会へ進む。
