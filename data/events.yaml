@@ -1420,6 +1420,42 @@ events:
           - who: narration
             say: "封筒には、背番号も何も書かれていなかった。"
 
+  # 秋季地区予選のブロックリーグ戦（issue #772）を通過したとき、マネージャーが知らせる（issue #1133）。
+  # 呼び出し元（HomeState.DismissResult）が結果行（ブロック順位つき）を組む。通過のときだけ出る。
+  - id: district_league_qualified
+    kind: System
+    text: "秋季地区予選を通過した。県大会へ進む。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、通過しました！県大会です！"
+          - who: captain
+            say: "最終節の結果、間違いないんですか。"
+          - who: team_manager
+            say: "三回確認しました。四回目を今から確認します。"
+      - lines:
+          - who: team_manager
+            say: "監督、ブロック突破です。表、何回見ても同じでした。"
+          - who: captain
+            say: "もう一回見せてください。"
+          - who: team_manager
+            say: "いいですけど、順位は逃げませんよ。"
+      - lines:
+          - who: narration
+            say: "最終節が終わって、順位表が貼り出された。部員が壁の前に集まって動かない。"
+          - who: player
+            name: "二年生"
+            say: "……上から数えたほうが早いですよね、これ。"
+          - who: team_manager
+            say: "早いです。県大会、行けます。"
+      - lines:
+          - who: team_manager
+            say: "通過です、監督。県大会の出場校に、うちの名前が入りました。"
+          - who: captain
+            say: "ここからが本番ですね。"
+          - who: team_manager
+            say: "はい。でも今日の夕飯は少しだけ豪華にしていいですか。"
+
   - id: koshien_draw
     kind: System
     text: "甲子園の組み合わせ抽選会が行われた。"

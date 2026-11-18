@@ -155,6 +155,8 @@ events:
             KokoSim.Engine.Career.ContractRenewal.EventId,
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
             "koshien_berth_donation", "koshien_draw",
+            // 秋季地区予選リーグ戦の通過（issue #1133）。
+            "district_league_qualified",
             // 夏の敗退直後の3年引退（issue #954）。IDは SummerRetirement の定数で引く。
             SummerRetirement.PrefectureLossEventId, SummerRetirement.KoshienLossEventId,
             SummerRetirement.KoshienChampionEventId,

@@ -59,6 +59,10 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public bool? LeagueQualified { get; set; }
 
+        /// <summary>リーグ戦での自校のブロック番号（1始まり）と順位。リーグ戦でなければ 0（issue #1133）。</summary>
+        public int LeagueBlockNumber { get; set; }
+        public int LeagueRank { get; set; }
+
         public TournamentWrapUp(string title, int tournamentDay, bool isChampion, TournamentKind kind)
         {
             Title = title;
@@ -805,10 +809,19 @@ namespace KokoSim.Unity.Shell
             ArchiveTournamentStats();
             // 自校の成績（勝敗・優勝したか）は LastOutcome.IsChampion で既に確定済み（敗退時は常に false）。
             // 「大会全体の優勝校」の確定を待たずに出せる（issue #529 Plan A）。
+            var league = runner as BlockLeagueRunner;
             PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion, Kind)
             {
-                LeagueQualified = (runner as BlockLeagueRunner)?.ManagerQualified,
+                LeagueQualified = league?.ManagerQualified,
             };
+            if (league != null && league.ManagerBlockIndex >= 0)
+            {
+                // 表示専用の読み取り（乱数は引かない）。通過メッセージの「第N ブロック M位」に使う。
+                var mine = league.BuildBlockViews()[league.ManagerBlockIndex];
+                PendingTournamentWrapUp.LeagueBlockNumber = mine.Block + 1;
+                foreach (var st in mine.Standings)
+                    if (st.IsManager) PendingTournamentWrapUp.LeagueRank = st.Rank;
+            }
             Mode = GameMode.Normal;
             Runner = null;
             BannerPending = false;

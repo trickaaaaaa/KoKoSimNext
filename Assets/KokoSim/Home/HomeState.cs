@@ -851,6 +851,16 @@ namespace KokoSim.Unity.Home
                 {
                     new FeedItem { When = "大会", Text = summary, Kind = good ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
                 });
+                // 地区予選リーグ戦を通過したらマネージャーが会話で知らせる（issue #1133）。結果行にブロック順位を出す。
+                // 保存できない局面（WrapUp待ち）でしか通らず、ここで1回だけ積むのでロードで二重にならない。
+                if (w.LeagueQualified == true)
+                {
+                    var placing = w.LeagueBlockNumber > 0 && w.LeagueRank > 0
+                        ? "第" + w.LeagueBlockNumber + "ブロック" + w.LeagueRank + "位で"
+                        : "";
+                    KokoSim.Unity.Shell.EventService.PushUncapped("district_league_qualified", null,
+                        KokoSim.Unity.Shell.PresentedEffect.Good(placing + "秋季県大会へ進出！"));
+                }
                 // 自校の夏がここで終わった（県予選で敗退／甲子園で敗退／甲子園で優勝）なら、負けた翌日に3年が
                 // 引退して新チームが発足する（issue #954）。時計送りの**前**に済ませる＝引退した3年は
                 // 消費週ぶんの練習をしない。県大会で優勝した年は甲子園へ進むので何もしない（甲子園の後で来る）。
