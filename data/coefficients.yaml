@@ -339,7 +339,7 @@ fielding:
   fly_error_routine_margin_seconds: 0.35  # この秒数以上の捕球余裕がある飛球は難度0（下限へ）＝平凡。大きいほど外野失策が増える帯校正ノブ
   # 送球エラー（内野ゴロ→一塁の2段階目, Issue #37 / design-14 P1-6b）。捕球ロール(Catching)の後の送球ロール(ThrowAccuracy)。
   # base=0 で送球ロールを引かない＝現行の捕球のみ判定と完全一致（決定論不変）。正値で悪送球が能力駆動に。
-  throw_error_base_prob: 0.0280       # 送球エラー基準確率（ThrowAccuracy50時）。issue #169で正値化＝Ac50で内野ゴロ失策の約40%が送球由来→issue #532で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）→issue #810で0.0343→0.0280：受け手の捕球ミスを三段目として新設した分だけ再配分（捕球・送球・受け手の按分は概ね48/34/18）
+  throw_error_base_prob: 0.0340       # 送球エラー基準確率（ThrowAccuracy50時）。issue #169で正値化＝Ac50で内野ゴロ失策の約40%が送球由来→issue #532で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）→issue #810で0.0343→0.0280：受け手の捕球ミスを三段目として新設した分だけ再配分（捕球・送球・受け手の按分は概ね48/34/18）
   throw_error_accuracy_slope: 0.004   # 送球精度(Ac−50)あたりの悪送球減少幅
   # 送球の逸れ（内野ゴロ→一塁, issue #858）。上の throw_error_base_prob/throw_error_accuracy_slope は確率係数
   # としてそのまま使うが、判定の形を二値ロールから「2次元の逸れ(ThrowScatterModel)をサンプルして閾値と比べる」
@@ -356,7 +356,7 @@ fielding:
   receive_error_base_prob: 0.0150     # 受け手の捕球ミス基準確率（一塁手Catching50時）。issue #810で正値化＝捕球・送球の両方から再配分しerrors_per_gameを帯内（1.8–3.6）に保った
   # 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球確定後、逸れ幅→回収ロスを守備所要時間へ
   # 加算してもう一度同じ判定基準で再評価する（拾い直しが間に合えばアウトのまま）。
-  wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）
+  wild_throw_scatter_sigma_m: 9.0     # 逸れ幅の標準偏差[m]（半正規分布）
   recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
   # 捕球ミス（お手玉）の回収レース（design-14 P1-6 追記, issue #817）。送球逸れの回収レースと同じ形で、
   # 捕球エラー確定後も「弾いたら即失策」にしない。こぼれ幅→拾い直しのロス（recovery_reaction_seconds共有+

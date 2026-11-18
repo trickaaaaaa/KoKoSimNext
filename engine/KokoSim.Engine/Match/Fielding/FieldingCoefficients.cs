@@ -256,7 +256,7 @@ public sealed record FieldingCoefficients
     /// issue #532 で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）。
     /// issue #810（2026-11-09）で 0.0343→0.0280：受け手の捕球ミス(<see cref="ReceiveErrorBaseProb"/>)を三段目として
     /// 新設した分だけ再配分（捕球・送球・受け手の按分は概ね48/34/18）。決定論baselineは再生成済み。</summary>
-    public double ThrowErrorBaseProb { get; init; } = 0.0280;
+    public double ThrowErrorBaseProb { get; init; } = 0.0340;
     /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
@@ -296,7 +296,7 @@ public sealed record FieldingCoefficients
     // 呼び出し元に実際の野手一覧が揃っているため）。
     /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。内野送球は距離が短いため
     /// <c>BaserunningCoefficients.WildThrowScatterSigmaM</c>（バックホーム用）とは独立の値。</summary>
-    public double WildThrowScatterSigmaM { get; init; } = 6.0;
+    public double WildThrowScatterSigmaM { get; init; } = 9.0;
     /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
     public double RecoveryReactionSeconds { get; init; } = 0.30;
 
