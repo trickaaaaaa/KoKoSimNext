@@ -100,7 +100,8 @@ public static class Step4Calibration
             for (var i = 0; i < 20000; i++)
             {
                 switch (BuntResolver.Resolve(batter, pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
-                    firstRunner: null, secondRunner: null, thirdRunner: null, field: null, baserun, rng))
+                    firstRunner: null, secondRunner: null, thirdRunner: null,
+                    field, field.StandardAlignment(), fielding, baserun, rng))
                 {
                     case BuntResult.SacrificeSuccess: sac++; break;
                     case BuntResult.InfieldHit: ih++; break;

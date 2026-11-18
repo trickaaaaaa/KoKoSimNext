@@ -100,6 +100,8 @@ public static partial class GameSimulation
         /// <summary>バント経路（犠打/セーフティ）での封殺（ForceOutAtSecond/Third/Home 合算,
         /// issue bunt-no-take-on-ball-pitches）。分母は<see cref="TotalSacrificeBunts"/>と同じ。</summary>
         public long TotalBuntForceOuts { get; init; }
+        /// <summary>バント内野安打（オールセーフ含む, issue #1092）。分母は<see cref="TotalSacrificeBunts"/>と同じ。</summary>
+        public long TotalBuntInfieldHits { get; init; }
         /// <summary>スクイズでボールが実際にプレーされた回数（ウエスト/ファウル/空振りは含まない）。</summary>
         public long TotalSqueezeBallInPlay { get; init; }
         /// <summary>スクイズでボールが実際にプレーされ、かつ三塁走者が本塁で刺された回数。</summary>
@@ -202,6 +204,9 @@ public static partial class GameSimulation
         /// <summary>バント経路の封殺率（issue bunt-no-take-on-ball-pitches）。</summary>
         public double BuntForceOutRate =>
             TotalSacrificeBunts > 0 ? (double)TotalBuntForceOuts / TotalSacrificeBunts : 0;
+        /// <summary>バント経路の内野安打率（オールセーフ含む, issue #1092）。</summary>
+        public double BuntInfieldHitRate =>
+            TotalSacrificeBunts > 0 ? (double)TotalBuntInfieldHits / TotalSacrificeBunts : 0;
         /// <summary>スクイズでボールが実際にプレーされたときの、三塁走者の本塁封殺率。</summary>
         public double SqueezeRunnerOutAtHomeRate =>
             TotalSqueezeBallInPlay > 0 ? (double)TotalSqueezeRunnerOutAtHome / TotalSqueezeBallInPlay : 0;
@@ -283,7 +288,7 @@ public static partial class GameSimulation
         public long TotalWildPitches;
         public long TotalStealAttempts, TotalStealSuccesses, TotalStealThirdAttempts, TotalStealThirdSuccesses;
         public long TotalSacrificeBunts, TotalSacrificeBuntSuccesses;
-        public long TotalBuntForceOuts, TotalSqueezeBallInPlay, TotalSqueezeRunnerOutAtHome;
+        public long TotalBuntForceOuts, TotalBuntInfieldHits, TotalSqueezeBallInPlay, TotalSqueezeRunnerOutAtHome;
         public long TotalStrikeOuts, TotalWalks, TotalHitBatters, TotalHomeRuns, TotalPlateAppearances;
         public long TotalLookingStrikeOuts;
         public int HomeWins, Ties, Extra, Shutouts;
@@ -334,6 +339,7 @@ public static partial class GameSimulation
             TotalSacrificeBunts += r.AwayTactics.SacrificeBunts + r.HomeTactics.SacrificeBunts;
             TotalSacrificeBuntSuccesses += r.AwayTactics.SacrificeBuntSuccesses + r.HomeTactics.SacrificeBuntSuccesses;
             TotalBuntForceOuts += r.AwayTactics.BuntForceOuts + r.HomeTactics.BuntForceOuts;
+            TotalBuntInfieldHits += r.AwayTactics.BuntInfieldHits + r.HomeTactics.BuntInfieldHits;
             TotalSqueezeBallInPlay += r.AwayTactics.SqueezeBallInPlay + r.HomeTactics.SqueezeBallInPlay;
             TotalSqueezeRunnerOutAtHome += r.AwayTactics.SqueezeRunnerOutAtHome + r.HomeTactics.SqueezeRunnerOutAtHome;
             foreach (var p in r.AwayPitching) { TotalStrikeOuts += p.StrikeOuts; TotalWalks += p.Walks; TotalHitBatters += p.HitBatters; }
@@ -431,6 +437,7 @@ public static partial class GameSimulation
             TotalSacrificeBunts += o.TotalSacrificeBunts;
             TotalSacrificeBuntSuccesses += o.TotalSacrificeBuntSuccesses;
             TotalBuntForceOuts += o.TotalBuntForceOuts;
+            TotalBuntInfieldHits += o.TotalBuntInfieldHits;
             TotalSqueezeBallInPlay += o.TotalSqueezeBallInPlay;
             TotalSqueezeRunnerOutAtHome += o.TotalSqueezeRunnerOutAtHome;
             TotalStrikeOuts += o.TotalStrikeOuts;
@@ -512,6 +519,7 @@ public static partial class GameSimulation
             TotalSacrificeBunts = TotalSacrificeBunts,
             TotalSacrificeBuntSuccesses = TotalSacrificeBuntSuccesses,
             TotalBuntForceOuts = TotalBuntForceOuts,
+            TotalBuntInfieldHits = TotalBuntInfieldHits,
             TotalSqueezeBallInPlay = TotalSqueezeBallInPlay,
             TotalSqueezeRunnerOutAtHome = TotalSqueezeRunnerOutAtHome,
             TotalStrikeOuts = TotalStrikeOuts,
@@ -690,6 +698,7 @@ public static partial class GameSimulation
         sb.AppendLine(c, $"| うち三盗 | {s.StealThirdSuccessRate:P1}（試行 {s.TotalStealThirdAttempts}） |");
         sb.AppendLine(c, $"| 犠打成功率（参考） | {s.SacrificeBuntSuccessRate:P1}（試行 {s.TotalSacrificeBunts}） |");
         sb.AppendLine(c, $"| バント封殺率（参考） | {s.BuntForceOutRate:P1}（試行 {s.TotalSacrificeBunts}） |");
+        sb.AppendLine(c, $"| バント内野安打率（参考） | {s.BuntInfieldHitRate:P1}（試行 {s.TotalSacrificeBunts}） |");
         sb.AppendLine(c, $"| スクイズ本塁封殺率（参考） | {s.SqueezeRunnerOutAtHomeRate:P1}（試行 {s.TotalSqueezeBallInPlay}） |");
         sb.AppendLine();
         sb.AppendLine("## 守備位置別・フライ/ゴロ別 失策内訳（issue #532）");

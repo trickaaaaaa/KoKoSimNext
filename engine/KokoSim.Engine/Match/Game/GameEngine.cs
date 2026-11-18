@@ -127,7 +127,9 @@ public sealed record TacticsTally(
     // ボールが実際にプレーされた回数とそのうち三塁走者が本塁で刺された回数。
     int BuntForceOuts = 0, int SqueezeBallInPlay = 0, int SqueezeRunnerOutAtHome = 0,
     // 三盗の内数（issue #949 の実測用）。
-    int StealThirdAttempts = 0, int StealThirdSuccesses = 0);
+    int StealThirdAttempts = 0, int StealThirdSuccesses = 0,
+    // バント内野安打（オールセーフ含む, issue #1092）。分母は SacrificeBunts と同じ。
+    int BuntInfieldHits = 0);
 
 /// <summary>
 /// 試合エンジン（設計書01 §3）。イニング進行・走塁・得点・継投・疲労・采配（設計書09）を統括する。
@@ -447,7 +449,7 @@ public static class GameEngine
     private static TacticsTally TallyOf(TeamState t)
         => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes,
             t.BuntForceOuts, t.SqueezeBallInPlay, t.SqueezeRunnerOutAtHome,
-            t.StealThirdAttempts, t.StealThirdSuccesses);
+            t.StealThirdAttempts, t.StealThirdSuccesses, t.BuntInfieldHits);
 
     /// <summary>
     /// 打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。
@@ -1795,6 +1797,7 @@ public static class GameEngine
                 offense.RecordSacrificeBunt(buntOutcome == BuntResult.SacrificeSuccess);
                 if (buntOutcome is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome)
                     offense.RecordBuntForceOut();
+                if (buntOutcome == BuntResult.InfieldHit) offense.RecordBuntInfieldHit();
                 var buntOuts = buntOutcome switch
                 {
                     BuntResult.PopOutDoubledOff => 2, // 小フライ＋一塁走者併殺（design-09「小フライ併殺」）
@@ -1822,7 +1825,8 @@ public static class GameEngine
                         buntPreFirst, buntPreSecond, buntPreThird,
                         bases.First, bases.Second, bases.Third,
                         paBaserunning, ctx.Field,
-                        batterSide: batter.Bats.EffectiveBats(currentPitcher.Throws))
+                        batterSide: batter.Bats.EffectiveBats(currentPitcher.Throws),
+                        fielding: res.BuntFielding)
                     : null;
                 buntTimeline = WithThrowScatter(buntTimeline,
                     res.BuntThrowScatter is { } buntThrow
@@ -1908,7 +1912,8 @@ public static class GameEngine
                         sqPreFirst, sqPreSecond, sqPreThird,
                         bases.First, bases.Second, bases.Third,
                         paBaserunning, ctx.Field, isSqueeze: true,
-                        batterSide: batter.Bats.EffectiveBats(currentPitcher.Throws))
+                        batterSide: batter.Bats.EffectiveBats(currentPitcher.Throws),
+                        fielding: sq.BuntFielding)
                     : null;
                 sqTimeline = WithThrowScatter(sqTimeline,
                     sq.BuntThrowScatter is { } sqThrow

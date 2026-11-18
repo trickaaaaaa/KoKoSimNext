@@ -16,6 +16,8 @@ public sealed class BuntResolverTests
 {
     private static readonly BaserunningCoefficients C = new();
     private static readonly FieldGeometry Field = new();
+    private static readonly KokoSim.Engine.Match.Fielding.FieldingCoefficients FieldingCoeff = new();
+    private static readonly System.Collections.Generic.IReadOnlyList<Fielder> Fielders = Field.StandardAlignment();
     private static readonly PitcherAttributes Pitcher = PitcherAttributes.LeagueAverage;
 
     // ── ①ボール球見送り ──
@@ -61,7 +63,7 @@ public sealed class BuntResolverTests
             for (var i = 0; i < n; i++)
             {
                 if (BuntResolver.Resolve(batter, pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
-                        firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng) == BuntResult.MissedBunt)
+                        firstRunner: null, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng) == BuntResult.MissedBunt)
                     missed++;
             }
             return missed / (double)n;
@@ -85,7 +87,7 @@ public sealed class BuntResolverTests
             for (var i = 0; i < n; i++)
             {
                 if (BuntResolver.Resolve(batter, pitcher, pitchStuff: stuff, courseDifficulty: 0.0, safety: false,
-                        firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng) == BuntResult.MissedBunt)
+                        firstRunner: null, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng) == BuntResult.MissedBunt)
                     missed++;
             }
             return missed / (double)n;
@@ -113,7 +115,7 @@ public sealed class BuntResolverTests
             for (var i = 0; i < n; i++)
             {
                 if (BuntResolver.Resolve(batter, pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
-                        firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng) == BuntResult.PopOut)
+                        firstRunner: null, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng) == BuntResult.PopOut)
                     pop++;
             }
             return pop / (double)n;
@@ -134,7 +136,7 @@ public sealed class BuntResolverTests
         for (var i = 0; i < 5000; i++)
         {
             var r = BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: true,
-                firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng);
+                firstRunner: null, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng);
             Assert.NotEqual(BuntResult.ForceOutAtSecond, r);
             Assert.NotEqual(BuntResult.ForceOutAtThird, r);
         }
@@ -155,7 +157,7 @@ public sealed class BuntResolverTests
             for (var i = 0; i < n; i++)
             {
                 if (BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: true,
-                        firstRunner: runner, secondRunner: null, thirdRunner: null, field: Field, C, rng) == BuntResult.ForceOutAtSecond)
+                        firstRunner: runner, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng) == BuntResult.ForceOutAtSecond)
                     forced++;
             }
             return forced / (double)n;
@@ -179,7 +181,7 @@ public sealed class BuntResolverTests
         for (var i = 0; i < 5000; i++)
         {
             var r = BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: true,
-                firstRunner: r1, secondRunner: null, thirdRunner: null, field: Field, C, rng);
+                firstRunner: r1, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng);
             Assert.NotEqual(BuntResult.ForceOutAtThird, r);
         }
     }
@@ -200,7 +202,7 @@ public sealed class BuntResolverTests
             for (var i = 0; i < n; i++)
             {
                 if (BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: true,
-                        firstRunner: r1, secondRunner: r2, thirdRunner: null, field: Field, C, rng) == BuntResult.ForceOutAtThird)
+                        firstRunner: r1, secondRunner: r2, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng) == BuntResult.ForceOutAtThird)
                     forced++;
             }
             return forced / (double)n;
@@ -225,7 +227,7 @@ public sealed class BuntResolverTests
         for (var i = 0; i < 5000; i++)
         {
             var r = BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: true,
-                firstRunner: r1, secondRunner: r2, thirdRunner: null, field: Field, C, rng);
+                firstRunner: r1, secondRunner: r2, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng);
             Assert.NotEqual(BuntResult.ForceOutAtHome, r);
         }
     }
@@ -247,7 +249,7 @@ public sealed class BuntResolverTests
             for (var i = 0; i < n; i++)
             {
                 if (BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: true,
-                        firstRunner: r1, secondRunner: r2, thirdRunner: r3, field: Field, C, rng) == BuntResult.ForceOutAtHome)
+                        firstRunner: r1, secondRunner: r2, thirdRunner: r3, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng) == BuntResult.ForceOutAtHome)
                     forced++;
             }
             return forced / (double)n;
@@ -269,7 +271,7 @@ public sealed class BuntResolverTests
         for (var i = 0; i < 20000; i++)
         {
             var r = BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
-                firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng);
+                firstRunner: null, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng);
             Assert.NotEqual(BuntResult.PopOutDoubledOff, r);
         }
     }
@@ -289,7 +291,7 @@ public sealed class BuntResolverTests
             for (var i = 0; i < n; i++)
             {
                 if (BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
-                        firstRunner: r1, secondRunner: null, thirdRunner: null, field: Field, C, rng)
+                        firstRunner: r1, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng)
                     == BuntResult.PopOutDoubledOff)
                     doubled++;
             }

@@ -19,6 +19,9 @@ namespace KokoSim.Engine.Tests.Match.Game;
 public sealed class BaserunningPlaysTests
 {
     private static readonly BaserunningCoefficients C = new();
+    private static readonly FieldGeometry Field = new();
+    private static readonly FieldingCoefficients FieldingCoeff = new();
+    private static readonly IReadOnlyList<Fielder> Fielders = Field.StandardAlignment();
 
     private static Player Catcher(int arm = 50) => new()
         { Position = FieldPosition.Catcher, ArmStrength = arm };
@@ -102,7 +105,8 @@ public sealed class BaserunningPlaysTests
         var batter = new Player { Bunt = 55, Speed = 70 };
         for (var i = 0; i < 3000; i++)
             seen.Add(BuntResolver.Resolve(batter, PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0,
-                safety: true, firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng));
+                safety: true, firstRunner: null, secondRunner: null, thirdRunner: null,
+                field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng));
         // 犠打成功・内野安打・小フライ・ファウル・空振りが一通り現れる。
         Assert.Contains(BuntResult.SacrificeSuccess, seen);
         Assert.Contains(BuntResult.InfieldHit, seen);
@@ -118,7 +122,7 @@ public sealed class BaserunningPlaysTests
         var rng = new Xoshiro256Random(1);
         var outcome = SqueezeResolver.Resolve(new Player { Bunt = 60 }, new Player { Baserunning = 60 },
             PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
-            new FieldGeometry(), wasteProbability: 1.0, C, rng);
+            Field, Fielders, FieldingCoeff, wasteProbability: 1.0, C, rng);
         Assert.True(outcome.RunnerOut);
         Assert.Equal(0, outcome.Runs);
     }
@@ -132,7 +136,7 @@ public sealed class BaserunningPlaysTests
         {
             var o = SqueezeResolver.Resolve(new Player { Bunt = 80 }, new Player { Baserunning = 70 },
                 PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
-                new FieldGeometry(), wasteProbability: 0.0, C, rng);
+                Field, Fielders, FieldingCoeff, wasteProbability: 0.0, C, rng);
             scored += o.Runs;
         }
         Assert.True(scored > 0, "スクイズが一度も決まらない");
@@ -158,7 +162,7 @@ public sealed class BaserunningPlaysTests
             {
                 var o = SqueezeResolver.Resolve(batter, runner, PitcherAttributes.LeagueAverage,
                     pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
-                    new FieldGeometry(), wasteProbability: 0.0, C, rng);
+                    Field, Fielders, FieldingCoeff, wasteProbability: 0.0, C, rng);
                 if (o.Bunt is BuntResult.Foul or BuntResult.MissedBunt) continue; // 打席続行（挟殺）は別テストの範囲
                 playedBalls++;
                 if (o.RunnerOut) caught++;

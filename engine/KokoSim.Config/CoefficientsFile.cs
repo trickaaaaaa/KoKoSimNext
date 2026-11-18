@@ -960,8 +960,6 @@ public static class CoefficientsLoader
         public double BuntLeftFirstStepBonusSeconds { get; set; } = D.BuntLeftFirstStepBonusSeconds;
         public double SacrificeBuntSquareDelaySeconds { get; set; } = D.SacrificeBuntSquareDelaySeconds;
         public double SafetyBuntSquareDelaySeconds { get; set; } = D.SafetyBuntSquareDelaySeconds;
-        public double BuntFieldThrowBaseSeconds { get; set; } = D.BuntFieldThrowBaseSeconds;
-        public double BuntPlacementSlope { get; set; } = D.BuntPlacementSlope;
         public double BuntInfieldHitTimeScale { get; set; } = D.BuntInfieldHitTimeScale;
         // バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）
         public double BuntTakeBase { get; set; } = D.BuntTakeBase;
@@ -979,10 +977,19 @@ public static class CoefficientsLoader
         public double BuntPopVelocitySlope { get; set; } = D.BuntPopVelocitySlope;
         public double BuntPopStuffSlope { get; set; } = D.BuntPopStuffSlope;
         public double BuntPopFloor { get; set; } = D.BuntPopFloor;
-        // バント: 一塁走者の封殺（issue bunt-no-take-on-ball-pitches）
-        public double BuntFieldedXM { get; set; } = D.BuntFieldedXM;
-        public double BuntFieldedZM { get; set; } = D.BuntFieldedZM;
-        public double BuntFieldedAtSeconds { get; set; } = D.BuntFieldedAtSeconds;
+        // バント: 打球の物理レース（issue #1092）
+        public double BuntLaunchQualitySkillSlope { get; set; } = D.BuntLaunchQualitySkillSlope;
+        public double BuntLaunchBearingMinDeg { get; set; } = D.BuntLaunchBearingMinDeg;
+        public double BuntLaunchBearingMaxDeg { get; set; } = D.BuntLaunchBearingMaxDeg;
+        public double BuntLaunchSpeedMinMps { get; set; } = D.BuntLaunchSpeedMinMps;
+        public double BuntLaunchSpeedMaxMps { get; set; } = D.BuntLaunchSpeedMaxMps;
+        public double BuntLaunchFirstBaseLineBase { get; set; } = D.BuntLaunchFirstBaseLineBase;
+        public double BuntLaunchLeftBatterFirstBaseLineBonus { get; set; } = D.BuntLaunchLeftBatterFirstBaseLineBonus;
+        public double BuntPitcherChargeFactor { get; set; } = D.BuntPitcherChargeFactor;
+        public double BuntCatcherFieldingReactionPenaltySeconds { get; set; } = D.BuntCatcherFieldingReactionPenaltySeconds;
+        public double BuntBarehandPenaltySeconds { get; set; } = D.BuntBarehandPenaltySeconds;
+        public double BuntForceOutLeadRunnerSafeThreshold { get; set; } = D.BuntForceOutLeadRunnerSafeThreshold;
+        // バント: 小フライの処理野手代表値（issue bunt-no-take-on-ball-pitches。小フライ専用）
         public double BuntFielderThrowSpeedMps { get; set; } = D.BuntFielderThrowSpeedMps;
         public double BuntFielderFieldingLevel { get; set; } = D.BuntFielderFieldingLevel;
         public double BuntForceR1StartDelaySeconds { get; set; } = D.BuntForceR1StartDelaySeconds;
@@ -1015,7 +1022,6 @@ public static class CoefficientsLoader
         public double ThrowScatterShortHopSecPerCm { get; set; } = D.ThrowScatterShortHopSecPerCm;
         public double ThrowScatterCatchingReliefSlope { get; set; } = D.ThrowScatterCatchingReliefSlope;
         public double ThrowScatterCatchingReliefMinFactor { get; set; } = D.ThrowScatterCatchingReliefMinFactor;
-        public double BuntFielderThrowAccuracyLevel { get; set; } = D.BuntFielderThrowAccuracyLevel;
         public double HomeTagSeconds { get; set; } = D.HomeTagSeconds;
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
@@ -1151,8 +1157,6 @@ public static class CoefficientsLoader
             BuntLeftFirstStepBonusSeconds = BuntLeftFirstStepBonusSeconds,
             SacrificeBuntSquareDelaySeconds = SacrificeBuntSquareDelaySeconds,
             SafetyBuntSquareDelaySeconds = SafetyBuntSquareDelaySeconds,
-            BuntFieldThrowBaseSeconds = BuntFieldThrowBaseSeconds,
-            BuntPlacementSlope = BuntPlacementSlope,
             BuntInfieldHitTimeScale = BuntInfieldHitTimeScale,
             BuntTakeBase = BuntTakeBase,
             BuntTakeDistanceSlope = BuntTakeDistanceSlope,
@@ -1168,9 +1172,17 @@ public static class CoefficientsLoader
             BuntPopVelocitySlope = BuntPopVelocitySlope,
             BuntPopStuffSlope = BuntPopStuffSlope,
             BuntPopFloor = BuntPopFloor,
-            BuntFieldedXM = BuntFieldedXM,
-            BuntFieldedZM = BuntFieldedZM,
-            BuntFieldedAtSeconds = BuntFieldedAtSeconds,
+            BuntLaunchQualitySkillSlope = BuntLaunchQualitySkillSlope,
+            BuntLaunchBearingMinDeg = BuntLaunchBearingMinDeg,
+            BuntLaunchBearingMaxDeg = BuntLaunchBearingMaxDeg,
+            BuntLaunchSpeedMinMps = BuntLaunchSpeedMinMps,
+            BuntLaunchSpeedMaxMps = BuntLaunchSpeedMaxMps,
+            BuntLaunchFirstBaseLineBase = BuntLaunchFirstBaseLineBase,
+            BuntLaunchLeftBatterFirstBaseLineBonus = BuntLaunchLeftBatterFirstBaseLineBonus,
+            BuntPitcherChargeFactor = BuntPitcherChargeFactor,
+            BuntCatcherFieldingReactionPenaltySeconds = BuntCatcherFieldingReactionPenaltySeconds,
+            BuntBarehandPenaltySeconds = BuntBarehandPenaltySeconds,
+            BuntForceOutLeadRunnerSafeThreshold = BuntForceOutLeadRunnerSafeThreshold,
             BuntFielderThrowSpeedMps = BuntFielderThrowSpeedMps,
             BuntFielderFieldingLevel = BuntFielderFieldingLevel,
             BuntForceR1StartDelaySeconds = BuntForceR1StartDelaySeconds,
@@ -1199,7 +1211,6 @@ public static class CoefficientsLoader
             ThrowScatterShortHopSecPerCm = ThrowScatterShortHopSecPerCm,
             ThrowScatterCatchingReliefSlope = ThrowScatterCatchingReliefSlope,
             ThrowScatterCatchingReliefMinFactor = ThrowScatterCatchingReliefMinFactor,
-            BuntFielderThrowAccuracyLevel = BuntFielderThrowAccuracyLevel,
             HomeTagSeconds = HomeTagSeconds,
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,

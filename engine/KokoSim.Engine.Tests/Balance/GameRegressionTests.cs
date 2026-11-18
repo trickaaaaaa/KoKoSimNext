@@ -113,10 +113,15 @@ public sealed class GameRegressionTests
         Assert.True(targets.HomeRunRate.Contains(s.HomeRunRate),
             $"（Brainつき）本塁打率 {s.HomeRunRate:P2} が帯外");
 
-        // バント封殺率・スクイズ本塁封殺率（issue bunt-no-take-on-ball-pitches）: ゆるいスモークテスト帯
-        // （判定が暴走して毎回封殺になるような重大バグだけを拾う。到達可能性そのものは単体テストで固定済み）。
+        // バント結果の内訳（issue #1092）: 打球の物理レースで処理点・処理時刻・処理野手を決める
+        // ようになったオーナー決定の目安帯（犠打成功・封殺・内野安打）。スクイズ本塁封殺率は
+        // ゆるいスモークテスト帯のまま（判定が暴走する重大バグだけを拾う。到達可能性は単体テストで固定済み）。
+        Assert.True(targets.SacrificeBuntSuccessRate.Contains(s.SacrificeBuntSuccessRate),
+            $"犠打成功率 {s.SacrificeBuntSuccessRate:P2}（試行 {s.TotalSacrificeBunts}） が帯外");
         Assert.True(targets.BuntForceOutRate.Contains(s.BuntForceOutRate),
             $"バント封殺率 {s.BuntForceOutRate:P2}（試行 {s.TotalSacrificeBunts}） が帯外");
+        Assert.True(targets.BuntInfieldHitRate.Contains(s.BuntInfieldHitRate),
+            $"バント内野安打率 {s.BuntInfieldHitRate:P2}（試行 {s.TotalSacrificeBunts}） が帯外");
         Assert.True(targets.SqueezeRunnerOutAtHomeRate.Contains(s.SqueezeRunnerOutAtHomeRate),
             $"スクイズ本塁封殺率 {s.SqueezeRunnerOutAtHomeRate:P2}（試行 {s.TotalSqueezeBallInPlay}） が帯外");
     }

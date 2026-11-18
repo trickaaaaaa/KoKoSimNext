@@ -20,6 +20,8 @@ namespace KokoSim.Engine.Tests.Match.Game;
 public sealed class SqueezeFailureTests
 {
     private static readonly FieldGeometry Field = new();
+    private static readonly System.Collections.Generic.IReadOnlyList<Fielder> Fielders = Field.StandardAlignment();
+    private static readonly KokoSim.Engine.Match.Fielding.FieldingCoefficients FieldingCoeff = new();
     private static readonly BatterAttributes Batter = new() { Contact = 55 };
     private static readonly PitcherAttributes Pitcher = PitcherAttributes.LeagueAverage;
     private static readonly Player Bunter = new() { Bunt = 55, Speed = 60 };
@@ -111,12 +113,12 @@ public sealed class SqueezeFailureTests
         var sawMiss = false;
         for (var i = 0; i < 2000 && !(sawFoul && sawMiss); i++)
         {
-            var o = SqueezeResolver.Resolve(Bunter, ThirdRunner, Pitcher, 0.0, 0.0, null, null, Field, 0.0, c, rng);
+            var o = SqueezeResolver.Resolve(Bunter, ThirdRunner, Pitcher, 0.0, 0.0, null, null, Field, Fielders, FieldingCoeff, 0.0, c, rng);
             if (o.Bunt == BuntResult.Foul) { Assert.False(o.RunnerOut); Assert.False(o.Wasted); sawFoul = true; }
             if (o.Bunt == BuntResult.MissedBunt) { Assert.True(o.RunnerOut); Assert.False(o.Wasted); sawMiss = true; }
         }
         Assert.True(sawFoul && sawMiss);
-        var w = SqueezeResolver.Resolve(Bunter, ThirdRunner, Pitcher, 0.0, 0.0, null, null, Field, 1.0, c, rng);
+        var w = SqueezeResolver.Resolve(Bunter, ThirdRunner, Pitcher, 0.0, 0.0, null, null, Field, Fielders, FieldingCoeff, 1.0, c, rng);
         Assert.True(w.Wasted);
         Assert.True(w.RunnerOut);
     }

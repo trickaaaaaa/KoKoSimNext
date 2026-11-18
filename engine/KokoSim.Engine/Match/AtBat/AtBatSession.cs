@@ -378,8 +378,8 @@ public sealed class AtBatSession
             // bases.Third を無条件に渡す）なので、通常バント（非スクイズ）でもそのまま満塁の本塁封殺判定に使える。
             var bunt = BuntResolver.Resolve(
                 batterPlayer, pitcher, plan.Stuff, courseDifficulty, safety,
-                _runnersNow.First, _runnersNow.Second, _runnersNow.Third, ctx.Field, ctx.Baserunning, rng,
-                out _buntThrowScatter);
+                _runnersNow.First, _runnersNow.Second, _runnersNow.Third, ctx.Field, fielders, ctx.Fielding,
+                ctx.Baserunning, rng, out _buntThrowScatter, out _buntFielding, batterSide: batter.Bats);
             switch (bunt)
             {
                 case BuntResult.MissedBunt:
@@ -442,7 +442,8 @@ public sealed class AtBatSession
             var squeezeCourseDifficulty = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y);
             var sq = SqueezeResolver.Resolve(
                 batterPlayer, thirdRunner, pitcher, plan.Stuff, squeezeCourseDifficulty,
-                _runnersNow.First, _runnersNow.Second, ctx.Field, wasteProb, ctx.Baserunning, rng);
+                _runnersNow.First, _runnersNow.Second, ctx.Field, fielders, ctx.Fielding,
+                wasteProb, ctx.Baserunning, rng);
 
             // バントが不成立（sq.Bunt が MissedBunt / Foul）。issue #1061 で3つに分けた:
             //  ① ウエスト（外された球）: ボール。打者はバットを出せず、飛び出した三塁走者は挟殺される。
@@ -776,10 +777,16 @@ public sealed class AtBatSession
     /// </summary>
     /// <summary>直近のバント処理の送球の逸れ（issue #859。<see cref="AtBatResult.BuntThrowScatter"/> へ写す）。</summary>
     private Fielding.ThrowScatterModel.Scatter? _buntThrowScatter;
+    /// <summary>直近のバント処理の物理レース結果（issue #1092。<see cref="AtBatResult.BuntFielding"/> へ写す）。</summary>
+    private BuntResolver.BuntFielding? _buntFielding;
 
     private PitchResolution FinishBunt(PlateAppearanceResult result, BuntResult bunt)
     {
-        _result = new AtBatResult(result, _pitchCount) { PitchLog = _pitchLog, BuntOutcome = bunt, BuntThrowScatter = _buntThrowScatter };
+        _result = new AtBatResult(result, _pitchCount)
+        {
+            PitchLog = _pitchLog, BuntOutcome = bunt,
+            BuntThrowScatter = _buntThrowScatter, BuntFielding = _buntFielding,
+        };
         return new PitchResolution(EndsPlateAppearance: true);
     }
 

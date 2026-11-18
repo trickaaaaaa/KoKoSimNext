@@ -515,9 +515,7 @@ baserunning:
   bunt_left_first_step_bonus_seconds: 0.13
   sacrifice_bunt_square_delay_seconds: 0.35  # 犠打は早く構えて走り出しが遅い
   safety_bunt_square_delay_seconds: 0.12     # セーフティは走りながら転がす
-  bunt_field_throw_base_seconds: 3.70        # コーナー突進＋素手＋短距離送球
-  bunt_placement_slope: 0.006                # 好バントほど処理が遅れる
-  bunt_infield_hit_time_scale: 0.14          # margin→確率のlogistic幅
+  bunt_infield_hit_time_scale: 0.14          # margin→確率のlogistic幅（defenseTimeは物理レースの処理点から引く, issue #1092）
   # バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）。スクイズは対象外（一球でコミット）
   bunt_take_base: 0.20
   bunt_take_distance_slope: 1.2
@@ -534,11 +532,26 @@ baserunning:
   bunt_pop_velocity_slope: 0.0008
   bunt_pop_stuff_slope: 0.012
   bunt_pop_floor: 0.02
-  # バント: 一塁走者の封殺（フォースアウト, issue bunt-no-take-on-ball-pitches）。処理点は「誰が処理したか」
-  # を特定しない簡略化（bunt_field_throw_base_seconds と同じ抽象レベル）。三塁走者→本塁のスクイズ判定も共有
-  bunt_fielded_x_m: -4.0
-  bunt_fielded_z_m: 8.0
-  bunt_fielded_at_seconds: 0.90
+  # バント: 打球の物理レース（issue #1092）。強さ（初速）と方向（方位、+X=一塁側/−X=三塁側）を打者のバント
+  # 技術から引き、既存のゴロ転がりモデル（fielding.roll_decel_mps2等）へそのまま通す。処理野手（投手/捕手/
+  # 一塁手/三塁手）はこの転がりへの到達レースで決める＝新しい物理式は発明しない。
+  bunt_launch_quality_skill_slope: 0.004     # 品質（0=投手前へ強く・1=ラインぎわへ弱く）の技術連動
+  bunt_launch_bearing_min_deg: 5.0           # 方位の下限（品質0）
+  bunt_launch_bearing_max_deg: 40.0          # 方位の上限（品質1）
+  bunt_launch_speed_min_mps: 2.0             # 初速の下限（品質1=ほぼ死んだバント）
+  bunt_launch_speed_max_mps: 7.0             # 初速の上限（品質0=強い投手前）
+  bunt_launch_first_base_line_base: 0.50     # 方位が一塁側になる基準確率
+  bunt_launch_left_batter_first_base_line_bonus: 0.15  # 左打者のドラッグボーナス
+  # bunt_pitcher_charge_factor / bunt_barehand_penalty_seconds はヘッドレスMonteCarlo実測（issue #1092）で校正:
+  # 犠打成功68.7% / 封殺7.3% / 内野安打4.2%（オーナー決定2026-11-17の目安70-80/5-10/5-10に合致）。
+  # 投手が充分前へ出ないと二塁封殺の送球が本塁側から長くなり届かず、出過ぎると球自体に追いつくのが遅れる
+  # （中間の0.25が実測で最良）。
+  bunt_pitcher_charge_factor: 0.25           # 投手の処理チャージ係数（投球フォロースルーの前進）
+  bunt_catcher_fielding_reaction_penalty_seconds: 0.30 # 捕手がしゃがみから反応する追加遅延[s]
+  bunt_barehand_penalty_seconds: 0.75         # 素手で処理する手間[s]（捕ってから送球に移れるまで）
+  bunt_force_out_lead_runner_safe_threshold: 0.35      # 前の走者を狙う判断のしきい値（オーナー決定2026-11-17）
+  # バント: 小フライの処理野手代表値（issue bunt-no-take-on-ball-pitches）。小フライは常に捕手が捕る簡略化で、
+  # 上の物理レースとは無関係＝誰が処理したか特定しない簡略化のまま。
   bunt_fielder_throw_speed_mps: 30.0
   bunt_fielder_fielding_level: 50.0
   bunt_force_r1_start_delay_seconds: 0.15
@@ -592,8 +605,6 @@ baserunning:
   throw_scatter_short_hop_sec_per_cm: 0.0015
   throw_scatter_catching_relief_slope: 0.004
   throw_scatter_catching_relief_min_factor: 0.60
-  # バント処理野手の代表送球精度。既定50＝「誰が処理したか特定しない」簡略化と恒等（帯不変）。
-  bunt_fielder_throw_accuracy_level: 50.0
   home_tag_seconds: 0.28                      # issue #1139: 0.12→0.28（捕手ブロック込みでやや長め）。home_success_bias/tag_up_success_bias を増分(0.16)差し引いてmargin不変
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅

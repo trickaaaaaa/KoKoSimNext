@@ -81,11 +81,6 @@ public static class TimelineBuilder
     /// 確定済み＝矛盾ガード。design-14は「捕り損ねたが刺した」場合を区別しないため、このビルダーは
     /// 常に出塁の絵になる）。</summary>
     private const double DropThirdStrikeThrowGuardSeconds = 0.15;
-    /// <summary>バント（issue #490）: 処理点＝本塁からマウンド方向へこの距離[m]（コメバッカー想定の演出用固定値）。
-    /// <see cref="BuntResolver"/>/<see cref="SqueezeResolver"/> は転がる方向を持たないため、投手が処理する
-    /// 単純化した絵にする（design-18 §4.5-③/⑨: 秒は判定と同一の分解で組み、絵のために別秒を発明しない —
-    /// ただし方向はどのみち判定に無いので、ここだけは演出用に決め打つ）。</summary>
-    private const double BuntFieldPointM = 6.0;
     /// <summary>バント: 小フライの頂点高さ[m]（演出用の固定値）。落下点・滞空秒は
     /// <see cref="BaserunningCoefficients.BuntPopFieldedZM"/>/<see cref="BaserunningCoefficients.BuntPopHangSeconds"/>
     /// へ昇格済み（issue bunt-no-take-on-ball-pitches。判定層のライナー併殺判定と共有する単一ソース＝判定と絵を
@@ -1742,11 +1737,10 @@ public static class TimelineBuilder
     /// <paramref name="result"/> を渡すだけで、ここでは新たな抽選をしない。
     ///
     /// <para><see cref="BuildPickoff"/>/<see cref="BuildBatteryMiss"/> と同様「時間の勝負」を持たない
-    /// 判定（成否のみのベルヌーイ試行）なので、絵の秒（転がり・処理・送球）は新規に組む。ただし
-    /// 内野安打/犠打の境目は <see cref="BuntResolver.InfieldHitProbability"/> と同じ内訳
-    /// （<see cref="BaserunningCoefficients.BuntBaseDistanceM"/> 等）を再利用し、絵のためだけの別秒は
-    /// 発明しない（design-18 §4.5-③/⑨）。転がる方向は判定に無い（BuntResolver は持たない）ため、
-    /// 常に投手が前進して処理するコメバッカーとして単純化する。</para>
+    /// 判定（成否のみのベルヌーイ試行）なので、絵の秒（転がり・処理・送球）は新規に組まない。処理野手・
+    /// 処理点・処理時刻は <paramref name="fielding"/>（<see cref="BuntResolver.RollFielding"/> の物理レース,
+    /// issue #1092）をそのまま使い、送球は封殺の各枝と同じ <see cref="HomePlayResolver.ResolveThrowPath"/>
+    /// 経由＝絵のためだけの別秒は発明しない（design-18 §4.5-③/⑨）。</para>
     ///
     /// <para>走者の進塁は、呼び出し元が <see cref="GameEngine.AdvanceOnBunt"/> 前後で控えた塁ごとの
     /// 走者参照を突き合わせて判定する（<paramref name="preFirst"/> と <paramref name="postFirst"/> の参照が
@@ -1755,13 +1749,29 @@ public static class TimelineBuilder
     /// 同じ突き合わせ方でバント・スクイズ両方を1つの関数でまかなえる。</para></summary>
     /// <param name="isSqueeze">実況キャプションの文言だけを変える（表示専用）。</param>
     /// <param name="batterSide">この打席で立つ打席側（<see cref="HandednessExtensions.EffectiveBats"/> 解決済み。null＝打者の <c>Bats</c>）。</param>
+    /// <param name="fielding">
+    /// 判定が物理レースで決めた処理野手・処理点・処理時刻（<see cref="BuntResolver.RollFielding"/>, issue #1092）。
+    /// 封殺（ForceOutAt*）・犠打成功・内野安打の絵はこの値をそのまま使う＝「判定＝絵」原則（design-18 §4.5-③）。
+    /// null＝未指定（ランナー進塁の配線だけを見るテスト等の便宜）: <see cref="DefaultFielding"/> の投手処理で代用する。
+    /// </param>
+    /// <summary><see cref="BuildBunt"/> の <c>fielding</c> 省略時の既定値（テスト便宜。issue #1092）。
+    /// 投手がマウンドとホームの中間あたりで平均的な肩・守備で処理したとみなす代表値＝新しい判定式は発明しない
+    /// （BuntResolver.RollFielding を呼ばない固定点なので、本番経路では必ず実レースの値を渡すこと）。</summary>
+    private static BuntResolver.BuntFielding DefaultFielding(BaserunningCoefficients c)
+        => new(
+            FieldPosition.Pitcher,
+            new HomePlaySituation(new Core.Vector3D(0, 0, 6.0), 0.9, Players.FielderAttributes.LeagueAverage.ThrowSpeedMps),
+            LaunchSpeedMps: 0.0, LaunchBearingDeg: 0.0);
+
     public static PlayTimeline BuildBunt(
         Player batter, IReadOnlyList<Fielder> fielders, BuntResult result,
         Player? preFirst, Player? preSecond, Player? preThird,
         Player? postFirst, Player? postSecond, Player? postThird,
-        BaserunningCoefficients c, FieldGeometry field, bool isSqueeze = false, Handedness? batterSide = null)
+        BaserunningCoefficients c, FieldGeometry field, bool isSqueeze = false, Handedness? batterSide = null,
+        BuntResolver.BuntFielding? fielding = null)
     {
         var side = batterSide ?? batter.Bats;
+        var resolvedFielding = fielding ?? DefaultFielding(c);
         var firstPt = BasePoint(field, "first");
         var ball = new List<BallSegment>
         {
@@ -1829,9 +1839,9 @@ public static class TimelineBuilder
         else if (result == BuntResult.ForceOutAtSecond)
         {
             // 一塁走者の封殺（issue bunt-no-take-on-ball-pitches）: 判定層と同じ処理点・処理時刻
-            // （BuntResolver.FieldedSituation）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
+            // （物理レースの結果 resolvedFielding, issue #1092）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
             // 使う＝判定と絵を食い違わせない（design-18の「判定＝絵」原則と同型）。
-            var situation = BuntResolver.FieldedSituation(c);
+            var situation = resolvedFielding.Situation;
             var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
             var secondPt = BasePoint(field, "second");
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
@@ -1855,11 +1865,11 @@ public static class TimelineBuilder
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = secondPt,
-                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.SecondBase, ToBase = "second",
+                FromRole = resolvedFielding.Fielder, ToRole = FieldPosition.SecondBase, ToBase = "second",
             });
             moves.Add(new FielderMove
             {
-                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+                Role = resolvedFielding.Fielder, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
             });
             moves.Add(new FielderMove
             {
@@ -1888,9 +1898,9 @@ public static class TimelineBuilder
         else if (result == BuntResult.ForceOutAtThird)
         {
             // 二塁走者の封殺（1・2塁の真のフォースのみ）: 一塁走者の封殺と同じ処理点・処理時刻
-            // （BuntResolver.FieldedSituation）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
+            // （物理レースの結果 resolvedFielding, issue #1092）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
             // 三塁向けに使う＝判定と絵を食い違わせない（design-18の「判定＝絵」原則と同型）。
-            var situation = BuntResolver.FieldedSituation(c);
+            var situation = resolvedFielding.Situation;
             var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
             var thirdPt = BasePoint(field, "third");
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
@@ -1912,11 +1922,11 @@ public static class TimelineBuilder
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = thirdPt,
-                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.ThirdBase, ToBase = "third",
+                FromRole = resolvedFielding.Fielder, ToRole = FieldPosition.ThirdBase, ToBase = "third",
             });
             moves.Add(new FielderMove
             {
-                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+                Role = resolvedFielding.Fielder, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
             });
             moves.Add(new FielderMove
             {
@@ -1945,9 +1955,9 @@ public static class TimelineBuilder
         else if (result == BuntResult.ForceOutAtHome)
         {
             // 三塁走者の封殺（満塁の真のフォースのみ）: 一塁・二塁走者の封殺と同じ処理点・処理時刻
-            // （BuntResolver.FieldedSituation）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
+            // （物理レースの結果 resolvedFielding, issue #1092）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
             // 本塁向けに使う＝判定と絵を食い違わせない（design-18の「判定＝絵」原則と同型）。
-            var situation = BuntResolver.FieldedSituation(c);
+            var situation = resolvedFielding.Situation;
             var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
             var throwPath = HomePlayResolver.ResolveThrowPath(situation, new Core.Vector3D(0, 0, 0), c);
@@ -1968,11 +1978,11 @@ public static class TimelineBuilder
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = Home,
-                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.Catcher, ToBase = "home",
+                FromRole = resolvedFielding.Fielder, ToRole = FieldPosition.Catcher, ToBase = "home",
             });
             moves.Add(new FielderMove
             {
-                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+                Role = resolvedFielding.Fielder, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
             });
             moves.Add(new FielderMove
             {
@@ -2000,44 +2010,34 @@ public static class TimelineBuilder
         }
         else
         {
-            var fieldPt = new TimelinePoint(0, BuntFieldPointM);
-            // BuntResolver.InfieldHitProbability と同じ内訳（安全側でセーフティではなく犠打の構え遅延を使う。
-            // 呼び出し元は safety フラグを保持していないため、既定として犠打側で揃える＝絵の近似）。
-            var handednessBonus = BuntResolver.FirstStepBonusSeconds(side, c);
-            var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
-                + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
-            var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
+            // 犠打成功/内野安打（issue #1092）: 判定層と同じ処理点・処理時刻（resolvedFielding）＋送球経路の
+            // 単一ソース（HomePlayResolver.ResolveThrowPath）を使う＝封殺の各枝と同型（design-18の「判定＝絵」原則）。
+            // 呼び出し元は safety フラグを保持していないため、打者の駆け抜けは既定として犠打側で揃える（絵の近似）。
+            var situation = resolvedFielding.Situation;
+            var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
+            var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
+            var throwPath = HomePlayResolver.ResolveThrowPath(situation, field.FirstBase, c);
+            var throwArrive = ContactAt + throwPath.ArriveAtSeconds;
+            var throwRelease = ContactAt + throwPath.ReleaseAtSeconds;
 
-            var throwArriveRaw = ContactAt + defenseTime;
-            var batterArrive = ContactAt + battingTime;
+            var battingTime = BuntResolver.BatterToFirstSeconds(batter, safety: false, side, c);
+            var batterArriveRaw = ContactAt + battingTime;
             var safe = result == BuntResult.InfieldHit;
-            // 矛盾ガード（BuildDropThirdStrikeと同じ考え方）: 確定済みの結果と食い違う到達順にしない。
-            var throwArrive = safe
-                ? Math.Max(throwArriveRaw, batterArrive + BuntThrowGuardSeconds)
-                : Math.Min(throwArriveRaw, batterArrive - BuntThrowGuardSeconds);
-
-            // 送球の秒は速さから出す（issue #1089）。判定の秒（defenseTime）は内訳を持たないので、旧実装は残りを
-            // 全部送球の飛翔に割り当てており、約1.7秒の山なりになっていた。到達時刻（＝判定の秒・打者との先着順）は
-            // そのままに、飛翔＝距離÷バント処理野手の送球速度・その前に握り替え（封殺の送球と同じ
-            // ResolveThrowPath の握り替え秒）を置き、残りの時間は転がり（処理点に着くまで）を長くして吸収する。
-            var throwFlight = Distance(fieldPt, firstPt) / c.BuntFielderThrowSpeedMps;
-            var transfer = c.OutfieldTransferSeconds * new Players.FielderAttributes { Fielding = (int)c.BuntFielderFieldingLevel }
-                .TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-            // 転がりは封殺の処理時刻（BuntFieldedAtSeconds）より短くしない。届かないほど到達が早い場合だけ
-            // 到達を後ろへずらす（犠打成功の矛盾ガードより処理の物理を優先する旧実装の fieldAt+0.05 と同じ考え方）。
-            var fieldAt = Math.Max(ContactAt + c.BuntFieldedAtSeconds, throwArrive - throwFlight - transfer);
-            throwArrive = Math.Max(throwArrive, fieldAt + transfer + throwFlight);
-            var throwRelease = throwArrive - throwFlight;
+            // 矛盾ガード（他の封殺枝と同じ考え方): 確定済みの結果と食い違う到達順にしない。送球は物理レースの
+            // 実値のまま（ここをずらすと「投げる前に捕っていない」絵になりうる）＝打者の駆け抜け側をずらす。
+            var batterArrive = safe
+                ? Math.Min(batterArriveRaw, throwArrive - BuntThrowGuardSeconds)
+                : Math.Max(batterArriveRaw, throwArrive + BuntThrowGuardSeconds);
 
             ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Throw, T0 = throwRelease, T1 = throwArrive, From = fieldPt, To = firstPt,
-                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.FirstBase, ToBase = "first",
+                FromRole = resolvedFielding.Fielder, ToRole = FieldPosition.FirstBase, ToBase = "first",
             });
             moves.Add(new FielderMove
             {
-                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+                Role = resolvedFielding.Fielder, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
             });
             moves.Add(new FielderMove
             {
