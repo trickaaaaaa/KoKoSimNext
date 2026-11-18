@@ -2365,6 +2365,7 @@ public static class GameEngine
             // コースのゲートは Chance の後段（&& の第2項）に置く＝乱数消費の位置と回数を従来と揃える。
             var droppedThirdStrikeReached = false;
             Player? dtsFirst = null, dtsSecond = null, dtsThird = null;
+            var rbiRuns = runs; // 振り逃げで生還した走者は打点にしない（打席ログの得点には数える）
             if (res.Result == PlateAppearanceResult.Strikeout && (bases.First is null || outs == 2)
                 && paBaserunning.DropThirdStrikeReachProb > 0.0)
             {
@@ -2395,6 +2396,7 @@ public static class GameEngine
                         runsThisHalf += dtsRuns;
                         offense.RecordRun(dtsThird);
                         ChargeRunnerScored(dtsThird);
+                        runs += dtsRuns; // 打席ログの得点（走者保存則）。スコア・失点は上で加算済み＝二重にしない
                     }
                     offense.DroppedThirdStrikeCount++;
                     // 再生データ（issue #488）: この球は三振確定後の後処理として判定されるため p.LastPitch を
@@ -2479,7 +2481,7 @@ public static class GameEngine
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
                 batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
                 pitcherRuns: ownRunsThisPa,
-                play: res.Play);
+                play: res.Play, rbi: rbiRuns);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -2559,7 +2561,8 @@ public static class GameEngine
         int unearnedRuns = 0,
         Match.Fielding.FieldingPlay? play = null,
         bool isSacBunt = false,
-        int? pitcherRuns = null)
+        int? pitcherRuns = null,
+        int? rbi = null)
     {
         if (result.IsHit()) offense.AddHit();
         // 外野手のファンブル（issue #811）は安打のまま失策も記録する＝「安打＋失策」の両立。
@@ -2568,7 +2571,7 @@ public static class GameEngine
         {
             defense.RecordFieldingError(errorFielder, errorRole);
         }
-        offense.RecordBatting(batter, result, runs, isSacFly, isSacBunt);
+        offense.RecordBatting(batter, result, rbi ?? runs, isSacFly, isSacBunt);
         offense.RecordMatchup(batter, pitcher);   // 慣れの蓄積（設計書02 §2.3b）
         // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
         PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay

@@ -887,7 +887,7 @@ public sealed class BaserunningPlaysTests
             foreach (var e in r.Log)
             {
                 var dropped = e.Result == PlateAppearanceResult.Strikeout && e.OutsThisPa == 0;
-                var scoredOnDrop = dropped && e.BaseThirdBefore ? 1 : 0;
+                if (dropped && e.BaseThirdBefore) Assert.Equal(1, e.RunsScored); // 打席ログの得点に数える（走者保存則）
                 if (dropped)
                 {
                     Assert.True(e.BaseFirstAfter, "振り逃げの打者が一塁にいない");
@@ -897,8 +897,8 @@ public sealed class BaserunningPlaysTests
                     if (e.BaseSecondBefore) dropsWithSecond++;
                     if (e.BaseFirstBefore) dropsWithFirst++;
                 }
-                if (e.IsTop) expectedAway += e.RunsScored + scoredOnDrop;
-                else expectedHome += e.RunsScored + scoredOnDrop;
+                if (e.IsTop) expectedAway += e.RunsScored;
+                else expectedHome += e.RunsScored;
             }
             Assert.Equal(expectedAway, r.AwayRuns);
             Assert.Equal(expectedHome, r.HomeRuns);
