@@ -249,6 +249,8 @@ namespace KokoSim.Unity.Components
         {
             KokoSim.Engine.Season.TrainingMenu.Batting => "batting",
             KokoSim.Engine.Season.TrainingMenu.PowerHitting => "power",
+            KokoSim.Engine.Season.TrainingMenu.FlyBallHitting => "flyball",
+            KokoSim.Engine.Season.TrainingMenu.GroundBallHitting => "groundball",
             KokoSim.Engine.Season.TrainingMenu.PlateDiscipline => "discipline",
             KokoSim.Engine.Season.TrainingMenu.Strength => "strength",
             KokoSim.Engine.Season.TrainingMenu.Defense => "defense",

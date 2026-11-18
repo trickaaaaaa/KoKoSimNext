@@ -11,7 +11,11 @@ namespace KokoSim.Engine.Season;
 /// ・足(Speed) のみ素質固定＝フラット（&lt;1.0でほぼ伸びない）。
 /// ・技術で決まる能力（守備・捕球・選球眼・制球・キレ・バント・送球精度・ミート）は相対的に伸びやすい（&gt;1.0）。
 /// ・球速(Velocity) は 1.0 固定。「入学時130→3年で150」の伸びは環境倍率が担う（#115）。素質と混ぜない。
-/// ・弾道(LaunchTendency) は型属性のため触らない（1.0）。
+/// ・弾道(LaunchTendency) は型属性だが issue #1166 で専用メニュー（FlyBallHitting/GroundBallHitting）から
+///   両方向に少し動けるようにした。「そんなには伸びない」監督方針のため0.5に絞る（他の技術系より低い）。
+///   1年ほぼ専念（42週・施設/指導力は中立点）した実測: 上げ+8 / 下げ−12（非対称は必要exp曲線を
+///   上げ下げ対称に数える仕組み上の自然な結果＝低い方の必要expが小さいぶん下げが速い。DevelopmentModel.ApplyLaunchTendencyExp）。
+///   値はたたき台（PRで監督に確認・要なら再校正）。
 /// </summary>
 public sealed record TrainabilityCoefficients
 {
@@ -19,7 +23,7 @@ public sealed record TrainabilityCoefficients
     // 未設定の能力（Velocity/Stamina/Power/ArmStrength/Steal/Baserunning/LaunchTendency）は1.0固定。
     public double Contact { get; init; } = 1.15;
     public double Power { get; init; } = 1.0;
-    public double LaunchTendency { get; init; } = 1.0;
+    public double LaunchTendency { get; init; } = 0.5;
     public double Discipline { get; init; } = 1.20;
     public double Speed { get; init; } = 0.4;
     public double ArmStrength { get; init; } = 1.0;

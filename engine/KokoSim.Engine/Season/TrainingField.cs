@@ -33,6 +33,9 @@ public static class TrainingFields
         TrainingMenu.PlateDiscipline => TrainingField.Batting,
         // 筋力トレは主効果がパワー＝打撃の道具（ティー・マシン）と同じ棚に置く。
         TrainingMenu.Strength => TrainingField.Batting,
+        // 弾道専用メニュー（issue #1166）も打撃の道具棚。
+        TrainingMenu.FlyBallHitting => TrainingField.Batting,
+        TrainingMenu.GroundBallHitting => TrainingField.Batting,
 
         TrainingMenu.Defense => TrainingField.Defense,
         TrainingMenu.Throwing => TrainingField.Defense,

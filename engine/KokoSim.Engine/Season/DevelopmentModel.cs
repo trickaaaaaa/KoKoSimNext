@@ -77,12 +77,24 @@ public static class DevelopmentModel
             }
             var eff = TrainingMenus.Effects(menu);
             if (eff.Main is { } mainAbility)
-                ApplyExp(p, mainAbility, common * scale * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
+            {
+                var delta = common * scale * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
                     * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
-                    * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor), c);
+                    * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor);
+                if (mainAbility == AbilityKind.LaunchTendency)
+                    ApplyLaunchTendencyExp(p, delta, eff.MainDirection, c);
+                else
+                    ApplyExp(p, mainAbility, delta, c);
+            }
             foreach (var subAbility in eff.Subs)
-                ApplyExp(p, subAbility, common * scale * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
-                    * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
+            {
+                var delta = common * scale * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
+                    * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
+                if (subAbility == AbilityKind.LaunchTendency)
+                    ApplyLaunchTendencyExp(p, delta, GrowthDirection.Up, c);
+                else
+                    ApplyExp(p, subAbility, delta, c);
+            }
             // 守備位置適性は守備・走塁分野（Defense 指導力）で駆動する。
             foreach (var (pos, weight) in eff.Aptitudes)
                 ApplyAptitudeExp(p, pos, common * scale * defenseStage * weight * defenseAdj, c);
@@ -171,12 +183,24 @@ public static class DevelopmentModel
         var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
 
         if (eff.Main is { } mainAbility)
-            ApplyExp(p, mainAbility, common * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
+        {
+            var delta = common * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
                 * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
-                * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor), c);
+                * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor);
+            if (mainAbility == AbilityKind.LaunchTendency)
+                ApplyLaunchTendencyExp(p, delta, eff.MainDirection, c);
+            else
+                ApplyExp(p, mainAbility, delta, c);
+        }
         foreach (var subAbility in eff.Subs)
-            ApplyExp(p, subAbility, common * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
-                * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
+        {
+            var delta = common * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
+                * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
+            if (subAbility == AbilityKind.LaunchTendency)
+                ApplyLaunchTendencyExp(p, delta, GrowthDirection.Up, c);
+            else
+                ApplyExp(p, subAbility, delta, c);
+        }
         // 守備位置適性（設計書01 §1.1）: 守備分野の伸びしろを乗せる（Defense 指導力）。
         foreach (var (pos, weight) in eff.Aptitudes)
             ApplyAptitudeExp(p, pos, common * defenseStage * weight * defenseAdj, c);
@@ -259,6 +283,51 @@ public static class DevelopmentModel
         if (p.Level(ability) >= p.Cap(ability))
         {
             p.ConsumeExp(ability, p.Exp(ability));
+        }
+    }
+
+    /// <summary>
+    /// 弾道(LaunchTendency)専用の経験値加算（設計書03 §3.1・issue #1166）。弾道はゴロ型〜フライ型の
+    /// タイプ軸（優劣軸ではない, design-01 §1.2）なので、生成時に能力ごとに振られる才能上限
+    /// （<see cref="DevelopingPlayer.Cap"/>）は見ない＝両方向とも表示レンジそのもの[1,99]を天井/床にする
+    /// （フライ側だけ才能上限で止まり、ゴロ側は無制限というのは筋が通らないため・監督方針）。
+    /// 必要expは上げ向きと対称（下げ向き v→v−1 の必要exp = <see cref="TrainingCoefficients.RequiredExp"/>(v−1)）。
+    /// exp は方向に関係なく同じ蓄積（<see cref="DevelopingPlayer.Exp"/>）を使う＝方向を切り替えても
+    /// 蓄積した「動かす圧力」自体は引き継ぐ（能力値アーキテクチャを増やさない最小実装）。乱数は使わない。
+    /// </summary>
+    internal static void ApplyLaunchTendencyExp(DevelopingPlayer p, double delta, GrowthDirection direction, TrainingCoefficients c)
+    {
+        const int Floor = 1;
+        const int Ceiling = 99;
+        const AbilityKind ability = AbilityKind.LaunchTendency;
+
+        var scaled = delta * p.GrowthMultiplier(ability) * c.Trainability.LaunchTendency;
+
+        if (direction == GrowthDirection.Up)
+        {
+            if (p.Level(ability) >= Ceiling) return;
+            p.AddExp(ability, scaled);
+            while (p.Level(ability) < Ceiling)
+            {
+                var required = c.RequiredExp(p.Level(ability));
+                if (p.Exp(ability) < required) break;
+                p.ConsumeExp(ability, required);
+                p.IncrementLevel(ability);
+            }
+            if (p.Level(ability) >= Ceiling) p.ConsumeExp(ability, p.Exp(ability));
+        }
+        else
+        {
+            if (p.Level(ability) <= Floor) return;
+            p.AddExp(ability, scaled);
+            while (p.Level(ability) > Floor)
+            {
+                var required = c.RequiredExp(p.Level(ability) - 1);
+                if (p.Exp(ability) < required) break;
+                p.ConsumeExp(ability, required);
+                p.DecrementLevel(ability);
+            }
+            if (p.Level(ability) <= Floor) p.ConsumeExp(ability, p.Exp(ability));
         }
     }
 

@@ -177,7 +177,8 @@ namespace KokoSim.Unity.Training
         // （配分しなかった分＝残りが自動的に休養に相当する）。
         private static readonly TrainingMenu[] EditableMenus =
         {
-            TrainingMenu.Batting, TrainingMenu.PowerHitting, TrainingMenu.PlateDiscipline, TrainingMenu.Strength,
+            TrainingMenu.Batting, TrainingMenu.PowerHitting, TrainingMenu.FlyBallHitting, TrainingMenu.GroundBallHitting,
+            TrainingMenu.PlateDiscipline, TrainingMenu.Strength,
             TrainingMenu.Defense, TrainingMenu.Throwing, TrainingMenu.BaseRunning, TrainingMenu.Bunt,
             TrainingMenu.Pitching, TrainingMenu.BreakingBall, TrainingMenu.VelocityTraining, TrainingMenu.Running,
         };
@@ -186,7 +187,8 @@ namespace KokoSim.Unity.Training
         // 行ごとに同じ順で並べることで、縦スキャンで選手間の配分差を比較できる（UI原則①⑥）。休養は除外＝余白。
         private static readonly TrainingMenu[] BarMenuOrder =
         {
-            TrainingMenu.Batting, TrainingMenu.PowerHitting, TrainingMenu.PlateDiscipline, TrainingMenu.Strength,
+            TrainingMenu.Batting, TrainingMenu.PowerHitting, TrainingMenu.FlyBallHitting, TrainingMenu.GroundBallHitting,
+            TrainingMenu.PlateDiscipline, TrainingMenu.Strength,
             TrainingMenu.Defense, TrainingMenu.Throwing, TrainingMenu.BaseRunning, TrainingMenu.Bunt,
             TrainingMenu.Pitching, TrainingMenu.BreakingBall, TrainingMenu.VelocityTraining, TrainingMenu.Running,
             TrainingMenu.DefenseP, TrainingMenu.DefenseC, TrainingMenu.Defense1B, TrainingMenu.Defense2B,
@@ -784,6 +786,8 @@ namespace KokoSim.Unity.Training
         {
             TrainingMenu.Batting => "打撃",
             TrainingMenu.PowerHitting => "長打",
+            TrainingMenu.FlyBallHitting => "フライ打撃",
+            TrainingMenu.GroundBallHitting => "ゴロ打撃",
             TrainingMenu.PlateDiscipline => "選球",
             TrainingMenu.Strength => "筋力",
             TrainingMenu.BaseRunning => "走塁",
@@ -814,6 +818,8 @@ namespace KokoSim.Unity.Training
         {
             TrainingMenu.Batting => "打",
             TrainingMenu.PowerHitting => "長",
+            TrainingMenu.FlyBallHitting => "飛",
+            TrainingMenu.GroundBallHitting => "地",
             TrainingMenu.PlateDiscipline => "選",
             TrainingMenu.Strength => "筋",
             TrainingMenu.BaseRunning => "走",
