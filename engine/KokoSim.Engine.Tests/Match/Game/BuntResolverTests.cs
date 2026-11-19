@@ -342,4 +342,72 @@ public sealed class BuntResolverTests
         Assert.True(slowRunner > 0.0, "鈍足一塁走者でも小フライ併殺が一度も出ない");
         Assert.True(slowRunner > fastRunner, $"一塁走者の走力で小フライ併殺率が下がらない: slow={slowRunner:P2} fast={fastRunner:P2}");
     }
+
+    // ── ⑧投球が打球の強さ・方向に効く（issue #1180） ──
+
+    private static double VeloPenaltyKmh(double velocityKmh)
+        => System.Math.Max(0.0, velocityKmh - C.BuntVelocityRefKmh);
+
+    [Fact]
+    public void RollFielding_FastBall_GivesStrongerRollAndEarlierFielding_ThanSlowBall_SameRng()
+    {
+        var batter = new Player { Bunt = 55 };
+        var fasterCount = 0;
+        for (ulong seed = 1; seed <= 200; seed++)
+        {
+            var slow = BuntResolver.RollFielding(batter, Handedness.Right, Fielders, FieldingCoeff, C,
+                new Xoshiro256Random(seed), VeloPenaltyKmh(120), 0.0);
+            var fast = BuntResolver.RollFielding(batter, Handedness.Right, Fielders, FieldingCoeff, C,
+                new Xoshiro256Random(seed), VeloPenaltyKmh(145), 0.0);
+            Assert.True(fast.LaunchSpeedMps >= slow.LaunchSpeedMps, $"seed={seed}: 速い球の初速が遅い球より小さい");
+            if (fast.LaunchSpeedMps > slow.LaunchSpeedMps) fasterCount++;
+        }
+        Assert.True(fasterCount > 100, $"速い球で初速が上がるケースが少なすぎる: {fasterCount}/200");
+    }
+
+    [Fact]
+    public void RollFielding_StuffRaisesLaunchSpeed_SameRng()
+    {
+        var batter = new Player { Bunt = 55 };
+        var plain = BuntResolver.RollFielding(batter, Handedness.Right, Fielders, FieldingCoeff, C, new Xoshiro256Random(7), 0.0, 0.0);
+        var heavy = BuntResolver.RollFielding(batter, Handedness.Right, Fielders, FieldingCoeff, C, new Xoshiro256Random(7), 0.0, 5.0);
+        Assert.True(heavy.LaunchSpeedMps > plain.LaunchSpeedMps, $"球威で初速が上がらない: plain={plain.LaunchSpeedMps:F2} heavy={heavy.LaunchSpeedMps:F2}");
+    }
+
+    [Fact]
+    public void RollFielding_ConsumesTwoDraws_RegardlessOfPitch()
+    {
+        var batter = new Player { Bunt = 55 };
+        var a = new Xoshiro256Random(9);
+        var b = new Xoshiro256Random(9);
+        BuntResolver.RollFielding(batter, Handedness.Right, Fielders, FieldingCoeff, C, a, 0.0, 0.0);
+        BuntResolver.RollFielding(batter, Handedness.Right, Fielders, FieldingCoeff, C, b, 25.0, 4.0);
+        Assert.Equal(a.NextDouble(), b.NextDouble());
+    }
+
+    [Fact]
+    public void ForceOutAtSecond_RisesWithPitcherVelocity()
+    {
+        double ForceRate(double velocityKmh)
+        {
+            var rng = new Xoshiro256Random(12);
+            var batter = new Player { Bunt = 55 };
+            var r1 = new Player { Speed = 50 };
+            var pitcher = new PitcherAttributes { MaxVelocityKmh = velocityKmh };
+            var forced = 0;
+            const int n = 30000;
+            for (var i = 0; i < n; i++)
+            {
+                if (BuntResolver.Resolve(batter, pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
+                        firstRunner: r1, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: C, rng: rng)
+                    == BuntResult.ForceOutAtSecond)
+                    forced++;
+            }
+            return forced / (double)n;
+        }
+
+        var slow = ForceRate(120);
+        var fast = ForceRate(150);
+        Assert.True(fast > slow, $"速い投手ほど二塁封殺が増えない: slow={slow:P2} fast={fast:P2}");
+    }
 }

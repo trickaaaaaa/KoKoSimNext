@@ -280,6 +280,12 @@ public sealed record BaserunningCoefficients
     /// <summary>プレースメント品質（0=投手前へ強く・1=ラインぎわへ弱く）の技術連動。(Bunt−50)あたり+shift、
     /// 残りは一様乱数（rng.NextDouble()）が占める＝好打者ほど「良い置きバント」側へ分布が寄る。</summary>
     public double BuntLaunchQualitySkillSlope { get; init; } = 0.004;
+    /// <summary>品質への球速の効き（issue #1180）。反応球速がバント基準（<see cref="BuntVelocityRefKmh"/>）を超えた
+    /// 1km/hあたり品質を下げる＝速い球ほど強く投手前へ転がる。</summary>
+    public double BuntLaunchQualityVelocitySlope { get; init; } = 0.008;
+    /// <summary>品質への球威の効き（issue #1180）。その1球の球威が基準（<see cref="BuntStuffRefValue"/>）を超えた
+    /// 1あたり品質を下げる。</summary>
+    public double BuntLaunchQualityStuffSlope { get; init; } = 0.02;
     /// <summary>方位の下限[deg]（品質0=ほぼ投手正面。design-02座標で+X=一塁側/−X=三塁側）。</summary>
     public double BuntLaunchBearingMinDeg { get; init; } = 5.0;
     /// <summary>方位の上限[deg]（品質1=ファウルラインぎわ）。</summary>
