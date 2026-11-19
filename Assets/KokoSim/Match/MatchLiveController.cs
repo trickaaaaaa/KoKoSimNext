@@ -141,6 +141,19 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool CalmBadgeForceForCapture;
 
+        /// <summary>撮影専用（issue #1178）: 対決ビューの投手を左投手として立たせる。既定 false＝従来と完全一致。</summary>
+        public static bool PitcherLeftForceForCapture;
+
+        /// <summary>撮影専用（issue #1178）: 監督の守備伝令を今送る（動揺が解けて渦巻きが消える絵）。<see cref="SendTimeout"/> と同じ流れ。</summary>
+        public void DefenseTimeoutForCapture()
+        {
+            if (_prog == null) return;
+            _prog.CallTimeout(_managerIsAway);
+            _preStep = null;
+            var snap = _prog.Snapshot();
+            ApplyPitcherRattled(snap, _atBat?.IsTop ?? snap.OffenseIsTop);
+        }
+
         [SerializeField] private ulong gameSeed = 20260718UL;
         [SerializeField] private string awayName = "北都大付属";
         [SerializeField] private string homeName = "桜丘";
@@ -1467,6 +1480,7 @@ namespace KokoSim.Unity.Match
             CloseMessengerPicker();
             if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
             _timeoutSentThisPause = true;
+            if (_prog != null) ApplyPitcherRattled(_prog.Snapshot(), _atBat?.IsTop ?? _prog.Snapshot().OffenseIsTop);   // 守備伝令で動揺が解けた絵を即座に（issue #1178）
             UpdatePauseMenu();   // 残数と送信済み表示を反映
         }
 
@@ -4082,6 +4096,7 @@ namespace KokoSim.Unity.Match
             {
                 KokoSim.Unity.Audio.MatchBrassBand.Rest();   // 高速試合モードは音を出さない
                 KokoSim.Unity.Audio.MatchAnnouncer.Stop();   // 場内放送も（issue #919）
+                _duelRig?.SetPitcherRattled(false);          // 高速試合モードは動揺の絵も出さない（issue #1178）
                 // 振りかぶりで先に解決した球（issue #696）はエンジン側では投げ終わっている＝描かずに捨てる。
                 _preStep = null;
                 HideRunnerGo();
@@ -4468,7 +4483,7 @@ namespace KokoSim.Unity.Match
                 bats = _current.BatterBats; throws = _current.PitcherThrows;
             }
             else return false;
-            pitcherLeft = throws == Handedness.Left;
+            pitcherLeft = throws == Handedness.Left || PitcherLeftForceForCapture;
             batterLeft = bats.EffectiveBats(throws) == Handedness.Left;   // engine と同じ打席側（issue #1019）
             return true;
         }
@@ -4623,6 +4638,20 @@ namespace KokoSim.Unity.Match
                 schoolId: oppSchoolId);
             RefreshHud(snap, offenseIsTop, order);
             ApplyDuelTeamColors(offenseIsTop);
+            ApplyPitcherRattled(snap, offenseIsTop);
+        }
+
+        /// <summary>
+        /// 対決ビューの投手へ動揺（頭上の渦巻き・投球前の汗）を流し込む（issue #1178）。観測口の守備側の値を読むだけ
+        /// ＝試合結果に触れない。HUD に文字は出さない。窓の観測（解決前）から引くので、動揺が立つのは
+        /// 「それを起こした打席」を見せ終えた次の窓から＝結果の先出しにならない。解ける瞬間
+        /// （守備伝令・継投・イニングの替わり目・2アウト回復）も同じ窓で拾う。高速試合モードでは出さない。
+        /// </summary>
+        private void ApplyPitcherRattled(MatchLiveSnapshot snap, bool offenseIsTop)
+        {
+            if (_duelRig == null || !_duelRig.Available) return;
+            var defense = offenseIsTop ? snap.Home : snap.Away;
+            _duelRig.SetPitcherRattled(defense.PitcherRattled && !_fastMode);
         }
 
         /// <summary>

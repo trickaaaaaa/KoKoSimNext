@@ -870,6 +870,14 @@ public sealed class TeamState
            ?? (Tactics as AiTacticsBrain)?.Profile.TacticalSense
            ?? neutral;
 
+    /// <summary>場面ジャンプ（設計書17 §3.4）で「動揺した状態で始める」ための注入口。連続出塁の数え直しは0から。</summary>
+    public void StartRattled()
+    {
+        PitcherRattled = true;
+        _consecutiveBaserunners = 0;
+        _outsSinceRattled = 0;
+    }
+
     public void ClearRattled()
     {
         PitcherRattled = false;

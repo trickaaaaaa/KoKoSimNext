@@ -26,6 +26,7 @@
 #   video       : {from: catch-0.8, to: release+0.9, fps: 30}＝その区間を連番で撮る
 #   probes      : 毎コマ probes.jsonl に書く実測（DuelStageRig の *ForCapture。ForCapture は省略可）
 #   overrides   : 見比べ用の切り替え（{DuelStageRig.Xxx: true} の形。static のフィールド/プロパティ）。終わったら戻す
+#   timeout_at  : duel_seconds の撮影で、開始から何秒後に監督が守備伝令を送るか（issue #1178。動揺が解ける絵）
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
@@ -89,3 +90,37 @@ captures:
     view: panel
     duel_seconds: 0.1
     overrides: {MatchLiveController.CalmBadgeForceForCapture: true}
+
+  - id: rattled-1178
+    name: "投手が動揺している間、頭上で渦巻きが回り、投げる前に汗が飛ぶ（issue #1178・後攻＝自校の投手）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: rig
+    duel_seconds: 4.0
+    video: {from: start, to: end, fps: 20}
+
+  - id: rattled-away-1178
+    name: "相手校の投手が動揺している絵（issue #1178・先攻が監督＝動揺は相手の投手）"
+    scenario: pitcher-rattled-lab
+    manager: away
+    view: rig
+    duel_seconds: 4.0
+    video: {from: start, to: end, fps: 20}
+
+  - id: rattled-left-1178
+    name: "左投手でも渦巻きと汗が頭の上・左右に出る（issue #1178・鏡映親ノードの下）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: rig
+    duel_seconds: 4.0
+    video: {from: start, to: end, fps: 20}
+    overrides: {MatchLiveController.PitcherLeftForceForCapture: true}
+
+  - id: rattled-timeout-1178
+    name: "守備伝令で動揺が解け、渦巻きが消える（issue #1178）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: rig
+    duel_seconds: 5.0
+    timeout_at: 1.5
+    video: {from: start, to: end, fps: 20}

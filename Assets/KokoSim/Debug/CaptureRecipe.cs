@@ -41,6 +41,9 @@ namespace KokoSim.Unity.Debugging
         /// <summary>対決ビューのまま撮る秒数（0＝使わない）。最初の球が投げられた瞬間から video の fps で連番を撮る
         /// （守備ビューへ移らない場面＝ファウルの打球など。issue #1074）。</summary>
         public float DuelSeconds;
+        /// <summary>duel_seconds の撮影の途中（開始から何秒後）で監督が守備伝令を送る（負＝送らない。issue #1178）。
+        /// 動揺が解けて渦巻きが消えるところを撮る。</summary>
+        public float DefenseTimeoutAt = -1f;
         /// <summary>毎コマ記録する実測（DuelStageRig の *ForCapture のメンバー名）。</summary>
         public List<string> Probes = new List<string>();
         /// <summary>見比べ用の切り替え（"DuelStageRig.Xxx": 値）。終わったら元へ戻す。</summary>
@@ -142,6 +145,7 @@ namespace KokoSim.Unity.Debugging
                 case "duel_view": return bool.TryParse(v, out r.DuelView);
                 case "speed": return TryFloat(v, out r.Speed) && r.Speed > 0;
                 case "duel_seconds": return TryFloat(v, out r.DuelSeconds) && r.DuelSeconds > 0;
+                case "timeout_at": return TryFloat(v, out r.DefenseTimeoutAt) && r.DefenseTimeoutAt >= 0f;
                 case "view":
                     r.View = Unquote(v);
                     return r.View == "board" || r.View == "panel" || r.View == "rig";

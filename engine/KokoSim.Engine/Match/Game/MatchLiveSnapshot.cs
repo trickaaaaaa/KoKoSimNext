@@ -95,10 +95,15 @@ public sealed record LivePitcherToday(
 /// 守備伝令が効いているか（<see cref="TeamState.DefenseCalmPa"/> &gt; 0 の写し, issue #1177）。
 /// 効いているあいだ投手の制球が上がる（設計書09 §3）。読むだけ＝試合結果に影響しない。
 /// </param>
+/// <param name="PitcherRattled">
+/// 現投手が動揺しているか（<see cref="TeamState.PitcherRattled"/> の写し, issue #1178）。両校とも載る
+/// （守備側でなくても値は持つが、イニングの替わり目で解ける）。対決ビューが頭上の渦巻きと投球前の汗を
+/// 出す根拠で、読むだけ＝乱数・試合結果に触れない。
+/// </param>
 public sealed record LiveTeamSnapshot(
     IReadOnlyList<LiveBatterSlot> Lineup, LivePitcherToday Pitcher,
     IReadOnlyList<LiveBatterSlot> Reserves, IReadOnlyList<LivePitcherToday> ReservePitchers,
-    bool OffenseCalmActive = false, bool DefenseCalmActive = false);
+    bool OffenseCalmActive = false, bool DefenseCalmActive = false, bool PitcherRattled = false);
 
 /// <summary>
 /// ライブ観戦のラインスコア1チーム分（回別得点＋R/H/E）。設計書16 §4-2 の LineScorePanel が引く観測データ。

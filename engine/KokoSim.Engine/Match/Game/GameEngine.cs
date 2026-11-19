@@ -593,6 +593,8 @@ public static class GameEngine
             bases.First = seeded.OnFirst ? offense.PreviousBatter(1) : null;
             pendingBalls = seeded.Balls;
             pendingStrikes = seeded.Strikes;
+            // 半回頭の ClearRattled の後に注ぐ（先に注ぐと消える）。守備側投手が動揺した状態で始める（issue #1178）。
+            if (seeded.PitcherRattled) defense.StartRattled();
         }
         // タイブレーク／場面ジャンプで最初から塁にいる走者は、この半イニングの頭の投手の責任にする。
         if (bases.First is { } seededFirst) responsible[seededFirst] = defense.CurrentPitcher;
