@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>判定テロップ</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Noto+Sans+JP:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7a1f2b}a:hover{color:#5a1520}
+.field{background:linear-gradient(180deg,#5f93c9 0%,#a9cbe6 34%,#7d8992 34%,#7d8992 47%,#2c5a2b 47%,#2c5a2b 53%,#4e8e35 53%,#5a9b3e 100%)}
+@keyframes call-pop{
+  0%{transform:scale(1.45);opacity:0;animation-timing-function:cubic-bezier(0.34,1.56,0.64,1)}
+  8%{transform:scale(1);opacity:1}
+  70%{transform:scale(1);opacity:1;animation-timing-function:ease-in}
+  80%{transform:scale(1.04);opacity:0}
+  100%{transform:scale(1.04);opacity:0}
+}
+@keyframes hr-pop{
+  0%{transform:scale(0.55);opacity:0;animation-timing-function:cubic-bezier(0.34,1.56,0.64,1)}
+  10%{transform:scale(1);opacity:1}
+  78%{transform:scale(1);opacity:1;animation-timing-function:ease-in}
+  88%{transform:scale(1.04);opacity:0}
+  100%{transform:scale(1.04);opacity:0}
+}
+@keyframes hr-fade{0%{opacity:0}10%{opacity:1}78%{opacity:1}88%{opacity:0}100%{opacity:0}}
+@keyframes hr-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes hr-shine{0%{background-position:160% 0,0 0}12%{background-position:160% 0,0 0}32%{background-position:-60% 0,0 0}100%{background-position:-60% 0,0 0}}
+@keyframes hr-twinkle{0%{transform:scale(0) rotate(0deg);opacity:0}12%{transform:scale(0) rotate(0deg);opacity:0}22%{transform:scale(1) rotate(45deg);opacity:1}38%{transform:scale(0) rotate(90deg);opacity:0}100%{transform:scale(0);opacity:0}}
+.call-pop{animation:call-pop 2.4s infinite}
+.hr-pop{animation:hr-pop 3.6s infinite}
+.hr-fade{animation:hr-fade 3.6s ease-out infinite}
+.hr-spin{animation:hr-spin 24s linear infinite}
+.hr-shine{animation:hr-shine 3.6s infinite}
+.hr-twinkle{animation:hr-twinkle 3.6s ease-out infinite}
+@media (prefers-reduced-motion: reduce){.call-pop,.hr-pop,.hr-fade,.hr-spin,.hr-shine,.hr-twinkle{animation:none}}
+</style>
+</helmet>
+<div style="width: 1600px; height: 2848px; box-sizing: border-box; padding: 40px 20px; background: #1d1b18; font-family: 'Noto Sans JP', sans-serif">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px">
+
+<div class="field" style="position: relative; height: 428px; border-radius: 14px; overflow: hidden">
+<div class="hr-fade" aria-hidden="true" style="position: absolute; inset: 0; background: rgba(14,12,10,0.24)"></div>
+<div role="status" aria-label="ホームラン" class="hr-pop" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center">
+<span style="position: relative; display: block; transform: skewX(-8deg)">
+<span style="display: block; font-family: 'Dela Gothic One', sans-serif; font-size: 96px; line-height: 1.1; letter-spacing: 0.02em; color: #f2b01e; -webkit-text-stroke: 7px #1d1b18; paint-order: stroke fill; text-shadow: {{hrExtrude}}; white-space: nowrap">ホームラン</span>
+<span class="hr-shine" aria-hidden="true" style="position: absolute; inset: 0; display: block; font-family: 'Dela Gothic One', sans-serif; font-size: 96px; line-height: 1.1; letter-spacing: 0.02em; white-space: nowrap; color: transparent; background-image: linear-gradient(110deg, rgba(255,255,255,0) 38%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0) 62%), linear-gradient(180deg, #fff7cc 0%, #ffd84a 36%, #f09a0a 60%, #ffe27a 100%); background-size: 250% 100%, 100% 100%; background-repeat: no-repeat; -webkit-background-clip: text; background-clip: text">ホームラン</span>
+</span>
+</div>
+</div>
+
+<sc-for list="{{calls}}" as="c" hint-placeholder-count="6">
+<div class="field" style="position: relative; height: 428px; border-radius: 14px; overflow: hidden">
+<div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(14,12,10,0.14)"></div>
+<div role="status" aria-label="{{c.jp}}" class="call-pop" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; animation-delay: {{c.delay}}">
+<span style="display: block; transform: skewX(-8deg); font-family: 'Dela Gothic One', sans-serif; font-size: 76px; line-height: 1.1; letter-spacing: 0.02em; color: {{c.fill}}; -webkit-text-stroke: 6px #1d1b18; paint-order: stroke fill; text-shadow: {{c.extrude}}; white-space: nowrap">{{c.jp}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":2848}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ext = (c, n, inkFrom, extra) => {
+      const out = [];
+      for (let i = 1; i <= n; i++) out.push(i + 'px ' + i + 'px 0 ' + c);
+      out.push(inkFrom + 'px ' + inkFrom + 'px 0 #1d1b18', (inkFrom + 1) + 'px ' + (inkFrom + 1) + 'px 0 #1d1b18');
+      return out.concat(extra).join(', ');
+    };
+    const drop = ['0 12px 28px rgba(0,0,0,0.4)'];
+    const YEL = ['#ffd23f', '#a87808'], GRN = ['#45cf74', '#16703a'], RED = ['#ff4d3f', '#9e1e17'], PUR = ['#b48cff', '#5a34b4'], BLU = ['#4fb6ff', '#1b5c99'];
+    const C = [['ストライク', YEL], ['三振', YEL], ['ボール', GRN], ['フォアボール', GRN], ['デッドボール', GRN], ['アウト', RED], ['ダブルプレー', RED], ['セーフ', GRN], ['ファール', YEL], ['フェア', BLU], ['エラー', PUR]];
+    const calls = C.map((x, i) => ({ jp: x[0], fill: x[1][0], extrude: ext(x[1][1], 5, 7, drop), delay: (i * 0.3) + 's' }));
+    const sparkles = [['150px', '80px', 26, '0s'], ['600px', '70px', 32, '0.15s'], ['640px', '300px', 22, '0.3s'], ['110px', '300px', 20, '0.22s']]
+      .map((s) => ({ x: s[0], y: s[1], size: s[2], delay: s[3] }));
+    return {
+      calls: calls,
+      hrExtrude: ext('#b3261e', 6, 8, ['0 14px 32px rgba(0,0,0,0.45)']),
+      hrExtrudeGlow: ext('#b3261e', 6, 8, ['0 0 48px rgba(255,196,60,0.5)', '0 14px 32px rgba(0,0,0,0.45)']),
+      sparkles: sparkles
+    };
+  }
+}
+</script>
+</body>
+</html>

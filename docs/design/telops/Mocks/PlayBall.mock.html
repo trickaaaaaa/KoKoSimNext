@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>プレイボール テロップ</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&amp;family=Dela+Gothic+One&amp;family=Yuji+Boku&amp;family=Noto+Sans+JP:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7a1f2b}a:hover{color:#5a1520}
+@keyframes pb-main{
+  0%{transform:translateX(1800px) skewX(-26deg);animation-timing-function:cubic-bezier(0.16,1,0.3,1)}
+  13%{transform:translateX(0) skewX(-8deg);animation-timing-function:linear}
+  64%{transform:translateX(-32px) skewX(-8deg);animation-timing-function:cubic-bezier(0.7,0,0.84,0)}
+  78%{transform:translateX(-1900px) skewX(-26deg)}
+  100%{transform:translateX(-1900px) skewX(-26deg)}
+}
+@keyframes pb-ghost{
+  0%{transform:translateX(900px);opacity:0;animation-timing-function:cubic-bezier(0.16,1,0.3,1)}
+  15%{transform:translateX(70px);opacity:1;animation-timing-function:linear}
+  65%{transform:translateX(-70px);opacity:1;animation-timing-function:cubic-bezier(0.7,0,0.84,0)}
+  80%{transform:translateX(-900px);opacity:0}
+  100%{transform:translateX(-900px);opacity:0}
+}
+@keyframes pb-lines{
+  0%{transform:translateX(1700px);opacity:0;animation-timing-function:cubic-bezier(0.3,0.6,0.4,1)}
+  2%{opacity:1}
+  11%{transform:translateX(-1700px);opacity:0}
+  63%{transform:translateX(1700px);opacity:0;animation-timing-function:cubic-bezier(0.6,0,0.7,0.4)}
+  66%{opacity:0.9}
+  77%{transform:translateX(-1700px);opacity:0}
+  100%{transform:translateX(-1700px);opacity:0}
+}
+@keyframes pb-dim{0%{opacity:0}12%{opacity:1}68%{opacity:1}80%{opacity:0}100%{opacity:0}}
+.pb-main{animation:pb-main 5s infinite}
+.pb-ghost{animation:pb-ghost 5s infinite}
+.pb-lines{animation:pb-lines 5s infinite}
+.pb-dim{animation:pb-dim 5s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.pb-main,.pb-ghost,.pb-lines,.pb-dim{animation:none}.pb-lines{opacity:0}}
+</style>
+</helmet>
+<div style="width: 1600px; height: 900px; position: relative; overflow: hidden; background: #4e8e35; color: #1d1b18; font-family: 'Noto Sans JP', sans-serif">
+
+<svg width="1600" height="900" viewBox="0 0 1000 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true" style="position: absolute; inset: 0; display: block">
+<defs>
+<linearGradient id="sky-p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a64ab"></stop><stop offset="0.55" stop-color="#6ca5d7"></stop><stop offset="1" stop-color="#d9e8f2"></stop></linearGradient>
+<pattern id="crowd-p" width="12" height="8" patternUnits="userSpaceOnUse"><rect width="12" height="8" fill="#7d8992"></rect><rect x="1" y="1" width="3" height="3" fill="#ebe6dc"></rect><rect x="6" y="2" width="3" height="3" fill="#c76b5b"></rect><rect x="3" y="5" width="3" height="2" fill="#3e4b64"></rect><rect x="9" y="5" width="2" height="2" fill="#efd17c"></rect></pattern>
+<pattern id="ivy-p" width="18" height="14" patternUnits="userSpaceOnUse"><rect width="18" height="14" fill="#2c5a2b"></rect><circle cx="4" cy="4" r="4" fill="#386c33"></circle><circle cx="13" cy="10" r="4" fill="#386c33"></circle><circle cx="12" cy="3" r="3" fill="#224820"></circle><circle cx="5" cy="11" r="3" fill="#224820"></circle></pattern>
+</defs>
+<rect x="0" y="0" width="1000" height="640" fill="url(#sky-p)"></rect>
+<circle cx="620" cy="470" r="110" fill="#ffffff" opacity="0.9"></circle>
+<circle cx="720" cy="440" r="90" fill="#ffffff" opacity="0.9"></circle>
+<circle cx="520" cy="460" r="80" fill="#ffffff" opacity="0.9"></circle>
+<path d="M0 508 Q500 466 1000 508 L1000 600 L0 600 Z" fill="url(#crowd-p)"></path>
+<path d="M0 508 Q500 466 1000 508" fill="none" stroke="#4a545c" stroke-width="5"></path>
+<rect x="394" y="400" width="212" height="192" fill="#22302a"></rect>
+<rect x="0" y="584" width="1000" height="52" fill="url(#ivy-p)"></rect>
+<rect x="0" y="580" width="1000" height="5" fill="#1d3a1c"></rect>
+<rect x="0" y="636" width="1000" height="18" fill="#b28a5f"></rect>
+<rect x="0" y="654" width="1000" height="246" fill="#4e8e35"></rect>
+<rect x="0" y="654" width="1000" height="20" fill="#5a9b3e"></rect>
+<rect x="0" y="698" width="1000" height="30" fill="#5a9b3e"></rect>
+<rect x="0" y="768" width="1000" height="46" fill="#5a9b3e"></rect>
+<rect x="0" y="866" width="1000" height="34" fill="#5a9b3e"></rect>
+<ellipse cx="500" cy="1090" rx="640" ry="300" fill="#6f4f3b"></ellipse>
+<ellipse cx="500" cy="870" rx="70" ry="16" fill="#83624a"></ellipse>
+<rect x="490" y="866" width="20" height="4" fill="#f6f3ec"></rect>
+<rect x="493" y="806" width="14" height="7" fill="#f6f3ec"></rect>
+<line x1="500" y1="990" x2="-40" y2="654" stroke="#f3efe6" stroke-width="4"></line>
+<line x1="500" y1="990" x2="1040" y2="654" stroke="#f3efe6" stroke-width="4"></line>
+</svg>
+
+<div class="pb-dim" aria-hidden="true" style="position: absolute; inset: 0; background: radial-gradient(ellipse 62% 26% at 50% 50%, rgba(14,12,10,0.6), rgba(14,12,10,0) 72%), rgba(14,12,10,0.16)"></div>
+
+<div class="pb-lines" aria-hidden="true" style="position: absolute; inset: 0">
+<span style="position: absolute; left: 200px; top: 318px; width: 520px; height: 3px; border-radius: 2px; background: #ffffff; opacity: 0.85"></span>
+<span style="position: absolute; left: 820px; top: 352px; width: 360px; height: 2px; border-radius: 1px; background: #ffffff; opacity: 0.6"></span>
+<span style="position: absolute; left: 520px; top: 560px; width: 640px; height: 4px; border-radius: 2px; background: {{accent}}"></span>
+<span style="position: absolute; left: 120px; top: 600px; width: 300px; height: 2px; border-radius: 1px; background: #ffffff; opacity: 0.7"></span>
+<span style="position: absolute; left: 1080px; top: 520px; width: 260px; height: 2px; border-radius: 1px; background: #ffffff; opacity: 0.5"></span>
+</div>
+
+<div class="pb-ghost" aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 270px; height: 360px; display: flex; align-items: center; justify-content: center">
+<span style="font-family: 'Anton', sans-serif; font-size: 330px; line-height: 1; letter-spacing: 0.04em; color: transparent; -webkit-text-stroke: 2px rgba(255,255,255,0.5); transform: skewX(-8deg); white-space: nowrap">PLAY BALL</span>
+</div>
+
+<div role="status" aria-label="プレイボール" class="pb-main" style="position: absolute; left: 0; right: 0; top: 300px; height: 300px; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{isSport}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<span style="font-family: 'Dela Gothic One', sans-serif; font-size: 156px; line-height: 1.05; letter-spacing: 0.02em; color: #ffffff; -webkit-text-stroke: 7px #1d1b18; paint-order: stroke fill; text-shadow: {{extrude}}; white-space: nowrap">プレイボール</span>
+<span style="display: flex; align-items: center; gap: 16px; font-family: 'Anton', sans-serif; font-size: 30px; letter-spacing: 0.5em; padding-left: 0.5em; color: #ffffff; text-shadow: 0 2px 10px rgba(0,0,0,0.5)"><span style="width: 64px; height: 4px; background: {{accent}}"></span>PLAY BALL<span style="width: 64px; height: 4px; background: {{accent}}"></span></span>
+</div>
+</sc-if>
+<sc-if value="{{isBrush}}" hint-placeholder-val="{{false}}">
+<div style="position: relative; display: flex; flex-direction: column; align-items: center">
+<span style="font-family: 'Yuji Boku', serif; font-size: 176px; line-height: 1.05; color: #ffffff; -webkit-text-stroke: 8px #1d1b18; paint-order: stroke fill; text-shadow: 8px 10px 0 #1d1b18, 0 24px 48px rgba(0,0,0,0.45); transform: rotate(-3deg); white-space: nowrap">プレイボール</span>
+<svg width="900" height="56" viewBox="0 0 900 56" aria-hidden="true" style="margin-top: -18px; transform: rotate(-3deg)"><path d="M20 38 C220 16 520 14 880 22 C600 30 300 40 40 50 Z" fill="{{accent}}"></path></svg>
+</div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#7a1f2b","options":["#7a1f2b","#1f3a6b","#1f5a3a","#c8402d"]},"lettering":{"editor":"enum","default":"sport","options":["sport","brush"]},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const A = this.props.accent ?? '#7a1f2b';
+    const L = this.props.lettering ?? 'sport';
+    const layers = [];
+    for (let i = 1; i <= 9; i++) layers.push(i + 'px ' + i + 'px 0 ' + A);
+    layers.push('11px 11px 0 #1d1b18', '12px 12px 0 #1d1b18', '0 28px 48px rgba(0,0,0,0.45)');
+    return {
+      accent: A,
+      isSport: L !== 'brush',
+      isBrush: L === 'brush',
+      extrude: layers.join(', ')
+    };
+  }
+}
+</script>
+</body>
+</html>
