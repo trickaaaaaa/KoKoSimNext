@@ -803,6 +803,9 @@ public sealed class MatchProgression
     /// 守備側の <see cref="LivePitcherToday"/> にだけ乗せる。攻撃側チームの現投手は今投げていないので常に0。
     /// 守備側の判定は <see cref="GameProgress.LiveAtBat"/>（<see cref="GameContext.CapturePitches"/> が真の時だけ
     /// 存在＝采配窓ごとに最新化される）から取る。存在しなければ判定不能として両チームとも0にする。</para>
+    ///
+    /// <para>伝令（issue #1177）: 両校の「攻撃伝令／守備伝令が効いているか」を効果窓の残り打席（&gt;0）から
+    /// 読むだけで載せる。乱数・判定には触れない。</para>
     /// </summary>
     public MatchLiveSnapshot Snapshot()
     {
@@ -811,10 +814,12 @@ public sealed class MatchProgression
         var homeIsDefending = liveAtBat is not null && liveAtBat.IsTop;
         var away = new LiveTeamSnapshot(_p.Away.LiveLineup(),
             _p.Away.LivePitcherLine(awayIsDefending ? PendingPitchIndex : 0),
-            _p.Away.LiveReserves(), _p.Away.LiveReservePitchers());
+            _p.Away.LiveReserves(), _p.Away.LiveReservePitchers(),
+            _p.Away.OffenseCalmPa > 0, _p.Away.DefenseCalmPa > 0);
         var home = new LiveTeamSnapshot(_p.Home.LiveLineup(),
             _p.Home.LivePitcherLine(homeIsDefending ? PendingPitchIndex : 0),
-            _p.Home.LiveReserves(), _p.Home.LiveReservePitchers());
+            _p.Home.LiveReserves(), _p.Home.LiveReservePitchers(),
+            _p.Home.OffenseCalmPa > 0, _p.Home.DefenseCalmPa > 0);
         return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
             _p.Away.LiveLine(), _p.Home.LiveLine(), _p.Ctx.ResolvedWeather, _p.Ctx.StadiumName);
     }
