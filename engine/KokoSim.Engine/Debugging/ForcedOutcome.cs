@@ -130,6 +130,8 @@ public static class ForcedOutcomes
             BuntFoulShare = 0.0, BuntFoulFloor = 0.0, BuntFoulSkillSlope = 0.0,
             BuntPopShare = 0.0, BuntPopFloor = 0.0, BuntPopSkillSlope = 0.0,
             BuntPopVelocitySlope = 0.0, BuntPopStuffSlope = 0.0,
+            // 転がしそこねをファウルに振り分けない（issue #1092）＝残る2%の転がしそこねは小フライのまま
+            BuntMisrollFoulShare = 0.0,
             // 転がしの成功率（SuccessRate）は Clamp(…, 0.05, 0.98)。基準を上げて上限へ張り付かせる
             BuntBase = 1.0,
         },

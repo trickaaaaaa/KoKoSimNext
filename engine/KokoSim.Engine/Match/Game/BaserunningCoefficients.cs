@@ -213,6 +213,13 @@ public sealed record BaserunningCoefficients
     public double BuntFoulSkillSlope { get; init; } = 0.0012;
     public double BuntFoulFloor { get; init; } = 0.06;
     public double BuntPopShare { get; init; } = 0.05;
+    /// <summary>
+    /// 転がしそこね（<see cref="BuntResolver.SuccessRate"/> に外れた）のうち、ファウル（カウントが進み打席継続）に
+    /// なる割合（issue #1092・2026-11-19 オーナー決定）。残りは小フライのアウト。以前は全部が小フライで、バントで
+    /// 終えた打席の25〜29%を占め、犠打・封殺・内野安打が目安（70-80/5-10/5-10）に収まらなかった。
+    /// 2ストライクからのファウルはスリーバント失敗（#1140）＝三振になる。
+    /// </summary>
+    public double BuntMisrollFoulShare { get; init; } = 0.75;
 
     // === バント内野安打の時間軸判定（設計書02 §4.1b/§4.3, Step4-②）===
     // 犠打・セーフティとも「打者走者→一塁」対「バント処理→一塁送球」の秒勝負に通す。
@@ -227,12 +234,9 @@ public sealed record BaserunningCoefficients
     public double SacrificeBuntSquareDelaySeconds { get; init; } = 0.35;
     /// <summary>セーフティ（プッシュ/ドラッグ）の構え遅延[s]（走りながら転がすので小さい）。</summary>
     public double SafetyBuntSquareDelaySeconds { get; init; } = 0.12;
-    /// <summary>バント処理→一塁送球の基準所要[s]（コーナー突進＋素手処理＋短距離送球）。</summary>
-    public double BuntFieldThrowBaseSeconds { get; init; } = 3.70;
-    /// <summary>好バントほど際どく転がり処理が遅れる係数（(Bunt−50)あたり加算）。</summary>
-    public double BuntPlacementSlope { get; init; } = 0.006;
-    /// <summary>内野安打 margin→確率の logistic 幅[s]。</summary>
-    public double BuntInfieldHitTimeScale { get; init; } = 0.14;
+    /// <summary>内野安打 margin→確率の logistic 幅[s]。defenseTime は <see cref="HomePlayResolver.DefenseTimeSeconds"/>
+    /// を <see cref="BuntResolver.BuntFielding"/>（物理レース, issue #1092）の実処理点から引く＝封殺と同じモデル。</summary>
+    public double BuntInfieldHitTimeScale { get; init; } = 0.20;
 
     // === バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）===
     // バントサイン中でも、明確なボール球は構えを解いて見送れる（打者の選球眼で変動）。スクイズは対象外
@@ -269,19 +273,49 @@ public sealed record BaserunningCoefficients
     /// <summary>小フライ率の下限。</summary>
     public double BuntPopFloor { get; init; } = 0.02;
 
-    // === バント: 一塁走者の封殺（フォースアウト, issue bunt-no-take-on-ball-pitches）===
-    // バントの処理点・処理時間・送球速度は「誰が処理したか」を特定しない簡略化（BuntFieldThrowBaseSeconds と
-    // 同じ抽象レベル）。一塁走者→二塁の封殺は既存の HomePlayResolver.SecondForceParams（Issue #369）をそのまま
-    // 使う＝新しい走者物理式は書かない（不変条件#1）。三塁走者→本塁のスクイズ判定（下記）もこの処理点を再利用する。
-    /// <summary>バント処理点のX座標[m]（本塁原点、負=三塁側）。三塁側チャージを想定した代表値。</summary>
-    public double BuntFieldedXM { get; init; } = -4.0;
-    /// <summary>バント処理点のZ座標[m]（本塁からの深さ）。</summary>
-    public double BuntFieldedZM { get; init; } = 8.0;
-    /// <summary>接触からバント処理までの所要[s]（チャージ＋捕球）。</summary>
-    public double BuntFieldedAtSeconds { get; init; } = 0.90;
-    /// <summary>バント処理野手の代表送球速度[m/s]（誰が処理したか特定しないための平均値）。</summary>
+    // === バント: 打球の物理レース（issue #1092）===
+    // 強さ（初速）と方向（方位、+X=一塁側/−X=三塁側）を打者のバント技術から引き、既存のゴロ転がりモデル
+    // （FieldingResolver.BouncePath）へそのまま通す＝新しい物理式は発明しない（不変条件#1）。処理野手
+    // （投手/捕手/一塁手/三塁手）はこの転がりに対する到達レースで決める（BuntResolver.RollFielding）。
+    /// <summary>プレースメント品質（0=投手前へ強く・1=ラインぎわへ弱く）の技術連動。(Bunt−50)あたり+shift、
+    /// 残りは一様乱数（rng.NextDouble()）が占める＝好打者ほど「良い置きバント」側へ分布が寄る。</summary>
+    public double BuntLaunchQualitySkillSlope { get; init; } = 0.004;
+    /// <summary>方位の下限[deg]（品質0=ほぼ投手正面。design-02座標で+X=一塁側/−X=三塁側）。</summary>
+    public double BuntLaunchBearingMinDeg { get; init; } = 5.0;
+    /// <summary>方位の上限[deg]（品質1=ファウルラインぎわ）。</summary>
+    public double BuntLaunchBearingMaxDeg { get; init; } = 40.0;
+    /// <summary>初速の下限[m/s]（品質1=ほぼ死んだバント）。</summary>
+    public double BuntLaunchSpeedMinMps { get; init; } = 2.0;
+    /// <summary>初速の上限[m/s]（品質0=強い投手前）。</summary>
+    public double BuntLaunchSpeedMaxMps { get; init; } = 7.0;
+    /// <summary>方位が一塁側（+X）になる基準確率（三塁側との五分）。</summary>
+    public double BuntLaunchFirstBaseLineBase { get; init; } = 0.50;
+    /// <summary>左打者が一塁側へ置きやすい分の加算（ドラッグバントは一塁線へ出やすい）。</summary>
+    public double BuntLaunchLeftBatterFirstBaseLineBonus { get; init; } = 0.15;
+    /// <summary>投手のバント処理チャージ係数（issue #1092）。投球フォロースルーの前進量で、
+    /// 標準位置（マウンド）からホーム方向へ詰めた分だけ到達レースの起点を前へ出す
+    /// （<see cref="Tactics.AlignmentTactics.Adjust"/> の BuntShiftCornerChargeFactor と同じ「チャージ係数」の作法。
+    /// 投手は采配のバントシフトに関係なく常に効く＝投球動作自体の前進で、シフトとは独立の物理）。</summary>
+    public double BuntPitcherChargeFactor { get; init; } = 0.25;
+    /// <summary>捕手がバントへ反応するときの追加遅延[s]（しゃがみ姿勢から立つ・マスクを外す。
+    /// <see cref="Fielding.FieldingCoefficients.PitcherFieldingReactionPenaltySeconds"/>の投手版と対の、捕手版）。</summary>
+    public double BuntCatcherFieldingReactionPenaltySeconds { get; init; } = 0.30;
+    /// <summary>バントを素手で処理する手間[s]（issue #1092）。到達（距離÷走力＋反応遅延）そのものは
+    /// 通常のゴロ処理と同じ式だが、バントは転がりが弱く・グラブでなく素手で拾って握り直す分、
+    /// 捕ってから送球に移れるまでが通常のゴロより長い。全処理野手・全方向に一律で加算（既存の
+    /// <see cref="Fielding.FieldingCoefficients.InfieldHandleJitterMeanSeconds"/>等と同じ「捕球は一瞬では
+    /// 終わらない」という既存の考え方を、バント特有の手間として明示した1項。実測して校正する。</summary>
+    public double BuntBarehandPenaltySeconds { get; init; } = 0.50;
+    /// <summary>前の走者を狙う判断のしきい値（オーナー決定2026-11-17）: 封殺のsafe確率がこれ未満のときだけ
+    /// 前の走者を狙い、それ以外は一塁で確実に1つ取る。</summary>
+    public double BuntForceOutLeadRunnerSafeThreshold { get; init; } = 0.35;
+
+    // === バント: 小フライ・一塁走者の封殺（フォースアウト, issue bunt-no-take-on-ball-pitches）===
+    // 小フライの処理（PopFieldedPoint等）は上の物理レースと無関係（常に捕手が捕る簡略化を維持）。
+    /// <summary>バント処理野手の代表送球速度[m/s]（小フライからのライナー併殺でのみ使う代表値。
+    /// 誰が処理したか特定しない簡略化＝小フライは常に捕手が捕る前提と同じ抽象レベル）。</summary>
     public double BuntFielderThrowSpeedMps { get; init; } = 30.0;
-    /// <summary>バント処理野手の代表守備力（握り替え倍率の算出用。50=倍率×1.0）。</summary>
+    /// <summary>バント処理野手の代表守備力（握り替え倍率の算出用。50=倍率×1.0。小フライ専用、上記と同じ理由）。</summary>
     public double BuntFielderFieldingLevel { get; init; } = 50.0;
     /// <summary>一塁走者がバントを読んでから二塁へ走り出す追加スタート遅延[s]（DoublePlayR1StartDelaySeconds
     /// より短い＝バントは事前に構えが見えるぶん、通常のゴロより早く動ける）。</summary>
@@ -389,10 +423,6 @@ public sealed record BaserunningCoefficients
     public double ThrowScatterCatchingReliefSlope { get; init; } = 0.004;
     /// <summary>遅れ縮小倍率の下限（最速側クランプ）。</summary>
     public double ThrowScatterCatchingReliefMinFactor { get; init; } = 0.60;
-    /// <summary>バント処理野手の代表送球精度（issue #858）。既定50＝「誰が処理したか特定しない」
-    /// バントの簡略化（design-02 §4.3/BuntFielderThrowSpeedMps等と同じ抽象レベル）と恒等＝現状の挙動を変えない。
-    /// 将来、処理野手を特定する実装に寄せるときの差し替え口。</summary>
-    public double BuntFielderThrowAccuracyLevel { get; init; } = 50.0;
 
     // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
     // 守備所要時間へ加算してもう一度同じ時間勝負を評価する（拾い直しが間に合えばアウトのまま）。

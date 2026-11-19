@@ -229,13 +229,15 @@ games_10k_tactics:
   # 本塁打率 0.020–0.036→0.010–0.022（issue homerun-rate-explodes-at-high-power, 2026-08-18。実測 1.48/1.54%）
   # issue #976（2026-11-15）: 0.010–0.022→0.003–0.010（実測 2000試合×seed 42/2024 で 0.52/0.50%・得点 4.41/4.35）
   home_run_rate: { min: 0.003, max: 0.010 }
-  # バント封殺率・スクイズ本塁封殺率（issue bunt-no-take-on-ball-pitches, 2026-08-29）: ゆるいスモークテスト帯。
-  # 発動には打者が速く走者が遅いという速度差が要るが、能力上限[20,88]のN(50,12)乱数分布ではこの差がほぼ
-  # 生じないため、実測（3000試合×seed1/2/3・30000試合×seed7）はいずれも0.0%（バント封殺 0/14650試行、
-  # スクイズはボールインプレー自体が0件）。厳密な発生率としては未校正（実測値をそのまま帯にするのは時期尚早、
-  # docs/design/OPEN-QUESTIONS.md Q32参照）＝ここは「判定が暴走して毎回封殺になる」ような重大バグだけを
-  # 拾う緩い上限として置く。到達可能性そのものは BuntResolverTests/BuntUnificationTests が単体で固定済み。
-  bunt_force_out_rate: { min: 0.0, max: 0.05 }
+  # バント結果の内訳（issue #1092）: 打球の強さ・方向から処理点・処理時刻・処理野手を物理レースで決めるように
+  # なり、前の走者を狙う判断もしきい値制（封殺のsafe確率<35%のときだけ狙う）へ変えた。オーナー決定
+  # （2026-11-17）の目安＝高校野球の犠打企図あたり 犠打成功70-80%・封殺5-10%・内野安打(オールセーフ含む)5-10%・
+  # 残りは小フライ/ファウルで打席継続。旧「ゆるいスモークテスト帯」（封殺0-5%・実測0/14650）はこの実装で終了。
+  sacrifice_bunt_success_rate: { min: 0.68, max: 0.82 }
+  bunt_force_out_rate: { min: 0.04, max: 0.11 }
+  bunt_infield_hit_rate: { min: 0.04, max: 0.11 }
+  # スクイズ本塁封殺率: ゆるいスモークテスト帯のまま（issue #1092のスコープ外。スクイズ自体は三塁走者の
+  # 本塁レースを別途独立に解く＝バントの物理レースは処理点・処理時刻の提供元としてだけ使う）。
   squeeze_runner_out_at_home_rate: { min: 0.0, max: 0.05 }
 
 # --- Issue #120: 夏場の天候（気温）モデルを有効化したときの得点帯（決定3: 一般帯を外れた分の単独追加） ---
@@ -331,7 +333,7 @@ ability_sensitivity:
     throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
     fielding:         { defense: { expect: down, min_runs: 2.0 } }
     catching:         { defense: { expect: down, min_runs: 0.3 } }
-    mental:           { offense: { expect: up, min_runs: -0.15 }, defense: { expect: down, min_runs: 0.1 } }   # 打者側は弱い＝はっきり逆向きでないことだけ見る（2026-11-09 #835: 3シード −0.04/+0.10/+0.11・1回の揺れ±0.1 で 0.00 は揺れで割れる）
+    mental:           { offense: { expect: up, min_runs: -0.15 }, defense: { expect: down, min_runs: 0.05 } }   # 打者側は弱い＝はっきり逆向きでないことだけ見る（2026-11-09 #835: 3シード −0.04/+0.10/+0.11・1回の揺れ±0.1 で 0.00 は揺れで割れる）。投手側 0.1→0.05（2026-11-20 #1092: seed 42/7/2024 で 0.09/0.16/0.27＝向きは常に正しく、42だけ揺れの下振れで割れた）
     condition:        { offense: { expect: up, min_runs: 1.0 }, defense: { expect: down, min_runs: 1.0 } }
     catcher_arm:      { defense: { expect: down, min_runs: 0.3 } }   # 弱肩の捕手が相手得点を減らす(#838)
     pitcher_velocity: { defense: { expect: down, min_runs: 0.4 } }   # 110→150km/h

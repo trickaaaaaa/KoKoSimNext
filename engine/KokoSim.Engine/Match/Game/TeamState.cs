@@ -178,6 +178,9 @@ public sealed class TeamState
     public int Squeezes { get; private set; }
     // 封殺率の実測用（issue bunt-no-take-on-ball-pitches）。
     public int BuntForceOuts { get; private set; }
+    /// <summary>バント内野安打（オールセーフ含む）の実測用（issue #1092）。<see cref="SacrificeBunts"/> と同じ
+    /// 分母（バントが実際にプレーされた回数）を共有する。</summary>
+    public int BuntInfieldHits { get; private set; }
     public int SqueezeBallInPlay { get; private set; }
     public int SqueezeRunnerOutAtHome { get; private set; }
 
@@ -215,6 +218,7 @@ public sealed class TeamState
 
     public void RecordSacrificeBunt(bool success) { SacrificeBunts++; if (success) SacrificeBuntSuccesses++; }
     public void RecordBuntForceOut() => BuntForceOuts++;
+    public void RecordBuntInfieldHit() => BuntInfieldHits++;
     public void RecordSqueeze() => Squeezes++;
     /// <summary>スクイズでボールが実際にプレーされた回数と、そのうち三塁走者が本塁で刺された回数
     /// （issue bunt-no-take-on-ball-pitches・design-02 §4.4「三塁走者スタート」）。</summary>

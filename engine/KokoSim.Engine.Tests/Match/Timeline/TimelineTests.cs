@@ -1834,6 +1834,14 @@ public sealed class TimelineTests
     private static Player Runner(string name, int speed = 70, int baserunning = 70) =>
         new() { Name = name, Speed = speed, Baserunning = baserunning };
 
+    /// <summary>BuildBunt の fielding 引数の代表値（issue #1092）: 投手が三塁側へやや出て処理した想定
+    /// （旧 FieldedSituation の固定値 X=-4/Z=8/0.90s と同じ代表点を使う＝このテストクラスの意図は
+    /// 「判定が渡した点をそのまま絵にするか」であって、物理レースの乱数分布そのものではない）。</summary>
+    private static BuntResolver.BuntFielding TestFielding(BaserunningCoefficients c) => new(
+        FieldPosition.Pitcher,
+        new HomePlaySituation(new Vector3D(-4, 0, 8), 0.9, c.BuntFielderThrowSpeedMps),
+        LaunchSpeedMps: 4.0, LaunchBearingDeg: -8.0);
+
     [Fact]
     public void BatteryMissTimeline_AllThreeOccupied_AllAdvanceAndThirdScores()
     {
@@ -2063,7 +2071,7 @@ public sealed class TimelineTests
 
         var tl = TimelineBuilder.BuildBunt(
             batter, fielders, BuntResult.SacrificeSuccess,
-            null, null, null, null, null, null, c, field);
+            null, null, null, null, null, null, c, field, fielding: TestFielding(c));
 
         var leg = Assert.Single(tl.Runners);
         Assert.Equal("打", leg.Label);
@@ -2086,7 +2094,7 @@ public sealed class TimelineTests
 
         var tl = TimelineBuilder.BuildBunt(
             batter, fielders, BuntResult.InfieldHit,
-            null, null, null, null, null, null, c, field);
+            null, null, null, null, null, null, c, field, fielding: TestFielding(c));
 
         var leg = Assert.Single(tl.Runners);
         Assert.False(leg.OutAtEnd);
@@ -2117,7 +2125,7 @@ public sealed class TimelineTests
 
         var tl = TimelineBuilder.BuildBunt(
             batter, fielders, result,
-            Runner("R1"), Runner("R2"), Runner("R3"), null, null, null, c, field);
+            Runner("R1"), Runner("R2"), Runner("R3"), null, null, null, c, field, fielding: TestFielding(c));
 
         var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
         var dist = Math.Sqrt(Math.Pow(throwSeg.To.X - throwSeg.From.X, 2) + Math.Pow(throwSeg.To.Z - throwSeg.From.Z, 2));
@@ -2132,8 +2140,8 @@ public sealed class TimelineTests
         Assert.True(fielded <= throwSeg.T0 + 1e-9, $"{result}: 捕る前（{fielded:F3}s）に投げ始めている（{throwSeg.T0:F3}s）");
     }
 
-    /// <summary>issue #1089: 犠打成功の送球の到達時刻（＝判定の秒）は直す前と同じ＝接触＋守備所要。
-    /// 浮いた時間は転がりを長くして吸収し、転がりは封殺の処理時刻より短くならない。</summary>
+    /// <summary>issue #1092: 犠打成功の処理点・処理時刻・送球到達は、判定が渡した fielding（物理レースの結果）
+    /// から HomePlayResolver.ResolveThrowPath で一意に決まる＝封殺の各枝（ForceOutAt*）と同じ経路。</summary>
     [Fact]
     public void BuntTimeline_SacrificeSuccess_ThrowArrivalUnchanged_RollAbsorbsSlack()
     {
@@ -2141,20 +2149,20 @@ public sealed class TimelineTests
         var field = new FieldGeometry();
         var fielders = field.StandardAlignment();
         var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+        var fielding = TestFielding(c);
 
         var tl = TimelineBuilder.BuildBunt(
             batter, fielders, BuntResult.SacrificeSuccess,
-            null, null, null, null, null, null, c, field);
+            null, null, null, null, null, null, c, field, fielding: fielding);
 
         var contactAt = tl.Ball.Single(b => b.Kind == BallSegmentKind.Pitch).T1;
-        var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
+        var throwPath = HomePlayResolver.ResolveThrowPath(fielding.Situation, field.FirstBase, c);
         var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
-        Assert.Equal(contactAt + defenseTime, throwSeg.T1, 9);
+        Assert.Equal(contactAt + throwPath.ArriveAtSeconds, throwSeg.T1, 9);
+        Assert.Equal(contactAt + throwPath.ReleaseAtSeconds, throwSeg.T0, 9);
 
         var roll = tl.Ball.Single(b => b.Kind == BallSegmentKind.Roll);
-        Assert.True(roll.T1 - contactAt >= c.BuntFieldedAtSeconds - 1e-9);
-        // 処理から投げ始めまでは握り替え（封殺の送球と同じ OutfieldTransferSeconds・守備50で×1.0）。
-        Assert.Equal(c.OutfieldTransferSeconds, throwSeg.T0 - roll.T1, 9);
+        Assert.Equal(contactAt + fielding.Situation.BallFieldedAtSeconds, roll.T1, 9);
     }
 
     [Fact]

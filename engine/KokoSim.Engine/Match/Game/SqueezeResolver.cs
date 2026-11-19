@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Game;
@@ -9,6 +11,10 @@ public readonly record struct SqueezeOutcome(int Runs, bool BatterOut, bool Runn
 {
     /// <summary>バントを処理した野手の送球の逸れ（issue #859。判定に使った値そのもの）。送球まで行かなければ null。</summary>
     public KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter? BuntThrowScatter { get; init; }
+
+    /// <summary>バントの物理レース結果（issue #1092。<see cref="Timeline.TimelineBuilder.BuildBunt"/> が
+    /// 「判定＝絵」で使う単一ソース）。送球まで行かなければ null。</summary>
+    public BuntResolver.BuntFielding? BuntFielding { get; init; }
 
     /// <summary>ウエスト（外された球）で打者がバントできなかったか。<see cref="BuntResult.MissedBunt"/> のうち
     /// 打者がバットを出さなかった側＝ボールのカウント。打者が空振りした側は false（ストライクのカウント）。</summary>
@@ -25,11 +31,13 @@ public static class SqueezeResolver
     /// <summary>pitchStuff/courseDifficulty は <see cref="BuntResolver.Resolve"/> へそのまま転送する
     /// （投球1球ごとの球威・コース難度）。firstRunner/secondRunner/field は一塁走者の二塁封殺
     /// （<see cref="BuntResult.ForceOutAtSecond"/>）・二塁走者の三塁封殺（<see cref="BuntResult.ForceOutAtThird"/>）
-    /// 判定用（issue bunt-no-take-on-ball-pitches）。field は三塁走者の本塁レースにも必須。</summary>
+    /// 判定用（issue bunt-no-take-on-ball-pitches）。field は三塁走者の本塁レースにも必須。
+    /// <paramref name="fielders"/>・<paramref name="fieldingCoeff"/> は打球の物理レース（issue #1092）に使う。</summary>
     public static SqueezeOutcome Resolve(
         Player batter, Player thirdRunner, PitcherAttributes pitcher, double pitchStuff, double courseDifficulty,
-        Player? firstRunner, Player? secondRunner, FieldGeometry field, double wasteProbability,
-        BaserunningCoefficients c, IRandomSource rng)
+        Player? firstRunner, Player? secondRunner, FieldGeometry field,
+        IReadOnlyList<Fielder> fielders, FieldingCoefficients fieldingCoeff,
+        double wasteProbability, BaserunningCoefficients c, IRandomSource rng)
     {
         // ウエストを読まれた場合: 打者はバントできず、飛び出した三塁走者が挟殺される大惨事。
         if (MathUtil.Chance(MathUtil.Clamp(wasteProbability, 0.0, 1.0), rng))
@@ -41,7 +49,8 @@ public static class SqueezeResolver
         // 独立に解くため、BuntResolver側の本塁封殺判定と二重にしない（issue bunt-no-take-on-ball-pitches）。
         var bunt = BuntResolver.Resolve(
             batter, pitcher, pitchStuff, courseDifficulty, safety: false,
-            firstRunner, secondRunner, thirdRunner: null, field, c, rng, out var buntScatter);
+            firstRunner, secondRunner, thirdRunner: null, field, fielders, fieldingCoeff, c, rng,
+            out var buntScatter, out var buntFielding);
         switch (bunt)
         {
             case BuntResult.SacrificeSuccess:
@@ -50,27 +59,33 @@ public static class SqueezeResolver
             case BuntResult.ForceOutAtThird:
                 // ボールが実際にプレーされた（一塁側の帰趨に関係なく）: 三塁走者は走塁判断のスタート込みで
                 // 本塁レースを解く（design-02 §4.4「バント成功率×三塁走者スタート」, issue bunt-no-take-on-ball-pitches）。
+                // 処理点・処理時刻・処理野手の肩は BuntResolver が物理レースで引いた同じ situation を使う
+                // （issue #1092。二重に処理野手を決め直さない＝判定＝絵の単一ソース）。
                 var runnerSafe = MathUtil.Chance(
                     HomePlayResolver.SuccessProbability(
-                        thirdRunner, fromBase: 3, BuntResolver.FieldedSituation(c), field, c,
+                        thirdRunner, fromBase: 3, buntFielding!.Value.Situation, field, c,
                         HomePlayResolver.HomeParams(c), c.SqueezeThirdRunnerStartDelaySeconds),
                     rng);
                 // 打者は犠打成功なら1アウト、内野安打/一塁封殺/二塁封殺（打者以外が封殺されただけ）なら生きる。
                 var batterOut = bunt == BuntResult.SacrificeSuccess;
                 return (runnerSafe
                     ? new SqueezeOutcome(1, BatterOut: batterOut, RunnerOut: false, bunt)
-                    : new SqueezeOutcome(0, BatterOut: batterOut, RunnerOut: true, bunt)) with { BuntThrowScatter = buntScatter };
+                    : new SqueezeOutcome(0, BatterOut: batterOut, RunnerOut: true, bunt))
+                    with { BuntThrowScatter = buntScatter, BuntFielding = buntFielding };
             case BuntResult.PopOut:
             case BuntResult.PopOutDoubledOff:
                 // 小フライ→三塁走者は動かず釘付けのまま（RunnerOutは三塁走者専用のフィールドなのでfalse固定）。
                 // 一塁走者が併殺で刺された場合（PopOutDoubledOff）は GameEngine 側が bunt の値そのものを見て
                 // 一塁走者の退場・追加アウトを別途処理する（本塁封殺の危険は依然スコープ外）。
-                return new SqueezeOutcome(0, BatterOut: true, RunnerOut: false, bunt) with { BuntThrowScatter = buntScatter };
+                return new SqueezeOutcome(0, BatterOut: true, RunnerOut: false, bunt)
+                    with { BuntThrowScatter = buntScatter, BuntFielding = buntFielding };
             case BuntResult.Foul:
                 // ファウルはボールデッド: 三塁走者は三塁へ戻る（アウトにならない）。カウントはストライク（AtBatSession）。
-                return new SqueezeOutcome(0, BatterOut: false, RunnerOut: false, bunt) with { BuntThrowScatter = buntScatter };
+                return new SqueezeOutcome(0, BatterOut: false, RunnerOut: false, bunt)
+                    with { BuntThrowScatter = buntScatter, BuntFielding = buntFielding };
             default: // MissedBunt（打者の空振り）: 飛び出した三塁走者は挟殺される。
-                return new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, bunt) with { BuntThrowScatter = buntScatter };
+                return new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, bunt)
+                    with { BuntThrowScatter = buntScatter, BuntFielding = buntFielding };
         }
     }
 }

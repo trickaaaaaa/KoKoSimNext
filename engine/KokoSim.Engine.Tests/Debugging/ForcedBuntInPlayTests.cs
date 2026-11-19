@@ -78,11 +78,14 @@ public sealed class ForcedBuntInPlayTests
         Assert.Equal(0.0, BuntResolver.TakeProbability(0.3, batter, c));
         Assert.Equal(0.98, BuntResolver.SuccessRate(batter, PitcherAttributes.LeagueAverage, 1.0, c), 6);
         var rng = new KokoSim.Engine.Core.Xoshiro256Random(11);
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var fieldingCoeff = new KokoSim.Engine.Match.Fielding.FieldingCoefficients();
         int pops = 0;
         for (int i = 0; i < 500; i++)
         {
             var r = BuntResolver.Resolve(batter, PitcherAttributes.LeagueAverage, 1.0, 0.5, false,
-                null, null, null, null, c, rng);
+                null, null, null, field, fielders, fieldingCoeff, c, rng);
             Assert.NotEqual(BuntResult.MissedBunt, r);
             Assert.NotEqual(BuntResult.Foul, r);
             if (r is BuntResult.PopOut or BuntResult.PopOutDoubledOff) pops++;
