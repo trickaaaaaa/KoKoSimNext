@@ -38,7 +38,7 @@ public sealed record BaserunningCoefficients
     /// 合わせて <see cref="Fielding.FieldingCoefficients.ThrowErrorBaseProb"/> を約4.5倍へ上げたため、この確率が
     /// 0.90のままだと失策連鎖/試合が参考帯（0.10–0.80）を超える（実測0.848–0.881）。悪送球1回あたりの連鎖確率を
     /// 下げて帯内（実測0.197–0.213）に戻した。</para></summary>
-    public double ErrorExtraAdvanceProb { get; init; } = 0.20;
+    public double ErrorExtraAdvanceProb { get; init; } = 0.50;
     /// <summary>失策連鎖の送球精度連動（Issue #37 / design-14 P1-6b）。連鎖確率 = ErrorExtraAdvanceProb −
     /// (送球者 ThrowAccuracy − 50)×この値。issue #169で 0.0→0.003 に正値化＝「送球が不正確な野手の失策ほど連鎖しやすい」（YAML sim値と一致）。</summary>
     public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.003;
