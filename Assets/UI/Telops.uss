@@ -7,10 +7,15 @@
    （UI Toolkitのtranslateはコードのアニメーションだけのために空けておく）。 */
 
 /* ── Calls（判定11種・pitch-call/judgement-call 共用の画像面） ── */
+/* 判定の器に画像ぶんの高さを持たせる（画像は absolute なので器が高さ0になり、下の球種・球速・
+   見逃し/空振りの行が画像の真ん中に重なっていた）。判定画像の高さは192〜208＝200で揃える */
+.pitch-call__stack {
+    height: 200px;
+}
 .tl-call-img {
     position: absolute;
-    left: 800px;
-    top: 450px;
+    left: 50%;   /* 器（pitch-call__stack＝判定の表示位置）の中心。1600×900の絶対座標にすると器の外へ飛ぶ */
+    top: 50%;
 }
 .tl-call-strike { width: 677px; height: 194.5px; margin-left: -338.5px; margin-top: -97.25px; background-image: url("project:///Assets/UI/Telops/Calls/call_strike.png"); }
 .tl-call-strikeout { width: 328px; height: 208px; margin-left: -164px; margin-top: -104px; background-image: url("project:///Assets/UI/Telops/Calls/call_strikeout.png"); }

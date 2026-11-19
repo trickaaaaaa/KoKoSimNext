@@ -44,6 +44,9 @@ namespace KokoSim.Unity.Debugging
         /// <summary>duel_seconds の撮影の途中（開始から何秒後）で監督が守備伝令を送る（負＝送らない。issue #1178）。
         /// 動揺が解けて渦巻きが消えるところを撮る。</summary>
         public float DefenseTimeoutAt = -1f;
+        /// <summary>duel_seconds の撮り始め（duel_from: launch＝試合の画面が出た瞬間から。プレイボールのテロップ等
+        /// 最初の球より前を撮るとき。issue #1179）。既定 false＝最初の球が投げられた瞬間から。</summary>
+        public bool DuelFromLaunch;
         /// <summary>毎コマ記録する実測（DuelStageRig の *ForCapture のメンバー名）。</summary>
         public List<string> Probes = new List<string>();
         /// <summary>見比べ用の切り替え（"DuelStageRig.Xxx": 値）。終わったら元へ戻す。</summary>
@@ -146,6 +149,13 @@ namespace KokoSim.Unity.Debugging
                 case "speed": return TryFloat(v, out r.Speed) && r.Speed > 0;
                 case "duel_seconds": return TryFloat(v, out r.DuelSeconds) && r.DuelSeconds > 0;
                 case "timeout_at": return TryFloat(v, out r.DefenseTimeoutAt) && r.DefenseTimeoutAt >= 0f;
+                case "duel_from":
+                {
+                    var f = Unquote(v);
+                    if (f == "launch") { r.DuelFromLaunch = true; return true; }
+                    if (f == "pitch") { r.DuelFromLaunch = false; return true; }
+                    return false;
+                }
                 case "view":
                     r.View = Unquote(v);
                     return r.View == "board" || r.View == "panel" || r.View == "rig";

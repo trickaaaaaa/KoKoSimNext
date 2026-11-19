@@ -447,8 +447,8 @@ namespace KokoSim.Unity.Match
                 _ => "tl-call-safe",
             };
             _judgementTelop?.SetFace(callClass);
-            // elapsed=このプレー時間軸での経過＝JudgementHoldSeconds − (T1 − t)（T1=表示が終わる時刻）。
-            var elapsed = JudgementHoldSeconds - (found.Value.T1 - t);
+            // elapsed=このプレー時間軸での経過＝t − T1（T1=表示が始まる時刻。PlaybackEvaluator.JudgementAt）。
+            var elapsed = t - found.Value.T1;
             _judgementTelop?.Tick(elapsed, JudgementHoldSeconds, JudgementCallInSeconds, JudgementCallOutSeconds);
 
             // 下段の飛距離（ホームランのフォールバック経路のみ。engine が判定に使った着地距離を
