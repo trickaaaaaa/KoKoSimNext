@@ -1467,6 +1467,7 @@ namespace KokoSim.Unity.Match
             CloseMessengerPicker();
             if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
             _timeoutSentThisPause = true;
+            if (_prog != null) ApplyPitcherRattled(_prog.Snapshot(), _atBat?.IsTop ?? _prog.Snapshot().OffenseIsTop);   // 守備伝令で動揺が解けた絵を即座に（issue #1178）
             UpdatePauseMenu();   // 残数と送信済み表示を反映
         }
 
@@ -4082,6 +4083,7 @@ namespace KokoSim.Unity.Match
             {
                 KokoSim.Unity.Audio.MatchBrassBand.Rest();   // 高速試合モードは音を出さない
                 KokoSim.Unity.Audio.MatchAnnouncer.Stop();   // 場内放送も（issue #919）
+                _duelRig?.SetPitcherRattled(false);          // 高速試合モードは動揺の絵も出さない（issue #1178）
                 // 振りかぶりで先に解決した球（issue #696）はエンジン側では投げ終わっている＝描かずに捨てる。
                 _preStep = null;
                 HideRunnerGo();
@@ -4623,6 +4625,20 @@ namespace KokoSim.Unity.Match
                 schoolId: oppSchoolId);
             RefreshHud(snap, offenseIsTop, order);
             ApplyDuelTeamColors(offenseIsTop);
+            ApplyPitcherRattled(snap, offenseIsTop);
+        }
+
+        /// <summary>
+        /// 対決ビューの投手へ動揺（頭上の渦巻き・投球前の汗）を流し込む（issue #1178）。観測口の守備側の値を読むだけ
+        /// ＝試合結果に触れない。HUD に文字は出さない。窓の観測（解決前）から引くので、動揺が立つのは
+        /// 「それを起こした打席」を見せ終えた次の窓から＝結果の先出しにならない。解ける瞬間
+        /// （守備伝令・継投・イニングの替わり目・2アウト回復）も同じ窓で拾う。高速試合モードでは出さない。
+        /// </summary>
+        private void ApplyPitcherRattled(MatchLiveSnapshot snap, bool offenseIsTop)
+        {
+            if (_duelRig == null || !_duelRig.Available) return;
+            var defense = offenseIsTop ? snap.Home : snap.Away;
+            _duelRig.SetPitcherRattled(defense.PitcherRattled && !_fastMode);
         }
 
         /// <summary>

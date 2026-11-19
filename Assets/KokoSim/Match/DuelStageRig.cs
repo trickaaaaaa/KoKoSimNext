@@ -1882,6 +1882,7 @@ namespace KokoSim.Unity.Match
             GroundFix(_pitcher);
             _pitcher.Speed = 1f;   // 采配窓の静止を解いて等速再生を始める
             PitcherAwaitsWindup = false;
+            BeginPitcherSweat();   // 動揺中なら投球動作の入りで汗が飛ぶ（issue #1178）
             SchedulePreLoad(WindupSeconds);   // 打者の足上げはリリースの前から（issue batter-timing-load-earlier）
         }
 
@@ -2073,6 +2074,7 @@ namespace KokoSim.Unity.Match
             _catcherResidual = Vector2.zero;
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
             _umpireCallCountdown = -1f;
+            ResetPitcherSweat();   // 前の球の汗を持ち越さない（issue #1178）
             PendingResultHoldSeconds = 0f;   // 打席をまたいで前の球の据え置き延長を引き継がない（issue #533）
             _catchCountdown = -1f;
             _catchIndex = -1;
@@ -3554,6 +3556,7 @@ namespace KokoSim.Unity.Match
             if (!Available) return;
             AdvanceSetGloveWeight(deltaTime);   // セットで握りを隠す補正の効き（issue #927）
             AdvanceSetHeadWeight(deltaTime);    // セットで待つ間の首の補正の効き（issue #912）
+            AdvanceRattledFx(deltaTime);        // 動揺の渦巻き・投球前の汗（issue #1178）
 
             // カットバック予約（アンカー同期のプリロール）。量子化と独立にプレー時間で数える
             if (_cutCountdown >= 0f)
@@ -3566,6 +3569,7 @@ namespace KokoSim.Unity.Match
                     CrossfadeActorTo(_pitcher, _cutClipTime, CrossfadeSeconds);
                     GroundFix(_pitcher);
                     HasCutToNextWindup = true;   // 次の1球の振りかぶりへ入った＝采配カードの受付締切
+                    BeginPitcherSweat();         // 動揺中なら投球動作の入りで汗が飛ぶ（issue #1178）
                 }
             }
 
@@ -4046,6 +4050,7 @@ namespace KokoSim.Unity.Match
                 DrawStrikeZone();
                 DrawBatTrail();
                 DrawBattedTrail();
+                DrawRattledFx();
                 return;
             }
             _postMat.SetFloat("_PosterLevels", PosterizeLevels);
@@ -4053,6 +4058,7 @@ namespace KokoSim.Unity.Match
             DrawStrikeZone();   // ポスタライズの**後**。前に置くと薄さが量子化に潰される（下の説明）
             DrawBatTrail();     // 打球の残像より**先**＝接触の瞬間は打球の線を上に出したい
             DrawBattedTrail();
+            DrawRattledFx();    // 動揺の渦巻き・汗（issue #1178）。頭の上なので打球の線とは重ならない
         }
 
         /// <summary>
