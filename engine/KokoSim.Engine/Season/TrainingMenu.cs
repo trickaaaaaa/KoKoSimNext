@@ -83,7 +83,8 @@ public static class TrainingMenus
         TrainingMenu.Strength => new(AbilityKind.Power, new[] { AbilityKind.ArmStrength }, NoPos),
         TrainingMenu.BaseRunning => new(AbilityKind.Speed, None, NoPos),
         TrainingMenu.Defense => new(AbilityKind.Fielding, new[] { AbilityKind.Catching }, NoPos),
-        TrainingMenu.Throwing => new(AbilityKind.ArmStrength, new[] { AbilityKind.Fielding }, NoPos),
+        // 副効果は守備と送球（送球の正確さを練習で伸ばす入口・issue #1167）。
+        TrainingMenu.Throwing => new(AbilityKind.ArmStrength, new[] { AbilityKind.Fielding, AbilityKind.ThrowAccuracy }, NoPos),
         TrainingMenu.Pitching => new(AbilityKind.Control, new[] { AbilityKind.Stamina }, NoPos),
         TrainingMenu.BreakingBall => new(AbilityKind.PitchRank, None, NoPos),
         TrainingMenu.Running => new(AbilityKind.Stamina, new[] { AbilityKind.Speed }, NoPos),
