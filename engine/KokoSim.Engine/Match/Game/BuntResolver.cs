@@ -106,13 +106,21 @@ public static class BuntResolver
     /// 五分＋左打者のドラッグボーナス。投手はフォロースルーの前進（<see cref="BaserunningCoefficients.BuntPitcherChargeFactor"/>）、
     /// 捕手はしゃがみからの反応遅延（<see cref="BaserunningCoefficients.BuntCatcherFieldingReactionPenaltySeconds"/>）を負う。
     /// 乱数消費は必ず2回（品質・方位の左右）＝分岐によらず一定（不変条件#2）。</para>
+    ///
+    /// <para>投球の効き（issue #1180）: <paramref name="veloPenaltyKmh"/>（反応球速がバント基準を超えた分、
+    /// <see cref="VelocityPenalty"/>）と <paramref name="stuffPenalty"/>（その1球の球威の基準超え）が大きいほど
+    /// 品質が下がる＝強く投手前へ転がる。品質の式に項を足すだけで乱数は増えない。</para>
     /// </summary>
     public static BuntFielding RollFielding(
         Player batter, Handedness side, IReadOnlyList<Fielder> fielders,
-        FieldingCoefficients fieldingCoeff, BaserunningCoefficients c, IRandomSource rng)
+        FieldingCoefficients fieldingCoeff, BaserunningCoefficients c, IRandomSource rng,
+        double veloPenaltyKmh = 0.0, double stuffPenalty = 0.0)
     {
         var skillEffect = c.AbilityEffect.Batting(batter.Bunt) - 50;
-        var quality = MathUtil.Clamp(rng.NextDouble() + skillEffect * c.BuntLaunchQualitySkillSlope, 0.0, 1.0);
+        var quality = MathUtil.Clamp(
+            rng.NextDouble() + skillEffect * c.BuntLaunchQualitySkillSlope
+            - veloPenaltyKmh * c.BuntLaunchQualityVelocitySlope - stuffPenalty * c.BuntLaunchQualityStuffSlope,
+            0.0, 1.0);
         var firstBaseLineProb = MathUtil.Clamp(
             c.BuntLaunchFirstBaseLineBase + (side.IsLeftSide() ? c.BuntLaunchLeftBatterFirstBaseLineBonus : 0.0),
             0.0, 1.0);
@@ -295,7 +303,7 @@ public static class BuntResolver
 
         // 打球の強さ・方向→処理野手・処理点・処理時刻の物理レース（issue #1092）。乱数消費は常に2回
         // （品質・方位の左右）。
-        var rolled = RollFielding(batter, side, fielders, fieldingCoeff, c, rng);
+        var rolled = RollFielding(batter, side, fielders, fieldingCoeff, c, rng, veloPenalty, stuffPenalty);
         fielding = rolled;
 
         var infieldHitP = InfieldHitProbability(batter, safety, side, field, rolled, c);

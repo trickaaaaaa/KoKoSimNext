@@ -539,6 +539,8 @@ baserunning:
   # 技術から引き、既存のゴロ転がりモデル（fielding.roll_decel_mps2等）へそのまま通す。処理野手（投手/捕手/
   # 一塁手/三塁手）はこの転がりへの到達レースで決める＝新しい物理式は発明しない。
   bunt_launch_quality_skill_slope: 0.004     # 品質（0=投手前へ強く・1=ラインぎわへ弱く）の技術連動
+  bunt_launch_quality_velocity_slope: 0.008  # 品質への球速の効き（基準超え1km/hあたり品質を下げる。issue #1180）
+  bunt_launch_quality_stuff_slope: 0.02      # 品質への球威の効き（基準超え1あたり品質を下げる。issue #1180）
   bunt_launch_bearing_min_deg: 5.0           # 方位の下限（品質0）
   bunt_launch_bearing_max_deg: 40.0          # 方位の上限（品質1）
   bunt_launch_speed_min_mps: 2.0             # 初速の下限（品質1=ほぼ死んだバント）

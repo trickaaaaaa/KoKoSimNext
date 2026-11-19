@@ -980,6 +980,8 @@ public static class CoefficientsLoader
         public double BuntPopFloor { get; set; } = D.BuntPopFloor;
         // バント: 打球の物理レース（issue #1092）
         public double BuntLaunchQualitySkillSlope { get; set; } = D.BuntLaunchQualitySkillSlope;
+        public double BuntLaunchQualityVelocitySlope { get; set; } = D.BuntLaunchQualityVelocitySlope;
+        public double BuntLaunchQualityStuffSlope { get; set; } = D.BuntLaunchQualityStuffSlope;
         public double BuntLaunchBearingMinDeg { get; set; } = D.BuntLaunchBearingMinDeg;
         public double BuntLaunchBearingMaxDeg { get; set; } = D.BuntLaunchBearingMaxDeg;
         public double BuntLaunchSpeedMinMps { get; set; } = D.BuntLaunchSpeedMinMps;
@@ -1175,6 +1177,8 @@ public static class CoefficientsLoader
             BuntPopStuffSlope = BuntPopStuffSlope,
             BuntPopFloor = BuntPopFloor,
             BuntLaunchQualitySkillSlope = BuntLaunchQualitySkillSlope,
+            BuntLaunchQualityVelocitySlope = BuntLaunchQualityVelocitySlope,
+            BuntLaunchQualityStuffSlope = BuntLaunchQualityStuffSlope,
             BuntLaunchBearingMinDeg = BuntLaunchBearingMinDeg,
             BuntLaunchBearingMaxDeg = BuntLaunchBearingMaxDeg,
             BuntLaunchSpeedMinMps = BuntLaunchSpeedMinMps,

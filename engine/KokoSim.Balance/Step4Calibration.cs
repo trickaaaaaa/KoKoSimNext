@@ -115,6 +115,37 @@ public static class Step4Calibration
         }
         sb.AppendLine();
 
+        // === 5b. 投球の効き（issue #1180）: 一塁走者ありの送りバント結果を投手の球速別に [%] ===
+        sb.AppendLine("## 5b. 送りバント結果 × 投手球速 [%]（一塁走者あり・バント50・N=20000。速い球ほど強く投手前へ→二塁封殺が増える）");
+        sb.AppendLine("| 球速 | 犠打成功 | 二塁封殺 | 内野安打 | 小フライ(併殺含む) | ファウル | 空振り |");
+        sb.AppendLine("|---|---|---|---|---|---|---|");
+        var bunter = new Player { Bunt = 50, Speed = 50 };
+        var firstRunner = new Player { Speed = 50 };
+        foreach (var kmh in new[] { 120.0, 135.0, 150.0 })
+        {
+            var p = new PitcherAttributes { MaxVelocityKmh = kmh };
+            var stuff = (kmh - 128.0) * 0.128;
+            int sac = 0, force = 0, ih = 0, pop = 0, foul = 0, miss = 0;
+            var rng = new Xoshiro256Random(seed ^ (ulong)kmh);
+            for (var i = 0; i < 20000; i++)
+            {
+                switch (BuntResolver.Resolve(bunter, p, pitchStuff: stuff, courseDifficulty: 0.0, safety: false,
+                    firstRunner: firstRunner, secondRunner: null, thirdRunner: null,
+                    field, field.StandardAlignment(), fielding, baserun, rng))
+                {
+                    case BuntResult.SacrificeSuccess: sac++; break;
+                    case BuntResult.ForceOutAtSecond: force++; break;
+                    case BuntResult.InfieldHit: ih++; break;
+                    case BuntResult.PopOut: case BuntResult.PopOutDoubledOff: pop++; break;
+                    case BuntResult.Foul: foul++; break;
+                    default: miss++; break;
+                }
+            }
+            double Q(int x) => x / 200.0;
+            sb.AppendLine($"| {kmh:F0}km/h | {Q(sac):F1} | {Q(force):F1} | {Q(ih):F1} | {Q(pop):F1} | {Q(foul):F1} | {Q(miss):F1} |");
+        }
+        sb.AppendLine();
+
         // === 6. 球速ヒストグラム（§1.1b/§1.1d: 常時 最速−3〜5km/h, たまに最速付近） ===
         sb.AppendLine("## 6. 球速ヒストグラム（最速145km/h投手, N=50000。目標: 中央値≈最速−4, 最速付近は稀）");
         var ace = new PitcherAttributes { MaxVelocityKmh = 145 };
