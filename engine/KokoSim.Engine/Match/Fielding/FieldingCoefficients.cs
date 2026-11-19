@@ -207,8 +207,10 @@ public sealed record FieldingCoefficients
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。
     /// |CatchMarginSeconds| がこれ未満の落球だけ、着地の瞬間に「フェア」を表示する。
     /// <see cref="Game.BaserunningCoefficients.CloseCallMarginSeconds"/> と同型の表示専用しきい値。
+    /// 0.5（issue #1085・オーナー決定2026-11-20）: 追いつけなかった外野フライの安打にも「フェア」を出す。
+    /// 「届かない」芝居の幅（余裕−0.5sまで）と揃え、完全に抜けた当たりだけ黙る。
     /// </summary>
-    public double CatchCloseCallMarginSeconds { get; init; } = 0.15;
+    public double CatchCloseCallMarginSeconds { get; init; } = 0.5;
 
     // 失策モデル（issue #123, 2026-07-23）。既定値は data/coefficients.yaml と同値＝実ゲーム（Unity は
     // new GameContext() の既定を使う）とsim/テストで同じ守備力連動になるよう揃える。変更時は
