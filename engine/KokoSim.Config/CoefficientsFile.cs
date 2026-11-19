@@ -955,6 +955,7 @@ public static class CoefficientsLoader
         public double BuntFoulSkillSlope { get; set; } = D.BuntFoulSkillSlope;
         public double BuntFoulFloor { get; set; } = D.BuntFoulFloor;
         public double BuntPopShare { get; set; } = D.BuntPopShare;
+        public double BuntMisrollFoulShare { get; set; } = D.BuntMisrollFoulShare;
         public double BuntBaseDistanceM { get; set; } = D.BuntBaseDistanceM;
         public double BuntRunnerReactionSeconds { get; set; } = D.BuntRunnerReactionSeconds;
         public double BuntLeftFirstStepBonusSeconds { get; set; } = D.BuntLeftFirstStepBonusSeconds;
@@ -1152,6 +1153,7 @@ public static class CoefficientsLoader
             BuntFoulSkillSlope = BuntFoulSkillSlope,
             BuntFoulFloor = BuntFoulFloor,
             BuntPopShare = BuntPopShare,
+            BuntMisrollFoulShare = BuntMisrollFoulShare,
             BuntBaseDistanceM = BuntBaseDistanceM,
             BuntRunnerReactionSeconds = BuntRunnerReactionSeconds,
             BuntLeftFirstStepBonusSeconds = BuntLeftFirstStepBonusSeconds,

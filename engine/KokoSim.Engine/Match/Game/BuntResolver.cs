@@ -287,7 +287,11 @@ public static class BuntResolver
         if (MathUtil.Chance(popShare, rng)) return PopOutOrDoubledOff(firstRunner, field, c, rng);
 
         if (!MathUtil.Chance(SuccessRate(batter, pitcher, courseDifficulty, c), rng))
-            return PopOutOrDoubledOff(firstRunner, field, c, rng); // 転がしそこねの凡打
+        {
+            // 転がしそこね: 一部はファウル（打席継続）、残りは小フライの凡打（issue #1092・BuntMisrollFoulShare）。
+            if (MathUtil.Chance(c.BuntMisrollFoulShare, rng)) return BuntResult.Foul;
+            return PopOutOrDoubledOff(firstRunner, field, c, rng);
+        }
 
         // 打球の強さ・方向→処理野手・処理点・処理時刻の物理レース（issue #1092）。乱数消費は常に2回
         // （品質・方位の左右）。

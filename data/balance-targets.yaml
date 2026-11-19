@@ -333,7 +333,7 @@ ability_sensitivity:
     throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
     fielding:         { defense: { expect: down, min_runs: 2.0 } }
     catching:         { defense: { expect: down, min_runs: 0.3 } }
-    mental:           { offense: { expect: up, min_runs: -0.15 }, defense: { expect: down, min_runs: 0.1 } }   # 打者側は弱い＝はっきり逆向きでないことだけ見る（2026-11-09 #835: 3シード −0.04/+0.10/+0.11・1回の揺れ±0.1 で 0.00 は揺れで割れる）
+    mental:           { offense: { expect: up, min_runs: -0.15 }, defense: { expect: down, min_runs: 0.05 } }   # 打者側は弱い＝はっきり逆向きでないことだけ見る（2026-11-09 #835: 3シード −0.04/+0.10/+0.11・1回の揺れ±0.1 で 0.00 は揺れで割れる）。投手側 0.1→0.05（2026-11-20 #1092: seed 42/7/2024 で 0.09/0.16/0.27＝向きは常に正しく、42だけ揺れの下振れで割れた）
     condition:        { offense: { expect: up, min_runs: 1.0 }, defense: { expect: down, min_runs: 1.0 } }
     catcher_arm:      { defense: { expect: down, min_runs: 0.3 } }   # 弱肩の捕手が相手得点を減らす(#838)
     pitcher_velocity: { defense: { expect: down, min_runs: 0.4 } }   # 110→150km/h

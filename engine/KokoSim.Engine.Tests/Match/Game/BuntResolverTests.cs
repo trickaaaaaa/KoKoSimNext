@@ -126,6 +126,45 @@ public sealed class BuntResolverTests
         Assert.True(fast > slow, $"球速で小フライ頻度が上がらない: slow={slow:P1} fast={fast:P1}");
     }
 
+    /// <summary>
+    /// 転がしそこね（成功率に外れた）の一部はファウル＝打席継続になる（issue #1092・BuntMisrollFoulShare）。
+    /// 振り分けを強めるほど小フライが減りファウルが増える。空振り・ファウル・小フライの先の分岐を0にして転がしそこねだけを見る。
+    /// </summary>
+    [Fact]
+    public void MisrolledBunt_SplitsIntoFoulAndPopOut_ByMisrollFoulShare()
+    {
+        (double Foul, double Pop) Rates(double share)
+        {
+            var c = C with
+            {
+                BuntMissShare = 0.0, BuntMissFloor = 0.0, BuntMissSkillSlope = 0.0, BuntMissVelocitySlope = 0.0, BuntMissStuffSlope = 0.0,
+                BuntFoulShare = 0.0, BuntFoulFloor = 0.0, BuntFoulSkillSlope = 0.0,
+                BuntPopShare = 0.0, BuntPopFloor = 0.0, BuntPopSkillSlope = 0.0, BuntPopVelocitySlope = 0.0, BuntPopStuffSlope = 0.0,
+                BuntBase = 0.0, BuntSkillSlope = 0.0,   // 成功率は下限 0.05＝ほぼ全部が転がしそこね
+                BuntMisrollFoulShare = share,
+            };
+            var rng = new Xoshiro256Random(5);
+            var batter = new Player { Bunt = 50 };
+            int foul = 0, pop = 0;
+            const int n = 4000;
+            for (var i = 0; i < n; i++)
+            {
+                var r = BuntResolver.Resolve(batter, Pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
+                    firstRunner: null, secondRunner: null, thirdRunner: null, field: Field, fielders: Fielders, fieldingCoeff: FieldingCoeff, c: c, rng: rng);
+                if (r == BuntResult.Foul) foul++;
+                if (r is BuntResult.PopOut or BuntResult.PopOutDoubledOff) pop++;
+            }
+            return (foul / (double)n, pop / (double)n);
+        }
+
+        var none = Rates(0.0);
+        var most = Rates(0.75);
+        Assert.Equal(0.0, none.Foul);                 // 振り分け0＝従来どおり全部小フライ
+        Assert.InRange(none.Pop, 0.90, 0.97);
+        Assert.InRange(most.Foul, 0.66, 0.76);        // 0.95×0.75≈0.71
+        Assert.True(most.Pop < none.Pop * 0.35, $"小フライが減っていない: {most.Pop:P1} vs {none.Pop:P1}");
+    }
+
     // ── ③一塁走者の封殺（フォースアウト） ──
 
     [Fact]

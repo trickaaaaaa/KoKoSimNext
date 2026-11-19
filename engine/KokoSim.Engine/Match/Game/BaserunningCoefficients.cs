@@ -213,6 +213,13 @@ public sealed record BaserunningCoefficients
     public double BuntFoulSkillSlope { get; init; } = 0.0012;
     public double BuntFoulFloor { get; init; } = 0.06;
     public double BuntPopShare { get; init; } = 0.05;
+    /// <summary>
+    /// 転がしそこね（<see cref="BuntResolver.SuccessRate"/> に外れた）のうち、ファウル（カウントが進み打席継続）に
+    /// なる割合（issue #1092・2026-11-19 オーナー決定）。残りは小フライのアウト。以前は全部が小フライで、バントで
+    /// 終えた打席の25〜29%を占め、犠打・封殺・内野安打が目安（70-80/5-10/5-10）に収まらなかった。
+    /// 2ストライクからのファウルはスリーバント失敗（#1140）＝三振になる。
+    /// </summary>
+    public double BuntMisrollFoulShare { get; init; } = 0.75;
 
     // === バント内野安打の時間軸判定（設計書02 §4.1b/§4.3, Step4-②）===
     // 犠打・セーフティとも「打者走者→一塁」対「バント処理→一塁送球」の秒勝負に通す。
@@ -229,7 +236,7 @@ public sealed record BaserunningCoefficients
     public double SafetyBuntSquareDelaySeconds { get; init; } = 0.12;
     /// <summary>内野安打 margin→確率の logistic 幅[s]。defenseTime は <see cref="HomePlayResolver.DefenseTimeSeconds"/>
     /// を <see cref="BuntResolver.BuntFielding"/>（物理レース, issue #1092）の実処理点から引く＝封殺と同じモデル。</summary>
-    public double BuntInfieldHitTimeScale { get; init; } = 0.14;
+    public double BuntInfieldHitTimeScale { get; init; } = 0.20;
 
     // === バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）===
     // バントサイン中でも、明確なボール球は構えを解いて見送れる（打者の選球眼で変動）。スクイズは対象外
@@ -298,7 +305,7 @@ public sealed record BaserunningCoefficients
     /// 捕ってから送球に移れるまでが通常のゴロより長い。全処理野手・全方向に一律で加算（既存の
     /// <see cref="Fielding.FieldingCoefficients.InfieldHandleJitterMeanSeconds"/>等と同じ「捕球は一瞬では
     /// 終わらない」という既存の考え方を、バント特有の手間として明示した1項。実測して校正する。</summary>
-    public double BuntBarehandPenaltySeconds { get; init; } = 0.62;
+    public double BuntBarehandPenaltySeconds { get; init; } = 0.50;
     /// <summary>前の走者を狙う判断のしきい値（オーナー決定2026-11-17）: 封殺のsafe確率がこれ未満のときだけ
     /// 前の走者を狙い、それ以外は一塁で確実に1つ取る。</summary>
     public double BuntForceOutLeadRunnerSafeThreshold { get; init; } = 0.35;
