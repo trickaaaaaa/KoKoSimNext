@@ -19,13 +19,13 @@ namespace KokoSim.Unity.Match
         private const float SwirlRadiusM = 0.14f;
         /// <summary>渦巻きの外半径の画素下限（試合ビューのRT上）。ピクセル化の後でも渦巻きと読める大きさ。</summary>
         private const float MinSwirlRadiusPx = 17f;
-        /// <summary>頭ボーンから渦巻きの中心までの高さ[m]（帽子の上に浮かせる）。</summary>
-        private const float SwirlLiftM = 0.42f;
+        /// <summary>頭ボーンから渦巻きの中心までの高さ[m]（帽子のすぐ上に乗せる。オーナー確認2026-11-20）。</summary>
+        public static float SwirlLiftM = 0.20f;
         private const float SwirlTurns = 1.75f;
         /// <summary>渦巻きが1周する秒数（ゆっくり回す）。</summary>
         private const float SwirlSpinSeconds = 2.2f;
-        /// <summary>渦巻きの面をカメラへ向ける度合い（0=真水平／1=画面に正対）。水平のままだと真横から見て線に潰れる。</summary>
-        public static float RattledSwirlFaceCamera = 0.55f;
+        /// <summary>渦巻きの面をカメラへ向ける度合い（0=真水平／1=画面に正対）。水平のままだと真横から見て線に潰れる。0.20＝地面と平行に寝た輪に見える（オーナー確認2026-11-20）。</summary>
+        public static float RattledSwirlFaceCamera = 0.20f;
         private const float SwirlFadeSeconds = 0.15f;
 
         /// <summary>汗が飛ぶ秒数（0.3秒前後）。</summary>
