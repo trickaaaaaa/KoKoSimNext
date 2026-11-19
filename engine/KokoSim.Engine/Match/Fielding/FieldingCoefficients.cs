@@ -200,8 +200,13 @@ public sealed record FieldingCoefficients
     /// <summary>
     /// お手玉の失策（2026-11-03）: もたつき[s]がこれ以上で、もたつきが無ければアウトだったセーフは
     /// 内野安打でなく失策（<see cref="FieldingErrorKind.Bobble"/>）。0以下＝無効（従来どおり内野安打）。
+    /// issue #1164（2026-11-20）で 1.3→1.45：失策の種類別按分（捕球48/悪送球34/受け手18・オーナー決定）
+    /// に合わせ、按分を食っていたお手玉を閾値を上げて減らした（しきい値を超える確率はその分下がる）。
+    /// 1.47（= InfieldHandleJitterMeanSeconds×InfieldHandleJitterMaxFactor、守備50の頭打ち値）を
+    /// 超えると平均的な守備力の内野手では構造的に発生しなくなる（BobbleErrorTests が5000シード探索で検出）
+    /// ため、その手前に留める。
     /// </summary>
-    public double BobbleErrorMinJitterSeconds { get; init; } = 1.3;
+    public double BobbleErrorMinJitterSeconds { get; init; } = 1.45;
 
     /// <summary>
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。
@@ -220,8 +225,10 @@ public sealed record FieldingCoefficients
     /// issue #532（2026-08-08）で×1.29（0.0384→0.0495）：外野フライ落球を難度連動（<see cref="FlyErrorBaseProb"/>）で減らした分、
     /// errors_per_game を現行水準（≈2.4）に保つため内野ゴロ側を引き上げた（捕球60/送球40の按分は維持）。
     /// issue #810（2026-11-09）で 0.0495→0.0400：受け手の捕球ミス(<see cref="ReceiveErrorBaseProb"/>)を三段目として
-    /// 新設した分だけ、捕球・送球の両方から再配分し errors_per_game を帯内（1.8–3.6）に保った。</summary>
-    public double ErrorBaseProb { get; init; } = 0.0400;
+    /// 新設した分だけ、捕球・送球の両方から再配分し errors_per_game を帯内（1.8–3.6）に保った。
+    /// issue #1164（2026-11-20）で 0.0400→0.0220：悪送球(<see cref="ThrowErrorBaseProb"/>)・受け手
+    /// (<see cref="ReceiveErrorBaseProb"/>)へ再配分（失策の種類別按分 捕球48/悪送球34/受け手18・オーナー決定）。</summary>
+    public double ErrorBaseProb { get; init; } = 0.0220;
     /// <summary>捕球(Catching−50)あたりのエラー変化（守備が平均より低い側＝弱小の傾き）。急にして弱小同士を大量失策に。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0065;
     /// <summary>守備が平均(50)より高い側の傾き（弱小側 ErrorCatchingSlope と非対称）。緩くして精鋭側に
@@ -241,8 +248,10 @@ public sealed record FieldingCoefficients
     /// <summary>
     /// フライ落球の基準確率（捕球余裕≈0＝ぎりぎりの飛球・Catching50時）。<see cref="ErrorBaseProb"/>（内野ゴロ）とは
     /// 独立に校正する。実効確率は <see cref="FlyErrorRoutineMarginSeconds"/> による難度で 0（平凡）〜この値（際どい）へ伸縮する。
+    /// issue #1164（2026-11-20）で 0.20→0.07：失策の種類別按分（捕球48/悪送球34/受け手18・オーナー決定）に
+    /// 合わせ、按分を食っていたフライ落球を下げた。
     /// </summary>
-    public double FlyErrorBaseProb { get; init; } = 0.20;
+    public double FlyErrorBaseProb { get; init; } = 0.07;
     /// <summary>
     /// フライを「平凡（難度0＝落球確率が下限 <see cref="ErrorMinProb"/> 近くへ落ちる）」とみなす捕球余裕[s]。
     /// 難度 = clamp(1 − catchMargin/この値, 0, 1)。余裕がこの秒数以上ある飛球は難度0（＝ほぼ確実に捕る）、
@@ -257,8 +266,12 @@ public sealed record FieldingCoefficients
     /// Ac50 で内野ゴロ失策の約40%が送球由来になる按分（残り≈60%が捕球由来 ErrorBaseProb）。
     /// issue #532 で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）。
     /// issue #810（2026-11-09）で 0.0343→0.0280：受け手の捕球ミス(<see cref="ReceiveErrorBaseProb"/>)を三段目として
-    /// 新設した分だけ再配分（捕球・送球・受け手の按分は概ね48/34/18）。決定論baselineは再生成済み。</summary>
-    public double ThrowErrorBaseProb { get; init; } = 0.0280;
+    /// 新設した分だけ再配分（捕球・送球・受け手の按分は概ね48/34/18）。決定論baselineは再生成済み。
+    /// issue #1164（2026-11-20）で 0.0280→0.1250：按分が実測で捕球81.4%/悪送球7.9%/受け手10.8%に偏っていた
+    /// （お手玉・フライ落球が按分を食っていた）のを、オーナー決定の捕球48/悪送球34/受け手18へ校正
+    /// （実測2000試合×seed7/42/99/2024で捕球46.5–49.0%/悪送球32.7–34.2%/受け手16.5–18.9%）。
+    /// 回収レース（<see cref="WildThrowScatterSigmaM"/>）で約半分がアウトに戻る分を見込んで大きく上げた。</summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.1250;
     /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
@@ -288,8 +301,10 @@ public sealed record FieldingCoefficients
     // 乱数消費順・結果とも完全一致（ThrowErrorBaseProb と同じ gating 方式で決定論を保つ）。
     /// <summary>受け手の捕球ミスの基準確率（一塁手 Catching50時）。issue #810で正値化＝捕球・送球の両方から
     /// 再配分し errors_per_game を帯内（1.8–3.6）に保った（捕球・送球・受け手の按分は概ね48/34/18）。
-    /// 一塁手自身が処理した打球（受け手が別にいない）には適用しない。</summary>
-    public double ReceiveErrorBaseProb { get; init; } = 0.0150;
+    /// 一塁手自身が処理した打球（受け手が別にいない）には適用しない。
+    /// issue #1164（2026-11-20）で 0.0150→0.0370：悪送球の確率を上げた分、三段目（受け手）に到達する
+    /// 母数が減るので、按分18%を保つため基準確率も上げた。</summary>
+    public double ReceiveErrorBaseProb { get; init; } = 0.0370;
 
     // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
     // 守備所要時間へ加算してもう一度同じ判定基準（defenseTime+ForceOutMarginSeconds vs runnerTime）で

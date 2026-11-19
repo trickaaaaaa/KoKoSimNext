@@ -33,8 +33,12 @@ public sealed record BaserunningCoefficients
     /// <para>issue #629（監督決定 2026-08-13）で 0.20→0.90。連鎖の対象を<b>悪送球だけ</b>に絞った
     /// （捕球エラー・フライ落球は球が野手の足元にあるので連鎖しない）ぶん、1本あたりの確率を上げて
     /// 試合あたりの連鎖数を据え置く＝「悪送球はほぼ必ず全走者を1つ多く進める」というモデルになる。
-    /// 実測（2000試合・seed 42/7）: ゲート無し0.20で 0.450/試合・得点5.21 → 悪送球のみ0.90で 0.484/0.482・5.20/5.21。</para></summary>
-    public double ErrorExtraAdvanceProb { get; init; } = 0.90;
+    /// 実測（2000試合・seed 42/7）: ゲート無し0.20で 0.450/試合・得点5.21 → 悪送球のみ0.90で 0.484/0.482・5.20/5.21。</para>
+    /// <para>issue #1164（2026-11-20）で 0.90→0.20：失策の種類別按分（捕球48/悪送球34/受け手18・オーナー決定）に
+    /// 合わせて <see cref="Fielding.FieldingCoefficients.ThrowErrorBaseProb"/> を約4.5倍へ上げたため、この確率が
+    /// 0.90のままだと失策連鎖/試合が参考帯（0.10–0.80）を超える（実測0.848–0.881）。悪送球1回あたりの連鎖確率を
+    /// 下げて帯内（実測0.197–0.213）に戻した。</para></summary>
+    public double ErrorExtraAdvanceProb { get; init; } = 0.20;
     /// <summary>失策連鎖の送球精度連動（Issue #37 / design-14 P1-6b）。連鎖確率 = ErrorExtraAdvanceProb −
     /// (送球者 ThrowAccuracy − 50)×この値。issue #169で 0.0→0.003 に正値化＝「送球が不正確な野手の失策ほど連鎖しやすい」（YAML sim値と一致）。</summary>
     public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.003;

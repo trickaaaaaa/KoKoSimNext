@@ -793,8 +793,12 @@ public sealed class BaserunningPlaysTests
         var totalOn = 0;
         var wpOn = 0;
         // ⚠ 30シードでは足りない（実測 2026-08-14: off=255 / on=252 で逆転した）。理由は上の振り逃げと同じ。
+        // 150→600（issue #1164, 2026-11-20）: 守備の失策係数（お手玉/フライ落球/送球/受け手の按分再配分）を
+        // 変えると、同シードでも打席ごとの乱数消費が変わってこの試合以降の乱数列が丸ごとずれる
+        // （不変条件#2は保たれるが、どの試合が暴投で得点するかの組み合わせが変わる）。150では
+        // off=2185/on=2176 で逆転したため、無関係な係数変更でも揺れない余裕を持たせた。
         // 1試合=独立シード＝並列に回して整数で足す（順序に依らず同じ合計。issue #639 と同じ作法）。
-        System.Threading.Tasks.Parallel.For(0, 150, i =>
+        System.Threading.Tasks.Parallel.For(0, 600, i =>
         {
             var s = (ulong)i;
             var off1 = GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
