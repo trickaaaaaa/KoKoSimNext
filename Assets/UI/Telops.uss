@@ -1,0 +1,102 @@
+/* 試合テロップの画像素材（issue #1179）。文字は描かず透過PNGを出し、位置・拡大率・不透明度だけを
+   コード（Assets/KokoSim/Match/Telops/*）が毎フレーム付ける。クラスは「どの画像を、どこを基準点に、
+   ネイティブ解像度の半分の大きさで置くか」だけを決める静的な値＝動き（translate/scale/opacity）は
+   必ずインラインstyleで上書きするので、ここでは一切書かない（混ざると二重定義で事故る）。
+
+   位置は1600×900基準。基準点(left/top)はPNGの中心が来る座標で、margin(-半幅,-半高)で中心合わせする
+   （UI Toolkitのtranslateはコードのアニメーションだけのために空けておく）。 */
+
+/* ── Calls（判定11種・pitch-call/judgement-call 共用の画像面） ── */
+.tl-call-img {
+    position: absolute;
+    left: 800px;
+    top: 450px;
+}
+.tl-call-strike { width: 677px; height: 194.5px; margin-left: -338.5px; margin-top: -97.25px; background-image: url("project:///Assets/UI/Telops/Calls/call_strike.png"); }
+.tl-call-strikeout { width: 328px; height: 208px; margin-left: -164px; margin-top: -104px; background-image: url("project:///Assets/UI/Telops/Calls/call_strikeout.png"); }
+.tl-call-ball { width: 440px; height: 198.5px; margin-left: -220px; margin-top: -99.25px; background-image: url("project:///Assets/UI/Telops/Calls/call_ball.png"); }
+.tl-call-walk { width: 790px; height: 200px; margin-left: -395px; margin-top: -100px; background-image: url("project:///Assets/UI/Telops/Calls/call_walk.png"); }
+.tl-call-hitbypitch { width: 800.5px; height: 201.5px; margin-left: -400.25px; margin-top: -100.75px; background-image: url("project:///Assets/UI/Telops/Calls/call_hitbypitch.png"); }
+.tl-call-out { width: 414.5px; height: 192.5px; margin-left: -207.25px; margin-top: -96.25px; background-image: url("project:///Assets/UI/Telops/Calls/call_out.png"); }
+.tl-call-doubleplay { width: 799.5px; height: 202px; margin-left: -399.75px; margin-top: -101px; background-image: url("project:///Assets/UI/Telops/Calls/call_doubleplay.png"); }
+.tl-call-safe { width: 427.5px; height: 193px; margin-left: -213.75px; margin-top: -96.5px; background-image: url("project:///Assets/UI/Telops/Calls/call_safe.png"); }
+.tl-call-foul { width: 545.5px; height: 192px; margin-left: -272.75px; margin-top: -96px; background-image: url("project:///Assets/UI/Telops/Calls/call_foul.png"); }
+.tl-call-fair { width: 428px; height: 195.5px; margin-left: -214px; margin-top: -97.75px; background-image: url("project:///Assets/UI/Telops/Calls/call_fair.png"); }
+.tl-call-error { width: 436.5px; height: 194.5px; margin-left: -218.25px; margin-top: -97.25px; background-image: url("project:///Assets/UI/Telops/Calls/call_error.png"); }
+/* ホームランのフォールバック面（issue #1179）。SetHomeRunHost されていない画面（試合詳細の2D再生等）だけ、
+   judgement-call（Calls画像と同じ器）でこの面を出す。通常のMatchLiveはhomerun-telopの専用アニメを使う。 */
+.tl-call-homerun { width: 832px; height: 232.5px; margin-left: -416px; margin-top: -116.25px; background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_base.png"); }
+
+/* ── プレイボール／ゲームセット（issue #1179 §1・§4。作り・位置・タイムラインは共通、素材と色だけ変える） ── */
+.tl-gt-root { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: none; }
+
+.tl-gt-dim { position: absolute; left: 800px; top: 450px; width: 1600px; height: 900px; margin-left: -800px; margin-top: -450px; background-image: url("project:///Assets/UI/Telops/PlayBall/playball_dim.png"); }
+
+.tl-gt-lines { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.tl-gt-line { position: absolute; border-radius: 2px; background-color: #FFFFFF; }
+.tl-gt-line-1 { left: 200px; top: 318px; width: 520px; height: 3px; border-radius: 1.5px; opacity: 0.85; }
+.tl-gt-line-2 { left: 820px; top: 352px; width: 360px; height: 2px; border-radius: 1px; opacity: 0.6; }
+.tl-gt-line-3 { left: 520px; top: 560px; width: 640px; height: 4px; border-radius: 2px; }
+.tl-gt-line-4 { left: 120px; top: 600px; width: 300px; height: 2px; border-radius: 1px; opacity: 0.7; }
+.tl-gt-line-5 { left: 1080px; top: 520px; width: 260px; height: 2px; border-radius: 1px; opacity: 0.5; }
+
+.tl-pb-ghost { position: absolute; left: 800px; top: 450px; width: 1860.5px; height: 233px; margin-left: -930.25px; margin-top: -116.5px; background-image: url("project:///Assets/UI/Telops/PlayBall/playball_ghost.png"); }
+.tl-gs-ghost { position: absolute; left: 800px; top: 450px; width: 1746px; height: 236px; margin-left: -873px; margin-top: -118px; background-image: url("project:///Assets/UI/Telops/GameSet/gameset_ghost.png"); }
+
+.tl-gt-group { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+
+.tl-pb-shadow { position: absolute; left: 800px; top: 423px; width: 1013px; height: 243px; margin-left: -506.5px; margin-top: -121.5px; background-image: url("project:///Assets/UI/Telops/PlayBall/playball_shadow.png"); }
+.tl-pb-extrude { position: absolute; left: 800px; top: 423px; width: 1013px; height: 243px; margin-left: -506.5px; margin-top: -121.5px; background-image: url("project:///Assets/UI/Telops/PlayBall/playball_extrude_mask.png"); }
+.tl-pb-face { position: absolute; left: 800px; top: 423px; width: 1013px; height: 243px; margin-left: -506.5px; margin-top: -121.5px; background-image: url("project:///Assets/UI/Telops/PlayBall/playball_face.png"); }
+.tl-pb-sub { position: absolute; left: 800px; top: 541px; width: 310.5px; height: 55.5px; margin-left: -155.25px; margin-top: -27.75px; background-image: url("project:///Assets/UI/Telops/PlayBall/playball_sub.png"); }
+.tl-pb-bar { position: absolute; top: 539px; width: 64px; height: 4px; }
+.tl-pb-bar-left { left: 564.75px; }
+.tl-pb-bar-right { left: 971.25px; }
+
+.tl-gs-shadow { position: absolute; left: 800px; top: 423px; width: 1008.5px; height: 239.5px; margin-left: -504.25px; margin-top: -119.75px; background-image: url("project:///Assets/UI/Telops/GameSet/gameset_shadow.png"); }
+.tl-gs-extrude { position: absolute; left: 800px; top: 423px; width: 1008.5px; height: 239.5px; margin-left: -504.25px; margin-top: -119.75px; background-image: url("project:///Assets/UI/Telops/GameSet/gameset_extrude_mask.png"); }
+.tl-gs-face { position: absolute; left: 800px; top: 423px; width: 1008.5px; height: 239.5px; margin-left: -504.25px; margin-top: -119.75px; background-image: url("project:///Assets/UI/Telops/GameSet/gameset_face.png"); }
+.tl-gs-sub { position: absolute; left: 800px; top: 541px; width: 287px; height: 55.5px; margin-left: -143.5px; margin-top: -27.75px; background-image: url("project:///Assets/UI/Telops/GameSet/gameset_sub.png"); }
+.tl-gs-bar { position: absolute; top: 539px; width: 64px; height: 4px; background-color: #FFFFFF; }
+.tl-gs-bar-left { left: 576.5px; }
+.tl-gs-bar-right { left: 959.5px; }
+
+/* ── ホームラン（issue #1179 §3） ── */
+.tl-hr-root { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: none; }
+.tl-hr-dim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: rgba(14, 12, 10, 0.24); }
+.tl-hr-group { position: absolute; left: 800px; top: 450px; width: 832px; height: 232.5px; margin-left: -416px; margin-top: -116.25px; }
+.tl-hr-img { position: absolute; left: 0; top: 0; width: 832px; height: 232.5px; }
+.tl-hr-base { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_base.png"); }
+.tl-hr-gold-00 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_00.png"); }
+.tl-hr-gold-01 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_01.png"); }
+.tl-hr-gold-02 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_02.png"); }
+.tl-hr-gold-03 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_03.png"); }
+.tl-hr-gold-04 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_04.png"); }
+.tl-hr-gold-05 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_05.png"); }
+.tl-hr-gold-06 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_06.png"); }
+.tl-hr-gold-07 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_07.png"); }
+.tl-hr-gold-08 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_08.png"); }
+.tl-hr-gold-09 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_09.png"); }
+.tl-hr-gold-10 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_10.png"); }
+.tl-hr-gold-11 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_11.png"); }
+.tl-hr-gold-12 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_12.png"); }
+.tl-hr-gold-13 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_13.png"); }
+.tl-hr-gold-14 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_14.png"); }
+.tl-hr-gold-15 { background-image: url("project:///Assets/UI/Telops/HomeRun/homerun_gold_15.png"); }
+
+/* 飛距離の下段（旧 .pitch-call__detail と同じ見た目。ホームランテロップ専用に持つ＝
+   judgement-call を介さなくなったため器を共有しない）。 */
+.tl-hr-distance {
+    position: absolute;
+    left: 800px;
+    top: 620px;
+    margin-left: -200px;
+    width: 400px;
+    font-size: var(--fs-body);
+    -unity-text-align: middle-center;
+    color: var(--sb-ink-1);
+    background-color: var(--sb-face);
+    border-bottom-width: var(--nb-border);
+    border-bottom-color: var(--ink);
+    padding: var(--sp-1) var(--sp-3);
+}

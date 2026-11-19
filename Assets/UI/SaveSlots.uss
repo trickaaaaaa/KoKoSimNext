@@ -222,3 +222,14 @@
 .sr-text .unity-base-field__input,
 .sr-text .unity-text-element { font-size: var(--fs-body); }
 .sr-input__line .sbk-field-suffix { font-size: var(--fs-body); }
+
+/* クレジット（issue #1179）。ライセンス本文は長い定型文＝折り返して読める高さいっぱいまで流す。
+   「校名の編集」等と違い常設の入力欄が無いので、スクロール領域の余白だけ別クラスに分ける。 */
+.ss-credits-scroll { flex-grow: 1; }
+.ss-credits-body {
+    white-space: normal;
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+}

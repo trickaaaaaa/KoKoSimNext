@@ -31,8 +31,12 @@ namespace KokoSim.Unity.Saves
         private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo, _saveBtn, _advanceBtn;
         private Button _titleBtn, _titleYes, _titleNo;
 
-        // 画面内タブ（issue #946）: 0＝セーブデータ／1＝校名の編集。ゲーム中（タブ経由）だけ出す。
-        private static readonly string[] PageLabels = { "セーブデータ", "校名の編集" };
+        // 画面内タブ（issue #946）: 0＝セーブデータ／1＝校名の編集（ゲーム中だけ）／最後＝クレジット
+        // （issue #1179・オーナー決定「入口は設定」＝この「システム」タブが唯一の設定っぽい画面）。
+        // 校名の編集はゲーム中（タブ経由）だけ出るので、配列はそのぶん長さが変わる＝インデックスを
+        // 固定の定数にしない（_creditsPage で参照する）。
+        private string[] _pageLabels;
+        private int _creditsPage;
         private int _page;
         private SchoolRenamePage _rename;
 
@@ -63,24 +67,52 @@ namespace KokoSim.Unity.Saves
             // 校名の編集はゲーム中だけ（タイトル経由は全国がまだ生成されていない＝引いた時点で生成が走る）。
             _rename = _inGame ? new SchoolRenamePage(_root, OnSchoolRenamed) : null;
             _rename?.Bind();
+            // クレジット（issue #1179）は校名の編集と違いゲーム中/タイトル経由どちらでも出す
+            // ＝配列の長さが変わる（校名の編集はゲーム中だけ挟む）ので、クレジットの位置は末尾固定で持つ。
+            _pageLabels = _rename != null
+                ? new[] { "セーブデータ", "校名の編集", "クレジット" }
+                : new[] { "セーブデータ", "クレジット" };
+            _creditsPage = _pageLabels.Length - 1;
+            BuildCreditsPage();
             ShowPage(0);
         }
 
-        /// <summary>画面内タブを切り替える（0＝セーブデータ／1＝校名の編集）。撮影ハーネスからも呼ぶ。</summary>
+        /// <summary>画面内タブを切り替える（0＝セーブデータ／校名の編集（ゲーム中だけ）／末尾＝クレジット）。
+        /// 撮影ハーネスからも呼ぶ。</summary>
         public void ShowPage(int page)
         {
-            _page = _rename != null ? page : 0;
+            _page = Mathf.Clamp(page, 0, _pageLabels.Length - 1);
             var tabs = _root.Q<VisualElement>("ss-tabs");
             if (tabs != null)
             {
                 tabs.Clear();
-                if (_rename != null) tabs.Add(UiComponents.SegTabs(PageLabels, _page, ShowPage));
+                tabs.Add(UiComponents.SegTabs(_pageLabels, _page, ShowPage));
             }
-            SetText("ss-heading", PageLabels[_page]);
+            SetText("ss-heading", _pageLabels[_page]);
+            var renamePage = _rename != null ? 1 : -1;
             SetShown("ss-page-saves", _page == 0);
-            SetShown("ss-page-rename", _page == 1);
-            if (_page == 1) _rename.Open();
-            else Render();
+            SetShown("ss-page-rename", _page == renamePage);
+            SetShown("ss-page-credits", _page == _creditsPage);
+            if (_page == renamePage) _rename.Open();
+            else if (_page == 0) Render();
+        }
+
+        /// <summary>クレジット（issue #1179）: フォントライセンス全文を一度だけ流し込む（静的内容）。</summary>
+        private void BuildCreditsPage()
+        {
+            SetText("credits-anton-body", LoadLicenseText("OFL-anton"));
+            SetText("credits-delagothic-body", LoadLicenseText("OFL-delagothicone"));
+        }
+
+        /// <summary>
+        /// Assets/Resources/Licenses/*.txt を読む（正典は Assets/UI/Fonts/OFL-*.txt・CREDITS.md。
+        /// ビルドに含めるには Resources 配下に置く必要があるため、起動時に読む複製をここへ置いている
+        /// ＝フォントのライセンスを更新したらこちらも揃える）。
+        /// </summary>
+        private static string LoadLicenseText(string name)
+        {
+            var asset = Resources.Load<TextAsset>("Licenses/" + name);
+            return asset != null ? asset.text : "";
         }
 
         /// <summary>改名の後: 自校名が変わるとトップバーの校名も変わる（編集ページはタブ経由＝トップバーが出ている）。</summary>

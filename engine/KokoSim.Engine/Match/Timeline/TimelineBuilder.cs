@@ -193,6 +193,11 @@ public static class TimelineBuilder
     /// <see cref="BaserunningCoefficients.CloseCallMarginSeconds"/> の初期値と同値）。
     /// closeFlyMarginSeconds=判定オーバーレイ「フェア」（Issue #328②）の際どさしきい値[s]（既定は
     /// <see cref="FieldingCoefficients.CatchCloseCallMarginSeconds"/> の初期値と同値）。
+    /// fairLineThresholdM=判定オーバーレイ「フェア」（issue #1179）の、着地点からファウルライン
+    /// （±45°、<see cref="FieldGeometry.InFoulTerritory"/> と同じ前提）までの垂直距離しきい値[m]。
+    /// 際どい飛球（上のclose fly）と並ぶ2つめの「フェア」条件＝ライン際に落ちたフェア打球（本塁打を除く）
+    /// にも同じ判定オーバーレイを出す。表示用の目安値（録画で確かめて決める）＝**表示専用**:
+    /// 乱数を引かず、結果（Result・塁打数）には一切触れない。
     /// fielderReachM=野手の守備範囲[m]（既定は <see cref="FieldingCoefficients.InfielderFieldingRadiusM"/>
     /// の初期値と同値）。**表示専用**: 守備解決は「半径ぶんは飛びついて届く」で判定しているので、
     /// 体を打球の位置まで運ぶ必要がない。この余白ぶん処理レッグを短くしないと、体が脚力を超えて動く。
@@ -208,7 +213,8 @@ public static class TimelineBuilder
         double closeFlyMarginSeconds = 0.5,
         double fielderReachM = 4.20,
         Player? batter = null,
-        FieldingCoefficients? fieldingCoeff = null)
+        FieldingCoefficients? fieldingCoeff = null,
+        double fairLineThresholdM = 1.5)
     {
         var table = formations ?? FormationTable.Default;
         var landing = new TimelinePoint(play.LandingX, play.LandingZ);
@@ -595,6 +601,10 @@ public static class TimelineBuilder
         var batterOut = play.Result == BattedBallResult.Out && !play.IsFly;
         // 判定オーバーレイ（Issue #59）: 一塁送球が絡んだ判定（force out / 内野安打）のみ際どさを評価。
         var batterCloseCall = play.JudgementMarginSeconds is { } jm && Math.Abs(jm) < closeCallMarginSeconds;
+        // 判定オーバーレイ「フェア」のライン際条件（issue #1179）。着地点からファウルラインまでの
+        // 垂直距離[m]（正＝フェア側、負＝ファウル側）。本塁付近（r≈0）は符号が定まらないので
+        // NaN を返し、しきい値比較がすべて false になる（フェアもファウルも出ない無害な既定）。
+        var lineDistanceM = DistanceToFoulLineM(play.LandingX, play.LandingZ);
         runners.Add(new RunnerLeg
         {
             Label = "打", T0 = ContactAt + 0.10, T1 = batterArrive,
@@ -695,6 +705,14 @@ public static class TimelineBuilder
         {
             // 野手が追いついていた際どい飛球が落ちた瞬間に「フェア」を出す（Issue #328②）。
             // 完全に抜けた当たり（|余裕|が閾値超）は対象外＝しきい値がそのままゲート。
+            judgements.Add(new JudgementEvent { Label = "打", T = landAt, Kind = JudgementKind.Fair });
+        }
+        else if (lineDistanceM >= 0.0 && lineDistanceM <= fairLineThresholdM)
+        {
+            // ライン際のフェア（issue #1179）: 着地点がファウルラインからしきい値以内のフェア打球
+            // （本塁打は上の分岐で既に確定済み・対象外）。上の「際どい飛球」と同じ判定オーバーレイを
+            // 共有する＝「フェア」は2つの条件のOR（このelse-ifでフライ/ゴロを問わず拾う）。
+            // 完全に抜けた普通の安打（ラインから十分離れている）・ファウル（ライン外＝距離が負）は対象外。
             judgements.Add(new JudgementEvent { Label = "打", T = landAt, Kind = JudgementKind.Fair });
         }
 
@@ -3816,6 +3834,20 @@ public static class TimelineBuilder
         var dx = a.X - b.X;
         var dz = a.Z - b.Z;
         return Math.Sqrt(dx * dx + dz * dz);
+    }
+
+    /// <summary>
+    /// 地上の点(x, z)からファウルライン（本塁から±45°、<see cref="FieldGeometry.InFoulTerritory"/> と
+    /// 同じ前提＝球場ごとの両翼長に依らない）までの垂直距離[m]（issue #1179）。
+    /// 正＝フェア側（ラインまでの距離）、負＝ファウル側。本塁付近（r≈0）は方位が定まらないため NaN。
+    /// </summary>
+    private static double DistanceToFoulLineM(double x, double z)
+    {
+        var r = Math.Sqrt(x * x + z * z);
+        if (r < 1e-6) return double.NaN;
+        var bearing = Math.Atan2(x, z);
+        var off = Math.PI / 4.0 - Math.Abs(bearing);
+        return r * Math.Sin(off);
     }
 
     /// <summary>一塁駆け抜け（オーバーラン）で塁の先まで走り抜ける距離[m]（issue #443。表示専用）。</summary>

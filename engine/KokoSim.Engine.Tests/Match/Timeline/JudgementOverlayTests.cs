@@ -258,6 +258,67 @@ public sealed class JudgementOverlayTests
         Assert.Empty(tl.Judgements);
     }
 
+    // --- 判定イベント「フェア」（issue #1179）: ライン際に落ちたフェア打球（本塁打を除く）も対象 ---
+
+    /// <summary>
+    /// 本塁から距離R・ファウルラインまでの垂直距離がdistance[m]になる着地点(X, Z)
+    /// （bearing = 45° − asin(distance / R)。R=50mは内野を抜けた安打の目安）。
+    /// </summary>
+    private static (double X, double Z) NearLinePoint(double distanceM, double rangeM = 50.0)
+    {
+        var off = Math.Asin(Math.Clamp(distanceM / rangeM, -1.0, 1.0));
+        var bearing = Math.PI / 4.0 - off;
+        return (rangeM * Math.Sin(bearing), rangeM * Math.Cos(bearing));
+    }
+
+    [Fact]
+    public void BuildBattedBall_GroundSingle_NearFoulLine_JudgementFiresAsFair_AtLandAt()
+    {
+        // ライン（±45°）から約1.0m（既定しきい値1.5m以内）に落ちた、際どい飛球ではない
+        // ふつうの内野安打を抜けた単打。フライではないので既存の「際どい飛球」条件には掛からない。
+        var (x, z) = NearLinePoint(1.0);
+        var play = FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.RightField, landingX: x, landingZ: z, fieldedAtSeconds: 2.0, isFly: false);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15, closeFlyMarginSeconds: 0.15);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.Equal(JudgementKind.Fair, j.Kind);
+        Assert.Equal(ContactAtSeconds + play.HangTimeSeconds, j.T, 6); // 着地の瞬間(landAt)
+    }
+
+    [Fact]
+    public void BuildBattedBall_GroundSingle_WellInsideFairTerritory_NoJudgement()
+    {
+        // ラインから十分離れた（約1.5mしきい値を大きく超える）普通の安打では「フェア」を出さない。
+        var (x, z) = NearLinePoint(10.0);
+        var play = FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.RightField, landingX: x, landingZ: z, fieldedAtSeconds: 2.0, isFly: false);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15, closeFlyMarginSeconds: 0.15);
+
+        Assert.Empty(tl.Judgements);
+    }
+
+    [Fact]
+    public void BuildBattedBall_FlyBall_NearFoulLine_ButNotCloseCatchMargin_StillFiresFair()
+    {
+        // フライでも、際どい捕球margin（closeFlyMarginSeconds）の対象外（悠々セーフに落ちた）でも、
+        // 着地点がライン際ならしきい値側の条件で「フェア」が出る（OR条件・issue #1179）。
+        var (x, z) = NearLinePoint(0.5, rangeM: 90.0);
+        var play = FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.RightField, landingX: x, landingZ: z, fieldedAtSeconds: 3.6,
+            hangTimeSeconds: 3.5, apexHeightM: 25.0, isFly: true) with { CatchMarginSeconds = 2.0 };
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15, closeFlyMarginSeconds: 0.15);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.Equal(JudgementKind.Fair, j.Kind);
+    }
+
     [Fact]
     public void BuildBattedBall_RoutineCatch_StaysOut_NeverFair()
     {
