@@ -135,6 +135,11 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static string ForceOverrideForCapture;
 #endif
+        /// <summary>
+        /// 【開発用】伝令が効いていなくても「制球↑」「ミート↑」を出す（issue #1177 の見た目の撮影用。
+        /// 撮影レシピ <c>calm-badge-1177</c> の overrides で立てる）。既定 false＝従来と完全一致。
+        /// </summary>
+        public static bool CalmBadgeForceForCapture;
 
         [SerializeField] private ulong gameSeed = 20260718UL;
         [SerializeField] private string awayName = "北都大付属";
@@ -4830,6 +4835,30 @@ namespace KokoSim.Unity.Match
 
             _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseSchoolId));
             _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseSchoolId));
+
+            // 伝令が効いている間だけ、上がっている能力の名前に↑（issue #1177）。守備伝令＝投手の制球、攻撃伝令＝打者のミート。
+            // 両校とも出す（相手校の伝令も相手の投手／打者の帯に出る）。数字・残り打席は出さない（監督決定 2026-11-19）。
+            // 置き場所は帯の盤面側の辺＝投手は帯の上・打者は帯の下（案B・2026-11-19 監督決定）。帯の中身は変えない。
+            var offTeam = offenseIsTop ? snap.Away : snap.Home;
+            var defTeam = offenseIsTop ? snap.Home : snap.Away;
+            if (defTeam.DefenseCalmActive || CalmBadgeForceForCapture)
+                _hudPitcherSlot.Add(CalmBadge("制球", "mhud-calm--pitcher"));
+            if (offTeam.OffenseCalmActive || CalmBadgeForceForCapture)
+                _hudBatterSlot.Add(CalmBadge("ミート", "mhud-calm--batter"));
+        }
+
+        /// <summary>伝令が効いている間の「制球↑」「ミート↑」（issue #1177）。位置は USS のクラスで決める。</summary>
+        private static VisualElement CalmBadge(string ability, string placement)
+        {
+            var badge = MakeRow("mhud-calm");
+            badge.AddToClassList(placement);
+            var t = MakeLabel(ability, "mhud-calm__t");
+            t.AddToClassList("f-body");
+            var up = MakeLabel("↑", "mhud-calm__up");
+            up.AddToClassList("f-body");
+            badge.Add(t);
+            badge.Add(up);
+            return badge;
         }
 
         private VisualElement BuildHudPitcher(LivePitcherToday def, int schoolId)
