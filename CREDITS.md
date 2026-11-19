@@ -17,3 +17,13 @@
 生成物はリポジトリに含めず、`tools/voicevox-announcements.py` で各自の環境に作ります
 （出力先 `Assets/KokoSim/Audio/Vendor/VoiceVox/` は Git 管理外）。
 No.7 の利用規約は [No.7 公式サイト](https://voiceseven.com/) を参照（商用利用は事前確認が要る）。
+
+## テロップ画像のフォント
+
+試合テロップの画像（`Assets/UI/Telops/`）は、次のフォントで描いた文字を画像に焼き込んでいます。
+フォントそのものは同梱していません。ライセンスは [SIL Open Font License 1.1](https://openfontlicense.org/) です。
+
+| フォント | ライセンス |
+|---|---|
+| Anton | `Assets/UI/Fonts/OFL-anton.txt` |
+| Dela Gothic One | `Assets/UI/Fonts/OFL-delagothicone.txt` |
