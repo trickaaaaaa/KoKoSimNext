@@ -178,8 +178,14 @@ namespace KokoSim.Unity.Debugging
                     Directory.CreateDirectory(ddir);
                     Time.captureDeltaTime = 1f / _r.VideoFps;
                     int frames = Mathf.CeilToInt(_r.DuelSeconds * _r.VideoFps);
+                    bool timeoutSent = false;
                     for (int f = 0; f < frames; f++)
                     {
+                        if (!timeoutSent && _r.DefenseTimeoutAt >= 0f && f / (float)_r.VideoFps >= _r.DefenseTimeoutAt)
+                        {
+                            timeoutSent = true;
+                            ctrl.DefenseTimeoutForCapture();
+                        }
                         WriteProbes(f / (double)_r.VideoFps, ctrl.DuelRigForCapture);
                         yield return Capture(ctrl, Path.Combine(ddir, "f" + _videoFrames.ToString("000", CultureInfo.InvariantCulture) + ".png"));
                         _videoFrames++;

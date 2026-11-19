@@ -18,7 +18,7 @@ namespace KokoSim.Unity.Match
         /// <summary>渦巻きの外半径[m]（下限の画素に満たないときはこの比のまま拡大する）。</summary>
         private const float SwirlRadiusM = 0.14f;
         /// <summary>渦巻きの外半径の画素下限（試合ビューのRT上）。ピクセル化の後でも渦巻きと読める大きさ。</summary>
-        private const float MinSwirlRadiusPx = 15f;
+        private const float MinSwirlRadiusPx = 17f;
         /// <summary>頭ボーンから渦巻きの中心までの高さ[m]（帽子の上に浮かせる）。</summary>
         private const float SwirlLiftM = 0.42f;
         private const float SwirlTurns = 1.75f;
@@ -181,14 +181,14 @@ namespace KokoSim.Unity.Match
                 {
                     for (int i = 0; i < SweatDropsPerSide; i++)
                     {
-                        float delay = i * 0.05f;
+                        float delay = i * 0.06f;
                         float t = _sweatT - delay;
                         if (t < 0f) continue;
                         float life = SweatSeconds - delay;
                         float u = t / life;
                         if (u >= 1f) continue;
-                        float outward = (0.42f + 0.16f * i) * side;   // m/s（画面の左右）
-                        float rise = 0.85f - 0.25f * i;               // m/s（上向きの初速）
+                        float outward = (0.35f + 0.30f * i) * side;   // m/s（画面の左右）
+                        float rise = 1.05f - 0.35f * i;               // m/s（上向きの初速）
                         const float gravity = 3.2f;
                         var pos = headPos
                             + right * ((0.10f * side + outward * t) * k)
@@ -211,9 +211,9 @@ namespace KokoSim.Unity.Match
             var f = right * dir.x + up * dir.y;
             var s = right * -dir.y + up * dir.x;   // 面内で f に直交
             GL.Vertex(c + f * (r * 1.5f));
-            GL.Vertex(c + s * (r * 0.75f));
+            GL.Vertex(c + s * (r * 0.95f));
             GL.Vertex(c - f * (r * 0.9f));
-            GL.Vertex(c - s * (r * 0.75f));
+            GL.Vertex(c - s * (r * 0.95f));
         }
     }
 }

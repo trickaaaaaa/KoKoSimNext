@@ -141,6 +141,19 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool CalmBadgeForceForCapture;
 
+        /// <summary>撮影専用（issue #1178）: 対決ビューの投手を左投手として立たせる。既定 false＝従来と完全一致。</summary>
+        public static bool PitcherLeftForceForCapture;
+
+        /// <summary>撮影専用（issue #1178）: 監督の守備伝令を今送る（動揺が解けて渦巻きが消える絵）。<see cref="SendTimeout"/> と同じ流れ。</summary>
+        public void DefenseTimeoutForCapture()
+        {
+            if (_prog == null) return;
+            _prog.CallTimeout(_managerIsAway);
+            _preStep = null;
+            var snap = _prog.Snapshot();
+            ApplyPitcherRattled(snap, _atBat?.IsTop ?? snap.OffenseIsTop);
+        }
+
         [SerializeField] private ulong gameSeed = 20260718UL;
         [SerializeField] private string awayName = "北都大付属";
         [SerializeField] private string homeName = "桜丘";
@@ -4470,7 +4483,7 @@ namespace KokoSim.Unity.Match
                 bats = _current.BatterBats; throws = _current.PitcherThrows;
             }
             else return false;
-            pitcherLeft = throws == Handedness.Left;
+            pitcherLeft = throws == Handedness.Left || PitcherLeftForceForCapture;
             batterLeft = bats.EffectiveBats(throws) == Handedness.Left;   // engine と同じ打席側（issue #1019）
             return true;
         }
