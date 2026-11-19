@@ -806,6 +806,8 @@ public sealed class MatchProgression
     ///
     /// <para>伝令（issue #1177）: 両校の「攻撃伝令／守備伝令が効いているか」を効果窓の残り打席（&gt;0）から
     /// 読むだけで載せる。乱数・判定には触れない。</para>
+    ///
+    /// <para>動揺（issue #1178）: 両校の現投手の <see cref="TeamState.PitcherRattled"/> を読むだけで載せる。</para>
     /// </summary>
     public MatchLiveSnapshot Snapshot()
     {
@@ -815,11 +817,11 @@ public sealed class MatchProgression
         var away = new LiveTeamSnapshot(_p.Away.LiveLineup(),
             _p.Away.LivePitcherLine(awayIsDefending ? PendingPitchIndex : 0),
             _p.Away.LiveReserves(), _p.Away.LiveReservePitchers(),
-            _p.Away.OffenseCalmPa > 0, _p.Away.DefenseCalmPa > 0);
+            _p.Away.OffenseCalmPa > 0, _p.Away.DefenseCalmPa > 0, _p.Away.PitcherRattled);
         var home = new LiveTeamSnapshot(_p.Home.LiveLineup(),
             _p.Home.LivePitcherLine(homeIsDefending ? PendingPitchIndex : 0),
             _p.Home.LiveReserves(), _p.Home.LiveReservePitchers(),
-            _p.Home.OffenseCalmPa > 0, _p.Home.DefenseCalmPa > 0);
+            _p.Home.OffenseCalmPa > 0, _p.Home.DefenseCalmPa > 0, _p.Home.PitcherRattled);
         return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
             _p.Away.LiveLine(), _p.Home.LiveLine(), _p.Ctx.ResolvedWeather, _p.Ctx.StadiumName);
     }

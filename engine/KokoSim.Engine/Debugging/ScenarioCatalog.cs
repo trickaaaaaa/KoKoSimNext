@@ -30,6 +30,8 @@ public sealed record ScenarioDefinition
     public int Strikes { get; init; }
     public int Batter { get; init; } = 1;
     public int PitcherFatigue { get; init; }
+    /// <summary>守備側投手が動揺した状態で始める（issue #1178）。</summary>
+    public bool PitcherRattled { get; init; }
 
     /// <summary>現代ルールのトグル（null=ベース GameContext のまま）。</summary>
     public bool? Dh { get; init; }
@@ -55,6 +57,7 @@ public sealed record ScenarioDefinition
         HomeScore = HomeScore,
         BatterOrder = Batter,
         PitcherFatiguePitches = PitcherFatigue,
+        PitcherRattled = PitcherRattled,
     };
 
     private bool Contains(int b)

@@ -65,6 +65,7 @@ scenarios:
     count: { balls: 3, strikes: 2 }
     batter: 4
     pitcher_fatigue: 120
+    pitcher_rattled: true
     modern_rules: { dh: false, tiebreak: true }
     seed: 20260721
     force: WildPitch
@@ -87,6 +88,8 @@ scenarios:
         Assert.Equal(2, s.Strikes);
         Assert.Equal(4, s.Batter);
         Assert.Equal(120, s.PitcherFatigue);
+        Assert.True(s.PitcherRattled);
+        Assert.True(s.ToStart().PitcherRattled);
         Assert.False(s.Dh);
         Assert.True(s.TieBreak);
         Assert.Equal(20260721UL, s.Seed);
@@ -98,6 +101,7 @@ scenarios:
         Assert.Equal(1, m.Inning);
         Assert.True(m.Top);
         Assert.Empty(m.Bases);
+        Assert.False(m.PitcherRattled);
         Assert.Null(m.Seed);
         Assert.Null(m.Force);
         Assert.Null(m.TieBreak);

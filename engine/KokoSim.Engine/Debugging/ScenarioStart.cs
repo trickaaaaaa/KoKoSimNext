@@ -39,6 +39,9 @@ public sealed record ScenarioStart
     /// <summary>守備側投手の当日の累計球数（疲労・継投判断の入力）。</summary>
     public int PitcherFatiguePitches { get; init; }
 
+    /// <summary>守備側投手が動揺した状態で始めるか（issue #1178。撮影レシピで動揺中の絵を作る）。</summary>
+    public bool PitcherRattled { get; init; }
+
     /// <summary>宣言が矛盾していないか（範囲外は黙って直さず投げる＝シナリオYAMLの誤りを早期に殺す）。</summary>
     public void Validate()
     {

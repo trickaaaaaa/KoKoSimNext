@@ -13,6 +13,7 @@
 #   count        : 先頭打者のカウント（balls 0-3 / strikes 0-2）
 #   batter       : 開始打順（1-9）
 #   pitcher_fatigue : 守備側投手の当日の累計球数
+#   pitcher_rattled : true＝守備側投手が動揺した状態で始める（issue #1178。絵の確認用）
 #   modern_rules : dh / tiebreak（省略＝呼び出し側の GameContext のまま）
 #   force        : 強制発動（設計書17 §6.1）。ForcedOutcome の enum 名
 

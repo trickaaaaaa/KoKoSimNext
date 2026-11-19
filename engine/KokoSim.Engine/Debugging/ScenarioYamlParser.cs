@@ -88,6 +88,7 @@ public static class ScenarioYamlParser
             Strikes = Int(MapOr(count, "strikes", "0"), 0),
             Batter = Int(Get(f, "batter"), 1),
             PitcherFatigue = Int(Get(f, "pitcher_fatigue"), 0),
+            PitcherRattled = Bool(Get(f, "pitcher_rattled"), false),
             Dh = NullableBool(MapOr(rules, "dh", "")),
             TieBreak = NullableBool(MapOr(rules, "tiebreak", "")),
             Seed = ULong(Get(f, "seed")),
