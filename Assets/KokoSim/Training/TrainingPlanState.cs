@@ -627,11 +627,11 @@ namespace KokoSim.Unity.Training
         }
 
         // 「この設定で伸びる能力」に常時並べる能力（打撃→走守→投手の全能力）。伸びない能力も出し、
-        // 効果のある能力だけバーが伸びる。走塁/盗塁/送球は練習メニュー経路が無いので一覧から除く。
+        // 効果のある能力だけバーが伸びる。走塁/盗塁は練習メニュー経路が無いので一覧から除く。
         private static readonly AbilityKind[] GrowthDisplayOrder =
         {
             AbilityKind.LaunchTendency, AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline, AbilityKind.Bunt,
-            AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.Fielding, AbilityKind.Catching,
+            AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.ThrowAccuracy, AbilityKind.Fielding, AbilityKind.Catching,
             AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank, AbilityKind.Stuff,
         };
 
