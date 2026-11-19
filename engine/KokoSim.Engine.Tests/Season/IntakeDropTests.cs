@@ -15,7 +15,7 @@ public sealed class IntakeDropTests
 
     private static readonly AbilityKind[] NotGrownByDefault =
     {
-        AbilityKind.Steal, AbilityKind.Baserunning, AbilityKind.Bunt,
+        AbilityKind.Baserunning, AbilityKind.Bunt,
         AbilityKind.Velocity, AbilityKind.PitchRank, AbilityKind.Stuff,
     };
 
@@ -24,6 +24,7 @@ public sealed class IntakeDropTests
         AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline,
         AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.Control,
         AbilityKind.ThrowAccuracy, // 遠投の副効果（issue #1167）
+        AbilityKind.Steal, // 走塁練習の副効果（issue #1168）
     };
 
     [Fact]

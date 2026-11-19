@@ -81,7 +81,8 @@ public static class TrainingMenus
         TrainingMenu.PowerHitting => new(AbilityKind.Power, new[] { AbilityKind.LaunchTendency }, NoPos),
         TrainingMenu.PlateDiscipline => new(AbilityKind.Discipline, new[] { AbilityKind.Contact }, NoPos),
         TrainingMenu.Strength => new(AbilityKind.Power, new[] { AbilityKind.ArmStrength }, NoPos),
-        TrainingMenu.BaseRunning => new(AbilityKind.Speed, None, NoPos),
+        // 副効果は盗塁（スタートの速さ・技術。走力とは別・issue #1168）。
+        TrainingMenu.BaseRunning => new(AbilityKind.Speed, new[] { AbilityKind.Steal }, NoPos),
         TrainingMenu.Defense => new(AbilityKind.Fielding, new[] { AbilityKind.Catching }, NoPos),
         // 副効果は守備と送球（送球の正確さを練習で伸ばす入口・issue #1167）。
         TrainingMenu.Throwing => new(AbilityKind.ArmStrength, new[] { AbilityKind.Fielding, AbilityKind.ThrowAccuracy }, NoPos),
