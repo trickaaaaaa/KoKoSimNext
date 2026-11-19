@@ -18,11 +18,11 @@ public sealed class PitcherRoleEmergenceTests
 {
     private static readonly RosterCoefficients C = new();
 
-    private static List<DevelopingPlayer> Cohorts(int seeds)
+    private static List<DevelopingPlayer> Cohorts(int seeds, double? talentCenter = null)
     {
         var all = new List<DevelopingPlayer>();
         for (var s = 0; s < seeds; s++)
-            all.AddRange(ProspectGenerator.Intake(1, C, new Xoshiro256Random((ulong)(60000 + s))));
+            all.AddRange(ProspectGenerator.Intake(1, C, new Xoshiro256Random((ulong)(60000 + s)), talentCenter: talentCenter));
         return all;
     }
 
@@ -105,18 +105,20 @@ public sealed class PitcherRoleEmergenceTests
     /// 投手の打撃が「野手 − 固定値」の崖でなく連続分布になる（#360 の根治）。
     /// 崖があると投手の打撃はごく狭い帯に固まるので、分布の広がりと野手との重なりで見る。
     /// </summary>
-    [Fact]
-    public void PitcherBatting_IsContinuous_NotACliff()
+    /// <para>issue #1080: 自校の新入生の野手（投手寄りは打撃・守備だけ）を BatterScaleDrop 下げたため、既定の中心32では
+    /// 投手の打撃の配分中心が下限（OffSpecialtyFloor）に張り付き、分布が下限で潰れる（sd≈3.1）。これは崖ではなく
+    /// 下限の圧縮（野手も同様）なので、下限が効かない中心50で本来の閾値（sd&gt;5.0）を見て、中心32は下限込みの緩い閾値で見る。</para>
+    [Theory]
+    [InlineData(32.0, 2.5)]
+    [InlineData(50.0, 5.0)]
+    public void PitcherBatting_IsContinuous_NotACliff(double talentCenter, double minSd)
     {
-        var all = Cohorts(1500);
+        var all = Cohorts(1500, talentCenter);
         var pitchers = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).Select(BattingLevel).ToList();
         var fielders = all.Where(p => !PitcherRoleResolver.LeansPitcher(p)).Select(BattingLevel).ToList();
 
         var pitcherSd = Math.Sqrt(pitchers.Sum(v => Math.Pow(v - pitchers.Average(), 2)) / pitchers.Count);
-        // 5.0→4.5（2026-11-17 issue #1080）: talentCenter未指定（名声非注入の既定32）に自校の下げ幅
-        // （RosterCoefficients.StrengthTargetDrop・既定7）も乗り、入学時の下げ(IntakeDrop)後のtrainedCenter
-        // （32-7-12=13）が総合力の下限（TalentMin=10）に寄るぶん、分布がわずかに圧縮される（実測 sd=4.88）。
-        Assert.True(pitcherSd > 4.5, $"投手の打撃分布が狭すぎる（崖の疑い）: sd={pitcherSd:F2}");
+        Assert.True(pitcherSd > minSd, $"投手の打撃分布が狭すぎる（崖の疑い）: sd={pitcherSd:F2}");
 
         // 野手の分布と十分に重なる（完全に分離＝崖）。
         var fielderMedian = fielders.OrderBy(v => v).ElementAt(fielders.Count / 2);

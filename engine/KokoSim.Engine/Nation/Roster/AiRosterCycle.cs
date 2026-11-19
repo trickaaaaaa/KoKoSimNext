@@ -333,11 +333,14 @@ public static class AiRosterCycle
         double Overall() => ProjectedOverall(roster, school, yearIndex, deps);
 
         // 1段目: 型を無視した一律の成長（打者・投手とも同じ g）＝型の導入前と同じ解。投手能力の成長量はこれで決まる。
+        // issue #1080: 1段目は目標を PitcherGrowthTargetRestore だけ戻して解く＝投手の伸びを物差しを下げる前に揃える
+        // （下げ幅は2段目＝打者だけで吸収）。下げた目標のままだと3年生の150km/h以上が年1〜4人（帯7〜18人）に減り、
+        // 下げ幅を全部戻すと入学時の投手の +StrengthTargetDrop と二重になって19人・145km/h以上 1154人（main 895人）に増えた。
         var gPitch = SolveG(g =>
         {
             foreach (var (p, b) in bases)
                 p.Snapshot = BumpTo(b, gradeFactor(p.Grade) * g, deps.Roster, ignoreBatterArchetype: true);
-        }, Overall, target, correction);
+        }, Overall, target + deps.Roster.PitcherGrowthTargetRestore, correction);
 
         // 型を持つ選手がいなければ（自校由来・旧セーブ）1段目で確定（適用済み）。
         if (!bases.Any(x => x.Base.BatterArchetype is not null)) return (gPitch, gPitch);

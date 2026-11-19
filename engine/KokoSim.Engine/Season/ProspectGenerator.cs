@@ -179,6 +179,24 @@ public sealed record RosterCoefficients
     public double StrengthTargetDrop { get; init; } = 7.0;
 
     /// <summary>
+    /// 打者（野手の能力・投手寄りの打撃と守備）の物差しを下げる量[能力点]（issue #1080・2026-11-19 オーナー決定「投手は据え置き」）。
+    /// 投手は今の物差しのまま、打者だけをこの量下げてチーム総合を <see cref="StrengthTargetDrop"/> だけ下げる。
+    /// 自校の新入生（<c>Intake</c>）はこの量を直接、AI校（<c>AiRosterFactory</c>／<c>StrengthTeamFactory</c>）は
+    /// 下げ幅込みの中心から差分（この量 − <see cref="StrengthTargetDrop"/>）を引いて、同じ物差しに揃える。値は「新入生で組んだチームの総合がちょうど
+    /// <see cref="StrengthTargetDrop"/> 下がる」量を実測で選ぶ（<c>OwnIntakeScaleDropTests</c>）。
+    /// 投手を下げると自校だけ 150km/h 級が入らなくなる（AI校は据え置き）ため、投手には掛けない。
+    /// </summary>
+    public double BatterScaleDrop { get; init; } = 12.0;
+
+    /// <summary>
+    /// AI校の成長の2段解き（<c>AiRosterCycle.SolveGrowthG</c>）の1段目（投手の伸びを決める段）で、総合の目標を
+    /// 戻す量[能力点]（issue #1080）。投手の球速の分布を物差しを下げる前に揃えるための値で、実測で選んだ
+    /// （戻す量 0: 3年生の150km/h以上 年1〜4人／3.5: 2〜7人／5: 7〜13人・Sのエース中央値 151.6km/h＝main と一致／
+    /// 7: 19人・145km/h以上 1154人＝main 895人を超える）。<c>VelocityDistributionByTierTests</c> で固定。
+    /// </summary>
+    public double PitcherGrowthTargetRestore { get; init; } = 5.0;
+
+    /// <summary>
     /// 学校の強度（<see cref="Nation.School.Strength"/>）を能力中心へ写す（issue #578）。
     /// **表示ランクは元の強度のまま**（Q24 の確定4＝表示は直さない）で、生成だけがこの写像を通る。
     /// 呼ぶのは「ティアが能力中心に変わる入口」だけ＝<see cref="Nation.StrengthTeamFactory.Create"/> と
@@ -599,8 +617,8 @@ public static class ProspectGenerator
         var formCoeff = form ?? new FormCoefficients();
         // 自校もAI校と同じ物差しで下げる（issue #1080・オーナー決定2026-11-17「自校は新入生の生成だけで合わせる」）。
         // TalentCenterFromFame 自体は変えない（名声のランク≒中心のランクという issue #1031 の一致はそのまま保つ）。
-        // ここで引くのは実際の生成（Create）に渡る値だけ＝AI校の CompressStrength と対称。
-        var center = (talentCenter ?? c.TalentCenterDefault) - c.StrengthTargetDrop;
+        // AI校と同じく投手寄りの新入生は今の中心のまま、野手だけを BatterScaleDrop 下げる（Create 内で役割判定後に引く）。
+        var center = talentCenter ?? c.TalentCenterDefault;
         var count = fixedCount is { } fc
             ? Math.Max(0, fc)
             : (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.IntakeMean, c.IntakeSd)), c.IntakeMin, c.IntakeMax);
@@ -814,6 +832,13 @@ public static class ProspectGenerator
         // w＝能力の配分に使う重み（バイアス無し）、wRole＝「投手としてどれだけ読めるか」（バイアス込み・
         // 判定境界で 0.5）。持ち物は wRole、能力の配分は w と使い分ける（PitcherRoleResolver 参照）。
         var (naturalPitcher, w, wRole) = ResolvePitcherRole(p, c);
+        // issue #1080: 野手だけ物差しを下げる（投手寄りは据え置き＝AI校と同じ作り。BatterScaleDrop 参照）。
+        // 役割判定は能力ロール前の適性だけで決まる＝ここで中心を動かしても判定は変わらない。
+        // 投手寄りは投球の能力を据え置き、打撃・守備の配分（BattingSkill）の中心だけを同じ量下げる
+        // （下の pitcherBattingDrop）。投手を丸ごと据え置くと投手が野手より打つ（実測: 打撃上位10%の投手が
+        // 11〜14%→43〜64%）。AI校も成長の2段解きで投手の打撃を野手とほぼ同じだけ下げている。
+        if (!naturalPitcher) talentCenter -= c.BatterScaleDrop;
+        var pitcherBattingDrop = naturalPitcher ? c.BatterScaleDrop : 0.0;
 
         // 「投手経歴」（旧 設計書01 §1.1b）は #366b で概念ごと廃止。野手の変化球上振れは
         // 投手適性からの連続配分（LearnPitches の wRole）に溶けているので、免罪符のフラグは要らない。
@@ -864,7 +889,9 @@ public static class ProspectGenerator
         // 専門配分の中心・フロアも w で連続補間（w=1で投手が本業＝total／w=0で野手が本業＝total）。
         // 投手系(制球/キレ)は offCenter↔total、打撃・守備系は total↔offCenter を逆向きに補間する。
         var pitchingCenter = Lerp(offCenter, total, w);
-        var battingCenter = Lerp(total, offCenter, w);
+        // issue #1080: 投手寄りの打撃・守備も野手と同じ量だけ下げる（投手が野手より打たない並びを保つ）。
+        // offRatio に比例させて小さく下げると、打撃上位10%に占める投手が 11〜14%→23〜28% に増えた。
+        var battingCenter = Lerp(total, offCenter, w) - pitcherBattingDrop;
         var pitchingFloor = (int)Math.Round(Lerp(c.OffSpecialtyFloor, c.SpecialtyFloor, w));
         var battingFloor = (int)Math.Round(Lerp(c.SpecialtyFloor, c.OffSpecialtyFloor, w));
         Distribute(p, PitchingSkill, pitchingCenter, concentration, pitchingFloor, c, rng, untrainedScale, capBonus);

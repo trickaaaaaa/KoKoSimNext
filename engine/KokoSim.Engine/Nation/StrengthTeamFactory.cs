@@ -77,6 +77,8 @@ public static class StrengthTeamFactory
         // issue #1080: 投手の中心だけ下げ幅（StrengthTargetDrop）を打ち消す。打者の個性（オールAの緩和）を
         // 狙った下げ幅は打撃側だけに効かせる＝球速の分布（VelocityDistributionByTierTests・design #908）を崩さない。
         var pitchingCastCenter = castCenter + rc.StrengthTargetDrop;
+        // 打者は自校・AI永続ロスターと同じ物差し（BatterScaleDrop）まで下げる（castCenter は既に StrengthTargetDrop 下げ済み）。
+        var battingCastCenter = castCenter - (rc.BatterScaleDrop - rc.StrengthTargetDrop);
         var starSlots = PickStarSlots(rng.Fork(StarSalt), FieldSlots.Length, rc.AiStarHitters);
         var ac = rc.Archetypes;   // 球質タイプ係数は自校生成と同じ RosterCoefficients に同居
         var archSalt = 0x7B15_0000UL;   // 球質タイプ用の Fork ソルト（主RNG非消費）
@@ -98,7 +100,7 @@ public static class StrengthTeamFactory
             var pos = FieldSlots[slot];
             var pr = Profile(rc, rng, ref profileSalt, starter: true, pos);
             order.Add(AiMentalModel.WithGradeArc(
-                PositionPlayer(pos, castCenter, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
+                PositionPlayer(pos, battingCastCenter, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
                         battingLift: starSlots.Contains(slot) ? starLift : 0.0)
                     with { UniformNumber = PositionNumber(pos), Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
                 pr.Grade, rc));
@@ -377,7 +379,11 @@ public static class StrengthTeamFactory
         var onMound = pos == FieldPosition.Pitcher;
         // 打撃中心: 本業(strength) ↔ 専門外(strength×OffSpecialtyFactor) を w で補間。主軸の上乗せは補間の後に足す
         // （投手寄せの主軸でも上乗せ量は同じ）。
-        var battingCenter = strength + (strength * rc.OffSpecialtyFactor - strength) * pitcherWeight + battingLift;
+        // issue #1080: マウンドに置く選手は投球の物差しを据え置いた中心（strength）で来るので、打撃3能力だけ
+        // 打者の物差しまで下げる（BatterScaleDrop）。下げないと投手が野手より打つ（自校で実測: 打撃上位10%の投手 11〜14%→43〜64%）。
+        var moundBattingDrop = onMound ? rc.BatterScaleDrop : 0.0;
+        var battingCenter = strength + (strength * rc.OffSpecialtyFactor - strength) * pitcherWeight + battingLift
+                            - moundBattingDrop;
 
         // 打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）: パワーを希少側にしてミートへ振り替え（打撃指標不変）
         // ＋5能力の凸凹配分（重みは専用 Fork から＝主RNG非消費）。Ability() の呼び出し順・回数は従来どおり保つ。
@@ -385,7 +391,7 @@ public static class StrengthTeamFactory
         var contact = Ability((battingCenter + rc.AiPowerSkew) * prof.Contact, rng);
         var power = Ability(Math.Max(0.0, battingCenter - rc.AiPowerSkew) * prof.Power, rng);
         var launch = Ability(50, rng);
-        var discipline = Ability((strength + battingLift) * prof.Discipline, rng);
+        var discipline = Ability(Math.Max(0.0, strength + battingLift - moundBattingDrop) * prof.Discipline, rng);
         var speed = Ability(strength, rng);
         // 肩は身体系＝個人差を自校と同じ σ で引く（issue #767。消費数は Ability と同じ1回）。
         // 送球精度は従来どおり肩と同じ標準正規値から σ6 で作る＝旧値と1ビット一致（肩の幅だけ広げる）。

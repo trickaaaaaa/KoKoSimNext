@@ -2736,6 +2736,8 @@ public static class CoefficientsLoader
         public double TierCompressionSlope { get; set; } = D.TierCompressionSlope;
         public double TierCompressionKnee { get; set; } = D.TierCompressionKnee;
         public double StrengthTargetDrop { get; set; } = D.StrengthTargetDrop;
+        public double BatterScaleDrop { get; set; } = D.BatterScaleDrop;
+        public double PitcherGrowthTargetRestore { get; set; } = D.PitcherGrowthTargetRestore;
         // 凸凹配分
         public double ConcentrationMean { get; set; } = D.ConcentrationMean;
         public double ConcentrationSd { get; set; } = D.ConcentrationSd;
@@ -3059,6 +3061,8 @@ public static class CoefficientsLoader
             TierCompressionSlope = TierCompressionSlope,
             TierCompressionKnee = TierCompressionKnee,
             StrengthTargetDrop = StrengthTargetDrop,
+            BatterScaleDrop = BatterScaleDrop,
+            PitcherGrowthTargetRestore = PitcherGrowthTargetRestore,
             ConcentrationMean = ConcentrationMean,
             ConcentrationSd = ConcentrationSd,
             SpecialtyFloor = SpecialtyFloor,

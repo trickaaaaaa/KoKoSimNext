@@ -1911,6 +1911,12 @@ roster:
   # 積まないとチーム総合が目標に届かず、打者の型(issue #1066)を入れても個性が死ぬ。学校どうしの勝率は
   # AggregateMatch が差分だけを見るので変わらない（team_strength.overall_tier_boost が見た目のランクを打ち消す）。
   strength_target_drop: 7.0
+  # 自校の新入生の野手だけを下げる量（issue #1080・2026-11-19「自校も投手は据え置き」）。AI校と同じく投手は今の物差しのまま。
+  # 新入生で組んだチームの総合がちょうど strength_target_drop 下がる量を実測で選ぶ（OwnIntakeScaleDropTests）。
+  batter_scale_drop: 12.0   # 実測: 新入生で組んだチームの総合が −6.5〜−7.4（中心70/55/40）
+  # AI校の成長の2段解きの1段目（投手の伸び）で総合の目標を戻す量（issue #1080）。投手の球速の分布を下げる前に揃える。
+  # 実測: 0→150km/h以上 年1〜4人／5→7〜13人（帯7〜18・Sのエース中央値 main と一致）／7→19人。
+  pitcher_growth_target_restore: 5.0
 
   # 凸凹配分（総ポイントをランダム重みで配分・偏り自体もばらつく＝金太郎飴回避）
   concentration_mean: 0.35    # 偏り強度σ。大きいほど内訳が凸凹

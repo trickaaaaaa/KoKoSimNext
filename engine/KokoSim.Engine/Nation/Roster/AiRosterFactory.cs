@@ -42,6 +42,10 @@ public static class AiRosterFactory
         // 狙った下げ幅は打撃側の生成だけに効かせる＝球速の分布（VelocityDistributionByTierTests・design #908）を
         // 崩さない。AiRosterCycle.SolveGrowthG の1段目（gPitch を解く側）も同じ下げ幅を打ち消して解く。
         var pitchingCenter = center + deps.Roster.StrengthTargetDrop;
+        // 打者は自校と同じ物差し（BatterScaleDrop）まで下げる。center は既に StrengthTargetDrop 下げてあるので差分を引く。
+        // 投手を据え置いたまま総合を StrengthTargetDrop 下げるには打者を深めに下げておく必要がある（成長は負にできず、
+        // 浅いままだと2段解きの2段目が打者の伸び0でも目標を上回る）。
+        var battingCenter = center - (deps.Roster.BatterScaleDrop - deps.Roster.StrengthTargetDrop);
 
         var usedGiven = new HashSet<string>();
         var players = new List<AiPlayer>();
@@ -100,7 +104,7 @@ public static class AiRosterFactory
                         pitchingLift: starPitchers.Contains(i) ? lift : 0.0)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats }
                 : StrengthTeamFactory.PositionPlayer(
-                        BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name, mental, rc,
+                        BestFieldPosition(aptitudes), battingCenter, rng, deps.Personality, salt++, name, mental, rc,
                         battingLift: starHitters.Contains(i) ? lift : 0.0)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
 
