@@ -167,4 +167,60 @@ public sealed class MatchProgressionTimeoutTests
         }
         Assert.True(sawExtra, "延長に入る試合が1つも無かった");
     }
+    // ===== 6. 観測口（issue #1177）: 伝令が効いているかを MatchLiveSnapshot に読むだけで載せる =====
+
+    // 伝令の後、その校が該当する側（守備伝令＝守備中／攻撃伝令＝攻撃中）で迎える打席を数え、
+    // 「効いている」がちょうど効果窓（3打席）のあいだだけ立ち、切れたら倒れることを見る。
+    // 攻撃伝令は打者が替わっても・半イニングをまたいでも、その校の攻撃の3打席ぶん続く。
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Snapshot_CarriesTimeoutCalm_OnlyWhileTheWindowLasts(bool offenseTimeout)
+    {
+        var prog = NewProg(11UL);
+        prog.Advance();   // 1回表＝away の攻撃・home の守備
+        var before = prog.Snapshot();
+        Assert.False(before.Away.OffenseCalmActive || before.Away.DefenseCalmActive);
+        Assert.False(before.Home.OffenseCalmActive || before.Home.DefenseCalmActive);
+
+        var teamIsAway = offenseTimeout;   // 攻撃伝令は away、守備伝令は home が送る
+        Assert.Equal(offenseTimeout ? MatchProgression.PlayerTimeoutResult.Offense : MatchProgression.PlayerTimeoutResult.Defense,
+            prog.CallTimeout(teamIsAway));
+
+        var covered = 0;
+        while (true)
+        {
+            var snap = prog.Snapshot();
+            var team = teamIsAway ? snap.Away : snap.Home;
+            var other = teamIsAway ? snap.Home : snap.Away;
+            var active = offenseTimeout ? team.OffenseCalmActive : team.DefenseCalmActive;
+            // 送っていない側の効果は立たない（相手校は伝令を送っていない＝采配AIなし）。
+            Assert.False(offenseTimeout ? team.DefenseCalmActive : team.OffenseCalmActive);
+            Assert.False(other.OffenseCalmActive || other.DefenseCalmActive);
+            if (!active) break;
+            if (prog.IsTeamOnOffense(teamIsAway) == offenseTimeout) covered++;
+            Assert.True(prog.Advance(), "効果窓が切れる前に試合が終わった");
+        }
+        Assert.Equal(new GameContext().Tactics.TimeoutDurationPa, covered);
+    }
+
+    // 観測口は読むだけ＝毎打席スナップショットを取っても試合結果は変わらない。
+    [Fact]
+    public void TakingSnapshots_DoesNotChangeTheResult()
+    {
+        static string Run(bool snapshots)
+        {
+            var prog = NewProg(11UL);
+            var called = false;
+            while (prog.Advance())
+            {
+                if (!called && prog.ConfirmedPlateAppearances > 4)
+                    called = prog.CallTimeout(teamIsAway: true) != MatchProgression.PlayerTimeoutResult.Unavailable;
+                if (snapshots) _ = prog.Snapshot();
+            }
+            return GameResultDigest.Sha256Of(prog.BuildResult());
+        }
+
+        Assert.Equal(Run(false), Run(true));
+    }
 }

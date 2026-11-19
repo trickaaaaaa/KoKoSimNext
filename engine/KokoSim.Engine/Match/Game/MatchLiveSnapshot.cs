@@ -87,9 +87,18 @@ public sealed record LivePitcherToday(
 /// <see cref="Reserves"/>=未出場の控え（1本の名簿・交代候補）、
 /// <see cref="ReservePitchers"/>=そのうち投手として置かれている者（継投の見通し表示用, issue #381）。
 /// </summary>
+/// <param name="OffenseCalmActive">
+/// 攻撃伝令が効いているか（<see cref="TeamState.OffenseCalmPa"/> &gt; 0 の写し, issue #1177）。
+/// 効いているあいだ打者のミートが上がる（設計書09 §3）。残り打席は載せない＝画面は有無だけを出す。
+/// </param>
+/// <param name="DefenseCalmActive">
+/// 守備伝令が効いているか（<see cref="TeamState.DefenseCalmPa"/> &gt; 0 の写し, issue #1177）。
+/// 効いているあいだ投手の制球が上がる（設計書09 §3）。読むだけ＝試合結果に影響しない。
+/// </param>
 public sealed record LiveTeamSnapshot(
     IReadOnlyList<LiveBatterSlot> Lineup, LivePitcherToday Pitcher,
-    IReadOnlyList<LiveBatterSlot> Reserves, IReadOnlyList<LivePitcherToday> ReservePitchers);
+    IReadOnlyList<LiveBatterSlot> Reserves, IReadOnlyList<LivePitcherToday> ReservePitchers,
+    bool OffenseCalmActive = false, bool DefenseCalmActive = false);
 
 /// <summary>
 /// ライブ観戦のラインスコア1チーム分（回別得点＋R/H/E）。設計書16 §4-2 の LineScorePanel が引く観測データ。

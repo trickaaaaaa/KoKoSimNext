@@ -1461,6 +1461,24 @@
 .mhud-pc__n--warn { color: var(--color-lamp); }      /* 残量 6割未満＝注意（= .stam__fill--mid。調子色を借りない） */
 .mhud-pc__n--alert { color: var(--color-warn); }     /* 残量 3割未満＝警告 */
 
+/* 伝令が効いている間の「制球↑」「ミート↑」（issue #1177）。帯の盤面側の辺に右寄せで乗せる
+   ＝投手は帯の上・打者は帯の下（2026-11-19 監督決定・案B）。帯と同じ地。↑は調子の色（好調）。 */
+.mhud-calm {
+    position: absolute;
+    right: 0;
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--hud-bg);
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+.mhud-calm--pitcher { bottom: 100%; }
+.mhud-calm--batter { top: 100%; }
+.mhud-calm__t { font-size: var(--hud-fs-chip); height: var(--hud-h-chip); -unity-text-align: middle-left; color: #FFFFFF; }
+.mhud-calm__up { font-size: var(--hud-fs-chip); height: var(--hud-h-chip); -unity-text-align: middle-left; color: var(--cond-good); margin-left: 1px; }
+
 /* 名前行のチップ（打順・守備位置・先発・学年）。地を持つのは①打順/登板順（白地黒字）
    ②守備位置（芝の緑地に白字・全校共通）③学年（薄い白）の3種。 */
 .mhud-cp {
