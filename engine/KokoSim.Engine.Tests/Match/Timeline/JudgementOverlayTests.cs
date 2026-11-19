@@ -232,12 +232,28 @@ public sealed class JudgementOverlayTests
     }
 
     [Fact]
-    public void BuildBattedBall_ClearlyMissedFly_NoJudgement_EvenWhenDropped()
+    public void BuildBattedBall_ChasedButUnreachedFly_JudgementFiresAsFair_WithDefaultThreshold()
     {
-        var play = DroppedFly(catchMargin: -2.0); // 完全に抜けた当たり＝フェアは出さない
+        // issue #1085: 追いつけなかった外野フライの安打（余裕−0.4s）にも、既定のしきい値で「フェア」を出す。
+        var play = DroppedFly(catchMargin: -0.4);
         var tl = TimelineBuilder.BuildBattedBall(
             play, Field.StandardAlignment(), Field, null, runnersOn: false,
-            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15, closeFlyMarginSeconds: 0.15);
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15,
+            closeFlyMarginSeconds: new FieldingCoefficients().CatchCloseCallMarginSeconds);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.Equal(JudgementKind.Fair, j.Kind);
+        Assert.Equal(ContactAtSeconds + play.HangTimeSeconds, j.T, 6);
+    }
+
+    [Fact]
+    public void BuildBattedBall_ClearlyMissedFly_NoJudgement_EvenWhenDropped()
+    {
+        var play = DroppedFly(catchMargin: -2.0); // 完全に抜けた当たり＝既定のしきい値でもフェアは出さない
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15,
+            closeFlyMarginSeconds: new FieldingCoefficients().CatchCloseCallMarginSeconds);
 
         Assert.Empty(tl.Judgements);
     }

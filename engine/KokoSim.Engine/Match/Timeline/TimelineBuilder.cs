@@ -210,7 +210,7 @@ public static class TimelineBuilder
         bool runnersOn,
         string resultText,
         double closeCallMarginSeconds = 0.15,
-        double closeFlyMarginSeconds = 0.15,
+        double closeFlyMarginSeconds = 0.5,
         double fielderReachM = 4.20,
         Player? batter = null,
         FieldingCoefficients? fieldingCoeff = null)
