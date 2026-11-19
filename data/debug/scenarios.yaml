@@ -147,6 +147,18 @@ scenarios:
     seed: 20260736
 
   # 監督が攻撃側で自分で盗塁サインを出す経路（強制発動なし＝采配カードから企図する。成否は自然に解く）
+  # 守備側投手が動揺した状態で始める（issue #1178）。1回表＝後攻 home の投手が守備側・走者なし。
+  # 頭上の渦巻きと投球前の汗を撮る（captures.yaml の rattled-1178 / rattled-away-1178）。
+  - id: pitcher-rattled-lab
+    name: 投手が動揺した状態で始める（1回表・走者なし）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    pitcher_rattled: true
+    seed: 20260737
+
   - id: steal-sign-lab
     name: 盗塁検証・自分で盗塁サイン（1回表無死一塁）
     away: { school: "AI:tier=C", score: 0 }

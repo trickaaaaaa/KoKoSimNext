@@ -89,3 +89,19 @@ captures:
     view: panel
     duel_seconds: 0.1
     overrides: {MatchLiveController.CalmBadgeForceForCapture: true}
+
+  - id: rattled-1178
+    name: "投手が動揺している間、頭上で渦巻きが回り、投げる前に汗が飛ぶ（issue #1178・後攻＝自校の投手）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: rig
+    duel_seconds: 4.0
+    video: {from: start, to: end, fps: 20}
+
+  - id: rattled-away-1178
+    name: "相手校の投手が動揺している絵（issue #1178・先攻が監督＝動揺は相手の投手）"
+    scenario: pitcher-rattled-lab
+    manager: away
+    view: rig
+    duel_seconds: 4.0
+    video: {from: start, to: end, fps: 20}
