@@ -47,6 +47,11 @@ namespace KokoSim.Unity.Debugging
         /// <summary>duel_seconds の撮り始め（duel_from: launch＝試合の画面が出た瞬間から。プレイボールのテロップ等
         /// 最初の球より前を撮るとき。issue #1179）。既定 false＝最初の球が投げられた瞬間から。</summary>
         public bool DuelFromLaunch;
+        /// <summary>timeout_at の伝令を、画面の操作と同じ流れ（中断→伝令役を選ぶ→再開）で送るか（issue #1174）。
+        /// true のとき守備伝令の場面が流れる。送れる瞬間（球の合間）まで毎コマ試す。</summary>
+        public bool TimeoutViaMenu;
+        /// <summary>TimeoutViaMenu の伝令役（控えの添字。負＝記録員）。</summary>
+        public int TimeoutMessengerIndex = -1;
         /// <summary>毎コマ記録する実測（DuelStageRig の *ForCapture のメンバー名）。</summary>
         public List<string> Probes = new List<string>();
         /// <summary>見比べ用の切り替え（"DuelStageRig.Xxx": 値）。終わったら元へ戻す。</summary>
@@ -149,6 +154,15 @@ namespace KokoSim.Unity.Debugging
                 case "speed": return TryFloat(v, out r.Speed) && r.Speed > 0;
                 case "duel_seconds": return TryFloat(v, out r.DuelSeconds) && r.DuelSeconds > 0;
                 case "timeout_at": return TryFloat(v, out r.DefenseTimeoutAt) && r.DefenseTimeoutAt >= 0f;
+                case "timeout_messenger":
+                {
+                    // 守備伝令の場面（issue #1174）: 控えの添字か recorder（記録員）
+                    var mv = Unquote(v);
+                    r.TimeoutViaMenu = true;
+                    if (mv == "recorder") { r.TimeoutMessengerIndex = -1; return true; }
+                    return int.TryParse(mv, System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out r.TimeoutMessengerIndex) && r.TimeoutMessengerIndex >= 0;
+                }
                 case "duel_from":
                 {
                     var f = Unquote(v);

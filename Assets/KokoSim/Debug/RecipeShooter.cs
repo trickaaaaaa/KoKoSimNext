@@ -179,12 +179,34 @@ namespace KokoSim.Unity.Debugging
                     Time.captureDeltaTime = 1f / _r.VideoFps;
                     int frames = Mathf.CeilToInt(_r.DuelSeconds * _r.VideoFps);
                     bool timeoutSent = false;
+                    bool sceneSeen = false, restoreLogged = false;
                     for (int f = 0; f < frames; f++)
                     {
                         if (!timeoutSent && _r.DefenseTimeoutAt >= 0f && f / (float)_r.VideoFps >= _r.DefenseTimeoutAt)
                         {
-                            timeoutSent = true;
-                            ctrl.DefenseTimeoutForCapture();
+                            if (_r.TimeoutViaMenu)
+                            {
+                                // 画面の操作と同じ流れで送る（issue #1174）。球の途中なら送れないので次のコマで試す
+                                timeoutSent = ctrl.SendDefenseTimeoutViaMenuForCapture(_r.TimeoutMessengerIndex);
+                                if (timeoutSent) sceneSeen = false;
+                            }
+                            else
+                            {
+                                timeoutSent = true;
+                                ctrl.DefenseTimeoutForCapture();
+                            }
+                        }
+                        // 伝令の場面が明けたら、投手・捕手の基準位置/向きが場面の前へ戻ったかを記録する（汚染の見張り）
+                        if (_r.TimeoutViaMenu && timeoutSent)
+                        {
+                            if (ctrl.TimeoutSceneOnForCapture) sceneSeen = true;
+                            else if (sceneSeen && !restoreLogged && ctrl.DuelRigForCapture != null)
+                            {
+                                restoreLogged = true;
+                                var err = ctrl.DuelRigForCapture.TimeoutRestoreErrorForCapture();
+                                File.WriteAllText(Path.Combine(_dir, "timeout-restore.txt"), string.Format(CultureInfo.InvariantCulture,
+                                    "frame\t{0}\nposM\t{1:F5}\nyawDeg\t{2:F4}\n", f, err.PosM, err.YawDeg));
+                            }
                         }
                         WriteProbes(f / (double)_r.VideoFps, ctrl.DuelRigForCapture);
                         yield return Capture(ctrl, Path.Combine(ddir, "f" + _videoFrames.ToString("000", CultureInfo.InvariantCulture) + ".png"));

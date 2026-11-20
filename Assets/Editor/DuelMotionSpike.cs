@@ -1460,6 +1460,16 @@ namespace KokoSim.EditorTools
                     "AA_Baseball_Defender_Standing_Idle_Loop_Type01",
                     "AA_Baseball_Defender_Crouch_Idle_Loop_Type01",
                     "AA_Baseball_Offense_Crouch_Idle_Loop_Type01",
+                    // 伝令の場面（issue #1174）で使う待機・会話の収録
+                    "AA_Baseball_Defender_Standing_Idle_Loop_Type02",
+                    "AA_Baseball_Defender_Standing_Idle_Loop_Type03",
+                    "AA_Baseball_Defender_Standing_Idle_Loop_Type04",
+                    "AA_Baseball_Defender_Crouch_To_Standing_Idle",
+                    "AA_Baseball_Offense_Base_Running_To_Walking",
+                    "AA_Baseball_Pitcher_Standing_Idle_Loop",
+                    "AA_Baseball_Pitcher_Head_Nodd_Type01",
+                    "AA_Baseball_Pitcher_Head_Nodd_Type02",
+                    "AA_Baseball_Umpire_Standing_Time",
                 };
 
                 var sb = new StringBuilder();

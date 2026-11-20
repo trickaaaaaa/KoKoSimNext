@@ -3554,6 +3554,9 @@ namespace KokoSim.Unity.Match
         public void Tick(float deltaTime)
         {
             if (!Available) return;
+            // 守備伝令の場面（issue #1174）の間は投球の予約・補正を一切進めない（場面が明けたら続きから）。
+            // ポーズだけ進めて、置き場所と向きは場面側が決める
+            if (_toActive) { TickTimeoutScene(deltaTime); return; }
             AdvanceSetGloveWeight(deltaTime);   // セットで握りを隠す補正の効き（issue #927）
             AdvanceSetHeadWeight(deltaTime);    // セットで待つ間の首の補正の効き（issue #912）
             AdvanceRattledFx(deltaTime);        // 動揺の渦巻き・投球前の汗（issue #1178）
