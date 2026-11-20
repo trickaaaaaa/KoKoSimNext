@@ -168,7 +168,7 @@ namespace KokoSim.Unity.Debugging
                 if (_r.DuelSeconds > 0f)
                 {
                     float waitedDuel = 0f;
-                    while (!ctrl.InPitchPhaseForCapture)
+                    while (!_r.DuelFromLaunch && !ctrl.InPitchPhaseForCapture)
                     {
                         if (ctrl.IsGameOver || waitedDuel > _r.TimeoutSeconds) { yield return false; yield break; }
                         waitedDuel += Time.unscaledDeltaTime;

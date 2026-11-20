@@ -9,6 +9,7 @@
     <Style src="MatchDetail.uss" />
     <Style src="MatchLive.uss" />
     <Style src="MatchSubstitution.uss" />
+    <Style src="Telops.uss" />
     <ui:VisualElement class="ui-root mlive-root">
         <ui:VisualElement class="mlive-3col">
 
@@ -55,8 +56,12 @@
                     <ui:VisualElement name="runner-go-host" class="runner-go" picking-mode="Ignore" />
                     <ui:VisualElement name="pitch-call" class="pitch-call">
                         <ui:VisualElement class="pitch-call__stack">
-                            <ui:Label name="pitch-call-judge-sh" class="pitch-call__judge pitch-call__judge--shadow" text="" />
-                            <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" />
+                            <ui:Label name="pitch-call-judge-sh" class="pitch-call__judge pitch-call__judge--shadow" text="" style="display: none;" />
+                            <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" style="display: none;" />
+                            <!-- 画像テロップ（issue #1179）。文言は data/debug/captures.yaml の撮影でも
+                                 使う call_*.png そのもの。クラス（tl-call-strike 等）の付け外しは
+                                 CallTelopView が担う。 -->
+                            <ui:VisualElement name="pitch-call-image" class="tl-call-img" />
                         </ui:VisualElement>
                         <ui:VisualElement name="pitch-call-detail" class="pitch-call__readout">
                             <ui:Label name="pitch-call-note" class="pitch-call__note f-body" text="" />
@@ -70,8 +75,11 @@
                          俯瞰と3Dの両方にかかるこの層へ出した。中身を書くのは Match2DPlaybackElement のまま。 -->
                     <ui:VisualElement name="judgement-call" class="pitch-call">
                         <ui:VisualElement class="pitch-call__stack">
-                            <ui:Label name="judgement-judge-sh" class="pitch-call__judge pitch-call__judge--shadow" text="" />
-                            <ui:Label name="judgement-judge" class="pitch-call__judge" text="" />
+                            <ui:Label name="judgement-judge-sh" class="pitch-call__judge pitch-call__judge--shadow" text="" style="display: none;" />
+                            <ui:Label name="judgement-judge" class="pitch-call__judge" text="" style="display: none;" />
+                            <!-- 画像テロップ（issue #1179）。ホームランはここを使わず専用の homerun-telop へ
+                                 移した（判定11種＝Calls画像の面だけがこの器を使う）。 -->
+                            <ui:VisualElement name="judgement-call-image" class="tl-call-img" />
                         </ui:VisualElement>
                         <ui:Label name="judgement-detail" class="pitch-call__detail" text="" />
                     </ui:VisualElement>
@@ -358,5 +366,38 @@
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
+    </ui:VisualElement>
+
+    <!-- プレイボール／ゲームセット（issue #1179 §1・§4）。盤面・3D対決ビューの両方にかかる全画面層に
+         置く（judgement-call と同じ理由＝盤面が隠れても出したい）。中身は GameTelopView が動かす。 -->
+    <ui:VisualElement name="game-telop" class="tl-gt-root" picking-mode="Ignore">
+        <ui:VisualElement name="gt-dim" class="tl-gt-dim" />
+        <ui:VisualElement name="gt-lines" class="tl-gt-lines">
+            <ui:VisualElement name="gt-line-1" class="tl-gt-line tl-gt-line-1" />
+            <ui:VisualElement name="gt-line-2" class="tl-gt-line tl-gt-line-2" />
+            <ui:VisualElement name="gt-line-3" class="tl-gt-line tl-gt-line-3" />
+            <ui:VisualElement name="gt-line-4" class="tl-gt-line tl-gt-line-4" />
+            <ui:VisualElement name="gt-line-5" class="tl-gt-line tl-gt-line-5" />
+        </ui:VisualElement>
+        <ui:VisualElement name="gt-ghost" />
+        <ui:VisualElement name="gt-group" class="tl-gt-group">
+            <ui:VisualElement name="gt-shadow" />
+            <ui:VisualElement name="gt-extrude" />
+            <ui:VisualElement name="gt-face" />
+            <ui:VisualElement name="gt-sub" />
+            <ui:VisualElement name="gt-bar-left" />
+            <ui:VisualElement name="gt-bar-right" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+
+    <!-- ホームラン（issue #1179 §3）。どちらのチームが打っても同じ演出・約3.2秒。
+         判定11種（Calls）とは別の専用アニメ＝判定テロップ（judgement-call）は使わない。 -->
+    <ui:VisualElement name="homerun-telop" class="tl-hr-root" picking-mode="Ignore">
+        <ui:VisualElement name="hr-dim" class="tl-hr-dim" />
+        <ui:VisualElement name="hr-group" class="tl-hr-group">
+            <ui:VisualElement name="hr-base" class="tl-hr-img tl-hr-base" />
+            <ui:VisualElement name="hr-gold" class="tl-hr-img tl-hr-gold-00" />
+        </ui:VisualElement>
+        <ui:Label name="hr-distance" class="tl-hr-distance" text="" />
     </ui:VisualElement>
 </ui:UXML>

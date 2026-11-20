@@ -119,6 +119,30 @@
                 </ui:VisualElement>
 
             </ui:VisualElement>
+
+            <!-- クレジット（issue #1179・オーナー決定「入口は設定」）。試合テロップの画像に焼き込んだ
+                 フォント（Anton・Dela Gothic One）のライセンス全文を載せる。見た目はスコアブックの
+                 既存部品（card）で組み、説明文は足さない＝ライセンス本文そのものだけを出す。 -->
+            <ui:VisualElement name="ss-page-credits" class="ss-body ss-credits-page" style="display: none;">
+                <ui:ScrollView mode="Vertical" class="scroll ss-credits-scroll">
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="card__hd card__hd--tight">
+                            <ui:Label class="card__hd-title" text="Anton" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="card__body">
+                            <ui:Label name="credits-anton-body" class="f-body ss-credits-body" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="card__hd card__hd--tight">
+                            <ui:Label class="card__hd-title" text="Dela Gothic One" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="card__body">
+                            <ui:Label name="credits-delagothic-body" class="f-body ss-credits-body" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:ScrollView>
+            </ui:VisualElement>
         </ui:VisualElement>
 
         <!-- 削除確認ダイアログ（同一ドキュメント内オーバーレイ。部品辞書の modal-scrim / modal-card を使用） -->

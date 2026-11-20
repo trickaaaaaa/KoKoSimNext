@@ -449,6 +449,10 @@ namespace KokoSim.Unity.Match
         private Label _pitchCallNote, _pitchCallPitchType, _pitchCallSpeed, _pitchCallUnit;
         private float _pitchCallClock;
         private bool _pitchCallOn;
+        // 判定テロップの画像面（issue #1179）。文字ラベル(_pitchCallJudge系)は display:none のまま残し、
+        // 面はこのCallTelopViewが動かす。合計の寿命(pitchCallHoldSeconds)はそのまま・入り/出だけこの秒数。
+        private KokoSim.Unity.Match.Telops.CallTelopView _pitchCallTelop;
+        private const double PitchCallInSeconds = 0.12, PitchCallOutSeconds = 0.12;
         // 「走った！」の叫び吹き出し（issue #696）。走者の元の塁ごとに1つ（[0]=一塁…[2]=三塁）。
         // 投手が投球動作に入った瞬間に、その球でスタートを切った走者の塁の側へ出す（攻守とも）。
         private VisualElement _runnerGoHost;
@@ -520,17 +524,17 @@ namespace KokoSim.Unity.Match
         // テロップが明けたら次の采配窓を取りに行く（球数制限の強制交代から戻る途中で出した場合）。
         private bool _subTelopPumpAfter;
 
-        // 試合開始/終了テロップ「プレイボール」「ゲームセット」（issue #442）。器は判定テロップ
-        // （judgement-call。#59/#354）を流用し、新規の見た目部品は作らない。寿命は PitchCall と同じ
-        // 「Update() の専用クロック」方式だが、判定オーバーレイ（#236）と同じく実時間で数える
-        // （倍速でも見え方を一定にする）。表示専用＝engine には触らない。
-        // 判定テロップ（0.6s）より +1.5s 長く掲げる（2026-08-05 監督指示「プレイボールの表示をもっと長く」。
-        // ゲームセットも同じ器＝同じ長さになる）。⚠ シーンの MatchLive が直列化値を持つ＝両方変える。
-        [SerializeField] private float gameTelopHoldSeconds = (float)Match2DPlaybackElement.JudgementHoldRealSeconds + 1.5f;
+        // 試合開始/終了テロップ「プレイボール」「ゲームセット」（issue #442・画像化は #1179）。
+        // 専用の全画面層（game-telop）を使う＝judgement-call（Calls画像11種専用になった）とは別の器。
+        // 寿命は Update() の専用クロック方式のまま。issue #1179 で「実時間固定」→「再生速度で縮む」へ切替
+        // （合計約4.0秒の振り付け＝プレイボール中は初球を投げさせない待ちもこの値に揃う）。
+        // ⚠ シーンの MatchLive が直列化値を持つ＝両方変える。
+        [SerializeField] private float gameTelopHoldSeconds = 4.0f;
         private VisualElement _gameTelopHost;
-        private Label _gameTelopLabel, _gameTelopLabelShadow, _gameTelopDetail;
+        private KokoSim.Unity.Match.Telops.GameTelopView _gameTelop;
         private float _gameTelopClock;
         private bool _gameTelopOn;
+        private KokoSim.Unity.Match.Telops.HomeRunTelopView _homeRunTelop;
         // 終局後「ゲームセット」を掲げる予約。得点テロップ（#60）の演出が済むのを Update 側で待つ。
         private bool _gameSetPending;
         private int _subLogCount;   // 既に取り込んだ交代ログ件数（_prog.Substitutions との差分検知。issue #920）
@@ -562,22 +566,32 @@ namespace KokoSim.Unity.Match
             host?.Add(_view);
             _fieldHost = host;
 
-            // 判定（アウト/セーフ/フェア/ホームラン）の器は盤面の外＝俯瞰と3Dの両方にかかる層へ。
-            // 中身を書くのは Match2DPlaybackElement のまま（表示窓・文言・色クラスの単一ソース）。
+            // 判定（アウト/セーフ/フェア/エラー/ファール/フェア、issue #1179でCalls画像11種）の器は
+            // 盤面の外＝俯瞰と3Dの両方にかかる層へ。中身を書くのは Match2DPlaybackElement のまま
+            // （表示窓・文言→画像面・色クラスの単一ソース）。
             var judgeHost = _root.Q<VisualElement>("judgement-call");
             var judgeLabel = _root.Q<Label>("judgement-judge");
             var judgeShadow = _root.Q<Label>("judgement-judge-sh");
             var judgeDetail = _root.Q<Label>("judgement-detail");
             if (judgeHost != null && judgeLabel != null && judgeDetail != null)
                 _view.SetJudgementHost(judgeHost, judgeLabel, judgeShadow, judgeDetail);
-            // 試合開始/終了テロップ（issue #442）も同じ器へ載せる（掲げるのは「最初のプレーの前」と
-            // 「終局後」だけ＝プレー時刻の純関数で描く Match2DPlaybackElement と時間帯が重ならない）。
-            _gameTelopHost = judgeHost;
-            _gameTelopLabel = judgeLabel;
-            _gameTelopLabelShadow = judgeShadow;
-            _gameTelopDetail = judgeDetail;
-            // 判定テキストの字送りは盤面の実幅から出す（USS に vw / clamp が無い。issue #479）。
-            RegisterCallTextMetrics(judgeHost, judgeLabel, judgeShadow);
+
+            // ホームラン（issue #1179 §3）は judgement-call を使わず専用の全画面層（homerun-telop）。
+            var homerunRoot = _root.Q<VisualElement>("homerun-telop");
+            if (homerunRoot != null)
+            {
+                _homeRunTelop = new KokoSim.Unity.Match.Telops.HomeRunTelopView(homerunRoot);
+                _view.SetHomeRunHost(_homeRunTelop);
+            }
+
+            // プレイボール／ゲームセット（issue #442・画像化は #1179）も専用の全画面層（game-telop）。
+            // judgement-call はもう使わない＝Calls画像11種専用になった。
+            _gameTelopHost = _root.Q<VisualElement>("game-telop");
+            if (_gameTelopHost != null) _gameTelop = new KokoSim.Unity.Match.Telops.GameTelopView(_gameTelopHost);
+
+            // 1球の判定テロップの画像面（issue #1179）。文字ラベルは常時隠す（UXML側で display:none 済み）。
+            var pitchCallImage = _root.Q<VisualElement>("pitch-call-image");
+            if (pitchCallImage != null) _pitchCallTelop = new KokoSim.Unity.Match.Telops.CallTelopView(pitchCallImage);
 
             _leftLineup = _root.Q<VisualElement>("left-lineup");
             _rightLineup = _root.Q<VisualElement>("right-lineup");
@@ -737,7 +751,7 @@ namespace KokoSim.Unity.Match
             // スクショ時は ShowGameTelopForCapture で出す。
             if (!CaptureMode)
             {
-                ShowGameTelop("プレイボール");
+                ShowGameTelop(isGameSet: false);
                 StartAutoRun();
             }
         }
@@ -3131,6 +3145,7 @@ namespace KokoSim.Unity.Match
             _view.CameraWorkEnabled = _cameraWorkWanted && _speed < 4f;
             // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
             _view.PlaybackSpeed = _speed;
+            _view.CallsSuppressed = _gameTelopOn;   // プレイボール/ゲームセット中は判定テロップを出さない（issue #1179）
 
             // 対決ビューはポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
             // 打球プレー中は俯瞰を出していても回す＝トグルで切り替えた瞬間に3Dが止まっていない（F9）。
@@ -3185,10 +3200,14 @@ namespace KokoSim.Unity.Match
             if (_pitchCallOn)
             {
                 _pitchCallClock += Time.deltaTime * _speed;
+                _pitchCallTelop?.Tick(_pitchCallClock, pitchCallHoldSeconds, PitchCallInSeconds, PitchCallOutSeconds);
                 if (_pitchCallClock >= pitchCallHoldSeconds - CallFadeSeconds)
                     _pitchCall?.AddToClassList("is-enter");
                 if (_pitchCallClock >= pitchCallHoldSeconds) HidePitchCall();
             }
+            // ホームラン（issue #1179 §3）。再生速度では縮めない＝実時間(deltaTime)のまま進める。
+            // 高速試合モード中はこのUpdate()自体に入らない（TickFastModeへ分岐）ので自然に止まる。
+            _homeRunTelop?.Tick(Time.deltaTime);
             if (_runnerGoClock >= 0f)
             {
                 _runnerGoClock -= Time.deltaTime * _speed;
@@ -3202,18 +3221,20 @@ namespace KokoSim.Unity.Match
                 _subCallClock += Time.deltaTime * _speed;
                 if (_subCallClock >= subCallHoldSeconds) HideSubCall();
             }
-            // 試合開始/終了テロップ（issue #442）。判定オーバーレイ（#236）と同じく実時間で数える
-            // ＝倍速でも見え方を一定にする。「ゲームセット」は得点テロップの演出が済んでから掲げる。
-            if (_gameSetPending && !_scoreCallOn)
+            // 試合開始/終了テロップ（issue #442・画像化は #1179）。「ゲームセット」は得点テロップと
+            // サヨナラのホームラン演出（#1176・ホームランは打ち切らない）の両方が済んでから掲げる。
+            // 寿命は再生速度で縮む（issue #1179「判定のように速度へ追従」）。
+            if (_gameSetPending && !_scoreCallOn && !(_homeRunTelop?.IsPlaying ?? false))
             {
                 _gameSetPending = false;
-                ShowGameTelop("ゲームセット");
+                ShowGameTelop(isGameSet: true);
                 // 器が見つからない画面でも結果画面への受け渡しだけは必ず行う（遷移を人質にしない）。
                 if (!_gameTelopOn) FinishGameEndHandOff();
             }
             if (_gameTelopOn)
             {
-                _gameTelopClock += Time.deltaTime;
+                _gameTelopClock += Time.deltaTime * _speed;
+                _gameTelop?.Tick(_gameTelopClock);
                 if (_gameTelopClock >= gameTelopHoldSeconds)
                 {
                     // プレー再生が器を先取りしていたら畳まない（判定の表示中に消さない）。フラグだけ下ろす。
@@ -3781,18 +3802,12 @@ namespace KokoSim.Unity.Match
         // 球種・球速の下段だけを出す。上下どちらも空なら器ごと出さない。
         private void ShowPitchCall(PitchToken pt)
         {
-            if (_pitchCall == null || _pitchCallJudge == null) return;
+            if (_pitchCall == null) return;
+            // プレイボール／ゲームセット／ホームランは打ち切らない＝その間に来た判定は捨てる（issue #1179）。
+            if (_gameTelopOn || (_homeRunTelop?.IsPlaying ?? false)) { HidePitchCall(); return; }
 
-            var judge = PitchJudgeJp(pt);
-            UiComponents.SetCallText(_pitchCallJudge, _pitchCallJudgeShadow, judge);
-            var judgeDisplay = judge.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
-            _pitchCallJudge.style.display = judgeDisplay;
-            if (_pitchCallJudgeShadow != null) _pitchCallJudgeShadow.style.display = judgeDisplay;
-            // 色は「ストライク系＝見逃し/空振り/ファール/三振」でひとまとまり（参照モックの色分け）。
-            // IsStrikeCall はカウント上のストライク判定なのでファールを含まない＝ここで足す。
-            _pitchCallJudge.EnableInClassList("pitch-call__judge--strike",
-                IsStrikeCall(pt.Kind) || pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Foul);
-            _pitchCallJudge.EnableInClassList("pitch-call__judge--ball", pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Ball);
+            // 画像テロップ（issue #1179）。文言→画像面の対応は PitchJudgeJp と同じ条件（1プレー1枚）。
+            var callClass = PitchCallClassOf(pt);
 
             // 計器表示（球種・球速）。実1球記録がある打席だけ値が入る＝合成投球列では丸ごと畳む。
             var note = PitchNoteJp(pt);
@@ -3808,11 +3823,38 @@ namespace KokoSim.Unity.Match
             if (_pitchCallDetail != null)
                 _pitchCallDetail.style.display = hasReadout ? DisplayStyle.Flex : DisplayStyle.None;
 
-            if (judge.Length == 0 && !hasReadout) { HidePitchCall(); return; }
+            if (callClass == null && !hasReadout) { HidePitchCall(); return; }
+
+            if (callClass != null)
+            {
+                _pitchCallTelop?.SetFace(callClass);
+                _pitchCallTelop?.Tick(0.0, pitchCallHoldSeconds, PitchCallInSeconds, PitchCallOutSeconds);
+            }
+            else
+            {
+                _pitchCallTelop?.Hide();
+            }
 
             ShowCallHost(_pitchCall);
             _pitchCallOn = true;
             _pitchCallClock = 0f;
+        }
+
+        /// <summary>
+        /// 1球の判定テロップの画像面（issue #1179）。<see cref="PitchJudgeJp"/> と同じ条件を
+        /// 画像クラス（tl-call-xxx）へ写すだけ＝文言と画像のどちらかだけを更新し忘れないよう1箇所に揃える。
+        /// </summary>
+        private static string PitchCallClassOf(PitchToken pt)
+        {
+            switch (pt.Kind)
+            {
+                case PitchKind.Ball: return pt.BallsAfter >= 4 ? "tl-call-walk" : "tl-call-ball";
+                case PitchKind.CalledStrike: return pt.StrikesAfter >= 3 ? "tl-call-strikeout" : "tl-call-strike";
+                case PitchKind.SwingingStrike: return pt.StrikesAfter >= 3 ? "tl-call-strikeout" : "tl-call-strike";
+                case PitchKind.Foul: return pt.StrikesAfter >= 3 ? "tl-call-strikeout" : "tl-call-foul";
+                case PitchKind.HitByPitch: return "tl-call-hitbypitch";
+                default: return null;
+            }
         }
 
         /// <summary>
@@ -3951,21 +3993,13 @@ namespace KokoSim.Unity.Match
         // 器は判定テロップ（judgement-call）を流用する。中身は普段 Match2DPlaybackElement が
         // プレー時刻の純関数で描く＝プレー再生が始まると自然に上書き・消灯される側なので、
         // 掲げるのは「最初のプレーの前」と「終局後」だけに限る（時間帯が重ならない）。
-        private void ShowGameTelop(string text)
+        /// <summary>プレイボール（false）／ゲームセット（true）を掲げる（issue #1179）。
+        /// 動きはGameTelopViewが毎フレーム(Tick)付ける＝ここでは変数切替と表示だけ。</summary>
+        private void ShowGameTelop(bool isGameSet)
         {
-            if (_gameTelopHost == null || _gameTelopLabel == null) return;
-            UiComponents.SetCallText(_gameTelopLabel, _gameTelopLabelShadow, text);
-            // 直前の判定の色クラスを引き継がない（素の書体・色で出す）。
-            _gameTelopLabel.EnableInClassList("pitch-call__judge--out", false);
-            _gameTelopLabel.EnableInClassList("pitch-call__judge--safe", false);
-            _gameTelopLabel.EnableInClassList("pitch-call__judge--fair", false);
-            _gameTelopLabel.EnableInClassList("pitch-call__judge--homerun", false);
-            if (_gameTelopDetail != null)
-            {
-                _gameTelopDetail.text = "";
-                _gameTelopDetail.style.display = DisplayStyle.None;
-            }
-            ShowCallHost(_gameTelopHost);
+            if (_gameTelopHost == null || _gameTelop == null) return;
+            _gameTelop.Play(isGameSet, KokoSim.Unity.Shell.SchoolAccent.ForManager());
+            _gameTelopHost.style.display = DisplayStyle.Flex;
             _gameTelopClock = 0f;
             _gameTelopOn = true;
         }
@@ -3978,7 +4012,7 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>スクショ用: 試合開始/終了テロップを強制表示する（寿命管理は通常と同じ）。</summary>
-        public void ShowGameTelopForCapture(bool gameSet) => ShowGameTelop(gameSet ? "ゲームセット" : "プレイボール");
+        public void ShowGameTelopForCapture(bool gameSet) => ShowGameTelop(gameSet);
 
         /// <summary>
         /// スクショ用: 任意の1球で判定オーバーレイを出す（issue #479 の受け入れ）。
@@ -3999,6 +4033,22 @@ namespace KokoSim.Unity.Match
             SetCount(balls, strikes);
             SetOuts(outs);
         }
+
+        /// <summary>
+        /// スクショ用: 判定テロップ（Calls画像11種）を1枚だけ強制表示する（issue #1179）。
+        /// "tl-call-strike" 等のクラス名で指定する（<see cref="PitchCallClassOf"/> / Match2DPlaybackElement の
+        /// CallClassOf が実戦で使う値そのまま。文言→画像面の対応を撮影側に持たせない）。
+        /// </summary>
+        public void ShowJudgementCallForCapture(string callClass) => _view?.ShowCallForCapture(callClass);
+
+        /// <summary>スクショ用: 判定テロップ（Calls画像）を畳む。</summary>
+        public void HideJudgementCallForCapture() => _view?.HideJudgement();
+
+        /// <summary>スクショ用: ホームランテロップ（約3.2秒の専用アニメ）を強制再生する（issue #1179）。</summary>
+        public void ShowHomeRunTelopForCapture(double distanceM) => _homeRunTelop?.Play(distanceM);
+
+        /// <summary>スクショ用: ホームランテロップを畳む。</summary>
+        public void HideHomeRunTelopForCapture() => _homeRunTelop?.Hide();
 
         private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>
             k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
@@ -4110,6 +4160,7 @@ namespace KokoSim.Unity.Match
                 _view.HideJudgement();
                 HideGameTelop();
                 HidePitchCall();
+                _homeRunTelop?.Hide();
                 HideSubCall();
                 if (_scoreCallOn) { _scoreCallOn = false; if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None; }
                 if (_inningBreakOn) { _inningBreakOn = false; _inningBreakClock = 0f; _afterInningBreak = null; SetVisible(_inningBreak, false); }

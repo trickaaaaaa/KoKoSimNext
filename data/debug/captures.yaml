@@ -24,6 +24,7 @@
 #                 節目: start / catch（送球の直前の区間の終わり）/ release（最初の送球）/ flight_end（最初の飛球の着地）
 #                       judgement（最初の判定）/ result / end（再生が閉じる直前＝長さの0.15秒手前）
 #   video       : {from: catch-0.8, to: release+0.9, fps: 30}＝その区間を連番で撮る
+#   duel_seconds: 対決ビューのまま撮る秒数（最初の球から）。duel_from: launch で試合の画面が出た瞬間から（プレイボール等）
 #   probes      : 毎コマ probes.jsonl に書く実測（DuelStageRig の *ForCapture。ForCapture は省略可）
 #   overrides   : 見比べ用の切り替え（{DuelStageRig.Xxx: true} の形。static のフィールド/プロパティ）。終わったら戻す
 #   timeout_at  : duel_seconds の撮影で、開始から何秒後に監督が守備伝令を送るか（issue #1178。動揺が解ける絵）
@@ -124,3 +125,38 @@ captures:
     duel_seconds: 5.0
     timeout_at: 1.5
     video: {from: start, to: end, fps: 20}
+  # ── 試合テロップの画像化（issue #1179）。画面全体（panel）で撮る ──
+  - id: telop-calls-1179
+    name: "1球の判定テロップ（ストライク／ボール等）が画像で出る（issue #1179）"
+    scenario: fresh-start
+    view: panel
+    duel_seconds: 9.0
+    video: {from: start, to: end, fps: 12}
+
+  - id: telop-strikeout-1179
+    name: "三振のテロップ（issue #1179）"
+    scenario: game-end-strikeout-lab
+    view: panel
+    duel_seconds: 4.0
+    video: {from: start, to: end, fps: 12}
+
+  - id: telop-out-1179
+    name: "打球のアウトのテロップ（issue #1179）"
+    scenario: fresh-start
+    view: panel
+    video: {from: judgement-0.3, to: judgement+1.2, fps: 12}
+
+  - id: telop-playball-1179
+    name: "プレイボールのテロップ（issue #1179）"
+    scenario: fresh-start
+    view: panel
+    duel_from: launch
+    duel_seconds: 5.0
+    video: {from: start, to: end, fps: 12}
+
+  - id: telop-gameset-1179
+    name: "ゲームセットのテロップ（issue #1179・9回表2死から三振で決着）"
+    scenario: game-end-strikeout-lab
+    view: panel
+    duel_seconds: 12.0
+    video: {from: start, to: end, fps: 12}

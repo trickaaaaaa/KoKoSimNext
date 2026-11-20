@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Timeline;            // JudgementKind（判定オーバーレイの種別）
 using KokoSim.Engine.Match.Timeline.Playback;
-using KokoSim.Unity.Components;                 // UiComponents.SetCallText（判定テキストの面＋影を対で書く）
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -141,7 +140,7 @@ namespace KokoSim.Unity.Match
         // 打球・走塁プレーの判定オーバーレイ（issue #59）。アウトは常時、セーフはCloseCall(際どい)時のみ、
         // レッグ終端(T1)から一定時間だけ大きく表示する。#6 の PitchCall と同じ器(.pitch-call)を流用。
         // t の純関数として毎フレーム再評価する（SetTime がシーク時も含め常に呼ばれるため専用クロック不要）。
-        /// <summary>判定を出しておく時間［実時間・秒］。</summary>
+        /// <summary>判定を出しておく時間（×1速のときの実時間・秒。issue #1179 以降は速度ぶん縮む）。</summary>
         public const double JudgementHoldRealSeconds = 0.6;
         private VisualElement _judgementHost;
         private Label _judgementLabel;
@@ -149,7 +148,15 @@ namespace KokoSim.Unity.Match
         // しか持てないので、ぼかし影は面のラベル・硬い影はこれが出す。面と対で書かないと影だけ前の判定が残る。
         private Label _judgementLabelShadow;
         // 判定の下段（本塁打の飛距離。1球判定の球種・球速行と同じ器 .pitch-call__detail を流用, issue #354）。
+        // ホームランは専用の homerun-telop へ移った（issue #1179）ので、ここは SetHomeRunHost 未設定の
+        // 画面（試合詳細の2D再生等）向けフォールバックでしか使わない。
         private Label _judgementDetail;
+        // 画像の判定テロップ（Calls、11種・issue #1179）。文言→画像面は CallClassOf が単一ソース。
+        private KokoSim.Unity.Match.Telops.CallTelopView _judgementTelop;
+        private const double JudgementCallInSeconds = 0.10, JudgementCallOutSeconds = 0.10;
+        // ホームランの専用テロップ（issue #1179 §3）。MatchLiveController が homerun-telop を
+        // 組んだときだけ設定される。未設定の画面（試合詳細の2D再生等）は下のフォールバックへ落ちる。
+        private KokoSim.Unity.Match.Telops.HomeRunTelopView _homeRunHost;
         // 器が自前か（＝この要素の子か）。外へ出した後は前面化を自分でやらない（打球3D化 F9）。
         private bool _judgementOwned = true;
         // 直前フレームで判定が出ていたか。出ていない→出た の**変わり目でだけ**跳ねの演出を仕込む
@@ -160,14 +167,30 @@ namespace KokoSim.Unity.Match
         private double _voicedAt;
 
         /// <summary>
-        /// 再生倍速（コントローラが毎フレーム同期する）。表示窓はプレー時間軸で数えるため、
-        /// 倍速のままだと実時間では比例して縮む（×4速で0.15秒＝視認不能。issue #236 症状A）。
-        /// 倍速を掛けてプレー時間軸の窓を広げ、**実時間の見え方を一定**にする。
+        /// 再生倍速（コントローラ（MatchLive/MatchDetail）が毎フレーム同期する）。
+        ///
+        /// <para>issue #236 の時代は「倍速を掛けてプレー時間軸の判定表示窓を広げ、実時間の見え方を
+        /// ×4速でも0.6秒のまま一定にする」側を選んでいたが、issue #1179 で**判定テロップは速度に
+        /// 追従して縮む**側へ方針転換した（画像化に合わせ、1球の判定・プレイボール/ゲームセットと同じ
+        /// 「速度で縮む」時間系統へ揃えた）。<see cref="JudgementHoldSeconds"/> はもう
+        /// <see cref="PlaybackSpeed"/> を掛けない＝このプロパティは現在どこからも参照されない
+        /// （呼び出し側が引き続き同期しても無害・将来の用途のため削除していない）。</para>
         /// </summary>
         public float PlaybackSpeed { get; set; } = 1f;
 
-        /// <summary>プレー時間軸での判定表示時間。再生の打ち切り時刻を決める側もこの値を使う。</summary>
-        public double JudgementHoldSeconds => JudgementHoldRealSeconds * Mathf.Max(0.01f, PlaybackSpeed);
+        /// <summary>
+        /// プレイボール／ゲームセットが掲がっている間、判定テロップ（Calls画像11種）を出さない
+        /// （issue #1179「ホームラン・プレイボール・ゲームセットは打ち切らない＝その間に来た判定は
+        /// 捨てる」）。MatchLiveController が _gameTelopOn と同期して毎フレーム書き込む。
+        /// </summary>
+        public bool CallsSuppressed { get; set; }
+
+        /// <summary>
+        /// プレー時間軸での判定表示時間。再生の打ち切り時刻を決める側（MatchLiveController の
+        /// LastJudgementEndTime呼び出し）もこの値を使う。issue #1179 で速度を掛けなくなった＝
+        /// プレー時間軸では常に0.6秒固定（＝実時間では速度ぶん縮む。判定のように縮める）。
+        /// </summary>
+        public double JudgementHoldSeconds => JudgementHoldRealSeconds;
 
         // 動く要素（軌跡・野手・走者・ボール）専用の子レイヤー。静的フィールド（this 自身の
         // generateVisualContent）と再描画頻度を分離するための層分け（issue #160）。
@@ -207,10 +230,17 @@ namespace KokoSim.Unity.Match
             _judgementLabelShadow = new Label { pickingMode = PickingMode.Ignore };
             _judgementLabelShadow.AddToClassList("pitch-call__judge");
             _judgementLabelShadow.AddToClassList("pitch-call__judge--shadow");
+            _judgementLabelShadow.style.display = DisplayStyle.None;
             stack.Add(_judgementLabelShadow);
             _judgementLabel = new Label { pickingMode = PickingMode.Ignore };
             _judgementLabel.AddToClassList("pitch-call__judge");
+            _judgementLabel.style.display = DisplayStyle.None;
             stack.Add(_judgementLabel);
+            // 画像の判定面（issue #1179）。面の切替・拡大率・不透明度は CallTelopView が担う。
+            var judgementImage = new VisualElement { pickingMode = PickingMode.Ignore };
+            judgementImage.AddToClassList("tl-call-img");
+            stack.Add(judgementImage);
+            _judgementTelop = new KokoSim.Unity.Match.Telops.CallTelopView(judgementImage);
             _judgementHost.Add(stack);
             _judgementDetail = new Label { pickingMode = PickingMode.Ignore };
             _judgementDetail.AddToClassList("pitch-call__detail");
@@ -366,64 +396,69 @@ namespace KokoSim.Unity.Match
             if (!found.HasValue)
             {
                 _judgementHost.style.display = DisplayStyle.None;
-                _judgementHost.RemoveFromClassList("is-enter");
+                _judgementTelop?.Hide();
                 _judgementShown = false;
                 _voicedPlay = null;   // 巻き戻して再生し直したら、同じ判定でもまた鳴らす
                 return;
             }
 
             var kind = found.Value.Kind;
-            // ホームランの歓声は「新しい判定が出た瞬間」に1回だけ（審判の声は issue #919 でやめた）。
-            // 表示の出入り（_judgementShown）では足りない＝判定が途切れずに次へ切り替わることがある
-            if (!ReferenceEquals(_voicedPlay, _play) || _voicedAt != found.Value.T1)
+            var isNewOccurrence = !ReferenceEquals(_voicedPlay, _play) || _voicedAt != found.Value.T1;
+            if (isNewOccurrence)
             {
                 _voicedPlay = _play;
                 _voicedAt = found.Value.T1;
                 if (kind == JudgementKind.HomeRun)
                     KokoSim.Unity.Audio.MatchSfx.PlayCheer();   // 得点テロップでもう一度鳴って重なる（意図どおり）
             }
-            // 併殺の2つ目のアウト（常に打者）は「ダブルプレー」（issue
-            // double-play-throw-pace-and-second-out-call ③案F・2026-08-27監督判断）。
-            // IsAdditionalOut は engine 側（PlaybackEvaluator.JudgementAt）が単一ソースで判定する。
-            UiComponents.SetCallText(_judgementLabel, _judgementLabelShadow, kind switch
-            {
-                JudgementKind.Out => found.Value.IsAdditionalOut ? "ダブルプレー" : "アウト",
-                JudgementKind.Fair => "フェア",
-                JudgementKind.HomeRun => "ホームラン",
-                JudgementKind.Error => "エラー",
-                JudgementKind.Foul => "ファール",
-                _ => "セーフ",
-            });
-            _judgementLabel.EnableInClassList("pitch-call__judge--out", kind == JudgementKind.Out);
-            // エラーは「走者が生きた」側なのでセーフと同じ色系を流用する（issue #439。新規クラスを作らない）
-            _judgementLabel.EnableInClassList("pitch-call__judge--safe",
-                kind == JudgementKind.Safe || kind == JudgementKind.Error);
-            _judgementLabel.EnableInClassList("pitch-call__judge--fair", kind == JudgementKind.Fair);
-            // ファールは対決ビューの球審コールと同じストライク系の色（issue #1134）
-            _judgementLabel.EnableInClassList("pitch-call__judge--strike", kind == JudgementKind.Foul);
-            _judgementLabel.EnableInClassList("pitch-call__judge--homerun", kind == JudgementKind.HomeRun);
 
-            // 下段の飛距離（本塁打のみ。engine が判定に使った着地距離をそのまま出す, issue #354）。
-            // 数字＋和文の混植は Oswald が和文グリフを持たないため避け、単位まで含めて1枚の
-            // 和文ラベルで出す（1球判定の球種・球速行と同じ扱い。設計書16の書体3役ルール）。
+            // ホームラン（issue #1179 §3）は判定11種（Calls）とは別の専用アニメ＝judgement-call を使わない。
+            // SetHomeRunHost されていない画面（試合詳細の2D再生等）だけ、下のCalls同じ器へ
+            // homerun_base画像＋飛距離でフォールバックする。
+            if (kind == JudgementKind.HomeRun && _homeRunHost != null)
+            {
+                if (isNewOccurrence) _homeRunHost.Play(found.Value.DistanceM ?? 0.0);
+                _judgementHost.style.display = DisplayStyle.None;
+                _judgementTelop?.Hide();
+                _judgementShown = false;
+                return;
+            }
+
+            // プレイボール／ゲームセット／ホームランは打ち切らない＝その間に来た判定は捨てる
+            // （issue #1179。行列に溜めない＝表示しないだけで後で出し直したりはしない）。
+            if (kind != JudgementKind.HomeRun && (CallsSuppressed || (_homeRunHost?.IsPlaying ?? false)))
+            {
+                _judgementHost.style.display = DisplayStyle.None;
+                _judgementTelop?.Hide();
+                _judgementShown = false;
+                return;
+            }
+
+            // 1プレー1枚の画像面（issue #1179 §2）。併殺の2つ目のアウト（常に打者）は「ダブルプレー」
+            // （issue double-play-throw-pace-and-second-out-call ③案F・2026-08-27監督判断）。
+            // IsAdditionalOut は engine 側（PlaybackEvaluator.JudgementAt）が単一ソースで判定する。
+            var callClass = kind switch
+            {
+                JudgementKind.Out => found.Value.IsAdditionalOut ? "tl-call-doubleplay" : "tl-call-out",
+                JudgementKind.Fair => "tl-call-fair",
+                JudgementKind.Error => "tl-call-error",
+                JudgementKind.Foul => "tl-call-foul",
+                JudgementKind.HomeRun => "tl-call-homerun",   // フォールバック経路のみ到達
+                _ => "tl-call-safe",
+            };
+            _judgementTelop?.SetFace(callClass);
+            // elapsed=このプレー時間軸での経過＝t − T1（T1=表示が始まる時刻。PlaybackEvaluator.JudgementAt）。
+            var elapsed = t - found.Value.T1;
+            _judgementTelop?.Tick(elapsed, JudgementHoldSeconds, JudgementCallInSeconds, JudgementCallOutSeconds);
+
+            // 下段の飛距離（ホームランのフォールバック経路のみ。engine が判定に使った着地距離を
+            // そのまま出す, issue #354）。通常のCalls（HomeRun以外）はこの行を畳む。
             var distance = found.Value.DistanceM;
             var showDistance = kind == JudgementKind.HomeRun && distance.HasValue;
             _judgementDetail.text = showDistance ? "推定飛距離 " + Mathf.RoundToInt((float)distance.Value) + "m" : "";
             _judgementDetail.style.display = showDistance ? DisplayStyle.Flex : DisplayStyle.None;
 
-            // 出ていない→出た の変わり目でだけ跳ねを仕込む（issue #479）。毎フレーム仕込むと
-            // is-enter が付きっぱなしで opacity 0 のまま＝判定が一度も見えなくなる。
-            if (!_judgementShown)
-            {
-                _judgementShown = true;
-                // 外すのは必ず二段スケジュール後（1回の ExecuteLater ではスタイル解決を挟めず跳ねない。
-                // 実測の経緯は MatchLiveController.ShowCallHost の項）。
-                var host = _judgementHost;
-                host.AddToClassList("is-enter");
-                host.schedule.Execute(() =>
-                    host.schedule.Execute(() => host.RemoveFromClassList("is-enter")).ExecuteLater(0)
-                ).ExecuteLater(0);
-            }
+            _judgementShown = true;
             _judgementHost.style.display = DisplayStyle.Flex;
             // 走者ラベルが後から追加されても常に最前面に出す（自前の器のときだけ。外へ出した器の
             // 重なり順はその画面の UXML が決める＝ここで持ち上げると score-call の上へ出てしまう）。
@@ -451,6 +486,18 @@ namespace KokoSim.Unity.Match
         public void HideJudgement()
         {
             if (_judgementHost != null) _judgementHost.style.display = DisplayStyle.None;
+            _judgementTelop?.Hide();
+        }
+
+        /// <summary>スクショ用: 判定テロップ（Calls画像11種）を1枚だけ強制表示する（issue #1179）。
+        /// 本番と同じ CallTelopView を通す＝入り切りの動きも含めて同じ絵になる。</summary>
+        public void ShowCallForCapture(string callClass)
+        {
+            if (_judgementHost == null || _judgementTelop == null) return;
+            _judgementTelop.SetFace(callClass);
+            _judgementTelop.Tick(0.0, JudgementHoldSeconds, JudgementCallInSeconds, JudgementCallOutSeconds);
+            _judgementHost.style.display = DisplayStyle.Flex;
+            if (_judgementOwned) _judgementHost.BringToFront();
         }
 
         public void SetJudgementHost(VisualElement host, Label judge, Label judgeShadow, Label detail)
@@ -462,9 +509,16 @@ namespace KokoSim.Unity.Match
             _judgementLabel = judge;
             _judgementLabelShadow = judgeShadow;   // 影は無くても動く（面だけになる＝ぼかし影のみ）
             _judgementDetail = detail;
+            // 画像面（issue #1179）はUXML側が judgement-call の中に用意する（judgement-call-image）。
+            var image = host.Q<VisualElement>("judgement-call-image");
+            _judgementTelop = image != null ? new KokoSim.Unity.Match.Telops.CallTelopView(image) : null;
             _judgementHost.style.display = DisplayStyle.None;
             _judgementShown = false;
         }
+
+        /// <summary>ホームラン専用テロップ（issue #1179 §3）を外から渡す。未設定の画面
+        /// （試合詳細の2D再生等）は UpdateJudgement 内のフォールバック（Calls画像＋飛距離）へ落ちる。</summary>
+        public void SetHomeRunHost(KokoSim.Unity.Match.Telops.HomeRunTelopView host) => _homeRunHost = host;
 
         // ── 射影（mock: px(p)=[CX+p.x*S, OY-p.y*S] を要素サイズへ uniform 拡縮・レターボックス） ──
         // デザインキャンバス全体が収まる基準スケール（camera work のズーム倍率=1に対応、fillColumn 非依存）。
