@@ -60,17 +60,12 @@ namespace KokoSim.Unity.Match
         private static float TimeoutDecelM => (TimeoutRunSpeed + TimeoutWalkSpeed) * 0.5f * OverrunDecelEndsAt;
 
         /// <summary>
-        /// カメラの候補（ステージ座標: +x=一塁側・+z=センター方向・マウンド z=18.44）。構図は縦に収めたい実寸[m]で
-        /// 決める（3d-character.md）。監督に録画で選んでもらう（issue #1174「構図は勝手に決めない」）。
+        /// カメラの位置（ステージ座標: +x=一塁側・+z=センター方向・マウンド z=18.44）。本塁側の斜め上から輪を見下ろす
+        /// （2026-11-21 監督決定。一塁側・二塁側の案と録画で見比べて選んだ）。
         /// </summary>
-        public static readonly (string Name, Vector3 Pos, float FrameH)[] TimeoutCameraPresets =
-        {
-            ("本塁側の斜め上", new Vector3(5.5f, 7.0f, 5.0f), 7.5f),
-            ("一塁側の斜め上", new Vector3(14.0f, 7.0f, 22.0f), 7.5f),
-            ("二塁側の斜め上（投手の背中越し）", new Vector3(-4.0f, 8.0f, 32.0f), 7.5f),
-        };
-        /// <summary>使うカメラの候補（<see cref="TimeoutCameraPresets"/> の添字）。撮影レシピの overrides で切り替える。</summary>
-        public static int TimeoutCameraPreset;
+        public static Vector3 TimeoutCameraPos = new Vector3(5.5f, 7.0f, 5.0f);
+        /// <summary>縦に収めたい実寸[m]（輪の全身と足元のマウンド。構図は画角でなく実寸で決める＝3d-character.md）。</summary>
+        public static float TimeoutFrameHeightM = 7.5f;
         /// <summary>
         /// カメラの注視点の高さ[m]。輪の胸（約0.9m）より下を見る＝輪を画面の上寄せに置き、下に出る伝令役の
         /// テロップ（交代テロップと同じ器）と重ねない（2026-11-21 録画で輪の下半分がテロップに隠れていた）。
@@ -272,9 +267,7 @@ namespace KokoSim.Unity.Match
 
         private void ApplyTimeoutCamera()
         {
-            int i = Mathf.Clamp(TimeoutCameraPreset, 0, TimeoutCameraPresets.Length - 1);
-            var c = TimeoutCameraPresets[i];
-            FramePreview(c.Pos, new Vector3(_toCenter.x, TimeoutLookY, _toCenter.y), c.FrameH);
+            FramePreview(TimeoutCameraPos, new Vector3(_toCenter.x, TimeoutLookY, _toCenter.y), TimeoutFrameHeightM);
         }
 
         /// <summary>stage-local の a から b を向く yaw[度]（素の向き +Z のクリップ用）。</summary>

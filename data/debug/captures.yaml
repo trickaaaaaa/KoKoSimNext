@@ -127,9 +127,9 @@ captures:
     duel_seconds: 5.0
     timeout_at: 1.5
     video: {from: start, to: end, fps: 20}
-  # ── 守備伝令の場面（issue #1174）。1球目の途中で伝令を送り、次の球の前にマウンドへ集まる。カメラは候補3案 ──
-  - id: timeout-scene-1174-cam0
-    name: "守備伝令の場面・カメラ案A 本塁側の斜め上（issue #1174）"
+  # ── 守備伝令の場面（issue #1174）。1球目の途中で伝令を送り、次の球の前にマウンドへ集まる ──
+  - id: timeout-scene-1174
+    name: "守備伝令の場面（issue #1174）"
     scenario: pitcher-rattled-lab
     manager: home
     view: panel
@@ -137,27 +137,6 @@ captures:
     timeout_at: 0.5
     timeout_messenger: 0
     video: {from: start, to: end, fps: 24}
-    overrides: {DuelStageRig.TimeoutCameraPreset: 0}
-  - id: timeout-scene-1174-cam1
-    name: "守備伝令の場面・カメラ案B 一塁側の斜め上（issue #1174）"
-    scenario: pitcher-rattled-lab
-    manager: home
-    view: panel
-    duel_seconds: 17.0
-    timeout_at: 0.5
-    timeout_messenger: 0
-    video: {from: start, to: end, fps: 24}
-    overrides: {DuelStageRig.TimeoutCameraPreset: 1}
-  - id: timeout-scene-1174-cam2
-    name: "守備伝令の場面・カメラ案C 二塁側の斜め上（issue #1174）"
-    scenario: pitcher-rattled-lab
-    manager: home
-    view: panel
-    duel_seconds: 17.0
-    timeout_at: 0.5
-    timeout_messenger: 0
-    video: {from: start, to: end, fps: 24}
-    overrides: {DuelStageRig.TimeoutCameraPreset: 2}
   - id: timeout-scene-1174-recorder
     name: "守備伝令の場面・控えが走らず記録員が伝令（issue #1174）"
     scenario: pitcher-rattled-lab
