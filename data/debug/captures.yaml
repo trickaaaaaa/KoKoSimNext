@@ -265,3 +265,10 @@ captures:
     view: panel
     duel_seconds: 18.0
     video: {from: start, to: end, fps: 24}
+
+  - id: runner-idle-1247
+    name: "走者の待機クリップ・向き（issue #1247 ①⑥）"
+    scenario: of-grounder-runner-lf-lab
+    manager: home
+    shots: [start, catch, release]
+    probes: [RunnerDiag]
