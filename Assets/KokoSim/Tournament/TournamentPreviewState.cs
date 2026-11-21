@@ -462,7 +462,7 @@ namespace KokoSim.Unity.Tournament
 
             if (stats.Pitching.Games > 0)
             {
-                row.Stat1 = stats.Pitching.Era.ToString("0.00");
+                row.Stat1 = stats.Pitching.EraText;
                 row.Stat2 = stats.Pitching.InningsText;
                 row.Stat3 = stats.Pitching.StrikeOuts.ToString();
                 return;

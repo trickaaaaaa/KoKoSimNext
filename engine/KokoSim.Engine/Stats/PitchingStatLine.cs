@@ -37,8 +37,14 @@ public sealed class PitchingStatLine
     /// <summary>投球回テキスト（例: 7回1/3 → "7 1/3"）。</summary>
     public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");
 
-    /// <summary>防御率＝自責点×27/アウト数（9回換算の自責点, issue #69, アウト0なら0）。</summary>
-    public double Era => Outs > 0 ? EarnedRuns * 27.0 / Outs : 0.0;
+    /// <summary>
+    /// 防御率＝自責点×27/アウト数（9回換算の自責点, issue #69）。アウト0で自責点があれば無限大
+    /// （0.00 と出さない・issue #1209）、アウト0で自責点も無ければ0。表示は <see cref="EraText"/>。
+    /// </summary>
+    public double Era => Outs > 0 ? EarnedRuns * 27.0 / Outs : (EarnedRuns > 0 ? double.PositiveInfinity : 0.0);
+
+    /// <summary>防御率の表示文字列（"2.14"。アウト0は防御率が定まらないので "-"）。</summary>
+    public string EraText => Outs > 0 ? Era.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "-";
 
     /// <summary>失点率（RA）＝失点×27/アウト数（自責点を区別しない参考値, アウト0なら0）。</summary>
     public double Ra => Outs > 0 ? Runs * 27.0 / Outs : 0.0;

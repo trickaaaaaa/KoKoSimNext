@@ -40,8 +40,9 @@ public static class BoxScoreGrid
     {
         // 打順枠ごとの打席カウンタ（枠単位。打順不明=0 は「0番の枠」として1本にまとめる）。
         var paCountByOrder = new Dictionary<int, int>();
-        // (打順, 打者名) → 行。初出順を保つため別リストで順序を持つ。
-        var rowIndex = new Dictionary<(int Order, string Name), int>();
+        // (打順, 選手ID) → 行。初出順を保つため別リストで順序を持つ。同姓の代打を1行にまとめないよう名前では引かない
+        // （選手IDが無い相手校の生成選手だけ名前で引く）。
+        var rowIndex = new Dictionary<(int Order, int Id, string Name), int>();
         var orders = new List<int>();
         var names = new List<string>();
         var sourceIds = new List<int?>();
@@ -55,7 +56,7 @@ public static class BoxScoreGrid
             pa++;
             paCountByOrder[e.BatterOrder] = pa;
 
-            var key = (e.BatterOrder, e.BatterName);
+            var key = (e.BatterOrder, e.BatterSourceId ?? -1, e.BatterSourceId is null ? e.BatterName : "");
             if (!rowIndex.TryGetValue(key, out var i))
             {
                 i = cells.Count;

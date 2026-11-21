@@ -118,7 +118,7 @@ public static class RecordRoom
         RecordCategory.Average => Rate3(x.Batting.Average),
         RecordCategory.Obp => Rate3(x.Batting.Obp),
         RecordCategory.Ops => Rate3(x.Batting.Ops),
-        RecordCategory.Era => x.Pitching.Era.ToString("0.00", CultureInfo.InvariantCulture),
+        RecordCategory.Era => x.Pitching.EraText,
         RecordCategory.Whip => x.Pitching.Whip.ToString("0.00", CultureInfo.InvariantCulture),
         RecordCategory.InningsPitched => x.Pitching.InningsText,
         _ => ((int)ValueOf(c, x)).ToString(CultureInfo.InvariantCulture),
