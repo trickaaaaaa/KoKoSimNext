@@ -185,6 +185,36 @@ captures:
     timeout_at: 0.5
     timeout_messenger: recorder
     video: {from: start, to: end, fps: 24}
+  # ── サヨナラの場面（issue #1176）。game-end-walkoff-lab は自然な解決でサヨナラ安打になるシード（強制発動は
+  # 打球の計算を飛ばして守備ビューを通らないので使わない）。manager で勝った側（後攻）が自校か相手校かを替える ──
+  - id: walkoff-1176
+    name: "サヨナラの場面・自校のサヨナラ安打（issue #1176）"
+    scenario: game-end-walkoff-lab
+    manager: home
+    view: panel
+    duel_seconds: 23.0
+    video: {from: start, to: end, fps: 24}
+  - id: walkoff-1176-lose
+    name: "サヨナラの場面・相手校のサヨナラ勝ち（issue #1176）"
+    scenario: game-end-walkoff-lab
+    manager: away
+    view: panel
+    duel_seconds: 23.0
+    video: {from: start, to: end, fps: 24}
+  - id: walkoff-1176-hr
+    name: "サヨナラの場面・サヨナラ本塁打（打者の生還を待つ。issue #1176）"
+    scenario: game-end-walkoff-hr-lab
+    manager: home
+    view: panel
+    duel_seconds: 40.0
+    video: {from: start, to: end, fps: 24}
+  - id: walkoff-1176-small
+    name: "サヨナラの場面・部員が少ない自校（ベンチ入り12人。issue #1176）"
+    scenario: game-end-walkoff-small-lab
+    manager: home
+    view: panel
+    duel_seconds: 23.0
+    video: {from: start, to: end, fps: 24}
   # ── 試合テロップの画像化（issue #1179）。画面全体（panel）で撮る ──
   - id: telop-calls-1179
     name: "1球の判定テロップ（ストライク／ボール等）が画像で出る（issue #1179）"

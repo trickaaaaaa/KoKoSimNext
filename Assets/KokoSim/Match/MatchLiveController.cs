@@ -544,6 +544,9 @@ namespace KokoSim.Unity.Match
         private KokoSim.Unity.Match.Telops.HomeRunTelopView _homeRunTelop;
         // 終局後「ゲームセット」を掲げる予約。得点テロップ（#60）の演出が済むのを Update 側で待つ。
         private bool _gameSetPending;
+        // サヨナラの場面（issue #1176）: 喜びを見せてから「ゲームセット」を掲げるまでの秒数（8割が輪に着いてから）。喜びの動きは2種類しかないので長く映さない
+        [SerializeField] private float walkoffCelebrateHoldSeconds = 0.4f;
+        private bool _walkoffSkip;          // 盤面クリックで場面を飛ばした（そのまま「ゲームセット」へ）
         private int _subLogCount;   // 既に取り込んだ交代ログ件数（_prog.Substitutions との差分検知。issue #920）
 
         // イニング間のスコア画面（試合画面改修）。攻守が入れ替わった瞬間、次の打席の再生を保留して
@@ -846,6 +849,8 @@ namespace KokoSim.Unity.Match
             _gameTelopClock = 0f;
             _gameTelopOn = false;
             _gameSetPending = false;
+            _walkoffSkip = false;
+            _duelRig?.EndWalkoffScene();   // 前の試合のサヨナラの場面を持ち越さない（issue #1176）
             _inningBreakClock = 0f;
             _inningBreakOn = false;
             _subLogCount = 0;
@@ -1310,6 +1315,12 @@ namespace KokoSim.Unity.Match
         private void OnRootPointerDown(PointerDownEvent evt)
         {
             if (CaptureMode) return;   // スクショハーネス中は中断を出さない（バッチ撮影を暗幕で潰さない）
+            // サヨナラの場面（issue #1176）の盤面クリック＝飛ばしてそのまま「ゲームセット」へ
+            if (!_paused && (_duelRig?.WalkoffSceneArmedOrActive ?? false) && !IsPauseExempt(evt.target as VisualElement))
+            {
+                SkipWalkoffScene();
+                return;
+            }
             if (_gameOver || _paused || _prog == null) return;
             if (_subPanel != null && _subPanel.IsOpen) return;
             if (_scoutPanel != null && _scoutPanel.IsOpen) return;
@@ -1655,22 +1666,28 @@ namespace KokoSim.Unity.Match
             _paused = false;
             var result = _prog.SkipDelegateToAi(_managerIsAway, managerTacticalSense);
             _view.SetPlay(null);
-            EndGame(result);
+            EndGame(result, allowWalkoffScene: false);   // 委任で終わったらサヨナラの場面は出さない（issue #1176）
             if (_caption != null) _caption.text = "以降を委任して試合終了。";
         }
 
         // 終局処理（自然終了・スキップ委任・高速試合モード中の終局 共通）。結果を確定表示し、
         // ライブ観戦なら試合結果画面へ渡す。
-        private void EndGame(GameResult result)
+        private void EndGame(GameResult result, bool allowWalkoffScene = true)
         {
             // 高速試合モード中に終局した場合はここで抜ける（_prog.IsFinished なので OpenWindowOrBreak は
             // 何もしない＝安全）。抜けておかないと通常ループが止まったままで「ゲームセット」テロップ等の
             // Update() 側の後処理（_gameSetPending の消化）が一生走らない。
+            // 高速試合モード・委任で終わったときはサヨナラの場面を出さない（issue #1176）
+            bool walkoffScene = allowWalkoffScene && !_fastMode && BeginWalkoffAtGameEnd();
+            if (!walkoffScene) _duelRig?.EndWalkoffScene();   // 予約だけ残っていたら畳む（委任・高速）
             SetFastMode(false);
-            EndFieldPlay();   // 打球の途中で終局しても守備陣・走者を場に置き去りにしない
-            // 対決ビューの役者をその場で止める（issue #647）。EndFieldPlay は投手を投球クリップの途中へ戻すので、
-            // 止めないと終わった試合で投げ終わりの余韻が再生され続ける。⚠ EndFieldPlay の後（戻された姿勢から畳む）
-            if (_duelRig != null && _duelRig.Available) _duelRig.FreezeForGameEnd();
+            if (!walkoffScene)
+            {
+                EndFieldPlay();   // 打球の途中で終局しても守備陣・走者を場に置き去りにしない
+                // 対決ビューの役者をその場で止める（issue #647）。EndFieldPlay は投手を投球クリップの途中へ戻すので、
+                // 止めないと終わった試合で投げ終わりの余韻が再生され続ける。⚠ EndFieldPlay の後（戻された姿勢から畳む）
+                if (_duelRig != null && _duelRig.Available) _duelRig.FreezeForGameEnd();
+            }
             _view.HideJudgement();
             KokoSim.Unity.Audio.MatchBrassBand.End(immediate: false);
             KokoSim.Unity.Audio.MatchAnnouncer.Stop();
@@ -2363,6 +2380,80 @@ namespace KokoSim.Unity.Match
             return sent;
         }
 
+        // ── サヨナラの場面（issue #1176） ──
+
+        /// <summary>
+        /// いまの打席がサヨナラの決着（規定の回以降の裏に、後攻がこの打席で勝ち越した）か。点は掲示板にまだ出していない
+        /// 分で数える（<see cref="RunsNotYetPosted"/> と同じ基準）。<paramref name="awayRuns"/>＝相手（先攻）の最終得点。
+        /// ⚠ <c>IsFinished</c> では見ない: 打球の再生を始める時点では、engine の終局の印はまだ立っていない
+        /// （打席の後処理で立つ。2026-11-21 実測）。勝ち越した瞬間に終わる規則（GameEngine の終局判定と同じ）で決める。
+        /// </summary>
+        private bool IsWalkoffNow(out int awayRuns)
+        {
+            awayRuns = 0;
+            if (_current == null || _current.IsTop || _prog == null || _current.Inning < _prog.RegulationInnings) return false;
+            var snap = _prog.Snapshot();
+            awayRuns = snap.AwayLine.Runs;
+            return snap.HomeLine.Runs > awayRuns && _postedHomeRuns <= awayRuns;
+        }
+
+        /// <summary>
+        /// 打球の再生を始めた直後に呼ぶ。サヨナラの決着なら、勝ち越しの走者（本塁打は打者）の生還の時刻で場面へ入る予約を
+        /// 3Dへ渡す。時刻は得点テロップと同じ表示同期の単一ソース（<see cref="PrepareDisplayTimings"/> の生還時刻）。
+        /// </summary>
+        private void TryArmWalkoff()
+        {
+            if (_fastMode || !DuelPacingActive || _current?.Play == null || _runScoreShowAt.Count == 0) return;
+            if (!IsWalkoffNow(out var awayRuns)) return;
+            // 本塁打は打者の生還を待つ（監督決定）＝最後の生還。それ以外は勝ち越しの1点（同点からの次の1点）
+            int k = _current.Play.HomeRun != null
+                ? _runScoreShowAt.Count - 1
+                : Mathf.Clamp(awayRuns - _postedHomeRuns, 0, _runScoreShowAt.Count - 1);
+            var tc = _runScoreShowAt[k];
+            if (!double.IsFinite(tc)) return;
+            _duelRig.ArmWalkoff((float)tc, _prog.BenchEntryCount(teamIsAway: false), DuelStageRig.BenchIsFirstBaseSide(false));
+        }
+
+        /// <summary>
+        /// 終局（<see cref="EndGame"/>）でサヨナラの場面を流すか決めて始める。予約済み（打球のあるサヨナラ）ならその場で
+        /// 始め、再生の無いサヨナラ（押し出し・死球など）は守備の定位置から始める。流すなら true。
+        /// </summary>
+        private bool BeginWalkoffAtGameEnd()
+        {
+            if (_duelRig == null || !_duelRig.Available) return false;
+            if (_duelRig.WalkoffSceneArmedOrActive)
+            {
+                _duelRig.StartArmedWalkoffNow();
+                return _duelRig.WalkoffSceneActive;
+            }
+            if (!DuelPacingActive || _current == null || _current.Play != null || _current.RunsScored <= 0) return false;
+            if (!IsWalkoffNow(out _)) return false;
+            var onBase = new[] { _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore };
+            return _duelRig.BeginWalkoffWithoutPlay(_prog.BenchEntryCount(teamIsAway: false), onBase,
+                DuelStageRig.BenchIsFirstBaseSide(false));
+        }
+
+        /// <summary>「ゲームセット」を掲げてよいか＝サヨナラの場面が無い・飛ばした・人だかりができてから所定の秒数たった。</summary>
+        private bool WalkoffReadyForGameSet()
+        {
+            if (_walkoffSkip || _duelRig == null || !_duelRig.WalkoffSceneActive) return true;
+            return _duelRig.WalkoffCelebrateSeconds >= walkoffCelebrateHoldSeconds;
+        }
+
+        /// <summary>
+        /// サヨナラの場面を飛ばす（盤面クリック）。場面はそのまま続け、「ゲームセット」を待たせない。打球の再生中なら
+        /// 再生を終わりまで飛ばす（再生の後始末で予約していた場面がその場で始まる）。
+        /// </summary>
+        private void SkipWalkoffScene()
+        {
+            _walkoffSkip = true;
+            if (!_gameOver && _stage == LiveStage.Play && _current?.Play != null)
+                _t = System.Math.Max(_t, PlayEndTime() + FinishGraceSeconds + 1e-3);
+        }
+
+        /// <summary>撮影専用（issue #1176）: サヨナラで喜ぶはずの人数（勝った側＝後攻のベンチ入り）。</summary>
+        internal int WalkoffExpectedCountForCapture => _prog?.BenchEntryCount(teamIsAway: false) ?? -1;
+
         /// <summary>撮影専用（issue #1174）: 伝令の場面を流しているか。</summary>
         internal bool TimeoutSceneOnForCapture => _timeoutSceneOn;
 
@@ -2661,6 +2752,7 @@ namespace KokoSim.Unity.Match
                 // 打球は3Dの守備ビューで見せる（打球処理の3D化 F9）。俯瞰は同じ時計で並走させたままにして、
                 // トグルを叩いた瞬間に同じ場面へ切り替わるようにする（＝2Dはデバッグ用の別窓であって、別経路ではない）。
                 BeginFieldPlay((float)_t);
+                TryArmWalkoff();   // サヨナラの決着なら、勝ち越しの走者の生還で場面へ入る予約（issue #1176）
                 RenderReplayFrame();
             }
             else
@@ -3253,7 +3345,8 @@ namespace KokoSim.Unity.Match
             // 対決ビューはポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
             // 打球プレー中は俯瞰を出していても回す＝トグルで切り替えた瞬間に3Dが止まっていない（F9）。
             // 投球・打球の途中で出した交代テロップ（issue #920）の間も止める＝明けたら同じ場面から続く。
-            if (!_paused && !(_subTelopOn && _subTelopFreezeRig) && (_duelOn || FieldPlayActive))
+            if (!_paused && !(_subTelopOn && _subTelopFreezeRig)
+                && (_duelOn || FieldPlayActive || (_duelRig?.WalkoffSceneActive ?? false)))
                 _duelRig?.Tick(Time.deltaTime * _speed);
             RefreshDuelFieldLabels();   // 頭上フルネームラベル（issue #393）。ポーズ中も現在位置のまま表示を保つ
             RefreshMiniDiamond();       // 走者の小ダイヤ（issue #595）。同じくポーズ中も現在位置のまま残す
@@ -3339,7 +3432,7 @@ namespace KokoSim.Unity.Match
             // 試合開始/終了テロップ（issue #442・画像化は #1179）。「ゲームセット」は得点テロップと
             // サヨナラのホームラン演出（#1176・ホームランは打ち切らない）の両方が済んでから掲げる。
             // 寿命は再生速度で縮む（issue #1179「判定のように速度へ追従」）。
-            if (_gameSetPending && !_scoreCallOn && !(_homeRunTelop?.IsPlaying ?? false))
+            if (_gameSetPending && !_scoreCallOn && !(_homeRunTelop?.IsPlaying ?? false) && WalkoffReadyForGameSet())
             {
                 _gameSetPending = false;
                 ShowGameTelop(isGameSet: true);
@@ -4436,6 +4529,9 @@ namespace KokoSim.Unity.Match
 
         private void EndFieldPlay()
         {
+            // サヨナラの場面（issue #1176）は再生が終わっても畳まない＝場面が守備ビューの役者を引き継いで続く。
+            // 再生を最後まで待たずに打ち切られたら、予約していた場面をその場で始める
+            if (_duelRig != null && _duelRig.WalkoffSceneArmedOrActive) { _duelRig.StartArmedWalkoffNow(); return; }
             if (FieldPlayActive) _duelRig.EndFieldPlay();
         }
 
@@ -4499,7 +4595,8 @@ namespace KokoSim.Unity.Match
         private void RefreshDuelFieldLabels()
         {
             if (_duelLabelHost == null) return;
-            if (!FieldPlayActive)
+            // サヨナラの場面（issue #1176）では名札を出さない＝人だかりに名前が重なって読めない
+            if (!FieldPlayActive || (_duelRig?.WalkoffSceneActive ?? false))
             {
                 foreach (var l in _duelFieldLabelPool) l.style.display = DisplayStyle.None;
                 return;

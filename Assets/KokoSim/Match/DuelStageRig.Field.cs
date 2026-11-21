@@ -4276,6 +4276,12 @@ namespace KokoSim.Unity.Match
             yield return OtBatterIdleClipName;
             yield return OtMessengerIdleClipName;
             yield return OtBatterStandClipName;
+            // サヨナラの場面（issue #1176）
+            yield return WoSprintClipName;
+            foreach (var n in WoCelebrateClipNames) yield return n;
+            yield return WoPitcherDefeatedClipName;
+            yield return WoPitcherDefeated2ClipName;
+            yield return WoCatcherDefeatedClipName;
         }
 
         /// <summary>その役の本来の待機クリップ（走行中は <c>IdleClip</c> が差し替わっているため別に持つ）。</summary>
@@ -5351,6 +5357,7 @@ namespace KokoSim.Unity.Match
         public void BeginFieldPlay(PlaybackPlay play, float t0)
         {
             if (!Available || play == null) return;
+            if (_woArmed || _woActive) EndWalkoffScene();   // 前の試合のサヨナラの場面を持ち越さない（issue #1176）
             play = StripPostResolutionReturnMoves(play);
             _bobble = HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
             if (_bobble.Kind == HandleBobbleKind.Fumble)
@@ -5503,6 +5510,8 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void EndFieldPlay()
         {
+            // サヨナラの場面（issue #1176）は場面ごと畳む（場面は守備ビューの役者を握っている）
+            if (_woArmed || _woActive) { EndWalkoffScene(); return; }
             if (_fieldPlay == null) return;
             _fieldPlay = null;
             _fieldPlan = null;
@@ -5614,6 +5623,9 @@ namespace KokoSim.Unity.Match
             if (_fieldPlay == null) return;
             float dt = t - _fieldT;
             _fieldT = t;
+            // サヨナラの場面（issue #1176）: 集まり始める時刻に達したら場面へ。以降は場面の時計で進む（Tick）
+            if (_woArmed && !_woActive && t >= _woTGather) BeginArmedWalkoff(t);
+            if (_woActive) return;
 
             // 捕球・送球の予定は**位置を置く前**に発火させる（クリップ差し替えは頭出しで位置を動かすため）。
             // 送球を後に置くのは、同じ野手が「捕る→投げる」と続くとき投げるほうが後勝ちであるべきだから
