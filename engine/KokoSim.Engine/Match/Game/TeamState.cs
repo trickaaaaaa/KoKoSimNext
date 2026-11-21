@@ -60,9 +60,25 @@ public sealed class TeamState
     public string Name => _team.Name;
     public Player CurrentPitcher { get; private set; }
 
-    /// <summary>捕手（盗塁刺しの送球主体）。捕手が打順にいなければ先頭打者で代用。</summary>
-    public Player Catcher => _lineup.FirstOrDefault(p => p.Position == FieldPosition.Catcher)
-                             ?? _lineup[0];
+    /// <summary>
+    /// 捕手（盗塁刺しの送球主体）。DH枠は守備に就かないので引かない（控えから繰り上げたDHは控え時の守備位置を残す）。
+    /// 捕手が打順にいなければ守備に就いている先頭の選手で代用。
+    /// </summary>
+    public Player Catcher => FielderAt(FieldPosition.Catcher)
+                             ?? _lineup[Enumerable.Range(0, 9).First(i => !IsDhSlot(i))];
+
+    private bool IsDhSlot(int slot) => _usesDh && slot == _dhSlot;
+
+    /// <summary>守備位置 <paramref name="pos"/> に就いている打順内の選手（DH枠は除く）。投手は呼び出し側で扱う。</summary>
+    private Player? FielderAt(FieldPosition pos)
+    {
+        for (var i = 0; i < 9; i++)
+        {
+            if (IsDhSlot(i)) continue;
+            if (_lineup[i].Position == pos) return _lineup[i];
+        }
+        return null;
+    }
 
     /// <summary>
     /// いまのバッテリー（<paramref name="pitcher"/>×<see cref="Catcher"/>）の相性 K（設計書23 §2.4）。乱数不使用。
@@ -118,7 +134,7 @@ public sealed class TeamState
     public Player? PlayerAtPosition(FieldPosition pos)
         => pos == FieldPosition.Pitcher
             ? CurrentPitcher
-            : _lineup.FirstOrDefault(p => p.Position == pos);
+            : FielderAt(pos);
     public int PitchesThrown { get; private set; }
     public int Runs { get; set; }
     public int PitcherChanges { get; private set; }
@@ -1523,7 +1539,8 @@ public sealed class TeamState
         var dhPlayer = _lineup[_dhSlot];
         if (dhFieldsAt is { } pos)
         {
-            var target = IndexOf(_lineup.FirstOrDefault(p => p != dhPlayer && p.Position == pos)!);
+            var fielder = FielderAt(pos);
+            var target = fielder is null ? -1 : IndexOf(fielder);
             if (target < 0) return false;
             _retired.Add(KeyOf(_lineup[target]));
             _replacedAtSlot[target] = _lineup[target].Name;   // 観測: 守備位置に就いた選手が退いた
