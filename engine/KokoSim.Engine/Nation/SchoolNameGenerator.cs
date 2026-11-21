@@ -18,6 +18,13 @@ public sealed record SchoolNameVocab
     /// </summary>
     public IReadOnlyDictionary<int, IReadOnlyList<string>> PlacesByPrefecture { get; init; }
         = new Dictionary<int, IReadOnlyList<string>>();
+
+    /// <summary>
+    /// 出さない私立の名前（語幹＋接尾。「高校」は付けない。issue #1320）。実在校のブランド名
+    /// （明徳義塾・常翔学園 等）が架空の学校として出ないようにする。当たったら乱数を引き直さず接尾を隣へずらす
+    /// （<see cref="SchoolNameGenerator.Generate"/>）。公立の「地名＋特徴語」は一般的な形なので対象外（ユーザー決定）。
+    /// </summary>
+    public IReadOnlyCollection<string> ExcludedPrivateNames { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>校名ジェネレータ。公立=地名＋特徴、私立=語幹＋接尾。乱数は注入（決定論）。</summary>
@@ -33,8 +40,9 @@ public static class SchoolNameGenerator
     {
         if (rng.NextDouble() < v.PrivateRatio)
         {
-            var stem = Pick(v.PrivateStems, rng);
-            var suffix = Pick(v.PrivateSuffixes, rng);
+            var si = PickIndex(v.PrivateStems, rng);
+            var xi = PickIndex(v.PrivateSuffixes, rng);
+            var (stem, suffix) = AvoidExcluded(v, si, xi);
             return (stem + suffix + "高校", Establishment.Private);
         }
         else
@@ -61,4 +69,33 @@ public static class SchoolNameGenerator
 
     private static string Pick(IReadOnlyList<string> list, IRandomSource rng)
         => list.Count == 0 ? "" : list[rng.NextInt(0, list.Count)];
+
+    /// <summary><see cref="Pick"/> と同じ乱数の使い方で添字を返す（空なら -1・乱数を消費しない）。</summary>
+    private static int PickIndex(IReadOnlyList<string> list, IRandomSource rng)
+        => list.Count == 0 ? -1 : rng.NextInt(0, list.Count);
+
+    /// <summary>
+    /// 実在校の名前に当たったら、<b>乱数を使わずに</b>接尾を隣へずらす（全部だめなら語幹も隣へ）。
+    /// 引いた乱数の数は変わらない＝強さ・名声・校風の生成列も、除外に当たらなかった学校の名前も変わらない。
+    /// 語彙の全組み合わせが除外されている異常時は、引いたままの組み合わせを返す（落とさない）。
+    /// </summary>
+    private static (string Stem, string Suffix) AvoidExcluded(SchoolNameVocab v, int si, int xi)
+    {
+        string At(IReadOnlyList<string> list, int i) => i < 0 ? "" : list[i];
+        var excluded = v.ExcludedPrivateNames;
+        if (excluded.Count == 0 || !excluded.Contains(At(v.PrivateStems, si) + At(v.PrivateSuffixes, xi)))
+            return (At(v.PrivateStems, si), At(v.PrivateSuffixes, xi));
+
+        int stems = Math.Max(1, v.PrivateStems.Count), suffixes = Math.Max(1, v.PrivateSuffixes.Count);
+        for (var ds = 0; ds < stems; ds++)
+        for (var dx = 0; dx < suffixes; dx++)
+        {
+            var s = si < 0 ? -1 : (si + ds) % stems;
+            var x = xi < 0 ? -1 : (xi + dx) % suffixes;
+            var stem = At(v.PrivateStems, s);
+            var suffix = At(v.PrivateSuffixes, x);
+            if (!excluded.Contains(stem + suffix)) return (stem, suffix);
+        }
+        return (At(v.PrivateStems, si), At(v.PrivateSuffixes, xi));
+    }
 }
