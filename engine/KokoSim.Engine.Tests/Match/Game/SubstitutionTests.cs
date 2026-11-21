@@ -102,6 +102,31 @@ public sealed class SubstitutionTests
         Assert.DoesNotContain(ss, state.CurrentLineup);
     }
 
+    [Fact]
+    public void DefensiveSub_RejectsPitcherSlot_NonDh()
+    {
+        var sub = At(FieldPosition.LeftField, "守備固め");
+        var state = new TeamState(MakeTeam(new[] { sub }));
+        var pitcher = state.CurrentLineup[state.PitcherSlot];
+
+        Assert.False(state.DefensiveSub(pitcher, sub));
+        Assert.Contains(sub, state.Reserves);
+        Assert.Equal(0, state.Substitutions);
+        Assert.Same(pitcher, state.CurrentLineup[state.PitcherSlot]);
+    }
+
+    [Fact]
+    public void DefensiveSub_RejectsDhSlot()
+    {
+        var sub = At(FieldPosition.LeftField, "守備固め");
+        var state = new TeamState(MakeDhTeam(new[] { sub }));
+        var dh = state.CurrentLineup[state.DhSlot];
+
+        Assert.False(state.DefensiveSub(dh, sub));
+        Assert.Contains(sub, state.Reserves);
+        Assert.Equal(0, state.Substitutions);
+    }
+
     // ===== 代走 =====
 
     [Fact]

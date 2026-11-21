@@ -371,8 +371,11 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         if (s.Inning < _c.DefensiveSubFromInning) return null;
         if (s.ScoreDiff < _c.DefensiveSubMinLead) return null;            // リードを守る場面のみ
 
+        // 守備に就いている野手枠だけが対象（投手枠・DH枠は守備固めにならない）。
+        var swappable = s.DefenseSlotSwappable;
         var weakest = s.Lineup
-            .Where(p => p.Position != Field.FieldPosition.Pitcher && p.Fielding <= _c.DefensiveSubFieldingCeiling)
+            .Where((p, i) => (swappable is null || (i < swappable.Count && swappable[i]))
+                             && p.Position != Field.FieldPosition.Pitcher && p.Fielding <= _c.DefensiveSubFieldingCeiling)
             .OrderBy(p => p.Fielding).FirstOrDefault();
         if (weakest is null) return null;
 
