@@ -2489,9 +2489,9 @@ namespace KokoSim.Unity.Match
                 _duelRig.StartArmedWalkoffNow();
                 return _duelRig.WalkoffSceneActive;
             }
-            if (!DuelPacingActive || _current == null || !IsWalkoffAtGameEnd()) return false;
+            if (!DuelPacingActive || !IsWalkoffAtGameEnd()) return false;
             // 塁の絵は決着の前の配置: 打席が確定していれば打席の頭の塁、打席の途中で決着した（暴投・捕逸・本盗・重盗）なら直近の窓の塁
-            var onBase = _paConfirmed
+            var onBase = _paConfirmed && _current != null
                 ? new[] { _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore }
                 : new[] { _atBat?.BaseFirst ?? false, _atBat?.BaseSecond ?? false, _atBat?.BaseThird ?? false };
             return _duelRig.BeginWalkoffWithoutPlay(_prog.BenchEntryCount(teamIsAway: false), onBase,
