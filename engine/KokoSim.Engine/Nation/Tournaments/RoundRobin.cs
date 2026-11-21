@@ -7,7 +7,7 @@ public sealed record Standing(School School, int Wins, int Losses, int RunMargin
 
 /// <summary>
 /// 総当たりリーグ（設計書05 §1.5 round_robin）。全対戦を消化し、勝点（勝利数）で順位付け。
-/// 同率は直接対決→得失点差で解決。リーグ戦の県は公式戦数が多く実戦経験を稼ぎやすい（§1.5）。決定論。
+/// 2校同率は直接対決→得失点差、3校以上の同率は得失点差で解決。リーグ戦の県は公式戦数が多く実戦経験を稼ぎやすい（§1.5）。決定論。
 /// </summary>
 public static class RoundRobin
 {
@@ -37,8 +37,9 @@ public static class RoundRobin
     }
 
     /// <summary>
-    /// リーグ戦の順位付け（設計書05 §1.5）。勝点（勝利数）→得失点差→強さ→Id の総順序で並べ、
-    /// 勝点が並んだ隣り合う2校は直接対決の勝者を上にする。<see cref="Run"/> と対話リーグ
+    /// リーグ戦の順位付け（設計書05 §1.5）。勝点（勝利数）で並べ、同率のうち<b>ちょうど2校</b>のときだけ
+    /// 直接対決の勝者を上にする。3校以上の同率は直接対決を使わず（三すくみで順位が動くため）、
+    /// 得失点差→強さ→Id の総順序で決める。<see cref="Run"/> と対話リーグ
     /// （<see cref="BlockLeagueRunner"/>）が同じ規則で順位を出すための単一の入口。
     /// <paramref name="head"/> のキーは (小Id, 大Id)・値は勝者Id。
     /// </summary>
@@ -46,24 +47,25 @@ public static class RoundRobin
         IReadOnlyList<School> teams, IReadOnlyDictionary<int, int> wins, IReadOnlyDictionary<int, int> losses,
         IReadOnlyDictionary<int, int> margin, IReadOnlyDictionary<(int, int), int> head)
     {
-        // 総順序で並べ（勝点→得失点→強さ→Id）、その後 2校同点の直接対決で局所補正（§1.5）。
-        var ordered = teams
-            .OrderByDescending(t => wins[t.Id])
-            .ThenByDescending(t => margin[t.Id])
-            .ThenByDescending(t => t.Strength)
-            .ThenBy(t => t.Id)
-            .ToList();
-
-        for (var k = 0; k + 1 < ordered.Count; k++)
+        var ordered = new List<School>(teams.Count);
+        foreach (var group in teams.GroupBy(t => wins[t.Id]).OrderByDescending(g => g.Key))
         {
-            var a = ordered[k];
-            var b = ordered[k + 1];
-            if (wins[a.Id] != wins[b.Id]) continue; // 同点のみ直接対決を優先
-            var key = (System.Math.Min(a.Id, b.Id), System.Math.Max(a.Id, b.Id));
-            if (head.TryGetValue(key, out var winnerId) && winnerId == b.Id)
+            var tied = group
+                .OrderByDescending(t => margin[t.Id])
+                .ThenByDescending(t => t.Strength)
+                .ThenBy(t => t.Id)
+                .ToList();
+            if (tied.Count == 2)
             {
-                ordered[k] = b; ordered[k + 1] = a; // 直接対決の勝者を上へ
+                var a = tied[0];
+                var b = tied[1];
+                var key = (System.Math.Min(a.Id, b.Id), System.Math.Max(a.Id, b.Id));
+                if (head.TryGetValue(key, out var winnerId) && winnerId == b.Id)
+                {
+                    tied[0] = b; tied[1] = a;
+                }
             }
+            ordered.AddRange(tied);
         }
 
         return ordered.Select(t => new Standing(t, wins[t.Id], losses[t.Id], margin[t.Id])).ToList();
