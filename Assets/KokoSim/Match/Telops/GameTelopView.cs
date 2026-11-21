@@ -16,7 +16,6 @@ namespace KokoSim.Unity.Match.Telops
         private readonly VisualElement _dim;
         private readonly VisualElement _linesHost;
         private readonly VisualElement[] _lines;
-        private readonly VisualElement _ghost;
         private readonly VisualElement _group;
         private readonly VisualElement _shadow;
         private readonly VisualElement _extrude;
@@ -35,7 +34,6 @@ namespace KokoSim.Unity.Match.Telops
                 root.Q<VisualElement>("gt-line-3"), root.Q<VisualElement>("gt-line-4"),
                 root.Q<VisualElement>("gt-line-5"),
             };
-            _ghost = root.Q<VisualElement>("gt-ghost");
             _group = root.Q<VisualElement>("gt-group");
             _shadow = root.Q<VisualElement>("gt-shadow");
             _extrude = root.Q<VisualElement>("gt-extrude");
@@ -53,7 +51,6 @@ namespace KokoSim.Unity.Match.Telops
             SetVariant(_extrude, isGameSet, "tl-pb-extrude", "tl-gs-extrude");
             SetVariant(_face, isGameSet, "tl-pb-face", "tl-gs-face");
             SetVariant(_sub, isGameSet, "tl-pb-sub", "tl-gs-sub");
-            SetVariant(_ghost, isGameSet, "tl-pb-ghost", "tl-gs-ghost");
             SetVariant(_barLeft, isGameSet, "tl-pb-bar tl-pb-bar-left", "tl-gs-bar tl-gs-bar-left");
             SetVariant(_barRight, isGameSet, "tl-pb-bar tl-pb-bar-right", "tl-gs-bar tl-gs-bar-right");
 
@@ -90,26 +87,7 @@ namespace KokoSim.Unity.Match.Telops
             else if (elapsed >= 3.15 && elapsed <= 3.85) ApplyLinesBurst(elapsed, 3.15, 3.85, 0.9);
             else _linesHost.style.opacity = 0f;
 
-            // 3) 巨大な英字(ghost): 0.00→0.75 OutExpo(x:+900→+70, op:0→1)。0.75→3.25 等速(x:+70→-70)。
-            //    3.25→4.00 InExpo(x:-70→-900, op:1→0)。
-            double ghostX, ghostOp;
-            if (elapsed < 0.75)
-            {
-                ghostX = TelopEasing.Segment(elapsed, 0.0, 0.75, 900.0, 70.0, TelopEasing.OutExpo);
-                ghostOp = TelopEasing.Segment(elapsed, 0.0, 0.75, 0.0, 1.0, TelopEasing.OutExpo);
-            }
-            else if (elapsed < 3.25)
-            {
-                ghostX = TelopEasing.Segment(elapsed, 0.75, 3.25, 70.0, -70.0, TelopEasing.Linear);
-                ghostOp = 1.0;
-            }
-            else
-            {
-                ghostX = TelopEasing.Segment(elapsed, 3.25, 4.00, -70.0, -900.0, TelopEasing.InExpo);
-                ghostOp = TelopEasing.Segment(elapsed, 3.25, 4.00, 1.0, 0.0, TelopEasing.InExpo);
-            }
-            _ghost.style.translate = new Translate(new Length((float)ghostX), 0, 0);
-            _ghost.style.opacity = (float)ghostOp;
+            // 3) 巨大な英字(ghost)は出さない（2026-11-21 監督決定＝やかましい）。番号は issue の表に合わせて欠番のまま。
 
             // 4) 文字のまとまり（shadow/extrude/face/sub/バー、issue表の4〜7）: 1つのwrapperに translateX。
             //    0.00→0.65 OutExpo(+1800→0)。0.65→3.20 等速(0→-32)。3.20→3.90 InExpo(-32→-1900)。

@@ -379,7 +379,6 @@
             <ui:VisualElement name="gt-line-4" class="tl-gt-line tl-gt-line-4" />
             <ui:VisualElement name="gt-line-5" class="tl-gt-line tl-gt-line-5" />
         </ui:VisualElement>
-        <ui:VisualElement name="gt-ghost" />
         <ui:VisualElement name="gt-group" class="tl-gt-group">
             <ui:VisualElement name="gt-shadow" />
             <ui:VisualElement name="gt-extrude" />
