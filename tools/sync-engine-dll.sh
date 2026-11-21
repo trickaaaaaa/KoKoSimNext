@@ -2,7 +2,7 @@
 # 純エンジン(KokoSim.Engine)をビルドし、UnityのPluginsへ配置する。
 # design-07 §1: エンジンはUnityへローカル参照（ここではnetstandard2.1のDLLとして共有）。
 #
-# 配置先（DLL と StreamingAssets の YAML 複製）は**生成物で Git 管理外**（issue #785）。
+# 配置先（DLL と Resources/KokoSimData の YAML 複製）は**生成物で Git 管理外**（issue #785）。
 # 並行 PR がマージのたびにバイナリ DLL で衝突していたため、PR に含めず各環境で作る。
 #   - ローカル: tools/install-git-hooks.sh で入るフックが checkout / pull / rebase 後に自動で回す
 #   - Unity CI: unity-ci.yml がコンパイル前に回す
@@ -33,8 +33,16 @@ DST_DIR="$ROOT/Assets/Plugins/KokoSim"
 mkdir -p "$DST_DIR"
 place "$ROOT/engine/KokoSim.Engine/bin/Release/netstandard2.1/KokoSim.Engine.dll" "$DST_DIR/KokoSim.Engine.dll"
 
-# data/ の YAML を StreamingAssets へ複製（Unity は data/ を直接読めない＝C-1）。data/ を単一ソースに保つ。
-SA_DIR="$ROOT/Assets/StreamingAssets/KokoSim"
+# data/ の YAML を Resources/KokoSimData へ複製（Unity は data/ を直接読めない＝C-1）。data/ を単一ソースに保つ。
+# ゲームは KokoSim.Unity.Shell.DataFiles が TextAsset として読む。以前の置き場所 StreamingAssets はブラウザ版で
+# ファイルとして読めない（URL になる）ので移した（Web 体験版 #1323）。古い置き場所が残っていればビルドに
+# 同梱されてしまうので消す（中身は全部この生成物＝消して困るものは無い）。
+if [ -d "$ROOT/Assets/StreamingAssets/KokoSim" ]; then
+  rm -rf "$ROOT/Assets/StreamingAssets/KokoSim" "$ROOT/Assets/StreamingAssets/KokoSim.meta"
+  rmdir "$ROOT/Assets/StreamingAssets" 2>/dev/null && rm -f "$ROOT/Assets/StreamingAssets.meta"
+  echo "旧置き場所を削除: Assets/StreamingAssets/KokoSim"
+fi
+SA_DIR="$ROOT/Assets/Resources/KokoSimData"
 mkdir -p "$SA_DIR"
 for y in school-names.yaml team-colors.yaml events.yaml skills.yaml preview-phrases.yaml scout-blurbs.yaml stadiums.yaml display-names.yaml; do
   place "$ROOT/data/$y" "$SA_DIR/$y"
@@ -48,4 +56,4 @@ for y in "$ROOT"/data/pref-formats/*.yaml; do
   place "$y" "$PF_DIR/$(basename "$y")"
 done
 
-echo "同期完了（engine DLL＋StreamingAssets）: $ROOT"
+echo "同期完了（engine DLL＋Resources/KokoSimData）: $ROOT"

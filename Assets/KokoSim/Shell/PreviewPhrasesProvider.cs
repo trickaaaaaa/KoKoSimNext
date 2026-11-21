@@ -7,7 +7,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// 大会展望の文言（data/preview-phrases.yaml・issue #784）の Unity 側プロバイダ。
-    /// <see cref="SkillCatalogProvider"/> と同型＝StreamingAssets の YAML を読み、解釈はエンジンの
+    /// <see cref="SkillCatalogProvider"/> と同型＝Resources の YAML（DataFiles） を読み、解釈はエンジンの
     /// 純パーサ <see cref="PreviewPhrasesParser"/> に委譲する（テストと同一コード＝同じ文が出る）。
     /// IO は Shell 層に隔離（不変条件#3）。読み込みに失敗したらエンジンの最小語彙で続ける。
     /// </summary>
@@ -34,9 +34,9 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path)) return PreviewPhrasesParser.Parse(File.ReadAllText(path));
-                Debug.LogWarning($"[展望の文言] StreamingAssets に preview-phrases.yaml が無い（{path}）。最小語彙で継続。");
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text)) return PreviewPhrasesParser.Parse(text);
+                Debug.LogWarning($"[展望の文言] Resources に preview-phrases.yaml が無い（{path}）。最小語彙で継続。");
             }
             catch (Exception e)
             {

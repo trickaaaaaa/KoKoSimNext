@@ -25,7 +25,7 @@ if [ -f "$ROOT/Temp/UnityLockfile" ] && pgrep -if "Unity.app/Contents/MacOS/Unit
   exit 2
 fi
 
-# engine DLL と StreamingAssets の YAML は Git 管理外の生成物（issue #785）。最新を作ってから焼く。
+# engine DLL と Resources/KokoSimData の YAML は Git 管理外の生成物（issue #785）。最新を作ってから焼く。
 bash "$ROOT/tools/sync-engine-dll.sh" "$ROOT"
 
 mkdir -p "$ROOT/out/build"

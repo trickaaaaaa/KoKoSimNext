@@ -9,7 +9,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// 県内地区の数（data/pref-formats/*.yaml）の Unity 側プロバイダ（issue #585）。
-    /// Unity は KokoSim.Config（YamlDotNet）を持たないため、StreamingAssets に置いた同じ YAML を読み、
+    /// Unity は KokoSim.Config（YamlDotNet）を持たないため、Resources に置いた同じ YAML を読み、
     /// 解釈はエンジンの純パーサ <see cref="PrefFormatDistrictParser"/> に委譲する
     /// （<see cref="SchoolNameVocabProvider"/> / <see cref="TeamColorProvider"/> と同型）。
     /// IO は Shell 層に隔離（不変条件#3）。決定論なので初回のみ読み込み静的キャッシュする。
@@ -106,18 +106,18 @@ namespace KokoSim.Unity.Shell
                 : PrefFormatDistrictParser.BuildRules(texts);
         }
 
-        /// <summary>StreamingAssets の県別 YAML を全部読む（regional-tournaments は地区表ではないので除く）。無ければ null。</summary>
+        /// <summary>Resources（DataFiles）の県別 YAML を全部読む（regional-tournaments は地区表ではないので除く）。無ければ null。</summary>
         private static List<string> ReadAllYaml()
         {
             try
             {
-                var dir = Path.Combine(Application.streamingAssetsPath, RelativeDir);
-                if (!Directory.Exists(dir)) return null;
+                var files = DataFiles.ReadAll(RelativeDir);
+                if (files.Count == 0) return null;
                 var texts = new List<string>();
-                foreach (var path in Directory.GetFiles(dir, "*.yaml"))
+                foreach (var (name, text) in files)
                 {
-                    if (Path.GetFileName(path) == "regional-tournaments.yaml") continue;
-                    texts.Add(File.ReadAllText(path));
+                    if (name == "regional-tournaments") continue;
+                    texts.Add(text);
                 }
                 return texts;
             }
@@ -132,21 +132,22 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var dir = Path.Combine(Application.streamingAssetsPath, RelativeDir);
-                if (Directory.Exists(dir))
+                var dir = DataFiles.Describe(RelativeDir);
+                var files = DataFiles.ReadAll(RelativeDir);
+                if (files.Count > 0)
                 {
                     var texts = new List<string>();
-                    foreach (var path in Directory.GetFiles(dir, "*.yaml"))
+                    foreach (var (name, text) in files)
                     {
                         // 地区表ではない（大会の地区＝地方大会の枠表）ので読まない。
-                        if (Path.GetFileName(path) == "regional-tournaments.yaml") continue;
-                        texts.Add(File.ReadAllText(path));
+                        if (name == "regional-tournaments") continue;
+                        texts.Add(text);
                     }
                     var plan = PrefFormatDistrictParser.BuildPlan(texts);
                     Debug.Log($"[県内地区] 読込成功: {plan.Count} 県が地区を持つ");
                     return plan;
                 }
-                Debug.LogWarning($"[県内地区] StreamingAssets に pref-formats が無い（{dir}）。地区なしで継続。");
+                Debug.LogWarning($"[県内地区] Resources に pref-formats が無い（{dir}）。地区なしで継続。");
             }
             catch (Exception e)
             {

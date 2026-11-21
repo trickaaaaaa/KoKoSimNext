@@ -22,7 +22,7 @@ elif ! git -C "$root" diff --quiet "$old" "$new" -- engine/KokoSim.Engine data 2
 fi
 [ "$need" = 0 ] && exit 0
 
-echo "[engine-dll] engine/ か data/ が変わったので DLL と StreamingAssets を作り直します…"
+echo "[engine-dll] engine/ か data/ が変わったので DLL と Resources/KokoSimData を作り直します…"
 if ! bash "$root/tools/sync-engine-dll.sh" "$root"; then
   echo "[engine-dll] ⚠ 同期に失敗しました。手で bash tools/sync-engine-dll.sh を回してください。" >&2
 fi

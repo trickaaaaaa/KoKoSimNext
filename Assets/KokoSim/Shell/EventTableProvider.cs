@@ -8,7 +8,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// イベント表（data/events.yaml）の Unity 側プロバイダ（issue #609）。
-    /// <see cref="TeamColorProvider"/> と同型＝StreamingAssets の YAML を読み、解釈はエンジンの
+    /// <see cref="TeamColorProvider"/> と同型＝Resources の YAML（DataFiles） を読み、解釈はエンジンの
     /// 純パーサ <see cref="EventTableParser"/> に委譲する。IO は Shell 層に隔離（不変条件#3）。
     ///
     /// <para>読めなければ<b>空表</b>で継続する（イベントが出ないだけで進行は止まらない）。
@@ -30,10 +30,10 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path))
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text))
                 {
-                    var events = EventTableParser.Parse(File.ReadAllText(path));
+                    var events = EventTableParser.Parse(text);
                     if (events.Count > 0)
                     {
                         Debug.Log($"[イベント] 読込成功: {events.Count} 件");
@@ -43,7 +43,7 @@ namespace KokoSim.Unity.Shell
                 }
                 else
                 {
-                    Debug.LogWarning($"[イベント] StreamingAssets に events.yaml が無い（{path}）。イベント無しで継続。");
+                    Debug.LogWarning($"[イベント] Resources に events.yaml が無い（{path}）。イベント無しで継続。");
                 }
             }
             catch (Exception e)

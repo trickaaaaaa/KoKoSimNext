@@ -8,7 +8,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// スキルカタログ（data/skills.yaml）の Unity 側プロバイダ（issue skills-yaml-not-data-driven）。
-    /// <see cref="SchoolNameVocabProvider"/> と同型＝StreamingAssets の YAML を読み、解釈はエンジンの
+    /// <see cref="SchoolNameVocabProvider"/> と同型＝Resources の YAML（DataFiles） を読み、解釈はエンジンの
     /// 純パーサ <see cref="SkillCatalogParser"/> に委譲する（Config層と同一コード＝表示文言の二重管理を解消）。
     /// IO は Shell 層に隔離（不変条件#3）。読み込み失敗・未知スキルは enum 名へフォールバックする。
     /// </summary>
@@ -50,16 +50,16 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path))
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text))
                 {
-                    var entries = SkillCatalogParser.Parse(File.ReadAllText(path));
+                    var entries = SkillCatalogParser.Parse(text);
                     var map = new Dictionary<Skill, SkillCatalogEntry>();
                     foreach (var e in entries) map[e.Id] = e;
                     Debug.Log($"[スキルカタログ] 読込成功: {map.Count} 件");
                     return map;
                 }
-                Debug.LogWarning($"[スキルカタログ] StreamingAssets に skills.yaml が無い（{path}）。enum名で継続。");
+                Debug.LogWarning($"[スキルカタログ] Resources に skills.yaml が無い（{path}）。enum名で継続。");
             }
             catch (Exception e)
             {
