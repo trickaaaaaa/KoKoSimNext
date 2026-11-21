@@ -15,6 +15,10 @@ namespace KokoSim.Unity.Audio
     ///
     /// 部品は1本のクリップにつなぎ、場内放送らしい残響とエコーをかける（尾が消えるまで応援を絞る）。
     /// オン/オフはセーブでなくアプリ設定（PlayerPrefs）＝次の試合・別のセーブでも同じ。オフにしたらその場で止める。
+    ///
+    /// <para><b>体験版（KOKOSIM_DEMO）には入れない</b>（issue #1318）。No.7 は「ゲームでの利用」が商用扱いで事前の相談が要り、
+    /// 宣伝用の無料体験版もそれに当たるため。体験版では鳴らさず、オン/オフのスイッチも隠す。
+    /// 声の素材そのものも体験版のビルドから外す（PlayerBuilder が Resources を一時的に外す）。</para>
     /// </summary>
     public static class MatchAnnouncer
     {
@@ -24,13 +28,20 @@ namespace KokoSim.Unity.Audio
         private static AnnouncerHost _host;
         private static readonly Dictionary<string, AudioClip> _clips = new();
 
+        /// <summary>このビルドに場内放送があるか（体験版には無い）。</summary>
+#if KOKOSIM_DEMO
+        public const bool Available = false;
+#else
+        public const bool Available = true;
+#endif
+
         /// <summary>オン/オフが変わった（切り替えボタンの点灯を合わせる）。</summary>
         public static event System.Action EnabledChanged;
 
         /// <summary>場内放送を流すか（アプリ設定。既定はオン）。偽にしたら鳴っている放送もその場で止める。</summary>
         public static bool Enabled
         {
-            get => PlayerPrefs.GetInt(PrefKey, 1) != 0;
+            get => Available && PlayerPrefs.GetInt(PrefKey, 1) != 0;
             set
             {
                 PlayerPrefs.SetInt(PrefKey, value ? 1 : 0);
@@ -48,7 +59,7 @@ namespace KokoSim.Unity.Audio
         /// </summary>
         public static bool Play(IReadOnlyList<string> clipNames)
         {
-            if (clipNames == null || clipNames.Count == 0) return false;
+            if (!Available || clipNames == null || clipNames.Count == 0) return false;
             var list = new List<AudioClip>(clipNames.Count);
             foreach (var name in clipNames)
             {
@@ -74,6 +85,7 @@ namespace KokoSim.Unity.Audio
         public static System.Action BindToggle(Button button)
         {
             if (button == null) return () => { };
+            if (!Available) { button.style.display = DisplayStyle.None; return () => { }; }
             void Apply() => button.EnableInClassList("chip-btn--on", Enabled);
             void Click() => Enabled = !Enabled;
             button.clicked += Click;
@@ -94,6 +106,7 @@ namespace KokoSim.Unity.Audio
         public static System.Action BindSwitch(VisualElement row, VisualElement sw)
         {
             if (row == null) return () => { };
+            if (!Available) { row.style.display = DisplayStyle.None; return () => { }; }
             void Apply() => sw?.EnableInClassList("switch--on", Enabled);
             void Click(ClickEvent _) => Enabled = !Enabled;
             row.RegisterCallback<ClickEvent>(Click);
