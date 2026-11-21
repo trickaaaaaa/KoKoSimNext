@@ -417,6 +417,31 @@ public static class PlaybackEvaluator
     /// </summary>
     public const double ErrorMarkDelaySeconds = JudgementEvent.ErrorMarkDelaySeconds;
 
+    /// <summary>悪送球とみなす送球の投げ始めが、エラー確定時刻より後ろへずれてよい幅[s]。</summary>
+    public const double WildThrowStartToleranceSeconds = 0.25;
+
+    /// <summary>
+    /// エラーした野手を球の区間から特定する（3D の「！」の付け先）。弾きロール（T0＝エラー時刻）の FromRole＝こぼした本人、
+    /// 受け手なしの悪送球（Throw で ToBase なし・<b>投げ始めがエラー時刻以前</b>）の FromRole＝投げた本人。
+    /// ⚠ 送球の「受け先が塁でない」だけで悪送球とみなさない: 中継のカットマンへの1本目も ToBase を持たず、
+    /// お手玉→拾った外野手が中継へ返す送球が後勝ちで「！」を奪っていた。悪送球は一塁へ届くはずだった時刻へ向けて
+    /// 投げ始める＝エラー確定より前、中継の送球は拾い直した後＝確定より後。特定できなければ null。
+    /// </summary>
+    public static FieldPosition? ErrorFielderFromBall(PlaybackPlay play, double errorT)
+    {
+        FieldPosition? role = null;
+        if (play?.Ball == null) return null;
+        foreach (var s in play.Ball)
+        {
+            if (s is not EndpointBallSegment eb || !eb.FromRole.HasValue) continue;
+            bool fumble = eb.Kind == BallSegmentKind.Roll && Math.Abs(eb.T0 - errorT) < 0.05;
+            bool wildThrow = eb.Kind == BallSegmentKind.Throw && eb.ToBase == null
+                && eb.T0 <= errorT + WildThrowStartToleranceSeconds;
+            if (fumble || wildThrow) role = eb.FromRole;
+        }
+        return role;
+    }
+
     /// <summary>
     /// 判定テロップの表示起点[s]。<see cref="PlaybackJudgement.DisplayT"/> があればそれ、無ければ確定時刻 T。
     /// エラーは打者が一塁でセーフになった瞬間（issue #806。値は TimelineBuilder が組む＝engine が単一ソース）。

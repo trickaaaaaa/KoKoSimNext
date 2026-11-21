@@ -216,6 +216,8 @@ namespace KokoSim.Unity.Match
         {
             const float targetDeg = 25f;      // 実物の被り角（俯角）
             var verts = mesh.vertices;
+            var normals = mesh.normals;
+            bool hasNormals = normals != null && normals.Length == verts.Length;
             var b = mesh.bounds;
             // つば＝クラウン底より下に垂れている前方(z>0)の頂点。クラウン底はキャップ全高から推定
             // （クラウン中心=原点・クラウン高さ≒半幅0.12。垂れつば込みの全高がそれより深い分がつば）
@@ -243,9 +245,10 @@ namespace KokoSim.Unity.Match
                 if (w <= 0f) continue;
                 var rot = Quaternion.Euler(lift * w, 0f, 0f);
                 verts[i] = hinge + rot * (verts[i] - hinge);
+                if (hasNormals) normals[i] = rot * normals[i];   // 法線も同じ回転で運ぶ（RecalculateNormals は呼ばない）
             }
             mesh.vertices = verts;
-            mesh.RecalculateNormals();
+            if (hasNormals) mesh.normals = normals;
             mesh.RecalculateBounds();
         }
 
@@ -280,7 +283,6 @@ namespace KokoSim.Unity.Match
                 targetSize.y / Mathf.Max(0.01f, b.size.y),
                 targetSize.z / Mathf.Max(0.01f, b.size.z));
             Apply(mesh, Matrix4x4.Scale(s) * Matrix4x4.Translate(-b.center));
-            mesh.RecalculateNormals();   // 非一様スケールでは法線が面へ直交しなくなるため取り直す
         }
 
         /// <summary>縁の革ひも（黄土色）。sRGB で書いてリニアへ直す（頂点色は SetColor の自動変換を通らない）。</summary>
@@ -347,7 +349,10 @@ namespace KokoSim.Unity.Match
             var normals = mesh.normals;
             if (normals != null && normals.Length == verts.Length)
             {
-                for (int i = 0; i < normals.Length; i++) normals[i] = m.MultiplyVector(normals[i]).normalized;
+                // 法線は逆転置で運ぶ＝非一様スケールでも面に直交したまま（RecalculateNormals で取り直さない。
+                // 非溶接メッシュでは UV 島の境目が全部ハードエッジになる＝3d-character.md の掟）
+                var nm = m.inverse.transpose;
+                for (int i = 0; i < normals.Length; i++) normals[i] = nm.MultiplyVector(normals[i]).normalized;
                 mesh.normals = normals;
             }
             mesh.RecalculateBounds();
