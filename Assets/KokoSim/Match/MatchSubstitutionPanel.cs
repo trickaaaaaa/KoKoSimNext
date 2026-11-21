@@ -1124,7 +1124,7 @@ namespace KokoSim.Unity.Match
                 row.Add(arrow);
                 var incoming = new Label(previewTo);
                 incoming.AddToClassList("lineup-row__incoming");
-                incoming.AddToClassList("f-body-bd");
+                incoming.AddToClassList("f-display");   // 人名は明朝（書体3役）
                 row.Add(incoming);
             }
             else

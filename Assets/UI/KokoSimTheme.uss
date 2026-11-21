@@ -755,8 +755,6 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .sb2-meter { align-items: center; margin-right: 22px; }
 .sb2-meter__k { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; }
 .sb2-meter__v { font-size: 24px; color: var(--color-chalk); margin-top: 2px; }
-.sb2-meter__v--fame { color: #EE8A3C; }
-.sb2-meter__v--trust { color: #E8503A; }
 
 /* --- 3カラム本体（外側スクロールなし・内部スクロール） --- */
 .dash { flex-grow: 1; flex-direction: row; padding: 14px; overflow: hidden; }
@@ -991,8 +989,8 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 /* 指標行は部品辞書 components.uss の .abil-row（--lg 修飾子）に一本化（issue #3）。 */
 /* 分析コメント（弱点）: パネル最下部 */
 .ts-analysis { border-top-width: 1px; border-top-color: var(--color-line); padding: 16px 20px 6px 20px; }
-.ts-analysis__k { font-size: var(--fs-cap); color: #9DB3A0; letter-spacing: 2px; margin-bottom: 4px; }
-.ts-analysis__t { font-size: 19px; color: #C7D2CB; white-space: normal; }
+.ts-analysis__k { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 2px; margin-bottom: 4px; }
+.ts-analysis__t { font-size: 19px; color: var(--color-chalk); white-space: normal; }
 /* レーダー軸ラベルは部品辞書 components.uss の radar-axis 系（--lg 修飾子）に一本化（issue #7）。 */
 /* 総合ランク: チップ＋(値) を1行に（1.5倍拡大） */
 .ts-overall-line { flex-direction: row; align-items: center; }
@@ -1102,11 +1100,11 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 #unity-tracker { background-color: transparent; border-width: 0; }
 /* つまみのみ表示（半透明の明色・角丸） */
 #unity-dragger {
-    background-color: rgba(232, 236, 234, 0.16);
+    background-color: var(--color-faint);
     border-width: 0; border-radius: 3px;
     width: 6px; min-height: 40px; margin: 0;
 }
-#unity-dragger:hover { background-color: rgba(232, 236, 234, 0.30); }
+#unity-dragger:hover { background-color: var(--color-muted); }
 /* 横スクロールのつまみは縦横が入れ替わる（高さ6px・最小長40px）。 */
 .unity-scroller--horizontal #unity-dragger { width: auto; height: 6px; min-height: 0; min-width: 40px; }
 
@@ -1175,7 +1173,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 /* 試合結果（自動消化） */
 .tm-result__round { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; }
 .tm-result__headline { font-size: 30px; -unity-text-align: middle-center; margin-top: 8px; }
-.tm-result__headline--win { color: var(--color-lamp); }
+.tm-result__headline--win { color: var(--color-chalk); }
 .tm-result__headline--lose { color: var(--color-warn); }
 .tm-result__score { font-size: 24px; color: var(--color-chalk); margin-top: 10px; margin-bottom: 20px; }
 
@@ -1335,7 +1333,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .sb2-badge { background-color: var(--sf-inset); color: var(--ink); border-width: 2px; border-color: var(--ink); }
 .sb2-name, .sb2-rank__t, .sb2-meter__v { color: var(--tx-1); }
 .sb2-pref, .sb2-rank__k, .sb2-meter__k { color: var(--tx-2); }
-/* 名声/信頼度の意味色（fame/trust）と掲示板ストリップ内の電光黄は不変。 */
+/* 名声/信頼度はランクのチップ画像で出す（TopBarMeters.SetRank が文字を透明化する）ので、文字色の意味色は持たない。掲示板ストリップ内の電光黄は不変。 */
 
 /* --- ナビ帯：白地に沈め、下端をインク太罫で締める。選択タブは空の青。 --- */
 .nav {

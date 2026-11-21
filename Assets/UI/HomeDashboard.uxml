@@ -281,7 +281,7 @@
 
             <!-- 右: 選択中の詳細 -->
             <ui:VisualElement class="xt-detail">
-              <ui:Label name="xt-d-name" class="xt-d__name" text="" />
+              <ui:Label name="xt-d-name" class="xt-d__name f-display" text="" />
               <ui:Label name="xt-d-sub" class="xt-d__sub" text="" />
               <ui:VisualElement name="xt-d-facts" class="xt-d__facts" />
             </ui:VisualElement>

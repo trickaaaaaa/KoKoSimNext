@@ -444,6 +444,7 @@ namespace KokoSim.Unity.Home
 
             var name = new Label(r.IsStay ? r.SchoolName + "（残留）" : r.SchoolName);
             name.AddToClassList("xt-c-name");
+            name.AddToClassList("f-display");   // 校名は明朝（書体3役）
             row.Add(name);
 
             var pref = new Label(r.PrefectureName); pref.AddToClassList("xt-c-pref"); row.Add(pref);
