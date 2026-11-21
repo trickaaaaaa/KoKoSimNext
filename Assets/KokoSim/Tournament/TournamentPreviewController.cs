@@ -38,6 +38,7 @@ namespace KokoSim.Unity.Tournament
 
             // 画面を開き直すたびトーナメントから始める（大会の現況が最初に目に入る）。
             _mode = ViewMode.Bracket;
+            _savedBracketScroll = null;   // 開き直したら自校へ合わせ直す（描き直しでは見ていた位置を保つ）
 
             var go = _root.Q<Button>("tp-go-preview");
             if (go != null) go.clicked += () => { _mode = ViewMode.Preview; Render(); };
@@ -78,8 +79,12 @@ namespace KokoSim.Unity.Tournament
             Render();
         }
 
+        /// <summary>樹形図を描き直す直前に見ていたスクロール位置。null＝まだ自校へ合わせていない（初回）。</summary>
+        private Vector2? _savedBracketScroll;
+
         private void Render()
         {
+            RememberBracketScroll();
             // 表示する大会は GameSession が決める（対話中の大会 or 自校が出ていない甲子園）。
             // 画面側で2種類を分岐しない＝「観るだけの甲子園」でも展望と樹形図がそのまま出る。
             var display = GameSession.Current.Display;
@@ -377,7 +382,19 @@ namespace KokoSim.Unity.Tournament
             head.Add(NewspaperBracketElement.BuildHead(bracket));
 
             var scroll = _root.Q<ScrollView>("tp-bracket-scroll");
-            if (scroll != null && paper.FocusMarker != null) CenterOn(scroll, paper.FocusMarker);
+            if (scroll == null || paper.FocusMarker == null) return;
+            // 初回だけ自校を中央へ。校別詳細から戻る・週送りの描き直しは見ていた位置へ戻す。
+            PlaceScroll(scroll, paper.FocusMarker, _savedBracketScroll);
+        }
+
+        /// <summary>樹形図が見えているあいだに、いまのスクロール位置を控える（校別詳細へ移る・週送りで描き直す前）。</summary>
+        private void RememberBracketScroll()
+        {
+            var scroll = _root.Q<ScrollView>("tp-bracket-scroll");
+            if (scroll == null || _bracketView == null) return;
+            if (_bracketView.resolvedStyle.display == DisplayStyle.None) return;
+            if (scroll.contentViewport.layout.width < 1f || scroll.contentContainer.layout.width < 1f) return;
+            _savedBracketScroll = scroll.scrollOffset;
         }
 
         /// <summary>ラウンド名帯を縦スクロール量ぶん下げて、ビューポート上端に貼り付ける。</summary>
@@ -387,8 +404,11 @@ namespace KokoSim.Unity.Tournament
             if (head != null) head.style.top = offsetY;
         }
 
-        /// <summary>初期表示で自校のカードをビューポート中央に置く（レイアウト確定後に1回だけ）。</summary>
-        private void CenterOn(ScrollView scroll, VisualElement target)
+        /// <summary>
+        /// 樹形図のスクロール位置を決める（レイアウト確定後に1回だけ）。<paramref name="restore"/> があればそこへ、
+        /// 無ければ（初期表示）自校のカードをビューポート中央に置く。
+        /// </summary>
+        private void PlaceScroll(ScrollView scroll, VisualElement target, Vector2? restore)
         {
             EventCallback<GeometryChangedEvent> cb = null;
             cb = _ =>
@@ -397,11 +417,12 @@ namespace KokoSim.Unity.Tournament
                 var view = scroll.contentViewport.layout.size;
                 var content = scroll.contentContainer.layout.size;
                 var pos = target.ChangeCoordinatesTo(scroll.contentContainer, Vector2.zero);
+                var wanted = restore ?? new Vector2(
+                    pos.x + target.layout.width * 0.5f - view.x * 0.5f,
+                    pos.y + target.layout.height * 0.5f - view.y * 0.5f);
                 scroll.scrollOffset = new Vector2(
-                    Mathf.Clamp(pos.x + target.layout.width * 0.5f - view.x * 0.5f, 0f,
-                        Mathf.Max(0f, content.x - view.x)),
-                    Mathf.Clamp(pos.y + target.layout.height * 0.5f - view.y * 0.5f, 0f,
-                        Mathf.Max(0f, content.y - view.y)));
+                    Mathf.Clamp(wanted.x, 0f, Mathf.Max(0f, content.x - view.x)),
+                    Mathf.Clamp(wanted.y, 0f, Mathf.Max(0f, content.y - view.y)));
                 SyncBracketHead(scroll.scrollOffset.y);
                 // ScrollView がスクロール量を次のレイアウトで丸め直すことがある（値変更イベントは来ない）。
                 // 1フレーム後にもう一度合わせ、段名帯の上に中身の端が覗かないようにする。
@@ -773,7 +794,7 @@ namespace KokoSim.Unity.Tournament
         /// <summary>今大会成績の1セル。数字だけのセルなのでコンデンス数字（.f-num・UI原則③）。</summary>
         private static Label StatCell(string text)
         {
-            var l = Cell(text, "tp-mc--st");
+            var l = UiComponents.SetInnings(Cell("", "tp-mc--st"), text);
             l.AddToClassList("f-num");
             return l;
         }

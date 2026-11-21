@@ -1369,6 +1369,19 @@ namespace KokoSim.Unity.Components
             return root;
         }
 
+        /// <summary>
+        /// 投球回の値を Label に入れる。端数があれば整数部は本来の大きさ、「1/3」だけ小さく組む
+        /// （⅓ ⅔ は字形が無いので整数＋小さな「1/3」。UI原則・書体ルール）。端数が無い文字列はそのまま。
+        /// </summary>
+        public static Label SetInnings(Label label, string text)
+        {
+            var (whole, frac) = KokoSim.Engine.Stats.InningsFormat.Split(text);
+            if (frac.Length == 0) { label.text = text ?? ""; return label; }
+            label.enableRichText = true;
+            label.text = whole + "<size=60%> " + frac + "</size>";
+            return label;
+        }
+
         // ===== RecordCell（記録室の混植セル。設計書16 §10.2 の穴#8・issue #600） =====
 
         /// <summary>記録室の1件（値・保持者・年）。</summary>
@@ -1404,7 +1417,7 @@ namespace KokoSim.Unity.Components
                 return cell;
             }
 
-            var value = new Label(d.Value ?? "");
+            var value = SetInnings(new Label(), d.Value);
             value.AddToClassList("recc__value");
             value.AddToClassList("f-num");
             cell.Add(value);

@@ -54,6 +54,8 @@
     --color-ink: #1A1608;          /* アンバー面上の暗文字 */
     --color-warn: #E86A4A;         /* 警告（猛練習・疲労・ベンチ外） */
     --color-good: #69B98B;         /* 良好（疲労バー低） */
+    --color-on-fill: #FFFFFF;      /* 塗り面（--sky/--ink/--color-cta/--ms-ink）の上の白文字 */
+    --color-scrim: rgba(6, 12, 8, 0.72);   /* モーダルの暗幕 */
 
     /* ── カラー：ランクS〜G（色覚対応・文字併記前提。全画面共通の単一ソース） ──────────────
        パワプロ風レター画像（Assets/UI/Images/ranks/）から抽出した代表色。
@@ -366,6 +368,7 @@
     --field-clay-day: #A26E44;         /* 内野ダート：乾いた明るい茶（甲子園様式＝内野扇は全面ダート） */
     --field-mound-day: #855A38;        /* マウンド：ダートより一段濃い土色 */
     --field-fence-day: #1F3A26;        /* 外野フェンス弧：明るい芝とコントラストが立つ濃緑 */
+    --field-chip-picked-bg: rgba(40, 58, 44, 0.95); /* 選択中の球場図チップの地（--field-chip-bg-day より一段明るい濃色） */
     --field-chip-bg-day: rgba(22, 36, 27, 0.92); /* 球場図チップの地＝守備トークン地(--field-token-fill-day)と同系の濃色。明芝に映える */
     --field-stand-hi-day: #3A423B;     /* 観客席帯（外殻）内側＝壁前列（明るめ） */
     --field-stand-lo-day: #212A24;     /* 観客席帯（外殻）外側＝暗く場外背景へ繋ぐ */
@@ -431,6 +434,8 @@
     /* 試合結果画面（mres・GameResult.mock 準拠）だけで使う色。地・枠・墨・文字は上の --ms-* を共有する */
     --mr-zero:       #B5AFA4;   /* 0 を薄く出す */
     --mr-muted:      #8C867B;   /* 「×」・凡打などの札の文字 */
+    --radar-grid-inner: #D9D4C8;   /* レーダーの内側の格子（白カード上で淡く細く） */
+    --radar-grid-outer: #8A887B;   /* レーダーの最外周（白カード上で一番濃く太く） */
     --mr-rule:       #D9D4C8;   /* 表の見出しの下線・打席に立っていない「·」 */
     --mr-hr:         #B8322A;   /* 本塁打（数字と札の地） */
     --mr-pa-hit-bg:  #F8E1DC;  --mr-pa-hit-tx:  #9A2A22;  --mr-pa-hit-edge:  #E5B3A8;   /* 安打・二塁打・三塁打 */
@@ -512,7 +517,8 @@
 
    この2ブロックは `.f-display` 等のユーティリティより**前**に置いてある。同じ詳細度なら後勝ちなので、
    要素に `.f-num` や `.f-display` を明示的に付ければそちらが必ず勝つ（＝個別指定で上書きできる）。
-   ただし複合セレクタ（`.abil-row--lg .abil-row__label` 等）は詳細度が高く単一クラスに勝つ点に注意。 */
+   ただし複合セレクタ（`.abil-row--lg .abil-row__label` 等）は詳細度が高く単一クラスに勝つ点に注意。
+   **人名・校名・見出しの明朝クラスはこの2ブロックに載せない**（下の明朝群だけに置く＝段落の順を変えても化けない）。 */
 
 /* SemiBold：見出し・強調・ボタン・大きめの数値（旧 bold の大半） */
 .rank-chip,
@@ -523,97 +529,64 @@
 .seg__cell--on,
 .filter-chip--on,
 .panel__title,
-.slot-card__name,
 .cmp-row__val--win,
-.cmp-card__name,
 .lineup-row__ord,
-.lineup-row__name,
 .pos-chip,
-.sp-pill__name,
 .radar-axis--lg .radar-axis__l,
 .radar-axis--lg .radar-axis__v,
-.mlineup-row__name,
 .pitch-call__judge,
 .bs-cell--team,
 .bs-cell--total,
-.school__name,
 .meter__v,
 .advance,
-.panel__title,
-.vs__team,
 .stat__v,
 .day__m,
 .cell--head,
 .grade,
-.cell--name,
 .eff-row__v,
 .eff-foot__v,
 .menu-chip,
-.edit-slot__name,
 .edit-slot__btn,
 .proj--up,
 .fat--warn,
-.result-banner,
 .sb-cell--team,
 .sb-cell--rhe,
 .stat-sub,
 .st-cell--head,
-.st-name,
 .st-ip,
 .st-num--hi,
 .mfeed--header,
 .mfeed--run,
 .tp-mark__sym,
 Button.tp-cta,
-.tp-empty__title,
 .tp-pcard__no,
-.tp-pcard__nm,
-.tp-roster__name,
 .brk-champ__name,
 .sb2-badge,
-.sb2-name,
 .sb2-cell__v,
 .sb2-meter__v,
 .card__hd-title,
 .hm-ts__v,
-.nm-team__n,
 .nm-vs,
 .pd2-numbox__no,
-.pd2-name,
 .pd2-captain,
 .ts-overall-value,
 .pd2-hidden-v,
 .pd2-hidden-v--unknown,
 .pd2-pv--num,
 .pd2-stat__v,
-.tm-banner__top,
-.tm-banner__open,
-.tm-dialog__vs,
-.tm-result__headline,
 .tm-btn--primary,
-.nt-hd__t,
-.nt-d__name,
-.lu-title,
 .lu-section,
 .lu-btn--go,
 .lu-tab--on,
 .lu-stat-name,
-.md-title,
 .mlive-team,
 .mlive-score,
-.mp-title,
-.mp-side__name,
 .mp-cta,
-.mr-title,
-.mr-outcome,
 .mr-cta,
-.mr-col__name,
-.msub-title,
 .msub-section,
 .msub-btn--go,
 .ms-section,
 .ms-tab--on,
-.pm-title,
 .pm-cta,
 .tp-camp__title,
 .tp-camp__mult,
@@ -628,7 +601,6 @@ Button.tp-cta,
 .tpm-preset__check,
 .tpm-done,
 .tp-ed-id__num,
-.tp-ed-who__name,
 .nom-btn--on,
 .tp-ed-section__title,
 .mslot__icon,
@@ -642,7 +614,6 @@ Button.tp-cta,
 /* Medium：12px 以下の小さな強調（SemiBold だと字画が潰れて読みにくくなる帯） */
 .banner__badge,
 .field-chip__num,
-.field-chip__name,
 .cmp-btn,
 .cmp-head__lab,
 .cmp-card__lab,
@@ -732,6 +703,7 @@ Button.tp-cta,
 .edit-slot__name,        /* 個別指導スロット編集の選手名 */
 .st-name,                /* 成績表の選手名 */
 .tp-roster__name,        /* 練習割当テーブルの選手名 */
+.tpc-row__name,         /* 個別指導のコピー先選択・行の選手名 */
 .tp-ed-who__name,        /* 練習モーダル・見出しの選手名 */
 .tp-pcard__nm,           /* 大会プレビュー・選手カードの名前 */
 .field-chip__name,       /* 球場図チップの選手名 */

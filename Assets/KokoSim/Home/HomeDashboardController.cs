@@ -789,7 +789,7 @@ namespace KokoSim.Unity.Home
                 cell.AddToClassList("hm-rk-e");
                 var name = new Label(e.Name); name.AddToClassList("hm-rk-e__n");
                 names.Add(name);
-                var val = new Label(e.Value); val.AddToClassList("hm-rk-e__v"); val.AddToClassList("f-num");
+                var val = UiComponents.SetInnings(new Label(), e.Value); val.AddToClassList("hm-rk-e__v"); val.AddToClassList("f-num");
                 cell.Add(name); cell.Add(val);
                 row.Add(cell);
             }

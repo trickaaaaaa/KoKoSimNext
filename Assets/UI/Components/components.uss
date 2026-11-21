@@ -593,7 +593,7 @@
 .modal-scrim {
     position: absolute;
     left: 0; top: 0; right: 0; bottom: 0;
-    background-color: rgba(6, 12, 8, 0.72);
+    background-color: var(--color-scrim);
     align-items: center;
     justify-content: center;
     display: none;
@@ -666,7 +666,7 @@
     padding: 2px 6px 1px 6px;
 }
 .field-chip:hover { border-color: var(--color-line-focus); }
-.field-chip--picked { border-color: var(--sky); background-color: rgba(40, 58, 44, 0.95); }
+.field-chip--picked { border-color: var(--sky); background-color: var(--field-chip-picked-bg); }
 .field-chip--picked:hover { border-color: var(--sky); }
 /* 2段チップ（issue #732 案A）: 上段＝背番号＋ランク／下段＝名前。和文の行箱は級数の倍近くあるので、
    段の高さを字面＋αで固定して枠の中に収める（Label 既定の余白も外す）。 */
@@ -1983,6 +1983,13 @@
     font-size: var(--fs-label);
     color: var(--sb-ink-2);
     margin: 0 0 0 var(--sp-4);
+    padding: 0;
+    flex-shrink: 0;
+}
+.sub-telop__out-name {
+    font-size: var(--fs-label);
+    color: var(--sb-ink-2);
+    margin: 0 0 0 var(--sp-1);
     padding: 0;
     flex-shrink: 0;
 }

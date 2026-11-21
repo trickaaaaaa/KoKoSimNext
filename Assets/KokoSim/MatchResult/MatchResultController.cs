@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Unity.Components;   // UiComponents
 using KokoSim.Unity.Shell;        // ScreenRouter
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -214,7 +215,7 @@ namespace KokoSim.Unity.MatchResult
             {
                 var row = Row("mres-tr");
                 row.Add(Cell(p.Name, "mres-c-pname", "mres-name"));
-                row.Add(Cell(p.Innings, "mres-c-n64", "mres-num", "mres-ink", "f-num"));
+                row.Add(UiComponents.SetInnings(Cell("", "mres-c-n64", "mres-num", "mres-ink", "f-num"), p.Innings));
                 row.Add(NumCell(p.Pitches, false, false, "mres-c-n64"));
                 row.Add(NumCell(p.Hits, false, false, "mres-c-n64"));
                 row.Add(NumCell(p.StrikeOuts, false, false, "mres-c-n64"));
