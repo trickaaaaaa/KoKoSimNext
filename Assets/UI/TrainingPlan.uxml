@@ -64,7 +64,7 @@
             </ui:ScrollView>
         </ui:VisualElement>
 
-        <ui:Label name="toast" text="" class="tp-toast" />
+        <ui:Label name="toast" text="" class="tp-toast" picking-mode="Ignore" />
 
         <!-- ═══ 統合モーダル（プリセット帯＋3カラム高密度＋伸びバー・単一ドキュメント内オーバーレイ） ═══ -->
         <ui:VisualElement name="tp-modal" class="ui-root modal-scrim">
