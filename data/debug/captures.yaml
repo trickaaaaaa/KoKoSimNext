@@ -28,6 +28,8 @@
 #   probes      : 毎コマ probes.jsonl に書く実測（DuelStageRig の *ForCapture。ForCapture は省略可）
 #   overrides   : 見比べ用の切り替え（{DuelStageRig.Xxx: true} の形。static のフィールド/プロパティ）。終わったら戻す
 #   timeout_at  : duel_seconds の撮影で、開始から何秒後に監督が守備伝令を送るか（issue #1178。動揺が解ける絵）
+#   timeout_messenger : timeout_at の伝令を画面の操作どおり（中断→伝令役→再開）に送る。控えの添字か recorder（記録員）。
+#                 守備伝令の場面が流れ、明けた後の投手・捕手の基準ずれを timeout-restore.txt に書く（issue #1174）
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
@@ -125,6 +127,25 @@ captures:
     duel_seconds: 5.0
     timeout_at: 1.5
     video: {from: start, to: end, fps: 20}
+  # ── 守備伝令の場面（issue #1174）。1球目の途中で伝令を送り、次の球の前にマウンドへ集まる ──
+  - id: timeout-scene-1174
+    name: "守備伝令の場面（issue #1174）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: panel
+    duel_seconds: 17.0
+    timeout_at: 0.5
+    timeout_messenger: 0
+    video: {from: start, to: end, fps: 24}
+  - id: timeout-scene-1174-recorder
+    name: "守備伝令の場面・控えが走らず記録員が伝令（issue #1174）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: panel
+    duel_seconds: 17.0
+    timeout_at: 0.5
+    timeout_messenger: recorder
+    video: {from: start, to: end, fps: 24}
   # ── 試合テロップの画像化（issue #1179）。画面全体（panel）で撮る ──
   - id: telop-calls-1179
     name: "1球の判定テロップ（ストライク／ボール等）が画像で出る（issue #1179）"
