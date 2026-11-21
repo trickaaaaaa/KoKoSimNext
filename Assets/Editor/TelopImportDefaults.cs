@@ -8,7 +8,7 @@ namespace KokoSim.EditorTools
     ///
     /// <para>素材は透過PNGで、UI Toolkitの画像テロップ（プレイボール・判定・ホームラン・ゲームセット）に
     /// そのまま貼る。Texture Type＝Sprite (2D and UI)・ミップマップなし・圧縮なし（issue本文の指定）に
-    /// 固定する。いちばん広い素材（playball_ghost.png 3721×466・gameset_ghost.png 3492×472）が
+    /// 固定する。いちばん広い素材（playball_face.png 2086×503・gameset_face.png 2096×496 等）が
     /// 既定の maxTextureSize(2048) では縮小されてしまうため、4096へ上げる。</para>
     ///
     /// <para><see cref="DuelMotionImportDefaults"/>（モーション）は importSettingsMissing（初回のみ）で

@@ -15,7 +15,7 @@ UI Toolkitでは文字を斜めに傾けたり、影を何重にも重ねたり�
 
 - このフォルダを `Assets/UI/Telops/` に置く（`PROMPT.md` と `Licenses/` は取り込まなくてよい）。
 - インポート設定は、Texture Type を Sprite（2D and UI）、ミップマップなし、圧縮なし（または高品質）にする。
-- PNGは2倍解像度で書き出してある。画面に出す大きさは、1600×900を基準にした座標で**PNGのピクセル数の半分**にする（例：1354×389pxなら677×194.5）。実際の解像度に合わせた拡大縮小は、PanelSettings の Scale With Screen Size（基準1600×900）に任せる。
+- PNGは2倍解像度で書き出してある。画面に出す大きさは、1600×900を基準にした座標で**PNGのピクセル数の半分**にする（例：call_strike.png は930×290pxなので465×145）。実際の解像度に合わせた拡大縮小は、PanelSettings の Scale With Screen Size（基準1600×900）に任せる。
 - 同じテロップの中の画像（PlayBallの3枚、GameSetの3枚、HomeRunの17枚）は、すべて同じサイズ・同じ位置合わせで書き出してある。中央をそろえて重ねるだけでずれない。
 - 書体はフォントとして同梱せず、画像に焼き込んである。どちらのフォントも SIL OFL なので、念のため `Licenses/` の内容をクレジット画面などに載せておくこと。
 
@@ -43,7 +43,7 @@ UI Toolkitでは文字を斜めに傾けたり、影を何重にも重ねたり�
 |---|---|---|
 | 1 | 暗幕 | 全画面に `rgba(14,12,10,0.16)` の単色を敷き、その上に `playball_dim.png`（1600×900、中央が濃い楕円）を重ねる |
 | 2 | スピード線 | VisualElementで作る（下の表） |
-| 3 | `playball_ghost.png` | 巨大な「PLAY BALL」の白い縁取り文字。画面より横に長いので、はみ出した部分は切れてよい |
+| 3 | （欠番） | 巨大な「PLAY BALL」の白い縁取り文字は**出さない**（2026-11-21 監督決定＝やかましい。素材も削除済み） |
 | 4 | `playball_shadow.png` | 墨色の影 |
 | 5 | `playball_extrude_mask.png` | 白い型。**スクールカラーで着色する**（`-unity-background-image-tint-color` に学校のアクセント色を指定） |
 | 6 | `playball_face.png` | 白い文字と墨色の縁取り |
@@ -52,7 +52,6 @@ UI Toolkitでは文字を斜めに傾けたり、影を何重にも重ねたり�
 **位置（1600×900基準）**
 - 4〜6の文字本体は、中心を (800, 423) に置く。
 - 7の小さい英字は、中心を (800, 541) に置く。
-- 3の巨大な英字は、中心を (800, 450) に置く。
 
 4〜7はひとまとまりで動かす。
 
@@ -71,7 +70,6 @@ UI Toolkitでは文字を斜めに傾けたり、影を何重にも重ねたり�
 | 対象 | 動き |
 |---|---|
 | 文字のまとまり（4〜7） | 0.00→0.65 で x を +1800 から 0 へ（OutExpo）。0.65→3.20 で 0 から −32 へ等速でゆっくり流す。3.20→3.90 で −32 から −1900 へ（InExpo） |
-| 巨大な英字（3） | 0.00→0.75 で x を +900 から +70 へ、不透明度 0→1（OutExpo）。0.75→3.25 で +70 から −70 へ等速。3.25→4.00 で −70 から −900 へ、不透明度 1→0（InExpo） |
 | スピード線（2） | 1回目は 0.00→0.55 で、まとめて x を +1700 から −1700 へ。不透明度は 0.1秒で1になり、終わりで0に戻す。2回目は 3.15→3.85 で同じ動きを繰り返す（最大の不透明度0.9） |
 | 暗幕（1） | 0.00→0.60 でフェードイン、3.40 まで保つ、3.40→4.00 でフェードアウト |
 
@@ -151,7 +149,6 @@ UI Toolkitでは文字を斜めに傾けたり、影を何重にも重ねたり�
 | playball_shadow.png | GameSet/gameset_shadow.png |
 | playball_extrude_mask.png | GameSet/gameset_extrude_mask.png |
 | playball_face.png | GameSet/gameset_face.png |
-| playball_ghost.png | GameSet/gameset_ghost.png（巨大な「GAME SET」） |
 | playball_sub.png | GameSet/gameset_sub.png（小さい「GAME SET」） |
 | playball_dim.png | PlayBall/playball_dim.png をそのまま使う |
 
