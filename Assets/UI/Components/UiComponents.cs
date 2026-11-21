@@ -272,48 +272,63 @@ namespace KokoSim.Unity.Components
         /// スナップし、0..maxMinutes（＝現在値＋残り時間でクランプ済みの上限）へ収めて onChange を呼ぶ。
         /// ±ボタンと役割を分けず併用する（①ドラッグで大きく動かす／②±で微調整）。
         /// locked（委任中）は onChange を配線しない＝見た目だけの静的バーになる。
+        /// 値が変わっても作り直さず <see cref="TimeAllocSliderElement.SetValue"/> で更新する
+        /// （作り直すと掴んだポインタが外れてドラッグが1点で止まる・issue #1278）。
         /// </summary>
-        public static VisualElement TimeAllocSlider(
+        public static TimeAllocSliderElement TimeAllocSlider(
             int minutes, int maxMinutes, int stepMinutes, string colorClass, bool locked, System.Action<int> onChange)
+            => new TimeAllocSliderElement(minutes, maxMinutes, stepMinutes, colorClass, locked, onChange);
+
+        public sealed class TimeAllocSliderElement : VisualElement
         {
-            var track = new VisualElement();
-            track.AddToClassList("ta-slider");
-            if (locked) track.AddToClassList("ta-slider--locked");
+            private readonly VisualElement _fill = new VisualElement();
+            private readonly int _step;
+            private int _max;
 
-            var fill = new VisualElement();
-            fill.AddToClassList("ta-slider__fill");
-            if (!string.IsNullOrEmpty(colorClass)) fill.AddToClassList("ta-slider__fill--" + colorClass);
-            fill.style.width = Length.Percent((maxMinutes > 0 ? Mathf.Clamp01((float)minutes / maxMinutes) : 0f) * 100f);
-            track.Add(fill);
-
-            if (locked || onChange == null || maxMinutes <= 0) return track;
-
-            void Seek(Vector2 localPos)
+            public TimeAllocSliderElement(
+                int minutes, int maxMinutes, int stepMinutes, string colorClass, bool locked, System.Action<int> onChange)
             {
-                var w = track.resolvedStyle.width;
-                if (w <= 0f) return;
-                var frac = Mathf.Clamp01(localPos.x / w);
-                var raw = Mathf.RoundToInt(frac * maxMinutes);
-                var snapped = Mathf.Max(0, (raw / stepMinutes) * stepMinutes);
-                onChange(snapped);
+                _step = stepMinutes;
+                AddToClassList("ta-slider");
+                if (locked) AddToClassList("ta-slider--locked");
+
+                _fill.AddToClassList("ta-slider__fill");
+                if (!string.IsNullOrEmpty(colorClass)) _fill.AddToClassList("ta-slider__fill--" + colorClass);
+                Add(_fill);
+                SetValue(minutes, maxMinutes);
+
+                if (locked || onChange == null) return;
+
+                RegisterCallback<PointerDownEvent>(e =>
+                {
+                    this.CapturePointer(e.pointerId);
+                    Seek(e.localPosition, onChange);
+                    e.StopPropagation();
+                });
+                RegisterCallback<PointerMoveEvent>(e =>
+                {
+                    if (this.HasPointerCapture(e.pointerId)) Seek(e.localPosition, onChange);
+                });
+                RegisterCallback<PointerUpEvent>(e =>
+                {
+                    if (this.HasPointerCapture(e.pointerId)) this.ReleasePointer(e.pointerId);
+                });
             }
 
-            track.RegisterCallback<PointerDownEvent>(e =>
+            public void SetValue(int minutes, int maxMinutes)
             {
-                track.CapturePointer(e.pointerId);
-                Seek(e.localPosition);
-                e.StopPropagation();
-            });
-            track.RegisterCallback<PointerMoveEvent>(e =>
-            {
-                if (track.HasPointerCapture(e.pointerId)) Seek(e.localPosition);
-            });
-            track.RegisterCallback<PointerUpEvent>(e =>
-            {
-                if (track.HasPointerCapture(e.pointerId)) track.ReleasePointer(e.pointerId);
-            });
+                _max = maxMinutes;
+                _fill.style.width = Length.Percent((maxMinutes > 0 ? Mathf.Clamp01((float)minutes / maxMinutes) : 0f) * 100f);
+            }
 
-            return track;
+            private void Seek(Vector2 localPos, System.Action<int> onChange)
+            {
+                var w = resolvedStyle.width;
+                if (w <= 0f || _max <= 0) return;
+                var frac = Mathf.Clamp01(localPos.x / w);
+                var raw = Mathf.RoundToInt(frac * _max);
+                onChange(Mathf.Max(0, (raw / _step) * _step));
+            }
         }
 
         // ===== SchoolName（設計書16 §4-3。校名は常に太明朝） =====
