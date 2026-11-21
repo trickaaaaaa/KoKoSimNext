@@ -18,7 +18,7 @@ namespace KokoSim.Unity.Shell
         public static void Start()
         {
             if (_task != null) return;
-            _task = Task.Run(() =>
+            _task = BackgroundWork.Run(() =>
             {
                 try
                 {
@@ -29,7 +29,7 @@ namespace KokoSim.Unity.Shell
                     var max = WeatherModel.AirDensityAt(
                         WeatherModel.CoolestTemperatureC, ctx.Aerodynamics.AirDensity, WeatherModel.Base);
                     TrajectoryFeatureTable.Prewarm(ctx.Aerodynamics, ctx.Mound, min, max,
-                        maxParallelism: Math.Max(1, Math.Min(4, Environment.ProcessorCount - 2)));
+                        maxParallelism: BackgroundWork.Parallelism(Math.Min(4, Environment.ProcessorCount - 2)));
                 }
                 catch (Exception e) { UnityEngine.Debug.LogException(e); }
             });

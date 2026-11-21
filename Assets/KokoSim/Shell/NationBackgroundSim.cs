@@ -46,7 +46,7 @@ namespace KokoSim.Unity.Shell
         // 「同時に churn する量＝Mono(Boehm) がヒープを確保する量のピーク」を決める。Boehm は一度確保した
         // ヒープを OS へ返さず、以後どの GC もヒープ全体を走査する（走査時間∝ヒープ）＝ピークを抑えるほど
         // 後続 GC が軽い。速度と確保ピークの折衷で3本（コア数−2 かつ ≤3）に絞る。
-        private static readonly int MaxWorkers = Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2));
+        private static readonly int MaxWorkers = BackgroundWork.Parallelism(Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2)));
 
         private static volatile int _throttle = (int)SimThrottle.Normal;
         private static volatile Task _task;
@@ -173,7 +173,7 @@ namespace KokoSim.Unity.Shell
             var jobs = run.Jobs;
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = Task.Run(() => Worker(jobs));
+                workers[w] = BackgroundWork.Run(() => Worker(jobs));
             _task = Task.WhenAll(workers);
         }
 
@@ -205,7 +205,7 @@ namespace KokoSim.Unity.Shell
                 Interlocked.Increment(ref _done);
 
                 // 区画間で必ずメインスレッドへ時間を譲る（確保レート抑制＝GC を短く分散させる）。
-                Thread.Sleep((SimThrottle)_throttle == SimThrottle.Boost ? BoostSleepMs : NormalSleepMs);
+                BackgroundWork.Sleep((SimThrottle)_throttle == SimThrottle.Boost ? BoostSleepMs : NormalSleepMs);
             }
         }
 
@@ -226,8 +226,8 @@ namespace KokoSim.Unity.Shell
             var m = Interlocked.Increment(ref _matchesResolved);
             if (_collectGarbage && m % CollectEveryMatches == 0)
                 GC.Collect();   // ヒープ肥大を防ぐ短い定期回収（ライブ試合前に溜め込まない）。
-            while ((SimThrottle)_throttle == SimThrottle.Paused)
-                Thread.Sleep(PausedPollMs);
+            while (BackgroundWork.Threaded && (SimThrottle)_throttle == SimThrottle.Paused)
+                BackgroundWork.Sleep(PausedPollMs);
         }
 
         /// <summary>
