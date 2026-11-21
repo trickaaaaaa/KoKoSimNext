@@ -20,14 +20,15 @@ internal static class SubstitutionCommands
     /// プレイヤーの伝令（設計書09 §3・issue #714/#716）。teamIsAway 側がいま攻撃中なら攻撃伝令、守備中なら守備伝令を
     /// 1回消費する。3アウト直後は次の半イニングへ攻守が入れ替わる扱い（SubstitutionOptions と同じ規則）。
     /// 戻り値: 0=残り0で発動せず／1=攻撃伝令／2=守備伝令。ライブ操作と取り消しの再生（issue #718）が同じ関数を通る。
+    /// asOffense＝攻守を呼び出し側が決めて渡す（画面に映っている半回で決める。issue #1246）。null＝局面から導出。
     /// </summary>
-    public static int CallTimeout(GameProgress p, bool teamIsAway, int? messengerIndex)
+    public static int CallTimeout(GameProgress p, bool teamIsAway, int? messengerIndex, bool? asOffense = null)
     {
         var team = p.OffenseOf(teamIsAway);
         var reserves = team.AvailableReserves;
         var messenger = messengerIndex is int i && i >= 0 && i < reserves.Count ? reserves[i] : null;
         var duration = p.Ctx.Tactics.TimeoutDurationPa;
-        if (IsOnOffense(p, teamIsAway))
+        if (asOffense ?? IsOnOffense(p, teamIsAway))
         {
             if (!team.TryUseOffenseTimeout()) return 0;
             team.StartOffenseCalm(duration, messenger);
@@ -39,9 +40,14 @@ internal static class SubstitutionCommands
         return 2;
     }
 
-    /// <summary>いま（この境界で）teamIsAway 側が攻撃側か。3アウト直後は次の半イニングの攻守で見る。</summary>
-    public static bool IsOnOffense(GameProgress p, bool teamIsAway)
+    /// <summary>
+    /// いま（この境界で）teamIsAway 側が攻撃側か。3アウト直後は次の半イニングの攻守で見る。
+    /// shownOffenseIsTop＝画面に映っている半回の攻撃側が表か（issue #1246）。3アウト目の打球を再生している間は
+    /// エンジンが画面より先に次の半回へ進んでいるので、渡されたらそれを優先する＝攻守のネタバレをしない。
+    /// </summary>
+    public static bool IsOnOffense(GameProgress p, bool teamIsAway, bool? shownOffenseIsTop = null)
     {
+        if (shownOffenseIsTop is bool shown) return shown == teamIsAway;
         var halfEnded = p.CurrentOuts >= 3;
         var battingIsAway = halfEnded ? !p.CurrentIsTop : p.CurrentIsTop;
         return battingIsAway == teamIsAway;

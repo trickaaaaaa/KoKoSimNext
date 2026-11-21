@@ -284,13 +284,14 @@ public sealed class MatchProgression
     /// 今この打席境界で teamIsAway 側の監督が選べる交代の一覧（観測データ）。
     /// 攻撃中なら代打（次打者）／代走（塁上の走者）、守備中なら投手交代／守備交代／DH解除が候補になる。
     /// </summary>
-    public SubstitutionOptions SubstitutionOptions(bool teamIsAway)
+    /// <para>shownOffenseIsTop（issue #1246）＝画面に映っている半回の攻撃側が表か。3アウト目の打球の再生中は
+    /// 攻守を画面の局面で出す（代打・代走のタブで次の半回の攻守がばれない）。null＝従来どおり。</para>
+    public SubstitutionOptions SubstitutionOptions(bool teamIsAway, bool? shownOffenseIsTop = null)
     {
         var team = _p.OffenseOf(teamIsAway);
         // 3アウト後は次の半イニング＝攻守が入れ替わる。試合開始前（未進行）は表＝先攻の攻撃から。
         var halfEnded = _p.CurrentOuts >= 3;
-        var battingIsAway = halfEnded ? !_p.CurrentIsTop : _p.CurrentIsTop;
-        var isOffense = battingIsAway == teamIsAway;
+        var isOffense = SubstitutionCommands.IsOnOffense(_p, teamIsAway, shownOffenseIsTop);
 
         var runners = new List<RunnerChoice>(3);
         if (isOffense && !halfEnded && !IsFinished && _p.CurrentBases is { } bases)
@@ -504,7 +505,10 @@ public sealed class MatchProgression
     /// いま（この打席境界で）自校（teamIsAway）が攻撃側（打者側）か。3アウト直後は次の半イニングへ
     /// 攻守が入れ替わるので、<see cref="SubstitutionOptions"/> と同じ規則で判定する（伝令の攻守判定に使う）。
     /// </summary>
-    public bool IsTeamOnOffense(bool teamIsAway) => SubstitutionCommands.IsOnOffense(_p, teamIsAway);
+    /// <para>shownOffenseIsTop（issue #1246）＝画面に映っている半回の攻撃側が表か。3アウト目の打球の再生中は
+    /// エンジンが画面より先に次の半回へ進んでいるので、渡せば画面の局面で判定する（null＝従来どおり）。</para>
+    public bool IsTeamOnOffense(bool teamIsAway, bool? shownOffenseIsTop = null)
+        => SubstitutionCommands.IsOnOffense(_p, teamIsAway, shownOffenseIsTop);
 
     /// <summary>
     /// その学校のこの試合のベンチ入りの人数（試合開始時の打順＋控え。途中で退いた選手も数える）。
@@ -535,10 +539,10 @@ public sealed class MatchProgression
     /// いまこの局面で自校（teamIsAway）が伝令をかけられるか（攻撃中なら攻撃伝令、守備中なら守備伝令の
     /// 残りが1以上）。UI の「タイム」ボタンの活性判定に使う。
     /// </summary>
-    public bool CanCallTimeout(bool teamIsAway)
+    public bool CanCallTimeout(bool teamIsAway, bool? shownOffenseIsTop = null)
     {
         if (IsFinished) return false;
-        return IsTeamOnOffense(teamIsAway)
+        return IsTeamOnOffense(teamIsAway, shownOffenseIsTop)
             ? OffenseTimeoutsLeft(teamIsAway) > 0
             : DefenseTimeoutsLeft(teamIsAway) > 0;
     }
@@ -556,15 +560,19 @@ public sealed class MatchProgression
     /// <para>messengerIndex（issue #716）＝伝令役にする控えの添字（<see cref="TimeoutMessengerCandidates"/> の並び）。
     /// null／範囲外＝伝令役なし（記録員が走る・係数1.0＝従来と同じ効き目）。</para>
     /// <para>決定列へ積む（issue #718）＝中断保存・シーク・交代の取り消し（再生し直し）で伝令が消えない。</para>
-    public PlayerTimeoutResult CallTimeout(bool teamIsAway, int? messengerIndex = null)
+    /// <para>shownOffenseIsTop（issue #1246）＝画面に映っている半回の攻撃側が表か。渡すと攻守をその半回で決める
+    /// （3アウト目の打球の再生中に押しても、エンジンの「次の半回」ではなく見えている局面の伝令になる）。
+    /// 決定列にも確定した攻守を残す＝再生で同じ側に効く。</para>
+    public PlayerTimeoutResult CallTimeout(bool teamIsAway, int? messengerIndex = null, bool? shownOffenseIsTop = null)
     {
         if (IsFinished) return PlayerTimeoutResult.Unavailable;
         var reserves = _p.OffenseOf(teamIsAway).AvailableReserves;
         var idx = messengerIndex is int i && i >= 0 && i < reserves.Count ? i : -1;
-        var kind = SubstitutionCommands.CallTimeout(_p, teamIsAway, idx >= 0 ? idx : null);
+        bool? asOffense = shownOffenseIsTop is bool shown ? shown == teamIsAway : null;
+        var kind = SubstitutionCommands.CallTimeout(_p, teamIsAway, idx >= 0 ? idx : null, asOffense);
         if (kind == 0) return PlayerTimeoutResult.Unavailable;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.Timeout, teamIsAway, BenchIndex: 0,
-            TargetIndex: idx, PitchIndex: PendingPitchIndex));
+            TargetIndex: idx, PitchIndex: PendingPitchIndex, AsOffense: asOffense));
         return kind == 1 ? PlayerTimeoutResult.Offense : PlayerTimeoutResult.Defense;
     }
 

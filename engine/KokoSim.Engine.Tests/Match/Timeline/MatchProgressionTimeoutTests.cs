@@ -167,6 +167,71 @@ public sealed class MatchProgressionTimeoutTests
         }
         Assert.True(sawExtra, "延長に入る試合が1つも無かった");
     }
+    // ===== 5b. 3アウト目の打球の再生中（issue #1246）: 攻守は画面に映っている半回で決める =====
+
+    // エンジンは3アウト目の打席を確定した時点で「次の半回」へ攻守が入れ替わる（SubstitutionCommands.IsOnOffense）。
+    // 画面はまだその打球を再生している＝shownOffenseIsTop を渡せば画面の局面で答える。そのずれた境界まで進める。
+    private static (MatchProgression Prog, bool ShownIsTop) AdvanceToHalfEndedBoundary(ulong seed)
+    {
+        var prog = NewProg(seed);
+        while (prog.Advance())
+        {
+            var shownIsTop = prog.Current!.IsTop;
+            // 先攻 away が攻撃中（表）なのに、エンジンは away を守備側と答える＝3アウトで半回が閉じた境界。
+            if (prog.IsTeamOnOffense(teamIsAway: true) != shownIsTop) return (prog, shownIsTop);
+        }
+        throw new Xunit.Sdk.XunitException("3アウトで終わる打席が1つも無かった");
+    }
+
+    [Fact]
+    public void ShownHalf_OverridesTheEngineHalfAtThreeOuts_ForOffenseAndOptionsAndTimeout()
+    {
+        var (prog, shownIsTop) = AdvanceToHalfEndedBoundary(11UL);
+        var shownTeamIsAway = shownIsTop;   // 画面で攻撃しているのは、表なら away・裏なら home
+
+        // 既定（従来どおり）はエンジンの次の半回＝画面とは逆に見えてしまう。
+        Assert.False(prog.IsTeamOnOffense(shownTeamIsAway));
+        Assert.False(prog.SubstitutionOptions(shownTeamIsAway).IsOffense);
+
+        // 画面の半回を渡すと、画面で攻撃中の側は攻撃・守備中の側は守備。
+        Assert.True(prog.IsTeamOnOffense(shownTeamIsAway, shownIsTop));
+        Assert.False(prog.IsTeamOnOffense(!shownTeamIsAway, shownIsTop));
+        Assert.True(prog.SubstitutionOptions(shownTeamIsAway, shownIsTop).IsOffense);
+        Assert.False(prog.SubstitutionOptions(!shownTeamIsAway, shownIsTop).IsOffense);
+        Assert.Empty(prog.SubstitutionOptions(shownTeamIsAway, shownIsTop).Runners);   // 3アウトで塁は空
+    }
+
+    [Fact]
+    public void Timeout_AtThreeOuts_UsesTheShownHalf_NotTheEngineNextHalf()
+    {
+        var (prog, shownIsTop) = AdvanceToHalfEndedBoundary(11UL);
+        var fielding = !shownIsTop;   // 画面で守備中の側（2死から3アウト目を取る側）
+
+        Assert.True(prog.CanCallTimeout(fielding, shownIsTop));
+        Assert.Equal(MatchProgression.PlayerTimeoutResult.Defense, prog.CallTimeout(fielding, null, shownIsTop));
+
+        Assert.Equal(2, prog.DefenseTimeoutsLeft(fielding));
+        Assert.Equal(3, prog.OffenseTimeoutsLeft(fielding));   // 次の半回の攻撃伝令としては消費されない
+    }
+
+    // 画面の半回で確定した伝令は、決定列にも攻守を残す＝中断保存・シークの再生でも同じ側に効く。
+    [Fact]
+    public void Timeout_AtThreeOuts_ReplaysOnTheSameSide()
+    {
+        var (prog, shownIsTop) = AdvanceToHalfEndedBoundary(11UL);
+        var fielding = !shownIsTop;
+        prog.CallTimeout(fielding, null, shownIsTop);
+
+        var save = prog.Save();
+        Assert.Contains(save.Decisions, d => d.Kind == GameDecisionKind.Timeout && d.AsOffense == false);
+
+        var resumed = GameReplay.Restore(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, save);
+        while (resumed.Steps.MoveNext()) { /* 保存位置まで再生 */ }
+        var team = resumed.Progress.OffenseOf(fielding);
+        Assert.Equal(2, team.DefenseTimeoutsLeft);
+        Assert.Equal(3, team.OffenseTimeoutsLeft);
+    }
+
     // ===== 6. 観測口（issue #1177）: 伝令が効いているかを MatchLiveSnapshot に読むだけで載せる =====
 
     // 伝令の後、その校が該当する側（守備伝令＝守備中／攻撃伝令＝攻撃中）で迎える打席を数え、

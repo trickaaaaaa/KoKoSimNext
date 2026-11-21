@@ -148,7 +148,7 @@ namespace KokoSim.Unity.Match
         public void DefenseTimeoutForCapture()
         {
             if (_prog == null) return;
-            _prog.CallTimeout(_managerIsAway);
+            _prog.CallTimeout(_managerIsAway, null, ShownOffenseIsTop);
             _preStep = null;
             var snap = _prog.Snapshot();
             ApplyPitcherRattled(snap, _atBat?.IsTop ?? snap.OffenseIsTop);
@@ -326,6 +326,11 @@ namespace KokoSim.Unity.Match
         // いま映している半回（イニング間画面の差し込み判定。エンジンに半回終了のイベントは無い）。
         private int _shownInning;
         private bool _shownIsTop, _shownAnyHalf;
+
+        // 画面に映っている半回の攻撃側が表か（映していない・高速試合中・終局は null＝エンジンの局面に従う）。
+        // 3アウト目の打球を再生している間、エンジンは画面より先に次の半回へ進んでいる＝攻守の表示・伝令・交代タブ・
+        // 守備側の名札は、エンジンの局面ではなくこの画面の半回で決める（issue #1246。さもないとアウトが先に分かる）。
+        private bool? ShownOffenseIsTop => _shownAnyHalf && !_fastMode && !_gameOver ? _shownIsTop : (bool?)null;
         /// <summary>この打席で描く投球列。1球進行では投げるたび1件ずつ伸び、一括経路では最初から全件入る。</summary>
         private readonly List<QueuedPitch> _paQueue = new();
         /// <summary>この打席が確定済みか（＝<see cref="_current"/> がいま描いている打席を指しているか）。</summary>
@@ -732,10 +737,11 @@ namespace KokoSim.Unity.Match
             //  自校の先攻/後攻が前試合と反転していると投手と打者のユニフォームが入れ替わって見えた）。
             InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
             ApplyDuelViewState();
-            _subPanel.SetMatch(_prog, _managerIsAway);
+            // 強制交代（球数制限）は次の半回の守備への継投＝エンジンの局面で開く（画面はまだ前の半回を映している）。
+            _subPanel.SetMatch(_prog, _managerIsAway, () => _forcedSubPause ? (bool?)null : ShownOffenseIsTop);
             _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp, _awaySchoolId, _homeSchoolId);
             // 指示パネルの初期フェーズ（1打席目の攻守）。以降は采配窓ごとに OpenWindow が追従させる。
-            if (_prog != null) _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
+            if (_prog != null) _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway, ShownOffenseIsTop));
             // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
             PostLineScore(1, isTop: true, finished: false);
             SetBackHomeVisible(false);
@@ -1421,12 +1427,12 @@ namespace KokoSim.Unity.Match
                 AwayName = _awayDisp,
                 HomeName = _homeDisp,
                 ManagerIsAway = _managerIsAway,
-                ManagerOnOffense = _prog.IsTeamOnOffense(_managerIsAway),
+                ManagerOnOffense = _prog.IsTeamOnOffense(_managerIsAway, ShownOffenseIsTop),
                 TimeoutCap = _prog.TimeoutsPerPeriod,
                 OffenseTimeoutsLeft = _prog.OffenseTimeoutsLeft(_managerIsAway),
                 DefenseTimeoutsLeft = _prog.DefenseTimeoutsLeft(_managerIsAway),
                 TimeoutSent = _timeoutSentThisPause,
-                TimeoutEnabled = !resolving && !_timeoutSentThisPause && _prog.CanCallTimeout(_managerIsAway),
+                TimeoutEnabled = !resolving && !_timeoutSentThisPause && _prog.CanCallTimeout(_managerIsAway, ShownOffenseIsTop),
                 ActionsEnabled = !resolving,
             };
 
@@ -1551,7 +1557,7 @@ namespace KokoSim.Unity.Match
             // 伝令役は送る前に控える（テロップの名前。engine の候補の並び＝messengerIndex の添字）
             var reserves = _prog.TimeoutMessengerCandidates(_managerIsAway);
             var messenger = messengerIndex is int mi && mi >= 0 && mi < reserves.Count ? reserves[mi] : null;
-            var kind = _prog.CallTimeout(_managerIsAway, messengerIndex);
+            var kind = _prog.CallTimeout(_managerIsAway, messengerIndex, ShownOffenseIsTop);
             CloseMessengerPicker();
             if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
             _timeoutSentThisPause = true;
@@ -1571,7 +1577,7 @@ namespace KokoSim.Unity.Match
         private void OpenMessengerPicker(IReadOnlyList<Player> cands)
         {
             if (_pmMessenger == null || _pmMessengerList == null) { SendTimeout(null); return; }
-            var onOffense = _prog.IsTeamOnOffense(_managerIsAway);
+            var onOffense = _prog.IsTeamOnOffense(_managerIsAway, ShownOffenseIsTop);
             var left = onOffense ? _prog.OffenseTimeoutsLeft(_managerIsAway) : _prog.DefenseTimeoutsLeft(_managerIsAway);
             if (_pmMessengerCap != null)
                 _pmMessengerCap.text = (onOffense ? "打者へ" : "マウンドへ") + "、誰を伝令に？（残り" + left + "回）";
@@ -2366,10 +2372,12 @@ namespace KokoSim.Unity.Match
             if (_gameOver || _paused || _fastMode || _inningBreakOn || _gameTelopOn) return;
             if (_stage != LiveStage.Window && _stage != LiveStage.Idle) return;
             if (FieldPlayActive || _subTelopOn) return;
+            // 送った側の半回でなくなっていたら（守備伝令の直後に3アウト目を取った等）捨てずに預かる。
+            // 伝令の効き目は次のその側の半回へ持ち越される＝その半回の窓で場面を流す（issue #1246）。
+            // 判定はエンジンの局面（3アウトで次の半回の攻守）＝半回が閉じた後の切れ目では流さない。
+            if (_prog == null || _prog.IsTeamOnOffense(_managerIsAway) != _timeoutSceneOffense) return;
             var row = _timeoutScenePending;
             _timeoutScenePending = null;
-            // 回をまたいで攻守が入れ替わっていたら（送ったときの攻守でなくなった）流さない
-            if (_prog == null || _prog.IsTeamOnOffense(_managerIsAway) != _timeoutSceneOffense) return;
             HidePitchCall();
             HideScoreCall();
             HideSubCall();
@@ -2897,10 +2905,9 @@ namespace KokoSim.Unity.Match
             _stealHandedOff = true;
             if (_duelRig != null && _duelRig.Available)
             {
-                // 守備側の頭上ラベル用の同定。盗塁は打席途中なので _current は同じ半回の直前の打席
-                // （走者が居る＝必ず先行打席がある）＝その IsTop で守備チームを引く。
-                if (_prog != null && _current != null)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                // 守備側の頭上ラベル用の同定。盗塁は打席途中で _current が空なので、画面の半回（_shownIsTop）で守備チームを引く。
+                if (_prog != null && _shownAnyHalf)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
                 _duelRig.EndDuelThrow();
                 _duelRig.BeginFieldPlay(_stealPlay, (float)System.Math.Min(_t, _stealReleaseAt));
             }
@@ -3023,8 +3030,8 @@ namespace KokoSim.Unity.Match
             _pickoffHandedOff = true;
             if (_duelRig != null && _duelRig.Available)
             {
-                if (_prog != null && _current != null)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                if (_prog != null && _shownAnyHalf)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
                 _duelRig.EndDuelThrow();
                 _duelRig.BeginFieldPlay(_pickoffPlay, (float)_pickoffReleaseAt);
             }
@@ -3096,8 +3103,8 @@ namespace KokoSim.Unity.Match
             _view.SetPlay(batteryMiss);
             if (_duelRig != null && _duelRig.Available)
             {
-                if (_prog != null && _current != null)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                if (_prog != null && _shownAnyHalf)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
                 _duelRig.BeginFieldPlay(batteryMiss, (float)_t);
             }
             RenderBatteryMissFrame();
@@ -3179,8 +3186,8 @@ namespace KokoSim.Unity.Match
             _view.SetPlay(foul);
             if (_duelRig != null && _duelRig.Available)
             {
-                if (_prog != null && _current != null)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                if (_prog != null && _shownAnyHalf)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
                 _duelRig.BeginFieldPlay(foul, (float)_t);
             }
             RenderFoulFieldFrame();
@@ -3243,8 +3250,8 @@ namespace KokoSim.Unity.Match
             _view.SetPlay(rundown);
             if (_duelRig != null && _duelRig.Available)
             {
-                if (_prog != null && _current != null)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                if (_prog != null && _shownAnyHalf)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
                 _duelRig.BeginFieldPlay(rundown, (float)_t);
             }
             RenderSqueezeRundownFrame();
@@ -3315,8 +3322,8 @@ namespace KokoSim.Unity.Match
             _view.SetPlay(dropThirdStrike);
             if (_duelRig != null && _duelRig.Available)
             {
-                if (_prog != null && _current != null)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                if (_prog != null && _shownAnyHalf)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
                 _duelRig.BeginFieldPlay(dropThirdStrike, (float)_t);
             }
             RenderDropThirdStrikeFrame();
@@ -5794,7 +5801,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 自校が今「攻撃側」か（交代モーダルの出し分け確認用）。</summary>
         public bool ManagerOnOffenseForCapture
-            => _prog != null && _prog.SubstitutionOptions(_managerIsAway).IsOffense;
+            => _prog != null && _prog.SubstitutionOptions(_managerIsAway, ShownOffenseIsTop).IsOffense;
 
         /// <summary>スクショ用: 今このタイミングで代走を出せるか（塁上に走者がいる攻撃中）。</summary>
         public bool ManagerCanPinchRunForCapture
