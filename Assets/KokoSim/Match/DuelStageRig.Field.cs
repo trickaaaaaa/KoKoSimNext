@@ -495,6 +495,18 @@ namespace KokoSim.Unity.Match
         /// <summary>立ち位置の不連続を吸収する時間[秒]（下の <see cref="FielderMotion.Entry"/>）。</summary>
         private const float EntryFadeSeconds = 0.3f;
 
+        /// <summary>
+        /// 時刻 t に残っている立ち位置の不連続[m]（<see cref="FielderMotion.Entry"/> を 0 へ落とす途中の値）。
+        /// 野手を engine の位置へ置くところは、走り・捕球・送球・タッチの窓を問わず**必ずこれを足す**
+        /// （窓の中だけ足さないと、プレー頭0.3秒以内に始まる捕球・送球で残りが1コマで跳ぶ）。
+        /// </summary>
+        private Vector2 EntryOffsetAt(in FielderMotion st, float t)
+        {
+            float fade = EntryFadeSeconds <= 0f ? 0f
+                : Mathf.Clamp01(1f - (t - _fieldT0) / EntryFadeSeconds);
+            return st.Entry * fade;
+        }
+
         private struct FielderMotion
         {
             /// <summary>いま流している段（-1=待機）。</summary>
@@ -583,7 +595,8 @@ namespace KokoSim.Unity.Match
                         st.ThrowYawRate * Mathf.Max(0f, dt));
                     if (Mathf.Abs(Mathf.DeltaAngle(st.Yaw, st.ThrowYawTo)) < 1e-3f) st.ThrowYawRate = 0f;
                 }
-                PlaceFielder(a, (float)cur.Pos.X, (float)cur.Pos.Y, st.Yaw);
+                var entryHold = EntryOffsetAt(st, t);
+                PlaceFielder(a, (float)cur.Pos.X + entryHold.x, (float)cur.Pos.Y + entryHold.y, st.Yaw);
                 _loco[pos] = st;
                 return;
             }
@@ -650,10 +663,8 @@ namespace KokoSim.Unity.Match
                         ? Mathf.MoveTowardsAngle(st.Yaw, startYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
                         : startYaw;
                     st.Started = true;
-                    float fadeS = EntryFadeSeconds <= 0f ? 0f
-                        : Mathf.Clamp01(1f - (t - _fieldT0) / EntryFadeSeconds);
-                    PlaceFielder(a, (float)cur.Pos.X + st.Entry.x * fadeS,
-                        (float)cur.Pos.Y + st.Entry.y * fadeS, st.Yaw);
+                    var entryStart = EntryOffsetAt(st, t);
+                    PlaceFielder(a, (float)cur.Pos.X + entryStart.x, (float)cur.Pos.Y + entryStart.y, st.Yaw);
                     if (dt > 0f)
                     {
                         // 発進の足の食い違い。収録の速さは終端へ向けてほぼ線形に増える（実測 speedHere）
@@ -812,10 +823,8 @@ namespace KokoSim.Unity.Match
             a.Speed = want < 0 ? 1f : mul;
 
             // 立ち位置の不連続を 0 へ落としながら engine の位置へ置く
-            float fade = EntryFadeSeconds <= 0f ? 0f
-                : Mathf.Clamp01(1f - (t - _fieldT0) / EntryFadeSeconds);
-            PlaceFielder(a, (float)cur.Pos.X + st.Entry.x * fade,
-                (float)cur.Pos.Y + st.Entry.y * fade, st.Yaw);
+            var entry = EntryOffsetAt(st, t);
+            PlaceFielder(a, (float)cur.Pos.X + entry.x, (float)cur.Pos.Y + entry.y, st.Yaw);
 
             // 受け入れの実測。**どちらも絵では読めない**（位置のずれは「野手が立っている」だけ、
             // 向きの飛びは1コマなので静止画に残らない）ので、通しながら最悪値を溜める
@@ -2224,8 +2233,9 @@ namespace KokoSim.Unity.Match
                         // ずれる量で頭打ちにする＝グラブは球の位置に居なければならない（上の掟）
                         st.Yaw += PreOpenTowardThrow(e.Pos, e.TCatch, st.Yaw, gh.magnitude);
                         _loco[e.Pos] = st;
-                        PlaceFielder(a, (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.X,
-                            (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.Y, st.Yaw);
+                        var catchPos = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos;
+                        var catchEntry = EntryOffsetAt(st, t);
+                        PlaceFielder(a, (float)catchPos.X + catchEntry.x, (float)catchPos.Y + catchEntry.y, st.Yaw);
                         // 足が地面に載った状態で置き直してから、上下をクリップへ渡す（横位置と向きは
                         // これまでどおり毎コマ engine が置く＝ルートモーションの XZ は捨てられる）
                         if (anchor.RootDrivenY && a.Animator != null)
@@ -2714,7 +2724,11 @@ namespace KokoSim.Unity.Match
                 if (a == null || a.Animator == null) continue;
 
                 float w = DuelCatcherPose.Weight(t, e.TCatch);
-                if (w > 0f) DuelCatcherPose.ReachMitt(a.Animator, _root.transform.TransformPoint(e.Point), w);
+                // ポーズを書き直していない体（据え置き・恒久停止・間引き）には当てない＝同じ姿勢へ補正が
+                // 積み上がる（Actor.PoseAdvanced・issue #368 と同型）。_poseGen は誰か1人が進めば進むので、
+                // 体ごとに見る
+                if (w > 0f && a.PoseAdvanced)
+                    DuelCatcherPose.ReachMitt(a.Animator, _root.transform.TransformPoint(e.Point), w);
 
                 // ⚠ 測るのは**ミット中心**（手首→中指付け根の中点）。手ボーンの原点は手首なので、
                 //    そこで測ると常にミットの厚みぶん外れた値が出る（捕手の受け入れと同じ単一ソース）
@@ -2966,13 +2980,14 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        /// <summary>フォロースルーを見せる長さ[s]（リリースから先）。</summary>
         /// <summary>
-        /// 内野手の送球モーションを速回しする上限倍率（issue #765）。これを越える短い窓は頭を捨てて合わせる。
+        /// 捕手以外の野手（投手・外野手も含む）の送球モーションを速回しする上限倍率（issue #765）。
+        /// これを越える短い窓は頭を捨てて合わせる。
         /// 1.6倍＝通常のリリース 0.76s を 0.48s まで（名手の最短保持≈0.56s を収める）。
         /// </summary>
-        private const float InfieldThrowMaxRate = 1.6f;
+        private const float FielderThrowMaxRate = 1.6f;
 
+        /// <summary>フォロースルーを見せる長さ[s]（リリースから先）。</summary>
         private const float ThrowFollowSeconds = 0.55f;
 
         /// <summary>投げ終わりの据え置き[s]（打ち切りには必ず据え置きを添える＝design-18 §4.5-⑭）。</summary>
@@ -3145,7 +3160,8 @@ namespace KokoSim.Unity.Match
             }
             else
             {
-                // 内野手の握り替え圧縮（issue #765）: 守備の上手い内野手は捕ってから 0.6〜0.8s で離す
+                // 捕手以外の握り替え圧縮（issue #765。内野手が主だが投手・外野手の短い窓にも同じ式で効く＝
+                // 窓が収録より短ければ誰でも頭を切って飛ぶので、役で分けない）: 守備の上手い内野手は捕ってから 0.6〜0.8s で離す
                 // （engine の握り替え＋もたつきが守備で強く縮む）。収録のリリース（0.76s／深い位置 1.36s）より
                 // 窓が短いと、頭を切って「捕った姿勢から投げる途中へ飛ぶ」。捕手と同じく一様に速回しして収める
                 // ＝機敏な野手ほど投げる動作そのものも速く見える。倍率は上限で切り、足りない分だけ頭を捨てる。
@@ -3153,7 +3169,7 @@ namespace KokoSim.Unity.Match
                 float window = tr - catchAt;
                 if (catchAt > 0f && window > 1e-3f && window < an.Release)
                 {
-                    rate = Mathf.Clamp(an.Release / window, 1f, InfieldThrowMaxRate);
+                    rate = Mathf.Clamp(an.Release / window, 1f, FielderThrowMaxRate);
                     tStart = tr - an.Release / rate;
                     tFire = Mathf.Max(tStart, catchAt);
                 }
@@ -3180,7 +3196,8 @@ namespace KokoSim.Unity.Match
         // 従来どおり BeginFieldPlay(play, TRelease) へ引き渡す（このカット自体は変更しない）。
         // 位置は動かさない（PlaceFielder で XZ を書き換えない）＝対決ビューの立ち位置のまま、
         // 向きだけ的へ寄せる。リリースでの立ち位置の不連続は BeginFieldPlay 側の Entry フェード
-        // （既存・EntryFadeSeconds）がそのまま吸収する＝ここで新たに作らない。
+        // （既存・EntryFadeSeconds）が吸収する＝ここで新たに作らない。リリースで始まる送球・その直後の
+        // 捕球の窓も EntryOffsetAt を足して置くので、窓の中でフェードの残りが跳ぶことは無い。
 
         private FieldThrowEvent _duelThrow;
         private Actor _duelThrowActor;
@@ -3394,7 +3411,8 @@ namespace KokoSim.Unity.Match
                         _throwTurnRateMax = Mathf.Max(_throwTurnRateMax, st.ThrowYawRate);
                         _loco[e.From] = st;
                         var p = PlaybackEvaluator.FielderAt(_fieldPlay, e.From, t).Pos;
-                        PlaceFielder(a, (float)p.X, (float)p.Y, st.Yaw);
+                        var throwEntry = EntryOffsetAt(st, t);
+                        PlaceFielder(a, (float)p.X + throwEntry.x, (float)p.Y + throwEntry.y, st.Yaw);
                     }
                     _throwHeadMin = Mathf.Min(_throwHeadMin, head);
                     _throwWindupMin = Mathf.Min(_throwWindupMin, e.TRelease - e.TFire);
@@ -3905,9 +3923,31 @@ namespace KokoSim.Unity.Match
                 if (a?.Go == null) continue;
                 a.Go.SetActive(on);
                 a.Enabled = on;
-                if (on) { a.Speed = 1f; a.HoldSeconds = 0f; }
+                if (on) ResetRunnerActor(a);
             }
             for (int i = 0; i < n; i++) _runnerMotion.Add(new RunnerMotion { Ladder = -1, Yaw = 0f });
+        }
+
+        /// <summary>
+        /// 走者を待機クリップへ戻す（前のプレーのスライディング等のクリップ・据え置きを持ち越さない）。
+        /// 次のプレーで止まったままの走者は <c>want=-1 == Ladder=-1</c> でクリップを差し替えないので、
+        /// ここで戻さないと前のプレーの姿勢のまま出る。
+        /// </summary>
+        private void ResetRunnerActor(Actor a)
+        {
+            if (a?.Go == null) return;
+            var idle = LoadClip(RunnerIdleClipName);
+            if (idle != null)
+            {
+                SetActorClip(a, idle, 0f, 0f);
+                a.IdleClip = idle;
+            }
+            a.IdleEndAt = 0f;
+            a.Speed = 1f;
+            a.HoldAtEnd = false;
+            a.Holding = false;
+            a.HoldSeconds = 0f;
+            a.HoldRemaining = 0f;
         }
 
         /// <summary>
@@ -4112,9 +4152,12 @@ namespace KokoSim.Unity.Match
                 }
             }
 
-            float targetYaw = want < 0
-                ? st.Yaw
-                : Mathf.Atan2(v.x, v.y) * Mathf.Rad2Deg - RunnerLadder[want].MoveDirDeg;
+            // 動かない走者は投手（マウンド）を見る（初期値の Yaw=0 だと常に中堅を向く）
+            float targetYaw = want >= 0
+                ? Mathf.Atan2(v.x, v.y) * Mathf.Rad2Deg - RunnerLadder[want].MoveDirDeg
+                : st.Started ? st.Yaw
+                : Mathf.Atan2((float)FieldDiagramGeometry.Mound.X - cur.x,
+                              (float)FieldDiagramGeometry.Mound.Y - cur.y) * Mathf.Rad2Deg;
             st.Yaw = st.Started
                 ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
                 : targetYaw;
@@ -4909,7 +4952,7 @@ namespace KokoSim.Unity.Match
         /// 振動し続け、6.88倍で頭打ちのまま着地まで寄らなかった）。誰も捕れない本塁打では
         /// 「守備の誰かを収める」こと自体が不要な絵の要求なので、この打球だけ機構を切る。</para>
         /// </summary>
-        private static bool IsHomeRun(PlaybackPlay play) => play?.Result != null && play.Result.Contains("ホームラン");
+        private static bool IsHomeRun(PlaybackPlay play) => play?.HomeRun != null;   // 表示文言でなく engine の値（本塁打だけが持つ）
 
         /// <summary>
         /// プレーの終わりに全景（縦155m）へ戻すか（issue field-view-cut-back-sooner ④）。
@@ -5536,6 +5579,7 @@ namespace KokoSim.Unity.Match
             foreach (var a in _runnerCast)
             {
                 if (a?.Go == null) continue;
+                ResetRunnerActor(a);
                 a.Go.SetActive(false);
                 a.Enabled = false;
             }
@@ -5737,18 +5781,8 @@ namespace KokoSim.Unity.Match
             foreach (var j in play.Judgements)
                 if (j.Kind == JudgementKind.Error) _errorMarkAt = (float)j.T;
             if (float.IsPositiveInfinity(_errorMarkAt) || play.Ball == null) return;
-            // 「誰がエラーしたか」は TimelineBuilder が球側に載せる: 弾きロール（T0=エラー時刻）の
-            // FromRole＝こぼした本人／受け手なし悪送球（Throw かつ ToBase なし）の FromRole＝投げた本人
-            foreach (var s in play.Ball)
-            {
-                var eb = s as EndpointBallSegment;
-                if (eb == null || !eb.FromRole.HasValue) continue;
-                if ((eb.Kind == BallSegmentKind.Roll && Mathf.Abs((float)eb.T0 - _errorMarkAt) < 0.05f)
-                    || (eb.Kind == BallSegmentKind.Throw && eb.ToBase == null))
-                {
-                    _errorMarkRole = eb.FromRole;
-                }
-            }
+            // 「誰がエラーしたか」は TimelineBuilder が球側に載せる（特定は engine の ErrorFielderFromBall）
+            _errorMarkRole = PlaybackEvaluator.ErrorFielderFromBall(play, _errorMarkAt);
             if (_errorMarkRole == null)
             {
                 // 落球（フライをこぼす）は球列が Flight のまま errT ちょうどで終わり、弾きロールも

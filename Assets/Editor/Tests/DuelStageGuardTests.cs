@@ -401,5 +401,42 @@ namespace KokoSim.EditorTests
             rig.Tick(0.1f);
             Assert.That(rig.BattedOutOfFrame, Is.True);
         }
+
+        /// <summary>
+        /// 鏡映親（左投げ・左打ちの役）の下でも IK の回転は世界で q だけ回る（#1247）。
+        /// ワールド回転を直接書くと S·q·S（鏡写し）に回り、孫の位置が剛体回転の答えとずれた。
+        /// リグが要らない純粋な Transform の検査（素体の無い端末でも回る）。
+        /// </summary>
+        [TestCase(false)]
+        [TestCase(true)]
+        public void DuelIkRotateAround_IsARigidWorldRotation_UnderMirroredParent(bool mirrored)
+        {
+            var root = new GameObject("mirror");
+            try
+            {
+                root.transform.localScale = new Vector3(mirrored ? -1f : 1f, 1f, 1f);
+                var bone = new GameObject("bone").transform;
+                bone.SetParent(root.transform, false);
+                bone.localPosition = new Vector3(0.3f, 1.2f, 0.1f);
+                bone.localRotation = Quaternion.Euler(20f, 35f, -10f);
+                var child = new GameObject("child").transform;
+                child.SetParent(bone, false);
+                child.localPosition = new Vector3(0.1f, 0.4f, 0.2f);
+
+                var pivot = bone.position;
+                var q = Quaternion.AngleAxis(50f, new Vector3(0.3f, 0.5f, 0.8f).normalized);
+                var childBefore = child.position;
+                var expected = pivot + q * (childBefore - pivot);
+
+                DuelIk.RotateAround(bone, pivot, q);
+
+                Assert.That(Vector3.Distance(child.position, expected), Is.LessThan(1e-4f),
+                    "孫の位置が世界で q だけ回した答えと一致する");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
     }
 }
