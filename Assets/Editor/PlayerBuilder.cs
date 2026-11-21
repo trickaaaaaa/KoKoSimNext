@@ -35,6 +35,10 @@ namespace KokoSim.EditorTools
         public const string DemoDefine = "KOKOSIM_DEMO";
         private const BuildTarget Target = BuildTarget.StandaloneWindows64;
 
+        // exe 名は英字に固定する（製品名は日本語の「白球監督録」）。exe 名は隣の <名前>_Data フォルダ名にもなり、
+        // steamcmd の起動設定やログの場所にも出るので、日本語を通さない。ウィンドウの題名は製品名のまま。
+        public const string ExeBaseName = "HakkyuKantokuroku";
+
         // 出力は out/build/（out/ は .gitignore 済み）。
         private static string DefaultOutRoot =>
             Path.GetFullPath(Path.Combine(Application.dataPath, "..", "out", "build"));
@@ -100,7 +104,7 @@ namespace KokoSim.EditorTools
             if (Directory.Exists(outDir)) Directory.Delete(outDir, true);   // 前回の残りを混ぜない
             Directory.CreateDirectory(outDir);
 
-            var exeName = SafeFileName(PlayerSettings.productName) + ".exe";
+            var exeName = ExeBaseName + ".exe";
             var options = new BuildPlayerOptions
             {
                 scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray(),
@@ -170,7 +174,7 @@ namespace KokoSim.EditorTools
             if (PlayerSettings.companyName == "DefaultCompany")
                 list.Add("社名が DefaultCompany のままです（人に配る前に確定する。#1308）。");
             if (PlayerSettings.productName == "KoKoSimNext")
-                list.Add("製品名が仮の KoKoSimNext のままです（人に配る前に確定する。#1308）。");
+                list.Add("製品名が仮の KoKoSimNext のままです（#1308 で「白球監督録」に確定済み。main を取り込んでください）。");
             return list.ToArray();
         }
 
@@ -200,12 +204,6 @@ namespace KokoSim.EditorTools
         {
             var i = Array.IndexOf(args, name);
             return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
-        }
-
-        private static string SafeFileName(string s)
-        {
-            foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
-            return string.IsNullOrWhiteSpace(s) ? "Game" : s;
         }
 
         private static double FolderSizeMb(string dir) =>
