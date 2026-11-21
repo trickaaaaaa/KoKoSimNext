@@ -16,12 +16,12 @@ public enum KoshienKind { Summer, Spring }
 /// </summary>
 public static class AppearanceLabel
 {
-    public static string For(int priorAppearances, int? priorLastYear, int currentYear)
+    public static string For(int priorAppearances, int? priorLastYear, int calendarYear)
     {
         if (priorAppearances <= 0 || priorLastYear is null) return "初出場";
 
         var count = priorAppearances + 1;
-        var gap = currentYear - priorLastYear.Value;
+        var gap = calendarYear - priorLastYear.Value;
         // 同じ年に2度積まれた（＝記録の取り違え）ときに「0年ぶり」「-1年ぶり」を印字しない。
         // 何回目かは分かるのでそこだけ出す＝画面に明らかな嘘を出さない。
         if (gap <= 0) return $"{count}回目";
@@ -43,7 +43,7 @@ public sealed class SchoolRecord
     public int SpringAppearances { get; internal set; }
     public int TotalAppearances => SummerAppearances + SpringAppearances;
 
-    /// <summary>直近出場の暦年。null＝未出場。</summary>
+    /// <summary>直近出場の<b>暦年</b>（実開催の年・2027 など。年度 YearIndex ではない）。null＝未出場。</summary>
     public int? LastSummerYear { get; internal set; }
     public int? LastSpringYear { get; internal set; }
 
@@ -96,20 +96,20 @@ public sealed class SchoolRecordBook
     /// 甲子園出場を1回積む。当面は「夏の県大会優勝＝夏の甲子園出場」としてのみ呼ばれる（issue #84）。
     /// 春（センバツ）は選考が実ゲームフローへ接続されたときに配線する（器のみ）。
     /// </summary>
-    public void RecordKoshienAppearance(int schoolId, KoshienKind kind, int currentYear)
+    public void RecordKoshienAppearance(int schoolId, KoshienKind kind, int calendarYear)
     {
         var r = For(schoolId);
         if (kind == KoshienKind.Summer)
         {
-            r.SummerAppearanceLabel = AppearanceLabel.For(r.SummerAppearances, r.LastSummerYear, currentYear);
+            r.SummerAppearanceLabel = AppearanceLabel.For(r.SummerAppearances, r.LastSummerYear, calendarYear);
             r.SummerAppearances++;
-            r.LastSummerYear = currentYear;
+            r.LastSummerYear = calendarYear;
         }
         else
         {
-            r.SpringAppearanceLabel = AppearanceLabel.For(r.SpringAppearances, r.LastSpringYear, currentYear);
+            r.SpringAppearanceLabel = AppearanceLabel.For(r.SpringAppearances, r.LastSpringYear, calendarYear);
             r.SpringAppearances++;
-            r.LastSpringYear = currentYear;
+            r.LastSpringYear = calendarYear;
         }
         if (r.BestResult == BestResult.None) r.BestResult = BestResult.Appearance;
     }
@@ -144,7 +144,7 @@ public sealed class SchoolRecordBook
     /// <para>戻り値は決勝の勝者（未消化で決勝が無ければ null）。<see cref="TournamentHistory.Fold"/> が
     /// 同じ走査を書き直さずに済むよう、ここで一度だけ拾った結果を渡す（issue #600）。</para>
     /// </summary>
-    public TournamentChampion? FoldTournament(IReadOnlyList<BracketMatch> matches, TournamentKind kind, int currentYear)
+    public TournamentChampion? FoldTournament(IReadOnlyList<BracketMatch> matches, TournamentKind kind, int calendarYear)
     {
         var koshien = kind is TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien;
         TournamentChampion? champion = null;
@@ -161,7 +161,7 @@ public sealed class SchoolRecordBook
         }
         if (champion is not { } c) return champion;
 
-        if (kind == TournamentKind.Summer) RecordKoshienAppearance(c.Id, KoshienKind.Summer, currentYear);
+        if (kind == TournamentKind.Summer) RecordKoshienAppearance(c.Id, KoshienKind.Summer, calendarYear);
         else if (koshien) UpdateBestResult(c.Id, BestResult.Champion);
         return champion;
     }

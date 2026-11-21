@@ -17,8 +17,8 @@ public sealed class ManagerPostingHistoryTests
         var book = new SchoolRecordBook();
         for (var i = 0; i < wins; i++) book.RecordOfficialMatch(winnerId: schoolId, loserId: 999);
         for (var i = 0; i < losses; i++) book.RecordOfficialMatch(winnerId: 999, loserId: schoolId);
-        for (var i = 0; i < summer; i++) book.RecordKoshienAppearance(schoolId, KoshienKind.Summer, currentYear: 2026 + i);
-        for (var i = 0; i < spring; i++) book.RecordKoshienAppearance(schoolId, KoshienKind.Spring, currentYear: 2026 + i);
+        for (var i = 0; i < summer; i++) book.RecordKoshienAppearance(schoolId, KoshienKind.Summer, calendarYear: 2026 + i);
+        for (var i = 0; i < spring; i++) book.RecordKoshienAppearance(schoolId, KoshienKind.Spring, calendarYear: 2026 + i);
         return book.For(schoolId);
     }
 
@@ -43,7 +43,7 @@ public sealed class ManagerPostingHistoryTests
         var history = new ManagerPostingHistory();
         var book = new SchoolRecordBook();
         for (var i = 0; i < 10; i++) book.RecordOfficialMatch(winnerId: -1, loserId: 999);
-        book.RecordKoshienAppearance(-1, KoshienKind.Summer, currentYear: 2027);
+        book.RecordKoshienAppearance(-1, KoshienKind.Summer, calendarYear: 2027);
         var record = book.For(-1);
 
         // 1校目: 年度1〜2で10勝0敗・夏1回、年度2の3月に転任。

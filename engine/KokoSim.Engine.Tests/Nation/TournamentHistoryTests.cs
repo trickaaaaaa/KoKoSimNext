@@ -112,7 +112,7 @@ public sealed class TournamentHistoryTests
     {
         var book = new SchoolRecordBook();
         var matches = LostInThirdRound();
-        var champion = book.FoldTournament(matches, TournamentKind.Summer, currentYear: 2);
+        var champion = book.FoldTournament(matches, TournamentKind.Summer, calendarYear: 2028);
 
         Assert.NotNull(champion);
         Assert.Equal(20, champion!.Value.Id);

@@ -59,7 +59,8 @@ namespace KokoSim.Unity.Shell
             if (fieldIds == null || fieldIds.Count == 0) return;   // 神宮大会が一度も走っていない（新規ゲーム等）
 
             var yearIndex = GameClock.YearIndex;
-            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
+            // 選考は第39週（暦の翌年1〜2月）・大会は翌年3月＝出場年は年度の暦年ではなく実開催の暦年（issue #1218）。
+            var calendarYear = SeasonClock.CalendarYear(yearIndex, GameClock.Week);
             RecordAppearances(fieldIds, calendarYear);
 
             var field = new List<School>(fieldIds.Count);

@@ -9,7 +9,7 @@ namespace KokoSim.Engine.Nation;
 ///
 /// <para><b>年は年度（YearIndex・1始まり）で持つ</b>。暦年の文字列化は Unity 側の <c>SeasonClock</c> の
 /// 担当で、engine には暦の起点（2026年）を持ち込まない（不変条件#3）。
-/// <see cref="SchoolRecord"/> の <c>LastSummerYear</c> 等と同じ尺度＝同じ値を渡すこと。</para>
+/// <see cref="SchoolRecord"/> の <c>LastSummerYear</c> 等は<b>暦年</b>で別の尺度（issue #1218）＝混ぜないこと。</para>
 ///
 /// <para><see cref="ReachedRoundName"/> は自校が<b>最後に戦ったカードのラウンド名</b>（"3回戦"/"決勝"…）。
 /// 優勝でも決勝敗退でも "決勝" が入るので、表示文言は <see cref="TournamentResultLabel"/> が

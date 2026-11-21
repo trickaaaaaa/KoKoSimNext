@@ -895,7 +895,9 @@ namespace KokoSim.Unity.Shell
         private void FoldTournamentRecords(ITournamentRunner runner, TournamentKind kind, int year)
         {
             var matches = runner.BuildBracketView().Matches;
-            var champion = Records.FoldTournament(matches, kind, year);
+            // 通算戦績の出場年は暦年（歴代大会結果の History は年度のまま・issue #1218）。出場を積むのは夏の県大会だけで、
+            // 夏は年度の暦年と一致する（センバツは SenbatsuEntry.Announce が実開催の暦年で積む）。
+            var champion = Records.FoldTournament(matches, kind, SeasonClock.SeasonBaseYear + (year - 1));
             // 自県の代表＝甲子園の出場校の1つ。ここが「夏の県大会の優勝校」を知る唯一の地点なので控える
             // （Runner は敗退確定と同時に null 化されるので、後から拾い直せない）。
             if (kind == TournamentKind.Summer)
