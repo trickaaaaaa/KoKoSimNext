@@ -80,9 +80,19 @@ namespace KokoSim.Unity.Match
             _detailHost = _root.Q<ScrollView>("mscout-detail");
             _situation = _root.Q<Label>("mscout-situation");
 
-            var close = _root.Q<Button>("mscout-close");
-            if (close != null) close.clicked += Close;
+            _closeButton = _root.Q<Button>("mscout-close");
+            if (_closeButton != null) _closeButton.clicked += Close;
             Close();
+        }
+
+        private Button _closeButton;
+
+        /// <summary>Bind で登録した購読を外す（画面を離れるたびに呼ぶ。外さないと OnEnable の往復で積み上がる）。</summary>
+        public void Unbind()
+        {
+            if (_closeButton != null) _closeButton.clicked -= Close;
+            _closeButton = null;
+            _open = false;
         }
 
         /// <summary>この試合の進行体・自校の攻守・両校の表示名と校IDを差し替える（試合ごとに呼ぶ）。</summary>

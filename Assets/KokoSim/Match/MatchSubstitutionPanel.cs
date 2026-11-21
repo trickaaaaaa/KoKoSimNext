@@ -50,6 +50,7 @@ namespace KokoSim.Unity.Match
         private bool _teamIsAway;
         private SubstitutionOptions _opt;
         private bool _open;
+        private IVisualElementScheduledItem _cancelRetry;
 
         // 攻撃タブ（守備中はタブ無し・割当へ統合）。
         private SubstitutionKind _offKind = SubstitutionKind.PinchHit;
@@ -164,7 +165,13 @@ namespace KokoSim.Unity.Match
         private void CancelAll()
         {
             if (_prog == null) return;
-            if (BackgroundGameOp.Running) return;
+            if (BackgroundGameOp.Running)
+            {
+                // 解決中は進行体に触れない。黙って捨てると _open が立ったままパネルだけ出て進行が止まるので、
+                // 解決が済み次第もう一度取り消しに来る。
+                _cancelRetry ??= _scrim?.schedule.Execute(() => { _cancelRetry = null; if (_open) CancelAll(); }).StartingIn(50);
+                return;
+            }
             var hadReserved = _prog.SubstitutionDraftCount > 0;
             _prog.CancelSubstitutionDraft();
             _reserved.Clear();
@@ -1265,10 +1272,36 @@ namespace KokoSim.Unity.Match
             _ => "—",
         };
 
+        private readonly List<(Button Btn, System.Action Action)> _bound = new();
+
         private void Click(string name, System.Action action)
         {
             var btn = _root.Q<Button>(name);
-            if (btn != null) btn.clicked += action;
+            if (btn == null) return;
+            btn.clicked += action;
+            _bound.Add((btn, action));
+        }
+
+        /// <summary>Bind で登録した購読を外す（画面を離れるたびに呼ぶ。外さないと OnEnable の往復で確定が多重発火しうる）。</summary>
+        public void Unbind()
+        {
+            foreach (var (btn, action) in _bound) btn.clicked -= action;
+            _bound.Clear();
+            _cancelRetry?.Pause();
+            _cancelRetry = null;
+            _open = false;
+        }
+
+        /// <summary>
+        /// 進行体に触れずに見た目だけ畳む。打席解決中（<see cref="BackgroundGameOp"/>）は下書きの取り消しが
+        /// できないので、終局・画面離脱の場面だけがこれを使う。
+        /// </summary>
+        public void ForceHide()
+        {
+            _cancelRetry?.Pause();
+            _cancelRetry = null;
+            _open = false;
+            if (_scrim != null) _scrim.style.display = DisplayStyle.None;
         }
     }
 }
