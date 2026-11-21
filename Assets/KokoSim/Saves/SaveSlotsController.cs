@@ -97,11 +97,16 @@ namespace KokoSim.Unity.Saves
             else if (_page == 0) Render();
         }
 
-        /// <summary>クレジット（issue #1179）: フォントライセンス全文を一度だけ流し込む（静的内容）。</summary>
+        /// <summary>クレジット（issue #1179・#1318）: 書体のライセンス全文を一度だけ流し込む（静的内容）。
+        /// 場内放送の行は、場内放送が入っていないビルド（体験版）では出さない。</summary>
         private void BuildCreditsPage()
         {
+            SetText("credits-notosansjp-body", LoadLicenseText("OFL-notosansjp"));
+            SetText("credits-shippori-body", LoadLicenseText("OFL-shipporiminchob1"));
+            SetText("credits-dotgothic-body", LoadLicenseText("OFL-dotgothic16"));
             SetText("credits-anton-body", LoadLicenseText("OFL-anton"));
             SetText("credits-delagothic-body", LoadLicenseText("OFL-delagothicone"));
+            SetShown("credits-row-announcer", KokoSim.Unity.Audio.MatchAnnouncer.Available);
         }
 
         /// <summary>

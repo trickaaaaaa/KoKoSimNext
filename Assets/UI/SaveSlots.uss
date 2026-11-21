@@ -237,3 +237,15 @@
     font-size: var(--fs-body);
     color: var(--color-chalk);
 }
+
+/* クレジットの「素材」カード（issue #1318）。区分ラベル左・名前右の1行（校名の編集の .sr-kv と同じ組み方）。
+   線は引かず行の高さで揃える。名前は長いもの（書体の列挙）があるので折り返す。 */
+.ss-cr {
+    flex-direction: row;
+    align-items: center;
+    min-height: 32px;
+    padding: 6px 0;
+    flex-shrink: 0;
+}
+.ss-cr__k { width: 300px; flex-shrink: 0; margin: 0; padding: 0; font-size: var(--fs-label); color: var(--color-muted); }
+.ss-cr__v { flex-grow: 1; flex-basis: 0; min-width: 0; margin: 0; padding: 0; white-space: normal; font-size: var(--fs-body); color: var(--color-chalk); }

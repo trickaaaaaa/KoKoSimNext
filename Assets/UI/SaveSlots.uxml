@@ -120,11 +120,67 @@
 
             </ui:VisualElement>
 
-            <!-- クレジット（issue #1179・オーナー決定「入口は設定」）。試合テロップの画像に焼き込んだ
-                 フォント（Anton・Dela Gothic One）のライセンス全文を載せる。見た目はスコアブックの
+            <!-- クレジット（issue #1179・オーナー決定「入口は設定」／issue #1318 で素材の一覧と全書体を足した）。
+                 先頭の「素材」カードに素材の出所、続けて書体（画面の3書体＋テロップ画像に焼き込んだ2書体）の
+                 ライセンス全文を載せる。場内放送の行は体験版では出さない（コードで隠す）。見た目はスコアブックの
                  既存部品（card）で組み、説明文は足さない＝ライセンス本文そのものだけを出す。 -->
             <ui:VisualElement name="ss-page-credits" class="ss-body ss-credits-page" style="display: none;">
                 <ui:ScrollView mode="Vertical" class="scroll ss-credits-scroll">
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="card__hd card__hd--tight">
+                            <ui:Label class="card__hd-title" text="素材" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="card__body">
+                            <ui:VisualElement class="ss-cr">
+                                <ui:Label class="ss-cr__k" text="効果音" />
+                                <ui:Label class="ss-cr__v" text="On-Jin ~音人~　https://on-jin.com/" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="ss-cr">
+                                <ui:Label class="ss-cr__k" text="歓声" />
+                                <ui:Label class="ss-cr__v" text="効果音ラボ" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="credits-row-announcer" class="ss-cr">
+                                <ui:Label class="ss-cr__k" text="場内放送" />
+                                <ui:Label class="ss-cr__v" text="VOICEVOX:No.7" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="ss-cr">
+                                <ui:Label class="ss-cr__k" text="3Dモデル（防具・帽子）" />
+                                <ui:Label class="ss-cr__v" text="Meshy（CC BY 4.0）" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="ss-cr">
+                                <ui:Label class="ss-cr__k" text="3Dモデル（ミット・グラブ）" />
+                                <ui:Label class="ss-cr__v" text="Tripo AI（CC BY 4.0）" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="ss-cr">
+                                <ui:Label class="ss-cr__k" text="フォント" />
+                                <ui:Label class="ss-cr__v" text="Noto Sans JP・しっぽり明朝 B1・DotGothic16・Anton・Dela Gothic One（SIL OFL 1.1）" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="card__hd card__hd--tight">
+                            <ui:Label class="card__hd-title" text="Noto Sans JP" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="card__body">
+                            <ui:Label name="credits-notosansjp-body" class="f-body ss-credits-body" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="card__hd card__hd--tight">
+                            <ui:Label class="card__hd-title" text="しっぽり明朝 B1" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="card__body">
+                            <ui:Label name="credits-shippori-body" class="f-body ss-credits-body" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="card__hd card__hd--tight">
+                            <ui:Label class="card__hd-title" text="DotGothic16" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="card__body">
+                            <ui:Label name="credits-dotgothic-body" class="f-body ss-credits-body" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                     <ui:VisualElement class="card">
                         <ui:VisualElement class="card__hd card__hd--tight">
                             <ui:Label class="card__hd-title" text="Anton" />
