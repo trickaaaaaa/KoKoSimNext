@@ -773,7 +773,7 @@ public sealed class AtBatSession
 
     /// <summary>
     /// バント試行で打席を確定させる（設計書15 Phase D-2b）。<see cref="AtBatResult.BuntOutcome"/> に詳細結果を
-    /// 残し、GameEngine 側が PopOut/SacrificeSuccess/InfieldHit を区別して進塁（AdvanceOnBunt）を分岐できるようにする。
+    /// 残し、GameEngine 側が PopOut/SacrificeSuccess/InfieldHit を区別して進塁（ApplyBunt）を分岐できるようにする。
     /// </summary>
     /// <summary>直近のバント処理の送球の逸れ（issue #859。<see cref="AtBatResult.BuntThrowScatter"/> へ写す）。</summary>
     private Fielding.ThrowScatterModel.Scatter? _buntThrowScatter;

@@ -15,7 +15,7 @@ namespace KokoSim.Engine.Tests.Match.AtBat;
 /// 設計書15 Phase D-2b の合否テスト。バントを AtBatSession の投球ループへ統一したことで
 /// (1) 2ストライクへ達しても実カウントを保ったまま強攻へ切り替わる（旧: 0-0にリセットされていた）、
 /// (2) PopOut/SacrificeSuccess/InfieldHit を区別できる（AtBatResult.BuntOutcome）、
-/// (3) GameEngine 側で正しい進塁（AdvanceOnBunt）に分岐する、ことを固定する。
+/// (3) GameEngine 側で正しい進塁（ApplyBunt）に分岐する、ことを固定する。
 /// </summary>
 public sealed class BuntUnificationTests
 {

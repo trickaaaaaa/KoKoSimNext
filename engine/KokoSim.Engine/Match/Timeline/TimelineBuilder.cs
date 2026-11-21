@@ -1760,9 +1760,9 @@ public static class TimelineBuilder
     /// issue #1092）をそのまま使い、送球は封殺の各枝と同じ <see cref="HomePlayResolver.ResolveThrowPath"/>
     /// 経由＝絵のためだけの別秒は発明しない（design-18 §4.5-③/⑨）。</para>
     ///
-    /// <para>走者の進塁は、呼び出し元が <see cref="GameEngine.AdvanceOnBunt"/> 前後で控えた塁ごとの
+    /// <para>走者の進塁は、呼び出し元が <see cref="BaserunningModel.ApplyBunt"/> 前後で控えた塁ごとの
     /// 走者参照を突き合わせて判定する（<paramref name="preFirst"/> と <paramref name="postFirst"/> の参照が
-    /// 変わっていれば「その走者が動いた」）。バントは一・二塁走者のみ1つ進む・三塁走者は自重（design-14）だが、
+    /// 変わっていれば「その走者が動いた」）。バントは一・二塁走者が1つ進み・押し出しの三塁走者は生還（design-14）だが、
     /// スクイズは三塁走者が生還する（<paramref name="preThird"/>≠<paramref name="postThird"/>）ため、
     /// 同じ突き合わせ方でバント・スクイズ両方を1つの関数でまかなえる。</para></summary>
     /// <param name="isSqueeze">実況キャプションの文言だけを変える（表示専用）。</param>
@@ -2076,7 +2076,7 @@ public static class TimelineBuilder
         }
 
         // 塁上の走者（バントは一・二塁のみ1つ進む・三塁は自重、スクイズは三塁が生還）。呼び出し元が
-        // AdvanceOnBunt 前後で控えた参照の食い違いで「動いたか」を判定する＝ここでは進塁規則を再実装しない。
+        // ApplyBunt 前後で控えた参照の食い違いで「動いたか」を判定する＝ここでは進塁規則を再実装しない。
         void AddAdvance(Player? pre, Player? post, int fromBase, int toBase, string label)
         {
             if (pre is null || ReferenceEquals(post, pre)) return;
