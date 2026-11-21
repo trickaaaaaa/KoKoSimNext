@@ -4836,6 +4836,8 @@ namespace KokoSim.Unity.Match
             _duelRig.SetTeamColors(defense, offense);
         }
 
+        // 左右のチーム欄（GameScreen.mock 準拠・2026-11-21）。左右とも同じ並び（ミラーしない）。
+        // 打順の行 9 → 投手の行 → 控え（見出し「控え／N人」＋行）。色は固定（--ms-*）でスクールカラーは使わない。
         private void BuildColumn(VisualElement lineupHost, VisualElement pitcherHost,
             LiveTeamSnapshot team, bool mirror, int highlightOrder, int schoolId)
         {
@@ -4843,58 +4845,70 @@ namespace KokoSim.Unity.Match
             {
                 lineupHost.Clear();
                 foreach (var s in team.Lineup)
-                    lineupHost.Add(BuildLineupRow(s, mirror, atBat: s.Order == highlightOrder, schoolId));
+                    lineupHost.Add(BuildLineupRow(s, atBat: s.Order == highlightOrder, schoolId));
             }
             if (pitcherHost != null)
             {
                 pitcherHost.Clear();
-                pitcherHost.Add(BuildPitcherRow(team.Pitcher, mirror));
+                pitcherHost.Add(BuildPitcherRow(team.Pitcher));
                 // 控え（ベンチ入り＝背番号ありのメンバのみ。ベンチ外は出さない）。控えは1本の名簿なので
-                // そのまま背番号の昇順で並べる（issue #381）。投手として置かれている控えだけ行の作りを
-                // 投手行に替える＝並びは分けず、見せる数字だけ役割に合わせる。
+                // そのまま背番号の昇順で並べる（issue #381）。投手として置かれている控えも同じ行の作り
+                //（背番号・名前・調子）で、材料だけ投手側の観測から引く。
                 var benchRows = new List<(int Number, VisualElement Row)>();
                 foreach (var b in team.Reserves)
                 {
                     if (b.Number <= 0) continue;
                     var asPitcher = FindReservePitcher(team, b.Number);
                     benchRows.Add((b.Number, asPitcher is null
-                        ? BuildBenchRow(b, mirror, schoolId)
-                        : BuildBenchPitcherRow(asPitcher, mirror, schoolId)));
+                        ? BuildBenchRow(b.Number, b.Name, b.ConditionValue, schoolId)
+                        : BuildBenchRow(asPitcher.Number, asPitcher.Name, asPitcher.ConditionValue, schoolId)));
                 }
                 if (benchRows.Count > 0)
                 {
                     benchRows.Sort((a, c) => a.Number.CompareTo(c.Number));
-                    var head = MakeLabel("控え", "mlineup-subhead");
-                    if (mirror) head.AddToClassList("mlineup-subhead--right");
+                    var head = new VisualElement();
+                    head.AddToClassList("mside-bench-head");
+                    head.Add(MakeLabel("控え", "mside-bench-head__t"));
+                    head.Add(MakeLabel(benchRows.Count + "人", "mside-bench-head__t"));
                     pitcherHost.Add(head);
                     foreach (var r in benchRows) pitcherHost.Add(r.Row);
                 }
             }
         }
 
-        // 並び: 打順 / 守備位置 / 名前(フルネーム) / 背番号 / 調子（右列は row-reverse でミラー）。
-        // 名前セルはライブ観戦だけ固定幅にする（mlineup-row--compact。試合前画面と共有クラスのため
-        // 画面ローカルの直書きにせずモディファイアで限定。issue #297）。
-        private VisualElement BuildLineupRow(LiveBatterSlot s, bool mirror, bool atBat, int schoolId)
+        // 打順の行: 打順 | 守備位置チップ | 名前(フルネーム) | 背番号の箱 | 調子の顔。
+        // 今の打者は行の地をベージュ・名前を山吹（枠は付けない）。
+        private VisualElement BuildLineupRow(LiveBatterSlot s, bool atBat, int schoolId)
         {
             var row = new VisualElement();
-            row.AddToClassList("mlineup-row");
-            row.AddToClassList("mlineup-row--compact");
-            if (mirror) row.AddToClassList("mlineup-row--mirror");
-            if (atBat) row.AddToClassList("mlineup-row--at-bat");
+            row.AddToClassList("mside-row");
+            if (atBat) row.AddToClassList("mside-row--at-bat");
 
-            row.Add(MakeLabel(s.Order.ToString(), "mlineup-row__ord", "f-num"));
-            row.Add(MakeLabel(MatchLiveStatsProvider.PosAbbr(s.Position), "mlineup-row__pos"));
+            row.Add(MakeLabel(s.Order.ToString(), "mside-row__ord"));
+            row.Add(MakeLabel(MatchLiveStatsProvider.PosAbbr(s.Position), "mside-pos", PosChipClass(s.Position), "f-body-bd"));
             // 退いた選手（←旧選手名）は出さない＝名前の幅を食って入った選手の名前が切れるため。
             // 交代は交代テロップ（#920）と実況の履歴で見せる（issue #947・監督決定）。
-            row.Add(MakeLabel(s.Name, "mlineup-row__name"));   // フルネーム
-            row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm", "f-num"));
+            row.Add(MakeLabel(SideName(s.Name), "mside-row__name"));   // フルネーム
+            row.Add(MakeLabel(NumText(s.Number), "mside-num", "f-body-bd"));
             var face = new ConditionFace();
-            face.AddToClassList("mlineup-row__cond");
             face.Set(_statsProvider.ConditionOf(schoolId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
         }
+
+        /// <summary>欄の選手名。姓名の間の全角空白を半角へ詰める（HUD の HudName と同じ扱い。字間は USS の letter-spacing 側）。</summary>
+        private static string SideName(string name) => (name ?? "").Replace('　', ' ');
+
+        /// <summary>守備位置チップの色クラス（投／捕／内野／外野／指の5系統）。</summary>
+        private static string PosChipClass(FieldPosition pos) => pos switch
+        {
+            FieldPosition.Pitcher => "mside-pos--p",
+            FieldPosition.Catcher => "mside-pos--c",
+            FieldPosition.FirstBase or FieldPosition.SecondBase
+                or FieldPosition.ThirdBase or FieldPosition.Shortstop => "mside-pos--if",
+            FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField => "mside-pos--of",
+            _ => "mside-pos--dh",
+        };
 
         /// <summary>
         /// その控えが投手として置かれているか（issue #381）。控えは1本の名簿で、
@@ -4907,47 +4921,35 @@ namespace KokoSim.Unity.Match
             return null;
         }
 
-        // 控え1行（背番号・名前フル・調子）。守備位置は出さない。代打・代走・守備固めの候補。
-        private VisualElement BuildBenchRow(LiveBatterSlot s, bool mirror, int schoolId)
+        // 控えの行: 背番号の箱 | 名前(フルネーム) | 調子の顔。守備位置は出さない。代打・代走・守備固めの候補。
+        private VisualElement BuildBenchRow(int number, string name, double conditionValue, int schoolId)
         {
             var row = new VisualElement();
-            row.AddToClassList("mlineup-benchrow");
-            if (mirror) row.AddToClassList("mlineup-row--mirror");
-            row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm", "f-num"));
-            row.Add(MakeLabel(s.Name, "mlineup-row__name"));
+            row.AddToClassList("mside-bench");
+            row.Add(MakeLabel(NumText(number), "mside-bench__num", "f-num"));
+            row.Add(MakeLabel(SideName(name), "mside-bench__name"));
             var face = new ConditionFace();
-            face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(schoolId, s.ConditionValue, s.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, conditionValue, name));
             row.Add(face);
             return row;
         }
 
-        // 控え投手1行（背番号・名前フル・調子）。
-        private VisualElement BuildBenchPitcherRow(LivePitcherToday p, bool mirror, int schoolId)
+        // 投手の行: 空き | 「投」チップ | 名前 | 球数（N 球）。目立たせない＝地・枠なし。
+        private VisualElement BuildPitcherRow(LivePitcherToday p)
         {
             var row = new VisualElement();
-            row.AddToClassList("mlineup-benchrow");
-            if (mirror) row.AddToClassList("mlineup-row--mirror");
-            row.Add(MakeLabel(NumText(p.Number), "num-badge", "num-badge--sm", "f-num"));
-            row.Add(MakeLabel(p.Name, "mlineup-row__name"));
-            var face = new ConditionFace();
-            face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(schoolId, p.ConditionValue, p.Name));
-            row.Add(face);
-            return row;
-        }
-
-        private VisualElement BuildPitcherRow(LivePitcherToday p, bool mirror)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("mlineup-pitcher");
-            if (mirror) row.AddToClassList("mlineup-pitcher--mirror");
-            row.Add(MakeLabel("投", "mlineup-pitcher__tag"));
-            // 背番号＋名前フル＋球数だけ（issue #739。投球回・失点は出さない）。
-            row.Add(MakeLabel(NumText(p.Number), "num-badge", "num-badge--sm", "f-num"));
-            row.Add(MakeLabel(p.Name, "mlineup-pitcher__name"));
-            // 確定球数＋進行中の打席ぶん（issue #397。LiveLineScore.PendingRuns と同型）。
-            row.Add(UiComponents.NumUnit((p.Pitches + p.PendingPitches).ToString(), "球", false, "mlineup-pitcher__stat"));
+            row.AddToClassList("mside-pitcher");
+            var gap = new VisualElement();
+            gap.AddToClassList("mside-pitcher__gap");
+            row.Add(gap);
+            row.Add(MakeLabel("投", "mside-pos", "mside-pos--p", "f-body-bd"));
+            row.Add(MakeLabel(SideName(p.Name), "mside-pitcher__name"));
+            // 確定球数＋進行中の打席ぶん（issue #397。LiveLineScore.PendingRuns と同型）。投球回・失点は出さない（issue #739）。
+            var count = new VisualElement();
+            count.AddToClassList("mside-pitcher__count");
+            count.Add(MakeLabel((p.Pitches + p.PendingPitches).ToString(), "mside-pitcher__n", "f-num-bd"));
+            count.Add(MakeLabel("球", "mside-pitcher__u", "f-body"));
+            row.Add(count);
             return row;
         }
 

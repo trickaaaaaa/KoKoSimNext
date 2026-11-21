@@ -411,6 +411,23 @@
     --sakura:      #F2B8C6;   /* 選択行の面（桜丘の校章色） */
     --sakura-tint: #F7DCE5;   /* 選択行のごく淡い面 */
 
+    /* 試合画面の左右のチーム欄（mside・GameScreen.mock 準拠。スクールカラーは使わない固定色） */
+    --ms-panel:      #FBFAF6;   /* 欄の地 */
+    --ms-edge:       #E3DFD5;   /* 欄の枠 */
+    --ms-ink:        #1D1B18;   /* 欄の主文字・見出しの下線 */
+    --ms-ink-2:      #3A3631;   /* 控えの名前・背番号の箱の枠 */
+    --ms-tx-2:       #4F4A42;   /* 先攻/後攻・控えの背番号の文字 */
+    --ms-tx-3:       #6F6A60;   /* 控えの見出し・球数の「球」 */
+    --ms-chip:       #ECE8DF;   /* 先攻/後攻のチップの地 */
+    --ms-bench-edge: #B5AFA4;   /* 控えの背番号の箱の枠 */
+    --ms-atbat:      #F7EEDF;   /* 今の打者の行の地 */
+    --ms-atbat-ink:  #C08410;   /* 今の打者の名前（山吹を濃くしてベージュの上で読めるように） */
+    --ms-pos-p-bg:   #F6D4D0;  --ms-pos-p-tx:   #8A1F1A;   /* 守備位置チップ: 投 */
+    --ms-pos-c-bg:   #DBE8F5;  --ms-pos-c-tx:   #1D4E80;   /* 捕 */
+    --ms-pos-if-bg:  #F6E6CF;  --ms-pos-if-tx:  #7A4510;   /* 一・二・三・遊 */
+    --ms-pos-of-bg:  #DFECD2;  --ms-pos-of-tx:  #2F5612;   /* 左・中・右 */
+    --ms-pos-dh-bg:  #E9E6F3;  --ms-pos-dh-tx:  #4A3E8C;   /* 指（DH） */
+
     /* ベタ影と枠の寸法（USSに box-shadow は無い＝§2の2方式で再現する）。 */
     --nb-border:      2px;   /* 部品（行パネル・チップ・小ボタン）の枠 */
     --nb-border-card: 3px;   /* カードの枠 */
@@ -573,7 +590,6 @@ Button.tp-cta,
 .lu-tab--on,
 .lu-stat-name,
 .md-title,
-.mlive-col-title,
 .mlive-team,
 .mlive-score,
 .mp-title,
@@ -646,7 +662,9 @@ Button.tp-cta,
    **人名（選手名・監督名）は 2026-07-22 に明朝化を決定（design-16 §9-6, 3-A）。**下の「人名の明朝化」ブロックで
    別立てにしてある。それ以外の本文・ラベル・数値セルは従来どおり入れない（暗背景で細い横画が潰れる＝§8のリスク）。 */
 
-/* ExtraBold：16〜28px の校名・見出し（この帯は横画が残る ExtraBold でないと潰れる） */
+/* ExtraBold：16〜28px の校名・見出し（この帯は横画が残る ExtraBold でないと潰れる）。
+   .mside-*__name＝試合画面の左右のチーム欄の選手名。モックの指定は 700 だが Unity ではブラウザより細く出るので
+   800 に上げた（2026-11-21 監督決定）。 */
 .sb2-name,
 .school__name,
 .vs__team,
@@ -660,7 +678,11 @@ Button.tp-cta,
 .msub-title,
 .pm-title,
 .md-title,
-.mlive-col-title,
+.mside-head__title,
+.mside-row__ord,
+.mside-row__name,
+.mside-pitcher__name,
+.mside-bench__name,
 .tp-empty__title,
 .nt-hd__t,
 .tm-dialog__vs,
