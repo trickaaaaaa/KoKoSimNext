@@ -1,0 +1,610 @@
+using UnityEngine;
+
+namespace KokoSim.Unity.Match
+{
+    /// <summary>
+    /// 攻撃伝令の場面（issue #1175）。自校の攻撃伝令を送ったら、次の球の前に「伝令が打者に耳打ちする」絵を差し込む。
+    /// 守備伝令の場面（<see cref="BeginTimeoutScene"/>・issue #1174）の攻撃版で、入口・テロップ・クリックで飛ばす・
+    /// 高速試合モードの扱いは呼び出し側（MatchLiveController）で共通。
+    ///
+    /// <b>表示だけ</b>の芝居で、engine（効き目・乱数・決定論）には一切触れない。位置・時刻・位相はここの固定値。
+    ///
+    /// 流れ: 球審がタイム → 打者が打席を外して下がる・伝令がベンチから走ってきて途中で歩きに変わり、打者の外側
+    /// （捕手と反対側＝本塁から遠い側）に並ぶ → 耳打ち（伝令が顔を寄せて片手を口もとへ・打者は首を向けて
+    /// うなずく）→ 球審がタイムを解く → 伝令はベンチへ戻り、打者は打席へ歩いて戻る → 畳む（構えへ戻す）。
+    ///
+    /// 耳打ちの形は収録に無いので、評価した後の骨に後から足す（design-18 §3.1「クリップ内部の緩急は改変しない」）。
+    /// 回す量はすべて骨の親のローカル空間で「向き→向き」の写像として作る＝左打者の鏡映親ノードの下でも同じ式で効く
+    /// （負スケールの下でワールドの回転を直接書くと手系が裏返る。<see cref="FixPitcherSetHead"/> と同じ作法）。
+    ///
+    /// 座標はすべてステージ座標（+x=一塁側・+z=センター方向・本塁が原点）。左打者は x を反転した鏡の絵になる。
+    /// クリップの素の向きは全部 +Z（実測 2026-11-21・<c>DuelMotionSpike.RunBatterTimeoutProbe</c>）。
+    /// </summary>
+    public sealed partial class DuelStageRig
+    {
+        // ---- 収録（issue #1175 の割り当て） ----------------------------------------------------
+        private const string OtBatterBackClipName = "AA_Baseball_Batter_Movement_Walk_B_Loop";
+        private const string OtBatterWalkClipName = "AA_Baseball_Batter_Movement_Walk_F_Loop";
+        private const string OtBatterIdleClipName = "AA_Baseball_Batter_Idle_Loop";
+        /// <summary>
+        /// 耳打ちの間の打者の待機。打者の待機（<see cref="OtBatterIdleClipName"/>）はバットを肩に担ぐ構えなので、
+        /// 手を下ろして立つ野手の待機を使い、バットは片手で下げて持たせる（2026-11-21 監督指摘）。
+        /// 伝令の待機（Type01）と位相が揃って同じ揺れにならないよう別の型にする。
+        /// </summary>
+        private const string OtBatterStandClipName = "AA_Baseball_Defender_Standing_Idle_Loop_Type02";
+        private const string OtMessengerIdleClipName = "AA_Baseball_Defender_Standing_Idle_Loop_Type01";
+
+        /// <summary>打者の歩きの収録の前進量[m/s]（1.33秒で0.95m）。</summary>
+        private const float OtBatterWalkVClip = 0.71f;
+
+        /// <summary>打者が打席を外して下がる距離[m]（本塁から遠ざかる向き）。</summary>
+        public static float OtBatterBackM = 1.3f;
+        /// <summary>打者のベンチ側に並ぶ伝令との間隔[m]（腰と腰）。耳打ちで伝令の口と打者の耳が 0.2〜0.3m に収まる所。</summary>
+        public static float OtPairGapM = 0.55f;
+        /// <summary>並んだ2人が互いへ向き合う角度[度]（センター方向から内へ）。</summary>
+        public static float OtFaceInDeg = 30f;
+        /// <summary>2人が揃ってから耳打ちしている秒数[s]。</summary>
+        public static float OtTalkSeconds = 3.6f;
+        /// <summary>散り始めてから畳むまでの下限[s]（打者が打席へ戻り着く方が遅ければそちら）。</summary>
+        public static float OtLeaveMinSeconds = 2.0f;
+
+        /// <summary>耳打ちで伝令の上体を打者へ傾ける角度[度]。</summary>
+        public static float OtLeanDeg = 20f;
+        /// <summary>打者のうなずきの深さ[度]と回数。</summary>
+        public static float OtNodDeg = 13f;
+        private const int OtNodCount = 3;
+        /// <summary>打者が首を伝令へ向ける上限[度]（胴の正面から）。</summary>
+        private const float OtHeadTurnMaxDeg = 65f;
+
+        /// <summary>
+        /// カメラ（2人の中点からの相対[m]。x は打者の側の符号を掛けて左右を映す＝+が本塁から遠い側）。
+        /// 正面のやや外側から2人の顔と、奥に本塁・捕手を入れる（2026-11-21 監督決定。本塁側の斜め前・外側の真横寄りの
+        /// 案と録画で見比べて選んだ）。
+        /// </summary>
+        public static Vector3 OtCameraOffset = new Vector3(1.6f, 1.5f, 5.2f);
+        /// <summary>縦に収めたい実寸[m]（2人の全身と足元の打席。寄りすぎない＝3d-character.md）。</summary>
+        public static float OtFrameHeightM = 4.6f;
+        /// <summary>注視点の高さ[m]。胸より下を見て2人を上寄せにし、下に出るテロップと重ねない。</summary>
+        public static float OtLookY = -0.25f;
+
+        private enum OtLeg { Back, Turn, Talk, Leave, Done }
+        private enum OtMsgLeg { Wait, Run, Decel, WalkIn, Turn, Talk, LeaveWalk, LeaveRun }
+
+        private bool _otActive;
+        private float _otT;
+        private float _otTalkStartT = -1f, _otLeaveStartT = -1f;
+        private OtLeg _otBatterLeg;
+        private OtMsgLeg _otMsgLeg;
+        private float _otMsgLegT, _otBatterLegT;
+        private Vector2 _otB0, _otB1, _otM, _otMsgStart, _otMsgPos, _otBatterPos;
+        private float _otBatterYaw, _otMsgYaw, _otBatterTalkYaw, _otMsgTalkYaw;
+        private float _otSide;            // 打者の側（右打者＝−1＝三塁側・左打者＝+1）
+        private float _otWhisperW;        // 耳打ちの後補正の効き（0..1）
+        private DuelActorSnapshot _otBatterSnap;
+        private bool _otBatterRootMotion;
+        private bool _otBatWasActive;
+        private float _otMouthEarM = -1f; // 撮影・検査用: 耳打ち中の伝令の口と打者の耳の距離の最小[m]
+
+        /// <summary>
+        /// 攻撃伝令の場面を始める。<paramref name="benchFirstBaseSide"/>＝伝令が一塁側のベンチから出てくるか
+        /// （<see cref="BenchIsFirstBaseSide"/> で決める）。組めないときは false＝呼び出し側はテロップだけで済ませる。
+        /// </summary>
+        public bool BeginOffenseTimeoutScene(bool benchFirstBaseSide)
+        {
+            if (!Available || _toActive || _otActive || FieldPlayActive || _batter == null || _batter.Animator == null) return false;
+            var run = LoadClip(TimeoutRunClipName);
+            var back = LoadClip(OtBatterBackClipName);
+            var bIdle = LoadClip(OtBatterIdleClipName);
+            if (run == null || back == null || bIdle == null || LoadClip(OtBatterWalkClipName) == null
+                || LoadClip(OtBatterStandClipName) == null) return false;
+            if (!EnsureMessenger(run)) return false;
+            Repaint(_messenger, _offenseColors);   // 伝令は攻撃側の選手
+
+            _otBatterSnap = Snapshot(_batter);
+            _otBatterRootMotion = _batter.Animator.applyRootMotion;
+            _otBatWasActive = _bat != null && _bat.activeSelf;
+
+            _otSide = _batterLeft ? 1f : -1f;
+            var bp = StagePos(_batter);
+            _otB0 = new Vector2(bp.x, bp.z);
+            _otB1 = _otB0 + new Vector2(_otSide * OtBatterBackM, 0f);
+            // 伝令はベンチから一直線に来て、打者の**ベンチ側**に並ぶ（2026-11-21 監督指摘「打者の前でかくっと
+            // 曲がらず一直線に」）。ベンチが打者と反対側（後攻の右打者など）なら本塁側に立つ＝一直線の道が
+            // 打者の体を突き抜けない。耳打ちの手・首の向きは立った側から決まる（ApplyWhisperPose）
+            float s = benchFirstBaseSide ? 1f : -1f;
+            _otM = _otB1 + new Vector2(s * OtPairGapM, 0f);
+            _otBatterTalkYaw = s * OtFaceInDeg;     // センター方向から伝令の側へ
+            _otMsgTalkYaw = -s * OtFaceInDeg;       // センター方向から打者の側へ
+
+            var bench = new Vector2(TimeoutBenchFront1B.x * s, TimeoutBenchFront1B.y);
+            var from = bench - _otM;
+            float d = from.magnitude;
+            _otMsgStart = d > TimeoutStartRadiusM ? _otM + from / d * TimeoutStartRadiusM : bench;
+
+            // 打者: 本塁を向いたまま後ろ歩きで下がる
+            _batter.HoldAtEnd = false;
+            _batter.Holding = false;
+            _batter.HoldRemaining = 0f;
+            _batter.EndAt = 0f;
+            _batter.DefaultEndAt = 0f;
+            _batter.IdleEndAt = 0f;
+            _batter.SpeedSwitchAt = -1f;
+            _batter.Animator.applyRootMotion = false;
+            _otBatterPos = _otB0;
+            _otBatterYaw = YawToward(_otB1, _otB0);   // 体は本塁側を向き、背中の方へ下がる
+            CrossfadeActorToClip(_batter, back, 0f, 0f, 0.3f);
+            _batter.IdleClip = back;
+            _batter.Speed = 1f;
+            PlaceFielder(_batter, _otBatterPos.x, _otBatterPos.y, _otBatterYaw);
+            _otBatterLeg = OtLeg.Back;
+            _otBatterLegT = 0f;
+
+            // 伝令: ベンチ前（遠ければ画面外）から走ってくる
+            var m = _messenger;
+            m.Go.SetActive(true);
+            m.Enabled = true;
+            m.HoldAtEnd = false;
+            m.Holding = false;
+            m.HoldRemaining = 0f;
+            m.DefaultEndAt = 0f;
+            m.IdleEndAt = 0f;
+            if (m.Animator != null) m.Animator.applyRootMotion = false;
+            _otMsgPos = _otMsgStart;
+            _otMsgYaw = YawToward(_otMsgStart, _otM) - TimeoutRunMoveDir;
+            SetActorClip(m, run, 0.4f * run.length, 0f);
+            m.IdleClip = run;
+            m.Speed = 0f;
+            PlaceFielder(m, _otMsgPos.x, _otMsgPos.y, _otMsgYaw);
+            _otMsgLeg = OtMsgLeg.Wait;
+            _otMsgLegT = 0f;
+
+            UmpireCallsTime();
+
+            _otActive = true;
+            _otT = 0f;
+            _otTalkStartT = _otLeaveStartT = -1f;
+            _otWhisperW = 0f;
+            _otMouthEarM = -1f;
+            ApplyOffenseTimeoutCamera();
+            return true;
+        }
+
+        private void ApplyOffenseTimeoutCamera()
+        {
+            var mid = (_otB1 + _otM) * 0.5f;
+            var off = OtCameraOffset;
+            // x は「本塁から遠い側＝+」の相対値。打者の側（_otSide＝本塁から遠い向き）を掛ける
+            var pos = new Vector3(mid.x + off.x * _otSide, off.y, mid.y + off.z);
+            FramePreview(pos, new Vector3(mid.x, OtLookY, mid.y), OtFrameHeightM);
+        }
+
+        /// <summary>場面が終わった（伝令が去り、打者が打席へ戻り着いた）か。</summary>
+        private bool OffenseTimeoutSceneDone => _otActive && _otLeaveStartT >= 0f
+            && _otT - _otLeaveStartT >= OtLeaveMinSeconds && _otBatterLeg == OtLeg.Done;
+
+        /// <summary>1コマ進める（ポーズを進めた後）。<paramref name="posed"/>＝このコマでポーズを評価し直したか。</summary>
+        private void StepOffenseTimeoutScene(float dt, bool posed)
+        {
+            if (!_otActive) return;
+            _otT += dt;
+            StepOtBatter(dt);
+            StepOtMessenger(dt);
+
+            if (_otTalkStartT < 0f && _otBatterLeg == OtLeg.Talk && _otMsgLeg == OtMsgLeg.Talk) _otTalkStartT = _otT;
+            if (_otTalkStartT >= 0f && _otLeaveStartT < 0f && _otT - _otTalkStartT >= OtTalkSeconds) BeginOtLeave();
+
+            // 耳打ちの効き: 話し始めで寄せ、散り始めで戻す
+            float wantW = _otTalkStartT >= 0f && _otLeaveStartT < 0f ? 1f : 0f;
+            _otWhisperW = Mathf.MoveTowards(_otWhisperW, wantW, dt / 0.45f);
+
+            // 後補正はポーズを評価し直したコマにだけ当てる（評価の間は骨がそのまま残る＝二度当てしない）
+            if (posed)
+            {
+                ApplyWhisperPose();
+                OtAlignBat();
+            }
+        }
+
+        private void StepOtBatter(float dt)
+        {
+            _otBatterLegT += dt;
+            switch (_otBatterLeg)
+            {
+                case OtLeg.Back:
+                {
+                    // 後ろ歩き（収録の前進量で足を合わせる）。体の向きは本塁側のまま
+                    float stepM = OtBatterWalkVClip * dt;
+                    var to = _otB1 - _otBatterPos;
+                    if (to.magnitude <= stepM)
+                    {
+                        _otBatterPos = _otB1;
+                        _otBatterLeg = OtLeg.Turn;
+                        _otBatterLegT = 0f;
+                        var idle = LoadClip(OtBatterStandClipName);   // 手を下ろして立つ（バットは片手で下げる）
+                        CrossfadeActorToClip(_batter, idle, 0.5f * idle.length, 0f, 0.35f);
+                        _batter.IdleClip = idle;
+                        _batter.Speed = 1f;
+                    }
+                    else _otBatterPos += to.normalized * stepM;
+                    break;
+                }
+                case OtLeg.Turn:
+                    // 待機のまま伝令の来る方（センター方向から外側へ）へ向き直る
+                    _otBatterYaw = Mathf.MoveTowardsAngle(_otBatterYaw, _otBatterTalkYaw, 200f * dt);
+                    if (Mathf.Abs(Mathf.DeltaAngle(_otBatterYaw, _otBatterTalkYaw)) < 0.5f) { _otBatterLeg = OtLeg.Talk; _otBatterLegT = 0f; }
+                    break;
+                case OtLeg.Talk:
+                    break;
+                case OtLeg.Leave:
+                {
+                    // 本塁の方を向いて歩いて戻る（収録の前進量で足を合わせる）
+                    var to = _otB0 - _otBatterPos;
+                    float want = YawToward(_otBatterPos, _otB0);
+                    _otBatterYaw = Mathf.MoveTowardsAngle(_otBatterYaw, want, 260f * dt);
+                    if (Mathf.Abs(Mathf.DeltaAngle(_otBatterYaw, want)) > 25f) break;   // 向き直ってから歩き出す
+                    if (_batter.Clip != LoadClip(OtBatterWalkClipName))
+                    {
+                        var walk = LoadClip(OtBatterWalkClipName);
+                        CrossfadeActorToClip(_batter, walk, 0f, 0f, 0.3f);
+                        _batter.IdleClip = walk;
+                        _batter.Speed = 1f;
+                    }
+                    float stepM = OtBatterWalkVClip * dt;
+                    if (to.magnitude <= stepM)
+                    {
+                        _otBatterPos = _otB0;
+                        _otBatterLeg = OtLeg.Done;
+                        var idle = LoadClip(OtBatterIdleClipName);
+                        CrossfadeActorToClip(_batter, idle, 0f, 0f, 0.3f);
+                        _batter.IdleClip = idle;
+                    }
+                    else _otBatterPos += to.normalized * stepM;
+                    break;
+                }
+                case OtLeg.Done:
+                    break;
+            }
+            PlaceFielder(_batter, _otBatterPos.x, _otBatterPos.y, _otBatterYaw);
+        }
+
+        private void StepOtMessenger(float dt)
+        {
+            var a = _messenger;
+            if (a == null || a.Go == null) return;
+            _otMsgLegT += dt;
+            var run = LoadClip(TimeoutRunClipName);
+            var walk = LoadClip(TimeoutWalkClipName);
+            float speed = 0f, moveDir = TimeoutRunMoveDir, vClip = TimeoutRunVClip;
+            Vector2 target = _otM;
+            switch (_otMsgLeg)
+            {
+                case OtMsgLeg.Wait:
+                    a.Speed = 0f;
+                    if (_otT >= 0.3f) { _otMsgLeg = OtMsgLeg.Run; _otMsgLegT = 0f; a.Speed = 1f; }
+                    break;
+                case OtMsgLeg.Run:
+                {
+                    speed = TimeoutRunSpeed;
+                    // 残りの道のりが減速＋歩きの分になったら落とす
+                    if (Vector2.Distance(_otMsgPos, _otM) <= TimeoutDecelM + 0.6f)
+                    {
+                        _otMsgLeg = OtMsgLeg.Decel;
+                        _otMsgLegT = 0f;
+                        CrossfadeActorToClip(a, LoadClip(OverrunClipName), 0f, 0f, TimeoutFadeSeconds);
+                        a.IdleClip = walk;
+                    }
+                    break;
+                }
+                case OtMsgLeg.Decel:
+                {
+                    float u = Mathf.Clamp01(_otMsgLegT / OverrunDecelEndsAt);
+                    speed = Mathf.Lerp(TimeoutRunSpeed, TimeoutWalkSpeed, u);
+                    moveDir = OverrunMoveDirDeg;
+                    vClip = 0f;
+                    if (u >= 1f)
+                    {
+                        _otMsgLeg = OtMsgLeg.WalkIn;
+                        _otMsgLegT = 0f;
+                        CrossfadeActorToClip(a, walk, 0f, 0f, TimeoutFadeSeconds);
+                        a.IdleClip = walk;
+                    }
+                    break;
+                }
+                case OtMsgLeg.WalkIn:
+                    speed = TimeoutWalkSpeed;
+                    moveDir = TimeoutWalkMoveDir;
+                    vClip = TimeoutWalkVClip;
+                    break;
+                case OtMsgLeg.Turn:
+                    _otMsgYaw = Mathf.MoveTowardsAngle(_otMsgYaw, _otMsgTalkYaw, TimeoutYawRateDegPerSec * dt);
+                    if (Mathf.Abs(Mathf.DeltaAngle(_otMsgYaw, _otMsgTalkYaw)) < 0.5f) { _otMsgLeg = OtMsgLeg.Talk; _otMsgLegT = 0f; }
+                    break;
+                case OtMsgLeg.Talk:
+                    break;
+                case OtMsgLeg.LeaveWalk:
+                    speed = TimeoutWalkSpeed;
+                    moveDir = TimeoutWalkMoveDir;
+                    vClip = TimeoutWalkVClip;
+                    target = _otMsgStart;
+                    if (_otMsgLegT >= TimeoutLeaveWalkSeconds)
+                    {
+                        _otMsgLeg = OtMsgLeg.LeaveRun;
+                        _otMsgLegT = 0f;
+                        CrossfadeActorToClip(a, run, 0f, 0f, TimeoutFadeSeconds);
+                        a.IdleClip = run;
+                    }
+                    break;
+                case OtMsgLeg.LeaveRun:
+                    speed = TimeoutRunSpeed;
+                    target = _otMsgStart;
+                    break;
+            }
+
+            if (speed > 0f)
+            {
+                var to = target - _otMsgPos;
+                float dist = to.magnitude;
+                float stepM = speed * dt;
+                if (dist <= stepM || dist < 1e-4f)
+                {
+                    _otMsgPos = target;
+                    if (_otMsgLeg == OtMsgLeg.WalkIn || _otMsgLeg == OtMsgLeg.Decel)
+                    {
+                        // 着いた: 待機へ替えて、打者の方へ向き直る
+                        _otMsgLeg = OtMsgLeg.Turn;
+                        _otMsgLegT = 0f;
+                        var idle = LoadClip(OtMessengerIdleClipName);
+                        if (idle != null)
+                        {
+                            CrossfadeActorToClip(a, idle, 0f, 0f, 0.35f);
+                            a.IdleClip = idle;
+                        }
+                        a.Speed = 1f;
+                    }
+                }
+                else
+                {
+                    _otMsgPos += to / dist * stepM;
+                    float wantYaw = YawToward(Vector2.zero, to) - moveDir;
+                    _otMsgYaw = Mathf.MoveTowardsAngle(_otMsgYaw, wantYaw, 540f * dt);
+                }
+                if (_otMsgLeg != OtMsgLeg.Turn)
+                    a.Speed = vClip > 0f ? Mathf.Clamp(speed / vClip, LocoSpeedMin, LocoSpeedMax) : 1f;
+            }
+            PlaceFielder(a, _otMsgPos.x, _otMsgPos.y, _otMsgYaw);
+        }
+
+        private void BeginOtLeave()
+        {
+            _otLeaveStartT = _otT;
+            UmpireCallsTime();   // タイムを解く（守備伝令の場面と同じ収録で「プレー再開」の合図に見せる）
+            _otBatterLeg = OtLeg.Leave;
+            _otBatterLegT = 0f;
+            var walk = LoadClip(TimeoutWalkClipName);
+            _otMsgLeg = OtMsgLeg.LeaveWalk;
+            _otMsgLegT = 0f;
+            if (walk != null && _messenger != null)
+            {
+                CrossfadeActorToClip(_messenger, walk, 0f, 0f, TimeoutFadeSeconds);
+                _messenger.IdleClip = walk;
+            }
+        }
+
+        // ---- 耳打ちの後補正 ------------------------------------------------------------------
+
+        /// <summary>
+        /// 耳打ちの形を骨へ足す（ポーズを評価した直後だけ）。伝令＝上体を打者へ傾け、首を打者の耳へ向け、
+        /// 打者に近い側の手を口もとへ。打者＝首を伝令へ向け、ゆっくりうなずく。
+        /// </summary>
+        private void ApplyWhisperPose()
+        {
+            if (_otWhisperW <= 0f || _messenger?.Animator == null || _batter?.Animator == null) return;
+            float w = _otWhisperW * _otWhisperW * (3f - 2f * _otWhisperW);
+            var ma = _messenger.Animator;
+            var ba = _batter.Animator;
+            var bHead = ba.GetBoneTransform(HumanBodyBones.Head);
+            var mHead = ma.GetBoneTransform(HumanBodyBones.Head);
+            if (bHead == null || mHead == null) return;
+
+            // 口と耳は「補正の前の頭」から見た点として控え、補正の後は頭の骨に付いて動かす
+            // （TransformPoint は鏡映の負スケールも含めて往復する＝左打者でも同じ点を指す）
+            var mSide = Vector3.ProjectOnPlane(bHead.position - mHead.position, Vector3.up).normalized;
+            var mMouthL = mHead.InverseTransformPoint(MouthPoint(ma, _messenger, mHead));
+            var bEarL = bHead.InverseTransformPoint(bHead.position + Vector3.up * 0.06f - mSide * 0.08f);
+
+            // ① 伝令の上体を打者の方へ傾ける（胸の骨で。上方向を打者側へ倒す）
+            var spine = ma.GetBoneTransform(HumanBodyBones.Chest) ?? ma.GetBoneTransform(HumanBodyBones.Spine);
+            if (spine != null && mSide.sqrMagnitude > 1e-6f)
+            {
+                var axis = Vector3.Cross(Vector3.up, mSide);
+                RotateBoneWorld(spine, Vector3.up, Quaternion.AngleAxis(OtLeanDeg * w, axis) * Vector3.up);
+            }
+
+            // ② 伝令の首を打者の耳へ向ける
+            TurnHeadToward(ma, _messenger, bHead.TransformPoint(bEarL), w, 0f);
+
+            // ③ 打者に近い側の手を口もとへ（手の中心を運ぶ＝手首でなく。3d-character.md）
+            var mouth = mHead.TransformPoint(mMouthL);
+            var face = FaceForward(ma, _messenger);
+            bool rightHand = Vector3.Dot(mSide, ChestRight(ma, _messenger)) > 0f;
+            var up = ma.GetBoneTransform(rightHand ? HumanBodyBones.RightUpperArm : HumanBodyBones.LeftUpperArm);
+            var lo = ma.GetBoneTransform(rightHand ? HumanBodyBones.RightLowerArm : HumanBodyBones.LeftLowerArm);
+            var hand = ma.GetBoneTransform(rightHand ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
+            if (up != null && lo != null && hand != null)
+            {
+                var knuckle = ma.GetBoneTransform(rightHand ? HumanBodyBones.RightMiddleProximal : HumanBodyBones.LeftMiddleProximal);
+                // 手の中心＝手首→中指付け根の中点（design-18 §3.3.1）。Fist は打者の骨を見るので使わない
+                var center = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.5f) : hand.position;
+                // 口の打者側の脇へ、少し前に（掌で口を覆う位置）
+                var want = mouth + mSide * 0.07f + face * 0.05f;
+                var wristTarget = hand.position + (want - center);
+                DuelIk.TwoBoneIk(up, lo, hand, Vector3.Lerp(hand.position, wristTarget, w), 0f);
+            }
+
+            // ④ 打者は首を伝令の口へ向け、うなずく
+            float tt = _otTalkStartT >= 0f ? _otT - _otTalkStartT : 0f;
+            float nod = 0f;
+            for (int i = 0; i < OtNodCount; i++)
+            {
+                float u = (tt - (0.9f + i * 0.85f)) / 0.6f;
+                if (u > 0f && u < 1f) nod = Mathf.Sin(u * Mathf.PI) * OtNodDeg;
+            }
+            TurnHeadToward(ba, _batter, mHead.TransformPoint(mMouthL), w, nod * w);
+
+            // 撮影・検査用: 伝令の口と打者の耳の距離（どちらも補正の後の頭に付いた点）
+            if (_otWhisperW >= 0.99f)
+            {
+                float dm = Vector3.Distance(mHead.TransformPoint(mMouthL), bHead.TransformPoint(bEarL));
+                _otMouthEarM = _otMouthEarM < 0f ? dm : Mathf.Min(_otMouthEarM, dm);
+            }
+        }
+
+        /// <summary>骨を、親のローカル空間で「向き a を向き b へ」写す回転だけ回す（鏡映の下でも同じ式で効く）。</summary>
+        private static void RotateBoneWorld(Transform bone, Vector3 aWorld, Vector3 bWorld)
+        {
+            var p = bone.parent;
+            if (p == null) return;
+            var aL = p.InverseTransformDirection(aWorld).normalized;
+            var bL = p.InverseTransformDirection(bWorld).normalized;
+            bone.localRotation = Quaternion.FromToRotation(aL, bL) * bone.localRotation;
+        }
+
+        /// <summary>胸の正面（水平）。肩の並びから取る。鏡映中は右と左が入れ替わるので符号を戻す。</summary>
+        private static Vector3 FaceForward(Animator an, Actor a)
+        {
+            var ra = an.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+            var la = an.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+            var f = Vector3.Cross(ra - la, Vector3.up);
+            f.y = 0f;
+            if (a.Mirrored) f = -f;
+            return f.sqrMagnitude > 1e-8f ? f.normalized : Vector3.forward;
+        }
+
+        /// <summary>体の右（見た目の右手の側・水平）。</summary>
+        private static Vector3 ChestRight(Animator an, Actor a)
+        {
+            var ra = an.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+            var la = an.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+            var r = ra - la;
+            r.y = 0f;
+            return r.sqrMagnitude > 1e-8f ? r.normalized : Vector3.right;
+        }
+
+        /// <summary>口のおおよその位置（頭の骨＝首の付け根から少し上・顔の前）。</summary>
+        private static Vector3 MouthPoint(Animator an, Actor a, Transform head)
+        {
+            var neck = an.GetBoneTransform(HumanBodyBones.Neck);
+            var upDir = neck != null ? (head.position - neck.position).normalized : Vector3.up;
+            // 顔の正面＝頭の前方向。頭の骨の向きは素体ごとに違うので、首→頭の上方向と胸の正面から作る
+            var f = Vector3.ProjectOnPlane(FaceForward(an, a), upDir);
+            if (f.sqrMagnitude < 1e-8f) f = FaceForward(an, a);
+            return head.position - upDir * 0.02f + f.normalized * 0.09f;
+        }
+
+        /// <summary>
+        /// 首（と頭）を target の方へ向ける。胴の正面からの水平の角度を <see cref="OtHeadTurnMaxDeg"/> までに抑え、
+        /// <paramref name="nodDeg"/> だけうつむかせる。首と頭に半分ずつ配る。
+        /// </summary>
+        private static void TurnHeadToward(Animator an, Actor a, Vector3 target, float w, float nodDeg)
+        {
+            var neck = an.GetBoneTransform(HumanBodyBones.Neck);
+            var head = an.GetBoneTransform(HumanBodyBones.Head);
+            if (neck == null || head == null) return;
+            var face = FaceForward(an, a);
+            var to = target - head.position;
+            var toH = new Vector3(to.x, 0f, to.z);
+            if (toH.sqrMagnitude < 1e-6f) return;
+            float yaw = Mathf.Clamp(Vector3.SignedAngle(face, toH.normalized, Vector3.up), -OtHeadTurnMaxDeg, OtHeadTurnMaxDeg) * w;
+            var turned = Quaternion.AngleAxis(yaw, Vector3.up) * face;
+            // 水平の向き → 半分を首、残りを頭で回す
+            var half = Quaternion.AngleAxis(yaw * 0.5f, Vector3.up) * face;
+            RotateBoneWorld(neck, face, half);
+            RotateBoneWorld(head, half, turned);
+            if (Mathf.Abs(nodDeg) > 0.01f)
+            {
+                var axis = Vector3.Cross(Vector3.up, turned);   // 右向きの軸まわりに前へ倒す
+                RotateBoneWorld(head, turned, Quaternion.AngleAxis(nodDeg, axis) * turned);
+            }
+        }
+
+        /// <summary>
+        /// 場面中のバット。両手が揃う収録（打席へ戻った後の構え待ち）は手の中点から立て、片手の収録
+        /// （歩き・耳打ちの間の立ち）は右手に持たせて先を下へ下ろす。両者は手の離れで混ぜる（クリップの替わり目で飛ばない）。
+        /// 打撃の握りの補正（<see cref="AlignBat"/>）は場面の間は通さない（構えの区間判定が歩きの収録に合わない）。
+        /// </summary>
+        private void OtAlignBat()
+        {
+            if (_bat == null || _batter?.Animator == null) return;
+            if (!_otBatWasActive) return;
+            var lhT = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var rhT = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            if (lhT == null || rhT == null) return;
+            _bat.SetActive(true);
+            var lh = Fist(lhT, HumanBodyBones.LeftMiddleProximal);
+            var rh = Fist(rhT, HumanBodyBones.RightMiddleProximal);
+            float apart = Vector3.Distance(lh, rh);
+            float one = Mathf.InverseLerp(0.30f, 0.50f, apart);
+            var face = FaceForward(_batter.Animator, _batter);
+            // 両手: 握りの中点から、両手の並びの水平の向きへ仰角を付けて立てる
+            var d = rh - lh;
+            var dh = new Vector3(d.x, 0f, d.z);
+            var twoAxis = dh.sqrMagnitude > 1e-6f
+                ? (dh.normalized * Mathf.Cos(_cal.BatStanceElevDeg * Mathf.Deg2Rad) + Vector3.up * Mathf.Sin(_cal.BatStanceElevDeg * Mathf.Deg2Rad)).normalized
+                : Vector3.up;
+            // 片手: 右手（左打者は鏡映で見た目の左手）で握り、先を下へ下ろす（体の少し前・外へ）。
+            // 握る手は固定する＝両手の高さが揃う立ちの収録で、低い方の手を選ぶと持ち手が入れ替わってバットが飛ぶ
+            var grip1 = rh;
+            var side = ChestRight(_batter.Animator, _batter);
+            var oneAxis = (Vector3.down * 0.9f + face * 0.3f + side * 0.15f).normalized;
+            var axis = Vector3.Slerp(twoAxis, oneAxis, one).normalized;
+            var grip = Vector3.Lerp((lh + rh) * 0.5f, grip1, one);
+            float halfLen = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
+            _bat.transform.localScale = new Vector3(1f, halfLen / BatHalfLength, 1f);
+            _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
+            _bat.transform.position = grip + axis * (halfLen - _cal.BatGripBelowM);
+        }
+
+        /// <summary>攻撃伝令の場面を畳む（打者を構えへ戻し、伝令役を伏せる）。走っていなければ何もしない。</summary>
+        private void EndOffenseTimeoutScene()
+        {
+            if (!_otActive) return;
+            _otActive = false;
+            if (_messenger != null && _messenger.Go != null)
+            {
+                _messenger.Go.SetActive(false);
+                _messenger.Enabled = false;
+                Repaint(_messenger, _defenseColors);   // 守備伝令で使うときの色へ戻しておく
+            }
+            Restore(_batter, _otBatterSnap);
+            if (_batter?.Animator != null) _batter.Animator.applyRootMotion = _otBatterRootMotion;
+            ResetBatterToStance();
+            if (_bat != null) _bat.SetActive(_otBatWasActive);
+            if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
+            ClearPreviewFrame();
+            ApplyCalibration(_cal);   // ⚠ 画角だけでなくカメラの位置・向きも戻す
+        }
+
+        /// <summary>
+        /// 撮影・検査用: 場面の後の打者のずれ [m, 度]（PlaceFielder 系での汚染の見張り）。位置は場面の前の基準と、
+        /// 向きは実際の transform と基準（BaseRot）の食い違いを見る。基準の向きそのものは場面の前と比べない:
+        /// 場面の後は構えの待機から始め直し、向きは較正（<see cref="SyncBatterYaw"/>）が決め直す
+        /// （見逃しの後に構えへ戻る途中で控えた向きは補間の途中の値。2026-11-21 録画で前後の構えが一致するのを確認）。
+        /// </summary>
+        internal (float PosM, float YawDeg) OffenseTimeoutRestoreErrorForCapture()
+        {
+            if (_batter == null || _batter.Go == null || !_otBatterSnap.Valid) return (0f, 0f);
+            var bp = _batter.BasePos;
+            var sp = _otBatterSnap.BasePos;
+            var lp = _batter.Go.transform.localPosition;
+            float pos = Mathf.Max(Vector2.Distance(new Vector2(bp.x, bp.z), new Vector2(sp.x, sp.z)),
+                Vector2.Distance(new Vector2(lp.x, lp.z), new Vector2(bp.x, bp.z)));
+            return (pos, Quaternion.Angle(_batter.Go.transform.localRotation, _batter.BaseRot));
+        }
+
+        /// <summary>撮影・検査用: 耳打ち中の伝令の口と打者の耳の距離の最小[m]（未計測は負）。</summary>
+        internal float OffenseTimeoutMouthEarForCapture => _otMouthEarM;
+
+        /// <summary>撮影・検査用: いまの打者が左打席か。</summary>
+        internal bool BatterLeftForCapture => _batterLeft;
+    }
+}

@@ -146,6 +146,45 @@ captures:
     timeout_at: 0.5
     timeout_messenger: recorder
     video: {from: start, to: end, fps: 24}
+  # ── 攻撃伝令の場面（issue #1175）。自校の攻撃中に伝令を送る（timeout_messenger は守備伝令と共通）──
+  - id: timeout-offense-1175
+    name: "攻撃伝令の場面・先攻＝三塁側ベンチ（issue #1175）"
+    scenario: offense-timeout-top-lab
+    manager: away
+    view: panel
+    duel_seconds: 17.0
+    timeout_at: 0.5
+    timeout_messenger: 0
+    video: {from: start, to: end, fps: 24}
+  - id: timeout-offense-1175-1b
+    name: "攻撃伝令の場面・後攻＝一塁側ベンチ（issue #1175）"
+    scenario: offense-timeout-bottom-lab
+    manager: home
+    view: panel
+    # 裏から始めるシナリオは最初の打席が解決するまで engine の内部が「表」のまま（ScenarioSkipsFirstTop）＝
+    # その間に送ると守備伝令になる。最初の打席が終わった後（2人目の打者）で送る
+    duel_seconds: 32.0
+    timeout_at: 15.0
+    timeout_messenger: 0
+    video: {from: start, to: end, fps: 24}
+  - id: timeout-offense-1175-left
+    name: "攻撃伝令の場面・左打者（issue #1175）"
+    scenario: offense-timeout-left-lab
+    manager: away
+    view: panel
+    duel_seconds: 17.0
+    timeout_at: 0.5
+    timeout_messenger: 0
+    video: {from: start, to: end, fps: 24}
+  - id: timeout-offense-1175-recorder
+    name: "攻撃伝令の場面・記録員が伝令（issue #1175）"
+    scenario: offense-timeout-top-lab
+    manager: away
+    view: panel
+    duel_seconds: 17.0
+    timeout_at: 0.5
+    timeout_messenger: recorder
+    video: {from: start, to: end, fps: 24}
   # ── 試合テロップの画像化（issue #1179）。画面全体（panel）で撮る ──
   - id: telop-calls-1179
     name: "1球の判定テロップ（ストライク／ボール等）が画像で出る（issue #1179）"

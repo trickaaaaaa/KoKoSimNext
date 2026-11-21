@@ -159,6 +159,35 @@ scenarios:
     pitcher_rattled: true
     seed: 20260737
 
+  # ── 攻撃伝令の場面（issue #1175）。走者なし＝伝令の走る道に走者が居ない。先攻＝三塁側ベンチ・後攻＝一塁側ベンチ ──
+  - id: offense-timeout-top-lab
+    name: 攻撃伝令の場面（1回表・走者なし）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20260771
+
+  - id: offense-timeout-left-lab
+    name: 攻撃伝令の場面・左打者（1回表・走者なし・3番から）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    batter: 3   # 撮影の既定シード（1）で先攻の3番が左打ち（上谷）
+    seed: 20260771
+
+  - id: offense-timeout-bottom-lab
+    name: 攻撃伝令の場面（2回裏・走者なし）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 2
+    top: false
+    outs: 0
+    seed: 20260772
+
   - id: steal-sign-lab
     name: 盗塁検証・自分で盗塁サイン（1回表無死一塁）
     away: { school: "AI:tier=C", score: 0 }
