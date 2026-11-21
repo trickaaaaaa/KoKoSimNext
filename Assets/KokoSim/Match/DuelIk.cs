@@ -13,18 +13,7 @@ namespace KokoSim.Unity.Match
         /// <summary>pivot を中心に回す。子はUnityの階層でついてくる。</summary>
         internal static void RotateAround(Transform t, Vector3 pivot, Quaternion q)
         {
-            var parent = t.parent;
-            if (parent != null && parent.localToWorldMatrix.determinant < 0f)
-            {
-                // 鏡映親（左投げ・左打ちの役）の下で t.rotation = q * t.rotation と書くと、実際に回るのは
-                // S·q·S（鏡写し）になる。行列で「世界で q だけ回した後の姿」を作り、親のローカルへ落として書く
-                var rotated = Matrix4x4.Rotate(q) * t.localToWorldMatrix;
-                t.localRotation = (parent.worldToLocalMatrix * rotated).rotation;
-            }
-            else
-            {
-                t.rotation = q * t.rotation;
-            }
+            t.rotation = q * t.rotation;
             t.position = pivot + q * (t.position - pivot);
         }
 
