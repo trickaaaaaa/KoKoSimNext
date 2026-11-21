@@ -166,6 +166,60 @@ public sealed class SubstitutionTests
         Assert.Equal(9, alignment.Count);
     }
 
+    // ===== DH枠は守備者の検索に出ない（issue #1207）。控えから繰り上げたDHは控え時の守備位置を残す。 =====
+
+    /// <summary>控え捕手がDHに繰り上がり、正捕手（先発）より前の打順（0番）に座るチーム。</summary>
+    private static Team MakeDhAheadOfCatcherTeam()
+    {
+        var fielders = Positions.Where(p => p != FieldPosition.Pitcher)
+            .Select((p, i) => At(p, $"{p}先発", contact: 40 + i)).ToList();
+        var order = new List<Player> { At(FieldPosition.Catcher, "控え捕手DH", contact: 95) };
+        order.AddRange(fielders);
+        return new Team
+        {
+            Name = "DH校",
+            BattingOrder = order,
+            DhSlot = 0,
+            StartingPitcher = At(FieldPosition.Pitcher, "先発P") with { Pitching = PitcherAttributes.LeagueAverage },
+            Reserves = new List<Player>(),
+        };
+    }
+
+    [Fact]
+    public void Catcher_WithDhLabelledCatcherAheadOfRealCatcher_ReturnsRealCatcher()
+    {
+        var state = new TeamState(MakeDhAheadOfCatcherTeam());
+        Assert.Equal("Catcher先発", state.Catcher.Name);
+    }
+
+    [Theory]
+    [InlineData(FieldPosition.Catcher, "Catcher先発")]
+    [InlineData(FieldPosition.Shortstop, "Shortstop先発")]
+    public void PlayerAtPosition_SkipsDhSlot(FieldPosition pos, string expected)
+    {
+        var state = new TeamState(MakeDhAheadOfCatcherTeam());
+        Assert.Equal(expected, state.PlayerAtPosition(pos)!.Name);
+    }
+
+    [Fact]
+    public void PlayerAtPosition_AfterReleaseDh_NoLongerSkipsThatSlot()
+    {
+        var state = new TeamState(MakeDhAheadOfCatcherTeam());
+        Assert.True(state.ReleaseDh());
+        Assert.False(state.UsesDh);
+        Assert.Equal(FieldPosition.Pitcher, state.PlayerAtPosition(FieldPosition.Pitcher)!.Position);
+        Assert.Equal("Catcher先発", state.Catcher.Name);
+    }
+
+    [Fact]
+    public void ReleaseDh_ToCatcher_PutsDhOntoRealCatchersSlot_NotItself()
+    {
+        var state = new TeamState(MakeDhAheadOfCatcherTeam());
+        Assert.True(state.ReleaseDh(FieldPosition.Catcher));
+        Assert.Equal("控え捕手DH", state.Catcher.Name);
+        Assert.DoesNotContain(state.CurrentLineup, p => p.Name == "Catcher先発");
+    }
+
     [Fact]
     public void ReleaseDh_OnNonDhTeam_ReturnsFalse()
     {
