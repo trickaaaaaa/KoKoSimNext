@@ -396,7 +396,9 @@ public sealed record TacticsCoefficients
     /// </summary>
     public int RattledThresholdFor(int mental)
     {
-        var offset = (int)Math.Round((mental - 50) / 50.0 * RattledThresholdMentalOffset);
+        // offsetがちょうど±0.5になる精神力がある（例: mental=75→+0.5）。既定のMath.Roundは偶数丸めで
+        // offset=0のまま精神力50と同値になり「高い/低いほど動揺しにくい/しやすい」が効かない区間ができる（issue #1211）。
+        var offset = (int)Math.Round((mental - 50) / 50.0 * RattledThresholdMentalOffset, MidpointRounding.AwayFromZero);
         return Math.Max(1, RattledConsecutiveBaserunners + offset);
     }
 

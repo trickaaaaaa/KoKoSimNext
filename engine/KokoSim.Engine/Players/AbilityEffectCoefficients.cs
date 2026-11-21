@@ -128,6 +128,8 @@ public sealed record AbilityEffectCoefficients
     private int Scale(int lv, double s)
     {
         if (s == 1.0) return lv;   // 恒等は丸めも通さない（従来と1ビット一致）
-        return (int)Math.Clamp(Math.Round(Pivot + s * (lv - Pivot)), 1, 100);
+        // Pivotからの差が奇数のとき必ず.5になる（s=0.5時）。既定のMath.Roundは偶数丸めで「3段同じ・1段上がる」の
+        // 不均一な刻みになり育成が効かない区間ができる（issue #1211）。Lv 2段ごとに均一に+1させるため丸め方向を固定する。
+        return (int)Math.Clamp(Math.Round(Pivot + s * (lv - Pivot), MidpointRounding.AwayFromZero), 1, 100);
     }
 }
