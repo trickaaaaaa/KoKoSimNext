@@ -638,9 +638,21 @@ namespace KokoSim.Unity.Components
                     ? new StyleLength(StyleKeyword.Null)
                     : new StyleLength(target);
             }
+            // 親への購読は付け直しのたびに積まない（要素を使い回す画面で AttachToPanel が繰り返される）。
+            EventCallback<GeometryChangedEvent> onParentGeometry = _ => Fit();
+            VisualElement hookedParent = null;
             label.RegisterCallback<GeometryChangedEvent>(_ => Fit());
             label.RegisterCallback<AttachToPanelEvent>(_ =>
-                label.parent?.RegisterCallback<GeometryChangedEvent>(__ => Fit()));
+            {
+                hookedParent?.UnregisterCallback(onParentGeometry);
+                hookedParent = label.parent;
+                hookedParent?.RegisterCallback(onParentGeometry);
+            });
+            label.RegisterCallback<DetachFromPanelEvent>(_ =>
+            {
+                hookedParent?.UnregisterCallback(onParentGeometry);
+                hookedParent = null;
+            });
         }
 
         /// <summary>
@@ -703,9 +715,21 @@ namespace KokoSim.Unity.Components
 
             foreach (var label in labels)
             {
-                label.RegisterCallback<GeometryChangedEvent>(_ => Schedule());
-                label.RegisterCallback<AttachToPanelEvent>(_ =>
-                    label.parent?.RegisterCallback<GeometryChangedEvent>(__ => Schedule()));
+                var l = label;
+                EventCallback<GeometryChangedEvent> onParentGeometry = _ => Schedule();
+                VisualElement hookedParent = null;
+                l.RegisterCallback<GeometryChangedEvent>(_ => Schedule());
+                l.RegisterCallback<AttachToPanelEvent>(_ =>
+                {
+                    hookedParent?.UnregisterCallback(onParentGeometry);
+                    hookedParent = l.parent;
+                    hookedParent?.RegisterCallback(onParentGeometry);
+                });
+                l.RegisterCallback<DetachFromPanelEvent>(_ =>
+                {
+                    hookedParent?.UnregisterCallback(onParentGeometry);
+                    hookedParent = null;
+                });
             }
         }
 

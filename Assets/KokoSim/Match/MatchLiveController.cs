@@ -764,6 +764,7 @@ namespace KokoSim.Unity.Match
             if (_pmTimeout != null) _pmTimeout.clicked -= OnSendTimeout;
             if (_pmResume != null) _pmResume.clicked -= OnResume;
             if (_pmSub != null) _pmSub.clicked -= OnOpenSubstitution;
+            if (_pmScout != null) _pmScout.clicked -= OnOpenScout;
             if (_pmMessengerBack != null) _pmMessengerBack.clicked -= CloseMessengerPicker;
             if (_pmSkip != null) _pmSkip.clicked -= OnSkip;
             _pauseModal?.UnregisterCallback<PointerDownEvent>(OnPauseScrimDown);
@@ -771,6 +772,9 @@ namespace KokoSim.Unity.Match
             _subTelop?.Host.UnregisterCallback<PointerDownEvent>(OnSubTelopDown);
             _root?.UnregisterCallback<PointerDownEvent>(OnRootPointerDown);
             _subPanel?.Close();
+            _subPanel?.Unbind();
+            _scoutPanel?.Close();
+            _scoutPanel?.Unbind();
             if (_backHome != null) _backHome.clicked -= OnBackHome;
             _unbindAnnounce?.Invoke();
             _unbindAnnounce = null;
@@ -814,6 +818,7 @@ namespace KokoSim.Unity.Match
             _gameOver = false;
             _stage = LiveStage.Idle;
             _paused = false;
+            _forcedSubPause = false;     // 強制交代パネルを開いたまま離れても次の試合へ持ち越さない
             _timeoutSentThisPause = false;
             _autoStarted = false;
             _finalResult = null;
@@ -1614,6 +1619,8 @@ namespace KokoSim.Unity.Match
             if (_gameOver || !_paused) return;
             _subPanel?.Close();
             _scoutPanel?.Close();
+            // 打席解決中などで交代パネルを畳めなかった＝出たまま再開すると進行だけ止まる。畳めるまで再開しない。
+            if (_subPanel != null && _subPanel.IsOpen) return;
             CloseMessengerPicker();
             SetVisible(_pauseModal, false);
             _paused = false;
@@ -1731,6 +1738,7 @@ namespace KokoSim.Unity.Match
             // 中断ポップアップを開いたまま背景解決が終局に達した場合も閉じる（結果画面へ暗幕を残さない）。
             SetVisible(_pauseModal, false);
             _subPanel?.Close();
+            _subPanel?.ForceHide();   // 解決中で取り消せなくても結果画面へ交代パネルを残さない
             _scoutPanel?.Close();
             // ⚠ 終局の受け渡し（_gameSetPending → FinishGameEndHandOff）は Update の中で、
             //    _paused / _inningBreakOn の早期 return より**後ろ**にある。つまり終局の瞬間に
