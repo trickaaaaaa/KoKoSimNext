@@ -21,8 +21,7 @@
         </ui:VisualElement>
 
         <ui:VisualElement class="ts-content">
-            <ui:Label text="高校野球" class="f-display-lg ts-title" />
-            <ui:Label text="シミュレーション" class="f-display-lg ts-title" />
+            <ui:Label text="白球監督録" class="f-display-lg ts-title" />
             <ui:VisualElement class="ts-rule" />
 
             <ui:VisualElement class="ts-menu">
