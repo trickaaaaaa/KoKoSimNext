@@ -294,6 +294,36 @@ public sealed class BlockLeagueRunnerTests
         Assert.Equal(adv.Select(s => s.Id), again.Select(s => s.Id));
     }
 
+    // ── 順位付け（issue #1216）──
+
+    private static IReadOnlyList<int> RankIds(
+        School[] teams, int[] wins, int[] margin, params (int Winner, int Loser)[] games)
+    {
+        var w = teams.Select((t, i) => (t.Id, wins[i])).ToDictionary(x => x.Id, x => x.Item2);
+        var l = teams.ToDictionary(t => t.Id, _ => 0);
+        var m = teams.Select((t, i) => (t.Id, margin[i])).ToDictionary(x => x.Id, x => x.Item2);
+        var head = games.ToDictionary(g => (System.Math.Min(g.Winner, g.Loser), System.Math.Max(g.Winner, g.Loser)), g => g.Winner);
+        return RoundRobin.Rank(teams, w, l, m, head).Select(s => s.School.Id).ToList();
+    }
+
+    [Fact]
+    public void Rank_ThreeWayTie_IgnoresHeadToHead_UsesRunMargin()
+    {
+        // 得失点差 A>B>C・対戦 B>A, A>C, C>B の三すくみ → 得失点差どおり A,B,C
+        var teams = new[] { Sch(1, 50), Sch(2, 50), Sch(3, 50) };
+        var ids = RankIds(teams, new[] { 1, 1, 1 }, new[] { 5, 3, 1 }, (2, 1), (1, 3), (3, 2));
+        Assert.Equal(new[] { 1, 2, 3 }, ids);
+    }
+
+    [Fact]
+    public void Rank_TwoTeamTie_HeadToHeadBeatsRunMargin()
+    {
+        var teams = new[] { Sch(1, 50), Sch(2, 50), Sch(3, 50) };
+        // 1と2が同勝数で得失点差は1が上・直接対決は2の勝ち → 2が上。3は勝数が少ない
+        var ids = RankIds(teams, new[] { 2, 2, 0 }, new[] { 5, 3, -8 }, (2, 1));
+        Assert.Equal(new[] { 2, 1, 3 }, ids);
+    }
+
     // ── 補助 ──
 
     private static string Digest(BlockLeagueRunner r)
