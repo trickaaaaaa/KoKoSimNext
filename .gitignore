@@ -78,4 +78,4 @@ Assets/UI/Images/portraits/*.jpeg.meta
 # 各環境ではフック（tools/install-git-hooks.sh）・Unity CI・check-unity-compile.sh が作る。
 # .meta（インポート設定）は追跡したまま。
 /Assets/Plugins/KokoSim/KokoSim.Engine.dll
-/Assets/StreamingAssets/KokoSim/**/*.yaml
+/Assets/Resources/KokoSimData/**/*.yaml

@@ -8,7 +8,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// 球場カタログ（data/stadiums.yaml）の Unity 側プロバイダ（issue #905。設計書13）。
-    /// <see cref="TeamColorProvider"/> と同型＝StreamingAssets の YAML（tools/sync-engine-dll.sh が複製）を読み、
+    /// <see cref="TeamColorProvider"/> と同型＝Resources の YAML（DataFiles）（tools/sync-engine-dll.sh が複製）を読み、
     /// 解釈はエンジンの純パーサ <see cref="StadiumCatalogParser"/> に委譲する。IO は Shell 層に隔離（不変条件#3）。
     /// 読めないときは C# 既定の4球場（甲子園・市営2種・県営）で継続し、警告を1回だけ出す。
     /// </summary>
@@ -41,16 +41,16 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path))
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text))
                 {
-                    var list = StadiumCatalogParser.Parse(File.ReadAllText(path));
+                    var list = StadiumCatalogParser.Parse(text);
                     if (list != null) return list;
                     Debug.LogWarning($"[球場] {RelativePath} から1件も読めなかった。既定4球場で継続。");
                 }
                 else
                 {
-                    Debug.LogWarning($"[球場] StreamingAssets に stadiums.yaml が無い（{path}）。"
+                    Debug.LogWarning($"[球場] Resources に stadiums.yaml が無い（{path}）。"
                                      + "bash tools/sync-engine-dll.sh を回す。既定4球場で継続。");
                 }
             }

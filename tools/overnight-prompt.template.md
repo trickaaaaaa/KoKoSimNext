@@ -34,7 +34,7 @@
    - オーケストレータ（シェル）もマージ前に非Heavy＋Heavy を再実行する最終防波堤を持つが、それに丸投げしない。**帯を壊す変更は自分で気づいて上記の「文脈付き needs-human」で止める**こと（丸投げすると文脈なしの agent-failed になる）。
    - dotnet が見つからない場合は PATH に /usr/local/share/dotnet を追加する
    - **どうしてもテストを緑にできない場合**: `gh issue edit __ISSUE__ --add-label agent-failed` を付け、issue に状況をコメントして終了する（PR を作らない）
-   - **DLL・StreamingAssets の YAML 複製は Git 管理外**（後述。`git add -f` しない）
+   - **DLL・Resources/KokoSimData の YAML 複製は Git 管理外**（後述。`git add -f` しない）
 4. **WIP コミット（実機確認に入る前に必須）**:
    - 非Heavy（必要なら Heavy も）が緑になった時点で、**Unity Editor に接続する前に一度コミットする**
      （メッセージは英語で可、例: `git commit -m "WIP: <内容>"`）。DLL・禁止物はステージしない。
@@ -85,7 +85,7 @@
 
 ## DLL について（必読）
 
-- `Assets/Plugins/KokoSim/KokoSim.Engine.dll` と `Assets/StreamingAssets/KokoSim/**/*.yaml` は
+- `Assets/Plugins/KokoSim/KokoSim.Engine.dll` と `Assets/Resources/KokoSimData/**/*.yaml` は
   **Git 管理外の生成物**（.gitignore 済み・issue #785）。`engine/`・`data/` を変えても**コミットするものは無い**。
 - 作るのは `bash tools/sync-engine-dll.sh`。checkout / rebase 後はフックが、`tools/check-unity-compile.sh` は
   検査前に自分で作り直すので、通常は手で回す必要も無い。

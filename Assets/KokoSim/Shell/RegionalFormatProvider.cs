@@ -7,7 +7,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// 秋季地区大会の枠配分（data/pref-formats/regional-tournaments.yaml）の Unity 側プロバイダ
-    /// （設計書05 §1.5b）。Unity は KokoSim.Config（YamlDotNet）を持たないため、StreamingAssets に
+    /// （設計書05 §1.5b）。Unity は KokoSim.Config（YamlDotNet）を持たないため、Resources に
     /// 置いた同じ YAML を読み、解釈はエンジンの純パーサ <see cref="RegionalFormatParser"/> に委譲する
     /// （<see cref="DistrictPlanProvider"/> と同型）。IO は Shell 層に隔離（不変条件#3）。
     /// 決定論なので初回のみ読み込み静的キャッシュする。
@@ -27,14 +27,14 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path))
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text))
                 {
-                    var set = RegionalFormatParser.Parse(File.ReadAllText(path));
+                    var set = RegionalFormatParser.Parse(text);
                     Debug.Log($"[地区大会枠] 読込成功: {set.Regions.Count} 地区");
                     return set;
                 }
-                Debug.LogWarning($"[地区大会枠] StreamingAssets に regional-tournaments.yaml が無い（{path}）。空で継続。");
+                Debug.LogWarning($"[地区大会枠] Resources に regional-tournaments.yaml が無い（{path}）。空で継続。");
             }
             catch (Exception e)
             {

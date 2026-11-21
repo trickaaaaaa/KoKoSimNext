@@ -15,7 +15,7 @@ name: unity-ci
 # ライセンス: Personal でも Activation が要る。**Secret 未設定の間はスキップして緑にする**
 # （赤にすると全 PR がブロックされて開発が止まるため）。設定手順は license ジョブの Step Summary に出る。
 #
-# engine DLL と StreamingAssets の YAML 複製は Git 管理外の生成物（issue #785）。Assets のコンパイルは
+# engine DLL と Resources/KokoSimData の YAML 複製は Git 管理外の生成物（issue #785）。Assets のコンパイルは
 # engine の API に依存するので engine/・data/ の変更でも発火し、コンパイル前に sync-engine-dll.sh で作る。
 on:
   push:
@@ -45,7 +45,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 生成物（engine DLL・StreamingAssets の YAML 複製）が追跡に戻っていないかを見る（issue #785）。
+  # 生成物（engine DLL・Resources/KokoSimData の YAML 複製）が追跡に戻っていないかを見る（issue #785）。
   # .gitignore 済みでも `git add -f` や古いブランチの rebase で紛れ込むと、並行 PR がまたバイナリで衝突する。
   # ライセンス不要なので常に走る。
   generated-files:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check
         run: |
-          tracked="$(git ls-files -- Assets/Plugins/KokoSim/KokoSim.Engine.dll ':(glob)Assets/StreamingAssets/KokoSim/**/*.yaml')"
+          tracked="$(git ls-files -- Assets/Plugins/KokoSim/KokoSim.Engine.dll ':(glob)Assets/Resources/KokoSimData/**/*.yaml')"
           if [ -n "$tracked" ]; then
             echo "::error::生成物が Git に入っています（issue #785）。git rm --cached で外してください:"
             echo "$tracked"
@@ -114,7 +114,7 @@ jobs:
           restore-keys: |
             Library-
 
-      # engine の DLL と StreamingAssets の YAML 複製は Git 管理外（issue #785）。ここで作ってから
+      # engine の DLL と Resources/KokoSimData の YAML 複製は Git 管理外（issue #785）。ここで作ってから
       # Unity に渡す（このブランチの engine/ と data/ から作る＝PR の engine 変更込みで検査される）。
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

@@ -7,7 +7,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// スカウト候補の寸評の語彙（data/scout-blurbs.yaml・issue #867）の Unity 側プロバイダ。
-    /// <see cref="PreviewPhrasesProvider"/> と同型＝StreamingAssets の YAML を読み、解釈はエンジンの
+    /// <see cref="PreviewPhrasesProvider"/> と同型＝Resources の YAML（DataFiles） を読み、解釈はエンジンの
     /// 純パーサ <see cref="ScoutBlurbPhrasesParser"/> に委譲する（テストと同一コード＝同じ文が出る）。
     /// IO は Shell 層に隔離（不変条件#3）。読み込みに失敗したらエンジンの最小語彙で続ける。
     /// </summary>
@@ -34,9 +34,9 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path)) return ScoutBlurbPhrasesParser.Parse(File.ReadAllText(path));
-                Debug.LogWarning($"[スカウト寸評] StreamingAssets に scout-blurbs.yaml が無い（{path}）。最小語彙で継続。");
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text)) return ScoutBlurbPhrasesParser.Parse(text);
+                Debug.LogWarning($"[スカウト寸評] Resources に scout-blurbs.yaml が無い（{path}）。最小語彙で継続。");
             }
             catch (Exception e)
             {

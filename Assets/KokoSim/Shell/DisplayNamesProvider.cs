@@ -7,7 +7,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// 大会名の表（data/display-names.yaml・issue #1319）の Unity 側プロバイダ。
-    /// 起動時（<see cref="AppBootstrap"/>）に1回だけ StreamingAssets の YAML を読み、
+    /// 起動時（<see cref="AppBootstrap"/>）に1回だけ Resources の YAML（DataFiles） を読み、
     /// <see cref="DisplayNames.Use"/> で engine の表を差し替える。解釈は engine の <see cref="DisplayNamesParser"/>（テストと同一コード）。
     /// IO は Shell 層に隔離（不変条件#3）。
     ///
@@ -20,16 +20,16 @@ namespace KokoSim.Unity.Shell
 
         public static void Load()
         {
-            var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
+            var path = DataFiles.Describe(RelativePath);
             try
             {
-                if (!File.Exists(path))
+                if (!DataFiles.TryReadText(RelativePath, out var text))
                 {
-                    Debug.LogError($"[大会名] StreamingAssets に display-names.yaml が無い（{path}）。実名の既定値で続ける。tools/sync-engine-dll.sh を回すこと。");
+                    Debug.LogError($"[大会名] Resources に display-names.yaml が無い（{path}）。実名の既定値で続ける。tools/sync-engine-dll.sh を回すこと。");
                     DisplayNames.Use(null);
                     return;
                 }
-                DisplayNames.Use(DisplayNamesParser.Parse(File.ReadAllText(path)));
+                DisplayNames.Use(DisplayNamesParser.Parse(text));
             }
             catch (Exception e)
             {

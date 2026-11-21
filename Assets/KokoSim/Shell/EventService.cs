@@ -152,7 +152,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>係数（C#既定＝data/coefficients.yaml events: と同値）。</summary>
         public static EventCoefficients Coefficients { get; private set; } = new EventCoefficients();
 
-        /// <summary>常駐スケジューラ（イベント表は StreamingAssets から一度だけ読む）。</summary>
+        /// <summary>常駐スケジューラ（イベント表は Resources（DataFiles）から一度だけ読む）。</summary>
         public static EventScheduler Scheduler
         {
             get

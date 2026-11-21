@@ -209,12 +209,12 @@ namespace KokoSim.EditorTools
             if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, Target))
                 list.Add("Windows Build Support (Mono) が入っていません。Unity Hub → インストール → この版の「モジュールを加える」で入れてください。");
 
-            // engine DLL と StreamingAssets の YAML は Git 管理外の生成物（issue #785）。無いと起動直後に落ちる。
+            // engine DLL と Resources/KokoSimData の YAML は Git 管理外の生成物（issue #785）。無いと起動直後に落ちる。
             var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             if (!File.Exists(Path.Combine(root, "Assets/Plugins/KokoSim/KokoSim.Engine.dll")))
                 list.Add("engine DLL がありません。bash tools/sync-engine-dll.sh を回してください。");
-            if (!File.Exists(Path.Combine(root, "Assets/StreamingAssets/KokoSim/school-names.yaml")))
-                list.Add("StreamingAssets の YAML がありません。bash tools/sync-engine-dll.sh を回してください。");
+            if (!File.Exists(Path.Combine(root, "Assets/Resources/KokoSimData/school-names.yaml")))
+                list.Add("Resources/KokoSimData の YAML がありません。bash tools/sync-engine-dll.sh を回してください。");
 
             if (!EditorBuildSettings.scenes.Any(s => s.enabled))
                 list.Add("Build Settings に有効なシーンがありません。");

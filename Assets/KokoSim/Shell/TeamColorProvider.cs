@@ -7,7 +7,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// チームカラー（data/team-colors.yaml）の Unity 側プロバイダ（設計書18 §3.5.1）。
-    /// <see cref="SchoolNameVocabProvider"/> と同型＝StreamingAssets の YAML を読み、解釈はエンジンの
+    /// <see cref="SchoolNameVocabProvider"/> と同型＝Resources の YAML（DataFiles） を読み、解釈はエンジンの
     /// 純パーサ <see cref="TeamColorParser"/> に委譲する。IO は Shell 層に隔離（不変条件#3）。
     ///
     /// 自校の配色だけはプレイヤーが領域ごとに決められる（2026-07-29 監督決定）。上書きは
@@ -53,10 +53,10 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path))
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text))
                 {
-                    var palette = TeamColorParser.Parse(File.ReadAllText(path));
+                    var palette = TeamColorParser.Parse(text);
                     if (palette != null)
                     {
                         Debug.Log($"[チームカラー] 読込成功: 配色 {palette.Entries.Count} 件");
@@ -66,7 +66,7 @@ namespace KokoSim.Unity.Shell
                 }
                 else
                 {
-                    Debug.LogWarning($"[チームカラー] StreamingAssets に team-colors.yaml が無い（{path}）。既定4件で継続。");
+                    Debug.LogWarning($"[チームカラー] Resources に team-colors.yaml が無い（{path}）。既定4件で継続。");
                 }
             }
             catch (Exception e)

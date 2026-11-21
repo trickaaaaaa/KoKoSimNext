@@ -7,7 +7,7 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// 校名語彙（data/school-names.yaml）の Unity 側プロバイダ（school-name-vocab-plan.md C-1）。
-    /// Unity は KokoSim.Config（YamlDotNet）を持たないため、StreamingAssets に置いた YAML を読み、
+    /// Unity は KokoSim.Config（YamlDotNet）を持たないため、Resources に置いた YAML を読み、
     /// 解釈はエンジンの純パーサ <see cref="SchoolNameVocabParser"/> に委譲する（Balance と同一コード＝決定論一致）。
     /// IO は Shell 層に隔離（不変条件#3）。決定論生成なので初回のみ読み込み静的キャッシュする。
     /// </summary>
@@ -33,14 +33,14 @@ namespace KokoSim.Unity.Shell
         {
             try
             {
-                var path = Path.Combine(Application.streamingAssetsPath, RelativePath);
-                if (File.Exists(path))
+                var path = DataFiles.Describe(RelativePath);
+                if (DataFiles.TryReadText(RelativePath, out var text))
                 {
-                    var vocab = SchoolNameVocabParser.Parse(File.ReadAllText(path));
+                    var vocab = SchoolNameVocabParser.Parse(text);
                     Debug.Log($"[校名語彙] 読込成功: 県別 {vocab.PlacesByPrefecture.Count} 県 / 共有地名 {vocab.PlacePrefixes.Count} 語");
                     return vocab;
                 }
-                Debug.LogWarning($"[校名語彙] StreamingAssets に school-names.yaml が無い（{path}）。既定語彙で継続。");
+                Debug.LogWarning($"[校名語彙] Resources に school-names.yaml が無い（{path}）。既定語彙で継続。");
             }
             catch (Exception e)
             {

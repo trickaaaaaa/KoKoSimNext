@@ -17,7 +17,7 @@
 #   - engine 系はワーカー間に分散。衝突は「マージ直前の rebase＋再テスト」で機械検出し、
 #     コンフリクト時は needs-human 送り（main は壊さない）。
 #   - マージは REPO ロックで直列化（rebase→禁止物除去→ローカル再テスト→squash マージ）。
-#   - DLL（Assets/Plugins/KokoSim/KokoSim.Engine.dll）と StreamingAssets の YAML 複製は Git 管理外の
+#   - DLL（Assets/Plugins/KokoSim/KokoSim.Engine.dll）と Resources/KokoSimData の YAML 複製は Git 管理外の
 #     生成物（issue #785）。各 worktree では post-checkout / post-rewrite フックと check-unity-compile.sh
 #     が作る。万一ブランチに紛れ込んだらマージ工程で追跡から外す。
 #   - main の直近 CI が failure なら以降のマージを停止（赤 main への積み増し防止）。
@@ -79,9 +79,9 @@ RUN_START="$(date +%s)"
 LOG_DIR="$REPO_DIR/out/overnight/$STAMP"
 PROMPT_TEMPLATE="$REPO_DIR/tools/overnight-prompt.template.md"
 DOTNET="/usr/local/share/dotnet/dotnet"
-# 生成物（DLL / StreamingAssets 複製）の pathspec。Git 管理外（.gitignore 済み・issue #785）だが、
+# 生成物（DLL / Resources/KokoSimData 複製）の pathspec。Git 管理外（.gitignore 済み・issue #785）だが、
 # `git add -f` 等で紛れ込んだ場合に備えて WIP 自動退避から除外し、マージ工程で追跡から外す。
-GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll :(glob)Assets/StreamingAssets/KokoSim/**/*.yaml"
+GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll :(glob)Assets/Resources/KokoSimData/**/*.yaml"
 
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 MODEL="${OVERNIGHT_MODEL:-claude-sonnet-5-5}"          # 既定は Sonnet。model:opus ラベルで昇格
@@ -229,11 +229,11 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
     unlock "$REPO_LOCK"; return
   fi
 
-  # 生成物（DLL / StreamingAssets 複製）は Git 管理外（issue #785）。紛れ込んでいたら追跡から外す
+  # 生成物（DLL / Resources/KokoSimData 複製）は Git 管理外（issue #785）。紛れ込んでいたら追跡から外す
   # （作業ツリーのファイルは残す＝Unity 検査で使う）。
   if [ -n "$(git -C "$wt" ls-files -- $GEN_FILES 2>/dev/null)" ]; then
     git -C "$wt" rm -r -q --cached -- $GEN_FILES >/dev/null 2>&1 || true
-    git -C "$wt" commit -q -m "chore: untrack generated engine DLL / StreamingAssets (#785)" >/dev/null 2>&1 || true
+    git -C "$wt" commit -q -m "chore: untrack generated engine DLL / YAML copies (#785)" >/dev/null 2>&1 || true
   fi
 
   # 禁止物ガード: フォントバイナリ / 静的フォント資産 / CI 定義の改変はマージしない
@@ -375,7 +375,7 @@ review_pr() { # $1=num $2=pr $3=wt $4=log
 # スクショ完了待ち）は内側セッションが最も消滅しやすい区間で、そこで未コミットのまま消えると
 # 退避ネット（#348・下の「未 push の作業を失わないための退避」）はコミット済みしか救えず
 # worktree ごと全損する（実例: #393、45分の実装が跡形もなく消えた）。gen_files（DLL /
-# StreamingAssets 複製）は対象から除外する（.gitignore 済みだが、念のため明示的に外す。
+# Resources/KokoSimData 複製）は対象から除外する（.gitignore 済みだが、念のため明示的に外す。
 # ここで巻き込むと退避 PR に生成物が混ざる）。PR が既にある場合は呼ばない
 # （merge_sequence が別途 reset --hard するため）。
 auto_wip_commit() { # $1=wt $2=log $3=num
