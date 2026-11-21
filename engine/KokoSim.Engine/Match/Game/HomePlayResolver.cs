@@ -65,6 +65,11 @@ public static class HomePlayResolver
     public static BasePlayParams SecondForceParams(FieldGeometry field, BaserunningCoefficients c)
         => new(2, field.SecondBase, c.SecondForceTagSeconds, c.SecondForceSuccessBias, c.SecondForceMarginScale);
 
+    /// <summary>外野ゴロの係数束（issue #1130）: ハーフウェーで待った一塁走者を、落ちた打球を拾った外野手が二塁で封殺する。
+    /// 送球先は二塁ベース、タッチは二塁封殺と同軸（ベースを踏むだけ）、バイアス/幅は外野ゴロ固有。TargetBase=2。</summary>
+    public static BasePlayParams OutfieldForceSecondParams(FieldGeometry field, BaserunningCoefficients c)
+        => new(2, field.SecondBase, c.SecondForceTagSeconds, c.OutfieldForceSecondSuccessBias, c.OutfieldForceSecondMarginScale);
+
     /// <summary>三塁封殺レースの係数束（併殺の代替一段目＝二塁走者を三塁で自己フォース, Q31）。送球先は
     /// 三塁ベース、タッチ/バイアス/幅は自己フォース固有（<see cref="ThirdParams"/> とは別＝あちらは開けた
     /// 進塁レース用の校正で意味が違う）。TargetBase=3。</summary>

@@ -38,6 +38,9 @@ namespace KokoSim.Engine.Match.Game;
 /// true のとき <see cref="Situation"/> の時計は拾い直しを終えた時刻（<see cref="Fielding.FieldingPlay.CatchErrorReadyAtSeconds"/>）
 /// から始まっており、非フォースの二塁走者は三塁を狙うかを拾い直した野手との時間勝負で決める
 /// （<see cref="BaserunningModel.ApplyDetailed"/> の ReachedOnError）。false＝従来どおり（二塁走者は自動で三塁へ）。</param>
+/// <param name="FlyRead">フライ（フェアの飛球・ライナー）の読みの材料（issue #1130）。2アウト未満なら、塁上の走者は
+/// これを見て打った瞬間に走るか待つかを決める（<see cref="FlyReadModel"/>）。null＝フライでない／単体テスト等
+/// ＝読みなし（従来どおり全員が打った瞬間に走る）。</param>
 public readonly record struct HomePlayContext(
     FieldGeometry Field,
     HomePlaySituation Situation,
@@ -49,4 +52,5 @@ public readonly record struct HomePlayContext(
     double? BatterToFirstSeconds = null,
     double? DoublePlayPivotArmMps = null,
     FieldPosition? FielderRole = null,
-    bool UnrecoveredCatchError = false);
+    bool UnrecoveredCatchError = false,
+    FlyReadSituation? FlyRead = null);

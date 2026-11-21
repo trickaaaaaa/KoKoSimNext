@@ -142,6 +142,26 @@ scenarios:
     bases: [3]
     seed: 20260801   # 係数変更で解が動いたら選び直す（GameEndScenarioTests が見張る）
 
+  # ── フライの読み（issue #1130）。無死一塁で、最初の打席が際どいフライ。自然な解決をシードで固定する ──
+  - id: flyread-halfway-lab
+    name: フライの読み・一塁走者がハーフウェーで待ってから走る安打（1回表無死一塁）
+    away: { school: "AI:tier=C" }
+    home: { school: "AI:tier=C" }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    seed: 20261130013   # レフト前ヒット。係数変更で解が動いたら選び直す（FlyReadScenarioTests が赤くなる）
+  - id: flyread-force-lab
+    name: フライの読み・外野ゴロ（待った一塁走者が二塁で封殺・1回表無死一塁）
+    away: { school: "AI:tier=C" }
+    home: { school: "AI:tier=C" }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    seed: 20261132550   # ライトゴロ。係数変更で解が動いたら選び直す（FlyReadScenarioTests が赤くなる）
+
   # ── 盗塁の捕手送球の絵の検証（issue #662）。最初の打席の初球で必ず二盗を企図する ──
   # 走塁系の強制は「走者一塁・二塁空き・打席の初球」でだけ効く（ForceNextForCapture の注記）。
   # 成否だけを固定する（投球は通常どおり解く）ので、捕手の送球は守備ビューまで通る。

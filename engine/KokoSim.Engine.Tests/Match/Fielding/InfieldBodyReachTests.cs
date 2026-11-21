@@ -138,6 +138,8 @@ public sealed class InfieldBodyReachTests
                 // 処理野手から数m離れた所に移ってから拾い直す＝体と球が離れることが絵の本旨（弾いた）。
                 // 「処理点は体の届く所」という本テストの前提（通常の内野ゴロ処理）とは別の物理なので除外する。
                 if (e.Timeline.FumbledCatch) continue;
+                // 外野ゴロ（issue #1130）: 落ちたフライを拾って二塁で封殺した凡打＝空中の捕球ではない（拾って勢いで運ぶ絵）。
+                if (fly && e.Timeline.Ball.Any(b => b.Kind == BallSegmentKind.Roll)) continue;
                 if (e.FieldedBy is not { } role) continue;
                 if (!fly && (role is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField)) continue; // ゴロは内野だけ
                 var leg = e.Timeline.Moves.Where(m => m.Role == role && m.Task == FielderTask.FieldBall)

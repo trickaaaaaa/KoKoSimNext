@@ -93,8 +93,11 @@ public sealed class TagUpRunnerLegTests
             var catchAt = CatchTime(entry.Timeline!);
             if (catchAt is not { } tc) continue;
 
+            // ハーフウェーで待ってから戻る走者（issue #1130）は打った瞬間から動く＝タッチアップではないので見ない。
+            var returners = entry.Timeline!.Runners.Where(l => l.Returning).Select(l => l.Label).ToHashSet();
             foreach (var leg in MovingLegs(entry.Timeline!))
             {
+                if (returners.Contains(leg.Label)) continue;
                 if (leg.T0 < tc - 1e-6)
                     early.Add($"{leg.Label} が捕球({tc:F2}s)の {tc - leg.T0:F2}s 前に離塁");
             }

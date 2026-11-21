@@ -701,6 +701,38 @@ public sealed record BaserunningCoefficients
     /// 盗塁・エンドランの走者が刺されない現実（issue fly-out-runner-dp-table-and-doubled-off-depiction）。</summary>
     public double DoubledOffRetreatSpeedMps { get; init; } = 3.0;
 
+    // === フライの読み（issue #1130・設計書12 §4.10）===
+    // 塁上の走者は、打球が「落ちるか捕られるか」を打った瞬間には知らない。2アウト未満のフライでは、際どさ
+    // （捕球の余裕 FieldingPlay.CatchMarginSeconds＝物理層）を見て「打った瞬間に走る／待つ」を決め、待つなら
+    // ハーフウェー（一塁・二塁走者）か塁に付く（三塁走者・深いフライ）。読みの外れは走塁能力で小さく補正する。
+    /// <summary>「打った瞬間に走る」確率の logistic 幅[s]（捕球の余裕に対して）。小さいほど読みが鋭い。</summary>
+    public double FlyReadScaleSeconds { get; init; } = 0.20;
+    /// <summary>走るか待つかの境目となる捕球の余裕[s]。正＝確実に捕られそうな打球でだけ待つ（あと少しで捕れずに落ちる
+    /// 打球で待つと、目の前に落ちた球を外野手がすぐ拾って二塁で封殺する＝外野ゴロが多発する。Heavy 実測で 0.25）。</summary>
+    public double FlyReadGoBiasSeconds { get; init; } = 0.25;
+    /// <summary>走塁能力（ability_effect の Running）による読みの鋭さの補正。幅＝Scale×(1−slope×(Running−50)/50)。</summary>
+    public double FlyReadAbilitySlope { get; init; } = 0.50;
+    /// <summary>読みの幅の倍率の下限（能力が高くても読みは完璧にならない）。</summary>
+    public double FlyReadScaleMinFactor { get; init; } = 0.40;
+    /// <summary>走る確率がこの値未満／(1−この値)超なら乱数を引かずに決める（明らかに捕れる／落ちる打球）。</summary>
+    public double FlyReadCertainProbability { get; init; } = 0.02;
+    /// <summary>待った走者が、打球が落ちたのを見てから走り出すまでの反応[s]。</summary>
+    public double FlyReadResumeSeconds { get; init; } = 0.30;
+    /// <summary>ハーフウェーの位置の上限（元の塁から次塁へ向かった距離[m]）。実際の位置は打球ごとに「捕られても戻れる距離」
+    /// （戻し送球の秒−反転−<see cref="FlyHalfwaySafetySeconds"/>）×脚力で決まり、これを超えない。</summary>
+    public double FlyHalfwayLeadM { get; init; } = 9.0;
+    /// <summary>ハーフウェーの位置を決めるときの戻りの余裕[s]（捕られても確実に戻れるだけ手前で待つ）。</summary>
+    public double FlyHalfwaySafetySeconds { get; init; } = 0.90;
+    /// <summary>これより浅い打球（落下点が本塁からこの距離[m]未満＝内野のポップ・ライナー）では、走者は塁に付いて動かない
+    /// （「ライナーは止まれ」）＝読みの乱数を引かない。浅い外野のポテンはこれより外＝読む。</summary>
+    public double FlyHalfwayMinRangeM { get; init; } = 40.0;
+    /// <summary>外野ゴロ（ハーフウェーで待った一塁走者を、落ちた打球を拾った外野手が二塁で封殺）の logistic 幅[s]。</summary>
+    public double OutfieldForceSecondMarginScale { get; init; } = 0.30;
+    /// <summary>外野ゴロの到達確率バイアス[s]（校正項）。</summary>
+    public double OutfieldForceSecondSuccessBias { get; init; } = 0.0;
+    /// <summary>外野手が二塁へ投げるのは、走者が間に合う見込みがこの値未満のときだけ（刺せると見たとき）。</summary>
+    public double OutfieldForceSecondMaxRunnerSuccess { get; init; } = 0.40;
+
     // === 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）===
     // 「捕手リード＋投手センス vs 状況の意外性」を確率化。読まれた盗塁はピッチアウトで捕手が優位に立ち
     // 送球が速くなる＝刺されやすい。意表（低い企図度・ギャンブル始動）は読まれにくい。

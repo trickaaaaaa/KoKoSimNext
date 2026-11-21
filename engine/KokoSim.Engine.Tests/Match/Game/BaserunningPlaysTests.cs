@@ -887,7 +887,7 @@ public sealed class BaserunningPlaysTests
         var dropsWithThird = 0;
         var dropsWithSecond = 0;
         var dropsWithFirst = 0;
-        for (ulong seed = 1; seed <= 60; seed++)
+        for (ulong seed = 1; seed <= 120; seed++)
         {
             var r = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(seed));
             var expectedAway = 0;
