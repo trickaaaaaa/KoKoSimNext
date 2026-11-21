@@ -213,6 +213,7 @@ public static class CoefficientsLoader
         public double PitchingScale { get; set; } = D.PitchingScale;
         public double OutfieldDefenseTopKnee { get; set; } = D.OutfieldDefenseTopKnee;
         public double OutfieldDefenseTopSlope { get; set; } = D.OutfieldDefenseTopSlope;
+        public double Delta { get; set; } = D.Delta;
 
         public KokoSim.Engine.Players.AbilityEffectCoefficients ToModel() => new()
         {
@@ -224,6 +225,7 @@ public static class CoefficientsLoader
             ArmScale = ArmScale,
             RunningScale = RunningScale,
             PitchingScale = PitchingScale,
+            Delta = Delta,
         };
     }
 
