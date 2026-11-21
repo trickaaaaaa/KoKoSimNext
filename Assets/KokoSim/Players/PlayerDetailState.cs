@@ -178,7 +178,7 @@ namespace KokoSim.Unity.Players
     public sealed class PlayerDetailState
     {
         // 全画面で共有する単一ソースのロスター（主将フラグを含む可変状態を画面間で一致させる, RosterService）。
-        private readonly IReadOnlyList<DevelopingPlayer> _roster;
+        private IReadOnlyList<DevelopingPlayer> _roster;
 
         // カテゴリ別ランクの重み（単一静的ソースを参照, Issue #30・#93 レーダー統一・#140 集約）。
         private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
@@ -190,8 +190,12 @@ namespace KokoSim.Unity.Players
 
         public int Count => _roster.Count;
 
+        /// <summary>在籍一覧が変わっていたら引き直す（週送りの年度替わり・issue #1250）。</summary>
+        public void SyncRoster() => RosterService.RefreshActive(ref _roster);
+
         public PlayerDetailView BuildView(int index)
         {
+            SyncRoster();
             if (_roster.Count == 0) return new PlayerDetailView();
             index = System.Math.Max(0, System.Math.Min(index, _roster.Count - 1));
             var p = _roster[index];

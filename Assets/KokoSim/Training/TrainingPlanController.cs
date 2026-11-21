@@ -59,7 +59,12 @@ namespace KokoSim.Unity.Training
         {
             // 共通トップバーの「今週を進める」で週送り（合宿・成長段階プレビューが連動）。
             // 全タブ共通の進週処理へ集約（issue #134: 大会モード中はホームへ回送して日送りへ引き継ぐ）。
-            Click("advance", () => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(Render));
+            Click("advance", () => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(() =>
+            {
+                // 年度替わりで部員が入れ替わったら一覧を引き直す。開いていたモーダルは別人を指すので閉じる（issue #1250）。
+                if (_state.SyncRoster()) { _modalOpen = false; _copyOpen = false; }
+                Render();
+            }));
             // モーダル内の操作（対象は選択選手）。押下後も Render で開いたまま最新化する。
             Click("template-save", () => { _state.SaveTemplate(); Toast("週テンプレを保存しました"); Render(); });
             Click("delegate-toggle", () => { _state.ToggleDelegate(_state.SelectedIndex); Render(); });

@@ -232,8 +232,8 @@ namespace KokoSim.Unity.Training
         // 以前は画面ローカルの _plans[] を並行して持っており、①週送りの実適用が固定7周期メニューだけを見て
         // この配分を無視していた ②画面を離れて戻ると _plans が既定に戻る、の2重の乖離があった。
         // Plan は共有ロスターに載るので画面往復で保持され、週送り（TrainingWeek.Apply）と同じソースを読む。
-        private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用＋計画の単一ソース（RosterService.Active）
-        private readonly bool[] _delegated;              // 選手索引→委任フラグ（UI状態・issue #484 要判断: 恒久化は保留）
+        private IReadOnlyList<DevelopingPlayer> _roster; // 表示用＋計画の単一ソース（RosterService.Active）
+        private bool[] _delegated;              // 選手索引→委任フラグ（UI状態・issue #484 要判断: 恒久化は保留）
         private readonly List<SavedTemplate> _templates = new List<SavedTemplate>(); // 週テンプレ（UI状態）
         private int _selected;
         // モーダルを開いた（＝選手を選択した）時点の配分スナップショット。「元に戻す」の復元先（issue #222⑥）。
@@ -257,6 +257,35 @@ namespace KokoSim.Unity.Training
             _delegated = new bool[_roster.Count];
             // 背番号は DevelopingPlayer.UniformNumber（メンバー設定画面で編集）を単一ソースとして読む。
             // 現在週は GameClock（全画面共有）。既定はシーズン頭（週0＝4月）。冬合宿を見るには週送りする。
+        }
+
+        /// <summary>
+        /// 在籍一覧が変わっていたら引き直す（週送りの年度替わり・issue #1250）。委任フラグ・選択は同じ選手を
+        /// 引き継ぎ、いなくなっていれば選択は先頭へ戻す。変わったら true。
+        /// </summary>
+        public bool SyncRoster()
+        {
+            var old = _roster;
+            var oldDelegated = _delegated;
+            var selected = _selected < old.Count ? old[_selected] : null;
+            if (!RosterService.RefreshActive(ref _roster)) return false;
+
+            var flags = new Dictionary<DevelopingPlayer, bool>();
+            for (var i = 0; i < old.Count; i++) flags[old[i]] = oldDelegated[i];
+            _delegated = new bool[_roster.Count];
+            for (var i = 0; i < _roster.Count; i++)
+                _delegated[i] = flags.TryGetValue(_roster[i], out var on) && on;
+
+            var at = selected == null ? -1 : IndexOfPlayer(selected);
+            _selected = at >= 0 ? at : 0;
+            _revertIndex = at >= 0 && _revertIndex >= 0 ? at : -1;
+            return true;
+        }
+
+        private int IndexOfPlayer(DevelopingPlayer p)
+        {
+            for (var i = 0; i < _roster.Count; i++) if (ReferenceEquals(_roster[i], p)) return i;
+            return -1;
         }
 
         /// <summary>選手の練習計画（単一ソースは <see cref="DevelopingPlayer.Plan"/>）。
