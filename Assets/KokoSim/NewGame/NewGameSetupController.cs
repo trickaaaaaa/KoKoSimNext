@@ -177,7 +177,15 @@ namespace KokoSim.Unity.NewGame
             }
         }
 
-        private string TypedName => (_name?.value ?? "").Trim();
+        /// <summary>入力を改名と同じ規則で幹へ整えたもの（末尾の「高校」・前後の空白は落とす）。空・上限超えは入力そのまま。</summary>
+        private string TypedName
+        {
+            get
+            {
+                var raw = _name?.value ?? "";
+                return SchoolNames.TryNormalizeStem(raw, out var stem) && stem != null ? stem : raw.Trim();
+            }
+        }
 
         /// <summary>入力が通らない理由（通るなら空文字）。</summary>
         private string Validate()
@@ -186,10 +194,9 @@ namespace KokoSim.Unity.NewGame
             if (name.Length == 0) return "校名を入力してください";
             if (name.Length > MaxNameLength) return "校名は " + MaxNameLength + " 文字までです";
             // 同じ県に同名の生成校が居ると大会表で見分けが付かない。県内だけ見れば足りる
-            // （対戦相手として並ぶのは県内校だから）。
-            var full = name + "高校";
-            foreach (var s in NationService.Nation.InPrefecture(_prefectureId))
-                if (s.Name == full || s.Name == name) return "その校名は県内の学校と重複しています";
+            // （対戦相手として並ぶのは県内校だから）。新規ゲームは全国を作り直すので、前の進行の差分が
+            // 乗った Nation ではなく生成時の名前と照合する。
+            if (NationService.IsNewGameStemTaken(_prefectureId, name)) return "その校名は県内の学校と重複しています";
             return "";
         }
 

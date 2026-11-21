@@ -139,6 +139,13 @@ namespace KokoSim.Unity.Shell
         public static TournamentBracketView DisplayBracket(TournamentBracketView view)
             => view?.Renamed(DisplayName);
 
+        /// <summary>
+        /// 新規ゲームの校名の重複チェック（issue #1251）。前の進行の改名・転任の差分が乗った <see cref="Nation"/> ではなく、
+        /// 生成時の名前で照合する＝まっさらな全国に対する答えになる（新規ゲームは全国を作り直すため）。
+        /// </summary>
+        public static bool IsNewGameStemTaken(int prefectureId, string stem)
+            => SchoolNames.IsGeneratedStemTaken(GeneratedNation.InPrefecture(prefectureId), stem);
+
         private static readonly NationCoefficients Coeff = new NationCoefficients();
         private static Nation _generated;
         private static Nation _nation;

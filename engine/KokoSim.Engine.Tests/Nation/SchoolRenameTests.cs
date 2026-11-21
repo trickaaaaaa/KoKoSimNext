@@ -71,6 +71,21 @@ public sealed class SchoolRenameTests
     }
 
     [Fact]
+    public void IsGeneratedStemTaken_ComparesGeneratedNamesNotRenames()
+    {
+        var schools = MakePrefecture(100, 3);
+        var overlay = new NationOverlay();
+        overlay.SetRename(schools[1], "水浜商工");
+
+        // 前の進行で改名された学校の元の名前（生成時）も、まっさらな全国では埋まっている
+        Assert.True(SchoolNames.IsGeneratedStemTaken(schools, "架空101"));
+        Assert.True(SchoolNames.IsGeneratedStemTaken(schools, "架空100"));
+        // 改名後の名前は生成時の名前ではない
+        Assert.False(SchoolNames.IsGeneratedStemTaken(schools, "水浜商工"));
+        Assert.False(SchoolNames.IsGeneratedStemTaken(schools, "存在しない"));
+    }
+
+    [Fact]
     public void Save_RoundTripsRenames_AndOldVersionReadsEmpty()
     {
         var state = new SaveState();
