@@ -9,6 +9,12 @@ namespace KokoSim.Engine.Match.Tactics;
 /// </summary>
 public sealed record TacticsCoefficients
 {
+    // ブラウザ版（IL2CPP→Emscripten）は、record が自動で作る GetHashCode（全プロパティを1つの式でつなぐ）の
+    // 括弧の入れ子が256段を超えるとコンパイルできない（プロパティ約85個が上限）。自分で書いて自動生成を止める。
+    // 等しい値は同じ型＝同じハッシュになるので Equals との約束は守れる（係数を辞書のキーには使っていない）。
+    // LargeRecordHashCodeTests が見張る。
+    public override int GetHashCode() => GetType().GetHashCode();
+
     // ===== 攻撃サイン判断（StandardTacticsBrain） =====
     /// <summary>送りバントを考え始めるイニング。</summary>
     public int SacBuntFromInning { get; init; } = 7;

@@ -3,6 +3,12 @@ namespace KokoSim.Engine.Match.Game;
 /// <summary>走塁進塁の確率係数（YAML駆動, 得点分布の統計回帰で調整）。</summary>
 public sealed record BaserunningCoefficients
 {
+    // ブラウザ版（IL2CPP→Emscripten）は、record が自動で作る GetHashCode（全プロパティを1つの式でつなぐ）の
+    // 括弧の入れ子が256段を超えるとコンパイルできない（プロパティ約85個が上限）。自分で書いて自動生成を止める。
+    // 等しい値は同じ型＝同じハッシュになるので Equals との約束は守れる（係数を辞書のキーには使っていない）。
+    // LargeRecordHashCodeTests が見張る。
+    public override int GetHashCode() => GetType().GetHashCode();
+
     /// <summary>
     /// 表示能力→物理層の効き（設計書21・<see cref="KokoSim.Engine.Players.AbilityEffectCoefficients"/>）。正典は YAML の <c>ability_effect:</c> 1ブロックで、
     /// ローダが batting/fielding/baserunning の3ブロックへ<b>同じ値</b>を配る（解決式が手元の係数束から引けるようにするため）。
