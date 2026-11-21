@@ -209,6 +209,10 @@ public sealed class DevelopingPlayer
     public int SlumpWeeks { get; set; }
     /// <summary>イップス（送球/制球の不調, 恒久寄り。克服イベントで解消）。</summary>
     public bool HasYips { get; set; }
+    /// <summary>発症時に下げた能力（克服で同じ能力を戻す。null＝発症の記録なし＝旧セーブ）。</summary>
+    public AbilityKind? YipsAbility { get; set; }
+    /// <summary>発症時に実際に下がった量（下限1で5未満のこともある）。克服ではこの量だけ戻す。</summary>
+    public int YipsDrop { get; set; }
 
     public int Level(AbilityKind k) => _level[(int)k];
     public int Cap(AbilityKind k) => _cap[(int)k];
@@ -312,6 +316,8 @@ public sealed class DevelopingPlayer
             InjuryResistance = InjuryResistance,
             SlumpWeeks = SlumpWeeks,
             HasYips = HasYips,
+            YipsAbility = YipsAbility,
+            YipsDrop = YipsDrop,
         };
         // 投手役は適性からの導出なので複製しない（#377）。適性は下でコピーするため結果は一致する。
         for (var i = 0; i < Count; i++)

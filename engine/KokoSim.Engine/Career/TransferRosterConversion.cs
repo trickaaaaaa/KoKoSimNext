@@ -173,7 +173,7 @@ public static class TransferRosterConversion
             var rounded = Math.Round(level + gap);
             return k == AbilityKind.Stamina
                 ? (int)Math.Max(level + 2, rounded)
-                : (int)MathUtil.Clamp(rounded, level + 2, 99);
+                : (int)Math.Min(99.0, Math.Max(level + 2, rounded));
         }
         void Set(AbilityKind k, int level)
         {
@@ -212,8 +212,8 @@ public static class TransferRosterConversion
         }
 
         // 精神系の上限も同じ流儀（新入生は現在値＋gap、下限は現在値＋2）。
-        dp.MentalCap = (int)MathUtil.Clamp(Math.Round(s.Mental + rng.NextGaussian(c.CapGapMean * remaining, c.CapGapSd * remaining)), s.Mental + 2, 99);
-        dp.LeadCap = (int)MathUtil.Clamp(Math.Round(s.Lead + rng.NextGaussian(c.CapGapMean * remaining, c.CapGapSd * remaining)), s.Lead + 2, 99);
+        dp.MentalCap = (int)Math.Min(99.0, Math.Max(s.Mental + 2, Math.Round(s.Mental + rng.NextGaussian(c.CapGapMean * remaining, c.CapGapSd * remaining))));
+        dp.LeadCap = (int)Math.Min(99.0, Math.Max(s.Lead + 2, Math.Round(s.Lead + rng.NextGaussian(c.CapGapMean * remaining, c.CapGapSd * remaining))));
         dp.ConditionValue = s.ConditionValue;
         return dp;
     }

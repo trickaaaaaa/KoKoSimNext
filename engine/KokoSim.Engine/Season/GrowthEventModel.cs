@@ -168,8 +168,11 @@ public static class GrowthEventModel
             if (p.HasYips && MathUtil.Chance(c.YipsOvercomeWeeklyProb, rng))
             {
                 p.HasYips = false;
-                var k = PitcherRoleResolver.LeansPitcher(p) ? AbilityKind.Control : AbilityKind.ThrowAccuracy;
-                Raise(p, k, c.YipsAbilityDrop); // 落ちた分を取り返す
+                // 発症時に下げた能力を下げた量だけ戻す。記録の無い旧セーブだけ従来どおり現在の役から選ぶ。
+                var k = p.YipsAbility ?? (PitcherRoleResolver.LeansPitcher(p) ? AbilityKind.Control : AbilityKind.ThrowAccuracy);
+                Raise(p, k, p.YipsAbility is null ? c.YipsAbilityDrop : p.YipsDrop);
+                p.YipsAbility = null;
+                p.YipsDrop = 0;
                 notices.Add(new GrowthNotice(p, GrowthEventType.YipsOvercome, k));
                 continue;
             }
@@ -411,7 +414,10 @@ public static class GrowthEventModel
 
         p.HasYips = true;
         var k = PitcherRoleResolver.LeansPitcher(p) ? AbilityKind.Control : AbilityKind.ThrowAccuracy;
-        p.SetLevel(k, Math.Max(1, p.Level(k) - c.YipsAbilityDrop));
+        var before = p.Level(k);
+        p.SetLevel(k, Math.Max(1, before - c.YipsAbilityDrop));
+        p.YipsAbility = k;
+        p.YipsDrop = before - p.Level(k);
         notices.Add(new GrowthNotice(p, GrowthEventType.Yips, k));
     }
 
