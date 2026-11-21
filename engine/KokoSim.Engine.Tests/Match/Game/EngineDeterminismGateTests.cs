@@ -34,6 +34,11 @@ public sealed class EngineDeterminismGateTests
         Assert.True(missing.Count == 0, "ベースライン欠落: " + string.Join(", ", missing));
         Assert.True(mismatches.Count == 0,
             $"決定論ゲート不一致（{mismatches.Count}件・no-go）:\n" + string.Join("\n", mismatches));
-        Assert.True(chec0 >= 150, $"検証件数が少ない（{chec0}）");
+        // 件数はカード×シードから決まる（regen-determinism-baseline.sh の行数検査と同じ根拠。issue #1232）
+        var expectedCount = DeterminismCards.CardNames.Length * System.Linq.Enumerable.Count(DeterminismCards.Seeds());
+        Assert.True(chec0 == expectedCount, $"検証件数が合わない（{chec0}／期待 {expectedCount}）");
+        // 余分な行（消えたカード・範囲外のシード）も検出する
+        Assert.True(baseline.Count == expectedCount,
+            $"ベースラインに余分な行がある（{baseline.Count}行／期待 {expectedCount}行）");
     }
 }

@@ -10,10 +10,11 @@
 set -u
 
 repo="$(git rev-parse --show-toplevel)"
-changed="$(git diff --name-only origin/main...HEAD 2>/dev/null | grep -E '^Assets/.*\.cs$' || true)"
+# engine 本体の .cs も対象（public API の改名だけでも DLL 経由で Assets が壊れる。issue #1232）
+changed="$(git diff --name-only origin/main...HEAD 2>/dev/null | grep -E '^(Assets/.*|engine/KokoSim\.Engine/.*)\.cs$' || true)"
 [ -z "$changed" ] && exit 0
 
-echo "[pre-push] Assets/ の C# に差分があります。Unity コンパイル検査を実行します…"
+echo "[pre-push] Assets/ か engine の C# に差分があります。Unity コンパイル検査を実行します…"
 out="$(bash "$repo/tools/check-unity-compile.sh" "$repo" 2>&1)"; rc=$?
 case "$rc" in
   0) echo "[pre-push] ✅ Unity コンパイル検査 緑"; exit 0 ;;

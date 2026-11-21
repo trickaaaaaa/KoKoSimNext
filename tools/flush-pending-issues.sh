@@ -36,8 +36,16 @@ if [[ $DRY_RUN -eq 0 ]] && ! gh issue list --repo "$REPO" --limit 1 >/dev/null 2
   exit 1
 fi
 
+# フロントマター（最初の2本の "---" の間）だけを出す。本文中の "url:" 等を拾わない（issue #1255）。
+frontmatter() { awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; if(n>=2) exit; next} n==1{print}' "$1"; }
 # フロントマターの1項目を取り出す（値が空なら空文字）。
-field() { sed -n "s/^$2:[[:space:]]*//p" "$1" | head -1; }
+# url だけは行末の「# 起票後に…」を値と読まないよう、空白の後の # 以降を落とす（URL 自体に # は出ない）。
+# title 等は「#1234 の続き」のような値があり得るので落とさない。
+field() {
+  local v; v="$(frontmatter "$1" | sed -n "s/^$2:[[:space:]]*//p" | head -1)"
+  [ "$2" = "url" ] && v="$(printf '%s' "$v" | sed 's/[[:space:]]*#.*$//')"
+  printf '%s' "$v" | sed 's/[[:space:]]*$//'
+}
 
 created=0
 skipped=0
@@ -46,20 +54,21 @@ for f in "$DIR"/*.md; do
   name="$(basename "$f")"
 
   if [[ -n "$(field "$f" url)" ]]; then
-    echo "skip  $name（既に起票済み: $(field "$f" url)）"
+    echo "skip  ${name}（既に起票済み: $(field "$f" url)）"
     skipped=$((skipped + 1))
     continue
   fi
 
   title="$(field "$f" title)"
   if [[ -z "$title" ]]; then
-    echo "skip  $name（title が無い）" >&2
+    echo "skip  ${name}（title が無い）" >&2
     skipped=$((skipped + 1))
     continue
   fi
 
   # 本文＝2つ目の "---" より後ろ（フロントマターは起票内容に含めない）。
-  body="$(awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n>=2{print}' "$f")"
+  # 本文中の "---"（区切り線）は残す（issue #1255: 以前は全部落としていた）。
+  body="$(awk 'BEGIN{n=0} n<2 && /^---[[:space:]]*$/{n++; next} n>=2{print}' "$f")"
 
   # ラベル引数を組む。無いラベルは事前に作る（色・説明は .claude/skills/issue/SKILL.md の表と同じ）。
   label_args=()
@@ -99,7 +108,17 @@ for f in "$DIR"/*.md; do
 
   # 二重起票を防ぐため、採番された URL をフロントマターへ書き戻す。
   # ⚠ macOS の sed は -i に引数が要る（GNU sed と非互換）ので明示する。
-  sed -i '' "s|^url:.*|url: $url|" "$f"
+  # フロントマターの中の url: だけを書き換える（本文の "url:" 行には触らない）。
+  # フロントマターに url: が無い草稿は、閉じの "---" の直前に足す（無いと書き戻されず二重起票になる）。
+  tmp2="$(mktemp)"
+  awk -v url="$url" '
+    BEGIN{n=0; done=0}
+    /^---[[:space:]]*$/ && n<2 {
+      n++
+      if (n==2 && !done) { print "url: " url; done=1 }
+      print; next }
+    n==1 && /^url:/ && !done { print "url: " url; done=1; next }
+    { print }' "$f" > "$tmp2" && mv "$tmp2" "$f"
   echo "created  $name → $url"
   created=$((created + 1))
 done

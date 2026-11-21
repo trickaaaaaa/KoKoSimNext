@@ -54,6 +54,15 @@ if ! DOTNET="$DOTNET" bash "$SELF_ROOT/tools/sync-engine-dll.sh" "$TARGET" >/dev
   exit 1
 fi
 
+# 中断（Ctrl-C・夜間のタイムアウト kill）でもゲート用 csproj を残さない（issue #1232）。
+# 残ると Unity が「知らない csproj」を拾い、次回の検査も古い中身を読む。
+cleanup_gates() {
+  rm -f "$TARGET/Assembly-CSharp.unitygate.csproj" "$TARGET/Assembly-CSharp-Editor.unitygate.csproj" \
+        "$TARGET/Assembly-CSharp-Player.unitygate.csproj"
+}
+trap cleanup_gates EXIT
+trap 'exit 130' INT TERM
+
 rc=0
 # 3パス目 "Assembly-CSharp-Player" は Assembly-CSharp を **UNITY_EDITOR 抜き**で通す
 # （issue: 打球処理3D化 F8）。エディタ定義付きでしか通していないと、製品コードが
@@ -109,7 +118,7 @@ for asm in Assembly-CSharp Assembly-CSharp-Editor Assembly-CSharp-Player; do
     { print }
   ' "$tpl" > "$gate"
 
-  out="$( cd "$TARGET" && "$DOTNET" build "$gate" -v q --nologo 2>&1 )"
+  out="$( cd "$TARGET" && "$DOTNET" build "$gate" -v q --nologo 2>&1 )"; build_rc=$?
   # dotnet は同じ診断を2回出す（restore 相当と build）ので重複を落とし、
   # 絶対パスと末尾の [.../*.csproj] を削って読める1行にする。
   errs="$(printf '%s\n' "$out" \
@@ -122,13 +131,16 @@ for asm in Assembly-CSharp Assembly-CSharp-Editor Assembly-CSharp-Player; do
     echo "🔴 ${asm}: コンパイルエラー $(printf '%s\n' "$errs" | wc -l | tr -d ' ') 件"
     printf '%s\n' "$errs" | sed 's/^/    /' | head -20
     rc=1
+  elif [ "$build_rc" -ne 0 ]; then
+    # `: error CSxxxx` の形でない失敗（restore・MSBuild・参照解決）も赤にする（issue #1232:
+    # 以前は error 行が無ければ緑と判定し、ビルドが別の理由で落ちても素通りしていた）
+    echo "🔴 ${asm}: ビルドが失敗（終了コード ${build_rc}・コンパイルエラー行なし）"
+    printf '%s\n' "$out" | grep -iE 'error|fail' | sed -e "s#${TARGET}/##g" | awk '!seen[$0]++' | head -10 | sed 's/^/    /'
+    rc=1
   else
     echo "✅ ${asm}: エラーなし（${warns:-warnings 不明}）"
   fi
 done
 
-# Editor 側が Assembly-CSharp.unitygate.csproj を参照するので、両方終わってから消す。
-rm -f "$TARGET/Assembly-CSharp.unitygate.csproj" "$TARGET/Assembly-CSharp-Editor.unitygate.csproj" \
-      "$TARGET/Assembly-CSharp-Player.unitygate.csproj"
-
+# Editor 側が Assembly-CSharp.unitygate.csproj を参照するので、両方終わってから消す（EXIT の trap が消す）。
 exit "$rc"

@@ -20,6 +20,10 @@ DuelCalibration のスライダ）へ移した。** 絵を見ながら追い込�
   blender -b --factory-startup --python tools/motion-edit.py -- \
       --in Assets/Motions/Duel/Batter_Batting_01.fbx --out /tmp/out.fbx \
       --fix grip --fix head --fix knee --probe
+  左打者の収録は --bats L（投手方向＝足並びと踏み込み脚を左右入れ替える）
+
+  --out は元の FBX と同じパス・Assets/ の中には書かない（--force 1 で許す）。FBX を上書きすると
+  Unity の .meta が腐ってクリップが消える既知事故と同じ形になる（issue #1255）。
 
 注意:
   - ポーズボーン行列（pose.bones[].matrix）は**オブジェクト空間**（このFBXは cm・スケール0.01）。
@@ -93,7 +97,19 @@ DEFAULTS = {
     "knee_side": "Left",         # 踏み込み脚（右打者は左）
 }
 
+# クリップのフレームレート。読み込んだ FBX のシーン設定から取り直す（issue #1255: 以前は 30 決め打ちで、
+# 60fps 収録だと補正窓の秒がすべて2倍ずれていた）。load() の後で set_fps_from_scene() が上書きする。
 FPS = 30.0
+# 打者の左右（--bats）。stance_dir が足並びの向きに使う
+BATS = "R"
+
+
+def set_fps_from_scene():
+    global FPS
+    r = bpy.context.scene.render
+    if r.fps > 0 and r.fps_base > 0:
+        FPS = r.fps / r.fps_base
+    print("[motion-edit] FPS = %g" % FPS)
 
 
 # ---------------------------------------------------------------- 下ごしらえ
@@ -200,12 +216,14 @@ def wrap180(a):
 
 
 def stance_dir(arm, frame):
-    """打者から見た投手方向（オブジェクト空間・水平）。両足並び＝捕手側の足→踏み込み足。"""
+    """打者から見た投手方向（オブジェクト空間・水平）。両足並び＝捕手側の足→踏み込み足。
+    右打者は右足が捕手側、左打者は左足が捕手側（issue #1255: 以前は右打者に決め打ち）。"""
     scn = bpy.context.scene
     scn.frame_set(frame)
     update()
-    back = obj_pos(arm, "RightFoot")
-    front = obj_pos(arm, "LeftFoot")
+    catcher_side, stride_side = ("RightFoot", "LeftFoot") if BATS == "R" else ("LeftFoot", "RightFoot")
+    back = obj_pos(arm, catcher_side)
+    front = obj_pos(arm, stride_side)
     v = front - back
     v.z = 0.0
     return v.normalized()
@@ -367,8 +385,24 @@ def main():
     p.update(opts.get("params", {}))
     src, dst = opts["in"], opts.get("out")
     fixes = set(opts["fix"])
+    global BATS
+    BATS = opts.get("bats", "R").upper()
+    if BATS not in ("R", "L"):
+        sys.exit("[motion-edit] --bats は R か L")
+    if BATS == "L" and "knee_side" not in opts.get("params", {}):
+        p["knee_side"] = "Right"   # 左打者の踏み込み脚は右
+    if dst and "force" not in opts:
+        import os
+        dst_abs = os.path.abspath(dst).replace("\\", "/")
+        same = os.path.exists(dst) and os.path.samefile(src, dst)
+        in_assets = "/Assets/" in dst_abs + "/" or dst_abs.startswith(os.path.abspath("Assets").replace("\\", "/"))
+        if same or in_assets:
+            sys.exit("[motion-edit] --out が元の FBX か Assets/ の中を指している（%s）。上書きは .meta を腐らせて"
+                     "クリップを消す既知事故と同じ形＝別の場所へ書いて確かめてから手で差し替える。"
+                     "どうしても書くなら --force 1" % dst)
 
     arm = load(src)
+    set_fps_from_scene()
     act = action_of(arm)
     f0, f1 = frame_range(act)
     scn = bpy.context.scene

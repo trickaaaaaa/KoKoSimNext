@@ -79,7 +79,7 @@ public static class DeterminismCards
     }
 
     /// <summary>代表カード名。</summary>
-    public static readonly string[] CardNames = { "avg", "tactics", "modern", "pitch-tactics", "messenger" };
+    public static readonly string[] CardNames = { "avg", "tactics", "modern", "pitch-tactics", "messenger", "dh-weather" };
 
     public static GameResult Run(string card, ulong seed)
     {
@@ -106,6 +106,11 @@ public static class DeterminismCards
                     new GameContext(), rng);
             case "messenger":
                 return RunMessenger(seed, new GameContext());
+            case "dh-weather":
+                // issue #1232: 他のカードは天候なし・既定球場・DHなし・球数制限なしで、これらの経路だけを変える
+                // 変更が指紋をすり抜けていた（tools/needs-heavy.sh は「Match/ だけで指紋が不変なら Heavy 不要」と判定する）。
+                // DH・天候（真夏の分布）・左右非対称の球場・低い球数上限・タイブレークを1枚にまとめて見張る。
+                return RunDhWeather(seed, DhWeatherContext);
             default:
                 throw new System.ArgumentOutOfRangeException(nameof(card), card, "unknown card");
         }
@@ -149,6 +154,35 @@ public static class DeterminismCards
         Contact = 50, Power = 50, LaunchTendency = 50, Discipline = 50,
         Speed = 50, ArmStrength = 50, Fielding = 50, Catching = 50,
     };
+
+    /// <summary>"dh-weather" カードの試合条件。球数上限 100 は単一試合でも先発が到達する値＝継投の強制経路を毎試合通す。</summary>
+    public static readonly GameContext DhWeatherContext = new()
+    {
+        Weather = new WeatherCoefficients { Enabled = true },
+        Field = new FieldGeometry { LeftFenceM = 91.0, RightFenceM = 100.0, CenterFenceM = 122.0, FenceHeightM = 2.5 },
+        WeeklyPitchLimit = 100,
+        TieBreakEnabled = true, TieBreakStartInning = 10,
+    };
+
+    /// <summary>"dh-weather" カード。ctx を差し替えられるのは、各条件が digest に効いていることを確かめるため。</summary>
+    public static GameResult RunDhWeather(ulong seed, GameContext ctx, bool useDh = true)
+    {
+        Team Make(string n) => (useDh ? DhTeam(n) : Team(n)) with { Tactics = new StandardTacticsBrain() };
+        return GameEngine.Play(Make("A"), Make("H"), ctx, new Xoshiro256Random(seed));
+    }
+
+    /// <summary>
+    /// <see cref="Team"/> の DH 制版（"dh-weather" カード用）。9番の投手を打順から外して先発投手に回し、
+    /// 代わりに打撃寄りの DH を9番に入れる。
+    /// </summary>
+    private static Team DhTeam(string name)
+    {
+        var t = Team(name);
+        var order = new List<Player>(t.BattingOrder);
+        var pitcher = order[8];
+        order[8] = Pos(FieldPosition.FirstBase) with { Name = name + "DH", Contact = 60, Power = 65 };
+        return t with { BattingOrder = order, DhSlot = 8, StartingPitcher = pitcher };
+    }
 
     /// <summary>決定論ゲートの標準チーム（設計書17 F2 のシナリオテストからも同じ構成を使う）。</summary>
     public static Team Team(string name)

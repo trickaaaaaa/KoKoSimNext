@@ -18,6 +18,19 @@ internal static class CommandLine
             return 0;
         }
 
+        try
+        {
+            return Dispatch(args);
+        }
+        catch (Exception e) when (e is FormatException or OverflowException or ArgumentException)
+        {
+            // 引数の打ち間違い（数値でない・範囲外・値の欠け・未知の --only）はスタックトレースでなく1行で返す（issue #1232）
+            return Fail($"引数エラー: {e.Message}");
+        }
+    }
+
+    private static int Dispatch(string[] args)
+    {
         return args[0] switch
         {
             "simulate" => RunSimulate(args[1..]),
@@ -110,7 +123,7 @@ internal static class CommandLine
         var report = Step4Calibration.Report(seed, coefficientsPath);
         if (reportPath is not null)
         {
-            System.IO.File.WriteAllText(reportPath, report);
+            WriteReportFile(reportPath, report);
             Console.WriteLine($"校正レポートを書き出しました: {reportPath}");
         }
         else
@@ -160,7 +173,7 @@ internal static class CommandLine
         var report = TierMatchupSimulation.Report(games, seed, coefficientsPath, roster);
         if (reportPath is not null)
         {
-            System.IO.File.WriteAllText(reportPath, report);
+            WriteReportFile(reportPath, report);
             Console.WriteLine($"ティア格子レポートを書き出しました: {reportPath}");
         }
         else
@@ -195,8 +208,7 @@ internal static class CommandLine
         var report = PitchAroundSimulation.Report(atBats, seed, coefficientsPath);
         if (reportPath is not null)
         {
-            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(reportPath))!);
-            System.IO.File.WriteAllText(reportPath, report);
+            WriteReportFile(reportPath, report);
         }
         Console.WriteLine(report);
         return 0;
@@ -220,7 +232,8 @@ internal static class CommandLine
                 case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
                 case "--targets": targetsPath = RequireValue(args, ref i); break;
                 // 調整中は見たい項目だけ回す（全24項目×2水準は重い）。例: --only speed,steal,steal_fast,catcher_arm
-                case "--only": only = new System.Collections.Generic.HashSet<string>(RequireValue(args, ref i).Split(',')); break;
+                case "--only": only = new System.Collections.Generic.HashSet<string>(
+                    RequireValue(args, ref i).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)); break;
                 default: return Fail($"未知のオプション: {args[i]}");
             }
         }
@@ -231,7 +244,7 @@ internal static class CommandLine
         var report = AbilitySweep.Report(result, targets);
         if (reportPath is not null)
         {
-            System.IO.File.WriteAllText(reportPath, report);
+            WriteReportFile(reportPath, report);
             Console.WriteLine($"能力感度レポートを書き出しました: {reportPath}");
         }
         else
@@ -517,6 +530,14 @@ internal static class CommandLine
         Console.Write(text);
         WriteReport(reportPath, text);
         return 0;
+    }
+
+    /// <summary>レポート先のディレクトリが無ければ作ってから書く（issue #1232: out/ の無い clone 直後に calibrate 等が落ちていた）。</summary>
+    private static void WriteReportFile(string reportPath, string text)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(reportPath));
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        File.WriteAllText(reportPath, text);
     }
 
     private static void WriteReport(string? reportPath, string text)
