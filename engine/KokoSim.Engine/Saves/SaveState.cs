@@ -147,6 +147,13 @@ public sealed class SaveState
     /// </summary>
     public ScoutField ScoutFieldSelection { get; set; } = ScoutField.Omakase;
 
+    // --- 試合ごとの乱数ストリームの連番（issue #1249。キーが無い＝0 で読めるので版は上げない） ---
+    /// <summary>試合後の怪我判定を何試合ぶん引いたか。ロード後も続きから＝同じセーブから同じ結果になる。</summary>
+    public int MatchInjurySeq { get; set; }
+
+    /// <summary>大舞台イベントの判定を何試合ぶん引いたか。</summary>
+    public int BigStageSeq { get; set; }
+
     // --- 教え子名鑑（過年度のドラフト指名確定・issue #586。v7 で追加） ---
     /// <summary>
     /// 監督キャリアに紐づく指名実績の台帳（設計書20 §6）。空＝一度も指名が出ていない

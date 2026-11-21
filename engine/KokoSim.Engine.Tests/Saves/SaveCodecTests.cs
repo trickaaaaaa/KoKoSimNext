@@ -417,6 +417,24 @@ public sealed class SaveCodecTests
         Assert.Equal(KokoSim.Engine.Season.ScoutField.Pitching, s.ScoutFieldSelection);
     }
 
+    // 試合ごとの乱数の連番が往復すること。キーが無い旧セーブは 0（issue #1249）。
+    [Fact]
+    public void MatchStreamSeqs_RoundTrip_AndDefaultToZero()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.MatchInjurySeq = 7;
+        state.BigStageSeq = 3;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(7, s.MatchInjurySeq);
+        Assert.Equal(3, s.BigStageSeq);
+
+        var stripped = json.Replace("\"matchInjurySeq\"", "\"x1\"").Replace("\"bigStageSeq\"", "\"x2\"");
+        Assert.True(SaveCodec.TryDeserialize(stripped, out var old, out err), err);
+        Assert.Equal(0, old.MatchInjurySeq);
+        Assert.Equal(0, old.BigStageSeq);
+    }
+
     // スカウトを持たない進行（未契約／秋を跨いでいない）も往復すること。
     [Fact]
     public void ScoutingState_Null_RoundTrips()

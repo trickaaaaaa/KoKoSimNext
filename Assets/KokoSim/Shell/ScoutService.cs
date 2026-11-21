@@ -40,8 +40,6 @@ namespace KokoSim.Unity.Shell
         private static readonly TeamStrengthCoefficients StrengthCoeff = new TeamStrengthCoefficients();
         private static readonly SeasonCalendar Calendar = new SeasonCalendar();
 
-        private static int _visitCounter;
-
         /// <summary>いま抱えているスカウトの状態。null＝未契約／まだ秋を跨いでいない。</summary>
         public static ScoutingState Current { get; private set; }
 
@@ -70,6 +68,12 @@ namespace KokoSim.Unity.Shell
         /// <summary>いま訪問できる時期か（秋〜冬）。</summary>
         public static bool InSeason => Calendar.IsRecruitingSeason(GameClock.Week);
 
+        /// <summary>
+        /// いま訪問できるか。時期（秋〜冬）に加えて、決着済みの前年度のリストが残っているだけの間
+        /// （新しいリストが出ない＝未契約など）は訪問できない（issue #1249）。
+        /// </summary>
+        public static bool CanVisit => InSeason && Current != null && !Current.Resolved;
+
         /// <summary>係数（画面が費用を出すために読む）。</summary>
         public static ScoutCoefficients Coefficients => Coeff;
 
@@ -90,32 +94,27 @@ namespace KokoSim.Unity.Shell
                 joinYearIndex, SelectedField, Level, slots, NationService.PrefectureId, HomeTier(),
                 RosterService.TalentCenter(), ManagerService.ContractEffects.ScoutTalentAdd,
                 new RosterCoefficients(), Coeff, StrengthCoeff, rng);
-            _visitCounter = 0;
             return true;
         }
 
         /// <summary>
         /// 1回訪問する。まだ対象にしていなければ、枠に空きがある限り<b>自動で対象にする</b>
         /// （画面のボタンは1つだけ・オーナー決定のワイヤー案A）。距離に応じた費用を部費から引き、
-        /// 確率で争奪戦を起こす。資金の判定と引き落としは<b>ここだけ</b>が持つ（engine は金庫を持たない）。
+        /// 確率で争奪戦を起こす。引き落としは<b>ここだけ</b>が持つ（engine は金庫を持たない）。払えないときは何も変えない。
         /// </summary>
         public static VisitResult Visit(int index)
         {
-            var p = At(index);
-            if (p == null || Current.Resolved || !InSeason) return VisitResult.OutOfSeason;
-
-            if (!p.Targeted)
+            var outcome = ScoutModel.TryVisit(
+                Current, index, InSeason, ManagerService.Manager.Funds, Coeff, GameSeed.Master ^ VisitStream, out var cost);
+            if (cost > 0.0) ManagerService.Manager.Funds -= cost;
+            switch (outcome)
             {
-                if (Current.TargetedCount >= Current.Slots) return VisitResult.SlotsFull;
-                p.Targeted = true;
+                case ScoutVisitOutcome.Visited: return VisitResult.Visited;
+                case ScoutVisitOutcome.VisitedWithRivalMove: return VisitResult.VisitedWithRivalMove;
+                case ScoutVisitOutcome.SlotsFull: return VisitResult.SlotsFull;
+                case ScoutVisitOutcome.NotEnoughFunds: return VisitResult.NotEnoughFunds;
+                default: return VisitResult.OutOfSeason;
             }
-
-            var cost = ScoutModel.VisitCost(p.Distance, Coeff);
-            if (ManagerService.Manager.Funds < cost) return VisitResult.NotEnoughFunds;
-            ManagerService.Manager.Funds -= cost;
-
-            var rng = new Xoshiro256Random(GameSeed.Master ^ (VisitStream ^ (ulong)(_visitCounter++)));
-            return ScoutModel.Visit(p, Coeff, rng) ? VisitResult.VisitedWithRivalMove : VisitResult.Visited;
         }
 
         // ── 節目の強制イベント（issue #1035。判定は engine の ScoutMilestones に1箇所） ──
@@ -217,7 +216,6 @@ namespace KokoSim.Unity.Shell
         {
             Current = s.Scouting;
             SelectedField = s.ScoutFieldSelection;
-            _visitCounter = 0;
             NavigatePending = false; _landOnCandidates = false;
         }
 
@@ -226,7 +224,6 @@ namespace KokoSim.Unity.Shell
         {
             Current = null;
             SelectedField = ScoutField.Omakase;
-            _visitCounter = 0;
             NavigatePending = false; _landOnCandidates = false;
         }
     }

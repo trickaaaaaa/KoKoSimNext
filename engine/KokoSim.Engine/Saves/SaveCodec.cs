@@ -78,6 +78,8 @@ public static class SaveCodec
             .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
             .Add("scouting", ScoutingSaves.ToJson(s.Scouting))
             .Add("scoutFieldSelection", EnumJson.Write(s.ScoutFieldSelection))
+            .Add("matchInjurySeq", s.MatchInjurySeq)
+            .Add("bigStageSeq", s.BigStageSeq)
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("events", EventSaves.ToJson(s.Events))
@@ -481,6 +483,9 @@ public static class SaveCodec
             // Migrate が旧セーブへ scouting=null を補うので素直に読む。
             Scouting = ScoutingSaves.FromJson(root.Has("scouting") ? root["scouting"] : null),
             ScoutFieldSelection = EnumJson.Read<ScoutField>(root.Str("scoutFieldSelection")),
+            // 試合ごとの乱数の連番（issue #1249）は版を上げずに足した項目＝キーが無い旧セーブは 0。
+            MatchInjurySeq = root.Has("matchInjurySeq") ? root.Int("matchInjurySeq") : 0,
+            BigStageSeq = root.Has("bigStageSeq") ? root.Int("bigStageSeq") : 0,
             // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
             // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
