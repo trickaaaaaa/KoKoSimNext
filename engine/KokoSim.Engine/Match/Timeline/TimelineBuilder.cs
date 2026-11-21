@@ -2375,6 +2375,12 @@ public static class TimelineBuilder
             // 飛び出しの勝負（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 一塁走者が二塁方向へ
             // 飛び出し→捕球で反転→一塁へ戻る（憤死 or 帰塁セーフ）。ToBase==FromBase なので下の塁間ループは
             // 1本も積まない＝以前は憤死も帰塁も描かれず「描写なしでツーアウト」に見えていた。
+            // ハーフウェーで待った走者がフライを捕られて戻る（issue #1130）。勝負なら戻し送球の到達も載っている。
+            if (m.FromBase is >= 1 and <= 3 && m.ToBase == m.FromBase && m.FlyHoldLeadM is not null)
+            {
+                AppendHalfwayReturnLegs(legs, judgements, m, label, speed, field, baserunning, flyCaughtAtSeconds);
+                continue;
+            }
             if (m.FromBase is >= 1 and <= 3 && m.ToBase == m.FromBase && m.DoubledOffThrowArriveSeconds is { } doThrowArrive)
             {
                 AppendDoubledOffLegs(legs, judgements, m, label, speed, field, baserunning,
@@ -2388,9 +2394,34 @@ public static class TimelineBuilder
             // 引くのは移動全体で1回（RunnerClock が出発塁からの累積で引くのと同じ）＝最初のレッグだけ。
             var lead = fromBox ? 0.0 : Math.Max(0.0, ctx.LeadDistanceM);
 
+            // フライを読んで待った走者（issue #1130）: 打った瞬間に待つ位置（ハーフウェー／塁）へ動き、落ちたのを
+            // 見てからそこを出る。判定の時計は「出発を遅らせる」形（追加スタート遅延）なので、到達時刻はそのまま
+            // ＝待つ位置を出る時刻だけを、その時計が待つ位置を通る時刻（t＋(待つ位置−リード)÷速度）に合わせる。
+            TimelinePoint? holdPt = null;
+            var holdLeaveAt = t;
+            if (!fromBox && tagUpAt is null && m.ToBase > m.FromBase && m.FlyHoldLeadM is { } holdLeadM)
+            {
+                var v = speed * ctx.TopSpeedFactor;
+                var leaveAt = ContactAt + ctx.StartDelaySeconds;
+                var reachAt = leaveAt + Math.Abs(holdLeadM - lead) / v;
+                var resumeAt = t + (holdLeadM - lead) / v;
+                if (resumeAt > reachAt + 1e-3)
+                {
+                    var stand = BasePoint(field, BaseName(m.FromBase));
+                    var leadPt = LeadPoint(field, m.FromBase, lead);
+                    var hold = LeadPoint(field, m.FromBase, holdLeadM);
+                    holdPt = hold;
+                    legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = leaveAt, From = stand, To = leadPt, Runner = m.Runner });
+                    legs.Add(new RunnerLeg { Label = label, T0 = leaveAt, T1 = reachAt, From = leadPt, To = hold, Runner = m.Runner,
+                        Returning = holdLeadM < lead });
+                    legs.Add(new RunnerLeg { Label = label, T0 = reachAt, T1 = resumeAt, From = hold, To = hold, Runner = m.Runner });
+                    holdLeaveAt = resumeAt;
+                }
+            }
+
             // 塁上の走者は移動開始まで元の塁に立たせる（待機レッグ）。打者走者は本塁の既定レッグがあるため対象外。
             // 投球の間にリードを取るので、待機レッグの終端はリード位置にする。
-            if (m.FromBase >= 1 && m.ToBase > m.FromBase && t > 0)
+            if (holdPt is null && m.FromBase >= 1 && m.ToBase > m.FromBase && t > 0)
             {
                 var stand = BasePoint(field, BaseName(m.FromBase));
                 var leadPt = LeadPoint(field, m.FromBase, lead);
@@ -2418,10 +2449,13 @@ public static class TimelineBuilder
                 legs.Add(new RunnerLeg
                 {
                     Label = label,
-                    T0 = t,
+                    // 待った走者（#1130）の最初のレッグは待つ位置を出る時刻から
+                    T0 = b == startBase && holdPt is not null ? holdLeaveAt : t,
                     T1 = t1,
-                    // 最初のレッグだけリード位置から（2本目以降は塁を踏んで出るので満距離）
-                    From = b == startBase && lead > 0
+                    // 最初のレッグだけリード位置から（2本目以降は塁を踏んで出るので満距離）。待った走者は待つ位置から。
+                    From = b == startBase && holdPt is { } hp
+                        ? hp
+                        : b == startBase && lead > 0
                         ? LeadPoint(field, b, lead)
                         : BasePoint(field, from),
                     To = b + 1 >= 4 ? Home : BasePoint(field, to),
@@ -2456,6 +2490,59 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// ハーフウェーで待った走者がフライを捕られて戻るレッグ（issue #1130）。判定（<c>BaserunningModel.ResolveHalfwayReturn</c>）と
+    /// 同じ材料＝捕球の時点の距離 <see cref="RunnerMove.DoubledOffLeadM"/>（元の塁からの全距離）で組む: 塁で待機 → リード →
+    /// 打った瞬間から待つ位置へ（捕球が早ければその途中で止まる） → 捕球を見て反転 → 元の塁へ戻る（Returning）。
+    /// 戻りの尺は判定の <see cref="DoubledOffResolver.RunnerReturnSecondsFromLead"/> と同じ（反転遅延＋距離÷脚力）。
+    /// 勝負（戻し送球あり）のときだけ判定イベントを置く。表示専用・乱数不使用。
+    /// </summary>
+    private static void AppendHalfwayReturnLegs(
+        List<RunnerLeg> legs, List<JudgementEvent> judgements, RunnerMove m, string label, double speed,
+        FieldGeometry field, BaserunningCoefficients baserunning, double? flyCaughtAtSeconds)
+    {
+        var basePt = BasePoint(field, BaseName(m.FromBase));
+        var ctx = HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+        var lead = Math.Max(0.0, ctx.LeadDistanceM);
+        var v = Math.Max(1e-6, speed * ctx.TopSpeedFactor);
+        var leadAtCatch = Math.Max(0.0, m.DoubledOffLeadM);
+        var leadPt = LeadPoint(field, m.FromBase, lead);
+        var holdPt = LeadPoint(field, m.FromBase, leadAtCatch);
+        var catchAt = ContactAt + (flyCaughtAtSeconds ?? 0.0);
+        var leaveAt = Math.Min(catchAt, ContactAt + ctx.StartDelaySeconds);
+        var reachAt = Math.Min(catchAt, leaveAt + Math.Abs(leadAtCatch - lead) / v);
+        var reverseAt = catchAt + baserunning.DoubledOffReverseSeconds;
+        var runnerArrive = reverseAt + leadAtCatch / Math.Max(1e-6, speed);
+        // 憤死なのに走者の時計が送球より先に戻るぶんは、反転の出遅れとして引き受ける（issue #801 と同じ作法）。
+        if (m.Out && m.DoubledOffThrowArriveSeconds is { } outThrowAt && runnerArrive < ContactAt + outThrowAt)
+        {
+            reverseAt += ContactAt + outThrowAt - runnerArrive;
+            runnerArrive = ContactAt + outThrowAt;
+        }
+
+        if (leaveAt > 0)
+            legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = leaveAt, From = basePt, To = leadPt, Runner = m.Runner });
+        legs.Add(new RunnerLeg { Label = label, T0 = leaveAt, T1 = Math.Max(leaveAt + 0.05, reachAt), From = leadPt, To = holdPt, Runner = m.Runner });
+        if (reverseAt > reachAt + 0.05)
+            legs.Add(new RunnerLeg { Label = label, T0 = Math.Max(leaveAt + 0.05, reachAt), T1 = reverseAt, From = holdPt, To = holdPt, Runner = m.Runner });
+        legs.Add(new RunnerLeg
+        {
+            Label = label, T0 = reverseAt, T1 = Math.Max(reverseAt + 0.05, runnerArrive), From = holdPt, To = basePt,
+            OutAtEnd = m.Out, CloseCall = m.CloseCall, Returning = true, Runner = m.Runner,
+        });
+        if (m.DoubledOffThrowArriveSeconds is { } throwArriveSeconds && (m.Out || m.CloseCall))
+        {
+            var throwArrive = ContactAt + throwArriveSeconds;
+            judgements.Add(new JudgementEvent
+            {
+                Label = label,
+                T = m.Out ? Math.Min(throwArrive, runnerArrive) : runnerArrive,
+                Kind = m.Out ? JudgementKind.Out : JudgementKind.Safe,
+                CloseCall = m.CloseCall,
+            });
+        }
+    }
+
+    /// <summary>
     /// 飛び出しの走者レッグ（issue fly-out-runner-dp-table-and-doubled-off-depiction）。判定
     /// （<see cref="DoubledOffResolver"/>）と同じ材料＝稼いだリード <see cref="RunnerMove.DoubledOffLeadM"/>・
     /// 走者の脚力・反転の判断遅延で組む: 一塁で待機 → 二塁方向へリードぶん走る（盗塁で走っていた走者は
@@ -2476,8 +2563,10 @@ public static class TimelineBuilder
         var leadPt = LeadPoint(field, m.FromBase, lead);
         var leadM = Math.Max(0.0, m.DoubledOffLeadM);                       // 捕球時点の距離（判定の戻り距離）
         var maxLeadM = Math.Max(leadM, m.DoubledOffMaxLeadM);                // 折り返し点（コミット上限まで走った点）
-        var farPt = LeadPoint(field, m.FromBase, lead + maxLeadM);
-        var catchPt = LeadPoint(field, m.FromBase, lead + leadM);
+        // 判定のリード（DoubledOffResolver.LeadGainedM）は塁からの距離＝戻りの秒はこの距離÷脚力。絵の位置も塁から測る
+        // （二次リードを足すと、足したぶんを一瞬で戻る絵になっていた・issue #1130 の Heavy で 76 m/s として表に出た）。
+        var farPt = LeadPoint(field, m.FromBase, maxLeadM);
+        var catchPt = LeadPoint(field, m.FromBase, leadM);
         // 捕球時刻（接触基準）。判定側は捕球点の時刻をそのまま使うので、絵も同じ起点にする。
         var caughtAt = flyCaughtAtSeconds ?? baserunning.LinerCommitCapSeconds;
         var catchAt = ContactAt + caughtAt;
@@ -2490,6 +2579,12 @@ public static class TimelineBuilder
         var reverseAt = catchAt + baserunning.DoubledOffReverseSeconds;
         var runnerArrive = catchAt + baserunning.DoubledOffReverseSeconds + leadM / Math.Max(1e-6, speed);
         var throwArrive = ContactAt + throwArriveSeconds;
+        // 憤死なのに走者の時計が送球より先に戻る（ゆらぎで刺した）ぶんは、反転の出遅れとして引き受ける（issue #801 と同じ作法）。
+        if (m.Out && runnerArrive < throwArrive)
+        {
+            reverseAt += throwArrive - runnerArrive;
+            runnerArrive = throwArrive;
+        }
 
         if (runStart > 0)
             legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = runStart, From = first, To = leadPt, Runner = m.Runner });
@@ -4339,6 +4434,13 @@ public static class TimelineBuilder
         }
         return play.FielderRole is { } r ? PositionName(r) : "";
     }
+
+    /// <summary>
+    /// 外野ゴロ（issue #1130）の実況文（"ライトゴロ" 等）。落ちたフライを拾った外野手が、待った一塁走者を二塁で
+    /// 封殺した打席＝記録は安打でなく野選の凡打。打球の方向名は安打と同じ <see cref="AreaName"/>。表示専用。
+    /// </summary>
+    public static string DescribeOutfieldForceOut(FieldingPlay play)
+        => AreaName(play) is { Length: > 0 } a ? $"{a}ゴロ" : "外野ゴロ";
 
     /// <summary>
     /// 守備結果を守備位置・打球種別から具体的な実況文にする（"ショートゴロ" "レフト前ヒット" 等）。

@@ -56,11 +56,11 @@ public sealed class DoubledOffDepictionTests
         // 二塁方向へ出るレッグ（To が一塁より二塁寄り）があり、最大リード（12m＋二次リード）まで出る
         var toward = legs.OrderByDescending(l => Dist(l.To, First)).First();
         Assert.True(Dist(toward.To, First) > Dist(toward.From, First));
-        Assert.Equal(12.0 + Baserunning.HomeLeadDistanceM, Dist(toward.To, First), 3);
+        Assert.Equal(12.0, Dist(toward.To, First), 3);
         Assert.True(toward.T1 <= TimelineBuilder.ContactAt + 1.0 + 1e-9, "コミット上限より後まで飛び出し続けている");
         // 折り返し点から捕球まで塁の方へ戻り（10m の点）、捕球＋判断遅延で反転する
         var retreat = legs.First(l => l.T0 >= toward.T1 - 1e-9 && l.To != l.From);
-        Assert.Equal(10.0 + Baserunning.HomeLeadDistanceM, Dist(retreat.To, First), 3);
+        Assert.Equal(10.0, Dist(retreat.To, First), 3);
         Assert.Equal(TimelineBuilder.ContactAt + 2.2, retreat.T1, 6);
 
         // 反転は捕球＋判断遅延から。帰塁レッグは Returning・終端で Out

@@ -75,6 +75,42 @@ public static class DoubledOffResolver
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.DoubledOffMarginScale), 0.01, 0.99);
     }
 
+    // === ハーフウェーから戻る勝負（issue #1130）===
+    // 読んで待った走者は、捕球の時点の位置（ハーフウェー）から元の塁へ戻る。飛び出し（コンタクト始動）と
+    // 違って距離はリードの式でなく、走者がその時点で実際に居る距離をそのまま使う。
+
+    /// <summary>捕球の時点で <paramref name="leadM"/> 離れている走者の戻りの所要[s]（反転遅延＋距離÷走力）。</summary>
+    public static double RunnerReturnSecondsFromLead(Player runner, double leadM, BaserunningCoefficients c)
+        => c.DoubledOffReverseSeconds + Math.Max(0.0, leadM) / runner.ToFielder(c.AbilityEffect).SprintSpeedMps;
+
+    /// <summary>距離を直接与える margin[s]（守備所要 − 走者所要 ＋ バイアス。正で戻れる側）。</summary>
+    public static double MarginFromLead(
+        Player runner, double leadM, double catchToBaseM, double throwSpeedMps, BaserunningCoefficients c,
+        int fielderFielding = 50)
+        => DefenseReturnSeconds(catchToBaseM, throwSpeedMps, c, fielderFielding)
+           - RunnerReturnSecondsFromLead(runner, leadM, c) + c.DoubledOffSuccessBias;
+
+    /// <summary>距離を直接与えて戻れる確率（乱数なし・送り判断と同じクランプ）。</summary>
+    public static double SuccessProbabilityFromLead(
+        Player runner, double leadM, double catchToBaseM, double throwSpeedMps, BaserunningCoefficients c,
+        int fielderFielding = 50)
+        => MathUtil.Clamp(MathUtil.Logistic(
+            MarginFromLead(runner, leadM, catchToBaseM, throwSpeedMps, c, fielderFielding) / c.DoubledOffMarginScale), 0.01, 0.99);
+
+    /// <summary>距離を直接与えて勝負を引く（戻し送球1本の逸れ＋勝負の2つ。<see cref="Resolve(Player,double,double,double,BaserunningCoefficients,IRandomSource,int,double,int,out KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter)"/> と同じ作法）。</summary>
+    public static DoubledOffResult ResolveFromLead(
+        Player runner, double leadM, double catchToBaseM, double throwSpeedMps,
+        BaserunningCoefficients c, IRandomSource rng, int fielderFielding, int throwAccuracy,
+        out KokoSim.Engine.Match.Fielding.ThrowScatterModel.Scatter throwScatter)
+    {
+        var (scatter, noise) = HomePlayResolver.SampleThrowScatter(throwAccuracy, c, rng);
+        throwScatter = scatter;
+        var margin = MarginFromLead(runner, leadM, catchToBaseM, throwSpeedMps, c, fielderFielding) + noise;
+        return MathUtil.Chance(MathUtil.Logistic(margin / c.DoubledOffMarginScale), rng)
+            ? DoubledOffResult.Safe
+            : DoubledOffResult.DoubledOff;
+    }
+
     public static DoubledOffResult Resolve(
         Player runner, double caughtAtSeconds, double catchToBaseM, double throwSpeedMps,
         BaserunningCoefficients c, IRandomSource rng, int fielderFielding = 50, double extraLeadM = 0.0)
@@ -95,7 +131,9 @@ public static class DoubledOffResolver
         var (scatter, noise) = HomePlayResolver.SampleThrowScatter(throwAccuracy, c, rng);
         throwScatter = scatter;
         var margin = Margin(runner, caughtAtSeconds, catchToBaseM, throwSpeedMps, c, fielderFielding, extraLeadM) + noise;
-        return MathUtil.Chance(MathUtil.Clamp(MathUtil.Logistic(margin / c.DoubledOffMarginScale), 0.01, 0.99), rng)
+        // 勝負の抽選は 1%/99% でクランプしない（issue #801 と同じ理由・#1130 で揃えた）。クランプは読み・送り判断のためのもので、
+        // 抽選に掛けると走者が数秒早く戻っていても 1% でアウトになり、その秒を説明する絵が無い。
+        return MathUtil.Chance(MathUtil.Logistic(margin / c.DoubledOffMarginScale), rng)
             ? DoubledOffResult.Safe
             : DoubledOffResult.DoubledOff;
     }

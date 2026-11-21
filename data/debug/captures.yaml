@@ -250,3 +250,18 @@ captures:
     view: panel
     duel_seconds: 12.0
     video: {from: start, to: end, fps: 12}
+  # ── フライの読み（issue #1130）。無死一塁の際どいフライ ──
+  - id: flyread-halfway-1130
+    name: "フライの読み・一塁走者がハーフウェーで待ってから走る（issue #1130）"
+    scenario: flyread-halfway-lab
+    manager: away   # 自校＝攻撃側・指示なし（守備側にすると守備方針が毎球予約され engine のテストと展開が変わる）
+    view: panel
+    duel_seconds: 18.0
+    video: {from: start, to: end, fps: 24}
+  - id: flyread-force-1130
+    name: "フライの読み・外野ゴロ（待った一塁走者が二塁で封殺・issue #1130）"
+    scenario: flyread-force-lab
+    manager: away   # 自校＝攻撃側・指示なし（守備側にすると守備方針が毎球予約され engine のテストと展開が変わる）
+    view: panel
+    duel_seconds: 18.0
+    video: {from: start, to: end, fps: 24}

@@ -1989,7 +1989,12 @@ public static class GameEngine
                     fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotArm,
                     FielderRole: fp.FielderRole,
                     // 拾い直せず確定した捕球ミス（issue #903）: 二塁走者が三塁を狙うかを時間勝負で決める合図。
-                    UnrecoveredCatchError: fp.CatchErrorReadyAtSeconds is not null);
+                    UnrecoveredCatchError: fp.CatchErrorReadyAtSeconds is not null,
+                    // フライの読み（issue #1130）: フェアの飛球・ライナー（空中で捕る／落ちる）だけ。落下点（捕球点）・
+                    // 落ちる（捕られる）時刻・捕球の余裕。ファウルフライは塁上の走者が離れない＝読まない。
+                    FlyRead: fp is { IsFly: true, FoulFly: false, CatchMarginSeconds: { } catchMargin }
+                        ? new FlyReadSituation(new Vector3D(fp.LandingX, 0, fp.LandingZ), fp.HangTimeSeconds, catchMargin)
+                        : null);
             }
 
             // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で
@@ -2016,6 +2021,11 @@ public static class GameEngine
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, paBaserunning, rng, collectMoves: true,
                 homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak, r2StealBreak, r3StealBreak);
+            // 外野ゴロ（issue #1130）: 落ちたフライの単打で、待った一塁走者が二塁で封殺された＝打者に安打は付かない
+            // （フォースアウトが成立した打球は安打にしない・公認野球規則 9.05(b)）。記録上は野選の凡打として扱う。
+            // 走塁の解決は済んでいる＝ここから下の数え方（打者アウトの有無・成績・記録）だけが変わる。
+            var outfieldForceOut = res.Result == PlateAppearanceResult.Single && batterSafeOnFc;
+            var paResult = outfieldForceOut ? PlateAppearanceResult.InPlayOut : res.Result;
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             // サヨナラの打ち切り（issue #642・公認野球規則 5.08(b)）: 最終回以降の裏は、勝ち越しの走者が
@@ -2426,7 +2436,7 @@ public static class GameEngine
                 }
             }
 
-            var batterOut = BaserunningModel.IsBatterOut(res.Result, batterSafeOnFc, droppedThirdStrikeReached);
+            var batterOut = BaserunningModel.IsBatterOut(paResult, batterSafeOnFc, droppedThirdStrikeReached);
             var outsThisPa = (batterOut ? 1 : 0) + extraOuts;
 
             offense.HomePlayOuts += homeOuts; // 本塁クロスプレー憤死（F2外野＋G1内野ゴロ, 統計参考値）
@@ -2484,13 +2494,17 @@ public static class GameEngine
             // 犠飛（issue #68）: フライ捕球の打席で、タッチアップにより走者が生還した場合。3アウト目の凡打では
             // ApplyInPlayOut が即座に (0 runs) を返す（アウトカウント確認は現状 outs>=2 ガード）ため、
             // ここで runs>0 を見るだけで「3アウト目ではない」ことも保証される＝AB非算入の対象を安全に絞れる。
+            // 外野ゴロ（#1130）は捕っていない＝犠飛ではない。
             var isSacFly = res.Result == PlateAppearanceResult.InPlayOut && homePlay is { IsFly: true } && runs > 0;
 
             timeline = WithThrowScatter(timeline,
                 Match.Timeline.ThrowScatterAssigner.FromBattedBall(res.Play, runnerMoves),
                 defense, ctx, rng, (ulong)log.Count * 16 + 6);
+            // 外野ゴロ（#1130）は安打でない＝実況も「ライトゴロ」等に差し替える（表示専用）。
+            if (outfieldForceOut && timeline is not null && res.Play is { } forcePlay)
+                timeline = timeline with { Result = Match.Timeline.TimelineBuilder.DescribeOutfieldForceOut(forcePlay) };
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
-                res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
+                paResult, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
                 batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
                 pitcherRuns: ownRunsThisPa,

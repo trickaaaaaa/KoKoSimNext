@@ -691,6 +691,19 @@ baserunning:
   steal_break_extra_lead_m: 6.0              # 盗塁で走っていた一塁走者が接触時点で稼いでいたリード（飛び出しの戻り距離に加算）
   steal_break_grounder_start_delay_seconds: 0.0 # 盗塁（三盗・重盗の本塁突入）で走っていた走者がゴロを打たれたときの追加スタート遅延[s]。既に走っているので読む遅れが無い＝接触と同時（issue #1138）
   doubled_off_retreat_speed_mps: 3.0         # コミット上限を過ぎてから捕球までに打球を見ながら塁へ戻る速さ（深いフライで刺されない）
+  # フライの読み（issue #1130・設計書12 §4.10）: 2アウト未満のフライで、走者は捕球の余裕（際どさ）を見て走るか待つかを決める
+  fly_read_scale_seconds: 0.20               # 「打った瞬間に走る」確率の logistic 幅[s]（捕球の余裕に対して）
+  fly_read_go_bias_seconds: 0.25             # 走る／待つの境目の捕球の余裕[s]
+  fly_read_ability_slope: 0.50               # 走塁能力（Running）で読みの幅を縮める傾き
+  fly_read_scale_min_factor: 0.40            # 読みの幅の倍率の下限
+  fly_read_certain_probability: 0.02         # これ未満／1−これ超は乱数を引かずに決める
+  fly_read_resume_seconds: 0.30              # 待った走者が落ちたのを見て走り出すまでの反応[s]
+  fly_halfway_lead_m: 9.0                    # ハーフウェーの位置の上限（元の塁からの距離[m]）。実際は打球ごとに「捕られても戻れる距離」
+  fly_halfway_safety_seconds: 0.90           # ハーフウェーの位置を決める戻りの余裕[s]（戻し送球の秒−反転−これ）×脚力
+  fly_halfway_min_range_m: 40.0              # これより浅い打球（内野のポップ・ライナー）は塁に付いて動かない＝読まない
+  outfield_force_second_margin_scale: 0.30   # 外野ゴロ（二塁封殺）の logistic 幅[s]
+  outfield_force_second_success_bias: 0.0    # 外野ゴロの到達確率バイアス[s]
+  outfield_force_second_max_runner_success: 0.40 # 外野手が二塁へ投げるのは走者の見込みがこれ未満のときだけ
   # 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）: 捕手リード＋投手センス vs 状況の意外性
   steal_expectedness_intercept: 0.42         # 盗塁企図の基準「予想されやすさ」E
   steal_expectedness_steal_slope: 0.006      # Steal能力→予想度（快足盗塁屋は読まれやすい）

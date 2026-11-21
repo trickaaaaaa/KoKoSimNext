@@ -112,6 +112,8 @@ public sealed class PictureVsVerdictTests
             if (throwAt is not { } ta) continue;
             var batter = tl.Runners.FirstOrDefault(l => l.Label == "打");
             if (batter is null || batter.OutAtEnd) continue;
+            // フライを捕られて塁へ戻る走者への戻し送球（飛び出し・ハーフウェー, issue #1130）は打者走者との勝負ではない。
+            if (tl.Runners.Any(l => l.Returning && l.Label != "打")) continue;
 
             infieldHits++;
             if (ta < batter.T1 - 1e-6)

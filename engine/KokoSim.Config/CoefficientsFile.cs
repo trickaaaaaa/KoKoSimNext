@@ -1087,6 +1087,19 @@ public static class CoefficientsLoader
         public double StealBreakExtraLeadM { get; set; } = D.StealBreakExtraLeadM;
         public double StealBreakGrounderStartDelaySeconds { get; set; } = D.StealBreakGrounderStartDelaySeconds;
         public double DoubledOffRetreatSpeedMps { get; set; } = D.DoubledOffRetreatSpeedMps;
+        // フライの読み（issue #1130）
+        public double FlyReadScaleSeconds { get; set; } = D.FlyReadScaleSeconds;
+        public double FlyReadGoBiasSeconds { get; set; } = D.FlyReadGoBiasSeconds;
+        public double FlyReadAbilitySlope { get; set; } = D.FlyReadAbilitySlope;
+        public double FlyReadScaleMinFactor { get; set; } = D.FlyReadScaleMinFactor;
+        public double FlyReadCertainProbability { get; set; } = D.FlyReadCertainProbability;
+        public double FlyReadResumeSeconds { get; set; } = D.FlyReadResumeSeconds;
+        public double FlyHalfwayLeadM { get; set; } = D.FlyHalfwayLeadM;
+        public double FlyHalfwaySafetySeconds { get; set; } = D.FlyHalfwaySafetySeconds;
+        public double FlyHalfwayMinRangeM { get; set; } = D.FlyHalfwayMinRangeM;
+        public double OutfieldForceSecondMarginScale { get; set; } = D.OutfieldForceSecondMarginScale;
+        public double OutfieldForceSecondSuccessBias { get; set; } = D.OutfieldForceSecondSuccessBias;
+        public double OutfieldForceSecondMaxRunnerSuccess { get; set; } = D.OutfieldForceSecondMaxRunnerSuccess;
         // 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）
         public double StealExpectednessIntercept { get; set; } = D.StealExpectednessIntercept;
         public double StealExpectednessStealSlope { get; set; } = D.StealExpectednessStealSlope;
@@ -1270,6 +1283,18 @@ public static class CoefficientsLoader
             StealBreakExtraLeadM = StealBreakExtraLeadM,
             StealBreakGrounderStartDelaySeconds = StealBreakGrounderStartDelaySeconds,
             DoubledOffRetreatSpeedMps = DoubledOffRetreatSpeedMps,
+            FlyReadScaleSeconds = FlyReadScaleSeconds,
+            FlyReadGoBiasSeconds = FlyReadGoBiasSeconds,
+            FlyReadAbilitySlope = FlyReadAbilitySlope,
+            FlyReadScaleMinFactor = FlyReadScaleMinFactor,
+            FlyReadCertainProbability = FlyReadCertainProbability,
+            FlyReadResumeSeconds = FlyReadResumeSeconds,
+            FlyHalfwayLeadM = FlyHalfwayLeadM,
+            FlyHalfwaySafetySeconds = FlyHalfwaySafetySeconds,
+            FlyHalfwayMinRangeM = FlyHalfwayMinRangeM,
+            OutfieldForceSecondMarginScale = OutfieldForceSecondMarginScale,
+            OutfieldForceSecondSuccessBias = OutfieldForceSecondSuccessBias,
+            OutfieldForceSecondMaxRunnerSuccess = OutfieldForceSecondMaxRunnerSuccess,
             StealExpectednessIntercept = StealExpectednessIntercept,
             StealExpectednessStealSlope = StealExpectednessStealSlope,
             GambleUnexpectednessReduction = GambleUnexpectednessReduction,
