@@ -8,7 +8,15 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="Inning">イニング（1始まり）。</param>
 /// <param name="Result">打席結果。表示テキストへの変換はUI側の責務。</param>
 /// <param name="RunsScored">このプレーで入った得点。</param>
-public sealed record BoxScoreGridCell(int PaIndex, int Inning, PlateAppearanceResult Result, int RunsScored);
+public sealed record BoxScoreGridCell(int PaIndex, int Inning, PlateAppearanceResult Result, int RunsScored)
+{
+    /// <summary>犠飛か（<see cref="PlayLogEntry.IsSacFly"/> の写し）。試合結果画面の「犠飛」表記用。</summary>
+    public bool IsSacFly { get; init; }
+    /// <summary>犠打（送りバント・スクイズ成功）か（<see cref="PlayLogEntry.IsSacBunt"/> の写し）。「犠打」表記用。</summary>
+    public bool IsSacBunt { get; init; }
+    /// <summary>この打席で増えたアウト数（<see cref="PlayLogEntry.OutsThisPa"/> の写し。2以上＝併殺）。</summary>
+    public int OutsThisPa { get; init; }
+}
 
 /// <summary>打席グリッドの1行（打順枠×選手）。<see cref="BattingLine"/> と (Order, Name) で対応する。</summary>
 /// <param name="Order">打順（1-9。ログに打順が無い場合は0）。</param>
@@ -57,7 +65,10 @@ public static class BoxScoreGrid
                 sourceIds.Add(e.BatterSourceId);
                 cells.Add(new List<BoxScoreGridCell>());
             }
-            cells[i].Add(new BoxScoreGridCell(pa, e.Inning, e.Result, e.RunsScored));
+            cells[i].Add(new BoxScoreGridCell(pa, e.Inning, e.Result, e.RunsScored)
+            {
+                IsSacFly = e.IsSacFly, IsSacBunt = e.IsSacBunt, OutsThisPa = e.OutsThisPa,
+            });
         }
 
         // 打順昇順（0＝不明は末尾）→ 同順は初出順。

@@ -47,6 +47,26 @@ public sealed class BoxScoreGridTests
     }
 
     [Fact]
+    public void Build_CarriesSacrificeAndOutsFlags()
+    {
+        // 試合結果画面の打席の札（犠打・犠飛・併殺）の材料。プレー記録の写しをそのまま載せるだけ。
+        var log = new List<PlayLogEntry>
+        {
+            new(1, true, "A", PlateAppearanceResult.InPlayOut, 0, BatterOrder: 1, OutsThisPa: 1, IsSacBunt: true),
+            new(2, true, "A", PlateAppearanceResult.InPlayOut, 1, BatterOrder: 1, OutsThisPa: 1, IsSacFly: true),
+            new(3, true, "A", PlateAppearanceResult.InPlayOut, 0, BatterOrder: 1, OutsThisPa: 2),
+        };
+
+        var cells = BoxScoreGrid.Build(log, isTop: true)[0].Cells;
+
+        Assert.True(cells[0].IsSacBunt);
+        Assert.False(cells[0].IsSacFly);
+        Assert.True(cells[1].IsSacFly);
+        Assert.Equal(2, cells[2].OutsThisPa);
+        Assert.False(cells[2].IsSacBunt || cells[2].IsSacFly);
+    }
+
+    [Fact]
     public void Build_SeparatesTopAndBottomHalves()
     {
         var log = new List<PlayLogEntry>
