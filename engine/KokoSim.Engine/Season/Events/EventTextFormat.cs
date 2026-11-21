@@ -13,11 +13,24 @@ namespace KokoSim.Engine.Season.Events;
 /// </summary>
 public static class EventTextFormat
 {
-    /// <summary>差し込み語として書いてよいキー（data/events.yaml のヘッダと対応）。</summary>
-    public static readonly IReadOnlyList<string> KnownKeys = new[] { "player", "school", "manager", "count", "injury", "weeks", "other" };
+    /// <summary>
+    /// 差し込み語として書いてよいキー（data/events.yaml のヘッダと対応）。
+    /// 大会名の差し込み語（<c>{koshien}</c> など）は <see cref="DisplayNames.Keys"/> から足す（issue #1319）。
+    /// </summary>
+    public static readonly IReadOnlyList<string> KnownKeys = BuildKnownKeys();
 
-    /// <summary>差し込み語を置換する。<paramref name="values"/> に無いキーは <c>{key}</c> のまま残す。</summary>
-    public static string Apply(string text, IReadOnlyDictionary<string, string> values)
+    private static IReadOnlyList<string> BuildKnownKeys()
+    {
+        var keys = new List<string> { "player", "school", "manager", "count", "injury", "weeks", "other" };
+        foreach (var (k, _) in DisplayNames.Keys) keys.Add(k);
+        return keys;
+    }
+
+    /// <summary>
+    /// 差し込み語を置換する。<paramref name="values"/> に無いキーは大会名の表（<see cref="DisplayNames.Current"/>）を引き、
+    /// それにも無ければ <c>{key}</c> のまま残す。
+    /// </summary>
+    public static string Apply(string text, IReadOnlyDictionary<string, string>? values)
     {
         if (string.IsNullOrEmpty(text) || text.IndexOf('{') < 0) return text;
 
@@ -29,7 +42,9 @@ public static class EventTextFormat
             if (close < 0) { sb.Append(text, i, text.Length - i); break; }
 
             var key = text.Substring(i + 1, close - i - 1);
-            sb.Append(values.TryGetValue(key, out var v) ? v : text.Substring(i, close - i + 1));
+            if (values != null && values.TryGetValue(key, out var v)) sb.Append(v);
+            else if (DisplayNames.Current.TryGet(key, out var name)) sb.Append(name);
+            else sb.Append(text, i, close - i + 1);
             i = close;
         }
         return sb.ToString();

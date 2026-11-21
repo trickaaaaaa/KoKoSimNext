@@ -43,9 +43,9 @@ namespace KokoSim.Unity.Shell
         public static string CountdownLabel(TournamentKind kind) => kind switch
         {
             TournamentKind.Summer => "夏予選まで",
-            TournamentKind.SenbatsuKoshien => "センバツまで",
+            TournamentKind.SenbatsuKoshien => KokoSim.Engine.Season.DisplayNames.Current.Senbatsu + "まで",
             TournamentKind.Regional => "地区大会まで",
-            TournamentKind.Jingu => "神宮大会まで",
+            TournamentKind.Jingu => KokoSim.Engine.Season.DisplayNames.Current.JinguShort + "まで",
             _ => "秋大会まで",
         };
 

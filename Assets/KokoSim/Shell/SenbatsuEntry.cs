@@ -82,7 +82,7 @@ namespace KokoSim.Unity.Shell
                 // 選外のイベントは「候補だった（秋季地区大会に出た）年」だけ。出ていない年は観るだけのセンバツへ入る。
                 if (entered)
                     EventService.Push("senbatsu_not_selected", subjectName: null,
-                        PresentedEffect.Bad("センバツ出場ならず。"));
+                        PresentedEffect.Bad(KokoSim.Engine.Season.DisplayNames.Current.Senbatsu + "出場ならず。"));
                 var spectated = BuildSpectatedRunner(field, title, seed, yearIndex);
                 GameSession.Current.EnterSpectatedSenbatsu(title, spectated, field);
                 return;
@@ -126,7 +126,7 @@ namespace KokoSim.Unity.Shell
         }
 
         public static string Title(int yearIndex)
-            => (SeasonClock.SeasonBaseYear + (yearIndex - 1)) + "年 選抜高等学校野球大会";
+            => (SeasonClock.SeasonBaseYear + (yearIndex - 1)) + "年 " + KokoSim.Engine.Season.DisplayNames.Current.SenbatsuOfficial;
 
         private static List<School> ResolveSchools(IReadOnlyList<int> ids)
         {

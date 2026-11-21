@@ -105,10 +105,10 @@ namespace KokoSim.Unity.CareerMeta
             FillRows("cr-record",
                 RecordRow("公式戦", r.OfficialWins + "勝 " + r.OfficialLosses + "敗", games > 0),
                 RecordRow("勝率", pct, games > 0),
-                RecordRow("甲子園出場",
+                RecordRow(KokoSim.Engine.Season.DisplayNames.Current.Koshien + "出場",
                     "夏" + r.SummerAppearances + "回・春" + r.SpringAppearances + "回",
                     r.TotalAppearances > 0),
-                RecordRow("甲子園成績", r.KoshienWins + "勝 " + r.KoshienLosses + "敗", koGames > 0),
+                RecordRow(KokoSim.Engine.Season.DisplayNames.Current.Koshien + "成績", r.KoshienWins + "勝 " + r.KoshienLosses + "敗", koGames > 0),
                 RecordRow("最高成績", BestResultLabel(r.BestResult), r.BestResult != BestResult.None));
         }
 
@@ -166,14 +166,14 @@ namespace KokoSim.Unity.CareerMeta
                 nodes.Add((summer, 1, new UiComponents.TimelineNodeData
                 {
                     Year = summer.ToString(),
-                    Title = "夏の甲子園 出場",
+                    Title = "夏の" + KokoSim.Engine.Season.DisplayNames.Current.Koshien + " 出場",
                     Note = string.IsNullOrEmpty(r.SummerAppearanceLabel) ? null : r.SummerAppearanceLabel,
                 }));
             if (r.LastSpringYear is int spring)
                 nodes.Add((spring, 1, new UiComponents.TimelineNodeData
                 {
                     Year = spring.ToString(),
-                    Title = "春の甲子園 出場",
+                    Title = "春の" + KokoSim.Engine.Season.DisplayNames.Current.Koshien + " 出場",
                     Note = string.IsNullOrEmpty(r.SpringAppearanceLabel) ? null : r.SpringAppearanceLabel,
                 }));
 
@@ -287,6 +287,8 @@ namespace KokoSim.Unity.CareerMeta
 
         private void RenderPostings(SchoolRecord r)
         {
+            // 列見出しの大会名は表（data/display-names.yaml）から引く（issue #1319）。
+            SetText("cr-post-ko-head", KokoSim.Engine.Season.DisplayNames.Current.Koshien);
             var rows = new List<VisualElement>();
             foreach (var p in BuildPostings(r))
             {

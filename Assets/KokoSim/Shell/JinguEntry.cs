@@ -132,6 +132,6 @@ namespace KokoSim.Unity.Shell
         }
 
         private static string Title(int yearIndex)
-            => (SeasonClock.SeasonBaseYear + (yearIndex - 1)) + "年 明治神宮野球大会（高校の部）";
+            => (SeasonClock.SeasonBaseYear + (yearIndex - 1)) + "年 " + KokoSim.Engine.Season.DisplayNames.Current.JinguOfficial;
     }
 }

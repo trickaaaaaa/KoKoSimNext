@@ -478,9 +478,9 @@ namespace KokoSim.Unity.Players
         private static string SlotJp(TournamentSlot s) => s switch
         {
             TournamentSlot.SummerPref => "夏（県）",
-            TournamentSlot.SummerKoshien => "夏（甲子園）",
+            TournamentSlot.SummerKoshien => "夏（" + KokoSim.Engine.Season.DisplayNames.Current.Koshien + "）",
             TournamentSlot.Autumn => "秋",
-            TournamentSlot.Senbatsu => "春（センバツ）",
+            TournamentSlot.Senbatsu => "春（" + KokoSim.Engine.Season.DisplayNames.Current.Senbatsu + "）",
             _ => "",
         };
 

@@ -118,7 +118,7 @@
                     <ui:Label class="cr-post__school" text="学校" />
                     <ui:Label class="cr-post__term" text="在任" />
                     <ui:Label class="cr-post__wl" text="公式戦" />
-                    <ui:Label class="cr-post__ko" text="甲子園" />
+                    <ui:Label name="cr-post-ko-head" class="cr-post__ko" text="" />
                   </ui:VisualElement>
                   <ui:VisualElement name="cr-posts" />
                 </ui:VisualElement>

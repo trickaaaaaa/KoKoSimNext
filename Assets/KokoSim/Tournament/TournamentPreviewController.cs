@@ -612,7 +612,7 @@ namespace KokoSim.Unity.Tournament
             {
                 tabs.Clear();
                 var selected = _entrantScope == qualifierScope ? 0 : 1;
-                tabs.Add(UiComponents.SegTabs(new[] { senbatsu ? "地区大会" : "県予選", senbatsu ? "センバツ" : "甲子園" },
+                tabs.Add(UiComponents.SegTabs(new[] { senbatsu ? "地区大会" : "県予選", senbatsu ? KokoSim.Engine.Season.DisplayNames.Current.Senbatsu : KokoSim.Engine.Season.DisplayNames.Current.Koshien },
                     selected, i =>
                 {
                     _entrantScope = i == 0 ? qualifierScope : TournamentPreviewState.StatScope.CurrentTournament;

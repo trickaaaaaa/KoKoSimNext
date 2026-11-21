@@ -53,7 +53,7 @@ namespace KokoSim.Unity.Shell
         {
             switch (t)
             {
-                case ManagerGrowthEventType.KoshienExperience: return "甲子園の経験";
+                case ManagerGrowthEventType.KoshienExperience: return KokoSim.Engine.Season.DisplayNames.Current.Koshien + "の経験";
                 case ManagerGrowthEventType.MentorCoach: return "名伯楽との出会い";
                 case ManagerGrowthEventType.ProObVisit: return "プロOBの訪問";
                 case ManagerGrowthEventType.FamousRivalLesson: return "名将との一戦";

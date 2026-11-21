@@ -204,11 +204,12 @@ events:
     public void SenbatsuNotSelected_EveryVariantNamesTheSenbatsuEarly()
     {
         var e = RepositoryEvents().Single(x => x.Id == "senbatsu_not_selected");
-        Assert.Contains("センバツ", e.Text);
+        // 大会名は差し込み語で書く（issue #1319）＝表を替えても「センバツ」相当の語が冒頭に来ることを見る。
+        Assert.Contains("{senbatsu}", e.Text);
         foreach (var v in e.Variants)
         {
             var head = string.Concat(v.Lines.Take(2).Select(l => l.Say));
-            Assert.Contains("センバツ", head);
+            Assert.Contains("{senbatsu}", head);
         }
     }
 

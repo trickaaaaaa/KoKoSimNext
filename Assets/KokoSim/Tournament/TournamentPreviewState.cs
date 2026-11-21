@@ -249,9 +249,9 @@ namespace KokoSim.Unity.Tournament
                 return (PreviewStage.DistrictLeague, league.AdvancePerBlock, "県大会");
             return d.Kind switch
             {
-                TK.Summer => (PreviewStage.SummerPrefecture, 1, "甲子園"),
+                TK.Summer => (PreviewStage.SummerPrefecture, 1, KokoSim.Engine.Season.DisplayNames.Current.Koshien),
                 TK.SummerKoshien => (PreviewStage.SummerKoshien, 1, ""),
-                TK.Regional => (PreviewStage.Regional, 1, "明治神宮大会"),
+                TK.Regional => (PreviewStage.Regional, 1, KokoSim.Engine.Season.DisplayNames.Current.Jingu),
                 TK.Jingu => (PreviewStage.Jingu, 1, ""),
                 TK.SenbatsuKoshien => (PreviewStage.SenbatsuKoshien, 1, ""),
                 _ => (PreviewStage.Autumn, 2, "地区大会"),
@@ -512,7 +512,7 @@ namespace KokoSim.Unity.Tournament
                 BestResult.RunnerUp => "準優勝経験／",
                 _ => "",
             };
-            return "甲子園 " + best + string.Join("・", parts) + "。";
+            return KokoSim.Engine.Season.DisplayNames.Current.Koshien + " " + best + string.Join("・", parts) + "。";
         }
 
         private static string Sym(ContenderMark m) => m switch
