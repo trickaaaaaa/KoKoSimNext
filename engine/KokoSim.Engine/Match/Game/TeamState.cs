@@ -1547,7 +1547,7 @@ public sealed class TeamState
             if (target < 0) return false;
             _retired.Add(KeyOf(_lineup[target]));
             _replacedAtSlot[target] = _lineup[target].Name;   // 観測: 守備位置に就いた選手が退いた
-            _lineup[target] = Rekey(dhPlayer, dhPlayer with { Position = pos });
+            _lineup[target] = Rekey(dhPlayer, dhPlayer.AtPosition(pos));   // 守備力も就く位置の適性で作り直す（#1245）
         }
         else
         {

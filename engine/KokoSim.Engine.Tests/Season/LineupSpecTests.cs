@@ -92,6 +92,43 @@ public sealed class LineupSpecTests
         _ = new TeamState(team); // 守備網羅（8野手＋先発）で構築成立
     }
 
+    // issue #1245: DH打者は守備位置が投手で投影される（UI は DH 枠に Pitcher を渡す）。DH解除で守備に就くときは
+    // 就く位置の適性で守備力を作り直す（投手適性のままにしない）。
+    [Theory]
+    [InlineData(FieldPosition.LeftField)]
+    [InlineData(FieldPosition.Shortstop)]
+    [InlineData(FieldPosition.Catcher)]
+    public void ReleaseDh_ToField_RebuildsFieldingFromTargetPositionAptitude(FieldPosition target)
+    {
+        var slots = new List<LineupSlot>(9);
+        var posCursor = 0;
+        DevelopingPlayer? dh = null;
+        for (var i = 0; i < 9; i++)
+        {
+            if (i == 3)
+            {
+                dh = Dp(100, "DH打者", pitcher: true);
+                dh.SetLevel(AbilityKind.Fielding, 60);
+                foreach (var pos in EightFieldPos) dh.SetAptitude(pos, 90);
+                dh.SetAptitude(FieldPosition.Pitcher, 10);
+                slots.Add(new LineupSlot(dh, FieldPosition.Pitcher)); // UI（ToLineupSpec）と同じ入力
+                continue;
+            }
+            slots.Add(new LineupSlot(Dp(i + 1, $"野手{i + 1}"), EightFieldPos[posCursor++]));
+        }
+        var sp = Dp(200, "先発", pitcher: true);
+        var team = RosterTeamBuilder.BuildFromLineup(new LineupSpec(slots, DhSlot: 3, StartingPitcher: sp));
+        var state = new TeamState(team);
+
+        Assert.True(state.ReleaseDh(target));
+
+        var expected = EffectiveFielding.Rank(dh!, target, new Engine.Match.Fielding.FieldingCoefficients());
+        var fielder = state.PlayerAtPosition(target)!;
+        Assert.Equal(100, fielder.SourceId);
+        Assert.Equal(expected, fielder.Fielding);
+        Assert.True(expected > EffectiveFielding.Rank(dh!, FieldPosition.Pitcher, new Engine.Match.Fielding.FieldingCoefficients()));
+    }
+
     [Fact]
     public void BuildFromLineup_DhWithoutStartingPitcher_Throws()
     {
