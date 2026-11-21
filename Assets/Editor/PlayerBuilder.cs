@@ -39,6 +39,15 @@ namespace KokoSim.EditorTools
         // steamcmd の起動設定やログの場所にも出るので、日本語を通さない。ウィンドウの題名は製品名のまま。
         public const string ExeBaseName = "HakkyuKantokuroku";
 
+        // 体験版のビルドから外すフォルダ（issue #1318）。場内放送（VOICEVOX:No.7）は商用の相談が済むまで体験版に入れない。
+        // Resources 配下は参照の有無に関係なく全部ビルドに入るため、ビルドの間だけ名前の末尾に ~ を付けて
+        // Unity から見えなくし、終わったら必ず戻す（.meta ごと動かすので GUID は変わらず、戻した後の再読み込みは
+        // 取り込みキャッシュから復元される）。
+        private static readonly string[] DemoExcludedResourceDirs =
+        {
+            "Assets/KokoSim/Audio/Vendor/VoiceVox/Resources",
+        };
+
         // 出力は out/build/（out/ は .gitignore 済み）。
         private static string DefaultOutRoot =>
             Path.GetFullPath(Path.Combine(Application.dataPath, "..", "out", "build"));
@@ -116,7 +125,16 @@ namespace KokoSim.EditorTools
             };
 
             var sw = Stopwatch.StartNew();
-            var report = BuildPipeline.BuildPlayer(options);
+            BuildReport report;
+            var hidden = flavor == Flavor.Demo ? HideDirs(DemoExcludedResourceDirs) : Array.Empty<string>();
+            try
+            {
+                report = BuildPipeline.BuildPlayer(options);
+            }
+            finally
+            {
+                RestoreDirs(hidden);
+            }
             sw.Stop();
             var summary = report.summary;
 
@@ -136,6 +154,51 @@ namespace KokoSim.EditorTools
             foreach (var w in warnings) sb.AppendLine("注意: " + w);
             message = sb.ToString().TrimEnd();
             return true;
+        }
+
+        /// <summary>フォルダ（と隣の .meta）の末尾に ~ を付けて Unity から隠す。隠したものの元の名前を返す。</summary>
+        private static string[] HideDirs(string[] dirs)
+        {
+            var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            var hidden = new System.Collections.Generic.List<string>();
+            try
+            {
+                foreach (var d in dirs)
+                {
+                    var full = Path.Combine(root, d);
+                    if (!Directory.Exists(full)) continue;   // 素材が無い環境（Git 管理外）では何もしない
+                    Directory.Move(full, full + "~");
+                    if (File.Exists(full + ".meta")) File.Move(full + ".meta", full + "~.meta");
+                    hidden.Add(d);
+                }
+            }
+            catch
+            {
+                RestoreDirs(hidden.ToArray());
+                throw;
+            }
+            if (hidden.Count > 0) AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            return hidden.ToArray();
+        }
+
+        private static void RestoreDirs(string[] dirs)
+        {
+            if (dirs.Length == 0) return;
+            var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            foreach (var d in dirs)
+            {
+                var full = Path.Combine(root, d);
+                try
+                {
+                    if (Directory.Exists(full + "~") && !Directory.Exists(full)) Directory.Move(full + "~", full);
+                    if (File.Exists(full + "~.meta") && !File.Exists(full + ".meta")) File.Move(full + "~.meta", full + ".meta");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[PlayerBuilder] {d} を元に戻せませんでした。手で末尾の ~ を外してください: {e.Message}");
+                }
+            }
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         }
 
         /// <summary>ビルドに入る前に止めるべき問題。空なら進めてよい。</summary>
