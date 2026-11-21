@@ -195,6 +195,21 @@ public sealed class ScoutCandidate
     public ScoutReport Report { get; set; } = new();
 }
 
+/// <summary>訪問1回の結果（<see cref="ScoutModel.TryVisit"/>）。</summary>
+public enum ScoutVisitOutcome
+{
+    /// <summary>訪問できた（争奪戦は起きなかった）。</summary>
+    Visited,
+    /// <summary>訪問できたが、競合校が動いた。</summary>
+    VisitedWithRivalMove,
+    /// <summary>訪問できない時期、または決着済み・候補なし。</summary>
+    OutOfSeason,
+    /// <summary>枠が埋まっている。</summary>
+    SlotsFull,
+    /// <summary>部費が足りない。</summary>
+    NotEnoughFunds,
+}
+
 /// <summary>
 /// スカウトの進行状態（1年ぶん）。新チーム発足後に探す分野を決め、秋の大会後（<see cref="SeasonCalendar.RecruitListWeek"/>）
 /// にこの状態を作り、3月の確定週（<see cref="SeasonCalendar.ProspectConfirmWeek"/>）の判定で使い切る。
@@ -378,6 +393,40 @@ public static class ScoutModel
         var rank = TierRank(p.RivalTier) + Math.Max(0, c.RivalEventTierStep);
         p.RivalTier = TierOfRank(Math.Min(rank, TierRank(Tier.S)));
         return true;
+    }
+
+    /// <summary>
+    /// 訪問の乱数ストリームの鍵。合流年度・候補の並び順・その候補への訪問済み回数から決まる＝
+    /// 連番カウンタ（セーブに載らない・訪問の順番で結果が変わる）を持たず、年度ごとに別の列になり、
+    /// 保存/読み直しでも同じ訪問は同じ結果になる（不変条件#2）。呼び出し側が母種と混ぜる。
+    /// </summary>
+    public static ulong VisitStreamKey(int joinYearIndex, int candidateIndex, int visitsSoFar)
+        => ((ulong)(uint)joinYearIndex << 40) ^ ((ulong)(uint)candidateIndex << 20) ^ (ulong)(uint)visitsSoFar;
+
+    /// <summary>
+    /// 1回訪問を試みる。<b>払えない・枠が無い・時期でないときは状態を一切変えない</b>（対象の印も付けない）。
+    /// まだ対象でなければ、枠に空きがある限り自動で対象にする。費用は返すだけで、引き落としは呼び出し側が持つ
+    /// （engine は金庫を持たない）。
+    /// </summary>
+    /// <param name="seedBase">訪問ストリームの母種（呼び出し側が全体シードと混ぜて渡す）。</param>
+    /// <param name="cost">訪問が成立したときの費用[万円]。成立しなければ 0。</param>
+    public static ScoutVisitOutcome TryVisit(
+        ScoutingState? state, int index, bool inSeason, double funds, ScoutCoefficients c, ulong seedBase, out double cost)
+    {
+        cost = 0.0;
+        if (state == null || state.Resolved || !inSeason || index < 0 || index >= state.Candidates.Count)
+            return ScoutVisitOutcome.OutOfSeason;
+
+        var p = state.Candidates[index];
+        if (!p.Targeted && state.TargetedCount >= state.Slots) return ScoutVisitOutcome.SlotsFull;
+
+        var price = VisitCost(p.Distance, c);
+        if (funds < price) return ScoutVisitOutcome.NotEnoughFunds;
+
+        p.Targeted = true;
+        cost = price;
+        var rng = new Xoshiro256Random(seedBase ^ VisitStreamKey(state.YearIndex, index, p.Visits));
+        return Visit(p, c, rng) ? ScoutVisitOutcome.VisitedWithRivalMove : ScoutVisitOutcome.Visited;
     }
 
     /// <summary>

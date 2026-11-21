@@ -598,9 +598,9 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         private void ApplyMatchInjuries(GameResult detail, bool managerWasAway)
         {
-            // 試合ごとに独立した決定論ストリーム（週・年度・試合連番から導出）。
+            // 試合ごとに独立した決定論ストリーム（年度・週・試合連番から導出。連番はセーブに載る）。
             var rng = new Xoshiro256Random(
-                0x2913_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_matchInjurySeq)));
+                0x2913_0000UL ^ StreamKey.Of(GameClock.YearIndex, GameClock.Week, ++_matchInjurySeq));
             var outcomes = MatchInjuryLedger.Apply(detail, managerWasAway, RosterService.Roster, rng, InjuryCoeff);
             if (outcomes.Count > 0) _injuryNotices.AddRange(outcomes);
         }
@@ -626,7 +626,7 @@ namespace KokoSim.Unity.Shell
                 ? baseProb
                 : GrowthEventModel.BigStageProb(Kind, NationService.ManagerSchool().Strength, opponent.Strength, GrowthEventsCoeff);
             var rng = new Xoshiro256Random(
-                0x8167_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_bigStageSeq)));
+                0x8167_0000UL ^ StreamKey.Of(GameClock.YearIndex, GameClock.Week, ++_bigStageSeq));
             _bigStageNotices.AddRange(GrowthEventModel.BigStage(
                 detail, managerWasAway, RosterService.Roster, prob, rng, GrowthEventsCoeff));
         }
@@ -1134,6 +1134,8 @@ namespace KokoSim.Unity.Shell
             PruneBatteryLedger();
             s.BatteryInnings = new List<BatteryInningsEntry>(BatteryLedger.Entries());
             s.CohesionDelta = CohesionDelta;
+            s.MatchInjurySeq = _matchInjurySeq;
+            s.BigStageSeq = _bigStageSeq;
         }
 
         /// <summary>観るだけのセンバツを DTO へ（<see cref="CaptureSpectatedKoshien"/> と同型）。</summary>
@@ -1214,6 +1216,8 @@ namespace KokoSim.Unity.Shell
             MomentumLevel = s.MomentumLevel;   // 同上（v24・issue #863）
             BatteryLedger = BatteryLedger.From(s.BatteryInnings ?? new List<BatteryInningsEntry>());   // 同上（v28・issue #933）
             CohesionDelta = s.CohesionDelta;   // 同上（v29・issue #934）
+            _matchInjurySeq = s.MatchInjurySeq;   // 同上（試合ごとの乱数の連番・issue #1249）
+            _bigStageSeq = s.BigStageSeq;
             PendingSenbatsuFieldIds = s.PendingSenbatsuFieldIds != null
                 ? new List<int>(s.PendingSenbatsuFieldIds) : new List<int>();
             PendingSenbatsuJinguRegion = s.PendingSenbatsuJinguRegion ?? "";
@@ -1313,6 +1317,7 @@ namespace KokoSim.Unity.Shell
             // 適用先を失うので参照だけ切る（issue #529。CompleteBracketFold は null チェックで安全に無視する）。
             _bracketFoldRunner = null;
             _matchInjurySeq = 0;
+            _bigStageSeq = 0;
             _injuryNotices.Clear();
         }
     }

@@ -105,7 +105,7 @@ namespace KokoSim.Unity.Scout
         public ScoutTab Tab;
         /// <summary>スカウト候補のタブを出せるか（スカウト網を契約して枠が解禁されている）。</summary>
         public bool HasScouting;
-        /// <summary>いま訪問できる時期か（秋〜冬）。</summary>
+        /// <summary>いま訪問できるか（秋〜冬で、決着済みでないリストがある）。</summary>
         public bool InScoutSeason;
 
         // ── 共通の上部帯（オーナー決定2026-11-09・ワイヤー案A） ──
@@ -145,7 +145,7 @@ namespace KokoSim.Unity.Scout
             var v = new ScoutView();
             BuildTopBand(v);
             v.HasScouting = ScoutService.Slots > 0;
-            v.InScoutSeason = ScoutService.InSeason;
+            v.InScoutSeason = ScoutService.CanVisit;
             v.Tab = v.HasScouting ? Tab : ScoutTab.Incoming;
 
             if (v.Tab == ScoutTab.Candidates) return BuildScoutView(v);

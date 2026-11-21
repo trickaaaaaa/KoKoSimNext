@@ -244,6 +244,126 @@ public sealed class ScoutingTests
         Assert.True(saturated, "訪問の上積みが頭打ちになっていない");
     }
 
+    // ── 訪問（issue #1249） ─────────────────────────────────────
+
+    private const ulong SeedBase = 0x5589_0000UL;
+
+    [Fact]
+    public void TryVisit_NotEnoughFunds_ChangesNothing()
+    {
+        var list = Build(800010, level: 2, field: ScoutField.Omakase);
+        var before = list.TargetedCount;
+
+        var outcome = ScoutModel.TryVisit(list, 0, inSeason: true, funds: 0.0, C, SeedBase, out var cost);
+
+        Assert.Equal(ScoutVisitOutcome.NotEnoughFunds, outcome);
+        Assert.Equal(0.0, cost);
+        Assert.False(list.Candidates[0].Targeted);
+        Assert.Equal(0, list.Candidates[0].Visits);
+        Assert.Equal(before, list.TargetedCount);
+    }
+
+    [Fact]
+    public void TryVisit_NotEnoughFunds_DoesNotConsumeSlot()
+    {
+        var list = Build(800011, level: 1, field: ScoutField.Omakase);
+        for (var i = 0; i < list.Candidates.Count; i++)
+            ScoutModel.TryVisit(list, i, true, 0.0, C, SeedBase, out _);
+
+        Assert.Equal(0, list.TargetedCount);
+        var ok = ScoutModel.TryVisit(list, 0, true, 1000.0, C, SeedBase, out var cost);
+        Assert.NotEqual(ScoutVisitOutcome.SlotsFull, ok);
+        Assert.True(cost > 0.0);
+        Assert.True(list.Candidates[0].Targeted);
+    }
+
+    [Fact]
+    public void TryVisit_SlotsFull_AndOutOfSeason_AndResolved_ChangeNothing()
+    {
+        var list = Build(800012, level: 1, field: ScoutField.Omakase);
+        for (var i = 0; i < list.Slots; i++)
+            ScoutModel.TryVisit(list, i, true, 1000.0, C, SeedBase, out _);
+        var extra = list.Slots;
+        Assert.Equal(ScoutVisitOutcome.SlotsFull,
+            ScoutModel.TryVisit(list, extra, true, 1000.0, C, SeedBase, out _));
+        Assert.False(list.Candidates[extra].Targeted);
+
+        Assert.Equal(ScoutVisitOutcome.OutOfSeason,
+            ScoutModel.TryVisit(list, 0, false, 1000.0, C, SeedBase, out _));
+
+        list.Resolved = true;
+        var visits = list.Candidates[0].Visits;
+        Assert.Equal(ScoutVisitOutcome.OutOfSeason,
+            ScoutModel.TryVisit(list, 0, true, 1000.0, C, SeedBase, out _));
+        Assert.Equal(visits, list.Candidates[0].Visits);
+    }
+
+    [Fact]
+    public void VisitStreamKey_DiffersByYearCandidateAndVisitCount()
+    {
+        var keys = new HashSet<ulong>();
+        for (var year = 1; year <= 6; year++)
+        for (var idx = 0; idx < 12; idx++)
+        for (var v = 0; v < 8; v++)
+            Assert.True(keys.Add(ScoutModel.VisitStreamKey(year, idx, v)), $"衝突 {year}/{idx}/{v}");
+    }
+
+    [Fact]
+    public void TryVisit_Rival_DependsOnYear_NotOnVisitOrder()
+    {
+        // 同じ「k回目の訪問」でも年度が違えば抽選が変わる（年度が式に無いと毎年同じ結果になる）。
+        string Pattern(int year)
+        {
+            var list = Build(800013, level: 3, field: ScoutField.Omakase);
+            list.YearIndex = year;
+            var sb = new System.Text.StringBuilder();
+            for (var i = 0; i < 40; i++)
+            {
+                var o = ScoutModel.TryVisit(list, i % list.Slots, true, 1e9, C, SeedBase, out _);
+                sb.Append(o == ScoutVisitOutcome.VisitedWithRivalMove ? '1' : '0');
+            }
+            return sb.ToString();
+        }
+        Assert.NotEqual(Pattern(2), Pattern(3));
+
+        // 訪問の順番を入れ替えても、各候補の n 回目の結果は変わらない。
+        var a = Build(800014, level: 3, field: ScoutField.Omakase);
+        var b = Build(800014, level: 3, field: ScoutField.Omakase);
+        for (var round = 0; round < 3; round++)
+            for (var i = 0; i < a.Slots; i++) ScoutModel.TryVisit(a, i, true, 1e9, C, SeedBase, out _);
+        for (var i = a.Slots - 1; i >= 0; i--)
+            for (var round = 0; round < 3; round++) ScoutModel.TryVisit(b, i, true, 1e9, C, SeedBase, out _);
+        for (var i = 0; i < a.Slots; i++)
+            Assert.Equal(a.Candidates[i].RivalTier, b.Candidates[i].RivalTier);
+    }
+
+    [Fact]
+    public void TryVisit_SaveLoadMidway_GivesSameResultAsUninterrupted()
+    {
+        var a = Build(800015, level: 3, field: ScoutField.Omakase);
+        for (var i = 0; i < 10; i++) ScoutModel.TryVisit(a, 0, true, 1e9, C, SeedBase, out _);
+
+        var b = Build(800015, level: 3, field: ScoutField.Omakase);
+        for (var i = 0; i < 4; i++) ScoutModel.TryVisit(b, 0, true, 1e9, C, SeedBase, out _);
+        // セーブ→ロードを模す（状態は JSON で往復・訪問カウンタ以外に持ち越すものは無い）。
+        var json = KokoSim.Engine.Saves.ScoutingSaves.ToJson(b);
+        b = KokoSim.Engine.Saves.ScoutingSaves.FromJson(json)!;
+        for (var i = 0; i < 6; i++) ScoutModel.TryVisit(b, 0, true, 1e9, C, SeedBase, out _);
+
+        Assert.Equal(a.Candidates[0].RivalTier, b.Candidates[0].RivalTier);
+        Assert.Equal(a.Candidates[0].Visits, b.Candidates[0].Visits);
+    }
+
+    [Fact]
+    public void StreamKey_DoesNotCollideAcrossWeeksEvenWithLargeSeq()
+    {
+        var keys = new HashSet<ulong>();
+        for (var year = 1; year <= 3; year++)
+        for (var week = 1; week <= 52; week++)
+        for (var seq = 1; seq <= 300; seq += 7)
+            Assert.True(keys.Add(StreamKey.Of(year, week, seq)));
+    }
+
     [Fact]
     public void Visit_IncrementsAndCanRaiseRival()
     {
