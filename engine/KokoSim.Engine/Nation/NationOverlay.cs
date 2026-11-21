@@ -67,6 +67,17 @@ public static class SchoolNames
         stem = t;
         return true;
     }
+
+    /// <summary>
+    /// 幹が、与えた学校群の<b>生成時の名前</b>（改名の差分に影響されない素の校名）の幹と重なるか。
+    /// 新規ゲームの校名の重複チェック用＝前の進行の改名・転任の差分が乗った全国ではなく、まっさらな全国と照合する。
+    /// </summary>
+    public static bool IsGeneratedStemTaken(IEnumerable<School> schools, string stem)
+    {
+        foreach (var s in schools)
+            if (Stem(s.GeneratedName) == stem) return true;
+        return false;
+    }
 }
 
 /// <summary>
