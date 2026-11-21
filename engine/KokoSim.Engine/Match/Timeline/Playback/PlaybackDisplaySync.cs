@@ -58,6 +58,18 @@ public static class PlaybackDisplaySync
         return t;
     }
 
+    /// <summary>この距離[m]未満しか動かないレッグは「その場に居るだけ」（待機・定点。<c>AppendHeldRunners</c> が To==From で張る）。
+    /// 走者レッグの静止判定の単一ソース（issue #1264④。厳密一致と 0.5m 閾値が混在していた）。</summary>
+    public const double StationaryLegMaxM = 0.5;
+
+    /// <summary>走者レッグが待機・定点（<see cref="StationaryLegMaxM"/> 未満しか動かない）か。</summary>
+    public static bool IsStationaryLeg(PlaybackRun s)
+    {
+        var dx = s.To.X - s.From.X;
+        var dy = s.To.Y - s.From.Y;
+        return dx * dx + dy * dy < StationaryLegMaxM * StationaryLegMaxM;
+    }
+
     /// <summary>一塁の駆け抜け（issue #443）とみなす最大の長さ[m]。塁間（27.43m）より十分短い。</summary>
     private const double RunThroughMaxM = 10.0;
 
@@ -88,7 +100,7 @@ public static class PlaybackDisplaySync
             if (batterOut && r.Label == "打") continue;
             foreach (var s in r.Segs)
             {
-                if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
+                if (IsStationaryLeg(s)) continue;   // その場に居るだけ
                 if (s.T1 > last) last = s.T1;
             }
         }
@@ -162,9 +174,7 @@ public static class PlaybackDisplaySync
             if (r.Label != "打" || r.Segs is null) continue;
             foreach (var s in r.Segs)
             {
-                var dx = s.To.X - s.From.X;
-                var dy = s.To.Y - s.From.Y;
-                if (dx * dx + dy * dy < 0.25) continue;
+                if (IsStationaryLeg(s)) continue;
                 return s.OutAtEnd ? null : s.T1;
             }
         }
@@ -185,11 +195,10 @@ public static class PlaybackDisplaySync
         for (var i = r.Segs.Count - 1; i >= 0; i--)
         {
             var s = r.Segs[i];
+            if (IsStationaryLeg(s)) continue;
             var dx = s.To.X - s.From.X;
             var dy = s.To.Y - s.From.Y;
-            var d2 = dx * dx + dy * dy;
-            if (d2 < 0.25) continue;
-            if (skipRunThrough && d2 < RunThroughMaxM * RunThroughMaxM && PrecededByMovingLeg(r, i)) continue;
+            if (skipRunThrough && dx * dx + dy * dy < RunThroughMaxM * RunThroughMaxM && PrecededByMovingLeg(r, i)) continue;
             return s;
         }
         return null;
@@ -199,9 +208,7 @@ public static class PlaybackDisplaySync
     {
         for (var i = index - 1; i >= 0; i--)
         {
-            var dx = r.Segs[i].To.X - r.Segs[i].From.X;
-            var dy = r.Segs[i].To.Y - r.Segs[i].From.Y;
-            if (dx * dx + dy * dy >= 0.25) return true;
+            if (!IsStationaryLeg(r.Segs[i])) return true;
         }
         return false;
     }

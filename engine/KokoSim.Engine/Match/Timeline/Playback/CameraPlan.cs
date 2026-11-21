@@ -254,27 +254,11 @@ public static class CameraPlanBuilder
     }
 
     /// <summary>
-    /// 「まだ見るものがある」最後の瞬間: 決着(<see cref="PlaybackPlay.ResAt"/>)・球が動き終わる時刻・
-    /// 実際に動く走者レッグの終わりのうち最大値（issue #406②。MatchLiveController.PlayEndTime と
-    /// 同じ作法で、全景へ戻す時刻の単一ソースにする＝engine のプラン（このメソッド経由）と3D側の
-    /// カメラカットの両方がここを見る。片方だけ直すとプランと実カットがずれる）。
-    ///
-    /// 決着後だけに起きる野手の定位置復帰（Backup/Cutoff の戻り等）は <see cref="PlaybackPlay.Moves"/>
-    /// を見ないこの式には自然と入らない＝含めると①「投手が帰る絵」を待つあいだ全景復帰が遅れて再発する。
+    /// 「まだ見るものがある」最後の瞬間。再生を切る時刻と同じ規則＝<see cref="PlaybackDisplaySync.LastActionTime"/>
+    /// を返すだけ（issue #1264④。以前は2本に分かれ、凡打の打者走者の扱いがずれていた）。
+    /// 全景へ戻す時刻（<see cref="WideStartTime"/>）の元になる。
     /// </summary>
-    public static double LastEventTime(PlaybackPlay play)
-    {
-        var lastEvent = play.ResAt;
-        foreach (var seg in play.Ball)
-            if (seg.T1 > lastEvent) lastEvent = seg.T1;
-        foreach (var runner in play.Runners)
-            foreach (var seg in runner.Segs)
-            {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue; // その場に居るだけ
-                if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            }
-        return lastEvent;
-    }
+    public static double LastEventTime(PlaybackPlay play) => PlaybackDisplaySync.LastActionTime(play);
 
     /// <summary>
     /// 全景へ戻し始める時刻（issue #406②/#441 の単一ソース。engine のプランと3D側のカット時刻の
@@ -557,7 +541,7 @@ public static class CameraPlanBuilder
         foreach (var runner in play.Runners)
             foreach (var seg in runner.Segs)
             {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
                 if (t < seg.T0 || t > seg.T1) continue;
                 var span = Math.Abs(seg.To.X - seg.From.X) + Math.Abs(seg.To.Y - seg.From.Y);
                 if (span <= best) continue;
@@ -581,7 +565,7 @@ public static class CameraPlanBuilder
         foreach (var runner in play.Runners)
             foreach (var seg in runner.Segs)
             {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
                 if (seg.T1 > t || seg.T1 < latest) continue;
                 latest = seg.T1;
                 found = (seg.From, seg.To);
@@ -596,7 +580,7 @@ public static class CameraPlanBuilder
         foreach (var runner in play.Runners)
             foreach (var seg in runner.Segs)
             {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
                 if (t < seg.T0 || t > seg.T1) continue;
                 var span = Math.Abs(seg.To.X - seg.From.X) + Math.Abs(seg.To.Y - seg.From.Y);
                 if (span <= best) continue;

@@ -3983,7 +3983,7 @@ namespace KokoSim.Unity.Match
             if (r?.Segs == null || r.Segs.Count == 0) return false;
             var last = r.Segs[r.Segs.Count - 1];
             // 塁上で動かないレッグ（待機）は到達ではない
-            if (new Vector2((float)(last.To.X - last.From.X), (float)(last.To.Y - last.From.Y)).sqrMagnitude < 0.25f)
+            if (PlaybackDisplaySync.IsStationaryLeg(last))
                 return false;
             t1 = (float)last.T1;
             outAtEnd = last.OutAtEnd;
@@ -4643,6 +4643,7 @@ namespace KokoSim.Unity.Match
             float th0 = -FoulQuarterRad - 0.12f, float th1 = FoulQuarterRad + 0.12f, int seg = 48)
         {
             var verts = new Vector3[(seg + 1) * 2];
+            var normals = new Vector3[(seg + 1) * 2];
             var tris = new int[seg * 12];   // 表裏の2枚
             for (int i = 0; i <= seg; i++)
             {
@@ -4651,6 +4652,8 @@ namespace KokoSim.Unity.Match
                 float s = Mathf.Sin(th), c = Mathf.Cos(th);
                 verts[i * 2] = new Vector3(rad * s, y0, rad * c);
                 verts[i * 2 + 1] = new Vector3(rad * s, y1, rad * c);
+                // 縦の壁の法線は水平（本塁側＝内向き）。上向きだと地面と同じ明るさで照らされる（issue #1264⑦）
+                normals[i * 2] = normals[i * 2 + 1] = new Vector3(-s, 0f, -c);
             }
             for (int i = 0; i < seg; i++)
             {
@@ -4661,17 +4664,20 @@ namespace KokoSim.Unity.Match
                 tris[t + 6] = b; tris[t + 7] = b + 3; tris[t + 8] = b + 1;
                 tris[t + 9] = b; tris[t + 10] = b + 2; tris[t + 11] = b + 3;
             }
-            AddSurface(name, verts, tris, 0f, color, layer);
+            AddSurface(name, verts, tris, 0f, color, layer, normals);
         }
 
-        private void AddSurface(string name, Vector3[] verts, int[] tris, float y, Color color, int layer)
+        private void AddSurface(string name, Vector3[] verts, int[] tris, float y, Color color, int layer, Vector3[] normals = null)
         {
             var mesh = new Mesh { name = name };
-            // ⚠ RecalculateNormals は呼ばない（design-18 の掟）。平面なので法線は一定＝上向きで足りる
+            // ⚠ RecalculateNormals は呼ばない（design-18 の掟）。水平面は法線が一定＝上向き。縦の壁は呼び元が渡す
             mesh.vertices = verts;
             mesh.triangles = tris;
-            var normals = new Vector3[verts.Length];
-            for (int i = 0; i < normals.Length; i++) normals[i] = Vector3.up;
+            if (normals == null)
+            {
+                normals = new Vector3[verts.Length];
+                for (int i = 0; i < normals.Length; i++) normals[i] = Vector3.up;
+            }
             mesh.normals = normals;
             mesh.RecalculateBounds();
             _meshes.Add(mesh);
@@ -6120,9 +6126,9 @@ namespace KokoSim.Unity.Match
             return string.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "{0}\t{1:F1}\t{2:F1}\t{3:F2}\t{4}\t{5}\t{6}\t{7:F1}\t{8:F1}\t{9}\t{10}\t{11:F2}\t{12:F2}\t{13:F0}",
                 _fieldPlay != null ? _fieldPlay.Name : "(none)", FieldMaxZoom, FieldMarginM, t,
-                ball.HasValue ? ball.Value.X.ToString("F1") : "-",
-                ball.HasValue ? ball.Value.Y.ToString("F1") : "-",
-                ball.HasValue ? ball.Value.H.ToString("F1") : "-",
+                ball.HasValue ? ball.Value.X.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "-",
+                ball.HasValue ? ball.Value.Y.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "-",
+                ball.HasValue ? ball.Value.H.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "-",
                 frameH, aim.y, aimPx, BallScreenPx(), bu, bv, FieldStationAt(t).y);
         }
 
