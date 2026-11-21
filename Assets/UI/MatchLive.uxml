@@ -15,7 +15,12 @@
 
             <!-- 左列: 自校スタメン -->
             <ui:VisualElement class="mlive-col mlive-col--side">
-                <ui:Label name="left-team" class="mlive-col-title" text="自校" />
+                <ui:VisualElement class="mlive-col-head">
+                    <ui:Label name="left-team" class="mlive-col-title" text="自校" />
+                    <ui:VisualElement name="left-side" class="mhud-cp mhud-cp--key mhud-cp--side">
+                        <ui:Label name="left-side-text" class="mhud-cp__t" text="先攻" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
                 <ui:VisualElement name="left-lineup" class="mlive-lineup" />
                 <ui:VisualElement name="left-pitcher" class="mlive-pitcher-host" />
             </ui:VisualElement>
@@ -121,7 +126,8 @@
                      MatchLiveController が生成する（カードの寸法は部品が持つ）。 -->
                 <ui:VisualElement name="tactics-host" class="tcards-host" />
 
-                <!-- 残置した常時操作（issue #289 で操作列を縮小）: 速度・カメラ演出・対決ビューだけ。
+                <!-- 残置した常時操作（issue #289 で操作列を縮小）: 速度と場内放送のスイッチだけ
+                     （カメラ演出・2D俯瞰のボタンは issue #1193 で撤去）。
                      1球指示は盤面内・投手HUD直下の SignPad へ、タイム・選手交代・スキップは
                      「盤面クリック→中断ポップアップ」(pause-modal) へ集約した。実況帯（履歴・実況バー）は
                      撤去＝ロジックのみ存続（MatchLiveController）。back-home はデモ観戦（結果画面へ
@@ -135,9 +141,13 @@
                         <ui:Button name="spd-fast" class="chip-btn" text="⚡高速" />
                     </ui:VisualElement>
                     <ui:VisualElement class="md-group">
-                        <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
-                        <ui:Button name="duel-view" class="chip-btn" text="2D俯瞰（デバッグ）" />
-                        <ui:Button name="announce" class="chip-btn" text="場内放送" />
+                        <!-- 場内放送のオン/オフ（issue #919 → #1193 でスイッチ化）。行ごと押せる。 -->
+                        <ui:VisualElement name="announce" class="mlive-announce">
+                            <ui:Label class="mlive-announce__label" text="場内放送" />
+                            <ui:VisualElement name="announce-switch" class="switch">
+                                <ui:VisualElement class="switch__knob" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
                 </ui:VisualElement>
@@ -146,7 +156,12 @@
 
             <!-- 右列: 相手校スタメン（ミラー配置） -->
             <ui:VisualElement class="mlive-col mlive-col--side">
-                <ui:Label name="right-team" class="mlive-col-title mlive-col-title--right" text="相手校" />
+                <ui:VisualElement class="mlive-col-head">
+                    <ui:Label name="right-team" class="mlive-col-title mlive-col-title--right" text="相手校" />
+                    <ui:VisualElement name="right-side" class="mhud-cp mhud-cp--key mhud-cp--side">
+                        <ui:Label name="right-side-text" class="mhud-cp__t" text="後攻" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
                 <ui:VisualElement name="right-lineup" class="mlive-lineup" />
                 <ui:VisualElement name="right-pitcher" class="mlive-pitcher-host" />
             </ui:VisualElement>
@@ -369,34 +384,36 @@
     </ui:VisualElement>
 
     <!-- プレイボール／ゲームセット（issue #1179 §1・§4）。盤面・3D対決ビューの両方にかかる全画面層に
-         置く（judgement-call と同じ理由＝盤面が隠れても出したい）。中身は GameTelopView が動かす。 -->
+         置く（judgement-call と同じ理由＝盤面が隠れても出したい）。中身は GameTelopView が動かす。
+         タイム（pause-modal）より手前に描かれるので、子まで全部 picking-mode="Ignore"＝クリックを受け止めない
+         （受け止めると「再開」が押せず試合に戻れなかった。issue #1193 の確認中に発見）。 -->
     <ui:VisualElement name="game-telop" class="tl-gt-root" picking-mode="Ignore">
-        <ui:VisualElement name="gt-dim" class="tl-gt-dim" />
-        <ui:VisualElement name="gt-lines" class="tl-gt-lines">
-            <ui:VisualElement name="gt-line-1" class="tl-gt-line tl-gt-line-1" />
-            <ui:VisualElement name="gt-line-2" class="tl-gt-line tl-gt-line-2" />
-            <ui:VisualElement name="gt-line-3" class="tl-gt-line tl-gt-line-3" />
-            <ui:VisualElement name="gt-line-4" class="tl-gt-line tl-gt-line-4" />
-            <ui:VisualElement name="gt-line-5" class="tl-gt-line tl-gt-line-5" />
+        <ui:VisualElement picking-mode="Ignore" name="gt-dim" class="tl-gt-dim" />
+        <ui:VisualElement picking-mode="Ignore" name="gt-lines" class="tl-gt-lines">
+            <ui:VisualElement picking-mode="Ignore" name="gt-line-1" class="tl-gt-line tl-gt-line-1" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-line-2" class="tl-gt-line tl-gt-line-2" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-line-3" class="tl-gt-line tl-gt-line-3" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-line-4" class="tl-gt-line tl-gt-line-4" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-line-5" class="tl-gt-line tl-gt-line-5" />
         </ui:VisualElement>
-        <ui:VisualElement name="gt-group" class="tl-gt-group">
-            <ui:VisualElement name="gt-shadow" />
-            <ui:VisualElement name="gt-extrude" />
-            <ui:VisualElement name="gt-face" />
-            <ui:VisualElement name="gt-sub" />
-            <ui:VisualElement name="gt-bar-left" />
-            <ui:VisualElement name="gt-bar-right" />
+        <ui:VisualElement picking-mode="Ignore" name="gt-group" class="tl-gt-group">
+            <ui:VisualElement picking-mode="Ignore" name="gt-shadow" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-extrude" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-face" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-sub" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-bar-left" />
+            <ui:VisualElement picking-mode="Ignore" name="gt-bar-right" />
         </ui:VisualElement>
     </ui:VisualElement>
 
     <!-- ホームラン（issue #1179 §3）。どちらのチームが打っても同じ演出・約3.2秒。
          判定11種（Calls）とは別の専用アニメ＝判定テロップ（judgement-call）は使わない。 -->
     <ui:VisualElement name="homerun-telop" class="tl-hr-root" picking-mode="Ignore">
-        <ui:VisualElement name="hr-dim" class="tl-hr-dim" />
-        <ui:VisualElement name="hr-group" class="tl-hr-group">
-            <ui:VisualElement name="hr-base" class="tl-hr-img tl-hr-base" />
-            <ui:VisualElement name="hr-gold" class="tl-hr-img tl-hr-gold-00" />
+        <ui:VisualElement picking-mode="Ignore" name="hr-dim" class="tl-hr-dim" />
+        <ui:VisualElement picking-mode="Ignore" name="hr-group" class="tl-hr-group">
+            <ui:VisualElement picking-mode="Ignore" name="hr-base" class="tl-hr-img tl-hr-base" />
+            <ui:VisualElement picking-mode="Ignore" name="hr-gold" class="tl-hr-img tl-hr-gold-00" />
         </ui:VisualElement>
-        <ui:Label name="hr-distance" class="tl-hr-distance" text="" />
+        <ui:Label picking-mode="Ignore" name="hr-distance" class="tl-hr-distance" text="" />
     </ui:VisualElement>
 </ui:UXML>

@@ -39,6 +39,30 @@
     flex-shrink: 0;
 }
 .mlive-col-title--right { -unity-text-align: middle-center; }
+/* 列見出しの行＝校名＋先攻/後攻のチップ（issue #1193）。行ごと中央寄せ、余白は行が持つ。 */
+.mlive-col-head {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-1);
+}
+.mlive-col-head .mlive-col-title { margin-bottom: 0; }
+.mlive-col-head .mhud-cp { margin-left: var(--sp-2); margin-right: 0; }
+
+/* 場内放送のスイッチの行（issue #1193）。chip-btn と同じ高さ・左の間隔で並べ、行ごと押せる。 */
+.mlive-announce {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 8px;
+    padding: 7px 4px;
+}
+.mlive-announce__label {
+    font-size: 20px;
+    letter-spacing: 1px;
+    color: var(--color-chalk);
+    margin-right: var(--sp-2);
+}
 
 .mlive-lineup { flex-direction: column; flex-shrink: 0; }
 .mlive-pitcher-host { flex-shrink: 0; }
