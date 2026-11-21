@@ -240,6 +240,8 @@ public static class RosterTeamBuilder
             // DHスロットの守備位置は表示用（守備には就かない）。
             var pos = !spec.UsesDh && i == spec.PitcherSlot ? FieldPosition.Pitcher : slot.Position;
             var pl = Project(slot.Player, pos);
+            if (spec.UsesDh && i == spec.DhSlot)
+                pl = pl with { FieldingByPosition = FieldingByPosition(slot.Player, injuryCoeff, fieldingCoeff) };
             order.Add(pl);
             TrackCaptain(slot.Player, pl);
         }
@@ -296,6 +298,18 @@ public static class RosterTeamBuilder
     /// 育成選手→試合用 Player 投影。野手能力は直写像、投手能力は PitcherAttributes へ。
     /// 怪我中は段階に応じた一律係数で能力ダウン（設計書03 §3.5「痛みを押しての出場」）。
     /// </summary>
+    /// <summary>全守備位置の実効守備力（<see cref="ToPlayer"/> の Fielding と同じ式・怪我補正込み）。DH解除で就く位置の守備力に使う（#1245）。</summary>
+    private static int[] FieldingByPosition(DevelopingPlayer dp, InjuryCoefficients? injuryCoeff, FieldingCoefficients? fieldingCoeff)
+    {
+        var injF = InjuryModel.PerformanceFactor(dp.Injury, injuryCoeff ?? new InjuryCoefficients());
+        if (dp.SlumpWeeks > 0) injF *= new GrowthEventCoefficients().SlumpPerformanceFactor;
+        var fCoeff = fieldingCoeff ?? new FieldingCoefficients();
+        var values = new int[Enum.GetValues(typeof(FieldPosition)).Length];
+        for (var i = 0; i < values.Length; i++)
+            values[i] = (int)MathUtil.Clamp(Math.Round(EffectiveFielding.Raw(dp, (FieldPosition)i, fCoeff) * injF), 1, 100);
+        return values;
+    }
+
     public static Player ToPlayer(DevelopingPlayer? dp, FieldPosition pos,
         InjuryCoefficients? injuryCoeff = null, FieldingCoefficients? fieldingCoeff = null,
         Players.PersonalityCoefficients? personalityCoeff = null)

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
 
 namespace KokoSim.Engine.Players;
@@ -52,6 +53,19 @@ public sealed record Player
     /// <summary>送球精度（肩＝ArmStrengthから分離, 設計書01 §1.2）。</summary>
     public int ThrowAccuracy { get; init; } = 50;
     public int Fielding { get; init; } = 50;
+
+    /// <summary>
+    /// 守備位置ごとの実効守備力（添字＝<see cref="FieldPosition"/> の整数値）。null＝持たない（<see cref="Fielding"/> が全位置の値）。
+    /// 投影時の守備位置が試合中に変わりうる選手（DH打者＝投手で投影され、DH解除で別の位置に就く）だけが持ち、
+    /// <see cref="AtPosition"/> が就く位置の適性で <see cref="Fielding"/> を作り直す（issue #1245）。
+    /// </summary>
+    public IReadOnlyList<int>? FieldingByPosition { get; init; }
+
+    /// <summary>守備位置を <paramref name="pos"/> へ変えた選手。<see cref="FieldingByPosition"/> があれば守備力もその位置の値へ差し替える。</summary>
+    public Player AtPosition(FieldPosition pos)
+        => FieldingByPosition is { } f && (int)pos < f.Count
+            ? this with { Position = pos, Fielding = f[(int)pos] }
+            : this with { Position = pos };
     public int Catching { get; init; } = 50;
 
     /// <summary>捕手リード（配球の質, 設計書01 §2①）。高いほど良い配球。捕手のみ意味を持つ。50=平均で恒等。</summary>
