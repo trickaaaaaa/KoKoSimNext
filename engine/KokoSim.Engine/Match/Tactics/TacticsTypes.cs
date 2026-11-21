@@ -146,6 +146,9 @@ public readonly record struct SubstitutionSituation(
     /// （＝既定係数の StandardTacticsBrain は読まない＝恒等）。</summary>
     public Players.Handedness? PitcherThrows { get; init; }
 
+    /// <summary>Lineup と同じ添字で「守備交代の対象にできる枠か」（投手枠・DH枠は false）。null＝全枠可（テスト用の素組み）。</summary>
+    public IReadOnlyList<bool>? DefenseSlotSwappable { get; init; }
+
     /// <summary>得点圏（二塁 or 三塁に走者）か＝代打の「場面」入力（設計書11 §4）。</summary>
     public bool RunnerInScoringPosition => OnSecond is not null || OnThird is not null;
 }

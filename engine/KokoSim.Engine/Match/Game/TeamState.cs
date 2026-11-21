@@ -1412,11 +1412,14 @@ public sealed class TeamState
         return true;
     }
 
-    /// <summary>守備交代: 出場中の outgoing を控え sub に代える（守備位置を継承）。</summary>
+    /// <summary>
+    /// 守備交代: 出場中の outgoing を控え sub に代える（守備位置を継承）。守備に就いている野手枠だけが対象＝
+    /// 投手枠・DH枠は <see cref="IsSwappableDefenseSlot"/> で弾く（登板の変更は <see cref="RelieveWith"/>、DH解除は <see cref="ReleaseDh"/>）。
+    /// </summary>
     public bool DefensiveSub(Player outgoing, Player sub)
     {
         var slot = IndexOf(outgoing);
-        return slot >= 0 && SubstituteAtSlot(slot, sub, BoxEntry.DefensiveSub);
+        return slot >= 0 && AssignFielderToSlot(slot, sub);
     }
 
     /// <summary>

@@ -2880,6 +2880,7 @@ public static class GameEngine
             team.CurrentLineup, team.Reserves)
         {
             PitcherThrows = opponent.CurrentPitcher?.Throws,   // 左右の相性（プラトーン）判断用
+            DefenseSlotSwappable = SwappableSlotsOf(team),
         };
     }
 

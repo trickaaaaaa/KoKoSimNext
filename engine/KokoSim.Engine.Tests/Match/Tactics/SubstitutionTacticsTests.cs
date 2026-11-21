@@ -338,6 +338,25 @@ public sealed class SubstitutionTacticsTests
     }
 
     [Fact]
+    public void DefensiveSub_SkipsDhSlot_WhenFlaggedNotSwappable()
+    {
+        var brain = new StandardTacticsBrain();
+        var dh = P("下手なDH", fielding: 10) with { Position = FieldPosition.FirstBase };
+        var lf = P("左翼", fielding: 40) with { Position = FieldPosition.LeftField };
+        var bench = new List<Player> { P("守備固め", fielding: 85) };
+        var sit = new SubstitutionSituation(8, 9, 0, 2, null, null, null, P("相手打者"), false,
+            new List<Player> { dh, lf }, bench)
+        { DefenseSlotSwappable = new[] { false, true } };
+
+        var d = brain.CallDefensiveSub(sit, Rng);
+        Assert.NotNull(d);
+        Assert.Equal("左翼", d!.Value.Out.Name);
+
+        var onlyDh = sit with { Lineup = new List<Player> { dh }, DefenseSlotSwappable = new[] { false } };
+        Assert.Null(brain.CallDefensiveSub(onlyDh, Rng));
+    }
+
+    [Fact]
     public void DefensiveSub_NotTriggered_WhenTrailing()
     {
         var brain = new StandardTacticsBrain();
