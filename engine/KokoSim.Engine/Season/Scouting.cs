@@ -551,13 +551,14 @@ public static class ScoutModel
         _ => 0.0,
     };
 
-    private static int RollPrefecture(int homePrefectureId, ScoutCoefficients c, IRandomSource rng)
+    internal static int RollPrefecture(int homePrefectureId, ScoutCoefficients c, IRandomSource rng)
     {
         if (!MathUtil.Chance(MathUtil.Clamp(c.OutOfPrefectureRatio, 0.0, 1.0), rng)) return homePrefectureId;
         var count = PrefectureNames.Japanese.Count;
-        var id = rng.NextInt(0, count);
-        if (id == homePrefectureId) id = (id + 1) % count;
-        return id;
+        if (homePrefectureId < 0 || homePrefectureId >= count) return rng.NextInt(0, count);
+        // 自県を除く count-1 県から一様に引く（自県の次の県だけ確率2倍になるのを避ける）。
+        var id = rng.NextInt(0, count - 1);
+        return id >= homePrefectureId ? id + 1 : id;
     }
 
     private static CareerPathPreference RollPreference(ScoutCoefficients c, IRandomSource rng)

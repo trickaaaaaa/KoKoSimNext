@@ -727,13 +727,13 @@ public static class ProspectGenerator
         // 実戦成長の隠し上限（Q8・2026-07-20）: 能力capと同じ「現在値＋gap＋Late上振れ」の流儀。
         // リードcapはさらに野球脳と相関（Q8(c)）＝「名捕手の天井」を個体で表現。mentalRng 末尾追加のため
         // 既存の mental/leadership/lead 値は不変（決定論の増分互換）。
-        var mentalCap = (int)MathUtil.Clamp(
+        var mentalCap = (int)Math.Min(99.0, Math.Max(mental + 2,
             Math.Round(mental + mentalRng.NextGaussian(c.CapGapMean, c.CapGapSd)
-                + (growth == GrowthType.Late ? c.LateCapBonus : 0)), mental + 2, 99);
-        var leadCap = (int)MathUtil.Clamp(
+                + (growth == GrowthType.Late ? c.LateCapBonus : 0))));
+        var leadCap = (int)Math.Min(99.0, Math.Max(lead + 2,
             Math.Round(lead + mentalRng.NextGaussian(c.CapGapMean, c.CapGapSd)
                 + (growth == GrowthType.Late ? c.LateCapBonus : 0)
-                + (mental - 50) * c.LeadCapMentalCorr), lead + 2, 99);
+                + (mental - 50) * c.LeadCapMentalCorr)));
 
         // 性格（設計書23 §1.4）: 専用フォークストリームで、種タイプ（今の8タイプを重みで）→②③④の軸を代表値の周りに
         // σ12 で引く（能力・精神ロール列を1ビットも乱さない）。①統率は種タイプのずらしを今どおり足す。
@@ -992,7 +992,8 @@ public static class ProspectGenerator
     private static void AdjustLevel(DevelopingPlayer p, AbilityKind k, int level)
     {
         p.SetLevel(k, level);
-        if (p.Cap(k) < level + 2) p.SetCap(k, level + 2);
+        var floor = k == AbilityKind.Stamina ? level + 2 : Math.Min(99, level + 2);
+        if (p.Cap(k) < floor) p.SetCap(k, floor);
     }
 
     private static void SetWithCap(DevelopingPlayer p, AbilityKind k, int level,
@@ -1012,7 +1013,7 @@ public static class ProspectGenerator
         var rounded = Math.Round(level + gap);
         var cap = k == AbilityKind.Stamina
             ? (int)Math.Max(level + 2, rounded)
-            : (int)MathUtil.Clamp(rounded, level + 2, 99);
+            : (int)Math.Min(99.0, Math.Max(level + 2, rounded));
         p.SetLevel(k, level);
         p.SetCap(k, cap);
     }

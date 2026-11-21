@@ -91,6 +91,8 @@ internal static class DevelopingPlayerSaves
             .Add("injuryRes", p.InjuryResistance)
             .Add("slumpWeeks", p.SlumpWeeks)
             .Add("hasYips", p.HasYips)
+            .Add("yipsAbility", EnumJson.WriteNullable(p.YipsAbility))
+            .Add("yipsDrop", p.YipsDrop)
             .Add("level", level)
             .Add("exp", exp)
             .Add("cap", cap)
@@ -186,6 +188,8 @@ internal static class DevelopingPlayerSaves
             InjuryWeeksRemaining = o.Int("injuryWeeks"),
             SlumpWeeks = o.Int("slumpWeeks"),
             HasYips = o.Bool("hasYips"),
+            YipsAbility = o.Has("yipsAbility") ? EnumJson.ReadNullable<AbilityKind>(o.Str("yipsAbility")) : null,
+            YipsDrop = o.Has("yipsDrop") ? o.Int("yipsDrop") : 0,
         };
 
         var level = o.Arr("level");
