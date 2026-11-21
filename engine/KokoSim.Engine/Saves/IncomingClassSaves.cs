@@ -78,6 +78,7 @@ internal static class ProspectReportSaves
         KnowsPotential = o.Bool("kPotential"),
         KnowsPersonality = o.Bool("kPersonality"),
         KnowsInjuryResistance = o.Bool("kInjury"),
-        Recruited = o.Bool("recruited"),
+        // recruited は v6（能動勧誘）で追加。v5 の入部予定者の見立てには無い＝未勧誘（false）として読む。
+        Recruited = o.Has("recruited") && o.Bool("recruited"),
     };
 }

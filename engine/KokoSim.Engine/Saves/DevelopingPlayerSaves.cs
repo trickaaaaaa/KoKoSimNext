@@ -192,15 +192,17 @@ internal static class DevelopingPlayerSaves
             YipsDrop = o.Has("yipsDrop") ? o.Int("yipsDrop") : 0,
         };
 
+        // 能力・守備位置の列挙は末尾追加のみ。保存時より列挙が増えていたら、増えた分の列は旧セーブに無い＝
+        // 既定値のまま読む（位置で読んで長さを見ないと旧セーブが全滅する・issue #1225）。
         var level = o.Arr("level");
         var exp = o.Arr("exp");
         var cap = o.Arr("cap");
         for (var i = 0; i < AbilityKinds.All.Length; i++)
         {
             var k = AbilityKinds.All[i];
-            p.SetLevel(k, ((JsonNumber)level[i]).AsInt());
-            p.SetCap(k, ((JsonNumber)cap[i]).AsInt());
-            p.AddExp(k, ((JsonNumber)exp[i]).AsDouble());   // 既定0からの加算で厳密復元
+            if (i < level.Count) p.SetLevel(k, ((JsonNumber)level[i]).AsInt());
+            if (i < cap.Count) p.SetCap(k, ((JsonNumber)cap[i]).AsInt());
+            if (i < exp.Count) p.AddExp(k, exp[i].ToDouble());   // 既定0からの加算で厳密復元
         }
 
         var apt = o.Arr("apt");
@@ -209,9 +211,9 @@ internal static class DevelopingPlayerSaves
         for (var i = 0; i < Positions.Length; i++)
         {
             var pos = Positions[i];
-            p.SetAptitude(pos, ((JsonNumber)apt[i]).AsInt());
-            p.SetAptitudeCap(pos, ((JsonNumber)aptCap[i]).AsInt());
-            p.AddAptitudeExp(pos, ((JsonNumber)aptExp[i]).AsDouble());
+            if (i < apt.Count) p.SetAptitude(pos, ((JsonNumber)apt[i]).AsInt());
+            if (i < aptCap.Count) p.SetAptitudeCap(pos, ((JsonNumber)aptCap[i]).AsInt());
+            if (i < aptExp.Count) p.AddAptitudeExp(pos, aptExp[i].ToDouble());
         }
 
         foreach (var v in o.Arr("learned").Items)

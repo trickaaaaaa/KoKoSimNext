@@ -30,6 +30,17 @@ public abstract class JsonValue
         return sb.ToString();
     }
 
+    /// <summary>
+    /// 数値として読む。書くとき NaN/∞ は null になる（<see cref="Of(double)"/>）ので、null は 0 として読む
+    /// ＝1個の異常値でセーブ全体を「復元に失敗」にしない（issue #1225）。
+    /// </summary>
+    public double ToDouble() => this switch
+    {
+        JsonNumber n => n.AsDouble(),
+        JsonNull => 0.0,
+        _ => throw new InvalidCastException($"JSON value is not a number: {GetType().Name}"),
+    };
+
     public JsonObject AsObject() => (JsonObject)this;
     public JsonArray AsArray() => (JsonArray)this;
 
@@ -111,7 +122,7 @@ public sealed class JsonObject : JsonValue
     public int Int(string key) => ((JsonNumber)Get(key)).AsInt();
     public long Long(string key) => ((JsonNumber)Get(key)).AsLong();
     public ulong ULong(string key) => ((JsonNumber)Get(key)).AsULong();
-    public double Double(string key) => ((JsonNumber)Get(key)).AsDouble();
+    public double Double(string key) => Get(key).ToDouble();
     public JsonObject Obj(string key) => (JsonObject)Get(key);
     public JsonArray Arr(string key) => (JsonArray)Get(key);
 
