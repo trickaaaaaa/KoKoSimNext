@@ -500,11 +500,18 @@ namespace KokoSim.Unity.Home
 
         private void OnTransferConfirm()
         {
-            if (!KokoSim.Unity.Shell.ManagerTransferService.Confirm(_xtPick)) return;
-            if (_xt != null) _xt.style.display = DisplayStyle.None;
-            Render();
-            if (_state.BannerPending) ShowBanner();
-            else TryShowEvent();
+            // 確定は裏の全シムの完了待ちを含み得る同期処理（issue #1226）。ManualWait で「転任準備中」を
+            // 1フレーム先に描画してからブロックへ入る（OnSave/OnLoad と同じ作法）。
+            var pick = _xtPick;
+            KokoSim.Unity.Shell.ManualWait.Run(_root, "転任準備中",
+                () => KokoSim.Unity.Shell.ManagerTransferService.Confirm(pick), ok =>
+            {
+                if (!ok) return;
+                if (_xt != null) _xt.style.display = DisplayStyle.None;
+                Render();
+                if (_state.BannerPending) ShowBanner();
+                else TryShowEvent();
+            });
         }
 
         // 隠しパラメータ一覧（選手詳細と同じ判明ルール）から取り出す。未判明は「？」のまま出す。

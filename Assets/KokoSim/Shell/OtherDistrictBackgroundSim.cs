@@ -103,7 +103,7 @@ namespace KokoSim.Unity.Shell
             {
                 _forceRun = true;
                 try { t.Wait(); }
-                catch (AggregateException) { /* 個々の地区の失敗は握り潰す（欠けた地区は呼び出し側が扱う） */ }
+                catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の地区の失敗は握り潰す（欠けた地区は呼び出し側が扱う）が、ログは出す（issue #1226）
             }
             lock (Gate) return new Dictionary<int, OtherDistrictResult>(Results);
         }

@@ -38,14 +38,9 @@ namespace KokoSim.Unity.Shell
                     Step(1);
                     if (YearIndex != prevYear)
                     {
-                        // 年度替わり（4月）: AI校も進級・新入生加入・逆算配分成長（#80）。背景の全国裏試合を
-                        // 完了させてからロスターを触る（背景タスクとロスター変更を重ねない）。
-                        NationBackgroundSim.EnsureCompleted();
-                        // issue #529: 自校敗退後の残りブラケット背景消化も、同じロスター（NationService.Rosters）
-                        // を読むため同様に完了を待ってからロスターへ触る。
-                        BracketFinishSim.EnsureCompleted();
-                        // 代表校の県予選成績の打ち直し（設計書05 §1.4b）も同じロスターを読むので完了を待つ。
-                        KoshienQualifierStatsSim.EnsureCompleted();
+                        // 年度替わり（4月）: AI校も進級・新入生加入・逆算配分成長（#80）。裏の全シムを
+                        // 完了させてからロスターを触る（背景タスクとロスター変更を重ねない。issue #1226）。
+                        BackgroundSims.EnsureAllCompleted();
                         // AI校の年次進化（issue wire-ai-school-evolve-into-game・設計書05 §2.3）: 終了年度の勝数で
                         // Strength/Fame を動かす。AdvanceAiYear の**前**＝逆算配分の目標を進化後の値にする。
                         NationService.EvolveAiSchools(prevYear);
@@ -121,11 +116,9 @@ namespace KokoSim.Unity.Shell
             if (Calendar.IsRecruitListWeek(Week))
             {
                 RecruitListOpened = ScoutService.BuildList(YearIndex + 1);
-                // AI校の節目成長・秋大会後（issue #843・Phase C）。ロスターを触るので背景裏試合の
-                // 完了を待つ（週18の夏ノードと同じ作法）。
-                NationBackgroundSim.EnsureCompleted();
-                BracketFinishSim.EnsureCompleted();
-                KoshienQualifierStatsSim.EnsureCompleted();
+                // AI校の節目成長・秋大会後（issue #843・Phase C）。ロスターを触るので裏の全シムの
+                // 完了を待つ（週18の夏ノードと同じ作法。issue #1226）。
+                BackgroundSims.EnsureAllCompleted();
                 NationService.ApplyAiGrowthNode(AiGrowthNode.Autumn, YearIndex);
             }
 
@@ -158,12 +151,13 @@ namespace KokoSim.Unity.Shell
                 SenbatsuEntry.Announce();
 
             // AI校の節目成長・冬明け（issue #843・Phase C）。4月の年度替わりより前に、夏の節目で翌夏に向けて
-            // 積んだ成長予算（PendingBudget）を使い切る（issue #1058）。センバツ選考発表と同週だが互いに無関係。
+            // 積んだ成長予算（PendingBudget）を使い切る（issue #1058）。センバツ選考発表と同週（上の
+            // SenbatsuEntry.Announce が同じ EnterWeek 内で SenbatsuQualifierStatsSim.Start を起こす）＝
+            // そのまま書くとロスターの読み（打ち直し）と書き（成長）が重なる。裏の全シムの完了を待ってから
+            // 書く＝同週に重ねても壊れない（issue #1226。以前は「互いに無関係」としていたが誤り）。
             if (Calendar.IsWinterGrowthNodeWeek(Week))
             {
-                NationBackgroundSim.EnsureCompleted();
-                BracketFinishSim.EnsureCompleted();
-                KoshienQualifierStatsSim.EnsureCompleted();
+                BackgroundSims.EnsureAllCompleted();
                 NationService.ApplyAiGrowthNode(AiGrowthNode.Winter, YearIndex);
             }
 
@@ -181,10 +175,9 @@ namespace KokoSim.Unity.Shell
             // AI校の代替わりは第18週のまま（自校の発足時期とは無関係。全国裏試合の完了待ちと結びついている）。
             if (CaptainSelector.IsNewTeamStartWeek(Week, Calendar))
             {
-                // AI校も夏後に代替わり: 進行中の全国裏試合を完了させてから3年生を引退させる（#80・秋は下級生のみ）。
-                NationBackgroundSim.EnsureCompleted();
-                BracketFinishSim.EnsureCompleted();   // issue #529: 同じロスターを読むため同様に完了を待つ。
-                KoshienQualifierStatsSim.EnsureCompleted();   // 設計書05 §1.4b: 同上。
+                // AI校も夏後に代替わり: 裏の全シムを完了させてから3年生を引退させる
+                // （#80・秋は下級生のみ。同じロスターを読む背景すべてを待つ・issue #1226）。
+                BackgroundSims.EnsureAllCompleted();
                 NationService.RetireAiGraduates();
                 // AI校の節目成長・夏大会後（issue #843・Phase C）。引退（代替わり）の直後＝新チームに残る1・2年について、
                 // 翌夏のチームがターゲットに届くよう年間予算を逆算して積み直し、夏の割合ぶんを乗せる（issue #1058）。

@@ -166,7 +166,7 @@ namespace KokoSim.Unity.Shell
             if (t == null) return;
             _throttle = (int)NationBackgroundSim.SimThrottle.Boost;
             try { t.Wait(); }
-            catch (AggregateException) { /* 個々の県の失敗は握り潰す */ }
+            catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の県の失敗は進行を止めないが、ログは出す（issue #1226）
             _task = null;
             _total = 0;
             Volatile.Write(ref _done, 0);

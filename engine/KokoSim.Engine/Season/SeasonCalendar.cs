@@ -90,7 +90,9 @@ public sealed record SeasonCalendar
     /// AI校の節目成長・冬明けノードの週（冬合宿（<see cref="WinterCampWeek"/>=38）の直後 ≒ 第39週。
     /// 設計書05 §2.3・issue #843）。年間成長予算（<see cref="Nation.Roster.AiPlayer.PendingBudget"/>）の
     /// 残り全額をここで使い切る＝4月の年度替わりより前に、前の夏の節目で翌夏に向けて積んだ成長を完了させる（issue #1058）
-    /// （<see cref="SenbatsuAnnounceWeek"/> と同週になるが、互いに無関係な処理なので衝突しない）。
+    /// （<see cref="SenbatsuAnnounceWeek"/> と同週。センバツ選考発表が起こす地区大会成績の打ち直し背景
+    /// （SenbatsuQualifierStatsSim）と同じロスターを読み書きするため、**無関係ではない**＝
+    /// Shell 側（GameClock.EnterWeek）が背景の完了を待ってから当ノードを書くことで衝突を避ける。issue #1226）。
     /// </summary>
     public int WinterGrowthNodeWeek { get; init; } = 39;
 

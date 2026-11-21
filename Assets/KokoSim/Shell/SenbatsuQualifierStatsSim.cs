@@ -160,7 +160,7 @@ namespace KokoSim.Unity.Shell
             var t = _task;
             if (t == null) return;
             try { t.Wait(); }
-            catch (AggregateException) { /* 個々の校の失敗は握り潰す（読み物なので進行は止めない） */ }
+            catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の校の失敗は握り潰す（読み物なので進行は止めない）が、ログは出す（issue #1226）
             _task = null;
             _total = 0;
             Volatile.Write(ref _done, 0);

@@ -182,16 +182,15 @@ namespace KokoSim.Unity.Shell
         /// 再開する手立ては無い（進捗を保存していない）ので、その県の成績は<b>永久に欠ける</b>。
         /// 待ち時間が出るのはこのためで、単なる作法ではない。</para>
         ///
-        /// <para>甲子園・センバツの代表校の県予選／地区大会成績を積む背景（<see cref="KoshienQualifierStatsSim"/> /
-        /// <see cref="SenbatsuQualifierStatsSim"/>）も同じ理由で待つ。待たないと積みかけの帳簿を写し、
-        /// 積む側のスレッドと読む側が同じ帳簿を同時に触る（issue #1116）。</para>
+        /// <para>甲子園・センバツの代表校の県予選／地区大会成績を積む背景・残りブラケット消化・自県裏カードの
+        /// 先読みも同じ理由で待つ（issue #1116・#1226）。待たないと積みかけの帳簿を写し、
+        /// 積む側のスレッドと読む側が同じ帳簿を同時に触る。待つシムの組み合わせは
+        /// <see cref="BackgroundSims.EnsureAllCompleted"/> に集約してある。</para>
         /// </summary>
         public static bool Save(string path)
         {
             if (!CanSave) return false;
-            NationBackgroundSim.EnsureCompleted();
-            KoshienQualifierStatsSim.EnsureCompleted();
-            SenbatsuQualifierStatsSim.EnsureCompleted();
+            BackgroundSims.EnsureAllCompleted();   // issue #1226: 待つシムの組み合わせを呼び先ごとに書き分けない
             var raw = Encoding.UTF8.GetBytes(SaveCodec.Serialize(Capture()));
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -202,11 +201,20 @@ namespace KokoSim.Unity.Shell
             return true;
         }
 
-        /// <summary>ファイルを読み、gunzip→復元して全サービスへ適用する。読めなければ false（例外で落ちない）。</summary>
+        /// <summary>
+        /// ファイルを読み、gunzip→復元して全サービスへ適用する。読めなければ false（例外で落ちない）。
+        ///
+        /// <para><b>読む前に旧進行の裏シムの完了を待つ</b>（issue #1226）。待たずに static 状態を差し替えると、
+        /// 旧ワーカー（全国裏試合・残りブラケット・予選成績の打ち直し・自県裏カードの先読み）が
+        /// <see cref="NationService.YearLedger"/> 等の static 経路へ書き込み続け、読み込んだ別セーブの
+        /// 結果へ旧進行の値が混ざる。<see cref="BackgroundSims.EnsureAllCompleted"/> で旧進行のぶんを
+        /// 先に畳んでから <see cref="Restore"/> する＝旧ワーカーの書き込みは「差し替え前」で確定する。</para>
+        /// </summary>
         public static bool Load(string path, out string error)
         {
             if (!TryReadText(path, out var json, out error)) return false;
             if (!SaveCodec.TryDeserialize(json, out var state, out error)) return false;
+            BackgroundSims.EnsureAllCompleted();
             Restore(state);
             // 読んだ直後は「その地点が保存済み」＝未保存の経過は0週から数え直す。
             LastSavedAt = (GameClock.YearIndex, GameClock.Week);
