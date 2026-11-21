@@ -20,11 +20,15 @@ namespace KokoSim.Unity.Shell
         /// <summary>
         /// [label]を表示させてから1フレーム後に[work]を同期実行し、結果を[onDone]へメインスレッドで渡す。
         /// [anyPanelElement]はスケジューラ確保のためだけに使う（同一パネルの何要素でもよい）。
+        /// 既に別の待ちが走っている間は何もせず false（二度押しでセーブ/ロードが重なるのを防ぐ。
+        /// <paramref name="work"/> も <paramref name="onDone"/> も呼ばない）。
         /// </summary>
-        public static void Run<T>(VisualElement anyPanelElement, string label, Func<T> work, Action<T> onDone)
+        public static bool Run<T>(VisualElement anyPanelElement, string label, Func<T> work, Action<T> onDone)
         {
+            if (Active) return false;
             Active = true;
             Label = label;
+            WaitOverlayController.Refresh(anyPanelElement);   // 次の Tick（66ms）を待たずオーバーレイを出す＝その間の押下も弾く
             anyPanelElement.schedule.Execute(() =>
             {
                 T result;
@@ -32,6 +36,7 @@ namespace KokoSim.Unity.Shell
                 finally { Active = false; }
                 onDone?.Invoke(result);
             }).ExecuteLater(16);   // 約1フレームぶん先送り＝ブロック開始前にオーバーレイの描画を確定させる
+            return true;
         }
     }
 }

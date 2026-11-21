@@ -37,6 +37,13 @@ namespace KokoSim.Unity.Shell
             Tick(overlay);   // 表示直後の初期反映（次tickを待たずに出す/消す）。
         }
 
+        /// <summary>同じパネルのオーバーレイを今すぐ現在の状態へ更新する（Tick の周期を待たない）。</summary>
+        public static void Refresh(VisualElement anyPanelElement)
+        {
+            var overlay = anyPanelElement?.panel?.visualTree.Q<VisualElement>(OverlayName);
+            if (overlay != null) Tick(overlay);
+        }
+
         private static void Tick(VisualElement overlay)
         {
             if (ManualWait.Active)

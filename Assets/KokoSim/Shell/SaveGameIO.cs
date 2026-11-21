@@ -194,11 +194,38 @@ namespace KokoSim.Unity.Shell
             var raw = Encoding.UTF8.GetBytes(SaveCodec.Serialize(Capture()));
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            using (var fs = File.Create(path))
-            using (var gz = new GZipStream(fs, System.IO.Compression.CompressionLevel.Optimal))
-                gz.Write(raw, 0, raw.Length);
+            if (!TryWriteAtomic(path, raw)) return false;
             LastSavedAt = (GameClock.YearIndex, GameClock.Week);
             return true;
+        }
+
+        /// <summary>
+        /// 一時ファイルへ gzip を書ききってから本来のパスへ置き換える。<c>File.Create(path)</c> で直接書くと
+        /// 既存スロットを先に切り詰めるので、書き込み中のクラッシュ・強制終了・ディスクフルで旧セーブごと壊れる。
+        /// 置き換えは同一ディレクトリ内なので、途中で落ちても旧ファイルか新ファイルのどちらかが丸ごと残る。
+        /// 失敗は握って false（旧ファイルは無傷）。
+        /// </summary>
+        private static bool TryWriteAtomic(string path, byte[] raw)
+        {
+            var tmp = path + ".tmp";
+            try
+            {
+                using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    using (var gz = new GZipStream(fs, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+                        gz.Write(raw, 0, raw.Length);
+                    fs.Flush(true);   // OS キャッシュ止まりのまま置き換えると、電源断で空ファイルが残り得る
+                }
+                if (File.Exists(path)) File.Replace(tmp, path, null);
+                else File.Move(tmp, path);
+                return true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Debug.LogWarning($"[セーブ] 書き込み失敗（{path}）: {e.Message}");
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch (Exception) { /* 後始末の失敗は無視 */ }
+                return false;
+            }
         }
 
         /// <summary>
