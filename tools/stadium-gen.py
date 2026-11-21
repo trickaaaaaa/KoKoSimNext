@@ -747,6 +747,9 @@ def write_obj(M, base):
             order.append(f[0])
     out = ["# Regional ballpark (Japan, 5,000-15,000 seats) - procedurally generated",
            "# meters, Y-up right-handed, home plate at (0,0,0), +Z = center field, +X = first base",
+           # 焼いた寸法を Unity 側（DuelStadiumBaker.Parse）へ渡す。stadium-import.py と同じ書式（issue #1255:
+           # 以前は書かず、Unity は 95/95/118/3.2 を仮定していた＝PARAMS を変えると変形が黙ってずれる）
+           "# kokosim: wing=%g center=%g fence_h=%g" % (P.R_CORNER, P.R_CENTER, P.FENCE_H),
            "mtllib %s.mtl" % os.path.basename(base)]
     for v in M.V:
         out.append("v %g %g %g" % v)

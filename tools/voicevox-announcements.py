@@ -101,12 +101,16 @@ def surnames():
     return out
 
 
+TIMEOUT_SEC = 60
+
+
 def post(path, params, body=None):
     url = API + path + "?" + urllib.parse.urlencode(params)
     data = json.dumps(body).encode() if body is not None else b""
     req = urllib.request.Request(url, data=data, method="POST",
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req) as r:
+    # エンジンが固まっても無限に待たない（issue #1255）。合成は長文でも数秒で返る
+    with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as r:
         return r.read()
 
 

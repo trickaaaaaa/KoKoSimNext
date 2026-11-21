@@ -18,7 +18,7 @@ case "$FLAVOR" in release|demo|dev) ;; *) echo "使い方: $0 [release|demo|dev]
 
 VERSION="$(sed -n 's/^m_EditorVersion: //p' "$ROOT/ProjectSettings/ProjectVersion.txt")"
 UNITY="${UNITY:-/Applications/Unity/Hub/Editor/$VERSION/Unity.app/Contents/MacOS/Unity}"
-[ -x "$UNITY" ] || { echo "Unity $VERSION が見つかりません: $UNITY（UNITY= で指定できます）" >&2; exit 2; }
+[ -x "$UNITY" ] || { echo "Unity $VERSION が見つかりません: ${UNITY}（UNITY= で指定できます）" >&2; exit 2; }
 
 if [ -f "$ROOT/Temp/UnityLockfile" ] && pgrep -if "Unity.app/Contents/MacOS/Unity .*-projectpath $ROOT( |$)" >/dev/null 2>&1; then
   echo "Editor でこのプロジェクトが開いています。メニュー「KokoSim/ビルド/…」から作るか、Editor を閉じてください。" >&2
@@ -30,7 +30,7 @@ bash "$ROOT/tools/sync-engine-dll.sh" "$ROOT"
 
 mkdir -p "$ROOT/out/build"
 LOG="$ROOT/out/build/$FLAVOR.log"
-echo "ビルド中（$FLAVOR）… ログ: ${LOG#$ROOT/}"
+echo "ビルド中（${FLAVOR}）… ログ: ${LOG#$ROOT/}"
 
 set +e
 "$UNITY" -batchmode -nographics -quit \
@@ -44,7 +44,7 @@ set -e
 
 grep -E '^\[PlayerBuilder\]|^(- |注意: )' "$LOG" || true
 if [ $rc -ne 0 ]; then
-  echo "🔴 ビルド失敗（終了コード $rc）。詳細は $LOG" >&2
+  echo "🔴 ビルド失敗（終了コード ${rc}）。詳細は $LOG" >&2
   exit 1
 fi
 echo "🟢 完了: out/build/windows-$FLAVOR/"

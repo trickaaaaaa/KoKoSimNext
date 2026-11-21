@@ -25,12 +25,16 @@ on:
       - "data/**"
       - "global.json"
       - ".github/workflows/ci.yml"
+      # fast ジョブが呼ぶシャード網羅の検査。これだけを直す PR でも CI を回す（issue #1232）
+      - "tools/check-heavy-shards.sh"
   pull_request:
     paths:
       - "engine/**"
       - "data/**"
       - "global.json"
       - ".github/workflows/ci.yml"
+      # fast ジョブが呼ぶシャード網羅の検査。これだけを直す PR でも CI を回す（issue #1232）
+      - "tools/check-heavy-shards.sh"
   workflow_dispatch:
 
 # 同一ブランチで新しい push があれば古い実行を打ち切る（無駄なランナー占有をなくす）。

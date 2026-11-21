@@ -15,7 +15,10 @@
 #   - ISSUE_WORKERS 本のワーカーが issue を並列に実装する（既定 3）。
 #   - area:unity の issue は 1 ワーカー（worker 0）に集約し直列化する（検証 Editor は 1 台・UI 衝突対策）。
 #   - engine 系はワーカー間に分散。衝突は「マージ直前の rebase＋再テスト」で機械検出し、
-#     コンフリクト時は needs-human 送り（main は壊さない）。
+#     コンフリクト時は needs-human 送り（main は壊さない）。ただし試合結果の指紋（determinism-baseline.txt）
+#     だけの衝突は main 側を採って続け、rebase 後のコードで作り直す（rebase_onto_main・issue #1255）。
+#   - 試合の解決を変える engine の束を流す夜は ISSUE_WORKERS=2（Unity 1本＋engine 1本の直列）を推奨。
+#     engine を並列にすると、指紋は自動で解けても帯（Heavy）が合成で外れうる。
 #   - マージは REPO ロックで直列化（rebase→禁止物除去→ローカル再テスト→squash マージ）。
 #   - DLL（Assets/Plugins/KokoSim/KokoSim.Engine.dll）と Resources/KokoSimData の YAML 複製は Git 管理外の
 #     生成物（issue #785）。各 worktree では post-checkout / post-rewrite フックと check-unity-compile.sh
@@ -88,7 +91,9 @@ MODEL="${OVERNIGHT_MODEL:-claude-sonnet-5-5}"          # 既定は Sonnet。mode
 OPUS_MODEL="claude-opus-5-5"
 FALLBACK_MODEL="${OVERNIGHT_FALLBACK:-claude-sonnet-5}"
 ISSUE_TIMEOUT="${ISSUE_TIMEOUT:-5400}"               # 1件あたりのハード上限（Unity実機確認込みで90分）
-STALL_TIMEOUT="${STALL_TIMEOUT:-600}"                # セッションの transcript が無進捗なら kill（既定10分）
+STALL_TIMEOUT="${STALL_TIMEOUT:-1500}"               # セッションの transcript が無進捗なら kill（既定25分）
+# transcript はツールの結果が返るまで更新されない。Heavy の前面実行（約9分＋ビルド）や
+# ベースライン再生成の間も無進捗に見えるので、Bash ツールの上限（10分）を十分に超える値にする（issue #1255）。
 MAX_ISSUES="${MAX_ISSUES:-0}"                        # 0 = 無制限
 ISSUE_WORKERS="${ISSUE_WORKERS:-3}"                  # 並列ワーカー数
 [ "$ISSUE_WORKERS" -lt 1 ] && ISSUE_WORKERS=1
@@ -111,8 +116,10 @@ command -v gh >/dev/null || { echo "gh が見つかりません" >&2; exit 1; }
 # バランスを揺らす件を並列で回すと互いの帯を壊し合うので、post-1.0 を流す夜は ISSUE_WORKERS=1 を推奨。
 # 出力は "番号\tタイトル\tISUNITY"（ISUNITY=1 なら area:unity 付き）。
 # 並びは ship-blocker（1.0までに必須）→ bug → その他 → post-1.0、同じ段の中は番号昇順。
+# 取得上限は十分大きく取る。gh は新しい順に切るので、上限を超えると**古い ship-blocker から**漏れる
+# （2026-11-21: 上限100・open 120件で #1080・#1205〜#1218 が対象から消えていた。issue #1255）。
 fetch_issues() {
-  gh issue list --state open --limit 100 --author "trickaaaaaa" --json number,title,labels --jq '
+  gh issue list --state open --limit 1000 --author "trickaaaaaa" --json number,title,labels --jq '
     [ .[] | select( ( [.labels[].name] | (index("needs-human") or index("agent-failed")) ) | not ) ]
     | sort_by( ([.labels[].name]) as $l
         | (if ($l | index("ship-blocker")) then 0 elif ($l | index("post-1.0")) then 3
@@ -148,10 +155,32 @@ HALT="$LOG_DIR/HALT"
 REPO_LOCK="$LOG_DIR/.repolock"      # REPO_DIR の .git を触る操作＋マージの単一ミューテックス
 CTR_LOCK="$LOG_DIR/.ctrlock"        # カウンタ/processed 追記用の軽量ロック
 
-# ── ロック（mkdir はアトミック。bash 3.2 に BASHPID が無いので PID 監視はせず、
-#    最大待ちで奪取するデッドロック回避のみ。LOG_DIR はラン毎に新規なので跨ぎstaleは無い） ──
-lock()   { local l="$1" w=0; until mkdir "$l" 2>/dev/null; do sleep 2; w=$((w+2)); [ "$w" -ge 2400 ] && rm -rf "$l"; done; }
-unlock() { rm -rf "$1" 2>/dev/null || true; }
+# ── ロック（mkdir はアトミック。LOG_DIR はラン毎に新規なので跨ぎ stale は無い） ──
+# 持ち主の PID を <ロック>/owner に書き、**持ち主が死んでいるときだけ**奪う（issue #1232）。
+# 以前は 2400 秒待つと無条件に rm -rf で奪っていたが、merge_sequence はロックを持ったまま
+# CI 再実行待ち（最大 CI_RERUN_WAIT 秒）＋非Heavy＋Heavy を回すので正常でも超えうる。奪われた側の
+# unlock が奪った側のロックまで消し、2つのマージが同時に走る事故になる。
+# bash 3.2 に BASHPID が無いので、各ワーカー（サブシェル）の PID は exec した sh の PPID で取る
+# （exec でコマンド置換のサブシェル自体を sh に置き換える＝PPID がこのシェルになる）。
+MYPID=$$
+self_pid() { MYPID="$(exec sh -c 'echo $PPID')"; }
+lock() {
+  local l="$1" owner
+  until mkdir "$l" 2>/dev/null; do
+    owner="$(cat "$l/owner" 2>/dev/null)"
+    if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+      echo "[lock] 持ち主 PID ${owner} が居ないので ${l##*/} を回収" >&2
+      rm -rf "$l"; continue
+    fi
+    sleep 2
+  done
+  echo "$MYPID" > "$l/owner"
+}
+# 自分が持っているときだけ外す（他人のロックを消さない）
+unlock() {
+  local owner; owner="$(cat "$1/owner" 2>/dev/null)"
+  if [ -z "$owner" ] || [ "$owner" = "$MYPID" ]; then rm -rf "$1" 2>/dev/null || true; fi
+}
 
 # ワーカー用: 自分の summary ファイルへ追記（NOTE_TARGET は各ワーカーが設定）
 NOTE_TARGET="$SYS_NOTES"
@@ -174,8 +203,10 @@ count_now() { cat "$COUNTER"; }
 CI_RERUN_WAIT="${CI_RERUN_WAIT:-1500}"
 main_ci_failing() {
   local row id c attempt
-  row="$(gh run list --branch main --workflow engine-ci --limit 1 --json databaseId,status,conclusion,attempt \
-        --jq '.[0] | select(.status=="completed") | "\(.databaseId) \(.conclusion) \(.attempt)"' 2>/dev/null)"
+  # 完了済みの最新1件を見る（issue #1255）。以前は最新1件を取ってから completed で絞っていたので、
+  # 最新が実行中だと「赤ではない」になり、直前の赤を見逃していた。
+  row="$(gh run list --branch main --workflow engine-ci --limit 20 --json databaseId,status,conclusion,attempt \
+        --jq '[.[] | select(.status=="completed")][0] | select(. != null) | "\(.databaseId) \(.conclusion) \(.attempt)"' 2>/dev/null)"
   id="${row%% *}"; c="$(echo "$row" | awk '{print $2}')"; attempt="$(echo "$row" | awk '{print $3}')"
   [ "$c" = "failure" ] || return 1
   if [ "${attempt:-1}" -le 1 ] && gh run rerun "$id" --failed >/dev/null 2>&1; then
@@ -193,6 +224,37 @@ main_ci_failing() {
     return 0  # 待ち切れなければ安全側（赤扱い）
   fi
   return 0
+}
+
+# ── 試合結果の指紋（determinism-baseline.txt）の衝突を機械で解く（issue #1255） ──
+# 試合の解決を変える PR はみな指紋を作り直すので、2本続けてマージすると必ず rebase で衝突する
+# （CLAUDE.md「手で直さない。片側を採って rebase を終え、作り直してコミット」）。以前は needs-human に
+# 送っていたため、engine の束を夜に流すと2本目以降が全部止まっていた。
+# 衝突が指紋だけなら main 側を採って rebase を続け、後で merge_sequence が作り直す。
+# 返り値: 0=rebase 完了 / 1=指紋以外の衝突（呼び出し側で abort）
+BASELINE_PATH="engine/KokoSim.Engine.Tests/Match/Game/determinism-baseline.txt"
+rebase_onto_main() { # $1=wt $2=log
+  local wt="$1" log="$2" conf guard=0
+  git -C "$wt" rebase refs/remotes/origin/main >>"$log" 2>&1 && return 0
+  while [ "$guard" -lt 50 ]; do
+    guard=$((guard+1))
+    conf="$(git -C "$wt" diff --name-only --diff-filter=U 2>/dev/null)"
+    if [ -n "$conf" ]; then
+      [ "$conf" = "$BASELINE_PATH" ] || return 1
+      echo "[merge] 指紋の衝突だけ → main 側を採って続行" >>"$log"
+      git -C "$wt" checkout --ours -- "$BASELINE_PATH" >>"$log" 2>&1 || return 1
+      git -C "$wt" add -- "$BASELINE_PATH" >>"$log" 2>&1 || return 1
+    fi
+    GIT_EDITOR=true git -C "$wt" rebase --continue >>"$log" 2>&1 && return 0
+    # 指紋だけのコミットは main 側を採ると空になる → 落として続ける
+    if [ -z "$(git -C "$wt" diff --name-only --diff-filter=U 2>/dev/null)" ] \
+       && [ -z "$(git -C "$wt" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+      git -C "$wt" rebase --skip >>"$log" 2>&1 && return 0
+    fi
+    [ -d "$(git -C "$wt" rev-parse --git-path rebase-merge 2>/dev/null)" ] \
+      || [ -d "$(git -C "$wt" rev-parse --git-path rebase-apply 2>/dev/null)" ] || return 1
+  done
+  return 1
 }
 
 # ── マージ工程（ロック内で直列）: rebase→禁止物除去→ガード→ローカル再テスト→squash マージ ──
@@ -220,13 +282,32 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
   # セッションの成果は push 済みコミットが全てなので、ここで捨ててよい。
   git -C "$wt" reset --hard -q HEAD >/dev/null 2>&1 || true
 
+  # この PR が指紋を作り直していたか（rebase で main 側を採ると差分から消えるので、rebase の前に見る）
+  local touched_baseline=0
+  git -C "$wt" diff --name-only 'refs/remotes/origin/main...HEAD' 2>/dev/null | grep -qx "$BASELINE_PATH" && touched_baseline=1
+
   # 最新 main の上へ rebase（cut 後に他 PR が landed していても巻き戻しを混ぜない）
-  if ! git -C "$wt" rebase refs/remotes/origin/main >/dev/null 2>&1; then
+  if ! rebase_onto_main "$wt" "$log"; then
     git -C "$wt" rebase --abort >/dev/null 2>&1 || true
     gh pr close "$branch" --comment "自動: 最新 main へ rebase 時にコンフリクト。手動確認のため保留します。" >/dev/null 2>&1 || true
     gh issue edit "$num" --add-label needs-human >/dev/null 2>&1 || true
     note "- 🟡 #$num $title — rebase コンフリクト→needs-human（他 PR と同一箇所を編集した可能性）"
     unlock "$REPO_LOCK"; return
+  fi
+
+  # 指紋を作り直していた PR は、rebase 後のコードで作り直す（main 側の指紋と合成した結果を凍結し直す）。
+  # 指紋を触っていない PR は作り直さない＝意図せず試合結果を変えていれば下の非Heavy 再テストで赤になる。
+  if [ "$touched_baseline" = 1 ]; then
+    if ! ( cd "$wt" && DOTNET="$DOTNET" bash tools/regen-determinism-baseline.sh ) >>"$log" 2>&1; then
+      gh issue edit "$num" --add-label agent-failed >/dev/null 2>&1 || true
+      note "- 🔴 #$num $title — rebase 後の指紋の作り直しに失敗→agent-failed（ログ: ${log}）"
+      unlock "$REPO_LOCK"; return
+    fi
+    if [ -n "$(git -C "$wt" status --porcelain -- "$BASELINE_PATH" 2>/dev/null)" ]; then
+      git -C "$wt" add -- "$BASELINE_PATH" >>"$log" 2>&1
+      git -C "$wt" commit -q -m "Regenerate determinism baseline after rebase onto main" >>"$log" 2>&1 || true
+      echo "[merge] rebase 後に指紋を作り直してコミット" >>"$log"
+    fi
   fi
 
   # 生成物（DLL / Resources/KokoSimData 複製）は Git 管理外（issue #785）。紛れ込んでいたら追跡から外す
@@ -289,7 +370,8 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
   # check-unity-compile.sh は Editor を起動せず約10秒で Assets 全体をコンパイルする。
   # 終了コード 2（雛形 csproj が無い＝検査不能）はマージを止めない（環境要因で夜が全滅するのを避ける）。
   local unity_paths
-  unity_paths="$(git -C "$wt" diff --name-only 'refs/remotes/origin/main...HEAD' 2>/dev/null | grep -E '^Assets/.*\.cs$' || true)"
+  # engine の public API を変えるだけの PR も Assets を壊しうる（DLL 経由。issue #1232）ので、engine 本体の .cs も対象
+  unity_paths="$(git -C "$wt" diff --name-only 'refs/remotes/origin/main...HEAD' 2>/dev/null | grep -E '^(Assets/.*|engine/KokoSim\.Engine/.*)\.cs$' || true)"
   if [ -n "$unity_paths" ]; then
     local ucheck urc
     ucheck="$(TEMPLATE_DIR="$REPO_DIR" DOTNET="$DOTNET" bash "$REPO_DIR/tools/check-unity-compile.sh" "$wt" 2>&1)"
@@ -359,9 +441,11 @@ review_pr() { # $1=num $2=pr $3=wt $4=log
   pkill -P "$watchdog" 2>/dev/null || true
   pkill -P "$pid" 2>/dev/null || true
 
-  # 判定は「最後の空でない行」だけを見る（本文中に VERDICT の文字列が出ても拾わない）
+  # 判定は「最後の空でない行」だけを見る（本文中に VERDICT の文字列が出ても拾わない）。
+  # 手本どおり ``` で囲んで返すと最後の行が ``` になるので、バッククォートと **・CR を先に消してから
+  # 空行を除く（以前は空行を除いてから消していたので、最後が空文字になり判定不能＝needs-human。issue #1255）。
   local verdict
-  verdict="$(grep -v '^[[:space:]]*$' "$out" 2>/dev/null | tail -1 | tr -d '\r`' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  verdict="$(tr -d '\r`*' < "$out" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | tail -1)"
   case "$verdict" in
     "VERDICT: PASS")  gh pr comment "$pr" --body-file "$out" >/dev/null 2>&1 || true; return 0 ;;
     "VERDICT: BLOCK") gh pr comment "$pr" --body-file "$out" >/dev/null 2>&1 || true; return 1 ;;
@@ -584,6 +668,7 @@ Refs #${num}" >/dev/null 2>&1 ) \
 # ── ワーカー: 自分の割当ファイルを上から直列処理 ──
 run_worker() { # $1=worker番号 $2=割当ファイル
   local w="$1" list="$2"
+  self_pid   # このワーカー（サブシェル）の PID をロックの持ち主として使う
   NOTE_TARGET="$LOG_DIR/summary-w$w.md"; : > "$NOTE_TARGET"
   local num title _u
   while IFS=$'\t' read -r num title _u; do

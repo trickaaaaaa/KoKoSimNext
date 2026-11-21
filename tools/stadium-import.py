@@ -89,23 +89,37 @@ def srgb(c):
 
 
 def parse_obj(path):
-    V, groups, order = [], collections.OrderedDict(), []
+    """OBJ の頂点・部位（o / g）・材質・面を読む。
+    issue #1255 で広げた範囲: 負の（相対）頂点番号・`g` だけで部位を切るファイル・部位宣言より前の面・
+    引数の無い usemtl。どれも以前は黙って誤読するか KeyError で落ちていた。"""
+    V, groups = [], collections.OrderedDict()
     grp = mat = None
     mtllib = None
+    saw_o = False
     with open(path) as fh:
         for line in fh:
-            if line.startswith("v "):
-                V.append(tuple(float(x) for x in line.split()[1:4]))
-            elif line.startswith("o "):
-                grp = line[2:].strip()
-                if grp not in groups:
-                    groups[grp] = []
-            elif line.startswith("usemtl"):
-                mat = line.split()[1]
-            elif line.startswith("mtllib"):
-                mtllib = line.split()[1]
-            elif line.startswith("f "):
-                idx = [int(t.split("/")[0]) - 1 for t in line.split()[1:]]
+            t = line.split()
+            if not t:
+                continue
+            if t[0] == "v":
+                V.append(tuple(float(x) for x in t[1:4]))
+            elif t[0] == "o" or (t[0] == "g" and not saw_o):
+                # o があるファイルでは g は材質グループ程度の意味なので部位にしない（Blender の書き出しは o）
+                saw_o = saw_o or t[0] == "o"
+                grp = line.split(None, 1)[1].strip() if len(t) > 1 else "default"
+                groups.setdefault(grp, [])
+            elif t[0] == "usemtl":
+                mat = t[1] if len(t) > 1 else None
+            elif t[0] == "mtllib" and len(t) > 1:
+                mtllib = t[1]
+            elif t[0] == "f":
+                if grp is None:
+                    grp = "default"
+                    groups.setdefault(grp, [])
+                idx = []
+                for tok in t[1:]:
+                    n = int(tok.split("/")[0])
+                    idx.append(n - 1 if n > 0 else len(V) + n)   # 負は「直前から数えた」相対番号
                 for k in range(1, len(idx) - 1):   # 多角形は扇に割る
                     groups[grp].append((mat, (idx[0], idx[k], idx[k + 1])))
     return V, groups, mtllib
@@ -315,9 +329,18 @@ def warp_fence_to_engine(V, groups, left, right, center):
     return out, report
 
 
+# フェンス上端のライン（判定の高さに含めない）の材質名に含まれる語（小文字で比較）
+FENCE_TOP_MATERIAL_KEYS = ("yellow", "fencetop", "fence_top", "topline", "top_line")
+
+
 def fence_height(out):
-    """判定に効くフェンス本体（上端のラインを除く）の高さ。上端ラインの材質は fenceYellow。"""
-    ys = [p[1] for m, tri in out.get("fence_outfield", []) if "Yellow" not in m for p in tri]
+    """判定に効くフェンス本体（上端のラインを除く）の高さ。上端ラインは材質名で見分ける。
+    issue #1255: 以前は材質名に "Yellow" を含むか（大文字小文字区別）だけで、材質の無い面で落ち、
+    "yellow"・"FenceTop" 等の名前では上端ラインまで本体に数えて高さが盛られていた。"""
+    def is_top_line(m):
+        n = (m or "").lower()
+        return any(k in n for k in FENCE_TOP_MATERIAL_KEYS)
+    ys = [p[1] for m, tri in out.get("fence_outfield", []) if not is_top_line(m) for p in tri]
     return max(ys) if ys else 0.0
 
 

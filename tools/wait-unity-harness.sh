@@ -13,6 +13,10 @@
 #   - 上限秒を過ぎた → 5
 #   - ログが無音の上限秒だけ伸びない → 6（固まった疑い。確認が途中で何も出さない作りなら 0＝無効のまま）
 set -u
+if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
+  echo "使い方: bash tools/wait-unity-harness.sh <結果の行の正規表現> [上限秒=900] [無音の上限秒=0]" >&2
+  exit 64
+fi
 PATTERN="$1"
 LIMIT="${2:-900}"
 SILENT_LIMIT="${3:-0}"
@@ -22,10 +26,16 @@ BEGIN=$(date +%s)
 LAST_SIZE=$(wc -c < "$LOG")
 LAST_GROW=$BEGIN
 
-fresh() { tail -n +"$START" "$LOG"; }
+fresh() { tail -n +"$START" "$LOG" 2>/dev/null; }
 
 while true; do
   NOW=$(date +%s)
+  # 待っている間に Editor.log が作り直された（Unity の再起動）なら、新しいログの頭から見る（issue #1255:
+  # 以前は古い行番号のまま tail し続け、上限まで何も拾えなかった）
+  if [ ! -f "$LOG" ] || [ "$(wc -l < "$LOG" 2>/dev/null || echo 0)" -lt $((START - 1)) ]; then
+    echo "（Editor.log が作り直された。新しいログの頭から見る）"
+    START=1; LAST_SIZE=0
+  fi
   if fresh | grep -q "$PATTERN"; then
     fresh | grep -B3 -A40 "$PATTERN" | grep -v '^UnityEngine\|^KokoSim\|^(File\|^System\|^$' | head -60
     exit 0
@@ -38,16 +48,19 @@ while true; do
     echo "STALL: Play が止まった"
     exit 3
   fi
-  if fresh | grep -q 'Exception:'; then
+  # 例外は Unity の書式（行頭が「型名Exception: 」）だけを拾う。メッセージ中に "Exception:" を含むだけの
+  # 無関係なログ行で止めない（issue #1255）
+  EXC_RE='^[A-Za-z0-9_.`]*Exception: '
+  if fresh | grep -q "$EXC_RE"; then
     echo "STALL: 例外が出た"
-    fresh | grep -m1 -A8 'Exception:'
+    fresh | grep -m1 -A8 "$EXC_RE"
     exit 4
   fi
   if [ $((NOW - BEGIN)) -ge "$LIMIT" ]; then
     echo "STALL: ${LIMIT}秒たっても結果が出ない"
     exit 5
   fi
-  SIZE=$(wc -c < "$LOG")
+  SIZE=$(wc -c < "$LOG" 2>/dev/null || echo 0)
   if [ "$SIZE" != "$LAST_SIZE" ]; then LAST_SIZE=$SIZE; LAST_GROW=$NOW; fi
   if [ "$SILENT_LIMIT" -gt 0 ] && [ $((NOW - LAST_GROW)) -ge "$SILENT_LIMIT" ]; then
     echo "STALL: ログが${SILENT_LIMIT}秒伸びていない（固まった疑い）"

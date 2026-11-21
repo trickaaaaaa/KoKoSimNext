@@ -25,8 +25,13 @@
    - なお、issue 本文に具体的な指定（レイアウト・数値・挙動）が書かれていれば、その範囲内は「指定済み」として実装してよい。指定を超える部分だけ最小限の無難な実装に留め、PR 本文にその旨を書く。
 3. **実装する**: 現在いる作業ディレクトリは専用 worktree で、ブランチ `issue/__ISSUE__-agent` にいる（最新 main の tip から切られている）。そのまま実装する。
    - CLAUDE.md の不変条件・コーディング規約と、UIなら .claude/rules/ui.md、3Dなら .claude/rules/3d-character.md に必ず従う
-   - **テスト（非Heavy）は必ず**: `dotnet test engine/ --filter "Category!=Heavy"` を**前面（ブロッキング）で実行し、緑を確認する**。数十秒で返る。
-   - **バランスに触れたら Heavy も自分で回す**（前面で）: バランス係数・確率モデル・打席/守備/走塁の解決・`data/**` のYAML を触った場合は、`dotnet test engine/ -c Release --filter "Category=Heavy"` を**前面（ブロッキング）で実行**する（Release ビルド込みで数十秒〜1〜2分。遅くても必ず前面で終了を待つ）。判定:
+   - **テスト（非Heavy）は必ず**: `dotnet test engine/ -c Release --filter "Category!=Heavy"` を**前面（ブロッキング）で実行し、緑を確認する**。約2分。**必ず `-c Release`**（Debug は約17倍遅い・#361）。Bash ツールの `timeout` は `600000` を指定する（既定の2分では途中で切られる）。
+   - **バランスに触れたら Heavy も自分で回す**（前面で）: バランス係数・確率モデル・打席/守備/走塁の解決・`data/**` のYAML を触った場合は、Heavy を**2回に分けて前面（ブロッキング）で実行**する。Heavy は全部で約9〜10分あり、1回で流すと Bash ツールの上限（10分）に届いて切られるので、必ず次の2本に分け、それぞれ Bash ツールの `timeout` に `600000` を指定する（2026-11-21 実測: 前半 約4分・後半 約6分）:
+     - 前半: `dotnet test engine/ -c Release --filter "Category=Heavy&(FullyQualifiedName~Balance.GameRegressionTests|FullyQualifiedName~Balance.BalanceRegressionTests|FullyQualifiedName~AbilitySensitivityTests|FullyQualifiedName~CaptureTimelinesCost)"`
+     - 後半: `dotnet test engine/ -c Release --filter "Category=Heavy&FullyQualifiedName!~Balance.GameRegressionTests&FullyQualifiedName!~Balance.BalanceRegressionTests&FullyQualifiedName!~AbilitySensitivityTests&FullyQualifiedName!~CaptureTimelinesCost"`
+     - 要るかどうかは `bash tools/needs-heavy.sh`（終了コード0＝要る）。未コミットの変更も見るので、コミット前に回してよい。
+
+     判定（両方の結果を合わせて）:
      - Heavy が**緑** → そのまま PR へ。
      - Heavy が**赤で、係数ノブの調整で許容帯（`data/balance-targets.yaml`）に収められる** → 調整して緑にしてから PR。
      - Heavy が**赤で、帯そのものを動かさないと収まらない** → **帯を勝手に動かさず**、`gh issue edit __ISSUE__ --add-label needs-human` を付け、issue に「どの帯がどの値で外れたか・原因・『帯を動かす案』と『係数で収める案』それぞれの帰結」を日本語で具体的に書いて終了する（PR を作らない）。これが**文脈のある保留**で、朝オーナーが即決できる（ブラインドで PR を作って agent-failed にされるより有用）。

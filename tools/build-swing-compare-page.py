@@ -24,15 +24,19 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 既定は screenshots/。data URI で内包するぶんページが重くなるので、
 # 縮小版を別ディレクトリへ用意したときは SWING_SHOTS_DIR で差し替える
 SRC = os.environ.get("SWING_SHOTS_DIR") or os.path.join(HERE, "screenshots")
-PAT = re.compile(r"^(?P<prefix>.+?)-(?P<run>.+)-(?P<idx>\d{2})-t(?P<t>[\d.]+)\.jpg$")
+# 接頭辞は名前の頭で照合してから外す（issue #1255: 以前は非貪欲の .+? で最初の "-" までを接頭辞と読み、
+# "-" を含む接頭辞では1枚も拾えなかった）
+PAT = re.compile(r"^(?P<run>.+)-(?P<idx>\d{2})-t(?P<t>[\d.]+)\.jpg$")
 STEP_MS = 50  # DuelSwingStripShooter.StepSec と一致（実時間再生）
 
 
 def collect(prefix):
     runs = {}
     for name in sorted(os.listdir(SRC)):
-        m = PAT.match(name)
-        if not m or m.group("prefix") != prefix:
+        if not name.startswith(prefix + "-"):
+            continue
+        m = PAT.match(name[len(prefix) + 1:])
+        if not m:
             continue
         runs.setdefault(m.group("run"), []).append(
             (int(m.group("idx")), float(m.group("t")), os.path.join(SRC, name)))

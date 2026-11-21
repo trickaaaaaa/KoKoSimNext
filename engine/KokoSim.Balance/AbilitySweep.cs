@@ -340,6 +340,14 @@ public static class AbilitySweep
     /// </summary>
     public static Result Run(int games, ulong seed, string? coefficientsPath = null, IReadOnlySet<string>? only = null)
     {
+        // 打ち間違いの Id は黙って空の表になる（issue #1232）ので、知らない Id があれば止める
+        if (only is not null)
+        {
+            var unknown = only.Where(id => Conditions.All(c => c.Id != id)).ToList();
+            if (unknown.Count > 0)
+                throw new ArgumentException(
+                    $"--only に知らない能力 Id: {string.Join(", ", unknown)}（使える Id: {string.Join(", ", Conditions.Select(c => c.Id))}）");
+        }
         var opp = UniformTeam("相手校");
         var baseline = Measure("baseline", "基準（全員50）", BaseLevel, UniformTeam("自校"), opp, games, seed, coefficientsPath);
 
