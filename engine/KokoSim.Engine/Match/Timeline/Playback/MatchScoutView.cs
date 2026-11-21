@@ -88,11 +88,17 @@ public static class MatchScoutView
     public static IReadOnlyList<ScoutRosterRow> Roster(SubstitutionOptions opt)
     {
         var rows = new List<ScoutRosterRow>(opt.Lineup.Count + 1 + opt.Reserves.Count + opt.UsedReserves.Count);
+        // 非DH制で投手に代打を出した直後の窓は、CurrentPitcher がまだ退いた旧投手で打順に居ない
+        // （マウンドは半回の頭の TakeMoundFromPinchHitter で代打が引き継ぐ）。点け先を投手の打順枠へ振り替える。
+        var pitcherOnLineup = false;
+        foreach (var lp in opt.Lineup)
+            if (ReferenceEquals(lp, opt.CurrentPitcher)) { pitcherOnLineup = true; break; }
+        var nowFallbackSlot = !opt.IsOffense && !opt.UsesDh && !pitcherOnLineup ? opt.PitcherSlot : -1;
         for (var i = 0; i < opt.Lineup.Count; i++)
         {
             var p = opt.Lineup[i];
             // 守備側の打順は回っていないので、守備中は次打者でなく現投手を点ける。
-            var isNow = opt.IsOffense ? i == opt.UpcomingBatterSlot : ReferenceEquals(p, opt.CurrentPitcher);
+            var isNow = opt.IsOffense ? i == opt.UpcomingBatterSlot : ReferenceEquals(p, opt.CurrentPitcher) || i == nowFallbackSlot;
             rows.Add(new ScoutRosterRow(p, ScoutSection.Lineup, i + 1, LineupPosition(opt, i), isNow, IsUsed: false));
         }
 

@@ -1874,14 +1874,15 @@ namespace KokoSim.Unity.Match
                         _signPad?.RefreshEnabled();
                     } },
                 new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Art = "hitrun", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst,
-                    OnSelect = () => _signChoice = OffensiveSign.HitAndRun,
-                    OnClear = () => _signChoice = null },
+                    // 盗塁と同じ球に押せない（engine は盗塁で一塁走者を先に動かすので、エンドランが効かなくなる・issue #1263）。
+                    GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst && _stealChoice == null,
+                    OnSelect = () => { _signChoice = OffensiveSign.HitAndRun; _signPad?.RefreshEnabled(); },
+                    OnClear = () => { _signChoice = null; _signPad?.RefreshEnabled(); } },
                 // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗。三塁のみは盗塁不可・issue #788）ので、
                 // カードは1枚のままラベルだけ書き換える（issue #622・案A）。
                 new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Art = "steal", Offense = true, Group = "run",
                     GroupLabel = "走塁", LabelOf = () => StealCardLabel,
-                    EnabledIf = () => StealTargetNow != null,
+                    EnabledIf = () => StealTargetNow != null && _signChoice != OffensiveSign.HitAndRun,
                     OnSelect = () => { _stealChoice = StartType.Gamble; _signPad?.RefreshEnabled(); },
                     OnClear = () => { _stealChoice = null; _signPad?.RefreshEnabled(); } },
                 // ── 攻撃: 構え（方針・解除するまで続く）──

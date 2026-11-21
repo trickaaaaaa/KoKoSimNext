@@ -109,6 +109,26 @@ public sealed class MatchScoutViewTests
     }
 
     [Fact]
+    public void Roster_NonDhDefense_LightsPitcherSlot_AfterPinchHitForPitcher()
+    {
+        // 投手（9番）に代打を出した直後: CurrentPitcher は退いた旧投手で打順に居らず、9番は代打。
+        var lineup = Fielders.Select((pos, i) => P(pos, "野" + (i + 1), i + 1)).ToList();
+        var oldPitcher = P(FieldPosition.Pitcher, "先発", 11);
+        lineup.Add(P(FieldPosition.Pitcher, "代打", 30));
+        var opt = Options(lineup, oldPitcher, pitcherSlot: 8, usesDh: false, dhSlot: -1, isOffense: false,
+            reserves: new[] { P(FieldPosition.Pitcher, "控え投手", 12) }, used: System.Array.Empty<Player>());
+        var rows = MatchScoutView.Roster(opt);
+        Assert.Equal("代打", rows.Single(r => r.IsNow).Player.Name);
+    }
+
+    [Fact]
+    public void Roster_NonDhDefense_LightsCurrentPitcher_Normally()
+    {
+        var rows = MatchScoutView.Roster(NonDhOptions(isOffense: false));
+        Assert.Equal("先発", rows.Single(r => r.IsNow).Player.Name);
+    }
+
+    [Fact]
     public void DefaultRow_IsLeadoffBatter()
     {
         var rows = MatchScoutView.Roster(DhOptions());
