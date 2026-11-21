@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 36;
+    public const int CurrentVersion = 37;
 
     // ===== Serialize =====
 
@@ -378,7 +378,27 @@ public static class SaveCodec
         }
         // v36（issue #1114）: 練習試合を最後に消化した絶対週（practiceLastPlayedWeek）。旧セーブは「記録なし」＝null で補う。
         if (version < 36 && !root.Has("practiceLastPlayedWeek")) root.Add("practiceLastPlayedWeek", JsonNull.Instance);
+        // v37（issue #1218）: 甲子園の出場年（records[].lastSummer/lastSpring）を実開催の暦年へ揃えた。
+        // 旧セーブは夏が年度（YearIndex・1始まり）、春が「年度の暦年」（実開催より1年早い）で積まれていた。
+        // 夏は暦年（>=1000）にならないので、1000 未満＝年度とみなして暦へ直す。
+        if (version < 37 && root.Has("records")) MigrateKoshienYearsToCalendar(root.Arr("records"));
         return root;
+    }
+
+    /// <summary>年度1の暦年。v36 以前のセーブの出場年を暦へ直すためだけに使う（Unity の SeasonClock.SeasonBaseYear と同値）。</summary>
+    private const int LegacyBaseYear = 2026;
+
+    private static void MigrateKoshienYearsToCalendar(JsonArray records)
+    {
+        foreach (var v in records.Items)
+        {
+            var o = v.AsObject();
+            if (o.Has("lastSummer") && !o.IsNull("lastSummer") && o.Int("lastSummer") < 1000)
+                o.Add("lastSummer", LegacyBaseYear + (o.Int("lastSummer") - 1));
+            // 春は暦年で積まれていたが、センバツは年度の翌暦年（1〜3月）に開かれるので1年足す。
+            if (o.Has("lastSpring") && !o.IsNull("lastSpring") && o.Int("lastSpring") >= 1000)
+                o.Add("lastSpring", o.Int("lastSpring") + 1);
+        }
     }
 
     // ===== 中身の読み書き =====

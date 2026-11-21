@@ -131,7 +131,7 @@ internal static class SaveTestFixtures
         var records = new SchoolRecordBook();
         records.RecordOfficialMatch(winnerId: 100, loserId: 200);
         records.RecordOfficialMatch(winnerId: 100, loserId: 300);
-        records.RecordKoshienAppearance(100, KoshienKind.Summer, currentYear: 2027);
+        records.RecordKoshienAppearance(100, KoshienKind.Summer, calendarYear: 2027);
 
         var facilities = new FacilitySet();
         facilities.SetLevel("lighting", 2);

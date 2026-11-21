@@ -593,7 +593,7 @@ public sealed class TournamentRunnerTests
         var matches = r.BuildBracketView().Matches;
 
         var book = new SchoolRecordBook();
-        book.FoldTournament(matches, TournamentKind.Summer, currentYear: 2028);
+        book.FoldTournament(matches, TournamentKind.Summer, calendarYear: 2028);
 
         var totalWins = 0;
         var totalLosses = 0;
@@ -615,7 +615,7 @@ public sealed class TournamentRunnerTests
         var matches = r.BuildBracketView().Matches;
 
         var book = new SchoolRecordBook();
-        book.FoldTournament(matches, TournamentKind.Summer, currentYear: 2028);
+        book.FoldTournament(matches, TournamentKind.Summer, calendarYear: 2028);
 
         var championRecord = book.For(1); // Sch(1, ...) が自校。
         Assert.Equal(1, championRecord.SummerAppearances);
@@ -632,7 +632,7 @@ public sealed class TournamentRunnerTests
         var matches = r.BuildBracketView().Matches;
 
         var book = new SchoolRecordBook();
-        book.FoldTournament(matches, TournamentKind.Autumn, currentYear: 2028);
+        book.FoldTournament(matches, TournamentKind.Autumn, calendarYear: 2028);
 
         Assert.Equal(0, book.For(1).SummerAppearances);
         Assert.Equal(0, book.For(1).TotalAppearances);

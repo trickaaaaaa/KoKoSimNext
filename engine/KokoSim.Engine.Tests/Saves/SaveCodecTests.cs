@@ -462,6 +462,33 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
     }
 
+    // v36 以前は夏の出場年を年度（YearIndex）、春の出場年を「年度の暦年」（センバツの実開催暦年より1年早い）で
+    // 積んでいた（issue #1218）。v37 で両方を実開催の暦年へ揃える。
+    [Fact]
+    public void V36Save_MixedKoshienYears_AreMigratedToCalendarYear()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.Contains("\"lastSummer\":2027", json);
+        Assert.Contains("\"lastSpring\":null", json);
+        var v36 = json
+            .Replace("\"lastSummer\":2027", "\"lastSummer\":2")      // 2年度目の夏（旧: YearIndex）
+            .Replace("\"lastSpring\":null", "\"lastSpring\":2027")   // 2年度目の春＝実際は2028年3月のセンバツ（旧: 1年早く 2027 で記録）
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":36");
+
+        Assert.True(SaveCodec.TryDeserialize(v36, out var s, out var err), err);
+        var r = s.Records.For(100);
+        Assert.Equal(2027, r.LastSummerYear);
+        Assert.Equal(2028, r.LastSpringYear);
+    }
+
+    // 暦年で入っている夏（v37 以降の値）は二重に変換しない。
+    [Fact]
+    public void CurrentSave_CalendarKoshienYears_RoundTripUnchanged()
+    {
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(SaveTestFixtures.BuildRichState()), out var s, out var err), err);
+        Assert.Equal(2027, s.Records.For(100).LastSummerYear);
+    }
+
     // 練習試合を一度もしていないセーブも往復できる（null のまま）。
     [Fact]
     public void PracticeLastPlayedWeek_Null_RoundTrips()
