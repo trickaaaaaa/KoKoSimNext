@@ -22,7 +22,10 @@ namespace KokoSim.Unity.MatchResult
         private const string AwayName = "北都大付属";
         private const string HomeName = "桜丘";
         private const int W = 1600;
-        private const int H = 900;
+        private static int H => Full ? 2600 : 900;
+
+        /// <summary>true＝縦に長いパネルで撮り、スクロールの下（投手成績・打席結果）まで1枚に収める。</summary>
+        public static bool Full;
 
         private IEnumerator Start()
         {
@@ -83,7 +86,7 @@ namespace KokoSim.Unity.MatchResult
             Debug.Log("[MR] " + kind + " seed=" + seed + " " + r.AwayRuns + "-" + r.HomeRuns
                 + " " + r.HomeLineScore.Count + "回");
             yield return null; yield return null;
-            yield return Capture(doc, file);
+            yield return Capture(doc, Full ? file + "-full" : file);
         }
 
         // 実エンジンで試合を消化して条件に合うものを探す（表示検証用。独立シード＝セッションの乱数列に触らない）。
@@ -97,7 +100,7 @@ namespace KokoSim.Unity.MatchResult
                 var ok = kind switch
                 {
                     Kind.Win => r.HomeRuns > r.AwayRuns,
-                    Kind.Lose => r.HomeRuns < r.AwayRuns,
+                    Kind.Lose => r.HomeRuns < r.AwayRuns && r.AwayLineScore.Count == 9,
                     Kind.Subs => System.Linq.Enumerable.Any(r.AwayBatting, l => l.Entry != BoxEntry.Starter)
                                  || System.Linq.Enumerable.Any(r.HomeBatting, l => l.Entry != BoxEntry.Starter),
                     _ => r.AwayLineScore.Count > 9,

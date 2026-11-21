@@ -1,114 +1,218 @@
-/* ═══════════════════════════════════════════════════════════════════════
-   MatchResult.uss — 試合結果画面の配置のみ（UI-BUILD-METHOD Step 4・issue #13 B案）
-   ───────────────────────────────────────────────────────────────────────
-   表の見た目（行・セル・列幅）は components.uss の BoxRow（bs-row / bs-cell）が持つ。
-   ここは「上＝勝敗＋イニングスコア／下＝左右2カラム」という割り付けだけを持ち、
-   色・余白・角丸は tokens を参照する。gap/grid は使わない（USS非対応）。
-   固定寸法セクションは flex-shrink:0（付けないと縦方向で潰れる）。
-   ═══════════════════════════════════════════════════════════════════════ */
+/* 試合結果画面（GameResult.mock 準拠・2026-11-21 作り直し）。1600×900 基準。
+   色は tokens.uss の固定色（--ms-* は試合画面の左右のチーム欄と共有、--mr-* はこの画面だけ）。スクールカラーは使わない。
+   UI Toolkit に gap / box-shadow が無いので、間隔は margin、枠は border で作る。
+   数字の列は固定幅＋右寄せで桁を揃える（フォントの等幅数字に頼らない）。書体は tokens.uss の登録
+   （明朝800: 見出し・校名・回の得点・打順・選手名）と、要素に付ける f-num / f-num-bd / f-body / f-body-bd。 */
 
-.mr-root {
+.mres-root {
     flex-grow: 1;
-    background-color: var(--color-field);
+    background-color: var(--ms-chip);
+    padding: 20px 24px 24px 24px;
 }
 
-/* ── ヘッダー：勝敗＋スコア＋唯一の操作（閉じる） ── */
-.mr-topbar {
+/* ── ① 見出し（高さ52px） ── */
+.mres-head {
     flex-direction: row;
     align-items: center;
-    height: var(--h-header);
+    height: 52px;
     flex-shrink: 0;
-    background-color: var(--color-strip);
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
+    margin-bottom: 16px;
 }
-.mr-title { font-size: var(--fs-page); color: var(--color-chalk); }
-/* 勝敗表記。アンバーはこの画面では勝利表記と閉じるCTAだけ（UI原則2）。 */
-.mr-outcome {
-    font-size: var(--fs-page);
-    color: var(--color-chalk);
-    background-color: var(--color-panel-deep);
-    border-radius: var(--radius-chip);
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    margin-left: var(--sp-4);
+.mres-head__bar {
+    width: 10px;
+    height: 28px;
+    border-radius: 3px;
+    background-color: var(--ms-ink);
+    margin-right: 12px;
 }
-.mr-outcome--win { color: var(--color-lamp); }
-.mr-score { font-size: var(--fs-body); color: var(--color-chalk); margin-left: var(--sp-3); }
-.mr-spacer { flex-grow: 1; }
-.mr-cta {
-    height: 40px;
-    min-width: 120px;
-    flex-shrink: 0;
-    background-color: var(--color-cta);
-    color: var(--color-ink);
-    font-size: var(--fs-body);
+.mres-head__title {
+    font-size: 28px;
+    letter-spacing: 4.48px;   /* 0.16em */
+    color: var(--ms-ink);
+    margin: 0;
+    padding: 0;
+}
+.mres-head__spacer { flex-grow: 1; }
+.mres-close {
+    height: 48px;
+    padding: 0 28px;
+    margin: 0;
+    border-radius: 10px;
     border-width: 0;
-    border-radius: var(--radius-panel);
+    background-color: var(--ms-ink);
+    color: #FFFFFF;
+    font-size: 16px;
+    letter-spacing: 3.2px;    /* 0.2em */
 }
-.mr-cta:hover { background-color: var(--color-cta-hi); }
+.mres-close:hover { background-color: var(--ms-ink-2); }
 
-/* ── イニングスコア：内容ぶんの幅だけ取る面（全幅に広げると右が間延びする） ── */
-.mr-linescore {
+/* ── 白いカード（②と③の各列） ── */
+.mres-card {
+    background-color: var(--ms-panel);
+    border-width: 1px;
+    border-color: var(--ms-edge);
+    border-radius: 14px;
+}
+
+/* ── ② スコア ── */
+.mres-score {
     flex-shrink: 0;
-    align-self: flex-start;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-panel);
-    /* 内側の余白は持たない＝表の外枠（.bs-table）に行がぴったり収まる（issue #649） */
-    margin-left: var(--sp-4);
-    margin-top: var(--sp-3);
-    margin-bottom: var(--sp-3);
+    flex-direction: row;
+    align-items: flex-start;
+    padding: 24px 32px;
+    margin-bottom: 16px;
 }
+.mres-line {
+    flex-shrink: 0;
+    border-top-width: 2px;
+    border-top-color: var(--ms-ink);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--ms-ink);
+}
+.mres-line__row { flex-direction: row; align-items: stretch; height: 46px; }
+.mres-line__row--head { height: 30px; }
+.mres-line__row--sep { border-bottom-width: 1px; border-bottom-color: var(--ms-chip); }
+.mres-line__team { width: 140px; flex-shrink: 0; -unity-text-align: middle-left; margin: 0; padding: 0; }
+.mres-line__inn { width: 48px; flex-shrink: 0; -unity-text-align: middle-center; margin: 0; padding: 0; }
+.mres-line__total {
+    width: 64px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    background-color: var(--ms-chip);
+    margin: 0;
+    padding: 0;
+}
+.mres-line__stat { width: 52px; flex-shrink: 0; -unity-text-align: middle-center; margin: 0; padding: 0; }
+.mres-line__h { font-size: 12px; color: var(--ms-tx-3); }
+.mres-line__h--sum { color: var(--ms-ink); }
+.mres-line__name { font-size: 17px; color: var(--ms-ink); }
+.mres-line__name--lose { color: var(--ms-tx-2); }
+.mres-line__runs { font-size: 20px; }
+.mres-line__x { font-size: 17px; color: var(--mr-muted); }
+.mres-line__sum { font-size: 26px; color: var(--ms-ink); }
+.mres-line__v { font-size: 17px; color: var(--ms-ink); }
 
-/* ── 本体：左＝自校／右＝相手の2カラム並置（同じ幅・同じ構成） ── */
-.mr-body {
+/* 長打（スコアの右の余白に種類ごと1行。縦線はスコアの高さいっぱい・行は上下中央。名前が長ければ折り返す） */
+.mres-xbh {
     flex-grow: 1;
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-    padding-bottom: var(--sp-4);
+    flex-shrink: 1;
+    min-width: 0;
+    align-self: stretch;
+    justify-content: center;
+    margin-left: 40px;
+    padding: 0 0 0 36px;
+    border-left-width: 1px;
+    border-left-color: var(--mr-rule);
 }
-.mr-cols { flex-direction: row; }
-.mr-col {
+.mres-xbh__item { flex-direction: row; flex-wrap: wrap; align-items: center; margin: 5px 0; }
+.mres-xbh__tag {
+    font-size: 16px;
+    color: var(--ms-ink);
+    background-color: var(--ms-chip);
+    border-radius: 5px;
+    padding: 2px 10px;
+    margin: 0 14px 0 0;
+}
+.mres-xbh__names { font-size: 21px; color: var(--ms-ink); margin: 0; padding: 0; }
+.mres-xbh__names--next { margin-left: 18px; }
+
+/* ── ③ 両チームの成績（ここだけスクロール。左右の列は同じ ScrollView の中） ── */
+.mres-body { flex-grow: 1; flex-shrink: 1; min-height: 0; }
+.mres-cols { flex-direction: row; align-items: flex-start; }
+.mres-side {
     flex-grow: 1;
     flex-basis: 0;
     min-width: 0;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-panel);
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    padding-bottom: var(--sp-3);
-    margin-right: var(--sp-3);
+    padding: 20px 22px;
 }
-/* 右カラムは右余白を作らない（左右の外周を対称に見せる）。USSは last-child 非対応のため修飾子で指定。 */
-.mr-col--right { margin-right: 0; }
+.mres-side--right { margin-left: 16px; }
+.mres-side__name {
+    font-size: 24px;
+    letter-spacing: 2.4px;    /* 0.1em */
+    color: var(--ms-ink);
+    margin: 0;
+    padding: 0;
+}
+.mres-block__title {
+    font-size: 13px;
+    color: var(--ms-tx-2);
+    margin: 22px 0 8px 0;
+    padding: 0;
+}
 
-.mr-col__head {
+/* 3つの表で共通の作り */
+.mres-table { border-top-width: 2px; border-top-color: var(--ms-ink); }
+.mres-tr {
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
-    height: 36px;
-    flex-shrink: 0;
+    height: 38px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--ms-chip);
 }
-.mr-col__cap {
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
-    letter-spacing: 1px;
-    margin-right: var(--sp-2);
-}
-.mr-col__name {
-    font-size: var(--fs-page);
-    color: var(--color-chalk);
+.mres-tr--head { height: 30px; border-bottom-color: var(--mr-rule); }
+.mres-tr--total { border-top-width: 1.5px; border-top-color: var(--ms-ink); border-bottom-width: 0; }
+.mres-th { font-size: 11px; color: var(--ms-tx-3); -unity-text-align: middle-right; }
+.mres-th--center { -unity-text-align: middle-center; }
+.mres-c-name.mres-th { -unity-text-align: middle-left; }
+.mres-c-pname.mres-th { -unity-text-align: middle-left; }
+
+/* 列の幅（打撃・投手は列の間隔4px、打席結果は6px） */
+.mres-c-ord { width: 22px; flex-shrink: 0; -unity-text-align: middle-center; margin: 0; padding: 0; }
+.mres-c-pos { width: 26px; flex-shrink: 0; margin: 0 0 0 4px; padding: 0; align-items: center; justify-content: center; }
+.mres-c-name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin: 0 0 0 4px;
+    padding: 0;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* 表の見出し（野手／投手／打席結果）。線は引かず、余白と小さな淡色文字で仕切る（UI原則4）。 */
-.mr-subhead {
-    font-size: var(--fs-cap);
-    color: var(--color-faint);
-    letter-spacing: 1px;
-    height: 22px;
-    flex-shrink: 0;
     -unity-text-align: middle-left;
-    margin-top: var(--sp-2);
 }
+.mres-c-pname {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    -unity-text-align: middle-left;
+}
+.mres-c-n42 { width: 42px; flex-shrink: 0; margin: 0 0 0 4px; padding: 0; -unity-text-align: middle-right; }
+.mres-c-n64 { width: 64px; flex-shrink: 0; margin: 0 0 0 4px; padding: 0; -unity-text-align: middle-right; }
+.mres-c-avg { width: 58px; flex-shrink: 0; margin: 0 0 0 4px; padding: 0; -unity-text-align: middle-right; }
+.mres-c--group { margin-left: 14px; }   /* 列の間隔4px＋塊の間隔10px */
+.mres-patable .mres-c-pos { margin-left: 6px; }
+.mres-patable .mres-c-name { margin-left: 6px; }
+.mres-c-pa { width: 82px; flex-shrink: 0; margin: 0 0 0 6px; padding: 0; }
+
+/* セルの中身 */
+.mres-ord { font-size: 15px; color: var(--ms-ink); }
+.mres-name { font-size: 16px; letter-spacing: 0.96px; color: var(--ms-ink); }   /* 0.06em */
+.mres-total__label { font-size: 13px; color: var(--ms-ink); padding-left: 6px; }
+.mres-num { font-size: 16px; }
+.mres-zero { color: var(--mr-zero); }
+.mres-ink { color: var(--ms-ink); }
+.mres-hr { color: var(--mr-hr); }
+.mres-line__runs.mres-zero { color: var(--mr-zero); }
+
+/* 守備位置チップ（試合画面の .mside-pos の色をそのまま使う。幅だけ列に合わせる） */
+.mres-pos { margin-left: 0; }
+.mres-pos--entry { background-color: var(--ms-chip); color: var(--ms-tx-2); }
+
+/* 打席結果の札（高さ26px・角丸6px・13px。枠は内側1px） */
+.mres-pa {
+    height: 26px;
+    border-radius: 6px;
+    font-size: 13px;
+    -unity-text-align: middle-center;
+    border-width: 0;
+}
+.mres-pa--hit  { background-color: var(--mr-pa-hit-bg);  color: var(--mr-pa-hit-tx);  border-width: 1px; border-color: var(--mr-pa-hit-edge); }
+.mres-pa--hr   { background-color: var(--mr-hr);         color: #FFFFFF; }
+.mres-pa--walk { background-color: var(--mr-pa-walk-bg); color: var(--mr-pa-walk-tx); border-width: 1px; border-color: var(--mr-pa-walk-edge); }
+.mres-pa--err  { background-color: var(--mr-pa-err-bg);  color: var(--mr-pa-err-tx);  border-width: 1px; border-color: var(--mr-pa-err-edge); }
+.mres-pa--other { color: var(--mr-muted); }
+.mres-pa--none  { color: var(--mr-rule); }
