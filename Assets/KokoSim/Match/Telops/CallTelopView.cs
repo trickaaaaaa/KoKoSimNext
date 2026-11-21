@@ -37,6 +37,10 @@ namespace KokoSim.Unity.Match.Telops
         /// </summary>
         public void Tick(double elapsed, double totalSeconds, double inSeconds, double outSeconds)
         {
+            // 面が無い（Hide 後に SetFace されていない）＝この回は画像を出さない。インプレーの球は
+            // 球種・球速の下段のために呼び出し側の時計が回り続けるので、ここで止めないと
+            // 前の球の面（ストライク等）がもう一度出る（issue #1201）。
+            if (_activeClass == null) { _image.style.opacity = 0f; return; }
             double scale, opacity;
             var outStart = System.Math.Max(inSeconds, totalSeconds - outSeconds);
             if (elapsed < inSeconds)
@@ -61,6 +65,15 @@ namespace KokoSim.Unity.Match.Telops
             _image.style.opacity = (float)opacity;
         }
 
-        public void Hide() => _image.style.opacity = 0f;
+        /// <summary>畳む。面のクラスも外す＝次に <see cref="SetFace"/> されるまで <see cref="Tick"/> は何も出さない。</summary>
+        public void Hide()
+        {
+            _image.style.opacity = 0f;
+            if (_activeClass != null) _image.RemoveFromClassList(_activeClass);
+            _activeClass = null;
+        }
+
+        /// <summary>いま出している面（tl-call-xxx）。畳んでいれば null。</summary>
+        public string ActiveFace => _activeClass;
     }
 }
