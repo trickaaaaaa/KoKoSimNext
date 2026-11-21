@@ -24,9 +24,14 @@ public static class AiRosterFactory
         FieldPosition.CenterField, FieldPosition.RightField,
     };
 
-    /// <summary>(校ID, 入学年度) から新入生コホートの生成シードを導く（決定論・不変条件#2）。ForSchool とは別ソルト。</summary>
-    public static IRandomSource CohortSeed(int schoolId, int enrollmentYearIndex)
-        => new Xoshiro256Random(0x0C0F_0000UL ^ (ulong)(long)schoolId ^ ((ulong)(long)enrollmentYearIndex * 0x9E37_79B9UL));
+    /// <summary>
+    /// (校ID, 入学年度) から新入生コホートの生成シードを導く（決定論・不変条件#2）。ForSchool とは別ソルト。
+    /// <paramref name="seedMix"/> はゲームの母種（issue #1228）。0＝母種なし＝従来と1ビットも違わない列
+    /// （engine テスト・Balance CLI・母種導入前のセーブ）。0 以外ならプレイごとに全国の新入生が変わる。
+    /// </summary>
+    public static IRandomSource CohortSeed(int schoolId, int enrollmentYearIndex, ulong seedMix = 0)
+        => new Xoshiro256Random(
+            0x0C0F_0000UL ^ (ulong)(long)schoolId ^ ((ulong)(long)enrollmentYearIndex * 0x9E37_79B9UL) ^ seedMix);
 
     /// <summary>
     /// 新入生コホート（1学年ぶん・全員 Grade=1）を生成する。IDは <paramref name="nextPlayerId"/> から連番で払い出し、
@@ -35,7 +40,7 @@ public static class AiRosterFactory
     public static IReadOnlyList<AiPlayer> NewcomerCohort(
         School school, int enrollmentYearIndex, ref int nextPlayerId, AiRosterDeps deps)
     {
-        var rng = CohortSeed(school.Id, enrollmentYearIndex);
+        var rng = CohortSeed(school.Id, enrollmentYearIndex, deps.SeedMix);
         var pc = deps.Persistent;
         var center = RecruitCenter(school, pc, deps.Roster);
 

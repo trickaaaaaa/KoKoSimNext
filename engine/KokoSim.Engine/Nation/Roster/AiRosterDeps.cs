@@ -11,6 +11,12 @@ namespace KokoSim.Engine.Nation.Roster;
 /// </summary>
 public sealed record AiRosterDeps
 {
+    /// <summary>
+    /// 新入生コホートの生成シードへ混ぜるゲームの母種（issue #1228）。0（既定）＝母種なし＝従来と同じ列。
+    /// Unity 側は新規ゲームでは母種、母種導入前のセーブでは 0 を渡す（<see cref="AiRosterFactory.CohortSeed"/>）。
+    /// </summary>
+    public ulong SeedMix { get; init; }
+
     /// <summary>永続ロスター係数（学年人数・新入生の質・成長予算・怪物）。</summary>
     public PersistentRosterCoefficients Persistent { get; init; } = new();
 

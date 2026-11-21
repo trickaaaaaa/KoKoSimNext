@@ -39,6 +39,7 @@ public static class SaveCodec
         var root = new JsonObject()
             .Add("version", CurrentVersion)
             .Add("masterSeed", s.MasterSeed)
+            .Add("legacyFixedSeeds", s.LegacyFixedSeeds)
             .Add("week", s.Week)
             .Add("yearIndex", s.YearIndex)
             .Add("roster", RosterToJson(s.Roster))
@@ -428,6 +429,8 @@ public static class SaveCodec
         {
             Version = CurrentVersion,
             MasterSeed = root.ULong("masterSeed"),
+            // issue #1228: キーが無い＝母種を混ぜる前のセーブ＝旧い作り方（版は上げない＝欠けても既定値で読める項目）。
+            LegacyFixedSeeds = !root.Has("legacyFixedSeeds") || root.Bool("legacyFixedSeeds"),
             Week = root.Int("week"),
             YearIndex = root.Int("yearIndex"),
             Roster = RosterFromJson(root.Arr("roster")),

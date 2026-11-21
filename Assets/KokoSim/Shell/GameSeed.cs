@@ -17,9 +17,17 @@ namespace KokoSim.Unity.Shell
     public static class GameSeed
     {
         private static ulong _master = RollMaster();
+        private static bool _legacyFixedSeeds;
 
         /// <summary>この新規ゲームの母種。全ての派生シードのもと。</summary>
         public static ulong Master => _master;
+
+        /// <summary>
+        /// 週次の抽選（怪我・成長・気づき・調子）と AI校の新入生（<c>CohortSeed</c>）の乱数へ混ぜる値（issue #1228）。
+        /// 新規ゲームは母種＝プレイごとに列が変わる。母種を混ぜる前のセーブは 0＝それまでの固定の列のまま
+        /// （進行中のセーブの展開を変えない）。
+        /// </summary>
+        public static ulong SeedMix => _legacyFixedSeeds ? 0UL : _master;
 
         /// <summary>母種の16進表記（バグ報告・再現トークンへの貼り付け用）。</summary>
         public static string MasterHex => Hex(_master);
@@ -40,7 +48,11 @@ namespace KokoSim.Unity.Shell
         /// 母種依存の初期状態がすべて同じになっていた。「新規ゲームの完全リセット」の一部として、
         /// デバッグ面のシード固定（<see cref="Reset(ulong)"/>）とは別に、常時（リリースビルドでも）呼ぶ。
         /// </summary>
-        public static void RerollForNewGame() => _master = RollMaster();
+        public static void RerollForNewGame()
+        {
+            _master = RollMaster();
+            _legacyFixedSeeds = false;
+        }
 
         private static string Hex(ulong v)
             => "0x" + v.ToString("x16", System.Globalization.CultureInfo.InvariantCulture);
@@ -50,12 +62,17 @@ namespace KokoSim.Unity.Shell
         // 復元専用の別径路（保存した母種を戻すだけ）＝設計書17 §8 の「表示は残す・固定は消す」を崩さない。
 
         /// <summary>セーブ保存: 母種を DTO へ写す。</summary>
-        public static void Capture(KokoSim.Engine.Saves.SaveState s) => s.MasterSeed = _master;
+        public static void Capture(KokoSim.Engine.Saves.SaveState s)
+        {
+            s.MasterSeed = _master;
+            s.LegacyFixedSeeds = _legacyFixedSeeds;
+        }
 
         /// <summary>セーブ復元: 保存した母種を据える（同じ母種で同じ展開へ再現・不変条件#2）。</summary>
         public static void Restore(KokoSim.Engine.Saves.SaveState s)
         {
             _master = s.MasterSeed;
+            _legacyFixedSeeds = s.LegacyFixedSeeds;
             UnityEngine.Debug.Log("[KokoSim] master seed restored <- " + Hex(_master));
         }
 

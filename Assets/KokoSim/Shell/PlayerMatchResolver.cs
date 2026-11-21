@@ -203,7 +203,7 @@ namespace KokoSim.Unity.Shell
             // 戻ってくる。展望（TournamentPreview）も同じ Rosters.TeamFor を通り実戦と一致する。
             var team = NationService.Rosters.TeamFor(opponent, yearIndex, Rules, calendarYear, aceRest);
             var brain = EnemyAiFactory.BrainFor(opponent);
-            var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
+            var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex, GameSeed.SeedMix).Fork(0x0BDE_0000UL);
             var reordered = brain.ComposeBattingOrder(team.BattingOrder, orderRng);
             // 投手枠・DH枠は並べ替え前のインデックス基準なので、engine の単一入口
             // （Team.WithBattingOrder＝同一参照から引き直す純関数）へ通す。Q21 の解決（2026-07-22）で
@@ -221,7 +221,7 @@ namespace KokoSim.Unity.Shell
             var yearIndex = GameSession.Current.Year;
             var team = NationService.Rosters.PeekTeamFor(opponent, yearIndex, Rules, CalendarYear());
             var brain = EnemyAiFactory.BrainFor(opponent);
-            var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
+            var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex, GameSeed.SeedMix).Fork(0x0BDE_0000UL);
             return team.WithBattingOrder(brain.ComposeBattingOrder(team.BattingOrder, orderRng)) with { Tactics = brain };
         }
 
