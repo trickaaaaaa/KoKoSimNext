@@ -26,8 +26,8 @@
     padding-top: 10px; padding-bottom: 10px;
 }
 .tp-camp { flex-grow: 1; margin-right: 14px; }   /* .banner を継承 */
-.tp-camp__title { font-size: 19px; color: var(--color-chalk); }
-.tp-camp__mult { font-size: 18px; color: var(--color-chalk); margin-left: var(--sp-2); }   /* 数値ラベル＝白（黄はデータに使わない・4-B） */
+.tp-camp__title { font-size: var(--fs-label); color: var(--color-chalk); }
+.tp-camp__mult { font-size: var(--fs-th); color: var(--color-chalk); margin-left: var(--sp-2); }   /* 数値ラベルは本文色（黄はデータに使わない・4-B） */
 .tp-camp__note { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
 .tp-camp__head { flex-direction: row; align-items: center; }
 .tp-camp__body { flex-grow: 1; }
@@ -51,10 +51,9 @@
     -unity-text-align: middle-center; border-radius: var(--radius-chip); margin-right: var(--sp-2);
 }
 .nom-slot--empty .nom-slot__num { background-color: var(--color-line); color: var(--color-muted); }
-.nom-slot__name { font-size: var(--fs-label); color: var(--color-chalk); }
+.nom-slot__name { font-size: var(--fs-label); color: var(--color-chalk); flex-grow: 1; flex-shrink: 0; margin-right: var(--sp-1); }   /* 名前は flex-grow で押し、×を枠の右端へ（issue #707） */
 .nom-slot--empty .nom-slot__name { color: var(--color-faint); }
-/* 指名中の枠を外す×（issue #707）。名前は flex-grow で押し、×を枠の右端へ。 */
-.nom-slot__name { flex-grow: 1; flex-shrink: 0; margin-right: var(--sp-1); }
+/* 指名中の枠を外す×（issue #707）。 */
 .nom-slot__x {
     flex-shrink: 0; width: 22px; height: 22px; -unity-text-align: middle-center;
     font-size: var(--fs-label); color: var(--color-muted); border-radius: var(--radius-chip);
@@ -71,7 +70,7 @@
     padding-left: var(--sp-4); padding-right: var(--sp-4);
 }
 .tp-toolbar__title { font-size: var(--fs-body); color: var(--color-chalk); }
-.tp-toolbar__count { font-size: 18px; color: var(--color-muted); margin-left: var(--sp-2); }
+.tp-toolbar__count { font-size: var(--fs-th); color: var(--color-muted); margin-left: var(--sp-2); }
 .tp-toolbar__spacer { flex-grow: 1; }
 .tp-toolbar__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-left: 14px; margin-right: var(--sp-1); letter-spacing: 1px; }
 .tp-toolbar__group { flex-direction: row; }
@@ -82,13 +81,14 @@
     flex-direction: row; align-items: center;
     height: var(--h-thead); background-color: var(--color-panel-deep);
     border-bottom-width: 0;
-    /* 行が独立パネル化（row-well+row-panel）したので、見出しの列開始位置を行パネルの内容インセットに合わせる。
-       左＝井12+枠2+pad16=30 ／ 右＝井12+枠5+pad16=33（＋スクロールバー用ガター6）。 */
-    padding-left: 30px; padding-right: 33px;
+    /* 見出しの列開始位置を行パネルの内容インセットに合わせる。スコアブック（.sbk）では行の井の左右余白が0・
+       枠が1px（scorebook.uss の .sbk .row-well / .sbk .row-panel）なので、左右とも 枠1+pad16=17
+       （＋スクロールバー用ガター6は .tp-thead__gutter）。 */
+    padding-left: 17px; padding-right: 17px;
 }
 /* 固定列は flex-shrink: 0（付けないと隣の flex-grow 列の中身が広い行だけ幅を奪われ列がずれる＝横ずれの真因）。
    見出しLabelは既定 margin/padding を持つので 0 に潰し、データ列(VisualElement)と列境界を一致させる。 */
-.tp-th { font-size: 18px; color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
+.tp-th { font-size: var(--fs-th); color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
 .tp-th--nom { width: var(--col-nom); }
 .tp-th--id { width: var(--col-id); }
 .tp-th--rank { width: var(--col-rank); }
@@ -128,7 +128,7 @@
 .trow__idtext { flex-direction: column; }
 /* 上段＝名前＋学年＋投打を同じ行に（Issue #273。ベンチ外チップ撤去で全行この1段のみ＝Issue #294）。 */
 .trow__top { flex-direction: row; align-items: center; }
-.trow__name { font-size: 19px; color: var(--color-chalk); margin-right: var(--sp-2); }
+.trow__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-2); }
 .trow__name:hover { color: var(--sky); }
 
 /* preset-open：行の「練習設定」列＝プリセット名＋主眼メニュー｜配分積み上げバー｜変更（クリックでモーダル）。
@@ -157,7 +157,7 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* 行ごとに反復する導線なのでアクセントにしない（30行ぶん黄が並ぶと希少性が壊れる＝UI原則②）。 */
-.preset-open__go { font-size: 19px; color: var(--color-muted); flex-shrink: 0; }
+.preset-open__go { font-size: var(--fs-label); color: var(--color-muted); flex-shrink: 0; }
 
 /* copy（列見出しと同じ「複製」2字表記, Issue #273 ④。1字幅の正方形ボタンから拡幅） */
 .copy-btn {
@@ -166,7 +166,6 @@
     border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: var(--fs-cap);
 }
 .copy-btn:hover { border-color: var(--sky); background-color: var(--color-panel-hover); }
-.copy-btn--disabled { color: var(--color-line); }
 
 /* ═══ ability bar 行（伸びバー・プリセット強調で共用） ═══ */
 /* 伸びバーは部品辞書 components.uss の .abil-row に一本化（issue #3）。ここは空状態の文言だけ残す。 */
@@ -176,8 +175,6 @@
    1440×840（パネル1600×900基準）・プリセット帯＋3カラム高密度化でスクロールを撲滅する。
    design-19 デーゲームNBスキンへ追いつかせる（旧ダークREFINEブロックは廃止・白地カード＋インク枠＋
    ベタ影＋赤CTAへ統一）。区切りは罫線でなく面の明度（--sf-card/--sf-raise/--sf-base）で作る（UI原則④）。 */
-#tp-modal.modal-scrim { background-color: var(--color-scrim); }
-
 .tpm-card {
     width: 1440px; max-width: 96%;
     height: 840px; max-height: 96%;
@@ -189,6 +186,7 @@
     overflow: hidden;
 }
 .tpc-card {
+    width: 720px; max-width: 86%; max-height: 82%;
     border-color: var(--ink);
     border-top-width: var(--nb-border-card); border-left-width: var(--nb-border-card);
     border-right-width: var(--nb-card-edge); border-bottom-width: var(--nb-card-edge);
@@ -222,9 +220,9 @@
 .tpm-close {
     width: 32px; height: 32px; -unity-text-align: middle-center;
     background-color: var(--sf-card); color: var(--color-chalk);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0; font-size: 18px;
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0; font-size: var(--fs-th);
 }
-.tpm-close:hover { border-color: var(--color-warn); color: var(--color-warn); }
+.tpm-close:hover { border-color: var(--ink); }
 
 /* ── タブ（配分⇄能力・issue #327③）：プリセット帯の左端に置く＝縦の帯を増やさない
    （伸びる能力14行=474pxで縦は満杯。帯を足すと1440×840で②-bの見切れが再発する）。
@@ -240,7 +238,7 @@
     margin: 0 2px 0 0; padding: 0;
 }
 .tpm-tab:hover { color: var(--color-chalk); }
-.tpm-tab--on { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
+.tpm-tab--on, .tpm-tab--on:hover { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
 
 /* ── プリセット帯：横1行のチップ列＋残りバジェット（常時視界内・issue #222③④） ── */
 .tpm-preset-strip {
@@ -369,10 +367,9 @@
     flex-shrink: 0;
 }
 .nom-btn:hover { background-color: var(--color-panel-hover); }
-.nom-btn--on { background-color: var(--sky); color: var(--color-on-fill); }
+.nom-btn--on, .nom-btn--on:hover { background-color: var(--sky); color: var(--color-on-fill); }
 
 /* ═══ 複製ピッカー（tp-copy-modal・コピー元を選ぶ, Issue #133-⑤） ═══ */
-.tpc-card { width: 720px; max-width: 86%; max-height: 82%; }
 .tpc-head {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
@@ -401,6 +398,6 @@
     position: absolute; bottom: 24px; left: 50%;
     translate: -50% 0;
     background-color: var(--sky); color: var(--color-on-fill);
-    font-size: 18px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: 0;
+    font-size: var(--fs-th); padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: 0;
     display: none;
 }

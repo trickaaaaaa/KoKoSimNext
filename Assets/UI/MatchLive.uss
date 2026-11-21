@@ -1,6 +1,6 @@
 /* 試合ライブ観戦（実試合を2D俯瞰で1試合まるごと再生）。全景＝FM型データ濃密の3カラム
    （左=自校スタメン / 中央=盤面 / 右=相手校スタメン）。サイド列は今日の成績を持たず
-   「守備位置・名前・背番号・調子」だけなので固定幅（260px）に絞り、余った幅は中央の盤面へ回す
+   「守備位置・名前・背番号・調子」だけなので固定幅（266px）に絞り、余った幅は中央の盤面へ回す
    （旧: 22% / 56% / 22%。issue #297）。
    描画は Match2DPlaybackElement を再利用。色・角丸・余白は tokens.uss の変数のみ。
    部品（スタメン行・投手行・マッチアップHUD・調子顔）は Components/components.uss。 */
@@ -305,7 +305,7 @@
     flex-direction: row; align-items: center; justify-content: center;
     color: #FFFFFF;
 }
-.tmo-resume:hover { background-color: var(--color-accent); }
+.tmo-resume:hover { opacity: 0.88; }
 .tmo-resume__icon { width: 18px; height: 18px; flex-shrink: 0; margin-right: 12px; }
 .tmo-resume__label { font-size: 20px; letter-spacing: 6px; color: #FFFFFF; }
 
@@ -320,7 +320,8 @@
 }
 .tmo-messenger .bench-row { min-height: 44px; }
 .tmo-messenger .bench-row .num-badge { margin-right: var(--sp-2); }
-.tmo-messenger .bench-row__tag { flex-shrink: 0; }
+.tmo-messenger .bench-row__name { margin-right: var(--sp-2); }
+.tmo-messenger .bench-row__tag { flex-shrink: 0; padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
 .tmo-back {
     flex-grow: 1;
     height: 60px;
@@ -439,10 +440,10 @@
 .msc__pos {
     width: var(--col-msc-pos);
     flex-shrink: 0;
-    margin-left: 3px;   /* 打順の「—」とくっついて「一投」の2文字に見えるのを防ぐ */
     font-size: var(--fs-label);
     color: var(--color-muted);
     margin: 0; padding: 0;
+    margin-left: 3px;   /* 打順の「—」とくっついて「一投」の2文字に見えるのを防ぐ（margin:0 より後ろに置く） */
     -unity-text-align: middle-center;
 }
 .msc__no {

@@ -131,9 +131,6 @@
 .sc-row2 { flex-direction: row; flex-shrink: 0; }
 .sc-card-last { margin-right: 0; }
 
-/* 隠しパラメータは半幅カードに入るので1列に積む（2列だと値が折り返す）。 */
-.sc-hidden__item--full { width: 100%; }
-
 /* 見立て表: 4軸を縦に並べ、入部後は「実際」の列が右に足される（列見出しはそのときだけ出す）。 */
 .sc-est { flex-direction: column; }
 .sc-est__row { flex-direction: row; align-items: center; height: 34px; }
