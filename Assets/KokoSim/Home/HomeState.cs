@@ -217,18 +217,26 @@ namespace KokoSim.Unity.Home
         /// ＝実測の差分なので、選ばれなかった節目のぶんも数字には出る。</para>
         /// </summary>
         /// <summary>
-        /// 観るだけの甲子園（自校が出場していない年）が決着したら優勝校を通知フィードへ1行流す
+        /// 観るだけの甲子園／センバツ（自校が出場していない年）が決着したら優勝校を通知フィードへ1行流す
         /// （設計書05 §1.1a）。自校が出場した年の結果は大会モードの後始末が出すので、ここは通らない。
         /// </summary>
         private void RunKoshienFeed()
         {
+            var items = new List<FeedItem>();
             var champion = GameSession.Current.ConsumeKoshienResult();
-            if (string.IsNullOrEmpty(champion)) return;
-
-            PushFeed(new List<FeedItem>
-            {
-                new FeedItem { When = "大会", Text = champion + " が全国制覇。", Kind = FeedKind.Normal, Tag = "情報" },
-            });
+            if (!string.IsNullOrEmpty(champion))
+                items.Add(new FeedItem { When = "大会", Text = champion + " が全国制覇。", Kind = FeedKind.Normal, Tag = "情報" });
+            var senbatsuChampion = GameSession.Current.ConsumeSenbatsuResult();
+            if (!string.IsNullOrEmpty(senbatsuChampion))
+                items.Add(new FeedItem
+                {
+                    When = "大会",
+                    Text = senbatsuChampion + " が" + KokoSim.Engine.Season.DisplayNames.Current.Senbatsu + "優勝。",
+                    Kind = FeedKind.Normal,
+                    Tag = "情報",
+                });
+            if (items.Count == 0) return;
+            PushFeed(items);
         }
 
         private void RunManagerGrowthFeed()
