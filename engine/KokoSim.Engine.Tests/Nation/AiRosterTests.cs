@@ -67,6 +67,22 @@ public sealed class AiRosterTests
             c3.Sum(p => p.Snapshot.Contact + p.Snapshot.Power));
     }
 
+    [Fact]
+    public void NewcomerCohort_SeedMix_ChangesCohort_AndZeroKeepsLegacySequence()
+    {
+        var school = MakeSchool(id: 42);
+        int n0 = 1, nLegacy = 1, nMixed = 1, nMixed2 = 1;
+        var legacy = AiRosterFactory.NewcomerCohort(school, 5, ref n0, new AiRosterDeps());
+        var zero = AiRosterFactory.NewcomerCohort(school, 5, ref nLegacy, new AiRosterDeps { SeedMix = 0 });
+        var mixed = AiRosterFactory.NewcomerCohort(school, 5, ref nMixed, new AiRosterDeps { SeedMix = 0xABCDEF12_3456789AUL });
+        var mixedAgain = AiRosterFactory.NewcomerCohort(school, 5, ref nMixed2, new AiRosterDeps { SeedMix = 0xABCDEF12_3456789AUL });
+
+        double Sum(IReadOnlyList<AiPlayer> c) => c.Sum(p => p.Snapshot.Contact + p.Snapshot.Power);
+        Assert.Equal(Sum(legacy), Sum(zero));
+        Assert.Equal(Sum(mixed), Sum(mixedAgain));
+        Assert.NotEqual(Sum(legacy), Sum(mixed));
+    }
+
     // --- 3年連続性＋単調に近い成長（#80 完了条件） ---
 
     [Fact]

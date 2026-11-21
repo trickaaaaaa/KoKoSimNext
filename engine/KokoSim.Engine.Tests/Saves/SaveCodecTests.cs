@@ -120,6 +120,28 @@ public sealed class SaveCodecTests
         Assert.Equal(a0.Snapshot.Name, b0.Snapshot.Name);
     }
 
+    // ===== 母種を混ぜない旧い乱数の作り方（issue #1228） =====
+
+    [Fact]
+    public void LegacyFixedSeeds_Roundtrips_AndMissingKeyMeansLegacy()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LegacyFixedSeeds = false;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var fresh, out var err), err);
+        Assert.False(fresh.LegacyFixedSeeds);
+
+        state.LegacyFixedSeeds = true;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var legacy, out err), err);
+        Assert.True(legacy.LegacyFixedSeeds);
+
+        // キーが無い（母種を混ぜる前のセーブ）＝旧い作り方。
+        var stripped = json.Replace("\"legacyFixedSeeds\":true,", "");
+        Assert.DoesNotContain("legacyFixedSeeds", stripped);
+        Assert.True(SaveCodec.TryDeserialize(stripped, out var old, out err), err);
+        Assert.True(old.LegacyFixedSeeds);
+    }
+
     // ===== 版チェック（例外で落ちない） =====
 
     [Fact]

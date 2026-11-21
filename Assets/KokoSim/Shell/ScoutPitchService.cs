@@ -26,7 +26,7 @@ namespace KokoSim.Unity.Shell
             if (opener == null) return false;
 
             var values = EventService.BuildValues();
-            var script = EventScheduler.PickScript(opener, EventService.Scheduler.AbsoluteWeek, EventService.Rng());
+            var script = EventScheduler.PickScript(opener, EventService.Scheduler.AbsoluteWeek, EventService.Rng(EventService.ScoutOfferPurpose));
             var stage = Stage.Contract;
             ScoutContractChoice picked = null;
 
@@ -90,7 +90,7 @@ namespace KokoSim.Unity.Shell
         {
             var next = EventService.Scheduler.Find(eventId);
             if (next == null) return;
-            var script = EventScheduler.PickScript(next, EventService.Scheduler.AbsoluteWeek, EventService.Rng());
+            var script = EventScheduler.PickScript(next, EventService.Scheduler.AbsoluteWeek, EventService.Rng(EventService.ScoutFollowPurpose));
             var lines = new List<PresentedLine>(e.Lines);
             lines.AddRange(EventService.ResolveLines(script, values));
             e.Lines = lines;

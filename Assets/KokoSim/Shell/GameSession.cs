@@ -685,13 +685,14 @@ namespace KokoSim.Unity.Shell
         public void ClearPracticeMatchFlow() => PracticeOpponent = null;
 
         /// <summary>
-        /// 練習試合の乱数種。相手校ID＋絶対週から決定論で導く（不変条件#2）。同じ週に同じ相手なら同じ試合になる。
+        /// 練習試合の乱数種。相手校ID＋絶対週＋母種（issue #1228。母種導入前のセーブは混ぜない）から決定論で導く（不変条件#2）。同じ週に同じ相手なら同じ試合になる。
         /// 申込時の受諾判定（<see cref="PracticeMatchScheduler.TryAccept"/>）と開始時
         /// （<see cref="PracticeMatchScheduler.BeginRequest"/>）で同じ種を作り直すことで、
         /// 受諾判定の消費が揃い、一括消化（<see cref="PracticeMatchScheduler.Request"/>）と同じ試合になる。
         /// </summary>
         public static IRandomSource PracticeMatchRng(int opponentId, int week)
-            => new Xoshiro256Random(0x9E37_79B9UL ^ (ulong)(long)opponentId ^ ((ulong)(long)week * 0x85EB_CA6BUL));
+            => new Xoshiro256Random(
+                0x9E37_79B9UL ^ (ulong)(long)opponentId ^ ((ulong)(long)week * 0x85EB_CA6BUL) ^ GameSeed.SeedMix);
 
         /// <summary>
         /// 練習試合をライブ観戦で開始する。ここで費用と週枠が確定する（申込成立＝費用発生）。

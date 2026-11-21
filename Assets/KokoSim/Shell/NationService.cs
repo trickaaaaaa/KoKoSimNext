@@ -321,7 +321,8 @@ namespace KokoSim.Unity.Shell
         // 生成はロスター参照時に (校ID, 年度) から遅延ブートストラップ（決定論）。GameContext と同様、係数は既定
         // （Unity側は coefficients.yaml を読まない従来挙動に合わせる。調整はテスト/Balance CLI 経由）。
 
-        private static readonly AiRosterDeps RosterDeps = new AiRosterDeps();
+        // 新入生の生成シードへ母種を混ぜる（issue #1228）。GameSeed の新規ゲーム／ロード後に作り直す。
+        private static AiRosterDeps RosterDeps => new AiRosterDeps { SeedMix = GameSeed.SeedMix };
         private static NationRosters _rosters;
         private static NationTournamentStats _tournamentStats;
         private static Dictionary<int, School> _schoolById;

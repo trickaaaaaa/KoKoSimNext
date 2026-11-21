@@ -141,6 +141,10 @@ namespace KokoSim.Unity.Home
         /// 大会外は TournamentDay=0 で <c>day &lt;&lt; 40</c> が消えるため、
         /// 従来の <c>year*100 + week</c> と<b>1ビット一致</b>する＝挙動が変わるのは大会中だけ。</para>
         ///
+        /// <para><b>母種を混ぜる</b>（issue #1228）: <c>_rng</c> は seed 42 固定で Fork しても状態が進まないので、
+        /// 暦だけだと全プレイが同じ列になる。<see cref="KokoSim.Unity.Shell.GameSeed.SeedMix"/> を混ぜて
+        /// プレイごとに変える（母種導入前のセーブは 0＝従来の列）。</para>
+        ///
         /// <para>週は0..51、年度は現実的な上限（200年プレイでも200程度）なので
         /// <c>year*100 + week</c> は (年度,週) に対して単射で、40ビット上の大会日とも重ならない。</para>
         /// </summary>
@@ -149,7 +153,7 @@ namespace KokoSim.Unity.Home
             var week = KokoSim.Unity.Shell.GameClock.Week;
             var year = KokoSim.Unity.Shell.GameClock.YearIndex;
             var day = GameSession.Current.TournamentDay;
-            return streamId ^ ((ulong)day << 40) ^ (ulong)(year * 100 + week);
+            return streamId ^ ((ulong)day << 40) ^ (ulong)(year * 100 + week) ^ KokoSim.Unity.Shell.GameSeed.SeedMix;
         }
 
         public HomeState(ulong seed = 42)

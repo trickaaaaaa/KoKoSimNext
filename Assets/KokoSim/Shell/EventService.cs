@@ -146,6 +146,12 @@ namespace KokoSim.Unity.Shell
         /// <summary>週次イベント抽選の独立ストリーム識別子（<see cref="GameSeed.Master"/> と混合）。</summary>
         private const ulong EventStream = 0x6090_0000UL;
 
+        // Rng(purpose) の用途別識別子（0＝週次抽選）。
+        private const ulong NovelPurpose = 0x0001_0000_0000_0000UL;
+        private const ulong PushedChoicePurpose = 0x0002_0000_0000_0000UL;
+        internal const ulong ScoutOfferPurpose = 0x0003_0000_0000_0000UL;
+        internal const ulong ScoutFollowPurpose = 0x0004_0000_0000_0000UL;
+
         private static EventScheduler _scheduler;
         private static readonly List<PresentedEvent> _pending = new List<PresentedEvent>();
 
@@ -298,7 +304,7 @@ namespace KokoSim.Unity.Shell
             var values = BuildValues();
             if (!string.IsNullOrEmpty(subjectName)) values["player"] = subjectName;
             if (extra != null) foreach (var kv in extra) values[kv.Key] = kv.Value;
-            var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, salt, Rng());
+            var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, salt, Rng(NovelPurpose));
 
             _pending.Add(new PresentedEvent
             {
@@ -364,7 +370,7 @@ namespace KokoSim.Unity.Shell
         {
             var e = Scheduler.Find(eventId);
             if (e == null || !e.HasChoices) return false;
-            var rng = Rng();
+            var rng = Rng(PushedChoicePurpose);
             var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, rng);
             var c = BuildChoiceEvent(new FiredEvent(e, GameClock.Week, script), rng);
             if (c == null) return false;
@@ -528,11 +534,14 @@ namespace KokoSim.Unity.Shell
         /// 経過状態でなく<b>暦</b>から作る＝その週ならいつ引いても同じ結果。
         /// <b>大会日を混ぜる</b>のは、大会中は <see cref="GameClock.Week"/> が進まず
         /// <see cref="GameSession.TournamentDay"/> だけが進むため（混ぜないと大会をまたぐ週が同じ抽選を引く）。
+        ///
+        /// <para><paramref name="purpose"/>（issue #1228）: 同じ週に別の用途が同じ列の頭を引くと選択が相関するので、
+        /// 週次抽選（0）以外の用途は固有の識別子を渡して別の列にする。</para>
         /// </summary>
-        internal static IRandomSource Rng()
+        internal static IRandomSource Rng(ulong purpose = 0)
         {
             var day = GameSession.Current.TournamentDay;
-            var key = EventStream ^ ((ulong)day << 40) ^ (ulong)(GameClock.YearIndex * 100 + GameClock.Week);
+            var key = EventStream ^ purpose ^ ((ulong)day << 40) ^ (ulong)(GameClock.YearIndex * 100 + GameClock.Week);
             return new Xoshiro256Random(GameSeed.Master ^ key);
         }
 

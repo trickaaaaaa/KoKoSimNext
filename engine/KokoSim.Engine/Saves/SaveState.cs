@@ -29,6 +29,12 @@ public sealed class SaveState
 
     // --- 乱数マスタ・暦 ---
     public ulong MasterSeed { get; set; }
+
+    /// <summary>
+    /// 母種を週次抽選・AI校の新入生へ混ぜない旧い乱数の作り方で進行しているか（issue #1228）。
+    /// 母種導入前のセーブは true（それまでの展開を変えない）。新規ゲームのセーブは false。
+    /// </summary>
+    public bool LegacyFixedSeeds { get; set; }
     public int Week { get; set; }
     public int YearIndex { get; set; } = 1;
 
