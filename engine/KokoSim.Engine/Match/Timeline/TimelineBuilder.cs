@@ -3529,6 +3529,31 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 内野ゴロで本塁へ投げ、走者がセーフになった（打者は野選で一塁に生きる）打球の送球を描く（issue #1240）。
+    /// 守備が投げたのは本塁への1本だけ＝基礎解決（<see cref="BuildBattedBall"/>）が積んだ「処理点→一塁」の
+    /// 直接送球は実際には投げていないので除き、打者のアウトの表現も訂正する。<see cref="AppendBackHomeThrows"/>
+    /// の続き。表示専用・乱数不使用。
+    /// </summary>
+    public static PlayTimeline AppendHomeSafeFieldersChoice(
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double homeArriveAnchor,
+        BaserunningCoefficients? coefficients = null)
+    {
+        var tl = AppendBackHomeThrows(timeline, play, field, homeArriveAnchor, runnerOut: false, coefficients);
+        var batterArrive = tl.Duration;
+        foreach (var leg in tl.Runners)
+            if (leg.Label == "打") { batterArrive = leg.T1; break; }
+
+        var ball = new List<BallSegment>(tl.Ball.Count);
+        foreach (var seg in tl.Ball)
+        {
+            var directToFirst = (seg.Kind == BallSegmentKind.Throw || seg.Kind == BallSegmentKind.Carry)
+                && seg.ToBase == "first" && Distance(seg.From, Home) > 0.5;
+            if (!directToFirst) ball.Add(seg);
+        }
+        return PatchFieldersChoiceBatterLeg(tl with { Ball = ball }, batterArrive, closeCall: false);
+    }
+
+    /// <summary>
     /// 満塁・内野前進の本塁封殺のあとの「本塁→一塁」の転送を描く（issue #741）。<see cref="AppendBackHomeThrows"/>
     /// の後に呼ぶ。基礎解決（<see cref="BuildBattedBall"/>）が積んだ「処理点→一塁」の直接送球は実際には投げていない
     /// ので除き、本塁に着いた送球の後へ捕手の一塁転送を足す。打者は転送が勝てばアウト（本封→一封の併殺）、

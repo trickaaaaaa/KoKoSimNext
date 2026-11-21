@@ -2316,6 +2316,14 @@ public static class GameEngine
                                 timeline, ctx.Field, batterArrive, batterOut: !batterSafeOnFc, paBaserunning);
                         }
                     }
+                    else if (safeAtHome is { } fcHome && batterSafeOnFc && res.Result == PlateAppearanceResult.InPlayOut
+                        && bhPlay is { IsFly: false } && !HasOutAtOtherBase(runnerMoves))
+                    {
+                        // 本塁へ投げてセーフ＝打者は野選で一塁セーフ（一塁へは投げていない）。issue #1240。
+                        timeline = Match.Timeline.TimelineBuilder.AppendHomeSafeFieldersChoice(
+                            timeline, bhPlay, ctx.Field, fcHome.T1, paBaserunning);
+                        homeThrowAdded = true;
+                    }
                     else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield)
                         && !HasOutAtOtherBase(runnerMoves))
                     {
