@@ -14,12 +14,10 @@
         <ui:VisualElement class="mlive-3col">
 
             <!-- 左列: 自校スタメン -->
-            <ui:VisualElement class="mlive-col mlive-col--side">
-                <ui:VisualElement class="mlive-col-head">
-                    <ui:Label name="left-team" class="mlive-col-title" text="自校" />
-                    <ui:VisualElement name="left-side" class="mhud-cp mhud-cp--key mhud-cp--side">
-                        <ui:Label name="left-side-text" class="mhud-cp__t" text="先攻" />
-                    </ui:VisualElement>
+            <ui:VisualElement class="mlive-col mlive-col--side mside">
+                <ui:VisualElement class="mside-head">
+                    <ui:Label name="left-side-text" class="mside-head__side" text="先攻" />
+                    <ui:Label name="left-team" class="mside-head__title" text="自校" />
                 </ui:VisualElement>
                 <ui:VisualElement name="left-lineup" class="mlive-lineup" />
                 <ui:VisualElement name="left-pitcher" class="mlive-pitcher-host" />
@@ -155,12 +153,10 @@
             </ui:VisualElement>
 
             <!-- 右列: 相手校スタメン（ミラー配置） -->
-            <ui:VisualElement class="mlive-col mlive-col--side">
-                <ui:VisualElement class="mlive-col-head">
-                    <ui:Label name="right-team" class="mlive-col-title mlive-col-title--right" text="相手校" />
-                    <ui:VisualElement name="right-side" class="mhud-cp mhud-cp--key mhud-cp--side">
-                        <ui:Label name="right-side-text" class="mhud-cp__t" text="後攻" />
-                    </ui:VisualElement>
+            <ui:VisualElement class="mlive-col mlive-col--side mside">
+                <ui:VisualElement class="mside-head">
+                    <ui:Label name="right-side-text" class="mside-head__side" text="後攻" />
+                    <ui:Label name="right-team" class="mside-head__title" text="相手校" />
                 </ui:VisualElement>
                 <ui:VisualElement name="right-lineup" class="mlive-lineup" />
                 <ui:VisualElement name="right-pitcher" class="mlive-pitcher-host" />
