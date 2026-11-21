@@ -21,6 +21,8 @@ namespace KokoSim.Unity.Home
         public string Text = "";
         public FeedKind Kind = FeedKind.Normal;
         public string Tag = "情報";   // 成長 / 警告 / 発見 / 情報
+        /// <summary>毎週大量に出る定常の行（練習の能力+1）。フィードの枠が足りないときは先に押し出される。</summary>
+        public bool Routine;
     }
 
     public sealed class GradeChip
@@ -184,6 +186,19 @@ namespace KokoSim.Unity.Home
             RunDraftResultFeed();
             // 練習効率の補正を1週ぶん減らす（issue #615）。**練習を適用した後**に呼ぶ＝
             // 「N週」と言われた週にちゃんとN回効く（先に減らすと1週ぶん短くなる）。
+            KokoSim.Unity.Shell.TrainingBoostService.Tick();
+        }
+
+        /// <summary>
+        /// 1週ぶんの練習が当たったあとの共通の締め（成長イベント・調子の波・練習効率補正の減算）。
+        /// 大会中の日送りは共有週が進まないので、週送りとは別の入口になるが、練習が1週回るたびに
+        /// 同じだけ回す（issue #1266）。週送りは Form を時計送りの後に引く都合で自前の並びを持つ。
+        /// </summary>
+        private void RunTournamentWeekTail()
+        {
+            RunGrowthWeek();
+            RunInsightWeek();
+            RunFormWeek();
             KokoSim.Unity.Shell.TrainingBoostService.Tick();
         }
 
@@ -513,6 +528,7 @@ namespace KokoSim.Unity.Home
                         Text = p.Name + " との信頼が深まった（精神力 +" + mentalGained + "）",
                         Kind = FeedKind.Up,
                         Tag = "成長",
+                        Routine = true,
                     });
                 }
                 foreach (var k in AbilityKinds.All)
@@ -526,6 +542,7 @@ namespace KokoSim.Unity.Home
                             Text = p.Name + " の " + AbilityJp(k) + " が +" + gained,
                             Kind = FeedKind.Up,
                             Tag = "成長",
+                            Routine = true,
                         });
                     }
                 }
@@ -747,7 +764,7 @@ namespace KokoSim.Unity.Home
             if (!practiceDue) return;
             RunPracticeWeek(_training.TournamentPracticeMult);
             RunInjuryWeek();
-            RunInsightWeek();
+            RunTournamentWeekTail();
         }
 
         /// <summary>自校の次戦を自動消化する（要件7「はい」）。結果をフィード化する。</summary>
@@ -908,10 +925,28 @@ namespace KokoSim.Unity.Home
         private static int SeasonBaseDisplayYear()
             => KokoSim.Unity.Shell.SeasonClock.SeasonBaseYear + (KokoSim.Unity.Shell.GameClock.YearIndex - 1);
 
+        private const int FeedBatchRoutineMax = 6;
+        private const int FeedCapacity = 12;
+
+        /// <summary>
+        /// 新しい行を先頭へ積む（バッチ内の並びは保つ）。定常の行（練習の能力+1）は1回につき6件まで・
+        /// 枠が溢れたら先に押し出す＝怪我・イベント・気づきなど重要な行が毎週の能力+1に埋もれない。
+        /// </summary>
         private void PushFeed(List<FeedItem> newItems)
         {
-            foreach (var it in newItems.Take(6)) _feed.Insert(0, it);
-            while (_feed.Count > 12) _feed.RemoveAt(_feed.Count - 1);
+            var batch = new List<FeedItem>();
+            var routine = 0;
+            foreach (var it in newItems)
+            {
+                if (it.Routine && ++routine > FeedBatchRoutineMax) continue;
+                batch.Add(it);
+            }
+            _feed.InsertRange(0, batch);
+            while (_feed.Count > FeedCapacity)
+            {
+                var i = _feed.FindLastIndex(f => f.Routine);
+                _feed.RemoveAt(i >= 0 ? i : _feed.Count - 1);
+            }
         }
 
         /// <summary>次の試合カード＋カウントダウンを大会仕様で埋める（要件4・5）。</summary>
