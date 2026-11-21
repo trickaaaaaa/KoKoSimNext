@@ -101,3 +101,47 @@ regions:
         Assert.Equal(2, kinki.BerthsFor("shiga", 2026)); // 偶数年
     }
 }
+
+/// <summary>開催県の表が尽きた年は、表の最終年を起点に地区内の県をJIS順で持ち回る（issue #1221）。</summary>
+public sealed class RegionalFormatHostRotationTests
+{
+    private static RegionalFormat Region(string name) =>
+        KokoSim.Config.RegionalFormatLoader.LoadFromFile(
+            Balance.BalanceRegressionTests.FindDataFile("pref-formats/regional-tournaments.yaml")).ForRegion(name)!;
+
+    [Fact]
+    public void HostFor_UsesTableYearsAsIs_AndRotatesBeyondTheTable()
+    {
+        var kanto = Region("kanto");
+        Assert.Equal("yamanashi", kanto.HostFor(2025));
+        Assert.Equal("gunma", kanto.HostFor(2026));
+        Assert.Equal("saitama", kanto.HostFor(2027));
+        Assert.Equal("chiba", kanto.HostFor(2028));
+        Assert.Equal("gunma", kanto.HostFor(2033)); // 7県で一巡して戻る
+    }
+
+    [Fact]
+    public void BerthsFor_HostBonusKeepsGoingAfterTheTableEnds()
+    {
+        foreach (var region in new[] { "hokushinetsu", "chugoku" })
+        {
+            var fmt = Region(region);
+            Assert.True(fmt.HostPrefectureBonus);
+            for (var year = 2026; year <= 2040; year++)
+            {
+                var host = fmt.HostFor(year)!;
+                var extra = fmt.BerthsPerPref.Keys.Count(p => fmt.BerthsFor(p, year) == fmt.BerthsPerPref[p] + 1);
+                Assert.Equal(1, extra);
+                Assert.Equal(fmt.BerthsPerPref[host] + 1, fmt.BerthsFor(host, year));
+            }
+        }
+    }
+
+    [Fact]
+    public void HostFor_VisitsEveryPrefectureOverOneCycle()
+    {
+        var fmt = Region("hokushinetsu");
+        var hosts = Enumerable.Range(2026, fmt.BerthsPerPref.Count).Select(y => fmt.HostFor(y)).Distinct().Count();
+        Assert.Equal(fmt.BerthsPerPref.Count, hosts);
+    }
+}
