@@ -49,6 +49,9 @@ namespace KokoSim.Unity.Match
         private MatchProgression _prog;
         private bool _teamIsAway;
         private SubstitutionOptions _opt;
+        // 画面に映っている半回の攻撃側が表か。3アウト目の打球の再生中に開いても攻守（代打・代走タブ／守備交代）を
+        // 画面の局面で出す＝次の半回の攻守を先に見せない（issue #1246）。
+        private System.Func<bool?> _shownOffenseIsTop;
         private bool _open;
         private IVisualElementScheduledItem _cancelRetry;
 
@@ -122,17 +125,18 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>この試合の進行体と監督のチームを差し替える（試合ごとに呼ぶ）。</summary>
-        public void SetMatch(MatchProgression prog, bool teamIsAway)
+        public void SetMatch(MatchProgression prog, bool teamIsAway, System.Func<bool?> shownOffenseIsTop = null)
         {
             _prog = prog;
             _teamIsAway = teamIsAway;
+            _shownOffenseIsTop = shownOffenseIsTop;
             Close();
         }
 
         public void Open()
         {
             if (_prog == null || _scrim == null) return;
-            _opt = _prog.SubstitutionOptions(_teamIsAway);
+            _opt = _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke());
             _offKind = SubstitutionKind.PinchHit;
             // 開いた時点を下書きの開始点にする（issue #718）。ここから先の交代は「全部やめる」で戻せる。
             _prog.BeginSubstitutionDraft();
@@ -179,7 +183,7 @@ namespace KokoSim.Unity.Match
             if (ForcedPitcherChangePending)
             {
                 _prog.BeginSubstitutionDraft();
-                _opt = _prog.SubstitutionOptions(_teamIsAway);
+                _opt = _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke());
                 ResetSelection();
                 Render();
                 return;
@@ -236,7 +240,7 @@ namespace KokoSim.Unity.Match
         public Player FielderForCapture(FieldPosition pos)
         {
             if (_prog == null) return null;
-            var opt = _prog.SubstitutionOptions(_teamIsAway);
+            var opt = _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke());
             if (pos == FieldPosition.Pitcher)
                 return opt.UsesDh
                     ? opt.CurrentPitcher
@@ -255,7 +259,7 @@ namespace KokoSim.Unity.Match
             get
             {
                 if (_prog == null) return -1;
-                var opt = _prog.SubstitutionOptions(_teamIsAway);
+                var opt = _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke());
                 return opt.Reserves != null ? opt.Reserves.Count : -1;
             }
         }
@@ -292,7 +296,7 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>スクショ用: いまDH制が生きているか（DH解除は不可逆なので前後の突き合わせに使う）。</summary>
-        public bool UsesDhForCapture => _prog != null && _prog.SubstitutionOptions(_teamIsAway).UsesDh;
+        public bool UsesDhForCapture => _prog != null && _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke()).UsesDh;
 
         /// <summary>スクショ用: 指枠に居る選手（非DH＝null）。<see cref="FielderForCapture"/> と同じく engine から引き直す。</summary>
         public Player DhForCapture
@@ -300,21 +304,21 @@ namespace KokoSim.Unity.Match
             get
             {
                 if (_prog == null) return null;
-                var opt = _prog.SubstitutionOptions(_teamIsAway);
+                var opt = _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke());
                 if (!opt.UsesDh || opt.DhSlot < 0 || opt.DhSlot >= opt.Lineup.Count) return null;
                 return opt.Lineup[opt.DhSlot];
             }
         }
 
         /// <summary>スクショ用: 投手が入っている打順スロット（DH制は -1＝打順外）。DH解除で打順へ入ったかの証拠。</summary>
-        public int PitcherSlotForCapture => _prog == null ? -2 : _prog.SubstitutionOptions(_teamIsAway).PitcherSlot;
+        public int PitcherSlotForCapture => _prog == null ? -2 : _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke()).PitcherSlot;
 
         /// <summary>
         /// スクショ用: 現在の打順9人（交代反映済み）。「誰が退いたか」は控えの増減では見えない
         /// （退場した先発は控え名簿に居ない）ので、打順から消えたことで確かめる。
         /// </summary>
         public IReadOnlyList<Player> LineupForCapture =>
-            _prog == null ? System.Array.Empty<Player>() : _prog.SubstitutionOptions(_teamIsAway).Lineup;
+            _prog == null ? System.Array.Empty<Player>() : _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke()).Lineup;
 
         /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者）。</summary>
         public void PickRunnerForCapture(int baseIndex)
@@ -1037,7 +1041,7 @@ namespace KokoSim.Unity.Match
             if (!ok)
             {
                 // 局面がずれた（この操作はもう成立しない）。選択肢を引き直して理由を出す。
-                _opt = _prog.SubstitutionOptions(_teamIsAway);
+                _opt = _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke());
                 ResetSelection();
                 Render();
                 if (_note != null)
@@ -1050,7 +1054,7 @@ namespace KokoSim.Unity.Match
             // 確定（issue #718・文言は #796）: 試合には即反映して表・比較を交代後の姿で見せるが、「試合へ戻る」を
             // 押すまでは「全部やめる」で開く前へ戻せる。続けて別の交代も確定できる。
             _reserved.Add(description);
-            _opt = _prog.SubstitutionOptions(_teamIsAway);
+            _opt = _prog.SubstitutionOptions(_teamIsAway, _shownOffenseIsTop?.Invoke());
             ResetSelection();
             _onApplied?.Invoke();
             Render();

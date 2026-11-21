@@ -66,7 +66,10 @@ public sealed record GameDecision(
     BattingApproach? Approach = null, OffensiveSign? Sign = null,
     StartType? Start = null, StealTarget StealTarget = StealTarget.Second,
     DefenseDepth? Infield = null, DefenseDepth? Outfield = null,
-    bool On = false);
+    bool On = false,
+    // Timeout 専用（issue #1246）: 伝令の攻守を呼び出し側が確定させたときだけ入る（画面に映っている半回で決める）。
+    // null＝従来どおり局面から導出（古い決定列）。
+    bool? AsOffense = null);
 
 public enum GameDecisionKind
 {
@@ -299,7 +302,7 @@ public static class GameReplay
                     SubstitutionCommands.DefenseAssign(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);
                     break;
                 case GameDecisionKind.Timeout:
-                    SubstitutionCommands.CallTimeout(p, d.OffenseIsAway, d.TargetIndex >= 0 ? d.TargetIndex : null);
+                    SubstitutionCommands.CallTimeout(p, d.OffenseIsAway, d.TargetIndex >= 0 ? d.TargetIndex : null, d.AsOffense);
                     break;
             }
             // 交代ログ（issue #920）。ライブ操作（MatchProgression.RecordSubstitution）と同じ位置で積む。
