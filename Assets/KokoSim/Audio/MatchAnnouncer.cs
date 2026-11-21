@@ -86,6 +86,26 @@ namespace KokoSim.Unity.Audio
             };
         }
 
+        /// <summary>
+        /// 試合画面の操作列のスイッチ（部品辞書の <c>.switch</c>）に結び付ける（issue #1193）。
+        /// <paramref name="row"/>（「場内放送」の文字＋スイッチ）のどこを押しても切り替わり、
+        /// <paramref name="sw"/> に <c>switch--on</c> を付け外しする。返り値は解除。
+        /// </summary>
+        public static System.Action BindSwitch(VisualElement row, VisualElement sw)
+        {
+            if (row == null) return () => { };
+            void Apply() => sw?.EnableInClassList("switch--on", Enabled);
+            void Click(ClickEvent _) => Enabled = !Enabled;
+            row.RegisterCallback<ClickEvent>(Click);
+            EnabledChanged += Apply;
+            Apply();
+            return () =>
+            {
+                row.UnregisterCallback<ClickEvent>(Click);
+                EnabledChanged -= Apply;
+            };
+        }
+
         private static AudioClip Clip(string name)
         {
             if (_clips.TryGetValue(name, out var cached)) return cached;

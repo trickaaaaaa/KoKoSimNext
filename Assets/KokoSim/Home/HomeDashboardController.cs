@@ -151,6 +151,9 @@ namespace KokoSim.Unity.Home
                 _state.AdvanceDay();
                 Render();
                 if (_state.ReachedMatchDay) ShowDialog();     // 試合日に到達→開始確認（要件7・惰性防止）
+                // 大会中も7日ごとに怪我・気づきのイベントが積まれる。ここで出さないとキューに残ったまま
+                // ホームに居続ける限り出ず、セーブも「イベントの場面が残っています」で止まっていた。
+                else TryShowEvent();
             }
             else
             {
@@ -606,6 +609,11 @@ namespace KokoSim.Unity.Home
             {
                 Render();
                 if (KokoSim.Unity.Shell.NewTeamService.Pending) ContinueNewTeamFlow();
+                // 後始末の中で積まれたもの（地区予選リーグ通過のイベント・連鎖した大会の開幕）もここで出す。
+                // 出さないと、イベントはタブを移って戻るまで出ずセーブもできず、開幕バナーは最初のタブ
+                // クリックでホームへ弾き戻されてから出ていた（週送りの分岐と同じ順に揃える）。
+                else if (_state.BannerPending) ShowBanner();
+                else TryShowEvent();
             });
         }
 

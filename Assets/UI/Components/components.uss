@@ -1350,6 +1350,8 @@
     flex-grow: 1;
     flex-basis: 0;
     min-width: 0;
+    height: 100%;                    /* 行の高さいっぱいにして縦中央へ（issue #1193。無いと字形の高さだけの箱が下へずれて欠けていた） */
+    -unity-text-align: middle-left;
     font-size: var(--fs-label);
     color: var(--color-chalk);
     white-space: nowrap;
@@ -1501,6 +1503,7 @@
    （issue #658。見比べで監督が選定）。 */
 .mhud-cp--pos { background-color: var(--grass); }
 .mhud-cp--pos .mhud-cp__t, .mhud-cp--pos .mhud-cp__u { color: #FFFFFF; }
+.mhud-cp--side { border-width: 1px; border-color: var(--ink); border-radius: var(--radius-chip); }   /* 先攻/後攻（試合画面の列見出し・紙の地の上なので枠で起こす。issue #1193） */
 .mhud-cp--dim { background-color: var(--hud-chip-dim); margin-right: 0; }   /* 学年 */
 .mhud-cp--dim .mhud-cp__t, .mhud-cp--dim .mhud-cp__u { color: var(--hud-label); }
 

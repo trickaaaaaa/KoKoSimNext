@@ -229,13 +229,8 @@ namespace KokoSim.Unity.Match
         private bool _forcedSubPause;
         // 自動進行を開始したか（OnEnable の一度だけ。スクショ時＝CaptureMode は開始しない）。
         private bool _autoStarted;
-        // タイムライン駆動カメラワーク（design-06/12・Issue #119）の観戦設定トグル。既定オフ＝現行の固定全景。
-        // ×4速時は酔い防止のため強制的に全景固定へ戻す（スキップは委任でその場で試合が終わるため対象外）。
-        private Button _camWork;
-        private bool _cameraWorkWanted;
         // 対決ビュー（design-18 §7-1 A案）。既定の開始ビュー（issue #312）で、インプレー打球の間だけ
         // 俯瞰へ自動で切り替わる。実体は DuelStageRig（UBC素体のループ芝居・12fps量子化）。
-        private Button _duelBtn;
         private bool _duelOn;
         // ユーザーが手動で対決ビューをOFF（俯瞰固定）にしたか。true の間は自動切替（打球/次打席）を止める。
         // 再度手動でONにすると自動切替も復帰する（issue #312）。
@@ -251,8 +246,7 @@ namespace KokoSim.Unity.Match
         private VisualElement _miniDiaHost;
         private MiniDiamondElement _miniDia;
         private const int MaxDuelFieldLabels = 6;
-        // 場内放送（issue #919）の切り替え（表示グループの chip-btn）と、同じ打席で二度言わないための鍵。
-        private Button _announceBtn;
+        // 場内放送（issue #919）の切り替え（操作列のスイッチ・#1193）の解除と、同じ打席で二度言わないための鍵。
         private System.Action _unbindAnnounce;
         private string _announcedKey;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
@@ -382,6 +376,8 @@ namespace KokoSim.Unity.Match
         private bool _battedHoldActive;
         private float _battedHoldClock;
         private const float BattedHoldSafetyCapSeconds = 1.5f;
+        // 伝令の3Dの場面（issue #1174/#1175）の打ち切り。通常は15秒前後で終わる＝その倍で切る。
+        private const float TimeoutSceneSafetyCapSeconds = 30f;
         /// <summary>「打った瞬間」の本塁打で、対決ビューのまま打者を映して見送る秒数（issue #704。**絵で決める値**）。</summary>
         public static float NoDoubtWatchSeconds = 1.8f;
 
@@ -646,16 +642,11 @@ namespace KokoSim.Unity.Match
             WireFastMode("spd-fast");
             _fastModeBoard = _root.Q<VisualElement>("fastmode-board");
             if (_fastModeBoard != null) _fastModeBoard.style.display = DisplayStyle.None;
-            _camWork = _root.Q<Button>("cam-work");
-            if (_camWork != null) _camWork.clicked += OnToggleCameraWork;
-            ApplyCameraWorkState();
             _duelHost = _root.Q<VisualElement>("duel-host");
             _duelHost?.Clear();   // OnEnable ごとの積み上がり防止（field-host と同じ運用）
             _duelImg = null;
-            _duelBtn = _root.Q<Button>("duel-view");
-            if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
-            _announceBtn = _root.Q<Button>("announce");
-            _unbindAnnounce = KokoSim.Unity.Audio.MatchAnnouncer.BindToggle(_announceBtn);
+            _unbindAnnounce = KokoSim.Unity.Audio.MatchAnnouncer.BindSwitch(
+                _root.Q<VisualElement>("announce"), _root.Q<VisualElement>("announce-switch"));
             // ⚠ 対決ステージの生成（InitDuelViewDefault）はここではなく BuildGame の**後ろ**。
             //    生成時に配色をマテリアルへ焼くので、両校の配色が入る前に立てると前試合の色で焼ける。
 
@@ -778,8 +769,6 @@ namespace KokoSim.Unity.Match
             _root?.UnregisterCallback<PointerDownEvent>(OnRootPointerDown);
             _subPanel?.Close();
             if (_backHome != null) _backHome.clicked -= OnBackHome;
-            if (_camWork != null) _camWork.clicked -= OnToggleCameraWork;
-            if (_duelBtn != null) _duelBtn.clicked -= OnToggleDuelView;
             _unbindAnnounce?.Invoke();
             _unbindAnnounce = null;
             KokoSim.Unity.Audio.MatchAnnouncer.Stop();
@@ -870,7 +859,6 @@ namespace KokoSim.Unity.Match
             _capHist.Clear();
             _speedButtons.Clear();
             _speedHandlers.Clear();
-            _cameraWorkWanted = false;
             _duelOn = false;
             _duelManualOff = false;
             // 配色と「最後に対決ビューへ流した攻守」も試合をまたがない。残すと次の試合の対決ステージが
@@ -996,13 +984,18 @@ namespace KokoSim.Unity.Match
             _prog = new MatchProgression(away, home, ctx, seed);
         }
 
-        // 列見出し（左=自校 / 右=相手校）。監督が先攻(away)か後攻(home)かで名前を割り当てる。
+        // 列見出し（左=自校 / 右=相手校）。監督が先攻(away)か後攻(home)かで名前を割り当て、
+        // 校名の横のチップに先攻/後攻を書く（issue #1193）。
         private void SetColumnTitles()
         {
             var own = _managerIsAway ? _awayDisp : _homeDisp;
             var opp = _managerIsAway ? _homeDisp : _awayDisp;
             if (_leftTeam != null) _leftTeam.text = own;
             if (_rightTeam != null) _rightTeam.text = opp;
+            var ownSide = _root?.Q<Label>("left-side-text");
+            var oppSide = _root?.Q<Label>("right-side-text");
+            if (ownSide != null) ownSide.text = _managerIsAway ? "先攻" : "後攻";
+            if (oppSide != null) oppSide.text = _managerIsAway ? "後攻" : "先攻";
         }
 
         // 代打采配デモ用の控え（識別しやすい名前）。本番は登録メンバー（設計書06 §3.3b）から供給する。
@@ -1318,6 +1311,11 @@ namespace KokoSim.Unity.Match
             if (_subTelopOn) { EndSubTelop(); return; }
             // 守備伝令の場面（issue #1174）の盤面クリック＝場面を飛ばす（すぐ定位置へ戻して進行を再開）
             if (_timeoutSceneOn) { EndTimeoutScene(); return; }
+            // プレイボール／ホームランのテロップ中の盤面クリック＝テロップを明ける（中断は開かない）。
+            // タイム中はテロップの時計が止まるので、開くとテロップが残ったままになる（ゲームセットは
+            // 上の _gameOver で弾かれる）。
+            if (_gameTelopOn) { HideGameTelop(); return; }
+            if (_homeRunTelop?.IsPlaying ?? false) { _homeRunTelop.Hide(); return; }
             OpenPauseMenu();
         }
 
@@ -1329,6 +1327,7 @@ namespace KokoSim.Unity.Match
             {
                 if (v is Button) return true;
                 if (v.ClassListContains("tcards")) return true;   // 采配の手札。押した指示と中断が二重反応しない
+                if (v.ClassListContains("mlive-announce")) return true;   // 場内放送のスイッチ（Buttonでない＝issue #1193）
                 if (v.ClassListContains("modal-scrim")) return true;
                 if (v.ClassListContains("inning-break")) return true;   // クリック＝スキップ。中断は開かない
                 if (v.ClassListContains("sub-telop")) return true;      // 交代テロップも同じ（issue #920）
@@ -1581,7 +1580,9 @@ namespace KokoSim.Unity.Match
             DrainSubstitutionEvents();
             // 再生・投球・采配窓の途中で止めていたなら Update が続きを流す。どこにも居ない（打席の
             // 切れ目で止めていた）場合だけ、次の采配窓を取りに行く。
-            if (_stage == LiveStage.Idle) AdvanceToNextWindow();
+            // 高速試合モード中は TickFastMode が自分で続きを進める＝ここで1球進行の入口を起こさない
+            //（起こすと高速中に1球ぶん通常の進行が走り、強制交代が出ると高速側では解けない _paused が残る）。
+            if (_stage == LiveStage.Idle && !_fastMode) AdvanceToNextWindow();
         }
 
         // 選手交代（設計書09 §6）。issue #289 で伝令の消費とは切り離した＝中断中ならいつでも開ける。
@@ -2283,6 +2284,8 @@ namespace KokoSim.Unity.Match
         // テロップのクリック＝その場で明ける。StopPropagation で中断ポップアップと二重反応させない。
         private void OnSubTelopDown(PointerDownEvent evt)
         {
+            // 伝令の場面もこの器（sub-telop）を借りて出す＝帯を押したら場面を飛ばす（盤面クリックと同じ）。
+            if (_timeoutSceneOn) { EndTimeoutScene(); evt.StopPropagation(); return; }
             if (!_subTelopOn) return;
             EndSubTelop();
             evt.StopPropagation();
@@ -3244,8 +3247,8 @@ namespace KokoSim.Unity.Match
             // 高速試合モード中は演出系（対決ビュー/2D俯瞰/HUD各種）を一切更新しない別ループへ分岐する。
             if (_fastMode) { TickFastMode(); return; }
 
-            // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
-            _view.CameraWorkEnabled = _cameraWorkWanted && _speed < 4f;
+            // 2D俯瞰のカメラワーク（Issue #119）は使わない＝固定全景。切り替えボタンは issue #1193 で撤去した。
+            _view.CameraWorkEnabled = false;
             // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
             _view.PlaybackSpeed = _speed;
             _view.CallsSuppressed = _gameTelopOn;   // プレイボール/ゲームセット中は判定テロップを出さない（issue #1179）
@@ -3272,6 +3275,12 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
+            // ホームラン（issue #1179 §3）。再生速度では縮めない＝実時間(deltaTime)のまま進める。
+            // 中断・イニング間・伝令の場面・交代テロップの待ちより**前**で回す＝それらの最中も実時間で消える
+            //（後ろで回すと、強制交代のパネル等の上に全画面の暗幕ごと凍って残っていた）。
+            // 高速試合モード中はこのUpdate()自体に入らない（TickFastModeへ分岐・切替時に畳む）。
+            _homeRunTelop?.Tick(Time.deltaTime);
+
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
 
@@ -3290,8 +3299,11 @@ namespace KokoSim.Unity.Match
             if (_timeoutSceneOn)
             {
                 _timeoutSceneClock += Time.deltaTime * _speed;
+                // 3Dの場面はリグの「散り終えた」で終わるが、役者が欠ける等で終わりが来ない場合に備えて
+                // 上限を置く（集まる＋話す4秒＋散る2.6秒で通常は15秒前後）。上限が無いと自動進行が止まる。
                 bool done = _timeoutSceneRig
-                    ? (_duelRig == null || !_duelRig.TimeoutSceneActive || _duelRig.TimeoutSceneDone)
+                    ? (_duelRig == null || !_duelRig.TimeoutSceneActive || _duelRig.TimeoutSceneDone
+                       || _timeoutSceneClock >= TimeoutSceneSafetyCapSeconds)
                     : _timeoutSceneClock >= subTelopHoldSeconds;
                 if (done) EndTimeoutScene();
                 return;
@@ -3320,9 +3332,6 @@ namespace KokoSim.Unity.Match
                     _pitchCall?.AddToClassList("is-enter");
                 if (_pitchCallClock >= pitchCallHoldSeconds) HidePitchCall();
             }
-            // ホームラン（issue #1179 §3）。再生速度では縮めない＝実時間(deltaTime)のまま進める。
-            // 高速試合モード中はこのUpdate()自体に入らない（TickFastModeへ分岐）ので自然に止まる。
-            _homeRunTelop?.Tick(Time.deltaTime);
             if (_runnerGoClock >= 0f)
             {
                 _runnerGoClock -= Time.deltaTime * _speed;
@@ -4231,6 +4240,9 @@ namespace KokoSim.Unity.Match
             _speedButtons.Add(b);
             System.Action handler = () =>
             {
+                // 終局後は高速へ入れない。入るとゲームセットのテロップを畳んだうえ TickFastMode が _gameOver で
+                // 止まり、結果画面への受け渡し（FinishGameEndHandOff）を起こすものが無くなって詰む。
+                if (_gameOver) return;
                 SetFastMode(true);
                 foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
             };
@@ -4324,18 +4336,6 @@ namespace KokoSim.Unity.Match
             RefreshPanel();
         }
 
-        // カメラ演出トグル（Issue #119）。押すたびオン/オフ、既定オフ。
-        private void OnToggleCameraWork()
-        {
-            _cameraWorkWanted = !_cameraWorkWanted;
-            ApplyCameraWorkState();
-        }
-
-        private void ApplyCameraWorkState()
-        {
-            _camWork?.EnableInClassList("chip-btn--on", _cameraWorkWanted);
-        }
-
         // 試合開始の既定ビュー（issue #312）: 対決ビューから始める。DuelStageRig が使えない環境
         // （3Dアセット未導入・生成失敗）では従来どおり俯瞰にフォールバックする。
         /// <summary>
@@ -4403,6 +4403,7 @@ namespace KokoSim.Unity.Match
 
         // 対決ビューの手動トグル。アセット未導入環境では何もしない（警告ログのみ）。手動でOFFにした試合中は
         // 打球/次打席の自動切替も止め、再度手動でONにすると自動切替が復帰する（issue #312）。
+        // 画面のボタン（2D俯瞰（デバッグ））は issue #1193 で撤去＝今は撮影ハーネス（ToggleDuelViewForCapture）だけが叩く。
         private void OnToggleDuelView()
         {
             if (!_duelOn)
@@ -4724,8 +4725,6 @@ namespace KokoSim.Unity.Match
         {
             if (_fieldHost != null) _fieldHost.style.display = _duelOn ? DisplayStyle.None : DisplayStyle.Flex;
             if (_duelHost != null) _duelHost.style.display = _duelOn ? DisplayStyle.Flex : DisplayStyle.None;
-            // トグルの意味は「2D俯瞰（デバッグ）を出すか」＝3Dが既定なので点灯は反転（F9）。
-            _duelBtn?.EnableInClassList("chip-btn--on", !_duelOn);
             // 俯瞰へ渡すときは飛翔中の球を畳む（issue #332）。畳まないと、対決ビューを閉じた後も
             // 次に開いた瞬間に古い球が本塁前に残って見える（#330 の「投球が二重に見える」と同種の事故）
             if (!_duelOn) _duelRig?.HideBall();
