@@ -145,6 +145,10 @@ namespace KokoSim.Unity.Shell
             foreach (var c in _candidates) if (c.SchoolId == schoolId.Value) { target = c; break; }
             if (target == null) return false;
 
+            // 転任は NationService.TransferManager で NationRosters を直接書き換える＝裏の全シム
+            // （同じロスターを読む全国裏試合・予選成績の打ち直し等）の完了を先に待つ（issue #1226）。
+            BackgroundSims.EnsureAllCompleted();
+
             // 歴任校の記録（issue #980）。転任先へ切り替える前に、旧校ぶんの在任区間・校名・戦績を確定して
             // 台帳へ積み、次の赴任の就任年度（退任年度+1）も同時に確定する（通算戦績バケットは転任をまたいでも
             // 単一＝校ID固定・issue #641 の方式なので、ここで基準値からの差分として切り出す）。

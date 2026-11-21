@@ -539,16 +539,18 @@ namespace KokoSim.Unity.Shell
             _prefetchTask = BackgroundWork.Run(() =>
             {
                 try { runner.PrefetchCurrentRoundBackgroundCards(PrefetchParallelism); }
-                catch { /* 個々の県カードの失敗は握り潰す（本解決がフォールバックで解く） */ }
+                catch (Exception e) { UnityEngine.Debug.LogException(e); }   // 本解決がフォールバックで解くので進行は止めない（issue #1226・ログだけ出す）
             });
         }
 
-        /// <summary>プレフェッチ完了を待つ（本解決の直前に呼び、背景と前景の同時アクセスを避ける）。通常は既に完了済み＝即返る。</summary>
-        private void JoinPrefetch()
+        /// <summary>プレフェッチ完了を待つ（本解決の直前・static状態を書き換える節目の前に呼び、背景と前景の
+        /// 同時アクセスを避ける。issue #1226 で <see cref="BackgroundSims"/> からも呼べるよう公開）。
+        /// 通常は既に完了済み＝即返る。</summary>
+        public void JoinPrefetch()
         {
             var t = _prefetchTask;
             if (t == null) return;
-            try { t.Wait(); } catch { /* 上の catch と同様に無視 */ }
+            try { t.Wait(); } catch (Exception e) { UnityEngine.Debug.LogException(e); }   // 上の catch と同様にログだけ出す
             _prefetchTask = null;
         }
 
@@ -1303,7 +1305,9 @@ namespace KokoSim.Unity.Shell
             LastLineup = null;   // 新規ゲームは白紙。ロードは Restore がこの後で書き戻す
             AwaitingMatchStart = false;
             PracticeOpponent = null;
-            _prefetchTask = null;
+            // タスクを握ったまま参照だけ切ると、旧進行のプレフェッチが新しい NationRosters を背景で
+            // 読み続ける（issue #1226）。Join で完了を待ってから外す（未開始/既完了なら即返る）。
+            JoinPrefetch();
             // 新規ゲーム/ロードは Records を丸ごと差し替える＝背景消化中だった旧大会の FoldTournament は
             // 適用先を失うので参照だけ切る（issue #529。CompleteBracketFold は null チェックで安全に無視する）。
             _bracketFoldRunner = null;

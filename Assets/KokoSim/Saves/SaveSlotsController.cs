@@ -358,6 +358,8 @@ namespace KokoSim.Unity.Saves
         {
             // ファイル読込＋復元は同期処理（メインスレッドを止める）。ManualWait で「ロード中」を
             // 1フレーム先に描画してからブロックへ入り、何も表示されず固まって見えるのを防ぐ（要望対応）。
+            // SaveGameIO.Load は復元の前に旧進行の裏シムの完了を自分で待つ（issue #1226）＝
+            // ここ（_inGame でもロードできる経路）から呼んでも別セーブの結果は混ざらない。
             string error = null;
             ManualWait.Run(_root, "ロード中", () => SaveSlots.Load(_selected, out error), ok =>
             {
@@ -367,6 +369,8 @@ namespace KokoSim.Unity.Saves
                     RenderDetail();
                     return;
                 }
+                // 前の進行の通知フィードを残さない（issue #1226。「タイトルへ戻る」の OnTitleConfirm と同じ作法）。
+                KokoSim.Unity.Home.HomeState.Reset();
                 // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
                 ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
             });
@@ -425,14 +429,12 @@ namespace KokoSim.Unity.Saves
         private void OnTitleConfirm()
         {
             if (_titleConfirm != null) _titleConfirm.style.display = DisplayStyle.None;
-            // 背景の全国裏試合／敗退後の残りブラケット消化を完了させてから静的リセットする。GameClock.Advance の
-            // 年度替わり・新チーム発足と同じ作法（issue #529）＝背景スレッドと同じ NationRosters を同時に触らない。
+            // 裏の全シムを完了させてから静的リセットする。GameClock.Advance の年度替わり・新チーム発足と
+            // 同じ作法（issue #529・#1226）＝背景スレッドと同じ NationRosters を同時に触らない。
             // この待ちは main をブロックし得るので ManualWait で「タイトルへ戻る準備中」を1フレーム先に描画してから入る。
             ManualWait.Run<object>(_root, "タイトルへ戻る準備中", () =>
             {
-                NationBackgroundSim.EnsureCompleted();
-                BracketFinishSim.EnsureCompleted();
-                KoshienQualifierStatsSim.EnsureCompleted();
+                BackgroundSims.EnsureAllCompleted();
                 return null;
             }, _ =>
             {

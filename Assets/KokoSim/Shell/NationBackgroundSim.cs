@@ -241,7 +241,7 @@ namespace KokoSim.Unity.Shell
             if (t == null) return;
             _throttle = (int)SimThrottle.Boost;   // Paused で止まっていても最後まで消化させる。
             try { t.Wait(); }
-            catch (AggregateException) { /* 個々の県の失敗は握り潰す（大会全体は継続。詳細はログ層で） */ }
+            catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の県の失敗は握り潰す（大会全体は継続）が、ログは出す（issue #1226）
             _task = null;
             _total = 0;
             Volatile.Write(ref _done, 0);
