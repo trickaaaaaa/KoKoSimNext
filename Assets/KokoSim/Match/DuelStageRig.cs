@@ -4586,10 +4586,24 @@ namespace KokoSim.Unity.Match
             return go;
         }
 
+        private static bool _warnedMissingLambert;
+
         private Material FlatMaterial(Color color)
         {
-            // シーンライト非依存の自前Lambert（Assets/DuelSpike/DuelStageProxyLambert.shader）
-            var mat = new Material(Shader.Find("KokoSim/DuelStageProxyLambert")) { hideFlags = HideFlags.HideAndDontSave };
+            // シーンライト非依存の自前Lambert（Assets/DuelSpike/DuelStageProxyLambert.shader）。
+            // 名前で探すシェーダは Always Included Shaders に入れてある（issue #1311。入れないと製品ビルドで剥がされ、
+            // Web お試しビルドで実際に ArgumentNullException になった）。それでも無ければ URP の Unlit で描く。
+            var shader = Shader.Find("KokoSim/DuelStageProxyLambert");
+            if (shader == null)
+            {
+                if (!_warnedMissingLambert)
+                {
+                    Debug.LogError("[DuelStageRig] KokoSim/DuelStageProxyLambert が見つからない（Always Included Shaders を確認）。URP Unlit で代用する。");
+                    _warnedMissingLambert = true;
+                }
+                shader = Shader.Find("Universal Render Pipeline/Unlit");
+            }
+            var mat = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
             mat.SetColor("_BaseColor", color);
             _materials.Add(mat);
             return mat;
