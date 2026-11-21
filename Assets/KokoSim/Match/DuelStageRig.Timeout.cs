@@ -111,11 +111,12 @@ namespace KokoSim.Unity.Match
         private bool _toPitcherRootMotion, _toCatcherRootMotion;
         private bool _toMaskWasOn;
 
-        /// <summary>伝令の場面を流しているか。</summary>
-        public bool TimeoutSceneActive => _toActive;
+        /// <summary>伝令の場面（守備＝#1174・攻撃＝#1175 のどちらか）を流しているか。</summary>
+        public bool TimeoutSceneActive => _toActive || _otActive;
 
         /// <summary>場面が終わった（散り終えた）か。呼び出し側はこれを見て <see cref="EndTimeoutScene"/> を呼ぶ。</summary>
-        public bool TimeoutSceneDone => _toActive && _toLeaveStartT >= 0f && _toT - _toLeaveStartT >= TimeoutLeaveSeconds;
+        public bool TimeoutSceneDone => (_toActive && _toLeaveStartT >= 0f && _toT - _toLeaveStartT >= TimeoutLeaveSeconds)
+            || OffenseTimeoutSceneDone;
 
         /// <summary>
         /// 伝令の場面を始める。対決ビューの投球・打球の途中では呼ばない（呼び出し側が球の合間に限る）。
@@ -124,7 +125,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public bool BeginTimeoutScene(bool benchFirstBaseSide)
         {
-            if (!Available || _toActive || FieldPlayActive || _pitcher == null || _catcher == null) return false;
+            if (!Available || _toActive || _otActive || FieldPlayActive || _pitcher == null || _catcher == null) return false;
             EnsureFieldCast();
             if (_fieldCast.Count == 0) return false;
             var run = LoadClip(TimeoutRunClipName);
@@ -282,13 +283,16 @@ namespace KokoSim.Unity.Match
             AdvanceRattledFx(deltaTime);   // 伝令で動揺が解けた渦巻きは場面の中で消えていく（issue #1178）
             _acc += deltaTime;
             float step = 1f / PoseFps;
+            bool posed = false;
             while (_acc >= step)
             {
                 _acc -= step;
                 foreach (var a in _actors) StepActor(a, step);
                 _poseGen++;
+                posed = true;
             }
             StepTimeoutScene(deltaTime);
+            StepOffenseTimeoutScene(deltaTime, posed);   // 攻撃伝令の場面（issue #1175）
         }
 
         /// <summary>
@@ -490,6 +494,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void EndTimeoutScene()
         {
+            EndOffenseTimeoutScene();   // 攻撃伝令の場面（issue #1175）も同じ口で畳む
             if (!_toActive) return;
             _toActive = false;
             _toMembers.Clear();

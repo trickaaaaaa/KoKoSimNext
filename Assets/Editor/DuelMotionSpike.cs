@@ -1503,6 +1503,82 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
+        /// 攻撃伝令の場面（issue #1175）で打者・伝令に使う収録の向きと、収録の頭→終わりで腰がどれだけ動くか
+        /// （ルートモーション込み・素の向き yaw=0 で置いたとき）を測る。歩きの進行方向と速さを決める根拠。
+        /// 出力: 向き（入り/終わり。-Z からの角度）・腰の移動 dx/dz[m]・長さ[s]。
+        /// </summary>
+        public static string RunBatterTimeoutProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var clips = new[]
+                {
+                    "Batter_Mixamo_Strike_01",
+                    "AA_Baseball_Batter_Idle_Loop",
+                    "AA_Baseball_Batter_Movement_Walk_B_Loop",
+                    "AA_Baseball_Batter_Movement_Walk_F_Loop",
+                    "AA_Baseball_Batter_Walk_In_Type01",
+                    "AA_Baseball_Batter_Walk_In_Loop",
+                    "AA_Baseball_Defender_Standing_Idle_Loop_Type01",
+                    "AA_Baseball_Offense_Base_Running_To_Walking",
+                };
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tyaw0\tyaw1\tdx\tdz\tlen");
+                foreach (var name in clips)
+                {
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(name + "\t(クリップが無い)"); continue; }
+                    var body = SpawnBody(root, "probe-" + name, Vector3.zero, 0f, Color.white);
+                    var anim = body.GetComponentInChildren<Animator>();
+                    float Yaw()
+                    {
+                        var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                        var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                        var f = Vector3.Cross(ra - la, Vector3.up);
+                        f.y = 0f;
+                        return Vector3.SignedAngle(new Vector3(0f, 0f, 1f), f.normalized, Vector3.up);
+                    }
+                    Sample(body, clip, 0.02f);
+                    float y0 = Yaw();
+                    var h0 = anim.GetBoneTransform(HumanBodyBones.Hips).position;
+                    Sample(body, clip, 0.98f);
+                    float y1 = Yaw();
+                    var h1 = anim.GetBoneTransform(HumanBodyBones.Hips).position;
+                    // 手の離れ具合（両手でバットを持つ収録か）。頭・中・終わりで測る
+                    var hands = new StringBuilder();
+                    foreach (var u in new[] { 0.05f, 0.5f, 0.95f })
+                    {
+                        Sample(body, clip, u);
+                        var lh = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                        var rh = anim.GetBoneTransform(HumanBodyBones.RightHand).position;
+                        hands.AppendFormat(CultureInfo.InvariantCulture, " {0:F2}(L{1:F2}/R{2:F2})",
+                            Vector3.Distance(lh, rh), lh.y, rh.y);
+                    }
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F1}\t{2:F1}\t{3:F2}\t{4:F2}\t{5:F2}\thands{6}",
+                        name, y0, y1, h1.x - h0.x, h1.z - h0.z, clip.length, hands));
+                    Object.DestroyImmediate(body);
+                }
+                Debug.Log("[DuelMotionSpike] batter timeout probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
         /// 走行・移動クリップの**前進量**実測（打球処理の3D化 F4）。速度合わせの単一ソース。
         ///
         /// engine の <c>FielderAt</c> は位置しか返さないので、Unity 側は

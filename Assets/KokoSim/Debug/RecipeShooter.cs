@@ -187,7 +187,7 @@ namespace KokoSim.Unity.Debugging
                             if (_r.TimeoutViaMenu)
                             {
                                 // 画面の操作と同じ流れで送る（issue #1174）。球の途中なら送れないので次のコマで試す
-                                timeoutSent = ctrl.SendDefenseTimeoutViaMenuForCapture(_r.TimeoutMessengerIndex);
+                                timeoutSent = ctrl.SendTimeoutViaMenuForCapture(_r.TimeoutMessengerIndex);
                                 if (timeoutSent) sceneSeen = false;
                             }
                             else
@@ -203,9 +203,12 @@ namespace KokoSim.Unity.Debugging
                             else if (sceneSeen && !restoreLogged && ctrl.DuelRigForCapture != null)
                             {
                                 restoreLogged = true;
-                                var err = ctrl.DuelRigForCapture.TimeoutRestoreErrorForCapture();
+                                var rig = ctrl.DuelRigForCapture;
+                                var err = rig.TimeoutRestoreErrorForCapture();
+                                var oerr = rig.OffenseTimeoutRestoreErrorForCapture();   // 攻撃伝令（issue #1175）は打者
                                 File.WriteAllText(Path.Combine(_dir, "timeout-restore.txt"), string.Format(CultureInfo.InvariantCulture,
-                                    "frame\t{0}\nposM\t{1:F5}\nyawDeg\t{2:F4}\n", f, err.PosM, err.YawDeg));
+                                    "frame\t{0}\nposM\t{1:F5}\nyawDeg\t{2:F4}\nbatterPosM\t{3:F5}\nbatterYawDeg\t{4:F4}\nmouthEarM\t{5:F3}\nbatterLeft\t{6}\n",
+                                    f, err.PosM, err.YawDeg, oerr.PosM, oerr.YawDeg, rig.OffenseTimeoutMouthEarForCapture, rig.BatterLeftForCapture));
                             }
                         }
                         WriteProbes(f / (double)_r.VideoFps, ctrl.DuelRigForCapture);

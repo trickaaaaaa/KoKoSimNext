@@ -4262,6 +4262,20 @@ namespace KokoSim.Unity.Match
             yield return ArriveSlideOut.Clip;
             yield return ArriveDiveBack.Clip;   // 牽制の帰塁（issue #524）
             yield return OverrunClipName; // 一塁駆け抜け（issue #443）
+
+            // 伝令の場面（守備＝issue #1174・攻撃＝issue #1175）
+            yield return TimeoutRunClipName;
+            yield return TimeoutWalkClipName;
+            yield return TimeoutPitcherIdleClipName;
+            yield return TimeoutNod1ClipName;
+            yield return TimeoutNod2ClipName;
+            yield return TimeoutUmpireClipName;
+            yield return TimeoutCrouchToStandClipName;
+            yield return OtBatterBackClipName;
+            yield return OtBatterWalkClipName;
+            yield return OtBatterIdleClipName;
+            yield return OtMessengerIdleClipName;
+            yield return OtBatterStandClipName;
         }
 
         /// <summary>その役の本来の待機クリップ（走行中は <c>IdleClip</c> が差し替わっているため別に持つ）。</summary>
