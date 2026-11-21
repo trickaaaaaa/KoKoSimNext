@@ -11,10 +11,12 @@ namespace KokoSim.Engine.Nation;
 /// </summary>
 public sealed record SummerRegion(int PrefectureId, string Name, int? Split)
 {
-    /// <summary>学校がこの区画に属するか。Split未設定の区画は県内全校、設定時は Id 偶奇で2分割
-    /// （GroupSplit.cs の地理未設定フォールバックと同じ規約。地理的な意味は持たない機械的な等分）。</summary>
+    /// <summary>学校がこの区画に属するか。Split未設定の区画は県内全校。分割県は、北海道で支部（DistrictId）を
+    /// 持つ学校なら支部から導いた南北（自校の <see cref="SummerRegions.RegionFor"/> と同じ規則・issue #1217）、
+    /// それ以外は Id 偶奇で2分割（GroupSplit.cs の地理未設定フォールバックと同じ規約。地理的な意味は持たない機械的な等分）。</summary>
     public bool Contains(School school)
-        => school.PrefectureId == PrefectureId && (Split is not { } s || school.Id % 2 == s);
+        => school.PrefectureId == PrefectureId
+           && (Split is not { } s || SummerRegions.SplitOf(school) == s);
 }
 
 /// <summary>49の夏の地方大会区画を組み立てる（設計書05 §1.1）。</summary>
@@ -111,6 +113,15 @@ public static class SummerRegions
             ? HokkaidoSplitFor(districtId)
             : ((districtId ?? 0) % 2 + 2) % 2;
         return matches.First(r => r.Split == split);
+    }
+
+    /// <summary>分割県の学校の Split（0/1）。北海道で支部が範囲内なら支部から、それ以外は Id 偶奇
+    /// （自校の負Idは偶奇のどちらにも一致しない＝-1を返す）。</summary>
+    internal static int SplitOf(School school)
+    {
+        if (school.PrefectureId == HokkaidoId && school.DistrictId is { } d && d >= 0 && d < HokkaidoBranches.Length)
+            return HokkaidoBranches[d].Split;
+        return school.Id % 2 is var m && (m == 0 || m == 1) ? m : -1;
     }
 
     /// <summary>北海道の DistrictId（支部番号）→夏の区画（Split）。範囲外・未設定は0（北北海道）。</summary>

@@ -156,6 +156,57 @@ public sealed class SummerRegionsTests
         Assert.Equal(expectedName, region.Name);
     }
 
+    /// <summary>
+    /// 支部（DistrictId）を持つ北海道の AI校は、校Id の偶奇でなく支部から南北が決まる
+    /// （自校の <see cref="SummerRegions.RegionFor"/> と同じ規則＝札幌支部の AI校が北北海道に出ない・issue #1217）。
+    /// </summary>
+    [Fact]
+    public void Contains_HokkaidoSchoolWithDistrict_FollowsBranchNotIdParity()
+    {
+        var prefs = MakeNation().Prefectures;
+        var regions = SummerRegions.Build(prefs);
+        var north = regions.First(r => r.PrefectureId == 0 && r.Split == 0);
+        var south = regions.First(r => r.PrefectureId == 0 && r.Split == 1);
+
+        // Id 偶奇なら北だが、札幌支部(0)＝南。
+        var sapporoEven = new School { Id = 100, Name = "札幌偶", PrefectureId = 0, DistrictId = 0, Strength = 50 };
+        Assert.False(north.Contains(sapporoEven));
+        Assert.True(south.Contains(sapporoEven));
+        Assert.Equal("南北海道", SummerRegions.NameOf(prefs, sapporoEven));
+
+        // Id 奇数なら南だが、旭川支部(1)＝北。
+        var asahikawaOdd = new School { Id = 101, Name = "旭川奇", PrefectureId = 0, DistrictId = 1, Strength = 50 };
+        Assert.True(north.Contains(asahikawaOdd));
+        Assert.False(south.Contains(asahikawaOdd));
+        Assert.Equal("北北海道", SummerRegions.NameOf(prefs, asahikawaOdd));
+    }
+
+    /// <summary>北海道の全支部で、AI校の所属区画が RegionFor（自校の規則）と一致する。</summary>
+    [Fact]
+    public void Contains_HokkaidoAllBranches_AgreesWithRegionFor()
+    {
+        var prefs = MakeNation().Prefectures;
+        var regions = SummerRegions.Build(prefs);
+        for (var d = 0; d < SummerRegions.HokkaidoBranchNames.Count; d++)
+        foreach (var id in new[] { 200, 201 })
+        {
+            var school = new School { Id = id, Name = "x", PrefectureId = 0, DistrictId = d, Strength = 50 };
+            var expected = SummerRegions.RegionFor(prefs, 0, d);
+            Assert.Equal(expected, regions.Single(r => r.Contains(school)));
+        }
+    }
+
+    /// <summary>支部が付いていない（地区データ無しの組み立て）北海道の AI校は従来どおり Id 偶奇で割る。</summary>
+    [Fact]
+    public void Contains_HokkaidoSchoolWithoutDistrict_FallsBackToIdParity()
+    {
+        var prefs = MakeNation().Prefectures;
+        var regions = SummerRegions.Build(prefs);
+        var even = new School { Id = 100, Name = "a", PrefectureId = 0, Strength = 50 };
+        Assert.Equal("北北海道", SummerRegions.NameOf(prefs, even));
+        Assert.Contains(even, new[] { even }.Where(regions.First(r => r.PrefectureId == 0 && r.Split == 0).Contains));
+    }
+
     /// <summary>東京は秋季側に地区データを持たないので、従来どおり DistrictId の偶奇で決める。</summary>
     [Theory]
     [InlineData(0, 0, "東東京")]
