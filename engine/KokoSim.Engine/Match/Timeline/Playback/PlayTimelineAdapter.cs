@@ -117,7 +117,8 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
     public BallSegmentKind Kind => _kind;
 
     private readonly BallSegmentKind _kind;
-    private readonly double _fx, _fy, _tx, _ty, _apex, _launch;
+    private double _fx, _fy;
+    private readonly double _tx, _ty, _apex, _launch;
 
     private EndpointBallSegment(
         BallSegmentKind kind, double t0, double t1, TimelinePoint from, TimelinePoint to, double apex, double launch)
@@ -129,6 +130,9 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
         _apex = apex;
         _launch = Math.Max(0.0, launch);
     }
+
+    /// <summary>始点だけを差し替えた写し（時刻・終点・弾み列はそのまま）。お手玉で球が止まった点から送球を始めるのに使う。</summary>
+    public EndpointBallSegment WithStart(TimelinePoint from) => this with { _fx = from.X, _fy = from.Z };
 
     // 滞空が必ず通る点（issue #743・本塁打の柵上）。null なら対称な放物線。
     private double? _passU;
