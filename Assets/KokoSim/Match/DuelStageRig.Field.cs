@@ -597,7 +597,7 @@ namespace KokoSim.Unity.Match
                 if (a.RootDrivenY)
                 {
                     a.RootDrivenY = false;
-                    if (a.Animator != null) a.Animator.applyRootMotion = false;
+                    SetRootMotion(a, false);
                 }
             }
 
@@ -2172,7 +2172,7 @@ namespace KokoSim.Unity.Match
                     // ⚠ **頭出しの前に切って、置き直してから入れる**。SeekActor はルートモーションを
                     //    積みながら 0→頭出し位置まで進めるので、入れたまま頭出しすると
                     //    「まだ沈んでいないはずの量」だけ根が下がった状態から始まる
-                    if (a.Animator != null) a.Animator.applyRootMotion = false;
+                    SetRootMotion(a, false);
                     a.RootDrivenY = false;
                     // 走りながら掬う外野ゴロ（issue #1079）: 捕った形で止めず収録を最後まで流す＝TypeF は捕った後も
                     // 前へ踏み出し続けるので、engine が勢いのまま運ぶ間（RunOut）に足が動く。最後のコマで送球まで待つ
@@ -2231,7 +2231,7 @@ namespace KokoSim.Unity.Match
                         if (anchor.RootDrivenY && a.Animator != null)
                         {
                             a.RootDrivenY = true;
-                            a.Animator.applyRootMotion = true;
+                            SetRootMotion(a, true);
                         }
                     }
                 }
@@ -5291,6 +5291,7 @@ namespace KokoSim.Unity.Match
         {
             public AnimationClip Clip, IdleClip;
             public float Time, Speed, EndAt, DefaultEndAt, IdleEndAt, GroundY;
+            public float HoldSeconds, HoldRemaining;   // 捕手の捕球の据え置き（伝令の場面を挟んでも切らさない）
             public bool HoldAtEnd, Holding, Valid;
             /// <summary>
             /// **立ち位置の基準**（<c>Actor.BasePos/BaseRot</c>）であって、控えた瞬間の transform ではない。
@@ -5358,6 +5359,8 @@ namespace KokoSim.Unity.Match
         {
             if (!Available || play == null) return;
             if (_woArmed || _woActive) EndWalkoffScene();   // 前の試合のサヨナラの場面を持ち越さない（issue #1176）
+            // 再入: 前のプレーを先に畳む。畳まないと PlaceFielder に汚された投手・捕手の基準を Snapshot してしまう
+            if (_fieldPlay != null) EndFieldPlay();
             play = StripPostResolutionReturnMoves(play);
             _bobble = HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
             if (_bobble.Kind == HandleBobbleKind.Fumble)
@@ -5565,6 +5568,7 @@ namespace KokoSim.Unity.Match
                 Clip = a.Clip, IdleClip = a.IdleClip, Time = a.Time, Speed = a.Speed,
                 EndAt = a.EndAt, DefaultEndAt = a.DefaultEndAt, IdleEndAt = a.IdleEndAt,
                 GroundY = a.GroundY, HoldAtEnd = a.HoldAtEnd, Holding = a.Holding,
+                HoldSeconds = a.HoldSeconds, HoldRemaining = a.HoldRemaining,
                 // ⚠ transform ではなく基準を控える（上の項。フォロースルーの途中の姿勢を
                 // 「立ち位置」として焼くと投手の向きが恒久的に狂う）
                 BasePos = a.BasePos, BaseRot = a.BaseRot,
@@ -5611,6 +5615,8 @@ namespace KokoSim.Unity.Match
             a.Speed = s.Speed;          // ⚠ SetActorClip の後（差し替えで戻らない）
             a.HoldAtEnd = s.HoldAtEnd;
             a.Holding = s.Holding;
+            a.HoldSeconds = s.HoldSeconds;      // ⚠ SetActorClip は据え置きを打ち消す＝その後に戻す
+            a.HoldRemaining = s.HoldRemaining;
             GroundFix(a);
         }
 

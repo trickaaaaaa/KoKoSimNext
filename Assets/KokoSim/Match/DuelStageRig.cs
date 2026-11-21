@@ -1090,6 +1090,8 @@ namespace KokoSim.Unity.Match
             public AnimationClip FadeFromClip;       // 退場側の素のクリップ参照（SyncBatterYawが家系判定に使う）
             public float FadeRemaining;
             public float FadeDuration;
+            public bool RootMotionBeforeFade;        // フェード開始前の applyRootMotion（CancelFade で元の値へ戻す）
+            public bool FadeRootMotionSaved;         // ↑を控えている間だけ true（二重フェードで false を控え直さない）
             public Vector3 BasePos;
             public Quaternion BaseRot;
             public float GroundY;
@@ -3424,6 +3426,10 @@ namespace KokoSim.Unity.Match
             if (!Available) return;
             _cutCountdown = -1f;
             _umpireCallCountdown = -1f;
+            _catchCountdown = -1f;        // 終局後に発火すると止めた姿勢が別のクリップへ変わる
+            _passedBallCountdown = -1f;
+            _swingCountdown = -1f;
+            _preLoadCountdown = -1f;
             foreach (var a in new[] { _pitcher, _catcher, _batter, _umpire })
             {
                 if (a == null || a.Go == null || !a.Graph.IsValid() || a.Clip == null) continue;
@@ -4433,7 +4439,9 @@ namespace KokoSim.Unity.Match
             _previewFrameH = 0f;
             _previewDist = 0f;
             _fovBaseDeg = _cal.FovDeg;
-            if (_camera != null) ApplyFov();
+            // 寄り枠の間は縦横比の上限が 8:1 へ緩んでいる（EnsureSize）。試合の 2.4:1 へ戻して引き直す
+            if (Available && _rtW > 0 && _rtH > 0) EnsureSize(_rtW, _rtH);
+            if (_camera != null && Target != null) ApplyFov();
         }
 
         /// <summary>プレビュー枠（縦に収めたい実寸[m]と注視距離[m]）。0＝試合の構図＝FovDeg をそのまま使う。</summary>
@@ -4866,7 +4874,7 @@ namespace KokoSim.Unity.Match
             a.Mixer.SetInputWeight(1, 0f);
             a.FadeDuration = seconds;
             a.FadeRemaining = seconds;
-            a.Animator.applyRootMotion = false;   // 混合ルート姿勢の差分が乗る（掟。CancelFadeで戻す）
+            SuspendRootMotionForFade(a);   // 混合ルート姿勢の差分が乗る（掟。CancelFadeで戻す）
         }
 
         private static void CrossfadeActorTo(Actor a, float clipTime, float seconds)
@@ -4887,7 +4895,30 @@ namespace KokoSim.Unity.Match
             a.Mixer.SetInputWeight(1, 0f);
             a.FadeDuration = seconds;
             a.FadeRemaining = seconds;
-            a.Animator.applyRootMotion = false;   // ↑の理由。CancelFade で戻す
+            SuspendRootMotionForFade(a);   // ↑の理由。CancelFade で戻す
+        }
+
+        /// <summary>場面側からルートモーションを切り替える。フェード中なら、畳むときに戻す値を差し替える（フェード終了で古い値へ戻さない）。</summary>
+        private static void SetRootMotion(Actor a, bool on)
+        {
+            if (a == null || a.Animator == null) return;
+            if (a.FadeRootMotionSaved) a.RootMotionBeforeFade = on;
+            else a.Animator.applyRootMotion = on;
+        }
+
+        /// <summary>フェード中でも「フェードが無ければ今こうなっているはず」のルートモーション設定を返す。</summary>
+        private static bool RootMotionOf(Actor a)
+            => a != null && a.Animator != null && (a.FadeRootMotionSaved ? a.RootMotionBeforeFade : a.Animator.applyRootMotion);
+
+        /// <summary>フェード中だけルートモーションを切る。元の値は控える（rootMotion:false の役者や場面側で切った役者を true に戻さない）。</summary>
+        private static void SuspendRootMotionForFade(Actor a)
+        {
+            if (!a.FadeRootMotionSaved)
+            {
+                a.RootMotionBeforeFade = a.Animator.applyRootMotion;
+                a.FadeRootMotionSaved = true;
+            }
+            a.Animator.applyRootMotion = false;
         }
 
         /// <summary>
@@ -4912,7 +4943,11 @@ namespace KokoSim.Unity.Match
             if (wasFading && a.Animator != null)
             {
                 EvaluateGraph(a, 0f);
-                a.Animator.applyRootMotion = true;
+            }
+            if (a.FadeRootMotionSaved)
+            {
+                if (a.Animator != null) a.Animator.applyRootMotion = a.RootMotionBeforeFade;
+                a.FadeRootMotionSaved = false;
             }
         }
 
@@ -7129,6 +7164,10 @@ namespace KokoSim.Unity.Match
             return LoadUniformMesh();
         }
 
+#if UNITY_EDITOR
+        private static readonly Dictionary<string, AnimationClip> EditorClipCache = new();
+#endif
+
         /// <summary>
         /// 供給元FBX（ClipFbxSources）を順に見てクリップを名前引きする。プローブ側も同じ入口を使う。
         /// FBXにはプレビュー複製（__preview__接頭辞）が同居するが、完全一致なので拾わない。
@@ -7138,12 +7177,14 @@ namespace KokoSim.Unity.Match
 #if UNITY_EDITOR
             if (!ForceCatalogOnly)
             {
+                // 場面の Tick が毎フレーム呼ぶ＝FBX 全体をなめ直さない（Unity の破棄済み参照は null 扱いで引き直す）
+                if (EditorClipCache.TryGetValue(clipName, out var cached) && cached != null) return cached;
                 foreach (var fbx in ClipFbxSources)
                 {
                     foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(fbx))
                     {
                         var c = a as AnimationClip;
-                        if (c != null && c.name == clipName) return c;
+                        if (c != null && c.name == clipName) { EditorClipCache[clipName] = c; return c; }
                     }
                 }
             }

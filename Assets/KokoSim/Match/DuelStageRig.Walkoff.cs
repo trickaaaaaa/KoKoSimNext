@@ -96,7 +96,7 @@ namespace KokoSim.Unity.Match
         private int _woCount;
         private bool _woBench1B;
         private DuelActorSnapshot _woPitcherSnap, _woCatcherSnap;
-        private bool _woBatterWasActive;
+        private bool _woBatterWasActive, _woBatWasActive;
 
         /// <summary>サヨナラの場面を流しているか（予約中は含まない）。</summary>
         public bool WalkoffSceneActive => _woActive;
@@ -149,6 +149,7 @@ namespace KokoSim.Unity.Match
             SetFieldCastVisible(true);
             _woBatterWasActive = _batter?.Go != null && _batter.Go.activeSelf;
             if (_batter?.Go != null) _batter.Go.SetActive(false);   // 打者はベンチ入りの1人として役者の溜めから出す
+            _woBatWasActive = _bat != null && _bat.activeSelf;
             if (_bat != null) _bat.SetActive(false);
 
             _woHomeRun = false;
@@ -292,7 +293,7 @@ namespace KokoSim.Unity.Match
                 a.HoldRemaining = 0f;
                 a.DefaultEndAt = 0f;
                 a.IdleEndAt = 0f;
-                if (a.Animator != null) a.Animator.applyRootMotion = false;
+                SetRootMotion(a, false);
                 SetActorClip(a, sprint, m.Phase * sprint.length, 0f);
                 a.IdleClip = sprint;
                 a.Speed = 0f;
@@ -406,7 +407,7 @@ namespace KokoSim.Unity.Match
                 a.DefaultEndAt = 0f;
                 a.IdleEndAt = 0f;
                 a.SpeedSwitchAt = -1f;
-                if (a.Animator != null) a.Animator.applyRootMotion = false;
+                SetRootMotion(a, false);
                 CrossfadeActorToClip(a, clip, phase * clip.length, 0f, 0.4f);
                 a.IdleClip = stand ?? clip;   // 落胆の収録が終わったら、その場で立ち尽くす
                 a.Speed = 1f;
@@ -418,6 +419,7 @@ namespace KokoSim.Unity.Match
         /// <summary>場面中の <see cref="Tick"/>。ポーズだけ進め、置き場所と向きは場面が決める（伝令の場面と同じ作り）。</summary>
         private void TickWalkoffScene(float deltaTime)
         {
+            AdvanceRattledFx(deltaTime);   // 再生の無いサヨナラ（押し出し等）で動揺の渦巻きが凍らない
             _acc += deltaTime;
             float step = 1f / PoseFps;
             while (_acc >= step)
@@ -434,9 +436,12 @@ namespace KokoSim.Unity.Match
         {
             var sprint = LoadClip(WoSprintClipName);
             var brake = LoadClip(TimeoutRunClipName);
-            if (_woAllCheerT < 0f && _woMembers.Count > 0
-                && _woMembers.FindAll(x => x.Leg == WoLeg.Cheer).Count >= Mathf.CeilToInt(_woMembers.Count * WoCrowdFormedShare))
-                _woAllCheerT = _woT;
+            if (_woAllCheerT < 0f && _woMembers.Count > 0)
+            {
+                int cheering = 0;
+                for (int i = 0; i < _woMembers.Count; i++) if (_woMembers[i].Leg == WoLeg.Cheer) cheering++;
+                if (cheering >= Mathf.CeilToInt(_woMembers.Count * WoCrowdFormedShare)) _woAllCheerT = _woT;
+            }
             foreach (var m in _woMembers)
             {
                 var a = m.A;
@@ -457,7 +462,7 @@ namespace KokoSim.Unity.Match
                         a.HoldAtEnd = false;
                         a.Holding = false;
                         a.HoldRemaining = 0f;
-                        if (a.Animator != null) a.Animator.applyRootMotion = false;
+                        SetRootMotion(a, false);
                         m.Leg = WoLeg.Wait;
                         m.Delay = 0f;
                         StartWoRun(m, sprint);
@@ -608,6 +613,7 @@ namespace KokoSim.Unity.Match
                 PlaceFieldCastAtDefault();
                 SetFieldCastVisible(_fieldCastVisible);
                 if (_batter?.Go != null) _batter.Go.SetActive(_woBatterWasActive);
+                if (_bat != null) _bat.SetActive(_woBatWasActive);
                 ClearPreviewFrame();
                 ApplyCalibration(_cal);
             }
