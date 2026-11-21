@@ -55,13 +55,13 @@ namespace KokoSim.Unity.Shell
         public static bool Run(Action work, Action onDone)
         {
             if (Interlocked.CompareExchange(ref _running, 1, 0) != 0) return false;
-            Task.Run(work).ContinueWith(t =>
+            BackgroundWork.Run(work).ContinueWith(t =>
                 MainThreadDispatcher.Enqueue(() =>
                 {
                     Volatile.Write(ref _running, 0);
                     if (t.Exception != null) UnityEngine.Debug.LogException(t.Exception.GetBaseException());
                     onDone?.Invoke();
-                }));
+                }), TaskContinuationOptions.ExecuteSynchronously);   // ブラウザ版は Run がその場で終わる＝継続もその場で（スレッドプールは回らない）
             return true;
         }
     }

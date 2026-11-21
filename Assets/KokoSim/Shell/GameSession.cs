@@ -529,14 +529,14 @@ namespace KokoSim.Unity.Shell
 
         // 先読みの同時カード数。1回戦は約100カード×約160ms（Mono Editor 実測 2026-11-10）＝逐次だと約16秒かかり、
         // 対戦カード画面ですぐ「試合開始」を押すと残りを丸ごと待たされていた。メインと描画に2コア残す。
-        private static readonly int PrefetchParallelism = Math.Max(1, Math.Min(6, Environment.ProcessorCount - 2));
+        private static readonly int PrefetchParallelism = BackgroundWork.Parallelism(Math.Max(1, Math.Min(6, Environment.ProcessorCount - 2)));
 
         /// <summary>現ラウンドの自県裏カードを背景スレッドで先行解決（キャッシュを温める）。自校の実対戦カードは対象外。</summary>
         private void KickPrefetch()
         {
             var runner = Runner;
             if (runner == null || runner.Finished || !runner.PlayerActive) return;
-            _prefetchTask = Task.Run(() =>
+            _prefetchTask = BackgroundWork.Run(() =>
             {
                 try { runner.PrefetchCurrentRoundBackgroundCards(PrefetchParallelism); }
                 catch { /* 個々の県カードの失敗は握り潰す（本解決がフォールバックで解く） */ }

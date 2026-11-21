@@ -58,13 +58,13 @@ namespace KokoSim.Unity.Shell
 
             _total = runner.RemainingBracketRounds;
             Volatile.Write(ref _done, 0);
-            _task = Task.Run(() => Worker(runner)).ContinueWith(_ =>
+            _task = BackgroundWork.Run(() => Worker(runner)).ContinueWith(_ =>
                 MainThreadDispatcher.Enqueue(() =>
                 {
                     _task = null;
                     _total = 0;
                     onComplete?.Invoke();
-                }));
+                }), TaskContinuationOptions.ExecuteSynchronously);
         }
 
         private static void Worker(ITournamentRunner runner)
@@ -72,12 +72,12 @@ namespace KokoSim.Unity.Shell
             while (runner.BracketResolutionPending)
             {
                 // ライブ試合中（他画面で練習試合の観戦等）は新しいラウンドへ進まず待つ（#208 と同じ作法）。
-                while (NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
-                    Thread.Sleep(PausedPollMs);
+                while (BackgroundWork.Threaded && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
+                    BackgroundWork.Sleep(PausedPollMs);
 
                 runner.StepBracketResolution();
                 Interlocked.Increment(ref _done);
-                Thread.Sleep(StepSleepMs);   // 区画間で必ずメインスレッドへ時間を譲る。
+                BackgroundWork.Sleep(StepSleepMs);   // 区画間で必ずメインスレッドへ時間を譲る。
             }
         }
 

@@ -38,7 +38,7 @@ namespace KokoSim.Unity.Shell
         private const int PausedPollMs = 16;
         private const int CollectEveryMatches = 48;
 
-        private static readonly int MaxWorkers = Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2));
+        private static readonly int MaxWorkers = BackgroundWork.Parallelism(Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2)));
 
         private static volatile Task _task;
         private static int _done;
@@ -108,7 +108,7 @@ namespace KokoSim.Unity.Shell
 
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = Task.Run(() => Worker(pending, matchesByRegion, stats, rng, yearIndex, calendarYear, brains));
+                workers[w] = BackgroundWork.Run(() => Worker(pending, matchesByRegion, stats, rng, yearIndex, calendarYear, brains));
             _task = Task.WhenAll(workers);
         }
 
@@ -141,7 +141,7 @@ namespace KokoSim.Unity.Shell
                     TournamentEntry.Schedule, totalRounds, yearIndex, rng, afterMatch: PauseGate);
 
                 Interlocked.Increment(ref _done);
-                Thread.Sleep(StepSleepMs);
+                BackgroundWork.Sleep(StepSleepMs);
             }
         }
 
@@ -150,8 +150,8 @@ namespace KokoSim.Unity.Shell
             var m = Interlocked.Increment(ref _matchesResolved);
             if (m % CollectEveryMatches == 0) GC.Collect();
 
-            while (NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
-                Thread.Sleep(PausedPollMs);
+            while (BackgroundWork.Threaded && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
+                BackgroundWork.Sleep(PausedPollMs);
         }
 
         /// <summary>打ち直しを完了まで待つ（ロスター変更の前に必ず呼ぶ）。未開始なら即返る。</summary>

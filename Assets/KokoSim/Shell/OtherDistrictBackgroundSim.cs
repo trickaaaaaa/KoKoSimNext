@@ -24,7 +24,7 @@ namespace KokoSim.Unity.Shell
         // 地区ごとに1本（神奈川で6地区・237試合＝直列で約37秒、1地区4〜8秒・エディタ実測）。2本に絞ると全地区が揃うまで
         // 約24秒かかり、自校の地区予選を早く終えると県大会へ入る瞬間にその分止まる。本数は地区数で頭打ち（Start）。
         // ライブ観戦中は PauseGate で止まるので、観戦の滑らかさには響かない。
-        private static readonly int MaxWorkers = Math.Max(1, Environment.ProcessorCount - 2);
+        private static readonly int MaxWorkers = BackgroundWork.Parallelism(Math.Max(1, Environment.ProcessorCount - 2));
 
         private static readonly object Gate = new object();
         private static readonly Dictionary<int, OtherDistrictResult> Results = new Dictionary<int, OtherDistrictResult>();
@@ -64,7 +64,7 @@ namespace KokoSim.Unity.Shell
             var workers = new Task[Math.Min(MaxWorkers, Math.Max(1, jobs.Count))];
             for (var w = 0; w < workers.Length; w++)
             {
-                workers[w] = Task.Run(() =>
+                workers[w] = BackgroundWork.Run(() =>
                 {
                     while (true)
                     {
@@ -75,7 +75,7 @@ namespace KokoSim.Unity.Shell
 
                         var result = jobs[idx].Value();
                         lock (Gate) if (gen == _generation) Results[jobs[idx].Key] = result;
-                        Thread.Sleep(StepSleepMs);
+                        BackgroundWork.Sleep(StepSleepMs);
                     }
                 });
             }
@@ -85,8 +85,8 @@ namespace KokoSim.Unity.Shell
         /// <summary>試合と試合の合間に呼ぶ。ライブ観戦中（Paused）は止まって2D再生の滑らかさを守る。</summary>
         public static void PauseGate()
         {
-            while (!_forceRun && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
-                Thread.Sleep(PausedPollMs);
+            while (BackgroundWork.Threaded && !_forceRun && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
+                BackgroundWork.Sleep(PausedPollMs);
         }
 
         /// <summary>消化を完了まで待って、地区番号→結果を返す。手元の結果が <paramref name="key"/> の大会のもの

@@ -31,7 +31,7 @@ namespace KokoSim.Unity.Shell
         private const int CollectEveryMatches = 48;
 
         // 静止画面で回す並列ワーカー数。校ごとに独立 Fork なので並列でも決定論不変（#208 と同じ根拠）。
-        private static readonly int MaxWorkers = Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2));
+        private static readonly int MaxWorkers = BackgroundWork.Parallelism(Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2)));
 
         private static volatile Task _task;
         private static int _done;            // Interlocked。打ち直し済みの校数（進捗の分子）。
@@ -81,7 +81,7 @@ namespace KokoSim.Unity.Shell
 
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = Task.Run(() => Worker(pending, stats, rng, yearIndex, calendarYear, brains));
+                workers[w] = BackgroundWork.Run(() => Worker(pending, stats, rng, yearIndex, calendarYear, brains));
             _task = Task.WhenAll(workers);
         }
 
@@ -112,7 +112,7 @@ namespace KokoSim.Unity.Shell
                     QualifierStatsSim.RoundsFor(result.Entrants), yearIndex, rng, afterMatch: PauseGate);
 
                 Interlocked.Increment(ref _done);
-                Thread.Sleep(StepSleepMs);
+                BackgroundWork.Sleep(StepSleepMs);
             }
         }
 
@@ -126,8 +126,8 @@ namespace KokoSim.Unity.Shell
             var m = Interlocked.Increment(ref _matchesResolved);
             if (m % CollectEveryMatches == 0) GC.Collect();
 
-            while (NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
-                Thread.Sleep(PausedPollMs);
+            while (BackgroundWork.Threaded && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
+                BackgroundWork.Sleep(PausedPollMs);
         }
 
         /// <summary>

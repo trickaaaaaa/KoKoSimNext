@@ -24,7 +24,7 @@ namespace KokoSim.Unity.Shell
         private const int NormalSleepMs = 2;
         private const int BoostSleepMs = 2;
         private const int PausedPollMs = 16;
-        private static readonly int MaxWorkers = Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2));
+        private static readonly int MaxWorkers = BackgroundWork.Parallelism(Math.Max(1, Math.Min(3, Environment.ProcessorCount - 2)));
 
         private static volatile int _throttle = (int)NationBackgroundSim.SimThrottle.Normal;
         private static volatile Task _task;
@@ -126,7 +126,7 @@ namespace KokoSim.Unity.Shell
             var jobs = run.Jobs;
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = Task.Run(() => Worker(jobs));
+                workers[w] = BackgroundWork.Run(() => Worker(jobs));
             _task = Task.WhenAll(workers);
         }
 
@@ -143,7 +143,7 @@ namespace KokoSim.Unity.Shell
                 lock (ResultsGate) Results.Add(result);
                 Interlocked.Increment(ref _done);
 
-                Thread.Sleep((NationBackgroundSim.SimThrottle)_throttle == NationBackgroundSim.SimThrottle.Boost
+                BackgroundWork.Sleep((NationBackgroundSim.SimThrottle)_throttle == NationBackgroundSim.SimThrottle.Boost
                     ? BoostSleepMs : NormalSleepMs);
             }
         }
@@ -155,8 +155,8 @@ namespace KokoSim.Unity.Shell
             var m = Interlocked.Increment(ref _matchesResolved);
             if (_collectGarbage && m % CollectEveryMatches == 0)
                 GC.Collect();
-            while ((NationBackgroundSim.SimThrottle)_throttle == NationBackgroundSim.SimThrottle.Paused)
-                Thread.Sleep(PausedPollMs);
+            while (BackgroundWork.Threaded && (NationBackgroundSim.SimThrottle)_throttle == NationBackgroundSim.SimThrottle.Paused)
+                BackgroundWork.Sleep(PausedPollMs);
         }
 
         /// <summary>実行中の秋季全国裏試合を完了まで待つ（自県の地区大会集約前に必ず呼ぶ）。未開始なら即返る。</summary>
