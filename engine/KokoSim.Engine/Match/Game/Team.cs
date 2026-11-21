@@ -55,6 +55,21 @@ public sealed record Team
     public Player? StartingPitcher { get; init; }
 
     /// <summary>
+    /// この試合のベンチ入り（試合開始時の打順＋控え＋DH制の先発投手）。試合中の交代では変わらない
+    /// （退いた選手もベンチに居る）。結束の顔ぶれ（設計書23 §3）とサヨナラの場面の人数（issue #1176）の単一ソース。
+    /// </summary>
+    public IReadOnlyList<Player> BenchEntry
+    {
+        get
+        {
+            var members = new List<Player>(BattingOrder);
+            members.AddRange(Reserves);
+            if (UsesDh && StartingPitcher is not null) members.Add(StartingPitcher);
+            return members;
+        }
+    }
+
+    /// <summary>
     /// 継投の余裕（<see cref="FatigueCoefficients.RelievePitchMargin"/>）に掛ける倍率
     /// （issue #55, 監督傾向「エース酷使／継投早め」, 決定4: B-1）。既定 1.0＝<c>GameContext.Fatigue</c> そのまま（帯不変）。
     /// 係数を丸ごと持たず倍率だけを持つのは、試合の係数（天候で消耗の勾配が変わる・#803/#971）を

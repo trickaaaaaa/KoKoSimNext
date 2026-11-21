@@ -143,10 +143,7 @@ public static class Cohesion
     /// <summary>主将を差し替えた場合の結束（主将指名画面の「指名したら」の見込み・issue #935）。</summary>
     public static double ForTeam(Team team, Player? captain, CohesionCoefficients c)
     {
-        var members = new List<Player>(team.BattingOrder);
-        members.AddRange(team.Reserves);
-        if (team.UsesDh && team.StartingPitcher is not null) members.Add(team.StartingPitcher);
-        return Value(BaseValue(members, captain, c), team.CohesionDelta);
+        return Value(BaseValue(team.BenchEntry, captain, c), team.CohesionDelta);
     }
 
     /// <summary>効き先①: 動揺の発生閾値の段（U≥高 で+1、U&lt;低 で−1、それ以外0）。</summary>

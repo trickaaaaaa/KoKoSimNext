@@ -121,6 +121,27 @@ scenarios:
     bases: [3]
     seed: 20260759   # 係数変更で解が動いたら選び直す（#683: 20260735→20260745／#835 球種ごとの回転軸: →20260751／#908 球質タイプ追加: →20260754／#911 キレ＝ストレートからの外れ: →20260759）
 
+  # ── サヨナラの場面の絵の検証（issue #1176）。game-end-walkoff-lab と同じ場面で、決着の形だけ替える ──
+  - id: game-end-walkoff-hr-lab
+    name: 終局検証・サヨナラ本塁打（9回裏2死三塁・同点）
+    away: { school: "AI:tier=C", score: 3 }
+    home: { school: "AI:tier=C", score: 3 }
+    inning: 9
+    top: false
+    outs: 2
+    bases: [3]
+    seed: 20260847   # 係数変更で解が動いたら選び直す（GameEndScenarioTests が見張る）
+
+  - id: game-end-walkoff-small-lab
+    name: 終局検証・部員が少ない後攻のサヨナラ（ベンチ入り12人・9回裏2死三塁・同点）
+    away: { school: "AI:tier=C", score: 3 }
+    home: { school: "AI:tier=C;bench=12", score: 3 }
+    inning: 9
+    top: false
+    outs: 2
+    bases: [3]
+    seed: 20260801   # 係数変更で解が動いたら選び直す（GameEndScenarioTests が見張る）
+
   # ── 盗塁の捕手送球の絵の検証（issue #662）。最初の打席の初球で必ず二盗を企図する ──
   # 走塁系の強制は「走者一塁・二塁空き・打席の初球」でだけ効く（ForceNextForCapture の注記）。
   # 成否だけを固定する（投球は通常どおり解く）ので、捕手の送球は守備ビューまで通る。

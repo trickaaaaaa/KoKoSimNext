@@ -180,6 +180,8 @@ namespace KokoSim.Unity.Debugging
                     int frames = Mathf.CeilToInt(_r.DuelSeconds * _r.VideoFps);
                     bool timeoutSent = false;
                     bool sceneSeen = false, restoreLogged = false;
+                    int woMax = -1, woExpected = -1;
+                    float woCelebrate = -1f;
                     for (int f = 0; f < frames; f++)
                     {
                         if (!timeoutSent && _r.DefenseTimeoutAt >= 0f && f / (float)_r.VideoFps >= _r.DefenseTimeoutAt)
@@ -211,12 +213,23 @@ namespace KokoSim.Unity.Debugging
                                     f, err.PosM, err.YawDeg, oerr.PosM, oerr.YawDeg, rig.OffenseTimeoutMouthEarForCapture, rig.BatterLeftForCapture));
                             }
                         }
+                        // サヨナラの場面（issue #1176）: 喜んだ人数がベンチ入りの人数と一致するかを数える
+                        if (ctrl.DuelRigForCapture != null && ctrl.DuelRigForCapture.WalkoffSceneActive)
+                        {
+                            woMax = Math.Max(woMax, ctrl.DuelRigForCapture.WalkoffCelebrantsForCapture);
+                            woExpected = ctrl.WalkoffExpectedCountForCapture;
+                            woCelebrate = Math.Max(woCelebrate, ctrl.DuelRigForCapture.WalkoffCelebrateSeconds);
+                        }
                         WriteProbes(f / (double)_r.VideoFps, ctrl.DuelRigForCapture);
                         yield return Capture(ctrl, Path.Combine(ddir, "f" + _videoFrames.ToString("000", CultureInfo.InvariantCulture) + ".png"));
                         _videoFrames++;
                         yield return null;
                     }
                     Time.captureDeltaTime = 0f;
+                    if (woMax >= 0)
+                        File.WriteAllText(Path.Combine(_dir, "walkoff.txt"), string.Format(CultureInfo.InvariantCulture,
+                            "celebrants\t{0}\nbenchEntry\t{1}\nmatch\t{2}\ncelebrateSeconds\t{3:F2}\n",
+                            woMax, woExpected, woMax == woExpected, woCelebrate));
                     yield return true;
                     yield break;
                 }

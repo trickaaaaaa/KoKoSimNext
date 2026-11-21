@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
@@ -135,6 +136,22 @@ public static class ScenarioBuilder
     /// </summary>
     private static Team ResolveTeam(string spec, string fallbackName, ulong seed, Team? playerTeam)
     {
+        // 末尾の ";bench=N"＝ベンチ入りを N 人に絞る（控えを背番号順の後ろから削る）。部員が少ない学校の絵の検証用
+        //（サヨナラの場面で喜ぶ人数＝ベンチ入り・issue #1176）。生成の乱数は引き終わった後に削る＝打順・能力は変わらない
+        var semi = spec.IndexOf(';');
+        if (semi >= 0)
+        {
+            var opt = spec.Substring(semi + 1).Trim();
+            var baseSpec = spec.Substring(0, semi).Trim();
+            const string benchKey = "bench=";
+            if (!opt.StartsWith(benchKey, System.StringComparison.OrdinalIgnoreCase)
+                || !int.TryParse(opt.Substring(benchKey.Length), System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var bench))
+                throw new System.ArgumentException($"未知のチーム指定: {spec}（末尾は ;bench=N だけ）");
+            var team = ResolveTeam(baseSpec, fallbackName, seed, playerTeam);
+            var keep = System.Math.Max(0, bench - (team.BenchEntry.Count - team.Reserves.Count));
+            return keep >= team.Reserves.Count ? team : team with { Reserves = team.Reserves.Take(keep).ToList() };
+        }
         if (string.Equals(spec, "player", System.StringComparison.OrdinalIgnoreCase))
         {
             return playerTeam ?? StrengthTeamFactory.Create(55.0, "自校", new Xoshiro256Random(seed));

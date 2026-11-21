@@ -1503,7 +1503,7 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
-        /// 攻撃伝令の場面（issue #1175）で打者・伝令に使う収録の向きと、収録の頭→終わりで腰がどれだけ動くか
+        /// 攻撃伝令の場面（issue #1175）・サヨナラの場面（issue #1176）で使う収録の向きと、収録の頭→終わりで腰がどれだけ動くか
         /// （ルートモーション込み・素の向き yaw=0 で置いたとき）を測る。歩きの進行方向と速さを決める根拠。
         /// 出力: 向き（入り/終わり。-Z からの角度）・腰の移動 dx/dz[m]・長さ[s]。
         /// </summary>
@@ -1531,6 +1531,15 @@ namespace KokoSim.EditorTools
                     "AA_Baseball_Batter_Walk_In_Loop",
                     "AA_Baseball_Defender_Standing_Idle_Loop_Type01",
                     "AA_Baseball_Offense_Base_Running_To_Walking",
+                    // サヨナラの場面（issue #1176）
+                    "AA_Baseball_Batter_Home_Run_Celebrating_Type01",
+                    "AA_Baseball_Batter_Home_Run_Celebrating_Type02",
+                    "AA_Baseball_Pitcher_Emotion_Victory_Type01",
+                    "AA_Baseball_Pitcher_Emotion_Victory_Type02",
+                    "AA_Baseball_Pitcher_Emotion_Defeated_Type01",
+                    "AA_Baseball_Pitcher_Emotion_Defeated_Type02",
+                    "AA_Baseball_Catcher_Emotion_Defeated",
+                    "AA_Baseball_Defender_Movement_Sprint_Loop",
                 };
                 var sb = new StringBuilder();
                 sb.AppendLine("clip\tyaw0\tyaw1\tdx\tdz\tlen");

@@ -20,6 +20,9 @@ public sealed class GameEndScenarioTests
     [InlineData("game-end-strikeout-lab", PlateAppearanceResult.Strikeout, false)]
     [InlineData("game-end-groundout-lab", PlateAppearanceResult.InPlayOut, true)]
     [InlineData("game-end-walkoff-lab", PlateAppearanceResult.Single, true)]
+    // サヨナラの場面（issue #1176）: 本塁打は打者の生還を待つ芝居、部員が少ない学校は喜ぶ人数が20人未満の検証用
+    [InlineData("game-end-walkoff-hr-lab", PlateAppearanceResult.HomeRun, true)]
+    [InlineData("game-end-walkoff-small-lab", PlateAppearanceResult.Single, true)]
     public void EndsTheGameOnFirstPlateAppearance(string id, PlateAppearanceResult expected, bool battedBall)
     {
         Assert.True(DebugScenarioLoader.LoadFromRepoOrEmpty().TryGet(id, out var def), id + " が無い");
@@ -35,5 +38,17 @@ public sealed class GameEndScenarioTests
         Assert.True(prog.IsFinished);
         // 3本とも後攻の勝ちで終わる（表2本＝リードのまま9回表で終了／walkoff＝9回裏のサヨナラ）。
         Assert.True(prog.HomeScore > prog.AwayScore, "後攻の勝ちで終わっていない");
+    }
+
+    /// <summary>「;bench=N」でベンチ入りを絞れる（サヨナラの場面で喜ぶ人数の検証・issue #1176）。</summary>
+    [Fact]
+    public void SmallBenchScenario_HasTwelveOnTheBench()
+    {
+        Assert.True(DebugScenarioLoader.LoadFromRepoOrEmpty().TryGet("game-end-walkoff-small-lab", out var def));
+        var built = ScenarioBuilder.Build(def, new GameContext(), 1UL);
+        Assert.Equal(12, built.Home.BenchEntry.Count);
+        Assert.Equal(20, built.Away.BenchEntry.Count);
+        var prog = new MatchProgression(built.Away, built.Home, built.Ctx, built.Seed, built.Start);
+        Assert.Equal(12, prog.BenchEntryCount(teamIsAway: false));
     }
 }

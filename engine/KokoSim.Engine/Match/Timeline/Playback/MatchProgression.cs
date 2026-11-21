@@ -498,6 +498,18 @@ public sealed class MatchProgression
     /// </summary>
     public bool IsTeamOnOffense(bool teamIsAway) => SubstitutionCommands.IsOnOffense(_p, teamIsAway);
 
+    /// <summary>
+    /// その学校のこの試合のベンチ入りの人数（試合開始時の打順＋控え。途中で退いた選手も数える）。
+    /// サヨナラの場面で喜ぶ選手の数（issue #1176）。観測のみ＝結果・乱数に触れない。
+    /// </summary>
+    public int BenchEntryCount(bool teamIsAway) => (teamIsAway ? _p.Away : _p.Home).BenchEntryCount;
+
+    /// <summary>
+    /// 規定のイニング数（<see cref="GameContext.RegulationInnings"/>）。この回以降の裏に後攻が勝ち越したら
+    /// その場で試合が終わる（サヨナラ）。観測のみ（issue #1176）。
+    /// </summary>
+    public int RegulationInnings => _ctx.RegulationInnings;
+
     /// <summary>自校（teamIsAway）の攻撃伝令の残り回数（攻3回・延長は1イニング1回, 設計書09 §3）。</summary>
     public int OffenseTimeoutsLeft(bool teamIsAway) => _p.OffenseOf(teamIsAway).OffenseTimeoutsLeft;
 

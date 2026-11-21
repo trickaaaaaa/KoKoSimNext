@@ -15,6 +15,9 @@ public sealed class TeamState
     private readonly Team _team;
     private int _battingIndex;
 
+    /// <summary>この試合のベンチ入りの人数（<see cref="Team.BenchEntry"/>。試合中の交代では変わらない）。表示専用（issue #1176）。</summary>
+    public int BenchEntryCount => _team.BenchEntry.Count;
+
     // ===== 可変ラインナップ（設計書09 §6, 選手交代）。無交代なら初期＝_team.BattingOrder と一致。 =====
     private readonly Player[] _lineup;          // 打順9スロットの現在の選手
     // 控え（打順外の全員）。継投・代打・代走・守備交代の共通の供給元＝投手控えと野手控えに分けない
