@@ -148,6 +148,9 @@ namespace KokoSim.Unity.Home
             if (KokoSim.Unity.Shell.ContractRenewalService.Pending) { ContinueRenewal(); return; }
             if (_state.InTournament)
             {
+                // 試合日に着いていたら日を進めず、開始確認を出し直すだけにする。進めると「いいえ」の後に
+                // 押すたび大会の日付だけが試合日を追い越し、大会明けの時計送り（TournamentDay/7 週）も増えていた。
+                if (_state.ReachedMatchDay) { ShowDialog(); return; }
                 _state.AdvanceDay();
                 Render();
                 if (_state.ReachedMatchDay) ShowDialog();     // 試合日に到達→開始確認（要件7・惰性防止）
