@@ -63,7 +63,7 @@ public sealed class HandleBobbleTests
         => System.Math.Sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
 
     [Fact]
-    public void FumblePopsOutOfTheGloveAndKeepsTheThrowUntouched()
+    public void FumblePopsOutOfTheGloveAndKeepsTheThrowTimingAndTarget()
     {
         var play = Grounder(2.13, 4.28, bobble: true);
         var b = HandleBobblePlanner.Plan(play);
@@ -81,8 +81,15 @@ public sealed class HandleBobbleTests
         var rest = bobble.At(bobble.T1 - bobble.T0);
         Assert.Equal(GloveReach, Dist(start.X, start.Y, fp.X, fp.Y), 3);
         Assert.True(Dist(rest.X, rest.Y, fp.X, fp.Y) >= GloveReach + HandleBobblePlanner.PopM - 1e-6, "グラブから外へ跳ねる");
-        // 送球はそのまま（判定の時刻を動かさない）
-        Assert.Same(play.Ball[2], after.Ball[3]);
+        // 送球の時刻・終点はそのまま（判定を動かさない）。始点だけ拾い直した球の止まった点へ（球が元の捕球点へ跳ばない）
+        var thrown = (EndpointBallSegment)after.Ball[3];
+        var original = (EndpointBallSegment)play.Ball[2];
+        Assert.Equal(original.T0, thrown.T0, 9);
+        Assert.Equal(original.T1, thrown.T1, 9);
+        Assert.Equal(original.At(original.T1 - original.T0).X, thrown.At(thrown.T1 - thrown.T0).X, 6);
+        Assert.Equal(original.At(original.T1 - original.T0).Y, thrown.At(thrown.T1 - thrown.T0).Y, 6);
+        Assert.Equal(rest.X, thrown.At(0).X, 6);
+        Assert.Equal(rest.Y, thrown.At(0).Y, 6);
     }
 
     /// <summary>拾う瞬間に球を手へ引き寄せない（監督指摘「残像付きで吸い込まれる」）。</summary>

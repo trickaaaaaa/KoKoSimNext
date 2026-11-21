@@ -130,9 +130,17 @@ public static class HandleBobblePlanner
 
         var balls = new List<PlaybackBallSegment>(play.Ball.Count + 1);
         TimelinePoint? stand = null;
+        TimelinePoint? restPt = null;
         var fp = PlaybackEvaluator.FielderAt(play, bobble.Fielder, bobble.CatchT).Pos;
         foreach (var s in play.Ball)
         {
+            // 拾い直した球が止まっていた点から投げ始める（元の捕球点へ球が跳ばない）。送球の時刻・終点は動かさない。
+            if (restPt is { } rp && s is EndpointBallSegment { Kind: BallSegmentKind.Throw } th && th.FromRole == bobble.Fielder)
+            {
+                balls.Add(th.WithStart(rp));
+                restPt = null;
+                continue;
+            }
             balls.Add(s);
             if (stand != null || s is not EndpointBallSegment eb || Math.Abs(eb.T1 - bobble.CatchT) > 1e-6
                 || eb.Kind is not (BallSegmentKind.Roll or BallSegmentKind.Bounce)) continue;
@@ -158,6 +166,7 @@ public static class HandleBobblePlanner
                 T0 = bobble.CatchT, T1 = pickupT,
                 From = glove, To = rest,
             }));
+            restPt = rest;
             var standR = Math.Max(0.0, restR - pickupReachM);
             stand = new TimelinePoint(fp.X + dx * standR, fp.Y + dy * standR);
         }
@@ -167,8 +176,15 @@ public static class HandleBobblePlanner
         if (play.Moves != null) foreach (var kv in play.Moves) moves[kv.Key] = kv.Value;
         var legs = new List<PlaybackMove>();
         if (moves.TryGetValue(bobble.Fielder, out var had))
-            foreach (var m in had) if (m.T1 <= stepStart + 1e-9) legs.Add(m);   // 後ろのレッグは拾いに行く間は捨てる
+            foreach (var m in had) if (m.T1 <= stepStart + 1e-9) legs.Add(m);   // 拾いに行く間のレッグは寄る一歩に置き換える
         legs.Add(new PlaybackMove(stepStart, stepEnd, new PlaybackVec(st.X, st.Z)));
+        // 拾い終わったあとのレッグ（定位置復帰など）は戻す。寄る一歩にまたがるものは終点を保ち、拾い終わりから始める。
+        if (had != null)
+            foreach (var m in had)
+            {
+                if (m.T1 <= stepStart + 1e-9 || m.T1 <= stepEnd + 1e-9) continue;
+                legs.Add(m.T0 >= stepEnd - 1e-9 ? m : m with { T0 = stepEnd });
+            }
         moves[bobble.Fielder] = legs;
         return play with { Ball = balls, Moves = moves };
     }

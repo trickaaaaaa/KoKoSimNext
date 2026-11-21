@@ -611,9 +611,8 @@ public static class FieldingResolver
                     var throwLanding = ThrowRecovery.LandingPoint(catchPoint, field.FirstBase, scatterM);
                     var firstBaseman = fielders.First(f => f.Position == FieldPosition.FirstBase);
                     var backup = fielders.First(f => f.Position == ThrowRecovery.BackupRole(1));
-                    var (backupX, backupZ) = FieldGeometry.StandardPosition(backup.Position);
                     var recovery = ThrowRecovery.RecoveryPenaltySeconds(
-                        scatterM, throwLanding, new Vector3D(backupX, 0, backupZ),
+                        scatterM, throwLanding, backup.Location,
                         firstBaseman.Attributes.SprintSpeedMps, backup.Attributes.SprintSpeedMps,
                         backup.Attributes.ThrowSpeedMps, coeff.RecoveryReactionSeconds, out var byBackup);
                     if (defenseTime + recovery + coeff.ForceOutMarginSeconds <= runnerTime)

@@ -2565,7 +2565,6 @@ public static class TimelineBuilder
         var maxLeadM = Math.Max(leadM, m.DoubledOffMaxLeadM);                // 折り返し点（コミット上限まで走った点）
         // 判定のリード（DoubledOffResolver.LeadGainedM）は塁からの距離＝戻りの秒はこの距離÷脚力。絵の位置も塁から測る
         // （二次リードを足すと、足したぶんを一瞬で戻る絵になっていた・issue #1130 の Heavy で 76 m/s として表に出た）。
-        var farPt = LeadPoint(field, m.FromBase, maxLeadM);
         var catchPt = LeadPoint(field, m.FromBase, leadM);
         // 捕球時刻（接触基準）。判定側は捕球点の時刻をそのまま使うので、絵も同じ起点にする。
         var caughtAt = flyCaughtAtSeconds ?? baserunning.LinerCommitCapSeconds;
@@ -2576,6 +2575,9 @@ public static class TimelineBuilder
         // 走り始めは脚力から逆算（盗塁で走っていた走者は接触前＝投球中から動く。コンタクト始動は接触直後）。
         var runStart = Math.Max(0.0, Math.Min(commitEnd - runSeconds, ContactAt + baserunning.LinerBreakReactionSeconds));
         var runEnd = Math.Max(runStart + 0.05, commitEnd);
+        // 折り返し点から捕球点へ戻る時間が無い（捕球が走り終わりと同時か前）なら、そもそも折り返し点まで走らせず
+        // 捕球点で止める＝次のレッグ（捕球点から反転）へ瞬間移動しない。
+        var farPt = catchAt > runEnd + 1e-6 ? LeadPoint(field, m.FromBase, maxLeadM) : catchPt;
         var reverseAt = catchAt + baserunning.DoubledOffReverseSeconds;
         var runnerArrive = catchAt + baserunning.DoubledOffReverseSeconds + leadM / Math.Max(1e-6, speed);
         var throwArrive = ContactAt + throwArriveSeconds;
@@ -2698,7 +2700,8 @@ public static class TimelineBuilder
     /// <para>2アウトの<b>ゴロアウト</b>も同じ扱いにする（issue #625）。判定側（<c>BaserunningModel</c>）は
     /// 3アウト目の凡打で進塁計算を打ち切る＝移動レッグが1件も積まれないため、直さないと
     /// フォースされた走者が塁に張り付いて見える。止める時刻は<b>打者が一塁でアウトになる瞬間</b>
-    /// （＝3アウト目の成立）で、フライの捕球時刻と同じ役割。走り切らせない（監督決定 2026-08-13・案B）。</para>
+    /// （＝3アウト目の成立。送球が塁へ着いた判定イベントの時刻で、打者の一塁到達より早い）で、フライの捕球時刻と同じ役割。
+    /// 走り切らせない（監督決定 2026-08-13・案B）。</para>
     ///
     /// <para>フライは走者全員が対象だが、<b>ゴロはフォースされている塁だけ</b>（一塁は常に／
     /// 二塁は一塁が埋まっていれば／三塁は一・二塁が埋まっていれば）。フォースの無い走者は
@@ -2721,7 +2724,7 @@ public static class TimelineBuilder
         var groundForceRun = outsBefore == 2 && play is { IsFly: false, Result: BattedBallResult.Out };
         // 止める時刻＝イニングが終わる瞬間。フライは捕球、ゴロは打者が一塁でアウトになる時刻。
         var stopAt = flyAutoRun ? ContactAt + (play!.FieldedAtSeconds ?? play.HangTimeSeconds)
-            : groundForceRun ? FindBatterArrive(timeline)
+            : groundForceRun ? FindBatterOutAt(timeline)
             : 0.0;
 
         var legs = new List<RunnerLeg>(timeline.Runners);
@@ -3710,7 +3713,8 @@ public static class TimelineBuilder
         var leadOut = false;
         string? leadLabel = null;
         var index = 0;
-        foreach (var m in moves)
+        // 連結後の列で数える＝AppendRunnerLegs の "走N" 採番と同じ（失策の連鎖で積まれた続きの move は1本に畳まれる）
+        foreach (var (m, _) in MergeChainedMoves(moves))
         {
             if (m.FromBase == 0) continue;              // 打者走者は「先頭走者」ではない（下の既定で見る）
             index++;                                    // AppendRunnerLegs の "走N" と同じ採番（塁上の走者だけ数える）
@@ -4472,6 +4476,17 @@ public static class TimelineBuilder
     }
 
     private static string BaseName(int b) => b switch { 1 => "first", 2 => "second", 3 => "third", _ => "home" };
+
+    /// <summary>
+    /// 打者がアウトになる瞬間（「打」のアウト判定イベント＝一塁への送球の到達）。無ければ一塁到達時刻。
+    /// 封殺は送球が打者より先に着いて成立するので、<see cref="FindBatterArrive"/> より早い。
+    /// </summary>
+    private static double FindBatterOutAt(PlayTimeline timeline)
+    {
+        foreach (var j in timeline.Judgements)
+            if (j.Label == "打" && j.Kind == JudgementKind.Out) return j.T;
+        return FindBatterArrive(timeline);
+    }
 
     private static double FindBatterArrive(PlayTimeline timeline)
     {

@@ -51,12 +51,15 @@ public static class PlaybackDisplaySync
         foreach (var r in play.Runners)
         {
             if (r.Label != "打") continue;
-            var leg = FinalMovingLeg(r);
+            var leg = FinalMovingLeg(r, skipRunThrough: true);
             if (leg is not null && !leg.OutAtEnd && leg.T1 > t) t = leg.T1;
             break;
         }
         return t;
     }
+
+    /// <summary>一塁の駆け抜け（issue #443）とみなす最大の長さ[m]。塁間（27.43m）より十分短い。</summary>
+    private const double RunThroughMaxM = 10.0;
 
     /// <summary>
     /// 守備ビューで「まだ見るもの」が終わる時刻[s]（issue field-view-cut-back-sooner ①）。
@@ -172,7 +175,11 @@ public static class PlaybackDisplaySync
     /// 走者が最後に「実際に動いた」レッグ（待機・定点レッグは To==From で張られるため除外）。
     /// <c>DuelStageRig.RunnerFinal</c>（3D側の到達検出）と同じ 0.5m 閾値。
     /// </summary>
-    private static PlaybackRun? FinalMovingLeg(PlaybackRunner r)
+    /// <param name="skipRunThrough">
+    /// 塁を駆け抜ける短い最終レッグ（一塁のオーバーラン）を飛ばして、塁へ着いたレッグを返す。
+    /// 駆け抜けはアウト/セーフの到達（#438）には含まれないので、結果の表示時刻は塁に着いた時刻で見る。
+    /// </param>
+    private static PlaybackRun? FinalMovingLeg(PlaybackRunner r, bool skipRunThrough = false)
     {
         if (r?.Segs is null) return null;
         for (var i = r.Segs.Count - 1; i >= 0; i--)
@@ -180,8 +187,22 @@ public static class PlaybackDisplaySync
             var s = r.Segs[i];
             var dx = s.To.X - s.From.X;
             var dy = s.To.Y - s.From.Y;
-            if (dx * dx + dy * dy >= 0.25) return s;
+            var d2 = dx * dx + dy * dy;
+            if (d2 < 0.25) continue;
+            if (skipRunThrough && d2 < RunThroughMaxM * RunThroughMaxM && PrecededByMovingLeg(r, i)) continue;
+            return s;
         }
         return null;
+    }
+
+    private static bool PrecededByMovingLeg(PlaybackRunner r, int index)
+    {
+        for (var i = index - 1; i >= 0; i--)
+        {
+            var dx = r.Segs[i].To.X - r.Segs[i].From.X;
+            var dy = r.Segs[i].To.Y - r.Segs[i].From.Y;
+            if (dx * dx + dy * dy >= 0.25) return true;
+        }
+        return false;
     }
 }
