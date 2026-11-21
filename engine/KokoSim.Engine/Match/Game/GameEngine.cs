@@ -1787,16 +1787,11 @@ public static class GameEngine
                     inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog));
             }
 
-            // バント決着（設計書15 Phase D-2b）: セッションがバント経路で確定した場合、進塁は AdvanceOnBunt
-            // （一・二塁走者のみ1つ進む・三塁走者は自重）専用ルールで、ApplyDetailed の一般経路は使わない。
-            // ForceOutAtSecond（一塁走者の封殺, issue bunt-no-take-on-ball-pitches）は AdvanceOnBunt を使わず
-            // 一塁へ直接打者を置く（AdvanceOnBunt は一塁走者を進塁させてしまい封殺の意味と矛盾するため）。
-            // ForceOutAtThird（二塁走者の封殺・1・2塁の真のフォースのみ）も同様に手組み: 打者は一塁生存・
-            // 元の一塁走者は（フォースされて）二塁へ進む・元の二塁走者は退場。ForceOutAtHome（三塁走者の封殺・
-            // 満塁の真のフォースのみ）も同様: 打者一塁生存・元一塁→二塁・元二塁→三塁・元三塁は退場（無得点）。
+            // バント決着（設計書15 Phase D-2b）: セッションがバント経路で確定した場合、塁の付け替えは
+            // BaserunningModel.ApplyBunt（押し出し込み・封殺された走者は外す）に一本化している。
+            // 満塁なら押し出された三塁走者が生還する（3アウト目が封殺・打者アウトなら得点は認めない）。
             if (res.BuntOutcome is { } buntOutcome)
             {
-                offense.RecordSacrificeBunt(buntOutcome == BuntResult.SacrificeSuccess);
                 if (buntOutcome is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome)
                     offense.RecordBuntForceOut();
                 if (buntOutcome == BuntResult.InfieldHit) offense.RecordBuntInfieldHit();
@@ -1807,18 +1802,36 @@ public static class GameEngine
                         or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome => 1,
                     _ => 0,
                 };
-                // タイムライン用に進塁前の走者を控える（AdvanceOnBunt は bases を直接書き換えるため、
+                // タイムライン用に進塁前の走者を控える（ApplyBunt は bases を直接書き換えるため、
                 // 呼び出し後には「誰が動いたか」が取れない。issue #490）。
                 var buntPreFirst = bases.First;
                 var buntPreSecond = bases.Second;
                 var buntPreThird = bases.Third;
-                if (buntOutcome == BuntResult.SacrificeSuccess) AdvanceOnBunt(bases, batter: null);
-                else if (buntOutcome == BuntResult.InfieldHit) AdvanceOnBunt(bases, batter);
-                else if (buntOutcome == BuntResult.ForceOutAtSecond) bases.First = batter;
-                else if (buntOutcome == BuntResult.ForceOutAtThird) { bases.Second = bases.First; bases.First = batter; }
-                else if (buntOutcome == BuntResult.ForceOutAtHome)
-                    { bases.Third = bases.Second; bases.Second = bases.First; bases.First = batter; }
-                else if (buntOutcome == BuntResult.PopOutDoubledOff) bases.First = null; // 一塁走者は併殺で退場
+                var (buntScorer, buntAdvanced) = BaserunningModel.ApplyBunt(bases, batter, buntOutcome);
+                // 誰も進まなかった打者アウトは犠打ではない（三塁走者だけ・二三塁など）。
+                var isSacBunt = buntOutcome == BuntResult.SacrificeSuccess && buntAdvanced;
+                offense.RecordSacrificeBunt(isSacBunt);
+                var buntRuns = 0;
+                if (buntScorer is not null)
+                {
+                    if (outs + buntOuts < 3) buntRuns = 1;
+                    else bases.Third = buntScorer; // 3アウト目が封殺・打者アウト＝生還は認めない
+                }
+                // 押し出しの得点（スクイズと同じ帰属: 得点・自責・引き継ぎ走者は責任投手へ）。
+                var buntUnearned = buntRuns > 0 && unearnedRunners.Contains(buntScorer!) ? 1 : 0;
+                var buntOwnRuns = buntRuns;
+                if (buntRuns > 0)
+                {
+                    offense.Runs += buntRuns;
+                    runsThisHalf += buntRuns;
+                    offense.RecordRun(buntScorer!);
+                    if (!ResponsibleFor(buntScorer!).Equals(currentPitcher))
+                    {
+                        defense.ChargeRuns(ResponsibleFor(buntScorer!), buntRuns, buntUnearned);
+                        buntOwnRuns = 0;
+                        buntUnearned = 0;
+                    }
+                }
                 // バント打球のタイムライン（issue #490）: 判定（BuntResolver）はそのまま、結果から逆算した絵。
                 // CaptureTimelines のときだけ組む＝統計シム・裏試合はゼロコスト・乱数消費ゼロ（他Buildと同作法）。
                 var buntTimeline = ctx.CaptureTimelines
@@ -1836,13 +1849,14 @@ public static class GameEngine
                         : System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(),
                     defense, ctx, rng, (ulong)log.Count * 16 + 5);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
-                    res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
+                    res.Result, buntRuns, buntOuts, res.Pitches, inning, isTop, log, ctx,
+                    pitcherRuns: buntOwnRuns, unearnedRuns: buntUnearned,
                     timeline: buntTimeline,
                     outsBefore: outs,
                     baseFirstBefore: buntPreFirst is not null, baseSecondBefore: buntPreSecond is not null, baseThirdBefore: buntPreThird is not null,
                     baseFirstAfter: bases.First is not null, baseSecondAfter: bases.Second is not null, baseThirdAfter: bases.Third is not null,
                     batterOrder: batterOrder, pitchLog: res.PitchLog,
-                    isSacBunt: buntOutcome == BuntResult.SacrificeSuccess);
+                    isSacBunt: isSacBunt);
                 outs += buntOuts;
                 MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
@@ -1878,12 +1892,8 @@ public static class GameEngine
                 {
                     offense.RecordSqueezeBallInPlay(sq.RunnerOut); // 実測用（issue bunt-no-take-on-ball-pitches）
                     bases.Third = null; // 三塁走者は生還（sq.Runs=1）または本塁で封殺（sq.RunnerOut）＝いずれも退場
-                    if (sq.Bunt == BuntResult.ForceOutAtSecond)
-                        bases.First = batter; // 一塁走者は二塁で封殺済み。打者は一塁生存（野選相当）
-                    else if (sq.Bunt == BuntResult.ForceOutAtThird)
-                        { bases.Second = bases.First; bases.First = batter; } // 二塁走者は三塁で封殺済み
-                    else
-                        AdvanceOnBunt(bases, sq.BatterOut ? null : batter);
+                    // 三塁走者は上で本塁の裁定が済んでいる（bases.Third=null）＝押し出しは一・二塁だけを見る。
+                    BaserunningModel.ApplyBunt(bases, batter, sq.Bunt);
                 }
                 // 小フライ併殺（PopOutDoubledOff）: 三塁走者は動かず（小フライは走者釘付け）、一塁走者だけ退場。
                 else if (sq.Bunt == BuntResult.PopOutDoubledOff)
@@ -2634,25 +2644,6 @@ public static class GameEngine
             play?.ErrorKind, play?.WildThrowScatterM, play?.RecoveredThrowScatterM is not null,
             // issue #1014: 本塁打のフェンス上の通過高さ（写すだけ＝判定・乱数順・digest不変）。
             play?.FenceCrossHeightM));
-    }
-
-    /// <summary>バント処理時の進塁: 一・二塁走者が1つ進む（三塁走者は自重）。batter 非null なら打者一塁へ。</summary>
-    private static void AdvanceOnBunt(BaseState bases, Player? batter)
-    {
-        if (bases.Second is not null && bases.Third is null)
-        {
-            bases.Third = bases.Second;
-            bases.Second = null;
-        }
-        if (bases.First is not null && bases.Second is null)
-        {
-            bases.Second = bases.First;
-            bases.First = null;
-        }
-        if (batter is not null && bases.First is null)
-        {
-            bases.First = batter;
-        }
     }
 
     private static int ClampAbility(double v) => Math.Clamp((int)Math.Round(v), 1, 100);

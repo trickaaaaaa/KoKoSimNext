@@ -31,7 +31,7 @@ public sealed record AtBatResult(PlateAppearanceResult Result, int Pitches)
     /// <summary>
     /// バント試行で確定した打席の詳細結果（設計書15 Phase D-2b）。null=バント経路ではない
     /// （<see cref="Result"/> だけでは PopOut と SacrificeSuccess が同じ InPlayOut に潰れて区別できないため、
-    /// GameEngine 側の進塁処理（AdvanceOnBunt を呼ぶか/走者を釘付けにするか）の分岐に使う）。
+    /// GameEngine 側の進塁処理（ApplyBunt を呼ぶか/走者を釘付けにするか）の分岐に使う）。
     /// </summary>
     public BuntResult? BuntOutcome { get; init; }
 

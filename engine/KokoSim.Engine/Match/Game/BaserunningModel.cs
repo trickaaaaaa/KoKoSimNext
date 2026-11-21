@@ -360,6 +360,55 @@ public static class BaserunningModel
     public static (int Runs, int Outs) AwardFirstBase(BaseState bases, Player batter, List<RunnerMove>? mv = null)
         => ApplyWalk(bases, batter, bases.First, bases.Second, bases.Third, mv);
 
+    /// <summary>
+    /// バント決着の塁の付け替え（押し出し込み）。打者が一塁を目指すので、一塁走者は常に・二塁走者は一塁走者あり・
+    /// 三塁走者は満塁のとき押し出される（打者アウトの犠打でも、アウトが取られるまでは同じ）。封殺された走者は
+    /// 塁から外し、残りの押し出しは進める。押し出されない二塁走者は三塁が空なら1つ進む（送りバント）。
+    /// 三塁走者が押し出されないとき（一・三塁など）は動かない。乱数は引かない。
+    /// <para>返り値 Scorer＝押し出しで本塁へ向かった三塁走者（塁からは外す。得点にするかは呼び出し側が
+    /// アウト数で決める＝3アウト目が封殺・打者アウトなら得点は認められない）。Advanced＝打者以外の誰かが
+    /// 進んだか（誰も進まない打者アウトは犠打ではない）。</para>
+    /// スクイズは三塁走者を別途裁定済みで <c>bases.Third = null</c> にしてから呼ぶ（押し出しの連鎖は一・二塁だけ見る）。
+    /// </summary>
+    public static (Player? Scorer, bool Advanced) ApplyBunt(BaseState bases, Player batter, BuntResult outcome)
+    {
+        if (outcome == BuntResult.PopOut) return (null, false);
+        if (outcome == BuntResult.PopOutDoubledOff)
+        {
+            bases.First = null;
+            return (null, false);
+        }
+
+        Player? r1 = bases.First, r2 = bases.Second, r3 = bases.Third;
+        var forced2 = r1 is not null;
+        var forced3 = forced2 && r2 is not null;
+        var forcedHome = forced3 && r3 is not null;
+        var batterReaches = outcome != BuntResult.SacrificeSuccess;
+
+        Player? scorer = null;
+        Player? n1 = null, n2 = null, n3 = null;
+        if (r3 is not null && outcome != BuntResult.ForceOutAtHome)
+        {
+            if (forcedHome) scorer = r3;
+            else n3 = r3;
+        }
+        if (r2 is not null && outcome != BuntResult.ForceOutAtThird)
+        {
+            if (forced3 || n3 is null) n3 = r2;
+            else n2 = r2;
+        }
+        if (r1 is not null && outcome != BuntResult.ForceOutAtSecond) n2 = r1;
+        if (batterReaches) n1 = batter;
+
+        bases.First = n1;
+        bases.Second = n2;
+        bases.Third = n3;
+        var advanced = scorer is not null
+            || (r2 is not null && ReferenceEquals(n3, r2))
+            || (r1 is not null && ReferenceEquals(n2, r1));
+        return (scorer, advanced);
+    }
+
     private static (int, int) ApplyWalk(BaseState bases, Player batter, Player? r1, Player? r2, Player? r3,
         List<RunnerMove>? mv)
     {
