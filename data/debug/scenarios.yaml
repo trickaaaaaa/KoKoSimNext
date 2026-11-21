@@ -142,6 +142,27 @@ scenarios:
     bases: [3]
     seed: 20260801   # 係数変更で解が動いたら選び直す（GameEndScenarioTests が見張る）
 
+  # ── 打球の無いサヨナラ（issue #1262）。押し出しの四球／暴投（打席の途中）で決着する ──
+  - id: game-end-walkoff-walk-lab
+    name: 終局検証・押し出し四球のサヨナラ（9回裏2死満塁・同点）
+    away: { school: "AI:tier=C", score: 3 }
+    home: { school: "AI:tier=C", score: 3 }
+    inning: 9
+    top: false
+    outs: 2
+    bases: [1, 2, 3]
+    seed: 20261019   # 係数変更で解が動いたら選び直す（GameEndScenarioTests が見張る）
+
+  - id: game-end-walkoff-wildpitch-lab
+    name: 終局検証・暴投のサヨナラ（9回裏2死三塁・同点。打席は未決着のまま終わる）
+    away: { school: "AI:tier=C", score: 3 }
+    home: { school: "AI:tier=C", score: 3 }
+    inning: 9
+    top: false
+    outs: 2
+    bases: [3]
+    seed: 20261107   # 係数変更で解が動いたら選び直す（GameEndScenarioTests が見張る）
+
   # ── フライの読み（issue #1130）。無死一塁で、最初の打席が際どいフライ。自然な解決をシードで固定する ──
   - id: flyread-halfway-lab
     name: フライの読み・一塁走者がハーフウェーで待ってから走る安打（1回表無死一塁）

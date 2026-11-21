@@ -215,6 +215,21 @@ captures:
     view: panel
     duel_seconds: 23.0
     video: {from: start, to: end, fps: 24}
+  # ── 打球の無いサヨナラ（issue #1262）。押し出し四球／暴投で決着しても場面が流れる ──
+  - id: walkoff-1262-walk
+    name: "サヨナラの場面・押し出し四球（issue #1262）"
+    scenario: game-end-walkoff-walk-lab
+    manager: home
+    view: panel
+    duel_seconds: 23.0
+    video: {from: start, to: end, fps: 24}
+  - id: walkoff-1262-wildpitch
+    name: "サヨナラの場面・暴投（打席の途中で決着。issue #1262）"
+    scenario: game-end-walkoff-wildpitch-lab
+    manager: home
+    view: panel
+    duel_seconds: 23.0
+    video: {from: start, to: end, fps: 24}
   # ── 試合テロップの画像化（issue #1179）。画面全体（panel）で撮る ──
   - id: telop-calls-1179
     name: "1球の判定テロップ（ストライク／ボール等）が画像で出る（issue #1179）"

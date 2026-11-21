@@ -44,7 +44,7 @@ namespace KokoSim.Unity.Match.Telops
         public void Play(double distanceM)
         {
             _elapsed = 0.0;
-            _lastFrame = -1;
+            ClearGoldFrame();
             _distance.text = "推定飛距離 " + Mathf.RoundToInt((float)distanceM) + "m";
             _root.style.display = DisplayStyle.Flex;
             SetGoldFrame(0);
@@ -63,7 +63,15 @@ namespace KokoSim.Unity.Match.Telops
         public void Hide()
         {
             _elapsed = -1.0;
+            ClearGoldFrame();
             _root.style.display = DisplayStyle.None;
+        }
+
+        // 同じ詳細度で最後に定義された 15 が常に勝つので、コマのクラスは使い終わりに必ず外す（2本目以降が最終コマで止まる）
+        private void ClearGoldFrame()
+        {
+            if (_lastFrame >= 0) _gold.RemoveFromClassList("tl-hr-gold-" + _lastFrame.ToString("00"));
+            _lastFrame = -1;
         }
 
         private void Apply(double t)

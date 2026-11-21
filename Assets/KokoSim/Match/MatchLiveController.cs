@@ -547,6 +547,10 @@ namespace KokoSim.Unity.Match
         private bool _gameSetPending;
         // サヨナラの場面（issue #1176）: 喜びを見せてから「ゲームセット」を掲げるまでの秒数（8割が輪に着いてから）。喜びの動きは2種類しかないので長く映さない
         [SerializeField] private float walkoffCelebrateHoldSeconds = 0.4f;
+        // 人だかりが成立しない（喜ぶ人数が足りない・到着できない役者がいる）場面でも「ゲームセット」を出す上限[秒]（実時間）。
+        // 通常は終局から10秒前後で人だかりができる＝その倍で切る。
+        private const float WalkoffSceneSafetyCapSeconds = 20f;
+        private float _walkoffSceneClock;
         private bool _walkoffSkip;          // 盤面クリックで場面を飛ばした（そのまま「ゲームセット」へ）
         private int _subLogCount;   // 既に取り込んだ交代ログ件数（_prog.Substitutions との差分検知。issue #920）
 
@@ -867,6 +871,7 @@ namespace KokoSim.Unity.Match
             _gameTelopOn = false;
             _gameSetPending = false;
             _walkoffSkip = false;
+            _walkoffSceneClock = 0f;
             _duelRig?.EndWalkoffScene();   // 前の試合のサヨナラの場面を持ち越さない（issue #1176）
             _inningBreakClock = 0f;
             _inningBreakOn = false;
@@ -1184,6 +1189,13 @@ namespace KokoSim.Unity.Match
         {
             if (result == AdvancePitchResult.Finished)
             {
+                // 打席の途中で決着したサヨナラ（暴投・捕逸・本盗・重盗）は、決着の球を投げ終えたその歩で終局が返る。
+                // その球（と進塁の再生）を描き切ってから終局へ進む＝再生の終わりの AdvanceToNextWindow が改めて Finished を受ける。
+                if (thrown != null && !_fastMode && _prog != null && _shownAnyHalf)
+                {
+                    EnqueueThrownPitch(thrown, terminal: false);
+                    return;
+                }
                 EndGame(_prog.BuildResult());
                 return;
             }
@@ -2477,17 +2489,32 @@ namespace KokoSim.Unity.Match
                 _duelRig.StartArmedWalkoffNow();
                 return _duelRig.WalkoffSceneActive;
             }
-            if (!DuelPacingActive || _current == null || _current.Play != null || _current.RunsScored <= 0) return false;
-            if (!IsWalkoffNow(out _)) return false;
-            var onBase = new[] { _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore };
+            if (!DuelPacingActive || _current == null || !IsWalkoffAtGameEnd()) return false;
+            // 塁の絵は決着の前の配置: 打席が確定していれば打席の頭の塁、打席の途中で決着した（暴投・捕逸・本盗・重盗）なら直近の窓の塁
+            var onBase = _paConfirmed
+                ? new[] { _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore }
+                : new[] { _atBat?.BaseFirst ?? false, _atBat?.BaseSecond ?? false, _atBat?.BaseThird ?? false };
             return _duelRig.BeginWalkoffWithoutPlay(_prog.BenchEntryCount(teamIsAway: false), onBase,
                 DuelStageRig.BenchIsFirstBaseSide(false));
+        }
+
+        /// <summary>
+        /// 終局の時点でサヨナラの決着か（規定の回以降の裏に後攻が勝ち越して終わった）。<see cref="IsWalkoffNow"/> と違い、
+        /// 点を掲示板へ出したかには依らない＝押し出し・死球は終局までに掲示済み、暴投・捕逸・重盗は再生の終わりで掲示済みになる。
+        /// 裏に後攻がリードで終わる試合は、その裏の攻撃中に勝ち越した場合しかない（先にリードなら裏は行わない）。
+        /// </summary>
+        private bool IsWalkoffAtGameEnd()
+        {
+            if (_prog == null || !_shownAnyHalf || _shownIsTop || _shownInning < _prog.RegulationInnings) return false;
+            var snap = _prog.Snapshot();
+            return snap.HomeLine.Runs > snap.AwayLine.Runs;
         }
 
         /// <summary>「ゲームセット」を掲げてよいか＝サヨナラの場面が無い・飛ばした・人だかりができてから所定の秒数たった。</summary>
         private bool WalkoffReadyForGameSet()
         {
             if (_walkoffSkip || _duelRig == null || !_duelRig.WalkoffSceneActive) return true;
+            if (_walkoffSceneClock >= WalkoffSceneSafetyCapSeconds) return true;
             return _duelRig.WalkoffCelebrateSeconds >= walkoffCelebrateHoldSeconds;
         }
 
@@ -3488,6 +3515,7 @@ namespace KokoSim.Unity.Match
             // 試合開始/終了テロップ（issue #442・画像化は #1179）。「ゲームセット」は得点テロップと
             // サヨナラのホームラン演出（#1176・ホームランは打ち切らない）の両方が済んでから掲げる。
             // 寿命は再生速度で縮む（issue #1179「判定のように速度へ追従」）。
+            if (_gameSetPending && _duelRig != null && _duelRig.WalkoffSceneActive) _walkoffSceneClock += Time.deltaTime;
             if (_gameSetPending && !_scoreCallOn && !(_homeRunTelop?.IsPlaying ?? false) && WalkoffReadyForGameSet())
             {
                 _gameSetPending = false;
