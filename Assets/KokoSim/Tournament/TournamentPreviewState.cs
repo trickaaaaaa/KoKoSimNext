@@ -195,10 +195,7 @@ namespace KokoSim.Unity.Tournament
             if (school == null) return null;
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
-            var (stage, leagueBerths, _) = StageOf(d);
-            // 勝ち抜き戦は従来どおり（甲子園・夏は1、それ以外は2）。リーグ戦だけブロックの進出校数
-            var berths = stage == PreviewStage.DistrictLeague ? leagueBerths
-                : d.Kind == TK.SummerKoshien || d.Kind == TK.Summer ? 1 : 2;
+            var (stage, berths, _) = StageOf(d);
             var excerpt = TournamentPreviewBuilder.BuildRosterFor(
                 school, d.Field, berths: berths, yearIndex: session.Year,
                 teamProvider: TeamFor, stage: stage,

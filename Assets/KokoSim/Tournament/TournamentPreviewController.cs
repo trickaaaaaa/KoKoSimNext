@@ -522,7 +522,7 @@ namespace KokoSim.Unity.Tournament
             if (rows.Count == 0) return;
 
             // 甲子園は「県の代表」だが、センバツは複数校が同じ地区から選ばれることもある選出枠＝「校」。
-            var koshien = KokoSim.Unity.Shell.GameSession.Current.Kind
+            var koshien = KokoSim.Unity.Shell.GameSession.Current.Display?.Kind
                 == KokoSim.Engine.Season.TournamentKind.SummerKoshien;
             SetText("tp-entrants-h", "出場 " + rows.Count + (koshien ? "代表" : "校"));
 
@@ -599,7 +599,7 @@ namespace KokoSim.Unity.Tournament
 
             // 成績スコープの切替（甲子園＝県予選／甲子園・センバツ＝地区大会／センバツ）。既定は
             // 直前の大会の実測＝開幕前でも中身のある表が出る（大会が変われば選択も追従する）。
-            var senbatsu = KokoSim.Unity.Shell.GameSession.Current.Kind
+            var senbatsu = KokoSim.Unity.Shell.GameSession.Current.Display?.Kind
                 == KokoSim.Engine.Season.TournamentKind.SenbatsuKoshien;
             var qualifierScope = senbatsu
                 ? TournamentPreviewState.StatScope.RegionalQualifier

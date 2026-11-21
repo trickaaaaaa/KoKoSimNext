@@ -1048,7 +1048,7 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
-        /// 「大会・全国」タブが描く大会（対話中のものを優先し、無ければ観るだけの甲子園）。
+        /// 「大会・全国」タブが描く大会（対話中のものを優先し、無ければ観るだけの甲子園／センバツ）。
         /// どちらも無ければ null＝空状態。画面がこの1箇所だけを見る＝2種類の大会を画面側で分岐しない。
         /// </summary>
         public TournamentDisplay Display
@@ -1059,6 +1059,9 @@ namespace KokoSim.Unity.Shell
                 if (HasSpectatedKoshien)
                     return new TournamentDisplay(
                         TournamentKind.SummerKoshien, KoshienTitle, KoshienRunner, KoshienField, false);
+                if (HasSpectatedSenbatsu)
+                    return new TournamentDisplay(
+                        TournamentKind.SenbatsuKoshien, SenbatsuTitle, SenbatsuRunner, SenbatsuField, false);
                 return null;
             }
         }
