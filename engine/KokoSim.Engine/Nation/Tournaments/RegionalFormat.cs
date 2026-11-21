@@ -36,8 +36,34 @@ public sealed record RegionalFormat
             var map = year % 2 == 1 ? OddYearBerths : EvenYearBerths;
             if (map is not null && map.TryGetValue(pref, out var v)) b = v;
         }
-        if (HostPrefectureBonus && HostByYear.TryGetValue(year, out var host) && host == pref) b += 1;
+        if (HostPrefectureBonus && HostFor(year) == pref) b += 1;
         return b;
+    }
+
+    /// <summary>
+    /// 指定年の開催県。表（<see cref="HostByYear"/>）にある年はそのまま、無い年は直近の表の年を起点に
+    /// 地区内の県をJIS順で1年1県ずつ持ち回りで巡回する（表より前の年は逆向き）。表が空なら null。
+    /// </summary>
+    public string? HostFor(int year)
+    {
+        if (HostByYear.Count == 0) return null;
+        if (HostByYear.TryGetValue(year, out var known)) return known;
+
+        var anchorYear = HostByYear.Keys.Where(y => y < year).DefaultIfEmpty(int.MinValue).Max();
+        if (anchorYear == int.MinValue) anchorYear = HostByYear.Keys.Min();
+        var anchorHost = HostByYear[anchorYear];
+
+        var cycle = FixedBerths.Keys.Concat(BerthsPerPref.Keys).Concat(HostByYear.Values)
+            .Concat(OddYearBerths?.Keys ?? Enumerable.Empty<string>())
+            .Concat(EvenYearBerths?.Keys ?? Enumerable.Empty<string>())
+            .Distinct()
+            .OrderBy(n => { var i = PrefectureNames.JisOrder.ToList().IndexOf(n); return i < 0 ? int.MaxValue : i; })
+            .ThenBy(n => n, StringComparer.Ordinal)
+            .ToList();
+        var at = cycle.IndexOf(anchorHost);
+        if (at < 0 || cycle.Count == 0) return anchorHost;
+        var step = (year - anchorYear) % cycle.Count;
+        return cycle[((at + step) % cycle.Count + cycle.Count) % cycle.Count];
     }
 }
 
