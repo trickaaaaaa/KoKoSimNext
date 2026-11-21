@@ -191,9 +191,9 @@ namespace KokoSim.Unity.Components
         private static RgbColor Cycle(IReadOnlyList<RgbColor> choices, RgbColor current, int delta)
         {
             if (choices == null || choices.Count == 0) return current;
-            var i = 0;
+            // 一覧に無い色（将来の上書き復元など）は「一覧の手前／奥」に居るものとして扱う＝▶で先頭、◀で末尾へ入る
+            var i = delta >= 0 ? -1 : choices.Count;
             for (var k = 0; k < choices.Count; k++) if (choices[k].Equals(current)) { i = k; break; }
-            // 一覧に無い色（将来の上書き復元など）から送っても必ず一覧内へ入るよう剰余で回す
             return choices[((i + delta) % choices.Count + choices.Count) % choices.Count];
         }
     }

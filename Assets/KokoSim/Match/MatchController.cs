@@ -1,3 +1,4 @@
+using KokoSim.Unity.Components;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -106,7 +107,7 @@ namespace KokoSim.Unity.Match
             {
                 var row = StRow(false);
                 row.Add(StCell(r.Name, "st-name", false));
-                row.Add(StCell(r.Innings, "st-ip", false));
+                row.Add(UiComponents.SetInnings(StCell("", "st-ip", false), r.Innings));
                 row.Add(StCell(r.H.ToString(), "st-num", false));
                 row.Add(StNum(r.R, false));
                 row.Add(StNum(r.So, r.So > 0));

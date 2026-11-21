@@ -23,6 +23,7 @@ namespace KokoSim.Unity.Member
         }
 
         private const float ChipRise = 2f;   // 立ち位置点からチップ下端までの持ち上げ[px]（点はチップの下端に接する・issue #732）
+        private const float ChipEdgeMargin = 6f;   // チップを球場図の端から離しておく余白[px]（左右・上）
 
         private MemberSettingState _state;
         private VisualElement _root;
@@ -166,7 +167,9 @@ namespace KokoSim.Unity.Member
                 var h = child.layout.height;
                 if (float.IsNaN(w) || float.IsNaN(h) || w <= 0f || h <= 0f) return; // 未確定→後で再試行
                 var dot = _field.FieldToLocal(m);
-                items.Add(new PlacedChip { El = child, Dot = dot, Cx = dot.x, W = w, H = h });
+                // 上端が球場図の外へ出る立ち位置（中堅など）はチップを下へ寄せて切れないようにする。
+                var top = Mathf.Max(ChipEdgeMargin, dot.y - ChipRise - h);
+                items.Add(new PlacedChip { El = child, Dot = dot, Cx = dot.x, W = w, H = h, Top = top });
             }
 
             ResolveOverlaps(items, fw);
@@ -175,9 +178,9 @@ namespace KokoSim.Unity.Member
             var markers = new List<FieldMarkersElement.Marker>();
             foreach (var it in items)
             {
-                var bottomY = it.Dot.y - ChipRise;
+                var bottomY = it.Top + it.H;
                 it.El.style.left = it.Cx - it.W * 0.5f;
-                it.El.style.top = bottomY - it.H;
+                it.El.style.top = it.Top;
                 // 引き出し線は点がチップの幅の外へ出たときだけ（下端の真下にあるうちは点だけ＝線が文字を横切らない。issue #732）。
                 var offset = Mathf.Abs(it.Cx - it.Dot.x) > it.W * 0.5f - 4f;
                 markers.Add(new FieldMarkersElement.Marker
@@ -196,35 +199,44 @@ namespace KokoSim.Unity.Member
             public VisualElement El;
             public Vector2 Dot;   // 立ち位置[px]（不動）
             public float Cx;      // チップ中心X（重なり回避で可変）
+            public float Top;     // チップ上端Y（球場図の上端で切れないよう寄せた後の値）
             public float W;
             public float H;
         }
 
         // 立ち位置点は動かさず、チップ中心Xだけ左右にずらして横方向の重なりを解く（縦が近いチップ同士）。
+        // 端へ押し戻すと別のチップに重なり直すので、「重なりを解く→端へ収める」を動きが止まるまで繰り返す。
         private static void ResolveOverlaps(List<PlacedChip> items, float fieldWidth)
         {
             const float gap = 4f;
+            const int maxPasses = 40;
             items.Sort((a, b) => a.Cx.CompareTo(b.Cx));
-            for (var pass = 0; pass < 4; pass++)
+            for (var pass = 0; pass < maxPasses; pass++)
             {
+                var moved = false;
                 for (var i = 0; i < items.Count; i++)
                     for (var j = i + 1; j < items.Count; j++)
                     {
                         var a = items[i];
                         var b = items[j];
-                        var vClose = Mathf.Abs(a.Dot.y - b.Dot.y) < (a.H + b.H) * 0.5f + 6f;
+                        var vClose = Mathf.Abs((a.Top + a.H * 0.5f) - (b.Top + b.H * 0.5f)) < (a.H + b.H) * 0.5f + 6f;
                         if (!vClose) continue;
                         var need = (a.W + b.W) * 0.5f + gap;
                         var dx = b.Cx - a.Cx;
-                        if (Mathf.Abs(dx) >= need) continue;
+                        if (Mathf.Abs(dx) >= need - 0.01f) continue;
                         var push = (need - Mathf.Abs(dx)) * 0.5f;
                         if (dx >= 0) { a.Cx -= push; b.Cx += push; }
                         else { a.Cx += push; b.Cx -= push; }
+                        moved = true;
                     }
+                // 端はみ出しをクランプ（チップは常に画面内・点は不動なので引き出し線が伸びる）。余白は広めに取る。
+                foreach (var it in items)
+                {
+                    var c = Mathf.Clamp(it.Cx, it.W * 0.5f + ChipEdgeMargin, fieldWidth - it.W * 0.5f - ChipEdgeMargin);
+                    if (Mathf.Abs(c - it.Cx) > 0.01f) { it.Cx = c; moved = true; }
+                }
+                if (!moved) break;
             }
-            // 端はみ出しをクランプ（チップは常に画面内・点は不動なので引き出し線が伸びる）。余白は広めに取る。
-            foreach (var it in items)
-                it.Cx = Mathf.Clamp(it.Cx, it.W * 0.5f + 6f, fieldWidth - it.W * 0.5f - 6f);
         }
 
         // ── 背番号10〜20：控え横並び ──

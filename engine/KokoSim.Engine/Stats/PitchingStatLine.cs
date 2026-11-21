@@ -35,7 +35,7 @@ public sealed class PitchingStatLine
         => ToBattingLines(_byPitch);
 
     /// <summary>投球回テキスト（例: 7回1/3 → "7 1/3"）。</summary>
-    public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");
+    public string InningsText => InningsFormat.Text(Outs);
 
     /// <summary>
     /// 防御率＝自責点×27/アウト数（9回換算の自責点, issue #69）。アウト0で自責点があれば無限大

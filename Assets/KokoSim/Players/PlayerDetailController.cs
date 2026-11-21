@@ -217,7 +217,7 @@ namespace KokoSim.Unity.Players
             cell.AddToClassList("pd2-statcell");
             var k = new Label(c.Label);
             k.AddToClassList("pd2-statcell__k");
-            var val = new Label(c.Value);
+            var val = UiComponents.SetInnings(new Label(), c.Value);
             val.AddToClassList("pd2-statcell__v");
             val.AddToClassList("f-num");
             cell.Add(k);

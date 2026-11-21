@@ -47,7 +47,7 @@
 }
 .nom-slot--empty { border-color: var(--color-line-soft); }
 .nom-slot__num {
-    font-size: var(--fs-label); color: #FFFFFF; background-color: var(--ink); width: 22px; height: 22px;
+    font-size: var(--fs-label); color: var(--color-on-fill); background-color: var(--ink); width: 22px; height: 22px;
     -unity-text-align: middle-center; border-radius: var(--radius-chip); margin-right: var(--sp-2);
 }
 .nom-slot--empty .nom-slot__num { background-color: var(--color-line); color: var(--color-muted); }
@@ -119,8 +119,8 @@
     border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
 }
 .nom-star:hover { border-color: var(--sky); color: var(--sky); }
-.nom-star--on { background-color: var(--sky); border-color: var(--sky); color: #FFFFFF; }
-.nom-star--on:hover { color: #FFFFFF; }
+.nom-star--on { background-color: var(--sky); border-color: var(--sky); color: var(--color-on-fill); }
+.nom-star--on:hover { color: var(--color-on-fill); }
 /* カテゴリ別ランク4組は独立列に出したので折返し禁止で1行に固定する（Issue #273）。 */
 .tcell--rank .cat-rank-chips { flex-wrap: nowrap; }
 
@@ -176,7 +176,7 @@
    1440×840（パネル1600×900基準）・プリセット帯＋3カラム高密度化でスクロールを撲滅する。
    design-19 デーゲームNBスキンへ追いつかせる（旧ダークREFINEブロックは廃止・白地カード＋インク枠＋
    ベタ影＋赤CTAへ統一）。区切りは罫線でなく面の明度（--sf-card/--sf-raise/--sf-base）で作る（UI原則④）。 */
-#tp-modal.modal-scrim { background-color: rgba(6, 12, 8, 0.72); }
+#tp-modal.modal-scrim { background-color: var(--color-scrim); }
 
 .tpm-card {
     width: 1440px; max-width: 96%;
@@ -240,7 +240,7 @@
     margin: 0 2px 0 0; padding: 0;
 }
 .tpm-tab:hover { color: var(--color-chalk); }
-.tpm-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+.tpm-tab--on { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
 
 /* ── プリセット帯：横1行のチップ列＋残りバジェット（常時視界内・issue #222③④） ── */
 .tpm-preset-strip {
@@ -257,7 +257,7 @@
     padding-left: 12px; padding-right: 12px; padding-top: 5px; padding-bottom: 5px; margin-right: var(--sp-2);
 }
 .tpm-preset-chip:hover { border-color: var(--sky); }
-.tpm-preset-chip--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+.tpm-preset-chip--on { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
 .tp-ed-section__lock { font-size: var(--fs-cap); color: var(--color-warn); margin-left: var(--sp-3); }
 .tpm-budget { flex-shrink: 0; width: 220px; margin-left: var(--sp-3); }
 .tp-ed-bar__remain { font-size: var(--fs-cap); color: var(--color-muted); margin-bottom: 3px; }
@@ -345,7 +345,7 @@
 }
 .tpm-revert:hover { border-color: var(--ink); }
 .tpm-done {
-    font-size: var(--fs-label); color: #FFFFFF; background-color: var(--color-cta);
+    font-size: var(--fs-label); color: var(--color-on-fill); background-color: var(--color-cta);
     border-width: var(--border-w); border-color: var(--color-cta); border-radius: 0;
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
 }
@@ -369,7 +369,7 @@
     flex-shrink: 0;
 }
 .nom-btn:hover { background-color: var(--color-panel-hover); }
-.nom-btn--on { background-color: var(--sky); color: #FFFFFF; }
+.nom-btn--on { background-color: var(--sky); color: var(--color-on-fill); }
 
 /* ═══ 複製ピッカー（tp-copy-modal・コピー元を選ぶ, Issue #133-⑤） ═══ */
 .tpc-card { width: 720px; max-width: 86%; max-height: 82%; }
@@ -400,7 +400,7 @@
 .tp-toast {
     position: absolute; bottom: 24px; left: 50%;
     translate: -50% 0;
-    background-color: var(--sky); color: #FFFFFF;
+    background-color: var(--sky); color: var(--color-on-fill);
     font-size: 18px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: 0;
     display: none;
 }

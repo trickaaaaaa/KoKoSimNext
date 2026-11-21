@@ -182,7 +182,7 @@
     height: 52px;
     flex-shrink: 0;
     background-color: var(--color-cta);
-    color: #FFFFFF;
+    color: var(--color-on-fill);
     font-size: var(--fs-body);
     border-width: 0;
     border-radius: var(--radius-panel);

@@ -18,6 +18,11 @@ namespace KokoSim.Unity.Components
         /// <summary>グリッドの段数（20/40/60/80/100）。</summary>
         private const int Rings = 5;
 
+        private static readonly CustomStyleProperty<Color> GridInnerProp = new("--radar-grid-inner");
+        private static readonly CustomStyleProperty<Color> GridOuterProp = new("--radar-grid-outer");
+        private static readonly Color FallbackGridInner = new Color32(0xD9, 0xD4, 0xC8, 0xFF);   // tokens.uss と同値
+        private static readonly Color FallbackGridOuter = new Color32(0x8A, 0x88, 0x7B, 0xFF);   // tokens.uss と同値
+
         /// <summary>
         /// レーダーを描く。<paramref name="axes"/> は真上から時計回りに並べる。
         /// <paramref name="grade"/> は塗り色を決めるランク（S〜G）。
@@ -35,9 +40,10 @@ namespace KokoSim.Unity.Components
             var radius = Mathf.Min(rect.width, rect.height) * radiusFactor;
             var p = ctx.painter2D;
 
-            // グリッド: 最外周だけ明るく、内側は暗く細く。
-            var gridInner = new Color(0.17f, 0.24f, 0.20f);
-            var gridOuter = new Color(0.40f, 0.52f, 0.45f);
+            // グリッド: 白カードの上では最外周だけ濃く太く、内側は淡く細く（色は tokens.uss --radar-grid-*）。
+            var style = ctx.visualElement.customStyle;
+            var gridInner = style.TryGetValue(GridInnerProp, out var gi) ? gi : FallbackGridInner;
+            var gridOuter = style.TryGetValue(GridOuterProp, out var go) ? go : FallbackGridOuter;
             for (var r = 1; r <= Rings; r++)
             {
                 var isOuter = r == Rings;

@@ -49,7 +49,7 @@ public sealed record PitchingLine(
     IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? BattingAgainstByPitch = null, int EarnedRuns = 0)
 {
     /// <summary>投球回（アウト数/3）。例: 7回1/3 → "7 1/3"。</summary>
-    public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");
+    public string InningsText => global::KokoSim.Engine.Stats.InningsFormat.Text(Outs);
 }
 
 /// <summary>個人守備成績（1試合）。現状は失策数のみ（issue #91）。SourceId＝育成選手ID（相手校の生成選手は null）。</summary>

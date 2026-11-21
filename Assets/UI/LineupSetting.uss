@@ -181,7 +181,7 @@
     margin: 0;
     font-size: 18px;
     letter-spacing: 3.6px;
-    color: #FFFFFF;
+    color: var(--color-on-fill);
     border-width: 0;
     border-radius: var(--sbk-r-card);
 }

@@ -40,7 +40,7 @@
     border-radius: 10px;
     border-width: 0;
     background-color: var(--ms-ink);
-    color: #FFFFFF;
+    color: var(--color-on-fill);
     font-size: 16px;
     letter-spacing: 3.2px;    /* 0.2em */
 }
@@ -211,7 +211,7 @@
     border-width: 0;
 }
 .mres-pa--hit  { background-color: var(--mr-pa-hit-bg);  color: var(--mr-pa-hit-tx);  border-width: 1px; border-color: var(--mr-pa-hit-edge); }
-.mres-pa--hr   { background-color: var(--mr-hr);         color: #FFFFFF; }
+.mres-pa--hr   { background-color: var(--mr-hr);         color: var(--color-on-fill); }
 .mres-pa--walk { background-color: var(--mr-pa-walk-bg); color: var(--mr-pa-walk-tx); border-width: 1px; border-color: var(--mr-pa-walk-edge); }
 .mres-pa--err  { background-color: var(--mr-pa-err-bg);  color: var(--mr-pa-err-tx);  border-width: 1px; border-color: var(--mr-pa-err-edge); }
 .mres-pa--other { color: var(--mr-muted); }

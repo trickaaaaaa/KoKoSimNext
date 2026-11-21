@@ -61,7 +61,11 @@ namespace KokoSim.Unity.Components
             if (r.Number > 0) row.Add(Text(r.Number.ToString(), "num-badge", "f-num-bd"));
             row.Add(Text(r.Name, "sub-telop__name", "f-display-lg"));
             if (r.Position.Length > 0) row.Add(Text(r.Position, "sub-telop__pos", "f-body-bd"));
-            if (r.OutName != null) row.Add(Text("← " + r.OutName, "sub-telop__out", "f-body"));
+            if (r.OutName != null)
+            {
+                row.Add(Text("←", "sub-telop__out", "f-body"));
+                row.Add(Text(r.OutName, "sub-telop__out-name", "f-display"));
+            }
             return row;
         }
 
