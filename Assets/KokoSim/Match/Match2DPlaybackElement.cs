@@ -102,6 +102,7 @@ namespace KokoSim.Unity.Match
         private Color _runnerEdge = Hex(0x23402A);  // 走者トークン（アンバー）の縁（明芝で締める）
         private Color _ballEdge = Hex(0x0B0B0B);    // ボールの黒縁（純白が明芝に溶けないよう輪郭）
         private Color _lamp = Hex(0xF5C64A);        // 走者塗り・移動中野手の縁（--color-lamp）
+        private Color _ink = Hex(0x1A1608);         // 走者ラベルの暗文字（--color-ink）
         private Color _trailColor = Hex(0xE68A2E);  // 軌跡（明芝で視認できる濃いめアンバー）
         private Color _ball = Hex(0xFFFFFF);        // ボール本体（純白＝--ball-white）
         private Color _grassStripe = Hex(0x578646); // 外野芝の刈り込みストライプ（明側・ベース芝と交互）
@@ -122,6 +123,7 @@ namespace KokoSim.Unity.Match
         private static readonly CustomStyleProperty<Color> BallEdgeProp = new("--field-ball-edge-day");
         private static readonly CustomStyleProperty<Color> TrailProp = new("--field-trail-day");
         private static readonly CustomStyleProperty<Color> LampProp = new("--color-lamp");
+        private static readonly CustomStyleProperty<Color> InkProp = new("--color-ink");
         private static readonly CustomStyleProperty<Color> BallProp = new("--ball-white");
         private static readonly CustomStyleProperty<Color> GrassStripeProp = new("--field-grass-stripe-day");
         private static readonly CustomStyleProperty<Color> WarningProp = new("--field-warning-day");
@@ -280,6 +282,7 @@ namespace KokoSim.Unity.Match
             if (cs.TryGetValue(BallEdgeProp, out var be)) _ballEdge = be;
             if (cs.TryGetValue(TrailProp, out var tr)) _trailColor = tr;
             if (cs.TryGetValue(LampProp, out var la)) _lamp = la;
+            if (cs.TryGetValue(InkProp, out var ink)) _ink = ink;
             if (cs.TryGetValue(BallProp, out var bw)) _ball = bw;
             if (cs.TryGetValue(GrassStripeProp, out var gs)) _grassStripe = gs;
             if (cs.TryGetValue(WarningProp, out var wa)) _warning = wa;
@@ -885,7 +888,8 @@ namespace KokoSim.Unity.Match
             {
                 var l = MakeTokenLabel();
                 _runnerLabels.Add(l);
-                Add(l);
+                // 判定の器より後ろに足すと判定が走者ラベルの下に潜る（走者が増えた1フレームだけ）。常に判定の手前へ挿す。
+                Insert(IndexOf(_judgementHost), l);
             }
             for (var i = 0; i < _runnerLabels.Count; i++)
             {
@@ -894,7 +898,7 @@ namespace KokoSim.Unity.Match
                 {
                     lbl.style.display = DisplayStyle.Flex;
                     lbl.text = _runners[i].Label;
-                    PlaceLabel(lbl, Project(_runners[i].PosM), Hex(0x1A1608), k); // 走者ラベルは ink（暗）
+                    PlaceLabel(lbl, Project(_runners[i].PosM), _ink, k); // 走者ラベルは ink（暗）
                 }
                 else lbl.style.display = DisplayStyle.None;
             }
