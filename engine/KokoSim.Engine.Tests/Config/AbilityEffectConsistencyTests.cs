@@ -53,6 +53,23 @@ public sealed class AbilityEffectConsistencyTests
         Assert.Equal(inf.ArmStrength, of.ArmStrength);   // 肩は頭打ちしない（#764）
     }
 
+    /// <summary>
+    /// 効き0.50は Pivot からの差が奇数のとき必ず.5になる。既定の<c>Math.Round</c>は偶数丸めで、
+    /// 「3段同じ・1段上がる」の不均一な刻みができ、育成が丸ごと効かない区間が出る（issue #1211）。
+    /// 期待は Lv 2段ごとに均一に+1（<c>MidpointRounding.AwayFromZero</c>）。
+    /// </summary>
+    [Fact]
+    public void Scale_HalfIntegerOffsetFromPivot_RoundsAwayFromZero_NotBankersRounding()
+    {
+        var half = new AbilityEffectCoefficients { BattingScale = 0.5 };
+        // 奇数lvと次の偶数lvが必ず同値（2段ペア）。3段同値になる偏りが無い＝育成が必ず動く。
+        for (var lv = 49; lv <= 59; lv += 2)
+            Assert.Equal(half.Batting(lv), half.Batting(lv + 1));
+        Assert.NotEqual(half.Batting(53), half.Batting(55)); // 旧コードは52,52で同値になっていた
+        Assert.Equal(52, half.Batting(53));
+        Assert.Equal(53, half.Batting(55));
+    }
+
     [Fact]
     public void Identity_LeavesAbilitiesUntouched_AndPivotIsFixedPoint()
     {

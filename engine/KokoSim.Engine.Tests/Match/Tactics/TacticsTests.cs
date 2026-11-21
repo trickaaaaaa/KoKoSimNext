@@ -495,6 +495,19 @@ public sealed class TacticsTests
         Assert.True(lowThreshold < baseThreshold);  // 精神力が低いほど動揺しやすい
     }
 
+    /// <summary>
+    /// 精神力75（50も）はoffsetがちょうど±0.5になる。既定の<c>Math.Round</c>は偶数丸めでoffset=0のまま
+    /// 精神力50と同値になり、「精神力が高い/低いほど動揺しにくい/しやすい」が効かない区間ができる（issue #1211）。
+    /// 期待は必ず精神力の向きに丸まる（<c>MidpointRounding.AwayFromZero</c>）。
+    /// </summary>
+    [Fact]
+    public void Rattled_MentalHalfIntegerTie_RoundsAwayFromZero_NotBankersRounding()
+    {
+        var baseThreshold = C.RattledThresholdFor(50);
+        Assert.True(C.RattledThresholdFor(75) > baseThreshold); // offset=+0.5 → 旧コードは0（動かない）
+        Assert.True(C.RattledThresholdFor(25) < baseThreshold); // offset=-0.5 → 旧コードは0（動かない）
+    }
+
     [Fact]
     public void Rattled_RecoversNaturallyAfterEnoughOuts()
     {

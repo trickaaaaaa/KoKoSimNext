@@ -290,6 +290,18 @@ public sealed class FormModelTests
         Assert.Equal(a.TotalPitches, b.TotalPitches);
     }
 
+    /// <summary>
+    /// ClampAbility は step×perStep がちょうど.5になる区間を持つ（例: 50+1×2.5=52.5）。既定の<c>Math.Round</c>は
+    /// 偶数丸めで、調子一段分の補正が丸ごと消える値がある（issue #1211）。期待は必ず調子の向きに丸まる
+    /// （<c>MidpointRounding.AwayFromZero</c>）。
+    /// </summary>
+    [Fact]
+    public void EffectiveAbility_HalfIntegerTie_RoundsAwayFromZero_NotBankersRounding()
+    {
+        Assert.Equal(53, FormModel.EffectiveAbility(50, Condition.Good, 2.5)); // 52.5 → 旧コードは52（動かない）
+        Assert.Equal(51, FormModel.EffectiveAbility(53, Condition.Poor, 2.5)); // 50.5 → 旧コードは50（動かない）
+    }
+
     private static Player Pos(FieldPosition pos, Condition c) => new()
     {
         Position = pos, Condition = c,
