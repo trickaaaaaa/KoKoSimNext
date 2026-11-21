@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
+using KokoSim.Engine.Saves.Json;
 using KokoSim.Engine.Season;
 using Xunit;
 
@@ -372,6 +373,88 @@ public sealed class SaveCodecTests
         Assert.True(SaveCodec.TryDeserialize(v4, out var s, out var err), err);
         Assert.Null(s.Incoming);
         Assert.Equal("北嶺", s.SchoolName);   // 他の項目は素通りで読めている
+    }
+
+    // ===== 旧版・異常値でも読める（issue #1225） =====
+
+    // v5 の入部予定者の見立てには recruited（v6 で追加）が無い。Has 分岐なしで読むと全体が失敗した。
+    [Fact]
+    public void V5Save_IncomingReportsWithoutRecruited_StillLoads()
+    {
+        var root = Parse(SaveCodec.Serialize(SaveTestFixtures.BuildRichState()));
+        var reports = root.Obj("incoming").Arr("reports");
+        Assert.True(reports.Count > 0, "見立てが無いと検証にならない");
+        var stripped = new JsonArray();
+        foreach (var r in reports.Items) stripped.Add(Without(r.AsObject(), "recruited"));
+        root.Obj("incoming").Add("reports", stripped);
+        root.Add("version", 5);
+        Assert.DoesNotContain("\"recruited\"", root.ToString());
+
+        Assert.True(SaveCodec.TryDeserialize(root.ToString(), out var s, out var err), err);
+        Assert.NotNull(s.Incoming);
+        Assert.Equal(reports.Count, s.Incoming!.Reports.Count);
+        Assert.All(s.Incoming.Reports, r => Assert.False(r.Recruited));
+    }
+
+    // NaN/∞ の double は null で書かれる。読むとき InvalidCast でセーブ全体が失敗していた。
+    [Fact]
+    public void NonFiniteDouble_DoesNotBreakTheWholeSave()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Manager.Funds = double.NaN;
+        var json = SaveCodec.Serialize(state);
+        Assert.Contains("\"funds\":null", json);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(0.0, s.Manager.Funds);
+        Assert.Equal(state.Roster.Count, s.Roster.Count);   // 他の項目は無傷
+    }
+
+    [Fact]
+    public void NonFiniteExp_InRosterPlayer_DoesNotBreakTheWholeSave()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var root = Parse(SaveCodec.Serialize(state));
+        var first = root.Arr("roster").Items[0].AsObject();
+        var exp = new JsonArray();
+        foreach (var _ in first.Arr("exp").Items) exp.Add(JsonNull.Instance);
+        first.Add("exp", exp);
+
+        Assert.True(SaveCodec.TryDeserialize(root.ToString(), out var s, out var err), err);
+        Assert.Equal(state.Roster.Count, s.Roster.Count);
+    }
+
+    // 能力・守備位置の列挙を末尾に足すと、旧セーブの配列は新しい列挙より短い。位置で読んで長さを見ないと全滅した。
+    [Fact]
+    public void RosterPlayer_WithShorterAbilityAndAptitudeArrays_StillLoads()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var root = Parse(SaveCodec.Serialize(state));
+        var first = root.Arr("roster").Items[0].AsObject();
+        foreach (var key in new[] { "level", "exp", "cap", "apt", "aptExp", "aptCap" })
+            first.Add(key, Truncated(first.Arr(key), first.Arr(key).Count - 2));
+
+        Assert.True(SaveCodec.TryDeserialize(root.ToString(), out var s, out var err), err);
+        var firstKind = AbilityKinds.All[0];
+        Assert.Equal(state.Roster[0].Level(firstKind), s.Roster[0].Level(firstKind));   // 残っている列は正しく戻る
+        Assert.Equal(state.Roster.Count, s.Roster.Count);
+    }
+
+    private static JsonObject Parse(string json) => JsonValue.Parse(json).AsObject();
+
+    private static JsonObject Without(JsonObject o, string drop)
+    {
+        var copy = new JsonObject();
+        foreach (var k in o.Keys)
+            if (k != drop) copy.Add(k, o[k]);
+        return copy;
+    }
+
+    private static JsonArray Truncated(JsonArray a, int n)
+    {
+        var copy = new JsonArray();
+        for (var i = 0; i < n; i++) copy.Add(a[i]);
+        return copy;
     }
 
     // ===== スカウト（issue #867） =====

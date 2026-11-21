@@ -617,7 +617,7 @@ public static class SaveCodec
             o.Added.Add(new AddedSchool(
                 ((JsonNumber)t[0]).AsInt(), ((JsonString)t[1]).Value, ((JsonNumber)t[2]).AsInt(),
                 t[3] is JsonNull ? (int?)null : ((JsonNumber)t[3]).AsInt(),
-                ((JsonNumber)t[4]).AsDouble(), ((JsonNumber)t[5]).AsDouble()));
+                t[4].ToDouble(), t[5].ToDouble()));
         }
         // 改名（v31・issue #946）。旧セーブには無い＝改名なしで読む。
         if (obj.Has("renames"))
@@ -648,7 +648,7 @@ public static class SaveCodec
         {
             var t = v.AsArray();
             list.Add(new SchoolEvolutionState(
-                ((JsonNumber)t[0]).AsInt(), ((JsonNumber)t[1]).AsDouble(), ((JsonNumber)t[2]).AsDouble()));
+                ((JsonNumber)t[0]).AsInt(), t[1].ToDouble(), t[2].ToDouble()));
         }
         return list;
     }
@@ -684,7 +684,7 @@ public static class SaveCodec
     private static List<double> DoublesFromJson(JsonArray arr)
     {
         var list = new List<double>(arr.Count);
-        foreach (var v in arr.Items) list.Add(((JsonNumber)v).AsDouble());
+        foreach (var v in arr.Items) list.Add(v.ToDouble());
         return list;
     }
 
@@ -750,8 +750,8 @@ public static class SaveCodec
                 SchoolName: ((JsonString)t[1]).Value,
                 PrefectureId: ((JsonNumber)t[2]).AsInt(),
                 DistrictId: t[3] is JsonNull ? (int?)null : ((JsonNumber)t[3]).AsInt(),
-                Strength: ((JsonNumber)t[4]).AsDouble(),
-                Fame: ((JsonNumber)t[5]).AsDouble()));
+                Strength: t[4].ToDouble(),
+                Fame: t[5].ToDouble()));
         }
         return list;
     }
