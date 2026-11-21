@@ -314,7 +314,7 @@ namespace KokoSim.Unity.Shell
         {
             var year = SeasonClock.SeasonBaseYear + (GameClock.YearIndex - 1);
             var pref = NationService.PrefectureId;
-            if (kind == TournamentKind.Summer) return year + "年 選手権" + PrefectureNames.ShortOf(pref) + "大会";
+            if (kind == TournamentKind.Summer) return year + "年 " + KokoSim.Engine.Season.DisplayNames.Current.PrefSummerPrefix + PrefectureNames.ShortOf(pref) + "大会";
             if (kind == TournamentKind.AutumnDistrict)
             {
                 // 自校が戦う地区を添える（例「秋季神奈川県地区予選（湘南地区）」。issue #725）。

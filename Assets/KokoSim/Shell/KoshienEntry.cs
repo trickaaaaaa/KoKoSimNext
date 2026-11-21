@@ -119,7 +119,7 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>大会名（"2028年 全国高等学校野球選手権大会"）。県大会の "2028年 選手権神奈川大会" と同じ作法。</summary>
         public static string Title(int yearIndex)
-            => (SeasonClock.SeasonBaseYear + (yearIndex - 1)) + "年 全国高等学校野球選手権大会";
+            => (SeasonClock.SeasonBaseYear + (yearIndex - 1)) + "年 " + KokoSim.Engine.Season.DisplayNames.Current.SummerOfficial;
 
         // ===== 出場校 =====
 

@@ -157,13 +157,13 @@ namespace KokoSim.Unity.Records
             FillRows("rc-summary",
                 SummaryRow("公式戦", r.OfficialWins + "勝 " + r.OfficialLosses + "敗", games > 0),
                 SummaryRow("勝率", pct, games > 0),
-                SummaryRow("甲子園出場",
+                SummaryRow(KokoSim.Engine.Season.DisplayNames.Current.Koshien + "出場",
                     "夏" + r.SummerAppearances + "回・春" + r.SpringAppearances + "回",
                     r.TotalAppearances > 0),
-                SummaryRow("直近の甲子園",
+                SummaryRow("直近の" + KokoSim.Engine.Season.DisplayNames.Current.Koshien,
                     string.IsNullOrEmpty(r.SummerAppearanceLabel) ? "―" : r.SummerAppearanceLabel,
                     !string.IsNullOrEmpty(r.SummerAppearanceLabel)),
-                SummaryRow("甲子園成績", r.KoshienWins + "勝 " + r.KoshienLosses + "敗", koGames > 0),
+                SummaryRow(KokoSim.Engine.Season.DisplayNames.Current.Koshien + "成績", r.KoshienWins + "勝 " + r.KoshienLosses + "敗", koGames > 0),
                 SummaryRow("最高成績", BestResultLabel(r.BestResult), r.BestResult != BestResult.None));
         }
 

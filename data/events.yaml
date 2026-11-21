@@ -27,6 +27,8 @@
 #   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 1年生の人数（新入部員）
 #   {injury} 故障名の話し言葉（「足首の捻挫」）／ {weeks} 全治までの週数 …… injury_occurred だけが渡す（issue #695）
 #   {other} 選手間イベントの相手（cast: other: で選ぶ。issue #945）
+#   {koshien} {senbatsu} {jingu} ほか 大会名（data/display-names.yaml の表から入る。issue #1319）。
+#     実在の大会名は文に直接書かない＝表を替えると全部の文が替わる。「甲子園の土」も {koshien}の土 と書く
 #   ※ {player} はいまは「在籍部員から暦で決まる1人」。System イベント（issue #610〜）では
 #     実際に起きた出来事の主役が渡される。
 #
@@ -883,7 +885,7 @@ events:
   # 監督の内面を独白で語らせない＝周りが「変わった」と言う形で書く。
   - id: mgr_koshien_experience
     kind: System
-    text: "甲子園の経験が采配に返ってきた。"
+    text: "{koshien}の経験が采配に返ってきた。"
     variants:
       - lines:
           - who: narration
@@ -896,7 +898,7 @@ events:
           - who: manager
             say: "そうか？"
           - who: team_manager
-            say: "ええ。甲子園のあとからです。"
+            say: "ええ。{koshien}のあとからです。"
 
   - id: mgr_rival_lesson
     kind: System
@@ -1322,11 +1324,11 @@ events:
 
   - id: summer_retirement_koshien
     kind: System
-    text: "甲子園で敗退。3年生が引退した。"
+    text: "{koshien}で敗退。3年生が引退した。"
     variants:
       - lines:
           - who: narration
-            say: "甲子園のベンチの前。三年生がしゃがみこんで、黒い土をかき集めている。"
+            say: "{koshien}のベンチの前。三年生がしゃがみこんで、黒い土をかき集めている。"
           - who: player
             name: "三年生"
             say: "これ、どのくらい持って帰っていいんですかね。"
@@ -1336,13 +1338,13 @@ events:
             name: "三年生"
             say: "……ばれてた。"
           - who: narration
-            say: "宿舎へ戻るバスの中、三年生の靴からは、ずっと甲子園の砂がこぼれていた。"
+            say: "宿舎へ戻るバスの中、三年生の靴からは、ずっと{koshien}の砂がこぼれていた。"
       - lines:
           - who: narration
             say: "宿舎での最後のミーティング。背番号が一枚ずつ、机の上に戻ってきた。"
           - who: player
             name: "三年生"
-            say: "甲子園の土がしみ込んでるんで、このまま返していいですか。"
+            say: "{koshien}の土がしみ込んでるんで、このまま返していいですか。"
           - who: team_manager
             say: "きれいにしてから返してください。"
           - who: player
@@ -1353,7 +1355,7 @@ events:
 
   - id: summer_retirement_champion
     kind: System
-    text: "甲子園で優勝。3年生が最後まで勝って引退した。"
+    text: "{koshien}で優勝。3年生が最後まで勝って引退した。"
     variants:
       - lines:
           - who: narration
@@ -1387,7 +1389,7 @@ events:
   # 実際に決まった相手で結果行を組む。
   - id: koshien_berth_donation
     kind: System
-    text: "OB会と卒業生から甲子園の激励金が届いた。"
+    text: "OB会と卒業生から{koshien}の激励金が届いた。"
     variants:
       - lines:
           - who: ob
@@ -1458,7 +1460,7 @@ events:
 
   - id: koshien_draw
     kind: System
-    text: "甲子園の組み合わせ抽選会が行われた。"
+    text: "{koshien}の組み合わせ抽選会が行われた。"
     variants:
       - lines:
           - who: narration
@@ -1466,7 +1468,7 @@ events:
           - who: captain
             say: "……引きました。"
           - who: team_manager
-            say: "監督、甲子園の初戦の番号が出ます。"
+            say: "監督、{koshien}の初戦の番号が出ます。"
       - lines:
           - who: team_manager
             say: "組み合わせ、出ましたよ。"
@@ -1489,7 +1491,7 @@ events:
 
   - id: senbatsu_berth_donation
     kind: System
-    text: "OB会と卒業生からセンバツの激励金が届いた。"
+    text: "OB会と卒業生から{senbatsu}の激励金が届いた。"
     variants:
       - lines:
           - who: ob
@@ -1508,7 +1510,7 @@ events:
       - lines:
           - who: local
             name: "後援会長"
-            say: "選抜出場、街の掲示板に貼りましたよ。"
+            say: "{senbatsu}出場、街の掲示板に貼りましたよ。"
           - who: team_manager
             say: "気が早いですね。"
           - who: local
@@ -1517,7 +1519,7 @@ events:
 
   - id: senbatsu_draw
     kind: System
-    text: "センバツの組み合わせ抽選会が行われた。"
+    text: "{senbatsu}の組み合わせ抽選会が行われた。"
     variants:
       - lines:
           - who: narration
@@ -1525,7 +1527,7 @@ events:
           - who: captain
             say: "……出ました。"
           - who: team_manager
-            say: "監督、センバツの初戦の相手です。"
+            say: "監督、{senbatsu}の初戦の相手です。"
       - lines:
           - who: team_manager
             say: "組み合わせ出ましたよ、監督。"
@@ -1541,25 +1543,25 @@ events:
 
   - id: senbatsu_not_selected
     kind: System
-    text: "センバツの選考発表があった。今年は選ばれなかった。"
+    text: "{senbatsu}の選考発表があった。今年は選ばれなかった。"
     variants:
       - lines:
           - who: narration
-            say: "センバツの出場校の発表。紙に、自分たちの校名は無かった。部室はしばらく静かだった。"
+            say: "{senbatsu}の出場校の発表。紙に、自分たちの校名は無かった。部室はしばらく静かだった。"
           - who: captain
             say: "……夏で見返します。"
           - who: team_manager
             say: "その言葉、忘れないでくださいね。"
       - lines:
           - who: team_manager
-            say: "監督、センバツは選外でした。"
+            say: "監督、{senbatsu}は選外でした。"
           - who: manager
             say: "次で取り返す。"
           - who: player
             say: "はい。"
       - lines:
           - who: narration
-            say: "センバツの選考発表。掲示板の前で部員が肩を落としている横を、他校の歓声が通り過ぎていった。"
+            say: "{senbatsu}の選考発表。掲示板の前で部員が肩を落としている横を、他校の歓声が通り過ぎていった。"
           - who: captain
             say: "悔しいです、正直。"
           - who: team_manager

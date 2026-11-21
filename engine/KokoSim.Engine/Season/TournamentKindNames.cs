@@ -1,7 +1,8 @@
 namespace KokoSim.Engine.Season;
 
 /// <summary>
-/// 大会種別の呼び名の単一ソース。開幕バナー・日付の小書き・記録タブの歴代大会結果が同じ関数を引く。
+/// 大会種別の呼び名の単一ソース。全国大会の名前は <see cref="DisplayNames"/>（data/display-names.yaml）から引く（issue #1319）。
+/// 開幕バナー・日付の小書き・記録タブの歴代大会結果が同じ関数を引く。
 /// <see cref="TournamentKind"/> を増やしたら <c>Of</c> の switch に足す（足し忘れは網羅テストが赤にする）。
 /// </summary>
 public static class TournamentKindNames
@@ -11,10 +12,10 @@ public static class TournamentKindNames
     {
         TournamentKind.Summer => "夏",
         TournamentKind.Autumn => "秋",
-        TournamentKind.SummerKoshien => "甲子園",
-        TournamentKind.SenbatsuKoshien => "センバツ",
+        TournamentKind.SummerKoshien => DisplayNames.Current.Koshien,
+        TournamentKind.SenbatsuKoshien => DisplayNames.Current.Senbatsu,
         TournamentKind.Regional => "地区大会",
-        TournamentKind.Jingu => "明治神宮大会",
+        TournamentKind.Jingu => DisplayNames.Current.Jingu,
         TournamentKind.AutumnDistrict => "地区予選",
         _ => throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "未対応の大会種別"),
     };
