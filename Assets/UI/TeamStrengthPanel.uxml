@@ -1,44 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
     <Style src="Components/scorebook.uss" />
-    <ui:VisualElement class="root sbk">
+    <ui:VisualElement class="root ui-root sbk">
 
-      <!-- ===== スコアボードヘッダー（選手詳細と共通の sb2） ===== -->
-      <ui:VisualElement class="sb2">
-        <ui:VisualElement class="sb2-left">
-          <ui:Label class="sb2-badge" text="桜" />
-          <ui:VisualElement class="sb2-id">
-            <ui:Label class="sb2-name" text="県立桜丘高校" />
-            <ui:Label class="sb2-pref" text="神奈川県" />
-          </ui:VisualElement>
-        </ui:VisualElement>
-        <ui:VisualElement class="sb2-center">
-          <ui:VisualElement class="sb2-cell">
-            <ui:Label class="sb2-cell__k" text="画面" />
-            <ui:Label class="sb2-cell__v" text="チーム総合力" />
-          </ui:VisualElement>
-        </ui:VisualElement>
-        <ui:VisualElement class="sb2-right">
-          <ui:Button name="back-home" class="advance" text="◀ ホームへ戻る" />
-        </ui:VisualElement>
-      </ui:VisualElement>
-
-      <!-- ===== ナビ ===== -->
-      <ui:VisualElement class="nav">
-        <ui:Label name="nav-home" class="nav__item nav__item--on" text="ホーム" />
-        <ui:Label name="nav-players" class="nav__item" text="選手" />
-        <ui:Label name="nav-training" class="nav__item" text="練習" />
-        <ui:Label name="nav-practice" class="nav__item" text="練習試合" />
-        <ui:Label name="nav-match" class="nav__item" text="試合" />
-        <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
-        <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
-        <ui:Label name="nav-management" class="nav__item" text="経営" />
-        <ui:Label name="nav-career" class="nav__item" text="キャリア" />
-        <ui:Label name="nav-records" class="nav__item" text="記録" />
-      </ui:VisualElement>
+      <!-- 上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。 -->
+      <ui:Instance template="TopBar" class="topbar-slot" />
 
       <ui:ScrollView mode="Vertical" class="pd2-scroll">
 
