@@ -219,5 +219,7 @@ public static class FormModel
     public static int EffectiveAbility(int ability, Condition c, double perStep)
         => ClampAbility(ability + Step(c) * perStep);
 
-    private static int ClampAbility(double v) => (int)MathUtil.Clamp(Math.Round(v), 1, 100);
+    // step×perStepがちょうど.5になる区間がある（例: 50+1×2.5=52.5）。既定のMath.Roundは偶数丸めで調子一段分の
+    // 補正が丸ごと消えることがあるため、必ず補正の向きに丸める（issue #1211）。
+    private static int ClampAbility(double v) => (int)MathUtil.Clamp(Math.Round(v, MidpointRounding.AwayFromZero), 1, 100);
 }
