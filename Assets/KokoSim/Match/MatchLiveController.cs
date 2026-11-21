@@ -784,6 +784,30 @@ namespace KokoSim.Unity.Match
             _speedButtons.Clear();
         }
 
+        /// <summary>
+        /// 打席途中の再生状態（盗塁・牽制・暴投捕逸・スクイズ挟殺・振り逃げ・守備ビューのファウル、打球の据え置き、
+        /// 待たせていた押し出しの掲示、投球フェーズ）を全部畳む。Update の再生分岐は先頭の非nullを再生するので、
+        /// 1つでも取り残すと次の打席が前の打席のプレーを再生する。後始末（EndFieldPlay・判定の消灯・塁/アウト/得点の反映）は
+        /// 呼び出し側の仕事＝ここはフィールドを戻すだけ。
+        /// </summary>
+        private void ClearMidPaPlayState()
+        {
+            _stealPlay = null;
+            _pickoffPlay = null;
+            _batteryMissPlay = null;
+            _foulFieldPlay = null;
+            _squeezeRundownPlay = null;
+            _dropThirdStrikePlay = null;
+            _battedHoldActive = false;
+            _battedHoldFoul = null;
+            _pendingFoulFlight = null;
+            _foulFlightHoldSeconds = null;
+            _nonBattedScoreAt = null;
+            _inPitchPhase = false;
+            _pitchCallDone = false;
+            _pitchBallVisible = false;
+        }
+
         // 試合ごとに初期化する進行状態（試合をまたいだ持ち越し禁止）。要素クエリ前に呼べるフィールドだけを扱う。
         private void ResetPerMatchState()
         {
@@ -802,16 +826,9 @@ namespace KokoSim.Unity.Match
             _shownIsTop = false;
             _shownAnyHalf = false;
             _postedAwayRuns = _postedHomeRuns = 0;   // 掲示済み得点の基準（issue #628）も試合をまたがない
-            _nonBattedScoreAt = null;                // 待たせていた押し出しの掲示予約も持ち越さない
             _paQueue.Clear();
             _paConfirmed = false;
-            _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
-            _pickoffPlay = null;     // 打席途中の牽制再生（issue #486）も同様
-            _batteryMissPlay = null; // 打席途中の暴投・捕逸再生（issue #487）も同様
-            _foulFieldPlay = null;   // 守備ビューで見せるファウル（issue #1074）も同様
-            _battedHoldFoul = null;
-            _squeezeRundownPlay = null; // 打席途中のスクイズ挟殺再生（issue #1061）も同様
-            _dropThirdStrikePlay = null; // 打席途中の振り逃げ再生（issue #488）も同様
+            ClearMidPaPlayState();       // 打席途中の再生は試合をまたがない
             _preStep = null;             // 振りかぶりで先に解決した球（issue #696）も試合をまたがない
             _windupAfterFieldPlay = false;
             _runnerGoFor = null;
@@ -1091,6 +1108,14 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
+            // 窓で止まっているエンジンへ AdvancePitch を呼ぶと窓を開かずに1球投げてしまう（高速試合モードを
+            // 窓の途中で出入りした・イニング間で入って出た、など）。投げさせずに同じ窓を開け直す。
+            if (!commitTactics && _prog.IsAtPitchWindow && _prog.CurrentAtBat is { } window)
+            {
+                OpenWindowOrBreak(window);
+                return;
+            }
+
             if (commitTactics) PushPitchTacticsChoice();
             var before = _prog.LastPitch;
             var result = _prog.AdvancePitch();
@@ -1134,6 +1159,16 @@ namespace KokoSim.Unity.Match
             ShowRunnerGo(thrown);
         }
 
+        /// <summary>
+        /// 打席が確定した＝「1打席」持続の指示を解除する。エンドラン指示は設計書09 §1.2 のとおり打席の確定で解く。
+        /// くさい所は「その打席だけ」で、エンジンは打席の確定で解いているので表示の点灯も落とす（issue #872）。
+        /// </summary>
+        private void ClearPerPaTacticsChoices()
+        {
+            if (_signChoice != null) { _signChoice = null; _signPad?.ClearSelection("batting"); }
+            if (_pitchAroundOn) { _pitchAroundOn = false; _signPad?.ClearSelection("pitcharound"); }
+        }
+
         private void DispatchStep(AdvancePitchResult result, LivePitch thrown)
         {
             if (result == AdvancePitchResult.Finished)
@@ -1152,10 +1187,7 @@ namespace KokoSim.Unity.Match
 
             if (result == AdvancePitchResult.PlateAppearance)
             {
-                // 打席が確定した＝「1打席」持続のエンドラン指示はここで解除する（design-09 §1.2）。
-                if (_signChoice != null) { _signChoice = null; _signPad?.ClearSelection("batting"); }
-                // くさい所は「その打席だけ」。エンジンは打席の確定で解いているので、表示の点灯も落とす（issue #872）。
-                if (_pitchAroundOn) { _pitchAroundOn = false; _signPad?.ClearSelection("pitcharound"); }
+                ClearPerPaTacticsChoices();
                 // 打席が確定した。<b>打席を終わらせた1球はここから描く</b>——インプレーの打球は確定して
                 // 初めて手に入る（BattedOf が _current.Play を読む）ので、順序は入れ替えられない。
                 _current = _prog.Current;
@@ -4376,7 +4408,12 @@ namespace KokoSim.Unity.Match
                 // イニング間画面）は自前の実時間タイマーで消える設計だが、そのタイマーは高速試合モードの
                 // Update() 分岐では回さない。ここで畳んでおかないと消えるきっかけを永遠に失い、
                 // 盤面に張り付いたまま高速試合モードの間じゅう残る（EndGame の EndFieldPlay と同じ理由）。
+                // サヨナラの予約は先に畳む（EndFieldPlay が予約した場面をその場で始めてしまい、以後 Tick されず凍る）。
+                _duelRig?.EndWalkoffScene();
+                _duelRig?.EndDuelThrow();   // 盗塁・牽制の送球を対決ビューで見せている最中（守備ビューへ渡す前）に入った場合
                 EndFieldPlay();
+                // 打席途中の再生状態も戻す。残すと戻った後の次の打席が前の打席の盗塁等を再生する。
+                ClearMidPaPlayState();
                 _view.HideJudgement();
                 HideGameTelop();
                 HidePitchCall();
@@ -4391,7 +4428,14 @@ namespace KokoSim.Unity.Match
             else
             {
                 ApplyDuelViewState();   // 対決ビュー/俯瞰の表示を _duelOn の状態へ戻す
-                if (_prog != null && !_prog.IsFinished) { _stage = LiveStage.Idle; AdvanceToNextWindow(); }
+                if (_prog != null && !_prog.IsFinished)
+                {
+                    _stage = LiveStage.Idle;
+                    // 高速中に打席が進んだなら、窓で選んでいた1手は別の場面のもの＝押し込まず消す。
+                    // 窓で止まったままなら（すぐ戻した）点灯はそのまま、同じ窓を開け直して次の球へ押し込む。
+                    if (!_prog.IsAtPitchWindow) { ClearPerPaTacticsChoices(); ResetPitchTacticsChoice(); }
+                    AdvanceToNextWindow();
+                }
             }
         }
 
