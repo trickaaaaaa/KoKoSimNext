@@ -142,7 +142,7 @@ namespace KokoSim.Unity.Shell
             rows.Add(Build(book, names, "投手", "防御率", descending: false,
                 qualify: s => s.Pitching.Outs >= outsNeeded,
                 key: s => s.Pitching.Era,
-                text: s => s.Pitching.Era.ToString("0.00")));
+                text: s => s.Pitching.EraText));
             rows.Add(Build(book, names, "投手", "奪三振", descending: true,
                 qualify: s => s.Pitching.StrikeOuts > 0,
                 key: s => s.Pitching.StrikeOuts,

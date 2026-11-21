@@ -353,7 +353,7 @@ public static class TournamentPreviewBuilder
         var head = $"{type} ／ 最速{(int)System.Math.Round(p.Pitching.MaxVelocityKmh)}km/h ／ {period} ";
         var s = stats?.Pitching;
         if (s is null || s.Games == 0) return head + "未登板";
-        return head + $"防御率{s.Era:0.00}・{s.StrikeOuts}奪三振";
+        return head + $"防御率{s.EraText}・{s.StrikeOuts}奪三振";
     }
 
     private static string BatterStatLine(Players.Player p, Stats.PlayerStats? stats, PreviewStage stage)

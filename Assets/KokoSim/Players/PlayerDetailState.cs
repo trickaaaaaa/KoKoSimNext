@@ -434,7 +434,7 @@ namespace KokoSim.Unity.Players
         {
             cells.Add(new StatCell("登板", N(p.Games)));
             cells.Add(new StatCell("先発", N(p.GamesStarted)));
-            cells.Add(new StatCell("防御率", Dec2(p.Era)));
+            cells.Add(new StatCell("防御率", p.EraText));
             cells.Add(new StatCell("投球回", p.InningsText));
             cells.Add(new StatCell("被安打", N(p.Hits)));
             cells.Add(new StatCell("失点", N(p.Runs)));

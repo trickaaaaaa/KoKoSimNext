@@ -257,12 +257,20 @@ public sealed class TeamState
     private sealed class PitAccum
     {
         public int BF, H, Runs, EarnedRuns, SO, BB, Outs, Pitches, HB, HRA;
+        /// <summary>初めて成績が積まれた順（＝登板順）。</summary>
+        public int Seq;
         public readonly Dictionary<PitchType, PitchTypeAccum> ByPitch = new();
     }
     private sealed class PitchTypeAccum { public int AtBats, Hits, HomeRuns; }
     private sealed class FieldAccum { public FieldPosition Position; public int Errors; }
     private readonly Dictionary<Player, BatAccum> _bat = new();
     private readonly Dictionary<Player, PitAccum> _pit = new();
+
+    private PitAccum GetOrAddPit(Player key)
+    {
+        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum { Seq = _pit.Count }; _pit[key] = a; }
+        return a;
+    }
     private readonly Dictionary<Player, FieldAccum> _field = new();
 
     /// <summary>
@@ -332,7 +340,7 @@ public sealed class TeamState
     {
         var key = KeyOf(pitcher);
         NoteFielders();
-        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        var a = GetOrAddPit(key);
         a.BF++;
         if (r.IsHit()) a.H++;
         a.Runs += runs;
@@ -371,7 +379,7 @@ public sealed class TeamState
     public void ChargeRuns(Player pitcher, int runs, int unearnedRuns = 0)
     {
         var key = KeyOf(pitcher);
-        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        var a = GetOrAddPit(key);
         a.Runs += runs;
         a.EarnedRuns += runs - unearnedRuns;
     }
@@ -385,7 +393,7 @@ public sealed class TeamState
     public void RecordRunnerOut(Player pitcher, int outs = 1)
     {
         var key = KeyOf(pitcher);
-        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        var a = GetOrAddPit(key);
         a.Outs += outs;
     }
 
@@ -397,7 +405,7 @@ public sealed class TeamState
     {
         if (pitches <= 0) return;
         var key = KeyOf(pitcher);
-        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        var a = GetOrAddPit(key);
         a.Pitches += pitches;
     }
 
@@ -535,11 +543,9 @@ public sealed class TeamState
             lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns));
         }
         Add(_starter);
-        foreach (var p in _team.Reserves) Add(p);
-        // 在フィールドから昇格した野手（issue #209 Phase C）は Team.Reserves に居ないので上の2経路では
-        // 拾えない。実際に投げた投手（_pit に成績がある）で未計上の者を登板順（挿入順）に追加する。
-        // 先発・控えは既に seen なのでスキップされ、通常試合の投手行は不変（＝決定論digestも不変）。
-        foreach (var p in _pit.Keys) Add(p);
+        // 先発の次は実際に投げた順（成績が最初に積まれた順）。控え（Reserves）の背番号順ではない。
+        // 在フィールドから昇格した野手（issue #209 Phase C）も _pit に成績があるので同じ経路で拾える。
+        foreach (var kv in _pit.OrderBy(kv => kv.Value.Seq)) Add(kv.Key);
         return lines;
     }
 

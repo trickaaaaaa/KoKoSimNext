@@ -2070,6 +2070,8 @@ public static class GameEngine
                 : null;
             var countedScorers = ScorersCountedAtWalkoff(runnerMoves, walkoffCap);
             if (walkoffCap is { } cap && runs > cap) runs = cap;
+            if (truncateAtWalkoff)
+                paResult = WalkoffHitResult(paResult, runnerMoves, defense.Runs - offense.Runs + 1);
             offense.Runs += runs;
             runsThisHalf += runs;
 
@@ -2420,6 +2422,14 @@ public static class GameEngine
             var droppedThirdStrikeReached = false;
             Player? dtsFirst = null, dtsSecond = null, dtsThird = null;
             var rbiRuns = runs; // 振り逃げで生還した走者は打点にしない（打席ログの得点には数える）
+            // 失策出塁（規則 9.04）: 2アウト前に限り、三塁走者が本来還れた場面だけ打点。それ以外の得点は打点にしない。
+            if (res.Result == PlateAppearanceResult.ReachedOnError)
+            {
+                rbiRuns = 0;
+                if (outs < 2)
+                    foreach (var m in countedScorers)
+                        if (preThirdPlayer is not null && m.Runner.Equals(preThirdPlayer)) rbiRuns++;
+            }
             if (res.Result == PlateAppearanceResult.Strikeout && (bases.First is null || outs == 2)
                 && !batteryMissEndedPa && paBaserunning.DropThirdStrikeReachProb > 0.0)
             {
@@ -2484,7 +2494,12 @@ public static class GameEngine
             {
                 foreach (var m in runnerMoves)
                 {
-                    if (m.Out && m.FromBase == 1 && m.ToBase == 2) { offense.DoublePlayCount++; break; }
+                    if (m.Out && m.FromBase == 1 && m.ToBase == 2)
+                    {
+                        offense.DoublePlayCount++;
+                        rbiRuns = 0; // 併殺打（フォースの併殺）の得点は打点にしない（規則 9.04(b)）
+                        break;
+                    }
                 }
             }
 
@@ -2572,6 +2587,36 @@ public static class GameEngine
         scorers.Sort((a, b) => b.FromBase.CompareTo(a.FromBase));
         scorers.RemoveRange(c, scorers.Count - c);
         return scorers;
+    }
+
+    /// <summary>
+    /// サヨナラ打の塁打の記録（公認野球規則 9.06(f)）: 勝ち越しの走者が進んだ塁数までしか打者に塁打を認めない
+    /// （三塁走者が二塁打で還れば単打）。<paramref name="needRuns"/> は勝ち越しに要る得点。単打・二塁打・三塁打だけが対象
+    /// （本塁打は全員の得点を認める）。勝ち越しの走者は前の走者から数えた needRuns 人目。
+    /// </summary>
+    internal static PlateAppearanceResult WalkoffHitResult(
+        PlateAppearanceResult result, IReadOnlyList<RunnerMove> moves, int needRuns)
+    {
+        var batterBases = result switch
+        {
+            PlateAppearanceResult.Single => 1,
+            PlateAppearanceResult.Double => 2,
+            PlateAppearanceResult.Triple => 3,
+            _ => 0,
+        };
+        if (batterBases == 0 || needRuns < 1) return result;
+        var scorers = new List<RunnerMove>();
+        foreach (var m in moves)
+            if (m.ToBase >= 4 && !m.Out) scorers.Add(m);
+        if (scorers.Count < needRuns) return result;
+        scorers.Sort((a, b) => b.FromBase.CompareTo(a.FromBase));
+        var credited = Math.Min(batterBases, 4 - scorers[needRuns - 1].FromBase);
+        return credited switch
+        {
+            <= 1 => PlateAppearanceResult.Single,
+            2 => PlateAppearanceResult.Double,
+            _ => PlateAppearanceResult.Triple,
+        };
     }
 
     /// <summary>速報・成績・動揺・伝令窓の更新（結果には影響しない共通後処理）。</summary>
