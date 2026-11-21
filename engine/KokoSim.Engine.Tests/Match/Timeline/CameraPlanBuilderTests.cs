@@ -304,6 +304,23 @@ public sealed class CameraPlanBuilderTests
     // ---- issue #406②: 全景復帰は ResAt でなく lastEvent（球が動き終わる／実際に動く走者レッグの
     // 終わり）基準 -----------------------------------------------------------------------------
 
+    // 再生を切る時刻の単一ソース（issue #1264④）。カメラ側とビュー側で値がずれない。
+    [Fact]
+    public void LastEventTime_IsTheSameSourceAsLastActionTime()
+    {
+        foreach (var play in PlaybackSamples.All)
+            Assert.Equal(PlaybackDisplaySync.LastActionTime(play), CameraPlanBuilder.LastEventTime(play));
+    }
+
+    [Fact]
+    public void IsStationaryLeg_TreatsSubHalfMeterDriftAsStanding()
+    {
+        var a = new PlaybackVec(10, 10);
+        Assert.True(PlaybackDisplaySync.IsStationaryLeg(new PlaybackRun(0, 1, a, a)));
+        Assert.True(PlaybackDisplaySync.IsStationaryLeg(new PlaybackRun(0, 1, a, new PlaybackVec(10.3, 10))));
+        Assert.False(PlaybackDisplaySync.IsStationaryLeg(new PlaybackRun(0, 1, a, new PlaybackVec(10.6, 10))));
+    }
+
     [Fact]
     public void LastEventTime_IgnoresStationaryRunnerLegs_ButCountsMovingLegsAndBallSegments()
     {

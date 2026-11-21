@@ -2644,6 +2644,7 @@ namespace KokoSim.Unity.Match
                     // 足上げの途中（PreLoad）から死球へは姿勢差が大きいのでクロスフェードで繋ぐ
                     if (_batterPreLoaded) CrossfadeActorToClip(_batter, _hbpClip, HbpReact - flight, 4.2f, 0.15f);
                     else SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
+                    _batter.Speed = 1f;   // PreLoad の LoadSpeed を持ち越さない（SetActorClip は倍率を戻さない。issue #1264②）
                     _batterPreLoaded = false;
                     break;
                 // NotCaught（暴投・捕逸・振り逃げ。issue #525）。打者が振ったかは分類でなく batterSwung が持つ
@@ -3283,7 +3284,14 @@ namespace KokoSim.Unity.Match
             if (_lastCatchPocketMoveM > MittPocketMoveHideM) _ball.SetActive(false);
             if (mitt != null)
             {
+                var worldScale = _ball.transform.lossyScale;
                 _ball.transform.SetParent(mitt, false);
+                // 装備メッシュが無い環境の代替グラブは球体の縮尺付き＝子の球が縮むので、見かけの大きさを保つ（issue #1264⑤）
+                var ms = mitt.lossyScale;
+                _ball.transform.localScale = new Vector3(
+                    ms.x > 1e-4f ? worldScale.x / ms.x : worldScale.x,
+                    ms.y > 1e-4f ? worldScale.y / ms.y : worldScale.y,
+                    ms.z > 1e-4f ? worldScale.z / ms.z : worldScale.z);
                 _ball.transform.localPosition = MittPocketBallLocal;
             }
             else

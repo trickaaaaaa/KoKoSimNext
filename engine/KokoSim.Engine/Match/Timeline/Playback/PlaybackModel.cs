@@ -464,8 +464,7 @@ public static class PlaybackEvaluator
             if (r.Label != "打") continue;
             foreach (var s in r.Segs)
             {
-                var dx = s.To.X - s.From.X; var dy = s.To.Y - s.From.Y;
-                if (dx * dx + dy * dy < 0.25) continue;                 // 待機・定点レッグ
+                if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;   // 待機・定点レッグ
                 if (s.To.X * s.To.X + s.To.Y * s.To.Y > 4.0) continue;  // 本塁で終わるレッグだけ
                 if (touch is null || s.T1 > touch) touch = s.T1;
             }
