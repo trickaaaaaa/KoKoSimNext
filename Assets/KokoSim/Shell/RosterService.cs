@@ -95,6 +95,19 @@ namespace KokoSim.Unity.Shell
         public static IReadOnlyList<DevelopingPlayer> Active => RosterLifecycle.Active(Roster);
 
         /// <summary>
+        /// 画面の State が生成時に掴んだ在籍一覧（<see cref="Active"/> のスナップショット）が、いまの在籍と
+        /// 食い違っていたら引き直す。週送りで年度が替わる（新入生・卒業）と、開いたままの画面の一覧が古くなる
+        /// ＝新入生が出ず配分・背番号も触れない（issue #1250）。変わっていなければ何もしない（false）。
+        /// </summary>
+        public static bool RefreshActive(ref IReadOnlyList<DevelopingPlayer> snapshot)
+        {
+            var current = Active;
+            if (snapshot != null && snapshot.SequenceEqual(current)) return false;
+            snapshot = current;
+            return true;
+        }
+
+        /// <summary>
         /// 年度替わり（4月・設計書03 §2）: 自校ロスターへ昇級・卒業・新入生を適用する（issue #535）。
         /// ロジックの実体は engine の <see cref="RosterLifecycle.AdvanceYear"/>（SeasonEngine と共有＝二重実装なし）。
         /// 卒業生は <see cref="Graduated"/> へ退避し、新入生には単調増加の安定 Id を振る（既存・卒業生と非衝突）。

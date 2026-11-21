@@ -103,7 +103,7 @@ namespace KokoSim.Unity.Member
         // 実効守備力（Fielding×適性補正）の係数（単一ソース、issue #371）。
         private static readonly Engine.Match.Fielding.FieldingCoefficients FieldingCoeffDefault = FieldingCoeff.Default;
 
-        private readonly IReadOnlyList<DevelopingPlayer> _roster;
+        private IReadOnlyList<DevelopingPlayer> _roster;
         // 統合モデル：_picked＝クリックで選択中の選手（比較の左）。_hovered＝カーソルを合わせた選手（比較の右）。
         // もう一度クリックすると _picked と対象の背番号を交換する（＝「入れ替わる」）。
         private int _picked = -1;
@@ -113,6 +113,27 @@ namespace KokoSim.Unity.Member
         public MemberSettingState()
         {
             _roster = RosterService.Active;
+        }
+
+        /// <summary>
+        /// 在籍一覧が変わっていたら引き直す（週送りの年度替わり・issue #1250）。選択・ホバーは同じ選手を
+        /// 引き継ぎ、いなくなっていれば解除する。変わったら true。
+        /// </summary>
+        public bool SyncRoster()
+        {
+            var old = _roster;
+            var picked = _picked >= 0 && _picked < old.Count ? old[_picked] : null;
+            var hovered = _hovered >= 0 && _hovered < old.Count ? old[_hovered] : null;
+            if (!RosterService.RefreshActive(ref _roster)) return false;
+            _picked = picked == null ? -1 : IndexOfPlayer(picked);
+            _hovered = hovered == null ? -1 : IndexOfPlayer(hovered);
+            return true;
+        }
+
+        private int IndexOfPlayer(DevelopingPlayer p)
+        {
+            for (var i = 0; i < _roster.Count; i++) if (ReferenceEquals(_roster[i], p)) return i;
+            return -1;
         }
 
         // ── 操作（コントローラから呼ぶ。呼び出し後に再描画する） ──

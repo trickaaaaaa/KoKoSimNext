@@ -44,7 +44,7 @@ namespace KokoSim.Unity.Players
         // カテゴリ別ランクの重み（単一静的ソースを参照, Issue #30・2026-07-22 owner決定 候補A・#140 集約）。
         private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
-        private readonly IReadOnlyList<DevelopingPlayer> _roster;
+        private IReadOnlyList<DevelopingPlayer> _roster;
         private readonly Dictionary<DevelopingPlayer, int> _indexOf = new Dictionary<DevelopingPlayer, int>();
 
         public PlayerSort Sort { get; private set; } = PlayerSort.Grade;
@@ -53,6 +53,20 @@ namespace KokoSim.Unity.Players
         {
             // 全画面で共有する単一ソースのロスター（背番号など可変状態を画面間で一致させる, RosterService）。
             _roster = RosterService.Active;
+            RebuildIndex();
+        }
+
+        /// <summary>在籍一覧が変わっていたら引き直す（週送りの年度替わり・issue #1250）。変わったら true。</summary>
+        public bool SyncRoster()
+        {
+            if (!RosterService.RefreshActive(ref _roster)) return false;
+            RebuildIndex();
+            return true;
+        }
+
+        private void RebuildIndex()
+        {
+            _indexOf.Clear();
             for (var i = 0; i < _roster.Count; i++)
                 _indexOf[_roster[i]] = i;
         }

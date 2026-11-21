@@ -95,7 +95,12 @@ namespace KokoSim.Unity.Member
         }
 
         // 全タブ共通の進週処理へ集約（大会モード中はホームへ回送して日送りへ引き継ぐ）。
-        private void OnAdvance() => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(Render);
+        // 年度替わりで部員が入れ替わったら一覧を引き直す（issue #1250）。
+        private void OnAdvance() => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(() =>
+        {
+            _state.SyncRoster();
+            Render();
+        });
 
         private void Render()
         {
