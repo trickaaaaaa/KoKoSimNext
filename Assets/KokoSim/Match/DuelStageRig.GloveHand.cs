@@ -44,7 +44,9 @@ namespace KokoSim.Unity.Match
                     continue;
                 }
                 var key = (src, hand.name);
-                if (!HandlessMeshCache.TryGetValue(key, out var handless))
+                // 値 null＝「手を含まないメッシュ」の記録。破棄済み（Unity の偽 null）は引き直す
+                if (!HandlessMeshCache.TryGetValue(key, out var handless)
+                    || (!ReferenceEquals(handless, null) && handless == null))
                 {
                     handless = BuildHandlessMesh(src, smr.bones, hand);
                     HandlessMeshCache[key] = handless;   // null＝手を含まないメッシュ（次回も素通し）
@@ -86,6 +88,7 @@ namespace KokoSim.Unity.Match
 
             var dst = Object.Instantiate(src);
             dst.name = src.name + " (glove hand hidden)";
+            dst.hideFlags = HideFlags.HideAndDontSave;   // static に持つので UnloadUnusedAssets で消させない
             var tris = new List<int>();
             var kept = new List<int>();
             for (int sub = 0; sub < src.subMeshCount; sub++)

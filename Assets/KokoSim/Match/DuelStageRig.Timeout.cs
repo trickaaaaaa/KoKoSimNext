@@ -137,8 +137,8 @@ namespace KokoSim.Unity.Match
             // 投手・捕手は対決の状態を控える（終わったら丸ごと戻す。EndFieldPlay と同じ作法）
             _toPitcherSnap = Snapshot(_pitcher);
             _toCatcherSnap = Snapshot(_catcher);
-            _toPitcherRootMotion = _pitcher.Animator != null && _pitcher.Animator.applyRootMotion;
-            _toCatcherRootMotion = _catcher.Animator != null && _catcher.Animator.applyRootMotion;
+            _toPitcherRootMotion = RootMotionOf(_pitcher);
+            _toCatcherRootMotion = RootMotionOf(_catcher);
 
             var pp = StagePos(_pitcher);
             _toCenter = new Vector2(pp.x, pp.z);
@@ -167,7 +167,7 @@ namespace KokoSim.Unity.Match
                 a.HoldRemaining = 0f;
                 a.DefaultEndAt = 0f;
                 a.IdleEndAt = 0f;
-                if (a.Animator != null) a.Animator.applyRootMotion = false;   // 位置はここで置く（クリップに動かさせない）
+                SetRootMotion(a, false);   // 位置はここで置く（クリップに動かさせない）
                 m.Pos = m.Start;
                 m.Leg = TimeoutLeg.Wait;
                 m.LegT = 0f;
@@ -185,7 +185,7 @@ namespace KokoSim.Unity.Match
             _pitcher.HoldRemaining = 0f;
             _pitcher.DefaultEndAt = 0f;
             _pitcher.IdleEndAt = 0f;
-            if (_pitcher.Animator != null) _pitcher.Animator.applyRootMotion = false;
+            SetRootMotion(_pitcher, false);
             CrossfadeActorToClip(_pitcher, pIdle, 0f, 0f, 0.4f);
             _pitcher.IdleClip = pIdle;
             _pitcher.Speed = 1f;
@@ -512,15 +512,15 @@ namespace KokoSim.Unity.Match
                 SetActorClip(kv.Value, idle, 0f, 0f);
                 kv.Value.IdleClip = idle;
                 kv.Value.Speed = 1f;
-                if (kv.Value.Animator != null) kv.Value.Animator.applyRootMotion = false;
+                SetRootMotion(kv.Value, false);
             }
             PlaceFieldCastAtDefault();
             SetFieldCastVisible(_fieldCastVisible);
 
             Restore(_pitcher, _toPitcherSnap);
             Restore(_catcher, _toCatcherSnap);
-            if (_pitcher?.Animator != null) _pitcher.Animator.applyRootMotion = _toPitcherRootMotion;
-            if (_catcher?.Animator != null) _catcher.Animator.applyRootMotion = _toCatcherRootMotion;
+            SetRootMotion(_pitcher, _toPitcherRootMotion);
+            SetRootMotion(_catcher, _toCatcherRootMotion);
             if (_cMaskMount != null && _toMaskWasOn) _cMaskMount.gameObject.SetActive(true);
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
 

@@ -101,7 +101,7 @@ namespace KokoSim.Unity.Match
             Repaint(_messenger, _offenseColors);   // 伝令は攻撃側の選手
 
             _otBatterSnap = Snapshot(_batter);
-            _otBatterRootMotion = _batter.Animator.applyRootMotion;
+            _otBatterRootMotion = RootMotionOf(_batter);
             _otBatWasActive = _bat != null && _bat.activeSelf;
 
             _otSide = _batterLeft ? 1f : -1f;
@@ -129,7 +129,7 @@ namespace KokoSim.Unity.Match
             _batter.DefaultEndAt = 0f;
             _batter.IdleEndAt = 0f;
             _batter.SpeedSwitchAt = -1f;
-            _batter.Animator.applyRootMotion = false;
+            SetRootMotion(_batter, false);
             _otBatterPos = _otB0;
             _otBatterYaw = YawToward(_otB1, _otB0);   // 体は本塁側を向き、背中の方へ下がる
             CrossfadeActorToClip(_batter, back, 0f, 0f, 0.3f);
@@ -148,7 +148,7 @@ namespace KokoSim.Unity.Match
             m.HoldRemaining = 0f;
             m.DefaultEndAt = 0f;
             m.IdleEndAt = 0f;
-            if (m.Animator != null) m.Animator.applyRootMotion = false;
+            SetRootMotion(m, false);
             _otMsgPos = _otMsgStart;
             _otMsgYaw = YawToward(_otMsgStart, _otM) - TimeoutRunMoveDir;
             SetActorClip(m, run, 0.4f * run.length, 0f);
@@ -576,7 +576,7 @@ namespace KokoSim.Unity.Match
                 Repaint(_messenger, _defenseColors);   // 守備伝令で使うときの色へ戻しておく
             }
             Restore(_batter, _otBatterSnap);
-            if (_batter?.Animator != null) _batter.Animator.applyRootMotion = _otBatterRootMotion;
+            SetRootMotion(_batter, _otBatterRootMotion);
             ResetBatterToStance();
             if (_bat != null) _bat.SetActive(_otBatWasActive);
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
