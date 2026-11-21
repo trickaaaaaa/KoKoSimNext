@@ -42,8 +42,9 @@ namespace KokoSim.Unity.Squad
             _state = new TeamStrengthState();
             _root = GetComponent<UIDocument>().rootVisualElement;
 
-            var back = _root.Q<Button>("back-home");
-            if (back != null) back.clicked += () => FindObjectOfType<ScreenRouter>()?.Show("HomeDashboard");
+            // 共通トップバーの「今週を進める」（他のタブ画面と同じ配線）。
+            var advance = _root.Q<Button>("advance");
+            if (advance != null) advance.clicked += () => WeekAdvance.FromSideScreen(Render);
 
             // レーダーは部品辞書の共通部品（描画＋軸ラベル配置は RadarChartView が持つ）。
             _radar = new RadarChartView(_root.Q<VisualElement>("radar"), RadiusFactor, LabelOffset,
@@ -54,6 +55,7 @@ namespace KokoSim.Unity.Squad
 
         private void Render()
         {
+            RenderTopBar();
             var v = _state.BuildView();
 
             // ヘッダー: 総合ランク チップ ＋ (値) 形式「E (41)」（1.5倍拡大）。
@@ -90,6 +92,17 @@ namespace KokoSim.Unity.Squad
             // レーダー描画データ（軸ラベル＋数値の生成/配置は共通部品に委ねる）。
             _factors.Clear(); _factors.AddRange(v.Factors);
             _radar.SetData(v.Radar, v.OverallGrade);
+        }
+
+        /// <summary>共通トップバーの動的値（週・メーター・校名・自校の総合ランク）。他画面と同じ単一ソース。</summary>
+        private void RenderTopBar()
+        {
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
+            TopBarMeters.Fill(_root);
+            var rank = _root.Q<VisualElement>("team-rank");
+            if (rank == null) return;
+            rank.Clear();
+            rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Active)));
         }
 
         private static VisualElement CohesionTag(string grade)
