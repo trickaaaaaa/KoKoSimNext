@@ -30,6 +30,10 @@ namespace KokoSim.Unity.Title
             // セーブが1件も無ければ押せない見た目にする（issue #508）。
             _continueBtn?.SetEnabled(SaveSlots.AnySaveExists());
 
+            // 版表記は Player Settings の Version（bundleVersion）を正典にする（issue #1310）。
+            var version = root.Q<Label>("ts-version");
+            if (version != null) version.text = "v" + Application.version;
+
             // デバッグ試合（issue #905）は開発用ビルドだけに出す。UXML では隠してあり、製品ビルドでは一切触らない。
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
             _debugMatch = root.Q<Button>("ts-debug-match");
