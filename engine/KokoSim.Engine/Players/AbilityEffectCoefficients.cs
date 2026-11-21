@@ -20,6 +20,11 @@ namespace KokoSim.Engine.Players;
 /// Lv で寝かせる。<b>球速は km/h が画面に出る</b>（最速・毎球の球速表示）ので実球速は変えず、打者の反応
 /// （球威・タイミング・打球質・バント難度）に使う <see cref="Match.Pitching.PitchPlan.ReactionVelocityKmh"/> だけを
 /// Lv50 の 132km/h を軸に寝かせる。スタミナ（目安球数）も画面に出る単位なので寝かせない。</para>
+///
+/// <para><see cref="Delta"/>（issue #1080）はこれとは別の軸: 「効き」でなく「表示の物差し」を下げる。生成側が
+/// 表示Lvを一律 −Delta して個性を出す（PR-B）一方、ここの4入口は読んだ Lv に +Delta してから従来どおりの
+/// 計算（<see cref="Scale(int, double)"/> 等）に渡す＝Delta を何にしても物理・帯・勝率は不変。本PRは Delta=0 の
+/// 配線のみで、実際に下げるのは別PR。</para>
 /// </summary>
 public sealed record AbilityEffectCoefficients
 {
@@ -67,6 +72,13 @@ public sealed record AbilityEffectCoefficients
     /// <summary>外野手の守備3能力の膝より上の傾き（1＝恒等）。<see cref="OutfieldDefenseTopKnee"/> 参照。</summary>
     public double OutfieldDefenseTopSlope { get; init; } = 0.5;
 
+    /// <summary>
+    /// 表示能力の物差しの下げ幅（issue #1080・PR-A）。生成側が表示Lvを一律 −Delta して個性を出す一方、
+    /// ここ（物理の入口）で +Delta して打ち消す＝物理層・帯・勝率は Delta の値によらず不変にする。
+    /// 既定 0（本PRでは配線のみ・生成側はまだ −Delta していない＝今は何も動かない）。実際に下げるのは別PR（PR-B）。
+    /// </summary>
+    public double Delta { get; init; } = 0.0;
+
     /// <summary>恒等（従来と1ビット一致）。テストと非物理経路の既定。</summary>
     public static readonly AbilityEffectCoefficients Identity = new()
     {
@@ -74,13 +86,16 @@ public sealed record AbilityEffectCoefficients
         OutfieldDefenseTopKnee = 0.0,
     };
 
-    public int Batting(int lv) => Scale(lv, BattingScale);
-    public int Fielding(int lv) => Scale(lv, FieldingScale);
+    public int Batting(int lv) => Scale(Physical(lv), BattingScale);
+    public int Fielding(int lv) => Scale(Physical(lv), FieldingScale);
     /// <summary>外野手の守備3能力の効き（上位の頭打ち＋<see cref="FieldingScale"/>）。<see cref="OutfieldDefenseTopKnee"/> 参照。</summary>
-    public int OutfieldFielding(int lv) => Scale(TopKnee(lv, OutfieldDefenseTopKnee, OutfieldDefenseTopSlope), FieldingScale);
-    public int Arm(int lv) => Scale(lv, ArmScale);
-    public int Running(int lv) => Scale(lv, RunningScale);
-    public int Pitching(int lv) => Scale(lv, PitchingScale);
+    public int OutfieldFielding(int lv) => Scale(TopKnee(Physical(lv), OutfieldDefenseTopKnee, OutfieldDefenseTopSlope), FieldingScale);
+    public int Arm(int lv) => Scale(Physical(lv), ArmScale);
+    public int Running(int lv) => Scale(Physical(lv), RunningScale);
+    public int Pitching(int lv) => Scale(Physical(lv), PitchingScale);
+
+    /// <summary>表示Lv→物理Lv（<see cref="Delta"/> を足し戻す）。Delta=0 なら恒等（丸めも通さず1ビット一致）。</summary>
+    private int Physical(int lv) => Delta == 0.0 ? lv : (int)Math.Round(lv + Delta);
 
     /// <summary>
     /// 球速の反応[km/h]: 最速 v を Lv50 の最速（<see cref="PitcherAttributes.VelocityKmhFromLevel"/>(pivot)＝132km/h）を軸に
