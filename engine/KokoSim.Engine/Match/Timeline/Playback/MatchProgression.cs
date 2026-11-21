@@ -202,6 +202,14 @@ public sealed class MatchProgression
     public int PendingPitchIndex { get; private set; }
 
     /// <summary>
+    /// いま采配窓（<see cref="GameStepKind.Pitch"/>）で止まっているか＝<see cref="AdvancePitch"/> が
+    /// <see cref="AdvancePitchResult.Pitch"/> を返した直後で、まだ次の進行（<see cref="Advance"/>／<see cref="AdvancePitch"/>／
+    /// <see cref="SeekTo"/>）を呼んでいない間だけ true。窓で止まっている進行体へ <see cref="AdvancePitch"/> を呼ぶと
+    /// 窓を開かずに1球投げてしまうので、呼び出し側（UI）が「投げさせずに同じ窓を開け直す」か判断する読み口。観測専用。
+    /// </summary>
+    public bool IsAtPitchWindow { get; private set; }
+
+    /// <summary>
     /// 中断保存の状態（シード or RNG状態＋確定打席数＋打席内の消化球数＋采配決定列）。
     /// <see cref="GameReplay.Restore"/> で復元できる。設計書17 F0 で Fork注入経路にも解禁した。
     /// </summary>
@@ -686,6 +694,7 @@ public sealed class MatchProgression
     {
         if (PendingForcedPitcherChange) return false;
         if (IsFinished) return false;
+        IsAtPitchWindow = false;
         // 1球ごとの采配窓（GameStepKind.Pitch, 設計書15）は読み飛ばし、打席が確定した境界だけを表に出す。
         // 従来どおりの打席単位供給（Pitch 窓で一時停止したいなら AdvancePitch を使う＝Phase D-1）。
         // 打席境界が返らず暴走したら（issue #288）フリーズではなく例外で落とす（下の安全弁）。
@@ -716,6 +725,7 @@ public sealed class MatchProgression
     {
         if (PendingForcedPitcherChange) return AdvancePitchResult.AwaitingForcedPitcherChange;
         if (IsFinished) return AdvancePitchResult.Finished;
+        IsAtPitchWindow = false;
         if (!_steps.MoveNext())
         {
             IsFinished = true;
@@ -727,6 +737,7 @@ public sealed class MatchProgression
         {
             PendingPitchIndex = _pitchIndexInCurrentPa;
             _pitchIndexInCurrentPa++;
+            IsAtPitchWindow = true;
             return AdvancePitchResult.Pitch;
         }
         ConfirmPlateAppearance(step);
@@ -932,10 +943,12 @@ public sealed class MatchProgression
         var current = Current;
         var finished = IsFinished;
         var pending = PendingPitchIndex;
+        var atWindow = IsAtPitchWindow;
         SeekTo(_confirmed, _pitchIndexInCurrentPa);
         Current = current;
         IsFinished = finished;
         PendingPitchIndex = pending;
+        IsAtPitchWindow = atWindow;
         // 下書きより前に確定した交代が同じ窓にあれば、再生後の観測（窓の対戦）も今の実体へ合わせる。
         RefreshLiveMatchupAfterSubstitution();
     }
@@ -970,6 +983,7 @@ public sealed class MatchProgression
         _pitchIndexInCurrentPa = pitchesInCurrentPa;
         PendingPitchIndex = pitchesInCurrentPa > 0 ? pitchesInCurrentPa - 1 : 0;
         IsFinished = false;
+        IsAtPitchWindow = false;
         Current = null;
     }
 
