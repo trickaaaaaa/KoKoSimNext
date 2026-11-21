@@ -442,12 +442,33 @@ namespace KokoSim.Unity.Training
             }
         }
 
+        // 行は値が変わっても作り直さない（作り直すと掴んだポインタ／長押しの予約先が消える・issue #1278）。
+        // 構成（選手・委任・メニューの並び）が前回と同じなら既存の行の値だけ更新する。
+        private string _menuSig, _defenseSig;
+        private readonly System.Collections.Generic.List<MenuRowView> _menuRows = new System.Collections.Generic.List<MenuRowView>();
+        private readonly System.Collections.Generic.List<MenuRowView> _defenseRows = new System.Collections.Generic.List<MenuRowView>();
+
         private void BuildMenuList(TrainingPlanView v)
         {
             var host = _root.Q<VisualElement>("tpm-menus");
             if (host == null) return;
-            host.Clear();
             var sel = v.SelectedIndex;
+
+            var sig = new System.Text.StringBuilder().Append(sel).Append('|').Append(v.DelegateOn);
+            foreach (var s in v.SelectedSlots) sig.Append('|').Append(s.Menu).Append(':').Append(s.SectionJp);
+            if (sig.ToString() == _menuSig && _menuRows.Count == v.SelectedSlots.Count)
+            {
+                for (var i = 0; i < _menuRows.Count; i++)
+                {
+                    var s = v.SelectedSlots[i];
+                    _menuRows[i].Update(s.Minutes, s.Minutes + v.SelectedRemaining, v.AtBudgetLimit);
+                }
+                return;
+            }
+
+            host.Clear();
+            _menuRows.Clear();
+            _menuSig = sig.ToString();
             foreach (var s in v.SelectedSlots)
             {
                 // 打撃系/投手系の繋ぎ目に節見出し（Issue #133-⑥。既存の節見出しスタイルを流用）。
@@ -459,14 +480,15 @@ namespace KokoSim.Unity.Training
                 }
 
                 var menu = s.Menu; // 捕捉
-                var maxForSlot = s.Minutes + v.SelectedRemaining;
-                host.Add(MenuRow(
+                var row = new MenuRowView(
                     s.Icon, s.MenuJp, null, "主効果 " + s.MainEffectJp,
-                    s.Minutes, maxForSlot, UiComponents.TrainingMenuColorClass(menu),
+                    s.Minutes, s.Minutes + v.SelectedRemaining, UiComponents.TrainingMenuColorClass(menu),
                     v.DelegateOn, v.AtBudgetLimit,
                     () => { _state.AdjustMinutes(sel, menu, -1); Render(); },
                     () => { _state.AdjustMinutes(sel, menu, +1); Render(); },
-                    m => { _state.SetMinutes(sel, menu, m); Render(); }));
+                    m => { _state.SetMinutes(sel, menu, m); Render(); });
+                _menuRows.Add(row);
+                host.Add(row);
             }
         }
 
@@ -475,54 +497,97 @@ namespace KokoSim.Unity.Training
         {
             var host = _root.Q<VisualElement>("tpm-defense");
             if (host == null) return;
-            host.Clear();
             var sel = v.SelectedIndex;
+
+            var sig = new System.Text.StringBuilder().Append(sel).Append('|').Append(v.DelegateOn);
+            foreach (var d in v.DefenseSlots) sig.Append('|').Append(d.Menu).Append(':').Append(d.Aptitude);
+            if (sig.ToString() == _defenseSig && _defenseRows.Count == v.DefenseSlots.Count)
+            {
+                for (var i = 0; i < _defenseRows.Count; i++)
+                {
+                    var d = v.DefenseSlots[i];
+                    _defenseRows[i].Update(d.Minutes, d.Minutes + v.SelectedRemaining, v.AtBudgetLimit);
+                }
+                return;
+            }
+
+            host.Clear();
+            _defenseRows.Clear();
+            _defenseSig = sig.ToString();
             foreach (var d in v.DefenseSlots)
             {
                 var menu = d.Menu; // 捕捉
-                var maxForSlot = d.Minutes + v.SelectedRemaining;
-                host.Add(MenuRow(
+                var row = new MenuRowView(
                     d.Label, d.Label + "守備", "適" + d.Aptitude, null,
-                    d.Minutes, maxForSlot, "defpos",
+                    d.Minutes, d.Minutes + v.SelectedRemaining, "defpos",
                     v.DelegateOn, v.AtBudgetLimit,
                     () => { _state.AdjustMinutes(sel, menu, -1); Render(); },
                     () => { _state.AdjustMinutes(sel, menu, +1); Render(); },
-                    m => { _state.SetMinutes(sel, menu, m); Render(); }));
+                    m => { _state.SetMinutes(sel, menu, m); Render(); });
+                _defenseRows.Add(row);
+                host.Add(row);
             }
         }
 
         // 練習メニュー1行（issue #222①②③）: アイコン／名前／(任意)適性値／ドラッグバー／分／±。
         // 攻撃メニューと守備ポジションで共用（36px基準の1行に圧縮・行高32px基準の趣旨に沿う）。
-        private static VisualElement MenuRow(
-            string icon, string name, string meta, string tip,
-            int minutes, int maxMinutes, string colorClass,
-            bool locked, bool atLimit,
-            System.Action onMinus, System.Action onPlus, System.Action<int> onSet)
+        private sealed class MenuRowView : VisualElement
         {
-            var row = new VisualElement();
-            row.AddToClassList("mslot");
-            if (locked) row.AddToClassList("mslot--locked");
-            if (!string.IsNullOrEmpty(tip)) row.tooltip = tip;
+            private readonly UiComponents.TimeAllocSliderElement _slider;
+            private readonly Button _plus;
+            private readonly bool _locked;
+            private VisualElement _minutes;
+            private int _shownMinutes;
 
-            var ic = new Label(icon); ic.AddToClassList("mslot__icon"); row.Add(ic);
-            var nm = new Label(name); nm.AddToClassList("mslot__name"); row.Add(nm);
-
-            if (!string.IsNullOrEmpty(meta))
+            public MenuRowView(
+                string icon, string name, string meta, string tip,
+                int minutes, int maxMinutes, string colorClass,
+                bool locked, bool atLimit,
+                System.Action onMinus, System.Action onPlus, System.Action<int> onSet)
             {
-                // 「適50」等の和文＋数字混植（Oswaldは和文グリフを持たないため単一Labelへf-numを付けない）。
-                var mt = new Label(meta); mt.AddToClassList("mslot__meta"); row.Add(mt);
+                _locked = locked;
+                AddToClassList("mslot");
+                if (locked) AddToClassList("mslot--locked");
+                if (!string.IsNullOrEmpty(tip)) tooltip = tip;
+
+                var ic = new Label(icon); ic.AddToClassList("mslot__icon"); Add(ic);
+                var nm = new Label(name); nm.AddToClassList("mslot__name"); Add(nm);
+
+                if (!string.IsNullOrEmpty(meta))
+                {
+                    // 「適50」等の和文＋数字混植（Oswaldは和文グリフを持たないため単一Labelへf-numを付けない）。
+                    var mt = new Label(meta); mt.AddToClassList("mslot__meta"); Add(mt);
+                }
+
+                _slider = UiComponents.TimeAllocSlider(minutes, maxMinutes, TrainingPresets.StepMinutes, colorClass, locked, onSet);
+                _slider.AddToClassList("mslot__slider");
+                Add(_slider);
+
+                _shownMinutes = minutes;
+                _minutes = UiComponents.NumUnitAuto(minutes + "分", false, "mslot__min");
+                Add(_minutes);
+
+                Add(StepButton("−", onMinus, locked));
+                _plus = StepButton("＋", onPlus, locked || atLimit);
+                Add(_plus);
             }
 
-            var slider = UiComponents.TimeAllocSlider(minutes, maxMinutes, TrainingPresets.StepMinutes, colorClass, locked, onSet);
-            slider.AddToClassList("mslot__slider");
-            row.Add(slider);
-
-            row.Add(UiComponents.NumUnitAuto(minutes + "分", false, "mslot__min"));
-
-            row.Add(StepButton("−", onMinus, locked));
-            row.Add(StepButton("＋", onPlus, locked || atLimit));
-
-            return row;
+            public void Update(int minutes, int maxMinutes, bool atLimit)
+            {
+                _slider.SetValue(minutes, maxMinutes);
+                if (minutes != _shownMinutes)
+                {
+                    _shownMinutes = minutes;
+                    var fresh = UiComponents.NumUnitAuto(minutes + "分", false, "mslot__min");
+                    var at = IndexOf(_minutes);
+                    Remove(_minutes);
+                    Insert(at, fresh);
+                    _minutes = fresh;
+                }
+                var plusDisabled = _locked || atLimit;
+                _plus.SetEnabled(!plusDisabled);
+                _plus.EnableInClassList("step-btn--locked", plusDisabled);
+            }
         }
 
         // この設定で伸びる能力（実効ドライラン）。
