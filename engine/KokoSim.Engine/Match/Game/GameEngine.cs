@@ -1044,6 +1044,7 @@ public static class GameEngine
             var squeezeAbandoned = false;
             var stealEndedHalf = false;
             var walkoffMidPa = false;
+            var batteryMissEndedPa = false;   // 打席を終わらせた球で暴投・捕逸が起きたか（同じ1球を振り逃げで二重に解かない・issue #1206）
             var atHeadWindow = true;   // 打席の頭の窓は束縛の前（上）で開いた
             while (!session.IsComplete)
             {
@@ -1268,7 +1269,9 @@ public static class GameEngine
                         // issue #619: 未消費の手動スクイズ予約があるときは三塁走者を
                         // 走らせない（同じ球で三塁走者がスクイズと重盗の両方に使われるのを防ぐ）。
                         // 既定 DoubleStealThirdBreakProb=0 では従来どおりこの分岐に入らず乱数消費ゼロ。
+                        // 一塁走者の盗塁死が3アウト目なら、三塁走者の本塁到達は認めない（issue #1206）。
                         if (bases.Third is not null && paBaserunning.DoubleStealThirdBreakProb > 0.0
+                            && outs < 3
                             && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze
                             && MathUtil.Chance(paBaserunning.DoubleStealThirdBreakProb, rng))
                         {
@@ -1472,9 +1475,13 @@ public static class GameEngine
                 //             打者への一塁の付与（押し出し）だけで塁が動く。四球はインプレー＝盗塁は成立しうるので戻さない
                 //  - 3アウト目の盗塁死で、この球が打席を終わらせた（三振・四球・死球）… 打席の決着が先に立つ
                 //             （三振が3アウト目／四球・死球は走者に安全進塁権）＝盗塁死は成立しない（issue #779）
+                //  - 四球の球での二盗死・重盗死（issue #1206）… 打者に一塁が与えられると一塁走者は二塁への安全進塁権を
+                //             得る＝刺されない。三盗は二塁走者が詰められていない（一塁が空き）ので、そのまま成立する
                 if (stealRecRunner is not null
                     && (session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay or AtBat.PitchKind.HitByPitch
-                        || (runnerOutEndsHalf && pitchRes.EndsPlateAppearance)))
+                        || (runnerOutEndsHalf && pitchRes.EndsPlateAppearance)
+                        || (!stealRecSuccess && !stealRecThird && pitchRes.EndsPlateAppearance
+                            && session.LastPitchKind == AtBat.PitchKind.Ball)))
                 {
                     bases.First = steal0First;
                     bases.Second = steal0Second;
@@ -1662,6 +1669,13 @@ public static class GameEngine
                 // 暴投=投手責/パスボール=捕手責は意味上分けるが、記録は合算1カウントに簡略化（design-14の割り切り）。
                 // 既定0（WildPitchProb=PassedBallProb=0）では走者の有無・投球結果によらず分岐自体に入らずrng消費ゼロ。
                 // ピッチアウトは捕手が立って構えた球＝後逸の対象にしない（issue #986）。
+                // 第3ストライクで打席が終わる球（issue #1206）: 一塁が空いている／2アウトなら捕り損ねは振り逃げの判定
+                // （下の DropThirdStrikeReach）が引き受ける＝ここで走者を進めると、同じ1球で全走者が2つ進んだり、
+                // 3アウト目の三振の後に走者が生還したりする。暴投で進むのは打者がアウトのままの（一塁が埋まっていて
+                // 2アウト未満の）三振だけ。乱数は従来どおり対象球ごとに引く（ゲートは Chance の後段）。
+                var finalStrikeoutPitch = pitchRes.EndsPlateAppearance
+                    && session.LastPitchKind is PitchKind.CalledStrike or PitchKind.SwingingStrike;
+                var droppedThirdStrikeDecides = finalStrikeoutPitch && (bases.First is null || outs == 2);
                 if (bases.RunnerCount > 0 && !pitchoutThisPitch
                     && session.LastPitchKind is PitchKind.Ball or PitchKind.CalledStrike or PitchKind.SwingingStrike
                     && (paBaserunning.WildPitchProb > 0.0 || paBaserunning.PassedBallProb > 0.0))
@@ -1680,8 +1694,10 @@ public static class GameEngine
                     // Chance が外れた球ではコース評価をしない（CanBatteryMiss は乱数非消費なので順序は帯に無関係）。
                     if (MathUtil.Chance(wpProb + pbProb, rng)
                         && BaserunningModel.CanBatteryMiss(
-                            session.PitchLog[^1].LocationX, session.PitchLog[^1].LocationY, ctx.StrikeZone, paBaserunning))
+                            session.PitchLog[^1].LocationX, session.PitchLog[^1].LocationY, ctx.StrikeZone, paBaserunning)
+                        && !droppedThirdStrikeDecides)
                     {
+                        batteryMissEndedPa = pitchRes.EndsPlateAppearance;
                         // 進塁前の走者配置を控える（issue #487の絵はこの写しから組む。ApplyBatteryMiss は
                         // bases を直接書き換えるので、呼び出し後には「誰から誰へ動いたか」が取れない）。
                         var wpFirst = bases.First;
@@ -1802,6 +1818,7 @@ public static class GameEngine
                         or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome => 1,
                     _ => 0,
                 };
+                buntOuts = Math.Min(buntOuts, 3 - outs);   // 2アウトからの併殺でも3アウト目まで（issue #1206）
                 // タイムライン用に進塁前の走者を控える（ApplyBunt は bases を直接書き換えるため、
                 // 呼び出し後には「誰が動いたか」が取れない。issue #490）。
                 var buntPreFirst = bases.First;
@@ -1858,13 +1875,13 @@ public static class GameEngine
                     batterOrder: batterOrder, pitchLog: res.PitchLog,
                     isSacBunt: isSacBunt);
                 outs += buntOuts;
-                MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
                 {
                     offense.RecordInningRuns(runsThisHalf);
                     yield return Pa();
                     yield break;
                 }
+                MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);   // 試合が終わった後には継投判断をしない（issue #1206）
                 yield return Pa();
                 continue;
             }
@@ -1883,6 +1900,9 @@ public static class GameEngine
                     + (sq.Bunt is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird ? 1 : 0)
                     + (sq.Bunt == BuntResult.PopOutDoubledOff ? 1 : 0) // 一塁走者の併殺（design-09「小フライ併殺」）
                     + (sq.RunnerOut ? 1 : 0);
+                sqOuts = Math.Min(sqOuts, 3 - outs);   // 2アウトからでも3アウト目まで（issue #1206）
+                // 3アウト目が打者アウト・封殺なら三塁走者の生還は認めない（規則5.08(a)。バントの押し出しと同じ扱い）。
+                var sqRuns = outs + sqOuts < 3 ? sq.Runs : 0;
                 // タイムライン用に進塁前の走者を控える（issue #490。バントと同じ理由）。
                 var sqPreFirst = bases.First;
                 var sqPreSecond = bases.Second;
@@ -1902,17 +1922,18 @@ public static class GameEngine
                 }
                 // 小フライ（PopOut）は走者（三塁含め）釘付けのまま。
 
-                offense.Runs += sq.Runs;
-                runsThisHalf += sq.Runs;
+                if (sqRuns == 0 && sq.Runs > 0) bases.Third = sqScorer;   // 得点にならない＝三塁走者は本塁に届いていない
+                offense.Runs += sqRuns;
+                runsThisHalf += sqRuns;
                 // スクイズ自体は失策由来ではないが、生還する三塁走者が既に失策で延命済み（issue #69）なら
                 // その1点は自責対象外のまま引き継ぐ。
-                var sqUnearnedRuns = sq.Runs > 0 && sqScorer is not null && unearnedRunners.Contains(sqScorer) ? sq.Runs : 0;
-                if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
+                var sqUnearnedRuns = sqRuns > 0 && sqScorer is not null && unearnedRunners.Contains(sqScorer) ? sqRuns : 0;
+                if (sqRuns > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
                 // 生還する三塁走者が引き継ぎ走者なら失点は責任投手へ（今の投手の行には積まない）。
-                var sqOwnRuns = sq.Runs;
-                if (sq.Runs > 0 && sqScorer is not null && !ResponsibleFor(sqScorer).Equals(currentPitcher))
+                var sqOwnRuns = sqRuns;
+                if (sqRuns > 0 && sqScorer is not null && !ResponsibleFor(sqScorer).Equals(currentPitcher))
                 {
-                    defense.ChargeRuns(ResponsibleFor(sqScorer), sq.Runs, sqUnearnedRuns);
+                    defense.ChargeRuns(ResponsibleFor(sqScorer), sqRuns, sqUnearnedRuns);
                     sqOwnRuns = 0;
                     sqUnearnedRuns = 0;
                 }
@@ -1933,7 +1954,7 @@ public static class GameEngine
                         : System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(),
                     defense, ctx, rng, (ulong)log.Count * 16 + 4);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
-                    res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
+                    res.Result, sqRuns, sqOuts, res.Pitches, inning, isTop, log, ctx,
                     pitcherRuns: sqOwnRuns,
                     timeline: sqTimeline,
                     outsBefore: outs,
@@ -1942,13 +1963,13 @@ public static class GameEngine
                     batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns,
                     isSacBunt: sq.Bunt == BuntResult.SacrificeSuccess);
                 outs += sqOuts;
-                MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
                 {
                     offense.RecordInningRuns(runsThisHalf);
                     yield return Pa();
                     yield break;
                 }
+                MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);   // 試合が終わった後には継投判断をしない（issue #1206）
                 yield return Pa();
                 continue;
             }
@@ -2400,7 +2421,7 @@ public static class GameEngine
             Player? dtsFirst = null, dtsSecond = null, dtsThird = null;
             var rbiRuns = runs; // 振り逃げで生還した走者は打点にしない（打席ログの得点には数える）
             if (res.Result == PlateAppearanceResult.Strikeout && (bases.First is null || outs == 2)
-                && paBaserunning.DropThirdStrikeReachProb > 0.0)
+                && !batteryMissEndedPa && paBaserunning.DropThirdStrikeReachProb > 0.0)
             {
                 var reachProb = MathUtil.Clamp(
                     paBaserunning.DropThirdStrikeReachProb
@@ -2524,14 +2545,13 @@ public static class GameEngine
 
             outs += outsThisPa;
 
-            MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
-
             if (walkoff?.Invoke() == true)
             {
                 offense.RecordInningRuns(runsThisHalf);
                 yield return Pa();
                 yield break;
             }
+            MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);   // 試合が終わった後には継投判断をしない（issue #1206）
             yield return Pa();
         }
 
