@@ -2030,7 +2030,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c712385c8c8ff4a4d82bb00d71a6d6e5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::KokoSim.Unity.AppBootstrap
-  targetFps: 60
 --- !u!4 &2010003124
 Transform:
   m_ObjectHideFlags: 0
