@@ -1539,13 +1539,17 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// DH解除（設計書09 §6）: 投手が打順に入り、以降 DH は消滅。dhFieldsAt を指定するとDHの選手がその守備位置に就く
-    /// （元の守備者は退場）。null なら DH の選手はそのまま退場（投手が打席へ立つだけ）。
+    /// DH解除（設計書09 §6）: 以降 DH は消滅し、投手が打順に入る。
+    /// dhFieldsAt を指定するとDHの選手が<b>自分の打順のまま</b>その守備位置に就き（元の守備者は退場）、
+    /// 投手は退いた守備者の打順スロットへ入る（現実ルール・#1284）。
+    /// null なら DH の選手はそのまま退場し、投手が DH の打順スロットで打席へ立つ。
     /// </summary>
     public bool ReleaseDh(FieldPosition? dhFieldsAt = null)
     {
         if (!_usesDh) return false;
         var dhPlayer = _lineup[_dhSlot];
+        var pitcher = Rekey(CurrentPitcher, CurrentPitcher with { Position = FieldPosition.Pitcher });
+        int pitcherSlot;
         if (dhFieldsAt is { } pos)
         {
             var fielder = FielderAt(pos);
@@ -1553,17 +1557,18 @@ public sealed class TeamState
             if (target < 0) return false;
             _retired.Add(KeyOf(_lineup[target]));
             _replacedAtSlot[target] = _lineup[target].Name;   // 観測: 守備位置に就いた選手が退いた
-            _lineup[target] = Rekey(dhPlayer, dhPlayer.AtPosition(pos));   // 守備力も就く位置の適性で作り直す（#1245）
+            _lineup[_dhSlot] = Rekey(dhPlayer, dhPlayer.AtPosition(pos));   // 守備力も就く位置の適性で作り直す（#1245）
+            pitcherSlot = target;
         }
         else
         {
             _retired.Add(KeyOf(dhPlayer));
+            _replacedAtSlot[_dhSlot] = dhPlayer.Name;   // 観測: DHが退いて投手が打順へ
+            pitcherSlot = _dhSlot;
         }
-        // 投手が DH の打順スロットへ入り、そこが投手スロットになる。
-        _replacedAtSlot[_dhSlot] = dhPlayer.Name;   // 観測: DHが退いて投手が打順へ
-        _lineup[_dhSlot] = Rekey(CurrentPitcher, CurrentPitcher with { Position = FieldPosition.Pitcher });
-        CurrentPitcher = _lineup[_dhSlot];
-        _pitcherSlot = _dhSlot;
+        _lineup[pitcherSlot] = pitcher;
+        CurrentPitcher = pitcher;
+        _pitcherSlot = pitcherSlot;
         _usesDh = false;
         Substitutions++;
         return true;

@@ -161,18 +161,18 @@ public sealed class SubstitutionLogTests
         Assert.Equal(0, relief.Order);
         Assert.Equal("H先発P", relief.Out!.Name);
 
-        // DHが左翼へ就き（元の左翼手が退く）、投手がDHの打順へ入る
+        // DHが自分の打順のまま左翼へ就き（元の左翼手が退く）、投手が退いた左翼手の打順へ入る（#1284）
         Assert.True(prog.ReleaseDh(teamIsAway: false, FieldPosition.LeftField));
         var entries = prog.Substitutions[1].Entries;
         var dhRelease = entries.Single(x => x.Kind == SubstitutionEntryKind.DhRelease);
-        Assert.Equal(9, dhRelease.Order);
         Assert.Equal("H二番手", dhRelease.In.Name);
         Assert.Equal(FieldPosition.Pitcher, dhRelease.Position);
-        Assert.Null(dhRelease.Out);   // 元DHは守備に就いて残っている
+        Assert.Equal("H左", dhRelease.Out!.Name);
         var moved = entries.Single(x => x.In.Name == "HDH");
         Assert.Equal(SubstitutionEntryKind.PositionChange, moved.Kind);
+        Assert.Equal(9, moved.Order);   // DHは自分の打順のまま
         Assert.Equal(FieldPosition.LeftField, moved.Position);
-        Assert.Equal("H左", moved.Out!.Name);
+        Assert.Null(moved.Out);
     }
 
     [Fact]
