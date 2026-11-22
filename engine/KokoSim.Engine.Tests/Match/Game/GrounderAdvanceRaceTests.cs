@@ -242,41 +242,33 @@ public sealed class GrounderAdvanceRaceTests
     [Fact]
     public void Fallback_ExtraOutsNonZero_UsesLegacyTable_NotPhysical()
     {
-        // extraOuts>0（この打球の送球はもう使われた＝本塁憤死等）では、物理レースへ入らず従来テーブル 18% へ
-        // フォールバックする。浅い中央ゴロ＋前進守備で三塁走者を本塁で勝負（送り閾値を超える P_home）させ、
-        // r3 が生還した打席（extraOuts==0）と本塁憤死した打席（extraOuts>0）で二塁走者の進塁挙動が変わることで確認。
-        // 一塁送球到達が早い＝物理なら P_relay が閾値未満＝自重（進塁0%・RNG非消費）になる域を選ぶ。
-        // ⇒ extraOuts==0 は物理で自重（≈0%）、extraOuts>0 は従来テーブル（≈18%）＝挙動が切り替わる。
+        // extraOuts>0（本塁憤死＝この打球の送球は使われた）では、物理レースへ入らず従来テーブル 18% へフォールバックする。
+        // 本塁で生還（セーフ）した打席も送球は本塁へ使われている（1打球の送球は1本・issue #1240）＝二塁走者は
+        // 一塁経由の転送とレースせず、三塁へ勝負なしで進む。浅い中央ゴロ＋前進守備で三塁走者を本塁で勝負させ、
+        // 憤死（≈18%の従来テーブル）／生還（必ず進塁）で二塁走者の進塁挙動が変わることで確認。
         var home = new HomePlayContext(
             Field,
             new HomePlaySituation(new Vector3D(8, 0, 33), 1.5, new Player { ArmStrength = 50 }.ToFielder().ThrowSpeedMps),
             new TacticsCoefficients(), 0.5, DefenseDepth.In, IsFly: false, ThrowArriveSeconds: 1.9);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
         var r3 = new Player { Speed = 50, Baserunning = 50 };
-        var tAdvance = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
-        Assert.True(PRelay(home, r2) < tAdvance, "この一塁到達は二塁走者の物理レースでは自重域のはず");
 
-        // 本塁送球の悪送球は切る: 逸れると二塁走者が三塁へ押し出され（物理レースとは別の進塁）、
-        // clean 側に混ざる（issue #830 で押し出した走者を消さないよう直してから表に出た）。
+        // 本塁送球の悪送球は切る: 逸れると二塁走者が三塁へ押し出され（別の進塁）、混ざる。
         var c = C with { RelayThrowErrorBaseProb = 0.0 };
         var rng = new Xoshiro256Random(2024);
-        int advOnExtra = 0, nExtra = 0, advOnClean = 0, nClean = 0;
+        int advOnExtra = 0, nExtra = 0, advOnScored = 0, nScored = 0;
         for (var i = 0; i < 8000; i++)
         {
             var bases = new BaseState { Second = r2, Third = r3 };
-            var (_, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
+            var (runs, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.InPlayOut, new Player(), 0, c, rng, collectMoves: false, home);
             var advanced = bases.Third == r2; // 二塁走者が三塁へ進んだか
             if (extraOuts > 0) { nExtra++; if (advanced) advOnExtra++; }
-            else { nClean++; if (advanced) advOnClean++; }
+            else if (runs > 0) { nScored++; if (advanced) advOnScored++; }
         }
-        Assert.True(nExtra > 500 && nClean > 500, $"両区分に十分な試行が必要（extra={nExtra}, clean={nClean}）");
-        var rateExtra = (double)advOnExtra / nExtra;   // extraOuts>0＝従来テーブル ≈18%
-        var rateClean = (double)advOnClean / nClean;   // extraOuts==0＝物理で自重 ≈0%
-        Assert.InRange(rateExtra, 0.10, 0.30);         // 従来テーブル域
-        Assert.True(rateClean < 0.02, $"物理は自重域＝ほぼ0%のはず（clean={rateClean:F3}）");
-        Assert.True(rateExtra > rateClean + 0.08,
-            $"従来テーブル(extra={rateExtra:F2})と物理自重(clean={rateClean:F2})で挙動が切り替わるはず");
+        Assert.True(nExtra > 500 && nScored > 500, $"両区分に十分な試行が必要（extra={nExtra}, scored={nScored}）");
+        Assert.InRange((double)advOnExtra / nExtra, 0.10, 0.30); // 本塁憤死＝従来テーブル域
+        Assert.Equal(nScored, advOnScored);                      // 本塁セーフ＝送球は本塁へ行った＝勝負なしで必ず進む
     }
 
     private static int CountAdvances(HomePlayContext home, Player r2, ulong seed)

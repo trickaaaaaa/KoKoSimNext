@@ -914,6 +914,8 @@ public static class BaserunningModel
         var extraOuts = 0;
         var homeOuts = 0;
         var batterSafeOnFc = false;
+        // 守備が本塁へ投げた（セーフでも）＝この打球の送球は使い切った。後続の走者は送球の勝負をしない（design-12 §3.5・1プレー1送球）。
+        var homeThrowUsed = false;
         // 併殺・野選（内野ゴロ×一塁走者, Issue #369）: 実試合経路（home!=null・ゴロ・打者の一塁到達時刻あり）は
         // 13%固定テーブルでなく「捕球点→二塁の封殺（P_force2）／二塁→一塁の転送」の二段の物理レースで解く
         // （#318 のゴロ進塁打と同じ流儀）。それ以外（home無し・打者一塁到達時刻なし＝単体テスト/
@@ -1152,6 +1154,9 @@ public static class BaserunningModel
                     var backHomeCloseCall = Math.Abs(backHomeMargin) < coeff.CloseCallMarginSeconds;
                     var (backHomeOutcome, backHomeLate, backHomeScatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
                         r3, 3, hi.Situation, hi.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, delay);
+                    // 守備は本塁へ投げた＝この打球の送球はこの1本（打者を一塁で刺す送球は無い）。打者は野選で生きる／
+                    // 本塁で刺したときだけ捕手の一塁転送と競う（満塁の本塁封殺と同じ作法）。
+                    homeThrowUsed = true;
                     if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                     {
                         runs++;
@@ -1161,12 +1166,29 @@ public static class BaserunningModel
                             bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
                             runs += PushRunnersOnWildThrow(bases, mv);
                         }
+                        // 野選: 一塁の打者はそのまま生きる（一塁走者は押し出されて二塁へ。後段の一塁走者カスケードが担う）。
+                        batterSafeOnFc = true;
+                        battersOwnOut = 0;
+                        bases.First = batter;
+                        mv?.Add(new RunnerMove(batter, 0, 1, false));
                     }
                     else
                     {
                         extraOuts++; homeOuts++; // バックホーム憤死（本塁で刺殺）
+                        var relayed = hi.BatterToFirstSeconds is not null;
+                        var (homeRelayScatter, homeRelayNoise) = relayed
+                            ? HomePlayResolver.SampleThrowScatter(50, coeff, rng)
+                            : (default(Fielding.ThrowScatterModel.Scatter), 0.0);
                         mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
-                            { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay + backHomeLate, ThrowScatter = backHomeScatter });
+                            { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay + backHomeLate, ThrowScatter = backHomeScatter,
+                              HomeForceRelay = relayed, RelayThrowScatter = relayed ? homeRelayScatter : null });
+                        if (relayed && MathUtil.Chance(HomeForceRelayBatterSafeProbability(hi, coeff, homeRelayNoise), rng))
+                        {
+                            batterSafeOnFc = true;
+                            battersOwnOut = 0;
+                            bases.First = batter;
+                            mv?.Add(new RunnerMove(batter, 0, 1, false));
+                        }
                     }
                     // 返球が逸れた分岐は押し上げ済みの三塁（元の二塁走者）を消さない（issue #830 と同じ不具合）
                     if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow) bases.Third = null;
@@ -1191,6 +1213,7 @@ public static class BaserunningModel
                 }
                 else if (HomeSendDecision.ShouldSend(prob, currentOuts, hfly.Aggression, hfly.Tactics))
                 {
+                    returnThrowUsed = true; // 本塁への送球で1本使う＝後続（二塁・一塁走者）のタッチアップは送球の勝負をしない。
                     var tagMargin = HomePlayResolver.TagUpMargin(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp);
                     var tagCloseCall = Math.Abs(tagMargin) < coeff.CloseCallMarginSeconds;
                     // 絵も判定と同じ「捕球を待ってから走る」時計にする（issue score-display-before-home-touch）。
@@ -1249,7 +1272,17 @@ public static class BaserunningModel
         {
             if (!r2Forced && extraOuts == 0 && home is { IsFly: false } adv)
             {
-                ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts, r2StealBreak);
+                if (homeThrowUsed)
+                {
+                    // 送球は本塁へ行った＝三塁は無警戒。勝負なしで進む（乱数なし）。
+                    mv?.Add(new RunnerMove(r2, 2, 3, false) { ExtraStartDelaySeconds = coeff.GrounderAdvanceStartDelaySeconds });
+                    bases.Third = r2;
+                    bases.Second = null;
+                }
+                else
+                {
+                    ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts, r2StealBreak);
+                }
                 r2 = null; // 進塁・憤死・自重のいずれでも二塁走者の帰趨はここで確定（自重時は bases.Second のまま）。
             }
             else if (extraOuts == 0 && home is { IsFly: true } fly2)
@@ -1269,9 +1302,8 @@ public static class BaserunningModel
                 r2 = null;
             }
         }
-        // タッチアップが3アウト目を作ったらここで打ち切る（進塁は起きない）。既存経路では
-        // ここに来る時点で extraOuts が増えているのは ResolveGrounderAdvance だけ＝そのとき r1 は必ず null
-        // （非フォースの二塁走者⇒一塁は空）なので、この行の追加は従来経路に対して恒等。
+        // 進塁の送球勝負が3アウト目を作ったらここで打ち切る（進塁は起きない）。ここに来る時点で extraOuts が
+        // 増えているのは ResolveGrounderAdvance か ResolveFlyTagUp（二塁走者）の走塁死だけ。
         if (currentOuts + battersOwnOut + extraOuts >= 3) return (runs, extraOuts, homeOuts, batterSafeOnFc);
         // 飛び出しの勝負を走って戻った一塁走者は、その捕球でタッチアップはできない（塁に戻るのが捕球の後）＝進塁抽選を引かない。
         if (r1 is not null && !r1RacedBack && bases.Second is null)
@@ -1533,7 +1565,9 @@ public static class BaserunningModel
         // ⚠ 本塁が本筋の場面（homeFirst）では一塁の自己フォース→二塁タッチを選ばない（PR #1076 レビュー）。
         // タッチ失敗（追加アウト0）のあとに本塁封殺の勝負がもう一度走り、「一塁を踏んでアウトにした打者が
         // 本塁封殺の野選で一塁に生きる」ような二重の守備になる。
-        var firstBaseCandidate = home.FielderRole == FieldPosition.FirstBase && !homeFirst;
+        // 一・三塁（二塁は空き）でも前進守備なら本塁の勝負が続く＝同じ穴（二塁のタッチ失敗のあとにもう1本投げる）を塞ぐ。
+        var firstBaseCandidate = home.FielderRole == FieldPosition.FirstBase && !homeFirst
+            && !(r3 is not null && home.InfieldDepth == Tactics.DefenseDepth.In);
 
         if (!thirdCandidate && !homeCandidate && !firstBaseCandidate)
         {
