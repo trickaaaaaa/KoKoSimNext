@@ -50,7 +50,7 @@ public static class SkillModel
         // 尻上がり: イニングを追うごとに安定。
         if (skills.Has(Skill.SlowStarterPitch))
             control += Math.Min(c.SlowStarterPitchMaxBonus, priorBf * c.SlowStarterPitchControlPerBf);
-        // 打者一巡: 3巡目以降に崩れやすい（対戦回数依存の癖・負）。
+        // 打者一巡: 2巡目以降に崩れやすい（対戦回数依存の癖・負）。
         if (skills.Has(Skill.SecondTimeThrough) && priorBf >= c.SecondTimeThroughBattersFaced)
             control -= c.SecondTimeThroughControlPenalty;
         // 荒れ球: 実効コントロールを下げる（四球増）。球威側の上乗せは PlayMods。

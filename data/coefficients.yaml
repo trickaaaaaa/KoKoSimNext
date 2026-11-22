@@ -849,7 +849,7 @@ skills:
   # 投手系（試合内・非線形）
   slow_starter_pitch_control_per_bf: 0.45
   slow_starter_pitch_max_bonus: 8.0
-  second_time_through_batters_faced: 18  # 打者一巡: 3巡目〜崩れる
+  second_time_through_batters_faced: 9  # 打者一巡: 2巡目（10人目）〜崩れる
   second_time_through_control_penalty: 6.0
   second_time_through_stuff_penalty: 0.10
   effectively_wild_control_penalty: 7.0  # 荒れ球: 制球↓（四球増）だが…

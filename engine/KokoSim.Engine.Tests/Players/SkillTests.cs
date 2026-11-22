@@ -83,8 +83,9 @@ public sealed class SkillTests
     {
         var p = new PitcherAttributes { Control = 60 };
         var skills = new SkillSet(new[] { Skill.SecondTimeThrough });
-        Assert.Equal(60, SkillModel.ApplyPitcher(p, skills, priorBf: 10, C).Control); // 1-2巡目は無影響
-        Assert.Equal(54, SkillModel.ApplyPitcher(p, skills, priorBf: 18, C).Control); // 3巡目〜で崩れる
+        Assert.Equal(60, SkillModel.ApplyPitcher(p, skills, priorBf: 8, C).Control);  // 1巡目（9人目まで）は無影響
+        Assert.Equal(54, SkillModel.ApplyPitcher(p, skills, priorBf: 9, C).Control);  // 2巡目（10人目）から崩れる
+        Assert.Equal(54, SkillModel.ApplyPitcher(p, skills, priorBf: 18, C).Control);
     }
 
     [Fact]
