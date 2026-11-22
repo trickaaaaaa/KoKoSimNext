@@ -332,3 +332,14 @@ captures:
     duel_seconds: 3.0
     video: {from: start, to: end, fps: 24}
     probes: [BatterRootDiag]
+
+  # ── フライの捕球直前に球が放物線を外れて減速しないか（issue #1336）。毎コマの球の高さ（BallHoldDiag）で
+  # 捕球の瞬間まで落ち続けるかを見る。flight_end＝engine の飛球区間の終わり（捕球）──
+  - id: fly-catch-1336
+    name: "外野フライの捕球直前の球の軌道（issue #1336）"
+    scenario: fair-fly-out-lab
+    manager: away
+    view: rig
+    shots: [flight_end-0.3, flight_end-0.1, flight_end]
+    video: {from: flight_end-0.6, to: flight_end+0.3, fps: 60}
+    probes: [BallHoldDiag, FieldCatchDiag]
