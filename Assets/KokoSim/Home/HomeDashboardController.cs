@@ -14,11 +14,6 @@ namespace KokoSim.Unity.Home
     [RequireComponent(typeof(UIDocument))]
     public sealed class HomeDashboardController : MonoBehaviour
     {
-        private static readonly Color Good = new Color(0.624f, 0.796f, 0.231f);   // #9FCB3B
-        private static readonly Color Warn = new Color(0.910f, 0.416f, 0.290f);   // #E86A4A
-        private static readonly Color Amber = new Color(0.961f, 0.776f, 0.290f);  // #F5C64A
-        private static readonly Color Sub = new Color(0.616f, 0.702f, 0.627f);    // #9DB3A0
-
         private HomeState _state;
         private VisualElement _root;
         private VisualElement _banner, _dialog, _result, _newTeam, _xt;
@@ -822,13 +817,13 @@ namespace KokoSim.Unity.Home
 
         private static VisualElement BuildFeed(FeedItem f)
         {
-            var color = TagColor(f.Tag);
+            var tone = TagTone(f.Tag);
             var item = new VisualElement();
             item.AddToClassList("fd-item");
 
             var bar = new VisualElement();
             bar.AddToClassList("fd-bar");
-            bar.style.backgroundColor = color;
+            bar.AddToClassList(tone);
             item.Add(bar);
 
             var body = new VisualElement();
@@ -838,8 +833,7 @@ namespace KokoSim.Unity.Home
             meta.AddToClassList("fd-meta");
             var tag = new Label(f.Tag);
             tag.AddToClassList("fd-tag");
-            tag.style.color = color;
-            SetBorder(tag, color);
+            tag.AddToClassList(tone);
             var time = new Label(f.When);
             time.AddToClassList("fd-time");
             meta.Add(tag); meta.Add(time);
@@ -883,23 +877,15 @@ namespace KokoSim.Unity.Home
 
         // ===== 補助 =====
 
-        private static Color TagColor(string tag)
+        private static string TagTone(string tag)
         {
             switch (tag)
             {
-                case "成長": return Good;
-                case "警告": return Warn;
-                case "発見": return Amber;
-                default: return Sub;
+                case "成長": return "fd-tone--growth";
+                case "警告": return "fd-tone--warn";
+                case "発見": return "fd-tone--find";
+                default: return "fd-tone--info";
             }
-        }
-
-        private static void SetBorder(VisualElement e, Color c)
-        {
-            e.style.borderTopWidth = 1; e.style.borderBottomWidth = 1;
-            e.style.borderLeftWidth = 1; e.style.borderRightWidth = 1;
-            e.style.borderTopColor = c; e.style.borderBottomColor = c;
-            e.style.borderLeftColor = c; e.style.borderRightColor = c;
         }
 
         private void SetText(string name, string text)

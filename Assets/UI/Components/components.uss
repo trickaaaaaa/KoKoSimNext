@@ -724,6 +724,8 @@
     margin-left: 4px;
 }
 .slot-card__clear:hover { color: var(--color-warn); }
+.ms-captain-mark { font-size: 11px; color: var(--color-chalk); margin-left: 3px; }
+.ms-grade { font-size: 11px; color: var(--color-muted); margin-right: 5px; }
 
 /* ── BenchSlot：控え（背番号10〜20）の2行カード ───────────────────────── */
 .bench-slot {
