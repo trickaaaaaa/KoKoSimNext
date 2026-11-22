@@ -56,6 +56,16 @@ namespace KokoSim.Unity.Shell
         public static bool CanTrain(int grade, int week) => Calendar.CanTrain(grade, week);
 
         /// <summary>
+        /// その週に練習時間が1分以上入っている分野（issue #1204）。成長イベント（覚醒・大覚醒・伸びしろアップ・新球種）は
+        /// この分野でしか起きない。練習できない週（引退・オフ期間）は空＝起きない。<see cref="Apply"/> と同じ解決を通す。
+        /// </summary>
+        public static IReadOnlyCollection<TrainingField> TrainedFields(DevelopingPlayer p, int week)
+        {
+            if (p.IsRetired || !Calendar.CanTrain(p.Grade, week)) return System.Array.Empty<TrainingField>();
+            return TrainingFields.Trained(TrainingPresets.Resolve(p.Plan ?? TrainingPlan.Default, Budget));
+        }
+
+        /// <summary>
         /// 1週ぶんの練習を選手 <paramref name="p"/> へ適用する（<paramref name="p"/> を破壊的に更新）。
         /// <paramref name="extraMult"/> は大会モード時の効果低下（&lt;1.0）に使う（通常週は1.0）。
         /// <paramref name="roster"/> はチーム内スキル（練習リーダー/お手本, 設計書10）の判定に使う全部員

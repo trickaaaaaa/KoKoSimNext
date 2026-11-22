@@ -293,7 +293,9 @@ namespace KokoSim.Unity.Home
         private void RunGrowthWeek()
         {
             var rng = _rng.Fork(WeeklyStream(GrowthStream));
-            var notices = GrowthEventModel.Week(Roster, rng, _growth);
+            var week = KokoSim.Unity.Shell.GameClock.Week;
+            var notices = GrowthEventModel.Week(
+                Roster, rng, _growth, p => KokoSim.Unity.Shell.TrainingWeek.TrainedFields(p, week));
             if (notices.Count == 0) return;
 
             var items = new List<FeedItem>();

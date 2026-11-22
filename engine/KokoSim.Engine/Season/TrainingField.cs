@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace KokoSim.Engine.Season;
 
@@ -63,6 +64,25 @@ public static class TrainingFields
         TrainingMenu.Rest => null,
         _ => null,
     };
+
+    /// <summary>成長イベントの分野 → 練習の分野（打撃⇔Batting／投球⇔Pitching／守備⇔Defense／走塁⇔BaseRunning）。</summary>
+    public static TrainingField Of(GrowthDomain domain) => domain switch
+    {
+        GrowthDomain.Batting => TrainingField.Batting,
+        GrowthDomain.Pitching => TrainingField.Pitching,
+        GrowthDomain.Defense => TrainingField.Defense,
+        GrowthDomain.Running => TrainingField.BaseRunning,
+        _ => throw new ArgumentOutOfRangeException(nameof(domain), domain, null),
+    };
+
+    /// <summary>実効配分で1分以上の練習時間が入っている分野の集合（休養は分野なし）。</summary>
+    public static IReadOnlyCollection<TrainingField> Trained(IReadOnlyList<MenuAllocation> allocations)
+    {
+        var set = new HashSet<TrainingField>();
+        foreach (var a in allocations)
+            if (a.Minutes >= 1 && OfOrNull(a.Menu) is { } f) set.Add(f);
+        return set;
+    }
 
     /// <summary>メニューの分野。休養を渡すと例外（呼び出し側で休養を除いてから使う）。</summary>
     public static TrainingField Of(TrainingMenu menu) =>

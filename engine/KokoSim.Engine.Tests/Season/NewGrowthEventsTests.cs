@@ -169,6 +169,96 @@ public sealed class NewGrowthEventsTests
         Assert.Equal(c.NewPitchOffset + c.PitchRefineGain, lp2.PowerOffset);
     }
 
+    // ===== 練習計画に時間が入っている分野でだけ起きる（issue #1204） =====
+
+    private static System.Func<DevelopingPlayer, System.Collections.Generic.IReadOnlyCollection<TrainingField>> Only(
+        params TrainingField[] fields) => _ => fields;
+
+    private static DevelopingPlayer SparklingPitcher()
+    {
+        var p = Pitcher();
+        p.BattingGrowth = 1.4; p.DefenseGrowth = 1.4; p.PitchingGrowth = 1.4;
+        p.ConditionValue = 0.9;
+        return p;
+    }
+
+    [Fact]
+    public void TrainedFields_AreTheFieldsWithAtLeastOneMinute_AndRestHasNone()
+    {
+        var alloc = new[]
+        {
+            new MenuAllocation(TrainingMenu.Batting, 60), new MenuAllocation(TrainingMenu.Strength, 30),
+            new MenuAllocation(TrainingMenu.Bunt, 10), new MenuAllocation(TrainingMenu.Pitching, 0),
+            new MenuAllocation(TrainingMenu.Rest, 100),
+        };
+        var f = TrainingFields.Trained(alloc);
+        Assert.Equal(new[] { TrainingField.Batting, TrainingField.BaseRunning }, f.OrderBy(x => x).ToArray());
+        Assert.Equal(TrainingField.Batting, TrainingFields.Of(GrowthDomain.Batting));
+        Assert.Equal(TrainingField.Pitching, TrainingFields.Of(GrowthDomain.Pitching));
+        Assert.Equal(TrainingField.Defense, TrainingFields.Of(GrowthDomain.Defense));
+        Assert.Equal(TrainingField.BaseRunning, TrainingFields.Of(GrowthDomain.Running));
+    }
+
+    [Fact]
+    public void Awakening_AndGrandAwakening_NeverPickADomainWithoutPractice()
+    {
+        var c = None() with { AwakeningWeeklyProb = 1.0, GrandAwakeningWeeklyProb = 1.0 };
+        var seen = new System.Collections.Generic.HashSet<GrowthDomain>();
+        for (ulong s = 1; s <= 60; s++)
+        {
+            var p = SparklingPitcher();
+            foreach (var n in GrowthEventModel.Week(new[] { p }, new Xoshiro256Random(s), c, Only(TrainingField.Batting, TrainingField.Defense)))
+                seen.Add(n.Domain!.Value);
+        }
+        Assert.NotEmpty(seen);
+        Assert.DoesNotContain(GrowthDomain.Pitching, seen);
+        Assert.DoesNotContain(GrowthDomain.Running, seen);
+
+        // 投球の練習をしている投手では、投球の覚醒も今どおり起きる。
+        var pitchSeen = new System.Collections.Generic.HashSet<GrowthDomain>();
+        for (ulong s = 1; s <= 60; s++)
+            foreach (var n in GrowthEventModel.Week(new[] { SparklingPitcher() }, new Xoshiro256Random(s), c, Only(TrainingField.Pitching)))
+                pitchSeen.Add(n.Domain!.Value);
+        Assert.Equal(new[] { GrowthDomain.Pitching }, pitchSeen.ToArray());
+    }
+
+    [Fact]
+    public void GrowthSurge_NeverPicksADomainWithoutPractice()
+    {
+        var c = None() with { GrowthSurgeWeeklyProb = 1.0 };
+        var seen = new System.Collections.Generic.HashSet<GrowthDomain>();
+        for (ulong s = 1; s <= 60; s++)
+            foreach (var n in GrowthEventModel.Week(new[] { SparklingPitcher() }, new Xoshiro256Random(s), c, Only(TrainingField.Defense)))
+                seen.Add(n.Domain!.Value);
+        Assert.Equal(new[] { GrowthDomain.Defense }, seen.ToArray());
+
+        // 走塁だけ練習している選手には、伸びしろアップの分野（打撃・守備・投球）が無い＝起きない。
+        var p = SparklingPitcher();
+        Assert.Empty(GrowthEventModel.Week(new[] { p }, new Xoshiro256Random(1), c, Only(TrainingField.BaseRunning)));
+        Assert.Equal(1.4, p.BattingGrowth);
+    }
+
+    [Fact]
+    public void NewPitch_OnlyWhilePracticingPitching()
+    {
+        var c = None() with { NewPitchWeeklyProb = 1.0 };
+        var p = Pitcher();
+        for (ulong s = 1; s <= 20; s++)
+            Assert.Empty(GrowthEventModel.Week(new[] { p }, new Xoshiro256Random(s), c, Only(TrainingField.Batting, TrainingField.Defense)));
+        Assert.Empty(p.LearnedPitches);
+
+        var n = Assert.Single(GrowthEventModel.Week(new[] { p }, new Xoshiro256Random(1), c, Only(TrainingField.Pitching)));
+        Assert.Equal(GrowthEventType.NewPitch, n.Type);
+    }
+
+    [Fact]
+    public void NoPractice_NoUpwardGrowthEvents_ButNullMeansUnrestricted()
+    {
+        var c = None() with { AwakeningWeeklyProb = 1.0, GrandAwakeningWeeklyProb = 1.0, GrowthSurgeWeeklyProb = 1.0, NewPitchWeeklyProb = 1.0 };
+        Assert.Empty(GrowthEventModel.Week(new[] { SparklingPitcher() }, new Xoshiro256Random(1), c, Only()));
+        Assert.NotEmpty(GrowthEventModel.Week(new[] { SparklingPitcher() }, new Xoshiro256Random(1), c));
+    }
+
     private static GameResult Game(BattingLine[] batting, PitchingLine[] pitching) => new()
     {
         AwayName = "相手", HomeName = "自校", AwayRuns = 1, HomeRuns = 5,
