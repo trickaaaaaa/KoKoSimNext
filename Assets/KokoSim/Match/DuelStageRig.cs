@@ -2209,9 +2209,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// バント（issue #490）の面通過・当てのクリップ内時刻。<see cref="SwingMissPlane"/>/
-        /// <see cref="SwingHitContact"/> と同じ役割だが、まだ <c>DuelMotionSpike.RunClipSpeedProbe</c> で
-        /// 実測していない**初期値**（クリップの尺・緩急が不明なため中間あたりを仮置き）。
-        /// design-18 §4.5-③の掟どおり、購入クリップを取り込み次第 実測して値を更新すること。
+        /// <see cref="SwingHitContact"/> と同じ役割。当て（Bunt_Hitting）は右手速度のピーク 0.55〜0.65 で、
+        /// 空振り（Bunt_Miss）はピーク 0.4〜0.5 で実測済み（2026-11-22・<c>DuelMotionSpike.RunClipSpeedProbe</c>）＝仮置きの値と整合。
         /// </summary>
         private const float BuntMissPlane = 0.50f;
         private const float BuntHitContact = 0.55f;
@@ -2224,6 +2223,14 @@ namespace KokoSim.Unity.Match
         /// 腰の速度は 0.65 から加速（走り出し）。0.70 は走り出しの手前＝当てた後の収まり。
         /// </summary>
         private const float BuntHitFinishSec = 0.70f;
+
+        /// <summary>
+        /// バントを空振りした後に打ち切る時刻[クリップ秒]（issue #1264⑥）。通常スイングの <see cref="SwingFinishSec"/>(1.433) だと
+        /// Bunt_Miss（len=4.13）では収まったあとの静止を無駄に流す。実測（2026-11-22・RunClipSpeedProbe RightHand 0.1s刻み）:
+        /// 右手速度は 0.4〜0.5 でピーク（<see cref="BuntMissPlane"/> 0.50 と整合）→0.7 で 0.1m/s へ落ち着き 1.4 まで静止
+        /// （その後 1.5 から別の動き）。0.80 は収まった直後で止める＝据え置きが後を持つ。
+        /// </summary>
+        private const float BuntMissFinishSec = 0.80f;
 
         /// <summary>
         /// スイングを打ち切る時刻[クリップ秒]。**振り抜いた所で止める**（2026-07-31 監督判断
@@ -2622,7 +2629,7 @@ namespace KokoSim.Unity.Match
                 // 打ち切りだけで据え置きが無いと、打ち切った瞬間に待機へ戻る
                 case DuelPitchOutcome.SwingMiss:
                     // 空振り専用の収録が無いので同じスイングを使う（バントは Bunt_Miss を使う）
-                    SetSwing(missClip, missAnchor, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    SetSwing(missClip, missAnchor, flight, useBunt ? BuntMissFinishSec : EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 // 当てる球は判定面でなく**捌く瞬間**（_ballArrival＝判定面の ContactAheadM 手前）で合わせる。
                 // flight を渡すと、前で捌くぶんバットが遅れて着く（0.30m/40m·s⁻¹ ≒ 8ms）
@@ -2644,13 +2651,14 @@ namespace KokoSim.Unity.Match
                     // 足上げの途中（PreLoad）から死球へは姿勢差が大きいのでクロスフェードで繋ぐ
                     if (_batterPreLoaded) CrossfadeActorToClip(_batter, _hbpClip, HbpReact - flight, 4.2f, 0.15f);
                     else SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
+                    _batter.Speed = 1f;   // PreLoad の LoadSpeed を持ち越さない（SetActorClip は倍率を戻さない。issue #1264②）
                     _batterPreLoaded = false;
                     break;
                 // NotCaught（暴投・捕逸・振り逃げ。issue #525）。打者が振ったかは分類でなく batterSwung が持つ
                 // ＝振り逃げ（ほぼ空振り三振）で打者のスイングが消えないようにする。見送りなら待機のまま
                 case DuelPitchOutcome.NotCaught:
                     if (batterSwung)
-                        SetSwing(missClip, missAnchor, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                        SetSwing(missClip, missAnchor, flight, useBunt ? BuntMissFinishSec : EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     else if (!_batterBunting)
                         SetTakeLoad(flight);   // 振らない暴投・捕逸もタイミングだけは取る
                     break;
@@ -2890,8 +2898,10 @@ namespace KokoSim.Unity.Match
         /// issue #396）＝捕手は投球前からその狙いを知っているので、構え（クリップ選択）に使ってよい。
         /// 実着弾位置は使わない（投球前に実着弾へ寄せると「捕手が未来を知っている」ことになり、
         /// リリース後の残差の体寄せ（<see cref="FixCatcherPose"/>）の効果を自分で潰す）。
-        /// 基準のx（<see cref="CatcherBaseX"/>）も較正の固定値を使う——<see cref="StanceCatcherToAim"/> で
-        /// 立ち位置を狙いへ寄せた後の位置を読むと、寄せた分だけ狙いの符号が相殺されクリップが動かなくなる。
+        /// 基準のx は <see cref="StanceCatcherToAim"/> が体を寄せた後の位置（<see cref="CatcherBaseX"/>＋狙いのx）。
+        /// 寄せる前の基準で選ぶと、体が狙いへ寄るぶんとクリップ側のミット相対位置で**横ずれを二重に数え**、
+        /// 狙い −0.30 でミットが約 −0.56（狙いより 0.26m 外）になる（issue #1264③）。横は体寄せが受け持つので、
+        /// 狙いの x だけではクリップは動かず、高さで選ぶ。
         /// </summary>
         private int SelectCatchAnchor(DuelPitchOutcome outcome, DuelPitchFlight? pitch)
         {
@@ -2904,7 +2914,7 @@ namespace KokoSim.Unity.Match
 
             float px = pitch?.AimX ?? 0f;
             float py = pitch?.AimY ?? DefaultPlateY;
-            float catcherX = CatcherBaseX;
+            float catcherX = CatcherBaseX + (pitch?.AimX ?? 0f);
             int best = -1;
             float bestCost = float.MaxValue;
             for (int i = 0; i < CatchAnchors.Length; i++)
@@ -3283,7 +3293,14 @@ namespace KokoSim.Unity.Match
             if (_lastCatchPocketMoveM > MittPocketMoveHideM) _ball.SetActive(false);
             if (mitt != null)
             {
+                var worldScale = _ball.transform.lossyScale;
                 _ball.transform.SetParent(mitt, false);
+                // 装備メッシュが無い環境の代替グラブは球体の縮尺付き＝子の球が縮むので、見かけの大きさを保つ（issue #1264⑤）
+                var ms = mitt.lossyScale;
+                _ball.transform.localScale = new Vector3(
+                    ms.x > 1e-4f ? worldScale.x / ms.x : worldScale.x,
+                    ms.y > 1e-4f ? worldScale.y / ms.y : worldScale.y,
+                    ms.z > 1e-4f ? worldScale.z / ms.z : worldScale.z);
                 _ball.transform.localPosition = MittPocketBallLocal;
             }
             else

@@ -2888,7 +2888,7 @@ namespace KokoSim.Unity.Match
             foreach (var r in play.Runners)
                 foreach (var s in r.Segs)
                 {
-                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけの走者は数えない
+                    if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;   // その場に居るだけの走者は数えない
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
@@ -3010,7 +3010,7 @@ namespace KokoSim.Unity.Match
             foreach (var r in play.Runners)
                 foreach (var s in r.Segs)
                 {
-                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;
+                    if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
@@ -3081,7 +3081,7 @@ namespace KokoSim.Unity.Match
             foreach (var r in play.Runners)
                 foreach (var s in r.Segs)
                 {
-                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;
+                    if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
@@ -3300,7 +3300,7 @@ namespace KokoSim.Unity.Match
             foreach (var r in play.Runners)
                 foreach (var s in r.Segs)
                 {
-                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;
+                    if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);

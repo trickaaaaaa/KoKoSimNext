@@ -55,6 +55,9 @@ public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMu
 /// 「捕手が球を追っている」が読める（実測: 盲点0コマ）。走者を入れる案は枠が最大47.8m必要で、
 /// 人が20pxになる（打球処理の3D化で退けた「点が動くだけ」の絵に近づく）。</para>
 ///
+/// <para>両フラグを立てたときの割り振り（issue #1264①）: 走者を入れるのは**捕手が球を握り打者走者が走っている**
+/// ＝振り逃げのときだけ。内野ゴロの保持・暴投/捕逸の後は野手に寄せ続ける。</para>
+///
 /// <para>2D俯瞰は全景に全部入るので既定オフ（＝ゴールデン不変）。3Dの守備カメラだけが渡す。</para>
 /// </param>
 /// <param name="ThrowBoxGrowsWithBall">
@@ -254,27 +257,11 @@ public static class CameraPlanBuilder
     }
 
     /// <summary>
-    /// 「まだ見るものがある」最後の瞬間: 決着(<see cref="PlaybackPlay.ResAt"/>)・球が動き終わる時刻・
-    /// 実際に動く走者レッグの終わりのうち最大値（issue #406②。MatchLiveController.PlayEndTime と
-    /// 同じ作法で、全景へ戻す時刻の単一ソースにする＝engine のプラン（このメソッド経由）と3D側の
-    /// カメラカットの両方がここを見る。片方だけ直すとプランと実カットがずれる）。
-    ///
-    /// 決着後だけに起きる野手の定位置復帰（Backup/Cutoff の戻り等）は <see cref="PlaybackPlay.Moves"/>
-    /// を見ないこの式には自然と入らない＝含めると①「投手が帰る絵」を待つあいだ全景復帰が遅れて再発する。
+    /// 「まだ見るものがある」最後の瞬間。再生を切る時刻と同じ規則＝<see cref="PlaybackDisplaySync.LastActionTime"/>
+    /// を返すだけ（issue #1264④。以前は2本に分かれ、凡打の打者走者の扱いがずれていた）。
+    /// 全景へ戻す時刻（<see cref="WideStartTime"/>）の元になる。
     /// </summary>
-    public static double LastEventTime(PlaybackPlay play)
-    {
-        var lastEvent = play.ResAt;
-        foreach (var seg in play.Ball)
-            if (seg.T1 > lastEvent) lastEvent = seg.T1;
-        foreach (var runner in play.Runners)
-            foreach (var seg in runner.Segs)
-            {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue; // その場に居るだけ
-                if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            }
-        return lastEvent;
-    }
+    public static double LastEventTime(PlaybackPlay play) => PlaybackDisplaySync.LastActionTime(play);
 
     /// <summary>
     /// 全景へ戻し始める時刻（issue #406②/#441 の単一ソース。engine のプランと3D側のカット時刻の
@@ -486,10 +473,12 @@ public static class CameraPlanBuilder
             {
                 var heldV = new PlaybackVec(held.Value.X, held.Value.Y);
                 // まだ**誰も持っていない**（野手が拾いに走っている最中）なら、被写体はその野手（issue #566）。
-                // 走者は25〜40m先に居るので、ここで走者を入れると枠が追いつかず地面を舐める。下の
-                // HeldBallFollowsRunner は「持っている」あいだの作法なので、走っている間は先に抜ける。
-                if (fr.LooseBallFollowsChaser && ChasingFielderAt(play, actualT, heldV) is { } chaser)
-                    return FitBox(heldV, chaser, fr);
+                // 走者は25〜40m先に居るので、ここで走者を入れると枠が追いつかず地面を舐める。
+                // 例外は振り逃げ＝**捕手が球を握ったまま打者走者が本塁から一塁へ走っている**あいだだけ（issue #1264①）。
+                // 内野ゴロの保持（#689）・暴投/捕逸の後（#566）は走者を入れると枠が40m級に広がるので野手に寄せ続ける。
+                if (fr.LooseBallFollowsChaser && NearestFielderTo(play, actualT, heldV) is { } nearest
+                    && !(fr.HeldBallFollowsRunner && IsCatcherHoldingForBatterRunner(play, actualT, nearest)))
+                    return FitBox(heldV, nearest.Pos, fr);
                 // 球が止まっている間も走っている走者が居れば一緒に収める（issue #488 実機確認 2026-08-06）。
                 // 振り逃げは「捕手が本塁付近で球を持っている 2.4秒」がまるごとこの分岐で、球だけを
                 // 追うと**一塁へ走る打者走者が一度も枠に入らない**（実測: 注視y が 2.4秒ずっと 1.0）。
@@ -557,7 +546,7 @@ public static class CameraPlanBuilder
         foreach (var runner in play.Runners)
             foreach (var seg in runner.Segs)
             {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
                 if (t < seg.T0 || t > seg.T1) continue;
                 var span = Math.Abs(seg.To.X - seg.From.X) + Math.Abs(seg.To.Y - seg.From.Y);
                 if (span <= best) continue;
@@ -581,7 +570,7 @@ public static class CameraPlanBuilder
         foreach (var runner in play.Runners)
             foreach (var seg in runner.Segs)
             {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
                 if (seg.T1 > t || seg.T1 < latest) continue;
                 latest = seg.T1;
                 found = (seg.From, seg.To);
@@ -596,7 +585,7 @@ public static class CameraPlanBuilder
         foreach (var runner in play.Runners)
             foreach (var seg in runner.Segs)
             {
-                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
                 if (t < seg.T0 || t > seg.T1) continue;
                 var span = Math.Abs(seg.To.X - seg.From.X) + Math.Abs(seg.To.Y - seg.From.Y);
                 if (span <= best) continue;
@@ -608,25 +597,25 @@ public static class CameraPlanBuilder
         return found;
     }
 
+    /// <summary>「球を持っている」とみなす球と野手の距離（m）。</summary>
+    private const double HoldingRadiusM = 1.5;
+
     /// <summary>
-    /// 球を拾いに出た野手（issue #566）。居なければ null。
+    /// 球にいちばん近い野手（issue #566・#689）。DH 以外の全野手が候補なので、球があれば必ず誰かが返る。
     ///
     /// <para><b>走り終わっても返し続ける</b>のが要点。「走っている間だけ」にすると、拾った瞬間に
     /// 被写体が走者へ移り、結局そこで枠が追いつかないパンが起きる（実測: 盲点が 0.40秒→2.15秒 に
     /// 悪化した）。拾った後は球のところに立っているので、球との箱は点に近い＝寄った枠のまま
     /// 「捕手が拾って投げ返す」が読める。送球が始まればこの分岐自体を抜ける。</para>
     ///
-    /// <para>誰を選ぶかは球にいちばん近い野手（issue #689。宣言順の先頭だと内野ゴロで捕手が選ばれ引いていく）。
-    /// 同距離は <see cref="FieldPosition"/> の宣言順＝決定論（不変条件#2）。</para>
+    /// <para>宣言順の先頭だと内野ゴロで捕手が選ばれ引いていく（#689）ので球にいちばん近い野手を取る。
+    /// 定位置のまま捕る野手は Moves に載らないので候補は全野手。同距離は <see cref="FieldPosition"/> の
+    /// 宣言順（strict <）＝決定論（不変条件#2）。</para>
     /// </summary>
-    private static PlaybackVec? ChasingFielderAt(PlaybackPlay play, double t, PlaybackVec ball)
+    private static (PlaybackVec Pos, FieldPosition Role, double Dist)? NearestFielderTo(
+        PlaybackPlay play, double t, PlaybackVec ball)
     {
-        // 球にいちばん近い野手（issue #689）。宣言順の先頭の「動いた野手」を取ると、内野ゴロでも毎回
-        // 本塁へ動く捕手が選ばれ、遊撃手が球を持っている間ずっと「遊撃手＋本塁」(40m級)の枠になって
-        // 引いていく。球を拾いに走る野手も、拾って持っている野手も、球のいちばん近くに居る。
-        // 定位置のまま捕る野手（三塁手など）は Moves に載らないので、候補は全野手にする。
-        // 同距離は宣言順（strict <）＝辞書の並びに依らず決定論。
-        PlaybackVec? found = null;
+        (PlaybackVec Pos, FieldPosition Role, double Dist)? found = null;
         var best = double.PositiveInfinity;
         foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
         {
@@ -635,9 +624,27 @@ public static class CameraPlanBuilder
             var d = (at.X - ball.X) * (at.X - ball.X) + (at.Y - ball.Y) * (at.Y - ball.Y);
             if (d >= best) continue;
             best = d;
-            found = at;
+            found = (at, pos, Math.Sqrt(d));
         }
         return found;
+    }
+
+    /// <summary>
+    /// 捕手が球を握っていて、本塁から出た打者走者が走っている最中か（＝振り逃げ。issue #1264①）。
+    /// 暴投・捕逸の後は本塁から出る走者レッグが無いので false。
+    /// </summary>
+    private static bool IsCatcherHoldingForBatterRunner(
+        PlaybackPlay play, double t, (PlaybackVec Pos, FieldPosition Role, double Dist) nearest)
+    {
+        if (nearest.Role != FieldPosition.Catcher || nearest.Dist > HoldingRadiusM) return false;
+        foreach (var runner in play.Runners)
+            foreach (var seg in runner.Segs)
+            {
+                if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
+                if (t < seg.T0 || t > seg.T1) continue;
+                if (Math.Abs(seg.From.X) < 0.5 && Math.Abs(seg.From.Y) < 0.5) return true;
+            }
+        return false;
     }
 
     private static PlaybackRun? FindCriticalRunAt(PlaybackPlay play, double t)

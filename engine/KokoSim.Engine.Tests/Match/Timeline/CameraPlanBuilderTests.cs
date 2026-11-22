@@ -115,6 +115,44 @@ public sealed class CameraPlanBuilderTests
         Assert.True(onAt.ZoomMult < offAt.ZoomMult, $"枠が広がっていない: {offAt.ZoomMult} → {onAt.ZoomMult}");
     }
 
+    // 両フラグを立てた3Dの実配線（issue #1264①）。振り逃げ（捕手が握る＋打者走者が本塁から走る）だけ
+    // 走者を枠に入れる。以前は「球に一番近い野手」が必ず返って走者の分岐に届かなかった。
+    [Fact]
+    public void Build_BothFlags_DropThirdStrike_WidensTowardTheBatterRunner()
+    {
+        var play = DropThirdStrikePlay();
+        var held = TimeWhileBallIsHeld(play);
+
+        var fr = CameraFraming.Default with { MaxZoom = 20.0, LooseBallFollowsChaser = true };
+        var chaserOnly = CameraPlanBuilder.Build(play, fr);
+        var both = CameraPlanBuilder.Build(play, fr with { HeldBallFollowsRunner = true });
+
+        var chaserAt = CameraEvaluator.ViewportAt(chaserOnly, held);
+        var bothAt = CameraEvaluator.ViewportAt(both, held);
+
+        Assert.True(bothAt.Cx > chaserAt.Cx + 0.5, $"一塁側へ寄っていない: {chaserAt.Cx} → {bothAt.Cx}");
+        Assert.True(bothAt.ZoomMult < chaserAt.ZoomMult, $"枠が広がっていない: {chaserAt.ZoomMult} → {bothAt.ZoomMult}");
+    }
+
+    // 暴投・捕逸は捕手が握っても本塁から出る走者が居ない＝両フラグでも走者を入れない（#566 の意図の維持）。
+    [Fact]
+    public void Build_BothFlags_BatteryMissAfterPickup_StaysOnTheCatcher()
+    {
+        var play = BatteryMissPlay();
+        var throwStart = play.Ball[^1].T0;
+        var heldAt = throwStart - 0.05;
+
+        var fr = CameraFraming.Default with { MaxZoom = 20.0, LooseBallFollowsChaser = true };
+        var chaserOnly = CameraPlanBuilder.Build(play, fr);
+        var both = CameraPlanBuilder.Build(play, fr with { HeldBallFollowsRunner = true });
+
+        var a = CameraEvaluator.ViewportAt(chaserOnly, heldAt);
+        var b = CameraEvaluator.ViewportAt(both, heldAt);
+        Assert.Equal(a.Cx, b.Cx, 6);
+        Assert.Equal(a.Cy, b.Cy, 6);
+        Assert.Equal(a.ZoomMult, b.ZoomMult, 6);
+    }
+
     // 既定（opt-out）は1キーフレームも変わらない＝2D俯瞰とゴールデンが無傷。
     [Fact]
     public void Build_HeldBallFollowsRunner_DefaultsOff()
@@ -303,6 +341,23 @@ public sealed class CameraPlanBuilderTests
 
     // ---- issue #406②: 全景復帰は ResAt でなく lastEvent（球が動き終わる／実際に動く走者レッグの
     // 終わり）基準 -----------------------------------------------------------------------------
+
+    // 再生を切る時刻の単一ソース（issue #1264④）。カメラ側とビュー側で値がずれない。
+    [Fact]
+    public void LastEventTime_IsTheSameSourceAsLastActionTime()
+    {
+        foreach (var play in PlaybackSamples.All)
+            Assert.Equal(PlaybackDisplaySync.LastActionTime(play), CameraPlanBuilder.LastEventTime(play));
+    }
+
+    [Fact]
+    public void IsStationaryLeg_TreatsSubHalfMeterDriftAsStanding()
+    {
+        var a = new PlaybackVec(10, 10);
+        Assert.True(PlaybackDisplaySync.IsStationaryLeg(new PlaybackRun(0, 1, a, a)));
+        Assert.True(PlaybackDisplaySync.IsStationaryLeg(new PlaybackRun(0, 1, a, new PlaybackVec(10.3, 10))));
+        Assert.False(PlaybackDisplaySync.IsStationaryLeg(new PlaybackRun(0, 1, a, new PlaybackVec(10.6, 10))));
+    }
 
     [Fact]
     public void LastEventTime_IgnoresStationaryRunnerLegs_ButCountsMovingLegsAndBallSegments()
