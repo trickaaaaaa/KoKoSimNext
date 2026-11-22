@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Stats;
 using KokoSim.Unity.Match;
 
 namespace KokoSim.Unity.MatchResult
@@ -89,40 +90,57 @@ namespace KokoSim.Unity.MatchResult
     }
 
     /// <summary>
-    /// 試合結果（<see cref="GameResult"/>）→ 試合結果画面の表示モデル。表示専用＝ここでは数値を作らず、
-    /// エンジンの集計を並べ替えて表示の区分を付けるだけ（不変条件#2 決定論に無影響）。
-    /// 打席の並びは engine の純関数 <see cref="BoxScoreGrid"/> を使う（判定ロジックをUI側に持たない）。
+    /// 試合の記録（<see cref="MatchRecord"/>）→ 試合結果画面の表示モデル。表示専用＝ここでは数値を作らず、
+    /// 記録の集計を並べ替えて表示の区分を付けるだけ（不変条件#2 決定論に無影響）。
+    /// 試合直後も過去の試合（戦績）も<b>同じ記録</b>から描く＝経路は1本（issue #1413）。記録は
+    /// engine の <see cref="MatchRecordFactory"/> が <see cref="GameResult"/> から作る（打席の並びは
+    /// <see cref="BoxScoreGrid"/>＝判定ロジックをUI側に持たない）。
     /// </summary>
     public static class MatchResultState
     {
         public const int MinPaColumns = 4;
 
+        /// <summary>試合直後の結果（<see cref="GameResult"/>）から描く。記録を作ってから <see cref="Build(MatchRecord)"/> に渡す。</summary>
         public static MatchResultView Build(GameResult r, bool managerIsAway, string awayName, string homeName)
+            => Build(MatchRecordFactory.From(r, new MatchRecord
+            {
+                ManagerIsAway = managerIsAway,
+                OwnName = managerIsAway ? awayName : homeName,
+                OpponentName = managerIsAway ? homeName : awayName,
+            }));
+
+        /// <summary>記録から描く。詳細の無い記録（スコアだけ）は開けない行なので呼ばない。</summary>
+        public static MatchResultView Build(MatchRecord rec)
         {
-            var ownName = managerIsAway ? awayName : homeName;
-            var oppName = managerIsAway ? homeName : awayName;
+            var away = rec.Away!;
+            var home = rec.Home!;
+            var ownName = rec.OwnName;
+            var oppName = rec.OpponentName;
+            var tied = away.Runs == home.Runs;
             var v = new MatchResultView
             {
                 AwayLine = new MatchResultLineRow
                 {
-                    TeamName = awayName, Won = !r.Tied && r.AwayRuns > r.HomeRuns,
-                    Runs = r.AwayRuns, Hits = r.AwayHits, Errors = r.AwayErrors,
+                    TeamName = rec.AwayName, Won = !tied && away.Runs > home.Runs,
+                    Runs = away.Runs, Hits = away.Hits, Errors = away.Errors,
                 },
                 HomeLine = new MatchResultLineRow
                 {
-                    TeamName = homeName, Won = !r.Tied && r.HomeRuns > r.AwayRuns,
-                    Runs = r.HomeRuns, Hits = r.HomeHits, Errors = r.HomeErrors,
+                    TeamName = rec.HomeName, Won = !tied && home.Runs > away.Runs,
+                    Runs = home.Runs, Hits = home.Hits, Errors = home.Errors,
                 },
-                Own = Side(r, managerIsAway, ownName),
-                Opponent = Side(r, !managerIsAway, oppName),
+                Own = Side(rec.ManagerIsAway ? away : home, ownName),
+                Opponent = Side(rec.ManagerIsAway ? home : away, oppName),
             };
 
             // 列は実際に行った回数＝両軍の長い方（延長は伸び、コールドは縮む）。後攻が短い回は裏が無かった＝「×」。
-            v.InningCount = System.Math.Max(r.AwayLineScore.Count, r.HomeLineScore.Count);
-            FillInnings(v.AwayLine, r.AwayLineScore, v.InningCount);
-            FillInnings(v.HomeLine, r.HomeLineScore, v.InningCount);
+            v.InningCount = System.Math.Max(away.LineScore.Count, home.LineScore.Count);
+            FillInnings(v.AwayLine, away.LineScore, v.InningCount);
+            FillInnings(v.HomeLine, home.LineScore, v.InningCount);
 
-            v.ExtraBaseHits = ExtraBaseHits(r, managerIsAway, ownName, oppName);
+            v.ExtraBaseHits = ExtraBaseHits(
+                rec.ManagerIsAway ? away.Batting : home.Batting, rec.ManagerIsAway ? home.Batting : away.Batting,
+                ownName, oppName);
             return v;
         }
 
@@ -132,18 +150,17 @@ namespace KokoSim.Unity.MatchResult
         }
 
         // ── 長打の行（本塁打→三塁打→二塁打。0人の項目は出さない。自校→相手の順に学校でまとめる） ──
-        private static List<MatchResultXbhGroup> ExtraBaseHits(GameResult r, bool managerIsAway, string ownName, string oppName)
+        private static List<MatchResultXbhGroup> ExtraBaseHits(
+            IReadOnlyList<MatchRecordBatter> own, IReadOnlyList<MatchRecordBatter> opp, string ownName, string oppName)
         {
             var (ownMark, oppMark) = SchoolMarks(ownName, oppName);
-            var own = managerIsAway ? r.AwayBatting : r.HomeBatting;
-            var opp = managerIsAway ? r.HomeBatting : r.AwayBatting;
             var groups = new List<MatchResultXbhGroup>();
             Add("本塁打", b => b.HomeRuns);
             Add("三塁打", b => b.Triples);
             Add("二塁打", b => b.Doubles);
             return groups;
 
-            void Add(string label, System.Func<BattingLine, int> count)
+            void Add(string label, System.Func<MatchRecordBatter, int> count)
             {
                 var g = new MatchResultXbhGroup { Label = label };
                 AddSchool(g, own, count, ownMark);
@@ -152,8 +169,8 @@ namespace KokoSim.Unity.MatchResult
             }
         }
 
-        private static void AddSchool(MatchResultXbhGroup g, IReadOnlyList<BattingLine> lines,
-            System.Func<BattingLine, int> count, string mark)
+        private static void AddSchool(MatchResultXbhGroup g, IReadOnlyList<MatchRecordBatter> lines,
+            System.Func<MatchRecordBatter, int> count, string mark)
         {
             var names = new List<string>();
             foreach (var b in lines)
@@ -185,10 +202,9 @@ namespace KokoSim.Unity.MatchResult
         private static string DisplayName(string name) => (name ?? "").Replace('　', ' ');
 
         // ── 片チームぶん ──
-        private static MatchResultSideView Side(GameResult r, bool isAway, string teamName)
+        private static MatchResultSideView Side(MatchRecordSide rec, string teamName)
         {
-            var batting = isAway ? r.AwayBatting : r.HomeBatting;
-            var pitching = isAway ? r.AwayPitching : r.HomePitching;
+            var batting = rec.Batting;
             var side = new MatchResultSideView { TeamName = teamName };
 
             var seenOrders = new HashSet<int>();
@@ -202,7 +218,7 @@ namespace KokoSim.Unity.MatchResult
                 {
                     Order = isSub ? 0 : b.Order, Pos = pos, PosKind = kind, Name = DisplayName(b.Name), IsSub = isSub,
                     AtBats = b.AtBats, Hits = b.Hits, Rbi = b.Rbi, HomeRuns = b.HomeRuns, Triples = b.Triples,
-                    Doubles = b.Doubles, WalksHbp = b.Walks + b.HitByPitches, StrikeOuts = b.StrikeOuts,
+                    Doubles = b.Doubles, WalksHbp = b.WalksHbp, StrikeOuts = b.StrikeOuts,
                     StolenBases = b.StolenBases,
                     Average = AvgText(b.Hits, b.AtBats), AverageDim = b.Hits == 0,
                 };
@@ -215,19 +231,23 @@ namespace KokoSim.Unity.MatchResult
             total.AverageDim = total.Hits == 0;
             side.Total = total;
 
-            foreach (var p in pitching)
+            foreach (var p in rec.Pitching)
                 side.Pitching.Add(new MatchResultPitchingRow
                 {
                     Name = DisplayName(p.Name), Innings = p.InningsText, Pitches = p.Pitches, Hits = p.Hits,
-                    StrikeOuts = p.StrikeOuts, WalksHbp = p.Walks + p.HitBatters, Runs = p.Runs,
+                    StrikeOuts = p.StrikeOuts, WalksHbp = p.WalksHbp, Runs = p.Runs,
                 });
 
             // 打席結果は打撃成績の行と1対1に並べる（打席に立たなかった代走・守備交代も「·」の行で出す）。
-            // 打席の並び（打順枠ごとの通し番号）は engine の BoxScoreGrid に任せ、(打順, 名前) で突き合わせる。
-            var grid = BoxScoreGrid.Build(r.Log, isAway);
-            var byKey = new Dictionary<(int, string), BoxScoreGridRow>();
-            foreach (var g in grid) byKey[(g.Order, g.BatterName)] = g;
-            side.PaColumns = System.Math.Max(MinPaColumns, BoxScoreGrid.MaxPaIndex(grid));
+            // 打席の並び（打順枠ごとの通し番号）は記録（engine の BoxScoreGrid 由来）に任せ、(打順, 名前) で突き合わせる。
+            var byKey = new Dictionary<(int, string), MatchRecordPaRow>();
+            var maxPa = 0;
+            foreach (var g in rec.PaRows)
+            {
+                byKey[(g.Order, g.BatterName)] = g;
+                foreach (var c in g.Cells) if (c.PaIndex > maxPa) maxPa = c.PaIndex;
+            }
+            side.PaColumns = System.Math.Max(MinPaColumns, maxPa);
             for (var i = 0; i < batting.Count; i++)
             {
                 var b = batting[i];
@@ -258,7 +278,7 @@ namespace KokoSim.Unity.MatchResult
         /// 守備位置の欄。スタメンは守備位置、途中出場は実際に就いた守備位置（代打・代走のあと守備に就いた
         /// 場合も新しい位置・監督決定 2026-11-21）。守備に就かなかった代打は「打」、代走は「走」。
         /// </summary>
-        private static (string, MatchResultPosKind) PosOf(BattingLine b, bool isSub)
+        private static (string, MatchResultPosKind) PosOf(MatchRecordBatter b, bool isSub)
         {
             if (!isSub) return (MatchLiveStatsProvider.PosAbbr(b.Position), KindOf(b.Position));
             if (b.FieldedAt is { } at) return (MatchLiveStatsProvider.PosAbbr(at), KindOf(at));
@@ -292,7 +312,12 @@ namespace KokoSim.Unity.MatchResult
         }
 
         /// <summary>打席の札の文字。凡打は犠打・犠飛・併殺を分ける（監督決定 2026-11-21）。</summary>
-        public static string PaText(BoxScoreGridCell c) => c.Result switch
+        public static string PaText(BoxScoreGridCell c) => PaText(c.Result, c.IsSacBunt, c.IsSacFly, c.OutsThisPa >= 2);
+
+        /// <summary><see cref="PaText(BoxScoreGridCell)"/> の記録版。</summary>
+        public static string PaText(MatchRecordPa c) => PaText(c.Result, c.SacBunt, c.SacFly, c.DoublePlay);
+
+        private static string PaText(PlateAppearanceResult result, bool sacBunt, bool sacFly, bool doublePlay) => result switch
         {
             PlateAppearanceResult.Strikeout => "三振",
             PlateAppearanceResult.Walk => "四球",
@@ -302,7 +327,7 @@ namespace KokoSim.Unity.MatchResult
             PlateAppearanceResult.Triple => "三塁打",
             PlateAppearanceResult.HomeRun => "本塁打",
             PlateAppearanceResult.ReachedOnError => "失策",
-            _ => c.IsSacBunt ? "犠打" : c.IsSacFly ? "犠飛" : c.OutsThisPa >= 2 ? "併殺" : "凡打",
+            _ => sacBunt ? "犠打" : sacFly ? "犠飛" : doublePlay ? "併殺" : "凡打",
         };
 
         public static MatchResultPaKind PaKind(PlateAppearanceResult r) => r switch

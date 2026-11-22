@@ -161,6 +161,12 @@ namespace KokoSim.Unity.Shell
         public TournamentHistory History { get; private set; } = new TournamentHistory();
 
         /// <summary>
+        /// 自校の公式戦の戦績（issue #1413）。1試合ごとの記録を全部残す＝記録画面の［戦績］と、過去の試合の
+        /// 結果画面の源。主語は学校（転任で去った学校の戦績は旧校のキーへ付け替わる・issue #1261 と同じ）。
+        /// </summary>
+        public MatchRecordBook MatchHistory { get; private set; } = new MatchRecordBook();
+
+        /// <summary>
         /// 試合前スタメン設定（打順・守備位置・DH・先発）。試合開始フローのスタメン画面で確定して書き込む。
         /// null＝未設定（RosterTeamBuilder.Build の自動編成へフォールバック）。
         /// </summary>
@@ -741,6 +747,7 @@ namespace KokoSim.Unity.Shell
         public PlayerMatchOutcome PlayMatch()
         {
             JoinPrefetch();   // 現ラウンドのプレフェッチを完了させてから本解決（背景と前景を排他）。
+            var matchDay = Runner.NextMatchDay;
             LastOutcome = Runner.PlayNextPlayerMatch();
             // 詳細シムで回った自校戦なら、ボックススコアを通算/今大会成績へ畳み込む。
             if (LastOutcome.Detail is { } detail)
@@ -755,6 +762,7 @@ namespace KokoSim.Unity.Shell
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
+            RecordOfficialMatch(LastOutcome, matchDay);
             ResultPending = true;
             ExitTournamentIfFinished();
             KickPrefetch();   // 次ラウンドの自県裏カードを先行して温める（未終了時のみ）。
@@ -790,6 +798,7 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public PlayerMatchOutcome CompleteMatch(GameResult result)
         {
+            var matchDay = Runner.NextMatchDay;
             LastOutcome = Runner.CompleteNextPlayerMatch(result);
             if (LastOutcome.Detail is { } detail)
             {
@@ -803,10 +812,29 @@ namespace KokoSim.Unity.Shell
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
+            RecordOfficialMatch(LastOutcome, matchDay);
             ResultPending = true;
             ExitTournamentIfFinished();
             KickPrefetch();   // 次ラウンドの自県裏カードを先行して温める（未終了時のみ）。
             return LastOutcome;
+        }
+
+        /// <summary>
+        /// 自校の公式戦1試合を戦績へ積む（issue #1413）。自動消化（<see cref="PlayMatch"/>）とライブ観戦
+        /// （<see cref="CompleteMatch"/>）の両経路がここを通る＝積み方は1つ。<c>Detail</c> の無い試合はスコアだけの行になる。
+        /// 試合日は結果が確定する前の次戦日（大会日程の実月日）。表示専用で乱数を使わない（帯・決定論に影響しない）。
+        /// </summary>
+        private void RecordOfficialMatch(PlayerMatchOutcome outcome, int matchDay)
+        {
+            var (month, day) = TournamentDate.DateOf(TournamentEntry.Schedule, Kind, matchDay);
+            var meta = new MatchRecord
+            {
+                Year = Year, Kind = Kind, Month = month, Day = day, RoundName = outcome.RoundName,
+                OpponentId = outcome.OpponentId, OwnName = NationService.ManagerSchoolName,
+                OpponentName = outcome.OpponentName, ManagerIsAway = outcome.ManagerWasAway,
+                OwnRuns = outcome.ManagerScore, OpponentRuns = outcome.OpponentScore, MercyEnded = outcome.MercyEnded,
+            };
+            MatchHistory.Add(outcome.Detail is { } detail ? MatchRecordFactory.From(detail, meta) : meta);
         }
 
         public void ConsumeResult() => ResultPending = false;
@@ -1120,6 +1148,7 @@ namespace KokoSim.Unity.Shell
             s.ManagerPostingBaselineSummerAppearances = PostingHistory.BaselineSummerAppearances;
             s.ManagerPostingBaselineSpringAppearances = PostingHistory.BaselineSpringAppearances;
             s.TournamentHistory = History;
+            s.MatchRecords = MatchHistory;
             s.Tournament = CaptureTournament();
             s.Koshien = CaptureSpectatedKoshien();
             s.Senbatsu = CaptureSpectatedSenbatsu();
@@ -1221,6 +1250,7 @@ namespace KokoSim.Unity.Shell
                 s.ManagerPostingBaselineWins, s.ManagerPostingBaselineLosses,
                 s.ManagerPostingBaselineSummerAppearances, s.ManagerPostingBaselineSpringAppearances);
             History = s.TournamentHistory;
+            MatchHistory = s.MatchRecords;
             ClearTransient();
             LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
             MomentumLevel = s.MomentumLevel;   // 同上（v24・issue #863）
@@ -1274,6 +1304,7 @@ namespace KokoSim.Unity.Shell
             Records = new SchoolRecordBook();
             PostingHistory.ResetForNewGame();
             History = new TournamentHistory();
+            MatchHistory = new MatchRecordBook();
             Year = 1;
             MomentumLevel = 0;
             BatteryLedger = new BatteryLedger();
