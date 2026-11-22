@@ -34,6 +34,9 @@ namespace KokoSim.Unity.Member
         private FieldMarkersElement _markers;   // 立ち位置点＋引き出し線
         private VisualElement _popover;         // ホバー/選択時のフルカード
         private int _popoverSlot = -1;          // 表示中フルカードの背番号（-1=非表示）
+        private bool _popoverPointerInside;     // カーソルがフルカード上＝✕へ動く間は閉じない
+        private IVisualElementScheduledItem _popoverHideTimer;
+        private const long PopoverHideDelayMs = 160;   // チップ→フルカードの隙間（4px）を渡る猶予
         private Color _accent = KokoSim.Unity.Shell.SchoolAccent.Default;   // 比較表の自チーム側の色（オーダー画面と同じ）
 
         private void OnEnable()
@@ -52,8 +55,17 @@ namespace KokoSim.Unity.Member
                 _fieldHost.Insert(1, _markers);   // 芝の上・チップの下
                 _popover = new VisualElement();
                 _popover.AddToClassList("field-pop");
-                _popover.pickingMode = PickingMode.Ignore;
                 _popover.style.display = DisplayStyle.None;
+                _popover.RegisterCallback<PointerEnterEvent>(_ =>
+                {
+                    _popoverPointerInside = true;
+                    _popoverHideTimer?.Pause();
+                });
+                _popover.RegisterCallback<PointerLeaveEvent>(_ =>
+                {
+                    _popoverPointerInside = false;
+                    if (_popoverSlot >= 0) HidePopover(_popoverSlot);
+                });
                 _fieldHost.Add(_popover);          // 最前面
                 _fieldHost.RegisterCallback<GeometryChangedEvent>(_ => PositionFieldCards());
             }
@@ -125,6 +137,8 @@ namespace KokoSim.Unity.Member
             BuildBench(v);
             BuildPool(v);
             BuildCompare(v);
+            // 入れ替え・✕の直後にフルカードが前の選手の名前を残さない（空の枠なら閉じる）。
+            if (_popoverSlot >= 0) ShowPopover(_popoverSlot);
         }
 
         // ── 背番号1〜9：守備位置（球場座標）に小型チップを置く ──
@@ -343,7 +357,7 @@ namespace KokoSim.Unity.Member
             });
             el.RegisterCallback<PointerLeaveEvent>(_ =>
             {
-                HidePopover(n);
+                SchedulePopoverHide(n);
                 _state.ClearHovered(pidx);
                 RenderCompareOnly();
             });
@@ -356,6 +370,7 @@ namespace KokoSim.Unity.Member
             var slot = _state.BuildView().Slots[number - 1];
             if (slot.PlayerIndex < 0) { HidePopover(number); return; }
 
+            _popoverHideTimer?.Pause();
             _popoverSlot = number;
             _popover.Clear();
             _popover.style.display = DisplayStyle.Flex;
@@ -387,8 +402,21 @@ namespace KokoSim.Unity.Member
         private void HidePopover(int number)
         {
             if (_popover == null || _popoverSlot != number) return;
+            _popoverHideTimer?.Pause();
             _popoverSlot = -1;
+            _popoverPointerInside = false;
             _popover.style.display = DisplayStyle.None;
+        }
+
+        private void SchedulePopoverHide(int number)
+        {
+            if (_popover == null || _popoverSlot != number) return;
+            _popoverHideTimer?.Pause();
+            _popoverHideTimer = _popover.schedule.Execute(() =>
+            {
+                if (!_popoverPointerInside) HidePopover(number);
+            });
+            _popoverHideTimer.ExecuteLater(PopoverHideDelayMs);
         }
 
         // ポップオーバーを対象チップの真上に置く（画面端はクランプ）。

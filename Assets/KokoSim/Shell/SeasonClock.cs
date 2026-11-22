@@ -58,5 +58,14 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static int CalendarYear(int yearIndex, int week)
             => SeasonBaseYear + (yearIndex - 1) + Calendar.DateOf(week).YearOffset;
+
+        /// <summary>
+        /// 大会の開催年（暦年）。年度は4月始まりなので、センバツ（選考週＝翌年1月・開催は3月）だけ年度の暦年より1年遅い。
+        /// ほかの大会（夏・秋・地区・神宮）は4〜12月＝年度の暦年と一致する。
+        /// </summary>
+        public static int TournamentCalendarYear(TournamentKind kind, int yearIndex)
+            => kind == TournamentKind.SenbatsuKoshien
+                ? CalendarYear(yearIndex, Calendar.SenbatsuAnnounceWeek)
+                : SeasonBaseYear + (yearIndex - 1);
     }
 }

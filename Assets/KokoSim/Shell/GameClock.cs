@@ -222,8 +222,13 @@ namespace KokoSim.Unity.Shell
         /// <summary>セーブ保存: 暦を DTO へ写す（issue #507）。</summary>
         public static void Capture(KokoSim.Engine.Saves.SaveState s) { s.Week = Week; s.YearIndex = YearIndex; }
 
-        /// <summary>セーブ復元: 暦を据える。</summary>
-        public static void Restore(KokoSim.Engine.Saves.SaveState s) { Week = s.Week; YearIndex = s.YearIndex; }
+        /// <summary>セーブ復元: 暦を据える。セーブに載らない週頭の一時フラグは前の進行のものなので落とす。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s)
+        {
+            Week = s.Week; YearIndex = s.YearIndex;
+            ProspectConfirmed = false; ProspectJoined = false;
+            RecruitListOpened = false; RecruitsWon = 0;
+        }
 
         /// <summary>共通トップバー「現在」表示（YYYY年M月W週目）。</summary>
         public static string CurrentLabel() => SeasonClock.CurrentLabel(YearIndex, Week);

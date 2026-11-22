@@ -706,7 +706,7 @@ namespace KokoSim.Unity.Tournament
             sub.Add(UiComponents.SchoolName(c.Name));
             var chip = UiComponents.RankChipLegacy(c.TierLetter);
             chip.text = "総合 " + c.TierLetter;
-            chip.style.marginLeft = 8;
+            chip.AddToClassList("tp-team-sub__rank");
             sub.Add(chip);
             var seed = new Label(c.SeedLabel);
             seed.AddToClassList("tp-seed");

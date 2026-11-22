@@ -72,8 +72,7 @@ namespace KokoSim.EditorTools
 
         /// <summary>
         /// メニューから1クリックで焼き直す（顔ののっぺらぼう化・髪・袖など、このベイカの変更を取り込む時）。
-        /// 焼き直しは資産を作り直す＝GUID が変わるので、ビルド同梱の索引（F8）が既にあれば続けて焼き直す
-        /// （古い索引のままだと Player ビルドでだけ領域メッシュが外れる）。
+        /// 焼き直しは資産を作り直す＝GUID が変わるので、<see cref="BakeAll(float)"/> がビルド同梱の索引（F8）も続けて焼き直す。
         /// </summary>
         [MenuItem("KokoSim/Duel/選手の顔と領域を作り直す")]
         public static void BakeAllFromMenu()
@@ -86,9 +85,6 @@ namespace KokoSim.EditorTools
                 return;
             }
             Debug.Log("[DuelVendorRegionBaker]\n" + report);
-            if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(
-                    "Assets/KokoSim/Resources/" + KokoSim.Unity.Match.DuelAssetCatalog.ResourceName + ".asset") != null)
-                KokoSim.UnityEditorTools.DuelAssetCatalogBaker.Bake();
         }
 
         /// <summary>
@@ -120,96 +116,115 @@ namespace KokoSim.EditorTools
             // 実体化したヒエラルキーでないと引けないので、ここだけ一時インスタンスを立てる。
             // メッシュは共有アセットなので、読む先がプレハブでも実体でも同じものになる
             var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            var anim = inst.GetComponent<Animator>();
-
-            foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
+            // 全メッシュを作り切ってから書き出す＝途中の例外で既存の資産が一部だけ消えた状態を残さない
+            var baked = new List<(string Path, Mesh Mesh)>();
+            try
             {
-                var mesh = MeshOf(r);
-                if (mesh == null) continue;
+                var anim = inst.GetComponent<Animator>();
 
-                var copy = Object.Instantiate(mesh);
-                copy.name = mesh.name;
+                foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
+                {
+                    var mesh = MeshOf(r);
+                    if (mesh == null) continue;
 
-                int[] regionPerVertex;
-                float[] hairWeight = null;
-                string note;
-                if (r.name == HeadMeshName)
-                {
-                    int headSm = HeadSubmesh(r);
-                    regionPerVertex = ClassifyHead(copy, headSm, faceTex, out hairWeight, out note);
-                    // 髪の濃さは元の形で引いた後に顔を均す（均した後だと前後比・高さ比がずれる）
-                    note += " / " + FlattenFace(copy, headSm);
-                }
-                else if (r.name == SuitMeshName)
-                {
-                    regionPerVertex = ClassifySuit(copy, suitTex, out note);
-                    note += " / " + FlareSleeves(copy, regionPerVertex, r as SkinnedMeshRenderer, anim);
-                }
-                else if (r.name == PantsMeshName)
-                {
-                    regionPerVertex = ClassifyPants(copy, pantsTex, out note);
-                }
-                else if (r.name == CapMeshName)
-                {
-                    regionPerVertex = ClassifyCap(copy, out note);
-                }
-                else
-                {
-                    Region reg;
-                    if (!WholeMeshRegion.TryGetValue(r.name, out reg))
+                    var copy = Object.Instantiate(mesh);
+                    copy.name = mesh.name;
+
+                    int[] regionPerVertex;
+                    float[] hairWeight = null;
+                    string note;
+                    if (r.name == HeadMeshName)
                     {
-                        sb.AppendLine(r.name + ": SKIP（領域の割当が未定義）");
-                        Object.DestroyImmediate(copy);
-                        continue;
+                        int headSm = HeadSubmesh(r);
+                        regionPerVertex = ClassifyHead(copy, headSm, faceTex, out hairWeight, out note);
+                        // 髪の濃さは元の形で引いた後に顔を均す（均した後だと前後比・高さ比がずれる）
+                        note += " / " + FlattenFace(copy, headSm);
                     }
-                    regionPerVertex = new int[copy.vertexCount];
-                    for (int i = 0; i < regionPerVertex.Length; i++) regionPerVertex[i] = (int)reg;
-                    note = "全体=" + reg;
+                    else if (r.name == SuitMeshName)
+                    {
+                        regionPerVertex = ClassifySuit(copy, suitTex, out note);
+                        note += " / " + FlareSleeves(copy, regionPerVertex, r as SkinnedMeshRenderer, anim);
+                    }
+                    else if (r.name == PantsMeshName)
+                    {
+                        regionPerVertex = ClassifyPants(copy, pantsTex, out note);
+                    }
+                    else if (r.name == CapMeshName)
+                    {
+                        regionPerVertex = ClassifyCap(copy, out note);
+                    }
+                    else
+                    {
+                        Region reg;
+                        if (!WholeMeshRegion.TryGetValue(r.name, out reg))
+                        {
+                            sb.AppendLine(r.name + ": SKIP（領域の割当が未定義）");
+                            Object.DestroyImmediate(copy);
+                            continue;
+                        }
+                        regionPerVertex = new int[copy.vertexCount];
+                        for (int i = 0; i < regionPerVertex.Length; i++) regionPerVertex[i] = (int)reg;
+                        note = "全体=" + reg;
+                    }
+
+                    // UV1.x = 領域ID、UV1.y = **バインドポーズの左右座標**（縦縞の刻み座標）。
+                    // 縞をスキニング後の頂点位置で刻むと、生地に印刷された縞ではなく
+                    // 「空間に固定された縞の中を体が通り抜ける」絵になる（2026-07-29 実害）。
+                    // 静止座標をここで焼いておけば、体が曲がっても縞は生地に付いたまま伸び縮みする。
+                    //
+                    // 袖だけは刻み座標を**腕の軸に沿った長さ**にする（issue uniform-stripes-ring-on-sleeves, 2026-08-18）。
+                    // 実物のピンストライプは生地を平らに広げて全部縦に裁つので、胴は縦縞・袖は腕の長さ方向に直交する
+                    // 輪（腕を下ろすと横縞）になる。左右 x の一枚板のままだと、斜め下へ伸びたAポーズの腕を平面が
+                    // 斜めに切って楕円の弧になる。継ぎ目（肩）は支配ボーンで切り替える（縫い目で向きが変わるのは実物どおり）。
+                    var rest = copy.vertices;
+                    var uv1 = new Vector2[copy.vertexCount];
+                    for (int i = 0; i < uv1.Length; i++)
+                        uv1[i] = new Vector2(
+                            KokoSim.Unity.Match.DuelUniformMeshBuilder.RegionUv(regionPerVertex[i]), rest[i].x);
+                    if (r.name == SuitMeshName)
+                        note += " / " + SleeveStripeAlongArm(copy, regionPerVertex, r as SkinnedMeshRenderer, anim, uv1);
+                    // 髪の領域では UV1.y を髪の濃さに使う（縞は地色の領域にしか乗らないので刻み座標は要らない）
+                    if (hairWeight != null)
+                        for (int i = 0; i < uv1.Length; i++)
+                            if (regionPerVertex[i] == (int)Region.Hair) uv1[i].y = hairWeight[i];
+                    copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
+
+                    var outPath = OutDir + "/" + r.name + "_Regions.asset";
+                    // 実行時に三角形を読めるようにしておく。グラブをはめた手を抜く処理
+                    // （DuelStageRig.HideGloveHand・issue #913）が読む。元 FBX の「読めない」設定を
+                    // そのまま引き継ぐと、エラーも出ずに手が残るだけになる。
+                    // **資産にする前に**立てる: 作った後に SerializedObject で立てても dirty が付かず、
+                    // 最後の SaveAssets で書かれない資産が出ていた（2026-11-15 実測: 9枚中7枚が 0 のまま）
+                    var so = new SerializedObject(copy);
+                    so.FindProperty("m_IsReadable").boolValue = true;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                    baked.Add((outPath, copy));
+                    sb.AppendLine(r.name + ": " + note);
                 }
 
-                // UV1.x = 領域ID、UV1.y = **バインドポーズの左右座標**（縦縞の刻み座標）。
-                // 縞をスキニング後の頂点位置で刻むと、生地に印刷された縞ではなく
-                // 「空間に固定された縞の中を体が通り抜ける」絵になる（2026-07-29 実害）。
-                // 静止座標をここで焼いておけば、体が曲がっても縞は生地に付いたまま伸び縮みする。
-                //
-                // 袖だけは刻み座標を**腕の軸に沿った長さ**にする（issue uniform-stripes-ring-on-sleeves, 2026-08-18）。
-                // 実物のピンストライプは生地を平らに広げて全部縦に裁つので、胴は縦縞・袖は腕の長さ方向に直交する
-                // 輪（腕を下ろすと横縞）になる。左右 x の一枚板のままだと、斜め下へ伸びたAポーズの腕を平面が
-                // 斜めに切って楕円の弧になる。継ぎ目（肩）は支配ボーンで切り替える（縫い目で向きが変わるのは実物どおり）。
-                var rest = copy.vertices;
-                var uv1 = new Vector2[copy.vertexCount];
-                for (int i = 0; i < uv1.Length; i++)
-                    uv1[i] = new Vector2(
-                        KokoSim.Unity.Match.DuelUniformMeshBuilder.RegionUv(regionPerVertex[i]), rest[i].x);
-                if (r.name == SuitMeshName)
-                    note += " / " + SleeveStripeAlongArm(copy, regionPerVertex, r as SkinnedMeshRenderer, anim, uv1);
-                // 髪の領域では UV1.y を髪の濃さに使う（縞は地色の領域にしか乗らないので刻み座標は要らない）
-                if (hairWeight != null)
-                    for (int i = 0; i < uv1.Length; i++)
-                        if (regionPerVertex[i] == (int)Region.Hair) uv1[i].y = hairWeight[i];
-                copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
-
-                var outPath = OutDir + "/" + r.name + "_Regions.asset";
-                // 実行時に三角形を読めるようにしておく。グラブをはめた手を抜く処理
-                // （DuelStageRig.HideGloveHand・issue #913）が読む。元 FBX の「読めない」設定を
-                // そのまま引き継ぐと、エラーも出ずに手が残るだけになる。
-                // **資産にする前に**立てる: 作った後に SerializedObject で立てても dirty が付かず、
-                // 最後の SaveAssets で書かれない資産が出ていた（2026-11-15 実測: 9枚中7枚が 0 のまま）
-                var so = new SerializedObject(copy);
-                so.FindProperty("m_IsReadable").boolValue = true;
-                so.ApplyModifiedPropertiesWithoutUndo();
-                AssetDatabase.DeleteAsset(outPath);
-                AssetDatabase.CreateAsset(copy, outPath);
-                EditorUtility.SetDirty(copy);
-                sb.AppendLine(r.name + ": " + note);
+                foreach (var b in baked)
+                {
+                    AssetDatabase.DeleteAsset(b.Path);
+                    AssetDatabase.CreateAsset(b.Mesh, b.Path);
+                    EditorUtility.SetDirty(b.Mesh);
+                }
+                baked.Clear();
             }
-
-            Object.DestroyImmediate(inst);
-            Object.DestroyImmediate(suitTex);
-            Object.DestroyImmediate(pantsTex);
-            Object.DestroyImmediate(faceTex);
+            finally
+            {
+                foreach (var b in baked) Object.DestroyImmediate(b.Mesh);   // 書き出せなかった複製
+                Object.DestroyImmediate(inst);
+                Object.DestroyImmediate(suitTex);
+                Object.DestroyImmediate(pantsTex);
+                Object.DestroyImmediate(faceTex);
+            }
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+            // 資産を作り直すと GUID が変わる。ビルド同梱の索引（F8）が既にあれば焼き直す
+            // （古い GUID のままだと Player ビルドでだけ領域メッシュが外れる）。
+            if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(
+                    "Assets/KokoSim/Resources/" + KokoSim.Unity.Match.DuelAssetCatalog.ResourceName + ".asset") != null)
+                KokoSim.UnityEditorTools.DuelAssetCatalogBaker.Bake();
             return sb.ToString();
         }
 

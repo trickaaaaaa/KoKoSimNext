@@ -44,7 +44,10 @@
             <ui:VisualElement name="factors" class="ts-factors" />
             <ui:VisualElement class="ts-analysis">
               <ui:Label class="ts-analysis__k" text="分析" />
-              <ui:Label name="analysis" class="ts-analysis__t" text="" />
+              <ui:VisualElement class="ts-analysis__row">
+                <ui:Label name="analysis-weak" class="ts-analysis__t ts-analysis__weak f-body-bd" text="" />
+                <ui:Label name="analysis" class="ts-analysis__t" text="" />
+              </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>
         </ui:VisualElement>
