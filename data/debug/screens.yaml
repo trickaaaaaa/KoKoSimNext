@@ -279,3 +279,23 @@ screens:
       - click: ev-novel
       - wait: 5
       - shot: 04-succession-d
+
+  - id: home-ranking-active-1411
+    name: "ホームのチーム内ランキングに引退した3年・卒業生が載らない（引退前→夏の引退後→年度替わり後・issue #1411）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: 24
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - shot: 01-home-before-retire
+      - advance_to_week: 38
+      - read: =RosterService.Roster.Count
+      - read: =RosterService.Active.Count
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - shot: 02-home-after-summer-retire
+      - advance_to_week: {week: 3, year: 2}
+      - read: =RosterService.Graduated.Count
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - shot: 03-home-year2
