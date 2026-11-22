@@ -75,7 +75,8 @@ public static class RosterTeamBuilder
         TrackCaptain(starterDp, starterPlayer);
 
         var bullpen = new List<Player>(2);
-        foreach (var p in pitchers.Skip(1).Take(2))
+        // 打順に穴埋めで入った投手役は控えに重ねない（1人1枠・打順9人が優先。issue #1244）。
+        foreach (var p in pitchers.Skip(1).Where(p => !fielders.Contains(p)).Take(2))
         {
             var pl = ToPlayer(p, FieldPosition.Pitcher);
             bullpen.Add(pl);
