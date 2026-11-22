@@ -77,9 +77,11 @@ namespace KokoSim.Unity.Shell
         }
 
 // デバッグ面のゲート（設計書17 §8）。Editor と Development Build では常に有効、
-// リリースビルドでは KOKOSIM_DEBUG を明示しない限り型ごと消える。この3項の並びは
+// リリースビルドでは KOKOSIM_DEBUG を明示しない限り型ごと消える。先頭の3項の並びは
 // Assets/KokoSim/Debug/ 配下と同一（grep で1箇所も漏らさないための単一の書き方）。
-#if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+// KOKOSIM_BENCHMARK（計測版・issue #1314）だけここと Benchmark/ 配下に足している＝母種を固定して同じ展開で
+// 測るために要る。計測版は製品版の配布物には入れない（tools/build-player.sh bench）。
+#if KOKOSIM_BENCHMARK || KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
         /// <summary>
         /// 母種を明示設定（デバッグ・将来のセーブ復元用）。同じ値を入れれば同じ展開に再現。
         /// 設計書17 §8（Q18-1）: 「固定」は操作面なのでリリースビルドからは型ごと消える。

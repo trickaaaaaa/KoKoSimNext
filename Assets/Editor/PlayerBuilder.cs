@@ -19,20 +19,22 @@ namespace KokoSim.EditorTools
     ///   製品版   … define なし
     ///   体験版   … KOKOSIM_DEMO を足す（区切りの実装は段階4。今は define を立てるだけ）
     ///   開発ビルド … Development（DEVELOPMENT_BUILD＝デバッグ HUD・デバッグ試合が入る。Profiler 接続可）
+    ///   計測版 … 製品版と同じ設定に KOKOSIM_BENCHMARK を足す（-benchmark で重さを測る。issue #1314）。配布はしない
     ///
     /// 入口は2つ。
     ///   Editor メニュー: KokoSim/ビルド/…（Editor を開いたまま作るとき）
     ///   コマンドライン: tools/build-player.sh（Editor を閉じて batchmode で作るとき）
-    ///     -executeMethod KokoSim.EditorTools.PlayerBuilder.BuildFromCommandLine -kokosimFlavor release|demo|dev [-kokosimOut &lt;dir&gt;]
+    ///     -executeMethod KokoSim.EditorTools.PlayerBuilder.BuildFromCommandLine -kokosimFlavor release|demo|dev|bench [-kokosimOut &lt;dir&gt;]
     ///
     /// ProjectSettings は書き換えない（ビルドのたびに差分が出るのを避ける）。
     /// 体験版の define は BuildPlayerOptions.extraScriptingDefines でそのビルドにだけ足す。
     /// </summary>
     public static class PlayerBuilder
     {
-        public enum Flavor { Release, Demo, Dev }
+        public enum Flavor { Release, Demo, Dev, Bench }
 
         public const string DemoDefine = "KOKOSIM_DEMO";
+        public const string BenchmarkDefine = "KOKOSIM_BENCHMARK";
         private const BuildTarget Target = BuildTarget.StandaloneWindows64;
 
         // exe 名は英字に固定する（製品名は日本語の「白球監督録」）。exe 名は隣の <名前>_Data フォルダ名にもなり、
@@ -61,6 +63,9 @@ namespace KokoSim.EditorTools
         [MenuItem("KokoSim/ビルド/Windows 開発ビルド")]
         private static void MenuDev() => BuildFromMenu(Flavor.Dev);
 
+        [MenuItem("KokoSim/ビルド/Windows 計測版（-benchmark）")]
+        private static void MenuBench() => BuildFromMenu(Flavor.Bench);
+
         private static void BuildFromMenu(Flavor flavor)
         {
             var ok = Build(flavor, null, out var message);
@@ -75,7 +80,7 @@ namespace KokoSim.EditorTools
             var flavorArg = ArgValue(args, "-kokosimFlavor") ?? "release";
             if (!TryParseFlavor(flavorArg, out var flavor))
             {
-                Debug.LogError($"[PlayerBuilder] -kokosimFlavor が不正です: {flavorArg}（release / demo / dev）");
+                Debug.LogError($"[PlayerBuilder] -kokosimFlavor が不正です: {flavorArg}（release / demo / dev / bench）");
                 EditorApplication.Exit(1);
                 return;
             }
@@ -92,6 +97,7 @@ namespace KokoSim.EditorTools
                 case "release": flavor = Flavor.Release; return true;
                 case "demo": flavor = Flavor.Demo; return true;
                 case "dev": flavor = Flavor.Dev; return true;
+                case "bench": flavor = Flavor.Bench; return true;
                 default: flavor = Flavor.Release; return false;
             }
         }
@@ -121,7 +127,7 @@ namespace KokoSim.EditorTools
                 target = Target,
                 targetGroup = BuildTargetGroup.Standalone,
                 options = flavor == Flavor.Dev ? BuildOptions.Development : BuildOptions.None,
-                extraScriptingDefines = flavor == Flavor.Demo ? new[] { DemoDefine } : Array.Empty<string>(),
+                extraScriptingDefines = ExtraDefines(flavor),
             };
 
             var sw = Stopwatch.StartNew();
@@ -258,10 +264,15 @@ namespace KokoSim.EditorTools
             File.WriteAllText(Path.Combine(outDir, "build-info.txt"), sb.ToString(), new UTF8Encoding(false));
         }
 
+        private static string[] ExtraDefines(Flavor f) =>
+            f == Flavor.Demo ? new[] { DemoDefine }
+            : f == Flavor.Bench ? new[] { BenchmarkDefine }
+            : Array.Empty<string>();
+
         private static string FlavorDirName(Flavor f) => "windows-" + f.ToString().ToLowerInvariant();
 
         private static string FlavorLabel(Flavor f) =>
-            f == Flavor.Release ? "製品版" : f == Flavor.Demo ? "体験版" : "開発ビルド";
+            f == Flavor.Release ? "製品版" : f == Flavor.Demo ? "体験版" : f == Flavor.Bench ? "計測版" : "開発ビルド";
 
         private static string ArgValue(string[] args, string name)
         {

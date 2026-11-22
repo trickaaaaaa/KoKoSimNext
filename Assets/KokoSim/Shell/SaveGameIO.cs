@@ -164,8 +164,20 @@ namespace KokoSim.Unity.Shell
         /// 新規ゲーム設定画面の「この高校ではじめる」がここだけを通る＝開始手順を2箇所に書かない。
         /// </summary>
         public static void StartNewSchool(string schoolName, int prefectureId, int? districtId)
+            => StartNewSchoolCore(schoolName, prefectureId, districtId, null);
+
+#if KOKOSIM_BENCHMARK || KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>母種を固定して新設校を始める（ベンチマークモード・issue #1314）。ロスター生成が母種を読む前に据える。</summary>
+        public static void StartNewSchool(string schoolName, int prefectureId, int? districtId, ulong masterSeed)
+            => StartNewSchoolCore(schoolName, prefectureId, districtId, masterSeed);
+#endif
+
+        private static void StartNewSchoolCore(string schoolName, int prefectureId, int? districtId, ulong? masterSeed)
         {
             ResetForNewGame();
+#if KOKOSIM_BENCHMARK || KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (masterSeed is { } seed) GameSeed.Reset(seed);
+#endif
             NationService.SetSchoolIdentity(schoolName, prefectureId, districtId);
             RosterService.ResetAsNewSchool();
         }
