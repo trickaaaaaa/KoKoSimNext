@@ -514,7 +514,7 @@ public static class FieldingResolver
             // ＝送球開始が遅れる形で見える。守備力で伸縮（issue #765: 名手はほぼもたつかず、下手ほど握り損ねる）。
             // 乱数は守備に関係なく必ず1つ引く（不変条件#2）。
             var jitterFactor = infielder.Attributes.TransferFactor(coeff.InfieldHandleJitterFieldingSlope, coeff.InfieldHandleJitterFactorMin);
-            var handleJitter = DrawHandleJitter(coeff, rng) * jitterFactor;
+            var handleJitter = DrawHandleJitter(coeff, rng, jitterFactor);
             // 送球の逸れ（issue #858）: 送球精度から決まる期待遅れの、リーグ平均（精度50）からの差分だけを
             // 送球時間へ乗せる（ThrowScatterCenteredBiasSeconds）。精度50では常に0（定義により厳密に0.0。
             // 両項が同じ式に同じσ・同じ受け手Catching=50を渡すため浮動小数も完全一致）＝精度50の既存テストは
@@ -762,14 +762,17 @@ public static class FieldingResolver
             coeff.ThrowScatterLateralSecPerCm, coeff.ThrowScatterHighSecPerCm, coeff.ThrowScatterShortHopSecPerCm,
             coeff.ThrowScatterCatchingReliefSlope, coeff.ThrowScatterCatchingReliefMinFactor);
 
-    private static double DrawHandleJitter(FieldingCoefficients coeff, IRandomSource rng)
+    internal static double DrawHandleJitter(FieldingCoefficients coeff, IRandomSource rng, double jitterFactor = 1.0)
     {
         var u = rng.NextDouble();
         if (coeff.InfieldHandleJitterMeanSeconds <= 0.0) return 0.0;
         // u∈[0,1) なので 1−u∈(0,1] ＝ log の引数は必ず正
         var jitter = -coeff.InfieldHandleJitterMeanSeconds * Math.Log(1.0 - u);
         var cap = coeff.InfieldHandleJitterMeanSeconds * coeff.InfieldHandleJitterMaxFactor;
-        return Math.Min(jitter, cap);
+        // 守備倍率を掛けた後で頭打ちにする。先に切ると倍率<1（守備51以上）の最大値が cap×倍率 に縮み、
+        // お手玉のしきい値（<see cref="FieldingCoefficients.BobbleErrorMinJitterSeconds"/>）へ届かず
+        // 失策が0になる（issue #1259: 能力が逆向きに効く崖）。倍率≥1（守備50以下）は cap×倍率 で従来と同一。
+        return Math.Min(jitter * jitterFactor, cap * Math.Max(1.0, jitterFactor));
     }
 
     private static IrregularBounce DrawIrregular(FieldingCoefficients coeff, IRandomSource rng)

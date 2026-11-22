@@ -210,7 +210,8 @@ public sealed record FieldingCoefficients
     /// に合わせ、按分を食っていたお手玉を閾値を上げて減らした（しきい値を超える確率はその分下がる）。
     /// 1.47（= InfieldHandleJitterMeanSeconds×InfieldHandleJitterMaxFactor、守備50の頭打ち値）を
     /// 超えると平均的な守備力の内野手では構造的に発生しなくなる（BobbleErrorTests が5000シード探索で検出）
-    /// ため、その手前に留める。
+    /// ため、その手前に留める。頭打ちは守備倍率を掛けた後に行う（issue #1259）ので、守備51以上でも
+    /// 倍率<1ぶんだけ確率が下がるだけで、0にはならない（単調に減る）。
     /// </summary>
     public double BobbleErrorMinJitterSeconds { get; init; } = 1.45;
 
