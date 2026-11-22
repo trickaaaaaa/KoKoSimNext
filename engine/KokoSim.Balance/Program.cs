@@ -41,6 +41,7 @@ internal static class CommandLine
             "simulate-tiers" => RunSimulateTiers(args[1..]),
             "defense-sensitivity" => RunDefenseSensitivity(args[1..]),
             "ability-sweep" => RunAbilitySweep(args[1..]),
+            "save-growth" => RunSaveGrowth(args[1..]),
             "pitch-around" => RunPitchAround(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
@@ -246,6 +247,35 @@ internal static class CommandLine
         {
             WriteReportFile(reportPath, report);
             Console.WriteLine($"能力感度レポートを書き出しました: {reportPath}");
+        }
+        else
+        {
+            Console.WriteLine(report);
+        }
+        return 0;
+    }
+
+    private static int RunSaveGrowth(string[] args)
+    {
+        var years = new[] { 10, 30, 50 };
+        var seed = 42UL;
+        string? reportPath = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--years": years = RequireValue(args, ref i).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(v => int.Parse(v, CultureInfo.InvariantCulture)).ToArray(); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        var report = SaveGrowthSimulation.Report(SaveGrowthSimulation.Run(years, seed), seed);
+        if (reportPath is not null)
+        {
+            WriteReportFile(reportPath, report);
+            Console.WriteLine($"セーブ測定レポートを書き出しました: {reportPath}");
         }
         else
         {
@@ -775,6 +805,8 @@ internal static class CommandLine
         Console.WriteLine("  pitch-around    [--atbats N] [--seed S] [--report path] [--coefficients ...]   # くさい所（縁狙い）の効果測定（issue #872）");
         Console.WriteLine("  ability-sweep   [--games N]   [--seed S] [--report path] [--coefficients ...] [--targets data/balance-targets.yaml] [--only id,id]");
         Console.WriteLine("                  # 能力を1つずつ20/80に振り結果が動くかを見る（issue #840・片側だけ変更・先攻後攻入れ替え）");
+        Console.WriteLine("  save-growth     [--years 10,30,50] [--seed S] [--report path]");
+        Console.WriteLine("                  # 長年プレイのセーブの大きさ・保存/読込の時間（卒業生を丸ごと持つ旧方式と名前の表の新方式・issue #1414）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
         Console.WriteLine("  simulate-nation [--years N]   [--seed S] [--report path] [--school-names data/school-names.yaml]");
         Console.WriteLine("                  [--autumn data] [--start-year 2025]   # 秋の大会フロー(秋季→地区→神宮→センバツ)を併走");

@@ -47,7 +47,7 @@ namespace KokoSim.EditorTests
             CollectionAssert.AreEqual(new[] { junior.Name }, HomeRunNames(), "夏の引退直後は引退者が載らない");
 
             RosterService.AdvanceYear(2);
-            Assert.IsTrue(RosterService.Graduated.Any(p => p.Id == senior.Id), "前提: 卒業生として退避されている");
+            Assert.IsTrue(RosterService.Graduated.Contains(senior.Id), "前提: 卒業生として退避されている");
             CollectionAssert.AreEqual(new[] { junior.Name }, HomeRunNames(), "年度替わりの後も卒業生は載らない");
         }
 

@@ -354,3 +354,17 @@ screens:
       - call: EventService.Clear()
       - show: HomeDashboard
       - shot: 02-home-after-retire
+
+  - id: graduates-name-table-1414
+    name: "卒業生を名前の表で持つ（卒業後も記録画面の個人記録に名前が出る・issue #1414）"
+    steps:
+      - new_game: {seed: 1}
+      - boost_roster: 80
+      # 新設校は1年生だけ＝3年後（第4年度）の春に最初の卒業生が出る。卒業後の年度まで進めて個人記録（通算）を見る
+      - advance_to_week: {week: 30, year: 5}
+      - call: EventService.Clear()
+      - read: =RosterService.Graduated.Count
+      - read: =RosterService.Graduated.Entries.0.Name
+      - show: RecordsScreen
+      - click: .seg-tab[1]
+      - shot: 01-personal-records-career

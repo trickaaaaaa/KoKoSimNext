@@ -30,7 +30,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 40;
+    public const int CurrentVersion = 41;
 
     // ===== Serialize =====
 
@@ -45,6 +45,7 @@ public static class SaveCodec
             .Add("yearIndex", s.YearIndex)
             .Add("roster", RosterToJson(s.Roster))
             .Add("nextPlayerId", s.NextPlayerId)
+            .Add("graduates", GraduateSaves.ToJson(s.Graduates))
             .Add("manager", CareerSaves.ManagerToJson(s.Manager))
             .Add("facilities", CareerSaves.FacilitiesToJson(s.Facilities))
             .Add("contracts", CareerSaves.ContractsToJson(s.Contracts))
@@ -151,6 +152,7 @@ public static class SaveCodec
             root = Migrate(root, version);
             state = Read(root);
             if (version < 38) DropStaleTransferStats(state);
+            if (version < 41) MoveGraduatesToNameTable(state);
             return true;
         }
         catch (Exception e)
@@ -406,6 +408,9 @@ public static class SaveCodec
         }
         // v40（issue #1413）: 自校の公式戦の戦績（matchRecords）が増えた。旧セーブは試合の中身を捨てていた＝空で補う。
         if (version < 40 && !root.Has("matchRecords")) root.Add("matchRecords", new JsonArray());
+        // v41（issue #1414）: 卒業生の名前の表（graduates）が増えた。旧セーブは卒業生を roster に本体ごと抱えていた＝
+        // 空で補い、roster の卒業生（Grade>3）は読み込み後に MoveGraduatesToNameTable が表へ移す。
+        if (version < 41 && !root.Has("graduates")) root.Add("graduates", new JsonArray());
         return root;
     }
 
@@ -422,7 +427,21 @@ public static class SaveCodec
         if (s.Roster.Count == 0) return;
         var ids = new HashSet<int>();
         foreach (var p in s.Roster) ids.Add(p.Id);
+        foreach (var e in s.Graduates.Entries) ids.Add(e.Id);
         s.Stats.RetainOnlyRoster(ids);
+    }
+
+    /// <summary>
+    /// v40 以前のセーブが roster に抱えていた卒業生（Grade&gt;3）を名前の表へ移し、本体を捨てる（issue #1414）。
+    /// 卒業生は年度替わりの昇級に加わらず Grade=4 のまま残るので、学年だけで見分けられる。
+    /// 入学・卒業年度は辿れないので 0（不明）。
+    /// </summary>
+    private static void MoveGraduatesToNameTable(SaveState s)
+    {
+        var graduated = s.Roster.FindAll(p => p.Grade > 3);
+        if (graduated.Count == 0) return;
+        s.Graduates.AddLegacy(graduated);
+        s.Roster.RemoveAll(p => p.Grade > 3);
     }
 
     private static JsonArray SchoolColorsToJson(Dictionary<int, TeamColors> colors)
@@ -497,6 +516,8 @@ public static class SaveCodec
             // 採番の続き番号は issue #644 で追加。無い旧セーブは 0＝復元側がロスターと成績から推定する
             // （版は上げない＝欠けても既定値で正しく読める項目の追加）。
             NextPlayerId = root.Has("nextPlayerId") ? root.Int("nextPlayerId") : 0,
+            // 卒業生の名前の表は v41 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            Graduates = GraduateSaves.FromJson(root.Arr("graduates")),
             Manager = CareerSaves.ManagerFromJson(root.Obj("manager")),
             Facilities = CareerSaves.FacilitiesFromJson(root.Obj("facilities")),
             // 年契約は v3 で追加。旧セーブ（v1/v2）には無いので、当時と同額・同効果の

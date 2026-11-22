@@ -26,13 +26,14 @@ public static class PlayerIdCounter
     }
 
     /// <summary>
-    /// セーブ復元時の採番の再開値。保存した続き番号・ロスター（在籍＋卒業生）・成績ストアに現れる
+    /// セーブ復元時の採番の再開値。保存した続き番号・ロスター・卒業生の名前の表・成績ストアに現れる
     /// ID のうち最大のものの次から振る。成績ストアも見るのは、転任で旧校の部員がロスターから
     /// 消えても成績は残る（＝ロスターの最大Idだけでは小さすぎる）ため。
     /// </summary>
-    public static int Resume(int savedNextId, IEnumerable<DevelopingPlayer> roster, PlayerStatStore? stats)
+    public static int Resume(int savedNextId, IEnumerable<DevelopingPlayer> roster, PlayerStatStore? stats,
+        GraduateRoll? graduates = null)
     {
-        var maxId = 0;
+        var maxId = graduates?.MaxId ?? 0;
         foreach (var p in roster) maxId = Math.Max(maxId, p.Id);
         if (stats is not null) maxId = Math.Max(maxId, stats.MaxPlayerId());
         return Math.Max(Math.Max(1, savedNextId), maxId + 1);
