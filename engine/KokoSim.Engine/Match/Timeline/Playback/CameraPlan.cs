@@ -531,10 +531,6 @@ public static class CameraPlanBuilder
     }
 
     /// <summary>
-    /// 時刻 t に**実際に動いている**走者の現在位置（複数なら最も遠くまで進む予定のレッグ＝
-    /// そのプレーの主役）。その場に居るだけのレッグ（From==To）は数えない。
-    /// </summary>
-    /// <summary>
     /// 時刻 t に**実際に動いている**走者が走っているレッグの両端（issue field-view-cut-back-sooner）。
     /// 選び方は <see cref="RunningRunnerAt"/> と同じ（最も遠くまで進む予定のレッグ＝そのプレーの主役）。
     /// 全景へ戻さない守備ビューで「その塁間まるごと」を収めるのに使う＝走者は必ず枠の中に居る。
@@ -578,6 +574,10 @@ public static class CameraPlanBuilder
         return found;
     }
 
+    /// <summary>
+    /// 時刻 t に**実際に動いている**走者の現在位置（複数なら最も遠くまで進む予定のレッグ＝
+    /// そのプレーの主役）。その場に居るだけのレッグ（From==To）は数えない。
+    /// </summary>
     private static PlaybackVec? RunningRunnerAt(PlaybackPlay play, double t)
     {
         PlaybackVec? found = null;

@@ -135,7 +135,7 @@ public sealed record TrainingCoefficients
 
     /// <summary>
     /// 基準週の練習時間[分]（設計書03 §3.1）。1メニューにこの分を配分すると BaseMainExp と一致する
-    /// （時間配分育成の後方互換の基準）。成長・疲労は「配分分 ÷ この値」で線形スケールする。
+    /// （時間配分育成の後方互換の基準）。成長は「配分分 ÷ この値」で線形スケールする（疲労は廃止済み）。
     /// </summary>
     public int ReferenceWeekMinutes { get; init; } = 300;
 

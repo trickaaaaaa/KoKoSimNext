@@ -29,7 +29,7 @@ public static class SeasonTransitions
 {
     /// <summary>
     /// 週 <paramref name="week"/> に入った直後の遷移を返す。大会開幕週なら種別を、新チーム発足週なら
-    /// 引退＋暫定主将選出（<see cref="RosterLifecycle.OnWeekEntered"/>）を含める。夏の大会（第15週）と
+    /// 引退＋暫定主将選出（<see cref="RosterLifecycle.OnWeekEntered"/>）を含める。夏の大会（第13週）と
     /// 引退（第18週）は別週なので、同一週に両方が同時に立つことはない。
     ///
     /// <para><paramref name="newTeamAlreadyStarted"/>＝その年度の新チームを夏の敗退直後にもう発足させている

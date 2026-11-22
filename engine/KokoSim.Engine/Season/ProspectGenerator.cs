@@ -152,10 +152,11 @@ public sealed record RosterCoefficients
     /// 強度→能力中心の圧縮率（1.0＝圧縮なし＝従来と1ビット一致）。小さいほどティア間の実力差が縮み、
     /// 格差マッチの得点差が緩む（issue #536 の実測: 実力差10ポイントごとに得点が約0.4倍）。
     /// <b>全国トップ校の絶対能力も同時に下がる</b>ので、値は実測（<c>simulate-tiers</c>）で決める。
-    /// </summary>
+    ///
     /// <para>2026-08-19（設計書21・案C）: 0.55 → <b>1.0（圧縮なし）</b>。ティア圧縮はAI校だけを寝かせるため表示ランクと中身が乖離した。
     /// 代わりに表示→物理の効き（<see cref="Players.AbilityEffectCoefficients"/>）を全員対称に寝かせる＝raw が中身。写像の式は
     /// 比較・実験用に残す（slope=1・knee=100 は恒等）。</para>
+    /// </summary>
     public double TierCompressionSlope { get; init; } = 1.0;
 
     /// <summary>

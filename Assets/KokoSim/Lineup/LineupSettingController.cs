@@ -230,7 +230,7 @@ namespace KokoSim.Unity.Lineup
             block.Add(sub);
             card.Add(block);
 
-            // 成績：「防 1.74　回 10 1/3　振 8」。ラベル（補足色13px）と数値（Oswald 17px）を別の Label に組む。
+            // 成績：「防 1.74　回 10 1/3　振 8」。ラベル（補足色13px）と数値（.f-num-bd 17px。書体は設計書22 以降 Noto Sans JP）を別の Label に組む。
             var stats = new VisualElement();
             stats.AddToClassList("lu-sp-stats");
             StatPair(stats, "防", v.StartingPitcherEraText);

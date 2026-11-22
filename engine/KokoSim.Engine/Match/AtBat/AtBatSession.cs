@@ -374,8 +374,9 @@ public sealed class AtBatSession
 
             var safety = battingOverride == Tactics.PitchBattingOverride.SafetyBunt;
             var courseDifficulty = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y);
-            // _thirdBaseRunner はスクイズ専用ではなく打席頭の三塁走者スナップショット（GameEngineが
-            // bases.Third を無条件に渡す）なので、通常バント（非スクイズ）でもそのまま満塁の本塁封殺判定に使える。
+            // 走者は _runnersNow（この球を投げる時点の塁上。basesNow が渡されなければ打席頭のスナップショット
+            // ＝GameEngine が bases.Third を無条件に渡す）を使うので、通常バント（非スクイズ）でもそのまま
+            // 満塁の本塁封殺判定に使える。
             var bunt = BuntResolver.Resolve(
                 batterPlayer, pitcher, plan.Stuff, courseDifficulty, safety,
                 _runnersNow.First, _runnersNow.Second, _runnersNow.Third, ctx.Field, fielders, ctx.Fielding,
@@ -438,7 +439,7 @@ public sealed class AtBatSession
                 throw new System.InvalidOperationException(
                     "スクイズ指示を受けましたが AtBatSession.Begin に batterPlayer が渡されていません。");
             // issue #492 C: 三塁走者は毎球取り直す（thirdRunnerOverride）。打席途中に三塁へ来た走者でも例外を
-            // 投げない。上書きが無ければ打席頭スナップショット（_thirdBaseRunner）を使う＝brain スクイズは従来不変。
+            // 投げない。上書きが無ければ _runnersNow.Third（basesNow が無ければ打席頭スナップショット）を使う＝brain スクイズは従来不変。
             var thirdRunner = thirdRunnerOverride ?? _runnersNow.Third;
             if (thirdRunner is null)
                 throw new System.InvalidOperationException(

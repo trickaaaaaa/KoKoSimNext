@@ -49,11 +49,13 @@ public sealed record TacticsCoefficients
     /// アウト数別の固定オフセット（<see cref="StealMinSuccessOneOutOffset"/>/<see cref="StealMinSuccessTwoOutOffset"/>）で
     /// 近似する（表の自前構築はオーナー決定で対象外）。</para></summary>
     public double StealMinSuccess { get; init; } = 0.65;
-    /// <summary>1アウトの損益分岐オフセット（<see cref="StealMinSuccess"/>への加算）。残り打席を気にせず
-    /// 先の塁を取りに行く価値が無死よりやや下がるため負（issue #838・セイバーメトリクス近似の目安 -0.03）。</summary>
+    /// <summary>1アウトの損益分岐オフセット（<see cref="StealMinSuccess"/>への加算）。負＝閾値が下がり無死より
+    /// 仕掛けやすい（1死は二塁へ進めれば外野フライなどでも還れて進塁の価値が無死よりやや高い、という
+    /// 近似の目安 -0.03。issue #838）。</summary>
     public double StealMinSuccessOneOutOffset { get; init; } = -0.03;
-    /// <summary>2アウトの損益分岐オフセット。刺されても残塁ロスが無く失敗の代償が小さい一方、
-    /// 得点圏へ進める価値だけが残るため正（issue #838・目安 +0.10）。二盗は0/1アウトでしか判定しない
+    /// <summary>2アウトの損益分岐オフセット。正＝閾値が上がり仕掛けにくい（2死は進塁しても進塁打・
+    /// 外野フライでは還れず進塁の価値が小さく、盗塁死はそのままイニング終了になる、という近似の目安
+    /// +0.10。issue #838）。二盗は0/1アウトでしか判定しない
     /// （<see cref="StandardTacticsBrain"/>の<c>s.Outs &lt; 2</c>ガード）ため現状は到達しないが、
     /// 損益分岐カーブの形を保つため定義だけ持つ。</summary>
     public double StealMinSuccessTwoOutOffset { get; init; } = 0.10;
@@ -243,6 +245,10 @@ public sealed record TacticsCoefficients
 
     /// <summary>スクイズのウエスト（バッテリー察知, 設計書09 §1）: 基礎＋捕手の判断（Fielding）勾配＋状況の露骨さ。</summary>
     public double SqueezeReadBase { get; init; } = 0.08;
+    /// <summary>
+    /// 捕手の <b>Fielding</b>（効き後・50 中立）1あたりの読まれる確率の加算。名前は PerLead だが捕手の Lead（リード能力）
+    /// ではなく Fielding を読む（GameEngine の <c>SqueezeWasteNow</c>）。改名は YAML キーも伴うので別途。
+    /// </summary>
     public double SqueezeReadPerLead { get; init; } = 0.002;
     public double SqueezeReadObviousBonus { get; init; } = 0.05;
     /// <summary>スクイズを読まれてウエストされる確率の上限（読みの基礎・捕手守備・明白さの加算を足した後に頭打ち）。</summary>

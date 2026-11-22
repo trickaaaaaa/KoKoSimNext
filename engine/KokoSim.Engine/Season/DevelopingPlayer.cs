@@ -12,7 +12,7 @@ namespace KokoSim.Engine.Season;
 public sealed record LearnedPitch(PitchType Type, int PowerOffset, int SharpnessOffset);
 
 /// <summary>
-/// 育成中の選手（可変）。表示層能力の現在値・経験値・才能上限（隠し）・疲労・成長タイプを持つ。
+/// 育成中の選手（可変）。表示層能力の現在値・経験値・才能上限（隠し）・成長タイプを持つ。
 /// 試合出場時は Players.Player へ投影する（Phase 2 資産の再利用）。
 /// </summary>
 public sealed class DevelopingPlayer
@@ -164,7 +164,7 @@ public sealed class DevelopingPlayer
     public bool IsCaptain { get; set; }
 
     /// <summary>
-    /// 引退済みか（設計書03 §2: 夏の第17週で3年生が引退）。引退してもロスターからは除去せず
+    /// 引退済みか（設計書03 §2・issue #954: 自校の夏の敗退直後に3年生が引退する。統計シムと安全網の固定フックは第18週）。引退してもロスターからは除去せず
     /// このフラグを立てて残す（＝記録は残るが、練習・試合・選手一覧の対象から外れる）。
     /// 除去は年度替わり（4月）の卒業でまとめて行う。フラグ操作は <see cref="RosterLifecycle"/> に集約する。
     /// </summary>

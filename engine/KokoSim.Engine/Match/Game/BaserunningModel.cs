@@ -946,14 +946,14 @@ public static class BaserunningModel
             if (extraOuts > 0)
             {
                 // どの塁を攻めたかで空ける走者が違う（Q31）。二塁/三塁が空けば、後続の押し出し進塁
-                // カスケード（717行目〜）が既存のまま自動的に残りの走者を正しく進める＝特別扱い不要。
+                // （この下の二塁走者・一塁走者の進塁ブロック）が既存のまま自動的に残りの走者を正しく進める＝特別扱い不要。
                 switch (dpTarget)
                 {
                     case DoublePlayForceTarget.Second: r1 = null; break;
                     case DoublePlayForceTarget.Third: r2 = null; break;
                     case DoublePlayForceTarget.Home:
                         r3 = null;
-                        homeOuts++; // 本塁クロスプレー憤死の統計参考値（603行目の単独本塁封殺と同じ計上先）
+                        homeOuts++; // 本塁クロスプレー憤死の統計参考値（ApplyRunnerAdvance の HomeVerdict.OutAtHome と同じ計上先）
                         break;
                 }
             }
@@ -1561,7 +1561,7 @@ public static class BaserunningModel
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
     {
         var thirdCandidate = r2 is not null && home.FielderRole == FieldPosition.ThirdBase;
-        // 本塁のフォースは満塁（一・二・三塁とも占有）でなければ成立しない（r3Forced＝486行目付近と同じ定義）。
+        // 本塁のフォースは満塁（一・二・三塁とも占有）でなければ成立しない（ApplyRunnerAdvance の r3Forced と同じ定義）。
         // 二塁が空いていれば三塁走者は押し出されない＝フォースでないので自己フォースの対象外。
         var homeCandidate = r2 is not null && r3 is not null && home.FielderRole is FieldPosition.Catcher or FieldPosition.Pitcher;
         // 満塁・内野前進は「本塁で封殺して1点を防ぐ」が本筋（ApplyInPlayOut の r3Forced×In 分岐）。併殺を狙わない

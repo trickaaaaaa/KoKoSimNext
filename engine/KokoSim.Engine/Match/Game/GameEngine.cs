@@ -891,8 +891,8 @@ public static class GameEngine
                 // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
                 // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。
                 // 段階0（AI校・裏試合・統計シムは常にこちら）なら恒等＝帯不変。
-                // バッテリーの相性（設計書23 §2.4）: ピンチ（プレッシャー指数が高い場面）だけ制球に小さな倍率（最大+3%）。
-                // 勢い（#863・最大+6%）より小さく、K=0・圧が低い場面では恒等。乱数不使用。
+                // バッテリーの相性（設計書23 §2.4）: ピンチ（プレッシャー指数が高い場面）だけ制球に倍率（pinch_control_per_k=0.20＝最大+20%）。
+                // 勢い（#863・最大+6%）より大きい（Q52 で引き上げ）。K=0・圧が低い場面では恒等。乱数不使用。
                 pit = PressureModel.ApplyPitcher(pit, BatteryChemistry.PinchControlMultiplier(
                     defense.BatteryK(currentPitcher, ctx.Chemistry), pressureIdx, ctx.Pressure.MaxIndex, ctx.Chemistry));
 
@@ -922,6 +922,7 @@ public static class GameEngine
             var squeezeSign = sign == OffensiveSign.Squeeze && bases.Third is not null ? sign : (OffensiveSign?)null;
             var squeezeThirdRunner = bases.Third;
             // ウエストを読まれる確率（設計書02 §4.4）。現在の局面（捕手・アウト・点差）から都度求める純関数。
+            // 捕手の効きは Fielding（SqueezeReadPerLead は名前に反して捕手の Lead ではなく Fielding にかかる）。
             // 打席頭の brain スクイズは頭の値で1回だけ計算（＝従来と完全一致）、手動スクイズ（issue #492 C）は
             // 打席途中に押されうるので下の投球ループで球ごとに取り直す。
             double SqueezeWasteNow() => MathUtil.Clamp(
@@ -1287,12 +1288,12 @@ public static class GameEngine
                         }
                         bases.First = null;
 
-                        // 一・三塁の重盗（design-14 P1-4）: 二盗の送球中に三塁走者も本塁を狙う。既定オフ
-                        // (DoubleStealThirdBreakProb=0)では分岐自体に入らずrng消費ゼロ＝単独二盗と完全一致。
+                        // 一・三塁の重盗（design-14 P1-4）: 二盗の送球中に三塁走者も本塁を狙う。既定は
+                        // DoubleStealThirdBreakProb=0.4（issue #402 で正値化）。0（無効）にすると分岐自体に入らずrng消費ゼロ＝単独二盗と完全一致。
                         // 投げた塁（二塁）だけがアウト対象という原則から、成立時の三塁走者は無条件生還。
                         // issue #619: 未消費の手動スクイズ予約があるときは三塁走者を
                         // 走らせない（同じ球で三塁走者がスクイズと重盗の両方に使われるのを防ぐ）。
-                        // 既定 DoubleStealThirdBreakProb=0 では従来どおりこの分岐に入らず乱数消費ゼロ。
+                        // DoubleStealThirdBreakProb=0（無効）のときは従来どおりこの分岐に入らず乱数消費ゼロ。
                         // 一塁走者の盗塁死が3アウト目なら、三塁走者の本塁到達は認めない（issue #1206）。
                         if (bases.Third is not null && paBaserunning.DoubleStealThirdBreakProb > 0.0
                             && outs < 3

@@ -76,7 +76,7 @@ public sealed record GrowthEventCoefficients
     /// <summary>伸び悩み発生時、その分野の伸びしろに乗る恒久係数。</summary>
     public double PlateauGrowthFactor { get; init; } = 0.6;
 
-    /// <summary>イップスの条件: 高疲労またはスランプ中のみ（脈絡ない劣化を作らない）。</summary>
+    /// <summary>イップスの条件: スランプ中のみ（脈絡ない劣化を作らない。疲労の概念は廃止済み）。</summary>
     public double YipsWeeklyProb { get; init; } = 0.0008;
     public int YipsAbilityDrop { get; init; } = 5;
     /// <summary>イップス克服の週次確率（克服イベントで取り返す道）。</summary>

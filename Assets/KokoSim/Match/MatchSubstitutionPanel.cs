@@ -20,8 +20,8 @@ namespace KokoSim.Unity.Match
     /// <para>issue #452（パワプロ方式）: 左の並びは<b>打順順</b>（1〜9番。DH制の投手＝打順外は末尾に「—」）。
     /// 操作が決まった時点で該当行を「旧 → 新」の<b>即時プレビュー</b>に切り替え、行の✕で選び直せる
     /// （保留は常に1件・フッター文は補助）。能力比較は選択中の枠の役割に追随し、開いた直後の
-    /// 投枠プリセレクトは廃止（守備交代で野手能力が見えない体験の解消）。継投の最短手
-    /// 「控えを1クリック→確定」は <see cref="ClickCandidate"/> の投枠フォールバックが引き続き担う。</para>
+    /// 投枠プリセレクトは廃止（守備交代で野手能力が見えない体験の解消）。投枠へ自動で倒すフォールバックも
+    /// issue #718 で廃止済み＝控え→枠／枠→控えのどちらの順でも選べ（<see cref="ClickCandidate"/>）、継投も枠を選んで入れる。</para>
     ///
     /// <para>操作は「誰を・どこへ」の一手に統一し、結果を導出する：
     /// 枠→枠＝入替（可逆・在フィールド同士）／枠(投)↔在フィールド野手＝投野交代／枠(指)↔守備位置＝DH解除／
@@ -29,9 +29,10 @@ namespace KokoSim.Unity.Match
     /// を通り、engine の <see cref="MatchProgression.Relieve"/>／<see cref="MatchProgression.DefenseAssign"/>／
     /// <see cref="MatchProgression.SwapDefensivePositions"/>／<see cref="MatchProgression.ConvertPitcherAndRelieve"/>／
     /// <see cref="MatchProgression.ReleaseDh"/> へ振り分ける。判断ロジックはエンジンに委ね、ここは表示と実行呼び出しだけ
-    /// （不変条件#3 エンジン純度）。確定は1操作ずつ即時・取り消し不可。ただし確定してもモーダルは
+    /// （不変条件#3 エンジン純度）。確定した交代は engine に下書きとして積まれ、確定してもモーダルは
     /// 閉じない（issue報告「投手交代と守備位置を一斉に変えられない」への対応）＝継投→守備位置の
-    /// 入れ替えのように複数操作を同じセッションで続けて行える。閉じるのは✕／やめるを押した時だけ。</para>
+    /// 入れ替えのように複数操作を同じセッションで続けて行える。「試合へ戻る」で試合へ持ち帰り、
+    /// ✕／「全部やめる」なら確定した交代をまとめて取り消して開く前へ戻して閉じる（issue #718）。</para>
     /// </summary>
     public sealed class MatchSubstitutionPanel
     {
@@ -171,8 +172,8 @@ namespace KokoSim.Unity.Match
             if (_prog == null) return;
             if (BackgroundGameOp.Running)
             {
-                // 解決中は進行体に触れない。黙って捨てると _open が立ったままパネルだけ出て進行が止まるので、
-                // 解決が済み次第もう一度取り消しに来る。
+                // 他の背景処理（BackgroundGameOp）の実行中は進行体に触れない。黙って捨てると _open が立ったままパネルだけ出て
+                // 進行が止まるので、背景処理が済み次第もう一度取り消しに来る。
                 _cancelRetry ??= _scrim?.schedule.Execute(() => { _cancelRetry = null; if (_open) CancelAll(); }).StartingIn(50);
                 return;
             }
@@ -342,8 +343,8 @@ namespace KokoSim.Unity.Match
             {
                 BuildDefenseModel();
                 // 投枠のプリセレクトは廃止（issue #452 指摘4。開いた直後に投球比較しか出ず、守備交代で
-                // 野手能力が見えない体験の主因だった）。継投の最短手「控えを1クリック→確定」は
-                // ClickCandidate の「枠未選択なら投枠へ」フォールバックが引き続き成立させる。
+                // 野手能力が見えない体験の主因だった）。「枠未選択なら投枠へ」のフォールバックも
+                // issue #718 で廃止（ClickCandidate は控えを選んだまま次に押した枠を待つ）。
             }
         }
 
@@ -1007,10 +1008,11 @@ namespace KokoSim.Unity.Match
         private void Apply()
         {
             if (_prog == null || _opt == null) return;
-            // 解決中（背景スレッドで _prog.Advance() 実行中）は engine の進行体をメインスレッドから触らない
-            // （issue #288／#278 と同型の予防）。モーダルは _paused 中しか開かない建付けなので通常ここは
-            // 立たないが、押下配信は1フレーム遅れうるため二重に守る。競合させると進行体を奪い合い、
-            // 最悪 Unity ごとフリーズする（背景 Advance の列挙状態とラインナップの同時変更）。
+            // 他の背景処理（BackgroundGameOp）の実行中は engine の進行体・共有状態をメインスレッドから触らない
+            // （issue #288／#278 と同型の予防）。1球進行は背景スレッドでなくメインスレッド同期なので、
+            // 試合の進行そのものでここが立つことは無い。モーダルは _paused 中しか開かない建付けなので通常ここは
+            // 立たないが、押下配信は1フレーム遅れうるため二重に守る。競合させると共有状態を奪い合い、
+            // 最悪 Unity ごとフリーズする（背景処理の列挙状態とラインナップの同時変更）。
             if (BackgroundGameOp.Running) return;
             var (_, description, _) = FooterState();   // 確定した交代の一覧に残す一文（適用前の局面で組む）
             bool ok;
@@ -1173,7 +1175,7 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        /// <summary>控え行（スタメン設定と同じ bench-row 部品）。タグは選手本来の守備位置。</summary>
+        /// <summary>控え行（スタメン設定と同じ bench-row 部品）。タグは <paramref name="note"/>（出場済の控えだけ「出場済」）で、守備位置は出さない。</summary>
         private VisualElement BenchRow(Player p, bool dim, bool picked, string note)
         {
             var row = new VisualElement();
@@ -1298,7 +1300,7 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 進行体に触れずに見た目だけ畳む。打席解決中（<see cref="BackgroundGameOp"/>）は下書きの取り消しが
+        /// 進行体に触れずに見た目だけ畳む。他の背景処理中（<see cref="BackgroundGameOp"/>）は下書きの取り消しが
         /// できないので、終局・画面離脱の場面だけがこれを使う。
         /// </summary>
         public void ForceHide()

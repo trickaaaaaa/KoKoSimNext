@@ -28,7 +28,7 @@ public sealed class HomeRunProfile
 
     /// <summary>本塁打の初速の箱: 下端[km/h]と幅。0番＝下端未満、最後＝上端以上。</summary>
     public const double EvLowKmh = 140.0, EvStepKmh = 5.0;
-    public const int EvBins = 14;   // <140, 140-145, …, 200-205, ≥205 を 14 箱に（0=未満、13=以上）
+    public const int EvBins = 14;   // <140, 140-145, …, 195-200, ≥200 を 14 箱に（0=未満、13=以上）
 
     /// <summary>本塁打の打球角度の箱: 下端[度]と幅。</summary>
     public const double LaLowDeg = 15.0, LaStepDeg = 5.0;
