@@ -88,12 +88,7 @@ namespace KokoSim.Unity.Match
             float depth = Vector3.Dot(headPos - eye, camT.forward);
             if (depth < 0.5f) return;
 
-            if (_zoneMat == null)
-            {
-                var sh = Shader.Find("KokoSim/DuelStageZone");
-                if (sh == null) return;
-                _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
-            }
+            if (!EnsureZoneMat()) return;
 
             // 1画素あたりの実寸[m]。外半径が画素下限に満たなければ記号ぜんたいを同じ比で拡大する
             float metersPerPx = 2f * depth * Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad) / Target.height;

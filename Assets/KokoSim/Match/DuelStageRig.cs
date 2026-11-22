@@ -966,6 +966,35 @@ namespace KokoSim.Unity.Match
         private DuelCalibration _cal = DuelCalibration.Default;   // 実行時ポーズ補正が参照する現在値
         private float _acc;
         private int _poseGen;
+
+        /// <summary>ポーズ時計を 12fps（PoseFps）のコマ単位で進める。1コマ以上進めたら true。</summary>
+        private bool StepPoseQuantum(float deltaTime)
+        {
+            _acc += deltaTime;
+            float step = 1f / PoseFps;
+            bool stepped = false;
+            while (_acc >= step)
+            {
+                _acc -= step;
+                foreach (var a in _actors) StepActor(a, step);
+                stepped = true;
+                // ポーズが進んだ回数。**ポーズ補正IKは「進んだ回だけ」当てる**必要があり
+                // （重み<1は今の位置からの補間＝二度当てると寄りすぎる）、呼び出し側が
+                // 進んだかどうかを知る唯一の手がかりになる（守備の捕球IK＝F5）
+                _poseGen++;
+            }
+            return stepped;
+        }
+
+        /// <summary>GL で引く重畳（ゾーン・残像・動揺FX）の共有マテリアル。シェーダが無ければ false。</summary>
+        private bool EnsureZoneMat()
+        {
+            if (_zoneMat != null) return true;
+            var sh = Shader.Find("KokoSim/DuelStageZone");
+            if (sh == null) return false;
+            _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+            return true;
+        }
         private float _fovBaseDeg = 2.9f;   // 16:9時の垂直FOV（ApplyCalibrationが上書き。既定=R-comp60）
         private readonly List<Transform> _runnerHelmetMounts = new List<Transform>();   // 走者のヘルメット枠（打者と同じ較正を流す）
         private Transform _capMount, _helmetMount;   // 被り物の位置オフセット枠（gear-head直下・実寸[m]）
@@ -3651,19 +3680,7 @@ namespace KokoSim.Unity.Match
                     _catcherShiftT = -1f;
             }
 
-            _acc += deltaTime;
-            float step = 1f / PoseFps;
-            bool stepped = false;
-            while (_acc >= step)
-            {
-                _acc -= step;
-                foreach (var a in _actors) StepActor(a, step);
-                stepped = true;
-                // ポーズが進んだ回数。**ポーズ補正IKは「進んだ回だけ」当てる**必要があり
-                // （重み<1は今の位置からの補間＝二度当てると寄りすぎる）、呼び出し側が
-                // 進んだかどうかを知る唯一の手がかりになる（守備の捕球IK＝F5）
-                _poseGen++;
-            }
+            bool stepped = StepPoseQuantum(deltaTime);
             if (stepped)
             {
                 GroundFix(_pitcher);   // 投球ループはルートモーションでマウンドを降りるためコマ毎に接地
@@ -4092,12 +4109,7 @@ namespace KokoSim.Unity.Match
         private void DrawStrikeZone()
         {
             if (_cal.ZoneShow < 0.5f || _root == null || _camera == null) return;
-            if (_zoneMat == null)
-            {
-                var sh = Shader.Find("KokoSim/DuelStageZone");
-                if (sh == null) return;
-                _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
-            }
+            if (!EnsureZoneMat()) return;
 
             float hw = (float)Zone.HalfWidthM;
             float bot = (float)Zone.BottomM;
@@ -4153,12 +4165,7 @@ namespace KokoSim.Unity.Match
         {
             if (_cal.BattedShow < 0.5f || _trailNow < 0f || _trail.Count < 2) return;
             if (_root == null || _camera == null) return;
-            if (_zoneMat == null)
-            {
-                var sh = Shader.Find("KokoSim/DuelStageZone");
-                if (sh == null) return;
-                _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
-            }
+            if (!EnsureZoneMat()) return;
 
             // 守備ビュー（引きの構図）は対決ビューより数十倍広い実寸を映すので、対決ビュー向けに
             // 詰めた尾の長さ・太さ（0.28s/0.045m＝本塁付近で約10px）のままだと1px未満の点になる
@@ -4231,12 +4238,7 @@ namespace KokoSim.Unity.Match
         {
             if (_cal.BatTrailShow < 0.5f || _batTrailKnob.Count < 2) return;
             if (_root == null || _camera == null) return;
-            if (_zoneMat == null)
-            {
-                var sh = Shader.Find("KokoSim/DuelStageZone");
-                if (sh == null) return;
-                _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
-            }
+            if (!EnsureZoneMat()) return;
 
             float span = Mathf.Max(0.02f, _cal.BatTrailSeconds);
             float arcStep = Mathf.Clamp(_cal.BatTrailArcStepDeg, 1f, 90f);
