@@ -82,8 +82,7 @@ public sealed class ManagerTraitEffectsTests
         var t = ManagerTraitEffects.ApplyTactics(b, new[] { ManagerTrait.Cautious }, Ai);
         // 既定でも敬遠は有効（issue #402: YAML 校正値へ揃えた）。Cautious はそれを積極化する＝
         // 発火確率を下げず（Math.Max）、敬遠を考え始めるパワー閾値を緩める。
-        Assert.True(t.IntentionalWalkProb >= b.IntentionalWalkProb);
-        Assert.True(t.IntentionalWalkProb > 0.0);
+        Assert.True(t.IntentionalWalkProb > b.IntentionalWalkProb);
         Assert.True(t.IntentionalWalkMinPower < b.IntentionalWalkMinPower);
     }
 

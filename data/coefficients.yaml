@@ -1250,7 +1250,7 @@ enemy_ai:
   aggressive_gear_push_innings_more: 1       # 8) 強気ギア
   aggressive_gear_push_diff_more: 1
   aggressive_gear_coast_lead_later: 2
-  cautious_intentional_walk_prob: 0.55       # 9) 慎重（敬遠ためらわない）
+  cautious_intentional_walk_prob: 0.7        # 9) 慎重（基準 intentional_walk_prob 0.6 より上でないと Math.Max に埋もれる）
   cautious_intentional_walk_min_power_relax: 4
   # ⑤ エース温存層: 先発選択（issue #42, 設計書11 §2/§3）🟡実測校正
   ace_rest_min_tier: 3                        # D: ローテ運用の基本判断（未満は常時エース先発）

@@ -64,7 +64,7 @@ public static class ManagerTraitEffects
                 },
                 ManagerTrait.Cautious => b with
                 {
-                    // 既定 0（無効）を正の確率へ。既に他要因で正なら大きい方を採る。
+                    // 基準の敬遠確率より上げる（Max なので基準以下だと埋もれて効かない）。
                     IntentionalWalkProb = Math.Max(b.IntentionalWalkProb, ai.CautiousIntentionalWalkProb),
                     IntentionalWalkMinPower = Math.Max(1, b.IntentionalWalkMinPower - ai.CautiousIntentionalWalkMinPowerRelax),
                 },
