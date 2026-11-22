@@ -121,7 +121,8 @@ namespace KokoSim.Unity.Tournament
                 teamProvider: TeamFor,
                 statsForSchool: id => BookFor(id, statScope),
                 stage: stage,
-                phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default);
+                phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default,
+                strengthCoefficients: KokoSim.Unity.Shell.TeamStrengthCoeff.Default);
 
             var v = new View
             {
@@ -199,7 +200,8 @@ namespace KokoSim.Unity.Tournament
             var excerpt = TournamentPreviewBuilder.BuildRosterFor(
                 school, d.Field, berths: berths, yearIndex: session.Year,
                 teamProvider: TeamFor, stage: stage,
-                phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default);
+                phrases: KokoSim.Unity.Shell.PreviewPhrasesProvider.Default,
+                strengthCoefficients: KokoSim.Unity.Shell.TeamStrengthCoeff.Default);
 
             // 通算戦績（issue #84）は寸評の頭に付け足す（展望の Contenders 行と同じ扱い）。
             var history = KoshienHistoryText(session.Records.For(school.Id));
@@ -364,7 +366,7 @@ namespace KokoSim.Unity.Tournament
                 {
                     RegionName = name,
                     SchoolName = s.Name,
-                    TierLetter = s.Tier.ToString(),
+                    TierLetter = ScoutedTier(s).ToString(),
                     // 未記録（旧セーブから来た年など）は空にせず「出場」と出す＝空欄で列が抜けたように見せない。
                     AppearanceLabel = string.IsNullOrEmpty(label) ? "出場" : label,
                     IsManager = s.Id == managerId,
@@ -398,7 +400,7 @@ namespace KokoSim.Unity.Tournament
                 {
                     RegionName = PrefectureNames.JapaneseOf(s.PrefectureId),
                     SchoolName = s.Name,
-                    TierLetter = s.Tier.ToString(),
+                    TierLetter = ScoutedTier(s).ToString(),
                     AppearanceLabel = string.IsNullOrEmpty(label) ? "出場" : label,
                     IsManager = s.Id == managerId,
                     RegionOrder = s.PrefectureId,
@@ -446,6 +448,12 @@ namespace KokoSim.Unity.Tournament
             => school.Id == KokoSim.Unity.Shell.NationService.ManagerSchoolId
                 ? ManagerTeamForPreview(school.Name)
                 : KokoSim.Unity.Shell.NationService.Rosters.TeamFor(school, year);
+
+        /// <summary>出場校名簿の等級。展望・校別詳細と同じく偵察結果（実際に出るチームの総合）から引く（#1303）。</summary>
+        private static Tier ScoutedTier(School school)
+            => ScoutedTeamProfile.OverallTier(
+                TeamFor(school, KokoSim.Unity.Shell.GameSession.Current.Year),
+                KokoSim.Unity.Shell.TeamStrengthCoeff.Default);
 
         /// <summary>
         /// 今大会成績の3セル（issue #634）。<b>登板があれば投手の数字</b>（防御率・投球回・奪三振）、

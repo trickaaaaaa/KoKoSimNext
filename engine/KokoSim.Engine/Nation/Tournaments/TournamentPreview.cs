@@ -109,10 +109,12 @@ public static class TournamentPreviewBuilder
         System.Func<School, int, Match.Game.Team>? teamProvider = null,
         System.Func<int, Stats.StatBook?>? statsForSchool = null,
         PreviewStage stage = PreviewStage.Autumn,
-        PreviewPhrases? phrases = null)
+        PreviewPhrases? phrases = null,
+        TeamStrengthCoefficients? strengthCoefficients = null)
     {
         if (entrants.Count == 0) throw new System.ArgumentException("出場校が空です。");
         var ph = phrases ?? PreviewPhrases.Fallback;
+        var strengthCoeff = strengthCoefficients ?? new TeamStrengthCoefficients();
 
         // シード＝強さ順（Knockout と同じ序列）。同強さは Id で安定化。
         var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
@@ -130,7 +132,7 @@ public static class TournamentPreviewBuilder
 
             var rating = ratings[s.Id];
             contenders.Add(new PreviewContender(
-                Seed: i + 1, Mark: mark, Name: s.Name, Tier: s.Tier, Rating: rating,
+                Seed: i + 1, Mark: mark, Name: s.Name, Tier: s.Tier, Rating: rating, // Tier は後で偵察結果に置き換える
                 Blurb: blurbs[s.Id]));
         }
         // ◎○○▲ の順（マーク→シード）。
@@ -152,12 +154,16 @@ public static class TournamentPreviewBuilder
         foreach (var s in ranked) if (!byName.ContainsKey(s.Name)) byName[s.Name] = s;
         var notables = new List<NotablePlayer>();
         var rosters = new List<RosterExcerpt>();
-        foreach (var c in contenders)
+        for (var ci = 0; ci < contenders.Count; ci++)
         {
+            var c = contenders[ci];
             if (!byName.TryGetValue(c.Name, out var school)) continue;
             // 実戦と同一ソース。永続ロスター（#80）を注入すれば展望＝実戦の一致契約を保つ（既定は従来の ForSchool）。
             var team = teamProvider is not null ? teamProvider(school, yearIndex)
                 : StrengthTeamFactory.ForSchool(school, yearIndex);
+            // 画面に出す等級は偵察結果（実際に出る選手の総合）から引く（#737・#1303）。学校の抽象的な Tier は使わない。
+            c = c with { Tier = ScoutedTeamProfile.OverallTier(team, strengthCoeff) };
+            contenders[ci] = c;
             var book = statsForSchool?.Invoke(school.Id);
             var notable = PickNotable(c, team, book, stage, yearIndex, ph, out var teamBlurb);
             notables.Add(notable);
@@ -178,7 +184,8 @@ public static class TournamentPreviewBuilder
         School school, IReadOnlyList<School> entrants, int berths, int yearIndex = 1,
         System.Func<School, int, Match.Game.Team>? teamProvider = null,
         PreviewStage stage = PreviewStage.Autumn,
-        PreviewPhrases? phrases = null)
+        PreviewPhrases? phrases = null,
+        TeamStrengthCoefficients? strengthCoefficients = null)
     {
         var ph = phrases ?? PreviewPhrases.Fallback;
         var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
@@ -196,7 +203,9 @@ public static class TournamentPreviewBuilder
         // 寸評の通し番号は出場校全体で振るので、1校でも全体を数える（材料が軽いので出場200校でも安い）
         var blurbs = PreviewWriter.SchoolBlurbs(ranked, ratings, marks, stage, yearIndex, ph);
         var contender = new PreviewContender(
-            Seed: seed, Mark: mark, Name: school.Name, Tier: school.Tier, Rating: rating,
+            Seed: seed, Mark: mark, Name: school.Name,
+            Tier: ScoutedTeamProfile.OverallTier(team, strengthCoefficients ?? new TeamStrengthCoefficients()),
+            Rating: rating,
             Blurb: blurbs[school.Id]);
         PickNotable(contender, team, book: null, stage, yearIndex, ph, out var teamBlurb);
         return BuildRoster(contender, team, stage, teamBlurb);
