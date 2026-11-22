@@ -146,11 +146,12 @@ namespace KokoSim.Unity.Records
                   PrefectureNames.ShortOf(e.PrefectureId > 0 ? e.PrefectureId : NationService.PrefectureId)
                 : TournamentKindNames.Of(e.Kind);
 
-        // ── 学校の通算 ───────────────────────────────────────────
+        // ── 監督の通算 ───────────────────────────────────────────
 
         /// <summary>
-        /// 学校の通算戦績。<b>新しい集計を作らず</b> <see cref="SchoolRecordBook"/> をそのまま読む
-        /// （キャリア画面と同じ記録を、あちらは監督の視点・こちらは学校の視点で出す）。
+        /// 監督の通算戦績。<b>新しい集計を作らず</b> <see cref="SchoolRecordBook"/> をそのまま読む。
+        /// 自校バケットは転任をまたいで単一（校ID固定）なので、前任校の戦績も含む＝「監督の通算」（issue #1261・
+        /// 歴代大会を監督の歴代としたのと揃える）。
         /// </summary>
         private void RenderSchoolSummary(SchoolRecord r)
         {

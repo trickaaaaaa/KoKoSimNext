@@ -33,7 +33,7 @@
 
         <ui:ScrollView mode="Vertical" class="rc-scroll scroll">
 
-          <!-- ===== タブ1：歴代大会（左＝年度別の表／右＝学校の通算） ===== -->
+          <!-- ===== タブ1：歴代大会（左＝年度別の表／右＝監督の通算） ===== -->
           <ui:VisualElement name="rc-page-tournaments" class="rc-row">
 
             <ui:VisualElement class="card rc-card-grow">
@@ -56,7 +56,7 @@
 
             <ui:VisualElement class="card rc-card-side">
               <ui:VisualElement class="card__hd card__hd--tight card__hd--dirt">
-                <ui:Label class="card__hd-title" text="学校の通算" />
+                <ui:Label class="card__hd-title" text="監督の通算" />
               </ui:VisualElement>
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="rc-summary" />
