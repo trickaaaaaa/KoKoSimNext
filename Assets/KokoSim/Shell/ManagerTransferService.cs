@@ -197,6 +197,8 @@ namespace KokoSim.Unity.Shell
                 RosterService.AdoptTransferRoster(result.Roster, result.NextPlayerId);
                 // 転任先の AI 時代の通算は、IDを振り直した新しい部員のキーへ付け替えて自校の通算にする（#1261）。
                 GameSession.Current.Stats.Career.ReplaceWith(result.ArrivingCareer);
+                // 戦績も学校に付いて回る（issue #1413）: 去る学校の試合は旧校へ、転任先がかつて戦った試合は自校へ。
+                GameSession.Current.MatchHistory.HandOverSchool(result.OldSchoolId, target.SchoolId);
                 TeamColorProvider.LeaveSchool(result.OldSchoolId, departingColors);
                 TeamColorProvider.ArriveAtSchool(target.SchoolId);
             }

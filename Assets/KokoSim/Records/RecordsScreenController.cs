@@ -4,6 +4,7 @@ using KokoSim.Engine.Nation;      // TournamentHistory / SchoolRecord / BestResu
 using KokoSim.Engine.Season;      // TournamentKind
 using KokoSim.Engine.Stats;       // RecordRoom / RecordCategory
 using KokoSim.Unity.Components;   // 部品辞書（SegTabs / RecordCell / EmptyState）
+using KokoSim.Unity.MatchResult;  // 過去の試合の結果画面
 using KokoSim.Unity.Shell;        // GameSession / RosterService / WeekAdvance
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -27,7 +28,14 @@ namespace KokoSim.Unity.Records
         /// <summary>各部門で出す順位の数（全幅タブなので3位まで置ける）。</summary>
         private const int TopCount = 3;
 
-        private static readonly string[] PageLabels = { "歴代大会", "個人記録" };
+        private static readonly string[] PageLabels = { "歴代大会", "個人記録", "戦績" };
+        private const int MatchesPage = 2;
+
+        /// <summary>
+        /// 次に開いたとき最初に出すタブ（-1＝既定）。過去の試合の結果画面から「閉じる」で戻るとき、
+        /// 戦績タブへ戻すために使う（issue #1413）。一度きり。
+        /// </summary>
+        public static int ReturnPage = -1;
         private static readonly string[] ScopeLabels = { "通算", "シーズン" };
 
         private VisualElement _root;
@@ -39,6 +47,7 @@ namespace KokoSim.Unity.Records
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
+            if (ReturnPage >= 0) { _page = ReturnPage; ReturnPage = -1; }
 
             // 全タブ共通の進週処理へ集約（issue #134: 大会モード中はホームへ回送して日送りへ引き継ぐ）。
             var advance = _root.Q<Button>("advance");
@@ -56,9 +65,11 @@ namespace KokoSim.Unity.Records
             RenderTournamentHistory();
             RenderSchoolSummary(GameSession.Current.Records.For(NationService.ManagerSchoolId));
             RenderPersonalRecords();
+            RenderMatches();
 
             Show("rc-page-tournaments", _page == 0);
             Show("rc-page-records", _page == 1);
+            Show("rc-page-matches", _page == MatchesPage);
         }
 
         /// <summary>共通トップバーの動的値（週・メーター・自校の総合ランク）を埋める。他画面と同じ単一ソース。</summary>
@@ -145,6 +156,63 @@ namespace KokoSim.Unity.Records
                 ? TournamentKindNames.Of(e.Kind) + " " +
                   PrefectureNames.ShortOf(e.PrefectureId > 0 ? e.PrefectureId : NationService.PrefectureId)
                 : TournamentKindNames.Of(e.Kind);
+
+        // ── 戦績（自校の公式戦1試合ごと・issue #1413） ──────────────────
+
+        /// <summary>
+        /// 年ごとの見出しの下に日付順（積んだ順＝試合順）。新しい年が上。行を押すと試合結果画面が開き、
+        /// 閉じると戦績タブへ戻る。詳細の無い行（スコアだけ）は押せない。
+        /// 主語は学校＝いまの自校の試合だけ（転任で去った学校の試合は旧校に残る・issue #1261 と同じ）。
+        /// </summary>
+        private void RenderMatches()
+        {
+            var records = GameSession.Current.MatchHistory.ForSchool(MatchRecordBook.ManagerKey).ToList();
+
+            var rows = new List<VisualElement>();
+            foreach (var year in records
+                .GroupBy(r => SeasonClock.TournamentCalendarYear(r.Kind, r.Year))
+                .OrderByDescending(g => g.Key))
+            {
+                rows.Add(Cell(year.Key + "年", "rc-mt__year", numeric: true));
+                foreach (var r in year) rows.Add(MatchRow(r));
+            }
+
+            FillRows("rc-mt-rows", rows.ToArray());
+
+            var has = records.Count > 0;
+            Show("rc-mt-head", has);
+            SetText("rc-mt-sub", has ? records.Count + "試合" : "");
+            FillRows("rc-mt-empty", has
+                ? new VisualElement[0]
+                : new[] { UiComponents.EmptyState("まだ公式戦をしていない。", "試合を終えるたびに1行ずつ増える。") });
+        }
+
+        private VisualElement MatchRow(MatchRecord r)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("rc-mt");
+
+            row.Add(Cell(r.Month > 0 ? r.Month + "月" + r.Day + "日" : "―", "rc-mt__date", numeric: true));
+            row.Add(Cell(TournamentKindNames.Of(r.Kind) + " " + r.RoundName, "rc-mt__cup"));
+            // 相手校は記録した時点の名前を持っている＝改名（issue #946）は ID から今の名前へ引き直す。
+            row.Add(Cell(NationService.DisplayName(r.OpponentId, r.OpponentName), "rc-mt__opp", display: true));
+            row.Add(Cell(r.OwnRuns + "-" + r.OpponentRuns, "rc-mt__score", numeric: true));
+            var res = Cell(r.Won ? "勝" : r.Lost ? "敗" : "分", "rc-mt__res");
+            if (!r.Won) res.AddToClassList("rc-mt__res--dim");
+            row.Add(res);
+
+            if (r.HasDetail)
+            {
+                row.AddToClassList("rc-mt--open");
+                var record = r;
+                row.RegisterCallback<ClickEvent>(_ => MatchResultController.ShowPast(record, () =>
+                {
+                    ReturnPage = MatchesPage;
+                    ScreenRouter.Instance?.ShowDeferred("RecordsScreen");
+                }));
+            }
+            return row;
+        }
 
         // ── 監督の通算 ───────────────────────────────────────────
 

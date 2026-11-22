@@ -174,6 +174,13 @@ public sealed class SaveState
     /// </summary>
     public TournamentHistory TournamentHistory { get; set; } = new();
 
+    // --- 自校の公式戦の戦績（1試合ごとの記録・issue #1413。v40 で追加） ---
+    /// <summary>
+    /// 自校の公式戦の戦績（<see cref="MatchRecordBook"/>）。全部残す。空＝旧セーブ（試合の中身は捨てていた
+    /// ので過去ぶんは復元できない）か、まだ公式戦をしていない。
+    /// </summary>
+    public MatchRecordBook MatchRecords { get; set; } = new();
+
     // --- 週次イベントの発火状態（issue #609。v9 で追加） ---
     /// <summary>
     /// クールダウンと年次フラグ（設計書03 §5）。<b>null＝旧セーブ</b>（イベントが週送りに繋がる前の進行）。

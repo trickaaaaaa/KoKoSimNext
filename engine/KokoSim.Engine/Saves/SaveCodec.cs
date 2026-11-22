@@ -30,7 +30,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 39;
+    public const int CurrentVersion = 40;
 
     // ===== Serialize =====
 
@@ -84,6 +84,7 @@ public static class SaveCodec
             .Add("bigStageSeq", s.BigStageSeq)
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
+            .Add("matchRecords", MatchRecordSaves.ToJson(s.MatchRecords))
             .Add("events", EventSaves.ToJson(s.Events))
             .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament))
@@ -403,6 +404,8 @@ public static class SaveCodec
             mgr39.Add("teamManagerPortrait", rng.NextInt(1, TeamManagerLifecycle.PortraitCount + 1));
             mgr39.Add("teamManagerOutgoingPortrait", 0);
         }
+        // v40（issue #1413）: 自校の公式戦の戦績（matchRecords）が増えた。旧セーブは試合の中身を捨てていた＝空で補う。
+        if (version < 40 && !root.Has("matchRecords")) root.Add("matchRecords", new JsonArray());
         return root;
     }
 
@@ -601,6 +604,10 @@ public static class SaveCodec
         // 歴代大会結果は v8 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
         s.TournamentHistory = new TournamentHistory();
         TournamentHistorySaves.RestoreInto(s.TournamentHistory, root.Arr("tournamentHistory"));
+
+        // 戦績は v40 で追加（issue #1413）。Migrate が旧セーブへ空配列を補うので素直に読む。
+        s.MatchRecords = new MatchRecordBook();
+        MatchRecordSaves.RestoreInto(s.MatchRecords, root.Arr("matchRecords"));
 
         return s;
     }

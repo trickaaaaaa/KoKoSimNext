@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Stats;       // MatchRecord
 using KokoSim.Unity.Components;   // UiComponents
 using KokoSim.Unity.Shell;        // ScreenRouter
 using UnityEngine;
@@ -22,6 +23,8 @@ namespace KokoSim.Unity.MatchResult
         /// <summary>試合終了時に MatchLive が積む表示要求（一度きり）。</summary>
         public sealed class MatchResultRequest
         {
+            /// <summary>過去の試合（戦績）の記録。あればこれを描き、<see cref="Result"/> 以下は使わない（issue #1413）。</summary>
+            public MatchRecord Record;
             public GameResult Result;
             public bool ManagerIsAway;
             public string AwayName;
@@ -33,6 +36,16 @@ namespace KokoSim.Unity.MatchResult
         }
 
         public static MatchResultRequest Pending;
+
+        /// <summary>
+        /// 過去の試合（戦績の1行）の結果画面を開く（issue #1413）。<paramref name="onClose"/> は「閉じる」で戻る先の
+        /// 切替（戦績タブへ戻す）。大会の後処理は無い＝試合直後の結果画面と違い、閉じても何も進まない。
+        /// </summary>
+        public static void ShowPast(MatchRecord record, System.Action onClose)
+        {
+            Pending = new MatchResultRequest { Record = record, OnClose = onClose };
+            ScreenRouter.Instance?.ShowDeferred("MatchResult");
+        }
 
         private VisualElement _root;
         private Button _close;
@@ -47,6 +60,12 @@ namespace KokoSim.Unity.MatchResult
             var req = Pending;
             Pending = null;
             _onClose = req?.OnClose;
+
+            if (req?.Record is { HasDetail: true } record)
+            {
+                Render(MatchResultState.Build(record));
+                return;
+            }
 
             var result = req?.Result;
             if (result == null) return;   // 要求なしで開かれた（スクショ等）: 骨組みだけ出す

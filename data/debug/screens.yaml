@@ -239,6 +239,30 @@ screens:
       - click: .seg-tab[1]
       - shot: 04-personal-records-year2
 
+  - id: match-history-1413
+    name: "記録画面の［戦績］タブ・過去の試合の結果画面・閉じると戦績へ戻る・転任後は旧校に残る（issue #1413）"
+    steps:
+      - new_game: {seed: 1}
+      - boost_roster: 80
+      - advance_to_week: 46
+      - call: EventService.Clear()
+      - show: RecordsScreen
+      - click: .seg-tab[2]
+      - shot: 01-matches-tab
+      - read: =GameSession.Current.MatchHistory.Count
+      - click: .rc-mt--open[0]
+      - wait: 5
+      - shot: 02-past-match-result
+      - click: mr-close
+      - wait: 5
+      - shot: 03-back-on-matches-tab
+      - transfer: ""
+      - call: EventService.Clear()
+      - show: RecordsScreen
+      - click: .seg-tab[2]
+      - shot: 04-matches-after-transfer
+      - read: =GameSession.Current.MatchHistory.Count
+
   - id: new-students-1250
     name: "年度が替わった週送りの後、選手一覧・練習・メンバー設定に新入生が出る（PR #1357・issue #1250）"
     steps:

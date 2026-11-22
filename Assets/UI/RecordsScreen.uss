@@ -159,3 +159,71 @@
     padding: 0;
     -unity-text-align: lower-left;
 }
+
+/* ── 戦績（日付 / 大会 / 相手 / スコア / 勝敗。年ごとの見出しの下に日付順。行を押すと試合結果画面） ─── */
+.rc-mt { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.rc-mt--head { height: 26px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
+.rc-mt--head .rc-mt__date,
+.rc-mt--head .rc-mt__cup,
+.rc-mt--head .rc-mt__opp,
+.rc-mt--head .rc-mt__score,
+.rc-mt--head .rc-mt__res { font-size: var(--fs-cap); color: var(--tx-3); }
+/* 押せる行（詳細のある試合）だけホバーで面を沈める。詳細の無い行は何も起きない。 */
+.rc-mt--open:hover { background-color: var(--color-row-hover); }
+.rc-mt__date {
+    width: var(--col-rc-mt-date);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+.rc-mt__cup {
+    width: var(--col-rc-mt-cup);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+/* 相手校は明朝（書体3役）。縮むのはここだけ＝左右の列が押し出されない。 */
+.rc-mt__opp {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-body);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+.rc-mt__score {
+    width: var(--col-rc-mt-score);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+.rc-mt__res {
+    width: var(--col-rc-mt-res);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+/* 負け・引き分けは一段沈める（勝ちだけが墨のまま＝有る強さが目に入る）。 */
+.rc-mt__res--dim { color: var(--tx-3); }
+/* 年ごとの見出し。 */
+.rc-mt__year {
+    height: 28px;
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--tx-3);
+    margin: var(--sp-2) 0 0 0;
+    padding: 0;
+    -unity-text-align: lower-left;
+}

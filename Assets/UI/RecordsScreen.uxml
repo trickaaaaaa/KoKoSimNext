@@ -65,6 +65,29 @@
 
           </ui:VisualElement>
 
+          <!-- ===== タブ3：戦績（自校の公式戦1試合ごと。行を押すと試合結果画面・issue #1413） ===== -->
+          <ui:VisualElement name="rc-page-matches" class="rc-row">
+
+            <ui:VisualElement class="card rc-card-grow">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="公式戦の戦績" />
+                <ui:Label name="rc-mt-sub" class="card__hd-sub" text="" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="rc-mt-head" class="rc-mt rc-mt--head">
+                  <ui:Label class="rc-mt__date" text="日付" />
+                  <ui:Label class="rc-mt__cup" text="大会" />
+                  <ui:Label class="rc-mt__opp" text="相手" />
+                  <ui:Label class="rc-mt__score" text="スコア" />
+                  <ui:Label class="rc-mt__res" text="勝敗" />
+                </ui:VisualElement>
+                <ui:VisualElement name="rc-mt-rows" />
+                <ui:VisualElement name="rc-mt-empty" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+          </ui:VisualElement>
+
           <!-- ===== タブ2：個人記録（校歴代・全幅なので3位まで出す） ===== -->
           <ui:VisualElement name="rc-page-records" class="rc-row">
 
