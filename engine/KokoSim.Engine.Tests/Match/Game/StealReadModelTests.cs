@@ -39,6 +39,38 @@ public sealed class StealReadModelTests
         Assert.True(gamble < normal, $"ギャンブル始動は意表＝予想度が下がるはず: gamble={gamble} normal={normal}");
     }
 
+    // --- 不変条件1: 生Lvでなく ability_effect（Running / Pitching）を通す（設計書21 §3.1） ---
+
+    private static BaserunningCoefficients WithEffect(double runningScale, double pitchingScale) => new()
+    {
+        AbilityEffect = AbilityEffectCoefficients.Identity with { RunningScale = runningScale, PitchingScale = pitchingScale },
+    };
+
+    [Fact]
+    public void Expectedness_GoesThroughRunningEffect()
+    {
+        double Gap(double scale)
+        {
+            var c = WithEffect(scale, 1.0);
+            return StealReadModel.Expectedness(Runner(steal: 90), StartType.Normal, c)
+                 - StealReadModel.Expectedness(Runner(steal: 50), StartType.Normal, c);
+        }
+        Assert.True(Gap(0.25) < Gap(1.0) - 0.01, $"走力系の効きが小さいほど Steal の差は縮むはず: 0.25={Gap(0.25)} 1.0={Gap(1.0)}");
+    }
+
+    [Fact]
+    public void Pitchout_GoesThroughPitchingEffectForCatcherLead()
+    {
+        double Gap(double scale)
+        {
+            var c = WithEffect(1.0, scale);
+            var e = StealReadModel.Expectedness(Runner(steal: 70), StartType.Normal, c);
+            return StealReadModel.PitchoutProbability(Catcher(lead: 90), Pitcher(), e, c)
+                 - StealReadModel.PitchoutProbability(Catcher(lead: 50), Pitcher(), e, c);
+        }
+        Assert.True(Gap(0.25) < Gap(1.0) - 0.005, $"投手系の効きが小さいほど捕手リードの差は縮むはず: 0.25={Gap(0.25)} 1.0={Gap(1.0)}");
+    }
+
     // --- ピッチアウト確率: 読み力(捕手リード＋投手センス)×予想度、意表は読み切れない ---
 
     [Fact]
