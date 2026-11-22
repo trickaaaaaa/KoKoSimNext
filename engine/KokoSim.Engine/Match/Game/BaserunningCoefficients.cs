@@ -453,7 +453,7 @@ public sealed record BaserunningCoefficients
     // 守備所要時間へ加算してもう一度同じ時間勝負を評価する（拾い直しが間に合えばアウトのまま）。
     /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。バックホーム/中継は
     /// 距離が長いぶん内野送球より逸れが大きくなりうるため独立の値を持つ（<c>FieldingCoefficients</c>の同名値とは別）。</summary>
-    public double WildThrowScatterSigmaM { get; init; } = 6.0;
+    public double WildThrowScatterSigmaM { get; init; } = 3.0;
     /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
     public double RecoveryReactionSeconds { get; init; } = 0.30;
     /// <summary>回収に動く野手のスプリント速度[m/s]（個別Player情報が届いていないため平均的な値の定数。
