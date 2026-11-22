@@ -441,17 +441,22 @@ public static class TimelineBuilder
                     // 捕球エラー（お手玉。issue #439）: 送球は存在しない。打球の進行方向へ数m弾く絵。
                     // アンアシスト中の悪送球（実質起こらない縁ケース）もここへ落とす＝刺殺の絵は描かない。
                     // FromRole は「弾いた野手」＝頭上のびっくりマーク（3D）が対象を特定するのに使う。
-                    var rest = Overshoot(Home, fieldPoint, ErrorDeflectM);
+                    // 拾い直せず確定した捕球ミス（issue #816）は、判定が引いたこぼれ幅と拾い直しを終える時刻で描く
+                    // （球は拾い直しの瞬間に止まる）。判定の無い失策（固定の弾き）は従来の定数。
+                    var deflectM = play.CatchErrorScatterM ?? ErrorDeflectM;
+                    var deflectSeconds = CatchErrorReadyAt(play) is { } catchReady
+                        ? Math.Max(0.1, catchReady - fieldedAt) : ErrorDeflectSeconds;
+                    var rest = Overshoot(Home, fieldPoint, deflectM);
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Roll,
-                        T0 = fieldedAt, T1 = fieldedAt + ErrorDeflectSeconds,
+                        T0 = fieldedAt, T1 = fieldedAt + deflectSeconds,
                         From = fieldPoint, To = rest,
                         FromRole = play.FielderRole,
                     });
                     // こぼした本人が拾い直しに行く（①）
                     errorBallRest = rest;
-                    errorBallDeadAt = fieldedAt + ErrorDeflectSeconds;
+                    errorBallDeadAt = fieldedAt + deflectSeconds;
                     errorChaser = play.FielderRole;
                 }
                 else if (play.Result == BattedBallResult.Out && play.RecoveredThrowScatterM is { } scatterM
@@ -1048,10 +1053,12 @@ public static class TimelineBuilder
                 var speed = Math.Max(4.0, chaser.Attributes.SprintSpeedMps);
                 // 一塁手の捕球ミス（Receive, issue #810）は球が止まる基準が「送球が一塁に着いた瞬間」
                 // （firstThrowArriveAt。弾きロールの開始＝errorBallDeadAt の起点と同じ値）。
+                // 拾い直せず確定した捕球ミスは反応の秒を判定側（回収レース）が持つ＝追いかけは拾い直しの時刻に着くよう逆算する
+                var catchReadyAt = CatchErrorReadyAt(play);
                 var t0 = (play.ErrorKind == FieldingErrorKind.Receive && firstThrowArriveAt is { } receiveChaseFrom
                         ? receiveChaseFrom
                         : play.ErrorKind == FieldingErrorKind.Throw ? ContactAt + (play.ThrowArriveSeconds ?? 0.0) : fieldedAt)
-                         + ErrorChaseReactionSeconds;
+                         + (catchReadyAt is null ? ErrorChaseReactionSeconds : 0.0);
                 // ⚠ 自分の直前のレッグ（一塁カバーへの走り込み等）が終わってから追いかけ始め、
                 // 出発点はそのレッグの行き先＝**実際に立っている位置**から距離を出す。
                 // 走行中に重ねたり出発点を推測すると2本の移動が合成され、表示速度が人間の脚力を超える
@@ -1066,7 +1073,9 @@ public static class TimelineBuilder
                     if (m.T1 > lastT1) { lastT1 = m.T1; chaseFrom = m.To; }
                 }
                 // 球が止まる前に着かない（先回りして待つ絵にしない）
-                var t1 = Math.Max(t0 + Distance(chaseFrom, chaseTo) / speed, errorBallDeadAt);
+                var travelSeconds = Distance(chaseFrom, chaseTo) / speed;
+                if (catchReadyAt is { } readyAt) t0 = Math.Max(t0, readyAt - travelSeconds);
+                var t1 = Math.Max(t0 + travelSeconds, errorBallDeadAt);
                 moves.Add(new FielderMove
                 {
                     Role = chaserRole, T0 = t0, T1 = t1, To = chaseTo, Task = FielderTask.Chase,
@@ -3572,6 +3581,14 @@ public static class TimelineBuilder
         var c = coefficients ?? new BaserunningCoefficients();
         var fieldPoint = FieldPointOf(play);
         var fieldedAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
+        // 拾い直せず確定した捕球ミス（issue #816）: 判定の時計は拾い直しを終えた時刻から始まる。球は弾いた地点ではなく
+        // 拾い直した地点・時刻から本塁へ向かう（弾いた瞬間から投げると、転がる球と送球が同時に存在してしまう）。
+        if (CatchErrorReadyAt(play) is not null
+            && timeline.ErrorPickupAt is { } pickAt && timeline.ErrorPickupPoint is { } pickPoint)
+        {
+            fieldPoint = pickPoint;
+            fieldedAt = pickAt;
+        }
 
         // エンジンの本塁レースと同一の判断・同一の係数（中継しきい値／理論カットマン位置／握り替え）。
         var situation = new HomePlaySituation(
@@ -4222,6 +4239,10 @@ public static class TimelineBuilder
     /// <summary>送球の離しの高さ[m]（再生側 <c>PlayTimelineAdapter.ThrowReleaseHeightM</c> と同じ値）。</summary>
     private const double PlayTimelineAdapterReleaseHeight = Playback.EndpointBallSegment.ThrowReleaseHeightM;
     private static double PlayTimelineAdapterRise(double flightSeconds) => Playback.EndpointBallSegment.ThrowRiseM(flightSeconds);
+
+    /// <summary>拾い直せず確定した捕球ミスで、処理野手が拾い直しを終える時刻（接触基準を絵の時計へ直したもの。無ければ null）。</summary>
+    private static double? CatchErrorReadyAt(FieldingPlay play)
+        => play.ErrorKind == FieldingErrorKind.Catch && play.CatchErrorReadyAtSeconds is { } r ? ContactAt + r : null;
 
     /// <summary>捕球エラーで弾いたボールが転がる距離[m]と時間[s]（issue #439。表示専用）。</summary>
     private const double ErrorDeflectM = 3.0;

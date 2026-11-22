@@ -436,6 +436,12 @@
   **2アウト＝0**）。三塁を狙う側（`AdvanceParams`）も本塁を狙う側（`TryHome`、三塁走者を含む）も同じ値を引く
   （以前は本塁側だけ遅れ0）。二塁走者を本塁へ回す見込みは、同じ打席の三塁の見込みを上限にする
   （`CatchErrorHomeSendProbability`。判定・絵の秒は変えず送り判断だけ）。三塁へ行かせる基準は `ShouldSendThird` のまま。
+- **一塁→三塁にも読みの遅れ・絵は拾い直しの時計で描く（issue #1293・2026-11-22）**: 一塁走者だけの捕球ミスで三塁を狙う勝負
+  （`ApplyRunnerAdvance` の一塁→三塁）にも `CatchErrorStartDelaySeconds` を引く（見込み・勝負・走り出しの遅れの3つで同じ値。
+  二塁走者の三塁・本塁と揃えた）。絵は `CatchErrorScatterM`（判定が引いたこぼれ幅）で球を転がし、球が止まる＝野手が拾い直す
+  時刻を `CatchErrorReadyAtSeconds` に合わせる（固定の3m・0.8秒をやめた）。本塁で刺す送球（`AppendBackHomeThrows`）は、
+  拾い直した地点・時刻（`PlayTimeline.ErrorPickupPoint/At`）から出る＝転がる球と送球が同時に存在しない。
+  判定を持たない失策（フライ落球・お手玉の既定）は従来どおり固定の弾き。
 
 ### P2-7. 死球（HBP）
 

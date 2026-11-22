@@ -162,4 +162,47 @@ public sealed class CatchErrorTwoOutsAndHomeCapTests
         }
         Assert.Fail("上限が送り判断を変える打席が見つからない（＝テストが空回り）");
     }
+
+    /// <summary>
+    /// 一塁走者だけの捕球ミスで三塁を狙う勝負も、二塁走者と同じ読みの遅れ（#950）を引き受ける（issue #1293）。
+    /// 1アウト以下は <see cref="BaserunningCoefficients.GrounderAdvanceStartDelaySeconds"/>、2アウトは0。
+    /// 見込みも遅れ込みなので、遅れなしの見込みより下がる。
+    /// </summary>
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    public void FirstRunnerToThird_CarriesTheSameReadDelay(int outs, bool delayed)
+    {
+        var runner = new Player();
+        var third = HomePlayResolver.ThirdParams(Field, Coeff);
+        var delay = BaserunningModel.CatchErrorStartDelaySeconds(outs, Coeff);
+        Assert.Equal(delayed, delay > 0.0);
+
+        // 遅れ込みの見込みで三塁へ送る打席を探す（拾い直しが遅いほど送りやすい＝送る境目の少し先）
+        HomePlaySituation? found = null;
+        for (var t = 2.0; t < 12.0; t += 0.01)
+        {
+            var s = ShortstopRecovery(t);
+            var withDelay = HomePlayResolver.SuccessProbability(runner, 1, s, Field, Coeff, third, delay);
+            if (HomeSendDecision.ShouldSendThird(withDelay, outs, 0.5, Tactics) && withDelay < 0.97)
+            { found = s; break; }
+        }
+        Assert.NotNull(found);
+
+        var rng = new Xoshiro256Random(1293);
+        var sawThirdMove = false;
+        for (var i = 0; i < 300 && !sawThirdMove; i++)
+        {
+            var bases = new BaseState { First = runner };
+            var (_, _, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.ReachedOnError, new Player(), outs, Coeff, rng,
+                collectMoves: true, Context(found!.Value), errorKind: FieldingErrorKind.Catch);
+            var m = moves.FirstOrDefault(x => ReferenceEquals(x.Runner, runner) && x.ToBase == 3);
+            if (m is null) continue;
+            Assert.True(m.ExtraStartDelaySeconds >= delay - 1e-9,
+                $"{outs}アウト: 一塁→三塁の走り出しの遅れ {m.ExtraStartDelaySeconds:F3} < 読みの遅れ {delay:F3}");
+            sawThirdMove = true;
+        }
+        Assert.True(sawThirdMove, "一塁走者が三塁を狙う打席が出ない（＝テストが空回り）");
+    }
 }
