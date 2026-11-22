@@ -1453,6 +1453,9 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 
 .ev-por__image--manager { background-image: url("project:///Assets/UI/Images/portraits/manager.jpeg"); }
 .ev-por__image--team_manager { background-image: url("project:///Assets/UI/Images/portraits/team_manager.jpeg"); }
+/* 部員と主将は同じ絵（Gemini 生成・自前の素材なのでコミットする）。 */
+.ev-por__image--player,
+.ev-por__image--captain { background-image: url("project:///Assets/UI/Images/portraits/player.png"); }
 
 /* 会話ボックス。白面＋インク枠＋ベタ影（案イ＝右下だけ枠を太らせる。部品級）。 */
 .ev__box {

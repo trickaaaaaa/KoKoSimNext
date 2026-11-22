@@ -230,8 +230,10 @@ namespace KokoSim.Unity.Home
         /// <summary>
         /// 実写ポートレートが用意されている役割（Assets/UI/Images/portraits/・issue
         /// manager-npc-replaces-coach-speaker・2026-08-29）。無い役割は単色シルエットのまま。
+        /// 部員と主将は同じ絵（player.png）を使う（2026-11-22 ユーザー決定）。
         /// </summary>
-        private static readonly string[] ImageRoles = { EventRoles.Manager, EventRoles.TeamManager };
+        private static readonly string[] ImageRoles =
+            { EventRoles.Manager, EventRoles.TeamManager, EventRoles.Player, EventRoles.Captain };
 
         public static bool HasImage(string who) => System.Array.IndexOf(ImageRoles, who) >= 0;
 
