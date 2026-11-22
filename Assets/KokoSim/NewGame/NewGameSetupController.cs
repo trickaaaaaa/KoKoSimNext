@@ -58,6 +58,7 @@ namespace KokoSim.Unity.NewGame
 
         private int _prefectureId = NationService.DefaultPrefectureId;
         private int? _districtId;
+        private int? _districtChoice;
 
         private void OnEnable()
         {
@@ -127,17 +128,18 @@ namespace KokoSim.Unity.NewGame
             if (prefectureId < 0 || prefectureId >= PrefectureNames.Japanese.Count) return;
             _prefectureId = prefectureId;
 
-            // 県内地区は group_split 採用県だけ（現状は神奈川7・兵庫5・愛知5・北海道10）。それ以外は欄ごと出さない。
+            // 県内地区は group_split 採用県だけ（現状は神奈川7・兵庫5・愛知5）か夏が2分割の県（東京・北海道は南北の2択）。それ以外は欄ごと出さない。
             var districts = DistrictPlanProvider.DistrictsOf(prefectureId);
             var has = districts > 0;
-            _districtId = has ? 0 : (int?)null;
+            _districtChoice = has ? 0 : (int?)null;
+            _districtId = has ? DistrictPlanProvider.NewGameDistrictId(prefectureId, 0) : (int?)null;
             if (_district != null)
             {
                 _district.style.display = has ? DisplayStyle.Flex : DisplayStyle.None;
                 if (has)
                 {
                     _district.choices = Enumerable.Range(0, districts)
-                        .Select(d => DistrictPlanProvider.DistrictLabel(prefectureId, d)).ToList();
+                        .Select(d => DistrictPlanProvider.NewGameChoiceLabel(prefectureId, d)).ToList();
                     _district.index = 0;
                     _district.UnregisterValueChangedCallback(OnDistrictChanged);
                     _district.RegisterValueChangedCallback(OnDistrictChanged);
@@ -152,7 +154,8 @@ namespace KokoSim.Unity.NewGame
 
         private void OnDistrictChanged(ChangeEvent<string> e)
         {
-            _districtId = _district?.index ?? 0;
+            _districtChoice = _district?.index ?? 0;
+            _districtId = DistrictPlanProvider.NewGameDistrictId(_prefectureId, _districtChoice ?? 0);
             Render();
         }
 
@@ -212,7 +215,7 @@ namespace KokoSim.Unity.NewGame
             {
                 var name = TypedName.Length == 0 ? "―" : TypedName + "高校";
                 var line = PrefectureNames.JapaneseOf(_prefectureId) + "　" + name;
-                if (_districtId is { } d) line += "　／　" + DistrictPlanProvider.DistrictLabel(_prefectureId, d);
+                if (_districtChoice is { } c) line += "　／　" + DistrictPlanProvider.NewGameChoiceLabel(_prefectureId, c);
                 _summary.text = line;
             }
             _start?.SetEnabled(error.Length == 0);

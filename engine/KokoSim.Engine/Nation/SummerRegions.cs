@@ -89,6 +89,30 @@ public static class SummerRegions
         _ => System.Array.Empty<string>(),
     };
 
+    // 新規開始画面で南北を選んだときに自校へ付ける支部（DistrictId）。南北それぞれで最大の支部＝
+    // 北北海道は旭川(1)・南北海道は札幌(0)。支部が正で南北は導出なので、選んだ南北の区画（RegionFor）と必ず一致する。
+    private static readonly int[] HokkaidoNewGameBranch = { 1, 0 };
+
+    /// <summary>
+    /// 新規開始画面の地区選択欄に出す名前（夏の区画名）。夏に2分割される東京（東東京/西東京）と北海道
+    /// （北北海道/南北海道）だけが2択を返し、他の県は空。<see cref="SplitDistrictNames"/> と違い北海道も含む＝
+    /// 北海道の10支部は秋季の概念で、最初の選択では見せない（issue #1334）。
+    /// </summary>
+    public static IReadOnlyList<string> NewGameSplitNames(int prefectureId) => prefectureId switch
+    {
+        HokkaidoId => HokkaidoSplitNames,
+        TokyoId => TokyoSplitNames,
+        _ => System.Array.Empty<string>(),
+    };
+
+    /// <summary>
+    /// 新規開始画面で選んだ夏の区画（<see cref="NewGameSplitNames"/> の添字）→自校の DistrictId。
+    /// 東京は添字そのもの（<see cref="RegionFor"/> が偶奇で読む）。北海道は選んだ南北の中の代表支部
+    /// （北北海道=旭川・南北海道=札幌）＝秋季の支部予選は <c>data/pref-formats/hokkaido.yaml</c> の支部番号のまま動く。
+    /// </summary>
+    public static int NewGameDistrictId(int prefectureId, int split)
+        => prefectureId == HokkaidoId ? HokkaidoNewGameBranch[split] : split;
+
     /// <summary>この区画の参加校（Nation.InPrefecture を区画の Contains でさらに絞る）。</summary>
     public static IEnumerable<School> Entrants(Nation nation, SummerRegion region)
         => nation.InPrefecture(region.PrefectureId).Where(region.Contains);
