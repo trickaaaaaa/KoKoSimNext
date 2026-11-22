@@ -364,14 +364,14 @@ captures:
     name: "内野ゴロのエラーで「！」が弾いた野手に付く（issue #1247 項目2・PR #1353）"
     scenario: if-grounder-3b-lab
     manager: home
-    force: ReachedOnError
-    shots: [judgement, judgement+0.5, end]
+    force: FieldingError
+    shots: [judgement, judgement+0.5, judgement+1.2]
     probes: [ErrorMark, FieldLabels]
 
   - id: error-mark-of-1247
-    name: "外野のエラー→中継で「！」が中継の投げ手に付かない（issue #1247 項目2・PR #1353）"
-    scenario: of-grounder-runner-cf-lab
+    name: "外野フライの落球→中継で「！」が落球した外野手に付き、中継の投げ手に付かない（issue #1247 項目2・PR #1353）"
+    scenario: fair-fly-out-lab
     manager: home
-    force: ReachedOnError
-    shots: [judgement, judgement+0.5, end]
+    force: FieldingError
+    shots: [judgement, judgement+0.5, judgement+1.2]
     probes: [ErrorMark, FieldLabels]
