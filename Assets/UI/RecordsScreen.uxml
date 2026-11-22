@@ -44,6 +44,7 @@
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="rc-th-head" class="rc-th rc-th--head">
                   <ui:Label class="rc-th__year" text="年度" />
+                  <ui:Label class="rc-th__school" text="赴任校" />
                   <ui:Label class="rc-th__cup" text="大会" />
                   <ui:Label class="rc-th__res" text="成績" />
                   <ui:Label class="rc-th__champ" text="優勝校" />

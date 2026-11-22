@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 37;
+    public const int CurrentVersion = 38;
 
     // ===== Serialize =====
 
@@ -71,6 +71,7 @@ public static class SaveCodec
             .Add("managerTransferKind", s.ManagerTransferKind)
             .Add("managerTransferCandidates", TransferCandidatesToJson(s.ManagerTransferCandidates))
             .Add("teamColorOverride", CareerSaves.TeamColorsToJson(s.TeamColorOverride))
+            .Add("schoolColorOverrides", SchoolColorsToJson(s.SchoolColorOverrides))
             .Add("schoolName", s.SchoolName)
             .Add("prefectureId", s.PrefectureId)
             .Add("districtId", s.DistrictId.HasValue ? JsonValue.Of(s.DistrictId.Value) : JsonNull.Instance)
@@ -147,6 +148,7 @@ public static class SaveCodec
         {
             root = Migrate(root, version);
             state = Read(root);
+            if (version < 38) DropStaleTransferStats(state);
             return true;
         }
         catch (Exception e)
@@ -385,7 +387,47 @@ public static class SaveCodec
         // 旧セーブは夏が年度（YearIndex・1始まり）、春が「年度の暦年」（実開催より1年早い）で積まれていた。
         // 夏は暦年（>=1000）にならないので、1000 未満＝年度とみなして暦へ直す。
         if (version < 37 && root.Has("records")) MigrateKoshienYearsToCalendar(root.Arr("records"));
+        // v38（issue #1261）: 他校の配色（schoolColorOverrides）が増えた。旧セーブは配色が学校に付いていない＝空で補う。
+        // 成績の古いキーの掃除は JSON では書けない（キー集合の突き合わせ）ので Read の後の DropStaleTransferStats が担う。
+        if (version < 38 && !root.Has("schoolColorOverrides")) root.Add("schoolColorOverrides", new JsonArray());
         return root;
+    }
+
+    /// <summary>
+    /// v37 以前のセーブに残る、転任で学校と食い違った成績を捨てる（issue #1261）。
+    /// ① 率いている学校の全国側の通算帳簿は、AI校だった頃のIDのまま止まっている（率いている間は自校ストアが持ち、
+    /// 手放すときにそちらで置き換える）ので捨てる。② 自校ストアの通算・アーカイブには、#1112 より前の転任で
+    /// 区切られなかった前任校の選手の成績が残り得る（記録タブの個人記録で名前が「―」になる）ので、
+    /// 今の名簿（卒業生含む）に居ない選手IDを捨てる。名簿が空のセーブは突き合わせられないので触らない。
+    /// </summary>
+    private static void DropStaleTransferStats(SaveState s)
+    {
+        if (s.NationOverlay.ManagedSchoolId is { } managed) s.TournamentStats.DropCareerBook(managed);
+        if (s.Roster.Count == 0) return;
+        var ids = new HashSet<int>();
+        foreach (var p in s.Roster) ids.Add(p.Id);
+        s.Stats.RetainOnlyRoster(ids);
+    }
+
+    private static JsonArray SchoolColorsToJson(Dictionary<int, TeamColors> colors)
+    {
+        var ids = new List<int>(colors.Keys);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids)
+            arr.Add(new JsonObject().Add("schoolId", id).Add("colors", CareerSaves.TeamColorsToJson(colors[id])));
+        return arr;
+    }
+
+    private static Dictionary<int, TeamColors> SchoolColorsFromJson(JsonArray arr)
+    {
+        var map = new Dictionary<int, TeamColors>();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            if (CareerSaves.TeamColorsFromJson(o["colors"]) is { } c) map[o.Int("schoolId")] = c;
+        }
+        return map;
     }
 
     /// <summary>年度1の暦年。v36 以前のセーブの出場年を暦へ直すためだけに使う（Unity の SeasonClock.SeasonBaseYear と同値）。</summary>
@@ -470,6 +512,8 @@ public static class SaveCodec
             ManagerTransferKind = root.Int("managerTransferKind"),
             ManagerTransferCandidates = TransferCandidatesFromJson(root.Arr("managerTransferCandidates")),
             TeamColorOverride = CareerSaves.TeamColorsFromJson(root["teamColorOverride"]),
+            // 他校の配色は v38 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            SchoolColorOverrides = SchoolColorsFromJson(root.Arr("schoolColorOverrides")),
             // 自校の同定は v4 で追加。Migrate が旧セーブへ既定（桜丘・神奈川・地区なし）を補うので素直に読む。
             SchoolName = root.Str("schoolName") ?? "桜丘",
             PrefectureId = root.Int("prefectureId"),

@@ -112,6 +112,17 @@ public sealed class TournamentArchive
         }
     }
 
+    /// <summary><paramref name="keep"/> に無い選手IDの成績を捨てる（名簿外の古い成績の掃除。issue #1261 のセーブ移行）。</summary>
+    internal void Retain(ISet<int> keep)
+    {
+        foreach (var slot in _slots.Values)
+        {
+            var drop = new List<int>();
+            foreach (var id in slot.Keys) if (!keep.Contains(id)) drop.Add(id);
+            foreach (var id in drop) slot.Remove(id);
+        }
+    }
+
     /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。全消去。</summary>
     internal void Clear() => _slots.Clear();
 

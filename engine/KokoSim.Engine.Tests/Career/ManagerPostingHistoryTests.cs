@@ -154,4 +154,19 @@ public sealed class ManagerPostingHistoryTests
         Assert.True(SaveCodec.TryDeserialize(json, out var old, out var err), err);
         Assert.Equal(expected, old.ManagerPostingStartYearIndex);
     }
+
+    // issue #1261: 記録画面の歴代大会の各行に、その年度に率いていた学校の校名を併記する。
+    [Fact]
+    public void SchoolNameAt_PicksTheSchoolLedInThatYear()
+    {
+        var history = new ManagerPostingHistory();
+        history.Close("前任高校", endedYearIndex: 3, new SchoolRecord());
+        history.Close("二校目高校", endedYearIndex: 5, new SchoolRecord());
+
+        Assert.Equal("前任高校", history.SchoolNameAt(1, "今の高校"));
+        Assert.Equal("前任高校", history.SchoolNameAt(3, "今の高校"));
+        Assert.Equal("二校目高校", history.SchoolNameAt(4, "今の高校"));
+        Assert.Equal("二校目高校", history.SchoolNameAt(5, "今の高校"));
+        Assert.Equal("今の高校", history.SchoolNameAt(6, "今の高校"));
+    }
 }

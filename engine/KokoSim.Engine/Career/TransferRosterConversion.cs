@@ -82,10 +82,12 @@ public static class TransferRosterConversion
     /// 転任先 AI校の在籍者を自校の育成選手へ。<paramref name="nextId"/> から自校の安定IDを振り
     /// （<see cref="PlayerIdCounter"/> と同じ単調増加カウンタ）、続き番号を返す。並びは学年の高い順・
     /// 校内ID順で安定。背番号は能力順で仮割当し、主将を立てる（新規ゲームの生成と同じ後処理）。
+    /// <paramref name="idMap"/> を渡すと、AI校の選手ID→振った自校の安定ID の対応を書き込む
+    /// （選手の通算成績の帳簿を、IDの振り直しと一緒に写し替えるため・issue #1261）。
     /// </summary>
     public static (List<DevelopingPlayer> Players, int NextId) ToManagerRoster(
         AiSchoolRoster roster, int nextId, ulong masterSeed, RosterCoefficients? c = null,
-        PersonalityCoefficients? personalities = null)
+        PersonalityCoefficients? personalities = null, Dictionary<int, int>? idMap = null)
     {
         var coeff = c ?? new RosterCoefficients();
         var pc = personalities ?? new PersonalityCoefficients();
@@ -104,6 +106,11 @@ public static class TransferRosterConversion
             list.Add(ToDevelopingPlayer(ai, rng, coeff, pc));
         }
         var next = PlayerIdCounter.AssignSequential(list, nextId);
+        if (idMap is not null)
+        {
+            idMap.Clear();
+            for (var i = 0; i < list.Count; i++) idMap[ordered[i].Id] = list[i].Id;
+        }
         UniformNumberAssigner.AutoAssign(list);
         CaptainSelector.EnsureCaptain(list);
         return (list, next);

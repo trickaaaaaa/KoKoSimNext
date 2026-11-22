@@ -200,10 +200,13 @@ namespace KokoSim.Unity.Shell
         /// 監督の転任（設計書04 §1.3・issue #641）。旧校を AI校として全国に残し（旧部員はそのロスターへ）、
         /// 転任先 AI校の部員を新しい自校の部員として返す。転任先は全国から外れる（自校は専用ID で出場）。
         /// 自校の同定（校名・県）は呼び出し側が <see cref="SetSchoolIdentity"/> で据え直す。
+        /// <paramref name="departingCareer"/>＝去る学校の在任中の通算成績（全国側の通算へ据える）。戻り値の
+        /// <see cref="SchoolTransferResult.ArrivingCareer"/> は転任先の AI 時代の通算を新しい部員のIDへ付け替えたもの
+        /// （issue #1261・呼び出し側が自校ストアの通算へ据える）。
         /// </summary>
         public static SchoolTransferResult TransferManager(
             DepartingSchool departing, IReadOnlyList<DevelopingPlayer> departingActive, School target,
-            int yearIndex, int nextPlayerId)
+            int yearIndex, int nextPlayerId, StatBook departingCareer)
         {
             _ = Nation;   // 保留中の年次進化を当ててから差分を動かす
             // 改名（issue #946）は学校に付いて回る: 自校の改名は全国へ残る旧校へ、転任先の改名は新しい自校名へ。
@@ -211,7 +214,7 @@ namespace KokoSim.Unity.Shell
             var departingRename = ManagerSchoolRenamed ? ManagerSchoolName : null;
             var targetRenamed = _overlay.Renames.Remove(target.Id);
             var result = SchoolTransfer.Execute(_overlay, GeneratedNation, Rosters, departing, departingActive,
-                target, yearIndex, nextPlayerId, GameSeed.Master);
+                target, yearIndex, nextPlayerId, GameSeed.Master, TournamentStats, departingCareer);
             if (departingRename != null) _overlay.Renames[result.OldSchoolId] = departingRename;
             else _overlay.Renames.Remove(result.OldSchoolId);
             _overlay.ManagerGeneratedName = targetRenamed ? SchoolNames.Stem(target.GeneratedName) : null;

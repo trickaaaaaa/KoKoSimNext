@@ -11,8 +11,9 @@ using UnityEngine.UIElements;
 namespace KokoSim.Unity.Records
 {
     /// <summary>
-    /// 記録画面（設計書06 §3.9・issue #600）。主語は<b>学校</b>で、キャリア画面（#586・主語＝監督）と
-    /// 対になる。監督が代わっても学校に残る記録＝年度別の大会結果と校歴代の個人記録を出す。
+    /// 記録画面（設計書06 §3.9・issue #600）。キャリア画面（#586・主語＝監督）と対になり、年度別の大会結果と
+    /// 個人記録を出す。<b>歴代大会は監督の歴代</b>（転任をまたいで積まれる）なので、各行に当時の赴任校を併記する
+    /// （issue #1261）。個人記録は今の赴任先の成績だけ（前任校の選手の成績は <c>PlayerStatStore.ClosedSchools</c> へ区切る・#1112）。
     ///
     /// <para>監督決定のC案＝画面内タブ（<see cref="UiComponents.SegTabs"/>）で［歴代大会］［個人記録］を
     /// 排他に切り替える。各ページが全幅を使えるので、個人記録は3位まで出す。</para>
@@ -105,6 +106,9 @@ namespace KokoSim.Unity.Records
                 if (e.ManagerIsChampion) row.AddToClassList("rc-th--own");
 
                 row.Add(Cell(SeasonClock.TournamentCalendarYear(e.Kind, e.Year).ToString(), "rc-th__year", numeric: true));
+                // この記録は監督の歴代＝その年度に率いていた学校を添える（転任後も前任校の大会が今の学校のものに見えない・issue #1261）。
+                row.Add(Cell(GameSession.Current.PostingHistory.SchoolNameAt(e.Year, TopBarMeters.SchoolDisplayName()),
+                    "rc-th__school", display: true));
                 row.Add(Cell(CupName(e), "rc-th__cup"));
 
                 // 優勝の年は行の面で示す（.rc-th--own）。文字色は足さない＝アクセントを増やさない（UI原則②）。

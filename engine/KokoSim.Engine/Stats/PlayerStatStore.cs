@@ -142,6 +142,18 @@ public sealed class PlayerStatStore
         Archive.Clear();
     }
 
+    /// <summary>
+    /// 今の赴任先の部員（<paramref name="rosterIds"/>）に居ない選手の成績を、今の赴任先ぶんのスコープから捨てる
+    /// （issue #1261 のセーブ移行）。#1112 より前の転任は成績を区切っていなかったので、前任校の選手の成績が
+    /// 通算・アーカイブに残っている（記録タブの個人記録で名前が「―」になる）。前任校ぶんは複写が無く復元できない。
+    /// </summary>
+    internal void RetainOnlyRoster(ISet<int> rosterIds)
+    {
+        foreach (var book in new[] { Career, Official, CurrentTournament, PrefQualifier, RegionalQualifier })
+            book.Retain(rosterIds);
+        Archive.Retain(rosterIds);
+    }
+
     /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。全消去して据え直す。</summary>
     internal void RestoreClosedSchools(IEnumerable<ClosedSchoolStats> closed)
     {
