@@ -121,8 +121,8 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             gear = PitcherGear.Coast;
         }
 
-        // 敬遠（design-14 P1-3）: 一塁空き・得点圏・強打者・僅差終盤で次打者と勝負。既定(IntentionalWalkProb=0)
-        // では rng.NextDouble() 自体を呼ばずガードでスキップ＝Brainつきの試合でも従来の乱数消費順・結果と完全一致。
+        // 敬遠（design-14 P1-3）: 一塁空き・得点圏・強打者・僅差終盤で次打者と勝負。確率（IntentionalWalkProb）が0なら
+        // rng.NextDouble() を呼ばずガードでスキップする（既定は #402 で0.6＝通常は引く）。
         var intentionalWalkBase = s.OnFirst is null
             && (s.OnSecond is not null || s.OnThird is not null)
             && s.Batter.Power >= _c.IntentionalWalkMinPower
@@ -178,6 +178,15 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         {
             // 不利カウント: ゾーンに集めて四球を避ける。
             policy = PitchPolicy.ControlFirst;
+        }
+        else if (_c.PitchTacticsInsideAttackProb > 0.0
+                 && s.Strikes > s.Balls
+                 && s.Base.Batter.Power < _c.KeepLowMinPower
+                 && !(s.Base.OnFirst is not null && s.Base.OnSecond is not null && s.Base.OnThird is not null)
+                 && rng.NextDouble() < _c.PitchTacticsInsideAttackProb)
+        {
+            // 釣り球・内角攻め: 有利カウントで内を突いて見せ球にする（強打者・満塁では使わない）。
+            policy = PitchPolicy.InsideAttack;
         }
 
         var steal = CallStealAttempt(s.Base, rng);

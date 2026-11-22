@@ -21,13 +21,11 @@ namespace KokoSim.Unity.Match
     /// 全国ストアを振り分けるのは engine の <see cref="SchoolStatsLookup"/> ＝ここでは集計しない。
     /// <b>選手IDは校ごとに1から振るので、校IDを見ずに引くと相手校の選手に同じ番号の自校選手の成績が出る</b>。
     /// 調子は自校=常に真値、相手校=監督の育成眼に応じた誤認モデル（<see cref="FormModel.Observe"/>）を通す
-    /// （設計書02 §3.3, issue #47）。観測ノイズは試合ごとに固定した RNG を選手名で Fork するため、
+    /// （設計書02 §3.3, issue #47）。観測ノイズは年度・週で固定した RNG を (校ID, 選手ID) で Fork するため、
     /// 同一試合中は同じ見え方になる（決定論・不変条件#2）。UI 側で数値を再計算しない（表示専用）。
     /// </summary>
     public sealed class MatchLiveStatsProvider
     {
-        private static int _seq;
-
         private readonly SchoolStatsLookup _lookup;
         private readonly IRandomSource _observeRng;
         private readonly FormCoefficients _formCoeff = new();
@@ -35,23 +33,25 @@ namespace KokoSim.Unity.Match
         public MatchLiveStatsProvider()
         {
             _lookup = NationService.StatsLookup;
-            // 試合ごとに独立した決定論ストリーム（週・年度・生成連番から導出。GameSession.ApplyMatchInjuries と同型）。
+            // 試合ごとに固定した決定論ストリーム（年度・週から導出）。生成連番は混ぜない＝画面を開き直す・
+            // 再開・ロードしても同じ試合は同じ見え方になる（不変条件#2）。選手ごとの分け方は ConditionOf。
             _observeRng = new Xoshiro256Random(
-                0x0BF0_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_seq)));
+                0x0BF0_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100));
         }
 
         /// <summary>
-        /// 調子（自校=常に真値。相手校=育成眼に応じた誤認あり）。<paramref name="name"/> は相手校の観測ノイズを
-        /// 選手ごとに Fork で固定するためのキー（Fork は親ストリームを進めないため、同一選手は毎回同じ結果になる）。
+        /// 調子（自校=常に真値。相手校=育成眼に応じた誤認あり）。相手校の観測ノイズは選手ごとに Fork で固定する
+        /// （Fork は親ストリームを進めないため、同一選手は毎回同じ結果になる）。キーは (校ID, <paramref name="sourceId"/>) で、
+        /// 選手IDが無い選手だけ <paramref name="name"/> を足して区別する（同姓同名でも誤認が同じにならない）。
         /// <para>自校判定は<b>校ID</b>で行う（issue #634）。永続ロスター（#80）以降は相手校の生成選手も
         /// SourceId を持つので、「SourceId 非 null＝自校」で判定すると相手校の調子まで真値で見えてしまう
         /// ＝育成眼の誤認モデル（#47）が効かない。</para>
         /// </summary>
-        public Condition ConditionOf(int schoolId, double conditionValue, string name) =>
+        public Condition ConditionOf(int schoolId, int? sourceId, double conditionValue, string name) =>
             _lookup.IsManagerSchool(schoolId)
                 ? FormModel.Quantize(conditionValue)
                 : FormModel.Observe(conditionValue, ManagerService.Manager.TalentEye,
-                    _observeRng.Fork(NameStreamId(name)), _formCoeff);
+                    _observeRng.Fork(PlayerStreamId(schoolId, sourceId, name)), _formCoeff);
 
         /// <summary>
         /// その校の選手の調子が推定（監督の目で見た値）か。自校は常に真値＝false、相手校は誤認モデルを通す＝true
@@ -59,11 +59,18 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public bool IsConditionEstimated(int schoolId) => !_lookup.IsManagerSchool(schoolId);
 
-        // 選手名 → Fork streamId（FNV-1a 64bit）。相手校の選手IDは校ごとに1から振られ校をまたいで
-        // 一意でないため、名前を安定キーとして使う（同一試合の同一選手なら常に同じ streamId）。
-        private static ulong NameStreamId(string name)
+        // (校ID, 選手ID) → Fork streamId（FNV-1a 64bit）。選手IDは校ごとに1から振られるので校IDと組にする。
+        // 選手IDを持たない選手（SourceId=null）は名前で代える（同一試合の同一選手なら常に同じ streamId）。
+        private static ulong PlayerStreamId(int schoolId, int? sourceId, string name)
         {
             var hash = 0xcbf29ce484222325UL;
+            hash = (hash ^ (ulong)(uint)schoolId) * 0x100000001b3UL;
+            if (sourceId is int id)
+            {
+                hash = (hash ^ (ulong)(uint)id) * 0x100000001b3UL;
+                return hash;
+            }
+            hash = (hash ^ 0xFFFFFFFFUL) * 0x100000001b3UL;
             foreach (var ch in name)
             {
                 hash ^= ch;

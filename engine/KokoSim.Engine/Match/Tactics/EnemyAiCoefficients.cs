@@ -179,6 +179,20 @@ public sealed record EnemyAiCoefficients
     /// <summary>代走に求める走力の上積みを下げる（22→12）。</summary>
     public int AiPinchRunImprovementRelax { get; init; } = 10;
 
+    // === ⑧ 上級差の層（issue #1295, 設計書11 §2・§4） ===
+    /// <summary>
+    /// 相手校一律の内角攻め（釣り球）の確率。有利カウントで強打者でも満塁でもないとき、この確率で
+    /// <see cref="PitchPolicy.InsideAttack"/> へ切り替える。使えるのは <see cref="InsidePolicyMinTier"/> 以上だけ
+    /// ＝下位ティアには引き出しが無く、素の判断から落ちる。
+    /// </summary>
+    public double AiInsideAttackProb { get; init; } = 0.30;
+    /// <summary>伝令の温存: このティア以上は、残り回数が <see cref="TimeoutReserveKeep"/> 以下のあいだ終盤まで使わない。</summary>
+    public int TimeoutReserveMinTier { get; init; } = 4;   // C: 残回数管理
+    /// <summary>温存する伝令の回数（残りがこの回数以下なら終盤まで取っておく）。</summary>
+    public int TimeoutReserveKeep { get; init; } = 1;
+    /// <summary>温存を解く回（この回以降は残りを使い切ってよい）。</summary>
+    public int TimeoutReserveFromInning { get; init; } = 7;
+
     // === ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2・設計書11） ===
     // AIが「守備位置の入替（無料）」と「コンバート継投」を打てるようにする層。#209 と同じ2段運用で
     // 入れ（①既定オフで配線 → ②有効化して帯を実測 → 採否）、実測の結果このティアで採用した

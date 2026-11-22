@@ -718,7 +718,7 @@ namespace KokoSim.Unity.Match
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied,
                 sid => _statsProvider.AptitudeGradesOf(OwnSchoolId, sid),
                 p => _statsProvider.PitchChartOf(OwnSchoolId, p),
-                p => _statsProvider.ConditionOf(OwnSchoolId, p.ConditionValue, p.Name));
+                p => _statsProvider.ConditionOf(OwnSchoolId, p.SourceId, p.ConditionValue, p.Name));
             _subPanel.Bind();
             // 能力ビューア（issue #602/#923）。局面文はポップアップと同じ単一ソースを渡す。
             _scoutPanel = new MatchScoutPanel(_root, _statsProvider, PauseSituationText);
@@ -1479,7 +1479,7 @@ namespace KokoSim.Unity.Match
                     ("打率", MatchLiveStatsProvider.LiveAvg(career, slot?.AtBats ?? 0, slot?.Hits ?? 0)),
                     ("本", career == null ? "—" : career.HomeRuns.ToString()),
                 },
-                Condition = _statsProvider.ConditionOf(offenseSchoolId, who.BatterConditionValue, who.BatterName),
+                Condition = _statsProvider.ConditionOf(offenseSchoolId, who.BatterSourceId, who.BatterConditionValue, who.BatterName),
                 ConditionEstimated = _statsProvider.IsConditionEstimated(offenseSchoolId),
             };
             if (def != null)
@@ -1491,7 +1491,7 @@ namespace KokoSim.Unity.Match
                     Detail = TimeoutPopupModel.PitcherDetail(def.Grade, def.Throws, def.Bats),
                     // 球数だけ（目安投球数・ゲージは出さない）。確定球数＋進行中の打席ぶん（issue #397）。
                     Stats = new List<(string, string)> { ("球数", (def.Pitches + def.PendingPitches).ToString()) },
-                    Condition = _statsProvider.ConditionOf(defenseSchoolId, def.ConditionValue, def.Name),
+                    Condition = _statsProvider.ConditionOf(defenseSchoolId, def.SourceId, def.ConditionValue, def.Name),
                     ConditionEstimated = _statsProvider.IsConditionEstimated(defenseSchoolId),
                 };
             }
@@ -4948,8 +4948,8 @@ namespace KokoSim.Unity.Match
                     if (b.Number <= 0) continue;
                     var asPitcher = FindReservePitcher(team, b.Number);
                     benchRows.Add((b.Number, asPitcher is null
-                        ? BuildBenchRow(b.Number, b.Name, b.ConditionValue, schoolId)
-                        : BuildBenchRow(asPitcher.Number, asPitcher.Name, asPitcher.ConditionValue, schoolId)));
+                        ? BuildBenchRow(b.Number, b.Name, b.SourceId, b.ConditionValue, schoolId)
+                        : BuildBenchRow(asPitcher.Number, asPitcher.Name, asPitcher.SourceId, asPitcher.ConditionValue, schoolId)));
                 }
                 if (benchRows.Count > 0)
                 {
@@ -4979,7 +4979,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(SideName(s.Name), "mside-row__name"));   // フルネーム
             row.Add(MakeLabel(NumText(s.Number), "mside-num", "f-body-bd"));
             var face = new ConditionFace();
-            face.Set(_statsProvider.ConditionOf(schoolId, s.ConditionValue, s.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, s.SourceId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
         }
@@ -5010,14 +5010,14 @@ namespace KokoSim.Unity.Match
         }
 
         // 控えの行: 背番号の箱 | 名前(フルネーム) | 調子の顔。守備位置は出さない。代打・代走・守備固めの候補。
-        private VisualElement BuildBenchRow(int number, string name, double conditionValue, int schoolId)
+        private VisualElement BuildBenchRow(int number, string name, int? sourceId, double conditionValue, int schoolId)
         {
             var row = new VisualElement();
             row.AddToClassList("mside-bench");
             row.Add(MakeLabel(NumText(number), "mside-bench__num", "f-num"));
             row.Add(MakeLabel(SideName(name), "mside-bench__name"));
             var face = new ConditionFace();
-            face.Set(_statsProvider.ConditionOf(schoolId, conditionValue, name));
+            face.Set(_statsProvider.ConditionOf(schoolId, sourceId, conditionValue, name));
             row.Add(face);
             return row;
         }
@@ -5183,7 +5183,7 @@ namespace KokoSim.Unity.Match
             var face = new ConditionFace();
             face.AddToClassList("mhud-face");
             face.AddToClassList("mhud-face--after-pc");
-            face.Set(_statsProvider.ConditionOf(schoolId, def.ConditionValue, def.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, def.SourceId, def.ConditionValue, def.Name));
             idn.Add(face);
             band.Add(idn);
 
@@ -5274,7 +5274,7 @@ namespace KokoSim.Unity.Match
             idn.Add(MakeRow("mhud-spacer"));
             var face = new ConditionFace();
             face.AddToClassList("mhud-face");
-            face.Set(_statsProvider.ConditionOf(schoolId, m.BatterConditionValue, m.BatterName));
+            face.Set(_statsProvider.ConditionOf(schoolId, m.BatterSourceId, m.BatterConditionValue, m.BatterName));
             idn.Add(face);
             band.Add(idn);
 

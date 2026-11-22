@@ -274,6 +274,13 @@ public sealed record TacticsCoefficients
     public int PitchTacticsThreeZeroSwingAwayMaxDiffAbs { get; init; } = 1;
     /// <summary>守備側: 2ストライク後、決め球（変化球中心）へ切り替える確率。</summary>
     public double PitchTacticsPutAwayProb { get; init; } = 0.50;
+    /// <summary>
+    /// 守備側: 有利カウント（ストライク&gt;ボール）で内角攻め（InsideAttack・釣り球）に切り替える確率。
+    /// 強打者（<see cref="KeepLowMinPower"/> 以上）・満塁（押し出しの死球が怖い）は対象外。
+    /// 既定0＝素の采配（StandardTacticsBrain）は使わず、乱数も引かない。上級AIだけが
+    /// <c>EnemyAiCoefficients.AiInsideAttackProb</c> で有効にする（設計書11 §2・§4）。
+    /// </summary>
+    public double PitchTacticsInsideAttackProb { get; init; } = 0.0;
     /// <summary>守備側: 3ボール以上でゾーンに集める（ControlFirst）ボール数の下限。</summary>
     public int PitchTacticsControlFirstMinBalls { get; init; } = 3;
 

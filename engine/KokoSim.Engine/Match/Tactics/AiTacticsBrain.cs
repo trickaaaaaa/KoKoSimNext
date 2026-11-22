@@ -81,6 +81,8 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         var coreOk = optimal && _profile.TierRank >= _ai.PitchTacticsMinTier;
         var batting = coreOk ? d?.Batting : null;
         var policy = coreOk ? d?.Policy : null;
+        // 釣り球・内角攻め（設計書11 §2）は上級の引き出し。下位ティアは素の判断から落とす（PA頭の TierGateDefense と同じ関門）。
+        if (policy == PitchPolicy.InsideAttack && _profile.TierRank < _ai.InsidePolicyMinTier) policy = null;
         var gear = coreOk ? d?.Gear : null;
 
         // 盗塁（設計書12 §5「セオリー vs 意表」）: 正着を外すと（①）、無謀な盗塁に走ることがある
@@ -130,6 +132,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     {
         if (_profile.TierRank < _ai.TimeoutMinTier) return false;       // ②引き出しになければ使えない
         if (!_inner.CallOffenseTimeout(s, rng)) return false;
+        if (ShouldReserveTimeout(s.OffenseTimeoutsLeft, s.Inning)) return false;   // 上級は終盤のために取っておく
         return MathUtil.Chance(_optimalProb, rng);                       // ①使いどころを外すことがある
     }
 
@@ -137,6 +140,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     {
         if (_profile.TierRank < _ai.TimeoutMinTier) return false;
         if (!_inner.CallDefenseTimeout(s, rng)) return false;
+        if (ShouldReserveTimeout(s.DefenseTimeoutsLeft, s.Inning)) return false;
         // ③豪腕依存はマウンドへ行かず任せがち。
         if (_profile.Style == SchoolStyle.AceDependent
             && !MathUtil.Chance(_ai.AceDependentDefenseTimeoutKeepProb, rng))
@@ -145,6 +149,16 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         }
         return MathUtil.Chance(_optimalProb, rng);
     }
+
+    /// <summary>
+    /// 伝令の温存（設計書11 §4「残回数管理」・issue #1295）。上級（<see cref="EnemyAiCoefficients.TimeoutReserveMinTier"/> 以上）は
+    /// 残りが <see cref="EnemyAiCoefficients.TimeoutReserveKeep"/> 回以下になったら、終盤（<see cref="EnemyAiCoefficients.TimeoutReserveFromInning"/> 回）まで
+    /// 使わず取っておく。下位は残りがある限り使う＝序盤に使い切って終盤に残らない。
+    /// </summary>
+    private bool ShouldReserveTimeout(int timeoutsLeft, int inning)
+        => _profile.TierRank >= _ai.TimeoutReserveMinTier
+           && timeoutsLeft <= _ai.TimeoutReserveKeep
+           && inning < _ai.TimeoutReserveFromInning;
 
     // --- 選手交代（設計書09 §6, C-2）: ②ティアで運用可否、①能力値で好機を逃す ---
 
@@ -419,7 +433,8 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// ⑥b 相手校一律の交代 baseline（issue #1046・設計書11 §4）。StandardTacticsBrain 素の交代条件は
     /// 現実の高校野球より控えめ（強豪校だと代打候補が一人も出ない）なので、相手校だけ条件を現実並みへ
     /// 引き上げる＝代打はミート上限を上げ求める上積みを下げ、打力の総合・左右の相性・場面を評価に入れる。
-    /// 代走は回・走力上限・上積みを緩める。校風（<see cref="ApplyStyle"/>）・監督傾向はこの上にさらに掛かる。
+    /// 代走は回・走力上限・上積みを緩める。校風（<see cref="ApplyStyle"/>）・監督傾向はこの baseline の<b>下</b>に先に掛かる
+    /// （実際の順は <c>EnemyAiFactory</c>：監督傾向→校風→baseline。baseline が最後に上書きする）。
     /// StandardTacticsBrain 素（games_10k/tactics 帯）はこの baseline を通らないので不変。
     /// </summary>
     private static TacticsCoefficients ApplyAiBaseline(TacticsCoefficients b, EnemyAiCoefficients ai)
@@ -434,6 +449,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
             PinchRunFromInning = System.Math.Max(1, b.PinchRunFromInning - ai.AiPinchRunInningEarlier),
             PinchRunSpeedCeiling = b.PinchRunSpeedCeiling + ai.AiPinchRunSpeedCeilingRelax,
             PinchRunImprovement = System.Math.Max(1, b.PinchRunImprovement - ai.AiPinchRunImprovementRelax),
+            PitchTacticsInsideAttackProb = ai.AiInsideAttackProb,
         };
 
     private static TacticsCoefficients ApplyStyle(TacticsCoefficients b, SchoolStyle style, EnemyAiCoefficients ai)
