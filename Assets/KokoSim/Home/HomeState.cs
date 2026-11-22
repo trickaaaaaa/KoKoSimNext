@@ -875,6 +875,7 @@ namespace KokoSim.Unity.Home
                 var good = w.LeagueQualified ?? w.IsChampion;
                 var summary = w.LeagueQualified is { } q
                     ? w.Title + (q ? " 県大会進出" : " 敗退")
+                    : w.IsRegionalPlayoff ? w.Title + (w.IsChampion ? " 勝利！地区大会へ進出" : " 敗退")
                     : w.IsChampion ? w.Title + " 優勝！" : w.Title + " 敗退";
                 PushFeed(new List<FeedItem>
                 {
@@ -898,8 +899,9 @@ namespace KokoSim.Unity.Home
                 // 大会が消費した週ぶん共有週を進める（大会モードは既に抜けているのでここでは時計だけ）。
                 // 大会が消費した週数＝最終日がどの週に入るか（切り捨てで正しい: 18日目は開幕週+2週の
                 // 範囲 14〜20日に入る）。A案の日程（issue #583）で8ラウンド県18日＝2週・9ラウンド県21日＝3週。
-                var weeks = System.Math.Max(1, w.TournamentDay / 7);
-                KokoSim.Unity.Shell.GameClock.Advance(weeks);
+                // 出場校決定戦は1日きり＝続く地区大会が週を進めるので、ここでは進めない。
+                var weeks = w.IsRegionalPlayoff ? 0 : System.Math.Max(1, w.TournamentDay / 7);
+                if (weeks > 0) KokoSim.Unity.Shell.GameClock.Advance(weeks);
 
                 // 夏の県大会の直後は甲子園へ直接つなぐ（設計書05 §1.1a）。暦の開幕週を作ると
                 // 3年引退（第18週）と正面衝突して出場校の3年が甲子園の前に引退するため、ここでつなぐ。
@@ -915,7 +917,9 @@ namespace KokoSim.Unity.Home
                 // （設計書05 §1.5b。夏の甲子園と同じ理由＝暦の開幕週を作らない）。神宮大会の直後は
                 // センバツ32校を確定して控えるだけ（実際の遷移は選考発表週＝GameClock 側のフック）。
                 KokoSim.Unity.Shell.RegionalEntry.EnterAfterPrefectureTournament(w.Kind);
-                KokoSim.Unity.Shell.RegionalEntry.EnterJinguAfterRegionalTournament(w.Kind);
+                // 出場校決定戦（近畿の2026年〜）の直後は、勝てば地区大会へ・負ければ地区大会を観ずに神宮の判定へ。
+                if (!KokoSim.Unity.Shell.RegionalEntry.EnterRegionalAfterPlayoff(w.Kind, w.IsRegionalPlayoff, w.IsChampion))
+                    KokoSim.Unity.Shell.RegionalEntry.EnterJinguAfterRegionalTournament(w.Kind);
                 KokoSim.Unity.Shell.JinguEntry.EnterSenbatsuAfterJinguTournament(w.Kind);
             }
         }

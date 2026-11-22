@@ -59,6 +59,9 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public bool? LeagueQualified { get; set; }
 
+        /// <summary>地区大会の出場校決定戦（近畿の2026年〜）だったか。決定戦は暦の週を消費せず、勝てば続けて地区大会へ入る。</summary>
+        public bool IsRegionalPlayoff { get; set; }
+
         /// <summary>リーグ戦での自校のブロック番号（1始まり）と順位。リーグ戦でなければ 0（issue #1133）。</summary>
         public int LeagueBlockNumber { get; set; }
         public int LeagueRank { get; set; }
@@ -831,6 +834,7 @@ namespace KokoSim.Unity.Shell
             PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion, Kind)
             {
                 LeagueQualified = league?.ManagerQualified,
+                IsRegionalPlayoff = RegionalEntry.IsPlayoff(Kind, Field),
             };
             if (league != null && league.ManagerBlockIndex >= 0)
             {
@@ -943,7 +947,10 @@ namespace KokoSim.Unity.Shell
             }
             // 地区大会の優勝校＝自地区の明治神宮大会代表。自校が地区大会に出場した年だけここを通る
             // （出場しなかった年は RegionalEntry が同期解決した結果を JinguEntry へ直接渡す）。
-            if (kind == TournamentKind.Regional)
+            // 出場校決定戦（2校の一発勝負）は地区大会の順位でも歴代大会結果の1行でもない＝積まない
+            // （勝てば続く地区大会の行が、その年の1行になる）。
+            var isRegionalPlayoff = RegionalEntry.IsPlayoff(kind, Field);
+            if (kind == TournamentKind.Regional && !isRegionalPlayoff)
             {
                 LastRegionalChampionId = champion?.Id;
                 var byId = (System.Func<int, School>)(id => id == NationService.ManagerSchoolId
@@ -960,7 +967,7 @@ namespace KokoSim.Unity.Shell
             // （個人成績は Stats.FoldMatch 側で別途積まれるので、ここで捨てても打率等は失われない）。
             var managerPlayed = false;
             foreach (var m in matches) if (m.ManagerInvolved) { managerPlayed = true; break; }
-            if (managerPlayed && kind != TournamentKind.AutumnDistrict)
+            if (managerPlayed && kind != TournamentKind.AutumnDistrict && !isRegionalPlayoff)
                 // 当時の本拠県を行へ焼く（issue #1112）。転任で県を跨いでも、歴代大会結果の大会名は
                 // 「いまの本拠県」で書き換わらない。
                 History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion, NationService.PrefectureId);

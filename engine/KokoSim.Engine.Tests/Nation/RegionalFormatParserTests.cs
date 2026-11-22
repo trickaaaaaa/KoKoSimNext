@@ -33,6 +33,13 @@ public sealed class RegionalFormatParserTests
             Assert.Equal(expected.OddYearBerths, actual.OddYearBerths);
             Assert.Equal(expected.EvenYearBerths, actual.EvenYearBerths);
             Assert.Equal(expected.HostByYear, actual.HostByYear);
+            Assert.Equal(expected.Playoff is null, actual.Playoff is null);
+            if (expected.Playoff is { } ep)
+            {
+                Assert.Equal(ep.FromYear, actual.Playoff!.FromYear);
+                Assert.Equal(ep.CandidateRank, actual.Playoff.CandidateRank);
+                Assert.Equal(ep.BerthsPerPref, actual.Playoff.BerthsPerPref);
+            }
         }
     }
 
@@ -99,6 +106,38 @@ regions:
         Assert.Equal(2, kinki.EvenYearBerths!["shiga"]);
         Assert.Equal(3, kinki.BerthsFor("shiga", 2025)); // 奇数年
         Assert.Equal(2, kinki.BerthsFor("shiga", 2026)); // 偶数年
+        Assert.Null(kinki.Playoff);
+    }
+
+    [Fact]
+    public void Parse_PlayoffBlock_FromRawYaml()
+    {
+        const string yaml = @"
+regions:
+  - region: kinki
+    fixed: { osaka: 3, hyogo: 3 }
+    biennial_rotation:
+      odd_year:  { shiga: 3, nara: 3 }
+      even_year: { shiga: 2, nara: 2 }
+    playoff:                 # 2026年から
+      from_year: 2026
+      candidate_rank: 3
+      berths_per_pref: { shiga: 2, nara: 2 }
+    host_prefecture_bonus: false
+    champion_to_jingu: true
+  - region: tohoku
+    berths_per_pref: { aomori: 3 }
+";
+        var set = RegionalFormatParser.Parse(yaml);
+        var kinki = set.ForRegion("kinki")!;
+        Assert.Equal(2026, kinki.Playoff!.FromYear);
+        Assert.Equal(3, kinki.Playoff.CandidateRank);
+        Assert.Equal(2, kinki.Playoff.BerthsPerPref["nara"]);
+        Assert.Equal(3, kinki.BerthsFor("nara", 2025));  // 決定戦の前は隔年制
+        Assert.Equal(2, kinki.BerthsFor("nara", 2027));  // 決定戦の年は各2校
+        Assert.Equal(2, kinki.PlayoffCandidateIndex("nara", 2027));
+        Assert.Null(set.ForRegion("tohoku")!.Playoff);
+        Assert.Equal(3, set.ForRegion("tohoku")!.BerthsFor("aomori", 2027));
     }
 }
 
@@ -135,6 +174,24 @@ public sealed class RegionalFormatHostRotationTests
                 Assert.Equal(fmt.BerthsPerPref[host] + 1, fmt.BerthsFor(host, year));
             }
         }
+    }
+
+    [Fact]
+    public void Shikoku_HostIsEhimeIn2025AndKagawaIn2026()
+    {
+        var shikoku = Region("shikoku");
+        Assert.Equal("ehime", shikoku.HostFor(2025));   // 2025年の四国大会は愛媛開催（issue #1290）
+        Assert.Equal("kagawa", shikoku.HostFor(2026));
+    }
+
+    [Fact]
+    public void Hyogo_DistrictNamesHaveNoNonexistentEastWestHarima()
+    {
+        var hyogo = KokoSim.Config.PrefFormatLoader.LoadFromFile(
+            Balance.BalanceRegressionTests.FindDataFile("pref-formats/hyogo.yaml"));
+        Assert.Equal(5, hyogo.Districts.Count);
+        Assert.DoesNotContain("東西播", hyogo.Districts);
+        Assert.Contains("西播", hyogo.Districts);
     }
 
     [Fact]
