@@ -448,6 +448,7 @@ namespace KokoSim.EditorTools
         {
             for (var go = GameObject.Find(RootName); go != null; go = GameObject.Find(RootName))
                 Object.DestroyImmediate(go);
+            DuelMotionSpike.ReleaseBodyMaterials();
             var cam = GameObject.Find("~DuelCatalogCamera");
             if (cam != null) Object.DestroyImmediate(cam);
         }

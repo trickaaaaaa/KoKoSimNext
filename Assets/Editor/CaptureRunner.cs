@@ -22,6 +22,8 @@ namespace KokoSim.UnityEditorTools
                 return "Play 中は始めない（止めてから呼ぶ。遊んでいる最中かもしれない）";
             if (EditorApplication.isCompiling)
                 return "コンパイル中。終わってから呼ぶ";
+            if (EditorUtility.scriptCompilationFailed)
+                return "コンパイルエラーがあり Play に入れない。直してから呼ぶ";
             if (ids == null || ids.Length == 0) return "レシピの id を渡す";
             var errors = new List<string>();
             var all = CaptureRecipes.Load(errors);
@@ -39,6 +41,11 @@ namespace KokoSim.UnityEditorTools
 
             RecipeShooter.Arm(ids);
             EditorApplication.EnterPlaymode();
+            if (!EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                RecipeShooter.Disarm();   // 予約を残すと、後で手で Play したときに撮影が勝手に始まり Play を抜ける
+                return "Play に入れなかった（撮影の予約は取り消した）";
+            }
             return "開始: " + string.Join(", ", ids) + "（終わると " + RecipeShooter.RunMarkerPath + " ができる）";
         }
 

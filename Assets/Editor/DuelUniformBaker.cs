@@ -30,6 +30,11 @@ namespace KokoSim.EditorTools
             sb.AppendLine(Bake("Body_Uniform_Slim2", KokoSim.Unity.Match.DuelUniformMeshBuilder.Slim2()));
             sb.AppendLine(Bake("Body_Uniform_Stout", KokoSim.Unity.Match.DuelUniformMeshBuilder.Stout()));
             AssetDatabase.SaveAssets();
+            // 作り直すと GUID が変わりうる。ビルド同梱の索引（F8）が既にあれば焼き直す
+            // （古い GUID のままだと Player ビルドでだけ着衣メッシュが外れる）。
+            if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(
+                    "Assets/KokoSim/Resources/" + KokoSim.Unity.Match.DuelAssetCatalog.ResourceName + ".asset") != null)
+                KokoSim.UnityEditorTools.DuelAssetCatalogBaker.Bake();
             return sb.ToString();
         }
 
