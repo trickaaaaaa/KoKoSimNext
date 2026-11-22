@@ -371,7 +371,9 @@ public static class PlaybackEvaluator
         foreach (var s in r.Segs)
         {
             if (t < s.T0) return pos;
-            var u = Math.Min(1, (t - s.T0) / (s.T1 - s.T0));
+            // 長さ0のレッグ（T1==T0）は t==T0 で 0/0＝NaN になる＝瞬間移動として終点へ置く
+            var span = s.T1 - s.T0;
+            var u = span > 0 ? Math.Min(1, (t - s.T0) / span) : 1;
             pos = new PlaybackVec(s.From.X + (s.To.X - s.From.X) * u, s.From.Y + (s.To.Y - s.From.Y) * u);
         }
         return pos;

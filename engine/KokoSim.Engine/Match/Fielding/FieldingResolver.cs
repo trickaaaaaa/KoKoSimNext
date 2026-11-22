@@ -784,16 +784,24 @@ public static class FieldingResolver
     }
 
     /// <summary>
+    /// 内野の通過走査（<see cref="InfielderCanCutOff"/>／<see cref="FindClosestInfielderMiss"/>）の反復上限。
+    /// 打球が内野に止まる・NaN になる等で「内野を出た」に届かない経路でも必ず終わらせる安全弁
+    /// （過去の CameraPlan 無限ループと同型）。刻み0.005s でも100秒ぶん＝実在の打球は届かない値。
+    /// </summary>
+    private const int MaxInterceptScanSteps = 20_000;
+
+    /// <summary>
     /// いずれかの内野手が、打球が内野の外縁を越える前に守備範囲（横の半径＋グラブの届く高さ）で
     /// 打球のライン上を捕えられるか（Issue #63 やること2の判定）。乱数は消費しない＝決定論。
     /// 捕えられない＝ホールを抜く／頭上を越すほど強い打球のときだけ内野を抜けたと判定する。
     /// </summary>
-    private static bool InfielderCanCutOff(
+    internal static bool InfielderCanCutOff(
         IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
     {
         var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
         var radius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
-        for (var t = path.HangTimeSeconds; ; t += step)
+        var t = path.HangTimeSeconds;
+        for (var i = 0; i < MaxInterceptScanSteps; i++, t += step)
         {
             var p = path.PositionAt(t);
             if (Math.Sqrt(p.X * p.X + p.Z * p.Z) > coeff.InfieldDepthM) return false; // 内野を出た
@@ -808,6 +816,7 @@ public static class FieldingResolver
                 }
             }
         }
+        return false; // 走査上限まで内野に止まったまま誰も届かない（想定外）＝捕えられない扱い
     }
 
     /// <summary>
@@ -816,7 +825,7 @@ public static class FieldingResolver
     /// 同じ経路・同じ式（守備範囲半径込みの到達可否）を辿るだけの副産物で、判定・帯には一切使わない。
     /// 乱数は消費しない（決定論）。誰も打球の高さ帯を通らない（想定外）場合のみ null。
     /// </summary>
-    private static (Fielder Fielder, Vector3D Point)? FindClosestInfielderMiss(
+    internal static (Fielder Fielder, Vector3D Point)? FindClosestInfielderMiss(
         IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
     {
         var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
@@ -824,7 +833,8 @@ public static class FieldingResolver
         Fielder? best = null;
         var bestPoint = default(Vector3D);
         var bestShortfall = double.PositiveInfinity;
-        for (var t = path.HangTimeSeconds; ; t += step)
+        var t = path.HangTimeSeconds;
+        for (var i = 0; i < MaxInterceptScanSteps; i++, t += step)
         {
             var p = path.PositionAt(t);
             if (Math.Sqrt(p.X * p.X + p.Z * p.Z) > coeff.InfieldDepthM) break; // 内野を出た
