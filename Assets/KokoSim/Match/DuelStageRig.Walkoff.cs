@@ -493,16 +493,7 @@ namespace KokoSim.Unity.Match
         private void TickWalkoffScene(float deltaTime)
         {
             AdvanceRattledFx(deltaTime);   // 再生の無いサヨナラ（押し出し等）で動揺の渦巻きが凍らない
-            _acc += deltaTime;
-            float step = 1f / PoseFps;
-            _woPosedThisTick = false;
-            while (_acc >= step)
-            {
-                _acc -= step;
-                foreach (var a in _actors) StepActor(a, step);
-                _poseGen++;
-                _woPosedThisTick = true;
-            }
+            _woPosedThisTick = StepPoseQuantum(deltaTime);
             _woT += deltaTime;
             StepWalkoffScene(deltaTime);
         }

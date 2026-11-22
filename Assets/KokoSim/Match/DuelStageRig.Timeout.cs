@@ -281,16 +281,7 @@ namespace KokoSim.Unity.Match
         private void TickTimeoutScene(float deltaTime)
         {
             AdvanceRattledFx(deltaTime);   // 伝令で動揺が解けた渦巻きは場面の中で消えていく（issue #1178）
-            _acc += deltaTime;
-            float step = 1f / PoseFps;
-            bool posed = false;
-            while (_acc >= step)
-            {
-                _acc -= step;
-                foreach (var a in _actors) StepActor(a, step);
-                _poseGen++;
-                posed = true;
-            }
+            bool posed = StepPoseQuantum(deltaTime);
             StepTimeoutScene(deltaTime);
             StepOffenseTimeoutScene(deltaTime, posed);   // 攻撃伝令の場面（issue #1175）
         }
