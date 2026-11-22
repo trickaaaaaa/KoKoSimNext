@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Unity.Home;
 using KokoSim.Unity.Shell;
 using UnityEngine;
@@ -158,6 +159,9 @@ namespace KokoSim.Unity.Debugging
                     case "advance_weeks": return AdvanceWeeks(s);
                     case "advance_days": return AdvanceDays(s);
                     case "advance_to_match_day": return AdvanceToMatchDay(s);
+                    case "play_tournament": return PlayTournament(s);
+                    case "advance_to_week": return AdvanceToWeek(s);
+                    case "boost_roster": return BoostRoster(s);
                     case "show": return Show(s);
                     case "click": return Press(s, submit: false);
                     case "submit": return Press(s, submit: true);
@@ -214,6 +218,7 @@ namespace KokoSim.Unity.Debugging
                     HomeState.Current.AdvanceWeek();
                     yield return null;
                     while (BackgroundGameOp.Running) yield return null;
+                    SettlePending();
                 }
                 _notes.Add($"advance_weeks: {done} 週 → 第{GameClock.Week}週");
             }
@@ -247,6 +252,170 @@ namespace KokoSim.Unity.Debugging
                 }
                 if (!GameSession.Current.ReachedMatchDay) { Fail(s, "60日送っても試合の日にならない"); yield break; }
                 _notes.Add($"advance_to_match_day: {days} 日");
+            }
+
+            /// <summary>
+            /// いまの大会を最後まで消化する（勝ち進んだ先・続けて開幕する大会も含め、大会中でなくなるまで）。
+            /// 自校の試合は本番と同じ経路で解く＝試合の日まで日送り → BeginMatch → 委任で最後まで → CompleteMatch →
+            /// 結果を閉じる（DismissResult）。成績・通知・大会の後始末が本番どおりに残る。
+            /// </summary>
+            private IEnumerator PlayTournament(ScreenStep s)
+            {
+                if (HomeState.Current == null) { Fail(s, "進行が無い（先に new_game）"); yield break; }
+                if (!GameSession.Current.InTournament) { Fail(s, "大会中でない（advance_weeks で大会の週まで進める）"); yield break; }
+                foreach (var x in PlayWhileInTournament(s)) yield return x;
+            }
+
+            /// <summary>
+            /// 途中の大会を消化しながら、指定の週まで進める。値: 39 か {week: 39, year: 2}（year は 1 始まりの年度・省略＝今の年度）。
+            /// 大会に入ったら <see cref="PlayTournament"/> と同じく自校の試合を解いて進む。
+            /// </summary>
+            private IEnumerator AdvanceToWeek(ScreenStep s)
+            {
+                if (HomeState.Current == null) { Fail(s, "進行が無い（先に new_game）"); yield break; }
+                int week, year = GameClock.YearIndex;
+                if (s.Map != null)
+                {
+                    if (!s.Map.TryGetValue("week", out var w) || !int.TryParse(w, out week)) { Fail(s, "week が無いか数でない"); yield break; }
+                    if (s.Map.TryGetValue("year", out var y) && !int.TryParse(y, out year)) { Fail(s, "year が数でない"); yield break; }
+                }
+                else if (!int.TryParse(s.Arg, out week)) { Fail(s, "週を数で（{week: 39, year: 2} も可）"); yield break; }
+                if (Before(year, week, GameClock.YearIndex, GameClock.Week)) { Fail(s, $"もう過ぎている（いま {GameClock.YearIndex}年度 第{GameClock.Week}週）"); yield break; }
+
+                int guard = 0;
+                while (Before(GameClock.YearIndex, GameClock.Week, year, week) && guard++ < 5000)
+                {
+                    if (GameSession.Current.InTournament)
+                    {
+                        foreach (var x in PlayWhileInTournament(s)) yield return x;
+                        if (_failed) yield break;
+                        continue;
+                    }
+                    HomeState.Current.AdvanceWeek();
+                    yield return null;
+                    while (BackgroundGameOp.Running) yield return null;
+                    SettlePending();
+                }
+                if (Before(GameClock.YearIndex, GameClock.Week, year, week)) { Fail(s, "進みきらなかった"); yield break; }
+                _notes.Add($"advance_to_week: {GameClock.YearIndex}年度 第{GameClock.Week}週");
+            }
+
+            /// <summary>
+            /// 週送りの途中でホームが順に出す「答え待ち」に、本番の既定どおり答える（プレイヤーが既定のまま決定を押すのと同じ）。
+            /// 新チームの主将（暫定主将＝画面の初期選択、無ければ候補の先頭）／背番号の振り直し（既定のまま確定）／
+            /// 年契約の更新（いまの段のまま確定）／転任の打診（残留。強制転任なら最初の候補）。
+            /// 答えずに進めると、ホームが答え待ちの画面を出し続けて別の画面を開けない（大会タブを開いてもホームへ戻される）。
+            /// </summary>
+            private void SettlePending()
+            {
+                if (NewTeamService.Pending)
+                {
+                    var view = NewTeamService.BuildView();
+                    int pick = -1;
+                    foreach (var c in view.Candidates) if (c.IsInterim) pick = c.ActiveIndex;
+                    if (pick < 0 && view.Candidates.Count > 0) pick = view.Candidates[0].ActiveIndex;
+                    if (pick >= 0 && NewTeamService.Confirm(pick)) _notes.Add($"自動: 新チームの主将を指名（{GameClock.YearIndex}年度 第{GameClock.Week}週）");
+                    else { NewTeamService.Skip(); _notes.Add("自動: 主将の指名を見送った"); }
+                }
+                if (UniformNumberService.Pending)
+                {
+                    UniformNumberService.Confirm();
+                    _notes.Add($"自動: 背番号を既定のまま確定（第{GameClock.Week}週）");
+                }
+                if (ContractRenewalService.Pending)
+                {
+                    ContractRenewalService.Confirm();
+                    _notes.Add($"自動: 年契約をいまの段のまま更新（第{GameClock.Week}週）");
+                }
+                if (ManagerTransferService.Pending)
+                {
+                    if (ManagerTransferService.Confirm(null)) _notes.Add("自動: 転任の打診は残留");
+                    else
+                    {
+                        int? first = null;
+                        foreach (var c in ManagerTransferService.BuildView().Rows) if (c.SchoolId != null) { first = c.SchoolId; break; }
+                        ManagerTransferService.Confirm(first);
+                        _notes.Add("自動: 強制転任で最初の候補へ");
+                    }
+                }
+            }
+
+            private static bool Before(int y1, int w1, int y2, int w2) => y1 < y2 || (y1 == y2 && w1 < w2);
+
+            private IEnumerable PlayWhileInTournament(ScreenStep s)
+            {
+                int matches = 0;
+                while (GameSession.Current.InTournament && matches < 60)
+                {
+                    HomeState.Current.ConsumeBanner();
+                    int days = 0;
+                    while (GameSession.Current.InTournament && !GameSession.Current.ReachedMatchDay && days < 60)
+                    {
+                        HomeState.Current.AdvanceDay();
+                        days++;
+                        yield return null;
+                        while (BackgroundGameOp.Running) yield return null;
+                    }
+                    if (!GameSession.Current.InTournament) break;
+                    if (!GameSession.Current.ReachedMatchDay) { Fail(s, "60日送っても試合の日にならない"); yield break; }
+
+                    while (BackgroundGameOp.Running) yield return null;
+                    LivePlayerMatch live = null;
+                    bool begun = false;
+                    if (!BackgroundGameOp.Run(() => live = HomeState.Current.BeginMatch(), () => begun = true))
+                    { Fail(s, "試合の準備を始められなかった"); yield break; }
+                    while (!begun) yield return null;
+                    if (live == null) { Fail(s, "試合の準備に失敗した（コンソールの例外を見る）"); yield break; }
+
+                    var result = live.Progression.SkipDelegateToAi(live.ManagerIsAway, ManagerService.TacticalSenseForAi);
+                    PlayerMatchOutcome outcome = null;
+                    bool completed = false;
+                    if (!BackgroundGameOp.Run(() => outcome = HomeState.Current.CompleteMatch(result), () => completed = true))
+                    { Fail(s, "試合後処理を始められなかった"); yield break; }
+                    while (!completed) yield return null;
+                    if (outcome != null)
+                        _notes.Add($"試合: {outcome.RoundName} {live.OpponentName} {outcome.ManagerScore}-{outcome.OpponentScore} "
+                                   + (outcome.ManagerWon ? (outcome.IsChampion ? "優勝" : "勝ち") : "負け"));
+
+                    // 結果画面を閉じる（本番は OnResultOk が背景で DismissResult を回す。大会の後始末・週送りを伴う）
+                    bool dismissed = false;
+                    if (!BackgroundGameOp.Run(() => HomeState.Current.DismissResult(), () => dismissed = true))
+                    { Fail(s, "結果を閉じられなかった"); yield break; }
+                    while (!dismissed) yield return null;
+                    float idle = 0f;
+                    while ((BackgroundGameOp.Running || NationBackgroundSim.Running) && idle < 600f)
+                    {
+                        idle += Time.unscaledDeltaTime;
+                        yield return null;
+                    }
+                    SettlePending();
+                    matches++;
+                }
+                if (GameSession.Current.InTournament) Fail(s, "60試合でも大会が終わらない");
+            }
+
+            /// <summary>自校の部員の全能力を上げて勝ち進ませる（センバツ・甲子園まで行く分岐を見る用）。値: 95 か {level: 95, cap: 99}。</summary>
+            private IEnumerator BoostRoster(ScreenStep s)
+            {
+                int level, cap = 99;
+                if (s.Map != null)
+                {
+                    if (!s.Map.TryGetValue("level", out var l) || !int.TryParse(l, out level)) { Fail(s, "level が無いか数でない"); yield break; }
+                    if (s.Map.TryGetValue("cap", out var c) && !int.TryParse(c, out cap)) { Fail(s, "cap が数でない"); yield break; }
+                }
+                else if (!int.TryParse(s.Arg, out level)) { Fail(s, "能力の値を数で"); yield break; }
+                foreach (var p in RosterService.Roster)
+                {
+                    foreach (var k in KokoSim.Engine.Season.AbilityKinds.All)
+                    {
+                        p.SetCap(k, cap);
+                        p.SetLevel(k, level);
+                    }
+                    p.Mental = System.Math.Min(95, level);
+                    p.ConditionValue = 1.0;
+                }
+                _notes.Add($"boost_roster: 全員の能力 {level}（上限 {cap}）");
+                yield return null;
             }
 
             // ---- 画面を開く・押す ----

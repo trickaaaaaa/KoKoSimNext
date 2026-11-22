@@ -20,6 +20,12 @@
 #   advance_weeks: 3    週を送る（ホームの「次の週へ」と同じ経路）。大会に入ったらそこで止める
 #   advance_days: 2     日を送る（大会中）
 #   advance_to_match_day: ""   大会中に自校の次の試合の日まで日を送る
+#   play_tournament: ""        いまの大会を最後まで消化（試合の日まで日送り→試合は委任で解く→結果を閉じる、を繰り返す。
+#                       続けて開幕する大会も含む）。成績・通知・大会の後始末は本番どおりに残る
+#                       週送り・大会の途中で出る答え待ち（新チームの主将・背番号・年契約の更新・転任の打診）には
+#                       本番の既定どおり自動で答える（主将＝暫定主将／背番号・契約＝そのまま確定／転任＝残留）。summary の notes に残る
+#   advance_to_week: 39 | {week: 39, year: 2}   途中の大会を消化しながら指定の週まで進める（year は1始まりの年度・週は 0〜49）
+#   boost_roster: 95 | {level: 95, cap: 99}     自校の部員の全能力を上げる（勝ち進む分岐を見る用）
 #   show: ManagementScreen     画面を開く（GameObject 名＝ScreenRouter の画面名）
 #   click: name | .class[添字]   押す（ClickEvent。Button なら自動で決定キーと同じ NavigationSubmitEvent）
 #   submit: name               決定キーで押す
@@ -121,3 +127,30 @@ screens:
       - show: HomeDashboard
       - read: weather-label
       - shot: 02-match-day
+
+  - id: innings-thirds-1279
+    name: "投球回の 1/3・2/3 の組み方（夏の県大会を消化した後のホームと選手詳細の成績・PR #1370・issue #1279 項目4）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_weeks: 13
+      - play_tournament: ""
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - shot: 01-home-ranking
+      - show: PlayerList
+      - click: tab-stats-btn
+      - shot: 02-player-stats
+
+  - id: senbatsu-watch-1265
+    name: "観るだけのセンバツが大会タブと通知フィードに出る（PR #1365・issue #1265）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: 40
+      - call: EventService.Clear()
+      - show: TournamentPreview
+      - shot: 01-tournament-tab-week40
+      - advance_to_week: 47
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - read: feed-list
+      - shot: 02-home-feed-week47
