@@ -93,7 +93,7 @@ public static class ThrowScatterAssigner
 
     /// <summary>
     /// 打球の打席で判定が引いた送球を、判定の順に並べる。走者へのプレー（<see cref="Game.RunnerMove.ThrowScatter"/>）・
-    /// 一塁への転送（<see cref="Game.RunnerMove.RelayThrowScatter"/>）を先に、内野ゴロの一塁送球
+    /// 転送（<see cref="Game.RunnerMove.RelayThrowScatter"/>。一塁手の自己フォース→二塁タッチだけ二塁行き・他は一塁行き）を先に、内野ゴロの一塁送球
     /// （<see cref="FieldingPlay.FirstThrowScatter"/>）を最後に置く（併殺では一塁送球の代わりに転送が一塁へ行く）。
     /// </summary>
     public static List<JudgedThrow> FromBattedBall(FieldingPlay? play, IEnumerable<Game.RunnerMove> moves)
@@ -102,7 +102,8 @@ public static class ThrowScatterAssigner
         foreach (var m in moves)
         {
             if (m.ThrowScatter is { } s) list.Add(new JudgedThrow(Math.Min(m.ToBase, 4), s));
-            if (m.RelayThrowScatter is { } r) list.Add(new JudgedThrow(1, r));
+            // 一塁手の自己フォース→二塁タッチの転送は一塁→二塁（それ以外の転送は一塁行き）。
+            if (m.RelayThrowScatter is { } r) list.Add(new JudgedThrow(m.FirstBaseSelfForceTag ? 2 : 1, r));
         }
         if (play?.FirstThrowScatter is { } f) list.Add(new JudgedThrow(1, f));
         return list;
