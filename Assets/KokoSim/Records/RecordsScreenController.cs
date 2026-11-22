@@ -342,7 +342,7 @@ namespace KokoSim.Unity.Records
         {
             var map = new Dictionary<int, string>();
             foreach (var p in RosterService.Roster) map[p.Id] = p.Name;
-            foreach (var p in RosterService.Graduated) map[p.Id] = p.Name;
+            foreach (var e in RosterService.Graduated.Entries) map[e.Id] = e.Name;
             return map;
         }
 

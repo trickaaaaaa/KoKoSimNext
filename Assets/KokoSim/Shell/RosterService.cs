@@ -65,7 +65,7 @@ namespace KokoSim.Unity.Shell
         private static bool _newSchool;
 
         private static List<DevelopingPlayer> _roster;
-        private static List<DevelopingPlayer> _graduates;
+        private static GraduateRoll _graduates;
         // 新入生へ振る安定ID（成績集計の帰属キー）の次の値。単調増加＝既存・卒業生の Id と衝突しない（issue #535）。
         private static int _nextId;
 
@@ -78,10 +78,11 @@ namespace KokoSim.Unity.Shell
         public static IReadOnlyList<DevelopingPlayer> Roster => _roster ??= Build(_rosterSeed, _rosterTalentCenterOverride);
 
         /// <summary>
-        /// 卒業してロスターを外れた選手（年度替わりで Grade&gt;3 になり除去された者）。成績の名前解決
-        /// （<see cref="TeamStatsService"/> の NameIndex）で当時の氏名を引くために退避しておく単一ソース（issue #535）。
+        /// 卒業してロスターを外れた選手の名前の表（年度替わりで Grade&gt;3 になり除去された者）。成績の名前解決
+        /// （記録画面の個人記録）で当時の氏名を引くための単一ソース（issue #535）。選手データ本体は持たず
+        /// ID・名前・入学/卒業年度だけを残す（issue #1414・本体を持ち続けるとセーブが際限なく重くなる）。
         /// </summary>
-        public static IReadOnlyList<DevelopingPlayer> Graduated
+        public static GraduateRoll Graduated
         {
             get { _ = Roster; return _graduates; }
         }
@@ -133,32 +134,30 @@ namespace KokoSim.Unity.Shell
                 ProspectService.MarkJoined(rollover.Newcomers);
                 GameClock.ProspectJoined = true;   // ホームが通知フィードへ流す（遷移とUI提示の分離）
             }
-            _graduates.AddRange(rollover.Graduated);   // 卒業生を退避（名前解決に使う）。
+            _graduates.AddGraduated(rollover.Graduated, newYearIndex);   // 卒業生は名前の表へ（本体は捨てる）。
 
             // 卒業・引退で空いた背番号を、在籍部員（新入生含むベンチ外）へ小さい番号から詰める
             // （#531 と同型・既存割当は壊さない非破壊。監督はメンバー設定画面で後から自由に振り直せる）。
             UniformNumberAssigner.FillVacancies(RosterLifecycle.Active(_roster));
         }
 
-        /// <summary>セーブ保存: 現在の共有ロスター＋退避済み卒業生を DTO へ写す（issue #507 / #535）。
-        /// 卒業生（Grade&gt;3）も同じリストに載せ、復元時に学年で振り分ける（名前解決を保つため）。</summary>
+        /// <summary>セーブ保存: 現在の共有ロスターと卒業生の名前の表を DTO へ写す（issue #507 / #535 / #1414）。</summary>
         public static void Capture(KokoSim.Engine.Saves.SaveState s)
         {
             _ = Roster;
-            var all = new List<DevelopingPlayer>(_roster);
-            all.AddRange(_graduates);
-            s.Roster = all;
+            s.Roster = new List<DevelopingPlayer>(_roster);
+            s.Graduates = _graduates;
             s.NextPlayerId = _nextId;   // 採番の続き（issue #644。転任後はロスターの最大Idより大きい）
         }
 
-        /// <summary>セーブ復元: 保存したロスターを在籍（Grade≤3）と卒業生（Grade&gt;3）へ振り分けて据える。
-        /// 背番号・成長・怪我・引退フラグを丸ごと持ち越し、安定 Id カウンタも再開する（保存した続き番号・
-        /// ロスター・成績ストアの最大Idのうち大きい方の次から。issue #644）。</summary>
+        /// <summary>セーブ復元: 保存したロスターと卒業生の名前の表を据える（旧版の卒業生本体は読み込み時に
+        /// engine が表へ変換済み・issue #1414）。背番号・成長・怪我・引退フラグを丸ごと持ち越し、安定 Id カウンタも
+        /// 再開する（保存した続き番号・ロスター・卒業生の表・成績ストアの最大Idのうち大きい方の次から。issue #644）。</summary>
         public static void Restore(KokoSim.Engine.Saves.SaveState s)
         {
-            _roster = s.Roster.Where(p => p.Grade <= 3).ToList();
-            _graduates = s.Roster.Where(p => p.Grade > 3).ToList();
-            _nextId = PlayerIdCounter.Resume(s.NextPlayerId, s.Roster, s.Stats);
+            _roster = s.Roster.ToList();
+            _graduates = s.Graduates;
+            _nextId = PlayerIdCounter.Resume(s.NextPlayerId, s.Roster, s.Stats, s.Graduates);
         }
 
         /// <summary>新規ゲームの完全リセット: 次アクセスで既定シード（42）から再生成させる。</summary>
@@ -233,7 +232,7 @@ namespace KokoSim.Unity.Shell
         public static void AdoptTransferRoster(List<DevelopingPlayer> roster, int nextId)
         {
             _roster = roster;
-            _graduates = new List<DevelopingPlayer>();
+            _graduates = new GraduateRoll();
             _nextId = nextId;
             // 転任先の部員はAI校の選手から作り直したもの＝推移はここから始まる（issue #1027）。
             AbilityHistory.EnsureStarted(_roster, GameClock.Week);
@@ -267,7 +266,7 @@ namespace KokoSim.Unity.Shell
             // 成績集計の帰属キー（安定ID）を連番付与。生成順＝安定順なので決定論（乱数不使用）。
             // 新規ゲーム（_nextId=0）は 1 から、転任後は旧校で使った Id の続きから振る（issue #535 / #644）。
             _nextId = PlayerIdCounter.AssignSequential(list, _nextId);
-            _graduates = new List<DevelopingPlayer>();  // 卒業生の退避先（初期は空）。
+            _graduates = new GraduateRoll();  // 卒業生の名前の表（初期は空）。
 
             UniformNumberAssigner.AutoAssign(list);   // 初期背番号を能力順で仮割当（プレイヤーが後で編集）
 

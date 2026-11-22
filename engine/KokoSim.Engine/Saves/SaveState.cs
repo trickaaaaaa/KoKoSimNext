@@ -42,6 +42,13 @@ public sealed class SaveState
     public List<DevelopingPlayer> Roster { get; set; } = new();
 
     /// <summary>
+    /// 卒業生の名前の表（v41・issue #1414）。<see cref="Roster"/> には在籍（引退済みの3年を含む）だけが載り、
+    /// 卒業生は選手データ本体を持たずここへ「ID・名前・入学/卒業年度」だけ残す。v40 以前のセーブが
+    /// <see cref="Roster"/> に抱えていた卒業生（Grade&gt;3）は読み込み時にここへ移される。
+    /// </summary>
+    public GraduateRoll Graduates { get; set; } = new();
+
+    /// <summary>
     /// 自校選手の安定IDの続き番号（issue #644）。0＝未保存（この項目より前のセーブ）＝復元側がロスターと
     /// 成績ストアの最大IDから推定する（<see cref="Season.PlayerIdCounter.Resume"/>）。
     /// </summary>
