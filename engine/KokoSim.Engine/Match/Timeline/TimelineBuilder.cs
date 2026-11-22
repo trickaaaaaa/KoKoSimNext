@@ -439,7 +439,7 @@ public static class TimelineBuilder
                          && play.ErrorKind != FieldingErrorKind.Bobble && play.ErrorKind != FieldingErrorKind.Receive)
                 {
                     // 捕球エラー（お手玉。issue #439）: 送球は存在しない。打球の進行方向へ数m弾く絵。
-                    // アンアシスト中の悪送球（実質起こらない縁ケース）もここへ落とす＝刺殺の絵は描かない。
+                    // アンアシスト刺殺（3U）には悪送球が起きない（issue #1260）ので、ここへ落ちる悪送球は無い。
                     // FromRole は「弾いた野手」＝頭上のびっくりマーク（3D）が対象を特定するのに使う。
                     var rest = Overshoot(Home, fieldPoint, ErrorDeflectM);
                     ball.Add(new BallSegment
