@@ -243,6 +243,29 @@ public sealed class TrainingPlanTests
         Assert.Contains(TrainingMenu.Defense, menus);
     }
 
+    // issue #1224: お任せは休養枠を持たず、配分合計が budget ちょうどになる（配分バーに空白が出ない）。
+    [Theory]
+    [InlineData(TrainingPreset.PitcherAuto)]
+    [InlineData(TrainingPreset.BatterAuto)]
+    [InlineData(TrainingPreset.Balanced)]
+    [InlineData(TrainingPreset.DefenseFocus)]
+    [InlineData(TrainingPreset.AceDevelopment)]
+    [InlineData(TrainingPreset.SluggerDevelopment)]
+    public void Presets_FillBudgetExactly_WithoutRest(TrainingPreset preset)
+    {
+        foreach (var budget in new[] { 300, 250, 400 })
+        {
+            var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = preset }, budget);
+            var total = 0;
+            foreach (var a in alloc)
+            {
+                Assert.NotEqual(TrainingMenu.Rest, a.Menu);
+                total += a.Minutes;
+            }
+            Assert.Equal(budget, total);
+        }
+    }
+
     [Fact]
     public void PitcherAuto_UsesOnlyPitcherMenus()
     {
@@ -250,7 +273,7 @@ public sealed class TrainingPlanTests
         var allowed = new HashSet<TrainingMenu>
         {
             TrainingMenu.Pitching, TrainingMenu.BreakingBall, TrainingMenu.Running,
-            TrainingMenu.VelocityTraining, TrainingMenu.Rest,
+            TrainingMenu.VelocityTraining,
         };
         foreach (var a in alloc) Assert.Contains(a.Menu, allowed);
     }
