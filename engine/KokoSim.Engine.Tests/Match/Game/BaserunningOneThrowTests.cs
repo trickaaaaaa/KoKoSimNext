@@ -171,11 +171,18 @@ public sealed class BaserunningOneThrowTests
     [Fact]
     public void InfieldIn_R1R3_FirstBaseman_DoesNotTagSecondThenRaceHome()
     {
-        // 一塁線寄りの一塁ゴロ（一塁自己フォース→二塁タッチが選ばれる捕球点＝DoublePlayRaceTests と同じ）。
+        // 一塁ベース直上の一塁ゴロ（一塁自己フォース→二塁タッチの最良条件＝DoublePlayRaceTests と同じ）。
         // 前進守備で三塁走者がいるなら本塁の勝負が続く＝二塁のタッチ失敗のあとにもう1本投げることになるので選ばない。
+        // 二塁タッチ側の固定オーバーヘッドは現行係数だと標準の二塁封殺より重く最良条件でも選ばれない
+        // （issue #1273・DoublePlayRaceTests.FirstBaseTag_EvenAtBestCaseGeometry_NeverBeatsSecondForce）ため、
+        // この検査自体（通常守備なら代替が選ばれる対照）はオーバーヘッドだけを軽くした係数で経路を強制的に通す。
+        var altFriendly = C with
+        {
+            DoublePlaySelfForceRelayTransferSeconds = 0.0, SecondTagSeconds = 0.10, SecondTagSuccessBias = 0.0,
+        };
         var rng = new Xoshiro256Random(15);
         HomePlayContext Ctx(DefenseDepth depth) => new(Field,
-            new HomePlaySituation(new Vector3D(26, 0, 10), 1.3, new Player { ArmStrength = 55 }.ToFielder().ThrowSpeedMps),
+            new HomePlaySituation(new Vector3D(19.4, 0, 19.4), 1.3, new Player { ArmStrength = 55 }.ToFielder().ThrowSpeedMps),
             new TacticsCoefficients(), 0.9, depth, IsFly: false,
             ThrowArriveSeconds: 2.0, BatterToFirstSeconds: 4.60, FielderRole: FieldPosition.FirstBase);
         int tagsNormal = 0;
@@ -184,12 +191,12 @@ public sealed class BaserunningOneThrowTests
             var r1 = new Player { Speed = 50, Baserunning = 50 };
             var inBases = new BaseState { First = r1, Third = Fast };
             var (_, _, _, _, _, inMoves) = BaserunningModel.ApplyDetailed(
-                inBases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, Ctx(DefenseDepth.In));
+                inBases, PlateAppearanceResult.InPlayOut, new Player(), 0, altFriendly, rng, collectMoves: true, Ctx(DefenseDepth.In));
             Assert.DoesNotContain(inMoves, m => m.FirstBaseSelfForceTag);
 
             var nBases = new BaseState { First = r1, Third = Fast };
             var (_, _, _, _, _, nMoves) = BaserunningModel.ApplyDetailed(
-                nBases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, Ctx(DefenseDepth.Normal));
+                nBases, PlateAppearanceResult.InPlayOut, new Player(), 0, altFriendly, rng, collectMoves: true, Ctx(DefenseDepth.Normal));
             if (nMoves.Any(m => m.FirstBaseSelfForceTag)) tagsNormal++;
         }
         Assert.True(tagsNormal > 0, "対照（通常守備）で一塁自己フォース代替が選ばれていない＝この検査が空振り");

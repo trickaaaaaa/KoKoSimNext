@@ -2019,6 +2019,12 @@ public static class GameEngine
                 var dpPivotRole = fp.FielderRole is Field.FieldPosition.ThirdBase or Field.FieldPosition.Shortstop
                     ? Field.FieldPosition.SecondBase : Field.FieldPosition.Shortstop;
                 var dpPivotArm = defense.PlayerAtPosition(dpPivotRole)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps;
+                // 自己フォース（Q31）の一段目は処理野手自身が対象塁へ走り込む動き（issue #1273）。送球（肩）でなく
+                // 処理した本人の脚（SprintSpeedMps）＝その野手の Speed 由来。null＝単体テスト等で未配線のときは
+                // BaserunningCoefficients.SelfForceFielderSprintSpeedMps（league average）へフォールバックする。
+                var selfForceSprintSpeedMps = fp.FielderRole is { } processingRole
+                    ? defense.PlayerAtPosition(processingRole)?.ToFielder(ctx.Baserunning.AbilityEffect).SprintSpeedMps
+                    : null;
                 homePlay = new HomePlayContext(
                     ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
                     fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotArm,
@@ -2029,7 +2035,8 @@ public static class GameEngine
                     // 落ちる（捕られる）時刻・捕球の余裕。ファウルフライは塁上の走者が離れない＝読まない。
                     FlyRead: fp is { IsFly: true, FoulFly: false, CatchMarginSeconds: { } catchMargin }
                         ? new FlyReadSituation(new Vector3D(fp.LandingX, 0, fp.LandingZ), fp.HangTimeSeconds, catchMargin)
-                        : null);
+                        : null,
+                    SelfForceSprintSpeedMps: selfForceSprintSpeedMps);
             }
 
             // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で

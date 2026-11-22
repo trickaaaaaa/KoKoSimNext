@@ -1062,6 +1062,7 @@ public static class CoefficientsLoader
         public double HomeForceMarginScale { get; set; } = D.HomeForceMarginScale;
         public double HomeForceSuccessBias { get; set; } = D.HomeForceSuccessBias;
         public double DoublePlaySelfForceRelayTransferSeconds { get; set; } = D.DoublePlaySelfForceRelayTransferSeconds;
+        public double SelfForceFielderSprintSpeedMps { get; set; } = D.SelfForceFielderSprintSpeedMps;
         // 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）
         public double FirstForceTagSeconds { get; set; } = D.FirstForceTagSeconds;
         public double FirstForceMarginScale { get; set; } = D.FirstForceMarginScale;
@@ -1263,6 +1264,7 @@ public static class CoefficientsLoader
             HomeForceMarginScale = HomeForceMarginScale,
             HomeForceSuccessBias = HomeForceSuccessBias,
             DoublePlaySelfForceRelayTransferSeconds = DoublePlaySelfForceRelayTransferSeconds,
+            SelfForceFielderSprintSpeedMps = SelfForceFielderSprintSpeedMps,
             FirstForceTagSeconds = FirstForceTagSeconds,
             FirstForceMarginScale = FirstForceMarginScale,
             FirstForceSuccessBias = FirstForceSuccessBias,

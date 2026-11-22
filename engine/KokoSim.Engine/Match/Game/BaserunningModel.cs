@@ -1590,8 +1590,11 @@ public static class BaserunningModel
         {
             // 一塁手が一塁を自己フォースしてから二塁へ送球してタッチ（issue 3-6-tag-double-play）。
             // 対象は三塁手/本塁の代替と同じ一塁走者＝一塁走者の二塁到達見込みを二塁封殺ルートと比較する。
+            // 一段目（一塁手自身が一塁へ走り込む）は送球でなく自分の脚（issue #1273）＝到達時刻を
+            // SelfForceArriveAtBaseSeconds で求め、以降（二塁への送球）はそこから時計を進める。
+            var arriveAtFirstSelf = SelfForceArriveAtBaseSeconds(home, home.Field.FirstBase, coeff);
             var selfForceSituation = new HomePlaySituation(
-                home.Field.FirstBase, home.Situation.BallFieldedAtSeconds, home.Situation.OutfielderThrowSpeedMps,
+                home.Field.FirstBase, arriveAtFirstSelf, home.Situation.OutfielderThrowSpeedMps,
                 home.Situation.OutfielderFielding);
             var secondTag = HomePlayResolver.SecondTagParams(home.Field, coeff);
             var pR1SafeTag = HomePlayResolver.SuccessProbability(
@@ -1607,8 +1610,15 @@ public static class BaserunningModel
         if (thirdCandidate)
         {
             var force3rd = HomePlayResolver.ThirdForceParams(home.Field, coeff);
+            // 三塁手自身が三塁へ走り込む一段目は送球でなく自分の脚（issue #1273）。「対象塁で捕球済み」とみなした
+            // HomePlaySituation に握り替えて既存の式へ渡す（新しい走者物理式は書かない＝不変条件#1）。
+            var atThird = home.Situation with
+            {
+                BallFieldedPoint = force3rd.TargetPoint,
+                BallFieldedAtSeconds = SelfForceArriveAtBaseSeconds(home, force3rd.TargetPoint, coeff),
+            };
             var pR2Safe3rd = HomePlayResolver.SuccessProbability(
-                r2!, 2, home.Situation, home.Field, coeff, force3rd, delay, transferSecondsOverride: 0.0);
+                r2!, 2, atThird, home.Field, coeff, force3rd, delay, transferSecondsOverride: 0.0);
             if (pR2Safe3rd < pR1Safe2nd)
             {
                 var (eo, fc) = ResolveDoublePlaySelfForce(
@@ -1620,8 +1630,14 @@ public static class BaserunningModel
         if (homeCandidate)
         {
             var forceHome = HomePlayResolver.HomeForceParams(coeff);
+            // 捕手/投手自身が本塁へ走り込む一段目も同じく自分の脚（issue #1273）。
+            var atHome = home.Situation with
+            {
+                BallFieldedPoint = forceHome.TargetPoint,
+                BallFieldedAtSeconds = SelfForceArriveAtBaseSeconds(home, forceHome.TargetPoint, coeff),
+            };
             var pR3SafeHome = HomePlayResolver.SuccessProbability(
-                r3!, 3, home.Situation, home.Field, coeff, forceHome, delay, transferSecondsOverride: 0.0);
+                r3!, 3, atHome, home.Field, coeff, forceHome, delay, transferSecondsOverride: 0.0);
             if (pR3SafeHome < pR1Safe2nd)
             {
                 var (eo, fc) = ResolveDoublePlaySelfForce(
@@ -1667,6 +1683,23 @@ public static class BaserunningModel
     }
 
     /// <summary>
+    /// 自己フォース一段目（Q31・issue #1273）: 処理野手自身が対象塁へ走り込んで到達する時刻[s]。
+    /// <see cref="HomePlayResolver.ResolveThrowPath"/> を肩（<see cref="HomePlaySituation.OutfielderThrowSpeedMps"/>）で
+    /// 呼ぶと「自分へ送球する」計算になり塁までの移動がほぼゼロ秒になる（旧実装の不具合）＝ここは送球でなく
+    /// 自分の脚（<see cref="HomePlayContext.SelfForceSprintSpeedMps"/>、null なら
+    /// <see cref="BaserunningCoefficients.SelfForceFielderSprintSpeedMps"/>）で処理点→対象塁の距離を走る。
+    /// <see cref="ResolveDoublePlay"/> のゲート比較と <see cref="ResolveDoublePlaySelfForce"/>／
+    /// <see cref="ResolveDoublePlayFirstBaseTag"/> が同じ値を使う単一ソース。
+    /// </summary>
+    private static double SelfForceArriveAtBaseSeconds(
+        HomePlayContext home, Vector3D targetPoint, BaserunningCoefficients coeff)
+    {
+        var sprintSpeedMps = home.SelfForceSprintSpeedMps ?? coeff.SelfForceFielderSprintSpeedMps;
+        var runSeconds = (home.Situation.BallFieldedPoint - targetPoint).Length / sprintSpeedMps;
+        return home.Situation.BallFieldedAtSeconds + runSeconds;
+    }
+
+    /// <summary>
     /// 併殺の代替一段目（Q31）: 三塁手/捕手/投手が自打球を自分でベースへ運んで封殺（送球なし）→
     /// そのまま自分の肩で一塁へ転送する（中継〈ピボット〉なし＝1回投げのみ）。ゲート
     /// （<c>home.FielderRole</c> が実際にその塁を処理した野手であること）は呼び出し元
@@ -1679,18 +1712,26 @@ public static class BaserunningModel
         HomePlayResolver.BasePlayParams force, double delay,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, bool allowForceOnly = true)
     {
+        // 一段目は送球でなく処理野手自身が対象塁へ走り込む動き（issue #1273）。「対象塁に到達した時点で
+        // 捕球済み」とみなした HomePlaySituation に握り替えて既存の式へ渡す（新しい走者物理式は書かない＝
+        // 不変条件#1）。transferSecondsOverride: 0.0 は従来どおり＝距離0（atBase.BallFieldedPoint==force.TargetPoint）
+        // なので握り替え秒を上乗せしない。
+        var arriveAtBaseSeconds = SelfForceArriveAtBaseSeconds(home, force.TargetPoint, coeff);
+        var atBase = home.Situation with { BallFieldedPoint = force.TargetPoint, BallFieldedAtSeconds = arriveAtBaseSeconds };
+
         // A-1) 自己フォース自体が間に合わない（現実にはほぼ起きない＝呼び出し元の比較で既に二塁封殺より
         // 有利と分かっているが、絶対的な間に合わなさは独立に見る）＝守備は諦め一塁を取る。RNG非消費。
         var pLeadSafe = HomePlayResolver.SuccessProbability(
-            leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+            leadRunner, leadFromBase, atBase, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
         if (pLeadSafe > coeff.DoublePlayForceMaxRunnerSuccess) return (0, false);
 
         // 二段目: 自己フォースした野手自身がそのまま一塁へ転送する（中継なし＝ピボット無し。issue⑦のような
         // 「二塁カバーに実際に入った野手」探しは不要＝この野手自身が投げ手）。起点は処理点でなく対象塁
-        // （force.TargetPoint）、時刻はフォースした瞬間（=BallFieldedAtSeconds、握り替えは自己フォース専用の
+        // （force.TargetPoint）、時刻は対象塁へ走り込んだ時刻（arriveAtBaseSeconds。旧実装はフォースした瞬間
+        // =BallFieldedAtSeconds を使い、塁への移動時間が抜けていた＝issue #1273）。握り替えは自己フォース専用の
         // DoublePlaySelfForceRelayTransferSeconds＝中継を受けてから投げ返す DoublePlayPivotTransferSeconds とは別）。
         var selfForceSituation = new HomePlaySituation(
-            force.TargetPoint, home.Situation.BallFieldedAtSeconds, home.Situation.OutfielderThrowSpeedMps,
+            force.TargetPoint, arriveAtBaseSeconds, home.Situation.OutfielderThrowSpeedMps,
             home.Situation.OutfielderFielding);
         var relayToFirst = HomePlayResolver
             .ResolveThrowPath(selfForceSituation, home.Field.FirstBase, coeff,
@@ -1707,7 +1748,7 @@ public static class BaserunningModel
         {
             if (!allowForceOnly || pLeadSafe > coeff.DoublePlayForceOnlyMaxRunnerSuccess) return (0, false);
             var onlyMargin = HomePlayResolver.Margin(
-                leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+                leadRunner, leadFromBase, atBase, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
             mv?.Add(new RunnerMove(leadRunner, leadFromBase, force.TargetBase, Out: true)
             {
                 CloseCall = Math.Abs(onlyMargin) < coeff.CloseCallMarginSeconds, Force = true,
@@ -1721,7 +1762,7 @@ public static class BaserunningModel
 
         // 自己フォースは成立（対象走者アウト）。際どさは表示のみ（RNG非消費）。
         var leadMargin = HomePlayResolver.Margin(
-            leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+            leadRunner, leadFromBase, atBase, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
         var leadClose = Math.Abs(leadMargin) < coeff.CloseCallMarginSeconds;
         // 一塁への転送1本の逸れ（issue #859）: その本の遅れと期待値の差を転送の秒へ足して勝負を引く（ゼロ平均）。
         // 投げ手は自己封殺した処理野手自身。
@@ -1766,18 +1807,21 @@ public static class BaserunningModel
         // 打者はまだ走者になっていないため、走者物理（RunnerClock）でなく打者の正典値
         // （home.BatterToFirstSeconds）を使う＝不変条件#1（新しい走者の式を書かない）に合わせ、既存の
         // RunnerTimeSeconds 経路は使わない。RNG非消費。
+        // 一塁手自身が一塁へ走り込む一段目は送球でなく自分の脚（issue #1273）＝到達時刻は
+        // SelfForceArriveAtBaseSeconds（旧実装は捕球の瞬間をそのまま使い、塁への移動時間が抜けていた）。
         var firstForce = HomePlayResolver.FirstForceParams(home.Field, coeff);
-        var selfForceMargin = HomePlayResolver.DefenseTimeSeconds(
-                home.Situation, firstForce.TargetPoint, firstForce.TagSeconds, coeff, transferSecondsOverride: 0.0)
+        var arriveAtBaseSeconds = SelfForceArriveAtBaseSeconds(home, firstForce.TargetPoint, coeff);
+        var selfForceMargin = arriveAtBaseSeconds + firstForce.TagSeconds
             - home.BatterToFirstSeconds!.Value + firstForce.SuccessBias;
         var pBatterSafeSelfForce = MathUtil.Clamp(
             MathUtil.Logistic(selfForceMargin / firstForce.MarginScale), 0.01, 0.99);
         if (pBatterSafeSelfForce > coeff.DoublePlayForceMaxRunnerSuccess) return (0, false, false);
 
         // 二段目: 一塁を踏んだ一塁手自身がそのまま二塁へ送球してタッチ（中継なし）。起点は一塁ベース、
-        // 時刻は捕球の瞬間（自己フォースの移動は無視する近似＝既存の代替＝Q31 と同じ）。
+        // 時刻は一塁へ走り込んだ時刻（arriveAtBaseSeconds。旧実装は捕球の瞬間=BallFieldedAtSeconds を使い、
+        // 自己フォースの移動時間を無視していた＝issue #1273）。
         var selfForceSituation = new HomePlaySituation(
-            home.Field.FirstBase, home.Situation.BallFieldedAtSeconds, home.Situation.OutfielderThrowSpeedMps,
+            home.Field.FirstBase, arriveAtBaseSeconds, home.Situation.OutfielderThrowSpeedMps,
             home.Situation.OutfielderFielding);
         var secondTag = HomePlayResolver.SecondTagParams(home.Field, coeff);
         var delay = coeff.DoublePlayR1StartDelaySeconds;

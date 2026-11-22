@@ -276,11 +276,26 @@ public sealed class DoublePlayRaceTests
     // 二塁封殺より低い（守備に有利）ときだけ選ばれる。ゲート不成立の大多数のケースは
     // 上のテスト（一塁走者のみ・FielderRole未指定）が既に固定している＝完全不変。
 
+    /// <summary>自己フォース一段目（処理野手自身が対象塁へ走り込む）の到達時刻[s]（issue #1273）。
+    /// 送球でなく自分の脚（<see cref="BaserunningCoefficients.SelfForceFielderSprintSpeedMps"/>）で運ぶ＝
+    /// BaserunningModel.SelfForceArriveAtBaseSeconds（private）と同じ式。</summary>
+    private static double SelfForceArriveAtBase(HomePlayContext home, Vector3D targetPoint)
+    {
+        var sprintSpeedMps = home.SelfForceSprintSpeedMps ?? C.SelfForceFielderSprintSpeedMps;
+        return home.Situation.BallFieldedAtSeconds + (home.Situation.BallFieldedPoint - targetPoint).Length / sprintSpeedMps;
+    }
+
     private static double PLeadSafe(
         HomePlayContext home, Player runner, int fromBase, HomePlayResolver.BasePlayParams force)
-        => HomePlayResolver.SuccessProbability(
-            runner, fromBase, home.Situation, home.Field, C, force, C.DoublePlayR1StartDelaySeconds,
+    {
+        var atBase = home.Situation with
+        {
+            BallFieldedPoint = force.TargetPoint, BallFieldedAtSeconds = SelfForceArriveAtBase(home, force.TargetPoint),
+        };
+        return HomePlayResolver.SuccessProbability(
+            runner, fromBase, atBase, home.Field, C, force, C.DoublePlayR1StartDelaySeconds,
             transferSecondsOverride: 0.0);
+    }
 
     [Fact]
     public void ThirdForceParams_TargetIsThirdBase_UsesThirdForceCoefficients()
@@ -334,6 +349,60 @@ public sealed class DoublePlayRaceTests
             if (batterSafeOnFc) fc++; else dp++;
         }
         Assert.True(dp + fc == 3000 && dp > 0, $"三塁代替でも併殺/野選が出るはず（DP={dp}, FC={fc}）");
+    }
+
+    [Fact]
+    public void SelfForceThird_FartherFromBase_RaisesLeadRunnerSafety()
+    {
+        // issue #1273: 旧実装は自己フォース一段目（捕球点→三塁）を「送球」として送球速度(≈30m/s)で
+        // 割っており、三塁手が三塁から離れても到達時刻がほぼ変わらなかった（野手が塁へ走る時間が
+        // 入っていない）。修正後は三塁から離れるほど自分の脚（SprintSpeedMps≈7-8m/s）で走る時間が
+        // 伸び、二塁走者の生存見込み（pLeadSafe）が実測で意味のある差になって上がる。
+        var r2 = new Player { Speed = 50, Baserunning = 50 };
+        var force3rd = HomePlayResolver.ThirdForceParams(Field, C);
+        var probs = new System.Collections.Generic.List<double>();
+        foreach (var offset in new[] { 0.0, 2.0, 4.0, 6.0, 8.0, 10.0 })
+        {
+            var home = Grounder(x: Field.ThirdBase.X + offset, z: Field.ThirdBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+                fielderRole: FieldPosition.ThirdBase);
+            probs.Add(PLeadSafe(home, r2, fromBase: 2, force3rd));
+        }
+        for (var i = 1; i < probs.Count; i++)
+            Assert.True(probs[i] > probs[i - 1],
+                $"三塁から離れるほど二塁走者の生存見込みが上がるはず: {string.Join(",", probs.Select(p => p.ToString("F4")))}");
+        // 旧実装（送球速度≈32.6m/sで割る）なら10m離れても到達時刻は10/32.6≈0.31s増にしかならず生存見込みは
+        // 低いまま動かない。脚力(≈7.25m/s)で割れば10/7.25≈1.38s増＝帯を大きく動かすはず（旧実装は届かない域）。
+        Assert.True(probs[5] > 0.10,
+            $"10m離れた捕球点では生存見込みが意味のある域まで上がるはず（旧実装はここまで届かない）: {probs[5]:F4}");
+    }
+
+    [Fact]
+    public void SelfForceThird_NearButOffThirdBase_RunnerSpeedAffectsForceRate()
+    {
+        // issue #1273 の再現: 三塁付近（ベースから5m、issueの実測「±6m」相当）で処理したゴロで、
+        // 旧実装は二塁走者の走力を20/50/80と振っても三塁での自己フォース成立率がほぼ不変だった
+        // （能力感度の穴）。修正後は走力が遅い走者ほど三塁で封殺されやすく、速い走者ほど免れる。
+        int ForceRate(double offset, int speed)
+        {
+            var home = Grounder(x: Field.ThirdBase.X + offset, z: Field.ThirdBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+                fielderRole: FieldPosition.ThirdBase);
+            var rng = new Xoshiro256Random(2026);
+            var forced = 0;
+            for (var i = 0; i < 2000; i++)
+            {
+                var r1 = new Player { Speed = 50, Baserunning = 50 };
+                var r2 = new Player { Speed = speed, Baserunning = speed };
+                var (_, _, _, moves) = RunOnce(home, r1, new Player(), rng, currentOuts: 0, r2: r2);
+                if (SelfForceOutAt(moves, toBase: 3)) forced++;
+            }
+            return forced;
+        }
+
+        var offsets = new[] { 6.0, 7.0, 8.0, 9.0 };
+        var slow = offsets.Sum(o => ForceRate(o, 1));
+        var fast = offsets.Sum(o => ForceRate(o, 99));
+        Assert.True(slow > fast,
+            $"遅い走者(走力1)のほうが三塁で封殺されやすいはず（遅い={slow}, 速い={fast}, offsets={string.Join(",", offsets)}）");
     }
 
     [Fact]
@@ -530,8 +599,10 @@ public sealed class DoublePlayRaceTests
     [Fact]
     public void SelfForceHome_PitcherAlsoGatesIn_ComebackerToMound()
     {
-        // 投手の目の前の弱いゴロ（マウンド付近）でも本塁代替を検討できる（ゲートは Catcher/Pitcher の両方）。
-        var home = Grounder(x: 0, z: 18.4, fieldedAt: 0.9, batterToFirst: 4.60, fielderRole: FieldPosition.Pitcher);
+        // 投手の目の前で止まる弱いゴロ（本塁至近＝ゲートは Catcher/Pitcher の両方）でも本塁代替を検討できる。
+        // マウンド付近（本塁から18m超）まで戻って拾う打球は、自分で本塁へ走り込むより投げるほうが速い
+        // （issue #1273: 野手が塁へ走る時間を正しく入れると、遠い捕球点では自己フォースは選ばれない）。
+        var home = Grounder(x: 0, z: 3.0, fieldedAt: 0.6, batterToFirst: 4.60, fielderRole: FieldPosition.Pitcher);
         var r3 = new Player { Speed = 50, Baserunning = 50 };
         var pR1Safe2nd = PR1Safe(home, new Player { Speed = 50, Baserunning = 50 });
         var pR3SafeHome = PLeadSafe(home, r3, fromBase: 3, HomePlayResolver.HomeForceParams(C));
@@ -616,15 +687,20 @@ public sealed class DoublePlayRaceTests
 
     private static double PLeadSafeBatter(HomePlayContext home, HomePlayResolver.BasePlayParams force)
     {
-        var margin = HomePlayResolver.DefenseTimeSeconds(home.Situation, force.TargetPoint, force.TagSeconds, C, transferSecondsOverride: 0.0)
+        // 一塁手自身が一塁へ走り込む一段目は送球でなく自分の脚（issue #1273）。
+        var margin = SelfForceArriveAtBase(home, force.TargetPoint) + force.TagSeconds
             - home.BatterToFirstSeconds!.Value + force.SuccessBias;
         return MathUtil.Clamp(MathUtil.Logistic(margin / force.MarginScale), 0.01, 0.99);
     }
 
-    /// <summary>この代替での一塁走者の二塁タッチ回避見込み（判定モデルの pR1SafeTag と同じ式）。</summary>
-    private static double PR1SafeTag(Player r1)
+    /// <summary>この代替での一塁走者の二塁タッチ回避見込み（判定モデルの pR1SafeTag と同じ式）。
+    /// 一段目（一塁手が一塁へ走り込む）の到達時刻は <paramref name="home"/> の実捕球点から求める（issue #1273）。</summary>
+    private static double PR1SafeTag(HomePlayContext home, Player r1)
     {
-        var situation = new HomePlaySituation(Field.FirstBase, 1.3, new Player { ArmStrength = 55 }.ToFielder().ThrowSpeedMps);
+        var firstForce = HomePlayResolver.FirstForceParams(Field, C);
+        var situation = new HomePlaySituation(
+            Field.FirstBase, SelfForceArriveAtBase(home, firstForce.TargetPoint),
+            home.Situation.OutfielderThrowSpeedMps, home.Situation.OutfielderFielding);
         var secondTag = HomePlayResolver.SecondTagParams(Field, C);
         return HomePlayResolver.SuccessProbability(
             r1, 1, situation, Field, C, secondTag, C.DoublePlayR1StartDelaySeconds,
@@ -658,24 +734,54 @@ public sealed class DoublePlayRaceTests
         Assert.Equal(C.SecondTagMarginScale, p.MarginScale, 12);
     }
 
+    // 一塁手の自己フォース→二塁タッチ代替（issue 3-6-tag-double-play）は、issue #1273 で一段目に
+    // 野手が塁へ走る時間（SelfForceFielderSprintSpeedMps）を正しく入れた結果、現行係数では構造的に
+    // 標準の二塁封殺（3-6-3型）へ勝てなくなった（下の FirstBaseTag_EvenAtBestCaseGeometry_NeverBeatsSecondForce
+    // が最良条件＝捕球点が一塁ベース直上でも勝てないことを固定している）。理由は二段目の固定オーバーヘッドの差:
+    // 代替側（DoublePlaySelfForceRelayTransferSeconds 0.70 + SecondTagSeconds 0.22 − SecondTagSuccessBias 0.12 ＝0.80）
+    // が標準側（OutfieldTransferSeconds 0.60 + SecondForceTagSeconds 0.10 ＝0.70）より0.10s重く、二塁が
+    // フォースでなくタッチ（打者が自己フォースで先にアウトになり、一塁走者のフォースが外れるため）に
+    // なる分だけ遅いぶんを一段目の移動距離0でも埋め切れない。この代替自体の内部ロジック（A-1/A-2・走者保存則）
+    // は将来の係数チューニングで再び選ばれ得るため、下のテスト群はその二段目オーバーヘッドだけを軽くした
+    // 係数で経路を強制的に通し、回帰ガードとして残す（一段目の脚力そのものは本物の係数のまま）。
+    private static readonly BaserunningCoefficients AltFriendly = C with
+    {
+        DoublePlaySelfForceRelayTransferSeconds = 0.0, SecondTagSeconds = 0.10, SecondTagSuccessBias = 0.0,
+    };
+
+    [Fact]
+    public void FirstBaseTag_EvenAtBestCaseGeometry_NeverBeatsSecondForce()
+    {
+        // 一塁ベースのほぼ真上で捕った一塁ゴロ（自己フォースの移動距離がほぼ0＝一段目は最良条件）でも、
+        // 二段目の固定オーバーヘッドの差（上のコメント）で代替は標準の二塁封殺に勝てない（issue #1273）。
+        var home = Grounder(x: 19.4, z: 19.4, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var r1Probe = new Player { Speed = 50, Baserunning = 50 };
+        var pR1Safe2nd = PR1Safe(home, r1Probe);
+        var pR1SafeTagValue = PR1SafeTag(home, r1Probe);
+        Assert.True(pR1SafeTagValue > pR1Safe2nd,
+            $"最良条件でも代替は標準の二塁封殺に勝てないはず: tag={pR1SafeTagValue:F4} > second={pR1Safe2nd:F4}");
+
+        var rng = new Xoshiro256Random(1060);
+        for (var i = 0; i < 200; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var (_, _, _, moves) = RunOnce(home, r1, new Player(), rng, currentOuts: 0);
+            Assert.False(FirstBaseTagOutAt(moves), "最良条件でも代替は選ばれないはず");
+        }
+    }
+
     [Fact]
     public void FirstBaseTag_FielderAtFirstBase_WideGrounder_SelectsAlternateOverSecondForce()
     {
-        // 一塁ベースからやや外側（一塁線寄り）で捕った一塁ゴロ＝直接二塁へ投げるより、まず一塁を踏んでから
-        // 二塁へ投げるほうが二塁までの距離が短い（標準の捕球点は二塁に近いが、この捕球点は遠い）。
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
-        var r1Probe = new Player { Speed = 50, Baserunning = 50 };
-        var pR1Safe2nd = PR1Safe(home, r1Probe);
-        var pR1SafeTagValue = PR1SafeTag(r1Probe);
-        Assert.True(pR1SafeTagValue < pR1Safe2nd,
-            $"この捕球点では一塁自己フォース代替が有利なはず: tag={pR1SafeTagValue:F4} < second={pR1Safe2nd:F4}");
-
+        // 一塁ベース付近で捕った一塁ゴロ＝二段目の固定オーバーヘッドを AltFriendly で埋めれば代替が有利になる
+        // （回帰ガード。現行係数での非選択は上の EvenAtBestCaseGeometry テストが別に固定している）。
+        var home = Grounder(x: 19.4, z: 19.4, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
         var rng = new Xoshiro256Random(1060);
         int dp = 0, safe = 0;
         for (var i = 0; i < 3000; i++)
         {
             var r1 = new Player { Speed = 50, Baserunning = 50 };
-            var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r1, new Player(), rng, currentOuts: 0);
+            var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r1, new Player(), rng, currentOuts: 0, coeff: AltFriendly);
             Assert.False(batterSafeOnFc, "この代替では打者は常にアウトのまま（野選にはならない）");
             Assert.False(moves.Any(m => m.FromBase == 1 && m.ToBase == 2 && m.Out && m.Force), "標準の二塁封殺（Force）は起きないはず（代替が選ばれた）");
             if (extraOuts == 1)
@@ -704,7 +810,7 @@ public sealed class DoublePlayRaceTests
         // 代替は選ばれず、今日どおりの二塁封殺（3-6-3型）に落ちる。
         var home = Grounder(x: 15, z: 20, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
         var r1Probe = new Player { Speed = 50, Baserunning = 50 };
-        Assert.True(PR1Safe(home, r1Probe) < PR1SafeTag(r1Probe), "この捕球点では標準の二塁封殺のほうが有利なはず");
+        Assert.True(PR1Safe(home, r1Probe) < PR1SafeTag(home, r1Probe), "この捕球点では標準の二塁封殺のほうが有利なはず");
 
         var rng = new Xoshiro256Random(1061);
         for (var i = 0; i < 200; i++)
@@ -719,7 +825,7 @@ public sealed class DoublePlayRaceTests
     public void FirstBaseTag_RequiresExactFielderRoleMatch_FallsBackForOtherPositions()
     {
         // 同じ捕球点でも FielderRole が一塁手でなければ（例: 遊撃手）ゲート不成立＝代替を検討しない。
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.Shortstop);
+        var home = Grounder(x: 21, z: 17, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.Shortstop);
         var rng = new Xoshiro256Random(1062);
         for (var i = 0; i < 50; i++)
         {
@@ -756,9 +862,9 @@ public sealed class DoublePlayRaceTests
     {
         // 一塁の自己フォースは確実だが、二塁へのタッチが快足の一塁走者には間に合わない見込み＝
         // 守備は投げない（分岐A-2相当）。打者は単独アウトのまま、一塁走者は普通に二塁へ安全進塁する。RNG非消費。
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var home = Grounder(x: 19.4, z: 19.4, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
         var fastR1 = new Player { Speed = 99, Baserunning = 99 };
-        Assert.True(1.0 - PR1SafeTag(fastR1) < C.DoublePlayAttemptMinRelaySuccess, "快足の一塁走者には二塁タッチが間に合わない見込みのはず");
+        Assert.True(1.0 - PR1SafeTag(home, fastR1) < C.DoublePlayAttemptMinRelaySuccess, "快足の一塁走者には二塁タッチが間に合わない見込みのはず");
 
         var rng = new Xoshiro256Random(1064);
         for (var i = 0; i < 50; i++)
@@ -778,13 +884,13 @@ public sealed class DoublePlayRaceTests
     [Fact]
     public void FirstBaseTag_ProducesDoublePlay_SecondOutIsTagNotForceOrForceOnly()
     {
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var home = Grounder(x: 19.4, z: 19.4, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
         var rng = new Xoshiro256Random(1065);
         RunnerMove? outMove = null;
         for (var i = 0; i < 3000 && outMove is null; i++)
         {
             var r1 = new Player { Speed = 50, Baserunning = 50 };
-            var (_, extraOuts, _, moves) = RunOnce(home, r1, new Player(), rng, currentOuts: 0);
+            var (_, extraOuts, _, moves) = RunOnce(home, r1, new Player(), rng, currentOuts: 0, coeff: AltFriendly);
             if (extraOuts == 1) outMove = moves.First(m => m.FromBase == 1 && m.ToBase == 2 && m.Out);
         }
         Assert.NotNull(outMove);
@@ -796,7 +902,7 @@ public sealed class DoublePlayRaceTests
     [Fact]
     public void FirstBaseTag_Deterministic_SameSeedSameResult()
     {
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var home = Grounder(x: 19.4, z: 19.4, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
         int Count(ulong seed)
         {
             var rng = new Xoshiro256Random(seed);
@@ -804,7 +910,7 @@ public sealed class DoublePlayRaceTests
             for (var i = 0; i < 500; i++)
             {
                 var r1 = new Player { Speed = 50, Baserunning = 50 };
-                var (_, _, batterSafeOnFc, moves) = RunOnce(home, r1, new Player(), rng);
+                var (_, _, batterSafeOnFc, moves) = RunOnce(home, r1, new Player(), rng, coeff: AltFriendly);
                 if (!batterSafeOnFc && FirstBaseTagOutAt(moves, outAtEnd: true)) dp++;
             }
             return dp;
@@ -833,7 +939,7 @@ public sealed class DoublePlayRaceTests
         // 一・二塁で一塁手の代替（一塁自己フォース→二塁タッチ）がタッチに失敗した場合。
         // 修正前は bases.Second を一塁走者で上書きし、二塁走者のカスケードがそれを外し、一塁走者の
         // カスケードが 1→2 をもう1本積んでいた（move の二重）。
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var home = Grounder(x: 19.4, z: 19.4, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
         var rng = new Xoshiro256Random(1066);
         int fails = 0, dps = 0;
         for (var i = 0; i < 3000; i++)
@@ -842,7 +948,7 @@ public sealed class DoublePlayRaceTests
             var r2 = new Player { Speed = 50, Baserunning = 50 };
             var bases = new BaseState { First = r1, Second = r2 };
             var (runs, extraOuts, _, batterSafeOnFc, _, moves) = BaserunningModel.ApplyDetailed(
-                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, home);
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, AltFriendly, rng, collectMoves: true, home);
             Assert.False(batterSafeOnFc);
             AssertRunnersConserved(3, bases, runs, 1 + extraOuts, $"試行{i}");
             Assert.Equal(1, moves.Count(m => ReferenceEquals(m.Runner, r1)));   // 一塁走者の move は1本だけ
@@ -868,7 +974,7 @@ public sealed class DoublePlayRaceTests
     public void FirstBaseTag_TagFails_BasesLoadedNormalDepth_RunnerScoresAndOthersAdvanceOnce()
     {
         // 満塁・通常守備: 三塁走者は押し出されて生還、二塁走者は三塁、一塁走者は二塁（タッチ失敗）。
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
+        var home = Grounder(x: 19.4, z: 19.4, fieldedAt: 1.3, batterToFirst: 4.60, fielderRole: FieldPosition.FirstBase);
         var rng = new Xoshiro256Random(1067);
         var fails = 0;
         for (var i = 0; i < 3000; i++)
@@ -878,7 +984,7 @@ public sealed class DoublePlayRaceTests
             var r3 = new Player { Speed = 50, Baserunning = 50 };
             var bases = new BaseState { First = r1, Second = r2, Third = r3 };
             var (runs, extraOuts, _, _, _, moves) = BaserunningModel.ApplyDetailed(
-                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, home);
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, AltFriendly, rng, collectMoves: true, home);
             AssertRunnersConserved(4, bases, runs, 1 + extraOuts, $"試行{i}");
             foreach (var r in new[] { r1, r2, r3 })
                 Assert.Equal(1, moves.Count(m => ReferenceEquals(m.Runner, r)));
@@ -896,7 +1002,7 @@ public sealed class DoublePlayRaceTests
     {
         // 満塁・内野前進は本塁封殺が本筋。一塁を踏んでから二塁へ投げる代替は選ばない
         // （選ぶとタッチ失敗のあとに本塁封殺の勝負がもう一度走り、守備が二重になる）。
-        var home = Grounder(x: 26, z: 10, fieldedAt: 1.3, batterToFirst: 4.60,
+        var home = Grounder(x: 21, z: 17, fieldedAt: 1.3, batterToFirst: 4.60,
             fielderRole: FieldPosition.FirstBase, depth: DefenseDepth.In);
         var rng = new Xoshiro256Random(1068);
         for (var i = 0; i < 1000; i++)
