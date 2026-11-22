@@ -456,6 +456,9 @@ public static class BaserunningModel
         var thirdOuts = 0;  // 単打の一塁→三塁レース憤死（Issue #89。extraOuts の内数）
         // 1プレーで送球先は1箇所＝アウトは最大1（1球は2箇所へ投げられない）。本塁・三塁で共有する（#89）。
         var outThrowUsed = false;
+        // 本塁へ投げてセーフだった（issue #1257）: 球は本塁へ行った＝他塁（三塁等）へはもう投げられない。
+        // outThrowUsed と違い、後続の本塁突入は引き続き本塁の送球との勝負（無条件生還にはしない）。
+        var homeThrowMade = false;
         // バックホーム悪送球（2026-08-30）: 本塁への送球が逸れ、アウトのはずの走者が生還したか。
         // 発生時は末尾で残る走者を1つずつ押し上げる（design-14 P1-6型の連鎖、全走者+1進塁）。
         var homeWildThrowOccurred = false;
@@ -520,7 +523,11 @@ public static class BaserunningModel
             var (outcome, delay, scatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
                 runner, fromBase, h.Situation, h.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, startDelay);
             // 送球を他の塁（三塁等）で使い切っていれば本塁には球が無い＝従来どおり無条件生還（乱数の消費順も従来どおり）。
-            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall, startDelay, scatter);
+            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed)
+            {
+                if (!outThrowUsed) homeThrowMade = true;
+                return (HomeVerdict.Scored, closeCall, startDelay, scatter);
+            }
             outThrowUsed = true;
             if (outcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
             {
@@ -572,7 +579,7 @@ public static class BaserunningModel
                 case HomeVerdict.Scored: runs++; mv?.Add(Mark(new RunnerMove(r2, 2, 4, false) { CloseCall = closeCall2, ExtraStartDelaySeconds = delay2, ThrowScatter = scatter2 })); break;
                 case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(Mark(new RunnerMove(r2, 2, 4, Out: true) { CloseCall = closeCall2, ExtraStartDelaySeconds = delay2, ThrowScatter = scatter2 })); break;
                 default:
-                    if (!r2Forced && third is null && !outThrowUsed && currentOuts + extraOuts < 3
+                    if (!r2Forced && third is null && !outThrowUsed && !homeThrowMade && currentOuts + extraOuts < 3
                         && home is { UnrecoveredCatchError: true } ce)
                     {
                         // 捕球ミスの失策（拾い直せず確定, issue #903）: 内野でこぼれた球は近くにある＝三塁は
@@ -613,7 +620,7 @@ public static class BaserunningModel
                         break;
                 }
             }
-            else if (home is { } hf && d1 > 0.0 && !outThrowUsed && currentOuts + extraOuts < 3
+            else if (home is { } hf && d1 > 0.0 && !outThrowUsed && !homeThrowMade && currentOuts + extraOuts < 3
                      && ResolveOutfieldForceAtSecond(r1, hf, d1, coeff, rng, mv, Mark, ref extraOuts) is { } forceOut)
             {
                 // 外野ゴロ（issue #1130）: 待った一塁走者を、落ちた打球を拾った外野手が二塁で狙った。
@@ -635,9 +642,9 @@ public static class BaserunningModel
                     second = r1; // 自重＝二塁で止まる（RNG非消費）
                     mv?.Add(Mark(new RunnerMove(r1, 1, 2, false) { ExtraStartDelaySeconds = d1 }));
                 }
-                else if (outThrowUsed)
+                else if (outThrowUsed || homeThrowMade)
                 {
-                    third = r1; // 送球は既に他塁で使用済み＝三塁は無血進塁（RNG非消費）
+                    third = r1; // 送球は既に他塁・本塁で使用済み＝三塁は無血進塁（RNG非消費）
                     mv?.Add(Mark(new RunnerMove(r1, 1, 3, false) { ExtraStartDelaySeconds = d1 }));
                 }
                 else
