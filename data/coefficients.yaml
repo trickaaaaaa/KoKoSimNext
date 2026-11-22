@@ -572,6 +572,9 @@ baserunning:
   # スクイズ: 三塁走者のスタート（走力連動, issue bunt-no-take-on-ball-pitches）。送球先が本塁になる以外は
   # 上のバント処理点を流用（home_success_bias等は既存のまま）
   squeeze_third_runner_start_delay_seconds: 0.05
+  # スクイズ: 守備が本塁へ投げる判断（issue #1258）。三塁走者のセーフ確率がこれ未満なら本塁へ1本だけ投げる
+  # （打者は一塁で生きる）。以上なら一塁側だけを処理し走者は生還＝1つの処理で2本投げない
+  squeeze_home_throw_safe_threshold: 0.90
   # 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）: 走塁 §4.1 と同じ秒の時間勝負
   home_runner_reaction_intercept: 0.55       # 本塁を狙う走者の判断遅延[s] = intercept − 走塁判断×slope
   home_runner_reaction_slope: 0.004

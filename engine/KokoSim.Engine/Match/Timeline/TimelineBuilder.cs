@@ -2106,7 +2106,7 @@ public static class TimelineBuilder
 
             var battingTime = BuntResolver.BatterToFirstSeconds(batter, safety: false, side, c);
             var batterArriveRaw = ContactAt + battingTime;
-            var safe = result == BuntResult.InfieldHit;
+            var safe = result is BuntResult.InfieldHit or BuntResult.FieldersChoice;
             // 矛盾ガード（他の封殺枝と同じ考え方): 確定済みの結果と食い違う到達順にしない。送球は物理レースの
             // 実値のまま（ここをずらすと「投げる前に捕っていない」絵になりうる）＝打者の駆け抜け側をずらす。
             var batterArrive = safe
@@ -2138,8 +2138,15 @@ public static class TimelineBuilder
                 OutAtEnd = !safe, Force = true, Runner = batter,
             });
             resolvedAt = Math.Max(batterArrive, throwArrive);
-            resultText = result == BuntResult.SacrificeSuccess ? "犠打成功" : "内野安打";
-            captions.Add(new TimelineCaption(resolvedAt, safe ? "セーフ！ 内野安打" : "アウト——一塁で刺した"));
+            resultText = result switch
+            {
+                BuntResult.SacrificeSuccess => "犠打成功",
+                BuntResult.FieldersChoice => "野選",
+                _ => "内野安打",
+            };
+            captions.Add(new TimelineCaption(resolvedAt, safe
+                ? (result == BuntResult.FieldersChoice ? "セーフ！ 野選" : "セーフ！ 内野安打")
+                : "アウト——一塁で刺した"));
             // セーフは際どさ未評価のため判定オーバーレイは積まない（盗塁・牽制と同じ表示条件, Issue #59）。
             if (!safe) judgements.Add(new JudgementEvent { Label = "打", T = resolvedAt, Kind = JudgementKind.Out });
         }

@@ -19,6 +19,7 @@ public enum BuntResult
     PopOutDoubledOff,  // 小フライ＋一塁走者が戻れず併殺（design-09「小フライ併殺」）
     Foul,              // ファウル（カウントのみ進む）
     MissedBunt,        // 空振り
+    FieldersChoice,    // 野選（先の走者を狙ったが生かし、打者は一塁で刺せた形・打者生存・アウトなし・安打にしない。issue #1258）
 }
 
 /// <summary>
@@ -357,7 +358,13 @@ public static class BuntResolver
             }
         }
         if (bestSafeP is not null && realizedSafeP is not null)
-            return MathUtil.Chance(realizedSafeP(), rng) ? BuntResult.InfieldHit : bestResult;
+        {
+            if (!MathUtil.Chance(realizedSafeP(), rng)) return bestResult;
+            // 先の走者を狙って刺せなかった（規則9.05）: 打者も一塁で間に合っていた（刺せなかった）なら内野安打、
+            // 一塁なら刺せたのに先の走者を選んだ形なら野選（安打にしない）。
+            return MathUtil.Chance(InfieldHitProbability(batter, safety, side, field, rolled, c), rng)
+                ? BuntResult.InfieldHit : BuntResult.FieldersChoice;
+        }
 
         // 犠打・セーフティ共通の内野安打判定（時間軸）。セーフティは構え遅延が小さく生きやすい。
         if (MathUtil.Chance(InfieldHitProbability(batter, safety, side, field, rolled, c, noise), rng)) return BuntResult.InfieldHit;

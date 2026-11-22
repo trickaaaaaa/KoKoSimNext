@@ -57,20 +57,28 @@ public static class SqueezeResolver
             case BuntResult.InfieldHit:
             case BuntResult.ForceOutAtSecond:
             case BuntResult.ForceOutAtThird:
-                // ボールが実際にプレーされた（一塁側の帰趨に関係なく）: 三塁走者は走塁判断のスタート込みで
-                // 本塁レースを解く（design-02 §4.4「バント成功率×三塁走者スタート」, issue bunt-no-take-on-ball-pitches）。
+            case BuntResult.FieldersChoice:
+                // ボールが実際にプレーされた: 守備は送球先を1つだけ選ぶ（issue #1258）。本塁へ投げるか、一塁側
+                // （一塁／封殺）の処理だけを行うか。二重に投げてアウトを2つ取らない。
                 // 処理点・処理時刻・処理野手の肩は BuntResolver が物理レースで引いた同じ situation を使う
                 // （issue #1092。二重に処理野手を決め直さない＝判定＝絵の単一ソース）。
-                var runnerSafe = MathUtil.Chance(
-                    HomePlayResolver.SuccessProbability(
-                        thirdRunner, fromBase: 3, buntFielding!.Value.Situation, field, c,
-                        HomePlayResolver.HomeParams(c), c.SqueezeThirdRunnerStartDelaySeconds),
-                    rng);
-                // 打者は犠打成功なら1アウト、内野安打/一塁封殺/二塁封殺（打者以外が封殺されただけ）なら生きる。
-                var batterOut = bunt == BuntResult.SacrificeSuccess;
-                return (runnerSafe
-                    ? new SqueezeOutcome(1, BatterOut: batterOut, RunnerOut: false, bunt)
-                    : new SqueezeOutcome(0, BatterOut: batterOut, RunnerOut: true, bunt))
+                var homeSafeP = HomePlayResolver.SuccessProbability(
+                    thirdRunner, fromBase: 3, buntFielding!.Value.Situation, field, c,
+                    HomePlayResolver.HomeParams(c), c.SqueezeThirdRunnerStartDelaySeconds);
+                // 乱数消費は送球先によらず常に1回（本塁へ投げないときは使わない）。
+                var homeSafe = MathUtil.Chance(homeSafeP, rng);
+                if (homeSafeP >= c.SqueezeHomeThrowSafeThreshold)
+                {
+                    // 走者は間に合う＝本塁へは投げない。一塁側の結果はそのまま、三塁走者は生還する。
+                    return new SqueezeOutcome(1, BatterOut: bunt == BuntResult.SacrificeSuccess, RunnerOut: false, bunt)
+                        with { BuntThrowScatter = buntScatter, BuntFielding = buntFielding };
+                }
+                // 本塁へ投げた（一塁側は何も処理しない＝打者は一塁で生きる）。刺せば野選（ForceOutAtHome＝三塁走者アウト・
+                // 打者生存）、刺せなければ走者生還。打者が一塁で間に合っていた形（内野安打）なら安打、それ以外は野選。
+                var afterHomeThrow = bunt == BuntResult.InfieldHit ? BuntResult.InfieldHit : BuntResult.FieldersChoice;
+                return (homeSafe
+                    ? new SqueezeOutcome(1, BatterOut: false, RunnerOut: false, afterHomeThrow)
+                    : new SqueezeOutcome(0, BatterOut: false, RunnerOut: true, BuntResult.ForceOutAtHome))
                     with { BuntThrowScatter = buntScatter, BuntFielding = buntFielding };
             case BuntResult.PopOut:
             case BuntResult.PopOutDoubledOff:

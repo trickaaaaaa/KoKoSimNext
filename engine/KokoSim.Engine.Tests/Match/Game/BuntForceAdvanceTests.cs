@@ -196,19 +196,21 @@ public sealed class BuntForceAdvanceTests
         return prog.AdvancePitch() == AdvancePitchResult.PlateAppearance ? prog.Current : null;
     }
 
+    /// <summary>先の走者（本塁）を狙って生かした満塁のバントは、打者生存・押し出しで1点（安打にならない野選。issue #1258）。
+    /// 内野安打は打者が一塁で間に合う場合だけ（満塁の本塁狙いが外れたケースでは出なくてよい）。</summary>
     [Fact]
-    public void BasesLoaded_BuntInfieldHit_BatterStaysOnAndThirdRunnerScores()
+    public void BasesLoaded_BuntThatBeatsTheLeadThrow_BatterStaysOnAndThirdRunnerScores()
     {
-        var singles = 0;
+        var pushedIn = 0;
         for (ulong seed = 1; seed <= 400; seed++)
         {
             var pa = BuntOnce(seed, outs: 0);
-            if (pa is null || pa.Result != PlateAppearanceResult.Single) continue;
-            singles++;
-            Assert.Equal(1, pa.RunsScored);
+            if (pa is null || pa.RunsScored != 1) continue;
+            if (pa.Result is not (PlateAppearanceResult.Single or PlateAppearanceResult.InPlayOut)) continue;   // 死球の押し出しは別
             Assert.True(pa.BaseFirstAfter && pa.BaseSecondAfter && pa.BaseThirdAfter);
+            pushedIn++;
         }
-        Assert.True(singles > 0, "満塁の内野安打が1度も出なかった（探索範囲を広げる必要あり）");
+        Assert.True(pushedIn > 0, "満塁のバントで押し出しの1点が1度も出なかった（探索範囲を広げる必要あり）");
     }
 
     [Fact]
@@ -217,8 +219,18 @@ public sealed class BuntForceAdvanceTests
         var outsSeen = 0;
         for (ulong seed = 1; seed <= 400; seed++)
         {
-            var pa = BuntOnce(seed, outs: 2);
-            if (pa is null || pa.Result != PlateAppearanceResult.InPlayOut) continue;
+            var prog = new MatchProgression(Team("A"), Team("H"), new GameContext(), seed,
+                new ScenarioStart { Inning = 1, IsTop = true, Outs = 2, OnFirst = true, OnSecond = true, OnThird = true });
+            prog.ForceNext(ForcedOutcome.BuntInPlay);
+            if (prog.AdvancePitch() != AdvancePitchResult.Pitch) continue;
+            prog.SetPitchBattingOverride(offenseIsAway: true, PitchBattingOverride.Bunt);
+            if (prog.AdvancePitch() != AdvancePitchResult.PlateAppearance) continue;
+            var pa = prog.Current!;
+            if (pa.Result != PlateAppearanceResult.InPlayOut) continue;
+            // 次の打席の頭のアウト数で「イニングが終わったか」を見る（アウトなしの野選なら2アウトのまま同じ半回が続く）。
+            var next = 0;
+            while (next++ < 40 && prog.AdvancePitch() != AdvancePitchResult.PlateAppearance) { }
+            if (prog.Current!.Inning == pa.Inning && prog.Current.IsTop == pa.IsTop) continue;   // 野選: 半回が続いた
             outsSeen++;
             Assert.Equal(0, pa.RunsScored);
         }

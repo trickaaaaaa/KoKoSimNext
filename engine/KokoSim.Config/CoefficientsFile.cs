@@ -1002,6 +1002,7 @@ public static class CoefficientsLoader
         public double BuntPopHangSeconds { get; set; } = D.BuntPopHangSeconds;
         // スクイズ: 三塁走者のスタート（issue bunt-no-take-on-ball-pitches）
         public double SqueezeThirdRunnerStartDelaySeconds { get; set; } = D.SqueezeThirdRunnerStartDelaySeconds;
+        public double SqueezeHomeThrowSafeThreshold { get; set; } = D.SqueezeHomeThrowSafeThreshold;
         // 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）
         public double HomeRunnerReactionIntercept { get; set; } = D.HomeRunnerReactionIntercept;
         public double HomeRunnerReactionSlope { get; set; } = D.HomeRunnerReactionSlope;
@@ -1210,6 +1211,7 @@ public static class CoefficientsLoader
             BuntPopFieldedZM = BuntPopFieldedZM,
             BuntPopHangSeconds = BuntPopHangSeconds,
             SqueezeThirdRunnerStartDelaySeconds = SqueezeThirdRunnerStartDelaySeconds,
+            SqueezeHomeThrowSafeThreshold = SqueezeHomeThrowSafeThreshold,
             HomeRunnerReactionIntercept = HomeRunnerReactionIntercept,
             HomeRunnerReactionSlope = HomeRunnerReactionSlope,
             HomeLeadDistanceM = HomeLeadDistanceM,
