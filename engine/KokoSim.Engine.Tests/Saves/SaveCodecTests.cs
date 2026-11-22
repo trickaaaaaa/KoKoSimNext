@@ -69,6 +69,10 @@ public sealed class SaveCodecTests
         Assert.Equal(3, s.Contracts.LevelOf("scouting"));
         Assert.Equal(1, s.Contracts.LevelOf("coach_pitching"));
         Assert.Equal(0, s.Contracts.LevelOf("expedition"));
+        // 解約の予約（issue #1298）: 段は年度末まで残り、予約もそのまま往復する。
+        Assert.Equal(1, s.Contracts.LevelOf("coach_batting"));
+        Assert.Equal(0, s.Contracts.ScheduledLevelOf("coach_batting"));
+        Assert.Null(s.Contracts.ScheduledLevelOf("coach_pitching"));
         Assert.Equal(1, s.ManagerLastGrownYear);
         // 番狂わせ名声デルタの持ち越し（v12）: 試合ごとの値と並びがそのまま往復すること。
         Assert.Equal(new[] { 6.0, -3.5, 0.0 }, s.ManagerPendingUpsetDeltas);

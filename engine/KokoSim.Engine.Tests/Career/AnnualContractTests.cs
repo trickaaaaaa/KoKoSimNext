@@ -250,4 +250,78 @@ public sealed class AnnualContractTests
 
         Assert.Equal(0, m.Funds, 9);
     }
+
+    // ── 解約は年度末に効く（issue #1298） ──────────────────────────────
+
+    /// <summary>第0週に契約→第45週に解約しても、第46週の総括で年額は引かれ、効果は年度末まで残る。</summary>
+    [Fact]
+    public void Cancel_MidYear_StillChargesAtYearEnd_AndKeepsEffectUntilThen()
+    {
+        var set = new ContractSet();
+        set.SetLevel("coach_batting", 1);   // 第0週に契約
+        set.ScheduleCancel("coach_batting"); // 第45週に解約の操作
+
+        Assert.Equal(1, set.LevelOf("coach_batting"));
+        Assert.Equal(50, Catalog.Aggregate(set).CoachingBattingAdd, 9);   // 効果は年度末まで残る
+
+        // 第46週の総括: 契約したままの年と同じ額が引かれる。
+        var kept = new ContractSet();
+        kept.SetLevel("coach_batting", 1);
+        Assert.Equal(FundsAfterOneYear(Catalog.Aggregate(kept)), FundsAfterOneYear(Catalog.Aggregate(set)), 9);
+        Assert.Equal(FundsAfterOneYear(null) - 50 + new CareerCoefficients().ScoutCost, FundsAfterOneYear(Catalog.Aggregate(set)), 6);
+
+        // 総括の後にはじめて段が下がり、効果も年額も消える（次の年から）。
+        set.ApplyScheduled();
+        Assert.Equal(0, set.LevelOf("coach_batting"));
+        Assert.Empty(set.Scheduled);
+        Assert.Equal(ContractEffects.None, Catalog.Aggregate(set));
+    }
+
+    [Fact]
+    public void Schedule_CanBeClearedBeforeYearEnd()
+    {
+        var set = new ContractSet();
+        set.SetLevel("expedition", 1);
+        set.ScheduleCancel("expedition");
+        Assert.Equal(0, set.ScheduledLevelOf("expedition"));
+
+        set.ClearSchedule("expedition");
+        set.ApplyScheduled();
+        Assert.Equal(1, set.LevelOf("expedition"));
+    }
+
+    [Fact]
+    public void Schedule_ToLevelAtOrAboveCurrent_IsNotAReservation()
+    {
+        var set = new ContractSet();
+        set.SetLevel("scouting", 2);
+        set.ScheduleLevel("scouting", 1);
+        Assert.Equal(1, set.ScheduledLevelOf("scouting"));
+        set.ScheduleLevel("scouting", 2);   // いまの段へ戻す＝取り消し
+        Assert.Null(set.ScheduledLevelOf("scouting"));
+    }
+
+    /// <summary>決め直して段を直接据えたら、古い予約は捨てる（契約し直した＝継続の意思）。</summary>
+    [Fact]
+    public void SetLevel_DropsThePendingReservation()
+    {
+        var set = new ContractSet();
+        set.SetLevel("scouting", 1);
+        set.ScheduleCancel("scouting");
+        set.SetLevel("scouting", 2);
+        set.ApplyScheduled();
+        Assert.Equal(2, set.LevelOf("scouting"));
+    }
+
+    /// <summary>下げる予約は2段階の下げ（Lv3→Lv1）にも使える。</summary>
+    [Fact]
+    public void Schedule_ToLowerNonZeroLevel_AppliesAtYearEnd()
+    {
+        var set = new ContractSet();
+        set.SetLevel("scouting", 3);
+        set.ScheduleLevel("scouting", 1);
+        Assert.Equal(3, set.LevelOf("scouting"));
+        set.ApplyScheduled();
+        Assert.Equal(1, set.LevelOf("scouting"));
+    }
 }

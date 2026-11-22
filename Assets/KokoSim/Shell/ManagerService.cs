@@ -250,6 +250,10 @@ namespace KokoSim.Unity.Shell
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 
+            // 年額を引いた後で、予約していた解約・段下げを効かせる（issue #1298）。
+            // 総括より前に下げると、年額を払わずに1年分の効果だけ得られてしまう。
+            Contracts.ApplyScheduled();
+
             // 転任判定（設計書04 §1.3）。成長更新の直後の Fame/Trust を判定に使う
             // （CareerEngine.Run と同じ順序: 自然増→節目→フリー化資格/残留判定）。
             // 独立ストリーム（milestoneRng とは別タグ）で本編の乱数列を乱さない（不変条件#2）。

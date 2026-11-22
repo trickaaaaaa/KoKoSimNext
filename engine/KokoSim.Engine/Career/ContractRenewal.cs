@@ -41,6 +41,8 @@ public static class ContractRenewal
 /// <summary>
 /// 更新の下書き（契約ID→選んだ段）。決めるまで <see cref="ContractSet"/> には触れず、
 /// <see cref="ApplyTo"/> で初めて書き戻す＝途中でやめても契約は変わらない。
+/// 段を<b>上げる</b>選択はすぐ効くが、<b>下げる（やめる）</b>選択は解約と同じく年度末の予約になる
+/// （この年の年額はいまの段で引かれる・issue #1298）。
 /// 対象は作った時点で契約中の系統だけ（未契約の系統をここで新しく契約させない）。
 /// </summary>
 public sealed class ContractRenewalDraft
@@ -53,7 +55,8 @@ public sealed class ContractRenewalDraft
     {
         _catalog = catalog;
         _defs = new List<ContractDef>(ContractRenewal.ActiveContracts(catalog, current));
-        foreach (var d in _defs) _levels[d.Id] = Math.Clamp(current.LevelOf(d.Id), 0, d.MaxLevel);
+        // 既に解約を予約している系統は、予約した段から始める（触らずに閉じても予約が消えない）。
+        foreach (var d in _defs) _levels[d.Id] = Math.Clamp(current.ScheduledLevelOf(d.Id) ?? current.LevelOf(d.Id), 0, d.MaxLevel);
     }
 
     /// <summary>更新で見せる系統（作った時点で契約中だったもの）。</summary>
@@ -71,21 +74,31 @@ public sealed class ContractRenewalDraft
         _levels[id] = Math.Clamp(level, 0, def.MaxLevel);
     }
 
-    /// <summary>選んだ段の年額合計[万円]。総括で引かれる額と同じ <see cref="ContractCatalog.Aggregate"/> の数え方。</summary>
+    /// <summary>
+    /// この年の総括で引かれる年額合計[万円]。下げた系統はいまの段のまま引かれる
+    /// （総括で引かれる額と同じ <see cref="ContractCatalog.Aggregate"/> の数え方）。
+    /// </summary>
     public double AnnualCost(ContractSet current) => _catalog.Aggregate(Preview(current)).AnnualCost;
 
-    /// <summary>下書きを反映した契約状態の複製（対象外の系統は現状のまま）。元の <paramref name="current"/> は変えない。</summary>
+    /// <summary>
+    /// 下書きを反映した「総括の時点の」契約状態の複製（対象外の系統は現状のまま）。
+    /// 上げた系統は選んだ段、下げた系統は年度末まで今の段のまま。元の <paramref name="current"/> は変えない。
+    /// </summary>
     public ContractSet Preview(ContractSet current)
     {
         var set = new ContractSet();
         foreach (var kv in current.Levels) set.SetLevel(kv.Key, kv.Value);
-        foreach (var kv in _levels) set.SetLevel(kv.Key, kv.Value);
+        foreach (var kv in _levels) set.SetLevel(kv.Key, Math.Max(kv.Value, current.LevelOf(kv.Key)));
         return set;
     }
 
-    /// <summary>選んだ段を契約状態へ書き戻す。</summary>
+    /// <summary>選んだ段を契約状態へ書き戻す（上げは即時、下げ・やめるは年度末の予約）。</summary>
     public void ApplyTo(ContractSet current)
     {
-        foreach (var kv in _levels) current.SetLevel(kv.Key, kv.Value);
+        foreach (var kv in _levels)
+        {
+            if (kv.Value >= current.LevelOf(kv.Key)) current.SetLevel(kv.Key, kv.Value);
+            else current.ScheduleLevel(kv.Key, kv.Value);
+        }
     }
 }

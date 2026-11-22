@@ -141,6 +141,8 @@ internal static class SaveTestFixtures
         var contracts = new ContractSet();
         contracts.SetLevel("scouting", 3);
         contracts.SetLevel("coach_pitching", 1);
+        contracts.SetLevel("coach_batting", 1);
+        contracts.ScheduleCancel("coach_batting");   // 年度末に解約する予約（issue #1298）
 
         return new SaveState
         {

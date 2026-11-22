@@ -81,20 +81,53 @@ public sealed class ContractRenewalTests
     }
 
     [Fact]
-    public void Draft_ChangingLevels_ChangesCost_ButNotTheSetUntilApplied()
+    public void Draft_Cancelling_IsScheduledForYearEnd_AndTheYearStillCharges()
     {
         var set = Signed(("scouting", 3), ("coach_batting", 1), ("expedition", 1));
         var draft = new ContractRenewalDraft(Catalog, set);
 
-        draft.SetLevel("coach_batting", 0); // 50 → 0
+        draft.SetLevel("coach_batting", 0); // やめる＝年度末の予約
         draft.SetLevel("scouting", 1);      // 対象外＝無視される
 
-        Assert.Equal(140 + 20, draft.AnnualCost(set), 9);
-        Assert.Equal(1, set.LevelOf("coach_batting"));   // 決めるまで契約は動かない
+        Assert.Equal(140 + 50 + 20, draft.AnnualCost(set), 9);   // この年の年額は変わらない
+        Assert.Equal(1, set.LevelOf("coach_batting"));           // 決めるまで契約は動かない
 
         draft.ApplyTo(set);
-        Assert.Equal(0, set.LevelOf("coach_batting"));
+        Assert.Equal(1, set.LevelOf("coach_batting"));           // 適用しても段は年度末まで残る
+        Assert.Equal(0, set.ScheduledLevelOf("coach_batting"));
         Assert.Equal(3, set.LevelOf("scouting"));
+    }
+
+    /// <summary>段を上げる選択はすぐ効き、その段の年額が引かれる。</summary>
+    [Fact]
+    public void Draft_RaisingTakesEffectNow()
+    {
+        var set = Signed(("coach_batting", 0), ("expedition", 1));
+        var draft = new ContractRenewalDraft(Catalog, set);
+        draft.SetLevel("expedition", 1);
+        Assert.Equal(20, draft.AnnualCost(set), 9);
+        draft.ApplyTo(set);
+        Assert.Equal(1, set.LevelOf("expedition"));
+        Assert.Null(set.ScheduledLevelOf("expedition"));
+    }
+
+    /// <summary>既に解約を予約している系統は、触らずに閉じても予約が消えず、現在の段に戻せば取り消せる。</summary>
+    [Fact]
+    public void Draft_KeepsAnExistingCancelReservation_UntilPickedBack()
+    {
+        var set = Signed(("expedition", 1));
+        set.ScheduleCancel("expedition");
+
+        var untouched = new ContractRenewalDraft(Catalog, set);
+        Assert.Equal(0, untouched.LevelOf("expedition"));
+        untouched.ApplyTo(set);
+        Assert.Equal(0, set.ScheduledLevelOf("expedition"));
+
+        var pickedBack = new ContractRenewalDraft(Catalog, set);
+        pickedBack.SetLevel("expedition", 1);
+        pickedBack.ApplyTo(set);
+        Assert.Null(set.ScheduledLevelOf("expedition"));
+        Assert.Equal(1, set.LevelOf("expedition"));
     }
 
     [Fact]
@@ -123,19 +156,19 @@ public sealed class ContractRenewalTests
         return m.Funds;
     }
 
-    /// <summary>更新で段を変えた年は、その段の年額が総括で引かれる。</summary>
+    /// <summary>更新で「やめる」を選んだ年も、総括の年額はいまの段のまま引かれる（解約は年度末・issue #1298）。</summary>
     [Fact]
-    public void Summary_ChargesTheRenewedLevel()
+    public void Summary_StillChargesACancelledContract_ThisYear()
     {
         var set = Signed(("scouting", 3), ("coach_batting", 1), ("expedition", 1));
         var asIs = FundsAfterSummary(set);
 
         var draft = new ContractRenewalDraft(Catalog, set);
-        draft.SetLevel("expedition", 0);    // −20
-        draft.SetLevel("coach_batting", 0); // −50
+        draft.SetLevel("expedition", 0);
+        draft.SetLevel("coach_batting", 0);
         draft.ApplyTo(set);
 
-        Assert.Equal(asIs + 70, FundsAfterSummary(set), 6);
+        Assert.Equal(asIs, FundsAfterSummary(set), 9);
     }
 
     /// <summary>何も変えなければ、総括で引かれる額は更新イベントが無かった年と同じ。</summary>

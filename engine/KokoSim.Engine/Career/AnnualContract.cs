@@ -9,7 +9,9 @@ namespace KokoSim.Engine.Career;
 /// <para><b>施設・練習道具との決定的な違いは「累積しない」こと。</b>
 /// 施設（<see cref="Season.FacilityUpgrade"/>）は段を買い足すたびに効果が積み上がる買い切りだが、
 /// 年契約は「いま何段で契約しているか」だけが効く継続契約で、Lv2 の年額と効果は Lv1 を<b>置き換える</b>。
-/// 段を下げれば効果も年額もその場で下がる（＝解約できる）。</para>
+/// 段は上げればすぐ効くが、<b>下げる（解約する）のは年度末</b>＝<see cref="ContractSet.ScheduleLevel"/> で予約し、
+/// 年度末の総括（年額の引き落とし）の後に <see cref="ContractSet.ApplyScheduled"/> で初めて下がる。
+/// いつでも解約の操作はできるが、その年の年額は必ず引かれる（年額を払わずに1年分の効果を得る穴を塞ぐ・issue #1298）。</para>
 /// </summary>
 public sealed record ContractTier
 {
@@ -211,12 +213,48 @@ public sealed record ContractCatalog
 public sealed class ContractSet
 {
     private readonly Dictionary<string, int> _levels = new();
+    private readonly Dictionary<string, int> _scheduled = new();
 
     public int LevelOf(string id) => _levels.TryGetValue(id, out var v) ? v : 0;
 
-    public void SetLevel(string id, int level) => _levels[id] = Math.Max(0, level);
+    /// <summary>段を直接据える。そのIDに予約があれば捨てる（決め直した＝予約より新しい意思）。</summary>
+    public void SetLevel(string id, int level)
+    {
+        _levels[id] = Math.Max(0, level);
+        _scheduled.Remove(id);
+    }
 
     public IReadOnlyDictionary<string, int> Levels => _levels;
+
+    /// <summary>年度末に下がる予約（契約ID→年度末の総括の後の段）。予約が無いIDは載らない。</summary>
+    public IReadOnlyDictionary<string, int> Scheduled => _scheduled;
+
+    /// <summary>年度末に下がる段。予約が無ければ null（＝いまの段のまま）。</summary>
+    public int? ScheduledLevelOf(string id) => _scheduled.TryGetValue(id, out var v) ? v : null;
+
+    /// <summary>
+    /// 年度末の総括の後にこの段へ下げる予約をする。いまの段以上なら下げではないので予約を捨てる
+    /// （取り消しも兼ねる）。いまの段・効果は年度末まで変わらず、年額はいまの段で引かれる。
+    /// </summary>
+    public void ScheduleLevel(string id, int level)
+    {
+        var target = Math.Max(0, level);
+        if (target >= LevelOf(id)) _scheduled.Remove(id);
+        else _scheduled[id] = target;
+    }
+
+    /// <summary>解約の予約（年度末に0へ）。</summary>
+    public void ScheduleCancel(string id) => ScheduleLevel(id, 0);
+
+    /// <summary>予約を取り消す（契約を続ける）。</summary>
+    public void ClearSchedule(string id) => _scheduled.Remove(id);
+
+    /// <summary>年度末の総括（年額の引き落とし）の後に呼ぶ。予約した段へ下げ、予約を空にする。</summary>
+    public void ApplyScheduled()
+    {
+        foreach (var kv in _scheduled) _levels[kv.Key] = Math.Max(0, kv.Value);
+        _scheduled.Clear();
+    }
 
     /// <summary>
     /// 新規ゲームの既定＝<b>何も契約していない</b>（監督決定 2026-08-11）。
