@@ -2945,6 +2945,7 @@ public static class CoefficientsLoader
         public double BatterArchetypeGapHitterContact { get; set; } = BAD.GapHitterContact;
         public double BatterArchetypeGapHitterPower { get; set; } = BAD.GapHitterPower;
         public double BatterArchetypeGapHitterSpeed { get; set; } = BAD.GapHitterSpeed;
+        public double BatterArchetypeGapHitterLaunch { get; set; } = BAD.GapHitterLaunch;
         public double BatterArchetypeSpeedyContactSpeed { get; set; } = BAD.SpeedyContactSpeed;
         public double BatterArchetypeSpeedyContactContact { get; set; } = BAD.SpeedyContactContact;
         public double BatterArchetypeSpeedyContactPower { get; set; } = BAD.SpeedyContactPower;
@@ -3053,6 +3054,7 @@ public static class CoefficientsLoader
                 GapHitterContact = BatterArchetypeGapHitterContact,
                 GapHitterPower = BatterArchetypeGapHitterPower,
                 GapHitterSpeed = BatterArchetypeGapHitterSpeed,
+                GapHitterLaunch = BatterArchetypeGapHitterLaunch,
                 SpeedyContactSpeed = BatterArchetypeSpeedyContactSpeed,
                 SpeedyContactContact = BatterArchetypeSpeedyContactContact,
                 SpeedyContactPower = BatterArchetypeSpeedyContactPower,

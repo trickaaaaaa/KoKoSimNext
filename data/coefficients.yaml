@@ -2166,6 +2166,7 @@ roster:
   batter_archetype_gap_hitter_contact: 10
   batter_archetype_gap_hitter_power: 6
   batter_archetype_gap_hitter_speed: -19
+  batter_archetype_gap_hitter_launch: -12          # 低い弾道（issue #1304）。弾道は成長しない＝生成時に尖り方を掛けて1回だけ
   batter_archetype_speedy_contact_speed: 13
   batter_archetype_speedy_contact_contact: 8
   batter_archetype_speedy_contact_power: -26
