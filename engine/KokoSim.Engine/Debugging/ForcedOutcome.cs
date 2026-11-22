@@ -138,8 +138,20 @@ public static class ForcedOutcomes
         _ => c,
     };
 
-    /// <summary>enum 名（大文字小文字を無視）から解釈する。未知なら false（例外を投げない）。</summary>
+    /// <summary>
+    /// enum 名（大文字小文字を無視）から解釈する。未知なら false（例外を投げない）。
+    /// 綴りは enum 名の1つだけ（<c>WildPitch</c>。<c>wild_pitch</c> や数値は通さない）＝CLI・Unity・DebugBridge・シナリオYAMLで同じ。
+    /// </summary>
     public static bool TryParse(string? name, out ForcedOutcome outcome)
-        => System.Enum.TryParse(name ?? "", ignoreCase: true, out outcome)
-           && System.Enum.IsDefined(typeof(ForcedOutcome), outcome);
+    {
+        outcome = ForcedOutcome.None;
+        if (string.IsNullOrEmpty(name)) return false;
+        foreach (var n in System.Enum.GetNames(typeof(ForcedOutcome)))
+        {
+            if (!string.Equals(n, name, System.StringComparison.OrdinalIgnoreCase)) continue;
+            outcome = (ForcedOutcome)System.Enum.Parse(typeof(ForcedOutcome), n);
+            return true;
+        }
+        return false;
+    }
 }

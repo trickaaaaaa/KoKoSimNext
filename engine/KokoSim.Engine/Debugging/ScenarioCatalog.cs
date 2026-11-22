@@ -44,6 +44,41 @@ public sealed record ScenarioDefinition
     /// <summary>強制発動（設計書17 §6.1, F4）。<c>ForcedOutcome</c> の enum 名。null=なし。</summary>
     public string? Force { get; init; }
 
+    /// <summary>強制発動を解釈する（null=なし）。未知の綴りは例外（黙って強制なしで始めない）。</summary>
+    public ForcedOutcome ResolveForce()
+    {
+        if (Force is null) return ForcedOutcome.None;
+        if (!ForcedOutcomes.TryParse(Force, out var f))
+            throw new System.ArgumentException(
+                $"シナリオ {Id}: 未知の force: {Force}（{string.Join("|", System.Enum.GetNames(typeof(ForcedOutcome)))}）");
+        return f;
+    }
+
+    /// <summary>
+    /// 宣言が矛盾していないか（範囲外・未知の綴りは黙って直さず投げる＝シナリオYAMLの誤りを読み込み時に殺す）。
+    /// YAML の読み込みと <see cref="ScenarioBuilder.Build"/> の両方で呼ぶ。
+    /// </summary>
+    public void Validate()
+    {
+        try
+        {
+            ToStart().Validate();
+            var seen = new HashSet<int>();
+            foreach (var b in Bases)
+            {
+                if (b is < 1 or > 3) throw new System.ArgumentException($"シナリオの指定が不正です: bases は1〜3（{b}）");
+                if (!seen.Add(b)) throw new System.ArgumentException($"シナリオの指定が不正です: bases に重複（{b}）");
+            }
+            ScenarioBuilder.ParseTeamSpec(Away);
+            ScenarioBuilder.ParseTeamSpec(Home);
+            ResolveForce();
+        }
+        catch (System.ArgumentException e) when (!e.Message.StartsWith("シナリオ " + Id, System.StringComparison.Ordinal))
+        {
+            throw new System.ArgumentException($"シナリオ {Id}: {e.Message}", e);
+        }
+    }
+
     public ScenarioStart ToStart() => new()
     {
         Inning = Inning,
@@ -114,7 +149,7 @@ public static class ScenarioBuilder
     public static Built Build(
         ScenarioDefinition def, GameContext baseCtx, ulong seed, Team? playerTeam = null)
     {
-        def.ToStart().Validate();
+        def.Validate();
 
         var away = ResolveTeam(def.Away, "遠征校", seed ^ 0xA_0000UL, playerTeam);
         var home = ResolveTeam(def.Home, "地元校", seed ^ 0xB_0000UL, playerTeam);
@@ -130,66 +165,74 @@ public static class ScenarioBuilder
         return new Built(away, home, ctx, def.ToStart(), def.Seed ?? seed);
     }
 
+    /// <summary>チーム指定を解釈した結果。</summary>
+    internal readonly record struct TeamSpec(bool IsPlayer, double Strength, string? Tier, int? Bench);
+
+    /// <summary>
+    /// チーム指定（<c>player</c> / <c>AI:tier=A</c> / <c>AI:strength=72</c>。末尾に <c>;bench=N</c> を付けられる）を構文だけ解く。
+    /// 乱数も生成も使わないので、YAML の読み込み時に誤りを殺すのにも使う。書式違反は <see cref="System.ArgumentException"/>。
+    /// </summary>
+    internal static TeamSpec ParseTeamSpec(string spec)
+    {
+        const string usage = "player | AI:tier=A | AI:strength=72";
+        // 末尾の ";bench=N"＝ベンチ入りを N 人に絞る（控えを背番号順の後ろから削る）。部員が少ない学校の絵の検証用
+        //（サヨナラの場面で喜ぶ人数＝ベンチ入り・issue #1176）。生成の乱数は引き終わった後に削る＝打順・能力は変わらない
+        int? bench = null;
+        var baseSpec = spec.Trim();
+        var semi = spec.IndexOf(';');
+        if (semi >= 0)
+        {
+            var opt = spec.Substring(semi + 1).Trim();
+            baseSpec = spec.Substring(0, semi).Trim();
+            const string benchKey = "bench=";
+            if (!opt.StartsWith(benchKey, System.StringComparison.OrdinalIgnoreCase)
+                || !int.TryParse(opt.Substring(benchKey.Length), System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var n))
+                throw new System.ArgumentException($"未知のチーム指定: {spec}（末尾は ;bench=N だけ）");
+            bench = n;
+        }
+
+        if (string.Equals(baseSpec, "player", System.StringComparison.OrdinalIgnoreCase))
+            return new TeamSpec(true, 55.0, null, bench);
+
+        if (!baseSpec.StartsWith("AI:", System.StringComparison.OrdinalIgnoreCase))
+            throw new System.ArgumentException($"未知のチーム指定: {spec}（{usage}）");
+
+        var arg = baseSpec.Substring(3);
+        var eq = arg.IndexOf('=');
+        if (eq <= 0) throw new System.ArgumentException($"未知のチーム指定: {spec}（{usage}）");
+        var key = arg.Substring(0, eq).Trim();
+        var val = arg.Substring(eq + 1).Trim();
+        if (string.Equals(key, "tier", System.StringComparison.OrdinalIgnoreCase))
+            return new TeamSpec(false, StrengthOfTier(val), val.ToUpperInvariant(), bench);
+        if (string.Equals(key, "strength", System.StringComparison.OrdinalIgnoreCase)
+            && double.TryParse(val, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var s))
+            return new TeamSpec(false, MathUtil.Clamp(s, 0.0, 100.0), null, bench);
+        throw new System.ArgumentException($"未知のチーム指定: {spec}（{usage}）");
+    }
+
     /// <summary>
     /// "player" / "AI:tier=A" / "AI:strength=72" を Team へ解決する。
     /// AI校は <see cref="StrengthTeamFactory"/>（大会展望と実戦の単一ソース）をそのまま使う。
     /// </summary>
     private static Team ResolveTeam(string spec, string fallbackName, ulong seed, Team? playerTeam)
     {
-        // 末尾の ";bench=N"＝ベンチ入りを N 人に絞る（控えを背番号順の後ろから削る）。部員が少ない学校の絵の検証用
-        //（サヨナラの場面で喜ぶ人数＝ベンチ入り・issue #1176）。生成の乱数は引き終わった後に削る＝打順・能力は変わらない
-        var semi = spec.IndexOf(';');
-        if (semi >= 0)
+        var parsed = ParseTeamSpec(spec);
+        Team team;
+        if (parsed.IsPlayer)
         {
-            var opt = spec.Substring(semi + 1).Trim();
-            var baseSpec = spec.Substring(0, semi).Trim();
-            const string benchKey = "bench=";
-            if (!opt.StartsWith(benchKey, System.StringComparison.OrdinalIgnoreCase)
-                || !int.TryParse(opt.Substring(benchKey.Length), System.Globalization.NumberStyles.Integer,
-                    System.Globalization.CultureInfo.InvariantCulture, out var bench))
-                throw new System.ArgumentException($"未知のチーム指定: {spec}（末尾は ;bench=N だけ）");
-            var team = ResolveTeam(baseSpec, fallbackName, seed, playerTeam);
-            var keep = System.Math.Max(0, bench - (team.BenchEntry.Count - team.Reserves.Count));
-            return keep >= team.Reserves.Count ? team : team with { Reserves = team.Reserves.Take(keep).ToList() };
-        }
-        if (string.Equals(spec, "player", System.StringComparison.OrdinalIgnoreCase))
-        {
-            return playerTeam ?? StrengthTeamFactory.Create(55.0, "自校", new Xoshiro256Random(seed));
-        }
-
-        var strength = 55.0;
-        var name = fallbackName;
-        if (spec.StartsWith("AI:", System.StringComparison.OrdinalIgnoreCase))
-        {
-            var arg = spec.Substring(3);
-            var eq = arg.IndexOf('=');
-            if (eq > 0)
-            {
-                var key = arg.Substring(0, eq).Trim();
-                var val = arg.Substring(eq + 1).Trim();
-                if (string.Equals(key, "tier", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    strength = StrengthOfTier(val);
-                    name = fallbackName + "(" + val.ToUpperInvariant() + ")";
-                }
-                else if (string.Equals(key, "strength", System.StringComparison.OrdinalIgnoreCase)
-                         && double.TryParse(val, System.Globalization.NumberStyles.Float,
-                             System.Globalization.CultureInfo.InvariantCulture, out var s))
-                {
-                    strength = MathUtil.Clamp(s, 0.0, 100.0);
-                }
-                else
-                {
-                    throw new System.ArgumentException($"未知のチーム指定: {spec}（player | AI:tier=A | AI:strength=72）");
-                }
-            }
+            team = playerTeam ?? StrengthTeamFactory.Create(parsed.Strength, "自校", new Xoshiro256Random(seed));
         }
         else
         {
-            throw new System.ArgumentException($"未知のチーム指定: {spec}（player | AI:tier=A | AI:strength=72）");
+            var name = parsed.Tier is null ? fallbackName : fallbackName + "(" + parsed.Tier + ")";
+            team = StrengthTeamFactory.Create(parsed.Strength, name, new Xoshiro256Random(seed));
         }
 
-        return StrengthTeamFactory.Create(strength, name, new Xoshiro256Random(seed));
+        if (parsed.Bench is not { } bench) return team;
+        var keep = System.Math.Max(0, bench - (team.BenchEntry.Count - team.Reserves.Count));
+        return keep >= team.Reserves.Count ? team : team with { Reserves = team.Reserves.Take(keep).ToList() };
     }
 
     /// <summary>ティア文字 → 帯の中央値（<see cref="Tiers.FromStrength"/> の逆写像）。</summary>

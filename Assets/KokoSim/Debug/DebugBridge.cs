@@ -77,6 +77,7 @@ namespace KokoSim.Unity.Debugging
             {
                 var seed = ParseSeed(seedHex);
                 ScenarioStart start = null;
+                var forced = ForcedOutcome.None;
                 var ctx = DebugTraceHub.AttachTo(new GameContext { CaptureTimelines = true });
                 // 係数の識別子は歩くのが高いので試合を起こすたびに1回だけ（設計書17 §4.3 の coeff）。
                 var coeffId = CoefficientFingerprint.Of(ctx);
@@ -95,6 +96,7 @@ namespace KokoSim.Unity.Debugging
                     start = built.Start;
                     seed = built.Seed;
                     _scenarioId = def.Id;
+                    forced = def.ResolveForce();   // CLI・Unity デバッグ試合と同じく、シナリオの force: を最初の1打席へ
                 }
                 else
                 {
@@ -109,6 +111,7 @@ namespace KokoSim.Unity.Debugging
                 _seed = seed;
                 _start = start;
                 _prog = new MatchProgression(_away, _home, _ctx, seed, start);
+                if (forced != ForcedOutcome.None) _prog.ForceNext(forced);
                 return DumpState();
             }
             catch (System.Exception e) { return Err(e.Message); }
@@ -331,7 +334,7 @@ namespace KokoSim.Unity.Debugging
         /// タイトル直後などロスター未ロード時は null＝engine 既定（生成校）へフォールバックし、
         /// どちらを使ったかを <paramref name="source"/>（"roster"/"generated"）で返す。
         /// </summary>
-        private static KokoSim.Engine.Match.Game.Team TryBuildPlayerTeam(out string source)
+        internal static KokoSim.Engine.Match.Game.Team TryBuildPlayerTeam(out string source)
         {
             try
             {

@@ -55,10 +55,17 @@ namespace KokoSim.Unity.Debugging
                 seed = s;
             }
 
-            var built = DebugMatchFactory.Build(stadium, new DebugMatchOptions { Seed = seed, Scenario = scenario });
+            // "player" 指定は実部員で解く（DebugBridge と同じ。ロスター未ロードなら null＝生成校のまま）
+            var built = DebugMatchFactory.Build(stadium, new DebugMatchOptions
+            {
+                Seed = seed,
+                Scenario = scenario,
+                PlayerTeam = scenario != null ? DebugBridge.TryBuildPlayerTeam(out _) : null,
+            });
             var ctx = DebugTraceHub.AttachTo(built.Ctx);   // HUD が閉じていれば恒等
             var prog = new MatchProgression(built.Away, built.Home, ctx, built.Seed, built.Start);
-            if (scenario != null && ForcedOutcomes.TryParse(scenario.Force, out var force)) prog.ForceNext(force);
+            var force = scenario?.ResolveForce() ?? ForcedOutcome.None;
+            if (force != ForcedOutcome.None) prog.ForceNext(force);
 
             MatchLiveController.Pending = new MatchLiveController.LiveMatchRequest
             {
