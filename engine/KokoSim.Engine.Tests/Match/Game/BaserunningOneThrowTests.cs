@@ -116,6 +116,58 @@ public sealed class BaserunningOneThrowTests
         Assert.True(scored > 0, "一度も生還しない");
     }
 
+    // 安打で本塁へ投げてセーフだった打球は、もう三塁へは投げられない（issue #1257）。
+    // 修正前は本塁セーフで送球使用済みにならず、後続の一塁走者の三塁レースが2本目の送球として走り、
+    // 2アウトでは3アウト目の後の得点が残った（runs=1 かつ三塁で憤死）。
+    [Theory]
+    [InlineData(34.0, 70.0, 3.0, 70)]
+    [InlineData(20.0, 55.0, 2.4, 60)]
+    [InlineData(-10.0, 80.0, 3.4, 50)]
+    [InlineData(40.0, 78.0, 3.6, 40)]
+    public void Single_HomeThrowSafe_NoSecondThrowToThird(double x, double z, double fieldedAt, int arm)
+    {
+        var home = new HomePlayContext(Field,
+            new HomePlaySituation(new Vector3D(x, 0, z), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps),
+            new TacticsCoefficients(), 0.9, DefenseDepth.Normal, IsFly: false);
+        var rng = new Xoshiro256Random(21);
+        var scoredWithThirdAttempt = 0;
+        foreach (var outs in new[] { 0, 1, 2 })
+        {
+            for (var i = 0; i < 4000; i++)
+            {
+                var r1 = new Player { Speed = 50, Baserunning = 50 };
+                var bases = new BaseState { First = r1, Second = new Player { Speed = 70, Baserunning = 60 } };
+                var (runs, _, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+                    bases, PlateAppearanceResult.Single, new Player(), outs, C, rng, collectMoves: true, home);
+                if (runs == 0) continue;
+                scoredWithThirdAttempt++;
+                Assert.False(moves.Any(m => m is { ToBase: 3, Out: true }),
+                    $"本塁へ投げて生還した打球で三塁へも投げて刺した（outs={outs}, runs={runs}）");
+            }
+        }
+        Assert.True(scoredWithThirdAttempt > 0, "一度も生還しない");
+    }
+
+    [Fact]
+    public void Single_R1R3_ThirdRunnerSafeAtHome_FirstRunnerDoesNotRaceToThird()
+    {
+        var home = new HomePlayContext(Field,
+            new HomePlaySituation(new Vector3D(34, 0, 70), 3.0, new Player { ArmStrength = 70 }.ToFielder().ThrowSpeedMps),
+            new TacticsCoefficients(), 0.9, DefenseDepth.Normal, IsFly: false);
+        var rng = new Xoshiro256Random(22);
+        var scored = 0;
+        for (var i = 0; i < 6000; i++)
+        {
+            var bases = new BaseState { First = new Player { Speed = 45, Baserunning = 50 }, Third = Fast };
+            var (runs, _, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.Single, new Player(), 2, C, rng, collectMoves: true, home);
+            if (runs == 0) continue;
+            scored++;
+            Assert.DoesNotContain(moves, m => m is { FromBase: 1, ToBase: 3, Out: true });
+        }
+        Assert.True(scored > 0, "一度も生還しない");
+    }
+
     [Fact]
     public void InfieldIn_R1R3_FirstBaseman_DoesNotTagSecondThenRaceHome()
     {
