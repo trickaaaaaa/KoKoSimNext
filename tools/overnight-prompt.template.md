@@ -56,16 +56,28 @@
      この検査だけが Assets のコンパイルを見る唯一のゲートである（PR #344 は using 漏れのまま main に入り
      Unity が丸ごと落ちた）。下の目視確認がブリッジ不応答でスキップになっても、**この検査はスキップできない**。
    - 検証専用チェックアウト `/Users/seiya.oda/Unity/KoKoSimNext-verify` に自分のブランチを反映する:
-     `git -C /Users/seiya.oda/Unity/KoKoSimNext-verify checkout --detach issue/__ISSUE__-agent`
+     `bash tools/verify-checkout.sh issue/__ISSUE__-agent`
+     （素の `git checkout --detach` は前の検証で Unity が作った未追跡の .meta 等で止まる。このスクリプトは
+     verify の Assets/ ProjectSettings/ Packages/ の残りを捨ててから切り替える。生成物の DLL は消さない）
      （同一リポジトリの worktree なので push 不要でローカルブランチをそのまま参照できる）
    - verify 側の engine DLL は checkout 時に post-checkout フックが作り直す（engine/ か data/ が変わったときだけ）。
      フックの出力が無いのに engine の変更が Unity に出ない場合は、verify チェックアウトで
      `bash tools/sync-engine-dll.sh` を一度回す（DLL は Git 管理外なのでコミットの心配は無い）
-   - UnityMCP（.mcp.json 設定済み）で検証用 Editor に接続する。mcpforunity://instances 等で
-     **接続先のプロジェクトパスが `KoKoSimNext-verify` であることを必ず確認**し、複数あれば `set_active_instance` で選ぶ。
-     **verify のインスタンスが見つからない場合（ユーザー本人の Editor しか居ない場合を含む）は、
-     絶対にそちらへ接続せず**、実機確認をスキップして「目視未実施（verify Editor 不在）」と PR に明記して先へ進む
-   - `refresh_unity` でリコンパイル → `read_console` で**コンパイルエラーがないこと**を必ず確認（CS エラーがあれば修正して worktree に反映→再 checkout →再確認）
+   - **検証用 Editor の再コンパイルと待ちは、必ずこのスクリプトで前面で行う**（最大5分・ターンを跨がない）:
+     `python3 tools/verify-editor.py refresh --timeout 300`（**Bash ツールの timeout は 400000 を指定**する。
+     既定の2分だとスクリプトより先に Bash が切れる。`wait` も同じ）
+     - `refresh_unity` を直接呼ばない。`refresh_unity` は60秒しか待たないが、verify Editor はリロード後に
+       ブリッジが戻るまで**1分半〜2分かかる**のが普通（2026-11-22 のサーバログで実測）。60秒のタイムアウトは
+       「不応答」ではない。以前はこれを不応答と取り違えて目視確認を飛ばしていた
+     - 終了コード0なら**最後の行が接続先の ID**（例 `KoKoSimNext-verify@364e5d…`）。このスクリプトは名前だけでなく
+       `Application.dataPath` が verify のパスであることまで確かめている。以後の MCP 呼び出しは
+       **すべて `unity_instance` にこの ID を渡す**（または `set_active_instance` で選ぶ）。ユーザー本人の Editor へは絶対に接続しない
+     - 「コンパイルエラーで止まっている」と出たら `read_console` でエラーを読み、直して worktree に反映→
+       再 `verify-checkout.sh` →再 `verify-editor.py refresh`
+     - その後も `read_console` で**コンパイルエラーがないこと**を必ず確認する
+     - 途中で Play を出入りした後などに応答が途切れたら `python3 tools/verify-editor.py wait` で待ってから続ける
+     - verify のインスタンスがそもそも居ない（スクリプトが5分待っても「未接続」のまま）ときだけ、実機確認をスキップして
+       「目視未実施（verify Editor 不在）」と PR に明記して先へ進む
    - UI の見た目確認: `docs/design/UI-BUILD-METHOD.md` のスクショ手順に従う。要点:
      - スクショは **Play モード中**に撮る（`manage_editor` で Play 開始、`Application.runInBackground=true` を確保）
      - 複数枚はバッチ用 MonoBehaviour コルーチンで撮る（execute_code 連打はドメインリロードで Play が抜ける）
@@ -79,7 +91,10 @@
    - 撮ったスクショを .claude/rules/ui.md の **UI原則7箇条**に照らして自己レビューし、違反があれば修正して
      **その場でコミットする**（まとめて1つの最終コミットにしなくてよい。直しごとにコミットしてから次へ進む）
    - スクショは `out/overnight/shots/issue-__ISSUE__/` にコピーして保存し、PR 本文に保存先とレビュー結果を書く
-   - **Editor に接続できない/ブリッジ不応答の場合**: 待たずに「Unity 上の目視確認は未実施」と PR に明記して先へ進む（issue を失敗扱いにしない）。background 完了通知を待つ・sleep で待つ等は禁止（待つと消滅する）
+   - **Editor に接続できない/ブリッジ不応答の場合**: まず `python3 tools/verify-editor.py wait`（前面・最大5分）で待つ。
+     それでも時間切れなら「Unity 上の目視確認は未実施（verify-editor.py が N 秒で時間切れ・最後の状態: …）」と
+     スクリプトの出力を添えて PR に明記して先へ進む（issue を失敗扱いにしない）。background 完了通知を待つ・
+     ScheduleWakeup/Monitor でターンを終えて待つのは禁止（消滅する）。前面のスクリプトの中で待つのはよい
    - 検証が終わったら Play モードを終了しておく
 6. **push & PR 作成（ここまでがあなたのゴール）**:
    - 手順4以降に直しが入っていれば最後にもう一度コミットする（無ければ手順4のコミットのままでよい）
