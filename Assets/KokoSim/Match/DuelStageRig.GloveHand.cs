@@ -51,7 +51,14 @@ namespace KokoSim.Unity.Match
                     handless = BuildHandlessMesh(src, smr.bones, hand);
                     HandlessMeshCache[key] = handless;   // null＝手を含まないメッシュ（次回も素通し）
                 }
-                if (handless != null) smr.sharedMesh = handless;
+                if (handless != null)
+                {
+                    // sharedMesh の差し替えは localBounds をメッシュの箱へ戻しうる＝固定バウンズ（±5m 箱）を張り直す
+                    var bounds = smr.localBounds;
+                    bool fixedBounds = !smr.updateWhenOffscreen;
+                    smr.sharedMesh = handless;
+                    if (fixedBounds) smr.localBounds = bounds;
+                }
             }
         }
 

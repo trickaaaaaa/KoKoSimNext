@@ -3153,7 +3153,8 @@ namespace KokoSim.Unity.Match
 
             // 球が手を離れる点の**幾何解**（どの時刻から再生を始めても同じ値）。
             // 保持中は実測の手で上書きするが、途中から再生した場合はこれが使われる
-            var off = Quaternion.Euler(0f, yaw, 0f) * new Vector3(an.HandX, 0f, an.HandZ);
+            // 収録は右投げ。左投げ（鏡映親の下）は手が体の反対側＝横オフセットの符号を返す（GloveX と同じ）
+            var off = Quaternion.Euler(0f, yaw, 0f) * new Vector3(an.HandX * MirrorSign(FielderActor(who)), 0f, an.HandZ);
             var hand = new Vector3((float)fp.X + off.x,
                 FieldGroundY((float)fp.X, (float)fp.Y) + an.HandY, (float)fp.Y + off.z);
 

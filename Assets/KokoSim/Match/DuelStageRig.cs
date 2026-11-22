@@ -1151,6 +1151,7 @@ namespace KokoSim.Unity.Match
             public readonly List<Material> VisorMats = new(); // つばの色で塗った装備（帽子つば・issue #621）
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
+            public bool TightBounds;                 // SpawnActor が固定バウンズで生成した役者（鏡映を外しても固定のまま）
             public bool Mirrored;                    // 鏡映親ノードが反転中か（EvaluateGraph が評価の間だけ鏡映を外す）
             public Transform MirrorNode;             // 鏡映親ノード（ApplyMirror が控える。無い役者は null）
             /// <summary>
@@ -4759,6 +4760,7 @@ namespace KokoSim.Unity.Match
                 GroundY = groundY,
                 RegionMat = regionReady ? mat : null,   // 攻守交代の塗り替え（SetTeamColors）用
                 BodyScale = scale,
+                TightBounds = tightBounds,
             };
             var lf = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
             var rf = animator.GetBoneTransform(HumanBodyBones.RightFoot);
@@ -6525,7 +6527,9 @@ namespace KokoSim.Unity.Match
                 }
                 else
                 {
-                    smr.updateWhenOffscreen = true;   // 非ミラーは従来どおり実ポーズ追従（SpawnActorの既定）
+                    // 非ミラーは従来どおり実ポーズ追従（SpawnActorの既定）。固定バウンズで生成した役者（守備陣）は固定のまま
+                    // ＝戻すと左→右の守備交代のあとその野手だけ毎フレームのフルスキニングに戻る
+                    smr.updateWhenOffscreen = !a.TightBounds;
                 }
             }
             // 剛体メッシュ（帽子・靴・ソックス・グラブ等のボーン直付け）は負スケールで巻き順が裏返り、

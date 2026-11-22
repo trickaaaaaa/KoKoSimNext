@@ -287,3 +287,48 @@ captures:
     manager: home
     shots: [start, catch, release]
     probes: [RunnerDiag]
+  # ── バントを当てた後の打者が走り出さずに止まる（issue #1141 の撮り方。旧 DuelBuntHitFinishShooter の置き換え）。
+  # 旧＝打ち切りがスイングと同じ 1.433（切り替えで再現）／新＝既定。probes の BatterRootDiag の腰が
+  # 旧は一塁へ走り出す（左打者は鏡映で三塁側へ）／新は構えの近くに止まる ──
+  - id: bunt-hit-finish-1141-old-R
+    name: "バントを当てた後の打者の止まり方・右打者・旧（打ち切り1.433）（issue #1141）"
+    scenario: offense-timeout-top-lab
+    manager: away
+    force: BuntInPlay
+    sign: Bunt
+    view: rig
+    duel_seconds: 3.0
+    video: {from: start, to: end, fps: 24}
+    probes: [BatterRootDiag]
+    overrides: {DuelStageRig.BuntHitFinishOverrideForCapture: 1.433}
+  - id: bunt-hit-finish-1141-new-R
+    name: "バントを当てた後の打者の止まり方・右打者・新（既定）（issue #1141）"
+    scenario: offense-timeout-top-lab
+    manager: away
+    force: BuntInPlay
+    sign: Bunt
+    view: rig
+    duel_seconds: 3.0
+    video: {from: start, to: end, fps: 24}
+    probes: [BatterRootDiag]
+  - id: bunt-hit-finish-1141-old-L
+    name: "バントを当てた後の打者の止まり方・左打者・旧（打ち切り1.433）（issue #1141）"
+    scenario: offense-timeout-left-lab
+    manager: away
+    force: BuntInPlay
+    sign: Bunt
+    view: rig
+    duel_seconds: 3.0
+    video: {from: start, to: end, fps: 24}
+    probes: [BatterRootDiag]
+    overrides: {DuelStageRig.BuntHitFinishOverrideForCapture: 1.433}
+  - id: bunt-hit-finish-1141-new-L
+    name: "バントを当てた後の打者の止まり方・左打者・新（既定）（issue #1141）"
+    scenario: offense-timeout-left-lab
+    manager: away
+    force: BuntInPlay
+    sign: Bunt
+    view: rig
+    duel_seconds: 3.0
+    video: {from: start, to: end, fps: 24}
+    probes: [BatterRootDiag]
