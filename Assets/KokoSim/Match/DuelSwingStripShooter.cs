@@ -63,6 +63,8 @@ namespace KokoSim.Unity.Match
             new GameObject("~SwingStripAuto").AddComponent<DuelSwingStripShooter>();
         }
 
+        private void OnDestroy() => DuelStageRig.CalibrationOverride = null;
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;

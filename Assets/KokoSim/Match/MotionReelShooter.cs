@@ -162,6 +162,13 @@ namespace KokoSim.Unity.Match
         private readonly HashSet<string> _done = new();
         private readonly StringBuilder _index = new();
 
+        private void OnDestroy()
+        {
+            MatchLiveController.CaptureContextOverride = null;
+            MatchLiveController.GameSeedOverrideForCapture = null;
+            MatchLiveController.ManagerIsAwayOverrideForCapture = null;
+        }
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
