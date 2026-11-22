@@ -74,7 +74,7 @@ public static class TrainingMenus
         return new MenuEffect(null, None, arr);
     }
 
-    /// <summary>メニュー→効果。副効果はそれぞれ sub_factor 倍で入る。休養は効果なし。設計書03 §3.1。</summary>
+    /// <summary>メニュー→効果。副効果は sub_factor 倍（`TrainingCoefficients.SubFactorFor` に個別指定があればそれ）で入る。休養は効果なし。設計書03 §3.1。</summary>
     public static MenuEffect Effects(TrainingMenu menu) => menu switch
     {
         TrainingMenu.Batting => new(AbilityKind.Contact, new[] { AbilityKind.Discipline }, NoPos),

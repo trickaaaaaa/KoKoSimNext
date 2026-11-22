@@ -15,8 +15,29 @@ public sealed record TrainingCoefficients
     /// 改定前と ±0.8 以内（名声0/30/60/90 実測）。
     /// </summary>
     public double BaseMainExp { get; init; } = 290.0;
-    /// <summary>副効果の倍率。</summary>
+    /// <summary>副効果の倍率（メニュー×能力の個別指定が無いときの既定）。</summary>
     public double SubFactor { get; init; } = 0.4;
+
+    /// <summary>
+    /// 副効果の倍率の個別指定（メニュー×能力）。載っていない組は <see cref="SubFactor"/>。
+    /// 既定は守備練習→捕球 0.7（issue #1409・オーナー決定 2026-11-22。捕球は失策の起きやすさを決めるのに
+    /// 伸ばす手段が守備練習の副効果しか無く、0.4 では守備+10に対し捕球+4程度だった。守備の主効果は変えない）。
+    /// data/coefficients.yaml training.sub_factor_overrides と一致させる。
+    /// </summary>
+    public IReadOnlyList<SubFactorOverride> SubFactorOverrides { get; init; } = DefaultSubFactorOverrides();
+
+    private static IReadOnlyList<SubFactorOverride> DefaultSubFactorOverrides() => new SubFactorOverride[]
+    {
+        new() { Menu = TrainingMenu.Defense, Ability = AbilityKind.Catching, Factor = 0.7 },
+    };
+
+    /// <summary>メニュー×能力の副効果倍率。個別指定があればそれ、無ければ <see cref="SubFactor"/>。</summary>
+    public double SubFactorFor(TrainingMenu menu, AbilityKind ability)
+    {
+        foreach (var o in SubFactorOverrides)
+            if (o.Menu == menu && o.Ability == ability) return o.Factor;
+        return SubFactor;
+    }
 
     /// <summary>施設係数（施設レベル0＝現状の基準値）。<see cref="FacilityTiers"/> 未指定時の既定施設係数。</summary>
     public double FacilityCoef { get; init; } = 1.0;
@@ -133,4 +154,12 @@ public sealed record TrainingCoefficients
     public double MatchBaserunningExp { get; init; } = 300.0;
 
     public double RequiredExp(int level) => LevelUpBase * Math.Pow(LevelUpGrowth, level);
+}
+
+/// <summary>副効果の倍率の個別指定1件（issue #1409）。</summary>
+public sealed record SubFactorOverride
+{
+    public TrainingMenu Menu { get; init; }
+    public AbilityKind Ability { get; init; }
+    public double Factor { get; init; }
 }

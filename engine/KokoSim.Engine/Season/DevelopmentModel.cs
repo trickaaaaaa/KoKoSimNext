@@ -89,7 +89,7 @@ public static class DevelopmentModel
             foreach (var subAbility in eff.Subs)
             {
                 var delta = common * scale * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
-                    * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
+                    * c.SubFactorFor(menu, subAbility) * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
                 if (subAbility == AbilityKind.LaunchTendency)
                     ApplyLaunchTendencyExp(p, delta, GrowthDirection.Up, c);
                 else
@@ -195,7 +195,7 @@ public static class DevelopmentModel
         foreach (var subAbility in eff.Subs)
         {
             var delta = common * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
-                * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
+                * c.SubFactorFor(menu, subAbility) * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
             if (subAbility == AbilityKind.LaunchTendency)
                 ApplyLaunchTendencyExp(p, delta, GrowthDirection.Up, c);
             else

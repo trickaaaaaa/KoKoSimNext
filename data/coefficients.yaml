@@ -1497,6 +1497,10 @@ training:
   # roster.intake_drop（練習で伸びる能力だけ入学時を下げる）とセット。定常のチーム総合は改定前と±0.8以内。
   base_main_exp: 290.0
   sub_factor: 0.4
+  # 副効果の倍率の個別指定（メニュー×能力。載っていない組は sub_factor）。C#既定（TrainingCoefficients）と一致させる。
+  # issue #1409（オーナー決定 2026-11-22）: 守備練習→捕球だけ 0.4→0.7。守備の主効果・他メニューの副効果は不変。
+  sub_factor_overrides:
+    - { menu: Defense, ability: Catching, factor: 0.7 }
   facility_coef: 1.0          # 施設レベル0（施設なし）の基準施設係数。facility_tiers で上位を注入（#115）
   # 基準指導力（中立点, #115）。監督メタ（分野別指導力）を注入しないときの既定＝この指導力で従来と1ビット一致。
   # 監督指導力を注入すると 投手系←Coaching.Pitching / 守備・走塁系←Coaching.Defense / 打撃系←Coaching.Batting で駆動。
