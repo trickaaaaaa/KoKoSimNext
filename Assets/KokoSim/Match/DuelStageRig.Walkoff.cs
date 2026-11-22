@@ -26,16 +26,29 @@ namespace KokoSim.Unity.Match
     {
         // ---- 収録（issue #1176 の割り当て） ----------------------------------------------------
         private const string WoSprintClipName = "AA_Baseball_Defender_Movement_Sprint_Loop";
+        /// <summary>喜びの出し方。収録をそのまま流す／立ち姿勢の上でバンザイを手で作る／収録の上半身だけ借りる（下半身は立ち姿勢で止める）。</summary>
+        private enum WoCheerKind { Clip, Banzai, UpperBody }
+
         /// <summary>
-        /// 喜ぶ収録。その場で喜ぶ勝利の2本を配り分ける。issue の割り当てにあった本塁打の喜び
-        /// （Batter_Home_Run_Celebrating_Type01/02）は収録の中で9m走り回る動きで、輪の中で使うと足が滑るので採らない
-        /// （実測 2026-11-21: 腰が dx −6.0 / dz +7.0 m 動く）。
+        /// 喜ぶ5種類（issue #1195）。勝利の2本はその場で喜ぶ収録そのまま。バンザイは立ち姿勢の収録の上で両腕を骨の後補正で
+        /// 上げ下げする。本塁打の喜び（Batter_Home_Run_Celebrating_Type01/02）は収録の中で約9m走り回る動きなので
+        /// （実測 2026-11-21: 腰が dx −6.0 / dz +7.0 m 動く）、下半身を立ち姿勢で止めて腕と体幹の動きだけ借りる。
         /// </summary>
-        private static readonly string[] WoCelebrateClipNames =
+        private static readonly (string Clip, WoCheerKind Kind)[] WoCheers =
         {
-            "AA_Baseball_Pitcher_Emotion_Victory_Type01",
-            "AA_Baseball_Pitcher_Emotion_Victory_Type02",
+            ("AA_Baseball_Pitcher_Emotion_Victory_Type01", WoCheerKind.Clip),
+            ("AA_Baseball_Pitcher_Emotion_Victory_Type02", WoCheerKind.Clip),
+            ("AA_Baseball_Defender_Standing_Idle_Loop_Type01", WoCheerKind.Banzai),
+            ("AA_Baseball_Batter_Home_Run_Celebrating_Type01", WoCheerKind.UpperBody),
+            ("AA_Baseball_Batter_Home_Run_Celebrating_Type02", WoCheerKind.UpperBody),
         };
+        /// <summary>立ち姿勢の控え（下半身を止める基準）に使う収録。</summary>
+        private const string WoStandClipName = "AA_Baseball_Defender_Standing_Idle_Loop_Type01";
+
+        /// <summary>バンザイ: 1回の上げ下げ[s]・続けて行う回数・その後の間[s]。腕を上げる角度（真下から。180＝真上）。上げる間に跳ぶ高さ[m]。</summary>
+        private const float WoBanzaiCycleSeconds = 0.9f, WoBanzaiRestSeconds = 0.6f, WoBanzaiArmDeg = 165f, WoBanzaiHopM = 0.14f;
+        private const int WoBanzaiCount = 2;
+
         private const string WoPitcherDefeatedClipName = "AA_Baseball_Pitcher_Emotion_Defeated_Type01";
         private const string WoPitcherDefeated2ClipName = "AA_Baseball_Pitcher_Emotion_Defeated_Type02";
         private const string WoCatcherDefeatedClipName = "AA_Baseball_Catcher_Emotion_Defeated";
@@ -82,9 +95,30 @@ namespace KokoSim.Unity.Match
             public float TakeoverT = float.PositiveInfinity;   // 走者を再生から引き取る時刻（場面の時計）
             public Vector2 Pos, Slot;
             public float Delay, Phase, Speed, Yaw, CheerAt = -1f;
-            public int CheerClip;
+            public int CheerClip;           // WoCheers の添字
+            public float CheerStartT;       // 喜び始めた時刻（場面の時計）
+            public float HopM;              // いまの跳ね上がり[m]（ポーズを書き直したコマで決め、毎コマ足す）
+            public bool PoseDirty;          // 喜びの後補正をまだ当てていない（収録を替えた直後）
             public WoLeg Leg;
         }
+
+        /// <summary>立ち姿勢の下半身（腰・両脚）。喜びの上半身だけ借りる収録で下半身をここへ戻す。</summary>
+        private sealed class WoStandPose
+        {
+            public Transform[] Bones;
+            public Quaternion[] Rots;
+            public Vector3 HipsPos;
+        }
+
+        private static readonly HumanBodyBones[] WoLowerBones =
+        {
+            HumanBodyBones.Hips,
+            HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes,
+            HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, HumanBodyBones.RightToes,
+        };
+
+        private readonly Dictionary<Actor, WoStandPose> _woStand = new();
+        private bool _woPosedThisTick;
 
         private readonly List<Actor> _woPool = new();
         private readonly List<WoMember> _woMembers = new();
@@ -174,7 +208,7 @@ namespace KokoSim.Unity.Match
         private bool EnsureWalkoffPool()
         {
             var sprint = LoadClip(WoSprintClipName);
-            if (sprint == null || LoadClip(WoCelebrateClipNames[0]) == null) return false;
+            if (sprint == null || LoadClip(WoCheers[0].Clip) == null) return false;
             if (_woPool.Count == 0)
             {
                 var vendor = LoadVendorBody();
@@ -188,6 +222,7 @@ namespace KokoSim.Unity.Match
                         rootMotion: false, tightBounds: true);
                     a.Go.name = "walkoff-" + i;
                     a.IdleClip = sprint;
+                    CaptureWoStand(a, sprint);
                     StepActor(a, 0.001f);
                     GroundFix(a);
                     if (!useVendor) AttachGear(a, GearKind.Cap, Vector3.zero, _offenseColors.Cap, layer, _offenseColors.CapVisor);
@@ -199,6 +234,29 @@ namespace KokoSim.Unity.Match
             }
             foreach (var a in _woPool) Repaint(a, _offenseColors);   // 試合・攻守で色が変わる（喜ぶのは攻撃側）
             return true;
+        }
+
+        /// <summary>立ち姿勢の下半身を控える（収録の頭の1コマ）。控えたあとは走りの収録へ戻す。</summary>
+        private void CaptureWoStand(Actor a, AnimationClip back)
+        {
+            var stand = LoadClip(WoStandClipName);
+            if (stand == null || a.Animator == null) return;
+            SetActorClip(a, stand, 0f, 0f);
+            StepActor(a, 0.001f);
+            var bones = new List<Transform>();
+            foreach (var hb in WoLowerBones)
+            {
+                var t = a.Animator.GetBoneTransform(hb);
+                if (t != null) bones.Add(t);
+            }
+            var hips = a.Animator.GetBoneTransform(HumanBodyBones.Hips);
+            if (hips != null && bones.Count > 0)
+            {
+                var pose = new WoStandPose { Bones = bones.ToArray(), Rots = new Quaternion[bones.Count], HipsPos = hips.localPosition };
+                for (int i = 0; i < bones.Count; i++) pose.Rots[i] = bones[i].localRotation;
+                _woStand[a] = pose;
+            }
+            SetActorClip(a, back, 0f, 0f);
         }
 
         /// <summary>予約した場面へ入る（守備ビューの再生の時計が集まり始める時刻に達した）。</summary>
@@ -283,7 +341,6 @@ namespace KokoSim.Unity.Match
             {
                 var m = _woMembers[i];
                 m.Phase = Mathf.Repeat(i * 0.37f, 1f);
-                m.CheerClip = (i * 7 + 3) % WoCelebrateClipNames.Length;
                 if (m.RunnerIdx >= 0) continue;
                 var a = m.A;
                 a.Go.SetActive(true);
@@ -340,6 +397,7 @@ namespace KokoSim.Unity.Match
         private void AssignWalkoffSlots()
         {
             var slots = new List<Vector2>();
+            var slotCheer = new List<int>();
             int need = _woMembers.Count - 1;
             for (int ring = 0; ring < WoRingRadius.Length && slots.Count < need; ring++)
             {
@@ -350,6 +408,7 @@ namespace KokoSim.Unity.Match
                     float deg = off + 360f * j / n;
                     float r = deg * Mathf.Deg2Rad;
                     slots.Add(WalkoffCenter + new Vector2(Mathf.Sin(r), Mathf.Cos(r)) * WoRingRadius[ring]);
+                    slotCheer.Add(WoCheerForSlot(ring, j, n));
                 }
             }
             var free = new List<WoMember>();
@@ -359,9 +418,10 @@ namespace KokoSim.Unity.Match
                 else free.Add(m);
             }
             // 来る方向（いまの位置。走者は再生の位置）で近い場所を貪欲に割り当てる
-            foreach (var slot in slots)
+            for (int si = 0; si < slots.Count; si++)
             {
                 if (free.Count == 0) break;
+                var slot = slots[si];
                 float sa = Mathf.Atan2(slot.x - WalkoffCenter.x, slot.y - WalkoffCenter.y);
                 int bi = 0;
                 float bd = float.PositiveInfinity;
@@ -373,8 +433,21 @@ namespace KokoSim.Unity.Match
                     if (d < bd) { bd = d; bi = i; }
                 }
                 free[bi].Slot = slot;
+                free[bi].CheerClip = slotCheer[si];
                 free.RemoveAt(bi);
             }
+        }
+
+        /// <summary>
+        /// 輪の j 番目（全 n 人）が喜ぶ種類。固定のずらし（乱数なし）で、輪の隣どうしは必ず別の種類にする
+        /// （3つ飛びで巡る。輪を一周して戻る最後の人だけ最初の人と重なるので1つ送る）。輪ごとに出だしをずらす。
+        /// </summary>
+        private static int WoCheerForSlot(int ring, int j, int n)
+        {
+            int k = WoCheers.Length;
+            int kind = (ring * 2 + j * 3) % k;
+            if (n > 1 && j == n - 1 && kind == (ring * 2) % k) kind = (kind + 1) % k;
+            return kind;
         }
 
         private Vector2 MemberPos(WoMember m)
@@ -422,11 +495,13 @@ namespace KokoSim.Unity.Match
             AdvanceRattledFx(deltaTime);   // 再生の無いサヨナラ（押し出し等）で動揺の渦巻きが凍らない
             _acc += deltaTime;
             float step = 1f / PoseFps;
+            _woPosedThisTick = false;
             while (_acc >= step)
             {
                 _acc -= step;
                 foreach (var a in _actors) StepActor(a, step);
                 _poseGen++;
+                _woPosedThisTick = true;
             }
             _woT += deltaTime;
             StepWalkoffScene(deltaTime);
@@ -485,6 +560,8 @@ namespace KokoSim.Unity.Match
                         }
                         break;
                     case WoLeg.Cheer:
+                        // 後補正はポーズを書き直したコマにだけ当てる（評価の間は骨がそのまま残る＝二度当てしない）
+                        if (m.PoseDirty || (_woPosedThisTick && a.PoseAdvanced)) ApplyWoCheerPose(m);
                         FaceWo(m, dt);
                         break;
                 }
@@ -557,11 +634,86 @@ namespace KokoSim.Unity.Match
         private void StartWoCheer(WoMember m)
         {
             m.Leg = WoLeg.Cheer;
-            var clip = LoadClip(WoCelebrateClipNames[m.CheerClip]);
+            var clip = LoadClip(WoCheers[m.CheerClip].Clip);
             if (clip == null) return;
+            m.CheerStartT = _woT;
+            m.HopM = 0f;
+            m.PoseDirty = WoCheers[m.CheerClip].Kind != WoCheerKind.Clip;
             CrossfadeActorToClip(m.A, clip, m.Phase * clip.length, 0f, 0.25f);
             m.A.IdleClip = clip;   // 終わったら頭からもう一度（喜び続ける）
             m.A.Speed = 1f;
+        }
+
+        // ---- 喜びの後補正（バンザイ・本塁打の喜びの上半身） ---------------------------------------
+
+        /// <summary>喜びの種類に応じた後補正を骨へ足す（ポーズを評価した直後だけ）。</summary>
+        private void ApplyWoCheerPose(WoMember m)
+        {
+            m.PoseDirty = false;
+            if (m.A?.Animator == null) return;
+            switch (WoCheers[m.CheerClip].Kind)
+            {
+                case WoCheerKind.Banzai: ApplyWoBanzai(m); break;
+                case WoCheerKind.UpperBody: ApplyWoUpperBody(m); break;
+            }
+        }
+
+        /// <summary>
+        /// バンザイ。立ち姿勢の収録の上で、両腕を体の横から真上へ上げ下げする（正面の面内で振る＝腕が体を突き抜けない）。
+        /// 上げるのに合わせて小さく跳ねる。骨は親ローカルの FromTo（<see cref="RotateBoneWorld"/>）で回すのでミラー下でも効く。
+        /// 長い間（<see cref="WoBanzaiRestSeconds"/>）をはさんで繰り返し、人ごとに位相をずらす。
+        /// </summary>
+        private void ApplyWoBanzai(WoMember m)
+        {
+            float cycle = WoBanzaiCycleSeconds * WoBanzaiCount + WoBanzaiRestSeconds;
+            float t = Mathf.Repeat(_woT - m.CheerStartT + m.Phase * cycle, cycle);
+            float w = 0f, hop = 0f;
+            if (t < WoBanzaiCycleSeconds * WoBanzaiCount)
+            {
+                float c = Mathf.Repeat(t, WoBanzaiCycleSeconds) / WoBanzaiCycleSeconds;   // 0..1（前半で上げ、後半で下げる）
+                float u = c < 0.5f ? c * 2f : (1f - c) * 2f;
+                w = u * u * (3f - 2f * u);
+                if (c < 0.5f) hop = Mathf.Sin(c * 2f * Mathf.PI) * WoBanzaiHopM;
+            }
+            m.HopM = hop;
+            if (w <= 1e-3f) return;
+
+            var an = m.A.Animator;
+            var right = ChestRight(an, m.A);
+            float blend = Mathf.Clamp01(w / 0.12f);
+            float theta = w * WoBanzaiArmDeg * Mathf.Deg2Rad;
+            for (int side = 0; side < 2; side++)
+            {
+                var up = an.GetBoneTransform(side == 0 ? HumanBodyBones.RightUpperArm : HumanBodyBones.LeftUpperArm);
+                var lo = an.GetBoneTransform(side == 0 ? HumanBodyBones.RightLowerArm : HumanBodyBones.LeftLowerArm);
+                var hand = an.GetBoneTransform(side == 0 ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
+                if (up == null || lo == null || hand == null) continue;
+                var outward = side == 0 ? right : -right;
+                var target = outward * Mathf.Sin(theta) - Vector3.up * Mathf.Cos(theta);
+                var cur = (lo.position - up.position).normalized;
+                var want = Vector3.Slerp(cur, target, blend);
+                RotateBoneWorld(up, cur, want);
+                // 肘は伸ばす（腕が回った後の前腕の向きを、上腕と同じ向きへ寄せる）
+                var cur2 = (hand.position - lo.position).normalized;
+                RotateBoneWorld(lo, cur2, Vector3.Slerp(cur2, want, blend * 0.85f));
+            }
+        }
+
+        /// <summary>
+        /// 収録の上半身だけ借りる。腰と両脚は立ち姿勢のまま止め、背骨は収録のときの世界の向きを保つ
+        /// （腰の向きを立ち姿勢へ戻したぶん、背骨のローカルを逆に回す）＝腕と体幹の動きだけが残る。
+        /// </summary>
+        private void ApplyWoUpperBody(WoMember m)
+        {
+            if (!_woStand.TryGetValue(m.A, out var st)) return;
+            var an = m.A.Animator;
+            var hips = an.GetBoneTransform(HumanBodyBones.Hips);
+            var spine = an.GetBoneTransform(HumanBodyBones.Spine);
+            if (hips == null) return;
+            if (spine != null && spine.parent == hips)
+                spine.localRotation = Quaternion.Inverse(st.Rots[0]) * hips.localRotation * spine.localRotation;
+            for (int i = 0; i < st.Bones.Length; i++) st.Bones[i].localRotation = st.Rots[i];
+            hips.localPosition = st.HipsPos;
         }
 
         /// <summary>輪の人は中心へ、中心の人はベンチの側（駆け寄ってくる仲間）へ向き直る。</summary>
@@ -573,6 +725,11 @@ namespace KokoSim.Unity.Match
             float want = YawToward(m.Pos, target);
             m.Yaw = Mathf.MoveTowardsAngle(m.Yaw, want, 260f * dt);
             PlaceFielder(m.A, m.Pos.x, m.Pos.y, m.Yaw);
+            if (m.HopM > 0f)   // 接地の補正（PlaceFielder）のあとに足す＝跳ねが接地に吸われない
+            {
+                var lp = m.A.Go.transform.localPosition;
+                m.A.Go.transform.localPosition = new Vector3(lp.x, lp.y + m.HopM, lp.z);
+            }
         }
 
         /// <summary>

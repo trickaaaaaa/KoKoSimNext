@@ -4344,7 +4344,7 @@ namespace KokoSim.Unity.Match
             yield return OtBatterStandClipName;
             // サヨナラの場面（issue #1176）
             yield return WoSprintClipName;
-            foreach (var n in WoCelebrateClipNames) yield return n;
+            foreach (var c in WoCheers) yield return c.Clip;
             yield return WoPitcherDefeatedClipName;
             yield return WoPitcherDefeated2ClipName;
             yield return WoCatcherDefeatedClipName;

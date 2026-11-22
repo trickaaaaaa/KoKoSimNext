@@ -545,8 +545,8 @@ namespace KokoSim.Unity.Match
         private KokoSim.Unity.Match.Telops.HomeRunTelopView _homeRunTelop;
         // 終局後「ゲームセット」を掲げる予約。得点テロップ（#60）の演出が済むのを Update 側で待つ。
         private bool _gameSetPending;
-        // サヨナラの場面（issue #1176）: 喜びを見せてから「ゲームセット」を掲げるまでの秒数（8割が輪に着いてから）。喜びの動きは2種類しかないので長く映さない
-        [SerializeField] private float walkoffCelebrateHoldSeconds = 0.4f;
+        // サヨナラの場面（issue #1176）: 喜びを見せてから「ゲームセット」を掲げるまでの秒数（8割が輪に着いてから）。喜びが5種類になった（#1195）ので、バンザイが1往復見える長さまで延ばした
+        [SerializeField] private float walkoffCelebrateHoldSeconds = 1.5f;
         // 人だかりが成立しない（喜ぶ人数が足りない・到着できない役者がいる）場面でも「ゲームセット」を出す上限[秒]（実時間）。
         // 通常は終局から10秒前後で人だかりができる＝その倍で切る。
         private const float WalkoffSceneSafetyCapSeconds = 20f;
