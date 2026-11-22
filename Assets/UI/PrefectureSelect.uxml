@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 県選択 画面（issue #1410）。タイトルの「はじめから」から来て、日本地図から本拠地の県を選ぶ。
+     選ぶと新規ゲーム設定画面（NewGameSetup）へ。北海道・東京は押すと拡大図（北北海道/南北海道・東東京/西東京）に替わり、
+     「全国地図へ」で戻れる。地図の部品は NewGame/JapanMapElement.cs（Painter2D）が pms-map の中に入る。
+
+     共通ナビ（TopBar）は出さない: タイトル画面・新規ゲーム設定と同じ理由（シェルサービスが未初期化）。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="Components/scorebook.uss" />
+    <Style src="PrefectureSelect.uss" />
+
+    <ui:VisualElement class="root ui-root pms-root sbk">
+      <ui:VisualElement class="pms-main">
+
+        <ui:VisualElement class="pms-masthead">
+          <ui:VisualElement class="rule-head pms-masthead__title">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label name="pms-title" class="rule-head__text f-display" text="本拠地を選ぶ" />
+          </ui:VisualElement>
+          <ui:Button name="pms-zoom-back" class="tool-btn f-body-md" text="◀ 全国地図へ" />
+          <ui:Button name="pms-back" class="tool-btn f-body-md" text="◀ タイトルへ" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="card pms-card">
+          <ui:VisualElement name="pms-map" class="pms-map" />
+        </ui:VisualElement>
+
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

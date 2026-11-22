@@ -34,7 +34,8 @@
 
             <ui:VisualElement class="ngs-line">
               <ui:Label class="ngs-lbl" text="都道府県" />
-              <ui:DropdownField name="ngs-pref" class="ngs-drop" />
+              <ui:Label name="ngs-pref-name" class="ngs-pref-name f-display" text="" />
+              <ui:Button name="ngs-pref-back" class="tool-btn f-body-md" text="地図に戻る" />
               <ui:Label name="ngs-district-lbl" class="ngs-lbl ngs-lbl--2nd" text="県内地区" />
               <ui:DropdownField name="ngs-district" class="ngs-drop ngs-drop--narrow" />
             </ui:VisualElement>
