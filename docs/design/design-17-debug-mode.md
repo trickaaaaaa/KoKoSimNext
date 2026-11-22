@@ -220,7 +220,7 @@ public interface IDebugTraceSink
 ### 4.3 JSONL スキーマ（1行1イベント）
 
 ```jsonl
-{"t":"game","seed":"0x9f3a...","rng":"9f3a...","fixture":"a1b2c3d4","away":"県立A","home":"県立B","scenario":null,"coeff":"data/coefficients.yaml@sha:1122"}
+{"t":"game","seed":"0x9f3a...","rng":"9f3a...","fixture":"a1b2c3d4","away":"県立A","home":"県立B","scenario":null,"coeff":"1122aabb","reg":9,"tb":false,"mercy":false}
 {"t":"pitch","i":9,"top":false,"o":2,"b":"P0123","p":"P0456","cnt":"3-2","n":7,"N":118,
  "plan":{"ty":"Slider","ax":0.12,"ay":0.55,"kmh":128.4,"stuff":62},
  "act":{"x":0.31,"y":0.22,"kmh":127.9,"ft":0.441,"ivb":0.11,"ihb":-0.18,"zone":false},
@@ -233,7 +233,8 @@ public interface IDebugTraceSink
 {"t":"end","away":4,"home":3,"innings":9}
 ```
 
-- キーは短縮（1試合で~300行×数百試合を扱うため）。**フィールド名は本節を単一ソースとする**。
+- キーは短縮（1試合で~300行×数百試合を扱うため）。**フィールド名の単一ソースは実装の `TraceJson`（engine）**で、本節の例はその写し（issue #1285 で二重宣言をやめた。書式を変えるときは `TraceJson` を直し、ここを合わせる）。
+- ヘッダの `seed` は呼び出し側が `GameContext.TraceSeed` で渡した母種（大会の隔離Fork等、母種を持たない試合は null）、`coeff` は `CoefficientFingerprint.Of(ctx)` の8桁（呼び出し側が1回だけ計算して `GameContext.TraceCoefficientsId` へ載せる。未指定は null）。
 - `jq` で切れることを要件にする（例: `jq -c 'select(.t=="pitch" and .bat.pSw>0.8 and .res.k=="Ball")' trace.jsonl` ＝「振るはずが見送った球」）。
 
 ### 4.4 Balance CLI サブコマンド
@@ -494,6 +495,8 @@ return KokoSim.Unity.Debugging.DebugBridge.DumpState();   // JSON が返る
 | §6.1 `ForcedOutcome` | 26種 | 19種（`TriplePlay` / `Balk` / `Squeeze` / `EnterTieBreak` / `WalkOff` を除外） | いずれも単独の抽選ゲートを持たず、守備の共同解決や試合状況の帰結として現れる。固定するには物理層の偽装か第二の解決経路が要り、どちらも不変条件#1に反する。`EnterTieBreak` は `TieBreakEnabled` ＋シナリオの開始イニング指定で作れる |
 | §6.1 実装方式 | 抽選をスキップして固定 | 打席結果系は**投球ループごとスキップ**（敬遠と同じ・物理層を1回も回さない）／稀プレー系は**該当ゲートの確率を1.0にした1打席コピーの走塁係数**（抽選自体は残す） | 後者は乱数消費順が「そのゲートを既定オンにした状態」と一致するので、副作用の範囲が読める |
 | §5 HUD の等幅 | 等幅フォント | 固定幅 Label を横に並べて整列 | プロジェクトに等幅フォントが無く、空白詰めでは球種名の長さ差（Fork/Slider/Fastball）で桁が崩れる。整列はフォントに頼らずレイアウトで取る |
+
+- **issue #1285 での追補**: 再現トークンの復元（`MatchProgression.FromReproToken`／`DebugBridge.Restore`）は、トークンの RNG 開始状態から始め、場面ジャンプの開始局面と采配・強制発動の決定列（`GameDecisionKind.ForcedOutcome` を新設して `ForceNext` も積む）を引き継ぐ。指紋（`ReproToken.Fingerprint`）は開始局面を含める（通常の試合は従来と同じ値）。トークン自体は決定列を持たないので、貼り付けで別の試合へ戻す場合の采配は復元できない（いまの試合の決定列を引き継ぐ）。HUD P5 に再現トークンとコピー、Editor メニューに母種・トークンの貼り付け入口を足した。
 
 ### 12.2 副次的に直したもの
 

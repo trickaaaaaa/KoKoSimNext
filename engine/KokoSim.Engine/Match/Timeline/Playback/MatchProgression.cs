@@ -164,7 +164,8 @@ public sealed class MatchProgression
         IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
         IReadOnlyDictionary<Player, double>? homePitchRecovery = null,
         IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
-        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null)
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null,
+        Debugging.ScenarioStart? scenarioStart = null)
     {
         _seed = 0;
         _seedable = false;
@@ -175,12 +176,31 @@ public sealed class MatchProgression
         _homePitchRecovery = homePitchRecovery;
         _awayPriorWeekPitches = awayPriorWeekPitches;
         _homePriorWeekPitches = homePriorWeekPitches;
+        _scenarioStart = scenarioStart;
         // NewProgress は dayForm 抽選で rng を消費するので、控えるのは必ずその手前。
         _rngState = (rng as Xoshiro256Random)?.CaptureState();
         _p = GameEngine.NewProgress(
             away, home, ctx, rng, awayPriorWeekPitches, homePriorWeekPitches,
+            scenarioStart: scenarioStart,
             awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         _steps = GameEngine.Steps(_p).GetEnumerator();
+    }
+
+    /// <summary>
+    /// 再現トークンの場面まで再生した進行体を作る（設計書17 §3.3・issue #1285）。トークンの RNG 開始状態から
+    /// 始め、<paramref name="scenarioStart"/>（注入で始めた試合の開始局面）と <paramref name="decisions"/>
+    /// （元の試合で積んだ采配・強制発動の決定列）を引き継ぐ＝黙って別の試合を再生しない。
+    /// 指紋の照合（<see cref="Debugging.ReproToken.Verify"/>）は呼び出し側が先に済ませること。
+    /// </summary>
+    public static MatchProgression FromReproToken(
+        Team away, Team home, GameContext ctx, Debugging.ReproToken token,
+        Debugging.ScenarioStart? scenarioStart = null, IReadOnlyList<GameDecision>? decisions = null)
+    {
+        var prog = new MatchProgression(away, home, ctx, Xoshiro256Random.FromState(token.RngState),
+            scenarioStart: scenarioStart);
+        if (decisions is not null) prog._decisions.AddRange(decisions);
+        prog.SeekTo(token.PlateAppearance, token.Pitch);
+        return prog;
     }
 
     /// <summary>直近に確定した打席（未進行なら null）。</summary>
@@ -1004,11 +1024,17 @@ public sealed class MatchProgression
         var state = _rngState ?? (_seedable ? new Xoshiro256Random(_seed).CaptureState() : null);
         if (state is null) return null;
         return new Debugging.ReproToken(state, _confirmed, _pitchIndexInCurrentPa,
-            Debugging.ReproToken.Fingerprint(_awayTeam, _homeTeam, _ctx));
+            Debugging.ReproToken.Fingerprint(_awayTeam, _homeTeam, _ctx, _scenarioStart));
     }
 
     /// <summary>次の1打席に効く強制発動を予約する（設計書17 §6.1, F4・デバッグ経路専用）。</summary>
-    public void ForceNext(Debugging.ForcedOutcome outcome) => _p.ForceNext(outcome);
+    public void ForceNext(Debugging.ForcedOutcome outcome)
+    {
+        _p.ForceNext(outcome);
+        // 決定列へも積む＝シーク・トークン復元（再生し直し）で予約が落ちない（issue #1285）。
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ForcedOutcome, false, BenchIndex: 0,
+            PitchIndex: PendingPitchIndex, Forced: outcome));
+    }
 
     private GameResult DrainToEnd()
     {

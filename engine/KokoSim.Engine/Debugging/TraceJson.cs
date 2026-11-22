@@ -17,11 +17,14 @@ public static class TraceJson
     public static string Game(GameTraceHeader h)
     {
         var sb = new StringBuilder(256);
-        sb.Append("{\"t\":\"game\",\"rng\":").Append(Str(h.RngStateHex))
+        sb.Append("{\"t\":\"game\",\"seed\":")
+          .Append(h.Seed is { } seed ? Str("0x" + seed.ToString("x", CultureInfo.InvariantCulture)) : "null")
+          .Append(",\"rng\":").Append(Str(h.RngStateHex))
           .Append(",\"fixture\":").Append(Str(h.FixtureFingerprint))
           .Append(",\"away\":").Append(Str(h.AwayName))
           .Append(",\"home\":").Append(Str(h.HomeName))
           .Append(",\"scenario\":").Append(h.ScenarioId is null ? "null" : Str(h.ScenarioId))
+          .Append(",\"coeff\":").Append(h.CoefficientsId is null ? "null" : Str(h.CoefficientsId))
           .Append(",\"reg\":").Append(Int(h.RegulationInnings))
           .Append(",\"tb\":").Append(Bool(h.TieBreakEnabled))
           .Append(",\"mercy\":").Append(Bool(h.MercyRuleEnabled))

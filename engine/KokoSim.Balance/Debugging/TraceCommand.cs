@@ -103,7 +103,11 @@ public static class TraceCommand
     private static void PlayAll(Options o, GameContext ctx, ITacticsBrain? brain, JsonlTraceSink? sink, int firstGame, int count)
     {
         // 観測は逐次実行（JSONL の行順を試合順に保つため）。統計シムのような並列化はしない。
-        GameContext Traced(GameContext c) => sink is null ? c : c with { CaptureTrace = true, TraceSink = sink };
+        // ヘッダの seed / coeff（設計書17 §4.3）。係数の識別子は歩くのが高いので1回だけ計算する。
+        var coeffId = sink is null ? null : CoefficientFingerprint.Of(ctx);
+        GameContext Traced(GameContext c, ulong matchSeed) => sink is null
+            ? c
+            : c with { CaptureTrace = true, TraceSink = sink, TraceSeed = matchSeed, TraceCoefficientsId = coeffId };
 
         // 場面ジャンプ（設計書17 §3.4, F2）: --scenario 指定時は data/debug/scenarios.yaml から組む。
         ScenarioBuilder.Built? scenario = null;
@@ -127,16 +131,17 @@ public static class TraceCommand
                 $"未知の --force 値: {forceName}（{string.Join("|", System.Enum.GetNames(typeof(ForcedOutcome)))}）");
         }
 
-        var root = new Xoshiro256Random(scenario?.Seed ?? o.Seed);
+        var seed = scenario?.Seed ?? o.Seed;
+        var root = new Xoshiro256Random(seed);
         for (var i = firstGame; i < firstGame + count; i++)
         {
             // simulate-games と同じ Fork 規約（i→ストリーム）。同じシードなら同じ対戦・同じ展開になる。
             var g = root.Fork((ulong)i);
             var (a, h, c, start) = scenario is { } sc
-                ? (sc.Away, sc.Home, Traced(sc.Ctx), sc.Start)
+                ? (sc.Away, sc.Home, Traced(sc.Ctx, seed), sc.Start)
                 : (GameSimulation.GenerateTeam(g, "遠征校") with { Tactics = brain },
                    GameSimulation.GenerateTeam(g, "地元校") with { Tactics = brain },
-                   Traced(ctx), null);
+                   Traced(ctx, seed), null);
 
             var p = GameEngine.NewProgress(a, h, c, g, scenarioStart: start);
             // 強制発動（設計書17 §6.1, F4）: 最初の1打席に効かせる。--scenario の force 指定も同じ経路。

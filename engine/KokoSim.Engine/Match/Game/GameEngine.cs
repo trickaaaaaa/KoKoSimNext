@@ -194,7 +194,7 @@ public static class GameEngine
         Debugging.GameTraceHeader? traceHeader = null;
         if (ctx.TracingEnabled)
         {
-            traceHeader = BuildTraceHeader(awayTeam, homeTeam, ctx, rng);
+            traceHeader = BuildTraceHeader(awayTeam, homeTeam, ctx, rng, scenarioStart);
             // 値は素通しのデコレータ（設計書17 §4.5）。包んでも乱数列は1ビットも変わらない。
             rng = new Debugging.CountingRandomSource(rng);
             // AI校の思考の可視化（設計書17 §5 P4）。判断内訳の文字列を組ませるだけで判断は変えない。
@@ -268,7 +268,7 @@ public static class GameEngine
 
     /// <summary>観測ヘッダ（設計書17 §4.1）。再現に必要な最小情報（RNG状態・対戦カード指紋）を先頭に置く。</summary>
     private static Debugging.GameTraceHeader BuildTraceHeader(
-        Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng)
+        Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng, Debugging.ScenarioStart? scenarioStart)
     {
         var raw = Debugging.CountingRandomSource.UnwrapAll(rng);
         var stateHex = "";
@@ -284,7 +284,9 @@ public static class GameEngine
             AwayName = awayTeam.Name,
             HomeName = homeTeam.Name,
             RngStateHex = stateHex,
-            FixtureFingerprint = Debugging.ReproToken.Fingerprint(awayTeam, homeTeam, ctx),
+            FixtureFingerprint = Debugging.ReproToken.Fingerprint(awayTeam, homeTeam, ctx, scenarioStart),
+            Seed = ctx.TraceSeed,
+            CoefficientsId = ctx.TraceCoefficientsId,
             ScenarioId = ctx.ScenarioId,
             RegulationInnings = ctx.RegulationInnings,
             TieBreakEnabled = ctx.TieBreakEnabled,

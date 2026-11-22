@@ -145,6 +145,12 @@ public sealed record GameContext
     /// <summary>注入シナリオid（設計書17 §3.4）。非nullの試合は digest・統計集計の対象外。通常はnull。</summary>
     public string? ScenarioId { get; init; }
 
+    /// <summary>トレースヘッダへ載せる母種（設計書17 §4.3 の <c>seed</c>）。観測専用＝試合の解決は読まない。null=載せない。</summary>
+    public ulong? TraceSeed { get; init; }
+
+    /// <summary>トレースヘッダへ載せる係数の識別子（設計書17 §4.3 の <c>coeff</c>。<see cref="Debugging.CoefficientFingerprint.Of"/>）。観測専用。</summary>
+    public string? TraceCoefficientsId { get; init; }
+
     /// <summary>観測が実際に走るか（フラグとシンクの両方が揃ったときだけ）。</summary>
     public bool TracingEnabled => CaptureTrace && TraceSink is not null;
 
