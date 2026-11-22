@@ -36,6 +36,7 @@
 #                       static から辿った値を書き換える（数字の段はリストの添字）
 #   wait: 5 | 300ms     フレーム数か実時間（UI の遅延タイマーを越えるとき）
 #   read: ngs-district  要素の中身（ドロップダウンは選択肢まで）を summary.json の reads に書く
+#   read: =GameSession.Current.PendingSenbatsuFieldIds   static から辿った値（コレクションは件数と先頭8件）。画面に出ない状態の確認用
 #   shot: 01-name | {name: 01-name, h: 1400}   いまの画面を撮る（同時に書体監査を summary.json へ）
 
 screens:
@@ -145,12 +146,14 @@ screens:
     name: "観るだけのセンバツが大会タブと通知フィードに出る（PR #1365・issue #1265）"
     steps:
       - new_game: {seed: 1}
-      - advance_to_week: 40
+      - advance_to_week: 39
+      - read: =GameSession.Current.HasSpectatedSenbatsu
       - call: EventService.Clear()
       - show: TournamentPreview
-      - shot: 01-tournament-tab-week40
-      - advance_to_week: 47
+      - shot: 01-tournament-tab-week39
+      - advance_to_week: 41
+      - read: =GameSession.Current.HasSpectatedSenbatsu
       - call: EventService.Clear()
       - show: HomeDashboard
       - read: feed-list
-      - shot: 02-home-feed-week47
+      - shot: 02-home-feed-week41

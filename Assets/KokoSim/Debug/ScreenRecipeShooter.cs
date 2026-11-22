@@ -595,6 +595,22 @@ namespace KokoSim.Unity.Debugging
             /// </summary>
             private IEnumerator Read(ScreenStep s)
             {
+                if (s.Arg.StartsWith("="))
+                {
+                    // =型.メンバー… は static から辿った値（コレクションは件数と先頭の数件）
+                    if (!TryResolve(s.Arg.Substring(1), out var v, out _, out var whyPath)) { _reads.Add(s.Arg + " = (" + whyPath + ")"); yield break; }
+                    string shown;
+                    if (v is string str) shown = str;
+                    else if (v is System.Collections.ICollection col)
+                    {
+                        var items = new List<string>();
+                        foreach (var o in col) { if (items.Count >= 8) break; items.Add(o?.ToString() ?? "null"); }
+                        shown = "Count=" + col.Count + " [" + string.Join(", ", items) + "]";
+                    }
+                    else shown = v?.ToString() ?? "null";
+                    _reads.Add(s.Arg + " = " + shown);
+                    yield break;
+                }
                 var root = CurrentRoot(s);
                 if (root == null) yield break;
                 var el = Find(root, s.Arg, out var why);
