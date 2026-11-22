@@ -73,7 +73,7 @@ public sealed class AiBattingProfileTests
     {
         // 旧 0.4 では逆算配分の伸びが2年に集中し、2年>3年 が 6〜8割の校で起きていた（B/A で顕著）。
         var deps = new AiRosterDeps();
-        var inverted = 0; const int schools = 20;
+        var inverted = 0; const int schools = 60;
         for (var id = 1; id <= schools; id++)
         {
             var school = new School { Id = 900 + id, Name = "校", PrefectureId = 0, Strength = 72, Fame = 50 };

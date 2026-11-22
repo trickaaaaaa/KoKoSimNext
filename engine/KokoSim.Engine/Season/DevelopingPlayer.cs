@@ -41,6 +41,13 @@ public sealed class DevelopingPlayer
     // 投手役はここには無い（#366b）。選手は「自分は投手だ」という状態を持たない＝必要な場所が
     // 守備位置適性から導出する（PitcherRoleResolver.LeansPitcher）。投手は配置であって属性ではない。
 
+    /// <summary>
+    /// 球質タイプ（試合層の <see cref="PitcherAttributes.Archetype"/> からの逆投影・issue #1302）。投手総合が型の上乗せを
+    /// 差し引くための材料で、<see cref="Nation.ScoutedTeamProfile"/> が集計用に一時的に載せる。セーブには載せない
+    /// （自校の選手は生成時に型を捨てている）。null＝型なし＝差し引かない。
+    /// </summary>
+    public PitcherArchetype? Archetype { get; init; }
+
     /// <summary>投打の利き（設計書01 §1.1c）。生成分布は 2B で実装、既定は右。</summary>
     public Handedness Throws { get; init; } = Handedness.Right;
     public Handedness Bats { get; init; } = Handedness.Right;
@@ -282,6 +289,7 @@ public sealed class DevelopingPlayer
             Throws = Throws,
             Bats = Bats,
             LeftExperiencePa = LeftExperiencePa,
+            Archetype = Archetype,
             GrowthType = GrowthType,
             PitchingGrowthType = PitchingGrowthType,
             BattingGrowthType = BattingGrowthType,

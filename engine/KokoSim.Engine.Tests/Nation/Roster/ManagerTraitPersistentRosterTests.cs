@@ -55,9 +55,10 @@ public sealed class ManagerTraitPersistentRosterTests
             var newcomers = pro.BattingOrder.Where(p => !plainIds.Contains(p.SourceId)).ToList();
             if (newcomers.Count == 0) continue;
             promotedYears++;
-            Assert.All(newcomers, p =>
-                Assert.True(FormModel.Step(p.Condition) >= Ai.PromoterMinConditionStep,
-                    $"抜擢されるのは好調な選手だけのはず: 校{id} {p.Name} {p.Condition}"));
+            // 抜擢された好調な選手が守備位置を奪うと、先発8枠の割当が連鎖して押し出された選手の代わりに別の控えが
+            // 入ることがある（その控えまで好調とは限らない）。「新顔のうち抜擢された選手は好調」を見る＝好調な新顔が1人はいる。
+            Assert.True(newcomers.Any(p => FormModel.Step(p.Condition) >= Ai.PromoterMinConditionStep),
+                $"抜擢された選手がいない（好調な新顔ゼロ）: 校{id} {string.Join(", ", newcomers.Select(p => $"{p.Name} {p.Condition}"))}");
         }
         Assert.True(promotedYears > 0, "60校のうち1校も抜擢が起きていない＝抜擢型が効いていない");
     }
