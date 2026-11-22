@@ -50,7 +50,7 @@
 }
 
 /* 乗せた区画の名前の札。カーソルの横に出す黒い札（掲示板の黒＝design-19 の黒島語彙） */
-.pmap__tip {
+.pms-root .pmap__tip {   /* .pms-root Label（余白0）より強くして札の余白を効かせる */
     position: absolute;
     padding-left: var(--sp-3);
     padding-right: var(--sp-3);
