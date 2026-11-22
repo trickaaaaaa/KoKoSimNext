@@ -191,6 +191,26 @@ public sealed class SubstitutionTests
         Assert.Equal(9, alignment.Count);
     }
 
+    [Fact]
+    public void ReleaseDh_ToField_DhKeepsOwnBattingSpot_PitcherTakesDisplacedFielderSpot()
+    {
+        var state = new TeamState(MakeDhTeam());
+        var dhSlot = state.DhSlot;
+        var dh = state.CurrentLineup[dhSlot];
+        var pitcher = state.CurrentPitcher;
+        var leftSlot = Enumerable.Range(0, 9).First(i => i != dhSlot && state.CurrentLineup[i].Position == FieldPosition.LeftField);
+
+        Assert.True(state.ReleaseDh(FieldPosition.LeftField));
+
+        // DH は自分の打順のまま左翼へ、投手は退いた左翼手の打順へ（#1284）。
+        Assert.Equal(dh.Name, state.CurrentLineup[dhSlot].Name);
+        Assert.Equal(FieldPosition.LeftField, state.CurrentLineup[dhSlot].Position);
+        Assert.Equal(pitcher.Name, state.CurrentLineup[leftSlot].Name);
+        Assert.Equal(FieldPosition.Pitcher, state.CurrentLineup[leftSlot].Position);
+        Assert.Equal(leftSlot, state.PitcherSlot);
+        Assert.Equal(state.CurrentPitcher, state.CurrentLineup[leftSlot]);
+    }
+
     // ===== DH枠は守備者の検索に出ない（issue #1207）。控えから繰り上げたDHは控え時の守備位置を残す。 =====
 
     /// <summary>控え捕手がDHに繰り上がり、正捕手（先発）より前の打順（0番）に座るチーム。</summary>
@@ -275,8 +295,9 @@ public sealed class SubstitutionTests
         Assert.Equal(FieldPosition.DesignatedHitter, state.LiveLineup()[8].Position);
 
         Assert.True(state.ReleaseDh(FieldPosition.LeftField));
-        // DH解除後はそのスロットに投手が入り、実守備位置（投手）を表示する。
-        Assert.Equal(FieldPosition.Pitcher, state.LiveLineup()[8].Position);
+        // DH解除後はDHだった選手が自分の打順で実守備位置（左翼）を表示し、投手は退いた左翼手の打順に入る。
+        Assert.Equal(FieldPosition.LeftField, state.LiveLineup()[8].Position);
+        Assert.Contains(state.LiveLineup(), l => l.Position == FieldPosition.Pitcher);
     }
 
     [Fact]
