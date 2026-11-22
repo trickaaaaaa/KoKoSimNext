@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Windows の製品ビルドを batchmode で作る（issue #1310・docs/release/steam-roadmap.md 段階1）。
-# 中身は Assets/Editor/Build/PlayerBuilder.cs。Editor を開いているときは
+# 中身は Assets/Editor/PlayerBuilder.cs。Editor を開いているときは
 # メニュー「KokoSim/ビルド/…」から作る（同じプロジェクトを batchmode で二重に開けないため）。
 #
 # 使い方:
