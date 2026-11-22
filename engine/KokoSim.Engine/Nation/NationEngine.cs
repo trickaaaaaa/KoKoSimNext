@@ -49,7 +49,10 @@ public static class NationEngine
         var districtPlan = prefTable is not null && prefFormats is not null
             ? DistrictPlan.Build(prefTable, prefFormats)
             : null;
-        var nation = NationGenerator.Generate(vocab, coeff, rng, districtPlan);
+        var districtWeights = prefTable is not null && prefFormats is not null
+            ? DistrictPlan.BuildWeights(prefTable, prefFormats)
+            : null;
+        var nation = NationGenerator.Generate(vocab, coeff, rng, districtPlan, districtWeights);
         var snapshots = new List<NationYear>(years);
         var lastTier = SnapshotTiers(nation);
 

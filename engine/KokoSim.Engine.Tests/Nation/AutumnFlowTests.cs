@@ -177,6 +177,59 @@ public sealed class AutumnFlowTests
     }
 
     [Fact]
+    public void NationGenerator_DistrictWeights_AssignBySizeRatio()
+    {
+        // 北海道(Id0・約200校)に10支部。札幌だけ突出した重みなら札幌の校数が最大で、重みの比と校数の比が近い。
+        var weights = new double[] { 55, 20, 20, 20, 15, 16, 10, 14, 16, 14 };
+        var nation = NationGenerator.Generate(new SchoolNameVocab(), Coeff, new Xoshiro256Random(1),
+            new Dictionary<int, int> { [0] = 10 },
+            new Dictionary<int, IReadOnlyList<double>> { [0] = weights });
+
+        var schools = nation.InPrefecture(0).ToList();
+        var counts = new int[10];
+        foreach (var s in schools) counts[s.DistrictId!.Value]++;
+        var total = weights.Sum();
+        for (var d = 0; d < 10; d++)
+        {
+            var expected = schools.Count * weights[d] / total;
+            Assert.InRange(counts[d], expected * 0.55, expected * 1.6);
+        }
+        Assert.Equal(counts.Max(), counts[0]);   // 札幌が最大
+    }
+
+    [Fact]
+    public void NationGenerator_DistrictWeights_AbsentOrMismatched_StaysUniformAndUnchanged()
+    {
+        // 重み無し／地区数と合わない重みは従来の均等割当（生成列も従来と同じ）。
+        var vocab = new SchoolNameVocab();
+        var plan = new Dictionary<int, int> { [5] = 4 };
+        var plain = NationGenerator.Generate(vocab, Coeff, new Xoshiro256Random(3), plan);
+        var mismatched = NationGenerator.Generate(vocab, Coeff, new Xoshiro256Random(3), plan,
+            new Dictionary<int, IReadOnlyList<double>> { [5] = new double[] { 1, 2, 3 } });
+        for (var i = 0; i < plain.Schools.Count; i++)
+            Assert.Equal(plain.Schools[i].DistrictId, mismatched.Schools[i].DistrictId);
+    }
+
+    [Fact]
+    public void DistrictPlan_BuildWeights_ReadsRealYaml()
+    {
+        var prefTable = PrefTable();
+        var formats = new Dictionary<string, PrefFormat>
+        {
+            ["aichi"] = KokoSim.Config.PrefFormatLoader.LoadFromFile(DataFile("pref-formats/aichi.yaml")),
+            ["hokkaido"] = KokoSim.Config.PrefFormatLoader.LoadFromFile(DataFile("pref-formats/hokkaido.yaml")),
+            ["hyogo"] = KokoSim.Config.PrefFormatLoader.LoadFromFile(DataFile("pref-formats/hyogo.yaml")),
+        };
+        var w = DistrictPlan.BuildWeights(prefTable, formats);
+        var aichi = w[prefTable.Prefectures.First(p => p.Name == "aichi").Id];
+        Assert.Equal(new double[] { 16, 6, 11, 5, 10 }, aichi);   // 名古屋16・東三河6・西三河11・知多5・尾張10
+        var hok = w[prefTable.Prefectures.First(p => p.Name == "hokkaido").Id];
+        Assert.Equal(10, hok.Count);
+        Assert.Equal(hok.Max(), hok[0]);                           // 札幌が最大
+        Assert.False(w.ContainsKey(prefTable.Prefectures.First(p => p.Name == "hyogo").Id));   // 重み無し＝均等
+    }
+
+    [Fact]
     public void DistrictAssignment_DoesNotPerturbGeneration()
     {
         // DistrictId は Fork で付与＝強さ・名声・校風の生成列は地区計画の有無で1ビットも変わらない。

@@ -36,6 +36,21 @@ namespace KokoSim.Unity.Shell
         public static IReadOnlyDictionary<int, PrefFormatDistrictParser.AutumnDistrictRule> Rules
             => _rules ?? (_rules = LoadRules());
 
+        private static IReadOnlyDictionary<int, IReadOnlyList<double>> _weights;
+
+        /// <summary>県Id → 地区ごとの規模比率（<c>district_weights:</c>）。重みの無い県は載らず均等割当。</summary>
+        public static IReadOnlyDictionary<int, IReadOnlyList<double>> Weights
+        {
+            get
+            {
+                if (_weights != null) return _weights;
+                var map = new Dictionary<int, IReadOnlyList<double>>();
+                foreach (var kv in Rules)
+                    if (kv.Value.Weights != null) map[kv.Key] = kv.Value.Weights;
+                return _weights = map;
+            }
+        }
+
         /// <summary>各地区から秋季県大会へ進む校数（地区予選を持たない県は1）。</summary>
         public static int AdvancePerDistrictOf(int prefectureId)
             => Rules.TryGetValue(prefectureId, out var r) ? r.AdvancePerDistrict : 1;

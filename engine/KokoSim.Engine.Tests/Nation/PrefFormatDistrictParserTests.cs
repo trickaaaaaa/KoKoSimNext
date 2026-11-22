@@ -179,6 +179,23 @@ stages:
         Assert.False(plan.ContainsKey(PrefectureNames.IdOf("nara")));   // 地区なしの県は載せない
     }
 
+    /// <summary>地区ごとの規模比率（district_weights）。Config の完全ロードと同じ値で、数が地区数と合わなければ読まない。</summary>
+    [Fact]
+    public void BuildWeights_MatchesFullLoad_AndRejectsMismatch()
+    {
+        var texts = new[] { "aichi.yaml", "hokkaido.yaml", "hyogo.yaml" }.Select(f => File.ReadAllText(FindPrefFormat(f))).ToList();
+        var w = PrefFormatDistrictParser.BuildWeights(texts);
+        foreach (var f in new[] { "aichi", "hokkaido" })
+        {
+            var full = KokoSim.Config.PrefFormatLoader.LoadFromFile(FindPrefFormat(f + ".yaml"));
+            Assert.Equal(full.DistrictWeights, w[PrefectureNames.IdOf(f)]);
+        }
+        Assert.False(w.ContainsKey(PrefectureNames.IdOf("hyogo")));   // 重み無し＝均等
+
+        var bad = File.ReadAllText(FindPrefFormat("aichi.yaml")).Replace("[16, 6, 11, 5, 10]", "[16, 6, 11]");
+        Assert.Empty(PrefFormatDistrictParser.BuildWeights(new[] { bad }));
+    }
+
     private static string PrefFormatDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

@@ -60,8 +60,11 @@ public static class CareerEngine
         var districtPlan = prefTable is not null && prefFormats is not null
             ? DistrictPlan.Build(prefTable, prefFormats)
             : null;
+        var districtWeights = prefTable is not null && prefFormats is not null
+            ? DistrictPlan.BuildWeights(prefTable, prefFormats)
+            : null;
 
-        var nation = NationGenerator.Generate(vocab, nationCoeff, rng, districtPlan);
+        var nation = NationGenerator.Generate(vocab, nationCoeff, rng, districtPlan, districtWeights);
         var timeline = new List<CareerYear>(years);
 
         var prefId = rng.NextInt(0, nation.Prefectures.Count);

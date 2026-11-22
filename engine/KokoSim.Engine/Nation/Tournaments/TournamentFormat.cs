@@ -70,6 +70,8 @@ public sealed record PrefFormat
     /// <summary>所属地区（regional-tournaments.yaml の region キー）。</summary>
     public string Region { get; init; } = "";
     public IReadOnlyList<string> Districts { get; init; } = System.Array.Empty<string>();
+    /// <summary>地区ごとの規模比率（<see cref="Districts"/> と同じ並び。生成校の地区割当の重み・設計書05 §2.2）。空＝均等。</summary>
+    public IReadOnlyList<double> DistrictWeights { get; init; } = System.Array.Empty<double>();
     public DistrictAssignment DistrictAssignment { get; init; } = DistrictAssignment.None;
     /// <summary>地区大会への出場枠（§1.5 の regional_berths）。</summary>
     public int RegionalBerths { get; init; } = 1;
