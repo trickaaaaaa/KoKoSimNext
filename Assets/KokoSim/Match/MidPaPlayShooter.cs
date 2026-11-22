@@ -117,6 +117,9 @@ namespace KokoSim.Unity.Match
                 ? new[] { "pickoff", "battery-miss", "drop-third" }
                 : new[] { "steal", "bunt" };
 
+        // 撮影用の static を Play 終了で元へ戻す（Domain Reload 無効でも次の Play へ引きずらない）
+        private void OnDestroy() => MatchLiveController.CaptureContextOverride = null;
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
