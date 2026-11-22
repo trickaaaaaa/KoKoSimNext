@@ -34,6 +34,11 @@ namespace KokoSim.Engine.Match.Game;
 /// 三塁を自分で踏んでフォース／捕手・投手が自打球→本塁を自分で踏んでフォース）を検討してよいかの
 /// ゲートに使う。null＝呼び出し側が未対応（単体テスト等）＝ゲート不成立＝従来どおり常に二塁封殺
 /// （帯不変）。</param>
+/// <param name="SelfForceSprintSpeedMps">自己フォース（Q31）で <see cref="FielderRole"/> の野手自身が対象塁へ
+/// 走り込む脚力[m/s]（<c>FielderAttributes.SprintSpeedMps</c>＝その野手の Speed 由来）。送球（肩）でなく
+/// 自分の脚で運ぶ動きなので<see cref="Situation"/>.OutfielderThrowSpeedMps とは別軸。null＝呼び出し側が未対応
+/// （単体テスト等）＝<see cref="BaserunningCoefficients.SelfForceFielderSprintSpeedMps"/>（league average）へ
+/// フォールバック（issue #1273: 旧実装は送球速度で計算しており、野手が塁へ走る時間がほぼゼロだった）。</param>
 /// <param name="UnrecoveredCatchError">この打球が「拾い直せずに失策のまま確定した捕球ミス」か（issue #903）。
 /// true のとき <see cref="Situation"/> の時計は拾い直しを終えた時刻（<see cref="Fielding.FieldingPlay.CatchErrorReadyAtSeconds"/>）
 /// から始まっており、非フォースの二塁走者は三塁を狙うかを拾い直した野手との時間勝負で決める
@@ -53,4 +58,5 @@ public readonly record struct HomePlayContext(
     double? DoublePlayPivotArmMps = null,
     FieldPosition? FielderRole = null,
     bool UnrecoveredCatchError = false,
-    FlyReadSituation? FlyRead = null);
+    FlyReadSituation? FlyRead = null,
+    double? SelfForceSprintSpeedMps = null);

@@ -603,6 +603,13 @@ public sealed record BaserunningCoefficients
     /// 投げる動作＝中継を受けてから投げ返す <see cref="DoublePlayPivotTransferSeconds"/>（0.90）とは別物
     /// （受け取り動作が無いぶん短い）。</summary>
     public double DoublePlaySelfForceRelayTransferSeconds { get; init; } = 0.70;
+    /// <summary>自己フォース一段目（処理野手自身が対象塁へ走り込む, issue #1273）の脚力[m/s]の既定値
+    /// （<see cref="HomePlayContext.SelfForceSprintSpeedMps"/> が null＝単体テスト等で未配線のときのフォールバック）。
+    /// 送球（肩＝<see cref="HomePlaySituation.OutfielderThrowSpeedMps"/>）でなく自分の脚で運ぶ動きなので、
+    /// <see cref="Players.FielderAttributes.SprintSpeedMps"/>（6.0 + Speed×0.025）の Speed=50（league average）相当。
+    /// 旧実装は処理点→対象塁の距離を送球速度（≈30 m/s）で割っており、野手が塁へ走る時間がほぼゼロになって
+    /// 併殺が過大・走力/肩の効きが消えていた（三塁手処理の一・二塁で併殺率96%・能力を振っても97〜99%で不変）。</summary>
+    public double SelfForceFielderSprintSpeedMps { get; init; } = 7.25;
 
     // === 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）===
     // 一塁ベース付近で捕った一塁ゴロは、一塁手が二塁へ投げて封殺する（3-6-3型）代わりに、自分で一塁を
