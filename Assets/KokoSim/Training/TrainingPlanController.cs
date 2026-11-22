@@ -31,6 +31,17 @@ namespace KokoSim.Unity.Training
         private void OnEnable()
         {
             _state = new TrainingPlanState();
+            // 画面を離れて戻ると UIDocument が木を作り直す。古い木を指す部品・シグネチャ・開閉状態を持ち越さない。
+            _modalOpen = false;
+            _copyOpen = false;
+            _abilityTab = false;
+            _copyTarget = 0;
+            _abilPitchChart = null;
+            _menuSig = null;
+            _defenseSig = null;
+            _menuRows.Clear();
+            _defenseRows.Clear();
+            _toastJob = null;
             _root = GetComponent<UIDocument>().rootVisualElement;
             _modal = _root.Q<VisualElement>("tp-modal");
             _copyModal = _root.Q<VisualElement>("tp-copy-modal");
@@ -38,6 +49,13 @@ namespace KokoSim.Unity.Training
             WireOverlayClose(_modal, () => _modalOpen, CloseModal);
             WireOverlayClose(_copyModal, () => _copyOpen, CloseCopyPicker);
             Render();
+        }
+
+        private void OnDisable()
+        {
+            _toastJob?.Pause();
+            _toastJob = null;
+            _abilPitchChart = null;
         }
 
         /// <summary>スクリムクリック・Escで閉じる（issue #222⑥）。カード内クリックは伝播停止し、
@@ -87,6 +105,7 @@ namespace KokoSim.Unity.Training
             _copyOpen = true;
             Render();
             _copyModal?.BringToFront();
+            _root.Q<Label>("toast")?.BringToFront();
             _copyModal?.Focus();
         }
 
@@ -103,6 +122,7 @@ namespace KokoSim.Unity.Training
             _abilityTab = false;   // 開き直しは常に配分タブから（モーダルの主目的は練習設定）
             Render();
             _modal?.BringToFront();
+            _root.Q<Label>("toast")?.BringToFront();
             _modal?.Focus();
         }
 
@@ -367,6 +387,16 @@ namespace KokoSim.Unity.Training
             }
 
             BuildTemplates(v);
+            KeepOverlayFocus();
+        }
+
+        // ±や再構築でフォーカスを持つ要素が木から消える／無効化されると Esc がスクリムへ届かない。開いているオーバーレイへ戻す。
+        private void KeepOverlayFocus()
+        {
+            var overlay = _copyOpen ? _copyModal : _modalOpen ? _modal : null;
+            if (overlay == null) return;
+            var focused = _root.panel?.focusController?.focusedElement as VisualElement;
+            if (focused == null || !focused.enabledInHierarchy || !overlay.Contains(focused)) overlay.Focus();
         }
 
         private void ShowIf(string name, bool on)
@@ -772,13 +802,18 @@ namespace KokoSim.Unity.Training
         }
 
         // ── ユーティリティ ─────────────────────────
+        private IVisualElementScheduledItem _toastJob;
+
         private void Toast(string msg)
         {
             var toast = _root.Q<Label>("toast");
             if (toast == null) return;
             toast.text = msg;
             toast.style.display = DisplayStyle.Flex;
-            toast.schedule.Execute(() => { if (toast != null) toast.style.display = DisplayStyle.None; }).ExecuteLater(1600);
+            toast.BringToFront();   // モーダルの暗幕より手前へ（モーダル操作で出すトーストも読める）
+            _toastJob?.Pause();     // 続けて出したとき前の予約が新しいトーストを消さない
+            _toastJob = toast.schedule.Execute(() => { toast.style.display = DisplayStyle.None; });
+            _toastJob.ExecuteLater(1600);
         }
 
         private void Click(string name, System.Action action)
