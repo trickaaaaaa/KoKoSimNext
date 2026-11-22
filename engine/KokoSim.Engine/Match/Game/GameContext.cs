@@ -88,6 +88,8 @@ public sealed record GameContext
     public int RegulationInnings { get; init; } = 9;
     public int MaxInnings { get; init; } = 15;         // 延長上限（無限ループ防止）
     public bool MercyRuleEnabled { get; init; } = false;
+    /// <summary>コールドゲームの成立条件（<see cref="MercyRuleEnabled"/> が真のときだけ効く）。</summary>
+    public MercyRuleCoefficients MercyRule { get; init; } = new();
 
     /// <summary>
     /// タイブレーク（設計書09 §7, 現代ルールトグル・年代連動は設計書05 §1.3）。

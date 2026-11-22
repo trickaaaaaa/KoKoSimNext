@@ -134,7 +134,7 @@ public sealed class GameEngineTests
     [InlineData(7, 0, 7, true)]    // 7回7点差で成立
     [InlineData(7, 0, 6, false)]   // 7回6点差はまだ継続
     public void IsMercy_BoundaryConditions(int inning, int away, int home, bool expected)
-        => Assert.Equal(expected, GameEngine.IsMercy(inning, away, home));
+        => Assert.Equal(expected, GameEngine.IsMercy(inning, away, home, new MercyRuleCoefficients()));
 
     [Fact]
     public void MercyRuleEnabled_EndsGameEarly_WhenLopsided()
@@ -149,8 +149,8 @@ public sealed class GameEngineTests
             var r = GameEngine.Play(strong, weak, ctx, new Xoshiro256Random(seed));
             if (!r.MercyEnded) continue;
             foundMercyEnded = true;
-            Assert.True(r.InningsPlayed < ctx.RegulationInnings || GameEngine.IsMercy(r.InningsPlayed, r.AwayRuns, r.HomeRuns));
-            Assert.True(GameEngine.IsMercy(r.InningsPlayed, r.AwayRuns, r.HomeRuns));
+            Assert.True(r.InningsPlayed < ctx.RegulationInnings || GameEngine.IsMercy(r.InningsPlayed, r.AwayRuns, r.HomeRuns, ctx.MercyRule));
+            Assert.True(GameEngine.IsMercy(r.InningsPlayed, r.AwayRuns, r.HomeRuns, ctx.MercyRule));
         }
         Assert.True(foundMercyEnded, "大差の対戦カードなのにコールドが一度も成立しなかった（設定または閾値を見直す）。");
     }

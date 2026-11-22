@@ -186,7 +186,7 @@ public static class ContactModel
 
         // 当てたうち一定割合はファウル。
         // 追い込まれたらファールで粘る（issue #683）。
-        var foulShare = strikes >= 2 ? Math.Min(0.9, coeff.FoulShare + coeff.TwoStrikeFoulBonus) : coeff.FoulShare;
+        var foulShare = strikes >= 2 ? Math.Min(coeff.TwoStrikeFoulShareMax, coeff.FoulShare + coeff.TwoStrikeFoulBonus) : coeff.FoulShare;
         if (MathUtil.Chance(foulShare, rng))
         {
             return (ContactOutcome.Foul, null);
@@ -202,7 +202,7 @@ public static class ContactModel
                 // つなぎの打撃（設計書10 §2.1・issue #907）: 走者ありで打球が少し弱くなる。スキルなしは0＝恒等。
                 + skillMods.QualityShift
                 + rng.NextGaussian(0, coeff.QualitySigma),
-            QualityMin, 1.05);
+            QualityMin, coeff.QualityMax);
 
         var maxExitKmh = coeff.ExitVeloInterceptKmh + batter.Power * coeff.ExitVeloPerPower;
         var veloFactor = VeloFactor(quality, coeff);
@@ -241,8 +241,8 @@ public static class ContactModel
             var w = coeff.PopupWeaknessWeight;
             if (MathUtil.Chance(coeff.PopupShare * ((1.0 - w) + w * weakness), pop))
             {
-                launchAngle = MathUtil.Clamp(pop.NextGaussian(coeff.PopupLaunchMeanDeg, coeff.PopupLaunchSigmaDeg), 50.0, 85.0);
-                exitMps = Math.Max(45.0, pop.NextGaussian(coeff.PopupExitMeanKmh, coeff.PopupExitSigmaKmh)) / 3.6;
+                launchAngle = MathUtil.Clamp(pop.NextGaussian(coeff.PopupLaunchMeanDeg, coeff.PopupLaunchSigmaDeg), coeff.PopupLaunchMinDeg, coeff.PopupLaunchMaxDeg);
+                exitMps = Math.Max(coeff.PopupExitMinKmh, pop.NextGaussian(coeff.PopupExitMeanKmh, coeff.PopupExitSigmaKmh)) / 3.6;
             }
         }
 

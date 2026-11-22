@@ -246,11 +246,11 @@ public sealed class PitchFlightPathTests
     /// <summary>球種・キレ（ストレートの球威50）の観測弾道（対決ビューが描く PitchFlightPath の入力と同じ回転＝PitchSpinModel）。</summary>
     private static PitchTrajectory Traj(PitchType type, double topKmh, int sharpness = 50)
     {
-        var slot = new PitchSlot { Type = type, Power = 50, Sharpness = sharpness };
+        var pitching = new PitchingCoefficients();
         var spec = new PitchSpec
         {
-            SpeedKmh = topKmh * slot.SpeedRatio,
-            SpinRadPerSec = PitchSpinModel.SpinFor(new PitchingCoefficients(), type, sharpness, 50),
+            SpeedKmh = topKmh * pitching.AxisFor(type).SpeedRatio,
+            SpinRadPerSec = PitchSpinModel.SpinFor(pitching, type, sharpness, 50),
         };
         return PitchSimulator.Simulate(spec, new Aerodynamics(), new MoundGeometry());
     }

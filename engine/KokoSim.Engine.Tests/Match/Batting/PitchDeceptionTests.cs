@@ -19,9 +19,8 @@ public sealed class PitchDeceptionTests
     /// <summary>能力50・最速 <paramref name="topKmh"/> の投手が投げた球種 <paramref name="type"/> の特徴量（判定と同じ表引き）。</summary>
     private static PitchTrajectoryFeatures Features(PitchType type, double topKmh = 140.0, int sharpness = 50)
     {
-        var slot = new PitchSlot { Type = type, Power = 50, Sharpness = sharpness };
         var f = TrajectoryFeatureTable.LookupFeatures(
-            Aero, Mound, PitchSpinModel.SpinFor(Pitching, type, sharpness, 50), topKmh * slot.SpeedRatio);
+            Aero, Mound, PitchSpinModel.SpinFor(Pitching, type, sharpness, 50), topKmh * Pitching.AxisFor(type).SpeedRatio);
         if (type == PitchType.Fastball) return f;
         var fb = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, PitchSpinModel.FastballSpin(Pitching, 50), topKmh);
         return f with { Fastball = new FastballReference(fb.InducedVerticalBreakM, fb.InducedHorizontalBreakM, fb.FlightTimeSeconds) };

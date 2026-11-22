@@ -103,8 +103,8 @@ public static class StealResolver
     public static double RunnerTimeSeconds(Player runner, BaserunningCoefficients c, StartType startType = StartType.Normal,
         StealTarget target = StealTarget.Second)
     {
-        var startDelay = Math.Max(0.10, c.StealReactionIntercept - c.AbilityEffect.Running(runner.Steal) * c.StealReactionSlope);
-        if (startType == StartType.Gamble) startDelay = Math.Max(0.05, startDelay - c.GambleJumpBonusSeconds);
+        var startDelay = Math.Max(c.StealStartDelayFloorSeconds, c.StealReactionIntercept - c.AbilityEffect.Running(runner.Steal) * c.StealReactionSlope);
+        if (startType == StartType.Gamble) startDelay = Math.Max(c.StealGambleStartDelayFloorSeconds, startDelay - c.GambleJumpBonusSeconds);
         // ジャンプ（投手の始動を読んで既に動き出している分）。床の**後**に引く＝全走者から同じ秒だけ
         // 引かれる（理由は StealJumpCreditSeconds のコメント）。
         startDelay -= c.StealJumpCreditSeconds;

@@ -16,23 +16,17 @@ namespace KokoSim.Engine.Players;
 /// </remarks>
 public static class UntrainedPitchingEstimator
 {
-    // 肩の何割が球速レベルへ乗るか。強肩の野手ほど速い球を投げられる（が本職投手ほどではない）。
-    private const double ArmToVelocityFactor = 0.75;
-    // 投げ慣れていない前提の各次元のベース水準（低め）。個体差を Fork 乱数で少し散らす。
-    private const int UntrainedControlBase = 30;
-    private const int UntrainedStaminaBase = 25;
-    private const int UntrainedPitchRankBase = 28;
-
     /// <summary>
     /// 肩の強さ（1〜100）から潜在投手能力を推定する。<paramref name="forked"/> は Fork 済みの
-    /// 専用ストリーム（主RNG非消費）。制球・スタミナ・キレは保守的に低く、個体差だけ散らす。
+    /// 専用ストリーム（主RNG非消費）。制球・スタミナ・キレは保守的に低く、個体差だけ散らす。水準と散らばりは
+    /// <see cref="Season.RosterCoefficients"/> の <c>Untrained*</c>（data/coefficients.yaml roster）。
     /// </summary>
-    public static PitcherAttributes Estimate(int armStrength, IRandomSource forked)
+    public static PitcherAttributes Estimate(int armStrength, IRandomSource forked, Season.RosterCoefficients c)
     {
-        var velocityLevel = Clamp(armStrength * ArmToVelocityFactor + forked.NextGaussian(0, 6));
-        var control = Clamp(UntrainedControlBase + forked.NextGaussian(0, 8));
-        var staminaLevel = Clamp(UntrainedStaminaBase + forked.NextGaussian(0, 6));
-        var pitchRank = Clamp(UntrainedPitchRankBase + forked.NextGaussian(0, 8));
+        var velocityLevel = Clamp(armStrength * c.UntrainedArmToVelocityFactor + forked.NextGaussian(0, c.UntrainedVelocitySd));
+        var control = Clamp(c.UntrainedControlBase + forked.NextGaussian(0, c.UntrainedControlSd));
+        var staminaLevel = Clamp(c.UntrainedStaminaBase + forked.NextGaussian(0, c.UntrainedStaminaSd));
+        var pitchRank = Clamp(c.UntrainedPitchRankBase + forked.NextGaussian(0, c.UntrainedPitchRankSd));
 
         return new PitcherAttributes
         {

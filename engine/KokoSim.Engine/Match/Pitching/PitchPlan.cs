@@ -115,7 +115,7 @@ public static class PitchSelection
         var rawVelo = ceiling - drop;
 
         // 球種の球速比を掛けた実投球速度（表示・実況・タイムライン用）。
-        var pitchVelo = rawVelo * slot.SpeedRatio;
+        var pitchVelo = rawVelo * pitching.AxisFor(slot.Type).SpeedRatio;
         // 打者の反応に使う球速（設計書21）: 効きが焼いた反応オフセット（速い投手ほど負）を足す＝ストレートの速さの差だけを
         // Lv50=132km/h 軸で寝かせ、消耗・ギア・ドロップ・球種の緩急はそのまま。オフセット0（効き1.0／平均投手）で rawVelo と同値。
         var reactionRaw = rawVelo + pitcher.ReactionVelocityOffsetKmh;
@@ -133,7 +133,7 @@ public static class PitchSelection
             AimX = aimX,
             AimY = aimY,
             VelocityKmh = pitchVelo,
-            ReactionVelocityKmh = reactionRaw * slot.SpeedRatio,
+            ReactionVelocityKmh = reactionRaw * pitching.AxisFor(slot.Type).SpeedRatio,
             Stuff = stuff,
             ControlLevel = pitcher.Control,
             PitchRank = slot.Rank,

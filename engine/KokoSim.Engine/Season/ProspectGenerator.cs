@@ -491,6 +491,26 @@ public sealed record RosterCoefficients
     /// 走力・精神力・捕手リード・走塁系など3分野に属さない能力はこの抽選と無関係に常に基本タイプで決まる。
     /// </summary>
     public double GrowthDomainSameProb { get; init; } = 0.6;
+    /// <summary>基本の成長タイプの抽選: 一様乱数がこの値未満なら早熟（Early）。</summary>
+    public double GrowthTypeEarlyCutoff { get; init; } = 0.30;
+    /// <summary>同・この値未満（かつ早熟の境以上）なら標準、以上なら晩成（Late）。</summary>
+    public double GrowthTypeStandardCutoff { get; init; } = 0.70;
+    /// <summary>投げ慣れていない選手（AI校の非マウンド選手）の球速Lv推定: 肩の何割が球速Lvへ乗るか（<c>UntrainedPitchingEstimator</c>）。</summary>
+    public double UntrainedArmToVelocityFactor { get; init; } = 0.75;
+    /// <summary>同・球速Lvの個体差の標準偏差（専用Fork乱数）。</summary>
+    public double UntrainedVelocitySd { get; init; } = 6.0;
+    /// <summary>同・制球Lvのベース水準（投げ慣れていない前提で低め）。</summary>
+    public double UntrainedControlBase { get; init; } = 30.0;
+    /// <summary>同・制球Lvの個体差の標準偏差。</summary>
+    public double UntrainedControlSd { get; init; } = 8.0;
+    /// <summary>同・スタミナLvのベース水準。</summary>
+    public double UntrainedStaminaBase { get; init; } = 25.0;
+    /// <summary>同・スタミナLvの個体差の標準偏差。</summary>
+    public double UntrainedStaminaSd { get; init; } = 6.0;
+    /// <summary>同・キレ（PitchRank）のベース水準。</summary>
+    public double UntrainedPitchRankBase { get; init; } = 28.0;
+    /// <summary>同・キレの個体差の標準偏差。</summary>
+    public double UntrainedPitchRankSd { get; init; } = 8.0;
 
     /// <summary>
     /// 足(Speed) の才能上限gap圧縮係数（Issue #114）。素質固定能力は「伸びる速さ」だけでなく「天井」も近い
@@ -690,7 +710,7 @@ public static class ProspectGenerator
         RosterCoefficients c, IRandomSource rng, PlayerNameVocab vocab, SkillCoefficients skillCoeff,
         PersonalityCoefficients personalityCoeff, FormCoefficients formCoeff, ISet<string> usedGiven)
     {
-        var growth = SampleGrowthType(rng);
+        var growth = SampleGrowthType(rng, c);
         // 成長タイプの分野別化（設計書02 §5.2・issue #866）: 独立Forkストリームで抽選し、
         // 既存の能力ロール列を1ビットも乱さない（不変条件#2）。
         var (pitchingGrowthType, battingGrowthType, defenseGrowthType) =
@@ -1078,11 +1098,11 @@ public static class ProspectGenerator
                 PitcherRoleResolver.RoleWeight(aptPitcher, bestField, c));
     }
 
-    internal static GrowthType SampleGrowthType(IRandomSource rng)
+    internal static GrowthType SampleGrowthType(IRandomSource rng, RosterCoefficients c)
     {
         var r = rng.NextDouble();
-        if (r < 0.30) return GrowthType.Early;
-        if (r < 0.70) return GrowthType.Standard;
+        if (r < c.GrowthTypeEarlyCutoff) return GrowthType.Early;
+        if (r < c.GrowthTypeStandardCutoff) return GrowthType.Standard;
         return GrowthType.Late;
     }
 

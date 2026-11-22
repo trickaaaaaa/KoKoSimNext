@@ -96,6 +96,8 @@ public sealed record BaserunningCoefficients
     /// スプリント速度は天井速度（加速ランプ非モデル化）なので、反応＋加速不足をこの遅延で吸収する（Step4再校正）。</summary>
     public double StealReactionIntercept { get; init; } = 0.95;
     public double StealReactionSlope { get; init; } = 0.008;
+    /// <summary>盗塁のスタート遅延の下限[s]（盗塁能力が極端に高くても、これより速くは出られない）。</summary>
+    public double StealStartDelayFloorSeconds { get; init; } = 0.10;
     /// <summary>
     /// ジャンプ[s]（走者が投手の始動を読んで既に動き出している分。上の遅延から差し引く）。
     ///
@@ -375,6 +377,8 @@ public sealed record BaserunningCoefficients
     /// <summary>本塁生還を狙う走者の判断遅延[s] = Intercept − 走塁判断×Slope。</summary>
     public double HomeRunnerReactionIntercept { get; init; } = 0.55;
     public double HomeRunnerReactionSlope { get; init; } = 0.004;
+    /// <summary>本塁を狙う走者・タッチアップ走者のスタート遅延の下限[s]。</summary>
+    public double HomeRunnerStartDelayFloorSeconds { get; init; } = 0.10;
     /// <summary>塁上の二次リード分の距離短縮[m]（残り塁間距離から差し引く）。</summary>
     public double HomeLeadDistanceM { get; init; } = 3.5;
     /// <summary>
@@ -774,4 +778,6 @@ public sealed record BaserunningCoefficients
     public double GamblePitchoutExtraBonusSeconds { get; init; } = 0.20;
     /// <summary>ギャンブル始動の好スタート[s]（走者の実効スタートを前倒し＝時間短縮）。</summary>
     public double GambleJumpBonusSeconds { get; init; } = 0.15;
+    /// <summary>ギャンブル始動の盗塁スタート遅延の下限[s]（好スタートの短縮を引いた後の床）。</summary>
+    public double StealGambleStartDelayFloorSeconds { get; init; } = 0.05;
 }

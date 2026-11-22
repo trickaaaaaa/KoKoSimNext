@@ -98,6 +98,8 @@ public sealed record BattingCoefficients
     /// 全体のファール率（全投球の約18.7%＝実野球並み）は動かさず、粘りだけを足して球数を伸ばす。0は恒等。
     /// </summary>
     public double TwoStrikeFoulBonus { get; init; } = 0.10;
+    /// <summary>追い込まれてのファール率（基礎＋ボーナス）の上限。</summary>
+    public double TwoStrikeFoulShareMax { get; init; } = 0.90;
 
     // --- コンタクト（空振り/ファウル/フェア） ---
     /// <summary>空振り率のロジスティック基準（球威=打者互角時の空振り対数オッズ）。</summary>
@@ -239,6 +241,8 @@ public sealed record BattingCoefficients
     public double QualityContactSlope { get; init; } = 0.0020;
     /// <summary>コンタクト品質の標準偏差。</summary>
     public double QualitySigma { get; init; } = 0.17;
+    /// <summary>コンタクト品質の上限（クランプ値。バレル＝1超で満初速を少し越える）。下限は <c>ContactModel.QualityMin</c>（品質の定義域の端で固定）。</summary>
+    public double QualityMax { get; init; } = 1.05;
     /// <summary>打球角度: 弾道1のときの平均角[deg]。</summary>
     public double LaunchAngleAtLt1 { get; init; } = -5.0;
     /// <summary>打球角度: 弾道100のときの平均角[deg]。</summary>
@@ -335,10 +339,16 @@ public sealed record BattingCoefficients
     public double PopupLaunchMeanDeg { get; init; } = 64.0;
     /// <summary>ポップフライ（issue #830 ②）: 打球角度の標準偏差[度]。</summary>
     public double PopupLaunchSigmaDeg { get; init; } = 7.0;
+    /// <summary>ポップフライの打球角度の下限[度]（クランプ）。</summary>
+    public double PopupLaunchMinDeg { get; init; } = 50.0;
+    /// <summary>ポップフライの打球角度の上限[度]（クランプ）。</summary>
+    public double PopupLaunchMaxDeg { get; init; } = 85.0;
     /// <summary>ポップフライ（issue #830 ②）: 初速の平均[km/h]。</summary>
     public double PopupExitMeanKmh { get; init; } = 95.0;
     /// <summary>ポップフライ（issue #830 ②）: 初速の標準偏差[km/h]。</summary>
     public double PopupExitSigmaKmh { get; init; } = 15.0;
+    /// <summary>ポップフライの初速の下限[km/h]（クランプ）。</summary>
+    public double PopupExitMinKmh { get; init; } = 45.0;
 
     // --- コンタクト品質への投手側寄与（「打たせて取る」の土台） ---
     // 打球質が打者能力だけで決まると、技巧派の優位は与四球の少なさからしか生まれず

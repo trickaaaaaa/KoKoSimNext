@@ -125,7 +125,7 @@ public static class TransferRosterConversion
         AiPlayer ai, IRandomSource rng, RosterCoefficients c, PersonalityCoefficients pc)
     {
         var s = ai.Snapshot;
-        var growth = ProspectGenerator.SampleGrowthType(rng);
+        var growth = ProspectGenerator.SampleGrowthType(rng, c);
         // 成長タイプの分野別化（設計書02 §5.2・issue #866）: 独立Forkストリームで抽選し、
         // この後の推定抽選列（性格・精神系・才能上限）を1ビットも乱さない（不変条件#2）。
         var (pitchingGrowthType, battingGrowthType, defenseGrowthType) =

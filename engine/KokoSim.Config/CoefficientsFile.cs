@@ -65,6 +65,12 @@ public sealed record CoefficientsBundle
     /// <summary>記録室の規定打席・規定投球回（issue #600）。表示専用＝帯には効かない。</summary>
     public KokoSim.Engine.Stats.RecordsCoefficients Records { get; init; } = new();
     public PracticeMatchCoefficients PracticeMatch { get; init; } = new();
+    /// <summary>センバツの地区別一般選考枠（設計書05 §4）。</summary>
+    public SenbatsuBerths SenbatsuBerths { get; init; } = new();
+    /// <summary>コールドゲームの成立条件（設計書05 §1.3）。</summary>
+    public MercyRuleCoefficients MercyRule { get; init; } = new();
+    /// <summary>在フィールド野手の緊急登板 backfill 経路の判定（設計書11 §4・issue #209）。</summary>
+    public ReliefBackfillCoefficients ReliefBackfill { get; init; } = new();
     /// <summary>施設カタログ（Issue #128）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
     public FacilityCatalog Facilities { get; init; } = FacilityCatalog.Default;
     /// <summary>年契約カタログ（設計書04 §1.4a）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
@@ -131,6 +137,9 @@ public static class CoefficientsLoader
         public TournamentDto? Tournament { get; set; }
         public RecordsDto? Records { get; set; }
         public PracticeMatchDto? PracticeMatch { get; set; }
+        public MercyRuleDto? MercyRule { get; set; }
+        public SenbatsuBerthsDto? SenbatsuBerths { get; set; }
+        public ReliefBackfillDto? ReliefBackfill { get; set; }
         public List<FacilityDefDto>? Facilities { get; set; }
         public List<ContractDefDto>? Contracts { get; set; }
 
@@ -177,6 +186,9 @@ public static class CoefficientsLoader
             Tournament = Tournament?.ToModel() ?? new TournamentSchedule(),
             Records = Records?.ToModel() ?? new KokoSim.Engine.Stats.RecordsCoefficients(),
             PracticeMatch = PracticeMatch?.ToModel() ?? new PracticeMatchCoefficients(),
+            MercyRule = MercyRule?.ToModel() ?? new MercyRuleCoefficients(),
+            SenbatsuBerths = SenbatsuBerths?.ToModel() ?? new SenbatsuBerths(),
+            ReliefBackfill = ReliefBackfill?.ToModel() ?? new ReliefBackfillCoefficients(),
             Facilities = Facilities is null
                 ? FacilityCatalog.Default
                 : new FacilityCatalog { Facilities = Facilities.Select(f => f.ToModel()).ToList() },
@@ -365,6 +377,47 @@ public static class CoefficientsLoader
         };
     }
 
+    private sealed class SenbatsuBerthsDto
+    {
+        public Dictionary<string, int>? GeneralByRegion { get; set; }
+
+        public SenbatsuBerths ToModel() => GeneralByRegion is null
+            ? new SenbatsuBerths()
+            : new SenbatsuBerths { GeneralByRegion = GeneralByRegion };
+    }
+
+    private sealed class MercyRuleDto
+    {
+        private static readonly MercyRuleCoefficients D = new();
+        public int EarlyInning { get; set; } = D.EarlyInning;
+        public int EarlyDiff { get; set; } = D.EarlyDiff;
+        public int LateInning { get; set; } = D.LateInning;
+        public int LateDiff { get; set; } = D.LateDiff;
+
+        public MercyRuleCoefficients ToModel() => new()
+        {
+            EarlyInning = EarlyInning,
+            EarlyDiff = EarlyDiff,
+            LateInning = LateInning,
+            LateDiff = LateDiff,
+        };
+    }
+
+    private sealed class ReliefBackfillDto
+    {
+        private static readonly ReliefBackfillCoefficients D = new();
+        public double BaseFieldingMargin { get; set; } = D.BaseFieldingMargin;
+        public double BattingRetentionWeight { get; set; } = D.BattingRetentionWeight;
+        public double LeagueAverageBatting { get; set; } = D.LeagueAverageBatting;
+
+        public ReliefBackfillCoefficients ToModel() => new()
+        {
+            BaseFieldingMargin = BaseFieldingMargin,
+            BattingRetentionWeight = BattingRetentionWeight,
+            LeagueAverageBatting = LeagueAverageBatting,
+        };
+    }
+
     private sealed class PracticeMatchDto
     {
         private static readonly PracticeMatchCoefficients D = new();
@@ -487,12 +540,14 @@ public static class CoefficientsLoader
         public string Type { get; set; } = "fastball";
         public double TiltDeg { get; set; }
         public double RpmScale { get; set; } = 1.0;
+        public double SpeedRatio { get; set; } = 1.0;
 
         public PitchAxisCoefficients ToModel() => new()
         {
             Type = ParseType(Type),
             TiltDeg = TiltDeg,
             RpmScale = RpmScale,
+            SpeedRatio = SpeedRatio,
         };
 
         private static PitchType ParseType(string s) => s switch
@@ -535,6 +590,7 @@ public static class CoefficientsLoader
         public double FirstPitchSwingFactor { get; set; } = D.FirstPitchSwingFactor;
         public double EarlyCountSwingFactor { get; set; } = D.EarlyCountSwingFactor;
         public double TwoStrikeFoulBonus { get; set; } = D.TwoStrikeFoulBonus;
+        public double TwoStrikeFoulShareMax { get; set; } = D.TwoStrikeFoulShareMax;
         public double WhiffIntercept { get; set; } = D.WhiffIntercept;
         public double WhiffContactSlope { get; set; } = D.WhiffContactSlope;
         public double WhiffOutOfZonePenalty { get; set; } = D.WhiffOutOfZonePenalty;
@@ -564,6 +620,7 @@ public static class CoefficientsLoader
         public double QualityMean { get; set; } = D.QualityMean;
         public double QualityContactSlope { get; set; } = D.QualityContactSlope;
         public double QualitySigma { get; set; } = D.QualitySigma;
+        public double QualityMax { get; set; } = D.QualityMax;
         public double LaunchAngleAtLt1 { get; set; } = D.LaunchAngleAtLt1;
         public double LaunchAngleAtLt100 { get; set; } = D.LaunchAngleAtLt100;
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
@@ -598,8 +655,11 @@ public static class CoefficientsLoader
         public double PopupWeaknessWeight { get; set; } = D.PopupWeaknessWeight;
         public double PopupLaunchMeanDeg { get; set; } = D.PopupLaunchMeanDeg;
         public double PopupLaunchSigmaDeg { get; set; } = D.PopupLaunchSigmaDeg;
+        public double PopupLaunchMinDeg { get; set; } = D.PopupLaunchMinDeg;
+        public double PopupLaunchMaxDeg { get; set; } = D.PopupLaunchMaxDeg;
         public double PopupExitMeanKmh { get; set; } = D.PopupExitMeanKmh;
         public double PopupExitSigmaKmh { get; set; } = D.PopupExitSigmaKmh;
+        public double PopupExitMinKmh { get; set; } = D.PopupExitMinKmh;
         public double ContactQualityVelocityRefKmh { get; set; } = D.ContactQualityVelocityRefKmh;
         public double ContactQualityPerKmh { get; set; } = D.ContactQualityPerKmh;
         public double ContactQualityPerControl { get; set; } = D.ContactQualityPerControl;
@@ -625,6 +685,7 @@ public static class CoefficientsLoader
             FirstPitchSwingFactor = FirstPitchSwingFactor,
             EarlyCountSwingFactor = EarlyCountSwingFactor,
             TwoStrikeFoulBonus = TwoStrikeFoulBonus,
+            TwoStrikeFoulShareMax = TwoStrikeFoulShareMax,
             WhiffIntercept = WhiffIntercept,
             WhiffContactSlope = WhiffContactSlope,
             WhiffOutOfZonePenalty = WhiffOutOfZonePenalty,
@@ -654,6 +715,7 @@ public static class CoefficientsLoader
             QualityMean = QualityMean,
             QualityContactSlope = QualityContactSlope,
             QualitySigma = QualitySigma,
+            QualityMax = QualityMax,
             LaunchAngleAtLt1 = LaunchAngleAtLt1,
             LaunchAngleAtLt100 = LaunchAngleAtLt100,
             LaunchAngleSigma = LaunchAngleSigma,
@@ -687,8 +749,11 @@ public static class CoefficientsLoader
             PopupWeaknessWeight = PopupWeaknessWeight,
             PopupLaunchMeanDeg = PopupLaunchMeanDeg,
             PopupLaunchSigmaDeg = PopupLaunchSigmaDeg,
+            PopupLaunchMinDeg = PopupLaunchMinDeg,
+            PopupLaunchMaxDeg = PopupLaunchMaxDeg,
             PopupExitMeanKmh = PopupExitMeanKmh,
             PopupExitSigmaKmh = PopupExitSigmaKmh,
+            PopupExitMinKmh = PopupExitMinKmh,
             ContactQualityVelocityRefKmh = ContactQualityVelocityRefKmh,
             ContactQualityPerKmh = ContactQualityPerKmh,
             ContactQualityPerControl = ContactQualityPerControl,
@@ -925,6 +990,7 @@ public static class CoefficientsLoader
         public double CatchThrowDistanceM { get; set; } = D.CatchThrowDistanceM;
         public double StealReactionIntercept { get; set; } = D.StealReactionIntercept;
         public double StealReactionSlope { get; set; } = D.StealReactionSlope;
+        public double StealStartDelayFloorSeconds { get; set; } = D.StealStartDelayFloorSeconds;
         public double StealJumpCreditSeconds { get; set; } = D.StealJumpCreditSeconds;
         public double PitcherQuickSeconds { get; set; } = D.PitcherQuickSeconds;
         public double PopTransferSeconds { get; set; } = D.PopTransferSeconds;
@@ -1010,6 +1076,7 @@ public static class CoefficientsLoader
         // 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）
         public double HomeRunnerReactionIntercept { get; set; } = D.HomeRunnerReactionIntercept;
         public double HomeRunnerReactionSlope { get; set; } = D.HomeRunnerReactionSlope;
+        public double HomeRunnerStartDelayFloorSeconds { get; set; } = D.HomeRunnerStartDelayFloorSeconds;
         public double HomeLeadDistanceM { get; set; } = D.HomeLeadDistanceM;
         public double RunnerTopSpeedFactor { get; set; } = D.RunnerTopSpeedFactor;
         public double RunnerBaseTurnSeconds { get; set; } = D.RunnerBaseTurnSeconds;
@@ -1117,6 +1184,7 @@ public static class CoefficientsLoader
         public double PitchoutDefenseBonusSeconds { get; set; } = D.PitchoutDefenseBonusSeconds;
         public double GamblePitchoutExtraBonusSeconds { get; set; } = D.GamblePitchoutExtraBonusSeconds;
         public double GambleJumpBonusSeconds { get; set; } = D.GambleJumpBonusSeconds;
+        public double StealGambleStartDelayFloorSeconds { get; set; } = D.StealGambleStartDelayFloorSeconds;
 
         public BaserunningCoefficients ToModel() => new()
         {
@@ -1142,6 +1210,7 @@ public static class CoefficientsLoader
             CatchThrowDistanceM = CatchThrowDistanceM,
             StealReactionIntercept = StealReactionIntercept,
             StealReactionSlope = StealReactionSlope,
+            StealStartDelayFloorSeconds = StealStartDelayFloorSeconds,
             StealJumpCreditSeconds = StealJumpCreditSeconds,
             PitcherQuickSeconds = PitcherQuickSeconds,
             PopTransferSeconds = PopTransferSeconds,
@@ -1219,6 +1288,7 @@ public static class CoefficientsLoader
             SqueezeHomeThrowSafeThreshold = SqueezeHomeThrowSafeThreshold,
             HomeRunnerReactionIntercept = HomeRunnerReactionIntercept,
             HomeRunnerReactionSlope = HomeRunnerReactionSlope,
+            HomeRunnerStartDelayFloorSeconds = HomeRunnerStartDelayFloorSeconds,
             HomeLeadDistanceM = HomeLeadDistanceM,
             RunnerTopSpeedFactor = RunnerTopSpeedFactor,
             RunnerBaseTurnSeconds = RunnerBaseTurnSeconds,
@@ -1313,6 +1383,7 @@ public static class CoefficientsLoader
             PitchoutDefenseBonusSeconds = PitchoutDefenseBonusSeconds,
             GamblePitchoutExtraBonusSeconds = GamblePitchoutExtraBonusSeconds,
             GambleJumpBonusSeconds = GambleJumpBonusSeconds,
+            StealGambleStartDelayFloorSeconds = StealGambleStartDelayFloorSeconds,
         };
     }
 
@@ -1441,6 +1512,7 @@ public static class CoefficientsLoader
         public double PowerPerDayForm { get; set; } = D.PowerPerDayForm;
         public double ControlPerDayForm { get; set; } = D.ControlPerDayForm;
         public double VelocityPerDayFormKmh { get; set; } = D.VelocityPerDayFormKmh;
+        public double VelocityFloorKmh { get; set; } = D.VelocityFloorKmh;
         public double SharpnessPerDayForm { get; set; } = D.SharpnessPerDayForm;
         public double WeeklyPersistence { get; set; } = D.WeeklyPersistence;
         public double WeeklySigma { get; set; } = D.WeeklySigma;
@@ -1475,6 +1547,7 @@ public static class CoefficientsLoader
             PowerPerDayForm = PowerPerDayForm,
             ControlPerDayForm = ControlPerDayForm,
             VelocityPerDayFormKmh = VelocityPerDayFormKmh,
+            VelocityFloorKmh = VelocityFloorKmh,
             SharpnessPerDayForm = SharpnessPerDayForm,
             WeeklyPersistence = WeeklyPersistence,
             WeeklySigma = WeeklySigma,
@@ -1670,6 +1743,11 @@ public static class CoefficientsLoader
         public double AccuracyMax { get; set; } = D.AccuracyMax;
         public double NominatedProbFactor { get; set; } = D.NominatedProbFactor;
         public double NominatedAccuracyAdd { get; set; } = D.NominatedAccuracyAdd;
+        public double RecentGrowthConditionMin { get; set; } = D.RecentGrowthConditionMin;
+        public double RecentGrowthTopicProb { get; set; } = D.RecentGrowthTopicProb;
+        public double PersonalityTopicProb { get; set; } = D.PersonalityTopicProb;
+        public double GrowthTypeTopicProb { get; set; } = D.GrowthTypeTopicProb;
+        public double HighGrowthDomainProb { get; set; } = D.HighGrowthDomainProb;
 
         public InsightCoefficients ToModel() => new()
         {
@@ -1680,6 +1758,11 @@ public static class CoefficientsLoader
             AccuracyMax = AccuracyMax,
             NominatedProbFactor = NominatedProbFactor,
             NominatedAccuracyAdd = NominatedAccuracyAdd,
+            RecentGrowthConditionMin = RecentGrowthConditionMin,
+            RecentGrowthTopicProb = RecentGrowthTopicProb,
+            PersonalityTopicProb = PersonalityTopicProb,
+            GrowthTypeTopicProb = GrowthTypeTopicProb,
+            HighGrowthDomainProb = HighGrowthDomainProb,
         };
     }
 
@@ -1733,6 +1816,14 @@ public static class CoefficientsLoader
         public double PenaltySameRegion { get; set; } = D.PenaltySameRegion;
         public double PenaltyNeighborRegion { get; set; } = D.PenaltyNeighborRegion;
         public double PenaltyFar { get; set; } = D.PenaltyFar;
+        public double ClosenessSameRegion { get; set; } = D.ClosenessSameRegion;
+        public double ClosenessNeighborRegion { get; set; } = D.ClosenessNeighborRegion;
+        public double RivalTierSameCutoff { get; set; } = D.RivalTierSameCutoff;
+        public double RivalTierPlus1Cutoff { get; set; } = D.RivalTierPlus1Cutoff;
+        public double RivalTierPlus2Cutoff { get; set; } = D.RivalTierPlus2Cutoff;
+        public double RivalTierPlus3Cutoff { get; set; } = D.RivalTierPlus3Cutoff;
+        public double BlurbHighMin { get; set; } = D.BlurbHighMin;
+        public double BlurbMidMin { get; set; } = D.BlurbMidMin;
         public double DormDistanceRelief { get; set; } = D.DormDistanceRelief;
         public double VisitCostSamePrefecture { get; set; } = D.VisitCostSamePrefecture;
         public double VisitCostSameRegion { get; set; } = D.VisitCostSameRegion;
@@ -1766,6 +1857,14 @@ public static class CoefficientsLoader
             PenaltySameRegion = PenaltySameRegion,
             PenaltyNeighborRegion = PenaltyNeighborRegion,
             PenaltyFar = PenaltyFar,
+            ClosenessSameRegion = ClosenessSameRegion,
+            ClosenessNeighborRegion = ClosenessNeighborRegion,
+            RivalTierSameCutoff = RivalTierSameCutoff,
+            RivalTierPlus1Cutoff = RivalTierPlus1Cutoff,
+            RivalTierPlus2Cutoff = RivalTierPlus2Cutoff,
+            RivalTierPlus3Cutoff = RivalTierPlus3Cutoff,
+            BlurbHighMin = BlurbHighMin,
+            BlurbMidMin = BlurbMidMin,
             DormDistanceRelief = DormDistanceRelief,
             VisitCostSamePrefecture = VisitCostSamePrefecture,
             VisitCostSameRegion = VisitCostSameRegion,
@@ -2349,6 +2448,7 @@ public static class CoefficientsLoader
         public int PinchRunSpeedCeiling { get; set; } = D.PinchRunSpeedCeiling;
         public int PinchRunImprovement { get; set; } = D.PinchRunImprovement;
         public int PinchRunMinDiff { get; set; } = D.PinchRunMinDiff;
+        public int PinchRunMaxDiff { get; set; } = D.PinchRunMaxDiff;
         public int DefensiveSubFromInning { get; set; } = D.DefensiveSubFromInning;
         public int DefensiveSubMinLead { get; set; } = D.DefensiveSubMinLead;
         public int DefensiveSubFieldingCeiling { get; set; } = D.DefensiveSubFieldingCeiling;
@@ -2358,6 +2458,8 @@ public static class CoefficientsLoader
         public double HitAndRunPowerPenalty { get; set; } = D.HitAndRunPowerPenalty;
         public double HitAndRunLaunchPenalty { get; set; } = D.HitAndRunLaunchPenalty;
         public double HitAndRunCaughtPenalty { get; set; } = D.HitAndRunCaughtPenalty;
+        public double HitAndRunCaughtSafeMin { get; set; } = D.HitAndRunCaughtSafeMin;
+        public double HitAndRunCaughtSafeMax { get; set; } = D.HitAndRunCaughtSafeMax;
         // 打撃姿勢（采配カードの拡充）
         public double GroundBallLaunchPenalty { get; set; } = D.GroundBallLaunchPenalty;
         public double GroundBallContactBoost { get; set; } = D.GroundBallContactBoost;
@@ -2372,6 +2474,7 @@ public static class CoefficientsLoader
         public double SqueezeReadBase { get; set; } = D.SqueezeReadBase;
         public double SqueezeReadPerLead { get; set; } = D.SqueezeReadPerLead;
         public double SqueezeReadObviousBonus { get; set; } = D.SqueezeReadObviousBonus;
+        public double SqueezeReadMax { get; set; } = D.SqueezeReadMax;
         // 陣形の初期守備位置
         public double InfieldInFactor { get; set; } = D.InfieldInFactor;
         public double InfieldDeepFactor { get; set; } = D.InfieldDeepFactor;
@@ -2492,6 +2595,7 @@ public static class CoefficientsLoader
             PinchRunSpeedCeiling = PinchRunSpeedCeiling,
             PinchRunImprovement = PinchRunImprovement,
             PinchRunMinDiff = PinchRunMinDiff,
+            PinchRunMaxDiff = PinchRunMaxDiff,
             DefensiveSubFromInning = DefensiveSubFromInning,
             DefensiveSubMinLead = DefensiveSubMinLead,
             DefensiveSubFieldingCeiling = DefensiveSubFieldingCeiling,
@@ -2500,6 +2604,8 @@ public static class CoefficientsLoader
             HitAndRunPowerPenalty = HitAndRunPowerPenalty,
             HitAndRunLaunchPenalty = HitAndRunLaunchPenalty,
             HitAndRunCaughtPenalty = HitAndRunCaughtPenalty,
+            HitAndRunCaughtSafeMin = HitAndRunCaughtSafeMin,
+            HitAndRunCaughtSafeMax = HitAndRunCaughtSafeMax,
             GroundBallLaunchPenalty = GroundBallLaunchPenalty,
             GroundBallContactBoost = GroundBallContactBoost,
             GroundBallPowerPenalty = GroundBallPowerPenalty,
@@ -2513,6 +2619,7 @@ public static class CoefficientsLoader
             SqueezeReadBase = SqueezeReadBase,
             SqueezeReadPerLead = SqueezeReadPerLead,
             SqueezeReadObviousBonus = SqueezeReadObviousBonus,
+            SqueezeReadMax = SqueezeReadMax,
             InfieldInFactor = InfieldInFactor,
             InfieldDeepFactor = InfieldDeepFactor,
             OutfieldInFactor = OutfieldInFactor,
@@ -2890,6 +2997,16 @@ public static class CoefficientsLoader
         public double SkillCapGapBonus { get; set; } = D.SkillCapGapBonus;
         // 成長タイプの分野別化（issue #866）
         public double GrowthDomainSameProb { get; set; } = D.GrowthDomainSameProb;
+        public double GrowthTypeEarlyCutoff { get; set; } = D.GrowthTypeEarlyCutoff;
+        public double GrowthTypeStandardCutoff { get; set; } = D.GrowthTypeStandardCutoff;
+        public double UntrainedArmToVelocityFactor { get; set; } = D.UntrainedArmToVelocityFactor;
+        public double UntrainedVelocitySd { get; set; } = D.UntrainedVelocitySd;
+        public double UntrainedControlBase { get; set; } = D.UntrainedControlBase;
+        public double UntrainedControlSd { get; set; } = D.UntrainedControlSd;
+        public double UntrainedStaminaBase { get; set; } = D.UntrainedStaminaBase;
+        public double UntrainedStaminaSd { get; set; } = D.UntrainedStaminaSd;
+        public double UntrainedPitchRankBase { get; set; } = D.UntrainedPitchRankBase;
+        public double UntrainedPitchRankSd { get; set; } = D.UntrainedPitchRankSd;
         public double SpeedCapGapFactor { get; set; } = D.SpeedCapGapFactor;
         public double ProdigyProb { get; set; } = D.ProdigyProb;
         // 変化球レパートリー（設計書02 §2.2）
@@ -3198,6 +3315,16 @@ public static class CoefficientsLoader
             LateCapBonus = LateCapBonus,
             SkillCapGapBonus = SkillCapGapBonus,
             GrowthDomainSameProb = GrowthDomainSameProb,
+            GrowthTypeEarlyCutoff = GrowthTypeEarlyCutoff,
+            GrowthTypeStandardCutoff = GrowthTypeStandardCutoff,
+            UntrainedArmToVelocityFactor = UntrainedArmToVelocityFactor,
+            UntrainedVelocitySd = UntrainedVelocitySd,
+            UntrainedControlBase = UntrainedControlBase,
+            UntrainedControlSd = UntrainedControlSd,
+            UntrainedStaminaBase = UntrainedStaminaBase,
+            UntrainedStaminaSd = UntrainedStaminaSd,
+            UntrainedPitchRankBase = UntrainedPitchRankBase,
+            UntrainedPitchRankSd = UntrainedPitchRankSd,
             SpeedCapGapFactor = SpeedCapGapFactor,
             ProdigyProb = ProdigyProb,
             PitcherSecondPitchProb = PitcherSecondPitchProb,

@@ -41,21 +41,6 @@ public sealed record PitchSlot
     /// <summary>rpm に使う軸が Power か（true=球威=ストレート系、false=キレ=変化球）。</summary>
     public static bool IsSpinByPower(PitchType type) => type == PitchType.Fastball;
 
-    /// <summary>球速比（設計書02 §2.1）。実投球速度 = サンプリング球速 × これ。</summary>
-    public double SpeedRatio => Type switch
-    {
-        PitchType.Fastball => 1.00,
-        PitchType.TwoSeam => 0.98,
-        PitchType.Cutter => 0.96,
-        PitchType.Slider => 0.90,
-        PitchType.Curve => 0.80,
-        PitchType.Fork => 0.92,
-        PitchType.Changeup => 0.85,
-        PitchType.Shuuto => 0.95,
-        PitchType.Sinker => 0.90,
-        _ => 1.00,
-    };
-
     /// <summary>指定ランクのストレート（全投手必修・野手の既定レパートリー）。</summary>
     public static PitchSlot FastballOf(int rank) => new()
     {

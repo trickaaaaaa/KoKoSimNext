@@ -437,7 +437,7 @@ public static class StrengthTeamFactory
         // 投手能力は全選手が持つ（issue #209 Phase B → #381）。マウンドに置かない選手は主RNGから
         // 投手4能力を引かず、肩から推定して埋める。専用 Fork（性格の salt と別ストリーム）＝主RNG非消費。
         // 呼ぶ位置も条件も旧 LatentPitching と同じなので、生成される値・乱数消費列ともに完全に同一。
-        pitching ??= UntrainedPitchingEstimator.Estimate(arm, rng.Fork(salt ^ UntrainedPitchingSalt));
+        pitching ??= UntrainedPitchingEstimator.Estimate(arm, rng.Fork(salt ^ UntrainedPitchingSalt), rc);
 
         // 精神力・統率・捕手リード（issue ai-school-mental-fixed-50）: 専用 Fork（性格 salt・潜在投手 salt と別ストリーム）
         // で引く＝主RNGの消費列と上の能力ロールは1ビットも変わらない。中心は呼び出し側が学校の強さ・校風から

@@ -20,9 +20,9 @@ public sealed class PitcherHandednessBreakTests
     private static double HorizontalBreakM(PitchType type, Handedness throws)
     {
         var spin = PitchSpinModel.ForThrower(PitchSpinModel.SpinFor(Coeff, type, 50, 50), throws);
-        var slot = new PitchSlot { Type = type, Power = 50, Sharpness = 50 };
-        var sim = PitchSimulator.Simulate(new PitchSpec { SpeedKmh = 130.0 * slot.SpeedRatio, SpinRadPerSec = spin }, Aero, Mound);
-        var table = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, spin, 130.0 * slot.SpeedRatio);
+        var ratio = Coeff.AxisFor(type).SpeedRatio;
+        var sim = PitchSimulator.Simulate(new PitchSpec { SpeedKmh = 130.0 * ratio, SpinRadPerSec = spin }, Aero, Mound);
+        var table = TrajectoryFeatureTable.LookupFeatures(Aero, Mound, spin, 130.0 * ratio);
         // 表の補間誤差（横 ≤3.1mm・issue #911）以内。小数2桁の丸め比較だと 0.3250 を挟んだ 0.2mm の差でも落ちる（issue #1016）。
         Assert.InRange(System.Math.Abs(sim.InducedHorizontalBreakM - table.InducedHorizontalBreakM), 0.0, 0.005);
         return sim.InducedHorizontalBreakM;

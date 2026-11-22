@@ -41,6 +41,8 @@ public sealed record FormCoefficients
     public double PowerPerDayForm { get; init; } = 2.0;
     public double ControlPerDayForm { get; init; } = 5.0;
     public double VelocityPerDayFormKmh { get; init; } = 1.5;
+    /// <summary>調子で下がっても最高球速がこれを下回らない床[km/h]。</summary>
+    public double VelocityFloorKmh { get; init; } = 105.0;
     /// <summary>キレへの当日補正（issue #49）。Controlと同スケール。</summary>
     public double SharpnessPerDayForm { get; init; } = 5.0;
 
@@ -137,7 +139,7 @@ public static class FormModel
         return p with
         {
             Control = ClampAbility(p.Control + step * f.ControlPerStep + dayForm * f.ControlPerDayForm),
-            MaxVelocityKmh = Math.Max(105.0,
+            MaxVelocityKmh = Math.Max(f.VelocityFloorKmh,
                 p.MaxVelocityKmh + step * f.VelocityPerStepKmh + dayForm * f.VelocityPerDayFormKmh),
             PitchRank = ClampAbility(p.PitchRank + axisDelta),
             Repertoire = p.Repertoire is null ? null : ApplyPitchAxisForm(p.Repertoire, axisDelta),
