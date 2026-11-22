@@ -19,7 +19,7 @@ public static class StealReadModel
     /// </summary>
     public static double Expectedness(Player runner, StartType startType, BaserunningCoefficients c)
     {
-        var e = c.StealExpectednessIntercept + (runner.Steal - 50) * c.StealExpectednessStealSlope;
+        var e = c.StealExpectednessIntercept + (c.AbilityEffect.Running(runner.Steal) - 50) * c.StealExpectednessStealSlope;
         if (startType == StartType.Gamble) e -= c.GambleUnexpectednessReduction;
         return MathUtil.Clamp(e, 0.0, 1.0);
     }
@@ -30,7 +30,7 @@ public static class StealReadModel
     {
         var readSkill = MathUtil.Clamp(
             c.StealReadIntercept
-            + (catcher.Lead - 50) * c.StealReadCatcherLeadSlope
+            + (c.AbilityEffect.Pitching(catcher.Lead) - 50) * c.StealReadCatcherLeadSlope
             + (pitcher.Mental - 50) * c.StealReadPitcherSenseSlope,
             0.0, 1.0);
         return MathUtil.Clamp(readSkill * expectedness, 0.0, c.MaxPitchoutProb);

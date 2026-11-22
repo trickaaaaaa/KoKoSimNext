@@ -713,10 +713,10 @@ baserunning:
   outfield_force_second_max_runner_success: 0.40 # 外野手が二塁へ投げるのは走者の見込みがこれ未満のときだけ
   # 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）: 捕手リード＋投手センス vs 状況の意外性
   steal_expectedness_intercept: 0.42         # 盗塁企図の基準「予想されやすさ」E
-  steal_expectedness_steal_slope: 0.006      # Steal能力→予想度（快足盗塁屋は読まれやすい）
+  steal_expectedness_steal_slope: 0.012      # Steal能力（効きRunning通し）→予想度（快足盗塁屋は読まれやすい）。#1210 で生Lv 0.006 → 効き0.5を通すので2倍
   gamble_unexpectedness_reduction: 0.28      # ギャンブル始動は意表＝予想度を下げる（G3b配線）
   steal_read_intercept: 0.15                 # 読み力の基準（捕手リード＋投手センス）。issue #838 で 0.50→0.15（盗塁屋が3割の確率でピッチアウトされていた）
-  steal_read_catcher_lead_slope: 0.006       # 捕手リード(Lead−50)あたり読み力加算
+  steal_read_catcher_lead_slope: 0.012       # 捕手リード（効きPitching通し）(Lead−50)あたり読み力加算。#1210 で生Lv 0.006 → 2倍
   steal_read_pitcher_sense_slope: 0.003      # 投手センス(Mental−50)あたり読み力加算
   max_pitchout_prob: 0.55                    # 読み切っても上限
   pitchout_defense_bonus_seconds: 0.35       # ピッチアウト成功で守備時間短縮（捕手優位）

@@ -756,14 +756,14 @@ public sealed record BaserunningCoefficients
     // 送球が速くなる＝刺されやすい。意表（低い企図度・ギャンブル始動）は読まれにくい。
     /// <summary>盗塁企図の基準「予想されやすさ」E∈[0,1]。快足盗塁屋のセオリー通りほど高い（読まれやすい）。</summary>
     public double StealExpectednessIntercept { get; init; } = 0.42;
-    /// <summary>走者のSteal能力→予想度（快足盗塁屋は動きが読まれやすい）。</summary>
-    public double StealExpectednessStealSlope { get; init; } = 0.006;
+    /// <summary>走者のSteal能力→予想度（快足盗塁屋は動きが読まれやすい）。効き（<c>ability_effect.running_scale</c>＝0.5）を通した Lv に掛ける＝生Lv時代の 0.006 の2倍で同じ効き（issue #1210）。</summary>
+    public double StealExpectednessStealSlope { get; init; } = 0.012;
     /// <summary>ギャンブル始動は意表＝予想度を下げる（読まれにくくなる）。</summary>
     public double GambleUnexpectednessReduction { get; init; } = 0.28;
     /// <summary>守備の読み力の基準（捕手リード＋投手センスが50/50で得られる読み力）。</summary>
     public double StealReadIntercept { get; init; } = 0.15;
-    /// <summary>捕手リード(Lead−50)あたりの読み力加算。</summary>
-    public double StealReadCatcherLeadSlope { get; init; } = 0.006;
+    /// <summary>捕手リード(Lead−50)あたりの読み力加算。効き（<c>ability_effect.pitching_scale</c>＝0.5）を通した Lv に掛ける＝生Lv時代の 0.006 の2倍で同じ効き（issue #1210）。</summary>
+    public double StealReadCatcherLeadSlope { get; init; } = 0.012;
     /// <summary>投手センス(Mental−50)あたりの読み力加算（バッテリーで読む）。</summary>
     public double StealReadPitcherSenseSlope { get; init; } = 0.003;
     /// <summary>ピッチアウト（読み切り）確率の上限。読み力×予想度でも越えない。</summary>
