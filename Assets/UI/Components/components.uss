@@ -280,7 +280,7 @@
     margin-right: 2px;
 }
 .seg-tab:hover { color: var(--color-chalk); }
-.seg-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+.seg-tab--on, .seg-tab--on:hover { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 
 /* ── ToolButton：見出しプレート等に置く操作ボタン（白地・空青文字・インク枠＋小ベタ影）──
    並び替え・切替など。CTA（赤）とは別＝操作系は空の青（design-19 §5）。 */
@@ -490,7 +490,7 @@
 .seg--lg .seg__cell { width: 40px; height: 32px; font-size: 18px; }
 /* 文字数が可変なラベル向け（強攻/待て等）。幅固定セルではなくパディングで揃える。 */
 .seg--auto .seg__cell { width: auto; height: 24px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
-.seg__cell--on { background-color: var(--sky); color: #FFFFFF; }
+.seg__cell--on, .seg__cell--on:hover { background-color: var(--sky); color: #FFFFFF; }
 /* 今は選べないセル（局面が合わない・控えが尽きた等）。押せないことを色だけで示す。 */
 .seg__cell--off { color: var(--color-faint); }
 .seg__cell--off:hover { color: var(--color-faint); }
@@ -555,7 +555,7 @@
     margin-left: 3px;
 }
 .switch--on { background-color: var(--sky); border-color: var(--sky); }
-.switch--on .switch__knob { background-color: var(--color-ink); margin-left: 22px; }
+.switch--on .switch__knob { background-color: var(--sf-card); margin-left: 22px; }
 
 /* ── StepButton：（− 値 +）の増減ボタン ─────────────────────────────── */
 .step-btn {
@@ -2646,7 +2646,7 @@
    言葉の列は固定幅（最長の「人を引っ張る」6字）で、4本の升目が縦にそろう（UI原則①）。 */
 .lean-row { flex-direction: row; align-items: center; height: 24px; }
 .lean-row__word {
-    width: 96px;
+    width: 108px;
     flex-shrink: 0;
     font-size: var(--fs-cap);
     color: var(--ink);

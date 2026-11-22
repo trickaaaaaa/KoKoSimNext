@@ -250,7 +250,7 @@
     --tx-2: #6F6A60; --color-muted: #6F6A60; --day-tx-2: #6F6A60;
     --tx-3: #8A857A; --color-faint: #8A857A; --day-tx-3: #8A857A;
     /* 線 */
-    --color-line: #E3DFD5; --color-line-soft: #ECE8DF; --divider: #E3DFD5;
+    --color-line: #E3DFD5; --color-line-soft: #ECE8DF; --divider: #D9D4C8;
     --color-line-focus: #2F2C27;
     /* 枠の太さ・ベタ影は撤去（1px の淡い枠だけ） */
     --nb-border: 1px; --nb-border-card: 1px;
@@ -310,8 +310,15 @@
     background-color: var(--sbk-card);
     border-width: 2px;
     border-color: var(--sbk-ink);
+    /* 枠が1px→2px になった差ぶん、components.uss の既定パディング（16/8・dense は上下4）から1px引いて中身をずらさない */
+    padding-left: 15px; padding-right: 15px; padding-top: 7px; padding-bottom: 7px;
 }
+.sbk .row-panel--dense.row-panel--selected, .sbk .row-panel--dense.row-panel--selected:hover { padding-top: 3px; padding-bottom: 3px; }
 .sbk .row--selected { border-color: var(--sbk-ink); }
+
+/* 表（リーグ表・ボックススコア）の外枠と見出し下の線は淡い1px（設計書22 §2。--line-focus は sbk が読み替えない） */
+.sbk .bs-table { border-color: var(--sbk-card-line); }
+.sbk .bs-row--head { border-bottom-color: var(--sbk-rule); }
 
 /* ── 主ボタン（今週を進める等）：応援団赤のまま。インク枠とベタ影だけ外して角丸に ── */
 .sbk .advance {
