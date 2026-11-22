@@ -207,7 +207,7 @@ screens:
     steps:
       - new_game: {seed: 1}
       - show: TeamStrength
-      - shot: 01-team-strength
+      - shot: {name: 01-team-strength, h: 1500}
       - show: TrainingPlan
       - shot: 02-training-unselected
       - click: .trow[2]
