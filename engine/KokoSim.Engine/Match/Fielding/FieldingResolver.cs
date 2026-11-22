@@ -570,7 +570,7 @@ public static class FieldingResolver
                 // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
                 var (result, errorKind) = MaybeInfieldError(
-                    fielders, infielder, coeff, rng, errorBonus, throwAccuracy, firstThrowScatter);
+                    fielders, infielder, coeff, rng, errorBonus, throwAccuracy, firstThrowScatter, unassistedPutout);
                 double? recoveredScatterM = null, recoveredOutSeconds = null, wildScatterM = null;
                 double? recoveredCatchScatterM = null, recoveredCatchOutSeconds = null;
                 double? catchErrorScatterM = null, catchErrorReadyAtSeconds = null;
@@ -609,11 +609,11 @@ public static class FieldingResolver
                     // （返球不要）とバックアップ（右翼手, ThrowRecovery.BackupRole）の近い方。
                     var scatterM = Math.Abs(rng.NextGaussian(0.0, coeff.WildThrowScatterSigmaM));
                     var throwLanding = ThrowRecovery.LandingPoint(catchPoint, field.FirstBase, scatterM);
-                    var firstBaseman = fielders.First(f => f.Position == FieldPosition.FirstBase);
+                    var receiver = FirstBaseReceiver(fielders, infielder);
                     var backup = fielders.First(f => f.Position == ThrowRecovery.BackupRole(1));
                     var recovery = ThrowRecovery.RecoveryPenaltySeconds(
                         scatterM, throwLanding, backup.Location,
-                        firstBaseman.Attributes.SprintSpeedMps, backup.Attributes.SprintSpeedMps,
+                        receiver.Attributes.SprintSpeedMps, backup.Attributes.SprintSpeedMps,
                         backup.Attributes.ThrowSpeedMps, coeff.RecoveryReactionSeconds, out var byBackup);
                     if (defenseTime + recovery + coeff.ForceOutMarginSeconds <= runnerTime)
                     {
@@ -666,9 +666,9 @@ public static class FieldingResolver
                     FielderThrowAccuracy = throwAccuracy,
                     JudgementMarginSeconds = judgementMargin,
                     ErrorKind = errorKind,
-                    // 一塁手の捕球ミス（issue #810）: 処理野手（FielderRole）は球を処理した野手（遊撃等）の
-                    // ままだが、失策を犯したのは受け手の一塁手＝ErrorFielderRole で帰属を分ける（トンネルと同じ作法）。
-                    ErrorFielderRole = errorKind == FieldingErrorKind.Receive ? FieldPosition.FirstBase : null,
+                    // 受け手の捕球ミス（issue #810）: 処理野手（FielderRole）は球を処理した野手（遊撃等）の
+                    // ままだが、失策を犯したのは受け手の一塁手（一塁手処理なら一塁カバーの投手）＝ErrorFielderRole で帰属を分ける（トンネルと同じ作法）。
+                    ErrorFielderRole = errorKind == FieldingErrorKind.Receive ? FirstBaseReceiver(fielders, infielder).Position : null,
                     // 「エラー」は送球が一塁へ届いて弾かれた瞬間（＝送球到達時刻）に出す。
                     ErrorAtSeconds = errorKind == FieldingErrorKind.Receive ? defenseTime : null,
                     GroundHops = path.Hops,
@@ -887,6 +887,7 @@ public static class FieldingResolver
         var zoneDist = new double[n];       // 守備位置への最接近距離
         var zoneBallTime = new double[n];   // その最接近点を打球が通る時刻
         var zonePoint = new Vector3D[n];    // その最接近点
+        var zoneAtGloveHeight = new bool[n]; // zone* がグラブの届く高さの点で更新済みか
         var cutRadius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
         var diveReach = Math.Max(0.0, Math.Min(cutRadius, coeff.InfielderDiveReachM));
         for (var k = 0; k < n; k++)
@@ -911,7 +912,15 @@ public static class FieldingResolver
             {
                 var f = infield[k];
                 var dist = (p - f.Location).Length;
-                if (dist < zoneDist[k]) { zoneDist[k] = dist; zoneBallTime[k] = tt; zonePoint[k] = p; }
+                // 処理点の基準はグラブの届く高さの点だけ（issue #1260）。グラブより高い点しか通らない野手だけは
+                // 従来どおり最接近点（zoneAtGloveHeight=false の間の暫定値）を持つ。
+                if (!aboveGlove)
+                {
+                    if (!zoneAtGloveHeight[k] || dist < zoneDist[k])
+                    { zoneDist[k] = dist; zoneBallTime[k] = tt; zonePoint[k] = p; zoneAtGloveHeight[k] = true; }
+                }
+                else if (!zoneAtGloveHeight[k] && dist < zoneDist[k])
+                { zoneDist[k] = dist; zoneBallTime[k] = tt; zonePoint[k] = p; }
                 if (aboveGlove) continue;
                 if (double.IsPositiveInfinity(cutTime[k]))
                 {
@@ -1253,7 +1262,7 @@ public static class FieldingResolver
     private static (BattedBallResult Result, FieldingErrorKind? ErrorKind) MaybeInfieldError(
         IReadOnlyList<Fielder> fielders, Fielder infielder,
         FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0, int? throwAccuracy = null,
-        ThrowScatterModel.Scatter? throwScatter = null)
+        ThrowScatterModel.Scatter? throwScatter = null, bool unassistedPutout = false)
     {
         if (CatchErrorOccurs(infielder, coeff, rng, extraProb))
         {
@@ -1265,6 +1274,8 @@ public static class FieldingResolver
                 return (BattedBallResult.Error, FieldingErrorKind.Tunnel);
             return (BattedBallResult.Error, FieldingErrorKind.Catch);
         }
+        // アンアシスト刺殺（3U）は送球が無い＝悪送球も受け手の捕球ミスも起こらない（issue #1260）。
+        if (unassistedPutout) return (BattedBallResult.Out, null);
         if (coeff.ThrowErrorBaseProb > 0.0)
         {
             // 送球精度が高いほど悪送球が減る。クランプは捕球エラーと共通の min/max を流用。
@@ -1283,15 +1294,14 @@ public static class FieldingResolver
                 return (BattedBallResult.Error, FieldingErrorKind.Throw);
             }
         }
-        // 一塁手の捕球ミス（issue #810）: 送球自体は正確（上の2段を通過済み）でも、受け手の一塁手が
+        // 受け手の捕球ミス（issue #810）: 送球自体は正確（上の2段を通過済み）でも、受け手が
         // 正確な送球を落とす／ショートバウンドを捕れない失策を三段目として引く。守備力連動は捕球エラーと
-        // 同じ非対称スロープ（弱小側 ErrorCatchingSlope・精鋭側 ErrorCatchingSlopeStrong）を一塁手自身の
-        // Catching へ適用する。一塁手自身が処理した打球（アンアシスト含む）には「受け手」が別にいないので
-        // 対象外＝ロールを引かない（乱数消費順は処理野手で変わらない）。
-        if (coeff.ReceiveErrorBaseProb > 0.0 && infielder.Position != FieldPosition.FirstBase)
+        // 同じ非対称スロープ（弱小側 ErrorCatchingSlope・精鋭側 ErrorCatchingSlopeStrong）を受け手自身の
+        // Catching へ適用する。受け手は通常は一塁手、一塁手が処理して投手のカバーへ投げる場合は投手（issue #1260）。
+        if (coeff.ReceiveErrorBaseProb > 0.0)
         {
-            var firstBaseman = fielders.First(f => f.Position == FieldPosition.FirstBase);
-            var catchingDelta = firstBaseman.Attributes.Catching - 50;
+            var receiver = FirstBaseReceiver(fielders, infielder);
+            var catchingDelta = receiver.Attributes.Catching - 50;
             var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
             var errProb = coeff.ReceiveErrorBaseProb - catchingDelta * slope;
             if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
@@ -1301,6 +1311,11 @@ public static class FieldingResolver
         }
         return (BattedBallResult.Out, null);
     }
+
+    /// <summary>一塁送球の受け手。一塁手が処理した打球は投手が一塁カバーに入って受ける（TimelineBuilder の firstBaseCoverer と同じ）。</summary>
+    private static Fielder FirstBaseReceiver(IReadOnlyList<Fielder> fielders, Fielder infielder)
+        => fielders.First(f => f.Position == (infielder.Position == FieldPosition.FirstBase
+            ? FieldPosition.Pitcher : FieldPosition.FirstBase));
 
     /// <summary>本塁→一塁の実戦タイム（設計書02 §4.1b）: 天井速度での距離÷速度＋実戦オフセット−左打者短縮。</summary>
     public static double BatterToFirstSeconds(FieldGeometry field, BatterAttributes batter, FieldingCoefficients coeff)
