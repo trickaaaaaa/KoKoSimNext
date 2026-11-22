@@ -173,8 +173,8 @@ namespace KokoSim.Unity.Shell
             System.Func<PlayerStats, string> text)
         {
             var pool = new List<PlayerStats>();
-            // チーム内ランキング＝今の学校の部員（在籍・引退・卒業生）だけ。転任すると旧校の部員の通算成績は
-            // 成績ストアに残るが、名前の引き先（Roster/Graduated）からは外れて「?」で載っていた（issue #730）。
+            // チーム内ランキング＝今の在籍部員（RosterService.Active）だけ。夏で引退した3年・卒業生は載せない（issue #1411）。
+            // 転任すると旧校の部員の通算成績は成績ストアに残るが、Active に居ないので載らない（issue #730）。
             foreach (var kv in book.Players)
                 if (names.ContainsKey(kv.Value.SourceId) && qualify(kv.Value)) pool.Add(kv.Value);
 
@@ -209,13 +209,11 @@ namespace KokoSim.Unity.Shell
             return row;
         }
 
-        /// <summary>成績の帰属キー（DevelopingPlayer.Id）→ 表示名。引退者に加え、卒業してロスターを
-        /// 外れた選手（<see cref="RosterService.Graduated"/>）も引けるよう両方から作る（issue #535）。</summary>
+        /// <summary>成績の帰属キー（DevelopingPlayer.Id）→ 表示名。在籍中の部員だけ（歴代は記録タブ・記録室の役目）。</summary>
         private static Dictionary<int, string> NameIndex()
         {
             var map = new Dictionary<int, string>();
-            foreach (var p in RosterService.Roster) map[p.Id] = p.Name;
-            foreach (var p in RosterService.Graduated) map[p.Id] = p.Name;
+            foreach (var p in RosterService.Active) map[p.Id] = p.Name;
             return map;
         }
 
