@@ -1,0 +1,123 @@
+# データ画面の撮影レシピ（ホーム・選手・メンバー設定・練習・経営・キャリア・記録などの確認用）。1件の確認＝1項目。
+# 試合の場面は captures.yaml。画面ごとの使い捨て *Shooter は新しく書かない（ここに手順を書く）。
+#
+# 実行（Unity Editor・Play していない状態で。MCP execute_code からも呼べる）:
+#   KokoSim.UnityEditorTools.ScreenCaptureRunner.Run("management-contracts")   # 複数 id を並べると続けて撮る
+# 終わると screenshots/<id>/ に DONE か FAILED と summary.json（撮った絵・書体監査・reads・手順のメモ・エラー）、
+# *.png（shot）が出る。全体の結果は screenshots/_screen-run.txt。
+#
+# このディレクトリ（data/debug/）はデバッグ専有でリリースから除外する。
+#
+# フィールド:
+#   id / name : 識別子（出力フォルダ名）と説明（" #" を含むなら "" で囲む）
+#   size      : {w: 1600, h: 900}（既定）
+#   steps     : 手順を上から順に。1つでも失敗したらその先は撮らずに FAILED
+#
+# 手順:
+#   new_game: {seed: 1, prefecture: 13, school: 桜丘, district: 0}
+#                       新設校で新規ゲーム→ホーム（どれも省略可。seed 既定 1＝毎回同じ部員）。
+#                       レシピの先頭に置かなければ、前のレシピ（同じ Run 内）の状態を引き継ぐ
+#   advance_weeks: 3    週を送る（ホームの「次の週へ」と同じ経路）。大会に入ったらそこで止める
+#   advance_days: 2     日を送る（大会中）
+#   advance_to_match_day: ""   大会中に自校の次の試合の日まで日を送る
+#   show: ManagementScreen     画面を開く（GameObject 名＝ScreenRouter の画面名）
+#   click: name | .class[添字]   押す（ClickEvent。Button なら自動で決定キーと同じ NavigationSubmitEvent）
+#   submit: name               決定キーで押す
+#   hover / leave: name        マウスを載せる／離す（PointerEnter/Leave。:hover の見た目は変わらない）
+#   call: Method(1, "a")       表示中の画面のコントローラのメソッド
+#   call: ManagerService.Contracts.ScheduleCancel("scouting")   KokoSim の型から辿った先のメソッド
+#   set: {ManagerService.Manager.Funds: 20, RosterService.Active.0.IsCaptain: true}
+#                       static から辿った値を書き換える（数字の段はリストの添字）
+#   wait: 5 | 300ms     フレーム数か実時間（UI の遅延タイマーを越えるとき）
+#   read: ngs-district  要素の中身（ドロップダウンは選択肢まで）を summary.json の reads に書く
+#   shot: 01-name | {name: 01-name, h: 1400}   いまの画面を撮る（同時に書体監査を summary.json へ）
+
+screens:
+  # ── 夜間マージ分の実機確認（2026-11-22・out/overnight/verify-targets-20261122.md）──
+
+  - id: career-cards-1325
+    name: "キャリア画面のカードが潰れない（PR #1385・issue #1325）"
+    steps:
+      - new_game: {seed: 1}
+      - show: CareerScreen
+      - shot: 01-career
+
+  - id: management-contract-cancel-1298
+    name: "経営タブ・年契約の解約予定の表示（PR #1376・issue #1298）"
+    steps:
+      - new_game: {seed: 1}
+      - call: ManagerService.Contracts.SetLevel("expedition", 1)
+      - call: ManagerService.Contracts.ScheduleCancel("expedition")
+      - show: ManagementScreen
+      - call: SelectTab(3)
+      - shot: 01-contracts
+
+  - id: training-plan-1297
+    name: "練習計画の列見出しの揃い（PR #1374・issue #1297）"
+    steps:
+      - new_game: {seed: 1}
+      - show: TrainingPlan
+      - shot: 01-training-plan
+
+  - id: player-detail-radar-1279
+    name: "選手詳細のレーダーの格子色（PR #1370・issue #1279 項目2）"
+    steps:
+      - new_game: {seed: 1}
+      - show: PlayerList
+      - shot: 01-player-detail
+
+  - id: member-captain-1239
+    name: "メンバー設定の主将マーカー「主」と学年ラベル（PR #1412・issue #1239）"
+    steps:
+      - new_game: {seed: 1}
+      # 「主」は控えの枠カード（背番号10〜）とフルカードにだけ出る。だれが控えに回るかは編成しだいなので、
+      # 見た目の確認のために全員に立てる（本番では1人だけ）
+      - set: {RosterService.Active.0.IsCaptain: true, RosterService.Active.1.IsCaptain: true, RosterService.Active.2.IsCaptain: true, RosterService.Active.3.IsCaptain: true, RosterService.Active.4.IsCaptain: true, RosterService.Active.5.IsCaptain: true, RosterService.Active.6.IsCaptain: true, RosterService.Active.7.IsCaptain: true, RosterService.Active.8.IsCaptain: true, RosterService.Active.9.IsCaptain: true}
+      - show: MemberSetting
+      - hover: .field-chip[0]
+      - shot: 01-member
+
+  - id: member-popover-close-1267
+    name: "背番号チップのポップオーバーの✕に届く（PR #1394・issue #1267 項目1）"
+    steps:
+      - new_game: {seed: 1}
+      - show: MemberSetting
+      - hover: .field-chip[0]
+      - shot: 01-popover-open
+      - leave: .field-chip[0]
+      - hover: .field-pop
+      - wait: 300ms
+      - read: .field-pop
+      - shot: 02-still-open-after-leaving-chip
+
+  - id: home-feed-1239
+    name: "ホームの通知フィードのタグ（枠なし・左バー・発見は空色）（PR #1412・issue #1239）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_weeks: 10
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - read: feed-list
+      - shot: 01-home
+
+  - id: new-game-hokkaido-1334
+    name: "新規開始で北海道を選ぶと北北海道/南北海道の2択（PR #1387・issue #1334）"
+    steps:
+      - show: NewGameSetup
+      - call: SetForCapture(0, "検証")
+      - read: ngs-district
+      - read: ngs-summary-text
+      - shot: 01-hokkaido
+
+  - id: home-weather-1199
+    name: "大会中のホームの天気・気温は試合当日だけ出る（PR #1391・issue #1199）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_weeks: 20
+      - show: HomeDashboard
+      - read: weather-label
+      - shot: 01-tournament-not-match-day
+      - advance_to_match_day: ""
+      - show: HomeDashboard
+      - read: weather-label
+      - shot: 02-match-day

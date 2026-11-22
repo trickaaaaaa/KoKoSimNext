@@ -78,6 +78,15 @@
      - 途中で Play を出入りした後などに応答が途切れたら `python3 tools/verify-editor.py wait` で待ってから続ける
      - verify のインスタンスがそもそも居ない（スクリプトが5分待っても「未接続」のまま）ときだけ、実機確認をスキップして
        「目視未実施（verify Editor 不在）」と PR に明記して先へ進む
+   - **撮影はレシピで行い、使い捨ての *Shooter を新しく書かない**:
+     - 試合・3D の場面 → `data/debug/captures.yaml` に足して `KokoSim.UnityEditorTools.CaptureRunner.Run("id")`
+     - データ画面（ホーム・選手・メンバー・練習・経営・キャリア・記録・新規開始など）→ `data/debug/screens.yaml` に
+       手順（new_game / advance_weeks / advance_to_match_day / show / click / hover / call / set / read / shot）を書いて
+       `KokoSim.UnityEditorTools.ScreenCaptureRunner.Run("id")`。書き方は screens.yaml の冒頭
+     - どちらも呼ぶとすぐ返り、Play に入って撮って抜ける。終わりは `screenshots/_capture-run.txt`／`screenshots/_screen-run.txt`
+       （verify 側＝`/Users/seiya.oda/Unity/KoKoSimNext-verify/screenshots/`）ができるまで前面で待つ。
+       `screenshots/<id>/summary.json` の errors が空で DONE であることと、書体監査（font_audit の「許可外: なし」）を確かめる
+     - 足したレシピは PR に含める（次に同じ画面を確かめる人がそのまま使える）
    - UI の見た目確認: `docs/design/UI-BUILD-METHOD.md` のスクショ手順に従う。要点:
      - スクショは **Play モード中**に撮る（`manage_editor` で Play 開始、`Application.runInBackground=true` を確保）
      - 複数枚はバッチ用 MonoBehaviour コルーチンで撮る（execute_code 連打はドメインリロードで Play が抜ける）

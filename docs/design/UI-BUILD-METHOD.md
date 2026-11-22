@@ -214,6 +214,13 @@ recipe（エディタ静的メソッド）:
 Unity -batchmode -projectPath . -executeMethod UIScreenshot.Capture -uxml PlayerRow -quit
 ```
 
+### 撮影レシピ（2026-11-22〜・画面ごとの *Shooter は新しく書かない）
+
+- データ画面: `data/debug/screens.yaml`（手順を上から書く）→ `ScreenCaptureRunner.Run("id")`（Editor・MCP の execute_code から呼べる）。
+  実体は `Assets/KokoSim/Debug/ScreenRecipeShooter.cs`（上の RenderTexture 方式＋書体監査）。
+- 試合・3D の場面: `data/debug/captures.yaml` → `CaptureRunner.Run("id")`。
+- 出力はどちらも `screenshots/<id>/`（*.png・summary.json・DONE/FAILED）。
+
 ### 運用ループ
 
 > 部品を修正 → スクショ出力 → **自分で画像を確認** → 直す、を人手を介さず回す。
