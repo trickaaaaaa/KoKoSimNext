@@ -19,13 +19,13 @@ public sealed record CohesionCoefficients
     /// <summary>U0: 主将の統率力（統率傾向×精神力/100）が基準を上回る1あたりの上乗せ b1（下回れば減点）。主将不在は0。</summary>
     public double CaptainPowerWeight { get; init; } = 0.9;
     /// <summary>U0: 主将の統率力の基準（ふつうの部の主将）。</summary>
-    public double CaptainPowerNeutral { get; init; } = 46.0;
+    public double CaptainPowerNeutral { get; init; } = 49.0;
     /// <summary>U0: 「引っ張る」選手（統率傾向がこの値以上）の閾値（design-23 §3.2 「①が65以上」）。</summary>
     public int LeaderThreshold { get; init; } = 65;
     /// <summary>U0: 引っ張る選手の割合（ベンチ入りに占める）が基準を上回る分に掛ける上乗せ b2（下回れば減点）。</summary>
     public double LeaderShareWeight { get; init; } = 80.0;
     /// <summary>U0: 引っ張る選手の割合の基準（ふつうの部）。</summary>
-    public double LeaderShareNeutral { get; init; } = 0.24;
+    public double LeaderShareNeutral { get; init; } = 0.267;
     /// <summary>U0: 目立ちたがり（④&lt;50）の割合が基準を上回る分に掛ける減点 b3（下回れば上乗せ）。</summary>
     public double SelfishShareWeight { get; init; } = 70.0;
     /// <summary>U0: 目立ちたがりの割合の基準（ふつうの部）。</summary>
@@ -33,7 +33,7 @@ public sealed record CohesionCoefficients
     /// <summary>U0: 一匹狼（①↓②↓③↓④目立ち）の割合が基準を上回る分に掛ける減点 b4（下回れば上乗せ）。</summary>
     public double LoneWolfShareWeight { get; init; } = 120.0;
     /// <summary>U0: 一匹狼の割合の基準（ふつうの部）。</summary>
-    public double LoneWolfShareNeutral { get; init; } = 0.06;
+    public double LoneWolfShareNeutral { get; init; } = 0.064;
 
     /// <summary>ΔU: 夏合宿（通常）の上乗せ（design-04 §4「結束↑」）。</summary>
     public double SummerCampDelta { get; init; } = 6.0;

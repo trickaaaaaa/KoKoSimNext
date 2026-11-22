@@ -4,6 +4,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Saves.Json;
@@ -78,6 +79,34 @@ public sealed class PersonalityTests
         foreach (var t in Personalities.All16)
             Assert.True(Freq(t) >= 0.03, $"{Personalities.DisplayName(t)} が {Freq(t):P1}（下限3%）");
         Assert.True(PC.Profile(Personality.Hardworker).SpawnWeight > PC.Profile(Personality.Genius).SpawnWeight);
+    }
+
+    /// <summary>
+    /// 種タイプの統率のずらしはマスの向きと一致し、種の大半（6割以上）が自分のマスの側に統率を持つ（設計書23 §1.4
+    /// 「代表値を中心に引き、50をまたいだ者だけ隣へ」・issue #1301）。統率は AI校（AiMentalModel.Roll）と自校の新入生が同じ式で引く。
+    /// </summary>
+    [Fact]
+    public void SeedTypes_LeadershipOffset_PointsToOwnCell_AndMostStayInIt()
+    {
+        foreach (var t in Personalities.Spawnable)
+        {
+            var offset = PC.Profile(t).LeadershipMeanOffset;
+            var cellHigh = Personalities.CellHigh(t, PersonalityAxis.Leadership);
+            Assert.True(cellHigh ? offset > 0 : offset < 0,
+                $"{Personalities.DisplayName(t)}: マスは統率{(cellHigh ? "↑" : "↓")}なのにずらし {offset:+0;-0;0}");
+
+            var rng = new Xoshiro256Random(0x5EED_1301UL + (ulong)t);
+            var own = 0;
+            const int n = 4000;
+            for (var i = 0; i < n; i++)
+            {
+                var (_, lead, _) = AiMentalModel.Roll(50, 0, PC.Profile(t), Roster, rng.Fork((ulong)i));
+                if (Personalities.High(lead) == cellHigh) own++;
+            }
+            var share = (double)own / n;
+            _out.WriteLine($"{Personalities.DisplayName(t)}: ずらし {offset:+0;-0;0}・統率が自分のマスの側 {share:P1}");
+            Assert.True(share >= 0.60, $"{Personalities.DisplayName(t)} の統率が自分のマスの側に入るのは {share:P1}（下限60%）");
+        }
     }
 
     // ===== 母集団平均（帯は選手の生成を通らない＝ここが安全網。設計書23 §1.4） =====

@@ -913,20 +913,20 @@ personalities:
   # 生成の種（今の8タイプ＋出にくいマスの5タイプ・出やすさは spawn_weight＝Q36/Q44）。代表値は旧表の効きを軸の式で再現する位置（マスの側にある）。
   profiles:
     #                  weight            ①統率ずらし                ②素直             ③勤勉          ④献身
-    - { type: HotBlood,     spawn_weight: 1.0, leadership_mean_offset:  14, receptiveness: 45, diligence: 80, selflessness: 95 }
-    - { type: Hardworker,   spawn_weight: 1.4, leadership_mean_offset:   4, receptiveness: 80, diligence: 85, selflessness: 95 }
-    - { type: Genius,       spawn_weight: 0.5, leadership_mean_offset:   0, receptiveness:  5, diligence: 95, selflessness:  5 }
-    - { type: HonorStudent, spawn_weight: 1.0, leadership_mean_offset:  12, receptiveness: 95, diligence: 52, selflessness: 95 }
-    - { type: MyPace,       spawn_weight: 1.4, leadership_mean_offset:   0, receptiveness: 30, diligence: 28, selflessness: 88 }
-    - { type: MoodMaker,    spawn_weight: 1.2, leadership_mean_offset:   4, receptiveness: 58, diligence: 12, selflessness:  5 }
+    - { type: HotBlood,     spawn_weight: 1.0, leadership_mean_offset:  25, receptiveness: 45, diligence: 80, selflessness: 95 }
+    - { type: Hardworker,   spawn_weight: 1.4, leadership_mean_offset:  -6, receptiveness: 80, diligence: 85, selflessness: 95 }
+    - { type: Genius,       spawn_weight: 0.5, leadership_mean_offset:  -6, receptiveness:  5, diligence: 95, selflessness:  5 }
+    - { type: HonorStudent, spawn_weight: 1.0, leadership_mean_offset:  25, receptiveness: 95, diligence: 52, selflessness: 95 }
+    - { type: MyPace,       spawn_weight: 1.4, leadership_mean_offset:  -6, receptiveness: 30, diligence: 28, selflessness: 88 }
+    - { type: MoodMaker,    spawn_weight: 1.2, leadership_mean_offset:  -6, receptiveness: 58, diligence: 12, selflessness:  5 }
     - { type: LoneWolf,     spawn_weight: 0.8, leadership_mean_offset: -16, receptiveness: 18, diligence: 42, selflessness:  8 }
     - { type: Introvert,    spawn_weight: 1.2, leadership_mean_offset: -14, receptiveness: 88, diligence: 28, selflessness: 93 }
     # 新しいマスの種（Q44 決着: 16タイプがそれぞれ3%以上出るように。既存8タイプの重み・統率のずらしは据え置き）
-    - { type: Star,         spawn_weight: 0.55, leadership_mean_offset:  14, receptiveness: 70, diligence: 60, selflessness: 22 }
+    - { type: Star,         spawn_weight: 0.55, leadership_mean_offset:  25, receptiveness: 70, diligence: 60, selflessness: 22 }
     - { type: Ambitious,    spawn_weight: 0.6,  leadership_mean_offset: -12, receptiveness: 70, diligence: 60, selflessness: 22 }
     - { type: Craftsman,    spawn_weight: 0.55, leadership_mean_offset:  -8, receptiveness: 30, diligence: 60, selflessness: 92 }
-    - { type: GangLeader,   spawn_weight: 0.2,  leadership_mean_offset:  14, receptiveness: 30, diligence: 60, selflessness: 22 }
-    - { type: Rowdy,        spawn_weight: 0.25, leadership_mean_offset:  14, receptiveness: 30, diligence: 35, selflessness: 20 }
+    - { type: GangLeader,   spawn_weight: 0.2,  leadership_mean_offset:  25, receptiveness: 30, diligence: 60, selflessness: 22 }
+    - { type: Rowdy,        spawn_weight: 0.25, leadership_mean_offset:  25, receptiveness: 30, diligence: 35, selflessness: 20 }
 
 # --- バッテリーの相性（設計書23 §2・issue #933）🟡 K = wS×S0 + wB×B。K=0 で効き先はすべて恒等。乱数不使用 ---
 # S0 = a1×d捕手① + a2×d投手② − a3×min(d投④,0)×min(d捕④,0) + a4×max(−d投④,0)×max(d捕④,0)（−1〜+1）
@@ -954,21 +954,21 @@ cohesion:
   # U0（顔ぶれの土台）＝50＋各項の「ふつうの部」からの差（Q54 決着: 顔ぶれだけで U0≥70 が上位約15%・U0<30 が下位約15%）。
   # 基準（*_neutral）は全国の AI校のベンチ入りメンバーの平均。割合の分母はベンチ入り全員・性格を持たない手組みの選手は数えない。
   captain_power_weight: 0.9     # b1: 主将の統率力（統率傾向×精神力/100）の基準からの差1あたり
-  captain_power_neutral: 46
+  captain_power_neutral: 49
   leader_threshold: 65          # 「引っ張る」＝統率傾向がこれ以上
   leader_share_weight: 80       # b2: 引っ張る選手の割合の基準からの差（1人/20人ぶん＝+4）
-  leader_share_neutral: 0.24
+  leader_share_neutral: 0.267
   selfish_share_weight: 70      # b3: 目立ちたがり（④<50）の割合の基準からの差（1人/20人ぶん＝−3.5）
   selfish_share_neutral: 0.385
   lone_wolf_share_weight: 120   # b4: 一匹狼の割合の基準からの差（1人/20人ぶん＝−6）
-  lone_wolf_share_neutral: 0.06
+  lone_wolf_share_neutral: 0.064
   summer_camp_delta: 6          # 夏合宿（通常）
   winter_camp_delta: 10         # 冬合宿（強化）
   event_improve_delta: 3        # 選手間イベントの好転（不和解消など）。#945 監督決定 +3（合宿より小さく）
   event_worsen_delta: -5        # 不和・サボりの悪化。#945 監督決定 −5（悪化を重く）
   # 選択肢つき選手間イベントの好転の確率（#945・設計書23 §3.3。d軸＝(軸−50)/50、式は EventChoiceResolver）
   #   叱る = scold_base + scold_receptiveness_weight×d素直 ／ 聞く = listen_base + …×d素直 + …×d姿勢
-  #   任せる = captain_base + captain_power_slope×d主将 + captain_subject_leadership_weight×d統率（d主将＝(統率力−46)/幅・主将不在は−1）
+  #   任せる = captain_base + captain_power_slope×d主将 + captain_subject_leadership_weight×d統率（d主将＝(統率力−49)/幅・主将不在は−1）
   #   全対応に choice_diligence_weight×d勤勉 を足し、[choice_prob_min, choice_prob_max] に丸める
   choice_prob_min: 0.10
   choice_prob_max: 0.90
