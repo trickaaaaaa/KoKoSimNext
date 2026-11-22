@@ -79,15 +79,11 @@ namespace KokoSim.Unity.Squad
                 }
             }
 
-            // 分析コメント（弱点を強調色＋太字、助言は通常）。リッチテキストで部分装飾。
+            // 分析コメント（弱点は実ウェイトの太字＋主文字色、助言は通常）。
+            var weak = _root.Q<Label>("analysis-weak");
             var analysis = _root.Q<Label>("analysis");
-            if (analysis != null)
-            {
-                analysis.enableRichText = true;
-                analysis.text = string.IsNullOrEmpty(v.AnalysisWeak)
-                    ? ""
-                    : $"<b><color=#E68A4A>{v.AnalysisWeak}。</color></b> {v.AnalysisAdvice}";
-            }
+            if (weak != null) weak.text = string.IsNullOrEmpty(v.AnalysisWeak) ? "" : v.AnalysisWeak + "。";
+            if (analysis != null) analysis.text = string.IsNullOrEmpty(v.AnalysisWeak) ? "" : v.AnalysisAdvice;
 
             // レーダー描画データ（軸ラベル＋数値の生成/配置は共通部品に委ねる）。
             _factors.Clear(); _factors.AddRange(v.Factors);

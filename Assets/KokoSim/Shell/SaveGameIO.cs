@@ -37,6 +37,8 @@ namespace KokoSim.Unity.Shell
         /// <item>試合開始フローの途中（<c>AwaitingMatchStart</c>・練習試合フロー）＝スタメンを保存しないため</item>
         /// <item>見せていないイベントの場面がある（<c>EventService.HasPending</c>・issue #1115）＝キューはセーブに載らない。
         /// 選択肢つきイベント・スカウトの分野選び・ドラフト結果の場面が、ロードで選ばれないまま消える</item>
+        /// <item>年契約の更新の待ち（<c>ContractRenewalService.Pending</c>）＝待ちはセーブに載らない。
+        /// 待ち中に保存してロードすると更新画面が出ず、段を選べないまま自動更新になる</item>
         /// </list>
         /// </summary>
         public static bool CanSave
@@ -47,6 +49,7 @@ namespace KokoSim.Unity.Shell
                 if (s.BracketFoldPending || s.ResultPending || s.PendingTournamentWrapUp != null) return false;
                 if (s.AwaitingMatchStart || s.PendingMatchIsPractice) return false;
                 if (EventService.HasPending) return false;
+                if (ContractRenewalService.Pending) return false;
                 if (s.Mode == GameMode.Tournament && (s.Runner == null || !s.Runner.CanCaptureState)) return false;
                 return true;
             }
@@ -69,6 +72,8 @@ namespace KokoSim.Unity.Shell
                 return "試合の準備中はセーブできません（ホームに戻るとセーブできます）。";
             if (EventService.HasPending)
                 return "イベントの場面が残っています（ホームで見終えるとセーブできます）。";
+            if (ContractRenewalService.Pending)
+                return "年契約の更新が残っています（ホームで確定するとセーブできます）。";
             return "";
         }
 

@@ -104,7 +104,7 @@ namespace KokoSim.Unity.Records
                 row.AddToClassList("rc-th");
                 if (e.ManagerIsChampion) row.AddToClassList("rc-th--own");
 
-                row.Add(Cell(CalendarYear(e.Year).ToString(), "rc-th__year", numeric: true));
+                row.Add(Cell(SeasonClock.TournamentCalendarYear(e.Kind, e.Year).ToString(), "rc-th__year", numeric: true));
                 row.Add(Cell(CupName(e), "rc-th__cup"));
 
                 // 優勝の年は行の面で示す（.rc-th--own）。文字色は足さない＝アクセントを増やさない（UI原則②）。
