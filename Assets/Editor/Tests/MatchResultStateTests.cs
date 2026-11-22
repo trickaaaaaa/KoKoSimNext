@@ -1,7 +1,10 @@
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Saves;
+using KokoSim.Engine.Stats;
 using KokoSim.Unity.MatchResult;
+using System.Linq;
 using NUnit.Framework;
 
 namespace KokoSim.EditorTests
@@ -158,6 +161,62 @@ namespace KokoSim.EditorTests
             Assert.AreEqual("三振", MatchResultState.PaText(new BoxScoreGridCell(1, 1, PlateAppearanceResult.Strikeout, 0) { OutsThisPa = 2 }));
             Assert.AreEqual(MatchResultPaKind.HomeRun, MatchResultState.PaKind(PlateAppearanceResult.HomeRun));
             Assert.AreEqual(MatchResultPaKind.Walk, MatchResultState.PaKind(PlateAppearanceResult.HitByPitch));
+        }
+
+        // 過去の試合（戦績）は試合直後と同じ記録から描く（issue #1413）。セーブして読み直した記録でも表示モデルが一致する。
+        [Test]
+        public void ViewFromSavedAndReloadedRecord_MatchesViewFromGameResult()
+        {
+            var home = new[]
+            {
+                Bat(1, FieldPosition.RightField, "関　太一", ab: 3, h: 1, hr: 1, rbi: 2, bb: 1, hbp: 1, sb: 1),
+                Bat(1, FieldPosition.Shortstop, "代打　一郎", ab: 1, h: 1) with { Entry = BoxEntry.PinchHit, FieldedAt = FieldPosition.LeftField },
+                Bat(2, FieldPosition.CenterField, "橋本　悠馬", ab: 3, d: 1),
+            };
+            var log = new[]
+            {
+                new PlayLogEntry(1, false, "関　太一", PlateAppearanceResult.HomeRun, 1, BatterOrder: 1),
+                new PlayLogEntry(1, false, "橋本　悠馬", PlateAppearanceResult.InPlayOut, 0, BatterOrder: 2, OutsThisPa: 2),
+                new PlayLogEntry(4, false, "代打　一郎", PlateAppearanceResult.InPlayOut, 1, BatterOrder: 1, IsSacFly: true, OutsThisPa: 1),
+            };
+            var result = Game(home: home, log: log);
+            var direct = MatchResultState.Build(result, managerIsAway: false, "北都大付属", "桜丘");
+
+            var record = MatchRecordFactory.From(result, new MatchRecord { ManagerIsAway = false, OwnName = "桜丘", OpponentName = "北都大付属" });
+            var state = new SaveState();
+            state.MatchRecords.Add(record);
+            Assert.IsTrue(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var back, out var err), err);
+            var reloaded = MatchResultState.Build(back.MatchRecords.Records[0]);
+
+            Assert.AreEqual(Dump(direct), Dump(reloaded));
+        }
+
+        private static string Dump(MatchResultView v)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(v.InningCount).Append('|');
+            foreach (var l in new[] { v.AwayLine, v.HomeLine })
+                sb.Append(l.TeamName).Append(l.Won).Append(l.Runs).Append(l.Hits).Append(l.Errors)
+                  .Append(string.Join(",", l.Innings.ConvertAll(i => i?.ToString() ?? "x"))).Append('|');
+            foreach (var g in v.ExtraBaseHits)
+                sb.Append(g.Label).Append(string.Join(",", g.Entries.ConvertAll(e => e.Names + "(" + e.School + ")"))).Append('|');
+            foreach (var side in new[] { v.Own, v.Opponent })
+            {
+                sb.Append(side.TeamName).Append(side.PaColumns).Append('|');
+                foreach (var b in side.Batting.Concat(new[] { side.Total }))
+                    sb.Append(b.Order).Append(b.Pos).Append(b.PosKind).Append(b.Name).Append(b.IsSub)
+                      .Append(b.AtBats).Append(b.Hits).Append(b.Rbi).Append(b.HomeRuns).Append(b.Triples).Append(b.Doubles)
+                      .Append(b.WalksHbp).Append(b.StrikeOuts).Append(b.StolenBases).Append(b.Average).Append('|');
+                foreach (var p in side.Pitching)
+                    sb.Append(p.Name).Append(p.Innings).Append(p.Pitches).Append(p.Hits).Append(p.StrikeOuts).Append(p.WalksHbp).Append(p.Runs).Append('|');
+                foreach (var r in side.PaRows)
+                {
+                    sb.Append(r.Order).Append(r.Pos).Append(r.Name);
+                    foreach (var c in r.Cells) sb.Append(c.Text).Append(c.Kind);
+                    sb.Append('|');
+                }
+            }
+            return sb.ToString();
         }
     }
 }
