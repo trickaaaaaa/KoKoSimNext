@@ -32,7 +32,7 @@
 .ms-head { flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
 .ms-head__spacer { flex-grow: 1; }
 
-.ms-auto-btn, .ms-swap-btn {
+.ms-auto-btn {
     font-size: var(--fs-label);
     color: var(--color-chalk);
     background-color: var(--color-panel-deep);
@@ -44,7 +44,7 @@
     padding-top: var(--sp-1);
     padding-bottom: var(--sp-1);
 }
-.ms-auto-btn:hover, .ms-swap-btn:hover { border-color: var(--sky); color: var(--sky); }
+.ms-auto-btn:hover { border-color: var(--sky); color: var(--sky); }
 
 /* 球場図は横長化して全景（issue #271 オーナー決定 2026-07-26）。旧440px幅・DiamondFraction 0.50では
    両翼(±45°・98m)が要素の半幅を1.79倍超過して見切れていた。700px幅・DiamondFraction 0.28
@@ -102,7 +102,6 @@
 .ms-tab--on { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
 
 .ms-cmp-scroll { flex-grow: 1; }
-.ms-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: var(--sp-1); }
 .ms-cmp-apt.ms-hidden { display: none; }
 
 /* ── 新チームの背番号決定の上部帯（issue #954・案C）。部品は Banner＋DialogButton(primary) ── */
