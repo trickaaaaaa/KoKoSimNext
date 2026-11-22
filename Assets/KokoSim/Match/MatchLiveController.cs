@@ -2812,6 +2812,63 @@ namespace KokoSim.Unity.Match
             AdvanceToNextWindow();   // タイム中断中・スクショ時は内部で待つ（起こさない）
         }
 
+        // ── 打席途中プレーの共通部品（盗塁・牽制・暴投/捕逸・ファウル守備・挟殺・振り逃げ） ──
+
+        /// <summary>打席途中プレーの再生に入る共通の頭: 投球の表示を畳んでプレー段へ。</summary>
+        private void BeginMidPaPlayStage()
+        {
+            _inPitchPhase = false;
+            _pitchBallVisible = false;
+            _stage = LiveStage.Play;
+            _windowCarry = 0f;
+        }
+
+        /// <summary>守備ビューを開いて <paramref name="t"/> から再生する。守備側の頭上ラベル用の同定は、
+        /// 打席途中で <c>_current</c> が空なので画面の半回（<c>_shownIsTop</c>）で守備チームを引く。
+        /// <paramref name="endDuelThrow"/> は対決ビューへ直乗せしていた送球クリップ（issue #512）を畳んでから渡す場合。</summary>
+        private void BeginMidPaFieldPlay(PlaybackPlay play, float t, bool endDuelThrow = false)
+        {
+            if (_duelRig == null || !_duelRig.Available) return;
+            if (_prog != null && _shownAnyHalf)
+                _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
+            if (endDuelThrow) _duelRig.EndDuelThrow();
+            _duelRig.BeginFieldPlay(play, t);
+        }
+
+        /// <summary>打席途中プレーの再生が終わった共通の後始末: 守備陣・走者を伏せて対決の構図へ戻す。
+        /// <paramref name="windupNext"/>＝次の球は振りかぶりから（issue #696。牽制は投げ直しで別に強制する）。</summary>
+        private void EndMidPaFieldView(bool windupNext = true)
+        {
+            EndFieldPlay();
+            if (windupNext) _windupAfterFieldPlay = true;
+            _view.HideJudgement();
+        }
+
+        /// <summary>この球の事象が動かした塁・アウトと、打席途中に入った点（issue #628）を盤面へ反映する。
+        /// 走者が走り着いてから動かす（先に動かすと走る前に着いて見える）。1球観測が無い経路（合成投球列）では何もしない。</summary>
+        private void ReflectMidPaBoard(QueuedPitch q)
+        {
+            if (q.Live == null) return;
+            SetOuts(q.Live.Outs);
+            SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+            PostMidPaScore(q.Live);
+        }
+
+        /// <summary>打席の続きへ（打球の <see cref="FinishPaView"/> と違い次打席へは進めない）。
+        /// この球が打席を終わらせていれば打球再生／結果保持へ入る。ファウルだけは終端球にならない。</summary>
+        private void ResumeAtBatAfterMidPaPlay(bool terminalPitchEntersBattedBall = true)
+        {
+            _foulFlightHoldSeconds = null;
+            _windowCarry = 0f;
+            _pitchCallDone = false;
+            _inPitchPhase = false;
+            if (terminalPitchEntersBattedBall && IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
+            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
+            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
+            _stage = LiveStage.Idle;
+            AdvanceToNextWindow();
+        }
+
         // ── 打席途中の盗塁の3D再生（issue #485） ──
         // 打球の EnterBattedBallOrHold と同型（守備ビューを開いて再生し、終わったら対決構図へ戻す）だが、
         // 盗塁は打席を終わらせないので、終端では FinishPaView（次打席へ）ではなく打席の続きへ戻す。
@@ -2821,14 +2878,11 @@ namespace KokoSim.Unity.Match
         /// （<c>BuildSteal</c> の出力）が単一ソース＝打球と同じ経路で描く。</summary>
         private void EnterStealPlay(PlaybackPlay steal)
         {
-            _inPitchPhase = false;
-            _pitchBallVisible = false;
-            _stage = LiveStage.Play;
-            _windowCarry = 0f;
+            BeginMidPaPlayStage();
             _stealPlay = steal;
             // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
             _stealReleaseAt = FieldCutMomentOf(steal);
-            _stealEndAt = StealPlayEndTime(steal);
+            _stealEndAt = MidPaPlayEndTime(steal);
             _view.SetPlay(steal);
             // 対決ビュー据え置きのまま捕手へ送球クリップを直乗せする（issue #512）。頭出しできれば
             // その時刻（TFire）から再生し、リリース（_stealReleaseAt）に達したら守備ビューへ引き渡す
@@ -2857,14 +2911,7 @@ namespace KokoSim.Unity.Match
         private void HandOffStealToFieldView()
         {
             _stealHandedOff = true;
-            if (_duelRig != null && _duelRig.Available)
-            {
-                // 守備側の頭上ラベル用の同定。盗塁は打席途中で _current が空なので、画面の半回（_shownIsTop）で守備チームを引く。
-                if (_prog != null && _shownAnyHalf)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
-                _duelRig.EndDuelThrow();
-                _duelRig.BeginFieldPlay(_stealPlay, (float)System.Math.Min(_t, _stealReleaseAt));
-            }
+            BeginMidPaFieldPlay(_stealPlay, (float)System.Math.Min(_t, _stealReleaseAt), endDuelThrow: true);
         }
 
         /// <summary>盗塁再生の1フレーム（打球の <see cref="RenderReplayFrame"/> の最小版。結果テキスト・
@@ -2879,9 +2926,9 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_stealPlay, _t);
         }
 
-        /// <summary>盗塁再生の打ち切り時刻。<see cref="PlayEndTime"/> と同じ規則（動く走者レッグ・球・判定の
-        /// 最後＋余韻）だが、打席の表示同期（結果テキスト・得点）は無いので盗塁プレー単体から出す。</summary>
-        private double StealPlayEndTime(PlaybackPlay play)
+        /// <summary>打席途中プレー（盗塁・牽制・暴投/捕逸・挟殺・振り逃げ）の打ち切り時刻。<see cref="PlayEndTime"/> と
+        /// 同じ規則（動く走者レッグ・球・判定の最後＋余韻）だが、打席の表示同期（結果テキスト・得点）は無いのでプレー単体から出す。</summary>
+        private double MidPaPlayEndTime(PlaybackPlay play)
         {
             var lastEvent = play.ResAt;
             foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
@@ -2905,9 +2952,7 @@ namespace KokoSim.Unity.Match
         /// 三振＋振り逃げが続く稀な複合）、そちらへ連結する。</summary>
         private void FinishStealView()
         {
-            EndFieldPlay();          // 守備陣・走者を伏せて対決の構図へ戻す（＝打席への唯一のカット）
-            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
-            _view.HideJudgement();
+            EndMidPaFieldView();   // 守備陣・走者を伏せて対決の構図へ戻す（＝打席への唯一のカット）
             _stealPlay = null;
             var q = _paQueue[_pitchIdx];
             if (q.Live?.SqueezeRundownPlay is { } squeezeRundownPlay)
@@ -2927,23 +2972,10 @@ namespace KokoSim.Unity.Match
             }
             // 盗塁が動かした塁・アウトはここで反映＝走者が走り着いてから盤面のダイヤ・アウトを動かす
             // （先に動かすと走る前に着いて見える）。1球観測が無い経路（合成投球列）には盗塁は載らない。
-            if (q.Live != null)
-            {
-                SetOuts(q.Live.Outs);
-                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
-                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
-            }
+            ReflectMidPaBoard(q);
             // 打席の続きへ（打球の FinishPaView と違い次打席へは進めない）。この球が打席を終わらせていれば
             // 続けて打球再生／結果保持へ入る（盗塁のあと同じ球で三振・四球・インプレーが起きる稀な複合）。
-            _foulFlightHoldSeconds = null;
-            _windowCarry = 0f;
-            _pitchCallDone = false;
-            _inPitchPhase = false;
-            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
-            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
-            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
-            _stage = LiveStage.Idle;
-            AdvanceToNextWindow();
+            ResumeAtBatAfterMidPaPlay();
         }
 
         // ── 打席途中の牽制の3D再生（issue #486） ──
@@ -2954,14 +2986,11 @@ namespace KokoSim.Unity.Match
         /// <see cref="PlaybackPlay"/>（<c>BuildPickoff</c> の出力）が単一ソース＝盗塁・打球と同じ経路で描く。</summary>
         private void EnterPickoffPlay(PlaybackPlay pickoff)
         {
-            _inPitchPhase = false;
-            _pitchBallVisible = false;
-            _stage = LiveStage.Play;
-            _windowCarry = 0f;
+            BeginMidPaPlayStage();
             _pickoffPlay = pickoff;
             // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
             _pickoffReleaseAt = FieldCutMomentOf(pickoff);
-            _pickoffEndAt = PickoffPlayEndTime(pickoff);
+            _pickoffEndAt = MidPaPlayEndTime(pickoff);
             _view.SetPlay(pickoff);
             // 対決ビュー据え置きのまま投手へ牽制送球クリップを直乗せする（issue #512。EnterStealPlay
             // と同型）。頭出しできなければ従来どおり即座に守備ビューへ切り替える。
@@ -2982,13 +3011,7 @@ namespace KokoSim.Unity.Match
         private void HandOffPickoffToFieldView()
         {
             _pickoffHandedOff = true;
-            if (_duelRig != null && _duelRig.Available)
-            {
-                if (_prog != null && _shownAnyHalf)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
-                _duelRig.EndDuelThrow();
-                _duelRig.BeginFieldPlay(_pickoffPlay, (float)_pickoffReleaseAt);
-            }
+            BeginMidPaFieldPlay(_pickoffPlay, (float)_pickoffReleaseAt, endDuelThrow: true);
         }
 
         /// <summary>牽制再生の1フレーム（<see cref="RenderStealFrame"/> と同型）。</summary>
@@ -3002,23 +3025,6 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_pickoffPlay, _t);
         }
 
-        /// <summary>牽制再生の打ち切り時刻（<see cref="StealPlayEndTime"/> と同じ規則）。</summary>
-        private double PickoffPlayEndTime(PlaybackPlay play)
-        {
-            var lastEvent = play.ResAt;
-            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            foreach (var r in play.Runners)
-                foreach (var s in r.Segs)
-                {
-                    if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;
-                    if (s.T1 > lastEvent) lastEvent = s.T1;
-                }
-            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
-            return ClampBeforeWideCameraCut(end, play);
-        }
-
         /// <summary>牽制再生が終わった: 対決構図へ戻し、この球を仕切り直して投げる
         /// （<see cref="BeginPitchWindupOrBall"/>）。牽制は「この球の前」の事象（issue #515）だが、
         /// 盗塁企図は走者が投手の投球動作を見てスタートするプレーなので、牽制セーフの直後であっても
@@ -3027,8 +3033,7 @@ namespace KokoSim.Unity.Match
         /// 球で送球する順序になっていた）。</summary>
         private void FinishPickoffView()
         {
-            EndFieldPlay();
-            _view.HideJudgement();
+            EndMidPaFieldView(windupNext: false);
             _pickoffPlay = null;
             BeginPitchWindupOrBall(_pitchIdx, forceWindup: true);
         }
@@ -3046,21 +3051,13 @@ namespace KokoSim.Unity.Match
         /// 盗塁・牽制・打球と同じ経路で描く。</summary>
         private void EnterBatteryMissPlay(PlaybackPlay batteryMiss)
         {
-            _inPitchPhase = false;
-            _pitchBallVisible = false;
-            _stage = LiveStage.Play;
-            _windowCarry = 0f;
+            BeginMidPaPlayStage();
             _batteryMissPlay = batteryMiss;
             // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
             _t = FieldCutMomentOf(batteryMiss);
-            _batteryMissEndAt = BatteryMissPlayEndTime(batteryMiss);
+            _batteryMissEndAt = MidPaPlayEndTime(batteryMiss);
             _view.SetPlay(batteryMiss);
-            if (_duelRig != null && _duelRig.Available)
-            {
-                if (_prog != null && _shownAnyHalf)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
-                _duelRig.BeginFieldPlay(batteryMiss, (float)_t);
-            }
+            BeginMidPaFieldPlay(batteryMiss, (float)_t);
             RenderBatteryMissFrame();
         }
 
@@ -3073,31 +3070,12 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_batteryMissPlay, _t);
         }
 
-        /// <summary>暴投・捕逸再生の打ち切り時刻（<see cref="PickoffPlayEndTime"/> と同じ規則）。</summary>
-        private double BatteryMissPlayEndTime(PlaybackPlay play)
-        {
-            var lastEvent = play.ResAt;
-            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            foreach (var r in play.Runners)
-                foreach (var s in r.Segs)
-                {
-                    if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;
-                    if (s.T1 > lastEvent) lastEvent = s.T1;
-                }
-            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
-            return ClampBeforeWideCameraCut(end, play);
-        }
-
         /// <summary>暴投・捕逸再生が終わった: 対決構図へ戻す。同じ球で振り逃げも解決していれば
         /// （issue #488）盤面を動かす前にその再生へ連結する（先に塁を動かすと二重に見える）。
         /// 続きが無ければ塁・アウトを反映して打席の続きへ戻る。</summary>
         private void FinishBatteryMissView()
         {
-            EndFieldPlay();
-            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
-            _view.HideJudgement();
+            EndMidPaFieldView();
             _batteryMissPlay = null;
             var q = _paQueue[_pitchIdx];
             if (q.Live?.DropThirdStrikePlay is { } dropThirdStrikePlay)
@@ -3105,21 +3083,8 @@ namespace KokoSim.Unity.Match
                 EnterDropThirdStrikePlay(dropThirdStrikePlay);
                 return;
             }
-            if (q.Live != null)
-            {
-                SetOuts(q.Live.Outs);
-                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
-                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
-            }
-            _foulFlightHoldSeconds = null;
-            _windowCarry = 0f;
-            _pitchCallDone = false;
-            _inPitchPhase = false;
-            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
-            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
-            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
-            _stage = LiveStage.Idle;
-            AdvanceToNextWindow();
+            ReflectMidPaBoard(q);
+            ResumeAtBatAfterMidPaPlay();
         }
 
         // ── 守備ビューで見せるファウル（issue #1074） ──
@@ -3128,22 +3093,14 @@ namespace KokoSim.Unity.Match
 
         private void EnterFoulFieldPlay(PlaybackPlay foul)
         {
-            _inPitchPhase = false;
-            _pitchBallVisible = false;
-            _stage = LiveStage.Play;
-            _windowCarry = 0f;
+            BeginMidPaPlayStage();
             // 対決ビューが打球を見せていた秒数は BeginFieldPlay で消えるので先に採る（同じ区間を二度描かない）
             var shown = _duelRig?.BattedElapsedSeconds ?? -1f;
             _foulFieldPlay = foul;
             _t = ContactMomentOf(foul, shown);
             _foulFieldEndAt = FoulFieldEndTime(foul);
             _view.SetPlay(foul);
-            if (_duelRig != null && _duelRig.Available)
-            {
-                if (_prog != null && _shownAnyHalf)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
-                _duelRig.BeginFieldPlay(foul, (float)_t);
-            }
+            BeginMidPaFieldPlay(foul, (float)_t);
             RenderFoulFieldFrame();
         }
 
@@ -3172,18 +3129,9 @@ namespace KokoSim.Unity.Match
         /// <summary>ファウルの再生が終わった: 対決構図へ戻し、次の球を振りかぶりから投げる（打席の続き）。</summary>
         private void FinishFoulFieldView()
         {
-            EndFieldPlay();
-            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696。暴投・捕逸と同じ）
-            _view.HideJudgement();
+            EndMidPaFieldView();
             _foulFieldPlay = null;
-            _foulFlightHoldSeconds = null;
-            _windowCarry = 0f;
-            _pitchCallDone = false;
-            _inPitchPhase = false;
-            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
-            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
-            _stage = LiveStage.Idle;
-            AdvanceToNextWindow();
+            ResumeAtBatAfterMidPaPlay(terminalPitchEntersBattedBall: false);
         }
 
         // ── 打席途中のスクイズ挟殺の3D再生（issue #1061） ──
@@ -3193,21 +3141,13 @@ namespace KokoSim.Unity.Match
 
         private void EnterSqueezeRundownPlay(PlaybackPlay rundown)
         {
-            _inPitchPhase = false;
-            _pitchBallVisible = false;
-            _stage = LiveStage.Play;
-            _windowCarry = 0f;
+            BeginMidPaPlayStage();
             _squeezeRundownPlay = rundown;
             // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
             _t = FieldCutMomentOf(rundown);
-            _squeezeRundownEndAt = BatteryMissPlayEndTime(rundown);
+            _squeezeRundownEndAt = MidPaPlayEndTime(rundown);
             _view.SetPlay(rundown);
-            if (_duelRig != null && _duelRig.Available)
-            {
-                if (_prog != null && _shownAnyHalf)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
-                _duelRig.BeginFieldPlay(rundown, (float)_t);
-            }
+            BeginMidPaFieldPlay(rundown, (float)_t);
             RenderSqueezeRundownFrame();
         }
 
@@ -3223,9 +3163,7 @@ namespace KokoSim.Unity.Match
         /// （<see cref="FinishBatteryMissView"/> と同型。3アウト目なら次の窓が攻守交代を開く）。</summary>
         private void FinishSqueezeRundownView()
         {
-            EndFieldPlay();
-            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
-            _view.HideJudgement();
+            EndMidPaFieldView();
             _squeezeRundownPlay = null;
             var q = _paQueue[_pitchIdx];
             if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
@@ -3238,21 +3176,8 @@ namespace KokoSim.Unity.Match
                 EnterDropThirdStrikePlay(dropThirdStrikePlay);
                 return;
             }
-            if (q.Live != null)
-            {
-                SetOuts(q.Live.Outs);
-                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
-                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
-            }
-            _foulFlightHoldSeconds = null;
-            _windowCarry = 0f;
-            _pitchCallDone = false;
-            _inPitchPhase = false;
-            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
-            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
-            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
-            _stage = LiveStage.Idle;
-            AdvanceToNextWindow();
+            ReflectMidPaBoard(q);
+            ResumeAtBatAfterMidPaPlay();
         }
 
         // ── 打席途中の振り逃げの3D再生（issue #488） ──
@@ -3265,21 +3190,13 @@ namespace KokoSim.Unity.Match
         /// 単一ソース＝盗塁・牽制・暴投/捕逸・打球と同じ経路で描く。</summary>
         private void EnterDropThirdStrikePlay(PlaybackPlay dropThirdStrike)
         {
-            _inPitchPhase = false;
-            _pitchBallVisible = false;
-            _stage = LiveStage.Play;
-            _windowCarry = 0f;
+            BeginMidPaPlayStage();
             _dropThirdStrikePlay = dropThirdStrike;
             // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
             _t = FieldCutMomentOf(dropThirdStrike);
-            _dropThirdStrikeEndAt = DropThirdStrikePlayEndTime(dropThirdStrike);
+            _dropThirdStrikeEndAt = MidPaPlayEndTime(dropThirdStrike);
             _view.SetPlay(dropThirdStrike);
-            if (_duelRig != null && _duelRig.Available)
-            {
-                if (_prog != null && _shownAnyHalf)
-                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_shownIsTop));
-                _duelRig.BeginFieldPlay(dropThirdStrike, (float)_t);
-            }
+            BeginMidPaFieldPlay(dropThirdStrike, (float)_t);
             RenderDropThirdStrikeFrame();
         }
 
@@ -3292,47 +3209,15 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_dropThirdStrikePlay, _t);
         }
 
-        /// <summary>振り逃げ再生の打ち切り時刻（<see cref="BatteryMissPlayEndTime"/> と同じ規則）。</summary>
-        private double DropThirdStrikePlayEndTime(PlaybackPlay play)
-        {
-            var lastEvent = play.ResAt;
-            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            foreach (var r in play.Runners)
-                foreach (var s in r.Segs)
-                {
-                    if (PlaybackDisplaySync.IsStationaryLeg(s)) continue;
-                    if (s.T1 > lastEvent) lastEvent = s.T1;
-                }
-            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
-            return ClampBeforeWideCameraCut(end, play);
-        }
-
         /// <summary>振り逃げ再生が終わった: 対決構図へ戻し、出塁後の塁・アウトを反映してから打席の続きへ。
         /// 三振確定後の後処理として起きる（＝この球の最後の事象）ので、これ以上連結するプレーは無い。</summary>
         private void FinishDropThirdStrikeView()
         {
-            EndFieldPlay();
-            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
-            _view.HideJudgement();
+            EndMidPaFieldView();
             _dropThirdStrikePlay = null;
             var q = _paQueue[_pitchIdx];
-            if (q.Live != null)
-            {
-                SetOuts(q.Live.Outs);
-                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
-                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
-            }
-            _foulFlightHoldSeconds = null;
-            _windowCarry = 0f;
-            _pitchCallDone = false;
-            _inPitchPhase = false;
-            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
-            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
-            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
-            _stage = LiveStage.Idle;
-            AdvanceToNextWindow();
+            ReflectMidPaBoard(q);
+            ResumeAtBatAfterMidPaPlay();
         }
 
         private void Update()
@@ -3754,7 +3639,7 @@ namespace KokoSim.Unity.Match
         /// 全景へハードカットする時刻（<see cref="CameraPlanBuilder.WideStartTime"/>）より
         /// 確実に手前で止める（issue #522）。
         ///
-        /// <see cref="StealPlayEndTime"/> 等は元々 <c>lastEvent + PlayTailSeconds(0.6)</c> 基準だが、
+        /// <see cref="MidPaPlayEndTime"/> 等は元々 <c>lastEvent + PlayTailSeconds(0.6)</c> 基準だが、
         /// カメラのハードカットは <c>lastEvent + CameraPlanBuilder.ReturnToWideDelaySeconds(0.9)</c>。
         /// 打ち切り判定に使う余韻 <see cref="FinishGraceSeconds"/>(0.3) を足すと
         /// <c>0.6+0.3=0.9</c> でカット時刻とちょうど一致してしまい、判定が発火する前に
