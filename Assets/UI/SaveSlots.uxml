@@ -152,6 +152,10 @@
                                 <ui:Label class="ss-cr__v" text="Tripo AI（CC BY 4.0）" />
                             </ui:VisualElement>
                             <ui:VisualElement class="ss-cr">
+                                <ui:Label class="ss-cr__k" text="地図データ" />
+                                <ui:Label class="ss-cr__v" text="「国土数値情報（行政区域データ）」（国土交通省 https://nlftp.mlit.go.jp/ksj/ ・CC BY 4.0）を加工して作成・Natural Earth" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="ss-cr">
                                 <ui:Label class="ss-cr__k" text="フォント" />
                                 <ui:Label class="ss-cr__v" text="Noto Sans JP・しっぽり明朝 B1・DotGothic16・Anton・Dela Gothic One（SIL OFL 1.1）" />
                             </ui:VisualElement>

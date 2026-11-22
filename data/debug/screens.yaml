@@ -42,6 +42,39 @@
 #   shot: 01-name | {name: 01-name, h: 1400}   いまの画面を撮る（同時に書体監査を summary.json へ）
 
 screens:
+  # ── 県選択（日本地図）・issue #1410 ──
+
+  - id: prefecture-map-1410
+    name: "はじめからの県選択を日本地図に（全国図・乗せたとき・北海道/東京の拡大・設定画面）（issue #1410）"
+    steps:
+      - show: PrefectureSelect
+      - wait: 5
+      - shot: 01-national
+      - call: HoverForCapture(33)
+      - wait: 3
+      - shot: 02-hover-hiroshima
+      - call: HoverForCapture(36)
+      - wait: 3
+      - shot: 03-hover-kagawa
+      - call: PickForCapture(0)
+      - wait: 5
+      - shot: 04-hokkaido-zoom
+      - call: HoverForCapture(0, 1)
+      - wait: 3
+      - shot: 05-hokkaido-hover-south
+      - call: ResetForCapture()
+      - call: PickForCapture(12)
+      - wait: 5
+      - shot: 06-tokyo-zoom
+      - call: HoverForCapture(12, 1)
+      - wait: 3
+      - shot: 07-tokyo-hover-west
+      - call: PickForCapture(12, 1)
+      - wait: 8
+      - read: ngs-pref-name
+      - read: ngs-district
+      - shot: 08-setup-tokyo-west
+
   # ── 夜間マージ分の実機確認（2026-11-22・out/overnight/verify-targets-20261122.md）──
 
   - id: career-cards-1325

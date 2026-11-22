@@ -97,7 +97,11 @@ namespace KokoSim.Unity.NewGame
 
 #if UNITY_EDITOR
         /// <summary>【スクショ・検証用】指定の県を押したのと同じ処理（座標を介さず、地図の当たり判定の結果を使う）。</summary>
-        internal void PickForCapture(int prefectureId, int? split = null)
+        internal void PickForCapture(int prefectureId) => PickForCapture(prefectureId, null);
+
+        internal void PickForCapture(int prefectureId, int split) => PickForCapture(prefectureId, (int?)split);
+
+        private void PickForCapture(int prefectureId, int? split)
         {
             var view = _map.View;
             foreach (var f in view.Features)
@@ -111,10 +115,9 @@ namespace KokoSim.Unity.NewGame
         }
 
         /// <summary>【スクショ・検証用】区画の内側の点に乗せた状態にする（図の座標 → 要素のローカル座標へ直して通常の乗せる処理に流す）。</summary>
-        internal void HoverForCapture(int prefectureId, int? split = null)
-        {
-            _map.HoverForCapture(prefectureId, split);
-        }
+        internal void HoverForCapture(int prefectureId) => _map.HoverForCapture(prefectureId, null);
+
+        internal void HoverForCapture(int prefectureId, int split) => _map.HoverForCapture(prefectureId, split);
 
         /// <summary>【スクショ・検証用】全国図へ戻す。</summary>
         internal void ResetForCapture() => ShowNational();
