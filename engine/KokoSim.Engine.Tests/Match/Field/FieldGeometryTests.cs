@@ -23,6 +23,31 @@ public sealed class FieldGeometryTests
     }
 
     [Fact]
+    public void WallDistance_FairSide_EqualsFenceDistance()
+    {
+        var field = new FieldGeometry { LeftFenceM = 91, RightFenceM = 100, CenterFenceM = 122 };
+        foreach (var deg in new[] { -45.0, -20.0, 0.0, 30.0, 45.0 })
+            Assert.Equal(field.FenceDistance(deg * Math.PI / 180), field.WallDistance(deg * Math.PI / 180), 9);
+    }
+
+    /// <summary>ファウル側の壁はラインから垂直に FoulSideM。ライン沿い（ポール方向）はポールの距離、
+    /// ラインから離れるほど壁が近くなる。FenceDistance を ±45° の外へ延長した値（cos(2φ) 補間）は使わない。</summary>
+    [Fact]
+    public void WallDistance_FoulSide_IsPerpendicularWallNotExtendedFence()
+    {
+        var field = new FieldGeometry { LeftFenceM = 95, RightFenceM = 95, CenterFenceM = 122, FoulSideM = 13 };
+        // ラインのすぐ外（φ=46°）: ポールより手前の壁は遠い＝ポールの距離で頭打ち。
+        Assert.Equal(95.0 / Math.Cos(1 * Math.PI / 180), field.WallDistance(46 * Math.PI / 180), 6);
+        // ライン＋30°（φ=75°）: 壁までは 13 / sin(30°) = 26m。
+        Assert.Equal(26.0, field.WallDistance(75 * Math.PI / 180), 6);
+        Assert.Equal(26.0, field.WallDistance(-75 * Math.PI / 180), 6);
+        // 延長した FenceDistance は 75° で 95+27·cos150°＝71.6m と全く別の値になる（ライン沿い60m等の誤判定の元）。
+        Assert.NotEqual(26.0, field.FenceDistance(75 * Math.PI / 180), 1);
+        // 壁はラインに近い方向ほど遠い＝単調に減る。
+        Assert.True(field.WallDistance(60 * Math.PI / 180) > field.WallDistance(80 * Math.PI / 180));
+    }
+
+    [Fact]
     public void FenceDistance_AsymmetricStadium_LeftAndRightDiffer()
     {
         // 広島市民球場（左101/右100）相当

@@ -1162,19 +1162,16 @@ public static class FieldingResolver
 
     /// <summary>
     /// 外野手のファンブルの確率（issue #811）。回収点でのボール速度から難度を出し（<see cref="FieldingCoefficients.OutfieldFumbleSpeedRefMps"/>
-    /// 以上で難度1・速度0で難度0）、外野手の Catching から守備力連動（捕球エラーと同じ非対称スロープを共有）で
+    /// 以上で難度1・速度0で難度0）、外野手の Catching から専用の非対称スロープ（OutfieldFumbleCatchingSlope*）で
     /// 伸縮させる。FlyCatchErrorProb（issue #532）と同じ「難度×基準確率」の形。
     /// </summary>
     private static double OutfieldFumbleProb(Fielder retriever, double ballSpeedMps, FieldingCoefficients coeff)
     {
         var difficulty = MathUtil.Clamp(ballSpeedMps / Math.Max(1e-6, coeff.OutfieldFumbleSpeedRefMps), 0.0, 1.0);
         var catchingDelta = retriever.Attributes.Catching - 50;
-        var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
-        // 捕球の効きは内野の捕球エラー（error_base_prob）に対する比率で掛ける。傾きを足し算で使うと
-        // 基準確率と無関係な上乗せ（捕球40で+6.5%）になり、基準確率を下げても頻度が下がらない。
-        var catchingFactor = coeff.ErrorBaseProb > 0.0
-            ? Math.Max(0.0, 1.0 - catchingDelta * slope / coeff.ErrorBaseProb)
-            : 1.0;
+        var slope = catchingDelta < 0 ? coeff.OutfieldFumbleCatchingSlope : coeff.OutfieldFumbleCatchingSlopeStrong;
+        // 捕球の効きは基準確率に掛ける倍率（足し算だと基準と無関係な上乗せになる）。内野の error_base_prob には連動しない。
+        var catchingFactor = Math.Max(0.0, 1.0 - catchingDelta * slope);
         var errProb = coeff.OutfieldFumbleBaseProb * catchingFactor * difficulty;
         return MathUtil.Clamp(errProb, 0.0, coeff.ErrorMaxProb);
     }

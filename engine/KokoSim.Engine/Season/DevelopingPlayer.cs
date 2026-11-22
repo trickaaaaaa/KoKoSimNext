@@ -55,7 +55,7 @@ public sealed class DevelopingPlayer
 
     /// <summary>
     /// 習得済み変化球（ストレートは必修のため含めない, 設計書02 §2.2）。
-    /// 投手1〜3球種／野手0〜1（投手経歴持ちは上振れ）。習得イベントで後から増える。
+    /// 投手1〜3球種／野手0〜1。習得イベントで後から増える。
     /// </summary>
     public List<LearnedPitch> LearnedPitches { get; } = new();
 

@@ -759,6 +759,8 @@ public static class CoefficientsLoader
         public double FenceRestitution { get; set; } = D.FenceRestitution;
         public double OutfieldPickupSeconds { get; set; } = D.OutfieldPickupSeconds;
         public double OutfieldFumbleBaseProb { get; set; } = D.OutfieldFumbleBaseProb;
+        public double OutfieldFumbleCatchingSlope { get; set; } = D.OutfieldFumbleCatchingSlope;
+        public double OutfieldFumbleCatchingSlopeStrong { get; set; } = D.OutfieldFumbleCatchingSlopeStrong;
         public double OutfieldFumbleSpeedRefMps { get; set; } = D.OutfieldFumbleSpeedRefMps;
         public double OutfieldFumbleDelayMeanSeconds { get; set; } = D.OutfieldFumbleDelayMeanSeconds;
         public double OutfieldFumbleDelayMaxFactor { get; set; } = D.OutfieldFumbleDelayMaxFactor;
@@ -854,6 +856,8 @@ public static class CoefficientsLoader
             FenceRestitution = FenceRestitution,
             OutfieldPickupSeconds = OutfieldPickupSeconds,
             OutfieldFumbleBaseProb = OutfieldFumbleBaseProb,
+            OutfieldFumbleCatchingSlope = OutfieldFumbleCatchingSlope,
+            OutfieldFumbleCatchingSlopeStrong = OutfieldFumbleCatchingSlopeStrong,
             OutfieldFumbleSpeedRefMps = OutfieldFumbleSpeedRefMps,
             OutfieldFumbleDelayMeanSeconds = OutfieldFumbleDelayMeanSeconds,
             OutfieldFumbleDelayMaxFactor = OutfieldFumbleDelayMaxFactor,
@@ -2875,8 +2879,6 @@ public static class CoefficientsLoader
         public double GrowthDomainSameProb { get; set; } = D.GrowthDomainSameProb;
         public double SpeedCapGapFactor { get; set; } = D.SpeedCapGapFactor;
         public double ProdigyProb { get; set; } = D.ProdigyProb;
-        // 投手経歴
-        public double PitcherBackgroundProb { get; set; } = D.PitcherBackgroundProb;
         // 変化球レパートリー（設計書02 §2.2）
         public double PitcherSecondPitchProb { get; set; } = D.PitcherSecondPitchProb;
         public double PitcherThirdPitchProb { get; set; } = D.PitcherThirdPitchProb;
@@ -3180,7 +3182,6 @@ public static class CoefficientsLoader
             GrowthDomainSameProb = GrowthDomainSameProb,
             SpeedCapGapFactor = SpeedCapGapFactor,
             ProdigyProb = ProdigyProb,
-            PitcherBackgroundProb = PitcherBackgroundProb,
             PitcherSecondPitchProb = PitcherSecondPitchProb,
             PitcherThirdPitchProb = PitcherThirdPitchProb,
             FielderBreakingProb = FielderBreakingProb,

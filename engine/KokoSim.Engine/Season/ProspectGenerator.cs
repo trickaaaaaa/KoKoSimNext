@@ -509,9 +509,6 @@ public sealed record RosterCoefficients
     /// <summary>能力別の才能上限gap圧縮係数（Issue #114）。素質固定能力（足）のみ&lt;1.0、他は1.0。</summary>
     public double CapGapFactor(AbilityKind k) => k == AbilityKind.Speed ? SpeedCapGapFactor : 1.0;
 
-    // --- 隠し属性「投手経歴」（設計書01 §1.1b）: 野手の変化球上振れの素 ---
-    public double PitcherBackgroundProb { get; init; } = 0.06;
-
     // --- 変化球レパートリー（設計書02 §2.2）: 本数は投手適性の連続量(RoleWeight)で決まる ---
     public double PitcherSecondPitchProb { get; init; } = 0.75;
     public double PitcherThirdPitchProb { get; init; } = 0.30;
@@ -897,7 +894,7 @@ public static class ProspectGenerator
         }
 
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
-        // 投手: 1〜3球種／野手: 0〜1（投手経歴持ちは1〜2に上振れ）。判定は創発ロール。
+        // 投手: 1〜3球種／野手: 0〜1。判定は創発ロール。
         LearnPitches(p, wRole, c, rng);
 
         return p;
@@ -917,8 +914,7 @@ public static class ProspectGenerator
     /// 判定境界で 0.5）を使う。能力配分の w（バイアス無し）を使うと、判定を通った投手でも重みが
     /// 0.2〜0.3 に沈み、変化球を1本も持たない投手が15%出る（実測）。持ち物は役割寄りの量で決める。
     ///
-    /// 1本目は「野手水準（経歴持ちは必ず）↔ 必ず1本」の補間、2本目は「経歴持ちの上振れ↔投手水準」、
-    /// 3本目は投手水準に比例。wRole→0 は従来の野手（0〜1本）、wRole→1 は従来の投手（1〜3本）と一致する。
+    /// 1本目は「野手水準 ↔ 必ず1本」の補間、2本目・3本目は投手水準に比例。wRole→0 は従来の野手（0〜1本）、wRole→1 は従来の投手（1〜3本）と一致する。
     /// </summary>
     private static void LearnPitches(DevelopingPlayer p, double wRole, RosterCoefficients c, IRandomSource rng)
     {

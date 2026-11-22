@@ -117,6 +117,23 @@ public sealed record FieldGeometry
         return lineFence + (CenterFenceM - lineFence) * Math.Cos(2.0 * bearingRad);
     }
 
+    /// <summary>
+    /// 方位角 φ [rad] の方向にある、競技場を囲む壁までの距離 [m]。フェア側（|φ|≤45°）は <see cref="FenceDistance"/>、
+    /// ファウル側（|φ|&gt;45°）は <see cref="InFoulTerritory"/> と同じ形＝ラインから垂直に <see cref="FoulSideM"/> の壁
+    /// （ライン沿いは両翼フェンスの距離で頭打ち）。<see cref="FenceDistance"/> は cos(2φ) の補間なのでフェアの外へ
+    /// 延長するとファウル側の壁と無関係な値になる（ライン沿い60m・壁際で判定を引かない等）。
+    /// </summary>
+    public double WallDistance(double bearingRad)
+    {
+        var abs = Math.Abs(bearingRad);
+        if (abs <= Math.PI / 4) return FenceDistance(bearingRad);
+        var off = Math.Min(abs, Math.PI / 2) - Math.PI / 4;
+        var lineFence = bearingRad >= 0 ? RightFenceM : LeftFenceM;
+        var toSideWall = FoulSideM / Math.Sin(off);
+        var toPole = lineFence / Math.Cos(off);
+        return Math.Min(toSideWall, toPole);
+    }
+
     public Vector3D FirstBase => new(BaseDistanceM * Math.Sin(Math.PI / 4), 0, BaseDistanceM * Math.Cos(Math.PI / 4));
     public Vector3D SecondBase => new(0, 0, BaseDistanceM * Math.Sqrt(2));
     public Vector3D ThirdBase => new(-BaseDistanceM * Math.Sin(Math.PI / 4), 0, BaseDistanceM * Math.Cos(Math.PI / 4));

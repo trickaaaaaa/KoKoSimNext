@@ -53,4 +53,27 @@ public sealed class DayFormPerTeamTests
         Assert.True(mismatches > 0,
             "全打順でaway/homeのdayFormが一致した＝辞書が共有され上書きされている疑い");
     }
+
+    /// <summary>控えは全員が当日の出来を持つ（代打・代走の野手も、Position が Pitcher でない救援も）。issue #1289。</summary>
+    [Fact]
+    public void SampleDayForms_DealsFormToEveryReserve_NotOnlyPositionPitchers()
+    {
+        var baseTeam = TeamOf("A");
+        var benchFielder = new Player { Position = FieldPosition.LeftField, Contact = 61, Power = 40 };
+        var benchPitcherOfFielderPosition = new Player
+        {
+            Position = FieldPosition.FirstBase, Pitching = PitcherAttributes.LeagueAverage, Contact = 33,
+        };
+        var away = new Team
+        {
+            Name = "A", BattingOrder = baseTeam.BattingOrder, PitcherSlot = 8,
+            Reserves = new[] { benchFielder, benchPitcherOfFielderPosition },
+        };
+        var home = TeamOf("H");
+
+        var progress = GameEngine.NewProgress(away, home, new GameContext(), new Xoshiro256Random(3));
+
+        Assert.NotEqual(0.0, progress.Away.DayFormOf(benchFielder));
+        Assert.NotEqual(0.0, progress.Away.DayFormOf(benchPitcherOfFielderPosition));
+    }
 }
