@@ -129,7 +129,8 @@ public sealed class InjuryCatalog
 
     /// <summary>
     /// 場面に応じて傷病の種類を重み抽選する。その場面に重みを持つ種類が無ければ null（＝発生させない）。
-    /// 重み抽選は必ず1回だけ rng を消費する（呼び出し側の乱数消費数を場面によらず一定に保つ）。
+    /// 重みを持つ種類がある場面では rng を1回だけ消費する。重みの合計が0以下
+    /// （その場面に重みを持つ種類が無い）ときは rng を消費せず null を返す。
     /// </summary>
     public InjuryTypeEntry? SampleType(InjuryScene scene, IRandomSource rng)
     {

@@ -93,7 +93,8 @@ public sealed record FieldingCoefficients
     /// <summary>
     /// 内野ゴロ処理のオーバーヘッド[s]（設計書02 §4.1b の時間軸校正）。捕球姿勢づくり・ステップ。
     /// <see cref="ThrowTransferSeconds"/> と足したものが「捕ってから離すまで」＝守備50で 0.80s
-    /// （守備90で0.69s／守備20で0.88s）。実際の内野手の 0.6〜0.9秒に合わせてある。
+    /// （守備90で約0.64s／守備20で約0.92s。内野の握り替え倍率 <see cref="InfieldTransferFieldingSlope"/> を効き後の守備で通した
+    /// 0.10＋0.70×倍率）。実際の内野手の 0.6〜0.9秒に合わせてある。
     /// issue #358 で 0.88→0.10 へ引き戻した。0.88 は #261 の得点環境の戻しを「内野手の処理時間」という
     /// 物理量に載せた値で、握り替え0.70と合わせて<b>捕球点で1.58秒ボールを持つ</b>＝実際の約2倍だった
     /// （判定だけでなく2D俯瞰の絵にもそのまま出ていた）。得点環境の戻しは
@@ -164,12 +165,12 @@ public sealed record FieldingCoefficients
     /// 全員を遅らせると別の野手が選ばれ、間に合わない場合はゾーン最寄りへ落ちて逆に速くなる）。
     /// 走路側でやるなら選択と落とし先を作り直す必要があり、この issue の範囲を越える。
     /// data/coefficients.yaml と同値。</para>
-    /// </summary>
     ///
     /// <para><b>0.48 → 0.49（2026-08-18・issue middle-infielder-charge-cap ＋ fielder-body-far-from-ball-at-catch）</b>:
     /// ミドルの前進上限 4→10m（捕球が早くなる方向）と、半径捕球の処理点を体が届く時刻へ採り直す（遅くなる方向）を
     /// 同時に入れた差し引きが −0.4pt（実測 60,000打席×seed 7/42/2024: 9.0/8.8/9.5%）。0.49 で 9.4/9.3/10.0%
     /// ＝従来水準（9.5/9.1/9.8%）に戻る。</para>
+    /// </summary>
     public double InfieldHandleJitterMeanSeconds { get; init; } = 0.49;
 
 
@@ -190,18 +191,18 @@ public sealed record FieldingCoefficients
     /// </summary>
     public double InfieldTransferFieldingSlope { get; init; } = 0.014;
 
-    /// <summary>内野の握り替え倍率の下限（最速側のクランプ, issue #765）。表示の守備≈98で届く。</summary>
+    /// <summary>内野の握り替え倍率の下限（最速側のクランプ, issue #765）。効きを通すと表示 Lv100 でも倍率は約0.713で届かない（死んだクランプ＝安全弁のみ）。</summary>
     public double InfieldTransferFactorMin { get; init; } = 0.65;
 
     /// <summary>
     /// もたつき（<see cref="InfieldHandleJitterMeanSeconds"/>）の平均を守備で伸縮する傾き（issue #765）。
     /// 倍率 = max(<see cref="InfieldHandleJitterFactorMin"/>, 1 − (守備−50)×この値)。
     /// 上手い内野手は「一発で握り替える」＝もたつきがほぼ出ず、下手な内野手ほど握り損ね・お手玉が増える。
-    /// 守備50で×1.0（帯不変）。表示の守備90で×0.35／守備20で×1.49。data/coefficients.yaml と同値。
+    /// 守備50で×1.0（帯不変）。表示の守備90で約×0.41／守備20で約×1.44（効き後の守備で計算）。data/coefficients.yaml と同値。
     /// </summary>
     public double InfieldHandleJitterFieldingSlope { get; init; } = 0.036;
 
-    /// <summary>もたつき倍率の下限（issue #765）。どんな名手でも、たまには握り直す。</summary>
+    /// <summary>もたつき倍率の下限（issue #765）。どんな名手でも、たまには握り直す。効きを通すと表示 Lv100 でも倍率は約0.262で届かない（死んだクランプ＝安全弁のみ）。</summary>
     public double InfieldHandleJitterFactorMin { get; init; } = 0.25;
     /// <summary>
     /// お手玉の失策（2026-11-03）: もたつき[s]がこれ以上で、もたつきが無ければアウトだったセーフは
@@ -267,8 +268,8 @@ public sealed record FieldingCoefficients
     public double FlyErrorRoutineMarginSeconds { get; init; } = 0.35;
 
     // 送球エラー（内野ゴロ→一塁の2段階目, Issue #37 / design-14 P1-6b）。捕球ロール(Catching)の後に
-    // 送球ロール(ThrowAccuracy)を引く。既定 base=0.0 は「送球ロールを一切引かない」＝現行の捕球のみ判定と
-    // 乱数消費順・結果とも完全一致（ErrorExtraAdvanceProb と同じ gating 方式で決定論を保つ）。
+    // 送球ロール(ThrowAccuracy)を引く。既定の base は 0.1250（issue #1164）＝送球ロールを引く。base=0.0 にすると
+    // 「送球ロールを一切引かない」＝捕球のみ判定と乱数消費順・結果とも完全一致（ErrorExtraAdvanceProb と同じ gating 方式）。
     /// <summary>送球エラーの基準確率（ThrowAccuracy50時）。issue #169で 0.0→0.0266 に正値化＝実ゲームで悪送球が発火。
     /// Ac50 で内野ゴロ失策の約40%が送球由来になる按分（残り≈60%が捕球由来 ErrorBaseProb）。
     /// issue #532 で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）。
@@ -304,8 +305,8 @@ public sealed record FieldingCoefficients
 
     // 受け手の捕球ミス（内野ゴロ→一塁の3段階目, issue #810 / design-14 P1-6b 追記）。捕球ロール(Catching)→
     // 送球ロール(ThrowAccuracy)を通過した（＝送球自体は正確）後に、受け手の一塁手が正確な送球を落とす／
-    // ショートバウンドを捕れない失策を引く。既定 base=0.0 なら「ロールを一切引かない」＝現行の2段判定と
-    // 乱数消費順・結果とも完全一致（ThrowErrorBaseProb と同じ gating 方式で決定論を保つ）。
+    // ショートバウンドを捕れない失策を引く。既定の base は 0.0370（issue #810/#1164）＝ロールを引く。base=0.0 にすると
+    // 「ロールを一切引かない」＝2段判定と乱数消費順・結果とも完全一致（ThrowErrorBaseProb と同じ gating 方式）。
     /// <summary>受け手の捕球ミスの基準確率（一塁手 Catching50時）。issue #810で正値化＝捕球・送球の両方から
     /// 再配分し errors_per_game を帯内（1.8–3.6）に保った（捕球・送球・受け手の按分は概ね48/34/18）。
     /// 一塁手自身が処理した打球（受け手が別にいない）には適用しない。
@@ -542,7 +543,9 @@ public sealed record FieldingCoefficients
     /// <para>30.0＝オーナー選択（2026-08-13）。「強い当たりでも3〜4m詰める・緩い当たりは思い切り突っ込む」水準で、
     /// 実測では遊撃定位置への 86km/h のゴロが 2.18s/39m地点 → 1.88s/35m地点、115km/h のゴロが
     /// 1.51s/39m → 1.39s/36m。母集団では平均捕球が 1.237→1.191s。減った内野安打は
-    /// <see cref="ForceOutMarginSeconds"/> を 0.60→0.72 へ厚くして水準ごと戻してある（帯は書き換えていない）。</para>
+    /// <see cref="ForceOutMarginSeconds"/> を 0.60→0.72 へ厚くして水準ごと戻していた（帯は書き換えていない）。
+    /// この余裕は後に物理層のもたつき（<see cref="InfieldHandleJitterMeanSeconds"/>）へ移し、現在の
+    /// <see cref="ForceOutMarginSeconds"/> は 0.0。</para>
     /// </summary>
     public double ChargeSlowBallSpeedMps { get; init; } = 30.0;
 
@@ -551,12 +554,13 @@ public sealed record FieldingCoefficients
     public double ChargeMaxAdvanceCornerM { get; init; } = 6.0;
 
     /// <summary>ミドル（二塁手・遊撃手）が前へ出られる距離[m]。一塁までの送球が長く、
-    /// 体勢を崩すと間に合わないぶんコーナーより浅い。</summary>
+    /// 体勢を崩すと間に合わないぶんコーナーより浅い。
     ///
     /// <para><b>4.0 → 10.0（issue middle-infielder-charge-cap）</b>: 4m は 30 m/s 分母の線形係数が掛かって実効 1〜2.4m
     /// ＝遊撃・二塁が正面のボテボテに 2〜3m しか出ず立って待っていた（実測: 79 km/h 遊撃正面で 3.3m/2.25s→内野安打。
     /// 上限なしで会える最速点は 9.6m/1.76s）。コーナーの 6m は上限なしと同値だったので触らない。突っ込んだ代償は
     /// 前進量に比例する握り替え・送球精度のペナルティが払う。</para>
+    /// </summary>
     public double ChargeMaxAdvanceMiddleM { get; init; } = 10.0;
 
     /// <summary>前進捕球いっぱいのときの握り替え追加時間[s]（走りながら捕る＝体勢が悪い）。

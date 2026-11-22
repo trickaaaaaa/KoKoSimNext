@@ -15,7 +15,7 @@ namespace KokoSim.Engine.Career;
 /// </summary>
 public sealed record ContractTier
 {
-    /// <summary>年額[万円]。年度頭に部費から引かれる。</summary>
+    /// <summary>年額[万円]。年度末の総括（第46週・<see cref="CareerEngine.ApplyResults"/>）で部費から引かれる。</summary>
     public double AnnualCost { get; init; }
 
     /// <summary>新入生の才能中心値への加算（スカウト網）。名声由来の上振れに上乗せする。</summary>
@@ -141,14 +141,15 @@ public sealed record ContractCatalog
     /// <summary>
     /// C#既定（data/coefficients.yaml <c>contracts:</c> と一致させること・不変条件#4）。
     ///
-    /// <para>スカウト網 Lv1（15万/年）は従来の <see cref="CareerCoefficients.ScoutCost"/> と同額で、
+    /// <para>スカウト網 Lv1（30万/年）は従来の <see cref="CareerCoefficients.ScoutCost"/> と同額で、
     /// 質への加算は0＝<b>買うのは「見立て」だけ</b>（issue #587 の事前開示）。質が動くのは Lv2 以上で、
     /// 実測では最良軸がC以上の逸材の出現率が 2.78%（未契約）→ 3.99%（Lv2）→ 5.74%（Lv3）と<b>倍化する</b>
     /// （平均が2〜3上がるより、当たりの頻度が変わる効き方）。新規ゲームは<b>未契約</b>から始まる
     /// （<see cref="ContractSet.Initial"/>）。</para>
     ///
-    /// <para>全部を最上段で契約すると 50+20+30×3＝160万/年。部費の年間収入は信頼度50で120万・
-    /// 信頼度100で160万なので、合宿費45万と合わせると全部は抱えられない＝「どれを取るか」の選択になる。</para>
+    /// <para>全部を最上段で契約すると 140+20+50×3＝310万/年。部費の年間収入（学校予算＋信頼度ぶん）は
+    /// 信頼度50で120万・信頼度100で160万で、寄付・一時金を足しても合宿費45万と合わせると全部は抱えられない
+    /// ＝「どれを取るか」の選択になる。</para>
     /// </summary>
     public static ContractCatalog Default { get; } = new()
     {
@@ -183,7 +184,7 @@ public sealed record ContractCatalog
             },
             // 専門コーチ: 分野別指導力の実効値を底上げする。監督自身の指導力は変えないので、
             // 解約すればその年から元に戻る（雇っている間だけ効く）。
-            // 2026-11-10 issue #865: +10→+20（効き目を引き上げる）。CoachingSlope(0.005)自体は
+            // issue #865: +10→+20→+50（効き目を引き上げる。現行は +50）。CoachingSlope(0.005)自体は
             // 監督本人の指導力全般に効く係数なので変えていない＝コーチ契約だけを強める。
             new ContractDef
             {
@@ -262,7 +263,7 @@ public sealed class ContractSet
     /// <para>スカウトは「金を払っている間だけ効く継続契約」で、払わなければ何も見えないし質も素のまま
     /// ＝<b>新入生は毎年8〜13人が勝手に入ってくる（受動枠）が、それが誰なのかは分からない</b>という
     /// 立ち上がりになる。以前は Lv1 を既定にして「年契約を導入しても収支が変わらない」ことを優先していたが、
-    /// 監督が一度も選んでいない15万/年が既定で引かれ続けるのは筋が悪い。</para>
+    /// 監督が一度も選んでいない30万/年（Lv1 の年額）が既定で引かれ続けるのは筋が悪い。</para>
     /// </summary>
     public static ContractSet Initial() => new ContractSet();
 

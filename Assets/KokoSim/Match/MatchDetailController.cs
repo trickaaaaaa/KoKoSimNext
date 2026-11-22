@@ -109,15 +109,15 @@ namespace KokoSim.Unity.Match
             }
         }
 
+        /// <summary>タイムライン駆動カメラワーク（Issue #119）の有効/無効。検証用に外から叩けるよう公開。</summary>
+        public void SetCameraWork(bool on) => _view.CameraWorkEnabled = on;
+
         /// <summary>
         /// スクショ用の決定論シーク。自動再生を止め、t=0 から dt 刻みで軌跡を積み直して
         /// 指定時刻 t の静止フレームを作る（mock はフレームごとに軌跡を push するため、
         /// 単に SetTime(t) すると彗星の尾が出ない。ここで再生到達と同じ軌跡を再現する）。
         /// UnityMCP execute_code から: controller.CaptureSeek(playIndex, t)。
         /// </summary>
-        /// <summary>タイムライン駆動カメラワーク（Issue #119）の有効/無効。検証用に外から叩けるよう公開。</summary>
-        public void SetCameraWork(bool on) => _view.CameraWorkEnabled = on;
-
         public void CaptureSeek(int playIndex, double t)
         {
             _paused = true;

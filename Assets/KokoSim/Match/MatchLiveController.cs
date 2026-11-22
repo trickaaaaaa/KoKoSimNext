@@ -1403,8 +1403,10 @@ namespace KokoSim.Unity.Match
             SetVisible(_pauseModal, true);
         }
 
-        // ポップアップの中身（状況・対戦・伝令の残り）とボタンの活性。打席解決中（BackgroundGameOp）はエンジンを触る操作
-        //（伝令・交代・スキップ）を伏せ、解決完了時の UpdateControlState 経由で復帰する（issue #278 と同じ守り）。
+        // ポップアップの中身（状況・対戦・伝令の残り）とボタンの活性。エンジンを触る操作（伝令・交代・スキップ）は、
+        // 他の背景処理（BackgroundGameOp）が走っている間と、エンジンが画面より先にいる間（EngineAheadOfScreen）は伏せ、
+        // 完了時の UpdateControlState 経由で復帰する。1球進行そのものは背景スレッドでなくメインスレッド同期なので、
+        // 試合の進行で Running が立つことは無い＝立つのは他の背景処理（週送り・試合後処理など）が静的状態を使っている間の予防（issue #278 の名残）。
         private void UpdatePauseMenu()
         {
             if (_prog == null) return;
@@ -1544,7 +1546,7 @@ namespace KokoSim.Unity.Match
         private bool CanSendTimeoutNow()
         {
             if (_gameOver || !_paused || _prog == null) return false;
-            if (BackgroundGameOp.Running || EngineAheadOfScreen) return false;   // 解決中は打席境界が未確定なので受け付けない
+            if (BackgroundGameOp.Running || EngineAheadOfScreen) return false;   // 他の背景処理中、または振りかぶりで解決済みの球を預かっている間は受け付けない
             return !_timeoutSentThisPause;          // 1中断につき1回
         }
 
@@ -1666,8 +1668,9 @@ namespace KokoSim.Unity.Match
 
         // 選手能力ビューア（issue #602）。中断中ならいつでも開ける＝**読むだけ**なので
         // 伝令を消費せず乱数も引かない（開閉が試合結果に影響しない＝決定論不変）。
-        // 打席解決中（BackgroundGameOp）でも進行体の可変状態には触れないが、交代・伝令と同じ守りで
-        // ボタンを伏せておく（解決の途中で読んだ観測が「いまの盤面」とずれて見えるため。issue #278 と同じ考え方）。
+        // 他の背景処理中（BackgroundGameOp）や、エンジンが画面より先にいる間（EngineAheadOfScreen）は、
+        // 進行体の可変状態には触れないが、交代・伝令と同じ守りでボタンを伏せておく
+        //（読んだ観測が「いまの盤面」とずれて見えるため。issue #278 と同じ考え方）。
         private void OnOpenScout()
         {
             if (_gameOver || _prog == null || !_paused) return;
@@ -1675,7 +1678,7 @@ namespace KokoSim.Unity.Match
             _scoutPanel?.Open();
         }
 
-        // 交代確定後（即時・取り消し不可）。該当スロットを即入替（退いた選手名を薄く併記）。
+        // 交代の確定後（パネル側が確定のたびに呼ぶ。「全部やめる」なら取り消しでも呼ばれる）。該当スロットを即入替（退いた選手名を薄く併記）。
         private void OnSubstitutionApplied()
         {
             // 采配窓で止まっているなら、窓の対戦（打者・投手）を engine から引き直す。engine は交代の直後に
@@ -1702,7 +1705,8 @@ namespace KokoSim.Unity.Match
         private void OnSkip()
         {
             if (_gameOver || _prog == null) return;
-            // 解決中は打席境界が未確定＝進行体を背景スレッドと奪い合う（issue #278）。「タイム」と同じ扱いで弾く。
+            // 他の背景処理（BackgroundGameOp）が走っている間は engine の共有状態を奪い合わないよう弾く（issue #278 の名残）。
+            // 1球進行自体は背景スレッドで走らないので、試合の進行中にここへ来ることは通常無い。「タイム」と同じ扱い。
             // ボタン自体も UpdateControlState で伏せているが、二重に守る（押下配信は1フレーム遅れうる）。
             if (BackgroundGameOp.Running) return;
             _subPanel?.Close();
@@ -2416,7 +2420,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 撮影専用（issue #1174/#1175）: 中断→伝令役を選んで送る（守備中なら守備伝令・攻撃中なら攻撃伝令）→再開、を画面の操作と同じ順で行う。
-        /// <paramref name="messengerIndex"/>＝控えの添字（負＝記録員）。送れなかった（解決中など）ら false。
+        /// <paramref name="messengerIndex"/>＝控えの添字（負＝記録員）。送れなかった（他の背景処理中・エンジンが先行中など）ら false。
         /// </summary>
         internal bool SendTimeoutViaMenuForCapture(int messengerIndex)
         {
@@ -2532,21 +2536,6 @@ namespace KokoSim.Unity.Match
             _subTelop?.Hide();
         }
 
-        // 対決ビュー→俯瞰の切替アンカー（issue #330）: 打球/ファウル飛球のタイムラインは必ず先頭に
-        // 投球セグメントを持つ（TimelineBuilder）。対決ビューは既にリリース〜ミート/ファウル接触を
-        // 演じ終えているので、俯瞰はその投球セグメントの終端（＝接触の瞬間）から再生する。
-        // タイムライン自身の T1 から取り、エンジンの ContactAt 定数は複製しない（単一ソース）。
-        // キャプションは実況キャプション列から接触直後の1件を拾う＝「ピッチャー、投げた」から
-        // 始まらず、打った/ファウルの実況から出る。
-        /// <param name="shownSeconds">
-        /// 対決ビューが接触後に打球を見せていた秒数（見せていなければ負）。俯瞰はその**続き**から
-        /// 始める＝同じ0.5秒を二度描かない。キャプションは <c>CaptionAt</c> が「t以前の最後の1件」を
-        /// 拾うので、飛ばした先でも「打った」の実況から出る（2026-07-31）。
-        /// </param>
-        /// <summary>
-        /// 対決ビューの打者をバントの構えへ入れる/戻す（issue #490）。**札を押した瞬間**に呼ぶのが本命で、
-        /// 構えへの移行クリップ 1.10秒ぶんの助走を窓の滞在時間から取る。表示専用＝判定・帯には無関係。
-        /// </summary>
         /// <summary>
         /// 次の1球に予約済みのバント・スクイズ指示があるか（issue #490）。engine の
         /// <see cref="MatchProgression.PendingPitchBattingOverride"/> を読むだけ＝乱数も状態も動かさない。
@@ -2561,6 +2550,10 @@ namespace KokoSim.Unity.Match
                 or PitchBattingOverride.Squeeze;
         }
 
+        /// <summary>
+        /// 対決ビューの打者をバントの構えへ入れる/戻す（issue #490）。**札を押した瞬間**に呼ぶのが本命で、
+        /// 構えへの移行クリップ 1.10秒ぶんの助走を窓の滞在時間から取る。表示専用＝判定・帯には無関係。
+        /// </summary>
         private void PrepareBuntStance(bool bunting, float leadSeconds = 0f)
         {
             if (!DuelPacingActive) return;
@@ -2599,6 +2592,17 @@ namespace KokoSim.Unity.Match
             return double.IsFinite(next) ? System.Math.Max(next, head.T1) : head.T1;
         }
 
+        // 対決ビュー→俯瞰の切替アンカー（issue #330）: 打球/ファウル飛球のタイムラインは必ず先頭に
+        // 投球セグメントを持つ（TimelineBuilder）。対決ビューは既にリリース〜ミート/ファウル接触を
+        // 演じ終えているので、俯瞰はその投球セグメントの終端（＝接触の瞬間）から再生する。
+        // タイムライン自身の T1 から取り、エンジンの ContactAt 定数は複製しない（単一ソース）。
+        // キャプションは実況キャプション列から接触直後の1件を拾う＝「ピッチャー、投げた」から
+        // 始まらず、打った/ファウルの実況から出る。
+        /// <param name="shownSeconds">
+        /// 対決ビューが接触後に打球を見せていた秒数（見せていなければ負）。俯瞰はその**続き**から
+        /// 始める＝同じ0.5秒を二度描かない。キャプションは <c>CaptionAt</c> が「t以前の最後の1件」を
+        /// 拾うので、飛ばした先でも「打った」の実況から出る（2026-07-31）。
+        /// </param>
         private static double ContactMomentOf(PlaybackPlay play, double shownSeconds = -1)
         {
             if (play == null || play.Ball.Count == 0) return 0;
@@ -3335,7 +3339,9 @@ namespace KokoSim.Unity.Match
                 _gameTelop?.Tick(_gameTelopClock);
                 if (_gameTelopClock >= gameTelopHoldSeconds)
                 {
-                    // プレー再生が器を先取りしていたら畳まない（判定の表示中に消さない）。フラグだけ下ろす。
+                    // 投球/プレー中に寿命が切れたらフラグだけ下ろし、器は畳まない。旧・判定テロップと器を共用していた
+                    // 時代の分岐（プレー再生が器を先取りしていたら判定の表示中に消さない）の名残。いまは専用の game-telop 層で
+                    // 判定とは別の器になり、窓では _gameTelopOn の間は初球を投げさせない（下）ので、ここへ来ることは通常無いはず。
                     if (_stage == LiveStage.Pitch || _stage == LiveStage.Play) { _gameTelopOn = false; _gameTelopClock = 0f; }
                     else HideGameTelop();
                     if (_gameOver) FinishGameEndHandOff();
@@ -3347,9 +3353,9 @@ namespace KokoSim.Unity.Match
             if (_stage == LiveStage.Window)
             {
                 // 「プレイボール」（issue #442）が掲がっている間は初球を投げさせない＝テロップの寿命が
-                // 必ず窓の中で尽きてから投球が始まる。器は判定テロップと共用なので、投球フェーズへ
-                // 入ってから寿命が切れると「畳めず次の判定表示まで残留する」（寿命を2.1sへ延ばした
-                // 2026-08-05 に顕在化する並び。従来は寿命0.6s＜窓1.0sで構造的に起きなかった）
+                // 必ず窓の中で尽きてから投球が始まる。旧実装は器を判定テロップと共用していたので、投球フェーズへ
+                // 入ってから寿命が切れると「畳めず次の判定表示まで残留する」ことがあった（寿命を2.1sへ延ばした
+                // 2026-08-05 に顕在化）。いまは専用の game-telop 層（issue #1179）だが、初球待ちはこの値に揃えたまま。
                 if (_gameTelopOn) return;
                 // 打席の頭の場内放送（issue #919）。打者を見る間と並行して流し、終わるまで1球目を待たせる。
                 var announcing = HoldForAnnouncement();
@@ -3939,8 +3945,9 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 1球の判定テロップの画像面（issue #1179）。四球成立の瞬間（4球目）は「フォアボール」、
-        /// 3ストライク目は「三振」の画像にする。
+        /// 1球の判定（球審コール）テロップの画像面クラス（tl-call-xxx）を返す（issue #1179）。四球成立の瞬間（4球目）は
+        /// 「フォアボール」、3ストライク目は「三振」の画像にする。どれにも当たらない球種は null（出さない）。
+        /// 打球プレーの判定の画像面は Match2DPlaybackElement.UpdateJudgement 内の switch が持つ（こちらは1球判定だけ）。
         /// </summary>
         private static string PitchCallClassOf(PitchToken pt)
         {
@@ -4088,9 +4095,9 @@ namespace KokoSim.Unity.Match
         }
 
         // ── 試合開始/終了テロップ「プレイボール」「ゲームセット」（issue #442） ──
-        // 器は判定テロップ（judgement-call）を流用する。中身は普段 Match2DPlaybackElement が
-        // プレー時刻の純関数で描く＝プレー再生が始まると自然に上書き・消灯される側なので、
-        // 掲げるのは「最初のプレーの前」と「終局後」だけに限る（時間帯が重ならない）。
+        // 器は専用の全画面層（game-telop・issue #1179）。当初（issue #442）は判定テロップ（judgement-call）を流用していたが、
+        // いまは別の器で、掲げている間は判定テロップ側を CallsSuppressed で出さない（時間帯が重ならないよう
+        // 「最初のプレーの前」と「終局後」だけに掲げる）。
         /// <summary>プレイボール（false）／ゲームセット（true）を掲げる（issue #1179）。
         /// 動きはGameTelopViewが毎フレーム(Tick)付ける＝ここでは変数切替と表示だけ。</summary>
         private void ShowGameTelop(bool isGameSet)
@@ -4134,8 +4141,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// スクショ用: 判定テロップ（Calls画像11種）を1枚だけ強制表示する（issue #1179）。
-        /// "tl-call-strike" 等のクラス名で指定する（<see cref="PitchCallClassOf"/> / Match2DPlaybackElement の
-        /// CallClassOf が実戦で使う値そのまま。文言→画像面の対応を撮影側に持たせない）。
+        /// "tl-call-strike" 等のクラス名で指定する（1球判定は <see cref="PitchCallClassOf"/>・打球プレーの判定は
+        /// Match2DPlaybackElement.UpdateJudgement 内の switch が実戦で使う値そのまま。文言→画像面の対応を撮影側に持たせない）。
         /// </summary>
         public void ShowJudgementCallForCapture(string callClass) => _view?.ShowCallForCapture(callClass);
 
@@ -4712,7 +4719,7 @@ namespace KokoSim.Unity.Match
 
         // ── 操作状態（issue #289 で操作列をポップアップへ集約） ──
         // 残置した操作列（速度・カメラ・対決ビュー）は常時有効＝状態を持たない。
-        // 打席解決中の守り（issue #278: 進行体を背景スレッドが握っている間はエンジンを触る操作を伏せる）は
+        // 他の背景処理中の守り（issue #278 の名残: 背景スレッドが共有状態を握っている間はエンジンを触る操作を伏せる）は
         // ポップアップ側のボタン活性（UpdatePauseMenu）が引き継ぐ。采配窓を開いた時（OpenWindow/EndGame）に
         // ここが呼ばれるので、開いていれば表示を復帰させる。
         private void UpdateControlState()
@@ -5038,7 +5045,7 @@ namespace KokoSim.Unity.Match
             // 1段目＝登板順・背番号・名前・学年・球数。打者HUDと同一の行構造（1つ目が白地黒字のチップ、
             // 次が素の白文字の背番号、その次が名前）で、右端に球数を置く。
             // 登板順は「N番手」が数字＋和文の混植なので、ReliefLabel の文字列ではなく数値から組んで
-            // Label を分ける（書体3役ルール・設計書16 §2。Oswald は欧文専用）。
+            // Label を分ける（設計書16 §2 の作法。設計書22 で数字も Noto Sans JP になり分けは必須でなくなったが、既存の分割は残している）。
             // 背番号・名前は Matchup（打席頭で凍った打者側の事情）ではなく LivePitcherToday（常に現在の
             // 投手を指すライブソース）から引く。番手・球数・スタミナと同じソースにしないと、交代直後に
             // 存在しない選手の行が1打席分表示される（issue #528）。
@@ -5074,7 +5081,7 @@ namespace KokoSim.Unity.Match
 
             // 2段目＝通算防御率・本日の奪三振・与四死球の等幅3セル（打者HUDと同構造）。奪三振と与四死球は
             // 対で見て初めて「今日の出来」になるので隣接させる（issue #407）。単位は見出しへ逃がしてあるので
-            // 値は数字だけ＝Oswald（.f-num）が素直に効く（設計書16 §2）。
+            // 値は数字だけ＝.f-num の数字セルとして素直に載る（設計書16 §2。書体は設計書22 で Noto Sans JP）。
             // 防御率は通算＋本日の合算（issue #449。通算なしは本日分のみ、登板なしかつ本日アウト0のみ「—」）。
             var era = MatchLiveStatsProvider.LiveEra(
                 _statsProvider.CareerPitching(schoolId, def.SourceId), def.EarnedRuns, def.Outs);
@@ -5208,7 +5215,7 @@ namespace KokoSim.Unity.Match
                 if (e.IsTop != offenseIsTop || e.BatterOrder != m.BatterOrder
                     || e.BatterName != m.BatterName) continue;
                 var pa = MakeRow("mhud-pa", PaKindMod(e));
-                // 略記は和文なので .f-num は付けない（Oswald は欧文専用）。
+                // 略記は和文なので .f-num は付けない（数字セル用のクラス。書体は設計書22 以降どちらも Noto Sans JP）。
                 pa.Add(MakeLabel(MatchLiveStatsProvider.ScorebookAbbr(e), "mhud-pa__t"));
                 row.Add(pa);
                 any = true;
@@ -5282,7 +5289,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 名前行のチップ。<paramref name="unit"/> がある場合は数字と和文単位で Label を分ける
-        /// ——Oswald（.f-num）は欧文専用で和文グリフを持たないため（書体3役ルール・設計書16 §2）。
+        /// ——設計書16 §2 の作法（当時は Oswald（.f-num）が欧文専用だったため）。設計書22 で数字も Noto Sans JP
+        /// になり分けは必須でなくなったが、既存の分割は残している。
         /// </summary>
         private static VisualElement HudChip(string text, string unit, string mod, bool numeric = false)
         {
@@ -5308,7 +5316,7 @@ namespace KokoSim.Unity.Match
         private static VisualElement HudNumber(string digits) => MakeLabel(digits, "mhud-no", "f-num");
 
         /// <summary>
-        /// 球数「6球」。数字と和文単位で Label を分ける（Oswald は欧文専用）。見出しは持たない。
+        /// 球数「6球」。数字と和文単位で Label を分ける（設計書16 §2 の作法・設計書22 以降は必須でなく既存の分割を残している）。見出しは持たない。
         /// 数字は太字＝学年チップより目立たせる（継投判断の主指標）。
         /// </summary>
         private static VisualElement HudPitchCount(string digits, string mod, string denominator)
@@ -5317,7 +5325,7 @@ namespace KokoSim.Unity.Match
             var n = MakeLabel(digits, "mhud-pc__n", "f-num-bd");
             if (mod != null) n.AddToClassList(mod);
             box.Add(n);
-            // 分母（実効目安投球数）。数字だけの Label なので Oswald が素直に効く（書体3役ルール）。
+            // 分母（実効目安投球数）。数字だけの Label なので .f-num の数字セルとして素直に載る（設計書16 §2）。
             if (!string.IsNullOrEmpty(denominator)) box.Add(MakeLabel("/ " + denominator, "mhud-pc__d", "f-num"));
             box.Add(MakeLabel("球", "mhud-pc__u"));
             return box;
@@ -5325,7 +5333,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// スタッツ行の1セル（ラベル上・数値下の縦積み）。単位はラベルへ逃がしてあるので
-        /// 値は数字だけになり、Oswald が素直に効く（UI原則③）。
+        /// 値は数字だけになり、.f-num の数字セルとして素直に載る（UI原則③）。
         /// </summary>
         private static VisualElement HudCell(string lab, string val, bool first = false, string valMod = null)
         {
@@ -5335,7 +5343,7 @@ namespace KokoSim.Unity.Match
             if (!first) cell.Add(MakeRow("mhud-cell__div"));
             cell.Add(MakeLabel(lab, "mhud-cell__lab"));
             var v = MakeLabel(val, "mhud-cell__val");
-            // 該当なしの「—」に .f-num を付けると欠字になる（Oswald は ASCII しか収録していない）。
+            // 該当なしの「—」に .f-num を付けると欠字になった（旧・Oswald は ASCII しか収録していなかった。設計書22 で Noto Sans JP になった今は載るが、作法は残している）。
             // 数字のときだけ載せる＝UiComponents の IsNumericCell と同じ作法。
             if (IsNumText(val)) v.AddToClassList("f-num");
             if (valMod != null) v.AddToClassList(valMod);
@@ -5343,7 +5351,7 @@ namespace KokoSim.Unity.Match
             return cell;
         }
 
-        /// <summary>Oswald（.f-num）に載せてよい文字列か。数字・小数点・符号・% だけなら真。</summary>
+        /// <summary>.f-num（数字セル）に載せてよい文字列か。数字・小数点・符号・% だけなら真。</summary>
         private static bool IsNumText(string s)
         {
             if (string.IsNullOrEmpty(s)) return false;
@@ -5596,8 +5604,6 @@ namespace KokoSim.Unity.Match
             return true;
         }
 
-        /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
-        /// <summary>スクショ用: 能力ビューアを開く／閉じる／タブを切り替える（issue #602 の受け入れ絵）。</summary>
         /// <summary>スクショ用（issue #716）: タイムを開いて「伝令を送る」を押した状態（伝令役の一覧）にする。</summary>
         internal void OpenMessengerPickerForCapture() { OpenPauseMenu(); OnSendTimeout(); }
         /// <summary>タイムのポップアップの今の ViewModel（撮影ハーネスが状態を書き換えて <see cref="RenderTimeoutForCapture"/> へ渡す）。</summary>
@@ -5607,6 +5613,7 @@ namespace KokoSim.Unity.Match
         internal VisualElement PauseModalForCapture => _pauseModal;
         /// <summary>スクショ用（issue #716）: 伝令役の一覧で i 番目（背番号順でなく控えの添字）を選んで送る。</summary>
         internal void PickMessengerForCapture(int i) => SendTimeout(i);
+        /// <summary>スクショ用: 能力ビューアを開く／閉じる／タブを切り替える（issue #602 の受け入れ絵）。以下 Scout 系はその一式。</summary>
         public void OpenScoutForCapture() { _paused = true; SetVisible(_pauseModal, true); _scoutPanel?.Open(); }
         public void CloseScoutForCapture() => _scoutPanel?.Close();
         public void SelectScoutTabForCapture(int tab) => _scoutPanel?.SelectTabForCapture(tab);
@@ -5614,6 +5621,7 @@ namespace KokoSim.Unity.Match
         public void HoverScoutRowForCapture(int index) => _scoutPanel?.HoverRowForCapture(index);
         public bool ScoutOpenForCapture => _scoutPanel != null && _scoutPanel.IsOpen;
 
+        /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
         public void OpenSubstitutionForCapture() => _subPanel?.Open();
 
         /// <summary>スクショ用: 自校が今「攻撃側」か（交代モーダルの出し分け確認用）。</summary>
@@ -5624,7 +5632,6 @@ namespace KokoSim.Unity.Match
         public bool ManagerCanPinchRunForCapture
             => _prog != null && _prog.SubstitutionOptions(_managerIsAway).CanPinchRun;
 
-        /// <summary>スクショ用: 選手交代モーダルを閉じる。</summary>
         /// <summary>スクショ用: 予約した交代を確定して閉じる（issue #718 以降、✕／やめる は予約の取り消し）。</summary>
         public void CloseSubstitutionForCapture() => _subPanel?.CommitForCapture();
         /// <summary>スクショ用（issue #718）: 予約をまとめて取り消して閉じる（「全部やめる」）。</summary>

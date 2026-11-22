@@ -74,7 +74,7 @@ public sealed class TrajectoryFeatureTable
 
     /// <summary>
     /// 回転軸の節点の間隔[deg]（issue #911）。0〜180° を 7 節点で覆う（負の軸は鏡映）。回転の座標系で補間するので
-    /// 30° 刻みでも誘発変化の誤差は 1mm 未満（<c>TrajectoryFeatureTableTests</c> で積分器と突き合わせて固定）。
+    /// 30° 刻みでも誘発変化の誤差は 2mm 未満（<c>TrajectoryFeatureTableTests</c> で積分器と突き合わせて固定）。
     /// </summary>
     public const double TiltNodeStepDeg = 30.0;
 

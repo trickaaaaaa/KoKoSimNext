@@ -13,7 +13,8 @@ public sealed record EnemyAiCoefficients
     public override int GetHashCode() => GetType().GetHashCode();
 
     // === ① 能力値層: 正着を選ぶ確率（設計書11 §1） ===
-    /// <summary>最適解選択率 = Base + 采配能力 × PerSense（floor〜cap にクランプ）。</summary>
+    /// <summary>最適解選択率 = Base + 采配能力 × PerSense（floor〜cap にクランプ）。采配能力は1〜100なので実際の値域は
+    /// 0.554〜0.95＝既定の floor/cap は届かない（采配能力を範囲外へ広げたときの安全弁）。</summary>
     public double OptimalBase { get; init; } = 0.55;
     public double OptimalPerSense { get; init; } = 0.004;
     public double OptimalFloor { get; init; } = 0.50;

@@ -2817,10 +2817,6 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 【撮影ハーネス用】捕球の受け入れ実測。グラブ（手ボーン）と捕球点の距離。
-        /// 捕手の実績は 0.007〜0.039m。**絵ではカメラの狙い外しと区別できない**ので実測で採る。
-        /// </summary>
-        /// <summary>
         /// 【撮影ハーネス用】捕球点の「球の線からの横ずれ」（issue #782）。1予定1行:
         /// 守備位置・転がりか・横ずれ[m]・野手との距離[m]・手前へ[m]・捕球直前のグラブ誤差[m]（未計測は −1）。
         /// </summary>
@@ -2862,6 +2858,10 @@ namespace KokoSim.Unity.Match
                 p.y, _ball.activeInHierarchy, _ballShadow != null && _ballShadow.activeSelf, glove);
         }
 
+        /// <summary>
+        /// 【撮影ハーネス用】捕球の受け入れ実測。グラブ（手ボーン）と捕球点の距離。
+        /// 捕手の実績は 0.007〜0.039m。**絵ではカメラの狙い外しと区別できない**ので実測で採る。
+        /// </summary>
         public string FieldCatchDiagForCapture()
         {
             var sb = new StringBuilder();

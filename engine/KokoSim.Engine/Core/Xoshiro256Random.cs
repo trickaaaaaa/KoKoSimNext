@@ -63,7 +63,7 @@ public sealed class Xoshiro256Random : IRandomSource
         }
 
         var range = (ulong)((long)maxExclusive - minInclusive);
-        // Lemire の偏りなし範囲縮約。
+        // 単純な剰余（Lemire 法ではない）。range が 2^64 に比べ十分小さいので偏りは無視できる。
         var m = NextUInt64() % range;
         return minInclusive + (int)m;
     }

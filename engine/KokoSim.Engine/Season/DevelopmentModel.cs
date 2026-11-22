@@ -114,12 +114,6 @@ public static class DevelopmentModel
     }
 
     /// <summary>
-    /// 個別指導3枠の追加倍率（Issue #126・#693・OPEN-QUESTIONS Q7(a)）。<paramref name="p"/> が指名中
-    /// （<see cref="DevelopingPlayer.IndividualCoaching"/>）のときだけ、その週の主効果expへ乗せる。
-    /// 追加倍率 = 基礎倍率 + (coachingFactor比 − 1) × スケール（下限1.0）。
-    /// coaching=null は中立点（比=1.0）扱い＝基礎倍率だけが掛かる。非指名なら 1.0＝従来一致。
-    /// </summary>
-    /// <summary>
     /// 個別指導の効果3「信頼関係」（issue #702・設計書03 §3.3）。指名中なら精神力へ週ぶんのexpを足す。
     /// メニュー・怪我・成長段階に関係なく一定（体でなく関係が育つ）。上限は <see cref="DevelopingPlayer.MentalCap"/>。
     /// 非指名は何もしない＝従来と1ビット一致。乱数は使わない。
@@ -131,6 +125,12 @@ public static class DevelopmentModel
             c.IndividualCoachingMentalExp, c);
     }
 
+    /// <summary>
+    /// 個別指導3枠の追加倍率（Issue #126・#693・OPEN-QUESTIONS Q7(a)）。<paramref name="p"/> が指名中
+    /// （<see cref="DevelopingPlayer.IndividualCoaching"/>）のときだけ、その週の主効果expへ乗せる。
+    /// 追加倍率 = 基礎倍率 + (coachingFactor比 − 1) × スケール（下限1.0）。
+    /// coaching=null は中立点（比=1.0）扱い＝基礎倍率だけが掛かる。非指名なら 1.0＝従来一致。
+    /// </summary>
     internal static double IndividualCoachingBonus(AbilityKind ability, DevelopingPlayer p,
         CoachingProfile? coaching, TrainingCoefficients c, double receptivity, double baselineFactor)
     {

@@ -8,7 +8,7 @@
 #   KokoSim.Unity.Debugging.DebugBridge.StartMatch("bases-loaded-9th", "0x9f3a5511")   # MCP / Editorメニュー
 #
 # フィールド:
-#   away/home    : "player" | "AI:tier=S..G" | "AI:strength=0..100"
+#   away/home    : "player" | "AI:tier=S..G" | "AI:strength=0..100"。末尾に ";bench=N" でベンチ入りを N 人に絞れる（例 "AI:tier=C;bench=12"）
 #   bases        : 占有塁の配列（1=一塁, 2=二塁, 3=三塁）。走者は「直前の打者たち」が入る
 #   count        : 先頭打者のカウント（balls 0-3 / strikes 0-2）
 #   batter       : 開始打順（1-9）
@@ -221,7 +221,6 @@ scenarios:
     force: StealCaught
     seed: 20260736
 
-  # 監督が攻撃側で自分で盗塁サインを出す経路（強制発動なし＝采配カードから企図する。成否は自然に解く）
   # 守備側投手が動揺した状態で始める（issue #1178）。1回表＝後攻 home の投手が守備側・走者なし。
   # 頭上の渦巻きと投球前の汗を撮る（captures.yaml の rattled-1178 / rattled-away-1178）。
   - id: pitcher-rattled-lab
@@ -263,6 +262,7 @@ scenarios:
     outs: 0
     seed: 20260772
 
+  # 監督が攻撃側で自分で盗塁サインを出す経路（強制発動なし＝采配カードから企図する。成否は自然に解く）
   - id: steal-sign-lab
     name: 盗塁検証・自分で盗塁サイン（1回表無死一塁）
     away: { school: "AI:tier=C", score: 0 }

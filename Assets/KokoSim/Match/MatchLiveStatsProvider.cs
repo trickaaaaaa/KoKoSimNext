@@ -209,9 +209,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 登板順の表記（1=先発、2以降は「N番手」）。
-        /// <b>マッチアップHUDはこれを使わない</b>——「N番手」は数字＋和文の混植で、Oswald（.f-num）が
-        /// 欧文専用のため Label を分ける必要があり、HUD 側は <see cref="LivePitcherToday.ReliefOrder"/>
-        /// から直接組む（書体3役ルール・設計書16 §2）。1ラベルで足りる他の表示用に残してある。
+        /// <b>マッチアップHUDはこれを使わない</b>——「N番手」は数字＋和文の混植で、当時は Oswald（.f-num）が
+        /// 欧文専用だったため Label を分ける作法（設計書16 §2）で HUD 側は <see cref="LivePitcherToday.ReliefOrder"/>
+        /// から直接組んでいる（設計書22 で数字も Noto Sans JP になり分けは必須でなくなったが、その組み方を残している）。1ラベルで足りる他の表示用に残してある。
         /// </summary>
         public static string ReliefLabel(int reliefOrder) => reliefOrder <= 1 ? "先発" : reliefOrder + "番手";
 

@@ -153,7 +153,7 @@ namespace KokoSim.Unity.Match
         // ホームランは専用の homerun-telop へ移った（issue #1179）ので、ここは SetHomeRunHost 未設定の
         // 画面（試合詳細の2D再生等）向けフォールバックでしか使わない。
         private Label _judgementDetail;
-        // 画像の判定テロップ（Calls、11種・issue #1179）。文言→画像面は CallClassOf が単一ソース。
+        // 画像の判定テロップ（Calls、11種・issue #1179）。文言→画像面は UpdateJudgement 内の callClass の switch が単一ソース。
         private KokoSim.Unity.Match.Telops.CallTelopView _judgementTelop;
         private const double JudgementCallInSeconds = 0.10, JudgementCallOutSeconds = 0.10;
         // ホームランの専用テロップ（issue #1179 §3）。MatchLiveController が homerun-telop を
@@ -462,16 +462,6 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 判定オーバーレイの器を**この要素の外**へ移す（打球処理の3D化 F9）。
-        ///
-        /// <b>なぜ要るか</b>: 判定（アウト／セーフ／フェア／ホームラン）を描いているのはここだけなので、
-        /// 3Dの守備ビューへ一本化すると<b>アウトが一度も出ない試合</b>になる。かといって判定の探索
-        /// （<see cref="PlaybackEvaluator.JudgementAt"/> の呼び方・表示窓・文言・色クラス）を2つ持つと
-        /// 二重管理になる＝<b>計算と文言はここに残したまま、器だけ</b>ビューをまたぐ層へ差し替える。
-        ///
-        /// 呼ばない画面（試合詳細の2D再生）は自前の器のままで、挙動は1ビットも変わらない。
-        /// </summary>
-        /// <summary>
         /// 判定オーバーレイを畳む。
         ///
         /// ⚠ 器を外へ出すと**盤面ごと隠れることで消えていた経路が無くなる**。以前は打席が終われば
@@ -499,6 +489,16 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: いま出している判定の画像面（tl-call-xxx）。出ていなければ null。</summary>
         public string JudgementFaceForCapture => _judgementTelop?.ActiveFace;
 
+        /// <summary>
+        /// 判定オーバーレイの器を**この要素の外**へ移す（打球処理の3D化 F9）。
+        ///
+        /// <b>なぜ要るか</b>: 判定（アウト／セーフ／フェア／ホームラン）を描いているのはここだけなので、
+        /// 3Dの守備ビューへ一本化すると<b>アウトが一度も出ない試合</b>になる。かといって判定の探索
+        /// （<see cref="PlaybackEvaluator.JudgementAt"/> の呼び方・表示窓・文言→画像面の対応）を2つ持つと
+        /// 二重管理になる＝<b>計算と文言はここに残したまま、器だけ</b>ビューをまたぐ層へ差し替える。
+        ///
+        /// 呼ばない画面（試合詳細の2D再生）は自前の器のままで、挙動は1ビットも変わらない。
+        /// </summary>
         public void SetJudgementHost(VisualElement host, Label judge, Label judgeShadow, Label detail)
         {
             if (host == null || judge == null || detail == null) return;

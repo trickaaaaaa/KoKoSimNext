@@ -50,7 +50,7 @@
 1. **二層構造**: 打席・打球・守備の解決は必ず物理層（初速・角度・回転・時間）で計算する。表示能力値を直接確率に使わない。表示層→物理層の変換式は一箇所（`data/coefficients.yaml` 駆動）に集約する。**表示能力の「効き」（`ability_effect:`・設計書21）もその一部**＝解決式が `Player` の能力を読むときは必ず `ToBatter(effect)/ToFielder(effect)/AbilityEffectCoefficients.Pitcher` か `c.AbilityEffect.Batting(...)` 等を通す（生の Lv を `(X−50)×slope` に入れない）
 2. **決定論**: 乱数はすべてシード付き `IRandomSource` を注入して使う。`System.Random` の直接 new や `Guid` 由来の乱数は禁止。同シード同結果を常に保証する
 3. **エンジン純度**: `engine/` 配下に `UnityEngine` への参照を持ち込まない。時刻・IO・乱数はすべて注入する
-4. **データ駆動**: バランス係数・球種定義・イベント・校名語彙・球場は `data/` のYAMLに置く。**係数の正典は `data/` の YAML** だが、実ゲーム（Unity）と Balance CLI 既定は YAML を読まず **C#既定**（各 `new XxxCoefficients()`）で走る。したがって **C#既定は YAML と一致していなければならず、`CoefficientsDefaultsConsistencyTests` が全プロパティで一致を固定する（片方だけ変えない）**。バランス調整は YAML を編集し、**同じ値を C#既定にも反映する**（順序はどちらでもよいが、両方を揃えてコミットする）。一致テストが赤い＝実ゲームが校正前の係数で走っている合図（issue #402）。例外は「実ゲームでは意図的にオフ」の係数（例: 天候モデル `weather`＝GameContext では null）で、この種の意図的乖離だけ同テストの除外リストに、理由を添えて載せる
+4. **データ駆動**: バランス係数・球種定義・イベント・校名語彙・球場は `data/` のYAMLに置く。**係数の正典は `data/` の YAML** だが、実ゲーム（Unity）と Balance CLI 既定は YAML を読まず **C#既定**（各 `new XxxCoefficients()`）で走る。したがって **C#既定は YAML と一致していなければならず、`CoefficientsDefaultsConsistencyTests` が全プロパティで一致を固定する（片方だけ変えない）**。バランス調整は YAML を編集し、**同じ値を C#既定にも反映する**（順序はどちらでもよいが、両方を揃えてコミットする）。一致テストが赤い＝実ゲームが校正前の係数で走っている合図（issue #402）。意図的な乖離（実ゲームでは意図的にオフ等）だけ、同テストの除外リスト（`ExcludedMembers`）に理由を添えて載せる（現在の除外は `Version`＝ファイル版数のみ。天候モデル `weather` は #803 で実ゲームに配線済みで除外していない）
 5. **統計回帰**: バランスに影響する変更後は必ず統計回帰テストを実行し、`data/balance-targets.yaml` の許容帯を満たすこと
 
 ## リポジトリ構成
@@ -72,7 +72,9 @@ dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ�
 dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約9分・2026-10-11実測・10コア。CIはシャード並列）
 dotnet test engine/ -c Release                               # 全テスト実行
 dotnet run --project engine/KokoSim.Balance -- \
-  simulate --games 10000 --seed 42 --report out/report.md   # 一括シミュレーション＋統計レポート
+  simulate --at-bats 10000 --seed 42 --report out/report.md   # 打席単位の一括シミュレーション＋統計レポート（--games は --at-bats の別名＝試合数ではない）
+dotnet run --project engine/KokoSim.Balance -- \
+  simulate-games --games 10000 --seed 42 --report out/games.md # フルゲーム単位（試合数）の統計レポート
 dotnet run --project engine/KokoSim.Balance -- \
   ability-sweep --games 2000 --report out/ability-sweep.md  # 能力を1つずつ20/80に振り結果が動くか（約8分・issue #840）
 ```
@@ -118,7 +120,7 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 球速 / コントロール / スタミナ | Velocity / Control / Stamina | |
 | キレ（球種ランク） | PitchRank | 変化球の有効軸（Sharpness→rpm→変化量）。変化球練習(BreakingBall)の主効果。ストレートでは未使用 |
 | 球威（ストレートホップ） | Stuff | ストレートの有効軸（Power→rpm→ホップ量）。球速練習(VelocityTraining)の副効果。変化球では未使用（Issue #274 で新設） |
-| 球質タイプ | PitcherArchetype(Power/Finesse/SoftToss/Balanced/Flamethrower/Pinpoint/BreakingBallArtist) | 本格派/技巧派/軟投派/バランス型＋尖った型の剛腕/精密機械/変化球の魔術師（各3%・issue #908）。実戦の失点が型によらず揃うよう球速・制球・キレの配分だけ振り替える（`data/coefficients.yaml` の `roster: archetype_*`）。投手を比べるときは型の上乗せの合計（`PitcherArchetypes.OffsetSum`）を差し引く |
+| 球質タイプ | PitcherArchetype(Power/Finesse/SoftToss/Balanced/Flamethrower/Pinpoint/BreakingBallArtist) | 本格派/技巧派/軟投派/バランス型＋尖った型の剛腕/精密機械/変化球の魔術師（各3%・issue #908）。実戦の失点が型によらず揃うよう球速・制球・キレの配分だけ振り替える（`data/coefficients.yaml` の `roster: archetype_*`）。投手を比べるときは型の影響を外した地力の合計（`PitcherArchetypes.StrengthSum`）を使う |
 | 投手総合 | PitcherComposite | 球速.40/制球.25/スタミナ.15/キレ.20（TeamStrengthCoefficients）。球速を最大要素にしつつ、他3つの合計(0.60)が球速(0.40)を上回る＝**球速単独では決まらない** |
 | 投手役の導出 | PitcherRoleResolver.LeansPitcher | **選手は「投手である」属性を持たない**（design-01 §1.1a・#366）。投手適性>最良守備適性（＋供給バイアス）で毎回導出する。判定式はこのクラスにしか置かない |
 | 投手寄せ重み / 投手らしさ | PitcherWeight(w) / RoleWeight(wRole) | w＝**バイアス無し**・能力の配分（打撃⇔投球）用。wRole＝**バイアス込み**で判定境界が0.5・持ち物（変化球本数・球質タイプ・投法）用。混ぜると全野手の打撃が下がり帯が動く |
@@ -141,7 +143,7 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 打撃姿勢 | BattingApproach | 待球策/転がせ/長打狙い/当てに行け。サインと違い**解除するまで続く構え**。効果は実効能力の倍率とスイング頻度の倍率だけ（設計書09 §1.1） |
 | 守備指示 / 配球方針 | DefensiveTactics / PitchPolicy | 陣形は初期守備位置へ反映（設計書09 §2） |
 | 采配の入口 | ITacticsBrain | プレイヤー・委任・敵AI共通（設計書09/11） |
-| 伝令 | Timeout (Offense/Defense) | 攻守各3回・延長は毎回+1（設計書09 §3） |
+| 伝令 | Timeout (Offense/Defense) | 攻守各3回・延長は回の頭で各1回に置き直す（積み増しではない。設計書09 §3） |
 | 動揺 | Rattled | 連続出塁で発生、伝令・継投・イニング跨ぎで解除 |
 | 主将 / 統率傾向 | Captain / Leadership | 統率力 = Leadership×Mental/100（設計書09 §8） |
 | 指名打者 / タイブレーク | DhSlot＋StartingPitcher / TieBreakEnabled | 現代ルールトグル（設計書09 §6-7） |

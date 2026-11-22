@@ -97,8 +97,9 @@ public static class QualifierStatsSim
             var opponent = schoolById(step.OpponentId);
             if (opponent is null) continue;
 
-            // 先攻/後攻は (校ID対・年度・残りラウンド) の決定論規則で決める（同じ組み合わせなら常に同じ側）。
-            // 本大会のスロット順（上側が先攻）とは別規則＝打ち直しは試合の再現ではなく成績の材料。
+            // 先攻/後攻は本大会（PlayerMatchResolver.ManagerIsAway）と同じ HomeAwayAssignment の規則（校ID対・年度・週）で
+            // 決める（同じ組み合わせなら常に同じ側）。ただし週の引数には残りラウンドを渡す（本大会は GameClock.Week）
+            // ＝本大会と同じ側になるとは限らない。打ち直しは試合の再現ではなく成績の材料。
             var selfIsAway = HomeAwayAssignment.ManagerIsAway(
                 self.Id, opponent.Id, yearIndex, step.RoundsRemaining);
             var away = selfIsAway ? self : opponent;

@@ -189,7 +189,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// <summary>
     /// 守備位置の入替＝コンバート（issue #255 A-2, 設計書09 §2.3）。オーナー決定 A-2＝<b>僅差終盤限定</b>で、
     /// リードを守る場面だけ守備を組み替える（無料の手なので毎回やらせると帯が大きく動くため範囲を絞る）。
-    /// ③校風で実効ティアを補正し、②ティア関門（既定 <c>DefenseSwapMinTier</c>=99＝誰も通らない＝恒等）で
+    /// ③校風で実効ティアを補正し、②ティア関門（既定 <c>DefenseSwapMinTier</c>=3＝D 以上が通る）で
     /// 運用可否を決め、①能力値で好機を掴めるかを引く。関門を通らない限り RNG は一切引かない。
     /// </summary>
     public (int SlotA, int SlotB)? CallDefenseSwap(in DefenseSwapSituation s, IRandomSource rng)
@@ -254,8 +254,9 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// <summary>
     /// 継投（設計書11 §4, issue #209）。基本トリガー（疲労・球数上限）は必ず尊重（Standardと同一・RNG不使用）。
     /// その上に高度トリガー（崩れ・僅差終盤・動揺）を②ティア関門・③校風・①能力値ミスで被せる。
-    /// 高度トリガーの各 MinTier は既定で到達不能(99)＝発火せず、基本トリガーの時しか RNG を引かない
-    /// （＝games_10k/tactics 帯・決定論baseline 不変, D1=(A)）。人選は Phase A では bullpen 先頭のまま。
+    /// 高度トリガーの各 MinTier の既定は 崩れ=0／僅差終盤=2／動揺=2（issue #1046 で実戦投入済み）＝該当ティアの相手校では
+    /// 発火する。StandardTacticsBrain は高度トリガーを持たず基本トリガーの時しか RNG を引かない
+    /// （＝games_10k/tactics 帯・決定論baseline は不変）。人選は Phase A では bullpen 先頭のまま。
     /// </summary>
     public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
     {
@@ -284,7 +285,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// コンバート継投の行き先（issue #255 B-1, 設計書09 §6.2）。継投がすでに決まった上で、
     /// 「元投手の打力が高いので打順に残したい」ときだけ通常継投の代わりに守備へ回す。
     /// 打順に残す判断なので<b>非DHのみ</b>（DH制では元投手はもともと打席に立たない）。
-    /// ②ティア関門（既定 <c>ConvertReliefMinTier</c>=99＝誰も通らない＝恒等）。RNG不使用＝決定論。
+    /// ②ティア関門（既定 <c>ConvertReliefMinTier</c>=5＝B 以上が通る）。RNG不使用＝決定論。
     /// 行き先は<b>負担の最も軽い守備位置</b>（＝押し出す野手の損失が最小）。同重みなら Fielding が低い方、
     /// それも同値なら打順スロットの小さい方を採る。
     /// </summary>
@@ -351,8 +352,8 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
 
     /// <summary>
     /// 高度な継投トリガーの条件判定（RNG不使用）。③校風で実効ティアを補正し（豪腕依存＝引っ張る／
-    /// 守り勝つ＝早め）、②各トリガーの引き出し（MinTier）を満たしたものから理由を返す。既定は MinTier=99
-    /// のため誰も通らず null＝恒等。
+    /// 守り勝つ＝早め）、②各トリガーの引き出し（MinTier）を満たしたものから理由を返す。既定の MinTier は
+    /// 崩れ=0／僅差終盤=2／動揺=2＝どれも満たさなければ null。
     /// </summary>
     private PitchingChangeReason? EvaluateAdvancedRelief(in PitchingChangeSituation s)
     {
