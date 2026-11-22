@@ -281,21 +281,19 @@ screens:
       - shot: 04-succession-d
 
   - id: home-ranking-active-1411
-    name: "ホームのチーム内ランキングに引退した3年・卒業生が載らない（引退前→夏の引退後→年度替わり後・issue #1411）"
+    name: "ホームのチーム内ランキングに引退した部員が載らない（引退前→引退後・issue #1411。年度替わり後はテスト TeamStatsRankingsTests）"
     steps:
       - new_game: {seed: 1}
       - advance_to_week: 24
+      - read: =RosterService.Roster.0.Name
+      - read: =RosterService.Roster.1.Name
+      - read: =RosterService.Roster.2.Name
       - call: EventService.Clear()
       - show: HomeDashboard
       - shot: 01-home-before-retire
-      - advance_to_week: 38
-      - read: =RosterService.Roster.Count
+      # 新設校は3年が居ないので、夏の引退と同じフラグ（IsRetired）を直接立てて引退直後の状態にする。
+      - set: {RosterService.Roster.0.IsRetired: true, RosterService.Roster.1.IsRetired: true, RosterService.Roster.2.IsRetired: true}
       - read: =RosterService.Active.Count
       - call: EventService.Clear()
       - show: HomeDashboard
-      - shot: 02-home-after-summer-retire
-      - advance_to_week: {week: 3, year: 2}
-      - read: =RosterService.Graduated.Count
-      - call: EventService.Clear()
-      - show: HomeDashboard
-      - shot: 03-home-year2
+      - shot: 02-home-after-retire
