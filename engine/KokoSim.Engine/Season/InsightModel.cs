@@ -60,6 +60,16 @@ public sealed record InsightCoefficients
     public double NominatedProbFactor { get; init; } = 5.0;
     /// <summary>見極め: 指名中の選手だけ精度に足す値（上限は <see cref="AccuracyMax"/> のまま）。監督決定 +0.15。</summary>
     public double NominatedAccuracyAdd { get; init; } = 0.15;
+    /// <summary>気づきの話題: 調子の連続値がこの値以上のとき「成長中の兆し」を話題にしうる。</summary>
+    public double RecentGrowthConditionMin { get; init; } = 0.2;
+    /// <summary>同・上の条件を満たしたときに成長中の兆しを話題にする確率。</summary>
+    public double RecentGrowthTopicProb { get; init; } = 0.4;
+    /// <summary>性格の兆しを話題にする確率（性格が Normal でない選手のみ）。</summary>
+    public double PersonalityTopicProb { get; init; } = 0.30;
+    /// <summary>成長タイプの兆しを話題にする確率。</summary>
+    public double GrowthTypeTopicProb { get; init; } = 0.25;
+    /// <summary>伸びしろの話題で「高い分野」を選ぶ確率（残りは「低い分野」）。</summary>
+    public double HighGrowthDomainProb { get; init; } = 0.5;
 }
 
 /// <summary>
@@ -93,22 +103,22 @@ public static class InsightModel
             if (!MathUtil.Chance(nominated ? nominatedProb : prob, rng)) continue;
 
             var accurate = MathUtil.Chance(nominated ? nominatedAccuracy : accuracy, rng);
-            notices.Add(Compose(p, accurate, rng) with { ViaCoaching = nominated });
+            notices.Add(Compose(p, accurate, rng, c) with { ViaCoaching = nominated });
         }
         return notices;
     }
 
-    private static InsightNotice Compose(DevelopingPlayer p, bool accurate, IRandomSource rng)
+    private static InsightNotice Compose(DevelopingPlayer p, bool accurate, IRandomSource rng, InsightCoefficients c)
     {
         // 話題を選ぶ: 成長中の兆し > 性格 > 伸びしろの高低 > 成長タイプ。
-        if (p.ConditionValue >= 0.2 && rng.NextDouble() < 0.4)
+        if (p.ConditionValue >= c.RecentGrowthConditionMin && rng.NextDouble() < c.RecentGrowthTopicProb)
         {
             return new InsightNotice(p, InsightTopic.RecentGrowth, "", accurate);
         }
 
         // 性格の兆し（設計書23 §1.5・Q37）: たまに性格の軸1つに触れる（「素直な子のようだ」）。読み違え時は逆の側に見える。
         // 読みは部員の PersonalityReading に記録し、4軸そろうとタイプ名が判明する（誤認込みの見立て）。
-        if (p.Personality != Players.Personality.Normal && rng.NextDouble() < 0.30)
+        if (p.Personality != Players.Personality.Normal && rng.NextDouble() < c.PersonalityTopicProb)
         {
             var axis = (Players.PersonalityAxis)rng.NextInt(0, 4);
             var trueHigh = Players.Personalities.High(AxisValue(p, axis));
@@ -127,7 +137,7 @@ public static class InsightModel
         //    「大器晩成かもしれない」は隠しパラメータの中でも起用と我慢の判断に直結するので、
         //    伸びしろの高低より前に置く。読み違え時は別のタイプを示唆する。
         //    分野別化で「投手としては晩成型かもしれない」のように分野を名指しする（pitching/batting/defense から一様に選ぶ）。
-        if (rng.NextDouble() < 0.25)
+        if (rng.NextDouble() < c.GrowthTypeTopicProb)
         {
             var field = GrowthFields[rng.NextInt(0, GrowthFields.Length)];
             var trueType = p.GrowthTypeForField(field);
@@ -138,7 +148,7 @@ public static class InsightModel
 
         // 分野別伸びしろの最大/最小を話題にする。読み違え(accurate=false)時は逆の示唆を返す。
         var (highDomain, lowDomain) = GrowthExtremes(p);
-        if (rng.NextDouble() < 0.5)
+        if (rng.NextDouble() < c.HighGrowthDomainProb)
         {
             var domain = accurate ? highDomain : lowDomain;
             return new InsightNotice(p, InsightTopic.HighGrowthDomain, domain, accurate);

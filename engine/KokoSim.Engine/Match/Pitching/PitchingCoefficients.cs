@@ -112,15 +112,15 @@ public sealed record PitchingCoefficients
     {
         // tiltDeg: 0=純バックスピン(ホップ) / 180=純トップスピン(落下方向を強める) / ±90=純サイドスピン
         //          (+ ＝ 投げ腕の側。左投手の+x＝一塁側、右投手は PitchSpinModel.ForThrower で反転して−x＝三塁側。issue #962)。
-        new() { Type = PitchType.Fastball, TiltDeg = 0.0,   RpmScale = 1.00 }, // バックスピンによるホップ成分
-        new() { Type = PitchType.TwoSeam,  TiltDeg = 45.0,  RpmScale = 0.62 }, // 微シュート＋微沈（縦+20/横+20cm。issue #1016）
-        new() { Type = PitchType.Cutter,   TiltDeg = -27.0, RpmScale = 0.48 }, // 小さく横滑り（縦+20/横−10cm。issue #1016）
-        new() { Type = PitchType.Slider,   TiltDeg = -80.0, RpmScale = 0.62 }, // 横の大きな変化（縦+5/横−30cm。生回転はストレート以上でもジャイロが多く実効は小さい。issue #1016）
-        new() { Type = PitchType.Curve,    TiltDeg = -146.0, RpmScale = 0.64 }, // 縦の大変化＋スライダーと同じ側（縦−30/横−20cm。issue #1016）
-        new() { Type = PitchType.Fork,     TiltDeg = 0.0,   RpmScale = 0.45 }, // 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。トップスピンで下に曲げる球ではない。キレが高いほどストレートから離れる＝回転が減る）
-        new() { Type = PitchType.Changeup, TiltDeg = 59.0,  RpmScale = 0.56 }, // 弱いバックスピン＋腕側＋緩急（縦+15/横+25cm。浮かない分だけ沈む。issue #1016）
-        new() { Type = PitchType.Shuuto,   TiltDeg = 66.0,  RpmScale = 0.94 }, // 打者の内側へ食い込む（縦+18/横+40cm。issue #1016）
-        new() { Type = PitchType.Sinker,   TiltDeg = 56.0,  RpmScale = 0.73 }, // 弱いバックスピン＋腕側（縦+20/横+30cm。浮かない分だけ沈む。issue #1016）
+        new() { Type = PitchType.Fastball, TiltDeg = 0.0,   RpmScale = 1.00, SpeedRatio = 1.00 }, // バックスピンによるホップ成分
+        new() { Type = PitchType.TwoSeam,  TiltDeg = 45.0,  RpmScale = 0.62, SpeedRatio = 0.98 }, // 微シュート＋微沈（縦+20/横+20cm。issue #1016）
+        new() { Type = PitchType.Cutter,   TiltDeg = -27.0, RpmScale = 0.48, SpeedRatio = 0.96 }, // 小さく横滑り（縦+20/横−10cm。issue #1016）
+        new() { Type = PitchType.Slider,   TiltDeg = -80.0, RpmScale = 0.62, SpeedRatio = 0.90 }, // 横の大きな変化（縦+5/横−30cm。生回転はストレート以上でもジャイロが多く実効は小さい。issue #1016）
+        new() { Type = PitchType.Curve,    TiltDeg = -146.0, RpmScale = 0.64, SpeedRatio = 0.80 }, // 縦の大変化＋スライダーと同じ側（縦−30/横−20cm。issue #1016）
+        new() { Type = PitchType.Fork,     TiltDeg = 0.0,   RpmScale = 0.45, SpeedRatio = 0.92 }, // 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。トップスピンで下に曲げる球ではない。キレが高いほどストレートから離れる＝回転が減る）
+        new() { Type = PitchType.Changeup, TiltDeg = 59.0,  RpmScale = 0.56, SpeedRatio = 0.85 }, // 弱いバックスピン＋腕側＋緩急（縦+15/横+25cm。浮かない分だけ沈む。issue #1016）
+        new() { Type = PitchType.Shuuto,   TiltDeg = 66.0,  RpmScale = 0.94, SpeedRatio = 0.95 }, // 打者の内側へ食い込む（縦+18/横+40cm。issue #1016）
+        new() { Type = PitchType.Sinker,   TiltDeg = 56.0,  RpmScale = 0.73, SpeedRatio = 0.90 }, // 弱いバックスピン＋腕側（縦+20/横+30cm。浮かない分だけ沈む。issue #1016）
     };
 
     /// <summary>球種→回転軸。見つからなければストレート相当（フォールバック、通常は発生しない）。</summary>
@@ -130,7 +130,7 @@ public sealed record PitchingCoefficients
         {
             if (axis.Type == type) return axis;
         }
-        return new PitchAxisCoefficients { Type = type, TiltDeg = 0.0, RpmScale = 1.0 };
+        return new PitchAxisCoefficients { Type = type, TiltDeg = 0.0, RpmScale = 1.0, SpeedRatio = 1.0 };
     }
 
     // === 投手ギア「飛ばす/流す」（設計書02 §1.1f）。エンジンフック（既定Normal） ===
@@ -165,4 +165,7 @@ public sealed record PitchAxisCoefficients
 
     /// <summary>基準回転数（<see cref="PitchingCoefficients.SpinRpmBase"/> 系）に対する実効回転数の倍率。</summary>
     public double RpmScale { get; init; } = 1.0;
+
+    /// <summary>球速比（設計書02 §2.1）。実投球速度＝サンプリング球速×これ（反応球速・球威・変化量の割引にも直接効く）。</summary>
+    public double SpeedRatio { get; init; } = 1.0;
 }

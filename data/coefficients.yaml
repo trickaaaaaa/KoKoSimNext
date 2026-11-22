@@ -55,36 +55,46 @@ pitching:
   # + ＝ 投げ腕の側（左投手の+x＝一塁側／右投手は反転して−x＝三塁側）。シュート系(+)は腕側へ、スライダー系(−)は反対側へ曲がる。反転は PitchSpinModel.ForThrower の1か所だけ。
   # rpm_scale は spin_rpm_base 系の基準回転数に対する実効回転数の倍率（グリップの生回転差＋ジャイロ無効成分を
   # 1つにまとめた実効値。2つの係数は式の上で完全に同じ効き方をするため不変条件#1に従って1つへ集約）。
+  # speed_ratio は球速比（設計書02 §2.1）。実投球速度＝サンプリング球速×これ。反応球速・球威・変化量の割引にも直接効く。
   pitch_axis:
     - type: fastball    # バックスピンによるホップ成分
       tilt_deg: 0.0
       rpm_scale: 1.00
+      speed_ratio: 1.00
     # issue #1016: 縦・横は能力50・最速140km/h・球種の球速比での誘発変化（PitchSimulator.Simulate）。+横＝投げ腕の側。
     #   シンカー・チェンジアップ・シュートは弱いバックスピン（ストレートより浮かない分だけ沈む）。カーブはスライダーと同じ側。
     - type: two_seam     # 微シュート＋微沈（縦+20/横+20cm）
       tilt_deg: 45.0
       rpm_scale: 0.62
+      speed_ratio: 0.98
     - type: cutter       # 小さく横滑り（縦+20/横−10cm）
       tilt_deg: -27.0
       rpm_scale: 0.48
+      speed_ratio: 0.96
     - type: slider       # 横の大きな変化（縦+5/横−30cm。生回転はストレート以上でもジャイロが多く実効は小さい）
       tilt_deg: -80.0
       rpm_scale: 0.62
+      speed_ratio: 0.90
     - type: curve        # 縦の大変化＋スライダーと同じ側（縦−30/横−20cm）
       tilt_deg: -146.0
       rpm_scale: 0.64
+      speed_ratio: 0.80
     - type: fork         # 低回転の縦落ち（issue #911: 弱いバックスピン＋大きく割り引いた実効回転数＝「ホップしない速球」。ストレートとの差はホップが無い分の落差で、トップスピンで下に曲げる球ではない）
       tilt_deg: 0.0
       rpm_scale: 0.45    # キレが高いほどストレートから離れる＝回転が減る（良いフォークほど回転が少ない）
+      speed_ratio: 0.92
     - type: changeup     # 弱いバックスピン＋腕側＋緩急（縦+15/横+25cm）
       tilt_deg: 59.0
       rpm_scale: 0.56
+      speed_ratio: 0.85
     - type: shuuto       # 打者の内側へ食い込む（縦+18/横+40cm）
       tilt_deg: 66.0
       rpm_scale: 0.94
+      speed_ratio: 0.95
     - type: sinker       # 弱いバックスピン＋腕側（縦+20/横+30cm）
       tilt_deg: 56.0
       rpm_scale: 0.73
+      speed_ratio: 0.90
   # 投手ギア「飛ばす/流す」（設計書02 §1.1f）🟡
   gear_push_velocity_bonus_kmh: 2.0
   gear_push_stamina_factor: 1.6
@@ -152,6 +162,7 @@ batting:
   first_pitch_swing_factor: 0.65    # 初球の様子見・ゾーン内のみ（初球スイング率 46%→約34%）
   early_count_swing_factor: 0.82    # 0-1/1-0/1-1等も少し見る・ゾーン内のみ（打席あたり 3.26→約3.6球）
   two_strike_foul_bonus: 0.10     # 追い込まれてからファールで粘る（打席あたりファール 0.61→約0.68本）
+  two_strike_foul_share_max: 0.90  # 追い込まれてのファール率の上限
   whiff_intercept: -2.52         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正。#578 で −2.40→−2.52＝stuff_per_kmh 倍化の平均中立化）
   whiff_contact_slope: 0.030     # ミート→空振り減
   whiff_out_of_zone_penalty: 0.85
@@ -213,6 +224,7 @@ batting:
   quality_mean: 0.635            # コンタクト品質の平均（#262 で 0.62→0.60、本塁打判定の正しで 0.62、投手の品質寄与×3 で 0.63 へ 2026-08-18、#911 打高寄せで 0.635）
   quality_contact_slope: 0.0020
   quality_sigma: 0.17
+  quality_max: 1.05  # コンタクト品質の上限（バレルで満初速を少し越える）
   launch_angle_at_lt1: -5.0      # 弾道1の平均打球角
   launch_angle_at_lt100: 26.0    # 弾道100の平均打球角
   launch_angle_sigma: 12.0
@@ -262,8 +274,11 @@ batting:
   popup_weakness_weight: 0.0   # 確率のうち品質の低さに比例させる割合（0＝一律・1＝比例。1 だと弱い打者に集中して格上との差を広げる）
   popup_launch_mean_deg: 64.0   # 打球角度の平均[度]
   popup_launch_sigma_deg: 7.0   # 打球角度の標準偏差[度]
+  popup_launch_min_deg: 50.0  # ポップフライ打球角度の下限[度]
+  popup_launch_max_deg: 85.0  # ポップフライ打球角度の上限[度]
   popup_exit_mean_kmh: 95.0   # 初速の平均[km/h]
   popup_exit_sigma_kmh: 15.0   # 初速の標準偏差[km/h]
+  popup_exit_min_kmh: 45.0  # ポップフライ初速の下限[km/h]
   # ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）🟡実測校正
   # 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。
   # ズレは無次元（正＝差し込まれ／負＝早い）。これが引っ張り/流しへ変換され、打者の左右が符号を与える。
@@ -476,6 +491,7 @@ baserunning:
   catch_throw_distance_m: 38.8
   steal_reaction_intercept: 0.95   # スタート遅延[s] = intercept − steal×slope。issue #838 で 0.90→0.95（傾き倍化に合わせ、平均的な走者の遅延を 0.70→0.55 へ）
   steal_reaction_slope: 0.008   # issue #838: 盗塁能力の差が秒に出るよう倍化（盗塁50の遅延は 0.95−0.40＝0.55）
+  steal_start_delay_floor_seconds: 0.10  # 盗塁のスタート遅延の下限[s]
   steal_jump_credit_seconds: 0.07  # issue #1139: tag_seconds の増分(+0.12)を引いて 0.19→0.07。 # ジャンプ[s]。走者は投手の始動を読んで既に動き出している＝遅延から差し引く（床の後に引く）。steal_success_bias 0.38 を物理層へ移した半分（2026-08-14）。走力50/盗塁50の二塁到達 3.94→3.75秒（高校生の実測3.6〜3.8秒へ）
   pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
   pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋立ち上がり＋送球時間）
@@ -581,6 +597,7 @@ baserunning:
   # 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）: 走塁 §4.1 と同じ秒の時間勝負
   home_runner_reaction_intercept: 0.55       # 本塁を狙う走者の判断遅延[s] = intercept − 走塁判断×slope
   home_runner_reaction_slope: 0.004
+  home_runner_start_delay_floor_seconds: 0.10  # 本塁を狙う走者・タッチアップ走者のスタート遅延の下限[s]
   home_lead_distance_m: 3.5                   # 二次リード分の距離短縮[m]
   # 塁上の走者の物理（Issue #316）。打者走者側（fielding: running_top_speed_factor / base_turn_seconds）
   # と同じ値＝同じモデル。以前ここが 1.0/0.0 で「加速も踏み直しも数えない」別モデルになっていた。
@@ -722,6 +739,7 @@ baserunning:
   pitchout_defense_bonus_seconds: 0.35       # ピッチアウト成功で守備時間短縮（捕手優位）
   gamble_pitchout_extra_bonus_seconds: 0.20  # ギャンブル走者は無防備でさらに刺されやすい（G3b配線）
   gamble_jump_bonus_seconds: 0.15            # ギャンブルの好スタート（走者時間短縮, G3b配線）
+  steal_gamble_start_delay_floor_seconds: 0.05  # ギャンブル始動のスタート遅延の下限[s]
 
 # --- 投手疲労（設計書02 §1.1e: スタミナ＝目安投球数を超えた球数で減衰・継投） ---
 # 目安投球数そのものは選手側（StaminaPitches）。Level→球数の変換は 45 + level×0.9（PitcherAttributes に集約）
@@ -807,6 +825,7 @@ form:
   power_per_day_form: 2.0
   control_per_day_form: 5.0
   velocity_per_day_form_kmh: 1.5
+  velocity_floor_kmh: 105.0  # 調子補正後の最高球速の床[km/h]
   sharpness_per_day_form: 5.0  # キレへの当日補正。Controlと同スケール（issue #49）
   # 週次の波（数日〜数週間続く。毎試合振り直さない）
   weekly_persistence: 0.75
@@ -1104,6 +1123,7 @@ tactics:
   pinch_run_speed_ceiling: 44        # この走力以下の走者を代走候補に
   pinch_run_improvement: 22          # 控えがこれだけ走力上なら送る
   pinch_run_min_diff: -2             # 1点を取りにいく場面（ビハインドこの点以内〜+1）
+  pinch_run_max_diff: 1  # 代走を出す点差の上限（リード側）
   defensive_sub_from_inning: 8
   defensive_sub_min_lead: 1          # このリード以上で守備固め
   defensive_sub_fielding_ceiling: 44 # この守備以下を交代候補に
@@ -1113,6 +1133,8 @@ tactics:
   hit_and_run_power_penalty: 0.15
   hit_and_run_launch_penalty: 0.20
   hit_and_run_caught_penalty: 0.15
+  hit_and_run_caught_safe_min: 0.02  # エンドラン空振り時の走者の生存確率の下限
+  hit_and_run_caught_safe_max: 0.98  # エンドラン空振り時の走者の生存確率の上限
   # 打撃姿勢（采配カード。プレイヤーが選んだ打席にだけ載る＝AI駆動のシムは不変）
   ground_ball_launch_penalty: 0.30 # 転がせ
   ground_ball_contact_boost: 0.05
@@ -1127,6 +1149,7 @@ tactics:
   squeeze_read_base: 0.08          # ウエスト（バッテリー察知）
   squeeze_read_per_lead: 0.002
   squeeze_read_obvious_bonus: 0.05
+  squeeze_read_max: 0.60  # ウエストを読まれる確率の上限
   # 陣形→初期守備位置（効果は幾何＝物理から出る, §2.1）
   infield_in_factor: 0.82
   infield_deep_factor: 1.12
@@ -1412,6 +1435,11 @@ insight:
   # 2026-10-31 監督決定: 頻度×5・精度+15%。
   nominated_prob_factor: 5.0
   nominated_accuracy_add: 0.15
+  recent_growth_condition_min: 0.2  # 気づき: 成長中の兆しを話題にしうる調子の下限
+  recent_growth_topic_prob: 0.4  # 気づき: 成長中の兆しを話題にする確率
+  personality_topic_prob: 0.30  # 気づき: 性格の兆しを話題にする確率
+  growth_type_topic_prob: 0.25  # 気づき: 成長タイプの兆しを話題にする確率
+  high_growth_domain_prob: 0.5  # 気づき: 伸びしろの話題で高い分野を選ぶ確率
 
 # --- 週次イベントの発火（設計書03 §5 / 04 §3.2・issue #609）---
 # 従来 EventScheduler にハードコードされていた「同一週最大1件・発火率50%」をここへ出したもの。
@@ -1453,6 +1481,14 @@ scout:
   penalty_same_region: 0.06
   penalty_neighbor_region: 0.14
   penalty_far: 0.24
+  closeness_same_region: 0.67  # 近さ: 同地方（同県=1.0・遠方=0.0）
+  closeness_neighbor_region: 0.33  # 近さ: 隣接地方
+  rival_tier_same_cutoff: 0.35  # 競合校ティア抽選: これ未満なら同ティア
+  rival_tier_plus1_cutoff: 0.65  # 同: これ未満なら+1ティア
+  rival_tier_plus2_cutoff: 0.85  # 同: これ未満なら+2ティア
+  rival_tier_plus3_cutoff: 0.95  # 同: これ未満なら+3ティア（以上は−1）
+  blurb_high_min: 60.0  # 寸評の水準: これ以上なら高
+  blurb_mid_min: 40.0  # 寸評の水準: これ以上なら中（未満は低）
   dorm_distance_relief: 0.6         # 寮が距離の減点を打ち消す割合（オーナー決定8）
   # 訪問費用[万円]（部費から。設計書04 §1.4）
   visit_cost_same_prefecture: 5.0
@@ -1696,6 +1732,42 @@ tournament:
 records:
   qualified_plate_appearances_per_game: 2.0   # 規定打席＝チーム試合数×この係数（NPBは3.1）
   qualified_outs_per_game: 3.0                # 規定投球回＝チーム試合数×この係数[アウト]（3.0＝1試合1回）
+
+# --- コールドゲーム（マーシールール。設計書05 §1.3, OPEN-QUESTIONS Q18）---
+# 「early_inning 回以降で early_diff 点差以上」または「late_inning 回以降で late_diff 点差以上」で成立。
+# 有効かどうかは現代ルールのトグル（GameContext.MercyRuleEnabled）が決める。
+mercy_rule:
+  early_inning: 5
+  early_diff: 10
+  late_inning: 7
+  late_diff: 7
+
+# --- センバツ（選抜）の地区別一般選考枠（設計書05 §4）---
+# 合計31＋神宮枠1（神宮優勝地区へ+1。コード側）＝32校規模。21世紀枠は非採用。
+# 基準は2024年（第96回）以降の実数＝一般選考29（北海道1・東北3・関東東京6・北信越2・東海3・近畿6・中国2・四国2・九州4）
+# ＋神宮1＋21世紀2＝32。21世紀枠2つぶんは、中国（実2→3）と九州（実4→5）へ1校ずつ上乗せして32に合わせる
+# （枠の増やし先は、いずれも一般枠で次点の層が厚い西日本の地区としたゲーム側の簡略化）。
+# 関東・東京は計6を融通（現実の「関東・東京6」に対応）。
+senbatsu_berths:
+  general_by_region:
+    hokkaido: 1
+    tohoku: 3
+    kanto: 5
+    tokyo: 1
+    hokushinetsu: 2
+    tokai: 3
+    kinki: 6
+    chugoku: 3
+    shikoku: 2
+    kyushu: 5
+
+# --- 在フィールド野手の緊急登板 backfill 経路（issue #209 Phase C path②, 設計書11 §4）---
+# ① 投野交代を既定とし、ベンチ野手が空いた守備位置を旧投手より明確に上手く守れ、かつ旧投手を残す打撃的価値が
+# 低い時だけ ② （旧投手退場＋ベンチ野手補充）に倒す。AI の在フィールド野手登板でのみ走る＝帯・決定論baselineに影響しない。
+relief_backfill:
+  base_fielding_margin: 10.0        # ② に倒す守備値の基準差（ベンチ野手が旧投手をこれ以上上回れば②）
+  batting_retention_weight: 0.3     # 旧投手の打力による基準差の補正重み（0＝守備値だけで判定）
+  league_average_batting: 50.0      # 打力（ミート・パワー平均）の基準点
 
 # --- 練習試合（設計書03 §週ターン③・設計書04 §名声の効果） ---
 practice_match:
@@ -2057,6 +2129,16 @@ roster:
   # 成長タイプの分野別化（設計書02 §5.2・issue #866）: 投球・打撃・守備の各分野が基本タイプと同じになる確率。
   # 残りは基本タイプと異なる方のタイプを一様に1つ選ぶ（「全分野バラバラ」ばかりにしない）。
   growth_domain_same_prob: 0.6
+  growth_type_early_cutoff: 0.30  # 基本の成長タイプ抽選: これ未満なら早熟
+  growth_type_standard_cutoff: 0.70  # 同: これ未満なら標準、以上は晩成
+  untrained_arm_to_velocity_factor: 0.75  # 投げ慣れていない選手の球速Lv推定: 肩の何割が球速へ乗るか
+  untrained_velocity_sd: 6.0  # 同: 球速Lvの個体差SD
+  untrained_control_base: 30.0  # 同: 制球Lvのベース
+  untrained_control_sd: 8.0  # 同: 制球LvのSD
+  untrained_stamina_base: 25.0  # 同: スタミナLvのベース
+  untrained_stamina_sd: 6.0  # 同: スタミナLvのSD
+  untrained_pitch_rank_base: 28.0  # 同: キレのベース
+  untrained_pitch_rank_sd: 8.0  # 同: キレのSD
   # 能力別 才能上限gap圧縮（Issue #114）: 素質固定能力（足）は「伸びる速さ」だけでなく「天井」も近い＝両方きつく。
   # gap（mean/sd）に乗じる。既定1.0で従来一致。cap_gap_mean 26×0.4≈10（＝天井も近い）。逸材は免除。
   speed_cap_gap_factor: 0.4

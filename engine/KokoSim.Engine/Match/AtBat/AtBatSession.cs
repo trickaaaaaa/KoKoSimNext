@@ -723,7 +723,7 @@ public sealed class AtBatSession
         // 変化球は同じ投手のストレートからの外れで判定する（issue #911・Batting.PitchDeception）。比べるストレートは
         // この1球と同じ球速サンプル（球種の球速比を掛ける前）・その投手の球威で投げた1球＝球速差は飛翔時間の差で入る。
         // 表引きだけ（RNG非消費）。
-        var fastballKmh = plan.VelocityKmh / SpeedRatioOf(plan.Type);
+        var fastballKmh = plan.VelocityKmh / _ctx.Pitching.AxisFor(plan.Type).SpeedRatio;
         var fb = TrajectoryFeatureTable.LookupFeatures(
             _ctx.Aerodynamics, _ctx.Mound, PitchSpinModel.ForThrower(PitchSpinModel.FastballSpin(_ctx.Pitching, FastballPower()), _ctx.PitcherThrows),
             fastballKmh);
@@ -731,14 +731,6 @@ public sealed class AtBatSession
         {
             Fastball = new FastballReference(fb.InducedVerticalBreakM, fb.InducedHorizontalBreakM, fb.FlightTimeSeconds),
         };
-    }
-
-    /// <summary>この投手の持ち球にある球種の球速比（無ければ球種の既定）。</summary>
-    private double SpeedRatioOf(PitchType type)
-    {
-        foreach (var slot in _pitcher.EffectiveRepertoire)
-            if (slot.Type == type) return slot.SpeedRatio;
-        return new Players.PitchSlot { Type = type, Power = 50, Sharpness = 50 }.SpeedRatio;
     }
 
     /// <summary>この投手のストレートの球威（持っていなければ50）。</summary>

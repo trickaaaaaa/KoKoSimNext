@@ -556,6 +556,8 @@ public static partial class GameSimulation
             Fatigue = b.Fatigue,
             PitchRecovery = b.PitchRecovery,
             Momentum = b.Momentum,
+            MercyRule = b.MercyRule,
+            ReliefBackfill = b.ReliefBackfill,
             // Issue #120/#803/#971: 天候（月別気温）モデル。null＝weather ブロック無し＝無効。
             // Heavy の summer 帯（games_10k_summer）は夏の甲子園（8月）想定なので8月ぶんを使う（従来と同値）。
             Weather = b.Weather?.ForMonth(8),

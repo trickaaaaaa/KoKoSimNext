@@ -175,7 +175,7 @@ public sealed class PitchAxisTests
             var spec = new PitchSpec { SpeedKmh = kmh, SpinRadPerSec = PitchSpec.SpinFromRpmAndTilt(Coeff.SpinRpmBase * axis.RpmScale, axis.TiltDeg) };
             return PitchSimulator.Simulate(spec, Aero, Mound);
         }
-        var ratio = new PitchSlot { Type = type, Power = 50, Sharpness = 50 }.SpeedRatio;
+        var ratio = Coeff.AxisFor(type).SpeedRatio;
         return (Sim(type, Top * ratio), Sim(PitchType.Fastball, Top));
     }
 

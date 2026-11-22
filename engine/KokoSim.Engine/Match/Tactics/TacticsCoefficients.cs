@@ -201,6 +201,8 @@ public sealed record TacticsCoefficients
     public int PinchRunImprovement { get; init; } = 22;
     /// <summary>代走を出す得失点差の下限（このビハインド以内。1点を取りにいく場面）。上限は+1（僅差リードまで）。</summary>
     public int PinchRunMinDiff { get; init; } = -2;
+    /// <summary>代走を出す点差の上限（リード側）。<see cref="PinchRunMinDiff"/>〜この値＝「1点を取りにいく場面」。</summary>
+    public int PinchRunMaxDiff { get; init; } = 1;
 
     /// <summary>守備固めを考え始めるイニング／守るリードの下限／守備交代候補の守備上限／控えがこれだけ守備上なら固める。</summary>
     public int DefensiveSubFromInning { get; init; } = 8;
@@ -215,6 +217,10 @@ public sealed record TacticsCoefficients
     public double HitAndRunLaunchPenalty { get; init; } = 0.20;
     /// <summary>エンドラン空振り時: 走者憤死判定に載せる成功率ペナルティ（打者と同時スタートの分の減額）。</summary>
     public double HitAndRunCaughtPenalty { get; init; } = 0.15;
+    /// <summary>エンドランの空振りで走者が憤死するか（盗塁相当の成功確率−ペナルティ）の判定に使う成功確率の下限。</summary>
+    public double HitAndRunCaughtSafeMin { get; init; } = 0.02;
+    /// <summary>同・成功確率の上限。</summary>
+    public double HitAndRunCaughtSafeMax { get; init; } = 0.98;
 
     // ===== 打撃姿勢（2026-07-31・采配カードの拡充。BattingApproach）=====
     // プレイヤーが選んだ打席にだけ載る（既定 Normal は恒等）＝AI駆動のシム・統計帯は不変。
@@ -239,6 +245,8 @@ public sealed record TacticsCoefficients
     public double SqueezeReadBase { get; init; } = 0.08;
     public double SqueezeReadPerLead { get; init; } = 0.002;
     public double SqueezeReadObviousBonus { get; init; } = 0.05;
+    /// <summary>スクイズを読まれてウエストされる確率の上限（読みの基礎・捕手守備・明白さの加算を足した後に頭打ち）。</summary>
+    public double SqueezeReadMax { get; init; } = 0.60;
 
     // ===== 陣形の初期守備位置（設計書09 §2.1: 効果は物理から出る） =====
     public double InfieldInFactor { get; init; } = 0.82;

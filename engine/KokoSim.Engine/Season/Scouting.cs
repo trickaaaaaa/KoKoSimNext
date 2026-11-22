@@ -94,6 +94,22 @@ public sealed record ScoutCoefficients
     public double PenaltySameRegion { get; init; } = 0.06;
     public double PenaltyNeighborRegion { get; init; } = 0.14;
     public double PenaltyFar { get; init; } = 0.24;
+    /// <summary>地元志向の相性項に使う「近さ」（0〜1）: 同地方。同県=1.0・遠方=0.0。</summary>
+    public double ClosenessSameRegion { get; init; } = 0.67;
+    /// <summary>同・隣接地方。</summary>
+    public double ClosenessNeighborRegion { get; init; } = 0.33;
+    /// <summary>競合校のティア抽選: 一様乱数がこの値未満なら自校と同ティア（差0）。</summary>
+    public double RivalTierSameCutoff { get; init; } = 0.35;
+    /// <summary>同・この値未満なら自校の1つ上。</summary>
+    public double RivalTierPlus1Cutoff { get; init; } = 0.65;
+    /// <summary>同・この値未満なら自校の2つ上。</summary>
+    public double RivalTierPlus2Cutoff { get; init; } = 0.85;
+    /// <summary>同・この値未満なら自校の3つ上（それ以上は1つ下）。</summary>
+    public double RivalTierPlus3Cutoff { get; init; } = 0.95;
+    /// <summary>寸評の水準バケツ: 最大軸（ノイズ入り）がこの値以上なら「高」。</summary>
+    public double BlurbHighMin { get; init; } = 60.0;
+    /// <summary>同・この値以上なら「中」、未満は「低」。</summary>
+    public double BlurbMidMin { get; init; } = 40.0;
     /// <summary>寮が距離の減点を打ち消す割合（オーナー決定8「寮は距離の減点を打ち消す効果として残る」）。</summary>
     public double DormDistanceRelief { get; init; } = 0.6;
 
@@ -315,7 +331,7 @@ public static class ScoutModel
                 Player = p,
                 PrefectureId = prefectureId,
                 Distance = PrefectureRegions.DistanceBetween(homePrefectureId, prefectureId),
-                RivalTier = RollRivalTier(homeTier, rng),
+                RivalTier = RollRivalTier(homeTier, c, rng),
                 Preference = RollPreference(c, rng),
             };
             cand.Report = BuildReport(p, level, strengthCoeff, c, rng.Fork(ReportStreamId(yearIndex, i)));
@@ -359,7 +375,7 @@ public static class ScoutModel
                 prob += c.ProbPerOpportunity * MathUtil.Clamp(opportunity, 0.0, 1.0);
                 break;
             case CareerPathPreference.Local:
-                prob += c.ProbPerLocal * Closeness(p.Distance);
+                prob += c.ProbPerLocal * Closeness(p.Distance, c);
                 break;
         }
 
@@ -467,7 +483,7 @@ public static class ScoutModel
         var mobility = N(s.Mobility);
         var defense = N(s.Defense);
         var pitching = N(s.Pitching);
-        var (axis, bucket) = PickBlurb(batting, mobility, defense, pitching);
+        var (axis, bucket) = PickBlurb(batting, mobility, defense, pitching, c);
 
         var report = new ScoutReport { Tier = tier, BlurbAxis = axis, BlurbBucket = bucket };
         if (tier < 2) return report;
@@ -495,11 +511,12 @@ public static class ScoutModel
     }
 
     /// <summary>寸評の軸＝ノイズ入り4軸の最大値。水準バケツは高/中/低の3段（文言は data/scout-blurbs.yaml）。</summary>
-    internal static (string Axis, string Bucket) PickBlurb(double batting, double mobility, double defense, double pitching)
+    internal static (string Axis, string Bucket) PickBlurb(
+        double batting, double mobility, double defense, double pitching, ScoutCoefficients c)
     {
         var items = new[] { ("batting", batting), ("mobility", mobility), ("defense", defense), ("pitching", pitching) };
         var top = items.OrderByDescending(x => x.Item2).First();
-        var bucket = top.Item2 >= 60.0 ? "high" : top.Item2 >= 40.0 ? "mid" : "low";
+        var bucket = top.Item2 >= c.BlurbHighMin ? "high" : top.Item2 >= c.BlurbMidMin ? "mid" : "low";
         return (top.Item1, bucket);
     }
 
@@ -543,11 +560,11 @@ public static class ScoutModel
     };
 
     /// <summary>地元志向の相性項に使う「近さ」0〜1（同県=1.0・遠方=0.0）。</summary>
-    public static double Closeness(RecruitDistance d) => d switch
+    public static double Closeness(RecruitDistance d, ScoutCoefficients c) => d switch
     {
         RecruitDistance.SamePrefecture => 1.0,
-        RecruitDistance.SameRegion => 0.67,
-        RecruitDistance.NeighborRegion => 0.33,
+        RecruitDistance.SameRegion => c.ClosenessSameRegion,
+        RecruitDistance.NeighborRegion => c.ClosenessNeighborRegion,
         _ => 0.0,
     };
 
@@ -573,13 +590,13 @@ public static class ScoutModel
         return roll < wp + wt ? CareerPathPreference.PlayingTime : CareerPathPreference.Local;
     }
 
-    private static Tier RollRivalTier(Tier homeTier, IRandomSource rng)
+    private static Tier RollRivalTier(Tier homeTier, ScoutCoefficients c, IRandomSource rng)
     {
         var roll = rng.NextDouble();
-        var delta = roll < 0.35 ? 0
-            : roll < 0.65 ? 1
-            : roll < 0.85 ? 2
-            : roll < 0.95 ? 3
+        var delta = roll < c.RivalTierSameCutoff ? 0
+            : roll < c.RivalTierPlus1Cutoff ? 1
+            : roll < c.RivalTierPlus2Cutoff ? 2
+            : roll < c.RivalTierPlus3Cutoff ? 3
             : -1;
         var rank = MathUtil.Clamp(TierRank(homeTier) + delta, 0, TierRank(Tier.S));
         return TierOfRank((int)rank);

@@ -368,7 +368,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng)
     {
         if (s.Inning < _c.PinchRunFromInning) return null;
-        if (s.ScoreDiff < _c.PinchRunMinDiff || s.ScoreDiff > 1) return null;
+        if (s.ScoreDiff < _c.PinchRunMinDiff || s.ScoreDiff > _c.PinchRunMaxDiff) return null;
 
         (Player Runner, Player Sub)? pick = null;
         var bestGain = int.MinValue;

@@ -336,7 +336,7 @@ public static class GameEngine
             // 規定回未満でも、表を終えた時点で後攻が既にコールド差でリードしていれば裏は行わず終了する
             // （規定回以降の「後攻リードで裏を省く」は下の既存判定に任せる＝挙動不変。issue #537）。
             if (ctx.MercyRuleEnabled && p.Inning < ctx.RegulationInnings
-                && p.Home.Runs > p.Away.Runs && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+                && p.Home.Runs > p.Away.Runs && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs, ctx.MercyRule))
             {
                 p.MercyEnded = true;
                 break;
@@ -361,7 +361,7 @@ public static class GameEngine
             var stopBottomHalf = allowWalkoff || ctx.MercyRuleEnabled
                 ? () => p.Home.Runs > p.Away.Runs
                         && (allowWalkoff
-                            || IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+                            || IsMercy(p.Inning, p.Away.Runs, p.Home.Runs, ctx.MercyRule))
                 : (Func<bool>?)null;
             foreach (var s in PlayHalfSteps(p, p.Home, p.Away,
                 walkoff: stopBottomHalf, isTop: false, truncateAtWalkoff: allowWalkoff)) yield return s;
@@ -370,7 +370,7 @@ public static class GameEngine
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs != p.Away.Runs) break;
             // 延長上限（引き分け許容）。
             if (p.Inning >= ctx.MaxInnings) break;
-            if (ctx.MercyRuleEnabled && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+            if (ctx.MercyRuleEnabled && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs, ctx.MercyRule))
             {
                 p.MercyEnded = true;
                 break;
@@ -929,7 +929,7 @@ public static class GameEngine
                 + (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Fielding) - 50) * ctx.Tactics.SqueezeReadPerLead
                 + (outs == 1 && Math.Abs(offense.Runs - defense.Runs) <= 1
                     ? ctx.Tactics.SqueezeReadObviousBonus : 0.0),
-                0.0, 0.60);
+                0.0, ctx.Tactics.SqueezeReadMax);
             var squeezeWaste = squeezeSign is null ? 0.0 : SqueezeWasteNow();
             if (squeezeSign is not null)
             {
@@ -1555,7 +1555,7 @@ public static class GameEngine
                             pitcherQuickOffsetSeconds: hrQuickOffset)
                             - ctx.Tactics.HitAndRunCaughtPenalty;
                     var caughtSafe = bases.Second is null
-                        && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng);
+                        && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, ctx.Tactics.HitAndRunCaughtSafeMin, ctx.Tactics.HitAndRunCaughtSafeMax), rng);
                     if (caughtSafe)
                     {
                         bases.Second = caughtRunner;
@@ -2975,10 +2975,10 @@ public static class GameEngine
     }
 
     /// <summary>コールドゲーム（マーシールール）判定（設計書05 §1.3, OPEN-QUESTIONS Q18）。internal はテスト専用。</summary>
-    internal static bool IsMercy(int inning, int away, int home)
+    internal static bool IsMercy(int inning, int away, int home, MercyRuleCoefficients c)
     {
         var diff = Math.Abs(home - away);
-        return (inning >= 5 && diff >= 10) || (inning >= 7 && diff >= 7);
+        return (inning >= c.EarlyInning && diff >= c.EarlyDiff) || (inning >= c.LateInning && diff >= c.LateDiff);
     }
 }
 
