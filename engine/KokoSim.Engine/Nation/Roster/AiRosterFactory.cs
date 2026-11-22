@@ -248,6 +248,8 @@ public static class AiRosterFactory
             Steal = Apply(p.Steal, BatterAttribute.Steal),
             Baserunning = Apply(p.Baserunning, BatterAttribute.Baserunning),
             Lead = Apply(p.Lead, BatterAttribute.Lead),
+            LaunchTendency = (int)MathUtil.Clamp(
+                p.LaunchTendency + Math.Round(BatterArchetypes.LaunchOffset(archetype, rc.BatterArchetypes) * intensity), 10, 99),
         };
     }
 

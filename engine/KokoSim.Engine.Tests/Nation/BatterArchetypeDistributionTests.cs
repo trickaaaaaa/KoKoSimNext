@@ -140,4 +140,28 @@ public sealed class BatterArchetypeDistributionTests
         Assert.True(powerHitters.Average(p => p.Power) > avgAll,
             $"長距離砲のパワーが平均以下: {powerHitters.Average(p => p.Power):F1} vs 全体平均 {avgAll:F1}");
     }
+    /// <summary>中距離ヒッターの「低い弾道が長所」（issue #1304）: 弾道のオフセットは負で、他の型は0（弾道に触らない）。</summary>
+    [Fact]
+    public void GapHitter_HasNegativeLaunchOffset_OthersZero()
+    {
+        var c = new BatterArchetypeCoefficients();
+        Assert.True(BatterArchetypes.LaunchOffset(BatterArchetype.GapHitter, c) < 0);
+        foreach (var a in System.Enum.GetValues<BatterArchetype>().Where(a => a != BatterArchetype.GapHitter))
+            Assert.Equal(0.0, BatterArchetypes.LaunchOffset(a, c));
+    }
+
+    /// <summary>
+    /// 中距離ヒッターの弾道は、同じ強さの他の型の平均より低く、型なしの弾道（≈50）は動かさない（issue #1304）。
+    /// </summary>
+    [Fact]
+    public void GapHitterArchetype_HasLowerLaunchThanOthers()
+    {
+        var starters = StarterFieldersAtStrength(80.0, 80, 30601);
+        var gap = starters.Where(p => p.BatterArchetype == BatterArchetype.GapHitter).ToList();
+        var others = starters.Where(p => p.BatterArchetype != BatterArchetype.GapHitter).ToList();
+        Assert.True(gap.Count > 0, "中距離ヒッター型が1人も抽選されていない（サンプル不足の可能性）");
+        _out.WriteLine($"中距離ヒッター n={gap.Count} 弾道平均 {gap.Average(p => p.LaunchTendency):F1} ／ 他 n={others.Count} 弾道平均 {others.Average(p => p.LaunchTendency):F1}");
+        Assert.True(gap.Average(p => p.LaunchTendency) < others.Average(p => p.LaunchTendency) - 5,
+            $"中距離ヒッターの弾道が低くない: {gap.Average(p => p.LaunchTendency):F1} vs {others.Average(p => p.LaunchTendency):F1}");
+    }
 }

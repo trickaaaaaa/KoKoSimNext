@@ -94,6 +94,12 @@ public sealed record BatterArchetypeCoefficients
     public double GapHitterContact { get; init; } = 10;
     public double GapHitterPower { get; init; } = 6;
     public double GapHitterSpeed { get; init; } = -19;
+    /// <summary>
+    /// 中距離ヒッターの弾道（負＝低い・ライナー寄り。issue #1304）。弾道は <see cref="BatterAttribute"/> に含めない
+    /// （OneTool の突出抽選・成長重みの正規化＝12能力のまま動かさない）。弾道は毎年の成長でも伸びないので、
+    /// 生成時に1回だけ（尖り方を掛けて）ずらす。
+    /// </summary>
+    public double GapHitterLaunch { get; init; } = -12;
 
     // --- 俊足巧打: 走力・ミート↑ パワー↓ ---
     public double SpeedyContactSpeed { get; init; } = 13;
@@ -297,6 +303,13 @@ public static class BatterArchetypes
         BatterArchetype.OneTool => attr == focus ? c.OneToolFocusBonus : c.OneToolOtherPenalty,
         _ => 0.0,   // Balanced
     };
+
+    /// <summary>
+    /// 型ごとの弾道オフセット（負＝低い）。中距離ヒッターだけが持つ（issue #1304）。正規化はしない＝
+    /// 弾道は成長しない能力なので、他の12能力の個性の総量には混ぜない。
+    /// </summary>
+    public static double LaunchOffset(BatterArchetype a, BatterArchetypeCoefficients c)
+        => a == BatterArchetype.GapHitter ? c.GapHitterLaunch : 0.0;
 
     private static readonly BatterAttribute[] AllAttributes = (BatterAttribute[])System.Enum.GetValues(typeof(BatterAttribute));
 
