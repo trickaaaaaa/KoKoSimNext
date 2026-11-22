@@ -208,6 +208,19 @@ scenarios:
     force: StealCaught
     seed: 20260736
 
+  # 2死で二盗失敗＝3アウト目が途中プレー（issue #1246）。エンジンは次の半回へ攻守が入れ替わるが、
+  # 守備ビューの頭上ラベルは画面の半回（1回表の守備＝home）の選手で出る
+  - id: steal-caught-2out-lab
+    name: 盗塁検証・2死で二盗失敗（1回表二死一塁＝3アウト目）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 2
+    bases: [1]
+    force: StealCaught
+    seed: 20260736
+
   # 監督が攻撃側で自分で盗塁サインを出す経路（強制発動なし＝采配カードから企図する。成否は自然に解く）
   # 守備側投手が動揺した状態で始める（issue #1178）。1回表＝後攻 home の投手が守備側・走者なし。
   # 頭上の渦巻きと投球前の汗を撮る（captures.yaml の rattled-1178 / rattled-away-1178）。

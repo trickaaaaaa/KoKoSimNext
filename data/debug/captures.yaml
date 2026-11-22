@@ -343,3 +343,35 @@ captures:
     shots: [flight_end-0.3, flight_end-0.1, flight_end]
     video: {from: flight_end-0.6, to: flight_end+0.3, fps: 60}
     probes: [BallHoldDiag, FieldCatchDiag]
+
+  - id: steal-labels-1246
+    name: "打席の頭の盗塁（失敗）で頭上ラベルが守備側の選手（issue #1246 項目1・PR #1352）"
+    scenario: steal-caught-lab
+    manager: home
+    view: panel
+    shots: [start+0.5, catch, end]
+    probes: [FieldLabels]
+
+  - id: steal-labels-3rd-out-1246
+    name: "2死の盗塁失敗＝3アウト目でも頭上ラベルが画面の半回の守備側（issue #1246 項目1/2・PR #1352）"
+    scenario: steal-caught-2out-lab
+    manager: home
+    view: panel
+    shots: [start+0.5, catch, end]
+    probes: [FieldLabels]
+
+  - id: error-mark-if-1247
+    name: "内野ゴロのエラーで「！」が弾いた野手に付く（issue #1247 項目2・PR #1353）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    force: ReachedOnError
+    shots: [judgement, judgement+0.5, end]
+    probes: [ErrorMark, FieldLabels]
+
+  - id: error-mark-of-1247
+    name: "外野のエラー→中継で「！」が中継の投げ手に付かない（issue #1247 項目2・PR #1353）"
+    scenario: of-grounder-runner-cf-lab
+    manager: home
+    force: ReachedOnError
+    shots: [judgement, judgement+0.5, end]
+    probes: [ErrorMark, FieldLabels]

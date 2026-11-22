@@ -26,6 +26,8 @@
 #                       本番の既定どおり自動で答える（主将＝暫定主将／背番号・契約＝そのまま確定／転任＝残留）。summary の notes に残る
 #   advance_to_week: 39 | {week: 39, year: 2}   途中の大会を消化しながら指定の週まで進める（year は1始まりの年度・週は 0〜49）
 #   boost_roster: 95 | {level: 95, cap: 99}     自校の部員の全能力を上げる（勝ち進む分岐を見る用）
+#   transfer: "" | {school: 123}   監督を転任させる（""＝同じ県でいちばん強い他校）。年度末の判定を待たずに
+#                       打診を開き、ホームの「転任する」と同じ確定処理を通す（記録・配色の持ち越しを見る用）
 #   show: ManagementScreen     画面を開く（GameObject 名＝ScreenRouter の画面名）
 #   click: name | .class[添字]   押す（ClickEvent。Button なら自動で決定キーと同じ NavigationSubmitEvent）
 #   submit: name               決定キーで押す
@@ -68,10 +70,13 @@ screens:
 
   - id: player-detail-radar-1279
     name: "選手詳細のレーダーの格子色（PR #1370・issue #1279 項目2）"
+    size: {w: 1600, h: 1500}
     steps:
       - new_game: {seed: 1}
       - show: PlayerList
       - shot: 01-player-detail
+      - show: TeamStrength
+      - shot: 02-team-strength
 
   - id: member-captain-1239
     name: "メンバー設定の主将マーカー「主」と学年ラベル（PR #1412・issue #1239）"
@@ -157,3 +162,40 @@ screens:
       - show: HomeDashboard
       - read: feed-list
       - shot: 02-home-feed-week41
+
+  - id: transfer-records-1261
+    name: "転任で記録・配色が学校に付いて回る（記録画面の赴任校列・配色・PR #1417・issue #1261）"
+    steps:
+      - new_game: {seed: 1}
+      # 本番の転任は年度末の総括（第46週）にだけ起きる。その週まで1年分の大会を消化してから転任させる
+      - advance_to_week: 46
+      - read: =TeamColorProvider.ManagerColors
+      - call: EventService.Clear()
+      - show: RecordsScreen
+      - shot: 01-records-before
+      - transfer: ""
+      - read: =TeamColorProvider.ManagerColors
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - shot: 02-home-after
+      - advance_to_week: {week: 30, year: 2}
+      - call: EventService.Clear()
+      - show: RecordsScreen
+      - shot: 03-records-year2
+      - click: .seg-tab[1]
+      - shot: 04-personal-records-year2
+
+  - id: new-students-1250
+    name: "年度が替わった週送りの後、選手一覧・練習・メンバー設定に新入生が出る（PR #1357・issue #1250）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: {week: 1, year: 2}
+      - read: =RosterService.Active
+      - call: EventService.Clear()
+      - show: PlayerList
+      - read: =RosterService.Roster
+      - shot: 01-player-list
+      - show: TrainingPlan
+      - shot: 02-training
+      - show: MemberSetting
+      - shot: 03-member

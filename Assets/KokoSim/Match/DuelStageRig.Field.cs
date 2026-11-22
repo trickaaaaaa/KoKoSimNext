@@ -5789,6 +5789,8 @@ namespace KokoSim.Unity.Match
         private FieldPosition? _errorMarkRole;
         private float _errorMarkAt = float.PositiveInfinity;
         private const float ErrorMarkSeconds = 1.5f;
+        /// <summary>撮影レシピの probes 用: エラーの「！」を付ける役と時刻（issue #1247 項目2）。</summary>
+        public string ErrorMarkForCapture => _errorMarkRole == null ? "なし" : _errorMarkRole + " @" + _errorMarkAt.ToString("0.00");
         private const float ErrorMarkAboveHeadM = 0.35f;
         /// <summary>マークの見た目の全高[m]（可読性スケールの基準。棒0.75+点=原点〜0.75）。</summary>
         private const float ErrorMarkHeightM = 0.75f;

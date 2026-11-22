@@ -25,6 +25,18 @@ namespace KokoSim.Unity.Match
             if (identity != null) _fieldIdentity = identity;
         }
 
+        /// <summary>撮影レシピの probes 用: いま出す頭上ラベルの名前（走者は「走:」付き）。守備側の同定が画面の半回と合うかを見る（issue #1246）。</summary>
+        public string FieldLabelsForCapture
+        {
+            get
+            {
+                var labels = CurrentFieldLabels(12);
+                var names = new List<string>(labels.Count);
+                foreach (var l in labels) names.Add(l.IsRunner ? "走:" + l.Name : l.Name);
+                return string.Join(" / ", names);
+            }
+        }
+
         /// <summary>頭上ラベル1件。UI Toolkit 座標への変換・見た目（書体/地色/縁取り）は呼び出し側の責務。</summary>
         public readonly struct FieldLabel
         {
