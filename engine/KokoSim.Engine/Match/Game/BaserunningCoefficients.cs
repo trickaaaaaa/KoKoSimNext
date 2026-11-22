@@ -365,6 +365,11 @@ public sealed record BaserunningCoefficients
     /// 通常の走塁反応（HomeRunnerReactionIntercept等）よりかなり短い。</summary>
     public double SqueezeThirdRunnerStartDelaySeconds { get; init; } = 0.05;
 
+    /// <summary>スクイズで守備が本塁へ投げる判断のしきい値（issue #1258）。三塁走者の「セーフになる確率」が
+    /// これ未満のときだけ本塁へ投げる＝その1本でアウトを取りに行く（打者は一塁で生きる）。以上なら走者は
+    /// 間に合うので一塁側の処理だけを行い、走者は無条件で生還する。守備は送球先を1つだけ選ぶ（二重送球をしない）。</summary>
+    public double SqueezeHomeThrowSafeThreshold { get; init; } = 0.90;
+
     // === 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）===
     // 走塁 §4.1 と同じ時間の勝負を本塁で解く。走者(走力＋走塁判断) vs 外野処理＋中継＋タッチ。
     /// <summary>本塁生還を狙う走者の判断遅延[s] = Intercept − 走塁判断×Slope。</summary>

@@ -19,6 +19,7 @@ public enum BuntResult
     PopOutDoubledOff,  // 小フライ＋一塁走者が戻れず併殺（design-09「小フライ併殺」）
     Foul,              // ファウル（カウントのみ進む）
     MissedBunt,        // 空振り
+    FieldersChoice,    // 野選（スクイズで本塁へ投げた／本塁へ投げず走者が生還した形で、打者は一塁で刺せた・打者生存・アウトなし・安打にしない。issue #1258）
 }
 
 /// <summary>

@@ -1896,6 +1896,7 @@ public static class GameEngine
             if (res.Squeeze is { } sq)
             {
                 var sqScorer = bases.Third; // スクイズで生還するのは三塁走者（issue #77 得点帰属。null化の前に捕捉）
+                // 本塁へ投げた処理（ForceOutAtHome）は三塁走者のアウト＝RunnerOut で数える（二重に数えない。issue #1258）。
                 var sqOuts = (sq.BatterOut ? 1 : 0)
                     + (sq.Bunt is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird ? 1 : 0)
                     + (sq.Bunt == BuntResult.PopOutDoubledOff ? 1 : 0) // 一塁走者の併殺（design-09「小フライ併殺」）
@@ -1908,7 +1909,8 @@ public static class GameEngine
                 var sqPreSecond = bases.Second;
                 var sqPreThird = bases.Third;
                 if (sq.Bunt is BuntResult.SacrificeSuccess or BuntResult.InfieldHit
-                    or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird)
+                    or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird
+                    or BuntResult.ForceOutAtHome or BuntResult.FieldersChoice)
                 {
                     offense.RecordSqueezeBallInPlay(sq.RunnerOut); // 実測用（issue bunt-no-take-on-ball-pitches）
                     bases.Third = null; // 三塁走者は生還（sq.Runs=1）または本塁で封殺（sq.RunnerOut）＝いずれも退場

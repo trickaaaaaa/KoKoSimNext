@@ -421,6 +421,11 @@ public sealed class AtBatSession
                 case BuntResult.InfieldHit:
                     RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
                     return FinishBunt(PlateAppearanceResult.Single, bunt);
+
+                case BuntResult.FieldersChoice:
+                    // 先の走者を狙って生かし、打者は一塁で刺せた形（野選・安打にしない。issue #1258）。
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
+                    return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
             }
         }
 
@@ -479,7 +484,7 @@ public sealed class AtBatSession
                 return new PitchResolution(EndsPlateAppearance: false, SqueezeRunnerCaughtAtThird: true);
             }
 
-            // ここに来るのは PopOut / SacrificeSuccess / InfieldHit / ForceOutAtSecond / ForceOutAtThird のみ＝
+            // ここに来るのは PopOut / SacrificeSuccess / InfieldHit / ForceOutAtSecond / ForceOutAtThird / ForceOutAtHome / FieldersChoice のみ＝
             // すべてボールが実際にプレーされたケース。
             RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
             var sqResult = sq.Bunt == BuntResult.InfieldHit ? PlateAppearanceResult.Single : PlateAppearanceResult.InPlayOut;
