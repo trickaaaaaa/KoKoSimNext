@@ -481,6 +481,32 @@ auto_wip_commit() { # $1=wt $2=log $3=num
   fi
 }
 
+# 前回ランの残り（同名のリモートブランチ・その open PR）を退避ブランチへ移す。REPO ロック内で呼ぶ。
+# 出力: 何も無ければ空。退避したら「<退避ブランチ>|<セッションへの指示文>」。失敗したら FAILED。
+# 退避ブランチへの push が成功してから元を消す順なので、途中で落ちても作業は必ずどちらかに残る。
+set_aside_previous_branch() { # $1=num $2=branch
+  local num="$1" branch="$2" sha prev pr
+  sha="$(git -C "$REPO_DIR" ls-remote origin "refs/heads/$branch" 2>/dev/null | cut -f1)"
+  [ -z "$sha" ] && return 0
+  prev="${branch}-prev"
+  if [ -n "$(git -C "$REPO_DIR" ls-remote origin "refs/heads/$prev" 2>/dev/null)" ]; then
+    prev="${branch}-prev-$(date +%Y%m%d%H%M%S)"
+  fi
+  if ! git -C "$REPO_DIR" push -q origin "$sha:refs/heads/$prev" >/dev/null 2>&1; then
+    echo "FAILED"; return 0
+  fi
+  pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)"
+  if [ -n "$pr" ]; then
+    gh pr close "$pr" --comment "自動: 夜間エージェントが続きから着手するため閉じる。作業はブランチ \`$prev\`（$sha）に残した。" >/dev/null 2>&1 || true
+  fi
+  if ! git -C "$REPO_DIR" push -q origin --delete "$branch" >/dev/null 2>&1; then
+    echo "FAILED"; return 0
+  fi
+  local from="前回の作業"
+  [ -n "$pr" ] && from="前回の PR #$pr（閉じた）の作業"
+  echo "$prev|${from}がブランチ \`$prev\` にある。まず \`git fetch origin $prev\` して差分と、その PR・issue のコメント（レビューの指摘・オーナーの判断）を読むこと。使える部分は取り込み（cherry-pick か merge）、指摘と判断を反映して続きから仕上げる。古い前提で不要になった部分は捨ててよい。"
+}
+
 # ── 1 issue の処理（ワーカー内から呼ばれる。並列で複数走る） ──
 process_issue() { # $1=num $2=title
   local num="$1" title="$2"
@@ -504,11 +530,20 @@ process_issue() { # $1=num $2=title
 
   echo "=== [$c] issue #$num: $title (model: ${issue_model}) ==="
 
-  # 既存の open PR があればスキップ（前回ランの残骸）
-  if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[].number' 2>/dev/null)" ]; then
-    note "- ⏭ #$num $title — スキップ（同ブランチの open PR が既にある。先に処置を）"
+  # 前回ランの作業が同じブランチ名で残っていたら、退避名へ移して続きから取り組ませる。
+  # ここまで来た issue は needs-human が外れている＝オーナーが判断を返した／差し戻しを解いた後なので、
+  # 以前のように「open PR があるからスキップ」すると判断待ちが解けた issue を毎回取りこぼす。
+  # 作業は消さない（退避ブランチに残す）。新しいセッションは main から切った同名ブランチで始め、
+  # 退避ブランチを取り込んで続ける＝push が non-fast-forward で弾かれない（--force は禁止のまま）。
+  local resume_note=""
+  lock "$REPO_LOCK"
+  resume_note="$(set_aside_previous_branch "$num" "$branch")"
+  unlock "$REPO_LOCK"
+  if [ "$resume_note" = "FAILED" ]; then
+    note "- 🔴 #$num $title — 前回のブランチを退避できなかった（作業を失わないためスキップ）"
     return
   fi
+  [ -n "$resume_note" ] && note "- ♻️ #$num 前回の作業を退避して続きから着手（${resume_note%%|*}）"
 
   # worktree を最新 main の正確な tip から切る（ref 操作は REPO ロックで直列化）
   local wt="$WT_ROOT/issue-$num" base_sha
@@ -531,6 +566,12 @@ process_issue() { # $1=num $2=title
   # ── セッション実行（ロック外＝並列。PR 作成で終了。CI待ち/マージはしない設計） ──
   local prompt log t_start
   prompt="$(sed "s/__ISSUE__/$num/g" "$PROMPT_TEMPLATE")"
+  if [ -n "$resume_note" ]; then
+    prompt="${prompt}
+
+## 前回の作業（必読）
+${resume_note#*|}"
+  fi
   log="$LOG_DIR/issue-$num.log"
   t_start="$(date +%s)"
 
