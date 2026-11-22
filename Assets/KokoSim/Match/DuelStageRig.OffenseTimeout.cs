@@ -434,7 +434,7 @@ namespace KokoSim.Unity.Match
             {
                 var knuckle = ma.GetBoneTransform(rightHand ? HumanBodyBones.RightMiddleProximal : HumanBodyBones.LeftMiddleProximal);
                 // 手の中心＝手首→中指付け根の中点（design-18 §3.3.1）。Fist は打者の骨を見るので使わない
-                var center = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.5f) : hand.position;
+                var center = HandCenter(hand, knuckle);
                 // 口の打者側の脇へ、少し前に（掌で口を覆う位置）
                 var want = mouth + mSide * 0.07f + face * 0.05f;
                 var wristTarget = hand.position + (want - center);

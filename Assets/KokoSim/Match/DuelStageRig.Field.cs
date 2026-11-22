@@ -3682,7 +3682,7 @@ namespace KokoSim.Unity.Match
             // 手の中心＝手首→中指付け根の中点。手ボーンの原点は手首なので、そのままだと球が手首に刺さる
             // （design-18 §3.3.1・HoldBallInHand と同じ作法）
             var tip = a.Animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
-            var w = tip != null ? Vector3.Lerp(hand.position, tip.position, 0.5f) : hand.position;
+            var w = HandCenter(hand, tip);
             return _root.transform.InverseTransformPoint(w);
         }
 

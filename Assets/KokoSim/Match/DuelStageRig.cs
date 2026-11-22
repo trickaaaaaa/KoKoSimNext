@@ -2983,7 +2983,7 @@ namespace KokoSim.Unity.Match
             var tip = _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             // 手の中心（ワールド）→ 手ボーンローカル。指の付け根方向はボーンローカルでは動かないので
             // 1回求めれば以後のポーズでも手の中を指し続ける
-            var centerWorld = tip != null ? Vector3.Lerp(hand.position, tip.position, 0.5f) : hand.position;
+            var centerWorld = HandCenter(hand, tip);
             _ballHand = hand;
             _ballHeldLocal = hand.InverseTransformPoint(centerWorld) + _cal.BallInHandOffset
                 + hand.InverseTransformDirection(PalmDirWorld(_pitcher.Animator, hand, tip)) * BallPalmSinkM;
@@ -5316,6 +5316,15 @@ namespace KokoSim.Unity.Match
 
         private static float Smooth(float u) => u * u * (3f - 2f * u);
 
+        /// <summary>手の中心＝手首→中指付け根の中点（3d-character.md の掟）。手ボーンの原点は手首なので、
+        /// そのまま球や道具を結ぶと手首に刺さる（design-18 §3.3.1）。付け根が引けないときは手首。</summary>
+        private const float HandCenterT = 0.5f;
+        /// <summary>バットを握る・グラブの掌を測るときの寄せ（手首→付け根の 0.65）。実測で決めた値＝中点とは別の定数のまま持つ。</summary>
+        private const float FistGripT = 0.65f;
+
+        private static Vector3 HandCenter(Transform wrist, Transform knuckle, float t = HandCenterT)
+            => knuckle != null ? Vector3.Lerp(wrist.position, knuckle.position, t) : wrist.position;
+
         /// <summary>
         /// 掌中心（ワールド）。手ボーンの原点は**手首**なので、そのまま結ぶとバットが手首の上を横切り
         /// 「握れていない」絵になる（design-18 §3.3.1）。中指付け根との補間で掌の中へ通す。
@@ -5323,7 +5332,7 @@ namespace KokoSim.Unity.Match
         private Vector3 Fist(Transform wrist, HumanBodyBones knuckle)
         {
             var k = _batter.Animator.GetBoneTransform(knuckle);
-            return k != null ? Vector3.Lerp(wrist.position, k.position, 0.65f) : wrist.position;
+            return HandCenter(wrist, k, FistGripT);
         }
 
         /// <summary>この球はバットに当たるか（ミート・ファウル）。空振りは当てない＝向けてはいけない。</summary>
@@ -6604,7 +6613,7 @@ namespace KokoSim.Unity.Match
                 var tip = _pitcher != null && _pitcher.Animator != null
                     ? _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal) : null;
                 if (hand == null) return "ball=手に貼り付け（手ボーン未解決）";
-                var center = tip != null ? Vector3.Lerp(hand.position, tip.position, 0.5f) : hand.position;
+                var center = HandCenter(hand, tip);
                 return "ball=手に貼り付け 手の中心からのずれ="
                     + Vector3.Distance(_ball.transform.position, center).ToString("F4") + "m"
                     + " 手首から=" + Vector3.Distance(_ball.transform.position, hand.position).ToString("F4") + "m"
@@ -6736,7 +6745,7 @@ namespace KokoSim.Unity.Match
                     sb.AppendLine(name + "\thand=" + (hand != null) + "\tglove=" + (glove != null) + "\t★欠落");
                     continue;
                 }
-                var palm = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.65f) : hand.position;
+                var palm = HandCenter(hand, knuckle, FistGripT);
                 var local = _root.transform.InverseTransformPoint(glove.position);
                 sb.AppendLine(name
                     + "\t掌=" + _root.transform.InverseTransformPoint(palm).ToString("F3")
@@ -6763,7 +6772,7 @@ namespace KokoSim.Unity.Match
             var hipBone = _pitcher.Animator.GetBoneTransform(HumanBodyBones.Hips);
             if (hand != null)
             {
-                var p = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.65f) : hand.position;
+                var p = HandCenter(hand, knuckle, FistGripT);
                 palm = _root.transform.InverseTransformPoint(p);
             }
             if (hipBone != null) hips = _root.transform.InverseTransformPoint(hipBone.position);
