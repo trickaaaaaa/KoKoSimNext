@@ -119,6 +119,19 @@ namespace KokoSim.Unity.Debugging.EditorTools
             UnityEngine.Debug.Log("[KokoSim/Debug] 再現トークンをクリップボードへ: " + EditorGUIUtility.systemCopyBuffer);
         }
 
+        /// <summary>クリップボードの16進（"0x..." 可）を母種として固定する（設計書17 §3.1 の貼り付け入口・issue #1285）。</summary>
+        [MenuItem(Root + "観測/母種を貼り付けて固定", priority = 84)]
+        private static void PasteSeed()
+        {
+            var text = EditorGUIUtility.systemCopyBuffer;
+            if (Shell.GameSeed.TryResetHex(text)) return;   // 成功は Reset がログに出す
+            UnityEngine.Debug.LogWarning("[KokoSim/Debug] クリップボードを母種（16進）として読めません: " + text);
+        }
+
+        /// <summary>クリップボードの再現トークンの場面へ戻る（設計書17 §3.3 の貼り付け入口・issue #1285）。</summary>
+        [MenuItem(Root + "観測/再現トークンを貼り付けて復元", priority = 85)]
+        private static void PasteReproToken() => Log(DebugBridge.Restore(EditorGUIUtility.systemCopyBuffer));
+
         private static void Start(string scenarioId)
         {
             DebugTraceHub.Enabled = true;   // 起こす試合は必ず観測付き（HUD・DumpTrace の前提）

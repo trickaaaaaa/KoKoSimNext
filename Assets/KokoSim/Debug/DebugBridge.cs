@@ -37,6 +37,8 @@ namespace KokoSim.Unity.Debugging
         private static KokoSim.Engine.Match.Game.Team _away, _home;
         private static GameContext _ctx;
         private static string _scenarioId;
+        // 場面ジャンプで始めた試合の開始局面。再現トークンの復元・指紋の照合で必要（issue #1285）。
+        private static ScenarioStart _start;
         private static ulong _seed;
         // "player" 指定を実部員で解決したか（設計書17 §6, #96）。"roster"=自校ロスター／"generated"=生成校。
         private static string _playerTeamSource = "generated";
@@ -76,6 +78,8 @@ namespace KokoSim.Unity.Debugging
                 var seed = ParseSeed(seedHex);
                 ScenarioStart start = null;
                 var ctx = DebugTraceHub.AttachTo(new GameContext { CaptureTimelines = true });
+                // 係数の識別子は歩くのが高いので試合を起こすたびに1回だけ（設計書17 §4.3 の coeff）。
+                var coeffId = CoefficientFingerprint.Of(ctx);
 
                 if (!string.IsNullOrEmpty(scenarioId))
                 {
@@ -101,30 +105,41 @@ namespace KokoSim.Unity.Debugging
                     _playerTeamSource = "generated"; // シナリオ無し＝"player"の概念なし。両校とも生成校。
                 }
 
-                _ctx = ctx;
+                _ctx = ctx with { TraceSeed = seed, TraceCoefficientsId = coeffId };
                 _seed = seed;
+                _start = start;
                 _prog = new MatchProgression(_away, _home, _ctx, seed, start);
                 return DumpState();
             }
             catch (System.Exception e) { return Err(e.Message); }
         }
 
-        /// <summary>再現トークンから場面を復元する。指紋が合わなければ<b>再生せずに</b>警告を返す。</summary>
+        /// <summary>
+        /// 再現トークンから場面を復元する。指紋が合わなければ<b>再生せずに</b>警告を返す。
+        /// トークンの RNG 開始状態・場面ジャンプの開始局面・いまの試合で積んだ采配/強制発動の決定列を引き継ぐ
+        /// （どれかを捨てると黙って別の試合を再生する・設計書17 §3.3, issue #1285）。
+        /// </summary>
         public static string Restore(string reproToken)
         {
             try
             {
                 if (_prog == null) return Err("no-match（先に StartMatch を呼ぶこと）");
                 if (!ReproToken.TryParse(reproToken, out var token)) return Err("bad-token");
-                if (!token.Verify(_away, _home, _ctx))
-                    return Err("fixture-mismatch（別のロスター/ルールです。黙って別の試合を再生しません）");
+                if (!token.Verify(_away, _home, _ctx, _start))
+                    return Err("fixture-mismatch（別のロスター/ルール/場面です。黙って別の試合を再生しません）");
 
-                _prog = new MatchProgression(_away, _home, _ctx, _seed);
-                _prog.SeekTo(token.PlateAppearance, token.Pitch);
+                _prog = MatchProgression.FromReproToken(_away, _home, _ctx, token, _start, _prog.Save().Decisions);
                 return DumpState();
             }
             catch (System.Exception e) { return Err(e.Message); }
         }
+
+        /// <summary>
+        /// いまの場面の再現トークン（HUD の表示・コピー用）。試合を起こしていない・RNG 状態を捕捉できない
+        /// 試合では null。<see cref="DebugBridge"/> が起こした試合のものなので、HUD は観測リングのヘッダと
+        /// RNG 開始状態が一致するときだけ出す。
+        /// </summary>
+        public static ReproToken? CurrentReproToken() => _prog?.ReproToken();
 
         // ===== 進行 =====
 

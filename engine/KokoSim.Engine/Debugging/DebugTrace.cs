@@ -114,6 +114,13 @@ public sealed record GameTraceHeader
 {
     public string AwayName { get; init; } = "";
     public string HomeName { get; init; } = "";
+    /// <summary>母種（この試合を起こしたシード）。呼び出し側が知らない試合（大会の隔離Fork等）は null。</summary>
+    public ulong? Seed { get; init; }
+    /// <summary>
+    /// 走った係数の識別子（<see cref="CoefficientFingerprint.Of"/>・8桁）。<c>trace-diff</c> の2本が同じ係数で
+    /// 走ったかを辿る用。呼び出し側が載せなければ null。
+    /// </summary>
+    public string? CoefficientsId { get; init; }
     /// <summary>開始時点の RNG 内部状態（16進連結）。これ単体で試合を頭から再生できる。</summary>
     public string RngStateHex { get; init; } = "";
     /// <summary>対戦カード指紋（<see cref="ReproToken.Fingerprint"/>）。</summary>

@@ -75,15 +75,19 @@ public readonly record struct ReproToken(
     /// 現在の対戦カードとトークンの指紋が一致するか。false のとき呼び出し側は<b>必ず警告を出す</b>
     /// （設計書17 §3.3「黙って違う試合を再生しない」）。
     /// </summary>
-    public bool Verify(Team away, Team home, GameContext ctx)
-        => FixtureFingerprint == Fingerprint(away, home, ctx);
+    public bool Verify(Team away, Team home, GameContext ctx, ScenarioStart? scenario = null)
+        => FixtureFingerprint == Fingerprint(away, home, ctx, scenario);
 
     /// <summary>
     /// 対戦カード指紋: 両校名・全選手の同一性・主要ルール・球場寸法の SHA256 先頭
     /// <see cref="FingerprintLength"/> 桁。<b>係数の細部までは含めない</b>（含めると係数調整のたびに
     /// 過去トークンが全滅して再現の役に立たなくなる）。「別のロスター／別の球場を掴んでいないか」の検出が目的。
+    ///
+    /// <para>場面ジャンプで始めた試合は開始局面（<paramref name="scenario"/>）も含める（issue #1285）。含めないと
+    /// 「1回表から始まる試合」のトークンと同じ指紋になり、照合が通ったまま別の場面を再生してしまう。
+    /// 通常の試合（null）は従来と1バイトも変わらない＝既存トークンは無効にならない。</para>
     /// </summary>
-    public static string Fingerprint(Team away, Team home, GameContext ctx)
+    public static string Fingerprint(Team away, Team home, GameContext ctx, ScenarioStart? scenario = null)
     {
         var sb = new StringBuilder();
         AppendTeam(sb, away);
@@ -99,6 +103,7 @@ public readonly record struct ReproToken(
           .Append(ctx.Field.CenterFenceM.ToString("F2", c)).Append('|')
           .Append(ctx.Field.RightFenceM.ToString("F2", c)).Append('|')
           .Append(ctx.Field.FenceHeightM.ToString("F2", c)).Append('\n');
+        if (scenario is not null) sb.Append("scenario|").Append(scenario).Append('\n');
 
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));

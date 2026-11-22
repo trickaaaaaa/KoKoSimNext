@@ -37,6 +37,8 @@ namespace KokoSim.Unity.Debugging
         private UIDocument _doc;
         private VisualElement _root;
         private Label _p1, _p2, _p3, _p4, _p5;
+        private Button _copyToken;
+        private string _reproToken;
         private long _renderedPitches = -1;
         private bool _renderedVisible;
 
@@ -139,13 +141,29 @@ namespace KokoSim.Unity.Debugging
                        + (t.SignCandidatesCsv == null ? "" : "\n  " + t.SignCandidatesCsv);
 
             var h = ring.Header;
+            _reproToken = CurrentToken(h);
             _p5.text = string.Format(c,
-                "P5 REPRO  fixture {0}  draws/pitch {1}\n  rng {2}…\n  master {3}",
+                "P5 REPRO  fixture {0}  draws/pitch {1}\n  rng {2}…\n  master {3}  seed {4}\n  token {5}",
                 h?.FixtureFingerprint ?? "-", t.RngDrawsInPitch,
                 h == null || h.RngStateHex.Length < 16 ? "-" : h.RngStateHex.Substring(0, 16),
-                Shell.GameSeed.MasterHex);
+                Shell.GameSeed.MasterHex,
+                h?.Seed is ulong seed ? "0x" + seed.ToString("x", c) : "-",
+                _reproToken ?? "-（DebugBridge で起こした試合のみ）");
+            _copyToken.SetEnabled(_reproToken != null);
 
             RenderLog(ring, c);
+        }
+
+        /// <summary>
+        /// 表示中の試合の再現トークン。<see cref="DebugBridge"/> が起こした試合のうち、観測リングの試合と
+        /// RNG 開始状態が一致するものだけ（別の試合のトークンを出さない）。
+        /// </summary>
+        private static string CurrentToken(GameTraceHeader header)
+        {
+            if (header == null || DebugBridge.CurrentReproToken() is not ReproToken token) return null;
+            var hex = new StringBuilder();
+            foreach (var w in token.RngState) hex.Append(w.ToString("x16", System.Globalization.CultureInfo.InvariantCulture));
+            return hex.ToString() == header.RngStateHex ? token.ToString() : null;
         }
 
         /// <summary>
@@ -209,6 +227,18 @@ namespace KokoSim.Unity.Debugging
             _p3 = AddPane(Muted);
             _p4 = AddPane(Muted);
             _p5 = AddPane(Muted);
+            // 再現トークンのコピー（設計書17 §3.3 / §5 P5）。バグ報告に貼る・Restore に渡す。
+            _copyToken = new Button(() =>
+            {
+                if (_reproToken == null) return;
+                GUIUtility.systemCopyBuffer = _reproToken;
+                UnityEngine.Debug.Log("[KokoSim/Debug] 再現トークンをクリップボードへ: " + _reproToken);
+            }) { text = "COPY TOKEN" };
+            _copyToken.style.fontSize = 10;
+            _copyToken.style.alignSelf = Align.FlexStart;
+            _copyToken.style.marginLeft = 6;
+            _copyToken.style.marginBottom = 4;
+            _root.Add(_copyToken);
 
             _logHost = new VisualElement { style = { flexGrow = 1, backgroundColor = PanelDeep, paddingTop = 4 } };
             _logHost.Add(MakeLogRow(LogHeaders, Muted));

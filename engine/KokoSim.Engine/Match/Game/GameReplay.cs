@@ -69,7 +69,9 @@ public sealed record GameDecision(
     bool On = false,
     // Timeout 専用（issue #1246）: 伝令の攻守を呼び出し側が確定させたときだけ入る（画面に映っている半回で決める）。
     // null＝従来どおり局面から導出（古い決定列）。
-    bool? AsOffense = null);
+    bool? AsOffense = null,
+    // ForcedOutcome 専用（設計書17 §6.1・issue #1285）: 予約した強制発動。復元・シークで落ちないよう決定列へ積む。
+    Debugging.ForcedOutcome? Forced = null);
 
 public enum GameDecisionKind
 {
@@ -129,6 +131,8 @@ public enum GameDecisionKind
     Timeout,
     /// <summary>くさい所（issue #872）。OffenseIsAway=**攻撃側**が先攻か（指示は守備側＝その逆に載る）。On=入れる／解く。その打席だけ。</summary>
     PitchAround,
+    /// <summary>強制発動の予約（設計書17 §6.1・issue #1285。デバッグ経路専用）。Forced=発動の種類。次の1打席に一度だけ効く。</summary>
+    ForcedOutcome,
 }
 
 /// <summary>復元された進行（状態＋続きを回すための enumerator）。drain して <see cref="GameEngine.BuildResult"/> へ。</summary>
@@ -300,6 +304,9 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.DefenseAssign:
                     SubstitutionCommands.DefenseAssign(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);
+                    break;
+                case GameDecisionKind.ForcedOutcome:
+                    if (d.Forced is { } forced) p.ForceNext(forced);
                     break;
                 case GameDecisionKind.Timeout:
                     SubstitutionCommands.CallTimeout(p, d.OffenseIsAway, d.TargetIndex >= 0 ? d.TargetIndex : null, d.AsOffense);
