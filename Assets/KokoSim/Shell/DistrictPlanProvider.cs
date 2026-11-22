@@ -63,10 +63,22 @@ namespace KokoSim.Unity.Shell
         /// （東京はここで2を返すが、秋季は分割されない＝地区予選を開いてはいけない）。</summary>
         public static int DistrictsOf(int prefectureId)
         {
-            var summerSplit = SummerRegions.SplitDistrictNames(prefectureId).Count;
+            var summerSplit = SummerRegions.NewGameSplitNames(prefectureId).Count;
             if (summerSplit > 0) return summerSplit;
             return Plan.TryGetValue(prefectureId, out var n) ? n : 0;
         }
+
+        /// <summary>新規開始画面の選択肢の名前（夏が2分割の東京・北海道は夏の区画名、他は <see cref="DistrictLabel"/>）。</summary>
+        public static string NewGameChoiceLabel(int prefectureId, int choice)
+        {
+            var names = SummerRegions.NewGameSplitNames(prefectureId);
+            return choice >= 0 && choice < names.Count ? names[choice] : DistrictLabel(prefectureId, choice);
+        }
+
+        /// <summary>新規開始画面で選んだ選択肢→自校の DistrictId。夏が2分割の県は <see cref="SummerRegions.NewGameDistrictId"/>、他は添字そのもの。</summary>
+        public static int NewGameDistrictId(int prefectureId, int choice)
+            => SummerRegions.NewGameSplitNames(prefectureId).Count > 0
+                ? SummerRegions.NewGameDistrictId(prefectureId, choice) : choice;
 
         /// <summary>
         /// その県の秋季地区予選の地区数（0＝地区予選なし・秋季県大会がいきなり始まる）。

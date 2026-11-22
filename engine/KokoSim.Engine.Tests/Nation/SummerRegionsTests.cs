@@ -236,6 +236,37 @@ public sealed class SummerRegionsTests
         Assert.Equal(expected, SummerRegions.SplitDistrictNames(prefectureId));
     }
 
+    /// <summary>新規開始画面（issue #1334）：夏が2分割の東京・北海道だけが夏の区画名の2択を返す。</summary>
+    [Theory]
+    [InlineData(0, new[] { "北北海道", "南北海道" })]
+    [InlineData(12, new[] { "東東京", "西東京" })]
+    [InlineData(20, new string[0])]
+    public void NewGameSplitNames_TokyoAndHokkaido(int prefectureId, string[] expected)
+    {
+        Assert.Equal(expected, SummerRegions.NewGameSplitNames(prefectureId));
+    }
+
+    /// <summary>選んだ南北→自校の DistrictId→RegionFor で、選んだ夏の区画に必ず戻る（北海道は代表支部）。</summary>
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(0, 1)]
+    [InlineData(12, 0)]
+    [InlineData(12, 1)]
+    public void NewGameDistrictId_RoundTripsToChosenRegion(int prefectureId, int split)
+    {
+        var prefs = MakeNation().Prefectures;
+        var districtId = SummerRegions.NewGameDistrictId(prefectureId, split);
+        Assert.Equal(split, SummerRegions.RegionFor(prefs, prefectureId, districtId).Split);
+    }
+
+    /// <summary>北海道の代表支部は北北海道=旭川(1)・南北海道=札幌(0)（秋季の支部番号）。</summary>
+    [Fact]
+    public void NewGameDistrictId_Hokkaido_RepresentativeBranches()
+    {
+        Assert.Equal("旭川", SummerRegions.HokkaidoBranchNames[SummerRegions.NewGameDistrictId(0, 0)]);
+        Assert.Equal("札幌", SummerRegions.HokkaidoBranchNames[SummerRegions.NewGameDistrictId(0, 1)]);
+    }
+
     /// <summary>北海道の支部名10件（DistrictId順）。data/pref-formats/hokkaido.yaml の districts: と同じ並び。</summary>
     [Fact]
     public void HokkaidoBranchNames_MatchesHokkaidoYamlOrder()
