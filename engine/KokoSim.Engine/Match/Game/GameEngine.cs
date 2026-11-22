@@ -722,7 +722,13 @@ public static class GameEngine
             var forcedPaResult = Debugging.ForcedOutcomes.ToPlateAppearance(force);
             // バントの解決は打席の中（AtBatSession→BuntResolver）で打席文脈の走塁係数を読むので、
             // BuntInPlay だけは強制した係数を打席文脈へ渡す。それ以外は従来どおり同一参照＝乱数順・結果は不変。
-            var paCtx = force == Debugging.ForcedOutcome.BuntInPlay ? ctx with { Baserunning = paBaserunning } : ctx;
+            // FieldingError は捕球の失策確率だけを寄せた守備係数を打席文脈へ渡す（打球の物理は通す）。
+            var paCtx = force switch
+            {
+                Debugging.ForcedOutcome.BuntInPlay => ctx with { Baserunning = paBaserunning },
+                Debugging.ForcedOutcome.FieldingError => ctx with { Fielding = Debugging.ForcedOutcomes.ApplyFielding(ctx.Fielding, force) },
+                _ => ctx,
+            };
 
             // プレッシャー指数（設計書02 §3）: 状況から自動算出。采配判断にも渡す。
             var pressureIdx = PressureModel.Compute(new PressureSituation(
@@ -1801,6 +1807,10 @@ public static class GameEngine
             offense.NextBatter();
             defense.SetPitchAround(false);   // くさい所はその打席だけ（issue #872）
             var res = session.Result;
+            // FieldingError は野手が捕りにいく打球でだけ効く＝失策が起きなかった打席（三振・四球・外野へ抜けた安打・本塁打等）
+            // なら次の打席へ予約を持ち越す（デバッグ経路専用）。
+            if (force == Debugging.ForcedOutcome.FieldingError && res.Play?.Result != Match.Fielding.BattedBallResult.Error)
+                p.ForceNext(force);
             defense.AddPitches(res.Pitches, gearWeight);
             p.TotalPitches += res.Pitches;
 

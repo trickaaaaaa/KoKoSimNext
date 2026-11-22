@@ -68,6 +68,15 @@ public enum ForcedOutcome
     // ── 走塁（盗塁企図を強制したうえで成否を固定する） ──
     StealSuccess,
     StealCaught,
+
+    // ── 守備（打球の物理はそのまま・捕球の失策だけを確定させる） ──
+    /// <summary>
+    /// 前に飛んだ打球の最初の捕球を失策（お手玉・落球）にする（issue #1247 の撮影用）。<see cref="ReachedOnError"/> は
+    /// 打席結果だけを固定して打球を作らない＝守備ビューに場面が出ないので、こちらは打球の物理を通したうえで
+    /// 捕球の失策確率だけを 1 に寄せる。失策が起きなかった打席（三振・四球・外野へ抜けた安打・本塁打等）では
+    /// 次の打席へ予約を持ち越す。
+    /// </summary>
+    FieldingError,
 }
 
 /// <summary>強制発動の分類と、打席結果への写像。</summary>
@@ -92,6 +101,16 @@ public static class ForcedOutcomes
         ForcedOutcome.ReachedOnError => PlateAppearanceResult.ReachedOnError,
         _ => null,
     };
+
+    /// <summary>
+    /// 1打席ぶんの守備係数（<see cref="FieldingError"/> だけが変える。他は同一参照＝乱数順・結果は不変）。
+    /// 捕球の失策確率を下限・上限とも 1 にし、トンネルの分岐を止め（お手玉に揃える）、こぼれ幅を広げる。抽選自体は残るので乱数の消費順は変わらない。
+    /// </summary>
+    public static Match.Fielding.FieldingCoefficients ApplyFielding(
+        Match.Fielding.FieldingCoefficients c, ForcedOutcome f) => f == ForcedOutcome.FieldingError
+        // こぼれ幅を広げる＝拾い直して一塁に間に合う（記録はアウト・issue #817）ことを減らす。間に合ってしまった打席は次へ持ち越す
+        ? c with { ErrorBaseProb = 1.0, ErrorMinProb = 1.0, ErrorMaxProb = 1.0, FlyErrorBaseProb = 1.0, TunnelShareProb = 0.0, CatchFumbleScatterSigmaM = 4.0 }
+        : c;
 
     /// <summary>盗塁企図そのものを起こす種別か（走者一塁・二塁空きが前提）。</summary>
     public static bool ForcesStealAttempt(this ForcedOutcome f)
