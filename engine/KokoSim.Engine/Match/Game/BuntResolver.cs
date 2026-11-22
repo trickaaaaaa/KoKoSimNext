@@ -365,9 +365,8 @@ public static class BuntResolver
         return BuntResult.SacrificeSuccess;
 
         double ForceSafeP(Player runner, int fromBase, HomePlayResolver.BasePlayParams bp, double delay)
-            => MathUtil.Clamp(MathUtil.Logistic(
-                (HomePlayResolver.Margin(runner, fromBase, rolled.Situation, field, c, bp, delay) + noise) / bp.MarginScale),
-                0.01, 0.99);
+            => MathUtil.Logistic(
+                (HomePlayResolver.Margin(runner, fromBase, rolled.Situation, field, c, bp, delay) + noise) / bp.MarginScale);
     }
 
     /// <summary>小フライからのライナー併殺（design-09「小フライ併殺」）。firstRunner/field が非null のときだけ

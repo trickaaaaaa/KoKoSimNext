@@ -636,7 +636,9 @@ public static class BaserunningModel
                 // 送り判定で自重した場合は本塁と同じ流儀で RNG を消費しない（決定論・消費順は home!=null 経路の慣習）。
                 var third3 = HomePlayResolver.ThirdParams(h3.Field, coeff);
                 // 待った一塁走者（#1130）は落ちてから走る＝三塁の見込みも勝負もその遅れ込み。
-                var prob = HomePlayResolver.SuccessProbability(r1, 1, h3.Situation, h3.Field, coeff, third3, d1);
+                // 拾い直せず確定した捕球ミス（#950）の読みの遅れも同じ1か所（二塁走者の三塁・本塁と同じ値）。
+                var d1Third = d1 + catchErrorStartDelay;
+                var prob = HomePlayResolver.SuccessProbability(r1, 1, h3.Situation, h3.Field, coeff, third3, d1Third);
                 if (!HomeSendDecision.ShouldSendThird(prob, currentOuts + extraOuts, h3.Aggression, h3.Tactics))
                 {
                     second = r1; // 自重＝二塁で止まる（RNG非消費）
@@ -649,19 +651,19 @@ public static class BaserunningModel
                 }
                 else
                 {
-                    var margin = HomePlayResolver.Margin(r1, 1, h3.Situation, h3.Field, coeff, third3, d1);
+                    var margin = HomePlayResolver.Margin(r1, 1, h3.Situation, h3.Field, coeff, third3, d1Third);
                     var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
-                    var race3 = HomePlayResolver.ResolveRace(r1, 1, h3.Situation, h3.Field, coeff, third3, rng, d1);
+                    var race3 = HomePlayResolver.ResolveRace(r1, 1, h3.Situation, h3.Field, coeff, third3, rng, d1Third);
                     if (race3.Safe)
                     {
                         third = r1;
-                        mv?.Add(Mark(new RunnerMove(r1, 1, 3, false) { CloseCall = closeCall, ExtraStartDelaySeconds = d1, ThrowScatter = race3.Scatter }));
+                        mv?.Add(Mark(new RunnerMove(r1, 1, 3, false) { CloseCall = closeCall, ExtraStartDelaySeconds = d1Third, ThrowScatter = race3.Scatter }));
                     }
                     else
                     {
                         extraOuts++; thirdOuts++; outThrowUsed = true; // 三塁で刺殺（走者はアウト＝塁上に残らない）
                         mv?.Add(Mark(new RunnerMove(r1, 1, 3, Out: true)
-                            { CloseCall = closeCall, ExtraStartDelaySeconds = d1 + race3.RunnerDelaySeconds, ThrowScatter = race3.Scatter }));
+                            { CloseCall = closeCall, ExtraStartDelaySeconds = d1Third + race3.RunnerDelaySeconds, ThrowScatter = race3.Scatter }));
                     }
                 }
             }
@@ -1839,8 +1841,9 @@ public static class BaserunningModel
             transferSecondsOverride: coeff.DoublePlaySelfForceRelayTransferSeconds);
         var r1Close = Math.Abs(r1Margin) < coeff.CloseCallMarginSeconds;
         var (relayScatter, relayNoise) = HomePlayResolver.SampleThrowScatter(home.Situation.ThrowerThrowAccuracy, coeff, rng);
-        var pR1SafeWithNoise = MathUtil.Clamp(
-            MathUtil.Logistic((r1Margin + relayNoise) / secondTag.MarginScale), 0.01, 0.99);
+        // 勝負の抽選はクランプしない（design-12 §3.9・issue #801）。1%/99% で切ると、大きく先着した走者がアウトになる
+        // 場面を秒で説明できない。
+        var pR1SafeWithNoise = MathUtil.Logistic((r1Margin + relayNoise) / secondTag.MarginScale);
         bases.First = null; // 打者は一塁手の自己フォースでアウト＝一塁走者は必ず一塁を去る
 
         if (MathUtil.Chance(pR1SafeWithNoise, rng))

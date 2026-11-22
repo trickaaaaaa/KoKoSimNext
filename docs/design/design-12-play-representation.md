@@ -284,6 +284,10 @@ Heavy統計回帰（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯
 
 **帯**: 結果が変わるのはクランプが効いていた場面だけ（安打の本塁憤死が2000試合で 386→338件）。
 
+**残っていたクランプ（issue #1293）**: 一塁手の自己フォース→二塁タッチの抽選（`ResolveDoublePlayFirstBaseTag` の
+`pR1SafeWithNoise`）と、バントの封殺の抽選（`BuntResolver` の `ForceSafeP`）も、勝負の抽選に 1%/99% のクランプを
+掛けたままだった。どちらも外した（乱数は従来どおり1つ）。送り判断に使う見込み（`SuccessProbability` 等）は読みのためクランプのまま。
+
 ### 3.10 こぼれ球を拾った後の送球（issue #809・2026-11-08・表示専用）
 
 失策でこぼれた／逸れた球を拾った野手の送球は、実物の手順に揃える（`TimelineBuilder.AppendErrorReturnThrow`）。
@@ -295,6 +299,10 @@ Heavy統計回帰（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯
 4. **拾った時点で全員止まっている**: 従来どおり1本で投手へ返す（内野で拾い、投手がマウンドに居る）。外野で拾った／投手が不在なら二塁へ
 
 拾いに行く野手は今のまま（お手玉・落球＝弾いた本人、悪送球＝一塁カバー）。「弾いた本人が間に合わなければ別の野手」は未対応。
+
+**拾い直せず確定した捕球ミス（issue #1293）**: 判定の時計は `CatchErrorReadyAtSeconds`（拾い直しを終える時刻）から本塁へ投げる前提。
+絵も同じ時計で描く＝球は判定が引いた `CatchErrorScatterM` だけ転がり、その時刻に止まって拾われる。本塁で刺す／生還を許す送球
+（`AppendBackHomeThrows`）は、拾い直した地点・時刻から出る（弾いた瞬間から投げると、転がる球と送球が同時に存在した）。
 判定・乱数には触れない（結果は `BaserunningModel`・失策連鎖 design-14 P1-6 が先に決めている）。
 
 ---
