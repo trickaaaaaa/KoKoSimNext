@@ -259,7 +259,7 @@ public sealed class BlockLeagueRunner : ITournamentRunner
                 var opp = c.A.Id == _managerId ? c.B : c.A;
                 var matchDay = _schedule.LeagueMatchDay(round);
                 var live = _playerResolver.BeginLive(mgr, opp, _rng.Fork(PlayerStream(round, c.Index)),
-                    MercyRuleEnabled, new TournamentMatchContext(LeagueRoundsRemaining, matchDay, _pitchLedger));
+                    MercyRuleEnabled, MatchContextOf(round, matchDay));
                 var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, RoundNameFor(round), opp.Id)
                     { RoundsRemaining = LeagueRoundsRemaining };
                 _pending = new Pending(round, c.Index, mgr, opp, live.ManagerIsAway, handle, matchDay);
@@ -297,7 +297,7 @@ public sealed class BlockLeagueRunner : ITournamentRunner
         foreach (var c in CardsOf(_roundIndex))
         {
             if (Involves(c)) continue;
-            var context = new TournamentMatchContext(LeagueRoundsRemaining, matchDay, _pitchLedger);
+            var context = MatchContextOf(_roundIndex, matchDay);
             jobs.Add((c.A, c.B, _rng.Fork(BackgroundStream(_roundIndex, c.Index)), context));
         }
         PrefetchRunner.Run(jobs, j => resolver.Resolve(j.A, j.B, j.Rng, j.Context), maxParallelism);
@@ -354,7 +354,7 @@ public sealed class BlockLeagueRunner : ITournamentRunner
                 var opp = c.A.Id == _managerId ? c.B : c.A;
                 var matchDay = _schedule.LeagueMatchDay(round);
                 var first = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerStream(round, c.Index)),
-                    MercyRuleEnabled, new TournamentMatchContext(LeagueRoundsRemaining, matchDay, _pitchLedger));
+                    MercyRuleEnabled, MatchContextOf(round, matchDay));
                 outcome = FinishManagerCard(round, c, mgr, opp, first.ManagerIsAway, matchDay, first.Result);
                 continue;
             }
@@ -380,9 +380,13 @@ public sealed class BlockLeagueRunner : ITournamentRunner
         var away = managerIsAway ? mgr : opp;
         var home = managerIsAway ? opp : mgr;
         var (r, awayWon, replays) = TournamentRunner.DecideByReplay(away, home, attempt =>
-            attempt == 0 ? firstResult
+        {
+            var g = attempt == 0 ? firstResult
                 : _playerResolver!.Resolve(mgr, opp, _rng.Fork(PlayerStream(round, c.Index, attempt)),
-                    MercyRuleEnabled, new TournamentMatchContext(LeagueRoundsRemaining, matchDay, _pitchLedger, attempt)).Result);
+                    MercyRuleEnabled, MatchContextOf(round, matchDay, attempt)).Result;
+            RecordOutings(g, away, home, matchDay);   // 再試合も含め全試合の球数を積む（裏試合と同じ）
+            return g;
+        });
         var managerWon = managerIsAway ? awayWon : !awayWon;
         var mgrRuns = managerIsAway ? r.AwayRuns : r.HomeRuns;
         var oppRuns = managerIsAway ? r.HomeRuns : r.AwayRuns;
@@ -392,7 +396,6 @@ public sealed class BlockLeagueRunner : ITournamentRunner
         var bScore = aIsMgr ? oppRuns : mgrRuns;
         if (aScore == bScore) { if (aIsMgr == managerWon) aScore++; else bScore++; }
         Record(round, c, aScore, bScore, r.MercyEnded, involvesManager: true);
-        RecordOutings(r, away, home, matchDay);
         return new PlayerMatchOutcome(managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, RoundNameFor(round),
             IsChampion: false, Detail: r, ManagerWasAway: managerIsAway, MercyEnded: r.MercyEnded,
             TieReplays: replays, OpponentId: opp.Id);
@@ -408,7 +411,7 @@ public sealed class BlockLeagueRunner : ITournamentRunner
             var matchDay = _schedule.LeagueMatchDay(round);
             var (g, awayWon, _) = TournamentRunner.DecideByReplay(c.A, c.B, attempt =>
             {
-                var context = new TournamentMatchContext(LeagueRoundsRemaining, matchDay, _pitchLedger, attempt);
+                var context = MatchContextOf(round, matchDay, attempt);
                 var game = _backgroundResolver.Resolve(c.A, c.B, _rng.Fork(BackgroundStream(round, c.Index, attempt)), context);
                 RecordOutings(game, c.A, c.B, matchDay);
                 _onBackgroundMatch?.Invoke(c.A.Id, c.B.Id, game);
@@ -441,17 +444,15 @@ public sealed class BlockLeagueRunner : ITournamentRunner
     }
 
     private void RecordOutings(GameResult r, School away, School home, int matchDay)
-    {
-        RecordSide(r.AwayPitching, away.Id, matchDay);
-        RecordSide(r.HomePitching, home.Id, matchDay);
-    }
+        => _pitchLedger.RecordGame(r, away.Id, home.Id, matchDay, _managerId);
 
-    private void RecordSide(IReadOnlyList<PitchingLine> lines, int schoolId, int matchDay)
-    {
-        var isManagerSchool = schoolId == _managerId;
-        foreach (var l in lines)
-            _pitchLedger.Record(PitcherLedgerKey.For(isManagerSchool, schoolId, l.SourceId, l.UniformNumber), l.Pitches, matchDay);
-    }
+    /// <summary>
+    /// 節 <paramref name="round"/> の試合の進行コンテキスト。<see cref="LeagueRoundsRemaining"/> は球場・コールド等の
+    /// 意味づけ用の定数なので、エース温存にはリーグの実際の残り節数（この節を含む）を別に渡す。
+    /// </summary>
+    private TournamentMatchContext MatchContextOf(int round, int matchDay, int attempt = 0)
+        => new(LeagueRoundsRemaining, matchDay, _pitchLedger, attempt, TournamentMatchContext.AceRestSaltOf(_rng),
+            AceRestRoundsRemaining: Math.Max(1, _totalRounds - round));
 
     private void ConsumeLegacyManagerCardRng(School a, School b)
     {

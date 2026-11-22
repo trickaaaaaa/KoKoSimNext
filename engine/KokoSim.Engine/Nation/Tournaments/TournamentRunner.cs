@@ -780,6 +780,9 @@ public sealed class TournamentRunner : ITournamentRunner
     /// 数日に分散するので、同じラウンドでもカードごとに日が違う。プレフェッチ（<see cref="PrefetchCurrentRoundBackgroundCards"/>）と
     /// 本解決が別の日を渡すと、メモ化 resolver が別条件で温めた結果を本解決が拾ってしまうため、必ずここを通す。
     /// </summary>
+    private TournamentMatchContext MatchContextOf(int roundsRemaining, int matchDay, int attempt = 0)
+        => new(roundsRemaining, matchDay, _pitchLedger, attempt, TournamentMatchContext.AceRestSaltOf(_rng));
+
     private int MatchDayOf(int roundsRemaining, int slot)
         => _schedule.MatchDay(
             _totalRounds, _totalRounds - roundsRemaining, slot, 1 << Math.Max(0, roundsRemaining - 1), _fieldSize);
@@ -838,7 +841,7 @@ public sealed class TournamentRunner : ITournamentRunner
             if (a.Id == _managerId || b.Id == _managerId) continue;     // 自校カードはライブ解決＝プレフェッチしない
             // 試合日はカードごとに違う（序盤は数日に分散・issue #583）。本解決と<b>必ず同じ日</b>で
             // 呼ばないと、メモ化 resolver が別条件で温めた結果を本解決が拾ってしまう。
-            var context = new TournamentMatchContext(roundsRemaining, MatchDayOf(roundsRemaining, i), _pitchLedger);
+            var context = MatchContextOf(roundsRemaining, MatchDayOf(roundsRemaining, i));
             jobs.Add((a, b, _rng.Fork(BackgroundStream(roundsRemaining, i)), context));
         }
         // ResolveRound の裏カード分岐と同一呼び出し（結果は捨てる＝メモ化 resolver が温める）。
@@ -950,14 +953,18 @@ public sealed class TournamentRunner : ITournamentRunner
                 var mercy = MercyRuleEnabledFor(roundsRemaining);
                 // 初戦（再試合回0）は従来と完全一致（同一Fork・同一context）＝非引き分け試合は決定論baseline不変。
                 var first = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
-                    mercy, new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger));
+                    mercy, MatchContextOf(roundsRemaining, matchDay));
                 var managerIsAway = first.ManagerIsAway;
                 var awaySchool = managerIsAway ? mgr : opp;
                 var homeSchool = managerIsAway ? opp : mgr;
                 var (decisive, awayWon, replays) = DecideByReplay(awaySchool, homeSchool, attempt =>
-                    attempt == 0 ? first.Result
+                {
+                    var g = attempt == 0 ? first.Result
                         : _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i, attempt)),
-                            mercy, new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger, attempt)).Result);
+                            mercy, MatchContextOf(roundsRemaining, matchDay, attempt)).Result;
+                    RecordOutings(g, awaySchool, homeSchool, matchDay);   // 再試合も含め全試合の球数を積む（裏試合と同じ）
+                    return g;
+                });
                 var r = decisive;
                 var managerWon = managerIsAway ? awayWon : !awayWon;
                 var mgrRuns = managerIsAway ? r.AwayRuns : r.HomeRuns;
@@ -972,7 +979,6 @@ public sealed class TournamentRunner : ITournamentRunner
                     OpponentId: opp.Id);
                 _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mw.Id, ml.Id, mws, mls, true, r.MercyEnded));
                 RecordCard(round, i, mw.Id == a.Id, mws, mls, r.MercyEnded);
-                RecordOutings(r, managerIsAway ? mgr : opp, managerIsAway ? opp : mgr, matchDay);
                 next[i] = mw;
                 continue;
             }
@@ -1025,7 +1031,7 @@ public sealed class TournamentRunner : ITournamentRunner
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
                 var matchDay = MatchDayOf(roundsRemaining, i);
-                var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
+                var context = MatchContextOf(roundsRemaining, matchDay);
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
                     MercyRuleEnabledFor(roundsRemaining), context);
                 var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName, opp.Id)
@@ -1059,9 +1065,13 @@ public sealed class TournamentRunner : ITournamentRunner
         var homeSchool = p.ManagerIsAway ? p.Opp : p.Mgr;
         var mercy = MercyRuleEnabledFor(p.RoundsRemaining);
         var (decisive, awayWon, replays) = DecideByReplay(awaySchool, homeSchool, attempt =>
-            attempt == 0 ? result
+        {
+            var g = attempt == 0 ? result
                 : _playerResolver!.Resolve(p.Mgr, p.Opp, _rng.Fork(PlayerMatchStream(p.RoundsRemaining, p.Slot, attempt)),
-                    mercy, new TournamentMatchContext(p.RoundsRemaining, p.MatchDay, _pitchLedger, attempt)).Result);
+                    mercy, MatchContextOf(p.RoundsRemaining, p.MatchDay, attempt)).Result;
+            RecordOutings(g, awaySchool, homeSchool, p.MatchDay);   // 再試合も含め全試合の球数を積む（裏試合と同じ）
+            return g;
+        });
         var r = decisive;
         var managerWon = p.ManagerIsAway ? awayWon : !awayWon;
         var mgrRuns = p.ManagerIsAway ? r.AwayRuns : r.HomeRuns;
@@ -1074,7 +1084,6 @@ public sealed class TournamentRunner : ITournamentRunner
         _matches.Add(new BracketMatch(
             p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winner.Id, loser.Id, winScore, loseScore, true, r.MercyEnded));
         RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore, r.MercyEnded);
-        RecordOutings(r, awaySchool, homeSchool, p.MatchDay);
         p.Next[p.Slot] = winner;
 
         // 自校スロット以降の残りカードを本流で解決（このラウンドの自校戦は1つだけ＝以降は非自校カード）。
@@ -1122,7 +1131,7 @@ public sealed class TournamentRunner : ITournamentRunner
             // 各試合（引き分け含む）を全国成績へ畳み込み・台帳へ記録する（再試合＝両試合とも公式試合という現実準拠）。
             var (decisive, awayWon, _) = DecideByReplay(a, b, attempt =>
             {
-                var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger, attempt);
+                var context = MatchContextOf(roundsRemaining, matchDay, attempt);
                 var g = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot, attempt)), context);
                 RecordOutings(g, a, b, matchDay);
                 _onBackgroundMatch?.Invoke(a.Id, b.Id, g);   // 全国成績への畳み込みは**記録時**（上のコメント参照）。
@@ -1142,33 +1151,7 @@ public sealed class TournamentRunner : ITournamentRunner
     /// 自校投手は SourceId、相手校生成投手は (校ID, 背番号) をキーにする（<see cref="PitcherLedgerKey"/>）。
     /// </summary>
     private void RecordOutings(GameResult r, School awaySchool, School homeSchool, int matchDay)
-    {
-        RecordSide(r.AwayPitching, awaySchool.Id, matchDay);
-        RecordSide(r.HomePitching, homeSchool.Id, matchDay);
-    }
-
-    /// <summary>
-    /// 片チームぶんの登板を台帳へ積む。
-    ///
-    /// <para>⚠ <b>キーの選択を「SourceId を持つか」で分けてはいけない</b>（OPEN-QUESTIONS Q26・2026-08-12 修正）。
-    /// AI校の選手も <c>AiRosterFactory.Bootstrap</c> が <c>nextId = 1</c> から振った<b>校内選手ID</b>を
-    /// SourceId に焼くので、旧実装（<c>SourceId is int sid ? ForPlayer(sid) : …</c>）では
-    /// <b>全AI校の「選手ID 5」が同じキー</b>に潰れていた（実測: 64校フルシム大会で79登板→19キー）。
-    /// さらに唯一の読み手 <see cref="Roster.AceRestSelector"/> は <c>ForOpponent(校ID, 背番号)</c> で引くため、
-    /// AI校のエース温存は<b>台帳の消耗を一度も見ていなかった</b>（<c>fatigueLoad</c> が常に0）。</para>
-    ///
-    /// <para>したがって<b>自校かどうか</b>で分ける: 自校は育成選手ID（セーブ内で一意・年をまたいでも安定）、
-    /// AI校は (校ID, 背番号)＝読み手の引き方と揃える。校IDは全国で一意、背番号は校内で一意なので衝突しない。</para>
-    /// </summary>
-    private void RecordSide(IReadOnlyList<PitchingLine> lines, int schoolId, int matchDay)
-    {
-        var isManagerSchool = schoolId == _managerId;
-        foreach (var l in lines)
-        {
-            var key = PitcherLedgerKey.For(isManagerSchool, schoolId, l.SourceId, l.UniformNumber);
-            _pitchLedger.Record(key, l.Pitches, matchDay);
-        }
-    }
+        => _pitchLedger.RecordGame(r, awaySchool.Id, homeSchool.Id, matchDay, _managerId);
 
     /// <summary>
     /// 引き分け再試合の共通決着関数（設計書05 §1.3, issue #253）。自校戦（自動消化 <see cref="ResolveRound"/>／

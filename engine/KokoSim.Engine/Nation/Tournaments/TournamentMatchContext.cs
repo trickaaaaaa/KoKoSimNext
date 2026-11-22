@@ -1,3 +1,5 @@
+using KokoSim.Engine.Core;
+
 namespace KokoSim.Engine.Nation.Tournaments;
 
 /// <summary>
@@ -7,5 +9,23 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// <see cref="TieReplay"/> は引き分け再試合（設計書05 §1.3, issue #253）の再試合回（0＝初戦）。カードの
 /// メモ化キー（<see cref="MemoizingBackgroundResolver"/>）と Fork ストリームを再試合ごとに分けるための添字で、
 /// 0 のときは従来と完全一致する（初戦は決定論baseline不変）。
+/// <see cref="AceRestSalt"/> は温存抽選のシードに混ぜる大会ごとの値（0＝従来と同じ）。
+/// <see cref="AceRestRoundsRemaining"/> は温存判断だけが見る「この先に残る試合数」（null＝<see cref="RoundsRemaining"/>）。
+/// リーグ戦は <see cref="RoundsRemaining"/> を意味のない定数にしているので、温存にはリーグの実際の残り節数を渡す。
 /// </summary>
-public sealed record TournamentMatchContext(int RoundsRemaining, int MatchDay, TournamentPitchLedger Ledger, int TieReplay = 0);
+public sealed record TournamentMatchContext(
+    int RoundsRemaining, int MatchDay, TournamentPitchLedger Ledger, int TieReplay = 0, ulong AceRestSalt = 0,
+    int? AceRestRoundsRemaining = null)
+{
+    /// <summary>温存判断が使う残り試合数。</summary>
+    public int RestRoundsRemaining => AceRestRoundsRemaining ?? RoundsRemaining;
+
+    /// <summary>エース温存の抽選シードに混ぜる大会ごとの値の基準ストリームID。</summary>
+    public const ulong AceRestSaltStream = 0xACE5_5A17UL;
+
+    /// <summary>
+    /// 大会の基準乱数（母種＾年＾種別で決まる）から温存抽選用の塩を導く。Fork は親を進めない純導出＝本編の乱数列は動かない。
+    /// これを混ぜないと温存の抽選値が (校ID, 試合日) だけで決まり、毎年・夏秋で同じになる。
+    /// </summary>
+    public static ulong AceRestSaltOf(IRandomSource tournamentRng) => tournamentRng.Fork(AceRestSaltStream).NextUInt64();
+}
