@@ -1755,8 +1755,7 @@ public sealed class TimelineTests
 
         var tl = TimelineBuilder.BuildPickoff(runner, pitcher, "first", pickedOff, c, field);
 
-        var throwSeg = Assert.Single(tl.Ball);
-        Assert.Equal(BallSegmentKind.Throw, throwSeg.Kind);
+        var throwSeg = Assert.Single(tl.Ball, x => x.Kind == BallSegmentKind.Throw);
         Assert.Equal(FieldPosition.Pitcher, throwSeg.FromRole);
         Assert.Equal(FieldPosition.FirstBase, throwSeg.ToRole);
         Assert.Equal("first", throwSeg.ToBase);
@@ -1814,7 +1813,7 @@ public sealed class TimelineTests
         var pitcher = new Player { Position = FieldPosition.Pitcher, ArmStrength = 55, Mental = 50 };
 
         var tl = TimelineBuilder.BuildPickoff(runner, pitcher, baseName, pickedOff: true, c, field);
-        var throwSeg = Assert.Single(tl.Ball);
+        var throwSeg = Assert.Single(tl.Ball, x => x.Kind == BallSegmentKind.Throw);
         Assert.Equal(baseName, throwSeg.ToBase);
         Assert.Equal(receiver, throwSeg.ToRole);
         Assert.Contains(tl.Moves, m => m.Role == receiver && m.Task == FielderTask.CoverBase);

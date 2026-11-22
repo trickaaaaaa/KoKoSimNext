@@ -1,3 +1,4 @@
+using System;
 using KokoSim.Engine.Match.Batting;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Pitching;
@@ -29,8 +30,16 @@ public enum FoulViewKind
 /// <param name="HangSeconds">接触から球が落ちるまで[s]。</param>
 public sealed record FoulChase(FieldPosition Role, double StartX, double StartZ, double ReachSeconds, double HangSeconds)
 {
-    /// <summary>落下より何秒遅れて着くか（正＝間に合わない）。</summary>
-    public double LateSeconds => ReachSeconds - HangSeconds;
+    /// <summary>
+    /// 絵に描く「落下より何秒遅れて着くか」（常に正＝間に合わない）。判定の捕球予算は落下時間より短い
+    /// （<c>CatchTimeBudget</c>）ので、素の到達（<see cref="ReachSeconds"/>）が落下より先でも落球になる。
+    /// そのまま描くと落下より先に着いた野手が捕らない絵になる＝<see cref="MinLateSeconds"/> を下限にして
+    /// 「あと一歩届かなかった」に揃える。
+    /// </summary>
+    public double LateSeconds => Math.Max(ReachSeconds - HangSeconds, MinLateSeconds);
+
+    /// <summary>落球の絵で、野手が落下点に着くのを落下より遅らせる最小の秒（表示専用）。</summary>
+    public const double MinLateSeconds = 0.1;
 }
 
 /// <summary>守備ビューで見せるファウルの判定（issue #1074・オーナー決定 2026-11-17）。純関数・乱数不使用。</summary>
