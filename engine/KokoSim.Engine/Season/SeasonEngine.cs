@@ -191,7 +191,10 @@ public static class SeasonEngine
 
                 // 選手成長イベント（設計書03 §5.5: 覚醒/開眼/スランプ/伸び悩み/イップス）。独立ストリーム。
                 var growthRng = rng.Fork(0x6707_0000UL ^ (ulong)(year * 100 + week));
-                var growthNotices = GrowthEventModel.Week(roster, growthRng, ctx.Growth);
+                var growthNotices = GrowthEventModel.Week(roster, growthRng, ctx.Growth, p =>
+                    ctx.Calendar.CanTrain(p.Grade, week)
+                        ? TrainingFields.Trained(TrainingPresets.Resolve(p.Plan ?? TrainingPlan.Default, budget))
+                        : System.Array.Empty<TrainingField>());
                 if (ctx.GrowthObserver is { } observe) foreach (var n in growthNotices) observe(n);
 
                 eventsFired += scheduler.Week(week, rng).Count;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Players;
 
@@ -157,9 +158,15 @@ public sealed record GrowthEventCoefficients
 /// </summary>
 public static class GrowthEventModel
 {
-    /// <summary>週次処理。効果を選手に適用し、発火一覧を返す（UIフィード・気づきイベントの素材）。</summary>
+    /// <summary>
+    /// 週次処理。効果を選手に適用し、発火一覧を返す（UIフィード・気づきイベントの素材）。
+    /// <paramref name="trainedFields"/> は選手ごとのその週の練習分野（issue #1204）。覚醒・大覚醒・伸びしろアップ・
+    /// 新球種は練習時間の入っている分野でしか起きない（練習していない分野の能力が伸びて計画と噛み合わなくなるのを防ぐ）。
+    /// null＝分野で絞らない（練習計画を見ない呼び出し）。
+    /// </summary>
     public static IReadOnlyList<GrowthNotice> Week(
-        IReadOnlyList<DevelopingPlayer> roster, IRandomSource rng, GrowthEventCoefficients c)
+        IReadOnlyList<DevelopingPlayer> roster, IRandomSource rng, GrowthEventCoefficients c,
+        Func<DevelopingPlayer, IReadOnlyCollection<TrainingField>>? trainedFields = null)
     {
         var notices = new List<GrowthNotice>();
         foreach (var p in roster)
@@ -181,10 +188,11 @@ public static class GrowthEventModel
             if (p.SlumpWeeks > 0) p.SlumpWeeks--;
 
             // --- 上昇イベント（福音・レア） ---
-            if (TryGrandAwakening(p, rng, c, notices)) continue;
-            if (TryAwakening(p, rng, c, notices)) continue;
-            if (TryGrowthSurge(p, rng, c, notices)) continue;
-            if (TryNewPitch(p, rng, c, notices)) continue;
+            var trained = trainedFields?.Invoke(p);
+            if (TryGrandAwakening(p, rng, c, notices, trained)) continue;
+            if (TryAwakening(p, rng, c, notices, trained)) continue;
+            if (TryGrowthSurge(p, rng, c, notices, trained)) continue;
+            if (TryNewPitch(p, rng, c, notices, trained)) continue;
             if (TryBreakthrough(p, rng, c, notices)) continue;
 
             // --- 下降イベント（試練・文脈必須） ---
@@ -196,10 +204,10 @@ public static class GrowthEventModel
     }
 
     private static bool TryAwakening(DevelopingPlayer p, IRandomSource rng, GrowthEventCoefficients c,
-        List<GrowthNotice> notices)
+        List<GrowthNotice> notices, IReadOnlyCollection<TrainingField>? trained)
     {
         if (p.ConditionValue < c.AwakeningConditionMin) return false;
-        var domains = EligibleDomains(p, c.AwakeningGrowthThreshold);
+        var domains = EligibleDomains(p, c.AwakeningGrowthThreshold, trained);
         if (domains.Count == 0) return false;
         if (!MathUtil.Chance(c.AwakeningWeeklyProb, rng)) return false;
 
@@ -214,10 +222,10 @@ public static class GrowthEventModel
 
     /// <summary>大覚醒（issue #694）: 1能力が大きく跳ね、その能力の才能上限も少し上がる（上限99）。</summary>
     private static bool TryGrandAwakening(DevelopingPlayer p, IRandomSource rng, GrowthEventCoefficients c,
-        List<GrowthNotice> notices)
+        List<GrowthNotice> notices, IReadOnlyCollection<TrainingField>? trained)
     {
         if (p.ConditionValue < c.GrandAwakeningConditionMin) return false;
-        var domains = EligibleDomains(p, c.AwakeningGrowthThreshold);
+        var domains = EligibleDomains(p, c.AwakeningGrowthThreshold, trained);
         if (domains.Count == 0) return false;
         if (!MathUtil.Chance(c.GrandAwakeningWeeklyProb, rng)) return false;
 
@@ -240,13 +248,16 @@ public static class GrowthEventModel
     /// その場で能力は動かない＝以後の練習の伸びで差が出る（伸び悩み Plateau の逆向き）。
     /// </summary>
     private static bool TryGrowthSurge(DevelopingPlayer p, IRandomSource rng, GrowthEventCoefficients c,
-        List<GrowthNotice> notices)
+        List<GrowthNotice> notices, IReadOnlyCollection<TrainingField>? trained)
     {
         if (p.ConditionValue < c.GrowthSurgeConditionMin) return false;
         if (!MathUtil.Chance(c.GrowthSurgeWeeklyProb, rng)) return false;
 
-        var domains = new List<GrowthDomain> { GrowthDomain.Batting, GrowthDomain.Defense };
-        if (PitcherRoleResolver.LeansPitcher(p)) domains.Add(GrowthDomain.Pitching);
+        var domains = new List<GrowthDomain>(3);
+        if (Trains(trained, GrowthDomain.Batting)) domains.Add(GrowthDomain.Batting);
+        if (Trains(trained, GrowthDomain.Defense)) domains.Add(GrowthDomain.Defense);
+        if (Trains(trained, GrowthDomain.Pitching) && PitcherRoleResolver.LeansPitcher(p)) domains.Add(GrowthDomain.Pitching);
+        if (domains.Count == 0) return false;
         var domain = domains[rng.NextInt(0, domains.Count)];
         var before = GrowthOf(p, domain);
         var after = Math.Min(c.GrowthSurgeMax, before * c.GrowthSurgeFactor);
@@ -263,9 +274,10 @@ public static class GrowthEventModel
     /// いちばん弱い球種のランクを上げる（球種を磨く）。
     /// </summary>
     private static bool TryNewPitch(DevelopingPlayer p, IRandomSource rng, GrowthEventCoefficients c,
-        List<GrowthNotice> notices)
+        List<GrowthNotice> notices, IReadOnlyCollection<TrainingField>? trained)
     {
         if (!PitcherRoleResolver.LeansPitcher(p)) return false;
+        if (!Trains(trained, GrowthDomain.Pitching)) return false;
         if (!MathUtil.Chance(c.NewPitchWeeklyProb, rng)) return false;
 
         if (p.LearnedPitches.Count < c.NewPitchMaxBreaking)
@@ -498,13 +510,16 @@ public static class GrowthEventModel
 
     /// <summary>
     /// 覚醒の起きうる分野＝伸びしろが閾値以上で、まだ上がる余地（上限まで空き）がある分野。
-    /// 投球は投手寄りの選手だけ（従来の覚醒と同じ）。
+    /// 投球は投手寄りの選手だけ（従来の覚醒と同じ）。さらに <paramref name="trained"/>（null＝絞らない）に
+    /// 練習時間の入っている分野だけ（issue #1204）。
     /// </summary>
-    private static List<GrowthDomain> EligibleDomains(DevelopingPlayer p, double threshold)
+    private static List<GrowthDomain> EligibleDomains(
+        DevelopingPlayer p, double threshold, IReadOnlyCollection<TrainingField>? trained)
     {
         var list = new List<GrowthDomain>(4);
         void Try(GrowthDomain d)
         {
+            if (!Trains(trained, d)) return;
             if (GrowthOf(p, d) < threshold) return;
             foreach (var k in KindsOf(d))
                 if (p.Level(k) < p.Cap(k)) { list.Add(d); return; }
@@ -515,6 +530,10 @@ public static class GrowthEventModel
         Try(GrowthDomain.Running);
         return list;
     }
+
+    /// <summary>その分野の練習時間が入っているか。null＝練習計画で絞らない。</summary>
+    private static bool Trains(IReadOnlyCollection<TrainingField>? trained, GrowthDomain d) =>
+        trained is null || trained.Contains(TrainingFields.Of(d));
 
     /// <summary>才能上限に迫っている分野（伸び悩みの文脈）。無ければ null。</summary>
     private static string? NearestCapDomain(DevelopingPlayer p, double proximity)
