@@ -377,11 +377,11 @@ captures:
     probes: [ErrorMark, FieldLabels]
 
   # ── 振り逃げで捕手が球を握っている間、一塁へ走る打者走者が枠に入るか（issue #1264 ①）。
-  # catch＝捕手が拾い終えた瞬間。連番で打者走者が握っている間ずっと枠に入っているか見る ──
+  # flight_end＝転がりが終わり捕手が球を握る瞬間。連番で打者走者が握っている間ずっと枠に入っているか見る ──
   - id: dropped-third-strike-runner-frame-1264
     name: "振り逃げで捕手が球を握っている間の枠に打者走者が入る（issue #1264 ①）"
     scenario: dropped-third-strike-lab
     manager: away
-    shots: [start, catch, release]
-    video: {from: catch-1.0, to: release+0.5, fps: 12}
+    shots: [start, flight_end, 5.0]
+    video: {from: 1.0, to: 6.0, fps: 10}
     probes: [RunnerDiag]
