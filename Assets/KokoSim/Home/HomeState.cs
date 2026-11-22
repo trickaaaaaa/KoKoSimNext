@@ -68,9 +68,9 @@ namespace KokoSim.Unity.Home
         public string AwaySub = "県立・強豪";
         public string GameDate = "";
         public string Venue = "自校グラウンド";
-        /// <summary>天気の文字（晴/曇/雨）。試合の無い週・次戦未確定は空＝天気欄を出さない（issue #803）。</summary>
-        public string WeatherLabel = "";
-        /// <summary>気温の数値部分（Oswald・単位抜き）。<see cref="WeatherLabel"/> と同時にしか立たない。</summary>
+        /// <summary>天気の状態（マークの元）。試合の無い週・次戦未確定は null＝天気欄を出さない（issue #803/#1200）。</summary>
+        public WeatherState? Weather;
+        /// <summary>気温の数値部分（Oswald・単位抜き）。<see cref="Weather"/> と同時にしか立たない。</summary>
         public string WeatherTempValue = "";
         /// <summary>気温の単位（"℃"・サンセリフ）。数字とは別 Label に割る（書体3役ルール）。</summary>
         public string WeatherTempUnit = "";
@@ -1002,7 +1002,7 @@ namespace KokoSim.Unity.Home
                     && !MatchStadium.IsIndoor(s.Kind, r.NextMatchRoundsRemaining, NationService.PrefectureId)
                     && r.PeekNextMatchWeather(PlayerMatchResolver.CurrentWeatherCoefficients()) is { } weather)
                 {
-                    view.WeatherLabel = WeatherLabels.Jp(weather.State);
+                    view.Weather = weather.State;
                     view.WeatherTempValue = Math.Round(weather.TemperatureC).ToString();
                     view.WeatherTempUnit = "℃";
                 }

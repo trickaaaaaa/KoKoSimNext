@@ -13,7 +13,7 @@
         <ui:VisualElement name="lsc-venue" class="lsc-venue">
             <ui:Label name="lsc-venue-name" class="lsc-venue__name f-body" text="" />
             <ui:VisualElement name="lsc-venue-weather" class="lsc-venue__weather">
-                <ui:Label name="lsc-venue-weather-k" class="lsc-venue__weather-k f-body" text="" />
+                <ui:VisualElement name="lsc-venue-weather-icon" class="lsc-venue__weather-icon" />
                 <ui:Label name="lsc-venue-temp-num" class="lsc-venue__temp-num f-num-bd" text="" />
                 <ui:Label name="lsc-venue-temp-unit" class="lsc-venue__temp-unit f-body" text="" />
             </ui:VisualElement>

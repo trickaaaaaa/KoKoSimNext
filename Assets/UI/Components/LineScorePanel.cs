@@ -67,7 +67,7 @@ namespace KokoSim.Unity.Components
                 if (weather is { } w)
                 {
                     weatherGroup.style.display = DisplayStyle.Flex;
-                    SetLabel(root.Q<Label>("lsc-venue-weather-k"), KokoSim.Unity.Shell.WeatherLabels.Jp(w.State));
+                    KokoSim.Unity.Shell.WeatherIcons.Apply(root.Q("lsc-venue-weather-icon"), w.State, darkBackground: true);   // 黒島＝-dark
                     SetLabel(root.Q<Label>("lsc-venue-temp-num"), System.Math.Round(w.TemperatureC).ToString());
                     SetLabel(root.Q<Label>("lsc-venue-temp-unit"), "℃");
                 }
