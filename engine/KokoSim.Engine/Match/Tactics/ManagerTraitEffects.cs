@@ -45,6 +45,10 @@ public static class ManagerTraitEffects
                     HitAndRunProb = Clamp01(b.HitAndRunProb * ai.RunAndGunHitAndRunFactor),
                     StealMinSuccess = MathUtil.Clamp(
                         b.StealMinSuccess - ai.RunAndGunStealMinSuccessRelax, 0.4, 0.99),
+                    // 校風 SmallBall（AiTacticsBrain.ApplyStyle）と同じく三盗も同じ重みで緩める（下限は三盗側の 0.30）。
+                    StealThirdProb = Clamp01(b.StealThirdProb * ai.RunAndGunStealFactor),
+                    StealThirdMinSuccess = MathUtil.Clamp(
+                        b.StealThirdMinSuccess - ai.RunAndGunStealMinSuccessRelax, 0.30, 0.99),
                 },
                 ManagerTrait.AggressivePinchHit => b with
                 {

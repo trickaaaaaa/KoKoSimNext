@@ -87,6 +87,17 @@ public sealed class EnemyAiTests
     }
 
     [Fact]
+    public void Tier_LowTier_SqueezeIsNotReplacedByBunt_WhenRunnerOnThird()
+    {
+        // 三塁走者ありの局面は標準の送りバント判定が意図的に除外している。ティア不足のスクイズを送りバントへ
+        // 置換すると、標準が出さない局面でバントが出てしまう（issue #1234）＝強攻へ落とす。
+        var low = new AiTacticsBrain(new AiProfile(90, TierRank: Ai.SqueezeMinTier - 1, SchoolStyle.SmallBall),
+            baserunning: Br, aiCoeff: Ai);
+        var s = Sit(inning: 9, outs: 1, third: P(), batter: P(power: 40, bunt: 80));
+        Assert.DoesNotContain(OffensiveSign.SacrificeBunt, RollOffense(low, s, 600));
+    }
+
+    [Fact]
     public void Tier_HighTier_CanUseSqueezeAndSteal()
     {
         // S(7): 全戦術が引き出しにある。

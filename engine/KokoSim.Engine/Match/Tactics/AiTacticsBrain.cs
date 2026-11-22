@@ -408,7 +408,8 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         return sign switch
         {
             OffensiveSign.SafetyBunt when rank < _ai.SafetyBuntMinTier => OffensiveSign.SacrificeBunt,
-            OffensiveSign.Squeeze when rank < _ai.SqueezeMinTier => OffensiveSign.SacrificeBunt,
+            // スクイズは三塁走者ありの局面＝標準の送りバント判定が意図的に除外している局面。バントへ置換せず強攻へ落とす。
+            OffensiveSign.Squeeze when rank < _ai.SqueezeMinTier => OffensiveSign.Swing,
             OffensiveSign.HitAndRun when rank < _ai.HitAndRunMinTier => OffensiveSign.Swing,
             OffensiveSign.Buster when rank < _ai.BusterMinTier => OffensiveSign.Swing,
             _ => sign,

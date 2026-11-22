@@ -76,12 +76,12 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
     public DefensiveTactics CallDefense(in TacticsSituation s, IRandomSource rng)
     {
-        // バントシフト: 相手の送りバント好機（自分の攻撃判断の鏡写し）を読む。
+        // バントシフト: 相手の送りバント好機（CallOffense の送りバント判定の鏡写し＝点差の窓・打者のバント能力も同じ）を読む。
         var buntThreat = s.OnThird is null && s.Outs == 0
                          && (s.OnFirst is not null || s.OnSecond is not null)
                          && (s.Inning >= _c.SacBuntFromInning || s.TieBreak)
-                         && System.Math.Abs(s.ScoreDiff) <= _c.SacBuntMaxBehind
-                         && s.Batter.Power <= _c.SacBuntMaxPower;
+                         && s.ScoreDiff >= -_c.SacBuntMaxBehind && s.ScoreDiff <= _c.SacBuntMaxAhead
+                         && s.Batter.Power <= _c.SacBuntMaxPower && s.Batter.Bunt >= _c.SacBuntMinSkill;
         var buntShift = buntThreat && rng.NextDouble() < _c.BuntShiftProb;
 
         // 内野前進: 三塁走者・2アウト未満・終盤の僅差（守備側リードは最大 InfieldInMaxLead）。

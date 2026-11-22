@@ -48,6 +48,16 @@ public sealed class ManagerTraitEffectsTests
     }
 
     [Fact]
+    public void RunAndGun_AlsoLoosensStealThird_LikeSmallBall()
+    {
+        var b = new TacticsCoefficients();
+        var t = ManagerTraitEffects.ApplyTactics(b, new[] { ManagerTrait.RunAndGun }, Ai);
+        Assert.True(t.StealThirdProb > b.StealThirdProb);
+        Assert.True(t.StealThirdMinSuccess < b.StealThirdMinSuccess);
+        Assert.True(t.StealThirdMinSuccess >= 0.30);
+    }
+
+    [Fact]
     public void SqueezeLover_RaisesSqueezeProb()
     {
         var b = new TacticsCoefficients();

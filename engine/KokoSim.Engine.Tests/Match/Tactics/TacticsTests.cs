@@ -330,6 +330,51 @@ public sealed class TacticsTests
         Assert.Equal(cf0.Z, cf1.Z, 9);
     }
 
+    // ===== バントシフトは攻撃側の送りバント判断の鏡（issue #1234） =====
+
+    private static int BuntShifts(TacticsSituation s, int n = 300)
+    {
+        var brain = new StandardTacticsBrain(C with { BuntShiftProb = 1.0 });
+        var c = 0;
+        for (ulong i = 0; i < (ulong)n; i++)
+            if (brain.CallDefense(s, new Xoshiro256Random(i)).BuntShift) c++;
+        return c;
+    }
+
+    [Fact]
+    public void Defense_BuntShift_NotWhenOffenseWouldNotBunt_AheadBeyondSacBuntMaxAhead()
+    {
+        // 攻撃側が2点リード（SacBuntMaxAhead=1 を超える）＝攻撃は送りバントしない場面でシフトを敷かない。
+        var batter = P(power: 40, bunt: 60);
+        Assert.False(brainWouldBunt(Situation(inning: 8, first: P(), batter: batter, diff: 2)));
+        Assert.Equal(0, BuntShifts(Situation(inning: 8, first: P(), batter: batter, diff: 2)));
+    }
+
+    [Fact]
+    public void Defense_BuntShift_NotWhenBatterCannotBunt()
+    {
+        var s = Situation(inning: 8, first: P(), batter: P(power: 40, bunt: C.SacBuntMinSkill - 1));
+        Assert.Equal(0, BuntShifts(s));
+    }
+
+    [Fact]
+    public void Defense_BuntShift_StillSet_WhenOffenseMayBunt()
+    {
+        foreach (var diff in new[] { -C.SacBuntMaxBehind, 0, C.SacBuntMaxAhead })
+        {
+            var s = Situation(inning: 8, first: P(), batter: P(power: 40, bunt: 60), diff: diff);
+            Assert.True(BuntShifts(s) > 0, $"diff={diff}");
+        }
+    }
+
+    private static bool brainWouldBunt(TacticsSituation s)
+    {
+        var brain = new StandardTacticsBrain(C with { SacBuntProb = 1.0 });
+        for (ulong i = 0; i < 50; i++)
+            if (brain.CallOffense(s, new Xoshiro256Random(i)) == OffensiveSign.SacrificeBunt) return true;
+        return false;
+    }
+
     [Fact]
     public void Alignment_BuntShift_ChargesCorners()
     {
