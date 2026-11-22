@@ -129,6 +129,9 @@ public static class SeasonEngine
         var roster = new List<DevelopingPlayer>();
         var scheduler = new EventScheduler(ctx.Events);
         var snapshots = new List<YearSnapshot>(years);
+        // 新入生へ安定IDを振る（実ゲームの RosterService と同じ採番）。Id=0 のままだと練習リーダー/お手本の
+        // 「本人を除く」判定（DevelopmentModel.TeamSkillExpFactor）が全員を本人扱いにして倍率が常に1.0になる（issue #1222）。
+        var nextId = 1;
 
         for (var year = 1; year <= years; year++)
         {
@@ -137,7 +140,9 @@ public static class SeasonEngine
             // 名声由来のtalentCenter（Issue #127）。未注入(null)なら従来どおり既定値を使う（不変条件#2）。
             var talentCenter = ctx.Fame is { } fame ? ctx.Roster.TalentCenterFromFame(fame) : (double?)null;
             var rollover = RosterLifecycle.AdvanceYear(roster, year, ctx.Roster, rng,
-                skills: ctx.Skills, personalities: ctx.Personalities, form: ctx.Form, talentCenter: talentCenter);
+                skills: ctx.Skills, personalities: ctx.Personalities, form: ctx.Form, talentCenter: talentCenter,
+                nextId: nextId);
+            nextId = rollover.NextId;
             var gradAvg = rollover.Graduated.Count > 0 ? rollover.Graduated.Average(p => p.AverageLevel()) : 0;
 
             scheduler.ResetAnnualFlags();
@@ -146,6 +151,10 @@ public static class SeasonEngine
             // 施設レベル→施設係数・週練習時間（Issue #115）。レベル0で従来と1ビット一致。
             var (facilityCoef, budget) = ctx.ResolveFacility();
             var training = ctx.Training with { FacilityCoef = facilityCoef };
+            // 施設・道具・医務室の効果（実ゲームの TrainingWeek.Effects と同じ集約）。道具は明示注入（テスト・実験用）が優先。
+            var effects = ctx.ResolveEffects();
+            var equipment = ctx.Equipment ?? (ctx.Facilities is null ? null : effects.Equipment);
+            var injuryOnset = ctx.Injury with { MedicalRecoveryFactor = effects.InjuryRecoveryFactor };
             for (var week = 0; week < ctx.Calendar.WeeksPerYear; week++)
             {
                 // 引退週フック（設計書03 §2 / 09 §8）: 夏の3年引退の翌週＝新チーム発足。3年を引退フラグ扱いに
@@ -156,7 +165,7 @@ public static class SeasonEngine
                 var campMult = ctx.Calendar.CampMultiplier(week, ctx.Training);
                 foreach (var p in roster)
                 {
-                    if (!ctx.Calendar.CanTrain(p.Grade, week)) continue;
+                    if (p.IsRetired || !ctx.Calendar.CanTrain(p.Grade, week)) continue;
                     // 選手ごとの練習計画（未設定はお任せ）を実効配分へ解決して1週ぶん適用（設計書03 §3.1）。
                     var plan = p.Plan ?? TrainingPlan.Default;
                     var alloc = TrainingPresets.Resolve(plan, budget);
@@ -164,24 +173,27 @@ public static class SeasonEngine
                     DevelopmentModel.TrainWeekPlan(
                         p, alloc, training.ReferenceWeekMinutes,
                         stage, campMult, ctx.Stages, training, ctx.Skills, ctx.Personalities, ctx.Coaching,
-                        ctx.Equipment, roster);
+                        equipment, roster);
                 }
 
                 // 調子の週次更新（設計書02 §3.3: 数週間続く波）。
                 // 独立ストリーム(Fork)で更新し、イベント抽選(root rng)の乱数列を乱さない（決定論の後方互換）。
+                // 引退した3年（ロスターには残る）は実ゲームの Roster（現役のみ）に居ないので回さない（issue #1222）。
+                var active = roster.Where(p => !p.IsRetired).ToList();
                 var formRng = rng.Fork(0xF0F0_0000UL ^ (ulong)(year * 100 + week));
-                foreach (var p in roster)
+                foreach (var p in active)
                 {
                     p.ConditionValue = Players.FormModel.NextWeeklyCondition(p.ConditionValue, formRng, ctx.Form);
                 }
 
                 // 怪我の週次処理（設計書03 §3.5: 発生判定→回復進行）。独立ストリーム。
                 var injuryRng = rng.Fork(0x1213_0000UL ^ (ulong)(year * 100 + week));
-                foreach (var p in roster)
+                foreach (var p in active)
                 {
                     if (p.Injury == Players.InjurySeverity.None)
                     {
-                        InjuryModel.WeeklyCheck(p, injuryRng, ctx.Injury, ctx.Skills, ctx.InjuryCatalog);
+                        InjuryModel.WeeklyCheck(p, injuryRng, injuryOnset, ctx.Skills, ctx.InjuryCatalog,
+                            effects.InjuryProbFactor);
                     }
                     else
                     {
@@ -191,7 +203,7 @@ public static class SeasonEngine
 
                 // 選手成長イベント（設計書03 §5.5: 覚醒/開眼/スランプ/伸び悩み/イップス）。独立ストリーム。
                 var growthRng = rng.Fork(0x6707_0000UL ^ (ulong)(year * 100 + week));
-                var growthNotices = GrowthEventModel.Week(roster, growthRng, ctx.Growth, p =>
+                var growthNotices = GrowthEventModel.Week(active, growthRng, ctx.Growth, p =>
                     ctx.Calendar.CanTrain(p.Grade, week)
                         ? TrainingFields.Trained(TrainingPresets.Resolve(p.Plan ?? TrainingPlan.Default, budget))
                         : System.Array.Empty<TrainingField>());

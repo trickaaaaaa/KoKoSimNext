@@ -110,8 +110,9 @@ public sealed record CareerCoefficients
     /// <summary>冬合宿の費用[万円]（設計書04 §4）。</summary>
     public double WinterCampCost { get; init; } = 25.0;
     /// <summary>
-    /// スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。年契約を持たない経路
-    /// （キャリアシム）の固定費で、<b>年契約カタログのスカウト網 Lv1 と同額に保つ</b>
+    /// スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。年契約を渡さない呼び出し
+    /// （<see cref="Career.CareerEngine.ApplyResults"/> の contracts=null）の固定費で、
+    /// <b>年契約カタログのスカウト網 Lv1 と同額に保つ</b>
     /// （2026-08-11 の値上げで 15 → 30。片方だけ動かすと sim と実ゲームで支出がずれる）。
     /// </summary>
     public double ScoutCost { get; init; } = 30.0;

@@ -53,6 +53,7 @@ public static class CareerEngine
         int startYear = 2025)
     {
         var mg = growthCoeff ?? new ManagerGrowthCoefficients();
+        var newGameContracts = ContractCatalog.Default.Aggregate(ContractSet.Initial());
 
         // 秋の大会フロー（設計書05 §1.5/§4）。prefTable と regionals を渡した時のみ併走（既定オフ＝挙動不変）。
         var autumnEnabled = prefTable is not null && regionals is not null;
@@ -108,14 +109,11 @@ public static class CareerEngine
                 reachedSenbatsu = af.SenbatsuField.Any(s => s.Id == managerSchool.Id);
             }
 
-            // メタ更新。
-            ApplyResults(manager, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c);
-            manager.CareerYears++;
-            manager.YearsAtSchool++;
-            if (reachedKoshien) manager.KoshienAppearances++;
-
-            // 監督成長イベント（設計書04 §1.1b: 節目の跳ね）。独立ストリームで既存の乱数列を乱さない。
-            ManagerGrowthEvents.Yearly(manager, reachedKoshien, wins, rng.Fork(0xA6A6_0000UL ^ (ulong)year), mg);
+            // メタ更新＋監督成長イベント（設計書04 §1.1/§1.1b）。実ゲームの年度替わりと同じ ManagerSeasonUpdate を通す
+            // （手書きの重複を持たない・issue #1222）。節目イベントは独立ストリームで既存の乱数列を乱さない。
+            // 新規ゲームは年契約を何も持たない＝スカウト費は引かない（実ゲームの ContractSet.Initial と同じ）。
+            ManagerSeasonUpdate.Apply(manager, reachedKoshien, nationalChampion, wins,
+                rng.Fork(0xA6A6_0000UL ^ (ulong)year), c, mg, upsetFameGain, upsetFameLoss, newGameContracts);
 
             var transferred = false;
 
@@ -145,7 +143,8 @@ public static class CareerEngine
                 var retained = rng.NextDouble() < retainChance;
                 if (!retained)
                 {
-                    prefId = rng.NextInt(0, nation.Prefectures.Count);
+                    // 教員の強制転任は同一県内の異動（実ゲームの ManagerTransferModel と同じ・issue #1222）。
+                    // prefId は据え置き＝赴任先の県は変えず、新しい学校の強さだけ引き直す。
                     baseStrength = rng.NextGaussian(c.NewSchoolStrengthMean, c.NewSchoolStrengthSd);
                     manager.Trust = c.TrustReset; // 信頼度は転任でリセット
                     manager.YearsAtSchool = 0;
