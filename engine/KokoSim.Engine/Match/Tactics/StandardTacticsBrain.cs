@@ -289,7 +289,9 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         double Value(Player p) => PinchHitValue(p, pitcherThrows);
         var upcoming = Value(s.UpcomingBatter);
 
-        var best = BestBy(s.Reserves, p => (int)System.Math.Round(Value(p) * 100));
+        var outgoing = s.UpcomingBatter;
+        var best = BestBy(s.Reserves, p => (int)System.Math.Round(Value(p) * 100),
+            allow: p => CanFillSlotOf(p, outgoing));
         if (best is null || Value(best) < upcoming + _c.PinchHitImprovement) return null;
         return best;
     }
@@ -358,21 +360,40 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         return order.OrderByDescending(p => FormModel.Step(p.Condition)).ToList();
     }
 
-    /// <summary>代走: 終盤に1点を取りにいく場面、鈍足の走者を明確に速い控えへ替える（得点に近い走者を優先）。</summary>
+    /// <summary>
+    /// 代走: 終盤に1点を取りにいく場面、鈍足の走者を明確に速い控えへ替える。
+    /// 全走者のうち「速さの上積みが最大」の1人を狙う（同値は得点に近い塁が先）。
+    /// 投手の走者には出さない（代走は投手の守備位置を引き継ぎ、次の回からそのまま登板してしまう・issue #1294）。
+    /// </summary>
     public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng)
     {
         if (s.Inning < _c.PinchRunFromInning) return null;
         if (s.ScoreDiff < _c.PinchRunMinDiff || s.ScoreDiff > 1) return null;
 
-        // 得点に近い塁の走者から見て、鈍足ならば候補。
-        var runner = new[] { s.OnThird, s.OnSecond, s.OnFirst }
-            .FirstOrDefault(r => r is not null && r.Speed <= _c.PinchRunSpeedCeiling);
-        if (runner is null) return null;
-
-        var fastest = BestBy(s.Reserves, p => p.Speed);
-        if (fastest is null || fastest.Speed < runner.Speed + _c.PinchRunImprovement) return null;
-        return (runner, fastest);
+        (Player Runner, Player Sub)? pick = null;
+        var bestGain = int.MinValue;
+        foreach (var runner in new[] { s.OnThird, s.OnSecond, s.OnFirst })
+        {
+            if (runner is null || runner.Position == Field.FieldPosition.Pitcher
+                || runner.Speed > _c.PinchRunSpeedCeiling) continue;
+            var fastest = BestBy(s.Reserves, p => p.Speed, allow: p => CanFillSlotOf(p, runner));
+            if (fastest is null) continue;
+            var gain = fastest.Speed - runner.Speed;
+            if (gain < _c.PinchRunImprovement || gain <= bestGain) continue;
+            bestGain = gain;
+            pick = (runner, fastest);
+        }
+        return pick;
     }
+
+    /// <summary>
+    /// 代打・代走で入る控えは退く選手の守備位置を引き継ぐ（<c>TeamState.SubstituteAtSlot</c>）ので、
+    /// 次の回にその位置を守れない控えと、ブルペンの投手（投手として置かれた控え）は使わない（issue #1294）。
+    /// 左投げを捕手・二塁・三塁・遊撃へ入れない規則は守備固めと同じ単一ソース。
+    /// </summary>
+    private static bool CanFillSlotOf(Player candidate, Player outgoing)
+        => candidate.Position != Field.FieldPosition.Pitcher
+           && (candidate.Throws != Players.Handedness.Left || !Field.FieldPositions.IsRightThrowOnly(outgoing.Position));
 
     /// <summary>守備固め: 終盤にリードを守る場面、守備の穴（投手除く）を明確に上回る控えへ替える。</summary>
     public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng)

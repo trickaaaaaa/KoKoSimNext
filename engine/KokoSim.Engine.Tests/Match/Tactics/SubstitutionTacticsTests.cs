@@ -320,6 +320,114 @@ public sealed class SubstitutionTacticsTests
         Assert.Equal("俊足代走", pr.Value.Sub.Name);
     }
 
+    // ===== 代打・代走の人選（issue #1294） =====
+
+    [Fact]
+    public void PinchRun_PitcherOnBase_NoPinchRunner()
+    {
+        // 投手への代走は投手の守備位置を引き継ぎ、次の回からそのまま登板してしまう。
+        var brain = new StandardTacticsBrain();
+        var pitcher = P("投手", speed: 30) with { Position = FieldPosition.Pitcher };
+        var bench = new List<Player> { P("俊足代走", speed: 92) };
+        var sit = new SubstitutionSituation(8, 9, 1, 0, null, pitcher, null, P("打者"), false,
+            new List<Player> { pitcher }, bench);
+
+        Assert.Null(brain.CallPinchRun(sit, Rng));
+    }
+
+    [Fact]
+    public void PinchRun_PitcherOnBase_StillPicksOtherSlowRunner()
+    {
+        var brain = new StandardTacticsBrain();
+        var pitcher = P("投手", speed: 30) with { Position = FieldPosition.Pitcher };
+        var slow = P("鈍足", speed: 35);
+        var bench = new List<Player> { P("俊足代走", speed: 92) };
+        var sit = new SubstitutionSituation(8, 9, 1, 0, pitcher, slow, null, P("打者"), false,
+            new List<Player> { pitcher, slow }, bench);
+
+        Assert.Equal("鈍足", brain.CallPinchRun(sit, Rng)!.Value.Runner.Name);
+    }
+
+    [Fact]
+    public void PinchRun_PicksRunnerWithLargestGain_NotFirstSlowRunner()
+    {
+        // 三塁の走力40は控え最速(70)との差30、一塁の走力20は差50＝一塁の走者へ出す（先頭の鈍足で打ち切らない）。
+        var brain = new StandardTacticsBrain();
+        var third = P("三塁", speed: 40);
+        var first = P("一塁", speed: 20);
+        var bench = new List<Player> { P("代走", speed: 70) };
+        var sit = new SubstitutionSituation(8, 9, 1, 0, first, null, third, P("打者"), false,
+            new List<Player> { first, third }, bench);
+
+        Assert.Equal("一塁", brain.CallPinchRun(sit, Rng)!.Value.Runner.Name);
+    }
+
+    [Fact]
+    public void PinchRun_TieOnGain_PrefersRunnerCloserToHome()
+    {
+        var brain = new StandardTacticsBrain();
+        var third = P("三塁", speed: 30);
+        var first = P("一塁", speed: 30);
+        var bench = new List<Player> { P("代走", speed: 80) };
+        var sit = new SubstitutionSituation(8, 9, 1, 0, first, null, third, P("打者"), false,
+            new List<Player> { first, third }, bench);
+
+        Assert.Equal("三塁", brain.CallPinchRun(sit, Rng)!.Value.Runner.Name);
+    }
+
+    [Fact]
+    public void PinchRun_SkipsBullpenPitcher_AndLeftThrowerForRightThrowOnlySlot()
+    {
+        var brain = new StandardTacticsBrain();
+        var shortstop = P("遊撃", speed: 30) with { Position = FieldPosition.Shortstop };
+        var bench = new List<Player>
+        {
+            P("足の速い救援", speed: 95) with { Position = FieldPosition.Pitcher },
+            P("左の外野手", speed: 90) with { Position = FieldPosition.LeftField, Throws = Handedness.Left },
+            P("右の外野手", speed: 80) with { Position = FieldPosition.RightField },
+        };
+        var sit = new SubstitutionSituation(8, 9, 1, 0, null, shortstop, null, P("打者"), false,
+            new List<Player> { shortstop }, bench);
+
+        Assert.Equal("右の外野手", brain.CallPinchRun(sit, Rng)!.Value.Sub.Name);
+    }
+
+    [Fact]
+    public void PinchHit_SkipsBullpenPitcher()
+    {
+        var brain = new StandardTacticsBrain();
+        var weak = P("非力", contact: 32);
+        var bench = new List<Player>
+        {
+            P("打てる救援", contact: 95) with { Position = FieldPosition.Pitcher },
+            P("野手の控え", contact: 70),
+        };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, weak, false,
+            new List<Player> { weak }, bench);
+
+        Assert.Equal("野手の控え", brain.CallPinchHit(sit, Rng)!.Name);
+    }
+
+    [Fact]
+    public void PinchHit_LeftThrowerNotSentToRightThrowOnlySlot()
+    {
+        var brain = new StandardTacticsBrain();
+        var shortstop = P("遊撃", contact: 32) with { Position = FieldPosition.Shortstop };
+        var bench = new List<Player>
+        {
+            P("左の外野手", contact: 90) with { Position = FieldPosition.LeftField, Throws = Handedness.Left },
+            P("右の控え", contact: 70),
+        };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, shortstop, false,
+            new List<Player> { shortstop }, bench);
+        Assert.Equal("右の控え", brain.CallPinchHit(sit, Rng)!.Name);
+
+        // 外野手の枠なら左投げでも構わない。
+        var outfielder = P("左翼", contact: 32) with { Position = FieldPosition.LeftField };
+        var sit2 = sit with { UpcomingBatter = outfielder, Lineup = new List<Player> { outfielder } };
+        Assert.Equal("左の外野手", brain.CallPinchHit(sit2, Rng)!.Name);
+    }
+
     [Fact]
     public void DefensiveSub_LateWithLead_ReplacesWeakFielder()
     {
