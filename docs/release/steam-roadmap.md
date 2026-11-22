@@ -77,6 +77,10 @@ KoKoSimNext を Steam で販売したい。その前に体験版を出す。あ�
   - 新規開始 → 週送り N 回 → 大会日 → 甲子園の試合（満員・守備場面）
   - 出す値：起動時間・ロード時間・週送りの時間・大会日の待ち・fps の分布・GC のメモリ最大値
   - 同じ手順を2台の機で比べられる（「実機確認はシナリオで」の方針どおり）
+  - 実装済み（issue #1314）: `Assets/KokoSim/Benchmark/`。計測版は `bash tools/build-player.sh bench`（`KOKOSIM_BENCHMARK`・配布しない。製品版には母種の固定が入らないため別ビルド）
+    - 実行: `HakkyuKantokuroku.exe -benchmark [-benchmark-out <dir>] [-benchmark-seed <hex>] [-benchmark-weeks <n>] [-benchmark-matches <n>] [-benchmark-match-seconds <s>] [-benchmark-speed <x>]`。終わると自分で終了する
+    - 出力: `<out>/benchmark_<日時>_summary.csv`（機体情報・起動・新規開始・週送り・大会日の待ち・区間ごとの fps 平均／下位1%／p50・p95・p99・最悪・GC と作業セットの最大値）と `_frames.csv`（全フレーム時間）。既定の出力先は `persistentDataPath/benchmark`
+    - 手順: タイトル → 新規開始（固定の母種）→ 週送り（大会に入るまで）→ 大会日（自校戦2試合を実フローと同じ背景処理で消化し、試合開始の準備・試合後処理・全国背景シムの待ちを測る）→ 甲子園の試合（`DebugMatchFactory` の固定試合を満員・ブラスバンド付きでライブ観戦画面に映す。対決ビュー／打球の俯瞰＝守備の場面でフレームを分けて採る）
 - 計測の結果から推奨スペックを決める。要るなら軽量設定を作る
 
 ### 段階2：製品として最低限の作り

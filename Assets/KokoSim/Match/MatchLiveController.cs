@@ -5572,6 +5572,9 @@ namespace KokoSim.Unity.Match
         public LivePlateAppearance CurrentPa => _current;
         public bool IsGameOver => _gameOver;
 
+        /// <summary>ベンチマーク用（issue #1314）: 対決ビュー（投手と打者）を映しているか。偽＝打球の俯瞰（守備の場面）などへ出ている間。</summary>
+        public bool DuelViewOnForBenchmark => _duelOn;
+
         // ── 打球プレーの3D再生を外から覗く窓（打球処理の3D化 F9 の受け入れ用） ──
         /// <summary>打球再生の時計[秒]。俯瞰・3D・判定オーバーレイを同時に駆動している唯一の値。</summary>
         public double PlayClockForCapture => _t;

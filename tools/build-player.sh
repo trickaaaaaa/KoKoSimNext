@@ -7,6 +7,8 @@
 #   bash tools/build-player.sh            # 製品版   → out/build/windows-release/
 #   bash tools/build-player.sh demo       # 体験版   → out/build/windows-demo/（KOKOSIM_DEMO）
 #   bash tools/build-player.sh dev        # 開発ビルド → out/build/windows-dev/（DEVELOPMENT_BUILD）
+#   bash tools/build-player.sh bench      # 計測版   → out/build/windows-bench/（KOKOSIM_BENCHMARK・配布しない）
+#                                         #   <exe> -benchmark で重さを自動計測して CSV を出す（issue #1314）
 #
 # 前提: Unity Hub でこの版に「Windows Build Support (Mono)」を入れてあること。
 # ログ: out/build/<flavor>.log
@@ -14,7 +16,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FLAVOR="${1:-release}"
-case "$FLAVOR" in release|demo|dev) ;; *) echo "使い方: $0 [release|demo|dev]" >&2; exit 2;; esac
+case "$FLAVOR" in release|demo|dev|bench) ;; *) echo "使い方: $0 [release|demo|dev|bench]" >&2; exit 2;; esac
 
 VERSION="$(sed -n 's/^m_EditorVersion: //p' "$ROOT/ProjectSettings/ProjectVersion.txt")"
 UNITY="${UNITY:-/Applications/Unity/Hub/Editor/$VERSION/Unity.app/Contents/MacOS/Unity}"
