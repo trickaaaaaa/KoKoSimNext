@@ -47,10 +47,17 @@ namespace KokoSim.Unity.Management
             Render();
         }
 
-        /// <summary>年契約を解約する。</summary>
+        /// <summary>年契約の解約を予約する（段が下がるのは年度末の総括の後）。</summary>
         public void Cancel(string contractId)
         {
             _state.Cancel(contractId);
+            Render();
+        }
+
+        /// <summary>解約の予約を取り消す。</summary>
+        public void CancelCancel(string contractId)
+        {
+            _state.CancelCancel(contractId);
             Render();
         }
 
@@ -183,7 +190,7 @@ namespace KokoSim.Unity.Management
             var lv = new VisualElement();
             lv.AddToClassList("mn-cell--lv");
             lv.Add(UiComponents.LevelPips(r.Level, r.MaxLevel));
-            var lvText = new Label("Lv" + r.Level);
+            var lvText = new Label(r.CancelScheduled ? "解約予定" : "Lv" + r.Level);
             lvText.AddToClassList("mn-lv-text");
             lv.Add(lvText);
             row.Add(lv);
@@ -238,7 +245,9 @@ namespace KokoSim.Unity.Management
             // 解約は年契約だけの操作。買い切りには戻す手段が無い（施設は学校の資産として残る）。
             if (r.CanCancel)
             {
-                var cancel = new Button(() => Cancel(id)) { text = "解約" };
+                var cancel = r.CancelScheduled
+                    ? new Button(() => CancelCancel(id)) { text = "取り消し" }
+                    : new Button(() => Cancel(id)) { text = "解約" };
                 cancel.AddToClassList("tool-btn");
                 cancel.AddToClassList("mn-cancel");
                 act.Add(cancel);

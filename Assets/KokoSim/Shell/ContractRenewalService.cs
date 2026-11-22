@@ -119,7 +119,7 @@ namespace KokoSim.Unity.Shell
             if (_page > 0) _page--;
         }
 
-        /// <summary>選んだ段を契約へ書き戻して待ちを下ろす。第46週の総括はその段の年額を引く。</summary>
+        /// <summary>選んだ段を契約へ書き戻して待ちを下ろす。上げた段はすぐ効き、やめる・下げるは年度末の予約。第46週の総括はいまの段の年額を引く。</summary>
         public static void Confirm()
         {
             if (_draft != null) _draft.ApplyTo(ManagerService.Contracts);
@@ -180,7 +180,8 @@ namespace KokoSim.Unity.Shell
                 {
                     Name = def.Name,
                     LevelText = picked == 0 ? "やめる" : "Lv" + picked,
-                    Cost = def.Tiers[picked].AnnualCost,
+                    // 総括で引かれる額＝下げた系統はいまの段のまま（解約は年度末・issue #1298）。
+                    Cost = def.Tiers[System.Math.Max(picked, before)].AnnualCost,
                     Changed = picked != before,
                 });
             }

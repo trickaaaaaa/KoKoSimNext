@@ -45,6 +45,8 @@ namespace KokoSim.Unity.Management
         public string ActionLabel = "購入";
         /// <summary>解約ボタンを出すか（年契約で1段以上契約中のときだけ）。</summary>
         public bool CanCancel;
+        /// <summary>年度末の総括の後に解約される予約が入っているか。段と効果は年度末まで残る（issue #1298）。</summary>
+        public bool CancelScheduled;
 
         /// <summary>
         /// この画面では変えられない年契約か（スカウト網＝夏の大会後の会話でだけ決める・issue #1064）。
@@ -166,7 +168,7 @@ namespace KokoSim.Unity.Management
         public void SelectTab(int index) => _selectedTab = index;
 
         /// <summary>
-        /// 年契約（設計書04 §1.4a）。買い切りの3区分と違い、年額を毎年部費から払い、いつでも解約できる。
+        /// 年契約（設計書04 §1.4a）。買い切りの3区分と違い、年額を毎年部費から払い、解約の操作はいつでもできる（効くのは年度末の総括の後）。
         /// 契約時の前払いは無いので購入可否の判定も無く、代わりに「部費 年間差引」が赤くなることで
         /// 抱えすぎが分かる（UI原則②: 本当の警告だけ警告色）。
         /// </summary>
@@ -198,6 +200,7 @@ namespace KokoSim.Unity.Management
                 CurrentEffect = ContractEffectText(def.Tiers[lv]),
                 IsContract = true,
                 CanCancel = lv > 0,
+                CancelScheduled = lv > 0 && set.ScheduledLevelOf(def.Id) == 0,
                 ActionLabel = lv == 0 ? "契約" : "上げる",
             };
 
@@ -265,13 +268,26 @@ namespace KokoSim.Unity.Management
             _statusWarn = false;
         }
 
-        /// <summary>年契約を解約する（段を0へ戻す）。年額も効果もその場で消える。</summary>
+        /// <summary>
+        /// 年契約を解約する。操作はいつでもできるが、段が下がるのは年度末の総括（年額の引き落とし）の後。
+        /// それまで効果は残り、年額は引かれる（issue #1298）。
+        /// </summary>
         public void Cancel(string contractId)
         {
             var def = ManagerService.ContractList.Find(contractId);
             if (def == null || contractId == ScoutPitch.ContractId) return;
-            ManagerService.Contracts.SetLevel(contractId, 0);
-            _status = def.Name + " を解約しました";
+            ManagerService.Contracts.ScheduleCancel(contractId);
+            _status = def.Name + " を年度末に解約します";
+            _statusWarn = false;
+        }
+
+        /// <summary>解約の予約を取り消す（契約を続ける）。</summary>
+        public void CancelCancel(string contractId)
+        {
+            var def = ManagerService.ContractList.Find(contractId);
+            if (def == null) return;
+            ManagerService.Contracts.ClearSchedule(contractId);
+            _status = def.Name + " の解約を取り消しました";
             _statusWarn = false;
         }
 

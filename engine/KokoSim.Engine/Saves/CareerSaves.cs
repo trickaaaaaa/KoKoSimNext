@@ -69,7 +69,7 @@ internal static class CareerSaves
     }
 
     // ===== ContractSet（年契約・設計書04 §1.4a） =====
-    // 施設と同じく、保存するのは「契約ID→現在の段」の辞書だけ（年額・効果はカタログ側の静的設定）。
+    // 施設と同じく、保存するのは「契約ID→現在の段」の辞書と、年度末に下がる解約の予約だけ（年額・効果はカタログ側の静的設定）。
 
     public static JsonObject ContractsToJson(ContractSet c)
     {
@@ -77,7 +77,17 @@ internal static class CareerSaves
         var ids = new List<string>(c.Levels.Keys);
         ids.Sort(System.StringComparer.Ordinal);
         foreach (var id in ids) levels.Add(id, c.LevelOf(id));
-        return new JsonObject().Add("levels", levels);
+        var obj = new JsonObject().Add("levels", levels);
+        // 年度末に下がる解約の予約（issue #1298）。無ければキーごと書かない＝予約の無い旧セーブと同形。
+        if (c.Scheduled.Count > 0)
+        {
+            var scheduled = new JsonObject();
+            var sids = new List<string>(c.Scheduled.Keys);
+            sids.Sort(System.StringComparer.Ordinal);
+            foreach (var id in sids) scheduled.Add(id, c.Scheduled[id]);
+            obj.Add("scheduled", scheduled);
+        }
+        return obj;
     }
 
     public static ContractSet ContractsFromJson(JsonObject o)
@@ -85,6 +95,11 @@ internal static class CareerSaves
         var set = new ContractSet();
         var levels = o.Obj("levels");
         foreach (var id in levels.Keys) set.SetLevel(id, levels.Int(id));
+        if (o.Has("scheduled"))
+        {
+            var scheduled = o.Obj("scheduled");
+            foreach (var id in scheduled.Keys) set.ScheduleLevel(id, scheduled.Int(id));
+        }
         return set;
     }
 
