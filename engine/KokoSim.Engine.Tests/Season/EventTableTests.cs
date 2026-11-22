@@ -422,12 +422,26 @@ events:
         var known = new HashSet<string>
         {
             EventRoles.Manager, EventRoles.Player, EventRoles.TeamManager, EventRoles.TeamManagerOutgoing,
-            EventRoles.Ob, EventRoles.Scout, EventRoles.Local, EventRoles.Captain, EventRoles.Narration,
+            EventRoles.Scout, EventRoles.Captain, EventRoles.Narration,
         };
         foreach (var e in RepositoryEvents())
         foreach (var v in e.Variants)
         foreach (var line in v.Lines)
             Assert.True(known.Contains(line.Who), $"{e.Id}: 未知の役割 {line.Who}（立ち絵が出ない）");
+    }
+
+    /// <summary>
+    /// OB・地域の人は立ち絵を作らず、マネージャーが監督に伝える形で書く（issue #1425）。
+    /// 表に who: ob / who: local が戻らないよう固定する（EventRoles の定数自体は未知の役割を落とさないため残す）。
+    /// </summary>
+    [Fact]
+    public void RepositoryTable_NoObOrLocalSpeakers()
+    {
+        foreach (var e in RepositoryEvents())
+        foreach (var v in e.Variants)
+        foreach (var line in v.Lines)
+            Assert.False(line.Who == EventRoles.Ob || line.Who == EventRoles.Local,
+                $"{e.Id}: who: {line.Who} は使わない（マネージャーが伝える形に書く）「{line.Say}」");
     }
 
     /// <summary>
