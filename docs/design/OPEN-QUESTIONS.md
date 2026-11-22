@@ -296,7 +296,7 @@ avg/modernカードの実ゲームプレー・RNG消費順は一切変わって�
 - 決定論ベースラインは200行中83行変化（意図した変更・`tools/regen-determinism-baseline.sh`で再生成済み）
 - 未着手: 表示層（`TimelineBuilder.AppendSelfForceDoublePlayThrows`新設・Unity実機確認）→ **実装済み**（engine 側。Unity 実機での見え方の確認記録はこの項に無い）
 
-## Q30. BackgroundGameOp が戻らないと全操作が静かに死ぬ（見張りを置くか）（2026-08-14・「静かに詰まる」経路の棚卸しで発見）
+## Q30. BackgroundGameOp が戻らないと全操作が静かに死ぬ（見張りを置くか）（2026-08-14・「静かに詰まる」経路の棚卸しで発見） → **確定（2026-11-22・オーナー判断＝案B：知らせるだけ・実装 [#1317](https://github.com/trickaaaaaa/KoKoSimNext/issues/1317)）**
 
 `BackgroundGameOp` は**同時1本の共有スロット**で、`Running` が立っている間は週送り
 （`HomeDashboardController` 145/223/482）・試合結果の「閉じる」（`MatchResultController` 203）・
@@ -321,6 +321,12 @@ avg/modernカードの実ゲームプレー・RNG消費順は一切変わって�
    「進んでいない」ことは分からない）。
 3. `Task.IsCompleted` 由来へ寄せて他2つと同じ作法に統一するか（`work` が戻らない問題は残るが、
    例外時の解除がフラグ操作に依存しなくなる）。
+
+**決着（2026-11-22）**: スロットは**強制解放しない**。`BackgroundGameOp` が開始時刻を持ち、上限
+（`StallLimitSeconds`＝120秒）を超えたら `Stalled` が立ち、`ScreenRouter.Update` がログを1度だけ出し、
+`WaitOverlayController` の既存の待ち表示の文言が「固まりました。セーブして再起動してください」に替わる
+（暗幕はクリックを塞がない）。上限は、既知の最悪の1本（試合開始前の自県フルシム約25秒・Mono 実測）の約5倍。
+実機の `-benchmark` の実測が出たら見直す。3（`Task.IsCompleted` 由来への統一）は別 issue。
 
 **発端**: スキップ停止（2026-08-14）の調査で「進行を止めるフラグの解除役が、消えうる経路にしか
 居ない」型を全経路棚卸しした際の残り1件。他の経路（終局テロップ・回間・各種コール・`_paused`・

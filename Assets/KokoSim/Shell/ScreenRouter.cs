@@ -106,6 +106,7 @@ namespace KokoSim.Unity.Shell
         {
             // バックグラウンド Task（試合後の大会処理）の完了をメインスレッドで反映する（issue #138）。
             MainThreadDispatcher.Drain();
+            BackgroundGameOp.CheckStall();   // 戻らない裏処理の見張り（Q30・ログは1度だけ）
 
             // 新チーム発足（夏の3年引退の翌週）の主将指名／夏・秋の大会開幕バナー／監督オファー（設計書04 §1.3）は、
             // どの画面で週を進めてもホームで出す（導線を1箇所に集約する, 設計書09 §8 / issue #134）。回送元は

@@ -21,6 +21,8 @@ namespace KokoSim.Unity.Shell
         private const string OverlayName = "wait-overlay";
         private const long TickMs = 66;   // 約15Hz。バーの動きを滑らかに見せつつ更新は軽量。
 
+        private const string StalledLabel = "固まりました。セーブして再起動してください";
+
         private static float _marqueePhase;
 
         /// <summary>画面ルートの末尾にオーバーレイを付け、更新スケジューラを起動する（未付与なら生成）。</summary>
@@ -70,10 +72,20 @@ namespace KokoSim.Unity.Shell
             if (BackgroundGameOp.Running)
             {
                 overlay.style.display = DisplayStyle.Flex;
+                if (BackgroundGameOp.Stalled)
+                {
+                    // 固まり（Q30）。暗幕がクリックを塞ぐと「セーブして」が押せないので、このときだけ素通しにする。
+                    overlay.pickingMode = PickingMode.Ignore;
+                    UiComponents.SetWaitOverlay(overlay, StalledLabel, null);
+                    Marquee(overlay);
+                    return;
+                }
+                overlay.pickingMode = PickingMode.Position;
                 UiComponents.SetWaitOverlay(overlay, "処理中", null);   // 試合開始/試合後処理には分子・分母が無い
                 Marquee(overlay);
                 return;
             }
+            overlay.pickingMode = PickingMode.Position;
             overlay.style.display = DisplayStyle.None;
         }
 
