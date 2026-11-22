@@ -13,7 +13,6 @@ districts: [...]             # 県内地区リスト（地理割の県のみ。�
 district_assignment: geographic | draw | none
                              # geographic=学校が地区固定 / draw=大会時抽選 / none=地区なし
 stages: [...]                # 予選→県大会のステージ列（下記）
-regional_berths: <int>       # この県から地区大会への出場枠
 seed_exemption: false        # 夏実績校などの予選免除の有無
 notes: [...]                 # 出典・特記（自由記述）
 ```

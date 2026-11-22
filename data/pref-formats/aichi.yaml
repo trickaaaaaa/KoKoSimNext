@@ -8,7 +8,6 @@ region: tokai
 districts: [名古屋, 東三河, 西三河, 知多, 尾張]
 district_weights: [16, 6, 11, 5, 10]   # 生成校の地区割当の規模比率（districts と同じ並び。2025年秋の出場校数＝上のコメントの実数。設計書05 §2.2）
 district_assignment: geographic
-regional_berths: 3
 seed_exemption: false
 stages:
   - name: 地区予選

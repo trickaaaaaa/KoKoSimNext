@@ -88,7 +88,7 @@ public sealed class StadiumAssignmentTests
     public void PrefFormatLoader_ParsesStadiumsBlock()
     {
         var fmt = PrefFormatLoader.LoadFromFile(Balance.BalanceRegressionTests.FindDataFile("pref-formats/kanagawa.yaml"));
-        Assert.Equal("kanagawa_final", fmt.Stadiums.FinalId);
+        Assert.Equal("kanagawa_autumn_final", fmt.Stadiums.FinalId);
         Assert.Contains("municipal_small_01", fmt.Stadiums.EarlyIds);
         Assert.False(fmt.Stadiums.IsEmpty);
     }

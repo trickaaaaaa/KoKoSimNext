@@ -2,9 +2,8 @@ using KokoSim.Engine.Core;
 
 namespace KokoSim.Engine.Nation.Tournaments;
 
-/// <summary>県大会の結果。地区大会へ進む出場校（regional_berths）と最終順位。</summary>
+/// <summary>県大会の結果。優勝校と最終順位（地区大会へ送る校数は <c>RegionalFormat.BerthsFor</c> が決め、この順位から上位を取る）。</summary>
 public sealed record PrefTournamentResult(
-    IReadOnlyList<School> Qualifiers,
     School Champion,
     IReadOnlyList<School> FinalPlacement)
 {
@@ -14,7 +13,7 @@ public sealed record PrefTournamentResult(
 
 /// <summary>
 /// 県フォーマット（設計書05 §1.5）を実行する。ステージ列（group_split→県大会 等）を順に処理し、
-/// regional_berths 校を地区大会へ送り出す。予選免除（seed_exemption）の推薦校は県大会から登場。
+/// 優勝校と最終順位を返す。予選免除（seed_exemption）の推薦校は県大会から登場。
 /// エンジンは pref-format の型を解釈するだけで、県ごとの差異は全て data で表現される（不変条件#4）。決定論。
 /// </summary>
 public static class PrefTournamentEngine
@@ -39,7 +38,6 @@ public static class PrefTournamentEngine
             : null;
 
         var pool = entrants.ToList();
-        var berths = System.Math.Max(1, format.RegionalBerths);
         KnockoutResult? lastKnock = null;
         IReadOnlyList<Standing>? lastStandings = null;
         var recommendedAdded = false;
@@ -80,7 +78,7 @@ public static class PrefTournamentEngine
         // 最終ステージの型で出場校・優勝・順位を決める。
         if (lastKnock is not null)
         {
-            return new PrefTournamentResult(lastKnock.Top(berths), lastKnock.Champion, lastKnock.Placement)
+            return new PrefTournamentResult(lastKnock.Champion, lastKnock.Placement)
             {
                 Matches = matches,
             };
@@ -88,12 +86,12 @@ public static class PrefTournamentEngine
         if (lastStandings is not null)
         {
             var placement = lastStandings.Select(s => s.School).ToList();
-            return new PrefTournamentResult(placement.Take(berths).ToList(), placement[0], placement)
+            return new PrefTournamentResult(placement[0], placement)
             {
                 Matches = matches,
             };
         }
         // 最終が group_split（進出校リストのみ）の場合はその並びを順位とみなす。
-        return new PrefTournamentResult(pool.Take(berths).ToList(), pool[0], pool) { Matches = matches };
+        return new PrefTournamentResult(pool[0], pool) { Matches = matches };
     }
 }

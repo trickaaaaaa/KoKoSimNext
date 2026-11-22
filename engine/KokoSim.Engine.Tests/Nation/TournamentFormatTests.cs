@@ -126,13 +126,12 @@ public sealed class TournamentFormatTests
     // ===== PrefTournamentEngine（3県サンプルをYAMLから実行） =====
 
     [Fact]
-    public void PrefEngine_Nara_KnockoutWithThirdPlace_YieldsThreeQualifiers()
+    public void PrefEngine_Nara_KnockoutWithThirdPlace_PlacesChampionFirstAndThirdPlaceWinnerThird()
     {
         var fmt = KokoSim.Config.PrefFormatLoader.LoadFromFile(DataFile("pref-formats/nara.yaml"));
         var r = PrefTournamentEngine.Run(fmt, Schools(24), Coeff, new Xoshiro256Random(1));
-        Assert.Equal(3, r.Qualifiers.Count);          // regional_berths: 3
-        Assert.Equal(r.Champion, r.Qualifiers[0]);
-        Assert.Equal(3, r.Qualifiers.Select(s => s.Id).Distinct().Count());
+        Assert.Equal(r.Champion, r.FinalPlacement[0]);
+        Assert.Equal(24, r.FinalPlacement.Select(s => s.Id).Distinct().Count());
     }
 
     [Fact]
@@ -147,20 +146,20 @@ public sealed class TournamentFormatTests
         for (ulong s = 0; s < 20; s++)
         {
             var r = PrefTournamentEngine.Run(fmt, teams, Coeff, new Xoshiro256Random(s), recommended);
-            Assert.Equal(2, r.Qualifiers.Count);       // regional_berths: 2
-            if (r.Qualifiers.Any(q => q.Id == 999)) qualified++;
+            if (r.FinalPlacement.Take(2).Any(q => q.Id == 999)) qualified++;
         }
         Assert.True(qualified > 10, $"予選免除の最強推薦校が地区大会へ届く回数が少なすぎる: {qualified}/20");
     }
 
     [Fact]
-    public void PrefEngine_Hyogo_GroupSplitWithLoserBracket_YieldsThreeQualifiers()
+    public void PrefEngine_Hyogo_GroupSplitWithLoserBracket_PlacesChampionFirst()
     {
         var fmt = KokoSim.Config.PrefFormatLoader.LoadFromFile(DataFile("pref-formats/hyogo.yaml"));
         var teams = Schools(60, districtMod: 5); // 5地区
         var recommended = Sch(999, 95.0, district: 0);
         var r = PrefTournamentEngine.Run(fmt, teams, Coeff, new Xoshiro256Random(7), recommended);
-        Assert.Equal(3, r.Qualifiers.Count);           // regional_berths: 3
+        Assert.Equal(r.Champion, r.FinalPlacement[0]);
+        Assert.Equal(r.FinalPlacement.Count, r.FinalPlacement.Select(s => s.Id).Distinct().Count());
     }
 
     // ===== 地区大会の枠配分（regional-tournaments.yaml） =====

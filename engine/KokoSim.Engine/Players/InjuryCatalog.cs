@@ -98,7 +98,7 @@ public sealed class InjuryCatalog
                 MinorShare = 0.10, ModerateShare = 0.40,
                 Sites = new[] { S(InjurySite.Knee, 0.40), S(InjurySite.Elbow, 0.30), S(InjurySite.Ankle, 0.20), S(InjurySite.Shoulder, 0.10) },
                 SceneWeights = Sc((InjuryScene.Weekly, 0.10), (InjuryScene.HomeCollision, 1.0),
-                    (InjuryScene.FenceCrash, 0.8), (InjuryScene.Sliding, 0.6)),
+                    (InjuryScene.FenceCrash, 0.8)),
             },
             new InjuryTypeEntry
             {

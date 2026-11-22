@@ -16,7 +16,6 @@ districts: [札幌, 旭川, 函館, 室蘭, 小樽, 空知, 名寄, 北見, 十�
 # 正確な加盟校数ではない（出典未確認）ので、実数が分かったらここを直す。
 district_weights: [55, 20, 20, 20, 15, 16, 10, 14, 16, 14]
 district_assignment: geographic
-regional_berths: 1
 seed_exemption: false
 stages:
   - name: 支部予選

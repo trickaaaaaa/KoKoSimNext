@@ -73,8 +73,6 @@ public sealed record PrefFormat
     /// <summary>地区ごとの規模比率（<see cref="Districts"/> と同じ並び。生成校の地区割当の重み・設計書05 §2.2）。空＝均等。</summary>
     public IReadOnlyList<double> DistrictWeights { get; init; } = System.Array.Empty<double>();
     public DistrictAssignment DistrictAssignment { get; init; } = DistrictAssignment.None;
-    /// <summary>地区大会への出場枠（§1.5 の regional_berths）。</summary>
-    public int RegionalBerths { get; init; } = 1;
     /// <summary>夏甲子園校の予選免除・県大会推薦（神奈川・兵庫。CHANGELOG 27）。</summary>
     public bool SeedExemption { get; init; }
     public IReadOnlyList<StageFormat> Stages { get; init; } = System.Array.Empty<StageFormat>();

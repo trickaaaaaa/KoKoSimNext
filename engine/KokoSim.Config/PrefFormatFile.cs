@@ -32,7 +32,6 @@ public static class PrefFormatLoader
         public List<string>? Districts { get; set; }
         public List<double>? DistrictWeights { get; set; }
         public string DistrictAssignment { get; set; } = "none";
-        public int RegionalBerths { get; set; } = 1;
         public bool SeedExemption { get; set; }
         public List<StageDto>? Stages { get; set; }
         public StadiumsDto? Stadiums { get; set; }
@@ -50,7 +49,6 @@ public static class PrefFormatLoader
                 "draw" => Engine.Nation.Tournaments.DistrictAssignment.Draw,
                 _ => Engine.Nation.Tournaments.DistrictAssignment.None,
             },
-            RegionalBerths = RegionalBerths,
             SeedExemption = SeedExemption,
             Stages = (Stages ?? new List<StageDto>()).Select(s => s.ToModel()).ToList(),
             Stadiums = Stadiums?.ToModel() ?? StadiumPlan.None,
