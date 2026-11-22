@@ -4,7 +4,7 @@
 pref: hyogo
 snapshot_year: 2025
 region: kinki
-districts: [神戸, 阪神, 播淡, 但丹, 東西播]   # 5地区（各地区内にA〜Fブロック）
+districts: [神戸, 阪神, 播淡, 但丹, 西播]   # 5地区（各地区内にA〜Fブロック。東播は播淡に含まれる）
 district_assignment: geographic
 seed_exemption: true          # 夏甲子園出場の東洋大姫路を県大会推薦校に追加
 stages:

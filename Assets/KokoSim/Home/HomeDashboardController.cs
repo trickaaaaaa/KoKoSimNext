@@ -596,7 +596,10 @@ namespace KokoSim.Unity.Home
             if (headline != null)
             {
                 var win = o.ManagerWon;
-                headline.text = o.IsChampion ? "優勝！" : (win ? "勝利！" : "敗戦");
+                // 出場校決定戦（2校の一発勝負）は勝っても「優勝」ではない
+                var playoff = KokoSim.Unity.Shell.RegionalEntry.IsPlayoff(
+                    KokoSim.Unity.Shell.GameSession.Current.Kind, KokoSim.Unity.Shell.GameSession.Current.Field);
+                headline.text = o.IsChampion && !playoff ? "優勝！" : (win ? "勝利！" : "敗戦");
                 headline.EnableInClassList("tm-result__headline--win", win);
                 headline.EnableInClassList("tm-result__headline--lose", !win);
             }

@@ -4,13 +4,15 @@
 pref: kanagawa
 snapshot_year: 2025
 region: kanto
-districts: [川崎, 横浜北, 横浜南, 横須賀, 湘南, 西湘, 北相]  # 7地区（issue #725 で4地区集約から実名どおりの7地区へ）
+# 実在の秋季地区予選は4地区のリーグ戦＝「川崎・横浜北」「横浜南・横須賀」「湘南・西湘」「北相」（2025年も同じ・計41ブロック・県大会80校。
+# 出典 kanagawa-baseball.com/fall/2025）。ゲームは4地区の内訳を実名で分け、7地区として回す簡略化（issue #725・監督決定）。
+districts: [川崎, 横浜北, 横浜南, 横須賀, 湘南, 西湘, 北相]  # 7地区
 district_assignment: geographic
 seed_exemption: true          # 夏の選手権代表校（横浜）を県大会へ推薦
 stages:
   - name: 地区予選
     type: group_split
-    groups: 7                 # 7地区（districts と同じ並び）
+    groups: 7                 # 7地区（districts と同じ並び。実在は4地区＝上のコメント）
     grouping: geographic
     child:
       type: round_robin       # 地区の中を4校ブロックに分けて総当たり（夏の順位でシード分散・issue #772）

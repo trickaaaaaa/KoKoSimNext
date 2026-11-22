@@ -13,7 +13,8 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// <para>見る構造は3階層のみ: <c>regions:</c> 配下の各 <c>- region: xxx</c> ブロック、その中の
 /// スカラーキー（<c>single_prefecture</c>/<c>host_prefecture_bonus</c>/<c>champion_to_jingu</c>）と
 /// インラインマップ（<c>{ k: v, ... }</c>）、および <c>biennial_rotation:</c> 直下の
-/// <c>odd_year:</c>/<c>even_year:</c>（インラインマップ）。<c>notes:</c> は読み捨てる。</para>
+/// <c>odd_year:</c>/<c>even_year:</c>（インラインマップ）、および <c>playoff:</c> 直下の
+/// <c>from_year:</c>/<c>candidate_rank:</c>/<c>berths_per_pref:</c>（出場校決定戦）。<c>notes:</c> は読み捨てる。</para>
 /// </summary>
 public static class RegionalFormatParser
 {
@@ -30,11 +31,16 @@ public static class RegionalFormatParser
         Dictionary<string, int>? oddYear = null;
         Dictionary<string, int>? evenYear = null;
         var hostByYear = new Dictionary<int, string>();
+        int? playoffFromYear = null;
+        var playoffBerths = new Dictionary<string, int>();
+        var playoffRank = 3;
 
         var regionIndent = -1;   // "- region:" の後続キー（berths_per_pref 等）の字下げ段
         var inBiennial = false;
         var biennialIndent = -1; // odd_year/even_year の字下げ段
         var inNotes = false;
+        var inPlayoff = false;
+        var playoffIndent = -1;
 
         void CloseRegion()
         {
@@ -50,6 +56,9 @@ public static class RegionalFormatParser
                 OddYearBerths = oddYear,
                 EvenYearBerths = evenYear,
                 HostByYear = hostByYear,
+                Playoff = playoffFromYear is { } fy
+                    ? new RegionalPlayoffRule { FromYear = fy, BerthsPerPref = playoffBerths, CandidateRank = playoffRank }
+                    : null,
             });
             region = null;
             singlePrefecture = false;
@@ -60,8 +69,12 @@ public static class RegionalFormatParser
             oddYear = null;
             evenYear = null;
             hostByYear = new Dictionary<int, string>();
+            playoffFromYear = null;
+            playoffBerths = new Dictionary<string, int>();
+            playoffRank = 3;
             inBiennial = false;
             inNotes = false;
+            inPlayoff = false;
         }
 
         foreach (var raw in yaml.Replace("\r\n", "\n").Split('\n'))
@@ -97,6 +110,18 @@ public static class RegionalFormatParser
                 }
                 inBiennial = false; // 段が戻った＝biennial_rotation ブロック終了
             }
+            if (inPlayoff)
+            {
+                if (indent >= playoffIndent)
+                {
+                    var (pk, pv) = Split(trimmed);
+                    if (pk == "from_year" && int.TryParse(pv, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromYear)) playoffFromYear = fromYear;
+                    else if (pk == "candidate_rank" && int.TryParse(pv, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rank)) playoffRank = rank;
+                    else if (pk == "berths_per_pref") playoffBerths = ParseInlineIntMap(pv);
+                    continue;
+                }
+                inPlayoff = false; // 段が戻った＝playoff ブロック終了
+            }
             if (inNotes)
             {
                 if (indent > regionIndent) continue; // notes: の箇条書き行
@@ -115,6 +140,7 @@ public static class RegionalFormatParser
                 case "berths_per_pref": berthsPerPref = ParseInlineIntMap(v); break;
                 case "host_by_year": hostByYear = ParseInlineYearMap(v); break;
                 case "biennial_rotation": inBiennial = true; biennialIndent = regionIndent + 2; break;
+                case "playoff": inPlayoff = true; playoffIndent = regionIndent + 2; break;
                 case "notes": inNotes = true; break;
             }
         }

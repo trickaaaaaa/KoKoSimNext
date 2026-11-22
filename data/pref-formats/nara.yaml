@@ -9,7 +9,7 @@ seed_exemption: false
 stages:
   - name: 県大会
     type: knockout
-    third_place_match: true   # 決勝の2校＋3位決定戦の勝者の計3校が近畿大会へ
+    third_place_match: true   # 決勝の2校は近畿大会へ直接。3位決定戦の勝者は近畿の出場校決定戦の候補（2026年〜。2025年までは直接進出）
 # 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=橿原公苑、序盤=市営級プールから抽選
 stadiums:
   final: nara_final
@@ -17,4 +17,4 @@ stadiums:
 notes:
   - 2025近畿大会開催県
   - 連合チームあり
-  - 近畿の枠は隔年制。regional-tournaments.yaml の kinki を参照
+  - 近畿の枠は2025年までが隔年制、2026年からは出場校決定戦。regional-tournaments.yaml の kinki を参照

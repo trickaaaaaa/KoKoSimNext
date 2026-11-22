@@ -39,6 +39,7 @@ public static class RegionalFormatLoader
         public Dictionary<string, int>? Fixed { get; set; }
         public Dictionary<string, int>? BerthsPerPref { get; set; }
         public BiennialDto? BiennialRotation { get; set; }
+        public PlayoffDto? Playoff { get; set; }
         public Dictionary<int, string>? HostByYear { get; set; }
 
         public RegionalFormat ToModel() => new()
@@ -52,7 +53,22 @@ public static class RegionalFormatLoader
             OddYearBerths = BiennialRotation?.OddYear,
             EvenYearBerths = BiennialRotation?.EvenYear,
             HostByYear = HostByYear ?? new Dictionary<int, string>(),
+            Playoff = Playoff is { FromYear: > 0 } p
+                ? new RegionalPlayoffRule
+                {
+                    FromYear = p.FromYear,
+                    BerthsPerPref = p.BerthsPerPref ?? new Dictionary<string, int>(),
+                    CandidateRank = p.CandidateRank,
+                }
+                : null,
         };
+    }
+
+    private sealed class PlayoffDto
+    {
+        public int FromYear { get; set; }
+        public Dictionary<string, int>? BerthsPerPref { get; set; }
+        public int CandidateRank { get; set; } = 3;
     }
 
     private sealed class BiennialDto

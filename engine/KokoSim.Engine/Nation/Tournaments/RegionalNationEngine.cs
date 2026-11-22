@@ -69,17 +69,21 @@ public static class RegionalNationEngine
             }
             else
             {
-                var entrants = new List<School>();
+                var regionRng = rng.Fork(0xB10C_0000UL ^ (uint)StableHash(fmt.Region));
+                var placements = new List<(string, IReadOnlyList<School>)>();
                 foreach (var p in prefIds.OrderBy(x => x))
                 {
                     if (!prefecturePlacements.TryGetValue(p, out var ph) || ph.Count == 0) continue;
-                    var berths = Math.Max(1, fmt.BerthsFor(PrefectureNames.JisOrder[p], calendarYear));
-                    foreach (var id in ph.Take(berths)) entrants.Add(byId(id));
+                    var prefName = PrefectureNames.JisOrder[p];
+                    // 直接枠と決定戦の候補の順位までだけ School に引く（それ以下は使わない）。
+                    var need = Math.Max(Math.Max(1, fmt.BerthsFor(prefName, calendarYear)),
+                        (fmt.PlayoffCandidateIndex(prefName, calendarYear) ?? -1) + 1);
+                    placements.Add((prefName, ph.Take(need).Select(byId).ToList()));
                 }
+                var entrants = RegionalPlayoff.Qualify(fmt, calendarYear, placements, coeff, regionRng);
                 if (entrants.Count == 0) { placement = Array.Empty<int>(); }
                 else
                 {
-                    var regionRng = rng.Fork(0xB10C_0000UL ^ (uint)StableHash(fmt.Region));
                     // カード記録は球場割当なし（StadiumPlan.None）で回す＝本編の乱数列には触れない
                     // （TournamentRecorder の球場抽選は専用 Fork のみで消費し、対戦解決の rng は進めない）。
                     // センバツの「選手一人一人の地区大会成績」再シム（QualifierStatsSim）の入力になる。

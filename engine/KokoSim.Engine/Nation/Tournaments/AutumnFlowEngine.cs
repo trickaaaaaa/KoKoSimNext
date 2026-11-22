@@ -81,13 +81,13 @@ public static class AutumnFlowEngine
             }
             else
             {
-                var entrants = new List<School>();
+                var placements = new List<(string, IReadOnlyList<School>)>();
                 foreach (var p in prefs)
                 {
                     if (!prefResults.TryGetValue(p.Id, out var pr)) continue;
-                    var berths = System.Math.Max(1, rf.BerthsFor(p.Name, year));
-                    entrants.AddRange(pr.FinalPlacement.Take(berths));
+                    placements.Add((p.Name, pr.FinalPlacement));
                 }
+                var entrants = RegionalPlayoff.Qualify(rf, year, placements, coeff, rng);
                 if (entrants.Count == 0) continue;
                 var knock = Knockout.Run(entrants, coeff, rng);
                 placement = knock.Placement;

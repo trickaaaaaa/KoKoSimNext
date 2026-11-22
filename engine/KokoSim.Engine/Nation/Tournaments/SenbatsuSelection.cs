@@ -7,7 +7,9 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public sealed record SenbatsuBerths
 {
     /// <summary>地区→一般選考枠。合計31＋神宮枠1＝32校規模（設計書05 §4「例年32校規模」・21世紀枠は非採用）。
-    /// 21世紀枠を採らない分、現実の一般選考枠(28)より各地区をやや厚く配分して32に合わせる。</summary>
+    /// 基準は2024年（第96回）以降の実数＝一般選考29（北海道1・東北3・関東東京6・北信越2・東海3・近畿6・中国2・四国2・九州4）
+    /// ＋神宮1＋21世紀2＝32。21世紀枠2つぶんは、中国（実2→3）と九州（実4→5）へ1校ずつ上乗せして32に合わせている
+    /// （枠の増やし先は、いずれも一般枠で次点の層が厚い西日本の地区としたゲーム側の簡略化）。</summary>
     public IReadOnlyDictionary<string, int> GeneralByRegion { get; init; } = new Dictionary<string, int>
     {
         ["hokkaido"] = 1,

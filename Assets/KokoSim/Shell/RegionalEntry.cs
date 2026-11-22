@@ -27,12 +27,33 @@ namespace KokoSim.Unity.Shell
         private const int ManagerSchoolId = -1;
 
         /// <summary>秋季県大会が終わった直後に呼ぶ。<b>秋以外の大会・自校非対話モードなら何もしない</b>。</summary>
-        /// <returns>自校が地区大会に出場した（＝対話モードで地区大会に入った）か。</returns>
+        /// <returns>自校が地区大会（または出場校決定戦）に出場した（＝対話モードで入った）か。</returns>
         public static bool EnterAfterPrefectureTournament(TournamentKind endedKind)
         {
             if (endedKind != TournamentKind.Autumn) return false;
             if (GameSession.Current.Mode != GameMode.Normal) return false;
+            return Start(managerPlayoffWon: null);
+        }
 
+        /// <summary>
+        /// 出場校決定戦（近畿の2026年〜）を自校が戦い終えた直後に呼ぶ。決定戦に勝っていれば地区大会へ対話で入り、
+        /// 負けていれば地区大会を観ずに同期で解いて明治神宮の判定へつなぐ。
+        /// </summary>
+        /// <returns>決定戦の後始末として処理した（＝続けて <see cref="EnterJinguAfterRegionalTournament"/> を呼んではいけない）か。</returns>
+        public static bool EnterRegionalAfterPlayoff(TournamentKind endedKind, bool wasPlayoff, bool managerWon)
+        {
+            if (endedKind != TournamentKind.Regional || !wasPlayoff) return false;
+            if (GameSession.Current.Mode != GameMode.Normal) return true;
+            Start(managerPlayoffWon: managerWon);
+            return true;
+        }
+
+        /// <summary>地区大会の出場校決定戦の実体か。決定戦は2校だけの一発勝負で、実際の地区大会は2校にならない。</summary>
+        internal static bool IsPlayoff(TournamentKind kind, IReadOnlyCollection<School> field)
+            => kind == TournamentKind.Regional && field != null && field.Count == 2;
+
+        private static bool Start(bool? managerPlayoffWon)
+        {
             AutumnBackgroundSim.EnsureCompleted();
             BracketFinishSim.EnsureCompleted();
             GameSession.Current.FlushPendingBracketFold();
@@ -56,9 +77,21 @@ namespace KokoSim.Unity.Shell
             var myPrefRomaji = PrefectureNames.JisOrder[NationService.PrefectureId];
             var berths = Math.Max(1, fmt.BerthsFor(myPrefRomaji, calendarYear));
             var myRank = IndexOfManager(myPlacement);
-            var qualifies = myRank >= 0 && myRank < berths;
 
-            var field = BuildField(myRegion, fmt, calendarYear, myPlacement);
+            // 出場校決定戦（近畿の2026年〜）の候補＝自校が県大会で決定戦の順位だったとき。まず決定戦を対話で戦う。
+            var isPlayoffCandidate = myRank >= 0 && fmt.PlayoffCandidateIndex(myPrefRomaji, calendarYear) == myRank;
+            if (isPlayoffCandidate && managerPlayoffWon == null)
+            {
+                var placements = CollectPlacements(myRegion, fmt, calendarYear, myPlacement, out _);
+                var (_, candidates) = RegionalPlayoff.Split(fmt, calendarYear, placements);
+                var opponent = PlayoffOpponentOfManager(candidates, yearIndex);
+                if (opponent != null) return StartPlayoff(myRegion, yearIndex, opponent);
+                managerPlayoffWon = true;   // 組む相手が居ない（候補が奇数・県大会の結果欠け）＝不戦勝で進む
+            }
+
+            var qualifies = myRank >= 0 && (myRank < berths || (isPlayoffCandidate && managerPlayoffWon == true));
+
+            var field = BuildField(myRegion, fmt, calendarYear, myPlacement, yearIndex, managerPlayoffWon);
             if (field.Count < 2)
             {
                 UnityEngine.Debug.LogWarning(
@@ -127,15 +160,33 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 自地区の全出場校（自県は対話プレイ済みの結果、他県は背景シム）を県別出場枠ぶんだけ集める。
+        /// 出場校決定戦のある地区・年は、決定戦の勝者も加える。自校が決定戦の候補のときは
+        /// <paramref name="managerPlayoffWon"/> に自校の勝敗を渡す（自校の組は対話で戦った結果を使う）。
         /// </summary>
         internal static List<School> BuildField(
-            string region, RegionalFormat fmt, int calendarYear, IReadOnlyList<int> myPlacement)
+            string region, RegionalFormat fmt, int calendarYear, IReadOnlyList<int> myPlacement,
+            int yearIndex, bool? managerPlayoffWon = null)
+        {
+            var placements = CollectPlacements(region, fmt, calendarYear, myPlacement, out var missing);
+            var (field, candidates) = RegionalPlayoff.Split(fmt, calendarYear, placements);
+            field.AddRange(ResolvePlayoffWinners(candidates, yearIndex, managerPlayoffWon));
+            if (missing.Count > 0)
+                UnityEngine.Debug.LogWarning(
+                    $"[地区大会] {RegionDisplayName(region)}大会の出場枠を埋められない県がある: "
+                    + string.Join("・", missing) + $"（出場校 {field.Count} 校で開催してしまう）。"
+                    + "秋季全国裏試合（AutumnBackgroundSim）が回っていない可能性がある。");
+            return field;
+        }
+
+        /// <summary>県ごとの県大会順位（直接枠と決定戦の候補の順位まで）を県Id順に集める。結果の無い県は <paramref name="missing"/> へ。</summary>
+        private static List<(string Pref, IReadOnlyList<School> Placement)> CollectPlacements(
+            string region, RegionalFormat fmt, int calendarYear, IReadOnlyList<int> myPlacement, out List<string> missing)
         {
             var myPrefId = NationService.PrefectureId;
             var otherResults = AutumnBackgroundSim.PrefectureResults;
-            var field = new List<School>();
+            var placements = new List<(string, IReadOnlyList<School>)>();
 
-            var missing = new List<string>();
+            missing = new List<string>();
             foreach (var prefId in PrefecturesInRegion(region))
             {
                 IReadOnlyList<int> placement = prefId == myPrefId
@@ -148,19 +199,78 @@ namespace KokoSim.Unity.Shell
                 if (placement.Count == 0) { missing.Add(PrefectureNames.JapaneseOf(prefId)); continue; }
 
                 var prefRomaji = PrefectureNames.JisOrder[prefId];
-                var berths = Math.Max(1, fmt.BerthsFor(prefRomaji, calendarYear));
-                foreach (var id in placement.Take(berths))
+                var need = Math.Max(Math.Max(1, fmt.BerthsFor(prefRomaji, calendarYear)),
+                    (fmt.PlayoffCandidateIndex(prefRomaji, calendarYear) ?? -1) + 1);
+                var schools = new List<School>();
+                foreach (var id in placement.Take(need))
                 {
                     var school = id == ManagerSchoolId ? ManagerSchool() : NationService.SchoolById(id);
-                    if (school != null) field.Add(school);
+                    if (school != null) schools.Add(school);
                 }
+                placements.Add((prefRomaji, schools));
             }
-            if (missing.Count > 0)
-                UnityEngine.Debug.LogWarning(
-                    $"[地区大会] {RegionDisplayName(region)}大会の出場枠を埋められない県がある: "
-                    + string.Join("・", missing) + $"（出場校 {field.Count} 校で開催してしまう）。"
-                    + "秋季全国裏試合（AutumnBackgroundSim）が回っていない可能性がある。");
-            return field;
+            return placements;
+        }
+
+        private static ulong PlayoffSeed(int yearIndex)
+            => GameSeed.Master ^ (ulong)(9800 + yearIndex * 10 + (int)TournamentKind.Regional);
+
+        /// <summary>自校の決定戦の相手。自校が不戦勝（相手が居ない）なら null。</summary>
+        private static School PlayoffOpponentOfManager(IReadOnlyList<School> candidates, int yearIndex)
+        {
+            foreach (var (a, b) in RegionalPlayoff.Pair(candidates, new Xoshiro256Random(PlayoffSeed(yearIndex))))
+            {
+                if (b == null) continue;
+                if (a.Id == ManagerSchoolId) return b;
+                if (b.Id == ManagerSchoolId) return a;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 決定戦の勝者（組の順）。自校の組は <paramref name="managerPlayoffWon"/> の結果を使い、残りの組は集計モデルで解く
+        /// （組ごとに別ストリーム＝自校の組を対話で戦っても他の組の結果は変わらない）。
+        /// </summary>
+        private static List<School> ResolvePlayoffWinners(
+            IReadOnlyList<School> candidates, int yearIndex, bool? managerPlayoffWon)
+        {
+            var rng = new Xoshiro256Random(PlayoffSeed(yearIndex));
+            var winners = new List<School>();
+            var pairs = RegionalPlayoff.Pair(candidates, rng);
+            for (var i = 0; i < pairs.Count; i++)
+            {
+                var (a, b) = pairs[i];
+                if (b == null) { winners.Add(a); continue; }
+                var managerIsA = a.Id == ManagerSchoolId;
+                if (managerIsA || b.Id == ManagerSchoolId)
+                {
+                    if (managerPlayoffWon == null)
+                        throw new InvalidOperationException("自校が出場校決定戦の候補なのに、決定戦の勝敗が渡されていない。");
+                    var manager = managerIsA ? a : b;
+                    var other = managerIsA ? b : a;
+                    winners.Add(managerPlayoffWon == true ? manager : other);
+                    continue;
+                }
+                winners.Add(RegionalPlayoff.Play(a, b, i, NationCoeff, rng));
+            }
+            return winners;
+        }
+
+        /// <summary>自校が出場校決定戦（自校と相手の2校の一発勝負）へ対話で入る。</summary>
+        private static bool StartPlayoff(string region, int yearIndex, School opponent)
+        {
+            var manager = ManagerSchool();
+            var field = new List<School> { manager, opponent };
+            var title = Title(region, yearIndex) + " 出場校決定戦";
+            var seed = PlayoffSeed(yearIndex) ^ 0x1UL;
+            NationService.TournamentStats.StartTournament();
+            var runner = new TournamentRunner(
+                field, manager, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule,
+                title, new PlayerMatchResolver(), TournamentEntry.BackgroundResolverFor(TournamentKind.Regional, yearIndex),
+                onBackgroundMatch: TournamentEntry.FoldBackgroundMatch);
+            GameSession.Current.EnterTournament(TournamentKind.Regional, title, runner, field);
+            GameSession.Current.Year = yearIndex;
+            return true;
         }
 
         /// <summary>順位付き出場校ID列の中で自校(-1)が何位（0基点）か。居なければ-1。</summary>
