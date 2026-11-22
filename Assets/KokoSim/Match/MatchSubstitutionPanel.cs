@@ -969,7 +969,8 @@ namespace KokoSim.Unity.Match
                     return (true, NameOf(op.Incoming) + " が登板し、" + NameOf(_opt.CurrentPitcher) + " は退場（再登板できない）。", false);
                 case DefKind.Convert:
                     return (true, NameOf(op.Incoming) + " が登板。" + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
-                        + " を守る（後で再登板できる）。" + PosJp(op.Pos) + " の " + NameOf(op.Outgoing) + " が退場。", false);
+                        + " を守る（後で再登板できる）。" + PosJp(op.Pos) + " の " + NameOf(op.Outgoing) + " が退場。"
+                        + (_opt.UsesDh ? "DHは解除され、" + NameOf(_opt.Lineup[_opt.DhSlot]) + " も退場（以降DHなし）。" : ""), false);
                 case DefKind.PromoteFielder:
                     // 単純な入れ替え。非DHは誰も退場しない＝元投手は後で再登板できる（issue #452）。
                     return _opt.UsesDh

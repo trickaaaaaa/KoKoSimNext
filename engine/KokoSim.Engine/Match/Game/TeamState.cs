@@ -1470,7 +1470,8 @@ public sealed class TeamState
     /// <paramref name="reliever"/>（控えの誰か）を登板させる。<paramref name="to"/> を守っていた野手は
     /// 退場し、その打順スロットが空く。
     /// 非DH＝元投手は自分の打順スロットに残ったまま守備位置だけ移り、新投手が空いたスロットへ入る。
-    /// DH制＝元投手は打順外だったので、空いた打順スロットを引き継いで守備に就く（DHは維持・新投手は打順外）。
+    /// DH制＝元投手は打順外だったので、空いた打順スロットを引き継いで守備に就く。DHは消滅し（規則5.11・#1296）、
+    /// 元DHは退場、新投手がDHの打順スロットで打つ（<see cref="UsesDh"/> は false になる）。
     /// 元投手は<b>退場していない</b>＝打席に立ち続け、後で再登板もできる（リエントリー禁止は退場者にのみ適用）。
     /// 球数・スティント疲労は選手単位で持ち回すので、コンバートを挟んでもスタミナは回復しない。
     /// </summary>
@@ -1489,7 +1490,15 @@ public sealed class TeamState
         _replacedAtSlot[fSlot] = displaced.Name;
         if (_usesDh)
         {
+            // 規則5.11: 投手が守備に就けば DH は消滅する。元投手は押し出された野手の打順スロットで打ち、
+            // 新投手が DH の打順スロットへ入る（打順は9人のまま）。元 DH は守る位置が無く退場する。
+            var dh = _lineup[_dhSlot];
+            _retired.Add(KeyOf(dh));
+            _replacedAtSlot[_dhSlot] = dh.Name;
             _lineup[fSlot] = Rekey(oldPitcher, oldPitcher with { Position = to });
+            _lineup[_dhSlot] = mound;
+            _pitcherSlot = _dhSlot;
+            _usesDh = false;
         }
         else
         {

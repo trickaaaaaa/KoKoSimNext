@@ -173,23 +173,29 @@ public sealed class DefenseConversionTests
     }
 
     [Fact]
-    public void ConvertPitcherAndRelieve_Dh_KeepsDhAndPutsPitcherIntoOrder()
+    public void ConvertPitcherAndRelieve_Dh_ReleasesDhAndNewPitcherBatsInDhSlot()
     {
         var relief = Rp("二番手");
         var state = new TeamState(MakeDhTeam(bullpen: new[] { relief }));
         var starter = state.CurrentPitcher;
         var displaced = state.CurrentLineup[LeftSlot];
+        var dhSlot = state.DhSlot;
+        var dh = state.CurrentLineup[dhSlot];
 
         Assert.True(state.ConvertPitcherAndRelieve(FieldPosition.LeftField, relief));
 
-        // DH制では投手が打順外なので、元投手は押し出された野手の打順スロットを引き継ぐ。
+        // 元投手は押し出された野手の打順スロットを引き継いで左翼へ。
         Assert.Equal(starter.Name, state.CurrentLineup[LeftSlot].Name);
         Assert.Equal(FieldPosition.LeftField, state.CurrentLineup[LeftSlot].Position);
         Assert.True(state.IsRetired(displaced));
         Assert.False(state.IsRetired(starter));
+        // DHは消滅（規則5.11）。元DHは退場し、新投手がDHの打順スロットで打つ。
+        Assert.False(state.UsesDh);
+        Assert.True(state.IsRetired(dh));
         Assert.Equal("二番手", state.CurrentPitcher.Name);
-        Assert.DoesNotContain(state.CurrentLineup, p => p.Position == FieldPosition.Pitcher);   // 新投手は打順外
-        Assert.True(state.UsesDh);                                                             // DHは維持
+        Assert.Equal("二番手", state.CurrentLineup[dhSlot].Name);
+        Assert.Equal(FieldPosition.Pitcher, state.CurrentLineup[dhSlot].Position);
+        Assert.Equal(9, PosOf(state).Distinct().Count());
         Assert.Equal(1, state.Substitutions);
     }
 
