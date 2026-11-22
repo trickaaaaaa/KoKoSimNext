@@ -102,8 +102,8 @@ public sealed record EnemyAiCoefficients
     public int AggressiveGearPushInningsMore { get; init; } = 1;
     public int AggressiveGearPushDiffMore { get; init; } = 1;
     public int AggressiveGearCoastLeadLater { get; init; } = 2;
-    // 9) 慎重: 一塁空きの強打者に敬遠を選びやすい（既定 0＝無効を正の確率へ）
-    public double CautiousIntentionalWalkProb { get; init; } = 0.55;
+    // 9) 慎重: 一塁空きの強打者に敬遠を選びやすい（基準 IntentionalWalkProb との Math.Max なので基準より上にする）
+    public double CautiousIntentionalWalkProb { get; init; } = 0.7;
     public int CautiousIntentionalWalkMinPowerRelax { get; init; } = 4; // 敬遠対象のパワー下限を下げる
 
     // === ⑤ エース温存層: 先発選択（issue #42, 設計書11 §2/§3） ===
