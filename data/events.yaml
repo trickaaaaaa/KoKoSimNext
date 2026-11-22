@@ -7,8 +7,10 @@
 #             （行ごとに独立抽選すると前後が噛み合わない文が出るため。2026-08-13 オーナー決定）。
 #             同じ (イベント, 通算週) なら常に同じ会話＝開き直しても文が変わらない。
 #   lines:    会話の中身。who=役割ID（立ち絵スロット＋既定の話者名）、say=本文、name=話者名の上書き。
-#             who: manager 監督 / player 部員 / team_manager マネージャー / ob OB / scout スカウト /
-#                  local 地域の人 / captain 主将 / narration 地の文（立ち絵なし）
+#             who: manager 監督 / player 部員 / team_manager マネージャー / scout スカウト /
+#                  captain 主将 / narration 地の文（立ち絵なし）
+#             ※ OB（ob）と地域の人（local）は使わない（issue #1425）。立ち絵を作らず、OB・後援会・町内会・記者の言葉は
+#               マネージャーが監督に伝える形（「監督、OBの方が〜だそうです」）で書く。EventTableTests が残っていないことを固定する
 #
 # ■ 監督の書き方（2026-08-19 監督指示・issue event-dialogue-manager-too-cool）
 #   プレイヤー＝監督なので、**監督に語らせすぎない**。旧版は109通り中104通りが監督の決め台詞で締まり、
@@ -259,14 +261,12 @@ events:
           - who: manager
             say: "普段どおりでいいぞ。見られて困る練習はしてない。"
       - lines:
-          - who: local
-            name: "記者"
-            say: "監督、今年のチームの手応えは？"
+          - who: team_manager
+            say: "監督、記者の方が、今年のチームの手応えを聞きたいそうです。"
           - who: manager
             say: "夏に見てください。"
-          - who: local
-            name: "記者"
-            say: "そうですか。では、写真を一枚。"
+          - who: team_manager
+            say: "「そうですか。では、写真を一枚」とのことです。もう部員を並べてますよ。"
       - lines:
           - who: team_manager
             say: "写真、{player} ばかり撮られていましたね。"
@@ -282,20 +282,22 @@ events:
       funds: 30            # 部費＝運営費の財布（道具・備品・合宿・スカウト）
     variants:
       - lines:
-          - who: ob
-            say: "監督、少ないですが部で使ってください。私も、ここで三年間転がされた口です。"
+          - who: team_manager
+            say: "監督、OBの方が寄付を持ってきてくださいました。「少ないですが、部で使ってください」と。"
           - who: manager
             say: "ありがたく。道具に回します。"
+          - who: team_manager
+            say: "ご自分もここで三年間転がされた口だそうですよ。"
       - lines:
           - who: narration
             say: "OB会の封筒が部室の机に置かれていた。添えられた紙には「がんばれ」の四文字だけ。"
           - who: team_manager
             say: "毎年、律儀に。ありがたいですね。"
       - lines:
-          - who: ob
-            say: "うちの代は一回戦負けでしてね。だから、あなたたちに託すんです。"
+          - who: team_manager
+            say: "監督、OBの方が寄付を。「うちの代は一回戦負けでしてね。だから、あなたたちに託すんです」だそうです。"
           - who: captain
-            say: "……はい。ありがとうございます。"
+            say: "……はい。ありがとうございますと、伝えておいてください。"
 
   # 設備・資金イベント（設計書04 §1.4・issue #613）。
   # 財布は部費1つ（issue #1082 で施設基金を統合）。寄付も破損の出費も部費で動く。効果は effects: に書くだけで足せる。
@@ -308,21 +310,20 @@ events:
       funds: 60
     variants:
       - lines:
-          - who: local
-            name: "後援会長"
-            say: "監督、みんなで少しずつ出し合いました。建物に使ってください。"
+          - who: team_manager
+            say: "監督、後援会長さんが、みんなで少しずつ出し合ったお金を届けてくださいました。"
           - who: manager
-            say: "ありがとうございます。無駄にはしません。"
+            say: "無駄にはしない。"
+          - who: team_manager
+            say: "建物に使ってほしいそうです。お礼状、書いておきますね。"
       - lines:
           - who: narration
             say: "職員室に呼ばれると、後援会名義の書類が机に置いてあった。"
           - who: team_manager
             say: "部費に入れておきますね。道具にも設備にも使えます。"
       - lines:
-          - who: ob
-            say: "室内が無いと、雪の日に何もできんでしょう。少しですが。"
           - who: team_manager
-            say: "助かります。設備の相談、また来ますね。"
+            say: "監督、OBの方からも寄付をいただきました。「室内が無いと、雪の日に何もできんでしょう」と。設備のこと、また相談しましょうね。"
 
   - id: gear_broken
     kind: Random
@@ -359,11 +360,10 @@ events:
       funds: 45
     variants:
       - lines:
-          - who: local
-            name: "地元企業の人"
-            say: "うちの社長、ここのOBでしてね。毎年やらせてもらってます。"
+          - who: team_manager
+            say: "監督、地元企業の方が用具を届けてくださいました。社長さんがここのOBで、毎年やらせてもらっているそうです。"
           - who: manager
-            say: "いつも、ありがとうございます。"
+            say: "いつも、ありがたい。"
       - lines:
           - who: narration
             say: "段ボールが三箱、部室の前に積まれている。伝票の差出人は町の工場だった。"
@@ -391,12 +391,12 @@ events:
           - who: team_manager
             say: "はい。まず来月の第一週で。"
       - lines:
-          - who: ob
-            say: "しばらく手伝わせてください。現役の頃、ここで拾ってもらった恩がある。"
+          - who: team_manager
+            say: "監督、OBの方が、しばらく手伝わせてほしいそうです。現役の頃、ここで拾ってもらった恩があると。"
           - who: manager
-            say: "助かります。守備をお願いできますか。"
-          - who: ob
-            say: "任せてください。"
+            say: "助かる。守備をお願いできるか聞いてくれ。"
+          - who: team_manager
+            say: "「任せてください」とのことです。もうグラブを出してますよ。"
       - lines:
           - who: narration
             say: "見慣れない大人がノックバットを持って立っている。打球が、明らかに速い。"
@@ -491,11 +491,12 @@ events:
       funds: 12
     variants:
       - lines:
-          - who: local
-            name: "町内会の人"
-            say: "監督、今年も神輿の担ぎ手が足りんとです。三年生だけでも貸してもらえんですか。"
+          - who: team_manager
+            say: "監督、町内会の方が、今年も神輿の担ぎ手が足りないそうです。三年生だけでも貸してもらえないか、と。"
           - who: manager
-            say: "分かりました。行かせます。"
+            say: "分かった。行かせよう。"
+          - who: team_manager
+            say: "法被はもう用意してあるそうですよ。"
       - lines:
           - who: narration
             say: "揃いの法被を着た部員たちが、慣れない手つきで綱を握っている。"
@@ -950,15 +951,15 @@ events:
     text: "プロOBが訪ねてきた。"
     variants:
       - lines:
-          - who: ob
-            say: "監督、久しぶりです。……この子ら、いい体になってきましたね。"
+          - who: team_manager
+            say: "監督、プロにいらしたOBの方が見えています。「この子ら、いい体になってきましたね」と。"
           - who: manager
             say: "どこを見てそう思う？　あとで教えてくれ。"
-          - who: ob
-            say: "いいですよ。まず下半身です。"
+          - who: team_manager
+            say: "お願いしたら、まず下半身だそうです。"
       - lines:
-          - who: ob
-            say: "現役の頃は、こうやって見られる側だったんですけどね。"
+          - who: team_manager
+            say: "監督、プロだったOBの方が、「現役の頃は、こうやって見られる側だったんですけどね」と笑っていました。"
           - who: captain
             say: "監督、あの人、本当にプロだった人ですか。"
 
@@ -972,11 +973,10 @@ events:
           - who: team_manager
             say: "監督、二時間も話し込んでましたね。"
       - lines:
-          - who: ob
-            name: "老監督"
-            say: "教えられることは何もない。ただ、私が間違えたことなら話せます。"
+          - who: team_manager
+            say: "監督、老監督が、「教えられることは何もない。ただ、私が間違えたことなら話せます」と。"
           - who: manager
-            say: "それが一番聞きたい話です。"
+            say: "それが一番聞きたい。そう伝えてくれ。"
 
   # 気づき: 成長タイプの見立て（設計書03 §5.6・issue #614）。
   # **断定しない**（育成眼が低いと読み違える）。会話も「かもしれない」の温度で書く。
@@ -1432,10 +1432,10 @@ events:
     text: "OB会と卒業生から{koshien}の激励金が届いた。"
     variants:
       - lines:
-          - who: ob
-            say: "監督、遠征も宿も金がかかるでしょう。同期で集めました。"
+          - who: team_manager
+            say: "監督、OBの方が封筒を届けてくださいました。「遠征も宿も金がかかるでしょう。同期で集めました」だそうです。"
           - who: manager
-            say: "ありがたく使わせてもらいます。"
+            say: "ありがたく使わせてもらう。"
           - who: team_manager
             say: "封筒、思ったより厚いですよ。数えるの手伝ってください。"
       - lines:
@@ -1446,19 +1446,17 @@ events:
           - who: team_manager
             say: "この学校で三年やった人たちですね。全員。"
       - lines:
-          - who: local
-            name: "後援会長"
-            say: "商店街も出しますよ。うちの店、あの夏のポスターまだ貼ってますからね。"
           - who: team_manager
-            say: "何年前のですか、それ。"
-          - who: local
-            name: "後援会長"
-            say: "十七年前。今年、貼り替えられる。"
+            say: "監督、後援会長さんが、商店街からも出してくださるそうです。十七年前のあの夏のポスターを、まだ店に貼っているからと。"
+          - who: captain
+            say: "十七年も貼ってあるんですか。"
+          - who: team_manager
+            say: "今年、貼り替えるそうですよ。"
       - lines:
-          - who: ob
-            say: "私は補欠で終わりました。だから、行く奴の靴代くらいは出したい。"
+          - who: team_manager
+            say: "監督、OBの方が封筒を置いていかれました。「私は補欠で終わりました。だから、行く奴の靴代くらいは出したい」と。"
           - who: manager
-            say: "必ず届けます。"
+            say: "必ず選手に届ける。"
           - who: narration
             say: "封筒には、背番号も何も書かれていなかった。"
 
@@ -1534,8 +1532,8 @@ events:
     text: "OB会と卒業生から{senbatsu}の激励金が届いた。"
     variants:
       - lines:
-          - who: ob
-            say: "冬の遠征は寒いでしょう。少ないですが足しにしてください。"
+          - who: team_manager
+            say: "監督、OBの方が「冬の遠征は寒いでしょう。少ないですが足しにしてください」と。"
           - who: manager
             say: "助かります。"
           - who: team_manager
@@ -1548,14 +1546,12 @@ events:
           - who: team_manager
             say: "選ばれた後輩に賭けたんでしょうね。"
       - lines:
-          - who: local
-            name: "後援会長"
-            say: "{senbatsu}出場、街の掲示板に貼りましたよ。"
           - who: team_manager
-            say: "気が早いですね。"
-          - who: local
-            name: "後援会長"
-            say: "毎年これくらいでちょうどいい。"
+            say: "監督、後援会長さんが、{senbatsu}出場を街の掲示板に貼ってくださったそうです。"
+          - who: captain
+            say: "もう貼ったんですか。"
+          - who: team_manager
+            say: "気が早いですよね。でも「毎年これくらいでちょうどいい」だそうです。"
 
   - id: senbatsu_draw
     kind: System
