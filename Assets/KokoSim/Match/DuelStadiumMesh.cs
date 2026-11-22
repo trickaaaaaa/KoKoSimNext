@@ -56,18 +56,19 @@ namespace KokoSim.Unity.Match
         // 左右の翼・中堅は判定と同じ値で作ってある（「球場メッシュを検証する」が照合する）。
         // 左右非対称の球場（北海道ボールパーク等・issue #959）は右が左と違う値になる。
         // フェンス高はモデルのフェンス本体の高さ（判定の高さとは違ってよい＝変形で合わせる）。
+        // 4つとも既定値は持たない。出どころは OBJ 先頭の `# kokosim:` 行だけ（DuelStadiumBaker が書き込む）。
         [Tooltip("焼いたフェンスの左翼[m]（左右同値の球場では両翼）")]
         [UnityEngine.Serialization.FormerlySerializedAs("BakedWingM")]
-        public float BakedLeftM = 95f;
+        public float BakedLeftM;
         [Tooltip("焼いたフェンスの右翼[m]。0＝左翼と同じ（右を持たない古い資産）")]
         public float BakedRightM = 0f;
 
         /// <summary>焼いた右翼[m]。<see cref="BakedRightM"/> が未設定（0）なら左翼と同じ。</summary>
         public float EffectiveBakedRightM => BakedRightM > 0f ? BakedRightM : BakedLeftM;
         [Tooltip("焼いたフェンスの中堅[m]")]
-        public float BakedCenterM = 118f;
+        public float BakedCenterM;
         [Tooltip("焼いたフェンス本体の高さ[m]")]
-        public float BakedFenceHeightM = 3.2f;
+        public float BakedFenceHeightM;
 
         public Part[] Parts = new Part[0];
 

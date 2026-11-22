@@ -125,6 +125,14 @@ namespace KokoSim.UnityEditorTools
                               + (d > TolM ? "  ← ずれている" : ""));
             }
 
+            // ---- フェンス高（WarpToField が p.y × 判定の高さ / BakedFenceHeightM で伸ばす倍率の分母） ----
+            // OBJ ヘッダの fence_h がメッシュと違うと、絵のフェンス高と本塁打の判定が食い違う
+            var bodyH = FenceBodyHeight(asset);
+            var dh = System.Math.Abs(bodyH - asset.BakedFenceHeightM);
+            if (!(dh <= TolM)) bad++;
+            sb.AppendLine($"  フェンス高  実測 {bodyH,6:F3} m / 焼いた寸法 {asset.BakedFenceHeightM,6:F3} m  差 {dh:F4}"
+                          + (dh <= TolM ? "" : "  ← ずれている"));
+
             // ---- 塁・投手板（走者の到達点と投手の立ち位置） ----
             // 一塁・三塁は中心を見ない。engine の座標は**塁線と塁間線の交点＝塁の外側の辺**で、
             // 中心はそこから半辺ぶんフェア側に寄る（実物も90フィートは塁の外角まで）
@@ -243,6 +251,29 @@ namespace KokoSim.UnityEditorTools
             return best;
         }
 
+        /// <summary>
+        /// フェンス本体の高さ。fence_outfield のサブメッシュのうち**地面に届くもの**（y≤0.01 の頂点を持つ）の最大の高さ。
+        /// 上端の黄色いライン（地面に届かない別材質）は判定の高さに含めない＝取り込み側
+        /// （stadium-import.py の fence_height）と同じ定義。
+        /// </summary>
+        private static float FenceBodyHeight(DuelStadiumMesh a)
+        {
+            var h = 0f;
+            foreach (var part in a.Parts)
+            {
+                if (part.Name != "fence_outfield" || part.Mesh == null) continue;
+                var v = part.Mesh.vertices;
+                for (var sub = 0; sub < part.Mesh.subMeshCount; sub++)
+                {
+                    var idx = part.Mesh.GetTriangles(sub);
+                    float lo = float.MaxValue, hi = float.MinValue;
+                    foreach (var i in idx) { lo = Mathf.Min(lo, v[i].y); hi = Mathf.Max(hi, v[i].y); }
+                    if (idx.Length > 0 && lo <= 0.01f) h = Mathf.Max(h, hi);
+                }
+            }
+            return h;
+        }
+
         private static List<Vector3> Points(DuelStadiumMesh a, string group, System.Func<float, bool> yFilter)
         {
             var outp = new List<Vector3>();
@@ -262,8 +293,9 @@ namespace KokoSim.UnityEditorTools
             public readonly List<Vector3> N = new List<Vector3>();
             public readonly List<Group> Groups = new List<Group>();
             public readonly Dictionary<string, Color> Mtl = new Dictionary<string, Color>();
-            // 焼いた寸法（`# kokosim: wing=.. center=.. fence_h=..`、左右非対称は `left=.. right=..`。無ければ standard の値）
-            public float BakedLeftM = 95f, BakedRightM = 95f, BakedCenterM = 118f, BakedFenceHeightM = 3.2f;
+            // 焼いた寸法（`# kokosim: wing=.. center=.. fence_h=..`、左右非対称は `left=.. right=..`）。
+            // OBJ 先頭のこの行が唯一の出どころ。無ければ NaN のまま Parse が落とす（既定値は持たない）
+            public float BakedLeftM = float.NaN, BakedRightM = float.NaN, BakedCenterM = float.NaN, BakedFenceHeightM = float.NaN;
         }
 
         private sealed class Group
@@ -339,6 +371,10 @@ namespace KokoSim.UnityEditorTools
                         break;
                 }
             }
+            if (float.IsNaN(o.BakedLeftM) || float.IsNaN(o.BakedRightM) || float.IsNaN(o.BakedCenterM) || float.IsNaN(o.BakedFenceHeightM))
+                throw new InvalidDataException(
+                    $"{objPath} に `# kokosim: wing=.. center=.. fence_h=..` 行が無い（または欠けている）。"
+                    + "tools/stadium-gen.py / stadium-import.py で作り直すこと");
             return o;
         }
 
