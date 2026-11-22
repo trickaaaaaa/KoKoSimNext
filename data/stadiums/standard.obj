@@ -1,5 +1,6 @@
 # Regional ballpark (Japan, 5,000-15,000 seats) - procedurally generated
 # meters, Y-up right-handed, home plate at (0,0,0), +Z = center field, +X = first base
+# kokosim: wing=95 center=118 fence_h=3.2
 mtllib standard.mtl
 v -0 0 0
 v -3.0406 0 3.0406

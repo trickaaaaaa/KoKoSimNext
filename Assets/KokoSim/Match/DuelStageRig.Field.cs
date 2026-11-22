@@ -4391,12 +4391,13 @@ namespace KokoSim.Unity.Match
 
         // 焼いた球場メッシュの寸法。ここを基準に、試合の球場寸法へ外野側を変形する。
         // 値は使う球場メッシュの資産が持つ（issue #904。standard＝95/118/3.2、神宮＝97.5/120/3.5）。
+        // 既定値は持たない＝BuildStadiumMesh が資産から入れた後でしか使わない（出どころは OBJ 先頭の `# kokosim:` 行）。
         // 左右非対称の球場（北海道ボールパーク＝左97・右99）は左右別（issue #959）。
         // DuelStadiumBaker.Verify が両翼・中堅を engine の弧と照合している。
-        private float BakedLeftM = 95f;
-        private float BakedRightM = 95f;
-        private float BakedCenterM = 118f;
-        private float BakedFenceHeightM = 3.2f;
+        private float BakedLeftM;
+        private float BakedRightM;
+        private float BakedCenterM;
+        private float BakedFenceHeightM;
 
         /// <summary>変形を始める本塁からの距離[m]。内野（塁・マウンド・ダート・グラスライン29m）には触らない。</summary>
         private const float WarpInnerM = 50f;

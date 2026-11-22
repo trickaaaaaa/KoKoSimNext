@@ -32,6 +32,7 @@ Unity 側はこれを基準に、試合の球場寸法へ外野を変形する�
 
 import argparse
 import collections
+import fnmatch
 import math
 import os
 import sys
@@ -69,10 +70,26 @@ RENAME = {
 }
 
 # 方位で分けるスタンド（面の重心の方位で決める）
-# 座席前面（*_seat_fronts）と外野上段のウィング席（wing_seat_*・横浜）も同じ stand_* へ寄せる
+# 座席前面（*_seat_fronts）と外野上段のウィング席（wing_seat_*・横浜・広島）も同じ stand_* へ寄せる
 # （寄せないと、ネット裏スタンドを隠しても残る／本塁打の球が当たらない）。ウィング席の座席列は作らない＝空席のまま
-INFIELD_STANDS = {"infield_seats", "infield_steps", "infield_seat_fronts"}
-OUTFIELD_STANDS = {"outfield_seats", "outfield_steps", "outfield_seat_fronts", "wing_seat_deck", "wing_seat_structure"}
+# 名前の列挙ではなくパターンで判定する（設計書13 §6.3）＝将来 wing_seat_upper のような部位が来ても取りこぼさない
+INFIELD_STANDS = {"infield_seats", "infield_steps"}
+OUTFIELD_STANDS = {"outfield_seats", "outfield_steps"}
+SEAT_FRONTS_PATTERN = "*_seat_fronts"   # 接頭辞が infield_ なら内野、それ以外は外野
+WING_SEAT_PATTERN = "wing_seat_*"       # 外野上段の張り出し
+
+
+def stand_side(g):
+    """部位 g が寄せ先のスタンドなら "infield" / "outfield"、スタンドでなければ None。"""
+    if g in INFIELD_STANDS:
+        return "infield"
+    if g in OUTFIELD_STANDS or fnmatch.fnmatchcase(g, WING_SEAT_PATTERN):
+        return "outfield"
+    if fnmatch.fnmatchcase(g, SEAT_FRONTS_PATTERN):
+        return "infield" if g.startswith("infield_") else "outfield"
+    return None
+
+
 SEAT_GROUPS = {"infield_seats", "outfield_seats"}
 BACKSTOP_DEG = 110.0   # standard の座席TSVと同じ境目（|θ|≥110°＝ネット裏）
 
@@ -153,9 +170,9 @@ def theta_deg(x, z):
     return math.degrees(math.atan2(x, z))
 
 
-def stand_name(base, x, z):
+def stand_name(side, x, z):
     th = theta_deg(x, z)
-    if base in OUTFIELD_STANDS:
+    if side == "outfield":
         return "stand_outfield_left" if th < 0 else "stand_outfield_right"
     if abs(th) >= BACKSTOP_DEG:
         return "stand_backstop"
@@ -226,9 +243,10 @@ def main():
                     dropped.append(g)
                 continue   # 4. 透過は捨てる
             tri = tuple(V[i] for i in f)
-            if g in INFIELD_STANDS or g in OUTFIELD_STANDS:
+            side = stand_side(g)
+            if side is not None:
                 c = centroid(tri)
-                name = stand_name(g, c[0], c[2])
+                name = stand_name(side, c[0], c[2])
             else:
                 name = RENAME.get(g, g)
             emit(name, m, tri)
@@ -415,7 +433,7 @@ def runs_to_rows(g, k, y, samples):
         th1, (a1, b1) = run[-1]
         half = SEAT_SAMPLE_DEG / 2
         depth = sum(b - a for _, (a, b) in run) / len(run)
-        name = stand_name("outfield_seats" if g == "outfield_seats" else "infield_seats",
+        name = stand_name("outfield" if g == "outfield_seats" else "infield",
                           math.sin(math.radians((th0 + th1) / 2)), math.cos(math.radians((th0 + th1) / 2)))
         rows.append((name, math.radians(th0 - half), math.radians(th1 + half), a0, a1,
                      y - SEAT_ABOVE_TREAD, depth + SEAT_BACK_IN, k))
