@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
 namespace KokoSim.Engine.Nation;
@@ -115,11 +116,29 @@ public static class TeamStrengthProfile
          + p.Level(AbilityKind.LaunchTendency) * c.LaunchWeight
          + p.Level(AbilityKind.Discipline) * c.DisciplineWeight;
 
+    /// <summary>
+    /// 投手総合＝球質タイプの上乗せを差し引いた地力（issue #1302）。上乗せは試合の失点が型によらず揃うよう校正してあり
+    /// 合計は揃っていない（本格 +3.1・技巧 −1.9・軟投 −3.2＝この重みでの加重）ので、差し引かないと同じ地力でも型で動く。
+    /// 型の外し方は <see cref="PitcherArchetypes.StrengthSum"/> と同じ（制球だけ割合を戻す）。型なし（null）は素のまま。
+    /// </summary>
     internal static double PitcherComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
-        => p.Level(AbilityKind.Velocity) * c.VelocityWeight
-         + p.Level(AbilityKind.Control) * c.ControlWeight
-         + p.Level(AbilityKind.Stamina) * c.StaminaWeight
-         + p.Level(AbilityKind.PitchRank) * c.PitchRankWeight;
+    {
+        var v = (double)p.Level(AbilityKind.Velocity);
+        var ctl = (double)p.Level(AbilityKind.Control);
+        var st = (double)p.Level(AbilityKind.Stamina);
+        var rk = (double)p.Level(AbilityKind.PitchRank);
+        if (p.Archetype is { } type)
+        {
+            var (dv, _, ds, dr) = PitcherArchetypes.Offsets(type, DefaultArchetypes);
+            v -= dv;
+            ctl = PitcherArchetypes.BaseControl(type, ctl, DefaultArchetypes);
+            st -= ds;
+            rk -= dr;
+        }
+        return v * c.VelocityWeight + ctl * c.ControlWeight + st * c.StaminaWeight + rk * c.PitchRankWeight;
+    }
+
+    private static readonly PitcherArchetypeCoefficients DefaultArchetypes = new();
 
     internal static double DefenseComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
         => p.Level(AbilityKind.Fielding) * c.FieldingWeight
