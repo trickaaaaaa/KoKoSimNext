@@ -503,13 +503,6 @@ namespace KokoSim.Unity.Match
             = System.Array.Empty<double>();          // 各走者の本塁到達T1（昇順）。大型スコアは最後の到達で開く（issue #643）
         private int _runScoreShown;                  // 発火済みの本数
 
-        // 交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板が起きた瞬間に数秒だけ盤面へ浮かせる。
-        // PitchCall/ScoreCall と同じ「Update() の専用クロックで寿命管理」方式。表示専用。
-        [SerializeField] private float subCallHoldSeconds = 2.6f;
-        private VisualElement _subCall;
-        private Label _subCallTag, _subCallText;
-        private float _subCallClock;
-        private bool _subCallOn;
 
         // 交代テロップ（issue #920）。交代を確定した瞬間（自校は交代パネルを閉じて再開した瞬間、AI は次の球の前）に
         // 進行を止めて盤面の下へ出す。止め方はイニング間画面（_inningBreakOn）と同じ型＝PumpEngine に入らせず
@@ -709,9 +702,6 @@ namespace KokoSim.Unity.Match
             _scoreCallOppNum = _root.Q<Label>("score-call-opp-num");
             _scoreCallOppNum?.AddToClassList("f-num-bd");
             _scoreCallOppName = _root.Q<Label>("score-call-opp-name");
-            _subCall = _root.Q<VisualElement>("sub-call");
-            _subCallTag = _root.Q<Label>("sub-call-tag");
-            _subCallText = _root.Q<Label>("sub-call-text");
 
             _inningBreak = _root.Q<VisualElement>("inning-break");
             _ibCaption = _root.Q<Label>("ib-caption");
@@ -865,8 +855,6 @@ namespace KokoSim.Unity.Match
             _pitchCallOn = false;
             _scoreCallClock = 0f;
             _scoreCallOn = false;
-            _subCallClock = 0f;
-            _subCallOn = false;
             _gameTelopClock = 0f;
             _gameTelopOn = false;
             _gameSetPending = false;
@@ -920,7 +908,6 @@ namespace KokoSim.Unity.Match
             SetBases(false, false, false);
             HidePitchCall();
             HideScoreCall();
-            HideSubCall();
             foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb.name == "spd-1");
             if (_result != null) _result.style.display = DisplayStyle.None;
         }
@@ -1844,10 +1831,10 @@ namespace KokoSim.Unity.Match
             _signPad?.SetDefs(new[]
             {
                 // ── 攻撃: 打ち方（1手）──  Art はカードの絵（Assets/UI/Images/signs）。Icon は絵が無いときに敷く1文字。
-                new SignPad.SignDef { Id = "batting-swing", Label = "積極的に", Icon = "打", Art = "swing", Offense = true, Group = "batting",
+                new SignDef { Id = "batting-swing", Label = "積極的に", Icon = "打", Art = "swing", Offense = true, Group = "batting",
                     GroupLabel = "打撃", OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.ForceSwing; PrepareBuntStance(false); },
                     OnClear = () => _pitchBattingChoice = null },
-                new SignPad.SignDef { Id = "batting-take", Label = "待て", Icon = "待", Art = "take", Offense = true, Group = "batting",
+                new SignDef { Id = "batting-take", Label = "待て", Icon = "待", Art = "take", Offense = true, Group = "batting",
                     GroupLabel = "打撃", OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.ForceTake; PrepareBuntStance(false); },
                     OnClear = () => _pitchBattingChoice = null },
                 // ── 攻撃: 仕掛け（1手・走者が要る）──
@@ -1856,11 +1843,11 @@ namespace KokoSim.Unity.Match
                 // リリースまでは実測 0.3秒しかない（クリップ内時刻を実測: リリース時点で
                 // Idle_To_Bunt が t=0.00＝始まったばかり）。窓の滞在時間ぶんを丸ごと使わないと
                 // 着弾までに構えへ入り切らない。
-                new SignPad.SignDef { Id = "batting-bunt", Label = "バント", Icon = "犠", Art = "bunt", Offense = true, Group = "batting",
+                new SignDef { Id = "batting-bunt", Label = "バント", Icon = "犠", Art = "bunt", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnAnyBase,
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
-                new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Art = "squeeze", Offense = true, Group = "batting",
+                new SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Art = "squeeze", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
                     OnSelect = () =>
                     {
@@ -1873,48 +1860,48 @@ namespace KokoSim.Unity.Match
                         PrepareBuntStance(false);
                         _signPad?.RefreshEnabled();
                     } },
-                new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Art = "hitrun", Offense = true, Group = "batting",
+                new SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Art = "hitrun", Offense = true, Group = "batting",
                     // 盗塁と同じ球に押せない（engine は盗塁で一塁走者を先に動かすので、エンドランが効かなくなる・issue #1263）。
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst && _stealChoice == null,
                     OnSelect = () => { _signChoice = OffensiveSign.HitAndRun; _signPad?.RefreshEnabled(); },
                     OnClear = () => { _signChoice = null; _signPad?.RefreshEnabled(); } },
                 // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗。三塁のみは盗塁不可・issue #788）ので、
                 // カードは1枚のままラベルだけ書き換える（issue #622・案A）。
-                new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Art = "steal", Offense = true, Group = "run",
+                new SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Art = "steal", Offense = true, Group = "run",
                     GroupLabel = "走塁", LabelOf = () => StealCardLabel,
                     EnabledIf = () => StealTargetNow != null && _signChoice != OffensiveSign.HitAndRun,
                     OnSelect = () => { _stealChoice = StartType.Gamble; _signPad?.RefreshEnabled(); },
                     OnClear = () => { _stealChoice = null; _signPad?.RefreshEnabled(); } },
                 // ── 攻撃: 構え（方針・解除するまで続く）──
-                new SignPad.SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Art = "work", Offense = true, Group = "approach",
+                new SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Art = "work", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.WorkCount),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignPad.SignDef { Id = "app-ground", Label = "転がせ", Icon = "転", Art = "ground", Offense = true, Group = "approach",
+                new SignDef { Id = "app-ground", Label = "転がせ", Icon = "転", Art = "ground", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.GroundBall),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignPad.SignDef { Id = "app-slug", Label = "長打狙い", Icon = "長", Art = "slug", Offense = true, Group = "approach",
+                new SignDef { Id = "app-slug", Label = "長打狙い", Icon = "長", Art = "slug", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.Slug),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignPad.SignDef { Id = "app-put", Label = "当てに行け", Icon = "当", Art = "put", Offense = true, Group = "approach",
+                new SignDef { Id = "app-put", Label = "当てに行け", Icon = "当", Art = "put", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.PutInPlay),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
 
                 // ── 守備（すべて方針・解除するまで続く）──
-                new SignPad.SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Art = "infield-in", Offense = false, Group = "infield",
+                new SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Art = "infield-in", Offense = false, Group = "infield",
                     GroupLabel = "陣形", OnSelect = () => PushDefInfield(DefenseDepth.In), OnClear = () => PushDefInfield(null) },
-                new SignPad.SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Art = "outfield-deep", Offense = false, Group = "outfield",
+                new SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Art = "outfield-deep", Offense = false, Group = "outfield",
                     GroupLabel = "陣形", OnSelect = () => PushDefOutfield(DefenseDepth.Deep), OnClear = () => PushDefOutfield(null) },
-                new SignPad.SignDef { Id = "policy-fast", Label = "直球中心", Icon = "直", Art = "fastball", Offense = false, Group = "policy",
+                new SignDef { Id = "policy-fast", Label = "直球中心", Icon = "直", Art = "fastball", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.FastballHeavy), OnClear = () => PushDefPolicy(null) },
-                new SignPad.SignDef { Id = "policy-break", Label = "変化球中心", Icon = "変", Art = "breaking", Offense = false, Group = "policy",
+                new SignDef { Id = "policy-break", Label = "変化球中心", Icon = "変", Art = "breaking", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.BreakingHeavy), OnClear = () => PushDefPolicy(null) },
-                new SignPad.SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Art = "control", Offense = false, Group = "policy",
+                new SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Art = "control", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.ControlFirst), OnClear = () => PushDefPolicy(null) },
                 // くさい所（issue #872）: ゾーンの際を突き、甘い球を投げない（四球も辞さない）。その打席だけ効く。
                 // 陣形の「長打警戒」と取り違えないよう名前は「くさい所」・アイコン文字は「際」（2026-11-10 オーナー決定）。絵は未作成＝文字を敷く。
-                new SignPad.SignDef { Id = "def-pitch-around", Label = "くさい所", Icon = "際", Offense = false, Group = "pitcharound",
+                new SignDef { Id = "def-pitch-around", Label = "くさい所", Icon = "際", Offense = false, Group = "pitcharound",
                     GroupLabel = "打席", OnSelect = () => PushPitchAround(true), OnClear = () => PushPitchAround(false) },
-                new SignPad.SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Art = "push", Offense = false, Group = "gear",
+                new SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Art = "push", Offense = false, Group = "gear",
                     GroupLabel = "ギア", OnSelect = () => PushDefGear(PitcherGear.Push), OnClear = () => PushDefGear(null) },
             });
         }
@@ -2320,7 +2307,6 @@ namespace KokoSim.Unity.Match
             // 判定・得点・旧ポップアップが残っていると重なって読みづらいので先に畳む。
             HidePitchCall();
             HideScoreCall();
-            HideSubCall();
             _subTelopFreezeRig = _stage == LiveStage.Pitch || _stage == LiveStage.Play;
             _subTelop.Show(card, card.TeamIsAway ? _awayDisp : _homeDisp, PitcherHudClearance());
             _subTelopOn = true;
@@ -2393,7 +2379,6 @@ namespace KokoSim.Unity.Match
             _timeoutScenePending = null;
             HidePitchCall();
             HideScoreCall();
-            HideSubCall();
             bool bench1B = DuelStageRig.BenchIsFirstBaseSide(_managerIsAway);
             _timeoutSceneRig = DuelPacingActive && (_timeoutSceneOffense
                 ? _duelRig.BeginOffenseTimeoutScene(bench1B)
@@ -2546,65 +2531,6 @@ namespace KokoSim.Unity.Match
             _subTelopPumpAfter = false;
             _subTelop?.Hide();
         }
-
-        private void BeginSubCall(KokoSim.Engine.Match.Game.PitchingChangeEvent e)
-        {
-            if (_subCall == null || _subCallTag == null || _subCallText == null) return;
-            // 交代は「今起きたこと」を示す確定オーバーレイ。直前の球判定・得点演出が残っていると
-            // 上下に重なって読みづらいので、他の一過性オーバーレイを先に畳んでから前面に出す。
-            HidePitchCall();
-            HideScoreCall();
-            var kind = e.Change.Kind;
-            // 実況の区別は「控えから出たか／守備に就いていた者が回ったか（＝守備に穴が開くか）」（issue #381）。
-            // 出てきた控えが投手枠かどうかでは分けない＝控えからの登板はすべて「投手交代」。
-            var isFielder = kind != KokoSim.Engine.Match.Game.PitchingChangeKind.ReserveRelief;
-            // 「野手登板」は表示しない＝控えから出たか在フィールド野手が回ったかを盤面の文言では区別しない
-            //（アンバー強調のみ isFielder で残す）。
-            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap ? "投野交代" : "投手交代";
-            _subCallTag.EnableInClassList("sub-call__tag--fielder", isFielder);   // 野手系だけアンバー点灯（一過性強調）
-            _subCallText.text = SubEventText(e);
-            _subCall.style.display = DisplayStyle.Flex;
-            _subCallOn = true;
-            _subCallClock = 0f;
-        }
-
-        private void HideSubCall()
-        {
-            _subCallOn = false;
-            _subCallClock = 0f;
-            if (_subCall != null) _subCall.style.display = DisplayStyle.None;
-        }
-
-        // 交代1件のテキスト（種別で出し分け）。backfill 先は「◯◯へ」で守備位置を添える。
-        private static string SubEventText(KokoSim.Engine.Match.Game.PitchingChangeEvent e)
-        {
-            var half = e.Inning + "回" + (e.IsTopHalf ? "表" : "裏");
-            var c = e.Change;
-            switch (c.Kind)
-            {
-                case KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap:
-                    return half + " " + c.InPitcherName + " が登板／" + c.OutPitcherName + " は" + PosJp(c.BackfillPosition) + "へ";
-                case KokoSim.Engine.Match.Game.PitchingChangeKind.FielderReliefWithBackfill:
-                    return half + " " + c.InPitcherName + " が登板／" + PosJp(c.BackfillPosition) + "は" + c.BackfillName;
-                default:
-                    // 控えからの登板（ReserveRelief）。守備に穴が開かないので交代の形だけを出す（issue #381）。
-                    return half + " " + c.OutPitcherName + " → " + c.InPitcherName;
-            }
-        }
-
-        private static string PosJp(KokoSim.Engine.Match.Field.FieldPosition? pos) => pos switch
-        {
-            KokoSim.Engine.Match.Field.FieldPosition.Pitcher => "投",
-            KokoSim.Engine.Match.Field.FieldPosition.Catcher => "捕",
-            KokoSim.Engine.Match.Field.FieldPosition.FirstBase => "一塁",
-            KokoSim.Engine.Match.Field.FieldPosition.SecondBase => "二塁",
-            KokoSim.Engine.Match.Field.FieldPosition.ThirdBase => "三塁",
-            KokoSim.Engine.Match.Field.FieldPosition.Shortstop => "遊撃",
-            KokoSim.Engine.Match.Field.FieldPosition.LeftField => "左翼",
-            KokoSim.Engine.Match.Field.FieldPosition.CenterField => "中堅",
-            KokoSim.Engine.Match.Field.FieldPosition.RightField => "右翼",
-            _ => "守備",
-        };
 
         // 対決ビュー→俯瞰の切替アンカー（issue #330）: 打球/ファウル飛球のタイムラインは必ず先頭に
         // 投球セグメントを持つ（TimelineBuilder）。対決ビューは既にリリース〜ミート/ファウル接触を
@@ -3507,12 +3433,6 @@ namespace KokoSim.Unity.Match
             }
             // 得点オーバーレイも自前の寿命で加算演出→消去まで進める（issue #60）。
             if (_scoreCallOn) AdvanceScoreCall(Time.deltaTime * _speed);
-            // 交代ポップアップも自前の寿命で消す（issue #209 表現）。
-            if (_subCallOn)
-            {
-                _subCallClock += Time.deltaTime * _speed;
-                if (_subCallClock >= subCallHoldSeconds) HideSubCall();
-            }
             // 試合開始/終了テロップ（issue #442・画像化は #1179）。「ゲームセット」は得点テロップと
             // サヨナラのホームラン演出（#1176・ホームランは打ち切らない）の両方が済んでから掲げる。
             // 寿命は再生速度で縮む（issue #1179「判定のように速度へ追従」）。
@@ -4099,7 +4019,7 @@ namespace KokoSim.Unity.Match
             // プレイボール／ゲームセット／ホームランは打ち切らない＝その間に来た判定は捨てる（issue #1179）。
             if (_gameTelopOn || (_homeRunTelop?.IsPlaying ?? false)) { HidePitchCall(); return; }
 
-            // 画像テロップ（issue #1179）。文言→画像面の対応は PitchJudgeJp と同じ条件（1プレー1枚）。
+            // 画像テロップ（issue #1179）。1プレー1枚。
             var callClass = PitchCallClassOf(pt);
 
             // 計器表示（球種・球速）。実1球記録がある打席だけ値が入る＝合成投球列では丸ごと畳む。
@@ -4134,8 +4054,8 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 1球の判定テロップの画像面（issue #1179）。<see cref="PitchJudgeJp"/> と同じ条件を
-        /// 画像クラス（tl-call-xxx）へ写すだけ＝文言と画像のどちらかだけを更新し忘れないよう1箇所に揃える。
+        /// 1球の判定テロップの画像面（issue #1179）。四球成立の瞬間（4球目）は「フォアボール」、
+        /// 3ストライク目は「三振」の画像にする。
         /// </summary>
         private static string PitchCallClassOf(PitchToken pt)
         {
@@ -4346,22 +4266,6 @@ namespace KokoSim.Unity.Match
         private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>
             k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
 
-        // 四球成立の瞬間（4球目）は「ボール」ではなく「フォアボール」を表示する（issue #61）。
-        // 3ストライク目も同様に「ストライク」ではなく「三振」を表示する（issue #329）。
-        private static string PitchJudgeJp(PitchToken pt)
-        {
-            switch (pt.Kind)
-            {
-                case KokoSim.Engine.Match.AtBat.PitchKind.Ball: return pt.BallsAfter >= 4 ? "フォアボール" : "ボール";
-                case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return pt.StrikesAfter >= 3 ? "三振" : "ストライク";
-                case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return pt.StrikesAfter >= 3 ? "三振" : "ストライク";
-                case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return pt.StrikesAfter >= 3 ? "三振" : "ファール";   // 2ストライクからのバントファウル＝スリーバント失敗（issue #1140）
-                case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "";   // 打球再生と結果ラベルに任せる
-                case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "デッドボール";
-                default: return "";
-            }
-        }
-
         // 判定の内訳（見逃し/空振り）＝計器表示の左端に添える補助情報。
         // 球種・球速は数字と和文を混植しないよう別ラベルへ分けたので、ここでは組み立てない（issue #479）。
         private static string PitchNoteJp(PitchToken pt)
@@ -4462,8 +4366,7 @@ namespace KokoSim.Unity.Match
                 HideGameTelop();
                 HidePitchCall();
                 _homeRunTelop?.Hide();
-                HideSubCall();
-                if (_scoreCallOn) { _scoreCallOn = false; if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None; }
+                    if (_scoreCallOn) { _scoreCallOn = false; if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None; }
                 if (_inningBreakOn) { _inningBreakOn = false; _inningBreakClock = 0f; _afterInningBreak = null; SetVisible(_inningBreak, false); }
                 ClearSubTelop();   // 交代テロップも畳む（高速中の交代は実況履歴の1行だけ。issue #920）
                 ClearTimeoutScene();   // 伝令の場面も（issue #1174）
@@ -5604,9 +5507,9 @@ namespace KokoSim.Unity.Match
         public bool JudgementVisibleForCapture =>
             _root?.Q<VisualElement>("judgement-call")?.resolvedStyle.display == DisplayStyle.Flex;
 
-        /// <summary>判定オーバーレイの文言（出ていなければ空）。</summary>
-        public string JudgementTextForCapture =>
-            JudgementVisibleForCapture ? (_root?.Q<Label>("judgement-judge")?.text ?? "") : "";
+        /// <summary>判定オーバーレイの画像面（tl-call-xxx。出ていなければ空）。</summary>
+        public string JudgementFaceForCapture =>
+            JudgementVisibleForCapture ? (_view?.JudgementFaceForCapture ?? "") : "";
 
         /// <summary>【撮影ハーネス用】走者の小ダイヤ（issue #595）が今出ているか。</summary>
         public bool MiniDiamondVisibleForCapture =>
@@ -5827,9 +5730,6 @@ namespace KokoSim.Unity.Match
         public bool ScoutOpenForCapture => _scoutPanel != null && _scoutPanel.IsOpen;
 
         public void OpenSubstitutionForCapture() => _subPanel?.Open();
-
-        /// <summary>スクショ用: 交代ポップアップ（issue #209）を任意の継投ログで強制表示する。</summary>
-        public void ForceSubCallForCapture(KokoSim.Engine.Match.Game.PitchingChangeEvent e) => BeginSubCall(e);
 
         /// <summary>スクショ用: 自校が今「攻撃側」か（交代モーダルの出し分け確認用）。</summary>
         public bool ManagerOnOffenseForCapture

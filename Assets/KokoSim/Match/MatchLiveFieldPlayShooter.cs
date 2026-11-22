@@ -168,7 +168,7 @@ namespace KokoSim.Unity.Match
                     if (_ctrl.JudgementVisibleForCapture)
                     {
                         sawJudge = true;
-                        if (judgeText.Length == 0) judgeText = _ctrl.JudgementTextForCapture;
+                        if (judgeText.Length == 0) judgeText = _ctrl.JudgementFaceForCapture;
                     }
                     if (rig != null)
                     {
@@ -192,7 +192,7 @@ namespace KokoSim.Unity.Match
                                       .Append(c[7]).Append('\t').Append(c[8]).Append('\t').Append(c[9]).Append('\t')
                                       .Append(c[10]).Append('\t').Append(c[11]).Append('\t').Append(c[12]).Append('\t')
                                       .Append(c[13]).Append('\t')
-                                      .Append(_ctrl.JudgementVisibleForCapture ? _ctrl.JudgementTextForCapture : "-")
+                                      .Append(_ctrl.JudgementVisibleForCapture ? _ctrl.JudgementFaceForCapture : "-")
                                       .Append('\n');
                         }
                     }

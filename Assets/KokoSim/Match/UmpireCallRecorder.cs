@@ -20,12 +20,11 @@ namespace KokoSim.Unity.Match
         private const int Fps = 12;
         private const float TailSeconds = 4.0f;   // 最後の1球のコール〜構え戻りまで録る
 
-        /// <summary>
-        /// 出力先（スクラッチパッド配下）。Play入りのドメインリロードで static は初期化子へ戻るので、
-        /// 外から代入するのでなくここを書き換えて使う（<see cref="DuelViewRecorder"/> の Dir と同じ運用）。
-        /// </summary>
-        public static string OutDir =
-            "/private/tmp/claude-501/-Users-seiya-oda-Unity-KoKoSimNext/1048af54-b6a3-474d-9aca-a1be741e7898/scratchpad/umpire-rec";
+        /// <summary>出力先の上書き（null=プロジェクト直下の out/umpire-rec）。Play入りを跨ぐと null へ戻る。</summary>
+        public static string OutDirOverride = null;
+
+        private static string OutDir =>
+            OutDirOverride ?? Path.Combine(Path.GetDirectoryName(Application.dataPath), "out", "umpire-rec");
 
         /// <summary>
         /// リリース間隔[秒]の上書き（0=既定 <see cref="DuelStageRig.DefaultPitchInterval"/>）。間合いの比較録画用。

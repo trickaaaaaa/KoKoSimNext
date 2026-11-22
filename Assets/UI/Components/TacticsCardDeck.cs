@@ -7,14 +7,12 @@ namespace KokoSim.Unity.Components
 {
     /// <summary>
     /// TacticsCardDeck（部品辞書 / 試合画面改修）: 采配指示を「重なって並ぶ手札」として出すカード列。
-    /// <see cref="SignPad"/> の後継で、定義は <see cref="SignPad.SignDef"/> をそのまま使う
-    /// （SetDefs / SetPhase / Select / ClearSelection の4本も同じ形＝画面側の配線は変えずに差し替えられる）。
+    /// 定義は <see cref="SignDef"/>（1件足せばカードが1枚増える）。
     ///
-    /// SignPad の見た目差し替えではなく別部品にしたのは、
     /// ①カード同士を重ねる ②カーソルが乗った1枚を最前面へ出す、がUSSだけでは書けないため
     /// （USS に隣接セレクタも z-index も無い）。重なりと最前面化は C# 側の絶対配置＋描画順で作る。
     ///
-    /// カードは将来 <see cref="SignPad.SignDef.Icon"/> の位置に絵を入れる前提で大きめに取る。
+    /// カードは将来 <see cref="SignDef.Icon"/> の位置に絵を入れる前提で大きめに取る。
     /// 名前も絵も「隣のカードに隠れない左の帯」の中央へ置く＝カード全幅で中央揃えにすると
     /// 隣の下に潜って読めない（トランプの隅の数字と同じ考え方）。
     ///
@@ -62,7 +60,7 @@ namespace KokoSim.Unity.Components
 
         private readonly VisualElement _inner;
         private readonly VisualElement _hits;
-        private IReadOnlyList<SignPad.SignDef> _defs = Array.Empty<SignPad.SignDef>();
+        private IReadOnlyList<SignDef> _defs = Array.Empty<SignDef>();
         // グループ→選択中の非既定カードId（既定選択はエントリなし＝無点灯）。フェーズ切替でも保持する。
         private readonly Dictionary<string, string> _selected = new();
         private readonly List<VisualElement> _cards = new();      // 表示順（＝重なり順）
@@ -88,9 +86,9 @@ namespace KokoSim.Unity.Components
         }
 
         /// <summary>指示の定義一式を差し替える。</summary>
-        public void SetDefs(IReadOnlyList<SignPad.SignDef> defs)
+        public void SetDefs(IReadOnlyList<SignDef> defs)
         {
-            _defs = defs ?? Array.Empty<SignPad.SignDef>();
+            _defs = defs ?? Array.Empty<SignDef>();
             _built = false;
             Rebuild();
         }
@@ -148,7 +146,7 @@ namespace KokoSim.Unity.Components
         }
 
         /// <summary>
-        /// 「いま選べるか」（<see cref="SignPad.SignDef.EnabledIf"/>）を評価し直す。走者の有無で
+        /// 「いま選べるか」（<see cref="SignDef.EnabledIf"/>）を評価し直す。走者の有無で
         /// バント/盗塁の可否が変わるので、打席が確定するたびに呼ぶ。選択状態は保持する。
         /// </summary>
         public void RefreshEnabled()
@@ -191,7 +189,7 @@ namespace KokoSim.Unity.Components
             if (index >= 0) SetHot(index);
         }
 
-        private SignPad.SignDef FindDef(string id)
+        private SignDef FindDef(string id)
         {
             foreach (var d in _defs) if (d.Id == id) return d;
             return null;
@@ -221,7 +219,7 @@ namespace KokoSim.Unity.Components
 
         // 当たり判定の短冊。位置はカードと同じだが、こちらは並べ替えないので
         // 押している最中に木から外れることがない（＝クリックが必ず成立する）。
-        private VisualElement BuildHit(SignPad.SignDef def, int index)
+        private VisualElement BuildHit(SignDef def, int index)
         {
             var hit = new VisualElement { pickingMode = PickingMode.Position };
             hit.AddToClassList("tcards__hit");
@@ -244,7 +242,7 @@ namespace KokoSim.Unity.Components
         private bool IsOff(int index) =>
             index < 0 || index >= _cards.Count || _cards[index].ClassListContains("tcard--off");
 
-        private VisualElement BuildCard(SignPad.SignDef def)
+        private VisualElement BuildCard(SignDef def)
         {
             var card = new VisualElement { pickingMode = PickingMode.Ignore };   // 判定は _hits が持つ
             card.AddToClassList("tcard");

@@ -1580,7 +1580,7 @@
 .mhud-pa--hit { background-color: var(--sakura); }        /* 安打系（単打〜本塁打） */
 .mhud-pa--walk { background-color: var(--color-lamp); }   /* 四球・死球・犠打犠飛・失策出塁 */
 .mhud-pa--out { background-color: var(--sky); }           /* アウト（三振・凡退） */
-/* 空青は暗いので白抜き（.signpad__tile--on と同じ判断）。桜とアンバーは明るいのでインクのまま。 */
+/* 空青は暗いので白抜き。桜とアンバーは明るいのでインクのまま。 */
 .mhud-pa--out .mhud-pa__t { color: #FFFFFF; }
 
 /* ── 最下段＝スタミナ（投手のみ）。文字は持たずバーだけを帯の最下段に全幅で置く ── */
@@ -1632,47 +1632,6 @@
     padding: 8px;
 }
 
-/* SignPad：指示パネル（issue #289。試合盤面・投手HUD直下の采配指示タイル。SignPad.cs が生成）。
-   設計書15 Phase C-3 の常駐1行帯の後継。攻撃中は打撃、守備中は配球だけを出し、既定（任せ/通常）は無点灯。
-   盤面overlayなので半透明パネルは MatchupHud の帯（--hud-bg）と同じ考え。選択色は旧セグ選択と同じ --sky を踏襲。
-   タイルは flex-wrap で段組み＝定義が増えたら下へ折り返す（gap非対応のため間隔は margin で作る）。 */
-/* 2026-07-31: 試合画面の1球指示は TacticsCardDeck（.tcard*）へ置き換えた。SignPad は
-   部品辞書の登録として残す（ComponentGallery 用・他画面で使うときの器）。 */
-.signpad {
-    background-color: rgba(24, 33, 28, 0.85);
-    border-radius: var(--radius-panel);
-    padding: var(--sp-2);
-    margin-top: 6px;
-    flex-shrink: 0;
-}
-.signpad__head { flex-direction: row; align-items: center; margin-bottom: var(--sp-1); }
-/* 暗パネル上の文字は昼スキンの chalk/muted（暗インク）だと沈む（issue #236 症状B と同根）。
-   主情報（攻撃/守備）は sb-ink-1、副ラベルは faint で階調を作る。 */
-.signpad__title { font-size: var(--fs-cap); color: var(--color-faint); margin-right: var(--sp-2); }
-.signpad__phase { font-size: var(--fs-cap); color: var(--sb-ink-1); }
-.signpad__group { flex-direction: row; align-items: center; flex-wrap: wrap; }
-.signpad__grouplab { font-size: var(--fs-cap); color: var(--color-faint); margin-right: var(--sp-1); }
-.signpad__tile {
-    -unity-text-align: middle-center;
-    font-size: var(--fs-label);
-    color: var(--color-muted);
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w);
-    border-color: var(--color-line);
-    border-radius: var(--radius-chip);
-    min-width: 64px;
-    height: 28px;
-    padding-left: var(--sp-2);
-    padding-right: var(--sp-2);
-    margin-right: var(--sp-1);
-    margin-top: 2px;
-    margin-bottom: 2px;
-}
-.signpad__tile:hover { color: var(--color-chalk); }
-.signpad__tile--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
-.signpad__tile--off { color: var(--color-faint); }
-.signpad__tile--off:hover { color: var(--color-faint); }
-
 /* PitchCall：投球判定の大型オーバーレイ（試合盤面・1球ごとに短時間だけ出す）。
    盤面ビューなので色は状態コード（ストライク＝アンバー／ボール＝良好色／それ以外＝チョーク）で、
    データ画面のアクセント本数制限の対象外（CLAUDE.md「適用範囲の例外（試合盤面）」）。
@@ -1698,20 +1657,7 @@
     margin: 0;
     padding: 0;
 }
-.pitch-call__judge--strike { color: var(--sb-call-strike); }
-.pitch-call__judge--ball { color: var(--sb-call-ball); }
-/* 打球・走塁プレーの判定オーバーレイ（issue #59）。PitchCallと同じ器・idiomを流用する。
-   アウト＝盤面の赤（ランプのアウトと同じ）、セーフ＝ボール系の緑。盤面ビューの色は状態コードで、
-   データ画面のアクセント本数制限の対象外（CLAUDE.md「適用範囲の例外（試合盤面）」）。 */
-.pitch-call__judge--out { color: var(--sb-call-out); }
-.pitch-call__judge--safe { color: var(--sb-call-ball); }
-/* フェア＝際どい飛球が落ちた瞬間の表示（issue #328②）。良し悪しではない中立の判定コールなので
-   strikeと同じアンバーを流用する。 */
-.pitch-call__judge--fair { color: var(--sb-call-strike); }
-/* ホームラン＝柵越えの着地の瞬間（issue #354）。打者側の最良の結果＝ボール系と同じ緑。 */
-.pitch-call__judge--homerun { color: var(--sb-call-ball); }
-/* 硬い影（②）の実体。色クラス（--out 等）と同じ詳細度だと並び順に勝敗が依存するので、
-   2クラス連結で詳細度を1段上げて必ず黒が勝つようにする。 */
+/* 硬い影（②）の実体。2クラス連結で詳細度を上げて、ベースの色指定より必ず黒が勝つようにする。 */
 .pitch-call__judge.pitch-call__judge--shadow {
     position: absolute;
     left: 0; right: 0; top: 3px;
@@ -1872,52 +1818,10 @@
     padding: 0 var(--sp-1);
 }
 
-/* SubCall：交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板を数秒だけ盤面へ浮かせる。
-   PitchCall/ScoreCall と同じ overlay idiom（半透明パネル・既定非表示）。種別タグは1個だけの一過性強調で
-   アンバー（野手系だけ点灯・通常継投は無彩の面）。本文は暗い盤面の上なので掲示板と同じ --sb-ink-1（明色）。 */
-.sub-call {
-    position: absolute;
-    /* 打者HUDを右上へ移したので、天井近くに出すと必ず重なる。得点テロップ（20%）より下へ逃がす。 */
-    left: 0; right: 0; top: 30%;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    display: none;
-}
-.sub-call__panel {
-    flex-direction: row;
-    align-items: center;
-    background-color: rgba(14, 26, 19, 0.82);
-    border-radius: var(--radius-panel);
-    padding: var(--sp-2) var(--sp-4);
-}
-/* 盤面（緑）の上に浮かせる暗い島なので、文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-*。
-   デースキン反転（--color-chalk はインク暗色に反転）に引きずられないよう board 系トークンを使う。 */
-.sub-call__tag {
-    font-size: var(--fs-label);
-    -unity-text-align: middle-center;
-    color: var(--sb-ink-1);
-    background-color: var(--sb-board-line);
-    border-radius: var(--radius-chip);
-    padding: var(--sp-1) var(--sp-2);
-    margin-right: var(--sp-2);
-}
-/* 野手登板・投野交代は「眺めてニヤニヤ」対象＝一過性のアンバー点灯で際立たせる（UI原則⑥）。
-   アンバー面の上の文字は暗インク（--color-ink）。 */
-.sub-call__tag--fielder {
-    color: var(--color-ink);
-    background-color: var(--color-lamp);
-}
-.sub-call__text {
-    font-size: var(--fs-body);
-    -unity-text-align: middle-center;
-    color: var(--sb-ink-1);
-}
-
 /* SubTelop：交代テロップ（issue #920）。交代を確定した瞬間に試合を止め、盤面の下に大きく出す
    （クリックか数秒で再開。C# の SubTelopView が中身を組む）。1枚＝1チームの同じ間合いの交代。
    入る選手の名前を明朝で大きく、背番号・打順・いま就いた位置・退く選手を同じ行に並べる。
-   盤面（緑）の上の暗い島なので、文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-*（sub-call と同じ作法）。
+   盤面（緑）の上の暗い島なので、文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-*。
    位置は盤面右下の投手HUD（.mhud-corner--right）より上＝帯と重ならない（2026-11-14 監督決定）。
    下端は --sub-telop-bottom、帯がそれより高いときは C# が帯の実高＋余白へ持ち上げる。上へ伸びる＝行が増えても帯に掛からない。 */
 .sub-telop {
@@ -2435,7 +2339,7 @@
 /* ═══ InningBreak：攻守交代のイニング間画面（試合画面改修）══════════════════════════
    3アウトで攻守が入れ替わったら、次の打席を始める前に数秒だけ盤面へ被せる暗幕。
    上部から撤去したラインスコアを大写しにして「いま何回で何点差か」をここで受け取ってもらう。
-   既存の一過性オーバーレイ（pitch-call / score-call / sub-call）と同じ作法＝既定非表示＋自前の寿命。
+   既存の一過性オーバーレイ（pitch-call / score-call）と同じ作法＝既定非表示＋自前の寿命。
    ラインスコアは拡大せず、部品そのままの寸法で中央に置く（scale で拡大すると罫が半端に太る）。 */
 .inning-break {
     position: absolute;

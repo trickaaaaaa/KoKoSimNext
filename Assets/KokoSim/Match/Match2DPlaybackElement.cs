@@ -159,9 +159,6 @@ namespace KokoSim.Unity.Match
         private KokoSim.Unity.Match.Telops.HomeRunTelopView _homeRunHost;
         // 器が自前か（＝この要素の子か）。外へ出した後は前面化を自分でやらない（打球3D化 F9）。
         private bool _judgementOwned = true;
-        // 直前フレームで判定が出ていたか。出ていない→出た の**変わり目でだけ**跳ねの演出を仕込む
-        // （UpdateJudgement は毎フレーム呼ばれるので、毎回仕込むと出っぱなしで一度も跳ねない）。
-        private bool _judgementShown;
         // 歓声を鳴らした判定（プレー＋表示時刻）。同じ判定で毎フレーム鳴らさないため
         private object _voicedPlay;
         private double _voicedAt;
@@ -397,7 +394,6 @@ namespace KokoSim.Unity.Match
             {
                 _judgementHost.style.display = DisplayStyle.None;
                 _judgementTelop?.Hide();
-                _judgementShown = false;
                 _voicedPlay = null;   // 巻き戻して再生し直したら、同じ判定でもまた鳴らす
                 return;
             }
@@ -420,7 +416,6 @@ namespace KokoSim.Unity.Match
                 if (isNewOccurrence) _homeRunHost.Play(found.Value.DistanceM ?? 0.0);
                 _judgementHost.style.display = DisplayStyle.None;
                 _judgementTelop?.Hide();
-                _judgementShown = false;
                 return;
             }
 
@@ -430,7 +425,6 @@ namespace KokoSim.Unity.Match
             {
                 _judgementHost.style.display = DisplayStyle.None;
                 _judgementTelop?.Hide();
-                _judgementShown = false;
                 return;
             }
 
@@ -458,7 +452,6 @@ namespace KokoSim.Unity.Match
             _judgementDetail.text = showDistance ? "推定飛距離 " + Mathf.RoundToInt((float)distance.Value) + "m" : "";
             _judgementDetail.style.display = showDistance ? DisplayStyle.Flex : DisplayStyle.None;
 
-            _judgementShown = true;
             _judgementHost.style.display = DisplayStyle.Flex;
             // 走者ラベルが後から追加されても常に最前面に出す（自前の器のときだけ。外へ出した器の
             // 重なり順はその画面の UXML が決める＝ここで持ち上げると score-call の上へ出てしまう）。
@@ -500,6 +493,9 @@ namespace KokoSim.Unity.Match
             if (_judgementOwned) _judgementHost.BringToFront();
         }
 
+        /// <summary>スクショ用: いま出している判定の画像面（tl-call-xxx）。出ていなければ null。</summary>
+        public string JudgementFaceForCapture => _judgementTelop?.ActiveFace;
+
         public void SetJudgementHost(VisualElement host, Label judge, Label judgeShadow, Label detail)
         {
             if (host == null || judge == null || detail == null) return;
@@ -513,7 +509,6 @@ namespace KokoSim.Unity.Match
             var image = host.Q<VisualElement>("judgement-call-image");
             _judgementTelop = image != null ? new KokoSim.Unity.Match.Telops.CallTelopView(image) : null;
             _judgementHost.style.display = DisplayStyle.None;
-            _judgementShown = false;
         }
 
         /// <summary>ホームラン専用テロップ（issue #1179 §3）を外から渡す。未設定の画面

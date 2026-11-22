@@ -222,7 +222,7 @@ namespace KokoSim.Unity.Match
                     if (_ctrl.JudgementVisibleForCapture && !sawJudge)
                     {
                         sawJudge = true;
-                        judgeText = _ctrl.JudgementTextForCapture;
+                        judgeText = _ctrl.JudgementFaceForCapture;
                     }
                     return true;
                 }, x => shotCount = x, frames);
