@@ -16,7 +16,7 @@ public sealed class CountingRandomSource : IRandomSource
     /// <summary>親子で共有する集計器（Fork した先の消費も1本の数字で追える）。</summary>
     public sealed class Counter
     {
-        /// <summary>これまでに消費した乱数の本数（Fork先を含む）。</summary>
+        /// <summary>これまでに消費した乱数の本数（Fork先を含む）。正規乱数は実際に引いた本数（0か2）で数える。</summary>
         public long Draws { get; internal set; }
         /// <summary>直近に Fork した派生ストリームのid（未Forkなら0）。</summary>
         public ulong LastForkStreamId { get; internal set; }
@@ -61,7 +61,10 @@ public sealed class CountingRandomSource : IRandomSource
 
     public double NextGaussian(double mean = 0.0, double stdDev = 1.0)
     {
-        Stats.Draws++;
+        // 正規乱数の実消費は 0（予備値を返すだけ）か 2（Box-Muller）。予備値の有無で数える。
+        // 素の Xoshiro 以外は中身が見えないので 1 本として数える。u1==0 の再抽選（確率 2^-53）は数えない。
+        var spare = UnwrapAll(_inner) is Xoshiro256Random x ? (bool?)x.HasSpareGaussian : null;
+        Stats.Draws += spare switch { true => 0, false => 2, null => 1 };
         return _inner.NextGaussian(mean, stdDev);
     }
 

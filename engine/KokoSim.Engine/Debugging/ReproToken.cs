@@ -133,11 +133,32 @@ public readonly record struct ReproToken(
           .Append(p.Speed.ToString(c)).Append(',').Append(p.ArmStrength.ToString(c)).Append(',')
           .Append(p.Fielding.ToString(c)).Append(',').Append(p.Catching.ToString(c)).Append(',')
           .Append(p.Mental.ToString(c)).Append('|');
+        // 送球精度・捕手リード・走塁系3能力・利き手・特殊能力も試合結果を動かす＝指紋に入れる。
+        // 入れないと、これらだけ育った後のトークンが照合を通って黙って別の試合を再生する（設計書17 §3.3）。
+        // 本追加をまたぐ旧トークンは指紋不一致＝警告して再生しない。
+        sb.Append(p.ThrowAccuracy.ToString(c)).Append(',').Append(p.Lead.ToString(c)).Append(',')
+          .Append(p.Bunt.ToString(c)).Append(',').Append(p.Steal.ToString(c)).Append(',')
+          .Append(p.Baserunning.ToString(c)).Append(',')
+          .Append(p.Throws).Append(',').Append(p.Bats).Append('|');
+        AppendSkills(sb, p.Skills);
         // 投手能力は全選手が持つ（#381）＝有無で分岐しない。旧トークンは野手の欄が空だったので指紋は変わる。
         var pit = p.Pitching;
         sb.Append(pit.MaxVelocityKmh.ToString("F1", c)).Append(',')
           .Append(pit.Control.ToString(c)).Append(',')
-          .Append(pit.StaminaPitches.ToString("F0", c))
-          .Append('\n');
+          .Append(pit.StaminaPitches.ToString("F0", c)).Append(',')
+          .Append(pit.PitchRank.ToString(c)).Append(',').Append(pit.Style).Append('|');
+        foreach (var slot in pit.EffectiveRepertoire)
+            sb.Append(slot.Type).Append(':').Append(slot.Power.ToString(c)).Append(':').Append(slot.Sharpness.ToString(c)).Append(';');
+        sb.Append('\n');
+    }
+
+    // 可視/隠しは効果判定で区別されない（SkillSet.Has）ので、和集合を名前順に並べる＝挿入順に依存しない。
+    private static void AppendSkills(StringBuilder sb, SkillSet skills)
+    {
+        var names = new List<string>();
+        foreach (var s in skills.Visible) names.Add(s.ToString());
+        foreach (var s in skills.Hidden) if (!skills.Visible.Contains(s)) names.Add(s.ToString());
+        names.Sort(StringComparer.Ordinal);
+        sb.Append(string.Join(",", names)).Append('|');
     }
 }

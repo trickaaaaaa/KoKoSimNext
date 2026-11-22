@@ -44,7 +44,7 @@ public sealed class RingBufferTraceSink : IDebugTraceSink
     /// <summary>直近 <paramref name="n"/> 球を<b>古い順</b>で返す（HUD の球ログ表）。</summary>
     public IReadOnlyList<PitchTrace> RecentPitches(int n)
     {
-        var count = (int)System.Math.Min(System.Math.Min(n, _pitches.Length), TotalPitches);
+        var count = (int)System.Math.Max(0, System.Math.Min(System.Math.Min(n, _pitches.Length), TotalPitches));
         var list = new List<PitchTrace>(count);
         for (var i = count; i >= 1; i--)
         {
@@ -57,7 +57,7 @@ public sealed class RingBufferTraceSink : IDebugTraceSink
     /// <summary>直近 <paramref name="n"/> 打席を<b>古い順</b>で返す。</summary>
     public IReadOnlyList<PaTrace> RecentPlateAppearances(int n)
     {
-        var count = (int)System.Math.Min(System.Math.Min(n, _pas.Length), TotalPlateAppearances);
+        var count = (int)System.Math.Max(0, System.Math.Min(System.Math.Min(n, _pas.Length), TotalPlateAppearances));
         var list = new List<PaTrace>(count);
         for (var i = count; i >= 1; i--)
         {

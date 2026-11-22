@@ -91,8 +91,9 @@ public sealed class ErrorTunnelTests
         Assert.Equal(FieldingErrorKind.Tunnel, tunnel.ErrorKind);
         // Catch/Tunnel は排他（内訳ロールがどちらかを選ぶ）。issue #817 で Catch 側にも捕球ミスの
         // 回収レースが追加されたため、どちらの設定でも捕球ロールの直後に必ず1本追加で引く
-        // （0%＝回収レースのガウス／100%＝内訳ロール）＝消費本数そのものは変わらず一致し続ける。
-        Assert.Equal(zero.Stats.Draws, full.Stats.Draws);
+        // （0%＝回収レースのガウス／100%＝内訳ロール）＝呼び出し回数は同じ。ただしガウスは実消費が2本
+        // （Box-Muller・issue #1235 で実数を数えるようにした）、内訳ロールは1本なので、本数は0%側が1本多い。
+        Assert.Equal(full.Stats.Draws + 1, zero.Stats.Draws);
     }
 
     /// <summary>トンネルは捕球エラーの内訳＝どちらの設定でも「失策になること」自体は変わらない。</summary>
