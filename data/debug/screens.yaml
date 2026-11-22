@@ -235,3 +235,19 @@ screens:
       - shot: 03-training-selected
       - show: ManagementScreen
       - shot: 04-management
+
+  - id: title-watercolor-1423-169
+    name: "タイトル画面の水彩画の背景・16:9（issue #1423）"
+    size: {w: 1600, h: 900}
+    steps:
+      - show: TitleScreen
+      - wait: 5
+      - shot: 01-title
+
+  - id: title-watercolor-1423-1610
+    name: "タイトル画面の水彩画の背景・16:10（issue #1423）"
+    size: {w: 1600, h: 1000}
+    steps:
+      - show: TitleScreen
+      - wait: 5
+      - shot: 01-title
