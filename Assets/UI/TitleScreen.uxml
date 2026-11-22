@@ -2,7 +2,8 @@
 <!-- タイトル画面（issue #482・B案 球場バック型）。起動直後の唯一の入口。
      共通ナビ（TopBar）は出さない: この画面が開く時点ではどのシェルサービスもまだ遅延初期化されておらず、
      スコアボードに載せる値（週・総合力ランク・部費等）が存在しないため。
-     背景は design-19「デーゲーム・フルNB」の色ブロック（空/スタンド/芝/土）をそのまま使う。写真・3Dは使わない。 -->
+     背景は甲子園の優勝の瞬間を描いた水彩画（issue #1423・Gemini 生成）を全面に敷く。3Dは使わない。
+     画像の上3分の1は空の余白＝タイトル文字の置き場、メニューは紙色の薄い地の上に載せる。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
@@ -12,13 +13,8 @@
 
     <ui:VisualElement class="ui-root ts-root sbk">
 
-        <!-- 球場バック（4段の色ブロック。上から空/スタンド/芝/土）。 -->
-        <ui:VisualElement class="ts-backdrop">
-            <ui:VisualElement class="ts-band ts-band--sky" />
-            <ui:VisualElement class="ts-band ts-band--stand" />
-            <ui:VisualElement class="ts-band ts-band--grass" />
-            <ui:VisualElement class="ts-band ts-band--dirt" />
-        </ui:VisualElement>
+        <!-- 背景の水彩画。 -->
+        <ui:VisualElement class="ts-backdrop" />
 
         <ui:VisualElement class="ts-content">
             <ui:Label text="白球監督録" class="f-display-lg ts-title" />
