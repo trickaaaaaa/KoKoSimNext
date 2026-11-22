@@ -42,6 +42,48 @@ public sealed class StatBook
         }
     }
 
+    /// <summary>
+    /// <paramref name="source"/> の成績を選手IDごとに<b>足し込む</b>（<see cref="ReplaceWith"/> と違い元の中身を残す）。
+    /// 同じIDの選手がいれば累計へ加算する＝呼び出し側は「同じ校の同じ選手」のときだけ使うこと（issue #634）。
+    /// </summary>
+    public void MergeFrom(StatBook source)
+    {
+        foreach (var kv in source._players)
+        {
+            var dst = For(kv.Key);
+            dst.Batting.Merge(kv.Value.Batting);
+            dst.Pitching.Merge(kv.Value.Pitching);
+            dst.Fielding.Merge(kv.Value.Fielding);
+        }
+    }
+
+    /// <summary>
+    /// 選手IDを <paramref name="idMap"/>（旧ID→新ID）で付け替えた複写を返す（元は変えない）。
+    /// 対応表に無いID（その学校に今居ない選手）は捨てる＝転任で選手IDを振り直すとき、
+    /// 帳簿のキーも一緒に写して「選手の通算は選手に付く」を保つため（issue #1261）。
+    /// </summary>
+    public StatBook Remapped(IReadOnlyDictionary<int, int> idMap)
+    {
+        var copy = new StatBook();
+        foreach (var kv in _players)
+        {
+            if (!idMap.TryGetValue(kv.Key, out var newId)) continue;
+            var dst = copy.For(newId);
+            dst.Batting.Merge(kv.Value.Batting);
+            dst.Pitching.Merge(kv.Value.Pitching);
+            dst.Fielding.Merge(kv.Value.Fielding);
+        }
+        return copy;
+    }
+
+    /// <summary><paramref name="keep"/> に無い選手IDの成績を捨てる（名簿外の古い成績の掃除。issue #1261 のセーブ移行）。</summary>
+    internal void Retain(ISet<int> keep)
+    {
+        var drop = new List<int>();
+        foreach (var id in _players.Keys) if (!keep.Contains(id)) drop.Add(id);
+        foreach (var id in drop) _players.Remove(id);
+    }
+
     private PlayerStats For(int id)
     {
         if (!_players.TryGetValue(id, out var s)) { s = new PlayerStats(id); _players[id] = s; }

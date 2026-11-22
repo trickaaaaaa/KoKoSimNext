@@ -119,6 +119,12 @@ public sealed class SaveState
     // --- 自校チームカラー上書き（null＝校IDからの自動割り当て） ---
     public TeamColors? TeamColorOverride { get; set; }
 
+    /// <summary>
+    /// 自校でない学校の配色（校ID→配色。v38・issue #1261）。配色は学校に付いて回る＝転任で去った学校の配色は
+    /// ここに残り、<see cref="TeamColorOverride"/> は今の自校の配色だけを指す。
+    /// </summary>
+    public Dictionary<int, TeamColors> SchoolColorOverrides { get; set; } = new();
+
     // --- 自校の同定（新設校スタート・issue #585。v4 で追加） ---
     /// <summary>自校の校名（「高校」を含まない幹の部分）。旧セーブは "桜丘" で補う。</summary>
     public string SchoolName { get; set; } = "桜丘";

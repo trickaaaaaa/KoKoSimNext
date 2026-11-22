@@ -38,10 +38,11 @@
 /* 添えるカード（学校の通算＝行数が固定）。表の幅を食わないよう固定幅で右に置く。 */
 .rc-card-side { width: 320px; flex-shrink: 0; margin-left: var(--sp-3); margin-right: 0; }
 
-/* ── 歴代大会結果（年度 / 大会 / 成績 / 優勝校） ─────────────── */
+/* ── 歴代大会結果（年度 / 赴任校 / 大会 / 成績 / 優勝校） ─────────────── */
 .rc-th { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
 .rc-th--head { height: 26px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
 .rc-th--head .rc-th__year,
+.rc-th--head .rc-th__school,
 .rc-th--head .rc-th__cup,
 .rc-th--head .rc-th__res,
 .rc-th--head .rc-th__champ { font-size: var(--fs-cap); color: var(--tx-3); }
@@ -52,6 +53,16 @@
     color: var(--tx-2);
     margin: 0;
     padding: 0;
+}
+/* 赴任校は明朝（書体3役）。長い校名は切る（幅固定＝左右の列を押さない）。 */
+.rc-th__school {
+    width: var(--col-rc-th-school);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
 }
 .rc-th__cup {
     width: var(--col-rc-th-cup);

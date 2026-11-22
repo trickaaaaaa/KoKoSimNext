@@ -126,7 +126,8 @@ namespace KokoSim.Unity.Shell
         /// <summary>
         /// 選択を確定する。<paramref name="schoolId"/>=null は残留（強制転任では不可＝false を返す）。
         /// 転任を選ぶと: 信頼度リセット・施設/施設基金を置いていく・部員は学校に残る（旧校は AI校として全国に残り、
-        /// 転任先 AI校の部員を引き継ぐ。issue #641）・自校の同定を更新する。
+        /// 転任先 AI校の部員を引き継ぐ。issue #641）・自校の同定を更新する。通算成績と配色も学校に付いて回る
+        /// （旧校へ置いていき、転任先のものを引き継ぐ。issue #1261）。
         /// 部費・名声・指導力・采配・育成眼は監督個人の実績として持ち越す（触らない）。
         /// </summary>
         public static bool Confirm(int? schoolId)
@@ -165,6 +166,12 @@ namespace KokoSim.Unity.Shell
             // 選手単位なので差分できず、複写してから現本体を空にする（新しい赴任先の記録タブに
             // 旧校の選手が混ざらないようにする）。
             GameSession.Current.Stats.CloseForTransfer(departingSchoolName, departingStartYearIndex, departingEndYearIndex);
+            // 去る学校の通算帳簿は学校に付いて回る（issue #1261）: いま区切った複写を、全国側の学校別通算へ据える
+            // （旧校のロスターは自校の選手IDを引き継ぐのでキーはそのまま使える）。
+            var closedStats = GameSession.Current.Stats.ClosedSchools;
+            var departingCareer = closedStats[closedStats.Count - 1].Career;
+            // 配色も学校に付いて回る: 去る直前の自校の配色を控え、転任後に旧校へ残す。
+            var departingColors = TeamColorProvider.ManagerColors;
 
             ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: true, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();
@@ -181,8 +188,12 @@ namespace KokoSim.Unity.Shell
                     NationService.ManagerSchoolGeneratedName, NationService.PrefectureId, NationService.DistrictId,
                     TeamOverall.Of(active));
                 var result = NationService.TransferManager(
-                    departing, active, targetSchool, GameClock.YearIndex, RosterService.NextPlayerId);
+                    departing, active, targetSchool, GameClock.YearIndex, RosterService.NextPlayerId, departingCareer);
                 RosterService.AdoptTransferRoster(result.Roster, result.NextPlayerId);
+                // 転任先の AI 時代の通算は、IDを振り直した新しい部員のキーへ付け替えて自校の通算にする（#1261）。
+                GameSession.Current.Stats.Career.ReplaceWith(result.ArrivingCareer);
+                TeamColorProvider.LeaveSchool(result.OldSchoolId, departingColors);
+                TeamColorProvider.ArriveAtSchool(target.SchoolId);
             }
             else
             {

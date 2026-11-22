@@ -105,6 +105,17 @@ public sealed class ManagerPostingHistory
         BaselineSpringAppearances = current.SpringAppearances;
     }
 
+    /// <summary>
+    /// 年度 <paramref name="yearIndex"/> に率いていた学校の校名（記録画面の歴代大会の各行に併記する・issue #1261）。
+    /// 退任済みの赴任に収まればその校名、収まらなければ（今の赴任・年度不明）<paramref name="currentSchoolName"/>。
+    /// </summary>
+    public string SchoolNameAt(int yearIndex, string currentSchoolName)
+    {
+        foreach (var p in _closed)
+            if (yearIndex >= p.StartYearIndex && yearIndex <= p.EndYearIndex) return p.SchoolName;
+        return currentSchoolName;
+    }
+
     /// <summary>今の赴任ぶんの差分（勝・敗・夏出場・春出場）。</summary>
     public (int Wins, int Losses, int SummerAppearances, int SpringAppearances) CurrentDelta(SchoolRecord current)
         => (current.OfficialWins - BaselineWins,

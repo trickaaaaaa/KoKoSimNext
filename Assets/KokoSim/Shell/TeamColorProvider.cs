@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using KokoSim.Engine.Nation;
 using UnityEngine;
@@ -27,11 +28,34 @@ namespace KokoSim.Unity.Shell
         /// <summary>自校の配色の上書き（null＝校IDからの自動割り当てを使う）。</summary>
         public static TeamColors ManagerOverride { get; set; }
 
+        /// <summary>
+        /// 自校でない学校の配色（校ID→配色）。配色は学校に付いて回る（issue #1261）＝転任で去った学校の配色は
+        /// ここへ残り、引き継いだ学校の配色は <see cref="ManagerOverride"/> へ移る。表に無い校は校IDからの自動割り当て。
+        /// </summary>
+        private static Dictionary<int, TeamColors> _schoolOverrides = new Dictionary<int, TeamColors>();
+
         /// <summary>校IDから配色を引く。自校だけは上書きがあればそれを返す。</summary>
         public static TeamColors For(int schoolId)
-            => schoolId == NationService.ManagerSchoolId && ManagerOverride != null
-                ? ManagerOverride
-                : Palette.ColorsFor(schoolId);
+        {
+            if (schoolId == NationService.ManagerSchoolId && ManagerOverride != null) return ManagerOverride;
+            return _schoolOverrides.TryGetValue(schoolId, out var kept) ? kept : Palette.ColorsFor(schoolId);
+        }
+
+        /// <summary>
+        /// 転任: 去る学校の配色を、その学校（全国での校ID）へ残す。<paramref name="colors"/> は去る直前の自校の配色
+        /// （<see cref="ManagerColors"/>）。新設校は自校の専用IDの自動割り当てで見えていた色を、そのまま持たせる。
+        /// </summary>
+        public static void LeaveSchool(int schoolId, TeamColors colors) => _schoolOverrides[schoolId] = colors;
+
+        /// <summary>
+        /// 転任: 引き継ぐ学校の配色を自校の配色へ据える。その学校に残していた配色（過去に率いた学校）があればそれ、
+        /// 無ければ AI校だった頃に見えていた自動割り当てのまま（色が変わらない）。
+        /// </summary>
+        public static void ArriveAtSchool(int schoolId)
+        {
+            ManagerOverride = _schoolOverrides.TryGetValue(schoolId, out var kept) ? kept : Palette.ColorsFor(schoolId);
+            _schoolOverrides.Remove(schoolId);
+        }
 
         /// <summary>自校の現在の配色（上書き前は校IDからの自動割り当て）。設定画面の初期値。</summary>
         public static TeamColors ManagerColors => For(NationService.ManagerSchoolId);
@@ -41,13 +65,22 @@ namespace KokoSim.Unity.Shell
         {
             _cached = null;
             ManagerOverride = null;
+            _schoolOverrides = new Dictionary<int, TeamColors>();
         }
 
-        /// <summary>セーブ保存: 自校の配色上書き（null＝自動割り当て）を DTO へ写す（issue #507）。</summary>
-        public static void Capture(KokoSim.Engine.Saves.SaveState s) => s.TeamColorOverride = ManagerOverride;
+        /// <summary>セーブ保存: 自校の配色上書き（null＝自動割り当て）と他校の配色を DTO へ写す（issue #507・#1261）。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s)
+        {
+            s.TeamColorOverride = ManagerOverride;
+            s.SchoolColorOverrides = new Dictionary<int, TeamColors>(_schoolOverrides);
+        }
 
-        /// <summary>セーブ復元: 自校の配色上書きを据える（パレット表キャッシュは再読込に任せる）。</summary>
-        public static void Restore(KokoSim.Engine.Saves.SaveState s) => ManagerOverride = s.TeamColorOverride;
+        /// <summary>セーブ復元: 自校の配色上書きと他校の配色を据える（パレット表キャッシュは再読込に任せる）。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s)
+        {
+            ManagerOverride = s.TeamColorOverride;
+            _schoolOverrides = new Dictionary<int, TeamColors>(s.SchoolColorOverrides);
+        }
 
         private static TeamColorPalette Load()
         {

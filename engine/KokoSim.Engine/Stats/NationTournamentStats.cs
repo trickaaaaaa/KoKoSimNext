@@ -38,6 +38,34 @@ public sealed class NationTournamentStats
         lock (_gate) return _careerBySchool.TryGetValue(schoolId, out var b) ? b : null;
     }
 
+    /// <summary>
+    /// 監督が学校を去るとき、在任中の通算帳簿をその学校の通算へ<b>据える</b>（issue #1261）。
+    /// 率いている間、学校の通算は自校ストア側に積まれ、ここの帳簿は止まっている（古いまま）。
+    /// 去った学校のロスターは自校の選手IDをそのまま引き継ぐ（<c>TransferRosterConversion.ToAiRoster</c>）ので、
+    /// 帳簿を<b>置き換える</b>だけでよい（足すと古い帳簿のキーと重なる）。
+    /// </summary>
+    public void ReplaceCareerBook(int schoolId, StatBook book)
+    {
+        lock (_gate) BookFor(_careerBySchool, schoolId).ReplaceWith(book);
+    }
+
+    /// <summary>
+    /// 監督が学校を引き継ぐとき、その学校の通算帳簿を全国から外して返す（issue #1261）。選手IDは
+    /// <paramref name="idMap"/>（AI校の選手ID→自校の選手ID）で付け替え、今の部員に居ない選手は捨てる。
+    /// 以後この学校の通算は自校ストアが持つ（<see cref="SchoolStatsLookup"/> が自校ストアを引く）。
+    /// </summary>
+    public StatBook TakeCareerBook(int schoolId, IReadOnlyDictionary<int, int> idMap)
+    {
+        lock (_gate)
+        {
+            if (!_careerBySchool.Remove(schoolId, out var book)) return new StatBook();
+            return book.Remapped(idMap);
+        }
+    }
+
+    /// <summary>学校の通算帳簿を捨てる（v37以前のセーブに残る、率いている学校の古い帳簿の掃除。issue #1261）。</summary>
+    internal void DropCareerBook(int schoolId) { lock (_gate) _careerBySchool.Remove(schoolId); }
+
     /// <summary>成績を持つ学校ID一覧（新聞・注目選手の走査用・スナップショット）。</summary>
     public IReadOnlyCollection<int> Schools
     {
