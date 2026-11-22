@@ -6,7 +6,7 @@ namespace KokoSim.Unity.Match
     /// <summary>
     /// 装備メッシュ（Assets/DuelSpike/Generated/AIGear）のロードと「装着正位」への較正。
     /// 出自はすべてMeshy生成＋Blenderデシメート（tools/aigear-decimate.py）。
-    /// bpy手続きモデリング（tools/aigear-plates.py）の板もの2点は、Meshy生成物へ差し替えて
+    /// bpy手続きモデリングの板もの2点（胸プロテクター・レガース）は、Meshy生成物へ差し替えて
     /// 2026-07-29 に廃止した。素体・クリップと同じくロードはエディタ限定（AssetDatabase）＝
     /// ビルド同梱方法は本実装時に決める。ロード不可時は null を返し、呼び元はプリミティブ装備へ
     /// フォールバックする（DuelStageRig.AttachGear）。

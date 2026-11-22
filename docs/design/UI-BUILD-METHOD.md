@@ -128,6 +128,17 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `ChoiceButton` | 同じ重みの選択肢1つ（`UiComponents.ChoiceButton`・`.choice-btn`）。白地＋墨1px枠、hover／選択は墨2px。応援団赤は使わない・確率や説明文は添えない。イベントの3択（issue #945）は会話ボックスの中に縦並び（`.ev__choices`） |
 | `TierChoice` | 段の選択肢1行（`UiComponents.TierChoice`・`.tier-choice`・issue #1034）。`ChoiceButton` と同じ器に「段名｜年額（右揃えの NumUnit）｜効果の1文」を列で並べる。選ばれた段は `choice-btn--selected`（墨2px）。年契約の更新モーダルで1系統1枚のカードに縦並び |
 
+#### チームカラー（design-18 §3.5・tokens.uss と同型の流し込みパターン）
+
+校ごとの配色は `data/team-colors.yaml` のパレット表を唯一の出所にし、UI と 3D の両方へ**同じ値を流し込む**。画面側で色を自作しない。
+
+| 部品 | 役割 |
+|---|---|
+| `TeamColorPalette` / `TeamColorProvider` | パレット表（engine の `TeamColorPalette`）と、校IDから配色を引く Shell の窓口（`TeamColorProvider.For`）。自校だけ領域別の上書き（`ManagerOverride`）を持つ。校IDの決定論選択で乱数は使わない |
+| `UniformColorPicker` | ユニフォーム配色の領域行（`.ucp-*`・issue #585）。選べる色はパレット表の色だけ（`TeamColorPalette.Swatches`）。チーム設定と新規ゲーム設定が共有し、下書きの保持と描画だけを担う（確定は持ち主の画面） |
+| `DuelStageRig.SetTeamColors` | 3D 選手のマテリアルへの流し込み（攻守交代ごとに呼ぶ）。素体・クリップは作り直さず色だけ塗り替える |
+| `SchoolAccent` | UI 側のスクールカラー（上の design-22 の表） |
+
 - 主ボタンは応援団赤（`--color-cta`）のまま・文字は白
 - 画面固有の Label の余白リセットは**画面ルート**（例 `.lu-root Label`）に置く。`.sbk Label` に置くと全データ画面の文字がくっつく
 - 撮影のたびに書体の監査を回す（`ScreenshotBatch` が `<prefix>fonts.txt` を書く＝`FontAudit`。許可は Noto Sans JP・Shippori Mincho B1・DotGothic16 だけ）
