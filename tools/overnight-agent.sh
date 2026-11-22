@@ -84,7 +84,7 @@ PROMPT_TEMPLATE="$REPO_DIR/tools/overnight-prompt.template.md"
 DOTNET="/usr/local/share/dotnet/dotnet"
 # 生成物（DLL / Resources/KokoSimData 複製）の pathspec。Git 管理外（.gitignore 済み・issue #785）だが、
 # `git add -f` 等で紛れ込んだ場合に備えて WIP 自動退避から除外し、マージ工程で追跡から外す。
-GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll :(glob)Assets/Resources/KokoSimData/**/*.yaml"
+GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll :(glob)Assets/Resources/KokoSimData/**/*.yaml Assets/Resources/KokoSimData/_index.txt"
 
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 MODEL="${OVERNIGHT_MODEL:-claude-sonnet-5-5}"          # 既定は Sonnet。model:opus ラベルで昇格

@@ -79,3 +79,4 @@ Assets/UI/Images/portraits/*.jpeg.meta
 # .meta（インポート設定）は追跡したまま。
 /Assets/Plugins/KokoSim/KokoSim.Engine.dll
 /Assets/Resources/KokoSimData/**/*.yaml
+/Assets/Resources/KokoSimData/_index.txt

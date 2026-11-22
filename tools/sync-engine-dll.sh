@@ -56,4 +56,13 @@ for y in "$ROOT"/data/pref-formats/*.yaml; do
   place "$y" "$PF_DIR/$(basename "$y")"
 done
 
+# 複製した YAML の一覧（KokoSimData からの相対パス・拡張子なし・1行1件）。DataFiles が起動時にメインスレッドで
+# これを読み、全部の中身を先に控える。Resources.Load はメインスレッドからしか呼べず、大会の後始末など
+# 裏のスレッドで初めて読むと黙って空になる（2026-11-22・地区大会→神宮→センバツの連鎖が切れた）。
+# Resources にはフォルダの中身をパスつきで列挙する手段が無いので、一覧をここで書いて渡す。
+INDEX_TMP="$(mktemp)"; chmod 644 "$INDEX_TMP"
+(cd "$SA_DIR" && find . -name '*.yaml' -type f | sed 's#^\./##; s#\.yaml$##' | LC_ALL=C sort) > "$INDEX_TMP"
+place "$INDEX_TMP" "$SA_DIR/_index.txt"
+rm -f "$INDEX_TMP"
+
 echo "同期完了（engine DLL＋Resources/KokoSimData）: $ROOT"
