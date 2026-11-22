@@ -233,7 +233,7 @@ namespace KokoSim.Unity.Home
         /// 部員と主将は同じ絵（player.png）を使う（2026-11-22 ユーザー決定）。
         /// </summary>
         private static readonly string[] ImageRoles =
-            { EventRoles.Manager, EventRoles.TeamManager, EventRoles.Player, EventRoles.Captain };
+            { EventRoles.Manager, EventRoles.TeamManager, EventRoles.Player, EventRoles.Captain, EventRoles.Scout };
 
         public static bool HasImage(string who) => System.Array.IndexOf(ImageRoles, who) >= 0;
 
