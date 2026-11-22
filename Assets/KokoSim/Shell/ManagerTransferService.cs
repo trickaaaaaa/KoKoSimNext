@@ -1,6 +1,7 @@
 // ViewModel層（設計書06 §1: エンジン→ViewModel→UXML）。UnityEngine 非依存に保つ。
 using System.Collections.Generic;
 using KokoSim.Engine.Career;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 
 namespace KokoSim.Unity.Shell
@@ -175,6 +176,10 @@ namespace KokoSim.Unity.Shell
 
             ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: true, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();
+            // マネージャー（NPC）も入れ替わる: 既存の学校への赴任なので2年か3年（issue #1430）。
+            // 独立ストリーム（不変条件#2・年度でずらし転任を重ねても毎回違う抽選にする）。
+            TeamManagerLifecycle.AssignForTransfer(
+                ManagerService.Manager, new Xoshiro256Random(GameSeed.Master ^ (0x1430_0002UL ^ (ulong)GameClock.YearIndex)));
             // 部員は学校に所属する（issue #641）: 旧校は AI校として全国に残り旧部員もそこに残る。
             // 転任先 AI校の部員を引き継ぎ、転任先は全国から外れる（自校＝専用ID で大会に出る）。
             var targetSchool = NationService.SchoolById(target.SchoolId);

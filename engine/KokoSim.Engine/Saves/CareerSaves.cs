@@ -28,7 +28,10 @@ internal static class CareerSaves
         .Add("funds", m.Funds)
         .Add("careerYears", m.CareerYears)
         .Add("yearsAtSchool", m.YearsAtSchool)
-        .Add("koshienApp", m.KoshienAppearances);
+        .Add("koshienApp", m.KoshienAppearances)
+        .Add("teamManagerPortrait", m.TeamManagerPortrait)
+        .Add("teamManagerGrade", m.TeamManagerGrade)
+        .Add("teamManagerOutgoingPortrait", m.OutgoingTeamManagerPortrait);
 
     public static Manager ManagerFromJson(JsonObject o) => new()
     {
@@ -47,6 +50,11 @@ internal static class CareerSaves
         // 猶予から数え直す（安全側＝いきなり転任対象になることはない）。
         YearsAtSchool = o.Has("yearsAtSchool") ? o.Int("yearsAtSchool") : 0,
         KoshienAppearances = o.Int("koshienApp"),
+        // マネージャー（NPC）の入れ替わりは v39（issue #1430）。旧セーブは SaveCodec.Migrate が
+        // 乱数で「2年か3年のマネージャーを1人付ける」補完をしてから読むので、ここは素直に読む。
+        TeamManagerPortrait = o.Int("teamManagerPortrait"),
+        TeamManagerGrade = o.Int("teamManagerGrade"),
+        OutgoingTeamManagerPortrait = o.Int("teamManagerOutgoingPortrait"),
     };
 
     // ===== FacilitySet =====

@@ -1376,6 +1376,54 @@ events:
           - who: narration
             say: "負けずに引退した三年生たちは、最後まで少し落ち着かない顔をしていた。"
 
+  # マネージャーの引き継ぎ（design-04 §1.3a・issue #1430）。3年の夏の引退の会話（summer_retirement_*）の
+  # 直後に続けて積まれる。引退する側（who: team_manager_outgoing）と新しい側（who: team_manager）の両方が話す。
+  - id: team_manager_succession
+    kind: System
+    text: "マネージャーが引退し、新しいマネージャーに引き継がれた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "引退したマネージャーが、得点板の鍵と分厚いノートを机に置いた。"
+          - who: team_manager_outgoing
+            name: "引退するマネージャー"
+            say: "鍵は三番目の引き出し。アイシングは多めに頼むこと。"
+          - who: team_manager
+            name: "新しいマネージャー"
+            say: "多めに、ですね。メモします。"
+          - who: team_manager_outgoing
+            name: "引退するマネージャー"
+            say: "ノートの最後のページ、まだ何も書いてないから好きに使って。"
+          - who: narration
+            say: "新しいマネージャーは、まず自分の名前をそこに書いた。"
+      - lines:
+          - who: narration
+            say: "部室の棚で、ボール拾いの籠と記録用紙の束が引き継がれていく。"
+          - who: player
+            name: "主将"
+            say: "三年間、ありがとうございました。"
+          - who: team_manager_outgoing
+            name: "引退するマネージャー"
+            say: "泣かないので、今は。"
+          - who: team_manager
+            name: "新しいマネージャー"
+            say: "……よろしくお願いします。"
+          - who: team_manager_outgoing
+            name: "引退するマネージャー"
+            say: "声、もう少し大きく。グラウンドじゃ届かない。"
+      - lines:
+          - who: team_manager_outgoing
+            name: "引退するマネージャー"
+            say: "スコアの付け方、最初は誰でも間違える。気にしないで。"
+          - who: team_manager
+            name: "新しいマネージャー"
+            say: "先輩も間違えましたか。"
+          - who: team_manager_outgoing
+            name: "引退するマネージャー"
+            say: "初日、全員の出塁を三振って書いた。"
+          - who: narration
+            say: "新しいマネージャーは、記録用紙をもう一度だけ丁寧に見直した。"
+
   # 夏の甲子園（設計書05 §1.1a）。県大会を勝ち抜いた直後に、激励金 → 抽選会 の順で出る。
   # どちらも効果の数値は yaml に書かない＝呼び出し元（KoshienEntry）が実際に動いた額・
   # 実際に決まった相手で結果行を組む。

@@ -251,3 +251,31 @@ screens:
       - show: TitleScreen
       - wait: 5
       - shot: 01-title
+
+  - id: team-manager-succession-1430
+    name: "マネージャーの学年つき入れ替わり・立ち絵10人・引き継ぎイベント（issue #1430）"
+    steps:
+      - new_game: {seed: 1}
+      # 新設校は1年（読み値は summary.json の reads で確認）。
+      - read: "=ManagerService.Manager.TeamManagerGrade"
+      - read: "=ManagerService.Manager.TeamManagerPortrait"
+      # 転任（既存の学校への赴任）で2年か3年に入れ替わる。見た目も前任と違う人になる（実際の転任経路）。
+      - transfer: ""
+      - read: "=ManagerService.Manager.TeamManagerGrade"
+      - read: "=ManagerService.Manager.TeamManagerPortrait"
+      # 3年夏の引き継ぎイベント（引退する側=9番・新しい側=4番）を直接積んで、立ち絵が役割ごとに
+      # 違う番号で出ることを撮る（本番は summer_retirement_* の直後に自動で積まれる）。
+      - set: {ManagerService.Manager.TeamManagerPortrait: 4, ManagerService.Manager.OutgoingTeamManagerPortrait: 9}
+      - call: EventService.PushMilestone("team_manager_succession")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-succession-a
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-succession-b
+      - click: ev-novel
+      - wait: 5
+      - shot: 03-succession-c
+      - click: ev-novel
+      - wait: 5
+      - shot: 04-succession-d

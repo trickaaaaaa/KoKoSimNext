@@ -616,6 +616,42 @@ public sealed class SaveCodecTests
         Assert.Equal(2027, s.Records.For(100).LastSummerYear);
     }
 
+    // ===== マネージャー（NPC）の入れ替わり（issue #1430・v39） =====
+
+    [Fact]
+    public void TeamManagerState_RoundTrips()
+    {
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(SaveTestFixtures.BuildRichState()), out var s, out var err), err);
+        Assert.Equal(6, s.Manager.TeamManagerPortrait);
+        Assert.Equal(2, s.Manager.TeamManagerGrade);
+        Assert.Equal(9, s.Manager.OutgoingTeamManagerPortrait);
+    }
+
+    // v38 以前のセーブはマネージャー（NPC）という状態を持たない。読み込み時に「転任で既存の学校に赴任したとき」
+    // と同じ扱い（2年か3年を無作為に1人）で埋まること（design-04 §1.3a）。母種から Fork した専用ストリームで
+    // 引くので、同じセーブを何度読んでも同じ人になる（不変条件#2）。
+    [Fact]
+    public void V38Save_WithoutTeamManagerState_GetsOneAssigned_Deterministically()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.Contains("\"teamManagerPortrait\":6", json);
+        var v38 = json
+            .Replace(",\"teamManagerPortrait\":6", "")
+            .Replace(",\"teamManagerGrade\":2", "")
+            .Replace(",\"teamManagerOutgoingPortrait\":9", "")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":38");
+        Assert.DoesNotContain("teamManagerPortrait", v38);
+
+        Assert.True(SaveCodec.TryDeserialize(v38, out var s1, out var err1), err1);
+        Assert.True(s1.Manager.TeamManagerGrade == 2 || s1.Manager.TeamManagerGrade == 3);
+        Assert.InRange(s1.Manager.TeamManagerPortrait, 1, KokoSim.Engine.Career.TeamManagerLifecycle.PortraitCount);
+
+        // 同じ旧セーブをもう一度読んでも同じ人になる（決定論）。
+        Assert.True(SaveCodec.TryDeserialize(v38, out var s2, out var err2), err2);
+        Assert.Equal(s1.Manager.TeamManagerGrade, s2.Manager.TeamManagerGrade);
+        Assert.Equal(s1.Manager.TeamManagerPortrait, s2.Manager.TeamManagerPortrait);
+    }
+
     // 練習試合を一度もしていないセーブも往復できる（null のまま）。
     [Fact]
     public void PracticeLastPlayedWeek_Null_RoundTrips()

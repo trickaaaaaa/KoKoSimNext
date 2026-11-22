@@ -1,6 +1,8 @@
 // ViewModel層（設計書06 §1: エンジン→ViewModel→UXML）。UnityEngine 非依存に保つ。
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Career;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
@@ -217,6 +219,14 @@ namespace KokoSim.Unity.Shell
             var transition = RosterLifecycle.BeginNewTeam(RosterService.Roster);
             // 会話は主将指名より先に読ませる（ホームが引退の会話のキューを見て先に開く）。
             EventService.PushMilestone(SummerRetirement.EventId(exit));
+            // マネージャー（NPC）も3年の夏で入れ替わる（issue #1430）。引退の会話の直後に引き継ぎの会話を
+            // 続けて積む＝EventNovelView は同じ週に積まれた会話を続けて見せるので、主将指名より先に読める。
+            if (TeamManagerLifecycle.IsRetiring(ManagerService.Manager))
+            {
+                TeamManagerLifecycle.Succeed(
+                    ManagerService.Manager, new Xoshiro256Random(GameSeed.Master ^ (0x1430_0003UL ^ (ulong)GameClock.YearIndex)));
+                EventService.PushMilestone(TeamManagerLifecycle.EventId);
+            }
             NewTeamService.Open(transition);
             // 引退で枠の大半が穴になった前チームのスタメンは捨てる（issue #955・第18週の発足と同じ）。
             GameSession.Current.LastLineup = null;

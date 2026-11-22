@@ -1450,7 +1450,18 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .ev-por--photo .ev-por__image { display: flex; }
 
 .ev-por__image--manager { background-image: url("project:///Assets/UI/Images/portraits/manager.jpeg"); }
-.ev-por__image--team_manager { background-image: url("project:///Assets/UI/Images/portraits/team_manager.jpeg"); }
+/* マネージャーは10人（tm01〜tm10・issue #1430）。番号は C#（EventNovelView.EventPortraits）が
+   Manager.TeamManagerPortrait / OutgoingTeamManagerPortrait から選ぶ＝クラスは固定割当でなく差し替え式。 */
+.ev-por__image--team_manager-01 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm01.png"); }
+.ev-por__image--team_manager-02 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm02.png"); }
+.ev-por__image--team_manager-03 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm03.png"); }
+.ev-por__image--team_manager-04 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm04.png"); }
+.ev-por__image--team_manager-05 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm05.png"); }
+.ev-por__image--team_manager-06 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm06.png"); }
+.ev-por__image--team_manager-07 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm07.png"); }
+.ev-por__image--team_manager-08 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm08.png"); }
+.ev-por__image--team_manager-09 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm09.png"); }
+.ev-por__image--team_manager-10 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm10.png"); }
 /* 部員と主将は同じ絵（Gemini 生成・自前の素材なのでコミットする）。 */
 .ev-por__image--player,
 .ev-por__image--captain { background-image: url("project:///Assets/UI/Images/portraits/player.png"); }

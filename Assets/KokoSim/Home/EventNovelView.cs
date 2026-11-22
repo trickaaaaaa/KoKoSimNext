@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using KokoSim.Engine.Career;
 using KokoSim.Engine.Season.Events;
 using KokoSim.Unity.Components;
 using KokoSim.Unity.Shell;
@@ -214,6 +215,7 @@ namespace KokoSim.Unity.Home
             { EventRoles.Manager, "監督" },
             { EventRoles.Player, "部員" },
             { EventRoles.TeamManager, "マネージャー" },
+            { EventRoles.TeamManagerOutgoing, "マネージャー" },
             { EventRoles.Ob, "OB" },
             { EventRoles.Scout, "スカウト" },
             { EventRoles.Captain, "主将" },
@@ -233,15 +235,36 @@ namespace KokoSim.Unity.Home
         /// 部員と主将は同じ絵（player.png）を使う（2026-11-22 ユーザー決定）。
         /// </summary>
         private static readonly string[] ImageRoles =
-            { EventRoles.Manager, EventRoles.TeamManager, EventRoles.Player, EventRoles.Captain, EventRoles.Scout };
+        {
+            EventRoles.Manager, EventRoles.TeamManager, EventRoles.TeamManagerOutgoing,
+            EventRoles.Player, EventRoles.Captain, EventRoles.Scout,
+        };
 
         public static bool HasImage(string who) => System.Array.IndexOf(ImageRoles, who) >= 0;
 
-        /// <summary>ポートレート要素に役割の画像クラスだけを立てる（他役割の残り香を消してから）。</summary>
+        /// <summary>
+        /// ポートレート要素に役割の画像クラスだけを立てる（他役割の残り香を消してから）。
+        /// マネージャー（<see cref="EventRoles.TeamManager"/> / <see cref="EventRoles.TeamManagerOutgoing"/>）は
+        /// 10人の立ち絵（tm01〜tm10）から今の番号で選ぶ（issue #1430）。新しい側は今のマネージャー
+        /// （<see cref="Manager.TeamManagerPortrait"/>）、引退する側は入れ替わりの直前に控えた番号
+        /// （<see cref="Manager.OutgoingTeamManagerPortrait"/>）を使う。
+        /// </summary>
         public static void ApplyImageClass(VisualElement el, string who)
         {
             foreach (var role in ImageRoles) el.RemoveFromClassList("ev-por__image--" + role);
-            if (HasImage(who)) el.AddToClassList("ev-por__image--" + who);
+            for (var i = 1; i <= TeamManagerLifecycle.PortraitCount; i++)
+                el.RemoveFromClassList("ev-por__image--team_manager-" + i.ToString("00"));
+            if (!HasImage(who)) return;
+            if (who == EventRoles.TeamManager || who == EventRoles.TeamManagerOutgoing)
+            {
+                var portrait = who == EventRoles.TeamManagerOutgoing
+                    ? ManagerService.Manager.OutgoingTeamManagerPortrait
+                    : ManagerService.Manager.TeamManagerPortrait;
+                if (portrait < 1 || portrait > TeamManagerLifecycle.PortraitCount) portrait = 1;
+                el.AddToClassList("ev-por__image--team_manager-" + portrait.ToString("00"));
+                return;
+            }
+            el.AddToClassList("ev-por__image--" + who);
         }
     }
 }
