@@ -162,6 +162,7 @@ namespace KokoSim.Unity.Debugging
                     case "play_tournament": return PlayTournament(s);
                     case "advance_to_week": return AdvanceToWeek(s);
                     case "boost_roster": return BoostRoster(s);
+                    case "transfer": return Transfer(s);
                     case "show": return Show(s);
                     case "click": return Press(s, submit: false);
                     case "submit": return Press(s, submit: true);
@@ -392,6 +393,42 @@ namespace KokoSim.Unity.Debugging
                     matches++;
                 }
                 if (GameSession.Current.InTournament) Fail(s, "60試合でも大会が終わらない");
+            }
+
+            /// <summary>
+            /// 監督を転任させる（転任の打診を開き、その学校を選んで確定する＝ホームの「転任する」と同じ確定処理）。
+            /// 値: ""＝同じ県でいちばん強い他校 / {school: 123}＝校ID。年度末の判定を待たずに起こす（記録・配色の持ち越しを見る用）。
+            /// </summary>
+            private IEnumerator Transfer(ScreenStep s)
+            {
+                if (HomeState.Current == null) { Fail(s, "進行が無い（先に new_game）"); yield break; }
+                while (BackgroundGameOp.Running || NationBackgroundSim.Running) yield return null;
+                int? want = null;
+                if (s.Map != null)
+                {
+                    if (!s.Map.TryGetValue("school", out var v) || !int.TryParse(v, out var id)) { Fail(s, "school が無いか数でない"); yield break; }
+                    want = id;
+                }
+                KokoSim.Engine.Nation.School pick = null;
+                foreach (var sc in NationService.Nation.Schools)
+                {
+                    if (want != null) { if (sc.Id == want.Value) { pick = sc; break; } continue; }
+                    if (sc.PrefectureId != NationService.PrefectureId) continue;
+                    if (pick == null || sc.Strength > pick.Strength) pick = sc;
+                }
+                if (pick == null) { Fail(s, "転任先が見つからない"); yield break; }
+                var from = TopBarMeters.SchoolDisplayName();
+                ManagerTransferService.Open(new KokoSim.Engine.Career.TransferResult(
+                    KokoSim.Engine.Career.TransferEventKind.ForcedTransfer,
+                    new List<KokoSim.Engine.Career.TransferCandidate>
+                    {
+                        new KokoSim.Engine.Career.TransferCandidate(pick.Id, pick.Name, pick.PrefectureId, pick.DistrictId, pick.Strength, pick.Fame),
+                    },
+                    CanStay: false));
+                if (!ManagerTransferService.Confirm(pick.Id)) { Fail(s, "転任を確定できなかった"); yield break; }
+                yield return null;
+                SettlePending();
+                _notes.Add($"transfer: {from} → {pick.Name}（校ID {pick.Id}）");
             }
 
             /// <summary>自校の部員の全能力を上げて勝ち進ませる（センバツ・甲子園まで行く分岐を見る用）。値: 95 か {level: 95, cap: 99}。</summary>
