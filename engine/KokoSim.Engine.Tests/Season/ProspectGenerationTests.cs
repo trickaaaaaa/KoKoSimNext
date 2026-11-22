@@ -397,14 +397,6 @@ public sealed class ProspectGenerationTests
 
     // --- 投手の創発（Issue #174: 生成時決め打ち廃止） ---
 
-    private static int BestFieldAptitude(DevelopingPlayer p)
-    {
-        var best = 0;
-        foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
-            if (pos != FieldPosition.Pitcher) best = Math.Max(best, p.Aptitude(pos));
-        return best;
-    }
-
     [Fact]
     public void PitcherRole_EmergesFromAptitude_NotCoinFlip()
     {

@@ -46,8 +46,20 @@ namespace KokoSim.Unity.Match
         private MatchLiveController _ctrl;
         private GameObject _liveGo;
 
+        // 撮影用の static を終わりに元へ戻す（Play を抜けずに次の撮影が走っても引きずらない）
+        private bool _prevCaptureMode;
+        private ulong? _prevSeedOverride;
+
+        private void OnDestroy()
+        {
+            MatchLiveController.CaptureMode = _prevCaptureMode;
+            MatchLiveController.GameSeedOverrideForCapture = _prevSeedOverride;
+        }
+
         private IEnumerator Start()
         {
+            _prevCaptureMode = MatchLiveController.CaptureMode;
+            _prevSeedOverride = MatchLiveController.GameSeedOverrideForCapture;
             Application.runInBackground = true;
             Time.captureDeltaTime = 1f / 30f;
             Directory.CreateDirectory(ShotDir);

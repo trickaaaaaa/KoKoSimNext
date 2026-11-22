@@ -1,0 +1,39 @@
+using System;
+
+namespace KokoSim.Unity.Components
+{
+    /// <summary>指示1件の定義。増やすときはこれを1件足すだけ（UI原則⑤: 直書き禁止の器）。</summary>
+    public sealed class SignDef
+    {
+        public string Id;
+        public string Label;
+        /// <summary>
+        /// 局面で変わる表示名（null=<see cref="Label"/> 固定）。同じ1枚の意味が塁状況で変わる札
+        /// （盗塁→三盗→本盗・issue #622）のために、<see cref="TacticsCardDeck.RefreshEnabled"/> が
+        /// 可否と一緒に文字も引き直す。
+        /// </summary>
+        public Func<string> LabelOf;
+        /// <summary>将来のアイコン化用（null=文字タイル）。指定時はアイコンを主表示に回す。</summary>
+        public string Icon;
+        /// <summary>
+        /// カードの絵（null=<see cref="Icon"/> の1文字を淡く敷く）。値は絵の名前で、
+        /// components.uss の <c>.tcard__pic--{Art}</c> が Assets/UI/Images/signs/sign-{Art}.png を引く。
+        /// </summary>
+        public string Art;
+        /// <summary>true=攻撃中に出す指示 / false=守備中に出す指示。</summary>
+        public bool Offense;
+        /// <summary>排他グループ（例: "batting" / "policy"）。同グループ内で1つだけ選べる。</summary>
+        public string Group;
+        public string GroupLabel;
+        /// <summary>既定（任せ/通常）。選択すると同グループの点灯が消える＝指示なし。</summary>
+        public bool IsDefault;
+        /// <summary>有効条件（null=常に有効）。走者・カウント等の局面条件を将来ここへ。</summary>
+        public Func<bool> EnabledIf;
+        public Action OnSelect;
+        /// <summary>
+        /// 選択を解いたときに呼ぶ（<see cref="TacticsCardDeck"/> のトグル用。null=解除操作なし）。
+        /// 「解除するまで続く方針」のカードは、既定タイルを別に置く代わりに同じカードをもう一度押して消す。
+        /// </summary>
+        public Action OnClear;
+    }
+}

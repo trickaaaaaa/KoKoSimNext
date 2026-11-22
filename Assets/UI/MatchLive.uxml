@@ -97,15 +97,6 @@
                         </ui:VisualElement>
                     </ui:VisualElement>
 
-                    <!-- 交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板が起きた瞬間に数秒だけ盤面へ浮かせる。
-                         PitchCall/ScoreCall と同じ overlay idiom（半透明パネル・既定非表示・自前寿命で消去）。 -->
-                    <ui:VisualElement name="sub-call" class="sub-call">
-                        <ui:VisualElement class="sub-call__panel">
-                            <ui:Label name="sub-call-tag" class="sub-call__tag f-body" text="投手交代" />
-                            <ui:Label name="sub-call-text" class="sub-call__text f-body" text="" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
                     <!-- イニング間のスコア画面。3アウトで攻守が入れ替わったら、次の打席を始める前に
                          数秒だけ挟んで回別得点を大写しにする（クリックで即スキップ）。
                          上部から撤去したラインスコアはここが唯一の置き場所になる。 -->
@@ -126,7 +117,7 @@
 
                 <!-- 残置した常時操作（issue #289 で操作列を縮小）: 速度と場内放送のスイッチだけ
                      （カメラ演出・2D俯瞰のボタンは issue #1193 で撤去）。
-                     1球指示は盤面内・投手HUD直下の SignPad へ、タイム・選手交代・スキップは
+                     1球指示は盤面内の TacticsCardDeck へ、タイム・選手交代・スキップは
                      「盤面クリック→中断ポップアップ」(pause-modal) へ集約した。実況帯（履歴・実況バー）は
                      撤去＝ロジックのみ存続（MatchLiveController）。back-home はデモ観戦（結果画面へ
                      渡さない文脈）の終局時だけ出るフォールバック導線。 -->

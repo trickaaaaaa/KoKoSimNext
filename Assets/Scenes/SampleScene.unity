@@ -902,7 +902,6 @@ MonoBehaviour:
   managerTacticalSense: 70
   fastModeHalfInningSeconds: 1
   runnerGoHoldSeconds: 1.6
-  subCallHoldSeconds: 2.6
   gameTelopHoldSeconds: 4
   inningBreakHoldSeconds: 4
 --- !u!114 &624382328

@@ -331,12 +331,6 @@ namespace KokoSim.Unity.Training
             _roster[_selected].Plan = _revertPlan;   // null=お任せへも戻せる
         }
 
-        /// <summary>週送り（合宿・成長段階のプレビューが連動）。</summary>
-        public void StepWeek(int delta)
-        {
-            KokoSim.Unity.Shell.GameClock.Advance(delta);   // 共有週を進める（全画面へ反映）
-        }
-
         public void SetYearFilter(int grade) => _yearFilter = grade;
         public void SetBenchFilter(int mode) => _benchFilter = mode;
 
