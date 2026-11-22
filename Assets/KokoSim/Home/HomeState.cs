@@ -638,7 +638,7 @@ namespace KokoSim.Unity.Home
             foreach (var n in notices)
             {
                 // タグ語彙は 成長 / 警告 / 発見 / 情報 の4つだけ（FeedItem の定義）。
-                // 「気づき」のような新語を足すと HomeDashboardController.TagColor が拾えず
+                // 「気づき」のような新語を足すと HomeDashboardController.TagTone が拾えず
                 // 既定の灰色に落ちる＝コードは通るのに画面だけ間違う。気づきは「発見」に載せる。
                 newItems.Add(new FeedItem
                 {

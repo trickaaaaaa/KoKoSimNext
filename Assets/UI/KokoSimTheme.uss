@@ -921,7 +921,15 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .fd-bar { width: 4px; flex-shrink: 0; }
 .fd-body { flex-grow: 1; padding: 11px 14px; }
 .fd-meta { flex-direction: row; align-items: center; margin-bottom: 4px; }
-.fd-tag { font-size: var(--fs-cap); letter-spacing: 1px; padding: 1px 7px; margin-right: 9px; }
+.fd-tag { font-size: var(--fs-cap); letter-spacing: 1px; padding: 1px 7px 1px 0; margin-right: 9px; }
+.fd-bar.fd-tone--growth { background-color: var(--color-good); }
+.fd-bar.fd-tone--warn { background-color: var(--color-warn); }
+.fd-bar.fd-tone--find { background-color: var(--sky); }
+.fd-bar.fd-tone--info { background-color: var(--color-muted); }
+.fd-tag.fd-tone--growth { color: var(--color-good); }
+.fd-tag.fd-tone--warn { color: var(--color-warn); }
+.fd-tag.fd-tone--find { color: var(--sky); }
+.fd-tag.fd-tone--info { color: var(--color-muted); }
 .fd-time { font-size: var(--fs-cap); color: var(--color-faint); }
 .fd-text { font-size: 19px; color: var(--color-chalk); white-space: normal; }
 

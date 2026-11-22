@@ -566,19 +566,15 @@ namespace KokoSim.Unity.Member
         private static Label CaptainMark()
         {
             var l = new Label("主");
-            l.style.fontSize = 11;
-            l.style.color = new Color(0.961f, 0.776f, 0.290f); // --color-lamp
-            l.style.unityFontStyleAndWeight = FontStyle.Bold;
-            l.style.marginLeft = 3;
+            l.AddToClassList("ms-captain-mark");
+            l.AddToClassList("f-body-bd");
             return l;
         }
 
         private static Label GradeLabel(string text)
         {
             var l = new Label(text);
-            l.style.fontSize = 11;
-            l.style.color = new Color(0.60f, 0.65f, 0.63f);
-            l.style.marginRight = 5;
+            l.AddToClassList("ms-grade");
             return l;
         }
 
