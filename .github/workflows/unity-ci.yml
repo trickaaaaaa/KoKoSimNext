@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check
         run: |
-          tracked="$(git ls-files -- Assets/Plugins/KokoSim/KokoSim.Engine.dll ':(glob)Assets/Resources/KokoSimData/**/*.yaml')"
+          tracked="$(git ls-files -- Assets/Plugins/KokoSim/KokoSim.Engine.dll ':(glob)Assets/Resources/KokoSimData/**/*.yaml' Assets/Resources/KokoSimData/_index.txt)"
           if [ -n "$tracked" ]; then
             echo "::error::生成物が Git に入っています（issue #785）。git rm --cached で外してください:"
             echo "$tracked"
