@@ -30,7 +30,7 @@ namespace KokoSim.EditorTests
             while (!s.ReachedMatchDay)
             {
                 var v = HomeState.Current.BuildView();
-                Assert.IsEmpty(v.WeatherLabel, "試合前（あと" + s.DaysUntilNextMatch + "日）は天気を出さない");
+                Assert.IsNull(v.Weather, "試合前（あと" + s.DaysUntilNextMatch + "日）は天気を出さない");
                 Assert.IsEmpty(v.WeatherTempValue);
                 Assert.IsEmpty(v.WeatherTempUnit);
                 daysBefore++;
@@ -39,7 +39,7 @@ namespace KokoSim.EditorTests
             }
 
             var day = HomeState.Current.BuildView();
-            Assert.IsNotEmpty(day.WeatherLabel, "試合当日は天気を出す");
+            Assert.IsNotNull(day.Weather, "試合当日は天気を出す");
             Assert.IsNotEmpty(day.WeatherTempValue);
             Assert.AreEqual("℃", day.WeatherTempUnit);
         }

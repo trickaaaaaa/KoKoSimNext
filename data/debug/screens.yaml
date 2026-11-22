@@ -181,11 +181,11 @@ screens:
       - new_game: {seed: 1}
       - advance_weeks: 20
       - show: HomeDashboard
-      - read: weather-label
+      - read: weather-icon
       - shot: 01-tournament-not-match-day
       - advance_to_match_day: ""
       - show: HomeDashboard
-      - read: weather-label
+      - read: weather-icon
       - shot: 02-match-day
 
   - id: innings-thirds-1279

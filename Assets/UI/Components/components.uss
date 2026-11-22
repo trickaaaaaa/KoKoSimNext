@@ -2125,10 +2125,25 @@
 /* 掲示板は黒島＝文字は常に明色（--color-* に追従させない。--sb-ink-* を使う。PR #883 レビュー指摘）。 */
 .lsc-venue { flex-direction: row; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; }
 .lsc-venue__name { font-size: var(--fs-cap); color: var(--sb-ink-2); margin-right: 10px; }
-.lsc-venue__weather { flex-direction: row; align-items: baseline; }
-.lsc-venue__weather-k { font-size: var(--fs-cap); color: var(--sb-ink-2); margin-right: 3px; }
+.lsc-venue__weather { flex-direction: row; align-items: center; }
+.lsc-venue__weather-icon { width: 24px; height: 24px; margin-right: 3px; }
 .lsc-venue__temp-num { font-size: var(--fs-cap); color: var(--sb-ink-1); margin-right: 1px; }
 .lsc-venue__temp-unit { font-size: var(--fs-cap); color: var(--sb-ink-2); }
+
+/* 天気マーク（issue #1200）。明暗2セット：-light＝紙色（ホーム）／-dark＝黒島（電光掲示板）。
+   天気→クラス名の写像は WeatherIcons（C#）が単一ソース。ホームと電光掲示板の両方が使うので components.uss に置く。 */
+.hm-hero__weather-icon, .lsc-venue__weather-icon {
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position-x: center;
+    background-position-y: center;
+}
+.wx-icon--sunny-light  { background-image: url("project:///Assets/UI/Images/weather/weather-sunny-light.png"); }
+.wx-icon--cloudy-light { background-image: url("project:///Assets/UI/Images/weather/weather-cloudy-light.png"); }
+.wx-icon--rainy-light  { background-image: url("project:///Assets/UI/Images/weather/weather-rainy-light.png"); }
+.wx-icon--sunny-dark   { background-image: url("project:///Assets/UI/Images/weather/weather-sunny-dark.png"); }
+.wx-icon--cloudy-dark  { background-image: url("project:///Assets/UI/Images/weather/weather-cloudy-dark.png"); }
+.wx-icon--rainy-dark   { background-image: url("project:///Assets/UI/Images/weather/weather-rainy-dark.png"); }
 
 .lsc {
     flex-direction: row;
