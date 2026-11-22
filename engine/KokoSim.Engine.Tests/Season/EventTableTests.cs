@@ -134,7 +134,7 @@ events:
         {
             "entrance_ceremony", "summer_camp", "culture_festival", "winter_camp", "draft_meeting", "graduation",
             // "injury"（週次の故障の会話）は issue #695 で削除＝効果が無く、誰も故障していないのに語っていた。
-            "rain_week", "media_coverage", "ob_donation", "recruit_rival_move",
+            "rain_week", "media_coverage", "ob_donation",
             "ace_hidden_injury", "skipping_practice",
             // システムイベント（issue #610〜）。IDは呼び出し側にベタ書きされているので、
             // 消えると「その出来事だけ黙って会話が出ない」形で壊れる。
@@ -252,6 +252,19 @@ events:
         var e = RepositoryEvents().First(x => x.Id == "draft_meeting");
         Assert.Equal(EventKind.Fixed, e.Kind);
         Assert.Equal(new SeasonCalendar().DraftWeek, e.CalendarWeek);
+    }
+
+    /// <summary>
+    /// 固定イベントは同じ週に2本出ない（issue #1276）。<c>EventScheduler.Week</c> は該当する Fixed を全部出すので、
+    /// 週が重なると別々の場面の会話が同じ週に並ぶ（文化祭とドラフト会議が第28週で重なっていた）。
+    /// </summary>
+    [Fact]
+    public void FixedEvents_DoNotShareACalendarWeek()
+    {
+        var clashes = RepositoryEvents().Where(e => e.Kind == EventKind.Fixed)
+            .GroupBy(e => e.CalendarWeek).Where(g => g.Count() > 1)
+            .Select(g => $"第{g.Key}週: {string.Join(", ", g.Select(e => e.Id))}").ToList();
+        Assert.Empty(clashes);
     }
 
     /// <summary>スカウトの節目の会話（issue #1035）は週次抽選に載らない System で、スカウトが話す。出すのは判定（ScoutMilestones）。</summary>

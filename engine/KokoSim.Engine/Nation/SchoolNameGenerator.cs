@@ -50,7 +50,7 @@ public static class SchoolNameGenerator
             // 県別地名 → 無ければ共有地名。リスト選択は乱数を消費しない（Pick が1ドロー消費）。
             var places = PlacesFor(v, prefId);
             var place = Pick(places, rng);
-            var suffix = Pick(v.PublicSuffixes, rng);
+            var suffix = AvoidRepeat(place, v.PublicSuffixes, PickIndex(v.PublicSuffixes, rng));
             return (place + suffix + "高校", Establishment.Public);
         }
     }
@@ -73,6 +73,25 @@ public static class SchoolNameGenerator
     /// <summary><see cref="Pick"/> と同じ乱数の使い方で添字を返す（空なら -1・乱数を消費しない）。</summary>
     private static int PickIndex(IReadOnlyList<string> list, IRandomSource rng)
         => list.Count == 0 ? -1 : rng.NextInt(0, list.Count);
+
+    /// <summary>字が重なる組み合わせか（「南陽南陽」「湘南南」「仙台台」）。地名の末尾が接尾の先頭字か接尾そのもの。</summary>
+    public static bool RepeatsCharacters(string place, string suffix)
+        => place.Length > 0 && suffix.Length > 0 && (place[^1] == suffix[0] || place.EndsWith(suffix, StringComparison.Ordinal));
+
+    /// <summary>
+    /// 引いた接尾が地名と字が重なるなら、<b>乱数を使わずに</b>接尾を隣へずらす（全部重なる異常時は引いたまま）。
+    /// ドロー数は変わらない＝重ならなかった学校の名前も、強さ・名声・校風の生成列も変わらない。
+    /// </summary>
+    private static string AvoidRepeat(string place, IReadOnlyList<string> suffixes, int index)
+    {
+        if (index < 0) return "";
+        for (var d = 0; d < suffixes.Count; d++)
+        {
+            var s = suffixes[(index + d) % suffixes.Count];
+            if (!RepeatsCharacters(place, s)) return s;
+        }
+        return suffixes[index];
+    }
 
     /// <summary>
     /// 実在校の名前に当たったら、<b>乱数を使わずに</b>接尾を隣へずらす（全部だめなら語幹も隣へ）。

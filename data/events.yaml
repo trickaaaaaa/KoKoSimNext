@@ -99,9 +99,10 @@ events:
           - who: narration
             say: "翌朝、いつもより静かなグラウンドに、それでも全員が揃っていた。"
 
+  # 10月第3週。第28週（指名の週）は draft_meeting が使う＝同じ週に Fixed が2本出ないよう1週前に置く（EventTableTests が固定）。
   - id: culture_festival
     kind: Fixed
-    calendar_week: 28
+    calendar_week: 27
     text: "文化祭。束の間の休息。"
     variants:
       - lines:
@@ -521,15 +522,6 @@ events:
             say: "同じ校庭に三つの部が並んでいる。打球が隣の陣地へ飛ぶたび、声が上がる。"
           - who: player
             say: "すみませーん！　ボール取ってくださーい！"
-
-  # 争奪戦（能動勧誘・設計書04 §2.2・issue #588）。
-  # 発火のタイミングは週次の抽選ではなく「訪問1回ごと」なので、確率は
-  # coefficients.yaml recruiting.rival_event_prob が持つ（週次イベントの weight は使わない）。
-  # ここはイベント表としての登録と文言の正典で、UI もこの言い回しに合わせる。
-  - id: recruit_rival_move
-    kind: Random
-    weight: 0.0
-    text: "訪問した。だが競合校も動いたようだ。"
 
   # --- システムイベント（issue #610〜）---
   # 週次抽選には載せず（kind: System）、実際に起きた出来事から**主役つき**で呼ばれる。

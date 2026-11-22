@@ -85,7 +85,6 @@ injuries:
       weekly: 0.10
       home_collision: 1.0
       fence_crash: 0.8
-      sliding: 0.6
 
   - id: Inflammation
     name: 疲労性炎症

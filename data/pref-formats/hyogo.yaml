@@ -6,7 +6,6 @@ snapshot_year: 2025
 region: kinki
 districts: [神戸, 阪神, 播淡, 但丹, 東西播]   # 5地区（各地区内にA〜Fブロック）
 district_assignment: geographic
-regional_berths: 3            # 大阪・兵庫は毎年固定3
 seed_exemption: true          # 夏甲子園出場の東洋大姫路を県大会推薦校に追加
 stages:
   - name: 地区予選
@@ -22,9 +21,9 @@ stages:
   - name: 県大会
     type: knockout
     entries: 41               # 地区予選40（5地区×8）＋ 推薦1（東洋大姫路）。実在は56
-# 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=神戸総合運動公園、序盤=市営級プールから抽選
+# 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=明石公園第一野球場（秋の会場・設計書13 §6.4）、序盤=市営級プールから抽選
 stadiums:
-  final: hyogo_final
+  final: hyogo_autumn_final
   early: [municipal_small_01, municipal_small_02]
 notes:
   - 実在の県大会は56チーム＝地区予選勝ち上がり55＋夏甲子園校の推薦1（本ゲームは校数規模に合わせ41）
