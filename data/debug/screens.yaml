@@ -68,6 +68,27 @@ screens:
       - show: TrainingPlan
       - shot: 01-training-plan
 
+  - id: training-plan-details-1287
+    name: "練習計画の細部（戻ると球種チャート・モーダルの状態・トースト・Esc。issue #1287）"
+    steps:
+      - new_game: {seed: 1}
+      - show: TrainingPlan
+      - call: OpenModal(0)
+      - click: tab-abil
+      - wait: 5
+      - shot: 01-abil-first
+      - show: HomeDashboard
+      - show: TrainingPlan
+      - wait: 5
+      - shot: 02-after-return-closed
+      - call: OpenModal(0)
+      - click: tab-abil
+      - wait: 5
+      - shot: 03-abil-second
+      - click: template-save
+      - wait: 3
+      - shot: 04-toast-over-scrim
+
   - id: player-detail-radar-1279
     name: "選手詳細のレーダーの格子色（PR #1370・issue #1279 項目2）"
     size: {w: 1600, h: 1500}
