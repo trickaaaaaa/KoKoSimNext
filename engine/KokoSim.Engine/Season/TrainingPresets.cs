@@ -11,18 +11,18 @@ public static class TrainingPresets
     /// <summary>練習時間の最小刻み[分]。配分は必ずこの倍数になる（UIの±ステップと共有）。</summary>
     public const int StepMinutes = 10;
 
-    // 各プリセットのメニュー群＋相対重み（末尾に休養1枠）。重みはメニュー配分の厚み（データ駆動化余地あり）。
+    // 各プリセットのメニュー群＋相対重み（休養枠は置かない＝配分合計が budget ちょうどになる・issue #1224）。重みはメニュー配分の厚み（データ駆動化余地あり）。
     private static readonly (TrainingMenu Menu, double Weight)[] PitcherAuto =
     {
         (TrainingMenu.Pitching, 1), (TrainingMenu.BreakingBall, 1), (TrainingMenu.Running, 1),
-        (TrainingMenu.VelocityTraining, 1), (TrainingMenu.Rest, 1),
+        (TrainingMenu.VelocityTraining, 1)
     };
 
     private static readonly (TrainingMenu Menu, double Weight)[] BatterAuto =
     {
         (TrainingMenu.Batting, 1), (TrainingMenu.PowerHitting, 1), (TrainingMenu.PlateDiscipline, 1),
         (TrainingMenu.Strength, 1), (TrainingMenu.Defense, 1), (TrainingMenu.BaseRunning, 1),
-        (TrainingMenu.Throwing, 1), (TrainingMenu.Bunt, 1), (TrainingMenu.Rest, 1),
+        (TrainingMenu.Throwing, 1), (TrainingMenu.Bunt, 1)
     };
 
     // バランス型（練習計画を組んでいない選手の既定でもある）。全員共通の配分＝ゲームが判定した
@@ -32,25 +32,24 @@ public static class TrainingPresets
     {
         (TrainingMenu.Batting, 2), (TrainingMenu.Pitching, 1), (TrainingMenu.Defense, 1),
         (TrainingMenu.BaseRunning, 1), (TrainingMenu.Strength, 1), (TrainingMenu.Throwing, 1),
-        (TrainingMenu.Rest, 1),
     };
 
     private static readonly (TrainingMenu Menu, double Weight)[] DefenseFocus =
     {
         (TrainingMenu.Defense, 3), (TrainingMenu.Throwing, 2), (TrainingMenu.DefenseInfield, 2),
-        (TrainingMenu.Batting, 1), (TrainingMenu.Rest, 1),
+        (TrainingMenu.Batting, 1)
     };
 
     private static readonly (TrainingMenu Menu, double Weight)[] AceDevelopment =
     {
         (TrainingMenu.Pitching, 3), (TrainingMenu.VelocityTraining, 2), (TrainingMenu.BreakingBall, 2),
-        (TrainingMenu.Running, 1), (TrainingMenu.Rest, 1),
+        (TrainingMenu.Running, 1)
     };
 
     private static readonly (TrainingMenu Menu, double Weight)[] SluggerDevelopment =
     {
         (TrainingMenu.PowerHitting, 3), (TrainingMenu.Batting, 2), (TrainingMenu.Strength, 2),
-        (TrainingMenu.Defense, 1), (TrainingMenu.Rest, 1),
+        (TrainingMenu.Defense, 1)
     };
 
     /// <summary>プランを実効配分（分）へ解決する。</summary>
