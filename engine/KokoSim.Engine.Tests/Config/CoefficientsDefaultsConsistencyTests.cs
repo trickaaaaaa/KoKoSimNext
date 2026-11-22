@@ -76,6 +76,20 @@ public sealed class CoefficientsDefaultsConsistencyTests
             return;
         }
 
+        // 辞書: 件数だけでなく鍵ごとに値を比べる（KeyValuePair は Key/Value が CanWrite=false で、
+        // 下の書き込み可能プロパティ走査に入らないため素通しになっていた・issue #1212）。
+        if (actual is IDictionary ad && expected is IDictionary ed)
+        {
+            foreach (var k in ed.Keys.Cast<object>().Union(ad.Keys.Cast<object>()))
+            {
+                var kp = $"{path}[{Fmt(k)}]";
+                if (!ed.Contains(k)) mismatches.Add($"{kp}: 既定=(なし) / yaml={Fmt(ad[k])}");
+                else if (!ad.Contains(k)) mismatches.Add($"{kp}: 既定={Fmt(ed[k])} / yaml=(なし)");
+                else CompareRecursive(kp, ed[k], ad[k], mismatches);
+            }
+            return;
+        }
+
         if (actual is IEnumerable ae && expected is IEnumerable ee)
         {
             var al = ae.Cast<object?>().ToList();
@@ -89,12 +103,16 @@ public sealed class CoefficientsDefaultsConsistencyTests
             return;
         }
 
-        // 係数オブジェクト（KokoSim 名前空間のレコード/クラス）: 書き込み可能プロパティを再帰比較する。
+        // 係数オブジェクト（KokoSim 名前空間のレコード/クラス）: 書き込み可能プロパティと public フィールドを再帰比較する。
         // 計算プロパティ（get-only）は CanWrite==false なので自動的に対象外になる。
         foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (!p.CanWrite || p.GetIndexParameters().Length > 0) continue;
             CompareRecursive($"{path}.{p.Name}", p.GetValue(expected), p.GetValue(actual), mismatches);
+        }
+        foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
+        {
+            CompareRecursive($"{path}.{f.Name}", f.GetValue(expected), f.GetValue(actual), mismatches);
         }
     }
 

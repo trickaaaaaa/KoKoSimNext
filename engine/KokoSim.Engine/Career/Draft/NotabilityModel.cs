@@ -11,22 +11,24 @@ namespace KokoSim.Engine.Career.Draft;
 /// </summary>
 public static class NotabilityModel
 {
-    // 役割別の能力加重（合計1.0）。投手加重は用語集 PitcherComposite と同一（球速単独で決まらない）。
+    // 役割別の能力加重（合計1.0）。投手加重は投手総合（PitcherComposite）と同じ重みを TeamStrengthCoefficients から引く
+    // （球速単独で決まらない・重みの正典を1か所に保つ・issue #1212）。
     private static readonly (AbilityKind Kind, double Weight)[] BatterWeights =
     {
         (AbilityKind.Contact, 0.25), (AbilityKind.Power, 0.25), (AbilityKind.Speed, 0.15),
         (AbilityKind.Fielding, 0.15), (AbilityKind.ArmStrength, 0.10), (AbilityKind.Catching, 0.10),
     };
-    private static readonly (AbilityKind Kind, double Weight)[] PitcherWeights =
+    private static (AbilityKind Kind, double Weight)[] PitcherWeights(TeamStrengthCoefficients strength) => new[]
     {
-        (AbilityKind.Velocity, 0.40), (AbilityKind.Control, 0.25),
-        (AbilityKind.Stamina, 0.15), (AbilityKind.PitchRank, 0.20),
+        (AbilityKind.Velocity, strength.VelocityWeight), (AbilityKind.Control, strength.ControlWeight),
+        (AbilityKind.Stamina, strength.StaminaWeight), (AbilityKind.PitchRank, strength.PitchRankWeight),
     };
 
     /// <summary>選手の注目度（0〜100）。stats は未出場なら null 可（実績は中立50扱い）。</summary>
-    public static double Compute(DevelopingPlayer player, PlayerStats? stats, DraftCoefficients c)
+    public static double Compute(
+        DevelopingPlayer player, PlayerStats? stats, DraftCoefficients c, TeamStrengthCoefficients strength)
     {
-        var ability = AbilityScore(player, c);
+        var ability = AbilityScore(player, c, strength);
         var perf = PerformanceScore(player, stats, c);
         var n = c.AbilityWeight * ability + c.PerformanceWeight * perf;
         return Clamp(n, 0, 100);
@@ -39,12 +41,12 @@ public static class NotabilityModel
     /// 役割はスカウトが判定するのであって選手が持つ属性ではない（設計書20 §2.1 改訂）。
     /// 投打とも強い個体は高い側で評価される＝二刀流が正しく注目される。
     /// </summary>
-    public static double AbilityScore(DevelopingPlayer player, DraftCoefficients c)
-        => Math.Max(AbilityScoreWith(player, PitcherWeights, c), AbilityScoreWith(player, BatterWeights, c));
+    public static double AbilityScore(DevelopingPlayer player, DraftCoefficients c, TeamStrengthCoefficients strength)
+        => Math.Max(AbilityScoreWith(player, PitcherWeights(strength), c), AbilityScoreWith(player, BatterWeights, c));
 
     /// <summary>投手軸としての能力合成スコア（0〜100）。表示・比較用に個別で引けるようにしてある。</summary>
-    public static double PitcherAbilityScore(DevelopingPlayer player, DraftCoefficients c)
-        => AbilityScoreWith(player, PitcherWeights, c);
+    public static double PitcherAbilityScore(DevelopingPlayer player, DraftCoefficients c, TeamStrengthCoefficients strength)
+        => AbilityScoreWith(player, PitcherWeights(strength), c);
 
     /// <summary>打者軸としての能力合成スコア（0〜100）。</summary>
     public static double BatterAbilityScore(DevelopingPlayer player, DraftCoefficients c)

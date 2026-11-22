@@ -183,6 +183,7 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
             RecoveryCoefficients.StealThrowScatterCatchingReliefSlope, RecoveryCoefficients.StealThrowScatterCatchingReliefMinFactor)
         : 0.0;
 
+    // 表示専用。C# 既定は YAML と一致をテストで固定している（Balance CLI の係数差し替えは絵に反映しない）。
     private static readonly Game.BaserunningCoefficients RecoveryCoefficients = new();
 
     /// <summary>逸れた送球の終点の高さ[m]の基準（受け手の胸の高さ＝3D守備ビューの送球の捕球高さと同じ値）。</summary>

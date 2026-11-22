@@ -1071,9 +1071,11 @@ public static partial class AtBatSimulation
         return new AtBatContext
         {
             Aerodynamics = bundle.Aerodynamics,
+            Mound = bundle.Mound,
             Pitching = bundle.Pitching,
             Batting = bundle.Batting,
             Fielding = bundle.Fielding,
+            Baserunning = bundle.Baserunning,
             Field = geom,
             Fielders = geom.StandardAlignment(),
         };

@@ -1,3 +1,4 @@
+using System.Linq;
 using KokoSim.Config;
 using Xunit;
 
@@ -67,5 +68,24 @@ public sealed class DraftLoaderTests
         Assert.InRange(c.CeilingBlend, 0.0, 1.0);
         // 足切りランクは C# 既定（Unity 実プレイの真値）と一致していること（片方だけ変えない）。
         Assert.Equal(new KokoSim.Engine.Career.Draft.DraftCoefficients().CandidateMinTier, c.CandidateMinTier);
+    }
+
+    [Fact]
+    public void RepositoryDraftFile_MatchesCsharpDefaults()
+    {
+        // Unity 実プレイは YAML を読まず C# 既定で走る（不変条件#4）。record の値等価で全項目を比べる。
+        var c = DraftLoader.LoadFromFile(YamlSentinelSupport.FindDataFile("draft.yaml"));
+        Assert.Equal(new KokoSim.Engine.Career.Draft.DraftCoefficients(), c);
+    }
+
+    [Fact]
+    public void EveryNumericYamlLeaf_ReachesTheModel()
+    {
+        var sentinel = YamlSentinelSupport.Build(YamlSentinelSupport.FindDataFile("draft.yaml"));
+        var c = DraftLoader.Parse(sentinel.Text);
+        var seen = YamlSentinelSupport.NumbersOf(c).Select(YamlSentinelSupport.Key).ToHashSet();
+
+        var dropped = sentinel.Markers.Where(m => !seen.Contains(YamlSentinelSupport.Key(m.Value))).Select(m => m.Key).ToList();
+        Assert.True(dropped.Count == 0, "data/draft.yaml の数値が Model に届かない:\n" + string.Join("\n", dropped));
     }
 }

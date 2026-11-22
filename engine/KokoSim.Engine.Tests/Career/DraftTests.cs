@@ -77,7 +77,23 @@ public sealed class DraftTests
         var p = Batter(1, 3, level: 80, cap: 90);
 
         // 加重合計1.0なので cur=80, cap=90 → 0.65*80 + 0.35*90 = 83.5
-        Assert.Equal(83.5, NotabilityModel.AbilityScore(p, c), 3);
+        Assert.Equal(83.5, NotabilityModel.AbilityScore(p, c, new TeamStrengthCoefficients()), 3);
+    }
+
+    [Fact]
+    public void PitcherAbilityScore_UsesTeamStrengthPitcherWeights()
+    {
+        // 投手総合の重みの正典は TeamStrengthCoefficients（issue #1212）。球速だけ重くすれば球速の高い投手の評価が上がる。
+        var c = new DraftCoefficients { CeilingBlend = 0 };
+        var p = Pitcher(1, 3, level: 50, cap: 50);
+        p.SetLevel(AbilityKind.Velocity, 90);
+        var baseScore = NotabilityModel.PitcherAbilityScore(p, c, new TeamStrengthCoefficients());
+        var heavy = NotabilityModel.PitcherAbilityScore(p, c, new TeamStrengthCoefficients
+        {
+            VelocityWeight = 0.70, ControlWeight = 0.10, StaminaWeight = 0.10, PitchRankWeight = 0.10,
+        });
+        Assert.Equal(50 + 0.40 * 40, baseScore, 6);
+        Assert.Equal(50 + 0.70 * 40, heavy, 6);
     }
 
     [Fact]
@@ -315,7 +331,7 @@ public sealed class DraftTests
         var p = Batter(1, 3, level: 55, cap: 90, name: "D打者");
         var stats = BattingStats(1, games: 14, pa: 56, ab: 50, hits: 25, hr: 8);   // OPS 1.0超
 
-        var n = NotabilityModel.Compute(p, stats, c);
+        var n = NotabilityModel.Compute(p, stats, c, new TeamStrengthCoefficients());
         Assert.Equal(Tier.D, PlayerStrengthProfile.Compute(p, S).BattingTier);
         Assert.True(NotabilityModel.BandOf(n, c) >= DraftRankBand.MiddleRound,
             $"床が無ければ中位圏に届くはず（notability={n:F1}）");

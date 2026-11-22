@@ -540,7 +540,7 @@ public static partial class GameSimulation
         };
     }
 
-    internal static GameContext BuildContext(string? coefficientsPath, FieldGeometry? field = null)
+    public static GameContext BuildContext(string? coefficientsPath, FieldGeometry? field = null)
     {
         var geom = field ?? new FieldGeometry();
         if (coefficientsPath is null) return new GameContext { Field = geom };
@@ -548,11 +548,14 @@ public static partial class GameSimulation
         return new GameContext
         {
             Aerodynamics = b.Aerodynamics,
+            Mound = b.Mound,
             Pitching = b.Pitching,
             Batting = b.Batting,
             Fielding = b.Fielding,
             Baserunning = b.Baserunning,
             Fatigue = b.Fatigue,
+            PitchRecovery = b.PitchRecovery,
+            Momentum = b.Momentum,
             // Issue #120/#803/#971: 天候（月別気温）モデル。null＝weather ブロック無し＝無効。
             // Heavy の summer 帯（games_10k_summer）は夏の甲子園（8月）想定なので8月ぶんを使う（従来と同値）。
             Weather = b.Weather?.ForMonth(8),
