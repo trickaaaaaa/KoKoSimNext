@@ -330,6 +330,7 @@ public sealed class TournamentPreviewTests
     public void Build_RanksAndMarks_TopSchools()
     {
         var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会");
+        var favSchool = Field().First(s => s.Name == "強打学園");
         // ◎1・○2・▲1（＋無印は含めない）。
         Assert.Equal(1, p.Contenders.Count(c => c.Mark == ContenderMark.Favorite));
         Assert.Equal(2, p.Contenders.Count(c => c.Mark == ContenderMark.Contender));
@@ -339,8 +340,42 @@ public sealed class TournamentPreviewTests
         var fav = p.Contenders.First(c => c.Mark == ContenderMark.Favorite);
         Assert.Equal("強打学園", fav.Name);
         Assert.Equal(1, fav.Seed);
-        Assert.Equal(Tier.A, fav.Tier);
+        Assert.Equal(ScoutedTeamProfile.OverallTier(StrengthTeamFactory.ForSchool(favSchool, 1), new TeamStrengthCoefficients()), fav.Tier);
         Assert.Equal(ContenderMark.Favorite, p.Contenders[0].Mark); // 先頭は◎
+    }
+
+    /// <summary>
+    /// 展望に出す等級は偵察結果（ScoutedTeamProfile）と一致する（#1303・#737）。
+    /// 学校の抽象的な強さが高くても、実際に出るチームが弱ければ展望もそのチームの等級を出す。
+    /// </summary>
+    [Fact]
+    public void Tier_MatchesScoutedTeamProfile_NotSchoolTier()
+    {
+        var field = Field();
+        const int year = 2;
+        var coeff = new TeamStrengthCoefficients();
+        // 強打学園（強さ88）の実チームだけ、はるかに弱い学校のロスターで差し替える。
+        var weak = StrengthTeamFactory.ForSchool(Sch(99, 20, name: "弱い代役"), year);
+        Team Provider(School s, int y) => s.Name == "強打学園" ? weak : StrengthTeamFactory.ForSchool(s, y);
+
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", field, berths: 2, "地区大会", year, teamProvider: Provider);
+        foreach (var c in p.Contenders)
+        {
+            var school = field.First(s => s.Name == c.Name);
+            Assert.Equal(ScoutedTeamProfile.OverallTier(Provider(school, year), coeff), c.Tier);
+        }
+        foreach (var r in p.Rosters)
+        {
+            var school = field.First(s => s.Name == r.SchoolName);
+            Assert.Equal(ScoutedTeamProfile.OverallTier(Provider(school, year), coeff), r.Tier);
+        }
+
+        var fav = field.First(s => s.Name == "強打学園");
+        var favTier = p.Contenders.First(c => c.Name == "強打学園").Tier;
+        Assert.NotEqual(fav.Tier, favTier);
+
+        var detail = TournamentPreviewBuilder.BuildRosterFor(fav, field, berths: 2, year, teamProvider: Provider);
+        Assert.Equal(favTier, detail.Tier);
     }
 
     [Fact]
