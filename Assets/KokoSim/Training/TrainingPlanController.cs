@@ -105,6 +105,7 @@ namespace KokoSim.Unity.Training
             _copyOpen = true;
             Render();
             _copyModal?.BringToFront();
+            _root.Q<Label>("toast")?.BringToFront();
             _copyModal?.Focus();
         }
 
@@ -121,6 +122,7 @@ namespace KokoSim.Unity.Training
             _abilityTab = false;   // 開き直しは常に配分タブから（モーダルの主目的は練習設定）
             Render();
             _modal?.BringToFront();
+            _root.Q<Label>("toast")?.BringToFront();
             _modal?.Focus();
         }
 

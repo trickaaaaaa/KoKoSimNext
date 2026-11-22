@@ -883,8 +883,10 @@ namespace KokoSim.Unity.Match
             {
                 var l = MakeTokenLabel();
                 _runnerLabels.Add(l);
-                // 判定の器より後ろに足すと判定が走者ラベルの下に潜る（走者が増えた1フレームだけ）。常に判定の手前へ挿す。
-                Insert(IndexOf(_judgementHost), l);
+                // 自前の判定の器より後ろに足すと判定が走者ラベルの下に潜る（走者が増えた1フレームだけ）ので手前へ挿す。外部の器は盤面の外にある＝子でないので末尾へ足す。
+                var at = _judgementOwned && _judgementHost != null ? IndexOf(_judgementHost) : -1;
+                if (at >= 0) Insert(at, l);
+                else Add(l);
             }
             for (var i = 0; i < _runnerLabels.Count; i++)
             {
