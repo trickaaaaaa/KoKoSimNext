@@ -199,3 +199,18 @@ screens:
       - shot: 02-training
       - show: MemberSetting
       - shot: 03-member
+
+  # ── 昼の配色への読み替え漏れ（issue #1286）──
+
+  - id: day-palette-1286
+    name: "チーム総合力の分析文・スクロールバー・選択行のずれ・施設台帳の行高（issue #1286）"
+    steps:
+      - new_game: {seed: 1}
+      - show: TeamStrength
+      - shot: 01-team-strength
+      - show: TrainingPlan
+      - shot: 02-training-unselected
+      - click: .trow[2]
+      - shot: 03-training-selected
+      - show: ManagementScreen
+      - shot: 04-management
