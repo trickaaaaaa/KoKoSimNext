@@ -1824,6 +1824,7 @@ public static class CoefficientsLoader
         private static readonly TrainingCoefficients D = new();
         public double BaseMainExp { get; set; } = D.BaseMainExp;
         public double SubFactor { get; set; } = D.SubFactor;
+        public List<SubFactorOverrideDto>? SubFactorOverrides { get; set; }
         public double FacilityCoef { get; set; } = D.FacilityCoef;
         public double CoachingLevel { get; set; } = D.CoachingLevel;
         public double CoachingSlope { get; set; } = D.CoachingSlope;
@@ -1849,6 +1850,9 @@ public static class CoefficientsLoader
         {
             BaseMainExp = BaseMainExp,
             SubFactor = SubFactor,
+            SubFactorOverrides = SubFactorOverrides is null
+                ? new TrainingCoefficients().SubFactorOverrides
+                : SubFactorOverrides.Select(o => o.ToModel()).ToList(),
             FacilityCoef = FacilityCoef,
             CoachingLevel = CoachingLevel,
             CoachingSlope = CoachingSlope,
@@ -1872,6 +1876,15 @@ public static class CoefficientsLoader
             MatchLeadExp = MatchLeadExp,
             MatchBaserunningExp = MatchBaserunningExp,
         };
+    }
+
+    private sealed class SubFactorOverrideDto
+    {
+        public TrainingMenu Menu { get; set; }
+        public AbilityKind Ability { get; set; }
+        public double Factor { get; set; }
+
+        public SubFactorOverride ToModel() => new() { Menu = Menu, Ability = Ability, Factor = Factor };
     }
 
     private sealed class FacilityTierDto
