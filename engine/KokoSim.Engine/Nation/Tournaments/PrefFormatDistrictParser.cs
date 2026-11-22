@@ -29,7 +29,8 @@ public static class PrefFormatDistrictParser
     /// <para><see cref="Names"/> は YAML の <c>districts:</c>（地区の実名・地区Id順）。数が <see cref="Districts"/> と
     /// 食い違う県は名前を持たない扱い（空）＝表示側は番号で出す（issue #725）。</para>
     public sealed record AutumnDistrictRule(string Pref, int Districts, int AdvancePerDistrict, bool SeedExemption,
-        IReadOnlyList<string>? Names = null, int TeamsPerBlock = 0, int AdvancePerBlock = 0)
+        IReadOnlyList<string>? Names = null, int TeamsPerBlock = 0, int AdvancePerBlock = 0,
+        IReadOnlyList<double>? Weights = null)
     {
         /// <summary>地区予選が「地区の中のブロックごとのリーグ戦」か（神奈川・issue #772）。偽＝地区ごとの1トーナメント。</summary>
         public bool IsBlockLeague => TeamsPerBlock >= 2;
@@ -53,6 +54,7 @@ public static class PrefFormatDistrictParser
     {
         string pref = "";
         var names = new List<string>();
+        var weights = new List<double>();
         var geographic = false;
         var seedExemption = false;
         var foundAdvance = 1;
@@ -104,6 +106,10 @@ public static class PrefFormatDistrictParser
                 if (k0 == null) continue;
                 if (k0 == "pref") pref = v0;
                 else if (k0 == "districts") names = ParseInlineList(v0);
+                else if (k0 == "district_weights")
+                    weights = ParseInlineList(v0)
+                        .Select(x => double.TryParse(x, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : double.NaN)
+                        .ToList();
                 else if (k0 == "district_assignment") geographic = v0 == "geographic";
                 else if (k0 == "seed_exemption") seedExemption = v0 == "true";
                 else if (k0 == "stages") inStages = true;
@@ -155,7 +161,8 @@ public static class PrefFormatDistrictParser
         CloseStage();
 
         return geographic
-            ? new AutumnDistrictRule(pref, found, foundAdvance, seedExemption, names, foundTeamsPerBlock, foundAdvancePerBlock)
+            ? new AutumnDistrictRule(pref, found, foundAdvance, seedExemption, names, foundTeamsPerBlock, foundAdvancePerBlock,
+                weights.Count == found && weights.All(w => w > 0) ? weights : null)
             : new AutumnDistrictRule(pref, 0, 1, false);
     }
 
@@ -183,6 +190,20 @@ public static class PrefFormatDistrictParser
             if (rule.Districts <= 0) continue;
             var id = PrefectureNames.IdOf(rule.Pref);
             if (id >= 0) map[id] = rule;
+        }
+        return map;
+    }
+
+    /// <summary>複数県ぶんの YAML テキストから「県Id → 地区ごとの規模比率」を作る（重みの無い・不正な県は載せない）。</summary>
+    public static IReadOnlyDictionary<int, IReadOnlyList<double>> BuildWeights(IEnumerable<string> yamlTexts)
+    {
+        var map = new Dictionary<int, IReadOnlyList<double>>();
+        foreach (var text in yamlTexts)
+        {
+            var rule = ParseRule(text);
+            if (rule.Districts <= 0 || rule.Weights is null) continue;
+            var id = PrefectureNames.IdOf(rule.Pref);
+            if (id >= 0) map[id] = rule.Weights;
         }
         return map;
     }

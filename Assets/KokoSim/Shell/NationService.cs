@@ -194,7 +194,7 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         private static Nation GeneratedNation => _generated ??= NationGenerator.Generate(
             SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026),
-            districtPlan: DistrictPlanProvider.Plan);
+            districtPlan: DistrictPlanProvider.Plan, districtWeights: DistrictPlanProvider.Weights);
 
         /// <summary>
         /// 監督の転任（設計書04 §1.3・issue #641）。旧校を AI校として全国に残し（旧部員はそのロスターへ）、

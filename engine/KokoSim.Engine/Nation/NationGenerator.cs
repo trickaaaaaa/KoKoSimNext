@@ -108,7 +108,8 @@ public static class NationGenerator
     /// </summary>
     public static Nation Generate(
         SchoolNameVocab vocab, NationCoefficients coeff, IRandomSource rng,
-        IReadOnlyDictionary<int, int>? districtPlan = null)
+        IReadOnlyDictionary<int, int>? districtPlan = null,
+        IReadOnlyDictionary<int, IReadOnlyList<double>>? districtWeights = null)
     {
         var prefectures = new List<Prefecture>(47);
         for (var i = 0; i < 47; i++)
@@ -125,11 +126,13 @@ public static class NationGenerator
         foreach (var pref in prefectures)
         {
             var districtCount = districtPlan is not null && districtPlan.TryGetValue(pref.Id, out var dc) ? dc : 0;
+            IReadOnlyList<double>? weights = null;
+            districtWeights?.TryGetValue(pref.Id, out weights);
             // 校名は県内でユニーク（同一県の大会・プレビューで同名校が並ばない）。県をまたぐ重複は許容（実在同様）。
             var usedNames = new HashSet<string>();
             for (var j = 0; j < pref.SchoolCount; j++)
             {
-                schools.Add(CreateSchool(id++, pref.Id, vocab, coeff, rng, usedNames, districtCount));
+                schools.Add(CreateSchool(id++, pref.Id, vocab, coeff, rng, usedNames, districtCount, weights));
             }
         }
 
@@ -166,7 +169,7 @@ public static class NationGenerator
 
     private static School CreateSchool(
         int id, int prefId, SchoolNameVocab vocab, NationCoefficients coeff, IRandomSource rng,
-        HashSet<string> usedNames, int districtCount = 0)
+        HashSet<string> usedNames, int districtCount = 0, IReadOnlyList<double>? districtWeights = null)
     {
         var (baseName, establishment) = SchoolNameGenerator.Generate(vocab, rng, prefId);
         // 県内でユニーク化。名前生成の乱数消費は変えず（帯保護）、重複時のみ決定論的に接尾辞を挿入する。
@@ -192,7 +195,7 @@ public static class NationGenerator
 
         // 県内地区（地理固定割の県のみ）。独立ストリーム(Fork)で均等抽選＝他の生成列を乱さない。
         int? districtId = districtCount > 0
-            ? rng.Fork(0xD157_0000UL ^ (ulong)id).NextInt(0, districtCount)
+            ? PickDistrict(rng.Fork(0xD157_0000UL ^ (ulong)id), districtCount, districtWeights)
             : null;
 
         // 監督傾向（issue #55, 決定3: 傾向なし55% / 1個35% / 2個10%）。校風と別軸で0〜2個重なる。
@@ -213,6 +216,21 @@ public static class NationGenerator
             DistrictId = districtId,
             ManagerTraits = traits,
         };
+    }
+
+    /// <summary>地区の抽選。重みが地区数と合うときは規模比率で、無いときは従来どおり均等（乱数の使い方も従来のまま）。</summary>
+    private static int PickDistrict(IRandomSource rng, int districtCount, IReadOnlyList<double>? weights)
+    {
+        if (weights is null || weights.Count != districtCount) return rng.NextInt(0, districtCount);
+        var total = 0.0;
+        for (var i = 0; i < weights.Count; i++) total += weights[i];
+        var r = rng.NextDouble() * total;
+        for (var i = 0; i < weights.Count; i++)
+        {
+            r -= weights[i];
+            if (r < 0) return i;
+        }
+        return districtCount - 1;
     }
 
     private static readonly Match.Tactics.ManagerTrait[] AllTraits =

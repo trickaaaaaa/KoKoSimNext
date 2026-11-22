@@ -23,6 +23,25 @@ public static class DistrictPlan
         return map;
     }
 
+    /// <summary>
+    /// 県Id → 地区ごとの規模比率（<c>district_weights:</c>）。地理固定割で、重みの数が地区数と一致し全部が正の県だけ載せる
+    /// （載らない県は均等割当のまま＝既存の生成列を変えない）。
+    /// </summary>
+    public static IReadOnlyDictionary<int, IReadOnlyList<double>> BuildWeights(
+        PrefectureTable prefTable, IReadOnlyDictionary<string, PrefFormat> prefFormats)
+    {
+        var map = new Dictionary<int, IReadOnlyList<double>>();
+        foreach (var fmt in prefFormats.Values)
+        {
+            if (fmt.DistrictAssignment != DistrictAssignment.Geographic) continue;
+            var count = GeographicGroupCount(fmt);
+            if (count <= 0 || fmt.DistrictWeights.Count != count || fmt.DistrictWeights.Any(w => !(w > 0))) continue;
+            var info = prefTable.Prefectures.FirstOrDefault(p => p.Name == fmt.Pref);
+            if (info is not null) map[info.Id] = fmt.DistrictWeights;
+        }
+        return map;
+    }
+
     /// <summary>地区予選（geographic な group_split）のブロック数。無ければ0。</summary>
     private static int GeographicGroupCount(PrefFormat fmt)
     {

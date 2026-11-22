@@ -30,6 +30,7 @@ public static class PrefFormatLoader
         public int SnapshotYear { get; set; }
         public string Region { get; set; } = "";
         public List<string>? Districts { get; set; }
+        public List<double>? DistrictWeights { get; set; }
         public string DistrictAssignment { get; set; } = "none";
         public int RegionalBerths { get; set; } = 1;
         public bool SeedExemption { get; set; }
@@ -42,6 +43,7 @@ public static class PrefFormatLoader
             SnapshotYear = SnapshotYear,
             Region = Region,
             Districts = Districts ?? new List<string>(),
+            DistrictWeights = DistrictWeights ?? new List<double>(),
             DistrictAssignment = DistrictAssignment switch
             {
                 "geographic" => Engine.Nation.Tournaments.DistrictAssignment.Geographic,
