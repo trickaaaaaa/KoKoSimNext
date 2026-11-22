@@ -837,7 +837,7 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
-        /// 投球クリップのyaw候補4種（-90/0/90/180）をリリース(0.53)と直後(0.60)で撮り比べる目視決着用。
+        /// 投球クリップのyaw候補4種（-90/0/90/180）をリリース(0.508)と直後(0.60)で撮り比べる目視決着用。
         /// 出力: out/duel-stage/frame/pitchyaw_[yaw]_t[時刻].png（採用構図R-comp60）
         /// </summary>
         public static string RunPitcherYawSheet()
@@ -1274,6 +1274,29 @@ namespace KokoSim.EditorTools
             return AnkleOffset.TryGetValue(body, out v) ? v : 0f;
         }
 
+        // コマごとに SpawnBody→DestroyImmediate する検査で素体ごとに作るとマテリアルが漏れる（1回で数千個）。色ごとに1つを使い回す
+        private static readonly System.Collections.Generic.Dictionary<Color, Material> BodyMaterials =
+            new System.Collections.Generic.Dictionary<Color, Material>();
+
+        private static Material BodyMaterial(Color color)
+        {
+            Material mat;
+            if (!BodyMaterials.TryGetValue(color, out mat) || mat == null)
+            {
+                mat = new Material(Shader.Find("KokoSim/DuelStageProxyLambert")) { hideFlags = HideFlags.DontSave };
+                mat.SetColor("_BaseColor", color);
+                BodyMaterials[color] = mat;
+            }
+            return mat;
+        }
+
+        internal static void ReleaseBodyMaterials()
+        {
+            foreach (var m in BodyMaterials.Values)
+                if (m != null) Object.DestroyImmediate(m);
+            BodyMaterials.Clear();
+        }
+
         internal static GameObject SpawnBody(GameObject root, string name, Vector3 pos, float yawDeg, Color color)
         {
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
@@ -1291,8 +1314,7 @@ namespace KokoSim.EditorTools
             go.transform.localPosition = pos;
             go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
 
-            var mat = new Material(Shader.Find("KokoSim/DuelStageProxyLambert")) { hideFlags = HideFlags.DontSave };
-            mat.SetColor("_BaseColor", color);
+            var mat = BodyMaterial(color);
             foreach (var r in go.GetComponentsInChildren<Renderer>()) r.sharedMaterial = mat;
 
             var animator = go.GetComponentInChildren<Animator>();
@@ -1473,7 +1495,7 @@ namespace KokoSim.EditorTools
                 };
 
                 var sb = new StringBuilder();
-                sb.AppendLine("clip\tchestX\tchestZ\thipsX\thipsZ\tyawTo-Z\tlen");
+                sb.AppendLine("clip\tchestX\tchestZ\thipsX\thipsZ\tyawFromPlusZ\tlen");
                 foreach (var name in clips)
                 {
                     var clip = FindClip(name);
@@ -1505,7 +1527,7 @@ namespace KokoSim.EditorTools
         /// <summary>
         /// 攻撃伝令の場面（issue #1175）・サヨナラの場面（issue #1176）で使う収録の向きと、収録の頭→終わりで腰がどれだけ動くか
         /// （ルートモーション込み・素の向き yaw=0 で置いたとき）を測る。歩きの進行方向と速さを決める根拠。
-        /// 出力: 向き（入り/終わり。-Z からの角度）・腰の移動 dx/dz[m]・長さ[s]。
+        /// 出力: 向き（入り/終わり。+Z からの角度）・腰の移動 dx/dz[m]・長さ[s]。
         /// </summary>
         public static string RunBatterTimeoutProbe()
         {
@@ -1674,7 +1696,7 @@ namespace KokoSim.EditorTools
                     sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                         "{0}\t{1:F2}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F2}\t{6:F2}\t{7:F2}\t{8:F0}",
                         shortName, clip.length, d.x, d.z, dist,
-                        clip.length > 0.01f ? dist / clip.length : 0f,
+                        clip.length > 0.01f ? dist / (clip.length * (1f - 0.05f)) : 0f,   // 始点 0.05〜終点 1.0 の移動なので尺は 0.95 ループぶん
                         chest.x, chest.z, moveVsChest));
                 }
 
@@ -2008,7 +2030,7 @@ namespace KokoSim.EditorTools
                     var loc = body.transform.InverseTransformPoint(glove);
                     if (i == 0) loc0 = loc;
                     sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                        "{0}\t{1:F2}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F3}\t{8:F3}",
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F3}\t{8:F3}\t{9:F3}",
                         shortName, sec, (loc - loc0).magnitude,
                         glove.y - baseY, glove.y - Mathf.Min(lf.y, rf.y), loc.x, loc.z,
                         body.transform.position.y - baseY, low,

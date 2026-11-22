@@ -115,11 +115,14 @@ namespace KokoSim.EditorTools
             // 袖の張り出し（FlareSleeves）は上腕ボーンの軸が要る。Animator.GetBoneTransform は
             // 実体化したヒエラルキーでないと引けないので、ここだけ一時インスタンスを立てる。
             // メッシュは共有アセットなので、読む先がプレハブでも実体でも同じものになる
-            var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            GameObject inst = null;
             // 全メッシュを作り切ってから書き出す＝途中の例外で既存の資産が一部だけ消えた状態を残さない
             var baked = new List<(string Path, Mesh Mesh)>();
             try
             {
+                // 開いているシーンに載せない・保存させない（保存すると購入 FBX への参照がシーンに入る）
+                inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                inst.hideFlags = HideFlags.HideAndDontSave;
                 var anim = inst.GetComponent<Animator>();
 
                 foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
@@ -213,7 +216,7 @@ namespace KokoSim.EditorTools
             finally
             {
                 foreach (var b in baked) Object.DestroyImmediate(b.Mesh);   // 書き出せなかった複製
-                Object.DestroyImmediate(inst);
+                if (inst != null) Object.DestroyImmediate(inst);
                 Object.DestroyImmediate(suitTex);
                 Object.DestroyImmediate(pantsTex);
                 Object.DestroyImmediate(faceTex);

@@ -294,11 +294,18 @@ namespace KokoSim.EditorTools
 
                         // 2) 深度+法線（全レンダラを差し替えマテリアルで再描画→復元）
                         var saved = new Material[renderers.Length];
-                        for (int i = 0; i < renderers.Length; i++) { saved[i] = renderers[i].sharedMaterial; renderers[i].sharedMaterial = depthMat; }
-                        cam.backgroundColor = dataClear;
-                        cam.targetTexture = dataRt;
-                        Render(cam, dataRt);
-                        for (int i = 0; i < renderers.Length; i++) renderers[i].sharedMaterial = saved[i];
+                        for (int i = 0; i < renderers.Length; i++) saved[i] = renderers[i].sharedMaterial;
+                        try
+                        {
+                            for (int i = 0; i < renderers.Length; i++) renderers[i].sharedMaterial = depthMat;
+                            cam.backgroundColor = dataClear;
+                            cam.targetTexture = dataRt;
+                            Render(cam, dataRt);
+                        }
+                        finally
+                        {
+                            for (int i = 0; i < renderers.Length; i++) renderers[i].sharedMaterial = saved[i];
+                        }
 
                         postMat.SetTexture("_DataTex", dataRt);
 
@@ -406,6 +413,7 @@ namespace KokoSim.EditorTools
                 DestroyMaterials(go);
                 Object.DestroyImmediate(go);
             }
+            DuelMotionSpike.ReleaseBodyMaterials();
             var cam = GameObject.Find("~DuelStageCamera");
             if (cam != null) Object.DestroyImmediate(cam);
         }

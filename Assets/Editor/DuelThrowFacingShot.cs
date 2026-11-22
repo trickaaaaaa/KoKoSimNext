@@ -86,6 +86,9 @@ namespace KokoSim.UnityEditorTools
                                 t0 + (t1 - t0) * f / (Frames - 1), k));
                     }
 
+                    // 通しは時刻順にしか進まない。送球が重なる場面（併殺）で順不同だと、先頭より前のコマが後ろへ押し出される
+                    shots.Sort((a, b) => a.Key != b.Key ? a.Key.CompareTo(b.Key) : a.Value.CompareTo(b.Value));
+
                     var sheets = new Dictionary<int, List<Texture2D>>();
                     int next = 0;
                     float poseStep = 1f / DuelStageRig.PoseFps;

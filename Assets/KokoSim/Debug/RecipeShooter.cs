@@ -35,6 +35,8 @@ namespace KokoSim.Unity.Debugging
 
         public static void Arm(string[] ids) => UnityEditor.SessionState.SetString(ArmKey, string.Join(",", ids));
 
+        public static void Disarm() => UnityEditor.SessionState.EraseString(ArmKey);
+
         public static string RunMarkerPath => Path.Combine(OutRoot, "_capture-run.txt");
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

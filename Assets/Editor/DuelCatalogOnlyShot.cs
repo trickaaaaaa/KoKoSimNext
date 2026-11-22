@@ -53,6 +53,7 @@ namespace KokoSim.UnityEditorTools
 
         private static Texture2D Shoot(bool catalogOnly, string tag, StringBuilder sb)
         {
+            bool prevForce = DuelStageRig.ForceCatalogOnly;
             DuelStageRig.ForceCatalogOnly = catalogOnly;
             var rig = new DuelStageRig();
             try
@@ -88,7 +89,7 @@ namespace KokoSim.UnityEditorTools
             finally
             {
                 rig.Dispose();
-                DuelStageRig.ForceCatalogOnly = false;
+                DuelStageRig.ForceCatalogOnly = prevForce;
             }
         }
     }
