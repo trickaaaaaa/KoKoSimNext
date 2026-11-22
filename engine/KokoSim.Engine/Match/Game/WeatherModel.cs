@@ -152,6 +152,7 @@ public static class WeatherModel
         new(12, 12.0, 3.0, 4.0, 20.0, 0.25),
     };
 
+    // 実ゲームの入口は YAML を読まずこの既定の表を引く。YAML との一致は CoefficientsDefaultsConsistencyTests が固定する（issue #1212）。
     private static readonly MonthlyWeatherCoefficients Default = new();
 
     /// <summary>暦月を 1〜12 へ折り返す（0→12, 13→1）。</summary>

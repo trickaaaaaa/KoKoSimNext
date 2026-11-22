@@ -170,6 +170,11 @@ public sealed class InjuryAndEventsTests
         low.SetLevel(AbilityKind.Contact, 60);
         var during = RosterTeamBuilder.ToPlayer(low, FieldPosition.LeftField);
         Assert.True(during.Contact < 60);
+
+        // 注入した係数が効く（new で既定を取らない・issue #1212）: 係数1.0＝スランプでも落ちない。
+        var noDrop = RosterTeamBuilder.ToPlayer(low, FieldPosition.LeftField,
+            growthCoeff: new GrowthEventCoefficients { SlumpPerformanceFactor = 1.0 });
+        Assert.Equal(60, noDrop.Contact);
     }
 
     // ===== イベント→ConditionValueフィードバック（設計書02 §3.3「イベントで上下」, issue #46） =====

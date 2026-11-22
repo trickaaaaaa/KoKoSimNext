@@ -4,8 +4,8 @@ namespace KokoSim.Engine.Career.Draft;
 
 /// <summary>
 /// ドラフト（NPB指名）の係数（設計書20, YAML駆動＝不変条件#4）。
-/// C# 既定値が Unity 実プレイの真値、data/draft.yaml は sim/テスト調整用
-/// （既存の sim-vs-unity 係数分割に倣う）。注目度は「評価スコア」であり
+/// 正典は data/draft.yaml（不変条件#4）。Unity 実プレイは YAML を読まず C# 既定で走るので、
+/// 両者は常に一致していなければならない（<c>DraftLoaderTests</c> が全項目の一致を固定する）。注目度は「評価スコア」であり
 /// 打席・打球・守備の解決確率ではない＝二層構造（不変条件#1）の対象外。
 /// </summary>
 public sealed record DraftCoefficients

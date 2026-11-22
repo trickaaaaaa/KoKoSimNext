@@ -199,7 +199,8 @@ public static class RosterTeamBuilder
         LineupSpec spec,
         InjuryCoefficients? injuryCoeff = null,
         FieldingCoefficients? fieldingCoeff = null,
-        Players.PersonalityCoefficients? personalityCoeff = null)
+        Players.PersonalityCoefficients? personalityCoeff = null,
+        GrowthEventCoefficients? growthCoeff = null)
     {
         if (spec.BattingOrder.Count != 9)
             throw new ArgumentException("打順はちょうど9人必要です。", nameof(spec));
@@ -232,7 +233,7 @@ public static class RosterTeamBuilder
         }
 
         Player Project(DevelopingPlayer dp, FieldPosition pos)
-            => ToPlayer(dp, pos, injuryCoeff, fieldingCoeff, personalityCoeff);
+            => ToPlayer(dp, pos, injuryCoeff, fieldingCoeff, personalityCoeff, growthCoeff);
 
         var order = new List<Player>(9);
         for (var i = 0; i < 9; i++)
@@ -242,7 +243,7 @@ public static class RosterTeamBuilder
             var pos = !spec.UsesDh && i == spec.PitcherSlot ? FieldPosition.Pitcher : slot.Position;
             var pl = Project(slot.Player, pos);
             if (spec.UsesDh && i == spec.DhSlot)
-                pl = pl with { FieldingByPosition = FieldingByPosition(slot.Player, injuryCoeff, fieldingCoeff) };
+                pl = pl with { FieldingByPosition = FieldingByPosition(slot.Player, injuryCoeff, fieldingCoeff, growthCoeff) };
             order.Add(pl);
             TrackCaptain(slot.Player, pl);
         }
@@ -300,10 +301,11 @@ public static class RosterTeamBuilder
     /// 怪我中は段階に応じた一律係数で能力ダウン（設計書03 §3.5「痛みを押しての出場」）。
     /// </summary>
     /// <summary>全守備位置の実効守備力（<see cref="ToPlayer"/> の Fielding と同じ式・怪我補正込み）。DH解除で就く位置の守備力に使う（#1245）。</summary>
-    private static int[] FieldingByPosition(DevelopingPlayer dp, InjuryCoefficients? injuryCoeff, FieldingCoefficients? fieldingCoeff)
+    private static int[] FieldingByPosition(DevelopingPlayer dp, InjuryCoefficients? injuryCoeff, FieldingCoefficients? fieldingCoeff,
+        GrowthEventCoefficients? growthCoeff)
     {
         var injF = InjuryModel.PerformanceFactor(dp.Injury, injuryCoeff ?? new InjuryCoefficients());
-        if (dp.SlumpWeeks > 0) injF *= new GrowthEventCoefficients().SlumpPerformanceFactor;
+        if (dp.SlumpWeeks > 0) injF *= (growthCoeff ?? new GrowthEventCoefficients()).SlumpPerformanceFactor;
         var fCoeff = fieldingCoeff ?? new FieldingCoefficients();
         var values = new int[Enum.GetValues(typeof(FieldPosition)).Length];
         for (var i = 0; i < values.Length; i++)
@@ -313,7 +315,7 @@ public static class RosterTeamBuilder
 
     public static Player ToPlayer(DevelopingPlayer? dp, FieldPosition pos,
         InjuryCoefficients? injuryCoeff = null, FieldingCoefficients? fieldingCoeff = null,
-        Players.PersonalityCoefficients? personalityCoeff = null)
+        Players.PersonalityCoefficients? personalityCoeff = null, GrowthEventCoefficients? growthCoeff = null)
     {
         // 旧 asPitcher 引数は撤去した（issue #381）。投手として置くかは <paramref name="pos"/> が既に表しており、
         // 呼び出し側が両方を渡す形は「配置と役割がずれた選手」を作れてしまう＝#366 と衝突する。
@@ -328,7 +330,7 @@ public static class RosterTeamBuilder
         // 怪我の一律係数（健常=1.0）。表示層で乗算してから物理層変換に通す（パイプライン不変）。
         // スランプ中（設計書03 §5.5）は追加の一時係数（怪我より軽く、期間で解ける）。
         var injF = InjuryModel.PerformanceFactor(dp.Injury, injuryCoeff ?? new InjuryCoefficients());
-        if (dp.SlumpWeeks > 0) injF *= new GrowthEventCoefficients().SlumpPerformanceFactor;
+        if (dp.SlumpWeeks > 0) injF *= (growthCoeff ?? new GrowthEventCoefficients()).SlumpPerformanceFactor;
         int L(AbilityKind k) => (int)MathUtil.Clamp(Math.Round(dp.Level(k) * injF), 1, 100);
         // スタミナは上限なし（issue #356）＝Lv100超の育成投手を試合用へ落とすとき100で頭打ちにしない。
         // 目安投球数（StaminaPitches）へは下でこの値を StaminaPitchesFromLevel に通す。
