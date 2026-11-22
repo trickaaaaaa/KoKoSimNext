@@ -89,13 +89,13 @@ namespace KokoSim.Unity.Home
         {
             var card = v.Card;
             var name = new Label(card.Name);
-            name.AddToClassList("cr-name");
+            name.AddToClassList("crn-name");
             _body.Add(name);
 
             var sub = new Label(card.CurrentLevel == 0
                 ? "いまは契約していません"
                 : "いま Lv" + card.CurrentLevel + " ／ 年 " + card.CurrentCost.ToString("0") + "万");
-            sub.AddToClassList("cr-sub");
+            sub.AddToClassList("crn-sub");
             _body.Add(sub);
 
             foreach (var o in card.Options)
@@ -110,23 +110,23 @@ namespace KokoSim.Unity.Home
             foreach (var r in v.Rows)
             {
                 var row = new VisualElement();
-                row.AddToClassList("cr-row");
-                if (r.Changed) row.AddToClassList("cr-row--changed");
+                row.AddToClassList("crn-row");
+                if (r.Changed) row.AddToClassList("crn-row--changed");
 
                 var name = new Label(r.Name);
-                name.AddToClassList("cr-row__name");
+                name.AddToClassList("crn-row__name");
                 row.Add(name);
 
                 var lv = new Label(r.LevelText);
-                lv.AddToClassList("cr-row__lv");
+                lv.AddToClassList("crn-row__lv");
                 row.Add(lv);
 
-                row.Add(UiComponents.NumUnit(r.Cost.ToString("0"), "万", r.Changed, "cr-row__cost"));
+                row.Add(UiComponents.NumUnit(r.Cost.ToString("0"), "万", r.Changed, "crn-row__cost"));
                 _body.Add(row);
             }
 
             var sep = new VisualElement();
-            sep.AddToClassList("cr-sep");
+            sep.AddToClassList("crn-sep");
             _body.Add(sep);
 
             _body.Add(Total("年額合計", v.TotalCost, false));
@@ -137,13 +137,13 @@ namespace KokoSim.Unity.Home
         private static VisualElement Total(string key, double value, bool warn, bool signed = false)
         {
             var row = new VisualElement();
-            row.AddToClassList("cr-row");
+            row.AddToClassList("crn-row");
             var k = new Label(key);
-            k.AddToClassList("cr-row__name");
+            k.AddToClassList("crn-row__name");
             row.Add(k);
             var sign = !signed ? "" : value < 0 ? "-" : "+";
-            var cost = UiComponents.NumUnit(sign + System.Math.Abs(value).ToString("0"), "万", true, "cr-row__cost");
-            if (warn) cost.AddToClassList("cr-warn");
+            var cost = UiComponents.NumUnit(sign + System.Math.Abs(value).ToString("0"), "万", true, "crn-row__cost");
+            if (warn) cost.AddToClassList("crn-warn");
             row.Add(cost);
             return row;
         }
@@ -151,16 +151,16 @@ namespace KokoSim.Unity.Home
         private static VisualElement Projection(ContractRenewalView v)
         {
             var row = new VisualElement();
-            row.AddToClassList("cr-row");
+            row.AddToClassList("crn-row");
             var k = new Label("部費 見込み");
-            k.AddToClassList("cr-row__name");
+            k.AddToClassList("crn-row__name");
             row.Add(k);
-            row.Add(UiComponents.NumUnit(v.Funds.ToString("0"), "万", false, "cr-row__cost"));
+            row.Add(UiComponents.NumUnit(v.Funds.ToString("0"), "万", false, "crn-row__cost"));
             var arrow = new Label("→");
-            arrow.AddToClassList("cr-arrow");
+            arrow.AddToClassList("crn-arrow");
             row.Add(arrow);
-            var after = UiComponents.NumUnit(v.ProjectedFunds.ToString("0"), "万", true, "cr-row__cost");
-            if (v.ProjectedFunds < v.Funds) after.AddToClassList("cr-warn");
+            var after = UiComponents.NumUnit(v.ProjectedFunds.ToString("0"), "万", true, "crn-row__cost");
+            if (v.ProjectedFunds < v.Funds) after.AddToClassList("crn-warn");
             row.Add(after);
             return row;
         }
