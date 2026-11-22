@@ -305,17 +305,15 @@
     border-radius: var(--sbk-r-card);
     margin-bottom: 6px;
 }
-/* 選択で枠が1px→2px になっても中身がずれないよう、通常時は枠の差ぶん（1px）パディングを足しておく */
-.sbk .row-panel { padding-left: 17px; padding-right: 17px; padding-top: 9px; padding-bottom: 9px; }
-.sbk .row-panel--dense { padding-top: 5px; padding-bottom: 5px; }
 .sbk .row-panel:hover { background-color: var(--sbk-card); border-color: var(--sbk-card-line-hover); }
 .sbk .row-panel--selected, .sbk .row-panel--selected:hover {
     background-color: var(--sbk-card);
     border-width: 2px;
     border-color: var(--sbk-ink);
-    padding-left: 16px; padding-right: 16px; padding-top: 8px; padding-bottom: 8px;
+    /* 枠が1px→2px になった差ぶん、components.uss の既定パディング（16/8・dense は上下4）から1px引いて中身をずらさない */
+    padding-left: 15px; padding-right: 15px; padding-top: 7px; padding-bottom: 7px;
 }
-.sbk .row-panel--dense.row-panel--selected, .sbk .row-panel--dense.row-panel--selected:hover { padding-top: 4px; padding-bottom: 4px; }
+.sbk .row-panel--dense.row-panel--selected, .sbk .row-panel--dense.row-panel--selected:hover { padding-top: 3px; padding-bottom: 3px; }
 .sbk .row--selected { border-color: var(--sbk-ink); }
 
 /* 表（リーグ表・ボックススコア）の外枠と見出し下の線は淡い1px（設計書22 §2。--line-focus は sbk が読み替えない） */
