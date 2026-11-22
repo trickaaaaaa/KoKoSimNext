@@ -409,11 +409,24 @@ public sealed record FieldingCoefficients
     /// <summary>
     /// 外野手のファンブルの基準確率（回収点でのボール速度が <see cref="OutfieldFumbleSpeedRefMps"/> 以上・
     /// Catching50時）。難度は回収点での打球速度で0〜1に連続的に伸縮する（速度0＝完全に止まった球では発生しない）。
-    /// 捕球の効きは <see cref="ErrorCatchingSlope"/> を <see cref="ErrorBaseProb"/> に対する比率で掛ける。既定0なら「ロールを一切引かない」＝
+    /// 捕球の効きは専用の <see cref="OutfieldFumbleCatchingSlope"/>/<see cref="OutfieldFumbleCatchingSlopeStrong"/> で掛ける
+    /// （内野の <see cref="ErrorBaseProb"/> とは連動しない）。既定0なら「ロールを一切引かない」＝
     /// 乱数消費順・結果とも完全に従来どおり（<see cref="ThrowErrorBaseProb"/> と同じ恒等の作法）。
     /// data/coefficients.yaml と同値（issue #811で正値化・errors_per_game/outfield_error_shareの帯内で校正）。
     /// </summary>
     public double OutfieldFumbleBaseProb { get; init; } = 0.008;
+
+    /// <summary>
+    /// 外野ファンブルの捕球の効き（Catching が平均(50)未満の側）。基準確率に掛ける倍率を Catching 1段あたり
+    /// この値だけ増やす（倍率＝1＋(50−Catching)×これ）。0.1625 は issue #811 で
+    /// <c>ErrorCatchingSlope 0.0065 ÷ ErrorBaseProb 0.040</c> だった時点の効き。#1164 で ErrorBaseProb を
+    /// 下げても外野ファンブルが連動して変わらないよう専用の値として持つ。
+    /// </summary>
+    public double OutfieldFumbleCatchingSlope { get; init; } = 0.1625;
+
+    /// <summary>外野ファンブルの捕球の効き（Catching が平均超の側）。倍率＝max(0, 1−(Catching−50)×これ)。
+    /// 0.025 は #811 時点の <c>ErrorCatchingSlopeStrong 0.001 ÷ 0.040</c>。</summary>
+    public double OutfieldFumbleCatchingSlopeStrong { get; init; } = 0.025;
 
     /// <summary>
     /// 回収点でのボール速度[m/s]がこの値以上で難度1（基準確率フル）とみなす。難度は 0（停止球）〜1（この速度以上）

@@ -453,39 +453,55 @@ public static class GameEngine
             t.BuntForceOuts, t.SqueezeBallInPlay, t.SqueezeRunnerOutAtHome,
             t.StealThirdAttempts, t.StealThirdSuccesses, t.BuntInfieldHits);
 
+    /// <summary>当日の出来のうち「控えの残り」を引く専用ストリーム（主乱数を消費しない Fork）。</summary>
+    private const ulong ReserveDayFormStreamId = 0x5245_5344_4159_464DUL;
+
     /// <summary>
-    /// 打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。
+    /// 打順＋先発＋控え全員の当日の出来をサンプリング（順序固定＝決定論）。
     /// チームごとに別辞書を返す（issue dayform-dictionary-shared-across-teams）＝
     /// <see cref="TeamState.SetPitchRecovery"/> と同じ理由（値等価の <see cref="Player"/> record を
     /// 1本の辞書へ merge すると別校の選手が偶然全属性一致したとき同一キーに潰れかねない）。
     /// 抽選順は先攻→後攻で従来と1ビットも変えない。
+    /// 控えのうち代打・代走の野手や <c>Position</c> が投手でない救援（issue #1289）は、主乱数ではなく
+    /// Fork した専用ストリームで引く＝主乱数の消費順が1語も動かず、その控えが出場しない試合は従来と同一
+    /// （出場した試合だけ結果が変わる）。
     /// </summary>
     private static (Dictionary<Player, double> Away, Dictionary<Player, double> Home) SampleDayForms(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng)
     {
         // ムラっけ（設計書10）は当日の出来の振れ幅を拡大。スキルなしは倍率1.0で従来と同一。
-        double Sample(Player p) => Players.FormModel.SampleDayForm(
-            rng, ctx.Form, SkillModel.DayFormVarianceFactor(p.Skills, ctx.Skills));
+        double Sample(Player p, IRandomSource r) => Players.FormModel.SampleDayForm(
+            r, ctx.Form, SkillModel.DayFormVarianceFactor(p.Skills, ctx.Skills));
 
         Dictionary<Player, double> SampleTeam(Team team)
         {
             var map = new Dictionary<Player, double>();
-            foreach (var p in team.BattingOrder) map[p] = Sample(p);
+            foreach (var p in team.BattingOrder) map[p] = Sample(p, rng);
             // DH制の先発投手は打順外（設計書09 §6）なので個別にサンプリング。
             if (team.UsesDh && team.StartingPitcher is not null)
             {
-                map[team.StartingPitcher] = Sample(team.StartingPitcher);
+                map[team.StartingPitcher] = Sample(team.StartingPitcher, rng);
             }
-            // 控えは1本の名簿になったが（issue #381）、**サンプリングする集合は変えない**＝
-            // 投手として置かれた控えだけを名簿順に引く。控えを二分していた頃と同じ選手・同じ順序なので
-            // 乱数消費が1語も動かない（帯・決定論baseline 不変）。控え野手にも当日の出来を配るのは
-            // 消費が増える別の変更なので、やるなら帯の張り直しを伴う独立した issue にする。
+            // 控えは1本の名簿（issue #381）。Position が投手の控えは従来どおり主乱数から名簿順に引く。
             foreach (var p in team.Reserves)
-                if (p.Position == Field.FieldPosition.Pitcher) map[p] = Sample(p);
+                if (p.Position == Field.FieldPosition.Pitcher) map[p] = Sample(p, rng);
             return map;
         }
 
-        return (SampleTeam(awayTeam), SampleTeam(homeTeam));
+        var away = SampleTeam(awayTeam);
+        var home = SampleTeam(homeTeam);
+
+        // 残りの控え（代打・代走・守備固めの野手、Position が投手でない救援）。投手役は Position でなく
+        // 創発で決まる（design-01 §1.1b）ので、Position による選別をせず全員に配る（design-02 §3.3b）。
+        void DealToRestOfReserves(Team team, Dictionary<Player, double> map, ulong salt)
+        {
+            var stream = rng.Fork(ReserveDayFormStreamId ^ salt);
+            foreach (var p in team.Reserves)
+                if (!map.ContainsKey(p)) map[p] = Sample(p, stream);
+        }
+        DealToRestOfReserves(awayTeam, away, 0UL);
+        DealToRestOfReserves(homeTeam, home, 1UL);
+        return (away, home);
     }
 
     private static IEnumerable<GameStep> PlayHalfSteps(
@@ -2160,7 +2176,7 @@ public static class GameEngine
                 && fpc.Result == Match.Fielding.BattedBallResult.Out
                 && IsOutfield(role))
             {
-                var fenceDist = ctx.Field.FenceDistance(fpc.BearingDeg * Math.PI / 180.0);
+                var fenceDist = ctx.Field.WallDistance(fpc.BearingDeg * Math.PI / 180.0);
                 if (fenceDist - fpc.RangeM <= ctx.MatchInjury.FenceCrashMarginM
                     && defense.PlayerAtPosition(role) is { } outfielder)
                 {

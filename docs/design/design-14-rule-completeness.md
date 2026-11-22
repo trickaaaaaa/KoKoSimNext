@@ -276,8 +276,10 @@
 - **物理量（不変条件#1）**: 回収点でのボール速度（`ExtraBaseResolver.RollPath.SpeedAt`＝減速直線を素通しした
   観測値。新しい経路・新しい乱数は持たない）。速い球ほど難度が上がり、完全に止まった球（速度0）ではほぼ
   発生しない。`FlyCatchErrorProb`（issue #532）と同じ「難度×基準確率」の形で、守備力連動は捕球エラーと
-  同じ非対称スロープ（`ErrorCatchingSlope`/`ErrorCatchingSlopeStrong`）を外野手自身の `Catching` へ適用する
-  （新しい傾き係数は増やさない）。
+  専用の非対称スロープ（`OutfieldFumbleCatchingSlope`＝0.1625／`...Strong`＝0.025）を外野手自身の `Catching` へ
+  適用する。倍率＝`max(0, 1 − (Catching−50)×slope)`で、内野の `error_base_prob` とは連動しない
+  （issue #1289: 当初は `ErrorCatchingSlope ÷ ErrorBaseProb` の比で流用していたため、#1164 で `error_base_prob` を
+  0.040→0.022 に下げると外野の効きが黙って約1.8倍に変わった。0.1625＝0.0065÷0.040、0.025＝0.001÷0.040 は #811 時点の効き）。
 - **一律の追加進塁にしない**: 発生時は「球が逸れた分だけ回収が遅れる」時間（指数分布、内野のもたつき
   `InfieldHandleJitterMeanSeconds` と同じ形）を回収時刻へ加算し、**その遅れた回収時刻で
   `ExtraBaseResolver.ResolveBases` を解き直す**。単打が二塁打へ伸びるかどうかは一律確率ではなく、

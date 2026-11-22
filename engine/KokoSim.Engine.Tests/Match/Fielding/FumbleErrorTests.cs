@@ -130,6 +130,30 @@ public sealed class FumbleErrorTests
         Assert.InRange(low / high, 0.35, 0.65);
     }
 
+    /// <summary>外野ファンブルの捕球の効きは内野の捕球エラー（ErrorBaseProb）に連動しない。
+    /// #1164 で ErrorBaseProb を下げたとき、比で掛けていたせいで外野の効きが黙って変わった（issue #1289）。</summary>
+    [Fact]
+    public void CatchingEffect_DoesNotDependOnInfieldErrorBaseProb()
+    {
+        var lowInfield = FumbleOnly(0.02) with { ErrorBaseProb = 0.022 };
+        var highInfield = FumbleOnly(0.02) with { ErrorBaseProb = 0.040 };
+
+        var a = FumbleRate(lowInfield, leftFieldCatching: 30, exitMps: 55.0);
+        var b = FumbleRate(highInfield, leftFieldCatching: 30, exitMps: 55.0);
+
+        _out.WriteLine($"捕球30: ErrorBaseProb0.022 {a:F4} / 0.040 {b:F4}");
+        Assert.Equal(a, b);
+    }
+
+    /// <summary>1段あたりの倍率は #811 時点（0.0065÷0.040＝0.1625／0.001÷0.040＝0.025）を既定に持つ。</summary>
+    [Fact]
+    public void DefaultCatchingSlopes_KeepIssue811Strength()
+    {
+        var c = new FieldingCoefficients();
+        Assert.Equal(0.1625, c.OutfieldFumbleCatchingSlope, 9);
+        Assert.Equal(0.025, c.OutfieldFumbleCatchingSlopeStrong, 9);
+    }
+
     [Fact]
     public void StoppedBall_AlmostNeverFumbles()
     {
