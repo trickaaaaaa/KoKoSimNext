@@ -873,7 +873,12 @@ public sealed class MatchProgression
             _p.Home.LivePitcherLine(homeIsDefending ? PendingPitchIndex : 0),
             _p.Home.LiveReserves(), _p.Home.LiveReservePitchers(),
             _p.Home.OffenseCalmPa > 0, _p.Home.DefenseCalmPa > 0, _p.Home.PitcherRattled);
-        return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
+        // 攻撃側・打順は投球窓（LiveAtBat）を優先する。Current は「直前に確定した打席」なので、表の3アウト直後に
+        // 裏の投球窓へ入っても表のまま＝同じスナップショット内で守備側（上の LiveAtBat 由来）と食い違う。
+        // LiveAtBat が無い（CapturePitches 偽）ときだけ従来どおり Current。
+        var offenseIsTop = liveAtBat?.IsTop ?? Current?.IsTop ?? true;
+        var batterOrder = liveAtBat?.BatterOrder ?? Current?.BatterOrder ?? 0;
+        return new MatchLiveSnapshot(away, home, offenseIsTop, batterOrder,
             _p.Away.LiveLine(), _p.Home.LiveLine(), _p.Ctx.ResolvedWeather, _p.Ctx.StadiumName);
     }
 

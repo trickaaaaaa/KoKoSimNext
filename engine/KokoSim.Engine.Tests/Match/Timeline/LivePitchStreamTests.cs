@@ -181,6 +181,39 @@ public sealed class LivePitchStreamTests
             Assert.Null(prog.CurrentAtBat);
     }
 
+    /// <summary>
+    /// 窓（CurrentAtBat）が出ている間、スナップショットの攻撃側・打順は窓と一致する（issue #1215）。
+    /// 旧実装は直前に確定した打席（Current）から取っていたので、表の3アウト直後に裏の投球窓へ入っても
+    /// 表のまま＝守備側（窓由来）と食い違った。食い違いが起きる局面を実際に踏むことも確かめる。
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(7UL)]
+    public void Snapshot_OffenseSideAndOrder_FollowThePitchWindow(ulong seed)
+    {
+        var prog = new MatchProgression(Team("A"), Team("H"),
+            new GameContext { CapturePitches = true }, seed);
+
+        var windows = 0;
+        var halfInningSwitches = 0;
+        while (true)
+        {
+            var r = prog.AdvancePitch();
+            if (r == AdvancePitchResult.Finished) break;
+            if (r != AdvancePitchResult.Pitch) continue;
+
+            var at = prog.CurrentAtBat!;
+            var snap = prog.Snapshot();
+            Assert.Equal(at.IsTop, snap.OffenseIsTop);
+            Assert.Equal(at.BatterOrder, snap.CurrentBatterOrder);
+            windows++;
+            if (prog.Current is { } cur && cur.IsTop != at.IsTop) halfInningSwitches++;
+        }
+
+        Assert.True(windows > 0);
+        Assert.True(halfInningSwitches > 0, "半回の切り替わり直後の窓を一度も踏んでいない");
+    }
+
     private static Team Team(string name)
     {
         var order = new List<Player>
