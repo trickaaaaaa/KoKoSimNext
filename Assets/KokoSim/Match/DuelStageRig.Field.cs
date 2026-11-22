@@ -1474,6 +1474,12 @@ namespace KokoSim.Unity.Match
             public FieldCatchKind Kind;
             public int Anchor;
             public Vector3 Point;     // 捕球点（**予定時に1回だけ確定**。毎コマ球を追わない）
+            /// <summary>
+            /// 空中の球を捕る予定か（issue #1336）。立つと <see cref="TCatch"/> は「放物線がグラブの高さを通る時刻」で、
+            /// 球は捕球点まで放物線に**差分だけ**足して寄せる（速度は放物線のまま）。
+            /// </summary>
+            public bool Aerial;
+            public Vector3 EngineAtCatch;   // Aerial のとき、TCatch の engine の球位置（stage-local）。捕球点との差が寄せる量
             public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
             public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
             public float PulledM;     // 捕球点を engine の終点から**軌跡に沿って**遡らせた量[m]
@@ -1856,6 +1862,21 @@ namespace KokoSim.Unity.Match
                 // どちらも「グラブの居る距離で捕る」で解ける。嘘の大きさは両側とも
                 // |野手との距離 − グラブの距離| に収まる（打点を投手側へ出す既存の作法と同型）。
                 var an = AnchorOf(kind, anchor);
+                // 空中の球の捕球時刻は「区間の終点（高さ0）」でなく「放物線がグラブの高さを通る時刻」（issue #1336）。
+                // 終点で高さ0の球をグラブの高さで捕ると、捕球の0.3秒前から球を放物線の外へ寄せることになり、
+                // 落下が急に止まって吸い込まれて見えた。engine の時刻・判定には触れない（絵の捕球時刻だけ）
+                bool aerialCatch = !isThrow && !missBy.HasValue && eb != null && eb.Kind == BallSegmentKind.Flight
+                    && (kind == FieldCatchKind.Catch || kind == FieldCatchKind.Dive || kind == FieldCatchKind.Drop);
+                if (aerialCatch)
+                {
+                    double tg = AerialGloveCrossLocalT(seg, an.GloveY, tLocal);
+                    if (tg < tLocal)
+                    {
+                        tLocal = tg;
+                        tc = (float)(seg.T0 + tLocal);
+                        end = seg.At(tLocal);
+                    }
+                }
                 float reach = new Vector2(an.GloveX, an.GloveZ).magnitude * CatchReachSlack;
                 var fp = PlaybackEvaluator.FielderAt(play, who, tc).Pos;
                 // 高さは**選んだ収録のグラブの高さそのもの**にする。`h` は「その種別ならこのくらいの高さ」
@@ -1966,6 +1987,8 @@ namespace KokoSim.Unity.Match
                     Kind = kind,
                     Anchor = anchor,
                     Point = pt,
+                    Aerial = aerialCatch,
+                    EngineAtCatch = new Vector3((float)end.X, (float)end.H, (float)end.Y),
                     HoldUntil = holdUntil,
                     FielderGapM = bestD,
                     PulledM = pulled,
@@ -5914,6 +5937,38 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 球を捕球点へ寄せた位置（<paramref name="w"/> は 0→1 の重み）。ゴロ・送球は従来どおり捕球点へ補間する。
+        /// 空中の球（issue #1336）は engine の放物線に「捕球の瞬間の残り差」を重みつきで足す＝終端の速度が
+        /// 放物線の落下速度のまま残る（捕球点へ補間すると終端速度が0になり、落下が止まって吸い込まれて見えた）。
+        /// </summary>
+        private static Vector3 BlendBallToCatch(FieldCatchEvent e, Vector3 enginePos, float w)
+            => e.Aerial
+                ? enginePos + (e.Point - e.EngineAtCatch) * w
+                : Vector3.Lerp(enginePos, e.Point, w);
+
+        /// <summary>
+        /// 飛球の区間 <paramref name="seg"/> が下りながら高さ <paramref name="gloveY"/>[m] を通る、区間内の時刻[s]。
+        /// 通らなければ（弾道が低く最後までグラブより下）<paramref name="endLocal"/> をそのまま返す。
+        /// </summary>
+        private static double AerialGloveCrossLocalT(PlaybackBallSegment seg, double gloveY, double endLocal)
+        {
+            const double step = 0.005, maxBack = 0.5;
+            if (seg.At(endLocal).H >= gloveY) return endLocal;
+            double hi = endLocal;
+            for (double back = step; back <= maxBack && endLocal - back >= 0.0; back += step)
+            {
+                double lo = endLocal - back;
+                if (seg.At(lo).H >= gloveY)
+                {
+                    double hl = seg.At(lo).H, hh = seg.At(hi).H;
+                    return hl > hh ? lo + (hi - lo) * (hl - gloveY) / (hl - hh) : lo;
+                }
+                hi = lo;
+            }
+            return endLocal;
+        }
+
+        /// <summary>
         /// 捕球の直前から保持の終わりまで、球を**捕球点**へ寄せる。
         ///
         /// グラブの狙点と球の描画位置が別々だと、寄せたグラブの横で球が地面へ落ちる
@@ -5937,7 +5992,7 @@ namespace KokoSim.Unity.Match
                     if (t >= e.TCatch - CatchBallBlendSeconds && t < e.TCatch)
                     {
                         float ub = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
-                        return Vector3.Lerp(enginePos, e.Point, ub * ub * (3f - 2f * ub));
+                        return BlendBallToCatch(e, enginePos, ub * ub * (3f - 2f * ub));
                     }
                     if (t >= e.TCatch && t < e.TCatch + popS)
                     {
@@ -5955,7 +6010,7 @@ namespace KokoSim.Unity.Match
                 }
                 if (t < e.TCatch - CatchBallBlendSeconds) continue;
                 float u = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
-                return Vector3.Lerp(enginePos, e.Point, u * u * (3f - 2f * u));
+                return BlendBallToCatch(e, enginePos, u * u * (3f - 2f * u));
             }
             return enginePos;
         }
