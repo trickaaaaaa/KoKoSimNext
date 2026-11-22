@@ -154,12 +154,29 @@ scenarios:
     outs: 1
     bases: [3]
     count: { balls: 3, strikes: 0 }
-    force: wild_pitch          # 機能D と併用
+    force: WildPitch           # 機能D と併用。ForcedOutcome の enum 名（大文字小文字は無視）
 ```
 
-- 実装は `ScenarioBuilder.Build(scenarioId, ScenarioCatalog, RosterSource) → (Team away, Team home, GameContext ctx, GameProgress seeded)`。
+- 実装は `ScenarioBuilder.Build(def, baseCtx, seed, playerTeam) → Built(Away, Home, Ctx, Start, Seed)`（`ScenarioCatalog.cs`）。`def` は `ScenarioCatalog.TryGet(id, …)` で引く。
+  `playerTeam` は `"player"` 指定を解くチーム（実部員）で、null なら平均的な生成校（強さ55）で代用する。
 - **注入で作った試合は digest 対象外**（開始状態が baseline と違うため）。トレースヘッダに `scenario: "<id>"` を刻む。
-- `school: "AI:tier=A"` のように**その場で生成**もできる（`EnemyAiFactory`／既存の学校生成を再利用）。
+- `school: "AI:tier=A"`（帯の中央値）／`"AI:strength=72"` のように**その場で生成**もできる（`StrengthTeamFactory`＝大会展望・実戦と同じ生成器）。
+  末尾に `;bench=N` を付けるとベンチ入りを N 人に絞る（例 `"AI:tier=C;bench=12"`）。
+- 追加キー: `pitcher_rattled: true`（守備側投手が動揺した状態で始める・#1178）。
+- **`seed` が効く範囲**: 試合の乱数（`Built.Seed`）だけ。両校の生成には効かない（生成は呼び出し側の seed から別ストリームで引く）。
+  `seed` を省くと呼び出し側の seed を使う。
+
+**3つの入口で同じ局面・同じ強制で始まる**: CLI（`trace --scenario`）・Unity のデバッグ試合（`DebugMatchLauncher`）・
+`DebugBridge.StartMatch` はどれも `ScenarioBuilder.Build` で組み、`ScenarioDefinition.ResolveForce()` の強制を最初の1打席へ予約する（`--force` は CLI だけの上書き）。
+`"player"` は Unity の2経路（デバッグ試合・`DebugBridge`）では実部員で解く（ロスター未ロードなら生成校）。CLI は実部員を持たないので生成校になる＝CLI だけ顔ぶれが違う。
+
+**書き間違いは読み込み時にエラー**（黙って既定値にしない。`DebugScenarioLoader.Parse` は `InvalidDataException`、Unity は警告ログで0件）:
+知らないキー（トップレベルも `away/home/count/modern_rules` の中も）／整数・真偽として読めない値／範囲外の値（`inning`・`outs`・`count`・`batter`・`bases` の 1〜3・重複）／
+未知の `force`（綴りは enum 名の1つだけ。`wild_pitch` のような別綴りや数値は通さない）／未知のチーム指定（`AI:A` のような `=` の無い指定を含む）／ブロック形式のネスト。
+
+**パーサの制約**（`ScenarioYamlParser`）: YAML の部分集合のみ。`- key: value` の連なりと、1行の `{ a: 1, b: x }`（フロー・マップ）・`[1, 2, 3]`（フロー・シーケンス）。
+ブロック形式のネスト（`away:` の次の行に `school:`）は不可。フロー・マップの `,` は引用符の中では区切りにならない。
+`scenarios:` 直下の `- id:` は字下げなしでも読む。
 
 ---
 

@@ -111,6 +111,7 @@ public static class TraceCommand
 
         // 場面ジャンプ（設計書17 §3.4, F2）: --scenario 指定時は data/debug/scenarios.yaml から組む。
         ScenarioBuilder.Built? scenario = null;
+        ScenarioDefinition? scenarioDef = null;
         if (o.ScenarioId is not null)
         {
             var catalog = KokoSim.Config.DebugScenarioLoader.LoadFromRepoOrEmpty();
@@ -119,16 +120,23 @@ public static class TraceCommand
                 throw new System.ArgumentException(
                     $"未知のシナリオid: {o.ScenarioId}（{KokoSim.Config.DebugScenarioLoader.DefaultRelativePath} に {catalog.Count} 件）");
             }
+            scenarioDef = def;
             scenario = ScenarioBuilder.Build(def, ctx, o.Seed);
         }
 
         // 強制発動（設計書17 §6.1）。--force が優先し、無ければシナリオ側の force 指定を使う。
-        var forceName = o.Force ?? (o.ScenarioId is null ? null : ScenarioForceOf(o.ScenarioId));
         var forced = ForcedOutcome.None;
-        if (forceName is not null && !ForcedOutcomes.TryParse(forceName, out forced))
+        if (o.Force is not null)
         {
-            throw new System.ArgumentException(
-                $"未知の --force 値: {forceName}（{string.Join("|", System.Enum.GetNames(typeof(ForcedOutcome)))}）");
+            if (!ForcedOutcomes.TryParse(o.Force, out forced))
+            {
+                throw new System.ArgumentException(
+                    $"未知の --force 値: {o.Force}（{string.Join("|", System.Enum.GetNames(typeof(ForcedOutcome)))}）");
+            }
+        }
+        else if (scenarioDef is not null)
+        {
+            forced = scenarioDef.ResolveForce();
         }
 
         var seed = scenario?.Seed ?? o.Seed;
@@ -150,10 +158,6 @@ public static class TraceCommand
             GameEngine.BuildResult(p);
         }
     }
-
-    /// <summary>シナリオYAML側の <c>force:</c> 指定を引く（未指定は null）。</summary>
-    private static string? ScenarioForceOf(string scenarioId)
-        => KokoSim.Config.DebugScenarioLoader.LoadFromRepoOrEmpty().TryGet(scenarioId, out var def) ? def.Force : null;
 
     /// <summary><c>--only</c> の値（"pitch" / "pa" / "game,end" …）を解釈する。</summary>
     public static JsonlTraceSink.Kinds ParseKinds(string value)

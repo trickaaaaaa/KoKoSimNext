@@ -14,6 +14,9 @@ public sealed record DebugMatchOptions
 
     /// <summary>場面ジャンプ（<c>data/debug/scenarios.yaml</c> の1件）。null なら1回表の頭から。</summary>
     public ScenarioDefinition? Scenario { get; init; }
+
+    /// <summary>シナリオの <c>"player"</c> 指定を解くチーム（実部員）。null なら平均的な生成校で代用する。</summary>
+    public Team? PlayerTeam { get; init; }
 }
 
 /// <summary>
@@ -52,7 +55,7 @@ public static class DebugMatchFactory
         if (options.Scenario is { } scenario)
         {
             // 場面ジャンプは受け取った文脈を with で引き継ぐ＝球場は保たれ、ScenarioId が立つ（統計から除外）。
-            var built = ScenarioBuilder.Build(scenario, ctx, seed);
+            var built = ScenarioBuilder.Build(scenario, ctx, seed, options.PlayerTeam);
             return new Built(WithAllPitchTypes(built.Away), WithAllPitchTypes(built.Home), built.Ctx, built.Start, built.Seed);
         }
 
