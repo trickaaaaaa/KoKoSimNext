@@ -3766,6 +3766,11 @@ public static class TimelineBuilder
         var flight = LegSeconds(Distance(first, third), c.RelayThrowSpeedMps);
         var arrive = GuardAgainstVerdict(releaseAt + flight, toFirst.T1 + flight, anchor, runnerOut: true);
 
+        // 三塁へ入る野手。陣形が三塁カバーを積んでいなければ三塁手（三塁手が処理したなら遊撃手）を足す＝
+        // 誰も居ない三塁へ球が飛ぶ絵を避ける（issue #1416）。
+        var assigned = CoverRoleAt(timeline, third, FieldPosition.ThirdBase);
+        var receiver = assigned == FieldPosition.ThirdBase && play.FielderRole == FieldPosition.ThirdBase
+            ? FieldPosition.Shortstop : assigned;
         var ball = new List<BallSegment>(timeline.Ball)
         {
             new()
@@ -3773,11 +3778,36 @@ public static class TimelineBuilder
                 Kind = BallSegmentKind.Throw, T0 = arrive - flight, T1 = arrive,
                 From = first, To = third,
                 FromRole = toFirst.ToRole ?? FieldPosition.FirstBase,
-                ToRole = CoverRoleAt(timeline, third, FieldPosition.ThirdBase), ToBase = "third",
+                ToRole = receiver, ToBase = "third",
             },
         };
-        var tl = timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, arrive + 1.0) };
+        var moves = WithThirdCoverLeg(timeline, receiver, third, arrive);
+        var tl = timeline with { Ball = ball, Moves = moves, Duration = Math.Max(timeline.Duration, arrive + 1.0) };
         return AlignTaggedRunnerToThrow(tl, "third", runnerLabel);
+    }
+
+    /// <summary>
+    /// 三塁カバーの野手が三塁へ入るレッグを足す（既に三塁へ向かうレッグがあれば、その急ぎ度を送球の到達へ引き直す）。
+    /// 出発は、その野手が先のレッグを終えた後に居る点（処理した野手なら捕球点）。表示専用。
+    /// </summary>
+    private static IReadOnlyList<FielderMove> WithThirdCoverLeg(
+        PlayTimeline timeline, FieldPosition role, TimelinePoint third, double ballArrive)
+    {
+        var sprint = Math.Max(4.0, new FielderAttributes().SprintSpeedMps);
+        foreach (var m in timeline.Moves)
+        {
+            if (m.Role == role && m.Task == FielderTask.CoverBase && Distance(m.To, third) < 1.0)
+                return RepaceCoverLeg(timeline, timeline.Moves, role, third, ballArrive, sprint);
+        }
+        var t0 = 0.0;
+        foreach (var m in timeline.Moves)
+            if (m.Role == role) t0 = Math.Max(t0, m.T1);
+        var from = FielderPositionAt(timeline, role, t0);
+        var t1 = CoverLegEnd(t0, Distance(from, third), ballArrive, sprint);
+        return new List<FielderMove>(timeline.Moves)
+        {
+            new() { Role = role, T0 = t0, T1 = t1, To = third, Task = FielderTask.CoverBase },
+        };
     }
 
     /// <summary>
@@ -4647,6 +4677,21 @@ public static class TimelineBuilder
     /// 出ないので、重なりを作る側で塞ぐ（検出は LegSpeedTests / PictureNeverSplitsAFielder）。</para>
     /// </summary>
     /// <summary>
+    /// ベースカバーのレッグの到達時刻[s]。球の到達の <see cref="CoverSetSeconds"/> 前に着く急ぎ度を、
+    /// 距離（fielder-leg-speed-by-distance）から決める。間に合わない距離なら全力。
+    /// </summary>
+    private static double CoverLegEnd(double t0, double dist, double ballArrive, double sprintSpeed)
+    {
+        var deadline = ballArrive - CoverSetSeconds;
+        if (deadline - t0 <= 1e-6) return t0 + dist / sprintSpeed;   // 間に合わない＝全力
+        var need = dist / (deadline - t0);
+        var pace = need <= EasyPaceMinMps ? EasyPaceMinMps
+            : need < EasyJogMps ? Math.Min(sprintSpeed, EasyJogMps)
+            : Math.Min(sprintSpeed, need);
+        return t0 + dist / pace;
+    }
+
+    /// <summary>
     /// ベースカバーのレッグの急ぎ度を、後から描き足した送球の到達（<paramref name="ballArrive"/>）へ引き直す
     /// （fielder-leg-speed-by-distance と同じ式）。陣形ループは差し替え前の送球を期限に急ぎ度を決めているので、
     /// 送球を早く着く別経路へ差し替えると、受け手が悠々と歩いて球より遅れてベースへ着く。
@@ -4669,21 +4714,7 @@ public static class TimelineBuilder
 
         var mv = moves[idx];
         var start = timeline.FielderStarts is { } starts && starts.TryGetValue(role, out var s0) ? s0 : mv.To;
-        var dist = Distance(start, mv.To);
-        var deadline = ballArrive - CoverSetSeconds;
-        double t1;
-        if (deadline - mv.T0 > 1e-6)
-        {
-            var need = dist / (deadline - mv.T0);
-            var pace = need <= EasyPaceMinMps ? EasyPaceMinMps
-                : need < EasyJogMps ? Math.Min(sprintSpeed, EasyJogMps)
-                : Math.Min(sprintSpeed, need);
-            t1 = mv.T0 + dist / pace;
-        }
-        else
-        {
-            t1 = mv.T0 + dist / sprintSpeed;   // 間に合わない＝全力（fielder-leg-speed-by-distance と同じ扱い）
-        }
+        var t1 = CoverLegEnd(mv.T0, Distance(start, mv.To), ballArrive, sprintSpeed);
         if (t1 >= mv.T1) return moves;
 
         var updated = new List<FielderMove>(moves);
