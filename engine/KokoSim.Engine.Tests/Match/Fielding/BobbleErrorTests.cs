@@ -20,11 +20,12 @@ public class BobbleErrorTests
     private static readonly FieldGeometry Field = new();
     private static readonly FieldingCoefficients Coeff = new() { ErrorBaseProb = 0, ThrowErrorBaseProb = 0 };
 
-    private static FieldingPlay Resolve(ulong seed, FieldingCoefficients? coeff = null)
+    private static FieldingPlay Resolve(ulong seed, FieldingCoefficients? coeff = null, int fielding = 50)
         => FieldingResolver.ResolveDetailed(
             // 三遊間の深い所への際どいゴロ（もたつき次第でアウトにもセーフにもなる）
             new BattedBall { ExitVelocityMps = 28.0, LaunchAngleDeg = 4.0, BearingDeg = -18.0 },
-            Field, new Aerodynamics(), BatterAttributes.LeagueAverage, Field.StandardAlignment(),
+            Field, new Aerodynamics(), BatterAttributes.LeagueAverage,
+            Field.StandardAlignment(new FielderAttributes { Fielding = fielding }),
             coeff ?? Coeff, new Xoshiro256Random(seed));
 
     private static FieldingPlay FirstBobble()
@@ -81,5 +82,35 @@ public class BobbleErrorTests
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         Assert.Equal(HandleBobbleKind.Fumble, HandleBobblePlanner.Plan(play).Kind);
+    }
+
+    // issue #1259: もたつきの頭打ちを守備倍率の前に掛けていたため、守備51以上では
+    // しきい値（1.45）に届かず失策が0になり、その分が内野安打に化けていた（能力が逆向きに効く崖）。
+    [Theory]
+    [InlineData(51)]
+    [InlineData(52)]
+    [InlineData(55)]
+    public void Bobble_StillHappensForFielderAboveFifty(int fielding)
+    {
+        var n = 0;
+        for (ulong s = 1; s <= 20000; s++)
+            if (Resolve(s * 7919, fielding: fielding).ErrorKind == FieldingErrorKind.Bobble) n++;
+        Assert.True(n > 0, $"守備{fielding}でお手玉の失策が1件も出ない");
+    }
+
+    [Fact]
+    public void BobbleRate_NeverRisesWithFielding_AcrossTheFiftyBoundary()
+    {
+        int Count(int fielding)
+        {
+            var n = 0;
+            for (ulong s = 1; s <= 20000; s++)
+                if (Resolve(s * 7919, fielding: fielding).ErrorKind == FieldingErrorKind.Bobble) n++;
+            return n;
+        }
+        var counts = new[] { 40, 45, 49, 50, 51, 52, 55, 60 }.Select(Count).ToArray();
+        for (var i = 1; i < counts.Length; i++)
+            Assert.True(counts[i] <= counts[i - 1], $"お手玉の件数が守備で逆向き: {string.Join(",", counts)}");
+        Assert.True(counts[3] > 0 && counts[4] > 0 && counts[5] > 0, $"守備50〜52で0件: {string.Join(",", counts)}");
     }
 }
