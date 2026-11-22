@@ -2404,6 +2404,7 @@ public static class CoefficientsLoader
         public int PitchTacticsThreeZeroSwingAwayFromInning { get; set; } = D.PitchTacticsThreeZeroSwingAwayFromInning;
         public int PitchTacticsThreeZeroSwingAwayMaxDiffAbs { get; set; } = D.PitchTacticsThreeZeroSwingAwayMaxDiffAbs;
         public double PitchTacticsPutAwayProb { get; set; } = D.PitchTacticsPutAwayProb;
+        public double PitchTacticsInsideAttackProb { get; set; } = D.PitchTacticsInsideAttackProb;
         public int PitchTacticsControlFirstMinBalls { get; set; } = D.PitchTacticsControlFirstMinBalls;
 
         public TacticsCoefficients ToModel() => new()
@@ -2540,6 +2541,7 @@ public static class CoefficientsLoader
             PitchTacticsThreeZeroSwingAwayFromInning = PitchTacticsThreeZeroSwingAwayFromInning,
             PitchTacticsThreeZeroSwingAwayMaxDiffAbs = PitchTacticsThreeZeroSwingAwayMaxDiffAbs,
             PitchTacticsPutAwayProb = PitchTacticsPutAwayProb,
+            PitchTacticsInsideAttackProb = PitchTacticsInsideAttackProb,
             PitchTacticsControlFirstMinBalls = PitchTacticsControlFirstMinBalls,
         };
     }
@@ -2638,6 +2640,10 @@ public static class CoefficientsLoader
         public int AiPinchRunInningEarlier { get; set; } = D.AiPinchRunInningEarlier;
         public int AiPinchRunSpeedCeilingRelax { get; set; } = D.AiPinchRunSpeedCeilingRelax;
         public int AiPinchRunImprovementRelax { get; set; } = D.AiPinchRunImprovementRelax;
+        public double AiInsideAttackProb { get; set; } = D.AiInsideAttackProb;
+        public int TimeoutReserveMinTier { get; set; } = D.TimeoutReserveMinTier;
+        public int TimeoutReserveKeep { get; set; } = D.TimeoutReserveKeep;
+        public int TimeoutReserveFromInning { get; set; } = D.TimeoutReserveFromInning;
         // ⑦ 守備位置操作層（issue #255）
         public int DefenseSwapMinTier { get; set; } = D.DefenseSwapMinTier;
         public int DefenseSwapFromInning { get; set; } = D.DefenseSwapFromInning;
@@ -2743,6 +2749,10 @@ public static class CoefficientsLoader
             AiPinchRunInningEarlier = AiPinchRunInningEarlier,
             AiPinchRunSpeedCeilingRelax = AiPinchRunSpeedCeilingRelax,
             AiPinchRunImprovementRelax = AiPinchRunImprovementRelax,
+            AiInsideAttackProb = AiInsideAttackProb,
+            TimeoutReserveMinTier = TimeoutReserveMinTier,
+            TimeoutReserveKeep = TimeoutReserveKeep,
+            TimeoutReserveFromInning = TimeoutReserveFromInning,
             DefenseSwapMinTier = DefenseSwapMinTier,
             DefenseSwapFromInning = DefenseSwapFromInning,
             DefenseSwapMaxScoreDiff = DefenseSwapMaxScoreDiff,

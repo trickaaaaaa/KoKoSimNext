@@ -1183,6 +1183,7 @@ tactics:
   pitch_tactics_three_zero_swing_away_from_inning: 7
   pitch_tactics_three_zero_swing_away_max_diff_abs: 1
   pitch_tactics_put_away_prob: 0.50                # 守備: 2ストライク後の決め球切替
+  pitch_tactics_inside_attack_prob: 0.0            # 守備: 有利カウントで内角攻め（素の采配は0＝使わない。上級AIだけ ai_inside_attack_prob）
   pitch_tactics_control_first_min_balls: 3         # 守備: 不利カウントでゾーンに集める
 
 # --- 敵AI（設計書11: 三層＝能力値ミス率×ティア引き出し×校風）🟡 別途の難易度補正は持たない ---
@@ -1285,6 +1286,11 @@ enemy_ai:
   ai_pinch_run_inning_earlier: 1             # 代走を考え始める回を前倒し（8→7）
   ai_pinch_run_speed_ceiling_relax: 8        # 代走候補にする走者の走力上限を上げる（44→52）
   ai_pinch_run_improvement_relax: 10         # 代走に求める走力の上積みを下げる（22→12）
+  # ⑧ 上級差の層（issue #1295, 設計書11 §2・§4）
+  ai_inside_attack_prob: 0.30                # 有利カウントでの内角攻め（釣り球）の確率。inside_policy_min_tier 以上だけ
+  timeout_reserve_min_tier: 4                # C: 伝令の温存（残回数管理）を使うティア
+  timeout_reserve_keep: 1                    # 残りがこの回数以下なら終盤まで取っておく
+  timeout_reserve_from_inning: 7             # 温存を解く回
   # ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2）🟡実測校正
   # AIが「守備位置の入替（交代回数を消費しない無料の手）」と「コンバート継投」を打てるようにする層。
   # ⑥ 高度な継投層と同じ2段運用（①既定オフで配線 → ②有効化して帯を実測 → 採否）で入れ、

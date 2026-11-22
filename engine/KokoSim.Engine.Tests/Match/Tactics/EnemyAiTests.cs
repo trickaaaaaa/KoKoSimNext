@@ -291,6 +291,95 @@ public sealed class EnemyAiTests
             "豪腕依存はマウンドへ行く回数が少ないはず");
     }
 
+    // ===== 釣り球・内角攻め（設計書11 §2・issue #1295）: B以上だけが持つ引き出し =====
+
+    private static int CountInsideAttacks(AiTacticsBrain brain, TacticsSituation s, int balls, int strikes, int n = 600)
+    {
+        var c = 0;
+        for (ulong i = 0; i < (ulong)n; i++)
+        {
+            var d = brain.CallPitchAction(new PitchTacticsSituation(s, balls, strikes, 1, null), new Xoshiro256Random(5000 + i));
+            if (d?.Policy == PitchPolicy.InsideAttack) c++;
+        }
+        return c;
+    }
+
+    [Fact]
+    public void InsideAttack_GatedBelowInsidePolicyMinTier_UsedAtOrAbove()
+    {
+        var s = Sit(inning: 3, batter: P(power: 50));
+        var below = new AiTacticsBrain(new AiProfile(95, Ai.InsidePolicyMinTier - 1, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
+        var at = new AiTacticsBrain(new AiProfile(95, Ai.InsidePolicyMinTier, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
+        Assert.Equal(0, CountInsideAttacks(below, s, balls: 0, strikes: 1));
+        Assert.True(CountInsideAttacks(at, s, balls: 0, strikes: 1) > 0, "B以上は有利カウントで内角を使うはず");
+    }
+
+    [Fact]
+    public void InsideAttack_NotUsedWhenBehindInCount_VsSluggerOrBasesLoaded()
+    {
+        var at = new AiTacticsBrain(new AiProfile(95, 7, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
+        Assert.Equal(0, CountInsideAttacks(at, Sit(inning: 3, batter: P(power: 50)), balls: 1, strikes: 1));   // 有利カウントではない
+        Assert.Equal(0, CountInsideAttacks(at, Sit(inning: 3, batter: P(power: 90)), balls: 0, strikes: 1));   // 強打者
+        Assert.Equal(0, CountInsideAttacks(at, Sit(inning: 3, first: P(), second: P(), third: P(), batter: P(power: 50)), balls: 0, strikes: 1)); // 満塁
+    }
+
+    [Fact]
+    public void InsideAttack_StandardBrain_NeverUsesByDefault()
+    {
+        var std = new StandardTacticsBrain();
+        var s = Sit(inning: 3, batter: P(power: 50));
+        for (ulong i = 0; i < 300; i++)
+        {
+            var d = std.CallPitchAction(new PitchTacticsSituation(s, 0, 1, 1, null), new Xoshiro256Random(i));
+            Assert.NotEqual(PitchPolicy.InsideAttack, d?.Policy);
+        }
+    }
+
+    // ===== 伝令の温存（設計書11 §4・issue #1295）: 上級は終盤のために最後の1回を取っておく =====
+
+    private static int CountDefenseTimeouts(int tier, int inning, int left)
+    {
+        var brain = new AiTacticsBrain(new AiProfile(95, tier, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
+        var s = Sit(inning: inning) with { PitcherRattled = true, PressureIndex = 6, DefenseTimeoutsLeft = left };
+        var n = 0;
+        for (ulong i = 0; i < 300; i++)
+            if (brain.CallDefenseTimeout(s, new Xoshiro256Random(i))) n++;
+        return n;
+    }
+
+    [Fact]
+    public void Timeout_HighTier_KeepsLastTimeoutUntilLateInnings()
+    {
+        var high = Ai.TimeoutReserveMinTier;
+        Assert.Equal(0, CountDefenseTimeouts(high, inning: Ai.TimeoutReserveFromInning - 1, left: Ai.TimeoutReserveKeep));
+        Assert.True(CountDefenseTimeouts(high, inning: Ai.TimeoutReserveFromInning, left: Ai.TimeoutReserveKeep) > 0);
+        Assert.True(CountDefenseTimeouts(high, inning: 3, left: Ai.TimeoutReserveKeep + 1) > 0, "残りに余裕があれば序盤でも使う");
+    }
+
+    [Fact]
+    public void Timeout_MidTier_SpendsLastTimeoutEarly()
+    {
+        var mid = Ai.TimeoutReserveMinTier - 1;
+        Assert.True(mid >= Ai.TimeoutMinTier);
+        Assert.True(CountDefenseTimeouts(mid, inning: 3, left: Ai.TimeoutReserveKeep) > 0, "温存を持たない下位は序盤でも使い切る");
+    }
+
+    [Fact]
+    public void Timeout_Offense_HighTierKeepsLastTimeoutUntilLateInnings()
+    {
+        var brain = new AiTacticsBrain(new AiProfile(95, 7, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
+        int Count(int inning, int left)
+        {
+            var s = Sit(inning: inning, batter: new Player { Mental = 30, Position = FieldPosition.CenterField })
+                with { PressureIndex = 6, OffenseTimeoutsLeft = left };
+            var n = 0;
+            for (ulong i = 0; i < 300; i++) if (brain.CallOffenseTimeout(s, new Xoshiro256Random(i))) n++;
+            return n;
+        }
+        Assert.Equal(0, Count(inning: 3, left: Ai.TimeoutReserveKeep));
+        Assert.True(Count(inning: Ai.TimeoutReserveFromInning, left: Ai.TimeoutReserveKeep) > 0);
+    }
+
     // ===== 同じ采配システム: 決定論・試合統合 =====
 
     [Fact]
