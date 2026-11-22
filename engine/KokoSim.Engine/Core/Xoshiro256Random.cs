@@ -68,6 +68,9 @@ public sealed class Xoshiro256Random : IRandomSource
         return minInclusive + (int)m;
     }
 
+    /// <summary>Box-Muller の予備値が残っているか（次の <see cref="NextGaussian"/> が乱数を引かずに返す）。消費本数の観測用。</summary>
+    public bool HasSpareGaussian => _hasSpareGaussian;
+
     public double NextGaussian(double mean = 0.0, double stdDev = 1.0)
     {
         if (_hasSpareGaussian)
