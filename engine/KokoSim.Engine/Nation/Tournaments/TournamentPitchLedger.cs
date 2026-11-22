@@ -1,3 +1,5 @@
+using KokoSim.Engine.Match.Game;
+
 namespace KokoSim.Engine.Nation.Tournaments;
 
 /// <summary>
@@ -7,7 +9,8 @@ namespace KokoSim.Engine.Nation.Tournaments;
 ///
 /// <para>⚠ <b>「SourceId を持つ側＝自校」ではない</b>（OPEN-QUESTIONS Q26）。AI校の選手も
 /// <c>AiRosterFactory</c> が振った<b>校内選手ID</b>を SourceId に持つ（校をまたぐと衝突する）。
-/// どちらのキーを使うかは<b>自校かどうか</b>で分ける＝<c>TournamentRunner.RecordSide</c> にしか置かない。</para>
+/// どちらのキーを使うかは<b>自校かどうか</b>で分ける＝<see cref="TournamentPitchLedger.RecordGame"/> にしか置かない。
+/// 自校が居ない大会（観戦扱い）は <see cref="TournamentRunner.Spectated"/> で組む＝nominal な自校IDを渡すとその1校だけ自校キーで記録され、読み手が引けなくなる。</para>
 /// </summary>
 /// <remarks>BoxScore は Match.Game 名前空間。ここでは値の同定だけを担い、集計は <see cref="TournamentPitchLedger"/> が行う。</remarks>
 public readonly record struct PitcherLedgerKey
@@ -32,7 +35,7 @@ public readonly record struct PitcherLedgerKey
     /// <summary>
     /// 「自校かどうか」でキーの取り方を分ける単一ルール（OPEN-QUESTIONS Q26）。
     /// 自校（<paramref name="isManagerSchool"/>）かつ育成選手ID（<paramref name="sourceId"/>）を持てば
-    /// <see cref="ForPlayer"/>、それ以外は <see cref="ForOpponent"/>。記録側（TournamentRunner.RecordSide）と
+    /// <see cref="ForPlayer"/>、それ以外は <see cref="ForOpponent"/>。記録側（<see cref="TournamentPitchLedger.RecordGame"/>）と
     /// 参照側（試合開始前の実効目安投球数の算出）の両方がこの1メソッドを通ることでキーの取り違えを防ぐ。
     /// </summary>
     public static PitcherLedgerKey For(bool isManagerSchool, int schoolId, int? sourceId, int uniformNumber)
@@ -82,6 +85,27 @@ public sealed class TournamentPitchLedger
             }
         }
         list.Add(new Outing(matchDay, pitches));
+    }
+
+    /// <summary>自校が居ない試合を表す校ID（<see cref="RecordGame"/> の既定。実在の校IDは 0 以上か自校の -1）。</summary>
+    public const int NoManagerSchool = int.MinValue;
+
+    /// <summary>
+    /// 1試合ぶんの両軍の登板を記録する（大会ランナー・予選成績の打ち直しが共通で通る入口）。
+    /// キーの取り方は <see cref="PitcherLedgerKey.For"/> の単一ルール＝<paramref name="managerSchoolId"/> と
+    /// 一致する校だけ自校キー、それ以外（裏試合の両校・観戦扱いの大会）は (校ID, 背番号)。
+    /// </summary>
+    public void RecordGame(GameResult r, int awaySchoolId, int homeSchoolId, int matchDay,
+        int managerSchoolId = NoManagerSchool)
+    {
+        RecordSide(r.AwayPitching, awaySchoolId, awaySchoolId == managerSchoolId, matchDay);
+        RecordSide(r.HomePitching, homeSchoolId, homeSchoolId == managerSchoolId, matchDay);
+    }
+
+    private void RecordSide(IReadOnlyList<PitchingLine> lines, int schoolId, bool isManagerSchool, int matchDay)
+    {
+        foreach (var l in lines)
+            Record(PitcherLedgerKey.For(isManagerSchool, schoolId, l.SourceId, l.UniformNumber), l.Pitches, matchDay);
     }
 
     /// <summary>その投手が currentDay の直前 windowDays 日間（currentDay 当日を含まない）に投げた累計球数。</summary>

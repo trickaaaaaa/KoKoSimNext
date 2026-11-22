@@ -87,11 +87,9 @@ public static class AutumnNationEngine
             : new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
                 afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier);
         var prefRng = rng.Fork(0xACE0_0000UL ^ (uint)pref.Id);
-        var runner = new TournamentRunner(
-            field, field[0], coeff, prefRng, schedule, $"{pref.Name}大会",
-            playerResolver: null, backgroundResolver: bg);
+        var runner = TournamentRunner.Spectated(
+            field, coeff, prefRng, schedule, $"{pref.Name}大会", backgroundResolver: bg);
 
-        while (!runner.Finished) runner.PlayNextPlayerMatch();
         runner.DrainBracketResolution();
         var matches = runner.BuildBracketView().Matches;
         var byId = field.ToDictionary(s => s.Id);

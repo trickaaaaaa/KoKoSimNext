@@ -8,7 +8,7 @@ namespace KokoSim.Engine.Nation.Roster;
 /// <summary>
 /// 相手校AIの先発選択（エース温存, issue #42）。ティア/相手との強さ差・大会の残りラウンド・
 /// エースの消耗状態（#41 台帳）・校風から温存スコアを算出し、決定論抽選で先発を差し替えるかを決める。
-/// rng を注入せず (校ID, 試合日) から専用ストリームを起こす＝<see cref="AiTeamBuilder"/> 同様の純関数（不変条件#2）。
+/// rng を注入せず (校ID, 試合日, 大会ごとの塩) から専用ストリームを起こす＝<see cref="AiTeamBuilder"/> 同様の純関数（不変条件#2）。
 /// </summary>
 public static class AceRestSelector
 {
@@ -41,7 +41,7 @@ public static class AceRestSelector
         var prob = Math.Clamp(score, ai.AceRestFloor, ai.AceRestCap);
 
         var roll = new Xoshiro256Random(
-            0xACE5_0000UL ^ (ulong)(uint)school.Id ^ ((ulong)(uint)context.MatchDay << 24)).NextDouble();
+            0xACE5_0000UL ^ (ulong)(uint)school.Id ^ ((ulong)(uint)context.MatchDay << 24) ^ context.Salt).NextDouble();
         return roll < prob;
     }
 

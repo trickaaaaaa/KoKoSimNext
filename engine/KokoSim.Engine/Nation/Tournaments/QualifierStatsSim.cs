@@ -88,14 +88,17 @@ public static class QualifierStatsSim
         if (self is null) return;
 
         // 球数台帳は打ち直しぶんだけを新しく持つ（本大会の台帳とは別＝実戦の投手起用に影響させない）。
+        // 解決器は台帳を読むだけで書かないので、1試合ごとにここで積む（積まないと代表校のエースが毎試合ゼロ消耗になる）。
         var ledger = new TournamentPitchLedger();
+        var aceRestSalt = TournamentMatchContext.AceRestSaltOf(rng);
 
         foreach (var step in path)
         {
             var opponent = schoolById(step.OpponentId);
             if (opponent is null) continue;
 
-            // 先攻/後攻は本大会と同じ決定論規則で決める（同じ組み合わせなら常に同じ側）。
+            // 先攻/後攻は (校ID対・年度・残りラウンド) の決定論規則で決める（同じ組み合わせなら常に同じ側）。
+            // 本大会のスロット順（上側が先攻）とは別規則＝打ち直しは試合の再現ではなく成績の材料。
             var selfIsAway = HomeAwayAssignment.ManagerIsAway(
                 self.Id, opponent.Id, yearIndex, step.RoundsRemaining);
             var away = selfIsAway ? self : opponent;
@@ -112,7 +115,8 @@ public static class QualifierStatsSim
                 ^ ((ulong)(long)step.RoundsRemaining << 44));
 
             var game = resolver.Resolve(away, home, matchRng,
-                new TournamentMatchContext(step.RoundsRemaining, matchDay, ledger));
+                new TournamentMatchContext(step.RoundsRemaining, matchDay, ledger, AceRestSalt: aceRestSalt));
+            ledger.RecordGame(game, away.Id, home.Id, matchDay);
 
             // 本人の側だけを積む（相手校は「その1試合だけ出てくる」ので成績としては半端になる）。
             foldInto(self.Id, game, selfIsAway);
