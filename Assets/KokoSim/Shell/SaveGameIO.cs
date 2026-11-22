@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using KokoSim.Engine.Career;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Saves;
 using UnityEngine;
 
@@ -185,6 +187,9 @@ namespace KokoSim.Unity.Shell
 #endif
             NationService.SetSchoolIdentity(schoolName, prefectureId, districtId);
             RosterService.ResetAsNewSchool();
+            // マネージャー（NPC）が1人付く: 新設校は1年（issue #1430）。独立ストリーム（不変条件#2）。
+            TeamManagerLifecycle.AssignForNewSchool(
+                ManagerService.Manager, new Xoshiro256Random(GameSeed.Master ^ 0x1430_0001UL));
         }
 
         /// <summary>既定のセーブ先（persistentDataPath/kokosim/&lt;slot&gt;.sav）。スロットUI接続は F1。</summary>

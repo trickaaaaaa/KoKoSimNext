@@ -160,6 +160,8 @@ events:
             // 夏の敗退直後の3年引退（issue #954）。IDは SummerRetirement の定数で引く。
             SummerRetirement.PrefectureLossEventId, SummerRetirement.KoshienLossEventId,
             SummerRetirement.KoshienChampionEventId,
+            // マネージャーの引き継ぎ（issue #1430）。IDは TeamManagerLifecycle の定数で引く。
+            KokoSim.Engine.Career.TeamManagerLifecycle.EventId,
             "senbatsu_berth_donation", "senbatsu_draw", "senbatsu_not_selected",
             "booster_club_fund", "gear_broken", "local_company_support",
             "outside_coach_visit", "self_practice_awakened", "exam_week_slump",
@@ -419,8 +421,8 @@ events:
     {
         var known = new HashSet<string>
         {
-            EventRoles.Manager, EventRoles.Player, EventRoles.TeamManager, EventRoles.Ob,
-            EventRoles.Scout, EventRoles.Local, EventRoles.Captain, EventRoles.Narration,
+            EventRoles.Manager, EventRoles.Player, EventRoles.TeamManager, EventRoles.TeamManagerOutgoing,
+            EventRoles.Ob, EventRoles.Scout, EventRoles.Local, EventRoles.Captain, EventRoles.Narration,
         };
         foreach (var e in RepositoryEvents())
         foreach (var v in e.Variants)

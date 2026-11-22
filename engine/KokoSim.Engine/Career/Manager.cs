@@ -45,4 +45,21 @@ public sealed class Manager
 
     /// <summary>指導力の平均（チーム総合力への寄与目安）。</summary>
     public double AverageCoaching => (CoachingBatting + CoachingPitching + CoachingDefense) / 3.0;
+
+    // --- マネージャー（NPC）の入れ替わり（design-04 §1.3a・issue #1430） ---
+
+    /// <summary>
+    /// 今のマネージャーの立ち絵番号（1〜<see cref="Career.TeamManagerLifecycle.PortraitCount"/>・tm01〜tm10 に対応）。
+    /// 抽選・入れ替えは <see cref="Career.TeamManagerLifecycle"/> だけが行う（不変条件#2＝Fork した専用ストリームで引く）。
+    /// </summary>
+    public int TeamManagerPortrait { get; set; } = 1;
+
+    /// <summary>今のマネージャーの学年（1〜3）。3年の夏が終わると1年の新マネージャーに入れ替わる。</summary>
+    public int TeamManagerGrade { get; set; } = 1;
+
+    /// <summary>
+    /// 入れ替わりの直後だけ意味を持つ、引退した側の立ち絵番号。引き継ぎイベント（<c>who: team_manager_outgoing</c>）の
+    /// 立ち絵に使う。入れ替わりが起きていない間は古い値が残っていても実害はない（その役割はその会話でしか使わない）。
+    /// </summary>
+    public int OutgoingTeamManagerPortrait { get; set; }
 }

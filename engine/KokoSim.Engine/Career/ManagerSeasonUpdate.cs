@@ -41,6 +41,8 @@ public static class ManagerSeasonUpdate
         m.CareerYears++;
         m.YearsAtSchool++;
         if (reachedKoshien) m.KoshienAppearances++;
+        // マネージャー（NPC）も進級（issue #1430）。3年の夏の入れ替えは別経路（TeamManagerLifecycle.Succeed）。
+        TeamManagerLifecycle.AdvanceGrade(m);
 
         // 節目イベント（甲子園経験・大敗の学び・講習会・OB訪問等）。独立ストリームで既存の乱数列を乱さない。
         return ManagerGrowthEvents.Yearly(m, reachedKoshien, wins, milestoneRng, mg);

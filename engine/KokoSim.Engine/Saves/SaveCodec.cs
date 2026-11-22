@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using KokoSim.Engine.Career;
 using KokoSim.Engine.Career.Draft;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Saves.Json;
@@ -29,7 +30,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 38;
+    public const int CurrentVersion = 39;
 
     // ===== Serialize =====
 
@@ -390,6 +391,18 @@ public static class SaveCodec
         // v38（issue #1261）: 他校の配色（schoolColorOverrides）が増えた。旧セーブは配色が学校に付いていない＝空で補う。
         // 成績の古いキーの掃除は JSON では書けない（キー集合の突き合わせ）ので Read の後の DropStaleTransferStats が担う。
         if (version < 38 && !root.Has("schoolColorOverrides")) root.Add("schoolColorOverrides", new JsonArray());
+        // v39（issue #1430）: マネージャー（NPC）の入れ替わり（立ち絵番号・学年）が増えた。旧セーブは
+        // マネージャーという状態そのものを持たなかった＝「転任で既存の学校に赴任したとき」と同じ扱いで
+        // 2年か3年のマネージャーを1人、無作為な見た目で付ける。乱数はこのセーブの母種から Fork した
+        // 専用ストリーム（不変条件#2）＝同じセーブを何度読み込んでも同じ人になる。
+        if (version < 39 && root["manager"] is JsonObject mgr39 && !mgr39.Has("teamManagerPortrait"))
+        {
+            var seed = root.Has("masterSeed") ? root.ULong("masterSeed") : 0UL;
+            var rng = new Xoshiro256Random(seed ^ 0x1430_0000UL);
+            mgr39.Add("teamManagerGrade", rng.NextInt(0, 2) == 0 ? 2 : 3);
+            mgr39.Add("teamManagerPortrait", rng.NextInt(1, TeamManagerLifecycle.PortraitCount + 1));
+            mgr39.Add("teamManagerOutgoingPortrait", 0);
+        }
         return root;
     }
 

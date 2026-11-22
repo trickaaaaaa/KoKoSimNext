@@ -30,8 +30,13 @@ public static class EventRoles
 {
     public const string Manager = "manager";
     public const string Player = "player";
-    /// <summary>女子マネージャー。コーチ・選手が担っていた「監督への報告」役の統一先（issue manager-npc-replaces-coach-speaker・2026-08-29）。</summary>
+    /// <summary>マネージャー。コーチ・選手が担っていた「監督への報告」役の統一先（issue manager-npc-replaces-coach-speaker・2026-08-29）。</summary>
     public const string TeamManager = "team_manager";
+    /// <summary>
+    /// 引退する側のマネージャー（issue #1430）。3年の夏の入れ替わりの引き継ぎイベントだけで使う役割で、
+    /// 立ち絵は<see cref="TeamManager"/>（新しい側）と違い、入れ替わる直前の番号を出す。
+    /// </summary>
+    public const string TeamManagerOutgoing = "team_manager_outgoing";
     public const string Ob = "ob";
     public const string Scout = "scout";
     public const string Local = "local";
@@ -52,6 +57,7 @@ public static class EventRoles
         Manager => "監督",
         Player => "部員",
         TeamManager => "マネージャー",
+        TeamManagerOutgoing => "マネージャー",
         Ob => "OB",
         Scout => "スカウト",
         Local => "地域の人",
