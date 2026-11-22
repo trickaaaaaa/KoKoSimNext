@@ -5,7 +5,7 @@ namespace KokoSim.Engine.Match.Field;
 /// <summary>
 /// 逸れた送球の回収レース（design-12 §3.8）。新しい確率式は作らず、既存の「守備所要時間 vs 走者所要時間」
 /// の時間勝負へ、拾い直しのロスを守備側の所要時間に加算するだけで統合する。
-/// 回収役は「受け手自身」（起点＝塁、逸れ幅ぶんだけ動く。拾って直接タッチ＝返球不要）と
+/// 回収役は「受け手自身」（起点＝塁、逸れ幅ぶん拾いに行って塁へ戻る＝往復。返球不要）と
 /// 「バックアップ」（定位置から着弾点まで走り、塁へ返球する）の近い方（min）。
 /// </summary>
 public static class ThrowRecovery
@@ -24,7 +24,7 @@ public static class ThrowRecovery
     public static Vector3D LandingPoint(Vector3D origin, Vector3D target, double scatterM)
         => target + (target - origin).Normalized() * scatterM;
 
-    /// <summary>回収ロス[s]。受け手自身の拾い直し（返球不要）とバックアップ（拾って返球）の近い方。</summary>
+    /// <summary>回収ロス[s]。受け手自身の拾い直し（往復・返球不要）とバックアップ（拾って返球）の近い方。</summary>
     public static double RecoveryPenaltySeconds(
         double scatterM, Vector3D landingPoint, Vector3D backupPosition,
         double selfSprintSpeedMps, double backupSprintSpeedMps, double backupThrowSpeedMps,
@@ -39,7 +39,8 @@ public static class ThrowRecovery
         double selfSprintSpeedMps, double backupSprintSpeedMps, double backupThrowSpeedMps,
         double reactionSeconds, out bool byBackup)
     {
-        var selfTime = scatterM / selfSprintSpeedMps + reactionSeconds;
+        // 受け手自身は着弾点まで拾いに行き、拾った球を持って塁へ戻る（封殺は塁を踏み直す必要がある）＝往復（issue #1260）
+        var selfTime = 2.0 * scatterM / selfSprintSpeedMps + reactionSeconds;
         var backupTime = (backupPosition - landingPoint).Length / backupSprintSpeedMps
                           + reactionSeconds + scatterM / backupThrowSpeedMps;
         byBackup = backupTime < selfTime;

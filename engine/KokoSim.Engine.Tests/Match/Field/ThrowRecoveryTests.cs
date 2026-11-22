@@ -55,7 +55,7 @@ public sealed class ThrowRecoveryTests
         var penalty = ThrowRecovery.RecoveryPenaltySeconds(
             scatterM, landing, backup, selfSprintSpeedMps: 7.0, backupSprintSpeedMps: 7.0,
             backupThrowSpeedMps: 30.0, reactionSeconds: 0.30);
-        var selfOnly = scatterM / 7.0 + 0.30;
+        var selfOnly = 2.0 * scatterM / 7.0 + 0.30;
         Assert.Equal(selfOnly, penalty, 6);
     }
 
@@ -72,24 +72,35 @@ public sealed class ThrowRecoveryTests
         var penalty = ThrowRecovery.RecoveryPenaltySeconds(
             scatterM, landing, backupPos, selfSprintSpeedMps: 7.0, backupSprintSpeedMps: 7.0,
             backupThrowSpeedMps: 30.0, reactionSeconds: 0.30);
-        var selfOnly = scatterM / 7.0 + 0.30;
+        var selfOnly = 2.0 * scatterM / 7.0 + 0.30;
         Assert.True(penalty < selfOnly, $"逸れ幅が投手の定位置付近なのにバックアップが選ばれていない: penalty={penalty} selfOnly={selfOnly}");
     }
 
     [Fact]
-    public void RecoveryPenaltySeconds_VeryLargeScatter_SelfEventuallyWinsAgain_BecauseBackupMustThrowBack()
+    public void RecoveryPenaltySeconds_SelfRecovery_IsRoundTrip_BecauseForceOutNeedsTheBagAgain()
     {
-        // バックアップは拾った後さらに塁へ返球が要る（距離＝逸れ幅ぶん）。逸れ幅が定位置よりずっと
-        // 遠くまで伸びると、受け手（返球不要＝直接タッチ）のほうが結局速くなる。
+        // 封殺は拾った後に塁を踏み直す必要がある＝受け手自身の回収は往復（issue #1260）。
+        var target = new Vector3D(0, 0, 0);
+        var landing = target + new Vector3D(0, 0, 3.0);
+        var penalty = ThrowRecovery.RecoveryPenaltySeconds(
+            scatterM: 3.0, landing, new Vector3D(0, 0, 500.0), selfSprintSpeedMps: 6.0, backupSprintSpeedMps: 7.0,
+            backupThrowSpeedMps: 30.0, reactionSeconds: 0.30);
+        Assert.Equal(2.0 * 3.0 / 6.0 + 0.30, penalty, 6);
+    }
+
+    [Fact]
+    public void RecoveryPenaltySeconds_VeryLargeScatter_BackupWinsBecauseSelfMustRunBackAndForth()
+    {
+        // 定位置よりずっと遠くまで逸れると、受け手は往復で2倍走る＝走って返球するバックアップのほうが速い。
         var target = new Vector3D(0, 0, 0);
         var backup = FieldGeometry.StandardPosition(FieldPosition.Pitcher);
-        var scatterM = 300.0; // 定位置(18.44m)よりはるかに遠く
+        var scatterM = 300.0;
         var landing = target + new Vector3D(0, 0, scatterM);
         var backupPos = new Vector3D(backup.X, 0, backup.Z);
         var penalty = ThrowRecovery.RecoveryPenaltySeconds(
             scatterM, landing, backupPos, selfSprintSpeedMps: 7.0, backupSprintSpeedMps: 7.0,
-            backupThrowSpeedMps: 30.0, reactionSeconds: 0.30);
-        var selfOnly = scatterM / 7.0 + 0.30;
-        Assert.Equal(selfOnly, penalty, 6);
+            backupThrowSpeedMps: 30.0, reactionSeconds: 0.30, out var byBackup);
+        Assert.True(byBackup);
+        Assert.True(penalty < 2.0 * scatterM / 7.0 + 0.30);
     }
 }
