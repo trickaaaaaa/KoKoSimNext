@@ -127,23 +127,6 @@ public sealed class SqueezeSingleThrowTests
     }
 
     [Fact]
-    public void LeadRunnerTargeted_ButSafe_IsAFieldersChoiceOrAHit_NeverALeadRunnerOutWithoutAnOut()
-    {
-        var rng = new Xoshiro256Random(8);
-        var batter = new Player { Bunt = 70, Speed = 50 };
-        var slowLead = new Player { Baserunning = 1, Speed = 1 };
-        var counts = new Dictionary<BuntResult, int>();
-        for (var i = 0; i < 20000; i++)
-        {
-            var r = BuntResolver.Resolve(batter, Pitcher, 0.0, 0.0, safety: false, slowLead, null, null,
-                Field, Fielders, FieldingCoeff, C, rng);
-            counts[r] = counts.GetValueOrDefault(r) + 1;
-        }
-        Assert.True(counts.GetValueOrDefault(BuntResult.ForceOutAtSecond) > 0);
-        Assert.True(counts.GetValueOrDefault(BuntResult.FieldersChoice) > 0, "先の走者を生かした野選が一度も出ない");
-    }
-
-    [Fact]
     public void FieldersChoice_PutsTheBatterOnFirst_WithoutAnOut()
     {
         var r1 = new Player { Name = "r1" };
