@@ -41,7 +41,7 @@ namespace KokoSim.Unity.Debugging
         /// <summary>手順の種類（<see cref="ScreenRecipeShooter"/> が実装しているもの）。</summary>
         public static readonly HashSet<string> StepKinds = new HashSet<string>
         {
-            "new_game", "advance_weeks", "advance_days", "advance_to_match_day", "show", "click", "submit", "hover", "leave", "call", "set", "wait", "shot", "read",
+            "new_game", "advance_weeks", "advance_days", "advance_to_match_day", "play_tournament", "advance_to_week", "boost_roster", "show", "click", "submit", "hover", "leave", "call", "set", "wait", "shot", "read",
         };
 
         public static string FindPath()
