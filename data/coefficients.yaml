@@ -356,7 +356,7 @@ fielding:
   receive_error_base_prob: 0.0370     # 受け手の捕球ミス基準確率（一塁手Catching50時）。issue #810で正値化＝捕球・送球の両方から再配分しerrors_per_gameを帯内（1.8–3.6）に保った→issue #1164（2026-11-20）で0.0150→0.0370：悪送球の確率を上げた分、三段目（受け手）へ到達する母数が減るので按分18%を保つため基準確率も上げた
   # 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球確定後、逸れ幅→回収ロスを守備所要時間へ
   # 加算してもう一度同じ判定基準で再評価する（拾い直しが間に合えばアウトのまま）。
-  wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）
+  wild_throw_scatter_sigma_m: 3.0     # 逸れ幅の標準偏差[m]（半正規分布）。issue #1260: 受け手自身の回収を往復にしたので 6.0→3.0（往復÷2＝回収時間は従来と等価）
   recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
   # 捕球ミス（お手玉）の回収レース（design-14 P1-6 追記, issue #817）。送球逸れの回収レースと同じ形で、
   # 捕球エラー確定後も「弾いたら即失策」にしない。こぼれ幅→拾い直しのロス（recovery_reaction_seconds共有+
@@ -599,7 +599,7 @@ baserunning:
   relay_throw_error_accuracy_slope: 0.004
   # 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球確定後、逸れ幅→回収ロスを守備所要時間へ
   # 加算してもう一度同じMargin/logisticレースを評価する（拾い直しが間に合えばアウトのまま）。
-  wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）。内野側とは独立値
+  wild_throw_scatter_sigma_m: 3.0     # 逸れ幅の標準偏差[m]（半正規分布）。内野側とは独立値。issue #1260: 往復化に伴い 6.0→3.0
   recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
   recovery_sprint_speed_mps: 6.5      # 回収に動く野手のスプリント速度[m/s]（平均的な値の定数）
   # 送球の逸れを本塁/中継・併殺・バント封殺へ一般化（issue #858）。HomePlayResolver.ResolveThrowPath/

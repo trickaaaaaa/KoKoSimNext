@@ -320,7 +320,7 @@ public sealed record FieldingCoefficients
     // 呼び出し元に実際の野手一覧が揃っているため）。
     /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。内野送球は距離が短いため
     /// <c>BaserunningCoefficients.WildThrowScatterSigmaM</c>（バックホーム用）とは独立の値。</summary>
-    public double WildThrowScatterSigmaM { get; init; } = 6.0;
+    public double WildThrowScatterSigmaM { get; init; } = 3.0;
     /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
     public double RecoveryReactionSeconds { get; init; } = 0.30;
 
