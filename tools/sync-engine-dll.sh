@@ -44,7 +44,7 @@ if [ -d "$ROOT/Assets/StreamingAssets/KokoSim" ]; then
 fi
 SA_DIR="$ROOT/Assets/Resources/KokoSimData"
 mkdir -p "$SA_DIR"
-for y in school-names.yaml team-colors.yaml events.yaml skills.yaml preview-phrases.yaml scout-blurbs.yaml stadiums.yaml display-names.yaml; do
+for y in japan-map.yaml school-names.yaml team-colors.yaml events.yaml skills.yaml preview-phrases.yaml scout-blurbs.yaml stadiums.yaml display-names.yaml; do
   place "$ROOT/data/$y" "$SA_DIR/$y"
 done
 

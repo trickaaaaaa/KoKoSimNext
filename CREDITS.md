@@ -12,6 +12,7 @@
 | 場内放送 | VOICEVOX:No.7 | **ゲームでの利用は商用扱いで、No.7 製作委員会への事前相談が必要**（[公式](https://voiceseven.com/)・2026-11-21）。製品版での扱いは未決（相談して許諾を取るか差し替えるか）。**体験版には入れない**（`KOKOSIM_DEMO` で鳴らさず、`PlayerBuilder` が素材をビルドから外し、この行も隠す） |
 | 3Dモデル（防具・帽子） | Meshy（CC BY 4.0） | 無料プランの生成物は CC BY 4.0（クレジットで商用可）。有料プランなら表記不要だが、どちらでも載せる（[Meshy](https://help.meshy.ai/en/articles/9992001-can-i-use-my-generated-assets-for-commercial-projects)）。対象: `DuelGearMeshes.cs` が読む Cap1・CatcherMask1・CatcherHelmet0・BatterHelmet0・ChestProtector1・LegGuard1 |
 | 3Dモデル（ミット・グラブ） | Tripo AI（CC BY 4.0） | 下の「3Dモデル」節 |
+| 地図データ（県選択画面） | 「国土数値情報（行政区域データ）」（国土交通省）https://nlftp.mlit.go.jp/ksj/ を加工して作成。Natural Earth（パブリックドメイン） | 行政区域データ（N03）は CC BY 4.0＝出典の表記で商用利用可（[データ頁](https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2024.html)・[利用規約](https://nlftp.mlit.go.jp/ksj/other/agreement.html)・2026-11-23）。国が作成したかのような表記はしない。北海道の振興局と東京の市区町村の区割りに使い、頂点を間引いて `data/japan-map.yaml` にしている（`tools/gen-japan-map.py`）。Natural Earth は表記不要だが載せる |
 | フォント | Noto Sans JP・しっぽり明朝 B1・DotGothic16・Anton・Dela Gothic One（SIL OFL 1.1） | 全文をゲーム内に載せる（`Assets/Resources/Licenses/OFL-*.txt`。正典は `Assets/UI/Fonts/OFL-*.txt`） |
 
 ## 3Dモデル（Tripo）

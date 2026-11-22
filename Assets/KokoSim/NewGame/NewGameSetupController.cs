@@ -14,6 +14,8 @@ namespace KokoSim.Unity.NewGame
     /// タイトルの「はじめから」から来て、**新設校を作って**ホームへ渡す唯一の入口。
     ///
     /// 決めるのは4つ: 都道府県 / 県内地区（採用県のみ） / 校名 / ユニフォーム配色。
+    /// 都道府県は直前の県選択画面（日本地図・issue #1410）で選んだもの（<see cref="NewGameSelection"/>）を表示し、
+    /// 「地図に戻る」で選び直せる。北海道・東京は地図の拡大図で選んだ南北・東西が地区欄の初期値になる。
     /// 配色UIは部品辞書の <see cref="UniformColorPicker"/>（チーム設定画面と共有＝同じ実装を2つ作らない）。
     /// 確定は <see cref="SaveGameIO.StartNewSchool"/> の1経路だけを通す（開始手順を画面に散らさない）。
     ///
@@ -43,7 +45,8 @@ namespace KokoSim.Unity.NewGame
 
         private VisualElement _root;
         private readonly UniformColorPicker _picker = new UniformColorPicker();
-        private DropdownField _pref;
+        private Label _prefName;
+        private Button _prefBack;
         private DropdownField _district;
         private Label _districtLabel;
         private TextField _name;
@@ -64,7 +67,8 @@ namespace KokoSim.Unity.NewGame
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
 
-            _pref = _root.Q<DropdownField>("ngs-pref");
+            _prefName = _root.Q<Label>("ngs-pref-name");
+            _prefBack = _root.Q<Button>("ngs-pref-back");
             _district = _root.Q<DropdownField>("ngs-district");
             _districtLabel = _root.Q<Label>("ngs-district-lbl");
             _name = _root.Q<TextField>("ngs-name");
@@ -74,7 +78,6 @@ namespace KokoSim.Unity.NewGame
             _error = _root.Q<Label>("ngs-error");
             _start = _root.Q<Button>("ngs-start");
 
-            BuildPrefectureDropdown();
             BuildPreview(_root.Q<VisualElement>("ngs-preview"));
 
             _picker.Bind(_root.Q<VisualElement>("ngs-rows"));
@@ -89,17 +92,19 @@ namespace KokoSim.Unity.NewGame
                 _name.RegisterValueChangedCallback(_ => Render());
             }
             if (_start != null) _start.clicked += OnStart;
+            if (_prefBack != null) _prefBack.clicked += OnBackToMap;
 
             var hint = _root.Q<Label>("ngs-hint");
             if (hint != null) hint.text = "初年度は1年生 " + RosterService.NewSchoolIntake + " 人だけで始まります";
 
-            ApplyPrefecture(NationService.DefaultPrefectureId);
+            ApplyPrefecture(NewGameSelection.PrefectureId, NewGameSelection.DistrictChoice);
         }
 
         private void OnDisable()
         {
             _picker.Changed -= OnColorsChanged;
             if (_start != null) _start.clicked -= OnStart;
+            if (_prefBack != null) _prefBack.clicked -= OnBackToMap;
             _rig?.Dispose();
             _rig = null;
             _rigView = null;
@@ -114,25 +119,22 @@ namespace KokoSim.Unity.NewGame
 
         // ---- 都道府県・県内地区 --------------------------------------------------
 
-        private void BuildPrefectureDropdown()
-        {
-            if (_pref == null) return;
-            _pref.choices = PrefectureNames.Japanese.ToList();
-            _pref.index = NationService.DefaultPrefectureId;
-            _pref.RegisterValueChangedCallback(e => ApplyPrefecture(PrefectureNames.Japanese.ToList().IndexOf(e.newValue)));
-        }
+        // クリック配信中に同期 Show すると UITK のイベント木が壊れる（ScreenRouter.cs 冒頭コメント）。
+        private static void OnBackToMap() => ScreenRouter.Instance?.ShowDeferred(PrefectureSelectController.ScreenName);
 
         /// <summary>県を切り替える。地区欄の出し入れ・校名候補の入れ替えがここにぶら下がる。</summary>
-        private void ApplyPrefecture(int prefectureId)
+        private void ApplyPrefecture(int prefectureId, int districtChoice = 0)
         {
             if (prefectureId < 0 || prefectureId >= PrefectureNames.Japanese.Count) return;
             _prefectureId = prefectureId;
+            if (_prefName != null) _prefName.text = PrefectureNames.JapaneseOf(prefectureId);
 
             // 県内地区は group_split 採用県だけ（現状は神奈川7・兵庫5・愛知5）か夏が2分割の県（東京・北海道は南北の2択）。それ以外は欄ごと出さない。
             var districts = DistrictPlanProvider.DistrictsOf(prefectureId);
             var has = districts > 0;
-            _districtChoice = has ? 0 : (int?)null;
-            _districtId = has ? DistrictPlanProvider.NewGameDistrictId(prefectureId, 0) : (int?)null;
+            if (districtChoice < 0 || districtChoice >= districts) districtChoice = 0;
+            _districtChoice = has ? districtChoice : (int?)null;
+            _districtId = has ? DistrictPlanProvider.NewGameDistrictId(prefectureId, districtChoice) : (int?)null;
             if (_district != null)
             {
                 _district.style.display = has ? DisplayStyle.Flex : DisplayStyle.None;
@@ -140,7 +142,7 @@ namespace KokoSim.Unity.NewGame
                 {
                     _district.choices = Enumerable.Range(0, districts)
                         .Select(d => DistrictPlanProvider.NewGameChoiceLabel(prefectureId, d)).ToList();
-                    _district.index = 0;
+                    _district.index = districtChoice;
                     _district.UnregisterValueChangedCallback(OnDistrictChanged);
                     _district.RegisterValueChangedCallback(OnDistrictChanged);
                 }
@@ -288,7 +290,7 @@ namespace KokoSim.Unity.NewGame
         /// <summary>【スクショ用】県・地区・校名を機械的に据える（人手の入力なしで絵を撮るため）。</summary>
         internal void SetForCapture(int prefectureId, string name)
         {
-            if (_pref != null) _pref.index = prefectureId;
+            NewGameSelection.Set(prefectureId, 0);
             ApplyPrefecture(prefectureId);
             if (_name != null) _name.value = name;
             Render();

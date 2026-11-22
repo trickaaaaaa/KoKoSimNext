@@ -1,0 +1,63 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   PrefectureSelect.uss — 県選択 画面の配置のみ（issue #1410）
+   ───────────────────────────────────────────────────────────────────────
+   器（.card / .rule-head / .tool-btn）は部品辞書のまま。地図の色は JapanMapElement が
+   scorebook.uss のトークン（--sbk-*）を直接引く＝ここに色は置かない（UI原則⑤）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.pms-root { flex-grow: 1; }
+
+.pms-root Label { margin: 0; padding: 0; }
+
+.pms-main {
+    flex-grow: 1;
+    min-height: 0;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-4);
+}
+
+.pms-masthead {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+.pms-masthead__title { flex-grow: 1; }
+
+/* 拡大図から全国地図へ戻るボタンは拡大図のときだけ出す（既定は隠す・コントローラが切り替える） */
+.pms-masthead .tool-btn { flex-shrink: 0; }
+#pms-zoom-back { display: none; }
+
+.pms-card {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    margin-bottom: 0;
+}
+
+.pms-map {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+/* ── 地図の部品（JapanMapElement） ───────────────────────────── */
+
+.pmap {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+/* 乗せた区画の名前の札。カーソルの横に出す黒い札（掲示板の黒＝design-19 の黒島語彙） */
+.pms-root .pmap__tip {   /* .pms-root Label（余白0）より強くして札の余白を効かせる */
+    position: absolute;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-1);
+    background-color: var(--sbk-ink);
+    color: var(--color-on-fill);
+    font-size: var(--fs-page);
+    border-radius: var(--sbk-r-chip);
+}

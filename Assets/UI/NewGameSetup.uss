@@ -49,6 +49,16 @@
 /* 2つ目のラベル（県内地区）は左に間を空けて塊を分ける（線でなく余白で区切る＝UI原則④）。 */
 .ngs-lbl--2nd { margin-left: var(--sp-4); width: 130px; }
 
+/* 本拠地の県名（地図から選んだもの）。幅は旧ドロップダウン(260px)から「地図に戻る」ボタンを引いた分 */
+.ngs-pref-name {
+    width: 150px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-page);
+    color: var(--ink);
+}
+
 .ngs-drop { width: 260px; flex-shrink: 0; margin: 0; }
 .ngs-drop--narrow { width: 180px; }
 

@@ -6,7 +6,7 @@ namespace KokoSim.Unity.Title
 {
     /// <summary>
     /// タイトル画面（issue #482・B案 球場バック型）。起動直後の入口。
-    /// 「はじめから」→ 新規ゲーム設定画面へ（issue #585。新設校の県・地区・校名・配色をそこで決める）。「つづきから」はセーブが1件も無ければ非活性、あればセーブスロット選択画面
+    /// 「はじめから」→ 県選択画面（日本地図・issue #1410）→ 新規ゲーム設定画面（issue #585。新設校の校名・配色をそこで決める）へ。「つづきから」はセーブが1件も無ければ非活性、あればセーブスロット選択画面
     /// （issue #508）へ遷移する。「終了」は Editor / Player の両方で意図どおり動くよう分岐する。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
@@ -65,9 +65,9 @@ namespace KokoSim.Unity.Title
 
         // クリック配信中に同期 Show すると UITK のイベント木が壊れるため、遷移は必ず遅延切替を使う
         // （ScreenRouter.cs 冒頭コメント参照）。
-        // 「はじめから」は新規ゲーム設定画面へ（issue #585）。新設校（県・地区・校名・配色）を
-        // そこで作ってからホームへ渡す＝ここでホームへ直行しない。
-        private static void OnNewGame() => ScreenRouter.Instance?.ShowDeferred("NewGameSetup");
+        // 「はじめから」は県選択画面（日本地図・issue #1410）へ。県を選ぶと新規ゲーム設定画面（issue #585）へ進み、
+        // 新設校（校名・配色）をそこで作ってからホームへ渡す＝ここでホームへ直行しない。
+        private static void OnNewGame() => ScreenRouter.Instance?.ShowDeferred("PrefectureSelect");
 
         private static void OnContinue()
         {
