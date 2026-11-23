@@ -918,6 +918,8 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .fd-item { flex-direction: row; align-items: stretch; border-bottom-width: 1px; border-bottom-color: var(--color-line); }
 .fd-bar { width: 4px; flex-shrink: 0; }
 .fd-body { flex-grow: 1; padding: 11px 14px; }
+/* 押せる通知（飛び先がある・issue #1474）は乗せたときだけ行の面を変える */
+.fd-item--link:hover { background-color: var(--color-row-hover); }
 .fd-meta { flex-direction: row; align-items: center; margin-bottom: 4px; }
 .fd-tag { font-size: var(--fs-cap); letter-spacing: 1px; padding: 1px 7px 1px 0; margin-right: 9px; }
 .fd-bar.fd-tone--growth { background-color: var(--color-good); }

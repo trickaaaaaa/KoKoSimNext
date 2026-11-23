@@ -375,3 +375,29 @@ screens:
       - show: RecordsScreen
       - click: .seg-tab[1]
       - shot: 01-personal-records-career
+
+  - id: feed-link-1474
+    name: "通知フィードの行を押すと飛び先へ（選手の通知＝その選手の詳細・試合の通知＝記録の戦績）（issue #1474）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_weeks: 2
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 01-home-feed
+      # 名簿の先頭ではない選手の通知を押す（先頭だと「既定で先頭を開いた」と区別できない）
+      - click: .fd-item--link[4]
+      - wait: 8
+      - read: name
+      - read: "=PlayerSelection.Index"
+      - shot: 02-opened-player
+      - advance_weeks: 11
+      - advance_to_match_day: ""
+      - play_tournament: ""
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 03-home-after-tournament
+      - click: .fd-item--link[0]
+      - wait: 8
+      - shot: 04-opened-from-feed

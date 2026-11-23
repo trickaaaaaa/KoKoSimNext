@@ -602,5 +602,7 @@ namespace KokoSim.Unity.Players
     public static class PlayerSelection
     {
         public static int Index;
+        /// <summary>外から選手を指名して一覧を開いた（通知フィード等・issue #1474）。一覧の初回描画で先頭行に戻さない。</summary>
+        public static bool Pinned;
     }
 }

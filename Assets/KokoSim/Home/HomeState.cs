@@ -23,6 +23,12 @@ namespace KokoSim.Unity.Home
         public string Tag = "情報";   // 成長 / 警告 / 発見 / 情報
         /// <summary>毎週大量に出る定常の行（練習の能力+1）。フィードの枠が足りないときは先に押し出される。</summary>
         public bool Routine;
+        /// <summary>押したときの飛び先（ScreenRouter の画面名。null＝押せない・issue #1474）。飛び先が一意に決まる通知だけに付ける。</summary>
+        public string Screen;
+        /// <summary>選手ひとりの通知なら、その選手（<see cref="KokoSim.Engine.Season.DevelopingPlayer.Id"/>）。選手の詳細で開く。-1＝無し。</summary>
+        public int PlayerId = -1;
+        /// <summary>記録画面のどのページで開くか（-1＝既定）。試合結果の通知を［戦績］で開く用。</summary>
+        public int RecordsPage = -1;
     }
 
     public sealed class GradeChip
@@ -240,7 +246,7 @@ namespace KokoSim.Unity.Home
             var items = new List<FeedItem>();
             var champion = GameSession.Current.ConsumeKoshienResult();
             if (!string.IsNullOrEmpty(champion))
-                items.Add(new FeedItem { When = "大会", Text = champion + " が全国制覇。", Kind = FeedKind.Normal, Tag = "情報" });
+                items.Add(new FeedItem { When = "大会", Text = champion + " が全国制覇。", Kind = FeedKind.Normal, Tag = "情報", Screen = FeedLinks.Tournament });
             var senbatsuChampion = GameSession.Current.ConsumeSenbatsuResult();
             if (!string.IsNullOrEmpty(senbatsuChampion))
                 items.Add(new FeedItem
@@ -249,6 +255,7 @@ namespace KokoSim.Unity.Home
                     Text = senbatsuChampion + " が" + KokoSim.Engine.Season.DisplayNames.Current.Senbatsu + "優勝。",
                     Kind = FeedKind.Normal,
                     Tag = "情報",
+                    Screen = FeedLinks.Tournament,
                 });
             if (items.Count == 0) return;
             PushFeed(items);
@@ -270,6 +277,7 @@ namespace KokoSim.Unity.Home
                     Text = ManagerGrowthText.Feed(lead, delta),
                     Kind = FeedKind.Up,
                     Tag = "成長",
+                    Screen = FeedLinks.Career,
                 },
             });
 
@@ -307,6 +315,7 @@ namespace KokoSim.Unity.Home
                     Text = GrowthEventText.Feed(n, _growth),
                     Kind = GrowthEventText.IsGood(n.Type) ? FeedKind.Up : FeedKind.Warn,
                     Tag = GrowthEventText.IsGood(n.Type) ? "成長" : "警告",
+                    Screen = FeedLinks.Players, PlayerId = n.Player.Id,
                 });
                 KokoSim.Unity.Shell.EventService.Push(
                     GrowthEventText.EventId(n), n.Player.Name,
@@ -352,6 +361,7 @@ namespace KokoSim.Unity.Home
                     Text = "来春の入部予定者 " + n + "名 が決まった。スカウトの見立てが届いている。",
                     Kind = FeedKind.Discover,
                     Tag = "発見",
+                    Screen = FeedLinks.Scout,
                 });
             }
             if (KokoSim.Unity.Shell.GameClock.RecruitListOpened)
@@ -365,6 +375,7 @@ namespace KokoSim.Unity.Home
                            + KokoSim.Unity.Shell.ScoutService.Slots + "名。",
                     Kind = FeedKind.Discover,
                     Tag = "発見",
+                    Screen = FeedLinks.Scout,
                 });
             }
             if (KokoSim.Unity.Shell.GameClock.RecruitsWon > 0)
@@ -377,6 +388,7 @@ namespace KokoSim.Unity.Home
                     Text = "口説いた候補 " + won + "名 が入部を決めた。",
                     Kind = FeedKind.Up,
                     Tag = "成長",
+                    Screen = FeedLinks.Scout,
                 });
             }
             if (KokoSim.Unity.Shell.GameClock.ProspectJoined)
@@ -389,6 +401,7 @@ namespace KokoSim.Unity.Home
                     Text = "新入生 " + n + "名 が入部した。能力が見えるようになった。",
                     Kind = FeedKind.Discover,
                     Tag = "発見",
+                    Screen = FeedLinks.Players,
                 });
             }
             if (items.Count > 0) PushFeed(items);
@@ -413,6 +426,7 @@ namespace KokoSim.Unity.Home
                         Text = c.Name + " がドラフト候補に挙がった（" + DraftRankBands.Label(c.To) + "）",
                         Kind = FeedKind.Discover,
                         Tag = "発見",
+                        Screen = FeedLinks.Players, PlayerId = c.PlayerId,
                     });
                     // 候補入りはノベルで見せる（issue #617）。名前が世に出た瞬間はキャリアの節目。
                     KokoSim.Unity.Shell.EventService.Push("draft_candidate", c.Name,
@@ -441,6 +455,7 @@ namespace KokoSim.Unity.Home
                            + "（" + DraftRankBands.Label(c.From) + "→" + to + "）",
                     Kind = c.Improved ? FeedKind.Up : FeedKind.Warn,
                     Tag = c.Improved ? "成長" : "警告",
+                    Screen = FeedLinks.Players, PlayerId = c.PlayerId,
                 });
             }
 
@@ -468,6 +483,7 @@ namespace KokoSim.Unity.Home
                             Text = pick.Name + " がドラフト" + pick.Round + "位指名！",
                             Kind = FeedKind.Discover,
                             Tag = "発見",
+                            Screen = FeedLinks.Players, PlayerId = pick.PlayerId,
                         }
                         : new FeedItem
                         {
@@ -475,6 +491,7 @@ namespace KokoSim.Unity.Home
                             Text = pick.Name + " は指名されなかった。",
                             Kind = FeedKind.Normal,
                             Tag = "情報",
+                            Screen = FeedLinks.Players, PlayerId = pick.PlayerId,
                         });
 
                     // 指名の可否はどちらもノベルで見せる（issue #617）。指名漏れを黙って流すと、
@@ -498,7 +515,7 @@ namespace KokoSim.Unity.Home
         {
             PushFeed(new List<FeedItem>
             {
-                new FeedItem { When = "本日", Text = GameSession.Current.Title + "が開幕した。", Kind = FeedKind.Discover, Tag = "情報" },
+                new FeedItem { When = "本日", Text = GameSession.Current.Title + "が開幕した。", Kind = FeedKind.Discover, Tag = "情報", Screen = FeedLinks.Tournament },
             });
         }
 
@@ -530,6 +547,7 @@ namespace KokoSim.Unity.Home
                         Text = p.Name + " との信頼が深まった（精神力 +" + mentalGained + "）",
                         Kind = FeedKind.Up,
                         Tag = "成長",
+                        Screen = FeedLinks.Players, PlayerId = p.Id,
                         Routine = true,
                     });
                 }
@@ -544,6 +562,7 @@ namespace KokoSim.Unity.Home
                             Text = p.Name + " の " + AbilityJp(k) + " が +" + gained,
                             Kind = FeedKind.Up,
                             Tag = "成長",
+                            Screen = FeedLinks.Players, PlayerId = p.Id,
                             Routine = true,
                         });
                     }
@@ -587,6 +606,7 @@ namespace KokoSim.Unity.Home
                                + InjuryLabel.WeeksToFullRecovery(p) + " 週）",
                         Kind = FeedKind.Warn,
                         Tag = "警告",
+                        Screen = FeedLinks.Players, PlayerId = p.Id,
                     });
                     // ノベルで見せる（issue #610）。マネージャーの一言で故障名と全治週を言い切る
                     // （issue #695・2026-10-28）＝結果行は足さない。数字はフィードと同じ材料から作る。
@@ -603,6 +623,7 @@ namespace KokoSim.Unity.Home
                         Text = p.Name + " が怪我から復帰した。",
                         Kind = FeedKind.Up,
                         Tag = "情報",
+                        Screen = FeedLinks.Players, PlayerId = p.Id,
                     });
                     KokoSim.Unity.Shell.EventService.Push("injury_returned", p.Name,
                         KokoSim.Unity.Shell.PresentedEffect.Good(p.Name + " が全快、練習に合流した！"),
@@ -648,6 +669,7 @@ namespace KokoSim.Unity.Home
                     Text = InsightText(n),
                     Kind = FeedKind.Discover,
                     Tag = "発見",
+                    Screen = FeedLinks.Players, PlayerId = n.Player.Id,
                 });
 
                 // 成長タイプの見立てだけノベルへ昇格する（issue #614）。起用と我慢の判断に直結する
@@ -798,6 +820,7 @@ namespace KokoSim.Unity.Home
                     When = "本日",
                     Text = o.RoundName + " vs " + o.OpponentName + "　" + o.ManagerScore + "-" + o.OpponentScore + "　" + verb,
                     Kind = o.ManagerWon ? FeedKind.Up : FeedKind.Warn,
+                    Screen = FeedLinks.Records, RecordsPage = FeedLinks.RecordsMatchesPage,
                     Tag = o.ManagerWon ? "情報" : "警告",
                 },
             };
@@ -858,7 +881,7 @@ namespace KokoSim.Unity.Home
                         text = n.PlayerName + " は怪我を押して出場した（復帰が " + n.WeeksRemaining + " 週先へ）";
                         break;
                 }
-                items.Add(new FeedItem { When = "本日", Text = text, Kind = FeedKind.Warn, Tag = "警告" });
+                items.Add(new FeedItem { When = "本日", Text = text, Kind = FeedKind.Warn, Tag = "警告", Screen = FeedLinks.Players, PlayerId = n.PlayerId });
             }
             return items;
         }
@@ -881,7 +904,7 @@ namespace KokoSim.Unity.Home
                     : w.IsChampion ? w.Title + " 優勝！" : w.Title + " 敗退";
                 PushFeed(new List<FeedItem>
                 {
-                    new FeedItem { When = "大会", Text = summary, Kind = good ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
+                    new FeedItem { When = "大会", Text = summary, Kind = good ? FeedKind.Up : FeedKind.Normal, Tag = "情報", Screen = FeedLinks.Tournament },
                 });
                 // 地区予選リーグ戦を通過したらマネージャーが会話で知らせる（issue #1133）。結果行にブロック順位を出す。
                 // 保存できない局面（WrapUp待ち）でしか通らず、ここで1回だけ積むのでロードで二重にならない。

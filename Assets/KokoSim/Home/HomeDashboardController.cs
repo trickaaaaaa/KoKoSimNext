@@ -847,6 +847,13 @@ namespace KokoSim.Unity.Home
             body.Add(text);
 
             item.Add(body);
+
+            // 押すと飛び先へ（issue #1474）。飛び先が一意に決まる通知だけ押せる＝押せる行は面の色で示す。
+            if (FeedLinks.CanOpen(f))
+            {
+                item.AddToClassList("fd-item--link");
+                item.RegisterCallback<ClickEvent>(_ => FeedLinks.Open(f));
+            }
             return item;
         }
 
