@@ -214,6 +214,8 @@ namespace KokoSim.Unity.Shell
             GameSession.Current.LastLineup = null;
 
             Clear();
+            // 新しい学校のマネージャー（2年か3年）が出迎える（issue #1496）。チュートリアルは転任では出さない。
+            TutorialService.OnTransferred();
             return true;
         }
     }

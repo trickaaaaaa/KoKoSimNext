@@ -1510,6 +1510,18 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .ev__choices { flex-shrink: 0; margin-top: var(--sp-3); display: none; }
 .ev__choices--open { display: flex; }
 .ev__hint--none { display: none; }
+/* 会話を飛ばす（issue #1496）。「クリックで次へ」の左に同じ大きさの文字で置く。飛ばせない会話・最後の行では消す。 */
+.ev__skip {
+    flex-grow: 1;
+    -unity-text-align: middle-right;
+    margin-right: var(--sp-4);
+    font-size: var(--fs-cap);
+    color: var(--day-tx-2);
+    letter-spacing: 2px;
+    display: none;
+}
+.ev__skip--open { display: flex; }
+.ev__skip:hover { color: var(--ink); }
 
 /* 結果行（監督指示 2026-08-19。旧・案A2 の右下の帯は廃止）。会話の最終行に
    「山田 のミートが ＋5 上がった！」を太字＋色で言い切る。色は通知フィードの Up/Warn と

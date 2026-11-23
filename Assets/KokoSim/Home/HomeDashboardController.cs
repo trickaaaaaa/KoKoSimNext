@@ -145,10 +145,10 @@ namespace KokoSim.Unity.Home
             {
                 // 試合日に着いていたら日を進めず、開始確認を出し直すだけにする。進めると「いいえ」の後に
                 // 押すたび大会の日付だけが試合日を追い越し、大会明けの時計送り（TournamentDay/7 週）も増えていた。
-                if (_state.ReachedMatchDay) { ShowDialog(); return; }
+                if (_state.ReachedMatchDay) { ShowMatchDay(); return; }
                 _state.AdvanceDay();
                 Render();
-                if (_state.ReachedMatchDay) ShowDialog();     // 試合日に到達→開始確認（要件7・惰性防止）
+                if (_state.ReachedMatchDay) ShowMatchDay();   // 試合日に到達→開始確認（要件7・惰性防止）
                 // 大会中も7日ごとに怪我・気づきのイベントが積まれる。ここで出さないとキューに残ったまま
                 // ホームに居続ける限り出ず、セーブも「イベントの場面が残っています」で止まっていた。
                 else TryShowEvent();
@@ -156,6 +156,8 @@ namespace KokoSim.Unity.Home
             else
             {
                 _state.AdvanceWeek();
+                // 初めて部費で何か買えるようになった週: 部費の説明（issue #1496）。出すのは下の導線のどこかの後（キューに残る）。
+                KokoSim.Unity.Shell.TutorialService.RaisePurchasesIfAffordable();
                 Render();
                 if (KokoSim.Unity.Shell.NewTeamService.Pending) ContinueNewTeamFlow();  // 引退週＝新チーム発足（設計書09 §8）
                 else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();  // 転任判定（設計書04 §1.3）
@@ -186,6 +188,8 @@ namespace KokoSim.Unity.Home
             Render();
             // 夏の引退の会話を読み終えたら主将指名へ続ける（issue #954: 引退の会話 → 主将指名 → 背番号決定）。
             if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            // 試合の日の説明（issue #1496）を読み終えたら、試合の開始確認へ続ける。
+            else if (_state.InTournament && _state.ReachedMatchDay) ShowDialog();
             else if (KokoSim.Unity.Shell.UniformNumberService.Pending) GoToUniformNumbers();
             // スカウトの節目の会話（分野選び・候補リスト到着・念押し）を読み終えたらスカウト画面へ（issue #1035）。
             else if (KokoSim.Unity.Shell.ScoutService.TakeNavigation())
@@ -531,12 +535,29 @@ namespace KokoSim.Unity.Home
             else TryShowEvent();                      // 開幕が無ければ持ち越したイベントを続けて出す（issue #609）
         }
 
+        /// <summary>
+        /// 試合の日に着いた。初めての試合なら采配の説明（issue #1496）を先に出し、読み終えたら
+        /// <see cref="OnNovelClosed"/> が開始確認を開く。試合の画面ではノベルを出さないので、ここ（ホーム）で出す。
+        /// </summary>
+        private void ShowMatchDay()
+        {
+            if (KokoSim.Unity.Shell.TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.FirstMatch)
+                && _novel != null && _novel.OpenNext())
+            {
+                SetBodyVisible(false);
+                return;
+            }
+            ShowDialog();
+        }
+
         private void ShowBanner()
         {
             _state.PushTournamentOpenFeed();   // 「大会が開幕した」を通知フィードへ（大会遷移は TournamentEntry が実施済み）
             _state.ConsumeBanner();
             Render();   // 積んだ開幕の通知（と自校の印・#1476）を出す。呼び出し元は演出の前に描き終えている
-            if (_banner == null) return;
+            // 初めての公式戦の開幕: 大会の流れの説明（issue #1496）。開幕の演出が消えてから出す。
+            var tutorial = KokoSim.Unity.Shell.TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.FirstTournament);
+            if (_banner == null) { if (tutorial) TryShowEvent(); return; }
             SetText("tm-banner-top", _state.BannerTop);
             SetText("tm-banner-name", _state.BannerName);
 
@@ -547,7 +568,11 @@ namespace KokoSim.Unity.Home
             _banner.schedule.Execute(() =>
             {
                 _banner.experimental.animation.Start(1f, 0f, 420, (e, v) => e.style.opacity = v)
-                    .OnCompleted(() => _banner.style.display = DisplayStyle.None);
+                    .OnCompleted(() =>
+                    {
+                        _banner.style.display = DisplayStyle.None;
+                        if (tutorial) TryShowEvent();
+                    });
             }).ExecuteLater(1900);
         }
 
