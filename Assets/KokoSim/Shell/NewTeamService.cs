@@ -218,7 +218,9 @@ namespace KokoSim.Unity.Shell
 
             var transition = RosterLifecycle.BeginNewTeam(RosterService.Roster);
             // 会話は主将指名より先に読ませる（ホームが引退の会話のキューを見て先に開く）。
-            EventService.PushMilestone(SummerRetirement.EventId(exit));
+            // 引退した3年生が0人（全員1年生の1年目など）の夏は引退の会話を出さない（issue #1531）。
+            var retirementEventId = SummerRetirement.EventIdFor(exit, transition);
+            if (retirementEventId != null) EventService.PushMilestone(retirementEventId);
             // マネージャー（NPC）も3年の夏で入れ替わる（issue #1430）。引退の会話の直後に引き継ぎの会話を
             // 続けて積む＝EventNovelView は同じ週に積まれた会話を続けて見せるので、主将指名より先に読める。
             if (TeamManagerLifecycle.IsRetiring(ManagerService.Manager))
