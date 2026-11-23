@@ -575,6 +575,25 @@ namespace KokoSim.Unity.Home
                             : KokoSim.Unity.Shell.PresentedEffect.Bad(pick.Name + " に指名は無かった"),
                         pick.PlayerId);
                 }
+
+                // プロ入りOBの挨拶訪問（設計書03 §5.1・issue #1469 O2）。一時金は指名の確定時に部費へ入っている
+                // （ManagerService.ApplyDraftNominations）。ここは会話と通知を積むだけ＝額は入れた値をそのまま書く。
+                foreach (var d in KokoSim.Unity.Shell.DraftService.LastOBDonations)
+                {
+                    var amount = System.Math.Round(d.Amount).ToString("0");
+                    items.Add(new FeedItem
+                    {
+                        When = "今週",
+                        Text = d.Pick.Name + " のプロ入りでOB会から祝い金（部費 ＋" + amount + " 万）",
+                        Kind = FeedKind.Up,
+                        Tag = "情報",
+                        Screen = FeedLinks.Players, PlayerId = d.Pick.PlayerId,
+                    });
+                    KokoSim.Unity.Shell.EventService.PushUncapped("draft_ob_greeting", d.Pick.Name,
+                        KokoSim.Unity.Shell.PresentedEffect.Good("部費 ＋" + amount + " 万！"), d.Pick.PlayerId);
+                }
+                KokoSim.Unity.Shell.DraftService.LastOBDonations =
+                    System.Array.Empty<(KokoSim.Engine.Career.Draft.DraftPick, double)>();
             }
 
             if (items.Count > 0) PushFeed(items);

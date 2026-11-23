@@ -39,9 +39,11 @@ public sealed class CareerEngineParityTests
         var t = CareerEngine.Run(1, m, Vocab, NationCoeff, C, new Xoshiro256Random(5));
         var y = t.Years[0];
         Assert.False(y.Transferred);
+        Assert.False(y.ReachedKoshien);
         var expected = funds0
             + CareerEngine.AnnualBudgetIncome(m.Trust, C)
             + CareerEngine.AnnualDonationIncome(m.Fame, y.ReachedKoshien, y.NationalChampion, C)
+            + CareerEngine.TournamentPrizeIncome(y.Wins, 0, C)   // 大会報奨（issue #1469）。この年は甲子園に出ていない
             - CareerEngine.AnnualFixedExpense(0, C);
         Assert.Equal(System.Math.Max(0, expected), m.Funds, 6);
     }

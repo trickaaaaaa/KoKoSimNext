@@ -202,6 +202,7 @@ public sealed class AnnualContractTests
         var expected = before
                        + c.AnnualBudgetBase + c.BudgetPerTrust * m.Trust
                        + c.SchoolInvestment + c.BoosterDonationPerFame * m.Fame   // 寄付も部費へ（issue #1082）
+                       + c.PrizePerOfficialWin * 3                                 // 大会報奨（issue #1469）
                        - (c.SummerCampCost + c.WinterCampCost + c.ScoutCost);
         Assert.Equal(expected, m.Funds, 6);
     }

@@ -51,6 +51,7 @@ public static class SaveCodec
             .Add("contracts", CareerSaves.ContractsToJson(s.Contracts))
             .Add("managerLastGrownYear", s.ManagerLastGrownYear)
             .Add("managerGrownWinsBaseline", s.ManagerGrownWinsBaseline)
+            .Add("managerGrownKoshienWinsBaseline", NullableIntToJson(s.ManagerGrownKoshienWinsBaseline))
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
             .Add("managerPendingUpsetDeltas", DoublesToJson(s.ManagerPendingUpsetDeltas))
             .Add("practiceLastPlayedWeek", s.PracticeLastPlayedWeek.HasValue ? JsonValue.Of(s.PracticeLastPlayedWeek.Value) : JsonNull.Instance)
@@ -531,6 +532,8 @@ public static class SaveCodec
                 : ContractSet.LegacyScoutingLevel1(),
             ManagerLastGrownYear = root.Int("managerLastGrownYear"),
             ManagerGrownWinsBaseline = root.Int("managerGrownWinsBaseline"),
+            ManagerGrownKoshienWinsBaseline = root.Has("managerGrownKoshienWinsBaseline") && !root.IsNull("managerGrownKoshienWinsBaseline")
+                ? root.Int("managerGrownKoshienWinsBaseline") : (int?)null,
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),
             // 番狂わせデルタは v12 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             ManagerPendingUpsetDeltas = DoublesFromJson(root.Arr("managerPendingUpsetDeltas")),

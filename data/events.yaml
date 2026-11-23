@@ -1358,6 +1358,31 @@ events:
           - who: captain
             say: "そうだぞ。呼ばれるところまで来たんだ。"
 
+  # プロ入りOBの挨拶訪問（設計書03 §5.1・issue #1469 O2）。指名された年に一時金が部費へ入る
+  # （1位100／2〜3位70／4〜7位50／育成30万。額は coefficients.yaml career.pro_donation_*）。
+  # 結果行（部費 ＋N 万）は提示層が足す。指名1人につき1回、draft_nominated の後に出る。
+  - id: draft_ob_greeting
+    kind: System
+    text: "プロ入りの挨拶とともに、OB会から祝い金が届いた。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、{player} くんの指名のお祝いだって、OB会の方が見えています。"
+          - who: narration
+            say: "差し出された封筒には「後輩たちの道具に」と書き添えてあった。"
+          - who: player
+            say: "……俺、まだ何もしてないんですけど。"
+      - lines:
+          - who: narration
+            say: "{player} が契約の挨拶に部室へ顔を出した。後ろにOB会長が、のし袋を持って立っていた。"
+          - who: team_manager
+            say: "「プロを出した部には、OBも張り切るんですよ」だそうです。"
+      - lines:
+          - who: captain
+            say: "監督、{player} 先輩のプロ入りで、OBの方々から寄付が集まったそうです。"
+          - who: team_manager
+            say: "電話が鳴りっぱなしでしたよ。今日だけで三回、同じ話を聞きました。"
+
   # 夏の敗退直後の3年引退（issue #954）。終わり方の3通りで会話を分ける（優勝の年に敗戦の台詞を出さない）。
   # 呼び出し元は大会の後始末（HomeState.DismissResult）。この会話を読んだあとに主将指名 → 背番号決定へ進む。
   - id: summer_retirement_prefecture

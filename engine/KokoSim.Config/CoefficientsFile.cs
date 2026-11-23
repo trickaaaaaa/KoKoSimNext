@@ -3637,6 +3637,12 @@ public static class CoefficientsLoader
         public double BoosterDonationPerFame { get; set; } = D.BoosterDonationPerFame;
         public double KoshienYearBonus { get; set; } = D.KoshienYearBonus;
         public double NationalTitleBonus { get; set; } = D.NationalTitleBonus;
+        public double PrizePerOfficialWin { get; set; } = D.PrizePerOfficialWin;
+        public double PrizePerNationalStageWin { get; set; } = D.PrizePerNationalStageWin;
+        public double ProDonationFirstRound { get; set; } = D.ProDonationFirstRound;
+        public double ProDonationUpperRound { get; set; } = D.ProDonationUpperRound;
+        public double ProDonationMiddleRound { get; set; } = D.ProDonationMiddleRound;
+        public double ProDonationLowerRound { get; set; } = D.ProDonationLowerRound;
         public double TransferFundsCarryOverRatio { get; set; } = D.TransferFundsCarryOverRatio;
         public double KoshienBerthDonationBase { get; set; } = D.KoshienBerthDonationBase;
         public double KoshienBerthDonationPerFame { get; set; } = D.KoshienBerthDonationPerFame;
@@ -3687,6 +3693,12 @@ public static class CoefficientsLoader
             BoosterDonationPerFame = BoosterDonationPerFame,
             KoshienYearBonus = KoshienYearBonus,
             NationalTitleBonus = NationalTitleBonus,
+            PrizePerOfficialWin = PrizePerOfficialWin,
+            PrizePerNationalStageWin = PrizePerNationalStageWin,
+            ProDonationFirstRound = ProDonationFirstRound,
+            ProDonationUpperRound = ProDonationUpperRound,
+            ProDonationMiddleRound = ProDonationMiddleRound,
+            ProDonationLowerRound = ProDonationLowerRound,
             TransferFundsCarryOverRatio = TransferFundsCarryOverRatio,
             KoshienBerthDonationBase = KoshienBerthDonationBase,
             KoshienBerthDonationPerFame = KoshienBerthDonationPerFame,

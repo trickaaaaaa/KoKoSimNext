@@ -1848,9 +1848,15 @@ career:
   # 寄付・一時金（設計書04 §1.4）。年度末に部費へ入る（issue #1082 で施設基金を部費へ統合）。
   # 統合前の施設基金の額の半分（オーナー決定 2026-11-17・案A）。そのまま流すと道具・合宿・年契約が実質タダになる。
   school_investment: 50.0                 # 学校の設備投資[万円/年]（実績によらない土台。名声由来の寄付を主役にするため小さく）
-  booster_donation_per_fame: 10.0         # 後援会・OB寄付（名声1あたり[万円/年]。名声100で年1000万）
+  booster_donation_per_fame: 10.0         # 後援会寄付（名声1あたり[万円/年]。名声100で年1000万。プロ入りOBの寄付は pro_donation_*・#1469）
   koshien_year_bonus: 500.0               # 甲子園出場の年の一時金[万円]
   national_title_bonus: 2500.0            # 全国優勝の年の一時金[万円]（出場ぶんに上乗せ）
+  prize_per_official_win: 10.0   # 大会報奨（#1469 T1）: 公式戦1勝ごと[万円]（夏秋の県・地区・神宮）
+  prize_per_national_stage_win: 30.0   # 同・甲子園/センバツの1勝ごと[万円]
+  pro_donation_first_round: 100.0   # OB寄付（#1469 O2）: 指名の年の一時金[万円]。1位
+  pro_donation_upper_round: 70.0   # 2〜3位
+  pro_donation_middle_round: 50.0   # 4〜7位
+  pro_donation_lower_round: 30.0   # 8位（下位・育成）
   transfer_funds_carry_over_ratio: 0.3    # 転任したときに持ち越せる部費の割合（残りは前の学校に残る）
   # 甲子園出場が決まった日にOB・卒業生から入る激励金（設計書05 §1.1a）。これも部費に入る。
   # 上の一時金（年度末に無言で入る）と違い、その場でイベントとして見える形で入る。

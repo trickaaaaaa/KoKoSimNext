@@ -91,6 +91,8 @@ namespace KokoSim.Unity.Shell
         // 前回成長適用時点の自校 通算成績スナップショット（このシーズンぶんの勝数・甲子園到達を差分で取る）。
         private static int _grownWinsBaseline;
         private static int _grownKoshienBaseline;
+        // 甲子園・センバツの勝ち（大会報奨の単価を分ける・issue #1469）。null＝旧セーブ（次の総括で今の通算を基準にする）。
+        private static int? _grownKoshienWinsBaseline;
         // 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと）。大会の確定時に積み、年度末の成長で畳み込んで消費する
         // （2026-08-15・issue #170 の実ゲーム配線）。engine の CareerEngine（sim）と同じ FameUpsetModel を通す。
         private static readonly List<double> _pendingUpsetDeltas = new List<double>();
@@ -133,6 +135,7 @@ namespace KokoSim.Unity.Shell
             _lastGrownYear = 0;
             _grownWinsBaseline = 0;
             _grownKoshienBaseline = 0;
+            _grownKoshienWinsBaseline = 0;
             _pendingUpsetDeltas.Clear();
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
@@ -170,6 +173,7 @@ namespace KokoSim.Unity.Shell
             s.ManagerLastGrownYear = _lastGrownYear;
             s.ManagerGrownWinsBaseline = _grownWinsBaseline;
             s.ManagerGrownKoshienBaseline = _grownKoshienBaseline;
+            s.ManagerGrownKoshienWinsBaseline = _grownKoshienWinsBaseline;
             s.ManagerPendingUpsetDeltas = new List<double>(_pendingUpsetDeltas);
             s.PracticeLastPlayedWeek = _practice?.LastPlayedWeek;
         }
@@ -183,6 +187,7 @@ namespace KokoSim.Unity.Shell
             _lastGrownYear = s.ManagerLastGrownYear;
             _grownWinsBaseline = s.ManagerGrownWinsBaseline;
             _grownKoshienBaseline = s.ManagerGrownKoshienBaseline;
+            _grownKoshienWinsBaseline = s.ManagerGrownKoshienWinsBaseline;
             _pendingUpsetDeltas.Clear();
             if (s.ManagerPendingUpsetDeltas != null) _pendingUpsetDeltas.AddRange(s.ManagerPendingUpsetDeltas);
             _practice = null;
@@ -218,6 +223,9 @@ namespace KokoSim.Unity.Shell
             var record = GameSession.Current.Records.For(NationService.ManagerSchoolId);
             var wins = System.Math.Max(0, record.OfficialWins - _grownWinsBaseline);
             var reachedKoshien = record.SummerAppearances > _grownKoshienBaseline;
+            // 大会報奨（issue #1469 T1）: 甲子園・センバツの勝ちは単価が高い。旧セーブ（基準なし）は今の通算を基準にする
+            // ＝過去の甲子園の勝ちをまとめて払わない（その年の甲子園の勝ちは通常の単価で数える）。
+            var nationalStageWins = System.Math.Max(0, record.KoshienWins - (_grownKoshienWinsBaseline ?? record.KoshienWins));
 
             // 節目イベント抽選は母種＋年度から導く独立ストリーム（本編の乱数列を乱さない・同母種同結果）。
             var milestoneRng = new Xoshiro256Random(GameSeed.Master ^ (0xA6A6_0000UL ^ (ulong)endedYearIndex));
@@ -246,7 +254,8 @@ namespace KokoSim.Unity.Shell
 
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
                 Manager, reachedKoshien, nationalChampion, wins, milestoneRng,
-                upsetFameGain: upsetFameGain, upsetFameLoss: upsetFameLoss, contracts: ContractEffects);
+                upsetFameGain: upsetFameGain, upsetFameLoss: upsetFameLoss, contracts: ContractEffects,
+                nationalStageWins: nationalStageWins);
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 
@@ -265,6 +274,27 @@ namespace KokoSim.Unity.Shell
             _lastGrownYear = endedYearIndex;
             _grownWinsBaseline = record.OfficialWins;
             _grownKoshienBaseline = record.SummerAppearances;
+            _grownKoshienWinsBaseline = record.KoshienWins;
+        }
+
+        /// <summary>
+        /// 教え子の指名（10月最終週・設計書20 §3.2）でOBから入る一時金を部費へ入れる（設計書04 §1.4・issue #1469 O2）。
+        /// 指名1人ごとの額を返す（提示側がプロ入りOBの挨拶訪問の会話を積む）。指名されなかった者は含めない。
+        /// 二重に呼ばない（<see cref="DraftService.RunNomination"/> が同じ年度で二度目は null を返すので、その結果だけを渡す）。
+        /// </summary>
+        public static IReadOnlyList<(KokoSim.Engine.Career.Draft.DraftPick Pick, double Amount)> ApplyDraftNominations(
+            KokoSim.Engine.Career.Draft.DraftResult result)
+        {
+            var list = new List<(KokoSim.Engine.Career.Draft.DraftPick, double)>();
+            if (result == null) return list;
+            foreach (var pick in result.Nominated)
+            {
+                var amount = CareerEngine.ProDraftDonation(pick.Round, CareerCoeff);
+                if (amount <= 0) continue;
+                Manager.Funds += amount;
+                list.Add((pick, amount));
+            }
+            return list;
         }
     }
 }

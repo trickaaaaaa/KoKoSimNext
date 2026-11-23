@@ -125,7 +125,7 @@ public sealed record CareerCoefficients
     /// （名声10で寄付100万＝土台の2倍、名声100で1000万＝20倍）。
     /// </summary>
     public double SchoolInvestment { get; init; } = 50.0;
-    /// <summary>後援会・OB寄付の名声1あたりの年額[万円]（名声に比例。名声100で年1000万）。</summary>
+    /// <summary>後援会寄付の名声1あたりの年額[万円]（名声に比例。名声100で年1000万）。プロ入りOBの寄付は <see cref="ProDonationFirstRound"/> ほか（issue #1469）。</summary>
     public double BoosterDonationPerFame { get; init; } = 10.0;
     /// <summary>甲子園出場の年に後援会から入る一時金[万円]。</summary>
     public double KoshienYearBonus { get; init; } = 500.0;
@@ -139,6 +139,18 @@ public sealed record CareerCoefficients
     public double KoshienBerthDonationPerFame { get; init; } = 1.5;
     /// <summary>全国優勝の年に入る一時金[万円]（甲子園出場ぶんとは別に上乗せ）。</summary>
     public double NationalTitleBonus { get; init; } = 2500.0;
+    /// <summary>大会報奨: 公式戦1勝ごとに部費へ入る額[万円]（issue #1469 T1・甲子園/センバツ以外の勝ち）。年度末の総括で入る。</summary>
+    public double PrizePerOfficialWin { get; init; } = 10.0;
+    /// <summary>大会報奨: 甲子園・センバツの1勝ごとの額[万円]（issue #1469 T1）。</summary>
+    public double PrizePerNationalStageWin { get; init; } = 30.0;
+    /// <summary>教え子がドラフト1位で指名された年にOBから入る一時金[万円]（issue #1469 O2・プロ入りOBの挨拶訪問）。</summary>
+    public double ProDonationFirstRound { get; init; } = 100.0;
+    /// <summary>同・2〜3位の一時金[万円]。</summary>
+    public double ProDonationUpperRound { get; init; } = 70.0;
+    /// <summary>同・4〜7位の一時金[万円]。</summary>
+    public double ProDonationMiddleRound { get; init; } = 50.0;
+    /// <summary>同・8位（下位・育成）の一時金[万円]。</summary>
+    public double ProDonationLowerRound { get; init; } = 30.0;
 
     /// <summary>
     /// 転任したときに持ち越せる部費の割合（issue #1082・オーナー決定 2026-11-17）。残りは前の学校に残る。

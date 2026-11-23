@@ -87,7 +87,7 @@ public static class CareerEngine
             };
 
             // 全国大会（47県予選→甲子園）。監督校を自県に加える。
-            var (reachedKoshien, nationalChampion, wins, upsetMatches) =
+            var (reachedKoshien, nationalChampion, wins, koshienWins, upsetMatches) =
                 SimulateSeason(nation, managerSchool, prefId, nationCoeff, rng);
 
             // 番狂わせ連動の名声デルタ（issue #170）。自校 vs 相手の Tier 格差で金星/取りこぼしを算出。
@@ -113,7 +113,8 @@ public static class CareerEngine
             // （手書きの重複を持たない・issue #1222）。節目イベントは独立ストリームで既存の乱数列を乱さない。
             // 新規ゲームは年契約を何も持たない＝スカウト費は引かない（実ゲームの ContractSet.Initial と同じ）。
             ManagerSeasonUpdate.Apply(manager, reachedKoshien, nationalChampion, wins,
-                rng.Fork(0xA6A6_0000UL ^ (ulong)year), c, mg, upsetFameGain, upsetFameLoss, newGameContracts);
+                rng.Fork(0xA6A6_0000UL ^ (ulong)year), c, mg, upsetFameGain, upsetFameLoss, newGameContracts,
+                nationalStageWins: koshienWins);
 
             var transferred = false;
 
@@ -174,7 +175,7 @@ public static class CareerEngine
         };
     }
 
-    private static (bool ReachedKoshien, bool NationalChampion, int Wins, IReadOnlyList<TrackedMatch> UpsetMatches) SimulateSeason(
+    private static (bool ReachedKoshien, bool NationalChampion, int Wins, int KoshienWins, IReadOnlyList<TrackedMatch> UpsetMatches) SimulateSeason(
         NationState nation, School managerSchool, int prefId, NationCoefficients coeff, IRandomSource rng)
     {
         var reps = new List<School>(49);
@@ -206,14 +207,16 @@ public static class CareerEngine
         var koshien = TournamentEngine.Run(
             reps, coeff, rng, trackSchoolId: reachedKoshien ? managerSchool.Id : null);
         var nationalChampion = false;
+        var koshienWins = 0;
         if (reachedKoshien)
         {
-            managerWins += koshien.WinsBySchool.TryGetValue(managerSchool.Id, out var kw) ? kw : 0;
+            koshienWins = koshien.WinsBySchool.TryGetValue(managerSchool.Id, out var kw) ? kw : 0;
+            managerWins += koshienWins;
             nationalChampion = koshien.Champion.Id == managerSchool.Id;
             upsetMatches.AddRange(koshien.TrackedMatches);
         }
 
-        return (reachedKoshien, nationalChampion, managerWins, upsetMatches);
+        return (reachedKoshien, nationalChampion, managerWins, koshienWins, upsetMatches);
     }
 
     /// <summary>部費の年間収入[万円]＝学校予算＋信頼度ぶん。経営タブ・年契約の更新の見込みと総括が同じ式を使う。</summary>
@@ -225,7 +228,7 @@ public static class CareerEngine
         => c.SummerCampCost + c.WinterCampCost + contractCost;
 
     /// <summary>
-    /// 年度末に部費へ入る寄付・一時金[万円]＝学校の設備投資＋後援会・OB寄付（名声比例）＋甲子園出場・全国優勝の一時金
+    /// 年度末に部費へ入る寄付・一時金[万円]＝学校の設備投資＋後援会寄付（名声比例）＋甲子園出場・全国優勝の一時金
     /// （設計書04 §1.4・issue #1082 で施設基金から部費へ統合）。総括と経営タブの見込みが同じ式を使う。
     /// </summary>
     public static double AnnualDonationIncome(double fame, bool reachedKoshien, bool nationalChampion, CareerCoefficients c)
@@ -235,8 +238,34 @@ public static class CareerEngine
            + (nationalChampion ? c.NationalTitleBonus : 0);
 
     /// <summary>
-    /// 部費の年間差引[万円]（予算＋寄付−固定支出）。経営タブの「年間差引」。甲子園・全国優勝の一時金は
-    /// 結果しだいなので見込みに入れない。信頼度・名声は総括前の値＝見込み。
+    /// 大会報奨[万円]（設計書04 §1.4・issue #1469 T1）＝公式戦1勝ごと <see cref="CareerCoefficients.PrizePerOfficialWin"/>、
+    /// そのうち甲子園・センバツの勝ちは <see cref="CareerCoefficients.PrizePerNationalStageWin"/>。年度末の総括で入る。
+    /// 勝ちは実ゲームの数え方（<c>SchoolRecord.OfficialWins</c>／<c>KoshienWins</c> の年差分）をそのまま使う。
+    /// </summary>
+    /// <param name="officialWins">この年度の公式戦の勝ち（甲子園・センバツの勝ちを含む）。</param>
+    /// <param name="nationalStageWins">そのうち甲子園・センバツの勝ち。</param>
+    public static double TournamentPrizeIncome(int officialWins, int nationalStageWins, CareerCoefficients c)
+    {
+        var national = Math.Clamp(nationalStageWins, 0, Math.Max(0, officialWins));
+        return c.PrizePerOfficialWin * (Math.Max(0, officialWins) - national) + c.PrizePerNationalStageWin * national;
+    }
+
+    /// <summary>
+    /// プロ入りしたOBからの一時金[万円]（設計書04 §1.4・issue #1469 O2）。教え子が指名された年にだけ入る
+    /// （積み上がらない＝名門の収入が雪だるまにならない）。順位 1／2〜3／4〜7／8（下位・育成）。指名なし（0）は0。
+    /// </summary>
+    public static double ProDraftDonation(int round, CareerCoefficients c) => round switch
+    {
+        <= 0 => 0,
+        1 => c.ProDonationFirstRound,
+        <= 3 => c.ProDonationUpperRound,
+        <= 7 => c.ProDonationMiddleRound,
+        _ => c.ProDonationLowerRound,
+    };
+
+    /// <summary>
+    /// 部費の年間差引[万円]（予算＋寄付−固定支出）。経営タブの「年間差引」。甲子園・全国優勝の一時金と
+    /// 大会報奨（<see cref="TournamentPrizeIncome"/>）は結果しだいなので見込みに入れない。信頼度・名声は総括前の値＝見込み。
     /// </summary>
     public static double AnnualFundsNet(double trust, double fame, double contractCost, CareerCoefficients c)
         => AnnualBudgetIncome(trust, c) + AnnualDonationIncome(fame, false, false, c) - AnnualFixedExpense(contractCost, c);
@@ -252,7 +281,7 @@ public static class CareerEngine
     /// </param>
     internal static void ApplyResults(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameGain, double upsetFameLoss,
-        CareerCoefficients c, ContractEffects? contracts = null)
+        CareerCoefficients c, ContractEffects? contracts = null, int nationalStageWins = 0)
     {
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする
         // （「気づいたら練れていた」の意図に沿った緩やかなカーブ。線形だと十数年で99へ急上昇し
@@ -286,6 +315,7 @@ public static class CareerEngine
         // 資金は下限0で止める（借金しない）。
         m.Funds += AnnualBudgetIncome(m.Trust, c);
         m.Funds += AnnualDonationIncome(m.Fame, reachedKoshien, nationalChampion, c);
+        m.Funds += TournamentPrizeIncome(wins, nationalStageWins, c);   // 大会報奨（issue #1469）
         m.Funds -= AnnualFixedExpense(contracts?.AnnualCost ?? c.ScoutCost, c);
         if (m.Funds < 0) m.Funds = 0;
     }

@@ -63,6 +63,11 @@ public sealed class SaveState
     public int ManagerGrownWinsBaseline { get; set; }
     public int ManagerGrownKoshienBaseline { get; set; }
     /// <summary>
+    /// 前回の年度更新時点の自校の甲子園・センバツの勝ち（大会報奨の単価を分ける・issue #1469）。
+    /// null＝このキーを持たない旧セーブ（読み込み時に今の通算で採り直す＝過去の勝ちをまとめて払わない）。
+    /// </summary>
+    public int? ManagerGrownKoshienWinsBaseline { get; set; }
+    /// <summary>
     /// 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと・<see cref="Career.FameUpsetModel.MatchDelta"/> の値）。
     /// 年度末の監督成長で畳み込んで消費する。v12 で追加（2026-08-15・番狂わせ加点の実ゲーム配線）。
     /// </summary>
