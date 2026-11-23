@@ -11,6 +11,7 @@
 # フィールド:
 #   id / name : 識別子（出力フォルダ名）と説明（" #" を含むなら "" で囲む）
 #   size      : {w: 1600, h: 900}（既定）
+#   game_scale: true  論理解像度を絵の大きさに合わせず、本番と同じ参照解像度 1600×900 のまま撮る（1280×720 の窓の本番の見え方＝0.8倍。issue #1533）
 #   steps     : 手順を上から順に。1つでも失敗したらその先は撮らずに FAILED
 #
 # 手順:
@@ -789,3 +790,93 @@ screens:
       - show: HomeDashboard
       - wait: 5
       - shot: 03-lightblue
+
+  # ── 1280×720 で見切れ・重なる箇所（ブラウザ版QA・issue #1533）──
+  # 試合の場面（采配の手札・交代パネル・選手能力パネル）は captures.yaml の overflow-1280-*-1533。
+  - id: overflow-1280-1533
+    name: "1280×720 で練習配分・スカウト・練習試合・選手一覧の故障欄・セーブ詳細・主将指名が切れない（issue #1533）"
+    size: {w: 1280, h: 720}
+    game_scale: true
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - show: TrainingPlan
+      - wait: 5
+      - shot: 01-training
+      - call: OpenModal(0)
+      - wait: 5
+      - shot: 01b-training-alloc
+      - show: ScoutScreen
+      - wait: 5
+      - shot: 02-scout
+      - show: PracticeMatch
+      - wait: 5
+      - click: .pm-row[0]
+      - wait: 5
+      - shot: 03-practice-selected
+      - set: {RosterService.Active.0.Injury: Moderate, RosterService.Active.0.InjuryType: Inflammation}
+      - show: PlayerList
+      - wait: 5
+      - shot: 04-players-injury
+      # ゲーム中のタブから開いた形（保存ができる＝空き枠の案内が出る）
+      - set: {SaveSlots.Entry: Tab}
+      - show: SaveSlots
+      - wait: 5
+      - click: .ss-row[0]
+      - wait: 3
+      - shot: 05-saves-slot0
+      - click: .ss-row[2]
+      - wait: 3
+      - shot: 06-saves-empty
+      - call: GameClock.Advance(18)
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 07-captain
+      # 打順表の行（lineup-row）の字の余白を抜いた影響の確認（スタメン設定も同じ部品）
+      - call: NewTeamService.Skip()
+      - show: LineupSetting
+      - wait: 5
+      - shot: 08-lineup
+
+  - id: overflow-1600-1533
+    name: "1600×900（既定の撮影）で同じ画面が崩れていない・練習配分・スカウト・練習試合・選手一覧の故障欄・セーブ詳細・主将指名が切れない（issue #1533）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - show: TrainingPlan
+      - wait: 5
+      - shot: 01-training
+      - call: OpenModal(0)
+      - wait: 5
+      - shot: 01b-training-alloc
+      - show: ScoutScreen
+      - wait: 5
+      - shot: 02-scout
+      - show: PracticeMatch
+      - wait: 5
+      - click: .pm-row[0]
+      - wait: 5
+      - shot: 03-practice-selected
+      - set: {RosterService.Active.0.Injury: Moderate, RosterService.Active.0.InjuryType: Inflammation}
+      - show: PlayerList
+      - wait: 5
+      - shot: 04-players-injury
+      # ゲーム中のタブから開いた形（保存ができる＝空き枠の案内が出る）
+      - set: {SaveSlots.Entry: Tab}
+      - show: SaveSlots
+      - wait: 5
+      - click: .ss-row[0]
+      - wait: 3
+      - shot: 05-saves-slot0
+      - click: .ss-row[2]
+      - wait: 3
+      - shot: 06-saves-empty
+      - call: GameClock.Advance(18)
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 07-captain
+      # 打順表の行（lineup-row）の字の余白を抜いた影響の確認（スタメン設定も同じ部品）
+      - call: NewTeamService.Skip()
+      - show: LineupSetting
+      - wait: 5
+      - shot: 08-lineup

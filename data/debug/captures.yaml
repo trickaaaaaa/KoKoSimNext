@@ -20,6 +20,7 @@
 #   duel_view   : 3Dの対決・守備ビューを点けるか（既定 true）
 #   view        : board＝盤面だけ / panel＝画面全体 / rig＝3Dの描画先そのまま（既定 board）
 #   size        : {w: 1600, h: 900}（既定）
+#   game_scale  : true＝論理解像度を絵の大きさに合わせず、本番と同じ参照解像度 1600×900 のまま撮る（1280×720 の窓の本番の見え方。issue #1533）
 #   shots       : 撮る瞬間。守備ビューの再生の時計[s]か、節目±秒
 #                 節目: start / catch（送球の直前の区間の終わり）/ release（最初の送球）/ flight_end（最初の飛球の着地）
 #                       judgement（最初の判定）/ result / end（再生が閉じる直前＝長さの0.15秒手前）
@@ -34,6 +35,10 @@
 #                 01-window（押す前の手札）→ カードを押して 02-pressed → cards_after 秒（既定4）流して 03-after を撮る。
 #                 手札に無い・押せないカードは FAILED。手札ごと写すので view: panel と組む。
 #                 撮るのは開幕の「プレイボール」が消えてから。撮った窓の局面（塁・カウント・攻守）を window.txt に書く
+#   window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(LeftField), shot]
+#                 最初の采配窓で止めたまま MatchLiveController のメソッドを順に呼ぶ（issue #1533）。引数は1つまで（数か列挙の名前）。
+#                 shot で 11-ui, 12-ui… を撮る。wait(2.5) で実時間を待つ。交代パネル・選手能力パネルなど窓から開く画面の見え方を撮る用。
+#                 cards と組めば 01-window の直後・押す前に回す。単独なら 01-window と呼び出しの絵だけ撮って終わる
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
@@ -414,3 +419,42 @@ captures:
     view: panel
     attempts: 1
     cards: [def-buntshift]
+
+  # ── 1280×720 で見切れ・重なる箇所（ブラウザ版QA・issue #1533）──
+  # 01-window＝采配の手札（攻撃: スクイズ/エンドラン/セーフティバント、守備: ウエスト/バントシフト/コントロール重視/際どい所）。
+  # 11-ui 以降＝交代パネル（打順表・枠を選んだ比較欄）と選手能力パネル。
+  - id: overflow-1280-offense-1533
+    name: "1280×720 の攻撃の手札・代打パネル・選手能力パネル（issue #1533）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    size: {w: 1280, h: 720}
+    game_scale: true
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture, OpenScoutForCapture, shot, HoverScoutRowForCapture(6), shot, CloseScoutForCapture]
+
+  - id: overflow-1280-defense-1533
+    name: "1280×720 の守備の手札・守備の交代パネル（枠を選んだ比較欄）（issue #1533）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    size: {w: 1280, h: 720}
+    game_scale: true
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(LeftField), shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture]
+
+  - id: overflow-1600-offense-1533
+    name: "1600×900（既定の撮影）で崩れていない・攻撃の手札・代打パネル・選手能力パネル（issue #1533）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture, OpenScoutForCapture, shot, HoverScoutRowForCapture(6), shot, CloseScoutForCapture]
+
+  - id: overflow-1600-defense-1533
+    name: "1600×900（既定の撮影）で崩れていない・守備の手札・守備の交代パネル（枠を選んだ比較欄）（issue #1533）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(LeftField), shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture]

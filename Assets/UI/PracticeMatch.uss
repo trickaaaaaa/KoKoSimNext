@@ -61,7 +61,7 @@
     margin-right: var(--sp-3);
 }
 .card--detail {
-    width: var(--w-editor);
+    width: var(--w-pm-detail);
     flex-shrink: 0;
 }
 

@@ -237,7 +237,7 @@ namespace KokoSim.Unity.Debugging
                 }
 
                 // 采配カードを押す場面（cards・issue #1473）: 最初の采配窓で止めて、押す前・押した直後・その球の後を撮る
-                if (_r.Cards != null)
+                if (_r.Cards != null || _r.WindowCalls != null)
                 {
                     // 開幕の「プレイボール」テロップが消えてから撮る（テロップは全画面の層で手札も局面も隠す）
                     float waitedWin = 0f;
@@ -253,6 +253,51 @@ namespace KokoSim.Unity.Debugging
                     File.WriteAllText(Path.Combine(_dir, "window.txt"), ctrl.WindowSituationForCapture + "\n");
                     yield return Capture(ctrl, Path.Combine(_dir, "01-window.png"));
                     _shotFiles.Add("01-window.png");
+                    if (_r.WindowCalls != null)
+                    {
+                        int uiShot = 11;
+                        foreach (var call in _r.WindowCalls)
+                        {
+                            if (call == "shot")
+                            {
+                                yield return null; yield return null;
+                                var file = uiShot.ToString(CultureInfo.InvariantCulture) + "-ui.png";
+                                uiShot++;
+                                yield return Capture(ctrl, Path.Combine(_dir, file));
+                                _shotFiles.Add(file);
+                                continue;
+                            }
+                            if (call.StartsWith("wait(") && call.EndsWith(")"))
+                            {
+                                // 実時間で待つ（パネルの遅延描画を越える・計測の間だけ止めておく用）
+                                if (!float.TryParse(call.Substring(5, call.Length - 6), NumberStyles.Float, CultureInfo.InvariantCulture, out var sec) || sec < 0f)
+                                {
+                                    _errors.Add("window_calls: wait の秒数が数でない: " + call);
+                                    ctrl.FreezeLiveForCapture(false);
+                                    yield return true;
+                                    yield break;
+                                }
+                                float t0 = Time.realtimeSinceStartup;
+                                while (Time.realtimeSinceStartup - t0 < sec) yield return null;
+                                continue;
+                            }
+                            var err = InvokeWindowCall(ctrl, call);
+                            if (err != null)
+                            {
+                                _errors.Add("window_calls: " + call + ": " + err);
+                                ctrl.FreezeLiveForCapture(false);
+                                yield return true;
+                                yield break;
+                            }
+                            yield return null;
+                        }
+                        if (_r.Cards == null)
+                        {
+                            ctrl.FreezeLiveForCapture(false);
+                            yield return true;
+                            yield break;
+                        }
+                    }
                     foreach (var id in _r.Cards)
                     {
                         if (!ctrl.TacticsCardSelectableForCapture(id))
@@ -541,7 +586,46 @@ namespace KokoSim.Unity.Debugging
 
             // ---- 撮影 ----
 
-            private IEnumerator Capture(MatchLiveController ctrl, string path)
+            /// <summary>
+        /// window_calls の1件（issue #1533）を MatchLiveController の公開メソッドとして呼ぶ。
+        /// 「Name」か「Name(arg)」（引数は1つまで・数か列挙の名前）。失敗の理由を返す（成功は null）。
+        /// </summary>
+        private static string InvokeWindowCall(MatchLiveController ctrl, string call)
+        {
+            string name = call.Trim(), arg = null;
+            int open = name.IndexOf('(');
+            if (open >= 0)
+            {
+                if (!name.EndsWith(")")) return "括弧が閉じていない";
+                arg = name.Substring(open + 1, name.Length - open - 2).Trim();
+                name = name.Substring(0, open).Trim();
+                if (arg.Length == 0) arg = null;
+            }
+            MethodInfo method = null;
+            foreach (var m in typeof(MatchLiveController).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            {
+                if (m.Name != name) continue;
+                if (m.GetParameters().Length == (arg == null ? 0 : 1)) { method = m; break; }
+            }
+            if (method == null) return "その名前と引数の数のメソッドが無い";
+            object[] args = null;
+            if (arg != null)
+            {
+                var t = method.GetParameters()[0].ParameterType;
+                try
+                {
+                    if (t.IsEnum) args = new[] { Enum.Parse(t, arg, true) };
+                    else if (t == typeof(string)) args = new object[] { arg.Trim('"') };
+                    else args = new[] { Convert.ChangeType(arg, t, CultureInfo.InvariantCulture) };
+                }
+                catch (Exception e) { return "引数を " + t.Name + " にできない（" + e.Message + "）"; }
+            }
+            try { method.Invoke(ctrl, args); }
+            catch (TargetInvocationException e) { return (e.InnerException ?? e).Message; }
+            return null;
+        }
+
+        private IEnumerator Capture(MatchLiveController ctrl, string path)
             {
                 yield return new WaitForEndOfFrame();
                 var rig = ctrl.DuelRigForCapture;
@@ -557,7 +641,7 @@ namespace KokoSim.Unity.Debugging
                 var rt = new RenderTexture(_r.Width, _r.Height, 24, RenderTextureFormat.ARGB32);
                 rt.Create();
                 ps.scaleMode = PanelScaleMode.ScaleWithScreenSize;
-                ps.referenceResolution = new Vector2Int(_r.Width, _r.Height);
+                if (!_r.GameScale) ps.referenceResolution = new Vector2Int(_r.Width, _r.Height);
                 ps.targetTexture = rt;
                 yield return null;
                 yield return new WaitForEndOfFrame();

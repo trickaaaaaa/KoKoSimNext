@@ -1426,8 +1426,8 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .nt-hd__s { font-size: var(--fs-label); color: var(--color-muted); }
 .nt-lead { font-size: var(--fs-label); color: var(--color-muted); margin-top: 4px; margin-bottom: 12px; flex-shrink: 0; }
 
-/* 高さは大きいモーダル共通トークン（--modal-lg-body-h。issue #869/#861）。 */
-.nt-body { flex-direction: row; height: var(--modal-lg-body-h); flex-shrink: 0; }
+/* 高さは主将指名だけ大きいモーダル共通（--modal-lg-body-h）より高い --modal-nt-body-h（issue #869/#861/#1533）。 */
+.nt-body { flex-direction: row; height: var(--modal-nt-body-h); flex-shrink: 0; }
 
 /* 左：候補リスト */
 .nt-list { flex-grow: 1; flex-basis: 0; min-width: 0; background-color: var(--color-panel); border-radius: var(--radius-card); padding: 6px 8px 8px 8px; }
@@ -1458,7 +1458,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
     border-radius: var(--radius-card); padding: 12px 14px; overflow: hidden; }
 .nt-d__name { font-size: 22px; color: var(--color-chalk); }
 .nt-d__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
-.nt-d__radar { height: 128px; flex-shrink: 0; margin-top: 4px; }
+.nt-d__radar { height: var(--nt-radar-h); flex-shrink: 0; margin-top: 4px; }
 .nt-d__facts { flex-direction: row; flex-wrap: wrap; margin-top: 6px; flex-shrink: 0; }
 .nt-fact { flex-direction: row; align-items: center; width: 50%; height: 26px; flex-shrink: 0; }
 .nt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0;

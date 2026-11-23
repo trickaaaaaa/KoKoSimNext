@@ -17,6 +17,11 @@ namespace KokoSim.Unity.Debugging
         public string Id;
         public string Name;
         public int Width = 1600, Height = 900;
+        /// <summary>
+        /// 真なら、絵の大きさに合わせて論理解像度を変えず、本番と同じ参照解像度（1600×900・ScaleWithScreenSize）のまま撮る
+        /// （issue #1533）。既定（偽）は論理解像度＝絵の大きさ。1280×720 の窓で本番がどう見えるか（0.8倍）を撮る用。
+        /// </summary>
+        public bool GameScale;
         public readonly List<ScreenStep> Steps = new List<ScreenStep>();
     }
 
@@ -152,6 +157,7 @@ namespace KokoSim.Unity.Debugging
             {
                 case "id": r.Id = Unquote(v); return r.Id.Length > 0;
                 case "name": r.Name = Unquote(v); return true;
+                case "game_scale": return bool.TryParse(Unquote(v), out r.GameScale);
                 case "size":
                     var m = FlowMap(v);
                     if (m == null) return false;

@@ -694,7 +694,7 @@ namespace KokoSim.Unity.Debugging
                 try
                 {
                     ps.scaleMode = PanelScaleMode.ScaleWithScreenSize;
-                    ps.referenceResolution = new Vector2Int(w, h);
+                    if (!_r.GameScale) ps.referenceResolution = new Vector2Int(w, h);
                     ps.targetTexture = rt;
                 }
                 catch (Exception e) { Fail(s, e); }

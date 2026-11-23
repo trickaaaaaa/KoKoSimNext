@@ -29,14 +29,16 @@ namespace KokoSim.Unity.Components
     {
         // カードの箱の寸法はこの部品が持つ（BaseballFieldElement / Match2DPlaybackElement と同じく、
         // 座標を自分で計算する自作要素は自分の幾何を持つ）。components.uss 側は色と枠だけを担当する。
-        /// <summary>カード1枚の幅。将来ここへ絵を入れる前提で大きめに取る。</summary>
+        /// <summary>カード1枚の幅の下限（名前が短い手札の幅）。将来ここへ絵を入れる前提で大きめに取る。
+        /// 実際の幅は手札の名前の長さで決める（<see cref="StepFor"/>・issue #1533）。</summary>
         public const float CardWidth = 106f;
         /// <summary>カード1枚の高さ（絵：名前 ≒ 2:1）。</summary>
         public const float CardHeight = 144f;
         /// <summary>隣のカードに覆われる幅。CardWidth − Overlap が「隠れない左の帯」になる。</summary>
         public const float Overlap = 30f;
 
-        private const float Step = CardWidth - Overlap;
+        /// <summary>帯（隣に隠れない左の幅）の下限＝名前が短い手札の帯。</summary>
+        private const float BaseStep = CardWidth - Overlap;
 
         /// <summary>名前の段（カード下部）の高さ比。絵の面は残り。</summary>
         private const float CapHeightRatio = 0.38f;
@@ -50,12 +52,54 @@ namespace KokoSim.Unity.Components
         /// <summary>この字数からは名前を2行に割る（「コントロール重視」を1行に収めると読めない級数になる）。</summary>
         private const int WrapFromLength = 4;
 
-        /// <summary>カード名の級数は<b>1行あたりの</b>文字数で決める（左の帯に収まる比率。モックで詰めた値）。</summary>
+        /// <summary>カード名の級数は<b>1行あたりの</b>文字数で決める（左の帯 76px に収まる比率。モックで詰めた値）。</summary>
         private static readonly float[] CapRatioByLen = { 0.34f, 0.34f, 0.30f, 0.24f, 0.19f, 0.155f, 0.135f };
 
-        /// <summary>長い名前を2行に割る（自動折り返しに任せず、割る位置を自分で決めて級数を確定させる）。</summary>
-        private static string WrapLabel(string label)
+        /// <summary>
+        /// カード名の級数の下限（issue #1533・オーナー決定）。字数で級数を変える作り（2字19px・3字18px…）は残し、
+        /// 4字以上で 14px 未満になっていた名前（6字10px など）だけ 14px へ底上げする。短い名前は以前と同じ大きさ。
+        /// </summary>
+        private const float MinNameFontSize = 14f;
+
+        /// <summary>名前1字ぶんの幅（下限 14px の Noto Sans JP の実測: 「コントロール」6字で 85px）。4字以上の行はこの幅で帯を決める。</summary>
+        private const float NameCharWidth = 85f / 6f;
+
+        /// <summary>名前の箱の左右に1pxずつ残す（0.8倍描画では字幅がわずかに広がり、帯の端や隣の枠に触れる）。</summary>
+        private const float NameSlack = 2f;
+
+        /// <summary>カードの左の枠（components.uss の .tcard の border-left-width＝--nb-shadow-card）。</summary>
+        private const float CardBorderLeft = 7f;
+
+        /// <summary>
+        /// いまの手札の帯の幅（隣のカードに隠れない左の幅）。名前は帯のうち左の枠の内側（<see cref="NameBand"/>）の中央に置く。
+        /// 手札でいちばん長い1行（下限 14px）がこの内側に入る幅まで、<see cref="BaseStep"/> から広げる（issue #1533）。
+        /// 3字までの行は級数が大きい（18〜23px）が字数が少ないので <see cref="BaseStep"/> の帯に入る（モックで詰めた比率）。
+        /// 攻撃の手札（最長「セーフティ」「エンドラン」5字）は 80px、守備の手札（「コントロール」6字）は 94px。
+        /// 1列に並べた手札（攻撃 7＋4枚・守備 2＋8枚）は盤面の幅（1600×900 で 1036px）に収まる（攻撃 956px・守備 1016px）。
+        /// 守備の手札はこれ以上広げると盤面の左右の打順表に重なる（帯 96px で 1036px＝ちょうど縁まで）。
+        /// </summary>
+        private float _step = BaseStep;
+
+        private float Step => _step;
+        private float CardWidthNow => _step + Overlap;
+        private float NameBand => _step - CardBorderLeft;
+
+        /// <summary>手札の名前（割った後の各行）から帯の幅を決める。</summary>
+        private static float StepFor(IEnumerable<string> names)
         {
+            var longest = 0;
+            foreach (var n in names)
+                foreach (var line in (n ?? "").Split('\n'))
+                    longest = Mathf.Max(longest, line.Length);
+            var need = Mathf.Ceil(longest * NameCharWidth) + NameSlack + CardBorderLeft;
+            return Mathf.Max(BaseStep, need);
+        }
+
+        /// <summary>長い名前を2行に割る（自動折り返しに任せず、割る位置を自分で決めて級数を確定させる）。</summary>
+        private static string WrapLabel(string label, string cardLabel = null)
+        {
+            // 割り方を明示した名前はそのまま（語の途中で割らない・issue #1533）
+            if (!string.IsNullOrEmpty(cardLabel)) return cardLabel;
             var s = label ?? "";
             if (s.Length < WrapFromLength) return s;
             var head = (s.Length + 1) / 2;
@@ -208,6 +252,11 @@ namespace KokoSim.Unity.Components
             _stanceRow.Clear();
             _byId.Clear();
 
+            var names = new List<string>();
+            foreach (var def in _defs)
+                if (def.Offense == _offense) names.Add(CardText(def));
+            _step = StepFor(names);
+
             foreach (var def in _defs)
             {
                 if (def.Offense != _offense) continue;
@@ -249,12 +298,16 @@ namespace KokoSim.Unity.Components
             // 下＝名前。左の帯（隣に隠れない幅）の中央へ置く。
             var cap = new VisualElement { pickingMode = PickingMode.Ignore };
             cap.AddToClassList("tcard__cap");
-            var name = new Label(WrapLabel(def.LabelOf?.Invoke() ?? def.Label)) { pickingMode = PickingMode.Ignore };
+            var name = new Label(CardText(def)) { pickingMode = PickingMode.Ignore };
             name.AddToClassList("tcard__name");
             cap.Add(name);
             card.Add(cap);
             return card;
         }
+
+        /// <summary>カードの名前の段に出す字（割り方込み）。</summary>
+        private static string CardText(SignDef def)
+            => def.LabelOf != null ? WrapLabel(def.LabelOf()) : WrapLabel(def.Label, def.CardLabel);
 
         private void RefreshHighlights()
         {
@@ -348,6 +401,9 @@ namespace KokoSim.Unity.Components
                 // 札の無い塊は畳む（どちらも空にならない構成だが、空の塊で幅と余白を取らない）。
                 style.display = _cards.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
                 style.height = CardHeight;
+                var Step = _deck.Step;
+                var CardWidth = _deck.CardWidthNow;
+                var NameBand = _deck.NameBand;
                 var width = _cards.Count > 0 ? Step * (_cards.Count - 1) + CardWidth : 0f;
                 _inner.style.width = width;
                 _hits.style.width = width;
@@ -369,7 +425,7 @@ namespace KokoSim.Unity.Components
                     if (ghost != null)
                     {
                         ghost.style.width = Step;
-                        ghost.style.fontSize = Mathf.Round(Step * 0.62f);
+                        ghost.style.fontSize = Mathf.Round(BaseStep * 0.62f);   // 帯を広げても敷き字の大きさは変えない
                     }
                     // 絵も同じ帯の中央へ。帯の幅に対して一定の余白を残す（絵は正方形で、帯に収まる大きさへ縮む）。
                     var pic = card.Q(className: "tcard__pic");
@@ -388,15 +444,16 @@ namespace KokoSim.Unity.Components
                     var name = card.Q<Label>(className: "tcard__name");
                     if (name != null)
                     {
-                        name.style.width = Step;
-                        // 級数は幅（1行の字数）と高さ（行数）の両方で決める。どちらか片方だけだと、
-                        // 2行にした長い名前が段からはみ出すか、短い名前が不揃いに小さくなる。
+                        name.style.width = NameBand;
+                        // 級数は幅（1行の字数・帯 76px 基準＝以前と同じ大きさ）と高さ（行数）の両方で決め、
+                        // 下限 14px へ底上げする（帯は手札の最長の行が 14px で入る幅まで広げてある）。
+                        // 2行でも段に入る（段 55px ÷ (2行×行送り1.45) ≒ 19px ≧ 14px）。
                         var rows = (name.text ?? "").Split('\n');
                         var perLine = 1;
                         foreach (var row in rows) perLine = Mathf.Max(perLine, row.Length);
-                        var byWidth = Step * CapRatioByLen[Mathf.Clamp(perLine, 1, CapRatioByLen.Length - 1)];
+                        var byWidth = BaseStep * CapRatioByLen[Mathf.Clamp(perLine, 1, CapRatioByLen.Length - 1)];
                         var byHeight = capHeight / (rows.Length * LineHeightFactor);
-                        name.style.fontSize = Mathf.Round(Mathf.Min(byWidth, byHeight));
+                        name.style.fontSize = Mathf.Max(MinNameFontSize, Mathf.Round(Mathf.Min(byWidth, byHeight)));
                     }
                 }
             }
