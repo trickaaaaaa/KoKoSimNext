@@ -124,7 +124,7 @@ namespace KokoSim.Unity.Components
     /// <summary>軸ラベルの段階（部品辞書 components.uss の radar-axis 系クラスに対応）。</summary>
     public enum RadarLabelSize
     {
-        /// <summary>ラベルを出さない（能力バランスなど、凡例を別に持つ画面）。</summary>
+        /// <summary>ラベルを出さない（凡例を別に持つ画面）。</summary>
         None,
         /// <summary>小（カード内の小型レーダー）。</summary>
         Normal,

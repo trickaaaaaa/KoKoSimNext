@@ -279,7 +279,60 @@ namespace KokoSim.Unity.Training
             var at = selected == null ? -1 : IndexOfPlayer(selected);
             _selected = at >= 0 ? at : 0;
             _revertIndex = at >= 0 && _revertIndex >= 0 ? at : -1;
+            _editSnapshot = null;   // 部員が入れ替わった＝控えは別人を指す（モーダルは呼び出し側が閉じる）
             return true;
+        }
+
+        // モーダルを開いた時点の控え（issue #1534）。モーダルの操作は共有ロスターへ即時に書くので、
+        // 「決定」以外（×・暗幕・Esc）で閉じたらこの控えへ戻す。選手ごとの計画・委任・個別指導の指名を持つ。
+        private sealed class EditSnapshot
+        {
+            public DevelopingPlayer[] Players;
+            public TrainingPlan[] Plans;   // null＝お任せ（未設定）もそのまま戻す
+            public bool[] Delegated;
+            public bool[] Nominated;
+        }
+
+        private EditSnapshot _editSnapshot;
+
+        /// <summary>練習設定のモーダルを開いた時点の状態を控える（issue #1534）。</summary>
+        public void BeginEdit()
+        {
+            var n = _roster.Count;
+            var snap = new EditSnapshot
+            {
+                Players = new DevelopingPlayer[n],
+                Plans = new TrainingPlan[n],
+                Delegated = new bool[n],
+                Nominated = new bool[n],
+            };
+            for (var i = 0; i < n; i++)
+            {
+                snap.Players[i] = _roster[i];
+                snap.Plans[i] = _roster[i].Plan;
+                snap.Delegated[i] = _delegated[i];
+                snap.Nominated[i] = _roster[i].IndividualCoaching;
+            }
+            _editSnapshot = snap;
+        }
+
+        /// <summary>「決定」: モーダルでの変更をそのまま残す（控えを捨てる）。</summary>
+        public void CommitEdit() => _editSnapshot = null;
+
+        /// <summary>「決定」以外で閉じた: モーダルを開いた時点の状態へ戻す（issue #1534）。</summary>
+        public void CancelEdit()
+        {
+            var snap = _editSnapshot;
+            _editSnapshot = null;
+            if (snap == null) return;
+            for (var i = 0; i < snap.Players.Length; i++)
+            {
+                var p = snap.Players[i];
+                p.Plan = snap.Plans[i];
+                p.IndividualCoaching = snap.Nominated[i];
+                var at = IndexOfPlayer(p);
+                if (at >= 0) _delegated[at] = snap.Delegated[i];
+            }
         }
 
         private int IndexOfPlayer(DevelopingPlayer p)

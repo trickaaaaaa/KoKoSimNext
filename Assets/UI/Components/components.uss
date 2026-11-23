@@ -613,6 +613,22 @@
 .dlg-btn--ghost { background-color: var(--color-panel-deep); color: var(--color-chalk); border-width: 1px; border-color: var(--color-line); }
 .dlg-btn--warn { background-color: var(--color-warn); color: #FFFFFF; border-width: 0; }
 
+/* ── ConfirmDialog：問い1行＋はい／いいえの確認（modal-scrim / modal-card / dlg-btn と組む）──
+   セーブ削除の確認（SaveSlots）から辞書へ移した（issue #1534 で経営の購入・年契約の確認にも使う）。 */
+.confirm-card {
+    padding: 28px 40px;
+    min-width: 360px;
+    align-items: center;
+}
+.confirm-q {
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    margin-bottom: var(--sp-4);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+.confirm-btns { flex-direction: row; }
+
 /* ── Banner：強調告知バー（合宿など） ───────────────────────────────── */
 .banner {
     flex-direction: row;
@@ -2288,7 +2304,7 @@
     transform-origin: 50% 100%;   /* 下端を軸に上へ伸び上がる（帯の高さを変えずに大きく見せる） */
 }
 /* 持ち上がるのはカーソルが乗った1枚だけ。最前面化は C# の BringToFront が行う（USS に z-index は無い）。 */
-.tcard--hot { translate: 0 -12px; scale: 1.22; }
+.tcard--hot { translate: 0 var(--tcard-hot-lift); scale: var(--tcard-hot-scale); }   /* 量は tokens.uss（issue #1534） */
 
 /* 上2/3＝絵の面。絵（.tcard__pic）が無いカードは Icon の1文字を淡く敷いて枠だと分かるようにする。 */
 .tcard__art {

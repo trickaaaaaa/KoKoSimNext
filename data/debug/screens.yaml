@@ -918,3 +918,109 @@ screens:
       - show: LineupSetting
       - wait: 5
       - shot: 08-lineup
+
+  # ── 経営の確認・練習プリセット・選手の能力バランス（issue #1534）──
+  - id: confirm-preset-radar-1534-1280
+    name: "経営の購入・年契約の確認と部費不足の無効・練習プリセットの配分と決定前の一覧・選手の能力バランスの項目名（issue #1534）"
+    size: {w: 1280, h: 720}
+    game_scale: true
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - show: ManagementScreen
+      - set: {ManagerService.Manager.Funds: 9}
+      - call: SelectTab(0)
+      - wait: 3
+      - shot: 01-facilities-funds9
+      - call: SelectTab(3)
+      - wait: 3
+      - shot: 02-contracts-funds9
+      - set: {ManagerService.Manager.Funds: 500}
+      - call: SelectTab(0)
+      - click: .mn-buy[4]
+      - wait: 3
+      - shot: 03-confirm-buy
+      - click: mn-confirm-no
+      - call: SelectTab(3)
+      - click: .mn-buy[0]
+      - wait: 3
+      - shot: 04-confirm-contract
+      - click: mn-confirm-yes
+      - wait: 3
+      - shot: 05-after-sign
+      - show: TrainingPlan
+      - wait: 5
+      - call: OpenModal(0)
+      - wait: 3
+      - click: .tpm-preset-chip[3]
+      - wait: 5
+      - shot: 06-preset-defense-before-done
+      - click: modal-done
+      - wait: 5
+      - shot: 07-after-done
+      # 「決定」以外（×）で閉じたら開いた時点へ戻る（2人目は主砲育成型を押して×＝バランス型のまま）
+      - call: OpenModal(1)
+      - wait: 3
+      - click: .tpm-preset-chip[5]
+      - wait: 3
+      - click: modal-close
+      - wait: 5
+      - shot: 07b-after-cancel
+      - show: PlayerList
+      - wait: 5
+      # game_scale では h を伸ばすと縮尺が変わる＝能力バランスは 1600 の h: 1500 の撮影で見る（論理レイアウトは同じ）
+      - shot: 08-players-top
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 09-home-team-radar
+
+  - id: confirm-preset-radar-1534-1600
+    name: "経営の購入・年契約の確認と部費不足の無効・練習プリセットの配分と決定前の一覧・選手の能力バランスの項目名（issue #1534）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - show: ManagementScreen
+      - set: {ManagerService.Manager.Funds: 9}
+      - call: SelectTab(0)
+      - wait: 3
+      - shot: 01-facilities-funds9
+      - call: SelectTab(3)
+      - wait: 3
+      - shot: 02-contracts-funds9
+      - set: {ManagerService.Manager.Funds: 500}
+      - call: SelectTab(0)
+      - click: .mn-buy[4]
+      - wait: 3
+      - shot: 03-confirm-buy
+      - click: mn-confirm-no
+      - call: SelectTab(3)
+      - click: .mn-buy[0]
+      - wait: 3
+      - shot: 04-confirm-contract
+      - click: mn-confirm-yes
+      - wait: 3
+      - shot: 05-after-sign
+      - show: TrainingPlan
+      - wait: 5
+      - call: OpenModal(0)
+      - wait: 3
+      - click: .tpm-preset-chip[3]
+      - wait: 5
+      - shot: 06-preset-defense-before-done
+      - click: modal-done
+      - wait: 5
+      - shot: 07-after-done
+      # 「決定」以外（×）で閉じたら開いた時点へ戻る（2人目は主砲育成型を押して×＝バランス型のまま）
+      - call: OpenModal(1)
+      - wait: 3
+      - click: .tpm-preset-chip[5]
+      - wait: 3
+      - click: modal-close
+      - wait: 5
+      - shot: 07b-after-cancel
+      - show: PlayerList
+      - wait: 5
+      - shot: {name: 08-players-radar, h: 1500}
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 09-home-team-radar

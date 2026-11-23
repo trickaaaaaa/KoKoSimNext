@@ -9,7 +9,7 @@ namespace KokoSim.Unity.Players
     /// <summary>
     /// 選手詳細のコントローラ（設計書06 §3.3、mock「選手詳細」）。
     /// PlayerSelection.Index の1名を PlayerDetailState から整形してバインドする。
-    /// 能力バランスは Painter2D で実描画（現在能力から）。成長推移は月の頭の記録＋今の値の折れ線（issue #1027）。
+    /// 能力バランスは Painter2D で実描画（現在能力から・項目名つき）。成長推移は月の頭の記録＋今の値の折れ線（issue #1027）。
     /// マスターディテール化（issue #131）: 独立画面ではなく、PlayerList と同じ GameObject・同じ
     /// UIDocument（PlayerList.uxml の右ペイン）に同居させる。切替入口は <see cref="RenderForSelection"/>
     /// （PlayerListController が行ホバーのたびに呼ぶ）。
@@ -30,8 +30,11 @@ namespace KokoSim.Unity.Players
         private int _scope;
         private PlayerDetailView _view;
 
-        // 能力バランスの半径比（軸ラベルは出さず、左の能力バー一覧が凡例を兼ねる）。
-        private const float RadiusFactor = 0.42f;
+        // 能力バランスの半径比と軸ラベルの距離比（issue #1534: ホームのチームランクの6角形と同じく項目名を出す）。
+        // 器（.pd2-radar）は横幅約300pxで縦に長い＝短辺は横幅。頂点は短辺の 0.31（≒93px）、項目名の中心は頂点の 1.4 倍の
+        // 距離に置く。左右の項目名（2字・幅約34px）が器の内側に収まり、頂点との間に約8px残る。
+        private const float RadiusFactor = 0.31f;
+        private const float LabelOffset = 1.4f;
 
         // 球種変化チャート（プロスピ風・扇形セクター塗り）は部品辞書へ昇格した（issue #94）。
         // 描画実体は UiComponents 側の PitchChartView。ここは器への差し込みだけを持つ。
@@ -46,8 +49,8 @@ namespace KokoSim.Unity.Players
             _root.Q<Label>("number")?.AddToClassList("f-num-bd");
 
             // レーダーは部品辞書の共通部品（チーム総合力・練習試合・試合開始前と同一の描画）。
-            _radar = new RadarChartView(_root.Q<VisualElement>("radar"), RadiusFactor,
-                labelSize: RadarLabelSize.None);
+            _radar = new RadarChartView(_root.Q<VisualElement>("radar"), RadiusFactor, LabelOffset,
+                RadarLabelSize.Normal);
 
             _pitchChart = new PitchChartView(_root.Q<VisualElement>("pitch-chart"));
 

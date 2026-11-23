@@ -152,21 +152,9 @@
 }
 
 /* ── 削除確認ダイアログ ─────────────────────────────────── */
-.ss-confirm__card {
-    padding: 28px 40px;
-    min-width: 360px;
-    align-items: center;
-}
-.ss-confirm__q {
-    font-size: var(--fs-body);
-    color: var(--color-chalk);
-    margin-bottom: var(--sp-4);
-    white-space: normal;
-    -unity-text-align: middle-center;
-}
+/* 器・問い・ボタン列は部品辞書の ConfirmDialog（confirm-card / confirm-q / confirm-btns・components.uss） */
 /* 「タイトルへ戻る」確認の補足（最後の保存から何週か。issue #730 でホームから移設） */
 .ss-confirm__sub { font-size: var(--fs-label); color: var(--color-muted); margin-bottom: var(--sp-4); }
-.ss-confirm__btns { flex-direction: row; }
 
 /* 画面の高さいっぱいに紙色を敷く（ルートが伸びず下半分が白く抜けていた）。 */
 .ss-root { flex-grow: 1; }

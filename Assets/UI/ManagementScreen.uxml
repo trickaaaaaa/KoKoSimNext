@@ -66,5 +66,16 @@
         </ui:VisualElement>
 
       </ui:VisualElement>
+
+      <!-- 購入・年契約の確認（issue #1534）。部品辞書の ConfirmDialog（modal-scrim / modal-card / confirm-card / dlg-btn）。 -->
+      <ui:VisualElement name="mn-confirm" class="ui-root modal-scrim">
+        <ui:VisualElement class="modal-card confirm-card">
+          <ui:Label name="mn-confirm-q" class="confirm-q f-body" text="" />
+          <ui:VisualElement class="confirm-btns">
+            <ui:Button name="mn-confirm-no" class="dlg-btn dlg-btn--ghost" text="いいえ" />
+            <ui:Button name="mn-confirm-yes" class="dlg-btn dlg-btn--primary" text="はい" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

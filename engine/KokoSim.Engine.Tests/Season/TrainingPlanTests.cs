@@ -278,6 +278,24 @@ public sealed class TrainingPlanTests
         foreach (var a in alloc) Assert.Contains(a.Menu, allowed);
     }
 
+    // issue #1534: 練習画面の配分欄には内野/外野の汎用守備の行が無い。プリセットがそれを使うと、
+    // その分が画面の合計に数えられず「残り 70/300分」と余って見える（守備重視型で起きていた）。
+    [Theory]
+    [InlineData(TrainingPreset.PitcherAuto)]
+    [InlineData(TrainingPreset.BatterAuto)]
+    [InlineData(TrainingPreset.Balanced)]
+    [InlineData(TrainingPreset.DefenseFocus)]
+    [InlineData(TrainingPreset.AceDevelopment)]
+    [InlineData(TrainingPreset.SluggerDevelopment)]
+    public void Presets_DoNotUseGroupDefenseMenus(TrainingPreset preset)
+    {
+        foreach (var a in TrainingPresets.Resolve(new TrainingPlan { Preset = preset }, 300))
+        {
+            Assert.NotEqual(TrainingMenu.DefenseInfield, a.Menu);
+            Assert.NotEqual(TrainingMenu.DefenseOutfield, a.Menu);
+        }
+    }
+
     // 8. コピー: b.Plan = a.Plan 後、b用に新プランを作っても a は不変（immutable の安全性, 要件6）。
     [Fact]
     public void Copy_SharesImmutablePlan_SourceUnaffected()
