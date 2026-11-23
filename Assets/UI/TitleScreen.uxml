@@ -17,8 +17,8 @@
         <ui:VisualElement class="ts-backdrop" />
 
         <ui:VisualElement class="ts-content">
-            <ui:Label text="白球監督録" class="f-display-lg ts-title" />
-            <ui:VisualElement class="ts-rule" />
+            <!-- 題字ロゴ（Claude Design 製・書体 Yuji Syuku/OFL をアウトライン化した画像）。 -->
+            <ui:VisualElement name="ts-logo" class="ts-logo" />
 
             <ui:VisualElement class="ts-menu">
                 <ui:Button name="ts-new-game" text="▶ はじめから" class="f-body-bd ts-menu-item ts-menu-item--cta" />
