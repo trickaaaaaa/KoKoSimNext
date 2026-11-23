@@ -17,16 +17,43 @@ public enum EventStance
     Listen,
     /// <summary>主将に任せる。主将の統率力で決まり、当事者が「引っ張る」側だと効きにくい。</summary>
     Captain,
+
+    // ── 怪我対応・学業配慮（issue #1270 E1・2026-11-23）。性格で振れない＝好転の確率は選択肢の improve_prob ──
+    /// <summary>検査に行かせる（エースの肘の違和感）。</summary>
+    SendToDoctor,
+    /// <summary>様子を見る（同。故障のリスクを取る）。</summary>
+    WaitAndSee,
+    /// <summary>練習を軽くする（テスト週の配慮）。</summary>
+    EasePractice,
+    /// <summary>いつも通りやる（同）。</summary>
+    AsUsual,
 }
 
-/// <summary>選択肢1つ（対応と、画面に出す言い回し）。</summary>
-public sealed record EventChoice(EventStance Stance, string Label);
+/// <summary>対応の性質。</summary>
+public static class EventStances
+{
+    /// <summary>
+    /// 結束を動かす対応か（選手間のもめ事への3つの対応だけ。設計書23 §3.3）。怪我対応・学業配慮は
+    /// 部員どうしの関係の話ではないので結束は動かさず、信頼度だけを動かす（issue #1270）。
+    /// </summary>
+    public static bool MovesCohesion(EventStance s) => s is EventStance.Scold or EventStance.Listen or EventStance.Captain;
+}
 
 /// <summary>
-/// 結果の会話1つ（対応×好転/悪化）。会話の最終行の結果行はここに書かず、提示層が結束の動きから足す
-/// （既存の結果行と同じ作法）。
+/// 選択肢1つ（対応と、画面に出す言い回し）。<paramref name="ImproveProb"/> があれば好転の確率は性格によらずこの値
+/// （怪我対応・学業配慮。1.0＝必ず「好転」側の結果）。null なら <see cref="EventChoiceResolver.ImproveProbability"/>。
 /// </summary>
-public sealed record EventOutcome(EventStance Stance, bool Improved, EventScript Script);
+public sealed record EventChoice(EventStance Stance, string Label, double? ImproveProb = null);
+
+/// <summary>
+/// 結果の会話1つ（対応×好転/悪化）。会話の最終行の結果行はここに書かず、提示層が結束の動きと
+/// <paramref name="Effect"/>（信頼度・名声・故障など・issue #1270）から足す（既存の結果行と同じ作法）。
+/// </summary>
+public sealed record EventOutcome(EventStance Stance, bool Improved, EventScript Script, EventEffect? Effect = null)
+{
+    /// <summary>この結果で起きる効果（無ければ <see cref="EventEffect.None"/>）。</summary>
+    public EventEffect EffectOrNone => Effect ?? EventEffect.None;
+}
 
 /// <summary>
 /// 当事者（<c>{player}</c>）と相手（<c>{other}</c>）の選び方（issue #945）。
@@ -44,6 +71,8 @@ public enum EventCastRule
     UpperGrade,
     /// <summary>1年生。</summary>
     FirstYear,
+    /// <summary>エース（背番号1）で、いま故障していない部員（issue #1270・エースの肘の違和感）。</summary>
+    Ace,
 }
 
 /// <summary>当事者と相手の選び方。<see cref="Other"/> が null なら相手は出ない。</summary>
@@ -89,6 +118,7 @@ public sealed record EventCast(EventCastRule Subject = EventCastRule.Any, EventC
         EventCastRule.Selfless => Players.Personalities.High(p.Selflessness),
         EventCastRule.UpperGrade => p.Grade >= 2,
         EventCastRule.FirstYear => p.Grade == 1,
+        EventCastRule.Ace => p.UniformNumber == 1 && p.Injury == Players.InjurySeverity.None,
         _ => true,
     };
 
@@ -124,6 +154,16 @@ public static class EventChoiceResolver
     /// <summary>主将の統率力（design-09 §8: 統率傾向×精神力/100）。主将不在は null。</summary>
     public static double? CaptainPower(DevelopingPlayer? captain)
         => captain is null ? null : CaptainSelector.LeadershipPower(captain);
+
+    /// <summary>
+    /// 選択肢の好転の確率。<see cref="EventChoice.ImproveProb"/> があればそれ（0〜1で止める・性格に依らない）、
+    /// 無ければ性格と主将の統率力から（<see cref="ImproveProbability(EventStance, PersonalityAxes, double?, CohesionCoefficients)"/>）。
+    /// </summary>
+    public static double ImproveProbability(EventChoice choice, PersonalityAxes subject, double? captainPower,
+        CohesionCoefficients c)
+        => choice.ImproveProb is { } fixedP
+            ? MathUtil.Clamp(fixedP, 0.0, 1.0)
+            : ImproveProbability(choice.Stance, subject, captainPower, c);
 
     /// <summary>好転の確率（0〜1）。</summary>
     public static double ImproveProbability(EventStance stance, PersonalityAxes subject, double? captainPower,
@@ -172,10 +212,15 @@ public static class EventChoiceResolver
     /// </summary>
     public static EventScript? PickOutcome(GameEvent e, EventStance stance, bool improved, int absoluteWeek, int salt,
         IRandomSource rng)
+        => PickOutcomeEntry(e, stance, improved, absoluteWeek, salt, rng)?.Script;
+
+    /// <summary><see cref="PickOutcome"/> の結果を効果つきで返す（issue #1270）。同じ抽選＝同じ会話を選ぶ。</summary>
+    public static EventOutcome? PickOutcomeEntry(GameEvent e, EventStance stance, bool improved, int absoluteWeek,
+        int salt, IRandomSource rng)
     {
-        var matches = new List<EventScript>();
+        var matches = new List<EventOutcome>();
         foreach (var o in e.Outcomes)
-            if (o.Stance == stance && o.Improved == improved) matches.Add(o.Script);
+            if (o.Stance == stance && o.Improved == improved) matches.Add(o);
         if (matches.Count == 0) return null;
         if (matches.Count == 1) return matches[0];
         var stream = EventScheduler.StreamOf(e.Id, absoluteWeek, salt) ^ OutcomeStreamSalt;

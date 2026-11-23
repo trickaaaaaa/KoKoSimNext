@@ -517,6 +517,11 @@ public static class GameEngine
         // どちらの Team（AwayTeam/HomeTeam）の MomentumLevel かを参照一致で引く。試合中は不変。
         var offenseMomentum = ReferenceEquals(offense, p.Away) ? p.AwayTeam.MomentumLevel : p.HomeTeam.MomentumLevel;
         var defenseMomentum = ReferenceEquals(defense, p.Away) ? p.AwayTeam.MomentumLevel : p.HomeTeam.MomentumLevel;
+        // 士気の土台（issue #1270 M1）。自校だけが持つ（null＝0＝恒等）。試合中は不変。
+        var offenseTeam = ReferenceEquals(offense, p.Away) ? p.AwayTeam : p.HomeTeam;
+        var defenseTeam = ReferenceEquals(defense, p.Away) ? p.AwayTeam : p.HomeTeam;
+        var offenseMorale = PressureModel.MoraleMitigation(offenseTeam.Morale, ctx.Pressure);
+        var defenseMorale = PressureModel.MoraleMitigation(defenseTeam.Morale, ctx.Pressure);
 
         var bases = new BaseState();
         var outs = 0;
@@ -855,10 +860,12 @@ public static class GameEngine
                 pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
                     currentPitcher.Mental, pressureIdx, ctx.Pressure,
                     defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
-                    defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills));
+                    defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills,
+                    defenseMorale));
                 bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
                     batter.Mental, pressureIdx, ctx.Pressure,
-                    offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills));
+                    offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills,
+                    moraleMitigation: offenseMorale));
 
                 // 主将（設計書09 §8.1, issue #860 A）: 在場なら常時チーム全員を底上げ。退場すると次打席で消える。
                 // ベンチでも底上げの3割（CaptainBenchFactor）は残る＝Bの伝令ボーナスと両取り可（2026-11-10 監督決定）。

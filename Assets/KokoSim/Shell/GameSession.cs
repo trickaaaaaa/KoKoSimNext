@@ -612,6 +612,10 @@ namespace KokoSim.Unity.Shell
                 0x2913_0000UL ^ StreamKey.Of(GameClock.YearIndex, GameClock.Week, ++_matchInjurySeq));
             var outcomes = MatchInjuryLedger.Apply(detail, managerWasAway, RosterService.Roster, rng, InjuryCoeff);
             if (outcomes.Count > 0) _injuryNotices.AddRange(outcomes);
+            // 怪我を押して出場させて悪化したら監督の信頼度が下がる（issue #1270 E1）。乱数は使わない。
+            var worsened = 0;
+            foreach (var o in outcomes) if (o.Kind == MatchInjuryOutcomeKind.Worsened) worsened++;
+            ManagerService.ApplyPlayThroughWorsened(worsened);
         }
 
         private readonly List<MatchInjuryOutcome> _injuryNotices = new List<MatchInjuryOutcome>();

@@ -67,6 +67,8 @@ public sealed class SaveState
     /// null＝このキーを持たない旧セーブ（読み込み時に今の通算で採り直す＝過去の勝ちをまとめて払わない）。
     /// </summary>
     public int? ManagerGrownKoshienWinsBaseline { get; set; }
+    /// <summary>今年度の教え子のプロ入りの名声（年度末の総括で上昇側に入れる・issue #1270 D1）。指名（10月）→総括（3月）の間に載る。</summary>
+    public double ManagerPendingDraftFame { get; set; }
     /// <summary>
     /// 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと・<see cref="Career.FameUpsetModel.MatchDelta"/> の値）。
     /// 年度末の監督成長で畳み込んで消費する。v12 で追加（2026-08-15・番狂わせ加点の実ゲーム配線）。

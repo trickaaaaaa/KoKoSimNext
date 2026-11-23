@@ -137,6 +137,14 @@ public sealed record CareerCoefficients
     public double KoshienBerthDonationBase { get; init; } = 120.0;
     /// <summary>同・名声1あたりの上乗せ[万円]（名声100で +150万＝年間予算の2倍強）。</summary>
     public double KoshienBerthDonationPerFame { get; init; } = 1.5;
+    /// <summary>教え子のプロ入り1人ぶんの名声の上昇（設計書04 §1.2・issue #1270 D1）。年度末の総括の上昇側に入り、逓減と年上限を通す。</summary>
+    public double FamePerDraftPick { get; init; } = 2.0;
+    /// <summary>同・ドラフト1位の名声の上昇。</summary>
+    public double FameFirstRoundPick { get; init; } = 4.0;
+    /// <summary>プロ入りぶんの名声の上昇の年上限（逓減の前）。</summary>
+    public double FameDraftSeasonCap { get; init; } = 6.0;
+    /// <summary>怪我を押して出場させて悪化したときの信頼度の低下（1件ごと・issue #1270 E1）。</summary>
+    public double TrustPlayThroughWorsened { get; init; } = 3.0;
     /// <summary>全国優勝の年に入る一時金[万円]（甲子園出場ぶんとは別に上乗せ）。</summary>
     public double NationalTitleBonus { get; init; } = 2500.0;
     /// <summary>大会報奨: 公式戦1勝ごとに部費へ入る額[万円]（issue #1469 T1・甲子園/センバツ以外の勝ち）。年度末の総括で入る。</summary>

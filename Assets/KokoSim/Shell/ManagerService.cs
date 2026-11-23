@@ -93,6 +93,8 @@ namespace KokoSim.Unity.Shell
         private static int _grownKoshienBaseline;
         // 甲子園・センバツの勝ち（大会報奨の単価を分ける・issue #1469）。null＝旧セーブ（次の総括で今の通算を基準にする）。
         private static int? _grownKoshienWinsBaseline;
+        // 今年度の教え子のプロ入りの名声（指名の週に積み、年度末の総括で上昇側に入れる・issue #1270 D1）。
+        private static double _pendingDraftFame;
         // 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと）。大会の確定時に積み、年度末の成長で畳み込んで消費する
         // （2026-08-15・issue #170 の実ゲーム配線）。engine の CareerEngine（sim）と同じ FameUpsetModel を通す。
         private static readonly List<double> _pendingUpsetDeltas = new List<double>();
@@ -136,6 +138,7 @@ namespace KokoSim.Unity.Shell
             _grownWinsBaseline = 0;
             _grownKoshienBaseline = 0;
             _grownKoshienWinsBaseline = 0;
+            _pendingDraftFame = 0;
             _pendingUpsetDeltas.Clear();
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
@@ -161,6 +164,21 @@ namespace KokoSim.Unity.Shell
             }
         }
 
+        /// <summary>今年度の教え子のプロ入りの名声（年度末の総括で入る・表示・デバッグ用。消費しない）。</summary>
+        public static double PendingDraftFame => _pendingDraftFame;
+
+        /// <summary>
+        /// 怪我を押して出場させて悪化したときの信頼度の低下（issue #1270 E1）。1件ごとに
+        /// <see cref="CareerCoefficients.TrustPlayThroughWorsened"/>。0〜100で止め、実際に動いた量を返す。
+        /// </summary>
+        public static double ApplyPlayThroughWorsened(int count)
+        {
+            if (count <= 0) return 0;
+            var before = Manager.Trust;
+            Manager.Trust = MathUtil.Clamp(Manager.Trust - CareerCoeff.TrustPlayThroughWorsened * count, 0.0, 100.0);
+            return Manager.Trust - before;
+        }
+
         /// <summary>今年度に積まれた番狂わせデルタの畳み込み値（表示・デバッグ用。消費しない）。</summary>
         public static double PendingUpsetFameDelta => FameUpsetModel.SeasonDelta(_pendingUpsetDeltas, CareerCoeff);
 
@@ -174,6 +192,7 @@ namespace KokoSim.Unity.Shell
             s.ManagerGrownWinsBaseline = _grownWinsBaseline;
             s.ManagerGrownKoshienBaseline = _grownKoshienBaseline;
             s.ManagerGrownKoshienWinsBaseline = _grownKoshienWinsBaseline;
+            s.ManagerPendingDraftFame = _pendingDraftFame;
             s.ManagerPendingUpsetDeltas = new List<double>(_pendingUpsetDeltas);
             s.PracticeLastPlayedWeek = _practice?.LastPlayedWeek;
         }
@@ -188,6 +207,7 @@ namespace KokoSim.Unity.Shell
             _grownWinsBaseline = s.ManagerGrownWinsBaseline;
             _grownKoshienBaseline = s.ManagerGrownKoshienBaseline;
             _grownKoshienWinsBaseline = s.ManagerGrownKoshienWinsBaseline;
+            _pendingDraftFame = s.ManagerPendingDraftFame;
             _pendingUpsetDeltas.Clear();
             if (s.ManagerPendingUpsetDeltas != null) _pendingUpsetDeltas.AddRange(s.ManagerPendingUpsetDeltas);
             _practice = null;
@@ -251,11 +271,14 @@ namespace KokoSim.Unity.Shell
             // 二重適用ガードの内側で消費するので、同じ年度を複数回叩いても1回だけ効く。
             var (upsetFameGain, upsetFameLoss) = FameUpsetModel.SeasonSplit(_pendingUpsetDeltas, CareerCoeff);
             _pendingUpsetDeltas.Clear();
+            // 教え子のプロ入りの名声（issue #1270 D1）。指名の週に年上限まで積んであり、ここで上昇側に入れる（逓減・年上限を通す）。
+            var draftFameGain = _pendingDraftFame;
+            _pendingDraftFame = 0;
 
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
                 Manager, reachedKoshien, nationalChampion, wins, milestoneRng,
                 upsetFameGain: upsetFameGain, upsetFameLoss: upsetFameLoss, contracts: ContractEffects,
-                nationalStageWins: nationalStageWins);
+                nationalStageWins: nationalStageWins, draftFameGain: draftFameGain);
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 
@@ -287,6 +310,11 @@ namespace KokoSim.Unity.Shell
         {
             var list = new List<(KokoSim.Engine.Career.Draft.DraftPick, double)>();
             if (result == null) return list;
+            // 名声（issue #1270 D1）: 年上限は同じ年度の指名ぶんを合わせて掛ける（総括で逓減・年上限を通す）。
+            var rounds = new List<int>();
+            foreach (var pick in result.Nominated) rounds.Add(pick.Round);
+            _pendingDraftFame = System.Math.Min(CareerCoeff.FameDraftSeasonCap,
+                _pendingDraftFame + CareerEngine.DraftFameGain(rounds, CareerCoeff));
             foreach (var pick in result.Nominated)
             {
                 var amount = CareerEngine.ProDraftDonation(pick.Round, CareerCoeff);

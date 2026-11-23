@@ -92,6 +92,13 @@ public sealed record Team
     public int MomentumLevel { get; init; } = 0;
 
     /// <summary>
+    /// 士気（0〜100・設計書04 §1.2・issue #1270 M1）。自校だけが持ち、値は監督の信頼度（Unity側が渡す）。
+    /// プレッシャーの負側の緩和に土台を足す（<see cref="PressureModel.MoraleMitigation"/>）。
+    /// null＝士気を持たない（AI校・裏試合・統計シム）＝恒等＝帯不変。
+    /// </summary>
+    public double? Morale { get; init; }
+
+    /// <summary>
     /// バッテリーの積み重ね（設計書23 §2.3・issue #933）: 投手ID×捕手ID（<see cref="Player.SourceId"/>）ごとの
     /// 一緒に守ったイニング数（重み付き）。自校だけが持つ（Unity側 GameSession が <c>BatteryLedger</c> から渡す）。
     /// null＝記録を持たない（AI校・裏試合・統計シム）＝同じ学校で過ごした年数（学年）から近似する（Q39）。

@@ -24,6 +24,12 @@ public sealed record PressureCoefficients
     public double MultiplierSlope { get; init; } = 0.02;
     /// <summary>疲労が閾値超過時、負側のみ増幅する倍率（終盤の失点劇）。</summary>
     public double FatigueNegativeAmplify { get; init; } = 1.5;
+    /// <summary>士気（＝部員の信頼度・設計書04 §1.2・issue #1270 M1）がこの値以上なら、プレッシャーの負側の緩和に土台 +MoraleMitigation。</summary>
+    public double MoraleHighThreshold { get; init; } = 70.0;
+    /// <summary>士気がこの値未満なら緩和の土台は −MoraleMitigation（負側を強める）。</summary>
+    public double MoraleLowThreshold { get; init; } = 30.0;
+    /// <summary>士気の土台の大きさ（伝令・主将の緩和に足す。合計は −1〜1 で止める）。士気を持たないチーム（AI校・裏試合・統計シム）は0＝恒等。</summary>
+    public double MoraleMitigation { get; init; } = 0.10;
 }
 
 /// <summary>
@@ -76,16 +82,20 @@ public static class PressureModel
     /// <para>trait（チャンス○×・ピンチ○×, 設計書10 §0.1）は raw へ先に掛かる: ○＝raw を +ClutchFloor×P 以上へ、
     /// ×＝負の raw を拡大し −ChokeCeiling×P 以下へ。その後の緩和・増幅は従来どおり負側に効く。
     /// trait=None（既定）なら従来と1ビットも変わらない。</para>
+    /// <para>moraleMitigation（士気の土台・設計書04 §1.2・issue #1270 M1）は伝令・主将の緩和に足す土台。
+    /// 負の値なら負側を強める。合計は −1〜1 で止める。0（既定・士気を持たないチーム）なら従来と1ビットも変わらない。</para>
     public static double Multiplier(int mental, int pressureIndex, PressureCoefficients c,
         double mitigation = 0.0, bool fatigueOver = false, double negativeAmplify = 1.0,
-        PressureTrait trait = PressureTrait.None, SkillCoefficients? skills = null)
+        PressureTrait trait = PressureTrait.None, SkillCoefficients? skills = null, double moraleMitigation = 0.0)
     {
         var raw = (mental - 50) / 50.0 * c.MultiplierSlope * pressureIndex;
         if (trait != PressureTrait.None && pressureIndex > 0)
             raw = ApplyTrait(raw, pressureIndex, trait, skills ?? DefaultSkills);
         if (raw < 0)
         {
-            raw *= 1.0 - MathUtil.Clamp(mitigation, 0.0, 1.0);
+            var mit = MathUtil.Clamp(mitigation, 0.0, 1.0);
+            if (moraleMitigation != 0.0) mit = MathUtil.Clamp(mit + moraleMitigation, -1.0, 1.0);
+            raw *= 1.0 - mit;
             if (fatigueOver) raw *= c.FatigueNegativeAmplify;
             raw *= negativeAmplify;
         }
@@ -93,6 +103,20 @@ public static class PressureModel
     }
 
     private static readonly SkillCoefficients DefaultSkills = new();
+
+    /// <summary>
+    /// 士気の土台（設計書04 §1.2「部員信頼→チーム士気の基礎値」・issue #1270 M1）。士気＝監督の信頼度（0〜100）。
+    /// 高い（≧<see cref="PressureCoefficients.MoraleHighThreshold"/>）と負側の緩和に +<see cref="PressureCoefficients.MoraleMitigation"/>、
+    /// 低い（＜<see cref="PressureCoefficients.MoraleLowThreshold"/>）と −（負側を強める）、その間は0。
+    /// null＝士気を持たない（AI校・裏試合・統計シム）＝0。精神力50の選手はプレッシャーの振れが0なので常に恒等。
+    /// </summary>
+    public static double MoraleMitigation(double? morale, PressureCoefficients c)
+    {
+        if (morale is not { } m) return 0.0;
+        if (m >= c.MoraleHighThreshold) return c.MoraleMitigation;
+        if (m < c.MoraleLowThreshold) return -c.MoraleMitigation;
+        return 0.0;
+    }
 
     /// <summary>チャンス○×・ピンチ○×を倍率の振れ raw へ掛ける（設計書10 §0.1）。</summary>
     public static double ApplyTrait(double raw, int pressureIndex, PressureTrait trait, SkillCoefficients s)

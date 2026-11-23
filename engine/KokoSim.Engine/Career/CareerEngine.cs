@@ -264,6 +264,20 @@ public static class CareerEngine
     };
 
     /// <summary>
+    /// 教え子のプロ入りで上がる名声（逓減の前・設計書04 §1.2・issue #1270 D1）。1人 <see cref="CareerCoefficients.FamePerDraftPick"/>
+    /// （1位は <see cref="CareerCoefficients.FameFirstRoundPick"/>）、合計は年 <see cref="CareerCoefficients.FameDraftSeasonCap"/> まで。
+    /// 年度末の総括（<see cref="NextFame"/> の上昇側）に入れる＝逓減と年上限を通す（名声→新入生→指名→名声の正のループを強めない）。
+    /// </summary>
+    /// <param name="rounds">この年度に指名された教え子の順位（1始まり。0以下は数えない）。</param>
+    public static double DraftFameGain(IEnumerable<int> rounds, CareerCoefficients c)
+    {
+        var sum = 0.0;
+        foreach (var r in rounds)
+            if (r >= 1) sum += r == 1 ? c.FameFirstRoundPick : c.FamePerDraftPick;
+        return Math.Min(sum, Math.Max(0, c.FameDraftSeasonCap));
+    }
+
+    /// <summary>
     /// 部費の年間差引[万円]（予算＋寄付−固定支出）。経営タブの「年間差引」。甲子園・全国優勝の一時金と
     /// 大会報奨（<see cref="TournamentPrizeIncome"/>）は結果しだいなので見込みに入れない。信頼度・名声は総括前の値＝見込み。
     /// </summary>
@@ -281,7 +295,7 @@ public static class CareerEngine
     /// </param>
     internal static void ApplyResults(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameGain, double upsetFameLoss,
-        CareerCoefficients c, ContractEffects? contracts = null, int nationalStageWins = 0)
+        CareerCoefficients c, ContractEffects? contracts = null, int nationalStageWins = 0, double draftFameGain = 0)
     {
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする
         // （「気づいたら練れていた」の意図に沿った緩やかなカーブ。線形だと十数年で99へ急上昇し
@@ -301,7 +315,7 @@ public static class CareerEngine
 
         // 名声（持ち越し）。FamePerWin は勝利一律の加算、upsetFameGain/Loss は Tier 格差ぶんの金星/取りこぼし
         // （順当な結果には効かない＝二重計上でない, issue #170）。
-        m.Fame = NextFame(m.Fame, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c);
+        m.Fame = NextFame(m.Fame, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c, draftFameGain);
 
         // 信頼度（校内）。
         var trust = m.Trust + c.TrustPerWin * wins + (reachedKoshien ? c.TrustKoshien : 0);
@@ -335,14 +349,18 @@ public static class CareerEngine
     /// </summary>
     /// <param name="upsetFameGain">金星の名声上昇（0以上・季上限適用済み）。上昇側として逓減を受ける。</param>
     /// <param name="upsetFameLoss">取りこぼしの名声低下（0以下）。逓減を受けず、名声に応じた倍率で引く。</param>
+    /// <param name="draftFameGain">
+    /// 教え子のプロ入りの名声（0以上・<see cref="DraftFameGain"/> で年上限を掛けた値。issue #1270 D1）。上昇側として逓減と年上限を受ける。
+    /// </param>
     public static double NextFame(
         double fame, bool reachedKoshien, bool nationalChampion, int wins,
-        double upsetFameGain, double upsetFameLoss, CareerCoefficients c)
+        double upsetFameGain, double upsetFameLoss, CareerCoefficients c, double draftFameGain = 0)
     {
         var gain = c.FamePerWin * wins
                    + (reachedKoshien ? c.FameKoshienAppearance : 0)
                    + (nationalChampion ? c.FameNationalChampion : 0)
-                   + upsetFameGain;
+                   + upsetFameGain
+                   + Math.Max(0, draftFameGain);
 
         if (gain > 0 && c.FameGainCeiling > 0)
             gain *= Math.Max(0, 1.0 - fame / c.FameGainCeiling);

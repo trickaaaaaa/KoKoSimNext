@@ -1016,6 +1016,9 @@ pressure:
   max_index: 8
   multiplier_slope: 0.02     # 倍率 = 1 + (精神力−50)/50 × slope × P（精神力100・P8で+16%）
   fatigue_negative_amplify: 1.5   # 疲労閾値超過時は負側のみ増幅（終盤の失点劇）
+  morale_high_threshold: 70.0   # 士気（＝監督の信頼度・#1270 M1）がこの値以上で負側の緩和に +morale_mitigation
+  morale_low_threshold: 30.0   # この値未満で −morale_mitigation（負側を強める）
+  morale_mitigation: 0.10   # 土台の大きさ。精神力50は恒等・AI校/裏試合は士気を持たない＝帯不変（OPEN-QUESTIONS「2026-11-23 束7」）
 
 # --- チームの勢い（issue #863）🟡 自校だけ大会中に保持・計算（Unity側）。段階0（AI校・裏試合・統計シム）は恒等＝帯不変 ---
 momentum:
@@ -1862,6 +1865,10 @@ career:
   # 上の一時金（年度末に無言で入る）と違い、その場でイベントとして見える形で入る。
   koshien_berth_donation_base: 120.0      # 土台[万円]（年間予算 80+0.8×信頼 の約1倍）
   koshien_berth_donation_per_fame: 1.5    # 名声1あたりの上乗せ[万円]
+  fame_per_draft_pick: 2.0   # プロ入りで名声（#1270 D1）: 1人ぶん（年度末の総括の上昇側＝逓減・年上限を通す）
+  fame_first_round_pick: 4.0   # 1位指名
+  fame_draft_season_cap: 6.0   # プロ入りぶんの年上限
+  trust_play_through_worsened: 3.0   # 怪我を押して出場させて悪化したときの信頼度の低下（#1270 E1・1件ごと）
   new_school_strength_mean: 34.0    # 教員監督の赴任先は弱小
   new_school_strength_sd: 6.0
   free_choice_school_strength: 48.0 # フリー化後の本拠地

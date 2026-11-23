@@ -246,6 +246,8 @@ namespace KokoSim.Unity.Shell
                 BatteryInnings = GameSession.Current.BatteryInningsForMatch(),
                 // 結束の上下（設計書23 §3.3・issue #934）も自校だけ（AI校は顔ぶれの土台だけ）。
                 CohesionDelta = GameSession.Current.CohesionDelta,
+                // 士気（設計書04 §1.2・issue #1270 M1）も自校だけ＝監督の信頼度。AI校は null＝恒等。
+                Morale = ManagerService.Manager.Trust,
             };
         }
 

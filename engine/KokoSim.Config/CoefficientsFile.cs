@@ -2270,6 +2270,9 @@ public static class CoefficientsLoader
         public int MaxIndex { get; set; } = D.MaxIndex;
         public double MultiplierSlope { get; set; } = D.MultiplierSlope;
         public double FatigueNegativeAmplify { get; set; } = D.FatigueNegativeAmplify;
+        public double MoraleHighThreshold { get; set; } = D.MoraleHighThreshold;
+        public double MoraleLowThreshold { get; set; } = D.MoraleLowThreshold;
+        public double MoraleMitigation { get; set; } = D.MoraleMitigation;
 
         public PressureCoefficients ToModel() => new()
         {
@@ -2281,6 +2284,9 @@ public static class CoefficientsLoader
             MaxIndex = MaxIndex,
             MultiplierSlope = MultiplierSlope,
             FatigueNegativeAmplify = FatigueNegativeAmplify,
+            MoraleHighThreshold = MoraleHighThreshold,
+            MoraleLowThreshold = MoraleLowThreshold,
+            MoraleMitigation = MoraleMitigation,
         };
     }
 
@@ -3646,6 +3652,10 @@ public static class CoefficientsLoader
         public double TransferFundsCarryOverRatio { get; set; } = D.TransferFundsCarryOverRatio;
         public double KoshienBerthDonationBase { get; set; } = D.KoshienBerthDonationBase;
         public double KoshienBerthDonationPerFame { get; set; } = D.KoshienBerthDonationPerFame;
+        public double FamePerDraftPick { get; set; } = D.FamePerDraftPick;
+        public double FameFirstRoundPick { get; set; } = D.FameFirstRoundPick;
+        public double FameDraftSeasonCap { get; set; } = D.FameDraftSeasonCap;
+        public double TrustPlayThroughWorsened { get; set; } = D.TrustPlayThroughWorsened;
         public double NewSchoolStrengthMean { get; set; } = D.NewSchoolStrengthMean;
         public double NewSchoolStrengthSd { get; set; } = D.NewSchoolStrengthSd;
         public double FreeChoiceSchoolStrength { get; set; } = D.FreeChoiceSchoolStrength;
@@ -3702,6 +3712,10 @@ public static class CoefficientsLoader
             TransferFundsCarryOverRatio = TransferFundsCarryOverRatio,
             KoshienBerthDonationBase = KoshienBerthDonationBase,
             KoshienBerthDonationPerFame = KoshienBerthDonationPerFame,
+            FamePerDraftPick = FamePerDraftPick,
+            FameFirstRoundPick = FameFirstRoundPick,
+            FameDraftSeasonCap = FameDraftSeasonCap,
+            TrustPlayThroughWorsened = TrustPlayThroughWorsened,
             NewSchoolStrengthMean = NewSchoolStrengthMean,
             NewSchoolStrengthSd = NewSchoolStrengthSd,
             FreeChoiceSchoolStrength = FreeChoiceSchoolStrength,

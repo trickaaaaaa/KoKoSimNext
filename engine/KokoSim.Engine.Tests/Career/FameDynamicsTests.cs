@@ -155,4 +155,49 @@ public sealed class FameDynamicsTests
     {
         Assert.Equal(0.0, CareerEngine.NextFame(2, false, false, 0, 0, upsetFameLoss: -50, C), 6);
     }
+
+    // ===== 教え子のプロ入り（設計書04 §1.2・issue #1270 D1） =====
+
+    [Fact]
+    public void DraftFameGain_TwoPerPick_FourForFirstRound_CappedAtSix()
+    {
+        Assert.Equal(0, CareerEngine.DraftFameGain(new int[0], C), 9);
+        Assert.Equal(2, CareerEngine.DraftFameGain(new[] { 5 }, C), 9);
+        Assert.Equal(4, CareerEngine.DraftFameGain(new[] { 1 }, C), 9);
+        Assert.Equal(6, CareerEngine.DraftFameGain(new[] { 1, 3 }, C), 9);
+        Assert.Equal(6, CareerEngine.DraftFameGain(new[] { 1, 1, 2, 8 }, C), 9);   // 年+6まで
+        Assert.Equal(2, CareerEngine.DraftFameGain(new[] { 0, 4 }, C), 9);         // 指名なし(0)は数えない
+    }
+
+    [Fact]
+    public void DraftFame_GoesThroughTheDiminishingGain()
+    {
+        // 同じ上乗せでも名声が高いほど効きが小さい（逓減）。名声0では +4 がそのまま乗る。
+        Assert.Equal(CareerEngine.NextFame(0, false, false, 0, 0, 0, C) + 4,
+            CareerEngine.NextFame(0, false, false, 0, 0, 0, C, draftFameGain: 4), 9);
+        var high = CareerEngine.NextFame(80, false, false, 0, 0, 0, C, draftFameGain: 6)
+                   - CareerEngine.NextFame(80, false, false, 0, 0, 0, C);
+        Assert.Equal(6 * (1 - 80 / C.FameGainCeiling), high, 9);
+    }
+
+    [Fact]
+    public void DraftFame_RespectsTheSeasonRiseCap()
+    {
+        // 甲子園＋10勝で年上限に張り付いた年は、プロ入りぶんを足しても上限を超えない。
+        var capped = CareerEngine.NextFame(10, true, false, 10, 0, 0, C);
+        Assert.Equal(10 + C.FameSeasonRiseCap, capped, 9);
+        Assert.Equal(capped, CareerEngine.NextFame(10, true, false, 10, 0, 0, C, draftFameGain: 6), 9);
+    }
+
+    [Fact]
+    public void SeasonUpdate_PassesDraftFameThrough()
+    {
+        Manager Run(double draft)
+        {
+            var m = new Manager { Fame = 30, Trust = 50, Funds = 100 };
+            ManagerSeasonUpdate.Apply(m, false, false, 2, new Xoshiro256Random(9), C, draftFameGain: draft);
+            return m;
+        }
+        Assert.True(Run(4).Fame > Run(0).Fame);
+    }
 }
