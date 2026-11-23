@@ -429,6 +429,104 @@ namespace KokoSim.EditorTests
             Assert.That(bad.Length, Is.EqualTo(0), "画面へ戻るファウル:\n" + bad);
         }
 
+        /// <summary>ファウルを実際のリリースと同じ形（本塁面の実着弾位置つき）で流し、打球へ乗り換わるまで進める。</summary>
+        private bool LaunchFoul(DuelStageRig rig, float ev, float la, float br, float plateX, float plateY,
+            KokoSim.Engine.Match.Fielding.FoulChase chase = null)
+        {
+            var ball = new KokoSim.Engine.Match.Batting.BattedBall { ExitVelocityMps = ev, LaunchAngleDeg = la, BearingDeg = br };
+            var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball,
+                new KokoSim.Engine.Match.Pitching.Aerodynamics(), new KokoSim.Engine.Match.Fielding.FieldingCoefficients(),
+                new KokoSim.Engine.Match.Field.FieldGeometry(), false, false, false, chase);
+            var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+            var pitch = new DuelPitchFlight(plateX, plateY, plateX, plateY, 0.5f, 0.05f, 0.2f, 140f);
+            rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, pitch, play.Ball[1]);
+            for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
+            return rig.BattedElapsedSeconds >= 0f;
+        }
+
+        /// <summary>打球の水平の動きのうち、全体の進む向きと逆へ戻った距離の合計[m]（1.5秒・120fps）。</summary>
+        private static float BackwardTravel(DuelStageRig rig, out float worstAt)
+        {
+            var p0 = rig.BattedPointForCapture(0f).Value;
+            var pEnd = rig.BattedPointForCapture(1.5f).Value;
+            worstAt = 0f;
+            var dir = new Vector2(pEnd.x - p0.x, pEnd.z - p0.z);
+            if (dir.magnitude < 0.01f) return 0f;
+            dir.Normalize();
+            var prev = p0;
+            float sum = 0f, worst = 0f;
+            for (float t = 1f / 120f; t <= 1.5f; t += 1f / 120f)
+            {
+                var p = rig.BattedPointForCapture(t).Value;
+                float along = Vector2.Dot(new Vector2(p.x - prev.x, p.z - prev.z), dir);
+                if (along < 0f) { sum -= along; if (-along > worst) { worst = -along; worstAt = t; } }
+                prev = p;
+            }
+            return sum;
+        }
+
+        /// <summary>
+        /// 実際の試合に出たファウル（2026-11-23・100試合・1834本の打球つきファウルから、戻りが大きかった当たりと
+        /// 守備ビューで見せる2種）を、打点の実位置つきで流して、打球が着地点で止まったあとに引き戻されないこと（issue #1543）。
+        /// 叩きつけた速いファウルは engine のセグメントが打点合わせの補正（自由落下時間）より先に終わり、
+        /// 静止した球を残りの補正が打球の進む向きと逆へ最大0.4m引き戻していた（画面の中で「跳ね返る」）。
+        /// 格子（#1074）は打点が本塁の真上（x=0）固定で、補正が0に近かったので掃けていなかった。
+        /// </summary>
+        [TestCase(38.5f, -22.1f, 49.7f, 0.46f, 0.70f, TestName = "FoulRebound_GrounderFirstBase")]
+        [TestCase(28.0f, -51.7f, -54.4f, -0.39f, 0.76f, TestName = "FoulRebound_PoundedThirdBase")]
+        [TestCase(38.5f, -16.0f, -45.9f, -0.36f, 0.61f, TestName = "FoulRebound_LineHugger")]
+        [TestCase(40.9f, -7.3f, -61.1f, -0.50f, 0.89f, TestName = "FoulRebound_HardChopLeavesFrame")]
+        [TestCase(35.4f, -36.6f, 49.2f, 0.18f, 0.96f, TestName = "FoulRebound_IntoDirt")]
+        [TestCase(42f, 25f, 47f, 0.3f, 0.8f, TestName = "FoulRebound_PoleFoulBigFoul")]
+        public void FoulBall_RealGameCases_DoNotDragBackAfterStopping(float ev, float la, float br, float px, float py)
+        {
+            var rig = Rig;
+            Assert.That(LaunchFoul(rig, ev, la, br, px, py), "前提: 打球になった");
+            float back = BackwardTravel(rig, out float at);
+            Assert.That(back, Is.LessThan(0.02f), $"打球が進む向きと逆へ合計 {back:F2}m 戻った（最大のコマ t={at:F2}s）");
+        }
+
+        /// <summary>
+        /// 同じ見張りを打点の位置（左右）も振った格子で掃く（issue #1543）。#1074 の格子は打点を本塁の真上に固定していて、
+        /// 打点合わせの補正が効く条件を掃いていなかった。ゴロ性（叩きつけ）を厚めに取る。
+        /// </summary>
+        [Test]
+        public void FoulBall_Sweep_PlateOffsets_DoNotDragBackAfterStopping()
+        {
+            var rig = Rig;
+            var bad = new System.Text.StringBuilder();
+            int n = 0;
+            foreach (var ev in new[] { 20f, 30f, 40f })
+            foreach (var la in new[] { -50f, -35f, -22f, -10f, -3f, 5f, 20f, 45f })
+            foreach (var br in new[] { 46f, 60f, 90f, 150f, -46f, -60f, -90f, -150f })
+            foreach (var px in new[] { -0.4f, 0f, 0.4f })
+            {
+                if (!LaunchFoul(rig, ev, la, br, px, 0.75f)) { rig.HideBall(); continue; }
+                n++;
+                float back = BackwardTravel(rig, out float at);
+                if (back > 0.02f) bad.AppendLine($"ev={ev} la={la} br={br} plateX={px}: 逆向きに合計 {back:F2}m（t={at:F2}s）");
+                rig.HideBall();
+            }
+            Assert.That(n, Is.GreaterThan(400), "前提: 掃けた本数");
+            Assert.That(bad.Length, Is.EqualTo(0), "止まったあとに引き戻されるファウル:\n" + bad);
+        }
+
+        /// <summary>
+        /// 守備ビューで見せるファウル（追ったフライ）の対決ビュー側の打球区間も、戻らないこと（issue #1543 の穴2）。
+        /// </summary>
+        [TestCase(25f, 60f, 100f, 0.1f)]
+        [TestCase(22f, 70f, -120f, -0.3f)]
+        [TestCase(30f, 50f, 135f, 0.35f)]
+        public void FoulBall_ChasedFly_DoesNotDragBack(float ev, float la, float br, float px)
+        {
+            var rig = Rig;
+            var chase = new KokoSim.Engine.Match.Fielding.FoulChase(
+                KokoSim.Engine.Match.Field.FieldPosition.Catcher, 0.0, -1.0, 4.6, 4.2);
+            Assert.That(LaunchFoul(rig, ev, la, br, px, 0.75f, chase), "前提: 打球になった");
+            float back = BackwardTravel(rig, out float at);
+            Assert.That(back, Is.LessThan(0.1f), $"追ったフライの打球が逆へ合計 {back:F2}m 戻った（t={at:F2}s）");
+        }
+
         /// <summary>打球の無い球（見送り）は見せるものが無い＝待たせない（従来どおり「画面外」扱い）。</summary>
         [Test]
         public void BattedOutOfFrame_IsTrue_WhenNoBattedBall()
