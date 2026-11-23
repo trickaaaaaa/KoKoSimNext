@@ -2270,8 +2270,7 @@ public static class CoefficientsLoader
         public int MaxIndex { get; set; } = D.MaxIndex;
         public double MultiplierSlope { get; set; } = D.MultiplierSlope;
         public double FatigueNegativeAmplify { get; set; } = D.FatigueNegativeAmplify;
-        public double MoraleHighThreshold { get; set; } = D.MoraleHighThreshold;
-        public double MoraleLowThreshold { get; set; } = D.MoraleLowThreshold;
+        public double MoraleNeutral { get; set; } = D.MoraleNeutral;
         public double MoraleMitigation { get; set; } = D.MoraleMitigation;
 
         public PressureCoefficients ToModel() => new()
@@ -2284,8 +2283,7 @@ public static class CoefficientsLoader
             MaxIndex = MaxIndex,
             MultiplierSlope = MultiplierSlope,
             FatigueNegativeAmplify = FatigueNegativeAmplify,
-            MoraleHighThreshold = MoraleHighThreshold,
-            MoraleLowThreshold = MoraleLowThreshold,
+            MoraleNeutral = MoraleNeutral,
             MoraleMitigation = MoraleMitigation,
         };
     }

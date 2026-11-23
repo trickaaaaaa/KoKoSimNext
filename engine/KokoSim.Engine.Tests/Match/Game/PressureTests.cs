@@ -30,11 +30,13 @@ public sealed class PressureTests
 
     [Theory]
     [InlineData(null, 0.0)]
-    [InlineData(29.9, -0.10)]
-    [InlineData(30.0, 0.0)]
-    [InlineData(69.9, 0.0)]
-    [InlineData(70.0, 0.10)]
+    [InlineData(0.0, -0.10)]
+    [InlineData(25.0, -0.05)]
+    [InlineData(50.0, 0.0)]
+    [InlineData(70.0, 0.04)]
     [InlineData(100.0, 0.10)]
+    [InlineData(120.0, 0.10)]   // 両端で止める
+    [InlineData(-10.0, -0.10)]
     public void MoraleMitigation_ByTrust(double? morale, double expected)
         => Assert.Equal(expected, PressureModel.MoraleMitigation(morale, C), 9);
 

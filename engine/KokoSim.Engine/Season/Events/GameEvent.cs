@@ -22,10 +22,6 @@ public enum EventKind
 /// <param name="Trust">監督の信頼度の増減（0〜100で止める）。issue #1270 E1。</param>
 /// <param name="Fame">監督の名声の増減（0〜100で止める・その場で動く）。issue #1270 E1／#1467。</param>
 /// <param name="PressureNextMatch">次の公式戦1試合だけ、自校側のプレッシャー指数に足す点（issue #1467 P2）。</param>
-/// <param name="Injury">主役を故障させる段階（None＝故障させない）。エースの肘の検査など（issue #1270）。</param>
-/// <param name="InjuryType">故障の種類。</param>
-/// <param name="InjurySite">故障の部位。</param>
-/// <param name="InjuryWeeks">全治週。</param>
 public sealed record EventEffect(
     double Funds = 0.0,
     double TrainingMult = 1.0,
@@ -33,11 +29,7 @@ public sealed record EventEffect(
     bool TrainingTargetIsPlayer = false,
     double Trust = 0.0,
     double Fame = 0.0,
-    int PressureNextMatch = 0,
-    Players.InjurySeverity Injury = Players.InjurySeverity.None,
-    Players.InjuryType InjuryType = Players.InjuryType.None,
-    Players.InjurySite InjurySite = Players.InjurySite.Shoulder,
-    int InjuryWeeks = 0)
+    int PressureNextMatch = 0)
 {
     /// <summary>何も起こさない（既定）。</summary>
     public static readonly EventEffect None = new();
@@ -47,10 +39,7 @@ public sealed record EventEffect(
 
     /// <summary>1つでも動く軸があるか。</summary>
     public bool IsEmpty => Funds == 0.0 && !HasTrainingBoost && Trust == 0.0 && Fame == 0.0
-                           && PressureNextMatch == 0 && !InjuresSubject;
-
-    /// <summary>主役を故障させるか（段階と全治週の両方が要る）。</summary>
-    public bool InjuresSubject => Injury != Players.InjurySeverity.None && InjuryWeeks > 0;
+                           && PressureNextMatch == 0;
 }
 
 /// <summary>

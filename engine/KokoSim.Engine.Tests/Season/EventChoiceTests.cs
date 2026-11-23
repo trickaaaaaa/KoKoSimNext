@@ -320,75 +320,61 @@ events:
         Assert.Null(EventChoiceResolver.PickOutcome(plain, EventStance.Scold, true, 3, 7, rng));
     }
 
-    // ===== 怪我対応・学業配慮・信頼度（issue #1270 E1） =====
+    // ===== 学業配慮・信頼度（issue #1270 E1） =====
 
     [Fact]
     public void Parse_OutcomeEffects_AndFixedImproveProb_StayOnTheirElement()
     {
         const string yaml = @"
 events:
-  - id: elbow
-    kind: Choice
-    text: ""肘。""
+  - id: exam
+    kind: Random
+    text: ""テスト。""
     effects:
       fame: 1
-    cast:
-      subject: ace
     choices:
-      - stance: doctor
-        label: ""検査""
+      - stance: ease
+        label: ""軽くする""
         improve_prob: 1.0
-      - stance: wait
-        label: ""様子見""
+      - stance: as_usual
+        label: ""いつも通り""
         improve_prob: 0.6
     outcomes:
-      - stance: doctor
+      - stance: ease
         result: improved
         effects:
-          trust: 4
-          injury: minor
-          injury_type: inflammation
-          injury_site: elbow
-          injury_weeks: 2
+          trust: 2
+          training_mult: 0.85
+          training_weeks: 2
         lines:
           - who: player
-            say: ""行ってきます。""
-      - stance: wait
+            say: ""勉強します。""
+      - stance: as_usual
         result: worsened
         effects:
-          trust: -4
+          trust: -1
         lines:
           - who: player
-            say: ""痛っ。""
+            say: ""眠い。""
 ";
         var e = EventTableParser.Parse(yaml).Single();
         Assert.Equal(1.0, e.Effect.Fame);
         Assert.Equal(0.0, e.Effect.Trust);   // 結果の効果はイベントの効果へ漏れない
-        Assert.Equal(new EventCast(EventCastRule.Ace), e.Cast);
+        Assert.False(e.Effect.HasTrainingBoost);
         Assert.Equal(1.0, e.Choices[0].ImproveProb);
         Assert.Equal(0.6, e.Choices[1].ImproveProb);
-        var doctor = e.Outcomes[0].EffectOrNone;
-        Assert.Equal(4, doctor.Trust);
-        Assert.True(doctor.InjuresSubject);
-        Assert.Equal(KokoSim.Engine.Players.InjurySeverity.Minor, doctor.Injury);
-        Assert.Equal(KokoSim.Engine.Players.InjuryType.Inflammation, doctor.InjuryType);
-        Assert.Equal(KokoSim.Engine.Players.InjurySite.Elbow, doctor.InjurySite);
-        Assert.Equal(2, doctor.InjuryWeeks);
-        Assert.Equal(-4, e.Outcomes[1].EffectOrNone.Trust);
-        Assert.False(e.Outcomes[1].EffectOrNone.InjuresSubject);
-    }
-
-    [Fact]
-    public void Parse_UnknownInjuryWord_Throws()
-    {
-        var yaml = "events:\n  - id: a\n    text: \"a\"\n    effects:\n      injury: broken\n";
-        Assert.Throws<FormatException>(() => EventTableParser.Parse(yaml));
+        var ease = e.Outcomes[0].EffectOrNone;
+        Assert.Equal(2, ease.Trust);
+        Assert.True(ease.HasTrainingBoost);
+        Assert.Equal(0.85, ease.TrainingMult);
+        Assert.Equal(-1, e.Outcomes[1].EffectOrNone.Trust);
+        Assert.False(e.Outcomes[1].EffectOrNone.HasTrainingBoost);
     }
 
     [Fact]
     public void FixedImproveProb_IgnoresPersonality()
     {
-        var fixedChoice = new EventChoice(EventStance.WaitAndSee, "様子を見る", 0.6);
+        var fixedChoice = new EventChoice(EventStance.AsUsual, "いつも通り", 0.6);
         Assert.Equal(0.6, EventChoiceResolver.ImproveProbability(fixedChoice, Axes(dilig: 1), null, C), 9);
         Assert.Equal(0.6, EventChoiceResolver.ImproveProbability(fixedChoice, Axes(dilig: 99), 99, C), 9);
         var scold = new EventChoice(EventStance.Scold, "叱る");
@@ -400,8 +386,6 @@ events:
     public void OnlyInterpersonalStances_MoveCohesion()
     {
         Assert.All(CohesionStances, s => Assert.True(EventStances.MovesCohesion(s)));
-        Assert.False(EventStances.MovesCohesion(EventStance.SendToDoctor));
-        Assert.False(EventStances.MovesCohesion(EventStance.WaitAndSee));
         Assert.False(EventStances.MovesCohesion(EventStance.EasePractice));
         Assert.False(EventStances.MovesCohesion(EventStance.AsUsual));
     }
@@ -414,19 +398,6 @@ events:
         foreach (var id in BranchedIds)
             foreach (var o in byId[id].Outcomes)
                 Assert.Equal(o.Improved ? 2 : -2, o.EffectOrNone.Trust);
-
-        var ace = byId["ace_hidden_injury"];
-        Assert.Equal(EventKind.Choice, ace.Kind);
-        Assert.Equal(EventCastRule.Ace, ace.Cast.Subject);
-        Assert.Equal(new[] { EventStance.SendToDoctor, EventStance.WaitAndSee }, ace.Choices.Select(c => c.Stance));
-        Assert.Equal(1.0, ace.Choices[0].ImproveProb);
-        var doctor = ace.Outcomes.Single(o => o.Stance == EventStance.SendToDoctor && o.Improved).EffectOrNone;
-        Assert.Equal(4, doctor.Trust);
-        Assert.True(doctor.InjuresSubject);
-        Assert.Equal(0, ace.Outcomes.Single(o => o.Stance == EventStance.WaitAndSee && o.Improved).EffectOrNone.Trust);
-        var hurt = ace.Outcomes.Single(o => o.Stance == EventStance.WaitAndSee && !o.Improved).EffectOrNone;
-        Assert.Equal(-4, hurt.Trust);
-        Assert.True(hurt.InjuresSubject);
 
         var exam = byId["exam_week_slump"];
         Assert.Equal(EventKind.Random, exam.Kind);   // kind を変えない＝週次抽選の乱数列は変わらない
@@ -446,17 +417,6 @@ events:
         Assert.Equal(1, media.Effect.PressureNextMatch);
         Assert.Equal(0.0, media.Effect.Trust);
         Assert.False(media.Effect.IsEmpty);
-    }
-
-    [Fact]
-    public void AceCast_PicksTheUninjuredNumberOne()
-    {
-        var ace = new DevelopingPlayer { Id = 1, Name = "エース", UniformNumber = 1 };
-        var other = new DevelopingPlayer { Id = 2, Name = "控え", UniformNumber = 10 };
-        Assert.True(EventCast.Matches(ace, EventCastRule.Ace));
-        Assert.False(EventCast.Matches(other, EventCastRule.Ace));
-        ace.Injury = KokoSim.Engine.Players.InjurySeverity.Minor;
-        Assert.False(EventCast.Matches(ace, EventCastRule.Ace));
     }
 
     // ===== 当事者の選び方 =====

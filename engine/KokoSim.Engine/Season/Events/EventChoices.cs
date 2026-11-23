@@ -18,11 +18,7 @@ public enum EventStance
     /// <summary>主将に任せる。主将の統率力で決まり、当事者が「引っ張る」側だと効きにくい。</summary>
     Captain,
 
-    // ── 怪我対応・学業配慮（issue #1270 E1・2026-11-23）。性格で振れない＝好転の確率は選択肢の improve_prob ──
-    /// <summary>検査に行かせる（エースの肘の違和感）。</summary>
-    SendToDoctor,
-    /// <summary>様子を見る（同。故障のリスクを取る）。</summary>
-    WaitAndSee,
+    // ── 学業配慮（issue #1270 E1・2026-11-23）。性格で振れない＝好転の確率は選択肢の improve_prob ──
     /// <summary>練習を軽くする（テスト週の配慮）。</summary>
     EasePractice,
     /// <summary>いつも通りやる（同）。</summary>
@@ -33,7 +29,7 @@ public enum EventStance
 public static class EventStances
 {
     /// <summary>
-    /// 結束を動かす対応か（選手間のもめ事への3つの対応だけ。設計書23 §3.3）。怪我対応・学業配慮は
+    /// 結束を動かす対応か（選手間のもめ事への3つの対応だけ。設計書23 §3.3）。学業配慮は
     /// 部員どうしの関係の話ではないので結束は動かさず、信頼度だけを動かす（issue #1270）。
     /// </summary>
     public static bool MovesCohesion(EventStance s) => s is EventStance.Scold or EventStance.Listen or EventStance.Captain;
@@ -41,13 +37,13 @@ public static class EventStances
 
 /// <summary>
 /// 選択肢1つ（対応と、画面に出す言い回し）。<paramref name="ImproveProb"/> があれば好転の確率は性格によらずこの値
-/// （怪我対応・学業配慮。1.0＝必ず「好転」側の結果）。null なら <see cref="EventChoiceResolver.ImproveProbability"/>。
+/// （学業配慮など。1.0＝必ず「好転」側の結果）。null なら <see cref="EventChoiceResolver.ImproveProbability"/>。
 /// </summary>
 public sealed record EventChoice(EventStance Stance, string Label, double? ImproveProb = null);
 
 /// <summary>
 /// 結果の会話1つ（対応×好転/悪化）。会話の最終行の結果行はここに書かず、提示層が結束の動きと
-/// <paramref name="Effect"/>（信頼度・名声・故障など・issue #1270）から足す（既存の結果行と同じ作法）。
+/// <paramref name="Effect"/>（信頼度・名声・練習効率など・issue #1270）から足す（既存の結果行と同じ作法）。
 /// </summary>
 public sealed record EventOutcome(EventStance Stance, bool Improved, EventScript Script, EventEffect? Effect = null)
 {
@@ -71,8 +67,6 @@ public enum EventCastRule
     UpperGrade,
     /// <summary>1年生。</summary>
     FirstYear,
-    /// <summary>エース（背番号1）で、いま故障していない部員（issue #1270・エースの肘の違和感）。</summary>
-    Ace,
 }
 
 /// <summary>当事者と相手の選び方。<see cref="Other"/> が null なら相手は出ない。</summary>
@@ -118,7 +112,6 @@ public sealed record EventCast(EventCastRule Subject = EventCastRule.Any, EventC
         EventCastRule.Selfless => Players.Personalities.High(p.Selflessness),
         EventCastRule.UpperGrade => p.Grade >= 2,
         EventCastRule.FirstYear => p.Grade == 1,
-        EventCastRule.Ace => p.UniformNumber == 1 && p.Injury == Players.InjurySeverity.None,
         _ => true,
     };
 

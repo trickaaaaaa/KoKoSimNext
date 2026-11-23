@@ -358,20 +358,6 @@ namespace KokoSim.Unity.Shell
                 parts.Add(whose + " " + Signed((effect.TrainingMult - 1.0) * 100.0) + "%（" + effect.TrainingWeeks + " 週）");
                 if (effect.TrainingMult < 1.0) bad = true;
             }
-            if (effect.InjuresSubject)
-            {
-                // 主役を故障させる（エースの肘の検査・様子見の悪化・issue #1270）。すでに故障中なら上書きしない
-                // （軽い炎症で重い故障を消さない）。週次の回復は既存の怪我と同じ経路（InjuryModel.WeeklyRecover）。
-                var p = FindActive(subjectId);
-                if (p != null && p.Injury == KokoSim.Engine.Players.InjurySeverity.None)
-                {
-                    KokoSim.Engine.Season.InjuryModel.Apply(p, new KokoSim.Engine.Season.InjuryDiagnosis(
-                        effect.InjuryType, effect.InjurySite, effect.Injury, effect.InjuryWeeks));
-                    parts.Add(p.Name + " は" + InjuryLabel.Diagnosis(effect.InjuryType, effect.InjurySite)
-                              + "で全治 " + effect.InjuryWeeks + " 週");
-                    bad = true;
-                }
-            }
             if (effect.Trust != 0.0)
             {
                 // 信頼度（issue #1270 E1）。0〜100で止め、文は実際に動いた量で書く。
@@ -497,7 +483,7 @@ namespace KokoSim.Unity.Shell
                 : EventChoiceResolver.ImproveProbability(stance, axes, captainPower, GameSession.CohesionCoefficientsInUse);
             var improved = EventChoiceResolver.Improved(pending.Roll, p);
 
-            // 結束が動くのは選手間のもめ事への対応だけ（怪我対応・学業配慮は信頼度だけ・issue #1270）。
+            // 結束が動くのは選手間のもめ事への対応だけ（学業配慮は信頼度だけ・issue #1270）。
             var parts = new List<string>();
             var bad = false;
             if (EventStances.MovesCohesion(stance))
@@ -509,7 +495,7 @@ namespace KokoSim.Unity.Shell
 
             EventOutcome outcome;
             pending.Outcomes.TryGetValue((stance, improved), out outcome);
-            // 結果ごとの効果（信頼度・故障・練習効率など）。文は実際に動いた量で書く。
+            // 結果ごとの効果（信頼度・練習効率など）。文は実際に動いた量で書く。
             var applied = outcome != null
                 ? ApplyEffect(outcome.EffectOrNone, e.Id, pending.SubjectId, pending.SubjectName)
                 : null;

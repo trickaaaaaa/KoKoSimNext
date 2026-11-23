@@ -230,12 +230,11 @@
       trust: 2              # 監督の信頼度（0〜100で止める・issue #1270）
       fame: 1               # 監督の名声（同）
       pressure_next_match: 1  # 次の公式戦1試合だけ自校側のプレッシャー指数に足す（issue #1467）
-      injury: minor         # 主役を故障させる（minor/moderate/severe）。injury_type / injury_site / injury_weeks と組で書く
 ```
 
 - **選択肢の結果ごとの効果**（issue #1270）: `outcomes:` の要素の中に `effects:` を書くと、その結果を選んだときだけ効く
   （イベント直下の `effects:` とは別）。選択肢に `improve_prob:` を書くと好転の確率を性格によらず固定する（1.0＝必ずその結果）。
-  対応の語は `scold/listen/captain`（選手間）と `doctor/wait`（怪我対応）・`ease/as_usual`（学業配慮）
+  対応の語は `scold/listen/captain`（選手間）と `ease/as_usual`（学業配慮）。結束が動くのは選手間の3つだけ（`EventStances.MovesCohesion`）
 
 - **`kind: System` は週次抽選に載らない**。怪我・成長・気づき・ドラフトのように「実際に起きた出来事」から
   `EventService.Push(id, 主役, 効果)` で呼ぶ。主役つきなので `{player}` は必ず実在の部員になる。

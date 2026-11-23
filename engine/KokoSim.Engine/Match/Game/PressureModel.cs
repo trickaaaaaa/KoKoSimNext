@@ -24,10 +24,8 @@ public sealed record PressureCoefficients
     public double MultiplierSlope { get; init; } = 0.02;
     /// <summary>疲労が閾値超過時、負側のみ増幅する倍率（終盤の失点劇）。</summary>
     public double FatigueNegativeAmplify { get; init; } = 1.5;
-    /// <summary>士気（＝部員の信頼度・設計書04 §1.2・issue #1270 M1）がこの値以上なら、プレッシャーの負側の緩和に土台 +MoraleMitigation。</summary>
-    public double MoraleHighThreshold { get; init; } = 70.0;
-    /// <summary>士気がこの値未満なら緩和の土台は −MoraleMitigation（負側を強める）。</summary>
-    public double MoraleLowThreshold { get; init; } = 30.0;
+    /// <summary>士気（＝監督の信頼度・設計書04 §1.2・issue #1270 M1）の中立値。ここで土台0、離れるほど比例して ±MoraleMitigation へ。</summary>
+    public double MoraleNeutral { get; init; } = 50.0;
     /// <summary>士気の土台の大きさ（伝令・主将の緩和に足す。合計は −1〜1 で止める）。士気を持たないチーム（AI校・裏試合・統計シム）は0＝恒等。</summary>
     public double MoraleMitigation { get; init; } = 0.10;
 }
@@ -113,16 +111,15 @@ public static class PressureModel
 
     /// <summary>
     /// 士気の土台（設計書04 §1.2「部員信頼→チーム士気の基礎値」・issue #1270 M1）。士気＝監督の信頼度（0〜100）。
-    /// 高い（≧<see cref="PressureCoefficients.MoraleHighThreshold"/>）と負側の緩和に +<see cref="PressureCoefficients.MoraleMitigation"/>、
-    /// 低い（＜<see cref="PressureCoefficients.MoraleLowThreshold"/>）と −（負側を強める）、その間は0。
+    /// 連続（2026-11-23 オーナー決定）: 土台 ＝ (士気 − <see cref="PressureCoefficients.MoraleNeutral"/>) / 50 × <see cref="PressureCoefficients.MoraleMitigation"/>。
+    /// 信頼度50で0、0で −MoraleMitigation（負側を強める）、100で +MoraleMitigation（両端で止める）。
     /// null＝士気を持たない（AI校・裏試合・統計シム）＝0。精神力50の選手はプレッシャーの振れが0なので常に恒等。
     /// </summary>
     public static double MoraleMitigation(double? morale, PressureCoefficients c)
     {
         if (morale is not { } m) return 0.0;
-        if (m >= c.MoraleHighThreshold) return c.MoraleMitigation;
-        if (m < c.MoraleLowThreshold) return -c.MoraleMitigation;
-        return 0.0;
+        var d = MathUtil.Clamp((m - c.MoraleNeutral) / 50.0, -1.0, 1.0);
+        return d * c.MoraleMitigation;
     }
 
     /// <summary>チャンス○×・ピンチ○×を倍率の振れ raw へ掛ける（設計書10 §0.1）。</summary>

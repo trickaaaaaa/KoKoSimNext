@@ -1016,9 +1016,10 @@ pressure:
   max_index: 8
   multiplier_slope: 0.02     # 倍率 = 1 + (精神力−50)/50 × slope × P（精神力100・P8で+16%）
   fatigue_negative_amplify: 1.5   # 疲労閾値超過時は負側のみ増幅（終盤の失点劇）
-  morale_high_threshold: 70.0   # 士気（＝監督の信頼度・#1270 M1）がこの値以上で負側の緩和に +morale_mitigation
-  morale_low_threshold: 30.0   # この値未満で −morale_mitigation（負側を強める）
-  morale_mitigation: 0.10   # 土台の大きさ。精神力50は恒等・AI校/裏試合は士気を持たない＝帯不変（OPEN-QUESTIONS「2026-11-23 束7」）
+  # 士気（＝監督の信頼度・#1270 M1・2026-11-23 オーナー決定で連続）: 負側の緩和の土台 ＝ (士気−morale_neutral)/50 × morale_mitigation
+  # （信頼度50で0・0で−0.10＝負側を強める・100で+0.10）。精神力50は恒等・AI校/裏試合は士気を持たない＝帯不変
+  morale_neutral: 50.0
+  morale_mitigation: 0.10
 
 # --- チームの勢い（issue #863）🟡 自校だけ大会中に保持・計算（Unity側）。段階0（AI校・裏試合・統計シム）は恒等＝帯不変 ---
 momentum:

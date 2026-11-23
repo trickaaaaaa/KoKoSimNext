@@ -245,11 +245,8 @@ public static class EventTableParser
     private sealed class EffectBuilder
     {
         private double _funds, _trainingMult = 1.0, _trust, _fame;
-        private int _trainingWeeks, _pressure, _injuryWeeks;
+        private int _trainingWeeks, _pressure;
         private bool _trainingPlayer;
-        private Players.InjurySeverity _injury = Players.InjurySeverity.None;
-        private Players.InjuryType _injuryType = Players.InjuryType.None;
-        private Players.InjurySite _injurySite = Players.InjurySite.Shoulder;
 
         public bool TrySet(string key, string value, string? id)
         {
@@ -262,23 +259,12 @@ public static class EventTableParser
                 case "trust": _trust = ParseDouble(value, 0.0); return true;
                 case "fame": _fame = ParseDouble(value, 0.0); return true;
                 case "pressure_next_match": _pressure = ParseInt(value) ?? 0; return true;
-                case "injury": _injury = ParseEnum<Players.InjurySeverity>(value, key, id); return true;
-                case "injury_type": _injuryType = ParseEnum<Players.InjuryType>(value, key, id); return true;
-                case "injury_site": _injurySite = ParseEnum<Players.InjurySite>(value, key, id); return true;
-                case "injury_weeks": _injuryWeeks = ParseInt(value) ?? 0; return true;
                 default: return false;
             }
         }
 
         public EventEffect Build() => new(_funds, _trainingMult, _trainingWeeks, _trainingPlayer, _trust, _fame,
-            _pressure, _injury, _injuryType, _injurySite, _injuryWeeks);
-    }
-
-    // 綴りを間違えた故障の指定は例外＝黙って「故障しない」にならない。snake_case（ligament_tear）も受ける。
-    private static T ParseEnum<T>(string v, string key, string? id) where T : struct, Enum
-    {
-        if (Enum.TryParse<T>(v.Replace("_", ""), ignoreCase: true, out var r)) return r;
-        throw new FormatException($"{id}: {key} に未知の語: {v}");
+            _pressure);
     }
 
     // 既定を Random にしているのは kind 省略の後方互換。**新しい種別を足したらここにも足す**＝
@@ -298,8 +284,6 @@ public static class EventTableParser
         "scold" => EventStance.Scold,
         "listen" => EventStance.Listen,
         "captain" => EventStance.Captain,
-        "doctor" => EventStance.SendToDoctor,
-        "wait" => EventStance.WaitAndSee,
         "ease" => EventStance.EasePractice,
         "as_usual" => EventStance.AsUsual,
         _ => throw new FormatException($"stance に未知の語: {v}"),
@@ -319,7 +303,6 @@ public static class EventTableParser
         "selfless" => EventCastRule.Selfless,
         "upper_grade" => EventCastRule.UpperGrade,
         "first_year" => EventCastRule.FirstYear,
-        "ace" => EventCastRule.Ace,
         _ => throw new FormatException($"cast に未知の語: {v}"),
     };
 
