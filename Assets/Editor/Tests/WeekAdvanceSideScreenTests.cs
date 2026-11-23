@@ -31,5 +31,22 @@ namespace KokoSim.EditorTests
             Assert.Greater(AbilitySum(), sum0, "横の画面から進めても練習が効く（能力の経験値が増える）");
             Assert.IsTrue(HomeState.Current.BuildView().Feed.Any(f => f.When == "今週"), "週のフィードが積まれる");
         }
+
+        /// <summary>
+        /// 見せていないイベントがある間は、横の画面からさらに週を進めない（issue #1527）。進めると場面がホームに
+        /// 行くまで溜まり続け、その間セーブもできなかった（システムタブで「今週を進める」→画面が変わらず週だけ進んだ）。
+        /// </summary>
+        [Test]
+        public void FromSideScreen_DoesNotAdvanceWhileAnEventIsUnseen()
+        {
+            for (var i = 0; i < 60 && !EventService.HasPending; i++) WeekAdvance.FromSideScreen(null);
+            Assume.That(EventService.HasPending, "60週のうちにイベントが1つも積まれなかった（前提が崩れた）");
+
+            var week = GameClock.Week;
+            var year = GameClock.YearIndex;
+            WeekAdvance.FromSideScreen(null);
+
+            Assert.AreEqual((year, week), (GameClock.YearIndex, GameClock.Week), "場面を見せる前に次の週へ進めない");
+        }
     }
 }
