@@ -114,15 +114,19 @@ namespace KokoSim.Unity.Saves
             host.Clear();
 
             Group(host, "画面", true);
-            var res = GameSettings.Resolution;
-            var choices = GameSettings.ResolutionChoices();
-            var ri = Mathf.Max(0, choices.IndexOf(res));
-            Row(host, "解像度", UiComponents.Stepper(res.x + " × " + res.y,
-                () => { GameSettings.Resolution = choices[ri - 1]; BuildSettingsPage(); },
-                () => { GameSettings.Resolution = choices[ri + 1]; BuildSettingsPage(); },
-                ri > 0, ri < choices.Count - 1));
-            Row(host, "表示", UiComponents.SegTabs(new[] { "フルスクリーン", "ウインドウ" }, GameSettings.FullScreen ? 0 : 1,
-                i => { GameSettings.FullScreen = i == 0; BuildSettingsPage(); }));
+            // ブラウザ版は大きさと全画面をブラウザ（と置き場所の全画面ボタン）が決める＝効かない行は出さない（オーナー決定 2026-11-23）。
+            if (GameSettings.DisplayAdjustable)
+            {
+                var res = GameSettings.Resolution;
+                var choices = GameSettings.ResolutionChoices();
+                var ri = Mathf.Max(0, choices.IndexOf(res));
+                Row(host, "解像度", UiComponents.Stepper(res.x + " × " + res.y,
+                    () => { GameSettings.Resolution = choices[ri - 1]; BuildSettingsPage(); },
+                    () => { GameSettings.Resolution = choices[ri + 1]; BuildSettingsPage(); },
+                    ri > 0, ri < choices.Count - 1));
+                Row(host, "表示", UiComponents.SegTabs(new[] { "フルスクリーン", "ウインドウ" }, GameSettings.FullScreen ? 0 : 1,
+                    i => { GameSettings.FullScreen = i == 0; BuildSettingsPage(); }));
+            }
 
             var fpsChoices = new[] { 30, 60, 120 };
             var fi = System.Array.IndexOf(fpsChoices, KokoSim.Bootstrap.FrameRateGuard.FpsLimit);
