@@ -507,6 +507,7 @@ public static class CoefficientsLoader
         public double CatcherLeadStuffPerPoint { get; set; } = D.CatcherLeadStuffPerPoint;
         public double LeadStraightShareMaxShift { get; set; } = D.LeadStraightShareMaxShift;
         public double LeadPitchWeightMaxExponent { get; set; } = D.LeadPitchWeightMaxExponent;
+        public double PitcherSenseLeadWeight { get; set; } = D.PitcherSenseLeadWeight;
         // 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式）
         public double SpinRpmBase { get; set; } = D.SpinRpmBase;
         /// <summary>ストレートの球威(Power-50)あたりの回転数傾き（Issue #274）。</summary>
@@ -540,6 +541,7 @@ public static class CoefficientsLoader
                 CatcherLeadStuffPerPoint = CatcherLeadStuffPerPoint,
                 LeadStraightShareMaxShift = LeadStraightShareMaxShift,
                 LeadPitchWeightMaxExponent = LeadPitchWeightMaxExponent,
+                PitcherSenseLeadWeight = PitcherSenseLeadWeight,
                 SpinRpmBase = SpinRpmBase,
                 SpinRpmPerPower = SpinRpmPerPower,
                 SharpnessDeviationPerLevel = SharpnessDeviationPerLevel,
@@ -1767,6 +1769,8 @@ public static class CoefficientsLoader
         public double GrowthTypeTopicProb { get; set; } = D.GrowthTypeTopicProb;
         public double HighGrowthDomainProb { get; set; } = D.HighGrowthDomainProb;
         public double HiddenSkillTopicProb { get; set; } = D.HiddenSkillTopicProb;
+        public double PitcherSenseTopicProb { get; set; } = D.PitcherSenseTopicProb;
+        public int PitcherSenseMisreadOffset { get; set; } = D.PitcherSenseMisreadOffset;
 
         public InsightCoefficients ToModel() => new()
         {
@@ -1783,6 +1787,8 @@ public static class CoefficientsLoader
             GrowthTypeTopicProb = GrowthTypeTopicProb,
             HighGrowthDomainProb = HighGrowthDomainProb,
             HiddenSkillTopicProb = HiddenSkillTopicProb,
+            PitcherSenseTopicProb = PitcherSenseTopicProb,
+            PitcherSenseMisreadOffset = PitcherSenseMisreadOffset,
         };
     }
 
@@ -1999,6 +2005,10 @@ public static class CoefficientsLoader
         public double MatchMentalExp { get; set; } = D.MatchMentalExp;
         public double MatchLeadExp { get; set; } = D.MatchLeadExp;
         public double MatchBaserunningExp { get; set; } = D.MatchBaserunningExp;
+        public double PitcherSenseGrowthNeutral { get; set; } = D.PitcherSenseGrowthNeutral;
+        public double PitcherSenseGrowthSlope { get; set; } = D.PitcherSenseGrowthSlope;
+        public double PitcherSenseGrowthMin { get; set; } = D.PitcherSenseGrowthMin;
+        public double PitcherSenseGrowthMax { get; set; } = D.PitcherSenseGrowthMax;
 
         public TrainingCoefficients ToModel() => new()
         {
@@ -2029,6 +2039,10 @@ public static class CoefficientsLoader
             MatchMentalExp = MatchMentalExp,
             MatchLeadExp = MatchLeadExp,
             MatchBaserunningExp = MatchBaserunningExp,
+            PitcherSenseGrowthNeutral = PitcherSenseGrowthNeutral,
+            PitcherSenseGrowthSlope = PitcherSenseGrowthSlope,
+            PitcherSenseGrowthMin = PitcherSenseGrowthMin,
+            PitcherSenseGrowthMax = PitcherSenseGrowthMax,
         };
     }
 
@@ -3042,6 +3056,7 @@ public static class CoefficientsLoader
         // 投手球速（地肩＋投手センス）
         public double PitcherSenseBonus { get; set; } = D.PitcherSenseBonus;
         public double NonPitcherSenseFactor { get; set; } = D.NonPitcherSenseFactor;
+        public double PitcherSenseSd { get; set; } = D.PitcherSenseSd;
         public double VelocityArmWeight { get; set; } = D.VelocityArmWeight;
         public double VelocitySenseWeight { get; set; } = D.VelocitySenseWeight;
         // 伸びしろ
@@ -3370,6 +3385,7 @@ public static class CoefficientsLoader
             LeftExperienceAiPaPerYear = LeftExperienceAiPaPerYear,
             PitcherSenseBonus = PitcherSenseBonus,
             NonPitcherSenseFactor = NonPitcherSenseFactor,
+            PitcherSenseSd = PitcherSenseSd,
             VelocityArmWeight = VelocityArmWeight,
             VelocitySenseWeight = VelocitySenseWeight,
             GrowthMean = GrowthMean,

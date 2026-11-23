@@ -153,6 +153,25 @@ public sealed record TrainingCoefficients
     /// <summary>1試合出場あたりの走塁判断exp（成長段階係数を乗算, AbilityKind.Baserunning へ）。</summary>
     public double MatchBaserunningExp { get; init; } = 300.0;
 
+    // === 投手センス→投手系能力の伸びやすさ（設計書01 §1.3・issue #1472） ===
+    // 投手系（球速/制球/スタミナ/キレ/球威）の経験値にだけ掛ける。打撃の才能（伸びしろ・総合力）とは独立に
+    // 投手センスで決まる＝野手として平凡でも投手センスが高い選手は、投手の練習を振ると大きく伸びる（投手転向で覚醒）。
+    /// <summary>倍率1.0になる投手センス（物理Lv＝表示Lv＋Δ）。既定の新入生（talent_center_default 32）の投手役の平均（実測30.8）。</summary>
+    public double PitcherSenseGrowthNeutral { get; init; } = 30.0;
+    /// <summary>投手センス1あたりの倍率の傾き。</summary>
+    public double PitcherSenseGrowthSlope { get; init; } = 0.012;
+    /// <summary>倍率の下限（投手センスが極端に低くても投手系がまったく伸びなくはしない）。</summary>
+    public double PitcherSenseGrowthMin { get; init; } = 0.7;
+    /// <summary>倍率の上限。</summary>
+    public double PitcherSenseGrowthMax { get; init; } = 1.4;
+
+    /// <summary>投手センス（表示Lv）→投手系能力の経験値倍率。物差しは今の物差し（表示Lv＋Δ）で読む（issue #1080）。</summary>
+    public double PitcherSenseGrowthFactor(int pitcherSenseDisplay)
+    {
+        var f = 1.0 + (Players.AbilityScale.Phys(pitcherSenseDisplay) - PitcherSenseGrowthNeutral) * PitcherSenseGrowthSlope;
+        return Math.Max(PitcherSenseGrowthMin, Math.Min(PitcherSenseGrowthMax, f));
+    }
+
     public double RequiredExp(int level) => LevelUpBase * Math.Pow(LevelUpGrowth, level);
 }
 

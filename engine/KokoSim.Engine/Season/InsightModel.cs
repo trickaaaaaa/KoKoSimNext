@@ -13,6 +13,7 @@ public enum InsightTopic
     GrowthType,        // 「大器晩成かもしれない」（成長タイプの示唆）
     Personality,       // 「〜な性格かもしれない」（性格の軸1つの示唆, 設計書23 §1.5。4軸そろうとタイプ名が判明）
     HiddenSkill,       // 隠しスキルに気づいた（即開示・issue #1471）。HiddenSkill に何のスキルか入る
+    PitcherSense,      // 「投手のセンスは〜くらいに見える」（投手センスの見立て・issue #1472）。PitcherSenseReading に見立て
 }
 
 /// <summary>
@@ -47,6 +48,12 @@ public sealed record InsightNotice(DevelopingPlayer Player, InsightTopic Topic, 
     /// 適用済み（<see cref="DevelopingPlayer.Skills"/> の可視側へ移してある）。他の話題では null。
     /// </summary>
     public Players.Skill? HiddenSkill { get; init; }
+
+    /// <summary>
+    /// <see cref="InsightTopic.PitcherSense"/> のとき、見立てた投手センス（表示Lv。読み違えなら本当の値からずれている・issue #1472）。
+    /// 部員の <see cref="DevelopingPlayer.PitcherSenseReading"/> にも記録済み。他の話題では null。
+    /// </summary>
+    public int? PitcherSenseReading { get; init; }
 }
 
 /// <summary>気づきの係数（設計書03 §5.6）。🟡頻度・精度カーブは検証で調整。</summary>
@@ -83,6 +90,13 @@ public sealed record InsightCoefficients
     /// 気配の段は作らず、話題になったら即開示する（オーナー判断 2026-11-23）。読み違えのときは開示しない。
     /// </summary>
     public double HiddenSkillTopicProb { get; init; } = 0.5;
+    /// <summary>
+    /// 投手センスの見立てを話題にする確率（issue #1472）。投手センスは隠し能力で、選手画面には見極めで分かった
+    /// 見立て（最後のもの）だけが出る。
+    /// </summary>
+    public double PitcherSenseTopicProb { get; init; } = 0.25;
+    /// <summary>読み違えたときに見立てがずれる幅（表示Lv。上下どちらかへ）。おおむねランク1〜2つぶん。</summary>
+    public int PitcherSenseMisreadOffset { get; init; } = 15;
 }
 
 /// <summary>
@@ -92,7 +106,7 @@ public sealed record InsightCoefficients
 public static class InsightModel
 {
     /// <summary>
-    /// 週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は性格の読み（DevelopingPlayer.PersonalityReading）の記録と、気づいた隠しスキルの開示（issue #1471）だけで、能力等は変更しない。
+    /// 週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は性格の読み（DevelopingPlayer.PersonalityReading）・投手センスの見立て（issue #1472）の記録と、気づいた隠しスキルの開示（issue #1471）だけで、能力等は変更しない。
     /// <paramref name="probFactor"/>／<paramref name="accuracyAdd"/> はビデオ・分析機材などの備品由来
     /// （1.0／0.0＝備品なし＝従来一致）。精度の上限は <see cref="InsightCoefficients.AccuracyMax"/> のまま。
     /// </summary>
@@ -153,6 +167,20 @@ public static class InsightModel
                 PersonalityAxis = axis,
                 RevealedType = p.PersonalityReading.KnownType,
             };
+        }
+
+        // 投手センスの見立て（issue #1472）: 隠し能力。たまに投手センスを見立てる（新しい見立てで上書き＝見直しもある）。
+        // 読み違えると上下どちらかへ PitcherSenseMisreadOffset ずれた見立てになる（選手画面には最後の見立てが出る）。
+        if (rng.NextDouble() < c.PitcherSenseTopicProb)
+        {
+            var shown = p.PitcherSense;
+            if (!accurate)
+            {
+                var off = rng.NextDouble() < 0.5 ? -c.PitcherSenseMisreadOffset : c.PitcherSenseMisreadOffset;
+                shown = (int)MathUtil.Clamp(shown + off, Players.AbilityScale.DisplayMin, 99);
+            }
+            p.PitcherSenseReading = shown;
+            return new InsightNotice(p, InsightTopic.PitcherSense, "", accurate) { PitcherSenseReading = shown };
         }
 
         // 成長タイプの兆し（設計書03 §5.6・issue #614、分野別化・issue #866）。

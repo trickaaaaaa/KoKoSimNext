@@ -84,6 +84,13 @@ public sealed record PitchingCoefficients
     /// </summary>
     public double LeadPitchWeightMaxExponent { get; init; } = 1.0;
 
+    /// <summary>
+    /// 投手センス→配球の質（設計書01 §1.3・issue #1472）。球種の選び分けに使う「バッテリーの配球力」を
+    /// 捕手リード＋(投手センス−50)×これ とする（投手センスは効き Pitching 通し）。球威の上乗せ（<see cref="CatcherLeadStuffPerPoint"/>）には
+    /// 足さない＝効くのは選び方だけ。0で従来どおり（捕手リードだけ）。小さく始める（オーナー判断 2026-11-23）。
+    /// </summary>
+    public double PitcherSenseLeadWeight { get; init; } = 0.5;
+
     // === 回転のマッピング（設計書02 §2.1・設計書15 Phase E。式は PitchSpinModel に集約） ===
     // Issue #274: 球種分岐で有効軸を切り替える。
     //   ストレート: 球威(Power) → SpinRpmBase + (Power-50) × SpinRpmPerPower

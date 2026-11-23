@@ -20,6 +20,8 @@ namespace KokoSim.Engine.Match.Timeline.Playback;
 /// <see cref="BattingSign"/>（issue #490）はこの球に出ていた打者への1球指示（バント/セーフティバント/
 /// スクイズ）。表示専用＝判定・帯には無関係。対決ビューが打者のバント構えを出すためだけの観測データで、
 /// 合成列（実記録がない球）は null のまま。
+/// <see cref="Pitchout"/>（issue #1472 ついで）は <see cref="PitchRecord.Pitchout"/> の写し＝外した球（ウエスト）。
+/// <see cref="PitchType"/> は配球の乱数で決まった「本来投げるはずだった球種」のままなので、表示側はこちらを見て球種名を出さない。
 /// </summary>
 public readonly record struct PitchToken(
     PitchKind Kind,
@@ -33,7 +35,8 @@ public readonly record struct PitchToken(
     double? AimX = null,
     double? AimY = null,
     Pitching.PitchTrajectory? Trajectory = null,
-    Tactics.PitchBattingOverride? BattingSign = null);
+    Tactics.PitchBattingOverride? BattingSign = null,
+    bool Pitchout = false);
 
 /// <summary>1打席の投球列（中継風カウントの合成データ）。</summary>
 public sealed record PitchSequence(IReadOnlyList<PitchToken> Pitches)

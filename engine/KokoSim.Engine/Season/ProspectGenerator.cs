@@ -485,6 +485,8 @@ public sealed record RosterCoefficients
     public double NonPitcherSenseFactor { get; init; } = 0.45;  // 野手の投手センスは低い
     public double VelocityArmWeight { get; init; } = 0.5;       // 球速level = arm×w1 + sense×w2
     public double VelocitySenseWeight { get; init; } = 0.5;
+    /// <summary>投手センスの個体差（σ・物理Lv）。自校の生成と AI校の生成（StrengthTeamFactory）で共有する（issue #1472）。</summary>
+    public double PitcherSenseSd { get; init; } = 6.0;
 
     // --- 伸びしろ（分野別・凸凹, 設計書01 §1.1 / 02 §5.1）。成長効率倍率、現在値と独立 ---
     public double GrowthMean { get; init; } = 1.0;
@@ -894,7 +896,10 @@ public static class ProspectGenerator
         // 二段分岐を廃し、投手適性に対して連続に振る（旧: isPitcher で total+bonus か total×0.45 の二択）。
         // 投手センスは球速・球威の土台＝お任せで伸びない側なので、下げない尺度（untrainedTotal）で読む。
         var senseMean = Lerp(untrainedTotal * c.NonPitcherSenseFactor, untrainedTotal + c.PitcherSenseBonus, w);
-        var pitcherSense = MathUtil.Clamp(senseMean + rng.NextGaussian(0, 6), 5, 95);
+        var pitcherSense = MathUtil.Clamp(senseMean + rng.NextGaussian(0, c.PitcherSenseSd), 5, 95);
+        // 選手に持たせる（issue #1472）。球速の計算は下で端数つきの値をそのまま使う＝生成結果は従来と1ビット一致。
+        // 今の物差し（物理Lv）で入れ、Intake の出口で他の能力と一緒に −Δ する（DevelopingScale）。
+        p.PitcherSense = (int)Math.Round(pitcherSense);
 
         // 専門配分の中心・フロアも w で連続補間（w=1で投手が本業＝total／w=0で野手が本業＝total）。
         // 投手系(制球/キレ)は offCenter↔total、打撃・守備系は total↔offCenter を逆向きに補間する。

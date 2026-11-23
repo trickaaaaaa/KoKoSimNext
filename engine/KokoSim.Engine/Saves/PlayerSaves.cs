@@ -32,6 +32,7 @@ internal static class PlayerSaves
             .Add("field", p.Fielding)
             .Add("catch", p.Catching)
             .Add("lead", p.Lead)
+            .Add("pitcherSense", p.PitcherSense)
             .Add("bunt", p.Bunt)
             .Add("steal", p.Steal)
             .Add("baserun", p.Baserunning)
@@ -76,6 +77,9 @@ internal static class PlayerSaves
         Fielding = o.Int("field"),
         Catching = o.Int("catch"),
         Lead = o.Int("lead"),
+        // 投手センス（v44・issue #1472）。v43 以前は無い＝仮の平均で読み、SaveCodec が読み込み後に
+        // 生成と同じ分布から決定論的に埋める（PitcherSenseSaveMigration）。
+        PitcherSense = o.Has("pitcherSense") ? o.Int("pitcherSense") : Players.AbilityScale.AverageDisplay,
         Bunt = o.Int("bunt"),
         Steal = o.Int("steal"),
         Baserunning = o.Int("baserun"),

@@ -56,6 +56,11 @@ public sealed record AtBatContext
     public int CatcherLead { get; init; } = 50;
 
     /// <summary>
+    /// 投げている投手の投手センス（効き Pitching 通し済み・issue #1472）。配球の選び分けに足す。既定50=平均で恒等。
+    /// </summary>
+    public int PitcherSense { get; init; } = 50;
+
+    /// <summary>
     /// 打者の「慣れ」（設計書02 §2.3b・issue times-through-order-familiarity）: この打者が<b>この試合で</b>この投手と
     /// 既に対戦した打席数。試合エンジンが <see cref="Game.TeamState.PriorPlateAppearancesAgainst"/> から設定
     /// （継投でその投手に対して0へ戻る）。既定 0＝慣れ無し＝1打席シム・従来と1ビットも変わらない。

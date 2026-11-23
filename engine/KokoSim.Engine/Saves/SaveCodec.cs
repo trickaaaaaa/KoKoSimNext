@@ -30,7 +30,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 43;
+    public const int CurrentVersion = 44;
 
     // ===== Serialize =====
 
@@ -162,6 +162,8 @@ public static class SaveCodec
             // v43（issue #1080）: 能力の表示の物差しを Δ 下げた。保存時の Δ（キーが無い＝v42 以前は 0）といまの Δ の差だけずらす。
             AbilityScaleSaveMigration.Apply(state,
                 root.Has("abilityDelta") ? root.Int("abilityDelta") : AbilityScaleSaveMigration.LegacyDelta);
+            // v44（issue #1472）: 投手センスを選手に持たせた。v43 以前は生成と同じ分布から決定論的に与える（物差しの移行の後＝表示Lv）。
+            if (version < PitcherSenseSaveMigration.IntroducedVersion) PitcherSenseSaveMigration.Apply(state);
             return true;
         }
         catch (Exception e)

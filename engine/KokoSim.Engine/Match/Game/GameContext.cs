@@ -175,7 +175,7 @@ public sealed record GameContext
         bool intentionalWalk = false, double swingProbabilityFactor = 1.0, int familiarityPa = 0,
         Batting.PitchFamiliarityTracker? pitchFamiliarity = null,
         Players.Handedness pitcherThrows = Players.Handedness.Right,
-        double leftExperienceDeficit = 0.0) => new()
+        double leftExperienceDeficit = 0.0, int pitcherSense = 50) => new()
     {
         PitcherThrows = pitcherThrows,
         FamiliarityPa = familiarityPa,
@@ -194,6 +194,7 @@ public sealed record GameContext
         TakeFirstPitch = takeFirstPitch,
         SwingProbabilityFactor = swingProbabilityFactor,
         CatcherLead = catcherLead,
+        PitcherSense = pitcherSense,
         Skills = skills ?? SkillPlayMods.None,
         CaptureTimeline = CaptureTimelines,
         CaptureTrace = TracingEnabled,

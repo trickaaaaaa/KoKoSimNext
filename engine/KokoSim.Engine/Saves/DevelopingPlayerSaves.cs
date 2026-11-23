@@ -67,6 +67,8 @@ internal static class DevelopingPlayerSaves
             .Add("lead", p.Lead)
             .Add("leadExp", p.LeadExp)
             .Add("leadCap", p.LeadCap)
+            .Add("pitcherSense", p.PitcherSense)
+            .Add("pitcherSenseReading", p.PitcherSenseReading is { } psr ? JsonValue.Of(psr) : JsonNull.Instance)
             .Add("leadership", p.Leadership)
             .Add("receptiveness", p.Receptiveness)
             .Add("diligence", p.Diligence)
@@ -175,6 +177,10 @@ internal static class DevelopingPlayerSaves
             Lead = o.Int("lead"),
             LeadExp = o.Double("leadExp"),
             LeadCap = o.Int("leadCap"),
+            // 投手センス（v44・issue #1472）。v43 以前は無い＝仮の平均で読み、SaveCodec が読み込み後に埋める。
+            PitcherSense = o.Has("pitcherSense") ? o.Int("pitcherSense") : AbilityScale.AverageDisplay,
+            PitcherSenseReading = o.Has("pitcherSenseReading") && !o.IsNull("pitcherSenseReading")
+                ? o.Int("pitcherSenseReading") : (int?)null,
             IsCaptain = o.Bool("isCaptain"),
             IsRetired = o.Bool("isRetired"),
             UniformNumber = o.Int("num"),

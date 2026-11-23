@@ -70,7 +70,8 @@ public static class PitchSelection
         IRandomSource rng,
         PitcherGear gear = PitcherGear.Normal,
         Tactics.PitchDirective? directive = null,
-        int catcherLead = 50)
+        int catcherLead = 50,
+        int pitcherSense = 50)
     {
         // 配球方針（設計書09 §2.2）。無指示なら恒等＝従来と完全一致。
         var d = directive ?? Tactics.PitchDirective.Identity;
@@ -100,7 +101,9 @@ public static class PitchSelection
 
         // ① 球種選択（Phase 簡略: ストレート基礎シェア±方針の重み、残りを変化球で等分。
         //    捕手リードが50超のぶんだけ投手の強い軸へ寄せる＝設計書01 §2①）。
-        var slot = ChoosePitch(pitcher, pitching, rng, d.StraightShareDelta, catcherLead);
+        //    投手センス（issue #1472）も選び分けの配球力に足す（球威の上乗せには足さない）。
+        var slot = ChoosePitch(pitcher, pitching, rng, d.StraightShareDelta,
+            catcherLead + (pitcherSense - 50) * pitching.PitcherSenseLeadWeight);
 
         // ② 毎球の球速サンプリング（§1.1d）: 最速（ギア補正込み）を天井に、平均−3〜5km/hの分布。
         var ceiling = pitcher.MaxVelocityKmh + gear switch
@@ -141,7 +144,7 @@ public static class PitchSelection
     }
 
     private static PitchSlot ChoosePitch(
-        PitcherAttributes pitcher, PitchingCoefficients c, IRandomSource rng, double straightShareDelta, int catcherLead)
+        PitcherAttributes pitcher, PitchingCoefficients c, IRandomSource rng, double straightShareDelta, double catcherLead)
     {
         var rep = pitcher.EffectiveRepertoire;
         if (rep.Count == 1) return rep[0];

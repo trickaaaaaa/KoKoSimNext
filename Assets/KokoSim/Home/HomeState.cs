@@ -829,6 +829,11 @@ namespace KokoSim.Unity.Home
                     return n.HiddenSkill is { } hs
                         ? name + " の「" + KokoSim.Unity.Shell.SkillCatalogProvider.Name(hs) + "」に気づいた。"
                         : name + " について何か気づいた。";
+                case InsightTopic.PitcherSense:
+                    // 投手センスの見立て（issue #1472）。断定しない（読み違えもある）。
+                    return n.PitcherSenseReading is { } sense
+                        ? name + " の投手センスは " + Tiers.FromStrength(sense) + " くらいかもしれない。"
+                        : name + " について何か気づいた。";
                 case InsightTopic.HighGrowthDomain:
                     return name + " は " + DomainJp(n.Domain) + " にまだ伸びる余地がありそうだ。";
                 case InsightTopic.LowGrowthDomain:

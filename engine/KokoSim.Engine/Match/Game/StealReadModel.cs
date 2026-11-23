@@ -31,7 +31,8 @@ public static class StealReadModel
         var readSkill = MathUtil.Clamp(
             c.StealReadIntercept
             + (c.AbilityEffect.Pitching(catcher.Lead) - 50) * c.StealReadCatcherLeadSlope
-            + (c.AbilityEffect.Phys(pitcher.Mental) - 50) * c.StealReadPitcherSenseSlope,
+            // 投手センス（隠し・issue #1472）。旧実装は精神力で代用していた。捕手リードと同じく投手系の効きを通す。
+            + (c.AbilityEffect.Pitching(pitcher.PitcherSense) - 50) * c.StealReadPitcherSenseSlope,
             0.0, 1.0);
         return MathUtil.Clamp(readSkill * expectedness, 0.0, c.MaxPitchoutProb);
     }

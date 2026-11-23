@@ -3960,7 +3960,9 @@ namespace KokoSim.Unity.Match
 
             // 計器表示（球種・球速）。実1球記録がある打席だけ値が入る＝合成投球列では丸ごと畳む。
             var note = PitchNoteJp(pt);
-            var ptype = pt.PitchType.HasValue ? PitchTypeLabels.Jp(pt.PitchType.Value) : "";
+            // 外した球（ウエスト・issue #1472 ついで）は球種名を出さない＝球種は配球の乱数で決まった本来の球のままなので。
+            var ptype = pt.Pitchout ? "ウエスト"
+                : pt.PitchType.HasValue ? PitchTypeLabels.Jp(pt.PitchType.Value) : "";
             var speed = pt.VelocityKmh.HasValue ? Mathf.RoundToInt((float)pt.VelocityKmh.Value).ToString() : "";
             SetOptionalLabel(_pitchCallNote, note);
             SetOptionalLabel(_pitchCallPitchType, ptype);

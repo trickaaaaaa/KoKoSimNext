@@ -1025,7 +1025,9 @@ public static class GameEngine
                     // ＝1ビットも変わらない（issue 完了条件）。
                     leftExperienceDeficit: currentPitcher.Throws == Handedness.Left
                         ? Batting.ContactModel.LeftExperienceDeficit(batter.LeftExperiencePa, ctx.Batting)
-                        : 0.0);
+                        : 0.0,
+                    // 投手センス（設計書01 §1.3・issue #1472）: 配球の選び分けに足す。効き Pitching 通し（不変条件#1）。
+                    pitcherSense: ctx.Batting.AbilityEffect.Pitching(currentPitcher.PitcherSense));
                 // 初球を指定のファウルにする強制（issue #1074 の撮影用）。それ以外は同一参照＝乱数順・結果は不変
                 return force is Debugging.ForcedOutcome.ChasedFoulFly or Debugging.ForcedOutcome.BigFoul
                                or Debugging.ForcedOutcome.GroundFoul or Debugging.ForcedOutcome.HighFoul

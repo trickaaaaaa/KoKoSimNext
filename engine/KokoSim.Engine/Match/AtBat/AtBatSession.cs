@@ -303,7 +303,7 @@ public sealed class AtBatSession
         // ① 配球（球種選択＋毎球球速サンプリング §1.1d） → ② 投球生成（狙い＋コントロールσ散布）
         var gear = gearOverride ?? ctx.Gear;
         var directive = pitchOverride ?? ctx.Directive;
-        var plan = PitchSelection.Select(pitcher, ctx.StrikeZone, batting, ctx.Pitching, rng, gear, directive, ctx.CatcherLead);
+        var plan = PitchSelection.Select(pitcher, ctx.StrikeZone, batting, ctx.Pitching, rng, gear, directive, ctx.CatcherLead, ctx.PitcherSense);
         // クセ球/荒れ球（設計書10）: 球速に依らない球威の上乗せ（空振り誘発の質的個性）。
         if (ctx.Skills.StuffBonus != 0.0) plan = plan with { Stuff = plan.Stuff + ctx.Skills.StuffBonus };
 
