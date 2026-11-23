@@ -56,7 +56,7 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 年契約の契約状態（設計書04 §1.4a）の単一ソース。買い切りの施設と違い、年額を毎年部費から払い、
-        /// いつでも段を下げて解約できる。新規ゲームの既定はスカウト網 Lv1 だけ＝従来のスカウト費15万/年と同額。
+        /// いつでも段を下げて解約できる。新規ゲームは全部未契約（スカウト網 Lv1 の年額は CareerCoefficients.ScoutCost と同額）。
         /// </summary>
         public static ContractSet Contracts => _contracts ?? (_contracts = ContractSet.Initial());
 
@@ -234,7 +234,7 @@ namespace KokoSim.Unity.Shell
                 }
 
             // 年契約（設計書04 §1.4a）の年額は部費からここで引かれる。既定（スカウト網 Lv1）なら
-            // 従来のスカウト費15万と同額＝年契約を入れても初期状態の収支は変わらない。
+            // CareerCoefficients.ScoutCost と同額（issue #1299）。
             // 適用の前後を測って差分を作る（issue #612）。種別から効果を推測すると、自然増や
             // 「弱点分野が伸びる」ような engine 側の分岐と食い違う。
             var before = ManagerGrowthDelta.Snapshot(Manager);

@@ -89,7 +89,7 @@ public sealed class ContractRenewalTests
         draft.SetLevel("coach_batting", 0); // やめる＝年度末の予約
         draft.SetLevel("scouting", 1);      // 対象外＝無視される
 
-        Assert.Equal(140 + 50 + 20, draft.AnnualCost(set), 9);   // この年の年額は変わらない
+        Assert.Equal(420 + 160 + 60, draft.AnnualCost(set), 9);   // この年の年額は変わらない
         Assert.Equal(1, set.LevelOf("coach_batting"));           // 決めるまで契約は動かない
 
         draft.ApplyTo(set);
@@ -105,7 +105,7 @@ public sealed class ContractRenewalTests
         var set = Signed(("coach_batting", 0), ("expedition", 1));
         var draft = new ContractRenewalDraft(Catalog, set);
         draft.SetLevel("expedition", 1);
-        Assert.Equal(20, draft.AnnualCost(set), 9);
+        Assert.Equal(60, draft.AnnualCost(set), 9);
         draft.ApplyTo(set);
         Assert.Equal(1, set.LevelOf("expedition"));
         Assert.Null(set.ScheduledLevelOf("expedition"));

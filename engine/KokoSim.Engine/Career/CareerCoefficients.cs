@@ -113,9 +113,9 @@ public sealed record CareerCoefficients
     /// スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。年契約を渡さない呼び出し
     /// （<see cref="Career.CareerEngine.ApplyResults"/> の contracts=null）の固定費で、
     /// <b>年契約カタログのスカウト網 Lv1 と同額に保つ</b>
-    /// （2026-08-11 の値上げで 15 → 30。片方だけ動かすと sim と実ゲームで支出がずれる）。
+    /// （2026-08-11 の値上げで 15 → 30、2026-11-23 issue #1299 案Bで 30 → 100。片方だけ動かすと sim と実ゲームで支出がずれる）。
     /// </summary>
-    public double ScoutCost { get; init; } = 30.0;
+    public double ScoutCost { get; init; } = 100.0;
 
     // --- 寄付・一時金（設計書04 §1.4, 万円）。年度末に部費へ入る（issue #1082 で施設基金を部費へ統合）。
     // 統合前の施設基金の収入をそのまま流すと道具・合宿・年契約が実質タダになるので、額は統合前の半分
