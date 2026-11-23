@@ -317,7 +317,7 @@ namespace KokoSim.Unity.Saves
             school.AddToClassList("ss-row__school");
             row.Add(school);
 
-            var yw = new Label(info.Exists && !info.Corrupt ? $"{info.YearIndex}/{info.Week}" : "");
+            var yw = new Label(info.Exists && !info.Corrupt ? info.ListLabel : "");
             yw.AddToClassList("f-num");
             yw.AddToClassList("ss-row__yw");
             row.Add(yw);
@@ -354,7 +354,7 @@ namespace KokoSim.Unity.Saves
                 if (info.Exists && !info.Corrupt)
                 {
                     facts.Add(FactRow("年度", UiComponents.NumUnit(info.YearIndex.ToString(), "年目")));
-                    facts.Add(FactRow("週", UiComponents.NumUnit(info.Week.ToString(), "週")));
+                    facts.Add(FactRow("週", WeekValue(info.WeekLabel)));   // トップバーと同じ「M月W週」（issue #1528）
                     facts.Add(FactRow("保存日時", DateValue(info.SavedAt)));
                 }
             }
@@ -409,6 +409,13 @@ namespace KokoSim.Unity.Saves
             row.Add(k);
             row.Add(value);
             return row;
+        }
+
+        private static VisualElement WeekValue(string weekLabel)
+        {
+            var l = new Label(weekLabel);
+            l.AddToClassList("f-num");
+            return l;
         }
 
         private static VisualElement DateValue(DateTime savedAt)

@@ -29,6 +29,15 @@ namespace KokoSim.Unity.Shell
         public string SchoolNameOrDefault =>
             string.IsNullOrEmpty(SchoolName) ? "桜丘" : SchoolName;
 
+        /// <summary>
+        /// 表示用の週（"M月W週"）。<see cref="Week"/> は0基点の内部値（0＝4月1週）なので生で出さず、
+        /// トップバーと同じ <see cref="SeasonClock.CompactLabel"/> を通す（issue #1528）。
+        /// </summary>
+        public string WeekLabel => SeasonClock.CompactLabel(YearIndex, Week);
+
+        /// <summary>一覧行の「年度/週」欄（"1/4月1週"）。週は <see cref="WeekLabel"/>。</summary>
+        public string ListLabel => YearIndex + "/" + WeekLabel;
+
         public SaveSlotInfo(string slotId, bool exists, bool corrupt, int week, int yearIndex,
             DateTime savedAt, string schoolName = null)
         {
