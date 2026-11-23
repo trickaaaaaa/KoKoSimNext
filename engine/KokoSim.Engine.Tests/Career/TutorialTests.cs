@@ -12,7 +12,7 @@ using Xunit;
 namespace KokoSim.Engine.Tests.Career;
 
 /// <summary>
-/// 赴任イベントとチュートリアル（issue #1496・design-04 §3.5）。何を積むかの判定・進み具合・セーブ往復・会話の表。
+/// 赴任イベントとチュートリアル（issue #1496・design-04 §3.4）。何を積むかの判定・進み具合・セーブ往復・会話の表。
 /// </summary>
 public sealed class TutorialTests
 {

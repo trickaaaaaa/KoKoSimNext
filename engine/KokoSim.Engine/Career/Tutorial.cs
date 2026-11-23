@@ -5,7 +5,7 @@ using KokoSim.Engine.Season;
 namespace KokoSim.Engine.Career;
 
 /// <summary>
-/// チュートリアルの場面（issue #1496・design-04 §3.5）。「はじめから」で始めた進行だけに、
+/// チュートリアルの場面（issue #1496・design-04 §3.4）。「はじめから」で始めた進行だけに、
 /// その場面が<b>初めて</b>来たときマネージャーが一言ずつ進め方を教える。
 /// 名前はセーブに文字列で載る（<see cref="Saves.SaveCodec"/>）＝改名しない。
 /// </summary>
@@ -90,7 +90,7 @@ public sealed class TutorialProgress
 }
 
 /// <summary>
-/// 赴任イベントとチュートリアルの判定（issue #1496・design-04 §3.5）。何を積むか（data/events.yaml の id）を
+/// 赴任イベントとチュートリアルの判定（issue #1496・design-04 §3.4）。何を積むか（data/events.yaml の id）を
 /// ここ1箇所で決め、Unity 側は返った id を順に積むだけにする。乱数不使用。
 /// </summary>
 public static class Tutorial
