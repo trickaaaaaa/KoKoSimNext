@@ -958,6 +958,14 @@ screens:
       - click: modal-done
       - wait: 5
       - shot: 07-after-done
+      # 「決定」以外（×）で閉じたら開いた時点へ戻る（2人目は主砲育成型を押して×＝バランス型のまま）
+      - call: OpenModal(1)
+      - wait: 3
+      - click: .tpm-preset-chip[5]
+      - wait: 3
+      - click: modal-close
+      - wait: 5
+      - shot: 07b-after-cancel
       - show: PlayerList
       - wait: 5
       # game_scale では h を伸ばすと縮尺が変わる＝能力バランスは 1600 の h: 1500 の撮影で見る（論理レイアウトは同じ）
@@ -1002,6 +1010,14 @@ screens:
       - click: modal-done
       - wait: 5
       - shot: 07-after-done
+      # 「決定」以外（×）で閉じたら開いた時点へ戻る（2人目は主砲育成型を押して×＝バランス型のまま）
+      - call: OpenModal(1)
+      - wait: 3
+      - click: .tpm-preset-chip[5]
+      - wait: 3
+      - click: modal-close
+      - wait: 5
+      - shot: 07b-after-cancel
       - show: PlayerList
       - wait: 5
       - shot: {name: 08-players-radar, h: 1500}

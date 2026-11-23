@@ -50,7 +50,7 @@ namespace KokoSim.Unity.Training
             _modal = _root.Q<VisualElement>("tp-modal");
             _copyModal = _root.Q<VisualElement>("tp-copy-modal");
             WireStaticButtons();
-            WireOverlayClose(_modal, () => _modalOpen, CloseModal);
+            WireOverlayClose(_modal, () => _modalOpen, CancelModal);   // 暗幕・Esc は「決定」以外＝取り消し（issue #1534）
             WireOverlayClose(_copyModal, () => _copyOpen, CloseCopyPicker);
             Render();
         }
@@ -98,8 +98,9 @@ namespace KokoSim.Unity.Training
             // 配分⇄能力タブ（issue #327③）。前後選手送りはタブを保ったまま選手だけ替わる。
             Click("tab-alloc", () => { _abilityTab = false; Render(); });
             Click("tab-abil", () => { _abilityTab = true; Render(); });
-            Click("modal-close", CloseModal);
-            Click("modal-done", CloseModal);
+            // 「決定」だけが変更を残す。×・暗幕・Esc は開いた時点へ戻して閉じる（issue #1534）。
+            Click("modal-close", CancelModal);
+            Click("modal-done", CommitModal);
             Click("copy-close", CloseCopyPicker);
         }
 
@@ -122,12 +123,27 @@ namespace KokoSim.Unity.Training
         private void OpenModal(int index)
         {
             _state.SelectPlayer(index);
+            _state.BeginEdit();   // 決定以外で閉じたら戻す控え（issue #1534）
             _modalOpen = true;
             _abilityTab = false;   // 開き直しは常に配分タブから（モーダルの主目的は練習設定）
             Render();
             _modal?.BringToFront();
             _root.Q<Label>("toast")?.BringToFront();
             _modal?.Focus();
+        }
+
+        /// <summary>「決定」: モーダルでの変更を残して閉じる。</summary>
+        public void CommitModal()
+        {
+            _state.CommitEdit();
+            CloseModal();
+        }
+
+        /// <summary>×・暗幕・Esc: モーダルを開いた時点の状態へ戻して閉じる（issue #1534）。</summary>
+        public void CancelModal()
+        {
+            _state.CancelEdit();
+            CloseModal();
         }
 
         private void CloseModal()
