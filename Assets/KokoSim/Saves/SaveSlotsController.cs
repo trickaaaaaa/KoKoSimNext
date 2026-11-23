@@ -241,7 +241,8 @@ namespace KokoSim.Unity.Saves
             if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
         }
 
-        private void OnAdvance() => WeekAdvance.FromSideScreen(Render);
+        // 週送りのあとはトップバー（日付・部費）も描き直す（issue #1527: 日付が変わらず、進んでいないように見えた）。
+        private void OnAdvance() => WeekAdvance.FromSideScreen(() => { TopBarMeters.Fill(_root); Render(); });
 
         private Button Wire(string name, Action handler)
         {

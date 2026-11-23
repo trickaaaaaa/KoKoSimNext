@@ -27,6 +27,13 @@ namespace KokoSim.Unity.Shell
                 ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
                 return;
             }
+            // 見せていないイベントの場面があるなら、次の週へ進めずホームで見せる（issue #1527）。進めると場面が
+            // ホームに行くまで溜まり続け、その間セーブもできなかった（システムタブで画面が変わらず週だけ進んだ）。
+            if (EventService.HasPending)
+            {
+                ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+                return;
+            }
             // 背景の試合後処理中は、ホームと同じく週を進めない（メインスレッドの GameClock/ロスター変更と競合する, issue #138）。
             if (BackgroundGameOp.Running) return;
             // 年契約の更新が未確定なら、ホームへ戻して更新の画面から続ける（ホームの週送りと同じ待ち）。
@@ -38,7 +45,12 @@ namespace KokoSim.Unity.Shell
             // 週の中身（練習・怪我・成長・調子・週次イベント・各種フィード）はホームの「今週を進める」と同じ
             // 入口 HomeState.AdvanceWeek を通す（issue #1113）。クロックだけ進めると中身が丸ごと飛ぶ。
             KokoSim.Unity.Home.HomeState.Current.AdvanceWeek();
+            // ホームの週送りと同じく、初めて部費で何か買えるようになった週の説明を積む（issue #1496）。
+            TutorialService.RaisePurchasesIfAffordable();
             render?.Invoke();
+            // この週に積まれた場面（週次イベント・説明）はホームで見せる。新チーム発足・開幕バナー・転任・年契約の
+            // 更新は ScreenRouter が回送する（イベントだけ回送の対象に無かった）。
+            if (EventService.HasPending) ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
         }
     }
 }
