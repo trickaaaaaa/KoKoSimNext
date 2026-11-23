@@ -3208,21 +3208,21 @@ public static class TimelineBuilder
     }
 
     /// <summary>
-    /// 併殺の代替ルート（三塁/本塁の自己フォース, Q31）の送球連鎖を描く。既存の「野手→一塁」1本 Throw を、
-    /// 「処理点→対象塁（自己フォース, Carry）→一塁（自己送球, Throw）」の2本に差し替える。結果不変・
-    /// 乱数不使用の表示専用。判定モデル（<see cref="BaserunningModel"/> の <c>ResolveDoublePlaySelfForce</c>）と
-    /// <b>同じ入力・同じ式</b>（<see cref="HomePlayResolver.ResolveThrowPath"/>）で秒を組む＝
-    /// <see cref="AppendDoublePlayThrows"/> と同じ設計。
+    /// 併殺の代替ルート（二塁/三塁/本塁の自己フォース, issue #1549・Q31）の送球連鎖を描く。既存の
+    /// 「野手→一塁」1本 Throw を、「処理点→対象塁（自己フォース, Carry）→一塁（自己送球, Throw）」の2本に
+    /// 差し替える。結果不変・乱数不使用の表示専用。判定モデル（<see cref="BaserunningModel"/> の
+    /// <c>ResolveDoublePlaySelfForce</c>）と<b>同じ入力・同じ式</b>（<see cref="HomePlayResolver.ResolveThrowPath"/>）
+    /// で秒を組む＝<see cref="AppendDoublePlayThrows"/> と同じ設計。
     ///
     /// <para>一段目（処理点→対象塁）は送球ではなく<see cref="BallSegmentKind.Carry"/>（グラブに収めたまま
     /// 走ってベースを踏む）＝<see cref="FieldingPlay.UnassistedPutout"/>（3U）と同じ表現。二段目（対象塁→
     /// 一塁）は同じ野手がそのまま投げる自己送球（中継〈ピボット〉なし＝<see cref="AppendDoublePlayThrows"/>の
     /// ような2人目の受け手・地肩差し替えは不要）。</para>
     ///
-    /// targetBase=対象塁（3=三塁自己フォース／4=本塁自己フォース）。呼び出し元は
-    /// <see cref="RunnerMove.SelfForceDoublePlayLead"/> が立った move の <c>ToBase</c> をそのまま渡す。
-    /// batterOut=打者が実際にアウトか（<see cref="AppendDoublePlayThrows"/> と同じ意味・同じ既定true。
-    /// 三塁/本塁は封殺できても一塁への転送がわずかに間に合わない野選では false）。
+    /// targetBase=対象塁（2=二塁自己フォース＝6-6-3/4-4-3／3=三塁自己フォース／4=本塁自己フォース）。
+    /// 呼び出し元は <see cref="RunnerMove.SelfForceDoublePlayLead"/> が立った move の <c>ToBase</c> を
+    /// そのまま渡す。batterOut=打者が実際にアウトか（<see cref="AppendDoublePlayThrows"/> と同じ意味・
+    /// 同じ既定true。対象塁は封殺できても一塁への転送がわずかに間に合わない野選では false）。
     /// </summary>
     public static PlayTimeline AppendSelfForceDoublePlayThrows(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
@@ -3259,9 +3259,20 @@ public static class TimelineBuilder
         var first = BasePoint(field, "first");
         var firstRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
 
-        var force = targetBase == 3 ? HomePlayResolver.ThirdForceParams(field, c) : HomePlayResolver.HomeForceParams(c);
-        var targetPt = targetBase == 3 ? BasePoint(field, "third") : Home;
-        var targetBaseName = targetBase == 3 ? "third" : "home";
+        var force = targetBase switch
+        {
+            2 => HomePlayResolver.SecondForceParams(field, c), // 二塁の自己フォース（issue #1549）。タッチの
+                                                                // 物理は標準の二塁封殺と同じ係数を共用する。
+            3 => HomePlayResolver.ThirdForceParams(field, c),
+            _ => HomePlayResolver.HomeForceParams(c),
+        };
+        var targetPt = targetBase switch
+        {
+            2 => BasePoint(field, "second"),
+            3 => BasePoint(field, "third"),
+            _ => Home,
+        };
+        var targetBaseName = targetBase switch { 2 => "second", 3 => "third", _ => "home" };
 
         // 一段目（処理点→対象塁）: 送球ではなく自分で運ぶ（UnassistedPutout と同じ Carry 表現）。判定モデルと
         // 同じ式・transferSecondsOverride: 0.0（握り替えなし＝その場でベースへ踏み込むだけ）。

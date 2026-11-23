@@ -2289,10 +2289,14 @@ public static class GameEngine
                     var forceOnlyDraw = false;   // 先の走者を封殺するだけ＝一塁へ転送しない（issue #797）
                     foreach (var m in runnerMoves)
                     {
-                        // Force が立つのが標準の二塁封殺ルートのみ（issue 3-6-tag-double-play の二塁タッチは
-                        // 同じ FromBase=1/ToBase=2 でも Force=false）＝下の判定に Force を要求して区別する。
-                        if (m.Out && m.FromBase == 1 && m.ToBase == 2 && m.Force) hasForceAtSecond = true;
-                        else if (m.SelfForceDoublePlayLead) selfForceLead = m;
+                        // SelfForceDoublePlayLead を先に見る: 二塁の自己フォース（issue #1549・6-6-3/4-4-3）は
+                        // 対象走者・対象塁が標準の二塁封殺ルートと同じ一塁走者・二塁のまま（FromBase=1/ToBase=2/
+                        // Force=true も同じ形）＝Force だけでは区別できない。三塁/本塁の自己フォース代替と同じ
+                        // SelfForceDoublePlayLead フラグで先に拾い、取れなければ標準の二塁封殺（Force）、
+                        // それも無ければ一塁手自己フォース→二塁タッチ（issue 3-6-tag-double-play・同じ
+                        // FromBase=1/ToBase=2 でも Force=false）の順で判定する。
+                        if (m.SelfForceDoublePlayLead) selfForceLead = m;
+                        else if (m.Out && m.FromBase == 1 && m.ToBase == 2 && m.Force) hasForceAtSecond = true;
                         else if (m.FirstBaseSelfForceTag) firstBaseSelfForceTag = m;
                         if (m.ForceOnly) forceOnlyDraw = true;
                     }
@@ -2334,9 +2338,11 @@ public static class GameEngine
                             pivotSprintSpeedByRole, batterOut: !batterSafeOnFc,
                             pivotThrowSpeedByRole: pivotThrowSpeedByRole, relayToFirst: !forceOnlyDraw);
                     }
-                    // 併殺の代替ルート（三塁/本塁の自己フォース, Q31）: 三塁手/捕手/投手が自打球を自分でベースへ
-                    // 運んで封殺→一塁へ自己送球。上の二塁封殺(hasForceAtSecond)とは互いに排他
-                    // （BaserunningModel.ResolveDoublePlay がどちらか一方の経路しか選ばないため）。
+                    // 併殺の代替ルート（二塁/三塁/本塁の自己フォース, issue #1549・Q31）: 遊撃手/二塁手/三塁手/
+                    // 捕手/投手が自打球を自分でベースへ運んで封殺→一塁へ自己送球。上の二塁封殺(hasForceAtSecond)
+                    // とは互いに排他（BaserunningModel.ResolveDoublePlay がどちらか一方の経路しか選ばないため。
+                    // 二塁の自己フォースは対象塁も二塁のままだが、SelfForceDoublePlayLead を上で先に拾うので
+                    // hasForceAtSecond 側へは吸われない）。
                     else if (selfForceLead is { } sfl && res.Play is { IsFly: false } sfPlay)
                     {
                         var batterArrive = timeline.Duration;
