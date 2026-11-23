@@ -35,7 +35,7 @@ namespace KokoSim.Unity.Components
         public string TypeLabel = "";    // 非空ならランクチップの代わりにこのラベルを表示（Grade は無視）
         public bool HideBar;             // true: バー＋数値を出さずアイコン/名前/タイプラベルだけにする
         // --- 上限のない量の数値表示（issue #356）: スタミナ＝目安投球数など 0..100 バーに載らない量は
-        //     バーを出さず「数字＋和文単位」を右端に出す（HideBar と併用。数字は Oswald・単位はサンセリフ＝NumUnit）。 ---
+        //     バーを出さず「数字＋和文単位」を右端に出す（HideBar と併用。数字と単位を分ける＝NumUnit）。 ---
         public string Unit = "";         // 非空かつ HideBar のとき Value をこの単位付き数値（例「135球」）で右端表示
         // --- ランクを持たない軸（球速＝km/h で読む量, issue #736）: チップは出さず、チップ幅の空きだけ残して
         //     バーの左端をほかの行とそろえる。 ---
@@ -752,7 +752,7 @@ namespace KokoSim.Unity.Components
 
         /// <summary>
         /// 数字＋和文単位を Label 分割して並べる（設計書16 §2・決定2-B「混植セルは Label を分ける」）。
-        /// 数字だけコンデンス体（Oswald＝f-num / bold で f-num-bd）に載せ、単位はサンセリフのまま。
+        /// 数字だけ f-num（bold で f-num-bd）に載せ、単位は f-body のまま。
         /// 例: NumUnit("2", "年")／NumUnit("45", "名")／NumUnit("15", "週")。
         /// containerClass に既存の列クラス（"cell cell--narrow" 等）を渡してレイアウトを流用する。
         /// </summary>
@@ -863,7 +863,7 @@ namespace KokoSim.Unity.Components
             else if (!string.IsNullOrEmpty(d.Value) && !string.IsNullOrEmpty(d.Unit))
             {
                 // バーの無い数値行（スタミナ＝目安投球数など上限のない量, issue #356）。右端に数字＋和文単位を出す。
-                // 数字は Oswald（f-num）・単位はサンセリフに Label を分ける（NumUnit・書体3役ルール）。
+                // 数字（f-num）と単位を Label で分ける（NumUnit）。
                 row.Add(NumUnit(d.Value, d.Unit, false, "abil-row__numunit"));
             }
 
@@ -1119,7 +1119,7 @@ namespace KokoSim.Unity.Components
             last?.AddToClassList("bs-row--last");
         }
 
-        /// <summary>Oswald（欧文専用）に載せてよい「数字だけのセル」か。数字・小数点・記号のみを許可し、
+        /// <summary>f-num に載せてよい「数字だけのセル」か（Oswald 時代の判定を残している）。数字・小数点・記号のみを許可し、
         /// 和文/かなを含むものは false。空文字は false（無駄なクラス付与を避ける）。</summary>
         private static bool IsNumericCell(string text)
         {
@@ -1158,7 +1158,7 @@ namespace KokoSim.Unity.Components
             if (has && hideBar && !string.IsNullOrEmpty(unit) && !string.IsNullOrEmpty(text))
             {
                 // 上限のない量（スタミナ＝目安投球数, issue #356）: 数字＋和文単位を分割して出す
-                // （数字は Oswald・単位はサンセリフ＝NumUnit・書体3役ルール）。バーは出さない。
+                // （数字と単位を分ける＝NumUnit）。バーは出さない。
                 var nu = NumUnit(text, unit, false, "cmp-row__val cmp-row__numunit");
                 el.Add(nu);
                 return el;
@@ -1166,8 +1166,8 @@ namespace KokoSim.Unity.Components
 
             var val = new Label(has ? (text ?? value.ToString()) : "—");
             val.AddToClassList("cmp-row__val");
-            // タイプ軸ラベル（弾道など、issue #219）は和文なので Oswald(f-num) を当てない（書体3役ルール）。
-            if (!hideBar) val.AddToClassList("f-num");   // 比較値は純数値＝コンデンス体（km/h も欧文なので Oswald で可, 決定2-B）
+            // タイプ軸ラベル（弾道など、issue #219）は和文なので f-num を当てない。
+            if (!hideBar) val.AddToClassList("f-num");   // 比較値は純数値＝f-num（決定2-B）
             if (has && win) val.AddToClassList("cmp-row__val--win");
             el.Add(val);
 
@@ -1322,7 +1322,7 @@ namespace KokoSim.Unity.Components
         /// <summary>キャリア年表の1節点。</summary>
         public sealed class TimelineNodeData
         {
-            /// <summary>暦年（4桁）。数字だけのセルなので Oswald で出す。</summary>
+            /// <summary>暦年（4桁）。数字だけのセルなので f-num で出す。</summary>
             public string Year;
             /// <summary>出来事の見出し（校名・大会名を含む＝明朝）。</summary>
             public string Title;
@@ -1411,7 +1411,7 @@ namespace KokoSim.Unity.Components
         /// <summary>記録室の1件（値・保持者・年）。</summary>
         public sealed class RecordCellData
         {
-            /// <summary>整形済みの値（".384" / "12" / "84 1/3"）。数字だけのセル＝Oswald。</summary>
+            /// <summary>整形済みの値（".384" / "12" / "84 1/3"）。数字だけのセル＝f-num。</summary>
             public string Value;
             /// <summary>保持者の氏名（人名＝明朝）。</summary>
             public string Name;
@@ -1424,7 +1424,7 @@ namespace KokoSim.Unity.Components
         /// <summary>
         /// 記録室の1件を「値 ｜ 氏名 ｜ 年」で組む（設計書16 §10.2 の穴#8）。
         ///
-        /// <para>Oswald は欧文専用で和文グリフを持たないため、<b>数字と和文は必ず Label を分ける</b>
+        /// <para>Oswald 時代は和文グリフが無かったため、<b>数字と和文は必ず Label を分ける</b>
         /// （1つの Label に「.384 中田 大祐（2027）」と入れると豆腐が出る）。
         /// この分割を画面ごとに書かずに済ませるための部品。</para>
         /// </summary>

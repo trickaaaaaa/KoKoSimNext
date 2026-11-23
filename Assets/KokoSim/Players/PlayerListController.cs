@@ -106,7 +106,7 @@ namespace KokoSim.Unity.Players
 
             row.Add(NumberCell(r.UniformNumber));
             row.Add(Cell(r.Name, "cell--name"));
-            // 学年は「2年」の混植なので数字だけ Oswald に載せる（決定2-B）。列は固定幅
+            // 学年は「2年」の混植なので数字だけ f-num に載せる（決定2-B）。列は固定幅
             // （flex-basis:0 の比例配分だと詰まった行で幅0になり文字が隣列へ重なる）。
             row.Add(KokoSim.Unity.Components.UiComponents.NumUnitAuto(r.GradeLabel, false, "cell cell--grade"));
 

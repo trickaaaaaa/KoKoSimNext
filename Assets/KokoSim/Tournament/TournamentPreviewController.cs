@@ -453,7 +453,7 @@ namespace KokoSim.Unity.Tournament
             round.AddToClassList("tp-seed");
             sub.Add(round);
             // 校名は太明朝・スコアはコンデンス数字なので、1つの Label に混ぜず分割する
-            // （Oswald は欧文専用で和文グリフを持たない＝設計書16 §2 の罠2）。
+            // （当時の Oswald は和文グリフを持たなかった＝設計書16 §2 の罠2）。
             var win = UiComponents.SchoolName(m.WinnerName);
             win.style.marginLeft = 8;
             sub.Add(win);

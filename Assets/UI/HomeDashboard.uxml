@@ -47,7 +47,7 @@
           </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 通常週: 夏予選カウントダウン（数値は Oswald＝Label を数字と単位に分割） -->
+        <!-- 通常週: 夏予選カウントダウン（数値は f-num＝Label を数字と単位に分割） -->
         <ui:VisualElement name="hm-hero-plain" class="hm-hero__plain">
           <ui:Label name="hero-cd-label" class="hm-hero__cd-k" text="夏予選まで" />
           <ui:Label name="hero-cd-num" class="hm-hero__cd-num f-num-bd" text="15" />

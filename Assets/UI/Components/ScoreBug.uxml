@@ -50,7 +50,7 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <!-- 回表示は菱形の上に重ねる。地色を敷いて菱形の罫を文字の下で抜く（USSに縁取りは無い）。
-                     Oswald は欧文専用なので数字と「回表」は Label を分ける（書体3役ルール）。 -->
+                     数字と「回表」は Label を分ける（Oswald 時代の書体3役ルールの名残）。 -->
                 <ui:VisualElement class="sbug-inning">
                     <ui:Label name="sbug-inning-num" class="sbug-inning__num f-num-bd" text="1" />
                     <ui:Label name="sbug-inning-half" class="sbug-inning__half f-body-bd" text="回表" />
