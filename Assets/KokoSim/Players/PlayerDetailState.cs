@@ -46,18 +46,15 @@ namespace KokoSim.Unity.Players
         public bool? SeenHigh;
     }
 
-    /// <summary>球種1つ（プロスピ風 変化チャート用。中心=ボール、方向=変化方向、距離=変化量、チップ=キレ）。</summary>
+    /// <summary>球種1つ（球種チャート用。中心=ボール、向き=変化の向き、丸の数=ランク、チップ=キレ）。</summary>
     public sealed class PitchData
     {
+        public PitchType Type;
         public string Name = "";
         public string ShortName = "";  // 略記（狭い器＝比較カードの小型チャート用, issue #560）
-        public string Kire = "C";     // キレ（Sharpness→S〜G）＝チップ
-        public float DirX;            // 変化方向（画面座標系: +x右 / +y下）
-        public float DirY;
-        public float Break01;         // 変化量 0〜1（扇の長さ）
-        // ストレートは「変化量」ではなく「伸び」で読ませる（扇の長さは短尺固定・幅で伸びを表す）。
+        public string Kire = "C";     // 有効軸ランク（ストレート=球威・変化球=キレ）→S〜G＝丸の数とチップ
+        public float AngleDeg;        // 変化の向き（右=0°・上=90°）。投げ手の反転済み（PitchTypeStyle.AngleFor）
         public bool IsFastball;
-        public float Extend01;        // 伸び 0〜1（ストレートのみ意味を持つ＝扇の幅）
         // 旧 Velo/Move/Rpm（Statcast風の参考値）は廃止＝どの画面にも出しておらず、engine を通らない飾りの式
         // （"18+(オフセット%30)cm" 等）を作るだけだった（2026-08-17）。
 
@@ -70,14 +67,12 @@ namespace KokoSim.Unity.Players
             foreach (var pt in pitches)
                 list.Add(new PitchChartDatum
                 {
+                    Type = pt.Type,
                     Name = pt.Name,
                     ShortName = pt.ShortName,
                     Kire = pt.Kire,
-                    DirX = pt.DirX,
-                    DirY = pt.DirY,
-                    Break01 = pt.Break01,
+                    AngleDeg = pt.AngleDeg,
                     IsFastball = pt.IsFastball,
-                    Extend01 = pt.Extend01,
                     VeloText = pt.IsFastball ? topVelocityKmh.ToString(CultureInfo.InvariantCulture) : null,
                 });
             return list;
@@ -532,7 +527,7 @@ namespace KokoSim.Unity.Players
             // 能力表（Bar(p, PitchRank/Stuff)）と同じ素のレベルを渡す＝チップと能力表の等級が一致する。
             // 試合用（RosterTeamBuilder 内部）は怪我補正込みだが、表示は能力表に合わせる。
             return BuildPitchData(RosterTeamBuilder.BuildRepertoire(
-                p, p.Level(AbilityKind.PitchRank), p.Level(AbilityKind.Stuff)));
+                p, p.Level(AbilityKind.PitchRank), p.Level(AbilityKind.Stuff)), p.Throws);
         }
 
         /// <summary>
@@ -541,61 +536,28 @@ namespace KokoSim.Unity.Players
         /// （<see cref="PitcherAttributes.EffectiveRepertoire"/>）から同じ絵を作る。
         /// </summary>
         public static List<PitchData> BuildPitchData(Player p)
-            => p?.Pitching == null ? new List<PitchData>() : BuildPitchData(p.Pitching.EffectiveRepertoire);
+            => p?.Pitching == null ? new List<PitchData>() : BuildPitchData(p.Pitching.EffectiveRepertoire, p.Throws);
 
-        /// <summary>レパートリー（球種の枠の並び）→球種チャート用 PitchData 一覧。上の2つの入口の共通部。</summary>
-        public static List<PitchData> BuildPitchData(IEnumerable<PitchSlot> repertoire)
+        /// <summary>レパートリー（球種の枠の並び）→球種チャート用 PitchData 一覧。上の2つの入口の共通部。
+        /// 向きは <see cref="PitchTypeStyle"/> が単一ソース（左投手は左右反転）。</summary>
+        public static List<PitchData> BuildPitchData(IEnumerable<PitchSlot> repertoire, Handedness throws = Handedness.Right)
         {
             var list = new List<PitchData>();
             foreach (var slot in repertoire)
             {
-                var isFast = slot.Type == PitchType.Fastball;
                 // 有効軸（PitchSlot.Rank）: ストレート=球威(Power)、変化球=キレ(Sharpness)。
-                var rank = slot.Rank;
-                var dir = PitchDir(slot.Type);
                 list.Add(new PitchData
                 {
+                    Type = slot.Type,
                     Name = PitchTypeLabels.Jp(slot.Type),
                     ShortName = PitchTypeLabels.Abbr(slot.Type),
-                    Kire = Tiers.FromStrength(rank).ToString(),
-                    DirX = dir.x,
-                    DirY = dir.y,
-                    // 扇の長さ＝変化量。実効キレ（1〜100）を扇の可動域へ線形に写す＝チップの等級と長さが常に同じ向きに動く。
-                    // ストレートは短尺固定（伸びは Extend01＝扇の幅で表す）。
-                    Break01 = isFast ? FastballBreak01 : BreakingBreak01(rank),
-                    IsFastball = isFast,
-                    Extend01 = isFast ? ClampF(rank / 100f, 0f, 1f) : 0f,
+                    Kire = Tiers.FromStrength(slot.Rank).ToString(),
+                    AngleDeg = PitchTypeStyle.AngleFor(slot.Type, throws),
+                    IsFastball = slot.Type == PitchType.Fastball,
                 });
             }
             return list;
         }
-
-        // 変化球の扇の長さ。実効キレ 1〜100 → 0.42〜1.0（旧実装と同じ可動域を保つ＝絵の骨格は変えない）。
-        private static float BreakingBreak01(int sharpness)
-            => ClampF(0.42f + 0.58f * (sharpness / 100f), 0.42f, 1.0f);
-
-        // ストレートの扇の長さ（変化量軸では短尺固定。伸びは Extend01＝扇の幅で読ませる）。
-        private const float FastballBreak01 = 0.15f;
-
-        // 球種ごとの変化方向（画面座標系: +x右 / +y下。上=伸び）。プロスピ風チャートの配置。
-        private static (float x, float y) PitchDir(PitchType t)
-        {
-            switch (t)
-            {
-                case PitchType.Fastball: return (0f, -1f);       // 上（伸び）
-                case PitchType.Cutter:   return (-0.5f, -0.35f); // 左上（小）
-                case PitchType.Slider:   return (-1f, 0.15f);    // 左
-                case PitchType.Curve:    return (-0.6f, 0.75f);  // 左下
-                case PitchType.Fork:     return (0f, 1f);        // 下（落ち）
-                case PitchType.Changeup: return (0.55f, 0.6f);   // 右下
-                case PitchType.Sinker:   return (0.45f, 0.9f);   // 右下（大きく落ち）
-                case PitchType.Shuuto:   return (1f, 0.15f);     // 右
-                case PitchType.TwoSeam:  return (0.7f, 0.5f);    // 右下（小）
-                default:                 return (0f, -1f);
-            }
-        }
-
-        private static float ClampF(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
     }
 
     /// <summary>一覧→詳細の選手選択を受け渡す（安定 index）。</summary>

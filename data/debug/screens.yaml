@@ -685,3 +685,17 @@ screens:
       - wait: 5
       - shot: 07-summer-retirement-choices
       - read: =TutorialService.Progress.Seen
+
+  # ── 球種チャートの作り直し（丸の列・ランクの数だけ丸）──
+
+  - id: pitch-chart-dots
+    name: "球種チャートを丸の列に（選手詳細の実物＋見本帳：480×310／230×150／154×104・右/左・1球種）"
+    size: {w: 2100, h: 1000}
+    steps:
+      - new_game: {seed: 1}
+      - show: PlayerList
+      - wait: 5
+      - shot: 01-player-detail
+      - call: PitchChartGallery.Show("PlayerList")
+      - wait: 5
+      - shot: 02-gallery
