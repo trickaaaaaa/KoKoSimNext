@@ -506,16 +506,29 @@
 
 ### 3.1 定義フォーマット（YAML → C#へロード）
 ```yaml
-- id: ace_hidden_injury
-  trigger: { type: random, weight: 3 }
-  requires: { flags: [!ace_injured_this_year], condition: "ace.recent_starts >= 4" }
-  text: "エースが肘の違和感を隠しているようだ…"
+- id: skipping_practice
+  kind: Choice
+  weight: 1.0
+  cooldown_weeks: 12
+  text: "主力が練習をサボっているらしい。"
+  variants:
+    - lines:
+        - who: team_manager
+          say: "監督、{player} くんがまた練習の途中で消えました。今週3回目です。"
   choices:
-    - label: "検査に行かせる"
-      effects: { player: {status: rest_3w}, trust: +5, flag: ace_injured_this_year }
-    - label: "様子を見る"
-      effects: { player: {injury_risk: x3_4w} }
+    - stance: scold
+      label: "呼び出して、きっちり叱る"
+    - stance: listen
+      label: "まずはサボる理由を聞いてみる"
+  outcomes:
+    - stance: scold
+      result: improved
+      lines:
+        - who: narration
+          say: "翌朝、{player} は誰よりも早くグラウンドにいた。"
 ```
+（正典は `data/events.yaml`。上は抜粋。旧版の例だった「エースの違和感」`ace_hidden_injury` は
+選択肢も効果も無いまま出ていたのでイベントごと削除した＝2026-11-23 作らないと決定・#1477）
 - Claude Codeでの量産・追加・バランス調整をデータ編集だけで完結させるための構造
 
 ### 3.2 フラグ管理
@@ -526,7 +539,7 @@
 - 固定: 入学式、仮入部→正式入部、テスト週×4、夏合宿、冬合宿、文化祭、ドラフト会議、
   プロ入りOBの挨拶訪問（元祖踏襲）、卒業式、転任辞令（3月・判定連動）
 - ランダム: 怪我、雨天週、取材、プロスカウト視察、OB寄付、感染症で部活動停止
-- 選択肢: エースの違和感、練習サボり、無名1年の自主練、保護者からの起用クレーム、
+- 選択肢: 練習サボり、無名1年の自主練、保護者からの起用クレーム、
   部員間の不和、他校からの引き抜き噂（フリー化後）
 
 ---

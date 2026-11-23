@@ -1603,31 +1603,7 @@ events:
           - who: team_manager
             say: "悔しいうちは伸びますよ。次の練習からです。"
 
-  # --- 選択肢イベント（Phase 5で効果接続） ---
-  # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
-  - id: ace_hidden_injury
-    kind: Choice
-    weight: 1.0
-    cooldown_weeks: 12
-    sets_annual_flag: ace_injured_this_year
-    requires_not_annual_flag: ace_injured_this_year
-    text: "エースが肘の違和感を隠しているようだ…"
-    variants:
-      - lines:
-          - who: captain
-            say: "監督。……{player}、投げたあと肘を庇ってます。本人は何も言いませんけど。"
-          - who: manager
-            say: "よく言ってくれた。"
-      - lines:
-          - who: narration
-            say: "エースの球は走ってはいるが、フォームがわずかに短くなっていた。"
-          - who: captain
-            say: "本人に聞いても『大丈夫』としか言わないと思います。"
-      - lines:
-          - who: narration
-            say: "ブルペンの後、{player} がひとりで肘に手を当てているのが見えた。"
-          - who: team_manager
-            say: "……外されたくないんでしょうね。どうします。"
+  # 「エースの違和感」（ace_hidden_injury）は選択肢も効果も無いまま出ていたので削除（2026-11-23 作らないと決定・#1477）。
 
   # --- 選手間イベント（選択肢つき・issue #945・設計書23 §3.3） ---
   # 会話の最後に監督の対応を3択で出す（choices:）。監督は選ぶだけで、台詞は持たない。
