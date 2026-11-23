@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 共通トップバー（UI-BUILD-METHOD Step 2/4）。スコアボードヘッダー(sb2)＋ナビタブ(nav)。
+<!-- 共通トップバー（UI-BUILD-METHOD Step 2/4）。墨の帯（1段目＝表札・日付・メーター・進めるボタン）＋ナビタブ。
      全画面がこの単一ソースを ui:Instance で読み込み、画面ごとに上部/タブを作り直さない。
      アクティブタブの強調は ScreenRouter が付ける（ここでは付けない）。
-     動的値（週・部費・名声・信頼度・総合ランク）は各画面のコントローラが name で埋める。 -->
+     表札・部費・チーム総合・名声・信頼度は TopBarMeters、日付は ScoreboardStrip.Fill が埋める。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <ui:Template name="ScoreboardStrip" src="ScoreboardStrip.uxml" />
     <ui:VisualElement class="sb2">
         <ui:VisualElement class="sb2-left">
             <ui:Label name="badge" class="sb2-badge" text="桜" />
@@ -12,23 +11,29 @@
                 <ui:Label name="school-name" class="sb2-name" text="県立桜丘高校" />
                 <ui:Label name="pref" class="sb2-pref" text="神奈川県" />
             </ui:VisualElement>
-            <ui:VisualElement class="sb2-rank">
-                <ui:Label class="sb2-rank__k" text="チーム総合力" />
-                <ui:VisualElement class="sb2-rank__row">
-                    <ui:VisualElement name="team-rank" class="sb2-rank__chip" />
-                    <ui:Label class="sb2-rank__t" text="ランク" />
-                </ui:VisualElement>
+            <ui:VisualElement class="sb2-div" />
+            <ui:VisualElement class="sb2-date">
+                <ui:Label name="week-year" class="sb2-date__k" text="2026年" />
+                <ui:Label name="tb-date" class="sb2-date__v" text="4月1週" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sb2-div sb2-div--gap" />
+            <ui:VisualElement class="sb2-date">
+                <ui:Label name="tb-record-k" class="sb2-date__k" text="今季の公式戦" />
+                <ui:Label name="tb-record" class="sb2-date__v sb2-record__v" text="0勝0敗" />
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:VisualElement class="sb2-center">
-            <ui:Instance template="ScoreboardStrip" />
-        </ui:VisualElement>
-
         <ui:VisualElement class="sb2-right">
-            <ui:VisualElement class="sb2-meter">
+            <ui:VisualElement class="sb2-meter sb2-meter--start">
                 <ui:Label class="sb2-meter__k" text="部費残高" />
-                <ui:Label name="funds" class="sb2-meter__v" text="¥120万" />
+                <ui:Label name="funds" class="sb2-meter__v sb2-meter__v--funds" text="¥120万" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sb2-meter sb2-meter--start">
+                <ui:Label class="sb2-meter__k" text="チーム総合" />
+                <ui:VisualElement class="sb2-rank__row">
+                    <ui:VisualElement name="team-rank" class="sb2-rank__chip" />
+                    <ui:Label name="team-rank-value" class="sb2-rank__v" text="" />
+                </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement class="sb2-meter">
                 <ui:Label class="sb2-meter__k" text="名声" />

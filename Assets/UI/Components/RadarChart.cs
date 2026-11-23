@@ -28,7 +28,7 @@ namespace KokoSim.Unity.Components
         /// <paramref name="grade"/> は塗り色を決めるランク（S〜G）。
         /// </summary>
         public static void Paint(MeshGenerationContext ctx, IReadOnlyList<RadarAxis> axes,
-            string grade, float radiusFactor)
+            string grade, float radiusFactor, Color? accent = null, int rings = Rings)
         {
             var n = axes.Count;
             if (n < 3) return;
@@ -44,18 +44,18 @@ namespace KokoSim.Unity.Components
             var style = ctx.visualElement.customStyle;
             var gridInner = style.TryGetValue(GridInnerProp, out var gi) ? gi : FallbackGridInner;
             var gridOuter = style.TryGetValue(GridOuterProp, out var go) ? go : FallbackGridOuter;
-            for (var r = 1; r <= Rings; r++)
+            for (var r = 1; r <= rings; r++)
             {
-                var isOuter = r == Rings;
+                var isOuter = r == rings;
                 p.BeginPath();
                 for (var i = 0; i < n; i++)
                 {
-                    var pt = AxisPoint(cx, cy, radius * ((float)r / Rings), i, n);
+                    var pt = AxisPoint(cx, cy, radius * ((float)r / rings), i, n);
                     if (i == 0) p.MoveTo(pt); else p.LineTo(pt);
                 }
                 p.ClosePath();
                 p.strokeColor = isOuter ? gridOuter : gridInner;
-                p.lineWidth = isOuter ? 1.6f : 1f;
+                p.lineWidth = isOuter && accent == null ? 1.6f : 1f;
                 p.Stroke();
             }
             for (var i = 0; i < n; i++)
@@ -69,9 +69,10 @@ namespace KokoSim.Unity.Components
             }
 
             // データ塗り: ランク連動色で中心→外へグラデ（黄アクセントは使わない）。
-            var rc = RankPalette.Of(grade);
-            var centerCol = (Color32)new Color(rc.r, rc.g, rc.b, 0.28f);
-            var rimCol = (Color32)new Color(rc.r * 0.68f, rc.g * 0.68f, rc.b * 0.68f, 0.62f);
+            // スクールカラー版（ホーム）は同じ色の18%で平らに塗り、頂点の点は打たない。
+            var rc = accent ?? RankPalette.Of(grade);
+            var centerCol = accent != null ? (Color32)new Color(rc.r, rc.g, rc.b, 0.18f) : (Color32)new Color(rc.r, rc.g, rc.b, 0.28f);
+            var rimCol = accent != null ? centerCol : (Color32)new Color(rc.r * 0.68f, rc.g * 0.68f, rc.b * 0.68f, 0.62f);
 
             var rim = new Vector2[n];
             for (var i = 0; i < n; i++)
@@ -146,6 +147,8 @@ namespace KokoSim.Unity.Components
         private readonly List<RadarAxis> _axes = new List<RadarAxis>();
         private readonly List<VisualElement> _axisNodes = new List<VisualElement>();
         private string _grade = "D";
+        private Color? _accent;
+        private int _rings = 5;
 
         /// <param name="host">レーダーを描く器（UXML の name 付き VisualElement）。</param>
         /// <param name="radiusFactor">短辺に対する半径比。</param>
@@ -174,6 +177,7 @@ namespace KokoSim.Unity.Components
             if (axes != null) _axes.AddRange(axes);
             _grade = string.IsNullOrEmpty(grade) ? "D" : grade;
             BuildAxisLabels();
+            ApplyAccentToValues();
             Reposition();
             if (_host != null) _host.MarkDirtyRepaint();
         }
@@ -227,6 +231,33 @@ namespace KokoSim.Unity.Components
             }
         }
 
-        private void OnPaint(MeshGenerationContext ctx) => RadarChart.Paint(ctx, _axes, _grade, _radiusFactor);
+        /// <summary>
+        /// スクールカラー版にする（ホームのチームランク）。塗りはこの色の18%・輪郭2.5px・頂点の点なし、
+        /// 目盛りは <paramref name="rings"/> 段。一番高い能力の数値だけこの色にする。null で既定（ランク色）に戻す。
+        /// </summary>
+        public void SetAccent(Color? accent, int rings = 5)
+        {
+            _accent = accent;
+            _rings = rings;
+            ApplyAccentToValues();
+            if (_host != null) _host.MarkDirtyRepaint();
+        }
+
+        private void ApplyAccentToValues()
+        {
+            if (_axisNodes.Count == 0) return;
+            var best = -1;
+            for (var i = 0; i < _axes.Count && i < _axisNodes.Count; i++)
+                if (best < 0 || _axes[i].Value01 > _axes[best].Value01) best = i;
+            for (var i = 0; i < _axisNodes.Count; i++)
+            {
+                var v = _axisNodes[i].Q<Label>(className: "radar-axis__v");
+                if (v == null) continue;
+                if (_accent != null && i == best) v.style.color = _accent.Value;
+                else v.style.color = StyleKeyword.Null;
+            }
+        }
+
+        private void OnPaint(MeshGenerationContext ctx) => RadarChart.Paint(ctx, _axes, _grade, _radiusFactor, _accent, _rings);
     }
 }

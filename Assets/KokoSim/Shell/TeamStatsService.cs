@@ -37,6 +37,9 @@ namespace KokoSim.Unity.Shell
     /// （記録画面が出来たら同じサービスを引く＝2箇所目のコピーを作らない）。
     /// 表示専用＝ゲームバランスには影響しない。UnityEngine 非依存。
     /// </summary>
+    /// <summary>チーム内ランキングの集計範囲（ホームの切り替え）。</summary>
+    public enum RankingScope { Career, Official, Tournament }
+
     public static class TeamStatsService
     {
         private const string Dash = "—";
@@ -95,15 +98,26 @@ namespace KokoSim.Unity.Shell
             };
         }
 
-        // ===== チーム内ランキング（通算スコープ） =====
+        /// <summary>試合の記録が1つでもあるか（通算に打席か投球のある選手がいる）。無ければホームは表の代わりに案内を出す。</summary>
+        public static bool HasRecords()
+        {
+            foreach (var kv in GameSession.Current.Stats.Career.Players)
+                if (kv.Value.Batting.PlateAppearances > 0 || kv.Value.Pitching.Outs > 0) return true;
+            return false;
+        }
+
+        // ===== チーム内ランキング（通算／公式戦／今大会） =====
 
         /// <summary>
-        /// チーム内ランキング（通算）。打率・防御率は規定（チーム試合数基準）を満たす選手のみ。
+        /// チーム内ランキング（既定は通算）。打率・防御率は規定（その範囲のチーム試合数基準）を満たす選手のみ。
         /// 該当者が居ない枠は Empty のまま返す＝呼び出し側は常に固定行数を描ける。
         /// </summary>
-        public static List<RankRow> Rankings()
+        public static List<RankRow> Rankings(RankingScope scope = RankingScope.Career)
         {
-            var book = GameSession.Current.Stats.Career;
+            var store = GameSession.Current.Stats;
+            var book = scope == RankingScope.Official ? store.Official
+                : scope == RankingScope.Tournament ? store.CurrentTournament
+                : store.Career;
             var names = NameIndex();
 
             // 規定打席・規定投球回は engine の単一ソース（RecordRoom＋data/coefficients.yaml の records:）から引く。

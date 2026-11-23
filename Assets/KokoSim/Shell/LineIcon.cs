@@ -23,7 +23,18 @@ namespace KokoSim.Unity.Shell
             FastForward,
             /// <summary>再生（塗り。再開）。</summary>
             Play,
+            /// <summary>棒グラフ（ホーム：チーム成績の記録なし）。</summary>
+            BarChart,
+            /// <summary>トロフィー（ホーム：ランキングの記録なし）。</summary>
+            Trophy,
+            /// <summary>右向きの山形（行の飛び先）。</summary>
+            ChevronRight,
+            /// <summary>十字（追加）。</summary>
+            Plus,
         }
+
+        /// <summary>線幅（24 座標で）。既定 2。</summary>
+        public float Stroke { get; set; } = StrokeWidth;
 
         private const float ViewBox = 24f;
         private const float StrokeWidth = 2f;
@@ -60,7 +71,7 @@ namespace KokoSim.Unity.Shell
             var color = resolvedStyle.color;
             p.strokeColor = color;
             p.fillColor = color;
-            p.lineWidth = StrokeWidth * s;
+            p.lineWidth = Stroke * s;
             p.lineCap = LineCap.Round;
             p.lineJoin = LineJoin.Round;
 
@@ -100,6 +111,33 @@ namespace KokoSim.Unity.Shell
                     p.BeginPath();
                     p.MoveTo(P(13, 6)); p.LineTo(P(20, 12)); p.LineTo(P(13, 18)); p.ClosePath();
                     p.Stroke();
+                    break;
+
+                case Kind.BarChart:
+                    Polyline(p, P(4, 20), P(4, 10));
+                    Polyline(p, P(10, 20), P(10, 4));
+                    Polyline(p, P(16, 20), P(16, 13));
+                    Polyline(p, P(22, 20), P(2, 20));
+                    break;
+
+                case Kind.Trophy:
+                    Polyline(p, P(8, 21), P(16, 21));
+                    Polyline(p, P(12, 17), P(12, 21));
+                    p.BeginPath();
+                    p.MoveTo(P(7, 9)); p.LineTo(P(7, 4)); p.LineTo(P(17, 4)); p.LineTo(P(17, 9));
+                    p.Arc(P(12, 9), 5f * s, 0f, 180f);
+                    p.Stroke();
+                    Polyline(p, P(7, 6), P(4, 6), P(4.4f, 8), P(5.5f, 9.3f), P(7, 10));
+                    Polyline(p, P(17, 6), P(20, 6), P(19.6f, 8), P(18.5f, 9.3f), P(17, 10));
+                    break;
+
+                case Kind.ChevronRight:
+                    Polyline(p, P(9, 6), P(15, 12), P(9, 18));
+                    break;
+
+                case Kind.Plus:
+                    Polyline(p, P(12, 5), P(12, 19));
+                    Polyline(p, P(5, 12), P(19, 12));
                     break;
 
                 case Kind.Play:

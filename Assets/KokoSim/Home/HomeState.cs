@@ -57,6 +57,15 @@ namespace KokoSim.Unity.Home
     }
 
     /// <summary>ホーム画面に表示する一式（スナップショット）。</summary>
+    /// <summary>週の目盛りの1マス（ホームの主役のカード・大会のない時期）。</summary>
+    public sealed class CountdownTick
+    {
+        public bool Now;       // 今週（今月）＝白で塗る
+        public bool Opening;   // 開幕の週（月）＝白の2px枠
+        public string Label = "";
+        public bool LabelStrong;   // 「今週」「開幕」は白の太字
+    }
+
     public sealed class HomeView
     {
         public string TeamRankGrade = "C";
@@ -86,6 +95,17 @@ namespace KokoSim.Unity.Home
         // 主役ヒーロー帯・通常週のカウントダウン（数字は f-num にするため単位と分割して持つ）。
         public string HeroBigValue = "";   // "15"（週数）／数字が無い状態は "開催中"
         public string HeroBigUnit = "";    // "週"／数字が無い状態は空
+
+        // 主役のカード（大会期間）：試合までの日数・大会名・相手のランク・試合日。
+        public string HeroDays = "";            // "2"／当日は "0"
+        public string TournamentName = "";      // "2037年 秋季神奈川県地区予選（横浜北地区）"
+        public string AwayRankGrade = "";       // 相手のランク（S〜G）。次戦が無いときは空
+        public string MatchDay = "";            // "9月15日"／当日は "本日"
+        // 主役のカード（大会のない時期）：見出し・大会名・開幕の週・週の目盛り。
+        public string HeroCountdownLabel = "";  // "夏の大会まで"
+        public string NextTournamentName = "";  // "夏予選（秋田大会）"
+        public string OpeningLabel = "";        // "7月2週 開幕"
+        public List<CountdownTick> Ticks = new List<CountdownTick>();
 
         public int GuidanceUsed;
         public int GuidanceTotal = 3;
@@ -1123,6 +1143,7 @@ namespace KokoSim.Unity.Home
             view.HomeTeam = NationService.ManagerSchoolName;
             view.HomeSub = "";
             view.Venue = s.Title;
+            view.TournamentName = s.Title;
 
             if (r.Finished)
             {
@@ -1133,6 +1154,8 @@ namespace KokoSim.Unity.Home
                 view.AwayTeam = "―";
                 view.AwaySub = "";
                 view.GameDate = leagueQualified != null || r.IsChampion ? "全試合終了" : "大会敗退";
+                view.HeroDays = "―";
+                view.MatchDay = "―";
                 // 次戦が無い＝天気欄は出さない（issue #803, 固定文字の廃止）。
             }
             else
@@ -1146,6 +1169,9 @@ namespace KokoSim.Unity.Home
                 view.AwaySub = r.NextOpponent != null
                     ? "ランク " + OpponentRank.Of(r.NextOpponent)   // 通算勝敗は出さない（issue #730 で #84 を撤回）
                     : "";
+                view.AwayRankGrade = r.NextOpponent != null ? OpponentRank.Of(r.NextOpponent).ToString() : "";
+                view.HeroDays = reached ? "0" : days.ToString();
+                view.MatchDay = reached ? "本日" : s.NextMatchDateLabel;
 
                 // 次戦に実際に効く天気を、試合を解決せずに覗く（issue #803・オーナー決定2026-11-09）。
                 // Resolve/BeginLive が後で辿るのと同一のFork鎖を辿るだけ＝ここで抽選し直さない。
@@ -1208,6 +1234,11 @@ namespace KokoSim.Unity.Home
                 // 主役ヒーロー帯（通常週）: 数字＝f-num にするため単位と分けて持つ。
                 view.HeroBigValue = left > 0 ? left.ToString() : "開催中";
                 view.HeroBigUnit = left > 0 ? "週" : "";
+                view.HeroCountdownLabel = SeasonClock.SeasonCountdownLabel(next.Kind);
+                view.NextTournamentName = SeasonClock.UpcomingTournamentName(next.Kind, NationService.PrefectureId);
+                var open = SeasonClock.MonthWeekOf(week + left);
+                view.OpeningLabel = open.Month + "月" + open.WeekOfMonth + "週 開幕";
+                view.Ticks = BuildTicks(week, left);
             }
 
             // 個別指導（設計書03 §3.3・issue #693）。練習計画画面で指名した選手（共有ロスターの
@@ -1222,6 +1253,47 @@ namespace KokoSim.Unity.Home
 
             view.Feed = _feed.ToList();
             return view;
+        }
+
+        /// <summary>週の目盛りを1週1マスで並べるときの上限。超えたら1マス＝1か月にする。</summary>
+        public const int MaxWeeklyTicks = 20;
+
+        /// <summary>
+        /// 今週から開幕の週までの目盛り。1週1マス（今週＝塗り・開幕＝枠、ラベルは「今週」・各月の最初の週に月名・「開幕」）。
+        /// マスが <see cref="MaxWeeklyTicks"/> を超える（冬をまたぐ等）ときは1マス＝1か月にする（最初は「今月」）。
+        /// </summary>
+        public static List<CountdownTick> BuildTicks(int week, int weeksLeft)
+        {
+            var ticks = new List<CountdownTick>();
+            if (weeksLeft < 0) weeksLeft = 0;
+            if (weeksLeft + 1 <= MaxWeeklyTicks)
+            {
+                for (var i = 0; i <= weeksLeft; i++)
+                {
+                    var d = SeasonClock.MonthWeekOf(week + i);
+                    var t = new CountdownTick { Now = i == 0, Opening = i == weeksLeft };
+                    if (t.Opening) { t.Label = "開幕"; t.LabelStrong = true; }
+                    else if (t.Now) { t.Label = "今週"; t.LabelStrong = true; }
+                    else if (d.WeekOfMonth == 1) t.Label = d.Month + "月";
+                    ticks.Add(t);
+                }
+                return ticks;
+            }
+
+            // 1マス＝1か月。今週の月から開幕の週の月まで、月が変わるたびに1マス。
+            var lastMonth = -1;
+            for (var i = 0; i <= weeksLeft; i++)
+            {
+                var m = SeasonClock.MonthWeekOf(week + i).Month;
+                if (m == lastMonth) continue;
+                lastMonth = m;
+                ticks.Add(new CountdownTick { Label = m + "月" });
+            }
+            ticks[0].Now = true; ticks[0].Label = "今月"; ticks[0].LabelStrong = true;
+            var last = ticks[ticks.Count - 1];
+            last.Opening = true; last.Label = "開幕"; last.LabelStrong = true;
+            if (ticks.Count == 1) last.Now = true;
+            return ticks;
         }
 
         /// <summary>故障の一言（injury_occurred）へ差し込む語。フィードの行と同じ材料（issue #695）。</summary>

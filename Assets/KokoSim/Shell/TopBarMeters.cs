@@ -30,6 +30,20 @@ namespace KokoSim.Unity.Shell
             Set(root, "funds", "¥" + m.Funds.ToString("0") + "万");
             SetRank(root, "fame", Tiers.FromStrength(m.Fame).ToString());
             SetRank(root, "trust", Tiers.FromStrength(m.Trust).ToString());
+
+            // チーム総合（ランクのチップ＋数字）。各画面のコントローラも team-rank を埋めるが、値は同じ単一ソース。
+            var overall = TeamOverall.Of(RosterService.Active);
+            var chip = root.Q<VisualElement>("team-rank");
+            if (chip != null)
+            {
+                chip.Clear();
+                chip.Add(KokoSim.Unity.Components.UiComponents.RankChipLegacy(Tiers.FromStrength(overall).ToString()));
+            }
+            Set(root, "team-rank-value", System.Math.Round(overall).ToString("0"));
+
+            // 校章のマスはスクールカラー（表示用の色）の地に白い頭文字。
+            var badge = root.Q<Label>("badge");
+            if (badge != null) badge.style.backgroundColor = SchoolAccent.ForManager();
         }
 
         /// <summary>表札に出す自校名（校名＋「高校」）。校名の幹だけを保持し、接尾は表示側で付ける。

@@ -1,3 +1,4 @@
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Season;
 
 namespace KokoSim.Unity.Shell
@@ -48,6 +49,43 @@ namespace KokoSim.Unity.Shell
             TournamentKind.Jingu => KokoSim.Engine.Season.DisplayNames.Current.JinguShort + "まで",
             _ => "秋大会まで",
         };
+
+        /// <summary>
+        /// ホームの主役のカードの見出し（「夏の大会まで」）。季節だけで呼ぶ＝夏予選・夏の甲子園は「夏」、
+        /// センバツは「春」、秋季大会・地区大会・神宮は「秋」。
+        /// </summary>
+        public static string SeasonCountdownLabel(TournamentKind kind) => kind switch
+        {
+            TournamentKind.Summer or TournamentKind.SummerKoshien => "夏の大会まで",
+            TournamentKind.SenbatsuKoshien => "春の大会まで",
+            _ => "秋の大会まで",
+        };
+
+        /// <summary>
+        /// 次の大会の呼び名（年なし・ホームの主役のカード用）。県の大会は「呼び名（県名＋大会）」
+        /// （例「夏予選（秋田大会）」「秋季大会（秋田大会）」）、全国・地区の大会は呼び名だけ。
+        /// </summary>
+        public static string UpcomingTournamentName(TournamentKind kind, int prefectureId)
+        {
+            var names = KokoSim.Engine.Season.DisplayNames.Current;
+            var pref = "（" + PrefectureNames.ShortOf(prefectureId) + "大会）";
+            return kind switch
+            {
+                TournamentKind.Summer => "夏予選" + pref,
+                TournamentKind.SummerKoshien => "夏の" + names.Koshien,
+                TournamentKind.SenbatsuKoshien => names.Senbatsu,
+                TournamentKind.Regional => "地区大会",
+                TournamentKind.Jingu => names.JinguShort,
+                _ => "秋季大会" + pref,
+            };
+        }
+
+        /// <summary>週 → (月, 月の何週目)。週は年をまたいでよい（0..49 に正規化する）。</summary>
+        public static (int Month, int WeekOfMonth) MonthWeekOf(int week)
+        {
+            var d = Calendar.DateOf(week);
+            return (d.Month, d.WeekOfMonth);
+        }
 
         /// <summary>暦年の小書き（"YYYY年"）。年度と4月始まりの繰り上がりは CurrentLabel と同じ規則。</summary>
         public static string YearLabel(int yearIndex, int week) => CalendarYear(yearIndex, week) + "年";
