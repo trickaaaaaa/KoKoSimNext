@@ -125,8 +125,7 @@ namespace KokoSim.Unity.Players
             injury.AddToClassList("cell--narrow");
             if (r.Injury.Length > 0)
             {
-                // 傷病名と程度は2行に折り返す（「・」が行頭に来ない＝禁則・issue #1533）
-                var injuryLabel = new Label(KokoSim.Unity.Components.Kinsoku.Apply(r.Injury));
+                var injuryLabel = new Label(InjuryText(r.Injury));
                 injuryLabel.AddToClassList("cell");
                 injuryLabel.AddToClassList("cell--warn");
                 injury.Add(injuryLabel);
@@ -137,6 +136,17 @@ namespace KokoSim.Unity.Players
         }
 
         // ===== 補助 =====
+
+        /// <summary>
+        /// 故障欄の字（「傷病名・程度」）。傷病名の途中で折り返さず、「・」の後で2行に割る（issue #1533）。
+        /// 傷病名＋「・」をひと続き（nobr）にする＝「疲労性炎／症・中度」と語の途中で割れない。
+        /// </summary>
+        private static string InjuryText(string injury)
+        {
+            var dot = injury.IndexOf('・');
+            if (dot <= 0) return injury;
+            return "<nobr>" + injury.Substring(0, dot + 1) + "</nobr>" + injury.Substring(dot + 1);
+        }
 
         // 背番号セル（issue #131）: 数字だけなのでコンデンス体（f-num）。列幅・右揃えは .cell--no（PlayerList.uss）。
         private static Label NumberCell(string text)
