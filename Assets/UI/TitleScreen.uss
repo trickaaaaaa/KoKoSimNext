@@ -36,18 +36,15 @@
     padding-bottom: 5%;
 }
 
-.ts-title {
-    font-size: 84px;
-    color: var(--ink);
-    margin: 0;
-}
-
-.ts-rule {
-    width: 280px;
-    height: 4px;
+/* 題字ロゴ（2000×752 の透過PNG）。画面幅の約4割＝760px、縦は原寸比。
+   ロゴ自体に一筆と落款があるので、下線は引かない。 */
+.ts-logo {
+    width: 760px;
+    height: 286px;
     flex-shrink: 0;
-    background-color: var(--ink);
-    margin-top: 20px;
+    margin-left: -12px;
+    background-image: url("project:///Assets/UI/Images/title/title-logo.png");
+    -unity-background-scale-mode: scale-to-fit;
 }
 
 /* 絵の上でも読めるよう紙色の薄い地に載せる。 */
