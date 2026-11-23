@@ -650,9 +650,9 @@
     border-color: var(--color-line);
     overflow: hidden;
 }
-/* 球場図の小型チップ（常設ラベル・高さ24px以下）。背番号＋姓＋ランクのみ。
+/* 球場図のチップ（常設ラベル・3段）。背番号＋主将＋ランク／名前／学年・投打＋✕。
    アンカーはチップ下端中央＝立ち位置点で、left/top は Controller が球場座標[m]から与える。
-   フルカード（学年/投打/×）はホバー時に field-pop で出す。
+   ホバーのポップオーバーは廃止（邪魔だったため・中身はチップへ常設）。
    地は守備トークン地(--field-token-fill-day)と同系の濃色チップ＝明芝の上で守備位置トークンに見える配色
    （試合2D俯瞰の濃色ディスクと同じ考え方）。文字は --field-chalk（昼夜共通の明色）で地に対して常に読める。 */
 .field-chip {
@@ -675,20 +675,11 @@
 .field-chip__name { height: 21px; margin: 0; padding: 0; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--field-chalk); white-space: nowrap; }
 .field-chip__empty { height: 21px; margin: 0; padding: 0; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-faint); }
 .field-chip .rank-chip { min-width: 18px; height: 18px; font-size: 11px; margin-left: 6px; }
-
-/* フルカードのポップオーバー（ホバー/選択時のみ・チップの真上）。 */
-.field-pop {
-    position: absolute;
-    width: 190px;
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w);
-    border-color: var(--color-line-focus);
-    border-radius: var(--radius-card);
-    padding-left: 7px;
-    padding-right: 7px;
-    padding-top: 5px;
-    padding-bottom: 6px;
-}
+.field-chip__sub { flex-direction: row; align-items: center; height: 17px; padding-bottom: 1px; }
+.field-chip .ms-captain-mark { height: 20px; margin: 0 0 0 4px; padding: 0; -unity-text-align: middle-left; color: var(--field-chalk); }
+.field-chip__sub-txt { margin: 0; padding: 0; font-size: 11px; color: var(--field-line); white-space: nowrap; }
+.field-chip .slot-card__clear { margin: 0 0 0 6px; padding: 0; font-size: 11px; color: var(--field-line); }
+.field-chip .slot-card__clear:hover { color: var(--color-warn); }
 
 /* ── SlotCard：背番号枠の中身（2行：①背番号＋名前＋位置ランク ②学年・投打・解除） ── */
 .slot-card__top { flex-direction: row; align-items: center; }

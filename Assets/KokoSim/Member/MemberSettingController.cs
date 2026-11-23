@@ -32,11 +32,6 @@ namespace KokoSim.Unity.Member
         private VisualElement _fieldHost;
         private BaseballFieldElement _field;
         private FieldMarkersElement _markers;   // 立ち位置点＋引き出し線
-        private VisualElement _popover;         // ホバー/選択時のフルカード
-        private int _popoverSlot = -1;          // 表示中フルカードの背番号（-1=非表示）
-        private bool _popoverPointerInside;     // カーソルがフルカード上＝✕へ動く間は閉じない
-        private IVisualElementScheduledItem _popoverHideTimer;
-        private const long PopoverHideDelayMs = 160;   // チップ→フルカードの隙間（4px）を渡る猶予
         private Color _accent = KokoSim.Unity.Shell.SchoolAccent.Default;   // 比較表の自チーム側の色（オーダー画面と同じ）
 
         private void OnEnable()
@@ -53,20 +48,6 @@ namespace KokoSim.Unity.Member
                 _fieldHost.Insert(0, _field);
                 _markers = new FieldMarkersElement();
                 _fieldHost.Insert(1, _markers);   // 芝の上・チップの下
-                _popover = new VisualElement();
-                _popover.AddToClassList("field-pop");
-                _popover.style.display = DisplayStyle.None;
-                _popover.RegisterCallback<PointerEnterEvent>(_ =>
-                {
-                    _popoverPointerInside = true;
-                    _popoverHideTimer?.Pause();
-                });
-                _popover.RegisterCallback<PointerLeaveEvent>(_ =>
-                {
-                    _popoverPointerInside = false;
-                    if (_popoverSlot >= 0) HidePopover(_popoverSlot);
-                });
-                _fieldHost.Add(_popover);          // 最前面
                 _fieldHost.RegisterCallback<GeometryChangedEvent>(_ => PositionFieldCards());
             }
 
@@ -137,8 +118,6 @@ namespace KokoSim.Unity.Member
             BuildBench(v);
             BuildPool(v);
             BuildCompare(v);
-            // 入れ替え・✕の直後にフルカードが前の選手の名前を残さない（空の枠なら閉じる）。
-            if (_popoverSlot >= 0) ShowPopover(_popoverSlot);
         }
 
         // ── 背番号1〜9：守備位置（球場座標）に小型チップを置く ──
@@ -205,7 +184,6 @@ namespace KokoSim.Unity.Member
                 });
             }
             _markers.SetMarkers(markers);
-            if (_popoverSlot >= 0) PositionPopover();
         }
 
         private sealed class PlacedChip
@@ -317,7 +295,8 @@ namespace KokoSim.Unity.Member
             }
         }
 
-        // 球場図の常設チップは2段（issue #732 案A）: 上段＝背番号＋ランク、下段＝名前（フル）。学年/投打/×はポップオーバーへ。
+        // 球場図の常設チップは3段: 上段＝背番号＋主将＋ランク、中段＝名前（フル）、下段＝学年・投打＋解除。
+        // 以前はホバーのポップオーバーで学年/投打/✕を出していたが、邪魔なので常時表示に寄せた。
         private void FillChip(VisualElement el, SlotView slot)
         {
             var top = new VisualElement();
@@ -330,10 +309,25 @@ namespace KokoSim.Unity.Member
 
             if (slot.PlayerIndex >= 0)
             {
+                if (slot.IsCaptain) top.Add(CaptainMark());
+                var gap = new VisualElement();
+                gap.AddToClassList("slot-card__spacer");
+                top.Add(gap);
                 top.Add(UiComponents.RankChip(slot.RankGrade));
                 var name = new Label(slot.Name);
                 name.AddToClassList("field-chip__name");
                 el.Add(name);
+
+                var sub = new VisualElement();
+                sub.AddToClassList("field-chip__sub");
+                var info = new Label(slot.GradeLabel + "  " + slot.HandLabel);
+                info.AddToClassList("field-chip__sub-txt");
+                sub.Add(info);
+                var spacer = new VisualElement();
+                spacer.AddToClassList("slot-card__spacer");
+                sub.Add(spacer);
+                sub.Add(ClearButton(slot.Number));
+                el.Add(sub);
             }
             else
             {
@@ -348,103 +342,9 @@ namespace KokoSim.Unity.Member
             var n = slot.Number;
             var pidx = slot.PlayerIndex;
             el.RegisterCallback<ClickEvent>(_ => { _state.ClickSlot(n); Render(); });
-            // ホバー：比較の右へ＋フルカードのポップオーバー表示。
-            el.RegisterCallback<PointerEnterEvent>(_ =>
-            {
-                _state.SetHovered(pidx);
-                ShowPopover(n);
-                RenderCompareOnly();
-            });
-            el.RegisterCallback<PointerLeaveEvent>(_ =>
-            {
-                SchedulePopoverHide(n);
-                _state.ClearHovered(pidx);
-                RenderCompareOnly();
-            });
-        }
-
-        // ── フルカードのポップオーバー（ホバー/選択時のみ） ──
-        private void ShowPopover(int number)
-        {
-            if (_popover == null || number < 1 || number > 9) return;
-            var slot = _state.BuildView().Slots[number - 1];
-            if (slot.PlayerIndex < 0) { HidePopover(number); return; }
-
-            _popoverHideTimer?.Pause();
-            _popoverSlot = number;
-            _popover.Clear();
-            _popover.style.display = DisplayStyle.Flex;
-
-            var top = new VisualElement();
-            top.AddToClassList("slot-card__top");
-            top.Add(NumBadge(slot.Number));
-            if (slot.IsCaptain) top.Add(CaptainMark());
-            var name = new Label(slot.Name);
-            name.AddToClassList("slot-card__name");
-            top.Add(name);
-            top.Add(UiComponents.RankChip(slot.RankGrade));
-            _popover.Add(top);
-
-            var sub = new VisualElement();
-            sub.AddToClassList("slot-card__sub");
-            var info = new Label(slot.GradeLabel + "  " + slot.HandLabel);
-            info.AddToClassList("slot-card__sub-txt");
-            sub.Add(info);
-            var spacer = new VisualElement();
-            spacer.AddToClassList("slot-card__spacer");
-            sub.Add(spacer);
-            sub.Add(ClearButton(slot.Number));
-            _popover.Add(sub);
-
-            PositionPopover();
-        }
-
-        private void HidePopover(int number)
-        {
-            if (_popover == null || _popoverSlot != number) return;
-            _popoverHideTimer?.Pause();
-            _popoverSlot = -1;
-            _popoverPointerInside = false;
-            _popover.style.display = DisplayStyle.None;
-        }
-
-        private void SchedulePopoverHide(int number)
-        {
-            if (_popover == null || _popoverSlot != number) return;
-            _popoverHideTimer?.Pause();
-            _popoverHideTimer = _popover.schedule.Execute(() =>
-            {
-                if (!_popoverPointerInside) HidePopover(number);
-            });
-            _popoverHideTimer.ExecuteLater(PopoverHideDelayMs);
-        }
-
-        // ポップオーバーを対象チップの真上に置く（画面端はクランプ）。
-        private void PositionPopover()
-        {
-            if (_popover == null || _popoverSlot < 0 || _field == null) return;
-            if (!TryDefPos(_popoverSlot, out var m)) return;
-            var dot = _field.FieldToLocal(m);
-            var pw = _popover.layout.width;
-            var ph = _popover.layout.height;
-            if (float.IsNaN(pw) || pw <= 0f) { _popover.schedule.Execute(PositionPopover); return; }
-            var fw = _field.contentRect.width;
-            var left = Mathf.Clamp(dot.x - pw * 0.5f, 2f, fw - pw - 2f);
-            // チップ上端の少し上。チップの高さは実寸で取る（2段チップ＝issue #732 で 22px 固定ではなくなった）。
-            var chipH = ChipHeightOf(_popoverSlot);
-            var top = Mathf.Max(2f, dot.y - ChipRise - chipH - ph - 4f);
-            _popover.style.left = left;
-            _popover.style.top = top;
-        }
-
-        private float ChipHeightOf(int number)
-        {
-            var host = _root.Q<VisualElement>("ms-field-slots");
-            if (host != null)
-                foreach (var child in host.Children())
-                    if (child.userData is int n && n == number && !float.IsNaN(child.layout.height) && child.layout.height > 0f)
-                        return child.layout.height;
-            return 46f;
+            // ホバー：比較の右へ。
+            el.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
+            el.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
         }
 
         // カーソル移動での比較プレビューは比較パネルだけ更新（盤面は再構築しない＝ホバー対象がぶれない）。
