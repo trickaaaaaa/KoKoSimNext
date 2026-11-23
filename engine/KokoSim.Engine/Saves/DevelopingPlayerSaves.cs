@@ -103,6 +103,8 @@ internal static class DevelopingPlayerSaves
         // 成長推移（v34・issue #1027）。1点＝[学年, 週, 全能力レベル…]。記録があるときだけ書く
         // ＝AI校の選手（空）にキーを足してセーブを膨らませない。
         if (p.History.Count > 0) obj.Add("hist", HistoryToJson(p.History));
+        // 怪物（issue #1468）。怪物のときだけ書く（大半の選手にキーを足さない）。旧セーブ（キー欠損）は None で読む＝版上げ不要。
+        if (p.Phenom != PhenomType.None) obj.Add("phenom", EnumJson.Write(p.Phenom));
         return obj;
     }
 
@@ -152,6 +154,7 @@ internal static class DevelopingPlayerSaves
             BattingGrowthType = o.Has("battingGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("battingGrowthType")) : null,
             DefenseGrowthType = o.Has("defenseGrowthType") ? EnumJson.ReadNullable<GrowthType>(o.Str("defenseGrowthType")) : null,
             IsProdigy = o.Bool("isProdigy"),
+            Phenom = o.Has("phenom") ? EnumJson.Read<PhenomType>(o.Str("phenom")) : PhenomType.None,
             Leadership = o.Int("leadership"),
             // 性格の4軸（設計書23 §1.5・v27）。旧セーブは8タイプ＋PersonalityFactor＝代表値＋隠れた個人差へ（Q47）。
             Receptiveness = PersonalitySaveMigration.DevelopingAxes(o).Receptiveness,

@@ -441,6 +441,13 @@ public sealed record RosterCoefficients
     /// <summary>打者の型（出現割合と配分オフセット）。AI校の永続ロスターだけが使う（issue #1066）。</summary>
     public Players.BatterArchetypeCoefficients BatterArchetypes { get; init; } = new();
 
+    /// <summary>
+    /// 怪物（Phenom）の係数（issue #1468）。<b>AI校の <see cref="Nation.Roster.PersistentRosterCoefficients.Phenom"/> と同じ値</b>
+    /// （YAML の正典は persistent_roster.phenom_*。ローダーが同じ1つを両方へ配る＝Q20 決定6「係数は自校/AI共通の置き場」）。
+    /// 自校の新入生とスカウト候補の怪物（<see cref="ProspectPhenom"/>）が型・帯・出現率を読む。
+    /// </summary>
+    public Nation.Roster.PhenomCoefficients Phenom { get; init; } = new();
+
     // --- 投打の利き（設計書01 §1.1c・式は HandednessModel） ---
     /// <summary>左投げの素の確率（左利き人口相当）。投手らしさ0の選手＝野手はこの値のまま。</summary>
     public double ThrowLeftProb { get; init; } = 0.10;
@@ -607,10 +614,14 @@ public static class ProspectGenerator
     /// 従来どおり <c>IntakeMean/Sd/Min/Max</c> から引く。**指定したときは人数の乱数draw自体を行わない**
     /// ＝以降の乱数列が既定経路とずれるが、これは新設校専用の別経路なので既存の決定論には影響しない。
     /// </param>
+    /// <param name="rollPhenom">
+    /// 自校の怪物（issue #1468）を混ぜるか。年度替わりの新入生（<see cref="RosterLifecycle"/>）だけが true を渡す。
+    /// 新規ゲームの初期部員・スカウトの候補プール（候補側で別に引く）・試合用の素体は false（既定）。
+    /// </param>
     public static IReadOnlyList<DevelopingPlayer> Intake(int year, RosterCoefficients c, IRandomSource rng,
         PlayerNameVocab? nameVocab = null, double? talentCenter = null, SkillCoefficients? skills = null,
         PersonalityCoefficients? personalities = null, IEnumerable<string>? existingNames = null,
-        FormCoefficients? form = null, int? fixedCount = null)
+        FormCoefficients? form = null, int? fixedCount = null, bool rollPhenom = false)
     {
         var vocab = nameVocab ?? new PlayerNameVocab();
         // 同一チーム内で下の名前が被らないよう、既存部員の名前も含めて持ち回る（苗字の重複はOK）。
@@ -629,6 +640,9 @@ public static class ProspectGenerator
             list.Add(Create(year, i, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));
         EnsurePitcherSupply(list, c);
         EnsureCatcherSupply(list, c);
+        // 自校の怪物（issue #1468）: 年度替わりの新入生だけ（rollPhenom）。専用Forkで引く＝ほかの抽選は1ビットも動かない。
+        // 投手系の型は投手役に読める選手へ＝供給の下限を済ませた後に選ぶ。
+        if (rollPhenom) ProspectPhenom.RollIntake(list, c, rng.Fork(PhenomStreamId(year)));
         return list;
     }
 
@@ -1084,6 +1098,9 @@ public static class ProspectGenerator
 
     /// <summary>成長タイプの分野別化抽選の独立ストリームID（能力ロール列を1ビットも乱さない, issue #866）。</summary>
     private static ulong GrowthDomainStreamId(int year, int index) => 0x1F9A_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>自校の新入生の怪物ロール（issue #1468）の Fork ソルト（年度ごと・他ストリームと別の上位ビット）。</summary>
+    private static ulong PhenomStreamId(int year) => 0x9E11_0000UL ^ (ulong)(year + 1);
 
     /// <summary>対左投手経験の初期値（issue #1072）用の専用Forkストリームキー。</summary>
     private static ulong LeftExperienceStreamId(int year, int index) => 0x1E57_0000UL ^ (ulong)(year * 1000 + index + 1);

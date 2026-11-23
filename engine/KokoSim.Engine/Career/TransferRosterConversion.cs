@@ -73,7 +73,7 @@ public static class TransferRosterConversion
             Condition = Condition.Normal,
             ConditionValue = 0,
         };
-        return new AiPlayer(dp.Id, yearIndex - (dp.Grade - 1), aptitudes, PhenomType.None, dp.Grade, snap);
+        return new AiPlayer(dp.Id, yearIndex - (dp.Grade - 1), aptitudes, dp.Phenom, dp.Grade, snap);
     }
 
     // ===== AI校 → 自校 =====
@@ -152,6 +152,7 @@ public static class TransferRosterConversion
             BattingGrowthType = battingGrowthType,
             DefenseGrowthType = defenseGrowthType,
             IsProdigy = ai.Phenom != PhenomType.None,
+            Phenom = ai.Phenom,
             Throws = s.Throws,
             Bats = s.Bats,
             PitchingGrowth = pitchingGrowth,

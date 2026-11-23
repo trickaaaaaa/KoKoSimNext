@@ -324,6 +324,14 @@ public static class ScoutModel
         for (var i = 0; i < chosen.Count; i++)
         {
             var p = chosen[i];
+            // 怪物（issue #1468・「スカウトで見つける」）: 候補1人ずつ専用Forkで引く＝ほかの抽選（県・競合・進路・見立て）は
+            // 1ビットも動かない。名声と関係ない。見立て（寸評・ランク）は怪物の能力をそのまま（ノイズ越しに）映すが、
+            // 怪物という隠し素質そのものはどの段でも見せない（§2.4「隠し素質は見せない」）。
+            {
+                var phenomRng = rng.Fork(PhenomStreamId(yearIndex, i));
+                if (phenomRng.NextDouble() < roster.Phenom.ScoutCandidateRate)
+                    ProspectPhenom.Apply(p, ProspectPhenom.RollTypeFor(p, roster, phenomRng), roster.Phenom, phenomRng);
+            }
             var prefectureId = RollPrefecture(homePrefectureId, c, rng);
             var cand = new ScoutCandidate
             {
@@ -611,6 +619,10 @@ public static class ScoutModel
     }
 
     private static Tier TierOfRank(int rank) => Ladder[(int)MathUtil.Clamp(rank, 0, Ladder.Length - 1)];
+
+    /// <summary>候補の怪物ロール（issue #1468）の Fork ソルト（合流年度×候補の並び順・他ストリームと別の上位ビット）。</summary>
+    private static ulong PhenomStreamId(int yearIndex, int index)
+        => 0x9E5C_0000_0000UL ^ ((ulong)(uint)yearIndex << 16) ^ (ulong)(uint)index;
 
     private static ulong SelectStreamId(int year) => 0xA1C0_0000UL ^ (ulong)year;
     private static ulong ReportStreamId(int year, int index) => 0xB2D0_0000UL ^ (ulong)(year * 1000 + index + 1);

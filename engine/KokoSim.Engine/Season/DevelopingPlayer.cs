@@ -114,6 +114,12 @@ public sealed class DevelopingPlayer
     /// </summary>
     public bool IsProdigy { get; init; }
 
+    /// <summary>
+    /// 怪物（隠しフラグ・issue #1468・Q20）。自校は新入生にたまに混じるか、スカウトで口説いた中学生。
+    /// AI校から転任で引き継いだ選手は AI 側の値を写す。None＝怪物でない（旧セーブ相当）。
+    /// </summary>
+    public PhenomType Phenom { get; set; } = PhenomType.None;
+
     /// <summary>精神力（設計書02 §3）。実戦出場でのみ成長する系（練習では伸びない, MatchGrowthModel）。</summary>
     public int Mental { get; set; } = 50;
     /// <summary>精神力の実戦経験値（設計書02 §5.3a, Q8）。必要expは能力値と同じ曲線。</summary>
@@ -303,6 +309,7 @@ public sealed class DevelopingPlayer
             BattingGrowthType = BattingGrowthType,
             DefenseGrowthType = DefenseGrowthType,
             IsProdigy = IsProdigy,
+            Phenom = Phenom,
             Mental = Mental,
             MentalExp = MentalExp,
             MentalCap = MentalCap,

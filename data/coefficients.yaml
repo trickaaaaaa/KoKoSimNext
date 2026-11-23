@@ -2371,3 +2371,7 @@ persistent_roster:
   phenom_support_max: 82
   phenom_all_round_min: 82      # 総合型の主要能力帯（S級）
   phenom_all_round_max: 95
+  # 自校の怪物（issue #1468・2026-11-23 オーナー判断）: 名声と関係なく出る。型・帯は上の AI校と共有。
+  # 実ゲーム/シムの自校生成（roster:）もこの値を読む（RosterCoefficients.Phenom＝ここと同じ1つ）。
+  phenom_own_intake_rate_per_year: 0.04   # 受動枠の新入生に「たまに無条件で」1人混じる年あたりの確率（≒25年に1人）
+  phenom_scout_candidate_rate: 0.005      # スカウト候補（中学生）1人が怪物である確率。勧誘に成功すると入部
