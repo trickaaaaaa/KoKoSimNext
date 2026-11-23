@@ -33,14 +33,7 @@ namespace KokoSim.Unity.Shell
         /// 解像度と全画面をゲームから変えられるか。ブラウザ版は false＝大きさはページの枠と置き場所の全画面ボタンが決める
         /// （ゲームから全画面にすると、最初のクリックでブラウザごと全画面になってしまう。2026-11-23 の Web お試しビルド）。
         /// </summary>
-        public static bool DisplayAdjustable
-        {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            get { return false; }
-#else
-            get { return true; }
-#endif
-        }
+        public static bool DisplayAdjustable => !BuildPlatform.IsBrowser;
 
         public static bool FullScreen
         {

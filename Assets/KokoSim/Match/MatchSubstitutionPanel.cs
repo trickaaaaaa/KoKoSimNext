@@ -500,11 +500,11 @@ namespace KokoSim.Unity.Match
             for (var i = 0; i < _opt.Reserves.Count; i++)
             {
                 var idx = i;
-                var row = BenchRow(_opt.Reserves[i], dim: false, picked: _offInIndex == i, note: "");
+                var row = BenchRow(_opt.Reserves[i], used: false, picked: _offInIndex == i);
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _offInIndex = idx; Render(); });
                 _inRows.Add(row);
             }
-            foreach (var p in _opt.UsedReserves) _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
+            foreach (var p in _opt.UsedReserves) _inRows.Add(BenchRow(p, used: true, picked: false));
             if (_opt.Reserves.Count == 0 && _opt.UsedReserves.Count == 0)
             {
                 var empty = new Label("控えが登録されていない。");
@@ -628,7 +628,7 @@ namespace KokoSim.Unity.Match
             for (var i = 0; i < _cands.Count; i++)
             {
                 var idx = i;
-                var row = BenchRow(_cands[i], dim: false, picked: _defInIndex == i, note: "");
+                var row = BenchRow(_cands[i], used: false, picked: _defInIndex == i);
                 if (chemFor.HasValue)
                 {
                     var chem = chemFor.Value.CandidateIsPitcher
@@ -643,7 +643,7 @@ namespace KokoSim.Unity.Match
             }
             // 出場済みは1本の名簿から一度だけ出す（旧 UsedBullpen＋UsedBench の連結を畳んだ。issue #381）。
             foreach (var p in _opt.UsedReserves)
-                _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
+                _inRows.Add(BenchRow(p, used: true, picked: false));
             if (_cands.Count == 0 && !_opt.UsedReserves.Any())
             {
                 var empty = new Label("控えが登録されていない。");
@@ -1175,24 +1175,20 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        /// <summary>控え行（スタメン設定と同じ bench-row 部品）。タグは <paramref name="note"/>（出場済の控えだけ「出場済」）で、守備位置は出さない。</summary>
-        private VisualElement BenchRow(Player p, bool dim, bool picked, string note)
+        /// <summary>
+        /// 控え行（スタメン設定と同じ bench-row 部品）。守備位置は出さない。出場済みの控え（<paramref name="used"/>）は
+        /// 名前を省略せず全部出し、薄い色で沈める＝タグは付けない（issue #1534 項目7。タグが幅を取って名前が「···」で切れていた）。
+        /// </summary>
+        private VisualElement BenchRow(Player p, bool used, bool picked)
         {
             var row = new VisualElement();
             row.AddToClassList("bench-row");
             if (picked) row.AddToClassList("bench-row--picked");
-            if (dim) row.AddToClassList("msub-row--off");
+            if (used) row.AddToClassList("msub-row--used");
 
             var name = new Label(NameOf(p));
             name.AddToClassList("bench-row__name");
             row.Add(name);
-
-            if (!string.IsNullOrEmpty(note))
-            {
-                var n = new Label(note);
-                n.AddToClassList("bench-row__tag");
-                row.Add(n);
-            }
             var benchFace = CondFace(p, "msub-cond");
             if (benchFace != null) row.Add(benchFace);
             return row;

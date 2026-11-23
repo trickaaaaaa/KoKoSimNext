@@ -1454,13 +1454,11 @@ namespace KokoSim.Unity.Match
             if (_atBat is { } at)
             {
                 m.Inning = at.Inning; m.IsTop = at.IsTop; m.Outs = at.Outs;
-                m.OnFirst = at.BaseFirst; m.OnSecond = at.BaseSecond; m.OnThird = at.BaseThird;
                 m.AwayScore = at.AwayScore; m.HomeScore = at.HomeScore;
             }
             else if (_current is { } cur)
             {
                 m.Inning = cur.Inning; m.IsTop = cur.IsTop; m.Outs = cur.OutsBefore;
-                m.OnFirst = cur.BaseFirstBefore; m.OnSecond = cur.BaseSecondBefore; m.OnThird = cur.BaseThirdBefore;
                 // 打席前スコアへ巻き戻す（LivePlateAppearance のスコアは解決後。BeginScoreCall と同じ導出）。
                 m.AwayScore = cur.IsTop ? cur.AwayScore - cur.RunsScored : cur.AwayScore;
                 m.HomeScore = cur.IsTop ? cur.HomeScore : cur.HomeScore - cur.RunsScored;
@@ -1469,6 +1467,7 @@ namespace KokoSim.Unity.Match
             {
                 m.Inning = 1; m.IsTop = true;
             }
+            ShownBases(out m.OnFirst, out m.OnSecond, out m.OnThird);
 
             if (_statsProvider == null) return m;
             var mu = _atBat != null ? new Matchup(_atBat) : _current != null ? new Matchup(_current) : (Matchup?)null;
@@ -4220,8 +4219,12 @@ namespace KokoSim.Unity.Match
         }
 
 
+        // いま掲示板（ScoreBug の塁ダイヤ）に出している塁。タイムのパネルはこれと同じ値を出す（issue #1534 項目8）。
+        private bool _shownBaseFirst, _shownBaseSecond, _shownBaseThird;
+
         private void SetBases(bool first, bool second, bool third)
         {
+            _shownBaseFirst = first; _shownBaseSecond = second; _shownBaseThird = third;
             _bases?[0]?.EnableInClassList("is-on", first);   // base-1（一塁）
             _bases?[1]?.EnableInClassList("is-on", second);  // base-2（二塁）
             _bases?[2]?.EnableInClassList("is-on", third);   // base-3（三塁）
@@ -4518,10 +4521,25 @@ namespace KokoSim.Unity.Match
         private void RefreshMiniDiamond()
         {
             if (_miniDiaHost == null) return;
-            var show = FieldPlayActive && _duelOn;
+            var show = MiniDiamondShown;
             var want = show ? DisplayStyle.Flex : DisplayStyle.None;
             if (_miniDiaHost.style.display != want) _miniDiaHost.style.display = want;
             if (show) _miniDia.SetRunners(_duelRig.CurrentRunnerDots());
+        }
+
+        /// <summary>走者の小ダイヤを出している（＝守備フォーカス中で対決ビュー）か。</summary>
+        private bool MiniDiamondShown => FieldPlayActive && _duelOn;
+
+        /// <summary>
+        /// いま画面に出ている塁の状況（issue #1534 項目8）。タイムのパネルの塁ダイヤはここだけから引く。
+        /// 小ダイヤを出している間（守備フォーカス中）は、その小ダイヤと同じ走者・同じ再生時刻の「最後に踏んだ塁」
+        /// （<see cref="DuelStageRig.TryCurrentOccupiedBases"/>）。それ以外は ScoreBug の塁ダイヤに出している値。
+        /// どちらも描いた分しか進まない＝解決済みの結果を先に見せない（<see cref="EngineAheadOfScreen"/> の約束のまま）。
+        /// </summary>
+        private void ShownBases(out bool first, out bool second, out bool third)
+        {
+            if (MiniDiamondShown && _duelRig.TryCurrentOccupiedBases(out first, out second, out third)) return;
+            first = _shownBaseFirst; second = _shownBaseSecond; third = _shownBaseThird;
         }
 
         /// <summary>

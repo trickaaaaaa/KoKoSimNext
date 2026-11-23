@@ -94,6 +94,9 @@ namespace KokoSim.Unity.Home
 
             Render();
 
+            // 側画面の「1日進める」で回送されてきた（issue #1534 項目9）。取り出しは毎回行い、持ち越さない。
+            var dayAdvanceRequested = KokoSim.Unity.Shell.WeekAdvance.TakeDayAdvanceRequest();
+
             // 他画面（練習・大会・練習試合・選手・メンバー）で週を進めて引退週／大会開幕週に入った場合は
             // ここへ回送されてくる（ScreenRouter が Pending/BannerPending を見て回送する, issue #134）。
             // その回送分もこの1箇所で受けて指名モーダル／開幕バナーを出す（演出の導線をホームに集約する）。
@@ -103,6 +106,9 @@ namespace KokoSim.Unity.Home
             else if (_state.BannerPending) ShowBanner();
             // 年契約の更新の待ち（別画面へ出ていて戻ってきた場合も、ここで会話→更新の画面へ戻す）。
             else if (KokoSim.Unity.Shell.ContractRenewalService.Pending) ContinueRenewal();
+            // 側画面で押された「1日進める」をここで実行する（日送り・試合日の開始確認・イベントはホームの押下と同じ経路）。
+            else if (dayAdvanceRequested && _state.InTournament
+                     && !KokoSim.Unity.Shell.GameSession.Current.ResultPending) OnAdvance();
             // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
             else TryShowEvent();
 
@@ -680,11 +686,7 @@ namespace KokoSim.Unity.Home
         {
             var v = _state.BuildView();
 
-            // 進行ボタンはモードで文言を切替（通常=週送り / 大会=日送り）。
-            var advance = _root.Q<Button>("advance");
-            if (advance != null) advance.text = v.TournamentMode ? "1日進める ▶" : "今週を進める ▶";
-
-            // 自校の表札・日付・部費・チーム総合・名声・信頼度は TopBarMeters／ScoreboardStrip が全画面共通で埋める。
+            // 自校の表札・日付・進行ボタンの文言・部費・チーム総合・名声・信頼度は TopBarMeters／ScoreboardStrip が全画面共通で埋める。
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
             KokoSim.Unity.Shell.TopBarMeters.Fill(_root);
 

@@ -66,6 +66,31 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 現在の再生時刻で走者が占めている塁（issue #1534 項目8）。タイムのパネルの塁ダイヤ用で、
+        /// <see cref="CurrentRunnerDots"/> と<b>同じ走者（3Dに立っている役者の枠）・同じ時刻 <c>_fieldT</c>・同じアウト判定</b>
+        /// （<see cref="PlaybackEvaluator.IsRunnerOut"/>）から引く＝小ダイヤと食い違わない。塁間の途中は出た塁のまま。
+        /// 守備フォーカス中でなければ false。
+        /// </summary>
+        public bool TryCurrentOccupiedBases(out bool first, out bool second, out bool third)
+        {
+            first = second = third = false;
+            if (_fieldPlay?.Runners == null) return false;
+            var n = Math.Min(_runnerCast.Count, _fieldPlay.Runners.Count);
+            for (var i = 0; i < n; i++)
+            {
+                var a = _runnerCast[i];
+                if (a?.Go == null || !a.Enabled || !a.Go.activeInHierarchy) continue;   // CurrentRunnerDots と枠を揃える
+                switch (PlaybackEvaluator.RunnerBaseAt(_fieldPlay, _fieldPlay.Runners[i], _fieldT))
+                {
+                    case 1: first = true; break;
+                    case 2: second = true; break;
+                    case 3: third = true; break;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
         /// ミニダイヤに描く走者の位置[m]。<c>RunnerXZ</c>（3D用）と<b>消え方だけ</b>が違う:
         /// アウトになった走者は <see cref="PlaybackEvaluator.IsRunnerOut"/> で false を返して<b>消える</b>
         /// （塁で決着したアウトも飛球の捕球アウトも同じ口で拾う）。

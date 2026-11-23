@@ -405,6 +405,48 @@ public static class PlaybackEvaluator
         return false;
     }
 
+    /// <summary>塁に居るとみなす半径[m]（送球の行き先の塁判定 <c>ThrowScatterAssigner.BaseOf</c> と同じ幅）。</summary>
+    private const double OnBaseRadiusM = 4.0;
+
+    /// <summary>
+    /// 時刻 t でこの走者が占めている塁（1〜3）。<b>最後に踏んだ塁</b>を返す＝塁間を走っている途中は出た塁のまま、
+    /// 次の塁へ着いた瞬間（レッグの終端 T1）に進む。アウトになった走者（<see cref="IsRunnerOut"/>）・
+    /// 本塁へ還った走者・まだ一塁に着いていない打者走者は null（issue #1534 項目8: タイムのパネルの塁を
+    /// 小ダイヤモンドと同じ再生時刻・同じ走者から引くため）。駆け抜け・オーバーランの終端は塁から外れるので数えない。
+    /// 表示専用の純関数＝判定・帯・タイムラインには一切関与しない。
+    /// </summary>
+    public static int? RunnerBaseAt(PlaybackPlay play, PlaybackRunner r, double t,
+        double baseDistanceM = FieldDiagramGeometry.BaseDistanceM)
+    {
+        if (r?.Segs is null || r.Segs.Count == 0 || IsRunnerOut(play, r, t)) return null;
+        var start = BaseNear(r.Segs[0].From, baseDistanceM);
+        int? b = start == 4 ? null : start;
+        foreach (var s in r.Segs)
+        {
+            if (t < s.T1) break;
+            var reached = BaseNear(s.To, baseDistanceM);
+            if (reached.HasValue) b = reached.Value == 4 ? null : reached;
+        }
+        return b;
+    }
+
+    private static int? BaseNear(PlaybackVec p, double baseDistanceM)
+    {
+        var h = baseDistanceM * Math.Sin(Math.PI / 4);
+        int? best = null;
+        var bestD = OnBaseRadiusM;
+        void Try(int b, double x, double y)
+        {
+            var d = Math.Sqrt((p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y));
+            if (d <= bestD) { bestD = d; best = b; }
+        }
+        Try(1, h, h);
+        Try(2, 0, baseDistanceM * Math.Sqrt(2));
+        Try(3, -h, h);
+        Try(4, 0, 0);
+        return best;
+    }
+
     /// <summary>
     /// 時刻 t で表示すべき判定（Issue #59 の判定オーバーレイ、Issue #328②で「フェア」を追加）。
     /// 確定時刻 T が <c>[t - holdSeconds, t]</c> に入る判定のうち直近（最大 T）を返す。判定が無ければ null。

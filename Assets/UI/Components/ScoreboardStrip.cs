@@ -9,6 +9,7 @@ namespace KokoSim.Unity.Components
     /// 旧・電光掲示板（升目）の入口をそのまま残し、全画面がこの1経路で日付を埋める
     /// （画面ごとに週の書式を作らない。呼ばない画面は UXML の既定値が出たままになる）。
     /// 大会期間は実月日（「9月13日」）、大会のない時期は週（「4月1週」）。
+    /// トップバーの進行ボタンの文言（大会中は「1日進める」）もここで埋める（issue #1534 項目9）。
     /// </summary>
     public static class ScoreboardStrip
     {
@@ -53,6 +54,10 @@ namespace KokoSim.Unity.Components
                 date.text = s.InTournament
                     ? s.TournamentDateLabel
                     : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
+
+            // 進行ボタン（issue #1534 項目9）: 大会中はどのタブでも「1日進める」。文言はここだけが決める。
+            var advance = root.Q<Button>("advance");
+            if (advance != null) advance.text = s.InTournament ? "1日進める ▶" : "今週を進める ▶";
         }
     }
 }
