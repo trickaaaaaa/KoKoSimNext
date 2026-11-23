@@ -25,6 +25,8 @@ namespace KokoSim.Unity.Title
 
             if (_newGame != null) _newGame.clicked += OnNewGame;
             if (_quit != null) _quit.clicked += OnQuit;
+            // ブラウザ版はタブを閉じれば終わる＝「終了」を出さない（issue #1534）。
+            if (_quit != null) _quit.style.display = BuildPlatform.IsBrowser ? DisplayStyle.None : DisplayStyle.Flex;
             if (_continueBtn != null) _continueBtn.clicked += OnContinue;
 
             // セーブが1件も無ければ押せない見た目にする（issue #508）。
