@@ -39,7 +39,7 @@ public sealed class AbilityEffectConsistencyTests
     [Fact]
     public void OutfieldDefenseTopKnee_IsIdentityBelowTheKnee_MonotoneAbove_AndOutfieldOnly()
     {
-        var e = new AbilityEffectCoefficients();
+        var e = new AbilityEffectCoefficients { Delta = 0.0 };   // 曲線そのもの（物差しの下げ幅は別のテスト）
         for (var lv = 1; lv <= (int)e.OutfieldDefenseTopKnee; lv++) Assert.Equal(e.Fielding(lv), e.OutfieldFielding(lv));
         for (var lv = 2; lv <= 100; lv++) Assert.True(e.OutfieldFielding(lv) >= e.OutfieldFielding(lv - 1), $"守備 {lv}");
         Assert.True(e.OutfieldFielding(90) < e.Fielding(90));
@@ -61,7 +61,7 @@ public sealed class AbilityEffectConsistencyTests
     [Fact]
     public void Scale_HalfIntegerOffsetFromPivot_RoundsAwayFromZero_NotBankersRounding()
     {
-        var half = new AbilityEffectCoefficients { BattingScale = 0.5 };
+        var half = new AbilityEffectCoefficients { BattingScale = 0.5, Delta = 0.0 };
         // 奇数lvと次の偶数lvが必ず同値（2段ペア）。3段同値になる偏りが無い＝育成が必ず動く。
         for (var lv = 49; lv <= 59; lv += 2)
             Assert.Equal(half.Batting(lv), half.Batting(lv + 1));
@@ -73,7 +73,9 @@ public sealed class AbilityEffectConsistencyTests
     [Fact]
     public void Identity_LeavesAbilitiesUntouched_AndPivotIsFixedPoint()
     {
-        var id = AbilityEffectCoefficients.Identity;
+        // 恒等＝効き1.0（issue #1080 以降も Δ は足す）。曲線の恒等性は Δ=0 で見る。
+        Assert.Equal(AbilityScale.Delta, AbilityEffectCoefficients.Identity.Delta);
+        var id = AbilityEffectCoefficients.Identity with { Delta = 0.0 };
         for (var lv = 1; lv <= 100; lv++)
         {
             Assert.Equal(lv, id.Batting(lv));
@@ -83,7 +85,7 @@ public sealed class AbilityEffectConsistencyTests
             Assert.Equal(lv, id.Pitching(lv));
         }
         Assert.Equal(146.4, id.PitchingKmh(146.4), 12);
-        var half = new AbilityEffectCoefficients { BattingScale = 0.5, FieldingScale = 0.5, RunningScale = 0.5, PitchingScale = 0.5 };
+        var half = new AbilityEffectCoefficients { BattingScale = 0.5, FieldingScale = 0.5, RunningScale = 0.5, PitchingScale = 0.5, Delta = 0.0 };
         Assert.Equal(50, half.Batting(50));
         Assert.Equal(60, half.Batting(70));
         Assert.Equal(40, half.Fielding(30));
@@ -103,7 +105,7 @@ public sealed class AbilityEffectConsistencyTests
             MaxVelocityKmh = 146.0, Control = 80, PitchRank = 70, StaminaPitches = 130.0,
             Repertoire = new[] { PitchSlot.FastballOf(80), new PitchSlot { Type = PitchType.Slider, Power = 40, Sharpness = 90 } },
         };
-        var half = new AbilityEffectCoefficients { PitchingScale = 0.5 };
+        var half = new AbilityEffectCoefficients { PitchingScale = 0.5, Delta = 0.0 };
         var e = half.Pitcher(p);
         Assert.Equal(146.0, e.MaxVelocityKmh, 9);            // 実球速（画面に出る）は据え置き
         Assert.Equal(130.0, e.StaminaPitches, 9);            // 目安球数（画面に出る）も据え置き
@@ -114,7 +116,7 @@ public sealed class AbilityEffectConsistencyTests
         Assert.Equal(70, e.Repertoire[1].Sharpness);
         Assert.Equal(139.0 - 146.0, e.ReactionVelocityOffsetKmh, 9);   // 反応は 139km/h 相当（差分で持つ）
         // 恒等は同一インスタンス（従来と1ビット一致）
-        Assert.Same(p, AbilityEffectCoefficients.Identity.Pitcher(p));
+        Assert.Same(p, (AbilityEffectCoefficients.Identity with { Delta = 0.0 }).Pitcher(p));
         // 平均投手（Lv50 相当）は既定の効きでもオフセット0＝帯の平均は動かない
         Assert.Equal(0.0, new AbilityEffectCoefficients().Pitcher(PitcherAttributes.LeagueAverage).ReactionVelocityOffsetKmh, 9);
     }
@@ -128,7 +130,7 @@ public sealed class AbilityEffectConsistencyTests
             Contact = 70, Power = 70, Discipline = 30, LaunchTendency = 80, Speed = 70,
             ArmStrength = 30, ThrowAccuracy = 70, Fielding = 90, Catching = 10, Lead = 80,
         };
-        var e = new AbilityEffectCoefficients { BattingScale = 0.5, FieldingScale = 0.5, RunningScale = 0.5, PitchingScale = 0.5 };
+        var e = new AbilityEffectCoefficients { BattingScale = 0.5, FieldingScale = 0.5, RunningScale = 0.5, PitchingScale = 0.5, Delta = 0.0 };
         var b = p.ToBatter(e);
         Assert.Equal(60, b.Contact); Assert.Equal(60, b.Power); Assert.Equal(40, b.Discipline);
         Assert.Equal(80, b.LaunchTendency);   // 弾道は「型」＝寝かせない

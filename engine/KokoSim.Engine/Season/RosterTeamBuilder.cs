@@ -309,7 +309,7 @@ public static class RosterTeamBuilder
         var fCoeff = fieldingCoeff ?? new FieldingCoefficients();
         var values = new int[Enum.GetValues(typeof(FieldPosition)).Length];
         for (var i = 0; i < values.Length; i++)
-            values[i] = (int)MathUtil.Clamp(Math.Round(EffectiveFielding.Raw(dp, (FieldPosition)i, fCoeff) * injF), 1, 100);
+            values[i] = AbilityScale.Disp((int)MathUtil.Clamp(Math.Round(EffectiveFielding.Raw(dp, (FieldPosition)i, fCoeff) * injF), 1, AbilityScale.PhysMax100));
         return values;
     }
 
@@ -331,14 +331,15 @@ public static class RosterTeamBuilder
         // スランプ中（設計書03 §5.5）は追加の一時係数（怪我より軽く、期間で解ける）。
         var injF = InjuryModel.PerformanceFactor(dp.Injury, injuryCoeff ?? new InjuryCoefficients());
         if (dp.SlumpWeeks > 0) injF *= (growthCoeff ?? new GrowthEventCoefficients()).SlumpPerformanceFactor;
-        int L(AbilityKind k) => (int)MathUtil.Clamp(Math.Round(dp.Level(k) * injF), 1, 100);
+        // 怪我の係数は掛け算＝今の物差し（物理Lv）で掛けて丸めてから表示Lvへ戻す（issue #1080。天井は 100+Δ）。
+        int L(AbilityKind k) => AbilityScale.Disp((int)MathUtil.Clamp(Math.Round(AbilityScale.Phys(dp.Level(k)) * injF), 1, AbilityScale.PhysMax100));
         // スタミナは上限なし（issue #356）＝Lv100超の育成投手を試合用へ落とすとき100で頭打ちにしない。
         // 目安投球数（StaminaPitches）へは下でこの値を StaminaPitchesFromLevel に通す。
-        int LStamina() => (int)Math.Max(1, Math.Round(dp.Level(AbilityKind.Stamina) * injF));
+        int LStamina() => AbilityScale.Disp((int)Math.Max(1, Math.Round(AbilityScale.Phys(dp.Level(AbilityKind.Stamina)) * injF)));
 
         // 守備位置適性→実効守備力（設計書01 §1.1）。式は EffectiveFielding に集約（issue #371）。
         var fCoeff = fieldingCoeff ?? new FieldingCoefficients();
-        int Field() => (int)MathUtil.Clamp(Math.Round(EffectiveFielding.Raw(dp, pos, fCoeff) * injF), 1, 100);
+        int Field() => AbilityScale.Disp((int)MathUtil.Clamp(Math.Round(EffectiveFielding.Raw(dp, pos, fCoeff) * injF), 1, AbilityScale.PhysMax100));
 
         // 育成レイヤは全選手が投手5種レベル（球速/制球/スタミナ/キレ/球威）を隠し持つ。それを配置に関係なく
         // そのまま Pitching へ投影する（issue #209 Phase B → #381。二刀流スター＝隠し投手力の高い選手を再現）。
@@ -424,8 +425,9 @@ public static class RosterTeamBuilder
             list.Add(new PitchSlot
             {
                 Type = lp.Type,
-                Power = (int)MathUtil.Clamp(pitchRank + lp.PowerOffset, 1, 100),
-                Sharpness = (int)MathUtil.Clamp(pitchRank + lp.SharpnessOffset, 1, 100),
+                // 範囲の切り詰めは今の物差しで（issue #1080。下限1・天井 100+Δ）＝表示Lvへ戻す。
+                Power = AbilityScale.Disp((int)MathUtil.Clamp(AbilityScale.Phys(pitchRank) + lp.PowerOffset, 1, AbilityScale.PhysMax100)),
+                Sharpness = AbilityScale.Disp((int)MathUtil.Clamp(AbilityScale.Phys(pitchRank) + lp.SharpnessOffset, 1, AbilityScale.PhysMax100)),
             });
         }
         return list;

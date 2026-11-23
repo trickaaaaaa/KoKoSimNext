@@ -16,6 +16,8 @@ namespace KokoSim.Engine.Tests.Nation;
 /// </summary>
 public sealed class AiArmByPositionTests
 {
+    private const int D = KokoSim.Engine.Players.AbilityScale.Delta;
+
     private readonly ITestOutputHelper _out;
     public AiArmByPositionTests(ITestOutputHelper o) { _out = o; }
 
@@ -63,9 +65,9 @@ public sealed class AiArmByPositionTests
         var (before, ssBefore) = Measure(NoArm);
         var (after, ssAfter) = Measure(new PersistentRosterCoefficients());
         foreach (var pos in after.Keys.OrderBy(k => k))
-            _out.WriteLine($"{pos}: 肩p50 {Median(before[pos])} → {Median(after[pos])}／70+ {Share(before[pos], 70):P1} → {Share(after[pos], 70):P1}");
+            _out.WriteLine($"{pos}: 肩p50 {Median(before[pos])} → {Median(after[pos])}／70+ {Share(before[pos], 70 - D):P1} → {Share(after[pos], 70 - D):P1}");
         foreach (var t in ssAfter.Keys.OrderBy(k => k))
-            _out.WriteLine($"遊撃 {t}: p50 {Median(ssBefore[t])} → {Median(ssAfter[t])}／75+ {Share(ssBefore[t], 75):P1} → {Share(ssAfter[t], 75):P1}");
+            _out.WriteLine($"遊撃 {t}: p50 {Median(ssBefore[t])} → {Median(ssAfter[t])}／75+ {Share(ssBefore[t], 75 - D):P1} → {Share(ssAfter[t], 75 - D):P1}");
 
         // 遊撃・捕手・右翼は一塁・左翼より明確に肩が強い（旧: 差 ±2 以内）。
         foreach (var strong in new[] { FieldPosition.Shortstop, FieldPosition.Catcher, FieldPosition.RightField })
@@ -77,6 +79,7 @@ public sealed class AiArmByPositionTests
         var allSsAfter = ssAfter.Values.SelectMany(v => v).ToList();
         Assert.True(Median(allSsAfter) >= Median(allSsBefore) + 4, $"遊撃 p50 {Median(allSsBefore)} → {Median(allSsAfter)}");
         // 中位校（D）にも強肩の遊撃手がいる（肩75＝127km/h 以上。σ6・位置重み付きでは 4%）。
-        Assert.True(Share(ssAfter[Tier.D], 75) >= 0.20, $"D校の遊撃手で肩75以上 {Share(ssAfter[Tier.D], 75):P1}");
+        // 肩は表示Lv（issue #1080: 今の物差し −Δ）＝今の物差しの肩75（127km/h）は表示 75−Δ。
+        Assert.True(Share(ssAfter[Tier.D], 75 - D) >= 0.20, $"D校の遊撃手で肩75以上 {Share(ssAfter[Tier.D], 75 - D):P1}");
     }
 }

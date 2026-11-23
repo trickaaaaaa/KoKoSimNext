@@ -18,11 +18,12 @@ public sealed class RunnerClockTests
 {
     private static readonly FieldGeometry Field = new();
 
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せ、試合の入口が +Δ して戻す。
     private static Player RunnerWith(int speed, int baserunning)
         => new()
         {
             Name = "走者", Bats = Handedness.Right, Throws = Handedness.Right,
-            Speed = speed, Baserunning = baserunning,
+            Speed = speed - AbilityScale.Delta, Baserunning = baserunning - AbilityScale.Delta,
         };
 
     // ── 塁上から（本塁/三塁レース）: HomePlayResolver とビット一致 ──

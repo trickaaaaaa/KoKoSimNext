@@ -33,11 +33,14 @@ internal sealed class RecordingTraceSink : IDebugTraceSink
 /// </summary>
 public sealed class DebugTraceTests
 {
+    // 表示Lv（issue #1080: 今の物差しの値 −Δ）＝決定論カード（GameResultDigest）と同じ選手。
+    private const int D = AbilityScale.Delta;
+
     private static Player Pos(FieldPosition pos) => new()
     {
         Position = pos,
-        Contact = 50, Power = 50, LaunchTendency = 50, Discipline = 50,
-        Speed = 50, ArmStrength = 50, Fielding = 50, Catching = 50,
+        Contact = 50 - D, Power = 50 - D, LaunchTendency = 50, Discipline = 50 - D,
+        Speed = 50 - D, ArmStrength = 50 - D, Fielding = 50 - D, Catching = 50 - D,
     };
 
     private static Team Team(string name)
@@ -58,8 +61,8 @@ public sealed class DebugTraceTests
                 Pos(FieldPosition.Pitcher) with { Name = name + "R2", Pitching = PitcherAttributes.LeagueAverage },
             }, new[]
             {
-                Pos(FieldPosition.FirstBase) with { Name = name + "PH", Contact = 55 },
-                Pos(FieldPosition.SecondBase) with { Name = name + "PR", Speed = 70 },
+                Pos(FieldPosition.FirstBase) with { Name = name + "PH", Contact = 55 - D },
+                Pos(FieldPosition.SecondBase) with { Name = name + "PR", Speed = 70 - D },
             }),
         };
     }

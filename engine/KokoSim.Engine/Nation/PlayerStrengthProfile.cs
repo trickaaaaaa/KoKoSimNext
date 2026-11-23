@@ -25,9 +25,11 @@ public sealed record PlayerStrength(
 /// </summary>
 public static class PlayerStrengthProfile
 {
-    public static PlayerStrength Compute(DevelopingPlayer player, TeamStrengthCoefficients c) => new(
-        Batting: TeamStrengthProfile.BatterComposite(player, c),
-        Mobility: TeamStrengthProfile.MobilityComposite(player, c),
-        Defense: TeamStrengthProfile.DefenseComposite(player, c),
-        Pitching: TeamStrengthProfile.PitcherComposite(player, c));
+    /// <param name="delta">表示Lvに足す量。画面のチップは表示Lvのまま（0＝issue #1080 で Δ 下がる）。ドラフトの足切りのように
+    /// 今の物差しの境目で判定する所だけ <see cref="Players.AbilityScale.Delta"/> を渡す。</param>
+    public static PlayerStrength Compute(DevelopingPlayer player, TeamStrengthCoefficients c, int delta = 0) => new(
+        Batting: TeamStrengthProfile.BatterComposite(player, c, delta),
+        Mobility: TeamStrengthProfile.MobilityComposite(player, c, delta),
+        Defense: TeamStrengthProfile.DefenseComposite(player, c, delta),
+        Pitching: TeamStrengthProfile.PitcherComposite(player, c, delta));
 }

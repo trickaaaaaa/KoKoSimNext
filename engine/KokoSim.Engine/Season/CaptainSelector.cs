@@ -17,9 +17,12 @@ public static class CaptainSelector
     public static double LeadershipPower(DevelopingPlayer p) => LeadershipPower(p.Leadership, p.Mental);
 
     /// <summary>統率力の式の単一ソース（試合層 <see cref="Player"/> と育成層 <see cref="DevelopingPlayer"/> で共有）。</summary>
-    public static double LeadershipPower(int leadership, int mental) => leadership * mental / 100.0;
+    /// <remarks>精神力は表示Lv。今の物差し（表示Lv＋Δ・issue #1080）で掛ける＝統率力の数字は物差しによらず同じ。
+    /// 試合の中は係数束の Δ を渡す（<paramref name="delta"/>）。</remarks>
+    public static double LeadershipPower(int leadership, int mental, int delta = AbilityScale.Delta)
+        => leadership * (mental + delta) / 100.0;
 
-    public static double LeadershipPower(Player p) => LeadershipPower(p.Leadership, p.Mental);
+    public static double LeadershipPower(Player p, int delta = AbilityScale.Delta) => LeadershipPower(p.Leadership, p.Mental, delta);
 
     /// <summary>現在の主将（不在なら null）。</summary>
     public static DevelopingPlayer? Current(IReadOnlyList<DevelopingPlayer> roster)
@@ -72,14 +75,14 @@ public static class CaptainSelector
     /// タイブレークは統率傾向→名前→背番号で決定論。空なら null。返すのは渡した参照そのもの
     /// （<c>Team.Captain</c> は在場判定を参照一致で行うので、打順・控えに入っている実体を渡すこと）。
     /// </summary>
-    public static Player? SelectFromPlayers(IEnumerable<Player> players)
+    public static Player? SelectFromPlayers(IEnumerable<Player> players, int delta = AbilityScale.Delta)
     {
         var list = players.ToList();
         if (list.Count == 0) return null;
         var topGrade = list.Max(p => p.Grade);
         return list
             .Where(p => p.Grade == topGrade)
-            .OrderByDescending(LeadershipPower)
+            .OrderByDescending(p => LeadershipPower(p, delta))
             .ThenByDescending(p => p.Leadership)
             .ThenBy(p => p.Name, System.StringComparer.Ordinal)
             .ThenBy(p => p.UniformNumber)

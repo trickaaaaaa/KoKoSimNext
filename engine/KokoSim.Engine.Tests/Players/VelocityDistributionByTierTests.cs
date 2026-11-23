@@ -80,26 +80,32 @@ public sealed class VelocityDistributionByTierTests
         Assert.True(byTier[Tier.C].Count(x => x >= 145) <= byTier[Tier.C].Count * 0.17,
             $"C校の 145+ 率 {100.0 * byTier[Tier.C].Count(x => x >= 145) / byTier[Tier.C].Count:F0}%");
         // issue #908: Lv90 から上を伸ばして Lv100＝158（150km/h超を作れるように）。人数は AI校の天井で合わせる。
-        Assert.Equal(158.0, PitcherAttributes.VelocityKmhFromLevel(100), 9);
+        Assert.Equal(158.0, PitcherAttributes.VelocityKmhFromPhysicalLevel(100), 9);   // 今の物差しの Lv100（表示93）
     }
 
     [Fact]
     public void Mapping_IsPiecewiseLinear_AndRoundTrips()
     {
-        Assert.Equal(132.0, PitcherAttributes.VelocityKmhFromLevel(50), 9);
-        Assert.Equal(108.5 + 0.47 * 30, PitcherAttributes.VelocityKmhFromLevel(30), 9);   // Lv≦50 は従来どおり
-        Assert.Equal(132.0 + 0.36 * 20, PitcherAttributes.VelocityKmhFromLevel(70), 9);
-        Assert.Equal(146.4, PitcherAttributes.VelocityKmhFromLevel(90), 9);                 // 上位の境（issue #908）
-        Assert.Equal(146.4 + 1.16 * 5, PitcherAttributes.VelocityKmhFromLevel(95), 9);      // 境から上は 1.16 km/h/Lv
-        Assert.Equal(158.0, PitcherAttributes.VelocityKmhFromLevel(100), 9);
+        // 曲線は今の物差し（物理Lv）で書く（issue #1080）。表示Lvの入口は +Δ してから同じ曲線に通す。
+        double K(double lv) => PitcherAttributes.VelocityKmhFromPhysicalLevel(lv);
+        Assert.Equal(132.0, K(50), 9);
+        Assert.Equal(108.5 + 0.47 * 30, K(30), 9);   // Lv≦50 は従来どおり
+        Assert.Equal(132.0 + 0.36 * 20, K(70), 9);
+        Assert.Equal(146.4, K(90), 9);                 // 上位の境（issue #908）
+        Assert.Equal(146.4 + 1.16 * 5, K(95), 9);      // 境から上は 1.16 km/h/Lv
+        Assert.Equal(158.0, K(100), 9);
+        // 表示Lv＝物理Lv−Δ（表示43＝132km/h）
+        Assert.Equal(132.0, PitcherAttributes.VelocityKmhFromLevel(50 - AbilityScale.Delta), 9);
         // 端数つきの逆変換も往復する（AI校の天井が端数の球速Lvを作る）
         foreach (var x in new[] { 12.3, 49.9, 50.0, 67.25, 90.0, 91.7, 99.4 })
-            Assert.Equal(x, PitcherAttributes.LevelFromVelocityKmhExact(PitcherAttributes.VelocityKmhFromLevel(x)), 6);
+            Assert.Equal(x, PitcherAttributes.PhysicalLevelFromVelocityKmhExact(K(x)), 6);
         // 単調増加・境で連続
         for (var lv = 1; lv < 100; lv++)
-            Assert.True(PitcherAttributes.VelocityKmhFromLevel(lv + 1) > PitcherAttributes.VelocityKmhFromLevel(lv));
-        // 往復一致（1〜100 全て）
+            Assert.True(K(lv + 1) > K(lv));
+        // 往復一致（物理 1〜100 全て・表示は1〜99 全て）
         for (var lv = 1; lv <= 100; lv++)
+            Assert.Equal(lv, PitcherAttributes.PhysicalLevelFromVelocityKmh(K(lv)));
+        for (var lv = 1; lv <= 99; lv++)
             Assert.Equal(lv, PitcherAttributes.LevelFromVelocityKmh(PitcherAttributes.VelocityKmhFromLevel(lv)));
     }
     [Fact]

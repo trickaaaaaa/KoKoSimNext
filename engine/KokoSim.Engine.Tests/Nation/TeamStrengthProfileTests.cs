@@ -20,11 +20,14 @@ public sealed class TeamStrengthProfileTests
     private static DevelopingPlayer Pitcher(int level, int mental = 50)
         => Make(level, mental, pitcher: true);
 
+    // level・mental は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せる＝チーム総合・6指標は今の物差しで測る
+    // ので、数字は物差しを下げる前と同じ（弾道は物差しの外＝そのまま）。
     private static DevelopingPlayer Make(int level, int mental, bool pitcher)
     {
-        var p = new DevelopingPlayer { Mental = mental };
+        var p = new DevelopingPlayer { Mental = mental - KokoSim.Engine.Players.AbilityScale.Delta };
         PitcherRoleResolver.SeedAptitudeForRole(p, pitcher);
-        foreach (var k in AbilityKinds.All) p.SetLevel(k, level);
+        foreach (var k in AbilityKinds.All)
+            p.SetLevel(k, k == AbilityKind.LaunchTendency ? level : level - KokoSim.Engine.Players.AbilityScale.Delta);
         return p;
     }
 

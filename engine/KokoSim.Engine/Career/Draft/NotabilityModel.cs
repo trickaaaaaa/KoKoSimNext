@@ -59,8 +59,9 @@ public static class NotabilityModel
         var cap = 0.0;
         foreach (var (kind, w) in weights)
         {
-            cur += w * player.Level(kind);
-            cap += w * player.Cap(kind);
+            // 注目度は今の物差し（表示Lv＋Δ・issue #1080）で合成する＝予想順位の境目（draft.yaml）はそのまま。
+            cur += w * (player.Level(kind) + Players.AbilityScale.Delta);
+            cap += w * (player.Cap(kind) + Players.AbilityScale.Delta);
         }
         var blend = Clamp(c.CeilingBlend, 0, 1);
         return Clamp((1 - blend) * cur + blend * cap, 0, 100);
@@ -127,7 +128,8 @@ public static class NotabilityModel
     /// </summary>
     public static bool MeetsCandidateFloor(DevelopingPlayer player, TeamStrengthCoefficients strength, DraftCoefficients c)
     {
-        var s = PlayerStrengthProfile.Compute(player, strength);
+        // 足切りも今の物差しで判定（issue #1080）＝候補の顔ぶれは物差しによらず同じ（画面のチップは Δ 下がって見える）。
+        var s = PlayerStrengthProfile.Compute(player, strength, Players.AbilityScale.Delta);
         var best = s.BattingTier > s.PitchingTier ? s.BattingTier : s.PitchingTier;
         return best >= c.CandidateMinTier;
     }

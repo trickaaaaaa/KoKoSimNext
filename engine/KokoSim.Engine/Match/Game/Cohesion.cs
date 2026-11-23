@@ -110,12 +110,13 @@ public static class Cohesion
     /// 割合の分母はベンチ入り全員。性格を持たない手組みの選手（<see cref="Personality.Normal"/>）は顔ぶれに数えない＝
     /// どの項も基準どおりとみなす（主将が手組みなら主将の項も0）。全員が手組みのチームは 50 ちょうど（Q57）。
     /// </summary>
-    public static double BaseValue(IReadOnlyCollection<Player> members, Player? captain, CohesionCoefficients c)
+    public static double BaseValue(IReadOnlyCollection<Player> members, Player? captain, CohesionCoefficients c,
+        int delta = AbilityScale.Delta)
     {
         if (members.Count == 0) return Neutral;
         var u = Neutral;
         if (captain is not null && captain.Personality != Personality.Normal)
-            u += c.CaptainPowerWeight * (Season.CaptainSelector.LeadershipPower(captain) - c.CaptainPowerNeutral);
+            u += c.CaptainPowerWeight * (Season.CaptainSelector.LeadershipPower(captain, delta) - c.CaptainPowerNeutral);
         double leaders = 0, selfish = 0, loneWolves = 0;
         foreach (var p in members)
         {
@@ -138,12 +139,12 @@ public static class Cohesion
     /// チームの結束 U（試合と画面の単一ソース・issue #935）。顔ぶれ＝打順＋控え＋DHの先発投手、主将は
     /// <see cref="Team.Captain"/>、上下は <see cref="Team.CohesionDelta"/>。
     /// </summary>
-    public static double ForTeam(Team team, CohesionCoefficients c) => ForTeam(team, team.Captain, c);
+    public static double ForTeam(Team team, CohesionCoefficients c, int delta = AbilityScale.Delta) => ForTeam(team, team.Captain, c, delta);
 
     /// <summary>主将を差し替えた場合の結束（主将指名画面の「指名したら」の見込み・issue #935）。</summary>
-    public static double ForTeam(Team team, Player? captain, CohesionCoefficients c)
+    public static double ForTeam(Team team, Player? captain, CohesionCoefficients c, int delta = AbilityScale.Delta)
     {
-        return Value(BaseValue(team.BenchEntry, captain, c), team.CohesionDelta);
+        return Value(BaseValue(team.BenchEntry, captain, c, delta), team.CohesionDelta);
     }
 
     /// <summary>効き先①: 動揺の発生閾値の段（U≥高 で+1、U&lt;低 で−1、それ以外0）。</summary>

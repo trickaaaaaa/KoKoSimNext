@@ -91,8 +91,9 @@ public sealed class AiMentalModelTests
             Assert.NotNull(cap);
             Assert.Contains(cap, All(team));   // 参照一致（在場判定に使う）
             Assert.Equal(All(team).Max(p => p.Grade), cap!.Grade);
-            var power = cap.Leadership * cap.Mental / 100.0;
-            Assert.True(All(team).Where(p => p.Grade == cap.Grade).All(p => p.Leadership * p.Mental / 100.0 <= power + 1e-9));
+            // 統率力＝統率傾向×精神力（今の物差し＝表示Lv＋Δ・issue #1080）/100。
+            var power = CaptainSelector.LeadershipPower(cap);
+            Assert.True(All(team).Where(p => p.Grade == cap.Grade).All(p => CaptainSelector.LeadershipPower(p) <= power + 1e-9));
         }
     }
 
@@ -208,19 +209,19 @@ public sealed class AiMentalModelTests
         // 旧セーブ相当: 全員 50/50/50 に潰す（能力はそのまま）。
         var legacy = AiRosterFactory.Bootstrap(school, 2, deps);
         var contacts = legacy.Players.ToDictionary(p => p.Id, p => p.Snapshot.Contact);
-        foreach (var p in legacy.Players) p.Snapshot = p.Snapshot with { Mental = 50, Leadership = 50, Lead = 50 };
+        foreach (var p in legacy.Players) p.Snapshot = p.Snapshot with { Mental = AbilityScale.AverageDisplay, Leadership = 50, Lead = AbilityScale.AverageDisplay };
         Assert.True(AiMentalModel.BackfillIfUnrolled(legacy, school, deps));
         Assert.True(legacy.Players.Select(p => p.Snapshot.Mental).Distinct().Count() > 5);
         foreach (var p in legacy.Players) Assert.Equal(contacts[p.Id], p.Snapshot.Contact);   // 能力は不変
         // 決定論: 同じセーブなら同じ値
         var again = AiRosterFactory.Bootstrap(school, 2, deps);
-        foreach (var p in again.Players) p.Snapshot = p.Snapshot with { Mental = 50, Leadership = 50, Lead = 50 };
+        foreach (var p in again.Players) p.Snapshot = p.Snapshot with { Mental = AbilityScale.AverageDisplay, Leadership = 50, Lead = AbilityScale.AverageDisplay };
         AiMentalModel.BackfillIfUnrolled(again, school, deps);
         Assert.Equal(legacy.Players.Select(p => p.Snapshot.Mental), again.Players.Select(p => p.Snapshot.Mental));
 
         // NationRosters 経由（GetOrBootstrap）でも後埋めが一度だけ走る。
         var nr = NationRosters.FromSaved(deps, new[] { legacy });
-        foreach (var p in legacy.Players) p.Snapshot = p.Snapshot with { Mental = 50, Leadership = 50, Lead = 50 };
+        foreach (var p in legacy.Players) p.Snapshot = p.Snapshot with { Mental = AbilityScale.AverageDisplay, Leadership = 50, Lead = AbilityScale.AverageDisplay };
         var got = nr.GetOrBootstrap(school, 2);
         Assert.True(got.Players.Select(p => p.Snapshot.Mental).Distinct().Count() > 5);
     }

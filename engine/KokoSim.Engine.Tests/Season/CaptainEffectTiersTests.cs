@@ -13,7 +13,7 @@ public sealed class CaptainEffectTiersTests
     private static DevelopingPlayer Guy(int leadership, int mental, int grade = 3,
         Personality personality = Personality.Normal) => new()
     {
-        Name = "X", Grade = grade, Leadership = leadership, Mental = mental,
+        Name = "X", Grade = grade, Leadership = leadership, Mental = mental - KokoSim.Engine.Players.AbilityScale.Delta,   // mental は今の物差し（issue #1080）
         Receptiveness = PersonalityFixture.Axes(personality).Receptiveness,
         Diligence = PersonalityFixture.Axes(personality).Diligence,
         Selflessness = PersonalityFixture.Axes(personality).Selflessness,

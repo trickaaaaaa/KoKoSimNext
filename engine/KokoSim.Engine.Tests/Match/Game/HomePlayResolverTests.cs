@@ -22,7 +22,7 @@ public sealed class HomePlayResolverTests
 
     /// <summary>外野の処理点（方位0=センター方向, 距離d）。</summary>
     private static HomePlaySituation Situation(double distanceM, double fieldedAt, int arm = 50, int throwAccuracy = 50)
-        => new(new Vector3D(0, 0, distanceM), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps,
+        => new(new Vector3D(0, 0, distanceM), fieldedAt, new Player { ArmStrength = arm - AbilityScale.Delta }.ToFielder().ThrowSpeedMps,
             ThrowerThrowAccuracy: throwAccuracy);
 
     private static double ScoreRate(Player runner, int fromBase, HomePlaySituation s, int trials = 4000, ulong seed = 5)
@@ -34,7 +34,9 @@ public sealed class HomePlayResolverTests
         return (double)safe / trials;
     }
 
-    private static Player Runner(int speed = 50, int baserunning = 50) => new() { Speed = speed, Baserunning = baserunning };
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せ、試合の入口が +Δ して戻す。
+    private static Player Runner(int speed = 50, int baserunning = 50)
+        => new() { Speed = speed - AbilityScale.Delta, Baserunning = baserunning - AbilityScale.Delta };
 
     // --- 既知の方向: 三塁走者は単打でほぼ生還、一塁走者は単打で本塁を狙えば刺されやすい ---
 

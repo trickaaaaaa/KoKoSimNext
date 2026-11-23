@@ -19,8 +19,8 @@ public sealed class ForcedFoulTests
 {
     private static Player Pos(FieldPosition pos) => new()
     {
-        Position = pos, Contact = 50, Power = 50, LaunchTendency = 50, Discipline = 50,
-        Speed = 50, ArmStrength = 50, Fielding = 50, Catching = 50, Bunt = 50,
+        Position = pos, Contact = 50 - AbilityScale.Delta, Power = 50 - AbilityScale.Delta, LaunchTendency = 50, Discipline = 50 - AbilityScale.Delta,
+        Speed = 50 - AbilityScale.Delta, ArmStrength = 50 - AbilityScale.Delta, Fielding = 50 - AbilityScale.Delta, Catching = 50 - AbilityScale.Delta, Bunt = 50 - AbilityScale.Delta,
     };
 
     private static Team Team(string name)

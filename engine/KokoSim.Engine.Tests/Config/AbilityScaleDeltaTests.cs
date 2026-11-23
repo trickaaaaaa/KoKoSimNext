@@ -22,19 +22,22 @@ public sealed class AbilityScaleDeltaTests
     private static readonly double[] Scales = { 1.0, 0.41, 0.5 };
 
     [Fact]
-    public void Delta_DefaultsToZero_AndIsANoOp()
+    public void Delta_DefaultsToAbilityScaleDelta_AndZeroIsANoOp()
     {
+        // PR-B（issue #1080）: 既定は物差しの下げ幅 AbilityScale.Delta（=7）。Delta=0 は従来（下げる前）と1ビット一致＝
+        // 恒等の効き（Scale 1.0）では読んだ Lv がそのまま出る。
         var e = new AbilityEffectCoefficients();
-        Assert.Equal(0.0, e.Delta);
-        var zero = e with { Delta = 0.0 };
+        Assert.Equal(AbilityScale.Delta, e.Delta);
+        var zero = AbilityEffectCoefficients.Identity with { Delta = 0.0 };
         foreach (var lv in Levels)
         {
-            Assert.Equal(e.Batting(lv), zero.Batting(lv));
-            Assert.Equal(e.Fielding(lv), zero.Fielding(lv));
-            Assert.Equal(e.OutfieldFielding(lv), zero.OutfieldFielding(lv));
-            Assert.Equal(e.Arm(lv), zero.Arm(lv));
-            Assert.Equal(e.Running(lv), zero.Running(lv));
-            Assert.Equal(e.Pitching(lv), zero.Pitching(lv));
+            Assert.Equal(lv, zero.Batting(lv));
+            Assert.Equal(lv, zero.Fielding(lv));
+            Assert.Equal(lv, zero.Arm(lv));
+            Assert.Equal(lv, zero.Running(lv));
+            Assert.Equal(lv, zero.Pitching(lv));
+            Assert.Equal(lv, zero.Phys(lv));
+            Assert.Equal(lv + AbilityScale.Delta, AbilityEffectCoefficients.Identity.Phys(lv));
         }
     }
 
@@ -49,7 +52,7 @@ public sealed class AbilityScaleDeltaTests
         foreach (var scale in Scales)
         foreach (var delta in Deltas)
         {
-            var baseline = new AbilityEffectCoefficients { BattingScale = scale, FieldingScale = scale, ArmScale = scale, RunningScale = scale, PitchingScale = scale };
+            var baseline = new AbilityEffectCoefficients { BattingScale = scale, FieldingScale = scale, ArmScale = scale, RunningScale = scale, PitchingScale = scale, Delta = 0.0 };
             var withDelta = baseline with { Delta = delta };
             foreach (var lv in Levels)
             {
@@ -68,7 +71,7 @@ public sealed class AbilityScaleDeltaTests
     [Fact]
     public void LoweringDisplayByDelta_ThenAddingItBack_MatchesForOutfieldKnee()
     {
-        var baseline = new AbilityEffectCoefficients();
+        var baseline = new AbilityEffectCoefficients { Delta = 0.0 };
         foreach (var delta in Deltas)
         {
             var withDelta = baseline with { Delta = delta };
@@ -89,7 +92,7 @@ public sealed class AbilityScaleDeltaTests
             MaxVelocityKmh = 146.0, Control = 65, PitchRank = 60, StaminaPitches = 130.0,
             Repertoire = new[] { PitchSlot.FastballOf(65) },
         };
-        var baseline = new AbilityEffectCoefficients { PitchingScale = 0.5 };
+        var baseline = new AbilityEffectCoefficients { PitchingScale = 0.5, Delta = 0.0 };
         var delta = 7.0;
         var shifted = p with { Control = 58, PitchRank = 53, Repertoire = new[] { PitchSlot.FastballOf(58) } };
         var withDelta = baseline with { Delta = delta };
@@ -113,7 +116,7 @@ public sealed class AbilityScaleDeltaTests
             ArmStrength = arm, ThrowAccuracy = throwAcc, Fielding = fielding, Catching = catching,
         };
 
-        var baseline = new AbilityEffectCoefficients { BattingScale = 0.5, FieldingScale = 0.5, RunningScale = 0.5 };
+        var baseline = new AbilityEffectCoefficients { BattingScale = 0.5, FieldingScale = 0.5, RunningScale = 0.5, Delta = 0.0 };
         var p = Make(70, 60, 30, 65, 40, 55, 80, 45);
         var delta = 5.0;
         var shifted = Make(65, 55, 25, 60, 35, 50, 75, 40);

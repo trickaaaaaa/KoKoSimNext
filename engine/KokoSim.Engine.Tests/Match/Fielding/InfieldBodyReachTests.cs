@@ -90,8 +90,8 @@ public sealed class InfieldBodyReachTests
 
     private static Player Pos(FieldPosition pos, int fielding) => new()
     {
-        Position = pos, Contact = 50, Power = 50, LaunchTendency = 50, Discipline = 50,
-        Speed = 50, ArmStrength = 50, Fielding = fielding, Catching = 50,
+        Position = pos, Contact = 50 - AbilityScale.Delta, Power = 50 - AbilityScale.Delta, LaunchTendency = 50, Discipline = 50 - AbilityScale.Delta,
+        Speed = 50 - AbilityScale.Delta, ArmStrength = 50 - AbilityScale.Delta, Fielding = fielding - AbilityScale.Delta, Catching = 50 - AbilityScale.Delta,
     };
 
     private static Team BuildTeam(string name, int fielding)

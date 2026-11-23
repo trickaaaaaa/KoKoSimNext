@@ -29,7 +29,7 @@ public sealed record PitcherAttributes
     public double ReactionVelocityOffsetKmh { get; init; } = 0.0;
 
     /// <summary>コントロール: 狙いからの散布σ（1〜100）。</summary>
-    public int Control { get; init; } = 50;
+    public int Control { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>
     /// スタミナ＝目安投球数（§1.1e）。本来の力を保てる球数。他能力と独立に生成・管理。
@@ -42,7 +42,7 @@ public sealed record PitcherAttributes
     /// 球種総合の素質（1〜100, 育成レイヤ）。レパートリー各球のランクの土台。
     /// 表示は球種ごとのランク（Repertoire）で行い、本値は成長・投影の中間表現。
     /// </summary>
-    public int PitchRank { get; init; } = 50;
+    public int PitchRank { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>
     /// 保有球種（設計書02 §2.2）。全投手ストレート必修。野手はデフォルト0〜1変化球（＝ストレート＋最大1）。
@@ -74,8 +74,14 @@ public sealed record PitcherAttributes
     public const double StaminaPitchesIntercept = 63.0;
     public const double StaminaPitchesPerLevel = 0.75;
 
-    /// <summary>育成レイヤのスタミナLevel(1〜100)→目安投球数の変換（表示層→内部の一箇所集約）。</summary>
-    public static double StaminaPitchesFromLevel(int level)
+    /// <summary>
+    /// 育成レイヤのスタミナLevel（<b>表示Lv</b>）→目安投球数の変換（表示層→内部の一箇所集約）。
+    /// 表示Lvは今の物差しより Δ 低い（issue #1080・<see cref="AbilityScale"/>）ので、+Δ して今の式に通す＝目安投球数は Δ によらず不変。
+    /// </summary>
+    public static double StaminaPitchesFromLevel(int level) => StaminaPitchesFromPhysicalLevel(AbilityScale.Phys(level));
+
+    /// <summary>今の物差しのスタミナLv（物理Lv）→目安投球数。生成の内部（表示へ下げる前）だけが使う。</summary>
+    public static double StaminaPitchesFromPhysicalLevel(int level)
         => StaminaPitchesIntercept + level * StaminaPitchesPerLevel;
 
     /// <summary>
@@ -84,7 +90,10 @@ public sealed record PitcherAttributes
     /// スタミナは上限なし（issue #356）＝上側をクランプしない。目安投球数の大きい投手は
     /// Lv100で頭打ちにならず素直に外挿する（Lv100=138球 / 逆変換 (138-63)/0.75=100）。下限のみ1で丸める。
     /// </summary>
-    public static int LevelFromStaminaPitches(double pitches)
+    public static int LevelFromStaminaPitches(double pitches) => AbilityScale.Disp(PhysicalLevelFromStaminaPitches(pitches));
+
+    /// <summary>目安投球数→今の物差しのスタミナLv（物理Lv）。生成・成長の内部（物理Lvの空間）だけが使う。</summary>
+    public static int PhysicalLevelFromStaminaPitches(double pitches)
         => (int)Math.Round(Math.Max(1.0, (pitches - StaminaPitchesIntercept) / StaminaPitchesPerLevel));
 
     // --- 球速Level → 最高球速[km/h]（表示層→物理層の一箇所集約・不変条件#1） ---
@@ -117,13 +126,17 @@ public sealed record PitcherAttributes
     private const double VelocityTopKneeKmh =
         VelocityKneeKmh + (VelocityTopKneeLevel - VelocityKneeLevel) * VelocitySlopeAboveKneeKmhPerLevel;   // 146.4
 
-    /// <summary>育成レイヤの球速Level(1〜100)→最高球速[km/h]の変換（Lv50・Lv90 を境にした区分線形）。</summary>
-    public static double VelocityKmhFromLevel(int level) => VelocityKmhFromLevel((double)level);
+    /// <summary>
+    /// 育成レイヤの球速Level（<b>表示Lv</b>）→最高球速[km/h]の変換。表示Lvは今の物差しより Δ 低い（issue #1080・
+    /// <see cref="AbilityScale"/>）ので +Δ して今の区分線形（<see cref="VelocityKmhFromPhysicalLevel(double)"/>）に通す＝km/h は Δ によらず不変。
+    /// </summary>
+    public static double VelocityKmhFromLevel(int level) => VelocityKmhFromPhysicalLevel(AbilityScale.Phys(level));
 
     /// <summary>
-    /// 連続版（AI校のやわらかい天井が端数の球速Lvを作るため）。整数を渡せば <see cref="VelocityKmhFromLevel(int)"/> と同値。
+    /// 今の物差しの球速Lv（物理Lv・Lv50・Lv90 を境にした区分線形）→最高球速[km/h]。端数可（AI校のやわらかい天井が
+    /// 端数の球速Lvを作るため）。生成・成長の内部（表示へ下げる前）と効きの軸だけが使う。
     /// </summary>
-    public static double VelocityKmhFromLevel(double level)
+    public static double VelocityKmhFromPhysicalLevel(double level)
         => level <= VelocityKneeLevel
             ? VelocityInterceptKmh + level * VelocitySlopeKmhPerLevel
             : level <= VelocityTopKneeLevel
@@ -131,10 +144,10 @@ public sealed record PitcherAttributes
                 : VelocityTopKneeKmh + (level - VelocityTopKneeLevel) * VelocitySlopeAboveTopKneeKmhPerLevel;
 
     /// <summary>
-    /// 最高球速[km/h]→球速Level の逆変換（端数つき・下限1でだけ丸める）。AI校の毎年の底上げが
-    /// 「天井の手前の素の値」へ戻すのに使う。
+    /// 最高球速[km/h]→今の物差しの球速Lv（物理Lv）の逆変換（端数つき・下限1でだけ丸める）。AI校の毎年の底上げが
+    /// 「天井の手前の素の値」へ戻すのに使う（物理Lvの空間）。
     /// </summary>
-    public static double LevelFromVelocityKmhExact(double kmh)
+    public static double PhysicalLevelFromVelocityKmhExact(double kmh)
     {
         var lv = kmh <= VelocityKneeKmh
             ? (kmh - VelocityInterceptKmh) / VelocitySlopeKmhPerLevel
@@ -145,9 +158,15 @@ public sealed record PitcherAttributes
         return Math.Max(1.0, Math.Round(lv, 9));
     }
 
-    /// <summary>最高球速[km/h]→球速Level の逆変換（表示・選出で「球速の等級」を復元する用。順変換と同じ区分の逆関数）。</summary>
-    public static int LevelFromVelocityKmh(double kmh)
-        => (int)Math.Round(Math.Clamp(LevelFromVelocityKmhExact(kmh), 1, 100));
+    /// <summary>
+    /// 最高球速[km/h]→球速Level（<b>表示Lv</b>）の逆変換（表示・選出で「球速の等級」を復元する用。順変換と同じ区分の逆関数）。
+    /// 今の物差しの整数Lv（<see cref="PhysicalLevelFromVelocityKmh"/>）から Δ を引く。
+    /// </summary>
+    public static int LevelFromVelocityKmh(double kmh) => AbilityScale.Disp(PhysicalLevelFromVelocityKmh(kmh));
+
+    /// <summary>最高球速[km/h]→今の物差しの球速Lv（物理Lv・整数）。天井は 100+Δ（issue #1080）。</summary>
+    public static int PhysicalLevelFromVelocityKmh(double kmh)
+        => (int)Math.Round(Math.Clamp(PhysicalLevelFromVelocityKmhExact(kmh), 1, AbilityScale.PhysMax100));
 
     /// <summary>リーグ平均的な投手（球速132km/h, 各50 = D帯, 目安100.5球 = Lv50, issue #408）。</summary>
     public static PitcherAttributes LeagueAverage => new();
@@ -159,9 +178,16 @@ public sealed record PitcherAttributes
     /// 上乗せは試合の失点が型によらず揃うよう校正してあり合計は揃っていない（本格 +6・技巧 −2・軟投 −5）ので、
     /// 差し引かないと同じ実力でも本格派ばかりが継投に選ばれる。
     /// </summary>
-    public double ReliefScore(PitcherArchetypeCoefficients? archetypes = null)
-        => PitcherArchetypes.StrengthSum(Archetype, LevelFromVelocityKmh(MaxVelocityKmh), Control,
-            LevelFromStaminaPitches(StaminaPitches), PitchRank, archetypes ?? DefaultArchetypes);
+    public double ReliefScore(PitcherArchetypeCoefficients? archetypes = null, int delta = AbilityScale.Delta)
+        => PhysicalStrengthSum(archetypes ?? DefaultArchetypes, delta);
+
+    /// <summary>
+    /// 型の上乗せを差し引いた地力（<see cref="PitcherArchetypes.StrengthSum"/>）を今の物差し（物理Lv）で測る（issue #1080）。
+    /// 剛腕の制球は割合で戻す（非線形）ので、表示Lvのまま足すと Δ で並びが変わる＝必ず物理Lvで合成する。
+    /// </summary>
+    public double PhysicalStrengthSum(PitcherArchetypeCoefficients archetypes, int delta = AbilityScale.Delta)
+        => PitcherArchetypes.StrengthSum(Archetype, PhysicalLevelFromVelocityKmh(MaxVelocityKmh), Control + delta,
+            PhysicalLevelFromStaminaPitches(StaminaPitches), PitchRank + delta, archetypes);
 
     private static readonly PitcherArchetypeCoefficients DefaultArchetypes = new();
 }

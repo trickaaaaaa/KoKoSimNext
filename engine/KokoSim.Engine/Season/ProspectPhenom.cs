@@ -148,7 +148,8 @@ public static class ProspectPhenom
         if (target <= cur) return;
         var headroom = Math.Max(2, p.Cap(k) - cur);
         p.SetLevel(k, target);
-        var cap = k == AbilityKind.Stamina ? target + headroom : Math.Min(99, target + headroom);
+        // 今の物差し（物理Lv）で当てる（issue #1080）＝天井は 99+Δ。
+        var cap = k == AbilityKind.Stamina ? target + headroom : Math.Min(Players.AbilityScale.PhysMax99, target + headroom);
         if (p.Cap(k) < cap) p.SetCap(k, cap);
     }
 

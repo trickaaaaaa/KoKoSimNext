@@ -219,7 +219,17 @@ public static class CoefficientsLoader
         public double OutfieldDefenseTopSlope { get; set; } = D.OutfieldDefenseTopSlope;
         public double Delta { get; set; } = D.Delta;
 
-        public KokoSim.Engine.Players.AbilityEffectCoefficients ToModel() => new()
+        public KokoSim.Engine.Players.AbilityEffectCoefficients ToModel()
+        {
+            // 物差しの下げ幅は試合の外（生成・育成・総合・セーブ）が定数 AbilityScale.Delta で読む＝YAML だけ変えると
+            // 試合の物理だけがずれる（issue #1080）。片方だけ変えられないよう、定数と違う値は読み込みで弾く。
+            if (Delta != KokoSim.Engine.Players.AbilityScale.Delta)
+                throw new System.IO.InvalidDataException(
+                    $"ability_effect.delta={Delta} は AbilityScale.Delta={KokoSim.Engine.Players.AbilityScale.Delta} と一致しなければならない（issue #1080）。");
+            return ToModelUnchecked();
+        }
+
+        private KokoSim.Engine.Players.AbilityEffectCoefficients ToModelUnchecked() => new()
         {
             OutfieldDefenseTopKnee = OutfieldDefenseTopKnee,
             OutfieldDefenseTopSlope = OutfieldDefenseTopSlope,

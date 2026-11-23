@@ -40,7 +40,7 @@ public sealed class FirstToThirdRaceTests
         Assert.Equal(Field.ThirdBase.X, third.TargetPoint.X, 6);
         Assert.Equal(Field.ThirdBase.Z, third.TargetPoint.Z, 6);
 
-        var runner = new Player { Speed = 50, Baserunning = 50 };
+        var runner = new Player { Speed = 50 - AbilityScale.Delta, Baserunning = 50 - AbilityScale.Delta };
         var toThird = HomePlayResolver.RunnerTimeSeconds(runner, 1, 3, Field, C);
         var toHome = HomePlayResolver.RunnerTimeSeconds(runner, 1, 4, Field, C);
         // 一塁→三塁(2塁) は一塁→本塁(3塁) より短い。
@@ -69,7 +69,7 @@ public sealed class FirstToThirdRaceTests
     public void ThirdReach_DeepWeakArm_HigherThan_ShallowStrongArm()
     {
         // 打球の深さ・方向・外野の肩が効く（Issue #89 の主眼）。
-        var runner = new Player { Speed = 50, Baserunning = 50 };
+        var runner = new Player { Speed = 50 - AbilityScale.Delta, Baserunning = 50 - AbilityScale.Delta };
         var third = HomePlayResolver.ThirdParams(Field, C);
 
         // 浅いレフト前＋強肩の右翼手相当（送球短・速い）＝到達しづらい。
@@ -120,7 +120,7 @@ public sealed class FirstToThirdRaceTests
         var rng = new Xoshiro256Random(123);
         for (var i = 0; i < 50; i++)
         {
-            var bases = new BaseState { First = new Player { Speed = 50, Baserunning = 50 } };
+            var bases = new BaseState { First = new Player { Speed = 50 - AbilityScale.Delta, Baserunning = 50 - AbilityScale.Delta } };
             var (_, extraOuts, baseOuts, _, _, _) = BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.Single, new Player(), 0, C, rng, collectMoves: false, home);
             Assert.Equal(0, extraOuts);            // 自重＝アウトなし
@@ -139,8 +139,8 @@ public sealed class FirstToThirdRaceTests
         // 二塁走者が本塁を自重して三塁で止まる（浅い当たり）と、一塁走者は三塁へ行けず二塁止まり。
         var home = Context(x: 0, z: 14, fieldedAt: 1.0, arm: 90);
         var rng = new Xoshiro256Random(7);
-        var r1 = new Player { Speed = 50, Baserunning = 50 };
-        var r2 = new Player { Speed = 50, Baserunning = 50 };
+        var r1 = new Player { Speed = 50 - AbilityScale.Delta, Baserunning = 50 - AbilityScale.Delta };
+        var r2 = new Player { Speed = 50 - AbilityScale.Delta, Baserunning = 50 - AbilityScale.Delta };
         var bases = new BaseState { First = r1, Second = r2 };
         var (runs, extraOuts, baseOuts, _, _, _) = BaserunningModel.ApplyDetailed(
             bases, PlateAppearanceResult.Single, new Player(), 0, C, rng, collectMoves: false, home);
@@ -192,7 +192,7 @@ public sealed class FirstToThirdRaceTests
         var toThird = 0;
         for (var i = 0; i < 5000; i++)
         {
-            var bases = new BaseState { First = new Player { Speed = 50, Baserunning = 50 } };
+            var bases = new BaseState { First = new Player { Speed = 50 - AbilityScale.Delta, Baserunning = 50 - AbilityScale.Delta } };
             BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.Single, new Player(), 0, C, rng, collectMoves: false, home: null);
             if (bases.Third is not null) toThird++;

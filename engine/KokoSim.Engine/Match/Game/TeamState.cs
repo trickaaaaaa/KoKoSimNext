@@ -36,8 +36,11 @@ public sealed class TeamState
     private int _pitcherSlot;
     private readonly Player _starter;           // 先発投手。ボックススコアの基準。
 
-    public TeamState(Team team)
+    /// <param name="abilityDelta">能力の物差しの下げ幅（issue #1080・試合の係数束の Δ）。主将の統率力・結束が精神力を
+    /// 今の物差しで読むのに使う。既定は <see cref="AbilityScale.Delta"/>。</param>
+    public TeamState(Team team, int abilityDelta = AbilityScale.Delta)
     {
+        _abilityDelta = abilityDelta;
         _team = team;
         _lineup = team.BattingOrder.ToArray();
         _reserves = new List<Player>(team.Reserves);
@@ -97,6 +100,7 @@ public sealed class TeamState
     }
 
     // 結束（設計書23 §3）。顔ぶれは試合開始時の打順＋控え（＝ベンチ入り）で決め、試合中は変えない。
+    private readonly int _abilityDelta;
     private double? _cohesion;
     private CohesionCoefficients? _cohesionCoeff;
 
@@ -107,7 +111,7 @@ public sealed class TeamState
     public double CohesionValue(CohesionCoefficients c)
     {
         if (_cohesion is { } u && ReferenceEquals(_cohesionCoeff, c)) return u;
-        var value = Cohesion.ForTeam(_team, c);
+        var value = Cohesion.ForTeam(_team, c, _abilityDelta);
         _cohesion = value;
         _cohesionCoeff = c;
         return value;
@@ -991,7 +995,7 @@ public sealed class TeamState
     {
         var cap = _team.Captain;
         if (cap is null) return 1.0;
-        var power = Season.CaptainSelector.LeadershipPower(cap);
+        var power = Season.CaptainSelector.LeadershipPower(cap, _abilityDelta);
         var presence = IsOnField(cap) ? 1.0 : c.CaptainBenchFactor;
         var pillar = cap.Skills.Has(Skill.SpiritualPillar)
             ? (skills ?? new SkillCoefficients()).SpiritualPillarCaptainFactor
@@ -1273,7 +1277,8 @@ public sealed class TeamState
         var benchFielder = allowBenchBackfill ? BestReserveDefender() : null;
         if (benchFielder is not null)
         {
-            var battingDelta = (retiringPitcher.Contact + retiringPitcher.Power) / 2.0 - backfill.LeagueAverageBatting;
+            // 打撃平均は今の物差しの値（issue #1080）＝表示Lvに Δ を足して比べる。
+            var battingDelta = (retiringPitcher.Contact + retiringPitcher.Power) / 2.0 + _abilityDelta - backfill.LeagueAverageBatting;
             var requiredMargin = backfill.BaseFieldingMargin + backfill.BattingRetentionWeight * battingDelta;
             if (benchFielder.Fielding - retiringPitcher.Fielding >= requiredMargin)
             {
@@ -1338,7 +1343,8 @@ public sealed class TeamState
         var useBench = false;
         if (benchFielder is not null)
         {
-            var battingDelta = (dh.Contact + dh.Power) / 2.0 - backfill.LeagueAverageBatting;
+            // 打撃平均は今の物差しの値（issue #1080）＝表示Lvに Δ を足して比べる。
+            var battingDelta = (dh.Contact + dh.Power) / 2.0 + _abilityDelta - backfill.LeagueAverageBatting;
             var requiredMargin = backfill.BaseFieldingMargin + backfill.BattingRetentionWeight * battingDelta;
             useBench = benchFielder.Fielding - dh.Fielding >= requiredMargin;
         }

@@ -31,11 +31,18 @@ public sealed class DraftTests
 
     private static readonly TeamStrengthCoefficients S = new();
 
+    private const int D = KokoSim.Engine.Players.AbilityScale.Delta;
+
     private static DevelopingPlayer Batter(int id, int grade, int level, int cap, string name = "打者")
     {
         var p = new DevelopingPlayer { Id = id, Name = name, Grade = grade };
         PitcherRoleResolver.SeedAptitudeForRole(p, false);
-        foreach (var k in BatterKinds) { p.SetLevel(k, level); p.SetCap(k, cap); }
+        // level・cap は今の物差しの値（issue #1080）。表示Lv（−Δ）で載せる＝注目度・予想順位の境目は今の物差しのまま。
+        foreach (var k in BatterKinds)
+        {
+            var d = k == AbilityKind.LaunchTendency ? 0 : D;   // 弾道は物差しの外
+            p.SetLevel(k, level - d); p.SetCap(k, cap - d);
+        }
         return p;
     }
 
@@ -43,7 +50,8 @@ public sealed class DraftTests
     {
         var p = new DevelopingPlayer { Id = id, Name = name, Grade = grade };
         PitcherRoleResolver.SeedAptitudeForRole(p, true);
-        foreach (var k in PitcherKinds) { p.SetLevel(k, level); p.SetCap(k, cap); }
+        // level・cap は今の物差しの値（issue #1080）。表示Lv（−Δ）で載せる＝注目度・予想順位の境目は今の物差しのまま。
+        foreach (var k in PitcherKinds) { p.SetLevel(k, level - D); p.SetCap(k, cap - D); }
         return p;
     }
 
@@ -86,7 +94,7 @@ public sealed class DraftTests
         // 投手総合の重みの正典は TeamStrengthCoefficients（issue #1212）。球速だけ重くすれば球速の高い投手の評価が上がる。
         var c = new DraftCoefficients { CeilingBlend = 0 };
         var p = Pitcher(1, 3, level: 50, cap: 50);
-        p.SetLevel(AbilityKind.Velocity, 90);
+        p.SetLevel(AbilityKind.Velocity, 90 - D);
         var baseScore = NotabilityModel.PitcherAbilityScore(p, c, new TeamStrengthCoefficients());
         var heavy = NotabilityModel.PitcherAbilityScore(p, c, new TeamStrengthCoefficients
         {
@@ -332,7 +340,7 @@ public sealed class DraftTests
         var stats = BattingStats(1, games: 14, pa: 56, ab: 50, hits: 25, hr: 8);   // OPS 1.0超
 
         var n = NotabilityModel.Compute(p, stats, c, new TeamStrengthCoefficients());
-        Assert.Equal(Tier.D, PlayerStrengthProfile.Compute(p, S).BattingTier);
+        Assert.Equal(Tier.D, PlayerStrengthProfile.Compute(p, S, D).BattingTier);   // 足切りは今の物差しのチップで判定（issue #1080）
         Assert.True(NotabilityModel.BandOf(n, c) >= DraftRankBand.MiddleRound,
             $"床が無ければ中位圏に届くはず（notability={n:F1}）");
 
@@ -350,7 +358,7 @@ public sealed class DraftTests
     {
         var c = new DraftCoefficients();
         var p = Batter(1, 3, level: 70, cap: 85);    // 打撃力ちょうど B
-        Assert.Equal(Tier.B, PlayerStrengthProfile.Compute(p, S).BattingTier);
+        Assert.Equal(Tier.B, PlayerStrengthProfile.Compute(p, S, D).BattingTier);   // 足切りは今の物差しのチップで判定（issue #1080）
         Assert.True(NotabilityModel.MeetsCandidateFloor(p, S, c));
     }
 

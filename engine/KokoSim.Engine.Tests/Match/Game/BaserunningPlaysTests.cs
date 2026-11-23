@@ -24,7 +24,7 @@ public sealed class BaserunningPlaysTests
     private static readonly IReadOnlyList<Fielder> Fielders = Field.StandardAlignment();
 
     private static Player Catcher(int arm = 50) => new()
-        { Position = FieldPosition.Catcher, ArmStrength = arm };
+        { Position = FieldPosition.Catcher, ArmStrength = arm - AbilityScale.Delta };
 
     private static double SbRate(Player runner, Player catcher, int trials = 4000, ulong seed = 5)
     {
@@ -41,22 +41,22 @@ public sealed class BaserunningPlaysTests
     public void Steal_LeagueAverage_IsPlausible()
     {
         // 平均走者×平均肩は五分〜やや不利（Step4校正: 走ってよいのは俊足のみ、という現実的な帯に再ベースライン）。
-        var rate = SbRate(new Player { Speed = 50, Steal = 50 }, Catcher(50));
+        var rate = SbRate(new Player { Speed = 50 - AbilityScale.Delta, Steal = 50 - AbilityScale.Delta }, Catcher(50));
         Assert.InRange(rate, 0.30, 0.60);
     }
 
     [Fact]
     public void Steal_FasterRunner_SucceedsMore()
     {
-        var slow = SbRate(new Player { Speed = 30, Steal = 30 }, Catcher(50));
-        var fast = SbRate(new Player { Speed = 90, Steal = 90 }, Catcher(50));
+        var slow = SbRate(new Player { Speed = 30 - AbilityScale.Delta, Steal = 30 - AbilityScale.Delta }, Catcher(50));
+        var fast = SbRate(new Player { Speed = 90 - AbilityScale.Delta, Steal = 90 - AbilityScale.Delta }, Catcher(50));
         Assert.True(fast > slow + 0.15, $"俊足の盗塁成功が高くない: slow={slow:F2} fast={fast:F2}");
     }
 
     [Fact]
     public void Steal_StrongerCatcherArm_ThrowsOutMore()
     {
-        var runner = new Player { Speed = 55, Steal = 55 };
+        var runner = new Player { Speed = 55 - AbilityScale.Delta, Steal = 55 - AbilityScale.Delta };
         var weakArm = SbRate(runner, Catcher(30));
         var strongArm = SbRate(runner, Catcher(95));
         Assert.True(strongArm < weakArm - 0.10, $"強肩捕手が刺せていない: weak={weakArm:F2} strong={strongArm:F2}");
@@ -65,15 +65,15 @@ public sealed class BaserunningPlaysTests
     [Fact]
     public void Steal_StartDelay_ShrinksWithStealParam()
     {
-        var slowStart = StealResolver.RunnerTimeSeconds(new Player { Speed = 50, Steal = 10 }, C);
-        var fastStart = StealResolver.RunnerTimeSeconds(new Player { Speed = 50, Steal = 90 }, C);
+        var slowStart = StealResolver.RunnerTimeSeconds(new Player { Speed = 50 - AbilityScale.Delta, Steal = 10 - AbilityScale.Delta }, C);
+        var fastStart = StealResolver.RunnerTimeSeconds(new Player { Speed = 50 - AbilityScale.Delta, Steal = 90 - AbilityScale.Delta }, C);
         Assert.True(fastStart < slowStart, "盗塁パラメータでスタートが速くならない");
     }
 
     [Fact]
     public void Steal_IsDeterministic()
     {
-        var r = new Player { Speed = 60, Steal = 60 };
+        var r = new Player { Speed = 60 - AbilityScale.Delta, Steal = 60 - AbilityScale.Delta };
         Assert.Equal(SbRate(r, Catcher(50), seed: 11), SbRate(r, Catcher(50), seed: 11));
     }
 
@@ -83,15 +83,15 @@ public sealed class BaserunningPlaysTests
     public void Bunt_SuccessRate_RisesWithBuntSkill()
     {
         var p = PitcherAttributes.LeagueAverage;
-        var low = BuntResolver.SuccessRate(new Player { Bunt = 20 }, p, courseDifficulty: 0.0, C);
-        var high = BuntResolver.SuccessRate(new Player { Bunt = 90 }, p, courseDifficulty: 0.0, C);
+        var low = BuntResolver.SuccessRate(new Player { Bunt = 20 - AbilityScale.Delta }, p, courseDifficulty: 0.0, C);
+        var high = BuntResolver.SuccessRate(new Player { Bunt = 90 - AbilityScale.Delta }, p, courseDifficulty: 0.0, C);
         Assert.True(high > low, $"バント技術で成功率が上がらない: {low:F2} vs {high:F2}");
     }
 
     [Fact]
     public void Bunt_HighVelocity_LowersSuccess()
     {
-        var batter = new Player { Bunt = 60 };
+        var batter = new Player { Bunt = 60 - AbilityScale.Delta };
         var slow = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 125 }, courseDifficulty: 0.0, C);
         var fast = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 150 }, courseDifficulty: 0.0, C);
         Assert.True(fast < slow, "速球でバントが難しくならない");

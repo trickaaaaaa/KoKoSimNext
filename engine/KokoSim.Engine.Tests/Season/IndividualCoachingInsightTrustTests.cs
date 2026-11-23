@@ -88,14 +88,15 @@ public sealed class IndividualCoachingInsightTrustTests
     private static int MentalAfterWeeks(bool nominated, int weeks, TrainingCoefficients? c = null,
         InjurySeverity injury = InjurySeverity.None)
     {
+        // 精神力は今の物差しで 55 から（issue #1080: 表示Lv＝−Δ で載せ、今の物差しの値で返す）。
         var p = Guy(nominated);
-        p.Mental = 55;
+        p.Mental = 55 - AbilityScale.Delta;
         p.MentalCap = 99;
         p.Injury = injury;
         var stages = new GrowthStageTable();
         for (var w = 0; w < weeks; w++)
             DevelopmentModel.TrainWeek(p, TrainingMenu.Running, 1, 1.0, stages, c ?? new TrainingCoefficients());
-        return p.Mental;
+        return p.Mental + AbilityScale.Delta;
     }
 
     [Fact]
@@ -135,12 +136,12 @@ public sealed class IndividualCoachingInsightTrustTests
     public void Trust_AppliesInPlannedTrainingToo()
     {
         var p = Guy(true);
-        p.Mental = 55;
+        p.Mental = 55 - AbilityScale.Delta;   // 今の物差しの55（issue #1080）
         var c = new TrainingCoefficients();
         var stages = new GrowthStageTable();
         var alloc = TrainingPresets.Resolve(TrainingPlan.Default, c.DefaultBudgetMinutes);
         for (var w = 0; w < 48; w++)
             DevelopmentModel.TrainWeekPlan(p, alloc, c.ReferenceWeekMinutes, 1, 1.0, stages, c);
-        Assert.InRange(p.Mental, 59, 61);
+        Assert.InRange(p.Mental + AbilityScale.Delta, 59, 61);
     }
 }

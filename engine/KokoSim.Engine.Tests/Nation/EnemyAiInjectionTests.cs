@@ -41,11 +41,11 @@ public sealed class EnemyAiInjectionTests
     private static Team WeakBattingTeamWithBench(ITacticsBrain tactics)
     {
         var order = Positions
-            .Select(pos => new Player { Position = pos, Contact = 30, Power = 40, Speed = 35, Fielding = 35, Discipline = 40 })
+            .Select(pos => new Player { Position = pos, Contact = 30 - AbilityScale.Delta, Power = 40 - AbilityScale.Delta, Speed = 35 - AbilityScale.Delta, Fielding = 35 - AbilityScale.Delta, Discipline = 40 - AbilityScale.Delta })
             .Append(new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage })
             .ToList();
         var bench = Enumerable.Range(0, 6)
-            .Select(_ => new Player { Position = FieldPosition.LeftField, Contact = 88, Power = 60, Speed = 85, Fielding = 85 })
+            .Select(_ => new Player { Position = FieldPosition.LeftField, Contact = 88 - AbilityScale.Delta, Power = 60 - AbilityScale.Delta, Speed = 85 - AbilityScale.Delta, Fielding = 85 - AbilityScale.Delta })
             .ToList();
         return new Team { Name = "テスト校", BattingOrder = order, PitcherSlot = 8, Reserves = bench, Tactics = tactics };
     }
@@ -89,7 +89,7 @@ public sealed class EnemyAiInjectionTests
         var order = Positions
             .Select(pos => new Player
             {
-                Position = pos, Contact = 75, Power = 50, Discipline = 80, Speed = 88, Steal = 88, Fielding = 50,
+                Position = pos, Contact = 75 - AbilityScale.Delta, Power = 50 - AbilityScale.Delta, Discipline = 80 - AbilityScale.Delta, Speed = 88 - AbilityScale.Delta, Steal = 88 - AbilityScale.Delta, Fielding = 50 - AbilityScale.Delta,
             })
             .Append(new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage })
             .ToList();
@@ -169,7 +169,7 @@ public sealed class EnemyAiInjectionTests
         var order = Positions
             .Select(pos => new Player
             {
-                Position = pos, Contact = 70, Power = 45, Discipline = 85, Bunt = 70, Speed = 50, Fielding = 50,
+                Position = pos, Contact = 70 - AbilityScale.Delta, Power = 45 - AbilityScale.Delta, Discipline = 85 - AbilityScale.Delta, Bunt = 70 - AbilityScale.Delta, Speed = 50 - AbilityScale.Delta, Fielding = 50 - AbilityScale.Delta,
             })
             .Append(new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage })
             .ToList();

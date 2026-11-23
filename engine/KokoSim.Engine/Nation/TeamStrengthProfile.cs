@@ -90,19 +90,22 @@ public static class TeamStrengthProfile
     public static TeamStrength Compute(IReadOnlyList<DevelopingPlayer> roster, TeamStrengthCoefficients c)
     {
         // 野手＝非投手を総合力（AverageLevel）降順。投手＝投手合成の降順。
+        // チーム総合と6指標は今の物差し（表示Lv＋Δ・issue #1080）で測る＝数字もランクも物差しによらず同じ。
+        // 選手個人の PlayerStrengthProfile は表示Lvのまま（d=0）＝個人のランクは Δ 下がる（狙い）。
+        const int d = AbilityScale.Delta;
         var fielders = roster.Where(p => !PitcherRoleResolver.LeansPitcher(p))
-            .OrderByDescending(p => p.AverageLevel()).ToList();
+            .OrderByDescending(p => p.AverageLevel(d)).ToList();
         var pitchers = roster.Where(p => PitcherRoleResolver.LeansPitcher(p))
-            .OrderByDescending(p => PitcherComposite(p, c)).ToList();
+            .OrderByDescending(p => PitcherComposite(p, c, d)).ToList();
 
         var regulars = fielders.Take(c.LineupSize).ToList();
 
-        var batting = Avg(regulars, p => BatterComposite(p, c));
-        var defense = Avg(regulars, p => DefenseComposite(p, c));
-        var mobility = Avg(regulars, p => MobilityComposite(p, c));
-        var pitching = PitchingStrength(pitchers, c);
-        var depth = DepthStrength(fielders, pitchers, c);
-        var mental = MentalStrength(regulars, pitchers);
+        var batting = Avg(regulars, p => BatterComposite(p, c, d));
+        var defense = Avg(regulars, p => DefenseComposite(p, c, d));
+        var mobility = Avg(regulars, p => MobilityComposite(p, c, d));
+        var pitching = PitchingStrength(pitchers, c, d);
+        var depth = DepthStrength(fielders, pitchers, c, d);
+        var mental = MentalStrength(regulars, pitchers, d);
 
         var overall = WeightedOverall(batting, pitching, defense, mobility, depth, mental, c);
         return new TeamStrength(batting, pitching, defense, mobility, depth, mental, overall);
@@ -110,23 +113,24 @@ public static class TeamStrengthProfile
 
     // --- 1選手の合成（サブ重み合計1.0）。PlayerStrengthProfile（選手個人のカテゴリ別ランク）も同じ式を共有する ---
 
-    internal static double BatterComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
-        => p.Level(AbilityKind.Contact) * c.ContactWeight
-         + p.Level(AbilityKind.Power) * c.PowerWeight
+    /// <remarks><paramref name="d"/>＝表示Lvに足す物差しの下げ幅（チーム総合は Δ・選手個人は 0。弾道は型の軸で足さない）。</remarks>
+    internal static double BatterComposite(DevelopingPlayer p, TeamStrengthCoefficients c, int d = 0)
+        => (p.Level(AbilityKind.Contact) + d) * c.ContactWeight
+         + (p.Level(AbilityKind.Power) + d) * c.PowerWeight
          + p.Level(AbilityKind.LaunchTendency) * c.LaunchWeight
-         + p.Level(AbilityKind.Discipline) * c.DisciplineWeight;
+         + (p.Level(AbilityKind.Discipline) + d) * c.DisciplineWeight;
 
     /// <summary>
     /// 投手総合＝球質タイプの上乗せを差し引いた地力（issue #1302）。上乗せは試合の失点が型によらず揃うよう校正してあり
     /// 合計は揃っていない（本格 +3.1・技巧 −1.9・軟投 −3.2＝この重みでの加重）ので、差し引かないと同じ地力でも型で動く。
     /// 型の外し方は <see cref="PitcherArchetypes.StrengthSum"/> と同じ（制球だけ割合を戻す）。型なし（null）は素のまま。
     /// </summary>
-    internal static double PitcherComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
+    internal static double PitcherComposite(DevelopingPlayer p, TeamStrengthCoefficients c, int d = 0)
     {
-        var v = (double)p.Level(AbilityKind.Velocity);
-        var ctl = (double)p.Level(AbilityKind.Control);
-        var st = (double)p.Level(AbilityKind.Stamina);
-        var rk = (double)p.Level(AbilityKind.PitchRank);
+        var v = (double)(p.Level(AbilityKind.Velocity) + d);
+        var ctl = (double)(p.Level(AbilityKind.Control) + d);
+        var st = (double)(p.Level(AbilityKind.Stamina) + d);
+        var rk = (double)(p.Level(AbilityKind.PitchRank) + d);
         if (p.Archetype is { } type)
         {
             var (dv, _, ds, dr) = PitcherArchetypes.Offsets(type, DefaultArchetypes);
@@ -140,25 +144,25 @@ public static class TeamStrengthProfile
 
     private static readonly PitcherArchetypeCoefficients DefaultArchetypes = new();
 
-    internal static double DefenseComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
-        => p.Level(AbilityKind.Fielding) * c.FieldingWeight
-         + p.Level(AbilityKind.Catching) * c.CatchingWeight
-         + p.Level(AbilityKind.ArmStrength) * c.ArmWeight;
+    internal static double DefenseComposite(DevelopingPlayer p, TeamStrengthCoefficients c, int d = 0)
+        => (p.Level(AbilityKind.Fielding) + d) * c.FieldingWeight
+         + (p.Level(AbilityKind.Catching) + d) * c.CatchingWeight
+         + (p.Level(AbilityKind.ArmStrength) + d) * c.ArmWeight;
 
-    internal static double MobilityComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
-        => p.Level(AbilityKind.Speed) * c.SpeedWeight
-         + p.Level(AbilityKind.Steal) * c.StealWeight;
+    internal static double MobilityComposite(DevelopingPlayer p, TeamStrengthCoefficients c, int d = 0)
+        => (p.Level(AbilityKind.Speed) + d) * c.SpeedWeight
+         + (p.Level(AbilityKind.Steal) + d) * c.StealWeight;
 
     // --- 指標 ---
 
     /// <summary>投手力＝エース偏重。2番手・3番手以降が欠ける場合は直近の値で埋める（1枚投手＝エース相当）。</summary>
-    private static double PitchingStrength(IReadOnlyList<DevelopingPlayer> pitchers, TeamStrengthCoefficients c)
+    private static double PitchingStrength(IReadOnlyList<DevelopingPlayer> pitchers, TeamStrengthCoefficients c, int d)
     {
         if (pitchers.Count == 0) return 0;
-        var ace = PitcherComposite(pitchers[0], c);
-        var second = pitchers.Count > 1 ? PitcherComposite(pitchers[1], c) : ace;
+        var ace = PitcherComposite(pitchers[0], c, d);
+        var second = pitchers.Count > 1 ? PitcherComposite(pitchers[1], c, d) : ace;
         var rest = pitchers.Count > 2
-            ? pitchers.Skip(2).Average(p => PitcherComposite(p, c))
+            ? pitchers.Skip(2).Average(p => PitcherComposite(p, c, d))
             : second;
         var wsum = c.AceWeight + c.SecondPitcherWeight + c.RestPitcherWeight;
         return (ace * c.AceWeight + second * c.SecondPitcherWeight + rest * c.RestPitcherWeight) / wsum;
@@ -168,13 +172,13 @@ public static class TeamStrengthProfile
     private static double DepthStrength(
         IReadOnlyList<DevelopingPlayer> fielders,
         IReadOnlyList<DevelopingPlayer> pitchers,
-        TeamStrengthCoefficients c)
+        TeamStrengthCoefficients c, int d)
     {
         var bench = fielders.Skip(c.LineupSize).Take(c.BenchSampleSize).ToList();
-        var benchAvg = bench.Count > 0 ? bench.Average(p => p.AverageLevel()) : 0.0;
+        var benchAvg = bench.Count > 0 ? bench.Average(p => p.AverageLevel(d)) : 0.0;
 
         var backups = pitchers.Skip(1).ToList();
-        var backupAvg = backups.Count > 0 ? backups.Average(p => PitcherComposite(p, c)) : 0.0;
+        var backupAvg = backups.Count > 0 ? backups.Average(p => PitcherComposite(p, c, d)) : 0.0;
 
         var wsum = c.BenchBatterWeight + c.BackupPitcherWeight;
         return (benchAvg * c.BenchBatterWeight + backupAvg * c.BackupPitcherWeight) / wsum;
@@ -183,11 +187,11 @@ public static class TeamStrengthProfile
     /// <summary>精神力＝主力（レギュラー＋エース）の Mental 平均。試合を担う面々の粘り。</summary>
     private static double MentalStrength(
         IReadOnlyList<DevelopingPlayer> regulars,
-        IReadOnlyList<DevelopingPlayer> pitchers)
+        IReadOnlyList<DevelopingPlayer> pitchers, int d)
     {
         var core = new List<DevelopingPlayer>(regulars);
         if (pitchers.Count > 0) core.Add(pitchers[0]);
-        return core.Count > 0 ? core.Average(p => p.Mental) : 0.0;
+        return core.Count > 0 ? core.Average(p => p.Mental + d) : 0.0;
     }
 
     private static double WeightedOverall(

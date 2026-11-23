@@ -121,7 +121,7 @@ public sealed class DevelopingPlayer
     public PhenomType Phenom { get; set; } = PhenomType.None;
 
     /// <summary>精神力（設計書02 §3）。実戦出場でのみ成長する系（練習では伸びない, MatchGrowthModel）。</summary>
-    public int Mental { get; set; } = 50;
+    public int Mental { get; set; } = AbilityScale.AverageDisplay;
     /// <summary>精神力の実戦経験値（設計書02 §5.3a, Q8）。必要expは能力値と同じ曲線。</summary>
     public double MentalExp { get; set; }
     /// <summary>精神力の隠し上限（Q8。生成時に才能ギャップ＋Late上振れで決まる）。</summary>
@@ -131,7 +131,7 @@ public sealed class DevelopingPlayer
     /// 捕手リード（配球の質, 設計書01 §2①）。天性（野球脳＝Mental相関）で素地が決まり、
     /// 捕手として実戦出場すると伸びる系（練習では伸びない, MatchGrowthModel）。捕手のみ意味を持つ。
     /// </summary>
-    public int Lead { get; set; } = 50;
+    public int Lead { get; set; } = AbilityScale.AverageDisplay;
     /// <summary>捕手リードの実戦経験値（設計書02 §5.3a, Q8）。</summary>
     public double LeadExp { get; set; }
     /// <summary>捕手リードの隠し上限（Q8。野球脳と相関＋Late上振れ＝「名捕手の天井」）。</summary>
@@ -280,11 +280,17 @@ public sealed class DevelopingPlayer
     /// 中核能力の平均レベル。育成曲線の観測に使う。どの能力群を中核とみなすかは
     /// 守備位置適性からの導出で決める（#366b: 選手が役割を覚えていない）。
     /// </summary>
-    public double AverageLevel()
+    public double AverageLevel() => AverageLevel(0);
+
+    /// <summary>
+    /// 中核能力の平均レベル（各能力に <paramref name="delta"/> を足してから平均）。チーム総合は今の物差し
+    /// （表示Lv＋Δ・issue #1080）で測るので Δ を渡す。並べ替えだけの用途は 0 のままで同じ並び。
+    /// </summary>
+    public double AverageLevel(int delta)
     {
         var kinds = PitcherRoleResolver.LeansPitcher(this) ? AbilityKinds.Pitching : BatterCore;
         var sum = 0.0;
-        foreach (var k in kinds) sum += _level[(int)k];
+        foreach (var k in kinds) sum += _level[(int)k] + delta;
         return sum / kinds.Length;
     }
 

@@ -14,7 +14,7 @@ public static class PickoffResolver
         => MathUtil.Clamp(
             c.PickoffBaseProb
             + (c.AbilityEffect.Running(runner.Steal) - 50) * c.PickoffRunnerLeadSlope
-            - (pitcher.Mental - 50) * c.PickoffPitcherSenseSlope,
+            - (c.AbilityEffect.Phys(pitcher.Mental) - 50) * c.PickoffPitcherSenseSlope,
             0.0, c.PickoffMaxProb);
 
     /// <summary>既定0（<see cref="BaserunningCoefficients.PickoffBaseProb"/>）ではガードにより

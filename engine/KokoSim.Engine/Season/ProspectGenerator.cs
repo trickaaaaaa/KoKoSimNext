@@ -422,7 +422,7 @@ public sealed record RosterCoefficients
     public int ApplyBatterOffset(int rolled, double offset)
     {
         var raw = BatterSoftCapInverse(Math.Max(10.0, rolled));
-        return (int)MathUtil.Clamp(Math.Round(BatterSoftCap(Math.Max(10.0, raw + offset))), 10, 99);
+        return (int)MathUtil.Clamp(Math.Round(BatterSoftCap(Math.Max(10.0, raw + offset))), 10, Players.AbilityScale.PhysMax99);
     }
 
     /// <summary>
@@ -435,7 +435,7 @@ public sealed record RosterCoefficients
     {
         var raw = BatterSoftCapInverse(Math.Max(10.0, displayed));
         var level = BatterSoftCap(Math.Max(10.0, raw + growthDelta * weight));
-        return (int)MathUtil.Clamp(Math.Round(level), 10, 99);
+        return (int)MathUtil.Clamp(Math.Round(level), 10, Players.AbilityScale.PhysMax99);
     }
 
     /// <summary>打者の型（出現割合と配分オフセット）。AI校の永続ロスターだけが使う（issue #1066）。</summary>
@@ -643,6 +643,9 @@ public static class ProspectGenerator
         // 自校の怪物（issue #1468）: 年度替わりの新入生だけ（rollPhenom）。専用Forkで引く＝ほかの抽選は1ビットも動かない。
         // 投手系の型は投手役に読める選手へ＝供給の下限を済ませた後に選ぶ。
         if (rollPhenom) ProspectPhenom.RollIntake(list, c, rng.Fork(PhenomStreamId(year)));
+        // ここまで今の物差し（物理Lv）で作った。表示Lvへ一律 −Δ（issue #1080。能力・才能上限・精神力・リード。
+        // 弾道と守備位置適性は物差しの対象外）。
+        foreach (var p in list) DevelopingScale.ToDisplay(p);
         return list;
     }
 
@@ -761,20 +764,21 @@ public static class ProspectGenerator
 
         // 精神系（設計書02 §3 / 09 §8）: 独立ストリーム(Fork)で抽選し、既存の能力ロール列を乱さない。
         var mentalRng = rng.Fork(MentalStreamId(year, index));
-        var mental = (int)MathUtil.Clamp(Math.Round(mentalRng.NextGaussian(c.MentalMean, c.MentalSd)), 1, 99);
+        // 生成は今の物差し（物理Lv）で作り、Intake の出口で表示Lvへ一律 −Δ（issue #1080）。天井は +Δ（99→99+Δ）。
+        var mental = (int)MathUtil.Clamp(Math.Round(mentalRng.NextGaussian(c.MentalMean, c.MentalSd)), 1, Players.AbilityScale.PhysMax99);
         var leadership = (int)MathUtil.Clamp(Math.Round(mentalRng.NextGaussian(c.LeadershipMean, c.LeadershipSd)), 1, 99);
         // 捕手リード（設計書01 §2①）: 野球脳(Mental)相関＋個体差。
         // mentalRng の末尾で引くことで既存の mental/leadership 値と主ロール列を1ビットも変えない。
         var lead = (int)MathUtil.Clamp(
-            Math.Round(c.LeadMean + (mental - 50) * c.LeadMentalCorr + mentalRng.NextGaussian(0, c.LeadSd)), 1, 99);
+            Math.Round(c.LeadMean + (mental - 50) * c.LeadMentalCorr + mentalRng.NextGaussian(0, c.LeadSd)), 1, Players.AbilityScale.PhysMax99);
 
         // 実戦成長の隠し上限（Q8・2026-07-20）: 能力capと同じ「現在値＋gap＋Late上振れ」の流儀。
         // リードcapはさらに野球脳と相関（Q8(c)）＝「名捕手の天井」を個体で表現。mentalRng 末尾追加のため
         // 既存の mental/leadership/lead 値は不変（決定論の増分互換）。
-        var mentalCap = (int)Math.Min(99.0, Math.Max(mental + 2,
+        var mentalCap = (int)Math.Min(Players.AbilityScale.PhysMax99, Math.Max(mental + 2,
             Math.Round(mental + mentalRng.NextGaussian(c.CapGapMean, c.CapGapSd)
                 + (growth == GrowthType.Late ? c.LateCapBonus : 0))));
-        var leadCap = (int)Math.Min(99.0, Math.Max(lead + 2,
+        var leadCap = (int)Math.Min(Players.AbilityScale.PhysMax99, Math.Max(lead + 2,
             Math.Round(lead + mentalRng.NextGaussian(c.CapGapMean, c.CapGapSd)
                 + (growth == GrowthType.Late ? c.LateCapBonus : 0)
                 + (mental - 50) * c.LeadCapMentalCorr)));
@@ -904,7 +908,7 @@ public static class ProspectGenerator
         // 投手球速level = 地肩 ＋ 投手センス（設計書01 §1.1b-3）。地肩は Stage1 で確定済み。
         var arm = p.Level(AbilityKind.ArmStrength);
         var veloLevel = (int)MathUtil.Clamp(
-            Math.Round(arm * c.VelocityArmWeight + pitcherSense * c.VelocitySenseWeight), 1, 100);
+            Math.Round(arm * c.VelocityArmWeight + pitcherSense * c.VelocitySenseWeight), 1, Players.AbilityScale.PhysMax100);
 
         // 球質タイプ（設計書01 §1.1b「技巧派投手」）: #377 で役割分岐を廃し、**全員に抽選して
         // オフセットを wRole で薄める**（投手として読めない選手ほど振れ幅が小さい）。投手総合はほぼ変えず
@@ -1040,9 +1044,12 @@ public static class ProspectGenerator
     private static void AdjustLevel(DevelopingPlayer p, AbilityKind k, int level)
     {
         p.SetLevel(k, level);
-        var floor = k == AbilityKind.Stamina ? level + 2 : Math.Min(99, level + 2);
+        var floor = k == AbilityKind.Stamina ? level + 2 : Math.Min(CapCeiling(k), level + 2);
         if (p.Cap(k) < floor) p.SetCap(k, floor);
     }
+
+    /// <summary>才能上限の天井（今の物差し）。能力は 99+Δ（表示99・issue #1080）、弾道は物差しの外なので 99 のまま。</summary>
+    private static int CapCeiling(AbilityKind k) => k == AbilityKind.LaunchTendency ? 99 : Players.AbilityScale.PhysMax99;
 
     private static void SetWithCap(DevelopingPlayer p, AbilityKind k, int level,
         RosterCoefficients c, IRandomSource rng, double extraGap = 0.0)
@@ -1061,7 +1068,7 @@ public static class ProspectGenerator
         var rounded = Math.Round(level + gap);
         var cap = k == AbilityKind.Stamina
             ? (int)Math.Max(level + 2, rounded)
-            : (int)Math.Min(99.0, Math.Max(level + 2, rounded));
+            : (int)Math.Min(CapCeiling(k), Math.Max(level + 2, rounded));
         p.SetLevel(k, level);
         p.SetCap(k, cap);
     }
@@ -1106,7 +1113,7 @@ public static class ProspectGenerator
     private static ulong LeftExperienceStreamId(int year, int index) => 0x1E57_0000UL ^ (ulong)(year * 1000 + index + 1);
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
-    private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
+    private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, Players.AbilityScale.PhysMax100);
 
     /// <summary>スタミナ専用の丸め（issue #356）＝上限なし（下限1のみ）。他能力の Lv とは別経路。</summary>
     private static int LvStamina(double level) => (int)Math.Max(1, Math.Round(level));

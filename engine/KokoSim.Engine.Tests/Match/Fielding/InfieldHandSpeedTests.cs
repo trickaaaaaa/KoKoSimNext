@@ -29,8 +29,9 @@ public sealed class InfieldHandSpeedTests
         ErrorBaseProb = 0, ThrowErrorBaseProb = 0, BobbleErrorMinJitterSeconds = 0,
     };
 
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せ、試合の入口が +Δ して戻す。
     private static FielderAttributes Fielder(int fielding)
-        => new Player { Name = "x", Position = FieldPosition.Shortstop, Fielding = fielding }.ToFielder(Effect);
+        => new Player { Name = "x", Position = FieldPosition.Shortstop, Fielding = fielding - AbilityScale.Delta }.ToFielder(Effect);
 
     private static FieldingPlay Grounder(int fielding, double ev, double bearing, ulong seed)
         => FieldingResolver.ResolveDetailed(

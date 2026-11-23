@@ -23,8 +23,9 @@ public sealed class ArmThrowSpeedTests
 
     private static readonly AbilityEffectCoefficients Effect = new();
 
+    /// <summary><paramref name="arm"/> は今の物差しの肩（issue #1080）。選手には表示Lv（−Δ）で載せ、入口が +Δ して戻す。</summary>
     private static FielderAttributes Fielder(int arm, AbilityEffectCoefficients? effect = null)
-        => new Player { Name = "x", Position = FieldPosition.Shortstop, ArmStrength = arm }.ToFielder(effect ?? Effect);
+        => new Player { Name = "x", Position = FieldPosition.Shortstop, ArmStrength = arm - AbilityScale.Delta }.ToFielder(effect ?? Effect);
 
     private static double Kmh(int arm) => Fielder(arm).ThrowSpeedMps * 3.6;
 
@@ -40,13 +41,14 @@ public sealed class ArmThrowSpeedTests
     public void ArmIsNotFlattenedByFieldingEffect()
     {
         // 守備・捕球・送球精度は従来どおり寝る（肩だけ外す）。
-        var f = new Player { Name = "x", Position = FieldPosition.Shortstop, ArmStrength = 90, Fielding = 90, ThrowAccuracy = 90, Catching = 90 }
+        const int d90 = 90 - AbilityScale.Delta;   // 今の物差しの90（表示83）
+        var f = new Player { Name = "x", Position = FieldPosition.Shortstop, ArmStrength = d90, Fielding = d90, ThrowAccuracy = d90, Catching = d90 }
             .ToFielder(Effect);
         Assert.Equal(90, f.ArmStrength);
-        Assert.Equal(Effect.Fielding(90), f.Fielding);
-        Assert.Equal(Effect.Fielding(90), f.ThrowAccuracy);
-        Assert.Equal(Effect.Fielding(90), f.Catching);
-        Assert.True(Effect.Fielding(90) < 90);
+        Assert.Equal(Effect.Fielding(d90), f.Fielding);
+        Assert.Equal(Effect.Fielding(d90), f.ThrowAccuracy);
+        Assert.Equal(Effect.Fielding(d90), f.Catching);
+        Assert.True(Effect.Fielding(d90) < 90);
         // 肩50（リーグ平均）は不動点＝統計帯の母集団は変わらない。
         Assert.Equal(50, Fielder(50).ArmStrength);
     }

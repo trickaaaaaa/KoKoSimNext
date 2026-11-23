@@ -1,3 +1,4 @@
+using KokoSim.Engine.Players;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -63,8 +64,8 @@ public sealed class FirstBaseCoverArrivalInGamesTests
     private static KokoSim.Engine.Players.Player Pos(FieldPosition pos, int speed) => new()
     {
         Position = pos,
-        Contact = 50, Power = 50, LaunchTendency = 50, Discipline = 50,
-        Speed = speed, ArmStrength = 50, Fielding = 50, Catching = 50,
+        Contact = 50 - AbilityScale.Delta, Power = 50 - AbilityScale.Delta, LaunchTendency = 50, Discipline = 50 - AbilityScale.Delta,
+        Speed = speed - AbilityScale.Delta, ArmStrength = 50 - AbilityScale.Delta, Fielding = 50 - AbilityScale.Delta, Catching = 50 - AbilityScale.Delta,
     };
 
     private static KokoSim.Engine.Match.Game.Team BuildTeam(string name, int speed)
