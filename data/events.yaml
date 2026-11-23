@@ -1013,13 +1013,9 @@ events:
             say: "練習を眺めていて、{player}の動きに引っかかるものがあった。"
           - who: team_manager
             say: "{player} の、あれって前からですか？"
-          - who: narration
-            say: "本人も気づいていない癖だった。"
       - lines:
           - who: team_manager
             say: "監督、{player} のスコア付けてて気づいたんですけど。"
-          - who: manager
-            say: "見せてくれ。"
           - who: team_manager
             say: "ほら、ここ。同じことが何度も起きてるんです。"
       - lines:
@@ -1042,8 +1038,6 @@ events:
             say: "{player}、最近ちょっと別人だよな。"
           - who: player
             say: "自分でもびっくりしてる。"
-          - who: narration
-            say: "一皮むけた{player}には、ひとつ武器が増えていた。"
 
   - id: skill_match_acquired
     kind: System
@@ -1074,8 +1068,6 @@ events:
             say: "{player}、今日は堂々としてたな。"
           - who: player
             say: "前の自分なら崩れてたと思う。"
-          - who: narration
-            say: "試合の中で、{player}はひとつ殻を破った。"
 
   - id: skill_overcome_grade
     kind: System
