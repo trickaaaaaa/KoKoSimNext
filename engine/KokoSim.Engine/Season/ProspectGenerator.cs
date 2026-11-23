@@ -441,10 +441,25 @@ public sealed record RosterCoefficients
     /// <summary>打者の型（出現割合と配分オフセット）。AI校の永続ロスターだけが使う（issue #1066）。</summary>
     public Players.BatterArchetypeCoefficients BatterArchetypes { get; init; } = new();
 
-    // --- 投打の利き（設計書01 §1.1c） ---
-    public double ThrowLeftProb { get; init; } = 0.12;
+    // --- 投打の利き（設計書01 §1.1c・式は HandednessModel） ---
+    /// <summary>左投げの素の確率（左利き人口相当）。投手らしさ0の選手＝野手はこの値のまま。</summary>
+    public double ThrowLeftProb { get; init; } = 0.10;
+    /// <summary>投手らしさ（RoleWeight）1あたりの左投げの上乗せ（左のプレミア・issue #1475）。</summary>
+    public double LeftThrowPitcherBonus { get; init; } = 0.12;
+    /// <summary>上乗せの学校の強さ依存: 新入生の能力中心1あたり（強豪ほど左腕を集める・issue #1475）。</summary>
+    public double LeftThrowStrengthSlope { get; init; } = 0.004;
+    /// <summary>上乗せが <see cref="LeftThrowPitcherBonus"/> ちょうどになる新入生の能力中心。</summary>
+    public double LeftThrowStrengthPivot { get; init; } = 45.0;
+    /// <summary>左投げの確率の上限（プロ級で右7:左3に近づく程度で止める）。</summary>
+    public double LeftThrowMax { get; init; } = 0.40;
     public double SwitchProb { get; init; } = 0.03;
+    /// <summary>右投げ→左打ちの確率（打者の型の点が0のとき）。</summary>
     public double BatLeftGivenRightThrow { get; init; } = 0.40;
+    /// <summary>打者の型の点（俊足・巧打寄りが正）1あたりの右投げ左打ちの上乗せ（issue #1475）。</summary>
+    public double BatLeftTypeSlope { get; init; } = 0.01;
+    /// <summary>右投げ左打ちの確率の下限・上限。</summary>
+    public double BatLeftGivenRightThrowMin { get; init; } = 0.15;
+    public double BatLeftGivenRightThrowMax { get; init; } = 0.75;
     public double BatLeftGivenLeftThrow { get; init; } = 0.98;
 
     // --- 対左投手経験の初期値・AI近似（設計書02 §2.3「左のプレミア」・issue #1072） ---
@@ -718,11 +733,8 @@ public static class ProspectGenerator
             SampleGrowthDomains(growth, rng.Fork(GrowthDomainStreamId(year, index)), c);
 
         // --- 投打の利き（条件付き, 設計書01 §1.1c） ---
-        var throws = rng.NextDouble() < c.ThrowLeftProb ? Handedness.Left : Handedness.Right;
-        Handedness bats;
-        if (rng.NextDouble() < c.SwitchProb) bats = Handedness.Switch;
-        else if (throws == Handedness.Left) bats = rng.NextDouble() < c.BatLeftGivenLeftThrow ? Handedness.Left : Handedness.Right;
-        else bats = rng.NextDouble() < c.BatLeftGivenRightThrow ? Handedness.Left : Handedness.Right;
+        // 乱数だけ旧実装と同じ位置・回数で引き、判定は投手らしさ（適性）と打者の型が出てから下す（issue #1475）。
+        var hand = HandednessModel.Roll(rng, c);
 
         // --- 伸びしろ（分野別・凸凹, 現在値と独立） ---
         // 晩成の上乗せ（issue #866）はその分野自身の成長タイプで判定する（基本タイプではない）。
@@ -784,8 +796,6 @@ public static class ProspectGenerator
             BattingGrowthType = battingGrowthType,
             DefenseGrowthType = defenseGrowthType,
             IsProdigy = isProdigy,
-            Throws = throws,
-            Bats = bats,
             LeftExperiencePa = leftExperiencePa,
             PitchingGrowth = pitchingGrowth,
             BattingGrowth = battingGrowth,
@@ -819,6 +829,8 @@ public static class ProspectGenerator
         // w＝能力の配分に使う重み（バイアス無し）、wRole＝「投手としてどれだけ読めるか」（バイアス込み・
         // 判定境界で 0.5）。持ち物は wRole、能力の配分は w と使い分ける（PitcherRoleResolver 参照）。
         var (naturalPitcher, w, wRole) = ResolvePitcherRole(p, c);
+        // 左のプレミア（issue #1475）: 投手らしさが高いほど・強豪（能力中心が高い）ほど左投げ。
+        p.Throws = HandednessModel.Throws(hand, wRole, talentCenter, c);
 
         // 「投手経歴」（旧 設計書01 §1.1b）は #366b で概念ごと廃止。野手の変化球上振れは
         // 投手適性からの連続配分（LearnPitches の wRole）に溶けているので、免罪符のフラグは要らない。
@@ -917,6 +929,11 @@ public static class ProspectGenerator
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
         // 投手: 1〜3球種／野手: 0〜1。判定は創発ロール。
         LearnPitches(p, wRole, c, rng);
+
+        // 打つ手（issue #1475）: 右投げは俊足・巧打寄りほど左打ち。能力が出揃ってから判定する（乱数は冒頭で引き済み）。
+        p.Bats = HandednessModel.Bats(hand, p.Throws,
+            HandednessModel.BatterTypeScore(p.Level(AbilityKind.Contact), p.Level(AbilityKind.Power),
+                p.Level(AbilityKind.Speed), p.Level(AbilityKind.ArmStrength)), c);
 
         return p;
     }

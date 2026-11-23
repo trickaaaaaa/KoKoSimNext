@@ -53,12 +53,11 @@ public sealed class AiLeftThrowPositionTests
 
     /// <summary>
     /// 左投手・左投げ一塁手・左投げ外野手は従来どおり出る（左投げを消したのではなく<b>置き場所を
-    /// 直した</b>）。位置ごとの左投げ率が係数 <c>ThrowLeftProb</c> 近傍にあることで固定する。
+    /// 直した</b>）。野手の位置の左投げ率は素の確率 <c>ThrowLeftProb</c> 近傍、投手は左のプレミア
+    /// （issue #1475・<c>HandednessModel</c>）で素の確率より高い。
     ///
-    /// <para>⚠ <b>チーム全体</b>の左投げ率は下がる（先発9人のうち4枠が右投げ固定になるため
-    /// 12% → 約7%）。「引いてから捨てる」流儀＝Fork の消費列を1ビットも変えないことを優先した
-    /// 帰結で、母集団の左投げ率を保ちたければ「就ける位置の確率を上げる」という別の判断が要る
-    /// （<c>ThrowLeftProb</c> をいじる＝モデルの変更なので、この issue では触らない）。</para>
+    /// <para>⚠ <b>チーム全体</b>の左投げ率は下がる（先発9人のうち4枠が右投げ固定になるため）。
+    /// 「引いてから捨てる」流儀＝Fork の消費列を1ビットも変えないことを優先した帰結。</para>
     /// </summary>
     [Fact]
     public void LeftiesStillAppear_AtPitcherFirstBaseAndOutfield()
@@ -74,10 +73,11 @@ public sealed class AiLeftThrowPositionTests
             }
         }
 
-        var prob = new KokoSim.Engine.Season.RosterCoefficients().ThrowLeftProb;
+        var rc = new KokoSim.Engine.Season.RosterCoefficients();
+        var prob = rc.ThrowLeftProb;
         foreach (var pos in new[]
                  {
-                     FieldPosition.Pitcher, FieldPosition.FirstBase,
+                     FieldPosition.FirstBase,
                      FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
                  })
         {
@@ -86,6 +86,10 @@ public sealed class AiLeftThrowPositionTests
             var rate = (double)left / total;
             Assert.InRange(rate, prob - 0.03, prob + 0.03);
         }
+
+        // 投手は左のプレミアで素の確率より高い（強さ55＝圧縮後の中心でも上乗せが効く）。
+        var (pl, pt) = counts[FieldPosition.Pitcher];
+        Assert.True((double)pl / pt > prob + rc.LeftThrowPitcherBonus * 0.5, $"投手の左投げ率 {(double)pl / pt:P1} が低い");
     }
 
     // ---- ② 永続AIロスターからの配置（重み罰・妥協順） ----

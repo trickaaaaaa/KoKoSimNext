@@ -48,9 +48,12 @@ public sealed class DevelopingPlayer
     /// </summary>
     public PitcherArchetype? Archetype { get; init; }
 
-    /// <summary>投打の利き（設計書01 §1.1c）。生成分布は 2B で実装、既定は右。</summary>
-    public Handedness Throws { get; init; } = Handedness.Right;
-    public Handedness Bats { get; init; } = Handedness.Right;
+    /// <summary>
+    /// 投打の利き（設計書01 §1.1c）。既定は右。生成時は投手らしさ・能力が出てから判定するので set 可
+    /// （issue #1475・<see cref="HandednessModel"/>）。生成後に書き換えるのは生成器だけ。
+    /// </summary>
+    public Handedness Throws { get; set; } = Handedness.Right;
+    public Handedness Bats { get; set; } = Handedness.Right;
 
     /// <summary>
     /// 対左投手の経験（加重打席数。設計書02 §2.3「左のプレミア」・issue #1072）。入学時は個人差あり

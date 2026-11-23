@@ -93,11 +93,11 @@ public static class StrengthTeamFactory
         for (var slot = 0; slot < FieldSlots.Length; slot++)
         {
             var pos = FieldSlots[slot];
-            var pr = Profile(rc, rng, ref profileSalt, starter: true, pos);
+            var pr = Profile(rc, rng, ref profileSalt, starter: true);
             order.Add(AiMentalModel.WithGradeArc(
-                PositionPlayer(pos, castCenter, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
-                        battingLift: starSlots.Contains(slot) ? starLift : 0.0)
-                    with { UniformNumber = PositionNumber(pos), Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
+                WithHandedness(PositionPlayer(pos, castCenter, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
+                        battingLift: starSlots.Contains(slot) ? starLift : 0.0), pr.Hand, 0.0, castCenter, rc, pos)
+                    with { UniformNumber = PositionNumber(pos), Grade = pr.Grade },
                 pr.Grade, rc));
         }
         // 投手枠に置く4人の「投手寄せ重み」をエース格から順に引く（#377・Fork＝主RNG非消費）。
@@ -106,9 +106,9 @@ public static class StrengthTeamFactory
 
         var acePr = Profile(rc, rng, ref profileSalt, starter: true);
         order.Add(AiMentalModel.WithGradeArc(
-            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc, mental,
-                    pitchingLift: starLift)
-                with { UniformNumber = 1, Throws = acePr.Throws, Bats = acePr.Bats, Grade = acePr.Grade },
+            WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc, mental,
+                    pitchingLift: starLift), acePr.Hand, MoundRoleWeight, castCenter, rc)
+                with { UniformNumber = 1, Grade = acePr.Grade },
             acePr.Grade, rc));
 
         var bullpen = new List<Player>();
@@ -117,16 +117,18 @@ public static class StrengthTeamFactory
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
             bullpen.Add(AiMentalModel.WithGradeArc(
-                Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental)
-                    with { UniformNumber = number, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
+                WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental),
+                        pr.Hand, MoundRoleWeight, castCenter, rc)
+                    with { UniformNumber = number, Grade = pr.Grade },
                 pr.Grade, rc));
         }
         // 控え投手の最後の1枠（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
         var reliefTail = rng.Fork(0x9A20_0000UL);
         var pr20 = Profile(rc, rng, ref profileSalt, starter: false);
         bullpen.Add(AiMentalModel.WithGradeArc(
-            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental)
-                with { UniformNumber = numbers.Mound[3], Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade },
+            WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental),
+                    pr20.Hand, MoundRoleWeight, castCenter, rc)
+                with { UniformNumber = numbers.Mound[3], Grade = pr20.Grade },
             pr20.Grade, rc));
 
         // 控え野手（全員生成・ベンチ入りメンバとして残り番号を若い順に採番）。能力・氏名とも Fork ストリーム由来＝
@@ -137,10 +139,11 @@ public static class StrengthTeamFactory
         for (var i = 0; i < BenchSlots.Length; i++)
         {
             var ability = rng.Fork(benchSalt++);   // 控えの能力ロールは Fork（主RNG非消費）
-            var pr = Profile(rc, rng, ref profileSalt, starter: false, BenchSlots[i]);
+            var pr = Profile(rc, rng, ref profileSalt, starter: false);
             bench.Add(AiMentalModel.WithGradeArc(
-                PositionPlayer(BenchSlots[i], castCenter - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc)
-                    with { UniformNumber = numbers.BenchFielders[i], Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
+                WithHandedness(PositionPlayer(BenchSlots[i], castCenter - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc),
+                        pr.Hand, 0.0, castCenter, rc, BenchSlots[i])
+                    with { UniformNumber = numbers.BenchFielders[i], Grade = pr.Grade },
                 pr.Grade, rc));
         }
 
@@ -232,35 +235,52 @@ public static class StrengthTeamFactory
     }
 
     /// <summary>
-    /// 投打の利き・学年を Fork（親状態非消費）で抽選する。主RNGの消費列を変えないため決定論を保つ。
-    /// 投打の分布は ProspectGenerator.Create（設計書01 §1.1c）と同じ条件付き抽選＝自校と同一の傾向にする。
+    /// マウンドに置く投手枠（エース・控え投手）の投手らしさ（<see cref="PitcherRoleResolver.RoleWeight"/> 相当・issue #1475）。
+    /// この経路は適性を持たず配置で投手を決めるので、自校・永続ロスターで投手役に読める選手の平均的な投手らしさ
+    /// （実測≈0.8。左投げ率の実測から逆算）を置く＝3経路で投手の左投げ率を揃える。野手枠は 0。
+    /// </summary>
+    private const double MoundRoleWeight = 0.8;
+
+    /// <summary>
+    /// 投打の利きの一様乱数・学年を Fork（親状態非消費）で抽選する。主RNGの消費列を変えないため決定論を保つ。
+    /// 投打の判定は能力が出てから <see cref="WithHandedness"/> で下す（式は <see cref="HandednessModel"/>＝自校と同じ。issue #1475）。
+    /// 乱数の消費は旧実装（定数の確率でその場判定）と同じ順・同じ回数＝学年の抽選も1ビットも動かない。
     /// 学年は先発を上級生寄り・控えを下級生寄りに配分する（高校野球の実感に沿う）。
+    /// </summary>
+    internal static (HandednessModel.Draw Hand, int Grade) Profile(
+        RosterCoefficients c, IRandomSource rng, ref ulong profileSalt, bool starter)
+    {
+        var r = rng.Fork(profileSalt++);
+        var hand = HandednessModel.Roll(r, c);
+        var g = r.NextDouble();
+        var grade = starter
+            ? (g < 0.50 ? 3 : g < 0.85 ? 2 : 1)    // 先発: 3年5割・2年35%・1年15%
+            : (g < 0.20 ? 3 : g < 0.55 ? 2 : 1);   // 控え: 3年2割・2年35%・1年45%
+        return (hand, grade);
+    }
+
+    /// <summary>
+    /// 先に引いた乱数 <paramref name="hand"/> から投打の利きを決めて載せる（issue #1475・設計書01 §1.1c）。
+    /// 投げる手は投手らしさ <paramref name="roleWeight"/> と学校の強さ <paramref name="schoolCenter"/>、
+    /// 打つ手は <paramref name="p"/> の能力（打者の型）で決まる。
     /// </summary>
     /// <param name="position">
     /// この選手が就く守備位置（分かっているとき）。<see cref="FieldPositions.IsRightThrowOnly"/> の位置なら
     /// 左投げを引いても右投げに固定する（issue ai-lefty-not-at-c-2b-3b-ss）。
     /// null＝位置が決まっていない経路（永続AIロスターの生成。配置は <c>AiTeamBuilder</c> が後で決める）。
     /// </param>
-    internal static (Handedness Throws, Handedness Bats, int Grade) Profile(
-        RosterCoefficients c, IRandomSource rng, ref ulong profileSalt, bool starter,
-        FieldPosition? position = null)
+    internal static Player WithHandedness(Player p, HandednessModel.Draw hand, double roleWeight, double schoolCenter,
+        RosterCoefficients c, FieldPosition? position = null)
     {
-        var r = rng.Fork(profileSalt++);
-        var throws = r.NextDouble() < c.ThrowLeftProb ? Handedness.Left : Handedness.Right;
-        // ⚠ 乱数は**引いてから捨てる**（issue #525/#629 と同じ流儀）。引き直すと Fork の消費列が
-        // ずれて学年・以降の生成まで動く＝裏試合の決定論と帯が動く。下の Bats も右投げ側の
-        // 条件分布へ落ちるだけで**引く回数は左右どちらでも1回**なので消費不変。
-        if (throws == Handedness.Left && position is { } p && FieldPositions.IsRightThrowOnly(p)) throws = Handedness.Right;
-        Handedness bats;
-        if (r.NextDouble() < c.SwitchProb) bats = Handedness.Switch;
-        else if (throws == Handedness.Left) bats = r.NextDouble() < c.BatLeftGivenLeftThrow ? Handedness.Left : Handedness.Right;
-        else bats = r.NextDouble() < c.BatLeftGivenRightThrow ? Handedness.Left : Handedness.Right;
-
-        var g = r.NextDouble();
-        var grade = starter
-            ? (g < 0.50 ? 3 : g < 0.85 ? 2 : 1)    // 先発: 3年5割・2年35%・1年15%
-            : (g < 0.20 ? 3 : g < 0.55 ? 2 : 1);   // 控え: 3年2割・2年35%・1年45%
-        return (throws, bats, grade);
+        var throws = HandednessModel.Throws(hand, roleWeight, schoolCenter, c);
+        // ⚠ 乱数は引いてから捨てる（issue #525/#629 と同じ流儀）。打つ手は右投げ側の条件分布へ落ちるだけ。
+        if (throws == Handedness.Left && position is { } pos && FieldPositions.IsRightThrowOnly(pos)) throws = Handedness.Right;
+        // AI校の打者はミート中心を +ai_power_skew・パワー中心を −ai_power_skew にずらして生成している（.35C+.35P を保つ配分）。
+        // そのずれを戻してから型を読む＝自校と同じ尺度（平均≈0）で「巧打寄りか」を測る。
+        var skew = (int)Math.Round(c.AiPowerSkew);
+        var bats = HandednessModel.Bats(hand, throws,
+            HandednessModel.BatterTypeScore(p.Contact - skew, p.Power + skew, p.Speed, p.ArmStrength), c);
+        return p with { Throws = throws, Bats = bats };
     }
 
     /// <summary>守備位置→先発背番号（投1・捕2・一3・二4・三5・遊6・左7・中8・右9）。</summary>

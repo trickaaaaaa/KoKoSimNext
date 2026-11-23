@@ -2100,10 +2100,23 @@ roster:
   ai_batter_cap_mid_level: 92.0
   ai_batter_cap_top_raw: 165.0
   ai_batter_cap_top_level: 96.0
-  # 投打の利き（§1.1c）
-  throw_left_prob: 0.12
+  # 投打の利き（§1.1c・式は HandednessModel。自校・AI校の永続ロスター・試合用AI校の3経路で共有）
+  # 左のプレミア（issue #1475）: 左投げ ＝ throw_left_prob ＋ 投手らしさ(RoleWeight 0〜1)
+  #   ×(left_throw_pitcher_bonus ＋ left_throw_strength_slope×(新入生の能力中心 − left_throw_strength_pivot))、上限 left_throw_max。
+  # 野手（投手らしさ≈0）は素の確率のまま。投手ほど・強豪ほど左腕が多い。
+  throw_left_prob: 0.10              # 素の確率（左利き人口相当）
+  left_throw_pitcher_bonus: 0.12     # 投手らしさ1あたりの上乗せ（能力中心が pivot のとき）
+  left_throw_strength_slope: 0.004   # 能力中心1あたりの上乗せの増減（強豪ほど左腕を集める）
+  left_throw_strength_pivot: 45.0
+  left_throw_max: 0.40               # プロ級で右7:左3に近づく程度で止める
   switch_prob: 0.03
-  bat_left_given_right_throw: 0.40   # 右投→左打（右投左打を意図的に量産）
+  # 右投→左打（右投左打を意図的に量産）。俊足・巧打寄りほど左打ち（issue #1475）:
+  #   bat_left_given_right_throw ＋ bat_left_type_slope × 打者の型の点、[min, max] でクランプ。
+  #   打者の型の点 ＝ ((ミート−パワー)＋(走力−肩))/2（同系統の差なので学校の強さに依らず平均≈0）。
+  bat_left_given_right_throw: 0.40
+  bat_left_type_slope: 0.01
+  bat_left_given_right_throw_min: 0.15
+  bat_left_given_right_throw_max: 0.75
   bat_left_given_left_throw: 0.98    # 左投→ほぼ左打（左投右打は絶滅危惧種）
   # 対左投手経験の初期値・AI近似（設計書02 §2.3「左のプレミア」・issue #1072）。
   left_experience_initial_mean_pa: 20.0

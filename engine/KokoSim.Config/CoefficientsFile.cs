@@ -2972,8 +2972,15 @@ public static class CoefficientsLoader
         public double AiBatterCapTopLevel { get; set; } = D.AiBatterCapTopLevel;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
+        public double LeftThrowPitcherBonus { get; set; } = D.LeftThrowPitcherBonus;
+        public double LeftThrowStrengthSlope { get; set; } = D.LeftThrowStrengthSlope;
+        public double LeftThrowStrengthPivot { get; set; } = D.LeftThrowStrengthPivot;
+        public double LeftThrowMax { get; set; } = D.LeftThrowMax;
         public double SwitchProb { get; set; } = D.SwitchProb;
         public double BatLeftGivenRightThrow { get; set; } = D.BatLeftGivenRightThrow;
+        public double BatLeftTypeSlope { get; set; } = D.BatLeftTypeSlope;
+        public double BatLeftGivenRightThrowMin { get; set; } = D.BatLeftGivenRightThrowMin;
+        public double BatLeftGivenRightThrowMax { get; set; } = D.BatLeftGivenRightThrowMax;
         public double BatLeftGivenLeftThrow { get; set; } = D.BatLeftGivenLeftThrow;
         // 対左投手経験の初期値・AI近似（issue #1072）
         public double LeftExperienceInitialMeanPa { get; set; } = D.LeftExperienceInitialMeanPa;
@@ -3295,8 +3302,15 @@ public static class CoefficientsLoader
             AiBatterCapTopRaw = AiBatterCapTopRaw,
             AiBatterCapTopLevel = AiBatterCapTopLevel,
             ThrowLeftProb = ThrowLeftProb,
+            LeftThrowPitcherBonus = LeftThrowPitcherBonus,
+            LeftThrowStrengthSlope = LeftThrowStrengthSlope,
+            LeftThrowStrengthPivot = LeftThrowStrengthPivot,
+            LeftThrowMax = LeftThrowMax,
             SwitchProb = SwitchProb,
             BatLeftGivenRightThrow = BatLeftGivenRightThrow,
+            BatLeftTypeSlope = BatLeftTypeSlope,
+            BatLeftGivenRightThrowMin = BatLeftGivenRightThrowMin,
+            BatLeftGivenRightThrowMax = BatLeftGivenRightThrowMax,
             BatLeftGivenLeftThrow = BatLeftGivenLeftThrow,
             LeftExperienceInitialMeanPa = LeftExperienceInitialMeanPa,
             LeftExperienceInitialSpreadPa = LeftExperienceInitialSpreadPa,
