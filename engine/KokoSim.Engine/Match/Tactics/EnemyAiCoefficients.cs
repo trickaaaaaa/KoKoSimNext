@@ -30,7 +30,6 @@ public sealed record EnemyAiCoefficients
     public int StealThirdMinTier { get; init; } = 4;   // C: 状況を見極めた三盗
     public int SqueezeMinTier { get; init; } = 5;      // B: 上級
     public int HitAndRunMinTier { get; init; } = 5;    // B: 上級
-    public int BusterMinTier { get; init; } = 5;       // B: 上級（シフト読みの裏）
     public int DepthMinTier { get; init; } = 2;        // E: 守備位置調整
     public int BuntShiftMinTier { get; init; } = 5;    // B: 守備シフト
     public int AdvancedPolicyMinTier { get; init; } = 2; // E: カウント別配球（低め徹底/制球重視）

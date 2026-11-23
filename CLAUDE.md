@@ -139,9 +139,10 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 育成眼 / 采配 | TalentEye / TacticalSense | |
 | 強さティア | Tier (G..S) | 学校属性 |
 | プレッシャー指数 | PressureIndex | 設計書02 §3。PressureModel が算出 |
-| 攻撃サイン | OffensiveSign | 強攻/待て/バント/スクイズ/盗塁/エンドラン/バスター（設計書09 §1） |
+| 攻撃サイン | OffensiveSign | 強攻/待て/バント/セーフティバント/スクイズ/盗塁/エンドラン（設計書09 §1。バスターは作らない＝2026-11-23 オーナー判断） |
 | 打撃姿勢 | BattingApproach | 待球策/転がせ/長打狙い/当てに行け。サインと違い**解除するまで続く構え**。効果は実効能力の倍率とスイング頻度の倍率だけ（設計書09 §1.1） |
 | 守備指示 / 配球方針 | DefensiveTactics / PitchPolicy | 陣形は初期守備位置へ反映（設計書09 §2） |
+| 申告敬遠 / ウエスト / バントシフト | IntentionalWalk / Pitchout / BuntShift | 守備のサイン2つ（敬遠＝その打席・ウエスト＝1球）と構え（設計書09 §1.2・issue #1473） |
 | 采配の入口 | ITacticsBrain | プレイヤー・委任・敵AI共通（設計書09/11） |
 | 伝令 | Timeout (Offense/Defense) | 攻守各3回・延長は回の頭で各1回に置き直す（積み増しではない。設計書09 §3） |
 | 動揺 | Rattled | 連続出塁で発生、伝令・継投・イニング跨ぎで解除 |

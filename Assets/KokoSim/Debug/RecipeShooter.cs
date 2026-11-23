@@ -236,6 +236,50 @@ namespace KokoSim.Unity.Debugging
                     yield break;
                 }
 
+                // 采配カードを押す場面（cards・issue #1473）: 最初の采配窓で止めて、押す前・押した直後・その球の後を撮る
+                if (_r.Cards != null)
+                {
+                    // 開幕の「プレイボール」テロップが消えてから撮る（テロップは全画面の層で手札も局面も隠す）
+                    float waitedWin = 0f;
+                    while (!ctrl.AtWindowForCapture || ctrl.GameTelopOnForCapture || ctrl.WindowSituationForCapture == null)
+                    {
+                        if (ctrl.IsGameOver || waitedWin > _r.TimeoutSeconds) { yield return false; yield break; }
+                        waitedWin += Time.unscaledDeltaTime;
+                        yield return null;
+                    }
+                    ctrl.FreezeLiveForCapture(true);
+                    yield return null; yield return null;
+                    // 撮った窓の局面を残す（走者の有無・攻守を絵と突き合わせる）
+                    File.WriteAllText(Path.Combine(_dir, "window.txt"), ctrl.WindowSituationForCapture + "\n");
+                    yield return Capture(ctrl, Path.Combine(_dir, "01-window.png"));
+                    _shotFiles.Add("01-window.png");
+                    foreach (var id in _r.Cards)
+                    {
+                        if (!ctrl.TacticsCardSelectableForCapture(id))
+                        {
+                            _errors.Add("采配カードが手札に無いか押せない: " + id);
+                            ctrl.FreezeLiveForCapture(false);
+                            yield return true;
+                            yield break;
+                        }
+                        ctrl.SelectSignForCapture(id);
+                    }
+                    yield return null; yield return null;
+                    yield return Capture(ctrl, Path.Combine(_dir, "02-pressed.png"));
+                    _shotFiles.Add("02-pressed.png");
+                    ctrl.FreezeLiveForCapture(false);
+                    float ran = 0f;
+                    while (ran < _r.CardsAfterSeconds && !ctrl.IsGameOver)
+                    {
+                        ran += Time.deltaTime;
+                        yield return null;
+                    }
+                    yield return Capture(ctrl, Path.Combine(_dir, "03-after.png"));
+                    _shotFiles.Add("03-after.png");
+                    yield return true;
+                    yield break;
+                }
+
                 PitchBattingOverride sign = default;
                 bool hasSign = !string.IsNullOrEmpty(_r.Sign) && Enum.TryParse(_r.Sign, true, out sign);
                 float waited = 0f;

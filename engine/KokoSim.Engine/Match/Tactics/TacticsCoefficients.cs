@@ -240,10 +240,6 @@ public sealed record TacticsCoefficients
     public double PutInPlayContactBoost { get; init; } = 0.14;
     public double PutInPlayPowerPenalty { get; init; } = 0.18;
 
-    /// <summary>バスター: シフト時は穴が空く（補正↑）、通常時は準備不足（補正↓）。</summary>
-    public double BusterVsShiftBonus { get; init; } = 0.08;
-    public double BusterPenalty { get; init; } = 0.05;
-
     /// <summary>スクイズのウエスト（バッテリー察知, 設計書09 §1）: 基礎＋捕手の判断（Fielding）勾配＋状況の露骨さ。</summary>
     public double SqueezeReadBase { get; init; } = 0.08;
     /// <summary>

@@ -642,7 +642,7 @@ public static class GameEngine
         offense.SetPendingSteal(null, StealTarget.Second);
         offense.ConsumePendingOffensiveSign();
         defense.SetPendingPitchDefenseOverride(null, null);
-        defense.SetPitchAround(false);
+        // 際どい所（issue #872→#1473）はほかの構えと同じく解除するまで続く＝半回をまたいで残す（ここでは下ろさない）。
 
         while (outs < 3)
         {
@@ -805,6 +805,11 @@ public static class GameEngine
             // 置くのが肝で、こうすると brain 側のRNG消費が指示の有無で変わらない＝同シードの乱数順が保たれる。
             // 未設定ならフィールド読み取りだけでRNGを1発も引かない（＝AI駆動のシム・統計帯は完全に不変）。
             defTactics = defense.ApplyStandingDefense(defTactics);
+            // プレイヤーの申告敬遠（issue #1473）: 打席の頭の窓で押されていれば、brain の敬遠と同じ経路（下の
+            // IntentionalWalk）でこの打席を投球なしの四球にする。brain 呼び出しの後で読むだけ＝乱数非消費。
+            // 打席の途中で押された敬遠は投球ループの頭で拾う（manualIntentionalWalk）。
+            var manualIntentionalWalk = defense.ConsumePendingIntentionalWalk();
+            if (manualIntentionalWalk) defTactics = defTactics with { IntentionalWalk = true };
             // 手動の攻撃サイン（エンドラン）は打席頭でなく**采配窓（各投球の直前）で消費する**（issue #492 B）。
             // 旧来はここで消費していたが、UI の采配窓はエンジンがこの地点を通り過ぎた後に開くため、いま見ている
             // 打席には構造上効かなかった。sign（brain の判断）は従来どおり打席頭で確定し、手動エンドランだけを
@@ -913,7 +918,7 @@ public static class GameEngine
             }
             var (pitcher, batterBase, playMods) = EffectiveMatchup();
             // ここまで（調子・スキル・プレッシャー）が打席内で不変な実効打者能力の土台。以降のサイン補正
-            // （エンドラン/バスター/得点圏）と打撃姿勢は毎球評価しうる（issue #492）ので、土台を控えておき
+            // （エンドラン/得点圏）と打撃姿勢は毎球評価しうる（issue #492）ので、土台を控えておき
             // 球ごとに BatterFor(...) で組み直す。無指示なら毎球の値は打席頭の値とビット単位で一致する。
             var batterAttrs = batterBase;
 
@@ -922,7 +927,7 @@ public static class GameEngine
             // 強攻へ切り替わる（旧: カウントを0-0にリセットして別解決していたのを解消）。
             var buntSign = sign is OffensiveSign.SacrificeBunt or OffensiveSign.SafetyBunt && bases.RunnerCount > 0
                 ? sign : (OffensiveSign?)null;
-            // バント/敬遠のいずれも、以降のヒットエンドラン/バスター判定・得点圏補正には関与しない
+            // バント/敬遠のいずれも、以降のヒットエンドラン判定・得点圏補正には関与しない
             // （実際に強攻へ落ち着くのは投球ループ内で確定するが、sign の見た目はここで前倒しして揃える）。
             if (buntSign is not null) sign = OffensiveSign.Swing;
 
@@ -948,22 +953,18 @@ public static class GameEngine
                 sign = OffensiveSign.Swing;
             }
 
-            // --- エンドラン/バスター/得点圏の打撃補正（設計書09 §1。パイプライン不変） ---
+            // --- エンドラン/得点圏の打撃補正（設計書09 §1。パイプライン不変） ---
             // brain のエンドラン判断は従来どおり打席頭で確定（＝打席全体に効く既定）。手動エンドラン（issue #492 B）は
             // 投球ループで毎球評価し、エンドランが効いた球だけ BatterFor(..., endrun:true) で補正する。
             var brainHitAndRun = sign == OffensiveSign.HitAndRun && bases.First is not null;
-            // バスター/得点圏補正の適用可否は打席頭で確定（塁状況スナップショット）＝AI駆動のシムは従来と完全一致。
-            var busterApplies = sign == OffensiveSign.Buster;
-            var busterFactor = defTactics.BuntShift
-                ? 1.0 + ctx.Tactics.BusterVsShiftBonus   // シフトの穴を突く
-                : 1.0 - ctx.Tactics.BusterPenalty;       // 準備不足
+            // 得点圏補正の適用可否は打席頭で確定（塁状況スナップショット）＝AI駆動のシムは従来と完全一致。
             var chanceApplies = sign == OffensiveSign.Swing
                 && (bases.Second is not null || bases.Third is not null)
                 && batter.ChanceHitFactor != 1.0;
 
             // 実効打者能力を「この球のサイン状態（エンドランの有無）＋打撃姿勢」で組み立てる純関数（issue #492）。
             // 打席頭の既定は BatterFor(打席頭の姿勢, brainHitAndRun) で、旧来のインライン計算とビット単位で一致する
-            // （順序: エンドラン→バスター→得点圏→姿勢）。毎球これを呼び直すが、状態が変わらなければ同じ値になる。
+            // （順序: エンドラン→得点圏→姿勢）。毎球これを呼び直すが、状態が変わらなければ同じ値になる。
             BatterAttributes BatterFor(BattingApproach approach, bool endrun)
             {
                 var b = batterBase;
@@ -974,8 +975,6 @@ public static class GameEngine
                         Power = ClampAbility(b.Power * (1.0 - ctx.Tactics.HitAndRunPowerPenalty)),
                         LaunchTendency = ClampAbility(b.LaunchTendency * (1.0 - ctx.Tactics.HitAndRunLaunchPenalty)),
                     };
-                else if (busterApplies)
-                    b = b with { Contact = ClampAbility(b.Contact * busterFactor) };
                 else if (chanceApplies)
                     // 性格④（設計書01 §1.1）: 得点圏の強攻。目立ちたがりは長打質(Power)上振れ、自己犠牲はやや堅実。
                     b = b with { Power = ClampAbility(b.Power * batter.ChanceHitFactor) };
@@ -1095,6 +1094,28 @@ public static class GameEngine
                 if (!ReferenceEquals(offense.PeekBatter(), batter) || !ReferenceEquals(defense.CurrentPitcher, currentPitcher))
                     RebindMatchup();
 
+                // プレイヤーの申告敬遠（issue #1473）: 打席の途中（カウントの途中）で押されたら、この球を投げる前に
+                // 打席を四球で終える（申告制＝ここから先は1球も投げない）。打席の頭で押された敬遠もここで確定する。
+                // 盗塁・1球指示・暴投など「投げる球」に付く処理へは進まない。プレイヤーの操作でしか通らない分岐で、
+                // ThrowNextPitch の敬遠は乱数を引かない＝AI 駆動のシムは1ビットも変わらない。
+                if (!manualIntentionalWalk && !defTactics.IntentionalWalk && defense.ConsumePendingIntentionalWalk())
+                {
+                    manualIntentionalWalk = true;
+                    defTactics = defTactics with { IntentionalWalk = true };
+                    abCtx = BuildAtBatContext();
+                    session.RebindMatchup(batterAttrs, pitcher, abCtx, batter);
+                }
+                if (manualIntentionalWalk)
+                {
+                    // 同じ球に重ねた1球の予約は投げないので捨てる（次の打席へ持ち越さない）。読み書きのみ＝乱数非消費。
+                    defense.ConsumePendingPitchout();
+                    offense.ConsumePendingOffensiveSign();
+                    offense.ConsumePendingPitchBattingOverride();
+                    offense.ConsumePendingSteal();
+                    session.ThrowNextPitch(rng);
+                    continue;
+                }
+
                 // 観測（設計書17 §4）: この球の乱数消費を測るため、采配窓を抜けた直後の値を控える。
                 var drawsAtPitchStart = rngStats?.Draws ?? 0;
                 var tracesBeforePitch = session.PitchTraces.Count;
@@ -1205,7 +1226,10 @@ public static class GameEngine
                 // 起きる＝その球は実際に投げる。半回はこの球の観測（LivePitch）を出してから終える。
                 var runnerOutEndsHalf = false;
                 var stealDoubleBreak = false;       // 重盗の三塁ブレイクを数えたか
-                var pitchoutThisPitch = false;      // この球が盗塁を読んだピッチアウトか（issue #986: ボール1つとして数える）
+                // プレイヤーのウエスト（issue #1473）: この球を外す。3ボールなら外さない（四球になる。AI の読みと同じ規則）。
+                // 読み書きだけ＝乱数非消費。盗塁が重なれば下の盗塁解決へピッチアウトとして渡る。
+                var manualPitchout = defense.ConsumePendingPitchout() && StealReadModel.CanPitchout(session.Balls);
+                var pitchoutThisPitch = manualPitchout;  // この球がピッチアウトか（issue #986: ボール1つとして数える）
                 StartType? stealStartApplied = null; // 実際に走った始動種別（打球の球でだけ活かす）
 
                 // 盗塁/牽制/重盗（設計書02 §4.2・設計書09 §1・design-14 P1-4/P1-5・設計書15 Phase D-2d）:
@@ -1219,6 +1243,19 @@ public static class GameEngine
                 // 牽制・盗塁解決へ渡すため。式が bool 経由になると null 解析が届かない）。
                 var stealFeasible = StealTargets.FromBases(
                     bases.First is not null, bases.Second is not null, bases.Third is not null);
+
+                // 手動の攻撃サイン（エンドラン）の予約はここで受け取る（読み書きのみ＝乱数非消費。使うのは下のエンドラン判定）。
+                var manualSign = offense.ConsumePendingOffensiveSign();
+                // ウエストとエンドランが重なった球（issue #1473・2026-11-23 オーナー判断）: 外した球で捕手が優位なまま、
+                // 走り出した一塁走者を二塁で判定する＝盗塁と同じ解決（ピッチアウト付き）へ流す。打者は外された球に
+                // 当てられない（ボール1つ）。走者が二塁で決着するので、この球ではエンドランの補正・強制スイングは掛からない。
+                // プレイヤーのウエストでしか通らない＝AI 同士の試合は1ビットも変わらない。
+                if (manualPitchout && stealAttempt is null && stealFeasible == StealTarget.Second
+                    && (brainHitAndRun || manualSign == OffensiveSign.HitAndRun) && bases.First is not null)
+                {
+                    stealAttempt = StartType.Normal;
+                    stealTarget = StealTarget.Second;
+                }
 
                 if (stealAttempt is { } stealStart && stealTarget == StealTarget.Second
                     && stealFeasible == StealTarget.Second && bases.First is { })
@@ -1253,7 +1290,8 @@ public static class GameEngine
                         // 抽選は常に引く（乱数順を動かさない）が、3ボールなら外せない（四球になるため・issue #986）。
                         var pitchout = StealReadModel.RollPitchout(
                             bases.First, defense.Catcher, currentPitcher, stealStart, paBaserunning, rng)
-                            && StealReadModel.CanPitchout(session.Balls);
+                            && StealReadModel.CanPitchout(session.Balls)
+                            || manualPitchout;   // プレイヤーのウエスト（抽選は上で必ず引く＝乱数順は不変）
                         pitchoutThisPitch = pitchout;
                         // 強制発動（F4）は抽選をスキップして成否を固定する。ここだけ乱数の消費順が変わるが、
                         // 強制した試合は HasForcedOutcomes で digest・統計から丸ごと外れるので影響が漏れない。
@@ -1361,7 +1399,8 @@ public static class GameEngine
                         var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng)
-                            && StealReadModel.CanPitchout(session.Balls);
+                            && StealReadModel.CanPitchout(session.Balls)
+                            || manualPitchout;   // プレイヤーのウエスト（抽選は上で必ず引く＝乱数順は不変）
                         pitchoutThisPitch = pitchout;
                         // 送球の逸れ（issue #841）の受け手＝三塁カバーの三塁手（BuildSteal の三盗送球と同じ約束）。
                         var thirdBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.ThirdBase);
@@ -1401,7 +1440,7 @@ public static class GameEngine
                 // 予約されていれば brain の判断より常に優先する（「1球指示は方針を単純上書き」の指示元が
                 // brain でも手動でも同じ扱い）。予約なし（未セット）ならフィールド読み取りのみでRNG非消費。
                 if (offense.ConsumePendingPitchBattingOverride() is { } manualBatting) battingOverride = manualBatting;
-                var (manualPolicy, manualGear, manualInfield, manualOutfield) = defense.ConsumePendingPitchDefenseOverride();
+                var (manualPolicy, manualGear, manualInfield, manualOutfield, manualBuntShift) = defense.ConsumePendingPitchDefenseOverride();
                 if (manualPolicy is { } mp)
                 {
                     pitchOverride = ctx.Tactics.DirectiveFor(mp, batter.Bats.EffectiveBats(currentPitcher.Throws));
@@ -1423,7 +1462,7 @@ public static class GameEngine
                 // brain・手動どちらも「いま一塁に走者がいるか」を毎球見直す＝打席途中の（独立の）盗塁企図
                 // で走者が抜けたら、以降の球は補正もスイング強制もかからない（brainHitAndRun は打席頭の
                 // 判断値のまま据え置くが、有効化の可否は毎球の bases.First で判定し直す）。
-                var manualEndrun = offense.ConsumePendingOffensiveSign() == OffensiveSign.HitAndRun;
+                var manualEndrun = manualSign == OffensiveSign.HitAndRun;
                 var endrunThisPitch = (brainHitAndRun || manualEndrun) && bases.First is not null;
                 r1Start = endrunThisPitch ? StartType.Contact : StartType.Normal;
                 r1StealBreak = false;
@@ -1440,22 +1479,24 @@ public static class GameEngine
                 var batterAttrsPitch = BatterFor(offense.BattingApproach, endrunThisPitch);
 
                 // 待球策: ストライクが2つ未満のあいだは、ゾーン内でも必ず見送る（2ストライクから通常）。
-                // 優先順は 1球指示（強制スイング/見送り）＞サイン（バント・スクイズ・エンドラン・バスター）＞待球策。
-                // 上の指示が何か決めていれば battingOverride が非nullなので触らない。バスターは battingOverride を
-                // 持たないサインなので sign で除く。見送りは既存の forcedTake と同じ経路＝乱数を引かない。
+                // 優先順は 1球指示（強制スイング/見送り）＞サイン（バント・スクイズ・エンドラン）＞待球策。
+                // 上の指示が何か決めていれば battingOverride が非nullなので触らない。
+                // 見送りは既存の forcedTake と同じ経路＝乱数を引かない。
                 if (offense.BattingApproach == BattingApproach.WorkCount
-                    && battingOverride is null && sign != OffensiveSign.Buster && session.Strikes < 2)
+                    && battingOverride is null && session.Strikes < 2)
                     battingOverride = PitchBattingOverride.ForceTake;
 
                 // 陣形（前進守備/長打警戒）を毎球評価（issue #492）: 深さ上書きがあればこの球だけ野手配列を
                 // 基準配置から組み直す。上書きなしなら打席頭の fielders を使う（＝従来と完全一致）。
                 IReadOnlyList<Field.Fielder>? fieldersOverride = null;
-                if (manualInfield is not null || manualOutfield is not null)
+                if (manualInfield is not null || manualOutfield is not null || manualBuntShift is not null)
                 {
                     var dt = defTactics with
                     {
                         Infield = manualInfield ?? defTactics.Infield,
                         Outfield = manualOutfield ?? defTactics.Outfield,
+                        // バントシフト（issue #1473）: 一・三塁手のチャージ＝初期守備位置の差し替え（効果は物理から出る）
+                        BuntShift = manualBuntShift ?? defTactics.BuntShift,
                     };
                     fieldersOverride = AlignmentTactics.Adjust(baseAlignment, dt, ctx.Tactics);
                 }
@@ -1484,6 +1525,15 @@ public static class GameEngine
                         sqWasteOverride = SqueezeWasteNow();
                         offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
                     }
+                }
+
+                // ウエストとスクイズが重なった（issue #1473）: 外した球はスクイズの解決で「外された」に確定させる
+                //（SqueezeResolver の Wasted＝ボール1つ＋飛び出した三塁走者の挟殺。設計書09 §1「ウエストで挟殺の大惨事」）。
+                // ピッチアウトの経路（ボールにするだけ）へは流さない。プレイヤーのウエストでしか通らない。
+                if (manualPitchout && battingOverride == PitchBattingOverride.Squeeze && bases.Third is not null)
+                {
+                    sqWasteOverride = 1.0;
+                    pitchoutThisPitch = false;
                 }
 
                 // エンドランの一塁走者・スクイズの三塁走者も、投球と同時にスタートを切る（issue #696・観測専用）。
@@ -1816,7 +1866,6 @@ public static class GameEngine
             // （バント/スクイズが決着する打席では、決着後の分岐内でも二重にNextBatter()を呼んでおり、
             // 打者を1人分余計に飛ばしていた。ここへ一本化したことで両方解消）。
             offense.NextBatter();
-            defense.SetPitchAround(false);   // くさい所はその打席だけ（issue #872）
             var res = session.Result;
             // FieldingError は野手が捕りにいく打球でだけ効く＝失策が起きなかった打席（三振・四球・外野へ抜けた安打・本塁打等）
             // なら次の打席へ予約を持ち越す（デバッグ経路専用）。

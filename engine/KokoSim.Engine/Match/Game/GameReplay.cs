@@ -71,7 +71,9 @@ public sealed record GameDecision(
     // null＝従来どおり局面から導出（古い決定列）。
     bool? AsOffense = null,
     // ForcedOutcome 専用（設計書17 §6.1・issue #1285）: 予約した強制発動。復元・シークで落ちないよう決定列へ積む。
-    Debugging.ForcedOutcome? Forced = null);
+    Debugging.ForcedOutcome? Forced = null,
+    // PitchDefenseOverride のバントシフト（issue #1473）。null＝指示なし（古い決定列）。
+    bool? BuntShift = null);
 
 public enum GameDecisionKind
 {
@@ -129,10 +131,14 @@ public enum GameDecisionKind
     /// TargetIndex=伝令役の控えの添字（TeamState.AvailableReserves。−1＝伝令役なし）。攻守はその時点の局面で決まる。
     /// </summary>
     Timeout,
-    /// <summary>くさい所（issue #872）。OffenseIsAway=**攻撃側**が先攻か（指示は守備側＝その逆に載る）。On=入れる／解く。その打席だけ。</summary>
+    /// <summary>際どい所（旧名くさい所・issue #872）。OffenseIsAway=**攻撃側**が先攻か（指示は守備側＝その逆に載る）。On=入れる／解く。解除するまで続く。</summary>
     PitchAround,
     /// <summary>強制発動の予約（設計書17 §6.1・issue #1285。デバッグ経路専用）。Forced=発動の種類。次の1打席に一度だけ効く。</summary>
     ForcedOutcome,
+    /// <summary>申告敬遠（issue #1473）。OffenseIsAway=**攻撃側**が先攻か（指示は守備側＝その逆に載る）。On=入れる／解く。その打席だけ。</summary>
+    IntentionalWalk,
+    /// <summary>ウエスト（issue #1473）。OffenseIsAway=**攻撃側**が先攻か（指示は守備側＝その逆に載る）。On=入れる／解く。1球限り。</summary>
+    Pitchout,
 }
 
 /// <summary>復元された進行（状態＋続きを回すための enumerator）。drain して <see cref="GameEngine.BuildResult"/> へ。</summary>
@@ -261,7 +267,7 @@ public static class GameReplay
                     p.OffenseOf(d.OffenseIsAway).SetPendingPitchBattingOverride(d.Batting);
                     break;
                 case GameDecisionKind.PitchDefenseOverride:
-                    p.OffenseOf(!d.OffenseIsAway).SetPendingPitchDefenseOverride(d.Policy, d.Gear, d.Infield, d.Outfield);
+                    p.OffenseOf(!d.OffenseIsAway).SetPendingPitchDefenseOverride(d.Policy, d.Gear, d.Infield, d.Outfield, d.BuntShift);
                     break;
                 case GameDecisionKind.BattingApproach:
                     p.OffenseOf(d.OffenseIsAway).SetBattingApproach(d.Approach ?? Tactics.BattingApproach.Normal);
@@ -271,6 +277,12 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.PitchAround:
                     p.OffenseOf(!d.OffenseIsAway).SetPitchAround(d.On);
+                    break;
+                case GameDecisionKind.IntentionalWalk:
+                    p.OffenseOf(!d.OffenseIsAway).SetPendingIntentionalWalk(d.On);
+                    break;
+                case GameDecisionKind.Pitchout:
+                    p.OffenseOf(!d.OffenseIsAway).SetPendingPitchout(d.On);
                     break;
                 case GameDecisionKind.OffensiveSign:
                     p.OffenseOf(d.OffenseIsAway).SetPendingOffensiveSign(d.Sign);

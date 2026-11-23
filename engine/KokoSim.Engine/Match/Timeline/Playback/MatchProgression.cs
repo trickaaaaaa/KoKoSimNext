@@ -630,12 +630,14 @@ public sealed class MatchProgression
     /// 深さ）を予約する。offenseIsAway=攻撃側が先攻(away)か（守備側はその逆側に適用）。全項目nullで指示解除。1球限り。
     /// 「解除するまで続く」方針カード（配球/ギア/陣形）は、UI が采配窓ごとに現在の選択で再予約して寿命を維持する。
     /// </summary>
+    /// <para>buntShift（issue #1473）＝バントシフト。null＝委任采配（brain）の判断のまま。陣形と同じく1球の口。</para>
     public void SetPitchDefenseOverride(bool offenseIsAway, PitchPolicy? policy, Pitching.PitcherGear? gear,
-        DefenseDepth? infield = null, DefenseDepth? outfield = null)
+        DefenseDepth? infield = null, DefenseDepth? outfield = null, bool? buntShift = null)
     {
-        _p.OffenseOf(!offenseIsAway).SetPendingPitchDefenseOverride(policy, gear, infield, outfield);
+        _p.OffenseOf(!offenseIsAway).SetPendingPitchDefenseOverride(policy, gear, infield, outfield, buntShift);
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PitchDefenseOverride, offenseIsAway, BenchIndex: 0,
-            Policy: policy, Gear: gear, Infield: infield, Outfield: outfield, PitchIndex: PendingPitchIndex));
+            Policy: policy, Gear: gear, Infield: infield, Outfield: outfield, PitchIndex: PendingPitchIndex,
+            BuntShift: buntShift));
     }
 
     /// <summary>
@@ -663,7 +665,8 @@ public sealed class MatchProgression
     }
 
     /// <summary>
-    /// くさい所（issue #872）: ゾーンの縁を突き、甘い球を投げない（四球も辞さない）。<b>その打席だけ</b>効き、打席が終わると解ける。
+    /// 際どい所（旧名くさい所・issue #872）: ゾーンの縁を突き、甘い球を投げない（四球も辞さない）。<b>解除するまで続く</b>
+    /// （2026-11-23 オーナー判断・issue #1473）。
     /// teamIsAway=指示する側（守備側）が先攻か。on=false で取り消し。乱数を消費しない。
     /// </summary>
     public void SetPitchAround(bool teamIsAway, bool on)
@@ -673,8 +676,32 @@ public sealed class MatchProgression
             On: on, PitchIndex: PendingPitchIndex));
     }
 
-    /// <summary>くさい所が入っているか（表示専用の読み口。乱数も状態も動かさない）。teamIsAway=守備側が先攻か。</summary>
+    /// <summary>際どい所が入っているか（表示専用の読み口。乱数も状態も動かさない）。teamIsAway=守備側が先攻か。</summary>
     public bool PitchAroundOn(bool teamIsAway) => _p.OffenseOf(teamIsAway).PitchAround;
+
+    /// <summary>
+    /// 申告敬遠（issue #1473・設計書09 §2.2「ウエスト／申告敬遠は独立コマンド」）。teamIsAway=指示する側（守備側）が先攻か。
+    /// 打席の頭の窓で押せばその打席を、打席の途中で押せば次の1球を投げる前に、投球なしの四球で終える。on=false で取り消し。
+    /// 乱数を消費しない。決定列へ積む＝中断保存・シークで消えない。
+    /// </summary>
+    public void SetIntentionalWalk(bool teamIsAway, bool on = true)
+    {
+        _p.OffenseOf(teamIsAway).SetPendingIntentionalWalk(on);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.IntentionalWalk, !teamIsAway, BenchIndex: 0,
+            On: on, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>
+    /// ウエスト（issue #1473）。teamIsAway=指示する側（守備側）が先攻か。次の1球を外す（ボール1つ）。3ボールでは外さない
+    /// （<see cref="StealReadModel.CanPitchout"/>）。盗塁が重なれば捕手が優位、スクイズが重なれば外されて三塁走者が挟まれる。
+    /// on=false で取り消し。乱数を消費しない。
+    /// </summary>
+    public void SetPitchout(bool teamIsAway, bool on = true)
+    {
+        _p.OffenseOf(teamIsAway).SetPendingPitchout(on);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.Pitchout, !teamIsAway, BenchIndex: 0,
+            On: on, PitchIndex: PendingPitchIndex));
+    }
 
     /// <summary>
     /// 采配カード（2026-07-31）: 次に解決される打席の攻撃サイン（エンドラン等）を予約する。<b>1打席限り</b>。

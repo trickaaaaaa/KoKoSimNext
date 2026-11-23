@@ -2516,8 +2516,6 @@ public static class CoefficientsLoader
         public double SlugContactPenalty { get; set; } = D.SlugContactPenalty;
         public double PutInPlayContactBoost { get; set; } = D.PutInPlayContactBoost;
         public double PutInPlayPowerPenalty { get; set; } = D.PutInPlayPowerPenalty;
-        public double BusterVsShiftBonus { get; set; } = D.BusterVsShiftBonus;
-        public double BusterPenalty { get; set; } = D.BusterPenalty;
         public double SqueezeReadBase { get; set; } = D.SqueezeReadBase;
         public double SqueezeReadPerLead { get; set; } = D.SqueezeReadPerLead;
         public double SqueezeReadObviousBonus { get; set; } = D.SqueezeReadObviousBonus;
@@ -2661,8 +2659,6 @@ public static class CoefficientsLoader
             SlugContactPenalty = SlugContactPenalty,
             PutInPlayContactBoost = PutInPlayContactBoost,
             PutInPlayPowerPenalty = PutInPlayPowerPenalty,
-            BusterVsShiftBonus = BusterVsShiftBonus,
-            BusterPenalty = BusterPenalty,
             SqueezeReadBase = SqueezeReadBase,
             SqueezeReadPerLead = SqueezeReadPerLead,
             SqueezeReadObviousBonus = SqueezeReadObviousBonus,
@@ -2731,7 +2727,6 @@ public static class CoefficientsLoader
         public int GambleStartMinTier { get; set; } = D.GambleStartMinTier;
         public int SqueezeMinTier { get; set; } = D.SqueezeMinTier;
         public int HitAndRunMinTier { get; set; } = D.HitAndRunMinTier;
-        public int BusterMinTier { get; set; } = D.BusterMinTier;
         public int DepthMinTier { get; set; } = D.DepthMinTier;
         public int BuntShiftMinTier { get; set; } = D.BuntShiftMinTier;
         public int AdvancedPolicyMinTier { get; set; } = D.AdvancedPolicyMinTier;
@@ -2845,7 +2840,6 @@ public static class CoefficientsLoader
             GambleStartMinTier = GambleStartMinTier,
             SqueezeMinTier = SqueezeMinTier,
             HitAndRunMinTier = HitAndRunMinTier,
-            BusterMinTier = BusterMinTier,
             DepthMinTier = DepthMinTier,
             BuntShiftMinTier = BuntShiftMinTier,
             AdvancedPolicyMinTier = AdvancedPolicyMinTier,

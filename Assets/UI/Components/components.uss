@@ -2261,7 +2261,11 @@
 
    カードの箱の寸法（幅・高さ・重なり）は TacticsCardDeck.cs が持つ。ここは色と枠だけ。
    自作要素が自分の幾何を持つのは BaseballFieldElement / Match2DPlaybackElement と同じ作法。 */
-.tcards { flex-shrink: 0; align-items: center; }
+.tcards { flex-shrink: 0; flex-direction: row; align-items: flex-end; }
+/* 手札の塊（issue #1473）。1列で左＝サイン／右＝構え。区切りは間の余白だけ（線・見出しは引かない）。
+   高さは TacticsCardDeck.cs がカード寸法から決める＝1列なので帯の高さは従来と同じ。 */
+.tcards__row { flex-shrink: 0; align-items: center; }
+.tcards__row--stance { margin-left: var(--sp-4); }
 .tcards__inner { position: relative; height: 100%; }
 /* 当たり判定の層。カードの上に透明な短冊を敷き、ポインタの出入りと押下はここだけで拾う
    （カードは重なり順を入れ替える＝木から外れるので、判定を持たせるとクリックが成立しない）。 */

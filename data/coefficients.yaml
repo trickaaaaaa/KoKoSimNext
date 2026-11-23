@@ -1150,8 +1150,6 @@ tactics:
   slug_contact_penalty: 0.12
   put_in_play_contact_boost: 0.14  # 当てに行け
   put_in_play_power_penalty: 0.18
-  buster_vs_shift_bonus: 0.08
-  buster_penalty: 0.05
   squeeze_read_base: 0.08          # ウエスト（バッテリー察知）
   squeeze_read_per_lead: 0.002
   squeeze_read_obvious_bonus: 0.05
@@ -1234,7 +1232,6 @@ enemy_ai:
   gamble_start_min_tier: 4          # C: ギャンブル始動（好ジャンプ・意表, G3b）
   squeeze_min_tier: 5               # B: 上級
   hit_and_run_min_tier: 5           # B: 上級
-  buster_min_tier: 5                # B: 上級
   depth_min_tier: 2                 # E: 守備位置調整
   bunt_shift_min_tier: 5            # B: 守備シフト
   advanced_policy_min_tier: 2       # E: カウント別配球

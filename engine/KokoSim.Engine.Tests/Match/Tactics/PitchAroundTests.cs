@@ -117,16 +117,21 @@ public sealed class PitchAroundTests
         Assert.Equal(neutral, atRef, 12);   // 未設定は基準値扱い＝直接組んだ PitchPlan は従来と同値
     }
 
-    // ── 打席単位（その打席だけ）──
+    // ── 解除するまで続く（2026-11-23 オーナー判断・issue #1473。以前は「その打席だけ」）──
 
     [Fact]
-    public void PitchAround_DoesNotCarryOverToNextPlateAppearance()
+    public void PitchAround_LastsUntilCleared_AcrossPlateAppearancesAndHalves()
     {
         var prog = NewGame(42);
         prog.SetPitchAround(teamIsAway: false, on: true);   // 先攻の攻撃＝後攻(home)が守備
         Assert.True(prog.PitchAroundOn(false));
         Assert.True(prog.Advance());
-        Assert.False(prog.PitchAroundOn(false), "打席が終わったのにくさい所が残っている");
+        Assert.True(prog.PitchAroundOn(false), "打席が終わったら際どい所が解けた（解除するまで続くはず）");
+        // 半回をまたいでも残る（次に守る回でもそのまま効く）
+        while (prog.Advance() && prog.Current!.Inning < 3) { }
+        Assert.True(prog.PitchAroundOn(false), "半回をまたいだら際どい所が解けた");
+        prog.SetPitchAround(teamIsAway: false, on: false);
+        Assert.False(prog.PitchAroundOn(false));
     }
 
     [Fact]

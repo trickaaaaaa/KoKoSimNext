@@ -30,6 +30,10 @@
 #   timeout_at  : duel_seconds の撮影で、開始から何秒後に監督が守備伝令を送るか（issue #1178。動揺が解ける絵）
 #   timeout_messenger : timeout_at の伝令を画面の操作どおり（中断→伝令役→再開）に送る。控えの添字か recorder（記録員）。
 #                 守備伝令の場面が流れ、明けた後の投手・捕手の基準ずれを timeout-restore.txt に書く（issue #1174）
+#   cards       : [def-ibb] のように采配カードの id を並べる（issue #1473）。守備ビューを待たず、最初の采配窓で止めて
+#                 01-window（押す前の手札）→ カードを押して 02-pressed → cards_after 秒（既定4）流して 03-after を撮る。
+#                 手札に無い・押せないカードは FAILED。手札ごと写すので view: panel と組む。
+#                 撮るのは開幕の「プレイボール」が消えてから。撮った窓の局面（塁・カウント・攻守）を window.txt に書く
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
@@ -375,3 +379,38 @@ captures:
     force: FieldingError
     shots: [judgement, judgement+0.5, judgement+1.2]
     probes: [ErrorMark, FieldLabels]
+
+  # ── 采配の手札を1列で左右に（左＝サイン／右＝構え）・新しい4つ（issue #1473）──
+  # どれも 01-window で攻撃・守備の左右に分けた手札が見える。02-pressed が押した直後、03-after がその球の後。
+  # 場面は1回表・無死一塁（steal-sign-lab）。manager: away＝自校が攻撃、home＝自校が守備。
+  - id: tactics-offense-safety-1473
+    name: "攻撃の手札（左右）＋セーフティバントを押す（issue #1473）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    attempts: 1
+    cards: [batting-safety]
+
+  - id: tactics-defense-ibb-1473
+    name: "守備の手札（左右）＋敬遠を押す（issue #1473）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    cards: [def-ibb]
+
+  - id: tactics-defense-pitchout-1473
+    name: "守備の手札（左右）＋ウエストを押す（issue #1473）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    cards: [def-pitchout]
+
+  - id: tactics-defense-buntshift-1473
+    name: "守備の手札（左右）＋バントシフトを敷く（issue #1473）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    cards: [def-buntshift]
