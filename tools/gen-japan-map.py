@@ -26,6 +26,7 @@ N03_URL = "https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2024/N03-20240101_%s_GM
 
 COS = math.cos(math.radians(36.0))
 SCALE = 100  # 全国図: 1 投影単位 = 100 整数
+NATIONAL_TILT_DEG = 35  # 全国図の傾き（画面で時計回り・issue #1502）
 ZOOM_LONG_SIDE = 1500  # 拡大図: 長い辺がこの目盛り数になるよう view ごとに倍率を決める（issue #1499）
 
 # PrefectureNames.Japanese と同じ（JIS順）。NE の name_ja と突き合わせて県Id の取り違えを防ぐ
@@ -176,20 +177,21 @@ def main():
         if pid == 12:  # 東京: 伊豆・小笠原は本土から遠く図が間延びするので本土部だけ（緯度 35.3° 以北）
             keep = lambda p: -p.centroid.y > 35.3
         nat[pid] = clean(g, 0.012, 0.0004 if pid not in (0, 46) else 0.002, keep)
-    # 沖縄は縮小して左下の枠へ
-    okinawa = nat[46]
+    # 16:9 の画面に収まるよう、全国図は時計回りに傾ける（列島が左下→右上に伸びるので横長になる・issue #1502）。
+    # 沖縄は縮めず（他県と同じ縮尺）、傾けた本土の外接矩形の左上の空いた海へ寄せる。枠は描かない。
+    rotated = {pid: [affinity.rotate(p, NATIONAL_TILT_DEG, origin=(0, 0)) for p in nat[pid]] for pid in range(47)}
+    okinawa = rotated[46]
     ob = bounds_of([okinawa])
-    rest = bounds_of([v for k, v in nat.items() if k != 46])
-    s = 0.7
-    ow, oh = (ob[2] - ob[0]) * s, (ob[3] - ob[1]) * s
-    pad = 0.25
-    fx = rest[0]
-    fy = rest[3] + 0.5  # 本土の南端の下
-    nat[46] = [affinity.affine_transform(p, [s, 0, 0, s, fx + pad - ob[0] * s, fy + pad - ob[1] * s]) for p in okinawa]
-    frame = (fx, fy, ow + pad * 2, oh + pad * 2)
+    rest = bounds_of([v for k, v in rotated.items() if k != 46])
+    pad = 0.3
+    rotated[46] = [affinity.translate(p, rest[0] + pad - ob[0], rest[1] + pad - ob[1]) for p in okinawa]
+    nat = rotated
+    # 沖縄の島は小さいので、島を囲む矩形（描かない）の中なら海の上でも沖縄に決まる（当たり判定だけの frame）
+    fpad = 0.12
+    frame = (rest[0] + pad - fpad, rest[1] + pad - fpad, (ob[2] - ob[0]) + fpad * 2, (ob[3] - ob[1]) + fpad * 2)
     b = bounds_of(nat.values())
-    ox, oy = b[0] - 0.3, b[1] - 0.3
-    W, H = round((b[2] + 0.3 - ox) * SCALE), round((b[3] + 0.3 - oy) * SCALE)
+    ox, oy = b[0] - 0.15, b[1] - 0.15
+    W, H = round((b[2] + 0.15 - ox) * SCALE), round((b[3] + 0.15 - oy) * SCALE)
     national = {
         "w": W, "h": H,
         "frame": [round((frame[0] - ox) * SCALE), round((frame[1] - oy) * SCALE), round(frame[2] * SCALE), round(frame[3] * SCALE)],
@@ -257,7 +259,8 @@ def main():
 HEADER = """# 県選択画面（issue #1410）の日本地図データ。tools/gen-japan-map.py が作る生成物＝手で編集しない。
 #
 # 座標: 平面投影（x=経度×cos36°, y=-緯度）の整数。全国図は100倍、拡大図は長い辺が約1500になる倍率。view ごとに bbox の左上が原点。
-#   national … 全国図（沖縄は縮小して frame の枠へ寄せてある）／hokkaido・tokyo … 拡大図（南北・東西に塗り分け）
+#   national … 全国図（時計回りに35°傾け、沖縄は同じ縮尺で左上の海へ寄せてある。frame は沖縄の当たり判定の矩形＝描かない）
+#   hokkaido・tokyo … 拡大図（南北・東西に塗り分け）
 #   feature の rings は外周と穴の頂点列（"x y x y ..."）。塗りも点内判定も偶奇規則。
 #   split は拡大図の区画（0=北北海道/東東京, 1=南北海道/西東京）。SummerRegions の Split と同じ並び。
 #

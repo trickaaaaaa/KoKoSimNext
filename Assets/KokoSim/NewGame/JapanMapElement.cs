@@ -17,14 +17,14 @@ namespace KokoSim.Unity.NewGame
         private const float Margin = 16f;   // 図の周りの余白[px]
         private const float LineWidth = 1.5f;
 
-        private Color _land = Hex(0xE6E2D8);    // --sbk-seg-bg
-        private Color _landAlt = Hex(0xD9D4C8); // --sbk-card-line-hover（拡大図の2つ目の区画）
+        // 海はカードの白のまま・陸は一段濃いベージュ（陸と海の差をはっきりさせる・issue #1502 配色2）
+        private Color _land = Hex(0xD9D4C8);    // --sbk-card-line-hover
+        private Color _landAlt = Hex(0xE6E2D8); // --sbk-seg-bg（拡大図の2つ目の区画＝一段薄く）
         private Color _line = Hex(0xFFFFFF);    // --sbk-card（区画の境界＝白い目地）
         private Color _hover = Hex(0x2F2C27);   // --sbk-ink（乗せた区画＝墨）
-        private Color _frame = Hex(0xD9D4C8);   // 沖縄の枠
 
-        private static readonly CustomStyleProperty<Color> LandProp = new("--sbk-seg-bg");
-        private static readonly CustomStyleProperty<Color> LandAltProp = new("--sbk-card-line-hover");
+        private static readonly CustomStyleProperty<Color> LandProp = new("--sbk-card-line-hover");
+        private static readonly CustomStyleProperty<Color> LandAltProp = new("--sbk-seg-bg");
         private static readonly CustomStyleProperty<Color> LineProp = new("--sbk-card");
         private static readonly CustomStyleProperty<Color> HoverProp = new("--sbk-ink");
 
@@ -153,7 +153,7 @@ namespace KokoSim.Unity.NewGame
         private void OnStyles(CustomStyleResolvedEvent e)
         {
             if (e.customStyle.TryGetValue(LandProp, out var c1)) _land = c1;
-            if (e.customStyle.TryGetValue(LandAltProp, out var c2)) { _landAlt = c2; _frame = c2; }
+            if (e.customStyle.TryGetValue(LandAltProp, out var c2)) _landAlt = c2;
             if (e.customStyle.TryGetValue(LineProp, out var c3)) _line = c3;
             if (e.customStyle.TryGetValue(HoverProp, out var c4)) _hover = c4;
             MarkDirtyRepaint();
@@ -185,22 +185,7 @@ namespace KokoSim.Unity.NewGame
                 p2d.Fill(FillRule.OddEven);
                 p2d.Stroke();
             }
-
-            // 沖縄を寄せた枠（全国図だけ）
-            if (_view.Frame is { } fr)
-            {
-                var a = new Vector2(fr[0], fr[1]) * scale + origin;
-                var b = new Vector2(fr[0] + fr[2], fr[1] + fr[3]) * scale + origin;
-                p2d.strokeColor = _frame;
-                p2d.lineWidth = 1f;
-                p2d.BeginPath();
-                p2d.MoveTo(a);
-                p2d.LineTo(new Vector2(b.x, a.y));
-                p2d.LineTo(b);
-                p2d.LineTo(new Vector2(a.x, b.y));
-                p2d.ClosePath();
-                p2d.Stroke();
-            }
+            // 沖縄の frame は当たり判定だけ（描かない・issue #1502）
         }
 
         private static Vector2 Pt(int[] ring, int i, float scale, Vector2 origin)
