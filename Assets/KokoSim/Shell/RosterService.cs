@@ -108,6 +108,19 @@ namespace KokoSim.Unity.Shell
             return true;
         }
 
+        /// <summary>年度替わりの克服判定のストリーム（issue #1471）。</summary>
+        private const ulong SkillOvercomeStream = 0x5C12_0000UL;
+
+        private static readonly List<SkillChangeNotice> _skillNotices = new List<SkillChangeNotice>();
+
+        /// <summary>年度替わりで起きたスキルの克服（issue #1471）を取り出して空にする（通知フィード・ノベルへ流す用）。</summary>
+        public static List<SkillChangeNotice> DrainSkillNotices()
+        {
+            var list = new List<SkillChangeNotice>(_skillNotices);
+            _skillNotices.Clear();
+            return list;
+        }
+
         /// <summary>
         /// 年度替わり（4月・設計書03 §2）: 自校ロスターへ昇級・卒業・新入生を適用する（issue #535）。
         /// ロジックの実体は engine の <see cref="RosterLifecycle.AdvanceYear"/>（SeasonEngine と共有＝二重実装なし）。
@@ -135,6 +148,11 @@ namespace KokoSim.Unity.Shell
                 GameClock.ProspectJoined = true;   // ホームが通知フィードへ流す（遷移とUI提示の分離）
             }
             _graduates.AddGraduated(rollover.Graduated, newYearIndex);   // 卒業生は名前の表へ（本体は捨てる）。
+
+            // 体質の負スキル（サボり癖・ケガしやすい）の克服（issue #1471・設計書10 §3）。新入生生成とは別の
+            // ストリーム（YearRng の Fork は状態を進めない）＝新入生の顔ぶれは1ビットも動かない。通知はホームが引き取る。
+            _skillNotices.AddRange(SkillAcquisitionModel.OnYearAdvanced(
+                _roster, YearRng(newYearIndex).Fork(SkillOvercomeStream), new SkillAcquisitionCoefficients()));
 
             // 卒業・引退で空いた背番号を、在籍部員（新入生含むベンチ外）へ小さい番号から詰める
             // （#531 と同型・既存割当は壊さない非破壊。監督はメンバー設定画面で後から自由に振り直せる）。
@@ -164,6 +182,7 @@ namespace KokoSim.Unity.Shell
         public static void Reset()
         {
             _roster = null; _graduates = null; _nextId = 0; _newSchool = false;
+            _skillNotices.Clear();
             _rosterSeed = DefaultSeed;
             _rosterTalentCenterOverride = null;
             ProspectService.Reset();   // 予定者もこの進行のものなので一緒に捨てる（issue #587）

@@ -113,6 +113,7 @@ namespace KokoSim.Unity.Home
         private readonly SkillCoefficients _skills = new SkillCoefficients();
         private readonly InsightCoefficients _insight = new InsightCoefficients();
         private readonly GrowthEventCoefficients _growth = new GrowthEventCoefficients();
+        private readonly SkillAcquisitionCoefficients _skillAcquisition = new SkillAcquisitionCoefficients();
         private readonly FormCoefficients _form = new FormCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
@@ -138,6 +139,7 @@ namespace KokoSim.Unity.Home
         private const ulong InsightStream = 0x1E51_0000UL;
         private const ulong GrowthStream = 0x6110_0000UL;   // 選手成長イベント（issue #611）
         private const ulong FormStream = 0xF0F0_0000UL;     // 調子の週次の波（設計書02 §3.3）
+        private const ulong SkillStream = 0x5C11_0000UL;    // 覚醒で有益スキル（issue #1471）
 
         /// <summary>
         /// 週次抽選の乱数ストリーム種（不変条件#2）。「その週ならいつ引いても同じ結果」になるよう、
@@ -184,6 +186,7 @@ namespace KokoSim.Unity.Home
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
             RunFormWeek();                              // 調子の週次の波（設計書02 §3.3）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
+            RunSkillYearFeed();                         // 年度替わりの負スキル克服（issue #1471）
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化（設計書20 §5）
             RunKoshienFeed();                           // 観るだけの甲子園の決着（設計書05 §1.1a）
@@ -321,7 +324,75 @@ namespace KokoSim.Unity.Home
                     GrowthEventText.EventId(n), n.Player.Name,
                     GrowthEventText.Effect(n, _growth), n.Player.Id);
             }
+
+            // 覚醒で有益スキル（issue #1471・設計書10 §3）。専用ストリーム＝成長イベントの乱数列は動かない。
+            var skillRng = _rng.Fork(WeeklyStream(SkillStream));
+            items.AddRange(SkillFeedItems(SkillAcquisitionModel.OnGrowthEvents(notices, skillRng, _skillAcquisition), "今週"));
             PushFeed(items);
+        }
+
+        /// <summary>
+        /// 特殊能力の変化（issue #1471）を通知フィードの行にし、ノベルへも積む。効果は engine が適用済み＝ここは提示だけ。
+        /// 行には選手の飛び先を付ける（#1474 の作法）。
+        /// </summary>
+        private static List<FeedItem> SkillFeedItems(IEnumerable<SkillChangeNotice> notices, string when)
+        {
+            var items = new List<FeedItem>();
+            foreach (var n in notices)
+            {
+                var tag = KokoSim.Unity.Shell.SkillChangeText.Tag(n);
+                items.Add(new FeedItem
+                {
+                    When = when,
+                    Text = KokoSim.Unity.Shell.SkillChangeText.Feed(n),
+                    Kind = tag == "発見" ? FeedKind.Discover : FeedKind.Up,
+                    Tag = tag,
+                    Screen = FeedLinks.Players, PlayerId = n.Player.Id,
+                });
+                KokoSim.Unity.Shell.EventService.Push(
+                    KokoSim.Unity.Shell.SkillChangeText.EventId(n), n.Player.Name,
+                    KokoSim.Unity.Shell.SkillChangeText.Effect(n), n.Player.Id);
+            }
+            return items;
+        }
+
+        /// <summary>
+        /// 撮影用（data/debug/screens.yaml の skill-change-1471）。部員の先頭3人に、気づきの開示・覚醒での習得・
+        /// 克服を1件ずつ起こし、本番と同じ提示経路（<see cref="SkillFeedItems"/>）で通知フィードとノベルへ流す。
+        /// 新設校は1年生だけ＝学年の克服も実戦の活躍も週送りでは待てないので、変化そのものはここで直接起こす。
+        /// </summary>
+        public void PresentSkillChangesForCapture()
+        {
+            var r = Roster;
+            if (r.Count < 3) return;
+            var notices = new List<SkillChangeNotice>();
+
+            var revealed = r[0];
+            if (revealed.Skills.Hidden.Count == 0)
+                revealed.Skills = new SkillSet(revealed.Skills.Visible, new[] { Skill.SlowStarterBat });
+            var hidden = revealed.Skills.Hidden.OrderBy(s => s).First();
+            revealed.Skills = revealed.Skills.Reveal(hidden);
+            notices.Add(new SkillChangeNotice(revealed, hidden, SkillChangeKind.Revealed, SkillChangeCause.Insight));
+
+            var awakened = new GrowthNotice(r[1], GrowthEventType.Awakening, null) { Domain = GrowthDomain.Batting };
+            notices.AddRange(SkillAcquisitionModel.OnGrowthEvents(new[] { awakened }, new Xoshiro256Random(1),
+                new SkillAcquisitionCoefficients { AwakeningSkillProb = 1.0 }));
+
+            var lazy = r[2];
+            lazy.Skills = lazy.Skills.Remove(Skill.Lazy);
+            notices.Add(new SkillChangeNotice(lazy, Skill.Lazy, SkillChangeKind.Overcome, SkillChangeCause.Grade));
+
+            PushFeed(SkillFeedItems(notices, "今週"));
+        }
+
+        /// <summary>
+        /// 年度替わりの克服（issue #1471）を通知フィードへ流す。克服そのものは <see cref="KokoSim.Unity.Shell.RosterService.AdvanceYear"/>
+        /// が済ませており、ここは提示だけ（入部の通知と同じ「遷移とUI提示の分離」）。
+        /// </summary>
+        private void RunSkillYearFeed()
+        {
+            var items = SkillFeedItems(KokoSim.Unity.Shell.RosterService.DrainSkillNotices(), "今週");
+            if (items.Count > 0) PushFeed(items);
         }
 
         /// <summary>
@@ -654,7 +725,7 @@ namespace KokoSim.Unity.Home
 
         /// <summary>
         /// 気づきの週次処理（設計書03 §5.6）。監督の育成眼を通じて隠しパラメータの兆しを受動的に開示する。
-        /// 状態は一切変えない＝通知フィードへ流すだけ。
+        /// 変える状態は性格の読みと、気づいた隠しスキルの開示（issue #1471・即開示）だけ。
         ///
         /// <para>備品「ビデオ・分析機材」（設計書04 §1.4a）が頻度と精度を上げる。未購入なら 1.0 / 0.0＝
         /// エンジンの既定と1ビット一致。</para>
@@ -690,6 +761,16 @@ namespace KokoSim.Unity.Home
                     Screen = FeedLinks.Players, PlayerId = n.Player.Id,
                 });
 
+                // 隠しスキルの開示（issue #1471・即開示）はノベルへも出す＝表に出た特殊能力は選手詳細のスキル欄に載る。
+                if (n.Topic == InsightTopic.HiddenSkill && n.HiddenSkill is { } revealed)
+                {
+                    var change = new SkillChangeNotice(n.Player, revealed, SkillChangeKind.Revealed, SkillChangeCause.Insight);
+                    KokoSim.Unity.Shell.EventService.Push(
+                        KokoSim.Unity.Shell.SkillChangeText.EventId(change), n.Player.Name,
+                        KokoSim.Unity.Shell.SkillChangeText.Effect(change), n.Player.Id);
+                    continue;
+                }
+
                 // 成長タイプの見立てだけノベルへ昇格する（issue #614）。起用と我慢の判断に直結する
                 // 一番重い気づきで、1行のフィードでは流れて消える。ほかの話題はフィードのまま
                 // （全部ノベルにすると毎週クリックさせることになる）。
@@ -724,6 +805,11 @@ namespace KokoSim.Unity.Home
                     return name + " は最近伸びてきているようだ。";
                 case InsightTopic.Personality:
                     return name + " は " + n.Domain + " な性格かもしれない。";
+                case InsightTopic.HiddenSkill:
+                    // 即開示（issue #1471）＝断定してよい（正しく気づいたときだけ開示する）。
+                    return n.HiddenSkill is { } hs
+                        ? name + " の「" + KokoSim.Unity.Shell.SkillCatalogProvider.Name(hs) + "」に気づいた。"
+                        : name + " について何か気づいた。";
                 case InsightTopic.HighGrowthDomain:
                     return name + " は " + DomainJp(n.Domain) + " にまだ伸びる余地がありそうだ。";
                 case InsightTopic.LowGrowthDomain:
@@ -844,6 +930,7 @@ namespace KokoSim.Unity.Home
             };
             items.AddRange(InjuryFeedItems());
             items.AddRange(BigStageFeedItems(_growth));
+            items.AddRange(SkillFeedItems(GameSession.Current.DrainSkillNotices(), "本日"));   // 実戦経験（issue #1471）
             items.AddRange(MomentumFeedItems());
             PushFeed(items);
         }

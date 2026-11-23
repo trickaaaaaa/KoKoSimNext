@@ -126,6 +126,34 @@ screens:
       - wait: 3
       - shot: 04-toast-over-scrim
 
+  - id: skill-change-1471
+    name: "特殊能力の変化（気づきで開示・覚醒で習得・克服）のノベル・通知フィード・選手詳細のスキル欄（issue #1471）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      # 先頭3人に 開示／覚醒で習得／克服 を1件ずつ起こし、本番と同じ提示経路で流す（撮影用の入口）
+      - call: HomeState.Current.PresentSkillChangesForCapture()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-novel-insight-revealed
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-novel-insight-result
+      - click: ev-novel
+      - wait: 5
+      - click: ev-novel
+      - wait: 5
+      - shot: 03-novel-awakening
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - read: feed-list
+      - shot: 04-home-feed
+      # 先頭の部員（気づきで開示した選手）の詳細。スキル欄に開示したスキルが出る
+      - show: PlayerList
+      - wait: 5
+      - shot: 05-player-detail-skills
+
   - id: player-detail-radar-1279
     name: "選手詳細のレーダーの格子色（PR #1370・issue #1279 項目2）"
     size: {w: 1600, h: 1500}

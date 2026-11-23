@@ -1002,6 +1002,96 @@ events:
           - who: team_manager
             say: "その半分が当たるようになりましたよ。"
 
+  # 特殊能力の変化（issue #1471・設計書10 §3）。何のスキルかは結果行（SkillChangeText）が言い切る＝会話は雰囲気だけ。
+  # 気づき（育成眼）で隠しスキルを即開示／覚醒で身につく／公式戦の活躍で身につく／負スキルの克服（実戦・学年）。
+  - id: skill_insight_revealed
+    kind: System
+    text: "選手の隠れた持ち味に気づいた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "練習を眺めていて、{player}の動きに引っかかるものがあった。"
+          - who: team_manager
+            say: "{player} の、あれって前からですか？"
+          - who: narration
+            say: "本人も気づいていない癖だった。"
+      - lines:
+          - who: team_manager
+            say: "監督、{player} のスコア付けてて気づいたんですけど。"
+          - who: manager
+            say: "見せてくれ。"
+          - who: team_manager
+            say: "ほら、ここ。同じことが何度も起きてるんです。"
+      - lines:
+          - who: narration
+            say: "ビデオを止めては戻す。{player}だけ、他の部員と違うところがあった。"
+          - who: player
+            say: "え、俺そんなことしてます？"
+
+  - id: skill_awakening
+    kind: System
+    text: "覚醒した選手が新しい持ち味を身につけた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "伸びただけではなかった。{player}のプレーに、新しい色が加わっていた。"
+          - who: player
+            say: "なんか、急に分かったんです。"
+      - lines:
+          - who: captain
+            say: "{player}、最近ちょっと別人だよな。"
+          - who: player
+            say: "自分でもびっくりしてる。"
+          - who: narration
+            say: "一皮むけた{player}には、ひとつ武器が増えていた。"
+
+  - id: skill_match_acquired
+    kind: System
+    text: "公式戦の活躍で選手が新しい持ち味を身につけた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "公式戦の緊張の中でつかんだものは、練習では手に入らない。"
+          - who: player
+            say: "あの試合で、何かつかめた気がします。"
+      - lines:
+          - who: team_manager
+            say: "{player}、試合のあとずっとニヤニヤしてますよ。"
+          - who: narration
+            say: "大一番での手応えが、{player}の中に残っていた。"
+
+  - id: skill_overcome_match
+    kind: System
+    text: "公式戦の活躍で選手が弱点を克服した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "苦手だった場面を、{player}は自分の力で越えてみせた。"
+          - who: player
+            say: "もう、あれは怖くないです。"
+      - lines:
+          - who: captain
+            say: "{player}、今日は堂々としてたな。"
+          - who: player
+            say: "前の自分なら崩れてたと思う。"
+          - who: narration
+            say: "試合の中で、{player}はひとつ殻を破った。"
+
+  - id: skill_overcome_grade
+    kind: System
+    text: "学年が上がり、選手が弱点を克服した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "学年が上がって、{player}の顔つきが変わった。"
+          - who: team_manager
+            say: "{player}、去年とは別人みたいですね。"
+      - lines:
+          - who: narration
+            say: "冬を越えて、{player}は体も心もひと回り大きくなっていた。"
+          - who: player
+            say: "去年の自分には戻りたくないです。"
+
   # ドラフト（設計書20・issue #617）。候補入り・スカウト視察（評価上昇）・指名確定。
   # 主役は3年の選手。指名の可否そのものは engine が決めており、ここは提示だけ。
   - id: draft_candidate

@@ -147,6 +147,9 @@ events:
             "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
             "insight_growth_type",
+            // 特殊能力の変化（issue #1471）。IDは SkillChangeText（Unity）にベタ書き。
+            "skill_insight_revealed", "skill_awakening", "skill_match_acquired",
+            "skill_overcome_match", "skill_overcome_grade",
             // スカウトの節目（issue #1035）。IDは ScoutMilestones の定数で引く。
             ScoutMilestones.ChooseFieldEventId, ScoutMilestones.ListArrivedEventId, ScoutMilestones.DeadlineEventId,
             // スカウトの一年の入口（issue #1064）。契約→分野の会話。IDは ScoutPitch の定数で引く。
