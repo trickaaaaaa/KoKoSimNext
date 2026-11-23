@@ -96,7 +96,7 @@
                         </ui:VisualElement>
                         <ui:Label name="delegate-state" text="手動" class="tpm-delegate__state" />
                     </ui:VisualElement>
-                    <ui:Button name="modal-close" text="✕" class="tpm-close" />
+                    <ui:Button name="modal-close" text="×" class="tpm-close" />
                 </ui:VisualElement>
 
                 <!-- プリセット帯：タブ（配分⇄能力・issue #327③）＋チップ列＋残りバジェット（issue #222③④）。
@@ -174,7 +174,7 @@
                     <ui:Label name="copy-name" text="選手名" class="tp-ed-who__name" />
                     <ui:Label text="へコピーする計画を選ぶ" class="tp-ed-section__title" />
                     <ui:VisualElement class="tp-ed-head__spacer" />
-                    <ui:Button name="copy-close" text="✕" class="tpm-close" />
+                    <ui:Button name="copy-close" text="×" class="tpm-close" />
                 </ui:VisualElement>
                 <ui:ScrollView mode="Vertical" class="tpc-scroll">
                     <ui:VisualElement name="copy-list" class="tpc-list" />

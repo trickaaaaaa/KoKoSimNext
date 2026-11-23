@@ -127,7 +127,7 @@
                         <ui:Button name="spd-1" class="chip-btn chip-btn--on" text="×1" />
                         <ui:Button name="spd-2" class="chip-btn" text="×2" />
                         <ui:Button name="spd-4" class="chip-btn" text="×4" />
-                        <ui:Button name="spd-fast" class="chip-btn" text="⚡高速" />
+                        <ui:Button name="spd-fast" class="chip-btn" text="高速" />
                     </ui:VisualElement>
                     <ui:VisualElement class="md-group">
                         <!-- 場内放送のオン/オフ（issue #919 → #1193 でスイッチ化）。行ごと押せる。 -->
@@ -292,7 +292,7 @@
                     <ui:Label name="mscout-situation" text="" class="msub-phase" />
                     <ui:VisualElement name="mscout-tabs" class="seg-tabs mscout-tabs" />
                     <ui:VisualElement class="msub-head__spacer" />
-                    <ui:Button name="mscout-close" text="✕" class="msub-close" />
+                    <ui:Button name="mscout-close" text="×" class="msub-close" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="mscout-body">
@@ -322,7 +322,7 @@
                     <ui:Label name="msub-phase" text="" class="msub-phase" />
                     <ui:VisualElement name="msub-kinds" class="seg seg--auto msub-kinds" />
                     <ui:VisualElement class="msub-head__spacer" />
-                    <ui:Button name="msub-close" text="✕" class="msub-close" />
+                    <ui:Button name="msub-close" text="×" class="msub-close" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="msub-body">

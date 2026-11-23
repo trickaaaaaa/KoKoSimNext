@@ -481,7 +481,7 @@ namespace KokoSim.Unity.Member
 
         private Label ClearButton(int number)
         {
-            var x = new Label("✕");
+            var x = new Label("×");
             x.AddToClassList("slot-card__clear");
             x.RegisterCallback<ClickEvent>(evt =>
             {

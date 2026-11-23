@@ -57,7 +57,10 @@ namespace KokoSim.EditorTests
         {
             var ttf = AssetDatabase.LoadAssetAtPath<Font>("Assets/UI/Fonts/NotoSansJP-Regular.ttf");
             Assert.AreEqual(FontEngineError.Success, FontEngine.LoadFontFace(ttf, 64));
+            // ⅓ ⅔ は投球回の内部の印。画面では LineupSettingController が「整数＋小さな 1/3」に組み直す（書体ルール）。
+            var internalMarks = new HashSet<char> { '⅓', '⅔' };
             var noGlyph = FontAssetBuilder.UiTextCharacters()
+                .Where(c => !internalMarks.Contains(c))
                 .Where(c => !(FontEngine.TryGetGlyphIndex(c, out var index) && index != 0))
                 .Distinct().OrderBy(c => c).ToList();
             Assert.IsEmpty(noGlyph,
