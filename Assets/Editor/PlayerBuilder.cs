@@ -114,6 +114,10 @@ namespace KokoSim.EditorTools
                 return false;
             }
 
+            // 3D の索引（素体・クリップ・装備）は gitignore＝端末ごとに古いことがある。ブラウザ版（WebDemoBuild）と同じく
+            // ビルドの直前に焼き直し、装備などが欠けた exe を作らない（issue #1248）。
+            KokoSim.UnityEditorTools.DuelAssetCatalogBaker.Bake();
+
             var outDir = Path.Combine(string.IsNullOrEmpty(outRoot) ? DefaultOutRoot : Path.GetFullPath(outRoot),
                                       FlavorDirName(flavor));
             if (Directory.Exists(outDir)) Directory.Delete(outDir, true);   // 前回の残りを混ぜない
