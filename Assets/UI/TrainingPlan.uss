@@ -269,6 +269,7 @@
 }
 .tpm-col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: column; margin-right: 18px; }
 .tpm-col--growth { margin-right: 0; min-height: 0; }
+.tpm-col--scroll { min-height: 0; }   /* 中の ScrollView を欄の高さで止める（issue #1533） */
 .tpm-col--last { margin-right: 0; }   /* 能力タブの右端カラム（issue #327③） */
 .tpm-col__title { font-size: var(--fs-cap); color: var(--color-chalk); letter-spacing: 1px; flex-shrink: 0; margin-bottom: var(--sp-2); }
 .tpm-col__list { flex-direction: column; flex-shrink: 0; }
@@ -298,10 +299,10 @@
     background-color: var(--color-panel-deep); color: var(--ink);
     border-radius: 0; margin-right: 6px; font-size: var(--fs-cap);
 }
-.mslot__name { width: 64px; flex-shrink: 0; font-size: var(--fs-cap); color: var(--color-chalk); }
+.mslot__name { width: var(--col-mslot-name); flex-shrink: 0; font-size: var(--fs-cap); color: var(--color-chalk); }
 .mslot__meta { width: 40px; flex-shrink: 0; font-size: var(--fs-cap); color: var(--color-muted); -unity-text-align: middle-right; margin-right: var(--sp-1); }
 .mslot__slider { margin-left: var(--sp-1); margin-right: var(--sp-2); }
-.mslot__min { width: 46px; flex-shrink: 0; justify-content: flex-end; margin-right: 2px; }
+.mslot__min { width: var(--col-mslot-min); flex-shrink: 0; justify-content: flex-end; margin-right: 2px; }
 .mslot__min .nu-num { font-size: var(--fs-cap); color: var(--color-chalk); }
 .mslot__min .nu-unit { font-size: var(--fs-cap); }
 /* ±ボタンはこの画面だけコンパクトサイズへ縮小（部品既定28pxは密度が要る他画面向け）。 */

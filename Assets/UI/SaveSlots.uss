@@ -124,6 +124,14 @@
     font-size: var(--fs-label);
     color: var(--color-muted);
 }
+/* 行の中の見出しと値は既定の Label の余白（上下 3〜4px の margin＋padding）を持たない。32px の行に余白ぶん
+   押し込まれて字の箱が字より低くなり、見出しが下の区切り線に重なって値と高さがずれていた（issue #1533）。 */
+.ss-d__row Label {
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
 /* 詳細ペインの案内文。既定は本文色＝ただの案内（空き枠・セーブ無し）はここに出る。
    警告色は本当の警告だけに残す（UI原則②）＝読み込み不可・保存できない理由・操作の失敗は
    --warn を足して赤にする（種別は SaveSlotsController.RenderDetail が知っている。issue #575①）。 */

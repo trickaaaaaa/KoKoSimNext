@@ -33,6 +33,11 @@ namespace KokoSim.Unity.Debugging
         /// <summary>board＝盤面だけ切り抜く / panel＝画面全体 / rig＝3Dリグの描画先そのまま。</summary>
         public string View = "board";
         public int Width = 1600, Height = 900;
+        /// <summary>
+        /// 真なら、絵の大きさに合わせて論理解像度を変えず、本番と同じ参照解像度（1600×900・ScaleWithScreenSize）のまま撮る
+        /// （issue #1533）。既定（偽）は論理解像度＝絵の大きさ。1280×720 の窓で本番がどう見えるか（0.8倍）を撮る用。
+        /// </summary>
+        public bool GameScale;
         /// <summary>撮る瞬間（例: release-0.2 / flight_end / 1.5）。</summary>
         public List<string> Shots = new List<string>();
         /// <summary>連番で撮る区間（例: from catch-0.8 to release+0.9 fps 30）。From が空なら撮らない。</summary>
@@ -62,6 +67,14 @@ namespace KokoSim.Unity.Debugging
         public List<string> Cards;
         /// <summary>cards の押下後、03-after を撮るまで流す秒数（ゲームの時計。既定 4）。</summary>
         public float CardsAfterSeconds = 4f;
+        /// <summary>
+        /// 采配窓で止めたまま順に呼ぶ試合の画面のメソッド（issue #1533。null＝使わない）。要素は
+        /// <c>OpenSubstitutionForCapture</c> のような MatchLiveController の公開メソッド名（引数は1つまで・
+        /// <c>PickSubstitutionSlotForCapture(LF)</c> のように括弧で。数か列挙の名前）か、<c>shot</c>（いまの画面を
+        /// 「11-ui」「12-ui」…で撮る）か、<c>wait(秒)</c>（実時間で待つ）。交代パネル・選手能力パネルなど、窓から開く画面の見え方を撮る用。
+        /// cards と組むときは 01-window の直後・カードを押す前に回す。単独なら 01-window と呼び出しの絵だけ撮って終わる。
+        /// </summary>
+        public List<string> WindowCalls;
         /// <summary>見比べ用の切り替え（"DuelStageRig.Xxx": 値）。終わったら元へ戻す。</summary>
         public Dictionary<string, string> Overrides = new Dictionary<string, string>();
     }
@@ -181,6 +194,7 @@ namespace KokoSim.Unity.Debugging
                 case "view":
                     r.View = Unquote(v);
                     return r.View == "board" || r.View == "panel" || r.View == "rig";
+                case "game_scale": return bool.TryParse(Unquote(v), out r.GameScale);
                 case "size":
                 {
                     var map = FlowMap(v);
@@ -197,6 +211,7 @@ namespace KokoSim.Unity.Debugging
                 }
                 case "overrides": r.Overrides = FlowMap(v); return r.Overrides != null;
                 case "cards": r.Cards = FlowSeq(v); return r.Cards != null && r.Cards.Count > 0;
+                case "window_calls": r.WindowCalls = FlowSeq(v); return r.WindowCalls != null && r.WindowCalls.Count > 0;
                 case "cards_after": return TryFloat(v, out r.CardsAfterSeconds) && r.CardsAfterSeconds >= 0f;
                 default: return false;
             }

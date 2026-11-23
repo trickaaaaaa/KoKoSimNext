@@ -13,6 +13,12 @@ namespace KokoSim.Unity.Components
         /// 可否と一緒に文字も引き直す。
         /// </summary>
         public Func<string> LabelOf;
+        /// <summary>
+        /// カードの名前の段に出す字の割り方（null＝<see cref="Label"/> を字数の真ん中で2行に割る）。
+        /// 真ん中が語の途中になる名前（ウエ／スト・セーフテ／ィバント等）は、ここで改行の位置を明示する
+        /// （改行なし＝1行のまま）。文言は <see cref="Label"/> と同じにする＝割り方だけを決める（issue #1533）。
+        /// </summary>
+        public string CardLabel;
         /// <summary>将来のアイコン化用（null=文字タイル）。指定時はアイコンを主表示に回す。</summary>
         public string Icon;
         /// <summary>

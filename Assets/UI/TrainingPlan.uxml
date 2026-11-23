@@ -120,9 +120,13 @@
 
                 <!-- 本体（配分タブ）：3カラム（野手/投手練習｜守備｜伸びる能力）。スクロールなしで一望できる。 -->
                 <ui:VisualElement name="tpm-body-alloc" class="tpm-body3">
-                    <ui:VisualElement class="tpm-col">
+                    <ui:VisualElement class="tpm-col tpm-col--scroll">
                         <ui:Label text="野手・投手練習" class="tpm-col__title" />
-                        <ui:VisualElement name="tpm-menus" class="tpm-col__list" />
+                        <!-- 投手練習まで入れると14行＋節見出し2つで欄の高さを越える＝最後の行がフッターの下へ落ちていた（issue #1533）。
+                             伸びる能力の列と同じく、入りきらないときだけ中をスクロールさせる -->
+                        <ui:ScrollView mode="Vertical" class="tpm-growth-scroll">
+                            <ui:VisualElement name="tpm-menus" class="tpm-col__list" />
+                        </ui:ScrollView>
                     </ui:VisualElement>
                     <ui:VisualElement class="tpm-col">
                         <ui:Label text="守備（ポジション別）" class="tpm-col__title" />

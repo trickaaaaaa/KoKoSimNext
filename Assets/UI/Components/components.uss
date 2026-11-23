@@ -903,6 +903,9 @@
    CJK の行箱で40pxになり、比較列に守備適性の帯が入らない。読ませるのは上の名前（明朝）で、
    ここは添え物＝13px・行高22pxに落とす。 */
 .cmp-card__meta { flex-direction: row; align-items: center; margin-top: 0; height: 22px; }
+/* メタ行の小片（投打・学年・守備位置）は既定の Label の上下の余白を持たない。22px の行に余白ぶん押し込まれ、
+   字の箱が16pxになって字の下半分がカードの下端（交代パネル）や次の行（選手能力パネル）へはみ出していた（issue #1533）。 */
+.cmp-card__meta .bench-row__tag { margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
 .cmp-card__hand { font-size: 13px; color: var(--color-muted); margin-right: var(--sp-1); }
 .cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }
 .cmp-card .cat-rank-chips { margin-top: var(--sp-2); }
@@ -957,6 +960,12 @@
 }
 .lineup-row__pos { width: 40px; margin-left: var(--sp-2); flex-direction: row; align-items: center; }
 .lineup-row__info { width: 96px; font-size: var(--fs-cap); color: var(--color-muted); }
+/* 行の字は既定の Label の上下の余白（margin 4/2＋padding 4/4）を持たない。行は高さ40px（flex-basis 0＋min-height）で
+   伸びないので、余白ぶん字の箱が28pxに押し込まれ、明朝の名前（行送り31px）の下が切れて行の下に寄って見えた（issue #1533）。
+   中身は行の中央揃え（align-items: center）なので、余白を抜いても字の位置は行の真ん中のまま。 */
+.lineup-row__ord, .lineup-row__name, .lineup-row__info, .lineup-row__arrow, .lineup-row__incoming {
+    margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0;
+}
 
 /* ── LineupRow の交代プレビュー（issue #452 パワプロ方式）──
    操作が決まった行を「旧名 → 新名」に切り替え、確定前の姿を表の上で見せる。
@@ -2332,6 +2341,9 @@
     top: 0; bottom: 0;
     color: var(--tx-1);
     -unity-text-align: middle-center;
+    /* 箱は隣に隠れない帯ちょうど（幅は TacticsCardDeck.cs）。既定の Label の左右の余白を持たせると箱が右へずれ、
+       字の右端が隣のカードの下に潜る（issue #1533） */
+    margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0;
 }
 
 /* 選択中＝操作系の青（旧 SignPad の選択色を踏襲）。 */

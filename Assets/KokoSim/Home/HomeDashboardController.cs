@@ -59,7 +59,8 @@ namespace KokoSim.Unity.Home
             _newTeam = _root.Q<VisualElement>("nt-modal");
             _xt = _root.Q<VisualElement>("xt-modal");
             _ntRadar = new KokoSim.Unity.Components.RadarChartView(
-                _root.Q<VisualElement>("nt-d-radar"), NewTeamRadarRadius);
+                _root.Q<VisualElement>("nt-d-radar"), NewTeamRadarRadius, NewTeamRadarLabelOffset,
+                KokoSim.Unity.Components.RadarLabelSize.Normal, NewTeamRadarLabelSpreadX);
             _tsRadar = new KokoSim.Unity.Components.RadarChartView(
                 _root.Q<VisualElement>("hm-radar"), TeamRadarRadius, TeamRadarLabelOffset);
             AddIcon("stats-empty", KokoSim.Unity.Shell.LineIcon.Kind.BarChart);
@@ -274,7 +275,12 @@ namespace KokoSim.Unity.Home
 
         // ===== 新チーム発足：次期主将の指名（設計書09 §8・案C 左リスト＋右詳細） =====
 
-        private const float NewTeamRadarRadius = 0.34f;
+        // 箱（.nt-d__radar＝--nt-radar-h 148px）に5軸のラベル（1段・実測 高さ26px・2字36px）を収め、
+        // 図の頂点にかけない値。半径40px・ラベルは頂点の20px外（上のラベルが箱の上端に来る）。旧値（箱128px・半径43px・1.2倍）はラベルが図に重なっていた（issue #1533）。
+        private const float NewTeamRadarRadius = 40f / 148f;
+        private const float NewTeamRadarLabelOffset = 60f / 40f;
+        /// <summary>左右のラベル（精神・走力）は横へ少し逃がして頂点との間を空ける（箱は横に広い）。</summary>
+        private const float NewTeamRadarLabelSpreadX = 1.12f;
 
         /// <summary>指名モーダルを開く。初期選択は自動選出済みの暫定主将（そのまま確定してもよい）。</summary>
         private void ShowNewTeam()

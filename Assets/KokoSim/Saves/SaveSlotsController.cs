@@ -363,7 +363,7 @@ namespace KokoSim.Unity.Saves
             if (note != null)
             {
                 var (text, warn) = NoteFor(info);
-                note.text = text;
+                note.text = Kinsoku.Apply(text);   // 「。」だけが次の行へ落ちない（issue #1501/#1533）
                 note.EnableInClassList("ss-d__note--warn", warn);
                 note.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
             }

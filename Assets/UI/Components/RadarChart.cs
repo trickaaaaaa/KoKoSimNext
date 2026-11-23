@@ -143,6 +143,7 @@ namespace KokoSim.Unity.Components
         private readonly float _radiusFactor;
         private readonly float _labelOffset;
         private readonly RadarLabelSize _labelSize;
+        private readonly float _labelSpreadX;
 
         private readonly List<RadarAxis> _axes = new List<RadarAxis>();
         private readonly List<VisualElement> _axisNodes = new List<VisualElement>();
@@ -154,13 +155,18 @@ namespace KokoSim.Unity.Components
         /// <param name="radiusFactor">短辺に対する半径比。</param>
         /// <param name="labelOffset">半径に対する軸ラベルの距離比。</param>
         /// <param name="labelSize">軸ラベルの段階（None＝出さない）。</param>
+        /// <param name="labelSpreadX">
+        /// 軸ラベルの横方向だけに掛ける倍率（1＝円周上）。横長の器で、上下のラベルの高さに合わせて図を小さくしたとき、
+        /// 左右のラベルを横へ逃がして図の頂点にかけないために使う（練習試合・issue #1533）。
+        /// </param>
         public RadarChartView(VisualElement host, float radiusFactor = 0.36f, float labelOffset = 1.20f,
-            RadarLabelSize labelSize = RadarLabelSize.Normal)
+            RadarLabelSize labelSize = RadarLabelSize.Normal, float labelSpreadX = 1f)
         {
             _host = host;
             _radiusFactor = radiusFactor;
             _labelOffset = labelOffset;
             _labelSize = labelSize;
+            _labelSpreadX = labelSpreadX;
             if (_host == null) return;
             _host.generateVisualContent += OnPaint;
             _host.RegisterCallback<GeometryChangedEvent>(_ =>
@@ -225,7 +231,7 @@ namespace KokoSim.Unity.Components
             {
                 var pt = RadarChart.AxisPoint(cx, cy, radius * _labelOffset, i, n);
                 var node = _axisNodes[i];
-                node.style.left = pt.x;
+                node.style.left = cx + (pt.x - cx) * _labelSpreadX;
                 node.style.top = pt.y;
                 node.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
             }

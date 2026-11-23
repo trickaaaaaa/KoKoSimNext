@@ -50,12 +50,24 @@ namespace KokoSim.Unity.Components
         /// <summary>この字数からは名前を2行に割る（「コントロール重視」を1行に収めると読めない級数になる）。</summary>
         private const int WrapFromLength = 4;
 
-        /// <summary>カード名の級数は<b>1行あたりの</b>文字数で決める（左の帯に収まる比率。モックで詰めた値）。</summary>
-        private static readonly float[] CapRatioByLen = { 0.34f, 0.34f, 0.30f, 0.24f, 0.19f, 0.155f, 0.135f };
+        /// <summary>カード名の級数は<b>1行あたりの</b>文字数で決める（左の帯に収まる比率。モックで詰めた値）。3字までに使う。</summary>
+        private static readonly float[] CapRatioByLen = { 0.34f, 0.34f, 0.30f, 0.24f };
+
+        /// <summary>カードの左の枠（components.uss の .tcard の border-left-width＝--nb-shadow-card）。</summary>
+        private const float CardBorderLeft = 7f;
+
+        /// <summary>
+        /// 名前を置く帯＝隣のカードに隠れない左の帯のうち、左の枠の内側（<see cref="Step"/> − 枠）。名前はこの帯の中央に置き、
+        /// 4字以上の行はこの帯に1行で入る級数にする（1字を1emとみて 帯÷字数）。以前は名前の箱を枠の内側から Step 幅で置いていた
+        /// ＝箱の右端が隣のカードの下に潜るぶん、4字以上は語の途中（ウエ／スト）で割るしかなかった（issue #1533）。
+        /// </summary>
+        private const float NameBand = Step - CardBorderLeft;
 
         /// <summary>長い名前を2行に割る（自動折り返しに任せず、割る位置を自分で決めて級数を確定させる）。</summary>
-        private static string WrapLabel(string label)
+        private static string WrapLabel(string label, string cardLabel = null)
         {
+            // 割り方を明示した名前はそのまま（語の途中で割らない・issue #1533）
+            if (!string.IsNullOrEmpty(cardLabel)) return cardLabel;
             var s = label ?? "";
             if (s.Length < WrapFromLength) return s;
             var head = (s.Length + 1) / 2;
@@ -249,7 +261,7 @@ namespace KokoSim.Unity.Components
             // 下＝名前。左の帯（隣に隠れない幅）の中央へ置く。
             var cap = new VisualElement { pickingMode = PickingMode.Ignore };
             cap.AddToClassList("tcard__cap");
-            var name = new Label(WrapLabel(def.LabelOf?.Invoke() ?? def.Label)) { pickingMode = PickingMode.Ignore };
+            var name = new Label(def.LabelOf != null ? WrapLabel(def.LabelOf()) : WrapLabel(def.Label, def.CardLabel)) { pickingMode = PickingMode.Ignore };
             name.AddToClassList("tcard__name");
             cap.Add(name);
             card.Add(cap);
@@ -388,13 +400,15 @@ namespace KokoSim.Unity.Components
                     var name = card.Q<Label>(className: "tcard__name");
                     if (name != null)
                     {
-                        name.style.width = Step;
+                        name.style.width = NameBand;
                         // 級数は幅（1行の字数）と高さ（行数）の両方で決める。どちらか片方だけだと、
                         // 2行にした長い名前が段からはみ出すか、短い名前が不揃いに小さくなる。
                         var rows = (name.text ?? "").Split('\n');
                         var perLine = 1;
                         foreach (var row in rows) perLine = Mathf.Max(perLine, row.Length);
-                        var byWidth = Step * CapRatioByLen[Mathf.Clamp(perLine, 1, CapRatioByLen.Length - 1)];
+                        var byWidth = perLine < CapRatioByLen.Length
+                            ? Step * CapRatioByLen[Mathf.Max(perLine, 1)]
+                            : Mathf.Floor(NameBand / perLine);
                         var byHeight = capHeight / (rows.Length * LineHeightFactor);
                         name.style.fontSize = Mathf.Round(Mathf.Min(byWidth, byHeight));
                     }
