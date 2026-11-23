@@ -135,7 +135,8 @@ events:
             "entrance_ceremony", "summer_camp", "culture_festival", "winter_camp", "draft_meeting", "graduation",
             // "injury"（週次の故障の会話）は issue #695 で削除＝効果が無く、誰も故障していないのに語っていた。
             "rain_week", "media_coverage", "ob_donation",
-            "ace_hidden_injury", "skipping_practice",
+            // "ace_hidden_injury"（エースの違和感）は issue #1477 で削除＝選択肢も効果も無いまま出ていた。
+            "skipping_practice",
             // システムイベント（issue #610〜）。IDは呼び出し側にベタ書きされているので、
             // 消えると「その出来事だけ黙って会話が出ない」形で壊れる。
             "injury_occurred", "injury_returned",

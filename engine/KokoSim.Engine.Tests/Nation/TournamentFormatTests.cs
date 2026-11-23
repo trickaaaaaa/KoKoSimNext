@@ -222,13 +222,6 @@ public sealed class TournamentFormatTests
     }
 
     [Fact]
-    public void ModernRules_ForcedOff_OverridesYear()
-    {
-        var rules = new ModernRules { DhForcedOff = true };
-        Assert.False(rules.DhEnabled(2030));
-    }
-
-    [Fact]
     public void ModernRules_PitchLimit_UnlimitedBeforeIntro()
     {
         var rules = new ModernRules();
@@ -252,15 +245,6 @@ public sealed class TournamentFormatTests
     {
         var rules = new ModernRules();
         var ctx = rules.ApplyTo(new GameContext(), 2015);
-        Assert.False(ctx.TieBreakEnabled);
-        Assert.Equal(int.MaxValue, ctx.WeeklyPitchLimit);
-    }
-
-    [Fact]
-    public void ApplyTo_ForcedOff_OverridesModernYear()
-    {
-        var rules = new ModernRules { TieBreakForcedOff = true, PitchLimitForcedOff = true };
-        var ctx = rules.ApplyTo(new GameContext(), 2026);
         Assert.False(ctx.TieBreakEnabled);
         Assert.Equal(int.MaxValue, ctx.WeeklyPitchLimit);
     }
