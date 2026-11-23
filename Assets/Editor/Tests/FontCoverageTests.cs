@@ -47,5 +47,22 @@ namespace KokoSim.EditorTests
                 font + " に焼かれていない字が " + missing.Count + " 字ある（ブラウザ版で □ になる）。"
                 + "KokoSim/Fonts/本番用の SDF を生成 を回す:\n" + new string(missing.Take(200).ToArray()));
         }
+
+        /// <summary>
+        /// 画面のコードに書いた字は、本文の書体（Noto Sans JP）に字形があること。絵文字（⚡ など）は
+        /// どの書体にも無く焼けない＝ブラウザ版で必ず □ になる（Mac/Editor は OS の絵文字で描くので気づけない）。
+        /// </summary>
+        [Test]
+        public void UiText_UsesOnlyCharactersTheBodyFontHas()
+        {
+            var ttf = AssetDatabase.LoadAssetAtPath<Font>("Assets/UI/Fonts/NotoSansJP-Regular.ttf");
+            Assert.AreEqual(FontEngineError.Success, FontEngine.LoadFontFace(ttf, 64));
+            var noGlyph = FontAssetBuilder.UiTextCharacters()
+                .Where(c => !(FontEngine.TryGetGlyphIndex(c, out var index) && index != 0))
+                .Distinct().OrderBy(c => c).ToList();
+            Assert.IsEmpty(noGlyph,
+                "画面のコードに、書体に字形が無い字がある（ブラウザ版で □ になる）。別の字か絵にする:\n"
+                + string.Join(" ", noGlyph.Select(c => c + "(U+" + ((int)c).ToString("X4") + ")")));
+        }
     }
 }
