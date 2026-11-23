@@ -79,6 +79,136 @@ screens:
       - read: ngs-district
       - shot: 08-setup-tokyo-west
 
+  # ── 束7 お金・信頼度・名声（2026-11-23・issue #1299 #1469 #1270 #1467）──
+  # 経営タブ: 収入の内訳の「後援会」（旧「後援会・OB」）と、年契約の新しい年額（スカウト網 100/250/420・遠征60・コーチ160）。
+  - id: management-economy-bundle7
+    name: "経営タブの収入の内訳（後援会）と年契約の年額（issue #1299 #1469）"
+    steps:
+      - new_game: {seed: 1}
+      - show: ManagementScreen
+      - shot: 01-income
+      - call: SelectTab(3)
+      - shot: 02-contracts
+      - call: ManagerService.Contracts.SetLevel("scouting", 3)
+      - call: ManagerService.Contracts.SetLevel("coach_batting", 1)
+      - show: ManagementScreen
+      - call: SelectTab(3)
+      - shot: 03-contracts-lv3-coach-net-red
+
+  # 選択肢の結果行に信頼度が並ぶ（結束の上下＋信頼度 ±2）。好転側（roll 0）を撮る。
+  - id: event-trust-interpersonal-1270
+    name: "選手間の選択肢の結果行に信頼度 ＋2（issue #1270 E1）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - read: "=ManagerService.Manager.Trust"
+      - call: EventService.PushChoiceEvent("skipping_practice", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 01-choices
+      - click: .choice-btn[0]
+      - wait: 5
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-result-line
+      - read: "=ManagerService.Manager.Trust"
+
+  # エースの肘の違和感（当事者は背番号1）。検査＝2週離脱・信頼度 ＋4。
+  # 積めないとき（背番号1が主将・故障中）は summary の reads の Trust が動かない＝背番号を確かめる。
+  - id: event-ace-doctor-1270
+    name: "エースの肘の違和感・検査に行かせる（2週離脱・信頼度 ＋4・issue #1270 E1）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - read: "=RosterService.Active.0.UniformNumber"
+      - read: "=ManagerService.Manager.Trust"
+      - call: EventService.PushChoiceEvent("ace_hidden_injury", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 01-choices
+      - click: .choice-btn[0]
+      - wait: 5
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-result-line
+      - read: "=ManagerService.Manager.Trust"
+
+  # 同・様子を見て悪化（roll 0.999＝悪化側）。中度の炎症で5週・信頼度 −4（凶報の色）。
+  - id: event-ace-wait-worsened-1270
+    name: "エースの肘の違和感・様子を見て故障（5週・信頼度 −4・issue #1270 E1）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - read: "=ManagerService.Manager.Trust"
+      - call: EventService.PushChoiceEvent("ace_hidden_injury", 0.999)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 01-choices
+      - click: .choice-btn[1]
+      - wait: 5
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-result-line
+      - read: "=ManagerService.Manager.Trust"
+
+  # テスト週の配慮（練習を軽くする＝効率 ×0.85・2週・信頼度 ＋2）。
+  - id: event-exam-ease-1270
+    name: "テスト週・練習を軽くする（信頼度 ＋2・issue #1270 E1）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - read: "=ManagerService.Manager.Trust"
+      - call: EventService.PushChoiceEvent("exam_week_slump", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 01-choices
+      - click: .choice-btn[0]
+      - wait: 5
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-result-line
+      - read: "=ManagerService.Manager.Trust"
+
   # ── 夜間マージ分の実機確認（2026-11-22・out/overnight/verify-targets-20261122.md）──
 
   - id: career-cards-1325
