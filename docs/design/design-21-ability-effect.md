@@ -160,10 +160,10 @@ GameEngine では打席頭の `EffectiveMatchup()` が唯一の入口: `batter.T
 - **読む側**（+Δ）: 物理の入口（`AbilityEffectCoefficients` の各ヘルパ＝効き1.0の恒等でも Δ は足す）・球速 Lv→km/h と逆変換・
   スタミナ→目安投球数（`PitcherAttributes` の表示Lv用 API。生成の内部は `*Physical*` 版）・采配AIの閾値（`StandardTacticsBrain`/
   `AiTacticsBrain`）・精神力×プレッシャー・動揺の閾値・牽制/盗塁の読み・主将の統率力（統率傾向×精神力）・結束・伝令・
-  投野交代の打撃平均・継投の人選（`PhysicalStrengthSum`）・チーム総合と6指標（`TeamStrengthProfile`）・ドラフトの注目度と足切り・
+  投野交代の打撃平均・継投の人選（`PhysicalStrengthSum`）・チーム総合と6指標（`TeamStrengthProfile`）・ドラフトの注目度・
   練習/実戦の必要exp・実効守備力（地力×適性）と怪我の係数（掛け算は今の物差しで掛けて丸めてから −Δ）。
   閾値の数字（`coefficients.yaml` の `*_min_*`・`draft.yaml` の境目）と総合の較正 `overall_offset` は今の物差しのまま＝変えない。
-- **表示どおり下がるもの（狙い）**: 選手個人の能力・ランク（`PlayerStrengthProfile` のチップ）・スカウトの見立て。
+- **表示どおり下がるもの（狙い）**: 選手個人の能力・ランク（`PlayerStrengthProfile` のチップ）・スカウトの見立て・ドラフト候補の足切り（画面のチップで判定・オーナー決定 2026-11-23）。
 - **漏れ検出**: `AbilityScaleLeakTests`（能力がばらけたチームの Δ=0／Δ=7 の試合が1ビット一致）と決定論ベースライン
   （固定チームを表示Lvで組んだ試合が物差しを下げる前と1ビット一致）。
 - **セーブ**: v43 から `abilityDelta` を記録。読み込み時に（保存時の Δ − いまの Δ）だけ表示Lvをずらす（キーの無い v42 以前は 0＝−7）。

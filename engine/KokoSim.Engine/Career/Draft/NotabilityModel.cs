@@ -128,8 +128,9 @@ public static class NotabilityModel
     /// </summary>
     public static bool MeetsCandidateFloor(DevelopingPlayer player, TeamStrengthCoefficients strength, DraftCoefficients c)
     {
-        // 足切りも今の物差しで判定（issue #1080）＝候補の顔ぶれは物差しによらず同じ（画面のチップは Δ 下がって見える）。
-        var s = PlayerStrengthProfile.Compute(player, strength, Players.AbilityScale.Delta);
+        // 足切りは画面のチップ（表示Lv）のまま判定する（issue #1080・オーナー決定 2026-11-23）。物差しを下げた分だけ
+        // チップも下がるので候補は少し減る（受け入れ済み）。注目度そのもの（予想順位の境目）は今の物差しで合成する。
+        var s = PlayerStrengthProfile.Compute(player, strength);
         var best = s.BattingTier > s.PitchingTier ? s.BattingTier : s.PitchingTier;
         return best >= c.CandidateMinTier;
     }

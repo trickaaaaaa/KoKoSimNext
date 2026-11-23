@@ -336,11 +336,11 @@ public sealed class DraftTests
     public void RankDBatter_WithHighCeilingAndStats_IsBlockedByFloor()
     {
         var c = new DraftCoefficients();
-        var p = Batter(1, 3, level: 55, cap: 90, name: "D打者");
+        var p = Batter(1, 3, level: 55 + D, cap: 90, name: "D打者");   // 画面の打撃力チップが D（表示55）
         var stats = BattingStats(1, games: 14, pa: 56, ab: 50, hits: 25, hr: 8);   // OPS 1.0超
 
         var n = NotabilityModel.Compute(p, stats, c, new TeamStrengthCoefficients());
-        Assert.Equal(Tier.D, PlayerStrengthProfile.Compute(p, S, D).BattingTier);   // 足切りは今の物差しのチップで判定（issue #1080）
+        Assert.Equal(Tier.D, PlayerStrengthProfile.Compute(p, S).BattingTier);
         Assert.True(NotabilityModel.BandOf(n, c) >= DraftRankBand.MiddleRound,
             $"床が無ければ中位圏に届くはず（notability={n:F1}）");
 
@@ -357,9 +357,23 @@ public sealed class DraftTests
     public void RankBBatter_PassesFloor()
     {
         var c = new DraftCoefficients();
-        var p = Batter(1, 3, level: 70, cap: 85);    // 打撃力ちょうど B
-        Assert.Equal(Tier.B, PlayerStrengthProfile.Compute(p, S, D).BattingTier);   // 足切りは今の物差しのチップで判定（issue #1080）
+        var p = Batter(1, 3, level: 70 + D, cap: 85 + D);    // 画面の打撃力チップがちょうど B（表示70）
+        Assert.Equal(Tier.B, PlayerStrengthProfile.Compute(p, S).BattingTier);
         Assert.True(NotabilityModel.MeetsCandidateFloor(p, S, c));
+    }
+
+    /// <summary>
+    /// 足切りは画面のチップ（表示Lv）で判定する（issue #1080・オーナー決定 2026-11-23）。今の物差しでは B（70）でも、
+    /// 表示では C（63）の選手は候補にしない＝物差しを下げた分だけ候補が少し減る（受け入れ済み）。
+    /// </summary>
+    [Fact]
+    public void Floor_UsesTheDisplayedChip_NotTheCurrentScale()
+    {
+        var c = new DraftCoefficients();
+        var p = Batter(1, 3, level: 70, cap: 85);   // 今の物差しで70＝表示63
+        Assert.Equal(Tier.B, PlayerStrengthProfile.Compute(p, S, D).BattingTier);
+        Assert.Equal(Tier.C, PlayerStrengthProfile.Compute(p, S).BattingTier);
+        Assert.False(NotabilityModel.MeetsCandidateFloor(p, S, c));
     }
 
     [Fact]
@@ -376,7 +390,7 @@ public sealed class DraftTests
     [Fact]
     public void Floor_IsCoefficientDriven()
     {
-        var p = Batter(1, 3, level: 55, cap: 90);      // 打撃力 D
+        var p = Batter(1, 3, level: 55 + D, cap: 90);  // 画面の打撃力 D（表示55）
         Assert.False(NotabilityModel.MeetsCandidateFloor(p, S, new DraftCoefficients()));
         Assert.True(NotabilityModel.MeetsCandidateFloor(p, S, new DraftCoefficients { CandidateMinTier = Tier.D }));
         Assert.True(NotabilityModel.MeetsCandidateFloor(p, S, new DraftCoefficients { CandidateMinTier = Tier.G }));
