@@ -17,7 +17,7 @@ namespace KokoSim.EditorTests
         // 撮影・診断の書き出し（セーブではない＝ブラウザ版で消えても困らない）。
         private static readonly string[] DiagnosticWriters =
         {
-            "DuelUmpireLookSheet.cs", "DuelViewRecorder.cs", "UmpireCallRecorder.cs", "ScreenshotBatch.cs",
+            "DuelUmpireLookSheet.cs", "DuelViewRecorder.cs", "UmpireCallRecorder.cs", "ScreenshotBatch.cs", "ScreenshotCapture.cs",
             "TournamentPreviewController.cs",
         };
 
