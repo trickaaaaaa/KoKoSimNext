@@ -30,9 +30,17 @@ public class TournamentPressureTests
     public void StageBonus_LeagueConstantIsNotFinal()
         => Assert.Equal(1, TournamentPressure.StageBonus(TournamentKind.AutumnDistrict, BlockLeagueRunner.LeagueRoundsRemaining));
 
-    [Fact]
-    public void StageBonus_NoContext_IsNotFinal()
-        => Assert.Equal(1, TournamentPressure.StageBonus(TournamentKind.Summer, null));
+    // 練習試合（大会の文脈なし）は GameSession.Kind に直前の大会の値（既定 Summer）が残っていても加点しない（PR #1555 レビュー）。
+    [Theory]
+    [InlineData(TournamentKind.Summer)]
+    [InlineData(TournamentKind.SummerKoshien)]
+    public void Apply_NoMatchContext_IsPracticeMatch_NoBonus(TournamentKind staleKind)
+    {
+        var ctx = TournamentPressure.Apply(new GameContext { MercyRuleEnabled = true }, staleKind, null);
+        Assert.Equal(new GameContext().PressureStageBonus, ctx.PressureStageBonus);
+        Assert.False(ctx.RetirementOnLine);
+        Assert.True(ctx.MercyRuleEnabled);
+    }
 
     [Theory]
     [InlineData(TournamentKind.Summer, true)]
@@ -47,7 +55,7 @@ public class TournamentPressureTests
     [Fact]
     public void Apply_SetsBothFields_AndKeepsOthers()
     {
-        var ctx = TournamentPressure.Apply(new GameContext { MercyRuleEnabled = true }, TournamentKind.SummerKoshien, 1);
+        var ctx = TournamentPressure.Apply(new GameContext { MercyRuleEnabled = true }, TournamentKind.SummerKoshien, Final());
         Assert.Equal(3, ctx.PressureStageBonus);
         Assert.True(ctx.RetirementOnLine);
         Assert.True(ctx.MercyRuleEnabled);
@@ -57,9 +65,11 @@ public class TournamentPressureTests
     public void Pressure_FinalSummerLateCloseRisp_ReachesCap()
     {
         var c = new PressureCoefficients();
-        var ctx = TournamentPressure.Apply(new GameContext(), TournamentKind.Summer, 1);
+        var ctx = TournamentPressure.Apply(new GameContext(), TournamentKind.Summer, Final());
         var p = PressureModel.Compute(
             new PressureSituation(ctx.PressureStageBonus, 9, 1, true, false, false, ctx.RetirementOnLine), c);
         Assert.Equal(System.Math.Min(c.MaxIndex, 3 + 1 + 1 + c.RispPoint + c.RetirementPoint), p);
     }
+
+    private static TournamentMatchContext Final() => new(RoundsRemaining: 1, MatchDay: 1, Ledger: new TournamentPitchLedger());
 }

@@ -15,8 +15,8 @@ public static class TournamentPressure
     public const int NationalBonus = 2;
     public const int FinalBonus = 3;
 
-    /// <param name="roundsRemaining">この試合を含む残りラウンド数（決勝=1）。null（大会外）や1以外は決勝ではない。</param>
-    public static int StageBonus(TournamentKind kind, int? roundsRemaining)
+    /// <param name="roundsRemaining">この試合を含む残りラウンド数（決勝=1）。1以外は決勝ではない。</param>
+    public static int StageBonus(TournamentKind kind, int roundsRemaining)
     {
         if (roundsRemaining == 1) return FinalBonus;
         return kind switch
@@ -29,10 +29,15 @@ public static class TournamentPressure
     public static bool RetirementOnLine(TournamentKind kind)
         => kind is TournamentKind.Summer or TournamentKind.SummerKoshien;
 
-    public static GameContext Apply(GameContext ctx, TournamentKind kind, int? roundsRemaining)
-        => ctx with
-        {
-            PressureStageBonus = StageBonus(kind, roundsRemaining),
-            RetirementOnLine = RetirementOnLine(kind),
-        };
+    /// <param name="match">大会の1試合ぶんの文脈。null＝練習試合（大会に紐付かない一戦）で、加点せず
+    /// <paramref name="ctx"/> をそのまま返す。<paramref name="kind"/> は大会外でも直前の大会の値が残るので、
+    /// 大会の試合かどうかは必ずこちらで判定する（PR #1555 のレビュー指摘）。</param>
+    public static GameContext Apply(GameContext ctx, TournamentKind kind, TournamentMatchContext? match)
+        => match is null
+            ? ctx
+            : ctx with
+            {
+                PressureStageBonus = StageBonus(kind, match.RoundsRemaining),
+                RetirementOnLine = RetirementOnLine(kind),
+            };
 }
