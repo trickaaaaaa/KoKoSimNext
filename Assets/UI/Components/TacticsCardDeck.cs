@@ -58,11 +58,8 @@ namespace KokoSim.Unity.Components
         /// </summary>
         private const float NameFontSize = 14f;
 
-        /// <summary>名前1字ぶんの幅の見込み（14px の Noto Sans JP の実測: 「コントロール」6字で 85px）。少し余裕をみる。</summary>
-        private const float NameCharWidth = 14.5f;
-
-        /// <summary>名前の箱の左右に残す余白（字の端が帯の端や隣のカードの枠に触れない分）。</summary>
-        private const float NameSidePad = 2f;
+        /// <summary>名前1字ぶんの幅（14px の Noto Sans JP の実測: 「コントロール」6字で 85px）。</summary>
+        private const float NameCharWidth = 85f / 6f;
 
         /// <summary>カードの左の枠（components.uss の .tcard の border-left-width＝--nb-shadow-card）。</summary>
         private const float CardBorderLeft = 7f;
@@ -70,8 +67,9 @@ namespace KokoSim.Unity.Components
         /// <summary>
         /// いまの手札の帯の幅（隣のカードに隠れない左の幅）。名前は帯のうち左の枠の内側（<see cref="NameBand"/>）の中央に置く。
         /// 手札でいちばん長い1行（14px）がこの内側に入る幅まで、<see cref="BaseStep"/> から広げる（issue #1533）。
-        /// 攻撃の手札（最長「セーフティ」「エンドラン」5字）は 82px、守備の手札（「コントロール」6字）は 96px。
-        /// 1列に並べた手札（攻撃 7＋4枚・守備 2＋8枚）は盤面の幅（1600×900 で 1036px）に収まる（攻撃 978px・守備 940px）。
+        /// 攻撃の手札（最長「セーフティ」「エンドラン」5字）は 78px、守備の手札（「コントロール」6字）は 92px。
+        /// 1列に並べた手札（攻撃 7＋4枚・守備 2＋8枚）は盤面の幅（1600×900 で 1036px）に収まる（攻撃 934px・守備 996px）。
+        /// 守備の手札はこれ以上広げると盤面の左右の打順表に重なる（帯 96px で 1036px＝ちょうど縁まで）。
         /// </summary>
         private float _step = BaseStep;
 
@@ -86,7 +84,7 @@ namespace KokoSim.Unity.Components
             foreach (var n in names)
                 foreach (var line in (n ?? "").Split('\n'))
                     longest = Mathf.Max(longest, line.Length);
-            var need = Mathf.Ceil(longest * NameCharWidth) + NameSidePad * 2 + CardBorderLeft;
+            var need = Mathf.Ceil(longest * NameCharWidth) + CardBorderLeft;
             return Mathf.Max(BaseStep, need);
         }
 

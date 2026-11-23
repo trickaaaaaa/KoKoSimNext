@@ -10,9 +10,10 @@
    TopBar の下を横並びにし、左右それぞれが独自スクロールを持つ（案A＝情報量フル維持）。
    比率は左40:右60（owner決定時点で「好みの範囲」と明記された目安値）。 */
 .pl-split { flex-direction: row; flex-grow: 1; min-height: 0; }
-/* 40:60 → 45:55（issue #1533・オーナー決定）。故障欄に傷病名＋程度（最長「疲労性炎症・中度」）を2行で入れる幅を左へ回した。 */
-.pl-split__left { flex-grow: 0; flex-shrink: 0; width: 45%; }
-.pl-split__right { flex-grow: 0; flex-shrink: 0; width: 55%; padding: 0 var(--sp-4) var(--sp-4) var(--sp-4); }
+/* 40:60 → 46:54（issue #1533・オーナー決定「比率を変えて故障欄を広げる」）。故障欄（--col-pl-inj）に傷病名＋程度
+   （最長「疲労性炎症・中度」）を2行で入れ、カテゴリ別ランク（実測200px）を縮めない最小の比率（1% ＝ 16px）。 */
+.pl-split__left { flex-grow: 0; flex-shrink: 0; width: 46%; }
+.pl-split__right { flex-grow: 0; flex-shrink: 0; width: 54%; padding: 0 var(--sp-4) var(--sp-4) var(--sp-4); }
 
 /* 見出し行：井（row-well）の中に置くがパネルにはしない。列は行パネルの内容と揃える。
    行パネル内容の左右インセット（左＝枠2+pad16／右＝枠5+pad16）を、井の padding(12) を除いた
@@ -71,4 +72,5 @@
     flex-shrink: 0;
     flex-basis: var(--col-pl-inj);
 }
-#player-rows .cell--narrow .cell--warn { white-space: normal; }
+/* 中の字は共通 .cell の flex-basis: 0（縦並びの器では高さ0）を外して中身の高さを取る＝2行がセルの中に収まる */
+#player-rows .cell--narrow .cell--warn { white-space: normal; flex-grow: 0; flex-basis: auto; }
