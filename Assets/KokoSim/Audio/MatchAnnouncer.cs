@@ -148,7 +148,7 @@ namespace KokoSim.Unity.Audio
         private const double LeadSeconds = 0.05;   // 予約の頭の余裕（今すぐ鳴らすと頭が欠けることがある）
         private const float GapSeconds = 0.18f;    // 部品と部品の間（「4番、」「キャッチャー、」の読点の間）
         private const float TailSeconds = 2.5f;    // 残響の尾（末尾に足す無音。ダッキングもここまで続く）
-        private const float Volume = 1f;
+        private static float Volume => 1f * KokoSim.Unity.Shell.GameSettings.AnnouncerScale;   // 設定の場内放送の音量（#1315）
 
         private AudioSource _source;
         private AudioClip _merged;
@@ -192,6 +192,7 @@ namespace KokoSim.Unity.Audio
             StopNow();
             _merged = Merge(clips, out var voiceSeconds);
             if (_merged == null) return false;
+            _source.volume = Volume;   // 設定の変更を次の放送から効かせる
             _source.clip = _merged;
             var start = AudioSettings.dspTime + LeadSeconds;
             _source.PlayScheduled(start);

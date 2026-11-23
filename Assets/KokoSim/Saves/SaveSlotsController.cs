@@ -37,6 +37,7 @@ namespace KokoSim.Unity.Saves
         // 固定の定数にしない（_creditsPage で参照する）。
         private string[] _pageLabels;
         private int _creditsPage;
+        private int _settingsPage;
         private int _page;
         private SchoolRenamePage _rename;
 
@@ -69,10 +70,12 @@ namespace KokoSim.Unity.Saves
             _rename?.Bind();
             // クレジット（issue #1179）は校名の編集と違いゲーム中/タイトル経由どちらでも出す
             // ＝配列の長さが変わる（校名の編集はゲーム中だけ挟む）ので、クレジットの位置は末尾固定で持つ。
+            // 設定（issue #1315）はクレジットの手前（末尾から2つ目）。
             _pageLabels = _rename != null
-                ? new[] { "セーブデータ", "校名の編集", "クレジット" }
-                : new[] { "セーブデータ", "クレジット" };
+                ? new[] { "セーブデータ", "校名の編集", "設定", "クレジット" }
+                : new[] { "セーブデータ", "設定", "クレジット" };
             _creditsPage = _pageLabels.Length - 1;
+            _settingsPage = _pageLabels.Length - 2;
             BuildCreditsPage();
             ShowPage(0);
         }
@@ -93,8 +96,72 @@ namespace KokoSim.Unity.Saves
             SetShown("ss-page-saves", _page == 0);
             SetShown("ss-page-rename", _page == renamePage);
             SetShown("ss-page-credits", _page == _creditsPage);
+            SetShown("ss-page-settings", _page == _settingsPage);
+            if (_page == _settingsPage) BuildSettingsPage();
             if (_page == renamePage) _rename.Open();
             else if (_page == 0) Render();
+        }
+
+        /// <summary>
+        /// 設定（issue #1315・オーナー決定 2026-11-23: 項目＝画面・fps・音量／入口＝システムタブだけ／1枚のカードに縦並び）。
+        /// 値は <see cref="GameSettings"/>（fps は <see cref="KokoSim.Bootstrap.FrameRateGuard"/>）が持ち、押すたびに保存・反映して組み直す。
+        /// 画質（標準／軽量）は計測とセットで別に作る（steam-roadmap 段階1「要るなら軽量設定を作る」）。
+        /// </summary>
+        private void BuildSettingsPage()
+        {
+            var host = _root.Q<VisualElement>("ss-set-rows");
+            if (host == null) return;
+            host.Clear();
+
+            Group(host, "画面", true);
+            var res = GameSettings.Resolution;
+            var choices = GameSettings.ResolutionChoices();
+            var ri = Mathf.Max(0, choices.IndexOf(res));
+            Row(host, "解像度", UiComponents.Stepper(res.x + " × " + res.y,
+                () => { GameSettings.Resolution = choices[ri - 1]; BuildSettingsPage(); },
+                () => { GameSettings.Resolution = choices[ri + 1]; BuildSettingsPage(); },
+                ri > 0, ri < choices.Count - 1));
+            Row(host, "表示", UiComponents.SegTabs(new[] { "フルスクリーン", "ウインドウ" }, GameSettings.FullScreen ? 0 : 1,
+                i => { GameSettings.FullScreen = i == 0; BuildSettingsPage(); }));
+
+            var fpsChoices = new[] { 30, 60, 120 };
+            var fi = System.Array.IndexOf(fpsChoices, KokoSim.Bootstrap.FrameRateGuard.FpsLimit);
+            Row(host, "fps の上限", UiComponents.SegTabs(new[] { "30", "60", "120" }, fi,
+                i => { KokoSim.Bootstrap.FrameRateGuard.FpsLimit = fpsChoices[i]; BuildSettingsPage(); }));
+
+            Group(host, "音量", false);
+            VolumeRow(host, "全体", () => GameSettings.VolumeMaster, v => GameSettings.VolumeMaster = v);
+            VolumeRow(host, "効果音", () => GameSettings.VolumeSe, v => GameSettings.VolumeSe = v);
+            VolumeRow(host, "場内放送", () => GameSettings.VolumeAnnouncer, v => GameSettings.VolumeAnnouncer = v);
+        }
+
+        private void VolumeRow(VisualElement host, string name, System.Func<int> get, System.Action<int> set)
+        {
+            var v = get();
+            const int step = GameSettings.VolumeStep;
+            Row(host, name, UiComponents.Stepper(v.ToString(),
+                () => { set(v - step); BuildSettingsPage(); },
+                () => { set(v + step); BuildSettingsPage(); },
+                v > 0, v < 100));
+        }
+
+        private static void Group(VisualElement host, string text, bool first)
+        {
+            var g = new Label(text);
+            g.AddToClassList("ss-set__group");
+            if (first) g.AddToClassList("ss-set__group--first");
+            host.Add(g);
+        }
+
+        private static void Row(VisualElement host, string name, VisualElement control)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("ss-set");
+            var k = new Label(name);
+            k.AddToClassList("ss-set__k");
+            row.Add(k);
+            row.Add(control);
+            host.Add(row);
         }
 
         /// <summary>クレジット（issue #1179・#1318）: 書体のライセンス全文を一度だけ流し込む（静的内容）。
