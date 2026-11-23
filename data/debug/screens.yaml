@@ -247,6 +247,31 @@ screens:
       - show: TeamStrength
       - shot: 02-team-strength
 
+  - id: player-detail-pitcher-sense-1472
+    name: "選手詳細の隠しパラメータ欄に投手センスの見立て（ランク）が出る・見立てが無い選手は「？」（issue #1472）"
+    size: {w: 1600, h: 1500}
+    steps:
+      - new_game: {seed: 1}
+      # 見極めの見立ては週の気づきで乱数しだいに付くので、ここでは見立てを直接置く（表示Lv。40＝C・15＝F の見立て）
+      - set: {RosterService.Active.0.PitcherSenseReading: 40, RosterService.Active.2.PitcherSenseReading: 15}
+      - read: =RosterService.Active.0.PitcherSense
+      - set: {PlayerSelection.Index: 0, PlayerSelection.Pinned: true}
+      - show: PlayerList
+      - wait: 5
+      - read: hidden-list
+      - shot: 01-player-detail-sense-known
+      # 見立てが無い選手（2人目）は「？」
+      - set: {PlayerSelection.Index: 1, PlayerSelection.Pinned: true}
+      - show: PlayerList
+      - wait: 5
+      - read: hidden-list
+      - shot: 02-player-detail-sense-unknown
+      - set: {PlayerSelection.Index: 2, PlayerSelection.Pinned: true}
+      - show: PlayerList
+      - wait: 5
+      - read: hidden-list
+      - shot: 03-player-detail-sense-low
+
   - id: member-captain-1239
     name: "メンバー設定の主将マーカー「主」と学年ラベル（PR #1412・issue #1239）"
     steps:

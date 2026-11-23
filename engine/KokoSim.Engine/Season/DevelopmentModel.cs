@@ -221,7 +221,10 @@ public static class DevelopmentModel
         // （＝規格外の俊足が稀に伸びる）。既定（全1.0）では従来と1ビットも変わらない（不変条件#2）。
         var trainability = c.Trainability.For(ability);
         if (p.IsProdigy) trainability = Math.Max(1.0, trainability);
-        p.AddExp(ability, delta * p.GrowthMultiplier(ability) * trainability);
+        // 投手センス（issue #1472）: 投手系の能力だけ、打撃の才能とは独立に投手センスで伸びやすさが変わる。
+        var sense = AbilityKinds.DomainOf(ability) == GrowthDomain.Pitching
+            ? c.PitcherSenseGrowthFactor(p.PitcherSense) : 1.0;
+        p.AddExp(ability, delta * p.GrowthMultiplier(ability) * trainability * sense);
         while (p.Level(ability) < p.Cap(ability))
         {
             // 必要expは今の物差しのLvで引く（issue #1080）＝練習の伸びは物差しによらず同じ。

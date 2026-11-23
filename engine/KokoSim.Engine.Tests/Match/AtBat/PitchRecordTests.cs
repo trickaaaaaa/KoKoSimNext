@@ -360,6 +360,23 @@ public sealed class PitchRecordTests
 
         Assert.Equal(rec.AimX, token.AimX);
         Assert.Equal(rec.AimY, token.AimY);
+        Assert.False(token.Pitchout);
+    }
+
+    /// <summary>
+    /// 外した球（ウエスト・issue #1472 ついで）は再生層の表現にも印が乗る＝表示側が球種名（本来投げるはずだった球）を出さない。
+    /// </summary>
+    [Fact]
+    public void PitchTokenFactory_CarriesPitchoutFlag()
+    {
+        var rec = new PitchRecord(
+            PitchKind.Ball, 1, 0, KokoSim.Engine.Players.PitchType.Fork,
+            LocationX: 0.70, LocationY: 1.50, VelocityKmh: 125.0,
+            AimX: 0.0, AimY: 0.8, Pitchout: true);
+        var token = KokoSim.Engine.Match.Timeline.Playback.PitchTokenFactory.From(
+            rec, new KokoSim.Engine.Match.Game.GameContext(),
+            runnerOnFirst: true, runnerOnSecond: false, runnerOnThird: false);
+        Assert.True(token.Pitchout);
     }
 
     /// <summary>

@@ -19,7 +19,7 @@ public sealed class StealReadModelTests
     private static Player Runner(int steal = 50, int speed = 50) => new() { Steal = steal, Speed = speed };
     private static Player Catcher(int lead = 50, int arm = 50)
         => new() { Position = FieldPosition.Catcher, Lead = lead, ArmStrength = arm };
-    private static Player Pitcher(int mental = 50) => new() { Position = FieldPosition.Pitcher, Mental = mental };
+    private static Player Pitcher(int sense = 50) => new() { Position = FieldPosition.Pitcher, PitcherSense = sense };
 
     // --- 意外性(Expectedness): 快足盗塁屋のセオリーは高く、意表・ギャンブルは低い ---
 
@@ -77,9 +77,23 @@ public sealed class StealReadModelTests
     public void Pitchout_MoreLikelyWithSharperBattery()
     {
         var e = StealReadModel.Expectedness(Runner(steal: 70), StartType.Normal, C);
-        var dull = StealReadModel.PitchoutProbability(Catcher(lead: 20), Pitcher(mental: 30), e, C);
-        var sharp = StealReadModel.PitchoutProbability(Catcher(lead: 90), Pitcher(mental: 85), e, C);
+        var dull = StealReadModel.PitchoutProbability(Catcher(lead: 20), Pitcher(sense: 30), e, C);
+        var sharp = StealReadModel.PitchoutProbability(Catcher(lead: 90), Pitcher(sense: 85), e, C);
         Assert.True(sharp > dull + 0.05, $"鋭いバッテリーほど読むはず: dull={dull} sharp={sharp}");
+    }
+
+    [Fact]
+    public void Pitchout_ReadsPitcherSense_NotMental()
+    {
+        // issue #1472: 投手側の読みは投手センス（隠し能力）。旧実装の代用（精神力）は効かない。
+        var e = StealReadModel.Expectedness(Runner(steal: 70), StartType.Normal, C);
+        var dull = StealReadModel.PitchoutProbability(Catcher(), Pitcher(sense: 20), e, C);
+        var sharp = StealReadModel.PitchoutProbability(Catcher(), Pitcher(sense: 90), e, C);
+        Assert.True(sharp > dull, $"投手センスが高いほど読むはず: dull={dull} sharp={sharp}");
+        var calm = new Player { Position = FieldPosition.Pitcher, Mental = 95 };
+        var nervous = new Player { Position = FieldPosition.Pitcher, Mental = 5 };
+        Assert.Equal(StealReadModel.PitchoutProbability(Catcher(), nervous, e, C),
+            StealReadModel.PitchoutProbability(Catcher(), calm, e, C), 12);
     }
 
     [Fact]
@@ -88,8 +102,8 @@ public sealed class StealReadModelTests
         // 意表（予想度をほぼ0にする）は、読み力が高くても掛け算で読み切れない。
         var eObvious = StealReadModel.Expectedness(Runner(steal: 95), StartType.Normal, C);
         var eSurprise = StealReadModel.Expectedness(Runner(steal: 20), StartType.Gamble, C);
-        var onObvious = StealReadModel.PitchoutProbability(Catcher(lead: 90), Pitcher(mental: 85), eObvious, C);
-        var onSurprise = StealReadModel.PitchoutProbability(Catcher(lead: 90), Pitcher(mental: 85), eSurprise, C);
+        var onObvious = StealReadModel.PitchoutProbability(Catcher(lead: 90), Pitcher(sense: 85), eObvious, C);
+        var onSurprise = StealReadModel.PitchoutProbability(Catcher(lead: 90), Pitcher(sense: 85), eSurprise, C);
         Assert.True(onSurprise < onObvious, $"意表の方が読まれにくいはず: surprise={onSurprise} obvious={onObvious}");
     }
 
@@ -98,7 +112,7 @@ public sealed class StealReadModelTests
     {
         // 極端に読みやすい状況でも上限を越えない。
         var e = StealReadModel.Expectedness(Runner(steal: 99), StartType.Normal, C);
-        var p = StealReadModel.PitchoutProbability(Catcher(lead: 99), Pitcher(mental: 99), e, C);
+        var p = StealReadModel.PitchoutProbability(Catcher(lead: 99), Pitcher(sense: 99), e, C);
         Assert.InRange(p, 0.0, C.MaxPitchoutProb);
     }
 
@@ -134,7 +148,7 @@ public sealed class StealReadModelTests
     {
         var runner = Runner(steal: 70);
         var catcher = Catcher(lead: 70);
-        var pitcher = Pitcher(mental: 60);
+        var pitcher = Pitcher(sense: 60);
         var a = new Xoshiro256Random(9);
         var b = new Xoshiro256Random(9);
         for (var i = 0; i < 50; i++)

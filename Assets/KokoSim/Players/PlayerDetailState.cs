@@ -251,6 +251,14 @@ namespace KokoSim.Unity.Players
             // 隠しパラメータ（推定）: 精神力のみ判明扱い、他はスカウト/面談で段階判明＝？。
             v.Hidden.Add(new HiddenParam { Key = "才能上限", Value = "？", Known = false });
             v.Hidden.Add(new HiddenParam { Key = "成長タイプ", Value = "？", Known = false });
+            // 投手センス（隠し能力・issue #1472）: 見極め（InsightModel）で見立てたランクだけを出す（読み違えも含む）。
+            var senseReading = p.PitcherSenseReading;
+            v.Hidden.Add(new HiddenParam
+            {
+                Key = "投手センス",
+                Value = senseReading.HasValue ? Tiers.FromStrength(senseReading.Value).ToString() : "？",
+                Known = senseReading.HasValue,
+            });
             // 性格（設計書23 §4・issue #935）: 見極め（InsightModel）で軸ごとに開示された見立てを出す。
             // タイプ名は4軸そろったときだけ（見立てから導く＝見誤りも含む）。軸は高い側か低い側かだけで値は出さない。
             var reading = p.PersonalityReading;

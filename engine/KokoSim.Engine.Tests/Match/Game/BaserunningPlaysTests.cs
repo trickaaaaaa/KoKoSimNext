@@ -651,12 +651,12 @@ public sealed class BaserunningPlaysTests
     [Fact]
     public void Pickoff_Rate_RisesWithRunnerLead_FallsWithPitcherSense()
     {
-        double Rate(int steal, int mental, int trials = 3000, ulong seed = 21)
+        double Rate(int steal, int sense, int trials = 3000, ulong seed = 21)
         {
             var coeff = C with { PickoffBaseProb = 0.03 };
             var rng = new Xoshiro256Random(seed);
             var runner = new Player { Steal = steal };
-            var pitcher = new Player { Mental = mental };
+            var pitcher = new Player { PitcherSense = sense };
             var hits = 0;
             for (var i = 0; i < trials; i++)
                 if (PickoffResolver.Resolve(runner, pitcher, coeff, rng)) hits++;
@@ -664,7 +664,7 @@ public sealed class BaserunningPlaysTests
         }
 
         Assert.True(Rate(90, 50) > Rate(20, 50), "走者Stealのリードで牽制率が上がらない");
-        Assert.True(Rate(50, 20) > Rate(50, 90), "投手Mentalで牽制率が下がらない");
+        Assert.True(Rate(50, 20) > Rate(50, 90), "投手センスで牽制率が下がらない（issue #1472）");
     }
 
     [Fact]

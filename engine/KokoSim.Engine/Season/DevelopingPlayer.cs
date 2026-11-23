@@ -137,6 +137,19 @@ public sealed class DevelopingPlayer
     /// <summary>捕手リードの隠し上限（Q8。野球脳と相関＋Late上振れ＝「名捕手の天井」）。</summary>
     public int LeadCap { get; set; } = 99;
 
+    /// <summary>
+    /// 投手センス（隠し能力・設計書01 §1.3・issue #1472）。生成時に球速の土台として引いた値をそのまま持つ
+    /// （<see cref="ProspectGenerator"/>）。効きは3つ: 配球の質・盗塁の読みと牽制（試合へ投影）／投手系能力の伸びやすさ
+    /// （<see cref="DevelopmentModel"/>・打撃の才能とは独立）。練習では伸びない。表示Lv（物差し −Δ）で持つ。
+    /// 選手画面の能力表には出さず、見極め（<see cref="InsightModel"/>）で推定が <see cref="PitcherSenseReading"/> に残る。
+    /// </summary>
+    public int PitcherSense { get; set; } = AbilityScale.AverageDisplay;
+
+    /// <summary>
+    /// 見極めで分かった投手センスの見立て（ランク表記のための表示Lv。読み違えもあり得る）。null＝まだ分からない。
+    /// </summary>
+    public int? PitcherSenseReading { get; set; }
+
     /// <summary>統率傾向（性格の一部, CHANGELOG 22b）。主将選定の軸（設計書09 §8）。</summary>
     public int Leadership { get; init; } = 50;
 
@@ -322,6 +335,8 @@ public sealed class DevelopingPlayer
             Lead = Lead,
             LeadExp = LeadExp,
             LeadCap = LeadCap,
+            PitcherSense = PitcherSense,
+            PitcherSenseReading = PitcherSenseReading,
             Leadership = Leadership,
             Receptiveness = Receptiveness,
             Diligence = Diligence,

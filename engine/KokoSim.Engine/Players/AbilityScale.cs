@@ -12,7 +12,7 @@ namespace KokoSim.Engine.Players;
 /// <para>天井と下限の扱い（オーナー決定 2026-11-21）: 物理Lvの<b>天井は +Δ</b>（表示99＝物理106まで出せる＝強豪の個性）、
 /// <b>下限は物理のまま</b>（表示では Δ 下がる: AI校 10→3・専門外 8→1）。表示の最小は1（物理 1+Δ）。</para>
 ///
-/// <para>対象: 1〜99 の表示能力（打撃・走塁・守備・投手の各能力・精神力・捕手リード・才能上限）。
+/// <para>対象: 1〜99 の表示能力（打撃・走塁・守備・投手の各能力・精神力・捕手リード・投手センス・才能上限）。
 /// 対象外: 弾道（ゴロ型〜フライ型の型の軸）・守備位置適性（地力に掛ける補正）・性格の4軸・km/h・目安投球数（画面の単位）。</para>
 ///
 /// <para>試合の中は係数束の <see cref="AbilityEffectCoefficients.Delta"/>（YAML <c>ability_effect.delta</c>）を読む
@@ -131,6 +131,7 @@ public static class AbilityScale
             Steal = Move(p.Steal, by),
             Baserunning = Move(p.Baserunning, by),
             Mental = Move(p.Mental, by),
+            PitcherSense = Move(p.PitcherSense, by),
             Pitching = Shift(p.Pitching, by),
         };
     }

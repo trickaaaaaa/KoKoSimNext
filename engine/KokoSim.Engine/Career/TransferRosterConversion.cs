@@ -165,6 +165,7 @@ public static class TransferRosterConversion
             Mental = s.Mental,
             Leadership = s.Leadership,
             Lead = s.Lead,
+            PitcherSense = s.PitcherSense, // 投手センス（issue #1472）は AI 側の値をそのまま引き継ぐ（乱数不使用）
             InjuryResistance = MathUtil.Clamp(rng.NextGaussian(50, 15), 10, 90),
             Skills = s.Skills,
         };

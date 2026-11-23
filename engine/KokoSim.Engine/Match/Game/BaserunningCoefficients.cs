@@ -183,12 +183,12 @@ public sealed record BaserunningCoefficients
     /// issue #402で 0.0→0.4 に正値化＝実ゲームで一・三塁重盗が発火（YAML校正値と一致）。</summary>
     public double DoubleStealThirdBreakProb { get; init; } = 0.4;
     /// <summary>牽制アウト（design-14 P1-5）の基準確率。走者の盗塁パラメータ(Steal)が高いほどリードが大きく上昇、
-    /// 投手のMental（牽制の鋭さの代理指標）が高いほど下降。issue #402で 0.0→0.05 に正値化したが、issue #661 で 0.0 に戻した＝牽制は<b>盗塁企図の球にしか出ない</b>ので、
+    /// 投手センス（牽制の鋭さ・issue #1472。旧実装は Mental で代用）が高いほど下降。issue #402で 0.0→0.05 に正値化したが、issue #661 で 0.0 に戻した＝牽制は<b>盗塁企図の球にしか出ない</b>ので、
     /// 牽制球が映った瞬間に「この後、盗塁だ」と分かってしまう。0 の間は牽制の判定も絵も出ない（乱数も消費しない）。</summary>
     public double PickoffBaseProb { get; init; } = 0.0;
     /// <summary>走者Steal(-50)あたりの牽制アウト確率の上昇幅。</summary>
     public double PickoffRunnerLeadSlope { get; init; } = 0.0015;
-    /// <summary>投手Mental(-50)あたりの牽制アウト確率の減少幅。</summary>
+    /// <summary>投手センス（効き Pitching 通し・issue #1472）(−50)あたりの牽制アウト確率の減少幅。</summary>
     public double PickoffPitcherSenseSlope { get; init; } = 0.001;
     /// <summary>牽制アウト確率の上限。</summary>
     public double PickoffMaxProb { get; init; } = 0.08;
@@ -768,7 +768,7 @@ public sealed record BaserunningCoefficients
     public double StealReadIntercept { get; init; } = 0.15;
     /// <summary>捕手リード(Lead−50)あたりの読み力加算。効き（<c>ability_effect.pitching_scale</c>＝0.5）を通した Lv に掛ける＝生Lv時代の 0.006 の2倍で同じ効き（issue #1210）。</summary>
     public double StealReadCatcherLeadSlope { get; init; } = 0.012;
-    /// <summary>投手センス(Mental−50)あたりの読み力加算（バッテリーで読む）。</summary>
+    /// <summary>投手センス（効き <c>ability_effect.pitching_scale</c> 通し・issue #1472。旧実装は Mental で代用）(−50)あたりの読み力加算（バッテリーで読む）。</summary>
     public double StealReadPitcherSenseSlope { get; init; } = 0.003;
     /// <summary>ピッチアウト（読み切り）確率の上限。読み力×予想度でも越えない。</summary>
     public double MaxPitchoutProb { get; init; } = 0.55;

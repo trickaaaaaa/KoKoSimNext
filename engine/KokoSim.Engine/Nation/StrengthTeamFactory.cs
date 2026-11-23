@@ -323,6 +323,22 @@ public static class StrengthTeamFactory
     // 旧 LatentPitchingSalt（#381 で改称）。値を変えると全AI校の非マウンド選手の投手能力が変わるので触らない。
     private const ulong UntrainedPitchingSalt = 0x7A17_0000_0000_0000UL;
 
+    /// <summary>投手センス（issue #1472）の Fork ソルト（性格・潜在投手・精神系と別ストリーム＝主RNG非消費）。</summary>
+    private const ulong PitcherSenseSalt = 0x5E45_0000_0000_0000UL;
+
+    /// <summary>
+    /// AI校の投手センス（隠し・issue #1472）。自校の生成（<see cref="Season.ProspectGenerator"/>）と同じ形:
+    /// 野手水準（強さ×<see cref="Season.RosterCoefficients.NonPitcherSenseFactor"/>）↔ 投手上振れ（強さ＋
+    /// <see cref="Season.RosterCoefficients.PitcherSenseBonus"/>）を投手寄せ重み w で補間し、σ
+    /// <see cref="Season.RosterCoefficients.PitcherSenseSd"/> の個体差を足す。今の物差し（物理Lv）で返す。
+    /// </summary>
+    internal static int SamplePitcherSense(double strength, double pitcherWeight, RosterCoefficients rc, IRandomSource rng)
+    {
+        var mean = strength * rc.NonPitcherSenseFactor
+                   + (strength + rc.PitcherSenseBonus - strength * rc.NonPitcherSenseFactor) * pitcherWeight;
+        return (int)Math.Round(MathUtil.Clamp(mean + rng.NextGaussian(0, rc.PitcherSenseSd), 5, 95));
+    }
+
     /// <summary>
     /// 投手寄せ重み w を引くときの候補プール人数。使い捨て生成（<see cref="Create"/>）専用で、
     /// 永続ロスター側は #384 で「コホート全員が適性を持ち選抜で配置が決まる」形になったため対応物は無い
@@ -497,6 +513,9 @@ public static class StrengthTeamFactory
             Mental = mentalLv,
             Leadership = leadershipLv,
             Lead = leadLv,
+            // 投手センス（issue #1472）: 専用 Fork＝主RNGの消費列と上の能力ロールは1ビットも変わらない。
+            // エース格の上乗せ（pitchingLift）は投手の素質ごと＝センスにも乗せる。
+            PitcherSense = SamplePitcherSense(strength + pitchingLift, pitcherWeight, rc, rng.Fork(salt ^ PitcherSenseSalt)),
         };
     }
 

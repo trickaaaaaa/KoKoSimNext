@@ -71,6 +71,14 @@ public sealed record Player
     /// <summary>捕手リード（配球の質, 設計書01 §2①）。高いほど良い配球。捕手のみ意味を持つ。50=平均で恒等。</summary>
     public int Lead { get; init; } = AbilityScale.AverageDisplay;
 
+    /// <summary>
+    /// 投手センス（隠し能力・設計書01 §1.3・issue #1472）。配球の質（球種の選び方）と、盗塁の読み・牽制の鋭さに効く。
+    /// 全選手が持つ（投手は配置であって属性ではない）。表示Lv（物差し −Δ）で持ち、解決式は
+    /// <see cref="AbilityEffectCoefficients.Pitching(int)"/> を通して読む（不変条件#1）。既定は平均＝恒等。
+    /// 選手画面の能力表には出さない（見極めで推定だけが分かる）。
+    /// </summary>
+    public int PitcherSense { get; init; } = AbilityScale.AverageDisplay;
+
     /// <summary>走塁系連続パラメータ（設計書02 §4）。旧走塁系スキルの後継。</summary>
     public int Bunt { get; init; } = AbilityScale.AverageDisplay;
     public int Steal { get; init; } = AbilityScale.AverageDisplay;

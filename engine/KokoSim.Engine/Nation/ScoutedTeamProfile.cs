@@ -45,6 +45,7 @@ public static class ScoutedTeamProfile
             Name = p.Name,
             Grade = p.Grade,
             Mental = p.Mental,
+            PitcherSense = p.PitcherSense,
             Leadership = p.Leadership,
             Archetype = p.Pitching.Archetype,
         };

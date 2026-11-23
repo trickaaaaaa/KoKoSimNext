@@ -391,6 +391,7 @@ public static class RosterTeamBuilder
             BuntSuccessBonus = pCoeff.BuntSuccessBonus(dp.Selflessness),
             ChanceHitFactor = pCoeff.ChanceHitFactor(dp.Selflessness),
             Lead = dp.Lead,               // 捕手リード（設計書01 §2①）。怪我係数の対象外
+            PitcherSense = dp.PitcherSense, // 投手センス（隠し・issue #1472）。怪我係数の対象外
             Skills = dp.Skills,           // スキルはフラグなので怪我係数の対象外
             Condition = FormModel.Quantize(dp.ConditionValue),
             ConditionValue = dp.ConditionValue,

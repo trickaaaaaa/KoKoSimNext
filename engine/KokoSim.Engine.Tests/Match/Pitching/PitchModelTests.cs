@@ -409,6 +409,66 @@ public sealed class PitchModelTests
             $"変化球優位の投手で高リードのストレート比率が下がっていない: avg={breakingShareAvg:P1} high={breakingShareHigh:P1}");
     }
 
+    // --- 投手センス→配球の質（issue #1472: 選び分けの配球力＝捕手リード＋(センス−50)×重み。球威には足さない） ---
+
+    [Fact]
+    public void PitcherSense_Fifty_IsIdentity()
+    {
+        var pitcher = new PitcherAttributes
+        {
+            MaxVelocityKmh = 147.0,
+            Repertoire = new[]
+            {
+                new PitchSlot { Type = PitchType.Fastball, Power = 90, Sharpness = 90 },
+                new PitchSlot { Type = PitchType.Slider, Power = 50, Sharpness = 15 },
+            },
+        };
+        for (ulong s = 0; s < 50; s++)
+        {
+            var a = PitchSelection.Select(pitcher, Zone, Bat, Pit, new Xoshiro256Random(s), catcherLead: 63);
+            var b = PitchSelection.Select(pitcher, Zone, Bat, Pit, new Xoshiro256Random(s), catcherLead: 63, pitcherSense: 50);
+            Assert.Equal(a.Type, b.Type);
+            Assert.Equal(a.Stuff, b.Stuff, 12);
+        }
+    }
+
+    [Fact]
+    public void PitcherSense_ShiftsSelectionLikeLead_ButNotStuff()
+    {
+        var strongFastball = new PitcherAttributes
+        {
+            MaxVelocityKmh = 147.0,
+            Repertoire = new[]
+            {
+                new PitchSlot { Type = PitchType.Fastball, Power = 90, Sharpness = 90 },
+                new PitchSlot { Type = PitchType.Slider, Power = 50, Sharpness = 15 },
+            },
+        };
+        double FastballShare(int sense)
+        {
+            var rng = new Xoshiro256Random(99);
+            const int n = 20000;
+            var fb = 0;
+            for (var i = 0; i < n; i++)
+                if (PitchSelection.Select(strongFastball, Zone, Bat, Pit, rng, pitcherSense: sense).Type == PitchType.Fastball) fb++;
+            return fb / (double)n;
+        }
+        var low = FastballShare(10);
+        var high = FastballShare(90);
+        Assert.True(high > low + 0.01, $"投手センスが高いほど強い軸へ寄るはず: low={low:P1} high={high:P1}");
+
+        // 球威の上乗せ（捕手リードの成分）には足さない。
+        var a = PitchSelection.Select(strongFastball, Zone, Bat, Pit, new Xoshiro256Random(4), pitcherSense: 10);
+        var b = PitchSelection.Select(strongFastball, Zone, Bat, Pit, new Xoshiro256Random(4), pitcherSense: 90);
+        if (a.Type == b.Type) Assert.Equal(a.Stuff, b.Stuff, 12);
+
+        // 重み0なら従来どおり（捕手リードだけ）。
+        var off = Pit with { PitcherSenseLeadWeight = 0.0 };
+        for (ulong s = 0; s < 30; s++)
+            Assert.Equal(PitchSelection.Select(strongFastball, Zone, Bat, off, new Xoshiro256Random(s)).Type,
+                PitchSelection.Select(strongFastball, Zone, Bat, off, new Xoshiro256Random(s), pitcherSense: 95).Type);
+    }
+
     [Fact]
     public void CatcherLead_High_PrefersSharperBreakingBall_AmongMultiple()
     {

@@ -171,6 +171,6 @@ public static class PitchTokenFactory
         // 対決ビューの投球前の構えに使ってよい（実着弾位置は引き続きリリース後にしか使わせない）。
         // サイン（issue #490）: PitchRecord.Sign の写し。バント/スクイズの構えを対決ビューに出すための表示専用。
         return new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh,
-            foulFlight, p.LocationX, p.LocationY, p.AimX, p.AimY, p.Trajectory, p.Sign);
+            foulFlight, p.LocationX, p.LocationY, p.AimX, p.AimY, p.Trajectory, p.Sign, p.Pitchout);
     }
 }
