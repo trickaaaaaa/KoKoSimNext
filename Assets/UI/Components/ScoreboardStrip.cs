@@ -49,14 +49,11 @@ namespace KokoSim.Unity.Components
                     record.text = won + "勝" + lost + "敗" + (drawn > 0 ? drawn + "分" : "");
             }
 
-            // 日付（issue #1534 項目9）: 大会中は大会の日付。負けてから結果を閉じるまで（大会モードは抜けている）も
-            // 大会の最終日のまま出し、明けの週は大会の日付より前の週へ戻さない＝「7月16日」→「7月1週」→「7月2週」の逆戻りを出さない。
             var date = root.Q<Label>("tb-date");
             if (date != null)
-                date.text = s.InTournament ? s.TournamentDateLabel
-                    : s.PendingTournamentWrapUp != null ? s.PendingWrapUpDateLabel
-                    : SeasonClock.CompactLabel(GameClock.YearIndex,
-                        SeasonClock.DisplayWeek(GameClock.YearIndex, GameClock.Week, s.LastTournamentEndDate));
+                date.text = s.InTournament
+                    ? s.TournamentDateLabel
+                    : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
 
             // 進行ボタン（issue #1534 項目9）: 大会中はどのタブでも「1日進める」。文言はここだけが決める。
             var advance = root.Q<Button>("advance");
