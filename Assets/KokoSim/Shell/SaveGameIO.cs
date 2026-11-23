@@ -220,6 +220,7 @@ namespace KokoSim.Unity.Shell
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             if (!TryWriteAtomic(path, raw)) return false;
+            WebStorage.Flush();   // ブラウザ版は IndexedDB へ書き出さないと開き直しで消える
             LastSavedAt = (GameClock.YearIndex, GameClock.Week);
             return true;
         }
