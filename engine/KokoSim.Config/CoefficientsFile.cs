@@ -1788,6 +1788,7 @@ public static class CoefficientsLoader
         public int MatchMinStrikeOuts { get; set; } = D.MatchMinStrikeOuts;
         public int ReliefMinOuts { get; set; } = D.ReliefMinOuts;
         public double GradeOvercomeProb { get; set; } = D.GradeOvercomeProb;
+        public double GradeOvercomeDiligenceSpan { get; set; } = D.GradeOvercomeDiligenceSpan;
         public int MaxSkills { get; set; } = D.MaxSkills;
 
         public SkillAcquisitionCoefficients ToModel() => new()
@@ -1803,6 +1804,7 @@ public static class CoefficientsLoader
             MatchMinStrikeOuts = MatchMinStrikeOuts,
             ReliefMinOuts = ReliefMinOuts,
             GradeOvercomeProb = GradeOvercomeProb,
+            GradeOvercomeDiligenceSpan = GradeOvercomeDiligenceSpan,
             MaxSkills = MaxSkills,
         };
     }

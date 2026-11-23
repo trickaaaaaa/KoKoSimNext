@@ -26,8 +26,8 @@ public sealed class SkillAcquisitionTests
         MatchOvercomeProb = 0, GradeOvercomeProb = 0,
     };
 
-    private static DevelopingPlayer Player(int id, SkillSet? skills = null, int grade = 2)
-        => new() { Id = id, Grade = grade, Skills = skills ?? SkillSet.Empty };
+    private static DevelopingPlayer Player(int id, SkillSet? skills = null, int grade = 2, int diligence = 50)
+        => new() { Id = id, Grade = grade, Skills = skills ?? SkillSet.Empty, Diligence = diligence };
 
     // ===== SkillSet =====
 
@@ -104,16 +104,44 @@ public sealed class SkillAcquisitionTests
         };
         var notices = SkillAcquisitionModel.OnGrowthEvents(growth, new Xoshiro256Random(3), Always());
 
-        Assert.Equal(2, notices.Count);
+        Assert.Equal(3, notices.Count);
         var b = notices.Single(n => n.Player == bat);
         Assert.Contains(b.Skill, SkillAcquisitionModel.BattingGain);
         Assert.Equal(SkillChangeKind.Acquired, b.Kind);
         Assert.Equal(SkillChangeCause.Awakening, b.Cause);
         Assert.Contains(b.Skill, bat.Skills.Visible);
         Assert.Contains(notices.Single(n => n.Player == pit).Skill, SkillAcquisitionModel.PitchingGain);
-        Assert.True(def.Skills.IsEmpty);
+        Assert.Contains(notices.Single(n => n.Player == def).Skill, SkillAcquisitionModel.DefenseGain);
 
         Assert.Empty(SkillAcquisitionModel.OnGrowthEvents(growth, new Xoshiro256Random(3), Never()));
+    }
+
+    [Fact]
+    public void DefenseAndRunningAwakening_GiveTheirPool_AndManifestDormantFirst()
+    {
+        // Q58 決着④: 守備・走塁の覚醒にも同じ確率で、その分野の有益スキル。隠しで持っていれば先に表へ出す。
+        var run = Player(1);
+        var def = Player(2, new SkillSet(hidden: new[] { Skill.RoleModel }));
+        var growth = new[]
+        {
+            new GrowthNotice(run, GrowthEventType.Awakening, null) { Domain = GrowthDomain.Running },
+            new GrowthNotice(def, GrowthEventType.GrandAwakening, null) { Domain = GrowthDomain.Defense },
+        };
+        var notices = SkillAcquisitionModel.OnGrowthEvents(growth, new Xoshiro256Random(2), Always());
+        Assert.Contains(notices.Single(n => n.Player == run).Skill, SkillAcquisitionModel.RunningGain);
+        var d = notices.Single(n => n.Player == def);
+        Assert.Equal((Skill.RoleModel, SkillChangeKind.Manifested), (d.Skill, d.Kind));
+        Assert.Contains(Skill.RoleModel, def.Skills.Visible);
+
+        // 反対（ケガしやすい）を持つ選手に故障しにくいは付かない
+        for (ulong seed = 1; seed <= 30; seed++)
+        {
+            var prone = Player(3, new SkillSet(visible: new[] { Skill.InjuryProne }));
+            SkillAcquisitionModel.OnGrowthEvents(
+                new[] { new GrowthNotice(prone, GrowthEventType.Awakening, null) { Domain = GrowthDomain.Running } },
+                new Xoshiro256Random(seed), Always());
+            Assert.False(prone.Skills.Has(Skill.Durable));
+        }
     }
 
     [Fact]
@@ -215,6 +243,28 @@ public sealed class SkillAcquisitionTests
         Assert.True(second.Skills.IsEmpty);
         Assert.True(freshman.Skills.Has(Skill.Lazy));
         Assert.True(hiddenFlaw.Skills.IsHidden(Skill.Lazy));
+    }
+
+    [Fact]
+    public void GradeOvercome_FollowsDiligence_AverageUnchanged()
+    {
+        // Q58 決着③: 勤勉さ1で10%・50で20%・99で30%（平均は20%のまま）。
+        var c = new SkillAcquisitionCoefficients();
+        Assert.Equal(0.10, SkillAcquisitionModel.GradeOvercomeProb(Player(1, diligence: 1), c), 9);
+        Assert.Equal(0.20, SkillAcquisitionModel.GradeOvercomeProb(Player(1, diligence: 50), c), 9);
+        Assert.Equal(0.30, SkillAcquisitionModel.GradeOvercomeProb(Player(1, diligence: 99), c), 9);
+
+        // 実際の抽選でも勤勉な選手ほど克服する
+        int Overcome(int diligence)
+        {
+            var roster = Enumerable.Range(1, 4000)
+                .Select(i => Player(i, new SkillSet(visible: new[] { Skill.Lazy }), diligence: diligence)).ToList();
+            return SkillAcquisitionModel.OnYearAdvanced(roster, new Xoshiro256Random(11), c).Count;
+        }
+        var lo = Overcome(1);
+        var hi = Overcome(99);
+        Assert.InRange(lo, 300, 500);    // 期待 400
+        Assert.InRange(hi, 1050, 1350);  // 期待 1200
     }
 
     // ===== シーズンへの配線 =====

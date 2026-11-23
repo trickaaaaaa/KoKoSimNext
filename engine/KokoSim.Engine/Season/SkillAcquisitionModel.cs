@@ -56,8 +56,13 @@ public sealed record SkillAcquisitionCoefficients
     public int MatchMinStrikeOuts { get; init; } = 10;
     /// <summary>活躍の基準（救援）: 無失点で取ったアウト数。</summary>
     public int ReliefMinOuts { get; init; } = 6;
-    /// <summary>年度替わりに、2・3年が体質の負スキル（サボり癖・ケガしやすい）を克服する確率（1年あたり）。</summary>
+    /// <summary>年度替わりに、2・3年が体質の負スキル（サボり癖・ケガしやすい）を克服する確率（1年あたり・勤勉さ50のとき）。</summary>
     public double GradeOvercomeProb { get; init; } = 0.20;
+    /// <summary>
+    /// 学年の克服の勤勉さ（性格③）への連動幅（Q58 決着③）。確率＝<see cref="GradeOvercomeProb"/>＋(勤勉さ−50)/49×この値
+    /// ＝勤勉さ1で −幅、99で ＋幅（既定 0.10 で 10%〜30%）。勤勉さの分布は50中心なので平均は変わらない。
+    /// </summary>
+    public double GradeOvercomeDiligenceSpan { get; init; } = 0.10;
     /// <summary>後天習得はこの数（怪物を除く）を超えては付けない。</summary>
     public int MaxSkills { get; init; } = 4;
 }
@@ -92,6 +97,13 @@ public static class SkillAcquisitionModel
     /// <summary>救援の活躍で付きうるスキル。</summary>
     internal static readonly Skill[] ReliefGain = { Skill.Fireman, Skill.ClutchPitcher };
 
+    /// <summary>
+    /// 守備・走塁の覚醒で付きうるスキル（Q58 決着④）。守備系スキルは廃止済み（#907）で走塁の巧拙はパラメータなので、
+    /// 分野の練習の積み重ねにつながる体質・チーム系から選ぶ＝守備はお手本・故障しにくい、走塁はムードメーカー・故障しにくい。
+    /// </summary>
+    internal static readonly Skill[] DefenseGain = { Skill.RoleModel, Skill.Durable };
+    internal static readonly Skill[] RunningGain = { Skill.Moodmaker, Skill.Durable };
+
     /// <summary>実戦の活躍で克服しうる負スキル（試合中の癖）。</summary>
     internal static readonly Skill[] BattingFlaws = { Skill.ChokeHitter };
     internal static readonly Skill[] PitchingFlaws =
@@ -104,7 +116,7 @@ public static class SkillAcquisitionModel
 
     /// <summary>
     /// 覚醒・大覚醒の後処理。発火した成長イベントのうち覚醒（打撃・投球の分野）だけを見て、
-    /// まれにその分野の有益スキルを付ける。守備・走塁の覚醒には付けない（守備系スキルは廃止・走塁はパラメータ）。
+    /// まれにその分野の有益スキルを付ける（守備・走塁も同じ確率・Q58 決着④）。
     /// </summary>
     public static IReadOnlyList<SkillChangeNotice> OnGrowthEvents(
         IReadOnlyList<GrowthNotice> growth, IRandomSource rng, SkillAcquisitionCoefficients c)
@@ -121,6 +133,8 @@ public static class SkillAcquisitionModel
             {
                 GrowthDomain.Batting => BattingGain,
                 GrowthDomain.Pitching => PitchingGain,
+                GrowthDomain.Defense => DefenseGain,
+                GrowthDomain.Running => RunningGain,
                 _ => null,
             };
             if (pool is null) continue;
@@ -171,7 +185,7 @@ public static class SkillAcquisitionModel
 
     /// <summary>
     /// 年度替わり（進級の後）の克服判定。2・3年（新入生は除く）が持つ体質の負スキルを、1つずつ
-    /// <see cref="SkillAcquisitionCoefficients.GradeOvercomeProb"/> で外す。隠しで持っていた負スキルは対象外
+    /// <see cref="GradeOvercomeProb(DevelopingPlayer, SkillAcquisitionCoefficients)"/>（勤勉さに連動）で外す。隠しで持っていた負スキルは対象外
     /// （本人も監督も知らない癖を「克服した」とは言えない＝気づきで表に出てから克服の対象になる）。
     /// </summary>
     public static IReadOnlyList<SkillChangeNotice> OnYearAdvanced(
@@ -184,13 +198,17 @@ public static class SkillAcquisitionModel
             foreach (var flaw in ConstitutionFlaws)
             {
                 if (!p.Skills.Visible.Contains(flaw)) continue;
-                if (!MathUtil.Chance(c.GradeOvercomeProb, rng)) continue;
+                if (!MathUtil.Chance(GradeOvercomeProb(p, c), rng)) continue;
                 p.Skills = p.Skills.Remove(flaw);
                 notices.Add(new SkillChangeNotice(p, flaw, SkillChangeKind.Overcome, SkillChangeCause.Grade));
             }
         }
         return notices;
     }
+
+    /// <summary>学年の克服の確率（勤勉さに連動・Q58 決着③）。0〜1 に収める。</summary>
+    public static double GradeOvercomeProb(DevelopingPlayer p, SkillAcquisitionCoefficients c)
+        => MathUtil.Clamp(c.GradeOvercomeProb + (p.Diligence - 50) / 49.0 * c.GradeOvercomeDiligenceSpan, 0.0, 1.0);
 
     private static SkillChangeNotice? Judge(DevelopingPlayer p, Skill[] flaws, Skill[] gains,
         IRandomSource rng, SkillAcquisitionCoefficients c)
