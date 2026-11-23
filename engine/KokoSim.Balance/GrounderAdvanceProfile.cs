@@ -22,7 +22,7 @@ public static partial class GameSimulation
         for (var i = 0; i < games; i++) forks[i] = root.Fork((ulong)i);
 
         // [方向][アウト][0=場面, 1=走った, 2=三塁憤死]
-        var dirs = new[] { "一塁方向（一・投）", "二塁方向（二）", "遊撃方向（遊）", "三塁方向（三・捕）" };
+        var dirs = new[] { "一塁方向（一）", "二塁方向（二）", "遊撃方向（遊）", "三塁方向（三・捕）", "投手ゴロ（投）" };
         var counts = new long[dirs.Length, 2, 3];
         var gate = new object();
         Parallel.For(0, games, i =>
@@ -38,7 +38,8 @@ public static partial class GameSimulation
                 if (!e.BaseSecondBefore || e.BaseFirstBefore || e.BaseThirdBefore || e.OutsBefore > 1) continue;
                 var d = e.FieldedBy switch
                 {
-                    FieldPosition.FirstBase or FieldPosition.Pitcher => 0,
+                    FieldPosition.FirstBase => 0,
+                    FieldPosition.Pitcher => 4,
                     FieldPosition.SecondBase => 1,
                     FieldPosition.Shortstop => 2,
                     FieldPosition.ThirdBase or FieldPosition.Catcher => 3,
