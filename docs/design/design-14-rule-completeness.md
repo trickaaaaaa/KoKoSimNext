@@ -415,7 +415,7 @@
   `grounder_advance_start_delay_seconds` を引き受ける（打球が内野にある以上、打った瞬間には走れない）。
   守備の時計は #816 の `CatchErrorReadyAtSeconds`（拾い直し完了）＋外野と同じ握り替え・送球。
 - **送り判断**: 三塁へ回すかの判断＝単打の一塁→三塁と同じ `HomeSendDecision.ShouldSendThird`
-  （`send_third_min_success` 0.60・2アウト緩和あり）。ゴロ進塁打の `SendAdvanceThreshold`（0.35）は
+  （`send_third_min_success` 0.60・2アウト緩和あり）。ゴロ進塁打の `SendAdvanceThreshold`（0.35・#1418 以降は投手ゴロ等にだけ効く）は
   「一塁で1アウトを取られた後」の進塁打用で、ここで使うと送った試行の多くが三塁で刺される（「三塁で
   アウトになるな」の定石に反する）ため採らなかった。
 - **乱数**: 自重は乱数を消費しない（本塁・三塁レースの流儀, 不変条件#2）。勝負は `ResolveRace`（逸れ2つ＋抽選1つ）。

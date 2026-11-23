@@ -13,7 +13,10 @@ namespace KokoSim.Engine.Tests.Match.Game;
 /// <summary>
 /// ゴロの進塁打で二塁走者を「一塁→三塁」の転送で刺す絵（issue #801）に、三塁へ入る野手の動きがあること（issue #1416）。
 /// 動きが無いと三塁手が守備位置に留まったまま、球だけが無人の三塁へ着いてアウトになる。
+/// issue #1418 で一塁手・二塁手のゴロは三塁へ転送しなくなり、転送が残るのは投手ゴロ（1-3 の後）などだけ＝600試合で
+/// 1件程度まで減った。標本を確保するため試合数を 3000 に増やし Heavy へ移した（数百試合以上は Heavy・issue #361）。
 /// </summary>
+[Trait("Category", "Heavy")]
 public sealed class AdvanceRelayThirdCoverTests
 {
     private static readonly FieldGeometry Field = new();
@@ -21,7 +24,7 @@ public sealed class AdvanceRelayThirdCoverTests
     [Fact]
     public void RelayToThird_HasAFielderCoveringTheBaseBeforeTheThrowArrives()
     {
-        const int games = 600;
+        const int games = 3000;
         var relays = new int[games];
         var failures = new System.Collections.Concurrent.ConcurrentBag<string>();
         var third = new TimelinePoint(Field.ThirdBase.X, Field.ThirdBase.Z);

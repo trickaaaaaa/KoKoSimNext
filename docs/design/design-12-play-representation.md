@@ -138,6 +138,7 @@ handoff §B の「併殺の名手 = `BaserunningModel` の DP に**野手 identi
   - **進塁先での走塁死**は `RunnerMove(2→3, Out)` として `extraOuts` に算入（本塁・三塁レースと同型・`CloseCall` は `|margin| < close_call_margin_seconds`）。**1プレー1送球**は `extraOuts==0` を適用条件に含めることで自然に満たす（併殺・野選・本塁憤死が起きた打席は送球を使い切っている＝物理レースへ入らず従来テーブルへフォールバック）。`productive_out_advance_prob` は**フライの進塁・純テーブル経路（`home==null`）・`extraOuts>0`** の3経路で存置（削除しない）。フォース進塁（`r1Forced`/`r2Forced`/`r3Forced`）は現状維持（時間の勝負にしない）。
   - 係数（`data/coefficients.yaml`＝C#既定と同値・`CoefficientsFile` マッピング）: `baserunning.grounder_advance_start_delay_seconds=0.90` / `advance_tag_seconds=0.10` / `advance_margin_scale=0.45` / `advance_success_bias=0.00` / `advance_relay_transfer_seconds=0.55` / `advance_direct_throw_max_runner_success=0.45`、`tactics.send_advance_min_success=0.35` / `send_advance_aggression_span=0.40`。RNG消費順が変わるため決定論ベースライン再ベースライン済み。
   - **Heavy 校正の注記（要オーナー判断）**: 一般帯 `games_10k.runs_per_team`（[3.5,6.7]）は seed42=6.63 / seed2024=6.67 で帯内。ただし**夏場帯** `games_10k_summer.runs_per_team`（[6.4,7.1]）が seed2024 で 7.077（変更前・main）→7.200（本変更）へ+0.12して**帯上限を超過**。`advance_success_bias` を 0.00〜−2.50 まで振っても夏場 seed2024 は 7.198〜7.200 で**ほぼ不動**（＝この帯超過は進塁レースの直接効果でなく RNG 消費順変化に伴う分布の揺れ。夏場 seed42 は 6.981 で不変）。issue #318 の校正縛り（bias 1本のみ・閾値/既存係数は不動）では収められないため、夏場帯の上限見直し（例 7.1→7.25）はオーナー判断（Issue コメント／`needs-human`）。
+  - **打球の方向で決める（issue #1418, 2026-11-23・オーナー決定 案C＋同日の補足2回）**: 二塁走者が遊撃ゴロで三塁へ走り、一塁経由の転送で刺されすぎていた（送り閾値0.35＝成功35%でも走る・方向を見ない。旧「一塁を捨てて三塁へ直接」分岐の廃止後は方向が効いていなかった）。①**走者より前（捕球点が本塁−二塁の線より三塁側＝`X<0`）のゴロは自重**（RNG非消費。例外は三盗で投球と同時に走っていた走者）②**走者の後ろで一塁手・二塁手が捕ったゴロは必ず進む**（RNG非消費。守備は一塁を取ったあと三塁へ転送しない＝「1塁方向へのゴロは100%進塁する。ファーストもわざわざ三塁に送球しない」。判定は `HomePlayContext.FielderRole`）③それ以外（**投手ゴロ**・三盗始動の走者など）は従来どおり転送レース（`send_advance_min_success` 0.35・アウト数を取らない）。途中で検討した「閾値0.65」「0アウトの上乗せ」は採らなかった。修正前後の実測表は Balance CLI の `grounder-advance` で取る。
 
 ### 3.6 安打の塁打数（Issue #24, 2026-07-21）
 
@@ -212,12 +213,13 @@ AVG .255→**.273**・得点 4.08→**5.14**/チーム（いずれも `balance-t
    変わるのは「発生後どうなるか」だけ。
 2. **逸れ幅**: `ThrowScatterSigmaCm`はcm単位（Ac50で22cm程度）で「ボールが塁を通り過ぎて
    拾い直しレースが起きるほどの逸れ」を表すには小さすぎたため流用せず、新設の
-   `WildThrowScatterSigmaM`（m単位、初期値6.0＝内野/本塁で独立値）をガウス分布からサンプルする。
+   `WildThrowScatterSigmaM`（m単位、内野/本塁で独立値。初期値6.0→issue #1260 で3.0＝受け手自身の回収を往復にした分、回収時間が従来と等価になるよう半分へ）をガウス分布からサンプルする。
    着弾点＝`ThrowRecovery.LandingPoint`＝**目標塁を、元の送球方向に逸れ幅ぶん延長した点**
    （送球が塁を通り過ぎて転がるイメージ。左右の分離はせず単一距離のまま）。
 3. **回収役は「受け手自身」と「バックアップ」の2候補から近い方を採用**（`ThrowRecovery.RecoveryPenaltySeconds`）:
-   - 受け手自身（一塁手／捕手）: 回収距離＝逸れ幅そのもの（すでに塁に立っていたため起点が近い）。
-     **返球は不要**（拾って直接タッチ）。
+   - 受け手自身（一塁手／捕手。一塁手が処理した打球の一塁送球は一塁カバーの投手）: 逸れ幅ぶん拾いに行き、
+     **拾った球を持って塁へ戻る＝往復**（封殺は塁を踏み直す必要がある。issue #1260 で片道から修正）。
+     回収時間＝`2×逸れ幅÷脚力＋反応`。**返球は不要**。
    - バックアップ: 定位置（`FieldGeometry.StandardPosition`）から着弾点までの距離を走り、
      **逸れ幅ぶんを塁へ返球する**。役割表（`ThrowRecovery.BackupRole`）は実際の野球のバックアップ
      規則に倣い固定＝一塁→右翼手／二塁→中堅手／三塁→左翼手／本塁→投手（フェーズ1で実際に使うのは

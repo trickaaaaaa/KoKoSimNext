@@ -125,9 +125,10 @@ public sealed record TacticsCoefficients
     public double SendThirdAggressionSpan { get; init; } = 0.45;
 
     // ===== ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318, 設計書12 §3.5）=====
-    // 本塁・三塁と同型だが**アウト数を取らない**（2アウト緩和なし）。ゴロ凡打は currentOuts>=2 で
-    // ApplyInPlayOut が即 return するため、2アウト緩和の枝は死にコードになるため設けない。
-    /// <summary>中立采配で進塁（二塁→三塁）を狙う閾値（到達見込みがこの値以上で進塁を試みる）。</summary>
+    // **アウト数を取らない**（2アウト緩和なし）。ゴロ凡打は currentOuts>=2 で ApplyInPlayOut が即 return する＝死にコード。
+    /// <summary>中立采配で進塁（二塁→三塁）を狙う閾値（到達見込みがこの値以上で進塁を試みる）。
+    /// issue #1418 で、走者の前（遊撃・三塁方向）のゴロは必ず自重・一塁手/二塁手のゴロは必ず進む（閾値を見ない）に
+    /// なった。この閾値が効くのは残り（投手ゴロ・三盗始動の走者など）だけ。</summary>
     public double SendAdvanceMinSuccess { get; init; } = 0.35;
     /// <summary>aggression(0=超慎重, 0.5=中立, 1=超積極) で閾値を動かす幅。</summary>
     public double SendAdvanceAggressionSpan { get; init; } = 0.40;

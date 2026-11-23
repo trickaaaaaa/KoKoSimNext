@@ -68,8 +68,7 @@ public static class ManagerTraitEffects
                 },
                 ManagerTrait.Cautious => b with
                 {
-                    // 基準の IntentionalWalkProb と大きい方を採る。既定の基準は 0.6（cautious_intentional_walk_prob の既定 0.55 より
-                    // 大きい）ので現行の既定値では確率は動かず、効くのは MinPower の緩和（打者の閾値を下げる）の方。
+                    // 基準の敬遠確率（既定 0.6）より上げる（既定 0.7・#1305。Max なので基準以下だと埋もれて効かない）。
                     IntentionalWalkProb = Math.Max(b.IntentionalWalkProb, ai.CautiousIntentionalWalkProb),
                     IntentionalWalkMinPower = Math.Max(1, b.IntentionalWalkMinPower - ai.CautiousIntentionalWalkMinPowerRelax),
                 },

@@ -167,9 +167,13 @@ public sealed class GrounderAdvanceRaceTests
     [Fact]
     public void BranchB_Relay_ProducesReachAndRunnerOut()
     {
-        // 中継が際どくなる送球到達（拮抗域）＝三塁到達と三塁での走塁死の両方が出る。刺殺は extraOuts＋(2→3,Out)。
-        var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: 2.0);
+        // 中継が際どくなる送球到達（走る域の下端＝送り閾値のすぐ上）＝三塁到達と三塁での走塁死の両方が出る。
+        // 刺殺は extraOuts＋(2→3,Out)。閾値を上げた（issue #1418）ので到達時刻は閾値から逆算して探す。
         var r2 = new Player { Speed = 50, Baserunning = 50 };
+        var t = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
+        var arrive = 1.5;
+        while (PRelay(Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: arrive), r2) < t) arrive += 0.01;
+        var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: arrive);
         var rng = new Xoshiro256Random(29);
         int reached = 0, outs = 0, extra = 0;
         for (var i = 0; i < 4000; i++)
@@ -203,6 +207,90 @@ public sealed class GrounderAdvanceRaceTests
         }
         var fresh = new Xoshiro256Random(77);
         Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15); // 無血進塁は RNG 非消費
+    }
+
+    // ================= 打球の方向・アウト数（issue #1418・オーナー決定 案C）=================
+
+    [Theory]
+    [InlineData(-9.0, 40.0)]   // 遊撃方向
+    [InlineData(-20.0, 22.0)]  // 三塁方向
+    public void FrontSideGrounder_SecondRunnerHolds_NoRngConsumed(double x, double z)
+    {
+        // 走者より前（遊撃・三塁方向）のゴロは、転送が遅く成功見込みが高くても原則自重（二塁残留・RNG非消費）。
+        // 一塁送球到達 3.0s＝右方向なら大半が進む送球（BranchB_RoutineGrounder と同じ）。
+        var home = Grounder(x: x, z: z, fieldedAt: 1.4, arm: 50, throwArriveSeconds: 3.0);
+        var r2 = new Player { Speed = 80, Baserunning = 80 };
+        Assert.True(PRelay(home, r2) >= HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients()),
+            "前提: 方向を見なければ走る域");
+
+        var rng = new Xoshiro256Random(5);
+        for (var i = 0; i < 50; i++)
+        {
+            var (bases, extraOuts, batterSafeOnFc, _) = RunOnce(home, r2, new Player(), rng);
+            Assert.Equal(0, extraOuts);
+            Assert.False(batterSafeOnFc);
+            Assert.Same(r2, bases.Second);
+            Assert.Null(bases.Third);
+        }
+        var fresh = new Xoshiro256Random(5);
+        Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15);
+    }
+
+    [Fact]
+    public void FrontSideGrounder_IsJudgedByFieldedPointSide()
+    {
+        Assert.True(BaserunningModel.IsGrounderInFrontOfSecondRunner(Grounder(x: -0.5, z: 40, fieldedAt: 1.4)));
+        Assert.False(BaserunningModel.IsGrounderInFrontOfSecondRunner(Grounder(x: 0.5, z: 40, fieldedAt: 1.4)));
+        Assert.False(BaserunningModel.IsGrounderInFrontOfSecondRunner(Grounder(x: 9, z: 40, fieldedAt: 1.4)));
+    }
+
+    [Theory]
+    [InlineData(FieldPosition.FirstBase, 0)]
+    [InlineData(FieldPosition.FirstBase, 1)]
+    [InlineData(FieldPosition.SecondBase, 0)]
+    [InlineData(FieldPosition.SecondBase, 1)]
+    public void RightSideInfielderGrounder_SecondRunnerAlwaysAdvances_NoRelayToThird(FieldPosition role, int outs)
+    {
+        // issue #1418（オーナー決定 2026-11-23）: 一塁・二塁方向のゴロは二塁走者が100%進む。一塁手・二塁手は一塁を
+        // 取ったあと三塁へ転送しない＝勝負にしない（鈍足・一塁送球が早くても憤死しない）。RNG非消費。
+        var situation = new HomePlaySituation(
+            new Vector3D(14, 0, 24), 1.0, new Player { ArmStrength = 90 }.ToFielder().ThrowSpeedMps);
+        var home = new HomePlayContext(Field, situation, new TacticsCoefficients(), 0.0,
+            DefenseDepth.Normal, false, ThrowArriveSeconds: 1.3, FielderRole: role);
+        var r2 = new Player { Speed = 1, Baserunning = 1 };
+        Assert.True(PRelay(home, r2) < HomeSendDecision.SendAdvanceThreshold(0.0, new TacticsCoefficients()),
+            "前提: 勝負なら自重する域");
+
+        var rng = new Xoshiro256Random(8);
+        for (var i = 0; i < 50; i++)
+        {
+            var bases = new BaseState { Second = r2 };
+            var (_, extraOuts, _, batterSafeOnFc, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), outs, C, rng, collectMoves: true, home);
+            Assert.Equal(0, extraOuts);
+            Assert.False(batterSafeOnFc);
+            Assert.Same(r2, bases.Third);
+            Assert.Null(bases.Second);
+            Assert.Contains(moves, m => m is { FromBase: 2, ToBase: 3, Out: false });
+        }
+        var fresh = new Xoshiro256Random(8);
+        Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15);
+    }
+
+    [Fact]
+    public void PitcherGrounder_StillRacesTheRelay()
+    {
+        // 投手ゴロは対象外（従来どおり一塁経由の転送との勝負）＝転送が早ければ自重する。
+        var situation = new HomePlaySituation(
+            new Vector3D(1, 0, 15), 1.0, new Player { ArmStrength = 90 }.ToFielder().ThrowSpeedMps);
+        var home = new HomePlayContext(Field, situation, new TacticsCoefficients(), 0.5,
+            DefenseDepth.Normal, false, ThrowArriveSeconds: 1.3, FielderRole: FieldPosition.Pitcher);
+        var r2 = new Player { Speed = 1, Baserunning = 1 };
+        Assert.False(BaserunningModel.IsRightSideInfielderGrounder(home));
+        var bases = new BaseState { Second = r2 };
+        BaserunningModel.ApplyDetailed(bases, PlateAppearanceResult.InPlayOut, new Player(), 1, C,
+            new Xoshiro256Random(3), collectMoves: true, home);
+        Assert.Same(r2, bases.Second);
     }
 
     // ================= 従来テーブルへのフォールバック =================

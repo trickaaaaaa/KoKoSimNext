@@ -164,9 +164,10 @@ public sealed class ForceTagDisplayTests
         // （issue productive-out-second-to-third-not-advancing で「一塁を捨てて直接送球」分岐を廃止したため、
         // 出塁と刺殺の両方を観測するには実在する送球＝転送レースの拮抗域を使う）。
         var home = new HomePlayContext(
-            Field, new HomePlaySituation(new Vector3D(-24, 0, 22), 1.4, new Player { ArmStrength = 70 }.ToFielder().ThrowSpeedMps),
+            // 右方向（一・二塁側）のゴロ。三塁側のゴロは二塁走者が原則自重する（issue #1418）。
+            Field, new HomePlaySituation(new Vector3D(9, 0, 40), 1.4, new Player { ArmStrength = 70 }.ToFielder().ThrowSpeedMps),
             new TacticsCoefficients(), 1.0, DefenseDepth.Normal, IsFly: false,
-            ThrowArriveSeconds: 2.0, BatterToFirstSeconds: 4.2);
+            ThrowArriveSeconds: 2.3, BatterToFirstSeconds: 4.2);
         var rng = new Xoshiro256Random(318);
         int found = 0;
         for (var i = 0; i < 2000; i++)
