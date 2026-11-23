@@ -497,13 +497,13 @@ set_aside_previous_branch() { # $1=num $2=branch
   fi
   pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)"
   if [ -n "$pr" ]; then
-    gh pr close "$pr" --comment "自動: 夜間エージェントが続きから着手するため閉じる。作業はブランチ \`$prev\`（$sha）に残した。" >/dev/null 2>&1 || true
+    gh pr close "$pr" --comment "自動: 夜間エージェントが続きから着手するため閉じる。作業はブランチ \`${prev}\`（${sha}）に残した。" >/dev/null 2>&1 || true
   fi
   if ! git -C "$REPO_DIR" push -q origin --delete "$branch" >/dev/null 2>&1; then
     echo "FAILED"; return 0
   fi
   local from="前回の作業"
-  [ -n "$pr" ] && from="前回の PR #$pr（閉じた）の作業"
+  [ -n "$pr" ] && from="前回の PR #${pr}（閉じた）の作業"
   echo "$prev|${from}がブランチ \`$prev\` にある。まず \`git fetch origin $prev\` して差分と、その PR・issue のコメント（レビューの指摘・オーナーの判断）を読むこと。使える部分は取り込み（cherry-pick か merge）、指摘と判断を反映して続きから仕上げる。古い前提で不要になった部分は捨ててよい。"
 }
 
@@ -710,7 +710,9 @@ Refs #${num}" >/dev/null 2>&1 ) \
 run_worker() { # $1=worker番号 $2=割当ファイル
   local w="$1" list="$2"
   self_pid   # このワーカー（サブシェル）の PID をロックの持ち主として使う
-  NOTE_TARGET="$LOG_DIR/summary-w$w.md"; : > "$NOTE_TARGET"
+  # 追記のみ。ここで空にするとラウンド2以降が前のラウンドの結果を消す（2026-11-24 の夜に SUMMARY が空になった）。
+  # 空にするのはラウンドループの前で1回だけ。
+  NOTE_TARGET="$LOG_DIR/summary-w$w.md"
   local num title _u
   while IFS=$'\t' read -r num title _u; do
     [ -z "$num" ] && continue
@@ -719,10 +721,17 @@ run_worker() { # $1=worker番号 $2=割当ファイル
 }
 
 # ── ラウンドループ: 割当→並列実行→再取得（新着があれば続行） ──
+w=0; while [ "$w" -lt "$ISSUE_WORKERS" ]; do : > "$LOG_DIR/summary-w$w.md"; w=$((w+1)); done
 round=1
 while :; do
   [ -f "$REPO_DIR/out/overnight/STOP" ] && { rm -f "$REPO_DIR/out/overnight/STOP"; NOTE_TARGET="$SYS_NOTES"; note "- 🛑 STOP ファイル検出。終了。"; break; }
   [ -f "$HALT" ] && { NOTE_TARGET="$SYS_NOTES"; note "- 🛑 HALT（赤 main 検出）。終了。"; break; }
+  # 上限に達したら再取得しない。上限で着手しなかった issue は processed に入らないので、
+  # 次の再取得で毎回「新着」に見え、何もしないラウンドを延々と回していた（2026-11-24 の夜に約2,100周）。
+  if [ "$MAX_ISSUES" -gt 0 ] && [ "$(count_now)" -ge "$MAX_ISSUES" ]; then
+    NOTE_TARGET="$SYS_NOTES"; note "- 🔢 着手上限（MAX_ISSUES=${MAX_ISSUES}）に達した。終了。"; break
+  fi
+  round_start_count="$(count_now)"
 
   issues="$(fetch_issues)"
   # 処理済みを除外
@@ -753,6 +762,11 @@ while :; do
     w=$((w+1))
   done
   for p in $pids; do wait "$p"; done
+
+  # 保険: 1件も着手しないラウンドは、同じ割当で回し直しても進まない（上限・STOP 以外の理由でも空回りさせない）。
+  if [ "$(count_now)" -eq "$round_start_count" ]; then
+    NOTE_TARGET="$SYS_NOTES"; note "- 🌙 このラウンドは1件も着手しなかった。終了。"; break
+  fi
 
   round=$((round + 1))
 done

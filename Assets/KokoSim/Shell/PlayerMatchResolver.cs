@@ -36,6 +36,8 @@ namespace KokoSim.Unity.Shell
                     Weather = CurrentWeatherCoefficients(),   // Issue #803/#971: 試合日の月で引く気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
+            // 大会段階・最後の夏のプレッシャー加点（設計書02 §3.1・issue #1507）。Resolve と BeginLive で同じ値。練習試合（context なし）は加点なし。
+            ctx = TournamentPressure.Apply(ctx, GameSession.Current.Kind, context);
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
             var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
             var managerIsAway = ManagerIsAway(manager, opponent);
@@ -68,6 +70,8 @@ namespace KokoSim.Unity.Shell
                     Weather = CurrentWeatherCoefficients(),   // Issue #803/#971: 試合日の月で引く気温モデルを実ゲームへ配線
                 },
                 CalendarYear());
+            // 大会段階・最後の夏のプレッシャー加点（設計書02 §3.1・issue #1507）。Resolve と BeginLive で同じ値。練習試合（context なし）は加点なし。
+            ctx = TournamentPressure.Apply(ctx, GameSession.Current.Kind, context);
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
             var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
