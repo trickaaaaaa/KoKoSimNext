@@ -249,3 +249,12 @@
 }
 .ss-cr__k { width: 300px; flex-shrink: 0; margin: 0; padding: 0; font-size: var(--fs-label); color: var(--color-muted); }
 .ss-cr__v { flex-grow: 1; flex-basis: 0; min-width: 0; margin: 0; padding: 0; white-space: normal; font-size: var(--fs-body); color: var(--color-chalk); }
+
+/* 設定（issue #1315）。1枚のカードに「画面・fps・音量」の行を縦に並べる。区分の見出しは行の頭に小さく、
+   項目名は左の固定幅・操作は右（クレジットの .ss-cr と同じ組み方）。線は引かず行の高さで揃える。 */
+.ss-root .ss-settings-page { flex-grow: 1; flex-basis: 0; min-height: 0; align-items: flex-start; }
+.ss-set-card { width: 760px; }
+.ss-set__group { margin: var(--sp-3) 0 var(--sp-1) 0; padding: 0; font-size: var(--fs-cap); color: var(--color-muted); }
+.ss-set__group--first { margin-top: 0; }
+.ss-set { flex-direction: row; align-items: center; min-height: 44px; flex-shrink: 0; }
+.ss-set__k { width: 200px; flex-shrink: 0; margin: 0; padding: 0; font-size: var(--fs-label); color: var(--color-chalk); }

@@ -125,8 +125,9 @@ namespace KokoSim.Unity.Audio
     /// </summary>
     internal sealed class BrassBandHost : MonoBehaviour
     {
-        private const float ThemeVolume = 0.45f;     // 打球音・場内放送が埋もれない大きさ
-        private const float FanfareVolume = 0.55f;
+        // 設定の効果音の音量（#1315）を掛ける。応援も効果音の側に入れる（設定画面は全体・効果音・場内放送の3つ）
+        private static float ThemeVolume => 0.45f * KokoSim.Unity.Shell.GameSettings.SeScale;     // 打球音・場内放送が埋もれない大きさ
+        private static float FanfareVolume => 0.55f * KokoSim.Unity.Shell.GameSettings.SeScale;
         private const float SwitchFadeSeconds = 0.6f;
         private const float FanfareSeconds = 10f;    // 得点の曲は頭のこの秒数だけ流す
         private const float FanfareFadeSeconds = 1.5f;

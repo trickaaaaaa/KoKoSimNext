@@ -1204,6 +1204,30 @@ namespace KokoSim.Unity.Components
             return bar;
         }
 
+        // ===== Stepper（◀ 値 ▶ の切替: 設定画面の解像度・音量, issue #1315） =====
+
+        /// <summary>
+        /// 値を ◀▶ で1段ずつ動かす部品。矢印の見た目はユニフォーム配色の切替（<c>ucp-arrow</c>）と同じ。
+        /// 端で押せなくするかは呼び出し側が <paramref name="canPrev"/>／<paramref name="canNext"/> で決める。
+        /// </summary>
+        public static VisualElement Stepper(string value, System.Action onPrev, System.Action onNext,
+                                            bool canPrev = true, bool canNext = true)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("stepper");
+            var prev = new Button(() => onPrev?.Invoke()) { text = "◀" };
+            prev.AddToClassList("ucp-arrow");
+            prev.SetEnabled(canPrev);
+            var label = new Label(value);
+            label.AddToClassList("stepper__val");
+            label.AddToClassList("f-num");
+            var next = new Button(() => onNext?.Invoke()) { text = "▶" };
+            next.AddToClassList("ucp-arrow");
+            next.SetEnabled(canNext);
+            box.Add(prev); box.Add(label); box.Add(next);
+            return box;
+        }
+
         // ===== LevelPips（段階レベルの升目: 経営画面の施設レベル, Issue #128） =====
 
         /// <summary>

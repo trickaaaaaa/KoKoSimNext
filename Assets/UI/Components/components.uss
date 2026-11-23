@@ -2789,6 +2789,16 @@ Button.ucp-arrow {
 
 Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 
+/* ── Stepper：◀ 値 ▶（設定画面の解像度・音量, issue #1315）。矢印は ucp-arrow を流用 ── */
+.stepper { flex-direction: row; align-items: center; }
+.stepper__val {
+    min-width: 140px;
+    margin: 0 var(--sp-2) 0 0;
+    padding: 0;
+    font-size: var(--fs-num);
+    -unity-text-align: middle-center;
+}
+
 /* ── Timeline：キャリア年表の縦軸＋節点（設計書16 §10.2 の穴#7・issue #586）───────
    「年 ｜ 節点と縦軸 ｜ 出来事」の3列。縦軸は装飾ではなく<b>時間が続いていることを示す線</b>なので
    UI原則④（線は機能がある場所だけ）に反しない。最終節点（現在）だけ白抜きの丸にして、

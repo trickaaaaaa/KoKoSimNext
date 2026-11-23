@@ -124,6 +124,13 @@
                  先頭の「素材」カードに素材の出所、続けて書体（画面の3書体＋テロップ画像に焼き込んだ2書体）の
                  ライセンス全文を載せる。場内放送の行は体験版では出さない（コードで隠す）。見た目はスコアブックの
                  既存部品（card）で組み、説明文は足さない＝ライセンス本文そのものだけを出す。 -->
+            <!-- 設定（issue #1315・オーナー決定: 1枚のカードに縦並び）。行は SaveSlotsController.BuildSettingsPage が組む -->
+            <ui:VisualElement name="ss-page-settings" class="ss-body ss-settings-page" style="display: none;">
+                <ui:VisualElement class="card ss-set-card">
+                    <ui:VisualElement name="ss-set-rows" class="card__body" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
             <ui:VisualElement name="ss-page-credits" class="ss-body ss-credits-page" style="display: none;">
                 <ui:ScrollView mode="Vertical" class="scroll ss-credits-scroll">
                     <ui:VisualElement class="card">

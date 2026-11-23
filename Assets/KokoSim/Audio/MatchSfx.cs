@@ -108,7 +108,7 @@ namespace KokoSim.Unity.Audio
             var src = Voice();
             if (src == null) return;
             src.pitch = pitch;
-            src.PlayOneShot(clip, volume);
+            src.PlayOneShot(clip, volume * KokoSim.Unity.Shell.GameSettings.SeScale);   // 設定の効果音の音量（#1315）
         }
 
         private static AudioClip[] Bank(string bank)

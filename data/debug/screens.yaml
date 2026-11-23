@@ -413,3 +413,20 @@ screens:
       - wait: 4000ms
       - read: feed-list
       - shot: 01-home-feed
+
+  - id: settings-1315
+    name: "システムタブの［設定］ページ（画面・fps・音量の1枚のカード）（issue #1315）"
+    steps:
+      - new_game: {seed: 1}
+      - show: SaveSlots
+      - wait: 5
+      # 撮影の道筋ではタイトル経由の形で開く（校名の編集が無い）＝［セーブデータ｜設定｜クレジット］の2番目
+      - click: .seg-tab[1]
+      - wait: 5
+      - shot: 01-settings
+      - click: .ucp-arrow[2]
+      - wait: 3
+      - read: ss-set-rows
+      - shot: 02-master-volume-down
+      # 設定は PlayerPrefs（この機械の好み）に残るので、下げた音量を戻しておく
+      - click: .ucp-arrow[3]
