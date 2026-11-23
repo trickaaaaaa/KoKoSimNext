@@ -104,44 +104,32 @@ public sealed class SkillAcquisitionTests
         };
         var notices = SkillAcquisitionModel.OnGrowthEvents(growth, new Xoshiro256Random(3), Always());
 
-        Assert.Equal(3, notices.Count);
+        Assert.Equal(2, notices.Count);
         var b = notices.Single(n => n.Player == bat);
         Assert.Contains(b.Skill, SkillAcquisitionModel.BattingGain);
         Assert.Equal(SkillChangeKind.Acquired, b.Kind);
         Assert.Equal(SkillChangeCause.Awakening, b.Cause);
         Assert.Contains(b.Skill, bat.Skills.Visible);
         Assert.Contains(notices.Single(n => n.Player == pit).Skill, SkillAcquisitionModel.PitchingGain);
-        Assert.Contains(notices.Single(n => n.Player == def).Skill, SkillAcquisitionModel.DefenseGain);
+        Assert.True(def.Skills.IsEmpty);   // 守備の覚醒には付けない（Q58 決着④）
 
         Assert.Empty(SkillAcquisitionModel.OnGrowthEvents(growth, new Xoshiro256Random(3), Never()));
     }
 
     [Fact]
-    public void DefenseAndRunningAwakening_GiveTheirPool_AndManifestDormantFirst()
+    public void DefenseAndRunningAwakening_GiveNothing_EvenWithDormantSkills()
     {
-        // Q58 決着④: 守備・走塁の覚醒にも同じ確率で、その分野の有益スキル。隠しで持っていれば先に表へ出す。
+        // Q58 決着④（オーナー判断 2026-11-23）: 守備・走塁に合うスキルが無いので付けない。隠しスキルも出さない。
         var run = Player(1);
-        var def = Player(2, new SkillSet(hidden: new[] { Skill.RoleModel }));
+        var def = Player(2, new SkillSet(hidden: new[] { Skill.RoleModel, Skill.ClutchHitter }));
         var growth = new[]
         {
             new GrowthNotice(run, GrowthEventType.Awakening, null) { Domain = GrowthDomain.Running },
             new GrowthNotice(def, GrowthEventType.GrandAwakening, null) { Domain = GrowthDomain.Defense },
         };
-        var notices = SkillAcquisitionModel.OnGrowthEvents(growth, new Xoshiro256Random(2), Always());
-        Assert.Contains(notices.Single(n => n.Player == run).Skill, SkillAcquisitionModel.RunningGain);
-        var d = notices.Single(n => n.Player == def);
-        Assert.Equal((Skill.RoleModel, SkillChangeKind.Manifested), (d.Skill, d.Kind));
-        Assert.Contains(Skill.RoleModel, def.Skills.Visible);
-
-        // 反対（ケガしやすい）を持つ選手に故障しにくいは付かない
-        for (ulong seed = 1; seed <= 30; seed++)
-        {
-            var prone = Player(3, new SkillSet(visible: new[] { Skill.InjuryProne }));
-            SkillAcquisitionModel.OnGrowthEvents(
-                new[] { new GrowthNotice(prone, GrowthEventType.Awakening, null) { Domain = GrowthDomain.Running } },
-                new Xoshiro256Random(seed), Always());
-            Assert.False(prone.Skills.Has(Skill.Durable));
-        }
+        Assert.Empty(SkillAcquisitionModel.OnGrowthEvents(growth, new Xoshiro256Random(2), Always()));
+        Assert.True(run.Skills.IsEmpty);
+        Assert.Equal(2, def.Skills.Hidden.Count);
     }
 
     [Fact]

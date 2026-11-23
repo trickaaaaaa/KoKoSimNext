@@ -97,13 +97,6 @@ public static class SkillAcquisitionModel
     /// <summary>救援の活躍で付きうるスキル。</summary>
     internal static readonly Skill[] ReliefGain = { Skill.Fireman, Skill.ClutchPitcher };
 
-    /// <summary>
-    /// 守備・走塁の覚醒で付きうるスキル（Q58 決着④）。守備系スキルは廃止済み（#907）で走塁の巧拙はパラメータなので、
-    /// 分野の練習の積み重ねにつながる体質・チーム系から選ぶ＝守備はお手本・故障しにくい、走塁はムードメーカー・故障しにくい。
-    /// </summary>
-    internal static readonly Skill[] DefenseGain = { Skill.RoleModel, Skill.Durable };
-    internal static readonly Skill[] RunningGain = { Skill.Moodmaker, Skill.Durable };
-
     /// <summary>実戦の活躍で克服しうる負スキル（試合中の癖）。</summary>
     internal static readonly Skill[] BattingFlaws = { Skill.ChokeHitter };
     internal static readonly Skill[] PitchingFlaws =
@@ -116,7 +109,8 @@ public static class SkillAcquisitionModel
 
     /// <summary>
     /// 覚醒・大覚醒の後処理。発火した成長イベントのうち覚醒（打撃・投球の分野）だけを見て、
-    /// まれにその分野の有益スキルを付ける（守備・走塁も同じ確率・Q58 決着④）。
+    /// まれにその分野の有益スキルを付ける。守備・走塁の覚醒には付けない（合うスキルが無い＝守備系スキルは廃止・
+    /// 走塁はパラメータ。Q58 決着④・オーナー判断 2026-11-23）。
     /// </summary>
     public static IReadOnlyList<SkillChangeNotice> OnGrowthEvents(
         IReadOnlyList<GrowthNotice> growth, IRandomSource rng, SkillAcquisitionCoefficients c)
@@ -133,8 +127,6 @@ public static class SkillAcquisitionModel
             {
                 GrowthDomain.Batting => BattingGain,
                 GrowthDomain.Pitching => PitchingGain,
-                GrowthDomain.Defense => DefenseGain,
-                GrowthDomain.Running => RunningGain,
                 _ => null,
             };
             if (pool is null) continue;
