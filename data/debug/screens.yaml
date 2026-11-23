@@ -140,15 +140,17 @@ screens:
       - click: ev-novel
       - wait: 5
       - shot: 01-choices
+      # 選ぶと結果の会話の1行目が出る。「練習を軽くする」の結果は2行＋結果行＝あと2回送ると結果行
+      # （選手間の選択肢は結果の会話が3行なので3回。行数が違うのでレシピも別）。
       - click: .choice-btn[0]
       - wait: 5
+      - shot: 02-outcome-1
       - click: ev-novel
       - wait: 3
-      - click: ev-novel
-      - wait: 3
+      - shot: 03-outcome-2
       - click: ev-novel
       - wait: 5
-      - shot: 02-result-line
+      - shot: 04-result-line
       - read: "=ManagerService.Manager.Trust"
 
   # ── 夜間マージ分の実機確認（2026-11-22・out/overnight/verify-targets-20261122.md）──
