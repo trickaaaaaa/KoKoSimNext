@@ -312,7 +312,7 @@ namespace KokoSim.Unity.Training
                 var focus = new Label(r.FocusSummary); focus.AddToClassList("preset-open__focus"); texts.Add(focus);
                 open.Add(texts);
                 open.Add(AllocationBar(r.Chips, v.Budget));   // 空き帯にメニュー別色の積み上げバー（Issue #133-③）
-                var go = new Label("変更 ▸"); go.AddToClassList("preset-open__go"); open.Add(go);
+                var go = new Label("変更 ▶"); go.AddToClassList("preset-open__go"); open.Add(go);
                 open.RegisterCallback<ClickEvent>(_ => OpenModal(idx));
                 presetCell.Add(open);
                 row.Add(presetCell);

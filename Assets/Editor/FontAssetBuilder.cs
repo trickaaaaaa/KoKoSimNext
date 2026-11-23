@@ -246,6 +246,47 @@ namespace KokoSim.EditorTools
             // UI 側の固定文言（画面見出し・ラベル・状態語）。data/ には出てこないので明示する。
             Add(VerificationCharacterSet());
 
+            // 画面のコードに直書きした文字（C# の文字列・UXML の text）。▶ ¥ ℃ ① や会話の漢字が
+            // data/ だけでは拾えず、ブラウザ版で □ になった（2026-11-23。Editor/Mac は OS のフォントで代わりに描くので気づけない）。
+            Add(UiTextCharacters());
+
+            var sb = new StringBuilder(set.Count);
+            foreach (var c in set) sb.Append(c);
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 実行時コード（Assets の C# 文字列リテラルと UXML の text/label/tooltip）に出てくる非 ASCII 文字。
+        /// Editor 専用（Editor/ 配下・*Shooter・*Probe・*Verifier）と行コメントは除く。絵文字（サロゲート）は書体に無いので拾わない。
+        /// </summary>
+        public static string UiTextCharacters()
+        {
+            var set = new HashSet<char>();
+            void Take(string s)
+            {
+                foreach (var c in s)
+                    if (c > '~' && !char.IsWhiteSpace(c) && !char.IsSurrogate(c) && !char.IsControl(c)) set.Add(c);
+            }
+
+            var literal = new System.Text.RegularExpressions.Regex("\"((?:[^\"\\\\]|\\\\.)*)\"");
+            foreach (var raw in Directory.GetFiles("Assets", "*.cs", SearchOption.AllDirectories))
+            {
+                var p = raw.Replace('\\', '/');
+                if (p.Contains("/Editor/") || p.EndsWith("Shooter.cs") || p.EndsWith("Probe.cs") || p.EndsWith("Verifier.cs")) continue;
+                foreach (var line in File.ReadAllLines(p))
+                {
+                    var t = line.TrimStart();
+                    if (t.StartsWith("//")) continue;
+                    var cut = t.IndexOf(" //", System.StringComparison.Ordinal);
+                    if (cut >= 0) t = t.Substring(0, cut);
+                    foreach (System.Text.RegularExpressions.Match m in literal.Matches(t)) Take(m.Groups[1].Value);
+                }
+            }
+
+            var attr = new System.Text.RegularExpressions.Regex("(?:text|label|tooltip)=\"([^\"]*)\"");
+            foreach (var p in Directory.GetFiles("Assets", "*.uxml", SearchOption.AllDirectories))
+                foreach (System.Text.RegularExpressions.Match m in attr.Matches(File.ReadAllText(p))) Take(m.Groups[1].Value);
+
             var sb = new StringBuilder(set.Count);
             foreach (var c in set) sb.Append(c);
             return sb.ToString();

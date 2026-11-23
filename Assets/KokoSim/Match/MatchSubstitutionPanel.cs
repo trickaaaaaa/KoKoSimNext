@@ -1142,7 +1142,7 @@ namespace KokoSim.Unity.Match
 
             if (onCancel != null)
             {
-                var x = new Button(() => onCancel()) { text = "✕" };
+                var x = new Button(() => onCancel()) { text = "×" };
                 x.AddToClassList("lineup-row__x");
                 x.RegisterCallback<ClickEvent>(e => e.StopPropagation());   // 行クリック（枠選択）に化けさせない
                 row.Add(x);
