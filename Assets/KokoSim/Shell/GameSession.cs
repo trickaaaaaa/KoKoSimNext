@@ -640,6 +640,31 @@ namespace KokoSim.Unity.Shell
                 detail, managerWasAway, RosterService.Roster, prob, rng, GrowthEventsCoeff));
         }
 
+        // 実戦経験での特殊能力の習得・克服（issue #1471・設計書10 §3）。公式戦1試合ぶん、活躍した出場者に。
+        private static readonly SkillAcquisitionCoefficients SkillAcquisitionCoeff = new SkillAcquisitionCoefficients();
+        private const ulong MatchSkillStream = 0x5C13_0000UL;
+        private readonly List<SkillChangeNotice> _skillNotices = new List<SkillChangeNotice>();
+
+        /// <summary>
+        /// 公式戦の後に実戦経験のスキル判定をする（練習試合は呼ばない）。乱数は試合ごとの独立ストリーム
+        /// （年度・週・大会の種類・試合日から導く）＝大会の展開・ほかの抽選の乱数列はずれない。セーブに載せる連番は要らない。
+        /// </summary>
+        private void ApplyMatchSkills(GameResult detail, bool managerWasAway, int matchDay)
+        {
+            var rng = new Xoshiro256Random(MatchSkillStream
+                ^ StreamKey.Of(GameClock.YearIndex, GameClock.Week, matchDay * 16 + (int)Kind) ^ GameSeed.SeedMix);
+            _skillNotices.AddRange(SkillAcquisitionModel.AfterOfficialMatch(
+                detail, managerWasAway, RosterService.Roster, rng, SkillAcquisitionCoeff));
+        }
+
+        /// <summary>実戦経験のスキル変化を取り出して空にする（通知フィード・ノベルへ流す用・issue #1471）。</summary>
+        public List<SkillChangeNotice> DrainSkillNotices()
+        {
+            var list = new List<SkillChangeNotice>(_skillNotices);
+            _skillNotices.Clear();
+            return list;
+        }
+
         /// <summary>大舞台イベントの結果を取り出して空にする（通知フィード・ノベルへ流す用）。</summary>
         public List<GrowthNotice> DrainBigStageNotices()
         {
@@ -653,6 +678,7 @@ namespace KokoSim.Unity.Shell
         {
             var list = new List<MatchInjuryOutcome>(_injuryNotices);
             _injuryNotices.Clear();
+            _skillNotices.Clear();
             return list;
         }
 
@@ -758,6 +784,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                ApplyMatchSkills(detail, LastOutcome.ManagerWasAway, matchDay);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
@@ -808,6 +835,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                ApplyMatchSkills(detail, LastOutcome.ManagerWasAway, matchDay);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
@@ -1360,6 +1388,7 @@ namespace KokoSim.Unity.Shell
             _matchInjurySeq = 0;
             _bigStageSeq = 0;
             _injuryNotices.Clear();
+            _skillNotices.Clear();
         }
     }
 }

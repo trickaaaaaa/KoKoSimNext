@@ -19,6 +19,10 @@ public sealed record SeasonContext
     /// <summary>傷病カタログ（data/injuries.yaml）。種類→部位→段階の一貫抽選に使う（設計書03 §3.5）。</summary>
     public Players.InjuryCatalog InjuryCatalog { get; init; } = Players.InjuryCatalog.Default;
     public GrowthEventCoefficients Growth { get; init; } = new();
+    /// <summary>特殊能力の後天習得・克服（設計書10 §3・issue #1471）。覚醒と年度替わりの克服をシムでも回す（実戦の道は試合が無いので回らない）。</summary>
+    public SkillAcquisitionCoefficients SkillAcquisition { get; init; } = new();
+    /// <summary>スキル変化の観測口（issue #1471・計測/テスト用）。null＝観測しない（結果は不変）。</summary>
+    public Action<SkillChangeNotice>? SkillObserver { get; init; }
     public IReadOnlyList<GameEvent> Events { get; init; } = Array.Empty<GameEvent>();
 
     /// <summary>
@@ -143,6 +147,9 @@ public static class SeasonEngine
                 skills: ctx.Skills, personalities: ctx.Personalities, form: ctx.Form, talentCenter: talentCenter,
                 nextId: nextId);
             nextId = rollover.NextId;
+            // 体質の負スキルの克服（issue #1471）。年度ごとの独立ストリーム＝root rng の列は動かない（Fork は状態を進めない）。
+            var overcome = SkillAcquisitionModel.OnYearAdvanced(roster, rng.Fork(0x5C12_0000UL ^ (ulong)year), ctx.SkillAcquisition);
+            if (ctx.SkillObserver is { } so) foreach (var n in overcome) so(n);
             var gradAvg = rollover.Graduated.Count > 0 ? rollover.Graduated.Average(p => p.AverageLevel()) : 0;
 
             scheduler.ResetAnnualFlags();
@@ -208,6 +215,10 @@ public static class SeasonEngine
                         ? TrainingFields.Trained(TrainingPresets.Resolve(p.Plan ?? TrainingPlan.Default, budget))
                         : System.Array.Empty<TrainingField>());
                 if (ctx.GrowthObserver is { } observe) foreach (var n in growthNotices) observe(n);
+                // 覚醒で有益スキル（issue #1471）。独立ストリーム。
+                var skillNotices = SkillAcquisitionModel.OnGrowthEvents(growthNotices,
+                    rng.Fork(0x5C11_0000UL ^ (ulong)(year * 100 + week)), ctx.SkillAcquisition);
+                if (ctx.SkillObserver is { } observeSkill) foreach (var n in skillNotices) observeSkill(n);
 
                 eventsFired += scheduler.Week(week, rng).Count;
             }

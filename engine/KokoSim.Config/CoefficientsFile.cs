@@ -48,6 +48,8 @@ public sealed record CoefficientsBundle
     public MatchInjuryCoefficients MatchInjury { get; init; } = new();
     public GrowthEventCoefficients Growth { get; init; } = new();
     public InsightCoefficients Insight { get; init; } = new();
+    /// <summary>特殊能力の後天習得・克服（設計書10 §3・issue #1471）。</summary>
+    public SkillAcquisitionCoefficients SkillAcquisition { get; init; } = new();
     /// <summary>週次イベントの発火（設計書03 §5 / 04 §3.2・issue #609）。</summary>
     public KokoSim.Engine.Season.Events.EventCoefficients Events { get; init; } = new();
     /// <summary>入部予定者の事前開示（設計書04 §2.1 効果2・issue #587）。</summary>
@@ -124,6 +126,7 @@ public static class CoefficientsLoader
         public InjuryDto? Injury { get; set; }
         public GrowthDto? Growth { get; set; }
         public InsightDto? Insight { get; set; }
+        public SkillAcquisitionDto? SkillAcquisition { get; set; }
         public ScoutingDto? Scouting { get; set; }
         public EventsDto? Events { get; set; }
         public ScoutDto? Scout { get; set; }
@@ -174,6 +177,7 @@ public static class CoefficientsLoader
             MatchInjury = Injury?.ToMatchModel() ?? new MatchInjuryCoefficients(),
             Growth = Growth?.ToModel() ?? new GrowthEventCoefficients(),
             Insight = Insight?.ToModel() ?? new InsightCoefficients(),
+            SkillAcquisition = SkillAcquisition?.ToModel() ?? new SkillAcquisitionCoefficients(),
             Scouting = Scouting?.ToModel() ?? new ProspectScoutingCoefficients(),
             Events = Events?.ToModel() ?? new KokoSim.Engine.Season.Events.EventCoefficients(),
             Scout = Scout?.ToModel() ?? new ScoutCoefficients(),
@@ -1750,6 +1754,7 @@ public static class CoefficientsLoader
         public double PersonalityTopicProb { get; set; } = D.PersonalityTopicProb;
         public double GrowthTypeTopicProb { get; set; } = D.GrowthTypeTopicProb;
         public double HighGrowthDomainProb { get; set; } = D.HighGrowthDomainProb;
+        public double HiddenSkillTopicProb { get; set; } = D.HiddenSkillTopicProb;
 
         public InsightCoefficients ToModel() => new()
         {
@@ -1765,6 +1770,42 @@ public static class CoefficientsLoader
             PersonalityTopicProb = PersonalityTopicProb,
             GrowthTypeTopicProb = GrowthTypeTopicProb,
             HighGrowthDomainProb = HighGrowthDomainProb,
+            HiddenSkillTopicProb = HiddenSkillTopicProb,
+        };
+    }
+
+    private sealed class SkillAcquisitionDto
+    {
+        private static readonly SkillAcquisitionCoefficients D = new();
+        public double AwakeningSkillProb { get; set; } = D.AwakeningSkillProb;
+        public double GrandAwakeningSkillProb { get; set; } = D.GrandAwakeningSkillProb;
+        public double MatchSkillProb { get; set; } = D.MatchSkillProb;
+        public double MatchOvercomeProb { get; set; } = D.MatchOvercomeProb;
+        public int MatchMinHits { get; set; } = D.MatchMinHits;
+        public int MatchMinRbi { get; set; } = D.MatchMinRbi;
+        public int MatchMinOuts { get; set; } = D.MatchMinOuts;
+        public int MatchMaxRuns { get; set; } = D.MatchMaxRuns;
+        public int MatchMinStrikeOuts { get; set; } = D.MatchMinStrikeOuts;
+        public int ReliefMinOuts { get; set; } = D.ReliefMinOuts;
+        public double GradeOvercomeProb { get; set; } = D.GradeOvercomeProb;
+        public double GradeOvercomeDiligenceSpan { get; set; } = D.GradeOvercomeDiligenceSpan;
+        public int MaxSkills { get; set; } = D.MaxSkills;
+
+        public SkillAcquisitionCoefficients ToModel() => new()
+        {
+            AwakeningSkillProb = AwakeningSkillProb,
+            GrandAwakeningSkillProb = GrandAwakeningSkillProb,
+            MatchSkillProb = MatchSkillProb,
+            MatchOvercomeProb = MatchOvercomeProb,
+            MatchMinHits = MatchMinHits,
+            MatchMinRbi = MatchMinRbi,
+            MatchMinOuts = MatchMinOuts,
+            MatchMaxRuns = MatchMaxRuns,
+            MatchMinStrikeOuts = MatchMinStrikeOuts,
+            ReliefMinOuts = ReliefMinOuts,
+            GradeOvercomeProb = GradeOvercomeProb,
+            GradeOvercomeDiligenceSpan = GradeOvercomeDiligenceSpan,
+            MaxSkills = MaxSkills,
         };
     }
 

@@ -42,6 +42,7 @@ internal static class CommandLine
             "defense-sensitivity" => RunDefenseSensitivity(args[1..]),
             "ability-sweep" => RunAbilitySweep(args[1..]),
             "save-growth" => RunSaveGrowth(args[1..]),
+            "skill-acquisition" => RunSkillAcquisition(args[1..]),
             "pitch-around" => RunPitchAround(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
@@ -248,6 +249,35 @@ internal static class CommandLine
         {
             WriteReportFile(reportPath, report);
             Console.WriteLine($"能力感度レポートを書き出しました: {reportPath}");
+        }
+        else
+        {
+            Console.WriteLine(report);
+        }
+        return 0;
+    }
+
+    /// <summary>特殊能力の後天習得・克服・開示の頻度（issue #1471）。</summary>
+    private static int RunSkillAcquisition(string[] args)
+    {
+        var schools = 100;
+        var seed = 42UL;
+        string? reportPath = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--schools": schools = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        var report = SkillAcquisitionSimulation.Report(SkillAcquisitionSimulation.Run(schools, seed), schools, seed);
+        if (reportPath is not null)
+        {
+            WriteReportFile(reportPath, report);
+            Console.WriteLine($"スキル習得の測定レポートを書き出しました: {reportPath}");
         }
         else
         {
@@ -825,6 +855,7 @@ internal static class CommandLine
         Console.WriteLine("  ability-sweep   [--games N]   [--seed S] [--report path] [--coefficients ...] [--targets data/balance-targets.yaml] [--only id,id]");
         Console.WriteLine("                  # 能力を1つずつ20/80に振り結果が動くかを見る（issue #840・片側だけ変更・先攻後攻入れ替え）");
         Console.WriteLine("  save-growth     [--years 10,30,50] [--seed S] [--report path]");
+        Console.WriteLine("  skill-acquisition [--schools 100] [--seed S] [--report path]   特殊能力の後天習得・克服・開示の頻度（#1471）");
         Console.WriteLine("                  # 長年プレイのセーブの大きさ・保存/読込の時間（卒業生を丸ごと持つ旧方式と名前の表の新方式・issue #1414）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
         Console.WriteLine("  simulate-nation [--years N]   [--seed S] [--report path] [--school-names data/school-names.yaml]");
