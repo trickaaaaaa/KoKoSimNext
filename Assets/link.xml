@@ -1,0 +1,16 @@
+<!--
+  ビルドで削らずに残す型（Web 体験版 #1323）。
+
+  GameObject.CreatePrimitive は球・カプセル・箱の当たり判定を自動で付ける（DuelStageRig はすぐ外す）。
+  ゲームのコードがこれらの型を名前で使っていないので、コードを削る設定（Strip Engine Code）で落とされ、
+  ブラウザ版で「Can't add component because class 'SphereCollider' doesn't exist!」が作るたびに出ていた。
+  本塁打の球をスタンドで止める MeshCollider（DuelStageRig.StandHit）も同じ物理の型なので一緒に残す。
+-->
+<linker>
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <type fullname="UnityEngine.SphereCollider" preserve="all" />
+    <type fullname="UnityEngine.CapsuleCollider" preserve="all" />
+    <type fullname="UnityEngine.BoxCollider" preserve="all" />
+    <type fullname="UnityEngine.MeshCollider" preserve="all" />
+  </assembly>
+</linker>
