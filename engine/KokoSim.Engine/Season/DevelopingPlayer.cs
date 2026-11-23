@@ -85,20 +85,22 @@ public sealed class DevelopingPlayer
     /// 分野別の型（上記3つ）が未設定（null＝旧セーブ）なら基本タイプへ落ちる＝旧セーブは全分野
     /// 「基本タイプ1つ」として読める（挙動不変）。走力・走塁系（分野外）は常に基本タイプ。
     /// </summary>
-    public GrowthType GrowthTypeFor(AbilityKind k)
+    public GrowthType GrowthTypeFor(AbilityKind k) => GrowthTypeOf(AbilityKinds.DomainOf(k));
+
+    private GrowthType GrowthTypeOf(GrowthDomain d) => d switch
     {
-        if (AbilityKinds.IsPitching(k)) return PitchingGrowthType ?? GrowthType;
-        if (AbilityKinds.IsBattingCore(k)) return BattingGrowthType ?? GrowthType;
-        if (AbilityKinds.IsDefense(k)) return DefenseGrowthType ?? GrowthType;
-        return GrowthType; // Speed/Bunt/Steal/Baserunning: 分野に属さない
-    }
+        GrowthDomain.Pitching => PitchingGrowthType ?? GrowthType,
+        GrowthDomain.Batting => BattingGrowthType ?? GrowthType,
+        GrowthDomain.Defense => DefenseGrowthType ?? GrowthType,
+        _ => GrowthType, // 走塁（Speed/Bunt/Steal/Baserunning）: 分野に属さない
+    };
 
     /// <summary>気づき（InsightModel）の分野名文字列から成長タイプを引く（"pitching"/"batting"/"defense"、他は基本タイプ）。</summary>
     public GrowthType GrowthTypeForField(string field) => field switch
     {
-        "pitching" => PitchingGrowthType ?? GrowthType,
-        "batting" => BattingGrowthType ?? GrowthType,
-        "defense" => DefenseGrowthType ?? GrowthType,
+        "pitching" => GrowthTypeOf(GrowthDomain.Pitching),
+        "batting" => GrowthTypeOf(GrowthDomain.Batting),
+        "defense" => GrowthTypeOf(GrowthDomain.Defense),
         _ => GrowthType,
     };
 
@@ -245,12 +247,15 @@ public sealed class DevelopingPlayer
     public void IncrementAptitude(FieldPosition pos) => _aptitude[(int)pos]++;
 
     /// <summary>能力が属する分野の伸びしろ倍率（設計書02 §5.1: 経験値式に乗算）。</summary>
-    public double GrowthMultiplier(AbilityKind k)
+    public double GrowthMultiplier(AbilityKind k) => GrowthOf(AbilityKinds.DomainOf(k));
+
+    /// <summary>分野の伸びしろ倍率。走塁は打撃分野の伸びしろに紐づく（2Bで細分化可）。</summary>
+    public double GrowthOf(GrowthDomain d) => d switch
     {
-        if (AbilityKinds.IsPitching(k)) return PitchingGrowth;
-        if (AbilityKinds.IsDefense(k)) return DefenseGrowth;
-        return BattingGrowth; // 打撃・走塁系は打撃分野の伸びしろに紐づける（2Bで細分化可）
-    }
+        GrowthDomain.Pitching => PitchingGrowth,
+        GrowthDomain.Defense => DefenseGrowth,
+        _ => BattingGrowth,
+    };
 
     // 育成曲線の観測＝強さに使う「優劣が意味を持つ中核能力」。
     // 選球眼は練習メニューに伸長経路が無い型属性のため平均から除く（OPEN-QUESTIONS Q4）。

@@ -14,7 +14,12 @@ namespace KokoSim.Engine.Season;
 public static class CaptainSelector
 {
     /// <summary>統率力（0〜約99）。主将適性の指標。</summary>
-    public static double LeadershipPower(DevelopingPlayer p) => p.Leadership * p.Mental / 100.0;
+    public static double LeadershipPower(DevelopingPlayer p) => LeadershipPower(p.Leadership, p.Mental);
+
+    /// <summary>統率力の式の単一ソース（試合層 <see cref="Player"/> と育成層 <see cref="DevelopingPlayer"/> で共有）。</summary>
+    public static double LeadershipPower(int leadership, int mental) => leadership * mental / 100.0;
+
+    public static double LeadershipPower(Player p) => LeadershipPower(p.Leadership, p.Mental);
 
     /// <summary>現在の主将（不在なら null）。</summary>
     public static DevelopingPlayer? Current(IReadOnlyList<DevelopingPlayer> roster)
@@ -74,7 +79,7 @@ public static class CaptainSelector
         var topGrade = list.Max(p => p.Grade);
         return list
             .Where(p => p.Grade == topGrade)
-            .OrderByDescending(p => p.Leadership * p.Mental / 100.0)
+            .OrderByDescending(LeadershipPower)
             .ThenByDescending(p => p.Leadership)
             .ThenBy(p => p.Name, System.StringComparer.Ordinal)
             .ThenBy(p => p.UniformNumber)

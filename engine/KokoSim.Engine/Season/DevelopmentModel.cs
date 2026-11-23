@@ -139,6 +139,10 @@ public static class DevelopmentModel
         return Math.Max(1.0, c.IndividualCoachingBaseMultiplier + (ratio - 1.0) * c.IndividualCoachingBonusScale);
     }
 
+    /// <summary>
+    /// 1メニューに基準週をフル配分する <see cref="TrainWeekPlan"/>（配分スケール1.0・道具なし）。
+    /// 実装は <see cref="TrainWeekPlan"/> に一本化している。
+    /// </summary>
     public static void TrainWeek(
         DevelopingPlayer p,
         TrainingMenu menu,
@@ -150,61 +154,8 @@ public static class DevelopmentModel
         Players.PersonalityCoefficients? personalities = null,
         CoachingProfile? coaching = null,
         IReadOnlyList<DevelopingPlayer>? roster = null)
-    {
-        ApplyIndividualCoachingTrust(p, c);
-        if (menu == TrainingMenu.Rest) return;
-
-        // 怪我中は練習不可（設計書03 §3.5: リハビリ/休養に限定）。
-        if (p.Injury != Players.InjurySeverity.None) return;
-
-        // ②素直さ（性格, 設計書01 §1.1）: 指導寄与を倍率補正。personalities=null または Normal は 1.0＝従来と一致。
-        var receptivity = personalities?.CoachingReceptivity(p.Receptiveness) ?? 1.0;
-        // ③勤勉さ＋隠れた個人差（Q47）→自主成長（設計書23 §1.2）。旧 PersonalityFactor。personalities=null でも既定の式で効く（従来どおり常時）。
-        var selfGrowth = (personalities ?? DefaultPersonalities).SelfGrowthFactor(p.Diligence, p.SelfGrowthJitter);
-        // 基準指導力（中立点）を common に焼き込む＝従来と同じ乗算列（分野別指導力の比は後段, #115）。
-        var baselineFactor = 1.0 + c.CoachingLevel * c.CoachingSlope * receptivity;
-
-        // 体質・成長系スキル（設計書10）: 練習熱心/サボり癖は経験値効率に作用。
-        // スキルなし（skills=null または未保有）なら倍率1.0で従来と完全一致。
-        var skillExp = 1.0;
-        if (skills is not null)
-        {
-            if (p.Skills.Has(Players.Skill.Diligent)) skillExp *= skills.DiligentExpFactor;
-            if (p.Skills.Has(Players.Skill.Lazy)) skillExp *= skills.LazyExpFactor;
-            skillExp *= TeamSkillExpFactor(p, roster, skills);
-        }
-
-        var eff = TrainingMenus.Effects(menu);
-        // 成長段階係数（設計書02 §5.2・issue #866）は能力の分野ごとに別のタイプで変わるので、
-        // common からは外し能力ごとに掛ける（全分野が同じタイプなら従来と1ビット一致）。
-        var common = c.BaseMainExp * c.FacilityCoef * baselineFactor
-                     * selfGrowth * campMultiplier * skillExp;
-        var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
-        var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
-
-        if (eff.Main is { } mainAbility)
-        {
-            var delta = common * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
-                * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
-                * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor);
-            if (mainAbility == AbilityKind.LaunchTendency)
-                ApplyLaunchTendencyExp(p, delta, eff.MainDirection, c);
-            else
-                ApplyExp(p, mainAbility, delta, c);
-        }
-        foreach (var subAbility in eff.Subs)
-        {
-            var delta = common * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
-                * c.SubFactorFor(menu, subAbility) * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
-            if (subAbility == AbilityKind.LaunchTendency)
-                ApplyLaunchTendencyExp(p, delta, GrowthDirection.Up, c);
-            else
-                ApplyExp(p, subAbility, delta, c);
-        }
-        // 守備位置適性（設計書01 §1.1）: 守備分野の伸びしろを乗せる（Defense 指導力）。
-        foreach (var (pos, weight) in eff.Aptitudes)
-            ApplyAptitudeExp(p, pos, common * defenseStage * weight * defenseAdj, c);
-    }
+        => TrainWeekPlan(p, new[] { new MenuAllocation(menu, 1) }, 1, stageIndex, campMultiplier, stages, c,
+            skills, personalities, coaching, equipment: null, roster);
 
     /// <summary>
     /// チーム内スキル（練習リーダー/お手本, 設計書10）による週間経験値の加算倍率。1.0=効果なし。

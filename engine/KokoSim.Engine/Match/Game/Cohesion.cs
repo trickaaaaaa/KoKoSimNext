@@ -115,7 +115,7 @@ public static class Cohesion
         if (members.Count == 0) return Neutral;
         var u = Neutral;
         if (captain is not null && captain.Personality != Personality.Normal)
-            u += c.CaptainPowerWeight * (captain.Leadership * captain.Mental / 100.0 - c.CaptainPowerNeutral);
+            u += c.CaptainPowerWeight * (Season.CaptainSelector.LeadershipPower(captain) - c.CaptainPowerNeutral);
         double leaders = 0, selfish = 0, loneWolves = 0;
         foreach (var p in members)
         {

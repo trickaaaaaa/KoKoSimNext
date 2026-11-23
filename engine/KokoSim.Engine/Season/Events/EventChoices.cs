@@ -123,7 +123,7 @@ public static class EventChoiceResolver
 
     /// <summary>主将の統率力（design-09 §8: 統率傾向×精神力/100）。主将不在は null。</summary>
     public static double? CaptainPower(DevelopingPlayer? captain)
-        => captain is null ? null : captain.Leadership * captain.Mental / 100.0;
+        => captain is null ? null : CaptainSelector.LeadershipPower(captain);
 
     /// <summary>好転の確率（0〜1）。</summary>
     public static double ImproveProbability(EventStance stance, PersonalityAxes subject, double? captainPower,

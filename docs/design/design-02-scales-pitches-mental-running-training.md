@@ -607,7 +607,7 @@ margin = 守備所要時間 − 走者所要時間
 - **能力→分野の対応**は伸びしろ（§5.1・`DevelopingPlayer.GrowthMultiplier`）と同じ3分野だが、**走力・走塁系
   （Speed/Bunt/Steal/Baserunning）・精神力・捕手リードは3分野のどれにも属さず、常に基本タイプで伸びる時期が
   決まる**（2026-11-10 監督決定。伸びしろ§5.1では簡便に打撃分野へ束ねているが、成長タイプではそれも分野外とする）。
-  対応表は `AbilityKinds.IsPitching/IsBattingCore/IsDefense`・`DevelopingPlayer.GrowthTypeFor(AbilityKind)` に集約する
+  対応表は `AbilityKinds.DomainOf`・`DevelopingPlayer.GrowthTypeFor(AbilityKind)` に集約する
 - 守備位置適性（§3.1の練習経路）は守備分野の成長タイプ（`DefenseGrowthType`）に従う
 - **晩成の上乗せ**（伸びしろ`late_growth_bonus`・才能上限`late_cap_bonus`）も分野ごとに、その分野自身の
   成長タイプが晩成かどうかで判定する（基本タイプではない）。例: 投球が早熟・打撃が晩成の選手は、

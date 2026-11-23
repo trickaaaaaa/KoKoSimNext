@@ -29,7 +29,8 @@ public enum AbilityKind
 public static class AbilityKinds
 {
     public static readonly AbilityKind[] All = (AbilityKind[])Enum.GetValues(typeof(AbilityKind));
-    public static readonly AbilityKind[] Batting =
+    /// <summary>野手の能力（打撃・走力・守備を含む8能力）。投手寄りでない選手の「中核能力」の並び。</summary>
+    public static readonly AbilityKind[] Fielder =
     {
         AbilityKind.Contact, AbilityKind.Power, AbilityKind.LaunchTendency, AbilityKind.Discipline,
         AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.Fielding, AbilityKind.Catching,
@@ -65,10 +66,18 @@ public static class AbilityKinds
         or AbilityKind.ArmStrength or AbilityKind.ThrowAccuracy;
 
     /// <summary>
-    /// 打撃中核（スイング・選球眼・弾道）。成長タイプの分野分け（設計書02 §5.2・issue #866）で
-    /// 「打撃」に属する能力はここだけ。走力・走塁系（Speed/Bunt/Steal/Baserunning）は3分野のどれにも
-    /// 属さず、分野外として基本タイプ（<see cref="DevelopingPlayer.GrowthType"/>）に従う。
+    /// 能力が属する分野（伸びしろ倍率・成長タイプ・分野別指導力の分野判定の単一ソース）。
+    /// 打撃＝スイング・選球眼・弾道、走塁＝走力・バント・盗塁・走塁判断（3分野のどれにも属さず
+    /// 成長タイプは基本タイプに従う。伸びしろ倍率は打撃、指導力は守備・走塁）。
     /// </summary>
-    public static bool IsBattingCore(AbilityKind k) => k is AbilityKind.Contact or AbilityKind.Power
-        or AbilityKind.LaunchTendency or AbilityKind.Discipline;
+    public static GrowthDomain DomainOf(AbilityKind k) => k switch
+    {
+        AbilityKind.Velocity or AbilityKind.Control or AbilityKind.Stamina
+            or AbilityKind.PitchRank or AbilityKind.Stuff => GrowthDomain.Pitching,
+        AbilityKind.Fielding or AbilityKind.Catching or AbilityKind.ArmStrength
+            or AbilityKind.ThrowAccuracy => GrowthDomain.Defense,
+        AbilityKind.Speed or AbilityKind.Bunt or AbilityKind.Steal
+            or AbilityKind.Baserunning => GrowthDomain.Running,
+        _ => GrowthDomain.Batting,
+    };
 }
