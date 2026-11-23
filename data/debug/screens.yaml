@@ -184,7 +184,10 @@ screens:
       - read: weather-icon
       - shot: 01-tournament-not-match-day
       - advance_to_match_day: ""
+      # 試合当日の朝に積まれたイベント会話が本文を覆うので、片付けてから撮る（天気マークを見る用・#1200）
+      - call: EventService.Clear()
       - show: HomeDashboard
+      - wait: 5
       - read: weather-icon
       - shot: 02-match-day
 
