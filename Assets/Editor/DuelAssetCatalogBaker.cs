@@ -34,7 +34,8 @@ namespace KokoSim.UnityEditorTools
 
             var missing = new List<string>();
 
-            cat.VendorBody = LoadOrNote<GameObject>(DuelStageRig.VendorBodyFbxPath, missing, "購入素体");
+            var vendorFbx = LoadOrNote<GameObject>(DuelStageRig.VendorBodyFbxPath, missing, "購入素体");
+            cat.VendorBody = vendorFbx != null ? SaveWithoutMaterials(vendorFbx, VendorBodyRuntimePath) : null;
             cat.FallbackBody = LoadOrNote<GameObject>(DuelStageRig.BodyFbxPath, missing, "U2素体");
             cat.UniformMesh = LoadOrNote<Mesh>(DuelStageRig.UniformMeshAssetPath, missing, "着衣メッシュ");
             cat.UmpireUniformMesh = LoadOrNote<Mesh>(DuelStageRig.UmpireMeshAssetPath, missing, "球審着衣メッシュ");
@@ -143,6 +144,44 @@ namespace KokoSim.UnityEditorTools
             File.WriteAllText("out/duel-stage/catalog-verify.txt", report);
             if (missing.Count > 0) Debug.LogWarning("[DuelAssetCatalogBaker] 索引が古い\n" + report);
             else Debug.Log("[DuelAssetCatalogBaker] 索引は最新\n" + report);
+        }
+
+        /// <summary>
+        /// 索引が指す購入素体（マテリアルを外した複製）。購入素体の置き場の下＝gitignore（購入素体の派生物）。
+        /// </summary>
+        internal const string VendorBodyRuntimePath = "Assets/DuelSpike/Vendor/Generated/VendorBody_Runtime.prefab";
+
+        /// <summary>
+        /// FBX を複製し、各 Renderer の先頭のマテリアル（試合が差し替える枠）を外したプレハブとして保存する。
+        ///
+        /// <b>なぜ要るか</b>: 試合では全 Renderer のマテリアルを領域塗り分けへ差し替える（DuelStageRig.SpawnActor）ので、
+        /// FBX のマテリアルとそのテクスチャ（2048角×7枚・約24MB）は描画に一度も使われない。それでも FBX を
+        /// 索引から指すと、マテリアル経由でテクスチャまでビルドに入っていた（ブラウザ版の容量・#1323）。
+        /// FBX の取り込み設定（マテリアルを作らない）で外すと、顔のサブメッシュをマテリアルで見分ける
+        /// DuelVendorRegionBaker が壊れるので、FBX は触らずに索引の側で外す。
+        /// </summary>
+        internal static GameObject SaveWithoutMaterials(GameObject fbx, string path)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            var go = Object.Instantiate(fbx);   // プレハブとの接続を持たない複製（FBX のマテリアルを引き継がない）
+            try
+            {
+                go.name = fbx.name;
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                {
+                    // 外すのは先頭の枠だけ。試合が差し替えるのは sharedMaterial（先頭）だけで、2つ目以降の枠
+                    // （頭部メッシュの2つ目のサブメッシュ＝素肌）は FBX のマテリアルのまま描かれている。
+                    // 全部外すと素肌がマゼンタ（マテリアル無し）になった（2026-11-23 ブラウザ版で実害）
+                    var mats = r.sharedMaterials;
+                    if (mats.Length > 0) mats[0] = null;
+                    r.sharedMaterials = mats;
+                }
+                return PrefabUtility.SaveAsPrefabAsset(go, path);
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
         private static T LoadOrNote<T>(string path, List<string> missing, string label) where T : Object
