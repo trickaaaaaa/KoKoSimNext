@@ -1865,8 +1865,7 @@ namespace KokoSim.Unity.Match
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 // セーフティバント（issue #1473）: 走力で内野安打を狙う＝走者が居なくても出せる。構えの前倒しはバントと同じ。
-                // 絵は未作成＝文字を敷く。
-                new SignDef { Id = "batting-safety", Label = "セーフティバント", CardLabel = "セーフティ\nバント", Icon = "セ", Offense = true, Group = "batting",
+                new SignDef { Id = "batting-safety", Label = "セーフティバント", CardLabel = "セーフティ\nバント", Icon = "セ", Art = "safety", Offense = true, Group = "batting",
                     GroupLabel = "打撃",
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.SafetyBunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
@@ -1910,20 +1909,20 @@ namespace KokoSim.Unity.Match
                     OnClear = () => PushApproach(BattingApproach.Normal) },
 
                 // ── 守備・左＝サイン（その1球・使うと解ける。issue #1473）──
-                // 申告敬遠: 押した次の1球を投げずに、その打席を四球で終える（打席の頭でもカウントの途中でも）。絵は未作成＝文字を敷く。
-                new SignDef { Id = "def-ibb", Label = "敬遠", Icon = "敬", Offense = false, Group = "defsign",
+                // 申告敬遠: 押した次の1球を投げずに、その打席を四球で終える（打席の頭でもカウントの途中でも）。
+                new SignDef { Id = "def-ibb", Label = "敬遠", Icon = "敬", Art = "ibb", Offense = false, Group = "defsign",
                     GroupLabel = "サイン",
                     OnSelect = () => _defSignChoice = DefenseSign.IntentionalWalk, OnClear = () => _defSignChoice = null },
                 // ウエスト: 次の1球を外す。走者が居ないとき（2026-11-23 オーナー判断）と3ボール（外すと四球。エンジンと同じ規則）は消灯する。
-                new SignDef { Id = "def-pitchout", Label = "ウエスト", CardLabel = "ウエスト", Icon = "外", Offense = false, Group = "defsign",
+                new SignDef { Id = "def-pitchout", Label = "ウエスト", CardLabel = "ウエスト", Icon = "外", Art = "pitchout", Offense = false, Group = "defsign",
                     GroupLabel = "サイン", EnabledIf = () => PitchoutAvailable,
                     OnSelect = () => _defSignChoice = DefenseSign.Pitchout, OnClear = () => _defSignChoice = null },
 
                 // ── 守備・右＝構え（解除するまで続く）──
                 new SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Art = "infield-in", Offense = false, Stance = true, Group = "infield",
                     GroupLabel = "陣形", OnSelect = () => PushDefInfield(DefenseDepth.In), OnClear = () => PushDefInfield(null) },
-                // バントシフト（issue #1473）: 一・三塁手のチャージ。前進守備と重ねられる（一・三塁はシフトが優先＝AlignmentTactics）。絵は未作成。
-                new SignDef { Id = "def-buntshift", Label = "バントシフト", CardLabel = "バント\nシフト", Icon = "シ", Offense = false, Stance = true, Group = "buntshift",
+                // バントシフト（issue #1473）: 一・三塁手のチャージ。前進守備と重ねられる（一・三塁はシフトが優先＝AlignmentTactics）。
+                new SignDef { Id = "def-buntshift", Label = "バントシフト", CardLabel = "バント\nシフト", Icon = "シ", Art = "buntshift", Offense = false, Stance = true, Group = "buntshift",
                     GroupLabel = "陣形", OnSelect = () => PushDefBuntShift(true), OnClear = () => PushDefBuntShift(false) },
                 new SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Art = "outfield-deep", Offense = false, Stance = true, Group = "outfield",
                     GroupLabel = "陣形", OnSelect = () => PushDefOutfield(DefenseDepth.Deep), OnClear = () => PushDefOutfield(null) },
@@ -1935,8 +1934,7 @@ namespace KokoSim.Unity.Match
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.ControlFirst), OnClear = () => PushDefPolicy(null) },
                 // 際どい所（issue #872・旧名くさい所）: ゾーンの際を突き、甘い球を投げない（四球も辞さない）。
                 // 2026-11-23 オーナー判断（issue #1473）で名前を「際どい所」に変え、ほかの構えと同じく解除するまで続く。
-                // アイコン文字は「際」のまま。絵は未作成＝文字を敷く。
-                new SignDef { Id = "def-pitch-around", Label = "際どい所", CardLabel = "際どい所", Icon = "際", Offense = false, Stance = true, Group = "pitcharound",
+                new SignDef { Id = "def-pitch-around", Label = "際どい所", CardLabel = "際どい所", Icon = "際", Art = "pitcharound", Offense = false, Stance = true, Group = "pitcharound",
                     GroupLabel = "打席", OnSelect = () => PushPitchAround(true), OnClear = () => PushPitchAround(false) },
                 new SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Art = "push", Offense = false, Stance = true, Group = "gear",
                     GroupLabel = "ギア", OnSelect = () => PushDefGear(PitcherGear.Push), OnClear = () => PushDefGear(null) },
