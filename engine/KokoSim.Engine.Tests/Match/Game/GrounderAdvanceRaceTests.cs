@@ -245,13 +245,13 @@ public sealed class GrounderAdvanceRaceTests
     }
 
     [Fact]
-    public void SendAdvanceThreshold_ZeroOut_IsStricter_AndBaseIsAtLeastSixty()
+    public void SendAdvanceThreshold_ZeroOut_IsStricter_BackSideStaysAggressive()
     {
-        // 送り閾値は 0.6〜0.7（オーナー決定）・0アウトはさらに慎重（上乗せ）。中立采配で測る。
+        // 送り閾値は走者の後ろのゴロ用＝原則進む側なので低め（0.35・オーナー決定 2026-11-23）。0アウトはさらに慎重（上乗せ）。
         var c = new TacticsCoefficients();
         var t0 = HomeSendDecision.SendAdvanceThreshold(0, 0.5, c);
         var t1 = HomeSendDecision.SendAdvanceThreshold(1, 0.5, c);
-        Assert.InRange(t1, 0.6, 0.7);
+        Assert.InRange(t1, 0.30, 0.40);
         Assert.True(t0 > t1, $"0アウト({t0:F2})は1アウト({t1:F2})より慎重のはず");
     }
 

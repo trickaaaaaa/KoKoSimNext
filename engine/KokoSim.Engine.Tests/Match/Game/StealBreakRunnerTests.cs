@@ -62,7 +62,7 @@ public sealed class StealBreakRunnerTests
         var broke = SecondRunnerOnGrounder(home, stealBreak: true, trials, seed: 7);
 
         Assert.True(broke.Reached > normal.Reached, $"到達: 盗塁始動={broke.Reached} 通常={normal.Reached}");
-        // 通常始動は送り閾値（issue #1418 で 0.65）に届かず自重するか、走って刺される。盗塁始動の走塁死はその半分未満。
+        // 通常始動は送り閾値に届かず自重するか、走って刺される。盗塁始動の走塁死はその半分未満。
         Assert.True(broke.Out * 2 < normal.Out + normal.Held,
             $"三塁での走塁死: 盗塁始動={broke.Out} 通常（走塁死＋自重）={normal.Out}+{normal.Held}");
         Assert.True(broke.Reached > trials * 0.8,

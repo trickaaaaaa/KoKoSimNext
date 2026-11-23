@@ -244,13 +244,13 @@ public sealed class PitcherArchetypeTests
     /// 打たせて取る型の失点が設計として許容できる幅かをオーナーに確認すること。
     /// </summary>
     [Fact]
-    [Trait("Category", "Heavy")]   // 型4種×400試合のフルエンジン実測
+    [Trait("Category", "Heavy")]   // 型7種×2400試合のフルエンジン実測（issue #1260 で 400→2400）
     public void Archetypes_AreBalanceNeutral_InActualGames()
     {
         var ctx = YamlContext();
         var runsAllowed = new Dictionary<PitcherArchetype, double>();
         foreach (PitcherArchetype a in System.Enum.GetValues(typeof(PitcherArchetype)))
-            runsAllowed[a] = MeasureArchetype(a, ctx, games: 400).RunsAllowed;
+            runsAllowed[a] = MeasureArchetype(a, ctx, games: 2400).RunsAllowed;
         var text = string.Join(" / ", runsAllowed.Select(kv => $"{PitcherArchetypes.Label(kv.Key)}{kv.Value:F2}"));
 
         // 剛腕だけは中立の例外（issue #908・オーナー決定 2026-11-14）: 制球G・F（割合0.55）では球速もキレもほぼ上限まで
@@ -264,7 +264,8 @@ public sealed class PitcherArchetypeTests
         // 本塁打の校正で三振の多い型が相対的に強くなり −0.07 まで来ていたので、キレの上乗せ +30→+3 で戻した
         // （実測 400試合 +0.25・旧下限 −0.10 は「強い側」を許していた）。
         // 下限は 0.0＝符号が正であることだけ守る（issue #1260・オーナー決定 案A'）。400試合のサンプル誤差は1型あたり
-        // ±0.1 程度で、0.05 の余白は見分けられない（実測 2400試合 +0.06〜+0.12・400試合でほぼ 0）。
+        // ±0.1 程度で、0.05 の余白は見分けられない（実測 2400試合 +0.06〜+0.12・400試合では −0.09〜−0.01 も出た）。
+        // 400試合では符号すら安定しないので試合数を 2400 に増やした（オーナー決定 案B・2026-11-23）。
         Assert.True(flameGap is > 0.0 and < 0.80, $"剛腕の失点がバランス型から外れすぎ（{flameGap:+0.00;-0.00}・少し弱い＝正であること）: " + text);
     }
 

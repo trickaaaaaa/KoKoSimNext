@@ -40,6 +40,8 @@ public sealed class ProductiveOutAdvanceRegressionTests
         var secondBaseN = new int[games];
         var secondBaseAdv = new int[games];
         var frontN = new int[games];
+        var firstBaseN = new int[games];
+        var firstBaseRan = new int[games];
         var frontRan = new int[games];
 
         Parallel.For(0, games, i =>
@@ -63,6 +65,11 @@ public sealed class ProductiveOutAdvanceRegressionTests
                     secondBaseN[i]++;
                     if (e.BaseThirdAfter) secondBaseAdv[i]++;
                 }
+                else if (fb == FieldPosition.FirstBase)
+                {
+                    firstBaseN[i]++;
+                    if (!e.BaseSecondAfter) firstBaseRan[i]++;
+                }
                 else if (fb is FieldPosition.Shortstop or FieldPosition.ThirdBase)
                 {
                     frontN[i]++;
@@ -75,16 +82,20 @@ public sealed class ProductiveOutAdvanceRegressionTests
         for (var i = 0; i < games; i++) { totalAdv += advanced[i]; totalHeld += held[i]; totalOut += outAtThird[i]; }
         var total = totalAdv + totalHeld + totalOut;
         var sbN = secondBaseN.Sum(); var sbAdv = secondBaseAdv.Sum(); var fN = frontN.Sum(); var fRan = frontRan.Sum();
+        var b1N = firstBaseN.Sum(); var b1Ran = firstBaseRan.Sum();
         _out.WriteLine($"n={total} advanced(2->3)={totalAdv} ({100.0 * totalAdv / total:F1}%) " +
                         $"held={totalHeld} ({100.0 * totalHeld / total:F1}%) outAtThird={totalOut} ({100.0 * totalOut / total:F1}%)");
-        _out.WriteLine($"二塁ゴロ n={sbN} 進塁={sbAdv} ／ 遊撃・三塁ゴロ n={fN} 走った={fRan}");
+        _out.WriteLine($"二塁ゴロ n={sbN} 進塁={sbAdv} ／ 一塁ゴロ n={b1N} 走った={b1Ran} ／ 遊撃・三塁ゴロ n={fN} 走った={fRan}");
 
         Assert.True(total > 400, $"標本不足 n={total}");
-        // 旧実装はこの場面で進塁0%（300試合270件中0件）。issue #1418 で遊撃・三塁ゴロは原則自重・送り閾値0.65
-        // （0アウト0.75）にしたので、全体の進塁率は約77%→約28%へ下がった（800試合）。進塁の主役は走者の後ろの
-        // 二塁ゴロ＝ここが0%へ戻っていないことを見張る（実測 約90%）。
+        // 旧実装はこの場面で進塁0%（300試合270件中0件）。issue #1418 で遊撃・三塁ゴロは原則自重にしたので、
+        // 全体の進塁率は約77%→約33%へ下がった（800試合）。走者の後ろ（一塁・二塁方向）のゴロは原則進む
+        // （オーナー決定 2026-11-23）＝ここが0%へ戻っていないことを見張る（実測 二塁ゴロ 約86%）。
         Assert.True(sbN > 100, $"二塁ゴロの標本不足 n={sbN}");
         Assert.InRange((double)sbAdv / sbN, 0.60, 0.99);
+        // 一塁ゴロ（一塁手が捕って投手へトス／自分で踏む）も走者の後ろ＝原則走る（走った割合・セーフ/憤死は問わない）。
+        Assert.True(b1N > 50, $"一塁ゴロの標本不足 n={b1N}");
+        Assert.True((double)b1Ran / b1N >= 0.40, $"一塁ゴロで走った割合が低すぎる（{b1Ran}/{b1N}）");
         // 走者の前（遊撃・三塁）のゴロでは走らない（例外は三盗で投球と同時に走っていた走者だけ）。
         Assert.True(fN > 100, $"遊撃・三塁ゴロの標本不足 n={fN}");
         Assert.True((double)fRan / fN < 0.03, $"遊撃・三塁ゴロで走った割合が高すぎる（{fRan}/{fN}）");
