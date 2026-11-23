@@ -3362,7 +3362,9 @@ namespace KokoSim.Unity.Match
             // 高さから立ち上がるので、max の細工でなく差ぶんを線形に寄せる側へ落とす（下 BattedPointAt）。
             _battedFromGround = head.H <= 1e-3;
             // 打点から地面までの自由落下時間。左右のずれ（±0.4m程度）もこの時間で解消する
-            _battedFade = Mathf.Sqrt(2f * Mathf.Max(0.05f, Mathf.Abs(_battedOffset.y)) / 9.8f);
+            // ⚠ 区間の長さを超えない（issue #1543）。叩きつけたファウルのようにセグメントが fade より先に終わる（球が
+            //    着地点で静止する）と、残りの補正が静止した球を打球の進む向きと逆へ引き戻し「跳ね返った」ように見えた
+            _battedFade = Mathf.Min(Mathf.Sqrt(2f * Mathf.Max(0.05f, Mathf.Abs(_battedOffset.y)) / 9.8f), _battedDur);
             _battedT = 0f;
             _battedLeftFrame = false;
             _trail.Clear();
