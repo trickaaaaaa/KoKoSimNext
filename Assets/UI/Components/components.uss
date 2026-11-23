@@ -2304,7 +2304,7 @@
     transform-origin: 50% 100%;   /* 下端を軸に上へ伸び上がる（帯の高さを変えずに大きく見せる） */
 }
 /* 持ち上がるのはカーソルが乗った1枚だけ。最前面化は C# の BringToFront が行う（USS に z-index は無い）。 */
-.tcard--hot { translate: 0 -12px; scale: 1.22; }
+.tcard--hot { translate: 0 var(--tcard-hot-lift); scale: var(--tcard-hot-scale); }   /* 量は tokens.uss（issue #1534） */
 
 /* 上2/3＝絵の面。絵（.tcard__pic）が無いカードは Icon の1文字を淡く敷いて枠だと分かるようにする。 */
 .tcard__art {
