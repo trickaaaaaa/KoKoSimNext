@@ -613,6 +613,22 @@
 .dlg-btn--ghost { background-color: var(--color-panel-deep); color: var(--color-chalk); border-width: 1px; border-color: var(--color-line); }
 .dlg-btn--warn { background-color: var(--color-warn); color: #FFFFFF; border-width: 0; }
 
+/* ── ConfirmDialog：問い1行＋はい／いいえの確認（modal-scrim / modal-card / dlg-btn と組む）──
+   セーブ削除の確認（SaveSlots）から辞書へ移した（issue #1534 で経営の購入・年契約の確認にも使う）。 */
+.confirm-card {
+    padding: 28px 40px;
+    min-width: 360px;
+    align-items: center;
+}
+.confirm-q {
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    margin-bottom: var(--sp-4);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+.confirm-btns { flex-direction: row; }
+
 /* ── Banner：強調告知バー（合宿など） ───────────────────────────────── */
 .banner {
     flex-direction: row;

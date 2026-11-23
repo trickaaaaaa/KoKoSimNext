@@ -169,8 +169,8 @@ namespace KokoSim.Unity.Management
 
         /// <summary>
         /// 年契約（設計書04 §1.4a）。買い切りの3区分と違い、年額を毎年部費から払い、解約の操作はいつでもできる（効くのは年度末の総括の後）。
-        /// 契約時の前払いは無いので購入可否の判定も無く、代わりに「部費 年間差引」が赤くなることで
-        /// 抱えすぎが分かる（UI原則②: 本当の警告だけ警告色）。
+        /// 契約時の前払いは無いが、年額が今の部費を超える段は契約できない（issue #1534）。
+        /// 抱えすぎは「部費 年間差引」が赤くなることでも分かる（UI原則②: 本当の警告だけ警告色）。
         /// </summary>
         private static void AddContractGroup(ManagementView v)
         {
@@ -182,11 +182,11 @@ namespace KokoSim.Unity.Management
                 Note = "部費から支払う",
                 IsContract = true,
             };
-            foreach (var def in catalog.Contracts) group.Rows.Add(BuildContractRow(def, set));
+            foreach (var def in catalog.Contracts) group.Rows.Add(BuildContractRow(def, set, v.Funds));
             if (group.Rows.Count > 0) v.Groups.Add(group);
         }
 
-        private static FacilityLedgerRow BuildContractRow(ContractDef def, ContractSet set)
+        private static FacilityLedgerRow BuildContractRow(ContractDef def, ContractSet set, double funds)
         {
             var lv = def.MaxLevel <= 0 ? 0 : System.Math.Clamp(set.LevelOf(def.Id), 0, def.MaxLevel);
 
@@ -218,10 +218,25 @@ namespace KokoSim.Unity.Management
                 var next = def.Tiers[lv + 1];
                 row.NextEffect = ContractEffectText(next);
                 row.NextCost = next.AnnualCost;
-                row.Affordable = true;   // 契約時の前払いは無い（年度末の総括でまとめて引かれる）
+                // 前払いは無い（年度末の総括でまとめて引かれる）が、年額が今の部費を超える段は押せない（issue #1534）。
+                row.Affordable = ContractAffordable(funds, next.AnnualCost);
             }
             return row;
         }
+
+        /// <summary>購入・年契約の前に出す確認の問い（issue #1534）。買い切りは「○○を○万で買いますか？」、
+        /// 年契約は「○○を年○万で契約しますか？」。次の段が無い行は空文字。</summary>
+        public static string ConfirmQuestion(FacilityLedgerRow r)
+        {
+            if (r == null || !r.NextCost.HasValue) return "";
+            var cost = r.NextCost.Value.ToString("0");
+            return r.IsContract
+                ? r.Name + "を年" + cost + "万で契約しますか？"
+                : r.Name + "を" + cost + "万で買いますか？";
+        }
+
+        /// <summary>年契約の段を結べるか＝その段の年額が今の部費を超えないか（issue #1534）。</summary>
+        public static bool ContractAffordable(double funds, double annualCost) => annualCost <= funds;
 
         /// <summary>年契約1段の効果の1行表記。効果ゼロ（未契約・据え置きの段）は「—」。</summary>
         public static string ContractEffectText(ContractTier t)
@@ -235,7 +250,7 @@ namespace KokoSim.Unity.Management
             return parts.Count == 0 ? "—" : string.Join(" ／ ", parts);
         }
 
-        /// <summary>年契約の段を1つ上げる（契約する）。前払いが無いので資金判定はしない。</summary>
+        /// <summary>年契約の段を1つ上げる（契約する）。前払いは無いが、年額が今の部費を超える段は結ばない（issue #1534）。</summary>
         public void Sign(string contractId)
         {
             var def = ManagerService.ContractList.Find(contractId);
@@ -258,6 +273,13 @@ namespace KokoSim.Unity.Management
             if (lv >= def.MaxLevel)
             {
                 _status = def.Name + " はすでに最上位の契約です";
+                _statusWarn = true;
+                return;
+            }
+
+            if (!ContractAffordable(ManagerService.Manager.Funds, def.Tiers[lv + 1].AnnualCost))
+            {
+                _status = "部費が足りません（" + def.Name + " は年 " + def.Tiers[lv + 1].AnnualCost.ToString("0") + "万）";
                 _statusWarn = true;
                 return;
             }

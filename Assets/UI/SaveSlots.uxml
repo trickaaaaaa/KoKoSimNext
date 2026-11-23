@@ -214,9 +214,9 @@
 
         <!-- 削除確認ダイアログ（同一ドキュメント内オーバーレイ。部品辞書の modal-scrim / modal-card を使用） -->
         <ui:VisualElement name="ss-confirm" class="ui-root modal-scrim">
-            <ui:VisualElement class="modal-card ss-confirm__card">
-                <ui:Label name="ss-confirm-q" class="ss-confirm__q f-body" text="" />
-                <ui:VisualElement class="ss-confirm__btns">
+            <ui:VisualElement class="modal-card confirm-card">
+                <ui:Label name="ss-confirm-q" class="confirm-q f-body" text="" />
+                <ui:VisualElement class="confirm-btns">
                     <ui:Button name="ss-confirm-no" class="dlg-btn dlg-btn--ghost" text="いいえ" />
                     <ui:Button name="ss-confirm-yes" class="dlg-btn dlg-btn--warn" text="削除する" />
                 </ui:VisualElement>
@@ -224,10 +224,10 @@
         </ui:VisualElement>
         <!-- 「タイトルへ戻る」確認（issue #730 でホームの ≡メニューから移設。破壊的操作＝確認を挟む）。 -->
         <ui:VisualElement name="ss-title-confirm" class="ui-root modal-scrim">
-            <ui:VisualElement class="modal-card ss-confirm__card">
-                <ui:Label class="ss-confirm__q f-body" text="タイトルへ戻りますか？　保存していない進行は失われます。" />
+            <ui:VisualElement class="modal-card confirm-card">
+                <ui:Label class="confirm-q f-body" text="タイトルへ戻りますか？　保存していない進行は失われます。" />
                 <ui:Label name="ss-title-since" class="ss-confirm__sub f-body" text="" />
-                <ui:VisualElement class="ss-confirm__btns">
+                <ui:VisualElement class="confirm-btns">
                     <ui:Button name="ss-title-no" class="dlg-btn dlg-btn--ghost" text="いいえ" />
                     <ui:Button name="ss-title-yes" class="dlg-btn dlg-btn--warn" text="タイトルへ戻る" />
                 </ui:VisualElement>

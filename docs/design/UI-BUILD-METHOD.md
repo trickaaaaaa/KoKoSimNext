@@ -126,6 +126,7 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `SchoolAccent` | スクールカラー（`acc-fg/bg/bd/bd-top` の付いた要素へ流し込む）。使うのは比較表の自チーム側とオーダー画面だけ |
 | `GrowthChart` | 成長推移の折れ線（`GrowthChartView`・`.gchart`・issue #1027）。左に目盛り＋線、下に区切りラベル、右に凡例（色見本＋名前＋今の値）。**線の色は凡例の色見本（`.gchart__sw--*`＝`--tm-*`）の解決済み背景色を読む**＝C# に色を持たない。横軸は呼び出し側が渡す区切りで等分（選手詳細では「1年／2年／3年」） |
 | `ChoiceButton` | 同じ重みの選択肢1つ（`UiComponents.ChoiceButton`・`.choice-btn`）。白地＋墨1px枠、hover／選択は墨2px。応援団赤は使わない・確率や説明文は添えない。イベントの3択（issue #945）は会話ボックスの中に縦並び（`.ev__choices`） |
+| `ConfirmDialog` | 問い1行＋はい／いいえの確認（`.confirm-card`／`.confirm-q`／`.confirm-btns`。`modal-scrim`＋`modal-card`＋`dlg-btn` と組む）。セーブ削除・タイトルへ戻る・経営の購入と年契約（issue #1534）で共有。問いは「○○を○万で買いますか？」の形で、補足の文は足さない |
 | `TierChoice` | 段の選択肢1行（`UiComponents.TierChoice`・`.tier-choice`・issue #1034）。`ChoiceButton` と同じ器に「段名｜年額（右揃えの NumUnit）｜効果の1文」を列で並べる。選ばれた段は `choice-btn--selected`（墨2px）。年契約の更新モーダルで1系統1枚のカードに縦並び |
 
 #### チームカラー（design-18 §3.5・tokens.uss と同型の流し込みパターン）

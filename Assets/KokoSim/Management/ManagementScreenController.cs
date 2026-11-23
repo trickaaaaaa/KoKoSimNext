@@ -20,6 +20,8 @@ namespace KokoSim.Unity.Management
     {
         private ManagementState _state;
         private VisualElement _root;
+        private VisualElement _confirm;
+        private System.Action _onConfirmYes;   // 確認で「はい」を押したときの実行（購入／契約）
 
         private void OnEnable()
         {
@@ -30,8 +32,56 @@ namespace KokoSim.Unity.Management
             var advance = _root.Q<Button>("advance");
             if (advance != null) advance.clicked += () => WeekAdvance.FromSideScreen(Render);
 
+            // 購入・年契約の確認（issue #1534）。暗幕のクリックと Esc は「いいえ」と同じ。
+            _confirm = _root.Q<VisualElement>("mn-confirm");
+            _onConfirmYes = null;
+            if (_confirm != null)
+            {
+                _confirm.style.display = DisplayStyle.None;
+                _confirm.focusable = true;
+                _confirm.RegisterCallback<ClickEvent>(_ => CloseConfirm());
+                _confirm.RegisterCallback<KeyDownEvent>(e =>
+                {
+                    if (e.keyCode == KeyCode.Escape) { CloseConfirm(); e.StopPropagation(); }
+                });
+                _confirm.Q<VisualElement>(className: "modal-card")?.RegisterCallback<ClickEvent>(e => e.StopPropagation());
+                var yes = _confirm.Q<Button>("mn-confirm-yes");
+                if (yes != null) yes.clicked += () =>
+                {
+                    var run = _onConfirmYes;
+                    CloseConfirm();
+                    run?.Invoke();
+                };
+                var no = _confirm.Q<Button>("mn-confirm-no");
+                if (no != null) no.clicked += CloseConfirm;
+            }
+
             Render();
         }
+
+        /// <summary>購入・年契約の前に「○○を○万で買いますか？ はい／いいえ」を出す（issue #1534）。</summary>
+        private void AskConfirm(FacilityLedgerRow r, System.Action onYes)
+        {
+            if (_confirm == null) { onYes(); return; }
+            var q = _confirm.Q<Label>("mn-confirm-q");
+            if (q != null) q.text = ManagementState.ConfirmQuestion(r);
+            _onConfirmYes = onYes;
+            _confirm.style.display = DisplayStyle.Flex;
+            _confirm.BringToFront();
+            _confirm.Focus();
+        }
+
+        private void CloseConfirm()
+        {
+            _onConfirmYes = null;
+            if (_confirm != null) _confirm.style.display = DisplayStyle.None;
+        }
+
+        /// <summary>確認を開いている間の問い（自動検証用・閉じていれば null）。</summary>
+        public string PendingConfirmQuestion
+            => _confirm != null && _confirm.resolvedStyle.display == DisplayStyle.Flex
+                ? _confirm.Q<Label>("mn-confirm-q")?.text
+                : null;
 
         /// <summary>スクショ・自動検証用に1段買う（通常は行の購入ボタン）。</summary>
         public void Buy(string facilityId)
@@ -227,9 +277,10 @@ namespace KokoSim.Unity.Management
             }
             else if (r.NextCost.HasValue)
             {
+                // 押したら確認を挟む（issue #1534）。部費が足りない行は押せない（SetEnabled の無効の見た目）。
                 var buy = r.IsContract
-                    ? new Button(() => Sign(id)) { text = r.ActionLabel }
-                    : new Button(() => Buy(id)) { text = r.ActionLabel };
+                    ? new Button(() => AskConfirm(r, () => Sign(id))) { text = r.ActionLabel }
+                    : new Button(() => AskConfirm(r, () => Buy(id))) { text = r.ActionLabel };
                 buy.AddToClassList("tool-btn");
                 buy.AddToClassList("mn-buy");
                 buy.SetEnabled(r.Affordable);
