@@ -162,11 +162,12 @@ namespace KokoSim.Unity.Records
         /// <summary>
         /// 年ごとの見出しの下に日付順（積んだ順＝試合順）。新しい年が上。行を押すと試合結果画面が開き、
         /// 閉じると戦績タブへ戻る。詳細の無い行（スコアだけ）は押せない。
-        /// 主語は学校＝いまの自校の試合だけ（転任で去った学校の試合は旧校に残る・issue #1261 と同じ）。
+        /// 主語は監督＝転任をまたいだ全公式戦（台帳は監督が率いた試合だけを積む）。各行にその年度に率いていた学校を
+        /// 添える（［歴代大会］と同じ作法・issue #1500）。
         /// </summary>
         private void RenderMatches()
         {
-            var records = GameSession.Current.MatchHistory.ForSchool(MatchRecordBook.ManagerKey).ToList();
+            var records = GameSession.Current.MatchHistory.Records.ToList();
 
             var rows = new List<VisualElement>();
             foreach (var year in records
@@ -193,6 +194,8 @@ namespace KokoSim.Unity.Records
             row.AddToClassList("rc-mt");
 
             row.Add(Cell(r.Month > 0 ? r.Month + "月" + r.Day + "日" : "―", "rc-mt__date", numeric: true));
+            row.Add(Cell(GameSession.Current.PostingHistory.SchoolNameAt(r.Year, TopBarMeters.SchoolDisplayName()),
+                "rc-mt__school", display: true));
             row.Add(Cell(TournamentKindNames.Of(r.Kind) + " " + r.RoundName, "rc-mt__cup"));
             // 相手校は記録した時点の名前を持っている＝改名（issue #946）は ID から今の名前へ引き直す。
             row.Add(Cell(NationService.DisplayName(r.OpponentId, r.OpponentName), "rc-mt__opp", display: true));

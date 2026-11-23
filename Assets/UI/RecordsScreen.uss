@@ -164,6 +164,7 @@
 .rc-mt { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
 .rc-mt--head { height: 26px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
 .rc-mt--head .rc-mt__date,
+.rc-mt--head .rc-mt__school,
 .rc-mt--head .rc-mt__cup,
 .rc-mt--head .rc-mt__opp,
 .rc-mt--head .rc-mt__score,
@@ -178,6 +179,16 @@
     margin: 0;
     padding: 0;
 }
+/* 赴任校は明朝（書体3役）。歴代大会の .rc-th__school と同じ。 */
+.rc-mt__school {
+    width: var(--col-rc-mt-school);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
 .rc-mt__cup {
     width: var(--col-rc-mt-cup);
     flex-shrink: 0;
@@ -185,6 +196,7 @@
     color: var(--tx-2);
     margin: 0;
     padding: 0;
+    overflow: hidden;
 }
 /* 相手校は明朝（書体3役）。縮むのはここだけ＝左右の列が押し出されない。 */
 .rc-mt__opp {
