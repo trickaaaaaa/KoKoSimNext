@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
@@ -35,6 +36,11 @@ public sealed class ProductiveOutAdvanceRegressionTests
         var advanced = new int[games];
         var held = new int[games];
         var outAtThird = new int[games];
+        // 打球の方向別（issue #1418）: 二塁ゴロ（走者の後ろ＝進む側）と遊撃・三塁ゴロ（走者の前＝原則自重）。
+        var secondBaseN = new int[games];
+        var secondBaseAdv = new int[games];
+        var frontN = new int[games];
+        var frontRan = new int[games];
 
         Parallel.For(0, games, i =>
         {
@@ -52,19 +58,37 @@ public sealed class ProductiveOutAdvanceRegressionTests
                 if (e.BaseThirdAfter) advanced[i]++;
                 else if (e.BaseSecondAfter) held[i]++;
                 else outAtThird[i]++;
+                if (fb == FieldPosition.SecondBase)
+                {
+                    secondBaseN[i]++;
+                    if (e.BaseThirdAfter) secondBaseAdv[i]++;
+                }
+                else if (fb is FieldPosition.Shortstop or FieldPosition.ThirdBase)
+                {
+                    frontN[i]++;
+                    if (!e.BaseSecondAfter) frontRan[i]++;
+                }
             }
         });
 
         var totalAdv = 0; var totalHeld = 0; var totalOut = 0;
         for (var i = 0; i < games; i++) { totalAdv += advanced[i]; totalHeld += held[i]; totalOut += outAtThird[i]; }
         var total = totalAdv + totalHeld + totalOut;
+        var sbN = secondBaseN.Sum(); var sbAdv = secondBaseAdv.Sum(); var fN = frontN.Sum(); var fRan = frontRan.Sum();
         _out.WriteLine($"n={total} advanced(2->3)={totalAdv} ({100.0 * totalAdv / total:F1}%) " +
                         $"held={totalHeld} ({100.0 * totalHeld / total:F1}%) outAtThird={totalOut} ({100.0 * totalOut / total:F1}%)");
+        _out.WriteLine($"二塁ゴロ n={sbN} 進塁={sbAdv} ／ 遊撃・三塁ゴロ n={fN} 走った={fRan}");
 
         Assert.True(total > 400, $"標本不足 n={total}");
-        // 旧実装はこの場面で進塁0%（300試合270件中0件）。修正後の実測は約77%（600試合）。
-        // 自重・三塁憤死（1塁手処理の短い中継など）も一定は残るはずなので上限も置く。
+        // 旧実装はこの場面で進塁0%（300試合270件中0件）。issue #1418 で遊撃・三塁ゴロは原則自重・送り閾値0.65
+        // （0アウト0.75）にしたので、全体の進塁率は約77%→約28%へ下がった（800試合）。進塁の主役は走者の後ろの
+        // 二塁ゴロ＝ここが0%へ戻っていないことを見張る（実測 約90%）。
+        Assert.True(sbN > 100, $"二塁ゴロの標本不足 n={sbN}");
+        Assert.InRange((double)sbAdv / sbN, 0.60, 0.99);
+        // 走者の前（遊撃・三塁）のゴロでは走らない（例外は三盗で投球と同時に走っていた走者だけ）。
+        Assert.True(fN > 100, $"遊撃・三塁ゴロの標本不足 n={fN}");
+        Assert.True((double)fRan / fN < 0.03, $"遊撃・三塁ゴロで走った割合が高すぎる（{fRan}/{fN}）");
         var rate = (double)totalAdv / total;
-        Assert.InRange(rate, 0.55, 0.95);
+        Assert.InRange(rate, 0.15, 0.95);
     }
 }
