@@ -24,6 +24,9 @@ namespace KokoSim.Unity.Training
         private VisualElement _modal;
         private VisualElement _copyModal;
         private bool _modalOpen;
+        // モーダルを開いている間は後ろの部員一覧を作り直さない（決定を押すまで一覧の表示を変えない・issue #1534）。
+        // 開いた瞬間の1回（選んだ行の強調）だけ描き、閉じたら最新に描き直す。
+        private bool _rowsFrozen;
         private bool _abilityTab;   // モーダルのタブ（false=配分／true=能力, issue #327③）
         private bool _copyOpen;     // 複製ピッカー（コピー元を選ぶ, Issue #133-⑤）
         private int _copyTarget;    // コピー先の選手索引
@@ -33,6 +36,7 @@ namespace KokoSim.Unity.Training
             _state = new TrainingPlanState();
             // 画面を離れて戻ると UIDocument が木を作り直す。古い木を指す部品・シグネチャ・開閉状態を持ち越さない。
             _modalOpen = false;
+            _rowsFrozen = false;
             _copyOpen = false;
             _abilityTab = false;
             _copyTarget = 0;
@@ -148,7 +152,8 @@ namespace KokoSim.Unity.Training
             BuildCampBanner(v);
             BuildNominations(v);
             BuildFilters(v);
-            BuildRows(v);
+            if (!(_modalOpen && _rowsFrozen)) BuildRows(v);
+            _rowsFrozen = _modalOpen;
             BuildModal(v);
             BuildCopyModal(v);
         }

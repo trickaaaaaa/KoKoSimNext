@@ -34,10 +34,11 @@ public static class TrainingPresets
         (TrainingMenu.BaseRunning, 1), (TrainingMenu.Strength, 1), (TrainingMenu.Throwing, 1),
     };
 
+    // 練習画面の配分欄に行が無いメニュー（内野/外野の汎用守備）はプリセットに入れない。入れるとその分が
+    // 画面の合計に数えられず「残り 70/300分」と余って見えた（issue #1534）。
     private static readonly (TrainingMenu Menu, double Weight)[] DefenseFocus =
     {
-        (TrainingMenu.Defense, 3), (TrainingMenu.Throwing, 2), (TrainingMenu.DefenseInfield, 2),
-        (TrainingMenu.Batting, 1)
+        (TrainingMenu.Defense, 3), (TrainingMenu.Throwing, 2), (TrainingMenu.Batting, 1)
     };
 
     private static readonly (TrainingMenu Menu, double Weight)[] AceDevelopment =
