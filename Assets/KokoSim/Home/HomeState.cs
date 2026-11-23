@@ -513,10 +513,28 @@ namespace KokoSim.Unity.Home
         /// 大会モード遷移自体は <see cref="TournamentEntry"/> が行うため、フィード投入だけをここに残す。</summary>
         public void PushTournamentOpenFeed()
         {
-            PushFeed(new List<FeedItem>
+            var items = new List<FeedItem>
             {
                 new FeedItem { When = "本日", Text = GameSession.Current.Title + "が開幕した。", Kind = FeedKind.Discover, Tag = "情報", Screen = FeedLinks.Tournament },
-            });
+            };
+            // 展望で自校に印（◎○▲）が付いていれば、部員の反応を添えて1行足す（設計書06 §3.5b・issue #1476）。
+            // 印は大会画面の展望と同じ組み立てから読む＝画面とずれない。
+            var own = new KokoSim.Unity.Tournament.TournamentPreviewState().Build()?.Contenders.Find(c => c.IsManager);
+            if (own != null)
+                items.Add(new FeedItem { When = "本日", Text = MarkedFeedText(own), Kind = FeedKind.Discover, Tag = "発見", Screen = FeedLinks.Tournament });
+            PushFeed(items);
+        }
+
+        /// <summary>自校に印が付いたときの1行（2026-11-23 オーナー選択: 事実＋部員の小さな反応。監督には語らせない）。</summary>
+        internal static string MarkedFeedText(KokoSim.Unity.Tournament.TournamentPreviewState.ContenderRow own)
+        {
+            var mark = "「" + own.MarkSym + own.MarkLabel + "」";
+            switch (own.MarkClass)
+            {
+                case "fav": return "新聞の展望で、" + own.Name + "が" + mark + "に挙がった。部員の顔が少し引きつっている。";
+                case "cont": return "新聞の展望で、" + own.Name + "が" + mark + "に挙がった。マネージャーが切り抜きを作っている。";
+                default: return "新聞の展望で、" + own.Name + "が" + mark + "扱いだ。「ダーク」の響きに部員が妙に喜んでいる。";
+            }
         }
 
         /// <summary>1週ぶんの練習を適用する。extraMult は大会モード時の効果低下（&lt;1.0）に使う。

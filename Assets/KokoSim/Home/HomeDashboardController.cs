@@ -535,6 +535,7 @@ namespace KokoSim.Unity.Home
         {
             _state.PushTournamentOpenFeed();   // 「大会が開幕した」を通知フィードへ（大会遷移は TournamentEntry が実施済み）
             _state.ConsumeBanner();
+            Render();   // 積んだ開幕の通知（と自校の印・#1476）を出す。呼び出し元は演出の前に描き終えている
             if (_banner == null) return;
             SetText("tm-banner-top", _state.BannerTop);
             SetText("tm-banner-name", _state.BannerName);

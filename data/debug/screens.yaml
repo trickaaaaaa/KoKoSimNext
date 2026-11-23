@@ -401,3 +401,15 @@ screens:
       - click: .fd-item--link[0]
       - wait: 8
       - shot: 04-opened-from-feed
+
+  - id: favorite-feed-1476
+    name: "展望で自校に印（◎○▲）が付くと、開幕の通知に部員の反応を添えて1行出る（issue #1476）"
+    steps:
+      - new_game: {seed: 1}
+      - boost_roster: 95
+      - advance_weeks: 20
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 4000ms
+      - read: feed-list
+      - shot: 01-home-feed
