@@ -1,92 +1,58 @@
 using UnityEngine.UIElements;
+using KokoSim.Engine.Season;
 using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Components
 {
     /// <summary>
-    /// ScoreboardStrip（部品辞書 / 設計書16 §4-1）の充填ロジック。
-    /// 見た目は Components/components.uss の .sbs* に、器は Components/ScoreboardStrip.uxml にある。
-    ///
-    /// 升目（マス）は値文字列から1文字ずつ生成する。数字が含まれる値は「数字＝値マス／
-    /// それ以外＝単位マス（一段小さい淡色）」、数字を含まない値（「開催中」「本日試合」「―」）は
-    /// 全マスを値マスとして出す。これで大会モードの非数値表示も分岐なしで升目に載る。
-    ///
-    /// 全画面のトップバーはこの1経路だけを通すこと（画面ごとに週の書式を作らない）。
-    /// 呼ばない画面は UXML の既定値が出たままになる＝旧実装で実際に起きていた
-    /// 「選手一覧のカウントダウンが常に『残り 15 週』」の再発防止。
+    /// トップバーの日付欄（上に年と時期の小書き・下に明朝の日付）の充填ロジック。
+    /// 旧・電光掲示板（升目）の入口をそのまま残し、全画面がこの1経路で日付を埋める
+    /// （画面ごとに週の書式を作らない。呼ばない画面は UXML の既定値が出たままになる）。
+    /// 大会期間は実月日（「9月13日」）、大会のない時期は週（「4月1週」）。
     /// </summary>
     public static class ScoreboardStrip
     {
-        /// <summary>
-        /// 通常週：共有現在週（GameClock）と**次の公式戦**までの残り週で埋める（issue #582）。
-        /// 夏の後は秋、秋の後は翌年の夏へ自動で切り替わる（種別も残り週も GameClock.NextTournament 由来）。
-        /// </summary>
-        public static void Fill(VisualElement root)
-        {
-            var next = GameClock.NextTournament;
-            // 大会中はどの画面のトップバーにも実月日を出す（issue #583）。書式は GameSession が単一ソース。
-            Fill(root, SeasonClock.CountdownLabel(next.Kind),
-                next.WeeksLeft > 0 ? next.WeeksLeft + "週" : "開催中", GameSession.Current.DateSuffix);
-        }
+        /// <summary>全画面共通の入口（大会中は小書きに大会の呼び名を添える）。</summary>
+        public static void Fill(VisualElement root) => Fill(root, null, null, null);
 
         /// <summary>
-        /// カウントダウンを呼び出し側が決める版（大会モードのホーム＝「次戦まで／本日試合」等）。
-        /// weekSuffix は年の添え字に続けて出す小書き（「夏の大会 7月13日」など。升目には載せない）。
+        /// 旧シグネチャ（カウントダウンを呼び出し側が決める版）。カウントダウンはトップバーから外した
+        /// （ホームの主役のカードが持つ）ので、引数は読まずに日付だけ埋める。
         /// </summary>
         public static void Fill(VisualElement root, string countdownLabel, string countdownValue, string weekSuffix)
         {
             if (root == null) return;
+            var s = GameSession.Current;
 
             var year = SeasonClock.YearLabel(GameClock.YearIndex, GameClock.Week);
             var sup = root.Q<Label>("week-year");
-            if (sup != null) sup.text = string.IsNullOrEmpty(weekSuffix) ? year : year + "　" + weekSuffix;
+            // 大会中は正式な大会名（「2026年 秋季神奈川県地区予選（川崎地区）」。年は大会名に含まれる）。
+            if (sup != null) sup.text = s.InTournament && !string.IsNullOrEmpty(s.Title) ? s.Title : year;
 
-            var k = root.Q<Label>("countdown-k");
-            if (k != null) k.text = countdownLabel;
-
-            // 週は白ドット、カウントダウンだけアンバー点灯（UI原則②＝アクセントは希少資源。
-            // 掲示板の中でも点灯させるのは最重要値ひとつだけ）。
-            // 大会中は GameClock.Week が開幕時点で凍結する（週暦は大会内実日付を触らない・issue #583）ため、
-            // ここも GameSession の大会内実日付を使う。素朴に GameClock.Week を出すと、進み続ける実日付
-            // （week-year側）と凍結した週表示が食い違って見える（大会日程と実際の日程が合っていないバグ）。
-            var weekCellsValue = GameSession.Current.InTournament
-                ? GameSession.Current.TournamentDateLabel
-                : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
-            FillCells(root.Q("week-cells"), weekCellsValue, false);
-            FillCells(root.Q("countdown-cells"), countdownValue, true);
-        }
-
-        /// <summary>値文字列を1文字1マスの升目に展開する。</summary>
-        private static void FillCells(VisualElement host, string value, bool lit)
-        {
-            if (host == null) return;
-            host.Clear();
-            if (string.IsNullOrEmpty(value)) return;
-
-            var hasDigit = false;
-            foreach (var ch in value) if (ch >= '0' && ch <= '9') { hasDigit = true; break; }
-
-            foreach (var ch in value)
+            // 大会中は GameClock.Week が開幕時点で凍結する（issue #583）＝大会内の実月日を出す。
+            // 戦績（大会中はいまの大会の勝敗、それ以外は今季の公式戦の勝敗）。公式戦の戦績（MatchHistory）が単一ソース。
+            var recordK = root.Q<Label>("tb-record-k");
+            var record = root.Q<Label>("tb-record");
+            if (recordK != null || record != null)
             {
-                if (ch == ' ' || ch == '　') continue;   // 区切りの空白はマスにしない
-
-                var cell = new Label(ch.ToString());
-                cell.AddToClassList("sbs-cell");
-                cell.AddToClassList("f-dot");
-
-                var isDigit = ch >= '0' && ch <= '9';
-                if (hasDigit && !isDigit)
+                int won = 0, lost = 0, drawn = 0;
+                foreach (var m in s.MatchHistory.ForSchool(KokoSim.Engine.Stats.MatchRecordBook.ManagerKey))
                 {
-                    cell.AddToClassList("sbs-cell--unit");   // 「月」「週」＝単位は一段落とす
+                    if (m.Year != s.Year) continue;
+                    if (s.InTournament && m.Kind != s.Kind) continue;
+                    if (m.Won) won++; else if (m.Lost) lost++; else drawn++;
                 }
-                else
-                {
-                    if (!hasDigit) cell.AddToClassList("sbs-cell--wide");   // 全角のみの値は広いマス
-                    if (lit) cell.AddToClassList("sbs-cell--lit");
-                }
-
-                host.Add(cell);
+                if (recordK != null)
+                    recordK.text = s.InTournament ? TournamentKindNames.Short(s.Kind) + "の戦績" : "今季の公式戦";
+                if (record != null)
+                    record.text = won + "勝" + lost + "敗" + (drawn > 0 ? drawn + "分" : "");
             }
+
+            var date = root.Q<Label>("tb-date");
+            if (date != null)
+                date.text = s.InTournament
+                    ? s.TournamentDateLabel
+                    : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
         }
     }
 }

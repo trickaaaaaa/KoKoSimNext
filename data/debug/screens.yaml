@@ -724,3 +724,68 @@ screens:
       - call: PitchChartGallery.Show("PlayerList")
       - wait: 5
       - shot: 02-gallery
+
+  # ── ホームのリデザイン（墨の帯・主役のカード・3列）──
+
+  - id: home-redesign
+    name: "ホームのリデザイン（大会のない時期・記録なし／大会期間・試合前／試合当日／記録あり・秋まで／冬をまたぐ／ほかの画面の帯）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 01-offseason-13weeks-empty
+      - advance_weeks: 8
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 02-offseason-5weeks
+      - advance_weeks: 10
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 03-tournament-before
+      - advance_to_match_day: ""
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 04-tournament-match-day
+      - play_tournament: ""
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 05-offseason-with-records
+      - advance_weeks: 10
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 05b-autumn-tournament-with-records
+      - advance_to_week: 30
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 06-offseason-over-winter
+      - show: PlayerList
+      - wait: 5
+      - shot: 07-player-list-topbar
+      - show: TrainingPlan
+      - wait: 5
+      - shot: 08-training-topbar
+
+  - id: home-school-colors
+    name: "スクールカラーが白・黄色・水色の学校でも主役のカードの白い文字が読める"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: SchoolColorProbe.Set("#F4F2EC")
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 01-white
+      - call: SchoolColorProbe.Set("#F2C200")
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 02-yellow
+      - call: SchoolColorProbe.Set("#7EC8E3")
+      - show: HomeDashboard
+      - wait: 5
+      - shot: 03-lightblue

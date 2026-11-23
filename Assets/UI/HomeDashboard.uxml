@@ -5,152 +5,185 @@
     <Style src="Components/components.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/scorebook.uss" />
-    <ui:VisualElement class="root sbk">
+    <ui:VisualElement class="root sbk hm-root">
 
       <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
       <ui:Instance template="TopBar" class="topbar-slot" />
 
-      <!-- ===== 主役ブロック: 直近の予定（全幅ヒーロー帯・design-16 §5 / 決定1-A）=====
-           均等3カラムを破って本文最上部に横断で載る主役。大会週は「次の試合」（対戦カード）、
-           通常週は「夏予選まで残りN週」（出場が決まったセンバツ等はその大会名で数える）。
-           コントローラが hm-hero-match / hm-hero-plain を display で二者択一する。 -->
-      <ui:VisualElement name="home-hero" class="hm-hero">
-        <ui:VisualElement class="rule-head hm-hero__eyebrow">
-          <ui:VisualElement class="rule-head__rule" />
-          <ui:Label class="rule-head__text" text="直近の予定" />
-        </ui:VisualElement>
+      <!-- ===== 主役のカード（スクールカラー地・高さ148）=====
+           大会期間は「次の試合」、大会のない時期は「次の大会まで」。コントローラが
+           hm-hero-match / hm-hero-plain を display で二者択一する。地の色は acc-bg（SchoolAccent）。 -->
+      <ui:VisualElement name="home-hero" class="hm-hero acc-bg">
+        <ui:VisualElement class="hm-hero__ring" />
 
-        <!-- 大会週: 対戦カード（round｜自校 VS 相手｜日程・球場・天気） -->
-        <ui:VisualElement name="hm-hero-match" class="hm-hero__match">
-          <ui:Label name="game-tag" class="hm-hero__round" text="２回戦" />
-          <ui:VisualElement class="hm-hero__teams">
-            <ui:VisualElement class="nm-team">
-              <ui:Label name="home-team" class="nm-team__n" text="桜丘" />
-              <ui:Label name="home-sub" class="nm-team__s" text="自校" />
-            </ui:VisualElement>
-            <ui:Label class="nm-vs" text="VS" />
-            <ui:VisualElement class="nm-team">
-              <ui:Label name="away-team" class="nm-team__n" text="享栄" />
-              <ui:Label name="away-sub" class="nm-team__s" text="ランク B" />
+        <!-- 大会期間：試合まで｜区分・大会名／自校 vs 相手校・ランク｜試合日・天気予報 -->
+        <ui:VisualElement name="hm-hero-match" class="hm-hero__state">
+          <ui:VisualElement class="hm-hero__big">
+            <ui:Label class="hm-hero__big-k" text="試合まで" />
+            <ui:VisualElement class="hm-hero__big-row">
+              <ui:Label name="hero-days" class="hm-hero__big-num" text="2" />
+              <ui:Label name="hero-days-unit" class="hm-hero__big-unit" text="日" />
             </ui:VisualElement>
           </ui:VisualElement>
-          <ui:VisualElement class="hm-hero__meta">
-            <ui:Label name="game-date" class="hm-hero__when" text="本日 試合" />
-            <ui:Label name="venue" class="nm-meta__i" text="甲子園" />
-            <!-- 天気（issue #803）。試合の無い週・次戦未確定はコントローラが display:none で丸ごと隠す。
-                 マーク（太陽/雲/雨・issue #1200）と気温の数字（Noto Sans JP。design-22でOswaldから改訂済み）は書体3役ルールで Label を分ける。 -->
-            <ui:VisualElement name="weather-group" class="nm-meta__i hm-hero__weather">
-                <ui:VisualElement name="weather-icon" class="hm-hero__weather-icon wx-icon--sunny-light" />
-                <ui:Label name="weather-temp-num" class="hm-hero__weather-num f-num-bd" text="33" />
-                <ui:Label name="weather-temp-unit" class="hm-hero__weather-unit f-body" text="℃" />
+          <ui:VisualElement class="hm-hero__mid">
+            <ui:VisualElement class="hm-hero__row">
+              <ui:Label name="game-tag" class="hm-hero__tag" text="リーグ第2戦" />
+              <ui:Label name="tournament-name" class="hm-hero__tname" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="hm-hero__row hm-hero__row--teams">
+              <ui:Label name="home-team" class="hm-hero__team" text="桜丘" />
+              <ui:Label class="hm-hero__vs" text="vs" />
+              <ui:Label name="away-team" class="hm-hero__team" text="享栄" />
+              <ui:VisualElement name="away-rank-group" class="hm-hero__rank">
+                <ui:Label class="hm-hero__rank-k" text="ランク" />
+                <ui:VisualElement name="away-rank" class="hm-hero__rank-chip" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+          <ui:VisualElement class="hm-hero__side">
+            <ui:VisualElement class="hm-hero__fact">
+              <ui:Label class="hm-hero__fact-k" text="試合日" />
+              <ui:Label name="match-day" class="hm-hero__fact-v" text="9月15日" />
+            </ui:VisualElement>
+            <!-- 天気（issue #803/#1199）。試合当日だけ・屋内は出さない＝コントローラが display:none で隠す。 -->
+            <ui:VisualElement name="weather-group" class="hm-hero__fact hm-hero__fact--wx">
+              <ui:Label class="hm-hero__fact-k" text="天気予報" />
+              <ui:VisualElement class="hm-hero__wx">
+                <ui:VisualElement name="weather-icon" class="hm-hero__weather-icon wx-icon--sunny-dark" />
+                <ui:Label name="weather-temp-num" class="hm-hero__wx-num" text="21" />
+                <ui:Label name="weather-temp-unit" class="hm-hero__wx-unit" text="℃" />
+              </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 通常週: 夏予選カウントダウン（数値は f-num＝Label を数字と単位に分割） -->
-        <ui:VisualElement name="hm-hero-plain" class="hm-hero__plain">
-          <ui:Label name="hero-cd-label" class="hm-hero__cd-k" text="夏予選まで" />
-          <ui:Label name="hero-cd-num" class="hm-hero__cd-num f-num-bd" text="15" />
-          <ui:Label name="hero-cd-unit" class="hm-hero__cd-unit" text="週" />
+        <!-- 大会のない時期：〇の大会まで N週｜大会名・開幕の週／週の目盛り -->
+        <ui:VisualElement name="hm-hero-plain" class="hm-hero__state">
+          <ui:VisualElement class="hm-hero__big">
+            <ui:Label name="hero-cd-label" class="hm-hero__big-k" text="夏の大会まで" />
+            <ui:VisualElement class="hm-hero__big-row">
+              <ui:Label name="hero-cd-num" class="hm-hero__big-num" text="13" />
+              <ui:Label name="hero-cd-unit" class="hm-hero__big-unit" text="週" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+          <ui:VisualElement class="hm-hero__mid hm-hero__mid--grow">
+            <ui:VisualElement class="hm-hero__row">
+              <ui:Label name="next-tournament" class="hm-hero__next" text="夏予選" />
+              <ui:Label name="opening-week" class="hm-hero__open" text="7月2週 開幕" />
+            </ui:VisualElement>
+            <ui:VisualElement name="ticks" class="hm-ticks" />
+            <ui:VisualElement name="tick-labels" class="hm-ticks hm-ticks--labels" />
+          </ui:VisualElement>
         </ui:VisualElement>
       </ui:VisualElement>
 
-      <!-- ===== ダッシュボード本体（3カラム・外側スクロールなし） ===== -->
-      <ui:VisualElement name="home-dash" class="dash">
+      <!-- ===== 3列（372｜残り全部｜360・間隔16） ===== -->
+      <ui:VisualElement name="home-dash" class="hm-dash">
 
-        <!-- COL1: 部の実力＝6指標レーダー / 故障者（「次の試合」は主役ヒーロー帯へ移設） -->
-        <ui:VisualElement class="dash-col dash-col--a">
-          <!-- チームランク（6指標レーダー）。カード本体クリックでチーム総合力の専用パネルへ -->
-          <ui:VisualElement class="card">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="チームランク" />
-            </ui:VisualElement>
-            <ui:VisualElement name="team-strength-row" class="card__body hm-ts">
-              <ui:VisualElement class="hm-ts__top">
-                <ui:Label class="hm-ts__k" text="総合" />
-                <ui:VisualElement name="team-strength-chip" class="pd2-overall__chip" />
-                <ui:Label name="team-strength-value" class="hm-ts__v f-num-bd" text="—" />
+        <!-- 左：チームランク（縦に伸ばす）／故障者 -->
+        <ui:VisualElement class="hm-col hm-col--a">
+          <ui:VisualElement name="team-strength-row" class="hm-card hm-card--grow hm-card--link">
+            <ui:VisualElement class="hm-card__hd">
+              <ui:Label class="hm-card__title" text="チームランク" />
+              <ui:VisualElement class="hm-card__hd-right">
+                <ui:Label class="hm-card__aside" text="総合" />
+                <ui:VisualElement name="team-strength-chip" class="hm-overall__chip" />
+                <ui:Label name="team-strength-value" class="hm-overall__v" text="—" />
               </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="hm-radar-wrap">
               <ui:VisualElement name="hm-radar" class="hm-radar" />
             </ui:VisualElement>
           </ui:VisualElement>
 
-          <!-- 故障者（設計書03 §3.5: 部位・程度は常に可視） -->
-          <ui:VisualElement class="card card--grow">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="故障者" />
-              <ui:Label name="injury-count" class="card__hd-sub" text="0 名" />
+          <ui:VisualElement name="injury-card" class="hm-card hm-card--inj">
+            <ui:VisualElement class="hm-inj-hd">
+              <ui:Label class="hm-card__title hm-card__title--sm" text="故障者" />
+              <ui:VisualElement class="hm-card__hd-right">
+                <ui:Label name="injury-count" class="hm-count__n" text="0" />
+                <ui:Label class="hm-count__u" text="人" />
+              </ui:VisualElement>
             </ui:VisualElement>
-            <ui:ScrollView mode="Vertical" class="card__scroll">
+            <ui:ScrollView name="injury-scroll" mode="Vertical" class="hm-inj-scroll">
               <ui:VisualElement name="injury-list" />
             </ui:ScrollView>
           </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- COL2: チーム成績 / チーム内ランキング -->
-        <ui:VisualElement class="dash-col dash-col--b">
-          <ui:VisualElement class="card">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="チーム成績" />
+        <!-- 中：チーム成績／チーム内ランキング（縦に伸ばす） -->
+        <ui:VisualElement class="hm-col hm-col--b">
+          <ui:VisualElement name="stats-card" class="hm-card hm-card--stats">
+            <ui:VisualElement name="stats-head" class="hm-st-row hm-st-row--head">
+              <ui:Label class="hm-card__title hm-st-k" text="チーム成績" />
+              <ui:Label class="hm-st-c hm-st-c--th" text="通算" />
+              <ui:Label class="hm-st-c hm-st-c--th hm-st-c--off" text="公式戦" />
+              <ui:Label name="stats-cur-head" class="hm-st-cur hm-st-cur--th acc-bg" text="今大会" />
             </ui:VisualElement>
-            <ui:VisualElement class="card__body">
-              <ui:VisualElement class="hm-th">
-                <ui:Label class="hm-sc-k hm-th__c" text="" />
-                <ui:Label class="hm-sc-v hm-th__c hm-th__c--r" text="通算" />
-                <ui:Label class="hm-sc-v hm-th__c hm-th__c--r" text="公式戦" />
-                <ui:Label class="hm-sc-v hm-th__c hm-th__c--r" text="今大会" />
+            <ui:VisualElement name="team-stats" />
+            <ui:VisualElement name="stats-empty" class="hm-empty">
+              <ui:VisualElement class="hm-empty__icon hm-icon-chart" />
+              <ui:VisualElement class="hm-empty__text">
+                <ui:Label class="hm-empty__t1" text="まだ試合の記録がありません" />
+                <ui:Label class="hm-empty__t2" text="練習試合や公式戦を行うと、ここに打率や防御率が出ます" />
               </ui:VisualElement>
-              <ui:VisualElement name="team-stats" />
             </ui:VisualElement>
           </ui:VisualElement>
 
-          <ui:VisualElement class="card card--grow">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="チーム内ランキング" />
-              <ui:Label class="card__hd-sub" text="通算" />
+          <ui:VisualElement class="hm-card hm-card--grow">
+            <ui:VisualElement class="hm-card__hd">
+              <ui:Label class="hm-card__title" text="チーム内ランキング" />
+              <ui:VisualElement name="rank-scope" class="hm-seg" />
             </ui:VisualElement>
-            <ui:VisualElement class="card__body hm-rk2">
-              <ui:VisualElement class="hm-rk2__col">
-                <ui:VisualElement class="hm-th">
-                  <ui:Label class="hm-rk-k hm-th__c hm-th__c--sec" text="打撃" />
-                  <ui:Label class="hm-rk-e hm-th__c" text="1位" />
-                  <ui:Label class="hm-rk-e hm-th__c" text="2位" />
+            <ui:VisualElement name="rank-body" class="hm-rk">
+              <ui:VisualElement class="hm-rk__col">
+                <ui:VisualElement class="hm-rk-row hm-rk-row--head">
+                  <ui:Label class="hm-rk-k hm-rk-k--sec" text="打撃" />
+                  <ui:Label class="hm-rk-1 hm-rk-th" text="1位" />
+                  <ui:Label class="hm-rk-2 hm-rk-th hm-rk-th--r" text="2位" />
                 </ui:VisualElement>
                 <ui:VisualElement name="rank-bat" />
               </ui:VisualElement>
-              <ui:VisualElement class="hm-rk2__gap" />
-              <ui:VisualElement class="hm-rk2__col">
-                <ui:VisualElement class="hm-th">
-                  <ui:Label class="hm-rk-k hm-th__c hm-th__c--sec" text="投手" />
-                  <ui:Label class="hm-rk-e hm-th__c" text="1位" />
-                  <ui:Label class="hm-rk-e hm-th__c" text="2位" />
+              <ui:VisualElement class="hm-rk__gap" />
+              <ui:VisualElement class="hm-rk__col">
+                <ui:VisualElement class="hm-rk-row hm-rk-row--head">
+                  <ui:Label class="hm-rk-k hm-rk-k--sec" text="投手" />
+                  <ui:Label class="hm-rk-1 hm-rk-th" text="1位" />
+                  <ui:Label class="hm-rk-2 hm-rk-th hm-rk-th--r" text="2位" />
                 </ui:VisualElement>
                 <ui:VisualElement name="rank-pit" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="rank-empty" class="hm-empty">
+              <ui:VisualElement class="hm-empty__icon hm-icon-trophy" />
+              <ui:VisualElement class="hm-empty__text">
+                <ui:Label class="hm-empty__t1" text="まだランキングはありません" />
+                <ui:Label class="hm-empty__t2" text="試合を重ねると、打撃・投手の部門ごとにチーム内の上位が出ます" />
               </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- COL3: 今週の出来事 / 個別指導 -->
-        <ui:VisualElement class="dash-col dash-col--c">
-          <ui:VisualElement class="card card--grow">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="今週の出来事" />
-              <ui:Label class="card__hd-sub" text="通知フィード" />
+        <!-- 右：個別指導／今週の出来事（縦に伸ばす） -->
+        <ui:VisualElement class="hm-col hm-col--c">
+          <ui:VisualElement class="hm-card hm-card--side">
+            <ui:VisualElement class="hm-card__hd">
+              <ui:Label class="hm-card__title" text="個別指導" />
+              <ui:VisualElement class="hm-card__hd-right">
+                <ui:Label class="hm-card__aside" text="枠" />
+                <ui:Label name="guidance-used" class="hm-count__n hm-count__n--sm" text="0" />
+                <ui:Label name="guidance-total" class="hm-card__aside" text="/ 3 使用中" />
+              </ui:VisualElement>
             </ui:VisualElement>
-            <ui:ScrollView mode="Vertical" class="card__scroll">
-              <ui:VisualElement name="feed-list" />
-            </ui:ScrollView>
+            <ui:VisualElement name="guidance-list" />
           </ui:VisualElement>
 
-          <ui:VisualElement class="card">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="個別指導" />
-              <ui:Label name="guidance-count" class="card__hd-sub" text="残り枠 1 / 3" />
+          <ui:VisualElement class="hm-card hm-card--side hm-card--grow">
+            <ui:VisualElement class="hm-card__hd">
+              <ui:Label class="hm-card__title" text="今週の出来事" />
             </ui:VisualElement>
-            <ui:VisualElement class="card__body">
-              <ui:VisualElement name="guidance-list" />
-            </ui:VisualElement>
+            <ui:ScrollView mode="Vertical" class="hm-feed-scroll">
+              <ui:VisualElement name="feed-list" />
+            </ui:ScrollView>
           </ui:VisualElement>
         </ui:VisualElement>
 

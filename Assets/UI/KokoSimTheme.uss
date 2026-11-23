@@ -806,104 +806,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
    題字・副題の書体と色はそのままで、上下の余白だけを落とす。 */
 .card__hd--tight { padding-top: 6px; padding-bottom: 6px; }
 
-/* ═══ ホーム（情報構成 案A・2026-07-21） ═══════════════════════════════
-   左＝部の実力（6指標レーダー）＋故障者 / 中＝チーム成績＋チーム内ランキング /
-   右＝今週の出来事＋個別指導。数値は右揃え・行高32px（UI原則①③）。 */
-
-/* --- 部の実力（レーダーは部品辞書 RadarChartView が描く） --- */
-.hm-ts { padding-bottom: 12px; }
-.hm-ts__top { flex-direction: row; align-items: center; }
-.hm-ts__k { font-size: var(--fs-cap); color: var(--tx-2); letter-spacing: 2px; margin-right: var(--sp-2); }
-.hm-ts__v { font-size: 28px; color: var(--tx-1); margin-left: var(--sp-3); }
-.hm-radar { height: 292px; flex-shrink: 0; align-items: center; justify-content: center; }
-
-/* --- チーム成績（項目 × 通算/公式戦/今大会） --- */
-.hm-srow { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
-.hm-sc-k { width: var(--col-hm-sc-k); flex-shrink: 0; font-size: var(--fs-label); color: var(--tx-2); margin: 0; padding: 0; }
-.hm-sc-v { width: var(--col-hm-sc-v); flex-shrink: 0; font-size: var(--fs-num); color: var(--tx-1); margin: 0; padding: 0; -unity-text-align: middle-right; }
-.hm-sc-v--none { color: var(--tx-3); }
-
-/* --- チーム内ランキング（部門 × 1〜3位。各枠は「選手名＋数値」） --- */
-.hm-rrow { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
-.hm-rk-k { width: var(--col-hm-rk-k); flex-shrink: 0; font-size: var(--fs-label); color: var(--tx-2); margin: 0; padding: 0; }
-.hm-rk-e { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center;
-           justify-content: space-between; margin: 0; padding: 0 var(--sp-2) 0 0; }
-/* 長い姓名でも数値が押し出されないよう、縮むのは名前側だけにする。 */
-.hm-rk-e__n { font-size: var(--fs-label); color: var(--tx-1); overflow: hidden; flex-shrink: 1; min-width: 0; }
-.hm-rk-e__v { width: var(--col-hm-rk-v); font-size: var(--fs-num); color: var(--tx-1); -unity-text-align: middle-right; flex-shrink: 0; margin: 0; padding: 0; }
-.hm-rk-e--none { color: var(--tx-3); font-size: var(--fs-label); }
-
-/* --- 故障者（部位・程度・復帰まで。重度だけ警告色＝UI原則②） --- */
-.hm-inj { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
-.hm-inj__no { width: var(--col-hm-inj-no); flex-shrink: 0; font-size: var(--fs-cap); color: var(--tx-3); margin: 0; padding: 0; -unity-text-align: middle-right; }
-.hm-inj__n { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--tx-1); margin: 0 0 0 var(--sp-3); padding: 0; overflow: hidden; }
-.hm-inj__st { width: var(--col-hm-inj-st); flex-shrink: 0; font-size: var(--fs-cap); color: var(--tx-2); margin: 0; padding: 0; }
-.hm-inj__st--severe { color: var(--color-warn); }
-.hm-inj__bk { width: var(--col-hm-inj-bk); flex-shrink: 0; font-size: var(--fs-num); color: var(--tx-2); margin: 0; padding: 0; -unity-text-align: middle-right; }
-.hm-inj--none { font-size: var(--fs-label); color: var(--tx-3); padding: var(--sp-2) 0; }
-
-/* ランキングは打撃／投手を横2列に並べる（縦1列だと12部門が入らずスクロール送りになるため）。
-   中央カラムは幅に余裕があるので、縦を半分にして全部門を一目に収める。 */
-.hm-rk2 { flex-direction: row; flex-grow: 1; min-height: 0; }
-.hm-rk2__col { flex-grow: 1; flex-basis: 0; min-width: 0; }
-.hm-rk2__gap { width: 24px; flex-shrink: 0; }
-
-/* --- 表の見出し（成績・ランキング共通。列幅は上のデータ側と同じ変数を参照） --- */
-.hm-th { flex-direction: row; align-items: center; height: var(--h-thead); flex-shrink: 0;
-         border-bottom-width: 1px; border-bottom-color: var(--divider); }
-.hm-th__c { font-size: var(--fs-th); color: var(--tx-3); letter-spacing: 1px; margin: 0; padding: 0; }
-.hm-th__c--r { -unity-text-align: middle-right; }
-.hm-th__c--sec { color: var(--tx-2); }
-
-/* --- 次の試合（旧COL Aカード。nm-team/nm-vs はヒーロー帯でも流用） --- */
-.nm-teams { flex-direction: row; align-items: center; }
-.nm-team { flex-grow: 1; align-items: center; }
-.nm-team__n { font-size: 23px; color: var(--color-chalk); }
-.nm-team__s { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
-.nm-vs { font-size: 24px; color: var(--color-muted); margin: 0 8px; }
-.nm-meta { flex-direction: row; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top-width: 1px; border-top-color: var(--color-line); }
-.nm-meta__i { font-size: var(--fs-cap); color: var(--color-muted); margin-right: 16px; }
-
-/* --- 主役ブロック: 直近の予定（全幅ヒーロー帯・design-16 §5 / 決定1-A） ---
-   .dash（padding:14）の上に横断で載る主役。左に柱見出し（rule-head）、右に対戦カード or
-   夏予選カウントダウン。均等3カラムより一段高い面(--sf-card)で「本文の主役」であることを示す。 */
-.hm-hero {
-    flex-shrink: 0;
-    flex-direction: row;
-    align-items: center;
-    background-color: var(--sf-card);                  /* = .card と同じ白面 */
-    border-color: var(--ink);                          /* design-19：主役帯も他カードと同じNB枠＋ベタ影 */
-    border-top-width: var(--nb-border-card);
-    border-left-width: var(--nb-border-card);
-    border-right-width: var(--nb-card-edge);
-    border-bottom-width: var(--nb-card-edge);
-    border-radius: 0;
-    margin: 14px 14px 0 14px;               /* dash の padding と左右を揃える。下は dash 側が空ける */
-    padding: 16px 22px;
-    min-height: 86px;
-}
-.hm-hero__eyebrow { margin-bottom: 0; margin-right: 22px; flex-shrink: 0; }
-
-/* 大会週: 対戦カード */
-.hm-hero__match { flex-direction: row; align-items: center; flex-grow: 1; }
-.hm-hero__round { font-size: 19px; letter-spacing: 2px; color: var(--color-chalk); margin-right: 24px; flex-shrink: 0; }
-.hm-hero__teams { flex-direction: row; align-items: center; flex-shrink: 0; }
-.hm-hero .nm-team__n { font-size: 24px; }   /* ヒーローでは校名をひとまわり大きく（明朝は tokens 側で適用） */
-.hm-hero .nm-vs { font-size: 22px; margin: 0 14px; }
-.hm-hero__meta { flex-direction: row; align-items: center; margin-left: auto; flex-shrink: 0; }
-.hm-hero__when { font-size: 18px; color: var(--color-chalk); letter-spacing: 1px; margin-right: 18px; }
-
-/* 天気（issue #803）。マーク（issue #1200）と気温の数字を別要素に分ける（書体3役ルール）。
-   .nm-meta__i を併用するフォント/色/行末マージンはそのまま継承させる。 */
-.hm-hero__weather { flex-direction: row; align-items: center; }
-.hm-hero__weather-icon { width: 28px; height: 28px; margin-right: 4px; }
-.hm-hero__weather-num { font-size: 16px; color: var(--color-chalk); margin-right: 1px; }
-
-/* 通常週: 夏予選カウントダウン（数字は f-num-bd を UXML で付与） */
-.hm-hero__plain { flex-direction: row; align-items: baseline; flex-grow: 1; }
-.hm-hero__cd-k { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; margin-right: 16px; }
-.hm-hero__cd-num { font-size: 40px; color: var(--color-chalk); }
-.hm-hero__cd-unit { font-size: 20px; color: var(--color-muted); margin-left: 4px; }
+/* ホームの本体は下の「ホーム（Home.*.mock 準拠）」の節。 */
 
 /* 調子5段階の色（選手一覧・主将指名など全画面共通）。
    値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
@@ -914,37 +817,343 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .cond--bad { color: #7FA8D6; }     /* = --cond-bad 不調（水色） */
 .cond--worst { color: #4F6FA8; }   /* = --cond-worst 絶不調（青） */
 
-/* --- 通知フィード --- */
-.fd-item { flex-direction: row; align-items: stretch; border-bottom-width: 1px; border-bottom-color: var(--color-line); }
-.fd-bar { width: 4px; flex-shrink: 0; }
-.fd-body { flex-grow: 1; padding: 11px 14px; }
-/* 押せる通知（飛び先がある・issue #1474）は乗せたときだけ行の面を変える */
-.fd-item--link:hover { background-color: var(--color-row-hover); }
-.fd-meta { flex-direction: row; align-items: center; margin-bottom: 4px; }
-.fd-tag { font-size: var(--fs-cap); letter-spacing: 1px; padding: 1px 7px 1px 0; margin-right: 9px; }
-.fd-bar.fd-tone--growth { background-color: var(--color-good); }
-.fd-bar.fd-tone--warn { background-color: var(--color-warn); }
-.fd-bar.fd-tone--find { background-color: var(--sky); }
-.fd-bar.fd-tone--info { background-color: var(--color-muted); }
-.fd-tag.fd-tone--growth { color: var(--color-good); }
-.fd-tag.fd-tone--warn { color: var(--color-warn); }
-.fd-tag.fd-tone--find { color: var(--sky); }
-.fd-tag.fd-tone--info { color: var(--color-muted); }
-.fd-time { font-size: var(--fs-cap); color: var(--color-faint); }
-.fd-text { font-size: 19px; color: var(--color-chalk); white-space: normal; }
+/* ═══ ホーム（Home.tournament.mock / Home.offseason.mock 準拠・1600×900基準） ═════════════
+   地 #E7E2D7・カードは #FBFAF6 の角丸14（枠線なし）。主役のカード（スクールカラー地）の下に
+   3列（372｜残り全部｜360・間隔16）。スクールカラーは SchoolAccent が acc-* の付いた要素へ流し込む。 */
+.sbk.hm-root { background-color: var(--hm-ground); }
+.hm-hero Label, .hm-dash Label { margin: 0; padding: 0; }
 
-/* --- 個別指導 --- */
-.gd-slot { flex-direction: row; align-items: center; justify-content: space-between; background-color: var(--color-panel-deep); border-width: 0; border-radius: var(--radius-card); padding: 12px 14px; margin-bottom: 10px; flex-shrink: 0; }
-.gd-slot--empty { background-color: transparent; border-width: 1px; border-color: var(--color-line); -unity-text-align: middle-center; }
-.gd-name { font-size: 18px; color: var(--color-chalk); }
-/* 指導の主眼はアンバーにしない（UI原則②: 1画面3箇所まで。ホームは「今週を進める」と
-   カウントダウンで既に2箇所使うため、枠が2つある指導ラベルに配ると必ず超過する）。 */
-.gd-focus { font-size: var(--fs-cap); color: var(--color-muted); }
-.gd-empty-t { font-size: var(--fs-label); color: var(--color-faint); -unity-text-align: middle-center; flex-grow: 1; }
-/* 枠を押すと練習計画へ（issue #707）。押せることをホバーで示す。 */
-.gd-slot--link:hover { background-color: var(--color-panel-hover); }
-.gd-slot--empty.gd-slot--link:hover { border-color: var(--sky); }
-.gd-slot--empty.gd-slot--link:hover .gd-empty-t { color: var(--sky); }
+/* ── カード ── */
+.hm-root .hm-card {
+    background-color: var(--hm-card);
+    border-width: 0;
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+}
+.hm-root .hm-card--side { padding-left: 20px; padding-right: 20px; }
+.hm-root .hm-card--grow { flex-grow: 1; flex-shrink: 1; min-height: 0; margin-bottom: 0; }
+.hm-root .hm-card__hd { flex-direction: row; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.hm-root .hm-card__hd-right { flex-direction: row; align-items: center; }
+.hm-root .hm-card__title {
+    font-size: 18px;
+    letter-spacing: 1.4px;
+    color: var(--hm-tx-1);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-card__title--sm { font-size: 16px; letter-spacing: 1.3px; }
+.hm-root .hm-card__aside { font-size: 13px; color: var(--hm-tx-2); }
+
+/* ── 主役のカード（高さ148・角丸14・左右32） ── */
+.hm-root .hm-hero {
+    flex-shrink: 0;
+    height: 148px;
+    margin: 18px 24px 0 24px;
+    padding: 0 32px;
+    border-width: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    background-color: #7A1F2B;
+}
+/* 右上の飾りの円（直径300・白6%の28px枠を半分はみ出させる） */
+.hm-root .hm-hero__ring {
+    position: absolute;
+    right: -40px; top: -60px;
+    width: 300px; height: 300px;
+    border-width: 28px;
+    border-color: var(--hm-on-accent-ring);
+    border-radius: 150px;
+}
+.hm-root .hm-hero__state { flex-direction: row; align-items: center; flex-grow: 1; }
+.hm-root .hm-hero__big {
+    align-items: center;
+    padding-right: 36px;
+    margin-right: 36px;
+    border-right-width: 1px;
+    border-right-color: var(--hm-on-accent-rule);
+    flex-shrink: 0;
+}
+.hm-root .hm-hero__big-k { font-size: 13px; color: var(--hm-on-accent-1); margin-bottom: 2px; }
+.hm-root .hm-hero__big-row { flex-direction: row; align-items: flex-end; }
+.hm-root .hm-hero__big-num {
+    font-size: 72px;
+    color: #FFFFFF;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-hero__big-unit {
+    font-size: 20px;
+    color: #FFFFFF;
+    margin: 0 0 20px 4px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.hm-root .hm-hero__mid { flex-shrink: 1; min-width: 0; }
+.hm-root .hm-hero__mid--grow { flex-grow: 1; }
+.hm-root .hm-hero__row { flex-direction: row; align-items: center; }
+.hm-root .hm-hero__row--teams { margin-top: 10px; }
+.hm-root .hm-hero__tag {
+    font-size: 17px;
+    color: #FFFFFF;
+    background-color: var(--hm-on-accent-chip);
+    border-radius: 4px;
+    padding: 2px 10px;
+    margin-right: 12px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.hm-root .hm-hero__tname { font-size: 17px; color: rgba(255, 255, 255, 0.85); }
+.hm-root .hm-hero__team {
+    font-size: 36px;
+    letter-spacing: 2.9px;
+    color: #FFFFFF;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-hero__vs { font-size: 16px; color: var(--hm-on-accent-2); margin: 0 18px; }
+.hm-root .hm-hero__rank { flex-direction: row; align-items: center; margin-left: 18px; }
+.hm-root .hm-hero__rank-k { font-size: 13px; color: rgba(255, 255, 255, 0.8); margin-right: 6px; }
+.hm-root .hm-hero__rank-chip .grade { width: 28px; height: 28px; min-width: 28px; margin: 0; }
+.hm-root .hm-hero__side { flex-direction: row; align-items: center; margin-left: auto; flex-shrink: 0; }
+.hm-root .hm-hero__fact { margin-left: 28px; }
+.hm-root .hm-hero__fact-k { font-size: 12px; color: rgba(255, 255, 255, 0.75); margin-bottom: 4px; }
+.hm-root .hm-hero__fact-v {
+    font-size: 24px;
+    color: #FFFFFF;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-hero__wx { flex-direction: row; align-items: center; height: 29px; }
+.hm-root .hm-hero__weather-icon { width: 24px; height: 24px; margin-right: 8px; }
+.hm-root .hm-hero__wx-num, .hm-root .hm-hero__wx-unit {
+    font-size: 18px;
+    color: #FFFFFF;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.hm-root .hm-hero__next {
+    font-size: 28px;
+    letter-spacing: 2.2px;
+    color: #FFFFFF;
+    margin-right: 14px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-hero__open { font-size: 14px; color: rgba(255, 255, 255, 0.8); padding-top: 8px; }
+
+/* 週の目盛り：今週＝白・これから＝白22%・開幕＝白の2px枠。マスとラベルは同じ幅で並べる */
+.hm-root .hm-ticks { flex-direction: row; margin-top: 12px; }
+.hm-root .hm-ticks--labels { margin-top: 6px; }
+.hm-root .hm-tick {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    height: 10px;
+    margin-right: 4px;
+    border-radius: 3px;
+    background-color: var(--hm-on-accent-tick);
+}
+.hm-root .hm-tick--last { margin-right: 0; }
+.hm-root .hm-tick--now { background-color: #FFFFFF; }
+.hm-root .hm-tick--open { background-color: rgba(0, 0, 0, 0); border-width: 2px; border-color: #FFFFFF; }
+.hm-root .hm-tick-label {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-right: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.72);
+    overflow: visible;
+    white-space: nowrap;
+}
+.hm-root .hm-tick-label.hm-tick--last { margin-right: 0; }
+.hm-root .hm-tick-label--strong { color: #FFFFFF; -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold"); }
+
+/* ── 3列 ── */
+.hm-root .hm-dash { flex-grow: 1; flex-direction: row; padding: 16px 24px 20px 24px; min-height: 0; overflow: hidden; }
+.hm-root .hm-col { flex-direction: column; min-height: 0; overflow: hidden; }
+.hm-root .hm-col--a { width: 372px; flex-shrink: 0; margin-right: 16px; }
+.hm-root .hm-col--b { flex-grow: 1; flex-basis: 0; min-width: 0; margin-right: 16px; }
+.hm-root .hm-col--c { width: 360px; flex-shrink: 0; }
+
+/* チームランク：見出しの右に「総合」チップ（30角）＋数字（明朝30）。レーダーは 320×290 */
+.hm-root .hm-overall__chip { margin-left: 8px; }
+.hm-root .hm-overall__chip .grade { width: 30px; height: 30px; min-width: 30px; margin: 0; }
+.hm-root .hm-overall__v {
+    font-size: 30px;
+    color: var(--hm-tx-1);
+    margin-left: 8px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-radar-wrap { flex-grow: 1; align-items: center; justify-content: center; }
+.hm-root .hm-radar {
+    width: 320px;
+    height: 290px;
+    flex-shrink: 0;
+    --radar-grid-inner: #E7E2D7;
+    --radar-grid-outer: #D3CDC0;
+}
+.hm-root .hm-radar .radar-axis { align-items: center; }
+.hm-root .hm-radar .radar-axis__l { font-size: 12px; color: var(--hm-tx-2); }
+.hm-root .hm-radar .radar-axis__v {
+    font-size: 20px;
+    color: var(--hm-tx-1);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+
+/* 故障者（0人のときは高さ56の1行。1人以上は今の一覧を下に出す） */
+.hm-root .hm-card--inj { padding-top: 0; padding-bottom: 0; margin-bottom: 0; }
+.hm-root .hm-inj-hd { flex-direction: row; align-items: center; justify-content: space-between; height: 56px; flex-shrink: 0; }
+.hm-root .hm-count__n {
+    font-size: 18px;
+    color: var(--hm-tx-1);
+    margin-right: 2px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.hm-root .hm-count__n--sm { font-size: 16px; margin: 0 3px; }
+.hm-root .hm-count__u { font-size: 13px; color: var(--hm-tx-2); padding-top: 3px; }
+.hm-root .hm-inj-scroll { max-height: 160px; flex-shrink: 1; margin-bottom: 12px; }
+.hm-root .hm-inj { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; border-top-width: 1px; border-top-color: var(--hm-line); }
+.hm-root .hm-inj__no { width: 28px; flex-shrink: 0; font-size: 12px; color: var(--hm-tx-3); -unity-text-align: middle-right; }
+.hm-root .hm-inj__n { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: 14px; color: var(--hm-tx-1); margin-left: 10px; overflow: hidden; }
+.hm-root .hm-inj__st { width: 150px; flex-shrink: 0; font-size: 12px; color: var(--hm-tx-2); }
+.hm-root .hm-inj__st--severe { color: var(--color-warn); }
+.hm-root .hm-inj__bk { width: 64px; flex-shrink: 0; font-size: 12px; color: var(--hm-tx-2); -unity-text-align: middle-right; }
+
+/* チーム成績：項目140｜通算・公式戦・今大会は残りを等分（数字は右寄せ・今大会だけ中央）。行34・行間に淡い線。
+   モックの固定幅（96/96/120）のままだと1600幅の中の列では項目と数字の間が大きく空くので、列を伸ばして詰める */
+.hm-root .hm-card--stats { padding-bottom: 12px; }
+.hm-root .hm-card--stats-empty { height: 150px; }
+.hm-root .hm-st-row { flex-direction: row; align-items: center; height: 34px; flex-shrink: 0; border-top-width: 1px; border-top-color: var(--hm-line); }
+.hm-root .hm-st-row--head { height: 30px; border-top-width: 0; align-items: flex-end; }
+.hm-root .hm-st-k { width: 140px; flex-shrink: 0; font-size: 16px; color: var(--hm-tx-label); }
+.hm-root .hm-st-row--head .hm-st-k { align-self: center; font-size: 18px; color: var(--hm-tx-1); }
+.hm-root .hm-card--stats-empty .hm-st-row--head .hm-st-k { flex-grow: 1; }
+.hm-root .hm-st-c { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: 20px; color: var(--hm-tx-3); -unity-text-align: middle-right; }
+.hm-root .hm-st-c--off { padding-right: 28px; }
+.hm-root .hm-st-c--th { font-size: 14px; color: var(--hm-tx-2); padding-bottom: 4px; }
+.hm-root .hm-st-cur {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    height: 100%;
+    -unity-text-align: middle-center;
+    font-size: 24px;
+    color: var(--hm-tx-1);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-st-cur--th {
+    height: auto;
+    font-size: 14px;
+    color: #FFFFFF;
+    padding: 4px 0;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+
+/* 記録がないときの案内（線画アイコン34＋2行） */
+.hm-root .hm-empty { flex-grow: 1; flex-direction: row; align-items: center; justify-content: center; }
+.hm-root .hm-empty__icon { width: 34px; height: 34px; margin-right: 14px; flex-shrink: 0; color: var(--hm-tx-4); }
+.hm-root .hm-empty__icon .licon { width: 34px; height: 34px; }
+.hm-root .hm-empty__t1 { font-size: 15px; color: var(--hm-tx-strong); margin-bottom: 2px; }
+.hm-root .hm-empty__t2 { font-size: 13px; color: var(--hm-tx-2); }
+
+/* チーム内ランキング：打撃・投手を左右に。各行は 部門64｜1位｜2位76（行44） */
+.hm-root .hm-seg { flex-direction: row; padding: 3px; background-color: var(--hm-line); border-radius: 8px; }
+.hm-root .hm-seg__btn {
+    height: 26px;
+    padding: 0 12px;
+    margin: 0 0 0 2px;
+    border-width: 0;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 12px;
+    color: var(--hm-tx-2);
+    -unity-text-align: middle-center;
+}
+.hm-root .hm-seg__btn--first { margin-left: 0; }
+.hm-root .hm-seg__btn--on { background-color: #FFFFFF; color: var(--hm-tx-1); -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold"); }
+.hm-root .hm-rk { flex-direction: row; flex-grow: 1; min-height: 0; margin-top: 10px; }
+.hm-root .hm-rk__col { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.hm-root .hm-rk__gap { width: 28px; flex-shrink: 0; }
+.hm-root .hm-rk-row { flex-direction: row; align-items: center; height: 44px; flex-shrink: 0; border-bottom-width: 1px; border-bottom-color: var(--hm-line); }
+.hm-root .hm-rk-row--head { height: 26px; border-bottom-width: 2px; border-bottom-color: var(--hm-tx-1); }
+.hm-root .hm-rk-k { width: 64px; flex-shrink: 0; margin-right: 10px; font-size: 13px; color: var(--hm-tx-label); }
+.hm-root .hm-rk-k--sec { font-size: 12px; color: var(--hm-tx-1); -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold"); }
+.hm-root .hm-rk-th { font-size: 12px; color: var(--hm-tx-2); }
+.hm-root .hm-rk-th--r { -unity-text-align: middle-right; }
+.hm-root .hm-rk-1 { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: flex-end; margin-right: 10px; overflow: hidden; }
+.hm-root .hm-rk-1__v {
+    font-size: 20px;
+    color: var(--hm-tx-1);
+    margin-right: 10px;
+    flex-shrink: 0;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .hm-rk-1__n {
+    font-size: 14px;
+    color: var(--hm-tx-strong);
+    padding-bottom: 1px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-Bold.asset?fileID=11400000&guid=79e45b7605bce4026b70c4d8d01cf21b&type=2#ShipporiMinchoB1-Bold");
+}
+.hm-root .hm-rk-2 { width: 76px; flex-shrink: 0; align-items: flex-end; }
+.hm-root .hm-rk-2__v { font-size: 13px; color: var(--hm-tx-2); -unity-text-align: middle-right; }
+.hm-root .hm-rk-2__n { font-size: 11px; color: var(--hm-tx-3); -unity-text-align: middle-right; overflow: hidden; }
+.hm-root .hm-rk--none { font-size: 13px; color: var(--hm-tx-4); }
+
+/* 個別指導：指名済み＝#F2EFE8 の角丸10（高さ52）・番号の丸はスクールカラー。空き＝点線 */
+.hm-root .gd-slot {
+    flex-direction: row;
+    align-items: center;
+    height: 52px;
+    padding: 0 14px;
+    margin-top: 10px;
+    border-radius: 10px;
+    background-color: var(--hm-slot);
+    flex-shrink: 0;
+}
+.hm-root .gd-slot--link:hover { background-color: var(--hm-line); }
+.hm-root .gd-no {
+    width: 26px; height: 26px;
+    border-radius: 13px;
+    margin-right: 12px;
+    font-size: 12px;
+    color: #FFFFFF;
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.hm-root .gd-name {
+    flex-grow: 1;
+    font-size: 17px;
+    letter-spacing: 1.4px;
+    color: var(--hm-tx-1);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.hm-root .gd-arrow { width: 16px; height: 16px; color: var(--hm-tx-3); flex-shrink: 0; }
+.hm-root .gd-plus { width: 16px; height: 16px; color: var(--hm-tx-2); margin-right: 8px; }
+.hm-root .gd-slot--empty { background-color: rgba(0, 0, 0, 0); justify-content: center; }
+.hm-root .gd-dash { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.hm-root .gd-empty-t { font-size: 15px; color: var(--hm-tx-2); }
+.hm-root .gd-slot--empty.gd-slot--link:hover { background-color: var(--hm-slot); }
+
+/* 今週の出来事：左にスクールカラーの縦線（4px）、札（情報など）・時期・本文 */
+.hm-root .hm-feed-scroll { flex-grow: 1; flex-shrink: 1; min-height: 0; margin-top: 8px; }
+.hm-root .fd-item { flex-direction: row; align-items: stretch; padding: 10px 0; }
+.hm-root .fd-item--link:hover { background-color: var(--hm-slot); }
+.hm-root .fd-bar { width: 4px; border-radius: 2px; flex-shrink: 0; margin-right: 12px; }
+.hm-root .fd-body { flex-grow: 1; flex-shrink: 1; min-width: 0; }
+.hm-root .fd-meta { flex-direction: row; align-items: center; margin-bottom: 4px; }
+.hm-root .fd-tag {
+    font-size: 12px;
+    color: var(--hm-tx-label);
+    background-color: var(--hm-line);
+    border-radius: 4px;
+    padding: 1px 7px;
+    margin-right: 8px;
+}
+.hm-root .fd-bar--warn { background-color: var(--color-warn); }
+.hm-root .fd-tag--warn { color: #FFFFFF; background-color: var(--color-warn); }
+.hm-root .fd-time { font-size: 12px; color: var(--hm-tx-2); }
+.hm-root .fd-text { font-size: 16px; color: var(--hm-tx-1); white-space: normal; }
 
 /* ============================================================ */
 /* 選手詳細（mock: 野球部監督GM「選手詳細」）              pd2-* */

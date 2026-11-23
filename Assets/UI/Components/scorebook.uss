@@ -266,7 +266,7 @@
 }
 
 /* ── カード・パネル系の器：淡い1px枠＋角丸。右下のベタ影（固定幅）も1pxへ ── */
-.sbk .card, .sbk .hm-hero, .sbk .tpm-card, .sbk .tpc-card, .sbk .ev__box, .sbk .nb-plate__front, .sbk .tcard {
+.sbk .card, .sbk .tpm-card, .sbk .tpc-card, .sbk .ev__box, .sbk .nb-plate__front, .sbk .tcard {
     border-color: var(--sbk-card-line);
     border-width: 1px;
     border-radius: var(--sbk-r-card);
@@ -321,74 +321,109 @@
 .sbk .bs-table { border-color: var(--sbk-card-line); }
 .sbk .bs-row--head { border-bottom-color: var(--sbk-rule); }
 
-/* ── 主ボタン（今週を進める等）：応援団赤のまま。インク枠とベタ影だけ外して角丸に ── */
-.sbk .advance {
+/* ── トップバー（墨の帯・Home.*.mock 準拠・全データ画面共通）。1段目78px＋タブ46px、左右28px ── */
+.sbk .sb2 {
+    background-color: var(--tb-ink);
+    border-bottom-width: 0;
+    height: 78px;
+    padding: 0 28px;
+    align-items: center;
+}
+.sbk .sb2-left { padding: 0; border-right-width: 0; flex-grow: 1; }
+.sbk .sb2-badge {
+    width: 46px; height: 46px;
     border-width: 0;
-    border-radius: var(--sbk-r-card);
+    border-radius: 8px;
+    background-color: var(--color-accent);
+    color: #FFFFFF;
+    font-size: 26px;
+    margin-right: 14px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.sbk .sb2-id { margin-right: 28px; }
+.sbk .sb2-name {
+    color: var(--tb-text);
+    font-size: 24px;
+    letter-spacing: 1.9px;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.sbk .sb2-pref { font-size: 12px; color: var(--tb-sub); letter-spacing: 0; margin-top: 1px; }
+.sbk .sb2-div { width: 1px; height: 40px; background-color: var(--tb-rule); margin: 0 28px 0 0; flex-shrink: 0; }
+.sbk .sb2-div--gap { margin-left: 36px; }
+.sbk .sb2-record__v { font-size: 22px; margin-top: 3px; }
+.sbk .sb2-date__k { font-size: 15px; color: var(--tb-sub); margin: 0; padding: 0; }
+.sbk .sb2-date__v {
+    font-size: 26px;
+    color: var(--tb-text);
+    margin: 1px 0 0 0; padding: 0;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+
+/* 右側：部費残高・チーム総合・名声・信頼度（項目の間隔30px）＋進めるボタン */
+.sbk .sb2-right { padding: 0; border-left-width: 0; flex-shrink: 0; }
+.sbk .sb2-meter { margin-right: 30px; align-items: center; }
+.sbk .sb2-meter--start { align-items: flex-start; }
+.sbk .sb2-meter__k { font-size: 12px; color: var(--tb-sub); letter-spacing: 0; margin: 0 0 4px 0; padding: 0; }
+.sbk .sb2-meter__v { margin: 0; padding: 0; }
+.sbk .sb2-meter__v--funds {
+    font-size: 20px;
+    color: var(--tb-text);
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.sbk .sb2-meter__v--fame, .sbk .sb2-meter__v--trust { width: 26px; height: 26px; min-width: 26px; font-size: 15px; }
+.sbk .sb2-rank__row { flex-direction: row; align-items: center; margin: 0; height: 26px; }
+.sbk .sb2-rank__chip .grade, .sbk .sb2-rank__chip .rank-chip { width: 26px; height: 26px; min-width: 26px; font-size: 15px; margin: 0; padding: 0; }
+.sbk .sb2-rank__v {
+    font-size: 19px;
+    color: var(--tb-text);
+    margin: 0 0 0 6px; padding: 0;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+
+/* ── 主ボタン（今週を進める・1日進める）：応援団赤のまま（設計書22）。高さ50・角丸10・17px太字 ── */
+.sbk .advance {
+    height: 50px;
+    border-width: 0;
+    border-radius: 10px;
+    font-size: 17px;
+    letter-spacing: 1.7px;
+    padding: 0 22px 0 26px;
+    margin: 0;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
 .sbk .advance:hover { background-color: var(--color-cta-hi); }
 
-/* ── トップバー（案A：1段＋ナビ）。紙色の地・校名は明朝・数字は Noto ── */
-.sbk .sb2 { background-color: var(--sbk-paper); }
-.sbk .sb2-badge {
-    background-color: var(--sbk-card);
-    color: var(--sbk-text);
-    border-width: 1.5px;
-    border-color: var(--sbk-patch-line);
-    border-radius: var(--sbk-r-patch);
-}
-.sbk .sb2-name {
-    color: var(--sbk-text);
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
-}
-.sbk .sb2-pref, .sbk .sb2-rank__k, .sbk .sb2-meter__k { color: var(--sbk-sub); }
-
-/* 中央：黒い電光掲示板 → 明朝の日付行。升目（1字1マス）の仕組みはそのまま、マスの地と枠を消して文字だけにする */
-.sbk .sbs {
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 0;
-    padding: 0;
-}
-.sbk .sbs-group__k, .sbk .sbs-group__sup {
-    font-size: 12px;
-    color: var(--sbk-sub);
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
-}
-.sbk .sbs-group__head { margin-bottom: 2px; }
-.sbk .sbs-cell, .sbk .sbs-cell--wide {
-    width: auto;
-    height: auto;
-    margin-right: 0;
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 0;
-    font-size: 26px;
-    color: var(--sbk-text);
-    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
-}
-.sbk .sbs-cell--unit { font-size: 15px; color: var(--sbk-sub); margin-left: 1px; margin-right: 4px; -unity-text-align: lower-center; padding-bottom: 3px; }
-.sbk .sbs-cell--lit { color: var(--sbk-text); background-color: rgba(0, 0, 0, 0); }
-.sbk .sbs-gap { width: 28px; }
-
-/* ナビ：文字タブ。選択中は墨の下線（塗らない）。下端は1pxの区切り線 */
+/* ナビ：墨の帯の2段目（46px）。タブは帯の幅いっぱいに均等に並べる（右に余白を残さない）。
+   選択中は白の太字＋白の3px下線、それ以外は淡い灰 */
 .sbk .nav {
-    background-color: var(--sbk-paper);
-    border-bottom-width: 1px;
-    border-bottom-color: var(--sbk-rule);
-    padding: 4px 18px 0 18px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    background-color: var(--tb-ink);
+    border-bottom-width: 0;
+    height: 46px;
+    margin: 0;
+    padding: 0 28px;
+    flex-shrink: 0;
 }
 .sbk .nav__item {
-    color: var(--sbk-sub);
-    font-size: 17px;
-    padding: 8px 14px 9px 14px;
-    border-bottom-width: 2px;
+    flex-grow: 1;
+    flex-basis: 0;
+    -unity-text-align: middle-center;
+    color: var(--tb-sub);
+    font-size: 18px;
+    letter-spacing: 0;
+    padding: 0;
+    margin: 0;
+    border-bottom-width: 3px;
     border-bottom-color: rgba(0, 0, 0, 0);
     border-radius: 0;
+    background-color: rgba(0, 0, 0, 0);
 }
-.sbk .nav__item:hover { color: var(--sbk-text); }
+.sbk .nav__item:hover { color: #FFFFFF; }
 .sbk .nav__item--on {
     background-color: rgba(0, 0, 0, 0);
-    color: var(--sbk-text);
-    border-bottom-color: var(--sbk-ink);
+    color: #FFFFFF;
+    border-bottom-color: #FFFFFF;
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
 

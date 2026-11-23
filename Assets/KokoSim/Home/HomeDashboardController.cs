@@ -27,8 +27,12 @@ namespace KokoSim.Unity.Home
 
         // 「部の実力」の6角形（部品辞書 RadarChartView）。総合力パネルと同じ絵をカードサイズで出す。
         private KokoSim.Unity.Components.RadarChartView _tsRadar;
-        private const float TeamRadarRadius = 0.30f;
-        private const float TeamRadarLabelOffset = 1.34f;
+        // 320×290 の中に中心(160,145)・半径98（短辺290に対して）、ラベルは半径＋28px。
+        private const float TeamRadarRadius = 98f / 290f;
+        private const float TeamRadarLabelOffset = (98f + 28f) / 98f;
+
+        // チーム内ランキングの集計範囲（通算／公式戦／今大会）。画面往復では保つ。
+        private static KokoSim.Unity.Shell.RankingScope _rankScope = KokoSim.Unity.Shell.RankingScope.Career;
 
         // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
         // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
@@ -58,6 +62,8 @@ namespace KokoSim.Unity.Home
                 _root.Q<VisualElement>("nt-d-radar"), NewTeamRadarRadius);
             _tsRadar = new KokoSim.Unity.Components.RadarChartView(
                 _root.Q<VisualElement>("hm-radar"), TeamRadarRadius, TeamRadarLabelOffset);
+            AddIcon("stats-empty", KokoSim.Unity.Shell.LineIcon.Kind.BarChart);
+            AddIcon("rank-empty", KokoSim.Unity.Shell.LineIcon.Kind.Trophy);
 
             _advanceBtn = _root.Q<Button>("advance");
             if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
@@ -105,6 +111,14 @@ namespace KokoSim.Unity.Home
                 // ライブ観戦から戻ってきた直後 → 試合結果を表示する。
                 ShowResult(session.LastOutcome);
             }
+        }
+
+        /// <summary>記録がないときの案内に線画アイコン（34px・線幅1.6）を入れる。二重に入れない。</summary>
+        private void AddIcon(string emptyName, KokoSim.Unity.Shell.LineIcon.Kind kind)
+        {
+            var host = _root.Q<VisualElement>(emptyName)?.Q<VisualElement>(className: "hm-empty__icon");
+            if (host == null || host.childCount > 0) return;
+            host.Add(new KokoSim.Unity.Shell.LineIcon(kind) { Stroke = 1.6f });
         }
 
         private Button Wire(string name, System.Action handler)
@@ -664,79 +678,132 @@ namespace KokoSim.Unity.Home
             var advance = _root.Q<Button>("advance");
             if (advance != null) advance.text = v.TournamentMode ? "1日進める ▶" : "今週を進める ▶";
 
-            // 自校の表札（校章・校名・県名）は TopBarMeters が全画面共通で埋める（issue #585）。
-            // 掲示板の升目（週・カウントダウン）。大会モードでは文言が変わるので上書き版を使う。
-            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root, v.CountdownLabel, v.CountdownCells, v.WeekSuffix);
-            KokoSim.Unity.Shell.TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース・全画面共通）
+            // 自校の表札・日付・部費・チーム総合・名声・信頼度は TopBarMeters／ScoreboardStrip が全画面共通で埋める。
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
+            KokoSim.Unity.Shell.TopBarMeters.Fill(_root);
 
-            // チーム総合力ランクチップ。
-            var rank = _root.Q<VisualElement>("team-rank");
-            if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChipLegacy(v.TeamRankGrade)); }
+            var accent = KokoSim.Unity.Shell.SchoolAccent.ForManager();
+            RenderTeamStrength(accent);
+            RenderHero(v);
 
-            RenderTeamStrength();
+            // 故障者（0人は高さ56の1行。1人以上は今の一覧を下に出す）。
+            SetText("injury-count", v.Injured.Count.ToString());
+            var injScroll = _root.Q<VisualElement>("injury-scroll");
+            if (injScroll != null) injScroll.style.display = v.Injured.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            BuildList("injury-list", v.Injured, BuildInjured);
 
-            // 主役ヒーロー帯（直近の予定）を二態で切替える。大会週＝対戦カード、通常週＝夏予選カウントダウン
-            // （前向きの予定表はエンジン未実装のためカウントダウンで代替＝design-16 §5 の但し書き）。
+            RenderStats(v.TournamentMode);
+            RenderRankings(v.TournamentMode);
+            BuildList("feed-list", v.Feed, BuildFeed);
+            var slots = new System.Collections.Generic.List<VisualElement>();
+            for (var i = 0; i < v.Guidance.Count; i++) slots.Add(BuildGuidance(v.Guidance[i], i + 1));
+            var gl = _root.Q<VisualElement>("guidance-list");
+            if (gl != null) { gl.Clear(); foreach (var e in slots) gl.Add(e); }
+            SetText("guidance-used", v.GuidanceUsed.ToString());
+            SetText("guidance-total", "/ " + v.GuidanceTotal + " 使用中");
+
+            // スクールカラー（表示用の色）を acc-* の付いた要素へ流し込む（主役のカード・今大会の列・番号・縦線）。
+            KokoSim.Unity.Shell.SchoolAccent.Apply(_root, accent);
+        }
+
+        /// <summary>主役のカード。大会期間＝次の試合、大会のない時期＝次の大会まで（週の目盛り）。</summary>
+        private void RenderHero(HomeView v)
+        {
             var heroMatch = _root.Q<VisualElement>("hm-hero-match");
             var heroPlain = _root.Q<VisualElement>("hm-hero-plain");
-            if (heroMatch != null)
-                heroMatch.style.display = v.TournamentMode ? DisplayStyle.Flex : DisplayStyle.None;
-            if (heroPlain != null)
-                heroPlain.style.display = v.TournamentMode ? DisplayStyle.None : DisplayStyle.Flex;
+            if (heroMatch != null) heroMatch.style.display = v.TournamentMode ? DisplayStyle.Flex : DisplayStyle.None;
+            if (heroPlain != null) heroPlain.style.display = v.TournamentMode ? DisplayStyle.None : DisplayStyle.Flex;
+
             if (v.TournamentMode)
             {
+                SetText("hero-days", v.HeroDays);
+                var unit = _root.Q<Label>("hero-days-unit");
+                if (unit != null) unit.style.display = v.HeroDays == "―" ? DisplayStyle.None : DisplayStyle.Flex;
                 SetText("game-tag", v.GameTag);
+                SetText("tournament-name", v.TournamentName);
                 SetText("home-team", v.HomeTeam);
                 SetText("away-team", v.AwayTeam);
-                SetText("home-sub", v.HomeSub);
-                SetText("away-sub", v.AwaySub);
-                SetText("game-date", v.GameDate);
-                SetText("venue", v.Venue);
-                // 天気（issue #803）。試合の無い週・次戦未確定は Weather が null＝欄ごと隠す（固定文字の廃止）。
-                // 文字の代わりにマーク（issue #1200）。ホームは紙色の明るい背景＝-light のセット。
+                var rankGroup = _root.Q<VisualElement>("away-rank-group");
+                if (rankGroup != null) rankGroup.style.display = string.IsNullOrEmpty(v.AwayRankGrade) ? DisplayStyle.None : DisplayStyle.Flex;
+                var rank = _root.Q<VisualElement>("away-rank");
+                if (rank != null)
+                {
+                    rank.Clear();
+                    if (!string.IsNullOrEmpty(v.AwayRankGrade)) rank.Add(UiComponents.RankChipLegacy(v.AwayRankGrade));
+                }
+                SetText("match-day", v.MatchDay);
+                // 天気（issue #803/#1199）。試合当日だけ・屋内は出さない。地はスクールカラー＝暗い背景用のマーク。
                 var weatherGroup = _root.Q<VisualElement>("weather-group");
                 if (weatherGroup != null)
                     weatherGroup.style.display = v.Weather.HasValue ? DisplayStyle.Flex : DisplayStyle.None;
                 if (v.Weather is { } wx)
-                    KokoSim.Unity.Shell.WeatherIcons.Apply(_root.Q<VisualElement>("weather-icon"), wx, darkBackground: false);
+                    KokoSim.Unity.Shell.WeatherIcons.Apply(_root.Q<VisualElement>("weather-icon"), wx, darkBackground: true);
                 SetText("weather-temp-num", v.WeatherTempValue);
                 SetText("weather-temp-unit", v.WeatherTempUnit);
-            }
-            else
-            {
-                SetText("hero-cd-label", v.CountdownLabel);
-                SetText("hero-cd-num", v.HeroBigValue);
-                SetText("hero-cd-unit", v.HeroBigUnit);
+                return;
             }
 
-            // 故障者（0名でもカードは残し「該当なし」を出す＝週をまたいでレイアウトが動かない）。
-            SetText("injury-count", v.Injured.Count + " 名");
-            var injList = _root.Q<VisualElement>("injury-list");
-            if (injList != null)
-            {
-                injList.Clear();
-                if (v.Injured.Count == 0)
-                {
-                    var none = new Label("該当なし");
-                    none.AddToClassList("hm-inj--none");
-                    injList.Add(none);
-                }
-                else
-                {
-                    foreach (var r in v.Injured) injList.Add(BuildInjured(r));
-                }
-            }
+            SetText("hero-cd-label", v.HeroCountdownLabel);
+            SetText("hero-cd-num", v.HeroBigValue);
+            SetText("hero-cd-unit", v.HeroBigUnit);
+            SetText("next-tournament", v.NextTournamentName);
+            SetText("opening-week", v.OpeningLabel);
 
-            BuildList("team-stats", KokoSim.Unity.Shell.TeamStatsService.TeamTotals(), BuildStatRow);
-            RenderRankings();
-            BuildList("feed-list", v.Feed, BuildFeed);
-            BuildList("guidance-list", v.Guidance, BuildGuidance);
-            SetText("guidance-count", "残り枠 " + (v.GuidanceTotal - v.GuidanceUsed) + " / " + v.GuidanceTotal);
+            var ticks = _root.Q<VisualElement>("ticks");
+            var labels = _root.Q<VisualElement>("tick-labels");
+            if (ticks == null || labels == null) return;
+            ticks.Clear(); labels.Clear();
+            for (var i = 0; i < v.Ticks.Count; i++)
+            {
+                var t = v.Ticks[i];
+                var last = i == v.Ticks.Count - 1;
+                var cell = new VisualElement();
+                cell.AddToClassList("hm-tick");
+                if (t.Opening) cell.AddToClassList("hm-tick--open");
+                else if (t.Now) cell.AddToClassList("hm-tick--now");
+                if (last) cell.AddToClassList("hm-tick--last");
+                ticks.Add(cell);
+
+                var l = new Label(t.Label);
+                l.AddToClassList("hm-tick-label");
+                if (t.LabelStrong) l.AddToClassList("hm-tick-label--strong");
+                if (last) l.AddToClassList("hm-tick--last");
+                labels.Add(l);
+            }
+        }
+
+        /// <summary>チーム成績。記録が無ければ表の代わりに案内（高さ150）。大会のない時期は今大会の列ごと出さない。</summary>
+        private void RenderStats(bool tournament)
+        {
+            var has = KokoSim.Unity.Shell.TeamStatsService.HasRecords();
+            var card = _root.Q<VisualElement>("stats-card");
+            card?.EnableInClassList("hm-card--stats-empty", !has);
+            Show("stats-empty", !has);
+            Show("team-stats", has);
+            Show("stats-cur-head", tournament);
+            var head = _root.Q<VisualElement>("stats-head");
+            if (head != null)
+            {
+                // 記録なしでも見出し（チーム成績）は出す。列の見出しだけ隠す。
+                foreach (var c in head.Query<Label>(className: "hm-st-c").ToList()) c.style.display = has ? DisplayStyle.Flex : DisplayStyle.None;
+                _root.Q<Label>("stats-cur-head").style.display = has && tournament ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+            var list = _root.Q<VisualElement>("team-stats");
+            if (list == null) return;
+            list.Clear();
+            if (!has) return;
+            foreach (var r in KokoSim.Unity.Shell.TeamStatsService.TeamTotals()) list.Add(BuildStatRow(r, tournament));
+        }
+
+        private void Show(string name, bool on)
+        {
+            var e = _root.Q<VisualElement>(name);
+            if (e != null) e.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         /// <summary>チームランクのカード（総合ランク＋6角形）。総合力パネルと同じ ViewModel を引く。
         /// 弱点の言語化（AnalysisWeak/Advice）はレーダーを見れば判るのでホームには出さない。</summary>
-        private void RenderTeamStrength()
+        private void RenderTeamStrength(Color accent)
         {
             var ts = new KokoSim.Unity.Squad.TeamStrengthState().BuildView();
 
@@ -747,83 +814,130 @@ namespace KokoSim.Unity.Home
                 tsChip.Add(UiComponents.RankChipLegacy(ts.OverallGrade));
             }
             SetText("team-strength-value", ts.OverallValue.ToString());
-            if (_tsRadar != null) _tsRadar.SetData(ts.Radar, ts.OverallGrade);
+            if (_tsRadar != null)
+            {
+                _tsRadar.SetData(ts.Radar, ts.OverallGrade);
+                _tsRadar.SetAccent(accent, rings: 4);
+            }
         }
 
         // ===== 行ビルダー =====
 
-        /// <summary>チーム成績の1行（項目名＋通算/公式戦/今大会。未計上は淡色の「—」）。</summary>
-        private static VisualElement BuildStatRow(KokoSim.Unity.Shell.TeamStatRow r)
+        /// <summary>チーム成績の1行（項目｜通算｜公式戦｜今大会＝スクールカラー8%の帯に明朝で大きく）。</summary>
+        private static VisualElement BuildStatRow(KokoSim.Unity.Shell.TeamStatRow r, bool tournament)
         {
             var row = new VisualElement();
-            row.AddToClassList("hm-srow");
+            row.AddToClassList("hm-st-row");
 
             var k = new Label(r.Label);
-            k.AddToClassList("hm-sc-k");
+            k.AddToClassList("hm-st-k");
             row.Add(k);
 
-            row.Add(StatCell(r.Career));
-            row.Add(StatCell(r.Official));
-            row.Add(StatCell(r.Tournament));
+            var career = new Label(r.Career); career.AddToClassList("hm-st-c"); row.Add(career);
+            var official = new Label(r.Official); official.AddToClassList("hm-st-c"); official.AddToClassList("hm-st-c--off"); row.Add(official);
+            if (tournament)
+            {
+                var cur = new Label(r.Tournament);
+                cur.AddToClassList("hm-st-cur");
+                cur.AddToClassList("acc-tint");
+                row.Add(cur);
+            }
             return row;
         }
 
-        private static Label StatCell(string text)
+        /// <summary>チーム内ランキング。打撃／投手を左右2列。右上の切り替えで通算／公式戦／今大会（大会のない時期は今大会なし）。</summary>
+        private void RenderRankings(bool tournament)
         {
-            var cell = new Label(text);
-            cell.AddToClassList("hm-sc-v");
-            cell.AddToClassList("f-num");   // 成績値は純数値＝コンデンス体（決定2-B・純数値セル）
-            if (text == "—") cell.AddToClassList("hm-sc-v--none");
-            return cell;
-        }
+            var has = KokoSim.Unity.Shell.TeamStatsService.HasRecords();
+            Show("rank-empty", !has);
+            Show("rank-body", has);
+            Show("rank-scope", has);
+            if (!tournament && _rankScope == KokoSim.Unity.Shell.RankingScope.Tournament)
+                _rankScope = KokoSim.Unity.Shell.RankingScope.Career;
+            BuildScopeSwitch(tournament);
 
-        /// <summary>チーム内ランキング。打撃／投手を左右2列へ振り分ける（区分名は各列の見出しが持つ）。</summary>
-        private void RenderRankings()
-        {
             var bat = _root.Q<VisualElement>("rank-bat");
             var pit = _root.Q<VisualElement>("rank-pit");
-            if (bat != null) bat.Clear();
-            if (pit != null) pit.Clear();
+            bat?.Clear();
+            pit?.Clear();
+            if (!has) return;
 
             var names = new List<Label>();
-            foreach (var r in KokoSim.Unity.Shell.TeamStatsService.Rankings())
+            foreach (var r in KokoSim.Unity.Shell.TeamStatsService.Rankings(_rankScope))
             {
                 var host = r.Section == "投手" ? pit : bat;
-                if (host != null) host.Add(BuildRankRow(r, names));
+                host?.Add(BuildRankRow(r, names));
             }
             // 名前の大きさはカード内で全員そろえる（入らない人がいれば全員同じ倍率で縮む・issue #970）。
             UiComponents.ShrinkGroupToFit(names, _root);
         }
 
-        /// <summary>チーム内ランキングの1部門（1〜3位。該当なしの枠は淡色の「—」で必ず埋める）。</summary>
+        private void BuildScopeSwitch(bool tournament)
+        {
+            var seg = _root.Q<VisualElement>("rank-scope");
+            if (seg == null) return;
+            seg.Clear();
+            void Add(string text, KokoSim.Unity.Shell.RankingScope scope, bool first)
+            {
+                var b = new Label(text);
+                b.AddToClassList("hm-seg__btn");
+                if (first) b.AddToClassList("hm-seg__btn--first");
+                if (_rankScope == scope) b.AddToClassList("hm-seg__btn--on");
+                b.RegisterCallback<ClickEvent>(_ =>
+                {
+                    if (_rankScope == scope) return;
+                    _rankScope = scope;
+                    RenderRankings(tournament);
+                });
+                seg.Add(b);
+            }
+            Add("通算", KokoSim.Unity.Shell.RankingScope.Career, true);
+            Add("公式戦", KokoSim.Unity.Shell.RankingScope.Official, false);
+            if (tournament) Add("今大会", KokoSim.Unity.Shell.RankingScope.Tournament, false);
+        }
+
+        /// <summary>チーム内ランキングの1部門（1位＝記録を明朝で大きく＋名前／2位＝右端に小さく記録と名前）。</summary>
         private static VisualElement BuildRankRow(KokoSim.Unity.Shell.RankRow r, List<Label> names)
         {
             var row = new VisualElement();
-            row.AddToClassList("hm-rrow");
+            row.AddToClassList("hm-rk-row");
 
             var k = new Label(r.Label);
             k.AddToClassList("hm-rk-k");
             row.Add(k);
 
-            foreach (var e in r.Top)
-            {
-                if (e.Empty)
-                {
-                    var none = new Label("—");
-                    none.AddToClassList("hm-rk-e");
-                    none.AddToClassList("hm-rk-e--none");
-                    row.Add(none);
-                    continue;
-                }
+            var first = new VisualElement();
+            first.AddToClassList("hm-rk-1");
+            var second = new VisualElement();
+            second.AddToClassList("hm-rk-2");
 
-                var cell = new VisualElement();
-                cell.AddToClassList("hm-rk-e");
-                var name = new Label(e.Name); name.AddToClassList("hm-rk-e__n");
-                names.Add(name);
-                var val = UiComponents.SetInnings(new Label(), e.Value); val.AddToClassList("hm-rk-e__v"); val.AddToClassList("f-num");
-                cell.Add(name); cell.Add(val);
-                row.Add(cell);
+            var e1 = r.Top.Count > 0 ? r.Top[0] : null;
+            if (e1 == null || e1.Empty)
+            {
+                var none = new Label("—"); none.AddToClassList("hm-rk--none"); first.Add(none);
             }
+            else
+            {
+                var val = UiComponents.SetInnings(new Label(), e1.Value); val.AddToClassList("hm-rk-1__v");
+                var name = new Label(e1.Name); name.AddToClassList("hm-rk-1__n");
+                names.Add(name);
+                first.Add(val); first.Add(name);
+            }
+
+            var e2 = r.Top.Count > 1 ? r.Top[1] : null;
+            if (e2 == null || e2.Empty)
+            {
+                var none = new Label("—"); none.AddToClassList("hm-rk--none"); none.AddToClassList("hm-rk-2__v"); second.Add(none);
+            }
+            else
+            {
+                var val = UiComponents.SetInnings(new Label(), e2.Value); val.AddToClassList("hm-rk-2__v");
+                var name = new Label(e2.Name); name.AddToClassList("hm-rk-2__n");
+                second.Add(val); second.Add(name);
+            }
+
+            row.Add(first);
+            row.Add(second);
             return row;
         }
 
@@ -850,13 +964,14 @@ namespace KokoSim.Unity.Home
 
         private static VisualElement BuildFeed(FeedItem f)
         {
-            var tone = TagTone(f.Tag);
             var item = new VisualElement();
             item.AddToClassList("fd-item");
 
+            // 左の縦線はスクールカラー。警告だけは警告色（UI原則②：本当の警告＝怪我など）で、札の文字も同じ色。
+            var warn = f.Tag == "警告";
             var bar = new VisualElement();
             bar.AddToClassList("fd-bar");
-            bar.AddToClassList(tone);
+            bar.AddToClassList(warn ? "fd-bar--warn" : "acc-bg");
             item.Add(bar);
 
             var body = new VisualElement();
@@ -866,7 +981,7 @@ namespace KokoSim.Unity.Home
             meta.AddToClassList("fd-meta");
             var tag = new Label(f.Tag);
             tag.AddToClassList("fd-tag");
-            tag.AddToClassList(tone);
+            if (warn) tag.AddToClassList("fd-tag--warn");
             var time = new Label(f.When);
             time.AddToClassList("fd-time");
             meta.Add(tag); meta.Add(time);
@@ -887,46 +1002,40 @@ namespace KokoSim.Unity.Home
             return item;
         }
 
-        private static VisualElement BuildGuidance(GuidanceSlot g)
+        /// <summary>個別指導の1枠。指名済み＝番号の丸（スクールカラー）＋名前＋矢印、空き＝点線の枠に「＋ 選手を指名」。
+        /// どちらも押すと練習計画へ（指名・解除は部員表の★で行う, issue #707）。</summary>
+        private static VisualElement BuildGuidance(GuidanceSlot g, int number)
         {
             var slot = new VisualElement();
             slot.AddToClassList("gd-slot");
-            // 枠を押すと練習計画へ（指名・解除は部員表の★で行う, issue #707）。表示だけの枠にしない。
             slot.AddToClassList("gd-slot--link");
             slot.RegisterCallback<ClickEvent>(_ => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TrainingPlan"));
             if (g.Empty)
             {
                 slot.AddToClassList("gd-slot--empty");
-                var t = new Label("＋ 空き枠（選手を指名）");
+                slot.Add(new DashedFrame());
+                var plus = new KokoSim.Unity.Shell.LineIcon(KokoSim.Unity.Shell.LineIcon.Kind.Plus) { Stroke = 2.2f };
+                plus.AddToClassList("gd-plus");
+                slot.Add(plus);
+                var t = new Label("選手を指名");
                 t.AddToClassList("gd-empty-t");
                 slot.Add(t);
+                return slot;
             }
-            else
-            {
-                var name = new Label(g.Name); name.AddToClassList("gd-name");
-                slot.Add(name);
-                // 重点は持っているときだけ出す（実際の指名を出すようになって固定ラベルは廃止, issue #693）。
-                if (!string.IsNullOrEmpty(g.Focus))
-                {
-                    var focus = new Label(g.Focus); focus.AddToClassList("gd-focus");
-                    slot.Add(focus);
-                }
-            }
+
+            var no = new Label(number.ToString());
+            no.AddToClassList("gd-no");
+            no.AddToClassList("acc-bg");
+            slot.Add(no);
+            var name = new Label(g.Name); name.AddToClassList("gd-name");
+            slot.Add(name);
+            var arrow = new KokoSim.Unity.Shell.LineIcon(KokoSim.Unity.Shell.LineIcon.Kind.ChevronRight) { Stroke = 2.2f };
+            arrow.AddToClassList("gd-arrow");
+            slot.Add(arrow);
             return slot;
         }
 
         // ===== 補助 =====
-
-        private static string TagTone(string tag)
-        {
-            switch (tag)
-            {
-                case "成長": return "fd-tone--growth";
-                case "警告": return "fd-tone--warn";
-                case "発見": return "fd-tone--find";
-                default: return "fd-tone--info";
-            }
-        }
 
         private void SetText(string name, string text)
         {
