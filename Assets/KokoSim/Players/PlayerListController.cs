@@ -125,7 +125,8 @@ namespace KokoSim.Unity.Players
             injury.AddToClassList("cell--narrow");
             if (r.Injury.Length > 0)
             {
-                var injuryLabel = new Label(r.Injury);
+                // 傷病名と程度は2行に折り返す（「・」が行頭に来ない＝禁則・issue #1533）
+                var injuryLabel = new Label(KokoSim.Unity.Components.Kinsoku.Apply(r.Injury));
                 injuryLabel.AddToClassList("cell");
                 injuryLabel.AddToClassList("cell--warn");
                 injury.Add(injuryLabel);

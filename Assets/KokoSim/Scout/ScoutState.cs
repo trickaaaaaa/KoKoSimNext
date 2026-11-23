@@ -193,7 +193,8 @@ namespace KokoSim.Unity.Scout
             var slots = ScoutService.Slots;
             if (slots <= 0)
             {
-                v.SlotWord = "スカウト枠 なし（スカウト網は夏の大会後に決める）";
+                // 括弧の説明（スカウト網は夏の大会後に決める）は外す＝帯の右端の「経営で変更」が切れていた（issue #1533・オーナー決定）
+                v.SlotWord = "スカウト枠 なし";
             }
             else
             {

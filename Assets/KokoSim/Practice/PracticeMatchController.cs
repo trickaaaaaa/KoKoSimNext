@@ -24,13 +24,8 @@ namespace KokoSim.Unity.Practice
         private readonly List<AbilityBar> _factors = new List<AbilityBar>();
         private int _selectedId = int.MinValue;
 
-        // 箱（.pm-radar）は高さ190px。軸ラベルは「名前＋数値」の2段（実測 高さ58px・幅54px）なので、
-        // 上下のラベルが箱に収まり（中心から 66px まで）、上下のラベルが図の頂点にかからない半径は 37px まで。
-        // 左右のラベルは横へ 1.2 倍逃がして頂点にかけない（箱は横に広い）。旧値（半径65px・ラベル1.22倍）は
-        // 上のラベルが箱の上へ、値が箱の下へはみ出し、左右のラベルが図の線に重なっていた（issue #1533）。
-        private const float RadiusFactor = 36f / 190f;
-        private const float LabelOffset = 66f / 36f;
-        private const float LabelSpreadX = 1.2f;
+        private const float RadiusFactor = 0.34f;
+        private const float LabelOffset = 1.22f;
 
         private void OnEnable()
         {
@@ -45,7 +40,7 @@ namespace KokoSim.Unity.Practice
             if (request != null) request.clicked += () => { _state.Request(); Render(); };
 
             // レーダーは部品辞書の共通部品（描画＋軸ラベル配置は RadarChartView が持つ）。
-            _radar = new RadarChartView(_root.Q<VisualElement>("pm-radar"), RadiusFactor, LabelOffset, RadarLabelSize.Normal, LabelSpreadX);
+            _radar = new RadarChartView(_root.Q<VisualElement>("pm-radar"), RadiusFactor, LabelOffset);
 
             Render();
         }

@@ -157,7 +157,7 @@ namespace KokoSim.Unity.Components
         /// <param name="labelSize">軸ラベルの段階（None＝出さない）。</param>
         /// <param name="labelSpreadX">
         /// 軸ラベルの横方向だけに掛ける倍率（1＝円周上）。横長の器で、上下のラベルの高さに合わせて図を小さくしたとき、
-        /// 左右のラベルを横へ逃がして図の頂点にかけないために使う（練習試合・issue #1533）。
+        /// 左右のラベルを横へ逃がして図の頂点にかけないために使う（主将指名・issue #1533）。
         /// </param>
         public RadarChartView(VisualElement host, float radiusFactor = 0.36f, float labelOffset = 1.20f,
             RadarLabelSize labelSize = RadarLabelSize.Normal, float labelSpreadX = 1f)
