@@ -76,14 +76,14 @@ namespace KokoSim.Unity.Home
         public string Venue = "自校グラウンド";
         /// <summary>天気の状態（マークの元）。試合の無い週・次戦未確定は null＝天気欄を出さない（issue #803/#1200）。</summary>
         public WeatherState? Weather;
-        /// <summary>気温の数値部分（Oswald・単位抜き）。<see cref="Weather"/> と同時にしか立たない。</summary>
+        /// <summary>気温の数値部分（単位抜き）。<see cref="Weather"/> と同時にしか立たない。</summary>
         public string WeatherTempValue = "";
         /// <summary>気温の単位（"℃"・サンセリフ）。数字とは別 Label に割る（書体3役ルール）。</summary>
         public string WeatherTempUnit = "";
 
         public bool TournamentMode;   // 大会モード中は次戦カード/カウントダウンを大会仕様に切替える
 
-        // 主役ヒーロー帯・通常週のカウントダウン（数字は Oswald にするため単位と分割して持つ）。
+        // 主役ヒーロー帯・通常週のカウントダウン（数字は f-num にするため単位と分割して持つ）。
         public string HeroBigValue = "";   // "15"（週数）／数字が無い状態は "開催中"
         public string HeroBigUnit = "";    // "週"／数字が無い状態は空
 
@@ -1093,7 +1093,7 @@ namespace KokoSim.Unity.Home
                 view.CountdownLabel = SeasonClock.CountdownLabel(next.Kind);
                 view.CountdownValue = left > 0 ? "残り " + left + " 週" : "開催中";
                 view.CountdownCells = left > 0 ? left + "週" : "開催中";
-                // 主役ヒーロー帯（通常週）: 数字＝Oswald にするため単位と分けて持つ。
+                // 主役ヒーロー帯（通常週）: 数字＝f-num にするため単位と分けて持つ。
                 view.HeroBigValue = left > 0 ? left.ToString() : "開催中";
                 view.HeroBigUnit = left > 0 ? "週" : "";
             }

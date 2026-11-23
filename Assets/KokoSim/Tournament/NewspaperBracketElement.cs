@@ -155,7 +155,7 @@ namespace KokoSim.Unity.Tournament
             box.Add(num);
             if (s.Mercy)
             {
-                // コールド勝ちの印。数字と和文は Label を分ける（Oswald は和文グリフを持たない）。
+                // コールド勝ちの印。数字と和文は Label を分ける（Oswald 時代の作法の名残）。
                 var mercy = new Label("コ");
                 mercy.AddToClassList("brk-mercy");
                 box.Add(mercy);

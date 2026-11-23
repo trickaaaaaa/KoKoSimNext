@@ -357,7 +357,7 @@
 }
 .abil-row__fill { height: 100%; border-radius: 0; }
 /* 上限のない量の数値表示（スタミナ＝目安投球数, issue #356）。バーの無い行で数字＋和文単位（NumUnit）を
-   右端＝値列の位置へ寄せる。数字は Oswald（.nu-num=f-num）・単位はサンセリフ（.nu-unit）。 */
+   右端＝値列の位置へ寄せる。数字は .nu-num（f-num）・単位は .nu-unit。 */
 .abil-row__numunit {
     margin-left: auto;      /* バーが無いぶん右端へ寄せて他行の値列と縦に揃える */
     flex-shrink: 0;
@@ -879,7 +879,7 @@
 .cmp-row--type .cmp-row__side { height: auto; flex-grow: 1; }
 .cmp-row--type .cmp-row__val { width: auto; flex-grow: 1; -unity-text-align: middle-left; color: var(--color-chalk); }
 /* 上限のない量（スタミナ＝目安投球数, issue #356）: 比較行でも数字＋和文単位を分割（NumUnit）。
-   数字は Oswald（.nu-num=f-num）。cmp-row--type と併用。 */
+   数字は .nu-num（f-num）。cmp-row--type と併用。 */
 .cmp-row__numunit { flex-direction: row; align-items: baseline; }
 .cmp-row__numunit .nu-num { font-size: var(--fs-label); color: var(--color-chalk); }
 .cmp-card {
@@ -1496,7 +1496,7 @@
     margin-right: var(--sp-1);
 }
 .mhud-cp__t { font-size: var(--hud-fs-chip); height: var(--hud-h-chip); -unity-text-align: middle-center; }
-/* 数字に添える和文単位（「番」「年」「番手」）。Oswald は欧文専用なので Label を分ける
+/* 数字に添える和文単位（「番」「年」「番手」）。Label を分ける（Oswald 時代の名残）
    ＝.nu-unit と同じ作法（設計書16 §2 書体3役ルール）。 */
 .mhud-cp__u { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); margin-left: 2px; }
 .mhud-cp--key { background-color: #FFFFFF; }                       /* 打順・登板順 */
@@ -1702,7 +1702,7 @@
 }
 
 /* 球種・球速の計器表示（参照モックの readout。実1球記録がある打席だけ出す）。
-   桁が動かないことが計器らしさの正体なので数字は Oswald（.f-num-bd）で、和文との混植を避けて
+   桁が動かないことが計器らしさの正体なので数字は .f-num-bd で、和文との混植を避けて
    ラベルを割る（書体3役ルール）。align-items: baseline は USS 非対応なので flex-end で代用する。
 
    ⚠ 地を敷くのは飾りではない。参照モックではこの計器は**盤面（黒いスコアボード）の中**にあり、
@@ -2104,7 +2104,7 @@
 }
 
 /* ═══ NumUnit：数字＋和文単位の混植セル（設計書16 §2・決定2-B）═════════════════
-   数字（.nu-num＝Oswald）と和文単位（.nu-unit）を1行に並べる。単位は数字より一段落とした
+   数字（.nu-num）と和文単位（.nu-unit）を1行に並べる。単位は数字より一段落とした
    ミュートで添える（数字を主役にする＝UI原則③）。色・サイズはセル側の文脈を継承する。 */
 .nu-wrap { flex-direction: row; align-items: center; }
 .nu-unit { color: var(--color-muted); margin-left: 2px; }
@@ -2805,7 +2805,7 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
    そこから先がまだ書かれていないことを形で出す。色はインクの濃淡だけでアクセントを使わない（UI原則②）。 */
 .timeline { }
 .timeline__node { flex-direction: row; align-items: stretch; flex-shrink: 0; }
-/* 年は数字だけのセル＝Oswald（書体3役）。右揃えで桁を揃える。 */
+/* 年は数字だけのセル＝f-num。右揃えで桁を揃える。 */
 .timeline__year {
     width: var(--col-tl-year);
     flex-shrink: 0;
@@ -2844,7 +2844,7 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 .timeline__empty { font-size: var(--fs-label); color: var(--tx-3); margin: 0; padding: var(--sp-3) 0; }
 
 /* ── RecordCell：記録室の混植セル（設計書16 §10.2 の穴#8・issue #600）───────────
-   「.384 ／ 中田 大祐 ／ 2027」を1行に組む。Oswald は欧文専用で和文グリフを持たないため
+   「.384 ／ 中田 大祐 ／ 2027」を1行に組む。Oswald 時代は和文グリフが無かったため
    数字と和文は Label を分ける（書体3役ルール）。値は右揃え・固定幅で桁を揃え（UI原則③）、
    縮むのは氏名だけにする＝年が押し出されない。 */
 .recc { flex-direction: row; align-items: center; flex-grow: 1; flex-basis: 0; min-width: 0; }

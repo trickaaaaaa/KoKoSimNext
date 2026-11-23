@@ -49,6 +49,6 @@ bash tools/sync-engine-dll.sh   # エンジンをビルドして Plugins へ再�
 ## 既知の移植上の注意（要 Editor 検証）
 
 - UI Toolkit は CSS grid 非対応のため、モックの grid レイアウトは Flexbox で表現しています。
-- フォントは設計書16の**書体3役制**（本文=IBM Plex Sans JP／見出し・校名・人名=Shippori Mincho B1／数字=Oswald＋掲示板=DotGothic16。すべてOFL）。既定は `KokoSimTextSettings.asset` の本文＝Plex Regular で、各役はユーティリティクラス（`.f-body*` / `.f-display*` / `.f-num*` / `.f-dot`）で当てる。SDF生成は `Assets/Editor/FontAssetBuilder.cs`（メニュー「KokoSim/Fonts」・文字セットは `data/` を走査）。旧 KokoSimFont（ヒラギノ丸ゴ）は再配布不可のため全廃済み（履歴からも除去）。詳細は docs/design/design-16-ui-restyle.md と docs/design/UI-BUILD-METHOD.md「書体3役ルール」。
+- フォントは design-22 の書体（本文・数字=Noto Sans JP／見出し・校名・人名=Shippori Mincho B1＋掲示板=DotGothic16。すべてOFL。設計書16 の IBM Plex Sans JP・Oswald から置換）。既定は `.ui-root` の Noto Sans JP Regular で、各役はユーティリティクラス（`.f-body*` / `.f-display*` / `.f-num*` / `.f-dot`）で当てる。SDF生成は `Assets/Editor/FontAssetBuilder.cs`（メニュー「KokoSim/Fonts」・文字セットは `data/` を走査）。旧 KokoSimFont（ヒラギノ丸ゴ）は再配布不可のため全廃済み（履歴からも除去）。詳細は docs/design/design-16-ui-restyle.md と docs/design/UI-BUILD-METHOD.md「書体3役ルール」。
 - USS の一部プロパティ（gradient / box-shadow / animation）は UI Toolkit 非対応のため省略。点滅ドット等は演出未実装。
 - ViewModel はデモ用に単独ロースターを生成しています。将来は Phase 3〜5 のセーブデータと接続します。

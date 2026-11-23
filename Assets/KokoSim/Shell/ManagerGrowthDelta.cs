@@ -66,7 +66,7 @@ namespace KokoSim.Unity.Shell
             items.Add(new EffectItem(label, Signed(value)));
         }
 
-        // 全角の符号で揃える（＋/− を半角にすると Oswald と混植になって高さが揃わない）。
+        // 全角の符号で揃える（＋/− を半角にすると Oswald 時代は混植で高さが揃わなかった名残）。
         private static string Signed(double value)
         {
             var n = System.Math.Round(System.Math.Abs(value));

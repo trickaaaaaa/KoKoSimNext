@@ -585,7 +585,7 @@ namespace KokoSim.Unity.Training
 
                 if (!string.IsNullOrEmpty(meta))
                 {
-                    // 「適50」等の和文＋数字混植（Oswaldは和文グリフを持たないため単一Labelへf-numを付けない）。
+                    // 「適50」等の和文＋数字混植（Oswald 時代の作法で単一Labelへf-numを付けない）。
                     var mt = new Label(meta); mt.AddToClassList("mslot__meta"); Add(mt);
                 }
 

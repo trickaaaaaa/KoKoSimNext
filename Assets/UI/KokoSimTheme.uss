@@ -1,6 +1,6 @@
 /* KokoSim スコアボードテーマ（設計書06）。モック mock-home-dashboard.html を UI Toolkit(Flexbox) へ移植。
    UI Toolkit は CSS grid 非対応のため grid は flex で表現。色覚対応の等級カラーを共通言語とする。
-   書体は設計書16の3役制（本文=IBM Plex Sans JP / 見出し・校名=Shippori Mincho B1 / 数字=Oswald）＋
+   書体は design-22（本文・数字=Noto Sans JP / 見出し・校名・人名=Shippori Mincho B1）＋
    掲示板のドット(DotGothic16)。役割クラスは tokens.uss の .f-* に集約し、ここでは指定しない。 */
 
 .root {
@@ -8,7 +8,7 @@
     background-color: var(--color-field);   /* --field 深緑 */
     color: var(--color-chalk);              /* --chalk */
     font-size: 22px;
-    /* 既定フォント＝IBM Plex Sans JP Regular（tokens.uss .ui-root と同一・設計書16 F1-a）。
+    /* 既定フォント＝Noto Sans JP Regular（tokens.uss .ui-root と同一・設計書16 F1-a／design-22 G0）。
        既定テーマの legacy ビットマップフォント(NotInter)を上書きし、全子孫へ継承させる。
        これが無いとテキストが legacy フォントで拡大描画されて滲む（設計書06）。 */
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
@@ -468,7 +468,7 @@
 .tp-momentum__label { font-size: 16px; color: var(--color-muted); margin-right: var(--sp-2); }
 
 /* リード文は「読み物」だが本文であることに変わりはないのでサンセリフ（明朝は見出し・固有名詞のみ）。
-   疑似イタリックは Plex に実イタリックが無く斜体変形になるため廃止した（design-16 §2）。 */
+   疑似イタリックは実イタリックが無く斜体変形になるため廃止した（design-16 §2）。 */
 .tp-lead {
     background-color: var(--sf-card); border-width: 0;
     border-radius: var(--radius-card);
@@ -899,7 +899,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .hm-hero__weather-icon { width: 28px; height: 28px; margin-right: 4px; }
 .hm-hero__weather-num { font-size: 16px; color: var(--color-chalk); margin-right: 1px; }
 
-/* 通常週: 夏予選カウントダウン（数字は Oswald＝f-num-bd を UXML で付与） */
+/* 通常週: 夏予選カウントダウン（数字は f-num-bd を UXML で付与） */
 .hm-hero__plain { flex-direction: row; align-items: baseline; flex-grow: 1; }
 .hm-hero__cd-k { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; margin-right: 16px; }
 .hm-hero__cd-num { font-size: 40px; color: var(--color-chalk); }
@@ -1082,7 +1082,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-pitchchart { min-height: 280px; flex-grow: 1; margin: 0 16px 16px 16px; }
 .pd2-pchip { position: absolute; flex-direction: row; align-items: center; }
 .pd2-pchip__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: 8px; }
-/* ストレートのみ添えるMAX球速（Issue #130）。数字はnu-num(Oswald)側で右揃え・コンデンス済み。 */
+/* ストレートのみ添えるMAX球速（Issue #130）。数字はnu-num側で右揃え。 */
 .pd2-pchip__velo { margin-right: 8px; }
 .pd2-pchip__velo .nu-num { font-size: var(--fs-label); color: var(--color-chalk); }
 .pd2-pchip__velo .nu-unit { font-size: var(--fs-cap); }

@@ -487,7 +487,7 @@ namespace KokoSim.Unity.Shell
             return list;
         }
 
-        // 全角の符号（半角にすると Oswald と混植になって高さが揃わない）。
+        // 全角の符号（Oswald 時代に半角だと混植で高さが揃わなかった名残）。
         private static string Signed(double value)
             => (value >= 0 ? "＋" : "−") + System.Math.Round(System.Math.Abs(value)).ToString("0");
 

@@ -301,7 +301,7 @@
     --col-sc-visits: 76px;   /* 訪問の丸ドット3つ（スカウト候補だけ・issue #867） */
 
     /* ── キャリア：年表と教え子名鑑（issue #586。ヘッダーとデータが同一変数を参照） ── */
-    --col-tl-year: 52px;     /* 年表の暦年（4桁・Oswald・右揃え） */
+    --col-tl-year: 52px;     /* 年表の暦年（4桁・右揃え） */
     --col-tl-rail: 12px;     /* 年表の縦軸（節点の丸の直径） */
     --col-cr-year: 56px;     /* 教え子名鑑 年（4桁＋余白） */
     --col-cr-no: 52px;       /* 教え子名鑑 当時の背番号（数値・右揃え） */
@@ -311,9 +311,9 @@
     --col-cr-post-term: 76px;/* 歴任校 在任（「3年目」） */
 
     /* 記録画面（issue #600）。歴代大会結果の表と記録室の混植セル。 */
-    --col-rc-val: 64px;      /* 記録の値（「1.104」「84 1/3」が最長・Oswald・右揃え） */
+    --col-rc-val: 64px;      /* 記録の値（「1.104」「84 1/3」が最長・右揃え） */
     --col-rc-name: 152px;    /* 記録の保持者（和文6文字＋姓名間スペース。明朝） */
-    --col-rc-year: 44px;     /* 記録の年（4桁・Oswald。通算スコープでは出さない） */
+    --col-rc-year: 44px;     /* 記録の年（4桁。通算スコープでは出さない） */
     --col-rc-rank: 40px;     /* 順位（「1位」） */
     --col-rc-cat: 84px;      /* 部門名（「本塁打」「投球回」が最長） */
     --col-rc-th-year: 64px;  /* 歴代大会 年度（4桁＋余白） */
@@ -489,7 +489,7 @@
     --hud-h-pa:   18px;
 }
 
-/* ── 基底クラス：既定フォント＝IBM Plex Sans JP Regular（設計書16 F1-a・2026-07-21）───
+/* ── 基底クラス：既定フォント＝Noto Sans JP Regular（設計書16 F1-a・design-22 G0 で IBM Plex Sans JP から置換）───
    PanelSettings 既定テーマの legacy ビットマップフォント(NotInter)は拡大描画で滲む/ジャギる。
    全画面の**ルート要素に必ず class="ui-root" を付け**、SDFフォントを全子孫へ継承させる
    （font-definition は継承プロパティ）。これを付け忘れた画面だけ文字がガビガビになる。
@@ -508,14 +508,14 @@
 
      .f-display / .f-display-lg  太明朝   校名・大会名・ページ見出し
      .f-body / -md / -bd         サンセリフ ラベル・本文・ボタン（疑似ボールド全廃）
-     .f-num / .f-num-bd          コンデンス 表・打率・金額・背番号
+     .f-num / .f-num-bd          数字      表・打率・金額・背番号（design-22 でサンセリフと同じ Noto Sans JP）
      .f-dot                      ドット    掲示板部品の中だけ
 
    移行が終わったら -unity-font-style: bold は原則禁止（実ウェイトで表現する）。 */
 
 /* ── 疑似ボールドの実ウェイト置換（設計書16 F3・2026-07-21）─────────────────
    `-unity-font-style: bold` は SDF を機械的に太らせる疑似ボールドで、字画が潰れて濁る。
-   全画面から撤去し、代わりに IBM Plex Sans JP の実ウェイト（SemiBold / Medium）を当てる。
+   全画面から撤去し、代わりに Noto Sans JP の実ウェイト（Bold / Medium）を当てる。
 
    USS には @extend も「変数にアセットを入れる」手段も無い（後者は既知の罠として不採用）。
    URL を各画面へばら撒くと単一ソースが壊れるので、**置換先のセレクタをここに列挙する**方式にした。
@@ -526,7 +526,7 @@
    ただし複合セレクタ（`.abil-row--lg .abil-row__label` 等）は詳細度が高く単一クラスに勝つ点に注意。
    **人名・校名・見出しの明朝クラスはこの2ブロックに載せない**（下の明朝群だけに置く＝段落の順を変えても化けない）。 */
 
-/* SemiBold：見出し・強調・ボタン・大きめの数値（旧 bold の大半） */
+/* Bold：見出し・強調・ボタン・大きめの数値（旧 bold の大半） */
 .rank-chip,
 .abil-row__value,
 .abil-row__note,
@@ -597,7 +597,7 @@ Button.tp-cta,
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
 
-/* Medium：12px 以下の小さな強調（SemiBold だと字画が潰れて読みにくくなる帯） */
+/* Medium：12px 以下の小さな強調（Bold だと字画が潰れて読みにくくなる帯） */
 .banner__badge,
 .field-chip__num,
 .cmp-head__lab,
@@ -616,7 +616,7 @@ Button.tp-cta,
 
 /* ── 校名・大会名・ページ見出しの明朝化（設計書16 §2・F3）───────────────────
    「校名は常に太明朝」がリスタイルのシグネチャ規則。校名と、記事の柱にあたるページ見出しを
-   ここで明朝へ寄せる。上の SemiBold/Medium 表より後に置いてあるので、両方に載る要素は明朝が勝つ。
+   ここで明朝へ寄せる。上の Bold/Medium 表より後に置いてあるので、両方に載る要素は明朝が勝つ。
 
    **人名（選手名・監督名）は 2026-07-22 に明朝化を決定（design-16 §9-6, 3-A）。**下の「人名の明朝化」ブロックで
    別立てにしてある。それ以外の本文・ラベル・数値セルは従来どおり入れない（暗背景で細い横画が潰れる＝§8のリスク）。 */
@@ -713,8 +713,8 @@ Button.tp-cta,
 }
 
 /* ── データ数字 Noto Sans JP（design-22 G0。旧 Oswald＝欧文コンデンス）─────────────────────────────────────
-   欧文フォントなので和文グリフを持たない。数値だけを載せる Label に付ける
-   （和文と混ぜる行は Label を分ける＝既存の sb2-cell__k / __v 方式）。 */
+   数値だけを載せる Label に付ける。Oswald 時代は和文グリフが無かったため、和文と混ぜる行は
+   Label を分けていた（sb2-cell__k / __v 方式）。Noto Sans JP では混ぜても化けないが、作法は残している。 */
 .f-num {
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Regular.asset?fileID=11400000&guid=5839fd367ddf74b178e747a3a65ccbf9&type=2#NotoSansJP-Regular");
 }

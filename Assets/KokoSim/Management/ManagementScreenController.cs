@@ -97,7 +97,7 @@ namespace KokoSim.Unity.Management
         }
 
         /// <summary>
-        /// 収支1枠（見出し＋金額＋内訳）。金額は NumUnit＝数字だけ Oswald・単位「万」はサンセリフ
+        /// 収支1枠（見出し＋金額＋内訳）。金額は NumUnit＝数字だけ f-num・単位「万」は f-body
         /// （書体3役ルール: 数字と和文の混植は Label を分ける）。<paramref name="signed"/> は
         /// 増減として読ませる枠（収入・支出・差引）に付け、残高には付けない。
         /// </summary>
@@ -205,7 +205,7 @@ namespace KokoSim.Unity.Management
             row.Add(next);
 
             // 最大レベルの行は数字が無いので NumUnitAuto に任せる（数字を含まない文字列は
-            // 分割せず1枚の Label で返る＝Oswald に無い記号を載せて豆腐にしない）。
+            // 分割せず1枚の Label で返る＝旧 Oswald に無い記号を載せて豆腐にしない作法の名残）。
             // 年契約は買い切りと単位が違う（毎年かかる）ので「/年」を必ず添える。
             var costText = r.Locked
                 ? r.CurrentCost.ToString("0") + "万/年"

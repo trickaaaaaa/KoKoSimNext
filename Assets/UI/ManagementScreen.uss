@@ -57,7 +57,7 @@
     flex-basis: 0;
     min-width: 0;
 }
-/* 数値は NumUnit（数字＝Oswald ／ 単位「万」＝サンセリフ）を差し込む器。 */
+/* 数値は NumUnit（数字＝f-num ／ 単位「万」＝f-body）を差し込む器。 */
 .mn-kv__v {
     flex-direction: row;
     align-items: center;
@@ -117,7 +117,7 @@
     flex-shrink: 0;
     padding-bottom: var(--sp-2);
 }
-/* 行の縦余白は落とし、背は中身（Oswald の数字ラベル）に決めさせる。
+/* 行の縦余白は落とし、背は中身（数字ラベル）に決めさせる。
    実測: 余白ありだと58px（枠余白15＋費用セル43）で、窓254pxに4.4行しか入らなかった。 */
 .mn-row {
     margin-bottom: 2px;
@@ -177,7 +177,7 @@
 }
 /* 最大レベルの行は NumUnitAuto が「クラスの無い素の Label」を返すので、
    .nu-num だけを指定すると既定サイズのまま行が伸びる。型セレクタで両方を受ける。 */
-/* 数字は他セルと同寸にする（Oswald は同じ px でも行が高く、ここだけ 19px だと
+/* 数字は他セルと同寸にする（当時の Oswald は同じ px でも行が高く、ここだけ 19px だと
    費用セル43px が行の背を決めていた＝実測。表として揃えるのは大きさでなく右揃えと桁）。 */
 .mn-cell--cost Label { font-size: var(--fs-cap); color: var(--color-chalk); }
 .mn-cell--cost .nu-unit { font-size: var(--fs-cap); color: var(--color-chalk); }
