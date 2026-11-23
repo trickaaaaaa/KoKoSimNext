@@ -80,3 +80,7 @@ Assets/UI/Images/portraits/*.jpeg.meta
 /Assets/Plugins/KokoSim/KokoSim.Engine.dll
 /Assets/Resources/KokoSimData/**/*.yaml
 /Assets/Resources/KokoSimData/_index.txt
+
+# ブラウザ体験版のビルド中だけ球場を退避する場所（WebDemoBuild。残っていたら次のビルドが戻す）
+Assets/WebDemoParked/
+Assets/WebDemoParked.meta
