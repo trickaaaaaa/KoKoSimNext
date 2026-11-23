@@ -21,17 +21,12 @@ public sealed record CoachingProfile
     public double Defense { get; init; }
 
     /// <summary>能力種別に対応する分野別指導力を返す。</summary>
-    public double LevelFor(AbilityKind k)
+    public double LevelFor(AbilityKind k) => AbilityKinds.DomainOf(k) switch
     {
-        if (AbilityKinds.IsPitching(k)) return Pitching;
-        if (IsDefenseOrRunning(k)) return Defense;
-        return Batting;
-    }
-
-    /// <summary>守備・走塁系（Defense 指導力の適用対象）。守備4能力＋走力＋走塁系3能力。</summary>
-    internal static bool IsDefenseOrRunning(AbilityKind k) =>
-        AbilityKinds.IsDefense(k)
-        || k is AbilityKind.Speed or AbilityKind.Bunt or AbilityKind.Steal or AbilityKind.Baserunning;
+        GrowthDomain.Pitching => Pitching,
+        GrowthDomain.Defense or GrowthDomain.Running => Defense, // 守備4能力＋走力＋走塁系3能力
+        _ => Batting,
+    };
 
     /// <summary>
     /// 監督メタ（分野別指導力）から育成注入値を作る（Phase 5監督メタ ⇄ Phase 3育成の接続）。

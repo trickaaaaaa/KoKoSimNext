@@ -75,13 +75,11 @@ public static class DraftEngine
             var band = NotabilityModel.BandOf(p, n, strength, c);
             if (!band.IsCandidate()) continue;   // 候補でない3年（足切り含む）は指名対象外
 
-            var prob = Logistic((n - c.NominationMidpoint) / c.NominationSpread);
+            var prob = MathUtil.Logistic((n - c.NominationMidpoint) / c.NominationSpread);
             var nominated = draftRng.NextDouble() < prob;
             picks.Add(new DraftPick(
                 p.Id, p.Name, n, band, nominated, nominated ? band.RoundOf(n, c) : 0));
         }
         return new DraftResult(year, picks);
     }
-
-    private static double Logistic(double z) => 1.0 / (1.0 + Math.Exp(-z));
 }

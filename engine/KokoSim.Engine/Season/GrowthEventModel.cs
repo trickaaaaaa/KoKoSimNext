@@ -259,7 +259,7 @@ public static class GrowthEventModel
         if (Trains(trained, GrowthDomain.Pitching) && PitcherRoleResolver.LeansPitcher(p)) domains.Add(GrowthDomain.Pitching);
         if (domains.Count == 0) return false;
         var domain = domains[rng.NextInt(0, domains.Count)];
-        var before = GrowthOf(p, domain);
+        var before = p.GrowthOf(domain);
         var after = Math.Min(c.GrowthSurgeMax, before * c.GrowthSurgeFactor);
         var lift = 0;
         foreach (var k in KindsOf(domain)) lift = Math.Max(lift, LiftCap(p, k, c.GrowthSurgeCapLift));
@@ -316,7 +316,7 @@ public static class GrowthEventModel
         List<GrowthNotice> notices)
     {
         if (!MathUtil.Chance(c.BreakthroughWeeklyProb, rng)) return false;
-        var kinds = PitcherRoleResolver.LeansPitcher(p) ? AbilityKinds.Pitching : AbilityKinds.Batting;
+        var kinds = PitcherRoleResolver.LeansPitcher(p) ? AbilityKinds.Pitching : AbilityKinds.Fielder;
         var k = kinds[rng.NextInt(0, kinds.Length)];
         var gained = Raise(p, k, c.BreakthroughGain);
         if (gained == 0) return false;   // 上限に張り付いていて上がらない＝起きなかったことにする
@@ -491,13 +491,6 @@ public static class GrowthEventModel
         _ => BattingKinds,
     };
 
-    private static double GrowthOf(DevelopingPlayer p, GrowthDomain d) => d switch
-    {
-        GrowthDomain.Pitching => p.PitchingGrowth,
-        GrowthDomain.Defense => p.DefenseGrowth,
-        _ => p.BattingGrowth,   // 走塁は打撃分野の伸びしろに紐づく（DevelopingPlayer.GrowthMultiplier と同じ）
-    };
-
     private static void SetGrowth(DevelopingPlayer p, GrowthDomain d, double v)
     {
         switch (d)
@@ -520,7 +513,7 @@ public static class GrowthEventModel
         void Try(GrowthDomain d)
         {
             if (!Trains(trained, d)) return;
-            if (GrowthOf(p, d) < threshold) return;
+            if (p.GrowthOf(d) < threshold) return;
             foreach (var k in KindsOf(d))
                 if (p.Level(k) < p.Cap(k)) { list.Add(d); return; }
         }

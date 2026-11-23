@@ -954,7 +954,7 @@ public sealed class TeamState
     {
         var cap = _team.Captain;
         if (cap is null) return 1.0;
-        var power = cap.Leadership * cap.Mental / 100.0;
+        var power = Season.CaptainSelector.LeadershipPower(cap);
         var presence = IsOnField(cap) ? 1.0 : c.CaptainBenchFactor;
         var pillar = cap.Skills.Has(Skill.SpiritualPillar)
             ? (skills ?? new SkillCoefficients()).SpiritualPillarCaptainFactor
