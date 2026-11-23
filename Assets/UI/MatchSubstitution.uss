@@ -80,6 +80,16 @@
 
 /* 選べない行（退場済み・対象外）。押しても何も起きないので、色だけで区別する（UI原則⑥）。 */
 .msub-row--off { opacity: 0.38; }
+/* 出場済みの控え（リエントリー禁止）。名前は省略せず全部出し、薄い色で沈める（issue #1534 項目7）。
+   名前は中身の幅で置く＝列が狭くても「···」で切らない。調子の顔は検討帳の出場済み行と同じく弱める。 */
+.msub-row--used .bench-row__name {
+    flex-basis: auto;
+    flex-shrink: 0;
+    overflow: visible;
+    text-overflow: clip;
+    color: var(--color-faint);
+}
+.msub-row--used .msub-cond { opacity: 0.45; }
 /* 中列の説明文（何が起きるか・次に何をクリックするか）。1行に収まらないので折り返す
    （.cmp-card__empty は中央寄せ1行用で、長文だと左右が切れて読めない）。 */
 .msub-hint {
