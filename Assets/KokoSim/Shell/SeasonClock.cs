@@ -38,6 +38,36 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
+        /// 実月日（大会の日付）が入る週（0基点）。月内の週は日付から 1〜7日＝1週・8〜14日＝2週…と数え、その月の週数で頭打ち。
+        /// 週暦は1年50週で実暦と一致しないので、大会の日付を週の表示へ写すときだけ使う（issue #1534 項目9）。
+        /// </summary>
+        public static int WeekOfDate(int month, int day)
+        {
+            var wanted = System.Math.Max(1, (day + 6) / 7);
+            var last = -1;
+            for (var w = 0; w < Calendar.WeeksPerYear; w++)
+            {
+                var d = Calendar.DateOf(w);
+                if (d.Month != month) continue;
+                last = w;
+                if (d.WeekOfMonth == wanted) return w;
+            }
+            return last;
+        }
+
+        /// <summary>
+        /// トップバーに出す週。直前に終わった大会の最終日（<paramref name="floorDate"/>）より前の週は出さない
+        /// （issue #1534 項目9: 大会は日で進み、明けの週送りは「最終日が入る週」までの切り捨てなので、
+        /// 7月16日に負けた後に「7月2週」と出て日付が逆戻りして見えた）。下限は同じ年度・数週以内のときだけ効かせる。
+        /// </summary>
+        public static int DisplayWeek(int yearIndex, int week, (int YearIndex, int Month, int Day)? floorDate)
+        {
+            if (floorDate is not { } f || f.YearIndex != yearIndex) return week;
+            var floor = WeekOfDate(f.Month, f.Day);
+            return floor > week && floor - week <= 5 ? floor : week;
+        }
+
+        /// <summary>
         /// 次の公式戦のカウントダウン見出し（issue #582）。夏＝地方予選なので「夏予選まで」、
         /// 秋＝秋季県大会は予選ではなく本大会なので「秋大会まで」。文言もここが単一ソース。
         /// </summary>

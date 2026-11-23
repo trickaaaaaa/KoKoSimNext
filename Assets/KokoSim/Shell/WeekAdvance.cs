@@ -9,10 +9,21 @@ namespace KokoSim.Unity.Shell
     ///   週次イベント・フィードもここで回る。大会開幕週の大会モード遷移は <see cref="GameClock.EnterWeek"/> に
     ///   集約済みなので、ここに大会判定は要らない。開幕時は BannerPending が立ち <see cref="ScreenRouter"/> が
     ///   ホームへ回送して開幕演出→日送りへ引き継ぐ）。
-    /// ・大会モード中: 日送り・試合ダイアログはホームが担うため、側画面からはホームへ回送する。
+    /// ・大会モード中: 日送り・試合ダイアログはホームが担うため、側画面からはホームへ回送し、着いたホームで1日進める
+    ///   （issue #1534 項目9: 大会中はどのタブでもボタンが「1日進める」なので、押した1回で日が進むようにする）。
     /// </summary>
     public static class WeekAdvance
     {
+        private static bool _dayAdvanceRequested;
+
+        /// <summary>側画面で大会中に「1日進める」が押されたか（ホームが着いたときに1回だけ取り出す）。</summary>
+        public static bool TakeDayAdvanceRequest()
+        {
+            var r = _dayAdvanceRequested;
+            _dayAdvanceRequested = false;
+            return r;
+        }
+
         /// <summary>側画面の「今週を進める」共通処理。<paramref name="render"/> は進週後の再描画（省略可）。</summary>
         public static void FromSideScreen(System.Action render)
         {
@@ -24,6 +35,7 @@ namespace KokoSim.Unity.Shell
             }
             if (GameSession.Current.InTournament)
             {
+                _dayAdvanceRequested = true;
                 ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
                 return;
             }

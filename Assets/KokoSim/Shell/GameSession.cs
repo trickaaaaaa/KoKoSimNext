@@ -1170,8 +1170,26 @@ namespace KokoSim.Unity.Shell
         {
             var w = PendingTournamentWrapUp;
             PendingTournamentWrapUp = null;
+            if (w != null)
+            {
+                var (m, d) = TournamentDate.DateOf(TournamentEntry.Schedule, w.Kind, w.TournamentDay);
+                LastTournamentEndDate = (GameClock.YearIndex, m, d);
+            }
             return w;
         }
+
+        /// <summary>
+        /// 後始末待ちの大会の最終日の実月日（"7月16日"）。後始末待ちでなければ空文字。負けてから結果を閉じるまでの間
+        /// （大会モードは既に抜けている）もトップバーを大会の日付のまま出すため（issue #1534 項目9）。
+        /// </summary>
+        public string PendingWrapUpDateLabel =>
+            PendingTournamentWrapUp is { } w ? TournamentDate.Label(TournamentEntry.Schedule, w.Kind, w.TournamentDay) : "";
+
+        /// <summary>
+        /// 直前に後始末した大会の最終日（年度・実月日）。トップバーの週をこれより前へ戻さない下限
+        /// （<see cref="SeasonClock.DisplayWeek"/>・issue #1534 項目9）。表示専用で保存しない。
+        /// </summary>
+        public (int YearIndex, int Month, int Day)? LastTournamentEndDate { get; private set; }
 
         // ===== セーブ往復（issue #507 F0 ／ 大会中は issue #565 F1） =====
         // 大会をまたぐ永続分（年度・成績・戦績）に加え、大会モードの進行（進行体・大会内経過日・出場校）も
@@ -1372,6 +1390,7 @@ namespace KokoSim.Unity.Shell
             ResultPending = false;
             LastOutcome = null;
             PendingTournamentWrapUp = null;
+            LastTournamentEndDate = null;
             KoshienRunner = null;
             KoshienField = Array.Empty<School>();
             KoshienTitle = "";

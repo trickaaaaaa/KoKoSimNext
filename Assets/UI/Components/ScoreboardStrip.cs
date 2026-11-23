@@ -9,6 +9,7 @@ namespace KokoSim.Unity.Components
     /// 旧・電光掲示板（升目）の入口をそのまま残し、全画面がこの1経路で日付を埋める
     /// （画面ごとに週の書式を作らない。呼ばない画面は UXML の既定値が出たままになる）。
     /// 大会期間は実月日（「9月13日」）、大会のない時期は週（「4月1週」）。
+    /// トップバーの進行ボタンの文言（大会中は「1日進める」）もここで埋める（issue #1534 項目9）。
     /// </summary>
     public static class ScoreboardStrip
     {
@@ -48,11 +49,18 @@ namespace KokoSim.Unity.Components
                     record.text = won + "勝" + lost + "敗" + (drawn > 0 ? drawn + "分" : "");
             }
 
+            // 日付（issue #1534 項目9）: 大会中は大会の日付。負けてから結果を閉じるまで（大会モードは抜けている）も
+            // 大会の最終日のまま出し、明けの週は大会の日付より前の週へ戻さない＝「7月16日」→「7月1週」→「7月2週」の逆戻りを出さない。
             var date = root.Q<Label>("tb-date");
             if (date != null)
-                date.text = s.InTournament
-                    ? s.TournamentDateLabel
-                    : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
+                date.text = s.InTournament ? s.TournamentDateLabel
+                    : s.PendingTournamentWrapUp != null ? s.PendingWrapUpDateLabel
+                    : SeasonClock.CompactLabel(GameClock.YearIndex,
+                        SeasonClock.DisplayWeek(GameClock.YearIndex, GameClock.Week, s.LastTournamentEndDate));
+
+            // 進行ボタン（issue #1534 項目9）: 大会中はどのタブでも「1日進める」。文言はここだけが決める。
+            var advance = root.Q<Button>("advance");
+            if (advance != null) advance.text = s.InTournament ? "1日進める ▶" : "今週を進める ▶";
         }
     }
 }
