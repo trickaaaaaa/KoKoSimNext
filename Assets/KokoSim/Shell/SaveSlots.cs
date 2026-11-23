@@ -87,7 +87,7 @@ namespace KokoSim.Unity.Shell
         public static void PurgeLegacyAutoSave()
         {
             var path = PathFor(LegacyAutoSlotId);
-            if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(path)) { File.Delete(path); WebStorage.Flush(); }
         }
 
         /// <summary>どれか1枠でも読めるセーブがあるか（タイトル「つづきから」の活性判定）。</summary>
@@ -142,7 +142,7 @@ namespace KokoSim.Unity.Shell
         public static void Delete(string slotId)
         {
             var path = PathFor(slotId);
-            if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(path)) { File.Delete(path); WebStorage.Flush(); }
         }
     }
 }
