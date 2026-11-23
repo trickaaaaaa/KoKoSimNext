@@ -52,13 +52,16 @@ namespace KokoSim.Unity.Components
         /// <summary>この字数からは名前を2行に割る（「コントロール重視」を1行に収めると読めない級数になる）。</summary>
         private const int WrapFromLength = 4;
 
-        /// <summary>
-        /// カード名の級数。全部のカードでそろえる（issue #1533・オーナー決定 14px）。以前は1行の字数で級数を変えていた
-        /// （2字19px〜6字10px）ため、長い名前だけ目立って小さかった。
-        /// </summary>
-        private const float NameFontSize = 14f;
+        /// <summary>カード名の級数は<b>1行あたりの</b>文字数で決める（左の帯 76px に収まる比率。モックで詰めた値）。</summary>
+        private static readonly float[] CapRatioByLen = { 0.34f, 0.34f, 0.30f, 0.24f, 0.19f, 0.155f, 0.135f };
 
-        /// <summary>名前1字ぶんの幅（14px の Noto Sans JP の実測: 「コントロール」6字で 85px）。</summary>
+        /// <summary>
+        /// カード名の級数の下限（issue #1533・オーナー決定）。字数で級数を変える作り（2字19px・3字18px…）は残し、
+        /// 4字以上で 14px 未満になっていた名前（6字10px など）だけ 14px へ底上げする。短い名前は以前と同じ大きさ。
+        /// </summary>
+        private const float MinNameFontSize = 14f;
+
+        /// <summary>名前1字ぶんの幅（下限 14px の Noto Sans JP の実測: 「コントロール」6字で 85px）。4字以上の行はこの幅で帯を決める。</summary>
         private const float NameCharWidth = 85f / 6f;
 
         /// <summary>名前の箱の左右に1pxずつ残す（0.8倍描画では字幅がわずかに広がり、帯の端や隣の枠に触れる）。</summary>
@@ -69,7 +72,8 @@ namespace KokoSim.Unity.Components
 
         /// <summary>
         /// いまの手札の帯の幅（隣のカードに隠れない左の幅）。名前は帯のうち左の枠の内側（<see cref="NameBand"/>）の中央に置く。
-        /// 手札でいちばん長い1行（14px）がこの内側に入る幅まで、<see cref="BaseStep"/> から広げる（issue #1533）。
+        /// 手札でいちばん長い1行（下限 14px）がこの内側に入る幅まで、<see cref="BaseStep"/> から広げる（issue #1533）。
+        /// 3字までの行は級数が大きい（18〜23px）が字数が少ないので <see cref="BaseStep"/> の帯に入る（モックで詰めた比率）。
         /// 攻撃の手札（最長「セーフティ」「エンドラン」5字）は 80px、守備の手札（「コントロール」6字）は 94px。
         /// 1列に並べた手札（攻撃 7＋4枚・守備 2＋8枚）は盤面の幅（1600×900 で 1036px）に収まる（攻撃 956px・守備 1016px）。
         /// 守備の手札はこれ以上広げると盤面の左右の打順表に重なる（帯 96px で 1036px＝ちょうど縁まで）。
@@ -441,11 +445,15 @@ namespace KokoSim.Unity.Components
                     if (name != null)
                     {
                         name.style.width = NameBand;
-                        // 級数は全カードでそろえる（帯は手札の最長の行が入る幅まで広げてある）。2行でも段に入る
-                        // （段 55px ÷ (2行×行送り1.45) ≒ 19px ≧ 14px）。
+                        // 級数は幅（1行の字数・帯 76px 基準＝以前と同じ大きさ）と高さ（行数）の両方で決め、
+                        // 下限 14px へ底上げする（帯は手札の最長の行が 14px で入る幅まで広げてある）。
+                        // 2行でも段に入る（段 55px ÷ (2行×行送り1.45) ≒ 19px ≧ 14px）。
                         var rows = (name.text ?? "").Split('\n');
+                        var perLine = 1;
+                        foreach (var row in rows) perLine = Mathf.Max(perLine, row.Length);
+                        var byWidth = BaseStep * CapRatioByLen[Mathf.Clamp(perLine, 1, CapRatioByLen.Length - 1)];
                         var byHeight = capHeight / (rows.Length * LineHeightFactor);
-                        name.style.fontSize = Mathf.Round(Mathf.Min(NameFontSize, byHeight));
+                        name.style.fontSize = Mathf.Max(MinNameFontSize, Mathf.Round(Mathf.Min(byWidth, byHeight)));
                     }
                 }
             }
