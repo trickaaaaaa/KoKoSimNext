@@ -63,6 +63,13 @@ public sealed class SaveState
     public int ManagerGrownWinsBaseline { get; set; }
     public int ManagerGrownKoshienBaseline { get; set; }
     /// <summary>
+    /// 前回の年度更新時点の自校の甲子園・センバツの勝ち（大会報奨の単価を分ける・issue #1469）。
+    /// null＝このキーを持たない旧セーブ（読み込み時に今の通算で採り直す＝過去の勝ちをまとめて払わない）。
+    /// </summary>
+    public int? ManagerGrownKoshienWinsBaseline { get; set; }
+    /// <summary>今年度の教え子のプロ入りの名声（年度末の総括で上昇側に入れる・issue #1270 D1）。指名（10月）→総括（3月）の間に載る。</summary>
+    public double ManagerPendingDraftFame { get; set; }
+    /// <summary>
     /// 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと・<see cref="Career.FameUpsetModel.MatchDelta"/> の値）。
     /// 年度末の監督成長で畳み込んで消費する。v12 で追加（2026-08-15・番狂わせ加点の実ゲーム配線）。
     /// </summary>
@@ -285,6 +292,8 @@ public sealed class SaveState
     /// 旧セーブは勢いという概念が存在しえない＝既定0で補う。
     /// </summary>
     public int MomentumLevel { get; set; }
+    /// <summary>次の公式戦1試合だけ自校側のプレッシャー指数に足す点（マスコミ取材・issue #1467）。</summary>
+    public int PendingMatchPressure { get; set; }
 
     /// <summary>
     /// 自校のバッテリーの積み重ね（設計書23 §2.3・issue #933・v28）。投手ID×捕手IDの組ごとの一緒に守ったイニング数。

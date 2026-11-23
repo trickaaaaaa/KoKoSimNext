@@ -108,6 +108,9 @@ events:
 
     private static readonly string[] BranchedIds = { "skipping_practice", "grade_friction", "selfish_clash" };
 
+    /// <summary>選手間のもめ事への3つの対応（性格で好転の確率が振れ、結束を動かす）。</summary>
+    private static readonly EventStance[] CohesionStances = { EventStance.Scold, EventStance.Listen, EventStance.Captain };
+
     private static IReadOnlyList<GameEvent> RepositoryEvents()
         => EventTableParser.Parse(File.ReadAllText(FindDataFile("events.yaml")));
 
@@ -124,7 +127,7 @@ events:
             Assert.Equal(new[] { EventStance.Scold, EventStance.Listen, EventStance.Captain },
                 e.Choices.Select(c => c.Stance).ToArray());
             Assert.All(e.Choices, c => Assert.False(string.IsNullOrWhiteSpace(c.Label), $"{id}: 選択肢の言い回しが空"));
-            foreach (EventStance s in Enum.GetValues(typeof(EventStance)))
+            foreach (var s in CohesionStances)
             foreach (var improved in new[] { true, false })
                 Assert.True(e.Outcomes.Any(o => o.Stance == s && o.Improved == improved && o.Script.Lines.Count > 0),
                     $"{id}: {s}/{(improved ? "好転" : "悪化")} の会話が無い");
@@ -240,7 +243,7 @@ events:
     [Fact]
     public void Probability_Diligence_HelpsEveryStance_AndSelfishnessFavorsListening()
     {
-        foreach (EventStance s in Enum.GetValues(typeof(EventStance)))
+        foreach (var s in CohesionStances)
             Assert.True(P(s, Axes(dilig: 85)) > P(s, Axes(dilig: 15)), $"{s}: 勤勉さで好転しやすくならない");
         Assert.True(P(EventStance.Listen, Axes(selfless: 15)) > P(EventStance.Listen, Axes(selfless: 85)));
     }
@@ -248,7 +251,7 @@ events:
     [Fact]
     public void Probability_StaysWithinBounds()
     {
-        foreach (EventStance s in Enum.GetValues(typeof(EventStance)))
+        foreach (var s in CohesionStances)
         foreach (var v in new[] { 1, 99 })
         foreach (var cap in new double?[] { null, 0, 99 })
         {
@@ -306,7 +309,7 @@ events:
     {
         var e = RepositoryEvents().First(x => x.Id == "grade_friction");
         var rng = new Xoshiro256Random(1);
-        foreach (EventStance s in Enum.GetValues(typeof(EventStance)))
+        foreach (var s in CohesionStances)
         foreach (var improved in new[] { true, false })
         {
             var script = EventChoiceResolver.PickOutcome(e, s, improved, 3, 7, rng);
@@ -315,6 +318,105 @@ events:
         }
         var plain = RepositoryEvents().First(x => x.Id == "rain_week");
         Assert.Null(EventChoiceResolver.PickOutcome(plain, EventStance.Scold, true, 3, 7, rng));
+    }
+
+    // ===== 学業配慮・信頼度（issue #1270 E1） =====
+
+    [Fact]
+    public void Parse_OutcomeEffects_AndFixedImproveProb_StayOnTheirElement()
+    {
+        const string yaml = @"
+events:
+  - id: exam
+    kind: Random
+    text: ""テスト。""
+    effects:
+      fame: 1
+    choices:
+      - stance: ease
+        label: ""軽くする""
+        improve_prob: 1.0
+      - stance: as_usual
+        label: ""いつも通り""
+        improve_prob: 0.6
+    outcomes:
+      - stance: ease
+        result: improved
+        effects:
+          trust: 2
+          training_mult: 0.85
+          training_weeks: 2
+        lines:
+          - who: player
+            say: ""勉強します。""
+      - stance: as_usual
+        result: worsened
+        effects:
+          trust: -1
+        lines:
+          - who: player
+            say: ""眠い。""
+";
+        var e = EventTableParser.Parse(yaml).Single();
+        Assert.Equal(1.0, e.Effect.Fame);
+        Assert.Equal(0.0, e.Effect.Trust);   // 結果の効果はイベントの効果へ漏れない
+        Assert.False(e.Effect.HasTrainingBoost);
+        Assert.Equal(1.0, e.Choices[0].ImproveProb);
+        Assert.Equal(0.6, e.Choices[1].ImproveProb);
+        var ease = e.Outcomes[0].EffectOrNone;
+        Assert.Equal(2, ease.Trust);
+        Assert.True(ease.HasTrainingBoost);
+        Assert.Equal(0.85, ease.TrainingMult);
+        Assert.Equal(-1, e.Outcomes[1].EffectOrNone.Trust);
+        Assert.False(e.Outcomes[1].EffectOrNone.HasTrainingBoost);
+    }
+
+    [Fact]
+    public void FixedImproveProb_IgnoresPersonality()
+    {
+        var fixedChoice = new EventChoice(EventStance.AsUsual, "いつも通り", 0.6);
+        Assert.Equal(0.6, EventChoiceResolver.ImproveProbability(fixedChoice, Axes(dilig: 1), null, C), 9);
+        Assert.Equal(0.6, EventChoiceResolver.ImproveProbability(fixedChoice, Axes(dilig: 99), 99, C), 9);
+        var scold = new EventChoice(EventStance.Scold, "叱る");
+        Assert.Equal(EventChoiceResolver.ImproveProbability(EventStance.Scold, Axes(dilig: 70), null, C),
+            EventChoiceResolver.ImproveProbability(scold, Axes(dilig: 70), null, C), 9);
+    }
+
+    [Fact]
+    public void OnlyInterpersonalStances_MoveCohesion()
+    {
+        Assert.All(CohesionStances, s => Assert.True(EventStances.MovesCohesion(s)));
+        Assert.False(EventStances.MovesCohesion(EventStance.EasePractice));
+        Assert.False(EventStances.MovesCohesion(EventStance.AsUsual));
+    }
+
+    /// <summary>資料の表（out/economy-proposal-1299.md §4.2・2026-11-23 オーナー決定 E1）どおりの信頼度。</summary>
+    [Fact]
+    public void RepositoryTable_TrustEffects_MatchTheDecision()
+    {
+        var byId = RepositoryEvents().ToDictionary(e => e.Id);
+        foreach (var id in BranchedIds)
+            foreach (var o in byId[id].Outcomes)
+                Assert.Equal(o.Improved ? 2 : -2, o.EffectOrNone.Trust);
+
+        var exam = byId["exam_week_slump"];
+        Assert.Equal(EventKind.Random, exam.Kind);   // kind を変えない＝週次抽選の乱数列は変わらない
+        Assert.True(exam.Effect.IsEmpty);            // 効果は選んだ結果の側へ移した
+        Assert.Equal(2, exam.Outcomes.Single(o => o.Stance == EventStance.EasePractice).EffectOrNone.Trust);
+        Assert.Equal(-1, exam.Outcomes.Single(o => o.Stance == EventStance.AsUsual).EffectOrNone.Trust);
+    }
+
+    /// <summary>マスコミ取材（issue #1467 P2）: 名声 +1・次の公式戦の自校側プレッシャー +1。kind は Random のまま。</summary>
+    [Fact]
+    public void RepositoryTable_MediaCoverage_RaisesFameAndNextMatchPressure()
+    {
+        var media = RepositoryEvents().Single(e => e.Id == "media_coverage");
+        Assert.Equal(EventKind.Random, media.Kind);
+        Assert.False(media.HasChoices);
+        Assert.Equal(1.0, media.Effect.Fame);
+        Assert.Equal(1, media.Effect.PressureNextMatch);
+        Assert.Equal(0.0, media.Effect.Trust);
+        Assert.False(media.Effect.IsEmpty);
     }
 
     // ===== 当事者の選び方 =====

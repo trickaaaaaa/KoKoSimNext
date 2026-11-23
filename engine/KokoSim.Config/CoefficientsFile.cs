@@ -2270,6 +2270,8 @@ public static class CoefficientsLoader
         public int MaxIndex { get; set; } = D.MaxIndex;
         public double MultiplierSlope { get; set; } = D.MultiplierSlope;
         public double FatigueNegativeAmplify { get; set; } = D.FatigueNegativeAmplify;
+        public double MoraleNeutral { get; set; } = D.MoraleNeutral;
+        public double MoraleMitigation { get; set; } = D.MoraleMitigation;
 
         public PressureCoefficients ToModel() => new()
         {
@@ -2281,6 +2283,8 @@ public static class CoefficientsLoader
             MaxIndex = MaxIndex,
             MultiplierSlope = MultiplierSlope,
             FatigueNegativeAmplify = FatigueNegativeAmplify,
+            MoraleNeutral = MoraleNeutral,
+            MoraleMitigation = MoraleMitigation,
         };
     }
 
@@ -3637,9 +3641,19 @@ public static class CoefficientsLoader
         public double BoosterDonationPerFame { get; set; } = D.BoosterDonationPerFame;
         public double KoshienYearBonus { get; set; } = D.KoshienYearBonus;
         public double NationalTitleBonus { get; set; } = D.NationalTitleBonus;
+        public double PrizePerOfficialWin { get; set; } = D.PrizePerOfficialWin;
+        public double PrizePerNationalStageWin { get; set; } = D.PrizePerNationalStageWin;
+        public double ProDonationFirstRound { get; set; } = D.ProDonationFirstRound;
+        public double ProDonationUpperRound { get; set; } = D.ProDonationUpperRound;
+        public double ProDonationMiddleRound { get; set; } = D.ProDonationMiddleRound;
+        public double ProDonationLowerRound { get; set; } = D.ProDonationLowerRound;
         public double TransferFundsCarryOverRatio { get; set; } = D.TransferFundsCarryOverRatio;
         public double KoshienBerthDonationBase { get; set; } = D.KoshienBerthDonationBase;
         public double KoshienBerthDonationPerFame { get; set; } = D.KoshienBerthDonationPerFame;
+        public double FamePerDraftPick { get; set; } = D.FamePerDraftPick;
+        public double FameFirstRoundPick { get; set; } = D.FameFirstRoundPick;
+        public double FameDraftSeasonCap { get; set; } = D.FameDraftSeasonCap;
+        public double TrustPlayThroughWorsened { get; set; } = D.TrustPlayThroughWorsened;
         public double NewSchoolStrengthMean { get; set; } = D.NewSchoolStrengthMean;
         public double NewSchoolStrengthSd { get; set; } = D.NewSchoolStrengthSd;
         public double FreeChoiceSchoolStrength { get; set; } = D.FreeChoiceSchoolStrength;
@@ -3687,9 +3701,19 @@ public static class CoefficientsLoader
             BoosterDonationPerFame = BoosterDonationPerFame,
             KoshienYearBonus = KoshienYearBonus,
             NationalTitleBonus = NationalTitleBonus,
+            PrizePerOfficialWin = PrizePerOfficialWin,
+            PrizePerNationalStageWin = PrizePerNationalStageWin,
+            ProDonationFirstRound = ProDonationFirstRound,
+            ProDonationUpperRound = ProDonationUpperRound,
+            ProDonationMiddleRound = ProDonationMiddleRound,
+            ProDonationLowerRound = ProDonationLowerRound,
             TransferFundsCarryOverRatio = TransferFundsCarryOverRatio,
             KoshienBerthDonationBase = KoshienBerthDonationBase,
             KoshienBerthDonationPerFame = KoshienBerthDonationPerFame,
+            FamePerDraftPick = FamePerDraftPick,
+            FameFirstRoundPick = FameFirstRoundPick,
+            FameDraftSeasonCap = FameDraftSeasonCap,
+            TrustPlayThroughWorsened = TrustPlayThroughWorsened,
             NewSchoolStrengthMean = NewSchoolStrengthMean,
             NewSchoolStrengthSd = NewSchoolStrengthSd,
             FreeChoiceSchoolStrength = FreeChoiceSchoolStrength,

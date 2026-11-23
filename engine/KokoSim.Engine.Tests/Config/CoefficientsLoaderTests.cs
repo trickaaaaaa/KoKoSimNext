@@ -210,7 +210,7 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(0.05, effects.InsightAccuracyAdd, 6);
         Assert.Equal(20.0, bundle.Career.SummerCampCost, 6);
         Assert.Equal(25.0, bundle.Career.WinterCampCost, 6);
-        Assert.Equal(30.0, bundle.Career.ScoutCost, 6);
+        Assert.Equal(100.0, bundle.Career.ScoutCost, 6);
 
         // 練習試合（設計書03 §週ターン③）の係数も YAML から束縛される。
         Assert.Equal(1.0, bundle.PracticeMatch.Cost, 6);

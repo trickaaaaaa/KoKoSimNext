@@ -579,7 +579,8 @@ events:
         var byId = RepositoryEvents().ToDictionary(e => e.Id);
         Assert.False(byId["outside_coach_visit"].Effect.TrainingTargetIsPlayer, "外部コーチは部全体のはず");
         Assert.True(byId["self_practice_awakened"].Effect.TrainingTargetIsPlayer, "自主練は本人だけのはず");
-        Assert.True(byId["exam_week_slump"].Effect.TrainingMult < 1.0, "テスト週間は効率が下がるはず");
+        // テスト週間は選択肢の結果に効果がある（issue #1270）。どちらを選んでも効率は下がる。
+        Assert.All(byId["exam_week_slump"].Outcomes, o => Assert.True(o.EffectOrNone.TrainingMult < 1.0, "テスト週間は効率が下がるはず"));
     }
 
     // ===== 地域イベント（issue #616） =====

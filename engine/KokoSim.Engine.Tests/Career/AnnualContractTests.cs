@@ -56,9 +56,9 @@ public sealed class AnnualContractTests
     /// 施設（FacilityCatalog.Aggregate が 1..lv を合算する）との決定的な違い。
     /// </summary>
     [Theory]
-    [InlineData(1, 30, 0)]
-    [InlineData(2, 80, 3)]
-    [InlineData(3, 140, 6)]
+    [InlineData(1, 100, 0)]
+    [InlineData(2, 250, 3)]
+    [InlineData(3, 420, 6)]
     public void Scouting_ReplacesLowerTier_DoesNotAccumulate(int level, double cost, double talentAdd)
     {
         var set = new ContractSet();
@@ -75,7 +75,7 @@ public sealed class AnnualContractTests
         var set = new ContractSet();
         set.SetLevel("scouting", 3);
         set.SetLevel("coach_batting", 1);
-        Assert.Equal(190, Catalog.Aggregate(set).AnnualCost, 9);   // 140 + 50
+        Assert.Equal(580, Catalog.Aggregate(set).AnnualCost, 9);   // 420 + 160
 
         // 解約＝段を0へ戻す。年額も効果もその場で消える（買い切りの施設にはできない挙動）。
         set.SetLevel("scouting", 0);
@@ -91,7 +91,7 @@ public sealed class AnnualContractTests
         set.SetLevel("no_such_contract", 2);   // カタログに無いIDは無視
         var e = Catalog.Aggregate(set);
 
-        Assert.Equal(140, e.AnnualCost, 9);
+        Assert.Equal(420, e.AnnualCost, 9);
         Assert.Equal(6, e.ScoutTalentAdd, 9);
     }
 
@@ -104,7 +104,7 @@ public sealed class AnnualContractTests
         set.SetLevel("expedition", 1);
         var e = Catalog.Aggregate(set);
         Assert.True(e.OutOfPrefectureOpponents);
-        Assert.Equal(20, e.AnnualCost, 9);
+        Assert.Equal(60, e.AnnualCost, 9);
     }
 
     [Fact]
@@ -126,9 +126,9 @@ public sealed class AnnualContractTests
         foreach (var d in Catalog.Contracts) set.SetLevel(d.Id, d.MaxLevel);
         var e = Catalog.Aggregate(set);
 
-        // 140（スカウト網Lv3）+ 20（遠征）+ 50×3（専門コーチ3分野）= 310万/年。
-        // 自由に使える上限（信頼度100で115万）の約3倍＝全部は絶対に抱えられない。
-        Assert.Equal(310, e.AnnualCost, 9);
+        // 420（スカウト網Lv3）+ 60（遠征）+ 160×3（専門コーチ3分野）= 960万/年（issue #1299 案B）。
+        // 強豪の定常の「自由に使える額」（約940万）でも届かない＝甲子園に出た年だけ全部取れる。
+        Assert.Equal(960, e.AnnualCost, 9);
         Assert.Equal(6, e.ScoutTalentAdd, 9);
         Assert.True(e.OutOfPrefectureOpponents);
     }
@@ -202,6 +202,7 @@ public sealed class AnnualContractTests
         var expected = before
                        + c.AnnualBudgetBase + c.BudgetPerTrust * m.Trust
                        + c.SchoolInvestment + c.BoosterDonationPerFame * m.Fame   // 寄付も部費へ（issue #1082）
+                       + c.PrizePerOfficialWin * 3                                 // 大会報奨（issue #1469）
                        - (c.SummerCampCost + c.WinterCampCost + c.ScoutCost);
         Assert.Equal(expected, m.Funds, 6);
     }
@@ -231,12 +232,12 @@ public sealed class AnnualContractTests
     public void YearEnd_ExtraContracts_CostMore()
     {
         var set = new ContractSet();
-        set.SetLevel("scouting", 3);        // 140万
-        set.SetLevel("coach_batting", 1);   // 50万
+        set.SetLevel("scouting", 3);        // 420万
+        set.SetLevel("coach_batting", 1);   // 160万
         var rich = FundsAfterOneYear(Catalog.Aggregate(set));
 
-        // 従来経路（スカウト費＝スカウト網Lv1と同額）より 160万ぶん多く出ていく。
-        Assert.Equal(FundsAfterOneYear(null) - 160, rich, 6);
+        // 従来経路（スカウト費＝スカウト網Lv1と同額の100万）より 480万ぶん多く出ていく。
+        Assert.Equal(FundsAfterOneYear(null) - 480, rich, 6);
     }
 
     [Fact]
@@ -268,7 +269,7 @@ public sealed class AnnualContractTests
         var kept = new ContractSet();
         kept.SetLevel("coach_batting", 1);
         Assert.Equal(FundsAfterOneYear(Catalog.Aggregate(kept)), FundsAfterOneYear(Catalog.Aggregate(set)), 9);
-        Assert.Equal(FundsAfterOneYear(null) - 50 + new CareerCoefficients().ScoutCost, FundsAfterOneYear(Catalog.Aggregate(set)), 6);
+        Assert.Equal(FundsAfterOneYear(null) - 160 + new CareerCoefficients().ScoutCost, FundsAfterOneYear(Catalog.Aggregate(set)), 6);
 
         // 総括の後にはじめて段が下がり、効果も年額も消える（次の年から）。
         set.ApplyScheduled();
@@ -323,5 +324,61 @@ public sealed class AnnualContractTests
         Assert.Equal(3, set.LevelOf("scouting"));
         set.ApplyScheduled();
         Assert.Equal(1, set.LevelOf("scouting"));
+    }
+
+    // ── 収支の釣り合い（issue #1299 案B・2026-11-23 オーナー決定） ─────────────
+
+    /// <summary>
+    /// 寄付イベント（OB会・後援会・地元企業・道具破損）の部費の期待値[万円/年]。data/events.yaml の発火を
+    /// 50週×400年回した実測（out/economy-proposal-1299.md §1.3）。年度末の総括の外で入る収入。
+    /// </summary>
+    private const double EventFundsPerYear = 140;
+
+    /// <summary>年契約に回せる額[万円/年]＝総括の収入＋寄付イベントの期待値－合宿（甲子園の一時金は入れない）。</summary>
+    private static double FreeFunds(double trust, double fame, double prize)
+    {
+        var c = new CareerCoefficients();
+        return CareerEngine.AnnualFundsNet(trust, fame, contractCost: 0, c) + prize + EventFundsPerYear;
+    }
+
+    private static double CostOf(params (string Id, int Level)[] levels)
+    {
+        var set = new ContractSet();
+        foreach (var (id, lv) in levels) set.SetLevel(id, lv);
+        return Catalog.Aggregate(set).AnnualCost;
+    }
+
+    /// <summary>新任（信頼30・名声0）でもスカウト網Lv1かコーチ1人は払えるが、その2つは同時に持てない。</summary>
+    [Fact]
+    public void Balance_Newcomer_CanAffordOneButNotBoth()
+    {
+        var free = FreeFunds(trust: 30, fame: 0, prize: 0);
+        Assert.True(CostOf(("scouting", 1)) <= free, $"Lv1 {CostOf(("scouting", 1))} > {free}");
+        Assert.True(CostOf(("coach_batting", 1)) <= free);
+        Assert.True(CostOf(("scouting", 1), ("coach_batting", 1)) > free);
+    }
+
+    /// <summary>強豪の定常（信頼100・名声47・年9勝の大会報奨）でも全部の最上段は維持できない（甲子園の一時金の年だけ届く）。</summary>
+    [Fact]
+    public void Balance_PowerhouseSteadyState_CannotKeepEverything()
+    {
+        var c = new CareerCoefficients();
+        var free = FreeFunds(trust: 100, fame: 47, prize: 90);   // 大会報奨（#1469 T1）: 9勝×10万
+        var all = new ContractSet();
+        foreach (var d in Catalog.Contracts) all.SetLevel(d.Id, d.MaxLevel);
+        Assert.True(Catalog.Aggregate(all).AnnualCost > free, $"全部 {Catalog.Aggregate(all).AnnualCost} <= {free}");
+        Assert.True(Catalog.Aggregate(all).AnnualCost <= free + c.KoshienYearBonus);
+        // Lv3＋コーチ2人なら取れる＝段階が上がるほど取れる組み合わせが増える。
+        Assert.True(CostOf(("scouting", 3), ("coach_batting", 1), ("coach_pitching", 1)) <= free);
+    }
+
+    /// <summary>中堅の定常（信頼75・名声31・年3勝）は Lv3＋コーチ1人 までで、Lv3＋コーチ2人は取れない。</summary>
+    [Fact]
+    public void Balance_MidTierSteadyState_ChoosesBetweenCombinations()
+    {
+        var free = FreeFunds(trust: 75, fame: 31, prize: 30);   // 大会報奨（#1469 T1）: 3勝×10万
+        Assert.True(CostOf(("scouting", 3), ("coach_batting", 1)) <= free);
+        Assert.True(CostOf(("scouting", 2), ("coach_batting", 1), ("coach_pitching", 1)) <= free);
+        Assert.True(CostOf(("scouting", 3), ("coach_batting", 1), ("coach_pitching", 1)) > free);
     }
 }

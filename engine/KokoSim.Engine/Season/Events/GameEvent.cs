@@ -19,11 +19,17 @@ public enum EventKind
 /// <param name="TrainingMult">練習効率の倍率（1.0＝変化なし）。issue #615。</param>
 /// <param name="TrainingWeeks">練習効率の補正が効く週数（0＝補正なし）。</param>
 /// <param name="TrainingTargetIsPlayer">true＝主役の1人だけ／false＝部全体。</param>
+/// <param name="Trust">監督の信頼度の増減（0〜100で止める）。issue #1270 E1。</param>
+/// <param name="Fame">監督の名声の増減（0〜100で止める・その場で動く）。issue #1270 E1／#1467。</param>
+/// <param name="PressureNextMatch">次の公式戦1試合だけ、自校側のプレッシャー指数に足す点（issue #1467 P2）。</param>
 public sealed record EventEffect(
     double Funds = 0.0,
     double TrainingMult = 1.0,
     int TrainingWeeks = 0,
-    bool TrainingTargetIsPlayer = false)
+    bool TrainingTargetIsPlayer = false,
+    double Trust = 0.0,
+    double Fame = 0.0,
+    int PressureNextMatch = 0)
 {
     /// <summary>何も起こさない（既定）。</summary>
     public static readonly EventEffect None = new();
@@ -32,7 +38,8 @@ public sealed record EventEffect(
     public bool HasTrainingBoost => TrainingWeeks > 0 && TrainingMult != 1.0;
 
     /// <summary>1つでも動く軸があるか。</summary>
-    public bool IsEmpty => Funds == 0.0 && !HasTrainingBoost;
+    public bool IsEmpty => Funds == 0.0 && !HasTrainingBoost && Trust == 0.0 && Fame == 0.0
+                           && PressureNextMatch == 0;
 }
 
 /// <summary>

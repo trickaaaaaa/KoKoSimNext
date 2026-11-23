@@ -130,7 +130,10 @@ namespace KokoSim.Unity.Shell
         public int SubjectId;
         public double Roll;
         public Dictionary<string, string> Values;
-        public Dictionary<(EventStance, bool), EventScript> Outcomes;
+        public Dictionary<(EventStance, bool), EventOutcome> Outcomes;
+        /// <summary>対応ごとの選択肢の定義（好転の確率の固定値 improve_prob を読む・issue #1270）。</summary>
+        public Dictionary<EventStance, EventChoice> Choices;
+        public string SubjectName;
     }
 
     /// <summary>
@@ -355,6 +358,36 @@ namespace KokoSim.Unity.Shell
                 parts.Add(whose + " " + Signed((effect.TrainingMult - 1.0) * 100.0) + "%（" + effect.TrainingWeeks + " 週）");
                 if (effect.TrainingMult < 1.0) bad = true;
             }
+            if (effect.Trust != 0.0)
+            {
+                // 信頼度（issue #1270 E1）。0〜100で止め、文は実際に動いた量で書く。
+                var before = m.Trust;
+                m.Trust = MathUtil.Clamp(m.Trust + effect.Trust, 0.0, 100.0);
+                var d = m.Trust - before;
+                if (d != 0.0)
+                {
+                    parts.Add("信頼度 " + Signed(d));
+                    if (d < 0) bad = true;
+                }
+            }
+            if (effect.Fame != 0.0)
+            {
+                // 名声（issue #1270 E1・#1467）。その場で動く（年度末の総括の保持率は通常どおり掛かる）。
+                var before = m.Fame;
+                m.Fame = MathUtil.Clamp(m.Fame + effect.Fame, 0.0, 100.0);
+                var d = m.Fame - before;
+                if (d != 0.0)
+                {
+                    parts.Add("名声 " + Signed(d));
+                    if (d < 0) bad = true;
+                }
+            }
+            if (effect.PressureNextMatch != 0)
+            {
+                // 次の公式戦1試合だけ自校側のプレッシャー指数に足す（issue #1467 P2）。重ねても積み増さない（大きい方）。
+                GameSession.Current.AddPendingMatchPressure(effect.PressureNextMatch);
+                parts.Add("次の公式戦のプレッシャー " + Signed(effect.PressureNextMatch));
+            }
             if (parts.Count == 0) return null;
 
             var sentence = string.Join("、", parts.ToArray()) + (bad ? "" : "！");
@@ -396,17 +429,21 @@ namespace KokoSim.Unity.Shell
 
             var week = Scheduler.AbsoluteWeek;
             var salt = subject.Id;
-            var outcomes = new Dictionary<(EventStance, bool), EventScript>();
+            var outcomes = new Dictionary<(EventStance, bool), EventOutcome>();
             foreach (EventStance stance in System.Enum.GetValues(typeof(EventStance)))
                 foreach (var improved in new[] { true, false })
                 {
-                    var script = EventChoiceResolver.PickOutcome(f.Event, stance, improved, week, salt, rng);
-                    if (script != null) outcomes[(stance, improved)] = script;
+                    var o = EventChoiceResolver.PickOutcomeEntry(f.Event, stance, improved, week, salt, rng);
+                    if (o != null) outcomes[(stance, improved)] = o;
                 }
 
             var choices = new List<PresentedChoice>(f.Event.Choices.Count);
+            var choiceDefs = new Dictionary<EventStance, EventChoice>();
             foreach (var c in f.Event.Choices)
+            {
                 choices.Add(new PresentedChoice { Stance = c.Stance, Label = EventTextFormat.Apply(c.Label, values) });
+                choiceDefs[c.Stance] = c;
+            }
 
             return new PresentedEvent
             {
@@ -421,6 +458,8 @@ namespace KokoSim.Unity.Shell
                     Roll = EventChoiceResolver.Roll(f.Event, week, salt, rng),
                     Values = values,
                     Outcomes = outcomes,
+                    Choices = choiceDefs,
+                    SubjectName = subject.Name,
                 },
             };
         }
@@ -438,18 +477,42 @@ namespace KokoSim.Unity.Shell
             var subject = FindActive(pending.SubjectId);
             var axes = subject != null ? PersonalityAxes.Of(subject) : PersonalityAxes.Neutral;
             var captainPower = EventChoiceResolver.CaptainPower(Captain());
-            var p = EventChoiceResolver.ImproveProbability(stance, axes, captainPower, GameSession.CohesionCoefficientsInUse);
+            EventChoice def;
+            var p = pending.Choices != null && pending.Choices.TryGetValue(stance, out def)
+                ? EventChoiceResolver.ImproveProbability(def, axes, captainPower, GameSession.CohesionCoefficientsInUse)
+                : EventChoiceResolver.ImproveProbability(stance, axes, captainPower, GameSession.CohesionCoefficientsInUse);
             var improved = EventChoiceResolver.Improved(pending.Roll, p);
 
-            GameSession.Current.ApplyCohesionEvent(improved);
+            // 結束が動くのは選手間のもめ事への対応だけ（学業配慮は信頼度だけ・issue #1270）。
+            var parts = new List<string>();
+            var bad = false;
+            if (EventStances.MovesCohesion(stance))
+            {
+                GameSession.Current.ApplyCohesionEvent(improved);
+                parts.Add(improved ? "チームの結束が強まった" : "チームの結束が揺らいだ");
+                bad = !improved;
+            }
 
-            var effect = improved
-                ? PresentedEffect.Good("チームの結束が強まった！")
-                : PresentedEffect.Bad("チームの結束が揺らいだ");
+            EventOutcome outcome;
+            pending.Outcomes.TryGetValue((stance, improved), out outcome);
+            // 結果ごとの効果（信頼度・練習効率など）。文は実際に動いた量で書く。
+            var applied = outcome != null
+                ? ApplyEffect(outcome.EffectOrNone, e.Id, pending.SubjectId, pending.SubjectName)
+                : null;
+            if (applied != null && applied.HasSentence)
+            {
+                parts.Add(applied.Sentence.TrimEnd('！'));
+                if (applied.Tone == EffectTone.Bad) bad = true;
+            }
+            PresentedEffect effect = null;
+            if (parts.Count > 0)
+            {
+                var sentence = string.Join("、", parts.ToArray()) + (bad ? "" : "！");
+                effect = bad ? PresentedEffect.Bad(sentence) : PresentedEffect.Good(sentence);
+            }
             var lines = new List<PresentedLine>(e.Lines);
-            EventScript script;
-            if (pending.Outcomes.TryGetValue((stance, improved), out script))
-                lines.AddRange(ResolveLines(script, pending.Values));
+            if (outcome != null)
+                lines.AddRange(ResolveLines(outcome.Script, pending.Values));
             e.Lines = WithResult(lines, effect);
             e.Effect = effect;
             e.Choices = null;

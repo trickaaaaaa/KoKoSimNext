@@ -51,6 +51,8 @@ public static class SaveCodec
             .Add("contracts", CareerSaves.ContractsToJson(s.Contracts))
             .Add("managerLastGrownYear", s.ManagerLastGrownYear)
             .Add("managerGrownWinsBaseline", s.ManagerGrownWinsBaseline)
+            .Add("managerGrownKoshienWinsBaseline", NullableIntToJson(s.ManagerGrownKoshienWinsBaseline))
+            .Add("managerPendingDraftFame", s.ManagerPendingDraftFame)
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
             .Add("managerPendingUpsetDeltas", DoublesToJson(s.ManagerPendingUpsetDeltas))
             .Add("practiceLastPlayedWeek", s.PracticeLastPlayedWeek.HasValue ? JsonValue.Of(s.PracticeLastPlayedWeek.Value) : JsonNull.Instance)
@@ -104,6 +106,7 @@ public static class SaveCodec
             .Add("lastJinguChampionId", NullableIntToJson(s.LastJinguChampionId))
             .Add("lastLineup", LineupSaves.ToJson(s.LastLineup))
             .Add("momentumLevel", s.MomentumLevel)
+            .Add("pendingMatchPressure", s.PendingMatchPressure)
             .Add("batteryInnings", BatteryInningsToJson(s.BatteryInnings))
             .Add("cohesionDelta", s.CohesionDelta)
             .Add("managerPostings", ManagerPostingSaves.ClosedToJson(s.ManagerPostings))
@@ -531,6 +534,9 @@ public static class SaveCodec
                 : ContractSet.LegacyScoutingLevel1(),
             ManagerLastGrownYear = root.Int("managerLastGrownYear"),
             ManagerGrownWinsBaseline = root.Int("managerGrownWinsBaseline"),
+            ManagerGrownKoshienWinsBaseline = root.Has("managerGrownKoshienWinsBaseline") && !root.IsNull("managerGrownKoshienWinsBaseline")
+                ? root.Int("managerGrownKoshienWinsBaseline") : (int?)null,
+            ManagerPendingDraftFame = root.Has("managerPendingDraftFame") ? root.Double("managerPendingDraftFame") : 0.0,
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),
             // 番狂わせデルタは v12 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             ManagerPendingUpsetDeltas = DoublesFromJson(root.Arr("managerPendingUpsetDeltas")),
@@ -596,6 +602,7 @@ public static class SaveCodec
             LastLineup = LineupSaves.FromJson(root["lastLineup"]),
             // チームの勢いは v24 で追加。Migrate が旧セーブへ0を補うので素直に読む。
             MomentumLevel = root.Int("momentumLevel"),
+            PendingMatchPressure = root.Has("pendingMatchPressure") ? root.Int("pendingMatchPressure") : 0,
             // バッテリーの積み重ねは v28 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             BatteryInnings = BatteryInningsFromJson(root.Arr("batteryInnings")),
             // 結束の上下は v29 で追加。Migrate が旧セーブへ0を補うので素直に読む。

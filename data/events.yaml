@@ -249,11 +249,15 @@ events:
           - who: manager
             say: "じゃあ今日はビデオでも見るか。"
 
+  # 取材（設計書03 §5.2・issue #1467 P2・#1270 E1）: 名声 +1、次の公式戦1試合だけ自校側のプレッシャー指数 +1。
   - id: media_coverage
     kind: Random
     weight: 1.5
     cooldown_weeks: 8
     text: "マスコミの取材が入った。部員の笑顔が、ぎこちない。"
+    effects:
+      fame: 1
+      pressure_next_match: 1
     variants:
       - lines:
           - who: narration
@@ -431,27 +435,56 @@ events:
           - who: player
             say: "はい！"
 
+  # 学業配慮（選択肢つき・issue #1270 E1・設計書03 §5.4）。kind は Random のまま（抽選の乱数列を変えない）。
+  # 練習を軽くする＝効率 ×0.85・2週・信頼 +2（従来の効果のまま）／いつも通り＝効率 ×0.95・2週・信頼 −1。
   - id: exam_week_slump
     kind: Random
     weight: 1.0
     cooldown_weeks: 12
     text: "テスト週間で練習時間が削られる。"
-    effects:
-      training_mult: 0.85
-      training_weeks: 2
     variants:
       - lines:
           - who: team_manager
-            say: "監督、今週から試験前です。全体練習は短縮になります。"
-          - who: manager
-            say: "分かった。赤点だけは出すなと伝えてくれ。"
-          - who: team_manager
-            say: "もう三回言いました。"
+            say: "監督、今週から試験前です。練習、どうしましょう。"
+          - who: captain
+            say: "赤点が出たら試合に出られないぞって、もう三回言いました。"
       - lines:
           - who: player
             say: "監督、正直……バットより教科書のほうが重いです。"
           - who: captain
             say: "俺のノート貸してやるから、赤点だけは取るなよ。"
+    choices:
+      - stance: ease
+        label: "練習を軽くして、勉強の時間をつくる"
+        improve_prob: 1.0
+      - stance: as_usual
+        label: "いつも通り練習する"
+        improve_prob: 1.0
+    outcomes:
+      - stance: ease
+        result: improved
+        effects:
+          training_mult: 0.85
+          training_weeks: 2
+          trust: 2
+        lines:
+          - who: team_manager
+            say: "全体練習は一時間で切り上げます。部室で勉強会をやるそうですよ。"
+          - who: player
+            name: "{player}"
+            say: "数学、主将が教えてくれるらしいです。……スパルタらしいです。"
+      - stance: as_usual
+        result: improved
+        effects:
+          training_mult: 0.95
+          training_weeks: 2
+          trust: -1
+        lines:
+          - who: team_manager
+            say: "練習はいつも通りです。……担任の先生から、ちょっと渋い顔をされました。"
+          - who: player
+            name: "{player}"
+            say: "単語帳、ポケットに入れてノック受けてます。"
 
   # 地域イベント（issue #616）。`requires_region:` の地方でだけ発火する。
   # 地方名は engine の JapanRegion（HokkaidoTohoku / Kanto / Chubu / Kinki / Chugoku / Shikoku / Kyushu）。
@@ -1358,6 +1391,31 @@ events:
           - who: captain
             say: "そうだぞ。呼ばれるところまで来たんだ。"
 
+  # プロ入りOBの挨拶訪問（設計書03 §5.1・issue #1469 O2）。指名された年に一時金が部費へ入る
+  # （1位100／2〜3位70／4〜7位50／育成30万。額は coefficients.yaml career.pro_donation_*）。
+  # 結果行（部費 ＋N 万）は提示層が足す。指名1人につき1回、draft_nominated の後に出る。
+  - id: draft_ob_greeting
+    kind: System
+    text: "プロ入りの挨拶とともに、OB会から祝い金が届いた。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、{player} くんの指名のお祝いだって、OB会の方が見えています。"
+          - who: narration
+            say: "差し出された封筒には「後輩たちの道具に」と書き添えてあった。"
+          - who: player
+            say: "……俺、まだ何もしてないんですけど。"
+      - lines:
+          - who: narration
+            say: "{player} が契約の挨拶に部室へ顔を出した。後ろにOB会長が、のし袋を持って立っていた。"
+          - who: team_manager
+            say: "「プロを出した部には、OBも張り切るんですよ」だそうです。"
+      - lines:
+          - who: captain
+            say: "監督、{player} 先輩のプロ入りで、OBの方々から寄付が集まったそうです。"
+          - who: team_manager
+            say: "電話が鳴りっぱなしでしたよ。今日だけで三回、同じ話を聞きました。"
+
   # 夏の敗退直後の3年引退（issue #954）。終わり方の3通りで会話を分ける（優勝の年に敗戦の台詞を出さない）。
   # 呼び出し元は大会の後始末（HomeState.DismissResult）。この会話を読んだあとに主将指名 → 背番号決定へ進む。
   - id: summer_retirement_prefecture
@@ -1917,6 +1975,8 @@ events:
     outcomes:
       - stance: scold
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -1927,6 +1987,8 @@ events:
             say: "え、こわ。急にどうしたんですか。"
       - stance: scold
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -1939,6 +2001,8 @@ events:
             say: "練習より先に、部室の空気が重くなりましたね。"
       - stance: listen
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -1949,6 +2013,8 @@ events:
             say: "次の週から、{player} は最後まで練習に残るようになった。店長は意外と話の分かる人だった。"
       - stance: listen
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -1959,6 +2025,8 @@ events:
             say: "今日も『なんとなく』で帰りました。ブレないですね、あの子。"
       - stance: captain
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: captain
             say: "おい {player}、明日から朝練は俺と行くぞ。家まで迎えに行くから。"
@@ -1969,6 +2037,8 @@ events:
             say: "主将は本当に毎朝迎えに来た。{player} はそれから一度もサボっていない。"
       - stance: captain
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: captain
             say: "{player}、頼むから来てくれよ。な？ な？"
@@ -2023,6 +2093,8 @@ events:
     outcomes:
       - stance: scold
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -2034,6 +2106,8 @@ events:
             say: "帰りにコンビニで、二人が同じアイス買ってるの見ました。仲良しか。"
       - stance: scold
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -2047,6 +2121,8 @@ events:
             say: "キャッチボールの相手、今日もお互い避けてます。"
       - stance: listen
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{other}"
@@ -2058,6 +2134,8 @@ events:
             say: "はい、言わせました。仲直りです。"
       - stance: listen
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -2071,6 +2149,8 @@ events:
             say: "外、もう真っ暗です。"
       - stance: captain
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: captain
             say: "今日から上も下も無し。文句があるなら俺に言え。以上。"
@@ -2084,6 +2164,8 @@ events:
             say: "主将の一声で、部室の空気が少しだけ軽くなった。"
       - stance: captain
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: captain
             say: "まあまあまあ、二人とも、ここはひとつ、な？"
@@ -2143,6 +2225,8 @@ events:
     outcomes:
       - stance: scold
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -2154,6 +2238,8 @@ events:
             say: "やればできるじゃん。"
       - stance: scold
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -2165,6 +2251,8 @@ events:
             say: "悪化してるじゃん……。"
       - stance: listen
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -2181,6 +2269,8 @@ events:
             say: "誤解が解けて、{player} のスイングは少しだけコンパクトになった。"
       - stance: listen
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: player
             name: "{player}"
@@ -2192,6 +2282,8 @@ events:
             say: "こいつ、ずっとこれなんですよ。"
       - stance: captain
         result: improved
+        effects:
+          trust: 2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: captain
             say: "{player}、お前の一発はみんな期待してる。だからサインのときは、サインだ。"
@@ -2204,6 +2296,8 @@ events:
             say: "{player} と {other} は、次の打順の相談をしながら帰っていった。"
       - stance: captain
         result: worsened
+        effects:
+          trust: -2          # 監督への信頼（issue #1270 E1: 好転 +2／悪化 −2）
         lines:
           - who: captain
             say: "打ちたい気持ちも分かる。でもバントも大事だ。でも打つのも大事で、"

@@ -55,9 +55,10 @@ public static class EventTableParser
         int? calendarWeek = null;
         double weight = 1.0;
         int cooldown = 4;
-        double effFunds = 0.0, effTrainingMult = 1.0;
-        int effTrainingWeeks = 0;
-        bool effTrainingPlayer = false;
+        // 効果（issue #613・#1270）。イベント直下の effects: はイベントの効果、outcomes: の要素の中は結果ごとの効果。
+        var eff = new EffectBuilder();
+        var elemEff = new EffectBuilder();
+        double? elemImproveProb = null;
         var variants = new List<EventScript>();
         var choices = new List<EventChoice>();
         var outcomes = new List<EventOutcome>();
@@ -91,7 +92,7 @@ public static class EventTableParser
                 if (open)
                 {
                     if (elemStance is null) throw new FormatException($"{id}: choices の要素に stance がありません。");
-                    choices.Add(new EventChoice(elemStance.Value, elemLabel ?? ""));
+                    choices.Add(new EventChoice(elemStance.Value, elemLabel ?? "", elemImproveProb));
                 }
             }
             else if (kind == "outcomes")
@@ -100,8 +101,10 @@ public static class EventTableParser
                 {
                     if (elemStance is null || elemImproved is null)
                         throw new FormatException($"{id}: outcomes の要素に stance と result が要ります。");
+                    var outcomeEffect = elemEff.Build();
                     outcomes.Add(new EventOutcome(elemStance.Value, elemImproved.Value,
-                        new EventScript(currentLines ?? new List<EventLine>())));
+                        new EventScript(currentLines ?? new List<EventLine>()),
+                        outcomeEffect.IsEmpty ? null : outcomeEffect));
                 }
             }
             else if (currentLines is not null && currentLines.Count > 0)
@@ -109,7 +112,8 @@ public static class EventTableParser
                 variants.Add(new EventScript(currentLines));
             }
             currentLines = null;
-            elemStance = null; elemImproved = null; elemLabel = null;
+            elemStance = null; elemImproved = null; elemLabel = null; elemImproveProb = null;
+            elemEff = new EffectBuilder();
         }
 
         void FlushEvent()
@@ -128,8 +132,7 @@ public static class EventTableParser
                 RequiresRegion = ParseRegion(region),
                 Text = text ?? "",
                 Variants = variants.ToArray(),
-                Effect = new EventEffect(
-                    effFunds, effTrainingMult, effTrainingWeeks, effTrainingPlayer),
+                Effect = eff.Build(),
                 Choices = choices.ToArray(),
                 Outcomes = outcomes.ToArray(),
                 Cast = new EventCast(castSubject, castOther),
@@ -138,8 +141,7 @@ public static class EventTableParser
             calendarWeek = null;
             weight = 1.0;
             cooldown = 4;
-            effFunds = 0.0;
-            effTrainingMult = 1.0; effTrainingWeeks = 0; effTrainingPlayer = false;
+            eff = new EffectBuilder();
             variants = new List<EventScript>();
             choices = new List<EventChoice>();
             outcomes = new List<EventOutcome>();
@@ -201,6 +203,10 @@ public static class EventTableParser
             var key = body.Substring(0, colon).Trim();
             var value = Unquote(body.Substring(colon + 1).Trim());
 
+            // 効果のキーは outcomes: の要素の中なら結果ごと、それ以外はイベントの効果へ。
+            var target = listKind == "outcomes" && elemOpen ? elemEff : eff;
+            if (target.TrySet(key, value, id)) continue;
+
             switch (key)
             {
                 case "id": id = value; break;
@@ -212,11 +218,7 @@ public static class EventTableParser
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
                 case "requires_region": region = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
-                // 効果（issue #613）。`effects:` の下に書くが、キー名で拾うので入れ子の深さは問わない。
-                case "funds": effFunds = ParseDouble(value, 0.0); break;
-                case "training_mult": effTrainingMult = ParseDouble(value, 1.0); break;
-                case "training_weeks": effTrainingWeeks = ParseInt(value) ?? 0; break;
-                case "training_target": effTrainingPlayer = value == "player"; break;
+                case "improve_prob": elemImproveProb = ParseDouble(value, 0.5); break;
                 case "variants":
                 case "outcomes":
                 case "choices":
@@ -237,6 +239,34 @@ public static class EventTableParser
         return events;
     }
 
+    /// <summary>
+    /// 効果1つぶんの素（issue #613・#1270）。`effects:` の下に書くが、キー名で拾うので入れ子の深さは問わない。
+    /// </summary>
+    private sealed class EffectBuilder
+    {
+        private double _funds, _trainingMult = 1.0, _trust, _fame;
+        private int _trainingWeeks, _pressure;
+        private bool _trainingPlayer;
+
+        public bool TrySet(string key, string value, string? id)
+        {
+            switch (key)
+            {
+                case "funds": _funds = ParseDouble(value, 0.0); return true;
+                case "training_mult": _trainingMult = ParseDouble(value, 1.0); return true;
+                case "training_weeks": _trainingWeeks = ParseInt(value) ?? 0; return true;
+                case "training_target": _trainingPlayer = value == "player"; return true;
+                case "trust": _trust = ParseDouble(value, 0.0); return true;
+                case "fame": _fame = ParseDouble(value, 0.0); return true;
+                case "pressure_next_match": _pressure = ParseInt(value) ?? 0; return true;
+                default: return false;
+            }
+        }
+
+        public EventEffect Build() => new(_funds, _trainingMult, _trainingWeeks, _trainingPlayer, _trust, _fame,
+            _pressure);
+    }
+
     // 既定を Random にしているのは kind 省略の後方互換。**新しい種別を足したらここにも足す**＝
     // 足し忘れると System が Random に化けて週次抽選のプールへ入り、主役の居ない会話が出るうえ
     // 抽選の重み合計が変わって発火の乱数列までずれる（issue #610 の作業中に実際に踏んだ）。
@@ -254,6 +284,8 @@ public static class EventTableParser
         "scold" => EventStance.Scold,
         "listen" => EventStance.Listen,
         "captain" => EventStance.Captain,
+        "ease" => EventStance.EasePractice,
+        "as_usual" => EventStance.AsUsual,
         _ => throw new FormatException($"stance に未知の語: {v}"),
     };
 

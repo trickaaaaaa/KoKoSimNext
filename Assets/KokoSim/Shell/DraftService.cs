@@ -137,6 +137,10 @@ namespace KokoSim.Unity.Shell
             return taken;
         }
 
+        /// <summary>直近の指名で入ったOBの一時金（指名1人ごと・issue #1469）。ホームが会話を積んだら空にする。</summary>
+        public static IReadOnlyList<(DraftPick Pick, double Amount)> LastOBDonations { get; set; } =
+            System.Array.Empty<(DraftPick, double)>();
+
         /// <summary>
         /// 10月最終週の指名確定（設計書20 §3.2）。対象は3年生の候補だけで、指名された者を
         /// 教え子名鑑へ積む。返り値には指名漏れも含む（通知フィードが「指名されなかった」を出すため）。
@@ -152,6 +156,8 @@ namespace KokoSim.Unity.Shell
 
             _lastNominatedYear = yearIndex;
             LastNomination = result;
+            // プロ入りOBの一時金（issue #1469 O2）。指名を確定したその週に部費へ入れ、会話はホームが積む。
+            LastOBDonations = ManagerService.ApplyDraftNominations(result);
             return result;
         }
 
@@ -172,6 +178,7 @@ namespace KokoSim.Unity.Shell
             _changes.Clear();
             _lastNominatedYear = 0;
             LastNomination = null;
+            LastOBDonations = System.Array.Empty<(DraftPick, double)>();
             RefreshBands();   // 基準だけ採る（_bands が null なので差分は出ない）
         }
 
@@ -183,6 +190,7 @@ namespace KokoSim.Unity.Shell
             _changes.Clear();
             _lastNominatedYear = 0;
             LastNomination = null;
+            LastOBDonations = System.Array.Empty<(DraftPick, double)>();
         }
     }
 }

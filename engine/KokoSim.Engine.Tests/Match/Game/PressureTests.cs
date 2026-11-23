@@ -13,6 +13,64 @@ public sealed class PressureTests
 {
     private static readonly PressureCoefficients C = new();
 
+    // ===== 取材の後の公式戦・自校側だけの加点（設計書02 §3.1・issue #1467 P2） =====
+
+    [Fact]
+    public void SideBonus_AddsOnlyWhenNonZero_AndCapsAtMax()
+    {
+        Assert.Equal(3, PressureModel.WithSideBonus(3, 0, C));
+        Assert.Equal(4, PressureModel.WithSideBonus(3, 1, C));
+        Assert.Equal(C.MaxIndex, PressureModel.WithSideBonus(C.MaxIndex, 1, C));
+        // 精神力50は指数が上がっても恒等。精神力30なら負側へ 0.008（=0.4×0.02×1）ぶん動く。
+        Assert.Equal(1.0, PressureModel.Multiplier(50, PressureModel.WithSideBonus(2, 1, C), C));
+        Assert.Equal(PressureModel.Multiplier(30, 2, C) - 0.008, PressureModel.Multiplier(30, PressureModel.WithSideBonus(2, 1, C), C), 9);
+    }
+
+    // ===== 士気の土台（設計書04 §1.2・issue #1270 M1） =====
+
+    [Theory]
+    [InlineData(null, 0.0)]
+    [InlineData(0.0, -0.10)]
+    [InlineData(25.0, -0.05)]
+    [InlineData(50.0, 0.0)]
+    [InlineData(70.0, 0.04)]
+    [InlineData(100.0, 0.10)]
+    [InlineData(120.0, 0.10)]   // 両端で止める
+    [InlineData(-10.0, -0.10)]
+    public void MoraleMitigation_ByTrust(double? morale, double expected)
+        => Assert.Equal(expected, PressureModel.MoraleMitigation(morale, C), 9);
+
+    [Fact]
+    public void Morale_MentalFifty_IsAlwaysIdentity()
+    {
+        foreach (var m in new[] { -0.10, 0.0, 0.10 })
+            Assert.Equal(1.0, PressureModel.Multiplier(50, 8, C, moraleMitigation: m));
+    }
+
+    [Fact]
+    public void Morale_ShrinksOrGrowsOnlyTheNegativeSide()
+    {
+        // 精神力20・P8: raw = −0.6×0.02×8 = −0.096。
+        var plain = PressureModel.Multiplier(20, 8, C);
+        Assert.Equal(1.0 - 0.096, plain, 9);
+        Assert.Equal(1.0 - 0.096 * 0.9, PressureModel.Multiplier(20, 8, C, moraleMitigation: 0.10), 9);
+        Assert.Equal(1.0 - 0.096 * 1.1, PressureModel.Multiplier(20, 8, C, moraleMitigation: -0.10), 9);
+        // 伝令の緩和（0.5）と足し合わせる。
+        Assert.Equal(1.0 - 0.096 * 0.4, PressureModel.Multiplier(20, 8, C, mitigation: 0.5, moraleMitigation: 0.10), 9);
+        // 正側（精神力の高い選手）には効かない。
+        Assert.Equal(PressureModel.Multiplier(90, 8, C), PressureModel.Multiplier(90, 8, C, moraleMitigation: -0.10));
+    }
+
+    [Fact]
+    public void Morale_Zero_IsBitIdenticalToTheOldFormula()
+    {
+        foreach (var mental in new[] { 1, 20, 49, 50, 51, 80, 99 })
+        foreach (var p in new[] { 0, 3, 8 })
+        foreach (var mit in new[] { 0.0, 0.3, 1.2 })
+            Assert.Equal(PressureModel.Multiplier(mental, p, C, mit, true, 1.3),
+                PressureModel.Multiplier(mental, p, C, mit, true, 1.3, moraleMitigation: 0.0));
+    }
+
     [Fact]
     public void Compute_PracticeGameEarlyNoRunners_IsZero()
     {

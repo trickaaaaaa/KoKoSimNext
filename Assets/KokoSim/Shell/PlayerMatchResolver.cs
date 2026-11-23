@@ -25,7 +25,8 @@ namespace KokoSim.Unity.Shell
         public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
             TournamentMatchContext? context = null)
         {
-            var mgrTeam = BuildManagerTeam(manager.Name);
+            // 取材の後の最初の公式戦は自校側だけプレッシャー +1（issue #1467 P2）。この resolver は公式戦専用。
+            var mgrTeam = BuildManagerTeam(manager.Name) with { ExtraPressure = GameSession.Current.PendingMatchPressure };
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var (field, stadiumName, stadiumId) = Stadium(context, rng, manager.PrefectureId);
             var ctx = Rules.ApplyTo(
@@ -53,7 +54,8 @@ namespace KokoSim.Unity.Shell
             // 唯一の差は観測ゲート（CaptureTimelines=観戦用タイムライン／CapturePitches=1球進行の供給口,
             // 設計書15 §8）。いずれも RNG 中立なので、全打席を進めた結果は Resolve のボックススコアと
             // 一致する＝観戦しても大会結果は変わらない。
-            var mgrTeam = BuildManagerTeam(manager.Name);
+            // 取材の後の最初の公式戦は自校側だけプレッシャー +1（issue #1467 P2）。この resolver は公式戦専用。
+            var mgrTeam = BuildManagerTeam(manager.Name) with { ExtraPressure = GameSession.Current.PendingMatchPressure };
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var (field, stadiumName, stadiumId) = Stadium(context, rng, manager.PrefectureId);
             var ctx = Rules.ApplyTo(
@@ -246,6 +248,8 @@ namespace KokoSim.Unity.Shell
                 BatteryInnings = GameSession.Current.BatteryInningsForMatch(),
                 // 結束の上下（設計書23 §3.3・issue #934）も自校だけ（AI校は顔ぶれの土台だけ）。
                 CohesionDelta = GameSession.Current.CohesionDelta,
+                // 士気（設計書04 §1.2・issue #1270 M1）も自校だけ＝監督の信頼度。AI校は null＝恒等。
+                Morale = ManagerService.Manager.Trust,
             };
         }
 

@@ -29,9 +29,9 @@ public sealed class ScoutPitchTests
     {
         var choices = ScoutPitch.ContractChoices(ContractCatalog.Default);
         Assert.Equal("契約しない（0万）", choices[0].Label);
-        Assert.Equal("Lv1（30万・枠2人）", choices[1].Label);
-        Assert.Equal("Lv2（80万・枠3人）", choices[2].Label);
-        Assert.Equal("Lv3（140万・枠4人）", choices[3].Label);
+        Assert.Equal("Lv1（100万・枠2人）", choices[1].Label);
+        Assert.Equal("Lv2（250万・枠3人）", choices[2].Label);
+        Assert.Equal("Lv3（420万・枠4人）", choices[3].Label);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class ScoutPitchTests
     public void ResultSentence_NamesLevelCostSlotsAndField()
     {
         var c = ScoutPitch.ContractChoices(ContractCatalog.Default)[2];
-        Assert.Equal("スカウト網 Lv2（年80万・枠3人）　探す分野: 投球", ScoutPitch.ResultSentence(c, ScoutField.Pitching));
+        Assert.Equal("スカウト網 Lv2（年250万・枠3人）　探す分野: 投球", ScoutPitch.ResultSentence(c, ScoutField.Pitching));
     }
 
     /// <summary>更新イベントの対象から外したスカウト網は、夏の入口のカタログ引きと同じIDで繋がっている。</summary>

@@ -113,9 +113,9 @@ public sealed record CareerCoefficients
     /// スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。年契約を渡さない呼び出し
     /// （<see cref="Career.CareerEngine.ApplyResults"/> の contracts=null）の固定費で、
     /// <b>年契約カタログのスカウト網 Lv1 と同額に保つ</b>
-    /// （2026-08-11 の値上げで 15 → 30。片方だけ動かすと sim と実ゲームで支出がずれる）。
+    /// （2026-08-11 の値上げで 15 → 30、2026-11-23 issue #1299 案Bで 30 → 100。片方だけ動かすと sim と実ゲームで支出がずれる）。
     /// </summary>
-    public double ScoutCost { get; init; } = 30.0;
+    public double ScoutCost { get; init; } = 100.0;
 
     // --- 寄付・一時金（設計書04 §1.4, 万円）。年度末に部費へ入る（issue #1082 で施設基金を部費へ統合）。
     // 統合前の施設基金の収入をそのまま流すと道具・合宿・年契約が実質タダになるので、額は統合前の半分
@@ -125,7 +125,7 @@ public sealed record CareerCoefficients
     /// （名声10で寄付100万＝土台の2倍、名声100で1000万＝20倍）。
     /// </summary>
     public double SchoolInvestment { get; init; } = 50.0;
-    /// <summary>後援会・OB寄付の名声1あたりの年額[万円]（名声に比例。名声100で年1000万）。</summary>
+    /// <summary>後援会寄付の名声1あたりの年額[万円]（名声に比例。名声100で年1000万）。プロ入りOBの寄付は <see cref="ProDonationFirstRound"/> ほか（issue #1469）。</summary>
     public double BoosterDonationPerFame { get; init; } = 10.0;
     /// <summary>甲子園出場の年に後援会から入る一時金[万円]。</summary>
     public double KoshienYearBonus { get; init; } = 500.0;
@@ -137,8 +137,28 @@ public sealed record CareerCoefficients
     public double KoshienBerthDonationBase { get; init; } = 120.0;
     /// <summary>同・名声1あたりの上乗せ[万円]（名声100で +150万＝年間予算の2倍強）。</summary>
     public double KoshienBerthDonationPerFame { get; init; } = 1.5;
+    /// <summary>教え子のプロ入り1人ぶんの名声の上昇（設計書04 §1.2・issue #1270 D1）。年度末の総括の上昇側に入り、逓減と年上限を通す。</summary>
+    public double FamePerDraftPick { get; init; } = 2.0;
+    /// <summary>同・ドラフト1位の名声の上昇。</summary>
+    public double FameFirstRoundPick { get; init; } = 4.0;
+    /// <summary>プロ入りぶんの名声の上昇の年上限（逓減の前）。</summary>
+    public double FameDraftSeasonCap { get; init; } = 6.0;
+    /// <summary>怪我を押して出場させて悪化したときの信頼度の低下（1件ごと・issue #1270 E1）。</summary>
+    public double TrustPlayThroughWorsened { get; init; } = 3.0;
     /// <summary>全国優勝の年に入る一時金[万円]（甲子園出場ぶんとは別に上乗せ）。</summary>
     public double NationalTitleBonus { get; init; } = 2500.0;
+    /// <summary>大会報奨: 公式戦1勝ごとに部費へ入る額[万円]（issue #1469 T1・甲子園/センバツ以外の勝ち）。年度末の総括で入る。</summary>
+    public double PrizePerOfficialWin { get; init; } = 10.0;
+    /// <summary>大会報奨: 甲子園・センバツの1勝ごとの額[万円]（issue #1469 T1）。</summary>
+    public double PrizePerNationalStageWin { get; init; } = 30.0;
+    /// <summary>教え子がドラフト1位で指名された年にOBから入る一時金[万円]（issue #1469 O2・プロ入りOBの挨拶訪問）。</summary>
+    public double ProDonationFirstRound { get; init; } = 100.0;
+    /// <summary>同・2〜3位の一時金[万円]。</summary>
+    public double ProDonationUpperRound { get; init; } = 70.0;
+    /// <summary>同・4〜7位の一時金[万円]。</summary>
+    public double ProDonationMiddleRound { get; init; } = 50.0;
+    /// <summary>同・8位（下位・育成）の一時金[万円]。</summary>
+    public double ProDonationLowerRound { get; init; } = 30.0;
 
     /// <summary>
     /// 転任したときに持ち越せる部費の割合（issue #1082・オーナー決定 2026-11-17）。残りは前の学校に残る。

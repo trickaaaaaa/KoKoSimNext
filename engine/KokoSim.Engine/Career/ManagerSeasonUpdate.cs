@@ -24,6 +24,10 @@ public static class ManagerSeasonUpdate
     /// <param name="contracts">
     /// 年契約の実効値（設計書04 §1.4a）。null なら従来どおりスカウト費を固定で引く＝1ビット一致。
     /// </param>
+    /// <param name="nationalStageWins">
+    /// <paramref name="wins"/> のうち甲子園・センバツの勝ち（大会報奨の単価が高い・issue #1469）。
+    /// </param>
+    /// <param name="draftFameGain">教え子のプロ入りの名声（<see cref="CareerEngine.DraftFameGain"/>・issue #1270 D1）。</param>
     public static IReadOnlyList<ManagerGrowthNotice> Apply(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins,
         IRandomSource milestoneRng,
@@ -31,13 +35,16 @@ public static class ManagerSeasonUpdate
         ManagerGrowthCoefficients? growthCoeff = null,
         double upsetFameGain = 0,
         double upsetFameLoss = 0,
-        ContractEffects? contracts = null)
+        ContractEffects? contracts = null,
+        int nationalStageWins = 0,
+        double draftFameGain = 0)
     {
         var c = careerCoeff ?? new CareerCoefficients();
         var mg = growthCoeff ?? new ManagerGrowthCoefficients();
 
         // 自然増（指導力・采配・育成眼・名声・信頼度・資金）。
-        CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c, contracts);
+        CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c, contracts,
+            nationalStageWins, draftFameGain);
         m.CareerYears++;
         m.YearsAtSchool++;
         if (reachedKoshien) m.KoshienAppearances++;

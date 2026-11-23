@@ -61,7 +61,7 @@ namespace KokoSim.Unity.Management
     public sealed class ManagementView
     {
         public double Funds;
-        /// <summary>年度末の総括で入る収入[万円]（学校予算＋信頼度連動＋学校の設備投資＋後援会・OB寄付）。
+        /// <summary>年度末の総括で入る収入[万円]（学校予算＋信頼度連動＋学校の設備投資＋後援会寄付）。
         /// 甲子園・全国優勝の一時金は結果しだいなので見込みに入れない（issue #1082）。</summary>
         public double Income;
         public string IncomeNote = "";
@@ -134,7 +134,7 @@ namespace KokoSim.Unity.Management
                 IncomeNote = "学校予算 " + Career.AnnualBudgetBase.ToString("0")
                              + " ＋ 信頼度 " + (Career.BudgetPerTrust * m.Trust).ToString("0")
                              + " ＋ 設備投資 " + Career.SchoolInvestment.ToString("0")
-                             + " ＋ 後援会・OB " + (Career.BoosterDonationPerFame * m.Fame).ToString("0"),
+                             + " ＋ 後援会 " + (Career.BoosterDonationPerFame * m.Fame).ToString("0"),
                 Expense = expense,
                 ExpenseNote = "合宿 " + camps.ToString("0")
                               + " ／ 年契約 " + contracts.AnnualCost.ToString("0"),

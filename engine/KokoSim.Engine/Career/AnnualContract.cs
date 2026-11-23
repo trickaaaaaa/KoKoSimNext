@@ -141,15 +141,16 @@ public sealed record ContractCatalog
     /// <summary>
     /// C#既定（data/coefficients.yaml <c>contracts:</c> と一致させること・不変条件#4）。
     ///
-    /// <para>スカウト網 Lv1（30万/年）は従来の <see cref="CareerCoefficients.ScoutCost"/> と同額で、
+    /// <para>スカウト網 Lv1（100万/年）は従来の <see cref="CareerCoefficients.ScoutCost"/> と同額で、
     /// 質への加算は0＝<b>買うのは「見立て」だけ</b>（issue #587 の事前開示）。質が動くのは Lv2 以上で、
     /// 実測では最良軸がC以上の逸材の出現率が 2.78%（未契約）→ 3.99%（Lv2）→ 5.74%（Lv3）と<b>倍化する</b>
     /// （平均が2〜3上がるより、当たりの頻度が変わる効き方）。新規ゲームは<b>未契約</b>から始まる
     /// （<see cref="ContractSet.Initial"/>）。</para>
     ///
-    /// <para>全部を最上段で契約すると 140+20+50×3＝310万/年。部費の年間収入（学校予算＋信頼度ぶん）は
-    /// 信頼度50で120万・信頼度100で160万で、寄付・一時金を足しても合宿費45万と合わせると全部は抱えられない
-    /// ＝「どれを取るか」の選択になる。</para>
+    /// <para>年額は 2026-11-23 オーナー決定（issue #1299 案B＝旧額の約3倍）。全部を最上段で契約すると
+    /// 420+60+160×3＝960万/年。合宿を引いた「自由に使える額」は新任約300・中堅約620・強豪約940万/年なので、
+    /// 強豪の定常でも全部は抱えられない（甲子園に出た年だけ届く）＝「どれを取るか」の選択になる。
+    /// 施設（買い切り）とも同じ部費を取り合う。</para>
     /// </summary>
     public static ContractCatalog Default { get; } = new()
     {
@@ -166,9 +167,9 @@ public sealed record ContractCatalog
                     // 効果1＝新入生の質（ScoutTalentAdd）／効果2＝入部前にどこまで見えるか（ProspectDisclosure）／
                     // 効果3＝スカウト候補の枠数・見立ての段（ScoutSlots, issue #867）。
                     // Lv1 は従来のスカウト費と同額で質も据え置き。上げると質より先に「見通し」が良くなる。
-                    new ContractTier { AnnualCost = 30, ScoutTalentAdd = 0, ProspectDisclosure = 0.15, ScoutSlots = 2 },   // 県内を回る
-                    new ContractTier { AnnualCost = 80, ScoutTalentAdd = 3, ProspectDisclosure = 0.45, ScoutSlots = 3 },   // 近隣県まで足を伸ばす
-                    new ContractTier { AnnualCost = 140, ScoutTalentAdd = 6, ProspectDisclosure = 0.75, ScoutSlots = 4 },  // 全国に網を張る
+                    new ContractTier { AnnualCost = 100, ScoutTalentAdd = 0, ProspectDisclosure = 0.15, ScoutSlots = 2 },   // 県内を回る
+                    new ContractTier { AnnualCost = 250, ScoutTalentAdd = 3, ProspectDisclosure = 0.45, ScoutSlots = 3 },   // 近隣県まで足を伸ばす
+                    new ContractTier { AnnualCost = 420, ScoutTalentAdd = 6, ProspectDisclosure = 0.75, ScoutSlots = 4 },  // 全国に網を張る
                 },
             },
             // 遠征: 県外の学校と練習試合が組める（相手の幅＝実戦成長の相手ティアの幅）。
@@ -179,7 +180,7 @@ public sealed record ContractCatalog
                 Tiers = new[]
                 {
                     new ContractTier(),
-                    new ContractTier { AnnualCost = 20, OutOfPrefectureOpponents = true },
+                    new ContractTier { AnnualCost = 60, OutOfPrefectureOpponents = true },
                 },
             },
             // 専門コーチ: 分野別指導力の実効値を底上げする。監督自身の指導力は変えないので、
@@ -190,19 +191,19 @@ public sealed record ContractCatalog
             {
                 Id = "coach_batting",
                 Name = "打撃コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingBattingAdd = 50 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 160, CoachingBattingAdd = 50 } },
             },
             new ContractDef
             {
                 Id = "coach_pitching",
                 Name = "投手コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingPitchingAdd = 50 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 160, CoachingPitchingAdd = 50 } },
             },
             new ContractDef
             {
                 Id = "coach_defense",
                 Name = "守備走塁コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingDefenseAdd = 50 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 160, CoachingDefenseAdd = 50 } },
             },
         },
     };
