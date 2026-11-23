@@ -56,6 +56,26 @@ public static class TournamentDate
         return AddDays(m, d, tournamentDay);
     }
 
+    /// <summary>
+    /// 大会明けの時計送りの下限＝従来の数え方（最終日が入る週までの切り捨て・最低1週）。
+    /// 大会中も7日ごとに練習1週ぶんが当たるので、この週数は大会中の練習週数と揃っている。
+    /// </summary>
+    public static int BaselineClockWeeks(int tournamentDay) => Math.Max(1, tournamentDay / 7);
+
+    /// <summary>
+    /// 大会明けに共有週を進める週数（issue #1548）。大会は日で進み週暦は開幕時点で止まっているので、
+    /// 従来の切り捨て（<see cref="BaselineClockWeeks"/>）だけだと、止まっていた週から数えた「M月W週」が
+    /// 最終日の実月日より前に見える（7月16日に負けたのに7月2週）。そこで最終日の実月日が入る週
+    /// （<see cref="SeasonCalendar.WeekOf"/>）まで進める。<paramref name="currentWeek"/> は止まっている現在の週。
+    /// 従来の週数より少なくなることはない（時計が日付より先にいるときは従来どおり）。
+    /// </summary>
+    public static int ClockWeeksAfter(
+        TournamentSchedule schedule, SeasonCalendar calendar, TournamentKind kind, int tournamentDay, int currentWeek)
+    {
+        var (month, day) = DateOf(schedule, kind, tournamentDay);
+        return Math.Max(BaselineClockWeeks(tournamentDay), calendar.WeekOf(month, day) - currentWeek);
+    }
+
     /// <summary>表示文字列（"7月13日"）。書式を画面ごとに作らないための単一ソース。</summary>
     public static string Label(TournamentSchedule schedule, TournamentKind kind, int tournamentDay)
     {
