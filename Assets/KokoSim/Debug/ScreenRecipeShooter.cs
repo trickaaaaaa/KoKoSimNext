@@ -492,7 +492,7 @@ namespace KokoSim.Unity.Debugging
 
             /// <summary>
             /// 要素を押す。値は要素の name か「.クラス」、同じものが複数あれば「[添字]」（例: .seg-tab[3]）。
-            /// click は ClickEvent（RegisterCallback&lt;ClickEvent&gt; の行・タブ用）、submit は決定キーと同じ
+            /// click は PointerDown→PointerUp→ClickEvent（行・タブ・イベント会話の面用）、submit は決定キーと同じ
             /// NavigationSubmitEvent（Button の clicked 用）。Button を click で押すと発火しないので、Button なら自動で submit にする。
             /// </summary>
             private IEnumerator Press(ScreenStep s, bool submit)
@@ -507,6 +507,13 @@ namespace KokoSim.Unity.Debugging
                 }
                 else
                 {
+                    // 実際のクリックと同じ順（押す→離す→クリック）で送る。PointerDown で採る面
+                    // （イベント会話の EventNovelView 等）は ClickEvent だけだと進まない。
+                    var at = el.worldBound.center;
+                    using (var e = PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, mousePosition = at, button = 0 }))
+                    { e.target = el; el.SendEvent(e); }
+                    using (var e = PointerUpEvent.GetPooled(new Event { type = EventType.MouseUp, mousePosition = at, button = 0 }))
+                    { e.target = el; el.SendEvent(e); }
                     using (var e = ClickEvent.GetPooled()) { e.target = el; el.SendEvent(e); }
                 }
                 // 押した結果の画面遷移（ShowDeferred）と再描画を1巡させる

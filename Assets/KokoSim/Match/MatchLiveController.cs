@@ -5391,6 +5391,18 @@ namespace KokoSim.Unity.Match
             _foulFieldPlay ?? _stealPlay ?? _pickoffPlay ?? _batteryMissPlay ?? _squeezeRundownPlay ?? _dropThirdStrikePlay
             ?? _current?.Play;
 
+        /// <summary>スクショ用: <see cref="PlayingForCapture"/> の再生を閉じる時計[秒]（この時刻を過ぎたコマで閉じる）。
+        /// 打席途中のプレーはプレーの長さより手前で閉じる（<c>MidPaPlayEndTime</c>）ので、撮影の節目「end」は
+        /// <c>play.Dur</c> でなくこちらで置く。</summary>
+        public double PlayCloseAtForCapture =>
+            (_foulFieldPlay != null ? _foulFieldEndAt
+            : _stealPlay != null ? _stealEndAt
+            : _pickoffPlay != null ? _pickoffEndAt
+            : _batteryMissPlay != null ? _batteryMissEndAt
+            : _squeezeRundownPlay != null ? _squeezeRundownEndAt
+            : _dropThirdStrikePlay != null ? _dropThirdStrikeEndAt
+            : _current?.Play != null ? PlayEndTime() : 0) + FinishGraceSeconds;
+
         /// <summary>
         /// 判定オーバーレイが**画面に出ているか**。
         /// ⚠ 「<c>JudgementAt</c> が値を返すか」ではなく<b>要素の表示状態</b>を見ること。

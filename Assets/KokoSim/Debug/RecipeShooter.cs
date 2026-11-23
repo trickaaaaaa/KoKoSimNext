@@ -254,6 +254,9 @@ namespace KokoSim.Unity.Debugging
                 var play = ctrl.PlayingForCapture;   // 打席途中のプレー（ファウル等）も撮れる
                 _result = play?.Result;
                 ComputeAnchors(play);
+                // 「end」はゲームが実際に再生を閉じる時刻の1コマ手前で置く（打席途中のプレーは play.Dur より手前で閉じる・#1264④で約0.3秒早まった）
+                if (play != null && _anchors.ContainsKey("end"))
+                    _anchors["end"] = Math.Max(0, Math.Min(_anchors["end"], ctrl.PlayCloseAtForCapture - 0.05));
                 var shots = new List<(string Label, double T)>();
                 foreach (var s in _r.Shots)
                 {
@@ -317,7 +320,8 @@ namespace KokoSim.Unity.Debugging
                 _anchors.Clear();
                 if (play == null) return;
                 _anchors["start"] = 0;
-                // 守備ビューの再生はプレーの長さの約0.1秒手前で閉じる（2026-11-17 実測）＝最後に絵が出る時刻で置く
+                // 守備ビューの再生はプレーの長さの約0.1秒手前で閉じる（2026-11-17 実測）＝最後に絵が出る時刻で置く。
+                // 実際に閉じる時刻（PlayCloseAtForCapture）の方が早ければ、呼び出し側でそちらへ寄せる
                 _anchors["end"] = Math.Max(0, play.Dur - 0.15);
                 _anchors["result"] = play.ResAt;
                 for (int i = 0; i < play.Ball.Count; i++)
