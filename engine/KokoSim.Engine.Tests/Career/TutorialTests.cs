@@ -51,6 +51,33 @@ public sealed class TutorialTests
         }
     }
 
+    // 「初めての試合」は公式戦・練習試合を問わず最初の1試合でだけ出る（2026-11-23 オーナー決定）。
+    [Fact]
+    public void FirstMatch_PracticeFirst_ThenOfficialOpenerShowsNothing()
+    {
+        var p = TutorialProgress.Fresh();
+        Assert.Equal(Tutorial.EventId(TutorialScene.FirstMatch), Tutorial.BeforeMatch(p, Tutorial.MatchKind.Practice));
+        Assert.Null(Tutorial.BeforeMatch(p, Tutorial.MatchKind.Official));
+        Assert.Null(Tutorial.BeforeMatch(p, Tutorial.MatchKind.Practice));
+    }
+
+    [Fact]
+    public void FirstMatch_OfficialFirst_ThenPracticeShowsNothing()
+    {
+        var p = TutorialProgress.Fresh();
+        Assert.Equal(Tutorial.EventId(TutorialScene.FirstMatch), Tutorial.BeforeMatch(p, Tutorial.MatchKind.Official));
+        Assert.Null(Tutorial.BeforeMatch(p, Tutorial.MatchKind.Practice));
+    }
+
+    [Fact]
+    public void FirstMatch_NotShownAfterDismiss()
+    {
+        var p = TutorialProgress.Fresh();
+        p.Dismiss();
+        Assert.Null(Tutorial.BeforeMatch(p, Tutorial.MatchKind.Practice));
+        Assert.Null(Tutorial.BeforeMatch(p, Tutorial.MatchKind.Official));
+    }
+
     [Fact]
     public void Dismissed_StopsEveryRemainingScene()
     {

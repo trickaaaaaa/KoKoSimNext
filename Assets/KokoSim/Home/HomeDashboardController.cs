@@ -186,8 +186,11 @@ namespace KokoSim.Unity.Home
         {
             SetBodyVisible(true);
             Render();
+            // 練習試合の初戦の前の采配の説明（issue #1496）を読み終えたら、スタメン設定へ続ける。
+            if (KokoSim.Unity.Shell.TutorialService.TakeLineupAfterNovel())
+                KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("LineupSetting");
             // 夏の引退の会話を読み終えたら主将指名へ続ける（issue #954: 引退の会話 → 主将指名 → 背番号決定）。
-            if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            else if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
             // 試合の日の説明（issue #1496）を読み終えたら、試合の開始確認へ続ける。
             else if (_state.InTournament && _state.ReachedMatchDay) ShowDialog();
             else if (KokoSim.Unity.Shell.UniformNumberService.Pending) GoToUniformNumbers();
@@ -541,7 +544,8 @@ namespace KokoSim.Unity.Home
         /// </summary>
         private void ShowMatchDay()
         {
-            if (KokoSim.Unity.Shell.TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.FirstMatch)
+            // 公式戦・練習試合を問わず最初の1試合でだけ出る（練習試合で見ていれば公式戦の初戦では出ない）。
+            if (KokoSim.Unity.Shell.TutorialService.RaiseBeforeMatch(KokoSim.Engine.Career.Tutorial.MatchKind.Official)
                 && _novel != null && _novel.OpenNext())
             {
                 SetBodyVisible(false);

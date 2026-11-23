@@ -170,6 +170,13 @@ namespace KokoSim.Unity.Practice
             // 成立 → 大会戦と同じ導線へ。スタメン設定OK→対戦カード→ホーム経由で MatchLive が始まる。
             _message = "";
             GameSession.Current.EnterPracticeMatchFlow(opponent, week);
+            // 最初の1試合なら、スタメン設定の前にホームで采配の説明を読む（issue #1496・公式戦の開始確認の前と同じ流れ）。
+            // 読み終えたらホームがスタメン設定へ進める（TutorialService.TakeLineupAfterNovel）。
+            if (TutorialService.RaiseBeforePracticeMatch())
+            {
+                ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+                return;
+            }
             ScreenRouter.Instance?.ShowDeferred("LineupSetting");
         }
 

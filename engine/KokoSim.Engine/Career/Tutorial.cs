@@ -15,7 +15,10 @@ public enum TutorialScene
     Basics,
     /// <summary>初めての公式戦の前（大会の開幕）: 大会の流れ・ベンチ入りとスタメンの決め方。</summary>
     FirstTournament,
-    /// <summary>初めての試合の前（試合の日）: サイン・伝令・委任采配の使い方。</summary>
+    /// <summary>
+    /// 初めての試合の前: サイン・伝令・委任采配の使い方。<b>公式戦・練習試合を問わず最初の1試合</b>で出す
+    /// （公式戦は試合の日の開始確認の前、練習試合は申し込みが成立してスタメン設定へ進む前。2026-11-23 オーナー決定）。
+    /// </summary>
     FirstMatch,
     /// <summary>初めてのスカウトの時期（夏の後の契約の会話の前）: スカウトと新入生。</summary>
     Scouting,
@@ -147,6 +150,16 @@ public static class Tutorial
 
     /// <summary>転任を確定した直後に積む会話。赴任イベントだけ（チュートリアルは転任では出さない）。</summary>
     public static IReadOnlyList<string> OnTransferred(TutorialProgress progress) => new[] { ArrivalTransferEventId };
+
+    /// <summary>試合の種類（<see cref="BeforeMatch"/> の引数）。説明はどちらでも同じで、最初の1試合でだけ出る。</summary>
+    public enum MatchKind { Official, Practice }
+
+    /// <summary>
+    /// 自校の試合を始める直前（公式戦の開始確認の前／練習試合のスタメン設定の前）。公式戦・練習試合を問わず
+    /// 最初の1試合でだけ采配の説明の id を返す＝練習試合で見ていれば公式戦の初戦では出さない（逆も同じ）。
+    /// </summary>
+    public static string? BeforeMatch(TutorialProgress progress, MatchKind kind)
+        => OnScene(progress, TutorialScene.FirstMatch);
 
     /// <summary>場面に入った。未見なら見た印を付けてその会話の id を返す（出さないなら null）。</summary>
     public static string? OnScene(TutorialProgress progress, TutorialScene scene)

@@ -430,6 +430,7 @@ screens:
       - shot: 02-master-volume-down
       # 設定は PlayerPrefs（この機械の好み）に残るので、下げた音量を戻しておく
       - click: .ucp-arrow[3]
+
   # ── 赴任イベントとチュートリアル（issue #1496） ──
 
   - id: arrival-tutorial-1496-new
