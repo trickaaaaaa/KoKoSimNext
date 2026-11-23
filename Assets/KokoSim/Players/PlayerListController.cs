@@ -37,7 +37,12 @@ namespace KokoSim.Unity.Players
             _advanceBtn = _root.Q<Button>("advance");
             if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
 
+            // 通知フィードから選手を指名して開いた（issue #1474）: 先頭行へ戻さず、その選手の詳細を出す。
+            var pinned = PlayerSelection.Pinned;
+            if (pinned) { _hasHovered = true; PlayerSelection.Pinned = false; }
+
             Render();
+            if (pinned) _detail?.RenderForSelection();
         }
 
         private void OnDisable()

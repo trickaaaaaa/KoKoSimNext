@@ -21,6 +21,8 @@ namespace KokoSim.Unity.Tournament
             public string MarkClass;    // fav / cont / dark（USS 色分け）
             public string MarkLabel;    // 優勝候補 / 対抗 / ダークホース
             public bool IsFavorite;
+            /// <summary>自校の行か（開幕の通知で「自校に印が付いた」を煽る・issue #1476）。</summary>
+            public bool IsManager;
             public string Name;
             public string TierLetter;   // S..G（gradeチップ）
             public string SeedLabel;    // 第1シード / ノーシード
@@ -152,6 +154,7 @@ namespace KokoSim.Unity.Tournament
                     MarkClass = MarkClass(c.Mark),
                     MarkLabel = TournamentPreviewBuilder.MarkLabel(c.Mark, stage),
                     IsFavorite = c.Mark == ContenderMark.Favorite,
+                    IsManager = idByName.TryGetValue(c.Name, out var cid) && cid == KokoSim.Unity.Shell.NationService.ManagerSchoolId,
                     Name = c.Name,
                     TierLetter = c.Tier.ToString(),
                     SeedLabel = TournamentPreviewBuilder.SeedLabel(c.Mark, c.Seed, stage),

@@ -29,7 +29,7 @@ namespace KokoSim.Unity.Records
         private const int TopCount = 3;
 
         private static readonly string[] PageLabels = { "歴代大会", "個人記録", "戦績" };
-        private const int MatchesPage = 2;
+        public const int MatchesPage = 2;
 
         /// <summary>
         /// 次に開いたとき最初に出すタブ（-1＝既定）。過去の試合の結果画面から「閉じる」で戻るとき、
