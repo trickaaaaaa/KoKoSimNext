@@ -185,6 +185,8 @@
           <ui:VisualElement name="ev-choices" class="ev__choices" />
           <ui:VisualElement class="ev__foot">
             <ui:Label name="ev-progress" class="ev__progress f-num" text="" />
+            <!-- 会話を飛ばす（赴任イベント・チュートリアルだけ・issue #1496）。押すと最後の行（選択肢）まで進む。 -->
+            <ui:Label name="ev-skip" class="ev__skip" text="スキップ ▶▶" />
             <ui:Label name="ev-hint" class="ev__hint" text="クリックで次へ" />
           </ui:VisualElement>
           <!-- 結果（誰の・何が・いくつ）は右下の帯でなく会話の最終行＝結果行（USS の ev__say の result 修飾）で出す

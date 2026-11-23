@@ -227,6 +227,8 @@ namespace KokoSim.Unity.Shell
                     ManagerService.Manager, new Xoshiro256Random(GameSeed.Master ^ (0x1430_0003UL ^ (ulong)GameClock.YearIndex)));
                 EventService.PushMilestone(TeamManagerLifecycle.EventId);
             }
+            // 初めての夏の引退: 新チームと主将の説明（issue #1496）。引退の会話の後・主将指名の前に読む。
+            TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.SummerRetirement);
             NewTeamService.Open(transition);
             // 引退で枠の大半が穴になった前チームのスタメンは捨てる（issue #955・第18週の発足と同じ）。
             GameSession.Current.LastLineup = null;

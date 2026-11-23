@@ -104,6 +104,7 @@ namespace KokoSim.Unity.Shell
             TeamColorProvider.Capture(s);
             DraftService.Capture(s);
             EventService.Capture(s);
+            TutorialService.Capture(s);
             TrainingBoostService.Capture(s);
             return s;
         }
@@ -131,6 +132,7 @@ namespace KokoSim.Unity.Shell
             // 部員（RosterService）と公式戦通算（GameSession.Stats）の両方が据わっている必要がある。
             DraftService.Restore(s);
             EventService.Restore(s);
+            TutorialService.Restore(s);
             TrainingBoostService.Restore(s);
             if (s.Tournament != null) TournamentEntry.RestoreRunner(s.Tournament);
             // 観るだけの甲子園（自校が出場していない年）。対話モードの大会とは排他なので順序は問わない。
@@ -160,6 +162,7 @@ namespace KokoSim.Unity.Shell
             ManagerTransferService.Clear();
             TeamColorProvider.Clear();
             EventService.Clear();
+            TutorialService.Reset();
             TrainingBoostService.Clear();
             GameClock.Reset();
             LastSavedAt = null;   // 新しい進行＝まだ一度も保存していない

@@ -195,6 +195,13 @@ public sealed class SaveState
     /// </summary>
     public EventSchedulerSaveState? Events { get; set; }
 
+    // --- チュートリアルの進み具合（issue #1496。v42 で追加） ---
+    /// <summary>
+    /// 見た説明の場面と「もう説明はいらない」（<see cref="TutorialProgress"/>）。v41 以前のセーブは
+    /// 読み込み時に「全部見た扱い」で埋まる（<see cref="SaveCodec"/> の Migrate）。
+    /// </summary>
+    public TutorialProgress Tutorial { get; set; } = TutorialProgress.Fresh();
+
     // --- 期間つきの練習効率補正（issue #615。v10 で追加） ---
     /// <summary>
     /// イベントが作った「N週だけ効率が上がる」の残り（設計書03 §5）。空＝補正なし。

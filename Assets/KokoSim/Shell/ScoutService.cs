@@ -134,6 +134,8 @@ namespace KokoSim.Unity.Shell
             var m = ScoutMilestones.AfterNewTeamStarted(Calendar, GameClock.Week, GameClock.YearIndex, Current);
             if (m == ScoutMilestone.None) return;
             SelectedField = ScoutField.Omakase;   // 選ばずに閉じたらお任せ（前年の選択を引きずらない）
+            // 初めてのスカウトの時期: スカウトと新入生の説明（issue #1496）。契約の会話より先に読む。
+            TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.Scouting);
             ScoutPitchService.Raise();
         }
 

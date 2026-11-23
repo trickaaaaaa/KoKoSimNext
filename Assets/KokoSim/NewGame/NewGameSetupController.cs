@@ -277,6 +277,9 @@ namespace KokoSim.Unity.NewGame
             // 配色はリセットで消えるので、同定を据えたあとに確定する（順序が逆だと選んだ色が消える）。
             TeamColorProvider.ManagerOverride = _picker.Colors;
             KokoSim.Unity.Home.HomeState.Reset();   // 前セッションの通知フィードを持ち越さない
+            // 赴任イベント（マネージャーの出迎え）→最初の説明をホームのノベルへ積む（issue #1496）。
+            // 開始手順（StartNewSchool）には入れない＝撮影レシピ・ベンチマークの new_game は会話なしでホームに着く。
+            TutorialService.OnNewSchoolStarted();
 
             Debug.Log($"[新規ゲーム] {PrefectureNames.JapaneseOf(_prefectureId)} {TypedName}高校"
                       + $" 地区={(_districtId.HasValue ? _districtId.Value.ToString() : "なし")}"

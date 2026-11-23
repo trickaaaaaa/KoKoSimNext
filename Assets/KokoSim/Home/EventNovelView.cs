@@ -24,9 +24,10 @@ namespace KokoSim.Unity.Home
         private readonly VisualElement _portrait;
         private readonly VisualElement _portraitImage;
         private readonly VisualElement _choices;    // 監督の対応の3択（issue #945）
-        private readonly Label _eyebrow, _role, _speaker, _say, _progress, _hint;
+        private readonly Label _eyebrow, _role, _speaker, _say, _progress, _hint, _skip;
         private readonly System.Action _onClosed;
         private readonly EventCallback<PointerDownEvent> _click;
+        private readonly EventCallback<PointerDownEvent> _skipClick;
 
         private PresentedEvent _event;
         private int _line;
@@ -44,9 +45,13 @@ namespace KokoSim.Unity.Home
             _progress = root?.Q<Label>("ev-progress");
             _hint = root?.Q<Label>("ev-hint");
             _choices = root?.Q<VisualElement>("ev-choices");
+            _skip = root?.Q<Label>("ev-skip");
 
             _click = _ => Advance();
             if (_root != null) _root.RegisterCallback(_click);
+            // 飛ばす（issue #1496）。押下は面へ伝わると1行送りも走るので、ここで止める。
+            _skipClick = evt => { evt.StopPropagation(); Skip(); };
+            if (_skip != null) _skip.RegisterCallback(_skipClick);
         }
 
         /// <summary>いま開いているか（開いている間はホームの本文域を隠す）。</summary>
@@ -56,6 +61,7 @@ namespace KokoSim.Unity.Home
         public void Dispose()
         {
             if (_root != null && _click != null) _root.UnregisterCallback(_click);
+            if (_skip != null && _skipClick != null) _skip.UnregisterCallback(_skipClick);
         }
 
         /// <summary>
@@ -91,6 +97,19 @@ namespace KokoSim.Unity.Home
             EventService.Complete();     // ここで初めてキューから外す（見終わった）
             if (OpenNext()) return;      // 同じ週に2件以上発火したときは続けて見せる
             Close();
+        }
+
+        /// <summary>
+        /// 会話を飛ばす（赴任イベント・チュートリアル・issue #1496）。最後の行へ進める＝選択肢のある会話は
+        /// 「分かった／もう説明はいらない」が開き、無い会話は最後の行の次のクリックで閉じる。
+        /// </summary>
+        private void Skip()
+        {
+            if (_event == null || !_event.Skippable || ShowingChoices) return;
+            var last = _event.Lines.Count - 1;
+            if (_line >= last) return;
+            _line = last;
+            RenderLine();
         }
 
         private void Close()
@@ -198,6 +217,9 @@ namespace KokoSim.Unity.Home
                     : "クリックで閉じる";
             // 3択を出している間は「クリックで次へ」を消す（面を押しても進まないので嘘になる）。
             if (_hint != null) _hint.EnableInClassList("ev__hint--none", ShowingChoices);
+            // 飛ばせるのは赴任イベント・チュートリアルの、最後の行より前だけ。
+            if (_skip != null)
+                _skip.EnableInClassList("ev__skip--open", _event.Skippable && _line < _event.Lines.Count - 1);
             RenderChoices();
         }
     }

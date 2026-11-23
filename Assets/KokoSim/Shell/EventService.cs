@@ -100,6 +100,11 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>発火時に確定させた抽選の材料（選ぶまで画面には出さない）。</summary>
         internal PendingChoice Pending;
+
+        /// <summary>
+        /// 会話を飛ばせるか（赴任イベント・チュートリアル・issue #1496）。飛ばすと最後の行（選択肢があればそれ）まで進む。
+        /// </summary>
+        public bool Skippable;
     }
 
     /// <summary>値つきの選択肢1つ（<see cref="PresentedEvent.Menu"/>）。</summary>
