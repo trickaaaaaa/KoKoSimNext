@@ -435,6 +435,19 @@ events:
         Assert.Equal(-1, exam.Outcomes.Single(o => o.Stance == EventStance.AsUsual).EffectOrNone.Trust);
     }
 
+    /// <summary>マスコミ取材（issue #1467 P2）: 名声 +1・次の公式戦の自校側プレッシャー +1。kind は Random のまま。</summary>
+    [Fact]
+    public void RepositoryTable_MediaCoverage_RaisesFameAndNextMatchPressure()
+    {
+        var media = RepositoryEvents().Single(e => e.Id == "media_coverage");
+        Assert.Equal(EventKind.Random, media.Kind);
+        Assert.False(media.HasChoices);
+        Assert.Equal(1.0, media.Effect.Fame);
+        Assert.Equal(1, media.Effect.PressureNextMatch);
+        Assert.Equal(0.0, media.Effect.Trust);
+        Assert.False(media.Effect.IsEmpty);
+    }
+
     [Fact]
     public void AceCast_PicksTheUninjuredNumberOne()
     {

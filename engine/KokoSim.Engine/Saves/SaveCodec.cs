@@ -106,6 +106,7 @@ public static class SaveCodec
             .Add("lastJinguChampionId", NullableIntToJson(s.LastJinguChampionId))
             .Add("lastLineup", LineupSaves.ToJson(s.LastLineup))
             .Add("momentumLevel", s.MomentumLevel)
+            .Add("pendingMatchPressure", s.PendingMatchPressure)
             .Add("batteryInnings", BatteryInningsToJson(s.BatteryInnings))
             .Add("cohesionDelta", s.CohesionDelta)
             .Add("managerPostings", ManagerPostingSaves.ClosedToJson(s.ManagerPostings))
@@ -601,6 +602,7 @@ public static class SaveCodec
             LastLineup = LineupSaves.FromJson(root["lastLineup"]),
             // チームの勢いは v24 で追加。Migrate が旧セーブへ0を補うので素直に読む。
             MomentumLevel = root.Int("momentumLevel"),
+            PendingMatchPressure = root.Has("pendingMatchPressure") ? root.Int("pendingMatchPressure") : 0,
             // バッテリーの積み重ねは v28 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             BatteryInnings = BatteryInningsFromJson(root.Arr("batteryInnings")),
             // 結束の上下は v29 で追加。Migrate が旧セーブへ0を補うので素直に読む。

@@ -1427,6 +1427,44 @@ public sealed class SaveCodecTests
         Assert.Equal(0, s.MomentumLevel);
     }
 
+    // ===== 束7: 大会報奨の基準・プロ入りの名声・取材のプレッシャー（issue #1469 #1270 #1467） =====
+
+    [Fact]
+    public void EconomyBundle7Fields_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.ManagerGrownKoshienWinsBaseline = 4;
+        state.ManagerPendingDraftFame = 6.0;
+        state.PendingMatchPressure = 1;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(4, s.ManagerGrownKoshienWinsBaseline);
+        Assert.Equal(6.0, s.ManagerPendingDraftFame);
+        Assert.Equal(1, s.PendingMatchPressure);
+    }
+
+    /// <summary>キーを持たない旧セーブも読める（基準は null＝次の総括で今の通算を採る・保留は0）。</summary>
+    [Fact]
+    public void SaveWithoutEconomyBundle7Keys_StillLoads()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.ManagerGrownKoshienWinsBaseline = 4;
+        state.ManagerPendingDraftFame = 6.0;
+        state.PendingMatchPressure = 1;
+        var json = SaveCodec.Serialize(state)
+            .Replace(",\"managerGrownKoshienWinsBaseline\":4", "")
+            .Replace(",\"managerPendingDraftFame\":6", "")
+            .Replace(",\"pendingMatchPressure\":1", "");
+        Assert.DoesNotContain("managerGrownKoshienWinsBaseline", json);
+        Assert.DoesNotContain("managerPendingDraftFame", json);
+        Assert.DoesNotContain("pendingMatchPressure", json);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Null(s.ManagerGrownKoshienWinsBaseline);
+        Assert.Equal(0.0, s.ManagerPendingDraftFame);
+        Assert.Equal(0, s.PendingMatchPressure);
+    }
+
     // ===== 成長タイプの分野別化（issue #866・v25） =====
 
     [Fact]

@@ -13,6 +13,19 @@ public sealed class PressureTests
 {
     private static readonly PressureCoefficients C = new();
 
+    // ===== 取材の後の公式戦・自校側だけの加点（設計書02 §3.1・issue #1467 P2） =====
+
+    [Fact]
+    public void SideBonus_AddsOnlyWhenNonZero_AndCapsAtMax()
+    {
+        Assert.Equal(3, PressureModel.WithSideBonus(3, 0, C));
+        Assert.Equal(4, PressureModel.WithSideBonus(3, 1, C));
+        Assert.Equal(C.MaxIndex, PressureModel.WithSideBonus(C.MaxIndex, 1, C));
+        // 精神力50は指数が上がっても恒等。精神力30なら負側へ 0.008（=0.4×0.02×1）ぶん動く。
+        Assert.Equal(1.0, PressureModel.Multiplier(50, PressureModel.WithSideBonus(2, 1, C), C));
+        Assert.Equal(PressureModel.Multiplier(30, 2, C) - 0.008, PressureModel.Multiplier(30, PressureModel.WithSideBonus(2, 1, C), C), 9);
+    }
+
     // ===== 士気の土台（設計書04 §1.2・issue #1270 M1） =====
 
     [Theory]

@@ -522,6 +522,9 @@ public static class GameEngine
         var defenseTeam = ReferenceEquals(defense, p.Away) ? p.AwayTeam : p.HomeTeam;
         var offenseMorale = PressureModel.MoraleMitigation(offenseTeam.Morale, ctx.Pressure);
         var defenseMorale = PressureModel.MoraleMitigation(defenseTeam.Morale, ctx.Pressure);
+        // 自校側だけのプレッシャー加点（取材の後の公式戦・issue #1467 P2）。0なら恒等。
+        var offenseExtraPressure = offenseTeam.ExtraPressure;
+        var defenseExtraPressure = defenseTeam.ExtraPressure;
 
         var bases = new BaseState();
         var outs = 0;
@@ -858,12 +861,12 @@ public static class GameEngine
                 // プレッシャー×精神力（設計書02 §3）: 緩和=伝令、負側増幅=疲労・動揺。精神力50なら恒等。
                 var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
                 pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
-                    currentPitcher.Mental, pressureIdx, ctx.Pressure,
+                    currentPitcher.Mental, PressureModel.WithSideBonus(pressureIdx, defenseExtraPressure, ctx.Pressure), ctx.Pressure,
                     defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
                     defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills,
                     defenseMorale));
                 bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
-                    batter.Mental, pressureIdx, ctx.Pressure,
+                    batter.Mental, PressureModel.WithSideBonus(pressureIdx, offenseExtraPressure, ctx.Pressure), ctx.Pressure,
                     offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills,
                     moraleMitigation: offenseMorale));
 

@@ -249,11 +249,15 @@ events:
           - who: manager
             say: "じゃあ今日はビデオでも見るか。"
 
+  # 取材（設計書03 §5.2・issue #1467 P2・#1270 E1）: 名声 +1、次の公式戦1試合だけ自校側のプレッシャー指数 +1。
   - id: media_coverage
     kind: Random
     weight: 1.5
     cooldown_weeks: 8
     text: "マスコミの取材が入った。部員の笑顔が、ぎこちない。"
+    effects:
+      fame: 1
+      pressure_next_match: 1
     variants:
       - lines:
           - who: narration

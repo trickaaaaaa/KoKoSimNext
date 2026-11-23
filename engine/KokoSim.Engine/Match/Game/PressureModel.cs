@@ -105,6 +105,13 @@ public static class PressureModel
     private static readonly SkillCoefficients DefaultSkills = new();
 
     /// <summary>
+    /// 片側だけの加点（取材の後の公式戦・issue #1467 P2）を足した指数。上限 <see cref="PressureCoefficients.MaxIndex"/> で止める。
+    /// 加点0なら <paramref name="pressureIndex"/> をそのまま返す＝従来と1ビットも変わらない。
+    /// </summary>
+    public static int WithSideBonus(int pressureIndex, int sideBonus, PressureCoefficients c)
+        => sideBonus == 0 ? pressureIndex : Math.Clamp(pressureIndex + sideBonus, 0, c.MaxIndex);
+
+    /// <summary>
     /// 士気の土台（設計書04 §1.2「部員信頼→チーム士気の基礎値」・issue #1270 M1）。士気＝監督の信頼度（0〜100）。
     /// 高い（≧<see cref="PressureCoefficients.MoraleHighThreshold"/>）と負側の緩和に +<see cref="PressureCoefficients.MoraleMitigation"/>、
     /// 低い（＜<see cref="PressureCoefficients.MoraleLowThreshold"/>）と −（負側を強める）、その間は0。

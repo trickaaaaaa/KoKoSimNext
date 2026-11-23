@@ -292,6 +292,8 @@ public sealed class SaveState
     /// 旧セーブは勢いという概念が存在しえない＝既定0で補う。
     /// </summary>
     public int MomentumLevel { get; set; }
+    /// <summary>次の公式戦1試合だけ自校側のプレッシャー指数に足す点（マスコミ取材・issue #1467）。</summary>
+    public int PendingMatchPressure { get; set; }
 
     /// <summary>
     /// 自校のバッテリーの積み重ね（設計書23 §2.3・issue #933・v28）。投手ID×捕手IDの組ごとの一緒に守ったイニング数。

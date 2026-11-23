@@ -186,6 +186,16 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public int MomentumLevel { get; private set; }
 
+        /// <summary>
+        /// 次の公式戦1試合だけ自校側のプレッシャー指数に足す点（マスコミ取材・設計書02 §3.1・issue #1467 P2）。
+        /// 公式戦を1試合終えると0へ戻す（練習試合では消えない）。**セーブに載る**。
+        /// </summary>
+        public int PendingMatchPressure { get; private set; }
+
+        /// <summary>取材などで次の公式戦のプレッシャーを積む（重ねても積み増さない＝大きい方）。</summary>
+        public void AddPendingMatchPressure(int points)
+            => PendingMatchPressure = System.Math.Max(PendingMatchPressure, points);
+
         private static readonly MomentumCoefficients MomentumCoeff = new();
 
         /// <summary>
@@ -794,6 +804,7 @@ namespace KokoSim.Unity.Shell
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
             RecordOfficialMatch(LastOutcome, matchDay);
+            PendingMatchPressure = 0;   // 取材のプレッシャーは公式戦1試合だけ（issue #1467）
             ResultPending = true;
             ExitTournamentIfFinished();
             KickPrefetch();   // 次ラウンドの自県裏カードを先行して温める（未終了時のみ）。
@@ -845,6 +856,7 @@ namespace KokoSim.Unity.Shell
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
             }
             RecordOfficialMatch(LastOutcome, matchDay);
+            PendingMatchPressure = 0;   // 取材のプレッシャーは公式戦1試合だけ（issue #1467）
             ResultPending = true;
             ExitTournamentIfFinished();
             KickPrefetch();   // 次ラウンドの自県裏カードを先行して温める（未終了時のみ）。
@@ -1202,6 +1214,7 @@ namespace KokoSim.Unity.Shell
             s.LastJinguChampionId = LastJinguChampionId;
             s.LastLineup = LastLineup;
             s.MomentumLevel = MomentumLevel;
+            s.PendingMatchPressure = PendingMatchPressure;
             PruneBatteryLedger();
             s.BatteryInnings = new List<BatteryInningsEntry>(BatteryLedger.Entries());
             s.CohesionDelta = CohesionDelta;
@@ -1286,6 +1299,7 @@ namespace KokoSim.Unity.Shell
             ClearTransient();
             LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
             MomentumLevel = s.MomentumLevel;   // 同上（v24・issue #863）
+            PendingMatchPressure = s.PendingMatchPressure;   // 取材の保留（issue #1467）
             BatteryLedger = BatteryLedger.From(s.BatteryInnings ?? new List<BatteryInningsEntry>());   // 同上（v28・issue #933）
             CohesionDelta = s.CohesionDelta;   // 同上（v29・issue #934）
             _matchInjurySeq = s.MatchInjurySeq;   // 同上（試合ごとの乱数の連番・issue #1249）
@@ -1339,6 +1353,7 @@ namespace KokoSim.Unity.Shell
             MatchHistory = new MatchRecordBook();
             Year = 1;
             MomentumLevel = 0;
+            PendingMatchPressure = 0;
             BatteryLedger = new BatteryLedger();
             CohesionDelta = 0.0;
             ClearTransient();

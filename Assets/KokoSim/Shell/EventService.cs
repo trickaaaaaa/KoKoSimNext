@@ -396,6 +396,12 @@ namespace KokoSim.Unity.Shell
                     if (d < 0) bad = true;
                 }
             }
+            if (effect.PressureNextMatch != 0)
+            {
+                // 次の公式戦1試合だけ自校側のプレッシャー指数に足す（issue #1467 P2）。重ねても積み増さない（大きい方）。
+                GameSession.Current.AddPendingMatchPressure(effect.PressureNextMatch);
+                parts.Add("次の公式戦のプレッシャー " + Signed(effect.PressureNextMatch));
+            }
             if (parts.Count == 0) return null;
 
             var sentence = string.Join("、", parts.ToArray()) + (bad ? "" : "！");

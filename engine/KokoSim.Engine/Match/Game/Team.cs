@@ -99,6 +99,12 @@ public sealed record Team
     public double? Morale { get; init; }
 
     /// <summary>
+    /// 自校側だけのプレッシャー指数の加点（設計書02 §3.1・issue #1467 P2）。マスコミ取材の後の最初の公式戦で +1。
+    /// このチームの打者の打席・投手の投球のときだけ足す（相手には効かない）。0（既定・AI校・裏試合・統計シム）は恒等。
+    /// </summary>
+    public int ExtraPressure { get; init; }
+
+    /// <summary>
     /// バッテリーの積み重ね（設計書23 §2.3・issue #933）: 投手ID×捕手ID（<see cref="Player.SourceId"/>）ごとの
     /// 一緒に守ったイニング数（重み付き）。自校だけが持つ（Unity側 GameSession が <c>BatteryLedger</c> から渡す）。
     /// null＝記録を持たない（AI校・裏試合・統計シム）＝同じ学校で過ごした年数（学年）から近似する（Q39）。
