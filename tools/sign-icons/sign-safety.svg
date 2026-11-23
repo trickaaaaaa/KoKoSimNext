@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+<!-- セ：セーフティバント（軽く当てて一塁へ走り出す）。黒＝絵、白＝抜き（PNG化で透明になる） -->
+<g transform="translate(10,24) rotate(14) scale(0.95)" fill="#000000"><path d="M0,-2.4 L18,-3 L46,-5.5 Q50,0 46,5.5 L18,3 L0,2.4 Z"></path><circle cx="0" cy="0" r="3.6"></circle></g>
+<path d="M44,50 L50,60" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round" stroke-dasharray="0.1 6"></path>
+<circle cx="52" cy="72" r="8" fill="#ffffff" stroke="#000000" stroke-width="4"></circle>
+<path d="M6,87 L94,87" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round"></path>
+<g fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round"><path d="M64,32 L74,32"></path><path d="M60,42 L74,42"></path></g>
+<path d="M78,28 L90,37 L78,46 Z" fill="#000000" stroke="#000000" stroke-width="3" stroke-linejoin="round"></path>
+<rect x="76" y="66" width="16" height="16" fill="#000000"></rect>
+</svg>

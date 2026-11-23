@@ -2343,6 +2343,11 @@
 .tcard__pic--breaking { background-image: url("project:///Assets/UI/Images/signs/sign-breaking.png"); }
 .tcard__pic--control { background-image: url("project:///Assets/UI/Images/signs/sign-control.png"); }
 .tcard__pic--push { background-image: url("project:///Assets/UI/Images/signs/sign-push.png"); }
+.tcard__pic--safety { background-image: url("project:///Assets/UI/Images/signs/sign-safety.png"); }
+.tcard__pic--ibb { background-image: url("project:///Assets/UI/Images/signs/sign-ibb.png"); }
+.tcard__pic--pitchout { background-image: url("project:///Assets/UI/Images/signs/sign-pitchout.png"); }
+.tcard__pic--buntshift { background-image: url("project:///Assets/UI/Images/signs/sign-buntshift.png"); }
+.tcard__pic--pitcharound { background-image: url("project:///Assets/UI/Images/signs/sign-pitcharound.png"); }
 /* 下段＝名前。左の帯（隣に隠れない幅）の中央へ置く＝カード全幅で中央揃えにすると隣の下に潜る。
    段の高さと級数は TacticsCardDeck.cs が決める（長い名前は2行に割るので、幅と高さの両方で効く）。 */
 .tcard__cap {

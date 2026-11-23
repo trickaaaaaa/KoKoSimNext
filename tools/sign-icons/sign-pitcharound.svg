@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+<!-- 際：際どい所（ゾーンの角ぎりぎりを突く）。黒＝絵、白＝抜き（PNG化で透明になる） -->
+<rect x="14" y="14" width="56" height="64" fill="none" stroke="#000000" stroke-width="6" stroke-linejoin="round"></rect>
+<g fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round"><path d="M32,50 L44,62"></path><path d="M28,64 L40,76"></path><path d="M44,40 L56,52"></path></g>
+<circle cx="70" cy="78" r="11" fill="#ffffff" stroke="#000000" stroke-width="4"></circle>
+<path d="M6,92 L94,92" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round"></path>
+</svg>
