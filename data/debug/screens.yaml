@@ -430,3 +430,102 @@ screens:
       - shot: 02-master-volume-down
       # 設定は PlayerPrefs（この機械の好み）に残るので、下げた音量を戻しておく
       - click: .ucp-arrow[3]
+  # ── 赴任イベントとチュートリアル（issue #1496） ──
+
+  - id: arrival-tutorial-1496-new
+    name: "はじめから→赴任イベント（新設校・1年のマネージャー）→最初の説明（週の送り方・練習）→スキップ→もう説明はいらない（issue #1496）"
+    steps:
+      - new_game: {seed: 1}
+      # 本番は新規ゲーム設定の「この高校ではじめる」が積む（StartNewSchool には入れていない＝ここで同じ入口を呼ぶ）。
+      - call: TutorialService.OnNewSchoolStarted()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-arrival-first-line
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-arrival-second-line
+      # 赴任イベントを飛ばす→最後の行へ
+      - click: ev-skip
+      - wait: 5
+      - shot: 03-arrival-skipped-to-last
+      - click: ev-novel
+      - wait: 5
+      - shot: 04-basics-first-line
+      - click: ev-novel
+      - wait: 5
+      - shot: 05-basics-second-line
+      # 説明を飛ばす→最後の行と「分かった／もう説明はいらない」
+      - click: ev-skip
+      - wait: 5
+      - shot: 06-basics-choices
+      - click: .choice-btn[1]
+      - wait: 5
+      - shot: 07-dismissed-reply
+      - read: =TutorialService.Progress.Dismissed
+      - read: =TutorialService.Progress.Seen
+
+  - id: arrival-tutorial-1496-transfer
+    name: "転任→赴任イベント（転任用・2年か3年のマネージャー）。チュートリアルは出ない（issue #1496）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      # 転任の確定（ManagerTransferService.Confirm）が赴任イベントを積む
+      - transfer: ""
+      - read: =ManagerService.Manager.TeamManagerGrade
+      - read: =EventService.Pending
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-transfer-arrival-a
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-transfer-arrival-b
+      - click: ev-novel
+      - wait: 5
+      - shot: 03-transfer-arrival-c
+
+  - id: arrival-tutorial-1496-scenes
+    name: "場面ごとの説明（公式戦の前・試合の前・スカウト・部費・夏の引退）の1行目と選択肢（issue #1496）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: TutorialService.Raise("FirstTournament")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-first-tournament
+      - click: ev-skip
+      - wait: 5
+      - shot: 02-first-tournament-choices
+      - click: .choice-btn[0]
+      - wait: 5
+      - call: TutorialService.Raise("FirstMatch")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 03-first-match
+      - click: ev-skip
+      - wait: 5
+      - click: .choice-btn[0]
+      - wait: 5
+      - call: TutorialService.Raise("Scouting")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 04-scouting
+      - click: ev-skip
+      - wait: 5
+      - click: .choice-btn[0]
+      - wait: 5
+      - call: TutorialService.Raise("Purchases")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 05-purchases
+      - click: ev-skip
+      - wait: 5
+      - click: .choice-btn[0]
+      - wait: 5
+      - call: TutorialService.Raise("SummerRetirement")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 06-summer-retirement
+      - click: ev-skip
+      - wait: 5
+      - shot: 07-summer-retirement-choices
+      - read: =TutorialService.Progress.Seen

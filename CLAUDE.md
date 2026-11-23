@@ -165,6 +165,7 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 再現トークン | ReproToken | `k1:<rngState>:<pa>:<pitch>:<fixtureFp>`。指紋不一致は警告して再生しない（設計書17 §3.3） |
 | 場面ジャンプ / 強制発動 | ScenarioStart / ForcedOutcome | デバッグ注入。`GameResult.ScenarioId` / `HasForcedOutcomes` が立った試合は digest・統計から除外（設計書17 §3.4/§6.1） |
 | デバッグ橋渡し | DebugBridge | MCP `execute_code`（C#6）から叩く static＋JSON文字列のみのAPI（設計書17 §7） |
+| 赴任イベント / チュートリアル | Tutorial（arrival_new_school / arrival_transfer）/ TutorialScene・TutorialProgress | マネージャーが出迎え・場面ごとに1回だけ進め方を教える。「はじめから」だけ・スキップ可・「もう説明はいらない」で以降出ない。進み具合はセーブ v42（design-04 §3.4・issue #1496） |
 
 ## 進め方
 
