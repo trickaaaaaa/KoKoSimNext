@@ -102,9 +102,9 @@ public sealed class PitcherSenseTests
         Assert.Equal(1.0, c.PitcherSenseGrowthFactor(AbilityScale.Disp(30)), 9);
         Assert.Equal(1.0 + 15 * c.PitcherSenseGrowthSlope, c.PitcherSenseGrowthFactor(AbilityScale.Disp(45)), 9);
         Assert.Equal(c.PitcherSenseGrowthMax, c.PitcherSenseGrowthFactor(99), 9);
-        // 表示1＝物理 1+Δ。下限は傾きを急にしたときに効く。
-        Assert.Equal(1.0 + (1 + AbilityScale.Delta - 30) * c.PitcherSenseGrowthSlope, c.PitcherSenseGrowthFactor(1), 9);
-        Assert.Equal(c.PitcherSenseGrowthMin, (c with { PitcherSenseGrowthSlope = 0.1 }).PitcherSenseGrowthFactor(1), 9);
+        // 表示1＝物理 1+Δ＝8。1+(8−30)×0.03＝0.34 は下限で止まる。
+        Assert.Equal(c.PitcherSenseGrowthMin, c.PitcherSenseGrowthFactor(1), 9);
+        Assert.Equal(1.0 + (20 - 30) * c.PitcherSenseGrowthSlope, c.PitcherSenseGrowthFactor(AbilityScale.Disp(20)), 9);
     }
 
     private static DevelopingPlayer Blank(int senseDisplay)
@@ -192,16 +192,9 @@ public sealed class PitcherSenseTests
         var ratio = Sum(hi) / Sum(lo);
         _out.WriteLine($"制球+キレ+スタミナの伸び 高/低 = {ratio:F2}（既定の傾き {new TrainingCoefficients().PitcherSenseGrowthSlope}）");
 
-        // 参考（判断材料・OPEN-QUESTIONS）: 傾きを強めたとき。
-        var strong = new TrainingCoefficients { PitcherSenseGrowthSlope = 0.03, PitcherSenseGrowthMin = 0.5, PitcherSenseGrowthMax = 2.0 };
-        var hiS = fielders.Select(p => ConvertAndTrain(p, 35, strong)).ToList();
-        var loS = fielders.Select(p => ConvertAndTrain(p, 10, strong)).ToList();
-        _out.WriteLine("参考 傾き0.03・0.5〜2.0倍: " + Row("高", hiS) + " / " + Row("低", loS)
-            + $" / 高/低 = {Sum(hiS) / Sum(loS):F2}");
-
-        // 既定値（小さく始める）での向きと最低限の差。高＞並＞低。
+        // オーナー判断（2026-11-23・覚醒を強める＝傾き0.03・倍率0.5〜2.0）: 高/低 ≈1.47。高＞並＞低。
         Assert.True(Sum(hi) > Sum(mid) && Sum(mid) > Sum(lo), "投手センスの順に伸びるはず");
-        Assert.True(ratio > 1.10, $"投手センスが高い野手は投手転向でよく伸びるはず: 高/低={ratio:F2}");
+        Assert.True(ratio > 1.40, $"投手センスが高い野手は投手転向でよく伸びるはず: 高/低={ratio:F2}");
         Assert.True(hi.Average(x => x.Kmh) > lo.Average(x => x.Kmh), "球速も伸びるはず");
     }
 

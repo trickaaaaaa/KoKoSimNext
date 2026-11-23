@@ -158,12 +158,12 @@ public sealed record TrainingCoefficients
     // 投手センスで決まる＝野手として平凡でも投手センスが高い選手は、投手の練習を振ると大きく伸びる（投手転向で覚醒）。
     /// <summary>倍率1.0になる投手センス（物理Lv＝表示Lv＋Δ）。既定の新入生（talent_center_default 32）の投手役の平均（実測30.8）。</summary>
     public double PitcherSenseGrowthNeutral { get; init; } = 30.0;
-    /// <summary>投手センス1あたりの倍率の傾き。</summary>
-    public double PitcherSenseGrowthSlope { get; init; } = 0.012;
+    /// <summary>投手センス1あたりの倍率の傾き（オーナー判断 2026-11-23：覚醒を強める＝0.012→0.03・倍率0.5〜2.0）。</summary>
+    public double PitcherSenseGrowthSlope { get; init; } = 0.03;
     /// <summary>倍率の下限（投手センスが極端に低くても投手系がまったく伸びなくはしない）。</summary>
-    public double PitcherSenseGrowthMin { get; init; } = 0.7;
+    public double PitcherSenseGrowthMin { get; init; } = 0.5;
     /// <summary>倍率の上限。</summary>
-    public double PitcherSenseGrowthMax { get; init; } = 1.4;
+    public double PitcherSenseGrowthMax { get; init; } = 2.0;
 
     /// <summary>投手センス（表示Lv）→投手系能力の経験値倍率。物差しは今の物差し（表示Lv＋Δ）で読む（issue #1080）。</summary>
     public double PitcherSenseGrowthFactor(int pitcherSenseDisplay)
