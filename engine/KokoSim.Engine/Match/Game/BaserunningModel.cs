@@ -1290,7 +1290,7 @@ public static class BaserunningModel
                 }
                 else
                 {
-                    ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts, r2StealBreak);
+                    ResolveGrounderAdvance(bases, r2, adv, currentOuts, coeff, rng, mv, ref extraOuts, r2StealBreak);
                 }
                 r2 = null; // 進塁・憤死・自重のいずれでも二塁走者の帰趨はここで確定（自重時は bases.Second のまま）。
             }
@@ -1347,16 +1347,22 @@ public static class BaserunningModel
     /// （実際の内野は「一塁の確実な1アウト」を捨てて三塁の走者を直接狙う判断はしない＝守備の危険回避を
     /// 物理レースだけでは表現できないため、旧実装にあった「一塁を捨てて三塁へ直接送球」分岐は廃止）。
     /// 二塁走者の帰趨は、実際に発生する送球（一塁への送球到達時刻）を起点にした転送レース（P_relay）だけで決まる:
+    /// 0) 走者より前（遊撃・三塁方向＝捕球点が本塁−二塁の線より三塁側）のゴロ → 原則自重（RNG非消費・issue #1418）。
+    ///    例外は三盗で投球と同時に走っていた走者（もう走っている）。
     /// A) 転送の脅威が実在する（P_relay &lt; 送り閾値）→ 走者自重（RNG非消費）／
     /// B) 脅威が薄い → 走者は三塁へ進み、転送とレース（P_relay）。
     /// 走者所要は本塁・三塁レースと同じ <see cref="HomePlayResolver"/> 経由（新しい走者の式を書かない）。
     /// 呼び出し前提: 非フォースの二塁走者（⇒一塁は必ず空）・三塁は空き・extraOuts==0・ゴロ。
     /// </summary>
     private static void ResolveGrounderAdvance(
-        BaseState bases, Player r2, HomePlayContext home,
+        BaseState bases, Player r2, HomePlayContext home, int currentOuts,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
         ref int extraOuts, bool stealBreak = false)
     {
+        // 0) 打球の方向で自重（issue #1418・オーナー決定 案C）。二塁走者は自分より前（三塁側）へのゴロでは進まない
+        //    ＝野手が三塁へ投げやすく、走者の目の前で捕られる。右方向（一・二塁側）のゴロだけ転送との勝負に進む。
+        if (!stealBreak && IsGrounderInFrontOfSecondRunner(home)) return;
+
         var advance = HomePlayResolver.AdvanceParams(home.Field, coeff);
         // 三盗で投球と同時に走っていた二塁走者は、ゴロを読んでから走る遅れが無い（issue #1138）。
         var delay = stealBreak ? coeff.StealBreakGrounderStartDelaySeconds : coeff.GrounderAdvanceStartDelaySeconds;
@@ -1375,8 +1381,8 @@ public static class BaserunningModel
             home.Field.FirstBase, arriveAtFirst, coeff.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
         var pRelay = HomePlayResolver.SuccessProbability(
             r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
-        // 送り閾値（アウト数を取らない＝2アウト緩和なし。理由は HomeSendDecision.SendAdvanceThreshold のコメント）。
-        var t = HomeSendDecision.SendAdvanceThreshold(home.Aggression, home.Tactics);
+        // 送り閾値（2アウト緩和なし・0アウトは上乗せ。理由は HomeSendDecision.SendAdvanceThreshold のコメント）。
+        var t = HomeSendDecision.SendAdvanceThreshold(currentOuts, home.Aggression, home.Tactics);
 
         // A) 自重。二塁残留（bases.Second は r2 のまま）。RNG非消費（本塁・三塁レースの流儀, 不変条件#2）。
         if (pRelay < t) return;
@@ -1388,6 +1394,13 @@ public static class BaserunningModel
             r2, 2, relay, home.Field, coeff, advance, rng, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
         ResolveAdvanceRace(bases, r2, race, relayMargin, delay, coeff, mv, ref extraOuts);
     }
+
+    /// <summary>
+    /// ゴロが二塁走者より前（遊撃・三塁方向）で捕られたか（issue #1418）。捕球点が本塁−二塁の線（Z 軸）より
+    /// 三塁側（X&lt;0）なら前。純関数・乱数不使用。
+    /// </summary>
+    internal static bool IsGrounderInFrontOfSecondRunner(HomePlayContext home)
+        => home.Situation.BallFieldedPoint.X < 0.0;
 
     /// <summary>
     /// 盗塁で投球と同時に走っていた二塁・三塁走者が、打球を空中で捕られたときの飛び出しの勝負（issue #1138）。

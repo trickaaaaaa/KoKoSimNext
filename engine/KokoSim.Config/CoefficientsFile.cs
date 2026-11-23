@@ -2409,8 +2409,9 @@ public static class CoefficientsLoader
         public double SendThirdMinSuccess { get; set; } = D.SendThirdMinSuccess;
         public double SendThirdTwoOutRelax { get; set; } = D.SendThirdTwoOutRelax;
         public double SendThirdAggressionSpan { get; set; } = D.SendThirdAggressionSpan;
-        // ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318。アウト数を取らない＝2アウト緩和なし）
+        // ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318。2アウト緩和なし・0アウトは上乗せ＝#1418）
         public double SendAdvanceMinSuccess { get; set; } = D.SendAdvanceMinSuccess;
+        public double SendAdvanceZeroOutExtra { get; set; } = D.SendAdvanceZeroOutExtra;
         public double SendAdvanceAggressionSpan { get; set; } = D.SendAdvanceAggressionSpan;
         // 犠飛以外のタッチアップの送り判定（design-14 P3-11）
         public double SendTagUpMinSuccess { get; set; } = D.SendTagUpMinSuccess;
@@ -2563,6 +2564,7 @@ public static class CoefficientsLoader
             SendThirdTwoOutRelax = SendThirdTwoOutRelax,
             SendThirdAggressionSpan = SendThirdAggressionSpan,
             SendAdvanceMinSuccess = SendAdvanceMinSuccess,
+            SendAdvanceZeroOutExtra = SendAdvanceZeroOutExtra,
             SendAdvanceAggressionSpan = SendAdvanceAggressionSpan,
             SendTagUpMinSuccess = SendTagUpMinSuccess,
             SendTagUpAggressionSpan = SendTagUpAggressionSpan,

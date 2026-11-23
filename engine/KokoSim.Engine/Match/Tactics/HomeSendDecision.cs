@@ -31,13 +31,15 @@ public static class HomeSendDecision
 
     /// <summary>
     /// ゴロ凡打の進塁打（二塁→三塁, Issue #318）の送り閾値（進塁見込みがこれ以上なら進塁を試みる）。
-    /// **アウト数を取らない**: ゴロ凡打は currentOuts&gt;=2 で <see cref="Game.BaserunningModel"/> の ApplyInPlayOut が
-    /// 即 return する（この進塁枝に到達するのは 0/1 アウトのみ）ため、2アウト緩和の枝は死にコードになる。
+    /// 2アウト緩和は無い: ゴロ凡打は currentOuts&gt;=2 で <see cref="Game.BaserunningModel"/> の ApplyInPlayOut が
+    /// 即 return する（この進塁枝に到達するのは 0/1 アウトのみ）。0アウトは <see cref="TacticsCoefficients.SendAdvanceZeroOutExtra"/>
+    /// を足して慎重にする（issue #1418）。outs はこの打席前のアウト数。
     /// aggression: 0=超慎重, 0.5=中立, 1=超積極。純関数・乱数不使用。
     /// </summary>
-    public static double SendAdvanceThreshold(double aggression, TacticsCoefficients c)
+    public static double SendAdvanceThreshold(int outs, double aggression, TacticsCoefficients c)
     {
         var t = c.SendAdvanceMinSuccess;
+        if (outs == 0) t += c.SendAdvanceZeroOutExtra;
         t -= (aggression - 0.5) * c.SendAdvanceAggressionSpan;
         return MathUtil.Clamp(t, 0.05, 0.95);
     }

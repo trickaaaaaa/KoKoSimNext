@@ -121,7 +121,7 @@ public sealed class GrounderAdvanceRaceTests
         // 一塁送球到達が早い（中継の脅威が実在する）＝P_relay が閾値未満＝自重（二塁残留）。RNG非消費（不変条件#2）。
         var home = Grounder(x: 9, z: 40, fieldedAt: 1.2, arm: 70, throwArriveSeconds: 1.7);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
-        var t = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
+        var t = HomeSendDecision.SendAdvanceThreshold(0, 0.5, new TacticsCoefficients());
         Assert.True(PRelay(home, r2) < t, "この一塁到達は自重域（P_relay < 閾値）のはず");
 
         var rng = new Xoshiro256Random(321);
@@ -147,7 +147,7 @@ public sealed class GrounderAdvanceRaceTests
         // 実測レンジ）＝定型的な進塁打のはず。打者は常にアウト（野選にならない）、走者はほとんどのケースで三塁へ。
         var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: 3.0);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
-        var t = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
+        var t = HomeSendDecision.SendAdvanceThreshold(0, 0.5, new TacticsCoefficients());
         Assert.True(PRelay(home, r2) >= t, "標準的な二塁ゴロは進塁を試みる域のはず");
 
         var rng = new Xoshiro256Random(11);
@@ -167,9 +167,13 @@ public sealed class GrounderAdvanceRaceTests
     [Fact]
     public void BranchB_Relay_ProducesReachAndRunnerOut()
     {
-        // 中継が際どくなる送球到達（拮抗域）＝三塁到達と三塁での走塁死の両方が出る。刺殺は extraOuts＋(2→3,Out)。
-        var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: 2.0);
+        // 中継が際どくなる送球到達（走る域の下端＝送り閾値のすぐ上）＝三塁到達と三塁での走塁死の両方が出る。
+        // 刺殺は extraOuts＋(2→3,Out)。閾値を上げた（issue #1418）ので到達時刻は閾値から逆算して探す。
         var r2 = new Player { Speed = 50, Baserunning = 50 };
+        var t = HomeSendDecision.SendAdvanceThreshold(0, 0.5, new TacticsCoefficients());
+        var arrive = 1.5;
+        while (PRelay(Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: arrive), r2) < t) arrive += 0.01;
+        var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: arrive);
         var rng = new Xoshiro256Random(29);
         int reached = 0, outs = 0, extra = 0;
         for (var i = 0; i < 4000; i++)
@@ -203,6 +207,87 @@ public sealed class GrounderAdvanceRaceTests
         }
         var fresh = new Xoshiro256Random(77);
         Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15); // 無血進塁は RNG 非消費
+    }
+
+    // ================= 打球の方向・アウト数（issue #1418・オーナー決定 案C）=================
+
+    [Theory]
+    [InlineData(-9.0, 40.0)]   // 遊撃方向
+    [InlineData(-20.0, 22.0)]  // 三塁方向
+    public void FrontSideGrounder_SecondRunnerHolds_NoRngConsumed(double x, double z)
+    {
+        // 走者より前（遊撃・三塁方向）のゴロは、転送が遅く成功見込みが高くても原則自重（二塁残留・RNG非消費）。
+        // 一塁送球到達 3.0s＝右方向なら大半が進む送球（BranchB_RoutineGrounder と同じ）。
+        var home = Grounder(x: x, z: z, fieldedAt: 1.4, arm: 50, throwArriveSeconds: 3.0);
+        var r2 = new Player { Speed = 80, Baserunning = 80 };
+        Assert.True(PRelay(home, r2) >= HomeSendDecision.SendAdvanceThreshold(0, 0.5, new TacticsCoefficients()),
+            "前提: 方向を見なければ走る域");
+
+        var rng = new Xoshiro256Random(5);
+        for (var i = 0; i < 50; i++)
+        {
+            var (bases, extraOuts, batterSafeOnFc, _) = RunOnce(home, r2, new Player(), rng);
+            Assert.Equal(0, extraOuts);
+            Assert.False(batterSafeOnFc);
+            Assert.Same(r2, bases.Second);
+            Assert.Null(bases.Third);
+        }
+        var fresh = new Xoshiro256Random(5);
+        Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15);
+    }
+
+    [Fact]
+    public void FrontSideGrounder_IsJudgedByFieldedPointSide()
+    {
+        Assert.True(BaserunningModel.IsGrounderInFrontOfSecondRunner(Grounder(x: -0.5, z: 40, fieldedAt: 1.4)));
+        Assert.False(BaserunningModel.IsGrounderInFrontOfSecondRunner(Grounder(x: 0.5, z: 40, fieldedAt: 1.4)));
+        Assert.False(BaserunningModel.IsGrounderInFrontOfSecondRunner(Grounder(x: 9, z: 40, fieldedAt: 1.4)));
+    }
+
+    [Fact]
+    public void SendAdvanceThreshold_ZeroOut_IsStricter_AndBaseIsAtLeastSixty()
+    {
+        // 送り閾値は 0.6〜0.7（オーナー決定）・0アウトはさらに慎重（上乗せ）。中立采配で測る。
+        var c = new TacticsCoefficients();
+        var t0 = HomeSendDecision.SendAdvanceThreshold(0, 0.5, c);
+        var t1 = HomeSendDecision.SendAdvanceThreshold(1, 0.5, c);
+        Assert.InRange(t1, 0.6, 0.7);
+        Assert.True(t0 > t1, $"0アウト({t0:F2})は1アウト({t1:F2})より慎重のはず");
+    }
+
+    [Fact]
+    public void ZeroOut_MarginalRelay_HoldsWhileOneOutGoes()
+    {
+        // 1アウトなら走る、0アウトなら自重する成功見込みの帯がある（右方向のゴロ）。一塁到達時刻を掃いて探す。
+        var r2 = new Player { Speed = 50, Baserunning = 50 };
+        var c = new TacticsCoefficients();
+        var t0 = HomeSendDecision.SendAdvanceThreshold(0, 0.5, c);
+        var t1 = HomeSendDecision.SendAdvanceThreshold(1, 0.5, c);
+        HomePlayContext? found = null;
+        for (var arrive = 1.5; arrive < 4.0 && found is null; arrive += 0.02)
+        {
+            var h = Grounder(x: 9, z: 40, fieldedAt: 1.4, throwArriveSeconds: arrive);
+            var p = PRelay(h, r2);
+            if (p >= t1 && p < t0) found = h;
+        }
+        Assert.NotNull(found);
+        var home = found!.Value;
+
+        var bases0 = new BaseState { Second = r2 };
+        var (_, extra0, _, _, _, _) = BaserunningModel.ApplyDetailed(
+            bases0, PlateAppearanceResult.InPlayOut, new Player(), 0, C, new Xoshiro256Random(1), collectMoves: true, home);
+        Assert.Equal(0, extra0);
+        Assert.Same(r2, bases0.Second);   // 0アウトは自重
+
+        var tried = 0;
+        var rng = new Xoshiro256Random(2);
+        for (var i = 0; i < 20; i++)
+        {
+            var b = new BaseState { Second = r2 };
+            BaserunningModel.ApplyDetailed(b, PlateAppearanceResult.InPlayOut, new Player(), 1, C, rng, collectMoves: true, home);
+            if (b.Second is null) tried++;
+        }
+        Assert.Equal(20, tried);   // 1アウトは走る（セーフ or 憤死で二塁は空く）
     }
 
     // ================= 従来テーブルへのフォールバック =================

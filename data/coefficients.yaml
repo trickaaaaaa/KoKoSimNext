@@ -1078,9 +1078,11 @@ tactics:
   send_third_min_success: 0.60       # 中立采配で三塁へ回す閾値
   send_third_two_out_relax: 0.25     # 2アウトは緩和
   send_third_aggression_span: 0.45   # aggression(0..1)で閾値を±動かす幅
-  # ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318）: アウト数を取らない（2アウト緩和なし）。
-  # ゴロ凡打は currentOuts>=2 で ApplyInPlayOut が即 return するため 2アウト緩和は死にコードになる。
-  send_advance_min_success: 0.35     # 中立采配で進塁を狙う閾値
+  # ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318）: 2アウト緩和なし（ゴロ凡打は currentOuts>=2 で
+  # ApplyInPlayOut が即 return する＝死にコード）。0アウトは上乗せで慎重に（issue #1418）。
+  # 遊撃・三塁方向（走者より前＝捕球点が二塁の左）のゴロはこの閾値より前に原則自重（BaserunningModel）。
+  send_advance_min_success: 0.65     # 中立采配で進塁を狙う閾値（#1418 で 0.35→0.65）
+  send_advance_zero_out_extra: 0.10  # 0アウトのときだけ閾値に足す（#1418）
   send_advance_aggression_span: 0.40 # aggression(0..1)で閾値を±動かす幅
   # 犠飛以外のタッチアップの送り判定（design-14 P3-11）。静止から出るぶん博打の分が悪く、実物の三塁コーチも
   # 「ほぼ確実な時だけ行かせる」＝他の送り閾値より高い。進塁打の0.35を流用すると送った試行の3〜4割が走塁死になる。
