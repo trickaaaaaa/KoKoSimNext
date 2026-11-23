@@ -47,6 +47,14 @@ public static class SummerRetirement
         _ => KoshienChampionEventId,
     };
 
+    /// <summary>
+    /// 新チーム発足（<see cref="RosterLifecycle.BeginNewTeam"/>）の結果を見て、出す引退の会話のイベントIDを返す。
+    /// この夏に引退した3年生が0人（新規開始の1年目＝全員1年生など）なら、返しに来る背番号も見送る先輩も居ないので
+    /// null＝会話を出さない（issue #1531）。新チームの発足・主将指名はそのまま続ける。
+    /// </summary>
+    public static string? EventIdFor(SummerExit exit, NewTeamTransition transition)
+        => transition.Retired.Count > 0 ? EventId(exit) : null;
+
     /// <summary>引退の会話のイベントか（主将指名より先に読ませる順序の判定に使う）。</summary>
     public static bool IsRetirementEvent(string? eventId)
         => eventId == PrefectureLossEventId || eventId == KoshienLossEventId || eventId == KoshienChampionEventId;

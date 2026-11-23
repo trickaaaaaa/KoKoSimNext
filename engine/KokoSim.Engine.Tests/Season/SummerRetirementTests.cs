@@ -116,6 +116,38 @@ public sealed class SummerRetirementTests
     }
 
     /// <summary>
+    /// 3年生が0人（新規開始の1年目＝全員1年生など）の夏は、引退の会話（「三年生が一人ずつ、背番号を返しに来た」）を
+    /// 出さない（issue #1531）。新チームの発足そのものは行う。
+    /// </summary>
+    [Theory]
+    [InlineData(SummerExit.PrefectureLoss)]
+    [InlineData(SummerExit.KoshienLoss)]
+    [InlineData(SummerExit.KoshienChampion)]
+    public void EventIdFor_NoThirdYears_ShowsNoRetirementEvent(SummerExit exit)
+    {
+        var roster = new List<DevelopingPlayer>
+        {
+            new DevelopingPlayer { Name = "一年甲", Grade = 1 },
+            new DevelopingPlayer { Name = "一年乙", Grade = 1 },
+        };
+        var transition = RosterLifecycle.BeginNewTeam(roster);
+
+        Assert.Empty(transition.Retired);
+        Assert.Null(SummerRetirement.EventIdFor(exit, transition));
+    }
+
+    /// <summary>3年生が引退した夏は従来どおり、終わり方に応じた引退の会話を出す。</summary>
+    [Theory]
+    [InlineData(SummerExit.PrefectureLoss)]
+    [InlineData(SummerExit.KoshienLoss)]
+    [InlineData(SummerExit.KoshienChampion)]
+    public void EventIdFor_WithThirdYears_ShowsRetirementEvent(SummerExit exit)
+    {
+        var transition = RosterLifecycle.BeginNewTeam(Roster());
+        Assert.Equal(SummerRetirement.EventId(exit), SummerRetirement.EventIdFor(exit, transition));
+    }
+
+    /// <summary>
     /// 敗退直後の発足でも、引退者の背番号を外し空き枠を詰めた案が出来ている＝背番号決定画面の初期案
     /// （<see cref="UniformNumberAssigner.FillVacancies"/>）がそのまま確定できる状態。
     /// </summary>
