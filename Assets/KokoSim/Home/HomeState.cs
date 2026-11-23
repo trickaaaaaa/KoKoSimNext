@@ -498,7 +498,7 @@ namespace KokoSim.Unity.Home
         {
             PushFeed(new List<FeedItem>
             {
-                new FeedItem { When = "本日", Text = GameSession.Current.Title + " が開幕した。", Kind = FeedKind.Discover, Tag = "情報" },
+                new FeedItem { When = "本日", Text = GameSession.Current.Title + "が開幕した。", Kind = FeedKind.Discover, Tag = "情報" },
             });
         }
 

@@ -57,7 +57,7 @@ namespace KokoSim.Unity.NewGame
             _zoomPrefecture = null;
             var map = JapanMapProvider.Map;
             if (map != null) _map.SetView(map.National);
-            if (_title != null) _title.text = "本拠地を選ぶ";
+            if (_title != null) _title.text = "プレイする県を選ぶ";
             if (_zoomBack != null) _zoomBack.style.display = DisplayStyle.None;
             if (_back != null) _back.style.display = DisplayStyle.Flex;
         }

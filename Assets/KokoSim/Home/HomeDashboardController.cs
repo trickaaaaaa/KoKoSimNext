@@ -842,7 +842,7 @@ namespace KokoSim.Unity.Home
             meta.Add(tag); meta.Add(time);
             body.Add(meta);
 
-            var text = new Label(f.Text);
+            var text = new Label(Kinsoku.Apply(f.Text));   // 句読点が行頭に落ちない（issue #1501）
             text.AddToClassList("fd-text");
             body.Add(text);
 

@@ -56,6 +56,10 @@ screens:
       - call: HoverForCapture(36)
       - wait: 3
       - shot: 03-hover-kagawa
+      # 沖縄は傾けた本土の左上の海に同じ縮尺で置く（#1502）。乗せて強調・札が出ること
+      - call: HoverForCapture(46)
+      - wait: 3
+      - shot: 03b-hover-okinawa
       - call: PickForCapture(0)
       - wait: 5
       - shot: 04-hokkaido-zoom

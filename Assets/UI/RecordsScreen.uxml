@@ -76,6 +76,7 @@
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="rc-mt-head" class="rc-mt rc-mt--head">
                   <ui:Label class="rc-mt__date" text="日付" />
+                  <ui:Label class="rc-mt__school" text="赴任校" />
                   <ui:Label class="rc-mt__cup" text="大会" />
                   <ui:Label class="rc-mt__opp" text="相手" />
                   <ui:Label class="rc-mt__score" text="スコア" />

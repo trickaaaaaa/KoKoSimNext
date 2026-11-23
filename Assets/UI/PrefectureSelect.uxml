@@ -17,7 +17,7 @@
         <ui:VisualElement class="pms-masthead">
           <ui:VisualElement class="rule-head pms-masthead__title">
             <ui:VisualElement class="rule-head__rule" />
-            <ui:Label name="pms-title" class="rule-head__text f-display" text="本拠地を選ぶ" />
+            <ui:Label name="pms-title" class="rule-head__text f-display" text="プレイする県を選ぶ" />
           </ui:VisualElement>
           <ui:Button name="pms-zoom-back" class="tool-btn f-body-md" text="◀ 全国地図へ" />
           <ui:Button name="pms-back" class="tool-btn f-body-md" text="◀ タイトルへ" />

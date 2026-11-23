@@ -209,6 +209,56 @@ public sealed class JapanMapTests
         Assert.False(f.Contains(150, 50));
     }
 
+    /// <summary>
+    /// どの輪郭も自分自身と交差しない（単純閉曲線）。偶奇規則の塗りで、自己交差は白い欠けになる
+    /// （issue #1499: 東京の拡大図を 89×50 の粗い格子へ丸めて自己交差し、23区側が抜けていた）。
+    /// </summary>
+    [Fact]
+    public void Rings_DoNotSelfIntersect()
+    {
+        var map = LoadReal();
+        foreach (var view in new[] { map.National, map.Hokkaido, map.Tokyo })
+            foreach (var f in view.Features)
+                foreach (var ring in f.Rings)
+                {
+                    var n = ring.Length / 2;
+                    for (var i = 0; i < n; i++)
+                        for (var j = i + 2; j < n; j++)
+                        {
+                            if (i == 0 && j == n - 1) continue;   // 閉じる辺と最初の辺は隣り合う
+                            Assert.False(SegmentsCross(ring, i, (i + 1) % n, j, (j + 1) % n),
+                                $"{view.Id} の {f.Name}{f.PrefectureId} で辺 {i} と {j} が交差している");
+                        }
+                }
+    }
+
+    /// <summary>拡大図は全国図より細かい格子で持つ（長い辺がおよそ1500目盛り。issue #1499）。</summary>
+    [Fact]
+    public void ZoomViews_UseFineGrid()
+    {
+        var map = LoadReal();
+        foreach (var view in new[] { map.Hokkaido, map.Tokyo })
+            Assert.True(System.Math.Max(view.Width, view.Height) >= 1000, $"{view.Id} の格子が粗い（{view.Width}×{view.Height}）");
+    }
+
+    private static bool SegmentsCross(int[] r, int a0, int a1, int b0, int b1)
+    {
+        long ax = r[a0 * 2], ay = r[a0 * 2 + 1], bx = r[a1 * 2], by = r[a1 * 2 + 1];
+        long cx = r[b0 * 2], cy = r[b0 * 2 + 1], dx = r[b1 * 2], dy = r[b1 * 2 + 1];
+        static long Cross(long ox, long oy, long px, long py, long qx, long qy) => (px - ox) * (qy - oy) - (py - oy) * (qx - ox);
+        static bool On(long ox, long oy, long px, long py, long qx, long qy)
+            => System.Math.Min(ox, px) <= qx && qx <= System.Math.Max(ox, px) && System.Math.Min(oy, py) <= qy && qy <= System.Math.Max(oy, py);
+        long d1 = Cross(cx, cy, dx, dy, ax, ay), d2 = Cross(cx, cy, dx, dy, bx, by);
+        long d3 = Cross(ax, ay, bx, by, cx, cy), d4 = Cross(ax, ay, bx, by, dx, dy);
+        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+        // 接する・重なる（共線）も欠けの元なので交差として扱う
+        if (d1 == 0 && On(cx, cy, dx, dy, ax, ay)) return true;
+        if (d2 == 0 && On(cx, cy, dx, dy, bx, by)) return true;
+        if (d3 == 0 && On(ax, ay, bx, by, cx, cy)) return true;
+        if (d4 == 0 && On(ax, ay, bx, by, dx, dy)) return true;
+        return false;
+    }
+
     private static class SummerRegionsIds
     {
         public const int Hokkaido = 0;
