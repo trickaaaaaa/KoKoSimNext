@@ -1024,3 +1024,22 @@ screens:
       - show: HomeDashboard
       - wait: 10
       - shot: 09-home-team-radar
+
+  - id: player-layout-converge-1532
+    name: "選手タブで「Layout update is struggling」が出ないか（issue #1532・1280×720 窓の見え方で全員を順に開いて待つ）"
+    game_scale: true
+    size: {w: 1280, h: 720}
+    steps:
+      - new_game: {seed: 1}
+      - set: {PlayerSelection.Index: 0, PlayerSelection.Pinned: true}
+      - show: PlayerList
+      - wait: 60
+      - shot: 01-player-0
+      - set: {PlayerSelection.Index: 5, PlayerSelection.Pinned: true}
+      - show: PlayerList
+      - wait: 60
+      - shot: 02-player-5
+      - set: {PlayerSelection.Index: 12, PlayerSelection.Pinned: true}
+      - show: PlayerList
+      - wait: 60
+      - shot: 03-player-12
