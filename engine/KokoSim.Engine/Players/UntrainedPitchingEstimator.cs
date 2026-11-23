@@ -30,13 +30,13 @@ public static class UntrainedPitchingEstimator
 
         return new PitcherAttributes
         {
-            MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velocityLevel),
+            MaxVelocityKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(velocityLevel),
             Control = control,
-            StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staminaLevel),
+            StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel(staminaLevel),
             PitchRank = pitchRank,
             // レパートリーはストレートのみ（未指定→ EffectiveRepertoire がストレートを返す）。
         };
     }
 
-    private static int Clamp(double v) => (int)MathUtil.Clamp(System.Math.Round(v), 1, 100);
+    private static int Clamp(double v) => (int)MathUtil.Clamp(System.Math.Round(v), 1, AbilityScale.PhysMax100);
 }

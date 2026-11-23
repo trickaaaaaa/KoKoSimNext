@@ -43,11 +43,12 @@ public static class AiMentalModel
     public static (int Mental, int Leadership, int Lead) Roll(
         double mentalCenter, double styleBonus, PersonalityProfile personality, RosterCoefficients rc, IRandomSource fork)
     {
-        var mental = (int)MathUtil.Clamp(Math.Round(fork.NextGaussian(mentalCenter, rc.MentalSd)), 1, 99);
+        // 精神力・リードは今の物差し（物理Lv）で引く＝天井 +Δ（issue #1080）。統率傾向は性格の軸＝対象外（99 のまま）。
+        var mental = (int)MathUtil.Clamp(Math.Round(fork.NextGaussian(mentalCenter, rc.MentalSd)), 1, AbilityScale.PhysMax99);
         var leadership = (int)MathUtil.Clamp(
             Math.Round(fork.NextGaussian(rc.LeadershipMean + styleBonus, rc.LeadershipSd) + personality.LeadershipMeanOffset), 1, 99);
         var lead = (int)MathUtil.Clamp(
-            Math.Round(rc.LeadMean + (mental - 50) * rc.LeadMentalCorr + fork.NextGaussian(0, rc.LeadSd)), 1, 99);
+            Math.Round(rc.LeadMean + (mental - 50) * rc.LeadMentalCorr + fork.NextGaussian(0, rc.LeadSd)), 1, AbilityScale.PhysMax99);
         return (mental, leadership, lead);
     }
 
@@ -58,13 +59,14 @@ public static class AiMentalModel
     /// 新入生の値に (grade−1) 学年ぶんのアークを載せる（使い捨て生成の上級生・ブートストラップの上級生用）。
     /// grade≤1 は恒等。
     /// </summary>
-    public static Player WithGradeArc(Player p, int grade, RosterCoefficients rc)
+    public static Player WithGradeArc(Player p, int grade, RosterCoefficients rc, bool physical = false)
     {
         var years = Math.Max(0, grade - 1);
         if (years == 0) return p;
         var d = (int)Math.Round(rc.AiMentalPerGrade * years);
         if (d == 0) return p;
-        return p with { Mental = (int)MathUtil.Clamp(p.Mental + d, 1, 99) };
+        // 天井は表示99＝物理 99+Δ（issue #1080）。生成の途中（物理Lv）から呼ぶときは physical=true。
+        return p with { Mental = (int)MathUtil.Clamp(p.Mental + d, 1, physical ? AbilityScale.PhysMax99 : 99) };
     }
 
     /// <summary>
@@ -79,7 +81,8 @@ public static class AiMentalModel
         foreach (var p in roster.Players)
         {
             var s = p.Snapshot;
-            if (s.Mental != 50 || s.Leadership != 50 || s.Lead != 50) return false;
+            // 未ロールの印は精神力・リードが既定（表示 AverageDisplay＝物理50）・統率傾向が50（issue #1080 で表示が Δ 下がった）。
+            if (s.Mental != AbilityScale.AverageDisplay || s.Leadership != 50 || s.Lead != AbilityScale.AverageDisplay) return false;
         }
         var rc = deps.Roster;
         var center = MentalCenter(school.Strength, school.Style, rc);
@@ -92,7 +95,7 @@ public static class AiMentalModel
             // ↑ 種タイプは保存していないので、導出ラベルの表を引く（設計書23 で増えた8タイプは表に無い＝ずらし0）。
             //   旧セーブ（精神系未設定の世代）の後埋めだけの経路。
             p.Snapshot = WithGradeArc(
-                p.Snapshot with { Mental = mental, Leadership = leadership, Lead = lead }, p.Grade, rc);
+                p.Snapshot with { Mental = AbilityScale.Disp(mental), Leadership = leadership, Lead = AbilityScale.Disp(lead) }, p.Grade, rc);
         }
         return true;
     }

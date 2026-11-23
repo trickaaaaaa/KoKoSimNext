@@ -85,14 +85,16 @@ public sealed class InjuryAndEventsTests
     public void Injury_Projection_LowersAbilities_AndCarriesSeverity()
     {
         var dp = Guy();
-        dp.SetLevel(AbilityKind.Contact, 60);
-        dp.SetLevel(AbilityKind.Speed, 60);
+        // 能力は今の物差しで 60（issue #1080: 表示Lv＝−Δ）。怪我の係数は今の物差しで掛けてから表示へ下ろす。
+        const int d = AbilityScale.Delta;
+        dp.SetLevel(AbilityKind.Contact, 60 - d);
+        dp.SetLevel(AbilityKind.Speed, 60 - d);
         dp.Injury = InjurySeverity.Severe;
 
         var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.CenterField);
         Assert.Equal(InjurySeverity.Severe, player.Injury); // 常に可視（采配判断用）
-        Assert.Equal(42, player.Contact); // 60 × 0.70
-        Assert.Equal(42, player.Speed);
+        Assert.Equal(42 - d, player.Contact); // 60 × 0.70
+        Assert.Equal(42 - d, player.Speed);
     }
 
     [Fact]

@@ -19,8 +19,13 @@ public sealed class SubstitutionTacticsTests
 {
     private static readonly IRandomSource Rng = new Xoshiro256Random(1);
 
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せる＝閾値（TacticsCoefficients）は今の物差しのまま。
     private static Player P(string name, int contact = 50, int speed = 50, int fielding = 50)
-        => new() { Name = name, Contact = contact, Speed = speed, Fielding = fielding };
+        => new()
+        {
+            Name = name, Contact = contact - AbilityScale.Delta, Speed = speed - AbilityScale.Delta,
+            Fielding = fielding - AbilityScale.Delta,
+        };
 
     // ===== StandardTacticsBrain の判断（既定係数, 決定論） =====
 

@@ -224,7 +224,8 @@ public static class DevelopmentModel
         p.AddExp(ability, delta * p.GrowthMultiplier(ability) * trainability);
         while (p.Level(ability) < p.Cap(ability))
         {
-            var required = c.RequiredExp(p.Level(ability));
+            // 必要expは今の物差しのLvで引く（issue #1080）＝練習の伸びは物差しによらず同じ。
+            var required = c.RequiredExp(Players.AbilityScale.Phys(p.Level(ability)));
             if (p.Exp(ability) < required) break;
             p.ConsumeExp(ability, required);
             p.IncrementLevel(ability);

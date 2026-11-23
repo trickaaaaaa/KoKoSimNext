@@ -428,14 +428,26 @@ public static class AiRosterCycle
         var d = Math.Max(0, (int)Math.Round(amount));
         var dp = Math.Max(0, (int)Math.Round(pitchAmount ?? amount));
         if (d <= 0 && dp <= 0) return b;
+        // スナップショットは表示Lv。成長の式（やわらかい天井・型の上乗せ）は今の物差しで書いてあるので、物理Lvへ戻して
+        // 当ててから表示Lvへ下ろす（issue #1080）。天井は +Δ（99→99+Δ）・下限は物理のまま。
+        return AbilityScale.InPhysical(b, x => BumpToPhysical(x, d, dp, rc, ignoreBatterArchetype));
+    }
+
+    private static Player BumpToPhysical(Player b, int d, int dp, RosterCoefficients rc, bool ignoreBatterArchetype)
+    {
         // 打者の型（issue #1066）: 型を持つ選手（AI校の永続ロスターだけ・自校/旧セーブは null）は、
         // 長所ほど伸び短所はあまり伸びない配分＋やわらかい天井（RosterCoefficients.BatterSoftCap）で底上げする。
         // 旧実装（型なし・全員同じ Up）は全能力が平行に 99 へ溜まり、型の長所・短所が消えていた（issue #1066 原因1）。
         // 型を持たない選手・ignoreBatterArchetype=true の呼び出しは旧実装と1ビットも変えない（Up のまま）。
         var archetype = ignoreBatterArchetype ? null : b.BatterArchetype;
+        // 天井（issue #1080）: 実際に当てる成長は 99+Δ（表示99）。1段目（ignoreBatterArchetype＝投手の成長量を決める解き）だけは
+        // 物差しを下げる前と同じ天井 99 で解く＝1段目の解（投手の成長量）が下げる前と同じになる。ここを 99+Δ にすると強豪校の
+        // 1段目の総合が上がって解が小さくなり、投手が伸びず 150km/h 級が減る（実測: 3年生の150km/h以上 12/10/16人→1人）。
+        // km/h の分布は「変えてはいけないもの」。2段目（型あり・投手は1段目の量で固定）は 99+Δ の天井で当てる。
+        var top = ignoreBatterArchetype ? 99 : AbilityScale.PhysMax99;
         int Up(int v, BatterAttribute attr)
         {
-            if (archetype is not { } a) return (int)MathUtil.Clamp(v + d, 10, 99);
+            if (archetype is not { } a) return (int)MathUtil.Clamp(v + d, 10, top);
             var weight = BatterArchetypes.GrowthWeight(a, attr, b.BatterArchetypeFocus, b.BatterArchetypeIntensity, rc.BatterArchetypes);
             return rc.GrowBatterAttribute(v, d, weight);
         }
@@ -463,7 +475,7 @@ public static class AiRosterCycle
         var a = b.Pitching;
         // 球速はやわらかい天井の手前（素の値）で底上げしてから天井を通す（issue #908）＝99 に張り付かない。
         // 膝より下は旧来の Up と同じ整数の足し算。
-        var vRaw = rc.VelocitySoftCapInverse(PitcherAttributes.LevelFromVelocityKmhExact(a.MaxVelocityKmh));
+        var vRaw = rc.VelocitySoftCapInverse(PitcherAttributes.PhysicalLevelFromVelocityKmhExact(a.MaxVelocityKmh));
         var vl = rc.VelocitySoftCap(Math.Max(10.0, vRaw + dp));
         // 制球・キレ・スタミナは型の上乗せを外した地力に足して 99 で切り詰め、上乗せを戻す（issue #908）。
         // 旧実装は上乗せ込みの値に足して切り詰めていたので、強豪校（毎年最大 +40）では型の個性が 99 に潰れ、
@@ -471,18 +483,18 @@ public static class AiRosterCycle
         // 剛腕の制球は割合（地力×0.55）なので、地力側に足して 99 で切ってから掛け直す＝溢れた分は制球に回らない
         // （オーナー決定「1＋2」）。型の当て方は PitcherArchetypes.Apply が単一ソース。
         var (_, _, os, or) = a.Archetype is { } type ? PitcherArchetypes.Offsets(type, rc.Archetypes) : (0.0, 0.0, 0.0, 0.0);
-        int UpKeep(int v, double off) => (int)MathUtil.Clamp(Math.Round(MathUtil.Clamp(v - off + dp, 10, 99) + off), 10, 99);
-        var baseControl = MathUtil.Clamp(PitcherArchetypes.BaseControl(a.Archetype, a.Control, rc.Archetypes) + dp, 10, 99);
+        int UpKeep(int v, double off) => (int)MathUtil.Clamp(Math.Round(MathUtil.Clamp(v - off + dp, 10, top) + off), 10, top);
+        var baseControl = MathUtil.Clamp(PitcherArchetypes.BaseControl(a.Archetype, a.Control, rc.Archetypes) + dp, 10, top);
         var (_, grownControl, _, _) = PitcherArchetypes.Apply(a.Archetype, 0, baseControl, 0, 0, rc.Archetypes);
-        var sl = UpKeep(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches), os);
+        var sl = UpKeep(PitcherAttributes.PhysicalLevelFromStaminaPitches(a.StaminaPitches), os);
         return r with
         {
             Pitching = a with
             {
-                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(vl),
-                Control = (int)MathUtil.Clamp(Math.Round(grownControl), 10, 99),
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(vl),
+                Control = (int)MathUtil.Clamp(Math.Round(grownControl), 10, top),
                 PitchRank = UpKeep(a.PitchRank, or),
-                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(sl),
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel(sl),
             },
         };
     }

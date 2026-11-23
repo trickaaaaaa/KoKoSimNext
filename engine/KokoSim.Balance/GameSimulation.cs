@@ -576,6 +576,12 @@ public static partial class GameSimulation
     private static int Ability(IRandomSource rng)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(50, 12)), 20, 88);
 
+    /// <summary>
+    /// 母集団は今の物差し（物理Lv・平均50）で引き、選手には表示Lv（−Δ）で載せる（issue #1080）。試合の入口が +Δ して戻す＝
+    /// 帯の母集団は物差しを下げる前と同じ。弾道は物差しの外なので素のまま。
+    /// </summary>
+    private static int Disp(int physical) => physical - AbilityScale.Delta;
+
     // issue game-sim-all-right-handed-batters: 打席の左右を実ロスターと揃える（AtBatSimulation.SampleBats が
     // 単一ソース）。それ以前は全員右打ちで、打球方向（issue #262）が三塁・遊撃側へ偏って games_10k 系の
     // 帯がその母集団で校正されていた。
@@ -583,14 +589,14 @@ public static partial class GameSimulation
     {
         Name = pos.ToString(),
         Position = pos,
-        Contact = Ability(rng),
-        Power = Ability(rng),
+        Contact = Disp(Ability(rng)),
+        Power = Disp(Ability(rng)),
         LaunchTendency = Ability(rng),
-        Discipline = Ability(rng),
-        Speed = Ability(rng),
-        ArmStrength = Ability(rng),
-        Fielding = Ability(rng),
-        Catching = Ability(rng),
+        Discipline = Disp(Ability(rng)),
+        Speed = Disp(Ability(rng)),
+        ArmStrength = Disp(Ability(rng)),
+        Fielding = Disp(Ability(rng)),
+        Catching = Disp(Ability(rng)),
         Bats = AtBatSimulation.SampleBats(rng),
     };
 
@@ -604,26 +610,26 @@ public static partial class GameSimulation
         {
             Name = name,
             Position = FieldPosition.Pitcher,
-            Contact = Ability(rng) / 2, // 投手は打撃控えめ
-            Power = Ability(rng) / 2,
+            Contact = Disp(Ability(rng) / 2), // 投手は打撃控えめ
+            Power = Disp(Ability(rng) / 2),
             LaunchTendency = Ability(rng),
-            Discipline = Ability(rng),
-            Speed = Ability(rng),
-            ArmStrength = Ability(rng),
-            Fielding = Ability(rng),
-            Catching = Ability(rng),
+            Discipline = Disp(Ability(rng)),
+            Speed = Disp(Ability(rng)),
+            ArmStrength = Disp(Ability(rng)),
+            Fielding = Disp(Ability(rng)),
+            Catching = Disp(Ability(rng)),
             Bats = AtBatSimulation.SampleBats(rng),
             Pitching = new PitcherAttributes
             {
                 MaxVelocityKmh = velo,
-                Control = control,
-                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staminaLevel),
-                PitchRank = pitchRank,
+                Control = Disp(control),
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel(staminaLevel),
+                PitchRank = Disp(pitchRank),
                 Repertoire = new[]
                 {
-                    PitchSlot.FastballOf(pitchRank),
-                    new PitchSlot { Type = PitchType.Slider, Power = pitchRank, Sharpness = pitchRank },
-                    new PitchSlot { Type = PitchType.Fork, Power = pitchRank, Sharpness = pitchRank },
+                    PitchSlot.FastballOf(Disp(pitchRank)),
+                    new PitchSlot { Type = PitchType.Slider, Power = Disp(pitchRank), Sharpness = Disp(pitchRank) },
+                    new PitchSlot { Type = PitchType.Fork, Power = Disp(pitchRank), Sharpness = Disp(pitchRank) },
                 },
             },
         };

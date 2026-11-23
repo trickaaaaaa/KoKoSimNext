@@ -40,7 +40,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         if (s.OnThird is not null && s.Outs <= 1
             && System.Math.Abs(s.ScoreDiff) <= _c.SqueezeMaxDiffAbs
             && (s.Inning >= _c.SqueezeFromInning || s.TieBreak)
-            && s.Batter.Bunt >= _c.SqueezeMinBunt
+            && P(s.Batter.Bunt) >= _c.SqueezeMinBunt
             && rng.NextDouble() < _c.SqueezeProb)
         {
             return OffensiveSign.Squeeze;
@@ -50,7 +50,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         var buntBase = s.OnThird is null && s.Outs == 0
                        && (s.OnFirst is not null || s.OnSecond is not null)
                        && s.ScoreDiff >= -_c.SacBuntMaxBehind && s.ScoreDiff <= _c.SacBuntMaxAhead
-                       && s.Batter.Power <= _c.SacBuntMaxPower && s.Batter.Bunt >= _c.SacBuntMinSkill;
+                       && P(s.Batter.Power) <= _c.SacBuntMaxPower && P(s.Batter.Bunt) >= _c.SacBuntMinSkill;
         if (buntBase && (s.Inning >= _c.SacBuntFromInning || s.TieBreak))
         {
             var prob = s.TieBreak ? _c.SacBuntTieBreakProb : _c.SacBuntProb;
@@ -59,14 +59,14 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
         // エンドラン: 一塁走者・当てられる打者（ミート高・パワー控えめ）。
         if (s.OnFirst is not null && s.OnSecond is null && s.Outs <= 1
-            && s.Batter.Contact >= _c.HitAndRunMinContact && s.Batter.Power <= _c.HitAndRunMaxPower
+            && P(s.Batter.Contact) >= _c.HitAndRunMinContact && P(s.Batter.Power) <= _c.HitAndRunMaxPower
             && rng.NextDouble() < _c.HitAndRunProb)
         {
             return OffensiveSign.HitAndRun;
         }
 
         // 待て: 制球難の投手から四球・球数を狙う。
-        if (s.Pitcher.Pitching.Control <= _c.TakeMaxControl && rng.NextDouble() < _c.TakeProb)
+        if (P(s.Pitcher.Pitching.Control) <= _c.TakeMaxControl && rng.NextDouble() < _c.TakeProb)
         {
             return OffensiveSign.Take;
         }
@@ -81,7 +81,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
                          && (s.OnFirst is not null || s.OnSecond is not null)
                          && (s.Inning >= _c.SacBuntFromInning || s.TieBreak)
                          && s.ScoreDiff >= -_c.SacBuntMaxBehind && s.ScoreDiff <= _c.SacBuntMaxAhead
-                         && s.Batter.Power <= _c.SacBuntMaxPower && s.Batter.Bunt >= _c.SacBuntMinSkill;
+                         && P(s.Batter.Power) <= _c.SacBuntMaxPower && P(s.Batter.Bunt) >= _c.SacBuntMinSkill;
         var buntShift = buntThreat && rng.NextDouble() < _c.BuntShiftProb;
 
         // 内野前進: 三塁走者・2アウト未満・終盤の僅差（守備側リードは最大 InfieldInMaxLead）。
@@ -93,7 +93,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
         // 外野: 強打者に後退、最終回同点で決勝走者が二塁なら前進（本塁バックアップ）。
         // 強打者は絶対基準（OutfieldDeepMinPower）と、打線の中で抜けているか（相対基準・issue #976 追補）の両方で見る。
-        var slugger = s.Batter.Power >= _c.OutfieldDeepMinPower
+        var slugger = P(s.Batter.Power) >= _c.OutfieldDeepMinPower
                       && (_c.OutfieldDeepAboveLineupMean <= 0.0 || s.OffenseLineupMeanPower <= 0.0
                           || s.Batter.Power >= s.OffenseLineupMeanPower + _c.OutfieldDeepAboveLineupMean);
         var outfield = slugger ? DefenseDepth.Deep
@@ -101,8 +101,8 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             : DefenseDepth.Normal;
 
         // 配球方針: 低め徹底（強打者/三塁走者）＞コントロール重視（制球難）＞おまかせ。
-        var control = s.Pitcher.Pitching.Control;
-        var policy = s.Batter.Power >= _c.KeepLowMinPower || (s.OnThird is not null && s.Outs < 2)
+        var control = P(s.Pitcher.Pitching.Control);
+        var policy = P(s.Batter.Power) >= _c.KeepLowMinPower || (s.OnThird is not null && s.Outs < 2)
             ? PitchPolicy.KeepLow
             : control <= _c.ControlFirstMaxControl ? PitchPolicy.ControlFirst
             : PitchPolicy.Auto;
@@ -125,7 +125,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         // rng.NextDouble() を呼ばずガードでスキップする（既定は #402 で0.6＝通常は引く）。
         var intentionalWalkBase = s.OnFirst is null
             && (s.OnSecond is not null || s.OnThird is not null)
-            && s.Batter.Power >= _c.IntentionalWalkMinPower
+            && P(s.Batter.Power) >= _c.IntentionalWalkMinPower
             && (s.Inning >= _c.IntentionalWalkFromInning || s.TieBreak)
             && System.Math.Abs(s.ScoreDiff) <= _c.IntentionalWalkMaxDiffAbs;
         var intentionalWalk = intentionalWalkBase && _c.IntentionalWalkProb > 0.0
@@ -150,7 +150,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     public PitchTacticsDirective? CallPitchAction(in PitchTacticsSituation s, IRandomSource rng)
     {
         PitchBattingOverride? batting = null;
-        if (s.Strikes >= 2 && s.Base.Batter.Contact >= _c.PitchTacticsTwoStrikeMinContact
+        if (s.Strikes >= 2 && P(s.Base.Batter.Contact) >= _c.PitchTacticsTwoStrikeMinContact
             && rng.NextDouble() < _c.PitchTacticsTwoStrikeForceSwingProb)
         {
             // 追い込まれ矯正: 見逃し三振を避けるため、ゾーンの際どい球にも手を出す。
@@ -159,7 +159,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         else if (s.Balls >= 3 && s.Strikes == 0)
         {
             // 3-0待て。ただし強打者×終盤×僅差は一発を狙う価値がTakeを上回るため打たせる。
-            var swingAway = s.Base.Batter.Power >= _c.PitchTacticsThreeZeroSwingAwayMinPower
+            var swingAway = P(s.Base.Batter.Power) >= _c.PitchTacticsThreeZeroSwingAwayMinPower
                 && System.Math.Abs(s.Base.ScoreDiff) <= _c.PitchTacticsThreeZeroSwingAwayMaxDiffAbs
                 && s.Base.Inning >= _c.PitchTacticsThreeZeroSwingAwayFromInning;
             if (!swingAway && rng.NextDouble() < _c.PitchTacticsThreeZeroTakeProb)
@@ -181,7 +181,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         }
         else if (_c.PitchTacticsInsideAttackProb > 0.0
                  && s.Strikes > s.Balls
-                 && s.Base.Batter.Power < _c.KeepLowMinPower
+                 && P(s.Base.Batter.Power) < _c.KeepLowMinPower
                  && !(s.Base.OnFirst is not null && s.Base.OnSecond is not null && s.Base.OnThird is not null)
                  && rng.NextDouble() < _c.PitchTacticsInsideAttackProb)
         {
@@ -259,7 +259,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     public bool CallOffenseTimeout(in TacticsSituation s, IRandomSource rng)
         => s.OffenseTimeoutsLeft > 0
            && s.PressureIndex >= _c.OffenseTimeoutMinPressure
-           && s.Batter.Mental <= _c.OffenseTimeoutMaxMental;
+           && P(s.Batter.Mental) <= _c.OffenseTimeoutMaxMental;
 
     public bool CallDefenseTimeout(in TacticsSituation s, IRandomSource rng)
         => s.DefenseTimeoutsLeft > 0
@@ -322,10 +322,19 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         => bats == Players.Handedness.Switch ? 1 : bats != pitcherThrows ? 1 : -1;
 
     /// <summary>調子込みのミート実効値（設計書11 §4, issue #48）。当日の出来（dayForm）は含まない。</summary>
-    private int EffectiveContact(Player p) => FormModel.EffectiveAbility(p.Contact, p.Condition, _form.ContactPerStep);
+    private int EffectiveContact(Player p) => FormModel.EffectiveAbility(P(p.Contact), p.Condition, _form.ContactPerStep);
 
     /// <summary>調子込みのパワー実効値（打力の総合評価用, 設計書11 §4）。</summary>
-    private int EffectivePower(Player p) => FormModel.EffectiveAbility(p.Power, p.Condition, _form.PowerPerStep);
+    private int EffectivePower(Player p) => FormModel.EffectiveAbility(P(p.Power), p.Condition, _form.PowerPerStep);
+
+    /// <summary>
+    /// 表示Lv→今の物差しのLv（issue #1080）。閾値（<c>coefficients.yaml</c> の <c>sac_bunt_min_skill</c> 等）は今の物差しの
+    /// 数字のまま置いてあるので、能力の絶対値を閾値に当てる所は必ずこれを通す（差・並びだけを見る所は通さなくても同じ）。
+    /// </summary>
+    private int P(int lv) => _br.AbilityEffect.Phys(lv);
+
+    /// <summary>この采配が能力を読む物差し（AiTacticsBrain が同じ Δ で読むため）。</summary>
+    internal Players.AbilityEffectCoefficients AbilityEffect => _br.AbilityEffect;
 
     /// <summary>
     /// 打順の並べ替え（設計書11 §4「オーダー編成」, issue #48）。守備位置は変えず、調子（のみ）で
@@ -375,7 +384,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         foreach (var runner in new[] { s.OnThird, s.OnSecond, s.OnFirst })
         {
             if (runner is null || runner.Position == Field.FieldPosition.Pitcher
-                || runner.Speed > _c.PinchRunSpeedCeiling) continue;
+                || P(runner.Speed) > _c.PinchRunSpeedCeiling) continue;
             var fastest = BestBy(s.Reserves, p => p.Speed, allow: p => CanFillSlotOf(p, runner));
             if (fastest is null) continue;
             var gain = fastest.Speed - runner.Speed;
@@ -405,7 +414,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         var swappable = s.DefenseSlotSwappable;
         var weakest = s.Lineup
             .Where((p, i) => (swappable is null || (i < swappable.Count && swappable[i]))
-                             && p.Position != Field.FieldPosition.Pitcher && p.Fielding <= _c.DefensiveSubFieldingCeiling)
+                             && p.Position != Field.FieldPosition.Pitcher && P(p.Fielding) <= _c.DefensiveSubFieldingCeiling)
             .OrderBy(p => p.Fielding).FirstOrDefault();
         if (weakest is null) return null;
 

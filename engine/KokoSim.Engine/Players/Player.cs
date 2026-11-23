@@ -43,16 +43,16 @@ public sealed record Player
     /// </summary>
     public double LeftExperiencePa { get; init; } = double.PositiveInfinity;
 
-    public int Contact { get; init; } = 50;
-    public int Power { get; init; } = 50;
+    public int Contact { get; init; } = AbilityScale.AverageDisplay;
+    public int Power { get; init; } = AbilityScale.AverageDisplay;
     public int LaunchTendency { get; init; } = 50;
-    public int Discipline { get; init; } = 50;
-    public int Speed { get; init; } = 50;
-    public int ArmStrength { get; init; } = 50;
+    public int Discipline { get; init; } = AbilityScale.AverageDisplay;
+    public int Speed { get; init; } = AbilityScale.AverageDisplay;
+    public int ArmStrength { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>送球精度（肩＝ArmStrengthから分離, 設計書01 §1.2）。</summary>
-    public int ThrowAccuracy { get; init; } = 50;
-    public int Fielding { get; init; } = 50;
+    public int ThrowAccuracy { get; init; } = AbilityScale.AverageDisplay;
+    public int Fielding { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>
     /// 守備位置ごとの実効守備力（添字＝<see cref="FieldPosition"/> の整数値）。null＝持たない（<see cref="Fielding"/> が全位置の値）。
@@ -66,18 +66,18 @@ public sealed record Player
         => FieldingByPosition is { } f && (int)pos < f.Count
             ? this with { Position = pos, Fielding = f[(int)pos] }
             : this with { Position = pos };
-    public int Catching { get; init; } = 50;
+    public int Catching { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>捕手リード（配球の質, 設計書01 §2①）。高いほど良い配球。捕手のみ意味を持つ。50=平均で恒等。</summary>
-    public int Lead { get; init; } = 50;
+    public int Lead { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>走塁系連続パラメータ（設計書02 §4）。旧走塁系スキルの後継。</summary>
-    public int Bunt { get; init; } = 50;
-    public int Steal { get; init; } = 50;
-    public int Baserunning { get; init; } = 50;
+    public int Bunt { get; init; } = AbilityScale.AverageDisplay;
+    public int Steal { get; init; } = AbilityScale.AverageDisplay;
+    public int Baserunning { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>精神力（設計書02 §3）。プレッシャー指数との積で場面補正になる。50=補正なし。</summary>
-    public int Mental { get; init; } = 50;
+    public int Mental { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>統率傾向（性格の一部, CHANGELOG 22b）。主将の統率力 = 統率傾向×精神力（設計書09 §8）。</summary>
     public int Leadership { get; init; } = 50;

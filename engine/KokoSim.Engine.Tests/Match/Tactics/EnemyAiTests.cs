@@ -22,12 +22,19 @@ public sealed class EnemyAiTests
     // 走力95 vs 肩20 の「余裕の盗塁」が中庸に寄り、しきい値の前提（際どい/余裕）が崩れる。
     private static readonly BaserunningCoefficients Br = new() { AbilityEffect = AbilityEffectCoefficients.Identity };
 
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せる＝閾値・効きは今の物差しのまま。
+    private const int D = AbilityScale.Delta;
+
     private static Player P(int contact = 50, int power = 50, int bunt = 50, int speed = 50,
         int steal = 50, int arm = 50, FieldPosition pos = FieldPosition.CenterField)
-        => new() { Position = pos, Contact = contact, Power = power, Bunt = bunt, Speed = speed, Steal = steal, ArmStrength = arm };
+        => new()
+        {
+            Position = pos, Contact = contact - D, Power = power - D, Bunt = bunt - D, Speed = speed - D,
+            Steal = steal - D, ArmStrength = arm - D,
+        };
 
     private static Player Pitcher(int control = 50) => new()
-    { Position = FieldPosition.Pitcher, Pitching = new PitcherAttributes { Control = control } };
+    { Position = FieldPosition.Pitcher, Pitching = new PitcherAttributes { Control = control - D } };
 
     private static TacticsSituation Sit(
         int inning = 8, int outs = 0, int diff = 0,

@@ -198,8 +198,9 @@ public sealed class SeasonEngineTests
             var y = summary.Years[i];
             Assert.Equal(g.Year, y.Year);
             Assert.Equal(g.Roster, y.RosterCount);
-            Assert.Equal(g.Reg, y.AvgLevelRegulars, 12);
-            Assert.Equal(g.Grad, y.GraduatingAvgLevel, 12);
+            // 平均Lvは表示Lv（issue #1080: 今の物差し −Δ）。golden は今の物差しの値＝育成は物差しによらず同じ。
+            Assert.Equal(g.Reg, g.Reg == 0 ? y.AvgLevelRegulars : y.AvgLevelRegulars + KokoSim.Engine.Players.AbilityScale.Delta, 12);
+            Assert.Equal(g.Grad, g.Grad == 0 ? y.GraduatingAvgLevel : y.GraduatingAvgLevel + KokoSim.Engine.Players.AbilityScale.Delta, 12);   // 卒業生なし＝0
             Assert.Equal(g.Events, y.EventsFired);
         }
     }

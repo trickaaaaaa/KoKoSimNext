@@ -330,7 +330,12 @@ public static class ScoutModel
             {
                 var phenomRng = rng.Fork(PhenomStreamId(yearIndex, i));
                 if (phenomRng.NextDouble() < roster.Phenom.ScoutCandidateRate)
+                {
+                    // 怪物の帯（PhenomCoefficients）は今の物差しの値＝物理Lvへ戻して当て、表示Lvへ戻す（issue #1080）。
+                    DevelopingScale.ToPhysical(p);
                     ProspectPhenom.Apply(p, ProspectPhenom.RollTypeFor(p, roster, phenomRng), roster.Phenom, phenomRng);
+                    DevelopingScale.ToDisplay(p);
+                }
             }
             var prefectureId = RollPrefecture(homePrefectureId, c, rng);
             var cand = new ScoutCandidate

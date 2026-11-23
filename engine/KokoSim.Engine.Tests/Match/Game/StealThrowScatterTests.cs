@@ -13,10 +13,11 @@ public sealed class StealThrowScatterTests
 {
     private static readonly BaserunningCoefficients C = new();
 
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せ、試合の入口が +Δ して戻す。
     private static Player Catcher(int throwAccuracy = 50) => new()
-        { Position = FieldPosition.Catcher, ArmStrength = 50, ThrowAccuracy = throwAccuracy, Fielding = 50 };
+        { Position = FieldPosition.Catcher, ArmStrength = 50 - AbilityScale.Delta, ThrowAccuracy = throwAccuracy - AbilityScale.Delta, Fielding = 50 - AbilityScale.Delta };
 
-    private static Player Receiver(int catching) => new() { Catching = catching };
+    private static Player Receiver(int catching) => new() { Catching = catching - AbilityScale.Delta };
 
     /// <summary>リーグ平均（送球精度50・受け手Catching50）では、送球の逸れを足しても DefenseTimeSeconds が
     /// 従来どおりの値のまま＝帯不変（不変条件#5、50が恒等の作法）。</summary>

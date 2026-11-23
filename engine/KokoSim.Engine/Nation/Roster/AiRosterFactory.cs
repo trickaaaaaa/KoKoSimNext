@@ -140,8 +140,9 @@ public static class AiRosterFactory
         }
 
         // SourceId（成績帰属キー）を確定した Id で焼き込む。
+        // ここまで今の物差し（物理Lv）で作った。表示Lvへ一律 −Δ（issue #1080。天井 +Δ・下限は物理のまま）。
         foreach (var ai in players)
-            ai.Snapshot = ai.Snapshot with { SourceId = ai.Id };
+            ai.Snapshot = AbilityScale.ToDisplay(ai.Snapshot) with { SourceId = ai.Id };
 
         return players;
     }

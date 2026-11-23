@@ -269,12 +269,13 @@ public static class AiTeamBuilder
                           + (bonus?.Invoke(fielders[i]) ?? 0.0);
             for (var slot = 0; slot < FieldSlots.Length; slot++)
             {
+                // 実効守備力は地力×適性補正（掛け算）＝今の物差しで掛ける（issue #1080）。
                 var raw = Season.EffectiveFielding.Raw(
-                    fielders[i].Snapshot.Fielding, fielders[i].Aptitude(FieldSlots[slot]), coeff);
+                    AbilityScale.Phys(fielders[i].Snapshot.Fielding), fielders[i].Aptitude(FieldSlots[slot]), coeff);
                 if (fielders[i].Snapshot.Throws == Players.Handedness.Left)
                     raw -= LeftThrowPenalty(FieldSlots[slot]);
                 w[slot, i] = raw + batting
-                             + fielders[i].Snapshot.ArmStrength * pc.FieldSlotArmWeight(FieldSlots[slot]);
+                             + AbilityScale.Phys(fielders[i].Snapshot.ArmStrength) * pc.FieldSlotArmWeight(FieldSlots[slot]);
             }
         }
 
@@ -311,9 +312,7 @@ public static class AiTeamBuilder
     /// </summary>
     internal static double PitcherScore(AiPlayer p, PitcherArchetypeCoefficients ac)
     {
-        var a = p.Snapshot.Pitching;
-        return PitcherArchetypes.StrengthSum(a.Archetype, PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh), a.Control,
-            PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches), a.PitchRank, ac);
+        return p.Snapshot.Pitching.PhysicalStrengthSum(ac);   // 今の物差しで合成（issue #1080）
     }
 
     /// <summary>野手の起用序列スコア（打撃＋守備＋走の素点和）。ランク付け専用（帯には効かない）。</summary>

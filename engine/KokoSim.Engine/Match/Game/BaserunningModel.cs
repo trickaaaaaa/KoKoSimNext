@@ -677,7 +677,7 @@ public static class BaserunningModel
             {
                 // 従来テーブル（home==null: 単体テスト・純テーブル経路）。決定論・乱数消費順を保存する。
                 // Chance() の評価順は変更前と同一に保つ（third の空き判定を先に短絡させない＝RNG消費順を保存）。
-                if (MathUtil.Chance(P(coeff.FirstToThirdOnSingle, r1.Baserunning, coeff), rng) && third is null)
+                if (MathUtil.Chance(P(coeff.FirstToThirdOnSingle, coeff.AbilityEffect.Phys(r1.Baserunning), coeff), rng) && third is null)
                 {
                     third = r1;
                     mv?.Add(new RunnerMove(r1, 1, 3, false));

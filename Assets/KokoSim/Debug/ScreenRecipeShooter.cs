@@ -397,7 +397,8 @@ namespace KokoSim.Unity.Debugging
 
             /// <summary>
             /// 監督を転任させる（転任の打診を開き、その学校を選んで確定する＝ホームの「転任する」と同じ確定処理）。
-            /// 値: ""＝同じ県でいちばん強い他校 / {school: 123}＝校ID。年度末の判定を待たずに起こす（記録・配色の持ち越しを見る用）。
+            /// 値: ""＝同じ県でいちばん強い他校 / weakest＝同じ県でいちばん弱い他校（弱小校の部員の能力表示を見る用・issue #1080）/
+            /// {school: 123}＝校ID。年度末の判定を待たずに起こす（記録・配色の持ち越しを見る用）。
             /// </summary>
             private IEnumerator Transfer(ScreenStep s)
             {
@@ -409,12 +410,13 @@ namespace KokoSim.Unity.Debugging
                     if (!s.Map.TryGetValue("school", out var v) || !int.TryParse(v, out var id)) { Fail(s, "school が無いか数でない"); yield break; }
                     want = id;
                 }
+                var weakest = s.Arg == "weakest";
                 KokoSim.Engine.Nation.School pick = null;
                 foreach (var sc in NationService.Nation.Schools)
                 {
                     if (want != null) { if (sc.Id == want.Value) { pick = sc; break; } continue; }
                     if (sc.PrefectureId != NationService.PrefectureId) continue;
-                    if (pick == null || sc.Strength > pick.Strength) pick = sc;
+                    if (pick == null || (weakest ? sc.Strength < pick.Strength : sc.Strength > pick.Strength)) pick = sc;
                 }
                 if (pick == null) { Fail(s, "転任先が見つからない"); yield break; }
                 var from = TopBarMeters.SchoolDisplayName();

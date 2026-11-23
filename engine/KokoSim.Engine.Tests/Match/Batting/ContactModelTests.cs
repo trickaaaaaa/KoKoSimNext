@@ -114,12 +114,12 @@ public sealed class ContactModelTests
         // 「2倍」は Lv≦50 側の傾きで測る。上位側は 0.36/0.47 倍＝約1.5倍（物理は km/h のまま・意図した副作用）。
         var coeff = new BattingCoefficients();
         var perVelocityLevelBelow =
-            (PitcherAttributes.VelocityKmhFromLevel(50) - PitcherAttributes.VelocityKmhFromLevel(49))
+            (PitcherAttributes.VelocityKmhFromPhysicalLevel(50) - PitcherAttributes.VelocityKmhFromPhysicalLevel(49))   // 今の物差しの Lv（issue #1080）
             * coeff.StuffPerKmh;
         Assert.InRange(perVelocityLevelBelow / coeff.WhiffContactSlope, 1.8, 2.25);
 
         var perVelocityLevelAbove =
-            (PitcherAttributes.VelocityKmhFromLevel(51) - PitcherAttributes.VelocityKmhFromLevel(50))
+            (PitcherAttributes.VelocityKmhFromPhysicalLevel(51) - PitcherAttributes.VelocityKmhFromPhysicalLevel(50))
             * coeff.StuffPerKmh;
         Assert.InRange(perVelocityLevelAbove / coeff.WhiffContactSlope, 1.4, 1.7);
     }

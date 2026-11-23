@@ -88,10 +88,12 @@ public sealed class BatterArchetypeDistributionTests
             + $"／ spread平均 {spreadAvg:F1} ／ 99張り付き率 {pinnedRate:F1}% "
             + $"／ 走力C未満の強打者 {powerSluggerLowSpeed} ／ パワーD未満の俊足 {speedsterLowPower}");
 
-        // 強さ80までは目標（オールA 1〜2人まで・99張り付き数%）。強さ90はクラス冒頭の既知のギャップ（main は
-        // オールA 7.9人/校・張り付き9割超）＝悪化していないことだけ固定する。
-        var allACap = strength >= 90 ? 3.5 : 2.0;
-        var pinnedCap = strength >= 90 ? 40.0 : 5.0;
+        // 能力は表示Lv（issue #1080: 今の物差し −Δ=7。A＝表示80以上＝今の物差しの87以上・99＝今の物差しの106）。
+        // 実測（seed 固定・各60校）: 物差しを下げる前→下げた後で 強さ80 オールA 1.13→0.27人/校・張り付き 3.5→0.0%、
+        // 強さ90 オールA 3.07→2.60人/校・張り付き 32→0.0%。張り付きは全強さで目標（数%）に入った。
+        // 強さ90のオールAは目標（1校2人以下）に届いていない（OPEN-QUESTIONS Q59・issue #1080）＝悪化しない上限だけを締める。
+        var allACap = strength >= 90 ? 3.0 : 2.0;
+        var pinnedCap = 5.0;
         Assert.True(allAPerSchoolAvg <= allACap, $"オールAが多すぎる: {allAPerSchoolAvg:F2}人/校（強さ{strength}・上限{allACap}）");
         Assert.InRange(spreadAvg, 20.0, 36.0);
         Assert.True(pinnedRate <= pinnedCap, $"99への張り付き率が高すぎる: {pinnedRate:F1}%（強さ{strength}・上限{pinnedCap}）");

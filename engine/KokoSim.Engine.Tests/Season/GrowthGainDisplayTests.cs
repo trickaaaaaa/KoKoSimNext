@@ -26,26 +26,29 @@ public sealed class GrowthGainDisplayTests
         Assert.Equal(Kmh(levelAfter) - Kmh(levelAfter - amount), GrowthGainDisplay.VelocityGainKmh(levelAfter, amount));
     }
 
+    // 球速Lvは表示Lv（issue #1080: 今の物差し −Δ）。既知の値は今の物差しの Lv44/64/52/50 の位置で固定する。
+    private const int D = AbilityScale.Delta;
+
     [Fact]
     public void VelocityGain_KnownValues()
     {
-        Assert.Equal(2, GrowthGainDisplay.VelocityGainKmh(44, 4));
-        Assert.Equal(1, GrowthGainDisplay.VelocityGainKmh(64, 4));
-        Assert.Equal(2, GrowthGainDisplay.VelocityGainKmh(52, 4));
+        Assert.Equal(2, GrowthGainDisplay.VelocityGainKmh(44 - D, 4));
+        Assert.Equal(1, GrowthGainDisplay.VelocityGainKmh(64 - D, 4));
+        Assert.Equal(2, GrowthGainDisplay.VelocityGainKmh(52 - D, 4));
     }
 
     [Fact]
     public void Amount_Velocity_IsShownInKmh()
     {
-        var p = PlayerWithVelocity(44);
+        var p = PlayerWithVelocity(44 - D);
         Assert.Equal("＋2km/h", GrowthGainDisplay.Amount(p, new AbilityGain(AbilityKind.Velocity, 4)));
     }
 
     [Fact]
     public void Amount_VelocityRoundingToZero_IsEmpty()
     {
-        var p = PlayerWithVelocity(50);
-        Assert.Equal(0, GrowthGainDisplay.VelocityGainKmh(50, 1));
+        var p = PlayerWithVelocity(50 - D);
+        Assert.Equal(0, GrowthGainDisplay.VelocityGainKmh(50 - D, 1));
         Assert.Equal("", GrowthGainDisplay.Amount(p, new AbilityGain(AbilityKind.Velocity, 1)));
     }
 

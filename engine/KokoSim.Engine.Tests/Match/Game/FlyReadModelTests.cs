@@ -21,7 +21,7 @@ public sealed class FlyReadModelTests
     private static readonly FieldGeometry Field = new();
 
     private static Player Runner(int baserunning = 50, int speed = 50)
-        => new() { Speed = speed, Baserunning = baserunning };
+        => new() { Speed = speed - AbilityScale.Delta, Baserunning = baserunning - AbilityScale.Delta };   // 引数は今の物差し（issue #1080）
 
     // ---- 読みの単調性 ----
 

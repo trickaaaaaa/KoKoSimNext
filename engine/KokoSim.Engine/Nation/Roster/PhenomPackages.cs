@@ -108,18 +108,18 @@ public static class PhenomPackages
         // 全選手が投手能力を持つ（#381）＝総合型は投手能力にも必ず乗る。旧実装は「投手能力を持つなら」の
         // 条件付きで、実質「マウンドに置かれた選手だけ」だった＝総合型の野手怪物は投げる能力が伸びなかった。
         var a = p.Pitching;
-        var velLevel = System.Math.Max(PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh),
+        var velLevel = System.Math.Max(PitcherAttributes.PhysicalLevelFromVelocityKmh(a.MaxVelocityKmh),
             rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
-        var staLevel = System.Math.Max(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches),
+        var staLevel = System.Math.Max(PitcherAttributes.PhysicalLevelFromStaminaPitches(a.StaminaPitches),
             rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
         return result with
         {
             Pitching = a with
             {
-                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velLevel),
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(velLevel),
                 Control = Hi(a.Control),
                 PitchRank = Hi(a.PitchRank),
-                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staLevel),
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel(staLevel),
             },
         };
     }
@@ -128,18 +128,18 @@ public static class PhenomPackages
         bool mainVelocity, bool mainControl, bool supportPitchRank, bool supportStamina)
     {
         var a = p.Pitching;
-        var velLevel = PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh);
-        var staLevel = PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches);
+        var velLevel = PitcherAttributes.PhysicalLevelFromVelocityKmh(a.MaxVelocityKmh);
+        var staLevel = PitcherAttributes.PhysicalLevelFromStaminaPitches(a.StaminaPitches);
         if (mainVelocity) velLevel = System.Math.Max(velLevel, rng.NextInt(c.MainMin, c.MainMax + 1));
         if (supportStamina) staLevel = System.Math.Max(staLevel, rng.NextInt(c.SupportMin, c.SupportMax + 1));
         return p with
         {
             Pitching = a with
             {
-                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velLevel),
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(velLevel),
                 Control = mainControl ? Main(a.Control, c, rng) : a.Control,   // 制球は学校準拠（剛腕はノーコン味）
                 PitchRank = supportPitchRank ? Support(a.PitchRank, c, rng) : a.PitchRank,
-                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staLevel),
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel(staLevel),
             },
         };
     }

@@ -361,7 +361,7 @@ public sealed class PersonalityTests
             var c = new TrainingCoefficients();
             var stages = new GrowthStageTable();
             var p = PersonalityFixture.Developing(type);
-            p.SetLevel(AbilityKind.Contact, 30);
+            p.SetLevel(AbilityKind.Contact, 30 - KokoSim.Engine.Players.AbilityScale.Delta);   // 今の物差しの30（issue #1080）
             p.SetCap(AbilityKind.Contact, 99);
             var before = p.Level(AbilityKind.Contact) + p.Exp(AbilityKind.Contact) / 100.0;
             for (var w = 0; w < 30; w++)
@@ -374,7 +374,7 @@ public sealed class PersonalityTests
         {
             var c = new TrainingCoefficients();
             var p = new DevelopingPlayer { Receptiveness = receptiveness };
-            p.SetLevel(AbilityKind.Contact, 30);
+            p.SetLevel(AbilityKind.Contact, 30 - KokoSim.Engine.Players.AbilityScale.Delta);   // 今の物差しの30（issue #1080）
             p.SetCap(AbilityKind.Contact, 99);
             for (var w = 0; w < 30; w++)
                 DevelopmentModel.TrainWeek(p, TrainingMenu.Batting, 1, 1.0, new GrowthStageTable(), c, personalities: PC);

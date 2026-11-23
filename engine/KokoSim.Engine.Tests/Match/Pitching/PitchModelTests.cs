@@ -70,21 +70,21 @@ public sealed class PitchModelTests
     public void StaminaLevelConversion_MapsToPitchCount()
     {
         // issue #408: 切片63・傾き0.75。Level 50 → 100.5球（D帯＝既定値）/ Level 100 → 138球（変換は一箇所に集約）。
-        Assert.Equal(100.5, PitcherAttributes.StaminaPitchesFromLevel(50), 6);
-        Assert.Equal(138.0, PitcherAttributes.StaminaPitchesFromLevel(100), 6);
+        Assert.Equal(100.5, PitcherAttributes.StaminaPitchesFromPhysicalLevel(50), 6);
+        Assert.Equal(138.0, PitcherAttributes.StaminaPitchesFromPhysicalLevel(100), 6);
         // 既定の StaminaPitches は Lv50 の目安投球数（D帯）と一致する。
-        Assert.Equal(PitcherAttributes.StaminaPitchesFromLevel(50), new PitcherAttributes().StaminaPitches, 6);
+        Assert.Equal(PitcherAttributes.StaminaPitchesFromPhysicalLevel(50), new PitcherAttributes().StaminaPitches, 6);
     }
 
     [Fact]
     public void StaminaConversion_SatisfiesIssue408Bands()
     {
         // issue #408 完了条件: クランプ下限(Lv10)≥70球 / 生成平均(Lv45)∈[95,100] / クランプ上限(Lv92)∈[120,140]。
-        Assert.True(PitcherAttributes.StaminaPitchesFromLevel(10) >= 70.0,
-            $"下限 Lv10 = {PitcherAttributes.StaminaPitchesFromLevel(10)}球 は 70球以上であること");
-        var mean = PitcherAttributes.StaminaPitchesFromLevel(45);
+        Assert.True(PitcherAttributes.StaminaPitchesFromPhysicalLevel(10) >= 70.0,
+            $"下限 Lv10 = {PitcherAttributes.StaminaPitchesFromPhysicalLevel(10)}球 は 70球以上であること");
+        var mean = PitcherAttributes.StaminaPitchesFromPhysicalLevel(45);
         Assert.InRange(mean, 95.0, 100.0);
-        var top = PitcherAttributes.StaminaPitchesFromLevel(92);
+        var top = PitcherAttributes.StaminaPitchesFromPhysicalLevel(92);
         Assert.InRange(top, 120.0, 140.0);
     }
 
@@ -100,11 +100,11 @@ public sealed class PitchModelTests
     public void LevelFromStaminaPitches_ExtrapolatesAbove100_NoUpperCap()
     {
         // issue #356/#408: スタミナは上限なし。Lv100=138球で頭打ちにならず外挿する（逆変換 (138-63)/0.75 = 100）。
-        Assert.Equal(100, PitcherAttributes.LevelFromStaminaPitches(138.0));
-        Assert.Equal(150, PitcherAttributes.LevelFromStaminaPitches(63.0 + 150 * 0.75));
+        Assert.Equal(100, PitcherAttributes.PhysicalLevelFromStaminaPitches(138.0));
+        Assert.Equal(150, PitcherAttributes.PhysicalLevelFromStaminaPitches(63.0 + 150 * 0.75));
         // 目安投球数が伸びるほど等級も単調に増える（ReliefScore/PitcherScore で他能力と土俵を揃える）。
-        Assert.True(PitcherAttributes.LevelFromStaminaPitches(200.0)
-                    > PitcherAttributes.LevelFromStaminaPitches(160.0));
+        Assert.True(PitcherAttributes.PhysicalLevelFromStaminaPitches(200.0)
+                    > PitcherAttributes.PhysicalLevelFromStaminaPitches(160.0));
     }
 
     [Fact]

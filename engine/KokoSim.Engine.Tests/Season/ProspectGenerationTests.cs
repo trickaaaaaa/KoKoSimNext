@@ -16,6 +16,9 @@ namespace KokoSim.Engine.Tests.Season;
 /// </summary>
 public sealed class ProspectGenerationTests
 {
+    // 能力は表示Lv（issue #1080: 今の物差し −Δ）。閾値は今の物差しの数字から Δ を引いて書く（下限は表示で 1・7・3）。
+    private const int D = KokoSim.Engine.Players.AbilityScale.Delta;
+
     private static readonly RosterCoefficients C = new();
 
     /// <summary>複数シードで新入生を大量生成して母集団を作る。</summary>
@@ -135,7 +138,7 @@ public sealed class ProspectGenerationTests
         Assert.InRange(Mean(high, AbilityKind.Speed) - Mean(low, AbilityKind.Speed), expected - 3.0, expected + 3.0);
         Assert.InRange(Mean(high, AbilityKind.ArmStrength) - Mean(low, AbilityKind.ArmStrength), expected - 3.0, expected + 3.0);
         // ばらつき（SD 12）は残る＝弱小校（中心20→身体系36）にも E 以上（40+）の俊足が一定数出る。
-        Assert.True(low.Count(p => p.Level(AbilityKind.Speed) >= 50) > low.Count * 0.08,
+        Assert.True(low.Count(p => p.Level(AbilityKind.Speed) >= 50 - D) > low.Count * 0.08,
             "弱小校の俊足が消えている（身体系のSDが潰れている）");
 
         // 一方、専門能力（ミート）は総合力に明確に連動する。
@@ -170,10 +173,10 @@ public sealed class ProspectGenerationTests
 
         // 投手の打撃（ミート）も、野手の投球関連も壊滅ゼロにはならない。
         Assert.All(pop.Where(p => PitcherRoleResolver.LeansPitcher(p)), p =>
-            Assert.True(p.Level(AbilityKind.Contact) >= C.OffSpecialtyFloor,
+            Assert.True(p.Level(AbilityKind.Contact) >= C.OffSpecialtyFloor - D,
                 $"投手のミートがフロア割れ: {p.Level(AbilityKind.Contact)}"));
         Assert.All(pop.Where(p => !PitcherRoleResolver.LeansPitcher(p)), p =>
-            Assert.True(p.Level(AbilityKind.Control) >= C.OffSpecialtyFloor,
+            Assert.True(p.Level(AbilityKind.Control) >= C.OffSpecialtyFloor - D,
                 $"野手のコントロールがフロア割れ: {p.Level(AbilityKind.Control)}"));
     }
 
@@ -245,7 +248,7 @@ public sealed class ProspectGenerationTests
         var mentals = pop.Select(p => (double)p.Mental).ToList();
 
         // Q8（実戦成長ループ）: 新入生は未熟＝中心46−(50−MentalMean)×corr ≈ 44.8 近傍。実戦出場で開花する。
-        Assert.InRange(leads.Average(), 43.0, 46.5);
+        Assert.InRange(leads.Average(), 43.0 - D, 46.5 - D);
         // 個体差が潰れていない（横並びの中にも良し悪しがある）。
         var sd = System.Math.Sqrt(leads.Select(v => (v - leads.Average()) * (v - leads.Average())).Average());
         Assert.InRange(sd, 5.0, 13.0);

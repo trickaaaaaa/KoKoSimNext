@@ -31,7 +31,7 @@ public static class StealReadModel
         var readSkill = MathUtil.Clamp(
             c.StealReadIntercept
             + (c.AbilityEffect.Pitching(catcher.Lead) - 50) * c.StealReadCatcherLeadSlope
-            + (pitcher.Mental - 50) * c.StealReadPitcherSenseSlope,
+            + (c.AbilityEffect.Phys(pitcher.Mental) - 50) * c.StealReadPitcherSenseSlope,
             0.0, 1.0);
         return MathUtil.Clamp(readSkill * expectedness, 0.0, c.MaxPitchoutProb);
     }

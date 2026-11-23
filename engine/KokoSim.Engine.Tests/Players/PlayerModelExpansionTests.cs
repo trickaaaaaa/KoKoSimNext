@@ -47,7 +47,7 @@ public sealed class PlayerModelExpansionTests
     [Fact]
     public void Player_ToFielder_ProjectsThrowAccuracy()
     {
-        var p = new Player { ArmStrength = 70, ThrowAccuracy = 35 };
+        var p = new Player { ArmStrength = 70 - AbilityScale.Delta, ThrowAccuracy = 35 - AbilityScale.Delta };
         var f = p.ToFielder();
         Assert.Equal(70, f.ArmStrength);
         Assert.Equal(35, f.ThrowAccuracy);

@@ -115,12 +115,13 @@ public static class DefenseSensitivitySimulation
         return list;
     }
 
+    // level は今の物差しの Lv（issue #1080）。選手には表示Lv（−Δ）で載せる。
     private static Player SetAttr(Player p, Attr attr, int level) => attr switch
     {
-        Attr.Speed => p with { Speed = level },
-        Attr.Fielding => p with { Fielding = level },
-        Attr.Contact => p with { Contact = level },
-        _ => p with { Power = level },
+        Attr.Speed => p with { Speed = level - AbilityScale.Delta },
+        Attr.Fielding => p with { Fielding = level - AbilityScale.Delta },
+        Attr.Contact => p with { Contact = level - AbilityScale.Delta },
+        _ => p with { Power = level - AbilityScale.Delta },
     };
 
     private static Team Apply(Team team, Condition c)

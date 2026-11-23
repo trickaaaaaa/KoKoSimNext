@@ -21,8 +21,9 @@ public sealed class TrainabilityTests
     private static DevelopingPlayer MakePlayer(AbilityKind k, int level, int cap, bool prodigy = false)
     {
         var p = new DevelopingPlayer { IsProdigy = prodigy };
-        p.SetLevel(k, level);
-        p.SetCap(k, cap);
+        // level・cap は今の物差しの値（issue #1080）。表示Lv（−Δ）で載せる＝必要expは今の物差しで引かれる。
+        p.SetLevel(k, level - KokoSim.Engine.Players.AbilityScale.Delta);
+        p.SetCap(k, cap - KokoSim.Engine.Players.AbilityScale.Delta);
         return p;
     }
 

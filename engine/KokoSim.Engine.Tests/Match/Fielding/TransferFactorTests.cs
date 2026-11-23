@@ -92,10 +92,12 @@ public sealed class TransferFactorTests
     [Fact]
     public void CatcherPop_FasterTransferForBetterFieldingCatcher()
     {
+        // 引数は今の物差しの守備（issue #1080）。選手には表示Lv（−Δ）で載せる。
+        const int d = AbilityScale.Delta;
         double PopDefense(int fielding) => StealResolver.DefenseTimeSeconds(
-            new Player { ArmStrength = 50, Fielding = fielding }, Br);
+            new Player { ArmStrength = 50 - d, Fielding = fielding - d }, Br);
 
-        Assert.Equal(PopDefense(50), StealResolver.DefenseTimeSeconds(new Player { ArmStrength = 50 }, Br), 12); // 守備50で恒等
+        Assert.Equal(PopDefense(50), StealResolver.DefenseTimeSeconds(new Player { ArmStrength = 50 - d }, Br), 12); // 守備50で恒等
         Assert.True(PopDefense(90) < PopDefense(50), "守備の高い捕手のポップが速くない");
         Assert.True(PopDefense(50) < PopDefense(20), "守備の低い捕手のポップが遅くない");
     }

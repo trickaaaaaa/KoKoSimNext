@@ -12,9 +12,12 @@ namespace KokoSim.Engine.Season;
 /// </summary>
 public static class EffectiveFielding
 {
-    /// <summary>丸め・クランプ前の生値＝ Fielding × AptitudeFactor(適性)。</summary>
+    /// <summary>
+    /// 丸め・クランプ前の生値＝ Fielding × AptitudeFactor(適性)。<b>今の物差し（物理Lv）</b>で返す（issue #1080）:
+    /// 掛け算なので、表示Lv（物理−Δ）のまま掛けると適性で効きが変わる。表示へ下ろすのは丸めた後（<see cref="Rank"/>）。
+    /// </summary>
     public static double Raw(DevelopingPlayer player, FieldPosition position, FieldingCoefficients coeff)
-        => Raw(player.Level(AbilityKind.Fielding), player.Aptitude(position), coeff);
+        => Raw(Players.AbilityScale.Phys(player.Level(AbilityKind.Fielding)), player.Aptitude(position), coeff);
 
     /// <summary>
     /// 素の守備力と適性から直接引く形（issue #384）。AI校は <see cref="DevelopingPlayer"/> を持たず
@@ -23,7 +26,7 @@ public static class EffectiveFielding
     public static double Raw(int fieldingLevel, int aptitude, FieldingCoefficients coeff)
         => fieldingLevel * coeff.AptitudeFactor(aptitude);
 
-    /// <summary>実効守備力（1〜100、四捨五入）。適性50（中庸）で地力の Fielding と一致する。</summary>
+    /// <summary>実効守備力（表示Lv、四捨五入）。適性50（中庸）で地力の Fielding と一致する。丸めは今の物差しで行ってから −Δ。</summary>
     public static int Rank(DevelopingPlayer player, FieldPosition position, FieldingCoefficients coeff)
-        => (int)MathUtil.Clamp(System.Math.Round(Raw(player, position, coeff)), 1, 100);
+        => Players.AbilityScale.Disp((int)MathUtil.Clamp(System.Math.Round(Raw(player, position, coeff)), 1, Players.AbilityScale.PhysMax100));
 }

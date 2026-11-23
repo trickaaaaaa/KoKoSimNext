@@ -1,3 +1,4 @@
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Season;
@@ -25,8 +26,8 @@ public sealed class EffectiveFieldingTests
     [Fact]
     public void Rank_AtNeutralAptitude50_EqualsFieldingItself()
     {
-        var p = PlayerWith(fielding: 60, aptitude: 50);
-        Assert.Equal(60, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff));
+        var p = PlayerWith(fielding: 60 - AbilityScale.Delta, aptitude: 50);
+        Assert.Equal(60, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff) + AbilityScale.Delta);   // 今の物差しの値（issue #1080）
     }
 
     [Fact]
@@ -35,25 +36,25 @@ public sealed class EffectiveFieldingTests
         // 適性99: factor=1+(99-50)*0.006=1.294（0-99の実用域では1.30クランプに届かない）。
         // issue本文の例表は倍率を×1.29に丸めて示した概算（60×1.29=77.4→77）だが、
         // 実装は丸めない倍率で計算する（60×1.294=77.64→78）。
-        var p = PlayerWith(fielding: 60, aptitude: 99);
+        var p = PlayerWith(fielding: 60 - AbilityScale.Delta, aptitude: 99);
         Assert.Equal(1.294, Coeff.AptitudeFactor(99), 3);
-        Assert.Equal(78, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff));
+        Assert.Equal(78, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff) + AbilityScale.Delta);   // 今の物差しの値（issue #1080）
     }
 
     [Fact]
     public void Rank_AtAptitude70_MatchesIssueTableExample_67()
     {
         // issue本文の例表: 守備力60・適性70 → 実効67。
-        var p = PlayerWith(fielding: 60, aptitude: 70);
-        Assert.Equal(67, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff));
+        var p = PlayerWith(fielding: 60 - AbilityScale.Delta, aptitude: 70);
+        Assert.Equal(67, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff) + AbilityScale.Delta);   // 今の物差しの値（issue #1080）
     }
 
     [Fact]
     public void Rank_AtAptitude30_MatchesIssueTableExample_53()
     {
         // issue本文の例表: 守備力60・適性30 → 実効53。
-        var p = PlayerWith(fielding: 60, aptitude: 30);
-        Assert.Equal(53, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff));
+        var p = PlayerWith(fielding: 60 - AbilityScale.Delta, aptitude: 30);
+        Assert.Equal(53, EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff) + AbilityScale.Delta);   // 今の物差しの値（issue #1080）
     }
 
     [Fact]

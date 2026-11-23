@@ -98,7 +98,7 @@ public static class StrengthTeamFactory
                 WithHandedness(PositionPlayer(pos, castCenter, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
                         battingLift: starSlots.Contains(slot) ? starLift : 0.0), pr.Hand, 0.0, castCenter, rc, pos)
                     with { UniformNumber = PositionNumber(pos), Grade = pr.Grade },
-                pr.Grade, rc));
+                pr.Grade, rc, physical: true));
         }
         // 投手枠に置く4人の「投手寄せ重み」をエース格から順に引く（#377・Fork＝主RNG非消費）。
         // 打撃はこの w の連続量で決まる＝役割ごとの −20 の崖は無い。
@@ -109,7 +109,7 @@ public static class StrengthTeamFactory
             WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc, mental,
                     pitchingLift: starLift), acePr.Hand, MoundRoleWeight, castCenter, rc)
                 with { UniformNumber = 1, Grade = acePr.Grade },
-            acePr.Grade, rc));
+            acePr.Grade, rc, physical: true));
 
         var bullpen = new List<Player>();
         var wIndex = 1;
@@ -120,7 +120,7 @@ public static class StrengthTeamFactory
                 WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental),
                         pr.Hand, MoundRoleWeight, castCenter, rc)
                     with { UniformNumber = number, Grade = pr.Grade },
-                pr.Grade, rc));
+                pr.Grade, rc, physical: true));
         }
         // 控え投手の最後の1枠（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
         var reliefTail = rng.Fork(0x9A20_0000UL);
@@ -129,7 +129,7 @@ public static class StrengthTeamFactory
             WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental),
                     pr20.Hand, MoundRoleWeight, castCenter, rc)
                 with { UniformNumber = numbers.Mound[3], Grade = pr20.Grade },
-            pr20.Grade, rc));
+            pr20.Grade, rc, physical: true));
 
         // 控え野手（全員生成・ベンチ入りメンバとして残り番号を若い順に採番）。能力・氏名とも Fork ストリーム由来＝
         // 主RNG消費を1ビットも変えない。Team.Tactics 未設定の相手校では MaybeOffenseSubs が Bench 前に早期 return するため、
@@ -144,7 +144,7 @@ public static class StrengthTeamFactory
                 WithHandedness(PositionPlayer(BenchSlots[i], castCenter - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc),
                         pr.Hand, 0.0, castCenter, rc, BenchSlots[i])
                     with { UniformNumber = numbers.BenchFielders[i], Grade = pr.Grade },
-                pr.Grade, rc));
+                pr.Grade, rc, physical: true));
         }
 
         // 監督傾向・抜擢型（issue #55）: Compose の前に控えを先発へ抜擢する（オーダー編成に効く傾向）。
@@ -165,10 +165,11 @@ public static class StrengthTeamFactory
         var composed = LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);
         // 主将（設計書09 §8）: 自校と同じ規則（最上級生の統率力最大）で AI 校にも置く（issue ai-school-mental-fixed-50）。
         // 参照は Compose 後の打順・控えの実体から選ぶ（Team.Captain の在場判定は参照一致）。
-        var captain = CaptainSelector.SelectFromPlayers(AllPlayers(composed));
+        var captain = CaptainSelector.SelectFromPlayers(AllPlayers(composed), delta: 0);   // まだ物理Lv（issue #1080）
         // 監督傾向・継投系（issue #55, 決定4: B-1）: エース酷使/継投早めのチームだけ継投の余裕に倍率を掛ける。
         // 傾向なしは倍率1＝GameContext.Fatigue そのまま（従来と完全一致・帯不変）。永続ロスター（AiTeamBuilder）も同じ関数を通す（#1047）。
-        return ManagerTraitEffects.Apply(composed with { Captain = captain }, traits, ai);
+        // ここまで今の物差し（物理Lv）。出口で表示Lvへ一律 −Δ（issue #1080）。打順・主将・DH判断は物理Lvで決めた＝下げても同じ。
+        return AbilityScale.ToDisplay(ManagerTraitEffects.Apply(composed with { Captain = captain }, traits, ai));
     }
 
     /// <summary>主将候補＝打順＋控え＋（DH制の）先発投手の全員（Compose 後の参照）。</summary>
@@ -306,15 +307,17 @@ public static class StrengthTeamFactory
         ISet<string> usedGiven)
         => PlayerNameGenerator.Generate(vocab, rng.Fork(nameSalt++), usedGiven);
 
+    // 生成は今の物差し（物理Lv）で作り、出口（Create・AiRosterFactory.NewcomerCohort）で表示Lvへ一律 −Δ する（issue #1080）。
+    // 天井は +Δ（表示99＝物理106まで出せる）、下限は物理のまま（表示では 10→3）。
     internal static int Ability(double center, IRandomSource rng)
-        => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(center, 6)), 10, 99);
+        => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(center, 6)), 10, AbilityScale.PhysMax99);
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
-    private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 10, 99);
+    private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 10, AbilityScale.PhysMax99);
 
     /// <summary>球種ランク（PitchRank 近傍の個体差）。</summary>
     private static int Grade(int pitchRank, IRandomSource rng)
-        => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(pitchRank, 8)), 1, 100);
+        => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(pitchRank, 8)), 1, AbilityScale.PhysMax100);
 
     /// <summary>潜在投手能力の Fork salt（性格 salt と衝突しない別ストリーム。issue #209 Phase B）。</summary>
     // 旧 LatentPitchingSalt（#381 で改称）。値を変えると全AI校の非マウンド選手の投手能力が変わるので触らない。
@@ -401,14 +404,15 @@ public static class StrengthTeamFactory
         var prof = AiBattingProfile.Draw(rng.Fork(salt ^ AiBattingProfile.ProfileSalt), rc);
         var contact = Ability((battingCenter + rc.AiPowerSkew) * prof.Contact, rng);
         var power = Ability(Math.Max(0.0, battingCenter - rc.AiPowerSkew) * prof.Power, rng);
-        var launch = Ability(50, rng);
+        // 弾道は型の軸（物差しの対象外）＝天井は 99 のまま（乱数の消費は Ability と同じ1回）。
+        var launch = Math.Min(99, Ability(50, rng));
         var discipline = Ability((strength + battingLift) * prof.Discipline, rng);
         var speed = Ability(strength, rng);
         // 肩は身体系＝個人差を自校と同じ σ で引く（issue #767。消費数は Ability と同じ1回）。
         // 送球精度は従来どおり肩と同じ標準正規値から σ6 で作る＝旧値と1ビット一致（肩の幅だけ広げる）。
         var armZ = rng.NextGaussian(0.0, 1.0);
-        var arm = (int)MathUtil.Clamp(Math.Round(strength + rc.AiArmSd * armZ), 10, 99);
-        var throwAccuracy = (int)MathUtil.Clamp(Math.Round(strength + 6.0 * armZ), 10, 99);
+        var arm = (int)MathUtil.Clamp(Math.Round(strength + rc.AiArmSd * armZ), 10, AbilityScale.PhysMax99);
+        var throwAccuracy = (int)MathUtil.Clamp(Math.Round(strength + 6.0 * armZ), 10, AbilityScale.PhysMax99);
         var fielding = Ability(strength * prof.Fielding, rng);
         var catching = Ability(strength * prof.Catching, rng);
 
@@ -436,15 +440,15 @@ public static class StrengthTeamFactory
 
             pitching = new PitcherAttributes
             {
-                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velocityLevel),
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(velocityLevel),
                 Archetype = archetype,
                 Control = control,
-                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staminaLevel),
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel(staminaLevel),
                 PitchRank = pitchRank,
                 // 集計用の簡易レパートリー: ストレート＋変化球2種（ランクは PitchRank 近傍）。
                 Repertoire = new[]
                 {
-                    PitchSlot.FastballOf(pitchRank),
+                    new PitchSlot { Type = PitchType.Fastball, Power = pitchRank, Sharpness = pitchRank },
                     new PitchSlot { Type = PitchType.Slider, Power = Grade(pitchRank, rng), Sharpness = Grade(pitchRank, rng) },
                     new PitchSlot { Type = PitchType.Fork, Power = Grade(pitchRank, rng), Sharpness = Grade(pitchRank, rng) },
                 },
@@ -480,7 +484,7 @@ public static class StrengthTeamFactory
             ThrowAccuracy = throwAccuracy,
             Fielding = fielding,
             Catching = catching,
-            Bunt = (int)MathUtil.Clamp(strength, 10, 99),
+            Bunt = (int)MathUtil.Clamp(strength, 10, AbilityScale.PhysMax99),
             Steal = speed,
             Baserunning = speed,
             Pitching = pitching,

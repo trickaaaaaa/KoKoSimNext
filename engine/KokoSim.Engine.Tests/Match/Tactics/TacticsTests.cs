@@ -23,16 +23,19 @@ public sealed class TacticsTests
     // 走力95 vs 肩20 が中庸に寄り「際どい/余裕」のしきい値前提が崩れる。
     private static readonly BaserunningCoefficients Br = new() { AbilityEffect = AbilityEffectCoefficients.Identity };
 
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せる＝閾値（TacticsCoefficients）は今の物差しのまま。
+    private const int D = AbilityScale.Delta;
+
     private static Player P(int contact = 50, int power = 50, int bunt = 50, int speed = 50,
         int steal = 50, int arm = 50, int mental = 50, FieldPosition pos = FieldPosition.CenterField)
         => new()
         {
-            Position = pos, Contact = contact, Power = power, Bunt = bunt,
-            Speed = speed, Steal = steal, ArmStrength = arm, Mental = mental,
+            Position = pos, Contact = contact - D, Power = power - D, Bunt = bunt - D,
+            Speed = speed - D, Steal = steal - D, ArmStrength = arm - D, Mental = mental - D,
         };
 
     private static Player Pitcher(int control = 50, string name = "P")
-        => new() { Name = name, Position = FieldPosition.Pitcher, Pitching = new PitcherAttributes { Control = control } };
+        => new() { Name = name, Position = FieldPosition.Pitcher, Pitching = new PitcherAttributes { Control = control - D } };
 
     private static TacticsSituation Situation(
         int inning = 5, int outs = 0, int diff = 0,
@@ -256,13 +259,13 @@ public sealed class TacticsTests
     public void Brain_Defense_OutfieldDeep_IsRelativeToTheLineup()
     {
         var brain = new StandardTacticsBrain(C);
-        var strongLineup = Situation(batter: P(power: 85)) with { OffenseLineupMeanPower = 84.0 };
+        var strongLineup = Situation(batter: P(power: 85)) with { OffenseLineupMeanPower = 84.0 - D };
         Assert.Equal(DefenseDepth.Normal, brain.CallDefense(strongLineup, new Xoshiro256Random(1)).Outfield);
-        var standout = Situation(batter: P(power: 95)) with { OffenseLineupMeanPower = 84.0 };
+        var standout = Situation(batter: P(power: 95)) with { OffenseLineupMeanPower = 84.0 - D };
         Assert.Equal(DefenseDepth.Deep, brain.CallDefense(standout, new Xoshiro256Random(1)).Outfield);
-        var averageLineup = Situation(batter: P(power: 75)) with { OffenseLineupMeanPower = 50.0 };
+        var averageLineup = Situation(batter: P(power: 75)) with { OffenseLineupMeanPower = 50.0 - D };
         Assert.Equal(DefenseDepth.Deep, brain.CallDefense(averageLineup, new Xoshiro256Random(1)).Outfield);
-        var belowAbsolute = Situation(batter: P(power: 70)) with { OffenseLineupMeanPower = 40.0 };
+        var belowAbsolute = Situation(batter: P(power: 70)) with { OffenseLineupMeanPower = 40.0 - D };
         Assert.Equal(DefenseDepth.Normal, brain.CallDefense(belowAbsolute, new Xoshiro256Random(1)).Outfield);
     }
 
@@ -628,7 +631,7 @@ public sealed class TacticsTests
         // issue #860 B: 伝令役が主将なら通常上限(MessengerFactorMax=1.4)を超えて効く。
         var captain = new Player
         {
-            Name = "主将", Grade = 3, Leadership = 80, Mental = 80,
+            Name = "主将", Grade = 3, Leadership = 80, Mental = 80 - D,
         }.WithAxes(Personality.HotBlood);
         var twin = captain with { Name = "双子" }; // 同じ能力値でも「主将本人」でなければボーナス無し
         var receiver = new Player { Name = "r", Grade = 1 }; // 学年を外して同学年ボーナスを避ける

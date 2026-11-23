@@ -78,24 +78,24 @@ public sealed class PitcherArchetypeTests
     public void VelocityFromLevel_MatchesLeagueAverage_AtLevel50()
     {
         // PitcherAttributes.LeagueAverage の記述「球速132km/h, 各50」と一致すること。
-        Assert.Equal(132.0, PitcherAttributes.VelocityKmhFromLevel(50), 1);
+        Assert.Equal(132.0, PitcherAttributes.VelocityKmhFromPhysicalLevel(50), 1);
         Assert.Equal(PitcherAttributes.LeagueAverage.MaxVelocityKmh,
-            PitcherAttributes.VelocityKmhFromLevel(50), 1);
+            PitcherAttributes.VelocityKmhFromPhysicalLevel(50), 1);
     }
 
     [Fact]
     public void VelocityFromLevel_SpansRealisticHighSchoolRange()
     {
-        var lo = PitcherAttributes.VelocityKmhFromLevel(20);
-        var top = PitcherAttributes.VelocityKmhFromLevel(99);
+        var lo = PitcherAttributes.VelocityKmhFromPhysicalLevel(20);
+        var top = PitcherAttributes.VelocityKmhFromPhysicalLevel(99);
 
         Assert.InRange(lo, 112, 122);    // 弱小校の投手
         // 全国級の剛腕: Lv99＝156.8（issue #908 で Lv90 から上を伸ばし Lv100＝158。現実の高校生の最速は 154〜158）。
         // 何人がそこへ届くかは生成側（AI校の天井）で合わせる＝VelocityDistributionByTierTests。
         Assert.InRange(top, 155, 158);
         // 上限に張り付かず最上位帯でも差が残る（旧式は Lv80 以上が全部155で潰れていた）。
-        Assert.True(PitcherAttributes.VelocityKmhFromLevel(99) > PitcherAttributes.VelocityKmhFromLevel(85));
-        Assert.True(PitcherAttributes.VelocityKmhFromLevel(85) > PitcherAttributes.VelocityKmhFromLevel(70));
+        Assert.True(PitcherAttributes.VelocityKmhFromPhysicalLevel(99) > PitcherAttributes.VelocityKmhFromPhysicalLevel(85));
+        Assert.True(PitcherAttributes.VelocityKmhFromPhysicalLevel(85) > PitcherAttributes.VelocityKmhFromPhysicalLevel(70));
     }
 
     [Theory]

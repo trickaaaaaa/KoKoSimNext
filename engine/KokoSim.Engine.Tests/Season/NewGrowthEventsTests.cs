@@ -289,8 +289,9 @@ public sealed class NewGrowthEventsTests
         Assert.All(notices, n => Assert.Equal(GrowthEventType.BigStage, n.Type));
         Assert.Equal(GrowthDomain.Pitching, notices.Single(n => n.Player == ace).Domain);
         Assert.Equal(GrowthDomain.Batting, notices.Single(n => n.Player == hero).Domain);
-        Assert.Equal(50 + c.BigStageMentalGain, hero.Mental);
-        Assert.Equal(50, quiet.Mental);
+        // 既定の精神力は表示 AverageDisplay（今の物差しの50・issue #1080）。
+        Assert.Equal(KokoSim.Engine.Players.AbilityScale.AverageDisplay + c.BigStageMentalGain, hero.Mental);
+        Assert.Equal(KokoSim.Engine.Players.AbilityScale.AverageDisplay, quiet.Mental);
     }
 
     [Fact]

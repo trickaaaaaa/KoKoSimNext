@@ -59,8 +59,9 @@ public static class NotabilityModel
         var cap = 0.0;
         foreach (var (kind, w) in weights)
         {
-            cur += w * player.Level(kind);
-            cap += w * player.Cap(kind);
+            // 注目度は今の物差し（表示Lv＋Δ・issue #1080）で合成する＝予想順位の境目（draft.yaml）はそのまま。
+            cur += w * (player.Level(kind) + Players.AbilityScale.Delta);
+            cap += w * (player.Cap(kind) + Players.AbilityScale.Delta);
         }
         var blend = Clamp(c.CeilingBlend, 0, 1);
         return Clamp((1 - blend) * cur + blend * cap, 0, 100);
@@ -127,6 +128,8 @@ public static class NotabilityModel
     /// </summary>
     public static bool MeetsCandidateFloor(DevelopingPlayer player, TeamStrengthCoefficients strength, DraftCoefficients c)
     {
+        // 足切りは画面のチップ（表示Lv）のまま判定する（issue #1080・オーナー決定 2026-11-23）。物差しを下げた分だけ
+        // チップも下がるので候補は少し減る（受け入れ済み）。注目度そのもの（予想順位の境目）は今の物差しで合成する。
         var s = PlayerStrengthProfile.Compute(player, strength);
         var best = s.BattingTier > s.PitchingTier ? s.BattingTier : s.PitchingTier;
         return best >= c.CandidateMinTier;

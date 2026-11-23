@@ -20,12 +20,12 @@ public static class TimeoutMessenger
     /// ベンチの主将を伝令で使う「ここ一番」の得＝Aの常時効果とは別枠）。
     /// </summary>
     public static double Factor(Player? messenger, Player receiver, bool toPitcher,
-        TacticsCoefficients c, PersonalityCoefficients pc, Player? captain = null)
+        TacticsCoefficients c, PersonalityCoefficients pc, Player? captain = null, int delta = AbilityScale.Delta)
     {
         if (messenger is null) return 1.0;
         var isCaptain = captain is not null && ReferenceEquals(messenger, captain);
         return FactorOf(messenger.Leadership, messenger.Mental, messenger.Grade, messenger.Selflessness,
-            receiver.Grade, toPitcher, isCaptain, c, pc);
+            receiver.Grade, toPitcher, isCaptain, c, pc, delta);
     }
 
     /// <summary>
@@ -33,7 +33,8 @@ public static class TimeoutMessenger
     /// 育成層の選手（主将指名画面の段階表示など）も同じ式で引けるよう、式はここ一箇所にだけ置く。
     /// </summary>
     public static double FactorOf(int leadership, int mental, int grade, int selflessness,
-        int receiverGrade, bool toPitcher, bool isCaptain, TacticsCoefficients c, PersonalityCoefficients pc)
+        int receiverGrade, bool toPitcher, bool isCaptain, TacticsCoefficients c, PersonalityCoefficients pc,
+        int delta = AbilityScale.Delta)
     {
         var f = 1.0 + (leadership - c.MessengerLeadershipNeutral) * c.MessengerLeadershipSlope;
         if (grade == 3) f += c.MessengerSeniorBonus;
@@ -44,7 +45,8 @@ public static class TimeoutMessenger
         f += pc.MessengerBonus(selflessness, toPitcher);
         if (isCaptain)
         {
-            f += leadership * mental / 100.0 * c.CaptainMessengerBonusPerPower;
+            // 統率力＝統率傾向×精神力（今の物差し＝表示Lv＋Δ・issue #1080）/100。
+            f += leadership * (mental + delta) / 100.0 * c.CaptainMessengerBonusPerPower;
             return Math.Clamp(f, c.MessengerFactorMin, c.CaptainMessengerFactorMax);
         }
         return Math.Clamp(f, c.MessengerFactorMin, c.MessengerFactorMax);
@@ -57,15 +59,15 @@ public static class TimeoutMessenger
     /// ベンチの主将は自然に最有力候補になる＝AI監督の人選を別途変える必要はない。
     /// </summary>
     public static Player? AiPick(IReadOnlyList<Player> reserves, Player receiver, bool toPitcher, int tacticalSense,
-        TacticsCoefficients c, PersonalityCoefficients pc, Player? captain = null)
+        TacticsCoefficients c, PersonalityCoefficients pc, Player? captain = null, int delta = AbilityScale.Delta)
     {
         if (reserves.Count == 0) return null;
         if (tacticalSense < c.AiMessengerPickMinSense) return reserves[0];
         var best = reserves[0];
-        var bestF = Factor(best, receiver, toPitcher, c, pc, captain);
+        var bestF = Factor(best, receiver, toPitcher, c, pc, captain, delta);
         for (var i = 1; i < reserves.Count; i++)
         {
-            var f = Factor(reserves[i], receiver, toPitcher, c, pc, captain);
+            var f = Factor(reserves[i], receiver, toPitcher, c, pc, captain, delta);
             if (f > bestF) { best = reserves[i]; bestF = f; }
         }
         return best;

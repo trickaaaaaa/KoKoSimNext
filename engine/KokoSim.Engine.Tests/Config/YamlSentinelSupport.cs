@@ -43,6 +43,13 @@ internal static class YamlSentinelSupport
 
     public static long Key(double v) => (long)Math.Round(v * 100.0);
 
+    /// <summary>
+    /// 値が C# の定数と一致しなければ読み込みで弾かれる葉（目印の値へ書き換えられない）。届くことは
+    /// <c>CoefficientsDefaultsConsistencyTests</c> と読み込みの検査が見ている。
+    /// ability_effect.delta: 表示能力の物差しの下げ幅（issue #1080・AbilityScale.Delta と一致必須）。
+    /// </summary>
+    private static readonly HashSet<string> PinnedLeaves = new(StringComparer.Ordinal) { "ability_effect.delta" };
+
     /// <summary>Model 内の数値（double/float/整数）を、辞書・リスト・public フィールドも含めて出現順に集める。</summary>
     public static List<double> NumbersOf(object? model)
     {
@@ -67,6 +74,7 @@ internal static class YamlSentinelSupport
                 for (var i = 0; i < seq.Children.Count; i++) CollectLeaves(seq.Children[i], $"{path}[{i}]", leaves);
                 break;
             case YamlScalarNode s when s.Style == ScalarStyle.Plain && s.Value is not null:
+                if (PinnedLeaves.Contains(path)) break;
                 if (long.TryParse(s.Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _))
                     leaves.Add((path, s, true));
                 else if (s.Value.Any(char.IsDigit)

@@ -16,7 +16,7 @@ public sealed class CohesionTests
     private static readonly CohesionCoefficients C = new();
 
     private static Player M(int leadership = 50, Personality type = Personality.Normal, int mental = 50)
-        => new Player { Name = "m", Leadership = leadership, Mental = mental }.WithAxes(type);
+        => new Player { Name = "m", Leadership = leadership, Mental = mental - AbilityScale.Delta }.WithAxes(type);   // mental は今の物差し（issue #1080）
 
     // ===== U0 =====
 

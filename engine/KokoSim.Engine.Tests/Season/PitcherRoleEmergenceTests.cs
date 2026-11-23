@@ -194,6 +194,7 @@ public sealed class PitcherRoleEmergenceTests
         // 期待すると、圧縮の有無ではなく写像の定義を二重に書くことになる。見たいのは
         // 「野手に隠れたオフセットが乗っていないこと」なので、中心は写像から引く。
         var center = C.CompressStrength(55.0);
-        Assert.InRange(fielders.Average(p => (p.Contact + p.Power) / 2.0), center - 2.0, center + 2.0);
+        // 表示Lv（issue #1080: 今の物差し −Δ）。中心は今の物差しの値。
+        Assert.InRange(fielders.Average(p => (p.Contact + p.Power) / 2.0) + KokoSim.Engine.Players.AbilityScale.Delta, center - 2.0, center + 2.0);
     }
 }

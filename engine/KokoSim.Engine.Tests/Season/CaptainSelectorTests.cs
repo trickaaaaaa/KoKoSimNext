@@ -21,7 +21,7 @@ public sealed class CaptainSelectorTests
             Name = name,
             Grade = grade,
             Leadership = leadership,
-            Mental = mental,
+            Mental = mental - KokoSim.Engine.Players.AbilityScale.Delta,   // mental は今の物差し（issue #1080）
         };
         PitcherRoleResolver.SeedAptitudeForRole(p, pitcher);
         return p;

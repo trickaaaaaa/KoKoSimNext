@@ -75,9 +75,10 @@ public sealed record AbilityEffectCoefficients
     /// <summary>
     /// 表示能力の物差しの下げ幅（issue #1080・PR-A）。生成側が表示Lvを一律 −Delta して個性を出す一方、
     /// ここ（物理の入口）で +Delta して打ち消す＝物理層・帯・勝率は Delta の値によらず不変にする。
-    /// 既定 0（本PRでは配線のみ・生成側はまだ −Delta していない＝今は何も動かない）。実際に下げるのは別PR（PR-B）。
+    /// 既定は <see cref="AbilityScale.Delta"/>（=7・PR-B）。試合の外（生成・育成・総合）は定数 <see cref="AbilityScale.Delta"/> を
+    /// 読むので、ここだけ変えると物理がずれる（YAML の読み込みは別の値を拒む）。漏れ検出テストだけが 0 を入れて比べる。
     /// </summary>
-    public double Delta { get; init; } = 0.0;
+    public double Delta { get; init; } = AbilityScale.Delta;
 
     /// <summary>恒等（従来と1ビット一致）。テストと非物理経路の既定。</summary>
     public static readonly AbilityEffectCoefficients Identity = new()
@@ -98,6 +99,18 @@ public sealed record AbilityEffectCoefficients
     private int Physical(int lv) => Delta == 0.0 ? lv : (int)Math.Round(lv + Delta);
 
     /// <summary>
+    /// 表示Lv→今の物差しのLv（物理Lv）。効き（Scale）は通さない＝能力の絶対値をそのまま閾値・式に当てていた所
+    /// （采配AIの閾値・精神力×プレッシャー・主将の統率力など）が使う（issue #1080）。試合の中はこれ（係数束の Delta）を読む。
+    /// </summary>
+    public int Phys(int lv) => Physical(lv);
+
+    /// <summary>端数つき版（表示Lvの平均など）。</summary>
+    public double Phys(double lv) => lv + Delta;
+
+    /// <summary>Δ の整数（表示Lvの平均など整数でずらす所用）。</summary>
+    public int DeltaInt => (int)Math.Round(Delta);
+
+    /// <summary>
     /// 球速の反応[km/h]: 最速 v を Lv50 の最速（<see cref="PitcherAttributes.VelocityKmhFromLevel"/>(pivot)＝132km/h）を軸に
     /// <c>pivotKmh + scale×(v − pivotKmh)</c>。scale 1.0 で恒等。<see cref="Pitcher"/> がこれと実最速の差を
     /// <see cref="PitcherAttributes.ReactionVelocityOffsetKmh"/> に焼き、PitchSelection が毎球の実球速に足す＝
@@ -106,7 +119,8 @@ public sealed record AbilityEffectCoefficients
     public double PitchingKmh(double kmh)
     {
         if (PitchingScale == 1.0) return kmh;
-        var pivotKmh = PitcherAttributes.VelocityKmhFromLevel((int)Math.Round(Pivot));
+        // 軸は今の物差しの Lv50（=132km/h）。km/h は物差しの外の単位なので Delta は関係しない。
+        var pivotKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel((int)Math.Round(Pivot));
         return pivotKmh + PitchingScale * (kmh - pivotKmh);
     }
 
@@ -116,7 +130,7 @@ public sealed record AbilityEffectCoefficients
     /// </summary>
     public PitcherAttributes Pitcher(PitcherAttributes p)
     {
-        if (PitchingScale == 1.0) return p;
+        if (PitchingScale == 1.0 && Delta == 0.0) return p;
         PitchSlot[]? rep = null;
         if (p.Repertoire is { Count: > 0 } r)
         {

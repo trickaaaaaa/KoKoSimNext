@@ -14,7 +14,8 @@ public sealed class CutoffRelayArmTests
 {
     private static readonly BaserunningCoefficients C = new();
 
-    private static double ThrowSpeed(int arm) => new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps;
+    // 引数は今の物差しの値（issue #1080）。選手には表示Lv（−Δ）で載せ、試合の入口が +Δ して戻す。
+    private static double ThrowSpeed(int arm) => new Player { ArmStrength = arm - AbilityScale.Delta }.ToFielder().ThrowSpeedMps;
 
     private static HomePlayResolver.ThrowPath PathFrom(double distanceM, int arm)
         => HomePlayResolver.ResolveThrowPath(

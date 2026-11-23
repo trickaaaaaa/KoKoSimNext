@@ -137,7 +137,7 @@ public static class DeterminismCards
         var grades = new[] { 3, 2, 1, 3, 2, 1, 3, 2, 2 };
         var order = new List<Player>();
         for (var i = 0; i < t.BattingOrder.Count; i++)
-            order.Add(t.BattingOrder[i] with { Grade = grades[i], Mental = 40 });
+            order.Add(t.BattingOrder[i] with { Grade = grades[i], Mental = 40 - D });
         var reserves = new List<Player>
         {
             (t.Reserves[0] with { Grade = 1, Leadership = 30 }).WithAxes(Personality.Introvert),
@@ -148,11 +148,14 @@ public static class DeterminismCards
         return t with { BattingOrder = order, Reserves = reserves };
     }
 
+    // 能力は表示Lv（issue #1080: 今の物差しの値 −Δ）。指紋は物差しを下げる前と同じ試合＝今の物差しで50の選手。
+    private const int D = AbilityScale.Delta;
+
     private static Player Pos(FieldPosition pos) => new()
     {
         Position = pos,
-        Contact = 50, Power = 50, LaunchTendency = 50, Discipline = 50,
-        Speed = 50, ArmStrength = 50, Fielding = 50, Catching = 50,
+        Contact = 50 - D, Power = 50 - D, LaunchTendency = 50, Discipline = 50 - D,
+        Speed = 50 - D, ArmStrength = 50 - D, Fielding = 50 - D, Catching = 50 - D,
     };
 
     /// <summary>"dh-weather" カードの試合条件。球数上限 100 は単一試合でも先発が到達する値＝継投の強制経路を毎試合通す。</summary>
@@ -180,7 +183,7 @@ public static class DeterminismCards
         var t = Team(name);
         var order = new List<Player>(t.BattingOrder);
         var pitcher = order[8];
-        order[8] = Pos(FieldPosition.FirstBase) with { Name = name + "DH", Contact = 60, Power = 65 };
+        order[8] = Pos(FieldPosition.FirstBase) with { Name = name + "DH", Contact = 60 - D, Power = 65 - D };
         return t with { BattingOrder = order, DhSlot = 8, StartingPitcher = pitcher };
     }
 
@@ -203,8 +206,8 @@ public static class DeterminismCards
                 Pos(FieldPosition.Pitcher) with { Name = name + "R2", Pitching = PitcherAttributes.LeagueAverage },
             }, new[]
             {
-                Pos(FieldPosition.FirstBase) with { Name = name + "PH", Contact = 55 },
-                Pos(FieldPosition.SecondBase) with { Name = name + "PR", Speed = 70 },
+                Pos(FieldPosition.FirstBase) with { Name = name + "PH", Contact = 55 - D },
+                Pos(FieldPosition.SecondBase) with { Name = name + "PR", Speed = 70 - D },
             }),
         };
     }

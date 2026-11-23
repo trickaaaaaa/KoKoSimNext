@@ -30,7 +30,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 42;
+    public const int CurrentVersion = 43;
 
     // ===== Serialize =====
 
@@ -39,6 +39,8 @@ public static class SaveCodec
     {
         var root = new JsonObject()
             .Add("version", CurrentVersion)
+            // 表示能力の物差しの下げ幅（issue #1080）。読み込み時に（保存時の Δ − いまの Δ）だけ表示Lvをずらす。
+            .Add("abilityDelta", Players.AbilityScale.Delta)
             .Add("masterSeed", s.MasterSeed)
             .Add("legacyFixedSeeds", s.LegacyFixedSeeds)
             .Add("week", s.Week)
@@ -157,6 +159,9 @@ public static class SaveCodec
             state = Read(root);
             if (version < 38) DropStaleTransferStats(state);
             if (version < 41) MoveGraduatesToNameTable(state);
+            // v43（issue #1080）: 能力の表示の物差しを Δ 下げた。保存時の Δ（キーが無い＝v42 以前は 0）といまの Δ の差だけずらす。
+            AbilityScaleSaveMigration.Apply(state,
+                root.Has("abilityDelta") ? root.Int("abilityDelta") : AbilityScaleSaveMigration.LegacyDelta);
             return true;
         }
         catch (Exception e)

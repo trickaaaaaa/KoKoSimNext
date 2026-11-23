@@ -202,8 +202,8 @@ public static class GameEngine
             if (homeTeam.Tactics is IExplainTactics hx) hx.ExplainDecisions = true;
         }
 
-        var away = new TeamState(awayTeam);
-        var home = new TeamState(homeTeam);
+        var away = new TeamState(awayTeam, ctx.Batting.AbilityEffect.DeltaInt);
+        var home = new TeamState(homeTeam, ctx.Batting.AbilityEffect.DeltaInt);
         // 球数制限（設計書05 §1.3）。既定 WeeklyPitchLimit=MaxValue＝無効＝従来の継投挙動と完全一致。
         // 持ち越しはチームごとに別辞書（SetPitchRecovery/SetDayForm と同じ理由＝Player が値等価の record）。
         away.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, awayPriorWeekPitches);
@@ -783,7 +783,7 @@ public static class GameEngine
                         defense.StartDefenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
                             defense.AvailableReserves, currentPitcher, toPitcher: true,
                             defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities,
-                            defense.Captain));
+                            defense.Captain, ctx.Batting.AbilityEffect.DeltaInt));
                     }
                 }
 
@@ -795,7 +795,7 @@ public static class GameEngine
                         offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
                             offense.AvailableReserves, batter, toPitcher: false,
                             offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities,
-                            offense.Captain));
+                            offense.Captain, ctx.Batting.AbilityEffect.DeltaInt));
                     }
                     sign = offense.Tactics.CallOffense(situation, rng);
                 }
@@ -866,12 +866,12 @@ public static class GameEngine
                 // プレッシャー×精神力（設計書02 §3）: 緩和=伝令、負側増幅=疲労・動揺。精神力50なら恒等。
                 var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
                 pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
-                    currentPitcher.Mental, PressureModel.WithSideBonus(pressureIdx, defenseExtraPressure, ctx.Pressure), ctx.Pressure,
+                    ctx.Batting.AbilityEffect.Phys(currentPitcher.Mental), PressureModel.WithSideBonus(pressureIdx, defenseExtraPressure, ctx.Pressure), ctx.Pressure,
                     defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
                     defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills,
                     defenseMorale));
                 bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
-                    batter.Mental, PressureModel.WithSideBonus(pressureIdx, offenseExtraPressure, ctx.Pressure), ctx.Pressure,
+                    ctx.Batting.AbilityEffect.Phys(batter.Mental), PressureModel.WithSideBonus(pressureIdx, offenseExtraPressure, ctx.Pressure), ctx.Pressure,
                     offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills,
                     moraleMitigation: offenseMorale));
 
@@ -892,7 +892,7 @@ public static class GameEngine
                         defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.CoachingReceptivity(currentPitcher.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
-                            ctx.Tactics, ctx.Personalities, defense.Captain)
+                            ctx.Tactics, ctx.Personalities, defense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
                         // 結束（設計書23 §3.4）: 伝令の効きに 1 + c1×(U−50)/50。U=50 で恒等。
                         * Cohesion.MessengerMultiplier(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion)));
                 if (offense.OffenseCalmPa > 0)
@@ -900,7 +900,7 @@ public static class GameEngine
                         offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.CoachingReceptivity(batter.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
-                            ctx.Tactics, ctx.Personalities, offense.Captain)
+                            ctx.Tactics, ctx.Personalities, offense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
                         * Cohesion.MessengerMultiplier(offense.CohesionValue(ctx.Cohesion), ctx.Cohesion)));
 
                 // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
@@ -2789,7 +2789,7 @@ public static class GameEngine
         defense.RecordPitching(pitcher, result, pitcherRuns ?? runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
         // 動揺からの立ち直り（設計書23 §2.4）: 相性 K が高いバッテリーは自然回復に要るアウトが1つ少ない。
         // 結束（設計書23 §3.4）: 動揺の発生閾値に ±1 の段（U≥70 で動揺しにくく、U<30 でしやすい）。
-        defense.NotePitchingResult(result, Math.Max(1, ctx.Tactics.RattledThresholdFor(pitcher.Mental)
+        defense.NotePitchingResult(result, Math.Max(1, ctx.Tactics.RattledThresholdFor(ctx.Batting.AbilityEffect.Phys(pitcher.Mental))
                 + Cohesion.RattledThresholdStep(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion)),
             outsThisPa, BatteryChemistry.RecoveryOuts(ctx.Tactics.RattledRecoveryOuts,
                 defense.BatteryK(pitcher, ctx.Chemistry), ctx.Chemistry));

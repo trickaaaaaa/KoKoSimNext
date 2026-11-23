@@ -102,6 +102,12 @@ public static class AbilitySweep
 
     // ── 条件の定義 ──
 
+    /// <summary>
+    /// 掃引の値（20/50/80）は今の物差しの Lv（issue #1080）。選手には表示Lv（−Δ）で載せ、試合の入口が +Δ して戻す＝
+    /// 能力感度の測り方は物差しを下げる前と同じ。弾道・性格・km/h は物差しの外なのでそのまま。
+    /// </summary>
+    private static int Disp(double v) => (int)v - AbilityScale.Delta;
+
     private static Player WithPitching(Player p, Func<PitcherAttributes, PitcherAttributes> f)
         => p with { Pitching = f(p.Pitching) };
 
@@ -130,21 +136,21 @@ public static class AbilitySweep
     /// <summary>掃引する能力の一覧（Id は balance-targets.yaml の ability_sensitivity.abilities の鍵と一致）。</summary>
     public static readonly IReadOnlyList<Condition> Conditions = new[]
     {
-        C("contact", "ミート", Scope.AllPlayers, (p, v) => p with { Contact = (int)v }),
-        C("power", "パワー", Scope.AllPlayers, (p, v) => p with { Power = (int)v }),
+        C("contact", "ミート", Scope.AllPlayers, (p, v) => p with { Contact = Disp(v) }),
+        C("power", "パワー", Scope.AllPlayers, (p, v) => p with { Power = Disp(v) }),
         C("launch", "弾道", Scope.AllPlayers, (p, v) => p with { LaunchTendency = (int)v }),
-        C("discipline", "選球眼", Scope.AllPlayers, (p, v) => p with { Discipline = (int)v }),
-        C("speed", "走力", Scope.AllPlayers, (p, v) => p with { Speed = (int)v }),
-        C("steal", "盗塁", Scope.AllPlayers, (p, v) => p with { Steal = (int)v }),
-        C("steal_fast", "盗塁（走力80の走者）", Scope.AllPlayers, (p, v) => p with { Steal = (int)v },
-            prelude: p => p with { Speed = HighLevel }),
-        C("baserunning", "走塁", Scope.AllPlayers, (p, v) => p with { Baserunning = (int)v }),
-        C("bunt", "バント", Scope.AllPlayers, (p, v) => p with { Bunt = (int)v }),
-        C("arm", "肩", Scope.AllPlayers, (p, v) => p with { ArmStrength = (int)v }),
-        C("throw_accuracy", "送球精度", Scope.AllPlayers, (p, v) => p with { ThrowAccuracy = (int)v }),
-        C("fielding", "守備", Scope.AllPlayers, (p, v) => p with { Fielding = (int)v }),
-        C("catching", "捕球", Scope.AllPlayers, (p, v) => p with { Catching = (int)v }),
-        C("mental", "精神力", Scope.AllPlayers, (p, v) => p with { Mental = (int)v }),
+        C("discipline", "選球眼", Scope.AllPlayers, (p, v) => p with { Discipline = Disp(v) }),
+        C("speed", "走力", Scope.AllPlayers, (p, v) => p with { Speed = Disp(v) }),
+        C("steal", "盗塁", Scope.AllPlayers, (p, v) => p with { Steal = Disp(v) }),
+        C("steal_fast", "盗塁（走力80の走者）", Scope.AllPlayers, (p, v) => p with { Steal = Disp(v) },
+            prelude: p => p with { Speed = HighLevel - AbilityScale.Delta }),
+        C("baserunning", "走塁", Scope.AllPlayers, (p, v) => p with { Baserunning = Disp(v) }),
+        C("bunt", "バント", Scope.AllPlayers, (p, v) => p with { Bunt = Disp(v) }),
+        C("arm", "肩", Scope.AllPlayers, (p, v) => p with { ArmStrength = Disp(v) }),
+        C("throw_accuracy", "送球精度", Scope.AllPlayers, (p, v) => p with { ThrowAccuracy = Disp(v) }),
+        C("fielding", "守備", Scope.AllPlayers, (p, v) => p with { Fielding = Disp(v) }),
+        C("catching", "捕球", Scope.AllPlayers, (p, v) => p with { Catching = Disp(v) }),
+        C("mental", "精神力", Scope.AllPlayers, (p, v) => p with { Mental = Disp(v) }),
         C("condition", "調子", Scope.AllPlayers, (p, v) =>
         {
             var cv = (v - BaseLevel) / 30.0;   // 20→-1（絶不調）／80→+1（絶好調）
@@ -160,35 +166,35 @@ public static class AbilitySweep
             BuntSuccessBonus = PersonalityEffect.BuntSuccessBonus((int)v),
             ChanceHitFactor = PersonalityEffect.ChanceHitFactor((int)v),
         }),
-        C("catcher_lead", "捕手:リード", Scope.Catcher, (p, v) => p with { Lead = (int)v }),
+        C("catcher_lead", "捕手:リード", Scope.Catcher, (p, v) => p with { Lead = Disp(v) }),
         // バッテリーの相性の出発点（設計書23 §2.2・issue #933）: 捕手の統率と投手の素直さを同時に振る＝S0 だけが動く
         // （均一チームは学年0＝積み重ね B は0）。
         C("battery_affinity", "バッテリー:相性（捕手の統率×投手の素直さ）", Scope.Battery, (p, v) =>
             p.Position == FieldPosition.Catcher ? p with { Leadership = (int)v } : p with { Receptiveness = (int)v }),
-        C("catcher_arm", "捕手:肩", Scope.Catcher, (p, v) => p with { ArmStrength = (int)v }),
-        C("catcher_catching", "捕手:捕球", Scope.Catcher, (p, v) => p with { Catching = (int)v }),
+        C("catcher_arm", "捕手:肩", Scope.Catcher, (p, v) => p with { ArmStrength = Disp(v) }),
+        C("catcher_catching", "捕手:捕球", Scope.Catcher, (p, v) => p with { Catching = Disp(v) }),
         C("pitcher_velocity", "投手:最速", Scope.Pitchers,
             (p, v) => WithPitching(p, a => a with { MaxVelocityKmh = v }), low: 110, high: 150, unit: "km/h"),
-        C("pitcher_control", "投手:制球", Scope.Pitchers, (p, v) => WithPitching(p, a => a with { Control = (int)v })),
+        C("pitcher_control", "投手:制球", Scope.Pitchers, (p, v) => WithPitching(p, a => a with { Control = Disp(v) })),
         C("pitcher_stamina", "投手:スタミナ", Scope.Pitchers,
-            (p, v) => WithPitching(p, a => a with { StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel((int)v) })),
+            (p, v) => WithPitching(p, a => a with { StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel((int)v) })),
         C("pitcher_stuff", "投手:球威", Scope.Pitchers, (p, v) => WithPitching(p, a => a with
         {
-            Repertoire = MapRepertoire(a, s => s.Type == PitchType.Fastball ? s with { Power = (int)v } : s),
+            Repertoire = MapRepertoire(a, s => s.Type == PitchType.Fastball ? s with { Power = Disp(v) } : s),
         })),
         C("pitcher_sharpness", "投手:キレ", Scope.Pitchers, (p, v) => WithPitching(p, a => a with
         {
-            Repertoire = MapRepertoire(a, s => s.Type != PitchType.Fastball ? s with { Sharpness = (int)v } : s),
+            Repertoire = MapRepertoire(a, s => s.Type != PitchType.Fastball ? s with { Sharpness = Disp(v) } : s),
         })),
-        C("pitcher_fielding", "投手:守備", Scope.Pitchers, (p, v) => p with { Fielding = (int)v }),
+        C("pitcher_fielding", "投手:守備", Scope.Pitchers, (p, v) => p with { Fielding = Disp(v) }),
         // 特殊能力の有無（issue #907）。精神力の下ごしらえは、チャンス/ピンチ○×が精神力50では低下が小さく差が見えにくいため。
-        S("skill_clutch_hitter", "特:チャンス○（精神力20）", Scope.AllPlayers, Skill.ClutchHitter, p => p with { Mental = LowLevel }),
+        S("skill_clutch_hitter", "特:チャンス○（精神力20）", Scope.AllPlayers, Skill.ClutchHitter, p => p with { Mental = LowLevel - AbilityScale.Delta }),
         S("skill_choke_hitter", "特:チャンス×", Scope.AllPlayers, Skill.ChokeHitter),
         S("skill_fastball_hitter", "特:速球打ち", Scope.AllPlayers, Skill.FastballHitter),
         S("skill_breaking_ball_hitter", "特:変化球打ち", Scope.AllPlayers, Skill.BreakingBallHitter),
         S("skill_opposite_field_hitter", "特:流し打ち", Scope.AllPlayers, Skill.OppositeFieldHitter),
         S("skill_team_batting", "特:つなぎの打撃", Scope.AllPlayers, Skill.TeamBatting),
-        S("skill_clutch_pitcher", "特:ピンチ○（精神力20）", Scope.Pitchers, Skill.ClutchPitcher, p => p with { Mental = LowLevel }),
+        S("skill_clutch_pitcher", "特:ピンチ○（精神力20）", Scope.Pitchers, Skill.ClutchPitcher, p => p with { Mental = LowLevel - AbilityScale.Delta }),
         S("skill_choke_pitcher", "特:ピンチ×", Scope.Pitchers, Skill.ChokePitcher),
         S("skill_quick_delivery", "特:クイック○", Scope.Pitchers, Skill.QuickDelivery),
         S("skill_slow_delivery", "特:クイック×", Scope.Pitchers, Skill.SlowDelivery),
@@ -211,10 +217,10 @@ public static class AbilitySweep
         Position = FieldPosition.Pitcher,
         Pitching = new PitcherAttributes
         {
-            MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(BaseLevel),
-            Control = BaseLevel,
-            StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(BaseLevel),
-            PitchRank = BaseLevel,
+            MaxVelocityKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(BaseLevel),
+            Control = BaseLevel - AbilityScale.Delta,
+            StaminaPitches = PitcherAttributes.StaminaPitchesFromPhysicalLevel(BaseLevel),
+            PitchRank = BaseLevel - AbilityScale.Delta,
             Repertoire = Repertoire(breakingBalls),
         },
     };
@@ -223,9 +229,9 @@ public static class AbilitySweep
     {
         var all = new[]
         {
-            PitchSlot.FastballOf(BaseLevel),
-            new PitchSlot { Type = PitchType.Slider, Power = BaseLevel, Sharpness = BaseLevel },
-            new PitchSlot { Type = PitchType.Fork, Power = BaseLevel, Sharpness = BaseLevel },
+            PitchSlot.FastballOf(BaseLevel - AbilityScale.Delta),
+            new PitchSlot { Type = PitchType.Slider, Power = BaseLevel - AbilityScale.Delta, Sharpness = BaseLevel - AbilityScale.Delta },
+            new PitchSlot { Type = PitchType.Fork, Power = BaseLevel - AbilityScale.Delta, Sharpness = BaseLevel - AbilityScale.Delta },
         };
         return all.Take(1 + breakingBalls).ToArray();
     }

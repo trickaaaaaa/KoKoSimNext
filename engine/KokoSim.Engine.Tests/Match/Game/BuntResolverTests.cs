@@ -391,8 +391,8 @@ public sealed class BuntResolverTests
         double ForceRate(double velocityKmh)
         {
             var rng = new Xoshiro256Random(12);
-            var batter = new Player { Bunt = 55 };
-            var r1 = new Player { Speed = 50 };
+            var batter = new Player { Bunt = 55 - AbilityScale.Delta };
+            var r1 = new Player { Speed = 50 - AbilityScale.Delta };
             var pitcher = new PitcherAttributes { MaxVelocityKmh = velocityKmh };
             var forced = 0;
             const int n = 30000;

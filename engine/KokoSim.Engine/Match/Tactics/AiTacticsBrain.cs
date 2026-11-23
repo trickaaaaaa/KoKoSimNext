@@ -264,7 +264,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         // 人選だけ横断ランキングに載せ替える（issue #209 Phase B。RNG非依存＝決定論）。
         if (_inner.CallPitchingChange(s, rng) is { } basic)
         {
-            var basicReliever = PickReliever(s, _inner.Skills);
+            var basicReliever = PickReliever(s, _inner.Skills, _inner.AbilityEffect.DeltaInt);
             return basic with { Reliever = basicReliever, ConvertTo = ConvertTargetFor(s, basicReliever) };
         }
 
@@ -277,7 +277,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
 
         // ①能力値: 最適な継投の好機を掴む確率（専用Fork由来の rng を消費）。外すと続投＝好機を逃す。
         if (!MathUtil.Chance(_optimalProb, rng)) return null;
-        var reliever = PickReliever(s, _inner.Skills);
+        var reliever = PickReliever(s, _inner.Skills, _inner.AbilityEffect.DeltaInt);
         return new PitchingChangeDecision(reason.Value, reliever, ConvertTargetFor(s, reliever));
     }
 
@@ -298,7 +298,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         if (s.DefenseLineup is not { } lineup || s.SwappableSlots is not { } swappable) return null;
 
         // 元投手の打力（ミート・パワーの平均）が閾値未満なら普通に替える＝打線に残す価値がない。
-        if ((pitcher.Contact + pitcher.Power) / 2.0 < _ai.ConvertReliefMinBatting) return null;
+        if ((_inner.AbilityEffect.Phys(pitcher.Contact) + _inner.AbilityEffect.Phys(pitcher.Power)) / 2.0 < _ai.ConvertReliefMinBatting) return null;
 
         Field.FieldPosition? target = null;
         var bestWeight = double.PositiveInfinity;
@@ -328,14 +328,15 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// <para>火消し（issue #907・設計書10 §2.2）を持つ候補は比較値に <see cref="Players.SkillCoefficients.FiremanReliefScoreBonus"/>
     /// を足す＝能力が少し劣っても火消しを優先して送る。</para>
     /// </summary>
-    internal static Players.Player? PickReliever(in PitchingChangeSituation s, Players.SkillCoefficients skills)
+    internal static Players.Player? PickReliever(in PitchingChangeSituation s, Players.SkillCoefficients skills,
+        int abilityDelta = Players.AbilityScale.Delta)
     {
         Players.Player? bestPlaced = null; var bestPlacedScore = double.NegativeInfinity;
         Players.Player? bestOther = null; var bestOtherScore = double.NegativeInfinity;
         foreach (var c in s.ReliefCandidates)
         {
             // 全選手が投手能力を持つ（#381）＝ランク不能で除外される候補はもう無い。
-            var score = c.Pitching.ReliefScore() + Game.SkillModel.ReliefScoreBonus(c.Skills, skills);
+            var score = c.Pitching.ReliefScore(delta: abilityDelta) + Game.SkillModel.ReliefScoreBonus(c.Skills, skills);
             if (c.Position == Field.FieldPosition.Pitcher)
             {
                 if (score > bestPlacedScore) { bestPlacedScore = score; bestPlaced = c; }

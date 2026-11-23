@@ -46,7 +46,8 @@ public sealed class TeamOverallCalibrationTests
             for (var s = 0; s < samples; s++)
             {
                 var roster = BuildRoster(center, 1000 + (ulong)s);
-                oldSum += roster.Average(p => p.AverageLevel());
+                // 旧総合は今の物差しの平均Lv（issue #1080: 表示Lv＋Δ）。総合は物差しによらず同じ＝較正 overall_offset は据え置き。
+                oldSum += roster.Average(p => p.AverageLevel(KokoSim.Engine.Players.AbilityScale.Delta));
                 newSum += TeamStrengthProfile.Compute(roster, ts).Overall;
             }
             var oldAvg = oldSum / samples;

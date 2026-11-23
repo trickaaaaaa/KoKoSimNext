@@ -45,12 +45,14 @@ public static class CaptainUsageSimulation
 
                 var team = GameSimulation.GenerateTeam(rng, name);
                 var baseCatcher = team.BattingOrder[slot];
-                var captain = baseCatcher with { Name = "主将", Leadership = leadership, Mental = mental };
+                // 精神力・打撃は表示Lv（issue #1080: 今の物差し −Δ）。掃引の値と範囲は今の物差しの数字。
+                const int d = AbilityScale.Delta;
+                var captain = baseCatcher with { Name = "主将", Leadership = leadership, Mental = mental - d };
                 var bestPlayer = baseCatcher with
                 {
                     Name = "控え最良",
-                    Contact = Math.Clamp(baseCatcher.Contact + battingGap, 20, 88),
-                    Power = Math.Clamp(baseCatcher.Power + battingGap, 20, 88),
+                    Contact = Math.Clamp(baseCatcher.Contact + battingGap, 20 - d, 88 - d),
+                    Power = Math.Clamp(baseCatcher.Power + battingGap, 20 - d, 88 - d),
                 };
 
                 var order = new List<Player>(team.BattingOrder);

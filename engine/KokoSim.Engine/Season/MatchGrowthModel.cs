@@ -69,7 +69,8 @@ public static class MatchGrowthModel
         exp += delta;
         while (value < cap)
         {
-            var required = c.RequiredExp(value);
+            // 必要expは今の物差しのLvで引く（issue #1080）＝伸びの手応えは物差しによらず同じ。
+            var required = c.RequiredExp(Players.AbilityScale.Phys(value));
             if (exp < required) break;
             exp -= required;
             value++;

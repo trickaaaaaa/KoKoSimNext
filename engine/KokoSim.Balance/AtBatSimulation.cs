@@ -236,8 +236,9 @@ public static partial class AtBatSimulation
     /// <summary>サンプル投手の総合等級（投手総合＝TeamStrengthCoefficients の重みで G〜S に量子化）。</summary>
     private static Tier PitcherTierOf(PitcherAttributes p, TeamStrengthCoefficients c)
     {
-        var velLevel = PitcherAttributes.LevelFromVelocityKmh(p.MaxVelocityKmh);
-        var staminaLevel = PitcherAttributes.LevelFromStaminaPitches(p.StaminaPitches);
+        // 打席シムの投手は効きを通さない物理の能力（今の物差し）＝等級も今の物差しで測る（issue #1080）。
+        var velLevel = PitcherAttributes.PhysicalLevelFromVelocityKmh(p.MaxVelocityKmh);
+        var staminaLevel = PitcherAttributes.PhysicalLevelFromStaminaPitches(p.StaminaPitches);
         var wsum = c.VelocityWeight + c.ControlWeight + c.StaminaWeight + c.PitchRankWeight;
         var score = (velLevel * c.VelocityWeight + p.Control * c.ControlWeight
                      + staminaLevel * c.StaminaWeight + p.PitchRank * c.PitchRankWeight) / wsum;
@@ -936,7 +937,7 @@ public static partial class AtBatSimulation
             sb.AppendLine("|---|" + string.Concat(BatterLevels.Select(_ => "---|")));
             for (var pi = 0; pi < PitcherLevels.Length; pi++)
             {
-                var kmh = PitcherAttributes.VelocityKmhFromLevel(PitcherLevels[pi]);
+                var kmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(PitcherLevels[pi]);
                 sb.Append($"| P{PitcherLevels[pi]} ({kmh:F0}km/h) |");
                 for (var bi = 0; bi < BatterLevels.Length; bi++)
                     sb.Append($" {StrikeoutRate(pi, bi):P0} / {WalkRate(pi, bi):P0} / {Average(pi, bi):.000} |");
@@ -954,7 +955,8 @@ public static partial class AtBatSimulation
     /// <summary>格子の投手（球速/制球/キレ＝level・スタミナは打席単位で無関係・ストレート＋スライダー）。</summary>
     public static PitcherAttributes GridPitcher(int level) => new()
     {
-        MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(level),
+        // 格子は今の物差しの Lv（打席の解決へ直接渡す物理の能力・issue #1080）。
+        MaxVelocityKmh = PitcherAttributes.VelocityKmhFromPhysicalLevel(level),
         Control = level,
         PitchRank = level,
         StaminaPitches = 90.0,
