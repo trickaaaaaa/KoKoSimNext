@@ -225,6 +225,43 @@ namespace KokoSim.EditorTests
             Assert.That(loaded, Is.GreaterThan(0), "装備メッシュが1つも読めない（検査が空振りしている）");
         }
 
+        /// <summary>
+        /// ビルドと同じ経路（索引だけ）で、リポジトリにある装備がすべて読めること。装備のロードが
+        /// エディタ限定だった間、ビルドではグラブ・ミット・マスク・レガースが全部プリミティブに落ちていた
+        /// （ブラウザ版で発覚・#1323。エディタの絵では気づけない）。索引は gitignore（購入資産の参照を含む）なので、
+        /// 無い環境では検査しない。
+        /// </summary>
+        [Test]
+        public void GearMeshes_LoadFromCatalogLikeABuild()
+        {
+            Assume.That(DuelStageRig.Catalog, Is.Not.Null, "ビルド同梱の索引が無い環境（購入資産なし）");
+            bool prev = DuelStageRig.ForceCatalogOnly;
+            DuelStageRig.ForceCatalogOnly = true;
+            DuelGearMeshes.ClearCache();
+            try
+            {
+                var gear = new Dictionary<string, Mesh>
+                {
+                    ["Cap"] = DuelGearMeshes.Cap(),
+                    ["CatcherMask"] = DuelGearMeshes.CatcherMask(),
+                    ["CatcherHelmet"] = DuelGearMeshes.CatcherHelmet(),
+                    ["BatterHelmet"] = DuelGearMeshes.BatterHelmet(),
+                    ["Chest"] = DuelGearMeshes.Chest(),
+                    ["Glove"] = DuelGearMeshes.Glove(),
+                    ["Mitt"] = DuelGearMeshes.Mitt(),
+                    ["LegGuard"] = DuelGearMeshes.LegGuard(),
+                };
+                foreach (var kv in gear)
+                    Assert.That(kv.Value, Is.Not.Null,
+                        $"{kv.Key} が索引から読めない＝ビルドでプリミティブに落ちる（KokoSim/Duel/F8 ビルド同梱の索引を焼く）");
+            }
+            finally
+            {
+                DuelStageRig.ForceCatalogOnly = prev;
+                DuelGearMeshes.ClearCache();
+            }
+        }
+
         // ---- インプレー打球の据え置き（issue #481 / #1099） ----
 
         /// <summary>

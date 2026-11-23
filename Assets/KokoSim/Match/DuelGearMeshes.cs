@@ -7,8 +7,10 @@ namespace KokoSim.Unity.Match
     /// 装備メッシュ（Assets/DuelSpike/Generated/AIGear）のロードと「装着正位」への較正。
     /// 出自はすべてMeshy生成＋Blenderデシメート（tools/aigear-decimate.py）。
     /// bpy手続きモデリングの板もの2点（胸プロテクター・レガース）は、Meshy生成物へ差し替えて
-    /// 2026-07-29 に廃止した。素体・クリップと同じくロードはエディタ限定（AssetDatabase）＝
-    /// ビルド同梱方法は本実装時に決める。ロード不可時は null を返し、呼び元はプリミティブ装備へ
+    /// 2026-07-29 に廃止した。ロードは素体・クリップと同じ二段構え＝エディタは AssetDatabase、
+    /// ビルドは索引（<see cref="DuelAssetCatalog"/>。焼く側の名前表は <see cref="RequiredPaths"/>／
+    /// <see cref="OptionalPaths"/>）。索引に装備が無かった間は、ビルドで全装備がプリミティブに
+    /// 落ちていた（ブラウザ版で発覚・#1323）。ロード不可時は null を返し、呼び元はプリミティブ装備へ
     /// フォールバックする（DuelStageRig.AttachGear）。
     ///
     /// 装着正位 = 「+Z が正面（視線方向）・+Y が上・1unit=1m・原点が装着基準点」。
@@ -20,13 +22,45 @@ namespace KokoSim.Unity.Match
         private const string Dir = "Assets/DuelSpike/Generated/AIGear/";
         private static readonly Dictionary<string, Mesh> Cache = new Dictionary<string, Mesh>();
 
+        // 装備FBXのパス（getter と索引を焼く側の単一ソース）
+        private const string CapPath = Dir + "AIGear_Cap1_lo.fbx";
+        private const string CatcherMaskPath = Dir + "AIGear_CatcherMask1_lo.fbx";
+        private const string CatcherHelmetPath = Dir + "AIGear_CatcherHelmet0_lo.fbx";
+        private const string BatterHelmetPath = Dir + "AIGear_BatterHelmet0_lo.fbx";
+        private const string ChestPath = Dir + "AIGear_ChestProtector1_lo.fbx";
+        private const string TripoGlovePath = Dir + "AIGear_GloveT_lo.fbx";
+        private const string MittPath = Dir + "AIGear_MittT_lo.fbx";
+        private const string LegGuardPath = Dir + "AIGear_LegGuard1_lo.fbx";
+        private const string VendorGlovePath = VendorDir + "CGT_Glove_lo.fbx";
+
+        /// <summary>どの環境にもあるはずの装備（リポジトリに入っている生成物）。索引に欠けたらビルドでプリミティブに落ちる。</summary>
+        internal static readonly string[] RequiredPaths =
+        {
+            CapPath, CatcherMaskPath, CatcherHelmetPath, BatterHelmetPath, ChestPath, TripoGlovePath, MittPath, LegGuardPath,
+        };
+
+        /// <summary>購入品（gitignore）。無い環境では生成物へ落ちるのが正常。</summary>
+        internal static readonly string[] OptionalPaths = { VendorGlovePath };
+
+        /// <summary>
+        /// 読み込み済みの装備を捨てる。<see cref="DuelStageRig.ForceCatalogOnly"/> を切り替えて
+        /// ビルド経路を確かめるときに呼ぶ（キャッシュが残っていると切り替えが絵に出ない）。
+        /// </summary>
+        internal static void ClearCache()
+        {
+            foreach (var m in Cache.Values)
+                if (m != null) Object.DestroyImmediate(m);
+            Cache.Clear();
+            GloveIsVendor = false;
+        }
+
         // ---- 公開getter（較正済み・キャッシュ） --------------------------------
 
         /// <summary>帽子。原点=クラウン中心、つば+Z前方・俯角25°、クラウン幅0.24m。</summary>
-        public static Mesh Cap() => Get("AIGear_Cap1_lo", CanonicalizeCap);
+        public static Mesh Cap() => GetAt(CapPath, CanonicalizeCap);
 
         /// <summary>捕手マスク（ケージ）。原点=中心、幅0.25m、正面+Z・上+Y。</summary>
-        public static Mesh CatcherMask() => Get("AIGear_CatcherMask1_lo", m => CanonicalizeMeshy(m, 0.25f));
+        public static Mesh CatcherMask() => GetAt(CatcherMaskPath, m => CanonicalizeMeshy(m, 0.25f));
 
         /// <summary>
         /// 捕手ヘルメット（殻）。原点=中心、正面+Z・上+Y。
@@ -35,7 +69,7 @@ namespace KokoSim.Unity.Match
         /// 頭に合わない（幅で合わせると奥行0.353の頭巾、奥行で合わせると幅0.164で頭がはみ出す）。
         /// 15%程度の非一様は素の生成物の比率ズレの補正であり、ポスタライズ＋ピクセル化後は判別できない。
         /// </summary>
-        public static Mesh CatcherHelmet() => Get("AIGear_CatcherHelmet0_lo",
+        public static Mesh CatcherHelmet() => GetAt(CatcherHelmetPath,
             m => CanonicalizeMeshy(m, new Vector3(0.205f, 0.195f, 0.265f)));
 
         /// <summary>
@@ -43,7 +77,7 @@ namespace KokoSim.Unity.Match
         /// Meshy（画像→3D）生成物を 4,000tri へ（89,614tri → Collapse のみ・通気孔4つでも頭打ちせず形も崩れない）。
         /// 素の寸法は幅0.215 / 高0.205 / 奥行0.300（つば込み）で頭より大きいので、非一様に詰める。
         /// </summary>
-        public static Mesh BatterHelmet() => Get("AIGear_BatterHelmet0_lo",
+        public static Mesh BatterHelmet() => GetAt(BatterHelmetPath,
             m => CanonicalizeMeshy(m, new Vector3(0.200f, 0.185f, 0.270f)));
 
         /// <summary>
@@ -51,7 +85,7 @@ namespace KokoSim.Unity.Match
         /// 生成物は肩当て・Yストラップ・パッドの段まで持つので、装着側の別置き肩当ては不要になる。
         /// 素の奥行0.242は胸当てとしては厚すぎる（体から浮く）ため、奥行だけ強めに詰めて胸に沿わせる。
         /// </summary>
-        public static Mesh Chest() => Get("AIGear_ChestProtector1_lo",
+        public static Mesh Chest() => GetAt(ChestPath,
             m => CanonicalizeMeshy(m, new Vector3(0.400f, 0.440f, 0.150f)));
 
         /// <summary>
@@ -78,7 +112,7 @@ namespace KokoSim.Unity.Match
         /// ウェブ（部品 afsas001）は内野手用の H 型で穴あきだったので、デシメート時に裏へ板を当てて塞いである
         /// （plate 引数・issue #927。投手用は握りを見せないために閉じたウェブを使う）。引数は aigear-decimate.py の頭に書いた。
         /// </summary>
-        private static Mesh VendorGlove() => GetAt(VendorDir + "CGT_Glove_lo.fbx", m =>
+        private static Mesh VendorGlove() => GetAt(VendorGlovePath, m =>
         {
             CanonicalizeMeshy(m, new Vector3(0.232f, 0.300f, 0.191f));
             Unpainted(m);
@@ -91,7 +125,7 @@ namespace KokoSim.Unity.Match
         /// 背面の手首口が貫通していて手と奥の景色が見えたので、内側に芯（core）を入れて塞いである。
         /// 生成物は閉じかけの形で奥行 0.263m・親指が開いて幅 0.300m あるので、奥行を 0.16m・幅を 0.25m へ詰める。
         /// </summary>
-        private static Mesh TripoGlove() => Get("AIGear_GloveT_lo", m =>
+        private static Mesh TripoGlove() => GetAt(TripoGlovePath, m =>
         {
             CanonicalizeMeshy(m, new Vector3(0.250f, 0.291f, 0.160f));
             // 塗り分けはしない（PaintPocket の「+Z を向く中心＝ポケットの内側」という読みが、閉じかけの
@@ -107,7 +141,7 @@ namespace KokoSim.Unity.Match
         /// 生成物は奥行 0.205m とかなり椀状なので、奥行だけ 0.15m へ軽く詰める（旧 Meshy 版は 0.317→0.145 と
         /// 半分以下へ潰してポケットが消えていた）。紐通し穴が縁を一周するのは旧版と同じ＝remesh 0.0015m → 6,000tri。
         /// </summary>
-        public static Mesh Mitt() => Get("AIGear_MittT_lo", m =>
+        public static Mesh Mitt() => GetAt(MittPath, m =>
         {
             CanonicalizeMeshy(m, new Vector3(0.258f, 0.300f, 0.150f));
             PaintPocket(m);
@@ -117,13 +151,10 @@ namespace KokoSim.Unity.Match
         /// レガース片脚。原点=中心、膝が上（+Y）・正面+Z。
         /// 縦寸は装着側が脛の実測長へ合わせ直す（DuelStageRig）ので、ここでは素の比率を保つ目安値。
         /// </summary>
-        public static Mesh LegGuard() => Get("AIGear_LegGuard1_lo",
+        public static Mesh LegGuard() => GetAt(LegGuardPath,
             m => CanonicalizeMeshy(m, new Vector3(0.150f, 0.470f, 0.110f)));
 
         // ---- ロード ------------------------------------------------------------
-
-        private static Mesh Get(string file, System.Action<Mesh> canonicalize)
-            => GetAt(Dir + file + ".fbx", canonicalize);
 
         /// <summary>購入装備の置き場（gitignore。design-18 §3.1）。無い環境では各 getter が生成物へ落ちる。</summary>
         private const string VendorDir = "Assets/DuelSpike/Vendor/Gear/";
@@ -139,8 +170,13 @@ namespace KokoSim.Unity.Match
 
         private static Mesh LoadMeters(string path)
         {
+            GameObject prefab = null;
 #if UNITY_EDITOR
-            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (!DuelStageRig.ForceCatalogOnly)
+                prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+#endif
+            // ビルドは索引だけ（AssetDatabase が無い）。エディタでも ForceCatalogOnly ならこちら
+            if (prefab == null && DuelStageRig.Catalog != null) prefab = DuelStageRig.Catalog.FindGear(path);
             if (prefab == null) return null;
             var mf = prefab.GetComponentInChildren<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return null;
@@ -154,9 +190,6 @@ namespace KokoSim.Unity.Match
             // （2026-11-14 監督指摘「おもっきしウェブなくない？」。Blender の絵では全部見えるので気づけない）
             MergeSubmeshes(mesh);
             return mesh;
-#else
-            return null;
-#endif
         }
 
         /// <summary>
