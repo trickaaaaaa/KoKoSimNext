@@ -300,7 +300,8 @@
 .day--edit:hover { border-color: var(--sky); }
 .chip-btn--hard { border-color: var(--color-warn); color: var(--color-warn); }
 .chip-btn--light { border-color: var(--color-good); color: var(--color-good); }
-.chip-btn--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+/* 選択中はホバーでも白文字のまま（.chip-btn:hover は特異度が上で、青地に青文字になっていた・issue #1529） */
+.chip-btn--on, .chip-btn--on:hover { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
 
 .eff-row {
     flex-direction: row;
