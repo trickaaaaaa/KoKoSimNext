@@ -30,7 +30,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 41;
+    public const int CurrentVersion = 42;
 
     // ===== Serialize =====
 
@@ -87,6 +87,7 @@ public static class SaveCodec
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("matchRecords", MatchRecordSaves.ToJson(s.MatchRecords))
             .Add("events", EventSaves.ToJson(s.Events))
+            .Add("tutorial", TutorialSaves.ToJson(s.Tutorial))
             .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament))
             .Add("koshien", TournamentSaves.ToJson(s.Koshien))
@@ -411,6 +412,9 @@ public static class SaveCodec
         // v41（issue #1414）: 卒業生の名前の表（graduates）が増えた。旧セーブは卒業生を roster に本体ごと抱えていた＝
         // 空で補い、roster の卒業生（Grade>3）は読み込み後に MoveGraduatesToNameTable が表へ移す。
         if (version < 41 && !root.Has("graduates")) root.Add("graduates", new JsonArray());
+        // v42（issue #1496）: チュートリアルの進み具合（tutorial）が増えた。旧セーブは途中から遊んでいる人＝
+        // 「全部見た扱い（もう説明はいらない）」で補う（急に説明を出さない）。乱数不使用。
+        if (version < 42 && !root.Has("tutorial")) root.Add("tutorial", TutorialSaves.AllSeenJson());
         return root;
     }
 
@@ -569,6 +573,8 @@ public static class SaveCodec
             BigStageSeq = root.Has("bigStageSeq") ? root.Int("bigStageSeq") : 0,
             // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
+            // チュートリアルの進み具合は v42 で追加。Migrate が旧セーブへ「全部見た扱い」を補うので素直に読む。
+            Tutorial = TutorialSaves.FromJson(root.Obj("tutorial")),
             // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             TrainingBoosts = EventSaves.BoostsFromJson(root.Arr("trainingBoosts")),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),

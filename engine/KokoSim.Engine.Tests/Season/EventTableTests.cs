@@ -223,6 +223,8 @@ events:
         foreach (var e in RepositoryEvents())
         {
             if (e.Kind != EventKind.Fixed && e.Kind != EventKind.System && e.Weight <= 0) continue;
+            // チュートリアルの説明（issue #1496）は1つの進行で一度しか出ない＝飽きようがないので1通りでよい。
+            if (KokoSim.Engine.Career.Tutorial.IsTutorialEvent(e.Id)) continue;
             Assert.True(e.Variants.Count >= 2, $"{e.Id} の会話が {e.Variants.Count} 通りしかない");
             Assert.All(e.Variants, v => Assert.NotEmpty(v.Lines));
         }

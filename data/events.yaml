@@ -1424,6 +1424,192 @@ events:
           - who: narration
             say: "新しいマネージャーは、記録用紙をもう一度だけ丁寧に見直した。"
 
+  # --- 赴任イベントとチュートリアル（issue #1496・design-04 §3.5） ---
+  # どれも System。出すかどうかと順番は engine の Tutorial（KokoSim.Engine.Career）が1箇所で決める。
+  # 赴任イベント: 「はじめから」で新設校を作った直後（1年のマネージャー）と、転任の直後（2年か3年のマネージャー）。
+  # チュートリアル: 「はじめから」の進行だけ。場面が初めて来たときにマネージャーが一言ずつ教える。
+  # 会話の最後に「分かった／もう説明はいらない」を提示層が足す（yaml の choices: ではない＝監督の対応ではないため）。
+  # 監督は聞き役（台詞は持たないか短い相槌まで）。画面の名前（「今週を進める」「練習」など）は実際のボタン・タブの文字に合わせる。
+  - id: arrival_new_school
+    kind: System
+    text: "監督として新設の野球部に着任した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "{school}野球部、創部の初日。グラウンドの隅に、真新しいベンチがひとつだけ置かれている。"
+          - who: team_manager
+            say: "監督！お待ちしていましたよ！"
+          - who: team_manager
+            say: "マネージャーをやります、1年です。部員もみんな1年なので、先輩はひとりもいません！"
+          - who: manager
+            say: "よろしく頼む。"
+          - who: narration
+            say: "ベンチの上に、まだ何も書かれていないスコアブックが一冊、置いてあった。"
+      - lines:
+          - who: team_manager
+            say: "監督！お待ちしていましたよ！"
+          - who: narration
+            say: "部室の鍵はまだ新しく、回すと固い音がした。"
+          - who: team_manager
+            say: "ボールは段ボール三箱ぶん、バットは十二本。部員は全員1年生です。"
+          - who: team_manager
+            say: "何もないところからですけど、{koshien}、目指しましょうね！"
+      - lines:
+          - who: narration
+            say: "創部の初日。グラウンドには、部員と同じくらいの数の石が転がっていた。"
+          - who: team_manager
+            say: "あ、監督！お待ちしていましたよ！ いま、みんなで石拾いをしてて。"
+          - who: player
+            say: "監督、よろしくお願いします！ これ、どこに捨てればいいですか！"
+          - who: team_manager
+            say: "最初の指示が、それになっちゃいましたね。"
+
+  - id: arrival_transfer
+    kind: System
+    text: "監督として新しい学校に着任した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "{school}野球部の部室。壁の寄せ書きには、歴代の部員の名前がびっしり並んでいる。"
+          - who: team_manager
+            say: "{manager}監督ですね。お噂はかねがね…"
+          - who: team_manager
+            say: "マネージャーです。部のことで分からないことがあれば、何でも聞いてください。"
+          - who: captain
+            say: "監督、よろしくお願いします！"
+      - lines:
+          - who: team_manager
+            say: "お噂はかねがね。今日からよろしくお願いします、{manager}監督。"
+          - who: team_manager
+            say: "部員の名簿と、去年のスコアブックは机の上にまとめておきました。"
+          - who: manager
+            say: "助かる。"
+          - who: narration
+            say: "名簿の最後のページに、付箋で「新しい監督へ」と書いてあった。"
+      - lines:
+          - who: narration
+            say: "グラウンドに入ると、ノックの音がぴたりと止んだ。"
+          - who: team_manager
+            say: "全員、集合！ 新しい監督がいらっしゃいました！"
+          - who: team_manager
+            say: "お噂はかねがね、です。みんな、ちょっと緊張してます。"
+          - who: player
+            say: "どんな練習するんだろうな。"
+          - who: narration
+            say: "誰かの小声が、静かなグラウンドに思ったより大きく響いた。"
+
+  # 赴任直後の説明。最初に要ることだけ（週の送り方・練習の決め方）。
+  - id: tutorial_basics
+    kind: System
+    text: "マネージャーから、部の進め方を教わった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、部の進め方を少しだけ説明させてください。"
+          - who: team_manager
+            say: "画面の上の「今週を進める」を押すと、1週間が進みます。練習も試合も、出来事も、全部この1週間ごとです。"
+          - who: team_manager
+            say: "その週に何を練習するかは「練習」で決めます。部員ひとりずつ、どの練習に何分使うか割り当てられます。"
+          - who: team_manager
+            say: "特に伸ばしたい子は、個別指導に指名すると伸びが良くなります。枠は限られてますけど。"
+          - who: team_manager
+            say: "決めた練習は毎週続きます。まずは練習を決めて、今週を進めてみましょう！"
+
+  # 初めての公式戦の前（大会の開幕）。
+  - id: tutorial_first_tournament
+    kind: System
+    text: "マネージャーから、大会の流れを教わった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、いよいよ公式戦です！ 大会の流れを説明しますね。"
+          - who: team_manager
+            say: "大会中は週ではなく1日ずつ進みます。試合の日が来たら、試合をするか確認が出ます。"
+          - who: team_manager
+            say: "試合に出られるのは、背番号をもらったベンチ入りの選手だけです。背番号は「メンバー」で決められます。"
+          - who: team_manager
+            say: "試合の前にはスタメンと打順を決める画面が出ます。誰をどこで使うかは、監督が決めてください。"
+          - who: team_manager
+            say: "負けたらそこで大会は終わりです。一戦ずつ、いきましょう！"
+
+  # 初めての試合の前（試合の日）。試合の画面ではノベルを出さないので、試合をするか聞く前にホームで出す。
+  - id: tutorial_first_match
+    kind: System
+    text: "マネージャーから、試合での采配を教わった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "試合の前に、采配のことを少しだけ。"
+          - who: team_manager
+            say: "攻撃のときは、打者ごとにサインを出せます。バント、盗塁、エンドラン……何も出さなければ打たせます。"
+          - who: team_manager
+            say: "ピンチや流れの悪いときは「タイム」から伝令を送れます。回数に限りがあるので、使いどころが大事です。"
+          - who: team_manager
+            say: "選手交代もタイムからです。疲れた投手の交代や、代打、守備固めができます。"
+          - who: team_manager
+            say: "全部任せたいときは「スキップ（委任）」で、残りの采配をお任せにできます。最初は気楽にどうぞ！"
+
+  # 初めてのスカウトの時期（夏の後・スカウトの契約の会話の前）。
+  - id: tutorial_scouting
+    kind: System
+    text: "マネージャーから、スカウトと新入生のことを教わった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、来年の新入生の話です。"
+          - who: team_manager
+            say: "毎年4月には新入生が入ってきます。何もしなくても来てくれますけど、どんな子が来るかは運次第です。"
+          - who: team_manager
+            say: "スカウトさんと契約すると、10月に中学生の候補のリストを持ってきてくれます。"
+          - who: team_manager
+            say: "リストの中から、会いに行く子を「スカウト」で選んで口説きます。口説けた子が4月に入ってきます。"
+          - who: team_manager
+            say: "契約にはお金がかかります。部費と相談して決めてくださいね。"
+
+  # 初めて部費で何か買えるようになった週。
+  - id: tutorial_purchases
+    kind: System
+    text: "マネージャーから、部費の使い方を教わった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、部費の使い道の話です。"
+          - who: team_manager
+            say: "部費は「経営」で使えます。施設、練習道具、備品が買えます。"
+          - who: team_manager
+            say: "施設は部全体の練習の効率が上がります。練習道具は、その分野の練習にだけ効きます。"
+          - who: team_manager
+            say: "部費は毎年3月に、学校の予算や寄付で入ってきます。勝って名前が売れると、寄付も増えますよ。"
+          - who: team_manager
+            say: "使いすぎると合宿やスカウトの分が足りなくなるので、そこだけ気をつけてくださいね。"
+
+  # 初めての夏の引退（引退の会話の後・主将指名の前）。
+  - id: tutorial_summer_retirement
+    kind: System
+    text: "マネージャーから、新チームのことを教わった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、夏が終わると3年生は引退です。ここからは1・2年生の新チームになります。"
+          - who: team_manager
+            say: "まずは新チームの主将を決めます。主将がスタメンにいると、チーム全体が少しずつ締まります。ベンチに置いて、伝令で走らせる手もありますよ。"
+          - who: team_manager
+            say: "そのあと背番号を決め直します。秋の大会は、この新チームで戦います。"
+          - who: team_manager
+            say: "3年生は卒業まで部に籍がありますけど、もう試合には出ません。"
+
+  # 「もう説明はいらない」を選んだときの返事（チュートリアルの会話の後ろに足す）。
+  - id: tutorial_dismissed
+    kind: System
+    text: "これからは説明なしで進めることにした。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "分かりました！ これからは説明なしでいきますね。困ったら、いつでも聞いてください。"
+      - lines:
+          - who: team_manager
+            say: "了解です。もう口うるさく言いません。……たぶん。"
+
   # 夏の甲子園（設計書05 §1.1a）。県大会を勝ち抜いた直後に、激励金 → 抽選会 の順で出る。
   # どちらも効果の数値は yaml に書かない＝呼び出し元（KoshienEntry）が実際に動いた額・
   # 実際に決まった相手で結果行を組む。
