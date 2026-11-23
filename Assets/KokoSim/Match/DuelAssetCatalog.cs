@@ -47,6 +47,20 @@ namespace KokoSim.Unity.Match
         public string[] ClipNames = new string[0];
         public AnimationClip[] Clips = new AnimationClip[0];
 
+        [Tooltip("装備のFBX（帽子・ヘルメット・マスク・胸当て・グラブ・ミット・レガース）。パスと並び順で対応する")]
+        public string[] GearPaths = new string[0];
+        public GameObject[] GearModels = new GameObject[0];
+
+        /// <summary>装備FBXのパスからモデルを引く（無ければ null）。パスの単一ソースは <see cref="DuelGearMeshes"/>。</summary>
+        public GameObject FindGear(string path)
+        {
+            if (GearPaths == null || GearModels == null) return null;
+            int n = Mathf.Min(GearPaths.Length, GearModels.Length);
+            for (int i = 0; i < n; i++)
+                if (GearPaths[i] == path) return GearModels[i];
+            return null;
+        }
+
         /// <summary>Renderer 名から領域IDつきメッシュを引く（無ければ null）。</summary>
         public Mesh FindRegionMesh(string rendererName)
         {

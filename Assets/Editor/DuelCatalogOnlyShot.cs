@@ -55,6 +55,7 @@ namespace KokoSim.UnityEditorTools
         {
             bool prevForce = DuelStageRig.ForceCatalogOnly;
             DuelStageRig.ForceCatalogOnly = catalogOnly;
+            DuelGearMeshes.ClearCache();   // 装備は読んだものを使い回す＝捨てないと経路を切り替えても絵が変わらない
             var rig = new DuelStageRig();
             try
             {
@@ -90,6 +91,7 @@ namespace KokoSim.UnityEditorTools
             {
                 rig.Dispose();
                 DuelStageRig.ForceCatalogOnly = prevForce;
+                DuelGearMeshes.ClearCache();
             }
         }
     }

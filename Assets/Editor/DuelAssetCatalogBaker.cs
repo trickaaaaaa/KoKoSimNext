@@ -13,7 +13,7 @@ namespace KokoSim.UnityEditorTools
     /// 【開発用・エディタ限定】ビルド同梱の索引（<see cref="DuelAssetCatalog"/>）を焼く（F8）。
     ///
     /// 中身は**コード側の名前表から自動で埋める**（<see cref="DuelStageRig.RequiredClipNames"/>・
-    /// 素体の Renderer 名）。名前を二重管理しないのが要で、この資産は索引でしかない。
+    /// 素体の Renderer 名・<see cref="DuelGearMeshes.RequiredPaths"/>）。名前を二重管理しないのが要で、この資産は索引でしかない。
     /// 既存の <c>DuelUniformBaker</c> / <c>DuelVendorRegionBaker</c> と同じ流儀。
     ///
     /// ⚠ **焼いた .asset は gitignore**（購入素体・購入クリップの GUID 参照＝実質的な再配布経路）。
@@ -70,6 +70,23 @@ namespace KokoSim.UnityEditorTools
             cat.ClipNames = names.ToArray();
             cat.Clips = clips.ToArray();
 
+            // 装備FBX。**DuelGearMeshes の表が単一ソース**。購入品（OptionalPaths）は無くても欠けにしない
+            var gearPaths = new List<string>();
+            var gearModels = new List<GameObject>();
+            foreach (var path in DuelGearMeshes.RequiredPaths.Concat(DuelGearMeshes.OptionalPaths))
+            {
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (model == null)
+                {
+                    if (DuelGearMeshes.RequiredPaths.Contains(path)) missing.Add("装備 " + path);
+                    continue;
+                }
+                gearPaths.Add(path);
+                gearModels.Add(model);
+            }
+            cat.GearPaths = gearPaths.ToArray();
+            cat.GearModels = gearModels.ToArray();
+
             if (created) AssetDatabase.CreateAsset(cat, AssetPath);
             EditorUtility.SetDirty(cat);
             AssetDatabase.SaveAssets();
@@ -107,6 +124,11 @@ namespace KokoSim.UnityEditorTools
             if (cat.UmpireUniformMesh == null) missing.Add("球審着衣メッシュ");
             foreach (var name in DuelStageRig.RequiredClipNames().Distinct())
                 if (cat.FindClip(name) == null) missing.Add("クリップ " + name);
+            foreach (var path in DuelGearMeshes.RequiredPaths)
+                if (cat.FindGear(path) == null) missing.Add("装備 " + path);
+            foreach (var path in DuelGearMeshes.OptionalPaths)
+                if (cat.FindGear(path) == null && AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+                    missing.Add("装備（購入品が手元にあるのに索引に無い） " + path);
             if (cat.VendorBody != null)
             {
                 foreach (var r in cat.VendorBody.GetComponentsInChildren<Renderer>(true))
@@ -140,6 +162,8 @@ namespace KokoSim.UnityEditorTools
             sb.AppendLine("領域メッシュ: " + cat.RegionNames.Length + "枚");
             sb.AppendLine("クリップ: " + cat.ClipNames.Length + "本 / 要求"
                 + DuelStageRig.RequiredClipNames().Distinct().Count() + "本");
+            sb.AppendLine("装備: " + (cat.GearPaths?.Length ?? 0) + "点 / 必須"
+                + DuelGearMeshes.RequiredPaths.Length + "点＋購入品" + DuelGearMeshes.OptionalPaths.Length + "点");
             if (missing.Count == 0) sb.AppendLine("欠け: なし");
             else
             {
