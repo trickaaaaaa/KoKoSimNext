@@ -20,6 +20,10 @@ namespace KokoSim.Unity.Components
     /// そこにポインタの出入りを持たせると、押している最中に対象が木から消えてクリックが成立しない。
     /// 判定は「並びが一生変わらない透明な短冊」(<c>_hits</c>) に持たせ、カードは表示専用にする。
     /// 選択は Click ではなく PointerDown で採る（押した時点で確定＝合成イベントに依存しない）。
+    ///
+    /// <para>手札は1列で左右に分ける（issue #1473・2026-11-23 オーナー判断）。左＝サイン（その1球・その打席で使うと解ける）、
+    /// 右＝構え（解除するまで続く）。どちらに出すかは <see cref="SignDef.Stance"/>。塊ごとに独立した手札
+    /// （重なり・持ち上げ・当たり判定）で、間は余白だけ空ける。カードの寸法・帯の高さは従来と同じ。</para>
     /// </summary>
     public sealed class TacticsCardDeck : VisualElement
     {
@@ -58,14 +62,12 @@ namespace KokoSim.Unity.Components
             return s.Substring(0, head) + "\n" + s.Substring(head);
         }
 
-        private readonly VisualElement _inner;
-        private readonly VisualElement _hits;
+        private readonly Row _signRow;     // 左＝サイン
+        private readonly Row _stanceRow;   // 右＝構え
         private IReadOnlyList<SignDef> _defs = Array.Empty<SignDef>();
         // グループ→選択中の非既定カードId（既定選択はエントリなし＝無点灯）。フェーズ切替でも保持する。
         private readonly Dictionary<string, string> _selected = new();
-        private readonly List<VisualElement> _cards = new();      // 表示順（＝重なり順）
         private readonly Dictionary<string, VisualElement> _byId = new();
-        private int _hotIndex = -1;
         private bool _offense;
         private bool _built;
         // 全カードへ掛ける全体ゲート（投手がモーションに入ったら締め切る。issue #493）。
@@ -76,13 +78,13 @@ namespace KokoSim.Unity.Components
         {
             AddToClassList("tcards");
             pickingMode = PickingMode.Ignore;   // 帯の余白はクリックを盤面へ通す（中断ポップアップが開く）
-            _inner = new VisualElement { pickingMode = PickingMode.Ignore };
-            _inner.AddToClassList("tcards__inner");
-            Add(_inner);
-            // 当たり判定の層。カードより後ろの兄弟＝常に手前で拾う。中身の短冊は並べ替えない。
-            _hits = new VisualElement { pickingMode = PickingMode.Ignore };
-            _hits.AddToClassList("tcards__hits");
-            Add(_hits);
+            // 構えの塊を後ろの兄弟に置く＝持ち上がったカードが隣の塊にかかっても、構え側が上に描かれる。
+            _signRow = new Row(this);
+            _signRow.AddToClassList("tcards__row--sign");
+            Add(_signRow);
+            _stanceRow = new Row(this);
+            _stanceRow.AddToClassList("tcards__row--stance");
+            Add(_stanceRow);
         }
 
         /// <summary>指示の定義一式を差し替える。</summary>
@@ -183,11 +185,15 @@ namespace KokoSim.Unity.Components
         /// <summary>スクショ用: 指定カードをホバー拡大の状態にする（実際のカーソルは要らない）。</summary>
         public void SetHotForCapture(string id)
         {
-            ClearHot();
+            _signRow.ClearHot();
+            _stanceRow.ClearHot();
             if (id == null || !_byId.TryGetValue(id, out var card)) return;
-            var index = _cards.IndexOf(card);
-            if (index >= 0) SetHot(index);
+            if (!_signRow.SetHotCard(card)) _stanceRow.SetHotCard(card);
         }
+
+        /// <summary>撮影用: そのカードがいまの局面で表示されていて押せるか（tcard--off でない）。</summary>
+        public bool IsSelectableForCapture(string id)
+            => id != null && _byId.TryGetValue(id, out var card) && !card.ClassListContains("tcard--off");
 
         private SignDef FindDef(string id)
         {
@@ -198,49 +204,21 @@ namespace KokoSim.Unity.Components
         private void Rebuild()
         {
             _built = true;
-            _inner.Clear();
-            _hits.Clear();
-            _cards.Clear();
+            _signRow.Clear();
+            _stanceRow.Clear();
             _byId.Clear();
-            _hotIndex = -1;
 
             foreach (var def in _defs)
             {
                 if (def.Offense != _offense) continue;
                 var card = BuildCard(def);
-                _cards.Add(card);
                 _byId[def.Id] = card;
-                _inner.Add(card);
-                _hits.Add(BuildHit(def, _cards.Count - 1));
+                (def.Stance ? _stanceRow : _signRow).AddCard(def, card);
             }
-            Layout();
+            _signRow.Layout();
+            _stanceRow.Layout();
             RefreshHighlights();
         }
-
-        // 当たり判定の短冊。位置はカードと同じだが、こちらは並べ替えないので
-        // 押している最中に木から外れることがない（＝クリックが必ず成立する）。
-        private VisualElement BuildHit(SignDef def, int index)
-        {
-            var hit = new VisualElement { pickingMode = PickingMode.Position };
-            hit.AddToClassList("tcards__hit");
-            hit.RegisterCallback<PointerEnterEvent>(_ =>
-            {
-                ClearHot();
-                if (!IsOff(index)) SetHot(index);
-            });
-            hit.RegisterCallback<PointerLeaveEvent>(_ => ClearHot());
-            // 押した時点で確定（Click は down/up の対と合成に依存するので使わない）。
-            hit.RegisterCallback<PointerDownEvent>(evt =>
-            {
-                if (IsOff(index)) return;
-                Select(def.Id);
-                evt.StopPropagation();
-            });
-            return hit;
-        }
-
-        private bool IsOff(int index) =>
-            index < 0 || index >= _cards.Count || _cards[index].ClassListContains("tcard--off");
 
         private VisualElement BuildCard(SignDef def)
         {
@@ -278,82 +256,6 @@ namespace KokoSim.Unity.Components
             return card;
         }
 
-        // カードは絶対配置で Step ずつずらして敷く。重なり順を変えても位置が動かないので、
-        // 最前面化（BringToFront）と復帰（元の添字へ Insert）を絵のずれ無しで行える。
-        private void Layout()
-        {
-            style.height = CardHeight;
-            var width = _cards.Count > 0 ? Step * (_cards.Count - 1) + CardWidth : 0f;
-            _inner.style.width = width;
-            _hits.style.width = width;
-
-            for (var i = 0; i < _cards.Count; i++)
-            {
-                var card = _cards[i];
-                card.style.left = i * Step;
-                card.style.width = CardWidth;
-                card.style.height = CardHeight;
-
-                // 短冊は「見えている帯」の幅。最後の1枚だけ何にも覆われないので全幅を取る。
-                var hit = _hits[i];
-                hit.style.left = i * Step;
-                hit.style.width = i == _cards.Count - 1 ? CardWidth : Step;
-
-                // 絵も名前も「隣に隠れない左の帯」の中央へ。帯の幅＝Step。
-                var ghost = card.Q<Label>(className: "tcard__ghost");
-                if (ghost != null)
-                {
-                    ghost.style.width = Step;
-                    ghost.style.fontSize = Mathf.Round(Step * 0.62f);
-                }
-                // 絵も同じ帯の中央へ。帯の幅に対して一定の余白を残す（絵は正方形で、帯に収まる大きさへ縮む）。
-                var pic = card.Q(className: "tcard__pic");
-                if (pic != null)
-                {
-                    var inset = Mathf.Round(Step * PicInsetRatio);
-                    pic.style.left = inset;
-                    pic.style.width = Step - inset * 2;
-                    pic.style.top = inset;
-                    pic.style.bottom = inset;
-                }
-                var cap = card.Q(className: "tcard__cap");
-                var capHeight = CardHeight * CapHeightRatio;
-                if (cap != null) cap.style.height = capHeight;
-
-                var name = card.Q<Label>(className: "tcard__name");
-                if (name != null)
-                {
-                    name.style.width = Step;
-                    // 級数は幅（1行の字数）と高さ（行数）の両方で決める。どちらか片方だけだと、
-                    // 2行にした長い名前が段からはみ出すか、短い名前が不揃いに小さくなる。
-                    var rows = (name.text ?? "").Split('\n');
-                    var perLine = 1;
-                    foreach (var row in rows) perLine = Mathf.Max(perLine, row.Length);
-                    var byWidth = Step * CapRatioByLen[Mathf.Clamp(perLine, 1, CapRatioByLen.Length - 1)];
-                    var byHeight = capHeight / (rows.Length * LineHeightFactor);
-                    name.style.fontSize = Mathf.Round(Mathf.Min(byWidth, byHeight));
-                }
-            }
-        }
-
-        private void SetHot(int index)
-        {
-            var card = _cards[index];
-            card.AddToClassList("tcard--hot");
-            card.BringToFront();   // 拡大したカードが隣に隠れないよう最前面へ
-            _hotIndex = index;
-        }
-
-        private void ClearHot()
-        {
-            if (_hotIndex < 0 || _hotIndex >= _cards.Count) return;
-            var card = _cards[_hotIndex];
-            card.RemoveFromClassList("tcard--hot");
-            // 重なり順を定義順へ戻す（絶対配置なので入れ直しても位置は動かない）。
-            _inner.Insert(_hotIndex, card);
-            _hotIndex = -1;
-        }
-
         private void RefreshHighlights()
         {
             foreach (var pair in _byId)
@@ -362,6 +264,159 @@ namespace KokoSim.Unity.Components
                 var on = def != null && !def.IsDefault
                          && _selected.TryGetValue(def.Group, out var sel) && sel == pair.Key;
                 pair.Value.EnableInClassList("tcard--on", on);
+            }
+        }
+
+        /// <summary>
+        /// 手札の1塊（サインか構え）。重なり・持ち上げ（最前面化）・当たり判定の短冊はこの中で閉じる＝塊をまたいで並びが干渉しない。
+        /// </summary>
+        private sealed class Row : VisualElement
+        {
+            private readonly TacticsCardDeck _deck;
+            private readonly VisualElement _inner;
+            private readonly VisualElement _hits;
+            private readonly List<VisualElement> _cards = new();      // 表示順（＝重なり順）
+            private int _hotIndex = -1;
+
+            public Row(TacticsCardDeck deck)
+            {
+                _deck = deck;
+                AddToClassList("tcards__row");
+                pickingMode = PickingMode.Ignore;
+                _inner = new VisualElement { pickingMode = PickingMode.Ignore };
+                _inner.AddToClassList("tcards__inner");
+                Add(_inner);
+                // 当たり判定の層。カードより後ろの兄弟＝常に手前で拾う。中身の短冊は並べ替えない。
+                _hits = new VisualElement { pickingMode = PickingMode.Ignore };
+                _hits.AddToClassList("tcards__hits");
+                Add(_hits);
+            }
+
+            public new void Clear()
+            {
+                _inner.Clear();
+                _hits.Clear();
+                _cards.Clear();
+                _hotIndex = -1;
+            }
+
+            public void AddCard(SignDef def, VisualElement card)
+            {
+                _cards.Add(card);
+                _inner.Add(card);
+                _hits.Add(BuildHit(def, _cards.Count - 1));
+            }
+
+            /// <summary>撮影用: この段にあるカードなら持ち上げて true。</summary>
+            public bool SetHotCard(VisualElement card)
+            {
+                var index = _cards.IndexOf(card);
+                if (index < 0) return false;
+                SetHot(index);
+                return true;
+            }
+
+            // 当たり判定の短冊。位置はカードと同じだが、こちらは並べ替えないので
+            // 押している最中に木から外れることがない（＝クリックが必ず成立する）。
+            private VisualElement BuildHit(SignDef def, int index)
+            {
+                var hit = new VisualElement { pickingMode = PickingMode.Position };
+                hit.AddToClassList("tcards__hit");
+                hit.RegisterCallback<PointerEnterEvent>(_ =>
+                {
+                    ClearHot();
+                    if (!IsOff(index)) SetHot(index);
+                });
+                hit.RegisterCallback<PointerLeaveEvent>(_ => ClearHot());
+                // 押した時点で確定（Click は down/up の対と合成に依存するので使わない）。
+                hit.RegisterCallback<PointerDownEvent>(evt =>
+                {
+                    if (IsOff(index)) return;
+                    _deck.Select(def.Id);
+                    evt.StopPropagation();
+                });
+                return hit;
+            }
+
+            private bool IsOff(int index) =>
+                index < 0 || index >= _cards.Count || _cards[index].ClassListContains("tcard--off");
+
+            // カードは絶対配置で Step ずつずらして敷く。重なり順を変えても位置が動かないので、
+            // 最前面化（BringToFront）と復帰（元の添字へ Insert）を絵のずれ無しで行える。
+            public void Layout()
+            {
+                // 札の無い塊は畳む（どちらも空にならない構成だが、空の塊で幅と余白を取らない）。
+                style.display = _cards.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+                style.height = CardHeight;
+                var width = _cards.Count > 0 ? Step * (_cards.Count - 1) + CardWidth : 0f;
+                _inner.style.width = width;
+                _hits.style.width = width;
+
+                for (var i = 0; i < _cards.Count; i++)
+                {
+                    var card = _cards[i];
+                    card.style.left = i * Step;
+                    card.style.width = CardWidth;
+                    card.style.height = CardHeight;
+
+                    // 短冊は「見えている帯」の幅。最後の1枚だけ何にも覆われないので全幅を取る。
+                    var hit = _hits[i];
+                    hit.style.left = i * Step;
+                    hit.style.width = i == _cards.Count - 1 ? CardWidth : Step;
+
+                    // 絵も名前も「隣に隠れない左の帯」の中央へ。帯の幅＝Step。
+                    var ghost = card.Q<Label>(className: "tcard__ghost");
+                    if (ghost != null)
+                    {
+                        ghost.style.width = Step;
+                        ghost.style.fontSize = Mathf.Round(Step * 0.62f);
+                    }
+                    // 絵も同じ帯の中央へ。帯の幅に対して一定の余白を残す（絵は正方形で、帯に収まる大きさへ縮む）。
+                    var pic = card.Q(className: "tcard__pic");
+                    if (pic != null)
+                    {
+                        var inset = Mathf.Round(Step * PicInsetRatio);
+                        pic.style.left = inset;
+                        pic.style.width = Step - inset * 2;
+                        pic.style.top = inset;
+                        pic.style.bottom = inset;
+                    }
+                    var cap = card.Q(className: "tcard__cap");
+                    var capHeight = CardHeight * CapHeightRatio;
+                    if (cap != null) cap.style.height = capHeight;
+
+                    var name = card.Q<Label>(className: "tcard__name");
+                    if (name != null)
+                    {
+                        name.style.width = Step;
+                        // 級数は幅（1行の字数）と高さ（行数）の両方で決める。どちらか片方だけだと、
+                        // 2行にした長い名前が段からはみ出すか、短い名前が不揃いに小さくなる。
+                        var rows = (name.text ?? "").Split('\n');
+                        var perLine = 1;
+                        foreach (var row in rows) perLine = Mathf.Max(perLine, row.Length);
+                        var byWidth = Step * CapRatioByLen[Mathf.Clamp(perLine, 1, CapRatioByLen.Length - 1)];
+                        var byHeight = capHeight / (rows.Length * LineHeightFactor);
+                        name.style.fontSize = Mathf.Round(Mathf.Min(byWidth, byHeight));
+                    }
+                }
+            }
+
+            private void SetHot(int index)
+            {
+                var card = _cards[index];
+                card.AddToClassList("tcard--hot");
+                card.BringToFront();   // 拡大したカードが隣に隠れないよう最前面へ
+                _hotIndex = index;
+            }
+
+            public void ClearHot()
+            {
+                if (_hotIndex < 0 || _hotIndex >= _cards.Count) return;
+                var card = _cards[_hotIndex];
+                card.RemoveFromClassList("tcard--hot");
+                // 重なり順を定義順へ戻す（絶対配置なので入れ直しても位置は動かない）。
+                _inner.Insert(_hotIndex, card);
+                _hotIndex = -1;
             }
         }
     }

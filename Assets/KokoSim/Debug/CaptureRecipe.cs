@@ -54,6 +54,14 @@ namespace KokoSim.Unity.Debugging
         public int TimeoutMessengerIndex = -1;
         /// <summary>毎コマ記録する実測（DuelStageRig の *ForCapture のメンバー名）。</summary>
         public List<string> Probes = new List<string>();
+        /// <summary>
+        /// 采配窓で押す采配カードの id（issue #1473。null＝使わない）。指定すると守備ビューを待たず、最初の采配窓で
+        /// 止めて「01-window」（押す前の手札）を撮り、カードを順に押して「02-pressed」を撮り、続けて
+        /// <see cref="CardsAfterSeconds"/> 秒流して「03-after」（その球の結果）を撮る。view: panel で手札まで写る。
+        /// </summary>
+        public List<string> Cards;
+        /// <summary>cards の押下後、03-after を撮るまで流す秒数（ゲームの時計。既定 4）。</summary>
+        public float CardsAfterSeconds = 4f;
         /// <summary>見比べ用の切り替え（"DuelStageRig.Xxx": 値）。終わったら元へ戻す。</summary>
         public Dictionary<string, string> Overrides = new Dictionary<string, string>();
     }
@@ -188,6 +196,8 @@ namespace KokoSim.Unity.Debugging
                     return !map.TryGetValue("fps", out var fps) || (int.TryParse(fps, out r.VideoFps) && r.VideoFps > 0);
                 }
                 case "overrides": r.Overrides = FlowMap(v); return r.Overrides != null;
+                case "cards": r.Cards = FlowSeq(v); return r.Cards != null && r.Cards.Count > 0;
+                case "cards_after": return TryFloat(v, out r.CardsAfterSeconds) && r.CardsAfterSeconds >= 0f;
                 default: return false;
             }
         }

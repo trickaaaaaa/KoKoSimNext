@@ -22,6 +22,11 @@ namespace KokoSim.Unity.Components
         public string Art;
         /// <summary>true=攻撃中に出す指示 / false=守備中に出す指示。</summary>
         public bool Offense;
+        /// <summary>
+        /// true=右の「構え」（解除するまで続く指示）/ false=左の「サイン」（その1球・その打席で使うと解ける指示）。
+        /// 手札は1列のまま、この2つを左右の塊に分けて並べる（issue #1473・2026-11-23 オーナー判断・設計書09 のサインと構えの区分）。
+        /// </summary>
+        public bool Stance;
         /// <summary>排他グループ（例: "batting" / "policy"）。同グループ内で1つだけ選べる。</summary>
         public string Group;
         public string GroupLabel;

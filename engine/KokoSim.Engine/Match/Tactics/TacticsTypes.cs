@@ -14,7 +14,7 @@ public enum OffensiveSign
     Squeeze,        // スクイズ
     Steal,          // 盗塁
     HitAndRun,      // エンドラン
-    Buster,         // バスター
+    // バスターは作らない（2026-11-23 オーナー判断・issue #1473）。
 }
 
 /// <summary>

@@ -671,6 +671,9 @@ public sealed class TeamState
     private Pitching.PitcherGear? _pendingPitchGear;
     private DefenseDepth? _pendingPitchInfield;
     private DefenseDepth? _pendingPitchOutfield;
+    private bool? _pendingPitchBuntShift;
+    private bool _pendingIntentionalWalk;
+    private bool _pendingPitchout;
 
     /// <summary>次の1球への打撃指示（強攻/待て）を予約する。null=指示解除。</summary>
     public void SetPendingPitchBattingOverride(PitchBattingOverride? v) => _pendingPitchBattingOverride = v;
@@ -689,14 +692,47 @@ public sealed class TeamState
     /// <summary>
     /// 次の1球への守備上書き（配球方針/ギア/内野・外野の深さ）を予約する（issue #492: 陣形も1球単位へ）。
     /// 全項目null=指示解除。「解除するまで続く」寿命は呼び出し側（UI）が采配窓ごとに再予約して維持する。
+    /// buntShift（issue #1473）＝バントシフト（一・三塁手チャージ）。null=brain の判断のまま。
     /// </summary>
     public void SetPendingPitchDefenseOverride(
-        PitchPolicy? policy, Pitching.PitcherGear? gear, DefenseDepth? infield = null, DefenseDepth? outfield = null)
+        PitchPolicy? policy, Pitching.PitcherGear? gear, DefenseDepth? infield = null, DefenseDepth? outfield = null,
+        bool? buntShift = null)
     {
         _pendingPitchPolicy = policy;
         _pendingPitchGear = gear;
         _pendingPitchInfield = infield;
         _pendingPitchOutfield = outfield;
+        _pendingPitchBuntShift = buntShift;
+    }
+
+    /// <summary>
+    /// 申告敬遠を予約する（issue #1473・設計書09 §2.2「ウエスト／申告敬遠は独立コマンド」）。この側が守備のとき、
+    /// 次に解決される打席の頭か、打席途中なら次の1球の手前で消費され、その打席は投球なしの四球で終わる。
+    /// 読み書きだけで乱数を使わない（未予約なら AI 駆動のシムは1ビットも変わらない）。
+    /// </summary>
+    public void SetPendingIntentionalWalk(bool on) => _pendingIntentionalWalk = on;
+
+    /// <summary>予約された申告敬遠を読み出して消費する。</summary>
+    public bool ConsumePendingIntentionalWalk()
+    {
+        var v = _pendingIntentionalWalk;
+        _pendingIntentionalWalk = false;
+        return v;
+    }
+
+    /// <summary>
+    /// ウエスト（ピッチアウト）を次の1球に予約する（issue #1473）。この側が守備のとき、次の1球を打者の届かない
+    /// 高め外へ外す（ボール1つ・3ボールなら外さない）。盗塁は捕手が優位に、スクイズは外されて三塁走者が挟まれる。
+    /// 読み書きだけで乱数を使わない。
+    /// </summary>
+    public void SetPendingPitchout(bool on) => _pendingPitchout = on;
+
+    /// <summary>予約されたウエストを読み出して消費する（1球限り）。</summary>
+    public bool ConsumePendingPitchout()
+    {
+        var v = _pendingPitchout;
+        _pendingPitchout = false;
+        return v;
     }
 
     /// <summary>予約された打撃指示を読み出して消費する（1球限り＝次球は自動でnullに戻る）。</summary>
@@ -708,14 +744,15 @@ public sealed class TeamState
     }
 
     /// <summary>予約された守備上書き（配球/ギア/陣形）を読み出して消費する（1球限り）。</summary>
-    public (PitchPolicy? Policy, Pitching.PitcherGear? Gear, DefenseDepth? Infield, DefenseDepth? Outfield)
+    public (PitchPolicy? Policy, Pitching.PitcherGear? Gear, DefenseDepth? Infield, DefenseDepth? Outfield, bool? BuntShift)
         ConsumePendingPitchDefenseOverride()
     {
-        var v = (_pendingPitchPolicy, _pendingPitchGear, _pendingPitchInfield, _pendingPitchOutfield);
+        var v = (_pendingPitchPolicy, _pendingPitchGear, _pendingPitchInfield, _pendingPitchOutfield, _pendingPitchBuntShift);
         _pendingPitchPolicy = null;
         _pendingPitchGear = null;
         _pendingPitchInfield = null;
         _pendingPitchOutfield = null;
+        _pendingPitchBuntShift = null;
         return v;
     }
 
@@ -763,12 +800,12 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// くさい所（issue #872）をプレイヤーが押したか。<b>その打席だけ</b>効く＝エンジンが打席の確定で下ろす
-    /// （他の配球方針が「解除するまで続く」のと違い、打者ごとの采配）。未設定ならフィールド読み取りだけでRNG非消費。
+    /// 際どい所（旧名くさい所・issue #872）をプレイヤーが押したか。ほかの構えと同じく<b>解除するまで続く</b>
+    /// （2026-11-23 オーナー判断・issue #1473。以前は打席の確定でエンジンが下ろしていた）。未設定ならフィールド読み取りだけでRNG非消費。
     /// </summary>
     public bool PitchAround { get; private set; }
 
-    /// <summary>くさい所を入れる／解く。</summary>
+    /// <summary>際どい所を入れる／解く。</summary>
     public void SetPitchAround(bool on) => PitchAround = on;
 
     private OffensiveSign? _pendingOffensiveSign;

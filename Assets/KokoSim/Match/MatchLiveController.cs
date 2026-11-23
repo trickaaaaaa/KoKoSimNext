@@ -286,9 +286,14 @@ namespace KokoSim.Unity.Match
         private PitcherGear? _defGear;
         private DefenseDepth? _defInfield;
         private DefenseDepth? _defOutfield;
-        // ③その打席だけの守備指示（くさい所・issue #872）。押すとエンジンへ入り、打席が終わるとエンジン側で解ける。
-        // 表示の点灯は窓ごとにエンジンの実状態へ合わせ直す（半回が変わって打席が確定しないまま解けた場合も消灯する）。
+        // ③際どい所（旧名くさい所・issue #872）。押すとエンジンへ入り、ほかの構えと同じく解除するまで続く（issue #1473）。
+        // 表示の点灯は窓ごとにエンジンの実状態へ合わせ直す（エンジン側で解けていれば消灯する）。
         private bool _pitchAroundOn;
+        // バントシフト（issue #1473）＝構え。陣形と同じく、自校が守備の窓ごとに1球の口へ再予約して続ける。
+        private bool _defBuntShift;
+        // 守備のサイン（issue #1473）＝申告敬遠・ウエスト。その1球へ押し込んで自動で解ける（敬遠はその打席が終わる）。
+        private DefenseSign? _defSignChoice;
+        private enum DefenseSign { IntentionalWalk, Pitchout }
         private MatchLiveStatsProvider _statsProvider;
         private string _awayDisp = "先攻", _homeDisp = "後攻";
         // 勝者が要る文脈か（大会戦=true／練習試合=false, issue #269）。結果画面の引き分け表記に渡す。
@@ -876,6 +881,8 @@ namespace KokoSim.Unity.Match
             _signChoice = null;
             _stealChoice = null;
             _pitchAroundOn = false;
+            _defSignChoice = null;
+            _defBuntShift = false;
             // 方針カードは試合をまたがない（前の試合の前進守備が次の試合に残らないよう明示的に戻す）。
             _approach = BattingApproach.Normal;
             _defPolicy = null;
@@ -1164,12 +1171,12 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 打席が確定した＝「1打席」持続の指示を解除する。エンドラン指示は設計書09 §1.2 のとおり打席の確定で解く。
-        /// くさい所は「その打席だけ」で、エンジンは打席の確定で解いているので表示の点灯も落とす（issue #872）。
+        /// 際どい所は構え（解除するまで続く・issue #1473）なのでここでは解かない。
         /// </summary>
         private void ClearPerPaTacticsChoices()
         {
             if (_signChoice != null) { _signChoice = null; _signPad?.ClearSelection("batting"); }
-            if (_pitchAroundOn) { _pitchAroundOn = false; _signPad?.ClearSelection("pitcharound"); }
+            if (_defSignChoice != null) { _defSignChoice = null; _signPad?.ClearSelection("defsign"); }
         }
 
         private void DispatchStep(AdvancePitchResult result, LivePitch thrown)
@@ -1219,6 +1226,8 @@ namespace KokoSim.Unity.Match
                 _shownInning = _current.Inning;
                 _shownIsTop = _current.IsTop;
                 _shownAnyHalf = true;
+                // カウントの途中で申告敬遠した打席（issue #1473）: この打席の球はもう描いてある＝頭から描き直さず結果へ。
+                if (_paQueue.Count > 0) { EnterBattedBallOrHold(); return; }
                 BeginPaFromSequence();
                 return;
             }
@@ -1322,7 +1331,7 @@ namespace KokoSim.Unity.Match
             RefreshPanel();                                       // HUD（打者・投手・球数）とスタメン列
             _signPad?.SetPhase(_atBat.IsTop == _managerIsAway);   // 攻撃中は打撃指示だけ／守備中は配球指示だけ
             _signPad?.RefreshEnabled();                           // 走者の有無でバント/盗塁の可否が変わる
-            // くさい所の点灯はエンジンの実状態に合わせる（半回が変わって打席が確定しないまま解けた場合の取りこぼし）。
+            // 際どい所の点灯はエンジンの実状態に合わせる（エンジン側で解けていたら消灯する）。
             if (_pitchAroundOn && _prog != null && !_prog.PitchAroundOn(_managerIsAway))
             {
                 _pitchAroundOn = false;
@@ -1851,6 +1860,12 @@ namespace KokoSim.Unity.Match
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnAnyBase,
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
+                // セーフティバント（issue #1473）: 走力で内野安打を狙う＝走者が居なくても出せる。構えの前倒しはバントと同じ。
+                // 絵は未作成＝文字を敷く。
+                new SignDef { Id = "batting-safety", Label = "セーフティバント", Icon = "セ", Offense = true, Group = "batting",
+                    GroupLabel = "打撃",
+                    OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.SafetyBunt; PrepareBuntStance(true); },
+                    OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 new SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Art = "squeeze", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
                     OnSelect = () =>
@@ -1877,35 +1892,49 @@ namespace KokoSim.Unity.Match
                     OnSelect = () => { _stealChoice = StartType.Gamble; _signPad?.RefreshEnabled(); },
                     OnClear = () => { _stealChoice = null; _signPad?.RefreshEnabled(); } },
                 // ── 攻撃: 構え（方針・解除するまで続く）──
-                new SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Art = "work", Offense = true, Group = "approach",
+                new SignDef { Id = "app-work", Stance = true, Label = "待球策", Icon = "粘", Art = "work", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.WorkCount),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignDef { Id = "app-ground", Label = "転がせ", Icon = "転", Art = "ground", Offense = true, Group = "approach",
+                new SignDef { Id = "app-ground", Stance = true, Label = "転がせ", Icon = "転", Art = "ground", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.GroundBall),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignDef { Id = "app-slug", Label = "長打狙い", Icon = "長", Art = "slug", Offense = true, Group = "approach",
+                new SignDef { Id = "app-slug", Stance = true, Label = "長打狙い", Icon = "長", Art = "slug", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.Slug),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
-                new SignDef { Id = "app-put", Label = "当てに行け", Icon = "当", Art = "put", Offense = true, Group = "approach",
+                new SignDef { Id = "app-put", Stance = true, Label = "当てに行け", Icon = "当", Art = "put", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.PutInPlay),
                     OnClear = () => PushApproach(BattingApproach.Normal) },
 
-                // ── 守備（すべて方針・解除するまで続く）──
-                new SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Art = "infield-in", Offense = false, Group = "infield",
+                // ── 守備・左＝サイン（その1球・使うと解ける。issue #1473）──
+                // 申告敬遠: 押した次の1球を投げずに、その打席を四球で終える（打席の頭でもカウントの途中でも）。絵は未作成＝文字を敷く。
+                new SignDef { Id = "def-ibb", Label = "敬遠", Icon = "敬", Offense = false, Group = "defsign",
+                    GroupLabel = "サイン",
+                    OnSelect = () => _defSignChoice = DefenseSign.IntentionalWalk, OnClear = () => _defSignChoice = null },
+                // ウエスト: 次の1球を外す。走者が居ないとき（2026-11-23 オーナー判断）と3ボール（外すと四球。エンジンと同じ規則）は消灯する。
+                new SignDef { Id = "def-pitchout", Label = "ウエスト", Icon = "外", Offense = false, Group = "defsign",
+                    GroupLabel = "サイン", EnabledIf = () => PitchoutAvailable,
+                    OnSelect = () => _defSignChoice = DefenseSign.Pitchout, OnClear = () => _defSignChoice = null },
+
+                // ── 守備・右＝構え（解除するまで続く）──
+                new SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Art = "infield-in", Offense = false, Stance = true, Group = "infield",
                     GroupLabel = "陣形", OnSelect = () => PushDefInfield(DefenseDepth.In), OnClear = () => PushDefInfield(null) },
-                new SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Art = "outfield-deep", Offense = false, Group = "outfield",
+                // バントシフト（issue #1473）: 一・三塁手のチャージ。前進守備と重ねられる（一・三塁はシフトが優先＝AlignmentTactics）。絵は未作成。
+                new SignDef { Id = "def-buntshift", Label = "バントシフト", Icon = "シ", Offense = false, Stance = true, Group = "buntshift",
+                    GroupLabel = "陣形", OnSelect = () => PushDefBuntShift(true), OnClear = () => PushDefBuntShift(false) },
+                new SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Art = "outfield-deep", Offense = false, Stance = true, Group = "outfield",
                     GroupLabel = "陣形", OnSelect = () => PushDefOutfield(DefenseDepth.Deep), OnClear = () => PushDefOutfield(null) },
-                new SignDef { Id = "policy-fast", Label = "直球中心", Icon = "直", Art = "fastball", Offense = false, Group = "policy",
+                new SignDef { Id = "policy-fast", Label = "直球中心", Icon = "直", Art = "fastball", Offense = false, Stance = true, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.FastballHeavy), OnClear = () => PushDefPolicy(null) },
-                new SignDef { Id = "policy-break", Label = "変化球中心", Icon = "変", Art = "breaking", Offense = false, Group = "policy",
+                new SignDef { Id = "policy-break", Label = "変化球中心", Icon = "変", Art = "breaking", Offense = false, Stance = true, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.BreakingHeavy), OnClear = () => PushDefPolicy(null) },
-                new SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Art = "control", Offense = false, Group = "policy",
+                new SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Art = "control", Offense = false, Stance = true, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.ControlFirst), OnClear = () => PushDefPolicy(null) },
-                // くさい所（issue #872）: ゾーンの際を突き、甘い球を投げない（四球も辞さない）。その打席だけ効く。
-                // 陣形の「長打警戒」と取り違えないよう名前は「くさい所」・アイコン文字は「際」（2026-11-10 オーナー決定）。絵は未作成＝文字を敷く。
-                new SignDef { Id = "def-pitch-around", Label = "くさい所", Icon = "際", Offense = false, Group = "pitcharound",
+                // 際どい所（issue #872・旧名くさい所）: ゾーンの際を突き、甘い球を投げない（四球も辞さない）。
+                // 2026-11-23 オーナー判断（issue #1473）で名前を「際どい所」に変え、ほかの構えと同じく解除するまで続く。
+                // アイコン文字は「際」のまま。絵は未作成＝文字を敷く。
+                new SignDef { Id = "def-pitch-around", Label = "際どい所", Icon = "際", Offense = false, Stance = true, Group = "pitcharound",
                     GroupLabel = "打席", OnSelect = () => PushPitchAround(true), OnClear = () => PushPitchAround(false) },
-                new SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Art = "push", Offense = false, Group = "gear",
+                new SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Art = "push", Offense = false, Stance = true, Group = "gear",
                     GroupLabel = "ギア", OnSelect = () => PushDefGear(PitcherGear.Push), OnClear = () => PushDefGear(null) },
             });
         }
@@ -1917,6 +1946,9 @@ namespace KokoSim.Unity.Match
         private bool RunnerOnThird => _atBat is { BaseThird: true };
         private bool RunnerOnAnyBase =>
             _atBat is { BaseFirst: true } or { BaseSecond: true } or { BaseThird: true };
+
+        // ウエストが押せるか（issue #1473）: 走者が居て、3ボールでない（3ボールで外すと四球＝StealReadModel が単一ソース）。
+        private bool PitchoutAvailable => RunnerOnAnyBase && StealReadModel.CanPitchout(_atBat.Balls);
 
         /// <summary>
         /// いまの塁状況で単独盗塁が狙える塁（issue #622。null＝どの塁も狙えない＝カードは消灯）。
@@ -1949,8 +1981,12 @@ namespace KokoSim.Unity.Match
         private void PushDefGear(PitcherGear? v) { _defGear = v; PushDefense(); }
         private void PushDefInfield(DefenseDepth? v) { _defInfield = v; PushDefense(); }
         private void PushDefOutfield(DefenseDepth? v) { _defOutfield = v; PushDefense(); }
+        private void PushDefBuntShift(bool on) { _defBuntShift = on; PushDefense(); }
 
-        // くさい所は「その打席だけ」＝エンジンが打席の確定で解く。押した次の1球から効く。自校が守備側の窓でだけ入れる。
+        // バントシフトは「敷く／敷かない（brain の判断のまま）」の2値＝外しているときは null を渡す。
+        private bool? DefBuntShiftOrNull => _defBuntShift ? true : (bool?)null;
+
+        // 際どい所は構え＝解除するまで続く（issue #1473）。押した次の1球から効く。自校が守備側の窓でだけ入れる。
         private void PushPitchAround(bool on)
         {
             _pitchAroundOn = on;
@@ -1965,7 +2001,7 @@ namespace KokoSim.Unity.Match
         {
             if (_prog == null || ManagerIsOnOffense()) return;   // 攻撃中は相手守備＝brain のまま触らない
             var offenseSide = _atBat != null ? _atBat.IsTop : !_managerIsAway;
-            _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield);
+            _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield, DefBuntShiftOrNull);
         }
 
         // いま止まっている窓（または一括経路）で自校が攻撃側か。
@@ -1998,7 +2034,10 @@ namespace KokoSim.Unity.Match
             if (!offense)
             {
                 var offenseSide = _atBat != null ? _atBat.IsTop : !_managerIsAway;
-                _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield);
+                _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield, DefBuntShiftOrNull);
+                // 守備のサイン（issue #1473）: 選んでいる1手だけをこの球へ押し込む（押していなければ何も積まない）。
+                if (_defSignChoice == DefenseSign.IntentionalWalk) _prog.SetIntentionalWalk(_managerIsAway);
+                else if (_defSignChoice == DefenseSign.Pitchout) _prog.SetPitchout(_managerIsAway);
             }
         }
 
@@ -2026,6 +2065,11 @@ namespace KokoSim.Unity.Match
                 _signChoice = null;
                 dropBatting = true;
             }
+            if (_defSignChoice == DefenseSign.Pitchout && _atBat != null && !PitchoutAvailable)
+            {
+                _defSignChoice = null;
+                _signPad?.ClearSelection("defsign");
+            }
             var dropRun = _stealChoice != null && StealTargetNow == null;
             if (dropRun) _stealChoice = null;
 
@@ -2042,6 +2086,8 @@ namespace KokoSim.Unity.Match
         {
             _pitchBattingChoice = null;
             _stealChoice = null;
+            // 守備のサイン（敬遠・ウエスト）も1球で解ける。敬遠はその球で打席が終わる。
+            if (_defSignChoice != null) { _defSignChoice = null; _signPad?.ClearSelection("defsign"); }
             if (_signChoice == null) _signPad?.ClearSelection("batting", "run");
             else _signPad?.ClearSelection("run");
         }
@@ -2055,7 +2101,6 @@ namespace KokoSim.Unity.Match
             PushPitchTacticsChoice();
             var advanced = _prog.Advance();
             _signChoice = null;   // 一括経路は1回のAdvanceで打席全体を解決する＝エンドランもここで解除
-            if (_pitchAroundOn) { _pitchAroundOn = false; _signPad?.ClearSelection("pitcharound"); }   // くさい所もその打席だけ
             ResetPitchTacticsChoice();
             if (!advanced) { EndGame(_prog.BuildResult()); return; }
             _current = _prog.Current;
@@ -5434,6 +5479,7 @@ namespace KokoSim.Unity.Match
                 PitchBattingOverride.ForceTake => "batting-take",
                 PitchBattingOverride.Bunt => "batting-bunt",
                 PitchBattingOverride.Squeeze => "batting-squeeze",
+                PitchBattingOverride.SafetyBunt => "batting-safety",
                 _ => null,
             };
             // 既定カード（任せ）は廃止＝解除は「点いているカードをもう一度押す」。null 指定は消灯だけ行う。
@@ -5461,6 +5507,24 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 采配カードをIDで押す（クリックと同経路＝OnSelect も通る）。
         /// <see cref="SelectPitchBattingForCapture"/> が扱わない群（走塁・仕掛け）を押すのに使う。</summary>
         public void SelectSignForCapture(string id) => _signPad?.Select(id);
+
+        /// <summary>
+        /// 撮影用（issue #1473）: その采配カードがいまの局面で手札に出ていて押せるか。押せない札を黙って押すと
+        /// 何も起きないまま撮れてしまうので、撮影レシピはこれで確かめてから押す。
+        /// </summary>
+        public bool TacticsCardSelectableForCapture(string id) => _signPad?.IsSelectableForCapture(id) ?? false;
+
+        /// <summary>撮影用（issue #1473）: 「プレイボール」「ゲームセット」のテロップを掲げている最中か（撮影はこれが消えてから）。</summary>
+        public bool GameTelopOnForCapture => _gameTelopOn;
+
+        /// <summary>
+        /// 撮影用（issue #1473）: いま止まっている采配窓の局面（回・表裏・アウト・カウント・塁・攻守）を1行で。
+        /// 窓に入っていなければ null。撮った絵の局面を残し、「走者が居ない」等を絵と突き合わせる。
+        /// </summary>
+        public string WindowSituationForCapture => _atBat == null ? null
+            : $"{_atBat.Inning}回{(_atBat.IsTop ? "表" : "裏")} {_atBat.Outs}死 {_atBat.Balls}-{_atBat.Strikes} "
+              + $"塁[{(_atBat.BaseFirst ? "1" : "-")}{(_atBat.BaseSecond ? "2" : "-")}{(_atBat.BaseThird ? "3" : "-")}] "
+              + $"球{_atBat.PitchNumberInPa} 自校={(_atBat.IsTop == _managerIsAway ? "攻撃" : "守備")}";
 
         /// <summary>スクショ用: 打席途中プレー（issue #485〜#488）を再生中なら種類名、そうでなければ null。
         /// 打球（<see cref="FieldPlayActiveForCapture"/>）とは別経路なので別の口で見る。</summary>
