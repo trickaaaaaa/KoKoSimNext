@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 
 namespace KokoSim.Engine.Season;
@@ -11,6 +12,7 @@ public enum InsightTopic
     LowGrowthDomain,   // 「〜の伸びしろはないかもしれない」（伸びしろ低の示唆）
     GrowthType,        // 「大器晩成かもしれない」（成長タイプの示唆）
     Personality,       // 「〜な性格かもしれない」（性格の軸1つの示唆, 設計書23 §1.5。4軸そろうとタイプ名が判明）
+    HiddenSkill,       // 隠しスキルに気づいた（即開示・issue #1471）。HiddenSkill に何のスキルか入る
 }
 
 /// <summary>
@@ -39,6 +41,12 @@ public sealed record InsightNotice(DevelopingPlayer Player, InsightTopic Topic, 
     /// この気づきで4軸の読みがそろったとき、読みから導出したタイプ（誤認込み）。そろっていなければ null。
     /// </summary>
     public Players.Personality? RevealedType { get; init; }
+
+    /// <summary>
+    /// <see cref="InsightTopic.HiddenSkill"/> のとき、表に出た隠しスキル（issue #1471・オーナー判断 2026-11-23＝即開示）。
+    /// 適用済み（<see cref="DevelopingPlayer.Skills"/> の可視側へ移してある）。他の話題では null。
+    /// </summary>
+    public Players.Skill? HiddenSkill { get; init; }
 }
 
 /// <summary>気づきの係数（設計書03 §5.6）。🟡頻度・精度カーブは検証で調整。</summary>
@@ -70,6 +78,11 @@ public sealed record InsightCoefficients
     public double GrowthTypeTopicProb { get; init; } = 0.25;
     /// <summary>伸びしろの話題で「高い分野」を選ぶ確率（残りは「低い分野」）。</summary>
     public double HighGrowthDomainProb { get; init; } = 0.5;
+    /// <summary>
+    /// 隠しスキルを持つ選手に正しく気づいたとき、それを話題にする（＝開示する）確率（issue #1471）。
+    /// 気配の段は作らず、話題になったら即開示する（オーナー判断 2026-11-23）。読み違えのときは開示しない。
+    /// </summary>
+    public double HiddenSkillTopicProb { get; init; } = 0.5;
 }
 
 /// <summary>
@@ -79,7 +92,7 @@ public sealed record InsightCoefficients
 public static class InsightModel
 {
     /// <summary>
-    /// 週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は性格の読み（DevelopingPlayer.PersonalityReading）を記録するだけで、能力等は変更しない。
+    /// 週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は性格の読み（DevelopingPlayer.PersonalityReading）の記録と、気づいた隠しスキルの開示（issue #1471）だけで、能力等は変更しない。
     /// <paramref name="probFactor"/>／<paramref name="accuracyAdd"/> はビデオ・分析機材などの備品由来
     /// （1.0／0.0＝備品なし＝従来一致）。精度の上限は <see cref="InsightCoefficients.AccuracyMax"/> のまま。
     /// </summary>
@@ -110,6 +123,16 @@ public static class InsightModel
 
     private static InsightNotice Compose(DevelopingPlayer p, bool accurate, IRandomSource rng, InsightCoefficients c)
     {
+        // 隠しスキル（issue #1471）: 正しく気づいたときだけ、たまに眠った素質を見抜く＝即開示する（気配の段は作らない）。
+        // 乱数は隠しスキルを持つ選手で正しく気づいたときにだけ引く＝持たない選手の話題の抽選列は従来と1ビット一致。
+        if (accurate && p.Skills.Hidden.Count > 0 && rng.NextDouble() < c.HiddenSkillTopicProb)
+        {
+            var hidden = p.Skills.Hidden.OrderBy(s => s).ToList();   // 集合の列挙順に頼らない（決定論）
+            var skill = hidden[rng.NextInt(0, hidden.Count)];
+            p.Skills = p.Skills.Reveal(skill);
+            return new InsightNotice(p, InsightTopic.HiddenSkill, "", accurate) { HiddenSkill = skill };
+        }
+
         // 話題を選ぶ: 成長中の兆し > 性格 > 伸びしろの高低 > 成長タイプ。
         if (p.ConditionValue >= c.RecentGrowthConditionMin && rng.NextDouble() < c.RecentGrowthTopicProb)
         {

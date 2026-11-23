@@ -101,6 +101,24 @@ public sealed record SkillSet
         return new SkillSet(_visible.Append(skill), _hidden.Where(s => s != skill));
     }
 
+    /// <summary>
+    /// 後天習得（設計書10 §3・issue #1471）。可視スキルとして足す（隠しで持っていたものは表へ出す）。
+    /// 反対のスキル（<see cref="SkillNames.OppositeOf"/>）を持っていたら何もしない＝同時に持たせない。
+    /// </summary>
+    public SkillSet Acquire(Skill skill)
+    {
+        if (SkillNames.OppositeOf(skill) is { } opposite && Has(opposite)) return this;
+        if (_visible.Contains(skill)) return this;
+        return new SkillSet(_visible.Append(skill), _hidden.Where(s => s != skill));
+    }
+
+    /// <summary>克服（設計書10 §3・issue #1471）。可視・隠しの両方から外す。持っていなければ同じ集合。</summary>
+    public SkillSet Remove(Skill skill)
+    {
+        if (!Has(skill)) return this;
+        return new SkillSet(_visible.Where(s => s != skill), _hidden.Where(s => s != skill));
+    }
+
     /// <summary>空集合（スキルなし）。</summary>
     public static SkillSet Empty { get; } = new();
 }
