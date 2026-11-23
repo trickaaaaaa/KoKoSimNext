@@ -96,12 +96,14 @@ public sealed class PitcherSenseTests
     // --- 投手系の伸びやすさ ---
 
     [Fact]
-    public void GrowthFactor_NeutralAtThirty_ClampedBothSides()
+    public void GrowthFactor_NoBonusAboveThirty_SlowerBelow()
     {
         var c = new TrainingCoefficients();
         Assert.Equal(1.0, c.PitcherSenseGrowthFactor(AbilityScale.Disp(30)), 9);
-        Assert.Equal(1.0 + 15 * c.PitcherSenseGrowthSlope, c.PitcherSenseGrowthFactor(AbilityScale.Disp(45)), 9);
-        Assert.Equal(c.PitcherSenseGrowthMax, c.PitcherSenseGrowthFactor(99), 9);
+        // 上乗せはしない（上限1.0・オーナー判断 2026-11-23）＝物理30以上は本来どおり。
+        Assert.Equal(1.0, c.PitcherSenseGrowthMax, 9);
+        Assert.Equal(1.0, c.PitcherSenseGrowthFactor(AbilityScale.Disp(45)), 9);
+        Assert.Equal(1.0, c.PitcherSenseGrowthFactor(99), 9);
         // 表示1＝物理 1+Δ＝8。1+(8−30)×0.03＝0.34 は下限で止まる。
         Assert.Equal(c.PitcherSenseGrowthMin, c.PitcherSenseGrowthFactor(1), 9);
         Assert.Equal(1.0 + (20 - 30) * c.PitcherSenseGrowthSlope, c.PitcherSenseGrowthFactor(AbilityScale.Disp(20)), 9);
@@ -192,9 +194,9 @@ public sealed class PitcherSenseTests
         var ratio = Sum(hi) / Sum(lo);
         _out.WriteLine($"制球+キレ+スタミナの伸び 高/低 = {ratio:F2}（既定の傾き {new TrainingCoefficients().PitcherSenseGrowthSlope}）");
 
-        // オーナー判断（2026-11-23・覚醒を強める＝傾き0.03・倍率0.5〜2.0）: 高/低 ≈1.47。高＞並＞低。
+        // オーナー判断（2026-11-23・傾き0.03・倍率0.5〜1.0＝上乗せせず下だけ効かせる）: 実測 高/低 1.40。高＞並＞低。
         Assert.True(Sum(hi) > Sum(mid) && Sum(mid) > Sum(lo), "投手センスの順に伸びるはず");
-        Assert.True(ratio > 1.40, $"投手センスが高い野手は投手転向でよく伸びるはず: 高/低={ratio:F2}");
+        Assert.True(ratio > 1.35, $"投手センスが高い野手は投手転向でよく伸びるはず: 高/低={ratio:F2}");
         Assert.True(hi.Average(x => x.Kmh) > lo.Average(x => x.Kmh), "球速も伸びるはず");
     }
 
