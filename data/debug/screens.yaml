@@ -480,6 +480,30 @@ screens:
       - show: TeamStrength
       - shot: 05-team-strength
 
+  - id: tournament-end-week-1548
+    name: "大会が終わったあとのトップバーの週が、大会の最終日より前に戻らない（夏の県大会→甲子園→秋の連鎖・issue #1548）"
+    steps:
+      - new_game: {seed: 1}
+      - boost_roster: 95
+      - advance_weeks: 20
+      - read: =GameSession.Current.InTournament
+      - read: =GameClock.Week
+      - read: tb-date
+      - play_tournament: ""
+      - read: =GameSession.Current.Kind
+      - read: =GameSession.Current.TournamentDay
+      - read: =GameClock.Week
+      - show: PlayerList
+      - wait: 5
+      - read: tb-date
+      - shot: 01-after-summer-and-koshien
+      - advance_to_week: 30
+      - read: =GameClock.Week
+      - show: PlayerList
+      - wait: 5
+      - read: tb-date
+      - shot: 02-after-autumn-chain
+
   - id: single-digit-fame0-intake-1080
     name: "名声0の自校の新入生（新設校の1年生と、翌年度の新入生）の能力が1桁でも崩れない（issue #1080）"
     size: {w: 1600, h: 1500}

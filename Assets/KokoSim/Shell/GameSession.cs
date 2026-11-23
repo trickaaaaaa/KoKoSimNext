@@ -511,6 +511,14 @@ namespace KokoSim.Unity.Shell
         public string TournamentDateLabel =>
             !InTournament ? "" : TournamentDate.Label(TournamentEntry.Schedule, Kind, TournamentDay);
 
+        /// <summary>
+        /// 大会が終わって結果を閉じるまでの間の、最終日の実月日（"7月16日"）。待ちが無ければ空文字（issue #1548）。
+        /// 負けた瞬間に大会モードは抜ける（#139）ので、結果を閉じるまでは週暦（開幕時点で止まった週）に
+        /// 戻って見える。それを避けて最終日の日付を出し続ける。
+        /// </summary>
+        public string WrapUpDateLabel =>
+            PendingTournamentWrapUp is { } w ? TournamentDate.Label(TournamentEntry.Schedule, w.Kind, w.TournamentDay) : "";
+
         /// <summary>大会種別の短い呼び名（小書き用）。</summary>
         private static string KindLabel(TournamentKind kind) => TournamentKindNames.Short(kind);
 

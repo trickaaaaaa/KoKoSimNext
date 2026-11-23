@@ -1,3 +1,4 @@
+using System;
 namespace KokoSim.Engine.Season;
 
 /// <summary>
@@ -190,6 +191,23 @@ public sealed record SeasonCalendar
             acc += WeeksPerMonth[i];
         }
         return (3, WeeksPerMonth[^1], 1);   // 到達しない（保険）
+    }
+
+    /// <summary>
+    /// 実月日(月, 日)が入る週インデックス(0〜49)。月内の週は「(日−1)/7」番目で、その月の配分週数を超えたら
+    /// 最後の週に丸める（9月は3週配分＝30日でも3週目）。<see cref="DateOf"/> の逆引きで、
+    /// 大会の最終日の実月日から「時計がどの週まで進めば日付より前に見えないか」を出すのに使う（issue #1548）。
+    /// </summary>
+    public int WeekOf(int month, int day)
+    {
+        var acc = 0;
+        for (var i = 0; i < MonthOrder.Length; i++)
+        {
+            if (MonthOrder[i] == month)
+                return acc + Math.Min(Math.Max(0, (day - 1) / 7), WeeksPerMonth[i] - 1);
+            acc += WeeksPerMonth[i];
+        }
+        return WeeksPerYear - 1;   // 範囲外の月は年末へ（保険）
     }
 
     /// <summary>学年と週から成長段階インデックス(0〜4)を返す（設計書02 §5.2）。</summary>

@@ -1072,11 +1072,22 @@ namespace KokoSim.Unity.Home
                 KokoSim.Unity.Shell.SummerRetirementService.OnTournamentEnded(w.Kind, w.IsChampion);
 
                 // 大会が消費した週ぶん共有週を進める（大会モードは既に抜けているのでここでは時計だけ）。
-                // 大会が消費した週数＝最終日がどの週に入るか（切り捨てで正しい: 18日目は開幕週+2週の
-                // 範囲 14〜20日に入る）。A案の日程（issue #583）で8ラウンド県18日＝2週・9ラウンド県21日＝3週。
+                // 大会は日で進み週暦は開幕時点で止まっているので、最終日の実月日が入る週まで進める
+                // （切り捨てだけだと7月16日に負けて7月2週へ戻って見える・issue #1548）。従来の週数
+                // （最終日が入る週までの切り捨て・A案の日程 #583 で18日＝2週・21日＝3週）より少なくはならない。
+                // 従来の週数を超えて進む分は、通常の週と同じく練習を1週ぶん回す＝暦の週ごとに練習1回が保たれる
+                // （大会中も7日ごとに練習1週ぶんが当たっている）。
                 // 出場校決定戦は1日きり＝続く地区大会が週を進めるので、ここでは進めない。
-                var weeks = w.IsRegionalPlayoff ? 0 : System.Math.Max(1, w.TournamentDay / 7);
-                if (weeks > 0) KokoSim.Unity.Shell.GameClock.Advance(weeks);
+                var weeks = w.IsRegionalPlayoff ? 0 : KokoSim.Unity.Shell.GameClock.WeeksAfterTournament(w.Kind, w.TournamentDay);
+                var baseline = w.IsRegionalPlayoff ? 0 : KokoSim.Engine.Season.TournamentDate.BaselineClockWeeks(w.TournamentDay);
+                if (baseline > 0) KokoSim.Unity.Shell.GameClock.Advance(baseline);
+                for (var i = baseline; i < weeks; i++)
+                {
+                    RunPracticeWeek(1.0);
+                    RunInjuryWeek();
+                    RunTournamentWeekTail();
+                    KokoSim.Unity.Shell.GameClock.Advance();
+                }
 
                 // 夏の県大会の直後は甲子園へ直接つなぐ（設計書05 §1.1a）。暦の開幕週を作ると
                 // 3年引退（第18週）と正面衝突して出場校の3年が甲子園の前に引退するため、ここでつなぐ。

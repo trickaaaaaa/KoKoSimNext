@@ -233,6 +233,14 @@ namespace KokoSim.Unity.Shell
         /// <summary>共通トップバー「現在」表示（YYYY年M月W週目）。</summary>
         public static string CurrentLabel() => SeasonClock.CurrentLabel(YearIndex, Week);
 
+        /// <summary>
+        /// 大会明けに進める週数（issue #1548）。止まっている現在の週から数えて、最終日の実月日が入る週まで進める
+        /// ＝明けのトップバーの週が大会の日付より前に戻って見えない。判定は engine の
+        /// <see cref="TournamentDate.ClockWeeksAfter"/> にしかない。
+        /// </summary>
+        public static int WeeksAfterTournament(TournamentKind kind, int tournamentDay)
+            => TournamentDate.ClockWeeksAfter(TournamentEntry.Schedule, Calendar, kind, tournamentDay, Week);
+
         /// <summary>年をまたいでも単調増加する絶対週番号。暦の刻み（<see cref="SeasonCalendar.WeeksPerYear"/>）を
         /// 使う唯一の場所にする（<see cref="ManagerService.AbsoluteWeek"/> もここを通す）。</summary>
         public static int AbsoluteWeekOf(int yearIndex, int week) => (yearIndex - 1) * Calendar.WeeksPerYear + week;

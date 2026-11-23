@@ -53,7 +53,9 @@ namespace KokoSim.Unity.Components
             if (date != null)
                 date.text = s.InTournament
                     ? s.TournamentDateLabel
-                    : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
+                    : !string.IsNullOrEmpty(s.WrapUpDateLabel)
+                        ? s.WrapUpDateLabel   // 結果を閉じるまでは最終日の日付（止まった開幕週に戻さない・issue #1548）
+                        : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
 
             // 進行ボタン（issue #1534 項目9）: 大会中はどのタブでも「1日進める」。文言はここだけが決める。
             var advance = root.Q<Button>("advance");
