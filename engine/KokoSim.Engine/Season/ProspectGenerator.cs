@@ -441,10 +441,32 @@ public sealed record RosterCoefficients
     /// <summary>打者の型（出現割合と配分オフセット）。AI校の永続ロスターだけが使う（issue #1066）。</summary>
     public Players.BatterArchetypeCoefficients BatterArchetypes { get; init; } = new();
 
-    // --- 投打の利き（設計書01 §1.1c） ---
-    public double ThrowLeftProb { get; init; } = 0.12;
+    /// <summary>
+    /// 怪物（Phenom）の係数（issue #1468）。<b>AI校の <see cref="Nation.Roster.PersistentRosterCoefficients.Phenom"/> と同じ値</b>
+    /// （YAML の正典は persistent_roster.phenom_*。ローダーが同じ1つを両方へ配る＝Q20 決定6「係数は自校/AI共通の置き場」）。
+    /// 自校の新入生とスカウト候補の怪物（<see cref="ProspectPhenom"/>）が型・帯・出現率を読む。
+    /// </summary>
+    public Nation.Roster.PhenomCoefficients Phenom { get; init; } = new();
+
+    // --- 投打の利き（設計書01 §1.1c・式は HandednessModel） ---
+    /// <summary>左投げの素の確率（左利き人口相当）。投手らしさ0の選手＝野手はこの値のまま。</summary>
+    public double ThrowLeftProb { get; init; } = 0.10;
+    /// <summary>投手らしさ（RoleWeight）1あたりの左投げの上乗せ（左のプレミア・issue #1475）。</summary>
+    public double LeftThrowPitcherBonus { get; init; } = 0.12;
+    /// <summary>上乗せの学校の強さ依存: 新入生の能力中心1あたり（強豪ほど左腕を集める・issue #1475）。</summary>
+    public double LeftThrowStrengthSlope { get; init; } = 0.004;
+    /// <summary>上乗せが <see cref="LeftThrowPitcherBonus"/> ちょうどになる新入生の能力中心。</summary>
+    public double LeftThrowStrengthPivot { get; init; } = 45.0;
+    /// <summary>左投げの確率の上限（プロ級で右7:左3に近づく程度で止める）。</summary>
+    public double LeftThrowMax { get; init; } = 0.40;
     public double SwitchProb { get; init; } = 0.03;
+    /// <summary>右投げ→左打ちの確率（打者の型の点が0のとき）。</summary>
     public double BatLeftGivenRightThrow { get; init; } = 0.40;
+    /// <summary>打者の型の点（俊足・巧打寄りが正）1あたりの右投げ左打ちの上乗せ（issue #1475）。</summary>
+    public double BatLeftTypeSlope { get; init; } = 0.01;
+    /// <summary>右投げ左打ちの確率の下限・上限。</summary>
+    public double BatLeftGivenRightThrowMin { get; init; } = 0.15;
+    public double BatLeftGivenRightThrowMax { get; init; } = 0.75;
     public double BatLeftGivenLeftThrow { get; init; } = 0.98;
 
     // --- 対左投手経験の初期値・AI近似（設計書02 §2.3「左のプレミア」・issue #1072） ---
@@ -592,10 +614,14 @@ public static class ProspectGenerator
     /// 従来どおり <c>IntakeMean/Sd/Min/Max</c> から引く。**指定したときは人数の乱数draw自体を行わない**
     /// ＝以降の乱数列が既定経路とずれるが、これは新設校専用の別経路なので既存の決定論には影響しない。
     /// </param>
+    /// <param name="rollPhenom">
+    /// 自校の怪物（issue #1468）を混ぜるか。年度替わりの新入生（<see cref="RosterLifecycle"/>）だけが true を渡す。
+    /// 新規ゲームの初期部員・スカウトの候補プール（候補側で別に引く）・試合用の素体は false（既定）。
+    /// </param>
     public static IReadOnlyList<DevelopingPlayer> Intake(int year, RosterCoefficients c, IRandomSource rng,
         PlayerNameVocab? nameVocab = null, double? talentCenter = null, SkillCoefficients? skills = null,
         PersonalityCoefficients? personalities = null, IEnumerable<string>? existingNames = null,
-        FormCoefficients? form = null, int? fixedCount = null)
+        FormCoefficients? form = null, int? fixedCount = null, bool rollPhenom = false)
     {
         var vocab = nameVocab ?? new PlayerNameVocab();
         // 同一チーム内で下の名前が被らないよう、既存部員の名前も含めて持ち回る（苗字の重複はOK）。
@@ -614,6 +640,9 @@ public static class ProspectGenerator
             list.Add(Create(year, i, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));
         EnsurePitcherSupply(list, c);
         EnsureCatcherSupply(list, c);
+        // 自校の怪物（issue #1468）: 年度替わりの新入生だけ（rollPhenom）。専用Forkで引く＝ほかの抽選は1ビットも動かない。
+        // 投手系の型は投手役に読める選手へ＝供給の下限を済ませた後に選ぶ。
+        if (rollPhenom) ProspectPhenom.RollIntake(list, c, rng.Fork(PhenomStreamId(year)));
         return list;
     }
 
@@ -718,11 +747,8 @@ public static class ProspectGenerator
             SampleGrowthDomains(growth, rng.Fork(GrowthDomainStreamId(year, index)), c);
 
         // --- 投打の利き（条件付き, 設計書01 §1.1c） ---
-        var throws = rng.NextDouble() < c.ThrowLeftProb ? Handedness.Left : Handedness.Right;
-        Handedness bats;
-        if (rng.NextDouble() < c.SwitchProb) bats = Handedness.Switch;
-        else if (throws == Handedness.Left) bats = rng.NextDouble() < c.BatLeftGivenLeftThrow ? Handedness.Left : Handedness.Right;
-        else bats = rng.NextDouble() < c.BatLeftGivenRightThrow ? Handedness.Left : Handedness.Right;
+        // 乱数だけ旧実装と同じ位置・回数で引き、判定は投手らしさ（適性）と打者の型が出てから下す（issue #1475）。
+        var hand = HandednessModel.Roll(rng, c);
 
         // --- 伸びしろ（分野別・凸凹, 現在値と独立） ---
         // 晩成の上乗せ（issue #866）はその分野自身の成長タイプで判定する（基本タイプではない）。
@@ -784,8 +810,6 @@ public static class ProspectGenerator
             BattingGrowthType = battingGrowthType,
             DefenseGrowthType = defenseGrowthType,
             IsProdigy = isProdigy,
-            Throws = throws,
-            Bats = bats,
             LeftExperiencePa = leftExperiencePa,
             PitchingGrowth = pitchingGrowth,
             BattingGrowth = battingGrowth,
@@ -819,6 +843,8 @@ public static class ProspectGenerator
         // w＝能力の配分に使う重み（バイアス無し）、wRole＝「投手としてどれだけ読めるか」（バイアス込み・
         // 判定境界で 0.5）。持ち物は wRole、能力の配分は w と使い分ける（PitcherRoleResolver 参照）。
         var (naturalPitcher, w, wRole) = ResolvePitcherRole(p, c);
+        // 左のプレミア（issue #1475）: 投手らしさが高いほど・強豪（能力中心が高い）ほど左投げ。
+        p.Throws = HandednessModel.Throws(hand, wRole, talentCenter, c);
 
         // 「投手経歴」（旧 設計書01 §1.1b）は #366b で概念ごと廃止。野手の変化球上振れは
         // 投手適性からの連続配分（LearnPitches の wRole）に溶けているので、免罪符のフラグは要らない。
@@ -917,6 +943,11 @@ public static class ProspectGenerator
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
         // 投手: 1〜3球種／野手: 0〜1。判定は創発ロール。
         LearnPitches(p, wRole, c, rng);
+
+        // 打つ手（issue #1475）: 右投げは俊足・巧打寄りほど左打ち。能力が出揃ってから判定する（乱数は冒頭で引き済み）。
+        p.Bats = HandednessModel.Bats(hand, p.Throws,
+            HandednessModel.BatterTypeScore(p.Level(AbilityKind.Contact), p.Level(AbilityKind.Power),
+                p.Level(AbilityKind.Speed), p.Level(AbilityKind.ArmStrength)), c);
 
         return p;
     }
@@ -1067,6 +1098,9 @@ public static class ProspectGenerator
 
     /// <summary>成長タイプの分野別化抽選の独立ストリームID（能力ロール列を1ビットも乱さない, issue #866）。</summary>
     private static ulong GrowthDomainStreamId(int year, int index) => 0x1F9A_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>自校の新入生の怪物ロール（issue #1468）の Fork ソルト（年度ごと・他ストリームと別の上位ビット）。</summary>
+    private static ulong PhenomStreamId(int year) => 0x9E11_0000UL ^ (ulong)(year + 1);
 
     /// <summary>対左投手経験の初期値（issue #1072）用の専用Forkストリームキー。</summary>
     private static ulong LeftExperienceStreamId(int year, int index) => 0x1E57_0000UL ^ (ulong)(year * 1000 + index + 1);

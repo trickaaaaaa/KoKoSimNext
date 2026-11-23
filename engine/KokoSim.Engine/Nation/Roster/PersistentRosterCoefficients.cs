@@ -127,4 +127,17 @@ public sealed record PhenomCoefficients
     /// <summary>総合型の主要能力帯（S級・世代の怪物）。</summary>
     public int AllRoundMin { get; init; } = 82;
     public int AllRoundMax { get; init; } = 95;
+
+    /// <summary>
+    /// 自校の新入生（受動枠）に怪物が1人混じる年あたりの確率（issue #1468・2026-11-23 オーナー判断「たまに無条件で」）。
+    /// <b>名声と関係ない</b>。型・帯は上の AI校と同じものを使う（<see cref="Season.ProspectPhenom"/>）。
+    /// 既定 0.04 ≒ 25年に1人（30年で期待1.2人）。
+    /// </summary>
+    public double OwnIntakeRatePerYear { get; init; } = 0.04;
+
+    /// <summary>
+    /// スカウトの候補（中学生）1人が怪物である確率（issue #1468・「スカウトで見つける」）。名声と関係ない。
+    /// 候補リストは枠×3人（Lv1 6人〜Lv3 12人）＝リストに怪物が居る年は Lv1 約3%・Lv3 約6%。勧誘に成功すると入部する。
+    /// </summary>
+    public double ScoutCandidateRate { get; init; } = 0.005;
 }

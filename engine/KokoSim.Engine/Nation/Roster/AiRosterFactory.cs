@@ -65,6 +65,7 @@ public static class AiRosterFactory
         var apts = new int[pc.CohortSize][];
         var leans = new bool[pc.CohortSize];
         var weights = new double[pc.CohortSize];
+        var roleWeights = new double[pc.CohortSize];
         for (var i = 0; i < pc.CohortSize; i++)
         {
             var aptitudes = AptitudeRoller.Roll(rc, rng.Fork(AptitudeSalt + (ulong)i));
@@ -76,6 +77,7 @@ public static class AiRosterFactory
             apts[i] = aptitudes;
             leans[i] = PitcherRoleResolver.IsNaturalPitcher(pitcherApt, bestField, rc);
             weights[i] = PitcherRoleResolver.PitcherWeight(pitcherApt, bestField, rc);
+            roleWeights[i] = PitcherRoleResolver.RoleWeight(pitcherApt, bestField, rc);
         }
 
         // 上位集中＝スター型（issue prefecture-dominance-star）: 圧縮で削った分（raw−圧縮後）を学年ごとに
@@ -99,11 +101,11 @@ public static class AiRosterFactory
                 ? StrengthTeamFactory.Pitcher(name, center, weight, rng, deps.Personality,
                         salt++, rc.Archetypes, archSalt++, rc, mental,
                         pitchingLift: starPitchers.Contains(i) ? lift : 0.0)
-                    with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats }
+                    with { Grade = 1 }
                 : StrengthTeamFactory.PositionPlayer(
                         BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name, mental, rc,
                         battingLift: starHitters.Contains(i) ? lift : 0.0)
-                    with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
+                    with { Grade = 1 };
 
             // 打者の型（issue #1066）: 長所は伸び短所は伸びない成長配分を決める。マウンドに置かれるかに関わらず
             // 全選手へ付与する（全選手が打席に立つ・#381 と同じ対称性）。専用 Fork＝主RNG非消費。
@@ -114,6 +116,10 @@ public static class AiRosterFactory
                 : (BatterAttribute?)null;
             var batterIntensity = BatterArchetypes.IntensityForStrength(school.Strength, rc.BatterArchetypes);
             snap = ApplyBatterArchetype(snap, batterArchetype, batterFocus, batterIntensity, rc);
+
+            // 投打の利き（issue #1475・設計書01 §1.1c）: 投手らしさ（適性から創発）と学校の強さ（新入生の中心）で左投げ、
+            // 打者の型（能力の傾き・型の反映後）で左打ち。乱数は Profile で引き済み（Fork＝主RNG非消費）。式は自校と同じ HandednessModel。
+            snap = StrengthTeamFactory.WithHandedness(snap, pr.Hand, roleWeights[i], center, rc);
 
             players.Add(new AiPlayer(nextPlayerId++, enrollmentYearIndex, aptitudes, PhenomType.None, 1, snap));
         }

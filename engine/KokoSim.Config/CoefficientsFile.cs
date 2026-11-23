@@ -148,6 +148,7 @@ public static class CoefficientsLoader
             // 表示→物理の効き（設計書21）: 正典は ability_effect: の1ブロック。解決式が手元の係数束から引けるよう
             // batting/fielding/baserunning の3ブロックへ同じ値を配る（食い違いは AbilityEffectConsistencyTests が検出）。
             var effect = AbilityEffect?.ToModel() ?? new KokoSim.Engine.Players.AbilityEffectCoefficients();
+            var persistentRoster = PersistentRoster?.ToModel() ?? new PersistentRosterCoefficients();
             return new()
         {
             Version = Version,
@@ -178,8 +179,9 @@ public static class CoefficientsLoader
             Scout = Scout?.ToModel() ?? new ScoutCoefficients(),
             ManagerGrowth = ManagerGrowth?.ToModel() ?? new ManagerGrowthCoefficients(),
             Training = Training?.ToModel() ?? new TrainingCoefficients(),
-            Roster = Roster?.ToModel() ?? new RosterCoefficients(),
-            PersistentRoster = PersistentRoster?.ToModel() ?? new PersistentRosterCoefficients(),
+            // 怪物の係数（persistent_roster.phenom_*）は自校の生成（RosterCoefficients.Phenom）と AI校で1つを共有する（issue #1468・Q20 決定6）。
+            Roster = (Roster?.ToModel() ?? new RosterCoefficients()) with { Phenom = persistentRoster.Phenom },
+            PersistentRoster = persistentRoster,
             TeamStrength = TeamStrength?.ToModel() ?? new TeamStrengthCoefficients(),
             Nation = Nation?.ToModel() ?? new NationCoefficients(),
             Career = Career?.ToModel() ?? new CareerCoefficients(),
@@ -2972,8 +2974,15 @@ public static class CoefficientsLoader
         public double AiBatterCapTopLevel { get; set; } = D.AiBatterCapTopLevel;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
+        public double LeftThrowPitcherBonus { get; set; } = D.LeftThrowPitcherBonus;
+        public double LeftThrowStrengthSlope { get; set; } = D.LeftThrowStrengthSlope;
+        public double LeftThrowStrengthPivot { get; set; } = D.LeftThrowStrengthPivot;
+        public double LeftThrowMax { get; set; } = D.LeftThrowMax;
         public double SwitchProb { get; set; } = D.SwitchProb;
         public double BatLeftGivenRightThrow { get; set; } = D.BatLeftGivenRightThrow;
+        public double BatLeftTypeSlope { get; set; } = D.BatLeftTypeSlope;
+        public double BatLeftGivenRightThrowMin { get; set; } = D.BatLeftGivenRightThrowMin;
+        public double BatLeftGivenRightThrowMax { get; set; } = D.BatLeftGivenRightThrowMax;
         public double BatLeftGivenLeftThrow { get; set; } = D.BatLeftGivenLeftThrow;
         // 対左投手経験の初期値・AI近似（issue #1072）
         public double LeftExperienceInitialMeanPa { get; set; } = D.LeftExperienceInitialMeanPa;
@@ -3295,8 +3304,15 @@ public static class CoefficientsLoader
             AiBatterCapTopRaw = AiBatterCapTopRaw,
             AiBatterCapTopLevel = AiBatterCapTopLevel,
             ThrowLeftProb = ThrowLeftProb,
+            LeftThrowPitcherBonus = LeftThrowPitcherBonus,
+            LeftThrowStrengthSlope = LeftThrowStrengthSlope,
+            LeftThrowStrengthPivot = LeftThrowStrengthPivot,
+            LeftThrowMax = LeftThrowMax,
             SwitchProb = SwitchProb,
             BatLeftGivenRightThrow = BatLeftGivenRightThrow,
+            BatLeftTypeSlope = BatLeftTypeSlope,
+            BatLeftGivenRightThrowMin = BatLeftGivenRightThrowMin,
+            BatLeftGivenRightThrowMax = BatLeftGivenRightThrowMax,
             BatLeftGivenLeftThrow = BatLeftGivenLeftThrow,
             LeftExperienceInitialMeanPa = LeftExperienceInitialMeanPa,
             LeftExperienceInitialSpreadPa = LeftExperienceInitialSpreadPa,
@@ -3378,6 +3394,9 @@ public static class CoefficientsLoader
         public int PhenomSupportMax { get; set; } = PD.SupportMax;
         public int PhenomAllRoundMin { get; set; } = PD.AllRoundMin;
         public int PhenomAllRoundMax { get; set; } = PD.AllRoundMax;
+        // 自校の怪物（issue #1468）: 型・帯はAI校と共有し、出る道の率だけ自校用（名声と無関係）。
+        public double PhenomOwnIntakeRatePerYear { get; set; } = PD.OwnIntakeRatePerYear;
+        public double PhenomScoutCandidateRate { get; set; } = PD.ScoutCandidateRate;
 
         public PersistentRosterCoefficients ToModel() => new()
         {
@@ -3416,6 +3435,8 @@ public static class CoefficientsLoader
                 SupportMax = PhenomSupportMax,
                 AllRoundMin = PhenomAllRoundMin,
                 AllRoundMax = PhenomAllRoundMax,
+                OwnIntakeRatePerYear = PhenomOwnIntakeRatePerYear,
+                ScoutCandidateRate = PhenomScoutCandidateRate,
             },
         };
     }

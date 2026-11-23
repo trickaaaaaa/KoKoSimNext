@@ -101,7 +101,7 @@ public static class RosterLifecycle
 
         var survivors = roster.Where(p => p.Grade <= 2).Select(p => p.Name).ToList();
         return ProspectGenerator.Intake(year, coeff, rng, skills: skills, personalities: personalities,
-            existingNames: survivors, form: form, talentCenter: talentCenter);
+            existingNames: survivors, form: form, talentCenter: talentCenter, rollPhenom: true);
     }
 
     /// <summary>
@@ -147,7 +147,7 @@ public static class RosterLifecycle
         // 在籍部員の氏名を渡し、下の名前の重複を避ける（既存挙動を維持）。
         var newcomers = incoming ?? ProspectGenerator.Intake(year, coeff, rng, skills: skills,
             personalities: personalities, existingNames: roster.Select(p => p.Name).ToList(),
-            form: form, talentCenter: talentCenter);
+            form: form, talentCenter: talentCenter, rollPhenom: true);
 
         // 新入生の安定ID採番（乱数不使用・単調増加）。nextId=0（既定・SeasonEngine）は採番せず Id=0 のまま。
         var id = nextId;

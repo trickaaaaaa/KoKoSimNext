@@ -368,6 +368,7 @@ public static class RosterTeamBuilder
             Throws = dp.Throws,
             Bats = dp.Bats,
             LeftExperiencePa = dp.LeftExperiencePa,   // 対左投手経験（設計書02 §2.3・issue #1072）
+            Phenom = dp.Phenom,                       // 怪物（隠しフラグ・issue #1468）
             Contact = L(AbilityKind.Contact),
             Power = L(AbilityKind.Power),
             LaunchTendency = dp.Level(AbilityKind.LaunchTendency), // 弾道は型属性（怪我で変わらない）

@@ -48,9 +48,12 @@ public sealed class DevelopingPlayer
     /// </summary>
     public PitcherArchetype? Archetype { get; init; }
 
-    /// <summary>投打の利き（設計書01 §1.1c）。生成分布は 2B で実装、既定は右。</summary>
-    public Handedness Throws { get; init; } = Handedness.Right;
-    public Handedness Bats { get; init; } = Handedness.Right;
+    /// <summary>
+    /// 投打の利き（設計書01 §1.1c）。既定は右。生成時は投手らしさ・能力が出てから判定するので set 可
+    /// （issue #1475・<see cref="HandednessModel"/>）。生成後に書き換えるのは生成器だけ。
+    /// </summary>
+    public Handedness Throws { get; set; } = Handedness.Right;
+    public Handedness Bats { get; set; } = Handedness.Right;
 
     /// <summary>
     /// 対左投手の経験（加重打席数。設計書02 §2.3「左のプレミア」・issue #1072）。入学時は個人差あり
@@ -110,6 +113,12 @@ public sealed class DevelopingPlayer
     /// （既定 false・出現率は data 駆動の RosterCoefficients.ProdigyProb）。
     /// </summary>
     public bool IsProdigy { get; init; }
+
+    /// <summary>
+    /// 怪物（隠しフラグ・issue #1468・Q20）。自校は新入生にたまに混じるか、スカウトで口説いた中学生。
+    /// AI校から転任で引き継いだ選手は AI 側の値を写す。None＝怪物でない（旧セーブ相当）。
+    /// </summary>
+    public PhenomType Phenom { get; set; } = PhenomType.None;
 
     /// <summary>精神力（設計書02 §3）。実戦出場でのみ成長する系（練習では伸びない, MatchGrowthModel）。</summary>
     public int Mental { get; set; } = 50;
@@ -300,6 +309,7 @@ public sealed class DevelopingPlayer
             BattingGrowthType = BattingGrowthType,
             DefenseGrowthType = DefenseGrowthType,
             IsProdigy = IsProdigy,
+            Phenom = Phenom,
             Mental = Mental,
             MentalExp = MentalExp,
             MentalCap = MentalCap,

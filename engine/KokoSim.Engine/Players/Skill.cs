@@ -140,6 +140,11 @@ public static class SkillNames
         Skill.ChokePitcher => Skill.ClutchPitcher,
         Skill.QuickDelivery => Skill.SlowDelivery,
         Skill.SlowDelivery => Skill.QuickDelivery,
+        // 体質系（issue #1326）。既存セーブで両方持つ選手はそのまま（ロード時に外さない＝オーナー判断・案A）。
+        Skill.Durable => Skill.InjuryProne,
+        Skill.InjuryProne => Skill.Durable,
+        Skill.Diligent => Skill.Lazy,
+        Skill.Lazy => Skill.Diligent,
         _ => null,
     };
 }

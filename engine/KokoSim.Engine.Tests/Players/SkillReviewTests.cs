@@ -400,4 +400,19 @@ public sealed class SkillReviewTests
             }
         }
     }
+
+    // issue #1326: 体質系（故障しにくい⇔ケガしやすい・練習熱心⇔サボり癖）も正負ペア＝同時に持たない。
+    [Theory]
+    [InlineData(Skill.Durable, Skill.InjuryProne)]
+    [InlineData(Skill.Diligent, Skill.Lazy)]
+    public void Generation_ConstitutionPairsAreExclusive(Skill positive, Skill negative)
+    {
+        Assert.Equal(negative, SkillNames.OppositeOf(positive));
+        Assert.Equal(positive, SkillNames.OppositeOf(negative));
+        foreach (var w in new[] { 0.0, 0.5, 1.0 })
+        {
+            foreach (var set in Generate(w, 20000))
+                Assert.False(set.Has(positive) && set.Has(negative), $"{positive} と {negative} を同時に持っている (w={w})");
+        }
+    }
 }
