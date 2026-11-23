@@ -224,6 +224,10 @@ namespace KokoSim.Unity.Match
         private bool _timeoutSentThisPause;   // 1中断につき伝令1回（連打で複数消費させない）
         // 自動連続進行の中断中フラグ（ポップアップ表示〜再開の間 true）。盤面・自動進行の両方を止める。
         private bool _paused;
+        // 振りかぶり中（エンジンが1球先＝伝令・交代を受け付けられない間）に押されたタイム（issue #1530）。
+        // その場で開くと画面が止まって預かった球が放されず、ボタンが全部伏せたまま戻らなかった。
+        // 1球を見せ終えて次の采配窓が開いたところ（UpdateControlState）でかける＝タイムは投球の合間にかかる。
+        private bool _pauseQueued;
         // 球数制限の強制交代パネル（OpenForcedPitcherChangePanel）が中断メニューを経由せず _paused を
         // 立てた印。中断メニューの「再開」は押せないので、Update() がパネルの Close を検知して自分で戻す。
         private bool _forcedSubPause;
@@ -1378,6 +1382,7 @@ namespace KokoSim.Unity.Match
             // 上の _gameOver で弾かれる）。
             if (_gameTelopOn) { HideGameTelop(); return; }
             if (_homeRunTelop?.IsPlaying ?? false) { _homeRunTelop.Hide(); return; }
+            if (EngineAheadOfScreen) { _pauseQueued = true; return; }   // 投げ終わってからかける（issue #1530）
             OpenPauseMenu();
         }
 
@@ -4772,6 +4777,12 @@ namespace KokoSim.Unity.Match
         // ここが呼ばれるので、開いていれば表示を復帰させる。
         private void UpdateControlState()
         {
+            if (_pauseQueued && !_paused && !EngineAheadOfScreen)
+            {
+                _pauseQueued = false;
+                if (!_gameOver && !BackgroundGameOp.Running) OpenPauseMenu();
+                return;
+            }
             if (_paused) UpdatePauseMenu();
         }
 
