@@ -426,6 +426,18 @@ screens:
       - click: tab-stats-btn
       - shot: 02-player-stats
 
+  - id: home-ranking-align-1596
+    name: "ホームのチーム内ランキング：1位の名前の書き出しが全行で揃い、2位が大きい（通算／公式戦・issue #1596）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_weeks: 13
+      - play_tournament: ""
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - shot: 01-career
+      - click: .hm-seg__btn[1]
+      - shot: 02-official
+
   - id: senbatsu-watch-1265
     name: "観るだけのセンバツが大会タブと通知フィードに出る（PR #1365・issue #1265）"
     steps:

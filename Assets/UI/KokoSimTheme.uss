@@ -1083,7 +1083,9 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
     font-size: 20px;
     color: var(--hm-tx-1);
     margin-right: 10px;
+    width: var(--col-hm-rk-v);
     flex-shrink: 0;
+    -unity-text-align: middle-right;
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
 }
 .hm-root .hm-rk-1__n {
