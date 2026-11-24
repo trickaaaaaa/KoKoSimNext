@@ -262,6 +262,13 @@ namespace KokoSim.Unity.Home
         /// </summary>
         private void ContinueNewTeamFlow()
         {
+            // 新規開始の主将指名は、赴任の会話（マネージャーの出迎え・最初の説明）を読み終えてから出す。
+            // 読み終えると OnNovelClosed が指名へ続ける。
+            if (KokoSim.Unity.Shell.NewTeamService.AtGameStart && _novel != null && _novel.OpenNext())
+            {
+                SetBodyVisible(false);
+                return;
+            }
             if (KokoSim.Unity.Shell.EventService.HasPendingWhere(KokoSim.Engine.Season.SummerRetirement.IsRetirementEvent)
                 && _novel != null && _novel.OpenNext())
             {
@@ -324,7 +331,7 @@ namespace KokoSim.Unity.Home
         {
             SetText("nt-lead", view.Lead);
             SetText("nt-retired", view.RetiredLabel);
-            SetText("nt-note", "指名できるのは新チーム発足のこの1回だけです。");
+            SetText("nt-note", view.AtGameStart ? "" : "指名できるのは新チーム発足のこの1回だけです。");
 
             var rows = _root.Q<ScrollView>("nt-rows");
             if (rows != null)

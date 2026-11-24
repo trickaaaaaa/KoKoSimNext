@@ -143,6 +143,22 @@ public sealed class CaptainSelectorTests
     }
 
     [Fact]
+    public void BeginNewTeam_KeepsCaptainWhoStaysOnTheNewTeam()
+    {
+        // 1年目は全員1年生＝誰も引退しない。新規開始で指名した主将を夏の発足で自動選出に戻さない。
+        var roster = new List<DevelopingPlayer>
+        {
+            Guy("統率型", 1, 99, 99),   // 自動選出ならこちら
+            Guy("指名した主将", 1, 40, 40),
+        };
+        CaptainSelector.Designate(roster, roster[1]);
+
+        var cap = CaptainSelector.BeginNewTeam(roster);
+        Assert.Equal("指名した主将", cap!.Name);
+        Assert.Single(roster, p => p.IsCaptain);
+    }
+
+    [Fact]
     public void DesignationCandidates_AreNewTopGradeOnly()
     {
         var roster = new List<DevelopingPlayer>

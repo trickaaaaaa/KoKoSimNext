@@ -33,6 +33,8 @@ namespace KokoSim.Unity.Shell
         public string Headline = "新チーム始動";
         public string Lead = "";
         public string RetiredLabel = "";
+        /// <summary>新規開始の主将指名か（1年目・ゲーム開始時の1回）。</summary>
+        public bool AtGameStart;
         public List<CaptainCandidateRow> Candidates = new List<CaptainCandidateRow>();
     }
 
@@ -66,9 +68,29 @@ namespace KokoSim.Unity.Shell
         {
             RetiredNames.Clear();
             foreach (var p in transition.Retired) RetiredNames.Add(p.Name);
-            Pending = true;
             StartedYear = GameClock.YearIndex;
+            // 誰も引退しない夏（全員1年生の1年目）は顔ぶれが変わらない＝主将は新規開始で指名済み
+            // （CaptainSelector.BeginNewTeam がそのまま続ける）。指名を出さずに発足の流れを閉じる。
+            if (transition.Retired.Count == 0)
+            {
+                Skip();
+                return;
+            }
+            Pending = true;
         }
+
+        /// <summary>
+        /// 新規開始の主将指名（1年目）。ゲームを始めたときに1回だけ出す。夏に誰も引退しない1年目は
+        /// 新チーム発足の指名を出さないので、ここで選んだ主将が1年目の夏の後も続く。
+        /// </summary>
+        public static void OpenAtGameStart()
+        {
+            RetiredNames.Clear();
+            Pending = true;
+        }
+
+        /// <summary>新規開始の主将指名を待っているか（1年目で、今年度の新チームはまだ発足していない）。</summary>
+        public static bool AtGameStart => Pending && GameClock.YearIndex == 1 && !IsStartedThisYear;
 
         /// <summary>
         /// 指名できる候補が居ない（新チームが空）ときに導線を閉じる。発足済みの印は残す
@@ -109,10 +131,12 @@ namespace KokoSim.Unity.Shell
         {
             var roster = RosterService.Roster;
             var active = RosterService.Active;
+            var atStart = AtGameStart;
             var view = new NewTeamView
             {
-                Lead = "3年生が引退しました。新チームの主将を指名してください。",
-                RetiredLabel = RetiredNames.Count + " 名が引退",
+                Lead = atStart ? "チームの主将を指名してください。" : "3年生が引退しました。新チームの主将を指名してください。",
+                RetiredLabel = atStart ? "" : RetiredNames.Count + " 名が引退",
+                AtGameStart = atStart,
             };
 
             foreach (var p in CaptainSelector.DesignationCandidates(roster))
@@ -143,10 +167,14 @@ namespace KokoSim.Unity.Shell
             if (activeIndex < 0 || activeIndex >= active.Count) return false;
             var roster = RosterService.Roster;
             var pick = active[activeIndex];
+            var atStart = AtGameStart;
             // 県予選で早く負けた年は第18週より前に発足する＝発足した時点から指名を受け付ける（issue #954）。
-            if (!CaptainSelector.CanDesignate(roster, pick, GameClock.Week, Calendar, IsStartedThisYear)) return false;
+            // 新規開始の指名は期間に関わらず受け付ける。
+            if (!CaptainSelector.CanDesignate(roster, pick, GameClock.Week, Calendar, IsStartedThisYear || atStart)) return false;
             CaptainSelector.Designate(roster, pick);
             Pending = false;
+            // 新規開始は背番号がもう決まっている＝背番号決定へは進まない。
+            if (atStart) return true;
             // 主将の次は新チームの背番号決定（issue #954・案C）。確定するまで週を進められない。
             UniformNumberService.Open();
             return true;
@@ -229,11 +257,14 @@ namespace KokoSim.Unity.Shell
                     ManagerService.Manager, new Xoshiro256Random(GameSeed.Master ^ (0x1430_0003UL ^ (ulong)GameClock.YearIndex)));
                 EventService.PushMilestone(TeamManagerLifecycle.EventId);
             }
+            // 誰も引退しない夏（全員1年生の1年目）は顔ぶれが変わらない＝説明・主将指名・スタメンの破棄は要らない
+            // （主将は新規開始で指名済み。Open が指名を出さずに流れを閉じる）。
+            var anyRetired = transition.Retired.Count > 0;
             // 初めての夏の引退: 新チームと主将の説明（issue #1496）。引退の会話の後・主将指名の前に読む。
-            TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.SummerRetirement);
+            if (anyRetired) TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.SummerRetirement);
             NewTeamService.Open(transition);
             // 引退で枠の大半が穴になった前チームのスタメンは捨てる（issue #955・第18週の発足と同じ）。
-            GameSession.Current.LastLineup = null;
+            if (anyRetired) GameSession.Current.LastLineup = null;
             return true;
         }
     }

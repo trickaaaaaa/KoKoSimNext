@@ -143,11 +143,21 @@ public static class CaptainSelector
     /// 新チーム発足処理（引退週フック）。引退した3年を含め全員の主将フラグを外し、
     /// 新チームの最上級生から <see cref="SelectAuto"/> で暫定主将を立てる（戻り値＝暫定主将）。
     /// この後 <see cref="IsDesignationWindow"/> の間だけプレイヤーが <see cref="Designate"/> で差し替えられる。
+    /// <para>いまの主将が新チームに残る（引退しない）ならそのまま続ける。1年目は全員1年生で誰も引退しない＝
+    /// 新規開始で指名した主将を夏に自動選出で上書きしない（2年目以降の主将は3年生＝必ず引退するので従来どおり）。</para>
     /// </summary>
     public static DevelopingPlayer? BeginNewTeam(IReadOnlyList<DevelopingPlayer> roster)
     {
+        var newTeam = NewTeamMembers(roster);
+        DevelopingPlayer? staying = null;
+        foreach (var p in newTeam) if (p.IsCaptain) { staying = p; break; }
         foreach (var p in roster) p.IsCaptain = false;
-        return SelectAuto(NewTeamMembers(roster));
+        if (staying != null)
+        {
+            staying.IsCaptain = true;
+            return staying;
+        }
+        return SelectAuto(newTeam);
     }
 
     /// <summary>
