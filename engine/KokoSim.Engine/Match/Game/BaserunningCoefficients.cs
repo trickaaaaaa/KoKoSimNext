@@ -614,6 +614,11 @@ public sealed record BaserunningCoefficients
     /// 旧実装は処理点→対象塁の距離を送球速度（≈30 m/s）で割っており、野手が塁へ走る時間がほぼゼロになって
     /// 併殺が過大・走力/肩の効きが消えていた（三塁手処理の一・二塁で併殺率96%・能力を振っても97〜99%で不変）。</summary>
     public double SelfForceFielderSprintSpeedMps { get; init; } = 7.25;
+    /// <summary>自己フォース一段目の走り出しの加速度[m/s²]（issue #1549）。捕った直後は止まっているので、
+    /// 最高速（<see cref="SelfForceFielderSprintSpeedMps"/> ほか本人の脚）まで等加速で乗ってから走る。
+    /// 長い距離なら「最高速÷(2×加速度)」だけ遅れ、距離0なら遅れも0。0以下なら加速を見ない（旧式＝最初から最高速）。
+    /// 旧式は 5.6m を 0.77秒（平均7.3m/s）で走り込み、3D の野手の足が滑って見えた。</summary>
+    public double SelfForceFielderAccelMps2 { get; init; } = 10.0;
 
     // === 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）===
     // 一塁ベース付近で捕った一塁ゴロは、一塁手が二塁へ投げて封殺する（3-6-3型）代わりに、自分で一塁を

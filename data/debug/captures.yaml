@@ -495,3 +495,30 @@ captures:
     view: panel
     attempts: 1
     window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-ibb), shot]
+
+  # 遊撃手・二塁手が自分で二塁を踏んで一塁へ投げる併殺（issue #1549）。二塁カバーが受けず、処理した本人が運んで投げる
+  - id: dp-663-1549
+    name: "併殺 6-6-3（遊撃手が自分で二塁を踏んで一塁へ・issue #1549）"
+    scenario: dp-663-lab
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]
+
+  - id: dp-443-1549
+    name: "併殺 4-4-3（二塁手が自分で二塁を踏んで一塁へ・issue #1549）"
+    scenario: dp-443-lab
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]
+
+  # 6-6-3 の遊撃手が二塁へ走り込むところを連番で撮る（足が滑って見える件の確認・issue #1549）。slip は走りの足の滑りの実測
+  - id: dp-663-1549-video
+    name: "併殺 6-6-3 の走り込み（連番・足の滑りの実測・issue #1549）"
+    scenario: dp-663-lab
+    manager: home
+    video: {from: catch-1.0, to: release+0.1, fps: 30}
+    probes: [FielderRunDiag]
+
+  - id: dp-663-1549-alt
+    name: "併殺 6-6-3 控えのシード"
+    scenario: dp-663-lab-alt
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]

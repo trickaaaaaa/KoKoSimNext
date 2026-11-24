@@ -688,6 +688,7 @@ baserunning:
   home_force_margin_scale: 0.45              # 本塁での自己フォース margin→到達確率のlogistic幅
   home_force_success_bias: 0.00              # 本塁での自己フォースの校正項[s]
   double_play_self_force_relay_transfer_seconds: 0.70  # 自己フォース側の一塁への転送握り替え[s]（受け取り動作が無いぶん double_play_pivot_transfer_seconds より短い）
+  self_force_fielder_accel_mps2: 10.0  # 自己フォース一段目の走り出しの加速度[m/s²]（issue #1549）。止まった状態から最高速まで等加速＝長い距離は 最高速/(2×加速度)≈0.36秒遅れる。0以下で旧式（最初から最高速）
   self_force_fielder_sprint_speed_mps: 7.25  # 自己フォース一段目（処理野手が対象塁へ走り込む, issue #1273）の脚力[m/s]既定（SprintSpeedMps の Speed=50 相当）。旧実装は送球速度(≈30 m/s)で割っており走る時間がほぼゼロだった
   # 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）: 一塁手が自打球を自分で
   # 一塁へ運んでフォース（送球なし）→二塁へ送球して一塁走者にタッチ。一塁を先に踏むと二塁のフォースが外れる
