@@ -438,7 +438,7 @@ screens:
       - click: .hm-seg__btn[1]
       - shot: 02-official
       # 名前が最長級（3字姓＋3字名）でも1位の書き出しが揃い、2位が欠けない
-      - set: {RosterService.Roster.0.Name: "小笠原 龍之介", RosterService.Roster.1.Name: "宇佐美 虎太郎", RosterService.Roster.2.Name: "大須賀 龍之介"}
+      - set: {RosterService.Roster.0.Name: "小笠原 龍之介", RosterService.Roster.1.Name: "宇佐美 虎太郎", RosterService.Roster.2.Name: "大須賀 龍之介", RosterService.Roster.3.Name: "小笠原 龍之介", RosterService.Roster.4.Name: "小笠原 龍之介", RosterService.Roster.5.Name: "小笠原 龍之介", RosterService.Roster.6.Name: "小笠原 龍之介", RosterService.Roster.7.Name: "小笠原 龍之介", RosterService.Roster.8.Name: "小笠原 龍之介", RosterService.Roster.9.Name: "小笠原 龍之介"}
       - show: HomeDashboard
       - click: .hm-seg__btn[0]
       - shot: 03-long-names
