@@ -140,6 +140,7 @@ namespace KokoSim.Unity.Match
             _fieldIdleClip[FieldPosition.Catcher] = infieldClip;
 
             EnsureRunnerCast(bodyPrefab, useVendor, layer);
+            EnsureBaseCrew(bodyPrefab, useVendor, layer);
             SetFieldCastVisible(_fieldCastVisible);
         }
 
@@ -157,6 +158,7 @@ namespace KokoSim.Unity.Match
                 a.Go.SetActive(on);
                 a.Enabled = on;
             }
+            SetBaseCrewVisible(on);
         }
 
         /// <summary>
@@ -4336,6 +4338,7 @@ namespace KokoSim.Unity.Match
             foreach (var l in LocoLadder) yield return l.Name;
             // 走りの向き違い（振り返り・背走・横歩き）と走り出し。ここが漏れていてビルドでだけ外野手が
             // 待機の姿勢のまま滑っていた（ブラウザ版で発覚・#1323）。DuelStageGuardTests が表の漏れを見張る
+            foreach (var n in BaseCrewClipNames()) yield return n;   // 塁審（issue #1595）
             foreach (var l in LocoLadderLookLeft) yield return l.Name;
             foreach (var l in LocoLadderLookRight) yield return l.Name;
             foreach (var l in LocoLadderBack) yield return l.Name;
@@ -5361,6 +5364,7 @@ namespace KokoSim.Unity.Match
             BuildFieldCatchPlan(play);
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             BuildFieldTagPlan(play);           // ⚠ 捕球の後（タッチする野手を捕球の予定表から引く。issue #489）
+            BuildBaseCallPlan(play);           // 塁審のアウト／セーフの演技（issue #1595）
             PlanHomeRunStandHit(play);         // 本塁打の球が外野スタンドに当たる点（issue #704）
             _hrWatchPoint = HomeRunWatchPoint(play);   // 外野手が見送る先（issue #921）
             _hrDeadT = HomeRunDeadTime(play);          // ⚠ PlanHomeRunStandHit の後（当たった時刻を使う。issue #978）
@@ -5494,6 +5498,7 @@ namespace KokoSim.Unity.Match
             _catchEvents.Clear();
             _throwEvents.Clear();
             _runnerMotion.Clear();
+            ResetBaseCrew();
             // びっくりマーク（issue #439 ②）はプレー打ち切りでも必ず消す（器は使い回す）
             if (_errorMark != null) _errorMark.SetActive(false);
             _errorMarkRole = null;
@@ -5611,6 +5616,7 @@ namespace KokoSim.Unity.Match
             FireDueTags(t);
             // 発進は最後（捕る・投げる・タッチが同じ野手に入っていたらそちらが勝つ）
             FireDueStarts(t);
+            FireDueBaseCalls(t);
 
             // 守備9人（投手・捕手を含む）。位置は engine の真値、足と向きは Unity が合わせる
             foreach (var pos in AllFieldPositions)

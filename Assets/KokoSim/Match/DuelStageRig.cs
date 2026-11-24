@@ -814,6 +814,7 @@ namespace KokoSim.Unity.Match
                 _offenseColors = UniformPalette.From(offense);
                 Repaint(_batter, _offenseColors);   // 打者ヘルメットもチーム色
                 foreach (var a in _runnerCast) Repaint(a, _offenseColors);   // 走者プールも同じ理由で塗り替える
+                foreach (var a in _coaches) Repaint(a, _offenseColors);      // ランナーコーチも攻撃側（issue #1595）
             }
         }
 
