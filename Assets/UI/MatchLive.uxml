@@ -50,6 +50,10 @@
                          生成する。既定は非表示（守備フォーカス中だけ・打席の寄りでは出さない）。 -->
                     <ui:VisualElement name="minidia-host" class="mdia-host" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
+                    <!-- 投球チャート（issue #1541）。右の中ほど＝右上の打者帯と右下の投手帯のあいだ。左下は
+                         対決ビューでは投手のすぐ横で投げ終わりの体がかぶるので避けた（オーナー判断 2026-11-24）。
+                         その打席の球のコースを印で打つ。中身の PitchLocationChart は MatchLiveController が生成する。 -->
+                    <ui:VisualElement name="plc-host" class="plc-host" picking-mode="Ignore" />
                     <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい）。
                          judge は影用の複製を先に置いて背面に敷く（USS の text_shadow は1要素1つしか
                          持てないので、ぼかし影は面のラベル・硬い影はこの複製が担う。issue #479）。
