@@ -487,6 +487,13 @@ public sealed record RosterCoefficients
     public double VelocitySenseWeight { get; init; } = 0.5;
     /// <summary>投手センスの個体差（σ・物理Lv）。自校の生成と AI校の生成（StrengthTeamFactory）で共有する（issue #1472）。</summary>
     public double PitcherSenseSd { get; init; } = 6.0;
+    /// <summary>
+    /// 選手が持つ投手センス（隠し能力）の中心（物理Lv・issue #1523）。全員に同じ中心で独立に引く＝投手か野手かで分けない。
+    /// 投手系の伸びの倍率が1.0になる値（<see cref="TrainingCoefficients.PitcherSenseGrowthNeutral"/>）と揃える。
+    /// </summary>
+    public double PitcherSenseMean { get; init; } = 30.0;
+    /// <summary>選手が持つ投手センスの個体差σ（物理Lv・issue #1523）。球速の土台の個体差（<see cref="PitcherSenseSd"/>）とは別。</summary>
+    public double PitcherSenseIndependentSd { get; init; } = 10.0;
 
     // --- 伸びしろ（分野別・凸凹, 設計書01 §1.1 / 02 §5.1）。成長効率倍率、現在値と独立 ---
     public double GrowthMean { get; init; } = 1.0;
@@ -892,14 +899,16 @@ public static class ProspectGenerator
             c.OffSpecialtyFactor, 1.0);
         var offCenter = total * offRatio;
 
-        // 投手センス（隠し, 球速levelの土台）: 野手水準(total×係数) ↔ 投手上振れ(total+bonus) を w で補間。
+        // 球速levelの土台（隠れた中間値・選手には持たせない）: 野手水準(total×係数) ↔ 投手上振れ(total+bonus) を w で補間。
         // 二段分岐を廃し、投手適性に対して連続に振る（旧: isPitcher で total+bonus か total×0.45 の二択）。
-        // 投手センスは球速・球威の土台＝お任せで伸びない側なので、下げない尺度（untrainedTotal）で読む。
+        // 球速・球威の土台＝お任せで伸びない側なので、下げない尺度（untrainedTotal）で読む。
         var senseMean = Lerp(untrainedTotal * c.NonPitcherSenseFactor, untrainedTotal + c.PitcherSenseBonus, w);
-        var pitcherSense = MathUtil.Clamp(senseMean + rng.NextGaussian(0, c.PitcherSenseSd), 5, 95);
-        // 選手に持たせる（issue #1472）。球速の計算は下で端数つきの値をそのまま使う＝生成結果は従来と1ビット一致。
-        // 今の物差し（物理Lv）で入れ、Intake の出口で他の能力と一緒に −Δ する（DevelopingScale）。
-        p.PitcherSense = (int)Math.Round(pitcherSense);
+        var veloFoundation = MathUtil.Clamp(senseMean + rng.NextGaussian(0, c.PitcherSenseSd), 5, 95);
+        // 選手が持つ投手センス（隠し能力・issue #1472）は球速の土台とは切り離し、全員に同じ分布から独立に引く（issue #1523）。
+        // 投手か野手かを見ない＝野手にも自然に高センスが混ざる（投手転向の「覚醒」の種）。専用ストリーム＝主RNGは消費しない
+        // （他の能力・球速の生成結果は従来と1ビット一致）。今の物差し（物理Lv）で入れ、Intake の出口で −Δ する（DevelopingScale）。
+        p.PitcherSense = (int)Math.Round(MathUtil.Clamp(
+            c.PitcherSenseMean + rng.Fork(PitcherSenseStreamId(year, index)).NextGaussian(0, c.PitcherSenseIndependentSd), 5, 95));
 
         // 専門配分の中心・フロアも w で連続補間（w=1で投手が本業＝total／w=0で野手が本業＝total）。
         // 投手系(制球/キレ)は offCenter↔total、打撃・守備系は total↔offCenter を逆向きに補間する。
@@ -913,7 +922,7 @@ public static class ProspectGenerator
         // 投手球速level = 地肩 ＋ 投手センス（設計書01 §1.1b-3）。地肩は Stage1 で確定済み。
         var arm = p.Level(AbilityKind.ArmStrength);
         var veloLevel = (int)MathUtil.Clamp(
-            Math.Round(arm * c.VelocityArmWeight + pitcherSense * c.VelocitySenseWeight), 1, Players.AbilityScale.PhysMax100);
+            Math.Round(arm * c.VelocityArmWeight + veloFoundation * c.VelocitySenseWeight), 1, Players.AbilityScale.PhysMax100);
 
         // 球質タイプ（設計書01 §1.1b「技巧派投手」）: #377 で役割分岐を廃し、**全員に抽選して
         // オフセットを wRole で薄める**（投手として読めない選手ほど振れ幅が小さい）。投手総合はほぼ変えず
@@ -1095,6 +1104,9 @@ public static class ProspectGenerator
 
     /// <summary>投打の両立素質の独立ストリームID（能力ロール列を1ビットも乱さない, #684）。</summary>
     private static ulong DualTalentStreamId(int year, int index) => 0x4E61_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>投手センス（隠し能力）の独立ストリームID（能力ロール列を1ビットも乱さない, #1523）。</summary>
+    private static ulong PitcherSenseStreamId(int year, int index) => 0x5E45_0000UL ^ (ulong)(year * 1000 + index + 1);
 
     /// <summary>球質タイプ抽選の独立ストリーム（能力ロール列を乱さない）。</summary>
     private static ulong ArchetypeStreamId(int year, int index) => 0x7B15_0000UL ^ (ulong)(year * 1000 + index + 1);

@@ -1453,6 +1453,12 @@ insight:
   hidden_skill_topic_prob: 0.5  # 気づき: 隠しスキルを持つ選手に正しく気づいたとき、それを開示する確率（即開示・#1471）
   pitcher_sense_topic_prob: 0.25  # 気づき: 投手センス（隠し能力・#1472）の見立てを話題にする確率（新しい見立てで上書き）
   pitcher_sense_misread_offset: 15  # 気づき: 読み違えたとき投手センスの見立てがずれる幅（表示Lv・上下どちらか）
+  # 投手の素質の見出し（issue #1523）: 隠しの投手センスと見える投手能力（球速・制球・キレの平均）の差で、見立て→外部コーチの2段。肩書きは見ない
+  pitcher_talent_sense_min: 42.0    # 見立ての対象: 投手センス（物理Lv）の下限
+  pitcher_talent_gap_min: 15.0      # 見立ての対象: 投手センス − 見える投手能力（物理Lv）の下限
+  pitcher_talent_hint_prob: 0.015   # 対象の選手に見立てが出る週次の確率
+  pitcher_talent_discover_prob: 0.04  # 見立て済みの選手が外部コーチに見出される（覚醒する）週次の確率
+  pitcher_talent_cap_bonus: 15      # 見出された選手の投手系能力の才能上限に足す値（表示Lv・99で止める）
 
 # --- 特殊能力の後天習得・克服（設計書10 §3・issue #1471）（OPEN-QUESTIONS Q58 決着 2026-11-23）---
 # 1.0 の道は3つ（オーナー判断 2026-11-23）: 覚醒で有益スキル／公式戦の活躍（実戦経験）／負スキルの克服（学年・実戦）。
@@ -1643,6 +1649,7 @@ training:
   pitcher_sense_growth_neutral: 30.0   # 倍率1.0の投手センス（物理Lv）。既定の新入生の投手役の平均（実測30.8）
   pitcher_sense_growth_slope: 0.03     # オーナー判断 2026-11-23: 0.012→0.03・倍率 0.5〜1.0（上乗せをやめ、下だけ効かせる）
   pitcher_sense_growth_min: 0.5
+  pitcher_awakened_growth_factor: 2.0  # 外部コーチに見出された選手（issue #1523）の倍率。通常の上限 1.0 が外れてこれに置き換わる（見出されるのは見える投手能力がセンスに追いついていない選手だけ）
   pitcher_sense_growth_max: 1.0        # 上乗せしない（2.0→1.2→1.0。2.0 だと豪腕＋名将＋施設フルの3年で +31.9km/h・1.2 でも +29.6km/h で帯 ≤28 の外）
 
 # --- 全国（架空校生成・AI校進化, 設計書05） ---
@@ -2174,7 +2181,10 @@ roster:
   non_pitcher_sense_factor: 0.45
   velocity_arm_weight: 0.5
   velocity_sense_weight: 0.5
-  pitcher_sense_sd: 6.0              # 投手センスの個体差σ（物理Lv）。自校の生成とAI校の生成で共有（issue #1472）
+  pitcher_sense_sd: 6.0              # 球速の土台の個体差σ（物理Lv）。自校の生成とAI校の生成で共有（issue #1472）
+  # 選手が持つ投手センス（隠し能力）は球速の土台と切り離し、全員に同じ分布から独立に引く（issue #1523・オーナー判断 2026-11-24）。
+  pitcher_sense_mean: 30.0           # 中心（物理Lv）。投手系の伸びの倍率が1.0になる値（pitcher_sense_growth_neutral）と揃える
+  pitcher_sense_independent_sd: 10.0 # 個体差σ（物理Lv）。+1.5σ（45）以上が約7％＝まれに高センスが混ざる
   # 伸びしろ（分野別・凸凹, 現在値と独立, §5.1）
   growth_mean: 1.0
   growth_sd: 0.22

@@ -97,6 +97,18 @@ public sealed record InsightCoefficients
     public double PitcherSenseTopicProb { get; init; } = 0.25;
     /// <summary>読み違えたときに見立てがずれる幅（表示Lv。上下どちらかへ）。おおむねランク1〜2つぶん。</summary>
     public int PitcherSenseMisreadOffset { get; init; } = 15;
+
+    // --- 投手の素質の見出し（issue #1523・PitcherTalentModel）。隠しの投手センスと見える投手能力の差で、見立て→外部コーチの2段 ---
+    /// <summary>見立ての対象になる投手センスの下限（物理Lv）。</summary>
+    public double PitcherTalentSenseMin { get; init; } = 42.0;
+    /// <summary>見立ての対象になる「投手センス − 見える投手能力（球速・制球・キレの平均）」の下限（物理Lv）。</summary>
+    public double PitcherTalentGapMin { get; init; } = 15.0;
+    /// <summary>対象の選手に見立てが出る週次の確率。</summary>
+    public double PitcherTalentHintProb { get; init; } = 0.015;
+    /// <summary>見立て済みの選手が外部コーチに見出される（覚醒する）週次の確率。</summary>
+    public double PitcherTalentDiscoverProb { get; init; } = 0.04;
+    /// <summary>見出された（覚醒した）選手の投手系能力の才能上限に足す値（表示Lv・99で止める）。</summary>
+    public int PitcherTalentCapBonus { get; init; } = 15;
 }
 
 /// <summary>

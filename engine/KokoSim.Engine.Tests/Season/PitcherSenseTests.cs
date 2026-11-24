@@ -11,7 +11,8 @@ using Xunit.Abstractions;
 namespace KokoSim.Engine.Tests.Season;
 
 /// <summary>
-/// 投手センス（隠し能力・設計書01 §1.3・issue #1472）: 生成時の一時値を選手に持たせ、投手系の伸びやすさ・見極めの見立てに効く。
+/// 投手センス（隠し能力・設計書01 §1.3・issue #1472）: 選手に持たせ、投手系の伸びやすさ・見極めの見立てに効く。
+/// 生成は全員に独立の乱数で引く（issue #1523）。見出し（見立て→外部コーチ）は <see cref="PitcherTalentTests"/>。
 /// 試合側の効き（配球の選び分け・盗塁の読み・牽制）は Match 側のテストが見る。
 /// </summary>
 public sealed class PitcherSenseTests
@@ -29,23 +30,33 @@ public sealed class PitcherSenseTests
         return all;
     }
 
-    // --- 生成: 一時値をそのまま持つ（分布は従来の一時値と同じ＝投手に読める選手ほど高い） ---
+    // --- 生成: 全員に独立の乱数で引く（issue #1523）。投手か野手かを見ない ---
 
     [Fact]
-    public void Generator_GivesEveryPlayerASense_PitchersHigherThanFielders()
+    public void Generator_GivesEveryPlayerAnIndependentSense_PitchersAndFieldersAlike()
     {
         var all = Cohorts(60);
-        var pitchers = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).Select(p => AbilityScale.Phys(p.PitcherSense)).ToList();
-        var fielders = all.Where(p => !PitcherRoleResolver.LeansPitcher(p)).Select(p => AbilityScale.Phys(p.PitcherSense)).ToList();
+        var pitchers = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).Select(p => (double)AbilityScale.Phys(p.PitcherSense)).ToList();
+        var fielders = all.Where(p => !PitcherRoleResolver.LeansPitcher(p)).Select(p => (double)AbilityScale.Phys(p.PitcherSense)).ToList();
         Assert.NotEmpty(pitchers);
         Assert.NotEmpty(fielders);
-        // 物理Lvで 5〜95（生成のクランプ）。全員が同じ値ではない（個体差 σ6）。
-        Assert.All(all, p => Assert.InRange(AbilityScale.Phys(p.PitcherSense), 5, 95 + 0));
-        Assert.True(all.Select(p => p.PitcherSense).Distinct().Count() > 10);
-        Assert.True(pitchers.Average() > fielders.Average() + 8,
-            $"投手に読める選手ほど投手センスが高いはず: pitchers={pitchers.Average():F1} fielders={fielders.Average():F1}");
-        // 見立ては生成時には無い（見極めで初めて付く）。
+        Assert.All(all, p => Assert.InRange(AbilityScale.Phys(p.PitcherSense), 5, 95));
+        Assert.True(all.Select(p => p.PitcherSense).Distinct().Count() > 20);
+
+        var phys = all.Select(p => (double)AbilityScale.Phys(p.PitcherSense)).ToList();
+        var mean = phys.Average();
+        var sd = System.Math.Sqrt(phys.Average(x => (x - mean) * (x - mean)));
+        _out.WriteLine($"投手センス（物理Lv）全体: 平均 {mean:F1} σ {sd:F1} ／ 投手 {pitchers.Average():F1} ／ 野手 {fielders.Average():F1}");
+        Assert.InRange(mean, Rc.PitcherSenseMean - 1.5, Rc.PitcherSenseMean + 1.5);
+        Assert.InRange(sd, Rc.PitcherSenseIndependentSd * 0.85, Rc.PitcherSenseIndependentSd * 1.15);
+        // 投手に読める選手と野手で分布が変わらない（役判定を見ない）。
+        Assert.InRange(pitchers.Average() - fielders.Average(), -2.5, 2.5);
+        // 野手にも高センスが自然に混ざる（+1.5σ 以上が数％〜1割）。
+        var highFielders = fielders.Count(x => x >= Rc.PitcherSenseMean + 1.5 * Rc.PitcherSenseIndependentSd) / (double)fielders.Count;
+        Assert.InRange(highFielders, 0.03, 0.12);
+        // 見立ては生成時には無い（見極めで初めて付く）。見出しの段も None。
         Assert.All(all, p => Assert.Null(p.PitcherSenseReading));
+        Assert.All(all, p => Assert.Equal(PitcherTalentStage.None, p.PitcherTalent));
     }
 
     [Fact]
@@ -57,18 +68,31 @@ public sealed class PitcherSenseTests
     }
 
     [Fact]
-    public void Generator_SenseIsTheVelocityFoundation()
+    public void Generator_SenseIsDetachedFromTheVelocityFoundation()
     {
-        // 球速 Lv の土台＝地肩×0.5＋投手センス×0.5（球質タイプの上乗せは投手らしさで薄まる）。野手（型の上乗せがほぼ0）で
-        // 「地肩とセンスから組んだ球速」と実際の球速が近い＝持たせた値が球速を作った一時値そのものであること。
-        var fielders = Cohorts(30).Where(p => !PitcherRoleResolver.LeansPitcher(p)).ToList();
-        var err = fielders.Select(p =>
+        // 球速 Lv の土台は従来どおり「地肩×0.5＋球速の土台（投手適性で決まる）×0.5」。選手が持つ投手センスは土台と切り離した
+        // 独立の値＝地肩で説明できない球速の残りと、投手センスに相関が無い（旧: 残りの0.5倍がそのまま投手センスだった）。
+        var fielders = Cohorts(40).Where(p => !PitcherRoleResolver.LeansPitcher(p)).ToList();
+        var resid = fielders.Select(p => (double)AbilityScale.Phys(p.Level(AbilityKind.Velocity))
+                                          - AbilityScale.Phys(p.Level(AbilityKind.ArmStrength)) * Rc.VelocityArmWeight).ToList();
+        var sense = fielders.Select(p => (double)AbilityScale.Phys(p.PitcherSense)).ToList();
+        var r = Correlation(resid, sense);
+        _out.WriteLine($"球速の残り×投手センスの相関 r={r:F3}（n={fielders.Count}）");
+        Assert.InRange(r, -0.15, 0.15);
+    }
+
+    private static double Correlation(IReadOnlyList<double> xs, IReadOnlyList<double> ys)
+    {
+        var mx = xs.Average();
+        var my = ys.Average();
+        double sxy = 0, sxx = 0, syy = 0;
+        for (var i = 0; i < xs.Count; i++)
         {
-            var expected = AbilityScale.Phys(p.Level(AbilityKind.ArmStrength)) * Rc.VelocityArmWeight
-                           + AbilityScale.Phys(p.PitcherSense) * Rc.VelocitySenseWeight;
-            return System.Math.Abs(AbilityScale.Phys(p.Level(AbilityKind.Velocity)) - expected);
-        }).Average();
-        Assert.True(err < 3.0, $"球速が地肩＋投手センスから外れている: 平均誤差 {err:F2}");
+            sxy += (xs[i] - mx) * (ys[i] - my);
+            sxx += (xs[i] - mx) * (xs[i] - mx);
+            syy += (ys[i] - my) * (ys[i] - my);
+        }
+        return sxy / System.Math.Sqrt(sxx * syy);
     }
 
     // --- AI校: 同じ形で全員が持つ ---
@@ -154,10 +178,11 @@ public sealed class PitcherSenseTests
         { TrainingMenu.Pitching, TrainingMenu.VelocityTraining, TrainingMenu.BreakingBall };
 
     private static (double Kmh, double Control, double Rank, double Stamina) ConvertAndTrain(DevelopingPlayer src, int sensePhys,
-        TrainingCoefficients? coeff = null)
+        TrainingCoefficients? coeff = null, bool discovered = false)
     {
         var p = src.Clone();
         p.PitcherSense = AbilityScale.Disp(sensePhys);
+        if (discovered) PitcherTalentModel.Discover(p, new InsightCoefficients());
         var c = coeff ?? new TrainingCoefficients();
         var stages = new GrowthStageTable();
         var kmh0 = PitcherAttributes.VelocityKmhFromLevel(p.Level(AbilityKind.Velocity));
@@ -175,29 +200,31 @@ public sealed class PitcherSenseTests
     public void PitcherConversion_MediocreFielderWithHighSense_Awakens()
     {
         // 既定の新入生（talent_center_default）から投手に読めない＝野手の選手を集め、3年間ずっと投手の練習
-        // （投げ込み・球速強化・変化球を週替わり）を振る。投手センスだけを野手の上位（物理35≈p99）と下位（10≈p10）に
-        // 置き換えて比べる＝能力・伸びしろ・成長タイプは同じ選手。
+        // （投げ込み・球速強化・変化球を週替わり）を振る。投手センスだけを高（物理45）と低（10）に置き換えて比べる
+        // ＝能力・伸びしろ・成長タイプは同じ選手。高センスの選手が外部コーチに見出された（覚醒）ときと、見出されないときも並べる。
         var fielders = Cohorts(20).Where(p => !PitcherRoleResolver.LeansPitcher(p)).Take(150).ToList();
         Assert.True(fielders.Count >= 100);
-        var hi = fielders.Select(p => ConvertAndTrain(p, 35)).ToList();
-        var mid = fielders.Select(p => ConvertAndTrain(p, 16)).ToList();
+        var awakened = fielders.Select(p => ConvertAndTrain(p, 45, discovered: true)).ToList();
+        var hiHidden = fielders.Select(p => ConvertAndTrain(p, 45)).ToList();
+        var mid = fielders.Select(p => ConvertAndTrain(p, 30)).ToList();
         var lo = fielders.Select(p => ConvertAndTrain(p, 10)).ToList();
         string Row(string name, List<(double Kmh, double Control, double Rank, double Stamina)> xs)
             => $"{name}: 球速 +{xs.Average(x => x.Kmh):F1}km/h 制球 +{xs.Average(x => x.Control):F1} キレ +{xs.Average(x => x.Rank):F1} スタミナ +{xs.Average(x => x.Stamina):F1}";
         _out.WriteLine($"野手 {fielders.Count} 人を3年間投手練習（施設なし・指導力既定）");
-        _out.WriteLine(Row("投手センス高（物理35）", hi));
-        _out.WriteLine(Row("投手センス並（物理16＝野手の中央）", mid));
-        _out.WriteLine(Row("投手センス低（物理10）", lo));
+        _out.WriteLine(Row("高センス（物理45）・見出された", awakened));
+        _out.WriteLine(Row("高センス（物理45）・見出されない", hiHidden));
+        _out.WriteLine(Row("並（物理30）", mid));
+        _out.WriteLine(Row("低（物理10）", lo));
 
         double Sum(List<(double Kmh, double Control, double Rank, double Stamina)> xs)
             => xs.Average(x => x.Control + x.Rank + x.Stamina);
-        var ratio = Sum(hi) / Sum(lo);
-        _out.WriteLine($"制球+キレ+スタミナの伸び 高/低 = {ratio:F2}（既定の傾き {new TrainingCoefficients().PitcherSenseGrowthSlope}）");
+        var ratio = Sum(awakened) / Sum(lo);
+        _out.WriteLine($"制球+キレ+スタミナの伸び 見出された高 / 低 = {ratio:F2}（見出されない高 / 低 = {Sum(hiHidden) / Sum(lo):F2}）");
 
-        // オーナー判断（2026-11-23・傾き0.03・倍率0.5〜1.0＝上乗せせず下だけ効かせる）: 実測 高/低 1.40。高＞並＞低。
-        Assert.True(Sum(hi) > Sum(mid) && Sum(mid) > Sum(lo), "投手センスの順に伸びるはず");
-        Assert.True(ratio > 1.35, $"投手センスが高い野手は投手転向でよく伸びるはず: 高/低={ratio:F2}");
-        Assert.True(hi.Average(x => x.Kmh) > lo.Average(x => x.Kmh), "球速も伸びるはず");
+        // 完了条件（issue #1523）: 見出された高センスの野手は、低センスの野手の2倍以上伸びる。
+        Assert.True(Sum(awakened) > Sum(hiHidden) && Sum(hiHidden) >= Sum(mid) && Sum(mid) > Sum(lo), "見出された＞高＞並＞低の順に伸びるはず");
+        Assert.True(ratio >= 2.0, $"見出された高センスの野手は投手転向で大きく伸びるはず: 高/低={ratio:F2}");
+        Assert.True(awakened.Average(x => x.Kmh) > lo.Average(x => x.Kmh) * 1.5, "球速も大きく伸びるはず");
     }
 
     // --- 見極め: 見立てを記録する ---

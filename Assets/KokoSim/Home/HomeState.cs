@@ -157,6 +157,7 @@ namespace KokoSim.Unity.Home
         // 週次抽選のストリームID（互いに独立＝どちらかの抽選回数が変わっても他方がずれない）。
         private const ulong InjuryStream = 0x1213_0000UL;
         private const ulong InsightStream = 0x1E51_0000UL;
+        private const ulong PitcherTalentStream = 0x7A1E_0000UL;   // 投手の素質の見出し（issue #1523）
         private const ulong GrowthStream = 0x6110_0000UL;   // 選手成長イベント（issue #611）
         private const ulong FormStream = 0xF0F0_0000UL;     // 調子の週次の波（設計書02 §3.3）
         private const ulong SkillStream = 0x5C11_0000UL;    // 覚醒で有益スキル（issue #1471）
@@ -203,6 +204,7 @@ namespace KokoSim.Unity.Home
             RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
             RunGrowthWeek();                            // 選手成長イベント（設計書03 §5.5）
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
+            RunPitcherTalentWeek();                     // 投手の素質の見出し（見立て→外部コーチ・issue #1523）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
             RunFormWeek();                              // 調子の週次の波（設計書02 §3.3）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
@@ -227,6 +229,7 @@ namespace KokoSim.Unity.Home
         {
             RunGrowthWeek();
             RunInsightWeek();
+            RunPitcherTalentWeek();
             RunFormWeek();
             KokoSim.Unity.Shell.TrainingBoostService.Tick();
         }
@@ -823,6 +826,35 @@ namespace KokoSim.Unity.Home
                     n.Player.Id);
             }
             PushFeed(newItems);
+        }
+
+        /// <summary>
+        /// 投手の素質の見出し（issue #1523）。隠しの投手センスと見える投手能力の差が大きい選手に、見立て→外部コーチの2段で起きる。
+        /// 効果（見出しの段・才能上限）は engine が適用済み＝ここは提示だけ。出口はノベルの結果行と通知フィードだけで、
+        /// 選手詳細には常時は出さない。乱数は専用ストリーム（気づき・怪我の抽選列はずれない）。
+        /// </summary>
+        private void RunPitcherTalentWeek()
+        {
+            var rng = _rng.Fork(WeeklyStream(PitcherTalentStream));
+            var notices = PitcherTalentModel.Week(Roster, rng, _insight);
+            if (notices.Count == 0) return;
+
+            var items = new List<FeedItem>();
+            foreach (var n in notices)
+            {
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = KokoSim.Unity.Shell.PitcherTalentText.Feed(n),
+                    Kind = n.Stage == PitcherTalentStage.Discovered ? FeedKind.Up : FeedKind.Discover,
+                    Tag = KokoSim.Unity.Shell.PitcherTalentText.Tag(n),
+                    Screen = FeedLinks.Players, PlayerId = n.Player.Id,
+                });
+                KokoSim.Unity.Shell.EventService.Push(
+                    KokoSim.Unity.Shell.PitcherTalentText.EventId(n), n.Player.Name,
+                    KokoSim.Unity.Shell.PitcherTalentText.Effect(n), n.Player.Id);
+            }
+            PushFeed(items);
         }
 
         /// <summary>

@@ -150,6 +150,12 @@ public sealed class DevelopingPlayer
     /// </summary>
     public int? PitcherSenseReading { get; set; }
 
+    /// <summary>
+    /// 投手の素質の見出しの段（issue #1523・<see cref="PitcherTalentModel"/>）。<see cref="PitcherTalentStage.Discovered"/>（見出された）に
+    /// なると投手系の伸びの倍率が上がる（<see cref="TrainingCoefficients.PitcherAwakenedGrowthFactor"/>）。選手詳細には常時は出さない。
+    /// </summary>
+    public PitcherTalentStage PitcherTalent { get; set; }
+
     /// <summary>統率傾向（性格の一部, CHANGELOG 22b）。主将選定の軸（設計書09 §8）。</summary>
     public int Leadership { get; init; } = 50;
 
@@ -337,6 +343,7 @@ public sealed class DevelopingPlayer
             LeadCap = LeadCap,
             PitcherSense = PitcherSense,
             PitcherSenseReading = PitcherSenseReading,
+            PitcherTalent = PitcherTalent,
             Leadership = Leadership,
             Receptiveness = Receptiveness,
             Diligence = Diligence,
