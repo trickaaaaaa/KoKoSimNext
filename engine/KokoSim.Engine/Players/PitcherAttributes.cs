@@ -112,6 +112,11 @@ public sealed record PitcherAttributes
     // （ドラフト・レポート 2021〜2025）。旧式は Lv99＝149.6 が上限で150km/h超が作れなかった。Lv90（146.4）から
     // 1.16 km/h/Lv で Lv100＝158.0 に届かせる（Lv93≒149.9・Lv95≒152.2）。人数は生成側（AI校のやわらかい天井
     // RosterCoefficients.VelocitySoftCap）で合わせる＝この式は「上位の1Lvの重み」だけを決める。
+    //
+    // この区分線形の定数は「Lv→km/h の変換式の定義」であって調整ノブではない（issue #1213・オーナー判断 2026-11-24）。
+    // YAML には出さず、ここの const を正典にする（#1080 の Δ と同じ扱い）。球速の価値を動かしたいときは
+    // data/coefficients.yaml の ability_effect（cq_per_kmh 等）と生成側のやわらかい天井で動かす。
+    // 値は PitcherVelocityMappingTests が固定する＝変えるなら生成分布・帯への影響を見たうえでテストごと直す。
     private const double VelocityInterceptKmh = 108.5;
     private const double VelocitySlopeKmhPerLevel = 0.47;
     /// <summary>区分の境（この Lv までは従来の傾き）。</summary>
