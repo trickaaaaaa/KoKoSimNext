@@ -192,7 +192,25 @@ scenarios:
     top: true
     outs: 0
     bases: [1]
-    seed: 20261124023   # ショートゴロ。係数変更で解が動いたら選び直す（SelfForceDoublePlayScenarioTests が赤くなる）
+    # ショートゴロ。係数変更で解が動いたら選び直す（SelfForceDoublePlayScenarioTests が赤くなる）。
+    # engine 単体で 6-6-3 になっても、撮影（監督が守備側）では別の打球になるシードがある。
+    # 選び直したら撮影レシピ dp-663-1549 で遊撃手が自分で踏むことまで確かめる
+    seed: 20261124946
+
+
+  - id: dp-663-lab-alt
+    name: 併殺 6-6-3（遊撃手が自分で二塁を踏んで一塁へ・1回表無死一塁）
+    away: { school: "AI:tier=C" }
+    home: { school: "AI:tier=C" }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    # ショートゴロ。係数変更で解が動いたら選び直す（SelfForceDoublePlayScenarioTests が赤くなる）。
+    # engine 単体で 6-6-3 になっても、撮影（監督が守備側）では別の打球になるシードがある。
+    # 選び直したら撮影レシピ dp-663-1549 で遊撃手が自分で踏むことまで確かめる
+    seed: 20261127057
+
 
   - id: dp-443-lab
     name: 併殺 4-4-3（二塁手が自分で二塁を踏んで一塁へ・1回表無死一塁）

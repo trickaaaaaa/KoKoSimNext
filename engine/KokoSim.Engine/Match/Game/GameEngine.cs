@@ -2369,8 +2369,12 @@ public static class GameEngine
                         {
                             if (leg.Label == "打") { batterArrive = leg.T1; break; }
                         }
+                        // 一塁へ走り込む秒は判定と同じ本人の脚（issue #1549）。
+                        var fbtSprint = defense.PlayerAtPosition(Field.FieldPosition.FirstBase)
+                            ?.ToFielder(ctx.Baserunning.AbilityEffect).SprintSpeedMps;
                         timeline = Match.Timeline.TimelineBuilder.AppendFirstBaseSelfForceTagThrows(
-                            timeline, fbtPlay, ctx.Field, batterArrive, ctx.Baserunning, runnerOut: fbt.Out);
+                            timeline, fbtPlay, ctx.Field, batterArrive, ctx.Baserunning, runnerOut: fbt.Out,
+                            selfForceSprintSpeedMps: fbtSprint);
                     }
 
                     // 飛び出しの勝負（フライ捕球→一塁走者が戻る vs 戻し送球）: 戻し送球を描く

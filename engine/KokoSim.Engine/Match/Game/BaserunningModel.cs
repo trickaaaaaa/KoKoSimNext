@@ -1759,8 +1759,22 @@ public static class BaserunningModel
         HomePlayContext home, Vector3D targetPoint, BaserunningCoefficients coeff)
     {
         var sprintSpeedMps = home.SelfForceSprintSpeedMps ?? coeff.SelfForceFielderSprintSpeedMps;
-        var runSeconds = (home.Situation.BallFieldedPoint - targetPoint).Length / sprintSpeedMps;
+        var runSeconds = SelfForceRunSeconds((home.Situation.BallFieldedPoint - targetPoint).Length, sprintSpeedMps, coeff);
         return home.Situation.BallFieldedAtSeconds + runSeconds;
+    }
+
+    /// <summary>
+    /// 自己フォース一段目で、止まった野手が <paramref name="distanceM"/> を走り切る秒（issue #1549）。
+    /// 最高速 <paramref name="sprintSpeedMps"/> まで <see cref="BaserunningCoefficients.SelfForceFielderAccelMps2"/> で
+    /// 等加速し、あとは最高速＝短い距離は加速の途中で着く。<b>判定と絵（TimelineBuilder）の単一ソース</b>。
+    /// </summary>
+    internal static double SelfForceRunSeconds(double distanceM, double sprintSpeedMps, BaserunningCoefficients coeff)
+    {
+        var v = Math.Max(0.1, sprintSpeedMps);
+        var a = coeff.SelfForceFielderAccelMps2;
+        if (a <= 0 || distanceM <= 0) return Math.Max(0, distanceM) / v;
+        var accelDistM = v * v / (2 * a);
+        return distanceM < accelDistM ? Math.Sqrt(2 * distanceM / a) : distanceM / v + v / (2 * a);
     }
 
     /// <summary>
