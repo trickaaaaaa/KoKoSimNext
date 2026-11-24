@@ -111,11 +111,13 @@ public static class DoubledOffResolver
             : DoubledOffResult.DoubledOff;
     }
 
+    // 勝負の抽選は 1%/99% でクランプしない（下の逸れ付きの Resolve と同じ・issue #801/#1241）。
     public static DoubledOffResult Resolve(
         Player runner, double caughtAtSeconds, double catchToBaseM, double throwSpeedMps,
         BaserunningCoefficients c, IRandomSource rng, int fielderFielding = 50, double extraLeadM = 0.0)
         => MathUtil.Chance(
-                SuccessProbability(runner, caughtAtSeconds, catchToBaseM, throwSpeedMps, c, fielderFielding, extraLeadM), rng)
+                MathUtil.Logistic(Margin(runner, caughtAtSeconds, catchToBaseM, throwSpeedMps, c, fielderFielding, extraLeadM)
+                    / c.DoubledOffMarginScale), rng)
             ? DoubledOffResult.Safe
             : DoubledOffResult.DoubledOff;
 

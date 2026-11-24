@@ -70,7 +70,7 @@ public static class PitchSelection
         IRandomSource rng,
         PitcherGear gear = PitcherGear.Normal,
         Tactics.PitchDirective? directive = null,
-        int catcherLead = 50,
+        double catcherLead = 50,
         int pitcherSense = 50)
     {
         // 配球方針（設計書09 §2.2）。無指示なら恒等＝従来と完全一致。

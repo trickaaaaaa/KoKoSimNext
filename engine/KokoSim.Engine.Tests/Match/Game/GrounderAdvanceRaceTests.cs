@@ -328,12 +328,11 @@ public sealed class GrounderAdvanceRaceTests
     }
 
     [Fact]
-    public void Fallback_ExtraOutsNonZero_UsesLegacyTable_NotPhysical()
+    public void HomeThrowUsed_ExtraOutsNonZero_SecondRunnerAdvancesWithoutRace()
     {
-        // extraOuts>0（本塁憤死＝この打球の送球は使われた）では、物理レースへ入らず従来テーブル 18% へフォールバックする。
-        // 本塁で生還（セーフ）した打席も送球は本塁へ使われている（1打球の送球は1本・issue #1240）＝二塁走者は
-        // 一塁経由の転送とレースせず、三塁へ勝負なしで進む。浅い中央ゴロ＋前進守備で三塁走者を本塁で勝負させ、
-        // 憤死（≈18%の従来テーブル）／生還（必ず進塁）で二塁走者の進塁挙動が変わることで確認。
+        // 本塁憤死（extraOuts>0）でも、本塁セーフ（生還）でも、この打球の送球は本塁へ使われている（1打球の送球は1本・
+        // issue #1240）＝二塁走者は一塁経由の転送とレースせず、三塁へ勝負なしで進む。かつては本塁憤死のときだけ
+        // 旧来の18%テーブルへ落ちていた（issue #1241）。浅い中央ゴロ＋前進守備で三塁走者を本塁で勝負させて確認。
         var home = new HomePlayContext(
             Field,
             new HomePlaySituation(new Vector3D(8, 0, 33), 1.5, new Player { ArmStrength = 50 }.ToFielder().ThrowSpeedMps),
@@ -355,7 +354,7 @@ public sealed class GrounderAdvanceRaceTests
             else if (runs > 0) { nScored++; if (advanced) advOnScored++; }
         }
         Assert.True(nExtra > 500 && nScored > 500, $"両区分に十分な試行が必要（extra={nExtra}, scored={nScored}）");
-        Assert.InRange((double)advOnExtra / nExtra, 0.10, 0.30); // 本塁憤死＝従来テーブル域
+        Assert.Equal(nExtra, advOnExtra);                        // 本塁憤死＝送球は本塁へ行った＝勝負なしで必ず進む
         Assert.Equal(nScored, advOnScored);                      // 本塁セーフ＝送球は本塁へ行った＝勝負なしで必ず進む
     }
 

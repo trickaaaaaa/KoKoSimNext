@@ -88,10 +88,10 @@ public static class BatteryChemistry
     }
 
     /// <summary>効き先①: 捕手の実効リード（Lv）に相性を掛ける。K=0 で恒等。</summary>
-    public static int ApplyToLead(int catcherLead, double k, BatteryChemistryCoefficients c)
+    public static double ApplyToLead(int catcherLead, double k, BatteryChemistryCoefficients c)
     {
         if (k == 0.0) return catcherLead;
-        return (int)MathUtil.Clamp(Math.Round(catcherLead * (1.0 + c.LeadFactorPerK * k)), 1, 100);
+        return MathUtil.Clamp(catcherLead * (1.0 + c.LeadFactorPerK * k), 1, 100); // 丸めない（issue #1241）。使う側が (Lead−50)×係数 で連続に読む
     }
 
     /// <summary>効き先②: 動揺からの自然回復に要るアウト数。K が閾値以上なら1つ減らす（1未満にしない）。</summary>

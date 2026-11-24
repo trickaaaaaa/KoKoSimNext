@@ -200,4 +200,23 @@ public sealed class StealBreakRunnerTests
 
         Assert.True(Scores(true) > Scores(false));
     }
+
+    [Fact]
+    public void DoubleSteal_CaughtLiner_OnlyOneReturnThrow_NeverTwoRunnersDoubledOff()
+    {
+        // 一・三塁の重盗でライナーが捕られても、守備は戻し送球を1か所へしか投げられない（1球は1か所・issue #1241）。
+        // 一塁走者と三塁走者の両方が憤死して「1つのライナーで3アウト」になってはいけない。
+        var rng = new Xoshiro256Random(77);
+        var oneOut = 0;
+        for (var i = 0; i < 4000; i++)
+        {
+            var bases = new BaseState { First = new Player { Speed = 40 }, Third = new Player { Speed = 40 } };
+            var (_, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, LinerCatch(),
+                r1StealBreak: true, r3StealBreak: true);
+            Assert.True(extraOuts <= 1, $"1つのライナーで追加アウトが{extraOuts}つ");
+            if (extraOuts == 1) oneOut++;
+        }
+        Assert.True(oneOut > 0, "重盗の走者がまったく憤死しない（勝負になっていない）");
+    }
 }

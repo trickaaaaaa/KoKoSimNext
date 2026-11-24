@@ -863,56 +863,63 @@ public static class GameEngine
                 var batterTrait = risp ? SkillModel.BatterPressureTrait(batter.Skills) : PressureTrait.None;
                 var pitcherTrait = pinch ? SkillModel.PitcherPressureTrait(currentPitcher.Skills) : PressureTrait.None;
 
+                // 実効ミート・制球に掛かる倍率（プレッシャー→主将→動揺→伝令→相性→勢い）は double のまま掛け合わせ、
+                // 最後に1回だけ整数へ丸める（段ごとに丸めると 制球50×1.008＝50.4→50 のように小さな効きが消え、順序でも結果が変わる・issue #1241）。
+                // 倍率の順序・乱数不使用は従来のまま。
+
                 // プレッシャー×精神力（設計書02 §3）: 緩和=伝令、負側増幅=疲労・動揺。精神力50なら恒等。
                 var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
-                pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
+                var pitMul = PressureModel.Multiplier(
                     ctx.Batting.AbilityEffect.Phys(currentPitcher.Mental), PressureModel.WithSideBonus(pressureIdx, defenseExtraPressure, ctx.Pressure), ctx.Pressure,
                     defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
                     defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills,
-                    defenseMorale));
-                bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
+                    defenseMorale);
+                var batMul = PressureModel.Multiplier(
                     ctx.Batting.AbilityEffect.Phys(batter.Mental), PressureModel.WithSideBonus(pressureIdx, offenseExtraPressure, ctx.Pressure), ctx.Pressure,
                     offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills,
-                    moraleMitigation: offenseMorale));
+                    moraleMitigation: offenseMorale);
 
                 // 主将（設計書09 §8.1, issue #860 A）: 在場なら常時チーム全員を底上げ。退場すると次打席で消える。
                 // ベンチでも底上げの3割（CaptainBenchFactor）は残る＝Bの伝令ボーナスと両取り可（2026-11-10 監督決定）。
                 // 精神力に関係なく効く＝プレッシャーのMultiplierとは別枠（恒等倍率1.0が既定）。
-                pit = PressureModel.ApplyPitcher(pit, defense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills));
-                bat = PressureModel.ApplyBatter(bat, offense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills));
+                pitMul *= defense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills);
+                batMul *= offense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills);
 
                 // 動揺と伝令の手応え（issue #714）。どちらも精神力に関係なく効く＝伝令を送る意味が見える大きさ。
                 // 動揺: 制球が落ちる。伝令の効果窓: 守備=制球／攻撃=ミートが上がる（大一番ほど・采配と素直さで増減）。
                 // 伝令役が主将なら通常上限1.4を超える（issue #860 B・TimeoutMessenger.Factor）。
                 // 乱数は使わない＝RNG列は不変（結果は効果の分だけ変わる）。
                 if (defense.PitcherRattled && ctx.Tactics.RattledControlPenalty > 0.0)
-                    pit = PressureModel.ApplyPitcher(pit, 1.0 - ctx.Tactics.RattledControlPenalty);
+                    pitMul *= 1.0 - ctx.Tactics.RattledControlPenalty;
                 if (defense.DefenseCalmPa > 0)
-                    pit = PressureModel.ApplyPitcher(pit, PressureModel.CalmMultiplier(pressureIdx,
+                    pitMul *= PressureModel.CalmMultiplier(pressureIdx,
                         defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.CoachingReceptivity(currentPitcher.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
                             ctx.Tactics, ctx.Personalities, defense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
                         // 結束（設計書23 §3.4）: 伝令の効きに 1 + c1×(U−50)/50。U=50 で恒等。
-                        * Cohesion.MessengerMultiplier(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion)));
+                        * Cohesion.MessengerMultiplier(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion));
                 if (offense.OffenseCalmPa > 0)
-                    bat = PressureModel.ApplyBatter(bat, PressureModel.CalmMultiplier(pressureIdx,
+                    batMul *= PressureModel.CalmMultiplier(pressureIdx,
                         offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
                         ctx.Personalities.CoachingReceptivity(batter.Receptiveness), ctx.Tactics,
                         TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
                             ctx.Tactics, ctx.Personalities, offense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
-                        * Cohesion.MessengerMultiplier(offense.CohesionValue(ctx.Cohesion), ctx.Cohesion)));
+                        * Cohesion.MessengerMultiplier(offense.CohesionValue(ctx.Cohesion), ctx.Cohesion));
 
                 // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
                 // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。
                 // 段階0（AI校・裏試合・統計シムは常にこちら）なら恒等＝帯不変。
                 // バッテリーの相性（設計書23 §2.4）: ピンチ（プレッシャー指数が高い場面）だけ制球に倍率（pinch_control_per_k=0.20＝最大+20%）。
                 // 勢い（#863・最大+6%）より大きい（Q52 で引き上げ）。K=0・圧が低い場面では恒等。乱数不使用。
-                pit = PressureModel.ApplyPitcher(pit, BatteryChemistry.PinchControlMultiplier(
-                    defense.BatteryK(currentPitcher, ctx.Chemistry), pressureIdx, ctx.Pressure.MaxIndex, ctx.Chemistry));
+                pitMul *= BatteryChemistry.PinchControlMultiplier(
+                    defense.BatteryK(currentPitcher, ctx.Chemistry), pressureIdx, ctx.Pressure.MaxIndex, ctx.Chemistry);
 
-                if (offenseMomentum > 0) bat = MomentumModel.ApplyBatter(bat, offenseMomentum, ctx.Momentum);
-                if (defenseMomentum > 0) pit = MomentumModel.ApplyPitcher(pit, defenseMomentum, ctx.Momentum);
+                if (offenseMomentum > 0) batMul *= MomentumModel.Multiplier(offenseMomentum, ctx.Momentum);
+                if (defenseMomentum > 0) pitMul *= MomentumModel.Multiplier(defenseMomentum, ctx.Momentum);
+
+                pit = PressureModel.ApplyPitcher(pit, pitMul);
+                bat = PressureModel.ApplyBatter(bat, batMul);
 
                 return (pit, bat, mods);
             }
@@ -1009,9 +1016,9 @@ public static class GameEngine
                     ? (PitchDirective?)null
                     : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats.EffectiveBats(currentPitcher.Throws));
                 // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。
-                var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead);
+                var catcherLeadLv = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead);
                 // バッテリーの相性（設計書23 §2.4）: 実効リードに 1 + k1×K。K=0 で恒等・乱数不使用。
-                catcherLead = BatteryChemistry.ApplyToLead(catcherLead, defense.BatteryK(currentPitcher, ctx.Chemistry), ctx.Chemistry);
+                var catcherLead = BatteryChemistry.ApplyToLead(catcherLeadLv, defense.BatteryK(currentPitcher, ctx.Chemistry), ctx.Chemistry);
                 var built = paCtx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
