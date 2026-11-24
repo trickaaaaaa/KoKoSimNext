@@ -64,6 +64,15 @@ public enum ForcedOutcome
     GroundFoul,
     /// <summary>打席の初球を「バックネット方向へ高く上がるファウル」にする（issue #1074「画面端で跳ね返る」の撮影用）。</summary>
     HighFoul,
+    /// <summary>
+    /// 打席の初球を「三遊間（三塁手と遊撃手の間）を抜けるゴロの安打」にする（issue #1591 の撮影用）。
+    /// 実際の守備位置で内野を抜け、両側の内野手が追う球を決まった順で探して当てる（乱数を引かない）。
+    /// </summary>
+    ThroughInfieldLeft,
+    /// <summary>打席の初球を「二遊間（二塁手と遊撃手の間）を抜けるゴロの安打」にする（<see cref="ThroughInfieldLeft"/> と同じ作り）。</summary>
+    ThroughInfieldMiddle,
+    /// <summary>打席の初球を「一二塁間を抜けるゴロの安打」にする（<see cref="ThroughInfieldLeft"/> と同じ作り）。</summary>
+    ThroughInfieldRight,
 
     // ── 走塁（盗塁企図を強制したうえで成否を固定する） ──
     StealSuccess,

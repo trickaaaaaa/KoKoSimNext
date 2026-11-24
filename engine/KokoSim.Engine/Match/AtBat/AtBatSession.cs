@@ -542,6 +542,14 @@ public sealed class AtBatSession
             return Continue();
         }
 
+        // 初球を「内野を抜けるゴロの安打」にする強制（issue #1591 の撮影用）: 条件に合う打球をそのまま守備解決へ回す
+        if (forcedFoulNow && Debugging.ForcedThroughInfieldBall.For(ctx.ForcedFoul, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding) is { } forcedThrough)
+        {
+            var forcedPlay = FieldingResolver.ResolveDetailed(
+                forcedThrough, ctx.Field, ctx.Aerodynamics, batter, fielders, ctx.Fielding, rng);
+            return FinishBattedBall(forcedPlay, forcedThrough, plan, loc, inZone, swingProb, ctx, fielders);
+        }
+
         // ④ コンタクト判定 → ⑤ 打球生成（流し打ちの方向/粘り打ちは batting コピーへ、打球の質は ctx.Skills.BattedBall）
         var (outcome, ball) = ContactModel.Resolve(
             batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes, pitchFamiliarityLevel,

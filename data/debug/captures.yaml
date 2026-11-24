@@ -718,3 +718,27 @@ captures:
     manager: home
     shots: [start, catch, result, end]
     probes: [BaseCrew]
+
+  - id: through-infield-left-1591
+    name: "三遊間を抜ける安打で、三塁手・遊撃手の両方が接触の直後から打球を追って走る（issue #1591）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: ThroughInfieldLeft
+    duel_seconds: 2.5
+    video: {from: start, to: start+3.0, fps: 10}
+
+  - id: through-infield-middle-1591
+    name: "二遊間を抜ける安打で、二塁手・遊撃手の両方が接触の直後から打球を追って走る（issue #1591）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: ThroughInfieldMiddle
+    duel_seconds: 2.5
+    video: {from: start, to: start+3.0, fps: 10}
+
+  - id: through-infield-right-1591
+    name: "一二塁間を抜ける安打で、一塁手・二塁手の両方が接触の直後から打球を追って走る（issue #1591）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: ThroughInfieldRight
+    duel_seconds: 2.5
+    video: {from: start, to: start+3.0, fps: 10}
