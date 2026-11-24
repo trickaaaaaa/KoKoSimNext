@@ -38,6 +38,11 @@ namespace KokoSim.Unity.Debugging
         /// （issue #1533）。既定（偽）は論理解像度＝絵の大きさ。1280×720 の窓で本番がどう見えるか（0.8倍）を撮る用。
         /// </summary>
         public bool GameScale;
+        /// <summary>校名（先攻・後攻）。null＝engine の仮名とデモの校名のまま。指定すると掲示板と打順表が同じ名前になり、
+        /// デモ用の仮名の控え（「代打 一郎」など）も足さない＝製品と同じ見た目（ストアのスクショ用）。</summary>
+        public string AwayName, HomeName;
+        /// <summary>配色（TeamColorProvider.Palette.ColorsFor に渡す校ID。先攻・後攻）。null＝配色なし。</summary>
+        public int? AwayColorId, HomeColorId;
         /// <summary>撮る瞬間（例: release-0.2 / flight_end / 1.5）。</summary>
         public List<string> Shots = new List<string>();
         /// <summary>連番で撮る区間（例: from catch-0.8 to release+0.9 fps 30）。From が空なら撮らない。</summary>
@@ -207,6 +212,28 @@ namespace KokoSim.Unity.Debugging
                     var map = FlowMap(v);
                     return map != null && map.TryGetValue("w", out var w) && map.TryGetValue("h", out var h)
                            && int.TryParse(w, out r.Width) && int.TryParse(h, out r.Height);
+                }
+                case "teams":
+                {
+                    var map = FlowMap(v);
+                    if (map == null || map.Count == 0) return false;
+                    foreach (var k in map.Keys) if (k != "away" && k != "home") return false;
+                    if (map.TryGetValue("away", out var an)) r.AwayName = an;
+                    if (map.TryGetValue("home", out var hn)) r.HomeName = hn;
+                    return true;
+                }
+                case "colors":
+                {
+                    var map = FlowMap(v);
+                    if (map == null || map.Count == 0) return false;
+                    foreach (var kv in map)
+                    {
+                        if (!int.TryParse(kv.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) return false;
+                        if (kv.Key == "away") r.AwayColorId = id;
+                        else if (kv.Key == "home") r.HomeColorId = id;
+                        else return false;
+                    }
+                    return true;
                 }
                 case "shots": r.Shots = FlowSeq(v); return r.Shots != null;
                 case "probes": r.Probes = FlowSeq(v); return r.Probes != null;

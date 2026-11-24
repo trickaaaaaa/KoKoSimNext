@@ -134,6 +134,20 @@ namespace KokoSim.Unity.Match
         /// ForcedOutcome の enum 名。既定 null＝シナリオの指定どおり。
         /// </summary>
         public static string ForceOverrideForCapture;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】場面ジャンプで始めた試合の校名（先攻・後攻）。撮影レシピの <c>teams</c>。
+        /// 既定 null＝engine の仮名（「遠征校(C)」など）とデモの校名のまま＝従来と完全一致。
+        /// 指定すると掲示板（engine の Team.Name）と左右の打順表の校名が同じ名前になり、デモ用の控え
+        /// （「代打 一郎」など）も足さない＝製品と同じ見た目で撮れる（ストアのスクショ用）。
+        /// </summary>
+        public static string AwayNameForCapture, HomeNameForCapture;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】場面ジャンプで始めた試合の配色（<c>TeamColorProvider.Palette.ColorsFor</c> に渡す校ID）。
+        /// 撮影レシピの <c>colors</c>。既定 null＝配色なし（デモの既定のユニフォーム）＝従来と完全一致。
+        /// </summary>
+        public static int? AwayColorIdForCapture, HomeColorIdForCapture;
 #endif
         /// <summary>
         /// 【開発用】伝令が効いていなくても「制球↑」「ミート↑」を出す（issue #1177 の見た目の撮影用。
@@ -759,7 +773,9 @@ namespace KokoSim.Unity.Match
             // 指示パネルの初期フェーズ（1打席目の攻守）。以降は采配窓ごとに OpenWindow が追従させる。
             if (_prog != null) _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway, ShownOffenseIsTop));
             // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
-            PostLineScore(1, isTop: true, finished: false);
+            // 場面ジャンプで途中の回から始めた試合は、その回・表裏で掲げる（1回表と決め打ちすると9回の場面でも「1回表」と出る）。
+            var startPoint = _prog?.ScenarioStartPoint;
+            PostLineScore(startPoint?.Inning ?? 1, isTop: startPoint?.IsTop ?? true, finished: false);
             SetBackHomeVisible(false);
             if (_caption != null) _caption.text = "試合開始。";
             UpdateControlState();
@@ -998,9 +1014,16 @@ namespace KokoSim.Unity.Match
 #endif
             // RosterTeamBuilder.Build が積む控え（投手枠2枚）へ、代打采配のデモ用の控えを足す。
             // 控えは1本の名簿なので上書きせず Merge する（上書きすると継投先が消える。issue #381）。
+            // 撮影で校名を指定したとき（製品と同じ見た目で撮る）は、識別用の仮名の控えを足さない。
+            var demoBench = true;
+#if UNITY_EDITOR
+            if (AwayNameForCapture != null || HomeNameForCapture != null) demoBench = false;
+#endif
             home = home with
             {
-                Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(home.Reserves, BuildBench()),
+                Reserves = demoBench
+                    ? KokoSim.Engine.Match.Game.TeamReserves.Merge(home.Reserves, BuildBench())
+                    : home.Reserves,
                 ManagerTacticalSense = managerTacticalSense,   // 伝令の効き目（issue #714）
             };
             _homeTeam = home;
@@ -1027,8 +1050,17 @@ namespace KokoSim.Unity.Match
                 && Unity.Debugging.DebugScenarios.Catalog.TryGet(ScenarioIdForCapture, out var scenario))
             {
                 var built = KokoSim.Engine.Debugging.ScenarioBuilder.Build(scenario, ctx, seed, home);
-                _homeTeam = built.Home;
-                _prog = new MatchProgression(built.Away, built.Home, built.Ctx, built.Seed, built.Start);
+                var awayTeam = built.Away;
+                var homeTeam = built.Home;
+                // 撮影の校名・配色（既定 null＝従来どおり）。校名は engine の Team.Name（掲示板）と打順表の両方へ。
+                // 名前を変えるだけ＝乱数・結果は変わらない。
+                if (AwayNameForCapture != null) { awayTeam = awayTeam with { Name = AwayNameForCapture }; _awayDisp = AwayNameForCapture; }
+                if (HomeNameForCapture != null) { homeTeam = homeTeam with { Name = HomeNameForCapture }; _homeDisp = HomeNameForCapture; }
+                if (AwayColorIdForCapture is { } ac) _awayColors = TeamColorProvider.Palette.ColorsFor(ac);
+                if (HomeColorIdForCapture is { } hc) _homeColors = TeamColorProvider.Palette.ColorsFor(hc);
+                SetColumnTitles();
+                _homeTeam = homeTeam;
+                _prog = new MatchProgression(awayTeam, homeTeam, built.Ctx, built.Seed, built.Start);
                 var forceName = string.IsNullOrEmpty(ForceOverrideForCapture) ? scenario.Force : ForceOverrideForCapture;
                 if (KokoSim.Engine.Debugging.ForcedOutcomes.TryParse(forceName, out var force)) _prog.ForceNext(force);
                 return;

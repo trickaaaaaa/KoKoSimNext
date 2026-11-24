@@ -128,6 +128,12 @@ public sealed class MatchProgression
     /// <summary>この試合の球場ID（<see cref="GameContext.StadiumId"/>。issue #905）。3D がどの球場の形を描くかの選択用。</summary>
     public string? StadiumId => _ctx.StadiumId;
 
+    /// <summary>
+    /// 場面ジャンプの開始局面（null＝1回表の頭から）。試合の画面が最初の打席より前に掲示板（回・表裏）を掲げるのに使う。
+    /// 読むだけ＝乱数・結果に影響しない。
+    /// </summary>
+    public Debugging.ScenarioStart? ScenarioStartPoint => _scenarioStart;
+
     /// <param name="scenarioStart">
     /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
     /// 注入した試合は <see cref="GameResult.ScenarioId"/> が立ち、digest・統計集計から外れる。

@@ -21,6 +21,9 @@
 #   view        : board＝盤面だけ / panel＝画面全体 / rig＝3Dの描画先そのまま（既定 board）
 #   size        : {w: 1600, h: 900}（既定）
 #   game_scale  : true＝論理解像度を絵の大きさに合わせず、本番と同じ参照解像度 1600×900 のまま撮る（1280×720 の窓の本番の見え方。issue #1533）
+#   teams       : {away: "青雲学院高校", home: "宮前商工"}＝校名（先攻・後攻。片方だけでも可）。掲示板と左右の打順表が同じ名前になり、
+#                 デモ用の仮名の控え（「代打 一郎」など）も足さない＝製品と同じ見た目で撮る（ストアのスクショ用）。省略＝仮名のまま
+#   colors      : {away: 9051, home: 9052}＝配色（TeamColorProvider の校ID。ユニフォームの色が両校で分かれる）。省略＝配色なし
 #   shots       : 撮る瞬間。守備ビューの再生の時計[s]か、節目±秒
 #                 節目: start / catch（送球の直前の区間の終わり）/ release（最初の送球）/ flight_end（最初の飛球の着地）
 #                       judgement（最初の判定）/ result / end（再生が閉じる直前＝長さの0.15秒手前）
@@ -623,3 +626,54 @@ captures:
     game_scale: true
     duel_seconds: 30
     video: {from: start, to: end, fps: 2}
+
+  # ── Steam ストアページのスクショ（docs/release/steam-store-page.md §4）。画面全体・1920×1080・製品と同じ見た目 ──
+  # 校名と配色を teams / colors で入れる（無いと掲示板が「遠征校(C)」、控えに「代打 一郎」が出る）。
+  - id: store-walkoff-hr
+    name: "ストア用: サヨナラ本塁打と歓喜の輪（自校＝後攻）"
+    scenario: game-end-walkoff-hr-lab
+    manager: home
+    teams: {away: "青雲学院高校", home: "宮前商工"}
+    colors: {away: 9051, home: 9052}
+    view: panel
+    size: {w: 1920, h: 1080}
+    duel_seconds: 40.0
+    video: {from: start, to: end, fps: 3}
+  - id: store-bases-loaded
+    name: "ストア用: 9回裏2死満塁フルカウントの対決（自校＝先攻で守る）"
+    scenario: bases-loaded-9th
+    manager: away
+    teams: {away: "宮前商工", home: "青雲学院高校"}
+    colors: {away: 9052, home: 9051}
+    view: panel
+    size: {w: 1920, h: 1080}
+    duel_seconds: 10.0
+    video: {from: start, to: end, fps: 4}
+  - id: store-strikeout
+    name: "ストア用: 最後の打者を三振に取ってゲームセット"
+    scenario: game-end-strikeout-lab
+    teams: {away: "青雲学院高校", home: "宮前商工"}
+    colors: {away: 9051, home: 9052}
+    view: panel
+    size: {w: 1920, h: 1080}
+    duel_seconds: 12.0
+    video: {from: start, to: end, fps: 4}
+  - id: store-tactics-offense
+    name: "ストア用: 攻撃の采配の手札（自校＝先攻）"
+    scenario: steal-sign-lab
+    manager: away
+    teams: {away: "宮前商工", home: "青雲学院高校"}
+    colors: {away: 9052, home: 9051}
+    view: panel
+    size: {w: 1920, h: 1080}
+    attempts: 1
+    cards: [batting-safety]
+  - id: store-dp
+    name: "ストア用: 併殺 6-6-3 の守備ビュー（自校＝後攻で守る）"
+    scenario: dp-663-lab
+    manager: home
+    teams: {away: "青雲学院高校", home: "宮前商工"}
+    colors: {away: 9051, home: 9052}
+    view: panel
+    size: {w: 1920, h: 1080}
+    shots: [catch-0.5, catch, release+0.2, judgement]

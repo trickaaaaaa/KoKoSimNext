@@ -146,6 +146,10 @@ namespace KokoSim.Unity.Debugging
                     MatchLiveController.ForceOverrideForCapture = null;
                     MatchLiveController.GameSeedOverrideForCapture = null;
                     MatchLiveController.ManagerIsAwayOverrideForCapture = null;
+                    MatchLiveController.AwayNameForCapture = null;
+                    MatchLiveController.HomeNameForCapture = null;
+                    MatchLiveController.AwayColorIdForCapture = null;
+                    MatchLiveController.HomeColorIdForCapture = null;
                 }
                 Finish(t0);
             }
@@ -157,6 +161,10 @@ namespace KokoSim.Unity.Debugging
                 MatchLiveController.ForceOverrideForCapture = _r.Force;
                 MatchLiveController.GameSeedOverrideForCapture = seed;
                 MatchLiveController.ManagerIsAwayOverrideForCapture = _r.ManagerAway;
+                MatchLiveController.AwayNameForCapture = _r.AwayName;
+                MatchLiveController.HomeNameForCapture = _r.HomeName;
+                MatchLiveController.AwayColorIdForCapture = _r.AwayColorId;
+                MatchLiveController.HomeColorIdForCapture = _r.HomeColorId;
                 EnsureOnlyMatchLive(false);
                 yield return null;
                 EnsureOnlyMatchLive(true);
