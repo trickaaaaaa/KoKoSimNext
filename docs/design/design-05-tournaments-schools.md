@@ -295,6 +295,7 @@
   - 公立系: 地名＋方角/序数/台/丘/中央/北陵…（例: 青葉東、桜丘、県立第一）
   - 私立系: 学院/学園/大付属/工業/商業/実業/国際…（例: 聖凛学院、北都大付属）
 - 実在地名（市区町村）は使用可、ただし**実在校名との完全一致を避けるチェック**を通す（ベストエフォート＋エディタで自由変更可能を担保）
+  - 実装（issue #1320・#1470）: 当たった名前を `data/school-names.yaml` の `excluded_private_names`／`excluded_public_names` に載せ、生成時に乱数を引き直さず接尾を隣へずらす（生成列は不変）。実在校名の全国一覧は repo に置かず（#1318）、非公開リポジトリ KoKoSimNext-assets の `school-names/real-high-schools.txt` と `tools/check-real-school-names.py` で語彙を照合して除外リストを作る
 
 ### 2.2 学校属性
 | 属性 | 内容 |

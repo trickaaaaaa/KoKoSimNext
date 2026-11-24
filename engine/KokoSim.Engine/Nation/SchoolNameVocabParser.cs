@@ -19,7 +19,7 @@ public static class SchoolNameVocabParser
         var d = new SchoolNameVocab();
         var lines = JoinFlowLines(yaml);
 
-        List<string>? publicSuffixes = null, privateStems = null, privateSuffixes = null, placePrefixes = null, excluded = null;
+        List<string>? publicSuffixes = null, privateStems = null, privateSuffixes = null, placePrefixes = null, excluded = null, excludedPublic = null;
         double? privateRatio = null;
         var places = new Dictionary<int, IReadOnlyList<string>>();
 
@@ -47,6 +47,7 @@ public static class SchoolNameVocabParser
                     case "private_suffixes": privateSuffixes = ParseList(value); break;
                     case "place_prefixes": placePrefixes = ParseList(value); break;
                     case "excluded_private_names": excluded = ParseList(value); break;
+                    case "excluded_public_names": excludedPublic = ParseList(value); break;
                     case "private_ratio":
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var r))
                             privateRatio = r;
@@ -73,6 +74,7 @@ public static class SchoolNameVocabParser
             PrivateRatio = privateRatio ?? d.PrivateRatio,
             PlacesByPrefecture = places,
             ExcludedPrivateNames = excluded != null ? new HashSet<string>(excluded) : d.ExcludedPrivateNames,
+            ExcludedPublicNames = excludedPublic != null ? new HashSet<string>(excludedPublic) : d.ExcludedPublicNames,
         };
     }
 
