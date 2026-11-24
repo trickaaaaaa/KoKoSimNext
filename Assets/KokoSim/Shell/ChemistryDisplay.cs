@@ -23,7 +23,10 @@ namespace KokoSim.Unity.Shell
         private static readonly CohesionCoefficients CohesionCoeff = new CohesionCoefficients();
 
         /// <summary>いまの自校の結束 U（試合で使うのと同じチーム＝ベンチ入りの顔ぶれ・主将・合宿などの上下）。</summary>
-        public static double CurrentCohesion() => Cohesion.ForTeam(ManagerTeam(), CohesionCoeff);
+        public static double CurrentCohesion() => CohesionOf(ManagerTeam());
+
+        /// <summary>このチームの結束 U。試合の士気（<see cref="Team.Morale"/>）と画面のチーム状態が同じ値を見る単一ソース。</summary>
+        public static double CohesionOf(Team team) => Cohesion.ForTeam(team, CohesionCoeff);
 
         /// <summary>この部員を主将にした場合の結束 U（主将指名画面の見込み）。</summary>
         public static double CohesionIfCaptain(DevelopingPlayer candidate)

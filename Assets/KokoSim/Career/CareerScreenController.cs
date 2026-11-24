@@ -12,7 +12,7 @@ namespace KokoSim.Unity.CareerMeta
 {
     /// <summary>
     /// キャリア画面（設計書06 §3.8・issue #586）。旧「監督」タブ（ManagerScreen）を統合した後継で、
-    /// 上段に「今の監督」（指導力・采配育成・名声信頼・通算成績）、下段に「歩み」（キャリア年表・
+    /// 上段に「今の監督」（指導力・采配育成・名声・通算成績）、下段に「歩み」（キャリア年表・
     /// 教え子名鑑・歴任校）を出す。
     ///
     /// <para>表示専用＝ロジックを持たない（UI-BUILD-METHOD 大原則④）。通算成績は
@@ -56,8 +56,7 @@ namespace KokoSim.Unity.CareerMeta
                 Ability("育成眼", m.TalentEye));
 
             FillRows("cr-eval",
-                Ability("名声", m.Fame),
-                Ability("信頼度", m.Trust));
+                Ability("名声", m.Fame));
 
             RenderRecord(record);
             RenderTimeline(record);

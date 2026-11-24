@@ -131,8 +131,7 @@ namespace KokoSim.Unity.Management
                 Funds = m.Funds,
                 Income = income,
                 // 内訳は金額の右へ並べるので短く保つ（単位はカード見出しの「単位: 万円」に集約）。
-                IncomeNote = "学校予算 " + Career.AnnualBudgetBase.ToString("0")
-                             + " ＋ 信頼度 " + (Career.BudgetPerTrust * m.Trust).ToString("0")
+                IncomeNote = "学校予算 " + (Career.AnnualBudgetBase + Career.BudgetPerTrust * m.Trust).ToString("0")
                              + " ＋ 設備投資 " + Career.SchoolInvestment.ToString("0")
                              + " ＋ 後援会 " + (Career.BoosterDonationPerFame * m.Fame).ToString("0"),
                 Expense = expense,

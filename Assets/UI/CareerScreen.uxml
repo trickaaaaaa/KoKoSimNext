@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- キャリア画面（設計書06 §3.8・設計書16 §3.8 ワイヤー ／ issue #586）。
-     旧「監督」タブを統合した画面＝監督メタ（指導力・采配・育成眼・名声・信頼度）はここに載る。
+     旧「監督」タブを統合した画面＝監督メタ（指導力・采配・育成眼・名声）はここに載る。
      監督選択のB案＝上下2段: 上段「今の監督」を4カード横並び、下段「歩み」（年表・教え子名鑑・歴任校）。
      表示専用でロジックを持たない（ManagerService / GameSession.Records / DraftService を読むだけ）。
      上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。 -->
@@ -56,7 +56,7 @@
 
             <ui:VisualElement class="card card--col">
               <ui:VisualElement class="card__hd card__hd--tight">
-                <ui:Label class="card__hd-title" text="名声・信頼度" />
+                <ui:Label class="card__hd-title" text="名声" />
               </ui:VisualElement>
               <ui:VisualElement class="card__body">
                 <ui:VisualElement name="cr-eval" />

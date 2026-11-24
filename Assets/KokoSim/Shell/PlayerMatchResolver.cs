@@ -244,7 +244,7 @@ namespace KokoSim.Unity.Shell
                 : RosterTeamBuilder.Build(RosterService.Active, name);
             // 伝令の効き目は監督の采配能力で変わる（設計書09 §3・issue #714）。チームの勢い（issue #863）は
             // 自校だけが持つ（相手校・AI校は Team.MomentumLevel の既定0のまま＝ここでは触らない）。
-            return team with
+            team = team with
             {
                 ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                 MomentumLevel = GameSession.Current.MomentumLevel,
@@ -252,8 +252,6 @@ namespace KokoSim.Unity.Shell
                 BatteryInnings = GameSession.Current.BatteryInningsForMatch(),
                 // 結束の上下（設計書23 §3.3・issue #934）も自校だけ（AI校は顔ぶれの土台だけ）。
                 CohesionDelta = GameSession.Current.CohesionDelta,
-                // 士気（設計書04 §1.2・issue #1270 M1）も自校だけ＝監督の信頼度。AI校は null＝恒等。
-                Morale = ManagerService.Manager.Trust,
                 // 入部の条件（約束）の見張り（設計書04 §2.4）。公式戦だけ＝委任・裏解決の采配AIが約束を破らない。
                 // 見張る約束が無ければ null（試合は従来と1ビットも変わらない）。練習試合は約束を数えないので付けない。
                 PromiseGuard = ScoutPromiseTracker.InOfficialTournament
@@ -261,6 +259,9 @@ namespace KokoSim.Unity.Shell
                         RosterService.Roster, GameSession.Current.Kind, ScoutPromiseTracker.NextMatchStamp())
                     : null,
             };
+            // 士気（設計書02 §3・issue #1603）も自校だけ＝チーム状態（結束 U）。画面のチーム状態と同じ値を見る。
+            // 結束は士気を読まないので、上の項目を載せたチームから引ける。AI校は null＝恒等。
+            return team with { Morale = ChemistryDisplay.CohesionOf(team) };
         }
 
         /// <summary>

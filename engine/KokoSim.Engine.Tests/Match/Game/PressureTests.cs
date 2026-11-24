@@ -37,8 +37,19 @@ public sealed class PressureTests
     [InlineData(100.0, 0.10)]
     [InlineData(120.0, 0.10)]   // 両端で止める
     [InlineData(-10.0, -0.10)]
-    public void MoraleMitigation_ByTrust(double? morale, double expected)
+    public void MoraleMitigation_ByCohesion(double? morale, double expected)
         => Assert.Equal(expected, PressureModel.MoraleMitigation(morale, C), 9);
+
+    [Fact]
+    public void Morale_FromCohesion_GoodHelpsBadHurtsFiftyIsIdentity()
+    {
+        // 自校の士気＝結束 U（issue #1603）。良い（高い）ほど負側を和らげ、悪い（低い）ほど強め、50 は恒等。
+        var good = PressureModel.Multiplier(20, 8, C, moraleMitigation: PressureModel.MoraleMitigation(85.0, C));
+        var normal = PressureModel.Multiplier(20, 8, C, moraleMitigation: PressureModel.MoraleMitigation(50.0, C));
+        var bad = PressureModel.Multiplier(20, 8, C, moraleMitigation: PressureModel.MoraleMitigation(15.0, C));
+        Assert.Equal(PressureModel.Multiplier(20, 8, C), normal);
+        Assert.True(good > normal && normal > bad);
+    }
 
     [Fact]
     public void Morale_MentalFifty_IsAlwaysIdentity()
