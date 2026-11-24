@@ -131,7 +131,7 @@ public static class ExtraBaseResolver
     /// </summary>
     public static RollPath ComputeRoll(
         Vector3D landing, Vector3D landingVelocity, double hangTimeSeconds,
-        double fenceDistanceM, FieldingCoefficients c)
+        double fenceDistanceM, FieldingCoefficients c, FieldGeometry? field = null)
     {
         var vh = Math.Sqrt(landingVelocity.X * landingVelocity.X + landingVelocity.Z * landingVelocity.Z);
         if (vh <= 1e-6)
@@ -143,7 +143,7 @@ public static class ExtraBaseResolver
         var descentRatio = Math.Abs(landingVelocity.Y) / (Math.Abs(landingVelocity.Y) + vh); // 0=水平, 1=垂直
         var retention = MathUtil.Clamp(
             c.RollRetentionFlat + (c.RollRetentionSteep - c.RollRetentionFlat) * descentRatio, 0.0, 1.0);
-        return RollFrom(landing, dir, vh * retention, hangTimeSeconds, fenceDistanceM, c);
+        return RollFrom(landing, dir, vh * retention, hangTimeSeconds, fenceDistanceM, c, field);
     }
 
     /// <summary>
@@ -152,7 +152,7 @@ public static class ExtraBaseResolver
     /// </summary>
     public static RollPath RollFrom(
         Vector3D start, Vector3D direction, double speedMps, double startSeconds,
-        double fenceDistanceM, FieldingCoefficients c)
+        double fenceDistanceM, FieldingCoefficients c, FieldGeometry? field = null)
     {
         var dir = direction;
         var v0 = Math.Max(0.0, speedMps);
@@ -162,7 +162,11 @@ public static class ExtraBaseResolver
         var decel = Math.Max(0.1, c.RollDecelMps2);
 
         var freeRoll = v0 * v0 / (2.0 * decel);
-        var toFence = Math.Max(0.0, fenceDistanceM - landingRange);
+        // 柵までの距離。転がる向きは放射方向とは限らない（横へ流れる打球・バウンドで逸れたゴロ）ので、
+        // 球筋が柵の曲線と交わる点で決める（field が無い呼び出しは従来の「着地点の方位の柵までの半径差」）。
+        var toFence = field is null
+            ? Math.Max(0.0, fenceDistanceM - landingRange)
+            : DistanceToWall(landing, dir, freeRoll, field);
         var reachedFence = freeRoll > toFence;
         var rollDist = reachedFence ? toFence : freeRoll;
 
@@ -182,33 +186,88 @@ public static class ExtraBaseResolver
     }
 
     /// <summary>
+    /// 地面の直線 <paramref name="start"/> + <paramref name="dir"/>·s が柵の曲線（<see cref="FieldGeometry.WallDistance"/>）に
+    /// 最初に届く s[m]。<paramref name="maxDistanceM"/> までに届かなければ +∞。純関数・乱数不使用。
+    /// </summary>
+    private static double DistanceToWall(Vector3D start, Vector3D dir, double maxDistanceM, FieldGeometry field)
+    {
+        double Gap(double s)
+        {
+            var x = start.X + dir.X * s;
+            var z = start.Z + dir.Z * s;
+            return Math.Sqrt(x * x + z * z) - field.WallDistance(Math.Atan2(x, z));
+        }
+
+        if (Gap(0.0) >= 0.0) return 0.0;
+        const double step = 0.5;
+        var prev = 0.0;
+        for (var s = step; ; s += step)
+        {
+            var cur = Math.Min(s, maxDistanceM);
+            if (Gap(cur) >= 0.0)
+            {
+                var lo = prev;
+                var hi = cur;
+                for (var i = 0; i < 40; i++)
+                {
+                    var mid = 0.5 * (lo + hi);
+                    if (Gap(mid) >= 0.0) hi = mid; else lo = mid;
+                }
+                return hi;
+            }
+            if (cur >= maxDistanceM) return double.PositiveInfinity;
+            prev = cur;
+        }
+    }
+
+    /// <summary>
     /// 転がる打球を回収する野手と回収時刻。停止点まで待つのではなく、転がっている途中で追いつける
     /// 最初の時刻（＝カットオフ）を二分法で求める。乱数を消費しない＝決定論。
     /// </summary>
     public static (Fielder Fielder, double Seconds) Retrieve(
         IReadOnlyList<Fielder> fielders, in RollPath path, FieldingCoefficients c)
     {
+        // 「その野手が追いつく最初の時刻」を野手ごとに二分法で求め、最も早い野手を採る（issue #1243:
+        // 停止点に最速の1人だけを見ると、ギャップへ転がる球を途中で押さえられる別の野手を見落とす）。
+        // g(t) = 「時刻 t の打球位置へ野手が到達する時刻」− t。g(lo)≤0 なら着地と同時に処理できる。
+        // 停止点に最も近い野手が外野手なら、競う相手も外野手だけ（外野へ抜けた球を内野手が後ろから追って
+        // 回収することはしない＝抜かれた内野手が回収役になる絵を作らない）。停止点が内野なら従来どおり全員。
         var stop = path.StopPosition;
-        var best = fielders[0];
-        var bestToStop = double.MaxValue;
+        var lo0 = path.HangTimeSeconds;
+        var nearest = fielders[0];
+        var nearestToStop = double.MaxValue;
         foreach (var f in fielders)
         {
             if (f.Position is FieldPosition.Catcher) continue;
             var t = ReachTime(f, stop);
-            if (t < bestToStop) { bestToStop = t; best = f; }
+            if (t < nearestToStop) { nearestToStop = t; nearest = f; }
         }
+        var outfieldOnly = IsOutfield(nearest.Position);
+        var chosen = nearest;
+        var chosenAt = InterceptSeconds(nearest, path, stop, lo0);
+        foreach (var f in fielders)
+        {
+            if (f.Position is FieldPosition.Catcher || ReferenceEquals(f, nearest)) continue;
+            if (outfieldOnly && !IsOutfield(f.Position)) continue;
+            var at = InterceptSeconds(f, path, stop, lo0);
+            if (at < chosenAt) { chosenAt = at; chosen = f; }
+        }
+        return (chosen, WithCarom(path, chosenAt, c));
+    }
 
-        var lo = path.HangTimeSeconds;
-        var hi = Math.Max(Math.Max(bestToStop, path.SettleAtSeconds), lo);
-        // g(t) = 「時刻 t の打球位置へ野手が到達する時刻」− t。g(lo)≤0 なら着地と同時に処理できる。
-        var chosen = best;
-        if (ReachTime(chosen, path.PositionAt(lo)) - lo <= 0) return (chosen, WithCarom(path, lo, c));
+    private static bool IsOutfield(FieldPosition pos)
+        => pos is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField;
+
+    private static double InterceptSeconds(Fielder f, in RollPath path, Vector3D stop, double lo)
+    {
+        if (ReachTime(f, path.PositionAt(lo)) - lo <= 0) return lo;
+        var hi = Math.Max(Math.Max(ReachTime(f, stop), path.SettleAtSeconds), lo);
         for (var i = 0; i < 24; i++)
         {
             var mid = 0.5 * (lo + hi);
-            if (ReachTime(chosen, path.PositionAt(mid)) - mid <= 0) hi = mid; else lo = mid;
+            if (ReachTime(f, path.PositionAt(mid)) - mid <= 0) hi = mid; else lo = mid;
         }
-        return (chosen, WithCarom(path, hi, c));
+        return hi;
     }
 
     /// <summary>
