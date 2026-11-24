@@ -1235,9 +1235,9 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-hidden-block { margin-bottom: 10px; }
 .pd2-hidden-block > .pd2-hidden-row { margin-bottom: 2px; }
 /* チーム総合力パネル: 精神力の行の右に並べるチーム状態の言葉（issue #935・#1600）。 */
-.tsp-cohesion { width: 150px; flex-shrink: 0; margin-left: var(--sp-3); }
+.tsp-cohesion { width: 164px; flex-shrink: 0; margin-left: var(--sp-3); }
 .tsp-cohesion__k { font-size: var(--fs-cap); color: var(--color-muted); margin: 0; padding: 0; }
-.tsp-cohesion__v { font-size: var(--fs-label); color: var(--color-chalk); margin: 0; padding: 0; white-space: nowrap; }
+.tsp-cohesion__v { font-size: var(--fs-cap); color: var(--color-chalk); margin: 0; padding: 0; white-space: nowrap; }
 .pd2-hidden-k { font-size: var(--fs-label); color: var(--color-muted); }
 .pd2-hidden-v { font-size: 18px; color: var(--color-chalk); }
 .pd2-hidden-v--unknown { font-size: 19px; color: var(--color-faint); }

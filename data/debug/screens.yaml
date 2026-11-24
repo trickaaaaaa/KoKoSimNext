@@ -1461,8 +1461,7 @@ screens:
       - show: TeamStrength
       - wait: 5
       - shot: 01-team-strength
-      - call: NewTeamService.Skip()
-      - call: GameClock.Advance(18)
+      - call: NewTeamService.OpenAtGameStart()
       - show: HomeDashboard
       - wait: 10
       - shot: 02-captain-dialog
