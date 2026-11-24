@@ -36,7 +36,6 @@ namespace KokoSim.Unity.NewGame
         /// 校名候補として並べる数。校名と同じ行に置くので**折り返さない本数**に抑える
         /// （独立行にすると下段の配色カードから最終2行が溢れて切れる）。
         /// </summary>
-        private const int SuggestCount = 6;
 
         // プレビューの構図はチーム設定画面と同じ（直立の投手を正面から。数値は実測で詰めたもの）。
         private static readonly Vector3 PreviewCamPos = new(-2.35f, 1.30f, 16.85f);
@@ -50,6 +49,7 @@ namespace KokoSim.Unity.NewGame
         private DropdownField _district;
         private Label _districtLabel;
         private TextField _name;
+        private BrowserNamePicker _browserName;   // ブラウザ版だけ入力欄を候補選択に置き換える（#1323）
         private VisualElement _suggestHost;
         private Label _summary;
         private Label _error;
@@ -91,6 +91,9 @@ namespace KokoSim.Unity.NewGame
                 _name.value = "";
                 _name.RegisterValueChangedCallback(_ => Render());
             }
+            // ブラウザ版は日本語を打てないので、入力欄を隠して下の候補ボタンから選ぶ（値は入力欄が持つ）。
+            // 選んだ名前は都道府県と同じ書き方で出す。候補ボタンは Windows 版と共通（BuildSuggestions）
+            _browserName = new BrowserNamePicker(_name, _suggestHost, "ngs-sug", "ngs-pref-name", "f-display");
             if (_start != null) _start.clicked += OnStart;
             if (_prefBack != null) _prefBack.clicked += OnBackToMap;
 
@@ -168,12 +171,7 @@ namespace KokoSim.Unity.NewGame
         {
             if (_suggestHost == null) return;
             _suggestHost.Clear();
-            var vocab = SchoolNameVocabProvider.Default;
-            if (vocab.PlacesByPrefecture == null
-                || !vocab.PlacesByPrefecture.TryGetValue(_prefectureId, out var places)
-                || places == null) return;
-
-            foreach (var place in places.Take(SuggestCount))
+            foreach (var place in BrowserNamePicker.CandidatesOf(_prefectureId))
             {
                 var text = place;
                 var b = new Button(() => { if (_name != null) _name.value = text; }) { text = text };
@@ -196,7 +194,7 @@ namespace KokoSim.Unity.NewGame
         private string Validate()
         {
             var name = TypedName;
-            if (name.Length == 0) return "校名を入力してください";
+            if (name.Length == 0) return _browserName != null && _browserName.Active ? "候補から校名を選んでください" : "校名を入力してください";
             if (name.Length > MaxNameLength) return "校名は " + MaxNameLength + " 文字までです";
             // 同じ県に同名の生成校が居ると大会表で見分けが付かない。県内だけ見れば足りる
             // （対戦相手として並ぶのは県内校だから）。新規ゲームは全国を作り直すので、前の進行の差分が

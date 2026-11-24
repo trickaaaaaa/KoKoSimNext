@@ -354,6 +354,28 @@ screens:
       - read: ngs-summary-text
       - shot: 01-hokkaido
 
+  - id: browser-name-candidates-1323
+    name: "ブラウザ版の校名は候補から選ぶ（入力欄の代わり）：新規作成と校名の編集（issue #1323）"
+    steps:
+      - set: {BuildPlatform.ForceBrowserInEditor: true}
+      - show: NewGameSetup
+      - call: SetForCapture(8, "")
+      - shot: 01-new-game-empty
+      - click: .ngs-sug[1]
+      - read: ngs-name-shown
+      - read: ngs-summary-text
+      - shot: 02-new-game-picked
+      - new_game: {seed: 1}
+      - set: {SaveSlots.Entry: Tab}
+      - show: SaveSlots
+      - wait: 5
+      - click: .seg-tab[1]
+      - wait: 5
+      - click: .name-cand[2]
+      - read: sr-name-shown
+      - shot: 03-rename-picked
+      - set: {BuildPlatform.ForceBrowserInEditor: false}
+
   - id: home-weather-1199
     name: "大会中のホームの天気・気温は試合当日だけ出る（PR #1391・issue #1199）"
     steps:

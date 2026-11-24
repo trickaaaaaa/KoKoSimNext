@@ -218,6 +218,11 @@
 .sr-text .unity-base-field__input,
 .sr-text .unity-text-element { font-size: var(--fs-body); }
 .sr-input__line .sbk-field-suffix { font-size: var(--fs-body); }
+/* ブラウザ版で入力欄の代わりに出す表示（BrowserNamePicker）。入力欄の文字と同じ大きさ。 */
+.sr-input__line > Label.sr-text { font-size: var(--fs-body); padding: 0; }
+/* ブラウザ版の校名の候補（入力欄の代わり・#1323）。新しい名前の行の下に道具ボタンを並べる。 */
+.sr-cands { flex-direction: row; flex-wrap: wrap; margin-top: var(--sp-2); }
+.sr-cands > Button { margin: 0; margin-right: var(--sp-2); margin-bottom: var(--sp-2); }
 
 /* クレジット（issue #1179）。ライセンス本文は長い定型文＝折り返して読める高さいっぱいまで流す。
    「校名の編集」等と違い常設の入力欄が無いので、スクロール領域の余白だけ別クラスに分ける。 */
