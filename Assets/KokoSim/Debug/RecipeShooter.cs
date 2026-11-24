@@ -241,9 +241,17 @@ namespace KokoSim.Unity.Debugging
                 {
                     // 開幕の「プレイボール」テロップが消えてから撮る（テロップは全画面の層で手札も局面も隠す）
                     float waitedWin = 0f;
-                    while (!ctrl.AtWindowForCapture || ctrl.GameTelopOnForCapture || ctrl.WindowSituationForCapture == null)
+                    string headBatter = null;
+                    while (!ctrl.AtWindowForCapture || ctrl.GameTelopOnForCapture || ctrl.WindowSituationForCapture == null
+                           || ctrl.WindowPitchNumberForCapture < _r.WindowPitch)
                     {
                         if (ctrl.IsGameOver || waitedWin > _r.TimeoutSeconds) { yield return false; yield break; }
+                        // カウントの途中で止めたい（window_pitch>=2）のに、その打席が先に終わって次の打者の頭へ進んだ＝撮り直し
+                        if (_r.WindowPitch > 1 && ctrl.AtWindowForCapture && ctrl.WindowSituationForCapture != null)
+                        {
+                            headBatter ??= ctrl.WindowBatterForCapture;
+                            if (ctrl.WindowBatterForCapture != headBatter) { yield return false; yield break; }
+                        }
                         waitedWin += Time.unscaledDeltaTime;
                         yield return null;
                     }
@@ -294,6 +302,20 @@ namespace KokoSim.Unity.Debugging
                         if (_r.Cards == null)
                         {
                             ctrl.FreezeLiveForCapture(false);
+                            if (_r.WindowAfterSeconds > 0f)
+                            {
+                                var log = new System.Text.StringBuilder();
+                                float after = 0f;
+                                while (after < _r.WindowAfterSeconds && !ctrl.IsGameOver)
+                                {
+                                    log.Append(after.ToString("F2", CultureInfo.InvariantCulture)).Append('\t').Append(ctrl.FrameStateForCapture()).Append('\n');
+                                    after += Time.deltaTime;
+                                    yield return null;
+                                }
+                                File.WriteAllText(Path.Combine(_dir, "window-after.txt"), log.ToString());
+                                yield return Capture(ctrl, Path.Combine(_dir, "03-after.png"));
+                                _shotFiles.Add("03-after.png");
+                            }
                             yield return true;
                             yield break;
                         }

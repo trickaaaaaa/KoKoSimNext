@@ -39,6 +39,10 @@
 #                 最初の采配窓で止めたまま MatchLiveController のメソッドを順に呼ぶ（issue #1533）。引数は1つまで（数か列挙の名前）。
 #                 shot で 11-ui, 12-ui… を撮る。wait(2.5) で実時間を待つ。交代パネル・選手能力パネルなど窓から開く画面の見え方を撮る用。
 #                 cards と組めば 01-window の直後・押す前に回す。単独なら 01-window と呼び出しの絵だけ撮って終わる
+#   window_pitch: window_calls／cards を始める采配窓の「その打席の何球目」（既定 1＝打席の頭。2以上はカウントの途中で止める。issue #1563）
+#                 その球まで行く前に打席が終わったら撮り直し（attempts を多めに）
+#   window_after: window_calls を回し終えたあと止めを解いてこの秒数流し、各コマの状態（描いている打席の球数・描画中の球・伝令の残り）を
+#                 window-after.txt に、最後の絵を 03-after.png に撮る（issue #1563）。cards と組むときは cards_after を使う
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
@@ -402,6 +406,55 @@ captures:
     view: panel
     attempts: 1
     cards: [batting-safety]
+
+  # ── 申告敬遠をタイムのメニューから（issue #1563）。止まる局面は steal-sign-lab（1回表・無死一塁）。home＝自校が守備 ──
+  # 01-window＝窓／11-ui＝タイムのメニュー（守備中は「申告敬遠」が出る）／12-ui＝確認「申告敬遠しますか？」。
+  # window-after.txt の各コマで queue（描く球の数）が 0 のまま・ball=False・result=Walk・timeoutsLeft が減っていないことを見る。
+  - id: ibb-timeout-head-1563
+    name: "申告敬遠（打席の頭）: タイムのメニュー→確認→はい（issue #1563）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [OpenPauseMenuForCapture, shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
+    window_after: 6
+
+  - id: ibb-timeout-mid-1563
+    name: "申告敬遠（カウントの途中・2球目の窓）: タイムのメニュー→確認→はい（issue #1563）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 12
+    window_pitch: 2
+    window_calls: [OpenPauseMenuForCapture, shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
+    window_after: 6
+
+  - id: ibb-timeout-no-1563
+    name: "申告敬遠の確認で「いいえ」: メニューへ戻り何も起きない・打席は続く（issue #1563）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [OpenPauseMenuForCapture, OpenIntentionalWalkConfirm, shot, CloseMessengerPicker, shot, OnResume]
+    window_after: 4
+
+  - id: ibb-timeout-offense-1563
+    name: "自校が攻撃のタイムのメニューには「申告敬遠」が出ない（issue #1563）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    attempts: 1
+    window_calls: [OpenPauseMenuForCapture, shot]
+
+  - id: ibb-ai-1563
+    name: "相手校(AI)の敬遠も投げずに歩く（強制発動の敬遠・issue #1563）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    force: IntentionalWalk
+    attempts: 1
+    window_calls: [shot]
+    window_after: 6
 
   - id: tactics-defense-pitchout-1473
     name: "守備の手札（左右）＋ウエストを押す（issue #1473）"

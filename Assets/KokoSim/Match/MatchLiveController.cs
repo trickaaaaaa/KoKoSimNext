@@ -5693,6 +5693,22 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public bool AtPaHeadWindowForCapture => _stage == LiveStage.Window && _atBat is { PitchNumberInPa: 1 };
 
+        /// <summary>撮影用（issue #1563）: いま止まっている采配窓が「その打席の何球目」か（窓でなければ 0）と、その打者の名前。</summary>
+        public int WindowPitchNumberForCapture => _atBat?.PitchNumberInPa ?? 0;
+        public string WindowBatterForCapture => _atBat?.BatterName;
+
+        /// <summary>撮影用（issue #1563）: 申告敬遠の確認を出している最中か・押せる状態か・メニューに出ているか。</summary>
+        public bool IntentionalWalkConfirmOpenForCapture => _pmIbbConfirm != null && _pmIbbConfirm.resolvedStyle.display != DisplayStyle.None;
+
+        /// <summary>撮影用（issue #1563）: 1コマぶんの状態（描いている打席の球数・描画中の球・自校の伝令の残り）を1行で。</summary>
+        public string FrameStateForCapture()
+        {
+            var pa = _current;
+            return $"stage={_stage} paConfirmed={_paConfirmed} queue={_paQueue.Count} pitchIdx={_pitchIdx} inPitch={_inPitchPhase} ball={_pitchBallVisible} "
+                 + $"result={(pa == null ? "-" : pa.Result.ToString())} seq={(pa?.PitchSeq?.Pitches.Count.ToString() ?? "-")} "
+                 + $"timeoutsLeft(off/def)={_prog?.OffenseTimeoutsLeft(_managerIsAway)}/{_prog?.DefenseTimeoutsLeft(_managerIsAway)}";
+        }
+
         /// <summary>スクショ用: いま采配窓で止まっているか（打席の途中＝球間を含む）。</summary>
         public bool AtWindowForCapture => _stage == LiveStage.Window;
         /// <summary>スクショ用: 投球フェーズ（振りかぶり〜判定〜次の窓の手前）か。対決ビューのまま撮るレシピの起点。</summary>

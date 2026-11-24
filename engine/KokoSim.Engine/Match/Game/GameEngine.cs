@@ -2675,7 +2675,8 @@ public static class GameEngine
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
                 batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
                 pitcherRuns: ownRunsThisPa,
-                play: res.Play, rbi: rbiRuns, intentionalWalk: defTactics.IntentionalWalk);
+                play: res.Play, rbi: rbiRuns,
+                intentionalWalk: defTactics.IntentionalWalk || force == Debugging.ForcedOutcome.IntentionalWalk);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
