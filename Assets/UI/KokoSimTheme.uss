@@ -757,7 +757,6 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .sb2-meter { align-items: center; margin-right: 22px; }
 .sb2-meter__k { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; }
 .sb2-meter__v { font-size: 24px; color: var(--color-chalk); margin-top: 2px; }
-.sb2-meter__v--state { font-size: var(--fs-label); margin-top: 5px; white-space: nowrap; }
 
 /* --- 3カラム本体（外側スクロールなし・内部スクロール） --- */
 .dash { flex-grow: 1; flex-direction: row; padding: 14px; overflow: hidden; }

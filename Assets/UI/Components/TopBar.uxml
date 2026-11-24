@@ -35,7 +35,7 @@
                     <ui:Label name="team-rank-value" class="sb2-rank__v" text="" />
                 </ui:VisualElement>
             </ui:VisualElement>
-            <ui:VisualElement class="sb2-meter">
+            <ui:VisualElement class="sb2-meter sb2-meter--start">
                 <ui:Label class="sb2-meter__k" text="チーム状態" />
                 <ui:Label name="team-state" class="sb2-meter__v sb2-meter__v--state" text="" />
             </ui:VisualElement>
