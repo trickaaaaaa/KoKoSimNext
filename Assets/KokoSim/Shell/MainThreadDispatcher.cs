@@ -97,9 +97,9 @@ namespace KokoSim.Unity.Shell
             }
             _startedAt = Clock();
             _stallLogged = false;
-            if (BackgroundWork.Busy)
+            if (BackgroundWork.AnyPending)
             {
-                // ブラウザ版で裏の仕事が残っている（#1588）。スロットは先に取る＝二度押し・週送りを弾き、待ち画面を出す。
+                // ブラウザ版で裏の仕事が残っている（#1588。試合の先読みも含む）。スロットは先に取る＝二度押し・週送りを弾き、待ち画面を出す。
                 // work は裏の仕事をコマをまたいで回し切ってから始める＝work の中の「終わるまで待つ」が1コマで
                 // 数百試合を回してメモリを使い切るのを避ける。
                 BackgroundWork.WhenIdle(() =>

@@ -126,6 +126,28 @@ namespace KokoSim.EditorTests
         }
 
         [Test]
+        public void Browser_Prefetch_DoesNotHoldDayAdvance_ButHoldsBackgroundGameOp()
+        {
+            var log = new List<int>();
+            BackgroundWork.RunSteps(Counter(3, log), holdsActions: false);   // 試合の先読み
+
+            Assert.IsFalse(BackgroundWork.Busy, "先読みは日送りを待たせない");
+            Assert.IsFalse(BackgroundWork.DeferUntilIdle(() => { }));
+            Assert.IsTrue(BackgroundWork.AnyPending);
+
+            var workSawAll = false;
+            var done = false;
+            Assert.IsTrue(BackgroundGameOp.Run(() => workSawAll = log.Count == 3, () => done = true));
+            for (var frame = 0; frame < 10 && !done; frame++)
+            {
+                BackgroundWork.Pump(0);
+                MainThreadDispatcher.Drain();
+            }
+            Assert.IsTrue(done);
+            Assert.IsTrue(workSawAll, "試合開始などは先読みを回し切ってから始まる");
+        }
+
+        [Test]
         public void Threaded_RunSteps_RunsToTheEndOnAThread()
         {
             BackgroundWork.SimulateBrowser = false;

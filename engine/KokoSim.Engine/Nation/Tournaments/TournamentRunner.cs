@@ -863,11 +863,15 @@ public sealed class TournamentRunner : ITournamentRunner
     /// アクセスを避ける。自校が敗退/優勝済み（<see cref="Finished"/>）や自校が実対戦を持つ前の不戦勝途中では何もしない。</para>
     /// </summary>
     public void PrefetchCurrentRoundBackgroundCards(int maxParallelism = 1)
+        => PrefetchRunner.Run(CurrentRoundPrefetchJobs(), job => job(), maxParallelism);
+
+    /// <inheritdoc />
+    public IReadOnlyList<Action> CurrentRoundPrefetchJobs()
     {
-        if (_backgroundResolver is null || Finished || _thirdPlacePending) return;
+        if (_backgroundResolver is null || Finished || _thirdPlacePending) return Array.Empty<Action>();
         var resolver = _backgroundResolver;
         var cur = _current;
-        if (cur.Length < 2) return;
+        if (cur.Length < 2) return Array.Empty<Action>();
         var roundsRemaining = TournamentRecorder.RoundsRemaining(cur.Length);
         // fork は base rng を進めない純導出だが、Fork 自体をワーカーから同時に呼ばないよう先に作っておく。
         var jobs = new List<(School A, School B, IRandomSource Rng, TournamentMatchContext Context)>();
@@ -884,7 +888,7 @@ public sealed class TournamentRunner : ITournamentRunner
         }
         // ResolveRound の裏カード分岐と同一呼び出し（結果は捨てる＝メモ化 resolver が温める）。
         // 1校は1ラウンドに1カードにしか出ない＝カード同士でロスターを取り合わない。
-        PrefetchRunner.Run(jobs, j => resolver.Resolve(j.A, j.B, j.Rng, j.Context), maxParallelism);
+        return jobs.ConvertAll<Action>(j => () => resolver.Resolve(j.A, j.B, j.Rng, j.Context));
     }
 
     // ===== 内部進行 =====

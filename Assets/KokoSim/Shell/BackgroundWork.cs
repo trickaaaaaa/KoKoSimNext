@@ -42,13 +42,15 @@ namespace KokoSim.Unity.Shell
         private sealed class SteppedJob
         {
             public Func<bool> Step;
+            public bool HoldsActions;
             public readonly TaskCompletionSource<bool> Done = new TaskCompletionSource<bool>();
         }
 
         // ブラウザ版の歩み待ちの仕事（メインスレッドだけが触る）。
         private static readonly List<SteppedJob> Jobs = new List<SteppedJob>();
-        // 回し切った後に走らせる操作（メインスレッドだけが触る）。
-        private static readonly Queue<Action> IdleActions = new Queue<Action>();
+        // 回し切った後に走らせる操作（メインスレッドだけが触る）。WaitAll＝待たせない仕事（先読み）も回し切るまで待つ。
+        private struct IdleAction { public Action Run; public bool WaitAll; }
+        private static readonly List<IdleAction> IdleActions = new List<IdleAction>();
 
         /// <summary>別スレッドで回せるか（ブラウザ版だけ false）。</summary>
         public static bool Threaded
@@ -62,8 +64,11 @@ namespace KokoSim.Unity.Shell
 #endif
         }
 
-        /// <summary>ブラウザ版で、まだ回し切っていない裏の仕事があるか（スレッドで回す版は常に false）。</summary>
-        public static bool Busy => !Threaded && Jobs.Count > 0;
+        /// <summary>ブラウザ版で、操作を待たせる裏の仕事がまだ残っているか（スレッドで回す版は常に false）。</summary>
+        public static bool Busy => !Threaded && Jobs.Exists(j => j.HoldsActions);
+
+        /// <summary>ブラウザ版で、待たせない仕事（先読み）も含めて裏の仕事が残っているか（スレッドで回す版は常に false）。</summary>
+        public static bool AnyPending => !Threaded && Jobs.Count > 0;
 
         /// <summary>仕事を回す。ブラウザ版はその場で最後まで回し、終わった Task を返す（例外は Task に包む）。
         /// 何百試合も回す重い仕事には使わない（<see cref="RunSteps"/> を使う）。</summary>
@@ -85,10 +90,12 @@ namespace KokoSim.Unity.Shell
         /// 1歩ずつ進む仕事を回す。<paramref name="step"/> は1区画ぶん進めて、まだ続きがあれば true を返す。
         /// スレッドで回す版は別スレッドで false まで回す。ブラウザ版は <see cref="Pump"/> が毎フレーム少しずつ回す。
         /// </summary>
-        public static Task RunSteps(Func<bool> step)
+        /// <param name="holdsActions">false＝週送り・日送りを待たせない（先読みのように、温めるだけで本流が後で
+        /// 同じものを解ける仕事）。試合開始などの <see cref="BackgroundGameOp"/> は false の仕事も回し切ってから始まる。</param>
+        public static Task RunSteps(Func<bool> step, bool holdsActions = true)
         {
             if (Threaded) return Task.Run(() => { while (step()) { } });
-            var job = new SteppedJob { Step = step };
+            var job = new SteppedJob { Step = step, HoldsActions = holdsActions };
             Jobs.Add(job);
             return job.Done.Task;
         }
@@ -101,7 +108,7 @@ namespace KokoSim.Unity.Shell
         public static void Pump(double? budgetMs = null)
         {
             if (Threaded) return;
-            var waiting = IdleActions.Count > 0;
+            var waiting = IdleActions.Count > 0;   // 操作が待っている＝Paused でも多めに回す
             if (Jobs.Count > 0 && (waiting || NationBackgroundSim.Throttle != NationBackgroundSim.SimThrottle.Paused))
             {
                 var budget = budgetMs ?? (waiting ? WaitingBudgetMs : FrameBudgetMs);
@@ -109,23 +116,24 @@ namespace KokoSim.Unity.Shell
                 do StepOnce(Jobs[0]);
                 while (Jobs.Count > 0 && sw.Elapsed.TotalMilliseconds < budget);
             }
-            while (Jobs.Count == 0 && IdleActions.Count > 0)
+            while (IdleActions.Count > 0 && (IdleActions[0].WaitAll ? !AnyPending : !Busy))
             {
-                var action = IdleActions.Dequeue();
+                var action = IdleActions[0].Run;
+                IdleActions.RemoveAt(0);
                 try { action(); }
                 catch (Exception e) { UnityEngine.Debug.LogException(e); }
             }
         }
 
         /// <summary>
-        /// 裏の仕事を回し切ってから <paramref name="action"/> を走らせる。スレッドで回す版・待つ仕事が無いときはその場で走らせる。
-        /// ブラウザ版で待つ仕事があるときは積んでおき、<see cref="Pump"/> が回し切った後に走らせる。
+        /// 裏の仕事を（待たせない先読みも含めて）回し切ってから <paramref name="action"/> を走らせる。スレッドで回す版・
+        /// 仕事が無いときはその場で走らせる。ブラウザ版で仕事が残っていれば積んでおき、<see cref="Pump"/> が回し切った後に走らせる。
         /// </summary>
         public static void WhenIdle(Action action)
         {
             if (action == null) return;
-            if (!Busy && IdleActions.Count == 0) { action(); return; }
-            IdleActions.Enqueue(action);
+            if (!AnyPending && IdleActions.Count == 0) { action(); return; }
+            IdleActions.Add(new IdleAction { Run = action, WaitAll = true });
         }
 
         /// <summary>回し切るのを待っている操作があるか（待ち画面を出す合図）。</summary>
@@ -139,7 +147,7 @@ namespace KokoSim.Unity.Shell
         public static bool DeferUntilIdle(Action action)
         {
             if (!Busy || action == null) return false;
-            if (!IdleActions.Contains(action)) IdleActions.Enqueue(action);
+            if (!IdleActions.Exists(a => a.Run.Equals(action))) IdleActions.Add(new IdleAction { Run = action, WaitAll = false });
             return true;
         }
 
@@ -152,7 +160,12 @@ namespace KokoSim.Unity.Shell
         {
             if (task == null) return;
             if (!Threaded)
-                while (!task.IsCompleted && Jobs.Count > 0) StepOnce(Jobs[0]);
+                while (!task.IsCompleted && Jobs.Count > 0)
+                {
+                    // 待っている仕事そのものを先に回す（束ねた Task＝WhenAll なら見つからない＝先頭から順に）。
+                    var own = Jobs.Find(j => j.Done.Task == task);
+                    StepOnce(own ?? Jobs[0]);
+                }
             task.Wait();
         }
 

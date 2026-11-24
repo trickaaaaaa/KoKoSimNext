@@ -132,6 +132,42 @@ public sealed class BackgroundPrefetchTests
                 stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits));
     }
 
+    /// <summary>
+    /// 1カードずつの仕事（<see cref="ITournamentRunner.CurrentRoundPrefetchJobs"/>）を逆順に1つずつ回しても、
+    /// 素のフルシムとバイト一致すること。ブラウザ版はコマごとに少しずつ回す（#1588）＝順も刻みも変わる。
+    /// </summary>
+    [Theory]
+    [InlineData(32, 42UL)]
+    [InlineData(11, 999UL)]
+    public void PrefetchJobs_RunInAnyOrder_MatchPlain(int count, ulong seed)
+    {
+        var plain = RunPlain(MakePrefecture(4000, count), seed);
+
+        var schools = MakePrefecture(4000, count);
+        var stats = new NationTournamentStats();
+        var bg = new MemoizingBackgroundResolver(
+            new BackgroundMatchResolver(new NationRosters(new AiRosterDeps()), new GameContext(), 1, stats: null));
+        var runner = new TournamentRunner(
+            schools, schools[0], Coeff, new Xoshiro256Random(seed), Schedule, "刻", null, bg,
+            onBackgroundMatch: (a, h, g) => stats.FoldMatch(a, h, g));
+        var warmed = 0;
+        while (!runner.Finished)
+        {
+            var jobs = runner.CurrentRoundPrefetchJobs();
+            for (var i = jobs.Count - 1; i >= 0; i--) { jobs[i](); warmed++; }
+            runner.PlayNextPlayerMatch();
+        }
+        runner.DrainBracketResolution();
+
+        Assert.True(warmed > 0, "仕事が1つも返らない＝先読みが効いていない");
+        Assert.Equal(plain.Champion, runner.ChampionName);
+        Assert.Equal(StatTotals(plain.Stats), StatTotals(stats));
+        foreach (var id in plain.Stats.Schools)
+            Assert.Equal(
+                plain.Stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits),
+                stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits));
+    }
+
     [Fact]
     public void Prefetch_DoesNotDoubleFold_Stats()
     {
