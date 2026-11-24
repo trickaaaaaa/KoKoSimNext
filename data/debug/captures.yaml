@@ -702,6 +702,7 @@ captures:
     scenario: if-grounder-3b-lab
     manager: home
     shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.9]
+    video: {from: judgement-0.4, to: judgement+0.9, fps: 10}
     probes: [BaseCrew]
 
   - id: base-umpire-2b-steal-out-1595
