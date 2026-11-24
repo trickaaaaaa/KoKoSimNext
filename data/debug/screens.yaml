@@ -1393,3 +1393,46 @@ screens:
       - call: ShowPage(3)
       - wait: 5
       - shot: 09-credits
+
+  # 共通トップバーのチーム状態（結束の言葉）。game_scale＝1280×720 の窓の本番の見え方（0.8倍）
+  - id: team-state-1600
+    name: "共通トップバーのチーム状態（言葉）・チーム総合力パネル・選手間イベントの結果行・主将指名（issue #1600）"
+    game_scale: true
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - read: "=ChemistryDisplay.CurrentTeamStateWord()"
+      - shot: 01-home
+      - show: TeamStrength
+      - wait: 5
+      - shot: 02-team-strength
+      - show: PlayerList
+      - wait: 5
+      - shot: 03-players
+      - show: ManagementScreen
+      - wait: 5
+      - shot: 04-management
+      - call: EventService.PushChoiceEvent("skipping_practice", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 05-choices
+      - click: .choice-btn[0]
+      - wait: 5
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - read: "=ChemistryDisplay.CurrentTeamStateWord()"
+      - shot: 06-result
+      - call: GameClock.Advance(18)
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 07-captain
