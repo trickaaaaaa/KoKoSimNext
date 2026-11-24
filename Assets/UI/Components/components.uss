@@ -3247,7 +3247,7 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 }
 .plc__num {
     position: absolute;
-    font-size: 12px;
+    font-size: 13px;
     margin: 0;
     padding: 0;
     -unity-text-align: middle-center;

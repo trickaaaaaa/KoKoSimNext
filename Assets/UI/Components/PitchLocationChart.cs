@@ -92,8 +92,8 @@ namespace KokoSim.Unity.Components
     {
         public const float ChartWidth = 180f;
         public const float ChartHeight = 204f;
-        private const float CircleR = 11f;
-        private const float TriangleR = 14f;
+        private const float CircleR = 12f;
+        private const float TriangleR = 16f;
 
         private static readonly Color FrameCol = new Color(1f, 1f, 1f, 0.9f);
         private static readonly Color GridCol = new Color(1f, 1f, 1f, 0.45f);
