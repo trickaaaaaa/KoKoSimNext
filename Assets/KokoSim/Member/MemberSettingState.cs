@@ -35,6 +35,8 @@ namespace KokoSim.Unity.Member
         public int Index;
         public string Name = "";
         public string GradeLabel = "";
+        public string HandLabel = "";    // 投打（例「右投左打」）
+        public bool IsCaptain;
         public bool IsPicked;            // 選択中の選手
     }
 
@@ -229,6 +231,8 @@ namespace KokoSim.Unity.Member
                     Index = i,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
+                    HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
+                    IsCaptain = p.IsCaptain,
                     IsPicked = _picked == i,
                 });
             }

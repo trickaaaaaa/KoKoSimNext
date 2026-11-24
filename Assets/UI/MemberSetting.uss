@@ -1,81 +1,177 @@
 /* ═══════════════════════════════════════════════════════════════════════
    MemberSetting.uss — メンバー設定 画面の配置のみ（UI-BUILD-METHOD Step 4）
    ───────────────────────────────────────────────────────────────────────
-   見た目の最小単位は components.uss（部品辞書）。ここは2カラム分割やダイヤ枠の
-   寸法など「この画面固有の並べ方」だけを持ち、色・余白・角丸は tokens を参照する。
+   見た目の最小単位は components.uss／scorebook.uss（部品辞書）。ここは4列の並べ方と
+   背番号のカード・行の寸法など「この画面固有の並べ方」を持ち、色は tokens を参照する。
    gap/grid/擬似要素は使わない（USS非対応）。固定寸法セクションは flex-shrink:0。
    ═══════════════════════════════════════════════════════════════════════ */
 
 .ms-root {
     flex-grow: 1;
-    background-color: var(--color-field);
 }
+/* 画面の地は紙色より一段濃くし、紙色のカードを浮かせる（影は使わない）。 */
+.sbk.ms-root { background-color: var(--sbk-paper-deep); }
 
+/* 4列＝背番号1〜9｜背番号10〜20｜ベンチ外｜2選手比較（残り全部）。列の間隔は16px。 */
 .ms-body {
     flex-direction: row;
     flex-grow: 1;
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-    padding-top: var(--sp-3);
-    padding-bottom: var(--sp-4);
+    min-height: 0;
+    padding: 16px 24px 18px 24px;
 }
+.ms-col { flex-shrink: 0; min-height: 0; margin-right: 16px; }
+.ms-col--field { width: 556px; }
+/* 10〜20とベンチ外の列は、6文字の名前（16px）が切れない幅まで詰め、空いたぶんを比較パネルへ回す
+   （モックは304px／300px。名前の右が大きく空くので詰めた＝2026-11-24 オーナー指示）。 */
+.ms-col--bench { width: 240px; }
+.ms-col--out { width: 224px; }
+.ms-col Label { margin: 0; padding: 0; }
 
-/* ── 左：背番号割当（上=ヘッダ／下=[縦長の球場図][控え＋プール]） ── */
-.ms-left {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
-    margin-right: var(--sp-4);
-}
-.ms-left-body { flex-direction: row; flex-grow: 1; }
-.ms-roster { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-4); }
-.ms-head { flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
-.ms-head__spacer { flex-grow: 1; }
+/* 列の見出し（高さ34px・下に10px）。右側は「登録 N / 20」「N 人」。 */
+.ms-col__head { height: 34px; flex-shrink: 0; flex-direction: row; align-items: center; margin-bottom: 10px; }
+.ms-col__title { flex-grow: 1; font-size: 18px; letter-spacing: 1.4px; color: var(--sbk-text); }
+.ms-col__meta { flex-direction: row; align-items: flex-end; flex-shrink: 0; }
+.ms-col .ms-col__meta-txt { font-size: 12px; color: var(--sbk-sub); padding-bottom: 2px; }
+.ms-col .ms-col__count { font-size: 16px; color: var(--sbk-text); margin-left: 4px; margin-right: 4px; }
 
-.ms-auto-btn {
-    font-size: var(--fs-label);
-    color: var(--color-chalk);
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w);
-    border-color: var(--color-line);
-    border-radius: var(--radius-chip);
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    padding-top: var(--sp-1);
-    padding-bottom: var(--sp-1);
-}
-.ms-auto-btn:hover { border-color: var(--sky); color: var(--sky); }
-
-/* 球場図は横長化して全景（issue #271 オーナー決定 2026-07-26）。旧440px幅・DiamondFraction 0.50では
-   両翼(±45°・98m)が要素の半幅を1.79倍超過して見切れていた。700px幅・DiamondFraction 0.28
-   （BaseballFieldElement側の定数。式は同ファイルのコメント参照）で両翼が要素内に収まる。
-   代償として右の控え/部員プール列（.ms-roster）が狭くなり折り返しが増えるが、内野ダイヤの
-   大きさ・チップの情報量はほぼ現状維持。 */
+/* ── 1列目：球場の絵とカード（背番号1〜9） ── */
 .ms-field {
-    width: 700px;
-    flex-shrink: 0;
-    align-self: stretch;
+    flex-grow: 1;
+    min-height: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    background-color: var(--sbk-field-deep);
 }
-.ms-field__slots {
+.ms-field__art, .ms-field__slots {
     position: absolute;
     left: 0; top: 0; right: 0; bottom: 0;
 }
-
-.ms-section {
-    font-size: var(--fs-label);
-    color: var(--color-muted);
-    margin-top: var(--sp-3);
-    margin-bottom: var(--sp-2);
+/* カードは168×56。選択の枠（2.5px）の有無で大きさが変わらないよう、ふだんは透明の枠を付けておく。 */
+.ms-fcard {
+    position: absolute;
+    width: 168px;
+    height: 56px;
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--sbk-patch-bg);
+    border-radius: 9px;
+    border-width: 2.5px;
+    border-color: rgba(0, 0, 0, 0);
+    padding-left: 7.5px;
+    padding-right: 7.5px;
 }
-.ms-bench { flex-direction: row; flex-wrap: wrap; flex-shrink: 0; }
+.ms-fcard--empty { background-color: rgba(251, 250, 246, 0.55); }
+.ms-fcard .ms-who { margin-left: 8px; margin-right: 8px; }
+.ms-fcard .ms-who__name { font-size: 15px; letter-spacing: 0.6px; }
+/* 名前の幅は86px。5文字（姓3＋名2など）までは15pxで収まる。6文字（語彙の最長＝姓3＋名3）は12px、
+   それより長い名前は11pxに落として、切らずに収める。 */
+.ms-fcard .ms-who__name--long { font-size: 12px; letter-spacing: 0; }
+.ms-fcard .ms-who__name--xlong { font-size: 11px; letter-spacing: 0; }
+.sbk .ms-fcard .rank-chip { min-width: 20px; width: 20px; height: 20px; padding: 0; margin: 0; flex-shrink: 0; }
 
-.ms-pool-scroll { max-height: 150px; flex-shrink: 0; }
-.ms-pool { flex-direction: row; flex-wrap: wrap; }
+/* 選択中（どの列でも同じ）：スクールカラーの枠。色は SchoolAccent.Apply が流し込む（.acc-bd）。 */
+.sbk .ms-pick { border-color: var(--color-accent); }
 
-/* ── 右：2選手比較 ── */
-.ms-compare {
-    width: 384px;
+/* 名前＋学年・投打の2行 */
+.ms-who { flex-grow: 1; flex-basis: 0; min-width: 0; justify-content: center; }
+.ms-who__name { font-size: 16px; letter-spacing: 1px; color: var(--sbk-text); white-space: nowrap; overflow: hidden; }
+.ms-col .ms-who__sub { font-size: 11px; color: var(--sbk-sub); white-space: nowrap; margin-top: 1px; }
+
+/* 背番号の箱（白地・1.5px枠）。行は28×22、球場のカードは26×22。 */
+.sbk .ms-col .num-badge { width: 28px; height: 22px; font-size: 13px; flex-shrink: 0; background-color: var(--sbk-card); }
+.sbk .ms-col .ms-fcard .num-badge { width: 26px; }
+.sbk .ms-col .num-badge--vacant { background-color: rgba(0, 0, 0, 0); color: var(--sbk-mute); border-color: var(--sbk-mute-soft); }
+.ms-col .ms-vacant { font-size: 13px; color: var(--sbk-mute); margin-left: 10px; }
+.ms-fcard .ms-vacant { margin-left: 8px; color: var(--sbk-info); }
+
+/* 主将の印（直径20px・スクールカラー地に白）。球場のカードでは右上の角にはみ出して置き、紙色の2px縁を付ける。 */
+.ms-cap {
+    width: 20px;
+    height: 20px;
     flex-shrink: 0;
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--sbk-card);
+    background-color: var(--color-accent);
+    -unity-text-align: middle-center;
+}
+.ms-col .ms-cap--corner {
+    position: absolute;
+    right: -11.5px;
+    top: -11.5px;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    border-width: 2px;
+    border-color: var(--sbk-patch-bg);
+}
+
+/* ── 2・3列目：選手の行（高さ54px・間隔6px） ── */
+.ms-bench-scroll { flex-grow: 1; min-height: 0; }
+.ms-row {
+    height: 54px;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--sbk-patch-bg);
+    border-radius: 9px;
+    border-width: 2.5px;
+    border-color: rgba(0, 0, 0, 0);
+    padding-left: 9.5px;
+    padding-right: 7.5px;
+}
+.ms-row--empty { background-color: rgba(0, 0, 0, 0); }
+.ms-row .ms-who { margin-left: 10px; margin-right: 10px; }
+.ms-row--out .ms-who { margin-left: 0; }
+.ms-col .ms-row__x {
+    width: 18px;
+    height: 30px;
+    flex-shrink: 0;
+    font-size: 14px;
+    color: var(--sbk-mute-soft);
+    -unity-text-align: middle-center;
+    margin-left: 10px;
+}
+.ms-col .ms-row__x:hover { color: var(--sbk-text); }
+
+/* ── 3列目：ベンチ外の入れ物（縦いっぱい）と自動割当ボタン ── */
+.ms-out {
+    flex-grow: 1;
+    min-height: 0;
+    background-color: var(--sbk-well);
+    border-radius: 12px;
+    padding: 8px;
+}
+.ms-out__scroll { flex-grow: 1; min-height: 0; }
+.ms-out__empty { flex-grow: 1; font-size: 13px; color: var(--sbk-mute); -unity-text-align: middle-center; }
+.ms-col .ms-out__note {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--sbk-sub);
+    white-space: normal;
+    margin: 8px 4px 4px 4px;
+}
+.ms-hidden { display: none; }
+.sbk Button.ms-auto-btn {
+    height: 46px;
+    flex-shrink: 0;
+    margin: 10px 0 0 0;
+    padding: 0;
+    border-width: 0;
+    border-radius: 10px;
+    background-color: var(--sbk-text);
+    color: var(--sbk-card);
+    font-size: 14px;
+    letter-spacing: 1.1px;
+}
+.sbk Button.ms-auto-btn:hover { background-color: var(--sbk-ink); }
+
+/* ── 4列目：2選手比較（残りの幅を全部使う） ── */
+.ms-compare {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
     padding-left: var(--sp-3);
     padding-right: var(--sp-3);
     /* padding-top は指定しない: .panel(KokoSimTheme.uss) の14pxとの二重掛けが上端の余白過多の
@@ -112,8 +208,9 @@
     margin-top: var(--sp-3);
 }
 .ms-newteam.ms-hidden { display: none; }
+.ms-head__spacer { flex-grow: 1; }
 .ms-newteam__lead { font-size: var(--fs-body); }
 .ms-newteam__ok { margin-right: 0; }
-/* 比較表は共通部品（scorebook.uss の .sbk-cmp*）。この画面の比較列は狭い（2人並べると片側約135px）ので、
+/* 比較表は共通部品（scorebook.uss の .sbk-cmp*）。2人並べると片側が狭いので、
    見出しの「打走守投」4組を1行に収めるためチップだけ18pxに詰める。 */
 .sbk .ms-compare .sbk-cmp-pl .cat-rank-chips .grade { min-width: 18px; width: 18px; height: 18px; padding: 0; margin: 0; }

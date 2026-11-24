@@ -67,6 +67,17 @@
     --sbk-mute-soft: #B5AFA4;      /* 使えない側の伝令の丸 */
     --sbk-accent-soft: rgba(122, 31, 43, 0.10);   /* 臙脂の10%（アイコンの地） */
 
+    /* メンバー設定（背番号の画面）：一段濃い紙色の地・入れ物の地・点線・球場の絵 */
+    --sbk-paper-deep: #E7E2D7;     /* 画面の地（紙色のカードが浮く濃さ） */
+    --sbk-well: #DED8CB;           /* カードを並べる入れ物の地 */
+    --sbk-dash: #CFC8BB;           /* 空き枠の点線 */
+    --sbk-field-deep: #3F6B3A;     /* 球場の絵：外周 */
+    --sbk-field-grass: #4B7A44;    /* 球場の絵：芝 */
+    --sbk-field-grass-edge: #5A8A52;   /* 球場の絵：外野の芝の縁 */
+    --sbk-field-dirt: #B48A60;     /* 球場の絵：土 */
+    --sbk-field-line: rgba(243, 239, 230, 0.8);   /* 球場の絵：ファウルライン */
+    --sbk-field-base: #F6F3EC;     /* 球場の絵：塁 */
+
     background-color: var(--sbk-paper);
     color: var(--sbk-text);
 }
