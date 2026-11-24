@@ -139,8 +139,9 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// そのプレーの塁審の判定を洗い出す。対象は走者の最終レッグが塁に着くアウトと際どいセーフだけ
-        /// （走者がただ進塁しただけの場面で毎回腕を出さない）。判定の時刻は到達時刻 T1＝engine の値。
+        /// そのプレーの塁審の判定を洗い出す。対象は走者のレッグが塁に着くアウトと際どいセーフだけ
+        /// （走者がただ進塁しただけの場面で毎回腕を出さない）。判定の時刻はそのレッグの到達時刻 T1＝engine の値。
+        /// 一塁のアウトは駆け抜け（オーバーラン）のレッグの手前のレッグが持つので、最終レッグだけでなく全レッグを見る。
         /// </summary>
         private void BuildBaseCallPlan(PlaybackPlay play)
         {
@@ -148,18 +149,22 @@ namespace KokoSim.Unity.Match
             if (play?.Runners == null) return;
             foreach (var r in play.Runners)
             {
-                if (!RunnerFinal(r, out var t1, out var outAtEnd, out var closeCall, out _, out _)) continue;
-                if (!outAtEnd && !closeCall) continue;
-                var to = new Vector2((float)r.Segs[r.Segs.Count - 1].To.X, (float)r.Segs[r.Segs.Count - 1].To.Y);
-                int ump = -1;
-                float best = BaseCallRadiusM;
-                for (int b = 1; b <= 3; b++)
+                if (r?.Segs == null) continue;
+                foreach (var seg in r.Segs)
                 {
-                    float d = (to - BaseBag(b)).magnitude;
-                    if (d < best) { best = d; ump = b == 1 ? 0 : b == 2 ? 1 : 2; }
+                    if (!seg.OutAtEnd && !seg.CloseCall) continue;
+                    if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
+                    var to = new Vector2((float)seg.To.X, (float)seg.To.Y);
+                    int ump = -1;
+                    float best = BaseCallRadiusM;
+                    for (int b = 1; b <= 3; b++)
+                    {
+                        float d = (to - BaseBag(b)).magnitude;
+                        if (d < best) { best = d; ump = b == 1 ? 0 : b == 2 ? 1 : 2; }
+                    }
+                    if (ump < 0) continue;
+                    _baseCalls.Add(new BaseCall { Ump = ump, TStart = (float)seg.T1 - BaseCallLeadSeconds, Out = seg.OutAtEnd });
                 }
-                if (ump < 0) continue;
-                _baseCalls.Add(new BaseCall { Ump = ump, TStart = t1 - BaseCallLeadSeconds, Out = outAtEnd });
             }
         }
 

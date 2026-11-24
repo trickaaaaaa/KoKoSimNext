@@ -701,7 +701,7 @@ captures:
     name: "サードゴロの一塁アウトで一塁塁審がアウトのコール、コーチは立っているだけ（issue #1595）"
     scenario: if-grounder-3b-lab
     manager: home
-    shots: [start, flight_end, judgement-0.2, judgement+0.15, judgement+0.5, judgement+1.0, end]
+    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+1.0, end]
     probes: [BaseCrew]
 
   - id: base-umpire-2b-steal-out-1595
@@ -715,5 +715,5 @@ captures:
     name: "三塁打（右翼）で塁審・コーチが走者の邪魔にならない（issue #1595）"
     scenario: fly-near-miss-back-lab
     manager: home
-    shots: [start, flight_end, result, end]
+    shots: [start, catch, result, end]
     probes: [BaseCrew]
