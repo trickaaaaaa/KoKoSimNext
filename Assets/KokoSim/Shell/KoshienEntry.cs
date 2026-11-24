@@ -191,8 +191,10 @@ namespace KokoSim.Unity.Shell
 
         // ===== 進行体 =====
 
-        private static IBackgroundMatchResolver BackgroundResolver(int yearIndex)
+        private static IBackgroundMatchResolver? BackgroundResolver(int yearIndex)
         {
+            // ブラウザ版は裏カードを集計モデルで決める（TournamentEntry.BackgroundResolverFor と同じ・#1588）。
+            if (!BackgroundWork.RunsFullBackgroundGames) return null;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             // 甲子園の裏カードも1球フルシムで解く（49校＝48試合なので県大会1つぶんより軽い）。
             // メモ化で包むのは自校が出る年だけでよいが、両方同じ形にして経路を1本に保つ。

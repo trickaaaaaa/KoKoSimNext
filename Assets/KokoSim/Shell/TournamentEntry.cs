@@ -191,9 +191,11 @@ namespace KokoSim.Unity.Shell
         /// <b>ここでは成績を畳まない</b>（畳み込みはランナーが裏カードを記録した瞬間に
         /// <see cref="FoldBackgroundMatch"/> で行う。計算時に畳むと中断・復帰で二重計上になる）。
         /// </summary>
-        internal static IBackgroundMatchResolver BackgroundResolverFor(
+        internal static IBackgroundMatchResolver? BackgroundResolverFor(
             TournamentKind kind, int yearIndex, IEnemyBrainFactory? brains = null)
         {
+            // ブラウザ版は裏カードを集計モデルで決める（null＝ランナーが集計モデルで解く・#1588 オーナー判断）。
+            if (!BackgroundWork.RunsFullBackgroundGames) return null;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             brains ??= new EnemyAiBrainFactory();
             if (kind is TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict)

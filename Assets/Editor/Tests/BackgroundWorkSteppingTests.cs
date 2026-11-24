@@ -156,6 +156,16 @@ namespace KokoSim.EditorTests
         }
 
         [Test]
+        public void Browser_DecidesBackgroundCardsByAggregateModel()
+        {
+            Assert.IsNull(TournamentEntry.BackgroundResolverFor(KokoSim.Engine.Season.TournamentKind.Summer, 1),
+                "ブラウザ版は裏カードをフルシムしない（null＝ランナーが集計モデルで決める・#1588 オーナー判断）");
+            BackgroundWork.SimulateBrowser = false;
+            Assert.IsNotNull(TournamentEntry.BackgroundResolverFor(KokoSim.Engine.Season.TournamentKind.Summer, 1),
+                "Windows 版は従来どおりフルシム");
+        }
+
+        [Test]
         public void Threaded_RunSteps_RunsToTheEndOnAThread()
         {
             BackgroundWork.SimulateBrowser = false;

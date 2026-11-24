@@ -196,6 +196,13 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static bool RunsReplays => Threaded;
 
+        /// <summary>
+        /// 大会の裏カード（自校が出ない試合）を1球単位のフルシムで解くか。ブラウザ版は解かず、集計モデル
+        /// （勝敗とスコアを一度に決める。全国の他県と同じ）で決める（1コアでは大会に入る・負けた後の待ちが長い・
+        /// #1588 オーナー判断）。他校の選手成績が積まれない・トーナメント表のスコアが集計モデル由来になる。
+        /// </summary>
+        public static bool RunsFullBackgroundGames => Threaded;
+
         /// <summary>同時に回す本数。ブラウザ版は1本。</summary>
         public static int Parallelism(int wanted) => Threaded ? Math.Max(1, wanted) : 1;
 
