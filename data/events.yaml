@@ -1080,6 +1080,62 @@ events:
           - who: team_manager
             say: "その半分が当たるようになりましたよ。"
 
+  # 投手の素質の見出し（issue #1523・設計書01 §1.3）。隠しの投手センスと、いま見える投手能力との差で起きる2段＝
+  # 「見立て」（まだ伸びは変わらない）→「外部コーチ」（見出されて投手系が伸びやすくなる）。肩書き（投手か野手か）は見ない。
+  # 見立ては「この子は投手に向いている」と示すことになる＝ポジションを勧めない方針の例外（オーナー判断 2026-11-24・このイベントだけ）。
+  # 外部コーチは立ち絵を作らない（issue #1425）＝マネージャー・地の文が伝える。結果は結果行（PitcherTalentText）が言い切る。
+  - id: pitcher_talent_hint
+    kind: System
+    scene: ground
+    text: "選手に投手の素質があるかもしれない。"
+    variants:
+      - lines:
+          - who: narration
+            say: "キャッチボールの相手をしていた部員が、手を止めて{player}の方を見ていた。"
+          - who: team_manager
+            say: "監督、{player}君の球、野手のものじゃない気がします。"
+          - who: player
+            say: "え、俺ですか。投げるのは遊びでしかやってないですよ。"
+      - lines:
+          - who: narration
+            say: "シートノックの合間、{player}が試しにマウンドから投げた一球が、ミットを大きく鳴らした。"
+          - who: captain
+            say: "今の、{player}ですよね。ちょっと見てやってください。"
+      - lines:
+          - who: team_manager
+            say: "{player}君、中学のときは投げてなかったそうです。"
+          - who: narration
+            say: "ブルペンの端で、ボールを握り直している{player}がいた。"
+          - who: team_manager
+            say: "指のかかり方が、ほかの子と違って見えたので。"
+
+  - id: pitcher_talent_discovered
+    kind: System
+    scene: ground
+    text: "外部コーチが選手の投手の素質を見出した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "見学に来ていた外部のコーチが、{player}のフォームを動画に撮らせてほしいと言ってきた。"
+          - who: team_manager
+            say: "あの方、{player}君を投手として一から見たいそうです。"
+          - who: player
+            say: "俺で、いいんですか。"
+      - lines:
+          - who: narration
+            say: "外部コーチの指導日。{player}の投球練習に、ずっと付き添う人影があった。"
+          - who: team_manager
+            say: "握りから直してもらってます。本人、目の色が変わりました。"
+          - who: manager
+            say: "しばらく任せよう。"
+      - lines:
+          - who: player
+            say: "あのコーチの言うとおりに投げたら、ミットの音が変わったんです。"
+          - who: captain
+            say: "こいつ、まだ伸びるんじゃないですか。"
+          - who: narration
+            say: "外部コーチは、{player}のノートに投げ方のメモを細かく書き込んでいた。"
+
   # 特殊能力の変化（issue #1471・設計書10 §3）。何のスキルかは結果行（SkillChangeText）が言い切る＝会話は雰囲気だけ。
   # 気づき（育成眼）で隠しスキルを即開示／覚醒で身につく／公式戦の活躍で身につく／負スキルの克服（実戦・学年）。
   - id: skill_insight_revealed

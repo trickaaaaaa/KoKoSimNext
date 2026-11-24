@@ -29,8 +29,8 @@ public sealed class PitcherSenseSaveMigrationTests
         => ProspectGenerator.Intake(2, new RosterCoefficients(), new Xoshiro256Random(31)).ToList();
 
     [Fact]
-    public void CurrentVersion_IsFortyFour()
-        => Assert.Equal(PitcherSenseSaveMigration.IntroducedVersion, SaveCodec.CurrentVersion);
+    public void CurrentVersion_IsAtLeastTheIntroducedVersion()
+        => Assert.True(SaveCodec.CurrentVersion >= PitcherSenseSaveMigration.IntroducedVersion);
 
     [Fact]
     public void RoundTrip_KeepsSenseAndReading()

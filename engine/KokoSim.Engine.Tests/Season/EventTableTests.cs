@@ -148,6 +148,8 @@ events:
             "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
             "insight_growth_type",
+            // 投手の素質の見出し（issue #1523）。IDは PitcherTalentText（Unity）にベタ書き。
+            "pitcher_talent_hint", "pitcher_talent_discovered",
             // 特殊能力の変化（issue #1471）。IDは SkillChangeText（Unity）にベタ書き。
             "skill_insight_revealed", "skill_awakening", "skill_match_acquired",
             "skill_overcome_match", "skill_overcome_grade",

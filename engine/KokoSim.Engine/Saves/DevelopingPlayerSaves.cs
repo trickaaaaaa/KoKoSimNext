@@ -69,6 +69,7 @@ internal static class DevelopingPlayerSaves
             .Add("leadCap", p.LeadCap)
             .Add("pitcherSense", p.PitcherSense)
             .Add("pitcherSenseReading", p.PitcherSenseReading is { } psr ? JsonValue.Of(psr) : JsonNull.Instance)
+            .Add("pitcherTalent", EnumJson.Write(p.PitcherTalent))
             .Add("leadership", p.Leadership)
             .Add("receptiveness", p.Receptiveness)
             .Add("diligence", p.Diligence)
@@ -181,6 +182,8 @@ internal static class DevelopingPlayerSaves
             PitcherSense = o.Has("pitcherSense") ? o.Int("pitcherSense") : AbilityScale.AverageDisplay,
             PitcherSenseReading = o.Has("pitcherSenseReading") && !o.IsNull("pitcherSenseReading")
                 ? o.Int("pitcherSenseReading") : (int?)null,
+            // 投手の素質の見出し（v45・issue #1523）。v44 以前は無い＝まだ何も起きていない。
+            PitcherTalent = o.Has("pitcherTalent") ? EnumJson.Read<PitcherTalentStage>(o.Str("pitcherTalent")) : PitcherTalentStage.None,
             IsCaptain = o.Bool("isCaptain"),
             IsRetired = o.Bool("isRetired"),
             UniformNumber = o.Int("num"),
