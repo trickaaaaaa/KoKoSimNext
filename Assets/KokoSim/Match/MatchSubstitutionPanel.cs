@@ -1260,20 +1260,7 @@ namespace KokoSim.Unity.Match
 
         private static string HandLabel(Player p) => p == null ? "" : HandednessLabels.Combined(p.Throws, p.Bats);
 
-        private static string PosJp(FieldPosition pos) => pos switch
-        {
-            FieldPosition.Pitcher => "投",
-            FieldPosition.Catcher => "捕",
-            FieldPosition.FirstBase => "一",
-            FieldPosition.SecondBase => "二",
-            FieldPosition.ThirdBase => "三",
-            FieldPosition.Shortstop => "遊",
-            FieldPosition.LeftField => "左",
-            FieldPosition.CenterField => "中",
-            FieldPosition.RightField => "右",
-            FieldPosition.DesignatedHitter => "指",
-            _ => "—",
-        };
+        private static string PosJp(FieldPosition pos) => FieldPositionNames.Abbr(pos);
 
         private readonly List<(Button Btn, System.Action Action)> _bound = new();
 

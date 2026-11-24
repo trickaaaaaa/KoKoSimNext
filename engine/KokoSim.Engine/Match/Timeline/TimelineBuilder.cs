@@ -4612,20 +4612,7 @@ public static class TimelineBuilder
         return arrive;
     }
 
-    /// <summary>守備位置の日本語呼称（実況・結果表示用）。</summary>
-    private static string PositionName(FieldPosition p) => p switch
-    {
-        FieldPosition.Pitcher => "ピッチャー",
-        FieldPosition.Catcher => "キャッチャー",
-        FieldPosition.FirstBase => "ファースト",
-        FieldPosition.SecondBase => "セカンド",
-        FieldPosition.ThirdBase => "サード",
-        FieldPosition.Shortstop => "ショート",
-        FieldPosition.LeftField => "レフト",
-        FieldPosition.CenterField => "センター",
-        FieldPosition.RightField => "ライト",
-        _ => "",
-    };
+    private static string PositionName(FieldPosition p) => FieldPositionNames.Katakana(p);
 
     /// <summary>内野/外野の「表示上の」境界[m]。表示専用の定数で、FieldingResolver の守備閾値
     /// （InfieldDepthM）とは意図的に分離する（キャプション用の値を判定へ流用しないため）。</summary>

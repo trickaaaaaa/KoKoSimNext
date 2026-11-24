@@ -176,36 +176,10 @@ namespace KokoSim.Unity.Match
         // ── 表示用の短縮ラベル（部品側でなく共通の書式を1箇所に集約） ──
 
         /// <summary>守備位置の1文字略記（投捕一二三遊左中右・DHは指）。</summary>
-        public static string PosAbbr(FieldPosition pos) => pos switch
-        {
-            FieldPosition.Pitcher => "投",
-            FieldPosition.Catcher => "捕",
-            FieldPosition.FirstBase => "一",
-            FieldPosition.SecondBase => "二",
-            FieldPosition.ThirdBase => "三",
-            FieldPosition.Shortstop => "遊",
-            FieldPosition.LeftField => "左",
-            FieldPosition.CenterField => "中",
-            FieldPosition.RightField => "右",
-            FieldPosition.DesignatedHitter => "指",
-            _ => "—",
-        };
+        public static string PosAbbr(FieldPosition pos) => FieldPositionNames.Abbr(pos);
 
         /// <summary>守備位置の2文字表記（HUDは横に余裕があるので1文字略記より読みやすい方を使う）。</summary>
-        public static string PosJp(FieldPosition pos) => pos switch
-        {
-            FieldPosition.Pitcher => "投手",
-            FieldPosition.Catcher => "捕手",
-            FieldPosition.FirstBase => "一塁",
-            FieldPosition.SecondBase => "二塁",
-            FieldPosition.ThirdBase => "三塁",
-            FieldPosition.Shortstop => "遊撃",
-            FieldPosition.LeftField => "左翼",
-            FieldPosition.CenterField => "中堅",
-            FieldPosition.RightField => "右翼",
-            FieldPosition.DesignatedHitter => "指名",
-            _ => "",
-        };
+        public static string PosJp(FieldPosition pos) => FieldPositionNames.Kanji2(pos);
 
         /// <summary>
         /// 登板順の表記（1=先発、2以降は「N番手」）。
