@@ -1650,6 +1650,31 @@
     padding: 8px;
 }
 
+/* ═══ PitchLocationChart：対決ビューの左下の投球チャート（issue #1541・器は PitchLocationChartElement.cs）═══
+   今の打席の球のコースを、ストライクゾーン（9分割）の上に番号付きの印で打つ（テレビ中継の左下の図）。
+   面は ScoreBug・小ダイヤと同じ黒島（--sb-face ＋ インク枠）＝芝・土・空のどの背景の上でも沈まない。
+   枠線と印は Painter2D（色は --field-chalk / --lamp-* / --sb-call-hit を要素側が読む）。番号だけ Label を重ねる。
+   寸法は図の縦横比（ゾーン＋余白 ≈ 0.86）に合わせた実寸。 */
+.plchart {
+    width: 180px;
+    height: 210px;
+    flex-shrink: 0;
+    background-color: var(--sb-face);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    padding: 8px;
+}
+/* 印の中の番号。印の中心（left/top＝要素側が置く）へ自分の箱の中心を合わせる。 */
+.plchart__num {
+    position: absolute;
+    translate: -50% -50%;
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-cap);
+    color: var(--ink);
+    -unity-text-align: middle-center;
+}
+
 /* PitchCall：投球判定の大型オーバーレイ（試合盤面・1球ごとに短時間だけ出す）。
    盤面ビューなので色は状態コード（ストライク＝アンバー／ボール＝良好色／それ以外＝チョーク）で、
    データ画面のアクセント本数制限の対象外（CLAUDE.md「適用範囲の例外（試合盤面）」）。

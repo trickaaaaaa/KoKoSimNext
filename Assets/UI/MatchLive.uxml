@@ -49,6 +49,9 @@
                          走者ドットと塁だけを描いて補う。中身の MiniDiamondElement は MatchLiveController が
                          生成する。既定は非表示（守備フォーカス中だけ・打席の寄りでは出さない）。 -->
                     <ui:VisualElement name="minidia-host" class="mdia-host" />
+                    <!-- 投球チャート（issue #1541）。対決ビューの右の中ほどに、今の打席の球のコースを番号付きの印で打つ。
+                         中身の PitchLocationChartElement は MatchLiveController が生成する。既定は非表示（対決ビュー中だけ）。 -->
+                    <ui:VisualElement name="plchart-host" class="plchart-host" picking-mode="Ignore" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
                     <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい）。
                          judge は影用の複製を先に置いて背面に敷く（USS の text_shadow は1要素1つしか

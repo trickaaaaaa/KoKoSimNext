@@ -249,6 +249,8 @@ namespace KokoSim.Unity.Match
         private readonly List<Label> _duelFieldLabelPool = new();
         private VisualElement _miniDiaHost;
         private MiniDiamondElement _miniDia;
+        private VisualElement _plChartHost;              // 投球チャート（issue #1541）
+        private PitchLocationChartElement _plChart;
         private const int MaxDuelFieldLabels = 6;
         // 場内放送（issue #919）の切り替え（操作列のスイッチ・#1193）の解除と、同じ打席で二度言わないための鍵。
         private System.Action _unbindAnnounce;
@@ -617,6 +619,7 @@ namespace KokoSim.Unity.Match
             _hudHost = _root.Q<VisualElement>("hud-host");
             BuildHudCorners();   // 右上=打者HUD／右下=投手HUD の常設コーナー
             BuildMiniDiamond();  // 守備フォーカス中だけ出す走者の小ダイヤ（issue #595）
+            BuildPitchLocationChart();  // 対決ビューの右の中ほどの投球チャート（issue #1541）
             _capHistHost = _root.Q<VisualElement>("caption-history");
             _leftTeam = _root.Q<Label>("left-team");
             _rightTeam = _root.Q<Label>("right-team");
@@ -841,6 +844,7 @@ namespace KokoSim.Unity.Match
             _shownAnyHalf = false;
             _postedAwayRuns = _postedHomeRuns = 0;   // 掲示済み得点の基準（issue #628）も試合をまたがない
             _paQueue.Clear();
+            _plChart?.ClearMarks();      // 投球チャートも試合をまたがない（issue #1541）
             _paConfirmed = false;
             ClearMidPaPlayState();       // 打席途中の再生は試合をまたがない
             _preStep = null;             // 振りかぶりで先に解決した球（issue #696）も試合をまたがない
@@ -1298,6 +1302,7 @@ namespace KokoSim.Unity.Match
             {
                 // 新しい打席の頭＝前の打席の後片付け。投球列と確定フラグをここで落とす。
                 _paQueue.Clear();
+                _plChart?.ClearMarks();   // 投球チャートは今の打席の球だけ（issue #1541）
                 _pitchIdx = 0;
                 _paConfirmed = false;
                 _current = null;
@@ -2120,6 +2125,7 @@ namespace KokoSim.Unity.Match
         private void BeginPaFromSequence()
         {
             _paQueue.Clear();
+            _plChart?.ClearMarks();   // 投球チャートは今の打席の球だけ（issue #1541）
             var pitches = _current.PitchSeq?.Pitches;
             if (pitches != null)
                 foreach (var pt in pitches)
@@ -3290,6 +3296,7 @@ namespace KokoSim.Unity.Match
                 _duelRig?.Tick(Time.deltaTime * _speed);
             RefreshDuelFieldLabels();   // 頭上フルネームラベル（issue #393）。ポーズ中も現在位置のまま表示を保つ
             RefreshMiniDiamond();       // 走者の小ダイヤ（issue #595）。同じくポーズ中も現在位置のまま残す
+            RefreshPitchLocationChart(); // 投球チャート（issue #1541）。対決ビュー中だけ出す
             RefreshHudVisibility();     // 打球プレー中はマッチアップHUDを引っ込める（下の説明を参照）
             UpdateTacticsAcceptance();  // 采配カードの受付ゲート（issue #493）。投手が次球の振りかぶりへ入ったら締め切る
 
@@ -3473,6 +3480,7 @@ namespace KokoSim.Unity.Match
                     var pt = q.Token;
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
                     ShowPitchCall(pt);
+                    AddPitchLocationMark(pt, _pitchIdx + 1);   // 投球チャート（issue #1541）。判定と同時に印を打つ
                     // 打席途中の牽制（issue #486/#515）はもうここでは見ない――この球の**前**の事象なので
                     // BeginPitchRender の頭（この球の振りかぶりに入る前）で既に再生済み。
                     // 打席途中の盗塁（issue #485）: この球を実際に投げ終えた今、守備ビューで
@@ -4527,6 +4535,48 @@ namespace KokoSim.Unity.Match
 
         /// <summary>走者の小ダイヤを出している（＝守備フォーカス中で対決ビュー）か。</summary>
         private bool MiniDiamondShown => FieldPlayActive && _duelOn;
+
+        /// <summary>
+        /// 投球チャート（issue #1541）を対決ビューの右の中ほどへ1つだけ作る（左下は投手にかぶる・2026-11-24 ユーザー決定）。小ダイヤと同じく画面固定の図なので、
+        /// <c>_duelImg</c> の子にせず盤面ラッパの子（UXML の <c>plchart-host</c>）に置く。
+        /// </summary>
+        private void BuildPitchLocationChart()
+        {
+            _plChartHost = _root.Q<VisualElement>("plchart-host");
+            if (_plChartHost == null) return;
+            _plChartHost.pickingMode = PickingMode.Ignore;   // 盤面クリック（→中断ポップアップ）を塞がない
+            _plChartHost.Clear();
+            _plChart = new PitchLocationChartElement();
+            _plChartHost.Add(_plChart);
+        }
+
+        /// <summary>
+        /// 投球チャートの出し入れ。出すのは<b>対決ビュー中だけ</b>＝守備ビュー（打球処理・右下に小ダイヤが出る間）と
+        /// 高速試合モード（対決ビューを出さない）では伏せる。印は打席の頭で消す（<see cref="BeginPaFromSequence"/> ほか）。
+        /// </summary>
+        private void RefreshPitchLocationChart()
+        {
+            if (_plChartHost == null) return;
+            var show = PitchLocationChartShown;
+            var want = show ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_plChartHost.style.display != want) _plChartHost.style.display = want;
+        }
+
+        /// <summary>投球チャートを出している（＝対決ビューで、守備フォーカス中でも高速試合でもない）か。</summary>
+        private bool PitchLocationChartShown => _duelOn && !FieldPlayActive && !_fastMode;
+
+        /// <summary>
+        /// 判定を出した1球の印を投球チャートへ打つ（issue #1541）。コースの無い球（合成の球＝<see cref="FlightOf"/> が
+        /// null を返す球）は打たない＝架空のコースを描かない。投手の左右は対決ビューの絵と同じ入口から引く。
+        /// </summary>
+        private void AddPitchLocationMark(PitchToken pt, int number)
+        {
+            if (_plChart == null) return;
+            if (pt.LocationX is not { } x || pt.LocationY is not { } y) return;
+            TryDuelHandedness(out _, out var pitcherLeft);
+            _plChart.AddMark(x, y, PitchLocationChartElement.ResultOf(pt.Kind), pt.PitchType,
+                pitcherLeft ? Handedness.Left : Handedness.Right, number);
+        }
 
         /// <summary>
         /// いま画面に出ている塁の状況（issue #1534 項目8）。タイムのパネルの塁ダイヤはここだけから引く。

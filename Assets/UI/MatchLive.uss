@@ -92,6 +92,18 @@
     display: none;
 }
 
+/* 投球チャート（issue #1541）の置き場所。対決ビューの右の中ほど（右上の打者の札と右下の投手の札の間）。
+   中継の定位置は左下だが、対決ビューでは左下が投手のすぐ横で、投げ終わりの体がかぶる（2026-11-24 ユーザー決定）。
+   部品の見た目は components.uss の .plchart が持ち、ここは配置だけを決める。既定は非表示で、
+   MatchLiveController が対決ビュー中だけ出す（守備ビュー・高速試合モードでは出さない＝右下の小ダイヤとは同時に出ない）。 */
+.plchart-host {
+    position: absolute;
+    right: var(--sp-3);
+    top: 50%;
+    translate: 0 -50%;
+    display: none;
+}
+
 /* 下部スタック（1球指示帯・実況履歴・実況バー・伝令残数）は issue #289 で撤去済み。
    1球指示は盤面直下の采配カード（components.uss の .tcard*）へ、タイム系操作は pause-modal へ移した。
    実況ログはロジックのみ存続（MatchLiveController._capHist）＝描画スタイルは持たない。 */
