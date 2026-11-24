@@ -194,6 +194,8 @@ namespace KokoSim.Unity.Match
             {
                 var sb = new System.Text.StringBuilder();
                 sb.Append("calls=").Append(_baseCalls.Count);
+                foreach (var c in _baseCalls)
+                    sb.Append(" [").Append(c.Ump).Append(c.Out ? " out@" : " safe@").Append(c.TStart.ToString("0.00")).Append(c.Fired ? " fired]" : "]");
                 for (int i = 0; i < _baseUmps.Length; i++)
                 {
                     var a = _baseUmps[i];
