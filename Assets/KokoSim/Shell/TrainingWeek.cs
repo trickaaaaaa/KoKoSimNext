@@ -74,9 +74,14 @@ namespace KokoSim.Unity.Shell
         /// プレビューは実選手のクローンにこれを呼ぶ（非破壊ドライラン）。実選手の
         /// <see cref="DevelopingPlayer.Clone"/> は Plan・IndividualCoaching を引き継ぐので、
         /// クローンへの適用結果＝実選手への適用結果（プレビューバー＝実際の伸び）。
+        ///
+        /// <paramref name="cohesionMultiplier"/> はチーム状態（結束）の効き先④（issue #1601・自校だけ）。
+        /// 呼び出し側（<see cref="KokoSim.Unity.Home.HomeState"/>）が週1回
+        /// <c>Cohesion.TrainingMultiplier(ChemistryDisplay.CurrentCohesion(), ...)</c> で求めた値を渡す。既定1.0＝従来一致。
         /// </summary>
         public static void Apply(
-            DevelopingPlayer p, int week, double extraMult = 1.0, IReadOnlyList<DevelopingPlayer>? roster = null)
+            DevelopingPlayer p, int week, double extraMult = 1.0, IReadOnlyList<DevelopingPlayer>? roster = null,
+            double cohesionMultiplier = 1.0)
         {
             // 夏の敗退直後に引退した3年（issue #954）は第18週を待たずに練習から外れる。
             if (p.IsRetired || !Calendar.CanTrain(p.Grade, week)) return;
@@ -95,7 +100,7 @@ namespace KokoSim.Unity.Shell
                 p, alloc, training.ReferenceWeekMinutes,
                 stage, campMult, Stages, training, Skills, Personalities, coaching,
                 // 練習道具は「振っているメニューの分野」にだけ効く（施設係数は全メニュー一律）。
-                Effects.Equipment, roster);
+                Effects.Equipment, roster, cohesionMultiplier);
         }
     }
 }

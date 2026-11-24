@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Game;
@@ -90,6 +91,34 @@ public sealed record CohesionCoefficients
     public double LowThreshold { get; init; } = 30.0;
     /// <summary>効き先: 伝令の効き 1 + c1×(U−50)/50 の c1（U=80 で+6%）。</summary>
     public double MessengerPerCohesion { get; init; } = 0.10;
+
+    // ---- issue #1601: チーム状態の効き先を足す（オーナー決定 2026-11-25） ----
+
+    /// <summary>
+    /// 効き先②: 守備側がエラーした後、その回の間だけ失策の起きやすさに掛ける倍率の上限／下限
+    /// （<see cref="Cohesion.ErrorStreakMultiplier"/> の 1 + k×(50−U)/50 を ±ErrorStreakCap でクランプする側の値）。
+    /// U=<see cref="ErrorStreakFloorU"/> で丁度この値に達する（オーナー決定: U=15 で ×1.5 まで）。
+    /// </summary>
+    public double ErrorStreakCap { get; init; } = 1.5;
+
+    /// <summary>効き先②: 上の倍率が <see cref="ErrorStreakCap"/> に達する U（これ以下は頭打ち。対称に 100−この値 以上は底打ち）。</summary>
+    public double ErrorStreakFloorU { get; init; } = 15.0;
+
+    /// <summary>
+    /// 効き先④: 練習の伸びに掛ける倍率 1 + k×(U−50)/50 の k（自校だけ）。
+    /// オーナー決定（U=85 で +5%）から逆算: k = 0.05 × 50 / 35。
+    /// </summary>
+    public double TrainingPerCohesion { get; init; } = 0.05 * 50.0 / 35.0;
+
+    /// <summary>
+    /// 効き先⑤: 選択肢つき選手間イベント（kind: Choice）の抽選の重みに掛ける倍率の上限（自校だけ・悪いほど起きやすい）。
+    /// U=<see cref="EventWeightFloorU"/> で丁度この値に達する（オーナー決定: U=15 で ×2 で頭打ち）。
+    /// U≥50（まあまあ以上）は恒等＝良いチームがさらに得をする設計ではない。
+    /// </summary>
+    public double EventWeightCap { get; init; } = 2.0;
+
+    /// <summary>効き先⑤: 上の倍率が <see cref="EventWeightCap"/> に達する U（これ以下は頭打ち）。</summary>
+    public double EventWeightFloorU { get; init; } = 15.0;
 }
 
 /// <summary>
@@ -154,6 +183,54 @@ public static class Cohesion
     /// <summary>効き先②: 伝令の効きの倍率 1 + c1×(U−50)/50（U=50 で1）。</summary>
     public static double MessengerMultiplier(double u, CohesionCoefficients c)
         => 1.0 + c.MessengerPerCohesion * (u - Neutral) / 50.0;
+
+    /// <summary>
+    /// issue #1601 ②: 守備側がエラーした後、その回の間だけ失策の起きやすさに掛ける倍率。
+    /// 1 + k×(50−U)/50（U=50 で恒等）。k は「U=<see cref="CohesionCoefficients.ErrorStreakFloorU"/> で丁度
+    /// <see cref="CohesionCoefficients.ErrorStreakCap"/> に達する」よう逆算し、その上限／下限（対称に 2−Cap）でクランプする
+    /// ＝U が低いほど崩れ（頭打ち）、高いほど立て直す（底打ち）。AI校にも U0 で効く（帯が動きうる＝統計回帰で確認）。
+    /// </summary>
+    public static double ErrorStreakMultiplier(double u, CohesionCoefficients c)
+    {
+        var span = Math.Max(1e-6, Neutral - c.ErrorStreakFloorU);
+        var k = (c.ErrorStreakCap - 1.0) / (span / 50.0);
+        var raw = 1.0 + k * (Neutral - u) / 50.0;
+        return MathUtil.Clamp(raw, 2.0 - c.ErrorStreakCap, c.ErrorStreakCap);
+    }
+
+    /// <summary>
+    /// issue #1601 ②: <see cref="ErrorStreakMultiplier"/> を守備係数へ適用する。失策の基準確率5種
+    /// （捕球・フライ落球・悪送球・受け手・外野ファンブル）を同じ倍率で伸縮する。mult=1.0 は恒等（同一参照を返す）。
+    /// </summary>
+    public static FieldingCoefficients ApplyErrorStreak(FieldingCoefficients c, double mult)
+        => mult == 1.0 ? c : c with
+        {
+            ErrorBaseProb = c.ErrorBaseProb * mult,
+            FlyErrorBaseProb = c.FlyErrorBaseProb * mult,
+            ThrowErrorBaseProb = c.ThrowErrorBaseProb * mult,
+            ReceiveErrorBaseProb = c.ReceiveErrorBaseProb * mult,
+            OutfieldFumbleBaseProb = c.OutfieldFumbleBaseProb * mult,
+        };
+
+    /// <summary>
+    /// issue #1601 ④: 練習の伸びに掛ける倍率 1 + k×(U−50)/50（U=50 で恒等・自校だけ）。上限は付けない
+    /// （U の定義域 0〜100 で自然に止まる）。施設・道具・勤勉さと同じ「練習効率」の並びに掛ける。
+    /// </summary>
+    public static double TrainingMultiplier(double u, CohesionCoefficients c)
+        => 1.0 + c.TrainingPerCohesion * (u - Neutral) / 50.0;
+
+    /// <summary>
+    /// issue #1601 ⑤: 選択肢つき選手間イベント（kind: Choice）の抽選の重みに掛ける倍率（自校だけ・悪いほど起きやすい）。
+    /// U≥50 は恒等＝1.0。U が <see cref="CohesionCoefficients.EventWeightFloorU"/> 以下なら
+    /// <see cref="CohesionCoefficients.EventWeightCap"/> で頭打ち（悪循環の歯止め。cooldown_weeks は別に保つ）。
+    /// </summary>
+    public static double EventWeightMultiplier(double u, CohesionCoefficients c)
+    {
+        if (u >= Neutral) return 1.0;
+        var span = Math.Max(1e-6, Neutral - c.EventWeightFloorU);
+        var frac = MathUtil.Clamp((Neutral - u) / span, 0.0, 1.0);
+        return 1.0 + (c.EventWeightCap - 1.0) * frac;
+    }
 
     // ===== ΔU（自校だけ。AI校は常に0＝Q40） =====
 

@@ -693,6 +693,8 @@ namespace KokoSim.Unity.Home
         {
             var week = KokoSim.Unity.Shell.GameClock.Week;
             var newItems = new List<FeedItem>();
+            // チーム状態（結束）の効き先④（issue #1601）: 週1回だけ求め、全部員へ同じ倍率を掛ける（自校だけ）。
+            var cohesionMult = KokoSim.Unity.Shell.ChemistryDisplay.CurrentTrainingMultiplier();
 
             foreach (var p in Roster)
             {
@@ -701,7 +703,7 @@ namespace KokoSim.Unity.Home
                 var mentalBefore = p.Mental;
                 // 期間つきの練習効率補正（issue #615）。補正が無ければ 1.0＝従来と1ビット一致。
                 var boost = KokoSim.Unity.Shell.TrainingBoostService.MultiplierFor(p.Id);
-                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult * boost, Roster);
+                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult * boost, Roster, cohesionMult);
                 // 個別指導の効果3「信頼関係」（issue #702）: 練習で精神力が伸びるのは指名中だけ。
                 // 1行で効いていることを見せる（新しい画面部品は作らない＝2026-10-31 監督決定）。
                 var mentalGained = p.Mental - mentalBefore;

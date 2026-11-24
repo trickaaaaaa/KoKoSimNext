@@ -26,6 +26,13 @@ public sealed record SeasonContext
     public IReadOnlyList<GameEvent> Events { get; init; } = Array.Empty<GameEvent>();
 
     /// <summary>
+    /// 練習の伸びに掛けるチーム状態（結束）の倍率（効き先④・issue #1601・<see cref="Match.Game.Cohesion.TrainingMultiplier"/>で算出）。
+    /// 既定1.0＝従来と1ビット一致（不変条件#2）。このヘッドレスシムは複数年の自校ロスターの伸びを測る用途（ability-sweep等）
+    /// なので、U=15/50/85 を振った比較はこの値を差し替えて呼び直す。
+    /// </summary>
+    public double CohesionTrainingMultiplier { get; init; } = 1.0;
+
+    /// <summary>
     /// 週あたり練習時間[分]（施設供給, 設計書03 §3.1/§4）。null = 施設レベル（<see cref="FacilityLevel"/>）から解決、
     /// それも無ければ Training.DefaultBudgetMinutes を使う。将来 School/施設Lv から算出して注入する口。
     /// </summary>
@@ -180,7 +187,7 @@ public static class SeasonEngine
                     DevelopmentModel.TrainWeekPlan(
                         p, alloc, training.ReferenceWeekMinutes,
                         stage, campMult, ctx.Stages, training, ctx.Skills, ctx.Personalities, ctx.Coaching,
-                        equipment, roster);
+                        equipment, roster, ctx.CohesionTrainingMultiplier);
                 }
 
                 // 調子の週次更新（設計書02 §3.3: 数週間続く波）。

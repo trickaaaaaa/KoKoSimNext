@@ -19,6 +19,9 @@ public static class DevelopmentModel
     /// 1メニューに基準週フル配分すると TrainWeek と厳密一致（後方互換）。乱数を使わない決定論。
     /// <para><paramref name="equipment"/>（練習道具・設計書04 §1.4 備品）は分野ごとの倍率で、
     /// 配分スケールと同じ位置に掛かる。null／全分野1.0 で従来と1ビット一致（不変条件#2）。</para>
+    /// <para><paramref name="cohesionMultiplier"/>（チーム状態＝結束の効き先④・issue #1601・<see cref="Match.Game.Cohesion.TrainingMultiplier"/>）は
+    /// 施設・道具・勤勉さと同じ「練習効率」の並びに掛かる。既定1.0＝従来と1ビット一致（不変条件#2）。自校だけが持つ
+    /// （AI校には練習の週次処理が無い）。</para>
     /// </summary>
     public static void TrainWeekPlan(
         DevelopingPlayer p,
@@ -32,7 +35,8 @@ public static class DevelopmentModel
         Players.PersonalityCoefficients? personalities = null,
         CoachingProfile? coaching = null,
         EquipmentBonus? equipment = null,
-        IReadOnlyList<DevelopingPlayer>? roster = null)
+        IReadOnlyList<DevelopingPlayer>? roster = null,
+        double cohesionMultiplier = 1.0)
     {
         ApplyIndividualCoachingTrust(p, c);
         // 怪我中は練習不可（設計書03 §3.5）: 全メニュー効果なし。
@@ -57,7 +61,7 @@ public static class DevelopmentModel
         // 成長段階係数（設計書02 §5.2・issue #866）は能力の分野ごとに別のタイプで変わるので、
         // common からは外し能力ごとに掛ける（全分野が同じタイプなら従来と1ビット一致）。
         var common = c.BaseMainExp * c.FacilityCoef * baselineFactor
-                     * selfGrowth * campMultiplier * skillExp;
+                     * selfGrowth * campMultiplier * skillExp * cohesionMultiplier;
         // 守備位置適性は守備・走塁分野（Defense 指導力）で駆動する（Fielding が代表）。
         var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
         var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
