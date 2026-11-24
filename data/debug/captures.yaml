@@ -701,7 +701,7 @@ captures:
     name: "サードゴロの一塁アウトで一塁塁審がアウトのコール、コーチは立っているだけ（issue #1595）"
     scenario: if-grounder-3b-lab
     manager: home
-    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.9]
+    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.7]
     video: {from: judgement-0.4, to: judgement+0.9, fps: 10}
     probes: [BaseCrew]
 
@@ -709,7 +709,7 @@ captures:
     name: "二盗失敗の二塁タッチアウトで二塁塁審がアウトのコール（issue #1595）"
     scenario: steal-caught-lab
     manager: home
-    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.9]
+    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.7]
     probes: [BaseCrew]
 
   - id: base-umpire-hit-runner-1595
