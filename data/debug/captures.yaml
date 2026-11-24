@@ -424,9 +424,10 @@ captures:
     scenario: steal-sign-lab
     manager: home
     view: panel
-    attempts: 12
+    attempts: 1
+    force: GroundFoul
     window_pitch: 2
-    window_calls: [OpenPauseMenuForCapture, shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
+    window_calls: [ClickToPauseForCapture, wait(3), shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
     window_after: 6
 
   - id: ibb-timeout-no-1563

@@ -5684,6 +5684,14 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void FreezeLiveForCapture(bool on) => _paused = on;
 
+        /// <summary>撮影用（issue #1563）: 盤面クリックでタイムを開く操作そのもの（エンジンが画面より先にいれば投げ終わるまで待ってから開く）。</summary>
+        public void ClickToPauseForCapture()
+        {
+            _paused = false;
+            if (EngineAheadOfScreen) _pauseQueued = true;
+            else OpenPauseMenu();
+        }
+
         /// <summary>検証用: いま高速試合モード中か（design-06 §3.4）。</summary>
         public bool FastModeForCapture => _fastMode;
 
