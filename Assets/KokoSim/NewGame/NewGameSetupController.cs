@@ -278,6 +278,8 @@ namespace KokoSim.Unity.NewGame
             // 赴任イベント（マネージャーの出迎え）→最初の説明をホームのノベルへ積む（issue #1496）。
             // 開始手順（StartNewSchool）には入れない＝撮影レシピ・ベンチマークの new_game は会話なしでホームに着く。
             TutorialService.OnNewSchoolStarted();
+            // 1年目の主将は始めに選ぶ（オーナー判断 2026-11-24）。赴任の会話を読み終えた後にホームで出す。
+            NewTeamService.OpenAtGameStart();
 
             Debug.Log($"[新規ゲーム] {PrefectureNames.JapaneseOf(_prefectureId)} {TypedName}高校"
                       + $" 地区={(_districtId.HasValue ? _districtId.Value.ToString() : "なし")}"

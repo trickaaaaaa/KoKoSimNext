@@ -170,7 +170,8 @@ namespace KokoSim.Unity.Shell
             {
                 NewTeamService.Open(t.NewTeam);
                 // 引退で枠の大半が穴になった前チームのスタメンは捨てる＝初試合は背番号どおりの既定で組む（issue #955）。
-                GameSession.Current.LastLineup = null;
+                // 誰も引退しない夏（1年目）は顔ぶれが変わらないので残す。
+                if (t.NewTeam.Retired.Count > 0) GameSession.Current.LastLineup = null;
             }
             // AI校の代替わりは第18週のまま（自校の発足時期とは無関係。全国裏試合の完了待ちと結びついている）。
             if (CaptainSelector.IsNewTeamStartWeek(Week, Calendar))
