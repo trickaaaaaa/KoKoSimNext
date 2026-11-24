@@ -495,7 +495,7 @@ namespace KokoSim.Unity.Shell
             if (EventStances.MovesCohesion(stance))
             {
                 GameSession.Current.ApplyCohesionEvent(improved);
-                parts.Add(improved ? "チームの結束が強まった" : "チームの結束が揺らいだ");
+                parts.Add(improved ? "チーム状態が良くなった" : "チーム状態が悪くなった");
                 bad = !improved;
             }
 

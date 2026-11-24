@@ -16,8 +16,8 @@ namespace KokoSim.Unity.Squad
         public List<RadarAxis> Radar = new List<RadarAxis>();
         public string AnalysisWeak = "";   // 強調表示部（弱点: X・Y）
         public string AnalysisAdvice = ""; // 通常表示部（◯強化が課題）
-        /// <summary>結束のランク（精神力の行に並べる・設計書23 §4・issue #935）。数字は出さない。</summary>
-        public string CohesionGrade = "D";
+        /// <summary>チーム状態の言葉（精神力の行に並べる・設計書23 §4・issue #1600）。数字は出さない。</summary>
+        public string TeamState = "";
     }
 
     /// <summary>
@@ -49,7 +49,7 @@ namespace KokoSim.Unity.Squad
             Add(v, "精神力", s.Mental);
 
             BuildAnalysis(v);
-            v.CohesionGrade = ChemistryDisplay.CohesionGrade(ChemistryDisplay.CurrentCohesion());
+            v.TeamState = ChemistryDisplay.CurrentTeamStateWord();
             return v;
         }
 

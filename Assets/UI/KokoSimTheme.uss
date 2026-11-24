@@ -757,6 +757,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .sb2-meter { align-items: center; margin-right: 22px; }
 .sb2-meter__k { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; }
 .sb2-meter__v { font-size: 24px; color: var(--color-chalk); margin-top: 2px; }
+.sb2-meter__v--state { font-size: var(--fs-label); margin-top: 5px; white-space: nowrap; }
 
 /* --- 3カラム本体（外側スクロールなし・内部スクロール） --- */
 .dash { flex-grow: 1; flex-direction: row; padding: 14px; overflow: hidden; }
@@ -1234,9 +1235,10 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 /* 性格の行＋4軸の見立て（issue #935）。塊ごとに下の余白を取り、中の行どうしは詰める。 */
 .pd2-hidden-block { margin-bottom: 10px; }
 .pd2-hidden-block > .pd2-hidden-row { margin-bottom: 2px; }
-/* チーム総合力パネル: 精神力の行の右に並べる結束のランク（issue #935）。 */
-.tsp-cohesion { flex-direction: row; align-items: center; width: 64px; flex-shrink: 0; margin-left: var(--sp-3); }
-.tsp-cohesion__k { font-size: var(--fs-cap); color: var(--color-muted); margin: 0 var(--sp-1) 0 0; padding: 0; }
+/* チーム総合力パネル: 精神力の行の右に並べるチーム状態の言葉（issue #935・#1600）。 */
+.tsp-cohesion { width: 150px; flex-shrink: 0; margin-left: var(--sp-3); }
+.tsp-cohesion__k { font-size: var(--fs-cap); color: var(--color-muted); margin: 0; padding: 0; }
+.tsp-cohesion__v { font-size: var(--fs-label); color: var(--color-chalk); margin: 0; padding: 0; white-space: nowrap; }
 .pd2-hidden-k { font-size: var(--fs-label); color: var(--color-muted); }
 .pd2-hidden-v { font-size: 18px; color: var(--color-chalk); }
 .pd2-hidden-v--unknown { font-size: 19px; color: var(--color-faint); }
@@ -1453,6 +1455,8 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .nt-c-pos { width: 30px; flex-shrink: 0; -unity-text-align: middle-center; font-size: var(--fs-label); color: var(--color-muted); }
 .nt-c-rank { width: 78px; flex-shrink: 0; flex-direction: row; justify-content: center; align-items: center;
     -unity-text-align: middle-center; }
+.nt-c-state { width: 150px; flex-shrink: 0; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-chalk); white-space: nowrap; }
+.nt-th .nt-c-state { color: var(--color-faint); }
 .nt-c-mental { width: 46px; flex-shrink: 0; -unity-text-align: middle-right; padding-right: 8px;
     font-size: var(--fs-label); color: var(--color-chalk); }
 .nt-c-tag { width: 44px; flex-shrink: 0; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-faint); }

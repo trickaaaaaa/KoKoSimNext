@@ -72,9 +72,9 @@ namespace KokoSim.Unity.Squad
                 foreach (var f in v.Factors)
                 {
                     var row = BuildFactor(f);
-                    // 精神力の行の右に結束のランクを並べる（設計書23 §4・issue #935 レイアウトA）。
+                    // 精神力の行の右にチーム状態の言葉を並べる（設計書23 §4・issue #1600）。
                     // ほかの行には同じ幅の空き枠を置く＝棒と数値の列がそろう（UI原則①）。
-                    row.Add(CohesionTag(f.Label == "精神力" ? v.CohesionGrade : null));
+                    row.Add(CohesionTag(f.Label == "精神力" ? v.TeamState : null));
                     list.Add(row);
                 }
             }
@@ -101,15 +101,17 @@ namespace KokoSim.Unity.Squad
             rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Active)));
         }
 
-        private static VisualElement CohesionTag(string grade)
+        private static VisualElement CohesionTag(string word)
         {
             var tag = new VisualElement();
             tag.AddToClassList("tsp-cohesion");
-            if (grade == null) return tag;
-            var k = new Label("結束");
+            if (word == null) return tag;
+            var k = new Label("チーム状態");
             k.AddToClassList("tsp-cohesion__k");
             tag.Add(k);
-            tag.Add(UiComponents.RankChip(grade, RankChipSize.Small));
+            var w = new Label(word);
+            w.AddToClassList("tsp-cohesion__v");
+            tag.Add(w);
             return tag;
         }
 

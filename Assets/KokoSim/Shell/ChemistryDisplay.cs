@@ -11,10 +11,13 @@ namespace KokoSim.Unity.Shell
     /// <summary>
     /// 結束を画面に出すための値（設計書23 §4・issue #935）。計算は engine の単一ソース
     /// （<see cref="Cohesion.ForTeam(Team, CohesionCoefficients)"/>）を呼ぶだけで、
-    /// 画面は値を数字で出さずランクチップ（G〜S）にする（#731）。自校だけ（相手校には出さない＝Q37）。
+    /// 画面は値を数字で出さず「チーム状態」の言葉5段にする（issue #1600・#731）。自校だけ（相手校には出さない＝Q37）。
     /// バッテリーの相性は画面に出さない（説明なしのランクは何か分からない・issue #1590）。
-    /// ランクの物差しは能力・チーム力と同じ <see cref="Tiers.FromStrength"/>（結束の効き始め 70以上／30未満が B 以上／G に当たる）。
+    /// 言葉の境目 70／30 は試合の効きの境目（<see cref="CohesionCoefficients.HighThreshold"/>／<see cref="CohesionCoefficients.LowThreshold"/>）から引く。
     /// </summary>
+    /// <summary>チーム状態（結束の言葉5段）。良い順。</summary>
+    public enum TeamStateLevel { Best, Good, Normal, Bad, Worst }
+
     public static class ChemistryDisplay
     {
         private static readonly CohesionCoefficients CohesionCoeff = new CohesionCoefficients();
@@ -30,8 +33,39 @@ namespace KokoSim.Unity.Shell
             return Cohesion.ForTeam(team, captain, CohesionCoeff);
         }
 
-        /// <summary>結束 U（0〜100）のランク。</summary>
-        public static string CohesionGrade(double u) => Tiers.FromStrength(u).ToString();
+        /// <summary>言葉の「とても良い」と「普通」の区切り（表示用）。効きの境目 70／30 は係数から引く。</summary>
+        public const double BestFrom = 85.0;
+        public const double NormalFrom = 50.0;
+
+        /// <summary>結束 U（0〜100）の段。境目は 85／70／50／30（70・30 は係数＝試合の効きの境目）。</summary>
+        public static TeamStateLevel TeamStateOf(double u, CohesionCoefficients c = null)
+        {
+            c = c ?? CohesionCoeff;
+            if (u >= BestFrom) return TeamStateLevel.Best;
+            if (u >= c.HighThreshold) return TeamStateLevel.Good;
+            if (u >= NormalFrom) return TeamStateLevel.Normal;
+            if (u >= c.LowThreshold) return TeamStateLevel.Bad;
+            return TeamStateLevel.Worst;
+        }
+
+        /// <summary>段の言葉（チーム状態に出す文字）。</summary>
+        public static string TeamStateWord(TeamStateLevel level)
+        {
+            switch (level)
+            {
+                case TeamStateLevel.Best: return "めっちゃええ感じ";
+                case TeamStateLevel.Good: return "ええ感じ";
+                case TeamStateLevel.Normal: return "まあまあ";
+                case TeamStateLevel.Bad: return "ちょっとギクシャク";
+                default: return "バラバラ";
+            }
+        }
+
+        /// <summary>結束 U（0〜100）のチーム状態の言葉。</summary>
+        public static string TeamStateWord(double u, CohesionCoefficients c = null) => TeamStateWord(TeamStateOf(u, c));
+
+        /// <summary>いまの自校のチーム状態の言葉（共通トップバー用）。</summary>
+        public static string CurrentTeamStateWord() => TeamStateWord(CurrentCohesion());
 
         private static Team ManagerTeam() => PlayerMatchResolver.BuildManagerTeam(NationService.ManagerSchoolName);
 

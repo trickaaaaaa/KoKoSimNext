@@ -40,6 +40,7 @@ namespace KokoSim.Unity.Shell
                 chip.Add(KokoSim.Unity.Components.UiComponents.RankChipLegacy(Tiers.FromStrength(overall).ToString()));
             }
             Set(root, "team-rank-value", System.Math.Round(overall).ToString("0"));
+            Set(root, "team-state", ChemistryDisplay.CurrentTeamStateWord());
 
             // 校章のマスはスクールカラー（表示用の色）の地に白い頭文字。
             var badge = root.Q<Label>("badge");

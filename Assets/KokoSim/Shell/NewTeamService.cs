@@ -21,8 +21,8 @@ namespace KokoSim.Unity.Shell
         public string StarterTier = "G";
         /// <summary>ベンチで伝令に走らせたときの効きの段階（G〜S）。</summary>
         public string BenchTier = "G";
-        /// <summary>この選手を主将にした場合の結束の段階（G〜S。設計書23 §4・issue #935）。</summary>
-        public string CohesionTier = "D";
+        /// <summary>この選手を主将にした場合のチーム状態の言葉（設計書23 §4・issue #1600）。</summary>
+        public string TeamState = "";
         /// <summary>自動選出された暫定主将か（初期選択に使う）。</summary>
         public bool IsInterim;
     }
@@ -150,7 +150,7 @@ namespace KokoSim.Unity.Shell
                     Mental = p.Mental,
                     StarterTier = CaptainEffectTiers.Starter(p).ToString(),
                     BenchTier = CaptainEffectTiers.Bench(p).ToString(),
-                    CohesionTier = ChemistryDisplay.CohesionGrade(ChemistryDisplay.CohesionIfCaptain(p)),
+                    TeamState = ChemistryDisplay.TeamStateWord(ChemistryDisplay.CohesionIfCaptain(p)),
                     IsInterim = p.IsCaptain,
                 });
             }
