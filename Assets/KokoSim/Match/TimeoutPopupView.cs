@@ -14,7 +14,7 @@ namespace KokoSim.Unity.Match
         private readonly VisualElement _out1, _out2, _base1, _base2, _base3;
         private readonly VisualElement _awayNameRow, _homeNameRow;
         private readonly VisualElement _batterRow, _pitcherRow;
-        private readonly Button _timeout, _sub, _scout, _skip;
+        private readonly Button _timeout, _sub, _scout, _ibb, _skip;
         private readonly Label _curSide, _curText, _othSide, _othText;
         private readonly VisualElement _curDots, _othDots;
 
@@ -37,6 +37,7 @@ namespace KokoSim.Unity.Match
             _timeout = root.Q<Button>("pm-timeout");
             _sub = root.Q<Button>("pm-sub");
             _scout = root.Q<Button>("pm-scout");
+            _ibb = root.Q<Button>("pm-ibb");
             _skip = root.Q<Button>("pm-skip");
             _curSide = root.Q<Label>("pm-to-cur-side");
             _curText = root.Q<Label>("pm-to-cur-text");
@@ -49,6 +50,7 @@ namespace KokoSim.Unity.Match
             AddIcon(root.Q("pm-timeout-icon"), LineIcon.Kind.Megaphone);
             AddIcon(root.Q("pm-sub-icon"), LineIcon.Kind.Swap);
             AddIcon(root.Q("pm-scout-icon"), LineIcon.Kind.Roster);
+            AddIcon(root.Q("pm-ibb-icon"), LineIcon.Kind.Walk);
             AddIcon(root.Q("pm-skip-icon"), LineIcon.Kind.FastForward, fill: true);
             AddIcon(root.Q("pm-resume-icon"), LineIcon.Kind.Play, fill: true);
         }
@@ -94,6 +96,11 @@ namespace KokoSim.Unity.Match
             _timeout?.SetEnabled(m.TimeoutEnabled);
             _sub?.SetEnabled(m.ActionsEnabled);
             _scout?.SetEnabled(m.ActionsEnabled);
+            if (_ibb != null)
+            {
+                _ibb.style.display = m.IntentionalWalkVisible ? DisplayStyle.Flex : DisplayStyle.None;
+                _ibb.SetEnabled(m.IntentionalWalkEnabled);
+            }
             _skip?.SetEnabled(m.ActionsEnabled);
         }
 

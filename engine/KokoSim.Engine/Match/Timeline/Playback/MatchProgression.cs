@@ -833,7 +833,7 @@ public sealed class MatchProgression
         else
         {
             var seed = PitchSequenceSynthesizer.SeedFrom(step.LogIndex, step.Inning, step.IsTop, e.Pitches, e.Result);
-            pitchSeq = PitchSequenceSynthesizer.Synthesize(e.Result, e.Pitches, seed);
+            pitchSeq = PitchSequenceSynthesizer.Synthesize(e.Result, e.Pitches, seed, e.IntentionalWalk);
         }
         Current = new LivePlateAppearance
         {

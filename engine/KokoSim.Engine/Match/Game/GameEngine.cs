@@ -2675,7 +2675,8 @@ public static class GameEngine
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
                 batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
                 pitcherRuns: ownRunsThisPa,
-                play: res.Play, rbi: rbiRuns);
+                play: res.Play, rbi: rbiRuns,
+                intentionalWalk: defTactics.IntentionalWalk || force == Debugging.ForcedOutcome.IntentionalWalk);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -2785,7 +2786,8 @@ public static class GameEngine
         Match.Fielding.FieldingPlay? play = null,
         bool isSacBunt = false,
         int? pitcherRuns = null,
-        int? rbi = null)
+        int? rbi = null,
+        bool intentionalWalk = false)
     {
         if (result.IsHit()) offense.AddHit();
         // 外野手のファンブル（issue #811）は安打のまま失策も記録する＝「安打＋失策」の両立。
@@ -2829,7 +2831,8 @@ public static class GameEngine
             outsThisPa, isSacFly, isSacBunt,
             play?.ErrorKind, play?.WildThrowScatterM, play?.RecoveredThrowScatterM is not null,
             // issue #1014: 本塁打のフェンス上の通過高さ（写すだけ＝判定・乱数順・digest不変）。
-            play?.FenceCrossHeightM));
+            play?.FenceCrossHeightM,
+            intentionalWalk));
     }
 
     private static int ClampAbility(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
