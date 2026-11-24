@@ -26,16 +26,28 @@ public sealed record BattingCoefficients
     public double AimSigmaYMeters { get; init; } = 0.155;
     /// <summary>
     /// 制球の高い投手ほど狙いをゾーンの隅へ散らす（issue walk-rate-floor-vs-elite-pitcher）: 狙い散布σの倍率
-    /// ＝ max(0.5, 1 + この値 × (Control−50))。従来は全員がゾーン中心を狙い、そこへ制球σだけが乗っていたので、
-    /// 制球が上がるほどゾーン率が一方的に上がり（C80 で 68%・実物の好投手は 50% 前後）、A投手 vs F打者の四球率が
-    /// 1% まで消えていた。好投手ほどコーナーを突く＝ゾーン際に散り、見逃しボールが増える。制球の低い投手は逆に
-    /// 真ん中を狙う（隅を狙う余裕が無い）＝母集団の四球率（atbat_10k 帯 ≤10%）を動かさない対称形。C50 で恒等。
+    /// ＝ Control≥50 なら max(0.5, 1 + <see cref="AimSpreadControlSlopeAbovePerPoint"/> × (Control−50))、
+    /// Control&lt;50 なら max(0.5, 1 + <see cref="AimSpreadControlSlopeBelowPerPoint"/> × (Control−50))。
+    /// 従来は全員がゾーン中心を狙い、そこへ制球σだけが乗っていたので、制球が上がるほどゾーン率が一方的に
+    /// 上がり（C80 で 68%・実物の好投手は 50% 前後）、A投手 vs F打者の四球率が 1% まで消えていた。
+    /// 好投手ほどコーナーを突く＝ゾーン際に散り、見逃しボールが増える。
     /// </summary>
     ///
-    /// <para>0.008＝実測（matchup grid・6,000打席×seed42/2024）: P80 vs B30 の BB% 1→3%・P90 vs B75 1→7%・P50 vs B45 は 8% のまま。
-    /// K% は P80/B30 44→43%・P90/B30 46→45%（帯内）。母集団（atbat_10k）の BB% は 9.7/9.1→9.8/9.2 で帯（≤10%）内。
-    /// 0.010 だと seed42 が 10.1% で天井を超え、0.017 だと P90 vs B75 が 17% まで膨らむ。</para>
-    public double AimSpreadControlSlopePerPoint { get; init; } = 0.008;
+    /// <para>0.008（Control≥50側・不変）＝実測（matchup grid・6,000打席×seed42/2024）: P80 vs B30 の BB% 1→3%・
+    /// P90 vs B75 1→7%・P50 vs B45 は 8% のまま。K% は P80/B30 44→43%・P90/B30 46→45%（帯内）。
+    /// 母集団（atbat_10k）の BB% は 9.7/9.1→9.8/9.2 で帯（≤10%）内。0.010 だと seed42 が 10.1% で天井を超え、
+    /// 0.017 だと P90 vs B75 が 17% まで膨らむ。</para>
+    public double AimSpreadControlSlopeAbovePerPoint { get; init; } = 0.008;
+
+    /// <summary>
+    /// 狙い散布σの倍率の傾き（Control&lt;50側・issue #1589）。従来は上と対称の0.008で「制球の低い投手は
+    /// 真ん中を狙う」（隅を狙う余裕が無い）としていたが、これが実行散布（<see cref="PitchingCoefficients.ControlSigmaMeters"/>）
+    /// の差を半分ほど打ち消し、制球Gでもゾーンに集まってしまっていた（オーナー指摘 2026-11-24）。
+    /// 0＝「真ん中寄せ」を完全無効化（Control&lt;50もControl50と同じ狙い散布のまま狭めない）。この値だけでは
+    /// 与四球率を11.0%→11.9%（約1pt）しか動かせず、実行散布側（<see cref="PitchingCoefficients.ControlSigmaSlopeBelowPerPoint"/>）
+    /// が主レバーになる（オーナー決定 2026-11-25・issue #1589コメント）。
+    /// </summary>
+    public double AimSpreadControlSlopeBelowPerPoint { get; init; } = 0.0;
 
     // --- 打者判断（スイング/見逃し） ---
     /// <summary>ゾーン内球へのスイング率の基準。</summary>
