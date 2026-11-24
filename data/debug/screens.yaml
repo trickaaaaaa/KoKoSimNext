@@ -284,7 +284,7 @@ screens:
       - show: PlayerList
       - shot: 01-player-detail
       - show: TeamStrength
-      - shot: 02-team-strength
+      - shot: {name: 02-team-strength, h: 1300}
 
   - id: player-detail-pitcher-sense-1472
     name: "選手詳細の隠しパラメータ欄に投手センスの見立て（ランク）が出る・見立てが無い選手は「？」（issue #1472）"
@@ -1436,3 +1436,18 @@ screens:
       - show: HomeDashboard
       - wait: 10
       - shot: 07-captain
+      # 言葉の段（最長の「ちょっとギクシャク」まで下げて、欠けと重なりを見る）
+      - call: GameSession.Current.ApplyCohesionEvent(true)
+      - call: GameSession.Current.ApplyCohesionEvent(true)
+      - show: TeamStrength
+      - wait: 5
+      - shot: 08-best
+      - call: GameSession.Current.ApplyCohesionEvent(false)
+      - call: GameSession.Current.ApplyCohesionEvent(false)
+      - call: GameSession.Current.ApplyCohesionEvent(false)
+      - call: GameSession.Current.ApplyCohesionEvent(false)
+      - call: GameSession.Current.ApplyCohesionEvent(false)
+      - call: GameSession.Current.ApplyCohesionEvent(false)
+      - show: TeamStrength
+      - wait: 5
+      - shot: 09-low
