@@ -169,6 +169,64 @@ namespace KokoSim.EditorTests
             Assert.That(checkedMaterials, Is.GreaterThan(0), "領域塗り分けのマテリアルが1つも見つからない（検査が空振りしている）");
         }
 
+        // ---- ビルド同梱の索引に載せるクリップの一覧（RequiredClipNames）の漏れ ----
+
+        /// <summary>
+        /// リグが持つクリップ名の表（<c>…ClipName</c>・<c>…ClipNames</c>・<c>Name</c>/<c>Clip</c> を持つ表や1件物）が
+        /// すべて <see cref="DuelStageRig.RequiredClipNames"/> に載っていること。漏れたクリップはビルド同梱の索引に入らず、
+        /// <b>ビルドでだけ</b>読めない（エディタは索引を通さず読むので絵では気づけない）。実害: 振り返り・背走・
+        /// 横歩き・走り出し・ジャンピングキャッチ・はじく・捕逸の10表が漏れていて、ブラウザ版で外野手が
+        /// 待機の姿勢のまま滑っていた（#1323）。新しい表を足したら一覧にも足す。
+        /// </summary>
+        [Test]
+        public void EveryClipTableOfTheRig_IsInTheCatalogList()
+        {
+            var required = new HashSet<string>(DuelStageRig.RequiredClipNames());
+            var missing = new List<string>();
+            int seen = 0;
+            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Static
+                | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+            foreach (var f in typeof(DuelStageRig).GetFields(F))
+            {
+                if (f.Name == "ClipFbxSources") continue;   // クリップ名ではなく供給元 FBX の置き場所
+                object v;
+                try { v = f.GetValue(null); } catch { continue; }
+                if (v == null) continue;
+                foreach (var name in ClipNamesIn(f.Name, v))
+                {
+                    if (string.IsNullOrEmpty(name)) continue;
+                    seen++;
+                    if (!required.Contains(name)) missing.Add(f.Name + ": " + name);
+                }
+            }
+            Assert.That(seen, Is.GreaterThan(50), "クリップ名の表を拾えていない（検査が空振りしている）");
+            Assert.That(missing, Is.Empty, "ビルド同梱の索引から漏れるクリップ（RequiredClipNames に足す）");
+        }
+
+        private static IEnumerable<string> ClipNamesIn(string fieldName, object v)
+        {
+            if (v is string s) { if (fieldName.EndsWith("ClipName")) yield return s; yield break; }
+            if (v is string[] arr) { if (fieldName.Contains("Clip")) foreach (var n in arr) yield return n; yield break; }
+            if (v is System.Array a)
+            {
+                var member = ClipMember(a.GetType().GetElementType());
+                if (member == null) yield break;
+                foreach (var e in a) yield return (string)member.GetValue(e);
+                yield break;
+            }
+            var t = v.GetType();
+            if (t.IsPrimitive || t.IsEnum || t.Namespace == null || !t.Namespace.StartsWith("KokoSim")) yield break;
+            var one = ClipMember(t);
+            if (one != null) yield return (string)one.GetValue(v);
+        }
+
+        /// <summary>表の要素のうちクリップ名を持つ欄（Name か Clip の文字列）。</summary>
+        private static System.Reflection.FieldInfo ClipMember(System.Type t)
+        {
+            var m = t.GetField("Name") ?? t.GetField("Clip");
+            return m != null && m.FieldType == typeof(string) ? m : null;
+        }
+
         // ---- 装備メッシュは1サブメッシュ（DuelGearMeshes.LoadMeters。design-18 §3.3.2） ----
 
         /// <summary>
