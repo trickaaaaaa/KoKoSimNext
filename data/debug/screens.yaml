@@ -751,6 +751,66 @@ screens:
       - read: =TutorialService.Progress.Dismissed
       - read: =TutorialService.Progress.Seen
 
+  - id: arrival-new-school-1612
+    name: "新設校の赴任イベント（部員は1年だけ・教員として赴任）を、シードを変えて言い回しごとに頭から4行ぶん撮る（issue #1612）"
+    steps:
+      - new_game: {seed: 1}
+      - call: TutorialService.OnNewSchoolStarted()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: s1-1
+      - click: ev-novel
+      - wait: 5
+      - shot: s1-2
+      - click: ev-novel
+      - wait: 5
+      - shot: s1-3
+      - click: ev-novel
+      - wait: 5
+      - shot: s1-4
+      - new_game: {seed: 2}
+      - call: TutorialService.OnNewSchoolStarted()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: s2-1
+      - click: ev-novel
+      - wait: 5
+      - shot: s2-2
+      - click: ev-novel
+      - wait: 5
+      - shot: s2-3
+      - click: ev-novel
+      - wait: 5
+      - shot: s2-4
+      - new_game: {seed: 3}
+      - call: TutorialService.OnNewSchoolStarted()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: s3-1
+      - click: ev-novel
+      - wait: 5
+      - shot: s3-2
+      - click: ev-novel
+      - wait: 5
+      - shot: s3-3
+      - click: ev-novel
+      - wait: 5
+      - shot: s3-4
+      - new_game: {seed: 4}
+      - call: TutorialService.OnNewSchoolStarted()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: s4-1
+      - click: ev-novel
+      - wait: 5
+      - shot: s4-2
+      - click: ev-novel
+      - wait: 5
+      - shot: s4-3
+      - click: ev-novel
+      - wait: 5
+      - shot: s4-4
+
   - id: arrival-tutorial-1496-transfer
     name: "転任→赴任イベント（転任用・2年か3年のマネージャー）。チュートリアルは出ない（issue #1496）"
     steps:
