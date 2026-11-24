@@ -2,7 +2,7 @@
 <!-- 共通トップバー（UI-BUILD-METHOD Step 2/4）。墨の帯（1段目＝表札・日付・メーター・進めるボタン）＋ナビタブ。
      全画面がこの単一ソースを ui:Instance で読み込み、画面ごとに上部/タブを作り直さない。
      アクティブタブの強調は ScreenRouter が付ける（ここでは付けない）。
-     表札・部費・チーム総合・名声・信頼度は TopBarMeters、日付は ScoreboardStrip.Fill が埋める。 -->
+     表札・部費・チーム総合・チーム状態・名声・信頼度は TopBarMeters、日付は ScoreboardStrip.Fill が埋める。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:VisualElement class="sb2">
         <ui:VisualElement class="sb2-left">
@@ -34,6 +34,10 @@
                     <ui:VisualElement name="team-rank" class="sb2-rank__chip" />
                     <ui:Label name="team-rank-value" class="sb2-rank__v" text="" />
                 </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="sb2-meter sb2-meter--start">
+                <ui:Label class="sb2-meter__k" text="チーム状態" />
+                <ui:Label name="team-state" class="sb2-meter__v sb2-meter__v--state" text="" />
             </ui:VisualElement>
             <ui:VisualElement class="sb2-meter">
                 <ui:Label class="sb2-meter__k" text="名声" />

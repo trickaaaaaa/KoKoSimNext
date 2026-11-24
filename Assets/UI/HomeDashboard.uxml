@@ -272,7 +272,7 @@
                 <ui:Label class="nt-c-mental nt-th__c" text="精神" />
                 <ui:Label class="nt-c-rank nt-th__c" text="スタメン" />
                 <ui:Label class="nt-c-rank nt-th__c" text="ベンチ" />
-                <ui:Label class="nt-c-rank nt-th__c" text="結束" />
+                <ui:Label class="nt-c-state nt-th__c" text="チーム状態" />
               </ui:VisualElement>
               <ui:ScrollView name="nt-rows" class="nt-rows" />
             </ui:VisualElement>
