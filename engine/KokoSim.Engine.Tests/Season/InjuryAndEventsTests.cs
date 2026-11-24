@@ -378,6 +378,91 @@ public sealed class InjuryAndEventsTests
         Assert.Contains(lossYear, n => n.Type == ManagerGrowthEventType.LessonFromBigLoss);
     }
 
+    // ===== 教え子（プロ入りした自分の教え子）の訪問は名鑑が空なら起こさない（issue #1615） =====
+
+    private static ManagerGrowthCoefficients ProVisitOnly() => new()
+    {
+        FamousRivalProb = 0, SeminarProb = 0, MentorProb = 0, BigLossProb = 0,
+        ProObVisitBaseProb = 1.0, ProObVisitFameSlope = 0,
+    };
+
+    [Fact]
+    public void ManagerGrowth_ProVisit_NeedsAProProtege()
+    {
+        var c = ProVisitOnly();
+
+        var none = new Manager { TalentEye = 30, TacticalSense = 30 };
+        var firedNone = ManagerGrowthEvents.Yearly(none, false, 1, new Xoshiro256Random(5), c, hasProProtege: false);
+        Assert.DoesNotContain(firedNone, n => n.Type == ManagerGrowthEventType.ProObVisit);
+        Assert.Equal(30, none.TalentEye, 6);          // 効果も入らない
+        Assert.Equal(30, none.TacticalSense, 6);
+
+        var some = new Manager { TalentEye = 30, TacticalSense = 30 };
+        var firedSome = ManagerGrowthEvents.Yearly(some, false, 1, new Xoshiro256Random(5), c, hasProProtege: true);
+        Assert.Contains(firedSome, n => n.Type == ManagerGrowthEventType.ProObVisit);
+        Assert.Equal(30 + c.ProObVisitBoost, some.TalentEye, 6);
+
+        // 既定（名鑑を持たないキャリアシム）は従来どおり起こりうる＝帯不変。
+        var legacy = new Manager { TalentEye = 30, TacticalSense = 30 };
+        Assert.Contains(ManagerGrowthEvents.Yearly(legacy, false, 1, new Xoshiro256Random(5), c),
+            n => n.Type == ManagerGrowthEventType.ProObVisit);
+    }
+
+    [Fact]
+    public void ManagerGrowth_ProVisitSuppressed_DoesNotShiftTheOtherGrowthDraws()
+    {
+        // 教え子の訪問を止めても乱数は引いて捨てる＝同じ年の他の節目（名将・講習会・名伯楽）の抽選結果は動かない。
+        var c = new ManagerGrowthCoefficients
+        {
+            FamousRivalProb = 0.5, SeminarProb = 0.5, MentorProb = 0.5, BigLossProb = 0.5,
+            ProObVisitBaseProb = 0.5, ProObVisitFameSlope = 0,
+        };
+
+        for (ulong seed = 1; seed <= 40; seed++)
+        {
+            var withProtege = ManagerGrowthEvents.Yearly(
+                new Manager { Funds = 100 }, false, 0, new Xoshiro256Random(seed), c, hasProProtege: true);
+            var without = ManagerGrowthEvents.Yearly(
+                new Manager { Funds = 100 }, false, 0, new Xoshiro256Random(seed), c, hasProProtege: false);
+
+            Assert.Equal(
+                withProtege.Where(n => n.Type != ManagerGrowthEventType.ProObVisit).Select(n => n.Type),
+                without.Select(n => n.Type));
+        }
+    }
+
+    [Fact]
+    public void ManagerSeasonUpdate_PassesProProtegeThrough()
+    {
+        var c = ProVisitOnly();
+        var none = ManagerSeasonUpdate.Apply(new Manager(), false, false, 2, new Xoshiro256Random(9),
+            growthCoeff: c, hasProProtege: false);
+        Assert.DoesNotContain(none, n => n.Type == ManagerGrowthEventType.ProObVisit);
+
+        var some = ManagerSeasonUpdate.Apply(new Manager(), false, false, 2, new Xoshiro256Random(9),
+            growthCoeff: c, hasProProtege: true);
+        Assert.Contains(some, n => n.Type == ManagerGrowthEventType.ProObVisit);
+    }
+
+    [Fact]
+    public void DraftHistory_PickVisitor_IsDeterministicAndNullWhenEmpty()
+    {
+        var history = new KokoSim.Engine.Career.Draft.DraftHistory();
+        Assert.Null(history.PickVisitor(new Xoshiro256Random(1)));
+
+        foreach (var (id, name) in new[] { (1, "甲"), (2, "乙"), (3, "丙") })
+            history.Add(new KokoSim.Engine.Career.Draft.DraftRecord(
+                2027, 2, id, name, 1, 1, KokoSim.Engine.Career.Draft.DraftRankBand.LowerRound, 80));
+
+        for (ulong seed = 1; seed <= 20; seed++)
+        {
+            var a = history.PickVisitor(new Xoshiro256Random(seed));
+            var b = history.PickVisitor(new Xoshiro256Random(seed));
+            Assert.NotNull(a);
+            Assert.Equal(a, b);
+        }
+    }
+
     // ===== Season 統合: 10年回して怪我が発生・回復し、破綻しない =====
 
     [Fact]

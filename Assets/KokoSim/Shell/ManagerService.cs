@@ -278,7 +278,9 @@ namespace KokoSim.Unity.Shell
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
                 Manager, reachedKoshien, nationalChampion, wins, milestoneRng,
                 upsetFameGain: upsetFameGain, upsetFameLoss: upsetFameLoss, contracts: ContractEffects,
-                nationalStageWins: nationalStageWins, draftFameGain: draftFameGain);
+                nationalStageWins: nationalStageWins, draftFameGain: draftFameGain,
+                // 教え子（プロ入りした自分の教え子）の訪問は、名鑑に1人以上いるときだけ（issue #1615）。
+                hasProProtege: DraftService.History.Count > 0);
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 

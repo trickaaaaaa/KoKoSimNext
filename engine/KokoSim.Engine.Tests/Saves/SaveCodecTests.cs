@@ -522,6 +522,21 @@ public sealed class SaveCodecTests
         Assert.Equal(0, old.BigStageSeq);
     }
 
+    // 新設校として始まったか（OB の有無の判定材料）が往復すること。キーが無い旧セーブは false＝OB が居る扱い（issue #1615）。
+    [Fact]
+    public void SchoolFoundedNew_RoundTrips_AndDefaultsToFalse()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.SchoolFoundedNew = true;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.True(s.SchoolFoundedNew);
+
+        var stripped = json.Replace("\"schoolFoundedNew\"", "\"x1\"");
+        Assert.True(SaveCodec.TryDeserialize(stripped, out var old, out err), err);
+        Assert.False(old.SchoolFoundedNew);
+    }
+
     // スカウトを持たない進行（未契約／秋を跨いでいない）も往復すること。
     [Fact]
     public void ScoutingState_Null_RoundTrips()

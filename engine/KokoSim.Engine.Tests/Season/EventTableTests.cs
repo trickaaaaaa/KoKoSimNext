@@ -705,6 +705,141 @@ events:
         Assert.Equal(Run(true), Run(false));
     }
 
+    // ===== OB の居ない新設校ではOBが出てくる話を出さない（issue #1615） =====
+
+    private const string ObSample = @"
+events:
+  - id: ob_gift
+    kind: Random
+    requires_ob: true
+    text: ""OB会から寄付。""
+  - id: other_a
+    kind: Random
+    text: ""雑談A。""
+  - id: other_b
+    kind: Random
+    text: ""雑談B。""
+  - id: berth
+    kind: System
+    text: ""OB会と卒業生から激励金が届いた。""
+    text_no_ob: ""保護者会から激励金が届いた。""
+    variants:
+      - requires_ob: true
+        lines:
+          - who: team_manager
+            say: ""OBの方が封筒を。""
+      - lines:
+          - who: team_manager
+            say: ""保護者会の皆さんが封筒を。""
+      - requires_ob: true
+        lines:
+          - who: team_manager
+            say: ""卒業生の名簿が。""
+";
+
+    [Fact]
+    public void Parse_RequiresOb_ReadsEventAndVariantFlags()
+    {
+        var events = EventTableParser.Parse(ObSample).ToDictionary(e => e.Id);
+        Assert.True(events["ob_gift"].RequiresOb);
+        Assert.False(events["other_a"].RequiresOb);
+
+        var berth = events["berth"];
+        Assert.False(berth.RequiresOb);                                            // イベント自体は新設校でも出る
+        Assert.Equal(new[] { true, false, true }, berth.Variants.Select(v => v.RequiresOb));
+        Assert.Equal("保護者会から激励金が届いた。", berth.TextFor(hasOb: false));
+        Assert.Equal("OB会と卒業生から激励金が届いた。", berth.TextFor(hasOb: true));
+        Assert.Equal("雑談A。", events["other_a"].TextFor(hasOb: false));         // text_no_ob が無ければ同じ文
+    }
+
+    [Fact]
+    public void ObEvent_FiresOnlyWhenThereIsAnOb()
+    {
+        var events = EventTableParser.Parse(ObSample);
+        var coeff = new EventCoefficients { WeeklyFireProbability = 1.0, MaxRandomPerWeek = 1 };
+
+        bool ObFires(bool? hasOb)
+        {
+            var s = new EventScheduler(events, coeff);
+            if (hasOb is { } h) s.ObFilter = () => h;
+            for (var seed = 1; seed <= 60; seed++)
+                if (s.Week(5, new Xoshiro256Random((ulong)seed)).Any(f => f.Event.Id == "ob_gift")) return true;
+            return false;
+        }
+
+        Assert.False(ObFires(false));   // OB が居ない新設校
+        Assert.True(ObFires(true));     // 卒業生が出た後・転任先の学校
+        Assert.True(ObFires(null));     // 名簿を渡さないヘッドレスシムは従来どおり
+    }
+
+    [Fact]
+    public void PickScript_WithoutOb_NeverPicksObVariants_AndWithOb_KeepsTheOriginalDraw()
+    {
+        var berth = EventTableParser.Parse(ObSample).Single(e => e.Id == "berth");
+
+        for (var week = 1; week <= 40; week++)
+        {
+            var noOb = EventScheduler.PickScript(berth, week, 0, new Xoshiro256Random(3), hasOb: false);
+            Assert.False(noOb.RequiresOb);
+
+            // OB が居る学校の引き方は従来（hasOb 引数なし）と1語も変わらない。
+            var before = EventScheduler.PickScript(berth, week, 0, new Xoshiro256Random(3));
+            var withOb = EventScheduler.PickScript(berth, week, 0, new Xoshiro256Random(3), hasOb: true);
+            Assert.Same(before, withOb);
+        }
+    }
+
+    [Fact]
+    public void ObEvent_SkippedForNewSchool_DoesNotShiftLaterDrawsOfOtherEvents()
+    {
+        // OB 会の寄付を抽選から外しても、残りのイベントの発火が「別の列」にならないこと（同じ乱数列で引き続ける）。
+        var events = EventTableParser.Parse(ObSample);
+        var coeff = new EventCoefficients { WeeklyFireProbability = 1.0 };
+        var s = new EventScheduler(events, coeff) { ObFilter = () => false };
+        var rng = new Xoshiro256Random(21);
+        var ids = new List<string>();
+        for (var w = 0; w < 30; w++) ids.AddRange(s.Week(w % 50, rng).Select(f => f.Event.Id));
+        Assert.DoesNotContain("ob_gift", ids);
+        Assert.NotEmpty(ids);
+    }
+
+    [Fact]
+    public void RepositoryTable_ObMentioningEvents_AreMarked_AndEveryObVariantHasAnObFreeAlternative()
+    {
+        var byId = RepositoryEvents().ToDictionary(e => e.Id);
+
+        // 新設校で出してはいけない話（OB会の寄付）は、イベントごと抽選から外す。
+        Assert.True(byId["ob_donation"].RequiresOb);
+
+        // イベントは残し、OB に触れる会話だけを外すもの。OB に触れない会話が必ず1つ以上残る。
+        foreach (var id in new[]
+                 {
+                     "booster_club_fund", "local_company_support", "outside_coach_visit",
+                     "koshien_berth_donation", "senbatsu_berth_donation",
+                 })
+        {
+            var e = byId[id];
+            Assert.False(e.RequiresOb, id);
+            Assert.Contains(e.Variants, v => v.RequiresOb);
+            Assert.Contains(e.Variants, v => !v.RequiresOb);
+        }
+
+        // 激励金はフィードの1行が OB を名指しするので、OB が居ない版の文に替える。
+        Assert.DoesNotContain("OB", byId["koshien_berth_donation"].TextFor(hasOb: false));
+        Assert.DoesNotContain("OB", byId["senbatsu_berth_donation"].TextFor(hasOb: false));
+
+        // OB なしの学校で選ばれうる会話に「OB」「卒業生」「先輩」が混ざらない（印の付け忘れを見張る）。
+        foreach (var e in byId.Values.Where(e => !e.RequiresOb && e.Id != "draft_ob_greeting"))
+            foreach (var v in e.Variants.Where(v => !v.RequiresOb))
+                foreach (var line in v.Lines)
+                    Assert.False(
+                        line.Say.Contains("OB") && !IsObExempt(e.Id),
+                        $"{e.Id}: OB を含む会話に requires_ob が付いていない: {line.Say}");
+    }
+
+    // 自校の教え子や外部の人の「OB」を言う話（印を付けない）。いまは無し＝増やすときは理由を添えてここへ。
+    private static bool IsObExempt(string eventId) => false;
+
     // ===== 場面（ノベル画面の背景・issue #1516） =====
 
     [Fact]

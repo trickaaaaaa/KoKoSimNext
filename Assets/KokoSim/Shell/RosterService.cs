@@ -66,6 +66,9 @@ namespace KokoSim.Unity.Shell
 
         private static List<DevelopingPlayer> _roster;
         private static GraduateRoll _graduates;
+        // いまの学校が新設校（歴史なし）として始まったか。Build が <see cref="_newSchool"/> から据え、セーブに載る（issue #1615）。
+        // _newSchool は初年度の生成にしか効かない一時フラグなので、OB の判定には使えない。
+        private static bool _foundedNew;
         // 新入生へ振る安定ID（成績集計の帰属キー）の次の値。単調増加＝既存・卒業生の Id と衝突しない（issue #535）。
         private static int _nextId;
 
@@ -85,6 +88,16 @@ namespace KokoSim.Unity.Shell
         public static GraduateRoll Graduated
         {
             get { _ = Roster; return _graduates; }
+        }
+
+        /// <summary>
+        /// この学校に OB（野球部の卒業生）が居るか（issue #1615）。転任で引き継いだ学校（もともと AI 校）は歴史があるので常に居る。
+        /// 新設校は卒業生が1人以上出る（最初の卒業は3年目の年度末）まで居ない。
+        /// OB 会の寄付・OB の来訪のようにOBが出てくるイベントの出し分けに使う。
+        /// </summary>
+        public static bool HasOb
+        {
+            get { _ = Roster; return !_foundedNew || _graduates.Count > 0; }
         }
 
         /// <summary>
@@ -169,6 +182,7 @@ namespace KokoSim.Unity.Shell
             _ = Roster;
             s.Roster = new List<DevelopingPlayer>(_roster);
             s.Graduates = _graduates;
+            s.SchoolFoundedNew = _foundedNew;
             s.NextPlayerId = _nextId;   // 採番の続き（issue #644。転任後はロスターの最大Idより大きい）
         }
 
@@ -179,13 +193,14 @@ namespace KokoSim.Unity.Shell
         {
             _roster = s.Roster.ToList();
             _graduates = s.Graduates;
+            _foundedNew = s.SchoolFoundedNew;
             _nextId = PlayerIdCounter.Resume(s.NextPlayerId, s.Roster, s.Stats, s.Graduates);
         }
 
         /// <summary>新規ゲームの完全リセット: 次アクセスで既定シード（42）から再生成させる。</summary>
         public static void Reset()
         {
-            _roster = null; _graduates = null; _nextId = 0; _newSchool = false;
+            _roster = null; _graduates = null; _nextId = 0; _newSchool = false; _foundedNew = false;
             _skillNotices.Clear();
             _rosterSeed = DefaultSeed;
             _rosterTalentCenterOverride = null;
@@ -257,6 +272,7 @@ namespace KokoSim.Unity.Shell
             _roster = roster;
             _graduates = new GraduateRoll();
             _nextId = nextId;
+            _foundedNew = false;   // 転任先はもともとAI校＝歴史がありOBが居る（issue #1615）
             // 転任先の部員はAI校の選手から作り直したもの＝推移はここから始まる（issue #1027）。
             AbilityHistory.EnsureStarted(_roster, GameClock.Week);
             _newSchool = false;
@@ -290,6 +306,7 @@ namespace KokoSim.Unity.Shell
             // 新規ゲーム（_nextId=0）は 1 から、転任後は旧校で使った Id の続きから振る（issue #535 / #644）。
             _nextId = PlayerIdCounter.AssignSequential(list, _nextId);
             _graduates = new GraduateRoll();  // 卒業生の名前の表（初期は空）。
+            _foundedNew = _newSchool;         // 新設校（転任先が見つからない保険の作り直しを含む）は卒業生が出るまで OB が居ない（issue #1615）。
 
             UniformNumberAssigner.AutoAssign(list);   // 初期背番号を能力順で仮割当（プレイヤーが後で編集）
 

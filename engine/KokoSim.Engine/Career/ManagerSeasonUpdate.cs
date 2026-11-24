@@ -28,6 +28,10 @@ public static class ManagerSeasonUpdate
     /// <paramref name="wins"/> のうち甲子園・センバツの勝ち（大会報奨の単価が高い・issue #1469）。
     /// </param>
     /// <param name="draftFameGain">教え子のプロ入りの名声（<see cref="CareerEngine.DraftFameGain"/>・issue #1270 D1）。</param>
+    /// <param name="hasProProtege">
+    /// プロ入りした教え子が名鑑に1人以上いるか（<see cref="ManagerGrowthEvents.Yearly"/>・issue #1615）。
+    /// 既定 true＝名鑑を持たないキャリアシム（<see cref="CareerEngine.Run"/>）は常に「いる」扱い。
+    /// </param>
     public static IReadOnlyList<ManagerGrowthNotice> Apply(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins,
         IRandomSource milestoneRng,
@@ -37,7 +41,8 @@ public static class ManagerSeasonUpdate
         double upsetFameLoss = 0,
         ContractEffects? contracts = null,
         int nationalStageWins = 0,
-        double draftFameGain = 0)
+        double draftFameGain = 0,
+        bool hasProProtege = true)
     {
         var c = careerCoeff ?? new CareerCoefficients();
         var mg = growthCoeff ?? new ManagerGrowthCoefficients();
@@ -52,6 +57,6 @@ public static class ManagerSeasonUpdate
         TeamManagerLifecycle.AdvanceGrade(m);
 
         // 節目イベント（甲子園経験・大敗の学び・講習会・OB訪問等）。独立ストリームで既存の乱数列を乱さない。
-        return ManagerGrowthEvents.Yearly(m, reachedKoshien, wins, milestoneRng, mg);
+        return ManagerGrowthEvents.Yearly(m, reachedKoshien, wins, milestoneRng, mg, hasProProtege);
     }
 }

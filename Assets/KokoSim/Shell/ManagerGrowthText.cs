@@ -11,7 +11,7 @@ namespace KokoSim.Unity.Shell
     public static class ManagerGrowthText
     {
         /// <summary>
-        /// その年の会話に使う1件を選ぶ。<b>珍しい順・大きい順</b>＝甲子園 &gt; 名伯楽 &gt; プロOB &gt;
+        /// その年の会話に使う1件を選ぶ。<b>珍しい順・大きい順</b>＝甲子園 &gt; 名伯楽 &gt; 教え子の訪問 &gt;
         /// 名将 &gt; 大敗 &gt; 講習会。同率が無いので決定論（乱数を引かない）。
         /// </summary>
         public static ManagerGrowthEventType Lead(IReadOnlyList<ManagerGrowthNotice> notices)
@@ -55,7 +55,7 @@ namespace KokoSim.Unity.Shell
             {
                 case ManagerGrowthEventType.KoshienExperience: return KokoSim.Engine.Season.DisplayNames.Current.Koshien + "の経験";
                 case ManagerGrowthEventType.MentorCoach: return "名伯楽との出会い";
-                case ManagerGrowthEventType.ProObVisit: return "プロOBの訪問";
+                case ManagerGrowthEventType.ProObVisit: return "教え子の訪問";
                 case ManagerGrowthEventType.FamousRivalLesson: return "名将との一戦";
                 case ManagerGrowthEventType.LessonFromBigLoss: return "大敗からの学び";
                 default: return "指導者講習会";

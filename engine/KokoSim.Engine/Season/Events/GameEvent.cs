@@ -96,6 +96,21 @@ public sealed record GameEvent
     public bool RequiresGraduatingClass { get; init; }
 
     /// <summary>
+    /// OB（野球部の卒業生）が居る学校でだけ発火する（OB会の寄付。issue #1615）。判定は
+    /// <see cref="EventScheduler.ObFilter"/>。<b>未設定（null）のときは判定しない</b>＝名簿を持たないヘッドレスシムは従来どおり。
+    /// </summary>
+    public bool RequiresOb { get; init; }
+
+    /// <summary>
+    /// OB が居ない学校のときの通知フィード1行（<see cref="Text"/> の代わり。null＝同じ文）。
+    /// 「OB会と卒業生から〜」のようにフィードの文自体が OB を名指しするイベント用（issue #1615）。
+    /// </summary>
+    public string? TextWithoutOb { get; init; }
+
+    /// <summary>通知フィード1行（OB の有無で言い回しが変わるイベントはここで切り替える）。</summary>
+    public string TextFor(bool hasOb) => !hasOb && TextWithoutOb is { } t ? t : Text;
+
+    /// <summary>
     /// 通知フィード1行の要約（従来の <c>text:</c>）。ノベル画面で読み終えたあとも履歴として残る行なので、
     /// バリエーションを持たせず<b>常に同じ1行</b>にする（後から一覧で追えることを優先）。
     /// </summary>

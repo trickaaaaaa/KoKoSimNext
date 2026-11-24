@@ -133,8 +133,16 @@ public sealed class EventScheduler
     /// </summary>
     public Func<bool>? GraduatingClassFilter { get; set; }
 
+    /// <summary>
+    /// この学校に OB（野球部の卒業生）が居るか（issue #1615）。新設校の最初の2年のように卒業生が1人も居ない間は、
+    /// OB 会の寄付のような OB が出てくるイベントを抽選に載せず、OB が出てくる会話も選ばない。
+    /// <b>null（既定）は判定しない</b>＝名簿を渡さないヘッドレスシムは従来どおり全部が抽選に載る（帯・ゴールデン不変）。
+    /// </summary>
+    public Func<bool>? ObFilter { get; set; }
+
     private bool CanFire(GameEvent e)
     {
+        if (e.RequiresOb && ObFilter is { } ob && !ob()) return false;
         if (e.RequiresGraduatingClass && GraduatingClassFilter is { } graduating && !graduating()) return false;
         if (CastFilter is { } cast && e.Cast != EventCast.Default && !cast(e)) return false;
         if (e.RequiresRegion is { } need && Region != need) return false;
@@ -147,7 +155,7 @@ public sealed class EventScheduler
     {
         _lastFiredWeek[e.Id] = _absoluteWeek;
         if (e.SetsAnnualFlag is { } flag) _annualFlags.Add(flag);
-        fired.Add(new FiredEvent(e, week, PickScript(e, _absoluteWeek, rng)));
+        fired.Add(new FiredEvent(e, week, PickScript(e, _absoluteWeek, 0, rng, ObFilter?.Invoke() ?? true)));
     }
 
     /// <summary>
@@ -162,11 +170,22 @@ public sealed class EventScheduler
     /// 主役つきイベント用（issue #610）。<paramref name="salt"/> に主役の選手IDを渡すと、
     /// <b>同じ週に2人が同時に故障しても別の会話</b>になる（同じ人・同じ週なら常に同じ会話）。
     /// </summary>
-    public static EventScript PickScript(GameEvent e, int absoluteWeek, int salt, IRandomSource rng)
+    /// <param name="hasOb">
+    /// OB が居る学校か（issue #1615）。false なら <see cref="EventScript.RequiresOb"/> の会話を候補から外して引く。
+    /// true なら全会話が候補＝従来と同じ引き方（同じ Fork・同じ個数）。
+    /// </param>
+    public static EventScript PickScript(GameEvent e, int absoluteWeek, int salt, IRandomSource rng, bool hasOb = true)
     {
         if (e.Variants.Count == 0) return EventScript.Single(EventRoles.Narration, e.Text);
-        if (e.Variants.Count == 1) return e.Variants[0];
-        return e.Variants[rng.Fork(StreamOf(e.Id, absoluteWeek, salt)).NextInt(0, e.Variants.Count)];
+        var candidates = e.Variants;
+        if (!hasOb)
+        {
+            var open = new List<EventScript>(e.Variants.Count);
+            foreach (var v in e.Variants) if (!v.RequiresOb) open.Add(v);
+            if (open.Count > 0) candidates = open;   // 全部が OB 前提のイベントは出せる会話が無い＝全会話から引く（データの欠陥はテストが見張る）
+        }
+        if (candidates.Count == 1) return candidates[0];
+        return candidates[rng.Fork(StreamOf(e.Id, absoluteWeek, salt)).NextInt(0, candidates.Count)];
     }
 
     /// <summary>
