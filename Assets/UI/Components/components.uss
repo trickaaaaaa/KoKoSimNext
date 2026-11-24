@@ -3229,3 +3229,26 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
     margin-left: 10px;
     --face-ring: rgba(0, 0, 0, 0);
 }
+
+/* ═══ 投球チャート（対決ビューの右の中ほど・右上の打者帯と右下の投手帯のあいだ） ═══
+   ゾーンの枠・9分割・印は PitchLocationChart が Painter2D で描く。ここは置き場所と地だけ。
+   地は MatchupHud の帯と同じ黒半透明（3Dの絵の上に出る計器）。 */
+.plc-host {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    justify-content: center;
+    align-items: flex-end;
+    display: none;
+}
+.plc {
+    width: 180px;
+    height: 204px;
+    background-color: var(--hud-bg);
+}
+.plc__num {
+    position: absolute;
+    font-size: 13px;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
