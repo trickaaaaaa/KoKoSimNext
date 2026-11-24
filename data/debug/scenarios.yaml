@@ -440,3 +440,14 @@ scenarios:
     outs: 0
     # issue #1135（通り道のライナー捕球）で旧シードの第1打席の結果が動いたため再選定。
     seed: 20263040
+
+  # ファーストゴロで投手が一塁カバーに入って受ける（ブラウザ版で投手の足が滑って見えた件・#1323）。最初の打席が 3-1。
+  # チームは呼び出し側シード 1 で組む前提（if-grounder-3b-lab と同じ）
+  - id: if-grounder-1b-cover-lab
+    name: 守備検証・ファーストゴロを投手が一塁カバーで受ける（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20263149

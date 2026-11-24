@@ -469,14 +469,10 @@ namespace KokoSim.Unity.Match
         /// 走りが一度も出ない。実測の中央値は 1.1s（p10 0.30／p90 3.37）。
         /// </summary>
         private const float StartMinLegSeconds = 0.6f;
-        /// <summary>
-        /// 発進を流すレッグの巡航速度の上限[m/s]。engine の実測（2026-08-16・501レッグ）は**全レッグ 8.3〜8.8**
-        /// （距離÷脚力で尺を決めるので距離に依らず全力）なので、ここを 6 にすると発進は一度も出ない。
-        /// 発進の収録は終端でも 3 m/s 前後＝どのみち足は追いつかない。それでも「構えから体を起こして
-        /// 押し出す」2〜3コマは絵になる（実測ストリップ 2026-08-16）ので、窓を <see cref="StartMaxSeconds"/>
-        /// で短く切って全レッグに流す。滑りは走りの段とは別枠で数える（<c>発進=…本 …コマ slip=</c>）。
-        /// </summary>
-        private const float StartMaxCruiseMps = 9.0f;
+        // 巡航速度の上限は持たない。代わりに「収録の終端の速さを再生倍率の上限まで上げても足が追いつかない」
+        // 発進は流さない（BuildFieldStartPlan）。engine の野手は全速（実測 8.3〜8.8 m/s）で走り出すのに、
+        // 発進の収録は終端でも 3 m/s 前後＝足が地面を滑る。ブラウザ版で一塁カバーの投手の足が滑って見えた
+        // （#1323・2026-11-24 オーナー判断で「全速の走り出しには発進を流さない」）。
         /// <summary>発進の一発物から走りの段へ移すときの繋ぎ[s]（位相が対応しないのでクロスフェード）。</summary>
         private const float StartHandoffFadeSeconds = 0.12f;
 
@@ -979,7 +975,6 @@ namespace KokoSim.Unity.Match
                     if (d.magnitude < StartMinLegM) continue;
                     // 巡航速度＝台形プロファイルの平坦部（平均 ÷ (1−肩)）
                     float cruise = d.magnitude / dur * (float)PlaybackEvaluator.PeakSpeedFactor(m.Profile);
-                    if (cruise > StartMaxCruiseMps) continue;
 
                     // 向きは球の方向で決める（走りの段と同じ材料・同じ規約）
                     var facing = LocoFacing.Forward;
@@ -1000,6 +995,7 @@ namespace KokoSim.Unity.Match
                     }
                     if (clip < 0) continue;
                     var sc = StartClips[clip];
+                    if (cruise > sc.EndSpeed * LocoSpeedMax) continue;   // 倍率を上げても足が追いつかない＝滑る
                     float mul = Mathf.Clamp(cruise / sc.EndSpeed, LocoSpeedMin, LocoSpeedMax);
                     float until = (float)m.T0 + Mathf.Min(StartMaxSeconds, sc.Length / mul);
                     _startEvents.Add(new FieldStartEvent

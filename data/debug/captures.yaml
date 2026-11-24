@@ -592,6 +592,24 @@ captures:
     video: {from: catch-1.0, to: release+0.1, fps: 30}
     probes: [FielderRunDiag]
 
+  # ブラウザ版で内野手の足が滑る件（#1323）。上の連番をビルドと同じ索引だけの読み方で撮り、slip を並べて比べる
+  - id: dp-663-run-catalog-1323
+    name: "併殺 6-6-3 の走り込み（ビルドと同じ索引だけの読み方・issue #1323）"
+    scenario: dp-663-lab
+    manager: home
+    overrides: {DuelTuning.ForceCatalogOnly: true}
+    video: {from: catch-1.0, to: release+0.1, fps: 30}
+    probes: [FielderIdleDiag, FielderRunDiag]
+
+  # ファーストゴロで一塁カバーに走る投手の足（ブラウザ版で滑って見えた・#1323）。slip は走りの足の滑りの実測
+  - id: p-cover-1b-run-1323
+    name: "ファーストゴロで一塁カバーに走る投手（連番・足の滑りの実測・issue #1323）"
+    scenario: if-grounder-1b-cover-lab
+    manager: home
+    view: rig
+    video: {from: start, to: end, fps: 30}
+    probes: [FielderIdleDiag, FielderRunDiag]
+
   - id: dp-663-1549-alt
     name: "併殺 6-6-3 控えのシード"
     scenario: dp-663-lab-alt
