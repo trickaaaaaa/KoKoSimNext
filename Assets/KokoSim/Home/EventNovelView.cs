@@ -23,6 +23,7 @@ namespace KokoSim.Unity.Home
         private readonly VisualElement _root;       // ev-novel
         private readonly VisualElement _portrait;
         private readonly VisualElement _portraitImage;
+        private readonly VisualElement _background; // 場面の背景（issue #1516）
         private readonly VisualElement _choices;    // 監督の対応の3択（issue #945）
         private readonly Label _eyebrow, _role, _speaker, _say, _progress, _hint, _skip;
         private readonly System.Action _onClosed;
@@ -38,6 +39,7 @@ namespace KokoSim.Unity.Home
             _onClosed = onClosed;
             _portrait = root?.Q<VisualElement>("ev-portrait");
             _portraitImage = root?.Q<VisualElement>("ev-portrait-image");
+            _background = root?.Q<VisualElement>("ev-bg");
             _eyebrow = root?.Q<Label>("ev-eyebrow");
             _role = root?.Q<Label>("ev-portrait-role");
             _speaker = root?.Q<Label>("ev-speaker");
@@ -179,6 +181,7 @@ namespace KokoSim.Unity.Home
             var result = EventRoles.IsResult(line.Who);
 
             if (_eyebrow != null) _eyebrow.text = "今週の出来事";
+            if (_background != null) EventScenes.ApplyBackground(_background, _event.Id);
 
             // 立ち絵。地の文・結果行は話者が居ないのでスロットごと消す（空の枠を残すと「絵が抜けている」ように見える）。
             if (_portrait != null)
@@ -221,6 +224,26 @@ namespace KokoSim.Unity.Home
             if (_skip != null)
                 _skip.EnableInClassList("ev__skip--open", _event.Skippable && _line < _event.Lines.Count - 1);
             RenderChoices();
+        }
+    }
+
+    /// <summary>
+    /// イベントの場面→背景の対応（issue #1516）。場面はイベント定義（data/events.yaml の <c>scene:</c>）が正典で、
+    /// ここはそれを USS のクラス（<c>ev__bg--場所</c>）へ写すだけ＝<b>背景の差し替え口はこの1か所</b>。
+    /// 定義が見つからないイベントは背景を出さない（従来の土色の舞台のまま）。
+    /// </summary>
+    public static class EventScenes
+    {
+        private static readonly EventScene[] All = (EventScene[])System.Enum.GetValues(typeof(EventScene));
+
+        public static string ClassFor(EventScene scene) => "ev__bg--" + scene.ToString().ToLowerInvariant();
+
+        /// <summary>背景要素に場面のクラスだけを立てる（前のイベントの残り香を消してから）。</summary>
+        public static void ApplyBackground(VisualElement el, string eventId)
+        {
+            foreach (var s in All) el.RemoveFromClassList(ClassFor(s));
+            var def = string.IsNullOrEmpty(eventId) ? null : EventService.Scheduler?.Find(eventId);
+            if (def != null) el.AddToClassList(ClassFor(def.Scene));
         }
     }
 

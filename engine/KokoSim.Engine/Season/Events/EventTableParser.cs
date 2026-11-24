@@ -19,6 +19,7 @@ namespace KokoSim.Engine.Season.Events;
 ///     cooldown_weeks: 6
 ///     sets_annual_flag: foo
 ///     requires_not_annual_flag: foo
+///     scene: ground           # ノベル画面の背景（issue #1516）。省略＝ground
 ///     text: "選手が練習中に故障した。"     # 通知フィード1行の要約
 ///     variants:                            # 会話まるごとN通り（無ければ text の1行だけ）
 ///       - lines:
@@ -51,7 +52,7 @@ public static class EventTableParser
 
         // 収集中のイベント1件ぶんの素。ネストが3段（イベント→variants→lines）あるので、
         // 「いま何を読んでいるか」を状態で持つのではなく、インデントで所属を決める。
-        string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null, region = null;
+        string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null, region = null, scene = null;
         int? calendarWeek = null;
         double weight = 1.0;
         int cooldown = 4;
@@ -130,6 +131,7 @@ public static class EventTableParser
                 SetsAnnualFlag = setsFlag,
                 RequiresNotAnnualFlag = requiresNotFlag,
                 RequiresRegion = ParseRegion(region),
+                Scene = ParseScene(scene),
                 Text = text ?? "",
                 Variants = variants.ToArray(),
                 Effect = eff.Build(),
@@ -137,7 +139,7 @@ public static class EventTableParser
                 Outcomes = outcomes.ToArray(),
                 Cast = new EventCast(castSubject, castOther),
             });
-            id = kind = text = setsFlag = requiresNotFlag = region = null;
+            id = kind = text = setsFlag = requiresNotFlag = region = scene = null;
             calendarWeek = null;
             weight = 1.0;
             cooldown = 4;
@@ -217,6 +219,7 @@ public static class EventTableParser
                 case "sets_annual_flag": setsFlag = value.Length > 0 ? value : null; break;
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
                 case "requires_region": region = value.Length > 0 ? value : null; break;
+                case "scene": scene = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
                 case "improve_prob": elemImproveProb = ParseDouble(value, 0.5); break;
                 case "variants":
@@ -314,6 +317,22 @@ public static class EventTableParser
         if (Enum.TryParse<Nation.JapanRegion>(name, out var r)) return r;
         throw new FormatException($"requires_region に未知の地方名: {name}");
     }
+
+    // 場面（issue #1516）。未知の語は既定へ落とさず**例外**にする（地方名と同じ理由＝綴り違いが黙って
+    // グラウンドの背景になり、絵でしか気づけない）。
+    private static EventScene ParseScene(string? name) => name switch
+    {
+        null or "" => EventScene.Ground,
+        "ground" => EventScene.Ground,
+        "bench" => EventScene.Bench,
+        "school" => EventScene.School,
+        "clubroom" => EventScene.Clubroom,
+        "office" => EventScene.Office,
+        "camp" => EventScene.Camp,
+        "hall" => EventScene.Hall,
+        "night" => EventScene.Night,
+        _ => throw new FormatException($"scene に未知の場所: {name}"),
+    };
 
     private static int IndentOf(string line)
     {

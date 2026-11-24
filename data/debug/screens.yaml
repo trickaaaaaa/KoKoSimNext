@@ -1048,3 +1048,120 @@ screens:
       - show: HomeDashboard
       - wait: 10
       - shot: 09-home-team-radar
+
+  # ── イベント画面の場面ごとの背景＋大きな立ち絵（issue #1516）。場所ごとに1件積んで、頭の3行を撮る ──
+  - id: event-scene-bg-1516
+    name: "イベント画面の背景と立ち絵（場所8つ×頭の3行・issue #1516）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("outside_coach_visit")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: ground-1
+      - click: ev-novel
+      - wait: 3
+      - shot: ground-2
+      - click: ev-novel
+      - wait: 3
+      - shot: ground-3
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("summer_retirement_koshien")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: bench-1
+      - click: ev-novel
+      - wait: 3
+      - shot: bench-2
+      - click: ev-novel
+      - wait: 3
+      - shot: bench-3
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("culture_festival")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: school-1
+      - click: ev-novel
+      - wait: 3
+      - shot: school-2
+      - click: ev-novel
+      - wait: 3
+      - shot: school-3
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("rain_week")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: clubroom-1
+      - click: ev-novel
+      - wait: 3
+      - shot: clubroom-2
+      - click: ev-novel
+      - wait: 3
+      - shot: clubroom-3
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("contract_renewal")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: office-1
+      - click: ev-novel
+      - wait: 3
+      - shot: office-2
+      - click: ev-novel
+      - wait: 3
+      - shot: office-3
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("summer_camp")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: camp-1
+      - click: ev-novel
+      - wait: 3
+      - shot: camp-2
+      - click: ev-novel
+      - wait: 3
+      - shot: camp-3
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("entrance_ceremony")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: hall-1
+      - click: ev-novel
+      - wait: 3
+      - shot: hall-2
+      - click: ev-novel
+      - wait: 3
+      - shot: hall-3
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("self_practice_awakened")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: night-1
+      - click: ev-novel
+      - wait: 3
+      - shot: night-2
+      - click: ev-novel
+      - wait: 3
+      - shot: night-3
+
+  # 同じ確認を 1280×720 の窓（ブラウザ版の枠）で。舞台が低くなっても立ち絵の頭が切れないか
+  - id: event-scene-bg-1516-720
+    name: "イベント画面の背景と立ち絵（1280×720・issue #1516）"
+    game_scale: true
+    size: {w: 1280, h: 720}
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("outside_coach_visit")
+      - show: HomeDashboard
+      - wait: 10
+      - shot: ground-1
+      - click: ev-novel
+      - wait: 3
+      - shot: ground-2
+      - call: EventService.Clear()
+      - call: EventService.PushMilestone("contract_renewal")
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - shot: office-2

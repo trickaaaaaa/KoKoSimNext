@@ -1612,6 +1612,26 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
     overflow: hidden;
 }
 
+/* 場面の背景（issue #1516）。写真をぼかした1枚を舞台いっぱいに敷き、立ち絵と会話を主役にする。
+   ぼかしは素材の段階で焼き込み済み（UI Toolkit にぼかしフィルタは無い）。画面比が変わっても歪めない＝cover で切り取る。
+   場面が分からないイベント（定義が見つからない）は背景を出さず、従来の土色の舞台のまま。 */
+.ev__bg {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    display: none;
+}
+.ev__bg--ground   { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/ground.jpg"); }
+.ev__bg--bench    { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/bench.jpg"); }
+.ev__bg--school   { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/school.jpg"); }
+.ev__bg--clubroom { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/clubroom.jpg"); }
+.ev__bg--office   { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/office.jpg"); }
+.ev__bg--camp     { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/camp.jpg"); }
+.ev__bg--hall     { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/hall.jpg"); }
+.ev__bg--night    { display: flex; background-image: url("project:///Assets/UI/Images/event-bg/night.jpg"); }
+
 /* 役割スロット（単色シルエット＋役割名）。絵が入ったらこの中身だけ差し替える。 */
 /* 立ち絵は<b>舞台の高さに追従させる</b>（胴を伸縮させる）。固定高にすると、効果帯が付いて
    舞台が縮んだ週だけ頭が切れる＝「効果のあるイベントでだけ絵が壊れる」形になる。 */
@@ -1666,7 +1686,26 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .ev-por--photo .ev-por__body { display: none; }
 .ev-por--photo .ev-por__image { display: flex; }
 
-.ev-por__image--manager { background-image: url("project:///Assets/UI/Images/portraits/manager.jpeg"); }
+/* 写真の立ち絵は背景の上に<b>人が立って見える</b>ように置く（issue #1516）。切り抜き（透過 PNG）を
+   舞台の高さいっぱいに出し、下端を会話ボックスの上辺に接地させる。写真カードの見え方（地色・枠・角丸）はやめる。
+   幅は絵の縦横比に任せる（contain）＝舞台が縮んでも頭が切れない。役割名は会話ボックスの話者名と重複するので出さない。 */
+.ev-por--photo {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+}
+.ev-por--photo .ev-por__image {
+    /* 中身の無い要素なので auto だと幅0に潰れる＝舞台いっぱいに広げ、絵の幅は contain に任せる */
+    width: 100%;
+    min-height: 0; max-height: none;
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgba(0, 0, 0, 0);
+    background-size: contain;
+    background-position: center bottom;
+}
+.ev-por--photo .ev-por__role { display: none; }
+
+.ev-por__image--manager { background-image: url("project:///Assets/UI/Images/portraits/manager.png"); }
 /* マネージャーは10人（tm01〜tm10・issue #1430）。番号は C#（EventNovelView.EventPortraits）が
    Manager.TeamManagerPortrait / OutgoingTeamManagerPortrait から選ぶ＝クラスは固定割当でなく差し替え式。 */
 .ev-por__image--team_manager-01 { background-image: url("project:///Assets/UI/Images/portraits/team_manager/tm01.png"); }

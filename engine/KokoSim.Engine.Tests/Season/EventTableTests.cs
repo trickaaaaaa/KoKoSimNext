@@ -625,6 +625,65 @@ events:
             "events:\n  - id: x\n    text: \"t\"\n    requires_region: Hokkaido\n"));
     }
 
+    // ===== 場面（ノベル画面の背景・issue #1516） =====
+
+    [Fact]
+    public void Parse_SceneOmitted_DefaultsToGround()
+    {
+        var e = EventTableParser.Parse("events:\n  - id: x\n    text: \"t\"\n").Single();
+        Assert.Equal(EventScene.Ground, e.Scene);
+    }
+
+    [Theory]
+    [InlineData("ground", EventScene.Ground)]
+    [InlineData("bench", EventScene.Bench)]
+    [InlineData("school", EventScene.School)]
+    [InlineData("clubroom", EventScene.Clubroom)]
+    [InlineData("office", EventScene.Office)]
+    [InlineData("camp", EventScene.Camp)]
+    [InlineData("hall", EventScene.Hall)]
+    [InlineData("night", EventScene.Night)]
+    public void Parse_Scene_ReadsEveryPlace(string word, EventScene expected)
+    {
+        var e = EventTableParser.Parse($"events:\n  - id: x\n    scene: {word}\n    text: \"t\"\n").Single();
+        Assert.Equal(expected, e.Scene);
+    }
+
+    /// <summary>
+    /// 場面は次のイベントへ持ち越さない（1件目だけに書いたら2件目は既定のグラウンド）。
+    /// </summary>
+    [Fact]
+    public void Parse_Scene_DoesNotLeakToNextEvent()
+    {
+        var events = EventTableParser.Parse(
+            "events:\n  - id: a\n    scene: camp\n    text: \"t\"\n  - id: b\n    text: \"t\"\n");
+        Assert.Equal(EventScene.Camp, events[0].Scene);
+        Assert.Equal(EventScene.Ground, events[1].Scene);
+    }
+
+    /// <summary>
+    /// 未知の場所は<b>例外</b>にすること。既定へ落とすと、綴りを間違えたイベントが黙ってグラウンドの背景で出る。
+    /// </summary>
+    [Fact]
+    public void Parse_UnknownScene_Throws()
+    {
+        Assert.Throws<FormatException>(() => EventTableParser.Parse(
+            "events:\n  - id: x\n    scene: gym\n    text: \"t\"\n"));
+    }
+
+    /// <summary>
+    /// 正典は全イベントに場面を<b>明示</b>する（省略＝グラウンドに頼らない）。新しいイベントを足すときに
+    /// 背景を考え忘れないための見張り。
+    /// </summary>
+    [Fact]
+    public void RepositoryTable_EveryEventDeclaresScene()
+    {
+        var yaml = File.ReadAllText(FindDataFile("events.yaml"));
+        var events = EventTableParser.Parse(yaml);
+        var declared = yaml.Replace("\r\n", "\n").Split('\n').Count(l => l.StartsWith("    scene: "));
+        Assert.Equal(events.Count, declared);
+    }
+
     // ===== バリエーション抽選 =====
 
     [Fact]

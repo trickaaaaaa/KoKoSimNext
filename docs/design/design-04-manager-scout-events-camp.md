@@ -550,6 +550,7 @@
 ```yaml
 - id: skipping_practice
   kind: Choice
+  scene: ground          # ノベル画面の背景になる場所（issue #1516・表示専用）
   weight: 1.0
   cooldown_weeks: 12
   text: "主力が練習をサボっているらしい。"
@@ -572,6 +573,10 @@
 （正典は `data/events.yaml`。上は抜粋。旧版の例だった「エースの違和感」`ace_hidden_injury` は
 選択肢も効果も無いまま出ていたのでイベントごと削除した＝2026-11-23 作らないと決定・#1477）
 - Claude Codeでの量産・追加・バランス調整をデータ編集だけで完結させるための構造
+- `scene:` はノベル画面の背景を選ぶ場所（issue #1516）。ground グラウンド／bench 球場／school 教室／clubroom 部室／
+  office 監督室／camp 合宿所／hall 体育館／night 夜のグラウンド の8つ。**全イベントに明示**する（省略はグラウンドに落ちるが、
+  背景の考え忘れを防ぐため正典では書く＝`EventTableTests.RepositoryTable_EveryEventDeclaresScene`）。未知の語はパーサが例外にする。
+  発火・効果には一切使わない
 
 ### 3.2 フラグ管理
 - グローバルフラグ（キャリア通算） / 年次リセットフラグ / 選手個別フラグ の3層
