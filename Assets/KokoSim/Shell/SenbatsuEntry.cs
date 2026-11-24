@@ -146,8 +146,10 @@ namespace KokoSim.Unity.Shell
                 GameSession.Current.Records.RecordKoshienAppearance(id, KoshienKind.Spring, calendarYear);
         }
 
-        private static IBackgroundMatchResolver BackgroundResolver(int yearIndex)
+        private static IBackgroundMatchResolver? BackgroundResolver(int yearIndex)
         {
+            // ブラウザ版は裏カードを集計モデルで決める（TournamentEntry.BackgroundResolverFor と同じ・#1588）。
+            if (!BackgroundWork.RunsFullBackgroundGames) return null;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             var ctx = new GameContext { Field = MatchStadium.For(TournamentKind.SenbatsuKoshien) };
             return new MemoizingBackgroundResolver(
