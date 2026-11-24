@@ -102,6 +102,12 @@ public sealed record GameEvent
     public bool RequiresOb { get; init; }
 
     /// <summary>
+    /// この年度末に転任の抽選がある教員監督のときだけ発火する（校長の会話。issue #1606）。判定は
+    /// <see cref="EventScheduler.TransferHintFilter"/>。<b>未設定（null）のときは出さない</b>＝監督を持たないヘッドレスシムには出ない。
+    /// </summary>
+    public bool RequiresTransferDraw { get; init; }
+
+    /// <summary>
     /// OB が居ない学校のときの通知フィード1行（<see cref="Text"/> の代わり。null＝同じ文）。
     /// 「OB会と卒業生から〜」のようにフィードの文自体が OB を名指しするイベント用（issue #1615）。
     /// </summary>

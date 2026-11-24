@@ -64,7 +64,7 @@ public static class ManagerTransferModel
             if (manager.YearsAtSchool < c.MinTenureYears) return TransferResult.Stayed;
 
             // 残留判定（信頼度が高いほど校が引き留める）。CareerEngine.Run と同じロジスティック式。
-            var z = (manager.Trust - c.RetainTrustThreshold) / c.RetainTrustSpread;
+            var z = RetainZ(manager.Trust, c);
             var retainChance = c.RetainProbability / (1.0 + Math.Exp(-z));
             if (rng.NextDouble() < retainChance) return TransferResult.Stayed;
 
@@ -86,6 +86,10 @@ public static class ManagerTransferModel
         }
         return TransferResult.Stayed;
     }
+
+    /// <summary>残留ロジスティックの正規化済み入力 z（信頼度が中点より上なら正）。判定と匂わせ（<see cref="TransferHint"/>）の共通の物差し。</summary>
+    public static double RetainZ(double trust, CareerCoefficients c)
+        => (trust - c.RetainTrustThreshold) / c.RetainTrustSpread;
 
     /// <summary>
     /// フリー監督に並べる候補校の数（issue #869）。名声が高いほど声がかかる学校が増える:

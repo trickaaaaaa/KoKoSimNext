@@ -192,6 +192,74 @@ screens:
       - shot: 04-result-line
       - read: "=ManagerService.Manager.Trust"
 
+  # ── 転任判定の前の校長の会話（issue #1606）。教員監督・在任3年目の2月（第44週）。信頼度の段ごとに撮る ──
+
+  - id: principal-talk-high-1606
+    name: "転任判定の前の校長の会話・高い段（issue #1606）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - advance_to_week: {week: 43, year: 1}
+      - set: {ManagerService.Manager.YearsAtSchool: 2, ManagerService.Manager.Trust: 75}
+      - advance_weeks: 1
+      - read: =GameClock.Week
+      - read: =EventService.Pending.Count
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-first-line
+      - click: ev-novel
+      - wait: 3
+      - shot: 02-principal
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - shot: 04-last-line
+
+  - id: principal-talk-mid-1606
+    name: "転任判定の前の校長の会話・中ほどの段（issue #1606）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - advance_to_week: {week: 43, year: 1}
+      - set: {ManagerService.Manager.YearsAtSchool: 2, ManagerService.Manager.Trust: 60}
+      - advance_weeks: 1
+      - read: =GameClock.Week
+      - read: =EventService.Pending.Count
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-first-line
+      - click: ev-novel
+      - wait: 3
+      - shot: 02-principal
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - shot: 04-last-line
+
+  - id: principal-talk-low-1606
+    name: "転任判定の前の校長の会話・低い段（issue #1606）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - advance_to_week: {week: 43, year: 1}
+      - set: {ManagerService.Manager.YearsAtSchool: 2, ManagerService.Manager.Trust: 30}
+      - advance_weeks: 1
+      - read: =GameClock.Week
+      - read: =EventService.Pending.Count
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-first-line
+      - click: ev-novel
+      - wait: 3
+      - shot: 02-principal
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - shot: 04-last-line
+
   # ── 夜間マージ分の実機確認（2026-11-22・out/overnight/verify-targets-20261122.md）──
 
   - id: career-cards-1325

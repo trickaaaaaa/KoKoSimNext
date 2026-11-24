@@ -263,6 +263,7 @@ namespace KokoSim.Unity.Home
             { EventRoles.TeamManagerOutgoing, "マネージャー" },
             { EventRoles.Ob, "OB" },
             { EventRoles.Scout, "スカウト" },
+            { EventRoles.Principal, "校長" },
             { EventRoles.Captain, "主将" },
             { EventRoles.Local, "関係者" },
         };
