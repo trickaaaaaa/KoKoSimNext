@@ -508,19 +508,7 @@ namespace KokoSim.Unity.Saves
         private void OnTitleConfirm()
         {
             if (_titleConfirm != null) _titleConfirm.style.display = DisplayStyle.None;
-            // 裏の全シムを完了させてから静的リセットする。GameClock.Advance の年度替わり・新チーム発足と
-            // 同じ作法（issue #529・#1226）＝背景スレッドと同じ NationRosters を同時に触らない。
-            // この待ちは main をブロックし得るので ManualWait で「タイトルへ戻る準備中」を1フレーム先に描画してから入る。
-            ManualWait.Run<object>(_root, "タイトルへ戻る準備中", () =>
-            {
-                BackgroundSims.EnsureAllCompleted();
-                return null;
-            }, _ =>
-            {
-                SaveGameIO.ResetForNewGame();
-                KokoSim.Unity.Home.HomeState.Reset();
-                ScreenRouter.Instance?.ShowDeferred("TitleScreen");
-            });
+            TitleReturn.Run(_root);
         }
 
         private void OnDeleteRequest()

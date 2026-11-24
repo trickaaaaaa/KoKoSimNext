@@ -376,6 +376,27 @@ screens:
       - shot: 03-rename-picked
       - set: {BuildPlatform.ForceBrowserInEditor: false}
 
+  - id: demo-end-1323
+    name: "体験版は2年目の夏が全部終わったところで止まり、終了画面を出す（配置A・issue #1323）"
+    steps:
+      - set: {DemoGate.ForceInEditor: true}
+      - new_game: {seed: 1}
+      - call: DemoGate.PutClockForCapture(2, 16)
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - click: advance
+      - wait: 5
+      - read: de-rows
+      - shot: 01-end-screen
+      - click: de-close
+      - wait: 3
+      - shot: 02-closed-home
+      - click: advance
+      - wait: 3
+      - shot: 03-advance-again
+      - set: {DemoGate.ForceInEditor: false}
+
   - id: home-weather-1199
     name: "大会中のホームの天気・気温は試合当日だけ出る（PR #1391・issue #1199）"
     steps:

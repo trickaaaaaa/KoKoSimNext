@@ -33,6 +33,13 @@ namespace KokoSim.Unity.Shell
                 ScreenRouter.Instance?.ShowDeferred(ScreenRouter.UniformNumberScreen);
                 return;
             }
+            // 体験版は2年目の夏が全部終わったところで止める（#1323）。週を進めず、ホームで終了画面を出す。
+            if (DemoGate.StopBeforeAdvance)
+            {
+                DemoGate.RequestEndScreen();
+                ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+                return;
+            }
             if (GameSession.Current.InTournament)
             {
                 _dayAdvanceRequested = true;

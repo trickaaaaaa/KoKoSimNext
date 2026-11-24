@@ -1525,6 +1525,24 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 /* ===== 年契約の更新モーダル（設計書04 §1.4a・issue #1034） =====
    部品辞書の modal-scrim / modal-card / dlg-btn / TierChoice を使う。主ボタンは足元の1つだけ（UI原則②⑦）。
    本文域は固定高＝ページをめくっても足元のボタンが動かない。 */
+/* 体験版の終了（#1323・配置A）。見出し→校名の2年間→成績の表（32px行）→案内→ボタン。 */
+.de-card { width: 560px; padding: 24px 32px 20px 32px; }
+.de-hd { font-size: var(--fs-page); color: var(--color-chalk); letter-spacing: 2px; margin: 0; padding: 0; }
+.de-sub { font-size: var(--fs-body); color: var(--color-muted); margin: 4px 0 0 0; padding: 0; }
+.de-rows { flex-direction: column; flex-shrink: 0; margin-top: var(--sp-3); padding-top: var(--sp-2);
+    border-top-width: 1px; border-top-color: var(--color-line); }
+.de-row { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.de-row__k { width: 160px; flex-shrink: 0; font-size: var(--fs-label); color: var(--color-muted); margin: 0; padding: 0; }
+.de-row__v { flex-grow: 1; flex-direction: row; align-items: center; font-size: var(--fs-body); color: var(--color-chalk);
+    margin: 0; padding: 0; }
+.de-row__v--none { color: var(--color-faint); }
+.de-num { font-size: var(--fs-body); color: var(--color-chalk); margin: 0 0 0 var(--sp-2); padding: 0; }
+.de-lead { font-size: var(--fs-body); color: var(--color-chalk); margin-top: var(--sp-3); padding-top: var(--sp-3);
+    border-top-width: 1px; border-top-color: var(--color-line); white-space: normal; }
+.de-store { align-self: flex-start; margin: var(--sp-3) 0 0 0; min-width: 200px; }
+.de-foot { flex-direction: row; justify-content: space-between; margin-top: var(--sp-4); flex-shrink: 0; }
+.de-foot > Button { margin: 0; }
+
 .crn-card { width: 700px; padding: 20px 24px 18px 24px; }
 .crn-hd { font-size: var(--fs-page); color: var(--color-chalk); letter-spacing: 2px; flex-shrink: 0; margin-bottom: 12px; }
 .crn-body { height: 340px; flex-shrink: 0; }

@@ -343,6 +343,22 @@
         </ui:VisualElement>
       </ui:VisualElement>
 
+      <!-- 体験版の終了（Web 体験版 #1323・配置A「中央のカード1枚」）。DemoEndPanel が埋める。ストアのボタンは
+           ストアページができるまで出さない（DemoGate.StoreUrl）。 -->
+      <ui:VisualElement name="de-modal" class="ui-root modal-scrim">
+        <ui:VisualElement class="modal-card de-card">
+          <ui:Label class="de-hd f-display" text="体験版はここまで" />
+          <ui:Label name="de-school" class="de-sub f-display" text="" />
+          <ui:VisualElement name="de-rows" class="de-rows" />
+          <ui:Label class="de-lead f-body" text="続きは製品版で。3年目の夏へ。" />
+          <ui:Button name="de-store" class="dlg-btn dlg-btn--primary de-store" text="ストアページ" />
+          <ui:VisualElement class="de-foot">
+            <ui:Button name="de-close" class="dlg-btn dlg-btn--ghost" text="閉じる" />
+            <ui:Button name="de-title" class="dlg-btn dlg-btn--ghost" text="タイトルへ" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
       <!-- 大会モード: 試合結果（自動消化）。 -->
       <ui:VisualElement name="tm-result" class="ui-root tm-scrim">
         <ui:VisualElement class="tm-card tm-result__card">
