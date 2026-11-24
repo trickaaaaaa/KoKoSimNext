@@ -80,8 +80,9 @@ public sealed class TournamentHistory
     {
         // 自校が関与した最後のカードのラウンド名＝到達ラウンド。ブラケットは進行順に積まれる。
         var reached = "";
+        // 3位決定戦（issue #1219）は準決勝敗退の後の一戦＝到達ラウンドは準決勝のまま（「3位決定戦敗退」と書かない）。
         foreach (var m in matches)
-            if (m.ManagerInvolved) reached = m.RoundName;
+            if (m.ManagerInvolved && !m.IsThirdPlace) reached = m.RoundName;
 
         var isChampion = champion is { } c && c.Id == managerSchoolId;
         var entry = new TournamentHistoryEntry(

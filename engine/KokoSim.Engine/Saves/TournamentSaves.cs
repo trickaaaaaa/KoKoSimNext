@@ -72,6 +72,8 @@ internal static class TournamentSaves
             .Add("pitchLedger", ledger);
         // ブロックリーグ戦（issue #772・v23）。勝ち抜き戦では書かない＝旧版のセーブと同じ形のまま
         if (r.League is { } league) json.Add("league", LeagueToJson(league));
+        // 3位決定戦（issue #1219）。無い大会では書かない＝旧版のセーブと同じ形のまま
+        if (r.ThirdPlaceMatch) json.Add("thirdPlace", true);
         return json;
     }
 
@@ -181,6 +183,7 @@ internal static class TournamentSaves
         {
             Title = o.Str("title") ?? "",
             IsNationalTournament = o.Bool("national"),
+            ThirdPlaceMatch = o.Has("thirdPlace") && o.Bool("thirdPlace"),
             PlayerActive = o.Bool("playerActive"),
             IsChampion = o.Bool("isChampion"),
             ChampionName = o.Str("championName"),

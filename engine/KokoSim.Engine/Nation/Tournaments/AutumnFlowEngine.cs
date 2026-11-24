@@ -89,7 +89,7 @@ public static class AutumnFlowEngine
                 }
                 var entrants = RegionalPlayoff.Qualify(rf, year, placements, coeff, rng);
                 if (entrants.Count == 0) continue;
-                var knock = Knockout.Run(entrants, coeff, rng);
+                var knock = Knockout.Run(entrants, coeff, rng, thirdPlaceMatch: true);
                 placement = knock.Placement;
                 champion = knock.Champion;
             }

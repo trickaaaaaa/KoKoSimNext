@@ -88,7 +88,7 @@ public static class RegionalNationEngine
                     // （TournamentRecorder の球場抽選は専用 Fork のみで消費し、対戦解決の rng は進めない）。
                     // センバツの「選手一人一人の地区大会成績」再シム（QualifierStatsSim）の入力になる。
                     var recorder = new TournamentRecorder(StadiumPlan.None, regionRng.Fork(0xB10C_57AD_0000UL));
-                    var knock = Knockout.Run(entrants, coeff, regionRng, recorder: recorder);
+                    var knock = Knockout.Run(entrants, coeff, regionRng, thirdPlaceMatch: true, recorder: recorder);
                     placement = knock.Placement.Select(s => s.Id).ToList();
                     matches = recorder.Records;
                 }

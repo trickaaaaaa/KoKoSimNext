@@ -1,8 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Season;
 
 namespace KokoSim.Engine.Nation.Tournaments;
+
+/// <summary>
+/// 準決勝敗退2校の3位決定戦を行う大会の種別（issue #1219）。順位の3位・4位が次の出場枠（秋季地区大会の県内順位・
+/// 近畿の決定戦候補・センバツ選考の地区順位）に効く大会だけ＝秋季県大会・秋季地区予選・秋季地区大会。
+/// 夏の県大会・甲子園・神宮は勝者だけが意味を持つので行わない。
+/// </summary>
+public static class ThirdPlaceRule
+{
+    public static bool AppliesTo(TournamentKind kind)
+        => kind is TournamentKind.Autumn or TournamentKind.AutumnDistrict or TournamentKind.Regional;
+}
 
 /// <summary>
 /// 対話プレイ済み <see cref="TournamentRunner"/> の <see cref="BracketMatch"/> 列から、
@@ -19,6 +31,7 @@ public static class KnockoutPlacement
     /// <summary>
     /// 解決済みの全カードから順位を組み立てる。<paramref name="matches"/> は決着済みの大会の
     /// <see cref="TournamentBracketView.Matches"/>（空だと空配列を返す＝呼び出し側で大会未決着を弾く）。
+    /// 3位決定戦（<see cref="BracketMatch.IsThirdPlace"/>）があれば、準決勝敗退2校はその勝者が3位・敗者が4位（issue #1219）。
     /// </summary>
     public static IReadOnlyList<School> FromMatches(
         IReadOnlyList<BracketMatch> matches, Func<int, School> byId)
@@ -26,7 +39,8 @@ public static class KnockoutPlacement
         if (matches.Count == 0) return Array.Empty<School>();
 
         // RoundsRemaining は「決勝=1」から浅い方へ増える。深い敗退（値が小さい）ほど上位。
-        var byRound = matches.GroupBy(m => m.RoundsRemaining).OrderBy(g => g.Key).ToList();
+        var thirdPlace = matches.FirstOrDefault(m => m.IsThirdPlace);
+        var byRound = matches.Where(m => !m.IsThirdPlace).GroupBy(m => m.RoundsRemaining).OrderBy(g => g.Key).ToList();
 
         var final = byRound[0];
         var championMatch = final.First();
@@ -34,6 +48,12 @@ public static class KnockoutPlacement
 
         for (var i = 1; i < byRound.Count; i++)
         {
+            if (byRound[i].Key == 2 && thirdPlace is not null && byRound[i].Count() == 2)
+            {
+                placement.Add(byId(thirdPlace.WinnerId));
+                placement.Add(byId(thirdPlace.LoserId));
+                continue;
+            }
             var losers = byRound[i]
                 .Select(m => byId(m.LoserId))
                 .OrderByDescending(s => s.Strength)

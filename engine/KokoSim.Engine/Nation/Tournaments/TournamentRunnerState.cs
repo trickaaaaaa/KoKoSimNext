@@ -32,6 +32,9 @@ public sealed class TournamentRunnerState
     /// <summary>全国大会（甲子園）か。ラウンド名の付け方が変わる。</summary>
     public bool IsNationalTournament { get; set; }
 
+    /// <summary>準決勝敗退2校の3位決定戦がある大会か（issue #1219）。</summary>
+    public bool ThirdPlaceMatch { get; set; }
+
     // --- 自校の状況 ---
     public bool PlayerActive { get; set; } = true;
     public bool IsChampion { get; set; }
