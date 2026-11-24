@@ -1170,6 +1170,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void TryPreResolveNextPitch()
         {
+            // タイムを待たせている間は先に解決しない（先に解決するとエンジンが画面より先にいる＝次の窓でもタイムが開けず、
+            // 打席の途中で申告敬遠などを押せない。issue #1563）。
+            if (_pauseQueued) return;
             if (_preStep.HasValue || _prog == null || _gameOver || _fastMode || CaptureMode) return;
             if (!DuelPacingActive || !(_duelRig?.HasCutToNextWindup ?? false)) return;
             if (_pitchIdx + 1 < _paQueue.Count || IsTerminalPitch(_pitchIdx)) return;

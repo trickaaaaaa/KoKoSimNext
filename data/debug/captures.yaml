@@ -427,7 +427,7 @@ captures:
     attempts: 1
     force: GroundFoul
     window_pitch: 2
-    window_calls: [ClickToPauseForCapture, wait(3), shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
+    window_calls: [ClickToPauseForCapture, wait(7), shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
     window_after: 6
 
   - id: ibb-timeout-no-1563
