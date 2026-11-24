@@ -106,6 +106,8 @@ namespace KokoSim.Unity.Shell
         private void Update()
         {
             // バックグラウンド Task（試合後の大会処理）の完了をメインスレッドで反映する（issue #138）。
+            // ブラウザ版は裏の仕事をスレッドで回せないので、コマごとに少しずつ回す（#1588。スレッド版は何もしない）。
+            BackgroundWork.Pump();
             MainThreadDispatcher.Drain();
             BackgroundGameOp.CheckStall();   // 戻らない裏処理の見張り（Q30・ログは1度だけ）
 

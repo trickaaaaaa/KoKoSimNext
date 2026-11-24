@@ -58,7 +58,7 @@ namespace KokoSim.Unity.Shell
 
             _total = runner.RemainingBracketRounds;
             Volatile.Write(ref _done, 0);
-            _task = BackgroundWork.Run(() => Worker(runner)).ContinueWith(_ =>
+            _task = BackgroundWork.RunSteps(() => Step(runner)).ContinueWith(_ =>
                 MainThreadDispatcher.Enqueue(() =>
                 {
                     _task = null;
@@ -67,18 +67,19 @@ namespace KokoSim.Unity.Shell
                 }), TaskContinuationOptions.ExecuteSynchronously);
         }
 
-        private static void Worker(ITournamentRunner runner)
+        /// <summary>1歩＝1ラウンド。まだラウンドが残っていれば true を返す（ブラウザ版はコマごとに少しずつ回す。#1588）。</summary>
+        private static bool Step(ITournamentRunner runner)
         {
-            while (runner.BracketResolutionPending)
-            {
-                // ライブ試合中（他画面で練習試合の観戦等）は新しいラウンドへ進まず待つ（#208 と同じ作法）。
-                while (BackgroundWork.Threaded && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
-                    BackgroundWork.Sleep(PausedPollMs);
+            if (!runner.BracketResolutionPending) return false;
 
-                runner.StepBracketResolution();
-                Interlocked.Increment(ref _done);
-                BackgroundWork.Sleep(StepSleepMs);   // 区画間で必ずメインスレッドへ時間を譲る。
-            }
+            // ライブ試合中（他画面で練習試合の観戦等）は新しいラウンドへ進まず待つ（#208 と同じ作法）。
+            while (BackgroundWork.Threaded && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
+                BackgroundWork.Sleep(PausedPollMs);
+
+            runner.StepBracketResolution();
+            Interlocked.Increment(ref _done);
+            BackgroundWork.Sleep(StepSleepMs);   // 区画間で必ずメインスレッドへ時間を譲る。
+            return runner.BracketResolutionPending;
         }
 
         /// <summary>
@@ -89,7 +90,7 @@ namespace KokoSim.Unity.Shell
         {
             var t = _task;
             if (t == null) return;
-            try { t.Wait(); }
+            try { BackgroundWork.Wait(t); }
             catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の失敗は握り潰す（大会全体は継続）が、ログは出す（issue #1226）
             _task = null;
             _total = 0;

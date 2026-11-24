@@ -69,6 +69,15 @@ namespace KokoSim.Unity.Shell
                 UiComponents.SetWaitOverlay(overlay, "他会場の結果を集計中", NationBackgroundSim.Progress);
                 return;
             }
+            // ブラウザ版で、操作が裏の仕事を回し切るのを待っている（#1588）。
+            if (BackgroundWork.HasWaiters)
+            {
+                overlay.pickingMode = PickingMode.Position;
+                overlay.style.display = DisplayStyle.Flex;
+                UiComponents.SetWaitOverlay(overlay, "他会場の結果を集計中", null);
+                Marquee(overlay);
+                return;
+            }
             if (BackgroundGameOp.Running)
             {
                 overlay.style.display = DisplayStyle.Flex;

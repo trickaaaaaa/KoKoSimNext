@@ -64,19 +64,18 @@ namespace KokoSim.Unity.Shell
             var workers = new Task[Math.Min(MaxWorkers, Math.Max(1, jobs.Count))];
             for (var w = 0; w < workers.Length; w++)
             {
-                workers[w] = BackgroundWork.Run(() =>
+                // 1歩＝1地区。ブラウザ版はコマごとに少しずつ回す（#1588）。
+                workers[w] = BackgroundWork.RunSteps(() =>
                 {
-                    while (true)
-                    {
-                        PauseGate();
-                        var idx = Interlocked.Increment(ref next);
-                        if (idx >= jobs.Count) return;
-                        lock (Gate) if (gen != _generation) return;
+                    PauseGate();
+                    var idx = Interlocked.Increment(ref next);
+                    if (idx >= jobs.Count) return false;
+                    lock (Gate) if (gen != _generation) return false;
 
-                        var result = jobs[idx].Value();
-                        lock (Gate) if (gen == _generation) Results[jobs[idx].Key] = result;
-                        BackgroundWork.Sleep(StepSleepMs);
-                    }
+                    var result = jobs[idx].Value();
+                    lock (Gate) if (gen == _generation) Results[jobs[idx].Key] = result;
+                    BackgroundWork.Sleep(StepSleepMs);
+                    return true;
                 });
             }
             lock (Gate) _task = Task.WhenAll(workers);
@@ -102,7 +101,7 @@ namespace KokoSim.Unity.Shell
             if (t != null)
             {
                 _forceRun = true;
-                try { t.Wait(); }
+                try { BackgroundWork.Wait(t); }
                 catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の地区の失敗は握り潰す（欠けた地区は呼び出し側が扱う）が、ログは出す（issue #1226）
             }
             lock (Gate) return new Dictionary<int, OtherDistrictResult>(Results);

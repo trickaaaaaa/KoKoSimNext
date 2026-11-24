@@ -64,6 +64,9 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void Start(IEnumerable<PrefectureResult> results, int yearIndex, ulong seed)
         {
+            // ブラウザ版は打ち直さない（約300試合＝1コアでは夏の敗退後が長く止まる・#1588 オーナー判断）。
+            // 読み物（大会展望の他県代表の県予選成績）が空欄になるだけで、進行・結果は変わらない。
+            if (!BackgroundWork.RunsReplays) return;
             EnsureCompleted();   // 前年ぶんが残っていたら先に畳む（同じ帳簿を2本の走りが触らない）
 
             var stats = NationService.TournamentStats;
@@ -81,39 +84,39 @@ namespace KokoSim.Unity.Shell
 
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = BackgroundWork.Run(() => Worker(pending, stats, rng, yearIndex, calendarYear, brains));
+            {
+                // 解決器はワーカーごとに新しく作る＝BackgroundMatchResolver は状態を持たないが、
+                // 同じ実体を複数スレッドで共有する理由も無いので取り違えの芽を残さない。
+                // 成績は QualifierStatsSim が県予選スコープへ積む＝解決器には積ませない（stats: null）。
+                var resolver = new BackgroundMatchResolver(
+                    NationService.Rosters, new GameContext(), yearIndex, stats: null,
+                    modernRules: null, calendarYear: calendarYear, brains: brains);
+                workers[w] = BackgroundWork.RunSteps(() => Step(pending, stats, rng, yearIndex, resolver));
+            }
             _task = Task.WhenAll(workers);
         }
 
         /// <summary>
-        /// 1ワーカーぶんのループ。校の添字を奪い合いながら1校ずつ打ち直す。
-        /// <b>解決器はワーカーごとに新しく作る</b>＝<see cref="BackgroundMatchResolver"/> は状態を持たないが、
-        /// 同じ実体を複数スレッドで共有する理由も無いので取り違えの芽を残さない。
+        /// 1歩＝1校。校の添字を奪い合いながら1校ぶん打ち直し、まだ校が残っていれば true を返す
+        /// （スレッド版は false まで回し、ブラウザ版はコマごとに少しずつ回す。#1588）。
         /// </summary>
-        private static void Worker(
+        private static bool Step(
             IReadOnlyList<PrefectureResult> pending, NationTournamentStats stats, IRandomSource rng,
-            int yearIndex, int calendarYear, IEnemyBrainFactory brains)
+            int yearIndex, BackgroundMatchResolver resolver)
         {
-            // 成績は QualifierStatsSim が県予選スコープへ積む＝解決器には積ませない（stats: null）。
-            var resolver = new BackgroundMatchResolver(
-                NationService.Rosters, new GameContext(), yearIndex, stats: null,
-                modernRules: null, calendarYear: calendarYear, brains: brains);
+            PauseGate();
 
-            while (true)
-            {
-                PauseGate();
+            var idx = Interlocked.Increment(ref _nextJob) - 1;
+            if (idx >= pending.Count) return false;
 
-                var idx = Interlocked.Increment(ref _nextJob) - 1;
-                if (idx >= pending.Count) return;
+            var result = pending[idx];
+            QualifierStatsSim.ReplayChampionPath(
+                result, NationService.SchoolById, resolver, stats, TournamentEntry.Schedule,
+                QualifierStatsSim.RoundsFor(result.Entrants), yearIndex, rng, afterMatch: PauseGate);
 
-                var result = pending[idx];
-                QualifierStatsSim.ReplayChampionPath(
-                    result, NationService.SchoolById, resolver, stats, TournamentEntry.Schedule,
-                    QualifierStatsSim.RoundsFor(result.Entrants), yearIndex, rng, afterMatch: PauseGate);
-
-                Interlocked.Increment(ref _done);
-                BackgroundWork.Sleep(StepSleepMs);
-            }
+            Interlocked.Increment(ref _done);
+            BackgroundWork.Sleep(StepSleepMs);
+            return true;
         }
 
         /// <summary>
@@ -138,7 +141,7 @@ namespace KokoSim.Unity.Shell
         {
             var t = _task;
             if (t == null) return;
-            try { t.Wait(); }
+            try { BackgroundWork.Wait(t); }
             catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の校の失敗は握り潰す（読み物なので進行は止めない）が、ログは出す（issue #1226）
             _task = null;
             _total = 0;

@@ -563,6 +563,22 @@ namespace KokoSim.Unity.Shell
         {
             var runner = Runner;
             if (runner == null || runner.Finished || !runner.PlayerActive) return;
+            if (!BackgroundWork.Threaded)
+            {
+                // ブラウザ版は1カードずつコマをまたいで回す（#1588）。1回戦の約100試合を1コマで回すと、
+                // 大会に入る瞬間に長く固まり、GC も回らずメモリが積み上がる。
+                var jobs = runner.CurrentRoundPrefetchJobs();
+                var next = 0;
+                _prefetchTask = BackgroundWork.RunSteps(() =>
+                {
+                    if (next >= jobs.Count) return false;
+                    try { jobs[next](); }
+                    catch (Exception e) { UnityEngine.Debug.LogException(e); }   // 本解決がフォールバックで解く（下と同じ）
+                    next++;
+                    return next < jobs.Count;
+                }, holdsActions: false);   // 日送りは待たせない（温めるだけ。同じスレッドなので本流と重ならない）
+                return;
+            }
             _prefetchTask = BackgroundWork.Run(() =>
             {
                 try { runner.PrefetchCurrentRoundBackgroundCards(PrefetchParallelism); }
@@ -577,7 +593,7 @@ namespace KokoSim.Unity.Shell
         {
             var t = _prefetchTask;
             if (t == null) return;
-            try { t.Wait(); } catch (Exception e) { UnityEngine.Debug.LogException(e); }   // 上の catch と同様にログだけ出す
+            try { BackgroundWork.Wait(t); } catch (Exception e) { UnityEngine.Debug.LogException(e); }   // 上の catch と同様にログだけ出す
             _prefetchTask = null;
         }
 

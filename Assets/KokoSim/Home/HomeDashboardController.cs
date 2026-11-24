@@ -165,6 +165,9 @@ namespace KokoSim.Unity.Home
             // issue #138: 試合後処理をバックグラウンドで回している間は週送りを受け付けない
             // （メインスレッドの GameClock/ロスター変更が背景処理と競合するのを防ぐ）。
             if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;
+            // ブラウザ版は裏の仕事を回し切ってから進める（#1588）。週送りの節目の「終わるまで待つ」が
+            // 1コマで数百試合を回すとメモリを使い切る。回し切ったら同じ操作をもう一度走らせる。
+            if (KokoSim.Unity.Shell.BackgroundWork.DeferUntilIdle(OnAdvance)) return;
             // 新チームの背番号を確定するまで週を進めない（issue #954）。確定の画面へ戻す。
             if (KokoSim.Unity.Shell.UniformNumberService.Pending) { GoToUniformNumbers(); return; }
             // 年契約の更新を確定するまで週を進めない（総括が選んだ段の年額を引くため）。

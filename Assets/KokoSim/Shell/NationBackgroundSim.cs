@@ -173,40 +173,39 @@ namespace KokoSim.Unity.Shell
             var jobs = run.Jobs;
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = BackgroundWork.Run(() => Worker(jobs));
+                workers[w] = BackgroundWork.RunSteps(() => Step(jobs));
             _task = Task.WhenAll(workers);
         }
 
         /// <summary>
-        /// 1ワーカーぶんのループ。ジョブ添字を奪い合いながら1区画ずつフルシムし、各区画の合間で
-        /// スロットルに従い休止する（背景スレッド上で走る）。Paused の間はジョブを取らずスピン待機する
+        /// 1歩＝1区画。ジョブ添字を奪い合いながら1区画をフルシムし、まだ区画が残っていれば true を返す
+        /// （スレッド版は false まで回し、ブラウザ版はコマごとに少しずつ回す。#1588）。各区画の合間で
+        /// スロットルに従い休止する。Paused の間はジョブを取らずスピン待機する
         /// ＝確保が止まりライブ試合の滑らかさを守る。ブースト／通常へ切替で再開する。
         /// </summary>
-        private static void Worker(IReadOnlyList<Func<PrefectureResult>> jobs)
+        private static bool Step(IReadOnlyList<Func<PrefectureResult>> jobs)
         {
-            while (true)
-            {
-                // ライブ試合中（Paused）は新しい区画を取らずに待つ（確保を止める）。
-                PauseGate();
+            // ライブ試合中（Paused）は新しい区画を取らずに待つ（確保を止める）。
+            PauseGate();
 
-                var idx = Interlocked.Increment(ref _nextJob) - 1;
-                if (idx >= jobs.Count) return;   // 全区画消化済み＝このワーカーは終了。
+            var idx = Interlocked.Increment(ref _nextJob) - 1;
+            if (idx >= jobs.Count) return false;   // 全区画消化済み＝このワーカーは終了。
 
-                // 重い処理: 1区画をフルシム。県内の各試合の合間で PauseGate（engine の afterMatch フック経由）が
-                // 走るので、ライブ試合に入った瞬間に県の途中でも即座に手を止められる＝県丸ごと走り切らない。
-                var result = jobs[idx]();
-                // 他県の校別勝数を年間台帳へ（AI校の年次進化の材料。台帳はロックで守られている）。
-                // ロード復帰の積み直しでは積まない＝勝数はセーブ（nationYearWins）から復元済みで、
-                // ここで積むと同じ大会を二度数えてAI校の進化が倍加速する。
-                if (_foldLedger) NationService.YearLedger.AddWins(result.Wins);
-                // 代表校（＋勝ち上がり）は甲子園の入力なので控える。以前はここで捨てていたため
-                // 「49代表が集まらない」＝甲子園を組めない状態だった。
-                lock (ResultsGate) Results.Add(result);
-                Interlocked.Increment(ref _done);
+            // 重い処理: 1区画をフルシム。県内の各試合の合間で PauseGate（engine の afterMatch フック経由）が
+            // 走るので、ライブ試合に入った瞬間に県の途中でも即座に手を止められる＝県丸ごと走り切らない。
+            var result = jobs[idx]();
+            // 他県の校別勝数を年間台帳へ（AI校の年次進化の材料。台帳はロックで守られている）。
+            // ロード復帰の積み直しでは積まない＝勝数はセーブ（nationYearWins）から復元済みで、
+            // ここで積むと同じ大会を二度数えてAI校の進化が倍加速する。
+            if (_foldLedger) NationService.YearLedger.AddWins(result.Wins);
+            // 代表校（＋勝ち上がり）は甲子園の入力なので控える。以前はここで捨てていたため
+            // 「49代表が集まらない」＝甲子園を組めない状態だった。
+            lock (ResultsGate) Results.Add(result);
+            Interlocked.Increment(ref _done);
 
-                // 区画間で必ずメインスレッドへ時間を譲る（確保レート抑制＝GC を短く分散させる）。
-                BackgroundWork.Sleep((SimThrottle)_throttle == SimThrottle.Boost ? BoostSleepMs : NormalSleepMs);
-            }
+            // 区画間で必ずメインスレッドへ時間を譲る（確保レート抑制＝GC を短く分散させる）。
+            BackgroundWork.Sleep((SimThrottle)_throttle == SimThrottle.Boost ? BoostSleepMs : NormalSleepMs);
+            return true;
         }
 
         /// <summary>
@@ -240,7 +239,7 @@ namespace KokoSim.Unity.Shell
             var t = _task;
             if (t == null) return;
             _throttle = (int)SimThrottle.Boost;   // Paused で止まっていても最後まで消化させる。
-            try { t.Wait(); }
+            try { BackgroundWork.Wait(t); }
             catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の県の失敗は握り潰す（大会全体は継続）が、ログは出す（issue #1226）
             _task = null;
             _total = 0;

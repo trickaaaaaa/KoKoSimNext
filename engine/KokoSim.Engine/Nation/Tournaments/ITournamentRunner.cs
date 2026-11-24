@@ -55,6 +55,12 @@ public interface ITournamentRunner
     /// 並列でも結果は逐次と一致する（BackgroundPrefetchTests）。
     /// </summary>
     void PrefetchCurrentRoundBackgroundCards(int maxParallelism = 1);
+    /// <summary>
+    /// <see cref="PrefetchCurrentRoundBackgroundCards"/> の中身を1カード＝1つの仕事に分けて返す（呼び元が好きな
+    /// 刻みで回せる＝ブラウザ版はコマごとに少しずつ回す・#1588）。乱数の Fork はここで済ませるので、
+    /// 返した仕事をどの順・どの刻みで回しても結果は同じ。状況により空。
+    /// </summary>
+    IReadOnlyList<Action> CurrentRoundPrefetchJobs();
 
     bool BracketResolutionPending { get; }
     int RemainingBracketRounds { get; }
