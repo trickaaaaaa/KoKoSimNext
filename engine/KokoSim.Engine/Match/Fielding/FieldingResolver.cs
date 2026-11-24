@@ -355,6 +355,11 @@ public static class FieldingResolver
         // 旧判定「着地距離≥フェンス距離 かつ 頂点≥フェンス高」は、柵の0〜6m先に落ちる低い当たり
         // （フェンス上では 4m に届かない）まで本塁打にしていた（実測: 本塁打の41%）。
         var clearsFence = ground.CrossedFence && ground.FenceCrossPosition.Y >= field.FenceHeightM;
+        // 柵に当たった高さ（issue #1243）。グラブの届かない高さで当たった打球は、柵に跳ね返る前に空中で捕れない
+        // （柵より手前の飛行区間は上の通り道のライナー捕球が見ている）。
+        var fenceHitAboveReach = ground.CrossedFence && !clearsFence
+            && coeff.LineDriveReachHeightM > 0.0
+            && ground.FenceCrossPosition.Y > coeff.LineDriveReachHeightM;
         // フェンス直撃（空中で柵に届いたが越えない）: 打球はそこで落ちる。着地＝フェンス弧上の点・
         // 着地時刻＝到達時刻・着地速度＝到達時の速度（転がりモデルはフェンス到達＝距離0で跳ね返り待ちに入る）。
         // 積分結果を柵で打ち切るだけ＝乱数不使用。
@@ -408,16 +413,16 @@ public static class FieldingResolver
         // 空中捕球判定（フライ／ライナー）。
         if (isFly)
         {
-            var (catcher, reach) = NearestReach(fielders, landing);
             // フェンス際の捕りにくさ（issue #976）: 壁を探して減速するぶん、捕球に使える時間が減る（乱数不使用）。
-            var catchBudget = CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff)
-                              - coeff.WallCatchPenalty(fenceDist - range);
+            // 捕るのは「予算内に届く野手の中で最速」（通り道のライナー捕球と同じ基準・issue #1243）。
+            var (catcher, reach, catchBudget) = BestAirCatcher(
+                fielders, landing, ground.HangTimeSeconds, coeff.WallCatchPenalty(fenceDist - range), coeff);
             // 捕球余裕（正=余裕あり、負=間に合わず）。判定オーバーレイ「フェア」（Issue #328②）の表示だけでなく、
             // フライ落球の難度連動（issue #532）にも使う＝平凡な飛球ほど落球確率が下限へ落ちる物理量。
             var catchMargin = catchBudget - reach;
-            if (reach <= catchBudget)
+            if (!fenceHitAboveReach && reach <= catchBudget)
             {
-                // フライ落球は「実際に捕る野手（NearestReach）」の Catching で引く（issue #532 C: 距離で選ぶ
+                // フライ落球は「実際に捕る野手（BestAirCatcher）」の Catching で引く（issue #532 C: 距離で選ぶ
                 // NearestFielder との食い違いを解消）。難度は捕球余裕 catchMargin で伸縮（issue #532 A/B）。
                 var result = MaybeFlyError(catcher, catchMargin, coeff, rng);
                 return Base(result) with
@@ -466,10 +471,10 @@ public static class FieldingResolver
                 // 抜けた先は Issue #24 で校正済みの集約転がりモデルへ引き継ぐ。
                 var td = path.TouchdownAtOrAfter(oct);
                 var through = td.Airborne
-                    ? ExtraBaseResolver.ComputeRoll(td.Position, td.Velocity, td.Seconds, fenceDist, coeff)
+                    ? ExtraBaseResolver.ComputeRoll(td.Position, td.Velocity, td.Seconds, fenceDist, coeff, field)
                     : ExtraBaseResolver.RollFrom(
                         td.Position, path.DirectionAt(td.Seconds), path.HorizontalSpeedAt(td.Seconds),
-                        td.Seconds, fenceDist, coeff);
+                        td.Seconds, fenceDist, coeff, field);
                 var result = HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime, rng)
                     with { ThroughInfield = true };
                 // 表示専用（Issue #336②）: 最も惜しく迫った内野手と最接近点。判定・帯には無関係。
@@ -639,7 +644,7 @@ public static class FieldingResolver
                     // 「野手が落ちてくるのを待つ」時間なので、触らずに抜けた球には乗らない。
                     var through = ExtraBaseResolver.RollFrom(
                         catchPoint, path.DirectionAt(fieldTimeRaw), path.HorizontalSpeedAt(fieldTimeRaw),
-                        fieldTimeRaw, fenceDist, coeff);
+                        fieldTimeRaw, fenceDist, coeff, field);
                     return HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime, rng) with
                     {
                         Result = BattedBallResult.Error,
@@ -1109,7 +1114,7 @@ public static class FieldingResolver
         IRandomSource rng)
     {
         var roll = ExtraBaseResolver.ComputeRoll(
-            landing, ground.LandingVelocity, ground.HangTimeSeconds, fenceDistanceM, coeff);
+            landing, ground.LandingVelocity, ground.HangTimeSeconds, fenceDistanceM, coeff, field);
         return HitFromRoll(baseOf, roll, field, batter, fielders, coeff, runnerTime, rng);
     }
 
@@ -1160,7 +1165,9 @@ public static class FieldingResolver
             // フェンスに当たらない（実測: 単打の3分の1が ReachedFence だが、その多くは外野手が
             // 手前で回収している）。跳ね返りを描くのは**実際に当たったプレーだけ**なので、
             // 回収時刻が衝突時刻より後のときに限って観測を載せる。
-            Carom = ExtraBaseResolver.ComputeFenceCarom(roll, coeff) is { } k && effectiveRetrieveAt > k.HitAtSeconds + 1e-9
+            // ファンブルで遅らせた時刻ではなく、実際に球へ届いた時刻（retrieveAt）で見る＝壁に当たる前に
+            // 触った球は、弾いたあとに遅れても跳ね返りの絵にならない（issue #1243）。
+            Carom = ExtraBaseResolver.ComputeFenceCarom(roll, coeff) is { } k && retrieveAt > k.HitAtSeconds + 1e-9
                 ? k
                 : null,
             FielderRole = retriever.Position,
@@ -1349,15 +1356,8 @@ public static class FieldingResolver
         var landing = ground.LandingPosition;
         if (!field.InFoulTerritory(landing)) return null;
 
-        Fielder? best = null;
-        var bestReach = double.MaxValue;
-        foreach (var f in fielders)
-        {
-            var t = ReachTime(f, landing);
-            if (t < bestReach) { bestReach = t; best = f; }
-        }
-        if (best is null) return null;
-        var budget = CatchTimeBudget(ground.HangTimeSeconds, best, coeff);
+        if (fielders.Count == 0) return null;
+        var (best, bestReach, budget) = BestAirCatcher(fielders, landing, ground.HangTimeSeconds, 0.0, coeff);
         if (bestReach > budget) return null;
 
         var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
@@ -1499,17 +1499,40 @@ public static class FieldingResolver
         return apex;
     }
 
-    private static (Fielder Fielder, double Time) NearestReach(IReadOnlyList<Fielder> fielders, Vector3D target)
+    /// <summary>
+    /// 着地点の空中捕球の捕り手（飛球・ファウルフライ共通）。捕球予算（<see cref="CatchTimeBudget"/>−<paramref name="wallPenaltySeconds"/>）
+    /// の内側に届く野手のうち到達が最も早い者。誰も届かなければ余裕（予算−到達）が最大の者（余裕の符号が表示とフライ落球の難度に使われる）。
+    /// 予算は守備力で野手ごとに違うので、最速の1人だけを見ると、その人が予算外のとき予算内に届く別の野手を見落とす（issue #1243）。
+    /// 捕手も飛球を捕る（issue #830）。投手はフォロースルー直後の追加反応遅延を負う。乱数不使用。
+    /// </summary>
+    private static (Fielder Fielder, double Reach, double Budget) BestAirCatcher(
+        IReadOnlyList<Fielder> fielders, Vector3D target, double hangTimeSeconds, double wallPenaltySeconds,
+        FieldingCoefficients coeff)
     {
-        Fielder best = fielders[0];
-        var bestT = double.MaxValue;
+        var best = fielders[0];
+        var bestReach = double.MaxValue;
+        var bestBudget = 0.0;
+        var bestMargin = double.NegativeInfinity;
+        var found = false;
         foreach (var f in fielders)
         {
-            // 捕手も飛球を捕る（issue #830: 本塁付近のポップフライ。以前は候補から外されていて捕手フライが0だった）
-            var t = ReachTime(f, target);
-            if (t < bestT) { bestT = t; best = f; }
+            var reach = ReachTime(f, target)
+                        + (f.Position == FieldPosition.Pitcher ? coeff.PitcherFieldingReactionPenaltySeconds : 0.0);
+            var budget = CatchTimeBudget(hangTimeSeconds, f, coeff) - wallPenaltySeconds;
+            var inBudget = reach <= budget;
+            if (inBudget)
+            {
+                if (!found || reach < bestReach)
+                {
+                    found = true; best = f; bestReach = reach; bestBudget = budget; bestMargin = budget - reach;
+                }
+            }
+            else if (!found && budget - reach > bestMargin)
+            {
+                best = f; bestReach = reach; bestBudget = budget; bestMargin = budget - reach;
+            }
         }
-        return (best, bestT);
+        return (best, bestReach, bestBudget);
     }
 
     private static Fielder NearestFielder(IReadOnlyList<Fielder> fielders, Vector3D target)
