@@ -254,6 +254,12 @@ namespace KokoSim.Unity.Shell
                 CohesionDelta = GameSession.Current.CohesionDelta,
                 // 士気（設計書04 §1.2・issue #1270 M1）も自校だけ＝監督の信頼度。AI校は null＝恒等。
                 Morale = ManagerService.Manager.Trust,
+                // 入部の条件（約束）の見張り（設計書04 §2.4）。公式戦だけ＝委任・裏解決の采配AIが約束を破らない。
+                // 見張る約束が無ければ null（試合は従来と1ビットも変わらない）。練習試合は約束を数えないので付けない。
+                PromiseGuard = ScoutPromiseTracker.InOfficialTournament
+                    ? KokoSim.Engine.Season.ScoutPromiseJudge.GuardFor(
+                        RosterService.Roster, GameSession.Current.Kind, ScoutPromiseTracker.NextMatchStamp())
+                    : null,
             };
         }
 

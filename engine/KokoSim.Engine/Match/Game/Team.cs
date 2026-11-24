@@ -117,6 +117,12 @@ public sealed record Team
     /// </summary>
     public double CohesionDelta { get; init; }
 
+    /// <summary>
+    /// 約束の見張り（設計書04 §2.4）。采配AIが約束の相手に代打・バント・途中出場・登板をさせないための除外。
+    /// 自校の公式戦だけが持つ（Unity側が組む）。AI校・裏試合・統計シムは null＝従来どおり。
+    /// </summary>
+    public MatchPromiseGuard? PromiseGuard { get; init; }
+
     /// <summary>DH制か。</summary>
     public bool UsesDh => DhSlot >= 0;
 

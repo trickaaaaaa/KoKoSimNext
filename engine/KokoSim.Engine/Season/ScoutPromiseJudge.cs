@@ -213,6 +213,31 @@ public static class ScoutPromiseJudge
                && batter.Grade == 1 && inFirstYearWindow;
     }
 
+    /// <summary>
+    /// 公式戦1試合ぶんの約束の見張り（采配AIが約束を破らないための除外・<see cref="MatchPromiseGuard"/>）。
+    /// 見張る約束が無ければ null（＝試合は従来と1ビットも変わらない）。物差しは試合後の判定と同じ。
+    /// </summary>
+    public static MatchPromiseGuard? GuardFor(IReadOnlyList<DevelopingPlayer> roster, TournamentKind kind, int pitchDayStamp)
+    {
+        var isSummer = kind == TournamentKind.Summer || kind == TournamentKind.SummerKoshien;
+        var inFirstYearWindow = isSummer || IsAutumn(kind);
+        var noPinchHitFor = new List<int>();
+        var noBunt = new List<int>();
+        var noEntry = new List<int>();
+        var noPitch = new List<int>();
+        foreach (var p in roster)
+        {
+            if (p.PromiseStatus != ScoutPromiseStatus.Active || p.Id <= 0) continue;
+            if (BreaksWhenPinchHitFor(p, kind)) noPinchHitFor.Add(p.Id);
+            if (p.Promise == ScoutPromiseKind.NoBunt && p.Grade == 1 && inFirstYearWindow) noBunt.Add(p.Id);
+            if (p.Promise == ScoutPromiseKind.RestFirstSummer && p.Grade == 1 && isSummer) noEntry.Add(p.Id);
+            if (BreaksOnEntry(p, pitches: true, kind, pitchDayStamp) && p.Promise == ScoutPromiseKind.NoConsecutiveDays)
+                noPitch.Add(p.Id);
+        }
+        var guard = new MatchPromiseGuard(noPinchHitFor, noBunt, noEntry, noPitch);
+        return guard.IsEmpty ? null : guard;
+    }
+
     /// <summary>登板日の通し番号。同じ年度・同じ大会の中で、翌日が +1 になる（大会をまたぐと連続しない）。</summary>
     public static int PitchDayStamp(int yearIndex, TournamentKind kind, int matchDay)
         => (yearIndex * 16 + (int)kind + 1) * 1000 + matchDay + 1;

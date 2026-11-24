@@ -798,6 +798,11 @@ public static class GameEngine
                             offense.Captain, ctx.Batting.AbilityEffect.DeltaInt));
                     }
                     sign = offense.Tactics.CallOffense(situation, rng);
+                    // 約束の見張り（設計書04 §2.4）: 「バントさせないで」の打者へはバント・スクイズのサインを出さない。
+                    // brain の判断（乱数の消費）はそのままで、結果だけ強攻に読み替える。見張りが無ければ素通り。
+                    if (offense.PromiseGuard?.BlocksBunt(batter) == true
+                        && sign is OffensiveSign.SacrificeBunt or OffensiveSign.SafetyBunt or OffensiveSign.Squeeze)
+                        sign = OffensiveSign.Swing;
                 }
             }
 
@@ -1173,7 +1178,11 @@ public static class GameEngine
                     // brain が何も言わなければ（Batting=null）方針側の既定（バント等, 設計書15 Phase D-2b）を
                     // 保つ。以前は battingOverride の既定が常にnullだったため無条件代入でも無害だったが、
                     // バント方針という非null既定が加わったことで「上書きは値がある時だけ」に変更が必要になった。
-                    if (d?.Batting is { } brainBatting) battingOverride = brainBatting;
+                    if (d?.Batting is { } brainBatting
+                        && !(offense.PromiseGuard?.BlocksBunt(batter) == true
+                             && brainBatting is PitchBattingOverride.Bunt or PitchBattingOverride.SafetyBunt
+                                 or PitchBattingOverride.Squeeze))
+                        battingOverride = brainBatting;   // 約束の見張り: 「バントさせないで」の打者へのバント指示は採らない
                     stealAttempt = d?.StealAttempt;
                     stealTarget = d?.StealTarget ?? StealTarget.Second;
                     traceCandidates = d?.Explanation; // 観測専用（設計書17 §5 P4）。判断には使わない。
@@ -2935,7 +2944,8 @@ public static class GameEngine
         {
             // 継投人選の候補＝控え全員＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
             // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
-            var candidates = defense.ReliefRankingCandidates;
+            // 約束の見張り（設計書04 §2.4）: 登板させると約束を破る子は候補から外す（見張りが無ければ従来の候補そのもの）。
+            var candidates = defense.EligibleReliefCandidates;
             var sit = new PitchingChangeSituation(
                 inning, ctx.RegulationInnings, outs,
                 defense.Runs - offense.Runs, runsThisHalf, defense.PitcherRattled,
@@ -2952,10 +2962,15 @@ public static class GameEngine
                 // 従来挙動と1ビットも変わらない＝帯不変）。
                 changed = decision switch
                 {
+                    { Reliever: { } blocked } when defense.PromiseGuard?.BlocksPitching(blocked) == true
+                        => defense.TryChangePitcherKeepingPromises(ctx.ReliefBackfill),
+                    // 見張りがあるときは控えから守備を補充しない（補充の控えが約束の子になりうる）。無ければ従来どおり。
                     { ConvertTo: { } to, Reliever: { } r } => defense.ConvertPitcherAndRelieve(to, r)
-                                                              || defense.RelieveWith(r, ctx.ReliefBackfill),
-                    { Reliever: { } reliever } => defense.RelieveWith(reliever, ctx.ReliefBackfill),
-                    _ => defense.TryChangePitcher(),
+                                                              || defense.RelieveWith(r, ctx.ReliefBackfill,
+                                                                  allowBenchBackfill: defense.PromiseGuard is null),
+                    { Reliever: { } reliever } => defense.RelieveWith(reliever, ctx.ReliefBackfill,
+                        allowBenchBackfill: defense.PromiseGuard is null),
+                    _ => defense.TryChangePitcherKeepingPromises(ctx.ReliefBackfill),
                 };
             }
         }
@@ -2965,7 +2980,7 @@ public static class GameEngine
             // 目安に過ぎないので自動交代せずプレイヤーの采配権のまま、atWeekly はルール上の強制だが
             // engine で機械的に選ばず MatchProgression.PendingForcedPitcherChange 側で人選待ちにする。
             // 既定（false＝裏試合・統計シム・既存テスト）はここに来ず従来どおり1ビットも変わらない。
-            changed = defense.TryChangePitcher();
+            changed = defense.TryChangePitcherKeepingPromises(ctx.ReliefBackfill);
         }
 
         // 交代が成立した時だけ観測ログへ積む（issue #209 表現。観測専用＝決定論・帯には影響しない）。
@@ -2995,7 +3010,7 @@ public static class GameEngine
     {
         if (defense.Tactics is null || defense.Reserves.Count == 0) return;
         var sit = SubSituationFor(defense, offense, ctx, inning, outs: 0, bases);
-        if (defense.Tactics.CallDefensiveSub(sit, rng) is { } d)
+        if (defense.Tactics.CallDefensiveSub(sit, rng) is { } d && defense.PromiseGuard?.BlocksEntry(d.Sub) != true)
         {
             defense.DefensiveSub(d.Out, d.Sub);
         }
@@ -3041,7 +3056,8 @@ public static class GameEngine
 
         // 代走: 塁上の鈍足走者を速い控えへ。塁の参照も差し替える。
         if (offense.Tactics.CallPinchRun(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
-            is { } r && offense.PinchRunFor(r.Runner, r.Sub, out var inserted))
+            is { } r && offense.PromiseGuard?.BlocksEntry(r.Sub) != true
+            && offense.PinchRunFor(r.Runner, r.Sub, out var inserted))
         {
             // 塁上の参照は engine が実際に打順へ入れた実体へ揃える（ここで組み直すと打順の実体とズレる）。
             if (bases.First == r.Runner) bases.First = inserted;
@@ -3054,7 +3070,10 @@ public static class GameEngine
         // 代打: 次打者を厚い控えへ（投手枠はStandard側で除外）。
         if (offense.Reserves.Count > 0
             && offense.Tactics.CallPinchHit(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
-            is { } sub)
+            is { } sub
+            // 約束の見張り: 「代打を出さないで」の打者へは送らない／「1年夏は出さないで」の控えは出さない。
+            && !(offense.PromiseGuard is { } guard
+                 && (guard.BlocksEntry(sub) || guard.BlocksPinchHitFor(offense.PeekBatter()))))
         {
             offense.PinchHitNext(sub);
         }
@@ -3069,7 +3088,7 @@ public static class GameEngine
         return new SubstitutionSituation(
             inning, ctx.RegulationInnings, outs, team.Runs - opponent.Runs,
             bases.First, bases.Second, bases.Third, upcoming, upcomingIsPitcher,
-            team.CurrentLineup, team.Reserves)
+            team.CurrentLineup, team.EligibleReserves)
         {
             PitcherThrows = opponent.CurrentPitcher?.Throws,   // 左右の相性（プラトーン）判断用
             DefenseSlotSwappable = SwappableSlotsOf(team),
