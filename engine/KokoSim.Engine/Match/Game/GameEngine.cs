@@ -2350,9 +2350,13 @@ public static class GameEngine
                         {
                             if (leg.Label == "打") { batterArrive = leg.T1; break; }
                         }
+                        // 自分で運ぶ秒は判定と同じ本人の脚（HomePlayContext.SelfForceSprintSpeedMps と同じ出所・issue #1549）。
+                        var sfSprint = sfPlay.FielderRole is { } sfRole
+                            ? defense.PlayerAtPosition(sfRole)?.ToFielder(ctx.Baserunning.AbilityEffect).SprintSpeedMps
+                            : null;
                         timeline = Match.Timeline.TimelineBuilder.AppendSelfForceDoublePlayThrows(
                             timeline, sfPlay, ctx.Field, batterArrive, sfl.ToBase, ctx.Baserunning,
-                            batterOut: !batterSafeOnFc, relayToFirst: !forceOnlyDraw);
+                            batterOut: !batterSafeOnFc, relayToFirst: !forceOnlyDraw, selfForceSprintSpeedMps: sfSprint);
                     }
                     // 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）:
                     // 一塁手が自打球を自分で一塁へ運んでフォース（送球なし）→二塁へ送球して一塁走者にタッチ。
