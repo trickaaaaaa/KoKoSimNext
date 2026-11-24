@@ -175,17 +175,19 @@ namespace KokoSim.EditorTools
                     // 「空間に固定された縞の中を体が通り抜ける」絵になる（2026-07-29 実害）。
                     // 静止座標をここで焼いておけば、体が曲がっても縞は生地に付いたまま伸び縮みする。
                     //
-                    // 袖だけは刻み座標を**腕の軸に沿った長さ**にする（issue uniform-stripes-ring-on-sleeves, 2026-08-18）。
-                    // 実物のピンストライプは生地を平らに広げて全部縦に裁つので、胴は縦縞・袖は腕の長さ方向に直交する
-                    // 輪（腕を下ろすと横縞）になる。左右 x の一枚板のままだと、斜め下へ伸びたAポーズの腕を平面が
-                    // 斜めに切って楕円の弧になる。継ぎ目（肩）は支配ボーンで切り替える（縫い目で向きが変わるのは実物どおり）。
+                    // 袖は縞を**腕に沿って平行**に通す（2026-11-24 監督指摘。袖は型紙の縦を肩→袖口に取って裁つので、
+                    // 腕を下ろすと胴と同じ縦縞になる。旧「腕に直交する輪」は誤りだった）。左右 x の一枚板のままだと、
+                    // 斜め下へ伸びたAポーズの腕を平面が斜めに切って楕円の弧になる。継ぎ目（肩）は支配ボーンで切り替える。
                     var rest = copy.vertices;
                     var uv1 = new Vector2[copy.vertexCount];
                     for (int i = 0; i < uv1.Length; i++)
                         uv1[i] = new Vector2(
                             KokoSim.Unity.Match.DuelUniformMeshBuilder.RegionUv(regionPerVertex[i]), rest[i].x);
                     if (r.name == SuitMeshName)
-                        note += " / " + SleeveStripeAlongArm(copy, regionPerVertex, r as SkinnedMeshRenderer, anim, uv1);
+                        note += " / " + SleeveStripeAlongArm(copy, ref regionPerVertex, r as SkinnedMeshRenderer, anim, ref uv1);
+                    // ズボンの脚は刻み座標を**その高さの脚の幅で正規化**する（2026-11-24 監督指摘「下半身の縞が線対称の輪になる」）。
+                    if (r.name == PantsMeshName)
+                        note += " / " + PantsStripeAlongLegs(copy, regionPerVertex, r as SkinnedMeshRenderer, anim, uv1);
                     // 髪の領域では UV1.y を髪の濃さに使う（縞は地色の領域にしか乗らないので刻み座標は要らない）
                     if (hairWeight != null)
                         for (int i = 0; i < uv1.Length; i++)
@@ -769,13 +771,25 @@ namespace KokoSim.EditorTools
             return "袖を張り出した頂点=" + moved + "（袖口 " + _flare.ToString("F2") + "倍）";
         }
 
+        /// <summary>袖の断面を調べる刻み[m]。</summary>
+        private const float SleeveSliceStepM = 0.004f;
+
+        /// <summary>断面の半幅が袖の真ん中のこの割合を下回ったら、そこから先は筒でない（袖山・袖口の縁）とみなす。</summary>
+        private const float SleeveTubeShare = 0.8f;
+
+        /// <summary>袖付けの位置の胴の x を平均するとき、袖付けの前後この範囲[m]の頂点を見る。</summary>
+        private const float SleeveSeamBandM = 0.01f;
+
         /// <summary>
-        /// 袖の縞の刻み座標を「上腕ボーンの原点からの腕軸方向の距離」で上書きする（issue uniform-stripes-ring-on-sleeves）。
-        /// 対象＝ユニ上の領域かつ支配ボーンが上腕/前腕。軸は <see cref="FlareSleeves"/> と同じく**バインドポーズ**から取る
-        /// （design-18 §3.5.1b）。前腕は上腕の長さを足して肘で連続させる。単位は胴の x と同じメッシュ空間[m]＝
-        /// 線の太さ・間隔は胴と同じ実寸になる（_StripeFreq は共通）。
+        /// 袖の縞の刻み座標を「腕軸に垂直な断面の中の位置（-1〜+1）× 袖の真ん中の半幅」で上書きする（2026-11-24 監督指摘）。
+        /// 縞は腕に沿って平行に通る＝腕を下ろすと胴と同じ縦縞（袖は型紙の縦を肩→袖口に取って裁つ）。
+        /// 対象＝ユニ上の領域かつ支配ボーンが上腕/前腕。軸は <see cref="FlareSleeves"/> と同じく上腕ボーンの**バインドポーズ**、
+        /// 断面の中の「左右」は腕軸に垂直で正面から見える向き（x を腕軸に垂直へ倒した向き）。断面の幅で正規化するのは
+        /// ズボンの脚と同じ理由（張り出した袖は円錐なので、正規化しないと側面で縞が輪になる。<see cref="PantsStripeAlongLegs"/>）。
+        /// 筒になる手前（肩の天辺）は身頃として胴の縞のまま残し、そこを袖付けとする（縫い目で縞が食い違うのは実物どおり）。
+        /// 単位は胴と同じメッシュ空間[m]。
         /// </summary>
-        private static string SleeveStripeAlongArm(Mesh mesh, int[] region, SkinnedMeshRenderer smr, Animator anim, Vector2[] uv1)
+        private static string SleeveStripeAlongArm(Mesh mesh, ref int[] region, SkinnedMeshRenderer smr, Animator anim, ref Vector2[] uv1)
         {
             if (smr == null || anim == null || !anim.isHuman) return "袖の縞=SKIP（Humanoidでない）";
             var bw = mesh.boneWeights;
@@ -783,39 +797,251 @@ namespace KokoSim.EditorTools
             if (bw == null || bw.Length != mesh.vertexCount || bind == null || bind.Length == 0)
                 return "袖の縞=SKIP（スキン情報なし）";
             var verts = mesh.vertices;
-            int moved = 0;
+            var tris = mesh.triangles;
+            int failed = 0;
             var arms = new[]
             {
-                new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand },
-                new[] { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand },
+                new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm },
+                new[] { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm },
             };
+            var sleeves = new List<SleeveFrame>();
+            var vertArm = new int[verts.Length];   // 袖（筒の区間）の頂点ならその腕の添字、それ以外（胴・肩の天辺）は -1
+            for (int i = 0; i < vertArm.Length; i++) vertArm[i] = -1;
             foreach (var arm in arms)
             {
                 int bi = BoneIndex(smr, anim, arm[0]);
                 int bj = BoneIndex(smr, anim, arm[1]);
-                int bk = BoneIndex(smr, anim, arm[2]);
                 if (bi < 0 || bj < 0) continue;
                 var p0 = bind[bi].inverse.MultiplyPoint3x4(Vector3.zero);
                 var p1 = bind[bj].inverse.MultiplyPoint3x4(Vector3.zero);
-                var p2 = bk >= 0 ? bind[bk].inverse.MultiplyPoint3x4(Vector3.zero) : p1 + (p1 - p0);
-                float lenU = (p1 - p0).magnitude;
-                float lenL = (p2 - p1).magnitude;
-                if (lenU < 1e-4f) continue;
-                var u = (p1 - p0) / lenU;
-                var v = lenL > 1e-4f ? (p2 - p1) / lenL : u;
+                if ((p1 - p0).sqrMagnitude < 1e-8f) continue;
+                var f = new SleeveFrame { Along = (p1 - p0).normalized };
+                f.Across = (Vector3.right - f.Along * Vector3.Dot(Vector3.right, f.Along)).normalized;
+
+                var member = new bool[verts.Length];
+                float tMin = float.MaxValue, tMax = float.MinValue;
                 for (int i = 0; i < verts.Length; i++)
                 {
                     if (region[i] != (int)Region.Shirt) continue;
                     int dom = Dominant(bw[i]);
-                    float along;
-                    if (dom == bi) along = Vector3.Dot(verts[i] - p0, u);
-                    else if (dom == bj) along = lenU + Vector3.Dot(verts[i] - p1, v);
-                    else continue;
-                    uv1[i].y = along;
+                    if (dom != bi && dom != bj) continue;
+                    member[i] = true;
+                    float t = Vector3.Dot(verts[i], f.Along);
+                    tMin = Mathf.Min(tMin, t); tMax = Mathf.Max(tMax, t);
+                }
+                f.Edges = TubeEdges(verts, tris, i => member[i]);
+                float mid = (tMin + tMax) * 0.5f;
+                if (!SliceAcross(f.Edges, f.Along, f.Across, mid, out float loRef, out float hiRef)) continue;
+                f.HRef = (hiRef - loRef) * 0.5f;
+                // 筒として成り立っている区間 [TLo, THi]。袖山（肩の天辺）・袖口の縁は断面が細く潰れている。
+                // 肩の天辺は筒の「ふた」で、ここに腕に沿った縞を載せると全部の縞がふたへ密集して細かい線の束になる
+                // （2026-11-24 実測）＝TLo より肩側は身頃として胴の縦縞のまま残し、TLo を袖付けとする。袖口側は端の断面を使い回す
+                f.TLo = mid; f.THi = mid;
+                for (float t = mid; t >= tMin; t -= SleeveSliceStepM)
+                {
+                    if (!SliceAcross(f.Edges, f.Along, f.Across, t, out float a0, out float a1) || (a1 - a0) * 0.5f < f.HRef * SleeveTubeShare) break;
+                    f.TLo = t;
+                }
+                for (float t = mid; t <= tMax; t += SleeveSliceStepM)
+                {
+                    if (!SliceAcross(f.Edges, f.Along, f.Across, t, out float a0, out float a1) || (a1 - a0) * 0.5f < f.HRef * SleeveTubeShare) break;
+                    f.THi = t;
+                }
+                // 袖の座標の原点を袖付けの位置の胴の x に揃える（縫い目で縞が食い違う幅を小さくする）
+                float sumX = 0f; int nX = 0;
+                for (int i = 0; i < verts.Length; i++)
+                    if (member[i] && Mathf.Abs(Vector3.Dot(verts[i], f.Along) - f.TLo) < SleeveSeamBandM) { sumX += verts[i].x; nX++; }
+                f.COff = nX > 0 ? sumX / nX : 0f;
+
+                int a = sleeves.Count;
+                sleeves.Add(f);
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    if (!member[i] || Vector3.Dot(verts[i], f.Along) < f.TLo) continue;
+                    if (!f.Coord(verts[i], out float s)) { failed++; continue; }
+                    uv1[i].y = s;
+                    vertArm[i] = a;
+                }
+            }
+            int moved = 0;
+            for (int i = 0; i < vertArm.Length; i++) if (vertArm[i] >= 0) moved++;
+            string seam = SplitSleeveSeam(mesh, vertArm, sleeves, ref region, ref uv1);
+            return "袖の縞を腕に沿わせた頂点=" + moved + "（断面が採れず x のまま=" + failed + "）/ " + seam;
+        }
+
+        /// <summary>1本の袖の座標系（<see cref="SleeveStripeAlongArm"/>）。</summary>
+        private sealed class SleeveFrame
+        {
+            public Vector3 Along, Across;
+            public List<(Vector3 A, Vector3 B)> Edges;
+            public float TLo, THi, HRef, COff;
+
+            /// <summary>
+            /// 袖の縞の刻み座標。断面の中の位置 u（-1〜+1）をそのまま使うと、筒の側面（u=±1）で値が止まり、そこに当たった縞が
+            /// 太い棒に広がる（張り出した袖は側面が広く正面から見える＝2026-11-24 実測）。asin で周りに沿った長さへ直すと
+            /// 縞の間隔が一周どこでも揃う。表と裏は側面で折り返す（同じ値を逆順に辿る）ので切れ目は出ない
+            /// </summary>
+            public bool Coord(Vector3 p, out float s)
+            {
+                s = 0f;
+                float t = Mathf.Clamp(Vector3.Dot(p, Along), TLo, THi);
+                if (!SliceAcross(Edges, Along, Across, t, out float lo, out float hi)) return false;
+                float u = Mathf.Clamp((Vector3.Dot(p, Across) - (lo + hi) * 0.5f) / ((hi - lo) * 0.5f), -1f, 1f);
+                s = COff + Mathf.Asin(u) * HRef;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// 袖付けで頂点を割って、縞の刻み座標が三角形の中で混ざらないようにする（縫い目で縞がはっきり切れる＝実物どおり）。
+        /// 割らないと、袖付けをまたぐ三角形の中で胴の x と袖の座標が補間され、縞が U 字の入れ子になる（2026-11-24 実測）。
+        /// またぐ三角形は多数決で袖か胴に振り、少数側の頂点を複製して三角形の側の座標を持たせる。
+        /// 位置・法線・ボーンの重みは同じなので陰影にも変形にも継ぎ目は出ない。
+        /// </summary>
+        private static string SplitSleeveSeam(Mesh mesh, int[] vertArm, List<SleeveFrame> sleeves, ref int[] region, ref Vector2[] uv1)
+        {
+            if (mesh.blendShapeCount > 0) return "袖付けの割り=SKIP（ブレンドシェイプあり）";
+            var pos = new List<Vector3>(); mesh.GetVertices(pos);
+            var nrm = new List<Vector3>(); mesh.GetNormals(nrm);
+            var tan = new List<Vector4>(); mesh.GetTangents(tan);
+            var uv0 = new List<Vector2>(); mesh.GetUVs(0, uv0);
+            var col = new List<Color>(); mesh.GetColors(col);
+            var bws = new List<BoneWeight>(mesh.boneWeights);
+            var uv1L = new List<Vector2>(uv1);
+            var regL = new List<int>(region);
+            var dup = new Dictionary<(int, int), int>();   // (元の頂点, 割り当て先の腕 or -1=胴) → 複製
+            int split = 0, dupCount = 0;
+
+            int Dup(int i, int arm)
+            {
+                if (dup.TryGetValue((i, arm), out int j)) return j;
+                j = pos.Count;
+                pos.Add(pos[i]);
+                if (nrm.Count > 0) nrm.Add(nrm[i]);
+                if (tan.Count > 0) tan.Add(tan[i]);
+                if (uv0.Count > 0) uv0.Add(uv0[i]);
+                if (col.Count > 0) col.Add(col[i]);
+                bws.Add(bws[i]);
+                regL.Add(regL[i]);
+                float s = pos[i].x;
+                if (arm >= 0 && !sleeves[arm].Coord(pos[i], out s)) s = pos[i].x;
+                uv1L.Add(new Vector2(uv1L[i].x, s));
+                dup[(i, arm)] = j;
+                dupCount++;
+                return j;
+            }
+
+            var subTris = new List<int[]>();
+            for (int sm = 0; sm < mesh.subMeshCount; sm++)
+            {
+                var tris = mesh.GetTriangles(sm);
+                for (int t = 0; t < tris.Length; t += 3)
+                {
+                    int arm = -1, nSleeve = 0;
+                    for (int k = 0; k < 3; k++)
+                        if (vertArm[tris[t + k]] >= 0) { nSleeve++; arm = vertArm[tris[t + k]]; }
+                    if (nSleeve == 0 || nSleeve == 3) continue;
+                    int side = nSleeve >= 2 ? arm : -1;   // 多数決
+                    for (int k = 0; k < 3; k++)
+                        if (vertArm[tris[t + k]] != side) tris[t + k] = Dup(tris[t + k], side);
+                    split++;
+                }
+                subTris.Add(tris);
+            }
+
+            mesh.SetVertices(pos);
+            if (nrm.Count > 0) mesh.SetNormals(nrm);
+            if (tan.Count > 0) mesh.SetTangents(tan);
+            if (uv0.Count > 0) mesh.SetUVs(0, uv0);
+            if (col.Count > 0) mesh.SetColors(col);
+            mesh.boneWeights = bws.ToArray();
+            for (int sm = 0; sm < subTris.Count; sm++) mesh.SetTriangles(subTris[sm], sm);
+            uv1 = uv1L.ToArray();
+            region = regL.ToArray();
+            return "袖付けで割った三角形=" + split + "（複製した頂点=" + dupCount + "）";
+        }
+
+        /// <summary>3頂点とも <paramref name="member"/> の三角形の辺（筒状の部位の断面を採る用）。</summary>
+        private static List<(Vector3 A, Vector3 B)> TubeEdges(Vector3[] verts, int[] tris, System.Func<int, bool> member)
+        {
+            var edges = new List<(Vector3 A, Vector3 B)>();
+            for (int t = 0; t < tris.Length; t += 3)
+            {
+                if (!member(tris[t]) || !member(tris[t + 1]) || !member(tris[t + 2])) continue;
+                for (int k = 0; k < 3; k++) edges.Add((verts[tris[t + k]], verts[tris[t + (k + 1) % 3]]));
+            }
+            return edges;
+        }
+
+        /// <summary>
+        /// 平面 dot(p, along)=t で辺を切った交点の、<paramref name="across"/> 方向の最小・最大＝その位置の断面の左右の端。
+        /// 輪切りの頂点は平面に乗っていない（1〜3cm ばらつく）ので、頂点を窓で拾わず辺の交点で厳密に採る。
+        /// </summary>
+        private static bool SliceAcross(List<(Vector3 A, Vector3 B)> edges, Vector3 along, Vector3 across, float t,
+            out float lo, out float hi)
+        {
+            lo = float.MaxValue; hi = float.MinValue;
+            foreach (var e in edges)
+            {
+                float t0 = Vector3.Dot(e.A, along), t1 = Vector3.Dot(e.B, along);
+                if (t < Mathf.Min(t0, t1) || t > Mathf.Max(t0, t1)) continue;
+                float f = Mathf.Abs(t1 - t0) < 1e-7f ? 0f : (t - t0) / (t1 - t0);
+                float w = Mathf.Lerp(Vector3.Dot(e.A, across), Vector3.Dot(e.B, across), f);
+                lo = Mathf.Min(lo, w); hi = Mathf.Max(hi, w);
+            }
+            return hi - lo > 1e-3f;
+        }
+
+        /// <summary>脚の正規化を始める高さ＝膝から股関節までのこの割合の所。ここより上（股下〜腰）は従来の x のまま。</summary>
+        private const float LegStripeTopShare = 0.4f;
+
+        /// <summary>
+        /// ズボンの脚の縞の刻み座標を「その高さの脚の断面の中の左右位置（-1〜+1）× 基準の高さの半幅」で上書きする。
+        ///
+        /// バインドポーズの左右座標 x のまま刻むと、縞は x=一定の平面とズボンの面の交線＝**等高線**になる。
+        /// 脚の側面は面が ±x を向いている（x がほとんど変わらない）ので、太さが数mm変わるだけで
+        /// 平面が筒から抜けて交線が閉じ、**脚の側面に左右対称の輪**ができる（膝・裾の膨らみで顕著）。
+        /// 高さごとに脚の左右の端を同じ座標へ揃えれば、どの高さでも縞の本数が同じになり、
+        /// 縞は脚に沿った真っ直ぐな線になる（脚の傾き・先細りもまとめて消える）。
+        ///
+        /// 断面の端は**その高さの平面で辺を切った交点**から厳密に採る（脚の輪切りは平面でなく
+        /// 1〜3cm ばらついているので、高さの窓で頂点を拾う方式だと隣の輪が混ざって端が揺れる）。
+        /// 基準の高さ（太ももの上）では正規化後の座標が元の x と一致するので、その上の従来の x と継ぎ目なくつながる。
+        /// 高さは膝・股関節ボーンの**バインドポーズ**から取る（メッシュは Z-up・design-18 §3.5.1b）。
+        /// </summary>
+        private static string PantsStripeAlongLegs(Mesh mesh, int[] region, SkinnedMeshRenderer smr, Animator anim, Vector2[] uv1)
+        {
+            if (smr == null || anim == null || !anim.isHuman) return "脚の縞=SKIP（Humanoidでない）";
+            var bind = mesh.bindposes;
+            int hipL = BoneIndex(smr, anim, HumanBodyBones.LeftUpperLeg);
+            int kneeL = BoneIndex(smr, anim, HumanBodyBones.LeftLowerLeg);
+            if (hipL < 0 || kneeL < 0 || bind == null || bind.Length == 0) return "脚の縞=SKIP（脚のボーンなし）";
+            float zHip = bind[hipL].inverse.MultiplyPoint3x4(Vector3.zero).z;
+            float zKnee = bind[kneeL].inverse.MultiplyPoint3x4(Vector3.zero).z;
+            float zTop = zKnee + (zHip - zKnee) * LegStripeTopShare;
+
+            var verts = mesh.vertices;
+            var tris = mesh.triangles;
+            int moved = 0, failed = 0;
+            var up = Vector3.forward;   // メッシュは Z-up
+            foreach (float side in new[] { -1f, 1f })
+            {
+                // この脚＝同じ側の頂点。断面は基準の高さより少し上の輪まで要るので、高さでは絞らない
+                // （股より上は左右がつながるが、両端とも同じ側の三角形しか採らないので混ざらない）
+                var edges = TubeEdges(verts, tris, i => verts[i].x * side > 0f);
+                if (!SliceAcross(edges, up, Vector3.right, zTop, out float loRef, out float hiRef)) continue;
+                float cRef = (loRef + hiRef) * 0.5f, hRef = (hiRef - loRef) * 0.5f;
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    var p = verts[i];
+                    if (region[i] != (int)Region.Pants || p.x * side <= 0f || p.z >= zTop) continue;
+                    if (!SliceAcross(edges, up, Vector3.right, p.z, out float lo, out float hi)) { failed++; continue; }
+                    float u = (p.x - (lo + hi) * 0.5f) / ((hi - lo) * 0.5f);
+                    uv1[i].y = cRef + u * hRef;
                     moved++;
                 }
             }
-            return "袖の縞を腕軸の輪にした頂点=" + moved;
+            return "脚の縞を脚の幅で正規化した頂点=" + moved + "（断面が採れず x のまま=" + failed + "・上端 z=" + zTop.ToString("F3") + "）";
         }
 
         private static int BoneIndex(SkinnedMeshRenderer smr, Animator anim, HumanBodyBones human)

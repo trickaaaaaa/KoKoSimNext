@@ -126,6 +126,34 @@ namespace KokoSim.UnityEditorTools
         }
 
         /// <summary>
+        /// 縦縞の寄り（ズボン・袖の縞が脚・腕に沿って真っ直ぐ通るか）。正面・斜め・横の4方向で全身・脚・上半身を撮る。
+        /// 刻み座標の等高線が脚の側面で輪になる不具合（脚の先細りで x=一定の面が筒から抜ける）は
+        /// 横からでないと見えない。
+        /// </summary>
+        [UnityEditor.MenuItem("KokoSim/Duel/縦縞の寄りを撮る")]
+        public static void RunStripes()
+        {
+            var palette = KokoSim.Unity.Shell.TeamColorProvider.Palette;
+            Directory.CreateDirectory(Dir);
+            var e = palette.FindById("white_navy");
+            if (e == null) { Debug.LogError("[ColorSheet] white_navy が無い"); return; }
+            var c = TeamColors.FromEntry(e);
+            var s = e.Stripe ?? TeamStripeStyle.DefaultFor(e.Team);
+            c = c with { Stripe = new TeamStripe(true, s.Color, s.FreqPerMeter) };
+            var cells = new List<Cell> { new Cell("縦縞", c) };
+            foreach (var yaw in new[] { 0f, 40f, 75f, 110f })
+            {
+                Shoot(cells, cols: 1, cellW: 640, cellH: 480, file: "stripes-body-" + (int)yaw,
+                    yawDeg: yaw, aimHeightM: 1.0f, frameHeightM: 1.9f, distM: 3.2f);
+                Shoot(cells, cols: 1, cellW: 640, cellH: 480, file: "stripes-legs-" + (int)yaw,
+                    yawDeg: yaw, aimHeightM: 0.62f, frameHeightM: 0.8f, distM: 1.6f);
+                Shoot(cells, cols: 1, cellW: 640, cellH: 480, file: "stripes-arms-" + (int)yaw,
+                    yawDeg: yaw, aimHeightM: 1.30f, frameHeightM: 0.7f, distM: 1.5f);
+            }
+            Debug.Log("[ColorSheet] stripes DONE -> " + Dir);
+        }
+
+        /// <summary>
         /// 立っている投手の帽子の中心を実測して、ステージ根ローカルで返す（<see cref="DuelStageRig.FramePreview"/>
         /// はステージ根ローカルで受ける）。見つからなければ全身の狙点へ落ちる。
         /// </summary>
@@ -153,7 +181,8 @@ namespace KokoSim.UnityEditorTools
         }
 
         private static void Shoot(List<Cell> cells, int cols, int cellW, int cellH, string file,
-            bool closeUp = false, float closeUpYawDeg = 0f)
+            bool closeUp = false, float closeUpYawDeg = 0f,
+            float yawDeg = float.NaN, float aimHeightM = 0f, float frameHeightM = 0f, float distM = 0f)
         {
             if (cells.Count == 0) return;
             var rows = (cells.Count + cols - 1) / cols;
@@ -165,7 +194,16 @@ namespace KokoSim.UnityEditorTools
             {
                 if (!rig.Available) { Debug.LogError("[ColorSheet] 素体が使えない（リグが組めない）"); return; }
                 if (!rig.PosePreviewStanding()) Debug.LogWarning("[ColorSheet] 直立クリップが無い＝投球姿勢のまま撮る");
-                if (closeUp)
+                if (!float.IsNaN(yawDeg))
+                {
+                    // 足元の高さは帽子の実測から逆算する（立ち位置の床の高さを決め打ちしない）
+                    var cap = FindCapCenter(rig);
+                    var aim = new Vector3(cap.x, cap.y - HeadHeightM + aimHeightM, cap.z);
+                    var dir = Quaternion.Euler(0f, yawDeg, 0f) * (CamPos - LookAt).normalized;
+                    dir.y = 0f;
+                    rig.FramePreview(aim + dir.normalized * distM, aim, frameHeightM);
+                }
+                else if (closeUp)
                 {
                     // 帽子の寄り。狙点は**目測でなく帽子メッシュの実測**で採る（目で置いた狙点だと
                     // 「カメラの狙い外し」と「塗り分けの失敗」が絵で区別できない）。
