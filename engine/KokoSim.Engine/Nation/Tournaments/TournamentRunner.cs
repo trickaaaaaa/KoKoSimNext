@@ -1367,16 +1367,8 @@ public sealed class TournamentRunner : ITournamentRunner
         return (r, awayWon, replays);
     }
 
-    /// <summary>
-    /// フルシム有効時、自校カードでも「背景カードと同量の本流消費」を保つためのダミー消費（集計モデル経路のみ）。
-    /// フルシムでは背景も Fork のため消費ゼロ＝自校カードも消費ゼロで整合する（何もしない）。
-    /// </summary>
     private void ConsumeLegacyManagerCardRng(School a, School b)
-    {
-        if (_backgroundResolver is not null) return;   // フルシム: 背景も Fork ＝消費なしで揃う
-        var (_, _, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
-        SynthesizeScore(margin);   // 破棄（本流消費だけ従来と一致させる）
-    }
+        => LegacyManagerCardRng.Consume(a, b, _coeff, _rng, _backgroundResolver is not null);
 
     /// <summary>
     /// 裏試合フルシム用 Fork ストリームID（ラウンド×スロット×再試合回で一意・決定論）。自校戦とも本流とも別系列。

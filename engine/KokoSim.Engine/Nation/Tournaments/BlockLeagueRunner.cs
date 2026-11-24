@@ -459,11 +459,7 @@ public sealed class BlockLeagueRunner : ITournamentRunner
             AceRestRoundsRemaining: Math.Max(1, _totalRounds - round));
 
     private void ConsumeLegacyManagerCardRng(School a, School b)
-    {
-        if (_backgroundResolver is not null) return;
-        var (_, _, _) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
-        _rng.NextInt(0, 4);
-    }
+        => LegacyManagerCardRng.Consume(a, b, _coeff, _rng, _backgroundResolver is not null);
 
     private bool Involves(Card c) => c.A.Id == _managerId || c.B.Id == _managerId;
 
