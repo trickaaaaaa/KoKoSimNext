@@ -97,5 +97,27 @@ namespace KokoSim.EditorTests
                 }
             }
         }
+
+        [Test]
+        public void ThrowingWork_ReleasesSlot_AndStillCallsOnDone()
+        {
+            var done = false;
+            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("boom"));
+            Assert.IsTrue(BackgroundGameOp.Run(() => throw new InvalidOperationException("boom"), () => done = true));
+            DrainUntilIdle();
+            Assert.IsTrue(done, "work が例外でも onDone は呼ばれる");
+            Assert.IsTrue(BackgroundGameOp.Run(() => { }, null), "解除後は次の処理を始められる");
+            DrainUntilIdle();
+        }
+
+        [Test]
+        public void OnDone_CanStartNextRun()
+        {
+            var nextStarted = false;
+            Assert.IsTrue(BackgroundGameOp.Run(() => { }, () => nextStarted = BackgroundGameOp.Run(() => { }, null)));
+            DrainUntilIdle();
+            Assert.IsTrue(nextStarted, "onDone の時点でスロットは解けている");
+            DrainUntilIdle();
+        }
     }
 }
