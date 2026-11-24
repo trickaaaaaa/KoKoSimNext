@@ -33,6 +33,10 @@ namespace KokoSim.Unity.Shell
             Plus,
             /// <summary>右向きの矢印（打者を一塁へ歩かせる＝申告敬遠）。</summary>
             Walk,
+            /// <summary>左向きの山形（戻る）。</summary>
+            ChevronLeft,
+            /// <summary>ゴミ箱（削除）。</summary>
+            Trash,
         }
 
         /// <summary>線幅（24 座標で）。既定 2。</summary>
@@ -135,6 +139,18 @@ namespace KokoSim.Unity.Shell
 
                 case Kind.ChevronRight:
                     Polyline(p, P(9, 6), P(15, 12), P(9, 18));
+                    break;
+
+                case Kind.ChevronLeft:
+                    Polyline(p, P(15, 6), P(9, 12), P(15, 18));
+                    break;
+
+                case Kind.Trash:
+                    Polyline(p, P(4, 7), P(20, 7));
+                    Polyline(p, P(9, 7), P(9, 4), P(15, 4), P(15, 7));
+                    Polyline(p, P(6, 7), P(7, 20), P(17, 20), P(18, 7));
+                    Polyline(p, P(10, 11), P(10, 17));
+                    Polyline(p, P(14, 11), P(14, 17));
                     break;
 
                 case Kind.Walk:

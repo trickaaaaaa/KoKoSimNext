@@ -18,7 +18,17 @@ namespace KokoSim.Engine.Saves;
 /// <b>それより前のセーブには無い</b>ので null になる＝呼び出し側で既定（桜丘）へ落とす。
 /// ここで既定を埋めない（「読めなかった」と「桜丘という校名だった」を潰さないため）。</para>
 /// </summary>
-public readonly record struct SaveHeader(int Version, int Week, int YearIndex, string? SchoolName);
+public readonly record struct SaveHeader(int Version, int Week, int YearIndex, string? SchoolName)
+{
+    /// <summary>本拠県（JIS順0基点）。v3以前のセーブには無いので null。</summary>
+    public int? PrefectureId { get; init; }
+
+    /// <summary>
+    /// 一覧のカードに出す概要。概要を書くようになる前のセーブ・項目が欠けたセーブは null
+    /// （呼び出し側は「—」で出す。読めないことを理由にヘッダ全体を失敗にしない）。
+    /// </summary>
+    public SaveSummary? Summary { get; init; }
+}
 
 /// <summary>
 /// セーブの正典コーデック（issue #507）。<see cref="SaveState"/> ⇔ JSON 文字列。<b>形（スキーマ）は engine 側</b>で、
@@ -117,6 +127,17 @@ public static class SaveCodec
             .Add("managerPostingBaselineLosses", s.ManagerPostingBaselineLosses)
             .Add("managerPostingBaselineSummerApp", s.ManagerPostingBaselineSummerAppearances)
             .Add("managerPostingBaselineSpringApp", s.ManagerPostingBaselineSpringAppearances);
+        // 一覧のカード用の概要（表示専用・復元には使わない）。最上位の単純な値で書く＝見出しの流し読みで拾える。
+        // 項目を足しただけで既存の項目は変えていないので、版は上げない（無いセーブは一覧で「—」になる）。
+        if (s.Summary is { } sum)
+        {
+            root.Add("summaryPhase", sum.Phase)
+                .Add("summaryOverall", sum.Overall)
+                .Add("summaryWins", sum.Wins)
+                .Add("summaryLosses", sum.Losses)
+                .Add("summarySpringApp", sum.SpringAppearances)
+                .Add("summarySummerApp", sum.SummerAppearances);
+        }
         return root.ToString();
     }
 
@@ -202,7 +223,22 @@ public static class SaveCodec
         return PeekHeader(reader);
     }
 
-    private static readonly string[] HeaderKeys = { "version", "week", "yearIndex", "schoolName" };
+    private static readonly string[] HeaderKeys =
+    {
+        "version", "week", "yearIndex", "schoolName", "prefectureId",
+        "summaryPhase", "summaryOverall", "summaryWins", "summaryLosses", "summarySpringApp", "summarySummerApp",
+    };
+
+    private static int? IntOrNull(object? token)
+        => token is JsonHeaderScanner.NumberToken n && n.TryInt(out var v) ? v : null;
+
+    /// <summary>概要は6項目そろったときだけ返す（1つでも欠けていれば null＝一覧は「—」）。</summary>
+    private static SaveSummary? SummaryOrNull(object?[] v)
+        => v[5] is string phase
+           && IntOrNull(v[6]) is { } overall && IntOrNull(v[7]) is { } wins && IntOrNull(v[8]) is { } losses
+           && IntOrNull(v[9]) is { } spring && IntOrNull(v[10]) is { } summer
+            ? new SaveSummary(phase, overall, wins, losses, spring, summer)
+            : null;
 
     /// <summary>
     /// <see cref="PeekHeader(string?)"/> の流し読み版（issue #660）。値を組み立てずに読み飛ばすので、
@@ -220,7 +256,11 @@ public static class SaveCodec
             if (v[2] is not JsonHeaderScanner.NumberToken yi || !yi.TryInt(out var yearIndex)) return null;
             // ⚠ 校名は任意項目（v3以前は無い）。無い・文字列でない＝null で返し、ヘッダ全体は読める扱い
             // （校名が無いだけの旧セーブを「壊れている」表示に落とさない）。
-            return new SaveHeader(version, week, yearIndex, v[3] as string);
+            return new SaveHeader(version, week, yearIndex, v[3] as string)
+            {
+                PrefectureId = IntOrNull(v[4]),
+                Summary = SummaryOrNull(v),
+            };
         }
         catch (Exception) { return null; }
     }
@@ -569,6 +609,12 @@ public static class SaveCodec
             // 他校の配色は v38 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             SchoolColorOverrides = SchoolColorsFromJson(root.Arr("schoolColorOverrides")),
             // 自校の同定は v4 で追加。Migrate が旧セーブへ既定（桜丘・神奈川・地区なし）を補うので素直に読む。
+            // 一覧のカード用の概要（表示専用）。無いセーブは null のまま。
+            Summary = root.Has("summaryPhase") && root.Has("summaryOverall")
+                ? new SaveSummary(root.Str("summaryPhase") ?? "", root.Int("summaryOverall"),
+                    root.Int("summaryWins"), root.Int("summaryLosses"),
+                    root.Int("summarySpringApp"), root.Int("summarySummerApp"))
+                : null,
             SchoolName = root.Str("schoolName") ?? "桜丘",
             PrefectureId = root.Int("prefectureId"),
             DistrictId = root["districtId"] is JsonNull ? (int?)null : root.Int("districtId"),

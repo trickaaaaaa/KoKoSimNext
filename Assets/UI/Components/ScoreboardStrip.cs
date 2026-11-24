@@ -17,6 +17,37 @@ namespace KokoSim.Unity.Components
         public static void Fill(VisualElement root) => Fill(root, null, null, null);
 
         /// <summary>
+        /// いまの戦績（見出しと「N勝N敗」）。大会中はいまの大会の勝敗、それ以外は今季の公式戦の勝敗。
+        /// 公式戦の戦績（MatchHistory）が単一ソース。上の帯とセーブデータ画面の右列が読む。
+        /// </summary>
+        public static (string Label, string Text) RecordNow()
+        {
+            var s = GameSession.Current;
+            int won = 0, lost = 0, drawn = 0;
+            foreach (var m in s.MatchHistory.ForSchool(KokoSim.Engine.Stats.MatchRecordBook.ManagerKey))
+            {
+                if (m.Year != s.Year) continue;
+                if (s.InTournament && m.Kind != s.Kind) continue;
+                if (m.Won) won++; else if (m.Lost) lost++; else drawn++;
+            }
+            return (s.InTournament ? TournamentKindNames.Short(s.Kind) + "の戦績" : "今季の公式戦",
+                won + "勝" + lost + "敗" + (drawn > 0 ? drawn + "分" : ""));
+        }
+
+        /// <summary>
+        /// いまの日付（上の帯の升目と同じ）。大会中は大会内の実月日、結果を閉じるまでは最終日、それ以外は「M月W週」。
+        /// </summary>
+        public static string DateNow()
+        {
+            var s = GameSession.Current;
+            return s.InTournament
+                ? s.TournamentDateLabel
+                : !string.IsNullOrEmpty(s.WrapUpDateLabel)
+                    ? s.WrapUpDateLabel   // 結果を閉じるまでは最終日の日付（止まった開幕週に戻さない・issue #1548）
+                    : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
+        }
+
+        /// <summary>
         /// 旧シグネチャ（カウントダウンを呼び出し側が決める版）。カウントダウンはトップバーから外した
         /// （ホームの主役のカードが持つ）ので、引数は読まずに日付だけ埋める。
         /// </summary>
@@ -36,26 +67,13 @@ namespace KokoSim.Unity.Components
             var record = root.Q<Label>("tb-record");
             if (recordK != null || record != null)
             {
-                int won = 0, lost = 0, drawn = 0;
-                foreach (var m in s.MatchHistory.ForSchool(KokoSim.Engine.Stats.MatchRecordBook.ManagerKey))
-                {
-                    if (m.Year != s.Year) continue;
-                    if (s.InTournament && m.Kind != s.Kind) continue;
-                    if (m.Won) won++; else if (m.Lost) lost++; else drawn++;
-                }
-                if (recordK != null)
-                    recordK.text = s.InTournament ? TournamentKindNames.Short(s.Kind) + "の戦績" : "今季の公式戦";
-                if (record != null)
-                    record.text = won + "勝" + lost + "敗" + (drawn > 0 ? drawn + "分" : "");
+                var (label, text) = RecordNow();
+                if (recordK != null) recordK.text = label;
+                if (record != null) record.text = text;
             }
 
             var date = root.Q<Label>("tb-date");
-            if (date != null)
-                date.text = s.InTournament
-                    ? s.TournamentDateLabel
-                    : !string.IsNullOrEmpty(s.WrapUpDateLabel)
-                        ? s.WrapUpDateLabel   // 結果を閉じるまでは最終日の日付（止まった開幕週に戻さない・issue #1548）
-                        : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
+            if (date != null) date.text = DateNow();
 
             // 進行ボタン（issue #1534 項目9）: 大会中はどのタブでも「1日進める」。文言はここだけが決める。
             var advance = root.Q<Button>("advance");

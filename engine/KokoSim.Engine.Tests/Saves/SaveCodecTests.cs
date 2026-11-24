@@ -1300,6 +1300,51 @@ public sealed class SaveCodecTests
         Assert.Null(header.Value.SchoolName);
     }
 
+    // ===== 一覧のカード用の概要（セーブデータ画面のリデザイン） =====
+
+    /// <summary>概要は見出しの流し読みで取り出せ、往復でも残る。県の番号も見出しで読める。</summary>
+    [Fact]
+    public void PeekHeader_ReadsSummaryAndPrefecture()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Summary = new SaveSummary("地区予選", 63, 214, 138, 3, 5);
+        var json = SaveCodec.Serialize(state);
+
+        var header = SaveCodec.PeekHeader(json)!.Value;
+        Assert.Equal(state.PrefectureId, header.PrefectureId);
+        Assert.Equal(state.Summary, header.Summary);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var back, out var err), err);
+        Assert.Equal(state.Summary, back.Summary);
+    }
+
+    /// <summary>概要を書く前のセーブ・項目が欠けたセーブは、例外にならず概要だけ null になる（一覧は「—」）。</summary>
+    [Theory]
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1}")]
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1,\"summaryPhase\":\"夏の大会前\",\"summaryOverall\":31}")]
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1,\"summaryPhase\":null,\"summaryOverall\":\"x\",\"summaryWins\":0,\"summaryLosses\":0,\"summarySpringApp\":0,\"summarySummerApp\":0}")]
+    public void PeekHeader_MissingSummary_IsNullNotThrow(string json)
+    {
+        var header = SaveCodec.PeekHeader(json);
+
+        Assert.NotNull(header);
+        Assert.Equal(3, header!.Value.Week);
+        Assert.Null(header.Value.Summary);
+        Assert.Null(header.Value.PrefectureId);
+    }
+
+    /// <summary>概要を持たない状態を書き出しても概要の項目は出ず、読み戻すと null のまま。</summary>
+    [Fact]
+    public void Summary_AbsentWhenNotSet()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+
+        Assert.DoesNotContain("summaryPhase", json);
+        Assert.Null(SaveCodec.PeekHeader(json)!.Value.Summary);
+        Assert.True(SaveCodec.TryDeserialize(json, out var back, out var err), err);
+        Assert.Null(back.Summary);
+    }
+
     // ===== 見出しの流し読み（issue #660） =====
 
     /// <summary>従来の見出し読み（DOM へ丸ごとパース）。流し読み版がこれと同じ答えを返すことの基準。</summary>
@@ -1310,7 +1355,11 @@ public sealed class SaveCodecTests
             var root = KokoSim.Engine.Saves.Json.JsonValue.Parse(text).AsObject();
             if (!root.Has("version")) return null;
             return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"),
-                root.Has("schoolName") ? root.Str("schoolName") : null);
+                root.Has("schoolName") ? root.Str("schoolName") : null)
+            {
+                // 県の番号は見出しに足した項目（セーブデータ画面のカード用）。概要はこれらのケースには無い＝null。
+                PrefectureId = root.Has("prefectureId") ? root.Int("prefectureId") : (int?)null,
+            };
         }
         catch (Exception) { return null; }
     }

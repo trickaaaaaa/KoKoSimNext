@@ -22,8 +22,27 @@ namespace KokoSim.Engine.Saves;
 /// DI が要る <see cref="Nation.Roster.NationRosters"/> は <see cref="Nation.Roster.NationRosters.FromSaved"/> で
 /// 復元し、成績/戦績はサービス側の実体へ据える。</para>
 /// </summary>
+/// <summary>
+/// セーブ一覧のカードに出す概要。本体を組み立てずに見出しの流し読み（<see cref="SaveCodec.PeekHeader(System.IO.TextReader)"/>）で
+/// 取り出せるよう、セーブの最上位に単純な値として書く（部員全員の能力や通算記録を読み直さないため）。
+/// </summary>
+/// <param name="Phase">時期の名前（「夏の大会前」「地区予選」など）。</param>
+/// <param name="Overall">チーム総合の点数（0〜100）。ランクはこの点数から決まるので持たない。</param>
+/// <param name="Wins">監督通算の勝ち（歴任校を通した公式戦）。</param>
+/// <param name="Losses">監督通算の負け。</param>
+/// <param name="SpringAppearances">センバツの出場回数（監督通算）。</param>
+/// <param name="SummerAppearances">夏の甲子園の出場回数（監督通算）。</param>
+public sealed record SaveSummary(
+    string Phase, int Overall, int Wins, int Losses, int SpringAppearances, int SummerAppearances);
+
 public sealed class SaveState
 {
+    /// <summary>
+    /// セーブ一覧のカードに出す概要（保存した時点の値）。復元には使わない＝表示専用。
+    /// これが無い古いセーブは null（一覧では「—」になる）。
+    /// </summary>
+    public SaveSummary? Summary { get; set; }
+
     /// <summary>スキーマ版（先頭・マイグレーション用）。</summary>
     public int Version { get; set; } = SaveCodec.CurrentVersion;
 

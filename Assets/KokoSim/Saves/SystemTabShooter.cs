@@ -70,8 +70,6 @@ namespace KokoSim.Unity.Saves
             SaveSlots.Entry = SaveSlotsEntry.Tab;
             doc = Open("SaveSlots");
             yield return null;
-            var ctrl = doc.GetComponent<SaveSlotsController>();
-            if (ctrl != null) ctrl.Select("manual2");
             yield return null; yield return null;
             Debug.Log("[SysTab] 壊れた枠 corrupt=" + SaveSlots.ReadInfo("manual2").Corrupt);
             yield return Capture(doc, "4-corrupt");

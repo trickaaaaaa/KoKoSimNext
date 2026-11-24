@@ -927,12 +927,7 @@ screens:
       - set: {SaveSlots.Entry: Tab}
       - show: SaveSlots
       - wait: 5
-      - click: .ss-row[0]
-      - wait: 3
-      - shot: 05-saves-slot0
-      - click: .ss-row[2]
-      - wait: 3
-      - shot: 06-saves-empty
+      - shot: 05-saves
       - call: GameClock.Advance(18)
       - show: HomeDashboard
       - wait: 10
@@ -970,12 +965,7 @@ screens:
       - set: {SaveSlots.Entry: Tab}
       - show: SaveSlots
       - wait: 5
-      - click: .ss-row[0]
-      - wait: 3
-      - shot: 05-saves-slot0
-      - click: .ss-row[2]
-      - wait: 3
-      - shot: 06-saves-empty
+      - shot: 05-saves
       - call: GameClock.Advance(18)
       - show: HomeDashboard
       - wait: 10
@@ -1278,3 +1268,51 @@ screens:
       - click: .ms-row--out[0]
       - hover: .ms-row[2]
       - shot: 02-compare-two
+
+  # ── セーブデータ画面のリデザイン：1枠ずつのカード＋いま遊んでいるデータ ──
+  # 手動3へ実際に保存して最後に消す（手動1・2には触らない）。手動3に本物のセーブがある環境では回さない。
+
+  - id: save-data-redesign
+    name: "セーブデータ画面：枠ごとのカード（概要が無い古いセーブは「—」）・保存した枠にプレイ中・確認の文言・タイトル経由"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - set: {SaveSlots.Entry: Tab}
+      - show: SaveSlots
+      - wait: 5
+      - shot: 01-before-save
+      - call: SaveSlots.Save("manual3")
+      - show: HomeDashboard
+      - set: {SaveSlots.Entry: Tab}
+      - show: SaveSlots
+      - wait: 5
+      - shot: 02-saved-playing
+      - show: HomeDashboard
+      - show: SaveSlots
+      - click: .ss-op-trash[0]
+      - shot: 03-confirm-delete
+      - show: HomeDashboard
+      - show: SaveSlots
+      - click: .ss-op--fill[0]
+      - shot: 04-confirm-overwrite
+      - show: HomeDashboard
+      - set: {SaveSlots.Entry: Title}
+      - show: SaveSlots
+      - wait: 5
+      - shot: 05-title-entry
+      - call: SaveSlots.Delete("manual3")
+      - show: HomeDashboard
+      - set: {SaveSlots.Entry: Tab}
+      - show: SaveSlots
+      - wait: 5
+      - shot: 06-after-delete
+      # 上の切り替えの行を共用するほかの3ページ（校名の編集／設定／クレジット）
+      - call: ShowPage(1)
+      - wait: 5
+      - shot: 07-rename
+      - call: ShowPage(2)
+      - wait: 5
+      - shot: 08-settings
+      - call: ShowPage(3)
+      - wait: 5
+      - shot: 09-credits
