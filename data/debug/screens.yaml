@@ -118,6 +118,18 @@ screens:
       - read: ngs-district
       - shot: 08-setup-tokyo-west
 
+  # 信頼度を画面から外した後の確認（issue #1603）: トップバー・キャリア・経営の予算の内訳に「信頼度」が出ない。
+  - id: trust-hidden-1603
+    name: "信頼度が画面に出ない（トップバー・キャリア・経営の内訳・issue #1603）"
+    steps:
+      - new_game: {seed: 1}
+      - show: HomeDashboard
+      - shot: 01-home-topbar
+      - show: CareerScreen
+      - shot: 02-career
+      - show: ManagementScreen
+      - shot: 03-management-income
+
   # ── 束7 お金・信頼度・名声（2026-11-23・issue #1299 #1469 #1270 #1467）──
   # 経営タブ: 収入の内訳の「後援会」（旧「後援会・OB」）と、年契約の新しい年額（スカウト網 100/250/420・遠征60・コーチ160）。
   - id: management-economy-bundle7
