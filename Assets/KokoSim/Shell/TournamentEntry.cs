@@ -84,7 +84,7 @@ namespace KokoSim.Unity.Shell
                     onBackgroundMatch: FoldBackgroundMatch)
                 : new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
                     TournamentTitle(actualKind), new PlayerMatchResolver(), homeBg,
-                    onBackgroundMatch: FoldBackgroundMatch);
+                    onBackgroundMatch: FoldBackgroundMatch, thirdPlaceMatch: ThirdPlaceRule.AppliesTo(actualKind));
             // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
             GameSession.Current.EnterTournament(actualKind, TournamentTitle(actualKind), runner, field);
             GameSession.Current.Year = yearIndex;

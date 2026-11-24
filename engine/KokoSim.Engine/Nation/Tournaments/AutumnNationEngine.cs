@@ -88,7 +88,7 @@ public static class AutumnNationEngine
                 afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier);
         var prefRng = rng.Fork(0xACE0_0000UL ^ (uint)pref.Id);
         var runner = TournamentRunner.Spectated(
-            field, coeff, prefRng, schedule, $"{pref.Name}大会", backgroundResolver: bg);
+            field, coeff, prefRng, schedule, $"{pref.Name}大会", backgroundResolver: bg, thirdPlaceMatch: true);
 
         runner.DrainBracketResolution();
         var matches = runner.BuildBracketView().Matches;
