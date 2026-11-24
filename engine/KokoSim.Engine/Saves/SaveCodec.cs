@@ -58,6 +58,7 @@ public static class SaveCodec
             .Add("roster", RosterToJson(s.Roster))
             .Add("nextPlayerId", s.NextPlayerId)
             .Add("graduates", GraduateSaves.ToJson(s.Graduates))
+            .Add("schoolFoundedNew", s.SchoolFoundedNew)
             .Add("manager", CareerSaves.ManagerToJson(s.Manager))
             .Add("facilities", CareerSaves.FacilitiesToJson(s.Facilities))
             .Add("contracts", CareerSaves.ContractsToJson(s.Contracts))
@@ -572,6 +573,8 @@ public static class SaveCodec
             NextPlayerId = root.Has("nextPlayerId") ? root.Int("nextPlayerId") : 0,
             // 卒業生の名前の表は v41 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             Graduates = GraduateSaves.FromJson(root.Arr("graduates")),
+            // 新設校として始まったか（issue #1615）は版を上げずに足した項目＝キーが無い旧セーブは false。
+            SchoolFoundedNew = root.Has("schoolFoundedNew") && root.Bool("schoolFoundedNew"),
             Manager = CareerSaves.ManagerFromJson(root.Obj("manager")),
             Facilities = CareerSaves.FacilitiesFromJson(root.Obj("facilities")),
             // 年契約は v3 で追加。旧セーブ（v1/v2）には無いので、当時と同額・同効果の

@@ -68,6 +68,13 @@ public sealed class SaveState
     public GraduateRoll Graduates { get; set; } = new();
 
     /// <summary>
+    /// いまの学校が新設校として始まった（歴史が無い）か（issue #1615）。true の間は卒業生が1人も出ていなければ
+    /// OB が居ない＝OB 会の寄付などのイベントを出さない。転任先（もともと AI 校）は歴史があるので false。
+    /// 版は上げずに足した項目＝キーが無い旧セーブは false（従来どおり OB が居る扱い）。
+    /// </summary>
+    public bool SchoolFoundedNew { get; set; }
+
+    /// <summary>
     /// 自校選手の安定IDの続き番号（issue #644）。0＝未保存（この項目より前のセーブ）＝復元側がロスターと
     /// 成績ストアの最大IDから推定する（<see cref="Season.PlayerIdCounter.Resume"/>）。
     /// </summary>

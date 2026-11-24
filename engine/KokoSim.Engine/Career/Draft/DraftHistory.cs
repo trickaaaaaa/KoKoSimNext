@@ -50,6 +50,13 @@ public sealed class DraftHistory
 
     public void Add(DraftRecord record) => _records.Add(record);
 
+    /// <summary>
+    /// 訪ねてくる教え子を名鑑から1人選ぶ（監督成長の「教え子の訪問」・issue #1615）。
+    /// 乱数を渡す＝同じ母種・同じ年なら同じ人（不変条件#2）。名鑑が空なら null。
+    /// </summary>
+    public DraftRecord? PickVisitor(Core.IRandomSource rng)
+        => _records.Count == 0 ? null : _records[rng.NextInt(0, _records.Count)];
+
     /// <summary>セーブ復元・新規ゲーム用の全消去。</summary>
     public void Clear() => _records.Clear();
 

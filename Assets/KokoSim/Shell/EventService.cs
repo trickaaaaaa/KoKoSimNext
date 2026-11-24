@@ -179,6 +179,8 @@ namespace KokoSim.Unity.Shell
                         CastFilter = e => e.Cast.TryPick(RosterService.Active, CastIndex(), CaptainId(), out _, out _),
                         // 卒業式は、この年度末に卒業する3年生（夏に引退して名簿に残る者を含む）が居る年だけ（issue #1609）。
                         GraduatingClassFilter = () => RosterService.Roster.Any(p => p.Grade >= 3),
+                        // OB（卒業生）の居ない新設校では、OB会の寄付などOBが出てくる話を出さない（issue #1615）。
+                        ObFilter = () => RosterService.HasOb,
                     };
                 // 自校の地方（issue #616）。転校（新規ゲーム・転任）で変わるので毎回据える＝
                 // 一度きりの初期化にすると、県を変えて始めた進行に前の県のイベントが出る。
@@ -315,12 +317,13 @@ namespace KokoSim.Unity.Shell
             var values = BuildValues();
             if (!string.IsNullOrEmpty(subjectName)) values["player"] = subjectName;
             if (extra != null) foreach (var kv in extra) values[kv.Key] = kv.Value;
-            var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, salt, Rng(NovelPurpose));
+            var hasOb = RosterService.HasOb;
+            var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, salt, Rng(NovelPurpose), hasOb);
 
             _pending.Add(new PresentedEvent
             {
                 Id = e.Id,
-                FeedText = EventTextFormat.Apply(e.Text, values),
+                FeedText = EventTextFormat.Apply(e.TextFor(hasOb), values),
                 Lines = WithResult(ResolveLines(script, values), effect),
                 Effect = effect,
             });

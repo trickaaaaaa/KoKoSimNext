@@ -11,7 +11,7 @@ public enum ManagerGrowthEventType
     FamousRivalLesson,  // 名将との練習試合: 采配 or 指導力上昇（教えを乞う）
     LessonFromBigLoss,  // 大敗からの学び: 弱点分野の指導力上昇
     CoachingSeminar,    // 指導者講習会（オフ・費用と引き換え）
-    ProObVisit,         // プロOBの訪問: 采配・育成眼上昇
+    ProObVisit,         // 教え子（プロ入りした自分の教え子）の訪問: 采配・育成眼上昇
     MentorCoach,        // 名伯楽との出会い（稀）: 全分野ボーナス
 }
 
@@ -43,9 +43,17 @@ public sealed record ManagerGrowthCoefficients
 /// </summary>
 public static class ManagerGrowthEvents
 {
-    /// <summary>年次イベント判定。効果を Manager に適用し、発火一覧を返す。</summary>
+    /// <summary>
+    /// 年次イベント判定。効果を Manager に適用し、発火一覧を返す。
+    /// </summary>
+    /// <param name="hasProProtege">
+    /// 監督が直接育ててプロ入りした教え子（教え子名鑑・<see cref="Draft.DraftHistory"/>）が1人以上いるか（issue #1615）。
+    /// false なら教え子の訪問は起こさない。<b>乱数は今までどおり引いてから捨てる</b>＝引く回数を変えると
+    /// 後ろの名伯楽の抽選がずれる。既定 true＝名鑑を持たないキャリアシムは従来どおり（帯不変）。
+    /// </param>
     public static IReadOnlyList<ManagerGrowthNotice> Yearly(
-        Manager m, bool reachedKoshien, int wins, IRandomSource rng, ManagerGrowthCoefficients c)
+        Manager m, bool reachedKoshien, int wins, IRandomSource rng, ManagerGrowthCoefficients c,
+        bool hasProProtege = true)
     {
         var fired = new List<ManagerGrowthNotice>();
 
@@ -78,8 +86,9 @@ public static class ManagerGrowthEvents
             fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.CoachingSeminar, c.SeminarBoost));
         }
 
-        // プロOBの訪問（名声で微増）。
-        if (MathUtil.Chance(c.ProObVisitBaseProb + m.Fame * c.ProObVisitFameSlope, rng))
+        // 教え子（プロ入りした自分の教え子）の訪問（名声で微増）。教え子がいなければ起こさない（乱数は引く）。
+        var proVisitRoll = MathUtil.Chance(c.ProObVisitBaseProb + m.Fame * c.ProObVisitFameSlope, rng);
+        if (proVisitRoll && hasProProtege)
         {
             m.TalentEye = Math.Min(c.Cap, m.TalentEye + c.ProObVisitBoost);
             m.TacticalSense = Math.Min(c.Cap, m.TacticalSense + c.ProObVisitBoost * 0.5);

@@ -19,10 +19,13 @@ namespace KokoSim.Engine.Season.Events;
 ///     cooldown_weeks: 6
 ///     sets_annual_flag: foo
 ///     requires_not_annual_flag: foo
+///     requires_ob: true       # OB（野球部の卒業生）が居る学校でだけ出す（issue #1615）
+///     text_no_ob: "..."       # OB が居ない学校のフィード1行（省略＝text と同じ）
 ///     scene: ground           # ノベル画面の背景（issue #1516）。省略＝ground
 ///     text: "選手が練習中に故障した。"     # 通知フィード1行の要約
 ///     variants:                            # 会話まるごとN通り（無ければ text の1行だけ）
-///       - lines:
+///       - requires_ob: true                # この会話は OB が居る学校でだけ選ぶ（issue #1615）
+///         lines:
 ///           - who: player
 ///             say: "監督、すみません……足が。"
 ///           - who: manager
@@ -55,6 +58,9 @@ public static class EventTableParser
         string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null, region = null, scene = null;
         int? calendarWeek = null;
         var requiresGraduatingClass = false;
+        var requiresOb = false;
+        string? textNoOb = null;
+        var elemRequiresOb = false;
         double weight = 1.0;
         int cooldown = 4;
         // 効果（issue #613・#1270）。イベント直下の effects: はイベントの効果、outcomes: の要素の中は結果ごとの効果。
@@ -111,8 +117,9 @@ public static class EventTableParser
             }
             else if (currentLines is not null && currentLines.Count > 0)
             {
-                variants.Add(new EventScript(currentLines));
+                variants.Add(new EventScript(currentLines) { RequiresOb = elemRequiresOb });
             }
+            elemRequiresOb = false;
             currentLines = null;
             elemStance = null; elemImproved = null; elemLabel = null; elemImproveProb = null;
             elemEff = new EffectBuilder();
@@ -133,6 +140,8 @@ public static class EventTableParser
                 RequiresNotAnnualFlag = requiresNotFlag,
                 RequiresRegion = ParseRegion(region),
                 RequiresGraduatingClass = requiresGraduatingClass,
+                RequiresOb = requiresOb,
+                TextWithoutOb = textNoOb,
                 Scene = ParseScene(scene),
                 Text = text ?? "",
                 Variants = variants.ToArray(),
@@ -144,6 +153,8 @@ public static class EventTableParser
             id = kind = text = setsFlag = requiresNotFlag = region = scene = null;
             calendarWeek = null;
             requiresGraduatingClass = false;
+            requiresOb = false;
+            textNoOb = null;
             weight = 1.0;
             cooldown = 4;
             eff = new EffectBuilder();
@@ -223,6 +234,11 @@ public static class EventTableParser
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
                 case "requires_region": region = value.Length > 0 ? value : null; break;
                 case "requires_graduating_class": requiresGraduatingClass = value == "true"; break;
+                case "requires_ob":
+                    if (listKind == "variants" && elemOpen) elemRequiresOb = value == "true";
+                    else requiresOb = value == "true";
+                    break;
+                case "text_no_ob": textNoOb = value.Length > 0 ? value : null; break;
                 case "scene": scene = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
                 case "improve_prob": elemImproveProb = ParseDouble(value, 0.5); break;

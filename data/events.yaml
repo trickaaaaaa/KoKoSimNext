@@ -294,6 +294,7 @@ events:
     scene: clubroom
     weight: 1.0
     cooldown_weeks: 10
+    requires_ob: true      # OB（野球部の卒業生）が居ない新設校では出さない（issue #1615）
     text: "OB会から寄付があった。"
     effects:
       funds: 30            # 部費＝運営費の財布（道具・備品・合宿・スカウト）
@@ -339,7 +340,8 @@ events:
             say: "職員室に呼ばれると、後援会名義の書類が机に置いてあった。"
           - who: team_manager
             say: "部費に入れておきますね。道具にも設備にも使えます。"
-      - lines:
+      - requires_ob: true
+        lines:
           - who: team_manager
             say: "監督、OBの方からも寄付をいただきました。「室内が無いと、雪の日に何もできんでしょう」と。設備のこと、また相談しましょうね。"
 
@@ -379,7 +381,8 @@ events:
     effects:
       funds: 45
     variants:
-      - lines:
+      - requires_ob: true
+        lines:
           - who: team_manager
             say: "監督、地元企業の方が用具を届けてくださいました。社長さんがここのOBで、毎年やらせてもらっているそうです。"
           - who: manager
@@ -411,7 +414,8 @@ events:
             say: "いいね。日程を合わせよう。"
           - who: team_manager
             say: "はい。まず来月の第一週で。"
-      - lines:
+      - requires_ob: true
+        lines:
           - who: team_manager
             say: "監督、OBの方が、しばらく手伝わせてほしいそうです。現役の頃、ここで拾ってもらった恩があると。"
           - who: manager
@@ -1022,23 +1026,27 @@ events:
           - who: manager
             say: "もちろん。"
 
+  # プロ入りした自分の教え子（教え子名鑑）が訪ねてくる（issue #1615）。{player} は名鑑から選んだ教え子の名前。
+  # 名鑑が空の間は起こさない（ManagerGrowthEvents.Yearly の hasProProtege）。
   - id: mgr_pro_ob
     kind: System
     scene: office
-    text: "プロOBが訪ねてきた。"
+    text: "教え子の{player}が訪ねてきた。"
     variants:
       - lines:
           - who: team_manager
-            say: "監督、プロにいらしたOBの方が見えています。「この子ら、いい体になってきましたね」と。"
+            say: "監督、{player} さんが顔を出してくれました。プロの寮から直接来たそうです。"
           - who: manager
-            say: "どこを見てそう思う？　あとで教えてくれ。"
+            say: "あいつ、いい体になったな。"
           - who: team_manager
-            say: "お願いしたら、まず下半身だそうです。"
+            say: "後輩たちの振りを見て「下半身ですね」と。監督の口癖が移ってますよ。"
       - lines:
           - who: team_manager
-            say: "監督、プロだったOBの方が、「現役の頃は、こうやって見られる側だったんですけどね」と笑っていました。"
+            say: "監督、{player} さんが見えています。「プロの寮は静かで、ここの声が恋しくなりまして」と笑っていました。"
           - who: captain
-            say: "監督、あの人、本当にプロだった人ですか。"
+            say: "監督、あの人、本当にここで練習してたんですか。"
+          - who: manager
+            say: "ああ。誰よりも先にグラウンドへ来ていた。"
 
   - id: mgr_mentor
     kind: System
@@ -2112,35 +2120,54 @@ events:
     kind: System
     scene: clubroom
     text: "OB会と卒業生から{koshien}の激励金が届いた。"
+    text_no_ob: "保護者会と地元の人たちから{koshien}の激励金が届いた。"   # OB（卒業生）の居ない新設校（issue #1615）
     variants:
-      - lines:
+      - requires_ob: true
+        lines:
           - who: team_manager
             say: "監督、OBの方が封筒を届けてくださいました。「遠征も宿も金がかかるでしょう。同期で集めました」だそうです。"
           - who: manager
             say: "ありがたく使わせてもらう。"
           - who: team_manager
             say: "封筒、思ったより厚いですよ。数えるの手伝ってください。"
-      - lines:
+      - requires_ob: true
+        lines:
           - who: narration
             say: "部室の机に、名前の並んだ紙が一枚と封筒がいくつも積まれていた。卒業生の名簿だった。"
           - who: captain
             say: "……知らない先輩の名前ばっかりです。"
           - who: team_manager
             say: "この学校で三年やった人たちですね。全員。"
-      - lines:
+      - requires_ob: true
+        lines:
           - who: team_manager
             say: "監督、後援会長さんが、商店街からも出してくださるそうです。十七年前のあの夏のポスターを、まだ店に貼っているからと。"
           - who: captain
             say: "十七年も貼ってあるんですか。"
           - who: team_manager
             say: "今年、貼り替えるそうですよ。"
-      - lines:
+      - requires_ob: true
+        lines:
           - who: team_manager
             say: "監督、OBの方が封筒を置いていかれました。「私は補欠で終わりました。だから、行く奴の靴代くらいは出したい」と。"
           - who: manager
             say: "必ず選手に届ける。"
           - who: narration
             say: "封筒には、背番号も何も書かれていなかった。"
+      - lines:
+          - who: team_manager
+            say: "監督、保護者会の皆さんが、お金を持ち寄ってくださいました。「子どもたちの遠征代に」と。"
+          - who: manager
+            say: "ありがたく使わせてもらう。"
+          - who: team_manager
+            say: "地元の商店からも、お弁当の差し入れが届いてますよ。"
+      - lines:
+          - who: narration
+            say: "部室の机に、保護者の名前が並んだ紙と封筒が積まれていた。地元の人の名前も混じっている。"
+          - who: captain
+            say: "……うちの親の字が、いちばん雑です。"
+          - who: team_manager
+            say: "みなさん、今日のために少しずつ貯めてくださったんですよ。"
 
   # 秋季地区予選のブロックリーグ戦（issue #772）を通過したとき、マネージャーが知らせる（issue #1133）。
   # 呼び出し元（HomeState.DismissResult）が結果行（ブロック順位つき）を組む。通過のときだけ出る。
@@ -2215,15 +2242,18 @@ events:
     kind: System
     scene: clubroom
     text: "OB会と卒業生から{senbatsu}の激励金が届いた。"
+    text_no_ob: "保護者会と地元の人たちから{senbatsu}の激励金が届いた。"   # OB（卒業生）の居ない新設校（issue #1615）
     variants:
-      - lines:
+      - requires_ob: true
+        lines:
           - who: team_manager
             say: "監督、OBの方が「冬の遠征は寒いでしょう。少ないですが足しにしてください」と。"
           - who: manager
             say: "助かります。"
           - who: team_manager
             say: "毛布代も出そうですね、これは。"
-      - lines:
+      - requires_ob: true
+        lines:
           - who: narration
             say: "年明けの部室に、振込明細の束が届いていた。差出人は卒業生の会だった。"
           - who: captain
@@ -2237,6 +2267,13 @@ events:
             say: "もう貼ったんですか。"
           - who: team_manager
             say: "気が早いですよね。でも「毎年これくらいでちょうどいい」だそうです。"
+      - lines:
+          - who: team_manager
+            say: "監督、保護者会の皆さんが、{senbatsu}の遠征費にと集めてくださいました。"
+          - who: manager
+            say: "ありがたい。大事に使わせてもらう。"
+          - who: team_manager
+            say: "領収書の整理は、私がやっておきますね。"
 
   - id: senbatsu_draw
     kind: System

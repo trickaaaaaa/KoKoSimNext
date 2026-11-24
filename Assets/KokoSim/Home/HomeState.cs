@@ -308,9 +308,18 @@ namespace KokoSim.Unity.Home
                 },
             });
 
+            // 教え子の訪問（issue #1615）は、名鑑から選んだ訪ねてきた教え子を {player} に据える（名鑑が空なら engine が発火させない）。
+            var subjectName = KokoSim.Unity.Shell.ManagerService.Manager.Name;
+            if (lead == KokoSim.Engine.Career.ManagerGrowthEventType.ProObVisit)
+            {
+                var visitor = DraftService.History.PickVisitor(
+                    new Xoshiro256Random(GameSeed.Master ^ (0xA6A8_0000UL ^ (ulong)GameClock.YearIndex)));
+                if (visitor != null) subjectName = visitor.Name;
+            }
+
             KokoSim.Unity.Shell.EventService.Push(
                 ManagerGrowthText.EventId(lead),
-                KokoSim.Unity.Shell.ManagerService.Manager.Name,
+                subjectName,
                 ManagerGrowthText.Effect(delta));
         }
 

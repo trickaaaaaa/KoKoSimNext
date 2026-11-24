@@ -18,6 +18,12 @@ public sealed record EventLine(string Who, string Name, string Say);
 /// </summary>
 public sealed record EventScript(IReadOnlyList<EventLine> Lines)
 {
+    /// <summary>
+    /// OB（野球部の卒業生）が居る学校でだけ選ぶ会話か（issue #1615）。OB の居ない新設校では候補から外す。
+    /// 外しても残りの会話の数だけで引き直す＝OB が居る学校の抽選結果は変わらない。
+    /// </summary>
+    public bool RequiresOb { get; init; }
+
     /// <summary>1行だけの会話（旧 <c>text:</c> しか持たないイベントの後方互換）。</summary>
     public static EventScript Single(string who, string text) => new(new[] { new EventLine(who, "", text) });
 }
