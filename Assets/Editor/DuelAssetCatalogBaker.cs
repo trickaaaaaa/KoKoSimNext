@@ -169,11 +169,11 @@ namespace KokoSim.UnityEditorTools
                 go.name = fbx.name;
                 foreach (var r in go.GetComponentsInChildren<Renderer>(true))
                 {
-                    // 外すのは先頭の枠だけ。試合が差し替えるのは sharedMaterial（先頭）だけで、2つ目以降の枠
-                    // （頭部メッシュの2つ目のサブメッシュ＝素肌）は FBX のマテリアルのまま描かれている。
-                    // 全部外すと素肌がマゼンタ（マテリアル無し）になった（2026-11-23 ブラウザ版で実害）
+                    // 枠は全部外す。試合は全部の枠を自前の材質へ塗り替える（DuelStageRig.SpawnActor）。
+                    // 以前は先頭の枠だけ替えていて、2つ目（頭部メッシュの素肌＝手・腕）が FBX の URP Lit のまま
+                    // 描かれ、ブラウザ版で手が消えた（#1323・2026-11-24）。FBX の肌テクスチャもビルドに入らなくなる
                     var mats = r.sharedMaterials;
-                    if (mats.Length > 0) mats[0] = null;
+                    for (int i = 0; i < mats.Length; i++) mats[i] = null;
                     r.sharedMaterials = mats;
                 }
                 return PrefabUtility.SaveAsPrefabAsset(go, path);

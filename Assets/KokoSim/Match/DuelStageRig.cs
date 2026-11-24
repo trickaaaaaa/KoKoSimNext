@@ -4723,7 +4723,15 @@ namespace KokoSim.Unity.Match
             // UV1の領域IDで塗り分け、領域資産が揃わない時だけ肌色一色へ落とす
             var mat = regionReady ? RegionMaterial(pal) : FlatMaterial(pal.Skin);
             if (regionReady) ApplyRegionColors(mat, pal, scale);   // 縞の刻みはスケール確定後でないと合わない
-            foreach (var r in rs) r.sharedMaterial = mat;
+            // **全部の枠を塗り替える**。購入素体の頭部メッシュは2つ目のサブメッシュが手・腕の素肌で、
+            // 先頭の枠だけ替えると素肌は FBX 付属の URP Lit で描かれ、ブラウザ版（WebGL）では描かれずに
+            // 手が消えた（#1323・2026-11-24）。素肌のサブメッシュも領域ID＝肌を持つので同じ材質で描ける
+            foreach (var r in rs)
+            {
+                var slots = r.sharedMaterials;
+                for (int i = 0; i < slots.Length; i++) slots[i] = mat;
+                r.sharedMaterials = slots;
+            }
             foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
             {
                 if (tightBounds)
