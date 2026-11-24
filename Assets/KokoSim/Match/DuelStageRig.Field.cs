@@ -2859,6 +2859,41 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 【撮影用】外野手の送球の握り替え〜リリースの間の滑り（issue #1552）。毎コマ1行ぶんを返す。
+        /// <c>move</c> は engine の位置の「流し始め（TFire）→リリース」の水平移動[m]（0なら止まって投げている）、
+        /// <c>live</c> は送球クリップが実際に流れている間か、<c>root</c>/<c>lf</c>/<c>rf</c> はいま描かれている
+        /// 足元と両足首の stage-local の水平位置（足の地面に対する滑りを後から読む材料）。
+        /// </summary>
+        public string ThrowSlipDiagForCapture()
+        {
+            if (_fieldPlay == null) return "play=-";
+            for (int i = 0; i < _throwEvents.Count; i++)
+            {
+                var e = _throwEvents[i];
+                if (!IsOutfield(e.From)) continue;
+                var a = FielderActor(e.From);
+                if (a == null || a.Go == null) continue;
+                var p0 = PlaybackEvaluator.FielderAt(_fieldPlay, e.From, e.TFire).Pos;
+                var p1 = PlaybackEvaluator.FielderAt(_fieldPlay, e.From, e.TRelease).Pos;
+                float move = new Vector2((float)(p1.X - p0.X), (float)(p1.Y - p0.Y)).magnitude;
+                var root = StagePos(a);
+                Vector3 lf = Vector3.zero, rf = Vector3.zero;
+                if (a.Animator != null && _root != null)
+                {
+                    var l = a.Animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                    var r = a.Animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                    if (l != null) lf = _root.transform.InverseTransformPoint(l.position);
+                    if (r != null) rf = _root.transform.InverseTransformPoint(r.position);
+                }
+                bool live = e.Fired && _fieldT <= e.TRelease + ThrowFollowSeconds;
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0} fire={1:F3} rel={2:F3} rate={3:F2} move={4:F3} live={5} root={6:F3},{7:F3} lf={8:F3},{9:F3} rf={10:F3},{11:F3}",
+                    e.From, e.TFire, e.TRelease, e.Rate, move, live ? 1 : 0, root.x, root.z, lf.x, lf.z, rf.x, rf.z);
+            }
+            return "throw=-";
+        }
+
+        /// <summary>
         /// 【撮影ハーネス用】捕球の受け入れ実測。グラブ（手ボーン）と捕球点の距離。
         /// 捕手の実績は 0.007〜0.039m。**絵ではカメラの狙い外しと区別できない**ので実測で採る。
         /// </summary>
