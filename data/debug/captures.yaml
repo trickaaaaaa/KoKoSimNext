@@ -695,3 +695,26 @@ captures:
     view: panel
     size: {w: 1920, h: 1080}
     shots: [catch-0.5, catch, release+0.2, judgement]
+
+  # ── 守備ビューの塁審とランナーコーチ（issue #1595）。塁でアウト／際どいセーフのとき、その塁の塁審が判定の動きを出す ──
+  - id: base-umpire-1b-out-1595
+    name: "サードゴロの一塁アウトで一塁塁審がアウトのコール、コーチは立っているだけ（issue #1595）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.7]
+    video: {from: judgement-0.4, to: judgement+0.9, fps: 10}
+    probes: [BaseCrew]
+
+  - id: base-umpire-2b-steal-out-1595
+    name: "二盗失敗の二塁タッチアウトで二塁塁審がアウトのコール（issue #1595）"
+    scenario: steal-caught-lab
+    manager: home
+    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.7]
+    probes: [BaseCrew]
+
+  - id: base-umpire-hit-runner-1595
+    name: "左翼への打球で一塁走者が三塁へ向かう長打の場面。塁審・コーチが走者の邪魔にならず、判定の無い進塁で腕を出さない（issue #1595）"
+    scenario: of-grounder-runner-lf-lab
+    manager: home
+    shots: [start, catch, result, end]
+    probes: [BaseCrew]
