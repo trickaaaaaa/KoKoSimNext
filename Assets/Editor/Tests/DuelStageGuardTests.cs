@@ -537,6 +537,31 @@ namespace KokoSim.EditorTests
             Assert.That(rig.BattedOutOfFrame, Is.True);
         }
 
+        // ---- 守備ビューから戻った投手のルートモーション（2026-11-24 実害） ----
+
+        /// <summary>
+        /// 打球プレー（守備ビュー）を流して対決ビューへ戻したら、投手のルートモーションが入っていること。
+        /// 守備ビューは捕球・走りのために役者のルートモーションを切る。戻し忘れると、次の打席から投手の
+        /// 踏み込みと体の回転（リリース後に約150°）が抜け、セットの向き（三塁側）のまま横へ倒れ込んで投げる。
+        /// </summary>
+        [Test]
+        public void Pitcher_RootMotionIsBackOn_AfterFieldPlay()
+        {
+            var rig = Rig;
+            var pitcher = rig.ActorAnimatorForCapture(1);
+            Assert.That(pitcher, Is.Not.Null, "前提: 投手がいる");
+            Assert.That(pitcher.applyRootMotion, Is.True, "前提: 対決ビューの投手はルートモーションで踏み込む");
+
+            var play = RunThroughPlay(3.8, 4.98);
+            rig.BeginFieldPlay(play, 0f);
+            float step = 1f / DuelStageRig.PoseFps;
+            for (float t = 0f; t < 8.5f; t += step) rig.Tick(step);
+            rig.EndFieldPlay();
+
+            Assert.That(pitcher.applyRootMotion, Is.True,
+                "守備ビューから戻った投手のルートモーションが切れたまま＝次の打席から横を向いて投げる");
+        }
+
         // ---- 外野手が走りながら掬った後の送球（issue #1552） ----
 
         /// <summary>
