@@ -31,11 +31,13 @@ public sealed class PlayerSignsAndShiftTests
         Assert.Equal(AdvancePitchResult.PlateAppearance, prog.AdvancePitch());
         Assert.Equal(PlateAppearanceResult.Walk, prog.Current!.Result);
         Assert.True(prog.Current.BaseFirstAfter);
+        Assert.Empty(prog.Current.PitchSeq.Pitches);   // 申告敬遠＝敬遠ボールを描かない
 
         while (prog.Advance()) { }
         var r = prog.BuildResult();
         Assert.Equal(1, r.IntentionalWalkCount);
         Assert.Equal(0, r.Log[0].Pitches);
+        Assert.True(r.Log[0].IntentionalWalk);
     }
 
     /// <summary>カウントの途中で押しても、次の球を投げずにその打席を四球で終える（投げた球はそのまま数える）。</summary>

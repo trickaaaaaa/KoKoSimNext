@@ -165,11 +165,22 @@ public sealed record TrainingCoefficients
     /// <summary>倍率の上限（オーナー判断 2026-11-23：2.0→1.2→1.0＝上乗せしない。2.0 だと豪腕＋名将＋施設フルの3年で +31.9km/h、1.2 でも +29.6km/h）。</summary>
     public double PitcherSenseGrowthMax { get; init; } = 1.0;
 
-    /// <summary>投手センス（表示Lv）→投手系能力の経験値倍率。物差しは今の物差し（表示Lv＋Δ）で読む（issue #1080）。</summary>
-    public double PitcherSenseGrowthFactor(int pitcherSenseDisplay)
+    /// <summary>
+    /// 見出された選手（外部コーチ・<see cref="PitcherTalentStage.Discovered"/>）の投手系の経験値倍率（issue #1523）。
+    /// 通常の倍率（上限 <see cref="PitcherSenseGrowthMax"/>）の上限が外れ、これに置き換わる。見出されるのは見える投手能力が
+    /// 投手センスに追いついていない選手だけ＝すでに強い投手には起きず、強い投手の伸びの目標（3年 +15〜20km/h・テスト上限 +28）は動かない。
+    /// </summary>
+    public double PitcherAwakenedGrowthFactor { get; init; } = 2.0;
+
+    /// <summary>
+    /// 投手センス（表示Lv）→投手系能力の経験値倍率。物差しは今の物差し（表示Lv＋Δ）で読む（issue #1080）。
+    /// <paramref name="discovered"/>＝外部コーチに見出された選手（issue #1523）は <see cref="PitcherAwakenedGrowthFactor"/> を下限に持つ。
+    /// </summary>
+    public double PitcherSenseGrowthFactor(int pitcherSenseDisplay, bool discovered = false)
     {
         var f = 1.0 + (Players.AbilityScale.Phys(pitcherSenseDisplay) - PitcherSenseGrowthNeutral) * PitcherSenseGrowthSlope;
-        return Math.Max(PitcherSenseGrowthMin, Math.Min(PitcherSenseGrowthMax, f));
+        var normal = Math.Max(PitcherSenseGrowthMin, Math.Min(PitcherSenseGrowthMax, f));
+        return discovered ? Math.Max(normal, PitcherAwakenedGrowthFactor) : normal;
     }
 
     public double RequiredExp(int level) => LevelUpBase * Math.Pow(LevelUpGrowth, level);

@@ -101,6 +101,9 @@
     right: var(--sp-3);
     top: 50%;
     translate: 0 -50%;
+    /* 中央から少し下げる（2026-11-24 ユーザー指示）。下の投手の札の上辺には伝令の「制球↑」（.mhud-calm--pitcher）と
+       特殊能力の段が乗ることがあるので、その分の隙間は残す。 */
+    margin-top: 48px;
     display: none;
 }
 
@@ -345,6 +348,7 @@
     border-radius: 12px;
 }
 .tmo-back:hover { background-color: var(--sbk-rule-soft); }
+.tmo-ibb__no { margin-right: 16px; }
 
 /* ── 選手能力ビューア（issue #602 → #923・監督決定B案） ──
    タイムから開く名簿。左＝自校/相手をタブで切り替える一覧（行の右へ能力をランクチップで並べる）、

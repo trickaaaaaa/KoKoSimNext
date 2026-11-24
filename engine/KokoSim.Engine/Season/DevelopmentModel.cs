@@ -223,7 +223,7 @@ public static class DevelopmentModel
         if (p.IsProdigy) trainability = Math.Max(1.0, trainability);
         // 投手センス（issue #1472）: 投手系の能力だけ、打撃の才能とは独立に投手センスで伸びやすさが変わる。
         var sense = AbilityKinds.DomainOf(ability) == GrowthDomain.Pitching
-            ? c.PitcherSenseGrowthFactor(p.PitcherSense) : 1.0;
+            ? c.PitcherSenseGrowthFactor(p.PitcherSense, p.PitcherTalent == PitcherTalentStage.Discovered) : 1.0;
         p.AddExp(ability, delta * p.GrowthMultiplier(ability) * trainability * sense);
         while (p.Level(ability) < p.Cap(ability))
         {

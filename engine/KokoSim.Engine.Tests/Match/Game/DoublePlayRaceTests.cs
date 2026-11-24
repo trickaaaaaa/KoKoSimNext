@@ -99,6 +99,12 @@ public sealed class DoublePlayRaceTests
     private static bool SelfForceOutAt(System.Collections.Generic.IReadOnlyList<RunnerMove> moves, int toBase)
         => moves.Any(m => m.ToBase == toBase && m.Out && m.SelfForceDoublePlayLead);
 
+    /// <summary>標準の二塁封殺（feed+pivotタッチ）の RunnerMove か。二塁の自己フォース（issue #1549）は
+    /// 同じ FromBase=1/ToBase=2/Force=true の形を取る＝<see cref="ForceOutAtSecond"/>（構造だけの判定）
+    /// では区別できないため、SelfForceDoublePlayLead を除外して区別する（GameEngine の分岐と同じ判別式）。</summary>
+    private static bool StandardForceOutAtSecond(System.Collections.Generic.IReadOnlyList<RunnerMove> moves)
+        => moves.Any(m => m is { FromBase: 1, ToBase: 2, Out: true, Force: true } && !m.SelfForceDoublePlayLead);
+
     // ================= 係数束（純関数・rng不使用）=================
 
     [Fact]
@@ -1016,5 +1022,220 @@ public sealed class DoublePlayRaceTests
             Assert.False(FirstBaseTagOutAt(moves), "満塁・内野前進では一塁の自己フォース代替を選ばないはず");
             AssertRunnersConserved(4, bases, runs, (batterSafeOnFc ? 0 : 1) + extraOuts, $"試行{i}");
         }
+    }
+
+    // ================= 併殺の代替（二塁の自己フォース＝6-6-3/4-4-3, issue #1549） =================
+    // 遊撃手/二塁手が自打球を自分で二塁ベースへ運んで封殺（送球なし）→一塁へ自己送球。標準の二塁封殺
+    // （feed+pivotタッチ）と対象走者・対象塁は同じ一塁走者・二塁のまま＝「届き方」だけが違う比較になる。
+
+    /// <summary>この代替での打者の一塁生存見込み（判定モデルの pBatterSafe と同じ式。二段目は自己フォース専用の
+    /// 握り替え DoublePlaySelfForceRelayTransferSeconds を使う）。</summary>
+    private static double PBatterSafeSelfForceSecond(HomePlayContext home, HomePlayResolver.BasePlayParams force)
+    {
+        var arriveAtBase = SelfForceArriveAtBase(home, force.TargetPoint);
+        var selfForceSituation = new HomePlaySituation(
+            force.TargetPoint, arriveAtBase, home.Situation.OutfielderThrowSpeedMps, home.Situation.OutfielderFielding);
+        var relayToFirst = HomePlayResolver
+            .ResolveThrowPath(selfForceSituation, Field.FirstBase, C, transferSecondsOverride: C.DoublePlaySelfForceRelayTransferSeconds)
+            .ArriveAtSeconds + C.SecondForceTagSeconds;
+        var margin = relayToFirst - home.BatterToFirstSeconds!.Value + C.DoublePlayRelayBias;
+        return MathUtil.Clamp(MathUtil.Logistic(margin / C.DoublePlayRelayMarginScale), 0.01, 0.99);
+    }
+
+    [Fact]
+    public void SecondSelfForce_FielderAtSecondBase_Shortstop_SelectsSelfForceOverStandardRoute()
+    {
+        // 遊撃手の目の前（自打球点=二塁ベースそのもの）＝二塁の自己フォース（6-6-3）が標準の
+        // 二塁封殺（feed+pivotタッチ）より有利（握り替え分だけ速い）。
+        var home = Grounder(
+            x: Field.SecondBase.X, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.Shortstop);
+        var force2nd = HomePlayResolver.SecondForceParams(Field, C);
+        var pR1Safe2nd = PR1Safe(home, new Player { Speed = 50, Baserunning = 50 });
+        var pR1SafeSelf = PLeadSafe(home, new Player { Speed = 50, Baserunning = 50 }, fromBase: 1, force2nd);
+        Assert.True(pR1SafeSelf < pR1Safe2nd,
+            $"二塁の自己フォースが標準ルートより有利なはず: self={pR1SafeSelf:F4} < standard={pR1Safe2nd:F4}");
+
+        var rng = new Xoshiro256Random(1549);
+        int dp = 0, fc = 0;
+        for (var i = 0; i < 3000; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var batter = new Player();
+            var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r1, batter, rng, currentOuts: 0);
+            Assert.Equal(1, extraOuts);
+            Assert.True(SelfForceOutAt(moves, toBase: 2), "二塁での自己フォース RunnerMove が出るはず");
+            Assert.False(StandardForceOutAtSecond(moves), "標準の二塁封殺（feed+pivot）は起きないはず（代替が選ばれた）");
+            if (batterSafeOnFc) { fc++; Assert.Same(batter, bases.First); } else { dp++; Assert.Null(bases.First); Assert.Null(bases.Second); }
+        }
+        Assert.True(dp + fc == 3000 && dp > 0 && fc > 0, $"二塁の自己フォースでも併殺/野選が出るはず（DP={dp}, FC={fc}）");
+    }
+
+    [Fact]
+    public void SecondSelfForce_FielderAtSecondBase_SecondBaseman_SelectsSelfForceOverStandardRoute()
+    {
+        // 二塁手の目の前（自打球点=二塁ベースそのもの）＝4-4-3 も同じ流儀で選ばれるはず。
+        var home = Grounder(
+            x: Field.SecondBase.X, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.SecondBase);
+        var rng = new Xoshiro256Random(1550);
+        int dp = 0, fc = 0;
+        for (var i = 0; i < 3000; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var batter = new Player();
+            var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r1, batter, rng, currentOuts: 0);
+            Assert.Equal(1, extraOuts);
+            Assert.True(SelfForceOutAt(moves, toBase: 2), "二塁での自己フォース RunnerMove が出るはず");
+            Assert.False(StandardForceOutAtSecond(moves));
+            if (batterSafeOnFc) { fc++; Assert.Same(batter, bases.First); } else { dp++; Assert.Null(bases.First); Assert.Null(bases.Second); }
+        }
+        Assert.True(dp + fc == 3000 && dp > 0 && fc > 0, $"4-4-3 でも併殺/野選が出るはず（DP={dp}, FC={fc}）");
+    }
+
+    [Fact]
+    public void SecondSelfForce_FarFromSecondBase_FallsBackToStandardRoute()
+    {
+        // 二遊間の深いゴロ（捕球点が二塁から遠い）は、標準の二塁封殺（送球）のほうが自己フォース（自分の脚）
+        // より速い＝代替は選ばれず今日どおりに落ちる（issue本文「二塁ベースから遠いゴロは、比較で自然に
+        // 今のルートへ落ちる」）。
+        var home = Grounder(x: -15, z: 20, fieldedAt: 1.9, batterToFirst: 4.20, arm: 55, fielderRole: FieldPosition.Shortstop);
+        var force2nd = HomePlayResolver.SecondForceParams(Field, C);
+        var pR1Safe2nd = PR1Safe(home, new Player { Speed = 50, Baserunning = 50 });
+        var pR1SafeSelf = PLeadSafe(home, new Player { Speed = 50, Baserunning = 50 }, fromBase: 1, force2nd);
+        Assert.True(pR1SafeSelf > pR1Safe2nd, "この捕球点では標準ルートのほうが有利なはず（二塁は遠い）");
+
+        var rng = new Xoshiro256Random(1551);
+        for (var i = 0; i < 200; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var (_, _, _, moves) = RunOnce(home, r1, new Player(), rng);
+            Assert.False(SelfForceOutAt(moves, toBase: 2), "この捕球点では二塁の自己フォースは選ばれないはず");
+        }
+    }
+
+    [Fact]
+    public void SecondSelfForce_RequiresExactFielderRoleMatch_FallsBackForOtherPositions()
+    {
+        // 同じ捕球点（二塁ベースそのもの）でも FielderRole が遊撃手/二塁手でなければ（例: 三塁手の
+        // 中継プレー等）ゲート不成立＝代替を検討しない。
+        var home = Grounder(
+            x: Field.SecondBase.X, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.ThirdBase);
+        var rng = new Xoshiro256Random(1552);
+        for (var i = 0; i < 50; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var (_, _, _, moves) = RunOnce(home, r1, new Player(), rng);
+            Assert.False(SelfForceOutAt(moves, toBase: 2), "三塁手処理では二塁の自己フォースのゲートは成立しないはず");
+        }
+    }
+
+    [Fact]
+    public void SecondSelfForce_FielderFartherFromSecondBase_RaisesLeadRunnerSafety()
+    {
+        // issue #1273 と同じ流儀: 二塁から離れるほど自分の脚（SelfForceFielderSprintSpeedMps）で走る時間が
+        // 伸び、一塁走者の生存見込み（自己フォースされにくさ）が単調に上がるはず。
+        var r1 = new Player { Speed = 50, Baserunning = 50 };
+        var force2nd = HomePlayResolver.SecondForceParams(Field, C);
+        var probs = new System.Collections.Generic.List<double>();
+        foreach (var offset in new[] { 0.0, 1.0, 2.0, 3.0, 4.0 })
+        {
+            var home = Grounder(x: Field.SecondBase.X + offset, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+                fielderRole: FieldPosition.Shortstop);
+            probs.Add(PLeadSafe(home, r1, fromBase: 1, force2nd));
+        }
+        for (var i = 1; i < probs.Count; i++)
+            Assert.True(probs[i] > probs[i - 1],
+                $"二塁から離れるほど一塁走者の生存見込みが上がるはず: {string.Join(",", probs.Select(p => p.ToString("F4")))}");
+    }
+
+    [Fact]
+    public void SecondSelfForce_FasterFielderSprintSpeed_LowersLeadRunnerSafety()
+    {
+        // 処理野手の走力（SelfForceSprintSpeedMps）そのものを直接振る＝#1273 の再発防止（距離だけでなく
+        // 脚力そのものが効くこと）。速いほど二塁へ早く到達し、一塁走者が自己フォースを免れる見込みは下がる。
+        var baseHome = Grounder(x: Field.SecondBase.X + 2.0, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.Shortstop);
+        var r1 = new Player { Speed = 50, Baserunning = 50 };
+        var force2nd = HomePlayResolver.SecondForceParams(Field, C);
+        var slow = PLeadSafe(baseHome with { SelfForceSprintSpeedMps = 6.0 }, r1, fromBase: 1, force2nd);
+        var fast = PLeadSafe(baseHome with { SelfForceSprintSpeedMps = 9.0 }, r1, fromBase: 1, force2nd);
+        Assert.True(fast < slow, $"足の速い野手のほうが一塁走者を自己フォースしやすいはず: fast={fast:F4} < slow={slow:F4}");
+    }
+
+    [Fact]
+    public void SecondSelfForce_StrongerFielderArm_LowersBatterSafeAtFirst()
+    {
+        // 二段目（二塁→一塁の自己送球）の肩が強いほど、打者が一塁で生存（野選）する見込みは下がるはず
+        // （Order_StrongerPivotArm_LowersBatterSafeAtFirst の自己フォース版）。
+        // batterToFirst は自己フォースの二段目（二塁→一塁、握り替え無しで肩だけ）が決着する域に合わせる
+        // （標準ルートの PBatterSafe とは分母のオーバーヘッドが違うため同じ 4.45 だと天井/床に飽和する）。
+        var home = Grounder(
+            x: Field.SecondBase.X, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 3.0,
+            fielderRole: FieldPosition.Shortstop);
+        var force2nd = HomePlayResolver.SecondForceParams(Field, C);
+        var weak = PBatterSafeSelfForceSecond(home with { Situation = home.Situation with { OutfielderThrowSpeedMps = 25.0 } }, force2nd);
+        var strong = PBatterSafeSelfForceSecond(home with { Situation = home.Situation with { OutfielderThrowSpeedMps = 35.0 } }, force2nd);
+        Assert.True(strong < weak, $"肩が強いほうが打者生存(野選)しにくいはず: strong={strong:F4} < weak={weak:F4}");
+    }
+
+    [Fact]
+    public void SecondSelfForce_ProducesForceTrueAndSelfForceDoublePlayLead_SameMove()
+    {
+        // GameEngine のタイムライン分岐（SelfForceDoublePlayLead を Force より先に見る）が正しく機能する前提:
+        // 二塁の自己フォースの move は標準ルートと同じ Force=true かつ SelfForceDoublePlayLead=true を両方持つ。
+        var home = Grounder(
+            x: Field.SecondBase.X, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.Shortstop);
+        var (_, _, _, moves) = RunOnce(home, new Player { Speed = 50, Baserunning = 50 }, new Player(), new Xoshiro256Random(1553), currentOuts: 0);
+        var m = Assert.Single(moves, m => m is { FromBase: 1, ToBase: 2, Out: true });
+        Assert.True(m.Force);
+        Assert.True(m.SelfForceDoublePlayLead);
+    }
+
+    [Fact]
+    public void SecondSelfForce_WithRunnerOnSecond_RunnersConservedAndCascadeAdvancesForcedRunner()
+    {
+        // 一・二塁の場面。二塁走者(r2)は一塁走者(r1)が自己フォースされるかどうかに関わらず、一塁走者が
+        // 一塁から出る以上フォースで三塁へ押し出される（r2Forced）。走者保存則（PR #1076 と同種の確認）。
+        var home = Grounder(
+            x: Field.SecondBase.X, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.Shortstop);
+        var rng = new Xoshiro256Random(1554);
+        for (var i = 0; i < 1000; i++)
+        {
+            var r1 = new Player { Speed = 50, Baserunning = 50 };
+            var r2 = new Player { Speed = 50, Baserunning = 50 };
+            var bases = new BaseState { First = r1, Second = r2 };
+            var (runs, extraOuts, _, batterSafeOnFc, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, home);
+            AssertRunnersConserved(3, bases, runs, (batterSafeOnFc ? 0 : 1) + extraOuts, $"試行{i}");
+            Assert.Same(r2, bases.Third); // 一塁走者が自己フォースされてもセーフでも、二塁走者は必ず三塁へ
+            Assert.Equal(1, moves.Count(m => ReferenceEquals(m.Runner, r1)));
+            Assert.Equal(1, moves.Count(m => ReferenceEquals(m.Runner, r2)));
+        }
+    }
+
+    [Fact]
+    public void SecondSelfForce_Deterministic_SameSeedSameResult()
+    {
+        var home = Grounder(
+            x: Field.SecondBase.X, z: Field.SecondBase.Z, fieldedAt: 1.3, batterToFirst: 4.60,
+            fielderRole: FieldPosition.Shortstop);
+        int Count(ulong seed)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var dp = 0;
+            for (var i = 0; i < 500; i++)
+            {
+                var r1 = new Player { Speed = 50, Baserunning = 50 };
+                var (_, _, batterSafeOnFc, moves) = RunOnce(home, r1, new Player(), rng);
+                if (!batterSafeOnFc && SelfForceOutAt(moves, toBase: 2)) dp++;
+            }
+            return dp;
+        }
+        Assert.Equal(Count(42), Count(42));
+        Assert.True(Count(42) > 0, "この設定では二塁代替の併殺が出るはず");
     }
 }

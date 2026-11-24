@@ -75,6 +75,13 @@ namespace KokoSim.Unity.Debugging
         /// cards と組むときは 01-window の直後・カードを押す前に回す。単独なら 01-window と呼び出しの絵だけ撮って終わる。
         /// </summary>
         public List<string> WindowCalls;
+        /// <summary>window_calls／cards を始める采配窓の「その打席の何球目」（既定 1＝打席の頭）。2以上はカウントの途中で止める（issue #1563）。</summary>
+        public int WindowPitch = 1;
+        /// <summary>
+        /// window_calls を回し終えたあと、止めを解いてこの秒数だけ流し、「03-after」と各コマの状態（window-after.txt）を撮る（issue #1563。0＝流さない）。
+        /// 申告敬遠で「投げずに歩く」ことを、各コマの打席の球数・描画中の球で確かめる用。
+        /// </summary>
+        public float WindowAfterSeconds;
         /// <summary>見比べ用の切り替え（"DuelStageRig.Xxx": 値）。終わったら元へ戻す。</summary>
         public Dictionary<string, string> Overrides = new Dictionary<string, string>();
     }
@@ -212,6 +219,8 @@ namespace KokoSim.Unity.Debugging
                 case "overrides": r.Overrides = FlowMap(v); return r.Overrides != null;
                 case "cards": r.Cards = FlowSeq(v); return r.Cards != null && r.Cards.Count > 0;
                 case "window_calls": r.WindowCalls = FlowSeq(v); return r.WindowCalls != null && r.WindowCalls.Count > 0;
+                case "window_pitch": return int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out r.WindowPitch) && r.WindowPitch >= 1;
+                case "window_after": return TryFloat(v, out r.WindowAfterSeconds) && r.WindowAfterSeconds >= 0f;
                 case "cards_after": return TryFloat(v, out r.CardsAfterSeconds) && r.CardsAfterSeconds >= 0f;
                 default: return false;
             }

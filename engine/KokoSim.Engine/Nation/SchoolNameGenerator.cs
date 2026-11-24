@@ -22,9 +22,16 @@ public sealed record SchoolNameVocab
     /// <summary>
     /// 出さない私立の名前（語幹＋接尾。「高校」は付けない。issue #1320）。実在校のブランド名
     /// （明徳義塾・常翔学園 等）が架空の学校として出ないようにする。当たったら乱数を引き直さず接尾を隣へずらす
-    /// （<see cref="SchoolNameGenerator.Generate"/>）。公立の「地名＋特徴語」は一般的な形なので対象外（ユーザー決定）。
+    /// （<see cref="SchoolNameGenerator.Generate"/>）。公立は <see cref="ExcludedPublicNames"/>。
     /// </summary>
     public IReadOnlyCollection<string> ExcludedPrivateNames { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// 出さない公立の名前（地名＋特徴語。「高校」は付けない。issue #1470）。実在校名（札幌東・仙台第一 等）との完全一致を避ける。
+    /// 当たったら乱数を引き直さず特徴語を隣へずらす。一覧は実在校名の全国リスト（非公開側）と語彙を照合する
+    /// <c>tools/check-real-school-names.py</c> が出す。
+    /// </summary>
+    public IReadOnlyCollection<string> ExcludedPublicNames { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>校名ジェネレータ。公立=地名＋特徴、私立=語幹＋接尾。乱数は注入（決定論）。</summary>
@@ -50,7 +57,7 @@ public static class SchoolNameGenerator
             // 県別地名 → 無ければ共有地名。リスト選択は乱数を消費しない（Pick が1ドロー消費）。
             var places = PlacesFor(v, prefId);
             var place = Pick(places, rng);
-            var suffix = AvoidRepeat(place, v.PublicSuffixes, PickIndex(v.PublicSuffixes, rng));
+            var suffix = AvoidRepeat(place, v.PublicSuffixes, PickIndex(v.PublicSuffixes, rng), v.ExcludedPublicNames);
             return (place + suffix + "高校", Establishment.Public);
         }
     }
@@ -80,11 +87,20 @@ public static class SchoolNameGenerator
 
     /// <summary>
     /// 引いた接尾が地名と字が重なるなら、<b>乱数を使わずに</b>接尾を隣へずらす（全部重なる異常時は引いたまま）。
+    /// 実在校名（<paramref name="excluded"/>）に当たる組み合わせも同じ要領で避ける（全部当たるなら重なりだけを避ける）。
     /// ドロー数は変わらない＝重ならなかった学校の名前も、強さ・名声・校風の生成列も変わらない。
     /// </summary>
-    private static string AvoidRepeat(string place, IReadOnlyList<string> suffixes, int index)
+    private static string AvoidRepeat(string place, IReadOnlyList<string> suffixes, int index, IReadOnlyCollection<string> excluded)
     {
         if (index < 0) return "";
+        if (excluded.Count > 0)
+        {
+            for (var d = 0; d < suffixes.Count; d++)
+            {
+                var s = suffixes[(index + d) % suffixes.Count];
+                if (!RepeatsCharacters(place, s) && !excluded.Contains(place + s)) return s;
+            }
+        }
         for (var d = 0; d < suffixes.Count; d++)
         {
             var s = suffixes[(index + d) % suffixes.Count];

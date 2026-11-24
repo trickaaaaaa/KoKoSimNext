@@ -108,7 +108,16 @@ public class PitchSequenceSynthesizerTests
     }
 
     [Fact]
-    public void Synthesize_IntentionalWalk_ZeroPitches_ShowsFourBalls()
+    public void Synthesize_IntentionalWalk_ZeroPitches_ShowsNoPitches()
+    {
+        var seed = PitchSequenceSynthesizer.SeedFrom(1, 1, true, 0, PlateAppearanceResult.Walk);
+        var seq = PitchSequenceSynthesizer.Synthesize(PlateAppearanceResult.Walk, 0, seed, intentionalWalk: true);
+        Assert.Empty(seq.Pitches);
+    }
+
+    /// <summary>申告敬遠の印が無い四球（場面注入など）は、投球0でも従来どおり4球の四球として合成する。</summary>
+    [Fact]
+    public void Synthesize_PlainWalk_ZeroPitches_StillShowsFourBalls()
     {
         var seed = PitchSequenceSynthesizer.SeedFrom(1, 1, true, 0, PlateAppearanceResult.Walk);
         var seq = PitchSequenceSynthesizer.Synthesize(PlateAppearanceResult.Walk, 0, seed);

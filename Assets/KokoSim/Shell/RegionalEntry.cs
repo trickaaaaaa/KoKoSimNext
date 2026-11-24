@@ -108,7 +108,7 @@ namespace KokoSim.Unity.Shell
             {
                 // 自校は出場しない＝観戦もせず同期で解決し、そのまま神宮の判定へ渡す。
                 var runner = TournamentRunner.Spectated(field, NationCoeff, new Xoshiro256Random(seed),
-                    TournamentEntry.Schedule, title);
+                    TournamentEntry.Schedule, title, thirdPlaceMatch: ThirdPlaceRule.AppliesTo(TournamentKind.Regional));
                 runner.DrainBracketResolution();
                 var byId = field.ToDictionary(s => s.Id);
                 var placement = KnockoutPlacement.FromMatches(runner.BuildBracketView().Matches, id => byId[id])
@@ -123,7 +123,8 @@ namespace KokoSim.Unity.Shell
             var playerRunner = new TournamentRunner(
                 field, manager, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule,
                 title, new PlayerMatchResolver(), TournamentEntry.BackgroundResolverFor(TournamentKind.Regional, yearIndex),
-                onBackgroundMatch: TournamentEntry.FoldBackgroundMatch);
+                onBackgroundMatch: TournamentEntry.FoldBackgroundMatch,
+                thirdPlaceMatch: ThirdPlaceRule.AppliesTo(TournamentKind.Regional));
             GameSession.Current.EnterTournament(TournamentKind.Regional, title, playerRunner, field);
             GameSession.Current.Year = yearIndex;
             return true;

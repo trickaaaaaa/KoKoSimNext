@@ -53,6 +53,11 @@ namespace KokoSim.Unity.Match
         /// <summary>この中断で既に伝令を送ったか。</summary>
         public bool TimeoutSent;
 
+        /// <summary>「申告敬遠」を出すか（自校が守備のときだけ）。</summary>
+        public bool IntentionalWalkVisible;
+        /// <summary>「申告敬遠」を押せるか（打席の途中で、次の1球を投げる前）。伝令の回数とは無関係。</summary>
+        public bool IntentionalWalkEnabled;
+
         /// <summary>選手交代・選手能力・スキップを押せるか（打席の解決中は伏せる）。</summary>
         public bool ActionsEnabled = true;
 

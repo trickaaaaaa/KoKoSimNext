@@ -35,7 +35,7 @@ public static class OtherDistrictSim
 
         var games = new List<OtherDistrictGame>();
         var runner = TournamentRunner.Spectated(entrants, coeff, rng, schedule, title, resolver,
-            onBackgroundMatch: (a, h, g) => games.Add(new OtherDistrictGame(a, h, g)));
+            onBackgroundMatch: (a, h, g) => games.Add(new OtherDistrictGame(a, h, g)), thirdPlaceMatch: true);
         runner.DrainBracketResolution();
 
         var byId = entrants.ToDictionary(s => s.Id);

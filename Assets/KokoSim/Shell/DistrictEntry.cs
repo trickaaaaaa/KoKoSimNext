@@ -68,7 +68,8 @@ namespace KokoSim.Unity.Shell
             if (field.All(s => s.Id != manager.Id))
             {
                 var spectated = TournamentRunner.Spectated(
-                    field, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule, title);
+                    field, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule, title,
+                    thirdPlaceMatch: ThirdPlaceRule.AppliesTo(TournamentKind.Autumn));
                 spectated.DrainBracketResolution();
                 var byId = field.ToDictionary(s => s.Id);
                 var placementIds = KnockoutPlacement.FromMatches(spectated.BuildBracketView().Matches, id => byId[id])
@@ -84,7 +85,8 @@ namespace KokoSim.Unity.Shell
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed),
                 TournamentEntry.Schedule, title, new PlayerMatchResolver(),
                 TournamentEntry.BackgroundResolverFor(TournamentKind.Autumn, yearIndex),
-                onBackgroundMatch: TournamentEntry.FoldBackgroundMatch);
+                onBackgroundMatch: TournamentEntry.FoldBackgroundMatch,
+                thirdPlaceMatch: ThirdPlaceRule.AppliesTo(TournamentKind.Autumn));
             GameSession.Current.EnterTournament(TournamentKind.Autumn, title, runner, field);
             GameSession.Current.Year = yearIndex;
             return true;

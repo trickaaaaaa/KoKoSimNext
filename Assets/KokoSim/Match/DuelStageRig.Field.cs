@@ -2858,6 +2858,49 @@ namespace KokoSim.Unity.Match
                 p.y, _ball.activeInHierarchy, _ballShadow != null && _ballShadow.activeSelf, glove);
         }
 
+        /// <summary>EditMode テスト用: 組んだ送球の予定（投げ手・流し始め・リリース）。</summary>
+        internal (FieldPosition From, float TFire, float TRelease)[] ThrowPlanForTest()
+        {
+            var r = new (FieldPosition, float, float)[_throwEvents.Count];
+            for (int i = 0; i < r.Length; i++) r[i] = (_throwEvents[i].From, _throwEvents[i].TFire, _throwEvents[i].TRelease);
+            return r;
+        }
+
+        /// <summary>
+        /// 【撮影用】外野手の送球の握り替え〜リリースの間の滑り（issue #1552）。毎コマ1行ぶんを返す。
+        /// <c>move</c> は engine の位置の「流し始め（TFire）→リリース」の水平移動[m]（0なら止まって投げている）、
+        /// <c>live</c> は送球クリップが実際に流れている間か、<c>root</c>/<c>lf</c>/<c>rf</c> はいま描かれている
+        /// 足元と両足首の stage-local の水平位置（足の地面に対する滑りを後から読む材料）。
+        /// </summary>
+        public string ThrowSlipDiagForCapture()
+        {
+            if (_fieldPlay == null) return "play=-";
+            for (int i = 0; i < _throwEvents.Count; i++)
+            {
+                var e = _throwEvents[i];
+                if (!IsOutfield(e.From)) continue;
+                var a = FielderActor(e.From);
+                if (a == null || a.Go == null) continue;
+                var p0 = PlaybackEvaluator.FielderAt(_fieldPlay, e.From, e.TFire).Pos;
+                var p1 = PlaybackEvaluator.FielderAt(_fieldPlay, e.From, e.TRelease).Pos;
+                float move = new Vector2((float)(p1.X - p0.X), (float)(p1.Y - p0.Y)).magnitude;
+                var root = StagePos(a);
+                Vector3 lf = Vector3.zero, rf = Vector3.zero;
+                if (a.Animator != null && _root != null)
+                {
+                    var l = a.Animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                    var r = a.Animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                    if (l != null) lf = _root.transform.InverseTransformPoint(l.position);
+                    if (r != null) rf = _root.transform.InverseTransformPoint(r.position);
+                }
+                bool live = e.Fired && _fieldT <= e.TRelease + ThrowFollowSeconds;
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0} fire={1:F3} rel={2:F3} rate={3:F2} move={4:F3} live={5} root={6:F3},{7:F3} lf={8:F3},{9:F3} rf={10:F3},{11:F3}",
+                    e.From, e.TFire, e.TRelease, e.Rate, move, live ? 1 : 0, root.x, root.z, lf.x, lf.z, rf.x, rf.z);
+            }
+            return "throw=-";
+        }
+
         /// <summary>
         /// 【撮影ハーネス用】捕球の受け入れ実測。グラブ（手ボーン）と捕球点の距離。
         /// 捕手の実績は 0.007〜0.039m。**絵ではカメラの狙い外しと区別できない**ので実測で採る。
@@ -3162,7 +3205,7 @@ namespace KokoSim.Unity.Match
             // ⚠ 捕ってからでないと投げられない。ただし**アンカーの側は動かさない**＝
             //    頭出し量を増やして（クリップの頭を捨てて）リリースの時刻を守る。
             //    ここで tStart 自体を持ち上げると球が手を離れる時刻がずれる
-            float tFire = Mathf.Max(tStart, CatchTimeOf(who, tr));
+            float tFire = Mathf.Max(tStart, ThrowFloorOf(play, who, tr));
             float rate = 1f;
 
             // 捕手の握り替え圧縮（監督決定 2026-08-05・issue #485）: 収録のリリースは捕球から 1.16s だが、
@@ -3189,7 +3232,8 @@ namespace KokoSim.Unity.Match
                 // （engine の握り替え＋もたつきが守備で強く縮む）。収録のリリース（0.76s／深い位置 1.36s）より
                 // 窓が短いと、頭を切って「捕った姿勢から投げる途中へ飛ぶ」。捕手と同じく一様に速回しして収める
                 // ＝機敏な野手ほど投げる動作そのものも速く見える。倍率は上限で切り、足りない分だけ頭を捨てる。
-                float catchAt = CatchTimeOf(who, tr);
+                // 走りながら掬った外野手は、運びが止まってから投げる（足を据えた収録が地面を滑らない。issue #1552）
+                float catchAt = ThrowFloorOf(play, who, tr);
                 float window = tr - catchAt;
                 if (catchAt > 0f && window > 1e-3f && window < an.Release)
                 {
@@ -3380,6 +3424,24 @@ namespace KokoSim.Unity.Match
             foreach (var e in _catchEvents)
                 if (e.Pos == pos && e.TCatch <= beforeT + 1e-4f && e.TCatch > t) t = e.TCatch;
             return t;
+        }
+
+        /// <summary>
+        /// その野手が送球を流し始められる最も早い時刻。通常は捕球の時刻。走りながら掬った外野ゴロ（engine が捕球の後に
+        /// <see cref="MoveProfile.RunOut"/> で数歩運ぶ）は、その運びが終わる時刻（issue #1552）。
+        /// 送球の収録は足を据えた投げ方なので、engine の位置が動いている間に流すと体が地面を滑る。
+        /// </summary>
+        private float ThrowFloorOf(PlaybackPlay play, FieldPosition who, float beforeT)
+        {
+            float catchAt = CatchTimeOf(who, beforeT);
+            if (catchAt <= 0f || play?.Moves == null) return catchAt;
+            IReadOnlyList<PlaybackMove> segs;
+            if (!play.Moves.TryGetValue(who, out segs) || segs == null) return catchAt;
+            float floor = catchAt;
+            foreach (var m in segs)
+                if (m.Profile == MoveProfile.RunOut && Mathf.Abs((float)m.T0 - catchAt) < 0.05f && (float)m.T1 <= beforeT + 1e-4f)
+                    floor = Mathf.Max(floor, (float)m.T1);
+            return floor;
         }
 
         /// <summary>投球が捕手へ着く時刻＝投球セグメントの終端（無ければ 0）。捕手の握り替え圧縮

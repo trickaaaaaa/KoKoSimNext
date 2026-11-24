@@ -62,10 +62,14 @@ public static class PitchSequenceSynthesizer
     /// <summary>
     /// 結果 result・総投球数 pitchCount・独立シード seed から投球列を合成する。
     /// pitchCount は結果ごとの最小球数（K=3/BB=4/インプレー=1）を下限に丸める
-    /// （申告敬遠 pitchCount=0 → 4球の敬遠ボールとして見せる）。途中で 3ストライク/4ボールに達しない。
+    /// 途中で 3ストライク/4ボールに達しない。申告敬遠（<paramref name="intentionalWalk"/>）で1球も投げていない打席は
+    /// 空の列（敬遠ボールを描かない＝打者がそのまま一塁へ歩く）。
     /// </summary>
-    public static PitchSequence Synthesize(PlateAppearanceResult result, int pitchCount, ulong seed)
+    public static PitchSequence Synthesize(PlateAppearanceResult result, int pitchCount, ulong seed, bool intentionalWalk = false)
     {
+        if (intentionalWalk && result == PlateAppearanceResult.Walk && pitchCount == 0)
+            return PitchSequence.Empty;
+
         var min = result switch
         {
             PlateAppearanceResult.Strikeout => 3,

@@ -100,6 +100,9 @@ namespace KokoSim.Unity.Components
         private Vector2 _center;
         private float _s = 1f;
         private bool _ready;
+        // 札の実寸と、札の中で列の真上に来るべき x。一度確定したら固定する（SetData で破棄）。
+        private List<Vector2> _sizes;
+        private List<float> _focus;
 
         public PitchChartView(VisualElement host, bool compact = false)
         {
@@ -120,6 +123,8 @@ namespace KokoSim.Unity.Components
             _velos.Clear();
             _pitches.Clear();
             _ready = false;
+            _sizes = null;
+            _focus = null;
             var has = pitches != null && pitches.Count > 0;
             if (_host != null) _host.style.display = has ? DisplayStyle.Flex : DisplayStyle.None;
             if (!has) { _host?.MarkDirtyRepaint(); return; }
@@ -164,7 +169,7 @@ namespace KokoSim.Unity.Components
                     chip.Add(UiComponents.RankChip(pt.Kire, RankChipSize.Small));
                 }
                 // 札の実寸が確定したら置き直す（ホスト寸法が変わらない差し替えでは host 側の event が来ない）。
-                chip.RegisterCallback<GeometryChangedEvent>(_ => Layout());
+                chip.RegisterCallback<GeometryChangedEvent>(_ => { if (_sizes == null) Layout(); });
                 _host.Add(chip);
                 _chips.Add(chip);
                 _velos.Add(velo);
@@ -205,19 +210,36 @@ namespace KokoSim.Unity.Components
             if (rect.width < 40f || rect.height < 40f) return;
 
             // 札の実寸（位置によらない）。どれか1枚でも未確定なら、確定後の GeometryChangedEvent でやり直す。
-            var sizes = new List<Vector2>(_chips.Count);
-            var focus = new List<float>(_chips.Count);   // 札の中で列の真上に来るべき x（無ければ NaN＝札の中央）
-            var sizesReady = true;
-            for (var i = 0; i < _chips.Count; i++)
+            // 確定したら幅を固定して以後は測り直さない（札の幅が置き場所＝左端の小数で揺れ、置き直しが毎フレーム続いた。issue #1532）。
+            var sizes = _sizes;
+            var focus = _focus;
+            var sizesReady = sizes != null;
+            if (!sizesReady)
             {
-                var chip = _chips[i];
-                var w = chip.resolvedStyle.width;
-                var h = chip.resolvedStyle.height;
-                if (float.IsNaN(w) || float.IsNaN(h) || w < 1f || h < 1f) { sizesReady = false; w = 0f; h = 0f; }
-                sizes.Add(new Vector2(w, h));
-                var v = _velos[i];
-                var vx = v != null ? v.layout.x + v.layout.width * 0.5f : float.NaN;
-                focus.Add(float.IsNaN(vx) || v.layout.width < 1f ? float.NaN : vx);
+                sizes = new List<Vector2>(_chips.Count);
+                focus = new List<float>(_chips.Count);   // 札の中で列の真上に来るべき x（無ければ NaN＝札の中央）
+                sizesReady = true;
+                for (var i = 0; i < _chips.Count; i++)
+                {
+                    var chip = _chips[i];
+                    var w = chip.resolvedStyle.width;
+                    var h = chip.resolvedStyle.height;
+                    if (float.IsNaN(w) || float.IsNaN(h) || w < 1f || h < 1f) { sizesReady = false; w = 0f; h = 0f; }
+                    sizes.Add(new Vector2(Mathf.Ceil(w), Mathf.Ceil(h)));
+                    var v = _velos[i];
+                    var vx = v != null ? v.layout.x + v.layout.width * 0.5f : float.NaN;
+                    focus.Add(float.IsNaN(vx) || v.layout.width < 1f ? float.NaN : vx);
+                }
+                if (sizesReady)
+                {
+                    _sizes = sizes;
+                    _focus = focus;
+                    for (var i = 0; i < _chips.Count; i++)
+                    {
+                        _chips[i].style.width = sizes[i].x;
+                        _chips[i].style.height = sizes[i].y;
+                    }
+                }
             }
 
             if (_compact)

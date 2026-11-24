@@ -1154,6 +1154,7 @@ public static class CoefficientsLoader
         public double HomeForceSuccessBias { get; set; } = D.HomeForceSuccessBias;
         public double DoublePlaySelfForceRelayTransferSeconds { get; set; } = D.DoublePlaySelfForceRelayTransferSeconds;
         public double SelfForceFielderSprintSpeedMps { get; set; } = D.SelfForceFielderSprintSpeedMps;
+        public double SelfForceFielderAccelMps2 { get; set; } = D.SelfForceFielderAccelMps2;
         // 併殺の代替ルート（一塁手の自己フォース→二塁タッチ, issue 3-6-tag-double-play）
         public double FirstForceTagSeconds { get; set; } = D.FirstForceTagSeconds;
         public double FirstForceMarginScale { get; set; } = D.FirstForceMarginScale;
@@ -1359,6 +1360,7 @@ public static class CoefficientsLoader
             HomeForceSuccessBias = HomeForceSuccessBias,
             DoublePlaySelfForceRelayTransferSeconds = DoublePlaySelfForceRelayTransferSeconds,
             SelfForceFielderSprintSpeedMps = SelfForceFielderSprintSpeedMps,
+            SelfForceFielderAccelMps2 = SelfForceFielderAccelMps2,
             FirstForceTagSeconds = FirstForceTagSeconds,
             FirstForceMarginScale = FirstForceMarginScale,
             FirstForceSuccessBias = FirstForceSuccessBias,
@@ -1771,6 +1773,11 @@ public static class CoefficientsLoader
         public double HiddenSkillTopicProb { get; set; } = D.HiddenSkillTopicProb;
         public double PitcherSenseTopicProb { get; set; } = D.PitcherSenseTopicProb;
         public int PitcherSenseMisreadOffset { get; set; } = D.PitcherSenseMisreadOffset;
+        public double PitcherTalentSenseMin { get; set; } = D.PitcherTalentSenseMin;
+        public double PitcherTalentGapMin { get; set; } = D.PitcherTalentGapMin;
+        public double PitcherTalentHintProb { get; set; } = D.PitcherTalentHintProb;
+        public double PitcherTalentDiscoverProb { get; set; } = D.PitcherTalentDiscoverProb;
+        public int PitcherTalentCapBonus { get; set; } = D.PitcherTalentCapBonus;
 
         public InsightCoefficients ToModel() => new()
         {
@@ -1789,6 +1796,11 @@ public static class CoefficientsLoader
             HiddenSkillTopicProb = HiddenSkillTopicProb,
             PitcherSenseTopicProb = PitcherSenseTopicProb,
             PitcherSenseMisreadOffset = PitcherSenseMisreadOffset,
+            PitcherTalentSenseMin = PitcherTalentSenseMin,
+            PitcherTalentGapMin = PitcherTalentGapMin,
+            PitcherTalentHintProb = PitcherTalentHintProb,
+            PitcherTalentDiscoverProb = PitcherTalentDiscoverProb,
+            PitcherTalentCapBonus = PitcherTalentCapBonus,
         };
     }
 
@@ -2009,6 +2021,7 @@ public static class CoefficientsLoader
         public double PitcherSenseGrowthSlope { get; set; } = D.PitcherSenseGrowthSlope;
         public double PitcherSenseGrowthMin { get; set; } = D.PitcherSenseGrowthMin;
         public double PitcherSenseGrowthMax { get; set; } = D.PitcherSenseGrowthMax;
+        public double PitcherAwakenedGrowthFactor { get; set; } = D.PitcherAwakenedGrowthFactor;
 
         public TrainingCoefficients ToModel() => new()
         {
@@ -2043,6 +2056,7 @@ public static class CoefficientsLoader
             PitcherSenseGrowthSlope = PitcherSenseGrowthSlope,
             PitcherSenseGrowthMin = PitcherSenseGrowthMin,
             PitcherSenseGrowthMax = PitcherSenseGrowthMax,
+            PitcherAwakenedGrowthFactor = PitcherAwakenedGrowthFactor,
         };
     }
 
@@ -3057,6 +3071,8 @@ public static class CoefficientsLoader
         public double PitcherSenseBonus { get; set; } = D.PitcherSenseBonus;
         public double NonPitcherSenseFactor { get; set; } = D.NonPitcherSenseFactor;
         public double PitcherSenseSd { get; set; } = D.PitcherSenseSd;
+        public double PitcherSenseMean { get; set; } = D.PitcherSenseMean;
+        public double PitcherSenseIndependentSd { get; set; } = D.PitcherSenseIndependentSd;
         public double VelocityArmWeight { get; set; } = D.VelocityArmWeight;
         public double VelocitySenseWeight { get; set; } = D.VelocitySenseWeight;
         // 伸びしろ
@@ -3386,6 +3402,8 @@ public static class CoefficientsLoader
             PitcherSenseBonus = PitcherSenseBonus,
             NonPitcherSenseFactor = NonPitcherSenseFactor,
             PitcherSenseSd = PitcherSenseSd,
+            PitcherSenseMean = PitcherSenseMean,
+            PitcherSenseIndependentSd = PitcherSenseIndependentSd,
             VelocityArmWeight = VelocityArmWeight,
             VelocitySenseWeight = VelocitySenseWeight,
             GrowthMean = GrowthMean,

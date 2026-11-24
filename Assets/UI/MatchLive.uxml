@@ -251,6 +251,13 @@
                                 <ui:Label class="tmo-action__sub f-body" text="両チームの出場選手" />
                             </ui:VisualElement>
                         </ui:Button>
+                        <ui:Button name="pm-ibb" class="tmo-action">
+                            <ui:VisualElement name="pm-ibb-icon" class="tmo-tile" />
+                            <ui:VisualElement class="tmo-action__text">
+                                <ui:Label class="tmo-action__title f-body-bd" text="申告敬遠" />
+                                <ui:Label class="tmo-action__sub f-body" text="投げずに一塁へ" />
+                            </ui:VisualElement>
+                        </ui:Button>
                     </ui:VisualElement>
 
                     <ui:VisualElement class="tmo-foot">
@@ -278,6 +285,20 @@
                     <ui:ScrollView name="pm-messenger-list" class="tmo-messenger__list" />
                     <ui:VisualElement class="tmo-foot">
                         <ui:Button name="pm-messenger-back" class="tmo-back f-body-bd" text="もどる" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 申告敬遠の確認（issue #1563）: 「申告敬遠」を押すと本体と入れ替わる。はい＝タイムを閉じて次の球を投げずに四球・いいえ＝タイムへ戻る（何も起きない）。 -->
+                <ui:VisualElement name="pm-ibb-confirm" class="tmo-messenger" style="display: none;">
+                    <ui:VisualElement class="tmo-head">
+                        <ui:VisualElement class="tmo-head__bar" />
+                        <ui:Label class="tmo-messenger__cap f-display" text="申告敬遠しますか？" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="tmo-foot">
+                        <ui:Button name="pm-ibb-no" class="tmo-back tmo-ibb__no f-body-bd" text="いいえ" />
+                        <ui:Button name="pm-ibb-yes" class="tmo-resume">
+                            <ui:Label class="tmo-resume__label f-body-bd" text="はい" />
+                        </ui:Button>
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

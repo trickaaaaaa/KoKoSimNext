@@ -237,7 +237,14 @@ public sealed record BracketMatch(
     int WinnerScore,
     int LoserScore,
     bool ManagerInvolved,
-    bool MercyEnded = false);
+    bool MercyEnded = false)
+{
+    /// <summary>3位決定戦のラウンド名（準決勝敗退2校の一戦・issue #1219）。</summary>
+    public const string ThirdPlaceRoundName = "3位決定戦";
+
+    /// <summary>3位決定戦のカードか。<see cref="RoundsRemaining"/> は準決勝と同じ2のまま＝順位の組み立て・集計はこれで分ける。</summary>
+    public bool IsThirdPlace => RoundName == ThirdPlaceRoundName;
+}
 
 /// <summary>
 /// 樹形図の1スロット（カードの上側/下側）。まだ校名が確定していない枠は TeamName=null（「Aブロック勝者」待ち）。
@@ -367,7 +374,8 @@ public sealed class TournamentRunner : ITournamentRunner
     /// </remarks>
     private sealed record PendingLiveMatch(
         School?[] Cur, School?[] Next, int Slot, School Mgr, School Opp,
-        string RoundName, int RoundsRemaining, bool ManagerIsAway, LivePlayerMatch Live, int MatchDay);
+        string RoundName, int RoundsRemaining, bool ManagerIsAway, LivePlayerMatch Live, int MatchDay,
+        bool ThirdPlace = false);
 
     public string Title { get; }
     public bool PlayerActive { get; private set; } = true;
@@ -377,6 +385,14 @@ public sealed class TournamentRunner : ITournamentRunner
     public string? ChampionName { get; private set; }
 
     private readonly bool _isNationalTournament;
+
+    private readonly bool _thirdPlaceMatch;
+    // 自校が準決勝で負け、3位決定戦がまだ残っている間だけ真（PlayerActive は真のまま・自校の次戦＝3位決定戦）。
+    // 保存しない＝復元時に試合ログと準決勝の結果から導く（DeriveThirdPlacePending）。
+    private bool _thirdPlacePending;
+
+    /// <summary>準決勝敗退2校が3位決定戦を戦う大会か（issue #1219）。</summary>
+    public bool ThirdPlaceMatch => _thirdPlaceMatch;
 
     public TournamentRunner(
         IReadOnlyList<School> entrants,
@@ -388,9 +404,10 @@ public sealed class TournamentRunner : ITournamentRunner
         IPlayerMatchResolver? playerResolver = null,
         IBackgroundMatchResolver? backgroundResolver = null,
         bool isNationalTournament = false,
-        Action<int, int, GameResult>? onBackgroundMatch = null)
+        Action<int, int, GameResult>? onBackgroundMatch = null,
+        bool thirdPlaceMatch = false)
         : this(entrants, ManagerIdIn(entrants, manager), coeff, rng, schedule, title,
-               playerResolver, backgroundResolver, isNationalTournament, onBackgroundMatch)
+               playerResolver, backgroundResolver, isNationalTournament, onBackgroundMatch, thirdPlaceMatch)
     {
     }
 
@@ -424,11 +441,12 @@ public sealed class TournamentRunner : ITournamentRunner
         string title,
         IBackgroundMatchResolver? backgroundResolver = null,
         bool isNationalTournament = false,
-        Action<int, int, GameResult>? onBackgroundMatch = null)
+        Action<int, int, GameResult>? onBackgroundMatch = null,
+        bool thirdPlaceMatch = false)
     {
         if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
         return new TournamentRunner(entrants, NoManagerId, coeff, rng, schedule, title,
-            playerResolver: null, backgroundResolver, isNationalTournament, onBackgroundMatch);
+            playerResolver: null, backgroundResolver, isNationalTournament, onBackgroundMatch, thirdPlaceMatch);
     }
 
     private TournamentRunner(
@@ -441,10 +459,12 @@ public sealed class TournamentRunner : ITournamentRunner
         IPlayerMatchResolver? playerResolver,
         IBackgroundMatchResolver? backgroundResolver,
         bool isNationalTournament,
-        Action<int, int, GameResult>? onBackgroundMatch)
+        Action<int, int, GameResult>? onBackgroundMatch,
+        bool thirdPlaceMatch)
     {
         _coeff = coeff;
         _rng = rng;
+        _thirdPlaceMatch = thirdPlaceMatch;
         _schedule = schedule;
         _playerResolver = playerResolver;
         _backgroundResolver = backgroundResolver;
@@ -506,6 +526,7 @@ public sealed class TournamentRunner : ITournamentRunner
         _backgroundResolver = backgroundResolver;
         _managerId = manager.Id;
         _isNationalTournament = state.IsNationalTournament;
+        _thirdPlaceMatch = state.ThirdPlaceMatch;
         _onBackgroundMatch = onBackgroundMatch;
         Title = state.Title;
 
@@ -551,6 +572,7 @@ public sealed class TournamentRunner : ITournamentRunner
         // 次戦相手は状態から導く（保存しない＝保存値と実体が食い違う余地を作らない）。
         // AdvanceUntilPlayerMatch は呼ばない: 呼ぶと不戦勝ラウンドを「もう一度」解決して乱数を余計に
         // 消費する（保存時点で消化済みのはず）。
+        _thirdPlacePending = DeriveThirdPlacePending();
         _nextOpponent = DeriveNextOpponent();
     }
 
@@ -560,6 +582,7 @@ public sealed class TournamentRunner : ITournamentRunner
     /// </summary>
     private School? DeriveNextOpponent()
     {
+        if (_thirdPlacePending) return ThirdPlaceOpponent();
         if (!PlayerActive || IsChampion || _current.Length < 2) return null;
         var idx = IndexOfManager(_current);
         return idx < 0 ? null : _current[idx ^ 1];
@@ -591,6 +614,7 @@ public sealed class TournamentRunner : ITournamentRunner
         {
             Title = Title,
             IsNationalTournament = _isNationalTournament,
+            ThirdPlaceMatch = _thirdPlaceMatch,
             PlayerActive = PlayerActive,
             IsChampion = IsChampion,
             ChampionName = ChampionName,
@@ -621,17 +645,20 @@ public sealed class TournamentRunner : ITournamentRunner
     /// <summary>総ラウンド数。</summary>
     public int TotalRounds => _totalRounds;
     /// <summary>次戦のラウンド名（決勝/準決勝/…/N回戦）。</summary>
-    public string RoundName => RoundNameFor(TournamentRecorder.RoundsRemaining(_current.Length));
+    public string RoundName => _thirdPlacePending
+        ? BracketMatch.ThirdPlaceRoundName
+        : RoundNameFor(TournamentRecorder.RoundsRemaining(_current.Length));
 
     /// <inheritdoc/>
     public int? NextMatchRoundsRemaining
-        => _nextOpponent is null ? null : TournamentRecorder.RoundsRemaining(_current.Length);
+        => _nextOpponent is null ? null : _thirdPlacePending ? 2 : TournamentRecorder.RoundsRemaining(_current.Length);
 
     /// <summary>自校の次戦を自動消化する。勝てば次戦へ進み、負ければ大会終了（残りは背景消化）。</summary>
     public PlayerMatchOutcome PlayNextPlayerMatch()
     {
         if (Finished) throw new InvalidOperationException("大会は自校にとって終了しています。");
         if (_nextOpponent is null) throw new InvalidOperationException("次戦相手が未確定です。");
+        if (_thirdPlacePending) return PlayThirdPlace();
 
         var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
         var roundName = RoundNameFor(roundsRemaining);
@@ -643,6 +670,7 @@ public sealed class TournamentRunner : ITournamentRunner
 
         if (!outcome.ManagerWon)
         {
+            if (_thirdPlacePending) { _nextOpponent = ThirdPlaceOpponent(); return outcome; }   // 準決勝負け→3位決定戦へ（issue #1219）
             PlayerActive = false;
             _nextOpponent = null;
             // 残りブラケットはここでは消化しない（issue #529）。呼び出し側が BracketResolutionPending を見て
@@ -681,6 +709,7 @@ public sealed class TournamentRunner : ITournamentRunner
         if (Finished) throw new InvalidOperationException("大会は自校にとって終了しています。");
         if (_nextOpponent is null) throw new InvalidOperationException("次戦相手が未確定です。");
         if (_playerResolver is null) throw new InvalidOperationException("ライブ観戦には IPlayerMatchResolver が必要です。");
+        if (_thirdPlacePending) return BeginThirdPlace();
 
         var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
         var roundName = RoundNameFor(roundsRemaining);
@@ -694,12 +723,19 @@ public sealed class TournamentRunner : ITournamentRunner
     public PlayerMatchOutcome CompleteNextPlayerMatch(GameResult result)
     {
         if (_pending is null) throw new InvalidOperationException("進行中のライブ自校戦がありません。");
+        if (_pending.ThirdPlace)
+        {
+            var third = _pending;
+            _pending = null;
+            return SettleThirdPlace(third.Mgr, third.Opp, third.ManagerIsAway, result);
+        }
 
         var outcome = CompleteRound(result);
         _roundIndex++;
 
         if (!outcome.ManagerWon)
         {
+            if (_thirdPlacePending) { _nextOpponent = ThirdPlaceOpponent(); return outcome; }   // 準決勝負け→3位決定戦へ（issue #1219）
             PlayerActive = false;
             _nextOpponent = null;
             // 残りブラケットはここでは消化しない（issue #529、上の PlayNextPlayerMatch と同じ理由）。
@@ -780,8 +816,8 @@ public sealed class TournamentRunner : ITournamentRunner
     /// 数日に分散するので、同じラウンドでもカードごとに日が違う。プレフェッチ（<see cref="PrefetchCurrentRoundBackgroundCards"/>）と
     /// 本解決が別の日を渡すと、メモ化 resolver が別条件で温めた結果を本解決が拾ってしまうため、必ずここを通す。
     /// </summary>
-    private TournamentMatchContext MatchContextOf(int roundsRemaining, int matchDay, int attempt = 0)
-        => new(roundsRemaining, matchDay, _pitchLedger, attempt, TournamentMatchContext.AceRestSaltOf(_rng));
+    private TournamentMatchContext MatchContextOf(int roundsRemaining, int matchDay, int attempt = 0, int? aceRestRounds = null)
+        => new(roundsRemaining, matchDay, _pitchLedger, attempt, TournamentMatchContext.AceRestSaltOf(_rng), aceRestRounds);
 
     private int MatchDayOf(int roundsRemaining, int slot)
         => _schedule.MatchDay(
@@ -799,6 +835,8 @@ public sealed class TournamentRunner : ITournamentRunner
     public WeatherSample? PeekNextMatchWeather(WeatherCoefficients coefficients)
     {
         if (_nextOpponent is null) return null;
+        if (_thirdPlacePending)
+            return WeatherModel.SampleForMatch(_rng.Fork(PlayerMatchStream(ThirdPlaceStreamRounds, 0)).Fork(2), coefficients);
         var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
         var slot = ManagerCardSlot(_current);
         // ResolveRound が自校カードで辿る鎖と同一: _rng.Fork(PlayerMatchStream(...)) がResolve/BeginLiveの
@@ -826,7 +864,7 @@ public sealed class TournamentRunner : ITournamentRunner
     /// </summary>
     public void PrefetchCurrentRoundBackgroundCards(int maxParallelism = 1)
     {
-        if (_backgroundResolver is null || Finished) return;
+        if (_backgroundResolver is null || Finished || _thirdPlacePending) return;
         var resolver = _backgroundResolver;
         var cur = _current;
         if (cur.Length < 2) return;
@@ -1003,6 +1041,7 @@ public sealed class TournamentRunner : ITournamentRunner
             next[i] = winner;
         }
         _roundEntrants[round + 1] = next;
+        if (roundsRemaining == 2) SettleThirdPlaceAfterSemifinal();
         return next;
     }
 
@@ -1102,6 +1141,7 @@ public sealed class TournamentRunner : ITournamentRunner
 
         _roundEntrants[round + 1] = p.Next;
         _current = p.Next;
+        if (p.RoundsRemaining == 2) SettleThirdPlaceAfterSemifinal();
         return new PlayerMatchOutcome(
             managerWon, p.Opp.Name, p.Opp.Tier, mgrRuns, oppRuns, p.RoundName, IsChampion: false,
             Detail: r, ManagerWasAway: p.ManagerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays,
@@ -1122,17 +1162,25 @@ public sealed class TournamentRunner : ITournamentRunner
     /// </summary>
     private (School Winner, School Loser, int WinScore, int LoseScore) ResolveBackgroundCard(
         School a, School b, int roundsRemaining, int slot)
+        => ResolveBackgroundCardCore(a, b, roundsRemaining, MatchDayOf(roundsRemaining, slot), roundsRemaining, slot, null);
+
+    /// <summary>
+    /// 裏試合カードの解決本体。<paramref name="contextRounds"/>/<paramref name="matchDay"/> が試合の条件（球場・天気・温存判断）、
+    /// <paramref name="streamRounds"/>/<paramref name="streamSlot"/> が Fork ストリームの鍵（カードごとに一意）。
+    /// 通常のカードは両者が同じ値＝従来どおり。3位決定戦だけ違う（<see cref="ThirdPlaceStreamRounds"/>）。
+    /// </summary>
+    private (School Winner, School Loser, int WinScore, int LoseScore) ResolveBackgroundCardCore(
+        School a, School b, int contextRounds, int matchDay, int streamRounds, int streamSlot, int? aceRestRounds)
     {
         if (_backgroundResolver is not null)
         {
-            var matchDay = MatchDayOf(roundsRemaining, slot);
             // 引き分け再試合（設計書05 §1.3, issue #253）。初戦（attempt 0）は従来と同一 Fork・同一 context ＝
             // 非引き分け試合は決定論baseline不変。延長上限で引き分けたときだけ別Fork の再試合を積む。
             // 各試合（引き分け含む）を全国成績へ畳み込み・台帳へ記録する（再試合＝両試合とも公式試合という現実準拠）。
             var (decisive, awayWon, _) = DecideByReplay(a, b, attempt =>
             {
-                var context = MatchContextOf(roundsRemaining, matchDay, attempt);
-                var g = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot, attempt)), context);
+                var context = MatchContextOf(contextRounds, matchDay, attempt, aceRestRounds);
+                var g = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(streamRounds, streamSlot, attempt)), context);
                 RecordOutings(g, a, b, matchDay);
                 _onBackgroundMatch?.Invoke(a.Id, b.Id, g);   // 全国成績への畳み込みは**記録時**（上のコメント参照）。
                 return g;
@@ -1144,6 +1192,144 @@ public sealed class TournamentRunner : ITournamentRunner
         var (w, l, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
         var (ws, ls) = SynthesizeScore(margin);
         return (w, l, ws, ls);
+    }
+
+    // ===== 3位決定戦（issue #1219） =====
+
+    /// <summary>3位決定戦の Fork ストリーム鍵に使う「残りラウンド数」。実在のラウンド（1以上）と衝突しない0。</summary>
+    private const int ThirdPlaceStreamRounds = 0;
+
+    /// <summary>3位決定戦の試合日＝決勝と同日（準決勝の後の休養日を挟み、決勝進出校とは別の2校が戦う）。</summary>
+    private int ThirdPlaceMatchDay => MatchDayOf(1, 0);
+
+    // 球場・観客・重圧は準決勝相当（2）。この後に試合は無いので温存判断には「残り1」を渡す。
+    private TournamentMatchContext ThirdPlaceContext(int attempt = 0)
+        => MatchContextOf(2, ThirdPlaceMatchDay, attempt, aceRestRounds: 1);
+
+    /// <summary>準決勝の敗者（確定済みの2校なら2校・不戦勝の枠や未消化なら空）。乱数不使用＝樹形図から導く。</summary>
+    private IReadOnlyList<School> SemifinalLosers()
+    {
+        var round = _totalRounds - 2;
+        if (round < 0 || _roundEntrants[round] is not { } entrants) return Array.Empty<School>();
+        var losers = new List<School>(2);
+        for (var i = 0; i < entrants.Length / 2; i++)
+        {
+            var a = entrants[2 * i];
+            var b = entrants[2 * i + 1];
+            if (a is null || b is null) continue;
+            if (!_cardResults.TryGetValue((round, i), out var r)) return Array.Empty<School>();
+            losers.Add(r.TopWon ? b : a);
+        }
+        return losers;
+    }
+
+    private School? ThirdPlaceOpponent() => SemifinalLosers().FirstOrDefault(s => s.Id != _managerId);
+
+    /// <summary>
+    /// 準決勝を消化した直後に呼ぶ。敗者2校が揃えば、自校が居ない一戦は裏試合としてその場で解き、
+    /// 自校が居る一戦は自校の次戦として積む（<see cref="_thirdPlacePending"/>）。3位決定戦の無い大会・不戦勝のある準決勝では何もしない。
+    /// </summary>
+    private void SettleThirdPlaceAfterSemifinal()
+    {
+        if (!_thirdPlaceMatch) return;
+        var losers = SemifinalLosers();
+        if (losers.Count != 2) return;
+        if (losers.Any(l => l.Id == _managerId)) { _thirdPlacePending = true; return; }
+
+        var (w, l2, ws, ls) = ResolveBackgroundCardCore(
+            losers[0], losers[1], 2, ThirdPlaceMatchDay, ThirdPlaceStreamRounds, 0, aceRestRounds: 1);
+        _matches.Add(new BracketMatch(
+            BracketMatch.ThirdPlaceRoundName, 2, w.Name, l2.Name, w.Id, l2.Id, ws, ls, false));
+    }
+
+    /// <summary>復元時: 自校が準決勝で負けて3位決定戦が未消化か。<see cref="_matches"/>・<see cref="_cardResults"/> を復元した後に呼ぶ。</summary>
+    private bool DeriveThirdPlacePending()
+        => _thirdPlaceMatch && PlayerActive && !IsChampion && _current.Length == 2
+           && IndexOfManager(_current) < 0
+           && !_matches.Any(m => m.IsThirdPlace)
+           && SemifinalLosers().Any(s => s.Id == _managerId);
+
+    private (School Mgr, School Opp) ThirdPlaceSides()
+    {
+        var losers = SemifinalLosers();
+        var mgr = losers.First(s => s.Id == _managerId);
+        return (mgr, losers.First(s => s.Id != _managerId));
+    }
+
+    private PlayerMatchOutcome PlayThirdPlace()
+    {
+        var (mgr, opp) = ThirdPlaceSides();
+        if (_playerResolver is null)
+        {
+            // 詳細シム無し（集計/裏試合 resolver のみ）: 自校戦も背景カードと同じ解決。
+            var (w, l, ws, ls) = ResolveBackgroundCardCore(
+                mgr, opp, 2, ThirdPlaceMatchDay, ThirdPlaceStreamRounds, 0, aceRestRounds: 1);
+            _matches.Add(new BracketMatch(BracketMatch.ThirdPlaceRoundName, 2, w.Name, l.Name, w.Id, l.Id, ws, ls, true));
+            EndAfterThirdPlace();
+            var won = w.Id == _managerId;
+            return new PlayerMatchOutcome(
+                won, opp.Name, opp.Tier, won ? ws : ls, won ? ls : ws,
+                BracketMatch.ThirdPlaceRoundName, IsChampion: false, OpponentId: opp.Id);
+        }
+
+        var first = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(ThirdPlaceStreamRounds, 0)),
+            MercyRuleEnabledFor(2), ThirdPlaceContext());
+        return SettleThirdPlace(mgr, opp, first.ManagerIsAway, first.Result);
+    }
+
+    private LivePlayerMatch BeginThirdPlace()
+    {
+        var (mgr, opp) = ThirdPlaceSides();
+        var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(ThirdPlaceStreamRounds, 0)),
+            MercyRuleEnabledFor(2), ThirdPlaceContext());
+        var handle = new LivePlayerMatch(
+            live.Progression, live.ManagerIsAway, opp.Name, BracketMatch.ThirdPlaceRoundName, opp.Id)
+            { RoundsRemaining = 2 };
+        _pending = new PendingLiveMatch(
+            _current, Array.Empty<School?>(), 0, mgr, opp, BracketMatch.ThirdPlaceRoundName, 2,
+            live.ManagerIsAway, handle, ThirdPlaceMatchDay, ThirdPlace: true);
+        return handle;
+    }
+
+    /// <summary>
+    /// 3位決定戦の終局結果（初戦）から、引き分け再試合を含めて決着させ、試合ログへ積んで自校の大会を終える。
+    /// 自動消化（<see cref="PlayThirdPlace"/>）と観戦（<see cref="CompleteNextPlayerMatch"/>）が同じここを通る＝観戦してもしなくても同じ展開。
+    /// </summary>
+    private PlayerMatchOutcome SettleThirdPlace(School mgr, School opp, bool managerIsAway, GameResult firstResult)
+    {
+        var awaySchool = managerIsAway ? mgr : opp;
+        var homeSchool = managerIsAway ? opp : mgr;
+        var mercy = MercyRuleEnabledFor(2);
+        var matchDay = ThirdPlaceMatchDay;
+        var (r, awayWon, replays) = DecideByReplay(awaySchool, homeSchool, attempt =>
+        {
+            var g = attempt == 0 ? firstResult
+                : _playerResolver!.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(ThirdPlaceStreamRounds, 0, attempt)),
+                    mercy, ThirdPlaceContext(attempt)).Result;
+            RecordOutings(g, awaySchool, homeSchool, matchDay);
+            return g;
+        });
+        var managerWon = managerIsAway ? awayWon : !awayWon;
+        var mgrRuns = managerIsAway ? r.AwayRuns : r.HomeRuns;
+        var oppRuns = managerIsAway ? r.HomeRuns : r.AwayRuns;
+        var winner = managerWon ? mgr : opp;
+        var loser = managerWon ? opp : mgr;
+        _matches.Add(new BracketMatch(
+            BracketMatch.ThirdPlaceRoundName, 2, winner.Name, loser.Name, winner.Id, loser.Id,
+            Math.Max(mgrRuns, oppRuns), Math.Min(mgrRuns, oppRuns), true, r.MercyEnded));
+        EndAfterThirdPlace();
+        return new PlayerMatchOutcome(
+            managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, BracketMatch.ThirdPlaceRoundName, IsChampion: false,
+            Detail: r, ManagerWasAway: managerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays,
+            OpponentId: opp.Id);
+    }
+
+    /// <summary>3位決定戦を終えた自校の大会の幕引き。決勝（裏試合）は <see cref="StepBracketResolution"/> で刻む。</summary>
+    private void EndAfterThirdPlace()
+    {
+        _thirdPlacePending = false;
+        PlayerActive = false;
+        _nextOpponent = null;
     }
 
     /// <summary>

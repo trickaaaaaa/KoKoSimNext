@@ -3208,25 +3208,26 @@ public static class TimelineBuilder
     }
 
     /// <summary>
-    /// 併殺の代替ルート（三塁/本塁の自己フォース, Q31）の送球連鎖を描く。既存の「野手→一塁」1本 Throw を、
-    /// 「処理点→対象塁（自己フォース, Carry）→一塁（自己送球, Throw）」の2本に差し替える。結果不変・
-    /// 乱数不使用の表示専用。判定モデル（<see cref="BaserunningModel"/> の <c>ResolveDoublePlaySelfForce</c>）と
-    /// <b>同じ入力・同じ式</b>（<see cref="HomePlayResolver.ResolveThrowPath"/>）で秒を組む＝
-    /// <see cref="AppendDoublePlayThrows"/> と同じ設計。
+    /// 併殺の代替ルート（二塁/三塁/本塁の自己フォース, issue #1549・Q31）の送球連鎖を描く。既存の
+    /// 「野手→一塁」1本 Throw を、「処理点→対象塁（自己フォース, Carry）→一塁（自己送球, Throw）」の2本に
+    /// 差し替える。結果不変・乱数不使用の表示専用。判定モデル（<see cref="BaserunningModel"/> の
+    /// <c>ResolveDoublePlaySelfForce</c>）と<b>同じ入力・同じ式</b>（<see cref="HomePlayResolver.ResolveThrowPath"/>）
+    /// で秒を組む＝<see cref="AppendDoublePlayThrows"/> と同じ設計。
     ///
     /// <para>一段目（処理点→対象塁）は送球ではなく<see cref="BallSegmentKind.Carry"/>（グラブに収めたまま
     /// 走ってベースを踏む）＝<see cref="FieldingPlay.UnassistedPutout"/>（3U）と同じ表現。二段目（対象塁→
     /// 一塁）は同じ野手がそのまま投げる自己送球（中継〈ピボット〉なし＝<see cref="AppendDoublePlayThrows"/>の
     /// ような2人目の受け手・地肩差し替えは不要）。</para>
     ///
-    /// targetBase=対象塁（3=三塁自己フォース／4=本塁自己フォース）。呼び出し元は
-    /// <see cref="RunnerMove.SelfForceDoublePlayLead"/> が立った move の <c>ToBase</c> をそのまま渡す。
-    /// batterOut=打者が実際にアウトか（<see cref="AppendDoublePlayThrows"/> と同じ意味・同じ既定true。
-    /// 三塁/本塁は封殺できても一塁への転送がわずかに間に合わない野選では false）。
+    /// targetBase=対象塁（2=二塁自己フォース＝6-6-3/4-4-3／3=三塁自己フォース／4=本塁自己フォース）。
+    /// 呼び出し元は <see cref="RunnerMove.SelfForceDoublePlayLead"/> が立った move の <c>ToBase</c> を
+    /// そのまま渡す。batterOut=打者が実際にアウトか（<see cref="AppendDoublePlayThrows"/> と同じ意味・
+    /// 同じ既定true。対象塁は封殺できても一塁への転送がわずかに間に合わない野選では false）。
     /// </summary>
     public static PlayTimeline AppendSelfForceDoublePlayThrows(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
-        int targetBase, BaserunningCoefficients? coefficients = null, bool batterOut = true, bool relayToFirst = true)
+        int targetBase, BaserunningCoefficients? coefficients = null, bool batterOut = true, bool relayToFirst = true,
+        double? selfForceSprintSpeedMps = null)
     {
         // relayToFirst=false: 対象塁を踏むだけで一塁へは投げない（issue #797）。打者は一塁に生きる。
         if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
@@ -3259,9 +3260,20 @@ public static class TimelineBuilder
         var first = BasePoint(field, "first");
         var firstRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
 
-        var force = targetBase == 3 ? HomePlayResolver.ThirdForceParams(field, c) : HomePlayResolver.HomeForceParams(c);
-        var targetPt = targetBase == 3 ? BasePoint(field, "third") : Home;
-        var targetBaseName = targetBase == 3 ? "third" : "home";
+        var force = targetBase switch
+        {
+            2 => HomePlayResolver.SecondForceParams(field, c), // 二塁の自己フォース（issue #1549）。タッチの
+                                                                // 物理は標準の二塁封殺と同じ係数を共用する。
+            3 => HomePlayResolver.ThirdForceParams(field, c),
+            _ => HomePlayResolver.HomeForceParams(c),
+        };
+        var targetPt = targetBase switch
+        {
+            2 => BasePoint(field, "second"),
+            3 => BasePoint(field, "third"),
+            _ => Home,
+        };
+        var targetBaseName = targetBase switch { 2 => "second", 3 => "third", _ => "home" };
 
         // 一段目（処理点→対象塁）: 送球ではなく自分で運ぶ（UnassistedPutout と同じ Carry 表現）。判定モデルと
         // 同じ式・transferSecondsOverride: 0.0（握り替えなし＝その場でベースへ踏み込むだけ）。
@@ -3272,9 +3284,20 @@ public static class TimelineBuilder
         var targetArrive = ContactAt + pathToTarget.ArriveAtSeconds;
 
         // 本塁から遠い投手（マウンド付近で捕った等）は自分で運ばない＝捕手へ投げ、捕手が本塁を踏んで一塁へ投げる
-        // （issue #830: 17m 先から運んで踏む絵＝秒速32mで走っていた）。判定は元から「本塁への送球」の秒で
-        // 解いている（ResolveThrowPath＝肩の速さ）ので、秒はそのまま・投げる人の絵だけ変える。
+        // （issue #830: 17m 先から運んで踏む絵＝秒速32mで走っていた）。こちらは送球の秒（ResolveThrowPath）のまま。
         var carried = targetBase != 4 || Distance(fieldPoint, targetPt) <= SelfForceCarryMaxM;
+        // 自分で運んで踏む場合の到達は、判定（BaserunningModel.SelfForceArriveAtBaseSeconds・issue #1273）と同じく
+        // <b>処理した本人の脚</b>で処理点→対象塁を走る秒。送球の秒（肩の速さ）で描くと 5.6m を 0.18秒（秒速31m）で
+        // 運ぶことになり、3D の野手が走り込めずにその場で立ったまま塁でアウトになる（issue #1549 の撮影で発覚。
+        // 判定の秒ともずれていた）。
+        var sprint = selfForceSprintSpeedMps ?? c.SelfForceFielderSprintSpeedMps;
+        if (carried)
+        {
+            var runM = Math.Sqrt((fieldPoint.X - force.TargetPoint.X) * (fieldPoint.X - force.TargetPoint.X)
+                                 + (fieldPoint.Z - force.TargetPoint.Z) * (fieldPoint.Z - force.TargetPoint.Z));
+            carryStart = ContactAt + fieldedAtSeconds;
+            targetArrive = carryStart + BaserunningModel.SelfForceRunSeconds(runM, sprint, c);
+        }
         var relayRole = carried ? play.FielderRole : FieldPosition.Catcher;
         ball.Add(carried
             ? new BallSegment
@@ -3293,7 +3316,11 @@ public static class TimelineBuilder
         // 二段目（対象塁→一塁）: 同じ野手がそのまま投げる自己送球（中継なし）。起点は対象塁・時刻は判定モデルと
         // 同じ基準（BallFieldedAtSeconds＝一段目と同じ捕球時刻。ResolveDoublePlaySelfForce 参照）、握り替えは
         // 自己フォース専用の DoublePlaySelfForceRelayTransferSeconds。
-        var selfForceSituation = new HomePlaySituation(force.TargetPoint, fieldedAtSeconds, arm, play.FielderFielding);
+        // 自分で運んだ場合の起点は判定（ResolveDoublePlaySelfForce・issue #1273）と同じく<b>対象塁へ着いた時刻</b>
+        // （本人の脚で走った到達）。捕球時刻を起点にすると、運びを脚の秒にしたぶん一塁への送球が詰まって
+        // 秒速40mを超える（issue #1549）。運ばない場合（遠い本塁＝捕手へ送球）は従来どおり捕球時刻。
+        var relayFrom = carried ? targetArrive - ContactAt : fieldedAtSeconds;
+        var selfForceSituation = new HomePlaySituation(force.TargetPoint, relayFrom, arm, play.FielderFielding);
         var pathToFirst = HomePlayResolver.ResolveThrowPath(
             selfForceSituation, field.FirstBase, c, transferSecondsOverride: c.DoublePlaySelfForceRelayTransferSeconds);
         // 判定モデルの握り替え起点は一段目と同じ捕球時刻（対象塁への到達＝targetArrive を待たない）なので、
@@ -3368,7 +3395,7 @@ public static class TimelineBuilder
         var moves = relayToFirst && firstRole is { } fr
             ? RepaceCoverLeg(timeline, timeline.Moves, fr, first, firstArrive, new FielderAttributes().SprintSpeedMps)
             : timeline.Moves;
-        if (carried) moves = WithCarryLeg(timeline, moves, play.FielderRole, targetPt, carryStart, targetArrive);
+        if (carried) moves = WithCarryLeg(timeline, moves, play.FielderRole, targetPt, carryStart, targetArrive, sprint);
         var duration = Math.Max(timeline.Duration, (relayToFirst ? firstArrive : targetArrive) + 1.0);
         return timeline with
         {
@@ -3395,7 +3422,7 @@ public static class TimelineBuilder
     /// </summary>
     public static PlayTimeline AppendFirstBaseSelfForceTagThrows(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
-        BaserunningCoefficients? coefficients = null, bool runnerOut = true)
+        BaserunningCoefficients? coefficients = null, bool runnerOut = true, double? selfForceSprintSpeedMps = null)
     {
         if (play.IsFly || play.RangeM > 46.0) return timeline; // ゲート自体が内野ゴロ限定（issue 3-6-tag-double-play）＝保守的に同じ条件
 
@@ -3427,9 +3454,14 @@ public static class TimelineBuilder
         // 同じ式・transferSecondsOverride: 0.0（握り替えなし＝その場でベースへ踏み込むだけ）。
         var situation = new HomePlaySituation(
             new Core.Vector3D(fieldPoint.X, 0, fieldPoint.Z), fieldedAtSeconds, arm, play.FielderFielding);
-        var pathToFirst = HomePlayResolver.ResolveThrowPath(situation, field.FirstBase, c, transferSecondsOverride: 0.0);
-        var carryStart = ContactAt + pathToFirst.ReleaseAtSeconds;
-        var firstArrive = ContactAt + pathToFirst.ArriveAtSeconds + c.FirstForceTagSeconds;
+        // 判定（ResolveDoublePlayFirstBaseTag・issue #1273）と同じく本人の脚で走り込む秒（issue #1549。送球の秒で
+        // 描くと一瞬で一塁に着く＝判定ともずれる）。
+        var sprint = selfForceSprintSpeedMps ?? c.SelfForceFielderSprintSpeedMps;
+        var runToFirstM = Math.Sqrt((fieldPoint.X - field.FirstBase.X) * (fieldPoint.X - field.FirstBase.X)
+                                    + (fieldPoint.Z - field.FirstBase.Z) * (fieldPoint.Z - field.FirstBase.Z));
+        var carryStart = ContactAt + fieldedAtSeconds;
+        var atFirstSeconds = fieldedAtSeconds + BaserunningModel.SelfForceRunSeconds(runToFirstM, sprint, c);
+        var firstArrive = ContactAt + atFirstSeconds + c.FirstForceTagSeconds;
 
         ball.Add(new BallSegment
         {
@@ -3441,7 +3473,7 @@ public static class TimelineBuilder
         // 二段目（一塁→二塁）: 同じ野手がそのまま投げる自己送球（中継なし）。起点は一塁ベース・時刻は判定
         // モデルと同じ基準（BallFieldedAtSeconds＝一段目と同じ捕球時刻。ResolveDoublePlayFirstBaseTag 参照）、
         // 握り替えは自己フォース専用の DoublePlaySelfForceRelayTransferSeconds。
-        var selfForceSituation = new HomePlaySituation(field.FirstBase, fieldedAtSeconds, arm, play.FielderFielding);
+        var selfForceSituation = new HomePlaySituation(field.FirstBase, atFirstSeconds, arm, play.FielderFielding);
         var pathToSecond = HomePlayResolver.ResolveThrowPath(
             selfForceSituation, field.SecondBase, c, transferSecondsOverride: c.DoublePlaySelfForceRelayTransferSeconds);
         // 判定モデルの握り替え起点は一段目と同じ捕球時刻（一塁到達＝firstArrive を待たない）なので、表示だけ
@@ -3487,7 +3519,7 @@ public static class TimelineBuilder
         var moves = secondRole is { } sr
             ? RepaceCoverLeg(timeline, timeline.Moves, sr, second, secondArrivePhysical, new FielderAttributes().SprintSpeedMps)
             : timeline.Moves;
-        moves = WithCarryLeg(timeline, moves, play.FielderRole, first, carryStart, firstArrive);
+        moves = WithCarryLeg(timeline, moves, play.FielderRole, first, carryStart, firstArrive, sprint);
         var duration = Math.Max(timeline.Duration, secondArrivePhysical + 1.0);
         return timeline with
         {
@@ -4006,8 +4038,11 @@ public static class TimelineBuilder
     private const double RunThroughMinLegM = 3.0;
     /// <summary>走りながら掬う絵にする最低の速さ[m/s]（捕球の瞬間の速さ。これ未満は歩いているのと同じ＝止まる）。</summary>
     private const double RunThroughMinSpeedMps = 3.0;
-    /// <summary>捕った後に勢いのまま運ぶ距離の上限[m]（握り替えが長い＝守備の低い野手で運びすぎないため）。</summary>
-    private const double RunThroughMaxCarryM = 4.0;
+    /// <summary>捕った後に勢いのまま運ぶ距離の上限[m]（TypeF の捕った後の数歩ぶん。issue #1552）。</summary>
+    private const double RunThroughMaxCarryM = 2.0;
+    /// <summary>捕った後に運ぶ秒の上限（issue #1552）。握り替え全体ではなく数歩で止まり、止まってから投げる＝
+    /// 送球クリップ（足を据えた収録）の間は野手の位置が動かない。</summary>
+    private const double RunThroughMaxCarrySeconds = 0.35;
 
     /// <summary>
     /// 走者ありの外野ゴロを「走りながら掬う」移動にする（issue #1079・オーナー決定＝engine の再生モデルで持つ）。
@@ -4015,9 +4050,11 @@ public static class TimelineBuilder
     ///
     /// <para>処理野手の捕球点へ向かう移動（終点＝捕球点・終わり＝捕球時刻）を <see cref="MoveProfile.RunIn"/>
     /// （減速しないで通過）にし、捕球〜握り替えの終わり（＝投げ始め）を <see cref="MoveProfile.RunOut"/>
-    /// （捕球の瞬間の速さから等減速して止まる）で同じ向きへ運ぶ。運ぶ距離＝捕球の瞬間の速さ×握り替えの秒÷2
-    /// （等減速の距離）なので、捕球の前後で速さが途切れない。捕球の時刻・位置、送球の投げ始めと到達の時刻は
-    /// どれも変えない（判定は不変）。送球の起点だけが運んで止まった点になる。</para>
+    /// （捕球の瞬間の速さから等減速して止まる）で同じ向きへ運ぶ。運ぶのは握り替え全体でなく数歩だけ
+    /// （<see cref="RunThroughMaxCarrySeconds"/>・<see cref="RunThroughMaxCarryM"/>で頭打ち。issue #1552）。
+    /// 運ぶ距離＝捕球の瞬間の速さ×運ぶ秒÷2（等減速の距離）なので、捕球の前後で速さが途切れない。
+    /// 運びが終わってから送球のリリースまでは止まっている＝足を据えた送球クリップが地面を滑らない。
+    /// 捕球の時刻・位置、送球の投げ始めと到達の時刻はどれも変えない（判定は不変）。送球の起点だけが運んで止まった点になる。</para>
     ///
     /// 当てはまらない（捕りに行く移動が見つからない・近すぎる・遅すぎる・握り替えが無い）ときは null。
     /// </summary>
@@ -4058,12 +4095,12 @@ public static class TimelineBuilder
         var speed = dist / dur * Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.RunIn);
         if (speed < RunThroughMinSpeedMps) return null;
 
-        var carry = Math.Min(RunThroughMaxCarryM, speed * hold / 2);
+        var carry = Math.Min(RunThroughMaxCarryM, speed * Math.Min(hold, RunThroughMaxCarrySeconds) / 2);
         var dirX = (fieldPoint.X - start.X) / dist;
         var dirZ = (fieldPoint.Z - start.Z) / dist;
         var carryTo = new TimelinePoint(fieldPoint.X + dirX * carry, fieldPoint.Z + dirZ * carry);
-        // 上限で切った運び（carry < speed*hold/2）は等減速の秒も縮める＝始点の速さを捕球の瞬間の速さに揃える
-        var carryEnd = fieldedAt + Math.Min(hold, 2 * carry / speed);
+        // 上限で切った運びは等減速の秒も縮める＝始点の速さを捕球の瞬間の速さに揃える
+        var carryEnd = fieldedAt + 2 * carry / speed;
         // 同じ野手が運ぶ間に別の移動を持っているなら触らない（移動が重なると FielderAt の進みが混ざる）
         for (var i = 0; i < moves.Count; i++)
             if (i != idx && moves[i].Role == role && moves[i].T0 < carryEnd && moves[i].T1 > fieldedAt) return null;
@@ -4729,12 +4766,14 @@ public static class TimelineBuilder
     /// </summary>
     private static IReadOnlyList<FielderMove> WithCarryLeg(
         PlayTimeline timeline, IReadOnlyList<FielderMove> moves, FieldPosition? carrier, TimelinePoint to,
-        double t0, double t1)
+        double t0, double t1, double? speedMps = null)
     {
         if (carrier is not { } role || t1 <= t0 + 1e-6) return moves;
         var from = FielderPositionAt(timeline with { Moves = moves }, role, t0);
         if (Distance(from, to) < 0.5 || IsBusy(moves, role, t0, t1)) return moves;
-        var speed = Math.Max(4.0, new FielderAttributes().SprintSpeedMps);
+        // 秒を本人の脚で組んだ呼び出し（自己フォース・issue #1549）は同じ速さで「走り切れるか」を見る（平均の脚だと
+        // 速い野手の走り込みが「走り切れない」と判定されて足されない）。
+        var speed = Math.Max(4.0, speedMps ?? new FielderAttributes().SprintSpeedMps);
         var runnableM = speed * (t1 - t0);
         var stop = StopWithinReach(from, to, runnableM, CarryReachM);
         // 守備範囲で埋めても走り切れない遠さ（球の秒が肩の速さのため）は、人の脚力を超える絵になるので足さない。

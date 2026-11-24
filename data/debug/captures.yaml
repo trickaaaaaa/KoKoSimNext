@@ -31,7 +31,7 @@
 #   timeout_at  : duel_seconds の撮影で、開始から何秒後に監督が守備伝令を送るか（issue #1178。動揺が解ける絵）
 #   timeout_messenger : timeout_at の伝令を画面の操作どおり（中断→伝令役→再開）に送る。控えの添字か recorder（記録員）。
 #                 守備伝令の場面が流れ、明けた後の投手・捕手の基準ずれを timeout-restore.txt に書く（issue #1174）
-#   cards       : [def-ibb] のように采配カードの id を並べる（issue #1473）。守備ビューを待たず、最初の采配窓で止めて
+#   cards       : [def-pitchout] のように采配カードの id を並べる（issue #1473）。守備ビューを待たず、最初の采配窓で止めて
 #                 01-window（押す前の手札）→ カードを押して 02-pressed → cards_after 秒（既定4）流して 03-after を撮る。
 #                 手札に無い・押せないカードは FAILED。手札ごと写すので view: panel と組む。
 #                 撮るのは開幕の「プレイボール」が消えてから。撮った窓の局面（塁・カウント・攻守）を window.txt に書く
@@ -39,6 +39,10 @@
 #                 最初の采配窓で止めたまま MatchLiveController のメソッドを順に呼ぶ（issue #1533）。引数は1つまで（数か列挙の名前）。
 #                 shot で 11-ui, 12-ui… を撮る。wait(2.5) で実時間を待つ。交代パネル・選手能力パネルなど窓から開く画面の見え方を撮る用。
 #                 cards と組めば 01-window の直後・押す前に回す。単独なら 01-window と呼び出しの絵だけ撮って終わる
+#   window_pitch: window_calls／cards を始める采配窓の「その打席の何球目」（既定 1＝打席の頭。2以上はカウントの途中で止める。issue #1563）
+#                 その球まで行く前に打席が終わったら撮り直し（attempts を多めに）
+#   window_after: window_calls を回し終えたあと止めを解いてこの秒数流し、各コマの状態（描いている打席の球数・描画中の球・伝令の残り）を
+#                 window-after.txt に、最後の絵を 03-after.png に撮る（issue #1563）。cards と組むときは cards_after を使う
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
@@ -64,6 +68,13 @@ captures:
     manager: home
     video: {from: catch-0.8, to: release+0.9, fps: 30}
     overrides: {DuelStageRig.ThrowClosedWindupOffForCapture: false}
+
+  - id: throw-slip-1552
+    name: "左翼ゴロの送球で足が滑らない（issue #1552・捕球〜リリースの水平移動と足の滑りの実測）"
+    scenario: of-grounder-runner-lf-lab
+    manager: home
+    video: {from: catch-0.8, to: release+0.9, fps: 30}
+    probes: [ThrowSlipDiag]
 
   - id: foul-chased-1074
     name: "あと一歩届かなかったファウルフライを守備ビューで見せる（issue #1074 (a)）"
@@ -396,13 +407,55 @@ captures:
     attempts: 1
     cards: [batting-safety]
 
-  - id: tactics-defense-ibb-1473
-    name: "守備の手札（左右）＋敬遠を押す（issue #1473）"
+  # ── 申告敬遠をタイムのメニューから（issue #1563）。止まる局面は steal-sign-lab（1回表・無死一塁）。home＝自校が守備 ──
+  # 01-window＝窓／11-ui＝タイムのメニュー（守備中は「申告敬遠」が出る）／12-ui＝確認「申告敬遠しますか？」。
+  # window-after.txt の各コマで queue（描く球の数）が 0 のまま・ball=False・result=Walk・timeoutsLeft が減っていないことを見る。
+  - id: ibb-timeout-head-1563
+    name: "申告敬遠（打席の頭）: タイムのメニュー→確認→はい（issue #1563）"
     scenario: steal-sign-lab
     manager: home
     view: panel
     attempts: 1
-    cards: [def-ibb]
+    window_calls: [OpenPauseMenuForCapture, shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
+    window_after: 6
+
+  - id: ibb-timeout-mid-1563
+    name: "申告敬遠（カウントの途中・2球目の窓）: タイムのメニュー→確認→はい（issue #1563）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    force: GroundFoul
+    window_pitch: 2
+    window_calls: [ClickToPauseForCapture, wait(7), shot, OpenIntentionalWalkConfirm, shot, OnConfirmIntentionalWalk]
+    window_after: 6
+
+  - id: ibb-timeout-no-1563
+    name: "申告敬遠の確認で「いいえ」: メニューへ戻り何も起きない・打席は続く（issue #1563）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [OpenPauseMenuForCapture, OpenIntentionalWalkConfirm, shot, CloseMessengerPicker, shot, OnResume]
+    window_after: 4
+
+  - id: ibb-timeout-offense-1563
+    name: "自校が攻撃のタイムのメニューには「申告敬遠」が出ない（issue #1563）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    attempts: 1
+    window_calls: [OpenPauseMenuForCapture, shot]
+
+  - id: ibb-ai-1563
+    name: "相手校(AI)の敬遠も投げずに歩く（強制発動の敬遠・issue #1563）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    force: IntentionalWalk
+    attempts: 1
+    window_calls: [shot]
+    window_after: 6
 
   - id: tactics-defense-pitchout-1473
     name: "守備の手札（左右）＋ウエストを押す（issue #1473）"
@@ -478,7 +531,7 @@ captures:
     size: {w: 1280, h: 720}
     game_scale: true
     attempts: 1
-    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-ibb), shot]
+    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-pitchout), shot]
 
   - id: tcard-hover-1534-away-1600
     name: "采配の手札のホバーの浮き上がりが隣のカードと投手欄の数字を隠さない（issue #1534）"
@@ -494,7 +547,34 @@ captures:
     manager: home
     view: panel
     attempts: 1
-    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-ibb), shot]
+    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-pitchout), shot]
+
+  # 遊撃手・二塁手が自分で二塁を踏んで一塁へ投げる併殺（issue #1549）。二塁カバーが受けず、処理した本人が運んで投げる
+  - id: dp-663-1549
+    name: "併殺 6-6-3（遊撃手が自分で二塁を踏んで一塁へ・issue #1549）"
+    scenario: dp-663-lab
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]
+
+  - id: dp-443-1549
+    name: "併殺 4-4-3（二塁手が自分で二塁を踏んで一塁へ・issue #1549）"
+    scenario: dp-443-lab
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]
+
+  # 6-6-3 の遊撃手が二塁へ走り込むところを連番で撮る（足が滑って見える件の確認・issue #1549）。slip は走りの足の滑りの実測
+  - id: dp-663-1549-video
+    name: "併殺 6-6-3 の走り込み（連番・足の滑りの実測・issue #1549）"
+    scenario: dp-663-lab
+    manager: home
+    video: {from: catch-1.0, to: release+0.1, fps: 30}
+    probes: [FielderRunDiag]
+
+  - id: dp-663-1549-alt
+    name: "併殺 6-6-3 控えのシード"
+    scenario: dp-663-lab-alt
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]
 
   # 対決ビューの右の中ほどの投球チャート（issue #1541）。打席の球が番号付きの印で溜まり、打者が替わると消える。
   # 1秒おきに画面全体を撮る（印の位置が3Dで球が来た位置と左右一致しているかを見る）
