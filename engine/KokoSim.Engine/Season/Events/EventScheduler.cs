@@ -126,8 +126,16 @@ public sealed class EventScheduler
     /// </summary>
     public Func<GameEvent, bool>? CastFilter { get; set; }
 
+    /// <summary>
+    /// この年度末に卒業する3年生が1人以上いるか（issue #1609）。新設校の1〜2年目のように3年生が居ない年は
+    /// 卒業式を出さない。<b>null（既定）は判定しない</b>＝名簿を渡さないヘッドレスシムは従来どおり毎年出る。
+    /// 固定イベントは抽選に載らず会話の選び方も Fork なので、出さない年があっても他の抽選の乱数列は動かない。
+    /// </summary>
+    public Func<bool>? GraduatingClassFilter { get; set; }
+
     private bool CanFire(GameEvent e)
     {
+        if (e.RequiresGraduatingClass && GraduatingClassFilter is { } graduating && !graduating()) return false;
         if (CastFilter is { } cast && e.Cast != EventCast.Default && !cast(e)) return false;
         if (e.RequiresRegion is { } need && Region != need) return false;
         if (e.RequiresNotAnnualFlag is { } f && _annualFlags.Contains(f)) return false;

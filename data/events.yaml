@@ -191,6 +191,7 @@ events:
     kind: Fixed
     scene: ground
     calendar_week: 49
+    requires_graduating_class: true   # 3年生（夏に引退した者を含む）が居ない年は出さない（issue #1609）
     text: "卒業式。3年生を送り出す。"
     variants:
       - lines:

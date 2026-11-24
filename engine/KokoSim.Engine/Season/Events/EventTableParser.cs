@@ -54,6 +54,7 @@ public static class EventTableParser
         // 「いま何を読んでいるか」を状態で持つのではなく、インデントで所属を決める。
         string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null, region = null, scene = null;
         int? calendarWeek = null;
+        var requiresGraduatingClass = false;
         double weight = 1.0;
         int cooldown = 4;
         // 効果（issue #613・#1270）。イベント直下の effects: はイベントの効果、outcomes: の要素の中は結果ごとの効果。
@@ -131,6 +132,7 @@ public static class EventTableParser
                 SetsAnnualFlag = setsFlag,
                 RequiresNotAnnualFlag = requiresNotFlag,
                 RequiresRegion = ParseRegion(region),
+                RequiresGraduatingClass = requiresGraduatingClass,
                 Scene = ParseScene(scene),
                 Text = text ?? "",
                 Variants = variants.ToArray(),
@@ -141,6 +143,7 @@ public static class EventTableParser
             });
             id = kind = text = setsFlag = requiresNotFlag = region = scene = null;
             calendarWeek = null;
+            requiresGraduatingClass = false;
             weight = 1.0;
             cooldown = 4;
             eff = new EffectBuilder();
@@ -219,6 +222,7 @@ public static class EventTableParser
                 case "sets_annual_flag": setsFlag = value.Length > 0 ? value : null; break;
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
                 case "requires_region": region = value.Length > 0 ? value : null; break;
+                case "requires_graduating_class": requiresGraduatingClass = value == "true"; break;
                 case "scene": scene = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
                 case "improve_prob": elemImproveProb = ParseDouble(value, 0.5); break;

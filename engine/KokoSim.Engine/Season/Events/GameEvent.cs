@@ -89,6 +89,13 @@ public sealed record GameEvent
     public Nation.JapanRegion? RequiresRegion { get; init; }
 
     /// <summary>
+    /// この年度末に卒業する3年生（夏に引退した者を含む）が1人以上いるときだけ発火する（卒業式。issue #1609）。
+    /// 判定は <see cref="EventScheduler.GraduatingClassFilter"/>。<b>未設定（null）のときは判定しない</b>＝
+    /// 名簿を持たないヘッドレスシムでは従来どおり毎年出る。
+    /// </summary>
+    public bool RequiresGraduatingClass { get; init; }
+
+    /// <summary>
     /// 通知フィード1行の要約（従来の <c>text:</c>）。ノベル画面で読み終えたあとも履歴として残る行なので、
     /// バリエーションを持たせず<b>常に同じ1行</b>にする（後から一覧で追えることを優先）。
     /// </summary>
