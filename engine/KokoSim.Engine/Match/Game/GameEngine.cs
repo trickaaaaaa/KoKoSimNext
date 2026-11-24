@@ -531,6 +531,9 @@ public static class GameEngine
         var bases = new BaseState();
         var outs = 0;
         var runsThisHalf = 0;
+        // issue #1601 ②: 守備側がエラーした後、その回の間だけ失策の起きやすさが結束 U で動く。
+        // 半イニング内で使い切り（次の半イニングはまた false から）＝「その回の終わりまで」。
+        var hadErrorThisHalf = false;
         // 自責点（issue #69）: 失策で出塁 or 失策連鎖で延命した走者を集合で追跡し、生還時に自責から除外する。
         // 半イニング内で使い切り（次の半イニングは新しい集合）。簡易規則の詳細は design-14/PitchingStatLine 参照。
         var unearnedRunners = new HashSet<Player>();
@@ -739,6 +742,14 @@ public static class GameEngine
                 Debugging.ForcedOutcome.FieldingError => ctx with { Fielding = Debugging.ForcedOutcomes.ApplyFielding(ctx.Fielding, force) },
                 _ => ctx,
             };
+            // issue #1601 ②: この回で守備側が既にエラーをしていたら、結束 U（AI校も U0 で効く）に応じた
+            // 倍率を失策の基準確率へ掛ける。恒等（mult=1.0）なら ApplyErrorStreak が同一参照を返すので、
+            // エラーが出ていない大多数の打席は従来と1ビットも変わらない。
+            if (hadErrorThisHalf)
+            {
+                var errorStreakMult = Cohesion.ErrorStreakMultiplier(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion);
+                paCtx = paCtx with { Fielding = Cohesion.ApplyErrorStreak(paCtx.Fielding, errorStreakMult) };
+            }
 
             // プレッシャー指数（設計書02 §3）: 状況から自動算出。采配判断にも渡す。
             var pressureIdx = PressureModel.Compute(new PressureSituation(
@@ -2686,13 +2697,15 @@ public static class GameEngine
             // Play.ErrorKind で判定してチーム失策数・個人失策数に加算する。
             Player? errorFielder = null;
             Match.Field.FieldPosition errorRole = default;
-            if ((res.Result == PlateAppearanceResult.ReachedOnError
-                    || res.Play?.ErrorKind == Match.Fielding.FieldingErrorKind.Fumble)
-                && (res.Play?.ErrorFielderRole ?? res.Play?.FielderRole) is { } eRole)
+            var thisPaHadError = res.Result == PlateAppearanceResult.ReachedOnError
+                || res.Play?.ErrorKind == Match.Fielding.FieldingErrorKind.Fumble;
+            if (thisPaHadError && (res.Play?.ErrorFielderRole ?? res.Play?.FielderRole) is { } eRole)
             {
                 errorRole = eRole;
                 errorFielder = defense.PlayerAtPosition(eRole);
             }
+            // issue #1601 ②: この回の残りの打席から失策の起きやすさが結束 U で動く（倍率の適用は次の打席頭）。
+            if (thisPaHadError) hadErrorThisHalf = true;
 
             // 犠飛（issue #68）: フライ捕球の打席で、タッチアップにより走者が生還した場合。3アウト目の凡打では
             // ApplyInPlayOut が即座に (0 runs) を返す（アウトカウント確認は現状 outs>=2 ガード）ため、
