@@ -131,10 +131,9 @@
 .sc-row2 { flex-direction: row; flex-shrink: 0; }
 .sc-card-last { margin-right: 0; }
 
-/* 見立て表: 4軸を縦に並べ、入部後は「実際」の列が右に足される（列見出しはそのときだけ出す）。 */
+/* 見立て表: 4軸を縦に並べる。 */
 .sc-est { flex-direction: column; }
 .sc-est__row { flex-direction: row; align-items: center; height: 34px; }
-.sc-est__row--head { height: 24px; }
 .sc-est__label {
     width: 92px;
     flex-shrink: 0;
@@ -151,7 +150,6 @@
     margin: 0;
     padding: 0;
 }
-.sc-est__th { font-size: var(--fs-cap); color: var(--color-faint); }
 /* 未契約で見立てが無いときの「？」。淡く出す（分からないことは警告ではない・UI原則②）。 */
 .sc-est__none { font-size: var(--fs-body); color: var(--color-faint); margin: 0; padding: 0; }
 .sc-cell--none { font-size: var(--fs-label); color: var(--color-faint); margin: 0; padding: 0; }

@@ -3,6 +3,7 @@ using System.Linq;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Season;      // 入部の条件（約束）の名前（ScoutPromises）
 using KokoSim.Unity.Components;   // 部品辞書（CompareRow等）
 using KokoSim.Unity.Shell;        // 球種チャート（PitchChartView / PitchChartDatum）・弾道ラベル
 using UnityEngine.UIElements;
@@ -72,6 +73,11 @@ namespace KokoSim.Unity.Match
         private FieldPosition? _convertTo;  // 継投時に元投手を回す守備位置（null=退場）
         private bool _dhWithdraw;        // 指枠を「そのまま退場」させる
         private bool _cmpFielderOverride;   // 投手が絡む操作でも打撃・守備ビューを見たい（トグル選択）
+
+        // 入部の条件（約束）の見張り（設計書04 §2.4）。保留中の操作で約束を破る選手（描画のたびに引き直す）と、
+        // 「約束を破って確定」を出している操作の鍵（null＝出していない。操作が変わったら下ろす）。
+        private readonly List<Player> _breakers = new();
+        private string _armedBreak;
 
         /// <param name="aptitudeGrades">
         /// 守備適性の9ポジションのランクを <see cref="Player.SourceId"/> から引く（issue #452）。
@@ -426,6 +432,7 @@ namespace KokoSim.Unity.Match
             // 交代するまで閉じさせない（Close 側のガードと対で、押せる/押せないを見た目にも出す）。
             _close?.SetEnabled(!forced);
             _cancel?.SetEnabled(!forced);
+            CollectBreakers();
             BuildKinds();
             if (_opt.IsOffense) { BuildOffenseOut(); BuildOffenseIn(); }
             else { BuildDefenseAssign(); BuildDefenseCandidates(); }
@@ -901,6 +908,13 @@ namespace KokoSim.Unity.Match
         private void BuildFooter()
         {
             var (ready, note, warn) = FooterState();
+            var breakKey = ready ? BreakKey() : null;
+            if (breakKey != _armedBreak) _armedBreak = null;   // 操作が変わったら押し直し
+            if (breakKey != null)
+            {
+                note = note + "　約束を破る：" + breakKey;
+                warn = true;
+            }
             if (_note != null)
             {
                 _note.text = note;
@@ -908,9 +922,10 @@ namespace KokoSim.Unity.Match
             }
             if (_ok != null)
             {
-                _ok.text = _opt.IsOffense
-                    ? (_offKind == SubstitutionKind.PinchRun ? "この代走を確定 ＋" : "この代打を確定 ＋")
-                    : "この操作を確定 ＋";
+                _ok.text = _armedBreak != null ? "約束を破って確定 ＋"
+                    : _opt.IsOffense
+                        ? (_offKind == SubstitutionKind.PinchRun ? "この代走を確定 ＋" : "この代打を確定 ＋")
+                        : "この操作を確定 ＋";
                 _ok.SetEnabled(ready);
             }
             var forced = ForcedPitcherChangePending;
@@ -1014,6 +1029,15 @@ namespace KokoSim.Unity.Match
             // 立たないが、押下配信は1フレーム遅れうるため二重に守る。競合させると共有状態を奪い合い、
             // 最悪 Unity ごとフリーズする（背景処理の列挙状態とラインナップの同時変更）。
             if (BackgroundGameOp.Running) return;
+            // 約束を破る操作は、1回目は確認だけ（ボタンの文が「約束を破って確定」に変わる・設計書04 §2.4）。
+            var breakKey = BreakKey();
+            if (breakKey != null && _armedBreak != breakKey)
+            {
+                _armedBreak = breakKey;
+                Render();
+                return;
+            }
+            _armedBreak = null;
             var (_, description, _) = FooterState();   // 確定した交代の一覧に残す一文（適用前の局面で組む）
             bool ok;
             if (_opt.IsOffense)
@@ -1061,6 +1085,72 @@ namespace KokoSim.Unity.Match
             ResetSelection();
             _onApplied?.Invoke();
             Render();
+        }
+
+        // ── 入部の条件（約束）の見張り（設計書04 §2.4） ──
+
+        /// <summary>
+        /// 保留中の操作で約束を破る選手を集める。代打を送る打者（「代打を出さない」）・途中から出す控え
+        /// （「1年夏は出さない」）・登板させる投手（「連投させない」）。判定は engine の <see cref="ScoutPromiseJudge"/>
+        /// を Shell 経由で引く（公式戦のときだけ）。
+        /// </summary>
+        private void CollectBreakers()
+        {
+            _breakers.Clear();
+            if (_opt == null || _opt.IsFinished) return;
+            void Check(Player p, bool breaks)
+            {
+                if (p != null && breaks && !_breakers.Contains(p)) _breakers.Add(p);
+            }
+            if (_opt.IsOffense)
+            {
+                if (_offInIndex < 0 || _offInIndex >= _opt.Reserves.Count) return;
+                var incoming = _opt.Reserves[_offInIndex];
+                Check(incoming, ScoutPromiseTracker.BreaksOnEntry(incoming.SourceId, pitches: false));
+                if (_offKind == SubstitutionKind.PinchHit
+                    && _opt.UpcomingBatterSlot >= 0 && _opt.UpcomingBatterSlot < _opt.Lineup.Count)
+                {
+                    var batter = _opt.Lineup[_opt.UpcomingBatterSlot];
+                    Check(batter, ScoutPromiseTracker.BreaksWhenPinchHitFor(batter.SourceId));
+                }
+                return;
+            }
+            var op = ResolveDef();
+            switch (op.Kind)
+            {
+                case DefKind.Relieve:
+                case DefKind.Convert:
+                case DefKind.PromoteFielder:
+                    Check(op.Incoming, ScoutPromiseTracker.BreaksOnEntry(op.Incoming?.SourceId, pitches: true));
+                    break;
+                case DefKind.Assign:
+                    Check(op.Incoming, ScoutPromiseTracker.BreaksOnEntry(op.Incoming?.SourceId, pitches: false));
+                    break;
+            }
+        }
+
+        /// <summary>保留中の操作で破る約束を「名前（条件）」でつないだ文（破らなければ null）。確認の鍵にも使う。</summary>
+        private string BreakKey()
+        {
+            if (_breakers.Count == 0) return null;
+            var parts = new List<string>(_breakers.Count);
+            foreach (var p in _breakers) parts.Add(NameOf(p) + "（" + PromiseLabel(p) + "）");
+            return string.Join("・", parts);
+        }
+
+        /// <summary>選手の生きている約束の名前（無ければ空）。</summary>
+        private static string PromiseLabel(Player p)
+        {
+            var holder = ScoutPromiseTracker.HolderOf(p?.SourceId);
+            return holder == null ? "" : ScoutPromises.Label(holder.Promise);
+        }
+
+        /// <summary>名前の横の約束タグ（約束の無い選手は付けない）。この操作で破るなら警告色。</summary>
+        private void AddPromiseTag(VisualElement row, Player p)
+        {
+            var label = PromiseLabel(p);
+            if (label.Length == 0) return;
+            row.Add(UiComponents.PromiseTag(label, _breakers.Contains(p)));
         }
 
         // ── 表示ヘルパ ──
@@ -1119,6 +1209,7 @@ namespace KokoSim.Unity.Match
             name.AddToClassList("lineup-row__name");
             if (previewTo != null) name.AddToClassList("lineup-row__name--out");
             row.Add(name);
+            if (previewTo == null) AddPromiseTag(row, p);
 
             if (previewTo != null)
             {
@@ -1189,6 +1280,7 @@ namespace KokoSim.Unity.Match
             var name = new Label(NameOf(p));
             name.AddToClassList("bench-row__name");
             row.Add(name);
+            if (!used) AddPromiseTag(row, p);
             var benchFace = CondFace(p, "msub-cond");
             if (benchFace != null) row.Add(benchFace);
             return row;

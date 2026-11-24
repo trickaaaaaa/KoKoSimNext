@@ -175,6 +175,7 @@ namespace KokoSim.Unity.Shell
             Pending = false;
             // 新規開始は背番号がもう決まっている＝背番号決定へは進まない。
             if (atStart) return true;
+            ScoutPromiseTracker.AfterCaptainNamed();   // 「主将にしてほしい」の約束（本人が2年の秋）
             // 主将の次は新チームの背番号決定（issue #954・案C）。確定するまで週を進められない。
             UniformNumberService.Open();
             return true;
@@ -213,6 +214,7 @@ namespace KokoSim.Unity.Shell
         public static void Confirm()
         {
             Pending = false;
+            ScoutPromiseTracker.AfterNumbersDecided();   // 「一桁の背番号」の約束（1年の秋）
             ScoutService.RaiseAfterNewTeamStarted();   // 引退→主将指名→背番号決定の終わり＝スカウトが分野を聞きに来る（issue #1035）
         }
 

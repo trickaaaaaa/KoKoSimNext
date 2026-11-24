@@ -70,6 +70,9 @@ internal static class DevelopingPlayerSaves
             .Add("pitcherSense", p.PitcherSense)
             .Add("pitcherSenseReading", p.PitcherSenseReading is { } psr ? JsonValue.Of(psr) : JsonNull.Instance)
             .Add("pitcherTalent", EnumJson.Write(p.PitcherTalent))
+            .Add("promise", EnumJson.Write(p.Promise))
+            .Add("promiseStatus", EnumJson.Write(p.PromiseStatus))
+            .Add("lastOfficialPitchStamp", p.LastOfficialPitchStamp)
             .Add("leadership", p.Leadership)
             .Add("receptiveness", p.Receptiveness)
             .Add("diligence", p.Diligence)
@@ -184,6 +187,10 @@ internal static class DevelopingPlayerSaves
                 ? o.Int("pitcherSenseReading") : (int?)null,
             // 投手の素質の見出し（v45・issue #1523）。v44 以前は無い＝まだ何も起きていない。
             PitcherTalent = o.Has("pitcherTalent") ? EnumJson.Read<PitcherTalentStage>(o.Str("pitcherTalent")) : PitcherTalentStage.None,
+            // 入部の条件（設計書04 §2.4）。項目の無い旧セーブは約束なしで読む。
+            Promise = o.Has("promise") ? EnumJson.Read<ScoutPromiseKind>(o.Str("promise")) : ScoutPromiseKind.None,
+            PromiseStatus = o.Has("promiseStatus") ? EnumJson.Read<ScoutPromiseStatus>(o.Str("promiseStatus")) : ScoutPromiseStatus.None,
+            LastOfficialPitchStamp = o.Has("lastOfficialPitchStamp") ? o.Int("lastOfficialPitchStamp") : 0,
             IsCaptain = o.Bool("isCaptain"),
             IsRetired = o.Bool("isRetired"),
             UniformNumber = o.Int("num"),

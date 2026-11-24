@@ -9,7 +9,7 @@ namespace KokoSim.Unity.Scout
 {
     /// <summary>
     /// 【開発用・エディタ限定】入部予定者（issue #587）の受け入れスクショ。
-    /// 週送りを実際に回して「確定前 → 3月確定（スカウト網 Lv1）→ Lv3 で見え方が変わる → 4月入部で答え合わせ」
+    /// 週送りを実際に回して「確定前 → 3月確定（スカウト網 Lv1）→ Lv3 で見え方が変わる → 4月入部で一覧から消える」
     /// の4状態を撮る。使い捨て。
     /// </summary>
     public sealed class ScoutShooter : MonoBehaviour
@@ -62,7 +62,7 @@ namespace KokoSim.Unity.Scout
                       + " sameProspects=" + (namesBefore == Names()));
             yield return Capture(doc, "03-confirmed-lv3");
 
-            // ④ 4月へ跨いで入部させる（推定と実際が並ぶ＝「？が埋まった」状態）
+            // ④ 4月へ跨いで入部させる（入部した学年は画面から消え、次の確定までの空状態に戻る）
             var rosterBefore = RosterService.Active.Count;
             yield return AdvanceTo(0);
             Debug.Log("[SC] week=" + GameClock.Week + " year=" + GameClock.YearIndex

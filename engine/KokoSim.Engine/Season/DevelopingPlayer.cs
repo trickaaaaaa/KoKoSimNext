@@ -156,6 +156,21 @@ public sealed class DevelopingPlayer
     /// </summary>
     public PitcherTalentStage PitcherTalent { get; set; }
 
+    /// <summary>
+    /// スカウトのとき交わした入部の条件（設計書04 §2.4。無ければ None）。本人について回り、
+    /// 公式戦で破ると信頼度と名声が下がる。
+    /// </summary>
+    public ScoutPromiseKind Promise { get; set; }
+
+    /// <summary><see cref="Promise"/> の状態（生きている／守り切った／破った）。</summary>
+    public ScoutPromiseStatus PromiseStatus { get; set; }
+
+    /// <summary>
+    /// 最後に公式戦で登板した日の通し番号（<see cref="ScoutPromiseJudge.PitchDayStamp"/>。0＝まだ無い）。
+    /// 「連投させない」の約束の判定に使う。
+    /// </summary>
+    public int LastOfficialPitchStamp { get; set; }
+
     /// <summary>統率傾向（性格の一部, CHANGELOG 22b）。主将選定の軸（設計書09 §8）。</summary>
     public int Leadership { get; init; } = 50;
 
@@ -344,6 +359,9 @@ public sealed class DevelopingPlayer
             PitcherSense = PitcherSense,
             PitcherSenseReading = PitcherSenseReading,
             PitcherTalent = PitcherTalent,
+            Promise = Promise,
+            PromiseStatus = PromiseStatus,
+            LastOfficialPitchStamp = LastOfficialPitchStamp,
             Leadership = Leadership,
             Receptiveness = Receptiveness,
             Diligence = Diligence,

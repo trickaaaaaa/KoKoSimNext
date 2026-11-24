@@ -110,6 +110,22 @@
     margin-right: var(--sp-2);
 }
 
+/* 入部の条件（約束）のタグ（設計書04 §2.4）。塁タグと同じ小片。この交代で破るときだけ警告色。 */
+.promise-tag {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip);
+    padding-left: 5px;
+    padding-right: 5px;
+    margin-left: var(--sp-2);
+    flex-shrink: 0;
+}
+.promise-tag--warn {
+    color: var(--color-ink);
+    background-color: var(--color-warn);
+}
+
 /* ── 右：2選手比較（スタメン設定の比較パネルと同じ部品） ── */
 /* 比較列。300px は #64（初回実装）の値で、**投手ビュー（5行・数値だけ）**に合わせた寸法だった。
    #478 で守備交代の既定が野手ビュー（9行・和文の型名あり）になり寸法が足りなくなったので、

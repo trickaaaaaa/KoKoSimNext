@@ -1195,6 +1195,65 @@ public sealed class TeamState
     /// <summary>まだ使っていない控え（名簿順＝背番号順）。交代UIの指名候補。</summary>
     public IReadOnlyList<Player> AvailableReserves => _reserves;
 
+    // ===== 約束の見張り（設計書04 §2.4）。PromiseGuard が null なら全部が従来の値をそのまま返す。 =====
+
+    /// <summary>約束の見張り（自校の公式戦だけ。null＝見張らない）。</summary>
+    public MatchPromiseGuard? PromiseGuard => _team.PromiseGuard;
+
+    /// <summary>采配AIに見せる控え＝途中から出すと約束を破る子を除いた控え（見張りが無ければ控えそのもの）。</summary>
+    public IReadOnlyList<Player> EligibleReserves
+    {
+        get
+        {
+            if (_team.PromiseGuard is not { } g) return _reserves;
+            var list = new List<Player>(_reserves.Count);
+            foreach (var p in _reserves) if (!g.BlocksEntry(p)) list.Add(p);
+            return list;
+        }
+    }
+
+    /// <summary>采配AIに見せる継投の候補＝登板させると約束を破る子を除いた <see cref="ReliefRankingCandidates"/>。</summary>
+    public IReadOnlyList<Player> EligibleReliefCandidates
+    {
+        get
+        {
+            var all = ReliefRankingCandidates;
+            if (_team.PromiseGuard is not { } g) return all;
+            var list = new List<Player>(all.Count);
+            foreach (var p in all) if (!g.BlocksPitching(p)) list.Add(p);
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// 既定の継投（<see cref="TryChangePitcher"/>）の約束を守る版。見張りが無ければ従来とまったく同じ。
+    /// 見張りがあれば、約束の子を飛ばして名簿順で控えの投手→控えの誰か、の順に選び、控えに投げられる子が
+    /// いなければ守っている野手をマウンドへ回す（オーナー決定 2026-11-24「野手を投手に回してでも約束を守る」）。
+    /// 野手は制球＋球速の高い順（緊急登板の目安。乱数は使わない）。誰もいなければ交代しない。
+    /// </summary>
+    public bool TryChangePitcherKeepingPromises(ReliefBackfillCoefficients? backfill = null)
+    {
+        if (_team.PromiseGuard is not { } g) return TryChangePitcher();
+        foreach (var p in _reserves)
+            if (p.Position == FieldPosition.Pitcher && !g.BlocksPitching(p)) return ChangePitcherTo(p);
+        foreach (var p in _reserves)
+            if (!g.BlocksPitching(p)) return ChangePitcherTo(p);
+
+        var skip = _usesDh ? _dhSlot : _pitcherSlot;
+        Player? best = null;
+        var bestScore = double.MinValue;
+        for (var i = 0; i < _lineup.Length; i++)
+        {
+            if (i == skip) continue;
+            var f = _lineup[i];
+            if (g.BlocksPitching(f)) continue;
+            var score = f.Pitching.Control + f.Pitching.MaxVelocityKmh;
+            if (score > bestScore) { best = f; bestScore = score; }
+        }
+        // 控えから守備を補充しない＝現投手がその野手の守備位置へ回る（補充の控えが約束の子になりうるため）。
+        return best is not null && RelieveWith(best, backfill, allowBenchBackfill: false);
+    }
+
     /// <summary>
     /// 投手交代で指名できる全候補＝控え全員（issue #137: 誰でも投手として登板できる）。
     /// 添字は <see cref="ChangePitcherTo"/> 呼び出しの Player 引数解決に使う（SubstitutionCommands/GameReplay 共通）。

@@ -209,6 +209,7 @@ namespace KokoSim.Unity.Home
             RunFormWeek();                              // 調子の週次の波（設計書02 §3.3）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
             RunSkillYearFeed();                         // 年度替わりの負スキル克服（issue #1471）
+            RunPromiseFeed();                           // 入部の条件（約束）の決着（設計書04 §2.4）
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化（設計書20 §5）
             RunKoshienFeed();                           // 観るだけの甲子園の決着（設計書05 §1.1a）
@@ -406,6 +407,31 @@ namespace KokoSim.Unity.Home
             notices.Add(new SkillChangeNotice(lazy, Skill.Lazy, SkillChangeKind.Overcome, SkillChangeCause.Grade));
 
             PushFeed(SkillFeedItems(notices, "今週"));
+        }
+
+        /// <summary>
+        /// 入部の条件（約束）の決着を通知フィードへ流す（設計書04 §2.4）。決着そのものは
+        /// <see cref="KokoSim.Unity.Shell.ScoutPromiseTracker"/> が済ませており、ここは提示だけ。
+        /// </summary>
+        private void RunPromiseFeed()
+        {
+            var items = PromiseFeedItems("今週");
+            if (items.Count > 0) PushFeed(items);
+        }
+
+        private static List<FeedItem> PromiseFeedItems(string when)
+        {
+            var items = new List<FeedItem>();
+            foreach (var o in KokoSim.Unity.Shell.ScoutPromiseTracker.DrainNotices())
+                items.Add(new FeedItem
+                {
+                    When = when,
+                    Text = KokoSim.Unity.Shell.ScoutPromiseTracker.FeedText(o),
+                    Kind = o.Kept ? FeedKind.Up : FeedKind.Warn,
+                    Tag = o.Kept ? "情報" : "警告",
+                    PlayerId = o.Player.Id,
+                });
+            return items;
         }
 
         /// <summary>
@@ -1008,6 +1034,7 @@ namespace KokoSim.Unity.Home
             items.AddRange(BigStageFeedItems(_growth));
             items.AddRange(SkillFeedItems(GameSession.Current.DrainSkillNotices(), "本日"));   // 実戦経験（issue #1471）
             items.AddRange(MomentumFeedItems());
+            items.AddRange(PromiseFeedItems("本日"));   // 入部の条件（約束）の決着（設計書04 §2.4）
             PushFeed(items);
         }
 

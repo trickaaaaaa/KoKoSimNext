@@ -751,6 +751,25 @@ namespace KokoSim.Unity.Components
         // ===== NumUnit（数字＋和文単位の混植セル）=====
 
         /// <summary>
+        /// 入部の条件（約束）のタグ（設計書04 §2.4）。約束が生きている選手の名前の近くに付ける共通の印で、
+        /// 中身は条件の短い名前（「4番確約」）。いまの並び・交代で破ることになるときは <paramref name="breaks"/> で警告色にする。
+        /// </summary>
+        public static VisualElement PromiseTag(string label, bool breaks)
+        {
+            // データ画面（スコアブック・.sbk）は sbk-promise、試合中の画面（設計書19）は promise-tag が見た目を持つ。
+            var tag = new Label(label);
+            tag.AddToClassList("sbk-promise");
+            tag.AddToClassList("promise-tag");
+            tag.AddToClassList("f-body");
+            if (breaks)
+            {
+                tag.AddToClassList("sbk-promise--warn");
+                tag.AddToClassList("promise-tag--warn");
+            }
+            return tag;
+        }
+
+        /// <summary>
         /// 数字＋和文単位を Label 分割して並べる（設計書16 §2・決定2-B「混植セルは Label を分ける」）。
         /// 数字だけ f-num（bold で f-num-bd）に載せ、単位は f-body のまま。
         /// 例: NumUnit("2", "年")／NumUnit("45", "名")／NumUnit("15", "週")。

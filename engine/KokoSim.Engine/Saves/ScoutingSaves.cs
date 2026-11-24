@@ -53,6 +53,9 @@ internal static class ScoutingSaves
         .Add("decided", p.Decided)
         .Add("succeeded", p.Succeeded)
         .Add("preference", EnumJson.Write(p.Preference))
+        .Add("response", EnumJson.Write(p.Response))
+        .Add("promise", EnumJson.Write(p.Promise))
+        .Add("promised", p.Promised)
         .Add("player", DevelopingPlayerSaves.ToJson(p.Player))
         .Add("report", ReportToJson(p.Report));
 
@@ -67,6 +70,10 @@ internal static class ScoutingSaves
         Decided = o.Bool("decided"),
         Succeeded = o.Bool("succeeded"),
         Preference = EnumJson.Read<CareerPathPreference>(o.Str("preference")),
+        // 手応えを持たない旧セーブは「まだ無い」で読む（次の訪問で埋まる）。
+        Response = o.Has("response") ? EnumJson.Read<VisitResponse>(o.Str("response")) : VisitResponse.None,
+        Promise = o.Has("promise") ? EnumJson.Read<ScoutPromiseKind>(o.Str("promise")) : ScoutPromiseKind.None,
+        Promised = o.Has("promised") && o.Bool("promised"),
         Player = DevelopingPlayerSaves.FromJson(o.Obj("player")),
         Report = ReportFromJson(o.Obj("report")),
     };

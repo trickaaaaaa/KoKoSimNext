@@ -138,6 +138,9 @@ namespace KokoSim.Unity.Shell
             // その場合だけ従来どおり年度替わりでその場生成する（乱数源は同じ YearRng）。
             var incoming = ProspectService.TakeFor(newYearIndex);
 
+            // 入部の条件（約束）の年度末の決着（設計書04 §2.4）。昇級・卒業の前の学年で見る。
+            ScoutPromiseTracker.AtYearEnd(_roster);
+
             var rollover = RosterLifecycle.AdvanceYear(
                 _roster, newYearIndex, coefficients, YearRng(newYearIndex),
                 talentCenter: TalentCenter(), nextId: _nextId, incoming: incoming);
@@ -147,6 +150,7 @@ namespace KokoSim.Unity.Shell
                 ProspectService.MarkJoined(rollover.Newcomers);
                 GameClock.ProspectJoined = true;   // ホームが通知フィードへ流す（遷移とUI提示の分離）
             }
+            ScoutPromiseTracker.AtJoin(rollover.Newcomers);   // 寮の約束は入部の時点で決着する
             _graduates.AddGraduated(rollover.Graduated, newYearIndex);   // 卒業生は名前の表へ（本体は捨てる）。
 
             // 体質の負スキル（サボり癖・ケガしやすい）の克服（issue #1471・設計書10 §3）。新入生生成とは別の

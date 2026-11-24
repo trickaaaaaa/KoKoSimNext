@@ -826,6 +826,8 @@ namespace KokoSim.Unity.Shell
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
+                // 入部の条件（約束）の判定（設計書04 §2.4）。公式戦だけ。怪我の反映の後＝この試合で負った怪我は次の試合から数えない。
+                ScoutPromiseTracker.AfterOfficialGame(detail, LastOutcome.ManagerWasAway, Kind, matchDay);
             }
             RecordOfficialMatch(LastOutcome, matchDay);
             PendingMatchPressure = 0;   // 取材のプレッシャーは公式戦1試合だけ（issue #1467）
@@ -878,6 +880,8 @@ namespace KokoSim.Unity.Shell
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
                 ApplyLeftExperienceGrowth(detail, LastOutcome.ManagerWasAway, isOfficial: true);
+                // 入部の条件（約束）の判定（設計書04 §2.4）。公式戦だけ。怪我の反映の後＝この試合で負った怪我は次の試合から数えない。
+                ScoutPromiseTracker.AfterOfficialGame(detail, LastOutcome.ManagerWasAway, Kind, matchDay);
             }
             RecordOfficialMatch(LastOutcome, matchDay);
             PendingMatchPressure = 0;   // 取材のプレッシャーは公式戦1試合だけ（issue #1467）

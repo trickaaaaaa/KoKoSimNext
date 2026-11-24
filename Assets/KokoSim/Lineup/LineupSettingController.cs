@@ -20,6 +20,9 @@ namespace KokoSim.Unity.Lineup
         private VisualElement _root;
         private Color _accent = SchoolAccent.Default;
 
+        private string _breakKey = "";      // いまの並びで破る約束（空＝破らない）
+        private string _armedBreakKey;      // 「約束を破って決定」を出している並び（null＝出していない）
+
         private void OnEnable()
         {
             _state = new LineupSettingState();
@@ -54,7 +57,16 @@ namespace KokoSim.Unity.Lineup
                 warn.text = v.WarnText;
                 warn.style.display = string.IsNullOrEmpty(v.WarnText) ? DisplayStyle.None : DisplayStyle.Flex;
             }
-            _root.Q<Button>("lu-ok")?.SetEnabled(v.CanConfirm);
+            // 約束を破る並びのまま決定するときだけ、もう一度押させる（設計書04 §2.4）。並びが変わったら押し直し。
+            var breakKey = string.Join("/", v.BrokenPromises);
+            if (breakKey != _armedBreakKey) _armedBreakKey = null;
+            _breakKey = breakKey;
+            var ok = _root.Q<Button>("lu-ok");
+            if (ok != null)
+            {
+                ok.SetEnabled(v.CanConfirm);
+                ok.text = _armedBreakKey != null ? "約束を破って決定" : "この打順で決定";
+            }
 
             _root.Q<Label>("lu-dh-on")?.EnableInClassList("sbk-seg__opt--on", v.UsesDh);
             _root.Q<Label>("lu-dh-off")?.EnableInClassList("sbk-seg__opt--on", !v.UsesDh);
@@ -126,7 +138,7 @@ namespace KokoSim.Unity.Lineup
 
                 row.Add(Cell("lu-c-num", new NumberPatch(r.UniformNumber)));
                 row.Add(PosChip(r));
-                row.Add(NameCell(r.Name, r.IsCaptain, r.Injury));
+                row.Add(NameCell(r.Name, r.IsCaptain, r.Injury, r.Promise));
 
                 var info = new Label(r.GradeLabel + " " + r.HandLabel);
                 info.AddToClassList("lu-c-info");
@@ -164,7 +176,7 @@ namespace KokoSim.Unity.Lineup
         }
 
         // 選手名（明朝）＋主将マーク。故障中は名前の下に怪我タグ（2段）。
-        private static VisualElement NameCell(string name, bool captain, InjuryChipView injury)
+        private static VisualElement NameCell(string name, bool captain, InjuryChipView injury, PromiseChipView promise)
         {
             var cell = new VisualElement();
             cell.AddToClassList("lu-c-name");
@@ -179,7 +191,7 @@ namespace KokoSim.Unity.Lineup
             if (captain) line.Add(new CaptainStamp());
             cell.Add(line);
 
-            if (!injury.IsEmpty) cell.Add(InjuryTag(injury));
+            AddTags(cell, injury, promise);
             return cell;
         }
 
@@ -224,6 +236,12 @@ namespace KokoSim.Unity.Lineup
             if (!v.StartingPitcherInjury.IsEmpty)
             {
                 var tag = InjuryTag(v.StartingPitcherInjury);
+                tag.style.marginLeft = 8;
+                sub.Add(tag);
+            }
+            if (!v.StartingPitcherPromise.IsEmpty)
+            {
+                var tag = UiComponents.PromiseTag(v.StartingPitcherPromise.Label, v.StartingPitcherPromise.Breaks);
                 tag.style.marginLeft = 8;
                 sub.Add(tag);
             }
@@ -297,7 +315,7 @@ namespace KokoSim.Unity.Lineup
                 name.AddToClassList("lu-bench-row__name");
                 name.AddToClassList("f-display");
                 block.Add(name);
-                if (!b.Injury.IsEmpty) block.Add(InjuryTag(b.Injury));
+                AddTags(block, b.Injury, b.Promise);
                 row.Add(block);
 
                 var cond = new VisualElement();
@@ -451,6 +469,12 @@ namespace KokoSim.Unity.Lineup
         private void OnOk()
         {
             if (!_state.CanConfirm) return;   // 編成不備（ベンチ入り9人未満）では確定させない
+            if (!string.IsNullOrEmpty(_breakKey) && _armedBreakKey == null)
+            {
+                _armedBreakKey = _breakKey;   // 1回目は確認だけ（ボタンの文が変わる）
+                Render();
+                return;
+            }
             var spec = _state.ToLineupSpec();
             GameSession.Current.Lineup = spec;
             // 次の試合のスタメン画面はここから始まる（issue lineup-carry-over-previous-game）。選手IDで持つのでセーブにも載る。
@@ -476,6 +500,22 @@ namespace KokoSim.Unity.Lineup
         }
 
         // ── 部品ヘルパ ──
+
+        // 名前の下のタグの段（怪我・入部の約束）。どちらも無ければ段を作らない＝行は1段のまま。
+        private static void AddTags(VisualElement host, InjuryChipView injury, PromiseChipView promise)
+        {
+            if (injury.IsEmpty && promise.IsEmpty) return;
+            var line = new VisualElement();
+            line.AddToClassList("lu-row__name-cell");
+            if (!injury.IsEmpty) line.Add(InjuryTag(injury));
+            if (!promise.IsEmpty)
+            {
+                var tag = UiComponents.PromiseTag(promise.Label, promise.Breaks);
+                if (!injury.IsEmpty) tag.style.marginLeft = 6;
+                line.Add(tag);
+            }
+            host.Add(line);
+        }
         private static VisualElement InjuryTag(InjuryChipView chip)
         {
             var tag = new VisualElement();

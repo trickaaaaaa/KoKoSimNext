@@ -1535,6 +1535,19 @@ scout:
   # 争奪戦
   rival_event_prob: 0.22            # 訪問1回あたりに競合校が動く確率
   rival_event_tier_step: 1          # 動くと競合校の格が1段上がる
+  # 訪問の手応え（成功率を4段の言葉へ丸める境目。数値は監督に見せない）
+  response_lukewarm_min: 0.25       # これ以上で「反応は薄い」・未満は「心ここにあらず」
+  response_warm_min: 0.45           # これ以上で「悪くない反応」
+  response_eager_min: 0.65          # これ以上で「目を輝かせる」
+  # 入部の条件（約束）。設計書04 §2.4
+  promise_ask_prob: 0.15            # 訪問1回あたりに条件を出してくる確率（候補1人につき一度きり＝たまに）
+  promise_bonus: 0.18               # 約束したときの成功率の上乗せ（訪問2回ぶん）
+  promise_weight_fit: 3.0           # 進路希望に合う条件の重み
+  promise_weight_neutral: 1.0       # 進路希望と関係ない条件の重み（矛盾する条件は出さない）
+  promise_captain_leadership_min: 70  # 「主将にしてほしい」を言い出す統率傾向の下限
+  promise_broken_trust: 5.0         # 破ったときの信頼度の下げ幅（1回だけ・オーナー決定 2026-11-24）
+  promise_broken_fame: 5.0          # 破ったときの名声の下げ幅（1回だけ・同上）
+  promise_kept_trust: 2.0           # 守り切ったときの信頼度の上げ幅（同上）
   # 進路希望の分布（重みの比。等分が初期値）
   preference_prestige_weight: 1.0
   preference_playing_time_weight: 1.0
