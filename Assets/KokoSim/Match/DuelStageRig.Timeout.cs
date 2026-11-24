@@ -33,20 +33,6 @@ namespace KokoSim.Unity.Match
         private const float TimeoutRunVClip = 4.28f, TimeoutRunMoveDir = -9.6f;
         private const float TimeoutWalkVClip = 0.73f, TimeoutWalkMoveDir = -4.5f;
 
-        /// <summary>集まる・散るときの走る速さ[m/s]（収録4.28を0.93倍＝軽いジョグ）。</summary>
-        public static float TimeoutRunSpeed = 4.0f;
-        /// <summary>輪に入る直前・散り始めの歩く速さ[m/s]（収録0.73の1.37倍。歩きの上限1.45倍の内側）。</summary>
-        public static float TimeoutWalkSpeed = 1.0f;
-        /// <summary>輪に入る前に歩く距離[m]。</summary>
-        public static float TimeoutWalkInM = 1.6f;
-        /// <summary>輪の半径[m]（投手の位置から各人の立ち位置まで）。</summary>
-        public static float TimeoutRingRadiusM = 1.2f;
-        /// <summary>集まる人が走り始める位置の、輪からの最大距離[m]。定位置がこれより遠い人は画面外のこの距離から走ってくる。</summary>
-        public static float TimeoutStartRadiusM = 9f;
-        /// <summary>全員が輪に入ってから話している秒数[s]。</summary>
-        public static float TimeoutTalkSeconds = 4.0f;
-        /// <summary>散り始めてから場面を畳むまで[s]。</summary>
-        public static float TimeoutLeaveSeconds = 2.6f;
         /// <summary>散るとき、歩いてから走りへ替えるまで[s]。</summary>
         private const float TimeoutLeaveWalkSeconds = 0.7f;
         /// <summary>クリップの繋ぎ[s]。</summary>
@@ -57,20 +43,8 @@ namespace KokoSim.Unity.Match
         /// 伝令の減速（走り→歩き）に使う距離[m]。収録 <see cref="OverrunClipName"/> の減速はほぼ全編
         /// （<see cref="OverrunDecelEndsAt"/>＝2.58s）で、走り→歩きの平均の速さで割った距離を進む。
         /// </summary>
-        private static float TimeoutDecelM => (TimeoutRunSpeed + TimeoutWalkSpeed) * 0.5f * OverrunDecelEndsAt;
+        private static float TimeoutDecelM => (DuelTuning.TimeoutRunSpeed + DuelTuning.TimeoutWalkSpeed) * 0.5f * OverrunDecelEndsAt;
 
-        /// <summary>
-        /// カメラの位置（ステージ座標: +x=一塁側・+z=センター方向・マウンド z=18.44）。本塁側の斜め上から輪を見下ろす
-        /// （2026-11-21 監督決定。一塁側・二塁側の案と録画で見比べて選んだ）。
-        /// </summary>
-        public static Vector3 TimeoutCameraPos = new Vector3(5.5f, 7.0f, 5.0f);
-        /// <summary>縦に収めたい実寸[m]（輪の全身と足元のマウンド。構図は画角でなく実寸で決める＝3d-character.md）。</summary>
-        public static float TimeoutFrameHeightM = 7.5f;
-        /// <summary>
-        /// カメラの注視点の高さ[m]。輪の胸（約0.9m）より下を見る＝輪を画面の上寄せに置き、下に出る伝令役の
-        /// テロップ（交代テロップと同じ器）と重ねない（2026-11-21 録画で輪の下半分がテロップに隠れていた）。
-        /// </summary>
-        public static float TimeoutLookY = -0.8f;
 
         /// <summary>
         /// 自校のベンチが一塁側か（伝令が走ってくる側）。日本の高校野球は試合ごとに抽選で決まり、
@@ -115,7 +89,7 @@ namespace KokoSim.Unity.Match
         public bool TimeoutSceneActive => _toActive || _otActive;
 
         /// <summary>場面が終わった（散り終えた）か。呼び出し側はこれを見て <see cref="EndTimeoutScene"/> を呼ぶ。</summary>
-        public bool TimeoutSceneDone => (_toActive && _toLeaveStartT >= 0f && _toT - _toLeaveStartT >= TimeoutLeaveSeconds)
+        public bool TimeoutSceneDone => (_toActive && _toLeaveStartT >= 0f && _toT - _toLeaveStartT >= DuelTuning.TimeoutLeaveSeconds)
             || OffenseTimeoutSceneDone;
 
         /// <summary>
@@ -219,11 +193,11 @@ namespace KokoSim.Unity.Match
         {
             if (a == null || a.Go == null) return;
             float r = slotDeg * Mathf.Deg2Rad;
-            var slot = _toCenter + new Vector2(Mathf.Sin(r), Mathf.Cos(r)) * TimeoutRingRadiusM;
+            var slot = _toCenter + new Vector2(Mathf.Sin(r), Mathf.Cos(r)) * DuelTuning.TimeoutRingRadiusM;
             var from = home - slot;
             float d = from.magnitude;
             // 定位置が遠い人は、輪から TimeoutStartRadiusM の所（画面の外）から走ってくる
-            var start = d > TimeoutStartRadiusM ? slot + from / d * TimeoutStartRadiusM : home;
+            var start = d > DuelTuning.TimeoutStartRadiusM ? slot + from / d * DuelTuning.TimeoutStartRadiusM : home;
             _toMembers.Add(new TimeoutMember
             {
                 A = a, Role = role, Start = start, Slot = slot, Delay = delay, Idle = idle, Phase = phase,
@@ -268,7 +242,7 @@ namespace KokoSim.Unity.Match
 
         private void ApplyTimeoutCamera()
         {
-            FramePreview(TimeoutCameraPos, new Vector3(_toCenter.x, TimeoutLookY, _toCenter.y), TimeoutFrameHeightM);
+            FramePreview(DuelTuning.TimeoutCameraPos, new Vector3(_toCenter.x, DuelTuning.TimeoutLookY, _toCenter.y), DuelTuning.TimeoutFrameHeightM);
         }
 
         /// <summary>stage-local の a から b を向く yaw[度]（素の向き +Z のクリップ用）。</summary>
@@ -310,7 +284,7 @@ namespace KokoSim.Unity.Match
                 float tt = _toT - _toTalkStartT;
                 if (!_toNod1 && tt >= 0.7f) { _toNod1 = true; PitcherNods(TimeoutNod1ClipName); }
                 if (!_toNod2 && tt >= 2.5f) { _toNod2 = true; PitcherNods(TimeoutNod2ClipName); }
-                if (tt >= TimeoutTalkSeconds) BeginTimeoutLeave(walk);
+                if (tt >= DuelTuning.TimeoutTalkSeconds) BeginTimeoutLeave(walk);
             }
 
             // 投手は輪の中心で向きだけ合わせる（伝令へ。散ったら本塁へ）
@@ -356,9 +330,9 @@ namespace KokoSim.Unity.Match
                     break;
                 case TimeoutLeg.Run:
                 {
-                    speed = TimeoutRunSpeed;
+                    speed = DuelTuning.TimeoutRunSpeed;
                     float left = Vector2.Distance(m.Pos, m.Slot);
-                    float brake = m.Role == TimeoutRole.Messenger ? TimeoutDecelM + TimeoutWalkInM * 0.5f : TimeoutWalkInM;
+                    float brake = m.Role == TimeoutRole.Messenger ? TimeoutDecelM + DuelTuning.TimeoutWalkInM * 0.5f : DuelTuning.TimeoutWalkInM;
                     if (left <= brake)
                     {
                         m.LegT = 0f;
@@ -382,7 +356,7 @@ namespace KokoSim.Unity.Match
                 {
                     // 収録の減速に合わせて地面の速さも落とす（走り→歩き。OverrunDecelEndsAt で歩きの速さ）
                     float u = Mathf.Clamp01(m.LegT / OverrunDecelEndsAt);
-                    speed = Mathf.Lerp(TimeoutRunSpeed, TimeoutWalkSpeed, u);
+                    speed = Mathf.Lerp(DuelTuning.TimeoutRunSpeed, DuelTuning.TimeoutWalkSpeed, u);
                     moveDir = OverrunMoveDirDeg;
                     if (u >= 1f)
                     {
@@ -394,11 +368,11 @@ namespace KokoSim.Unity.Match
                     break;
                 }
                 case TimeoutLeg.WalkIn:
-                    speed = TimeoutWalkSpeed;
+                    speed = DuelTuning.TimeoutWalkSpeed;
                     moveDir = TimeoutWalkMoveDir;
                     break;
                 case TimeoutLeg.LeaveWalk:
-                    speed = TimeoutWalkSpeed;
+                    speed = DuelTuning.TimeoutWalkSpeed;
                     moveDir = TimeoutWalkMoveDir;
                     target = m.Start;
                     if (m.LegT >= TimeoutLeaveWalkSeconds)
@@ -410,7 +384,7 @@ namespace KokoSim.Unity.Match
                     }
                     break;
                 case TimeoutLeg.LeaveRun:
-                    speed = TimeoutRunSpeed;
+                    speed = DuelTuning.TimeoutRunSpeed;
                     target = m.Start;
                     break;
             }

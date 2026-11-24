@@ -106,14 +106,14 @@ namespace KokoSim.UnityEditorTools
             //     そちらは帽子が別メッシュ（生成メッシュ）＝つばの塗り分けが**別実装**になる。
             try
             {
-                DuelStageRig.ForceU2Body = true;
+                DuelTuning.ForceU2Body = true;
                 Shoot(visor, cols: 4, cellW: 520, cellH: 390, file: "sheet-visor-u2", closeUp: true);
                 Shoot(visor, cols: 4, cellW: 520, cellH: 390, file: "sheet-visor-u2-side",
                     closeUp: true, closeUpYawDeg: 75f);
             }
             finally
             {
-                DuelStageRig.ForceU2Body = false;
+                DuelTuning.ForceU2Body = false;
             }
 
             // ④ 実際の校IDで引いた見た目（軸込み）。同一県規模で並べて被りの体感を確かめる。

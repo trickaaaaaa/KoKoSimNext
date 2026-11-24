@@ -235,8 +235,8 @@ namespace KokoSim.EditorTests
         public void GearMeshes_LoadFromCatalogLikeABuild()
         {
             Assume.That(DuelStageRig.Catalog, Is.Not.Null, "ビルド同梱の索引が無い環境（購入資産なし）");
-            bool prev = DuelStageRig.ForceCatalogOnly;
-            DuelStageRig.ForceCatalogOnly = true;
+            bool prev = DuelTuning.ForceCatalogOnly;
+            DuelTuning.ForceCatalogOnly = true;
             DuelGearMeshes.ClearCache();
             try
             {
@@ -257,7 +257,7 @@ namespace KokoSim.EditorTests
             }
             finally
             {
-                DuelStageRig.ForceCatalogOnly = prev;
+                DuelTuning.ForceCatalogOnly = prev;
                 DuelGearMeshes.ClearCache();
             }
         }

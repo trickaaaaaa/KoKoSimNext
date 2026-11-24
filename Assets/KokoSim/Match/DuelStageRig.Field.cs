@@ -799,7 +799,7 @@ namespace KokoSim.Unity.Match
                     if (postIdle != null && clip == postIdle)
                     {
                         CrossfadeActorToClip(a, clip, PostHomeRunIdlePhase(pos) * clip.length, 0f,
-                            PostHrStandFadeSeconds);
+                            DuelTuning.PostHrStandFadeSeconds);
                         // ⚠ 投手は対決の「末尾で頭姿勢のまま止まる」を持ったまま来る＝待機が1周したところで
                         //    固まる（実測: 本塁到達のコマで投手だけクリップ内時刻 0.00 に張り付いていた）。
                         //    ここでループに戻す。対決の値は EndFieldPlay の Restore が控えから戻す
@@ -808,7 +808,7 @@ namespace KokoSim.Unity.Match
                     }
                     // 直立→構えは別の姿勢へ移るので、位相合わせでなく短くクロスフェードする（体が跳ばない）
                     else if (want < 0 && clip != IdleClipFor(pos) && clip.name != a.Clip?.name)
-                        CrossfadeActorToClip(a, clip, 0f, 0f, HomeRunCrouchFadeSeconds);
+                        CrossfadeActorToClip(a, clip, 0f, 0f, DuelTuning.HomeRunCrouchFadeSeconds);
                     else if (handoffFromStart && want >= 0)
                         CrossfadeActorToClip(a, clip, 0f, 0f, StartHandoffFadeSeconds);
                     else
@@ -1358,8 +1358,6 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private HandleBobble _bobble = HandleBobble.NoneValue;
 
-        /// <summary>もたつきの芝居を付けるか（見比べ撮影用の静的スイッチ。既定 true）。</summary>
-        public static bool HandleBobbleEnabled = true;
 
         /// <summary>握り直しで球がグラブから浮く高さ[m]・浮き始め（捕球から）[s]・浮いている秒数。</summary>
         private const float JuggleHeightM = 0.35f;
@@ -1418,16 +1416,12 @@ namespace KokoSim.Unity.Match
             RunToType02,
         }
 
-#if UNITY_EDITOR
-        /// <summary>スクショ用（issue #1079 の見比べ）: 走りながら掬う外野ゴロの収録。</summary>
-        public static OutfieldRunThroughPick OutfieldRunThroughPickForCapture = OutfieldRunThroughPick.TypeF;
-#endif
 
         private static int OutfieldRunThroughAnchor(int current)
         {
             var pick = OutfieldRunThroughPick.TypeF;
 #if UNITY_EDITOR
-            pick = OutfieldRunThroughPickForCapture;
+            pick = DuelTuning.OutfieldRunThroughPickForCapture;
 #endif
             string clip = pick == OutfieldRunThroughPick.TypeF ? "AA_Baseball_Defender_Catching_TypeF"
                 : pick == OutfieldRunThroughPick.RunToType02 ? "AA_Baseball_Defender_Movement_Run_To_Catching_Type02"
@@ -2111,12 +2105,6 @@ namespace KokoSim.Unity.Match
         /// <summary>横の逸れがこれ以上なら、体を寄せなくても逸れを追って捕る形が出ているとみなす[m]（issue #979）。</summary>
         private const float ThrowScatterShownLateralM = 0.35f;
 
-        /// <summary>
-        /// タッチプレーで逸れを捕った形を見せる最短の秒（捕球の瞬間から。12fps で約1コマ強）と、そこからタッチの
-        /// 瞬間まで収録を等速で流す最短の秒（issue #979）。判定の遅れ（<c>ScatterRecoverySeconds</c>）だけでは
-        /// 足りないときの下限＝収録は短く切って（頭を捨てて）つなぎ、**倍率は上げない**。**絵で決める値**。
-        /// </summary>
-        public static float ScatterTagShowSeconds = 0.10f, ScatterTagRunUpSeconds = 0.12f;
 
         /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
         private const float CatchBallBlendSeconds = 0.30f;
@@ -2339,9 +2327,9 @@ namespace KokoSim.Unity.Match
                     // ① タッチの瞬間を、判定が加えた「逸れの遅れ」ぶん後ろへずらす（案b）
                     // ② それでも捕る形を見せる秒が足りなければ、収録の頭を捨てて短くつなぐ（案a・倍率は等速のまま）
                     float window = Mathf.Max(avail + recv.ScatterRecoverySeconds,
-                        ScatterTagShowSeconds + ScatterTagRunUpSeconds);
+                        DuelTuning.ScatterTagShowSeconds + DuelTuning.ScatterTagRunUpSeconds);
                     tTag = recv.TCatch + window;
-                    float runUp = Mathf.Min(DefenderTagOut.Moment, window - ScatterTagShowSeconds);
+                    float runUp = Mathf.Min(DefenderTagOut.Moment, window - DuelTuning.ScatterTagShowSeconds);
                     rate = 1f;
                     tagStart = tTag - runUp;
                     head = DefenderTagOut.Moment - runUp;
@@ -2423,7 +2411,7 @@ namespace KokoSim.Unity.Match
         ///
         /// 返すのは開く角度[度]（＝捕球の向きへの加算）。開ける上限はグラブがずれる量で決める:
         /// 体を Δ 回すとグラブは <c>|gh|·2sin(Δ/2)</c> だけ動く。これが
-        /// <see cref="FieldCatchOpenBudgetM"/> を超えない範囲までしか開かない
+        /// <see cref="DuelTuning.FieldCatchOpenBudgetM"/> を超えない範囲までしか開かない
         /// ＝**グラブは球の位置に居なければならない**（<c>FireDueCatches</c> の掟）を壊さない。
         ///
         /// 帰結（実測のグラブオフセットから）: 走り込み捕球（|gh|=0.112m）は上限が 180°＝
@@ -2436,7 +2424,7 @@ namespace KokoSim.Unity.Match
             foreach (var e in _throwEvents)
             {
                 if (e.From != pos) continue;
-                if (e.TFire < tCatch - 1e-3f || e.TFire > tCatch + FieldCatchOpenLeadSeconds) continue;
+                if (e.TFire < tCatch - 1e-3f || e.TFire > tCatch + DuelTuning.FieldCatchOpenLeadSeconds) continue;
                 if (e.TFire >= bestFire) continue;   // 同じ野手が続けて投げるなら一番早いほうに合わせる
                 bestFire = e.TFire;
                 want = Mathf.DeltaAngle(baseYaw, e.Yaw);
@@ -2445,7 +2433,7 @@ namespace KokoSim.Unity.Match
 
             float cap = gloveOffsetM <= 1e-3f
                 ? 180f
-                : 2f * Mathf.Asin(Mathf.Clamp01(FieldCatchOpenBudgetM / (2f * gloveOffsetM))) * Mathf.Rad2Deg;
+                : 2f * Mathf.Asin(Mathf.Clamp01(DuelTuning.FieldCatchOpenBudgetM / (2f * gloveOffsetM))) * Mathf.Rad2Deg;
             float open = Mathf.Clamp(want, -cap, cap);
             _catchOpenMax = Mathf.Max(_catchOpenMax, Mathf.Abs(open));
             return open;
@@ -2464,7 +2452,7 @@ namespace KokoSim.Unity.Match
             foreach (var e in _throwEvents)
             {
                 if (e.Fired || e.From != pos) continue;
-                if (e.TFire < t || e.TFire > t + FieldCatchOpenLeadSeconds) continue;
+                if (e.TFire < t || e.TFire > t + DuelTuning.FieldCatchOpenLeadSeconds) continue;
                 if (e.TFire >= best) continue;
                 best = e.TFire;
                 yaw = e.Yaw;
@@ -2484,8 +2472,6 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private PlaybackVec? _hrWatchPoint;
 
-        /// <summary>本塁打の構えへ移るクロスフェードの長さ[s]。**絵で決める値**。</summary>
-        public static float HomeRunCrouchFadeSeconds = 0.35f;
 
         private static PlaybackVec? HomeRunWatchPoint(PlaybackPlay play)
         {
@@ -2555,8 +2541,6 @@ namespace KokoSim.Unity.Match
         /// <summary>外野手が立ってから着弾点を見続ける秒数[s]。その後で打者走者の方へ振り返る（左・中・右）。</summary>
         private static readonly float[] PostHrOutfieldLookHold = { 1.0f, 1.4f, 0.8f };
 
-        /// <summary>構え→立って待つのクロスフェード[s]。**絵で決める値**。</summary>
-        public static float PostHrStandFadeSeconds = 0.6f;
         /// <summary>待機中に体を回す速さ[度/秒]。走りの回頭（540°/s）より遅く、その場で向き直る程度。</summary>
         private const float PostHrYawRateDegPerSec = 160f;
         /// <summary>目で追う先とのずれがこれを超えたら体を回し始め、<see cref="PostHrTurnStopDeg"/> 未満で止める[度]。</summary>
@@ -2572,7 +2556,7 @@ namespace KokoSim.Unity.Match
         private float HomeRunDeadTime(PlaybackPlay play)
         {
             if (!IsHomeRun(play) || play.Ball == null || play.Ball.Count == 0) return float.PositiveInfinity;
-            if (_hrHit) return _hrHitT + StandHopSeconds;
+            if (_hrHit) return _hrHitT + DuelTuning.StandHopSeconds;
             double end = 0;
             foreach (var s in play.Ball) if (s.T1 > end) end = s.T1;
             return (float)end;
@@ -2692,16 +2676,7 @@ namespace KokoSim.Unity.Match
             return best < float.MaxValue * 0.5f;
         }
 
-        /// <summary>
-        /// 捕球中に的へ開くとき、グラブが収録の位置からずれてよい量[m]（issue #505 ②）。
-        /// ずれた分は捕球IK（<c>DuelCatcherPose.ReachMitt</c>）が球へ引き戻す＝**IK の仕事量の予算**。
-        /// 大きくすると「最初から的を向いて投げる」が増える代わりに捕球の腕が伸びる。
-        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
-        /// </summary>
-        public static float FieldCatchOpenBudgetM = 0.18f;
 
-        /// <summary>捕球からこの秒数までに投げるなら「このあと投げる」とみなす[s]（issue #505 ②）。</summary>
-        public static float FieldCatchOpenLeadSeconds = 0.8f;
 
         /// <summary>
         /// 捕球の前後だけグラブを球へ寄せる（捕手の <c>FixCatcherPose</c> と同型）。
@@ -3115,16 +3090,12 @@ namespace KokoSim.Unity.Match
         /// 送球クリップを選ぶ**純関数**（乱数を引かない）。主軸は距離＝実測の手の速さの段。
         /// 捕手だけは専用収録（しゃがみから立って投げる）を使う。
         /// </summary>
-#if UNITY_EDITOR
-        /// <summary>スクショ用（issue #1079 の見比べ）: 0 以上なら外野手の送球を距離によらずこの添字の収録にする。</summary>
-        public static int OutfieldThrowAnchorForCapture = -1;
-#endif
 
         private static FieldThrowAnchor SelectFieldThrow(FieldPosition pos, float distM)
         {
             if (pos == FieldPosition.Catcher) return CatcherThrowAnchor;
 #if UNITY_EDITOR
-            if (OutfieldThrowAnchorForCapture >= 0 && IsOutfield(pos)) return FieldThrowAnchors[OutfieldThrowAnchorForCapture];
+            if (DuelTuning.OutfieldThrowAnchorForCapture >= 0 && IsOutfield(pos)) return FieldThrowAnchors[DuelTuning.OutfieldThrowAnchorForCapture];
 #endif
             for (int i = 0; i < FieldThrowAnchors.Length; i++)
                 if (distM <= FieldThrowAnchors[i].MaxDistM) return FieldThrowAnchors[i];
@@ -3508,20 +3479,8 @@ namespace KokoSim.Unity.Match
             }
         }
 
-#if UNITY_EDITOR
-        /// <summary>スクショ用: 開きの秒の上書き（負＝既定のまま）。</summary>
-        public static float ThrowOpenSecondsOverrideForCapture = -1f;
-        /// <summary>スクショ用: 開き切る時刻をリリースの何秒前にするか（負＝収録の表のまま）。</summary>
-        public static float ThrowOpenEndLeadOverrideForCapture = -1f;
-#endif
         /// <summary>閉じる・開くときの体の回り方の上限[度/秒]（下限。実際は開く角度÷開きの秒から上げる）。</summary>
         private const float ThrowOpenRateDegPerSec = 720f;
-#if UNITY_EDITOR
-        /// <summary>スクショ用（issue #1095 の見比べ）: 真にすると閉じない（胸を的へ向けたまま投げる旧挙動）。</summary>
-        public static bool ThrowClosedWindupOffForCapture;
-        /// <summary>スクショ用: 外野手の閉じる角度を収録によらずこの値[度]にする（負＝表のまま）。</summary>
-        public static float OutfieldClosedYawOverrideForCapture = -1f;
-#endif
 
         /// <summary>
         /// その野手が時刻 t に送球の振りかぶり中なら、描く体の向き（閉じた向き→的へ開く）を返す（issue #1095）。
@@ -3534,7 +3493,7 @@ namespace KokoSim.Unity.Match
             yaw = 0f;
             rate = ThrowOpenRateDegPerSec;
 #if UNITY_EDITOR
-            if (ThrowClosedWindupOffForCapture) return false;
+            if (DuelTuning.ThrowClosedWindupOffForCapture) return false;
 #endif
             for (int i = 0; i < _throwEvents.Count; i++)
             {
@@ -3542,7 +3501,7 @@ namespace KokoSim.Unity.Match
                 if (e.From != pos || !e.Fired || t < e.TFire || t >= e.TRelease) continue;
                 float closed = IsOutfield(pos) ? e.Anchor.OutfieldClosedYawDeg : e.Anchor.ClosedYawDeg;
 #if UNITY_EDITOR
-                if (IsOutfield(pos) && OutfieldClosedYawOverrideForCapture >= 0f) closed = OutfieldClosedYawOverrideForCapture;
+                if (IsOutfield(pos) && DuelTuning.OutfieldClosedYawOverrideForCapture >= 0f) closed = DuelTuning.OutfieldClosedYawOverrideForCapture;
 #endif
                 if (Mathf.Abs(closed) < 1e-3f) return false;
                 // 左投げ（鏡映親の下）はグラブの腕が逆側へ開く＝閉じる向きも逆
@@ -3550,8 +3509,8 @@ namespace KokoSim.Unity.Match
                 float openSec = e.Anchor.OpenSeconds;
                 float openEnd = e.Anchor.OpenAtRelease ? e.TRelease : e.TRelease - 1f / PoseFps;
 #if UNITY_EDITOR
-                if (ThrowOpenSecondsOverrideForCapture > 0f) openSec = ThrowOpenSecondsOverrideForCapture;
-                if (ThrowOpenEndLeadOverrideForCapture >= 0f) openEnd = e.TRelease - ThrowOpenEndLeadOverrideForCapture;
+                if (DuelTuning.ThrowOpenSecondsOverrideForCapture > 0f) openSec = DuelTuning.ThrowOpenSecondsOverrideForCapture;
+                if (DuelTuning.ThrowOpenEndLeadOverrideForCapture >= 0f) openEnd = e.TRelease - DuelTuning.ThrowOpenEndLeadOverrideForCapture;
 #endif
                 float u = Mathf.InverseLerp(openEnd - openSec, openEnd, t);
                 float w = 1f - u * u * (3f - 2f * u);
@@ -4790,22 +4749,7 @@ namespace KokoSim.Unity.Match
         // 視差が出ないので酔わず、station の切り替えは対決構図→守備カメラの1回だけで済む
         // （対決カメラは z=+78.44 から −z を向くので外野が背後にあり、パンでは届かない）。
 
-        /// <summary>
-        /// 守備カメラの据え位置（stage-local[m]）。本塁後方に**2台**据える（監督決定 2026-08-01・案D）。
-        ///
-        /// 高さは絵に直結する。低いほど視線が寝て選手を横から見る＝立体が出るが、
-        /// 遠くの被写体では背後のフェンス（3.2m）と暗幕（7m）が画面の半分を埋める
-        /// （寄った枠は縦10m級なので、90m先へ向けると縦の画角は6.6°しかない）。
-        /// 高くすると外野の背景に芝と空が入る代わりに、内野が見下ろしになる。
-        /// **足して2で割れない**ので内野用と外野用に分け、被写体の深さで切り替える。
-        ///
-        /// ⚠ z は **> −16**（バックネット書き割り z=−16・34×8m より手前）。
-        /// 奥へ引くと壁が画面下半分を黒く塞ぐ（2026-08-01 実害）。
-        /// </summary>
-        public static Vector3 FieldStationInfield = new(0f, 10f, -14f);
 
-        /// <inheritdoc cref="FieldStationInfield"/>
-        public static Vector3 FieldStationOutfield = new(0f, 24f, -14f);
 
         /// <summary>
         /// 外野の据え位置へ切り替える被写体の深さ[m]（本塁からの距離）。
@@ -4829,14 +4773,6 @@ namespace KokoSim.Unity.Match
         /// <summary>注視点の高さの下限[m]。地面でなく腰の高さに取ると、寄ったときに人が下に切れない。</summary>
         private const float FieldAimYMin = 1.0f;
 
-        /// <summary>
-        /// 注視点（高さ）の追従速度上限[m/s]（issue #399②-2）。①（頂点・着地点基準）でセグメント中の
-        /// 目標は一定になるが、セグメントの変わり目（接触→滞空／着地・捕球→保持）では目標が段差で変わる。
-        /// ここへ即座に飛ぶと段差そのものが目に付くので、Mathf.MoveTowards で寄せる。
-        /// 全景へ戻す「カット」（<see cref="_fieldCamCutT"/>）は対象外＝そこは既存どおり一気に切り替える。
-        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
-        /// </summary>
-        public static float FieldAimYSpeedCapMPerSecond = 20f;
 
         /// <summary>
         /// ZoomMult=1（全景）で縦に収まる実寸[m]。engine 側のデザインキャンバス
@@ -4845,125 +4781,24 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private const float FieldWideHeightM = 520f / 3.35f;   // ≒155.2
 
-        /// <summary>
-        /// 守備カメラの寄りの深さ。2D俯瞰の既定（MaxZoom=3.4＝縦45.6m）では野手が十数pxにしかならない。
-        /// 外野フライで FitBox が求めるズームは実測5.75で上限に頭打ちされていた（engine テストで固定）。
-        /// **絵で決める値**なので、比較撮影のために差し替えられるようにしてある。
-        /// </summary>
-        public static float FieldMaxZoom = 40f;
 
-        /// <summary>
-        /// ポール際の大ファウル（issue #1074）の寄りの上限。球だけを追って寄り切ると、スタンドへ入る前後で
-        /// 観客しか映らない絵になる（実測: 最後の1.5秒が観客の寄り）。ポールとスタンドが一緒に収まる広さで止める
-        /// （4倍＝縦およそ39m）。**絵で決める値**。
-        /// </summary>
-        public static float BigFoulMaxZoom = 4f;
 
-        /// <summary>
-        /// 被写体まわりに残す余白[m]。**寄りの深さを決めているのは実はこちら**で、<see cref="FieldMaxZoom"/> ではない。
-        ///
-        /// <c>FitBox</c> は箱の縦横に 2×Margin を足してからズームを決めるので、箱が点まで縮んでも
-        /// <c>zoom ≤ 155.2/(2×Margin)</c> ＝ **frameH は 2×Margin より小さくならない**。
-        /// 既定の 6.0m では frameH の下限が 12m（＝上限 12.9 倍）で、これより上に MaxZoom を上げても
-        /// 1mm も寄らない。**絵で決める値**なので比較撮影のために差し替えられるようにしてある。
-        /// </summary>
-        public static float FieldMarginM = 2f;
 
-        /// <summary>
-        /// 守備ビューの打球残像・尾の長さ[秒]（issue #398 ①）。対決ビュー向けの値
-        /// （<see cref="DuelCalibration.BattedTrailSeconds"/>＝0.28s）は「接触から俯瞰へ渡るまで
-        /// （旧・約0.55s）で消え切る」前提で詰めた長さで、いまの引きの構図（frameH 29〜65m）では
-        /// 短すぎて「点」に近い。**絵で決める値**なので比較撮影のために差し替えられるようにしてある。
-        /// 0.45→0.35 は監督決定（2026-08-06・issue #505 ①「くどい」）。
-        /// </summary>
-        public static float FieldBattedTrailSeconds = 0.35f;
 
-        /// <summary>
-        /// 守備ビューの打球残像・頭の太さ[m]（issue #398 ①）。対決ビュー向けの 0.045m は本塁付近の
-        /// 寄った構図で約10pxになるよう詰めた値で、frameH 29m 級の構図では1px未満（実質見えない）。
-        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
-        /// 0.35→0.22 は監督決定（2026-08-06・issue #505 ①「くどい」）。
-        /// </summary>
-        public static float FieldBattedTrailWidthM = 0.22f;
 
-        /// <summary>
-        /// 守備ビューの打球残像・頭の濃さ（issue #505 ①）。
-        ///
-        /// ⚠ **対決ビューとは別に持つ**。濃さと色だけは <see cref="DuelCalibration.BattedTrailAlpha"/>
-        /// を共有していたので、守備ビューを弱めると対決ビュー（0.045m/0.45/0.28s で詰めた絵。
-        /// design-18 §4.5-④）まで薄くなっていた。尾長・太さと同じ「フィールド専用」の枠へ揃える。
-        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
-        /// 0.28 は監督決定（2026-08-06・issue #505 ①。対決ビューは 0.45 のまま）。
-        /// </summary>
-        public static float FieldBattedTrailAlpha = 0.28f;
 
-        /// <summary>
-        /// 送球区間でも残像を出すか（issue #505 ①）。
-        ///
-        /// 残像は「打球の行方（フライ／ゴロ／ライナー）を一瞬で読ませる」ための線（design-18 §4.5-④）で、
-        /// **送球には要らない**（始点＝野手・終点＝塁の両方が絵に写っており、行方を線で補う必要がない）。
-        /// それでも従来は区間の種別を見ずに積んでいたので、送球にも打球と同じ太さの帯が出ていた。
-        /// false は監督決定（2026-08-06・issue #505 ①）。
-        /// </summary>
-        public static bool FieldTrailOnThrow = false;
 
-        /// <summary>
-        /// 送球区間で球を追うか。2D俯瞰の既定は「始点と終点を両方収める」＝送球の距離ぶん必ず引くので、
-        /// 6-3 の一塁到達や中継バックホームという**そのプレーで一番見たい瞬間が一番引いた絵になる**
-        /// （実測 frameH 20m / 56m）。3Dでは中継カメラと同じく球を追う側にする。
-        /// </summary>
-        public static bool FieldThrowFollowsBall = true;
 
-        /// <summary>
-        /// 送球の枠（始点・終点を収める側）を投げ手から球へ**伸ばす**か（issue #566）。
-        /// 既定の切り替え式は枠が階段状に跳び、寄っている3Dではズームが追いつく前にアイムだけが
-        /// 投げ手と受け手のあいだの地面へ着く。伸ばす式なら跳ばない。切り分け用に残す静的スイッチ。
-        /// </summary>
-        public static bool FieldThrowBoxGrows = true;
 
-        /// <summary>
-        /// パンとズームを連動させるか（issue #566）。パン上限 45m/s に対しズーム上限は 2倍/秒 しか
-        /// 無いので、被写体が切り替わる瞬間に**枠が狭いまま被写体のあいだの地面を舐める**区間ができる。
-        /// on にすると、遅れたぶんだけ枠を広げて生の被写体を必ず収める（＝広げる方向にしか効かない）。
-        /// 追従が足りているプレーでは1キーフレームも変わらない。切り分け用に残す静的スイッチ。
-        /// </summary>
-        public static bool FieldKeepSubjectFramed = true;
 
-        /// <summary>
-        /// 内野ゴロ・併殺の固定枠（issue #689・監督決定: 案Bベース＋アウトの瞬間だけ一塁へ寄せる）。
-        /// 接触から送球リリースまでは「本塁〜二塁を収める固定枠」に据えて動かさず、最後の送球が出てから
-        /// 到達までのあいだに、送球の終点（一塁）へゆっくり寄せて決着まで据える。
-        /// false にすると従来の追従（比較撮影用の切り替え）。
-        /// issue #742（監督決定 2026-11-03: 案B＝捕る野手中心・縦12m）で既定を false にした＝固定枠は見比べ用に残すだけ。
-        /// </summary>
-        public static bool FieldInfieldFixedFrame = false;
         private static readonly Vector3 InfieldFixedAim = new(0f, 1.2f, 24f);
         private const float InfieldFixedFrameH = 44f;
         /// <summary>アウトの瞬間に寄せる枠の縦[m]。ズーム速度上限（12m/s）で追える範囲に収める。</summary>
         private const float InfieldOutFrameH = 22f;
         /// <summary>最後の送球の到達後も寄せ続ける秒数（据え置きの収束余白）。</summary>
         private const float InfieldOutSettleSeconds = 0.3f;
-        /// <summary>
-        /// 内野ゴロを「捕る野手（＋球）中心の追従」で撮るときの枠の縦[m]（issue #742 の見比べ用・null＝使わない）。
-        /// 固定枠（<see cref="FieldInfieldFixedFrame"/>）を切った状態で値を入れると、注視点は engine の追従プラン
-        /// （打球中＝球と捕りに行く野手／保持中＝球を持つ野手＝併殺なら捕球した野手→二塁のピボット／送球中＝送球の終点）
-        /// のまま、縦の実寸だけこの値に据える。既定 12m（監督決定 2026-11-03・案B。比較撮影で 44m固定／12m／18m を見比べた）。
-        /// パンの遅れで被写体が枠から外れそうなときは <see cref="FieldKeepSubjectFramed"/> が枠を広げる（広げる方向だけ）。
-        /// </summary>
-        public static float? InfieldFollowFrameH = 12f;
 
-        /// <summary>
-        /// 内野ゴロの追従で、注視点を追従プラン（球と野手のあいだ）でなく**球そのもの**に置くか（2026-11-03 監督報告
-        /// 「捕球の瞬間が見えない」）。プランの注視点＋パン速度上限だと、速いゴロは捕球の瞬間に枠が追いつかない。
-        /// 球は捕球の瞬間グラブの中にある＝球を真ん中に置けば捕球は必ず枠に入る。送球も球を追う。
-        /// </summary>
-        public static bool InfieldFollowOnBall = true;
 
-        /// <summary>
-        /// 球追いのなじませ時定数[s]。一次遅れの追従に同じ秒数の先読みを足す＝等速の球には遅れが0になり、
-        /// 打った瞬間・捕った瞬間の折れ目だけが滑らかになる。
-        /// </summary>
-        public static float InfieldBallFollowTauS = 0.12f;
         /// <summary>球追いのパン速度の安全上限[m/s]（送球 ~40m/s を追えること）。</summary>
         private const float InfieldBallFollowPanCapMPerSecond = 90f;
         private bool _fieldInfieldFollow;
@@ -5000,7 +4835,7 @@ namespace KokoSim.Unity.Match
         /// 引きずり、**頭が全景のまま**になって寄り切る前にプレーが終わる
         /// （実測 2026-08-06: 盗塁の頭1.5秒が枠64.7m＝人18px／バント打球も頭が枠64.3m）。
         ///
-        /// 牽制（issue #515）だけは <see cref="FieldThrowFollowsBall"/> を使わない。送球1本だけの短い
+        /// 牽制（issue #515）だけは <see cref="DuelTuning.FieldThrowFollowsBall"/> を使わない。送球1本だけの短い
         /// プレー（<c>BuildPickoff</c> の出力＝マウンド始点・投手が投げ手）に「球を追う」枠（0.25秒先取り
         /// ＋0.6秒先読み）を適用すると、頭出しの時点で既にサンプル先の球が一塁付近まで進んでおり、
         /// 最初のキーフレームからマウンド（＝投げ手の投手）が枠外になる（実測: 一塁側に寄った絵で始まる）。
@@ -5025,14 +4860,14 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static CameraFraming FieldFramingFor(PlaybackPlay play)
             => new CameraFraming(
-                play?.FoulView == KokoSim.Engine.Match.Fielding.FoulViewKind.BigFoul ? BigFoulMaxZoom : FieldMaxZoom,
-                FieldMarginM, CameraFraming.Default.PitchZoom,
-                ThrowFollowsBall: !IsEndpointFramedThrow(play) && FieldThrowFollowsBall,
+                play?.FoulView == KokoSim.Engine.Match.Fielding.FoulViewKind.BigFoul ? DuelTuning.BigFoulMaxZoom : DuelTuning.FieldMaxZoom,
+                DuelTuning.FieldMarginM, CameraFraming.Default.PitchZoom,
+                ThrowFollowsBall: !IsEndpointFramedThrow(play) && DuelTuning.FieldThrowFollowsBall,
                 HeldBallFollowsRunner: true,
                 LooseBallFollowsChaser: true,
-                ThrowBoxGrowsWithBall: FieldThrowBoxGrows,
-                KeepSubjectFramed: FieldKeepSubjectFramed && !IsHomeRun(play),
-                ReturnsToWide: FieldReturnsToWide);
+                ThrowBoxGrowsWithBall: DuelTuning.FieldThrowBoxGrows,
+                KeepSubjectFramed: DuelTuning.FieldKeepSubjectFramed && !IsHomeRun(play),
+                ReturnsToWide: DuelTuning.FieldReturnsToWide);
 
         /// <summary>
         /// 本塁打（誰にも処理されない打球）か（issue fence-camera-zoom-and-outfielder-facing）。
@@ -5047,13 +4882,6 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private static bool IsHomeRun(PlaybackPlay play) => play?.HomeRun != null;   // 表示文言でなく engine の値（本塁打だけが持つ）
 
-        /// <summary>
-        /// プレーの終わりに全景（縦155m）へ戻すか（issue field-view-cut-back-sooner ④）。
-        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある（true で旧挙動）。
-        /// engine のプラン（<see cref="CameraFraming.ReturnsToWide"/>）と3D側のカット
-        /// （<see cref="_fieldCamCutT"/>）の両方がここを見る＝片方だけ変えるとプランと実カットがずれる。
-        /// </summary>
-        public static bool FieldReturnsToWide = false;
 
         /// <summary>
         /// 「始点と終点を両方収める」枠にすべき短い送球1本のプレーか（牽制 issue #515／暴投・捕逸の
@@ -5093,7 +4921,7 @@ namespace KokoSim.Unity.Match
         /// fence-camera-zoom-and-outfielder-facing）。頂点固定のままだとフェンス際・本塁打の着地・
         /// 頭越えの瞬間まで頂点ぶんの縦枠（本塁打級で20〜30m）を引きずり、寄れない。高さは着地へ向けて
         /// 単調に下がるので現在高度をそのまま使っても上昇時の問題（貼り付いて絵から消える）は起きない。
-        /// frameH の変化自体は <see cref="ApplyFieldCamera"/> 側のレート制限（毎秒 <see cref="FieldZoomSpeedCapMPerSecond"/>）
+        /// frameH の変化自体は <see cref="ApplyFieldCamera"/> 側のレート制限（毎秒 <see cref="DuelTuning.FieldZoomSpeedCapMPerSecond"/>）
         /// で滑らかに追いつく＝段差では跳ばない。
         /// それ以外の区間（保持中・ゴロ・送球等）は従来どおり現在＋先読みの箱に落ちる。
         /// </summary>
@@ -5112,7 +4940,7 @@ namespace KokoSim.Unity.Match
                 double rel = t - flight.T0;
                 float h = rel > half ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
                 aimY = Mathf.Max(FieldAimYMin, h * 0.5f);
-                frameH = Mathf.Max(frameH, h + FieldMarginM * 2f);
+                frameH = Mathf.Max(frameH, h + DuelTuning.FieldMarginM * 2f);
             }
             else
             {
@@ -5123,7 +4951,7 @@ namespace KokoSim.Unity.Match
                     float h0 = (float)b0.Value.H;
                     float h1 = b1.HasValue ? (float)b1.Value.H : h0;
                     aimY = Mathf.Max(FieldAimYMin, (h0 + h1) * 0.5f);
-                    frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + FieldMarginM * 2f);
+                    frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + DuelTuning.FieldMarginM * 2f);
                 }
             }
             // スタンドに当たった本塁打は、地面まで沈む engine の高さでなく止まった球の高さを収める。
@@ -5131,15 +4959,15 @@ namespace KokoSim.Unity.Match
             if (StandHitBallPoint(t) is { } onStand)
             {
                 aimY = Mathf.Max(FieldAimYMin, onStand.y * 0.5f);
-                frameH = Mathf.Max(frameH, onStand.y + FieldMarginM * 2f);
+                frameH = Mathf.Max(frameH, onStand.y + DuelTuning.FieldMarginM * 2f);
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
             ApplyHomeRunStyleFrame(t, ref aim, ref frameH);   // 当たりの種類ごとの見せ方（issue #704）
-            if (_fieldInfieldFollow && InfieldFollowFrameH is { } followH)
+            if (_fieldInfieldFollow && DuelTuning.InfieldFollowFrameH is { } followH)
             {
                 frameH = followH;   // 縦の実寸を据える（issue #742）
-                if (InfieldFollowOnBall
-                    && PlaybackEvaluator.BallAt(_fieldPlay, t + InfieldBallFollowTauS) is { } ball)
+                if (DuelTuning.InfieldFollowOnBall
+                    && PlaybackEvaluator.BallAt(_fieldPlay, t + DuelTuning.InfieldBallFollowTauS) is { } ball)
                     aim = new Vector3((float)ball.X, Mathf.Max(FieldAimYMin, (float)ball.H * 0.5f), (float)ball.Y);
                 return;
             }
@@ -5307,7 +5135,7 @@ namespace KokoSim.Unity.Match
                 if (_fieldStationCuts[i].T > t) break;
                 outfield = _fieldStationCuts[i].Outfield;
             }
-            return outfield ? FieldStationOutfield : FieldStationInfield;
+            return outfield ? DuelTuning.FieldStationOutfield : DuelTuning.FieldStationInfield;
         }
 
         /// <summary>
@@ -5343,20 +5171,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private float _fieldAimY = FieldAimYMin;
 
-        /// <summary>
-        /// パン（注視点の水平）の速度上限[m/s]。**絵で決める値**。中継の速いパン（送球の
-        /// 振り向き等）は許し、プラン由来のスパイクだけ削る。実測（2026-08-05）: 飛翔中のパンは
-        /// 5〜50°/s 級で穏やか＝これは安全弁で、忙しさの主犯はズーム側。
-        /// </summary>
-        public static float FieldPanSpeedCapMPerSecond = 35f;
 
-        /// <summary>
-        /// ズーム（縦に収める実寸）の速度上限[m/s]。**絵で決める値**。監督報告（2026-08-05
-        /// 「外野フライでもカメラが忙しい」「球追いズームを緩めて」）を受けて追加。
-        /// 実測: 飛翔中に画角20〜130°/sの鋸歯が1.5秒続き、捕球後の寄りは1秒で16m級（27m/s）
-        /// 詰めていた。12m/sに絞ると鋸歯は消え、寄りは8割まで入った所で全景カットに渡る。
-        /// </summary>
-        public static float FieldZoomSpeedCapMPerSecond = 12f;
 
         /// <summary>ズーム表示値（速度上限を通した後）。0未満＝未初期化（プレー頭で目標へ直接合わせる）。</summary>
         private float _fieldFrameHShown = -1f;
@@ -5392,21 +5207,21 @@ namespace KokoSim.Unity.Match
             else
             {
                 float step = Mathf.Max(dt, 0f) * HomeRunCamSpeedScale;   // 弾丸ライナーは速く追う（issue #704）
-                _fieldAimY = Mathf.MoveTowards(_fieldAimY, target.y, FieldAimYSpeedCapMPerSecond * step);
-                if (_fieldInfieldFollow && InfieldFollowOnBall && InfieldFollowFrameH.HasValue)
+                _fieldAimY = Mathf.MoveTowards(_fieldAimY, target.y, DuelTuning.FieldAimYSpeedCapMPerSecond * step);
+                if (_fieldInfieldFollow && DuelTuning.InfieldFollowOnBall && DuelTuning.InfieldFollowFrameH.HasValue)
                 {
                     // 球追い: 一次遅れ（先読みと同じ時定数）＋安全上限。速度上限だけだと速いゴロに置いていかれる
-                    float k = 1f - Mathf.Exp(-Mathf.Max(dt, 0f) / Mathf.Max(0.01f, InfieldBallFollowTauS));
+                    float k = 1f - Mathf.Exp(-Mathf.Max(dt, 0f) / Mathf.Max(0.01f, DuelTuning.InfieldBallFollowTauS));
                     float cap = InfieldBallFollowPanCapMPerSecond * Mathf.Max(dt, 0f);
                     _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, Mathf.Lerp(_fieldAimXShown, target.x, k), cap);
                     _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, Mathf.Lerp(_fieldAimZShown, target.z, k), cap);
                 }
                 else
                 {
-                    _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, target.x, FieldPanSpeedCapMPerSecond * step);
-                    _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, target.z, FieldPanSpeedCapMPerSecond * step);
+                    _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, target.x, DuelTuning.FieldPanSpeedCapMPerSecond * step);
+                    _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, target.z, DuelTuning.FieldPanSpeedCapMPerSecond * step);
                 }
-                _fieldFrameHShown = Mathf.MoveTowards(_fieldFrameHShown, frameH, FieldZoomSpeedCapMPerSecond * step);
+                _fieldFrameHShown = Mathf.MoveTowards(_fieldFrameHShown, frameH, DuelTuning.FieldZoomSpeedCapMPerSecond * step);
             }
 
             FramePreview(station, new Vector3(_fieldAimXShown, _fieldAimY, _fieldAimZShown), _fieldFrameHShown);
@@ -5505,7 +5320,7 @@ namespace KokoSim.Unity.Match
             // 再入: 前のプレーを先に畳む。畳まないと PlaceFielder に汚された投手・捕手の基準を Snapshot してしまう
             if (_fieldPlay != null) EndFieldPlay();
             play = StripPostResolutionReturnMoves(play);
-            _bobble = HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
+            _bobble = DuelTuning.HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
             if (_bobble.Kind == HandleBobbleKind.Fumble)
             {
                 var fumbleAn = FieldFumbleAnchors[FumbleSideFor(play, _bobble)];
@@ -5588,8 +5403,8 @@ namespace KokoSim.Unity.Match
             _runnerHeadMin = float.MaxValue;
             _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
 
-            _fieldInfieldFixed = FieldInfieldFixedFrame && IsInfieldGrounder(play);
-            _fieldInfieldFollow = !FieldInfieldFixedFrame && InfieldFollowFrameH.HasValue && IsInfieldGrounder(play);
+            _fieldInfieldFixed = DuelTuning.FieldInfieldFixedFrame && IsInfieldGrounder(play);
+            _fieldInfieldFollow = !DuelTuning.FieldInfieldFixedFrame && DuelTuning.InfieldFollowFrameH.HasValue && IsInfieldGrounder(play);
             _fieldInfieldHasOut = false;
             if (_fieldInfieldFixed)
             {
@@ -5617,7 +5432,7 @@ namespace KokoSim.Unity.Match
             var wideStart = CameraPlanBuilder.WideStartTime(play);
             // 全景へ戻さない設定（issue field-view-cut-back-sooner ④）ではカットそのものを打たない。
             // プランも全景へ戻らない（ReturnsToWide:false）ので、ここで切ると**戻り先ではない枠**へ跳ぶ。
-            _fieldCamCutT = FieldReturnsToWide && double.IsFinite(wideStart)
+            _fieldCamCutT = DuelTuning.FieldReturnsToWide && double.IsFinite(wideStart)
                 ? (float)wideStart
                 : float.PositiveInfinity;
             // 全景カットをびっくりマークの窓の中で切らない（2026-08-05 監督報告「カメラが見づらい・
@@ -5825,8 +5640,8 @@ namespace KokoSim.Unity.Match
                     bool onThrow = IsThrowAt(t);
                     // もたつきのお手玉は弾いた後に残像を出さない（こぼれた球・拾い上げは打球ではない）
                     bool bobbled = _bobble.Kind == HandleBobbleKind.Fumble && t >= _bobble.CatchT;
-                    if (!bobbled && (FieldTrailOnThrow || !onThrow)) PushTrailPoint(p, t, FieldBattedTrailSeconds);
-                    else if (_trail.Count > 0) TrimTrail(t, FieldBattedTrailSeconds);
+                    if (!bobbled && (DuelTuning.FieldTrailOnThrow || !onThrow)) PushTrailPoint(p, t, DuelTuning.FieldBattedTrailSeconds);
+                    else if (_trail.Count > 0) TrimTrail(t, DuelTuning.FieldBattedTrailSeconds);
                     // 受け入れ実測（issue #505 ①）: 送球中に線が**描かれた**コマ数。
                     // ⚠ 0 にはならないのが正しい。積むのを止めても、直前まで積んだ打球の尾が
                     //    FieldBattedTrailSeconds かけて消えるため＝健全な値は「送球1本あたり
@@ -5845,7 +5660,7 @@ namespace KokoSim.Unity.Match
                     if (_ballShadow != null) _ballShadow.SetActive(false);
                     // 球が消えた（捕球・失投等）後も尾は自然に消えるよう時計だけ進める。進めないと
                     // 尾の最後の点が刈られず、次にこの残像枠を使うプレーまで宙に浮いたまま残る
-                    if (_trail.Count > 0) TrimTrail(t, FieldBattedTrailSeconds);
+                    if (_trail.Count > 0) TrimTrail(t, DuelTuning.FieldBattedTrailSeconds);
                 }
             }
 
@@ -5938,7 +5753,7 @@ namespace KokoSim.Unity.Match
                 _errorCamAim = new Vector3(c.x, FieldAimYMin, c.y);
                 // 対角で収める＝縦横どちらへ散っても入る。縦寸へは最悪アスペクト(4:3)換算（安全側）
                 _errorCamFrameH = Mathf.Max(12f,
-                    (Vector2.Distance(min, max) + FieldMarginM * 2f) / 1.33f);
+                    (Vector2.Distance(min, max) + DuelTuning.FieldMarginM * 2f) / 1.33f);
             }
         }
 
@@ -6256,7 +6071,7 @@ namespace KokoSim.Unity.Match
 
             return string.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "{0}\t{1:F1}\t{2:F1}\t{3:F2}\t{4}\t{5}\t{6}\t{7:F1}\t{8:F1}\t{9}\t{10}\t{11:F2}\t{12:F2}\t{13:F0}",
-                _fieldPlay != null ? _fieldPlay.Name : "(none)", FieldMaxZoom, FieldMarginM, t,
+                _fieldPlay != null ? _fieldPlay.Name : "(none)", DuelTuning.FieldMaxZoom, DuelTuning.FieldMarginM, t,
                 ball.HasValue ? ball.Value.X.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "-",
                 ball.HasValue ? ball.Value.Y.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "-",
                 ball.HasValue ? ball.Value.H.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "-",

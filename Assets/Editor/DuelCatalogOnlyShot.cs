@@ -14,7 +14,7 @@ namespace KokoSim.UnityEditorTools
     /// <b>なぜ要るか</b>: エディタのロードは <c>AssetDatabase</c> を先に見るので、
     /// ビルド同梱の索引が壊れていても**手元では絵が出る**。索引の不備は Player ビルドでだけ
     /// 現れる＝作らないと気づけない類の壊れ方なので、
-    /// <see cref="DuelStageRig.ForceCatalogOnly"/> でビルドと同じ経路に切り替えて撮る。
+    /// <see cref="DuelTuning.ForceCatalogOnly"/> でビルドと同じ経路に切り替えて撮る。
     ///
     /// 出すのは2つ:
     ///   ① <c>Available</c>（＝リグが組めたか。ビルドでの受け入れ条件そのもの）
@@ -53,8 +53,8 @@ namespace KokoSim.UnityEditorTools
 
         private static Texture2D Shoot(bool catalogOnly, string tag, StringBuilder sb)
         {
-            bool prevForce = DuelStageRig.ForceCatalogOnly;
-            DuelStageRig.ForceCatalogOnly = catalogOnly;
+            bool prevForce = DuelTuning.ForceCatalogOnly;
+            DuelTuning.ForceCatalogOnly = catalogOnly;
             DuelGearMeshes.ClearCache();   // 装備は読んだものを使い回す＝捨てないと経路を切り替えても絵が変わらない
             var rig = new DuelStageRig();
             try
@@ -90,7 +90,7 @@ namespace KokoSim.UnityEditorTools
             finally
             {
                 rig.Dispose();
-                DuelStageRig.ForceCatalogOnly = prevForce;
+                DuelTuning.ForceCatalogOnly = prevForce;
                 DuelGearMeshes.ClearCache();
             }
         }

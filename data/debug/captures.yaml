@@ -27,7 +27,7 @@
 #   video       : {from: catch-0.8, to: release+0.9, fps: 30}＝その区間を連番で撮る
 #   duel_seconds: 対決ビューのまま撮る秒数（最初の球から）。duel_from: launch で試合の画面が出た瞬間から（プレイボール等）
 #   probes      : 毎コマ probes.jsonl に書く実測（DuelStageRig の *ForCapture。ForCapture は省略可）
-#   overrides   : 見比べ用の切り替え（{DuelStageRig.Xxx: true} の形。static のフィールド/プロパティ）。終わったら戻す
+#   overrides   : 見比べ用の切り替え（{DuelTuning.Xxx: true} の形。static のフィールド/プロパティ）。終わったら戻す
 #   timeout_at  : duel_seconds の撮影で、開始から何秒後に監督が守備伝令を送るか（issue #1178。動揺が解ける絵）
 #   timeout_messenger : timeout_at の伝令を画面の操作どおり（中断→伝令役→再開）に送る。控えの添字か recorder（記録員）。
 #                 守備伝令の場面が流れ、明けた後の投手・捕手の基準ずれを timeout-restore.txt に書く（issue #1174）
@@ -60,14 +60,14 @@ captures:
     scenario: of-grounder-runner-lf-lab
     manager: home
     video: {from: catch-0.8, to: release+0.9, fps: 30}
-    overrides: {DuelStageRig.ThrowClosedWindupOffForCapture: true}
+    overrides: {DuelTuning.ThrowClosedWindupOffForCapture: true}
 
   - id: throw-video-lf-after
     name: "左翼ゴロの送球・振りかぶりで体を閉じる（issue #1079 / #1095 の見比べ・新）"
     scenario: of-grounder-runner-lf-lab
     manager: home
     video: {from: catch-0.8, to: release+0.9, fps: 30}
-    overrides: {DuelStageRig.ThrowClosedWindupOffForCapture: false}
+    overrides: {DuelTuning.ThrowClosedWindupOffForCapture: false}
 
   - id: throw-slip-1552
     name: "左翼ゴロの送球で足が滑らない（issue #1552・捕球〜リリースの水平移動と足の滑りの実測）"
@@ -320,7 +320,7 @@ captures:
     duel_seconds: 3.0
     video: {from: start, to: end, fps: 24}
     probes: [BatterRootDiag]
-    overrides: {DuelStageRig.BuntHitFinishOverrideForCapture: 1.433}
+    overrides: {DuelTuning.BuntHitFinishOverrideForCapture: 1.433}
   - id: bunt-hit-finish-1141-new-R
     name: "バントを当てた後の打者の止まり方・右打者・新（既定）（issue #1141）"
     scenario: offense-timeout-top-lab
@@ -341,7 +341,7 @@ captures:
     duel_seconds: 3.0
     video: {from: start, to: end, fps: 24}
     probes: [BatterRootDiag]
-    overrides: {DuelStageRig.BuntHitFinishOverrideForCapture: 1.433}
+    overrides: {DuelTuning.BuntHitFinishOverrideForCapture: 1.433}
   - id: bunt-hit-finish-1141-new-L
     name: "バントを当てた後の打者の止まり方・左打者・新（既定）（issue #1141）"
     scenario: offense-timeout-left-lab

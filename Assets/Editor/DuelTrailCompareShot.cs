@@ -52,10 +52,10 @@ namespace KokoSim.UnityEditorTools
             Directory.CreateDirectory(Dir);
 
             // ⚠ static のノブを触るので、必ず元へ戻す（撮影の副作用を実ゲームへ残さない）
-            float s0 = DuelStageRig.FieldBattedTrailSeconds;
-            float w0 = DuelStageRig.FieldBattedTrailWidthM;
-            float a0 = DuelStageRig.FieldBattedTrailAlpha;
-            bool t0 = DuelStageRig.FieldTrailOnThrow;
+            float s0 = DuelTuning.FieldBattedTrailSeconds;
+            float w0 = DuelTuning.FieldBattedTrailWidthM;
+            float a0 = DuelTuning.FieldBattedTrailAlpha;
+            bool t0 = DuelTuning.FieldTrailOnThrow;
             try
             {
                 foreach (var idx in PlayIndices)
@@ -63,10 +63,10 @@ namespace KokoSim.UnityEditorTools
                     var rows = new List<List<Texture2D>>();
                     foreach (var v in Variants)
                     {
-                        DuelStageRig.FieldBattedTrailSeconds = v.Seconds;
-                        DuelStageRig.FieldBattedTrailWidthM = v.WidthM;
-                        DuelStageRig.FieldBattedTrailAlpha = v.Alpha;
-                        DuelStageRig.FieldTrailOnThrow = v.OnThrow;
+                        DuelTuning.FieldBattedTrailSeconds = v.Seconds;
+                        DuelTuning.FieldBattedTrailWidthM = v.WidthM;
+                        DuelTuning.FieldBattedTrailAlpha = v.Alpha;
+                        DuelTuning.FieldTrailOnThrow = v.OnThrow;
                         rows.Add(ShootPlay(PlaybackSamples.All[idx]));
                     }
                     WriteSheet(rows, Label(idx));
@@ -75,10 +75,10 @@ namespace KokoSim.UnityEditorTools
             }
             finally
             {
-                DuelStageRig.FieldBattedTrailSeconds = s0;
-                DuelStageRig.FieldBattedTrailWidthM = w0;
-                DuelStageRig.FieldBattedTrailAlpha = a0;
-                DuelStageRig.FieldTrailOnThrow = t0;
+                DuelTuning.FieldBattedTrailSeconds = s0;
+                DuelTuning.FieldBattedTrailWidthM = w0;
+                DuelTuning.FieldBattedTrailAlpha = a0;
+                DuelTuning.FieldTrailOnThrow = t0;
             }
             Debug.Log("[#505Trail] DONE -> " + Dir);
         }

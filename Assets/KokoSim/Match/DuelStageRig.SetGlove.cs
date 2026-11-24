@@ -9,19 +9,7 @@ namespace KokoSim.Unity.Match
     /// </summary>
     public sealed partial class DuelStageRig
     {
-        /// <summary>
-        /// セット姿勢でグラブ側の手首を掌側へ曲げる角度[度]（掌屈）。グラブの指先側がポケットの向き＝握りの側へ倒れ、
-        /// 握った手を外からかぶせて覆う。
-        /// </summary>
-        public static float SetGloveFlexDeg = 58f;
 
-        /// <summary>
-        /// 前腕の軸まわりのひねり[度]。掌屈だけ（58°）でも握りは大きく隠れるが、ひねりを足すと
-        /// グラブの縁が握りの残りを覆う。値は掃引の実測（2026-11-14・右投げ）:
-        /// 見えている握りの頂点（中継カメラ/二塁走者）＝ 収録のまま 344/318 → 掌屈60° 43/32 → 58°+30° 10/12。
-        /// 左投げ（鏡映）は 292/295 → 47/13。掌屈は 65° を超えると指先側が握りを通り過ぎてまた見え始める（75°で277）。
-        /// </summary>
-        public static float SetGloveRollDeg = 30f;
 
         /// <summary>セット補正の効き（0〜1）。セットで静止している間は1へ、投球へ入ったら0へ、<see cref="CrossfadeSeconds"/>で寄せる。</summary>
         private float _setGloveW;
@@ -75,11 +63,11 @@ namespace KokoSim.Unity.Match
             var fingers = par.InverseTransformDirection(_setGlove.up);
             var pocket = par.InverseTransformDirection(_setGlove.forward);
             var flexAxis = Vector3.Cross(fingers, pocket);   // 指先をポケットの側へ倒す軸
-            var q = Quaternion.AngleAxis(SetGloveFlexDeg * _setGloveW, flexAxis.normalized);
-            if (fore != null && SetGloveRollDeg != 0f)
+            var q = Quaternion.AngleAxis(DuelTuning.SetGloveFlexDeg * _setGloveW, flexAxis.normalized);
+            if (fore != null && DuelTuning.SetGloveRollDeg != 0f)
             {
                 var armAxis = par.InverseTransformDirection(hand.position - fore.position).normalized;
-                q = Quaternion.AngleAxis(SetGloveRollDeg * _setGloveW, armAxis) * q;
+                q = Quaternion.AngleAxis(DuelTuning.SetGloveRollDeg * _setGloveW, armAxis) * q;
             }
             hand.localRotation = q * hand.localRotation;
         }
@@ -87,8 +75,8 @@ namespace KokoSim.Unity.Match
         /// <summary>【診断用】セット補正を掛け直して測る（掃引用）。ポーズは今のコマを評価し直してから当てる。</summary>
         public string SweepSetGloveForCapture(float flexDeg, float rollDeg)
         {
-            SetGloveFlexDeg = flexDeg;
-            SetGloveRollDeg = rollDeg;
+            DuelTuning.SetGloveFlexDeg = flexDeg;
+            DuelTuning.SetGloveRollDeg = rollDeg;
             if (_pitcher == null) return "no pitcher";
             EvaluateGraph(_pitcher, 0f);
             _setGloveW = 1f;

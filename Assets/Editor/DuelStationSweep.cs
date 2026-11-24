@@ -39,10 +39,10 @@ namespace KokoSim.UnityEditorTools
             var log = new StringBuilder();
             log.AppendLine("heightM\tplay\tmaxZoom\tmarginM\tt\tballX\tballZ\tballH\tframeH_m\taimY\taimPx\tballPx\tballU\tballV");
 
-            var savedIn = DuelStageRig.FieldStationInfield;
-            var savedOut = DuelStageRig.FieldStationOutfield;
-            var savedZoom = DuelStageRig.FieldMaxZoom;
-            DuelStageRig.FieldMaxZoom = 8f;
+            var savedIn = DuelTuning.FieldStationInfield;
+            var savedOut = DuelTuning.FieldStationOutfield;
+            var savedZoom = DuelTuning.FieldMaxZoom;
+            DuelTuning.FieldMaxZoom = 8f;
             try
             {
                 foreach (var (idx, label) in Plays)
@@ -79,9 +79,9 @@ namespace KokoSim.UnityEditorTools
             }
             finally
             {
-                DuelStageRig.FieldStationInfield = savedIn;
-                DuelStageRig.FieldStationOutfield = savedOut;
-                DuelStageRig.FieldMaxZoom = savedZoom;
+                DuelTuning.FieldStationInfield = savedIn;
+                DuelTuning.FieldStationOutfield = savedOut;
+                DuelTuning.FieldMaxZoom = savedZoom;
             }
 
             File.WriteAllText(Path.Combine(Dir, "station.tsv"), log.ToString());
@@ -91,8 +91,8 @@ namespace KokoSim.UnityEditorTools
         /// <summary>比較のあいだは2台の据え位置を同じ点に釘付けにする（1台として扱う）。</summary>
         private static void PinStation(Vector3 p)
         {
-            DuelStageRig.FieldStationInfield = p;
-            DuelStageRig.FieldStationOutfield = p;
+            DuelTuning.FieldStationInfield = p;
+            DuelTuning.FieldStationOutfield = p;
         }
 
         private static void Write(RenderTexture rt, string name)
