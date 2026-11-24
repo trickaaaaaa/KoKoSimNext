@@ -203,7 +203,7 @@ namespace KokoSim.Unity.Components
             if (_host == null || _pitches.Count == 0) return;
             var rect = _host.contentRect;
             if (rect.width < 40f || rect.height < 40f) return;
-            UnityEngine.Debug.Log("[PCHART-DBG] Layout " + UnityEngine.Time.frameCount);
+            UnityEngine.Debug.Log("[PCHART-DBG] f" + UnityEngine.Time.frameCount + " rect=" + rect + " chips=" + string.Join(";", _chips.ConvertAll(c => c.resolvedStyle.width + "x" + c.resolvedStyle.height + "@" + c.resolvedStyle.left + "," + c.resolvedStyle.top)));
 
             // 札の実寸（位置によらない）。どれか1枚でも未確定なら、確定後の GeometryChangedEvent でやり直す。
             var sizes = new List<Vector2>(_chips.Count);
