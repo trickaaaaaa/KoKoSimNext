@@ -106,43 +106,43 @@ namespace KokoSim.Unity.Shell
             Volatile.Write(ref _nextJob, 0);
             Volatile.Write(ref _matchesResolved, 0);
 
+            // 地区大会（秋）成績の打ち直し＝地区大会の開幕月の気温（Issue #803/#971）。
+            var weather = WeatherModel.ForTournament(TournamentEntry.Schedule, TournamentKind.Regional);
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = BackgroundWork.Run(() => Worker(pending, matchesByRegion, stats, rng, yearIndex, calendarYear, brains));
+            {
+                var resolver = new BackgroundMatchResolver(
+                    NationService.Rosters, new GameContext { Weather = weather }, yearIndex, stats: null,
+                    modernRules: null, calendarYear: calendarYear, brains: brains);
+                workers[w] = BackgroundWork.RunSteps(() => Step(pending, matchesByRegion, stats, rng, yearIndex, resolver));
+            }
             _task = Task.WhenAll(workers);
         }
 
         /// <summary>本編・県予選（KSQP）と衝突しない専用ストリーム識別子（'SBQP'＝SenBatsu Qualifier Pass）。</summary>
         private const ulong StreamId = 0x5342_5150UL;
 
-        private static void Worker(
+        /// <summary>1歩＝1校。まだ校が残っていれば true を返す（ブラウザ版はコマごとに少しずつ回す。#1588）。</summary>
+        private static bool Step(
             IReadOnlyList<int> pending, IReadOnlyDictionary<int, IReadOnlyList<TournamentMatchRecord>> matchesByRegion,
-            NationTournamentStats stats, IRandomSource rng, int yearIndex, int calendarYear, IEnemyBrainFactory brains)
+            NationTournamentStats stats, IRandomSource rng, int yearIndex, BackgroundMatchResolver resolver)
         {
-            // 地区大会（秋）成績の打ち直し＝地区大会の開幕月の気温（Issue #803/#971）。
-            var weatherCtx = new GameContext { Weather = WeatherModel.ForTournament(TournamentEntry.Schedule, TournamentKind.Regional) };
-            var resolver = new BackgroundMatchResolver(
-                NationService.Rosters, weatherCtx, yearIndex, stats: null,
-                modernRules: null, calendarYear: calendarYear, brains: brains);
+            PauseGate();
 
-            while (true)
-            {
-                PauseGate();
+            var idx = Interlocked.Increment(ref _nextJob) - 1;
+            if (idx >= pending.Count) return false;
 
-                var idx = Interlocked.Increment(ref _nextJob) - 1;
-                if (idx >= pending.Count) return;
+            var schoolId = pending[idx];
+            var matches = matchesByRegion[schoolId];
+            var path = KnockoutPlacement.PathOf(matches, schoolId);
+            var totalRounds = matches.Count > 0 ? matches.Max(m => m.RoundsRemaining) : 1;
+            QualifierStatsSim.ReplayPath(
+                schoolId, path, NationService.SchoolById, resolver, stats.FoldRegionalQualifier,
+                TournamentEntry.Schedule, totalRounds, yearIndex, rng, afterMatch: PauseGate);
 
-                var schoolId = pending[idx];
-                var matches = matchesByRegion[schoolId];
-                var path = KnockoutPlacement.PathOf(matches, schoolId);
-                var totalRounds = matches.Count > 0 ? matches.Max(m => m.RoundsRemaining) : 1;
-                QualifierStatsSim.ReplayPath(
-                    schoolId, path, NationService.SchoolById, resolver, stats.FoldRegionalQualifier,
-                    TournamentEntry.Schedule, totalRounds, yearIndex, rng, afterMatch: PauseGate);
-
-                Interlocked.Increment(ref _done);
-                BackgroundWork.Sleep(StepSleepMs);
-            }
+            Interlocked.Increment(ref _done);
+            BackgroundWork.Sleep(StepSleepMs);
+            return true;
         }
 
         private static void PauseGate()
@@ -159,7 +159,7 @@ namespace KokoSim.Unity.Shell
         {
             var t = _task;
             if (t == null) return;
-            try { t.Wait(); }
+            try { BackgroundWork.Wait(t); }
             catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の校の失敗は握り潰す（読み物なので進行は止めない）が、ログは出す（issue #1226）
             _task = null;
             _total = 0;

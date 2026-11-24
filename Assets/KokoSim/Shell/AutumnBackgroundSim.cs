@@ -126,26 +126,24 @@ namespace KokoSim.Unity.Shell
             var jobs = run.Jobs;
             var workers = new Task[MaxWorkers];
             for (var w = 0; w < workers.Length; w++)
-                workers[w] = BackgroundWork.Run(() => Worker(jobs));
+                workers[w] = BackgroundWork.RunSteps(() => Step(jobs));
             _task = Task.WhenAll(workers);
         }
 
-        private static void Worker(IReadOnlyList<Func<AutumnPrefectureResult>> jobs)
+        private static bool Step(IReadOnlyList<Func<AutumnPrefectureResult>> jobs)
         {
-            while (true)
-            {
-                PauseGate();
+            PauseGate();
 
-                var idx = Interlocked.Increment(ref _nextJob) - 1;
-                if (idx >= jobs.Count) return;
+            var idx = Interlocked.Increment(ref _nextJob) - 1;
+            if (idx >= jobs.Count) return false;
 
-                var result = jobs[idx]();
-                lock (ResultsGate) Results.Add(result);
-                Interlocked.Increment(ref _done);
+            var result = jobs[idx]();
+            lock (ResultsGate) Results.Add(result);
+            Interlocked.Increment(ref _done);
 
-                BackgroundWork.Sleep((NationBackgroundSim.SimThrottle)_throttle == NationBackgroundSim.SimThrottle.Boost
-                    ? BoostSleepMs : NormalSleepMs);
-            }
+            BackgroundWork.Sleep((NationBackgroundSim.SimThrottle)_throttle == NationBackgroundSim.SimThrottle.Boost
+                ? BoostSleepMs : NormalSleepMs);
+            return true;
         }
 
         private const int CollectEveryMatches = 48;
@@ -165,7 +163,7 @@ namespace KokoSim.Unity.Shell
             var t = _task;
             if (t == null) return;
             _throttle = (int)NationBackgroundSim.SimThrottle.Boost;
-            try { t.Wait(); }
+            try { BackgroundWork.Wait(t); }
             catch (AggregateException e) { UnityEngine.Debug.LogException(e.GetBaseException()); }   // 個々の県の失敗は進行を止めないが、ログは出す（issue #1226）
             _task = null;
             _total = 0;

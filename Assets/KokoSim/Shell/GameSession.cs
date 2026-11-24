@@ -577,7 +577,7 @@ namespace KokoSim.Unity.Shell
         {
             var t = _prefetchTask;
             if (t == null) return;
-            try { t.Wait(); } catch (Exception e) { UnityEngine.Debug.LogException(e); }   // 上の catch と同様にログだけ出す
+            try { BackgroundWork.Wait(t); } catch (Exception e) { UnityEngine.Debug.LogException(e); }   // 上の catch と同様にログだけ出す
             _prefetchTask = null;
         }
 

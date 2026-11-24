@@ -15,6 +15,8 @@ namespace KokoSim.Unity.Shell
     public static class WeekAdvance
     {
         private static bool _dayAdvanceRequested;
+        // ブラウザ版で、裏の仕事を回し切るのを待っている週送りがあるか（#1588）。
+        private static bool _sideAdvanceDeferred;
 
         /// <summary>側画面で大会中に「1日進める」が押されたか（ホームが着いたときに1回だけ取り出す）。</summary>
         public static bool TakeDayAdvanceRequest()
@@ -55,6 +57,16 @@ namespace KokoSim.Unity.Shell
             }
             // 背景の試合後処理中は、ホームと同じく週を進めない（メインスレッドの GameClock/ロスター変更と競合する, issue #138）。
             if (BackgroundGameOp.Running) return;
+            // ブラウザ版は裏の仕事を回し切ってから進める（#1588・ホームの週送りと同じ）。
+            if (BackgroundWork.Busy)
+            {
+                if (!_sideAdvanceDeferred)   // 連打しても1回だけ積む
+                {
+                    _sideAdvanceDeferred = true;
+                    BackgroundWork.DeferUntilIdle(() => { _sideAdvanceDeferred = false; FromSideScreen(render); });
+                }
+                return;
+            }
             // 年契約の更新が未確定なら、ホームへ戻して更新の画面から続ける（ホームの週送りと同じ待ち）。
             if (ContractRenewalService.Pending)
             {
