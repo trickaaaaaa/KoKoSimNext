@@ -89,6 +89,12 @@ public sealed class RunnersStartedObservationTests
         foreach (var (before, lp) in pitches)
         {
             if (!before.BaseFirst) continue;
+            // 満塁ではエンドランを効かせない（issue #1234・HitAndRunRules）＝一塁走者は走らない
+            if (before.BaseSecond && before.BaseThird)
+            {
+                Assert.False(lp.RunnerStarted(1), "満塁でエンドランが効いている");
+                continue;
+            }
             withRunner++;
             Assert.True(lp.RunnerStarted(1), "エンドランの球で一塁走者のスタートが載っていない");
         }
