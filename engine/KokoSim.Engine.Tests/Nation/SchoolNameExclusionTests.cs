@@ -89,6 +89,94 @@ public class SchoolNameExclusionTests
             Assert.True(v.PrivateSuffixes.Any(x => !v.ExcludedPrivateNames.Contains(stem + x)), $"語幹「{stem}」の接尾が全部除外されている");
     }
 
+    private static SchoolNameVocab PublicOnly(params string[] excluded) => new()
+    {
+        PlacePrefixes = new[] { "札幌", "仙台" },
+        PublicSuffixes = new[] { "東", "西", "第一" },
+        PrivateRatio = 0.0,
+        ExcludedPublicNames = excluded,
+    };
+
+    [Fact]
+    public void ExcludedPublicNames_NeverAppear()
+    {
+        var v = PublicOnly("札幌東", "仙台第一", "仙台東");
+        var rng = new Xoshiro256Random(5);
+        for (var i = 0; i < 2000; i++)
+        {
+            var (name, est) = SchoolNameGenerator.Generate(v, rng);
+            Assert.Equal(Establishment.Public, est);
+            Assert.DoesNotContain(name.Replace("高校", ""), v.ExcludedPublicNames);
+        }
+    }
+
+    [Fact]
+    public void PublicExclusion_DoesNotChangeTheRandomDraws()
+    {
+        var with = new Xoshiro256Random(21);
+        var without = new Xoshiro256Random(21);
+        var vWith = PublicOnly("札幌東", "仙台西");
+        var vWithout = PublicOnly();
+        for (var i = 0; i < 500; i++)
+        {
+            var (a, _) = SchoolNameGenerator.Generate(vWith, with);
+            var (b, _) = SchoolNameGenerator.Generate(vWithout, without);
+            Assert.Equal(without.CaptureState(), with.CaptureState());
+            if (!vWith.ExcludedPublicNames.Contains(b.Replace("高校", ""))) Assert.Equal(b, a);
+        }
+    }
+
+    [Fact]
+    public void ExcludedPublicName_ShiftsToTheNextSuffix()
+    {
+        var v = PublicOnly("札幌東");
+        var rng = new Xoshiro256Random(2);
+        var shifted = 0;
+        for (var i = 0; i < 500; i++)
+        {
+            var probe = Xoshiro256Random.FromState(rng.CaptureState());
+            probe.NextDouble();
+            var pi = probe.NextInt(0, 2);
+            var xi = probe.NextInt(0, 3);
+            var (name, _) = SchoolNameGenerator.Generate(v, rng);
+            if (pi == 0 && xi == 0) { Assert.Equal("札幌西高校", name); shifted++; }
+        }
+        Assert.True(shifted > 0);
+    }
+
+    [Fact]
+    public void AllSuffixesExcluded_FallsBackToTheDrawnName()
+    {
+        // 全部除外の異常時でも落とさず、引いたままの名前を返す。
+        var v = PublicOnly("札幌東", "札幌西", "札幌第一", "仙台東", "仙台西", "仙台第一");
+        var (name, _) = SchoolNameGenerator.Generate(v, new Xoshiro256Random(3));
+        Assert.EndsWith("高校", name);
+    }
+
+    [Fact]
+    public void Parser_ReadsThePublicExclusionList()
+    {
+        var v = SchoolNameVocabParser.Parse("public_suffixes: [東, 西]\nexcluded_public_names: [札幌東,\n  仙台西]\n");
+        Assert.Contains("札幌東", v.ExcludedPublicNames);
+        Assert.Contains("仙台西", v.ExcludedPublicNames);
+    }
+
+    [Fact]
+    public void RepositoryPublicExclusionList_MatchesTheVocabulary()
+    {
+        // 綴り違いの除外は黙って効かない。リストの全部が「地名＋特徴語」で作れる名前であること、
+        // どの地名も特徴語が1つ以上残ること（全部除外だと引いたままの名前が出て実在と一致する）を固定する。
+        var v = SchoolNameVocabParser.Parse(File.ReadAllText(FindDataFile("school-names.yaml")));
+        Assert.NotEmpty(v.ExcludedPublicNames);
+        var places = v.PlacePrefixes.Concat(v.PlacesByPrefecture.Values.SelectMany(p => p)).Distinct().ToList();
+        var possible = places.SelectMany(p => v.PublicSuffixes.Select(x => p + x)).ToHashSet();
+        foreach (var name in v.ExcludedPublicNames)
+            Assert.True(possible.Contains(name), $"公立の除外リストの「{name}」は地名＋特徴語で作れない（綴り違い？）");
+        foreach (var place in places)
+            Assert.True(v.PublicSuffixes.Any(x => !SchoolNameGenerator.RepeatsCharacters(place, x) && !v.ExcludedPublicNames.Contains(place + x)),
+                $"地名「{place}」の特徴語が全部除外されている");
+    }
+
     private static string FindDataFile(string fileName)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
