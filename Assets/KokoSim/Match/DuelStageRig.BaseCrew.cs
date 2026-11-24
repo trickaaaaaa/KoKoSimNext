@@ -18,8 +18,14 @@ namespace KokoSim.Unity.Match
         public const string BaseUmpireOutClipName = "AA_Baseball_Umpire_Standing_Out_Type01";
         public const string BaseUmpireSafeClipName = "AA_Baseball_Umpire_Standing_Safe_Type01";
 
-        /// <summary>判定の腕が上がるまでの頭出し[s]。判定の瞬間（走者の到達）に腕の動きの山を合わせる。</summary>
-        private const float BaseCallLeadSeconds = 0.35f;
+        /// <summary>判定の腕が上がり始める時刻の、判定の瞬間より前の余裕[s]。</summary>
+        private const float BaseCallLeadSeconds = 0.2f;
+
+        // 収録の頭には腕を動かさない長い待ち（アウト約2.5s・セーフ約2.0s）が入っている＝そこを飛ばして
+        // 腕が上がり始める所から流す（右手首の高さの実測 2026-11-25: アウトは2.40→2.67s、セーフは1.87→2.13s で跳ね上がる）。
+        // 守備ビューの再生は判定の後1秒足らずで閉じるので、頭から流すと腕が上がる前に終わる。
+        private const float BaseCallOutOnsetSeconds = 2.5f;
+        private const float BaseCallSafeOnsetSeconds = 2.0f;
 
         /// <summary>走者のレッグの行き先がこの範囲[m]にある塁を、その判定の塁とみなす（一塁の駆け抜けまで入る）。</summary>
         private const float BaseCallRadiusM = 5f;
@@ -205,7 +211,8 @@ namespace KokoSim.Unity.Match
                 var clip = LoadClip(c.Out ? BaseUmpireOutClipName : BaseUmpireSafeClipName);
                 if (a != null && a.Enabled && clip != null)
                 {
-                    CrossfadeActorToClip(a, clip, Mathf.Max(0f, t - c.TStart), 0f, 0.12f);   // 終わったら待機（IdleClip）へ戻る
+                    float seek = (c.Out ? BaseCallOutOnsetSeconds : BaseCallSafeOnsetSeconds) - BaseCallLeadSeconds;
+                    CrossfadeActorToClip(a, clip, seek + Mathf.Max(0f, t - c.TStart), 0f, 0.1f);   // 終わったら待機（IdleClip）へ戻る
                     a.Speed = 1f;
                 }
                 c.Fired = true;
