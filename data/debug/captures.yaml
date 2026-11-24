@@ -65,6 +65,13 @@ captures:
     video: {from: catch-0.8, to: release+0.9, fps: 30}
     overrides: {DuelStageRig.ThrowClosedWindupOffForCapture: false}
 
+  - id: throw-slip-1552
+    name: "左翼ゴロの送球で足が滑らない（issue #1552・捕球〜リリースの水平移動と足の滑りの実測）"
+    scenario: of-grounder-runner-lf-lab
+    manager: home
+    video: {from: catch-0.8, to: release+0.9, fps: 30}
+    probes: [ThrowSlipDiag]
+
   - id: foul-chased-1074
     name: "あと一歩届かなかったファウルフライを守備ビューで見せる（issue #1074 (a)）"
     scenario: of-grounder-norunner-lab

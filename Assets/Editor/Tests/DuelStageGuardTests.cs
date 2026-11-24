@@ -536,5 +536,74 @@ namespace KokoSim.EditorTests
             rig.Tick(0.1f);
             Assert.That(rig.BattedOutOfFrame, Is.True);
         }
+
+        // ---- 外野手が走りながら掬った後の送球（issue #1552） ----
+
+        /// <summary>
+        /// 走りながら掬った外野手は、engine の運びが止まってから送球クリップを流す（足を据えた収録の間に位置が動くと
+        /// 体が地面を滑る）。流し始め〜リリースの間の engine の位置が動かないこと。
+        /// </summary>
+        [TestCase(4.98f)]   // 握り替え 1.18s（深い位置の収録のリリース 1.36s より短い＝速回しで収める）
+        [TestCase(4.40f)]   // 握り替え 0.60s（守備の上手い野手＝頭を捨てる分も出る）
+        [TestCase(5.80f)]   // 握り替え 2.00s（窓が十分ある）
+        public void OutfieldRunThroughThrow_StartsOnlyAfterTheCarryStops(float release)
+        {
+            var rig = Rig;
+            var play = RunThroughPlay(3.8, release);
+            rig.BeginFieldPlay(play, 0f);
+            var plan = rig.ThrowPlanForTest();
+            Assert.That(plan.Length, Is.GreaterThan(0), "前提: 送球の予定が組まれた");
+
+            var e = plan[0];
+            Assert.That(e.From, Is.EqualTo(KokoSim.Engine.Match.Field.FieldPosition.LeftField));
+            var p0 = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.FielderAt(play, e.From, e.TFire).Pos;
+            var p1 = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.FielderAt(play, e.From, e.TRelease).Pos;
+            float moved = new Vector2((float)(p1.X - p0.X), (float)(p1.Y - p0.Y)).magnitude;
+            Assert.That(moved, Is.LessThan(0.01f),
+                $"送球クリップを流している間（{e.TFire:F2}〜{e.TRelease:F2}s）に engine の位置が {moved:F2}m 動く＝体が滑る");
+        }
+
+        private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay RunThroughPlay(double fieldedAt, double release)
+        {
+            var fieldPt = new KokoSim.Engine.Match.Timeline.TimelinePoint(-18.5, 71.7);
+            var lf = KokoSim.Engine.Match.Field.FieldPosition.LeftField;
+            var tl = new KokoSim.Engine.Match.Timeline.PlayTimeline
+            {
+                Ball = new List<KokoSim.Engine.Match.Timeline.BallSegment>
+                {
+                    new KokoSim.Engine.Match.Timeline.BallSegment
+                    {
+                        Kind = KokoSim.Engine.Match.Timeline.BallSegmentKind.Roll, T0 = 0.85, T1 = fieldedAt,
+                        From = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 0), To = fieldPt,
+                    },
+                },
+                Moves = new List<KokoSim.Engine.Match.Timeline.FielderMove>
+                {
+                    new KokoSim.Engine.Match.Timeline.FielderMove
+                    {
+                        Role = lf, T0 = 1.2, T1 = fieldedAt, To = fieldPt,
+                        Task = KokoSim.Engine.Match.Timeline.FielderTask.FieldBall,
+                    },
+                },
+                FielderStarts = new Dictionary<KokoSim.Engine.Match.Field.FieldPosition, KokoSim.Engine.Match.Timeline.TimelinePoint>
+                {
+                    [lf] = new KokoSim.Engine.Match.Timeline.TimelinePoint(-28, 80),
+                },
+                Result = "テスト", Duration = 8.0, ResolvedAt = 8.0,
+            };
+            var rt = KokoSim.Engine.Match.Timeline.TimelineBuilder.ApplyOutfieldRunThrough(tl, lf, fieldPt, fieldedAt, release);
+            Assert.That(rt.HasValue, "前提: 走りながら掬う移動が付く");
+            var ball = new List<KokoSim.Engine.Match.Timeline.BallSegment>(tl.Ball)
+            {
+                new KokoSim.Engine.Match.Timeline.BallSegment
+                {
+                    Kind = KokoSim.Engine.Match.Timeline.BallSegmentKind.Throw, T0 = release, T1 = release + 2.0,
+                    From = rt.Value.ThrowFrom, To = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 38.8),
+                    FromRole = lf, ToRole = KokoSim.Engine.Match.Field.FieldPosition.Shortstop,
+                },
+            };
+            tl = rt.Value.Timeline with { Ball = ball };
+            return KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+        }
     }
 }

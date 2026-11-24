@@ -36,5 +36,19 @@ public sealed class OutfieldRunThroughScenarioTests
         // 走者ありは捕りに行く移動が RunIn・捕った後に RunOut で運ぶ。走者なしは従来どおり（どちらも無い）
         Assert.Equal(runThrough, tl.Moves.Any(m => m.Role == fielder && m.Profile == MoveProfile.RunIn));
         Assert.Equal(runThrough, tl.Moves.Any(m => m.Role == fielder && m.Profile == MoveProfile.RunOut));
+        if (!runThrough) return;
+
+        // issue #1552: 運びは数歩で終わり、送球のリリースの前に止まっている（送球クリップの間は位置が動かない）
+        var carry = tl.Moves.Single(m => m.Role == fielder && m.Profile == MoveProfile.RunOut);
+        var th = tl.Ball.First(b => b.Kind == BallSegmentKind.Throw);
+        Assert.True(carry.T1 - carry.T0 <= 0.35 + 1e-9, "運びが0.35sを超えている");
+        Assert.True(carry.T1 <= th.T0 + 1e-9, "運びがリリースより後まで続いている");
+        Assert.Equal(carry.To.X, th.From.X, 6);                 // 送球は運んで止まった点から
+        Assert.Equal(carry.To.Z, th.From.Z, 6);
+        var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
+        var stop = PlaybackEvaluator.FielderAt(play, fielder, carry.T1).Pos;
+        var rel = PlaybackEvaluator.FielderAt(play, fielder, th.T0).Pos;
+        Assert.Equal(stop.X, rel.X, 6);
+        Assert.Equal(stop.Y, rel.Y, 6);
     }
 }

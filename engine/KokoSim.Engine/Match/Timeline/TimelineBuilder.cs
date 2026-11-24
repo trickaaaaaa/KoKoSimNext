@@ -4038,8 +4038,11 @@ public static class TimelineBuilder
     private const double RunThroughMinLegM = 3.0;
     /// <summary>走りながら掬う絵にする最低の速さ[m/s]（捕球の瞬間の速さ。これ未満は歩いているのと同じ＝止まる）。</summary>
     private const double RunThroughMinSpeedMps = 3.0;
-    /// <summary>捕った後に勢いのまま運ぶ距離の上限[m]（握り替えが長い＝守備の低い野手で運びすぎないため）。</summary>
-    private const double RunThroughMaxCarryM = 4.0;
+    /// <summary>捕った後に勢いのまま運ぶ距離の上限[m]（TypeF の捕った後の数歩ぶん。issue #1552）。</summary>
+    private const double RunThroughMaxCarryM = 2.0;
+    /// <summary>捕った後に運ぶ秒の上限（issue #1552）。握り替え全体ではなく数歩で止まり、止まってから投げる＝
+    /// 送球クリップ（足を据えた収録）の間は野手の位置が動かない。</summary>
+    private const double RunThroughMaxCarrySeconds = 0.35;
 
     /// <summary>
     /// 走者ありの外野ゴロを「走りながら掬う」移動にする（issue #1079・オーナー決定＝engine の再生モデルで持つ）。
@@ -4047,9 +4050,11 @@ public static class TimelineBuilder
     ///
     /// <para>処理野手の捕球点へ向かう移動（終点＝捕球点・終わり＝捕球時刻）を <see cref="MoveProfile.RunIn"/>
     /// （減速しないで通過）にし、捕球〜握り替えの終わり（＝投げ始め）を <see cref="MoveProfile.RunOut"/>
-    /// （捕球の瞬間の速さから等減速して止まる）で同じ向きへ運ぶ。運ぶ距離＝捕球の瞬間の速さ×握り替えの秒÷2
-    /// （等減速の距離）なので、捕球の前後で速さが途切れない。捕球の時刻・位置、送球の投げ始めと到達の時刻は
-    /// どれも変えない（判定は不変）。送球の起点だけが運んで止まった点になる。</para>
+    /// （捕球の瞬間の速さから等減速して止まる）で同じ向きへ運ぶ。運ぶのは握り替え全体でなく数歩だけ
+    /// （<see cref="RunThroughMaxCarrySeconds"/>・<see cref="RunThroughMaxCarryM"/>で頭打ち。issue #1552）。
+    /// 運ぶ距離＝捕球の瞬間の速さ×運ぶ秒÷2（等減速の距離）なので、捕球の前後で速さが途切れない。
+    /// 運びが終わってから送球のリリースまでは止まっている＝足を据えた送球クリップが地面を滑らない。
+    /// 捕球の時刻・位置、送球の投げ始めと到達の時刻はどれも変えない（判定は不変）。送球の起点だけが運んで止まった点になる。</para>
     ///
     /// 当てはまらない（捕りに行く移動が見つからない・近すぎる・遅すぎる・握り替えが無い）ときは null。
     /// </summary>
@@ -4090,12 +4095,12 @@ public static class TimelineBuilder
         var speed = dist / dur * Playback.PlaybackEvaluator.PeakSpeedFactor(MoveProfile.RunIn);
         if (speed < RunThroughMinSpeedMps) return null;
 
-        var carry = Math.Min(RunThroughMaxCarryM, speed * hold / 2);
+        var carry = Math.Min(RunThroughMaxCarryM, speed * Math.Min(hold, RunThroughMaxCarrySeconds) / 2);
         var dirX = (fieldPoint.X - start.X) / dist;
         var dirZ = (fieldPoint.Z - start.Z) / dist;
         var carryTo = new TimelinePoint(fieldPoint.X + dirX * carry, fieldPoint.Z + dirZ * carry);
-        // 上限で切った運び（carry < speed*hold/2）は等減速の秒も縮める＝始点の速さを捕球の瞬間の速さに揃える
-        var carryEnd = fieldedAt + Math.Min(hold, 2 * carry / speed);
+        // 上限で切った運びは等減速の秒も縮める＝始点の速さを捕球の瞬間の速さに揃える
+        var carryEnd = fieldedAt + 2 * carry / speed;
         // 同じ野手が運ぶ間に別の移動を持っているなら触らない（移動が重なると FielderAt の進みが混ざる）
         for (var i = 0; i < moves.Count; i++)
             if (i != idx && moves[i].Role == role && moves[i].T0 < carryEnd && moves[i].T1 > fieldedAt) return null;
