@@ -1314,28 +1314,6 @@ namespace KokoSim.Unity.Components
             return row;
         }
 
-        // ===== BatteryChemistry（バッテリーの相性: スタメン設定・交代パネル。設計書23 §4・issue #935） =====
-
-        /// <summary>
-        /// バッテリーの相性＝ランクチップ（G〜S）＋積み重ね（一緒に守ったイニング）の短いバー。数字と説明文は出さない（#731）。
-        /// <paramref name="grade"/> が null（相手が決まっていない・同じ選手）なら同じ幅の空き枠だけを返す＝列をそろえる。
-        /// </summary>
-        public static VisualElement BatteryChemistry(string grade, float bond01)
-        {
-            var wrap = new VisualElement();
-            wrap.AddToClassList("bat-chem");
-            if (string.IsNullOrEmpty(grade)) return wrap;
-            wrap.Add(RankChip(grade, RankChipSize.Small));
-            var track = new VisualElement();
-            track.AddToClassList("bat-chem__bar");
-            var fill = new VisualElement();
-            fill.AddToClassList("bat-chem__fill");
-            fill.style.width = Length.Percent(Mathf.Clamp01(bond01) * 100f);
-            track.Add(fill);
-            wrap.Add(track);
-            return wrap;
-        }
-
         // ===== Timeline（キャリア年表の縦軸＋節点。設計書16 §10.2 の穴#7・issue #586） =====
 
         /// <summary>キャリア年表の1節点。</summary>
