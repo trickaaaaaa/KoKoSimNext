@@ -264,6 +264,8 @@ public static class GameEngine
     private static void SeedLineScore(TeamState t, int runs, int completedInnings)
     {
         for (var i = 0; i < completedInnings; i++) t.RecordInningRuns(i == 0 ? runs : 0);
+        // まだ1回も攻撃していない側（1回から始める場面）は、注入した点を最初に記録される半回へ持ち越す＝R と回別の合計を食い違わせない。
+        if (completedInnings == 0) t.CarryRunsIntoFirstInning(runs);
     }
 
     /// <summary>観測ヘッダ（設計書17 §4.1）。再現に必要な最小情報（RNG状態・対戦カード指紋）を先頭に置く。</summary>

@@ -12,7 +12,7 @@ namespace KokoSim.Engine.Players;
 ///   - 全行コメント（先頭が <c>#</c>）と空行は無視（行末コメントは非対応＝skills.yamlは使わない）
 ///   - <c>skills:</c> 直下の <c>- id: X</c> で始まるブロック・リスト、以降のインデント行が同じ項目の
 ///     <c>key: value</c>（<c>category</c>/<c>hidden_eligible</c>/<c>name</c>/<c>description</c>）
-/// 未知の id・category を持つ項目は黙って捨てる（呼び元がフォールバック/警告を選べる、他パーサと同流儀）。
+/// 未知の id（数字の "3" のような列挙値の直指定も含む）・category を持つ項目は黙って捨てる（呼び元がフォールバック/警告を選べる、他パーサと同流儀）。
 /// </summary>
 public static class SkillCatalogParser
 {
@@ -26,7 +26,7 @@ public static class SkillCatalogParser
         void Flush()
         {
             if (id is { Length: > 0 }
-                && System.Enum.TryParse<Skill>(id, out var skillId)
+                && IsSkillName(id, out var skillId)
                 && TryCategory(category, out var cat))
             {
                 list.Add(new SkillCatalogEntry(skillId, cat, name ?? "", description ?? "", hiddenEligible));
@@ -69,6 +69,10 @@ public static class SkillCatalogParser
         Flush();
         return list;
     }
+
+    // 数字（"3"）は Enum.TryParse が通してしまうので、名前として書かれたものだけを受ける。
+    private static bool IsSkillName(string id, out Skill skill)
+        => System.Enum.TryParse(id, out skill) && char.IsLetter(id[0]) && System.Enum.IsDefined(typeof(Skill), skill);
 
     private static bool TryCategory(string? raw, out SkillCategory category)
     {

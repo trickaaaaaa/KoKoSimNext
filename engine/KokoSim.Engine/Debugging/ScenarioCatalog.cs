@@ -69,6 +69,7 @@ public sealed record ScenarioDefinition
                 if (b is < 1 or > 3) throw new System.ArgumentException($"シナリオの指定が不正です: bases は1〜3（{b}）");
                 if (!seen.Add(b)) throw new System.ArgumentException($"シナリオの指定が不正です: bases に重複（{b}）");
             }
+            ToStart().ValidateNotFinished(new GameContext());
             ScenarioBuilder.ParseTeamSpec(Away);
             ScenarioBuilder.ParseTeamSpec(Home);
             ResolveForce();
@@ -137,6 +138,9 @@ public sealed class ScenarioCatalog
 /// </summary>
 public static class ScenarioBuilder
 {
+    /// <summary>seed を宣言したシナリオの顔ぶれの母種（宣言済みの seed はこの値で選んだ）。</summary>
+    public const ulong DeclaredSeedTeamBase = 1UL;
+
     /// <summary>組み上がった試合一式。<see cref="GameEngine.NewProgress"/> へそのまま渡せる。</summary>
     public sealed record Built(Team Away, Team Home, GameContext Ctx, ScenarioStart Start, ulong Seed);
 
@@ -151,18 +155,29 @@ public static class ScenarioBuilder
     {
         def.Validate();
 
-        var away = ResolveTeam(def.Away, "遠征校", seed ^ 0xA_0000UL, playerTeam);
-        var home = ResolveTeam(def.Home, "地元校", seed ^ 0xB_0000UL, playerTeam);
+        // seed を宣言したシナリオは、両校の顔ぶれも試合の乱数も呼び出し側の seed に依らない
+        // （CLI の --seed や Unity の DebugMatchFactory.DefaultSeed で対戦校が変わらない）。宣言済みの seed は
+        // 顔ぶれの母種を DeclaredSeedTeamBase として選んである＝この定数を変えると選び直しになる。
+        var scenarioSeed = def.Seed ?? seed;
+        var teamBase = def.Seed is null ? seed : DeclaredSeedTeamBase;
+        var away = ResolveTeam(def.Away, "遠征校", teamBase ^ 0xA_0000UL, playerTeam);
+        var home = ResolveTeam(def.Home, "地元校", teamBase ^ 0xB_0000UL, playerTeam);
 
         var ctx = baseCtx with { ScenarioId = def.Id };
         if (def.TieBreak is { } tb) ctx = ctx with { TieBreakEnabled = tb };
-        if (def.Dh == true)
+        try { def.ToStart().ValidateNotFinished(ctx); }
+        catch (System.ArgumentException e)
         {
-            away = WithDh(away);
-            home = WithDh(home);
+            throw new System.ArgumentException($"シナリオ {def.Id}: {e.Message}", e);
+        }
+        if (def.Dh is { } dh)
+        {
+            // true/false どちらも宣言どおりに揃える（false を無視すると、DH制の自校が渡ったとき DH制で始まる）。
+            away = dh ? WithDh(away) : WithoutDh(away);
+            home = dh ? WithDh(home) : WithoutDh(home);
         }
 
-        return new Built(away, home, ctx, def.ToStart(), def.Seed ?? seed);
+        return new Built(away, home, ctx, def.ToStart(), scenarioSeed);
     }
 
     /// <summary>チーム指定を解釈した結果。</summary>
@@ -248,6 +263,27 @@ public static class ScenarioBuilder
         "G" => 25.0,
         _ => throw new System.ArgumentException($"未知のティア: {tier}（S〜G）"),
     };
+
+    /// <summary>DH制を解く（DH枠へ先発投手を打順に戻し、DH選手は控えの先頭へ回す）。</summary>
+    private static Team WithoutDh(Team t)
+    {
+        if (!t.UsesDh) return t;
+        var pitcher = t.StartingPitcher
+            ?? throw new System.InvalidOperationException("DH制のチームに StartingPitcher がありません");
+        var order = new List<Player>(t.BattingOrder);
+        var dh = order[t.DhSlot];
+        order[t.DhSlot] = pitcher;
+        var reserves = new List<Player> { dh };
+        reserves.AddRange(t.Reserves);
+        return t with
+        {
+            BattingOrder = order,
+            Reserves = reserves,
+            PitcherSlot = t.DhSlot,
+            DhSlot = -1,
+            StartingPitcher = null,
+        };
+    }
 
     /// <summary>DH制へ組み替える（投手を打順から外し、9番枠をDHにする）。</summary>
     private static Team WithDh(Team t)

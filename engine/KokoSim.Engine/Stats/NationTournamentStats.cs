@@ -26,16 +26,16 @@ public sealed class NationTournamentStats
     // 他県（背景スレッド）が同時に別校を畳み込むため、辞書構造の競合をロックで防ぐ（校キーは disjoint）。
     private readonly object _gate = new();
 
-    /// <summary>学校IDの今大会成績（未登録なら null）。UIの相手校成績欄・新聞が引く。</summary>
+    /// <summary>学校IDの今大会成績（未登録なら null）。UIの相手校成績欄・新聞が引く。<b>呼んだ時点の複写</b>を返す（以後の畳み込みは映らない）。</summary>
     public StatBook? ForSchool(int schoolId)
     {
-        lock (_gate) return _bySchool.TryGetValue(schoolId, out var b) ? b : null;
+        lock (_gate) return _bySchool.TryGetValue(schoolId, out var b) ? Snapshot(b) : null;
     }
 
     /// <summary>学校IDの通算成績（未登録なら null。大会をまたいで積む, issue #634）。</summary>
     public StatBook? CareerForSchool(int schoolId)
     {
-        lock (_gate) return _careerBySchool.TryGetValue(schoolId, out var b) ? b : null;
+        lock (_gate) return _careerBySchool.TryGetValue(schoolId, out var b) ? Snapshot(b) : null;
     }
 
     /// <summary>
@@ -86,7 +86,7 @@ public sealed class NationTournamentStats
     /// </summary>
     public StatBook? PrefQualifierForSchool(int schoolId)
     {
-        lock (_gate) return _prefQualifierBySchool.TryGetValue(schoolId, out var b) ? b : null;
+        lock (_gate) return _prefQualifierBySchool.TryGetValue(schoolId, out var b) ? Snapshot(b) : null;
     }
 
     /// <summary>県予選成績を持つ学校ID一覧（セーブ用・スナップショット）。</summary>
@@ -135,7 +135,7 @@ public sealed class NationTournamentStats
     /// </summary>
     public StatBook? RegionalQualifierForSchool(int schoolId)
     {
-        lock (_gate) return _regionalQualifierBySchool.TryGetValue(schoolId, out var b) ? b : null;
+        lock (_gate) return _regionalQualifierBySchool.TryGetValue(schoolId, out var b) ? Snapshot(b) : null;
     }
 
     /// <summary>地区大会成績を持つ学校ID一覧（セーブ用・スナップショット）。</summary>
@@ -151,6 +151,14 @@ public sealed class NationTournamentStats
         {
             BookFor(_regionalQualifierBySchool, schoolId).FoldGame(result, schoolIsAway);
         }
+    }
+
+    // 背景スレッドの畳み込みと読み手（UI・セーブ）が重なっても列挙中に書き換わらないよう、ロックの中で複写して渡す。
+    private static StatBook Snapshot(StatBook book)
+    {
+        var copy = new StatBook();
+        copy.ReplaceWith(book);
+        return copy;
     }
 
     private static StatBook BookFor(Dictionary<int, StatBook> books, int schoolId)

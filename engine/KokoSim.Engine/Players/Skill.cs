@@ -121,6 +121,20 @@ public sealed record SkillSet
 
     /// <summary>空集合（スキルなし）。</summary>
     public static SkillSet Empty { get; } = new();
+
+    // record の合成等価は private な HashSet を参照比較してしまう＝中身が同じでも別物になり、
+    // Player の値等価（辞書キー等）が黙って崩れる。可視・隠しそれぞれの集合の中身で比べる。
+    public bool Equals(SkillSet? other)
+        => other is not null && _visible.SetEquals(other._visible) && _hidden.SetEquals(other._hidden);
+
+    public override int GetHashCode()
+    {
+        // 並び順に依存しない（HashSet の列挙順は不定）。
+        int v = 0, h = 0;
+        foreach (var s in _visible) v ^= (int)s * 397 + 17;
+        foreach (var s in _hidden) h ^= (int)s * 761 + 29;
+        return unchecked(v * 31 + h);
+    }
 }
 
 /// <summary>

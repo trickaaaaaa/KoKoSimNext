@@ -63,6 +63,9 @@ public static class PrefFormatDistrictParser
         // stages: 配下のステージ1件ぶんの状態。ステージの区切り（"- " 始まり）で確定・リセットする。
         var inStages = false;
         var stageIndent = -1;
+        // stages: 直下のリスト項目（"- "）の字下げ。これと同じ段の "-" だけがステージの始まりで、
+        // 入れ子のリストの "-" はステージを閉じない。
+        var stageItemIndent = -1;
         string? stageType = null, stageGrouping = null;
         int? stageGroups = null;
         var found = 0;
@@ -102,6 +105,7 @@ public static class PrefFormatDistrictParser
                 CloseStage();
                 inStages = false;
                 stageIndent = -1;
+                stageItemIndent = -1;
                 var (k0, v0) = Split(trimmed);
                 if (k0 == null) continue;
                 if (k0 == "pref") pref = v0;
@@ -119,8 +123,9 @@ public static class PrefFormatDistrictParser
             if (!inStages) continue;
 
             // ステージの開始（"- name: 地区予選" / "- type: knockout"）。
-            if (trimmed.StartsWith("-"))
+            if (trimmed.StartsWith("-") && (stageItemIndent < 0 || indent == stageItemIndent))
             {
+                stageItemIndent = indent;
                 CloseStage();
                 stageIndent = indent + 2;   // "- " のぶんだけ内側がステージ自身のキー段
                 trimmed = trimmed.Substring(1).Trim();
@@ -220,10 +225,18 @@ public static class PrefFormatDistrictParser
             .ToList();
     }
 
+    // 行末コメントを落とす。引用符の中の # と、直前が空白でない # は値の一部として残す（YAML と同じ）。
     private static string StripComment(string line)
     {
-        var i = line.IndexOf('#');
-        return i < 0 ? line : line.Substring(0, i);
+        var quote = '\0';
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (quote != '\0') { if (c == quote) quote = '\0'; }
+            else if (c == '"' || c == '\'') quote = c;
+            else if (c == '#' && (i == 0 || char.IsWhiteSpace(line[i - 1]))) return line.Substring(0, i);
+        }
+        return line;
     }
 
     private static (string? Key, string Value) Split(string trimmed)
