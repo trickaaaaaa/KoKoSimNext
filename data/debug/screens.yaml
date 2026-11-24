@@ -1451,3 +1451,18 @@ screens:
       - show: TeamStrength
       - wait: 5
       - shot: 09-low
+
+  - id: team-state-tall-1600
+    name: "チーム総合力パネルの精神力の行の右（チーム状態）を縦長で撮る（issue #1600）"
+    size: {w: 1600, h: 1300}
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - show: TeamStrength
+      - wait: 5
+      - shot: 01-team-strength
+      - call: NewTeamService.Skip()
+      - call: GameClock.Advance(18)
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 02-captain-dialog
