@@ -70,6 +70,8 @@ namespace KokoSim.Unity.Shell
             IReadOnlyList<int> fieldIds, IReadOnlyList<RegionalResult> otherRegions, int yearIndex, ulong seed,
             bool keepExisting = false)
         {
+            // ブラウザ版は打ち直さない（甲子園代表の打ち直しと同じ理由・#1588）。大会展望の地区大会成績が空欄になるだけ。
+            if (!BackgroundWork.RunsReplays) return;
             EnsureCompleted();   // 前年ぶんが残っていたら先に畳む（同じ帳簿を2本の走りが触らない）
 
             var stats = NationService.TournamentStats;

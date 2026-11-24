@@ -148,6 +148,14 @@ namespace KokoSim.EditorTests
         }
 
         [Test]
+        public void Browser_SkipsReadingOnlyReplays()
+        {
+            Assert.IsFalse(BackgroundWork.RunsReplays, "ブラウザ版は代表校の予選成績を打ち直さない（#1588 オーナー判断）");
+            BackgroundWork.SimulateBrowser = false;
+            Assert.IsTrue(BackgroundWork.RunsReplays, "スレッド版（Windows）は従来どおり打ち直す");
+        }
+
+        [Test]
         public void Threaded_RunSteps_RunsToTheEndOnAThread()
         {
             BackgroundWork.SimulateBrowser = false;

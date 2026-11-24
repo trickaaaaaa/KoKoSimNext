@@ -190,6 +190,12 @@ namespace KokoSim.Unity.Shell
             if (Threaded) Thread.Sleep(milliseconds);
         }
 
+        /// <summary>
+        /// 読み物のためだけの打ち直し（甲子園・センバツ代表の予選成績）を回すか。ブラウザ版は回さない
+        /// （1コアでは数百試合が長い待ちになる・#1588 オーナー判断）。進行・試合結果には関わらない。
+        /// </summary>
+        public static bool RunsReplays => Threaded;
+
         /// <summary>同時に回す本数。ブラウザ版は1本。</summary>
         public static int Parallelism(int wanted) => Threaded ? Math.Max(1, wanted) : 1;
 

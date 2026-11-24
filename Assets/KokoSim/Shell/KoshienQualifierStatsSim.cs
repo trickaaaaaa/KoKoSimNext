@@ -64,6 +64,9 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void Start(IEnumerable<PrefectureResult> results, int yearIndex, ulong seed)
         {
+            // ブラウザ版は打ち直さない（約300試合＝1コアでは夏の敗退後が長く止まる・#1588 オーナー判断）。
+            // 読み物（大会展望の他県代表の県予選成績）が空欄になるだけで、進行・結果は変わらない。
+            if (!BackgroundWork.RunsReplays) return;
             EnsureCompleted();   // 前年ぶんが残っていたら先に畳む（同じ帳簿を2本の走りが触らない）
 
             var stats = NationService.TournamentStats;
