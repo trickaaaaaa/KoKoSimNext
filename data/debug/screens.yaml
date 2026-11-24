@@ -319,7 +319,7 @@ screens:
       # 見た目の確認のために全員に立てる（本番では1人だけ）
       - set: {RosterService.Active.0.IsCaptain: true, RosterService.Active.1.IsCaptain: true, RosterService.Active.2.IsCaptain: true, RosterService.Active.3.IsCaptain: true, RosterService.Active.4.IsCaptain: true, RosterService.Active.5.IsCaptain: true, RosterService.Active.6.IsCaptain: true, RosterService.Active.7.IsCaptain: true, RosterService.Active.8.IsCaptain: true, RosterService.Active.9.IsCaptain: true}
       - show: MemberSetting
-      - hover: .field-chip[0]
+      - hover: .ms-fcard[0]
       - shot: 01-member
 
   - id: member-popover-close-1267
@@ -327,9 +327,9 @@ screens:
     steps:
       - new_game: {seed: 1}
       - show: MemberSetting
-      - hover: .field-chip[0]
+      - hover: .ms-fcard[0]
       - shot: 01-popover-open
-      - leave: .field-chip[0]
+      - leave: .ms-fcard[0]
       - hover: .field-pop
       - wait: 300ms
       - read: .field-pop
@@ -1227,3 +1227,54 @@ screens:
       - show: PlayerList
       - wait: 60
       - shot: 03-player-12
+
+  # ── 背番号の画面のリデザイン：4列（背番号1〜9｜10〜20｜ベンチ外｜比較） ──
+
+  - id: member-numbers-redesign
+    name: "メンバー設定：背番号10〜20を縦1列・すぐ右にベンチ外。空き枠は点線、選択はスクールカラーの枠、ベンチ外が多いときは列の中だけスクロール"
+    steps:
+      # 新設校＝部員10人（背番号11〜20が空き・ベンチ外0人）
+      - new_game: {seed: 1}
+      - show: MemberSetting
+      - wait: 5
+      - shot: 01-ten-players
+      - click: .ms-fcard[0]
+      - wait: 5
+      - shot: 02-picked
+      - click: .ms-fcard[0]
+      # 強い学校へ転任＝3学年そろった部員（ベンチ外が出る）
+      - transfer: ""
+      - call: EventService.Clear()
+      - show: MemberSetting
+      - wait: 5
+      - read: =RosterService.Active
+      - shot: 03-full-roster
+      - click: .ms-row--out[0]
+      - wait: 5
+      - shot: 04-picked-bench-out
+      - click: .ms-row[0]
+      - wait: 5
+      - shot: 05-swapped
+      # 部員の先頭の背番号を外す（空いた枠の見え方）
+      - set: {RosterService.Active.0.UniformNumber: 0}
+      - show: PlayerList
+      - show: MemberSetting
+      - wait: 5
+      - shot: 06-vacant-starter
+
+  - id: member-numbers-long-names
+    name: "メンバー設定：6文字の名前（姓3＋名3）が背番号1〜9のカードで切れない・主将の印と重ならない／選んだ選手と別の選手にカーソルを載せた2人比較"
+    steps:
+      - new_game: {seed: 1}
+      - set: {RosterService.Active.0.Name: "佐々木　健太郎", RosterService.Active.1.Name: "長谷川　虎太郎", RosterService.Active.2.Name: "五十嵐　慎之介", RosterService.Active.3.Name: "小野寺　龍之介", RosterService.Active.4.Name: "佐々木　陸", RosterService.Active.5.Name: "久保田　倫太郎", RosterService.Active.6.Name: "宇佐美　健太郎", RosterService.Active.7.Name: "長谷部　正太郎", RosterService.Active.8.Name: "阿久津　幸太郎", RosterService.Active.9.Name: "大久保　優太郎"}
+      - show: MemberSetting
+      - wait: 5
+      - shot: 01-six-letter-names
+      # 3学年そろった部員で、ベンチ外の選手を選び（左）、背番号12の選手にカーソルを載せる（右）＝2人比較。
+      # 撮影（shot）のあとに続けた click／hover は効かないことがあるので、撮る前に操作を済ませる
+      - transfer: ""
+      - call: EventService.Clear()
+      - show: MemberSetting
+      - click: .ms-row--out[0]
+      - hover: .ms-row[2]
+      - shot: 02-compare-two

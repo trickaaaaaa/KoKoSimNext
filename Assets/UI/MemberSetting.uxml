@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- メンバー設定 画面（UI-BUILD-METHOD Step 4）。背番号1〜20の固定枠に選手を割り当て、
-     選んだ2選手の全能力を比較する。骨組みだけ置き、枠・プール・比較は MemberSettingController が
-     部品（components.uss）で動的生成する。スタイルは tokens → KokoSimTheme → components → 画面USS の順。
-     背番号1〜9はダイヤモンド配置（守備位置の慣例）、10〜20は控えとして横並び。 -->
+     選んだ2選手の全能力を比較する。骨組みだけ置き、枠・ベンチ外・比較は MemberSettingController が
+     動的生成する。スタイルは tokens → KokoSimTheme → components → scorebook → 画面USS の順。
+     4列＝背番号1〜9（球場の絵）｜背番号10〜20（縦1列）｜ベンチ外｜2選手比較。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="TopBar" src="Components/TopBar.uxml" />
     <Style src="tokens.uss" />
@@ -26,36 +26,48 @@
 
         <ui:VisualElement class="ms-body">
 
-            <!-- 左：背番号割当（ダイヤ＋控え＋プール） -->
-            <ui:VisualElement class="ms-left">
-                <ui:VisualElement class="ms-head">
-                    <ui:VisualElement class="ms-head__spacer" />
-                    <ui:Button name="ms-auto" text="能力順で自動割当" class="ms-auto-btn" />
+            <!-- 1列目：背番号1〜9。球場の絵（MemberFieldArtElement）の上に、Controller がカードを絶対配置で置く。 -->
+            <ui:VisualElement class="ms-col ms-col--field">
+                <ui:VisualElement class="ms-col__head">
+                    <ui:Label text="背番号 1〜9" class="ms-col__title f-display" />
                 </ui:VisualElement>
+                <ui:VisualElement name="ms-field" class="ms-field">
+                    <ui:VisualElement name="ms-field-slots" class="ms-field__slots" />
+                </ui:VisualElement>
+            </ui:VisualElement>
 
-                <!-- 左＝縦長の球場図、右＝控え＋プール。球場図は縦長でないと内野ダイヤを大きく取れない。 -->
-                <ui:VisualElement class="ms-left-body">
-                    <!-- 球場図（背番号1〜9を守備位置＝球場座標へ配置）。芝/ファウル/ダート/ライン/フェンスは
-                         BaseballFieldElement が座標系から描く。Controller がスロット等を挿入する。 -->
-                    <ui:VisualElement name="ms-field" class="field-diamond ms-field">
-                        <ui:VisualElement name="ms-field-slots" class="ms-field__slots" />
+            <!-- 2列目：背番号10〜20（縦1列・11枠）。高さが足りないとき（新チームの帯が出ている間など）だけ列の中でスクロールする。 -->
+            <ui:VisualElement class="ms-col ms-col--bench">
+                <ui:VisualElement class="ms-col__head">
+                    <ui:Label text="背番号 10〜20" class="ms-col__title f-display" />
+                    <ui:VisualElement class="ms-col__meta">
+                        <ui:Label text="登録" class="ms-col__meta-txt" />
+                        <ui:Label name="ms-assigned" text="0" class="ms-col__count f-num-bd" />
+                        <ui:Label text="/ 20" class="ms-col__meta-txt" />
                     </ui:VisualElement>
-
-                    <!-- .ms-field 拡幅（issue #271）で .ms-roster 側が狭まり列数が減った分、控え(10〜20)の
-                         行数が増えて縦に伸びる。列全体を縦スクロールにして「部員（ベンチ外）」が
-                         画面外へ押し出されて触れなくなるのを防ぐ（プール自体の内側スクロールは維持）。 -->
-                    <ui:ScrollView mode="Vertical" class="ms-roster">
-                        <!-- 控え（背番号10〜20・横並び） -->
-                        <ui:Label text="控え　背番号 10–20" class="ms-section" />
-                        <ui:VisualElement name="ms-bench" class="ms-bench" />
-
-                        <!-- 割当元プール（ベンチ外のみ） -->
-                        <ui:Label name="ms-pool-title" text="部員（ベンチ外）" class="ms-section" />
-                        <ui:ScrollView mode="Vertical" class="ms-pool-scroll">
-                            <ui:VisualElement name="ms-pool" class="ms-pool" />
-                        </ui:ScrollView>
-                    </ui:ScrollView>
                 </ui:VisualElement>
+                <ui:ScrollView mode="Vertical" class="ms-bench-scroll">
+                    <ui:VisualElement name="ms-bench" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <!-- 3列目：ベンチ外。入りきらないときは入れ物の中だけスクロールする。 -->
+            <ui:VisualElement class="ms-col ms-col--out">
+                <ui:VisualElement class="ms-col__head">
+                    <ui:Label text="ベンチ外" class="ms-col__title f-display" />
+                    <ui:VisualElement class="ms-col__meta">
+                        <ui:Label name="ms-out-count" text="0" class="ms-col__count f-num-bd" />
+                        <ui:Label text="人" class="ms-col__meta-txt" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="ms-out">
+                    <ui:ScrollView name="ms-out-scroll" mode="Vertical" class="ms-out__scroll">
+                        <ui:VisualElement name="ms-pool" />
+                    </ui:ScrollView>
+                    <ui:Label name="ms-out-empty" text="ベンチ外の選手はいません" class="ms-out__empty ms-hidden" />
+                    <ui:Label text="選手を選んでから入れたい背番号をクリックすると入れ替わります。" class="ms-out__note" />
+                </ui:VisualElement>
+                <ui:Button name="ms-auto" text="能力順で自動割当" class="ms-auto-btn f-body-bd" />
             </ui:VisualElement>
 
             <!-- 右：2選手比較 -->

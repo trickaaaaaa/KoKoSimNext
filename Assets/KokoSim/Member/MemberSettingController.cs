@@ -8,30 +8,30 @@ namespace KokoSim.Unity.Member
     /// <summary>
     /// メンバー設定のコントローラ（設計書06 §3.3b）。UIDocument（sourceAsset = MemberSetting.uxml）へ
     /// MemberSettingState をバインドし、背番号1〜20の割当と2選手比較を描画・操作する。
-    /// 見た目は部品辞書（components.uss）＋トークンのみ。ロジックは State/エンジンに委ねる。
+    /// 4列＝背番号1〜9（球場の絵の上のカード）｜10〜20（縦1列）｜ベンチ外｜2選手比較。
+    /// 見た目は部品辞書（components.uss／scorebook.uss）＋トークンのみ。ロジックは State/エンジンに委ねる。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class MemberSettingController : MonoBehaviour
     {
-        // 背番号1〜9の標準守備位置＝球場座標[m]。検算済み定数 MemberFieldLayout（エンジン）を単一ソースに引く。
-        private static bool TryDefPos(int n, out Vector2 m)
+        // 背番号1〜9のカードの中心（球場の絵の設計座標 556×700）。投捕一二三遊左中右の順。
+        // 遊は二塁ベースの左下（三遊間寄り）、二は右下（一二塁間寄り）。外野の3人は扇形の内側。
+        private static readonly Vector2[] CardCenter =
         {
-            if (n < 1 || n > 9) { m = default; return false; }
-            var p = KokoSim.Engine.Match.Field.MemberFieldLayout.DefensivePosition(n);
-            m = new Vector2((float)p.X, (float)p.Y);
-            return true;
-        }
-
-        private const float ChipRise = 2f;   // 立ち位置点からチップ下端までの持ち上げ[px]（点はチップの下端に接する・issue #732）
-        private const float ChipEdgeMargin = 6f;   // チップを球場図の端から離しておく余白[px]（左右・上）
+            new Vector2(278f, 488f), new Vector2(278f, 640f), new Vector2(452f, 548f),
+            new Vector2(398f, 418f), new Vector2(104f, 548f), new Vector2(158f, 418f),
+            new Vector2(110f, 312f), new Vector2(278f, 252f), new Vector2(446f, 312f),
+        };
+        private const float CardW = 168f;
+        private const float CardH = 56f;
+        private const float PickFrame = 2.5f;   // 選択の枠の太さ（USS の .ms-fcard / .ms-row の border-width と同じ）
 
         private MemberSettingState _state;
         private VisualElement _root;
         private Button _advanceBtn;
         private Button _newTeamOk;               // 新チームの背番号決定の「背番号を確定」（issue #954）
         private VisualElement _fieldHost;
-        private BaseballFieldElement _field;
-        private FieldMarkersElement _markers;   // 立ち位置点＋引き出し線
+        private MemberFieldArtElement _field;
         private Color _accent = KokoSim.Unity.Shell.SchoolAccent.Default;   // 比較表の自チーム側の色（オーダー画面と同じ）
 
         private void OnEnable()
@@ -40,15 +40,14 @@ namespace KokoSim.Unity.Member
             _accent = KokoSim.Unity.Shell.SchoolAccent.ForManager();
             _root = GetComponent<UIDocument>().rootVisualElement;
 
-            // 球場図（座標系ドリブンで芝/ファウル/ダート/ライン/ベース/フェンスを描く）をスロットの背面へ。
+            // 球場の絵（設計座標で芝・土・ライン・塁を描く）をカードの背面へ。
             _fieldHost = _root.Q<VisualElement>("ms-field");
             if (_fieldHost != null)
             {
-                _field = new BaseballFieldElement();
+                _fieldHost.Q<MemberFieldArtElement>()?.RemoveFromHierarchy();   // 画面を開き直したときの二重挿入を防ぐ
+                _field = new MemberFieldArtElement();
                 _fieldHost.Insert(0, _field);
-                _markers = new FieldMarkersElement();
-                _fieldHost.Insert(1, _markers);   // 芝の上・チップの下
-                _fieldHost.RegisterCallback<GeometryChangedEvent>(_ => PositionFieldCards());
+                _field.RegisterCallback<GeometryChangedEvent>(_ => PositionFieldCards());
             }
 
             Click("ms-auto", () => { _state.AutoAssign(); Render(); });
@@ -111,16 +110,20 @@ namespace KokoSim.Unity.Member
 
             RenderNewTeamBand();
 
-            SetText("ms-pool-title",
-                "部員　登録 " + v.AssignedCount + " / 20　・　ベンチ外 " + v.BenchOutCount);
+            SetText("ms-assigned", v.AssignedCount.ToString());
+            SetText("ms-out-count", v.BenchOutCount.ToString());
 
             BuildField(v);
             BuildBench(v);
             BuildPool(v);
             BuildCompare(v);
+
+            // 選択の枠・主将の印へスクールカラーを流す（比較パネルは BuildCompare が流す）。
+            foreach (var col in _root.Query<VisualElement>(className: "ms-col").ToList())
+                KokoSim.Unity.Shell.SchoolAccent.Apply(col, _accent);
         }
 
-        // ── 背番号1〜9：守備位置（球場座標）に小型チップを置く ──
+        // ── 背番号1〜9：球場の絵の上にカード（168×56）を置く ──
         private void BuildField(MemberSettingView v)
         {
             var host = _root.Q<VisualElement>("ms-field-slots");
@@ -129,109 +132,47 @@ namespace KokoSim.Unity.Member
             for (var n = 1; n <= 9; n++)
             {
                 var slot = v.Slots[n - 1];
-                var chip = new VisualElement();
-                chip.AddToClassList("field-chip");
-                if (slot.IsPicked) chip.AddToClassList("field-chip--picked");
-                chip.userData = n;   // 配置（PlaceChip）で守備位置を引くための添字
+                var card = new VisualElement();
+                card.AddToClassList("ms-fcard");
+                card.userData = n;   // 配置（PositionFieldCards）で中心座標を引くための添字
 
-                FillChip(chip, slot);
-                WireChip(chip, slot);
-                chip.RegisterCallback<GeometryChangedEvent>(_ => PositionFieldCards());
-                host.Add(chip);
+                if (slot.PlayerIndex >= 0)
+                {
+                    MarkPicked(card, slot.IsPicked);
+                    card.Add(NumBadge(slot.Number));
+                    card.Add(Who(slot.Name, slot.GradeLabel, slot.HandLabel, fitLongName: true));
+                    card.Add(UiComponents.RankChip(slot.RankGrade));
+                    if (slot.IsCaptain) card.Add(CaptainMark(corner: true));
+                }
+                else
+                {
+                    card.AddToClassList("ms-fcard--empty");
+                    card.Add(VacantFrame());
+                    card.Add(NumBadge(slot.Number, vacant: true));
+                    card.Add(VacantLabel());
+                }
+                WireSlot(card, slot);
+                host.Add(card);
             }
             PositionFieldCards();
         }
 
-        // 全チップを球場座標へ配置し、立ち位置点との重なりを回避（点は不動・チップだけ左右にオフセット）。
+        // カードの中心を球場の絵の座標へ合わせる（絵が縮めば置き場所も同じ倍率で動く。カードの大きさは変えない）。
         private void PositionFieldCards()
         {
-            if (_field == null || _markers == null) return;
+            if (_field == null || _field.Scale <= 0f) return;
             var host = _root.Q<VisualElement>("ms-field-slots");
             if (host == null) return;
-            var fw = _field.contentRect.width;
-            if (float.IsNaN(fw) || fw <= 0f) return;
-
-            // 各チップの立ち位置点・目標中心X・実寸を集める。
-            var items = new List<PlacedChip>();
             foreach (var child in host.Children())
             {
-                if (!(child.userData is int n) || !TryDefPos(n, out var m)) continue;
-                var w = child.layout.width;
-                var h = child.layout.height;
-                if (float.IsNaN(w) || float.IsNaN(h) || w <= 0f || h <= 0f) return; // 未確定→後で再試行
-                var dot = _field.FieldToLocal(m);
-                // 上端が球場図の外へ出る立ち位置（中堅など）はチップを下へ寄せて切れないようにする。
-                var top = Mathf.Max(ChipEdgeMargin, dot.y - ChipRise - h);
-                items.Add(new PlacedChip { El = child, Dot = dot, Cx = dot.x, W = w, H = h, Top = top });
-            }
-
-            ResolveOverlaps(items, fw);
-
-            // チップを配置（下端中央＝点の ChipRise px 上）し、点＆引き出し線をオーバーレイへ。
-            var markers = new List<FieldMarkersElement.Marker>();
-            foreach (var it in items)
-            {
-                var bottomY = it.Top + it.H;
-                it.El.style.left = it.Cx - it.W * 0.5f;
-                it.El.style.top = it.Top;
-                // 引き出し線は点がチップの幅の外へ出たときだけ（下端の真下にあるうちは点だけ＝線が文字を横切らない。issue #732）。
-                var offset = Mathf.Abs(it.Cx - it.Dot.x) > it.W * 0.5f - 4f;
-                markers.Add(new FieldMarkersElement.Marker
-                {
-                    Dot = it.Dot,
-                    ChipAnchor = new Vector2(it.Cx, bottomY),
-                    Lead = offset,
-                });
-            }
-            _markers.SetMarkers(markers);
-        }
-
-        private sealed class PlacedChip
-        {
-            public VisualElement El;
-            public Vector2 Dot;   // 立ち位置[px]（不動）
-            public float Cx;      // チップ中心X（重なり回避で可変）
-            public float Top;     // チップ上端Y（球場図の上端で切れないよう寄せた後の値）
-            public float W;
-            public float H;
-        }
-
-        // 立ち位置点は動かさず、チップ中心Xだけ左右にずらして横方向の重なりを解く（縦が近いチップ同士）。
-        // 端へ押し戻すと別のチップに重なり直すので、「重なりを解く→端へ収める」を動きが止まるまで繰り返す。
-        private static void ResolveOverlaps(List<PlacedChip> items, float fieldWidth)
-        {
-            const float gap = 4f;
-            const int maxPasses = 40;
-            items.Sort((a, b) => a.Cx.CompareTo(b.Cx));
-            for (var pass = 0; pass < maxPasses; pass++)
-            {
-                var moved = false;
-                for (var i = 0; i < items.Count; i++)
-                    for (var j = i + 1; j < items.Count; j++)
-                    {
-                        var a = items[i];
-                        var b = items[j];
-                        var vClose = Mathf.Abs((a.Top + a.H * 0.5f) - (b.Top + b.H * 0.5f)) < (a.H + b.H) * 0.5f + 6f;
-                        if (!vClose) continue;
-                        var need = (a.W + b.W) * 0.5f + gap;
-                        var dx = b.Cx - a.Cx;
-                        if (Mathf.Abs(dx) >= need - 0.01f) continue;
-                        var push = (need - Mathf.Abs(dx)) * 0.5f;
-                        if (dx >= 0) { a.Cx -= push; b.Cx += push; }
-                        else { a.Cx += push; b.Cx -= push; }
-                        moved = true;
-                    }
-                // 端はみ出しをクランプ（チップは常に画面内・点は不動なので引き出し線が伸びる）。余白は広めに取る。
-                foreach (var it in items)
-                {
-                    var c = Mathf.Clamp(it.Cx, it.W * 0.5f + ChipEdgeMargin, fieldWidth - it.W * 0.5f - ChipEdgeMargin);
-                    if (Mathf.Abs(c - it.Cx) > 0.01f) { it.Cx = c; moved = true; }
-                }
-                if (!moved) break;
+                if (!(child.userData is int n) || n < 1 || n > CardCenter.Length) continue;
+                var c = _field.ToLocal(CardCenter[n - 1]);
+                child.style.left = c.x - CardW * 0.5f;
+                child.style.top = c.y - CardH * 0.5f;
             }
         }
 
-        // ── 背番号10〜20：控え横並び ──
+        // ── 背番号10〜20：縦1列 ──
         private void BuildBench(MemberSettingView v)
         {
             var host = _root.Q<VisualElement>("ms-bench");
@@ -240,17 +181,30 @@ namespace KokoSim.Unity.Member
             for (var n = 10; n <= 20; n++)
             {
                 var slot = v.Slots[n - 1];
-                var el = new VisualElement();
-                el.AddToClassList("bench-slot");
-                if (slot.IsPicked) el.AddToClassList("bench-slot--picked");
+                var row = new VisualElement();
+                row.AddToClassList("ms-row");
 
-                FillCard(el, slot);
-                WireSlot(el, slot);
-                host.Add(el);
+                if (slot.PlayerIndex >= 0)
+                {
+                    MarkPicked(row, slot.IsPicked);
+                    row.Add(NumBadge(slot.Number));
+                    row.Add(Who(slot.Name, slot.GradeLabel, slot.HandLabel));
+                    if (slot.IsCaptain) row.Add(CaptainMark());
+                    row.Add(ClearButton(slot.Number));
+                }
+                else
+                {
+                    row.AddToClassList("ms-row--empty");
+                    row.Add(VacantFrame());
+                    row.Add(NumBadge(slot.Number, vacant: true));
+                    row.Add(VacantLabel());
+                }
+                WireSlot(row, slot);
+                host.Add(row);
             }
         }
 
-        // 控え/枠の配線（クリックで選択・配置、ホバーで比較の右へ）。球場チップは WireChip を使う。
+        // 枠の配線（クリックで選択・配置、ホバーで比較の右へ）。球場のカードも10〜20の行も同じ。
         private void WireSlot(VisualElement el, SlotView slot)
         {
             var n = slot.Number;
@@ -260,124 +214,33 @@ namespace KokoSim.Unity.Member
             el.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
         }
 
-        // 枠カードの共通中身（2行）：①背番号＋名前(中央) ②学年・投打＋解除（背番号10〜20は総合ランク非表示, issue #220）。
-        private void FillCard(VisualElement el, SlotView slot)
-        {
-            var top = new VisualElement();
-            top.AddToClassList("slot-card__top");
-            top.Add(NumBadge(slot.Number));
-
-            if (slot.PlayerIndex >= 0)
-            {
-                if (slot.IsCaptain) top.Add(CaptainMark());
-                var name = new Label(slot.Name);
-                name.AddToClassList("slot-card__name");
-                top.Add(name);
-                el.Add(top);
-
-                var sub = new VisualElement();
-                sub.AddToClassList("slot-card__sub");
-                var info = new Label(slot.GradeLabel + "  " + slot.HandLabel);
-                info.AddToClassList("slot-card__sub-txt");
-                sub.Add(info);
-                var spacer = new VisualElement();
-                spacer.AddToClassList("slot-card__spacer");
-                sub.Add(spacer);
-                sub.Add(ClearButton(slot.Number));
-                el.Add(sub);
-            }
-            else
-            {
-                var empty = new Label("未割当");
-                empty.AddToClassList("slot-card__empty");
-                top.Add(empty);
-                el.Add(top);
-            }
-        }
-
-        // 球場図の常設チップは3段: 上段＝背番号＋主将＋ランク、中段＝名前（フル）、下段＝学年・投打＋解除。
-        // 以前はホバーのポップオーバーで学年/投打/✕を出していたが、邪魔なので常時表示に寄せた。
-        private void FillChip(VisualElement el, SlotView slot)
-        {
-            var top = new VisualElement();
-            top.AddToClassList("field-chip__top");
-            var badge = new Label(slot.Number.ToString());
-            badge.AddToClassList("field-chip__num");
-            badge.AddToClassList("f-num");
-            top.Add(badge);
-            el.Add(top);
-
-            if (slot.PlayerIndex >= 0)
-            {
-                if (slot.IsCaptain) top.Add(CaptainMark());
-                var gap = new VisualElement();
-                gap.AddToClassList("slot-card__spacer");
-                top.Add(gap);
-                top.Add(UiComponents.RankChip(slot.RankGrade));
-                var name = new Label(slot.Name);
-                name.AddToClassList("field-chip__name");
-                el.Add(name);
-
-                var sub = new VisualElement();
-                sub.AddToClassList("field-chip__sub");
-                var info = new Label(slot.GradeLabel + "  " + slot.HandLabel);
-                info.AddToClassList("field-chip__sub-txt");
-                sub.Add(info);
-                var spacer = new VisualElement();
-                spacer.AddToClassList("slot-card__spacer");
-                sub.Add(spacer);
-                sub.Add(ClearButton(slot.Number));
-                el.Add(sub);
-            }
-            else
-            {
-                var empty = new Label("空");
-                empty.AddToClassList("field-chip__empty");
-                el.Add(empty);
-            }
-        }
-
-        private void WireChip(VisualElement el, SlotView slot)
-        {
-            var n = slot.Number;
-            var pidx = slot.PlayerIndex;
-            el.RegisterCallback<ClickEvent>(_ => { _state.ClickSlot(n); Render(); });
-            // ホバー：比較の右へ。
-            el.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
-            el.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
-        }
-
         // カーソル移動での比較プレビューは比較パネルだけ更新（盤面は再構築しない＝ホバー対象がぶれない）。
         private void RenderCompareOnly() => BuildCompare(_state.BuildView());
 
-        // ── プール ──
+        // ── ベンチ外：名前と学年・投打だけの行。0人のときは入れ物の中央に一言 ──
         private void BuildPool(MemberSettingView v)
         {
             var host = _root.Q<VisualElement>("ms-pool");
             if (host == null) return;
             host.Clear();
+            var none = v.Pool.Count == 0;
+            _root.Q<VisualElement>("ms-out-scroll")?.EnableInClassList("ms-hidden", none);
+            _root.Q<VisualElement>("ms-out-empty")?.EnableInClassList("ms-hidden", !none);
+
             foreach (var p in v.Pool)
             {
-                var chip = new VisualElement();
-                chip.AddToClassList("pool-chip");
-                if (p.IsPicked) chip.AddToClassList("pool-chip--picked");
-
-                var body = new VisualElement();
-                body.AddToClassList("pool-chip__body");
-                var name = new Label(p.Name);
-                name.AddToClassList("pool-chip__name");
-                body.Add(name);
-                var meta = new VisualElement();
-                meta.AddToClassList("pool-chip__meta");
-                meta.Add(GradeLabel(p.GradeLabel));
-                body.Add(meta);
-                chip.Add(body);
+                var row = new VisualElement();
+                row.AddToClassList("ms-row");
+                row.AddToClassList("ms-row--out");
+                MarkPicked(row, p.IsPicked);
+                row.Add(Who(p.Name, p.GradeLabel, p.HandLabel));
+                if (p.IsCaptain) row.Add(CaptainMark());
 
                 var idx = p.Index;
-                chip.RegisterCallback<ClickEvent>(_ => { _state.ClickPool(idx); Render(); });
-                chip.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
-                chip.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
-                host.Add(chip);
+                row.RegisterCallback<ClickEvent>(_ => { _state.ClickPool(idx); Render(); });
+                row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
+                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
+                host.Add(row);
             }
         }
 
@@ -454,35 +317,76 @@ namespace KokoSim.Unity.Member
 
         // ── 部品ヘルパ ──
 
-        private static Label NumBadge(int n)
+        private static Label NumBadge(int n, bool vacant = false)
         {
             var b = new Label(n.ToString());
             b.AddToClassList("num-badge");
-            b.AddToClassList("f-num");
+            b.AddToClassList("f-num-bd");
+            if (vacant) b.AddToClassList("num-badge--vacant");
             return b;
         }
 
-        // 主将マーカー（省スペースの漢字1文字・SDFフォント収録字）。名前の省略で消えない固定要素。
-        private static Label CaptainMark()
+        // 名前（明朝）＋学年・投打の2行。球場のカードは幅が狭いので、長い名前は級数を落として切らずに収める。
+        private static VisualElement Who(string name, string grade, string hand, bool fitLongName = false)
+        {
+            var who = new VisualElement();
+            who.AddToClassList("ms-who");
+            var nm = new Label(name);
+            nm.AddToClassList("ms-who__name");
+            nm.AddToClassList("f-display");
+            if (fitLongName)
+            {
+                var letters = 0;
+                foreach (var ch in name) if (!char.IsWhiteSpace(ch)) letters++;
+                if (letters >= 7) nm.AddToClassList("ms-who__name--xlong");
+                else if (letters >= 6) nm.AddToClassList("ms-who__name--long");
+            }
+            who.Add(nm);
+            var sub = new Label(grade + " " + hand);
+            sub.AddToClassList("ms-who__sub");
+            who.Add(sub);
+            return who;
+        }
+
+        // 選択中の枠（スクールカラー）。色は Render の最後に SchoolAccent.Apply が流す。
+        private static void MarkPicked(VisualElement el, bool picked)
+        {
+            if (!picked) return;
+            el.AddToClassList("ms-pick");
+            el.AddToClassList("acc-bd");
+        }
+
+        // 空いている枠の点線（部品辞書 DashedFrame）。透明の枠（選択用）の外周に重なるよう、枠の太さぶん外へ出す。
+        private static DashedFrame VacantFrame()
+        {
+            var f = new DashedFrame { Radius = 9f, Dash = 4f, Gap = 3f };
+            f.style.left = -PickFrame; f.style.top = -PickFrame;
+            f.style.right = -PickFrame; f.style.bottom = -PickFrame;
+            return f;
+        }
+
+        private static Label VacantLabel()
+        {
+            var l = new Label("未割当");
+            l.AddToClassList("ms-vacant");
+            return l;
+        }
+
+        // 主将の印（スクールカラーの丸に「主」）。corner=true は球場のカードの右上の角にはみ出して置く形。
+        private static Label CaptainMark(bool corner = false)
         {
             var l = new Label("主");
-            l.AddToClassList("ms-captain-mark");
+            l.AddToClassList("ms-cap");
+            l.AddToClassList("acc-bg");
             l.AddToClassList("f-body-bd");
+            if (corner) l.AddToClassList("ms-cap--corner");
             return l;
         }
-
-        private static Label GradeLabel(string text)
-        {
-            var l = new Label(text);
-            l.AddToClassList("ms-grade");
-            return l;
-        }
-
 
         private Label ClearButton(int number)
         {
             var x = new Label("×");
-            x.AddToClassList("slot-card__clear");
+            x.AddToClassList("ms-row__x");
             x.RegisterCallback<ClickEvent>(evt =>
             {
                 evt.StopPropagation();
