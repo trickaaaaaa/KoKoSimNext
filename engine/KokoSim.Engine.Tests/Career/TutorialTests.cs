@@ -167,6 +167,21 @@ public sealed class TutorialTests
         Assert.True(events.Single(x => x.Id == Tutorial.ArrivalTransferEventId).Variants.Count >= 2);
     }
 
+    [Fact]
+    public void NewSchoolArrival_EveryVariant_SaysFirstYearsOnly_AndTeacherAppointment_WithoutManagerSpeaking()
+    {
+        var events = EventTableParser.Parse(File.ReadAllText(FindDataFile("events.yaml")));
+        var e = events.Single(x => x.Id == Tutorial.ArrivalNewSchoolEventId);
+        Assert.Contains("教員", e.Text);
+        foreach (var v in e.Variants)
+        {
+            var all = string.Concat(v.Lines.Select(l => l.Say));
+            Assert.Contains("1年", all);
+            Assert.True(all.Contains("先生") || all.Contains("教員"), "教員として赴任したことが出てこない");
+            Assert.DoesNotContain(v.Lines, l => l.Who == EventRoles.Manager);
+        }
+    }
+
     private static string FindDataFile(string fileName)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
