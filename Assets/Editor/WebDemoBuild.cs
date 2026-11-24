@@ -25,9 +25,13 @@ namespace KokoSim.UnityEditorTools
     ///   ・IL2CPP のコード生成を「サイズ優先」（wasm 13.7MB→11.1MB）
     /// 途中で落ちて戻し損ねても、次に回したときに最初に戻す（<see cref="RestoreLeftovers"/>）。
     ///
-    /// 出力: out/webdemo（Gzip。unityroom は Brotli を受け付けないため）。
-    /// 実行: メニュー「KokoSim/Build/ブラウザ体験版をビルド」か
+    /// 出力は2通り（どちらも Gzip。unityroom は Brotli を受け付けないため）:
+    ///   ・手元で確かめる用: out/webdemo（Decompression Fallback あり＝素の http サーバでも開ける）
+    ///   ・unityroom へ上げる用: out/unityroom（Decompression Fallback なし＝unityroom のアップロード画面の指定。
+    ///     上げるのは中の Build フォルダ）
+    /// 実行: メニュー「KokoSim/Build/ブラウザ体験版をビルド」「…（unityroom へ上げる用）」か
     ///   Unity -batchmode -quit -projectPath . -buildTarget WebGL -executeMethod KokoSim.UnityEditorTools.WebDemoBuild.Build
+    ///   （unityroom 用は末尾を BuildForUnityroom に）
     /// </summary>
     public static class WebDemoBuild
     {
@@ -47,10 +51,15 @@ namespace KokoSim.UnityEditorTools
         private const string AudioMemo = "Temp/webdemo-audio-restore.txt";
 
         [MenuItem("KokoSim/Build/ブラウザ体験版をビルド")]
-        public static void Build()
+        public static void Build() => Build("webdemo", decompressionFallback: true);
+
+        [MenuItem("KokoSim/Build/ブラウザ体験版をビルド（unityroom へ上げる用）")]
+        public static void BuildForUnityroom() => Build("unityroom", decompressionFallback: false);
+
+        private static void Build(string outName, bool decompressionFallback)
         {
             var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var outDir = Path.Combine(root, "out", "webdemo");
+            var outDir = Path.Combine(root, "out", outName);
             bool batch = Application.isBatchMode;
             BuildSummary summary = default;
             bool ok = false;
@@ -59,6 +68,7 @@ namespace KokoSim.UnityEditorTools
             DuelAssetCatalogBaker.Bake();   // 索引は gitignore＝端末ごとに古いことがある（装備・素体の欠けを防ぐ）
 
             var codeGen = PlayerSettings.GetIl2CppCodeGeneration(NamedBuildTarget.WebGL);
+            bool fallbackBefore = PlayerSettings.WebGL.decompressionFallback;
             string[] hidden = Array.Empty<string>();
             try
             {
@@ -67,7 +77,7 @@ namespace KokoSim.UnityEditorTools
                 LowerAudioRates();
                 PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
                 PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
-                PlayerSettings.WebGL.decompressionFallback = true;   // 素の http サーバでも開けるように
+                PlayerSettings.WebGL.decompressionFallback = decompressionFallback;
 
                 if (Directory.Exists(outDir)) Directory.Delete(outDir, true);
                 var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -85,6 +95,7 @@ namespace KokoSim.UnityEditorTools
             finally
             {
                 PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, codeGen);
+                PlayerSettings.WebGL.decompressionFallback = fallbackBefore;
                 PlayerBuilder.RestoreDirs(hidden);
                 RestoreLeftovers();
             }
