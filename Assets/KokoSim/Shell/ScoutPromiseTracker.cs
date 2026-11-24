@@ -89,10 +89,9 @@ namespace KokoSim.Unity.Shell
         /// <summary>通知フィードの1行。</summary>
         public static string FeedText(ScoutPromiseOutcome o)
             => o.Kept
-                ? o.Player.Name + " との約束（" + ScoutPromises.Label(o.Kind) + "）を守り切った。信頼度 +"
-                  + Coeff.PromiseKeptTrust.ToString("0")
-                : o.Player.Name + " との約束（" + ScoutPromises.Label(o.Kind) + "）を破った。信頼度 −"
-                  + Coeff.PromiseBrokenTrust.ToString("0") + "・名声 −" + Coeff.PromiseBrokenFame.ToString("0");
+                ? o.Player.Name + " との約束（" + ScoutPromises.Label(o.Kind) + "）を守り切った。"
+                : o.Player.Name + " との約束（" + ScoutPromises.Label(o.Kind) + "）を破った。名声 −"
+                  + Coeff.PromiseBrokenFame.ToString("0");
 
         /// <summary>新規ゲーム・ロードで通知の残りを捨てる。</summary>
         public static void Reset() => _notices.Clear();

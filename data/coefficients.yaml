@@ -1023,8 +1023,8 @@ pressure:
   max_index: 8
   multiplier_slope: 0.02     # 倍率 = 1 + (精神力−50)/50 × slope × P（精神力100・P8で+16%）
   fatigue_negative_amplify: 1.5   # 疲労閾値超過時は負側のみ増幅（終盤の失点劇）
-  # 士気（＝監督の信頼度・#1270 M1・2026-11-23 オーナー決定で連続）: 負側の緩和の土台 ＝ (士気−morale_neutral)/50 × morale_mitigation
-  # （信頼度50で0・0で−0.10＝負側を強める・100で+0.10）。精神力50は恒等・AI校/裏試合は士気を持たない＝帯不変
+  # 士気（＝チーム状態＝結束 U・#1270 M1／#1603・2026-11-23 オーナー決定で連続）: 負側の緩和の土台 ＝ (士気−morale_neutral)/50 × morale_mitigation
+  # （結束50で0・0で−0.10＝負側を強める・100で+0.10）。精神力50は恒等・AI校/裏試合は士気を持たない＝帯不変
   morale_neutral: 50.0
   morale_mitigation: 0.10
 

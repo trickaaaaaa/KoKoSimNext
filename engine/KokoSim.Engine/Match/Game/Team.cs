@@ -92,7 +92,7 @@ public sealed record Team
     public int MomentumLevel { get; init; } = 0;
 
     /// <summary>
-    /// 士気（0〜100・設計書04 §1.2・issue #1270 M1）。自校だけが持ち、値は監督の信頼度（Unity側が渡す）。
+    /// 士気（0〜100・設計書02 §3・issue #1270 M1）。自校だけが持ち、値はチーム状態＝結束 U（Unity側が渡す・issue #1603）。
     /// プレッシャーの負側の緩和に土台を足す（<see cref="PressureModel.MoraleMitigation"/>）。
     /// null＝士気を持たない（AI校・裏試合・統計シム）＝恒等＝帯不変。
     /// </summary>

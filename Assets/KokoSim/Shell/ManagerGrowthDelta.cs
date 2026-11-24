@@ -51,7 +51,6 @@ namespace KokoSim.Unity.Shell
             Add(items, "采配", Tactical);
             Add(items, "育成眼", TalentEye);
             Add(items, "名声", Fame);
-            Add(items, "信頼度", Trust);
             if (System.Math.Abs(Funds) >= 0.5)
                 items.Add(new EffectItem("部費", Signed(Funds), "万"));
             return items;

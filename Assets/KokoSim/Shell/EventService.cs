@@ -366,15 +366,8 @@ namespace KokoSim.Unity.Shell
             }
             if (effect.Trust != 0.0)
             {
-                // 信頼度（issue #1270 E1）。0〜100で止め、文は実際に動いた量で書く。
-                var before = m.Trust;
+                // 信頼度（issue #1270 E1）。0〜100で止める。画面には出さない（issue #1603）＝結果行にも並べない。
                 m.Trust = MathUtil.Clamp(m.Trust + effect.Trust, 0.0, 100.0);
-                var d = m.Trust - before;
-                if (d != 0.0)
-                {
-                    parts.Add("信頼度 " + Signed(d));
-                    if (d < 0) bad = true;
-                }
             }
             if (effect.Fame != 0.0)
             {

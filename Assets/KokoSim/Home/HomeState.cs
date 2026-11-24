@@ -1093,8 +1093,7 @@ namespace KokoSim.Unity.Home
                         break;
                     case MatchInjuryOutcomeKind.Worsened:
                         text = n.PlayerName + " が押して出場し悪化（" + InjuryLabel.Severity(n.Severity)
-                               + "・あと " + n.WeeksRemaining + " 週）信頼度 −"
-                               + KokoSim.Unity.Shell.ManagerService.Coefficients.TrustPlayThroughWorsened.ToString("0");
+                               + "・あと " + n.WeeksRemaining + " 週）";
                         break;
                     default:
                         text = n.PlayerName + " は怪我を押して出場した（復帰が " + n.WeeksRemaining + " 週先へ）";

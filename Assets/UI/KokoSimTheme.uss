@@ -1586,7 +1586,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .sb2-badge { background-color: var(--sf-inset); color: var(--ink); border-width: 2px; border-color: var(--ink); }
 .sb2-name, .sb2-rank__t, .sb2-meter__v { color: var(--tx-1); }
 .sb2-pref, .sb2-rank__k, .sb2-meter__k { color: var(--tx-2); }
-/* 名声/信頼度はランクのチップ画像で出す（TopBarMeters.SetRank が文字を透明化する）ので、文字色の意味色は持たない。掲示板ストリップ内の電光黄は不変。 */
+/* 名声はランクのチップ画像で出す（TopBarMeters.SetRank が文字を透明化する）ので、文字色の意味色は持たない。掲示板ストリップ内の電光黄は不変。 */
 
 /* --- ナビ帯：白地に沈め、下端をインク太罫で締める。選択タブは空の青。 --- */
 .nav {

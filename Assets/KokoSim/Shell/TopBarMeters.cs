@@ -5,9 +5,9 @@ using UnityEngine.UIElements;
 namespace KokoSim.Unity.Shell
 {
     /// <summary>
-    /// 共通トップバーの動的値（自校の表札＋部費残高・名声・信頼度）の一括埋め（issue #172 追補 / #585）。
+    /// 共通トップバーの動的値（自校の表札＋部費残高・名声）の一括埋め（issue #172 追補 / #585）。
     /// 値は <see cref="ManagerService.Manager"/> と <see cref="NationService"/> が単一ソースで、
-    /// 名声・信頼度は全画面共通の <see cref="Tiers.FromStrength"/>（S〜G）で等級化し、
+    /// 名声は全画面共通の <see cref="Tiers.FromStrength"/>（S〜G）で等級化し、
     /// 選手能力と同じレター画像チップ（KokoSimTheme.uss .grade--X）で表示する。
     /// 各画面のコントローラが ScoreboardStrip.Fill と並べて呼ぶ。
     ///
@@ -29,7 +29,6 @@ namespace KokoSim.Unity.Shell
             var m = ManagerService.Manager;
             Set(root, "funds", "¥" + m.Funds.ToString("0") + "万");
             SetRank(root, "fame", Tiers.FromStrength(m.Fame).ToString());
-            SetRank(root, "trust", Tiers.FromStrength(m.Trust).ToString());
 
             // チーム総合（ランクのチップ＋数字）。各画面のコントローラも team-rank を埋めるが、値は同じ単一ソース。
             var overall = TeamOverall.Of(RosterService.Active);
@@ -61,7 +60,7 @@ namespace KokoSim.Unity.Shell
             if (label != null) label.text = text;
         }
 
-        /// <summary>名声・信頼度をレター画像チップにする（文字はレイアウト用に残し透明化）。</summary>
+        /// <summary>名声をレター画像チップにする（文字はレイアウト用に残し透明化）。</summary>
         private static void SetRank(VisualElement root, string name, string grade)
         {
             var label = root.Q<Label>(name);

@@ -388,7 +388,7 @@
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
 }
 
-/* 右側：部費残高・チーム総合・名声・信頼度（項目の間隔30px）＋進めるボタン */
+/* 右側：部費残高・チーム総合・チーム状態・名声（項目の間隔30px）＋進めるボタン */
 .sbk .sb2-right { padding: 0; border-left-width: 0; flex-shrink: 0; }
 .sbk .sb2-meter { margin-right: 30px; align-items: center; }
 .sbk .sb2-meter--start { align-items: flex-start; }
@@ -405,7 +405,7 @@
     white-space: nowrap;
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
 }
-.sbk .sb2-meter__v--fame, .sbk .sb2-meter__v--trust { width: 26px; height: 26px; min-width: 26px; font-size: 15px; }
+.sbk .sb2-meter__v--fame { width: 26px; height: 26px; min-width: 26px; font-size: 15px; }
 .sbk .sb2-rank__row { flex-direction: row; align-items: center; margin: 0; height: 26px; }
 .sbk .sb2-rank__chip .grade, .sbk .sb2-rank__chip .rank-chip { width: 26px; height: 26px; min-width: 26px; font-size: 15px; margin: 0; padding: 0; }
 .sbk .sb2-rank__v {

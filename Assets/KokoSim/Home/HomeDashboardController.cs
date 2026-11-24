@@ -705,7 +705,7 @@ namespace KokoSim.Unity.Home
         {
             var v = _state.BuildView();
 
-            // 自校の表札・日付・進行ボタンの文言・部費・チーム総合・名声・信頼度は TopBarMeters／ScoreboardStrip が全画面共通で埋める。
+            // 自校の表札・日付・進行ボタンの文言・部費・チーム総合・名声は TopBarMeters／ScoreboardStrip が全画面共通で埋める。
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
             KokoSim.Unity.Shell.TopBarMeters.Fill(_root);
 
