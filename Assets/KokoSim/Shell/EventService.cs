@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season.Events;
@@ -176,6 +177,8 @@ namespace KokoSim.Unity.Shell
                     {
                         // 当事者の条件（目立ちたがり・1年生など）に合う部員が居ない週は抽選に載せない（issue #945）。
                         CastFilter = e => e.Cast.TryPick(RosterService.Active, CastIndex(), CaptainId(), out _, out _),
+                        // 卒業式は、この年度末に卒業する3年生（夏に引退して名簿に残る者を含む）が居る年だけ（issue #1609）。
+                        GraduatingClassFilter = () => RosterService.Roster.Any(p => p.Grade >= 3),
                     };
                 // 自校の地方（issue #616）。転校（新規ゲーム・転任）で変わるので毎回据える＝
                 // 一度きりの初期化にすると、県を変えて始めた進行に前の県のイベントが出る。

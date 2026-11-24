@@ -635,6 +635,76 @@ events:
             "events:\n  - id: x\n    text: \"t\"\n    requires_region: Hokkaido\n"));
     }
 
+    // ===== 卒業式は卒業する3年生が居る年だけ（issue #1609） =====
+
+    private const string GraduationSample = @"
+events:
+  - id: graduation
+    kind: Fixed
+    calendar_week: 49
+    requires_graduating_class: true
+    text: ""卒業式。""
+  - id: chat
+    kind: Random
+    text: ""雑談。""
+  - id: chat2
+    kind: Random
+    text: ""雑談2。""
+";
+
+    [Fact]
+    public void Parse_RequiresGraduatingClass_ReadsFlagAndDefaultsToFalse()
+    {
+        var events = EventTableParser.Parse(GraduationSample).ToDictionary(e => e.Id);
+        Assert.True(events["graduation"].RequiresGraduatingClass);
+        Assert.False(events["chat"].RequiresGraduatingClass);
+    }
+
+    [Fact]
+    public void RepositoryTable_GraduationRequiresGraduatingClass()
+    {
+        var graduation = RepositoryEvents().Single(e => e.Id == "graduation");
+        Assert.True(graduation.RequiresGraduatingClass);
+    }
+
+    [Fact]
+    public void Graduation_FiresOnlyWhenThereIsAGraduatingClass()
+    {
+        var events = EventTableParser.Parse(GraduationSample);
+        var coeff = new EventCoefficients { WeeklyFireProbability = 1.0 };
+
+        bool GraduationFires(bool? hasThirdYear)
+        {
+            var s = new EventScheduler(events, coeff);
+            if (hasThirdYear is { } h) s.GraduatingClassFilter = () => h;
+            return s.Week(49, new Xoshiro256Random(7)).Any(f => f.Event.Id == "graduation");
+        }
+
+        Assert.False(GraduationFires(false));   // 1年生だけ・1〜2年生だけの名簿
+        Assert.True(GraduationFires(true));     // 3年生（夏に引退した者を含む）が居る
+        Assert.True(GraduationFires(null));     // 名簿を渡さないヘッドレスシムは従来どおり毎年出る
+    }
+
+    [Fact]
+    public void Graduation_SkippedYear_DoesNotShiftTheRandomDraws()
+    {
+        var events = EventTableParser.Parse(GraduationSample);
+        var coeff = new EventCoefficients { WeeklyFireProbability = 1.0 };
+
+        // 卒業式の有無だけが違う2本の進行。同じシードで以後ずっと同じランダムイベント列になること。
+        List<string> Run(bool hasThirdYear)
+        {
+            var s = new EventScheduler(events, coeff) { GraduatingClassFilter = () => hasThirdYear };
+            var rng = new Xoshiro256Random(11);
+            var ids = new List<string>();
+            for (var w = 40; w < 50 + 30; w++)
+                ids.AddRange(s.Week(w % 50, rng).Where(f => f.Event.Id != "graduation").Select(f => f.Event.Id));
+            return ids;
+        }
+
+        Assert.Equal(Run(true), Run(false));
+    }
+
     // ===== 場面（ノベル画面の背景・issue #1516） =====
 
     [Fact]
