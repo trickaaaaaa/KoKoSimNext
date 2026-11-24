@@ -28,6 +28,7 @@ namespace KokoSim.Unity.Saves
 
         private DropdownField _pref;
         private TextField _name;
+        private BrowserNamePicker _browserName;   // ブラウザ版だけ入力欄を候補選択に置き換える（#1323）
         private Button _revert, _confirm;
         private int _prefId;
         private int _selectedId = NationService.ManagerSchoolId;
@@ -57,6 +58,8 @@ namespace KokoSim.Unity.Saves
             {
                 _name.maxLength = SchoolNames.MaxStemLength;
                 _name.RegisterValueChangedCallback(OnInputChanged);
+                // ブラウザ版は日本語を打てないので、入力欄を隠して選んだ学校の県の地名から選ぶ（値は入力欄が持つ）
+                _browserName = new BrowserNamePicker(_name, _root.Q<VisualElement>("sr-cands"), "tool-btn", "sr-text", "f-display");
             }
             _revert = _root.Q<Button>("sr-revert");
             if (_revert != null) _revert.clicked += OnRevert;
@@ -102,6 +105,7 @@ namespace KokoSim.Unity.Saves
         public bool ConfirmInput(string input)
         {
             _name?.SetValueWithoutNotify(input ?? "");
+            _browserName?.Sync();
             return Apply(input);
         }
 
@@ -154,6 +158,8 @@ namespace KokoSim.Unity.Saves
             SetText("sr-d-sub", NationService.PrefectureName(PrefectureOf(_selectedId)));
             SetText("sr-d-gen", GeneratedName(_selectedId));
             _name?.SetValueWithoutNotify(SchoolNames.Stem(CurrentName(_selectedId)));
+            _browserName?.SetCandidates(PrefectureOf(_selectedId));
+            _browserName?.Sync();
             UpdateButtons();
         }
 

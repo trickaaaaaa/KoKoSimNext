@@ -11,9 +11,16 @@ namespace KokoSim.Unity.Shell
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
             get { return true; }
+#elif UNITY_EDITOR
+            get { return ForceBrowserInEditor; }
 #else
             get { return false; }
 #endif
         }
+
+#if UNITY_EDITOR
+        /// <summary>【エディタ限定】ブラウザ版の画面をエディタで撮る・試すために、ブラウザ版として振る舞わせる。</summary>
+        public static bool ForceBrowserInEditor;
+#endif
     }
 }

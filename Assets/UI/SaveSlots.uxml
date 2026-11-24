@@ -108,6 +108,8 @@
                                 <ui:TextField name="sr-name" class="sbk-field sr-text f-display" />
                                 <ui:Label class="sbk-field-suffix f-display" text="高校" />
                             </ui:VisualElement>
+                            <!-- ブラウザ版だけ使う校名の候補（日本語を打てないので入力欄の代わり。BrowserNamePicker・#1323） -->
+                            <ui:VisualElement name="sr-cands" class="sr-cands" style="display: none;" />
                         </ui:VisualElement>
                         <!-- 県内の学校と重なる名前のときだけ出す（新規作成画面と同じ文言）。 -->
                         <ui:Label name="sr-d-note" class="ss-d__note ss-d__note--warn f-body" text="その校名は県内の学校と重複しています" style="display: none;" />
