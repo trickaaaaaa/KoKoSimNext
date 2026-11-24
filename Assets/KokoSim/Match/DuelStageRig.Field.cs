@@ -5430,6 +5430,13 @@ namespace KokoSim.Unity.Match
             public float HoldSeconds, HoldRemaining;   // 捕手の捕球の据え置き（伝令の場面を挟んでも切らさない）
             public bool HoldAtEnd, Holding, Valid;
             /// <summary>
+            /// ルートモーションの入切（フェード中なら「フェードが無ければこうなっている」値）。
+            /// 守備ビューの捕球・走りは投手を含む役者のルートモーションを切る（<see cref="SetRootMotion"/>）。
+            /// 戻さないと、次の打席から投手の踏み込みと体の回転（リリース後に約150°）が丸ごと抜け、
+            /// セットの向き（三塁側）のまま横へ倒れ込んで投げる（2026-11-24 実害・PitcherDiag で切れたままを実測）。
+            /// </summary>
+            public bool RootMotion;
+            /// <summary>
             /// **立ち位置の基準**（<c>Actor.BasePos/BaseRot</c>）であって、控えた瞬間の transform ではない。
             /// 打球が出るのはリリースの約0.9秒後＝投手はフォロースルーの途中で、transform は
             /// ルートモーションぶん前へ出て回っている。そこを基準として戻すと、次の打席以降
@@ -5709,6 +5716,7 @@ namespace KokoSim.Unity.Match
                 // ⚠ transform ではなく基準を控える（上の項。フォロースルーの途中の姿勢を
                 // 「立ち位置」として焼くと投手の向きが恒久的に狂う）
                 BasePos = a.BasePos, BaseRot = a.BaseRot,
+                RootMotion = RootMotionOf(a),
             };
         }
 
@@ -5734,6 +5742,7 @@ namespace KokoSim.Unity.Match
                 EndAt = a.IdleEndAt, DefaultEndAt = a.DefaultEndAt, IdleEndAt = a.IdleEndAt,
                 GroundY = a.GroundY, HoldAtEnd = false, Holding = false,
                 BasePos = a.BasePos, BaseRot = a.BaseRot,
+                RootMotion = RootMotionOf(a),
             };
         }
 
@@ -5754,6 +5763,7 @@ namespace KokoSim.Unity.Match
             a.Holding = s.Holding;
             a.HoldSeconds = s.HoldSeconds;      // ⚠ SetActorClip は据え置きを打ち消す＝その後に戻す
             a.HoldRemaining = s.HoldRemaining;
+            SetRootMotion(a, s.RootMotion);     // ⚠ SetActorClip（CancelFade）の後＝フェードの控えで上書きされない
             GroundFix(a);
         }
 

@@ -537,6 +537,70 @@ namespace KokoSim.EditorTests
             Assert.That(rig.BattedOutOfFrame, Is.True);
         }
 
+        // ---- 守備ビューから戻った投手のルートモーション（2026-11-24 実害） ----
+
+        /// <summary>
+        /// 打球プレー（守備ビュー）を流して対決ビューへ戻したら、投手のルートモーションが入っていること。
+        /// 守備ビューは捕球・走りのために役者のルートモーションを切る。戻し忘れると、次の打席から投手の
+        /// 踏み込みと体の回転（リリース後に約150°）が抜け、セットの向き（三塁側）のまま横へ倒れ込んで投げる。
+        /// </summary>
+        [Test]
+        public void Pitcher_RootMotionIsBackOn_AfterFieldPlay()
+        {
+            var rig = Rig;
+            var pitcher = rig.ActorAnimatorForCapture(1);
+            Assert.That(pitcher, Is.Not.Null, "前提: 投手がいる");
+            Assert.That(pitcher.applyRootMotion, Is.True, "前提: 対決ビューの投手はルートモーションで踏み込む");
+
+            var play = PitcherFieldsPlay();
+            rig.BeginFieldPlay(play, 0f);
+            float step = 1f / DuelStageRig.PoseFps;
+            bool cutDuringPlay = false;
+            for (float t = 0f; t < 4.5f; t += step)
+            {
+                rig.SetFieldTime(t);   // 試合と同じく守備ビューの時計を進める（MatchLiveController.RenderReplayFrame）
+                rig.Tick(step);
+                cutDuringPlay |= !pitcher.applyRootMotion;
+            }
+            Assert.That(cutDuringPlay, Is.True, "前提: 投手が捕った（捕球の収録がルートモーションを切った）");
+            rig.EndFieldPlay();
+
+            Assert.That(pitcher.applyRootMotion, Is.True,
+                "守備ビューから戻った投手のルートモーションが切れたまま＝次の打席から横を向いて投げる");
+        }
+
+        /// <summary>投手前のゴロを投手が自分で捕る打球（捕球の収録が役者のルートモーションを切る）。</summary>
+        private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay PitcherFieldsPlay()
+        {
+            var p = KokoSim.Engine.Match.Field.FieldPosition.Pitcher;
+            var pt = new KokoSim.Engine.Match.Timeline.TimelinePoint(1.0, 14.0);
+            var tl = new KokoSim.Engine.Match.Timeline.PlayTimeline
+            {
+                Ball = new List<KokoSim.Engine.Match.Timeline.BallSegment>
+                {
+                    new KokoSim.Engine.Match.Timeline.BallSegment
+                    {
+                        Kind = KokoSim.Engine.Match.Timeline.BallSegmentKind.Roll, T0 = 0.85, T1 = 1.6,
+                        From = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 0), To = pt,
+                    },
+                },
+                Moves = new List<KokoSim.Engine.Match.Timeline.FielderMove>
+                {
+                    new KokoSim.Engine.Match.Timeline.FielderMove
+                    {
+                        Role = p, T0 = 1.0, T1 = 1.6, To = pt,
+                        Task = KokoSim.Engine.Match.Timeline.FielderTask.FieldBall,
+                    },
+                },
+                FielderStarts = new Dictionary<KokoSim.Engine.Match.Field.FieldPosition, KokoSim.Engine.Match.Timeline.TimelinePoint>
+                {
+                    [p] = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 17.0),
+                },
+                Result = "テスト", Duration = 4.0, ResolvedAt = 4.0,
+            };
+            return KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+        }
+
         // ---- 外野手が走りながら掬った後の送球（issue #1552） ----
 
         /// <summary>
