@@ -576,20 +576,31 @@ captures:
     manager: home
     shots: [catch-0.5, catch, release+0.2, judgement, end]
 
-  # ── 投球チャート（issue #1541）。対決ビューの右の中ほど。1打席の球が番号つきで溜まり、打者が替わると消える ──
-  - id: pitch-chart-1541-right
-    name: "投球チャート・右投手（issue #1541）。丸＝ストレート／三角＝変化球（頂点は球種チャートと同じ向き）"
+  # 対決ビューの右の中ほどの投球チャート（issue #1541）。打席の球が番号付きの印で溜まり、打者が替わると消える。
+  # 1秒おきに画面全体を撮る（印の位置が3Dで球が来た位置と左右一致しているかを見る）
+  - id: pitch-chart-1541
+    name: "投球チャート（右投手・issue #1541）"
     scenario: fresh-start
     manager: home
     view: panel
-    duel_seconds: 30.0
+    duel_seconds: 30
     video: {from: start, to: end, fps: 2}
 
-  - id: pitch-chart-1541-left
-    name: "投球チャート・左投手（issue #1541）。三角の頂点が左右反転する"
+  - id: pitch-chart-left-1541
+    name: "投球チャート（左投手の絵＝三角の向きが左右反転・issue #1541）"
     scenario: fresh-start
     manager: home
     view: panel
-    duel_seconds: 30.0
+    duel_seconds: 30
     video: {from: start, to: end, fps: 2}
     overrides: {MatchLiveController.PitcherLeftForceForCapture: true}
+
+  - id: pitch-chart-720-1541
+    name: "投球チャート（1280×720 の窓・issue #1541）"
+    scenario: fresh-start
+    manager: home
+    view: panel
+    size: {w: 1280, h: 720}
+    game_scale: true
+    duel_seconds: 30
+    video: {from: start, to: end, fps: 2}
