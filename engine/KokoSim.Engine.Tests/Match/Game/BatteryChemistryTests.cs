@@ -110,10 +110,18 @@ public sealed class BatteryChemistryTests
     }
 
     [Fact]
+    public void ApplyToLead_KeepsTheFraction_NotRoundedToAnInteger()
+    {
+        // 50×(1+0.3×0.1)＝51.5。整数へ丸めると小さな相性の効きが中ほどの捕手で消える（issue #1241）。
+        Assert.Equal(51.5, BatteryChemistry.ApplyToLead(50, 0.1, C), 9);
+        Assert.Equal(50.15, BatteryChemistry.ApplyToLead(50, 0.01, C), 9);
+    }
+
+    [Fact]
     public void Effects_FollowK()
     {
-        Assert.Equal(78, BatteryChemistry.ApplyToLead(60, 1.0, C));    // 60×1.30＝78
-        Assert.Equal(51, BatteryChemistry.ApplyToLead(60, -0.5, C));   // 60×0.85＝51
+        Assert.Equal(78.0, BatteryChemistry.ApplyToLead(60, 1.0, C), 9);    // 60×1.30＝78
+        Assert.Equal(51.0, BatteryChemistry.ApplyToLead(60, -0.5, C), 9);   // 60×0.85＝51
         Assert.Equal(1, BatteryChemistry.RecoveryOuts(2, 0.6, C));
         Assert.Equal(2, BatteryChemistry.RecoveryOuts(2, 0.59, C));
         Assert.Equal(1, BatteryChemistry.RecoveryOuts(1, 1.0, C));     // 1未満にしない

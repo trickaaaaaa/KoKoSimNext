@@ -53,7 +53,7 @@ public sealed record AtBatContext
     public bool IntentionalWalk { get; init; }
 
     /// <summary>守備側の捕手リード（設計書01 §2①）。試合エンジンが捕手から設定。既定50=平均で恒等。</summary>
-    public int CatcherLead { get; init; } = 50;
+    public double CatcherLead { get; init; } = 50;
 
     /// <summary>
     /// 投げている投手の投手センス（効き Pitching 通し済み・issue #1472）。配球の選び分けに足す。既定50=平均で恒等。

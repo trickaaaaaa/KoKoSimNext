@@ -39,6 +39,13 @@ public sealed class DoubledOffResolverTests
     }
 
     [Fact]
+    public void Draw_IsNotClampedTo99Percent_WhenTheRunnerIsSecondsAhead()
+    {
+        // 抽選は 1%/99% でクランプしない（issue #801/#1241）。数秒先着した走者が 1% でアウトになる絵は説明できない。
+        Assert.True(SafeRate(Runner(), caughtAt: 3.5, catchToBaseM: 60, throwSpeed: 32, trials: 20000) > 0.998);
+    }
+
+    [Fact]
     public void SharpLiner_CloseToBase_RunnerOftenDoubledOff()
     {
         // 鋭いライナー(滞空0.6s)・塁のすぐ近くでの捕球(3m)＝短い送球が間に合いやすい。

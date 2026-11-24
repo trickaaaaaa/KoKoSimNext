@@ -942,7 +942,13 @@ public static class BaserunningModel
         if (r1 is not null && home is { IsFly: false, BatterToFirstSeconds: not null } dp)
         {
             DoublePlayForceTarget dpTarget;
-            (extraOuts, batterSafeOnFc, dpTarget, r1AdvanceRecorded) = ResolveDoublePlay(bases, batter, r1, r2, r3, dp, coeff, rng, mv);
+            // 投球と同時に走っていた走者（エンドラン・ギャンブル始動・盗塁の巻き戻し）はゴロを読む遅れが無い（設計書12 §4.7.1・issue #1241）。
+            var r1DpDelay = r1Start is StartType.Contact or StartType.Gamble || r1StealBreak
+                ? coeff.StealBreakGrounderStartDelaySeconds : coeff.DoublePlayR1StartDelaySeconds;
+            var r2DpDelay = r2StealBreak ? coeff.StealBreakGrounderStartDelaySeconds : coeff.DoublePlayR1StartDelaySeconds;
+            var r3DpDelay = r3StealBreak ? coeff.StealBreakGrounderStartDelaySeconds : coeff.DoublePlayR1StartDelaySeconds;
+            (extraOuts, batterSafeOnFc, dpTarget, r1AdvanceRecorded) = ResolveDoublePlay(
+                bases, batter, r1, r2, r3, dp, coeff, rng, mv, r1DpDelay, r2DpDelay, r3DpDelay);
             if (extraOuts > 0)
             {
                 // どの塁を攻めたかで空ける走者が違う（Q31）。二塁/三塁が空けば、後続の押し出し進塁
@@ -1051,8 +1057,8 @@ public static class BaserunningModel
             && (r2StealBreak || reads?.At(2) is { Start: FlyRunnerStart.Go }))
         {
             r2RacedBack = true;
-            // 盗塁の走者（#1138）は従来どおり必ず勝負。読み違えた走者は送球が残っているときだけ（残っていなければ帰塁）。
-            if (r2StealBreak || CanContestReturn())
+            // 送球が残っているときだけ勝負（残っていなければ帰塁）。盗塁の走者（#1138）も1球は1か所＝先の勝負で送球を使えば帰塁（#1241）。
+            if (CanContestReturn())
             {
                 returnThrowUsed = true;
                 var extraLead2 = r2StealBreak ? coeff.StealBreakExtraLeadM : 0.0;
@@ -1068,7 +1074,7 @@ public static class BaserunningModel
             && (r3StealBreak || reads?.At(3) is { Start: FlyRunnerStart.Go }))
         {
             r3RacedBack = true;
-            if (r3StealBreak || CanContestReturn() && !CatcherOwnsBase(3))
+            if (CanContestReturn() && (r3StealBreak || !CatcherOwnsBase(3)))
             {
                 returnThrowUsed = true;
                 var extraLead3 = r3StealBreak ? coeff.StealBreakExtraLeadM : 0.0;
@@ -1279,7 +1285,7 @@ public static class BaserunningModel
 
         if (r2 is not null && !r2RacedBack && bases.Third is null)
         {
-            if (!r2Forced && extraOuts == 0 && home is { IsFly: false } adv)
+            if (!r2Forced && (extraOuts == 0 || homeThrowUsed) && home is { IsFly: false } adv)
             {
                 if (homeThrowUsed)
                 {
@@ -1595,7 +1601,8 @@ public static class BaserunningModel
     /// 配置は後段の一塁走者カスケードに任せる)。</returns>
     private static (int ExtraOuts, bool BatterSafeOnFc, DoublePlayForceTarget Target, bool R1AdvanceRecorded) ResolveDoublePlay(
         BaseState bases, Player batter, Player r1, Player? r2, Player? r3, HomePlayContext home,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
+        double r1Delay, double r2Delay, double r3Delay)
     {
         var thirdCandidate = r2 is not null && home.FielderRole == FieldPosition.ThirdBase;
         // 本塁のフォースは満塁（一・二・三塁とも占有）でなければ成立しない（ApplyRunnerAdvance の r3Forced と同じ定義）。
@@ -1621,13 +1628,12 @@ public static class BaserunningModel
 
         if (!thirdCandidate && !homeCandidate && !firstBaseCandidate && !secondSelfForceCandidate)
         {
-            var (eo, fc) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv, allowForceOnly: !homeFirst);
+            var (eo, fc) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv, r1Delay, allowForceOnly: !homeFirst);
             return (eo, fc, DoublePlayForceTarget.Second, false);
         }
 
         var force2nd = HomePlayResolver.SecondForceParams(home.Field, coeff);
-        var delay = coeff.DoublePlayR1StartDelaySeconds;
-        var pR1Safe2nd = HomePlayResolver.SuccessProbability(r1, 1, home.Situation, home.Field, coeff, force2nd, delay);
+        var pR1Safe2nd = HomePlayResolver.SuccessProbability(r1, 1, home.Situation, home.Field, coeff, force2nd, r1Delay);
 
         if (secondSelfForceCandidate)
         {
@@ -1640,11 +1646,11 @@ public static class BaserunningModel
                 BallFieldedPoint = force2nd.TargetPoint, BallFieldedAtSeconds = arriveAtSecondSelf,
             };
             var pR1SafeSelf = HomePlayResolver.SuccessProbability(
-                r1, 1, atSecondSelf, home.Field, coeff, force2nd, delay, transferSecondsOverride: 0.0);
+                r1, 1, atSecondSelf, home.Field, coeff, force2nd, r1Delay, transferSecondsOverride: 0.0);
             if (pR1SafeSelf < pR1Safe2nd)
             {
                 var (eo, fc) = ResolveDoublePlaySelfForce(
-                    bases, batter, leadRunner: r1, leadFromBase: 1, home, force2nd, delay, coeff, rng, mv,
+                    bases, batter, leadRunner: r1, leadFromBase: 1, home, force2nd, r1Delay, coeff, rng, mv,
                     allowForceOnly: !homeFirst);
                 return (eo, fc, DoublePlayForceTarget.Second, false);
             }
@@ -1662,11 +1668,11 @@ public static class BaserunningModel
                 home.Situation.OutfielderFielding);
             var secondTag = HomePlayResolver.SecondTagParams(home.Field, coeff);
             var pR1SafeTag = HomePlayResolver.SuccessProbability(
-                r1, 1, selfForceSituation, home.Field, coeff, secondTag, delay,
+                r1, 1, selfForceSituation, home.Field, coeff, secondTag, r1Delay,
                 transferSecondsOverride: coeff.DoublePlaySelfForceRelayTransferSeconds);
             if (pR1SafeTag < pR1Safe2nd)
             {
-                var (eo, fc, recorded) = ResolveDoublePlayFirstBaseTag(bases, batter, r1, home, coeff, rng, mv);
+                var (eo, fc, recorded) = ResolveDoublePlayFirstBaseTag(bases, batter, r1, home, coeff, rng, mv, r1Delay);
                 return (eo, fc, DoublePlayForceTarget.Second, recorded);
             }
         }
@@ -1682,11 +1688,11 @@ public static class BaserunningModel
                 BallFieldedAtSeconds = SelfForceArriveAtBaseSeconds(home, force3rd.TargetPoint, coeff),
             };
             var pR2Safe3rd = HomePlayResolver.SuccessProbability(
-                r2!, 2, atThird, home.Field, coeff, force3rd, delay, transferSecondsOverride: 0.0);
+                r2!, 2, atThird, home.Field, coeff, force3rd, r2Delay, transferSecondsOverride: 0.0);
             if (pR2Safe3rd < pR1Safe2nd)
             {
                 var (eo, fc) = ResolveDoublePlaySelfForce(
-                    bases, batter, leadRunner: r2!, leadFromBase: 2, home, force3rd, delay, coeff, rng, mv,
+                    bases, batter, leadRunner: r2!, leadFromBase: 2, home, force3rd, r2Delay, coeff, rng, mv,
                     allowForceOnly: !homeFirst);
                 return (eo, fc, DoublePlayForceTarget.Third, false);
             }
@@ -1701,16 +1707,16 @@ public static class BaserunningModel
                 BallFieldedAtSeconds = SelfForceArriveAtBaseSeconds(home, forceHome.TargetPoint, coeff),
             };
             var pR3SafeHome = HomePlayResolver.SuccessProbability(
-                r3!, 3, atHome, home.Field, coeff, forceHome, delay, transferSecondsOverride: 0.0);
+                r3!, 3, atHome, home.Field, coeff, forceHome, r3Delay, transferSecondsOverride: 0.0);
             if (pR3SafeHome < pR1Safe2nd)
             {
                 var (eo, fc) = ResolveDoublePlaySelfForce(
-                    bases, batter, leadRunner: r3!, leadFromBase: 3, home, forceHome, delay, coeff, rng, mv);
+                    bases, batter, leadRunner: r3!, leadFromBase: 3, home, forceHome, r3Delay, coeff, rng, mv);
                 return (eo, fc, DoublePlayForceTarget.Home, false);
             }
         }
 
-        var (eo2, fc2) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv, allowForceOnly: !homeFirst);
+        var (eo2, fc2) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv, r1Delay, allowForceOnly: !homeFirst);
         return (eo2, fc2, DoublePlayForceTarget.Second, false);
     }
 
@@ -1891,7 +1897,7 @@ public static class BaserunningModel
     /// <returns>(追加アウト数, 打者が野選で一塁生存したか＝この代替では常にfalse, 一塁走者の 1→2 の move を積んだか)。</returns>
     private static (int ExtraOuts, bool BatterSafeOnFc, bool R1AdvanceRecorded) ResolveDoublePlayFirstBaseTag(
         BaseState bases, Player batter, Player r1, HomePlayContext home,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, double delay)
     {
         // A-1) 自己フォース自体（一塁手が一塁を踏む）が間に合わない＝この代替は選ばれない（呼び出し元の比較で
         // 既に二塁封殺より有利と分かっているが、絶対的な間に合わなさは独立に見る。既存の代替と同じ流儀）。
@@ -1915,7 +1921,6 @@ public static class BaserunningModel
             home.Field.FirstBase, arriveAtBaseSeconds, home.Situation.OutfielderThrowSpeedMps,
             home.Situation.OutfielderFielding);
         var secondTag = HomePlayResolver.SecondTagParams(home.Field, coeff);
-        var delay = coeff.DoublePlayR1StartDelaySeconds;
         var pR1Safe = HomePlayResolver.SuccessProbability(
             r1, 1, selfForceSituation, home.Field, coeff, secondTag, delay,
             transferSecondsOverride: coeff.DoublePlaySelfForceRelayTransferSeconds);
@@ -1971,10 +1976,9 @@ public static class BaserunningModel
     /// <returns>(追加アウト数, 打者が野選で一塁生存したか)。</returns>
     private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlayAtSecond(
         BaseState bases, Player batter, Player r1, HomePlayContext home,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, bool allowForceOnly = true)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, double delay, bool allowForceOnly = true)
     {
         var force = HomePlayResolver.SecondForceParams(home.Field, coeff);
-        var delay = coeff.DoublePlayR1StartDelaySeconds;
         // 一塁走者の二塁到達見込み（P_r1_safe）。捕球点→二塁の直接送球（幾何）と一塁走者の脚（走力＋走塁判断）から創発。
         var pR1Safe = HomePlayResolver.SuccessProbability(r1, 1, home.Situation, home.Field, coeff, force, delay);
 

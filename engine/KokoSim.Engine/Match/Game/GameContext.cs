@@ -171,7 +171,7 @@ public sealed record GameContext
     /// <summary>指定守備陣で打席解決用コンテキストを作る。gear/directive/take は采配（設計書09）、skills はスキル（設計書10）が設定する。</summary>
     public AtBatContext ToAtBatContext(IReadOnlyList<Fielder> fielders, bool runnersOn = false,
         PitcherGear gear = PitcherGear.Normal, Tactics.PitchDirective? directive = null,
-        bool takeFirstPitch = false, SkillPlayMods? skills = null, int catcherLead = 50,
+        bool takeFirstPitch = false, SkillPlayMods? skills = null, double catcherLead = 50,
         bool intentionalWalk = false, double swingProbabilityFactor = 1.0, int familiarityPa = 0,
         Batting.PitchFamiliarityTracker? pitchFamiliarity = null,
         Players.Handedness pitcherThrows = Players.Handedness.Right,
