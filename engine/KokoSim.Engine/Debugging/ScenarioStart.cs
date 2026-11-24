@@ -54,6 +54,35 @@ public sealed record ScenarioStart
         Require(PitcherFatiguePitches >= 0, "pitcher_fatigue は0以上");
     }
 
+    /// <summary>
+    /// 始まった時点で既に決着している局面を弾く（<see cref="Match.Game.GameEngine"/> の進行ループと同じ判定）。
+    /// 規定回以降の裏で後攻がリード・規定回以降の表で決着済み・延長上限超え・コールド差など。
+    /// 通すと1球も投げずに試合が終わり、場面を作ったつもりの再現が空振りになる。
+    /// </summary>
+    public void ValidateNotFinished(Match.Game.GameContext ctx)
+    {
+        Validate();
+        var reg = ctx.RegulationInnings;
+        var mercy = ctx.MercyRuleEnabled;
+        var finished = Inning > ctx.MaxInnings;
+        if (IsTop)
+        {
+            if (Inning > 1)
+            {
+                var prev = Inning - 1;
+                if (prev >= reg && AwayScore != HomeScore) finished = true;
+                if (mercy && Match.Game.GameEngine.IsMercy(prev, AwayScore, HomeScore, ctx.MercyRule)) finished = true;
+            }
+        }
+        else
+        {
+            if (Inning >= reg && HomeScore > AwayScore) finished = true;
+            if (mercy && Inning < reg && HomeScore > AwayScore
+                && Match.Game.GameEngine.IsMercy(Inning, AwayScore, HomeScore, ctx.MercyRule)) finished = true;
+        }
+        Require(!finished, $"始まった時点で試合が終わっています（{Inning}回{(IsTop ? "表" : "裏")} {AwayScore}-{HomeScore}）");
+    }
+
     private static void Require(bool ok, string what)
     {
         if (!ok) throw new System.ArgumentException($"シナリオの指定が不正です: {what}");

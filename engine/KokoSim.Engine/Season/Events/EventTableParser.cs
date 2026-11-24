@@ -232,9 +232,9 @@ public static class EventTableParser
             {
                 case "id": id = value; break;
                 case "kind": kind = value; break;
-                case "calendar_week": calendarWeek = ParseInt(value); break;
-                case "weight": weight = ParseDouble(value, 1.0); break;
-                case "cooldown_weeks": cooldown = ParseInt(value) ?? 4; break;
+                case "calendar_week": calendarWeek = ParseInt(key, value); break;
+                case "weight": weight = ParseDouble(key, value, 1.0); break;
+                case "cooldown_weeks": cooldown = ParseInt(key, value) ?? 4; break;
                 case "sets_annual_flag": setsFlag = value.Length > 0 ? value : null; break;
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
                 case "requires_region": region = value.Length > 0 ? value : null; break;
@@ -248,7 +248,7 @@ public static class EventTableParser
                 case "text_no_ob": textNoOb = value.Length > 0 ? value : null; break;
                 case "scene": scene = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
-                case "improve_prob": elemImproveProb = ParseDouble(value, 0.5); break;
+                case "improve_prob": elemImproveProb = ParseDouble(key, value, 0.5); break;
                 case "variants":
                 case "outcomes":
                 case "choices":
@@ -282,13 +282,13 @@ public static class EventTableParser
         {
             switch (key)
             {
-                case "funds": _funds = ParseDouble(value, 0.0); return true;
-                case "training_mult": _trainingMult = ParseDouble(value, 1.0); return true;
-                case "training_weeks": _trainingWeeks = ParseInt(value) ?? 0; return true;
+                case "funds": _funds = ParseDouble(key, value, 0.0); return true;
+                case "training_mult": _trainingMult = ParseDouble(key, value, 1.0); return true;
+                case "training_weeks": _trainingWeeks = ParseInt(key, value) ?? 0; return true;
                 case "training_target": _trainingPlayer = value == "player"; return true;
-                case "trust": _trust = ParseDouble(value, 0.0); return true;
-                case "fame": _fame = ParseDouble(value, 0.0); return true;
-                case "pressure_next_match": _pressure = ParseInt(value) ?? 0; return true;
+                case "trust": _trust = ParseDouble(key, value, 0.0); return true;
+                case "fame": _fame = ParseDouble(key, value, 0.0); return true;
+                case "pressure_next_match": _pressure = ParseInt(key, value) ?? 0; return true;
                 default: return false;
             }
         }
@@ -297,15 +297,16 @@ public static class EventTableParser
             _pressure);
     }
 
-    // 既定を Random にしているのは kind 省略の後方互換。**新しい種別を足したらここにも足す**＝
-    // 足し忘れると System が Random に化けて週次抽選のプールへ入り、主役の居ない会話が出るうえ
+    // kind 省略は Random（後方互換）。**新しい種別を足したらここにも足す**＝足し忘れると例外で気づける。
+    // 未知の綴りを Random に落とすと System が週次抽選のプールへ入り、主役の居ない会話が出るうえ
     // 抽選の重み合計が変わって発火の乱数列までずれる（issue #610 の作業中に実際に踏んだ）。
     private static EventKind ParseKind(string? kind) => kind switch
     {
+        null or "" or "Random" => EventKind.Random,
         "Fixed" => EventKind.Fixed,
         "Choice" => EventKind.Choice,
         "System" => EventKind.System,
-        _ => EventKind.Random,
+        _ => throw new FormatException($"kind に未知の語: {kind}"),
     };
 
     // 選択肢の語は未知なら例外＝綴りを間違えた選択肢が黙って消えたり別の対応に化けたりしない。
@@ -377,14 +378,19 @@ public static class EventTableParser
         return n;
     }
 
-    /// <summary>行末コメントを落とす。引用符の中の # は残す（文言に「#」が出ても壊れないように）。</summary>
+    /// <summary>
+    /// 行末コメントを落とす。引用符（二重・単一）の中の # と、直前が空白でない # は値の一部として残す
+    /// （YAML と同じ＝文言や値に「#」が出ても壊れないように）。
+    /// </summary>
     private static string StripComment(string line)
     {
-        var quoted = false;
+        var quote = '\0';
         for (var i = 0; i < line.Length; i++)
         {
-            if (line[i] == '"') quoted = !quoted;
-            else if (line[i] == '#' && !quoted) return line.Substring(0, i);
+            var c = line[i];
+            if (quote != '\0') { if (c == quote) quote = '\0'; }
+            else if (c == '"' || c == '\'') quote = c;
+            else if (c == '#' && (i == 0 || char.IsWhiteSpace(line[i - 1]))) return line.Substring(0, i);
         }
         return line;
     }
@@ -396,9 +402,22 @@ public static class EventTableParser
         return s;
     }
 
-    private static int? ParseInt(string s)
-        => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : (int?)null;
+    // 値が空（または null/~）なら「書かなかった」＝既定。書いてあるのに読めないものは既定へ落とさず例外にする
+    // （`weight: 2,0` が黙って 1.0 になる、のような化け方を読み込み時に殺す）。
+    private static bool IsAbsent(string s) => s.Length == 0 || s == "null" || s == "~";
 
-    private static double ParseDouble(string s, double fallback)
-        => double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
+    private static int? ParseInt(string key, string s)
+    {
+        if (IsAbsent(s)) return null;
+        if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)) return v;
+        throw new FormatException($"{key} は整数で書いてください: {s}");
+    }
+
+    private static double ParseDouble(string key, string s, double fallback)
+    {
+        if (IsAbsent(s)) return fallback;
+        if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
+            && !double.IsNaN(v) && !double.IsInfinity(v)) return v;
+        throw new FormatException($"{key} は数値で書いてください: {s}");
+    }
 }

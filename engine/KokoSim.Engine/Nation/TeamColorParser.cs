@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -20,7 +21,8 @@ public static class TeamColorParser
 {
     /// <summary>
     /// 解釈できた件数が0なら null を返す（＝呼び元がフォールバックと警告を選べる）。
-    /// 1件でも読めたら、壊れた行は黙って捨てて残りを返す。
+    /// 1件でも読めたら、壊れた行（id/base/team が読めない）は黙って捨てて残りを返す。visor・縞の色・縞の密度は
+    /// 書いてあるのに読めなければ <see cref="FormatException"/>（黒や0に化けさせない）。
     /// </summary>
     public static TeamColorPalette? Parse(string yaml)
     {
@@ -56,7 +58,8 @@ public static class TeamColorParser
             if (!map.TryGetValue("team", out var teamHex) || !RgbColor.TryParseHex(teamHex, out var team)) continue;
 
             var visor = team;
-            if (map.TryGetValue("visor", out var visorHex)) RgbColor.TryParseHex(visorHex, out visor);
+            if (map.TryGetValue("visor", out var visorHex) && !RgbColor.TryParseHex(visorHex, out visor))
+                throw new FormatException($"{id}: visor の色が読めません: {visorHex}");
 
             // 縞は「型」だけ（色・密度）。出すかどうかは校IDの軸が決める（issue #621）。
             TeamStripeStyle? stripe = null;
@@ -64,10 +67,13 @@ public static class TeamColorParser
             {
                 var s = ParseFlowMap(stripeBlock);
                 var color = team;
-                if (s.TryGetValue("color", out var colorHex)) RgbColor.TryParseHex(colorHex, out color);
+                if (s.TryGetValue("color", out var colorHex) && !RgbColor.TryParseHex(colorHex, out color))
+                    throw new FormatException($"{id}: stripe.color の色が読めません: {colorHex}");
                 var freq = TeamStripeStyle.DefaultFreqPerMeter;
-                if (s.TryGetValue("freq", out var freqText))
-                    double.TryParse(freqText, NumberStyles.Float, CultureInfo.InvariantCulture, out freq);
+                if (s.TryGetValue("freq", out var freqText)
+                    && !(double.TryParse(freqText, NumberStyles.Float, CultureInfo.InvariantCulture, out freq)
+                         && freq > 0 && !double.IsInfinity(freq)))
+                    throw new FormatException($"{id}: stripe.freq は正の数で書いてください: {freqText}");
                 stripe = new TeamStripeStyle(color, freq);
             }
 

@@ -174,7 +174,15 @@ public sealed class TeamState
     /// <summary>攻撃したイニングごとの得点（表/裏の各ハーフで1要素追加）。</summary>
     public IReadOnlyList<int> InningRuns => _inningRuns;
     public void AddHit() => Hits++;
-    public void RecordInningRuns(int runs) => _inningRuns.Add(runs);
+    public void RecordInningRuns(int runs)
+    {
+        _inningRuns.Add(runs + _carriedRuns);
+        _carriedRuns = 0;
+    }
+
+    // 場面ジャンプで1回から始めたとき、注入した得点を最初の半回の記録へ足すための持ち越し（通常の試合では常に0）。
+    private int _carriedRuns;
+    internal void CarryRunsIntoFirstInning(int runs) => _carriedRuns += runs;
 
     /// <summary>
     /// 失策をチーム計＋当該守備選手へ帰属させる（issue #91）。fielder が解決できない場合（想定外）でも
