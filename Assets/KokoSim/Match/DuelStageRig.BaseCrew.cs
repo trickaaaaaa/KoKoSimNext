@@ -21,8 +21,8 @@ namespace KokoSim.Unity.Match
         /// <summary>判定の腕が上がるまでの頭出し[s]。判定の瞬間（走者の到達）に腕の動きの山を合わせる。</summary>
         private const float BaseCallLeadSeconds = 0.35f;
 
-        /// <summary>判定の演技を出す塁の範囲[m]。一塁の駆け抜け（オーバーラン3.5m先）まで入る。</summary>
-        private const float BaseCallRadiusM = 5f;
+        /// <summary>判定の瞬間に走者が塁からこの範囲[m]に居れば、その塁の判定とみなす。</summary>
+        private const float BaseCallRadiusM = 3f;
 
         private static readonly Vector2 BaseUnitAlongLine1B = new Vector2(0.70711f, 0.70711f);
         private static readonly Vector2 BaseUnitFoul1B = new Vector2(0.70711f, -0.70711f);
@@ -139,32 +139,35 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// そのプレーの塁審の判定を洗い出す。対象は走者のレッグが塁に着くアウトと際どいセーフだけ
-        /// （走者がただ進塁しただけの場面で毎回腕を出さない）。判定の時刻はそのレッグの到達時刻 T1＝engine の値。
-        /// 一塁のアウトは駆け抜け（オーバーラン）のレッグの手前のレッグが持つので、最終レッグだけでなく全レッグを見る。
+        /// そのプレーの塁審の判定を洗い出す。対象は塁で出たアウトと際どいセーフだけ（走者がただ進塁しただけの場面で
+        /// 毎回腕を出さない）。種類と時刻は engine の判定イベント（<see cref="PlaybackPlay.Judgements"/>）の値で、
+        /// 判定の瞬間にいずれかの走者が塁の上に居るものだけを塁審の判定にする
+        /// （飛球の捕球アウトは走者が塁に居ない＝球審・外野の仕事なので対象外）。
         /// </summary>
         private void BuildBaseCallPlan(PlaybackPlay play)
         {
             _baseCalls.Clear();
-            if (play?.Runners == null) return;
-            foreach (var r in play.Runners)
+            if (play?.Runners == null || play.Judgements == null) return;
+            foreach (var j in play.Judgements)
             {
-                if (r?.Segs == null) continue;
-                foreach (var seg in r.Segs)
+                bool isOut = j.Kind == KokoSim.Engine.Match.Timeline.JudgementKind.Out;
+                bool closeSafe = j.Kind == KokoSim.Engine.Match.Timeline.JudgementKind.Safe && j.CloseCall;
+                if (!isOut && !closeSafe) continue;
+                int ump = -1;
+                float best = BaseCallRadiusM;
+                foreach (var r in play.Runners)
                 {
-                    if (!seg.OutAtEnd && !seg.CloseCall) continue;
-                    if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
-                    var to = new Vector2((float)seg.To.X, (float)seg.To.Y);
-                    int ump = -1;
-                    float best = BaseCallRadiusM;
+                    var p = PlaybackEvaluator.RunnerAt(r, j.T, respectHideAt: false);
+                    if (!p.HasValue) continue;
+                    var at = new Vector2((float)p.Value.X, (float)p.Value.Y);
                     for (int b = 1; b <= 3; b++)
                     {
-                        float d = (to - BaseBag(b)).magnitude;
-                        if (d < best) { best = d; ump = b == 1 ? 0 : b == 2 ? 1 : 2; }
+                        float d = (at - BaseBag(b)).magnitude;
+                        if (d < best) { best = d; ump = b - 1; }
                     }
-                    if (ump < 0) continue;
-                    _baseCalls.Add(new BaseCall { Ump = ump, TStart = (float)seg.T1 - BaseCallLeadSeconds, Out = seg.OutAtEnd });
                 }
+                if (ump < 0) continue;
+                _baseCalls.Add(new BaseCall { Ump = ump, TStart = (float)j.T - BaseCallLeadSeconds, Out = isOut });
             }
         }
 
