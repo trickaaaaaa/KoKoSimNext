@@ -153,10 +153,6 @@ namespace KokoSim.Unity.Lineup
         /// <summary>いまの並びで試合に入ると破る約束の名前（「選手名（条件）」。確定時の確認に出す）。</summary>
         public List<string> BrokenPromises = new List<string>();
         public Condition StartingPitcherCondition = Condition.Normal;
-        /// <summary>先発投手と捕手の相性のランク（設計書23 §4・issue #935）。捕手がいなければ null。</summary>
-        public string BatteryGrade;
-        /// <summary>先発投手と捕手が一緒に守った積み重ね（0〜1）。</summary>
-        public float BatteryBond;
         public string TeamRankGrade = "C";
         public int TeamOverallValue;        // チーム総合の数値（0〜100。ランクチップの隣に出す）
 
@@ -715,12 +711,6 @@ namespace KokoSim.Unity.Lineup
                     Promise = PromiseChip(p, breaking),
                     Condition = FormModel.Quantize(p.ConditionValue),
                 });
-                // 先発投手と捕手の相性（設計書23 §4・issue #935）。先発の行に出す。
-                if (_pos[i] == FieldPosition.Catcher && StartingPitcherIndex >= 0)
-                {
-                    var chem = ChemistryDisplay.Battery(_roster[StartingPitcherIndex], p);
-                    if (chem.HasValue) { v.BatteryGrade = chem.Value.Grade; v.BatteryBond = chem.Value.Bond; }
-                }
             }
 
             // 先発投手カード：DH制＝打順外の先発、DHなし＝打順内の「投」の選手（同じ人を2箇所に出す）。
