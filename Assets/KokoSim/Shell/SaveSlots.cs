@@ -38,9 +38,17 @@ namespace KokoSim.Unity.Shell
         /// <summary>一覧行の「年度/週」欄（"1/4月1週"）。週は <see cref="WeekLabel"/>。</summary>
         public string ListLabel => YearIndex + "/" + WeekLabel;
 
+        /// <summary>本拠県（JIS順0基点）。v3以前のセーブには無い＝null（画面は「—」）。</summary>
+        public int? PrefectureId { get; }
+
+        /// <summary>保存した時点の概要（時期・チーム総合・監督通算・甲子園出場）。概要を書く前のセーブは null（画面は「—」）。</summary>
+        public SaveSummary Summary { get; }
+
         public SaveSlotInfo(string slotId, bool exists, bool corrupt, int week, int yearIndex,
-            DateTime savedAt, string schoolName = null)
+            DateTime savedAt, string schoolName = null, int? prefectureId = null, SaveSummary summary = null)
         {
+            PrefectureId = prefectureId;
+            Summary = summary;
             SlotId = slotId;
             Exists = exists;
             Corrupt = corrupt;
@@ -132,7 +140,7 @@ namespace KokoSim.Unity.Shell
             var info = SaveGameIO.TryPeekHeader(path) is { } header
                        && header.Version >= 1 && header.Version <= SaveCodec.CurrentVersion
                 ? new SaveSlotInfo(slotId, exists: true, corrupt: false, header.Week, header.YearIndex,
-                    savedAt, header.SchoolName)
+                    savedAt, header.SchoolName, header.PrefectureId, header.Summary)
                 : new SaveSlotInfo(slotId, exists: true, corrupt: true, week: 0, yearIndex: 0, savedAt);
             InfoCache[path] = (stamp, info);
             return info;
@@ -147,10 +155,17 @@ namespace KokoSim.Unity.Shell
         /// <summary>スロットから読み込んで全サービスへ復元する。</summary>
         public static bool Load(string slotId, out string error) => SaveGameIO.Load(PathFor(slotId), out error);
 
+        /// <summary>
+        /// いま遊んでいる進行の枠か（この進行で最後に保存／読込した枠）。新しく始めてまだ保存していない間は
+        /// どの枠でもない。
+        /// </summary>
+        public static bool IsActive(string slotId) => SaveGameIO.ActivePath == PathFor(slotId);
+
         /// <summary>スロットを削除する（存在しなければ何もしない）。</summary>
         public static void Delete(string slotId)
         {
             var path = PathFor(slotId);
+            if (IsActive(slotId)) SaveGameIO.ForgetActivePath();
             if (File.Exists(path)) { File.Delete(path); WebStorage.Flush(); }
         }
     }

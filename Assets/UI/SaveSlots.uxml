@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- セーブスロット選択画面（issue #508・オーナー承認の案2＝リスト＋詳細ペイン）。issue #509 でホームの
-     メニュー「セーブ」からも同じ画面を開くようになった（SaveSlots.Entry で分岐。SaveSlotsController 参照）。
-     入口は2つ（タイトルの「つづきから」／共通ナビの「システム」タブ。ホームの ≡メニューは #730 で廃止）。
-     タイトル経由は開いた時点でどのシェルサービスも遅延初期化されていないため共通トップバーは出さない
-     （TitleScreen と同じ理由）。ホームのメニュー経由も出さず ss-back で戻る。
-     タブ経由（issue #565）だけトップバーを出す＝他のタブと同じ見え方にし、移動はタブで行う。
-     左＝手動3枠＋オート1枠の32px行一覧、右＝選択枠の詳細（学校名・年度・週・保存日時）＋保存(ホーム経由のみ)／読込／削除。 -->
+<!-- セーブデータ画面（「システム」タブ／タイトルの「つづきから」）。入口は SaveSlots.Entry で分岐する
+     （SaveSlotsController 参照）。タイトル経由は開いた時点でどのシェルサービスも遅延初期化されていないため、
+     共通トップバー・保存・「いま遊んでいるデータ」は出さない。
+     上＝画面内の切り替え（セーブデータ／校名の編集／設定／クレジット）と「タイトルへ戻る」。
+     セーブデータのページは 左＝枠ごとのカード（中身と操作をカードの中に置く）／右＝いま遊んでいるデータ。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="TopBar" src="Components/TopBar.uxml" />
     <Style src="tokens.uss" />
@@ -22,51 +20,32 @@
         </ui:VisualElement>
         <ui:VisualElement class="ss-main">
 
+            <!-- 切り替えの行。つまみは SegTabs（Controller が組む）、「タイトルへ戻る」の中身（矢印＋文字）も Controller が入れる -->
             <ui:VisualElement class="ss-header">
-                <ui:VisualElement class="rule-head">
-                    <ui:VisualElement class="rule-head__rule" />
-                    <ui:Label name="ss-heading" class="rule-head__text f-display" text="セーブデータ" />
-                </ui:VisualElement>
-                <ui:VisualElement class="ss-header__end">
-                    <!-- ゲーム中だけ出す画面内タブ（セーブデータ／校名の編集・issue #946）。部品は SegTabs。 -->
-                    <ui:VisualElement name="ss-tabs" class="ss-tabs" />
-                    <ui:Button name="ss-title" class="dlg-btn dlg-btn--ghost" text="タイトルへ戻る" />
-                </ui:VisualElement>
+                <ui:VisualElement name="ss-tabs" class="ss-tabs" />
+                <ui:VisualElement class="ss-header__spacer" />
+                <ui:Button name="ss-title" class="ss-title-btn" />
             </ui:VisualElement>
 
-            <ui:VisualElement name="ss-page-saves" class="ss-body">
+            <ui:VisualElement name="ss-page-saves" class="ss-saves">
 
-                <!-- 左：スロット一覧（手動1〜3＋オート・32px行） -->
-                <ui:VisualElement class="card card--list">
-                    <ui:VisualElement class="card__hd">
-                        <ui:Label class="card__hd-title" text="スロット" />
-                    </ui:VisualElement>
-                    <ui:VisualElement class="card__body">
-                        <ui:VisualElement class="ss-thead">
-                            <ui:Label class="ss-th ss-th--slot" text="枠" />
-                            <ui:Label class="ss-th ss-th--school" text="学校名" />
-                            <ui:Label class="ss-th ss-th--yw" text="年度/週" />
-                        </ui:VisualElement>
-                        <ui:VisualElement name="ss-rows" class="ss-rows" />
-                    </ui:VisualElement>
+                <!-- 左：セーブの枠（1枠＝1枚のカード）。枠が増えても崩れないよう ScrollView に入れる -->
+                <ui:VisualElement class="ss-saves__left">
+                    <!-- 保存できない理由・読み込みや保存の失敗だけを出す1行（何も無ければ隠す） -->
+                    <ui:Label name="ss-note" class="ss-note f-body" text="" style="display: none;" />
+                    <ui:ScrollView mode="Vertical" class="ss-slots-scroll">
+                        <ui:VisualElement name="ss-slots" />
+                    </ui:ScrollView>
                 </ui:VisualElement>
 
-                <!-- 右：選択枠の詳細 -->
-                <ui:VisualElement class="card card--detail">
-                    <ui:VisualElement class="card__hd">
-                        <ui:Label class="card__hd-title" text="詳細" />
+                <!-- 右：いま遊んでいるデータ（ゲーム中だけ） -->
+                <ui:VisualElement name="ss-now" class="ss-now">
+                    <ui:Label class="ss-now__title f-display" text="いま遊んでいるデータ" />
+                    <ui:VisualElement class="ss-now__school">
+                        <ui:Label name="ss-now-name" class="ss-now__name f-display" text="" />
+                        <ui:Label name="ss-now-pref" class="ss-now__pref f-display-lg" text="" />
                     </ui:VisualElement>
-                    <ui:VisualElement class="card__body card__body--fill">
-                        <ui:Label name="ss-d-name" class="ss-d__name f-display-lg" text="" />
-                        <ui:Label name="ss-d-sub" class="ss-d__sub f-body" text="" />
-                        <ui:VisualElement name="ss-d-facts" class="ss-d__facts" />
-                        <ui:Label name="ss-d-note" class="ss-d__note f-body" text="" />
-                        <ui:VisualElement class="ss-d__foot">
-                            <ui:Button name="ss-save" class="dlg-btn dlg-btn--primary" text="保存" style="display: none;" />
-                            <ui:Button name="ss-load" class="dlg-btn dlg-btn--primary" text="読込" />
-                            <ui:Button name="ss-delete" class="dlg-btn dlg-btn--warn" text="削除" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
+                    <ui:VisualElement name="ss-now-rows" class="ss-now__rows" />
                 </ui:VisualElement>
 
             </ui:VisualElement>
@@ -214,13 +193,14 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 削除確認ダイアログ（同一ドキュメント内オーバーレイ。部品辞書の modal-scrim / modal-card を使用） -->
+        <!-- 上書き・読み込み・削除の確認（同一ドキュメント内オーバーレイ。部品辞書の modal-scrim / modal-card / ConfirmDialog）。
+             文言と確定ボタン（墨＝上書き・読み込み／削除色＝削除）は Controller が入れる -->
         <ui:VisualElement name="ss-confirm" class="ui-root modal-scrim">
             <ui:VisualElement class="modal-card confirm-card">
                 <ui:Label name="ss-confirm-q" class="confirm-q f-body" text="" />
                 <ui:VisualElement class="confirm-btns">
-                    <ui:Button name="ss-confirm-no" class="dlg-btn dlg-btn--ghost" text="いいえ" />
-                    <ui:Button name="ss-confirm-yes" class="dlg-btn dlg-btn--warn" text="削除する" />
+                    <ui:Button name="ss-confirm-no" class="dlg-btn dlg-btn--ghost" text="やめる" />
+                    <ui:Button name="ss-confirm-yes" class="dlg-btn dlg-btn--ink" text="" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

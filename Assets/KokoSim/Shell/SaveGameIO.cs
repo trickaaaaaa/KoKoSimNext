@@ -86,6 +86,15 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static (int YearIndex, int Week)? LastSavedAt { get; private set; }
 
+        /// <summary>
+        /// この進行を最後に保存／読込したファイル（null＝新しく始めてまだ保存していない）。セーブデータ画面が
+        /// 「プレイ中」の枠を決めるのに使う。<b>セーブ対象ではない</b>（セッション内の目安）。
+        /// </summary>
+        public static string ActivePath { get; private set; }
+
+        /// <summary>「プレイ中」の枠の記録を消す（その枠のファイルを削除したとき）。</summary>
+        public static void ForgetActivePath() => ActivePath = null;
+
         /// <summary>全 static サービスから現在状態を集めて DTO を組む。</summary>
         public static SaveState Capture()
         {
@@ -106,6 +115,7 @@ namespace KokoSim.Unity.Shell
             EventService.Capture(s);
             TutorialService.Capture(s);
             TrainingBoostService.Capture(s);
+            s.Summary = SaveSummaries.Current();   // 一覧のカード用の概要（表示専用・復元には使わない）
             return s;
         }
 
@@ -166,6 +176,7 @@ namespace KokoSim.Unity.Shell
             TrainingBoostService.Clear();
             GameClock.Reset();
             LastSavedAt = null;   // 新しい進行＝まだ一度も保存していない
+            ActivePath = null;
         }
 
         /// <summary>
@@ -222,6 +233,7 @@ namespace KokoSim.Unity.Shell
             if (!TryWriteAtomic(path, raw)) return false;
             WebStorage.Flush();   // ブラウザ版は IndexedDB へ書き出さないと開き直しで消える
             LastSavedAt = (GameClock.YearIndex, GameClock.Week);
+            ActivePath = path;
             return true;
         }
 
@@ -271,6 +283,7 @@ namespace KokoSim.Unity.Shell
             Restore(state);
             // 読んだ直後は「その地点が保存済み」＝未保存の経過は0週から数え直す。
             LastSavedAt = (GameClock.YearIndex, GameClock.Week);
+            ActivePath = path;
             return true;
         }
 

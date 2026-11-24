@@ -1,35 +1,227 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   SaveSlots.uss — セーブスロット選択画面（issue #508・保存/戻るは #509 でホーム経由のみ追加）
+   SaveSlots.uss — セーブデータ画面（「システム」タブ／タイトルの「つづきから」）
    ───────────────────────────────────────────────────────────────────────
-   値は tokens.uss の変数のみを参照する（直書き禁止）。
-   区切りは面の明度差で作り、罫線は表のヘッダー下だけに引く（UI原則④）。
-   主要操作は右の詳細ペインの「読込」（ホーム経由は「保存」も）（UI原則⑦）。削除は警告色（本当の警告＝破壊的操作）。
-
-   ── 監督判断（2026-08-10・issue #575。自己レビューで再指摘しないこと）─────────────
-   ・見出し帯の濃緑＋白抜き題字は design-19 §8-4/§8-5 の正典どおり（.card / .card__hd 共通部品）。
-     「白地＋インク枠へ未移行」は誤診＝この画面だけ白見出しにしない。
-   ・画面下半分の余白は「意図した余白」。手動3枠しか無く情報量を増やせないので、カードは
-     中身の高さで止め、上寄せのまま残す（.card--grow 相当を足さない）。
+   上＝画面内の切り替えと「タイトルへ戻る」。セーブデータのページは 左＝枠ごとのカード／右＝いま遊んでいるデータ。
+   色は tokens（scorebook.uss の --sbk-*）を参照する。gap は無いので間隔は margin で作る。
+   校名の編集・設定・クレジットのページは下のほうの節（.ss-body 以下）で、ここの上部の行を共用する。
    ═══════════════════════════════════════════════════════════════════════ */
+
+.ss-root { flex-grow: 1; }
+/* 画面の地は紙色より一段濃くし、紙色のカードを浮かせる（影は使わない）。 */
+.sbk.ss-root { background-color: var(--sbk-paper-deep); }
 
 .ss-main {
     flex-grow: 1;
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-    padding-top: var(--sp-4);
-    padding-bottom: var(--sp-3);
+    min-height: 0;
+    padding: 16px 24px 20px 24px;
 }
 
-/* ── ヘッダ（柱見出し＋ホーム経由だけ出る「戻る」） ───────────────── */
+/* ── ① 切り替えの行（高さ44px・下に16px） ── */
 .ss-header {
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--sp-2);
+    height: 44px;
+    flex-shrink: 0;
+    margin-bottom: 16px;
 }
-.ss-header .rule-head { margin-bottom: 0; }
+.ss-header__spacer { flex-grow: 1; }
+.ss-tabs { flex-shrink: 0; }
+/* つまみ型の切り替え：入れ物の地に、選択中だけ白地＋墨の太字（太字は Controller が書体クラスで付ける） */
+.sbk .ss-tabs .seg-tabs {
+    flex-direction: row;
+    background-color: var(--sbk-well);
+    border-radius: 10px;
+    padding: 4px;
+}
+.sbk .ss-tabs .seg-tab,
+.sbk .ss-tabs .seg-tab:hover {
+    height: 36px;
+    margin: 0 4px 0 0;
+    padding: 0 20px;
+    border-width: 0;
+    border-radius: 7px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--sbk-sub);
+    font-size: 14px;
+}
+.sbk .ss-tabs .seg-tab--last { margin-right: 0; }
+.sbk .ss-tabs .seg-tab:hover { color: var(--sbk-text); }
+.sbk .ss-tabs .seg-tab--on,
+.sbk .ss-tabs .seg-tab--on:hover {
+    background-color: var(--sbk-card);
+    color: var(--sbk-text);
+}
+/* 「タイトルへ戻る」：枠だけのボタン（左に左向きの矢印） */
+.sbk Button.ss-title-btn {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0 18px;
+    border-width: 1px;
+    border-color: var(--sbk-dash);
+    border-radius: 9px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--sbk-info);
+}
+.sbk Button.ss-title-btn:hover { border-color: var(--sbk-mute); }
+.ss-title-btn .licon { width: 16px; height: 16px; margin-right: 8px; }
+.ss-title-btn__txt { margin: 0; padding: 0; font-size: 14px; color: var(--sbk-info); }
 
-/* ── 2カラム本体 ─────────────────────────────────────────── */
+/* ── ② 本体：左＝枠のカード（残り全部）／右＝いま遊んでいるデータ（420px） ── */
+.ss-saves { flex-direction: row; flex-grow: 1; min-height: 0; }
+.ss-saves__left { flex-grow: 1; flex-basis: 0; min-width: 0; min-height: 0; }
+.ss-slots-scroll { flex-grow: 1; min-height: 0; }
+.ss-saves Label { margin: 0; padding: 0; }
+
+/* 保存できない理由・読み込みや保存の失敗（本当の警告だけ＝警告色） */
+.ss-saves .ss-note {
+    flex-shrink: 0;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--color-warn);
+    white-space: normal;
+}
+
+/* ── 枠のカード（高さ172px・間隔12px）。ふだんは 1px枠＋1px内余白、プレイ中は 2px枠＋0内余白＝大きさは同じ ── */
+.ss-card {
+    flex-direction: row;
+    align-items: center;
+    height: 172px;
+    flex-shrink: 0;
+    margin-bottom: 12px;
+    background-color: var(--sbk-patch-bg);
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: var(--sbk-card-line);
+    padding: 1px;
+}
+.sbk .ss-card--playing { border-width: 2px; padding: 0; border-color: var(--color-accent); }
+/* 空いている枠：背景なし・点線（DashedFrame が外周に重なる） */
+.ss-card--empty { background-color: rgba(0, 0, 0, 0); border-color: rgba(0, 0, 0, 0); }
+
+/* 左端：枠の番号（76px・右に線） */
+.ss-card__no {
+    width: 76px;
+    flex-shrink: 0;
+    align-self: stretch;
+    align-items: center;
+    justify-content: center;
+    border-right-width: 1px;
+    border-right-color: var(--sbk-rule-soft);
+}
+.ss-card--empty .ss-card__no { border-right-width: 0; }
+.ss-card__no-k { font-size: 11px; color: var(--sbk-sub); }
+.ss-card__no-v { font-size: 30px; color: var(--sbk-text); }
+.ss-card--empty .ss-card__no-k,
+.ss-card--empty .ss-card__no-v { color: var(--sbk-mute); }
+/* 空きの枠の番号の右の点線（縦） */
+.ss-card__vrule { width: 2px; align-self: stretch; flex-shrink: 0; }
+
+/* 中：情報（3行・行の間隔12px） */
+.ss-card__info { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 24px; margin-right: 24px; justify-content: center; }
+.ss-card__head { flex-direction: row; align-items: flex-end; }
+.ss-card__name { font-size: 26px; letter-spacing: 2.1px; color: var(--sbk-text); white-space: nowrap; }
+.ss-saves .ss-card__pref { font-size: 19px; letter-spacing: 1.1px; color: var(--sbk-info); margin-left: 14px; padding-bottom: 2px; }
+/* 「プレイ中」の札（スクールカラー地に白。色は SchoolAccent.Apply が流す） */
+.ss-saves .ss-card__playing {
+    align-self: center;
+    margin-left: 14px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--sbk-card);
+    background-color: var(--color-accent);
+}
+.ss-card__items { flex-direction: row; align-items: flex-end; margin-top: 12px; }
+.ss-item { margin-right: 30px; flex-shrink: 0; }
+.ss-item__k { font-size: 11px; color: var(--sbk-mute); }
+.ss-item__v { flex-direction: row; align-items: flex-end; height: 32px; margin-top: 4px; }
+.ss-item__big { font-size: 20px; color: var(--sbk-text); }                    /* 明朝の値（「9月2週」） */
+.ss-item__score { font-size: 26px; color: var(--sbk-text); }                  /* 総合の点数（明朝） */
+.ss-item__num { font-size: 20px; color: var(--sbk-text); }                    /* 太字の数字（勝敗・回数） */
+.ss-saves .ss-item__unit { font-size: 13px; color: var(--sbk-info); padding-bottom: 3px; margin-left: 2px; margin-right: 4px; }
+.ss-saves .ss-item__sep { font-size: 13px; color: var(--sbk-mute-soft); padding-bottom: 3px; margin-left: 4px; margin-right: 8px; }
+.ss-saves .ss-item__year { font-size: 13px; color: var(--sbk-info); padding-bottom: 3px; margin-left: 8px; }
+.ss-saves .ss-item__tag {
+    align-self: center;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--sbk-info);
+    background-color: var(--sbk-rule-soft);
+    white-space: nowrap;
+}
+.ss-item__none { font-size: 20px; color: var(--sbk-mute); }                   /* 値がない項目の「—」 */
+.sbk .ss-item .rank-chip { min-width: 30px; width: 30px; height: 30px; padding: 0; margin: 0 8px 1px 0; flex-shrink: 0; }
+.ss-saves .ss-card__saved { font-size: 12px; color: var(--sbk-mute); margin-top: 12px; }
+.ss-card__vacant { font-size: 16px; color: var(--sbk-mute); }
+
+/* 右端：操作（間隔10px・右の余白24px） */
+.ss-card__ops { flex-direction: row; align-items: center; flex-shrink: 0; margin-right: 22px; }
+.sbk Button.ss-op-trash {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    border-radius: 10px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--sbk-danger);
+    align-items: center;
+    justify-content: center;
+}
+.sbk Button.ss-op-trash:hover { background-color: var(--sbk-rule-soft); }
+.ss-op-trash .licon { width: 20px; height: 20px; }
+.sbk Button.ss-op {
+    flex-direction: row;
+    align-items: center;
+    height: 48px;
+    margin: 0 0 0 10px;
+    padding: 0 20px;
+    border-width: 1.5px;
+    border-color: var(--sbk-text);
+    border-radius: 10px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--sbk-text);
+    font-size: 15px;
+}
+.sbk Button.ss-op--fill { border-width: 0; background-color: var(--sbk-text); color: var(--sbk-card); }
+.sbk Button.ss-op--fill:hover { background-color: var(--sbk-ink); }
+.ss-op .licon { width: 16px; height: 16px; margin-right: 8px; }
+.ss-op__txt { font-size: 15px; color: var(--sbk-card); }
+
+/* ── 右列：いま遊んでいるデータ ── */
+.ss-now {
+    width: 420px;
+    flex-shrink: 0;
+    margin-left: 16px;
+    padding: 22px 24px;
+    background-color: var(--sbk-patch-bg);
+    border-radius: 14px;
+}
+.ss-now__title { font-size: 18px; letter-spacing: 1.4px; color: var(--sbk-text); }
+.ss-now__school { flex-direction: row; align-items: flex-end; margin-top: 16px; }
+.ss-now__name { font-size: 24px; letter-spacing: 1.9px; color: var(--sbk-text); }
+.ss-saves .ss-now__pref { font-size: 18px; letter-spacing: 1.1px; color: var(--sbk-info); margin-left: 14px; padding-bottom: 2px; }
+.ss-now__rows { margin-top: 16px; border-top-width: 2px; border-top-color: var(--sbk-text); }
+.ss-now__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 40px;
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--sbk-rule-soft);
+}
+.ss-now__k { font-size: 13px; color: var(--sbk-sub); }
+.ss-now__v { flex-direction: row; align-items: center; }
+.ss-now__v Label { font-size: 15px; color: var(--sbk-text); }
+.sbk .ss-now__v .rank-chip { min-width: 22px; width: 22px; height: 22px; padding: 0; margin: 0 8px 0 0; flex-shrink: 0; }
+
+/* ── 校名の編集・設定・クレジットのページ（2カラム本体） ─────────────── */
 .ss-body {
     flex-direction: row;
     flex-grow: 1;
@@ -45,62 +237,6 @@
     flex-shrink: 0;
 }
 
-/* ── スロット一覧（行高32px・UI原則①） ───────────────────── */
-.ss-thead {
-    flex-direction: row;
-    align-items: center;
-    height: var(--h-thead);
-    flex-shrink: 0;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--divider);
-}
-.ss-th {
-    font-size: var(--fs-th);
-    color: var(--color-muted);
-}
-.ss-th--slot { width: var(--col-ss-slot); flex-shrink: 0; }
-.ss-th--school { flex-grow: 1; flex-basis: 0; min-width: 0; }
-.ss-th--yw { width: var(--col-ss-yw); flex-shrink: 0; -unity-text-align: middle-right; }
-
-.ss-rows { flex-grow: 1; }
-
-.ss-row {
-    flex-direction: row;
-    align-items: center;
-    height: 32px;
-    flex-shrink: 0;
-    padding-left: var(--sp-1);
-    padding-right: var(--sp-1);
-    border-radius: var(--radius-chip);
-}
-.ss-row:hover { background-color: var(--color-row-hover); }
-.ss-row--on {
-    background-color: var(--sf-hover);
-    border-left-width: 2px;
-    border-left-color: var(--line-focus);
-}
-.ss-row--empty { opacity: 0.5; }
-.ss-row__slot {
-    width: var(--col-ss-slot);
-    flex-shrink: 0;
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
-}
-.ss-row__school {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
-    font-size: var(--fs-body);
-    color: var(--color-chalk);
-}
-.ss-row__yw {
-    width: var(--col-ss-yw);
-    flex-shrink: 0;
-    font-size: var(--fs-num);
-    color: var(--color-chalk);
-    -unity-text-align: middle-right;
-}
-
 /* ── 詳細ペイン ─────────────────────────────────────────── */
 .ss-d__name {
     color: var(--color-chalk);
@@ -110,27 +246,6 @@
     color: var(--color-muted);
     margin-top: var(--sp-1);
     margin-bottom: var(--sp-3);
-}
-.ss-d__facts { flex-shrink: 0; }
-.ss-d__row {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    height: 32px;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--divider);
-}
-.ss-d__row-k {
-    font-size: var(--fs-label);
-    color: var(--color-muted);
-}
-/* 行の中の見出しと値は既定の Label の余白（上下 3〜4px の margin＋padding）を持たない。32px の行に余白ぶん
-   押し込まれて字の箱が字より低くなり、見出しが下の区切り線に重なって値と高さがずれていた（issue #1533）。 */
-.ss-d__row Label {
-    margin-top: 0;
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
 }
 /* 詳細ペインの案内文。既定は本文色＝ただの案内（空き枠・セーブ無し）はここに出る。
    警告色は本当の警告だけに残す（UI原則②）＝読み込み不可・保存できない理由・操作の失敗は
@@ -156,13 +271,7 @@
 /* 「タイトルへ戻る」確認の補足（最後の保存から何週か。issue #730 でホームから移設） */
 .ss-confirm__sub { font-size: var(--fs-label); color: var(--color-muted); margin-bottom: var(--sp-4); }
 
-/* 画面の高さいっぱいに紙色を敷く（ルートが伸びず下半分が白く抜けていた）。 */
-.ss-root { flex-grow: 1; }
-.ss-root .ss-body { flex-grow: 0; }   /* カードは中身の高さで止める（監督判断 2026-08-10・上の注記） */
-
-/* ── ヘッダ右端（画面内タブ＋「タイトルへ戻る」）・issue #946 ─────────── */
-.ss-header__end { flex-direction: row; align-items: center; }
-.ss-tabs { flex-shrink: 0; margin-right: var(--sp-3); }
+.ss-root .ss-body { flex-grow: 0; }   /* カードは中身の高さで止める */
 
 /* ═══ 校名の編集（issue #946・A案）═══════════════════════════════════
    左＝県の切り替え＋学校一覧（行パネル）／右＝選んだ学校の名前の編集（詳細ペインは ss-d__* を共用）。
@@ -230,7 +339,6 @@
    本文の高さで器が伸び、見出し・画面内タブの行が押し潰される） */
 .ss-root .ss-credits-page { flex-grow: 1; flex-basis: 0; min-height: 0; }
 .ss-credits-scroll { flex-grow: 1; flex-basis: 0; }
-.ss-header { flex-shrink: 0; }
 .ss-credits-body {
     white-space: normal;
     margin: 0;
