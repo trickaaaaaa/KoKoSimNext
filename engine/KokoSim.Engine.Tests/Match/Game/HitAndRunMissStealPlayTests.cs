@@ -111,6 +111,87 @@ public sealed class HitAndRunMissStealPlayTests
         Assert.True(caught > 0, "2アウトのエンドラン空振り憤死が一度も起きない");
     }
 
+    /// <summary>
+    /// issue #1234（2026-11-24 オーナー判断）: 一・二塁でエンドランを空振りしたら、捕手は三塁へ投げて先頭の二塁走者と
+    /// 三塁で勝負する。一塁走者は送球されないので成否にかかわらず二塁へ進む（旧実装は一塁走者を抽選なしで憤死させ、
+    /// 二塁走者は止めていた）。
+    /// </summary>
+    [Fact]
+    public void FirstAndSecond_MissedHitAndRun_RacesTheLeadRunnerAtThird_TrailRunnerTakesSecond()
+    {
+        var start = new ScenarioStart { Inning = 3, IsTop = true, Outs = 0, OnFirst = true, OnSecond = true };
+        int caught = 0, safe = 0;
+        for (ulong seed = 1; seed <= 120; seed++)
+        {
+            var prog = new MatchProgression(Team("A"), Team("H"),
+                new GameContext { CaptureTimelines = true, CapturePitches = true }, seed, start);
+            if (prog.AdvancePitch() != AdvancePitchResult.Pitch) continue;
+            prog.SetOffensiveSign(true, OffensiveSign.HitAndRun);
+            prog.AdvancePitch();
+            var lp = prog.LastPitch;
+            if (lp is null || lp.Pitch.Kind != PitchKind.SwingingStrike || lp.EndsPlateAppearance) continue;
+
+            Assert.NotNull(lp.StealPlay);
+            Assert.False(lp.BaseFirst);
+            Assert.True(lp.BaseSecond, $"seed {seed}: 一塁走者が二塁へ進んでいない");
+            if (lp.StealPlay!.Result == "盗塁死")
+            {
+                caught++;
+                Assert.Equal(1, lp.Outs);
+                Assert.False(lp.BaseThird);
+            }
+            else
+            {
+                safe++;
+                Assert.Equal(0, lp.Outs);
+                Assert.True(lp.BaseThird, $"seed {seed}: セーフなのに二塁走者が三塁にいない");
+            }
+        }
+        Assert.True(caught > 0, "一・二塁のエンドラン空振りで三塁アウトが一度も起きない");
+        Assert.True(safe > 0, "一・二塁のエンドラン空振りで三塁セーフが一度も起きない");
+    }
+
+    /// <summary>issue #1234: 満塁ではエンドランを効かせない（采配カードも出さない）。空振りしても走者は誰も動かない。</summary>
+    [Fact]
+    public void BasesLoaded_HitAndRun_IsNotApplied()
+    {
+        var start = new ScenarioStart { Inning = 3, IsTop = true, Outs = 0, OnFirst = true, OnSecond = true, OnThird = true };
+        var whiffs = 0;
+        for (ulong seed = 1; seed <= 60; seed++)
+        {
+            var prog = new MatchProgression(Team("A"), Team("H"),
+                new GameContext { CaptureTimelines = true, CapturePitches = true }, seed, start);
+            if (prog.AdvancePitch() != AdvancePitchResult.Pitch) continue;
+            prog.SetOffensiveSign(true, OffensiveSign.HitAndRun);
+            prog.AdvancePitch();
+            var lp = prog.LastPitch;
+            if (lp is null || lp.Pitch.Kind != PitchKind.SwingingStrike || lp.EndsPlateAppearance) continue;
+            whiffs++;
+            Assert.Null(lp.StealPlay);
+            Assert.Equal(0, lp.Outs);
+            Assert.True(lp.BaseFirst && lp.BaseSecond && lp.BaseThird);
+            Assert.False(lp.RunnerStarted(1));
+        }
+        Assert.True(whiffs > 0, "満塁で空振りが一度も起きない");
+    }
+
+    [Theory]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, true, true, false)]   // 満塁は選べない
+    [InlineData(false, true, true, false)]
+    [InlineData(false, false, false, false)]
+    public void HitAndRunRules_IsAvailable(bool first, bool second, bool third, bool expected)
+        => Assert.Equal(expected, HitAndRunRules.IsAvailable(first, second, third));
+
+    [Fact]
+    public void HitAndRunRules_ThrowTarget_IsThirdWhenSecondOccupied()
+    {
+        Assert.Equal(StealTarget.Second, HitAndRunRules.CaughtThrowTarget(onSecond: false));
+        Assert.Equal(StealTarget.Third, HitAndRunRules.CaughtThrowTarget(onSecond: true));
+    }
+
     private static Player Pos(FieldPosition pos, bool slow) => new()
     {
         Position = pos, Contact = 30, Power = 50, LaunchTendency = 50, Discipline = 50,

@@ -956,7 +956,8 @@ public static class GameEngine
             // --- エンドラン/得点圏の打撃補正（設計書09 §1。パイプライン不変） ---
             // brain のエンドラン判断は従来どおり打席頭で確定（＝打席全体に効く既定）。手動エンドラン（issue #492 B）は
             // 投球ループで毎球評価し、エンドランが効いた球だけ BatterFor(..., endrun:true) で補正する。
-            var brainHitAndRun = sign == OffensiveSign.HitAndRun && bases.First is not null;
+            var brainHitAndRun = sign == OffensiveSign.HitAndRun
+                && HitAndRunRules.IsAvailable(bases.First is not null, bases.Second is not null, bases.Third is not null);
             // 得点圏補正の適用可否は打席頭で確定（塁状況スナップショット）＝AI駆動のシムは従来と完全一致。
             var chanceApplies = sign == OffensiveSign.Swing
                 && (bases.Second is not null || bases.Third is not null)
@@ -1465,7 +1466,9 @@ public static class GameEngine
                 // で走者が抜けたら、以降の球は補正もスイング強制もかからない（brainHitAndRun は打席頭の
                 // 判断値のまま据え置くが、有効化の可否は毎球の bases.First で判定し直す）。
                 var manualEndrun = manualSign == OffensiveSign.HitAndRun;
-                var endrunThisPitch = (brainHitAndRun || manualEndrun) && bases.First is not null;
+                // 満塁ではエンドランを効かせない（issue #1234・HitAndRunRules が単一ソース。采配カードも同じ式で出し分ける）。
+                var endrunThisPitch = (brainHitAndRun || manualEndrun)
+                    && HitAndRunRules.IsAvailable(bases.First is not null, bases.Second is not null, bases.Third is not null);
                 r1Start = endrunThisPitch ? StartType.Contact : StartType.Normal;
                 r1StealBreak = false;
                 r2StealBreak = false;
@@ -1609,17 +1612,30 @@ public static class GameEngine
                 if (endrunThisPitch && bases.First is not null && session.LastPitchKind == AtBat.PitchKind.SwingingStrike
                     && !(outs >= 2 && pitchRes.EndsPlateAppearance))
                 {
-                    var caughtRunner = bases.First;
-                    var hrReceiver = defense.PlayerAtPosition(Field.FieldPosition.Shortstop);
+                    // 捕手の送球先（issue #1234・2026-11-24 オーナー判断）: 二塁が空なら二塁で一塁走者と、一・二塁なら
+                    // 三塁で先頭の二塁走者と勝負する（旧実装は一・二塁で一塁走者を抽選なしで憤死させ、二塁走者は止めていた）。
+                    // 勝負は盗塁と同じ物理の秒比較から、空振りした分の不利（HitAndRunCaughtPenalty）を引いて上下限で挟む。
+                    // 一・二塁の一塁走者は送球されないので、勝負の成否にかかわらず二塁へ進む。満塁はここへ来ない（IsAvailable）。
+                    var hrTarget = HitAndRunRules.CaughtThrowTarget(bases.Second is not null);
+                    var caughtRunner = hrTarget == StealTarget.Third ? bases.Second! : bases.First;
+                    var hrReceiver = defense.PlayerAtPosition(hrTarget == StealTarget.Third
+                        ? Field.FieldPosition.ThirdBase : Field.FieldPosition.Shortstop);
                     var hrQuickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
                     var stealSafeProb = StealResolver.SuccessProbability(
-                            bases.First, defense.Catcher, paBaserunning,
+                            caughtRunner, defense.Catcher, paBaserunning,
+                            target: hrTarget,
                             receiver: hrReceiver,
                             pitcherQuickOffsetSeconds: hrQuickOffset)
                             - ctx.Tactics.HitAndRunCaughtPenalty;
-                    var caughtSafe = bases.Second is null
-                        && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, ctx.Tactics.HitAndRunCaughtSafeMin, ctx.Tactics.HitAndRunCaughtSafeMax), rng);
-                    if (caughtSafe)
+                    var caughtSafe = MathUtil.Chance(
+                        MathUtil.Clamp(stealSafeProb, ctx.Tactics.HitAndRunCaughtSafeMin, ctx.Tactics.HitAndRunCaughtSafeMax), rng);
+                    if (hrTarget == StealTarget.Third)
+                    {
+                        if (caughtSafe) bases.Third = caughtRunner;
+                        else { outs++; defense.RecordRunnerOut(currentPitcher); }
+                        bases.Second = bases.First;
+                    }
+                    else if (caughtSafe)
                     {
                         bases.Second = caughtRunner;
                     }
@@ -1639,11 +1655,11 @@ public static class GameEngine
                         var hrResult = caughtSafe ? StealResult.Safe : StealResult.CaughtStealing;
                         var hrTimes = StealResolver.Forced(
                             caughtRunner, defense.Catcher, paBaserunning, hrResult,
-                            startType: StartType.Contact, receiver: hrReceiver, pitcherQuickOffsetSeconds: hrQuickOffset);
+                            startType: StartType.Contact, target: hrTarget, receiver: hrReceiver, pitcherQuickOffsetSeconds: hrQuickOffset);
                         stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                             Timeline.TimelineBuilder.BuildSteal(
                                 caughtRunner, defense.Catcher, hrResult,
-                                paBaserunning, ctx.Field, StealTarget.Second, pitchout: false, StartType.Contact,
+                                paBaserunning, ctx.Field, hrTarget, pitchout: false, StartType.Contact,
                                 doubleStealScorer: null, hrTimes.RunnerSeconds, hrTimes.DefenseSeconds,
                                 throwScatter: null, hrQuickOffset));
                     }

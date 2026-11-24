@@ -1936,7 +1936,7 @@ namespace KokoSim.Unity.Match
                     } },
                 new SignDef { Id = "sign-hitrun", Label = "エンドラン", CardLabel = "エンドラン", Icon = "走", Art = "hitrun", Offense = true, Group = "batting",
                     // 盗塁と同じ球に押せない（engine は盗塁で一塁走者を先に動かすので、エンドランが効かなくなる・issue #1263）。
-                    GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst && _stealChoice == null,
+                    GroupLabel = "打撃", EnabledIf = () => EndrunAvailable && _stealChoice == null,
                     OnSelect = () => { _signChoice = OffensiveSign.HitAndRun; _signPad?.RefreshEnabled(); },
                     OnClear = () => { _signChoice = null; _signPad?.RefreshEnabled(); } },
                 // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗。三塁のみは盗塁不可・issue #788）ので、
@@ -1994,6 +1994,10 @@ namespace KokoSim.Unity.Match
         // カードの出方が打席の結果を先に漏らしていた（走者が出るのを見る前にバントが押せた）。
         private bool RunnerOnFirst => _atBat is { BaseFirst: true };
         private bool RunnerOnThird => _atBat is { BaseThird: true };
+        // エンドランが押せるか（issue #1234・2026-11-24 オーナー判断）: 一塁に走者が居て、満塁でない。
+        // 満塁は押し出しで全員が進む場面＝エンドランを掛ける意味が無いので選ばせない（engine も満塁では効かせない）。
+        private bool EndrunAvailable =>
+            _atBat != null && HitAndRunRules.IsAvailable(_atBat.BaseFirst, _atBat.BaseSecond, _atBat.BaseThird);
         private bool RunnerOnAnyBase =>
             _atBat is { BaseFirst: true } or { BaseSecond: true } or { BaseThird: true };
 
@@ -2109,7 +2113,7 @@ namespace KokoSim.Unity.Match
                 _pitchBattingChoice = null;
                 dropBatting = true;
             }
-            if (_signChoice == OffensiveSign.HitAndRun && !RunnerOnFirst)
+            if (_signChoice == OffensiveSign.HitAndRun && !EndrunAvailable)
             {
                 _signChoice = null;
                 dropBatting = true;
