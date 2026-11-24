@@ -364,6 +364,25 @@ captures:
     video: {from: flight_end-0.6, to: flight_end+0.3, fps: 60}
     probes: [BallHoldDiag, FieldCatchDiag]
 
+  # ── ビルドと同じ読み方（索引だけ）で外野手が走るか（ブラウザ版で待機の姿勢のまま滑っていた・#1323）。
+  # 走りの向き違い・走り出しのクリップが索引の一覧から漏れていた。catalog と editor を並べて見比べる ──
+  - id: fly-run-catalog-1323
+    name: "外野フライを追う外野手（ビルドと同じ索引だけの読み方・issue #1323）"
+    scenario: fair-fly-out-lab
+    manager: away
+    view: rig
+    overrides: {DuelTuning.ForceCatalogOnly: true}
+    shots: [flight_end-2.0, flight_end-1.2, flight_end-0.5]
+    probes: [FielderIdleDiag, FielderRunDiag]
+
+  - id: fly-run-editor-1323
+    name: "外野フライを追う外野手（エディタの読み方・比較用・issue #1323）"
+    scenario: fair-fly-out-lab
+    manager: away
+    view: rig
+    shots: [flight_end-2.0, flight_end-1.2, flight_end-0.5]
+    probes: [FielderIdleDiag, FielderRunDiag]
+
   - id: steal-labels-1246
     name: "打席の頭の盗塁（失敗）で頭上ラベルが守備側の選手（issue #1246 項目1・PR #1352）"
     scenario: steal-caught-lab

@@ -4331,13 +4331,24 @@ namespace KokoSim.Unity.Match
             yield return BatterBuntHitClipName;
             yield return BatterBuntMissClipName;
             foreach (var c in CatchAnchors) yield return c.Clip;
+            foreach (var c in PassedBallAnchors) yield return c.Clip;   // 捕逸
 
             // 守備（F2・F4・F5・F6）
             yield return InfielderIdleClipName;
             yield return OutfielderIdleClipName;
             foreach (var n in PostHomeRunIdleClipNames) yield return n;   // 本塁打の一周の待機（issue #978）
             foreach (var l in LocoLadder) yield return l.Name;
+            // 走りの向き違い（振り返り・背走・横歩き）と走り出し。ここが漏れていてビルドでだけ外野手が
+            // 待機の姿勢のまま滑っていた（ブラウザ版で発覚・#1323）。DuelStageGuardTests が表の漏れを見張る
+            foreach (var l in LocoLadderLookLeft) yield return l.Name;
+            foreach (var l in LocoLadderLookRight) yield return l.Name;
+            foreach (var l in LocoLadderBack) yield return l.Name;
+            yield return ShuffleToLeft.Name;
+            yield return ShuffleToRight.Name;
+            foreach (var s in StartClips) yield return s.Name;
             foreach (var a in FieldCatchAnchors) yield return a.Clip;
+            foreach (var a in FieldDiveAnchors) yield return a.Clip;     // 背走からのジャンピングキャッチ
+            foreach (var a in FieldFumbleAnchors) yield return a.Clip;   // はじく
             foreach (var a in FieldThrowAnchors) yield return a.Clip;
             yield return CatcherThrowAnchor.Clip;
             yield return DefenderTagOut.Clip;   // タッチアウトの受け手（issue #489）
