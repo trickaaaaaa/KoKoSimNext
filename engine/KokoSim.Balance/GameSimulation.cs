@@ -772,19 +772,8 @@ public static partial class GameSimulation
     private static double Rate(long errors, long chances) => chances > 0 ? (double)errors / chances : 0.0;
 
     /// <summary>守備位置の日本語表示名（失策内訳レポート用）。</summary>
-    private static string PositionName(FieldPosition p) => p switch
-    {
-        FieldPosition.Pitcher => "投手",
-        FieldPosition.Catcher => "捕手",
-        FieldPosition.FirstBase => "一塁",
-        FieldPosition.SecondBase => "二塁",
-        FieldPosition.ThirdBase => "三塁",
-        FieldPosition.Shortstop => "遊撃",
-        FieldPosition.LeftField => "左翼",
-        FieldPosition.CenterField => "中堅",
-        FieldPosition.RightField => "右翼",
-        _ => p.ToString(),
-    };
+    private static string PositionName(FieldPosition p)
+        => FieldPositionNames.Kanji2(p) is { Length: > 0 } s ? s : p.ToString();
 
     /// <summary>球種の日本語表示名（用語集準拠）。</summary>
     private static string PitchTypeName(PitchType t) => t switch

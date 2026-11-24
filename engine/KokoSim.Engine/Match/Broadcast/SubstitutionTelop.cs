@@ -102,20 +102,7 @@ public static class SubstitutionTelop
     };
 
     /// <summary>守備位置の呼び名（場内放送と同じ言い方）。</summary>
-    public static string PositionText(FieldPosition p) => p switch
-    {
-        FieldPosition.Pitcher => "ピッチャー",
-        FieldPosition.Catcher => "キャッチャー",
-        FieldPosition.FirstBase => "ファースト",
-        FieldPosition.SecondBase => "セカンド",
-        FieldPosition.ThirdBase => "サード",
-        FieldPosition.Shortstop => "ショート",
-        FieldPosition.LeftField => "レフト",
-        FieldPosition.CenterField => "センター",
-        FieldPosition.RightField => "ライト",
-        FieldPosition.DesignatedHitter => "指名打者",
-        _ => "",
-    };
+    public static string PositionText(FieldPosition p) => FieldPositionNames.Katakana(p);
 
     private static bool SamePlayer(SubstitutionPlayer a, SubstitutionPlayer b)
         => a.SourceId == b.SourceId && a.Number == b.Number && a.Name == b.Name;
