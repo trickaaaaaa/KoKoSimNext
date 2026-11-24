@@ -1054,7 +1054,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .hm-root .hm-empty__t1 { font-size: 15px; color: var(--hm-tx-strong); margin-bottom: 2px; }
 .hm-root .hm-empty__t2 { font-size: 13px; color: var(--hm-tx-2); }
 
-/* チーム内ランキング：打撃・投手を左右に。各行は 部門64｜1位｜2位76（行44） */
+/* チーム内ランキング：打撃・投手を左右に。各行は 部門64｜1位（記録72右揃え＋名前）｜2位92（行44） */
 .hm-root .hm-seg { flex-direction: row; padding: 3px; background-color: var(--hm-line); border-radius: 8px; }
 .hm-root .hm-seg__btn {
     height: 26px;
@@ -1097,9 +1097,9 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
     overflow: hidden;
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-Bold.asset?fileID=11400000&guid=79e45b7605bce4026b70c4d8d01cf21b&type=2#ShipporiMinchoB1-Bold");
 }
-.hm-root .hm-rk-2 { width: 76px; flex-shrink: 0; align-items: flex-end; }
-.hm-root .hm-rk-2__v { font-size: 13px; color: var(--hm-tx-2); -unity-text-align: middle-right; }
-.hm-root .hm-rk-2__n { font-size: 11px; color: var(--hm-tx-3); -unity-text-align: middle-right; overflow: hidden; }
+.hm-root .hm-rk-2 { width: 92px; flex-shrink: 0; align-items: flex-end; }
+.hm-root .hm-rk-2__v { font-size: 16px; color: var(--hm-tx-2); -unity-text-align: middle-right; }
+.hm-root .hm-rk-2__n { font-size: 13px; color: var(--hm-tx-3); -unity-text-align: middle-right; overflow: hidden; }
 .hm-root .hm-rk--none { font-size: 13px; color: var(--hm-tx-4); }
 
 /* 個別指導：指名済み＝#F2EFE8 の角丸10（高さ52）・番号の丸はスクールカラー。空き＝点線 */

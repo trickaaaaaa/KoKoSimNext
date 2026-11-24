@@ -437,6 +437,11 @@ screens:
       - shot: 01-career
       - click: .hm-seg__btn[1]
       - shot: 02-official
+      # 名前が最長級（3字姓＋3字名）でも1位の書き出しが揃い、2位が欠けない
+      - set: {RosterService.Roster.0.Name: "小笠原 龍之介", RosterService.Roster.1.Name: "宇佐美 虎太郎", RosterService.Roster.2.Name: "大須賀 龍之介"}
+      - show: HomeDashboard
+      - click: .hm-seg__btn[0]
+      - shot: 03-long-names
 
   - id: senbatsu-watch-1265
     name: "観るだけのセンバツが大会タブと通知フィードに出る（PR #1365・issue #1265）"
