@@ -105,6 +105,8 @@ namespace KokoSim.Unity.Players
         public string GradeLabel = "1年";
         public string ThrowsBats = "右投右打";
         public bool IsCaptain;
+        /// <summary>入部の条件（約束）の1語（設計書04 §2.4。例「4番確約・1年秋の大会まで」）。約束が無ければ空。</summary>
+        public string Promise = "";
         public int TopVelocityKmh;
         public string OverallGrade = "D";
         public int OverallValue;
@@ -207,6 +209,8 @@ namespace KokoSim.Unity.Players
             };
             // 故障（設計書03 §3.5: 常に可視）。文言は engine のカタログ由来（InjuryLabel が単一ソース）。
             v.Injury = KokoSim.Unity.Shell.InjuryLabel.Full(p);
+            // 入部の条件（約束・設計書04 §2.4）。生きている約束は期限つき、決着した約束は結果つき。
+            v.Promise = KokoSim.Engine.Season.ScoutPromises.DetailText(p.Promise, p.PromiseStatus);
 
             var overall = (int)System.Math.Round(p.AverageLevel());
             v.OverallValue = overall;

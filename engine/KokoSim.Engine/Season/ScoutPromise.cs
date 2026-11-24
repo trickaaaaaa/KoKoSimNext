@@ -95,6 +95,34 @@ public static class ScoutPromises
         _ => "",
     };
 
+    /// <summary>
+    /// 約束の期限の短い言い方（選手詳細）。判定の節目（<see cref="ScoutPromiseJudge"/>）と揃える＝
+    /// 起用の約束は1年秋の大会まで・果たす約束は1年のうち（3月の年度末で決着）。
+    /// </summary>
+    public static string DeadlineLabel(ScoutPromiseKind kind) => kind switch
+    {
+        ScoutPromiseKind.Regular or ScoutPromiseKind.Cleanup or ScoutPromiseKind.TopOfOrder
+            or ScoutPromiseKind.NoPinchHitter or ScoutPromiseKind.NoBunt => "1年秋の大会まで",
+        ScoutPromiseKind.PlayAsFreshman or ScoutPromiseKind.StartingPitcher => "1年のうちに",
+        ScoutPromiseKind.RestFirstSummer => "1年夏の大会まで",
+        ScoutPromiseKind.NoConsecutiveDays => "卒業まで",
+        ScoutPromiseKind.SingleDigitNumber => "1年秋の背番号",
+        ScoutPromiseKind.Captain => "2年秋の主将指名",
+        ScoutPromiseKind.Dorm => "入部まで",
+        _ => "",
+    };
+
+    /// <summary>
+    /// 選手詳細に出す約束の1語（約束が無ければ空）。生きている約束は「条件・期限」、決着した約束は「条件（守った／破った）」。
+    /// </summary>
+    public static string DetailText(ScoutPromiseKind kind, ScoutPromiseStatus status) => status switch
+    {
+        ScoutPromiseStatus.Active => Label(kind) + "・" + DeadlineLabel(kind),
+        ScoutPromiseStatus.Kept => Label(kind) + "（守った）",
+        ScoutPromiseStatus.Broken => Label(kind) + "（破った）",
+        _ => "",
+    };
+
     /// <summary>条件を聞く会話のイベントID（<c>data/events.yaml</c>。例 <c>scout_promise_regular</c>）。</summary>
     public static string AskEventId(ScoutPromiseKind kind) => kind switch
     {

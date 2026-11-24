@@ -1185,6 +1185,8 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-meta__i { font-size: 18px; color: var(--color-muted); margin-right: 20px; }
 /* 故障中だけ警告色（UI原則②: 本当の警告にだけ使う）。健常時はこの要素自体を隠す。 */
 .pd2-meta__i--injury { color: var(--color-warn); }
+/* 入部の条件（約束）のタグの置き場（設計書04 §2.4）。タグ自体の見た目は共通部品（sbk-promise）。 */
+.pd2-meta__promise { flex-direction: row; align-self: center; }
 .pd2-overall { align-items: center; padding-left: 24px; border-left-width: 1px; border-left-color: var(--color-line); }
 .pd2-overall__k { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 2px; margin-bottom: 8px; }
 .pd2-overall__chip { flex-direction: row; }

@@ -198,10 +198,23 @@ public sealed class ScoutPromiseTests
     }
 
     [Fact]
-    public void EveryKind_HasALabel()
+    public void EveryKind_HasALabelAndADeadline()
     {
         foreach (ScoutPromiseKind k in System.Enum.GetValues(typeof(ScoutPromiseKind)))
-            if (k != ScoutPromiseKind.None) Assert.False(string.IsNullOrEmpty(ScoutPromises.Label(k)), k.ToString());
+        {
+            if (k == ScoutPromiseKind.None) continue;
+            Assert.False(string.IsNullOrEmpty(ScoutPromises.Label(k)), k.ToString());
+            Assert.False(string.IsNullOrEmpty(ScoutPromises.DeadlineLabel(k)), k.ToString());
+        }
+    }
+
+    [Fact]
+    public void DetailText_ShowsDeadlineWhileLive_AndTheOutcomeAfter()
+    {
+        Assert.Equal("4番確約・1年秋の大会まで", ScoutPromises.DetailText(ScoutPromiseKind.Cleanup, ScoutPromiseStatus.Active));
+        Assert.Equal("4番確約（守った）", ScoutPromises.DetailText(ScoutPromiseKind.Cleanup, ScoutPromiseStatus.Kept));
+        Assert.Equal("4番確約（破った）", ScoutPromises.DetailText(ScoutPromiseKind.Cleanup, ScoutPromiseStatus.Broken));
+        Assert.Equal("", ScoutPromises.DetailText(ScoutPromiseKind.None, ScoutPromiseStatus.None));
     }
 
     // ── 補助 ────────────────────────────────────────────────

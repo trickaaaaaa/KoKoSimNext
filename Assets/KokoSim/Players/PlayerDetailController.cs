@@ -97,6 +97,14 @@ namespace KokoSim.Unity.Players
             // 故障（設計書03 §3.5）: 怪我している時だけ警告色で出す（UI原則②）。
             SetDisplay("meta-injury", v.Injury.Length > 0);
             SetText("meta-injury", v.Injury);
+            // 入部の条件（約束・設計書04 §2.4）: スタメン設定・交代画面と同じ共通のタグ。約束が無ければ出さない。
+            var promiseHost = _root.Q<VisualElement>("meta-promise");
+            if (promiseHost != null)
+            {
+                promiseHost.Clear();
+                if (v.Promise.Length > 0) promiseHost.Add(UiComponents.PromiseTag(v.Promise, breaks: false));
+                promiseHost.style.display = v.Promise.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            }
 
             BuildList("pitcher-abils", v.PitcherAbilities, BuildAbil);
             BuildList("fielder-abils", v.FielderAbilities, BuildAbil);
