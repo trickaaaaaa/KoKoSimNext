@@ -46,6 +46,7 @@ namespace KokoSim.Unity.Home
 
         // 年契約の更新モーダル（issue #1034）。会話（ノベル）を読み終えたあとに開く。
         private ContractRenewalModal _renewal;
+        private DemoEndPanel _demoEnd;   // 体験版の終了画面（#1323）
 
         private void OnEnable()
         {
@@ -88,6 +89,8 @@ namespace KokoSim.Unity.Home
             _dash = _root.Q<VisualElement>("home-dash");
             _novel = new EventNovelView(_root.Q<VisualElement>("ev-novel"), OnNovelClosed);
             _renewal = new ContractRenewalModal(_root, OnRenewalClosed);
+            _demoEnd = new DemoEndPanel(_root);
+            _demoEnd.Bind();
             // 本文域は必ず見える状態から始める。UIDocument のツリーは画面を離れても生き残るので、
             // ノベルを開いたまま他タブへ移ると、隠したインライン指定が残って空のホームになる。
             SetBodyVisible(true);
@@ -96,6 +99,8 @@ namespace KokoSim.Unity.Home
 
             // 側画面の「1日進める」で回送されてきた（issue #1534 項目9）。取り出しは毎回行い、持ち越さない。
             var dayAdvanceRequested = KokoSim.Unity.Shell.WeekAdvance.TakeDayAdvanceRequest();
+            // 側画面の週送りが体験版の区切りで止まって回送されてきた（#1323）。
+            var demoEndRequested = KokoSim.Unity.Shell.DemoGate.TakeEndScreenRequest();
 
             // 他画面（練習・大会・練習試合・選手・メンバー）で週を進めて引退週／大会開幕週に入った場合は
             // ここへ回送されてくる（ScreenRouter が Pending/BannerPending を見て回送する, issue #134）。
@@ -109,6 +114,7 @@ namespace KokoSim.Unity.Home
             // 側画面で押された「1日進める」をここで実行する（日送り・試合日の開始確認・イベントはホームの押下と同じ経路）。
             else if (dayAdvanceRequested && _state.InTournament
                      && !KokoSim.Unity.Shell.GameSession.Current.ResultPending) OnAdvance();
+            else if (demoEndRequested) _demoEnd?.Show();
             // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
             else TryShowEvent();
 
@@ -148,6 +154,7 @@ namespace KokoSim.Unity.Home
             _tsRowClick = null;
             if (_novel != null) { _novel.Dispose(); _novel = null; }
             if (_renewal != null) { _renewal.Dispose(); _renewal = null; }
+            if (_demoEnd != null) { _demoEnd.Close(); _demoEnd.Unbind(); _demoEnd = null; }
 
         }
 
@@ -162,6 +169,8 @@ namespace KokoSim.Unity.Home
             if (KokoSim.Unity.Shell.UniformNumberService.Pending) { GoToUniformNumbers(); return; }
             // 年契約の更新を確定するまで週を進めない（総括が選んだ段の年額を引くため）。
             if (KokoSim.Unity.Shell.ContractRenewalService.Pending) { ContinueRenewal(); return; }
+            // 体験版は2年目の夏が全部終わったところで止める（#1323）。週を進めず終了画面を出す。
+            if (KokoSim.Unity.Shell.DemoGate.StopBeforeAdvance) { _demoEnd?.Show(); return; }
             if (_state.InTournament)
             {
                 // 試合日に着いていたら日を進めず、開始確認を出し直すだけにする。進めると「いいえ」の後に

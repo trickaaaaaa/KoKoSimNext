@@ -127,7 +127,7 @@ namespace KokoSim.Unity.CareerMeta
             return row;
         }
 
-        private static string BestResultLabel(BestResult b)
+        internal static string BestResultLabel(BestResult b)   // 体験版の終了画面（DemoEndPanel）も使う
         {
             switch (b)
             {
