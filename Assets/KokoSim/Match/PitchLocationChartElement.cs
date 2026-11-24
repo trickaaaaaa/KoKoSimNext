@@ -156,13 +156,30 @@ namespace KokoSim.Unity.Match
         {
             var plot = Plot();
             if (plot.width < 8f) return;
+            // 絶対配置の left/top は枠の内側が原点。印の描画（Painter2D）と contentRect は枠の外側が原点なので、枠の太さぶん引く。
+            var origin = new Vector2(resolvedStyle.borderLeftWidth, resolvedStyle.borderTopWidth);
             foreach (var m in _marks)
             {
-                var c = ToLocal(plot, m.X, m.Y);
+                var c = ToLocal(plot, m.X, m.Y) - origin;
                 // ラベルの箱を印の中心へ（幅は文字で決まる＝translate で中心合わせ）。
                 m.Number.style.left = c.x;
-                m.Number.style.top = c.y;
+                m.Number.style.top = c.y - DigitDropPx(m.Number);
             }
+        }
+
+        /// <summary>
+        /// 行の箱の中心から数字の字面の中心までの下がり[px]（箱は上に空きが多く、数字は基線から字高ぶんしか立たない）。
+        /// 書体の縦メトリクス（箱の中心＝(アセンダ＋ディセンダ)/2・数字の中心＝字高/2）から出すので書体・サイズが変わっても追従する。
+        /// </summary>
+        private static float DigitDropPx(Label label)
+        {
+            var asset = label.resolvedStyle.unityFontDefinition.fontAsset;
+            if (asset == null) return 0f;
+            var f = asset.faceInfo;
+            if (f.pointSize <= 0f) return 0f;
+            var boxCenter = (f.ascentLine + f.descentLine) * 0.5f;   // descentLine は負
+            var digitCenter = f.capLine * 0.5f;
+            return (boxCenter - digitCenter) / f.pointSize * label.resolvedStyle.fontSize;
         }
 
         private void OnGenerate(MeshGenerationContext mgc)
