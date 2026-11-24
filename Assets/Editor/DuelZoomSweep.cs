@@ -54,11 +54,11 @@ namespace KokoSim.UnityEditorTools
             var log = new StringBuilder();
             log.AppendLine("shot\tplay\tmaxZoom\tmarginM\tt\tballX\tballZ\tballH\tframeH_m\taimY\taimPx\tballPx\tballU\tballV");
 
-            var savedIn = DuelStageRig.FieldStationInfield;
-            var savedOut = DuelStageRig.FieldStationOutfield;
-            var savedZoom = DuelStageRig.FieldMaxZoom;
-            var savedMargin = DuelStageRig.FieldMarginM;
-            var savedFollow = DuelStageRig.FieldThrowFollowsBall;
+            var savedIn = DuelTuning.FieldStationInfield;
+            var savedOut = DuelTuning.FieldStationOutfield;
+            var savedZoom = DuelTuning.FieldMaxZoom;
+            var savedMargin = DuelTuning.FieldMarginM;
+            var savedFollow = DuelTuning.FieldThrowFollowsBall;
             try
             {
                 foreach (var (idx, label) in Plays)
@@ -105,11 +105,11 @@ namespace KokoSim.UnityEditorTools
             }
             finally
             {
-                DuelStageRig.FieldStationInfield = savedIn;
-                DuelStageRig.FieldStationOutfield = savedOut;
-                DuelStageRig.FieldMaxZoom = savedZoom;
-                DuelStageRig.FieldMarginM = savedMargin;
-                DuelStageRig.FieldThrowFollowsBall = savedFollow;
+                DuelTuning.FieldStationInfield = savedIn;
+                DuelTuning.FieldStationOutfield = savedOut;
+                DuelTuning.FieldMaxZoom = savedZoom;
+                DuelTuning.FieldMarginM = savedMargin;
+                DuelTuning.FieldThrowFollowsBall = savedFollow;
             }
 
             File.WriteAllText(Path.Combine(Dir, "zoom.tsv"), log.ToString());
@@ -119,16 +119,16 @@ namespace KokoSim.UnityEditorTools
         /// <summary>比較のあいだは2台の据え位置を同じ点に釘付けにする（1台として扱う）。</summary>
         private static void PinStation(Vector3 p)
         {
-            DuelStageRig.FieldStationInfield = p;
-            DuelStageRig.FieldStationOutfield = p;
+            DuelTuning.FieldStationInfield = p;
+            DuelTuning.FieldStationOutfield = p;
         }
 
         private static void Shot(DuelStageRig rig, StringBuilder log, PlaybackPlay play,
             float t, float maxZoom, float margin, bool throwFollowsBall, string name)
         {
-            DuelStageRig.FieldMaxZoom = maxZoom;
-            DuelStageRig.FieldMarginM = margin;
-            DuelStageRig.FieldThrowFollowsBall = throwFollowsBall;
+            DuelTuning.FieldMaxZoom = maxZoom;
+            DuelTuning.FieldMarginM = margin;
+            DuelTuning.FieldThrowFollowsBall = throwFollowsBall;
             rig.BeginFieldPlay(play, t);   // プランは Margin/MaxZoom 込みでここで組み直される
             rig.RenderNow();
             Write(rig.Target, name);

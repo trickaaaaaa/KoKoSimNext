@@ -942,13 +942,6 @@ namespace KokoSim.Unity.Match
 
         public RenderTexture Target { get; private set; }
 
-        /// <summary>
-        /// 色数制限（ポスタライズ）の段数。0または1で無効＝素通し。
-        /// 監督選定（2026-07-28・絵柄マトリクス）: 6段・輪郭なし を採用既定とした。
-        /// → 監督判定（2026-08-05・クリーン化見比べ）: **無効（1）** へ改定。ポストの実装・
-        /// ブリット経路は温存する（戻すときは 6f に上げるだけ。DuelStagePixelPost Pass0）。
-        /// </summary>
-        public static float PosterizeLevels = 1f;
 
         private RenderTexture _colorRt;   // ポスト前のカメラ出力（ポスタライズ有効時のみ生成）
         private Material _postMat;
@@ -1098,10 +1091,6 @@ namespace KokoSim.Unity.Match
         /// <summary>撮影用（issue #938）: バットの軸（ノブ→バレル。ワールド）。バットを出していなければ零。</summary>
         public Vector3 BatCenterForCapture => _bat != null && _bat.activeSelf ? _bat.transform.localPosition : Vector3.zero;
         public Vector3 BatAxisForCapture => _bat != null && _bat.activeSelf ? _bat.transform.up : Vector3.zero;
-        /// <summary>撮影用（issue #938）: 真にするとバントの水平固定を切る＝修正前の絵と比べるため。</summary>
-        public static bool BuntFlatDisabledForCapture;
-        /// <summary>スクショ用（issue #1087 の見比べ）: バント中も握りを詰め、バットを両手の中点で真横に持たせる旧挙動へ戻す。</summary>
-        public static bool BuntGripOldForCapture;
 #endif
 
         private sealed class Actor
@@ -1785,11 +1774,7 @@ namespace KokoSim.Unity.Match
             // 上の手はバットの中ほど」の正しい構えなのに、スイング用の補正（両手を GripGapM 0.10m へ寄せる。
             // 窓は GripEndSec 2.60s まで＝1.1〜1.8秒のバント系クリップは全区間）が潰していた。
             // 重みはバットを寝かせる補正と同じ（移行の進み・クロスフェードの補間込み）＝手が1コマで飛ばない
-            float gripW = 1f;
-#if UNITY_EDITOR
-            if (!BuntGripOldForCapture)
-#endif
-                gripW = 1f - BuntBatFlatWeight();
+            float gripW = 1f - BuntBatFlatWeight();
             DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim, gripW);
         }
 
@@ -2745,7 +2730,7 @@ namespace KokoSim.Unity.Match
             _batter.Speed = k;   // SetActorClip の後（差し替えで持ち越さないため）
             _batter.HoldSeconds = hold;   // 同上（SetActorClip が保留中の据え置きを打ち消す）
 #if UNITY_EDITOR
-            if (SwingAnchorOverrideForCapture > 0f) anchorClipSec = SwingAnchorOverrideForCapture;
+            if (DuelTuning.SwingAnchorOverrideForCapture > 0f) anchorClipSec = DuelTuning.SwingAnchorOverrideForCapture;
 #endif
             // 見逃しのタイミング取りはバット軌道を武装しない（接触の時刻を 0 にすると SwingBatAxis は
             // 構えで焼いた向きをそのまま返す＝トップでも手に付いて平行移動するだけ）。軌跡（#444）も出さない。
@@ -2854,9 +2839,6 @@ namespace KokoSim.Unity.Match
             // 横へ動き出していた＝最初から捕れないと分かっている絵。反応までは普段どおり構えて待ち、
             // クリップは「捕り損ねる瞬間の反応時間前」から頭出しする（動き出しの区間を飛ばす）。
             float react = Mathf.Min(PassedBallReactSeconds, PassedBallAnchors[index].Moment);
-#if UNITY_EDITOR
-            if (PassedBallOldForCapture) react = PassedBallAnchors[index].Moment;
-#endif
             _passedBallSeek = PassedBallAnchors[index].Moment - react;
             float start = _ballArrival - react;
             if (start > 0f) _passedBallCountdown = start;
@@ -2869,9 +2851,6 @@ namespace KokoSim.Unity.Match
             if (_passedBallIndex < 0 || _catcher == null) return;
             var clip = _passedBallClips[_passedBallIndex];
             float fade = PassedBallFadeSeconds;
-#if UNITY_EDITOR
-            if (PassedBallOldForCapture) fade = 0f;
-#endif
             CrossfadeActorToClip(_catcher, clip, Mathf.Max(0f, seek), 0f, fade);
         }
 
@@ -2884,10 +2863,6 @@ namespace KokoSim.Unity.Match
         private const float PassedBallFadeSeconds = 0.08f;
         /// <summary>後逸クリップを頭出しするクリップ内秒（Moment − 反応時間）。</summary>
         private float _passedBallSeek;
-#if UNITY_EDITOR
-        /// <summary>スクショ用（issue #1088 の見比べ）: 真にするとリリースの瞬間から後逸クリップを流す旧挙動へ戻す。</summary>
-        public static bool PassedBallOldForCapture;
-#endif
 
         /// <summary>
         /// コースに一番近い捕球クリップの添字（無ければ-1＝捕手は待機のまま）。
@@ -4092,7 +4067,7 @@ namespace KokoSim.Unity.Match
         private void OnEndCameraRendering(UnityEngine.Rendering.ScriptableRenderContext ctx, Camera cam)
         {
             if (cam != _camera || _postMat == null || _colorRt == null || Target == null) return;
-            if (PosterizeLevels < 2f)
+            if (DuelTuning.PosterizeLevels < 2f)
             {
                 Graphics.Blit(_colorRt, Target);
                 DrawStrikeZone();
@@ -4101,7 +4076,7 @@ namespace KokoSim.Unity.Match
                 DrawRattledFx();
                 return;
             }
-            _postMat.SetFloat("_PosterLevels", PosterizeLevels);
+            _postMat.SetFloat("_PosterLevels", DuelTuning.PosterizeLevels);
             Graphics.Blit(_colorRt, Target, _postMat, 0);
             DrawStrikeZone();   // ポスタライズの**後**。前に置くと薄さが量子化に潰される（下の説明）
             DrawBatTrail();     // 打球の残像より**先**＝接触の瞬間は打球の線を上に出したい
@@ -4191,11 +4166,11 @@ namespace KokoSim.Unity.Match
             // 詰めた尾の長さ・太さ（0.28s/0.045m＝本塁付近で約10px）のままだと1px未満の点になる
             // （issue #398 ①）。フィールド専用の値へ差し替える（FieldMaxZoom 等と同じ「絵で決める」枠）
             bool inField = _fieldPlay != null;
-            float span = Mathf.Max(0.02f, inField ? FieldBattedTrailSeconds : _cal.BattedTrailSeconds);
-            float halfW = Mathf.Max(0.001f, inField ? FieldBattedTrailWidthM : _cal.BattedTrailWidthM) * 0.5f;
+            float span = Mathf.Max(0.02f, inField ? DuelTuning.FieldBattedTrailSeconds : _cal.BattedTrailSeconds);
+            float halfW = Mathf.Max(0.001f, inField ? DuelTuning.FieldBattedTrailWidthM : _cal.BattedTrailWidthM) * 0.5f;
             // 色はリニア空間へ自分で落とす（掟: 即時モードは自動変換が効かない）。アルファは変換しない
             var baseCol = _cal.BattedTrailColor.linear;
-            float headA = Mathf.Clamp01(inField ? FieldBattedTrailAlpha : _cal.BattedTrailAlpha);
+            float headA = Mathf.Clamp01(inField ? DuelTuning.FieldBattedTrailAlpha : _cal.BattedTrailAlpha);
             var tr = _root.transform;
             var eye = _camera.transform.position;
 
@@ -5340,10 +5315,6 @@ namespace KokoSim.Unity.Match
         /// <summary>この球はバットに当たるか（ミート・ファウル）。空振りは当てない＝向けてはいけない。</summary>
         private bool _batAimsBall;
 
-#if UNITY_EDITOR
-        /// <summary>【実測プローブ用】接触のクリップ時刻を差し替える（負＝既定のまま）。</summary>
-        internal static float SwingAnchorOverrideForCapture = -1f;
-#endif
 
         /// <summary>
         /// 振り下ろしに使う長さを**ポーズのコマ数**で持つ（秒でなく）。収録の振り下ろしは 0.11 クリップ秒＝
@@ -5370,20 +5341,12 @@ namespace KokoSim.Unity.Match
         private const float BatWrapDeg = 250f;
         private const float BatWrapFrames = 1.6f;
 
-#if UNITY_EDITOR
-        /// <summary>【実測プローブ用】<see cref="SwingFinishSec"/> を差し替える（負＝既定のまま）。</summary>
-        internal static float SwingFinishOverrideForCapture = -1f;
-        /// <summary>【実測プローブ用】<see cref="BuntHitFinishSec"/> を差し替える（負＝既定のまま）。</summary>
-        internal static float BuntHitFinishOverrideForCapture = -1f;
-        /// <summary>【実測プローブ用】<see cref="BatWrapFrames"/> を差し替える（負＝既定のまま）。</summary>
-        internal static float BatWrapFramesOverrideForCapture = -1f;
-#endif
 
         private static float EffectiveSwingFinishSec()
         {
             float v = SwingFinishSec;
 #if UNITY_EDITOR
-            if (SwingFinishOverrideForCapture > 0f) v = SwingFinishOverrideForCapture;
+            if (DuelTuning.SwingFinishOverrideForCapture > 0f) v = DuelTuning.SwingFinishOverrideForCapture;
 #endif
             return v;
         }
@@ -5392,7 +5355,7 @@ namespace KokoSim.Unity.Match
         {
             float v = BuntHitFinishSec;
 #if UNITY_EDITOR
-            if (BuntHitFinishOverrideForCapture > 0f) v = BuntHitFinishOverrideForCapture;
+            if (DuelTuning.BuntHitFinishOverrideForCapture > 0f) v = DuelTuning.BuntHitFinishOverrideForCapture;
 #endif
             return v;
         }
@@ -5401,7 +5364,7 @@ namespace KokoSim.Unity.Match
         {
             float v = BatWrapFrames;
 #if UNITY_EDITOR
-            if (BatWrapFramesOverrideForCapture > 0f) v = BatWrapFramesOverrideForCapture;
+            if (DuelTuning.BatWrapFramesOverrideForCapture > 0f) v = DuelTuning.BatWrapFramesOverrideForCapture;
 #endif
             return v;
         }
@@ -5429,13 +5392,9 @@ namespace KokoSim.Unity.Match
         /// この帯は駆動そのものでなく「手より先に回らない」ための安全弁なので、効かなくなる所まで広げてよい。
         private const float BatSweepReachM = 0.55f;
 
-#if UNITY_EDITOR
-        /// <summary>【実測プローブ用】上の帯の差し替え（負＝既定）。</summary>
-        internal static float SweepReachOverrideForCapture = -1f;
-#endif
         private static float SweepReach =>
 #if UNITY_EDITOR
-            SweepReachOverrideForCapture > 0f ? SweepReachOverrideForCapture :
+            DuelTuning.SweepReachOverrideForCapture > 0f ? DuelTuning.SweepReachOverrideForCapture :
 #endif
             BatSweepReachM;
 
@@ -5726,15 +5685,9 @@ namespace KokoSim.Unity.Match
                 // 握り点（両掌の中点）は下で今どおり手に追従させるので、バットは手から離れない。
                 // 移行（Idle_To_Bunt）は進みに応じて寝かせ、クロスフェード中は重みを補間する＝1コマで寝る／起きる飛びを出さない。
                 float buntFlat = BuntBatFlatWeight();
-#if UNITY_EDITOR
-                if (BuntFlatDisabledForCapture) buntFlat = 0f;
-#endif
                 // バントは「下の手＝ノブ、上の手がバットの中ほど」（issue #1087）。握りを詰めなくなったので両手は
                 // 収録どおり離れており、握り線（ノブ側の手→もう一方の手）がそのままバットの線になる。
                 bool buntHands = buntFlat > 0.001f;
-#if UNITY_EDITOR
-                if (BuntGripOldForCapture) buntHands = false;
-#endif
                 Vector3 knobHand = Vector3.zero;
                 if (buntHands)
                 {
@@ -7023,18 +6976,7 @@ namespace KokoSim.Unity.Match
         //              Available=false へ落ちる＝購入資産が無い環境の従来挙動と同じ
         // 索引の中身の鮮度は DuelAssetCatalogBaker の検証メニューが見る。
 
-        /// <summary>
-        /// 【開発用】AssetDatabase を使わず**索引だけ**で組む（＝Player ビルドと同じ経路）。
-        /// エディタのロードは AssetDatabase を先に見るので、索引が壊れていても手元では絵が出る。
-        /// ビルドを作らずにビルド経路を確かめるための唯一の入口。
-        /// </summary>
-        public static bool ForceCatalogOnly;
 
-        /// <summary>
-        /// 【開発用】購入素体を無視してU2素体で組む（issue #621）。購入素体は gitignore 配下で
-        /// 手元に無い環境がある＝U2側にも実装が要る作り（帽子つばの塗り分け等）を、素体を消さずに確かめる。
-        /// </summary>
-        public static bool ForceU2Body;
 
         private static DuelAssetCatalog _catalog;
         private static bool _catalogTried;
@@ -7051,18 +6993,14 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        /// <summary>【開発用】体型比較撮影向けに素体FBXを差し替える（null=既定のSuperhero Male）。
-        /// 素体を替える時は対応する着衣ベイク資産（UniformMeshOverrideForCapture）も揃えること＝
-        /// ベイクは bindposes/boneWeights を素体からコピーするため、素体と着衣メッシュは必ず同源で組。</summary>
-        internal static string BodyFbxOverrideForCapture;
 
         private static GameObject LoadBody()
         {
 #if UNITY_EDITOR
-            if (!ForceCatalogOnly)
+            if (!DuelTuning.ForceCatalogOnly)
             {
                 var fromDb = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-                    BodyFbxOverrideForCapture ?? BodyFbx);
+                    DuelTuning.BodyFbxOverrideForCapture ?? BodyFbx);
                 if (fromDb != null) return fromDb;
             }
 #endif
@@ -7085,9 +7023,9 @@ namespace KokoSim.Unity.Match
         {
             // 【検証用】購入素体が手元に無い環境（＝U2素体へ落ちる経路）を、素体を消さずに再現する。
             // 帽子つばの塗り分けのように**素体ごとに実装が別**な作りでは、こちらの経路も絵で確かめる要がある。
-            if (ForceU2Body) return null;
+            if (DuelTuning.ForceU2Body) return null;
 #if UNITY_EDITOR
-            if (!ForceCatalogOnly)
+            if (!DuelTuning.ForceCatalogOnly)
             {
                 var fromDb = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(VendorBodyFbx);
                 if (fromDb != null) return fromDb;
@@ -7115,7 +7053,7 @@ namespace KokoSim.Unity.Match
                     r.gameObject.SetActive(false);
                     continue;
                 }
-                var mesh = ForceCatalogOnly ? null : UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
+                var mesh = DuelTuning.ForceCatalogOnly ? null : UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
                     VendorRegionMeshDir + r.name + VendorRegionMeshSuffix);
                 if (mesh == null && Catalog != null) mesh = Catalog.FindRegionMesh(r.name);
                 if (mesh == null) { all = false; continue; }
@@ -7153,19 +7091,13 @@ namespace KokoSim.Unity.Match
 #endif
         }
 
-        /// <summary>
-        /// 着衣メッシュ（DuelUniformBaker のベイク資産）。素体と同じくエディタ限定ロード。
-        /// 無ければ null＝素体のまま出す（警告のみ・対決ビューは止めない）。
-        /// </summary>
-        /// <summary>【開発用】比較シート撮影向けに着衣メッシュ資産を差し替える（null=既定のSlim0）。</summary>
-        internal static string UniformMeshOverrideForCapture;
 
         private static Mesh LoadUniformMesh()
         {
 #if UNITY_EDITOR
-            if (!ForceCatalogOnly)
+            if (!DuelTuning.ForceCatalogOnly)
             {
-                var path = UniformMeshOverrideForCapture ?? UniformMeshAsset;
+                var path = DuelTuning.UniformMeshOverrideForCapture ?? UniformMeshAsset;
                 var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(path);
                 if (mesh != null) return mesh;
                 Debug.LogWarning("[DuelStageRig] uniform mesh not baked (" + path
@@ -7183,10 +7115,10 @@ namespace KokoSim.Unity.Match
         private static Mesh LoadUmpireMesh()
         {
 #if UNITY_EDITOR
-            if (!ForceCatalogOnly)
+            if (!DuelTuning.ForceCatalogOnly)
             {
                 var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
-                    UniformMeshOverrideForCapture ?? UmpireMeshAsset);
+                    DuelTuning.UniformMeshOverrideForCapture ?? UmpireMeshAsset);
                 if (mesh != null) return mesh;
                 Debug.LogWarning("[DuelStageRig] umpire mesh not baked (" + UmpireMeshAsset
                     + ") - run KokoSim.EditorTools.DuelUniformBaker.BakeAll()");
@@ -7209,7 +7141,7 @@ namespace KokoSim.Unity.Match
         public static AnimationClip LoadClip(string clipName)
         {
 #if UNITY_EDITOR
-            if (!ForceCatalogOnly)
+            if (!DuelTuning.ForceCatalogOnly)
             {
                 // 場面の Tick が毎フレーム呼ぶ＝FBX 全体をなめ直さない（Unity の破棄済み参照は null 扱いで引き直す）
                 if (EditorClipCache.TryGetValue(clipName, out var cached) && cached != null) return cached;

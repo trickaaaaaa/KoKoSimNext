@@ -59,8 +59,6 @@ namespace KokoSim.Unity.Match
         /// <summary>ベンチから出てくる役者の上限（ベンチ入りの上限＝AiUniformNumbers.BenchSize）。</summary>
         public const int WalkoffPoolMax = 20;
 
-        /// <summary>人だかりの中心（本塁の少し前。ステージ座標 m）。勝ち越しの走者（本塁打なら打者）がここに立つ。</summary>
-        public static Vector2 WalkoffCenter = new Vector2(0.0f, 3.0f);
         /// <summary>輪の半径[m]と、その輪に並べる人数（内から）。0.9m以上空くように決めてある。</summary>
         private static readonly float[] WoRingRadius = { 1.15f, 2.0f, 2.85f, 3.7f };
         private static readonly int[] WoRingCapacity = { 6, 11, 16, 21 };
@@ -407,14 +405,14 @@ namespace KokoSim.Unity.Match
                 {
                     float deg = off + 360f * j / n;
                     float r = deg * Mathf.Deg2Rad;
-                    slots.Add(WalkoffCenter + new Vector2(Mathf.Sin(r), Mathf.Cos(r)) * WoRingRadius[ring]);
+                    slots.Add(DuelTuning.WalkoffCenter + new Vector2(Mathf.Sin(r), Mathf.Cos(r)) * WoRingRadius[ring]);
                     slotCheer.Add(WoCheerForSlot(ring, j, n));
                 }
             }
             var free = new List<WoMember>();
             foreach (var m in _woMembers)
             {
-                if (m.Winner) m.Slot = WalkoffCenter;
+                if (m.Winner) m.Slot = DuelTuning.WalkoffCenter;
                 else free.Add(m);
             }
             // 来る方向（いまの位置。走者は再生の位置）で近い場所を貪欲に割り当てる
@@ -422,13 +420,13 @@ namespace KokoSim.Unity.Match
             {
                 if (free.Count == 0) break;
                 var slot = slots[si];
-                float sa = Mathf.Atan2(slot.x - WalkoffCenter.x, slot.y - WalkoffCenter.y);
+                float sa = Mathf.Atan2(slot.x - DuelTuning.WalkoffCenter.x, slot.y - DuelTuning.WalkoffCenter.y);
                 int bi = 0;
                 float bd = float.PositiveInfinity;
                 for (int i = 0; i < free.Count; i++)
                 {
                     var p = MemberPos(free[i]);
-                    float ma = Mathf.Atan2(p.x - WalkoffCenter.x, p.y - WalkoffCenter.y);
+                    float ma = Mathf.Atan2(p.x - DuelTuning.WalkoffCenter.x, p.y - DuelTuning.WalkoffCenter.y);
                     float d = Mathf.Abs(Mathf.DeltaAngle(sa * Mathf.Rad2Deg, ma * Mathf.Rad2Deg));
                     if (d < bd) { bd = d; bi = i; }
                 }
@@ -711,8 +709,8 @@ namespace KokoSim.Unity.Match
         private void FaceWo(WoMember m, float dt)
         {
             var target = m.Winner
-                ? WalkoffCenter + new Vector2(_woBench1B ? 5f : -5f, 2f)
-                : WalkoffCenter;
+                ? DuelTuning.WalkoffCenter + new Vector2(_woBench1B ? 5f : -5f, 2f)
+                : DuelTuning.WalkoffCenter;
             float want = YawToward(m.Pos, target);
             m.Yaw = Mathf.MoveTowardsAngle(m.Yaw, want, 260f * dt);
             PlaceFielder(m.A, m.Pos.x, m.Pos.y, m.Yaw);

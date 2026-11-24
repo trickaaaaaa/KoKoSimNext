@@ -3752,7 +3752,7 @@ namespace KokoSim.Unity.Match
         /// 打ち切りをハードカットより確実に手前で終わらせることで、そのコマを再生の外へ出す。
         ///
         /// <para>⚠ 全景ハードカットは廃止した（issue field-view-cut-back-sooner ④・
-        /// <see cref="DuelStageRig.FieldReturnsToWide"/>）ので、この clamp が守っていた「全景の1コマ」
+        /// <see cref="DuelTuning.FieldReturnsToWide"/>）ので、この clamp が守っていた「全景の1コマ」
         /// はもう出ない。それでも残しているのは<b>打席途中プレーの尺そのもの</b>が
         /// この値で決まっているため（外すと盗塁・牽制の再生が伸びる＝この issue が頼まれていない変更に
         /// なる）。旧挙動（FieldReturnsToWide=true）へ戻したときの保険も兼ねる。</para>
@@ -4842,7 +4842,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 撮影ハーネス用: 対決ステージを作り直す（着衣メッシュの差し替え比較=痩せ3段シート用。
-        /// DuelStageRig.UniformMeshOverrideForCapture を変えてから呼ぶ）。表示中なら新RTを結線し直す。
+        /// DuelTuning.UniformMeshOverrideForCapture を変えてから呼ぶ）。表示中なら新RTを結線し直す。
         /// </summary>
         internal void RebuildDuelRigForCapture()
         {

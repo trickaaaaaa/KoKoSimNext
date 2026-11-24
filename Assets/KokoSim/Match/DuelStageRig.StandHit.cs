@@ -25,12 +25,6 @@ namespace KokoSim.Unity.Match
         private static bool IsBallStopPart(string name)
             => name.StartsWith("stand_outfield") || name == "backscreen" || name == "scoreboard";
 
-        /// <summary>跳ねている時間[s]。**絵で決める値**。</summary>
-        public static float StandHopSeconds = 0.6f;
-        /// <summary>跳ねの高さ＝入射速さ×この係数（上限・下限つき）[m]。</summary>
-        public static float StandHopHeightPerMps = 0.05f;
-        /// <summary>跳ねで進む距離＝入射の水平速さ×この係数[m]。座席の段を1〜3段ぶん転がる程度。</summary>
-        public static float StandHopRunPerMps = 0.08f;
 
         private HomeRunStyle _hrStyle = HomeRunStyle.Standard;
         private bool _hrFence;        // 柵を越えた瞬間が求まったか
@@ -38,16 +32,6 @@ namespace KokoSim.Unity.Match
         private Vector3 _hrFenceLocal; // 柵を越えた瞬間の球（_root 基準）
 
         // ── 当たりの種類ごとのカメラ（issue #704。監督決定: テロップは出さずカメラだけで見せ分ける） ──
-        /// <summary>弾丸ライナーの追従の速さ（パン・ズームの速度上限に掛ける倍率）。**絵で決める値**。</summary>
-        public static float LinerCamSpeedScale = 2.2f;
-        /// <summary>ぎりぎりの本塁打で、柵を越える瞬間に寄せる縦の実寸[m]。</summary>
-        public static float WallFrameH = 13f;
-        /// <summary>柵を越える何秒前から寄せ始めるか／寄せ切るか[s]。</summary>
-        public static float WallBlendStartSeconds = 0.9f;
-        public static float WallBlendFullSeconds = 0.35f;
-        /// <summary>寄せを抜き始める時刻＝着弾から（スタンドに当たらないときは柵を越えてから）の据え置き[s]と、抜けきるまでの秒数[s]。</summary>
-        public static float WallNoHitHoldSeconds = 0.5f;
-        public static float WallReleaseSeconds = 0.55f;
 
         private bool _hrHit;
         private float _hrHitT;
@@ -103,9 +87,9 @@ namespace KokoSim.Unity.Match
                         _hrHitT = t - step + step * frac;
                         _hrHitPos = root.InverseTransformPoint(hit.point);
                         var vel = (cur - prev) / step;
-                        _hrHopH = Mathf.Clamp(vel.magnitude * StandHopHeightPerMps, 0.3f, 2.2f);
+                        _hrHopH = Mathf.Clamp(vel.magnitude * DuelTuning.StandHopHeightPerMps, 0.3f, 2.2f);
                         var horiz = new Vector3(vel.x, 0f, vel.z);
-                        float run = Mathf.Clamp(horiz.magnitude * StandHopRunPerMps, 0.4f, 3.0f);
+                        float run = Mathf.Clamp(horiz.magnitude * DuelTuning.StandHopRunPerMps, 0.4f, 3.0f);
                         var restXZ = _hrHitPos + horiz.normalized * run;
                         _hrRestPos = SurfaceBelow(restXZ, out var restY) ? new Vector3(restXZ.x, restY, restXZ.z) : _hrHitPos;
                         float fenceR = FenceR(Mathf.Atan2(_hrHitPos.x, _hrHitPos.z));
@@ -130,7 +114,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>この打球のカメラの速度上限に掛ける倍率（弾丸ライナーだけ速く追う）。</summary>
         private float HomeRunCamSpeedScale
-            => _fieldPlay != null && _hrStyle == HomeRunStyle.Liner ? LinerCamSpeedScale : 1f;
+            => _fieldPlay != null && _hrStyle == HomeRunStyle.Liner ? DuelTuning.LinerCamSpeedScale : 1f;
 
         /// <summary>
         /// 当たりの種類ごとに守備カメラの枠を上書きする（<see cref="ComputeFieldFrame"/> の最後に呼ぶ）。
@@ -145,15 +129,15 @@ namespace KokoSim.Unity.Match
             {
                 case HomeRunStyle.Wall when _hrFence:
                 {
-                    float w = Mathf.InverseLerp(_hrFenceT - WallBlendStartSeconds, _hrFenceT - WallBlendFullSeconds, t);
+                    float w = Mathf.InverseLerp(_hrFenceT - DuelTuning.WallBlendStartSeconds, _hrFenceT - DuelTuning.WallBlendFullSeconds, t);
                     w = w * w * (3f - 2f * w);
-                    float releaseT = _hrHit ? _hrHitT : _hrFenceT + WallNoHitHoldSeconds;
-                    float r = Mathf.Clamp01((t - releaseT) / Mathf.Max(1e-3f, WallReleaseSeconds));
+                    float releaseT = _hrHit ? _hrHitT : _hrFenceT + DuelTuning.WallNoHitHoldSeconds;
+                    float r = Mathf.Clamp01((t - releaseT) / Mathf.Max(1e-3f, DuelTuning.WallReleaseSeconds));
                     w *= 1f - r * r * (3f - 2f * r);
                     if (w <= 0f) return;
                     var fenceAim = new Vector3(_hrFenceLocal.x, Mathf.Max(FieldAimYMin, FenceHeightM * 0.6f), _hrFenceLocal.z);
                     aim = Vector3.Lerp(aim, fenceAim, w);
-                    frameH = Mathf.Lerp(frameH, WallFrameH, w);
+                    frameH = Mathf.Lerp(frameH, DuelTuning.WallFrameH, w);
                     return;
                 }
                 case HomeRunStyle.Towering:
@@ -163,7 +147,7 @@ namespace KokoSim.Unity.Match
                     if (flight == null) return;
                     float apex = Mathf.Max(0f, (float)flight.At((flight.T1 - flight.T0) * 0.5).H);
                     aim.y = Mathf.Max(aim.y, apex * 0.5f);
-                    frameH = Mathf.Max(frameH, apex + FieldMarginM * 2f);
+                    frameH = Mathf.Max(frameH, apex + DuelTuning.FieldMarginM * 2f);
                     return;
                 }
             }
@@ -173,7 +157,7 @@ namespace KokoSim.Unity.Match
         private Vector3? StandHitBallPoint(float t)
         {
             if (!_hrHit || t < _hrHitT) return null;
-            float u = Mathf.Clamp01((t - _hrHitT) / Mathf.Max(1e-3f, StandHopSeconds));
+            float u = Mathf.Clamp01((t - _hrHitT) / Mathf.Max(1e-3f, DuelTuning.StandHopSeconds));
             var p = Vector3.Lerp(_hrHitPos, _hrRestPos, u);
             p.y += _hrHopH * 4f * u * (1f - u);
             return p;

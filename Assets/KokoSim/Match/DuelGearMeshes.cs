@@ -43,7 +43,7 @@ namespace KokoSim.Unity.Match
         internal static readonly string[] OptionalPaths = { VendorGlovePath };
 
         /// <summary>
-        /// 読み込み済みの装備を捨てる。<see cref="DuelStageRig.ForceCatalogOnly"/> を切り替えて
+        /// 読み込み済みの装備を捨てる。<see cref="DuelTuning.ForceCatalogOnly"/> を切り替えて
         /// ビルド経路を確かめるときに呼ぶ（キャッシュが残っていると切り替えが絵に出ない）。
         /// </summary>
         internal static void ClearCache()
@@ -172,7 +172,7 @@ namespace KokoSim.Unity.Match
         {
             GameObject prefab = null;
 #if UNITY_EDITOR
-            if (!DuelStageRig.ForceCatalogOnly)
+            if (!DuelTuning.ForceCatalogOnly)
                 prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
 #endif
             // ビルドは索引だけ（AssetDatabase が無い）。エディタでも ForceCatalogOnly ならこちら

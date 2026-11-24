@@ -37,35 +37,11 @@ namespace KokoSim.Unity.Match
         /// <summary>打者の歩きの収録の前進量[m/s]（1.33秒で0.95m）。</summary>
         private const float OtBatterWalkVClip = 0.71f;
 
-        /// <summary>打者が打席を外して下がる距離[m]（本塁から遠ざかる向き）。</summary>
-        public static float OtBatterBackM = 1.3f;
-        /// <summary>打者のベンチ側に並ぶ伝令との間隔[m]（腰と腰）。耳打ちで伝令の口と打者の耳が 0.2〜0.3m に収まる所。</summary>
-        public static float OtPairGapM = 0.55f;
-        /// <summary>並んだ2人が互いへ向き合う角度[度]（センター方向から内へ）。</summary>
-        public static float OtFaceInDeg = 30f;
-        /// <summary>2人が揃ってから耳打ちしている秒数[s]。</summary>
-        public static float OtTalkSeconds = 3.6f;
-        /// <summary>散り始めてから畳むまでの下限[s]（打者が打席へ戻り着く方が遅ければそちら）。</summary>
-        public static float OtLeaveMinSeconds = 2.0f;
 
-        /// <summary>耳打ちで伝令の上体を打者へ傾ける角度[度]。</summary>
-        public static float OtLeanDeg = 20f;
-        /// <summary>打者のうなずきの深さ[度]と回数。</summary>
-        public static float OtNodDeg = 13f;
         private const int OtNodCount = 3;
         /// <summary>打者が首を伝令へ向ける上限[度]（胴の正面から）。</summary>
         private const float OtHeadTurnMaxDeg = 65f;
 
-        /// <summary>
-        /// カメラ（2人の中点からの相対[m]。x は打者の側の符号を掛けて左右を映す＝+が本塁から遠い側）。
-        /// 正面のやや外側から2人の顔と、奥に本塁・捕手を入れる（2026-11-21 監督決定。本塁側の斜め前・外側の真横寄りの
-        /// 案と録画で見比べて選んだ）。
-        /// </summary>
-        public static Vector3 OtCameraOffset = new Vector3(1.6f, 1.5f, 5.2f);
-        /// <summary>縦に収めたい実寸[m]（2人の全身と足元の打席。寄りすぎない＝3d-character.md）。</summary>
-        public static float OtFrameHeightM = 4.6f;
-        /// <summary>注視点の高さ[m]。胸より下を見て2人を上寄せにし、下に出るテロップと重ねない。</summary>
-        public static float OtLookY = -0.25f;
 
         private enum OtLeg { Back, Turn, Talk, Leave, Done }
         private enum OtMsgLeg { Wait, Run, Decel, WalkIn, Turn, Talk, LeaveWalk, LeaveRun }
@@ -107,19 +83,19 @@ namespace KokoSim.Unity.Match
             _otSide = _batterLeft ? 1f : -1f;
             var bp = StagePos(_batter);
             _otB0 = new Vector2(bp.x, bp.z);
-            _otB1 = _otB0 + new Vector2(_otSide * OtBatterBackM, 0f);
+            _otB1 = _otB0 + new Vector2(_otSide * DuelTuning.OtBatterBackM, 0f);
             // 伝令はベンチから一直線に来て、打者の**ベンチ側**に並ぶ（2026-11-21 監督指摘「打者の前でかくっと
             // 曲がらず一直線に」）。ベンチが打者と反対側（後攻の右打者など）なら本塁側に立つ＝一直線の道が
             // 打者の体を突き抜けない。耳打ちの手・首の向きは立った側から決まる（ApplyWhisperPose）
             float s = benchFirstBaseSide ? 1f : -1f;
-            _otM = _otB1 + new Vector2(s * OtPairGapM, 0f);
-            _otBatterTalkYaw = s * OtFaceInDeg;     // センター方向から伝令の側へ
-            _otMsgTalkYaw = -s * OtFaceInDeg;       // センター方向から打者の側へ
+            _otM = _otB1 + new Vector2(s * DuelTuning.OtPairGapM, 0f);
+            _otBatterTalkYaw = s * DuelTuning.OtFaceInDeg;     // センター方向から伝令の側へ
+            _otMsgTalkYaw = -s * DuelTuning.OtFaceInDeg;       // センター方向から打者の側へ
 
             var bench = new Vector2(TimeoutBenchFront1B.x * s, TimeoutBenchFront1B.y);
             var from = bench - _otM;
             float d = from.magnitude;
-            _otMsgStart = d > TimeoutStartRadiusM ? _otM + from / d * TimeoutStartRadiusM : bench;
+            _otMsgStart = d > DuelTuning.TimeoutStartRadiusM ? _otM + from / d * DuelTuning.TimeoutStartRadiusM : bench;
 
             // 打者: 本塁を向いたまま後ろ歩きで下がる
             _batter.HoldAtEnd = false;
@@ -172,15 +148,15 @@ namespace KokoSim.Unity.Match
         private void ApplyOffenseTimeoutCamera()
         {
             var mid = (_otB1 + _otM) * 0.5f;
-            var off = OtCameraOffset;
+            var off = DuelTuning.OtCameraOffset;
             // x は「本塁から遠い側＝+」の相対値。打者の側（_otSide＝本塁から遠い向き）を掛ける
             var pos = new Vector3(mid.x + off.x * _otSide, off.y, mid.y + off.z);
-            FramePreview(pos, new Vector3(mid.x, OtLookY, mid.y), OtFrameHeightM);
+            FramePreview(pos, new Vector3(mid.x, DuelTuning.OtLookY, mid.y), DuelTuning.OtFrameHeightM);
         }
 
         /// <summary>場面が終わった（伝令が去り、打者が打席へ戻り着いた）か。</summary>
         private bool OffenseTimeoutSceneDone => _otActive && _otLeaveStartT >= 0f
-            && _otT - _otLeaveStartT >= OtLeaveMinSeconds && _otBatterLeg == OtLeg.Done;
+            && _otT - _otLeaveStartT >= DuelTuning.OtLeaveMinSeconds && _otBatterLeg == OtLeg.Done;
 
         /// <summary>1コマ進める（ポーズを進めた後）。<paramref name="posed"/>＝このコマでポーズを評価し直したか。</summary>
         private void StepOffenseTimeoutScene(float dt, bool posed)
@@ -191,7 +167,7 @@ namespace KokoSim.Unity.Match
             StepOtMessenger(dt);
 
             if (_otTalkStartT < 0f && _otBatterLeg == OtLeg.Talk && _otMsgLeg == OtMsgLeg.Talk) _otTalkStartT = _otT;
-            if (_otTalkStartT >= 0f && _otLeaveStartT < 0f && _otT - _otTalkStartT >= OtTalkSeconds) BeginOtLeave();
+            if (_otTalkStartT >= 0f && _otLeaveStartT < 0f && _otT - _otTalkStartT >= DuelTuning.OtTalkSeconds) BeginOtLeave();
 
             // 耳打ちの効き: 話し始めで寄せ、散り始めで戻す
             float wantW = _otTalkStartT >= 0f && _otLeaveStartT < 0f ? 1f : 0f;
@@ -284,7 +260,7 @@ namespace KokoSim.Unity.Match
                     break;
                 case OtMsgLeg.Run:
                 {
-                    speed = TimeoutRunSpeed;
+                    speed = DuelTuning.TimeoutRunSpeed;
                     // 残りの道のりが減速＋歩きの分になったら落とす
                     if (Vector2.Distance(_otMsgPos, _otM) <= TimeoutDecelM + 0.6f)
                     {
@@ -298,7 +274,7 @@ namespace KokoSim.Unity.Match
                 case OtMsgLeg.Decel:
                 {
                     float u = Mathf.Clamp01(_otMsgLegT / OverrunDecelEndsAt);
-                    speed = Mathf.Lerp(TimeoutRunSpeed, TimeoutWalkSpeed, u);
+                    speed = Mathf.Lerp(DuelTuning.TimeoutRunSpeed, DuelTuning.TimeoutWalkSpeed, u);
                     moveDir = OverrunMoveDirDeg;
                     vClip = 0f;
                     if (u >= 1f)
@@ -311,7 +287,7 @@ namespace KokoSim.Unity.Match
                     break;
                 }
                 case OtMsgLeg.WalkIn:
-                    speed = TimeoutWalkSpeed;
+                    speed = DuelTuning.TimeoutWalkSpeed;
                     moveDir = TimeoutWalkMoveDir;
                     vClip = TimeoutWalkVClip;
                     break;
@@ -322,7 +298,7 @@ namespace KokoSim.Unity.Match
                 case OtMsgLeg.Talk:
                     break;
                 case OtMsgLeg.LeaveWalk:
-                    speed = TimeoutWalkSpeed;
+                    speed = DuelTuning.TimeoutWalkSpeed;
                     moveDir = TimeoutWalkMoveDir;
                     vClip = TimeoutWalkVClip;
                     target = _otMsgStart;
@@ -335,7 +311,7 @@ namespace KokoSim.Unity.Match
                     }
                     break;
                 case OtMsgLeg.LeaveRun:
-                    speed = TimeoutRunSpeed;
+                    speed = DuelTuning.TimeoutRunSpeed;
                     target = _otMsgStart;
                     break;
             }
@@ -417,7 +393,7 @@ namespace KokoSim.Unity.Match
             if (spine != null && mSide.sqrMagnitude > 1e-6f)
             {
                 var axis = Vector3.Cross(Vector3.up, mSide);
-                RotateBoneWorld(spine, Vector3.up, Quaternion.AngleAxis(OtLeanDeg * w, axis) * Vector3.up);
+                RotateBoneWorld(spine, Vector3.up, Quaternion.AngleAxis(DuelTuning.OtLeanDeg * w, axis) * Vector3.up);
             }
 
             // ② 伝令の首を打者の耳へ向ける
@@ -447,7 +423,7 @@ namespace KokoSim.Unity.Match
             for (int i = 0; i < OtNodCount; i++)
             {
                 float u = (tt - (0.9f + i * 0.85f)) / 0.6f;
-                if (u > 0f && u < 1f) nod = Mathf.Sin(u * Mathf.PI) * OtNodDeg;
+                if (u > 0f && u < 1f) nod = Mathf.Sin(u * Mathf.PI) * DuelTuning.OtNodDeg;
             }
             TurnHeadToward(ba, _batter, mHead.TransformPoint(mMouthL), w, nod * w);
 

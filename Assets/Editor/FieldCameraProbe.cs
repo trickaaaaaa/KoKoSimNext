@@ -374,14 +374,14 @@ namespace KokoSim.Unity.EditorTools
                 var h0 = (float)b0.Value.H;
                 var h1 = b1.HasValue ? (float)b1.Value.H : h0;
                 aimY = Mathf.Max(1.0f, (h0 + h1) * 0.5f);
-                frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + DuelStageRig.FieldMarginM * 2f);
+                frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + DuelTuning.FieldMarginM * 2f);
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
         }
 
         /// <summary>据え位置は被写体の深さで内野/外野を切り替える。</summary>
         private static Vector3 StationFor(Vector3 aim)
-            => aim.z >= 45f ? DuelStageRig.FieldStationOutfield : DuelStageRig.FieldStationInfield;
+            => aim.z >= 45f ? DuelTuning.FieldStationOutfield : DuelTuning.FieldStationInfield;
 
         private static Camera NewProbeCamera()
         {
