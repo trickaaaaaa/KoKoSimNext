@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Career;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season.Events;
@@ -181,6 +182,8 @@ namespace KokoSim.Unity.Shell
                         GraduatingClassFilter = () => RosterService.Roster.Any(p => p.Grade >= 3),
                         // OB（卒業生）の居ない新設校では、OB会の寄付などOBが出てくる話を出さない（issue #1615）。
                         ObFilter = () => RosterService.HasOb,
+                        // 転任判定の前の校長の会話は、教員監督でこの年度末に残留の抽選がある年だけ（issue #1606）。
+                        TransferHintFilter = () => TransferHint.TierFor(ManagerService.Manager, ManagerService.Coefficients),
                     };
                 // 自校の地方（issue #616）。転校（新規ゲーム・転任）で変わるので毎回据える＝
                 // 一度きりの初期化にすると、県を変えて始めた進行に前の県のイベントが出る。

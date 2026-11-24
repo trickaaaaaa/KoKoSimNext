@@ -61,6 +61,8 @@ public static class EventTableParser
         var requiresOb = false;
         string? textNoOb = null;
         var elemRequiresOb = false;
+        var requiresTransferDraw = false;
+        Career.TransferHintTier? elemTransferHint = null;
         double weight = 1.0;
         int cooldown = 4;
         // 効果（issue #613・#1270）。イベント直下の effects: はイベントの効果、outcomes: の要素の中は結果ごとの効果。
@@ -117,9 +119,10 @@ public static class EventTableParser
             }
             else if (currentLines is not null && currentLines.Count > 0)
             {
-                variants.Add(new EventScript(currentLines) { RequiresOb = elemRequiresOb });
+                variants.Add(new EventScript(currentLines) { RequiresOb = elemRequiresOb, TransferHint = elemTransferHint });
             }
             elemRequiresOb = false;
+            elemTransferHint = null;
             currentLines = null;
             elemStance = null; elemImproved = null; elemLabel = null; elemImproveProb = null;
             elemEff = new EffectBuilder();
@@ -141,6 +144,7 @@ public static class EventTableParser
                 RequiresRegion = ParseRegion(region),
                 RequiresGraduatingClass = requiresGraduatingClass,
                 RequiresOb = requiresOb,
+                RequiresTransferDraw = requiresTransferDraw,
                 TextWithoutOb = textNoOb,
                 Scene = ParseScene(scene),
                 Text = text ?? "",
@@ -154,6 +158,7 @@ public static class EventTableParser
             calendarWeek = null;
             requiresGraduatingClass = false;
             requiresOb = false;
+            requiresTransferDraw = false;
             textNoOb = null;
             weight = 1.0;
             cooldown = 4;
@@ -238,6 +243,8 @@ public static class EventTableParser
                     if (listKind == "variants" && elemOpen) elemRequiresOb = value == "true";
                     else requiresOb = value == "true";
                     break;
+                case "requires_transfer_draw": requiresTransferDraw = value == "true"; break;
+                case "transfer_hint": elemTransferHint = ParseTransferHint(value, id); break;
                 case "text_no_ob": textNoOb = value.Length > 0 ? value : null; break;
                 case "scene": scene = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
@@ -337,6 +344,15 @@ public static class EventTableParser
         if (Enum.TryParse<Nation.JapanRegion>(name, out var r)) return r;
         throw new FormatException($"requires_region に未知の地方名: {name}");
     }
+
+    // 転任の匂わせの段（issue #1606）。未知の語は例外（綴り違いが黙って全段に出るのを防ぐ）。
+    private static Career.TransferHintTier ParseTransferHint(string name, string? eventId) => name switch
+    {
+        "high" => Career.TransferHintTier.High,
+        "mid" => Career.TransferHintTier.Mid,
+        "low" => Career.TransferHintTier.Low,
+        _ => throw new FormatException($"{eventId}: transfer_hint に未知の段: {name}"),
+    };
 
     // 場面（issue #1516）。未知の語は既定へ落とさず**例外**にする（地方名と同じ理由＝綴り違いが黙って
     // グラウンドの背景になり、絵でしか気づけない）。

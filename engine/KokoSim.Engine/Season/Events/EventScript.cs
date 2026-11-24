@@ -24,6 +24,11 @@ public sealed record EventScript(IReadOnlyList<EventLine> Lines)
     /// </summary>
     public bool RequiresOb { get; init; }
 
+    /// <summary>
+    /// 転任判定の前の匂わせで、この段のときだけ選ぶ会話か（issue #1606）。null＝どの段でも選べる。
+    /// </summary>
+    public Career.TransferHintTier? TransferHint { get; init; }
+
     /// <summary>1行だけの会話（旧 <c>text:</c> しか持たないイベントの後方互換）。</summary>
     public static EventScript Single(string who, string text) => new(new[] { new EventLine(who, "", text) });
 }
@@ -45,6 +50,8 @@ public static class EventRoles
     public const string TeamManagerOutgoing = "team_manager_outgoing";
     public const string Ob = "ob";
     public const string Scout = "scout";
+    /// <summary>校長。転任判定の前の会話（issue #1606）だけで使う。立ち絵はまだ無い（シルエット）。</summary>
+    public const string Principal = "principal";
     public const string Local = "local";
     public const string Captain = "captain";
     public const string Narration = "narration";
@@ -66,6 +73,7 @@ public static class EventRoles
         TeamManagerOutgoing => "マネージャー",
         Ob => "OB",
         Scout => "スカウト",
+        Principal => "校長",
         Local => "地域の人",
         Captain => "主将",
         Narration => "",

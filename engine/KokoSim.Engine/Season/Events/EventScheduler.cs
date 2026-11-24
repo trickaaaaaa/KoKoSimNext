@@ -140,8 +140,16 @@ public sealed class EventScheduler
     /// </summary>
     public Func<bool>? ObFilter { get; set; }
 
+    /// <summary>
+    /// 年度末に転任の抽選がある教員監督なら、そのときの信頼度の段（issue #1606）。抽選が無い年・フリー監督は null。
+    /// 校長の会話は<b>この関数が null でない年だけ</b>出し、段に合う会話だけを選ぶ。
+    /// <b>未設定（null）のときは出さない</b>＝監督を持たないヘッドレスシムには出ない（帯・ゴールデン不変）。
+    /// </summary>
+    public Func<Career.TransferHintTier?>? TransferHintFilter { get; set; }
+
     private bool CanFire(GameEvent e)
     {
+        if (e.RequiresTransferDraw && TransferHintFilter?.Invoke() == null) return false;
         if (e.RequiresOb && ObFilter is { } ob && !ob()) return false;
         if (e.RequiresGraduatingClass && GraduatingClassFilter is { } graduating && !graduating()) return false;
         if (CastFilter is { } cast && e.Cast != EventCast.Default && !cast(e)) return false;
@@ -155,7 +163,7 @@ public sealed class EventScheduler
     {
         _lastFiredWeek[e.Id] = _absoluteWeek;
         if (e.SetsAnnualFlag is { } flag) _annualFlags.Add(flag);
-        fired.Add(new FiredEvent(e, week, PickScript(e, _absoluteWeek, 0, rng, ObFilter?.Invoke() ?? true)));
+        fired.Add(new FiredEvent(e, week, PickScript(e, _absoluteWeek, 0, rng, ObFilter?.Invoke() ?? true, TransferHintFilter?.Invoke())));
     }
 
     /// <summary>
@@ -174,14 +182,26 @@ public sealed class EventScheduler
     /// OB が居る学校か（issue #1615）。false なら <see cref="EventScript.RequiresOb"/> の会話を候補から外して引く。
     /// true なら全会話が候補＝従来と同じ引き方（同じ Fork・同じ個数）。
     /// </param>
-    public static EventScript PickScript(GameEvent e, int absoluteWeek, int salt, IRandomSource rng, bool hasOb = true)
+    /// <param name="transferHint">
+    /// 転任の匂わせの段（issue #1606）。指定があれば、その段の会話（と段の指定が無い会話）だけから引く。
+    /// null（既定）は絞らない＝従来と同じ引き方。
+    /// </param>
+    public static EventScript PickScript(
+        GameEvent e, int absoluteWeek, int salt, IRandomSource rng, bool hasOb = true,
+        Career.TransferHintTier? transferHint = null)
     {
         if (e.Variants.Count == 0) return EventScript.Single(EventRoles.Narration, e.Text);
         var candidates = e.Variants;
+        if (transferHint is { } tier)
+        {
+            var open = new List<EventScript>(candidates.Count);
+            foreach (var v in candidates) if (v.TransferHint is null || v.TransferHint == tier) open.Add(v);
+            if (open.Count > 0) candidates = open;
+        }
         if (!hasOb)
         {
-            var open = new List<EventScript>(e.Variants.Count);
-            foreach (var v in e.Variants) if (!v.RequiresOb) open.Add(v);
+            var open = new List<EventScript>(candidates.Count);
+            foreach (var v in candidates) if (!v.RequiresOb) open.Add(v);
             if (open.Count > 0) candidates = open;   // 全部が OB 前提のイベントは出せる会話が無い＝全会話から引く（データの欠陥はテストが見張る）
         }
         if (candidates.Count == 1) return candidates[0];

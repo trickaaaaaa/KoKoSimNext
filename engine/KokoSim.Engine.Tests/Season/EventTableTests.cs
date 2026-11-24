@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using KokoSim.Engine.Career;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Season.Events;
@@ -438,7 +439,7 @@ events:
         var known = new HashSet<string>
         {
             EventRoles.Manager, EventRoles.Player, EventRoles.TeamManager, EventRoles.TeamManagerOutgoing,
-            EventRoles.Scout, EventRoles.Captain, EventRoles.Narration,
+            EventRoles.Scout, EventRoles.Captain, EventRoles.Narration, EventRoles.Principal,
         };
         foreach (var e in RepositoryEvents())
         foreach (var v in e.Variants)
@@ -839,6 +840,114 @@ events:
 
     // 自校の教え子や外部の人の「OB」を言う話（印を付けない）。いまは無し＝増やすときは理由を添えてここへ。
     private static bool IsObExempt(string eventId) => false;
+
+    // ===== 転任判定の前の校長の会話（issue #1606） =====
+
+    private const string PrincipalSample = @"
+events:
+  - id: principal_talk
+    kind: Fixed
+    calendar_week: 44
+    requires_transfer_draw: true
+    text: ""校長に呼ばれた。""
+    variants:
+      - transfer_hint: high
+        lines:
+          - who: principal
+            say: ""高い段。""
+      - transfer_hint: mid
+        lines:
+          - who: principal
+            say: ""中ほどの段。""
+      - transfer_hint: low
+        lines:
+          - who: principal
+            say: ""低い段。""
+  - id: chat
+    kind: Random
+    text: ""雑談。""
+";
+
+    [Fact]
+    public void Parse_TransferHint_ReadsEventFlagAndVariantTiers()
+    {
+        var events = EventTableParser.Parse(PrincipalSample).ToDictionary(e => e.Id);
+        Assert.True(events["principal_talk"].RequiresTransferDraw);
+        Assert.False(events["chat"].RequiresTransferDraw);
+        Assert.Equal(
+            new TransferHintTier?[] { TransferHintTier.High, TransferHintTier.Mid, TransferHintTier.Low },
+            events["principal_talk"].Variants.Select(v => v.TransferHint).ToArray());
+    }
+
+    [Fact]
+    public void Parse_TransferHint_UnknownTierThrows()
+    {
+        Assert.Throws<FormatException>(() => EventTableParser.Parse(
+            "events:\n  - id: x\n    kind: Fixed\n    text: \"t\"\n    variants:\n      - transfer_hint: top\n        lines:\n          - who: narration\n            say: \"a\"\n"));
+    }
+
+    [Fact]
+    public void PrincipalTalk_FiresOnlyInTheDrawYear_AndPicksTheMatchingTier()
+    {
+        var events = EventTableParser.Parse(PrincipalSample);
+        var coeff = new EventCoefficients { WeeklyFireProbability = 0.0 };
+
+        string? Talk(TransferHintTier? tier, bool wired = true)
+        {
+            var s = new EventScheduler(events, coeff);
+            if (wired) s.TransferHintFilter = () => tier;
+            return s.Week(44, new Xoshiro256Random(7)).SingleOrDefault(f => f.Event.Id == "principal_talk")?.Script.Lines[0].Say;
+        }
+
+        Assert.Equal("高い段。", Talk(TransferHintTier.High));
+        Assert.Equal("中ほどの段。", Talk(TransferHintTier.Mid));
+        Assert.Equal("低い段。", Talk(TransferHintTier.Low));
+        Assert.Null(Talk(null));                  // 抽選の無い年・フリー監督
+        Assert.Null(Talk(null, wired: false));    // 監督を持たないヘッドレスシム
+    }
+
+    [Fact]
+    public void PrincipalTalk_SkippedYear_DoesNotShiftTheRandomDraws()
+    {
+        var events = EventTableParser.Parse(PrincipalSample);
+        var coeff = new EventCoefficients { WeeklyFireProbability = 1.0 };
+
+        List<string> Run(TransferHintTier? tier)
+        {
+            var s = new EventScheduler(events, coeff) { TransferHintFilter = () => tier };
+            var rng = new Xoshiro256Random(11);
+            var ids = new List<string>();
+            for (var w = 30; w < 50 + 30; w++)
+                ids.AddRange(s.Week(w % 50, rng).Where(f => f.Event.Id != "principal_talk").Select(f => f.Event.Id));
+            return ids;
+        }
+
+        Assert.Equal(Run(TransferHintTier.Mid), Run(null));
+    }
+
+    [Fact]
+    public void RepositoryTable_PrincipalTalk_IsWiredAndTieredWithoutNumbers()
+    {
+        var talk = RepositoryEvents().Single(e => e.Id == "principal_talk");
+        Assert.Equal(EventKind.Fixed, talk.Kind);
+        Assert.True(talk.RequiresTransferDraw);
+        Assert.True(talk.CalendarWeek < new SeasonCalendar().ProspectConfirmWeek);   // 判定（総括）より前
+
+        foreach (var tier in new[] { TransferHintTier.High, TransferHintTier.Mid, TransferHintTier.Low })
+            Assert.True(talk.Variants.Count(v => v.TransferHint == tier) >= 2, $"{tier} の会話が2通り以上要る");
+        Assert.All(talk.Variants, v => Assert.NotNull(v.TransferHint));
+
+        // 数字・確率・「信頼度」は出さない／結果行は付けない（効果なし）。
+        Assert.True(talk.Effect.IsEmpty);
+        var all = talk.Text + string.Concat(talk.Variants.SelectMany(v => v.Lines).Select(l => l.Say));
+        Assert.DoesNotContain("信頼", all);
+        Assert.DoesNotContain("%", all);
+        Assert.DoesNotContain("％", all);
+        Assert.DoesNotMatch("[0-9０-９]", all);
+        // 高い段でも確約にしない（異動はありうる）。
+        foreach (var v in talk.Variants.Where(v => v.TransferHint == TransferHintTier.High))
+            Assert.DoesNotContain("必ず", string.Concat(v.Lines.Select(l => l.Say)));
+    }
 
     // ===== 場面（ノベル画面の背景・issue #1516） =====
 

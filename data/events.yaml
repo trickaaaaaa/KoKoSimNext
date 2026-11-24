@@ -185,6 +185,100 @@ events:
           - who: team_manager
             say: "順位はどうでも、行けるかどうかですね。"
 
+  # 3月の転任判定（総括週＝第46週・ManagerTransferModel）の前に、校長が学校の見方を匂わせる（issue #1606・設計書04 §1.3）。
+  # 出るのは「教員監督で、この年度末に残留の抽選がある」年だけ（requires_transfer_draw。判定は engine の TransferHint.TierFor）。
+  # 文は信頼度の段で出し分ける（transfer_hint: high/mid/low＝残留確率の式の中点±傾き）。**数字・確率・「信頼度」の語は出さない**。
+  # 高い段でも異動はありうる（残留の上限は0.8）ので「確約」の文にしない。第45週は年契約の更新の会話があるので1週前に置く。
+  - id: principal_talk
+    kind: Fixed
+    scene: office
+    calendar_week: 44
+    requires_transfer_draw: true
+    text: "校長に呼ばれた。年度末の人事の前に、少し話をした。"
+    variants:
+      - transfer_hint: high
+        lines:
+          - who: narration
+            say: "校長室に呼ばれた。机の上には、まだ封を切っていない人事の書類が積んである。"
+          - who: principal
+            say: "来年度も野球部は先生にお願いしたいと、上には伝えてありますから。"
+          - who: manager
+            say: "ありがとうございます。"
+          - who: principal
+            say: "まあ、人事は私の一存では決まりませんがね。"
+      - transfer_hint: high
+        lines:
+          - who: principal
+            say: "先生のところは、保護者の方からも評判がいいんですよ。うちの学校の顔です。"
+          - who: narration
+            say: "湯のみのお茶が、いつもより熱かった。"
+          - who: principal
+            say: "春の辞令が出るまでは、何とも言えませんが。この調子でお願いします。"
+      - transfer_hint: high
+        lines:
+          - who: narration
+            say: "廊下で校長に呼び止められた。手には、なぜか野球部の新聞記事の切り抜きがある。"
+          - who: principal
+            say: "これ、職員室に貼っておきました。皆さん読んでましたよ。"
+          - who: team_manager
+            say: "校長先生、監督のこと、教育委員会にも褒めておいてくださいね。"
+          - who: principal
+            say: "言ってはあります。言っては。"
+      - transfer_hint: mid
+        lines:
+          - who: narration
+            say: "校長室に呼ばれた。窓の外では、野球部の一年生が雪かきをしている。"
+          - who: principal
+            say: "人事のことは私にもわかりませんが……まあ、頑張っておられるのは見ています。"
+          - who: manager
+            say: "恐れ入ります。"
+          - who: principal
+            say: "見ているだけで、決めるのは私じゃないんですよ。"
+      - transfer_hint: mid
+        lines:
+          - who: principal
+            say: "先生、今年の野球部はどうですか。いえ、世間話です。ただの世間話。"
+          - who: team_manager
+            say: "校長先生、さっきから三回目の世間話ですよ。"
+          - who: narration
+            say: "校長はお茶を一口飲んで、窓の外を見た。"
+      - transfer_hint: mid
+        lines:
+          - who: narration
+            say: "年度末の校長室は、書類の山で机が見えない。"
+          - who: principal
+            say: "春は人が動く季節ですからね。先生のところも、どうなるか。"
+          - who: manager
+            say: "そうですね。"
+          - who: principal
+            say: "悪い話は聞いていませんよ。良い話も、聞いていませんが。"
+      - transfer_hint: low
+        lines:
+          - who: narration
+            say: "校長室に呼ばれた。いつもは出るお茶が、今日は出なかった。"
+          - who: principal
+            say: "教育委員会から、野球部のことで少し問い合わせがありましてね。"
+          - who: manager
+            say: "どういった内容でしょうか。"
+          - who: principal
+            say: "いえ、私のほうで答えておきました。ただ、春の人事は少し覚悟しておいてください。"
+      - transfer_hint: low
+        lines:
+          - who: principal
+            say: "先生、来年度のことなんですがね。まだ何も決まっていません。決まっていませんが。"
+          - who: team_manager
+            say: "校長先生、その「が」の続きを聞かせてください。"
+          - who: narration
+            say: "校長は書類を揃え直して、それ以上は何も言わなかった。"
+      - transfer_hint: low
+        lines:
+          - who: narration
+            say: "職員室で、校長が電話を切ってから監督のほうを見た。"
+          - who: principal
+            say: "教育委員会の方が、近いうちにグラウンドを見に来るそうです。普段どおりで結構ですよ。"
+          - who: team_manager
+            say: "普段どおりって、普段どおりにしていたらまずいんじゃ……。"
+
   # 卒業式＝「送り出す」場面（issue #954）。引退の場面（土の持ち帰り・背番号の返上・最後のミーティング）は
   # 夏の敗退直後の summer_retirement_* へ移した＝背番号は夏に返上済みなので、ここで返しに来ない。
   - id: graduation
