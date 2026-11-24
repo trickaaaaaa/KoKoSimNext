@@ -1025,9 +1025,10 @@ namespace KokoSim.Unity.Home
                 {
                     When = "本日",
                     Text = o.RoundName + " vs " + o.OpponentName + "　" + o.ManagerScore + "-" + o.OpponentScore + "　" + verb,
-                    Kind = o.ManagerWon ? FeedKind.Up : FeedKind.Warn,
+                    // 負けは終わった試合＝手を打つ警告ではない。大会の締めの敗退と同じく情報扱い（UI原則②・issue #1607）
+                    Kind = o.ManagerWon ? FeedKind.Up : FeedKind.Normal,
                     Screen = FeedLinks.Records, RecordsPage = FeedLinks.RecordsMatchesPage,
-                    Tag = o.ManagerWon ? "情報" : "警告",
+                    Tag = "情報",
                 },
             };
             items.AddRange(InjuryFeedItems());
