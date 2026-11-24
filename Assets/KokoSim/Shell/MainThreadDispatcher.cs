@@ -38,8 +38,8 @@ namespace KokoSim.Unity.Shell
     /// 小さなヘルパ（issue #138・オーナー判断 Q1(a)）。<paramref name="work"/> を <see cref="Task.Run"/> で
     /// 回し、完了後に <paramref name="onDone"/> を <see cref="MainThreadDispatcher"/> 経由でメインスレッドで呼ぶ。
     ///
-    /// 実行中は <see cref="Running"/> を立て、二重起動と「メインスレッドからの GameClock/ロスター変更」の
-    /// 割り込みを弾く（背景処理と同じ静的状態を同時に触らせない＝決定論・整合性を守る）。フラグの解除は
+    /// 実行中は <see cref="Running"/> が立ち（スロットの Task が未完了の間＝<c>Task.IsCompleted</c> 由来）、二重起動と「メインスレッドからの GameClock/ロスター変更」の
+    /// 割り込みを弾く（背景処理と同じ静的状態を同時に触らせない＝決定論・整合性を守る）。スロットの完了は
     /// メインスレッドの継続（Drain）内で行うため、UI が処理完了を反映するまで Running は立ったままになる。
     ///
     /// <para>見張り（Q30・issue #1317）: <paramref name="work"/> が戻らない（無限ループ・デッドロック）と Running が
@@ -54,7 +54,10 @@ namespace KokoSim.Unity.Shell
         /// （Mono 実測・先読み導入前）で、その約5倍。大会日の全国裏試合は別系統（NationBackgroundSim）なのでここに載らない。</summary>
         public const double StallLimitSeconds = 120.0;
 
-        private static int _running;   // 0=idle, 1=running
+        // スロット。Running は NationBackgroundSim / BracketFinishSim と同じく Task.IsCompleted 由来にして、
+        // 解除をフラグの書き込みではなく Task の完了に一本化する（Q30 の3）。
+        private static readonly object SlotGate = new object();
+        private static TaskCompletionSource<bool> _slot;
         private static double _startedAt;
         private static bool _stallLogged;
 
@@ -62,7 +65,10 @@ namespace KokoSim.Unity.Shell
         internal static Func<double> Clock = () => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
         /// <summary>重い試合後処理が進行中か（メインスレッドの週送り等が割り込まないよう参照する）。</summary>
-        public static bool Running => Volatile.Read(ref _running) != 0;
+        public static bool Running
+        {
+            get { var slot = Volatile.Read(ref _slot); return slot != null && !slot.Task.IsCompleted; }
+        }
 
         /// <summary>実行中の work が <see cref="StallLimitSeconds"/> を超えて戻っていないか。</summary>
         public static bool Stalled => Running && Clock() - _startedAt > StallLimitSeconds;
@@ -83,16 +89,29 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static bool Run(Action work, Action onDone)
         {
-            if (Interlocked.CompareExchange(ref _running, 1, 0) != 0) return false;
+            var slot = new TaskCompletionSource<bool>();
+            lock (SlotGate)
+            {
+                if (Running) return false;
+                Volatile.Write(ref _slot, slot);
+            }
             _startedAt = Clock();
             _stallLogged = false;
-            BackgroundWork.Run(work).ContinueWith(t =>
-                MainThreadDispatcher.Enqueue(() =>
-                {
-                    Volatile.Write(ref _running, 0);
-                    if (t.Exception != null) UnityEngine.Debug.LogException(t.Exception.GetBaseException());
-                    onDone?.Invoke();
-                }), TaskContinuationOptions.ExecuteSynchronously);   // ブラウザ版は Run がその場で終わる＝継続もその場で（スレッドプールは回らない）
+            try
+            {
+                BackgroundWork.Run(work).ContinueWith(t =>
+                    MainThreadDispatcher.Enqueue(() =>
+                    {
+                        slot.TrySetResult(true);   // onDone より前に解く＝onDone の中から次の Run を始められる
+                        if (t.Exception != null) UnityEngine.Debug.LogException(t.Exception.GetBaseException());
+                        onDone?.Invoke();
+                    }), TaskContinuationOptions.ExecuteSynchronously);   // ブラウザ版は Run がその場で終わる＝継続もその場で（スレッドプールは回らない）
+            }
+            catch
+            {
+                slot.TrySetResult(true);
+                throw;
+            }
             return true;
         }
     }

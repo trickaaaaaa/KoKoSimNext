@@ -359,7 +359,7 @@ avg/modernカードの実ゲームプレー・RNG消費順は一切変わって�
 （`StallLimitSeconds`＝120秒）を超えたら `Stalled` が立ち、`ScreenRouter.Update` がログを1度だけ出し、
 `WaitOverlayController` の既存の待ち表示の文言が「固まりました。セーブして再起動してください」に替わる
 （暗幕はクリックを塞がない）。上限は、既知の最悪の1本（試合開始前の自県フルシム約25秒・Mono 実測）の約5倍。
-実機の `-benchmark` の実測が出たら見直す。3（`Task.IsCompleted` 由来への統一）は別 issue。
+実機の `-benchmark` の実測が出たら見直す。3（`Task.IsCompleted` 由来への統一）は別 issue（[#1437](https://github.com/trickaaaaaa/KoKoSimNext/issues/1437)）で実装済み＝`Running` はスロット（`TaskCompletionSource`）の `Task.IsCompleted` 由来。完了は onDone の前（メインスレッドの継続内）。
 
 **発端**: スキップ停止（2026-08-14）の調査で「進行を止めるフラグの解除役が、消えうる経路にしか
 居ない」型を全経路棚卸しした際の残り1件。他の経路（終局テロップ・回間・各種コール・`_paused`・
