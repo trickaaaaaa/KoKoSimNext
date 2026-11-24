@@ -182,6 +182,24 @@ namespace KokoSim.Unity.Match
             }
         }
 
+        /// <summary>撮影レシピの probes 用（issue #1595）: 塁審3人の再生中のクリップと再生位置、予定した判定の数。</summary>
+        public string BaseCrewForCapture
+        {
+            get
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append("calls=").Append(_baseCalls.Count);
+                for (int i = 0; i < _baseUmps.Length; i++)
+                {
+                    var a = _baseUmps[i];
+                    sb.Append(" | ").Append(i == 0 ? "1B " : i == 1 ? "2B " : "3B ");
+                    if (a == null || !a.Enabled || a.Clip == null) { sb.Append('-'); continue; }
+                    sb.Append(a.Clip.name.Replace("AA_Baseball_Umpire_", "")).Append('@').Append(a.Time.ToString("0.00"));
+                }
+                return sb.ToString();
+            }
+        }
+
         /// <summary>プレーの終わり: 判定の演技を畳んで待機へ戻す（次のプレーへ持ち越さない）。</summary>
         private void ResetBaseCrew()
         {
