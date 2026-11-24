@@ -495,3 +495,16 @@ captures:
     view: panel
     attempts: 1
     window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-ibb), shot]
+
+  # 遊撃手・二塁手が自分で二塁を踏んで一塁へ投げる併殺（issue #1549）。二塁カバーが受けず、処理した本人が運んで投げる
+  - id: dp-663-1549
+    name: "併殺 6-6-3（遊撃手が自分で二塁を踏んで一塁へ・issue #1549）"
+    scenario: dp-663-lab
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]
+
+  - id: dp-443-1549
+    name: "併殺 4-4-3（二塁手が自分で二塁を踏んで一塁へ・issue #1549）"
+    scenario: dp-443-lab
+    manager: home
+    shots: [catch-0.5, catch, release+0.2, judgement, end]
