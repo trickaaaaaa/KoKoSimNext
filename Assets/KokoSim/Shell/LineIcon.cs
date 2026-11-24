@@ -31,6 +31,8 @@ namespace KokoSim.Unity.Shell
             ChevronRight,
             /// <summary>十字（追加）。</summary>
             Plus,
+            /// <summary>右向きの矢印（打者を一塁へ歩かせる＝申告敬遠）。</summary>
+            Walk,
         }
 
         /// <summary>線幅（24 座標で）。既定 2。</summary>
@@ -133,6 +135,11 @@ namespace KokoSim.Unity.Shell
 
                 case Kind.ChevronRight:
                     Polyline(p, P(9, 6), P(15, 12), P(9, 18));
+                    break;
+
+                case Kind.Walk:
+                    Polyline(p, P(3, 12), P(20, 12));
+                    Polyline(p, P(13, 5), P(20, 12), P(13, 19));
                     break;
 
                 case Kind.Plus:

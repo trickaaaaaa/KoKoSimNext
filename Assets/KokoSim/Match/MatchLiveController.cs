@@ -216,6 +216,9 @@ namespace KokoSim.Unity.Match
         private VisualElement _pauseModal;
         private TimeoutPopupView _timeoutView;   // 値の流し込み（見た目は MatchLive.uss の tmo-*）
         private Button _pmTimeout, _pmSub, _pmSkip, _pmResume;
+        // 申告敬遠（issue #1563）: タイムのメニューのカードと、押したあとの「はい／いいえ」確認（メニューと入れ替わる）。
+        private Button _pmIbb, _pmIbbYes, _pmIbbNo;
+        private VisualElement _pmIbbConfirm;
         // 伝令役の人選（issue #716・A案）: 「伝令を送る」でメニューと入れ替わる控え一覧。
         private VisualElement _pmMenu, _pmMessenger;
         private ScrollView _pmMessengerList;
@@ -299,9 +302,9 @@ namespace KokoSim.Unity.Match
         private bool _pitchAroundOn;
         // バントシフト（issue #1473）＝構え。陣形と同じく、自校が守備の窓ごとに1球の口へ再予約して続ける。
         private bool _defBuntShift;
-        // 守備のサイン（issue #1473）＝申告敬遠・ウエスト。その1球へ押し込んで自動で解ける（敬遠はその打席が終わる）。
+        // 守備のサイン（issue #1473）＝ウエスト。その1球へ押し込んで自動で解ける。申告敬遠は手札でなくタイムのメニューから（issue #1563）。
         private DefenseSign? _defSignChoice;
-        private enum DefenseSign { IntentionalWalk, Pitchout }
+        private enum DefenseSign { Pitchout }
         private MatchLiveStatsProvider _statsProvider;
         private string _awayDisp = "先攻", _homeDisp = "後攻";
         // 勝者が要る文脈か（大会戦=true／練習試合=false, issue #269）。結果画面の引き分け表記に渡す。
@@ -649,6 +652,13 @@ namespace KokoSim.Unity.Match
             if (_pmSub != null) _pmSub.clicked += OnOpenSubstitution;
             _pmScout = _root.Q<Button>("pm-scout");
             if (_pmScout != null) _pmScout.clicked += OnOpenScout;
+            _pmIbb = _root.Q<Button>("pm-ibb");
+            if (_pmIbb != null) _pmIbb.clicked += OpenIntentionalWalkConfirm;
+            _pmIbbConfirm = _root.Q<VisualElement>("pm-ibb-confirm");
+            _pmIbbYes = _root.Q<Button>("pm-ibb-yes");
+            if (_pmIbbYes != null) _pmIbbYes.clicked += OnConfirmIntentionalWalk;
+            _pmIbbNo = _root.Q<Button>("pm-ibb-no");
+            if (_pmIbbNo != null) _pmIbbNo.clicked += CloseMessengerPicker;
             _pmSkip = _root.Q<Button>("pm-skip");
             if (_pmSkip != null) _pmSkip.clicked += OnSkip;
             _pmResume = _root.Q<Button>("pm-resume");
@@ -779,6 +789,9 @@ namespace KokoSim.Unity.Match
             if (_pmResume != null) _pmResume.clicked -= OnResume;
             if (_pmSub != null) _pmSub.clicked -= OnOpenSubstitution;
             if (_pmScout != null) _pmScout.clicked -= OnOpenScout;
+            if (_pmIbb != null) _pmIbb.clicked -= OpenIntentionalWalkConfirm;
+            if (_pmIbbYes != null) _pmIbbYes.clicked -= OnConfirmIntentionalWalk;
+            if (_pmIbbNo != null) _pmIbbNo.clicked -= CloseMessengerPicker;
             if (_pmMessengerBack != null) _pmMessengerBack.clicked -= CloseMessengerPicker;
             if (_pmSkip != null) _pmSkip.clicked -= OnSkip;
             _pauseModal?.UnregisterCallback<PointerDownEvent>(OnPauseScrimDown);
@@ -1458,6 +1471,9 @@ namespace KokoSim.Unity.Match
                 TimeoutEnabled = !resolving && !_timeoutSentThisPause && _prog.CanCallTimeout(_managerIsAway, ShownOffenseIsTop),
                 ActionsEnabled = !resolving,
             };
+            // 申告敬遠は自校が守備のときだけ。打席が確定して結果を見せている間は出さない（押すと次の打者への敬遠になってしまう）。
+            m.IntentionalWalkVisible = !m.ManagerOnOffense;
+            m.IntentionalWalkEnabled = IntentionalWalkAvailable;
 
             if (_atBat is { } at)
             {
@@ -1635,10 +1651,35 @@ namespace KokoSim.Unity.Match
             SetVisible(_pmMessenger, true);
         }
 
+        // 伝令役の人選・申告敬遠の確認（どちらもメニューと入れ替わる）を畳んでメニューへ戻る。
         private void CloseMessengerPicker()
         {
             SetVisible(_pmMessenger, false);
+            SetVisible(_pmIbbConfirm, false);
             SetVisible(_pmMenu, true);
+        }
+
+        // 申告敬遠を押せるか: 自校が守備で、打席の途中（まだ結果の出ていない打者）の、次の1球を投げる前。
+        // 伝令の残りには左右されない（実際のルールでも申告敬遠は伝令とは別の操作）。
+        private bool IntentionalWalkAvailable
+            => _prog != null && !_gameOver && _paused && !_paConfirmed && _atBat != null
+               && !BackgroundGameOp.Running && !EngineAheadOfScreen
+               && !_prog.IsTeamOnOffense(_managerIsAway, ShownOffenseIsTop);
+
+        private void OpenIntentionalWalkConfirm()
+        {
+            if (!IntentionalWalkAvailable || _pmIbbConfirm == null) return;
+            SetVisible(_pmMenu, false);
+            SetVisible(_pmIbbConfirm, true);
+        }
+
+        // 「はい」: 申告敬遠を予約してタイムを閉じる。次の窓で投球なしの四球になる（engine の SetIntentionalWalk は
+        // 打席の頭にもカウントの途中にも対応）。伝令は消費しない。
+        private void OnConfirmIntentionalWalk()
+        {
+            if (!IntentionalWalkAvailable) { CloseMessengerPicker(); return; }
+            _prog.SetIntentionalWalk(_managerIsAway);
+            OnResume();
         }
 
         // 「再開」: 中断を解いて自動連続進行へ戻る。暗幕クリックでも呼ばれる（OnPauseScrimDown）。
@@ -1917,10 +1958,6 @@ namespace KokoSim.Unity.Match
                     OnClear = () => PushApproach(BattingApproach.Normal) },
 
                 // ── 守備・左＝サイン（その1球・使うと解ける。issue #1473）──
-                // 申告敬遠: 押した次の1球を投げずに、その打席を四球で終える（打席の頭でもカウントの途中でも）。
-                new SignDef { Id = "def-ibb", Label = "敬遠", Icon = "敬", Art = "ibb", Offense = false, Group = "defsign",
-                    GroupLabel = "サイン",
-                    OnSelect = () => _defSignChoice = DefenseSign.IntentionalWalk, OnClear = () => _defSignChoice = null },
                 // ウエスト: 次の1球を外す。走者が居ないとき（2026-11-23 オーナー判断）と3ボール（外すと四球。エンジンと同じ規則）は消灯する。
                 new SignDef { Id = "def-pitchout", Label = "ウエスト", CardLabel = "ウエスト", Icon = "外", Art = "pitchout", Offense = false, Group = "defsign",
                     GroupLabel = "サイン", EnabledIf = () => PitchoutAvailable,
@@ -2046,8 +2083,7 @@ namespace KokoSim.Unity.Match
                 var offenseSide = _atBat != null ? _atBat.IsTop : !_managerIsAway;
                 _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield, DefBuntShiftOrNull);
                 // 守備のサイン（issue #1473）: 選んでいる1手だけをこの球へ押し込む（押していなければ何も積まない）。
-                if (_defSignChoice == DefenseSign.IntentionalWalk) _prog.SetIntentionalWalk(_managerIsAway);
-                else if (_defSignChoice == DefenseSign.Pitchout) _prog.SetPitchout(_managerIsAway);
+                if (_defSignChoice == DefenseSign.Pitchout) _prog.SetPitchout(_managerIsAway);
             }
         }
 
@@ -2096,7 +2132,7 @@ namespace KokoSim.Unity.Match
         {
             _pitchBattingChoice = null;
             _stealChoice = null;
-            // 守備のサイン（敬遠・ウエスト）も1球で解ける。敬遠はその球で打席が終わる。
+            // 守備のサイン（ウエスト）も1球で解ける。
             if (_defSignChoice != null) { _defSignChoice = null; _signPad?.ClearSelection("defsign"); }
             if (_signChoice == null) _signPad?.ClearSelection("batting", "run");
             else _signPad?.ClearSelection("run");

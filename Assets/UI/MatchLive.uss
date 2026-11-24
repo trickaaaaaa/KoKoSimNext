@@ -333,6 +333,7 @@
     border-radius: 12px;
 }
 .tmo-back:hover { background-color: var(--sbk-rule-soft); }
+.tmo-ibb__no { margin-right: 16px; }
 
 /* ── 選手能力ビューア（issue #602 → #923・監督決定B案） ──
    タイムから開く名簿。左＝自校/相手をタブで切り替える一覧（行の右へ能力をランクチップで並べる）、

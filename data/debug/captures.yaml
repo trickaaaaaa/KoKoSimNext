@@ -31,7 +31,7 @@
 #   timeout_at  : duel_seconds の撮影で、開始から何秒後に監督が守備伝令を送るか（issue #1178。動揺が解ける絵）
 #   timeout_messenger : timeout_at の伝令を画面の操作どおり（中断→伝令役→再開）に送る。控えの添字か recorder（記録員）。
 #                 守備伝令の場面が流れ、明けた後の投手・捕手の基準ずれを timeout-restore.txt に書く（issue #1174）
-#   cards       : [def-ibb] のように采配カードの id を並べる（issue #1473）。守備ビューを待たず、最初の采配窓で止めて
+#   cards       : [def-pitchout] のように采配カードの id を並べる（issue #1473）。守備ビューを待たず、最初の采配窓で止めて
 #                 01-window（押す前の手札）→ カードを押して 02-pressed → cards_after 秒（既定4）流して 03-after を撮る。
 #                 手札に無い・押せないカードは FAILED。手札ごと写すので view: panel と組む。
 #                 撮るのは開幕の「プレイボール」が消えてから。撮った窓の局面（塁・カウント・攻守）を window.txt に書く
@@ -403,14 +403,6 @@ captures:
     attempts: 1
     cards: [batting-safety]
 
-  - id: tactics-defense-ibb-1473
-    name: "守備の手札（左右）＋敬遠を押す（issue #1473）"
-    scenario: steal-sign-lab
-    manager: home
-    view: panel
-    attempts: 1
-    cards: [def-ibb]
-
   - id: tactics-defense-pitchout-1473
     name: "守備の手札（左右）＋ウエストを押す（issue #1473）"
     scenario: steal-sign-lab
@@ -485,7 +477,7 @@ captures:
     size: {w: 1280, h: 720}
     game_scale: true
     attempts: 1
-    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-ibb), shot]
+    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-pitchout), shot]
 
   - id: tcard-hover-1534-away-1600
     name: "采配の手札のホバーの浮き上がりが隣のカードと投手欄の数字を隠さない（issue #1534）"
@@ -501,7 +493,7 @@ captures:
     manager: home
     view: panel
     attempts: 1
-    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-ibb), shot]
+    window_calls: [SetTacticsHotForCapture(policy-fast), shot, SetTacticsHotForCapture(def-pitchout), shot]
 
   # 遊撃手・二塁手が自分で二塁を踏んで一塁へ投げる併殺（issue #1549）。二塁カバーが受けず、処理した本人が運んで投げる
   - id: dp-663-1549
