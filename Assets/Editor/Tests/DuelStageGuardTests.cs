@@ -555,7 +555,14 @@ namespace KokoSim.EditorTests
             var play = PitcherFieldsPlay();
             rig.BeginFieldPlay(play, 0f);
             float step = 1f / DuelStageRig.PoseFps;
-            for (float t = 0f; t < 4.5f; t += step) rig.Tick(step);
+            bool cutDuringPlay = false;
+            for (float t = 0f; t < 4.5f; t += step)
+            {
+                rig.SetFieldTime(t);   // 試合と同じく守備ビューの時計を進める（MatchLiveController.RenderReplayFrame）
+                rig.Tick(step);
+                cutDuringPlay |= !pitcher.applyRootMotion;
+            }
+            Assert.That(cutDuringPlay, Is.True, "前提: 投手が捕った（捕球の収録がルートモーションを切った）");
             rig.EndFieldPlay();
 
             Assert.That(pitcher.applyRootMotion, Is.True,
