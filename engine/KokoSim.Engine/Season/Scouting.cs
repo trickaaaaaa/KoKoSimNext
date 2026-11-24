@@ -123,6 +123,32 @@ public sealed record ScoutCoefficients
     public double RivalEventProb { get; init; } = 0.22;
     public int RivalEventTierStep { get; init; } = 1;
 
+    // --- 訪問の手応え（成功率を4段の言葉へ丸める境目。数値そのものは監督に見せない） ---
+    /// <summary>成功率がこの値以上なら「反応は薄い」、未満は「心ここにあらず」。</summary>
+    public double ResponseLukewarmMin { get; init; } = 0.25;
+    /// <summary>同・この値以上なら「悪くない反応」。</summary>
+    public double ResponseWarmMin { get; init; } = 0.45;
+    /// <summary>同・この値以上なら「目を輝かせる」。</summary>
+    public double ResponseEagerMin { get; init; } = 0.65;
+
+    // --- 入部の条件（約束）。設計書04 §2.4 ---
+    /// <summary>訪問1回あたりに条件を出してくる確率（候補1人につき一度きり＝たまに）。</summary>
+    public double PromiseAskProb { get; init; } = 0.15;
+    /// <summary>約束したときの成功率の上乗せ（訪問2回ぶん）。</summary>
+    public double PromiseBonus { get; init; } = 0.18;
+    /// <summary>進路希望に合う条件の重み。</summary>
+    public double PromiseWeightFit { get; init; } = 3.0;
+    /// <summary>進路希望と関係ない条件の重み。</summary>
+    public double PromiseWeightNeutral { get; init; } = 1.0;
+    /// <summary>「主将にしてほしい」を言い出す統率傾向の下限。</summary>
+    public int PromiseCaptainLeadershipMin { get; init; } = 70;
+    /// <summary>約束を破ったときの信頼度の下げ幅（1回だけ）。</summary>
+    public double PromiseBrokenTrust { get; init; } = 5.0;
+    /// <summary>約束を破ったときの名声の下げ幅（1回だけ）。</summary>
+    public double PromiseBrokenFame { get; init; } = 5.0;
+    /// <summary>約束を守り切ったときの信頼度の上げ幅。</summary>
+    public double PromiseKeptTrust { get; init; } = 2.0;
+
     // --- 進路希望の分布（重みの比。指定なし＝等分が初期値・要調整） ---
     public double PreferencePrestigeWeight { get; init; } = 1.0;
     public double PreferencePlayingTimeWeight { get; init; } = 1.0;
@@ -209,6 +235,33 @@ public sealed class ScoutCandidate
 
     /// <summary>見立て（生成時に凍結）。</summary>
     public ScoutReport Report { get; set; } = new();
+
+    /// <summary>最後に訪問したときの手応え（未訪問は <see cref="VisitResponse.None"/>）。</summary>
+    public VisitResponse Response { get; set; }
+
+    /// <summary>訪問のとき出してきた入部の条件（出していなければ None。一度きり）。</summary>
+    public ScoutPromiseKind Promise { get; set; }
+
+    /// <summary>その条件を約束したか（断った・答えていないは false）。</summary>
+    public bool Promised { get; set; }
+}
+
+/// <summary>
+/// 訪問の手応え（設計書04 §2.4）。訪問した時点の成功率を4段に丸めたもので、入部の見込み（%）の代わりに
+/// 監督へ返す唯一の感触。並びは弱い→強い（比較できる）。
+/// </summary>
+public enum VisitResponse
+{
+    /// <summary>まだ訪問していない。</summary>
+    None,
+    /// <summary>心ここにあらず。</summary>
+    Cold,
+    /// <summary>反応は薄い。</summary>
+    Lukewarm,
+    /// <summary>悪くない反応。</summary>
+    Warm,
+    /// <summary>目を輝かせている。</summary>
+    Eager,
 }
 
 /// <summary>訪問1回の結果（<see cref="ScoutModel.TryVisit"/>）。</summary>
@@ -401,7 +454,31 @@ public static class ScoutModel
 
         prob += Math.Min(c.VisitGainMax, c.ProbPerVisit * Math.Max(0, p.Visits));
 
+        // 入部の条件を約束した子は来やすい（断っても下げない）。
+        if (p.Promised) prob += c.PromiseBonus;
+
         return MathUtil.Clamp(prob, c.ProbabilityMin, c.ProbabilityMax);
+    }
+
+    /// <summary>成功率を手応えの4段へ丸める（境目は <see cref="ScoutCoefficients"/>）。</summary>
+    public static VisitResponse ResponseOf(double probability, ScoutCoefficients c)
+        => probability >= c.ResponseEagerMin ? VisitResponse.Eager
+            : probability >= c.ResponseWarmMin ? VisitResponse.Warm
+            : probability >= c.ResponseLukewarmMin ? VisitResponse.Lukewarm
+            : VisitResponse.Cold;
+
+    /// <summary>
+    /// 訪問が成立した直後に呼び、その時点の成功率（3月の判定と同じ式）から手応えを候補へ焼く。
+    /// 乱数は使わない＝スカウト網の段によるノイズも乗らない（監督が自分で会った感触）。
+    /// 3月までに名声・部員・競合校が動けば、最終の成否とはずれうる。
+    /// </summary>
+    public static VisitResponse UpdateResponse(
+        ScoutCandidate p, double fame, Tier homeTier, bool hasDorm,
+        IReadOnlyList<DevelopingPlayer> roster, TeamStrengthCoefficients tc, ScoutCoefficients c)
+    {
+        var opportunity = OpportunityScore(p.Player, roster, tc);
+        p.Response = ResponseOf(SuccessProbability(p, fame, homeTier, hasDorm, opportunity, c), c);
+        return p.Response;
     }
 
     /// <summary>訪問1回の費用[万円]（距離で決まる。部費から出る）。</summary>
@@ -476,7 +553,14 @@ public static class ScoutModel
             var prob = SuccessProbability(p, fame, homeTier, hasDorm, opportunity, c);
             p.Decided = true;
             p.Succeeded = MathUtil.Chance(prob, rng);
-            if (p.Succeeded) won.Add(p);
+            if (!p.Succeeded) continue;
+            won.Add(p);
+            // 交わした約束は本人に持たせる＝入部後もずっと本人について回る。
+            if (p.Promised && p.Promise != ScoutPromiseKind.None)
+            {
+                p.Player.Promise = p.Promise;
+                p.Player.PromiseStatus = ScoutPromiseStatus.Active;
+            }
         }
         state.Resolved = true;
         return won;

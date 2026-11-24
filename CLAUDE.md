@@ -134,6 +134,8 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 部費 | Manager.Funds | **財布は1つ**（design-04 §1.4・issue #1082 で施設基金を統合）。学校予算・信頼度ぶん・学校の設備投資・後援会/OB寄付・甲子園/全国優勝の一時金が入り、施設・道具・備品・合宿・年契約・遠征すべてに使う。転任では3割だけ持ち越す |
 | 買えるものの区分 | PurchaseKind(Facility/Equipment/Gear) | 施設（Lv1-3）／練習道具（効果小・大の2段）／備品（買い切り）。どれも部費から払う |
 | 年契約 | ContractCatalog / ContractSet / ContractEffects | スカウト網・遠征・専門コーチ（design-04 §1.4a）。買い切りの施設と違い**効果が累積せず**「いまの段」だけが効き、年額を毎年部費から払い、段を0へ戻せば解約できる。既定はスカウト網Lv1＝従来の `ScoutCost` と同額・同効果 |
+| 訪問の手応え | VisitResponse(Cold/Lukewarm/Warm/Eager) | スカウト候補を訪問した時点の成功率を4段に丸めた感触。入部の見込み（%）は出さず、これだけを返す（設計書04 §2.4） |
+| 入部の条件（約束） | ScoutPromiseKind / ScoutPromiseStatus(Active/Kept/Broken) / ScoutPromises | 訪問のときたまに候補が出す条件（レギュラー確約・4番確約・連投させない等12種）。約束すると口説きやすくなり、入部後は本人が持つ（`DevelopingPlayer.Promise`）。公式戦で破ると信頼度と名声が下がる（設計書04 §2.4） |
 | 練習分野 / 練習道具 | TrainingField(Batting/Defense/BaseRunning/Pitching) / EquipmentBonus | 施設の効率係数が全メニュー一律なのに対し、道具は**振っているメニューの分野にだけ**効く。メニュー→分野の写像は `TrainingFields` が単一ソース |
 | 指導力（打撃/投手/守備走塁） | Coaching.Batting/.Pitching/.Defense | |
 | 育成眼 / 采配 | TalentEye / TacticalSense | |

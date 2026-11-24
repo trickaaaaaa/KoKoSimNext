@@ -38,6 +38,8 @@ namespace KokoSim.Unity.Lineup
         public bool IsCaptain;
         /// <summary>故障中の表示（例「捻挫・中度／あと 3 日」）。健常なら空（設計書03 §3.5）。</summary>
         public InjuryChipView Injury = InjuryChipView.None;
+        /// <summary>入部の条件（約束）の印。無ければ空（設計書04 §2.4）。</summary>
+        public PromiseChipView Promise = PromiseChipView.None;
         /// <summary>調子（常に自校の真値。UI原則⑥・ConditionFaceで表情顔として出す）。</summary>
         public Condition Condition = Condition.Normal;
     }
@@ -52,6 +54,18 @@ namespace KokoSim.Unity.Lineup
         public bool IsEmpty => Head.Length == 0;
     }
 
+    /// <summary>
+    /// 入部の条件（約束）の印（設計書04 §2.4）。約束が生きている選手に付け、いまの並びで試合に入ると破るなら
+    /// <see cref="Breaks"/> が立つ（警告色）。約束が無ければ空。
+    /// </summary>
+    public sealed class PromiseChipView
+    {
+        public static readonly PromiseChipView None = new PromiseChipView();
+        public string Label = "";   // 「4番確約」
+        public bool Breaks;
+        public bool IsEmpty => Label.Length == 0;
+    }
+
     /// <summary>控え（打順外）の1選手。</summary>
     public sealed class BenchRowView
     {
@@ -63,6 +77,8 @@ namespace KokoSim.Unity.Lineup
         public bool IsPicked;
         /// <summary>故障中の表示（例「捻挫・中度／あと 3 日」）。健常なら空（設計書03 §3.5）。</summary>
         public InjuryChipView Injury = InjuryChipView.None;
+        /// <summary>入部の条件（約束）の印。無ければ空（設計書04 §2.4）。</summary>
+        public PromiseChipView Promise = PromiseChipView.None;
         /// <summary>調子（常に自校の真値。UI原則⑥・ConditionFaceで表情顔として出す）。</summary>
         public Condition Condition = Condition.Normal;
     }
@@ -133,6 +149,9 @@ namespace KokoSim.Unity.Lineup
         public string StartingPitcherInningsText = "-";
         public string StartingPitcherStrikeoutsText = "-";
         public InjuryChipView StartingPitcherInjury = InjuryChipView.None;
+        public PromiseChipView StartingPitcherPromise = PromiseChipView.None;
+        /// <summary>いまの並びで試合に入ると破る約束の名前（「選手名（条件）」。確定時の確認に出す）。</summary>
+        public List<string> BrokenPromises = new List<string>();
         public Condition StartingPitcherCondition = Condition.Normal;
         /// <summary>先発投手と捕手の相性のランク（設計書23 §4・issue #935）。捕手がいなければ null。</summary>
         public string BatteryGrade;
@@ -585,6 +604,35 @@ namespace KokoSim.Unity.Lineup
 
         // ── View 構築 ──
 
+        /// <summary>
+        /// いまの並びで公式戦に入ると破ることになる約束の持ち主（設計書04 §2.4）。練習試合は数えない＝空。
+        /// 判定は engine の <see cref="ScoutPromiseJudge.WouldBreak"/>（試合後の判定と同じ物差し）。
+        /// </summary>
+        private IReadOnlyList<DevelopingPlayer> PromiseBreakers()
+        {
+            var gs = KokoSim.Unity.Shell.GameSession.Current;
+            if (!KokoSim.Unity.Shell.ScoutPromiseTracker.InOfficialTournament || _shortage)
+                return System.Array.Empty<DevelopingPlayer>();
+            var order = new List<DevelopingPlayer>(_idx.Length);
+            for (var i = 0; i < _idx.Length; i++)
+            {
+                if (_idx[i] < 0) return System.Array.Empty<DevelopingPlayer>();   // 編成が埋まっていない
+                order.Add(_roster[_idx[i]]);
+            }
+            var spIdx = StartingPitcherIndex;
+            return ScoutPromiseJudge.WouldBreak(
+                _roster, order, spIdx >= 0 ? _roster[spIdx] : null, gs.Kind,
+                KokoSim.Unity.Shell.ScoutPromiseTracker.NextMatchStamp());
+        }
+
+        private static PromiseChipView PromiseChip(DevelopingPlayer p, IReadOnlyList<DevelopingPlayer> breaking)
+        {
+            if (p.PromiseStatus != ScoutPromiseStatus.Active) return PromiseChipView.None;
+            var breaks = false;
+            foreach (var b in breaking) if (ReferenceEquals(b, p)) { breaks = true; break; }
+            return new PromiseChipView { Label = ScoutPromises.Label(p.Promise), Breaks = breaks };
+        }
+
         /// <summary>故障中の表示（傷病名・段階・完治までの残り）。健常なら空（設計書03 §3.5）。大会中は日、それ以外は週。</summary>
         private static InjuryChipView InjuryChip(DevelopingPlayer p)
         {
@@ -635,6 +683,13 @@ namespace KokoSim.Unity.Lineup
 
             // 画面下部の操作説明は廃止（オーダー画面リデザイン 2026-11-09）。
 
+            var breaking = PromiseBreakers();
+            foreach (var b in breaking) v.BrokenPromises.Add(b.Name + "（" + ScoutPromises.Label(b.Promise) + "）");
+            // 故障者起用の警告と同じ行に出す（編成不備の警告があるときはそちらが先）。
+            if (v.BrokenPromises.Count > 0 && v.CanConfirm)
+                v.WarnText = (string.IsNullOrEmpty(v.WarnText) ? "" : v.WarnText + "　")
+                             + "約束を破る並び（" + string.Join("・", v.BrokenPromises) + "）";
+
             for (var i = 0; i < 9; i++)
             {
                 var p = _roster[_idx[i]];
@@ -657,6 +712,7 @@ namespace KokoSim.Unity.Lineup
                     IsPosPicked = _pickKind == PickKind.SlotPosition && _posPickSlot == i,
                     IsCaptain = p.IsCaptain,
                     Injury = InjuryChip(p),
+                    Promise = PromiseChip(p, breaking),
                     Condition = FormModel.Quantize(p.ConditionValue),
                 });
                 // 先発投手と捕手の相性（設計書23 §4・issue #935）。先発の行に出す。
@@ -685,6 +741,7 @@ namespace KokoSim.Unity.Lineup
                 v.StartingPitcherInningsText = pit.Ip;
                 v.StartingPitcherStrikeoutsText = pit.K;
                 v.StartingPitcherInjury = InjuryChip(sp);
+                v.StartingPitcherPromise = PromiseChip(sp, breaking);
                 v.StartingPitcherCondition = FormModel.Quantize(sp.ConditionValue);
             }
 
@@ -706,6 +763,7 @@ namespace KokoSim.Unity.Lineup
                     HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
                     Injury = InjuryChip(p),
+                    Promise = PromiseChip(p, breaking),
                     Condition = FormModel.Quantize(p.ConditionValue),
                 });
             }

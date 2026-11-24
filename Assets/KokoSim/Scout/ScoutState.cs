@@ -27,8 +27,6 @@ namespace KokoSim.Unity.Scout
         /// <summary>見立てが有効か。スカウト網が未契約なら false＝<b>推定そのものを出さない</b>
         /// （開示0の推定は誤差σ20でほぼ雑音なので、色付きランクとして出すと嘘をつくことになる）。</summary>
         public bool HasEstimate;
-        /// <summary>入部後にだけ埋まる実測（null＝まだ入部していない＝答え合わせは出さない）。</summary>
-        public PlayerStrength Actual;
         public int UnknownCount;
 
         // 隠しパラメータ（判明していなければ null＝画面は「？」）。
@@ -71,6 +69,10 @@ namespace KokoSim.Unity.Scout
         public string CareerPathWord = "";
         /// <summary>進路希望の一文（詳細用。「名門校に行きたいようだ」）。</summary>
         public string CareerPathSentence = "";
+        /// <summary>最後の訪問の手応え（未訪問は空）。</summary>
+        public string ResponseSentence = "";
+        /// <summary>交わした約束の名前（約束していなければ空）。</summary>
+        public string PromiseLabel = "";
         /// <summary>個別能力のランク（段3だけ埋まる）。</summary>
         public List<AbilityRankRow> Abilities = new List<AbilityRankRow>();
     }
@@ -87,16 +89,14 @@ namespace KokoSim.Unity.Scout
     /// <summary>スカウト画面の ViewModel（設計書06 §3.6）。</summary>
     public sealed class ScoutView
     {
-        /// <summary>一覧の見出し（「入部予定者」／「今年の入部者」）。</summary>
+        /// <summary>一覧の見出し（「入部予定者」／「スカウト候補」）。</summary>
         public string ListTitle = "入部予定者";
         /// <summary>一覧の副題（合流年度・人数）。</summary>
         public string ListSub = "";
-        /// <summary>詳細の副題に添える状態（「2027年4月入部予定」／「入部済み」）。</summary>
+        /// <summary>詳細の副題に添える状態（「2027年4月入部予定」）。</summary>
         public string StateWord = "";
         /// <summary>一覧が空のときに出す一文（空＝行がある）。</summary>
         public string EmptyText = "";
-        /// <summary>入部済みの学年を見ているか（＝答え合わせの列を出す）。</summary>
-        public bool Joined;
         /// <summary>見立てを出せるか（スカウト網が未契約なら false）。</summary>
         public bool HasEstimate;
         /// <summary>見立てカードの注記（開示の程度）。</summary>
@@ -131,7 +131,6 @@ namespace KokoSim.Unity.Scout
     /// </summary>
     public sealed class ScoutState
     {
-        private static readonly TeamStrengthCoefficients Strength = new TeamStrengthCoefficients();
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
 
         private static readonly ScoutField[] FieldValues =
@@ -150,7 +149,9 @@ namespace KokoSim.Unity.Scout
 
             if (v.Tab == ScoutTab.Candidates) return BuildScoutView(v);
 
-            var cls = ProspectService.Current;
+            // 入部した学年はここに載せない（1年生は選手一覧で見られる。入部済みの子が「入部予定者」に
+            // 並ぶと紛らわしい＝2026-11-24 オーナー決定）。4月〜次の3月の確定までは空状態を出す。
+            var cls = ProspectService.HasPending ? ProspectService.Current : null;
             if (cls == null)
             {
                 v.ListSub = "未確定";
@@ -159,13 +160,9 @@ namespace KokoSim.Unity.Scout
                 return v;
             }
 
-            v.Joined = cls.Joined;
             v.HasEstimate = cls.Disclosure > 0;
-            v.ListTitle = cls.Joined ? "今年の入部者" : "入部予定者";
-            v.EstimateNote = !v.HasEstimate ? "スカウト網 未契約"
-                : cls.Joined ? "見立てと実際"
-                : DisclosureWord(cls.Disclosure);
-            v.StateWord = cls.Joined ? "入部済み" : YearLabel(cls.YearIndex) + "4月入部予定";
+            v.EstimateNote = !v.HasEstimate ? "スカウト網 未契約" : DisclosureWord(cls.Disclosure);
+            v.StateWord = YearLabel(cls.YearIndex) + "4月入部予定";
             v.ListSub = cls.Count + "名 ・ " + v.StateWord;
 
             for (var i = 0; i < cls.Reports.Count; i++)
@@ -198,7 +195,7 @@ namespace KokoSim.Unity.Scout
             }
             else
             {
-                var used = ScoutService.Current?.TargetedCount ?? 0;
+                var used = CurrentList()?.TargetedCount ?? 0;
                 v.SlotWord = "スカウト枠 " + slots + "人（内定" + used + "）";
             }
 
@@ -224,10 +221,10 @@ namespace KokoSim.Unity.Scout
         // ── スカウト候補一覧（issue #867） ─────────────────────────
         private ScoutView BuildScoutView(ScoutView v)
         {
-            var state = ScoutService.Current;
+            var state = CurrentList();
             v.ListTitle = "スカウト候補";
 
-            if (state == null || state.Candidates.Count == 0)
+            if (state == null)
             {
                 v.ListSub = "未着";
                 v.EmptyText = ScoutService.AwaitingList
@@ -242,6 +239,13 @@ namespace KokoSim.Unity.Scout
             foreach (var c in state.Candidates) v.Rows.Add(BuildScoutRow(c));
             return v;
         }
+
+        /// <summary>
+        /// 今年度ぶんの候補リスト（合流年度＝今年度＋1）。4月に年度が替わったら前年度のリストは出さない
+        /// ＝決着済みの候補（入部した子を含む）を次の秋まで並べ続けない。3月の決着〜年度替わりは結果つきで残る。
+        /// </summary>
+        private static ScoutingState CurrentList()
+            => ScoutMilestones.HasListFor(ScoutService.Current, GameClock.YearIndex) ? ScoutService.Current : null;
 
         private ProspectRow BuildScoutRow(ScoutCandidate c)
         {
@@ -259,6 +263,8 @@ namespace KokoSim.Unity.Scout
                 RivalIsStronger = ScoutModel.TierRank(c.RivalTier) > ScoutModel.TierRank(HomeTier()),
                 Targeted = c.Targeted,
                 Visits = c.Visits,
+                ResponseSentence = ResponseSentence(c.Response),
+                PromiseLabel = c.Promised ? ScoutPromises.Label(c.Promise) : "",
                 VisitCost = ScoutModel.VisitCost(c.Distance, ScoutService.Coefficients),
                 Decided = c.Decided,
                 Succeeded = c.Succeeded,
@@ -302,6 +308,16 @@ namespace KokoSim.Unity.Scout
             _ => "地元でプレーしたいようだ",
         };
 
+        /// <summary>訪問の手応えの一文（4段。未訪問は空）。訪問直後の一言と詳細カードの行で同じ文を使う。</summary>
+        public static string ResponseSentence(VisitResponse r) => r switch
+        {
+            VisitResponse.Eager => "目を輝かせて聞いていた",
+            VisitResponse.Warm => "悪くない反応だった",
+            VisitResponse.Lukewarm => "反応は薄かった",
+            VisitResponse.Cold => "心ここにあらずだった",
+            _ => "",
+        };
+
         private static Tier HomeTier() => Tiers.FromStrength(TeamOverall.Of(RosterService.Active));
 
         private int WeeksUntilCandidates()
@@ -314,16 +330,14 @@ namespace KokoSim.Unity.Scout
         private ProspectRow BuildRow(IncomingClass cls, int index)
         {
             var r = cls.Reports[index];
-            // 未合流なら予定者の実体、合流済みならロスターから引く（実体はロスター側だけが持つ）。
-            var player = cls.Joined ? FindInRoster(r.PlayerId) : PlayerAt(cls, index);
+            var player = PlayerAt(cls, index);
 
             var row = new ProspectRow
             {
                 Name = string.IsNullOrEmpty(r.Name) ? "？" : r.Name,
                 Estimate = new PlayerStrength(r.Batting, r.Mobility, r.Defense, r.Pitching),
                 HasEstimate = cls.Disclosure > 0,
-                // 入部したら隠しは全部開くので「？」は残さない（詳細が値を出しているのに一覧だけ？だと矛盾する）。
-                UnknownCount = cls.Joined ? 0 : r.UnknownCount,
+                UnknownCount = r.UnknownCount,
                 Recruited = r.Recruited,
                 // スカウト評は見立てから起こすので、見立てが無ければ出さない。
                 Comment = "",
@@ -332,13 +346,11 @@ namespace KokoSim.Unity.Scout
             if (player != null)
             {
                 row.Handedness = HandednessJp(player);
-                if (cls.Joined) row.Actual = PlayerStrengthProfile.Compute(player, Strength);
-                // 隠しパラメータは「事前に判明した項目」だけ出す。入部後は全部見せる
-                // （選手詳細と同じ扱い＝ここだけ隠し続けると二重の真実になる）。
-                if (cls.Joined || r.KnowsGrowthType) row.GrowthType = GrowthTypeJp(player.GrowthType);
-                if (cls.Joined || r.KnowsPotential) row.Potential = PotentialJp(player);
-                if (cls.Joined || r.KnowsPersonality) row.Personality = Personalities.DisplayName(player.Personality);
-                if (cls.Joined || r.KnowsInjuryResistance) row.InjuryResistance = InjuryResistanceJp(player.InjuryResistance);
+                // 隠しパラメータは「事前に判明した項目」だけ出す。
+                if (r.KnowsGrowthType) row.GrowthType = GrowthTypeJp(player.GrowthType);
+                if (r.KnowsPotential) row.Potential = PotentialJp(player);
+                if (r.KnowsPersonality) row.Personality = Personalities.DisplayName(player.Personality);
+                if (r.KnowsInjuryResistance) row.InjuryResistance = InjuryResistanceJp(player.InjuryResistance);
             }
 
             row.Comment = row.HasEstimate
@@ -349,9 +361,6 @@ namespace KokoSim.Unity.Scout
 
         private static DevelopingPlayer PlayerAt(IncomingClass cls, int index)
             => index >= 0 && index < cls.Players.Count ? cls.Players[index] : null;
-
-        private static DevelopingPlayer FindInRoster(int id)
-            => id <= 0 ? null : RosterService.Roster.FirstOrDefault(p => p.Id == id);
 
         private int WeeksUntilConfirm()
         {

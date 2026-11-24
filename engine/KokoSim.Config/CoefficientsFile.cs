@@ -1910,6 +1910,17 @@ public static class CoefficientsLoader
         public double ReportNoiseSdTier1 { get; set; } = D.ReportNoiseSdTier1;
         public double ReportNoiseSdTier2 { get; set; } = D.ReportNoiseSdTier2;
         public double ReportNoiseSdTier3 { get; set; } = D.ReportNoiseSdTier3;
+        public double ResponseLukewarmMin { get; set; } = D.ResponseLukewarmMin;
+        public double ResponseWarmMin { get; set; } = D.ResponseWarmMin;
+        public double ResponseEagerMin { get; set; } = D.ResponseEagerMin;
+        public double PromiseAskProb { get; set; } = D.PromiseAskProb;
+        public double PromiseBonus { get; set; } = D.PromiseBonus;
+        public double PromiseWeightFit { get; set; } = D.PromiseWeightFit;
+        public double PromiseWeightNeutral { get; set; } = D.PromiseWeightNeutral;
+        public int PromiseCaptainLeadershipMin { get; set; } = D.PromiseCaptainLeadershipMin;
+        public double PromiseBrokenTrust { get; set; } = D.PromiseBrokenTrust;
+        public double PromiseBrokenFame { get; set; } = D.PromiseBrokenFame;
+        public double PromiseKeptTrust { get; set; } = D.PromiseKeptTrust;
 
         public ScoutCoefficients ToModel() => new()
         {
@@ -1951,6 +1962,17 @@ public static class CoefficientsLoader
             ReportNoiseSdTier1 = ReportNoiseSdTier1,
             ReportNoiseSdTier2 = ReportNoiseSdTier2,
             ReportNoiseSdTier3 = ReportNoiseSdTier3,
+            ResponseLukewarmMin = ResponseLukewarmMin,
+            ResponseWarmMin = ResponseWarmMin,
+            ResponseEagerMin = ResponseEagerMin,
+            PromiseAskProb = PromiseAskProb,
+            PromiseBonus = PromiseBonus,
+            PromiseWeightFit = PromiseWeightFit,
+            PromiseWeightNeutral = PromiseWeightNeutral,
+            PromiseCaptainLeadershipMin = PromiseCaptainLeadershipMin,
+            PromiseBrokenTrust = PromiseBrokenTrust,
+            PromiseBrokenFame = PromiseBrokenFame,
+            PromiseKeptTrust = PromiseKeptTrust,
         };
     }
 

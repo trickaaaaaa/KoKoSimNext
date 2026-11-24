@@ -35,6 +35,7 @@ namespace KokoSim.Unity.Shell
         private const ulong ListStream = 0x5588_0000UL;
         private const ulong VisitStream = 0x5589_0000UL;
         private const ulong ResolveStream = 0x558A_0000UL;
+        private const ulong PromiseStream = 0x558B_0000_0000_0000UL;
 
         private static readonly ScoutCoefficients Coeff = new ScoutCoefficients();
         private static readonly TeamStrengthCoefficients StrengthCoeff = new TeamStrengthCoefficients();
@@ -107,6 +108,13 @@ namespace KokoSim.Unity.Shell
             var outcome = ScoutModel.TryVisit(
                 Current, index, InSeason, ManagerService.Manager.Funds, Coeff, GameSeed.Master ^ VisitStream, out var cost);
             if (cost > 0.0) ManagerService.Manager.Funds -= cost;
+            // 訪問が成立したら、その時点の手応えを候補へ残す（争奪戦で競合校が動いた後の値）。
+            if (outcome == ScoutVisitOutcome.Visited || outcome == ScoutVisitOutcome.VisitedWithRivalMove)
+            {
+                var p = At(index);
+                UpdateResponse(p);
+                AskPromise(p, index);
+            }
             switch (outcome)
             {
                 case ScoutVisitOutcome.Visited: return VisitResult.Visited;
@@ -115,6 +123,39 @@ namespace KokoSim.Unity.Shell
                 case ScoutVisitOutcome.NotEnoughFunds: return VisitResult.NotEnoughFunds;
                 default: return VisitResult.OutOfSeason;
             }
+        }
+
+        private static void UpdateResponse(ScoutCandidate p)
+            => ScoutModel.UpdateResponse(
+                p, ManagerService.Manager.Fame, HomeTier(), HasDorm, RosterService.Active, StrengthCoeff, Coeff);
+
+        /// <summary>
+        /// 訪問のとき、たまに入部の条件を出してくる（設計書04 §2.4・候補1人につき一度きり）。出たらスカウトとの会話を積み、
+        /// ホームで読んで返事をしたらスカウト画面の同じ候補へ戻る。乱数は訪問と同じ鍵の別ストリーム
+        /// ＝訪問の順番・保存/読み直しで結果が変わらない。
+        /// </summary>
+        private static void AskPromise(ScoutCandidate p, int index)
+        {
+            var rng = new Xoshiro256Random(
+                GameSeed.Master ^ PromiseStream ^ ScoutModel.VisitStreamKey(Current.YearIndex, index, p.Visits));
+            var roster = RosterService.Active;
+            var asked = ScoutPromises.TryAsk(
+                p, roster, HasDorm, ScoutPromises.Taken(roster, Current, p), StrengthCoeff, Coeff, rng);
+            if (asked == ScoutPromiseKind.None) return;
+            if (!ScoutPromiseService.Raise(p, () => UpdateResponse(p))) return;
+            NavigatePending = true;
+            _landOnCandidates = true;
+            _returnSelection = index;
+        }
+
+        private static int _returnSelection = -1;
+
+        /// <summary>条件の会話から戻ったとき、同じ候補を選び直すための添字（無ければ -1）。読んだら下ろす。</summary>
+        public static int TakeReturnSelection()
+        {
+            var was = _returnSelection;
+            _returnSelection = -1;
+            return was;
         }
 
         // ── 節目の強制イベント（issue #1035。判定は engine の ScoutMilestones に1箇所） ──
@@ -218,7 +259,8 @@ namespace KokoSim.Unity.Shell
         {
             Current = s.Scouting;
             SelectedField = s.ScoutFieldSelection;
-            NavigatePending = false; _landOnCandidates = false;
+            NavigatePending = false; _landOnCandidates = false; _returnSelection = -1;
+            ScoutPromiseTracker.Reset();
         }
 
         /// <summary>新規ゲームの完全リセット。</summary>
@@ -226,7 +268,8 @@ namespace KokoSim.Unity.Shell
         {
             Current = null;
             SelectedField = ScoutField.Omakase;
-            NavigatePending = false; _landOnCandidates = false;
+            NavigatePending = false; _landOnCandidates = false; _returnSelection = -1;
+            ScoutPromiseTracker.Reset();
         }
     }
 }

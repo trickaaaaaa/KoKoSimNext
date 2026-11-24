@@ -157,6 +157,14 @@ events:
             ScoutMilestones.ChooseFieldEventId, ScoutMilestones.ListArrivedEventId, ScoutMilestones.DeadlineEventId,
             // スカウトの一年の入口（issue #1064）。契約→分野の会話。IDは ScoutPitch の定数で引く。
             ScoutPitch.OfferEventId, ScoutPitch.DeclinedEventId, ScoutPitch.FieldAskEventId, ScoutPitch.FieldDoneEventId,
+            // 入部の条件（約束・設計書04 §2.4）。IDは ScoutPromises が条件の種類から引く。
+            ScoutPromises.AskEventId(ScoutPromiseKind.Regular), ScoutPromises.AskEventId(ScoutPromiseKind.PlayAsFreshman),
+            ScoutPromises.AskEventId(ScoutPromiseKind.Cleanup), ScoutPromises.AskEventId(ScoutPromiseKind.TopOfOrder),
+            ScoutPromises.AskEventId(ScoutPromiseKind.RestFirstSummer), ScoutPromises.AskEventId(ScoutPromiseKind.NoPinchHitter),
+            ScoutPromises.AskEventId(ScoutPromiseKind.NoBunt), ScoutPromises.AskEventId(ScoutPromiseKind.NoConsecutiveDays),
+            ScoutPromises.AskEventId(ScoutPromiseKind.StartingPitcher), ScoutPromises.AskEventId(ScoutPromiseKind.SingleDigitNumber),
+            ScoutPromises.AskEventId(ScoutPromiseKind.Captain), ScoutPromises.AskEventId(ScoutPromiseKind.Dorm),
+            ScoutPromises.AcceptedEventId, ScoutPromises.DeclinedEventId,
             // 年契約の更新（issue #1034）。IDは ContractRenewal の定数で引く。
             KokoSim.Engine.Career.ContractRenewal.EventId,
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",

@@ -40,12 +40,15 @@ namespace KokoSim.Unity.Scout
             if (visit != null) visit.clicked += Visit;
 
             // 節目の会話（候補リスト到着・念押し）から来たときは候補のタブから始める（issue #1035）。
-            // 候補リストを待っている時期（夏〜第24週）に自分で開いたときも同じ＝入部済みの1年生の
-            // 答え合わせ（この時期は意味が通らない）でなく「リストは10月に届く」を最初に見せる（issue #1064）。
+            // 候補リストを待っている時期（夏〜第24週）に自分で開いたときも同じ＝「リストは10月に届く」を
+            // 最初に見せる（issue #1064）。
             var landOnCandidates = ScoutService.TakeLandOnCandidates();
             if (landOnCandidates || ScoutService.AwaitingList) _state.Tab = ScoutTab.Candidates;
 
-            _selected = 0;
+            // 条件の会話（入部の約束）から戻ったときは、訪問していた候補を選び直す。
+            var back = ScoutService.TakeReturnSelection();
+            _selected = back >= 0 ? back : 0;
+            _status = "";
             Render();
         }
 
@@ -72,10 +75,13 @@ namespace KokoSim.Unity.Scout
         public void Visit()
         {
             if (_view == null || _selected >= _view.Rows.Count || !_view.Rows[_selected].IsScout) return;
-            switch (ScoutService.Visit(_selected))
+            var result = ScoutService.Visit(_selected);
+            // 手応えは訪問した時点の感触（4段）。入部の見込み（%）は出さない。
+            var felt = ScoutState.ResponseSentence(ScoutService.Current.Candidates[_selected].Response);
+            switch (result)
             {
-                case VisitResult.Visited: _status = "訪問した。手応えはあった。"; break;
-                case VisitResult.VisitedWithRivalMove: _status = "訪問した。だが競合校も動いたようだ。"; break;
+                case VisitResult.Visited: _status = "訪問した。" + felt + "。"; break;
+                case VisitResult.VisitedWithRivalMove: _status = "訪問した。" + felt + "。競合校も動いたようだ。"; break;
                 case VisitResult.SlotsFull: _status = "スカウト枠が埋まっている。"; break;
                 case VisitResult.NotEnoughFunds: _status = "部費が足りない。"; break;
                 default: _status = "いまは訪問できない（秋〜冬のあいだだけ）。"; break;
@@ -314,6 +320,8 @@ namespace KokoSim.Unity.Scout
                 host.Add(Row("進路希望", r.CareerPathSentence, false));
                 host.Add(Row("競合校", r.RivalTier, r.RivalIsStronger));
                 host.Add(Row("訪問", Dots(r.Visits) + " ・ " + r.Visits + "回", false));
+                host.Add(Row("手応え", string.IsNullOrEmpty(r.ResponseSentence) ? "—" : r.ResponseSentence, false));
+                if (!string.IsNullOrEmpty(r.PromiseLabel)) host.Add(Row("約束", r.PromiseLabel, false));
             }
 
             var visit = _root.Q<Button>("sc-visit");
@@ -341,8 +349,7 @@ namespace KokoSim.Unity.Scout
         }
 
         /// <summary>
-        /// 4軸を縦に並べた見立て表。入部済みなら「実際」の列を足して答え合わせにする
-        /// （＝「？が埋まった」ことが絵で分かる）。入部予定者は段ゲートが無いので常に出す
+        /// 4軸を縦に並べた見立て表。入部予定者は段ゲートが無いので常に出す
         /// （未契約だけ「？」になる）。スカウト候補は段2未満では表自体を伏せ、
         /// 「まだ分からない」ことを欄の有無で示す（1マスずつ？を並べると雑音が色付きに見える）。
         /// </summary>
@@ -361,36 +368,14 @@ namespace KokoSim.Unity.Scout
                 return;
             }
 
-            // 列は「見立て（契約しているときだけ）」と「実際（入部後だけ）」の2本。
-            var hasActual = r.Actual != null;
-            if (r.HasEstimate && hasActual) host.Add(EstimateHead());
-            host.Add(EstimateRow("打撃力", r, s => s.BattingTier, hasActual));
-            host.Add(EstimateRow("走力", r, s => s.MobilityTier, hasActual));
-            host.Add(EstimateRow("守備力", r, s => s.DefenseTier, hasActual));
-            host.Add(EstimateRow("投手力", r, s => s.PitchingTier, hasActual));
-        }
-
-        private static VisualElement EstimateHead()
-        {
-            var row = new VisualElement();
-            row.AddToClassList("sc-est__row");
-            row.AddToClassList("sc-est__row--head");
-            row.Add(HeadCell("", "sc-est__label"));
-            row.Add(HeadCell("見立て", "sc-est__col"));
-            row.Add(HeadCell("実際", "sc-est__col"));
-            return row;
-        }
-
-        private static Label HeadCell(string text, string cls)
-        {
-            var l = new Label(text);
-            l.AddToClassList(cls);
-            l.AddToClassList("sc-est__th");
-            return l;
+            host.Add(EstimateRow("打撃力", r, s => s.BattingTier));
+            host.Add(EstimateRow("走力", r, s => s.MobilityTier));
+            host.Add(EstimateRow("守備力", r, s => s.DefenseTier));
+            host.Add(EstimateRow("投手力", r, s => s.PitchingTier));
         }
 
         private static VisualElement EstimateRow(
-            string label, ProspectRow r, System.Func<PlayerStrength, Tier> axis, bool hasActual)
+            string label, ProspectRow r, System.Func<PlayerStrength, Tier> axis)
         {
             var row = new VisualElement();
             row.AddToClassList("sc-est__row");
@@ -399,9 +384,8 @@ namespace KokoSim.Unity.Scout
             l.AddToClassList("sc-est__label");
             row.Add(l);
 
-            // 未契約なら見立ての列は「？」。入部後は実測の列を足す。
+            // 未契約なら見立ての列は「？」。
             row.Add(r.HasEstimate ? ChipCell(axis(r.Estimate)) : UnknownCell());
-            if (hasActual) row.Add(ChipCell(axis(r.Actual)));
             return row;
         }
 

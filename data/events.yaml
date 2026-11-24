@@ -1438,6 +1438,228 @@ events:
           - who: team_manager
             say: "どっちも待ってくれない気がします。"
 
+  # 入部の条件（約束）。設計書04 §2.4。訪問のとき、候補がたまに条件を出してくる。
+  # 条件の種類・出す確率・誰に出すかは ScoutPromises（engine）が決め、ここには会話だけを書く。
+  # 選択肢は「約束する／約束はできない」。IDは ScoutPromises.AskEventId と一致させる（ScoutPromiseEventTests が固定）。
+  # {player} は訪問した候補の名前。監督には台詞を持たせない（選ぶだけ）。
+  - id: scout_promise_regular
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "監督、{player} から条件が出ました。『公式戦は、スタメンで使ってほしい』そうです。"
+          - who: team_manager
+            say: "中学生に、もう交渉されてますね。"
+      - lines:
+          - who: narration
+            say: "{player} は、まっすぐこちらを見て言った。「試合に出られないなら、行く意味がありません」"
+          - who: scout
+            say: "スタメンで使う、という約束がほしいそうです。はっきりした子です。"
+
+  - id: scout_promise_play_as_freshman
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} の条件です。『1年のうちから、公式戦に出してほしい』と。途中からでも構わないそうです。"
+          - who: team_manager
+            say: "控えめなのか、強気なのか、分かりませんね。"
+      - lines:
+          - who: narration
+            say: "{player} の父親が、湯呑みを置いた。「1年のうちに、一度でいいから公式戦のグラウンドに立たせてやってください」"
+          - who: scout
+            say: "一度でいい、と言う親御さんほど、スタンドで数えているものです。"
+
+  - id: scout_promise_cleanup
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} の条件は、ひとつだけです。『4番を打たせてほしい』。"
+          - who: team_manager
+            say: "ひとつだけ、がいちばん重いやつですね。"
+      - lines:
+          - who: narration
+            say: "{player} は、色紙に大きく「四番」と書いて差し出した。サインの練習ではなかった。"
+          - who: scout
+            say: "4番を打たせる、と約束してほしいそうです。"
+
+  - id: scout_promise_top_of_order
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} からです。『打順は、1番から5番のどこかで使ってほしい』そうです。"
+          - who: team_manager
+            say: "4番と言わないあたり、計算ができる子です。"
+      - lines:
+          - who: scout
+            say: "{player} は、打席が多く回る打順がいいそうです。1番から5番のどこかで、と。"
+          - who: team_manager
+            say: "下位打線の先輩たちが、聞いたら泣きます。"
+
+  - id: scout_promise_rest_first_summer
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} の条件は、変わってます。『1年の夏は、公式戦に出さないでほしい』。まず体をつくりたいそうです。"
+          - who: team_manager
+            say: "出さない約束のほうが、守るのは難しいかもしれません。"
+      - lines:
+          - who: narration
+            say: "{player} は、細い腕をさすりながら言った。「最初の夏は、ベンチの外でいいです。体をつくらせてください」"
+          - who: scout
+            say: "1年の夏は公式戦に出さない。それが条件です。珍しい子です。"
+
+  - id: scout_promise_no_pinch_hitter
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} からです。『スタメンで出た試合は、代打を出さないでほしい』と。"
+          - who: team_manager
+            say: "最後まで打たせろ、ということですね。チャンスで回ってきませんように。"
+      - lines:
+          - who: narration
+            say: "{player} は、少しだけ声を低くした。「打てなくても、最後まで自分で打ちたいんです」"
+          - who: scout
+            say: "スタメンで出た試合は、代打を出さない。その約束がほしいそうです。"
+
+  - id: scout_promise_no_bunt
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} の条件です。『バントのサインは出さないでほしい。打たせてほしい』。"
+          - who: team_manager
+            say: "無死一塁で、監督の手が震える未来が見えます。"
+      - lines:
+          - who: narration
+            say: "{player} は、バットを握る手を見せた。豆だらけだった。「これは、振るためにつくった手です」"
+          - who: scout
+            say: "送りバントはさせない、という約束がほしいそうです。"
+
+  - id: scout_promise_no_consecutive_days
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} というより、ご両親からです。『二日続けては投げさせないでほしい』と。"
+          - who: team_manager
+            say: "大会の日程表と、にらめっこになりますね。"
+      - lines:
+          - who: scout
+            say: "{player} の中学の監督さんからです。『連投だけは、させないでやってほしい』と頼まれました。"
+          - who: team_manager
+            say: "頼まれごとは、断るより守るほうが難しいです。"
+
+  - id: scout_promise_starting_pitcher
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} の条件です。『公式戦で、先発のマウンドに立たせてほしい』。"
+          - who: team_manager
+            say: "まっさらなマウンドが好きなんでしょう。気持ちは分かります。"
+      - lines:
+          - who: narration
+            say: "{player} は、迷わず言った。「後ろで投げるのは、好きじゃないんです。最初から投げたい」"
+          - who: scout
+            say: "公式戦で先発させる、という約束がほしいそうです。"
+
+  - id: scout_promise_single_digit_number
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} からです。『秋には、一桁の背番号がほしい』そうです。"
+          - who: team_manager
+            say: "番号は9つしかありません。先輩たちには、内緒にしておきます。"
+      - lines:
+          - who: narration
+            say: "{player} は、小さな声で言った。「背番号は、一桁がいいです。秋でいいので」"
+          - who: scout
+            say: "小さな声で、大きなことを言う子です。"
+
+  - id: scout_promise_captain
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} の条件は、大きく出ました。『2年の秋、主将にしてほしい』。"
+          - who: team_manager
+            say: "まだ入部もしていないのに、もう任期の話です。"
+      - lines:
+          - who: narration
+            say: "{player} は、玄関の靴をきれいに揃えてから、こちらへ向き直った。「2年の秋、主将をやらせてください」"
+          - who: scout
+            say: "靴まで揃えられると、断りにくいですね。"
+
+  - id: scout_promise_dorm
+    kind: System
+    scene: office
+    text: "{player} が、入部の条件を出してきた。"
+    variants:
+      - lines:
+          - who: scout
+            say: "{player} は遠くから来ます。『寮に入れるなら』というのが条件です。"
+          - who: team_manager
+            say: "うちに寮は、まだありません。4月までに建てる、という約束になります。"
+      - lines:
+          - who: narration
+            say: "{player} の母親が、時刻表を広げた。片道二時間半だった。"
+          - who: scout
+            say: "寮に入れるなら行かせたい、とのことです。うちに寮は、まだありません。"
+
+  - id: scout_promise_accepted
+    kind: System
+    scene: office
+    text: "{player} と、入部の条件を約束した。"
+    variants:
+      - lines:
+          - who: scout
+            say: "伝えておきます。きっと喜びますよ。……約束は、入ってからが本番ですからね。"
+      - lines:
+          - who: scout
+            say: "承知しました。これで、ぐっと話が進みます。"
+          - who: team_manager
+            say: "約束、手帳に書いておきます。監督が忘れないように。"
+
+  - id: scout_promise_declined
+    kind: System
+    scene: office
+    text: "{player} の条件は、約束しなかった。"
+    variants:
+      - lines:
+          - who: scout
+            say: "分かりました。約束できないことは、約束しない。それも誠意です。"
+      - lines:
+          - who: scout
+            say: "そう伝えます。まあ、条件がすべてじゃありません。足で稼ぎましょう。"
+
   # 年契約の更新（issue #1034）。年額が引かれる年度の総括の前週に、契約中の年契約の段を選び直させる。
   # 出すかどうかと週は ContractRenewal（engine）が1箇所で決める。会話の後は更新の画面（段を1枚ずつ選ぶ）へ。
   # IDは ContractRenewal.EventId と一致させる（EventTableTests が固定）。

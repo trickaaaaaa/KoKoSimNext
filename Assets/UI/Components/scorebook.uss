@@ -177,6 +177,23 @@
 .sbk .sbk-injury--row { flex-direction: row; align-items: center; }
 .sbk .sbk-injury--row Label { font-size: 11px; color: var(--sbk-injury-fg); }
 
+/* ── 入部の条件（約束）のタグ（11px。墨の細枠＝選手についている約束／警告色＝いまの並びで破る） ── */
+.sbk .sbk-promise {
+    font-size: 11px;
+    color: var(--sbk-ink);
+    border-width: 1px;
+    border-color: var(--sbk-ink);
+    border-radius: var(--sbk-r-tag);
+    padding: 0 5px;
+    margin: 0;
+    align-self: flex-start;
+}
+.sbk .sbk-promise--warn {
+    color: var(--sbk-injury-fg);
+    background-color: var(--sbk-injury-bg);
+    border-color: var(--sbk-injury-fg);
+}
+
 /* ── RankChip のこの試作での大きさ（画像はそのまま。設計書19＝ランク色は機能色） ── */
 .sbk .rank-chip--sbk22 { min-width: 22px; width: 22px; height: 22px; padding: 0; flex-shrink: 0; }
 .sbk .rank-chip--sbk36 { min-width: 36px; width: 36px; height: 36px; padding: 0; flex-shrink: 0; }

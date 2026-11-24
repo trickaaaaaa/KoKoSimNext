@@ -244,6 +244,74 @@ public sealed class ScoutingTests
         Assert.True(saturated, "訪問の上積みが頭打ちになっていない");
     }
 
+    // ── 訪問の手応え（設計書04 §2.4「訪問の手応え」） ─────────────────
+
+    [Theory]
+    [InlineData(0.02, VisitResponse.Cold)]
+    [InlineData(0.24, VisitResponse.Cold)]
+    [InlineData(0.25, VisitResponse.Lukewarm)]
+    [InlineData(0.44, VisitResponse.Lukewarm)]
+    [InlineData(0.45, VisitResponse.Warm)]
+    [InlineData(0.64, VisitResponse.Warm)]
+    [InlineData(0.65, VisitResponse.Eager)]
+    [InlineData(0.92, VisitResponse.Eager)]
+    public void ResponseOf_BandsTheProbabilityIntoFourSteps(double probability, VisitResponse expected)
+        => Assert.Equal(expected, ScoutModel.ResponseOf(probability, C));
+
+    [Fact]
+    public void Candidate_HasNoResponse_UntilVisited()
+        => Assert.All(Build(800021, level: 3, field: ScoutField.Omakase).Candidates,
+            c => Assert.Equal(VisitResponse.None, c.Response));
+
+    [Fact]
+    public void UpdateResponse_MatchesTheProbabilityAtThatMoment_AndIsStored()
+    {
+        var roster = new List<DevelopingPlayer>();
+        var p = Candidate(RecruitDistance.SamePrefecture, Tier.C, CareerPathPreference.Prestige);
+        p.Visits = 1;
+
+        var got = ScoutModel.UpdateResponse(p, fame: 50, Tier.C, hasDorm: false, roster, Strength, C);
+
+        var prob = ScoutModel.SuccessProbability(
+            p, 50, Tier.C, false, ScoutModel.OpportunityScore(p.Player, roster, Strength), C);
+        Assert.Equal(ScoutModel.ResponseOf(prob, C), got);
+        Assert.Equal(got, p.Response);
+        Assert.NotEqual(VisitResponse.None, got);
+    }
+
+    [Fact]
+    public void UpdateResponse_NeverGetsWorseWithMoreVisits_WhenRivalStaysPut()
+    {
+        var roster = new List<DevelopingPlayer>();
+        var p = Candidate(RecruitDistance.Far, Tier.C, CareerPathPreference.Prestige);
+        var prev = VisitResponse.None;
+        for (var visits = 1; visits <= 6; visits++)
+        {
+            p.Visits = visits;
+            var r = ScoutModel.UpdateResponse(p, 30, Tier.C, false, roster, Strength, C);
+            Assert.True(r >= prev, $"訪問{visits}回目で手応えが下がった: {prev} → {r}");
+            prev = r;
+        }
+    }
+
+    [Fact]
+    public void Response_SurvivesSaveLoad_AndOldSavesReadAsNone()
+    {
+        var s = Build(800022, level: 2, field: ScoutField.Omakase);
+        s.Candidates[0].Response = VisitResponse.Warm;
+
+        var json = KokoSim.Engine.Saves.ScoutingSaves.ToJson(s);
+        var back = KokoSim.Engine.Saves.ScoutingSaves.FromJson(json)!;
+        Assert.Equal(VisitResponse.Warm, back.Candidates[0].Response);
+        Assert.Equal(VisitResponse.None, back.Candidates[1].Response);
+
+        // 手応えを持たない旧セーブ（項目なし）は「まだ無い」で読む。
+        var text = json.ToString()!.Replace("\"response\":\"Warm\",", "").Replace("\"response\":\"None\",", "");
+        Assert.DoesNotContain("response", text);
+        var old = KokoSim.Engine.Saves.ScoutingSaves.FromJson(KokoSim.Engine.Saves.Json.JsonParser.Parse(text))!;
+        Assert.Equal(VisitResponse.None, old.Candidates[0].Response);
+    }
+
     // ── 訪問（issue #1249） ─────────────────────────────────────
 
     private const ulong SeedBase = 0x5589_0000UL;
