@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using KokoSim.EditorTools;
 using KokoSim.Unity.Match;
 using UnityEditor;
 using UnityEditor.Build;
@@ -17,9 +18,10 @@ namespace KokoSim.UnityEditorTools
     /// 容量を削るために、**ビルドの間だけ**次を変えて、終わったら必ず元へ戻す（製品版＝Windows には効かせない）:
     ///   ・球場メッシュは <see cref="KeptStadiumModels"/> だけ残す（ほかは Resources の外へ退避＝ビルドに入らない。
     ///     試合では標準の球場を寸法へ伸縮して描く既存の代わりに落ちる＝DuelStageRig.LoadStadiumAsset）
-    ///   ・声・曲の取り込みの品質とサンプルレートを下げる（Web には音の機種別設定が無いので既定値を一時的に書き換える。
-    ///     2026-11-23 実測: 音 43.8MB→30.0MB。効いているのは品質で、サンプルレートだけ下げても変わらなかった。
-    ///     この組み合わせ＝声 品質0.4/16kHz・曲 品質0.6/22.05kHz の音をオーナーが聞いて確認済み）
+    ///   ・場内放送の声（VOICEVOX:No.7）を外す。Windows 体験版（PlayerBuilder）と同じ表・同じ隠し方。
+    ///     No.7 は商用の相談が済むまで体験版に入れない（issue #1318。体験版では MatchAnnouncer.Available=false で鳴らない）
+    ///   ・曲の取り込みの品質とサンプルレートを下げる（Web には音の機種別設定が無いので既定値を一時的に書き換える。
+    ///     効くのは品質で、サンプルレートだけ下げても変わらなかった。品質0.6/22.05kHz の音をオーナーが聞いて確認済み）
     ///   ・IL2CPP のコード生成を「サイズ優先」（wasm 13.7MB→11.1MB）
     /// 途中で落ちて戻し損ねても、次に回したときに最初に戻す（<see cref="RestoreLeftovers"/>）。
     ///
@@ -32,10 +34,9 @@ namespace KokoSim.UnityEditorTools
         /// <summary>残す球場モデル（それ以外の DuelStadiumMesh_*.asset は外す）。standard は Resources 名に接尾辞が無い。</summary>
         internal static readonly string[] KeptStadiumModels = { DuelStadiumMesh.StandardModel, "koshien" };
 
-        /// <summary>音のフォルダ → ビルドの間だけ使う品質とサンプルレート。</summary>
+        /// <summary>音のフォルダ → ビルドの間だけ使う品質とサンプルレート（声は外すので載せない）。</summary>
         internal static readonly (string Dir, float Quality, uint Rate)[] AudioRates =
         {
-            ("Assets/KokoSim/Audio/Vendor/VoiceVox", 0.4f, 16000),   // 実況・審判の声（素材は 24kHz モノラル）
             ("Assets/KokoSim/Audio/Vendor/Suno", 0.6f, 22050),       // 応援の曲（素材は 44.1kHz）
         };
 
@@ -58,8 +59,10 @@ namespace KokoSim.UnityEditorTools
             DuelAssetCatalogBaker.Bake();   // 索引は gitignore＝端末ごとに古いことがある（装備・素体の欠けを防ぐ）
 
             var codeGen = PlayerSettings.GetIl2CppCodeGeneration(NamedBuildTarget.WebGL);
+            string[] hidden = Array.Empty<string>();
             try
             {
+                hidden = PlayerBuilder.HideDirs(PlayerBuilder.DemoExcludedResourceDirs);
                 ParkStadiums();
                 LowerAudioRates();
                 PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
@@ -82,6 +85,7 @@ namespace KokoSim.UnityEditorTools
             finally
             {
                 PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, codeGen);
+                PlayerBuilder.RestoreDirs(hidden);
                 RestoreLeftovers();
             }
 
@@ -148,9 +152,14 @@ namespace KokoSim.UnityEditorTools
 
         // ---- 後始末 ----------------------------------------------------------------
 
-        /// <summary>退避した球場と書き換えた音の設定を元へ戻す。何も残っていなければ何もしない。</summary>
+        /// <summary>隠した声・退避した球場・書き換えた音の設定を元へ戻す。何も残っていなければ何もしない。</summary>
         internal static void RestoreLeftovers()
         {
+            var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            var leftHidden = PlayerBuilder.DemoExcludedResourceDirs
+                .Where(d => Directory.Exists(Path.Combine(root, d) + "~")).ToArray();
+            if (leftHidden.Length > 0) PlayerBuilder.RestoreDirs(leftHidden);
+
             if (AssetDatabase.IsValidFolder(ParkDir))
             {
                 foreach (var guid in AssetDatabase.FindAssets("", new[] { ParkDir }))

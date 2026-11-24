@@ -45,7 +45,8 @@ namespace KokoSim.EditorTools
         // Resources 配下は参照の有無に関係なく全部ビルドに入るため、ビルドの間だけ名前の末尾に ~ を付けて
         // Unity から見えなくし、終わったら必ず戻す（.meta ごと動かすので GUID は変わらず、戻した後の再読み込みは
         // 取り込みキャッシュから復元される）。
-        private static readonly string[] DemoExcludedResourceDirs =
+        // ブラウザ体験版（WebDemoBuild）も同じ表・同じ隠し方を使う。
+        internal static readonly string[] DemoExcludedResourceDirs =
         {
             "Assets/KokoSim/Audio/Vendor/VoiceVox/Resources",
         };
@@ -167,7 +168,7 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>フォルダ（と隣の .meta）の末尾に ~ を付けて Unity から隠す。隠したものの元の名前を返す。</summary>
-        private static string[] HideDirs(string[] dirs)
+        internal static string[] HideDirs(string[] dirs)
         {
             var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var hidden = new System.Collections.Generic.List<string>();
@@ -191,7 +192,7 @@ namespace KokoSim.EditorTools
             return hidden.ToArray();
         }
 
-        private static void RestoreDirs(string[] dirs)
+        internal static void RestoreDirs(string[] dirs)
         {
             if (dirs.Length == 0) return;
             var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
