@@ -69,7 +69,8 @@ TestResults/
 Assets/KokoSim/Resources/
 Assets/KokoSim/Resources.meta
 
-# 出所未確認の実写ポートレート（公開リポジトリに載せない・ローカルにだけ置く）
+# 立ち絵の元の jpeg（背景つき・使っていない手元の控え）。ゲームが使うのは切り抜いた png（AI 生成・自前の素材なので
+# コミットする。監督の manager.png も issue #1516 で切り抜いて同じ扱いにした）
 Assets/UI/Images/portraits/*.jpeg
 Assets/UI/Images/portraits/*.jpeg.meta
 

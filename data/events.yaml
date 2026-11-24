@@ -2,6 +2,9 @@
 # 追加・調整はこのファイル編集だけで完結させる（データ駆動）。
 #
 # ■ 書き方
+#   scene:    ノベル画面の背景になる場所（issue #1516・表示専用）。ground グラウンド / bench 球場 / school 教室 /
+#             clubroom 部室 / office 監督室 / camp 合宿所 / hall 体育館 / night 夜のグラウンド。
+#             全イベントに書く（EventTableTests が省略を弾く）。未知の語はパーサが例外にする
 #   text:     通知フィードに残る1行の要約。**バリエーションを持たせない**（後から一覧で追う行なので固定）。
 #   variants: ノベル画面で見せる会話。**会話まるごと**でN通り書き、発火時に1つだけ選ばれる
 #             （行ごとに独立抽選すると前後が噛み合わない文が出るため。2026-08-13 オーナー決定）。
@@ -42,6 +45,7 @@ events:
   # --- 固定イベント（カレンダー連動, calendar_week: 0〜49） ---
   - id: entrance_ceremony
     kind: Fixed
+    scene: hall
     calendar_week: 0
     text: "入学式。新入部員が加わった。"
     variants:
@@ -74,6 +78,7 @@ events:
 
   - id: summer_camp
     kind: Fixed
+    scene: camp
     calendar_week: 18
     text: "夏合宿。全体の経験値が跳ね上がる。"
     variants:
@@ -104,6 +109,7 @@ events:
   # 10月第3週。第28週（指名の週）は draft_meeting が使う＝同じ週に Fixed が2本出ないよう1週前に置く（EventTableTests が固定）。
   - id: culture_festival
     kind: Fixed
+    scene: school
     calendar_week: 27
     text: "文化祭。束の間の休息。"
     variants:
@@ -129,6 +135,7 @@ events:
 
   - id: winter_camp
     kind: Fixed
+    scene: ground
     calendar_week: 38
     text: "冬合宿。鍛錬期の山場。"
     variants:
@@ -156,6 +163,7 @@ events:
   # ＝片方だけ動かすと赤になる。同じ週の中では、会議の場面が指名結果のノベルより先に並ぶ（HomeState.AdvanceWeek）。
   - id: draft_meeting
     kind: Fixed
+    scene: clubroom
     calendar_week: 28
     text: "ドラフト会議。教え子に指名がかかるか。"
     variants:
@@ -181,6 +189,7 @@ events:
   # 夏の敗退直後の summer_retirement_* へ移した＝背番号は夏に返上済みなので、ここで返しに来ない。
   - id: graduation
     kind: Fixed
+    scene: ground
     calendar_week: 49
     text: "卒業式。3年生を送り出す。"
     variants:
@@ -223,6 +232,7 @@ events:
   # --- ランダムイベント（重み付き抽選） ---
   - id: rain_week
     kind: Random
+    scene: clubroom
     weight: 3.0
     cooldown_weeks: 2
     text: "雨天でグラウンドが使えない。"
@@ -252,6 +262,7 @@ events:
   # 取材（設計書03 §5.2・issue #1467 P2・#1270 E1）: 名声 +1、次の公式戦1試合だけ自校側のプレッシャー指数 +1。
   - id: media_coverage
     kind: Random
+    scene: ground
     weight: 1.5
     cooldown_weeks: 8
     text: "マスコミの取材が入った。部員の笑顔が、ぎこちない。"
@@ -279,6 +290,7 @@ events:
 
   - id: ob_donation
     kind: Random
+    scene: clubroom
     weight: 1.0
     cooldown_weeks: 10
     text: "OB会から寄付があった。"
@@ -307,6 +319,7 @@ events:
   # 財布は部費1つ（issue #1082 で施設基金を統合）。寄付も破損の出費も部費で動く。効果は effects: に書くだけで足せる。
   - id: booster_club_fund
     kind: Random
+    scene: office
     weight: 1.0
     cooldown_weeks: 16
     text: "後援会が部費に寄付してくれた。"
@@ -331,6 +344,7 @@ events:
 
   - id: gear_broken
     kind: Random
+    scene: ground
     weight: 1.2
     cooldown_weeks: 8
     text: "練習道具が壊れた。買い替えに部費を使った。"
@@ -357,6 +371,7 @@ events:
 
   - id: local_company_support
     kind: Random
+    scene: clubroom
     weight: 0.8
     cooldown_weeks: 20
     text: "地元企業が用具を支援してくれた。"
@@ -380,6 +395,7 @@ events:
   #   training_target team（既定・部全体）／player（会話の主役ひとり）
   - id: outside_coach_visit
     kind: Random
+    scene: ground
     weight: 1.0
     cooldown_weeks: 14
     text: "外部コーチが指導に来てくれることになった。"
@@ -409,6 +425,7 @@ events:
 
   - id: self_practice_awakened
     kind: Random
+    scene: night
     weight: 1.2
     cooldown_weeks: 10
     text: "自主練に目覚めた部員がいる。"
@@ -439,6 +456,7 @@ events:
   # 練習を軽くする＝効率 ×0.85・2週・信頼 +2（従来の効果のまま）／いつも通り＝効率 ×0.95・2週・信頼 −1。
   - id: exam_week_slump
     kind: Random
+    scene: school
     weight: 1.0
     cooldown_weeks: 12
     text: "テスト週間で練習時間が削られる。"
@@ -491,6 +509,7 @@ events:
   # **綴りを間違えるとパースで落ちる**（黙って全国に出さない）。
   - id: region_snow_indoor
     kind: Random
+    scene: clubroom
     weight: 1.4
     cooldown_weeks: 20
     requires_region: HokkaidoTohoku
@@ -516,6 +535,7 @@ events:
 
   - id: region_local_festival
     kind: Random
+    scene: ground
     weight: 1.0
     cooldown_weeks: 24
     requires_region: Kyushu
@@ -538,6 +558,7 @@ events:
 
   - id: region_urban_ground_share
     kind: Random
+    scene: ground
     weight: 1.2
     cooldown_weeks: 18
     requires_region: Kanto
@@ -564,6 +585,7 @@ events:
   # 数値（診断名・全治週・上がった能力）は発生元が**結果行**として会話の最後に足す＝ここには書かない。
   - id: injury_occurred
     kind: System
+    scene: ground
     text: "選手が故障した。"
     # 故障はマネージャーの一言で言い切る（issue #695・2026-10-28 監督決定）。誰が・何で・何週離脱かだけ。
     # 小芝居は挟まず、結果行も足さない（この1行が結果そのもの）。{injury}/{weeks} は発生元が渡す。
@@ -581,6 +603,7 @@ events:
 
   - id: injury_returned
     kind: System
+    scene: ground
     text: "選手が怪我から復帰した。"
     variants:
       - lines:
@@ -606,6 +629,7 @@ events:
   # 覚醒は分野で会話を分ける（issue #694）。投手が覚醒して打撃の話になっていた。
   - id: growth_awakening_batting
     kind: System
+    scene: ground
     text: "選手が打撃で覚醒した。"
     variants:
       - lines:
@@ -626,6 +650,7 @@ events:
 
   - id: growth_awakening_pitching
     kind: System
+    scene: ground
     text: "選手が投球で覚醒した。"
     variants:
       - lines:
@@ -648,6 +673,7 @@ events:
 
   - id: growth_awakening_defense
     kind: System
+    scene: ground
     text: "選手が守備で覚醒した。"
     variants:
       - lines:
@@ -670,6 +696,7 @@ events:
 
   - id: growth_awakening_running
     kind: System
+    scene: ground
     text: "選手が走塁で覚醒した。"
     variants:
       - lines:
@@ -692,6 +719,7 @@ events:
 
   - id: growth_breakthrough
     kind: System
+    scene: ground
     text: "選手がコツを掴んだ。"
     variants:
       - lines:
@@ -713,6 +741,7 @@ events:
   # issue #694 で足した上昇イベント。数値（上がった能力・球種）は結果行で言い切る＝ここは雰囲気だけ。
   - id: growth_grand_awakening
     kind: System
+    scene: ground
     text: "選手が大覚醒した。"
     variants:
       - lines:
@@ -737,6 +766,7 @@ events:
 
   - id: growth_surge
     kind: System
+    scene: ground
     text: "選手に伸びしろが見えた。"
     variants:
       - lines:
@@ -759,6 +789,7 @@ events:
 
   - id: growth_new_pitch
     kind: System
+    scene: ground
     text: "投手が新しい球種を覚えた。"
     variants:
       - lines:
@@ -781,6 +812,7 @@ events:
 
   - id: growth_pitch_refined
     kind: System
+    scene: ground
     text: "投手の球種が良くなった。"
     variants:
       - lines:
@@ -796,6 +828,7 @@ events:
 
   - id: growth_big_stage_batting
     kind: System
+    scene: bench
     text: "選手が大舞台で化けた。"
     variants:
       - lines:
@@ -816,6 +849,7 @@ events:
 
   - id: growth_big_stage_pitching
     kind: System
+    scene: bench
     text: "投手が大舞台で化けた。"
     variants:
       - lines:
@@ -836,6 +870,7 @@ events:
 
   - id: growth_slump
     kind: System
+    scene: ground
     text: "選手がスランプに入った。"
     variants:
       - lines:
@@ -858,6 +893,7 @@ events:
 
   - id: growth_plateau
     kind: System
+    scene: ground
     text: "選手の伸びが頭打ちになった。"
     variants:
       - lines:
@@ -878,6 +914,7 @@ events:
 
   - id: growth_yips
     kind: System
+    scene: ground
     text: "選手が送球・制球を崩した。"
     variants:
       - lines:
@@ -893,6 +930,7 @@ events:
 
   - id: growth_yips_overcome
     kind: System
+    scene: ground
     text: "選手が送球・制球の不調を克服した。"
     variants:
       - lines:
@@ -911,6 +949,7 @@ events:
   # 監督の内面を独白で語らせない＝周りが「変わった」と言う形で書く。
   - id: mgr_koshien_experience
     kind: System
+    scene: bench
     text: "{koshien}の経験が采配に返ってきた。"
     variants:
       - lines:
@@ -928,6 +967,7 @@ events:
 
   - id: mgr_rival_lesson
     kind: System
+    scene: ground
     text: "名将との練習試合で学びがあった。"
     variants:
       - lines:
@@ -945,6 +985,7 @@ events:
 
   - id: mgr_big_loss
     kind: System
+    scene: office
     text: "大敗から学んだ。"
     variants:
       - lines:
@@ -962,6 +1003,7 @@ events:
 
   - id: mgr_seminar
     kind: System
+    scene: office
     text: "指導者講習会に参加した。"
     variants:
       - lines:
@@ -981,6 +1023,7 @@ events:
 
   - id: mgr_pro_ob
     kind: System
+    scene: office
     text: "プロOBが訪ねてきた。"
     variants:
       - lines:
@@ -998,6 +1041,7 @@ events:
 
   - id: mgr_mentor
     kind: System
+    scene: office
     text: "名伯楽との出会いがあった。"
     variants:
       - lines:
@@ -1015,6 +1059,7 @@ events:
   # **断定しない**（育成眼が低いと読み違える）。会話も「かもしれない」の温度で書く。
   - id: insight_growth_type
     kind: System
+    scene: ground
     text: "選手の成長タイプに見当がついた。"
     variants:
       - lines:
@@ -1039,6 +1084,7 @@ events:
   # 気づき（育成眼）で隠しスキルを即開示／覚醒で身につく／公式戦の活躍で身につく／負スキルの克服（実戦・学年）。
   - id: skill_insight_revealed
     kind: System
+    scene: ground
     text: "選手の隠れた持ち味に気づいた。"
     variants:
       - lines:
@@ -1059,6 +1105,7 @@ events:
 
   - id: skill_awakening
     kind: System
+    scene: ground
     text: "覚醒した選手が新しい持ち味を身につけた。"
     variants:
       - lines:
@@ -1074,6 +1121,7 @@ events:
 
   - id: skill_match_acquired
     kind: System
+    scene: bench
     text: "公式戦の活躍で選手が新しい持ち味を身につけた。"
     variants:
       - lines:
@@ -1089,6 +1137,7 @@ events:
 
   - id: skill_overcome_match
     kind: System
+    scene: bench
     text: "公式戦の活躍で選手が弱点を克服した。"
     variants:
       - lines:
@@ -1104,6 +1153,7 @@ events:
 
   - id: skill_overcome_grade
     kind: System
+    scene: ground
     text: "学年が上がり、選手が弱点を克服した。"
     variants:
       - lines:
@@ -1121,6 +1171,7 @@ events:
   # 主役は3年の選手。指名の可否そのものは engine が決めており、ここは提示だけ。
   - id: draft_candidate
     kind: System
+    scene: clubroom
     text: "選手がドラフト候補に挙がった。"
     variants:
       - lines:
@@ -1143,6 +1194,7 @@ events:
 
   - id: draft_scout_visit
     kind: System
+    scene: ground
     text: "スカウトが視察に来た。"
     variants:
       - lines:
@@ -1173,6 +1225,7 @@ events:
   # scout_choose_field＝契約済みの学校への入口（契約を続けるか）／scout_contract_offer＝未契約の学校への入口。
   - id: scout_choose_field
     kind: System
+    scene: office
     text: "スカウトが、今年の契約を聞きに来た。"
     variants:
       - lines:
@@ -1195,6 +1248,7 @@ events:
 
   - id: scout_contract_offer
     kind: System
+    scene: office
     text: "スカウトが、契約の相談に来た。"
     variants:
       - lines:
@@ -1215,6 +1269,7 @@ events:
 
   - id: scout_contract_declined
     kind: System
+    scene: office
     text: "スカウト網は、今年は契約しないことになった。"
     variants:
       - lines:
@@ -1235,6 +1290,7 @@ events:
 
   - id: scout_field_ask
     kind: System
+    scene: office
     text: "スカウトが、探す分野を聞きに来た。"
     variants:
       - lines:
@@ -1259,6 +1315,7 @@ events:
 
   - id: scout_field_done
     kind: System
+    scene: office
     text: "スカウトが、10月にリストを持ってくることになった。"
     variants:
       - lines:
@@ -1277,6 +1334,7 @@ events:
 
   - id: scout_list_arrived
     kind: System
+    scene: office
     text: "スカウトが候補のリストを持ってきた。"
     variants:
       - lines:
@@ -1303,6 +1361,7 @@ events:
 
   - id: scout_deadline
     kind: System
+    scene: office
     text: "スカウトが、訪問の期限を知らせに来た。"
     variants:
       - lines:
@@ -1328,6 +1387,7 @@ events:
   # IDは ContractRenewal.EventId と一致させる（EventTableTests が固定）。
   - id: contract_renewal
     kind: System
+    scene: office
     text: "年契約の更新の季節になった。"
     variants:
       - lines:
@@ -1354,6 +1414,7 @@ events:
 
   - id: draft_nominated
     kind: System
+    scene: clubroom
     text: "教え子に指名がかかった。"
     variants:
       - lines:
@@ -1376,6 +1437,7 @@ events:
 
   - id: draft_missed
     kind: System
+    scene: clubroom
     text: "教え子の指名は無かった。"
     variants:
       - lines:
@@ -1396,6 +1458,7 @@ events:
   # 結果行（部費 ＋N 万）は提示層が足す。指名1人につき1回、draft_nominated の後に出る。
   - id: draft_ob_greeting
     kind: System
+    scene: office
     text: "プロ入りの挨拶とともに、OB会から祝い金が届いた。"
     variants:
       - lines:
@@ -1420,6 +1483,7 @@ events:
   # 呼び出し元は大会の後始末（HomeState.DismissResult）。この会話を読んだあとに主将指名 → 背番号決定へ進む。
   - id: summer_retirement_prefecture
     kind: System
+    scene: clubroom
     text: "夏の県予選で敗退。3年生が引退した。"
     variants:
       - lines:
@@ -1456,6 +1520,7 @@ events:
 
   - id: summer_retirement_koshien
     kind: System
+    scene: bench
     text: "{koshien}で敗退。3年生が引退した。"
     variants:
       - lines:
@@ -1487,6 +1552,7 @@ events:
 
   - id: summer_retirement_champion
     kind: System
+    scene: bench
     text: "{koshien}で優勝。3年生が最後まで勝って引退した。"
     variants:
       - lines:
@@ -1520,6 +1586,7 @@ events:
   # 直後に続けて積まれる。引退する側（who: team_manager_outgoing）と新しい側（who: team_manager）の両方が話す。
   - id: team_manager_succession
     kind: System
+    scene: ground
     text: "マネージャーが引退し、新しいマネージャーに引き継がれた。"
     variants:
       - lines:
@@ -1572,6 +1639,7 @@ events:
   # 監督は聞き役（台詞は持たないか短い相槌まで）。画面の名前（「今週を進める」「練習」など）は実際のボタン・タブの文字に合わせる。
   - id: arrival_new_school
     kind: System
+    scene: ground
     text: "監督として新設の野球部に着任した。"
     variants:
       - lines:
@@ -1606,6 +1674,7 @@ events:
 
   - id: arrival_transfer
     kind: System
+    scene: clubroom
     text: "監督として新しい学校に着任した。"
     variants:
       - lines:
@@ -1641,6 +1710,7 @@ events:
   # 赴任直後の説明。最初に要ることだけ（週の送り方・練習の決め方）。
   - id: tutorial_basics
     kind: System
+    scene: clubroom
     text: "マネージャーから、部の進め方を教わった。"
     variants:
       - lines:
@@ -1658,6 +1728,7 @@ events:
   # 初めての公式戦の前（大会の開幕）。
   - id: tutorial_first_tournament
     kind: System
+    scene: clubroom
     text: "マネージャーから、大会の流れを教わった。"
     variants:
       - lines:
@@ -1675,6 +1746,7 @@ events:
   # 初めての試合の前。公式戦・練習試合を問わず最初の1試合で出す（公式戦は開始確認の前、練習試合はスタメン設定の前にホームで）。
   - id: tutorial_first_match
     kind: System
+    scene: bench
     text: "マネージャーから、試合での采配を教わった。"
     variants:
       - lines:
@@ -1692,6 +1764,7 @@ events:
   # 初めてのスカウトの時期（夏の後・スカウトの契約の会話の前）。
   - id: tutorial_scouting
     kind: System
+    scene: clubroom
     text: "マネージャーから、スカウトと新入生のことを教わった。"
     variants:
       - lines:
@@ -1709,6 +1782,7 @@ events:
   # 初めて部費で何か買えるようになった週。
   - id: tutorial_purchases
     kind: System
+    scene: clubroom
     text: "マネージャーから、部費の使い方を教わった。"
     variants:
       - lines:
@@ -1726,6 +1800,7 @@ events:
   # 初めての夏の引退（引退の会話の後・主将指名の前）。
   - id: tutorial_summer_retirement
     kind: System
+    scene: clubroom
     text: "マネージャーから、新チームのことを教わった。"
     variants:
       - lines:
@@ -1741,6 +1816,7 @@ events:
   # 「もう説明はいらない」を選んだときの返事（チュートリアルの会話の後ろに足す）。
   - id: tutorial_dismissed
     kind: System
+    scene: clubroom
     text: "これからは説明なしで進めることにした。"
     variants:
       - lines:
@@ -1755,6 +1831,7 @@ events:
   # 実際に決まった相手で結果行を組む。
   - id: koshien_berth_donation
     kind: System
+    scene: clubroom
     text: "OB会と卒業生から{koshien}の激励金が届いた。"
     variants:
       - lines:
@@ -1790,6 +1867,7 @@ events:
   # 呼び出し元（HomeState.DismissResult）が結果行（ブロック順位つき）を組む。通過のときだけ出る。
   - id: district_league_qualified
     kind: System
+    scene: clubroom
     text: "秋季地区予選を通過した。県大会へ進む。"
     variants:
       - lines:
@@ -1824,6 +1902,7 @@ events:
 
   - id: koshien_draw
     kind: System
+    scene: hall
     text: "{koshien}の組み合わせ抽選会が行われた。"
     variants:
       - lines:
@@ -1855,6 +1934,7 @@ events:
 
   - id: senbatsu_berth_donation
     kind: System
+    scene: clubroom
     text: "OB会と卒業生から{senbatsu}の激励金が届いた。"
     variants:
       - lines:
@@ -1881,6 +1961,7 @@ events:
 
   - id: senbatsu_draw
     kind: System
+    scene: hall
     text: "{senbatsu}の組み合わせ抽選会が行われた。"
     variants:
       - lines:
@@ -1905,6 +1986,7 @@ events:
 
   - id: senbatsu_not_selected
     kind: System
+    scene: clubroom
     text: "{senbatsu}の選考発表があった。今年は選ばれなかった。"
     variants:
       - lines:
@@ -1940,6 +2022,7 @@ events:
   # 主将は当事者にも相手にもならない（「主将に任せる」の相手が本人になる会話を作らない）。
   - id: skipping_practice
     kind: Choice
+    scene: ground
     weight: 1.0
     cooldown_weeks: 12
     text: "主力が練習をサボっているらしい。"
@@ -2052,6 +2135,7 @@ events:
 
   - id: grade_friction
     kind: Choice
+    scene: clubroom
     weight: 1.0
     cooldown_weeks: 12
     text: "上級生と1年生がもめているらしい。"
@@ -2180,6 +2264,7 @@ events:
 
   - id: selfish_clash
     kind: Choice
+    scene: ground
     weight: 1.0
     cooldown_weeks: 12
     text: "チャンスでの打撃をめぐって、部員同士が言い合いになった。"

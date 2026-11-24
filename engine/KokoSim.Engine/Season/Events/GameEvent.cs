@@ -10,6 +10,22 @@ public enum EventKind
 }
 
 /// <summary>
+/// イベントの場面（issue #1516）。ノベル画面の背景を選ぶための<b>場所</b>で、判定には一切使わない（表示専用）。
+/// data/events.yaml の <c>scene:</c> に書く。省略したイベントは <see cref="Ground"/>（グラウンド）。
+/// </summary>
+public enum EventScene
+{
+    Ground,    // グラウンド・練習
+    Bench,     // 球場のベンチ・大会
+    School,    // 校舎・教室
+    Clubroom,  // 部室
+    Office,    // 監督室・応接（スカウト・OB・後援会）
+    Camp,      // 合宿所
+    Hall,      // 体育館・式典
+    Night,     // 夜のグラウンド（自主練）
+}
+
+/// <summary>
 /// イベントが起こす効果（issue #613）。<b>データに書く</b>＝新しい寄付イベントを足すのに
 /// コードを触らせない。適用は Shell（財布を持っている側）が行い、engine はここまでを定義する。
 ///
@@ -101,6 +117,9 @@ public sealed record GameEvent
 
     /// <summary>当事者（{player}）と相手（{other}）の選び方（issue #945）。既定＝誰でも・相手なし。</summary>
     public EventCast Cast { get; init; } = EventCast.Default;
+
+    /// <summary>場面（ノベル画面の背景・issue #1516）。表示専用で発火・効果には関わらない。</summary>
+    public EventScene Scene { get; init; } = EventScene.Ground;
 
     /// <summary>選択肢を持つか。</summary>
     public bool HasChoices => Choices.Count > 0;
