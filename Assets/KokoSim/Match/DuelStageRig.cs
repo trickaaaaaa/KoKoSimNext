@@ -5629,6 +5629,7 @@ namespace KokoSim.Unity.Match
         private void AlignBat()
         {
             if (_bat == null || _batter == null) return;
+            if (_standingPreview) { _bat.SetActive(false); return; }   // プレビューは配色以外を画から追い出す
             var lhT = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
             var rhT = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand);
             if (lhT == null || rhT == null) return;
