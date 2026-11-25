@@ -32,12 +32,29 @@ public sealed class PlayerSignsAndShiftTests
         Assert.Equal(PlateAppearanceResult.Walk, prog.Current!.Result);
         Assert.True(prog.Current.BaseFirstAfter);
         Assert.Empty(prog.Current.PitchSeq.Pitches);   // 申告敬遠＝敬遠ボールを描かない
+        Assert.True(prog.Current.IntentionalWalk);      // 画面が「申告敬遠」と言い分けられる印
 
         while (prog.Advance()) { }
         var r = prog.BuildResult();
         Assert.Equal(1, r.IntentionalWalkCount);
         Assert.Equal(0, r.Log[0].Pitches);
         Assert.True(r.Log[0].IntentionalWalk);
+    }
+
+    [Fact]
+    public void OrdinaryWalk_IsNotMarkedIntentional()
+    {
+        for (ulong seed = 1; seed <= 200; seed++)
+        {
+            var prog = NewGame(seed);
+            while (prog.Advance())
+            {
+                var cur = prog.Current!;
+                Assert.False(cur.IntentionalWalk);   // 敬遠を指示していない試合では一度も立たない
+                if (cur.Result == PlateAppearanceResult.Walk) return;
+            }
+        }
+        Assert.Fail("四球が200シードで見つからない");
     }
 
     /// <summary>カウントの途中で押しても、次の球を投げずにその打席を四球で終える（投げた球はそのまま数える）。</summary>

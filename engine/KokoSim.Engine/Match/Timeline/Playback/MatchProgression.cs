@@ -23,6 +23,8 @@ public sealed class LivePlateAppearance
     public required int RunsScored { get; init; }
     public required PlateAppearanceResult Result { get; init; }
     public PlaybackPlay? Play { get; init; }
+    /// <summary>申告敬遠で終えた打席か（結果は <see cref="PlateAppearanceResult.Walk"/>＝成績は四球。表示の言い分けだけに使う）。</summary>
+    public bool IntentionalWalk { get; init; }
 
     // ── 中継風カウント表示用（#4）。すべて観測データで結果には影響しない ──
     /// <summary>合成した投球列（B/S を1球ずつ点灯させる。結果と整合・独立シード）。</summary>
@@ -850,6 +852,7 @@ public sealed class MatchProgression
             BatterName = e.BatterName,
             RunsScored = e.RunsScored,
             Result = e.Result,
+            IntentionalWalk = e.IntentionalWalk,
             Play = e.Timeline is null ? null : PlayTimelineAdapter.ToPlaybackPlay(e.Timeline),
             PitchSeq = pitchSeq,
             OutsBefore = e.OutsBefore,
