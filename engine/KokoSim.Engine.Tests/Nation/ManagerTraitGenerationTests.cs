@@ -90,19 +90,20 @@ public sealed class ManagerTraitGenerationTests
         Assert.True(promoted > schools / 3, $"抜擢が観測できる頻度で起きるはず: {promoted}/{schools}");
     }
 
-    // 抜擢された控えは先発の位置番号（1〜9）を着け、押し出された先発が控えの番号へ回る。背番号は重ならない。
+    // 背番号は大会前に決まっている＝抜擢された控えは自分の2桁の番号のまま先発する（入れ替えない・#1254 オーナー判断）。
     [Fact]
-    public void Promoter_PromotedStarter_WearsPositionNumber_NumbersStayUnique()
+    public void Promoter_PromotedStarter_KeepsOwnBenchNumber()
     {
         var promotedSchools = 0;
         for (var id = 0; id < 40; id++)
         {
             var pro = StrengthTeamFactory.ForSchool(PromoterSchool(id, 62), yearIndex: 1);
             var plain = StrengthTeamFactory.ForSchool(PlainSchool(id, 62), yearIndex: 1);
-            Assert.All(pro.BattingOrder, p => Assert.InRange(p.UniformNumber, 1, 9));
+            if (OrderNames(pro).SetEquals(OrderNames(plain))) continue;
+            promotedSchools++;
+            Assert.Contains(pro.BattingOrder, p => p.UniformNumber >= 10);
             var all = pro.BattingOrder.Concat(pro.Reserves).Where(p => p.UniformNumber > 0).Select(p => p.UniformNumber).ToList();
             Assert.Equal(all.Count, all.Distinct().Count());
-            if (!OrderNames(pro).SetEquals(OrderNames(plain))) promotedSchools++;
         }
         Assert.True(promotedSchools > 0, "抜擢が1校も起きない＝この検査が何も見ていない");
     }
