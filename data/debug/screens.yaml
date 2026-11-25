@@ -254,6 +254,69 @@ screens:
       - shot: 04-result-line
       - read: "=ManagerService.Manager.Trust"
 
+  # ── 合宿をしますか？（issue #1482）。第18週に入って本番どおりの経路で出る質問（費用・期間・効果）→ 選ぶ → 結果 ──
+  - id: camp-decision-skip-1482
+    name: "夏合宿の質問→しない（倍率・結束・費用がなくなる・issue #1482）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: 17
+      - read: =GameSession.Current.CohesionDelta
+      - advance_weeks: 1
+      - read: =GameClock.Week
+      - read: =GameSession.Current.CohesionDelta
+      - read: =EventService.Pending.Count
+      # 第18週には他の場面も積まれる（新チーム・週次イベント）。合宿の質問だけを先頭に出し直す（週頭の結束 +6 は本番どおり入っている）
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("summer_camp", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - shot: 01-explain-lines
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-choices
+      - click: .choice-btn[1]
+      - wait: 5
+      - shot: 03-skip-outcome
+      - read: =GameSession.Current.CampSkips
+      - read: =GameSession.Current.CohesionDelta
+      - read: =TrainingWeek.CampMultiplier(18)
+
+  - id: camp-decision-join-1482
+    name: "夏合宿の質問→する（倍率×2.0・結束↑・結果行・issue #1482）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: 17
+      - advance_weeks: 1
+      - read: =GameClock.Week
+      - read: =GameSession.Current.CohesionDelta
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("summer_camp", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - click: .choice-btn[0]
+      - wait: 5
+      - shot: 01-join-outcome-1
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-join-result-line
+      - read: =GameSession.Current.CampSkips
+      - read: =GameSession.Current.CohesionDelta
+      - read: =TrainingWeek.CampMultiplier(18)
+
   # ── 転任判定の前の校長の会話（issue #1606）。教員監督・在任3年目の2月（第44週）。信頼度の段ごとに撮る ──
 
   - id: principal-talk-high-1606

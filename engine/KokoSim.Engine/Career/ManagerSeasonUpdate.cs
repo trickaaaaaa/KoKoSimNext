@@ -32,6 +32,7 @@ public static class ManagerSeasonUpdate
     /// プロ入りした教え子が名鑑に1人以上いるか（<see cref="ManagerGrowthEvents.Yearly"/>・issue #1615）。
     /// 既定 true＝名鑑を持たないキャリアシム（<see cref="CareerEngine.Run"/>）は常に「いる」扱い。
     /// </param>
+    /// <param name="campSkips">この年度に見送った合宿（issue #1482）。見送った合宿の費用は引かない。既定＝どちらも行う。</param>
     public static IReadOnlyList<ManagerGrowthNotice> Apply(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins,
         IRandomSource milestoneRng,
@@ -42,14 +43,15 @@ public static class ManagerSeasonUpdate
         ContractEffects? contracts = null,
         int nationalStageWins = 0,
         double draftFameGain = 0,
-        bool hasProProtege = true)
+        bool hasProProtege = true,
+        Season.CampSkips campSkips = default)
     {
         var c = careerCoeff ?? new CareerCoefficients();
         var mg = growthCoeff ?? new ManagerGrowthCoefficients();
 
         // 自然増（指導力・采配・育成眼・名声・信頼度・資金）。
         CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameGain, upsetFameLoss, c, contracts,
-            nationalStageWins, draftFameGain);
+            nationalStageWins, draftFameGain, campSkips);
         m.CareerYears++;
         m.YearsAtSchool++;
         if (reachedKoshien) m.KoshienAppearances++;

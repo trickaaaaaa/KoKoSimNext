@@ -223,9 +223,9 @@ public static class CareerEngine
     public static double AnnualBudgetIncome(double trust, CareerCoefficients c)
         => c.AnnualBudgetBase + c.BudgetPerTrust * trust;
 
-    /// <summary>部費の年間固定支出[万円]＝合宿（夏冬）＋年契約の年額。</summary>
-    public static double AnnualFixedExpense(double contractCost, CareerCoefficients c)
-        => c.SummerCampCost + c.WinterCampCost + contractCost;
+    /// <summary>部費の年間固定支出[万円]＝合宿（夏冬・見送った合宿は払わない）＋年契約の年額。</summary>
+    public static double AnnualFixedExpense(double contractCost, CareerCoefficients c, Season.CampSkips skips = default)
+        => (skips.Summer ? 0.0 : c.SummerCampCost) + (skips.Winter ? 0.0 : c.WinterCampCost) + contractCost;
 
     /// <summary>
     /// 年度末に部費へ入る寄付・一時金[万円]＝学校の設備投資＋後援会寄付（名声比例）＋甲子園出場・全国優勝の一時金
@@ -281,12 +281,14 @@ public static class CareerEngine
     /// 部費の年間差引[万円]（予算＋寄付−固定支出）。経営タブの「年間差引」。甲子園・全国優勝の一時金と
     /// 大会報奨（<see cref="TournamentPrizeIncome"/>）は結果しだいなので見込みに入れない。信頼度・名声は総括前の値＝見込み。
     /// </summary>
-    public static double AnnualFundsNet(double trust, double fame, double contractCost, CareerCoefficients c)
-        => AnnualBudgetIncome(trust, c) + AnnualDonationIncome(fame, false, false, c) - AnnualFixedExpense(contractCost, c);
+    public static double AnnualFundsNet(double trust, double fame, double contractCost, CareerCoefficients c,
+        Season.CampSkips skips = default)
+        => AnnualBudgetIncome(trust, c) + AnnualDonationIncome(fame, false, false, c) - AnnualFixedExpense(contractCost, c, skips);
 
     /// <summary>総括のあとの部費の見込み[万円]（総括と同じく0で止める）。信頼度・名声は総括前の値＝見込み。</summary>
-    public static double ProjectedFunds(double funds, double trust, double fame, double contractCost, CareerCoefficients c)
-        => Math.Max(0, funds + AnnualFundsNet(trust, fame, contractCost, c));
+    public static double ProjectedFunds(double funds, double trust, double fame, double contractCost, CareerCoefficients c,
+        Season.CampSkips skips = default)
+        => Math.Max(0, funds + AnnualFundsNet(trust, fame, contractCost, c, skips));
 
     /// <param name="contracts">
     /// 年契約の実効値（設計書04 §1.4a）。null なら従来どおり <see cref="CareerCoefficients.ScoutCost"/> を
@@ -295,7 +297,8 @@ public static class CareerEngine
     /// </param>
     internal static void ApplyResults(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameGain, double upsetFameLoss,
-        CareerCoefficients c, ContractEffects? contracts = null, int nationalStageWins = 0, double draftFameGain = 0)
+        CareerCoefficients c, ContractEffects? contracts = null, int nationalStageWins = 0, double draftFameGain = 0,
+        Season.CampSkips campSkips = default)
     {
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする
         // （「気づいたら練れていた」の意図に沿った緩やかなカーブ。線形だと十数年で99へ急上昇し
@@ -330,7 +333,7 @@ public static class CareerEngine
         m.Funds += AnnualBudgetIncome(m.Trust, c);
         m.Funds += AnnualDonationIncome(m.Fame, reachedKoshien, nationalChampion, c);
         m.Funds += TournamentPrizeIncome(wins, nationalStageWins, c);   // 大会報奨（issue #1469）
-        m.Funds -= AnnualFixedExpense(contracts?.AnnualCost ?? c.ScoutCost, c);
+        m.Funds -= AnnualFixedExpense(contracts?.AnnualCost ?? c.ScoutCost, c, campSkips);
         if (m.Funds < 0) m.Funds = 0;
     }
 

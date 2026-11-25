@@ -27,6 +27,9 @@ namespace KokoSim.Unity.Shell
         private static readonly SeasonCalendar Calendar = new SeasonCalendar();
         private static readonly GrowthStageTable Stages = new GrowthStageTable();
         private static readonly TrainingCoefficients Training = new TrainingCoefficients();
+
+        /// <summary>練習の係数（C#既定＝data/coefficients.yaml training:）。合宿の説明の倍率もここから引く（issue #1482）。</summary>
+        internal static TrainingCoefficients Coefficients => Training;
         private static readonly SkillCoefficients Skills = new SkillCoefficients();
         private static readonly PersonalityCoefficients Personalities = new PersonalityCoefficients();
 
@@ -50,7 +53,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>
         /// 指定週の合宿倍率（設計書03 §4）。プレビューのバナー表示と実適用が同じ値を使うための単一ソース。
         /// </summary>
-        public static double CampMultiplier(int week) => Calendar.CampMultiplier(week, Training);
+        public static double CampMultiplier(int week) => Calendar.CampMultiplier(week, Training, GameSession.Current.CampSkips);
 
         /// <summary>その週にこの選手が練習できるか（学年別カレンダー・引退・オフ期間）。</summary>
         public static bool CanTrain(int grade, int week) => Calendar.CanTrain(grade, week);
@@ -89,7 +92,7 @@ namespace KokoSim.Unity.Shell
             var plan = p.Plan ?? TrainingPlan.Default;   // 未設定は全員バランス型（issue #680）
             var alloc = TrainingPresets.Resolve(plan, Budget);
             var stage = Calendar.StageIndex(p.Grade, week);
-            var campMult = Calendar.CampMultiplier(week, Training) * extraMult;
+            var campMult = Calendar.CampMultiplier(week, Training, GameSession.Current.CampSkips) * extraMult;
             // 施設係数を焼き込んだ係数で走らせる（engine SeasonEngine と同じ: training with { FacilityCoef }）。
             var training = Training with { FacilityCoef = FacilityCoef };
             // 専門コーチ（年契約・設計書04 §1.4a）は雇っている分野の指導力だけを底上げする。

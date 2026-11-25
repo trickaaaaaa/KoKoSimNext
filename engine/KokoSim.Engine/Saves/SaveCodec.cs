@@ -40,7 +40,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 48;
+    public const int CurrentVersion = 49;
 
     // ===== Serialize =====
 
@@ -122,6 +122,8 @@ public static class SaveCodec
             .Add("pendingMatchPressure", s.PendingMatchPressure)
             .Add("batteryInnings", BatteryInningsToJson(s.BatteryInnings))
             .Add("cohesionDelta", s.CohesionDelta)
+            .Add("summerCampSkipped", s.SummerCampSkipped)
+            .Add("winterCampSkipped", s.WinterCampSkipped)
             .Add("managerPostings", ManagerPostingSaves.ClosedToJson(s.ManagerPostings))
             .Add("managerPostingStartYearIndex", s.ManagerPostingStartYearIndex)
             .Add("managerPostingBaselineWins", s.ManagerPostingBaselineWins)
@@ -471,6 +473,8 @@ public static class SaveCodec
         if (version < 47 && root["matchRecords"] is JsonArray mr47) MatchRecordSaves.MigrateToPositionTrail(mr47);
         // v48（issue #1620）: 自校配色にヘルメット（helmet）が増えた。キーが無い旧セーブは読み込み側
         // （CareerSaves.TeamColorsFromJson）が帽子クラウンと同色で補う＝移行ブロックは要らない。
+        // v49（issue #1482）: 合宿の見送り（summerCampSkipped/winterCampSkipped）が増えた。キーが無い旧セーブは
+        // 読み込み側が false（どちらも行う）で補う＝移行ブロックは要らない。
         return root;
     }
 
@@ -668,6 +672,9 @@ public static class SaveCodec
             BatteryInnings = BatteryInningsFromJson(root.Arr("batteryInnings")),
             // 結束の上下は v29 で追加。Migrate が旧セーブへ0を補うので素直に読む。
             CohesionDelta = root.Double("cohesionDelta"),
+            // 合宿の見送りは v49（issue #1482）で追加。キーが無い旧セーブは「どちらも行う」＝false。
+            SummerCampSkipped = root.Has("summerCampSkipped") && root.Bool("summerCampSkipped"),
+            WinterCampSkipped = root.Has("winterCampSkipped") && root.Bool("winterCampSkipped"),
             // 監督の赴任履歴は v32 で追加。Migrate が旧セーブへ空配列/0を補うので素直に読む。
             ManagerPostings = ManagerPostingSaves.ClosedFromJson(root.Arr("managerPostings")),
             ManagerPostingStartYearIndex = root.Int("managerPostingStartYearIndex"),

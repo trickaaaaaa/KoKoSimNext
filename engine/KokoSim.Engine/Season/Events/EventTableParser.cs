@@ -282,7 +282,7 @@ public static class EventTableParser
     /// </summary>
     private sealed class EffectBuilder
     {
-        private double _funds, _trainingMult = 1.0, _trust, _fame;
+        private double _funds, _trainingMult = 1.0, _trust, _fame, _cohesion;
         private int _trainingWeeks, _pressure;
         private bool _trainingPlayer;
 
@@ -296,13 +296,14 @@ public static class EventTableParser
                 case "training_target": _trainingPlayer = value == "player"; return true;
                 case "trust": _trust = ParseDouble(key, value, 0.0); return true;
                 case "fame": _fame = ParseDouble(key, value, 0.0); return true;
+                case "cohesion": _cohesion = ParseDouble(key, value, 0.0); return true;
                 case "pressure_next_match": _pressure = ParseInt(key, value) ?? 0; return true;
                 default: return false;
             }
         }
 
         public EventEffect Build() => new(_funds, _trainingMult, _trainingWeeks, _trainingPlayer, _trust, _fame,
-            _pressure);
+            _pressure, _cohesion);
     }
 
     // kind 省略は Random（後方互換）。**新しい種別を足したらここにも足す**＝足し忘れると例外で気づける。
@@ -325,6 +326,8 @@ public static class EventTableParser
         "captain" => EventStance.Captain,
         "ease" => EventStance.EasePractice,
         "as_usual" => EventStance.AsUsual,
+        "camp_join" => EventStance.CampJoin,
+        "camp_skip" => EventStance.CampSkip,
         _ => throw new FormatException($"stance に未知の語: {v}"),
     };
 

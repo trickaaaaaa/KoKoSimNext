@@ -222,6 +222,33 @@ namespace KokoSim.Unity.Shell
             => CohesionDelta = Cohesion.AdvanceWeek(CohesionDelta, week, calendar, CohesionCoeff);
 
         /// <summary>
+        /// 今年度に見送った合宿（issue #1482）。夏冬の合宿週の頭にマネージャーが聞き、「しない」を選ぶと立つ。
+        /// 倍率（<see cref="TrainingWeek"/>）・年度末の費用（<see cref="ManagerService.ApplyYearlyGrowth"/>）・結束の上乗せが
+        /// すべてなくなる。決めていない間は「行う」＝従来どおり。**セーブに載る**（v49）。年度末の総括のあとに落とす。
+        /// </summary>
+        public CampSkips CampSkips { get; private set; }
+
+        /// <summary>
+        /// 合宿の決断を記録する。見送るなら、週の頭に <see cref="AdvanceCohesionWeek"/> が上乗せした結束を取り戻す
+        /// （合宿をしなかった週と同じ値になる）。同じ合宿を二度決めても結束を二重に戻さない。
+        /// </summary>
+        public void DecideCamp(bool winter, bool attend)
+        {
+            var skipped = !attend;
+            if (CampSkips.IsSkipped(winter) == skipped) return;
+            CampSkips = CampSkips.With(winter, skipped);
+            if (skipped) CohesionDelta = Cohesion.SkipCamp(CohesionDelta, winter, CohesionCoeff);
+            else CohesionDelta = Cohesion.ClampDelta(Cohesion.AfterCamp(CohesionDelta, winter, CohesionCoeff));
+        }
+
+        /// <summary>年度末の総括で費用を引いたあと、見送りの記録を落とす（次の年度は「行う」から）。</summary>
+        public void ResetCampSkips() => CampSkips = CampSkips.None;
+
+        /// <summary>結束を直接動かす（合宿の夜の語らいなど、効果つきの結果。issue #1482）。</summary>
+        public void AddCohesion(double delta)
+            => CohesionDelta = Cohesion.ClampDelta(Cohesion.AfterEvent(CohesionDelta, delta));
+
+        /// <summary>
         /// 選手間イベントの好転・悪化（不和解消・サボり等）で結束を動かす。振れ幅は対応ごとに違う
         /// （issue #1599・叱る＝大きく振れる／話を聞く＝小さく安全／主将に任せる＝主将の統率力 <paramref name="captainPower"/> 次第）。
         /// </summary>
@@ -1252,6 +1279,8 @@ namespace KokoSim.Unity.Shell
             PruneBatteryLedger();
             s.BatteryInnings = new List<BatteryInningsEntry>(BatteryLedger.Entries());
             s.CohesionDelta = CohesionDelta;
+            s.SummerCampSkipped = CampSkips.Summer;
+            s.WinterCampSkipped = CampSkips.Winter;
             s.MatchInjurySeq = _matchInjurySeq;
             s.BigStageSeq = _bigStageSeq;
         }
@@ -1336,6 +1365,7 @@ namespace KokoSim.Unity.Shell
             PendingMatchPressure = s.PendingMatchPressure;   // 取材の保留（issue #1467）
             BatteryLedger = BatteryLedger.From(s.BatteryInnings ?? new List<BatteryInningsEntry>());   // 同上（v28・issue #933）
             CohesionDelta = s.CohesionDelta;   // 同上（v29・issue #934）
+            CampSkips = new CampSkips(s.SummerCampSkipped, s.WinterCampSkipped);   // 同上（v49・issue #1482）
             _matchInjurySeq = s.MatchInjurySeq;   // 同上（試合ごとの乱数の連番・issue #1249）
             _bigStageSeq = s.BigStageSeq;
             PendingSenbatsuFieldIds = s.PendingSenbatsuFieldIds != null
@@ -1390,6 +1420,7 @@ namespace KokoSim.Unity.Shell
             PendingMatchPressure = 0;
             BatteryLedger = new BatteryLedger();
             CohesionDelta = 0.0;
+            CampSkips = CampSkips.None;
             ClearTransient();
         }
 

@@ -268,6 +268,13 @@ public static class Cohesion
         => delta + (winter ? c.WinterCampDelta : c.SummerCampDelta);
 
     /// <summary>
+    /// 合宿を見送る（issue #1482）。週の頭の <see cref="AdvanceWeek"/> は合宿の週に上乗せ済みなので、
+    /// 見送ったぶんをここで取り戻す＝「合宿をしなかった週」と同じ値になる。
+    /// </summary>
+    public static double SkipCamp(double delta, bool winter, CohesionCoefficients c)
+        => ClampDelta(delta - (winter ? c.WinterCampDelta : c.SummerCampDelta));
+
+    /// <summary>
     /// 選手間イベントの好転／悪化。<paramref name="eventDelta"/> は対応ごとの振れ幅そのもの
     /// （<see cref="Season.Events.EventChoiceResolver.CohesionDelta"/> が対応・好転/悪化・主将の統率力から求める。issue #1599）。
     /// </summary>

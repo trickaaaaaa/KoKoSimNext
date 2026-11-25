@@ -334,6 +334,13 @@ public sealed class SaveState
     public double CohesionDelta { get; set; }
 
     /// <summary>
+    /// 今年度の夏／冬の合宿を見送ったか（issue #1482・v49）。年度末の総括で費用を引いたあと落とす。
+    /// 旧セーブは合宿が自動だった＝どちらも行う（false）で補う。
+    /// </summary>
+    public bool SummerCampSkipped { get; set; }
+    public bool WinterCampSkipped { get; set; }
+
+    /// <summary>
     /// 退任済みの赴任履歴（issue #980・v32）。<see cref="ManagerPostingHistory.Closed"/>。
     /// 旧セーブは転任が一度も記録されていない＝空で補う。
     /// </summary>

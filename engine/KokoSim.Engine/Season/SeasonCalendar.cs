@@ -218,11 +218,17 @@ public sealed record SeasonCalendar
         return (grade - 1) * 2 + half;         // 1年前半0,後半1 / 2年前半2,後半3
     }
 
-    /// <summary>その週の合宿倍率（合宿でなければ1.0）。</summary>
-    public double CampMultiplier(int week, TrainingCoefficients c)
+    /// <summary>合宿の期間[週]（夏冬とも1週）。マネージャーの「合宿をしますか？」の説明に出す。</summary>
+    public const int CampWeeks = 1;
+
+    /// <summary>
+    /// その週の合宿倍率（合宿でなければ1.0）。<paramref name="skips"/> で見送った合宿の週は1.0
+    /// （既定＝どちらも行う＝従来どおり。AI校・シムはこの既定のまま）。
+    /// </summary>
+    public double CampMultiplier(int week, TrainingCoefficients c, CampSkips skips = default)
     {
-        if (week == SummerCampWeek) return c.SummerCampMult;
-        if (week == WinterCampWeek) return c.WinterCampMult;
+        if (week == SummerCampWeek) return skips.Summer ? 1.0 : c.SummerCampMult;
+        if (week == WinterCampWeek) return skips.Winter ? 1.0 : c.WinterCampMult;
         return 1.0;
     }
 

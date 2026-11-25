@@ -289,7 +289,10 @@ namespace KokoSim.Unity.Shell
                 upsetFameGain: upsetFameGain, upsetFameLoss: upsetFameLoss, contracts: ContractEffects,
                 nationalStageWins: nationalStageWins, draftFameGain: draftFameGain,
                 // 教え子（プロ入りした自分の教え子）の訪問は、名鑑に1人以上いるときだけ（issue #1615）。
-                hasProProtege: DraftService.History.Count > 0);
+                hasProProtege: DraftService.History.Count > 0,
+                campSkips: GameSession.Current.CampSkips);
+            // 見送った合宿の費用は引いた。次の年度は「行う」から（issue #1482）。
+            GameSession.Current.ResetCampSkips();
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 
