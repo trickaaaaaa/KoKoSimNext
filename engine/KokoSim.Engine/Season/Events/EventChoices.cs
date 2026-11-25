@@ -23,6 +23,12 @@ public enum EventStance
     EasePractice,
     /// <summary>いつも通りやる（同）。</summary>
     AsUsual,
+
+    // ── 合宿の決断（issue #1482）。好転/悪化は無い（improve_prob 1.0）。結束・倍率・費用は選んだ側が動かす ──
+    /// <summary>合宿をする。</summary>
+    CampJoin,
+    /// <summary>合宿を見送る。倍率・結束・費用がすべてなくなる。</summary>
+    CampSkip,
 }
 
 /// <summary>対応の性質。</summary>
@@ -33,6 +39,9 @@ public static class EventStances
     /// 部員どうしの関係の話ではないので結束は動かさず、信頼度だけを動かす（issue #1270）。
     /// </summary>
     public static bool MovesCohesion(EventStance s) => s is EventStance.Scold or EventStance.Listen or EventStance.Captain;
+
+    /// <summary>合宿をするか見送るかの選択か（issue #1482）。提示層が合宿の状態（倍率・結束・費用）を動かす。</summary>
+    public static bool IsCampDecision(EventStance s) => s is EventStance.CampJoin or EventStance.CampSkip;
 }
 
 /// <summary>

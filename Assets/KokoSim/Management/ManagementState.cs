@@ -120,8 +120,10 @@ namespace KokoSim.Unity.Management
             var income = budget + donation;
             // 固定支出＝合宿（年2回）＋年契約の年額合計。スカウト費は年契約「スカウト網」に含まれる
             // （engine 側 CareerEngine.ApplyResults も同じ数え方＝二重には引かない）。
-            var camps = Career.SummerCampCost + Career.WinterCampCost;
-            var expense = CareerEngine.AnnualFixedExpense(contracts.AnnualCost, Career);
+            // 見送った合宿の費用は引かない（issue #1482）。まだ決めていない合宿は行う見込み。
+            var skips = KokoSim.Unity.Shell.GameSession.Current.CampSkips;
+            var camps = CareerEngine.AnnualFixedExpense(0, Career, skips);
+            var expense = CareerEngine.AnnualFixedExpense(contracts.AnnualCost, Career, skips);
 
             var (coefAdd, minutesAdd) = catalog.Aggregate(set);
             var (coefMaxAdd, minutesMaxAdd) = catalog.Aggregate(MaxedSet(catalog));

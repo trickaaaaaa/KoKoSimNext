@@ -21,7 +21,12 @@ public static class EventTextFormat
 
     private static IReadOnlyList<string> BuildKnownKeys()
     {
-        var keys = new List<string> { "player", "school", "manager", "count", "injury", "weeks", "other" };
+        var keys = new List<string>
+        {
+            "player", "school", "manager", "count", "injury", "weeks", "other",
+            // 合宿の説明（issue #1482）。費用[万円]・期間[週]・経験値の倍率。合宿のイベントだけが渡す。
+            "camp_cost", "camp_weeks", "camp_mult",
+        };
         foreach (var (k, _) in DisplayNames.Keys) keys.Add(k);
         return keys;
     }

@@ -32,6 +32,7 @@
 #   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 1年生の人数（新入部員）
 #   {injury} 故障名の話し言葉（「足首の捻挫」）／ {weeks} 全治までの週数 …… injury_occurred だけが渡す（issue #695）
 #   {other} 選手間イベントの相手（cast: other: で選ぶ。issue #945）
+#   {camp_cost} 合宿の費用[万円] ／ {camp_weeks} 合宿の期間[週] ／ {camp_mult} 合宿の経験値の倍率 …… summer_camp / winter_camp だけが渡す（issue #1482）
 #   {koshien} {senbatsu} {jingu} ほか 大会名（data/display-names.yaml の表から入る。issue #1319）。
 #     実在の大会名は文に直接書かない＝表を替えると全部の文が替わる。「甲子園の土」も {koshien}の土 と書く
 #   ※ {player} はいまは「在籍部員から暦で決まる1人」。System イベント（issue #610〜）では
@@ -76,35 +77,120 @@ events:
           - who: narration
             say: "揃わない声が、グラウンドの端まで届いた。"
 
+  # 合宿（issue #1482）。週の頭にマネージャーが「合宿をしますか？」と聞く＝費用・期間・効果を先に見せて、する／しないを選ぶ。
+  # 「しない」を選ぶと倍率・結束・費用がすべてなくなる（AI校は従来どおり必ず合宿する）。
+  # する→結果の会話は「いつもの合宿の様子」と、結束がもう一段上がる夜の語らい・不和の解消（effects: cohesion）から1つ。
+  # 費用・倍率は coefficients.yaml が正典＝文に数字を直書きしない（{camp_cost}{camp_weeks}{camp_mult}）。
+  # 好転/悪化は無い（improve_prob: 1.0＝結果は improved だけ）。
   - id: summer_camp
     kind: Fixed
     scene: camp
     calendar_week: 18
-    text: "夏合宿。全体の経験値が跳ね上がる。"
+    text: "夏合宿の時期。マネージャーが、合宿をするか聞いてきた。"
     variants:
       - lines:
+          - who: team_manager
+            say: "監督、夏合宿の時期です。今年はやりますか？"
+          - who: team_manager
+            say: "費用は部費から{camp_cost}万円、期間は{camp_weeks}週間です。"
+          - who: team_manager
+            say: "効果は、練習の経験値が{camp_mult}倍になることと、チームの状態が上がることです。"
+      - lines:
+          - who: captain
+            say: "夏合宿の話、聞きましたか。俺たちは、やる気でいます。"
+          - who: team_manager
+            say: "費用は部費から{camp_cost}万円、期間は{camp_weeks}週間。経験値が{camp_mult}倍になって、チームの状態も上がります。"
+          - who: team_manager
+            say: "どうしますか、監督。"
+    choices:
+      - stance: camp_join
+        label: "合宿をする"
+        improve_prob: 1.0
+      - stance: camp_skip
+        label: "今年は合宿をしない"
+        improve_prob: 1.0
+    outcomes:
+      - stance: camp_join
+        result: improved
+        lines:
           - who: narration
             say: "夏合宿。日が落ちてもアスファルトは熱を持ったままで、ノックの音だけが響いていた。"
           - who: team_manager
             say: "監督、そろそろ切り上げますか。倒れられたら元も子もない。"
-          - who: manager
-            say: "あと五本で上がろう。"
-      - lines:
+          - who: narration
+            say: "あと五本。誰かがそう言って、また一本目が始まった。"
+      - stance: camp_join
+        result: improved
+        lines:
           - who: player
             say: "もう無理です……。"
           - who: captain
             say: "無理って言えるうちは大丈夫だ。俺なんか声も出ねえ。"
           - who: narration
             say: "誰かが笑った。それでまた、次の一本が始まった。"
-      - lines:
+      - stance: camp_join
+        result: improved
+        lines:
           - who: narration
             say: "合宿最終日の夜。誰も口を利かず、それでも誰も先に寝ようとしなかった。"
           - who: team_manager
             say: "よくやりました。明日は昼から、軽くだけにしましょう。"
-          - who: manager
-            say: "そうしよう。"
           - who: narration
             say: "翌朝、いつもより静かなグラウンドに、それでも全員が揃っていた。"
+      - stance: camp_join
+        result: improved
+        effects:
+          cohesion: 3
+        lines:
+          - who: narration
+            say: "合宿所の夜。消灯のあとも、部屋のあちこちから小声が聞こえてくる。"
+          - who: player
+            name: "{player}"
+            say: "先輩、{koshien}って、どんな景色なんですか。"
+          - who: captain
+            say: "まだ見てねえよ。だから、みんなで見に行くんだろ。"
+          - who: narration
+            say: "笑い声が、布団の中でくぐもって響いた。"
+      - stance: camp_join
+        result: improved
+        effects:
+          cohesion: 4
+        lines:
+          - who: team_manager
+            say: "あの二人、昼の練習からずっと口を利いていませんでした。"
+          - who: narration
+            say: "大部屋の雑魚寝。背中合わせに寝転んだまま、どちらからともなく声が出た。"
+          - who: player
+            name: "{player}"
+            say: "……昼間は悪かった。明日は、一緒にノックを受けよう。"
+          - who: narration
+            say: "返事の代わりに、毛布が小さく動いた。"
+      - stance: camp_join
+        result: improved
+        effects:
+          cohesion: 3
+        lines:
+          - who: team_manager
+            say: "差し入れのスイカ、みんなで割りましょう。目隠しは主将からです。"
+          - who: captain
+            say: "なんで俺なんだ。……よし、右か？"
+          - who: narration
+            say: "見当違いの方向へ歩く主将に、全員が腹を抱えて笑った。"
+      - stance: camp_skip
+        result: improved
+        lines:
+          - who: team_manager
+            say: "分かりました。今年の夏は合宿なしで、いつも通りの練習にします。"
+          - who: player
+            name: "{player}"
+            say: "ちょっとほっとしたような、物足りないような気分です。"
+      - stance: camp_skip
+        result: improved
+        lines:
+          - who: captain
+            say: "合宿なし、了解しました。そのぶん、普段の練習で取り返します。"
+          - who: narration
+            say: "夏の夕方、いつもの時間にグラウンドの照明が落ちた。"
 
   # 10月第3週。第28週（指名の週）は draft_meeting が使う＝同じ週に Fixed が2本出ないよう1週前に置く（EventTableTests が固定）。
   - id: culture_festival
@@ -133,31 +219,114 @@ events:
           - who: player
             say: "監督も見に来てくれたんですね。あとで出し物あるんで、ぜひ。"
 
+  # 冬合宿も夏と同じ作り（上のコメント参照）。冬は費用・倍率・結束が夏より大きい。
   - id: winter_camp
     kind: Fixed
     scene: ground
     calendar_week: 38
-    text: "冬合宿。鍛錬期の山場。"
+    text: "冬合宿の時期。マネージャーが、合宿をするか聞いてきた。"
     variants:
       - lines:
+          - who: team_manager
+            say: "監督、冬合宿の時期です。今年はやりますか？"
+          - who: team_manager
+            say: "費用は部費から{camp_cost}万円、期間は{camp_weeks}週間です。"
+          - who: team_manager
+            say: "効果は、練習の経験値が{camp_mult}倍になることと、チームの状態が大きく上がることです。"
+      - lines:
+          - who: captain
+            say: "冬合宿、今年もありますよね。夏に負けた分、取り返したいんです。"
+          - who: team_manager
+            say: "費用は部費から{camp_cost}万円、期間は{camp_weeks}週間。経験値が{camp_mult}倍になって、チームの状態も大きく上がります。"
+          - who: team_manager
+            say: "どうしますか、監督。"
+    choices:
+      - stance: camp_join
+        label: "合宿をする"
+        improve_prob: 1.0
+      - stance: camp_skip
+        label: "今年は合宿をしない"
+        improve_prob: 1.0
+    outcomes:
+      - stance: camp_join
+        result: improved
+        lines:
           - who: narration
             say: "冬。吐く息が白い。打球音が乾いて、遠くまで届く。"
           - who: team_manager
             say: "今日は走り込みを長めに入れます。"
-          - who: manager
-            say: "頼む。"
-      - lines:
+          - who: narration
+            say: "白い息の列が、グラウンドを何周もまわっていた。"
+      - stance: camp_join
+        result: improved
+        lines:
           - who: player
             say: "監督、指の感覚がないんですけど……。"
           - who: team_manager
             say: "カイロなら部室にあります。ちゃんと使ってくださいね。"
           - who: narration
             say: "手をこすり合わせながら、列に戻っていった。"
-      - lines:
+      - stance: camp_join
+        result: improved
+        lines:
           - who: captain
             say: "夏に負けた分、冬でやり返します。"
-          - who: manager
-            say: "その意気だ。じゃあ、まず一本目。"
+          - who: narration
+            say: "朝の霜柱を踏みしめて、一本目のノックが始まった。"
+      - stance: camp_join
+        result: improved
+        effects:
+          cohesion: 4
+        lines:
+          - who: team_manager
+            say: "夜は、みんなで鍋です。具材は部員の持ち寄りですよ。"
+          - who: player
+            name: "{player}"
+            say: "うちの鍋、肉が入ってないんですけど。"
+          - who: captain
+            say: "文句があるなら、自分で持ってこい。"
+          - who: narration
+            say: "湯気の向こうで、全員がいつもより饒舌だった。"
+      - stance: camp_join
+        result: improved
+        effects:
+          cohesion: 5
+        lines:
+          - who: narration
+            say: "最終日の夜。ストーブを囲んで、誰かが秋の大会の話を切り出した。"
+          - who: player
+            name: "{player}"
+            say: "あの試合、俺のエラーで流れが変わりました。ずっと言えなくて。"
+          - who: captain
+            say: "気づいてたよ。お前だけのせいじゃない。みんなで取り返すんだ。"
+          - who: narration
+            say: "誰も茶化さなかった。ストーブの火だけが、静かに音を立てていた。"
+      - stance: camp_join
+        result: improved
+        effects:
+          cohesion: 4
+        lines:
+          - who: team_manager
+            say: "雪で外が使えません。今日は体育館で、合同のミーティングにします。"
+          - who: captain
+            say: "学年ごとに分かれるの、やめませんか。全員で輪になりましょう。"
+          - who: narration
+            say: "一年生も三年生も同じ円の中で、同じ目標を紙に書いた。"
+      - stance: camp_skip
+        result: improved
+        lines:
+          - who: team_manager
+            say: "分かりました。今年の冬は合宿なしで、いつも通りの練習にします。"
+          - who: player
+            name: "{player}"
+            say: "正直、寒いのは助かります。でも、ちょっと不安です。"
+      - stance: camp_skip
+        result: improved
+        lines:
+          - who: captain
+            say: "合宿なし、了解しました。そのぶん、毎日の練習で追い込みます。"
+          - who: narration
+            say: "冬の夕方、グラウンドの照明がいつもの時間に落ちた。"
 
   # 指名の確定と同じ週（SeasonCalendar.DraftWeek＝28）。EventTableTests が DraftWeek との一致を固定している
   # ＝片方だけ動かすと赤になる。同じ週の中では、会議の場面が指名結果のノベルより先に並ぶ（HomeState.AdvanceWeek）。

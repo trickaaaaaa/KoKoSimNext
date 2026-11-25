@@ -387,6 +387,13 @@ namespace KokoSim.Unity.Shell
                     if (d < 0) bad = true;
                 }
             }
+            if (effect.Cohesion != 0.0)
+            {
+                // 結束の上下（issue #1482）。合宿の夜の語らい・不和の解消など。
+                GameSession.Current.AddCohesion(effect.Cohesion);
+                parts.Add(effect.Cohesion > 0 ? "チーム状態が良くなった" : "チーム状態が悪くなった");
+                if (effect.Cohesion < 0) bad = true;
+            }
             if (effect.PressureNextMatch != 0)
             {
                 // 次の公式戦1試合だけ自校側のプレッシャー指数に足す（issue #1467 P2）。重ねても積み増さない（大きい方）。
@@ -431,6 +438,7 @@ namespace KokoSim.Unity.Shell
             var values = BuildValues();
             values["player"] = subject.Name;
             if (other != null) values["other"] = other.Name;
+            AddCampValues(f.Event.Id, values);
 
             var week = Scheduler.AbsoluteWeek;
             var salt = subject.Id;
@@ -510,6 +518,22 @@ namespace KokoSim.Unity.Shell
 
             EventOutcome outcome;
             pending.Outcomes.TryGetValue((stance, improved), out outcome);
+            var outcomeHasCohesion = outcome != null && outcome.EffectOrNone.Cohesion != 0.0;
+            // 合宿の決断（issue #1482）: 「する」は倍率が効き（練習適用側）・費用は年度末に引かれ・結束が上がる。
+            // 「しない」は三つともなくなる。週の頭の結束の上乗せはここで取り戻す（GameSession.DecideCamp）。
+            if (EventStances.IsCampDecision(stance))
+            {
+                var winter = e.Id == WinterCampEventId;
+                var attend = stance == EventStance.CampJoin;
+                GameSession.Current.DecideCamp(winter, attend);
+                if (attend)
+                {
+                    var cal = new KokoSim.Engine.Season.SeasonCalendar();
+                    var mult = cal.CampMultiplier(winter ? cal.WinterCampWeek : cal.SummerCampWeek, TrainingWeek.Coefficients);
+                    parts.Add("今週の経験値 ×" + mult.ToString("0.0"));
+                    if (!outcomeHasCohesion) parts.Add("チーム状態が良くなった");
+                }
+            }
             // 結果ごとの効果（信頼度・練習効率など）。文は実際に動いた量で書く。
             var applied = outcome != null
                 ? ApplyEffect(outcome.EffectOrNone, e.Id, pending.SubjectId, pending.SubjectName)
@@ -632,6 +656,28 @@ namespace KokoSim.Unity.Shell
         /// 差し込み語の値。<b>未知の語はここに入れない</b>＝<c>{key}</c> のまま画面に残り、
         /// data/events.yaml の書き間違いが絵で分かる（<see cref="EventTextFormat"/>）。
         /// </summary>
+        /// <summary>夏冬の合宿のイベント ID（issue #1482）。「合宿をしますか？」を出す2本。</summary>
+        internal const string SummerCampEventId = "summer_camp";
+        internal const string WinterCampEventId = "winter_camp";
+
+        private static bool IsCampEvent(string id) => id == SummerCampEventId || id == WinterCampEventId;
+
+        /// <summary>
+        /// 合宿のイベントの説明に差し込む費用・期間・倍率（issue #1482）。値は係数の正典（費用＝<see cref="ManagerService.Coefficients"/>・
+        /// 倍率＝<see cref="TrainingWeek.CampMultiplier"/> と同じ元）から引く＝文に数字を直書きしない。
+        /// </summary>
+        private static void AddCampValues(string eventId, Dictionary<string, string> values)
+        {
+            if (!IsCampEvent(eventId)) return;
+            var winter = eventId == WinterCampEventId;
+            var career = ManagerService.Coefficients;
+            var cal = new KokoSim.Engine.Season.SeasonCalendar();
+            var week = winter ? cal.WinterCampWeek : cal.SummerCampWeek;
+            values["camp_cost"] = (winter ? career.WinterCampCost : career.SummerCampCost).ToString("0");
+            values["camp_weeks"] = KokoSim.Engine.Season.SeasonCalendar.CampWeeks.ToString();
+            values["camp_mult"] = cal.CampMultiplier(week, TrainingWeek.Coefficients).ToString("0.0");
+        }
+
         internal static Dictionary<string, string> BuildValues()
         {
             return new Dictionary<string, string>

@@ -563,7 +563,7 @@ namespace KokoSim.Unity.Training
 
         private void BuildCampBanner(TrainingPlanView view)
         {
-            var mult = _calendar.CampMultiplier(_week, _training);
+            var mult = _calendar.CampMultiplier(_week, _training, KokoSim.Unity.Shell.GameSession.Current.CampSkips);
             view.CampActive = mult > 1.0;
             if (!view.CampActive) return;
             var winter = mult >= _training.WinterCampMult;
