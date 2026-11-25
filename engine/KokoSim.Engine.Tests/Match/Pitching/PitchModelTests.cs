@@ -132,7 +132,8 @@ public sealed class PitchModelTests
     [Fact]
     public void HigherControl_SpreadsTheAim_TowardTheCorners_And50IsIdentity()
     {
-        // 狙い散布σは max(0.5, 1 + slope×(Control−50)) 倍。C50 は恒等・C90 は広く・C30 は狭い（真ん中を狙う）・乱数消費は同じ。
+        // 狙い散布σは max(0.5, 1 + slope×(Control−50)) 倍。傾きは制球50以上と未満で別（issue #1589）。
+        // C50 は恒等・C90 は上側の傾きで広く・C30 は下側の傾きに従う・乱数消費は同じ。
         double AimSpread(int control, ulong seed)
         {
             var pitcher = new PitcherAttributes { MaxVelocityKmh = 140.0, Control = control };
@@ -146,9 +147,28 @@ public sealed class PitchModelTests
         var c90 = AimSpread(90, 9);
         Assert.InRange(c50, Bat.AimSigmaXMeters * 0.95, Bat.AimSigmaXMeters * 1.05);
         var expected90 = Bat.AimSigmaXMeters * (1.0 + Bat.AimSpreadControlSlopePerPoint * 40);
-        var expected30 = Bat.AimSigmaXMeters * System.Math.Max(0.5, 1.0 - Bat.AimSpreadControlSlopePerPoint * 20);
+        var expected30 = Bat.AimSigmaXMeters * System.Math.Max(0.5, 1.0 - Bat.AimSpreadControlSlopeBelowPerPoint * 20);
         Assert.InRange(c90, expected90 * 0.95, expected90 * 1.05);
         Assert.InRange(c30, expected30 * 0.95, expected30 * 1.05);
+    }
+
+    [Fact]
+    public void AimSpread_BelowSlope_IsIndependentOfAboveSlope()
+    {
+        // issue #1589: 下側の傾きだけを変えても C70 の狙いは変わらず、C30 の狙いだけが変わる。
+        double AimSpread(BattingCoefficients bat, int control)
+        {
+            var pitcher = new PitcherAttributes { MaxVelocityKmh = 140.0, Control = control };
+            var rng = new Xoshiro256Random(11);
+            var xs = Enumerable.Range(0, 3000).Select(_ => PitchSelection.Select(pitcher, Zone, bat, Pit, rng).AimX).ToList();
+            var mean = xs.Average();
+            return Math.Sqrt(xs.Sum(x => (x - mean) * (x - mean)) / xs.Count);
+        }
+        var flat = Bat with { AimSpreadControlSlopeBelowPerPoint = 0.0 };
+        var steep = Bat with { AimSpreadControlSlopeBelowPerPoint = 0.02 };
+        Assert.Equal(AimSpread(flat, 70), AimSpread(steep, 70), 9);
+        Assert.InRange(AimSpread(flat, 30), Bat.AimSigmaXMeters * 0.95, Bat.AimSigmaXMeters * 1.05); // 傾き0＝C50と同じ
+        Assert.True(AimSpread(steep, 30) < AimSpread(flat, 30) * 0.8);                              // 1−0.02×20＝0.6倍
     }
 
     // --- ギア「飛ばす/流す」（§1.1f） ---

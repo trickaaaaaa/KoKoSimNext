@@ -15,8 +15,23 @@ public sealed class ControlScatterTests
     [InlineData(0, 0.30)]    // 切片そのまま 30cm
     public void ControlSigma_MatchesDesignFormula(int control, double expectedMeters)
     {
-        var coeff = new PitchingCoefficients();
+        // 設計書02 の一次式そのもの（制球50未満の上乗せ＝issue #1589 を外した形）。
+        var coeff = new PitchingCoefficients { ControlSigmaExtraBelowCmPerPoint = 0.0 };
         Assert.Equal(expectedMeters, coeff.ControlSigmaMeters(control), 6);
+    }
+
+    [Fact]
+    public void ControlSigma_ExtraBelow_WidensOnlyBelow50()
+    {
+        // issue #1589: 制球50未満だけ σ に ＋extra×(50−C)。50以上は一次式のまま（好投手の四球の床を動かさない）。
+        var plain = new PitchingCoefficients { ControlSigmaExtraBelowCmPerPoint = 0.0 };
+        var extra = new PitchingCoefficients { ControlSigmaExtraBelowCmPerPoint = 0.3 };
+        Assert.Equal(plain.ControlSigmaMeters(50), extra.ControlSigmaMeters(50), 9);
+        Assert.Equal(plain.ControlSigmaMeters(80), extra.ControlSigmaMeters(80), 9);
+        // C20: 30 − 20×0.22 + 0.3×30 = 25.6 + 9 = 34.6cm
+        Assert.Equal(0.346, extra.ControlSigmaMeters(20), 6);
+        // 50 を境に連続
+        Assert.Equal(plain.ControlSigmaMeters(49) + 0.003, extra.ControlSigmaMeters(49), 9);
     }
 
     [Fact]
