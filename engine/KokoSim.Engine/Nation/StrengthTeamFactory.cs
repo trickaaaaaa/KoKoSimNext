@@ -231,13 +231,10 @@ public static class StrengthTeamFactory
         // 抜擢の価値があるとき（調子込みで先発の素の打撃を上回る）だけ入れ替える＝諸刃を無闇に負わない。
         if (bestScore <= LineupOrderer.BattingScore(starter, lineup)) return;
 
-        // 背番号は入れ替える（先発の位置番号を抜擢された選手が着け、押し出された先発は控えの番号へ）。
-        // 永続ロスター経路（AiTeamBuilder）の「その位置の番号を着ける」と揃え、控え番号のまま先発に出ないようにする。
-        order[slot] = benchPlayer with
-        {
-            Condition = bestCond, ConditionValue = bestCv, UniformNumber = starter.UniformNumber,
-        };
-        bench[bestIdx] = starter with { UniformNumber = benchPlayer.UniformNumber };   // 押し出された先発はベンチへ（守備位置は同一）
+        // 背番号は入れ替えない。背番号は大会前に決まっていて、抜擢された控えは自分の2桁の番号のまま先発する
+        // （#1254 でオーナー判断・2026-11-25）。
+        order[slot] = benchPlayer with { Condition = bestCond, ConditionValue = bestCv };
+        bench[bestIdx] = starter;   // 押し出された先発はベンチへ（守備位置は同一）
     }
 
     /// <summary>
