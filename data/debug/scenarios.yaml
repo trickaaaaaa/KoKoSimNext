@@ -451,3 +451,24 @@ scenarios:
     top: true
     outs: 0
     seed: 20263149
+
+  # ピッチャーフライを投手が追って捕る（投手の足が滑って見えた件）。最初の打席が投手への飛球（初球・7.4m を約3.4秒で寄る）。
+  # チームは呼び出し側シード 1 で組む前提（if-grounder-1b-cover-lab と同じ顔ぶれ）
+  - id: p-fly-lab
+    name: 守備検証・ピッチャーフライを投手が捕る（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20271776
+
+  # 同じく、寄りが速め（7.7m を約2.1秒）のピッチャーフライ
+  - id: p-fly-lab-fast
+    name: 守備検証・ピッチャーフライを投手が捕る・寄りが速め（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    seed: 20270651
