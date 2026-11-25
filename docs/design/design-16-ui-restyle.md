@@ -5,7 +5,9 @@
 > データ画面では廃止。現行の書体ルールは UI-BUILD-METHOD.md「書体ルール」と design-22 §3 が正。
 
 作成: 2026-07-21。承認済みの方向性（B案「新聞とテロップ」＋甲子園球場の電光掲示板をシグネチャに採用）を実装計画に落としたもの。
-**まだ実装していない。** 着手条件・順序は §6 を参照。
+~~**まだ実装していない。** 着手条件・順序は §6 を参照。~~
+→ **2026-11-26 改訂（issue #1283）: F0〜F4 は 2026-07-22 までに実装完了**（§6 のフェーズ表の ✅ のとおり。コミット `ed446868`〜`750a5e12`）。
+本書は計画書として残し、その後の改訂は冒頭の改訂注記（design-22）と §10.3「解決の記録」に集約する。
 
 ---
 
@@ -166,7 +168,8 @@ F1でGoが出た後は「既存画面の移行（F2/F3）」と「未実装画�
 6. ~~**人名（監督名・選手名）を明朝にするか**~~ → **2026-07-22 クローズ（3-A）**。**人名も明朝**。
    校名＝太明朝に加え、選手名・監督名も明朝にして新聞見出しの一貫性を最優先する。
    一覧表の可読性低下は許容（詳細画面・一覧とも明朝）。
-7. **画面内タブ（記録・設定などの大分類）**: SegmentedControl で代用するか TabBar を辞書に足すか（§10）
+7. ~~**画面内タブ（記録・設定などの大分類）**: SegmentedControl で代用するか TabBar を辞書に足すか（§10）~~ → **2026-08-12 クローズ（issue #600）**。
+   `SegTabs`（`UiComponents.SegTabs`）を流用し、TabBar は作らなかった（§10.2 #10・§10.3）。
 8. ~~**数値の Oswald 化の範囲**~~ → **2026-07-22 クローズ（2-B→実施は純数値優先）**。当初 2-B は「混植も分割して徹底」だったが、
    全画面ロールアウトは**まず純数値セルだけ `.f-num`／`.f-num-bd` を付ける**方針に確定（工数対効果）。
    実装済み: PlayerList（総合値・学年は `NumUnit` で分割）／PlayerDetail・TeamStrength・練習・練習試合の能力値（共有部品 `AbilityRow` に一括）／
@@ -299,3 +302,22 @@ Switch（現代ルール）／Chip（称号タグ）／SchoolName（歴代大会
 **書体上の注意（4画面すべてに効く）**: 数字と和文を同じ Label に入れないこと。Oswald は欧文専用で
 和文グリフを持たないため、`¥120万` `.384（2027）` `Lv2` のような混植は必ず Label を分ける
 （#6 MoneyCell / #8 RecordRow が要るのはこのため）。
+
+### 10.3 解決の記録（2026-11-26 調査・issue #1283）
+
+§10.2 の穴が実際にどうなったかを、`Assets/UI/Components/`・`Assets/KokoSim/`・`Assets/UI/*.uss` の実コードで確かめた記録。
+**同じ名前の部品は作られていない**（`MaskedStat`・`RowButton`・`StepMeter`・`LedgerRow`・`TotalRule`・`MoneyCell`・`RevealAnimation` は `Assets/` に1件も無い）。穴は「別名で作った／既存部品で足りた／未着手」に分かれた。
+
+| # | 部品 | 結果 | 実際の解決 |
+|---|---|---|---|
+| 1 | MaskedStat | **作らず別の手段で解決** | スカウト画面が「？」を淡い無彩色の文字で出し、判明すると値に差し替わる（`ScoutScreenController`＋`.sc-hidden__val--unknown`／`.sc-cell--none`／`.sc-est__none`、色は `--color-faint`）。「RankChip と差し替わる2状態の部品」にはしていない |
+| 2 | RevealAnimation | **未解決（未作成）** | 開示のめくり演出は `Assets/` に無い（`ScoutScreen.uss` に transition も無い）。design-06 §3.6 には「？表示→開示演出」の記述が残ったまま。演出の採否は決まっていない |
+| 3 | RowButton | **作らず既存部品で解決** | 経営の行内ボタンは既存の `.tool-btn` に画面固有の `.mn-buy`／`.mn-cancel` を重ねる（`ManagementScreenController`）。スカウトの訪問は行内でなく右の詳細欄の `tool-btn`（`sc-visit`） |
+| 4 | StepMeter | **作られた（名前は `LevelPips`）** | `UiComponents.LevelPips`＋`.lv-pips`／`.lv-pip--on`（保有段＝塗り・未保有段＝地色）。経営の施設レベル（#584）と大会展望の勢い段階で使う |
+| 5 | LedgerRow / TotalRule | **作らず別の手段で解決** | 経営は収支を表でなく「枠4つ」（`.mn-kv`＝見出し＋金額＋内訳）に組み、符号は数字側に付ける。警告色は差引が負のときだけ（`.mn-kv--neg`）。紙上で描いた「表＋合計の二重罫」は採っていない（`.mn-total` は練習効率の合計で別物） |
+| 6 | MoneyCell | **作らず既存部品で解決** | `UiComponents.NumUnit(数字, "万")`／`NumUnitAuto`（数字と単位を別 Label に分ける）。本文・数字が Noto Sans JP になった後（design-22）は混植で豆腐が出ないので、分ける必然性は薄れた |
+| 7 | Timeline | **作られた**（#586） | §10.2 の本文どおり |
+| 8 | RecordRow | **作られた**（名前は `RecordCell`・#600） | §10.2 の本文どおり |
+| 9 | TextField / Dropdown | **作られた（名前は `SbkField`）** | `.sbk-field`／`.sbk-field-suffix`（`scorebook.uss`・校名の編集 #946 で辞書化）。`.sbk` スコープの中でだけ効く。新規作成画面の `.ngs-text`／`.ngs-drop` も同じ見た目に寄せてある。UI-BUILD-METHOD.md の辞書に載っている |
+| 10 | TabBar | **穴ではなかった**（#600） | `SegTabs` を流用 |
+| 11 | EmptyState | **作られた**（#600） | §10.2 の本文どおり |

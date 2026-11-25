@@ -88,8 +88,10 @@ supersedes: design-19「デーゲーム・フルNB」の面・枠・影・カー
 | **G0 全画面の書体と調子色** | 既定フォント3箇所と `.f-body*` `.f-num*` を Noto へ。移行レジストリの Plex 指定を Noto へ。調子5色の3面同期。オーダー画面の `.sbk` 内の読み替えを撤去（全体側で済むため） | 全画面スクショで崩れ（はみ出し・行高のずれ）の棚卸し。書体の監査で Plex/Oswald ゼロ |
 | **G1 シェル** | TopBar を紙色化（電光ストリップ撤去）・ナビ・`.card`/行パネル/2択の `.sbk` 版。データ画面のルートへ `sbk` を付ける | 全データ画面が「一応スコアブックになる」・崩れの棚卸し |
 | **G2 主要データ画面** | Home / PlayerList / PlayerDetail / MemberSetting / TeamSetting / TrainingPlan / TeamStrengthPanel | 画面別スクショ承認 |
-| **G3 残りのデータ画面** | Scout / Management / Career / Records / PracticeMatch / TournamentPreview / MatchPreview / MatchResult / NewGameSetup / SaveSlots / TitleScreen | 画面別スクショ承認 |
+| **G3 残りのデータ画面** | Scout / Management / Career / Records / PracticeMatch / TournamentPreview / MatchPreview / MatchResult※ / NewGameSetup / SaveSlots / TitleScreen | 画面別スクショ承認 |
 | **G4 正典の反映** | CLAUDE.md「UI原則」・UI-BUILD-METHOD.md・design-16/19 に置換注記。不要になった旧部品・Plex/Oswald の扱い。メモリ更新 | main へのマージ判断 |
+
+> ※ **MatchResult は現在 scorebook の対象外**（2026-11-26 確認・issue #1283）。G3 の時点（2026-11-09）では他の画面と同じく画面ルートに `sbk` を付けていたが、その後 #1198（コミット 9051f09e）で試合結果画面は専用の器（`.mres-card`・色は `tokens.uss` の `--mr-*`／`--ms-*`）へ作り直され、`MatchResult.uxml` は `sbk` も `scorebook.uss` も使っていない。試合画面の左右のチーム欄（`.mside-*`・`--ms-*`）も同様に #1197（c9584a73）で専用の器になった。新しい見た目の仕様・書体・色の決め方の整理は**オーナー確認待ち（issue #1283 の未了項目）**で、本書にはまだ書かない。
 
 試合中の画面（MatchLive / MatchScreen / MatchDetail の盤面 / 交代パネル）は G0 の書体・調子色だけが効き、面は今のまま。
 

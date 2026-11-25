@@ -515,7 +515,7 @@
 .tp-team-name { font-size: 22px; color: var(--color-chalk); }
 .tp-team-sub__rank { margin-left: 8px; }
 .tp-seed { font-size: var(--fs-label); color: var(--color-muted); margin-left: 8px; }
-/* 試合結果のスコア。校名（明朝）と混ぜず独立 Label にしてコンデンス数字を当てる。 */
+/* 試合結果のスコア。校名（明朝）と混ぜず独立 Label にして数字の書体（.f-num＝Noto Sans JP）を当てる。 */
 .tp-mscore {
     font-size: 22px; color: var(--color-chalk);
     margin-left: var(--sp-3); margin-right: var(--sp-3);
@@ -527,7 +527,7 @@
 .tp-bar { flex-grow: 1; margin-right: 14px; }
 .tp-bar__top { flex-direction: row; justify-content: space-between; margin-bottom: 3px; }
 .tp-bar__label { font-size: var(--fs-label); color: var(--color-muted); }
-/* 数値はコンデンス（.f-num を C# 側で付与）。桁が揃うよう右寄せにする（UI原則③）。 */
+/* 数値は .f-num（Noto Sans JP）を C# 側で付与。桁が揃うよう右寄せにする（UI原則③）。 */
 .tp-bar__val { font-size: var(--fs-num); color: var(--color-chalk); -unity-text-align: middle-right; }
 /* 丸端バー → 角端（design-16 §5）。トラックの枠線も落とし、面の明度差だけで示す。 */
 .tp-track { height: 6px; background-color: var(--sf-inset); border-radius: 0; border-width: 0; }

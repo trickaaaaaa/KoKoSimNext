@@ -144,6 +144,8 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 - 画面固有の Label の余白リセットは**画面ルート**（例 `.lu-root Label`）に置く。`.sbk Label` に置くと全データ画面の文字がくっつく
 - 撮影のたびに書体の監査を回す（`ScreenshotBatch` が `<prefix>fonts.txt` を書く＝`FontAudit`。許可は Noto Sans JP・Shippori Mincho B1・DotGothic16 だけ）
 
+> **現状の事実（2026-11-26・issue #1283。設計はオーナー確認待ちで、ここでは決めない）**: 上の「自作カードclassを新設しない」に対し、試合結果画面（`MatchResult.uxml`・`.mres-card`＋`MatchResult.uss`・色は `tokens.uss` の `--mr-*`／`--ms-*`。#1198）と、試合画面の左右のチーム欄（`.mside-*`＠`components.uss`・色は `--ms-*`。#1197）は専用の器で作られており、`.card`／`sbk` を使っていない（`MatchResult.uxml` に `sbk` クラスも `scorebook.uss` の読み込みも無い）。これらの扱い（部品辞書へ載せるか・例外として明記するか）は未決。
+
 > **昼NBスキンの継承**（試合中の画面。データ画面は上の `sbk` を足す）：新規画面は ①`tokens.uss`/`components.uss`/`KokoSimTheme.uss` をこの順で `<Style>` する ②トップバーは `<ui:Instance template="TopBar">` 1行 ③器は上表の `.card`／`.row-well`+`.row-panel`／`.plate-header` を組み合わせる ④色・寸法は `var(--...)` のみ（直書き禁止）。この4点を守れば昼NBデザインは自動で継承される。
 
 各部品は**サンプルデータ入りのプレビュー**（UI Builder のPreview、またはStep 3の単体スクショ）を持つ。
