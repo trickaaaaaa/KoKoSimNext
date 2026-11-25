@@ -322,6 +322,12 @@ public enum ForcedOutcome
 }
 ```
 
+> **このスケッチは起票時の案で、実装とは違う**。現行の `ForcedOutcome`（`engine/KokoSim.Engine/Debugging/ForcedOutcome.cs`）は
+> `None` を除いて**28種**。`PassedBall` は持たず（`WildPitch` の強制は `PassedBallProb = 0` に寄せる）、`Error` は `ReachedOnError`、
+> `TriplePlay`／`Balk`／`Squeeze`／`EnterTieBreak`／`WalkOff` は持たない（§12.1）。スケッチに無い種別として、
+> 撮影用の `BuntInPlay`（#1089）・`ChasedFoulFly`／`BigFoul`／`GroundFoul`／`HighFoul`（#1074）・
+> `ThroughInfieldLeft`／`ThroughInfieldMiddle`／`ThroughInfieldRight`（#1591・#1639）・`FieldingError`（#1247）を足してある。
+
 - 適用は「次の1球」または「次の1打席」の**一度きり**（1球采配の override と同型）。
 - **実装方針**: 該当の抽選を丸ごとスキップし、結果を固定して以降のパイプライン（走者進塁・記録・タイムライン生成）は通常どおり流す。
   → **打球の物理層を偽装しない**（不変条件#1）。「本塁打を強制」は「本塁打になる `BattedBall` を注入する」ではなく
@@ -359,7 +365,7 @@ public static class DebugBridge
     // 進行
     public static string AdvancePitch(int n);                         // → 進めたぶんの PitchTrace 配列
     public static string AdvancePa(int n);
-    public static string AdvanceUntil(string what);                   // "inning-end" | "game-end" | "next-runner-on"
+    public static string AdvanceUntil(string what);                   // "inning-end" | "game-end" | "pa"
     public static string SeekTo(int pa, int pitch);
 
     // 注入
@@ -513,7 +519,7 @@ return KokoSim.Unity.Debugging.DebugBridge.DumpState();   // JSON が返る
 | §3.4 YAML パース | （未指定） | engine の `ScenarioYamlParser`（純パーサ）＋ IO は Config/Unity 側 | Unity は YamlDotNet を持たない。`SchoolNameVocabParser` と同じ分け方で、CLI と Unity の解釈のズレを構造的に潰す |
 | §3.4 `data/debug/` の Unity 供給 | StreamingAssets 経路を流用 | **StreamingAssets へ複製しない**。Editor/Development Build はリポジトリの `data/debug/` を直読み | StreamingAssets へ置くとビルドに同梱されてしまい Q18-2 の「ディレクトリ単位で除外」と矛盾する。直読みなら除外を1行も書かずに除外できる |
 | §5 P4 候補スコア | `TacticsDecision` に候補スコア配列 | `PitchTacticsDirective.Explanation`（文字列）＋ `IExplainTactics` | `AiTacticsBrain` は「スコア比較」ではなく「①能力値の当たり外れ×②ティア関門」で手を絞る構造。候補スコアを捏造せず、実際の関門通過状況を出す |
-| §6.1 `ForcedOutcome` | 26種 | 19種（`TriplePlay` / `Balk` / `Squeeze` / `EnterTieBreak` / `WalkOff` を除外） | いずれも単独の抽選ゲートを持たず、守備の共同解決や試合状況の帰結として現れる。固定するには物理層の偽装か第二の解決経路が要り、どちらも不変条件#1に反する。`EnterTieBreak` は `TieBreakEnabled` ＋シナリオの開始イニング指定で作れる |
+| §6.1 `ForcedOutcome` | 26種 | F4 時点で19種、**現在は28種（`None` 除く）**（F4 時点の19種から撮影用の9種を足した。上の追補とスケッチ直後の注記）。除外は（`TriplePlay` / `Balk` / `Squeeze` / `EnterTieBreak` / `WalkOff` を除外。`PassedBall` は持たず、`Error` は `ReachedOnError` に改名） | いずれも単独の抽選ゲートを持たず、守備の共同解決や試合状況の帰結として現れる。固定するには物理層の偽装か第二の解決経路が要り、どちらも不変条件#1に反する。`EnterTieBreak` は `TieBreakEnabled` ＋シナリオの開始イニング指定で作れる |
 | §6.1 実装方式 | 抽選をスキップして固定 | 打席結果系は**投球ループごとスキップ**（敬遠と同じ・物理層を1回も回さない）／稀プレー系は**該当ゲートの確率を1.0にした1打席コピーの走塁係数**（抽選自体は残す） | 後者は乱数消費順が「そのゲートを既定オンにした状態」と一致するので、副作用の範囲が読める |
 | §5 HUD の等幅 | 等幅フォント | 固定幅 Label を横に並べて整列 | プロジェクトに等幅フォントが無く、空白詰めでは球種名の長さ差（Fork/Slider/Fastball）で桁が崩れる。整列はフォントに頼らずレイアウトで取る |
 
@@ -539,12 +545,17 @@ return KokoSim.Unity.Debugging.DebugBridge.DumpState();   // JSON が返る
 | F2 全シナリオ | 6件すべて宣言どおりの局面（イニング・表裏・アウト・走者・カウント・得点・打順・球数）で起動 |
 | F2 `DebugBridge` | 全メソッドを `execute_code`（C#6/codedom）から実行して確認。異常系はすべて `{"ok":false,"err":...}` を返し例外を投げない |
 | F2 `data/debug/` 欠損 | `ListScenarios()` が 0件で ok を返す（例外なし） |
-| F4 全 `ForcedOutcome` | 19種すべて1回で発動し、下流（進塁・記録・タイムライン）が破綻せず完走 |
+| F4 全 `ForcedOutcome` | 19種すべて1回で発動し、下流（進塁・記録・タイムライン）が破綻せず完走（F4 時点の実測。`ForcedOutcomeTests` は `None` 以外の全値を列挙して回すので、現在の28種も同じテストが見張る） |
 | F4 pitch粒度シーク | 往復（進む→戻る→進む）で同一トレース。シーク後に最後まで流すと中断なし実行と digest 一致 |
 | F3 HUD | A案（右サイドバー縦一列）で実装。表示専用でリングバッファを読むだけ＝`CaptureTrace` on/off の digest 一致に含まれる |
 
 ### 12.4 積み残し
 
-- 大会フローから起こすライブ観戦（`MatchLiveController.Pending` 経路）は、`GameContext` を呼び出し側が組むため
-  HUD の観測が刺さっていない。デモ生成の試合と `DebugBridge` 起点の試合は観測付き。
-- `ScenarioBuilder` の `"player"` 解決は現状フォールバックの生成校。Unity 側の実部員（`RosterService`）との接続は未配線。
+F3・F2 の積み残し2件は、どちらも解消済み。
+
+- ~~大会フローから起こすライブ観戦（`MatchLiveController.Pending` 経路）は、`GameContext` を呼び出し側が組むため HUD の観測が刺さっていない。~~
+  → **解消（#95）**。`DebugTraceHub.AttachTo(ctx)` をライブ観戦の入口（`MatchLiveController`）と大会の自校戦（`PlayerMatchResolver`）が通す。
+  HUD が閉じているあいだ `AttachTo` は恒等＝観戦の有無で大会結果は変わらない。
+- ~~`ScenarioBuilder` の `"player"` 解決は現状フォールバックの生成校。Unity 側の実部員（`RosterService`）との接続は未配線。~~
+  → **解消（#96）**。`DebugBridge.TryBuildPlayerTeam` が `PlayerMatchResolver.BuildManagerTeam` を唯一の入口として実部員で解く
+  （ロスター未ロードなら生成校へ退避し、`"roster"`／`"generated"` のどちらで解いたかを返す）。デバッグ試合（`DebugMatchLauncher`）も同じ関数を使う。

@@ -21,6 +21,12 @@ public sealed record ProspectScoutingCoefficients
 
     /// <summary>開示精度1のときに隠しパラメータ1項目が判明する確率。1にしない＝全部は見えない。</summary>
     public double RevealMax { get; init; } = 0.85;
+
+    /// <summary>育成眼がこの値を超えたぶんだけ開示精度に上乗せする（新規ゲームの初期値 20＝上乗せなし・設計書04 §1.1）。</summary>
+    public double DisclosureTalentEyeBase { get; init; } = 20.0;
+
+    /// <summary>育成眼（基準超え）1あたりの開示精度の上乗せ（育成眼99で約+0.24。契約の開示と合算して1で頭打ち）。</summary>
+    public double DisclosurePerTalentEye { get; init; } = 0.003;
 }
 
 /// <summary>
@@ -84,6 +90,16 @@ public sealed class ProspectReport
 /// </summary>
 public static class ProspectScouting
 {
+    /// <summary>
+    /// 監督の育成眼ぶんを上乗せした開示精度（0〜1・設計書04 §1.1「新入生の隠しパラメータ開示精度」）。
+    /// 契約の開示（<see cref="Career.ContractEffects.ProspectDisclosure"/>）に、基準を超えた育成眼を足す。
+    /// 表示の「契約の有無」（<see cref="IncomingClass.Disclosure"/>）には混ぜない＝<see cref="Survey(DevelopingPlayer, double, TeamStrengthCoefficients, ProspectScoutingCoefficients, IRandomSource)"/> にだけ渡す。
+    /// </summary>
+    public static double EffectiveDisclosure(double contractDisclosure, double talentEye, ProspectScoutingCoefficients c)
+        => MathUtil.Clamp(
+            contractDisclosure + System.Math.Max(0.0, talentEye - c.DisclosureTalentEyeBase) * c.DisclosurePerTalentEye,
+            0.0, 1.0);
+
     /// <summary>
     /// 予定者コホート全員ぶんの報告書を引く。<paramref name="disclosure"/> は
     /// <see cref="Career.ContractEffects.ProspectDisclosure"/>（0〜1）。

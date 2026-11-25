@@ -303,8 +303,14 @@ public static class HomePlayResolver
     /// 運の秒で説明できる場面だけになる: アウト ⇔ margin＋ゆらぎ＜0 で、margin＝守備−走者＋バイアス。
     /// 走者が守備より先に着く（守備−走者＞0）のにアウトなら、ゆらぎはその差＋バイアス以上に走者へ不利に出ている
     /// ＝<paramref name="defenseMinusRunner"/> ぶんを守備の素早さ（<paramref name="quickSeconds"/>）と走者の出遅れで
-    /// 引き受けても、引いたゆらぎの内側に収まる（バイアスが負の勝負は無い）。
-    /// 乱数の消費は従来の <see cref="MathUtil.Chance"/> と同じ1回。</para>
+    /// 引き受ければ、絵はアウトの秒を説明できる。バイアスが正の勝負（本塁・三塁・タッチアップ）では、その出遅れは
+    /// 引いたゆらぎの内側に収まる。<b>バイアスが負の勝負</b>（ゴロの進塁打・捕球ミス後の二塁→三塁＝#903 の
+    /// <see cref="BaserunningCoefficients.AdvanceSuccessBias"/> −0.12、二塁タッチの
+    /// <see cref="BaserunningCoefficients.SecondTagSuccessBias"/> −0.12。いずれも #1139）では、<paramref name="quickSeconds"/> が
+    /// 0（中継も握り替えの差し替えも無い直接送球）のとき出遅れが運として引いた幅を最大 0.12 秒超えうる
+    /// （走者が送球より先に着いてアウトの絵にしない不変条件は、出遅れが差をそのまま引き受けるので守られる）。
+    /// 乱数の消費は従来の <see cref="MathUtil.Chance"/> と同じ1回（<see cref="ResolveRace"/> 全体では、
+    /// 抽選の前に送球の逸れの正規乱数2つ＝<see cref="SampleThrowScatter"/> を引く）。</para>
     /// </summary>
     private static RaceVerdict DrawRace(
         double margin, double marginScale, double defenseMinusRunner, double quickSeconds, IRandomSource rng,

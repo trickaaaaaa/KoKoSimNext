@@ -40,10 +40,15 @@
 | 長打狙い | パワー↑・弾道↑・ミート↓ |
 | 当てに行け | ミート↑・パワー↓（弾道は動かさない） |
 
-- 効果は**実効能力への倍率**と**スイング頻度の倍率**の2つにしか落ちない。確率へ直接触らず、
+- 転がせ／長打狙い／当てに行けの効果は**実効能力への倍率**にしか落ちない。確率へ直接触らず、
   表示能力→物理層の変換の前段で能力を動かすだけ（不変条件#1）。エンドランとまったく同じ流儀
+- **待球策だけは能力を動かさない**（#974・#995）。当初は「スイング頻度の倍率」（`work_count_swing_factor`）だったが、
+  「2ストライクになるまで振らない」へ変えた。`GameEngine` が毎球、`BattingApproach.WorkCount` かつ1球指示・サインが
+  出ておらずストライクが2つ未満なら `PitchBattingOverride.ForceTake`（強制見送り）にする。見送りは既存の強制見送りと同じ経路＝
+  乱数を引かない
 - 既定（指示なし）は恒等で、乱数を1発も引かない。**AI校は使わない**ので統計帯・digest は不変
-- 係数は `data/coefficients.yaml` の `tactics:` 節（`work_count_swing_factor` 等）
+- 係数は `data/coefficients.yaml` の `tactics:` 節（`ground_ball_*`／`slug_*`／`put_in_play_*`）。待球策に係数は無い
+  （`work_count_swing_factor` は廃止済みでYAMLにも存在しない。`AtBatContext.SwingProbabilityFactor` は既定1.0の恒等の口として残るだけ）
 
 ### 1.2 プレイヤーの采配窓口（`MatchProgression`）
 

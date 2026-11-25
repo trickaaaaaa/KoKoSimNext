@@ -37,6 +37,11 @@ namespace KokoSim.Unity.Home
         // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
         // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
         private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk, _xtOk;
+        // まとめて進行（ヒーロー帯・issue #1479）。通常週＝次の大会まで／大会中＝次の試合日まで。
+        private Button _nextTournamentBtn, _nextMatchBtn;
+        private System.Action _advanceOnce, _advanceUntilStop;
+        // 直近のまとめて進行が止まった理由（ヒーロー帯の文言になる）。次に進めるまで残す。
+        private string _stopReason;
         private VisualElement _tsRow;
         private EventCallback<ClickEvent> _tsRowClick;
 
@@ -69,6 +74,11 @@ namespace KokoSim.Unity.Home
 
             _advanceBtn = _root.Q<Button>("advance");
             if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
+            _advanceOnce = () => Advance(false);
+            _advanceUntilStop = () => Advance(true);
+            _stopReason = null;
+            _nextTournamentBtn = Wire("advance-next-tournament", _advanceUntilStop);
+            _nextMatchBtn = Wire("advance-next-match", _advanceUntilStop);
 
             _dialogYes = Wire("tm-dialog-yes", OnMatchYes);
             _dialogNo = Wire("tm-dialog-no", OnMatchNo);
@@ -145,6 +155,8 @@ namespace KokoSim.Unity.Home
         private void OnDisable()
         {
             if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
+            if (_nextTournamentBtn != null) _nextTournamentBtn.clicked -= _advanceUntilStop;
+            if (_nextMatchBtn != null) _nextMatchBtn.clicked -= _advanceUntilStop;
             if (_dialogYes != null) _dialogYes.clicked -= OnMatchYes;
             if (_dialogNo != null) _dialogNo.clicked -= OnMatchNo;
             if (_resultOk != null) _resultOk.clicked -= OnResultOk;
@@ -160,14 +172,20 @@ namespace KokoSim.Unity.Home
 
         // ===== 大会モード進行（要件1〜7） =====
 
-        private void OnAdvance()
+        /// <summary>トップバーの「今週を進める／1日進める」＝1回分だけ進める。</summary>
+        private void OnAdvance() => Advance(false);
+
+        /// <summary>
+        /// 進行の入口。<paramref name="untilStop"/> が false なら1回分（通常週＝1週・大会中＝1日）、true なら
+        /// 止まる場面（イベント・大会開幕・試合日・新チーム発足・背番号決定・転任打診・年契約更新）まで繰り返す
+        /// （issue #1479）。故障・通知フィード項目では止めない。止まった理由はヒーロー帯の文言に出す。
+        /// </summary>
+        private void Advance(bool untilStop)
         {
             // issue #138: 試合後処理をバックグラウンドで回している間は週送りを受け付けない
             // （メインスレッドの GameClock/ロスター変更が背景処理と競合するのを防ぐ）。
             if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;
-            // ブラウザ版は裏の仕事を回し切ってから進める（#1588）。週送りの節目の「終わるまで待つ」が
-            // 1コマで数百試合を回すとメモリを使い切る。回し切ったら同じ操作をもう一度走らせる。
-            if (KokoSim.Unity.Shell.BackgroundWork.DeferUntilIdle(OnAdvance)) return;
+            _stopReason = null;
             // 新チームの背番号を確定するまで週を進めない（issue #954）。確定の画面へ戻す。
             if (KokoSim.Unity.Shell.UniformNumberService.Pending) { GoToUniformNumbers(); return; }
             // 年契約の更新を確定するまで週を進めない（総括が選んだ段の年額を引くため）。
@@ -179,25 +197,90 @@ namespace KokoSim.Unity.Home
                 // 試合日に着いていたら日を進めず、開始確認を出し直すだけにする。進めると「いいえ」の後に
                 // 押すたび大会の日付だけが試合日を追い越し、大会明けの時計送り（TournamentDay/7 週）も増えていた。
                 if (_state.ReachedMatchDay) { ShowMatchDay(); return; }
-                _state.AdvanceDay();
-                Render();
-                if (_state.ReachedMatchDay) ShowMatchDay();   // 試合日に到達→開始確認（要件7・惰性防止）
-                // 大会中も7日ごとに怪我・気づきのイベントが積まれる。ここで出さないとキューに残ったまま
-                // ホームに居続ける限り出ず、セーブも「イベントの場面が残っています」で止まっていた。
-                else TryShowEvent();
             }
-            else
+
+            var inTournament = _state.InTournament;
+            for (var step = 0; step < MaxAdvanceSteps; step++)
             {
-                _state.AdvanceWeek();
-                // 初めて部費で何か買えるようになった週: 部費の説明（issue #1496）。出すのは下の導線のどこかの後（キューに残る）。
-                KokoSim.Unity.Shell.TutorialService.RaisePurchasesIfAffordable();
-                Render();
-                if (KokoSim.Unity.Shell.NewTeamService.Pending) ContinueNewTeamFlow();  // 引退週＝新チーム発足（設計書09 §8）
-                else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();  // 転任判定（設計書04 §1.3）
-                else if (_state.BannerPending) ShowBanner();    // 大会開幕演出（要件1・2）
-                else if (KokoSim.Unity.Shell.ContractRenewalService.Pending) ContinueRenewal();   // 年契約の更新（issue #1034）
-                else TryShowEvent();                            // 週次イベントのノベル提示（issue #609）
+                // ブラウザ版は裏の仕事を回し切ってから進める（#1588）。週送りの節目の「終わるまで待つ」が
+                // 1コマで数百試合を回すとメモリを使い切る。回し切ったら同じ操作をもう一度走らせる。
+                // 繰り返しの途中でも1回ごとに見る（待つ間は止まったことにせず、続きから走らせる）。
+                if (step > 0 && KokoSim.Unity.Shell.BackgroundWork.Busy) Render();
+                if (KokoSim.Unity.Shell.BackgroundWork.DeferUntilIdle(untilStop ? _advanceUntilStop : _advanceOnce)) return;
+                if (step > 0 && KokoSim.Unity.Shell.BackgroundGameOp.Running) break;
+
+                if (inTournament ? StepDay() : StepWeek()) return;   // 止まる場面に着いた（その場面の画面は出した）
+                if (!untilStop) break;
+                // 大会が終わった・始まった（モードが変わった）ら、日と週を取り違えて進めないよう繰り返しを終える。
+                if (_state.InTournament != inTournament || (inTournament && _state.TournamentFinished)) break;
             }
+            Render();
+        }
+
+        /// <summary>1回の繰り返しの上限（1年は約50週・大会は2週間ほど。無限ループの安全網）。</summary>
+        private const int MaxAdvanceSteps = 60;
+
+        /// <summary>大会中の1日。試合日・イベントに着いたらその画面を出して true、何も無ければ false。</summary>
+        private bool StepDay()
+        {
+            _state.AdvanceDay();
+            if (_state.ReachedMatchDay)
+            {
+                _stopReason = "試合日";
+                Render();
+                ShowMatchDay();   // 試合日に到達→開始確認（要件7・惰性防止）
+                return true;
+            }
+            // 大会中も7日ごとに怪我・気づきのイベントが積まれる。ここで出さないとキューに残ったまま
+            // ホームに居続ける限り出ず、セーブも「イベントの場面が残っています」で止まっていた。
+            if (KokoSim.Unity.Shell.EventService.HasPending)
+            {
+                _stopReason = "イベント発生";
+                Render();
+                TryShowEvent();
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>通常週の1週。止まる場面に着いたらその画面を出して true、何も無ければ false。</summary>
+        private bool StepWeek()
+        {
+            _state.AdvanceWeek();
+            // 初めて部費で何か買えるようになった週: 部費の説明（issue #1496）。出すのは下の導線のどこかの後（キューに残る）。
+            KokoSim.Unity.Shell.TutorialService.RaisePurchasesIfAffordable();
+            if (KokoSim.Unity.Shell.NewTeamService.Pending)               // 引退週＝新チーム発足（設計書09 §8）
+            {
+                _stopReason = "新チーム発足";
+                Render();
+                ContinueNewTeamFlow();
+            }
+            else if (KokoSim.Unity.Shell.ManagerTransferService.Pending)  // 転任判定（設計書04 §1.3）
+            {
+                _stopReason = "転任の打診";
+                Render();
+                ShowTransferOffer();
+            }
+            else if (_state.BannerPending)                                // 大会開幕演出（要件1・2）
+            {
+                _stopReason = "大会開幕";
+                Render();
+                ShowBanner();
+            }
+            else if (KokoSim.Unity.Shell.ContractRenewalService.Pending)  // 年契約の更新（issue #1034）
+            {
+                _stopReason = "年契約の更新";
+                Render();
+                ContinueRenewal();
+            }
+            else if (KokoSim.Unity.Shell.EventService.HasPending)         // 週次イベントのノベル提示（issue #609）
+            {
+                _stopReason = "イベント発生";
+                Render();
+                TryShowEvent();
+            }
+            else return false;
+            return true;
         }
 
         // ===== イベント（ノベル提示・issue #609） =====
@@ -296,6 +379,8 @@ namespace KokoSim.Unity.Home
             if (_hero != null) _hero.style.display = d;
             if (_dash != null) _dash.style.display = d;
             if (_advanceBtn != null) _advanceBtn.SetEnabled(visible);
+            _nextTournamentBtn?.SetEnabled(visible);
+            _nextMatchBtn?.SetEnabled(visible);
         }
 
         // ===== 新チーム発足：次期主将の指名（設計書09 §8・案C 左リスト＋右詳細） =====
@@ -774,7 +859,12 @@ namespace KokoSim.Unity.Home
             SetText("hero-cd-num", v.HeroBigValue);
             SetText("hero-cd-unit", v.HeroBigUnit);
             SetText("next-tournament", v.NextTournamentName);
-            SetText("opening-week", v.OpeningLabel);
+            var open = _root.Q<Label>("opening-week");
+            if (open != null)
+            {
+                open.text = _stopReason != null ? "停止：" + _stopReason : v.OpeningLabel;
+                open.EnableInClassList("hm-hero__open--stop", _stopReason != null);
+            }
 
             var ticks = _root.Q<VisualElement>("ticks");
             var labels = _root.Q<VisualElement>("tick-labels");

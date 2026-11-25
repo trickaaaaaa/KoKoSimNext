@@ -1668,6 +1668,10 @@ public static class CoefficientsLoader
         public int SlumpWeeksMax { get; set; } = D.SlumpWeeksMax;
         public double SlumpPerformanceFactor { get; set; } = D.SlumpPerformanceFactor;
         public double SlumpConditionDrop { get; set; } = D.SlumpConditionDrop;
+        public int SlumpCoachingRecoveryWeeks { get; set; } = D.SlumpCoachingRecoveryWeeks;
+        public double SlumpRestShareMin { get; set; } = D.SlumpRestShareMin;
+        public int SlumpRestRecoveryWeeks { get; set; } = D.SlumpRestRecoveryWeeks;
+        public int SlumpMatchRecoveryWeeks { get; set; } = D.SlumpMatchRecoveryWeeks;
         public double PlateauCapProximity { get; set; } = D.PlateauCapProximity;
         public double PlateauWeeklyProb { get; set; } = D.PlateauWeeklyProb;
         public double PlateauGrowthFactor { get; set; } = D.PlateauGrowthFactor;
@@ -1718,6 +1722,10 @@ public static class CoefficientsLoader
             SlumpWeeksMax = SlumpWeeksMax,
             SlumpPerformanceFactor = SlumpPerformanceFactor,
             SlumpConditionDrop = SlumpConditionDrop,
+            SlumpCoachingRecoveryWeeks = SlumpCoachingRecoveryWeeks,
+            SlumpRestShareMin = SlumpRestShareMin,
+            SlumpRestRecoveryWeeks = SlumpRestRecoveryWeeks,
+            SlumpMatchRecoveryWeeks = SlumpMatchRecoveryWeeks,
             PlateauCapProximity = PlateauCapProximity,
             PlateauWeeklyProb = PlateauWeeklyProb,
             PlateauGrowthFactor = PlateauGrowthFactor,
@@ -1846,6 +1854,8 @@ public static class CoefficientsLoader
         public double EstimateSdMin { get; set; } = D.EstimateSdMin;
         public double RevealMin { get; set; } = D.RevealMin;
         public double RevealMax { get; set; } = D.RevealMax;
+        public double DisclosureTalentEyeBase { get; set; } = D.DisclosureTalentEyeBase;
+        public double DisclosurePerTalentEye { get; set; } = D.DisclosurePerTalentEye;
 
         public ProspectScoutingCoefficients ToModel() => new()
         {
@@ -1853,6 +1863,8 @@ public static class CoefficientsLoader
             EstimateSdMin = EstimateSdMin,
             RevealMin = RevealMin,
             RevealMax = RevealMax,
+            DisclosureTalentEyeBase = DisclosureTalentEyeBase,
+            DisclosurePerTalentEye = DisclosurePerTalentEye,
         };
     }
 
@@ -2039,6 +2051,19 @@ public static class CoefficientsLoader
         public double MatchMentalExp { get; set; } = D.MatchMentalExp;
         public double MatchLeadExp { get; set; } = D.MatchLeadExp;
         public double MatchBaserunningExp { get; set; } = D.MatchBaserunningExp;
+        public double MatchSuccessBatExp { get; set; } = D.MatchSuccessBatExp;
+        public double MatchSuccessPitchExp { get; set; } = D.MatchSuccessPitchExp;
+        public double MatchSuccessFieldExp { get; set; } = D.MatchSuccessFieldExp;
+        public int MatchSuccessMinHits { get; set; } = D.MatchSuccessMinHits;
+        public int MatchSuccessMinRbi { get; set; } = D.MatchSuccessMinRbi;
+        public int MatchSuccessMinOuts { get; set; } = D.MatchSuccessMinOuts;
+        public int MatchSuccessMaxRuns { get; set; } = D.MatchSuccessMaxRuns;
+        public int MatchSuccessMinStrikeOuts { get; set; } = D.MatchSuccessMinStrikeOuts;
+        public int MatchSuccessMaxTeamErrors { get; set; } = D.MatchSuccessMaxTeamErrors;
+        public double MatchSuccessMultPractice { get; set; } = D.MatchSuccessMultPractice;
+        public double MatchSuccessMultPrefectural { get; set; } = D.MatchSuccessMultPrefectural;
+        public double MatchSuccessMultRegional { get; set; } = D.MatchSuccessMultRegional;
+        public double MatchSuccessMultKoshien { get; set; } = D.MatchSuccessMultKoshien;
         public double PitcherSenseGrowthNeutral { get; set; } = D.PitcherSenseGrowthNeutral;
         public double PitcherSenseGrowthSlope { get; set; } = D.PitcherSenseGrowthSlope;
         public double PitcherSenseGrowthMin { get; set; } = D.PitcherSenseGrowthMin;
@@ -2074,6 +2099,19 @@ public static class CoefficientsLoader
             MatchMentalExp = MatchMentalExp,
             MatchLeadExp = MatchLeadExp,
             MatchBaserunningExp = MatchBaserunningExp,
+            MatchSuccessBatExp = MatchSuccessBatExp,
+            MatchSuccessPitchExp = MatchSuccessPitchExp,
+            MatchSuccessFieldExp = MatchSuccessFieldExp,
+            MatchSuccessMinHits = MatchSuccessMinHits,
+            MatchSuccessMinRbi = MatchSuccessMinRbi,
+            MatchSuccessMinOuts = MatchSuccessMinOuts,
+            MatchSuccessMaxRuns = MatchSuccessMaxRuns,
+            MatchSuccessMinStrikeOuts = MatchSuccessMinStrikeOuts,
+            MatchSuccessMaxTeamErrors = MatchSuccessMaxTeamErrors,
+            MatchSuccessMultPractice = MatchSuccessMultPractice,
+            MatchSuccessMultPrefectural = MatchSuccessMultPrefectural,
+            MatchSuccessMultRegional = MatchSuccessMultRegional,
+            MatchSuccessMultKoshien = MatchSuccessMultKoshien,
             PitcherSenseGrowthNeutral = PitcherSenseGrowthNeutral,
             PitcherSenseGrowthSlope = PitcherSenseGrowthSlope,
             PitcherSenseGrowthMin = PitcherSenseGrowthMin,
@@ -3692,6 +3730,8 @@ public static class CoefficientsLoader
         private static readonly CareerCoefficients D = new();
         public double CoachingGrowthPerYear { get; set; } = D.CoachingGrowthPerYear;
         public double CoachingGrowthPerWin { get; set; } = D.CoachingGrowthPerWin;
+        public double CoachingGrowthPerNationalStageWin { get; set; } = D.CoachingGrowthPerNationalStageWin;
+        public double CoachingGrowthPerUpsetFame { get; set; } = D.CoachingGrowthPerUpsetFame;
         public double CoachingCap { get; set; } = D.CoachingCap;
         public double CoachingToStrength { get; set; } = D.CoachingToStrength;
         public int FreeKoshienThreshold { get; set; } = D.FreeKoshienThreshold;
@@ -3752,6 +3792,8 @@ public static class CoefficientsLoader
         {
             CoachingGrowthPerYear = CoachingGrowthPerYear,
             CoachingGrowthPerWin = CoachingGrowthPerWin,
+            CoachingGrowthPerNationalStageWin = CoachingGrowthPerNationalStageWin,
+            CoachingGrowthPerUpsetFame = CoachingGrowthPerUpsetFame,
             CoachingCap = CoachingCap,
             CoachingToStrength = CoachingToStrength,
             FreeKoshienThreshold = FreeKoshienThreshold,

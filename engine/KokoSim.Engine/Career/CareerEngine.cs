@@ -303,7 +303,10 @@ public static class CareerEngine
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする
         // （「気づいたら練れていた」の意図に沿った緩やかなカーブ。線形だと十数年で99へ急上昇し
         //  終盤の伸びしろが無くなる＝エンドゲームの単調化を招くため、残り余地に比例させる）。
-        var baseGrowth = c.CoachingGrowthPerYear + c.CoachingGrowthPerWin * wins;
+        // 格上に勝つ（金星）・大舞台（甲子園/センバツ）で勝つほど経験が大きい（設計書04 §1.1）。
+        var baseGrowth = c.CoachingGrowthPerYear + c.CoachingGrowthPerWin * wins
+            + c.CoachingGrowthPerNationalStageWin * Math.Max(0, nationalStageWins)
+            + c.CoachingGrowthPerUpsetFame * Math.Max(0.0, upsetFameGain);
         double Grow(double current, double factor)
         {
             var headroom = (c.CoachingCap - current) / c.CoachingCap; // 1(未熟)→0(上限)

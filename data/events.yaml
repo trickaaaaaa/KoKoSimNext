@@ -500,6 +500,11 @@ events:
     weight: 3.0
     cooldown_weeks: 2
     text: "雨天でグラウンドが使えない。"
+    # 雨の週は練習効率が下がる。室内練習場（Lv1以上）があれば下がらない（設計書03 §4/§5.2・issue #1480）。
+    effect_negated_by_facility: indoor
+    effects:
+      training_mult: 0.85
+      training_weeks: 1
     variants:
       - lines:
           - who: narration

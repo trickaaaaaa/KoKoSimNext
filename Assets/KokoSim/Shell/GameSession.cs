@@ -653,16 +653,25 @@ namespace KokoSim.Unity.Shell
         /// 実戦成長ループ（Q8）: 詳細シムの自校戦1試合ぶん、出場者の精神力/走塁判断/捕手リードを伸ばす。
         /// 成績畳み込み（FoldGame）と同じ合流点で適用（PlayMatch/CompleteMatch の双方から1回ずつ）。
         /// </summary>
-        private void ApplyMatchGrowth(GameResult detail, bool managerWasAway)
-            => MatchGrowthModel.Apply(detail, managerWasAway, RosterService.Roster,
+        private void ApplyMatchGrowth(GameResult detail, bool managerWasAway, bool official)
+        {
+            MatchGrowthModel.Apply(detail, managerWasAway, RosterService.Roster,
                 GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
+            // 成功体験ボーナス（設計書02 §5.3b・issue #1487）。大会の格で倍率が上がる（練習試合は null＝最小）。
+            MatchGrowthModel.ApplySuccess(detail, managerWasAway, RosterService.Roster, official ? Kind : (TournamentKind?)null,
+                GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
+        }
 
         /// <summary>
         /// 試合結果による調子フィードバック（設計書02 §3.3, issue #46）: 詳細シムの自校戦1試合ぶん、
         /// 出場者の ConditionValue を好投/好打で+、被弾/大敗で−へ動かす。実戦成長と同じ合流点で適用。
         /// </summary>
         private void ApplyMatchCondition(GameResult detail, bool managerWasAway)
-            => MatchConditionModel.Apply(detail, managerWasAway, RosterService.Roster, FormCoeff);
+        {
+            MatchConditionModel.Apply(detail, managerWasAway, RosterService.Roster, FormCoeff);
+            // 起用法によるスランプの立て直し（設計書03 §5.5・issue #1481）。乱数なし。
+            GrowthEventModel.SlumpRecoveryAfterMatch(detail, managerWasAway, RosterService.Roster, GrowthEventsCoeff);
+        }
 
         // 怪我（設計書03 §3.5）。週次処理（HomeState.RunInjuryWeek）と同じ既定係数を使う。
         private static readonly InjuryCoefficients InjuryCoeff = new InjuryCoefficients();
@@ -833,7 +842,7 @@ namespace KokoSim.Unity.Shell
             if (PracticeOpponent is { } practiceOpponent)
                 NationService.TournamentStats.FoldSchool(
                     practiceOpponent.Id, result, schoolIsAway: !managerIsAway);
-            ApplyMatchGrowth(result, managerIsAway);
+            ApplyMatchGrowth(result, managerIsAway, official: false);
             ApplyMatchCondition(result, managerIsAway);
             ApplyMatchInjuries(result, managerIsAway);
             ApplyBatteryInnings(result, managerIsAway, isOfficial: false);
@@ -852,7 +861,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 FoldOpponentIntoNation(detail, LastOutcome);
-                ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway, official: true);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
@@ -906,7 +915,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 FoldOpponentIntoNation(detail, LastOutcome);
-                ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway, official: true);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);

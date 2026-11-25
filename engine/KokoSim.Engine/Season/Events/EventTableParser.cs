@@ -57,7 +57,7 @@ public static class EventTableParser
 
         // 収集中のイベント1件ぶんの素。ネストが3段（イベント→variants→lines）あるので、
         // 「いま何を読んでいるか」を状態で持つのではなく、インデントで所属を決める。
-        string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null, region = null, scene = null;
+        string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null, region = null, scene = null, effectNegatedBy = null;
         int? calendarWeek = null;
         var requiresGraduatingClass = false;
         var requiresOb = false;
@@ -157,11 +157,12 @@ public static class EventTableParser
                 Text = text ?? "",
                 Variants = variants.ToArray(),
                 Effect = eff.Build(),
+                EffectNegatedByFacility = effectNegatedBy,
                 Choices = choices.ToArray(),
                 Outcomes = outcomes.ToArray(),
                 Cast = new EventCast(castSubject, castOther),
             });
-            id = kind = text = setsFlag = requiresNotFlag = region = scene = null;
+            id = kind = text = setsFlag = requiresNotFlag = region = scene = effectNegatedBy = null;
             calendarWeek = null;
             requiresGraduatingClass = false;
             requiresOb = false;
@@ -244,6 +245,7 @@ public static class EventTableParser
                 case "cooldown_weeks": cooldown = ParseInt(key, value) ?? 4; break;
                 case "sets_annual_flag": setsFlag = value.Length > 0 ? value : null; break;
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
+                case "effect_negated_by_facility": effectNegatedBy = value.Length > 0 ? value : null; break;
                 case "requires_region": region = value.Length > 0 ? value : null; break;
                 case "requires_graduating_class": requiresGraduatingClass = value == "true"; break;
                 case "requires_ob":

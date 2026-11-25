@@ -935,6 +935,29 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
 }
 .hm-root .hm-hero__open { font-size: 14px; color: rgba(255, 255, 255, 0.8); padding-top: 8px; }
+/* 止まった理由（まとめて進行・issue #1479）。開幕の週の文言を差し替えて出す */
+.hm-root .hm-hero__open--stop {
+    color: #FFFFFF;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+
+/* まとめて進行ボタン（ヒーロー帯の右端）。応援団赤は使わない＝赤はトップバーの主ボタンだけ */
+.hm-root .hm-hero__btn {
+    flex-shrink: 0;
+    height: 40px;
+    margin: 0 0 0 28px;
+    padding: 0 20px;
+    border-width: 0;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #FFFFFF;
+    background-color: var(--hm-on-accent-chip);
+    -unity-text-align: middle-center;
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/NotoSansJP-Bold.asset?fileID=11400000&guid=0a6535b0156cd4b349a9c2b1c707ba43&type=2#NotoSansJP-Bold");
+}
+.hm-root .hm-hero__btn:hover { background-color: var(--hm-on-accent-rule); }
+.hm-root .hm-hero__btn:disabled { opacity: 0.5; }
+.hm-root .hm-hero__btn--plain { margin-left: 32px; }
 
 /* 週の目盛り：今週＝白・これから＝白22%・開幕＝白の2px枠。マスとラベルは同じ幅で並べる */
 .hm-root .hm-ticks { flex-direction: row; margin-top: 12px; }

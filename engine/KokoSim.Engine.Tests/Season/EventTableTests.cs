@@ -597,6 +597,44 @@ events:
         Assert.All(byId["exam_week_slump"].Outcomes, o => Assert.True(o.EffectOrNone.TrainingMult < 1.0, "テスト週間は効率が下がるはず"));
     }
 
+    // ===== 雨天と室内練習場（issue #1480） =====
+
+    [Fact]
+    public void Parse_ReadsEffectNegatedByFacility()
+    {
+        var e = EventTableParser.Parse(
+            "events:\n  - id: rain\n    text: \"雨。\"\n    effect_negated_by_facility: indoor\n"
+            + "    effects:\n      training_mult: 0.85\n      training_weeks: 1\n"
+            + "  - id: plain\n    text: \"晴。\"\n");
+
+        Assert.Equal("indoor", e[0].EffectNegatedByFacility);
+        Assert.Null(e[1].EffectNegatedByFacility);
+    }
+
+    [Fact]
+    public void EffectGiven_IsNegatedOnlyByTheNamedFacility()
+    {
+        var rain = RepositoryEvents().Single(e => e.Id == "rain_week");
+
+        Assert.Equal("indoor", rain.EffectNegatedByFacility);
+        Assert.True(rain.Effect.HasTrainingBoost);
+        Assert.True(rain.Effect.TrainingMult < 1.0, "雨の週は練習効率が下がるはず");
+        Assert.False(rain.Effect.TrainingTargetIsPlayer, "雨は部全体");
+
+        Assert.Same(rain.Effect, rain.EffectGiven(_ => 0));
+        Assert.Same(rain.Effect, rain.EffectGiven(id => id == "indoor" ? 0 : 3));
+        Assert.Same(EventEffect.None, rain.EffectGiven(id => id == "indoor" ? 1 : 0));
+        Assert.Same(EventEffect.None, rain.EffectGiven(id => id == "indoor" ? 3 : 0));
+    }
+
+    [Fact]
+    public void EffectGiven_WithoutNegation_IgnoresFacilities()
+    {
+        var snow = RepositoryEvents().Single(e => e.Id == "region_snow_indoor");
+        Assert.Null(snow.EffectNegatedByFacility);
+        Assert.Same(snow.Effect, snow.EffectGiven(_ => 3));
+    }
+
     // ===== 地域イベント（issue #616） =====
 
     /// <summary>

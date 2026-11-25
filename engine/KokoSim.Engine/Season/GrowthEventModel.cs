@@ -69,6 +69,16 @@ public sealed record GrowthEventCoefficients
     public double SlumpPerformanceFactor { get; init; } = 0.93;
     /// <summary>スランプ発生時の調子押し下げ（設計書02 §3.3「イベントで上下」, issue #46）。</summary>
     public double SlumpConditionDrop { get; init; } = 0.15;
+    // スランプの立て直し（設計書03 §5.5「起用法・休養・個別指導で回復」）。何もしなければ週に1ずつ減る
+    // 残り週が、下の手当てで余分に減る（0以下に切り上げ）。
+    /// <summary>個別指導（3枠）に指名している週の追加回復[週]。</summary>
+    public int SlumpCoachingRecoveryWeeks { get; init; } = 1;
+    /// <summary>休養とみなす下限＝その週の練習時間に占める休養枠の割合。</summary>
+    public double SlumpRestShareMin { get; init; } = 0.2;
+    /// <summary>休養枠が <see cref="SlumpRestShareMin"/> 以上の週の追加回復[週]。</summary>
+    public int SlumpRestRecoveryWeeks { get; init; } = 1;
+    /// <summary>起用法: スランプ中の選手が試合で好打・好投したときの回復[週]（1試合につき1回）。</summary>
+    public int SlumpMatchRecoveryWeeks { get; init; } = 1;
 
     /// <summary>伸び悩みの条件: 分野の現在値が上限にこの範囲まで迫っている（=「限界の顕在化」）。</summary>
     public double PlateauCapProximity { get; init; } = 3.0;
@@ -163,10 +173,12 @@ public static class GrowthEventModel
     /// <paramref name="trainedFields"/> は選手ごとのその週の練習分野（issue #1204）。覚醒・大覚醒・伸びしろアップ・
     /// 新球種は練習時間の入っている分野でしか起きない（練習していない分野の能力が伸びて計画と噛み合わなくなるのを防ぐ）。
     /// null＝分野で絞らない（練習計画を見ない呼び出し）。
+    /// <paramref name="restShare"/> は選手ごとのその週の休養枠の割合（0〜1）。スランプの立て直しにだけ使う（null＝休養なし扱い）。
     /// </summary>
     public static IReadOnlyList<GrowthNotice> Week(
         IReadOnlyList<DevelopingPlayer> roster, IRandomSource rng, GrowthEventCoefficients c,
-        Func<DevelopingPlayer, IReadOnlyCollection<TrainingField>>? trainedFields = null)
+        Func<DevelopingPlayer, IReadOnlyCollection<TrainingField>>? trainedFields = null,
+        Func<DevelopingPlayer, double>? restShare = null)
     {
         var notices = new List<GrowthNotice>();
         foreach (var p in roster)
@@ -184,8 +196,8 @@ public static class GrowthEventModel
                 continue;
             }
 
-            // スランプ進行（回復）。
-            if (p.SlumpWeeks > 0) p.SlumpWeeks--;
+            // スランプ進行（回復）。個別指導・休養で早く抜ける。
+            if (p.SlumpWeeks > 0) p.SlumpWeeks = Math.Max(0, p.SlumpWeeks - SlumpWeeklyRecovery(p, c, restShare));
 
             // --- 上昇イベント（福音・レア） ---
             var trained = trainedFields?.Invoke(p);
@@ -202,6 +214,50 @@ public static class GrowthEventModel
         }
         return notices;
     }
+
+    /// <summary>スランプ中の1週で減る週数＝自然回復1＋個別指導＋休養。</summary>
+    internal static int SlumpWeeklyRecovery(
+        DevelopingPlayer p, GrowthEventCoefficients c, Func<DevelopingPlayer, double>? restShare)
+    {
+        var weeks = 1;
+        if (p.IndividualCoaching) weeks += c.SlumpCoachingRecoveryWeeks;
+        if (restShare is not null && restShare(p) >= c.SlumpRestShareMin) weeks += c.SlumpRestRecoveryWeeks;
+        return weeks;
+    }
+
+    /// <summary>
+    /// 起用法によるスランプの立て直し（設計書03 §5.5）。試合に出て好打・好投したスランプ中の自校の選手の残り週を縮める。
+    /// 使い続けて結果が出れば早く抜ける。乱数は使わない（決定論）。戻り値＝縮めた選手。
+    /// </summary>
+    public static IReadOnlyList<DevelopingPlayer> SlumpRecoveryAfterMatch(
+        Match.Game.GameResult detail, bool managerIsAway, IReadOnlyList<DevelopingPlayer> roster,
+        GrowthEventCoefficients c)
+    {
+        var helped = new List<DevelopingPlayer>();
+        if (c.SlumpMatchRecoveryWeeks <= 0) return helped;
+        var byId = new Dictionary<int, DevelopingPlayer>(roster.Count);
+        foreach (var dp in roster) byId[dp.Id] = dp;
+        var done = new HashSet<int>();
+
+        void Help(int? sourceId, bool good)
+        {
+            if (!good || sourceId is not { } id || done.Contains(id) || !byId.TryGetValue(id, out var dp)) return;
+            if (dp.SlumpWeeks <= 0) return;
+            done.Add(id);
+            dp.SlumpWeeks = Math.Max(0, dp.SlumpWeeks - c.SlumpMatchRecoveryWeeks);
+            helped.Add(dp);
+        }
+
+        foreach (var l in managerIsAway ? detail.AwayPitching : detail.HomePitching) Help(l.SourceId, IsGoodPitching(l, c));
+        foreach (var l in managerIsAway ? detail.AwayBatting : detail.HomeBatting) Help(l.SourceId, IsGoodBatting(l, c));
+        return helped;
+    }
+
+    private static bool IsGoodPitching(Match.Game.PitchingLine l, GrowthEventCoefficients c) =>
+        (l.Outs >= c.BigStageMinOuts && l.Runs <= c.BigStageMaxRuns) || l.StrikeOuts >= c.BigStageMinStrikeOuts;
+
+    private static bool IsGoodBatting(Match.Game.BattingLine l, GrowthEventCoefficients c) =>
+        l.Hits >= c.BigStageMinHits || l.Rbi >= c.BigStageMinRbi || (l.HomeRuns >= 1 && l.Hits >= 2);
 
     private static bool TryAwakening(DevelopingPlayer p, IRandomSource rng, GrowthEventCoefficients c,
         List<GrowthNotice> notices, IReadOnlyCollection<TrainingField>? trained)
@@ -355,7 +411,7 @@ public static class GrowthEventModel
         foreach (var l in managerIsAway ? detail.AwayPitching : detail.HomePitching)
         {
             if (l.SourceId is not { } id || !byId.TryGetValue(id, out var dp) || done.Contains(id)) continue;
-            var good = (l.Outs >= c.BigStageMinOuts && l.Runs <= c.BigStageMaxRuns) || l.StrikeOuts >= c.BigStageMinStrikeOuts;
+            var good = IsGoodPitching(l, c);
             if (!good || !MathUtil.Chance(prob, rng)) continue;
             done.Add(id);
             AddBigStage(dp, GrowthDomain.Pitching, rng, c, notices);
@@ -363,7 +419,7 @@ public static class GrowthEventModel
         foreach (var l in managerIsAway ? detail.AwayBatting : detail.HomeBatting)
         {
             if (l.SourceId is not { } id || !byId.TryGetValue(id, out var dp) || done.Contains(id)) continue;
-            var good = l.Hits >= c.BigStageMinHits || l.Rbi >= c.BigStageMinRbi || (l.HomeRuns >= 1 && l.Hits >= 2);
+            var good = IsGoodBatting(l, c);
             if (!good || !MathUtil.Chance(prob, rng)) continue;
             done.Add(id);
             AddBigStage(dp, GrowthDomain.Batting, rng, c, notices);

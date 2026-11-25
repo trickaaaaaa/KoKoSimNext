@@ -76,8 +76,10 @@ PerfScore = clamp( 50·(1 - shrink) + raw·shrink , 0 , 100 )
   持ち上がる**（防御率9点台の投手が、打席ゼロなので50を貰って浮く）。先にサンプルの有無で振り分け、
   **両方あれば高い方／片方だけならその軸／どちらも無ければ50**とする。
 
-いずれも `data/draft.yaml` 駆動（不変条件#4）。C# 既定（`DraftCoefficients`）が Unity 実プレイの真値、
-YAML は sim/テスト調整用（既存の sim-vs-unity 係数分割に倣う）。
+いずれも `data/draft.yaml` 駆動（不変条件#4）。**係数の正典は YAML**。ただし Unity 実プレイは YAML を読まず C# 既定
+（`DraftCoefficients`）で走るので、値を変えたら同じ値を C# 既定にも反映する。両者の一致は
+`DraftLoaderTests.RepositoryDraftFile_MatchesCsharpDefaults` が全項目で固定する（`CoefficientsDefaultsConsistencyTests` と同じ作法）。
+※旧記述「C# 既定が実プレイの真値・YAML は sim/テスト調整用」は撤回（CLAUDE.md 不変条件#4）。
 
 ## 3. 候補判定と指名順位予想
 
@@ -113,7 +115,7 @@ best = max( 打撃力チップ, 投手力チップ )        # PlayerStrengthProf
   （`DraftEvaluation.Notability`）＝将来の候補一覧画面で「注目度は高いがランク不足」を出せる。
 - 判定は `NotabilityModel.MeetsCandidateFloor` の1箇所。`DraftEngine` の3入口（`Evaluate` / `EvaluateRoster` /
   `RunNomination`）はすべて足切り込みの `BandOf(player, n, strength, c)` を通す。
-- `CandidateMinTier` は `data/draft.yaml` の `candidate_min_tier`（G〜S）で調整（C# 既定＝B が実プレイの真値）。学年の下限 `CandidateMinGrade` も同じ `candidate_min_grade`（既定2）。
+- `CandidateMinTier` は `data/draft.yaml` の `candidate_min_tier`（G〜S）で調整（正典は YAML＝B。C# 既定も同じ B で、`DraftLoaderTests` が一致を固定）。学年の下限 `CandidateMinGrade` も同じ `candidate_min_grade`（既定2）。
 
 > 併せて挙がっていた「甘さ」の要因のうち、①中位一律4位→§3.2 の按分（4〜7位）で対応、③打者の規定打席→100 へ
 > （2026-08-15）。②指名確率の中点（64）が中位下限（66）より低く中位候補はほぼ確実に指名される点は
@@ -159,10 +161,16 @@ round = バンド内で注目度に応じて按分（DraftRankBands.RoundOf）
 
 | イベント | FeedKind | 文言（例） |
 |---|---|---|
-| 候補入り | `Discover` | 「○○がドラフト候補に名前が挙がった（{バンド文言}）」 |
-| 注目度上昇 | `Up` | 「○○の評価が上がった（{旧バンド}→{新バンド}）」 |
-| 注目度下降 | `Warn`/`Normal` | 「○○の評価が下がった（{旧バンド}→{新バンド}）」 |
-| 指名確定 | `Discover` | 「○○が{球団}から{round}位指名を受けた！」／「○○は指名されなかった」 |
+| 候補入り | `Discover` ＋ノベル `draft_candidate`（#617） | 「○○がドラフト候補に挙がった（{バンド文言}）」。ノベルは「○○がドラフト候補に入った（{バンド}）！」 |
+| 注目度上昇 | `Up` ＋ノベル `draft_scout_visit`（#617） | 「○○の評価が上がった（{旧バンド}→{新バンド}）」。ノベルは「スカウトが見に来た」場面で「ドラフト評価が {旧} → {新} に上がった！」 |
+| 注目度下降 | `Warn`（フィードのみ） | 「○○の評価が下がった（{旧バンド}→{新バンド}）」。圏外へ落ちたときは「候補から外れた」。**ノベルは挟まない**（下降のたびに挟むと通わせるほど話が重くなる） |
+| 指名確定 | `Discover` ＋ノベル `draft_nominated`（#617） | 「○○がドラフト{round}位指名！」。ノベルは「○○が NPB {round} 位で指名された！」。球団名は出さない（球団割り当ては §8 の将来拡張） |
+| 指名漏れ | `Normal` ＋ノベル `draft_missed`（#617） | 「○○は指名されなかった。」。指名漏れも黙って流さずノベルで見せる（三年間見てきた選手の最後が通知1行で終わらないように） |
+| プロ入りOBの祝い金 | `Up` ＋ノベル `draft_ob_greeting`（#1469 O2） | 「○○のプロ入りでOB会から祝い金（部費 ＋N 万）」 |
+
+- 実装は `Assets/KokoSim/Home/HomeState.cs` の `RunDraftFeed`（週次の候補入り・評価差分）／`RunDraftResultFeed`（10月最終週の指名結果）。
+  指名の可否のノベルは**上限を通さず**（`PushUncapped`）積む＝同じ週に固定イベント `draft_meeting`（#1029）が先に枠を使っても落ちない。
+  `draft_meeting` は指名結果より**前**に並ぶ。
 
 - 候補入り／注目度変化の**差分検出は Unity側（Shell）の責務**。engine は「その週の評価スナップショット
   （選手Id→Notability/バンド）」を純関数で返す。Shell が前回スナップショットと比較して Feed へ流す。
