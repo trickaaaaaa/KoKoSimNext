@@ -394,6 +394,12 @@ public sealed class TournamentRunner : ITournamentRunner
     /// <summary>準決勝敗退2校が3位決定戦を戦う大会か（issue #1219）。</summary>
     public bool ThirdPlaceMatch => _thirdPlaceMatch;
 
+    /// <summary>
+    /// 裏試合を1つ記録するたびに呼ぶ読み取り専用の観測口（地方大会新聞・issue #1485）。乱数にも状態にも触れない＝
+    /// 決定論不変。ブラケットの残り消化が背景スレッドで走るので、受け側はスレッド安全にすること。
+    /// </summary>
+    public Action<BackgroundGameReport>? OnBackgroundGame { get; set; }
+
     public TournamentRunner(
         IReadOnlyList<School> entrants,
         School manager,
@@ -1187,6 +1193,7 @@ public sealed class TournamentRunner : ITournamentRunner
                 var g = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(streamRounds, streamSlot, attempt)), context);
                 RecordOutings(g, a, b, matchDay);
                 _onBackgroundMatch?.Invoke(a.Id, b.Id, g);   // 全国成績への畳み込みは**記録時**（上のコメント参照）。
+                OnBackgroundGame?.Invoke(new BackgroundGameReport(contextRounds, streamRounds == ThirdPlaceStreamRounds, a, b, g));
                 return g;
             });
             var winner = awayWon ? a : b;
