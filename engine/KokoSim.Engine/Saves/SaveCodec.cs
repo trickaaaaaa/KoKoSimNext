@@ -40,7 +40,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 46;
+    public const int CurrentVersion = 47;
 
     // ===== Serialize =====
 
@@ -466,6 +466,9 @@ public static class SaveCodec
         // v42（issue #1496）: チュートリアルの進み具合（tutorial）が増えた。旧セーブは途中から遊んでいる人＝
         // 「全部見た扱い（もう説明はいらない）」で補う（急に説明を出さない）。乱数不使用。
         if (version < 42 && !root.Has("tutorial")) root.Add("tutorial", TutorialSaves.AllSeenJson());
+        // v47（issue #1608）: 戦績の打撃成績の守備位置が「最後に守った位置1つ」から「守った位置の並び」になった。
+        // 旧セーブの行は今の位置1つ（途中出場は就いた位置があればそれ、無ければ空）から並びを作る。
+        if (version < 47 && root["matchRecords"] is JsonArray mr47) MatchRecordSaves.MigrateToPositionTrail(mr47);
         return root;
     }
 

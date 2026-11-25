@@ -77,7 +77,7 @@ internal static class MatchRecordSaves
         foreach (var b in s.Batting)
             bat.Add(Row(
                 JsonValue.Of(b.Order), EnumJson.Write(b.Position), EnumJson.Write(b.Entry),
-                b.FieldedAt is { } at ? EnumJson.Write(at) : JsonNull.Instance, JsonValue.Of(b.Name),
+                PositionsToJson(b.Positions), JsonValue.Of(b.Name),
                 JsonValue.Of(b.AtBats), JsonValue.Of(b.Hits), JsonValue.Of(b.Rbi), JsonValue.Of(b.HomeRuns),
                 JsonValue.Of(b.Triples), JsonValue.Of(b.Doubles), JsonValue.Of(b.WalksHbp),
                 JsonValue.Of(b.StrikeOuts), JsonValue.Of(b.StolenBases)));
@@ -115,7 +115,7 @@ internal static class MatchRecordSaves
             var a = item.AsArray();
             bat.Add(new MatchRecordBatter(
                 Int(a, 0), EnumJson.Read<FieldPosition>(Str(a, 1)), EnumJson.Read<BoxEntry>(Str(a, 2)),
-                a[3] is JsonNull ? null : EnumJson.Read<FieldPosition>(Str(a, 3)), Str(a, 4) ?? "",
+                PositionsFromJson(a[3]), Str(a, 4) ?? "",
                 Int(a, 5), Int(a, 6), Int(a, 7), Int(a, 8), Int(a, 9), Int(a, 10), Int(a, 11), Int(a, 12), Int(a, 13)));
         }
 
@@ -143,6 +143,48 @@ internal static class MatchRecordSaves
         }
 
         return new MatchRecordSide(o.Int("r"), o.Int("h"), o.Int("e"), line, bat, pit, paRows);
+    }
+
+    private static JsonArray PositionsToJson(IReadOnlyList<FieldPosition> positions)
+    {
+        var arr = new JsonArray();
+        foreach (var p in positions) arr.Add(EnumJson.Write(p));
+        return arr;
+    }
+
+    private static IReadOnlyList<FieldPosition> PositionsFromJson(JsonValue v)
+    {
+        var list = new List<FieldPosition>();
+        if (v is JsonArray arr)
+            foreach (var item in arr.Items)
+                if (item is JsonString s) list.Add(EnumJson.Read<FieldPosition>(s.Value));
+        return list;
+    }
+
+    /// <summary>
+    /// v46 以前の打撃成績の行は「最後に守った位置」を1つ（文字列か null）だけ持っていた。位置の並びへ直す
+    /// （issue #1608）: スタメンは今の位置1つ、途中出場は就いた位置があればその1つ・無ければ空。
+    /// </summary>
+    internal static void MigrateToPositionTrail(JsonArray records)
+    {
+        foreach (var rec in records.Items)
+        {
+            if (rec is not JsonObject r) continue;
+            foreach (var side in new[] { "a", "h" })
+            {
+                if (r[side] is not JsonObject so || so["bat"] is not JsonArray bat) continue;
+                foreach (var row in bat.Items)
+                {
+                    if (row is not JsonArray a || a.Count < 5 || a[3] is JsonArray) continue;
+                    var fielded = Str(a, 3);
+                    var starter = Str(a, 2) == nameof(BoxEntry.Starter);
+                    var trail = new JsonArray();
+                    var pos = starter ? Str(a, 1) : fielded;
+                    if (pos is not null) trail.Add(JsonValue.Of(pos));
+                    a.Set(3, trail);
+                }
+            }
+        }
     }
 
     private const int SacFlyBit = 1, SacBuntBit = 2, DoublePlayBit = 4;

@@ -296,7 +296,10 @@ namespace KokoSim.Unity.MatchResult
                 MatchResultPosKind.Dh => "mside-pos--dh",
                 _ => "mres-pos--entry",
             };
-            wrap.Add(Cell(text, "mside-pos", "mres-pos", cls, "f-body-bd"));
+            // 位置が2つ以上つながる行は、文字数ぶん欄を広げる（文字は詰めない）。
+            var chip = Cell(text, "mside-pos", "mres-pos", cls, "f-body-bd");
+            if (text.Length >= 2) chip.AddToClassList(text.Length switch { 2 => "mres-pos--w2", 3 => "mres-pos--w3", _ => "mres-pos--w4" });
+            wrap.Add(chip);
             return wrap;
         }
 

@@ -121,8 +121,8 @@ namespace KokoSim.Unity.Match
         private static BatRow ToBatRow(BattingLine b) => new()
         {
             Order = b.Order.ToString(),
-            // 途中出場は本来の適性でなく入り方（打・走・守）と実際に守った位置を出す（issue #680）
-            Pos = b.Entry == BoxEntry.Starter ? PosJp(b.Position) : MatchResult.MatchResultState.PosText(b),
+            // 本来の適性でなく、入り方（打・走）と実際に就いた守備位置の並びを出す（issue #680・#1608）
+            Pos = MatchResult.MatchResultState.PosText(b),
             Name = b.Name,
             Ab = b.AtBats, H = b.Hits, Rbi = b.Rbi, Hr = b.HomeRuns, Bb = b.Walks, So = b.StrikeOuts,
             Avg = AvgStr(b.Average, b.AtBats),
@@ -139,23 +139,6 @@ namespace KokoSim.Unity.Match
             if (ab == 0) return "－";
             var s = avg.ToString("0.000");
             return s.StartsWith("0") ? s.Substring(1) : s;   // 0.312 → .312
-        }
-
-        private static string PosJp(FieldPosition p)
-        {
-            switch (p)
-            {
-                case FieldPosition.Pitcher: return "投";
-                case FieldPosition.Catcher: return "捕";
-                case FieldPosition.FirstBase: return "一";
-                case FieldPosition.SecondBase: return "二";
-                case FieldPosition.ThirdBase: return "三";
-                case FieldPosition.Shortstop: return "遊";
-                case FieldPosition.LeftField: return "左";
-                case FieldPosition.CenterField: return "中";
-                case FieldPosition.RightField: return "右";
-                default: return "－";
-            }
         }
 
         // ===== スコアボード（イニング別 R, ＋ H E） =====

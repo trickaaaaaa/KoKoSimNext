@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Saves;
@@ -61,7 +62,8 @@ public sealed class MatchRecordTests
             {
                 var b = lines[i];
                 var m = side.Batting[i];
-                Assert.Equal((b.Order, b.Position, b.Name, b.Entry, b.FieldedAt), (m.Order, m.Position, m.Name, m.Entry, m.FieldedAt));
+                Assert.Equal((b.Order, b.Position, b.Name, b.Entry), (m.Order, m.Position, m.Name, m.Entry));
+                Assert.Equal(b.Positions, m.Positions);
                 Assert.Equal((b.AtBats, b.Hits, b.Rbi, b.HomeRuns, b.Triples, b.Doubles),
                     (m.AtBats, m.Hits, m.Rbi, m.HomeRuns, m.Triples, m.Doubles));
                 Assert.Equal((b.Walks + b.HitByPitches, b.StrikeOuts, b.StolenBases), (m.WalksHbp, m.StrikeOuts, m.StolenBases));
@@ -109,6 +111,59 @@ public sealed class MatchRecordTests
             Assert.Equal(a.Away!.PaRows.Select(r => r.Cells.Select(c => c.Result)), b.Away!.PaRows.Select(r => r.Cells.Select(c => c.Result)));
             Assert.Equal(a.Home!.Batting.Select(x => x.Name), b.Home!.Batting.Select(x => x.Name));
         }
+    }
+
+    private static MatchRecordBatter Bat(int order, FieldPosition pos, BoxEntry entry, params FieldPosition[] trail)
+        => new(order, pos, entry, trail, $"選手{order}{entry}", 3, 1, 0, 0, 0, 0, 0, 0, 0);
+
+    private static MatchRecordSide SideOf(params MatchRecordBatter[] bat)
+        => new(1, 2, 0, new List<int> { 0, 1 }, bat, new List<MatchRecordPitcher>(), new List<MatchRecordPaRow>());
+
+    // 守った位置の並び（issue #1608）はセーブを往復しても順番どおり残る。
+    [Fact]
+    public void PositionTrail_RoundTripsInOrder()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var side = SideOf(
+            Bat(1, FieldPosition.Shortstop, BoxEntry.Starter, FieldPosition.Shortstop, FieldPosition.SecondBase),
+            Bat(2, FieldPosition.DesignatedHitter, BoxEntry.Starter, FieldPosition.DesignatedHitter, FieldPosition.LeftField),
+            Bat(1, FieldPosition.LeftField, BoxEntry.PinchHit, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField),
+            Bat(3, FieldPosition.LeftField, BoxEntry.PinchRun));
+        state.MatchRecords = new MatchRecordBook();
+        state.MatchRecords.Add(Meta() with { Away = side, Home = side });
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var back, out var err), err);
+        var bat = back.MatchRecords.Records[0].Away!.Batting;
+        Assert.Equal(new[] { FieldPosition.Shortstop, FieldPosition.SecondBase }, bat[0].Positions);
+        Assert.Equal(new[] { FieldPosition.DesignatedHitter, FieldPosition.LeftField }, bat[1].Positions);
+        Assert.Equal(new[] { FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField }, bat[2].Positions);
+        Assert.Empty(bat[3].Positions);
+    }
+
+    // v46 以前のセーブ（最後に守った位置が1つ）: スタメンは今の位置1つ・途中出場は就いた位置があればその1つ。
+    [Fact]
+    public void V46Save_WithSinglePosition_MigratesToOnePositionTrail()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var side = SideOf(
+            Bat(1, FieldPosition.Shortstop, BoxEntry.Starter, FieldPosition.Shortstop, FieldPosition.SecondBase),
+            Bat(1, FieldPosition.LeftField, BoxEntry.PinchHit, FieldPosition.LeftField),
+            Bat(2, FieldPosition.LeftField, BoxEntry.PinchRun));
+        state.MatchRecords = new MatchRecordBook();
+        state.MatchRecords.Add(Meta() with { Away = side, Home = null });
+
+        var json = SaveCodec.Serialize(state)
+            .Replace("\"Starter\",[\"Shortstop\",\"SecondBase\"],", "\"Starter\",null,")
+            .Replace("\"PinchHit\",[\"LeftField\"],", "\"PinchHit\",\"LeftField\",")
+            .Replace("\"PinchRun\",[],", "\"PinchRun\",null,")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":46");
+        Assert.DoesNotContain("\"Starter\",[", json);
+        Assert.True(SaveCodec.TryDeserialize(json, out var back, out var err), err);
+
+        var bat = back.MatchRecords.Records[0].Away!.Batting;
+        Assert.Equal(new[] { FieldPosition.Shortstop }, bat[0].Positions);
+        Assert.Equal(new[] { FieldPosition.LeftField }, bat[1].Positions);
+        Assert.Empty(bat[2].Positions);
     }
 
     [Fact]
