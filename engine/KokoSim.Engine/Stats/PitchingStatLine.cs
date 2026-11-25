@@ -28,6 +28,23 @@ public sealed class PitchingStatLine
     /// <summary>被本塁打（issue #77）。</summary>
     public int HomeRunsAllowed { get; private set; }
 
+    /// <summary>球速の記録（設計書06 §3.2b）: 球速を測れた球数。平均球速の分母。</summary>
+    public int VelocitySamples { get; private set; }
+    /// <summary>投げた球の球速の合計[km/h]。</summary>
+    public double VelocitySumKmh { get; private set; }
+    /// <summary>キャリアハイ: 最速[km/h]（球が無ければ0）。</summary>
+    public double MaxVelocityKmh { get; private set; }
+    /// <summary>キャリアハイ: 1試合の最多奪三振。</summary>
+    public int MaxStrikeOutsInGame { get; private set; }
+    /// <summary>キャリアハイ: 1試合の最長投球回（アウト数）。</summary>
+    public int MaxOutsInGame { get; private set; }
+
+    /// <summary>平均球速[km/h]（記録0なら0）。</summary>
+    public double AverageVelocityKmh => VelocitySamples > 0 ? VelocitySumKmh / VelocitySamples : 0.0;
+
+    /// <summary>最長投球回のテキスト（例: 9回1/3 → "9 1/3"）。</summary>
+    public string MaxInningsText => InningsFormat.Text(MaxOutsInGame);
+
     private readonly Dictionary<PitchType, PitchTypeAccum> _byPitch = new();
 
     /// <summary>球種ごとの被打成績（issue #180）。打席確定球がインプレー/被安打の打席のみ集計対象。</summary>
@@ -70,6 +87,11 @@ public sealed class PitchingStatLine
         HitBatters += l.HitBatters;
         Pitches += l.Pitches;
         HomeRunsAllowed += l.HomeRunsAllowed;
+        VelocitySamples += l.VelocitySamples;
+        VelocitySumKmh += l.VelocitySumKmh;
+        MaxVelocityKmh = System.Math.Max(MaxVelocityKmh, l.MaxVelocityKmh);
+        MaxStrikeOutsInGame = System.Math.Max(MaxStrikeOutsInGame, l.StrikeOuts);
+        MaxOutsInGame = System.Math.Max(MaxOutsInGame, l.Outs);
         if (l.BattingAgainstByPitch is { } byPitch)
             foreach (var (type, line) in byPitch)
                 AddPitchType(type, line.AtBats, line.Hits, line.HomeRuns);
@@ -90,6 +112,11 @@ public sealed class PitchingStatLine
         HitBatters += o.HitBatters;
         Pitches += o.Pitches;
         HomeRunsAllowed += o.HomeRunsAllowed;
+        VelocitySamples += o.VelocitySamples;
+        VelocitySumKmh += o.VelocitySumKmh;
+        MaxVelocityKmh = System.Math.Max(MaxVelocityKmh, o.MaxVelocityKmh);
+        MaxStrikeOutsInGame = System.Math.Max(MaxStrikeOutsInGame, o.MaxStrikeOutsInGame);
+        MaxOutsInGame = System.Math.Max(MaxOutsInGame, o.MaxOutsInGame);
         foreach (var (type, line) in o.BattingAgainstByPitch)
             AddPitchType(type, line.AtBats, line.Hits, line.HomeRuns);
     }
@@ -122,6 +149,17 @@ public sealed class PitchingStatLine
         HitBatters = hitBatters;
         Pitches = pitches;
         HomeRunsAllowed = homeRunsAllowed;
+    }
+
+    /// <summary>セーブ復元専用: 球速の記録とキャリアハイ（設計書06 §3.2b）。<see cref="Restore"/> の後に呼ぶ。</summary>
+    internal void RestorePhysical(int velocitySamples, double velocitySumKmh, double maxVelocityKmh,
+        int maxStrikeOutsInGame, int maxOutsInGame)
+    {
+        VelocitySamples = velocitySamples;
+        VelocitySumKmh = velocitySumKmh;
+        MaxVelocityKmh = maxVelocityKmh;
+        MaxStrikeOutsInGame = maxStrikeOutsInGame;
+        MaxOutsInGame = maxOutsInGame;
     }
 
     /// <summary>セーブ復元専用: 球種別の被打内訳を1件据える（<see cref="AddPitchType"/> への内部委譲）。</summary>

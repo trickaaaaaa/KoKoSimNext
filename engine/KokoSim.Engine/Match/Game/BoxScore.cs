@@ -38,6 +38,17 @@ public sealed record BattingLine(
     /// </summary>
     public int PlateAppearancesVsLeft { get; init; }
 
+    /// <summary>打球データ（設計書06 §3.2b）: 物理を生んだインプレー打球の数。初速・角度の平均の分母。観測専用。</summary>
+    public int BattedBalls { get; init; }
+    /// <summary>インプレー打球の初速の合計[km/h]（平均＝合計÷<see cref="BattedBalls"/>）。</summary>
+    public double ExitVelocitySumKmh { get; init; }
+    /// <summary>インプレー打球の打球角度の合計[°]。</summary>
+    public double LaunchAngleSumDeg { get; init; }
+    /// <summary>この試合の最高初速[km/h]（打球が無ければ0）。</summary>
+    public double MaxExitVelocityKmh { get; init; }
+    /// <summary>この試合で打った本塁打の最長飛距離[m]（本塁打が無ければ0）。</summary>
+    public double LongestHomeRunM { get; init; }
+
     /// <summary>打率（打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;
 }
@@ -55,6 +66,13 @@ public sealed record PitchingLine(
 {
     /// <summary>投球回（アウト数/3）。例: 7回1/3 → "7 1/3"。</summary>
     public string InningsText => global::KokoSim.Engine.Stats.InningsFormat.Text(Outs);
+
+    /// <summary>球速の記録（設計書06 §3.2b）: 投げた球のうち球速を測れた数。平均球速の分母。観測専用。</summary>
+    public int VelocitySamples { get; init; }
+    /// <summary>投げた球の球速の合計[km/h]（平均＝合計÷<see cref="VelocitySamples"/>）。</summary>
+    public double VelocitySumKmh { get; init; }
+    /// <summary>この試合の最速[km/h]（球が無ければ0）。</summary>
+    public double MaxVelocityKmh { get; init; }
 }
 
 /// <summary>個人守備成績（1試合）。現状は失策数のみ（issue #91）。SourceId＝育成選手ID（相手校の生成選手は null）。</summary>

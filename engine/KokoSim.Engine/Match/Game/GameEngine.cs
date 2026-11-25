@@ -2819,6 +2819,22 @@ public static class GameEngine
         _ => 1,
     };
 
+    /// <summary>
+    /// 成績画面の物理データ（設計書06 §3.2b）: 打球の初速・角度・本塁打の飛距離と、投げた球の球速を控える。
+    /// 1球ごとの解決済みの値の写しを積むだけ＝乱数・判定に触れない観測専用。
+    /// </summary>
+    private static void RecordPhysicalStats(
+        TeamState offense, TeamState defense, Player pitcher, Player batter,
+        IReadOnlyList<AtBat.PitchRecord>? pitchLog, Match.Fielding.FieldingPlay? play)
+    {
+        if (pitchLog is not { Count: > 0 }) return;
+        foreach (var pr in pitchLog) defense.RecordPitchSpeed(pitcher, pr.VelocityKmh);
+        var last = pitchLog[^1];
+        if (last.Kind != PitchKind.InPlay || last.BattedBall is not { } ball) return;
+        double? hrDistance = play is { Result: Match.Fielding.BattedBallResult.HomeRun } ? play.RangeM : null;
+        offense.RecordBattedBall(batter, ball, hrDistance);
+    }
+
     private static void FinishPlateAppearance(
         TeamState offense, TeamState defense, Player pitcher, Player batter,
         PlateAppearanceResult result, int runs, int outsThisPa, int pitches,
@@ -2848,6 +2864,7 @@ public static class GameEngine
         }
         offense.RecordBatting(batter, result, rbi ?? runs, isSacFly, isSacBunt);
         offense.RecordMatchup(batter, pitcher);   // 慣れの蓄積（設計書02 §2.3b）
+        RecordPhysicalStats(offense, defense, pitcher, batter, pitchLog, play);
         // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
         PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay
             ? pl[^1].PitchType

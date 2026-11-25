@@ -134,8 +134,10 @@ namespace KokoSim.Unity.Players
     {
         public string Label = "";
         public string Value = "";
+        /// <summary>単位（km/h・°・m）。値の右に小さく組む（空なら無し）。</summary>
+        public string Unit = "";
         public StatCell() { }
-        public StatCell(string label, string value) { Label = label; Value = value; }
+        public StatCell(string label, string value, string unit = "") { Label = label; Value = value; Unit = unit; }
     }
 
     /// <summary>1スコープ分の打撃・投手フルライン（issue #77）。</summary>
@@ -387,6 +389,9 @@ namespace KokoSim.Unity.Players
         // 防御率・WHIP・K9（2桁小数）。
         private static string Dec2(double v) => v.ToString("0.00", Ci);
         private static string N(int v) => v.ToString(Ci);
+        // 物理データ（設計書06 §3.2b）: 記録が無い（0）ときは「—」。単位は km/h・°・m。
+        private static StatCell Phys(string label, double v, string unit)
+            => v > 0 ? new StatCell(label, v.ToString("0", Ci), unit) : new StatCell(label, "—");
 
         private void BuildStats(PlayerDetailView v, int sourceId)
         {
@@ -438,6 +443,15 @@ namespace KokoSim.Unity.Players
             cells.Add(new StatCell("出塁率", Rate3(b.Obp)));
             cells.Add(new StatCell("長打率", Rate3(b.Slg)));
             cells.Add(new StatCell("OPS", Rate3(b.Ops)));
+            // 打球データ（設計書06 §3.2b）。角度はゴロで負になりうるので「記録なし」は打球数で判定する。
+            cells.Add(Phys("平均打球初速", b.AverageExitVelocityKmh, "km/h"));
+            cells.Add(b.BattedBalls > 0 ? new StatCell("平均打球角度", b.AverageLaunchAngleDeg.ToString("0", Ci), "°") : new StatCell("平均打球角度", "—"));
+            cells.Add(Phys("最長本塁打", b.LongestHomeRunM, "m"));
+            // キャリアハイ
+            cells.Add(Phys("最高初速", b.MaxExitVelocityKmh, "km/h"));
+            cells.Add(new StatCell("1試合安打", b.MaxHitsInGame > 0 ? N(b.MaxHitsInGame) : "—"));
+            cells.Add(new StatCell("1試合打点", b.MaxRbiInGame > 0 ? N(b.MaxRbiInGame) : "—"));
+            cells.Add(new StatCell("1試合本塁打", b.MaxHomeRunsInGame > 0 ? N(b.MaxHomeRunsInGame) : "—"));
         }
 
         // 投手フルライン（高校野球のため勝敗・セーブは載せない, issue #77）。
@@ -456,6 +470,11 @@ namespace KokoSim.Unity.Players
             cells.Add(new StatCell("与死球", N(p.HitBatters)));
             cells.Add(new StatCell("球数", N(p.Pitches)));
             cells.Add(new StatCell("WHIP", Dec2(p.Whip)));
+            cells.Add(Phys("平均球速", p.AverageVelocityKmh, "km/h"));
+            // キャリアハイ
+            cells.Add(Phys("最速", p.MaxVelocityKmh, "km/h"));
+            cells.Add(new StatCell("1試合奪三振", p.MaxStrikeOutsInGame > 0 ? N(p.MaxStrikeOutsInGame) : "—"));
+            cells.Add(new StatCell("1試合投球回", p.MaxOutsInGame > 0 ? p.MaxInningsText : "—"));
         }
 
         // 球種別被打率（issue #180）: 打席確定球がインプレー/被安打の打席のみ集計対象＝公式打数とは別概念。

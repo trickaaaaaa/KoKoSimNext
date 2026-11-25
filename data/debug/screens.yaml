@@ -626,6 +626,27 @@ screens:
       - wait: 3
       - shot: 03-postgame-line3
 
+  - id: player-physical-stats-1493
+    name: "選手詳細の成績欄に打球データ（平均初速・角度・最長本塁打）・球速・キャリアハイが並ぶ（通算／公式戦通算／大会別・issue #1493）"
+    size: {w: 1600, h: 1500}
+    steps:
+      - new_game: {seed: 1}
+      - boost_roster: 70
+      - advance_weeks: 13
+      - play_tournament: ""
+      - call: EventService.Clear()
+      - show: PlayerList
+      - click: tab-stats-btn
+      - set: {PlayerSelection.Index: 0, PlayerSelection.Pinned: true}
+      - click: scope-official
+      - shot: 01-official-p0
+      - set: {PlayerSelection.Index: 1, PlayerSelection.Pinned: true}
+      - shot: 02-official-p1
+      - set: {PlayerSelection.Index: 2, PlayerSelection.Pinned: true}
+      - shot: 03-official-p2
+      - click: scope-tourn
+      - shot: 04-tourn-p2
+
   - id: innings-thirds-1279
     name: "投球回の 1/3・2/3 の組み方（夏の県大会を消化した後のホームと選手詳細の成績・PR #1370・issue #1279 項目4）"
     steps:
