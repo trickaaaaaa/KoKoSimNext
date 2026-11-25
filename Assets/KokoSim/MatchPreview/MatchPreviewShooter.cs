@@ -60,7 +60,8 @@ namespace KokoSim.Unity.MatchPreview
                 var l = root.Q<Label>(n);
                 if (l != null) l.text = n.Contains("own") ? "福山商工高校" : "東広島中央校";
             }
-            root.Query<Label>(className: "mp-radar__name").ForEach(l => l.text = "福山商工高校");
+            root.Q("mp-own-radar")?.Query<Label>(className: "mp-radar__name").ForEach(l => l.text = "福山商工高校");
+            root.Q("mp-opp-radar")?.Query<Label>(className: "mp-radar__name").ForEach(l => l.text = "東広島中央校");
             root.Query<Label>(className: "mp-row__name").ForEach(l => l.text = "長谷川 悠一郎");
             yield return Capture(doc, "02-long-names");
 

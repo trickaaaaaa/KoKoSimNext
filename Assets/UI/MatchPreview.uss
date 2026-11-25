@@ -11,8 +11,11 @@
     background-color: #E7E2D7;
     padding: 20px 24px;
 }
-/* スコアブックの Label 既定の余白を、この画面ではすべて自前で決める。 */
-.mp-root Label {
+/* スコアブックの Label 既定の余白を、この画面ではすべて自前で決める。
+   型セレクタ1つ（詳細度最小）にして、各部品のクラスの margin/padding が必ず勝つようにする
+   （`.mp-root Label` だとクラス1つの指定より強く、札の内側余白や字間の余白が消える）。
+   この USS は MatchPreview.uxml にしか付かないので、他画面の Label には効かない。 */
+Label {
     margin: 0;
     padding: 0;
 }
@@ -209,6 +212,7 @@
     align-items: center;
     flex-shrink: 0;
     padding-bottom: 8px;
+    margin-bottom: 4px;
     border-bottom-width: 2px;
     border-bottom-color: #1D1B18;
 }
@@ -238,6 +242,7 @@
     align-items: center;
     height: 36px;
     flex-shrink: 0;
+    margin-top: 4px;     /* モックの列の gap: 4px */
     border-bottom-width: 1px;
     border-bottom-color: #ECE8DF;
 }
@@ -395,15 +400,11 @@
     border-top-right-radius: 4px;
     border-bottom-right-radius: 4px;
 }
-.mp-bar__track--own .mp-bar__fill {
-    border-top-left-radius: 4px;
-    border-bottom-left-radius: 4px;
-}
-.mp-bar__track--opp .mp-bar__fill {
-    border-top-right-radius: 4px;
-    border-bottom-right-radius: 4px;
-    background-color: #3A3631;
-}
+/* 棒そのものには角丸を付けない。溝（track）を角丸＋overflow:hidden にして切り抜く。
+   棒に角丸を付けると、位置によって暗い棒の中に白い点が2段並ぶ描画の乱れが出た（2026-11-26 実測。
+   角丸を外すと消え、左右反転しても残った）。 */
+.mp-bar__track { overflow: hidden; }
+.mp-bar__track--opp .mp-bar__fill { background-color: #3A3631; }
 .mp-bar__fill { height: 16px; }
 .mp-bar__label {
     width: 76px;
