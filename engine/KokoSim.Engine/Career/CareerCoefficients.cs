@@ -6,6 +6,10 @@ public sealed record CareerCoefficients
     // --- 指導力の成長（采配経験, 設計書04 §1.1） ---
     public double CoachingGrowthPerYear { get; init; } = 3.0;
     public double CoachingGrowthPerWin { get; init; } = 0.4;
+    /// <summary>甲子園・センバツの勝ち1つごとの上乗せ（大舞台ほど経験が大きい・設計書04 §1.1）。<see cref="CoachingGrowthPerWin"/> に足す。</summary>
+    public double CoachingGrowthPerNationalStageWin { get; init; } = 0.3;
+    /// <summary>金星の名声上昇（<see cref="FameUpsetModel"/>・季上限済み）1あたりの上乗せ（格上に勝つほど経験が大きい・設計書04 §1.1）。</summary>
+    public double CoachingGrowthPerUpsetFame { get; init; } = 0.1;
     public double CoachingCap { get; init; } = 99.0;
 
     // --- 監督→学校強さ（指導力がチーム力を押し上げる） ---
