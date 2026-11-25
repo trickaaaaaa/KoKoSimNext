@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
@@ -72,6 +73,9 @@ public sealed class CohesionTests
     {
         Assert.Equal(0, Cohesion.RattledThresholdStep(50, C));
         Assert.Equal(1.0, Cohesion.MessengerMultiplier(50, C), 12);
+        Assert.Equal(1.0, Cohesion.ErrorStreakMultiplier(50, C), 12);
+        Assert.Equal(1.0, Cohesion.TrainingMultiplier(50, C), 12);
+        Assert.Equal(1.0, Cohesion.EventWeightMultiplier(50, C), 12);
     }
 
     [Fact]
@@ -83,6 +87,60 @@ public sealed class CohesionTests
         Assert.Equal(-1, Cohesion.RattledThresholdStep(29.9, C));
         Assert.Equal(1.06, Cohesion.MessengerMultiplier(80, C), 12);
         Assert.Equal(0.94, Cohesion.MessengerMultiplier(20, C), 12);
+    }
+
+    // ===== issue #1601 ②: エラー後の失策倍率（その回の終わりまで） =====
+
+    [Fact]
+    public void ErrorStreakMultiplier_WorsensBelowFiftyAndCapsAtU15()
+    {
+        // U=15 で丁度オーナー決定の上限 ×1.5 に達する。
+        Assert.Equal(C.ErrorStreakCap, Cohesion.ErrorStreakMultiplier(15, C), 9);
+        // それより低くても頭打ち（珍プレー化しない＝一度エラーしたら崩壊する、にしない）。
+        Assert.Equal(C.ErrorStreakCap, Cohesion.ErrorStreakMultiplier(0, C), 9);
+        // U=15 と 50 の中間（U=32.5）は半分だけ悪化。
+        Assert.Equal(1.0 + (C.ErrorStreakCap - 1.0) / 2.0, Cohesion.ErrorStreakMultiplier(32.5, C), 9);
+        // 良いチーム（U高）は立て直す＝倍率1未満。対称に底打ちする。
+        Assert.True(Cohesion.ErrorStreakMultiplier(85, C) < 1.0);
+        Assert.Equal(2.0 - C.ErrorStreakCap, Cohesion.ErrorStreakMultiplier(85, C), 9);
+        Assert.Equal(2.0 - C.ErrorStreakCap, Cohesion.ErrorStreakMultiplier(100, C), 9);
+    }
+
+    [Fact]
+    public void ApplyErrorStreak_ScalesAllFiveErrorProbs_AndIsIdentityAtOne()
+    {
+        var baseC = new FieldingCoefficients();
+        Assert.Same(baseC, Cohesion.ApplyErrorStreak(baseC, 1.0));   // 恒等は同一参照（大多数の打席が従来と1ビット一致）
+
+        var scaled = Cohesion.ApplyErrorStreak(baseC, 1.5);
+        Assert.Equal(baseC.ErrorBaseProb * 1.5, scaled.ErrorBaseProb, 12);
+        Assert.Equal(baseC.FlyErrorBaseProb * 1.5, scaled.FlyErrorBaseProb, 12);
+        Assert.Equal(baseC.ThrowErrorBaseProb * 1.5, scaled.ThrowErrorBaseProb, 12);
+        Assert.Equal(baseC.ReceiveErrorBaseProb * 1.5, scaled.ReceiveErrorBaseProb, 12);
+        Assert.Equal(baseC.OutfieldFumbleBaseProb * 1.5, scaled.OutfieldFumbleBaseProb, 12);
+    }
+
+    // ===== issue #1601 ④: 練習の伸び（自校だけ・上限なし） =====
+
+    [Fact]
+    public void TrainingMultiplier_U85IsPlusFivePercent_AndIsSymmetric()
+    {
+        Assert.Equal(1.05, Cohesion.TrainingMultiplier(85, C), 9);
+        // オーナー決定「U=85で+5%」と対称（U=15で−5%）。
+        Assert.Equal(0.95, Cohesion.TrainingMultiplier(15, C), 9);
+        Assert.True(Cohesion.TrainingMultiplier(100, C) > Cohesion.TrainingMultiplier(85, C));
+    }
+
+    // ===== issue #1601 ⑤: 悪いイベントの抽選重み（自校だけ・頭打ち） =====
+
+    [Fact]
+    public void EventWeightMultiplier_IdentityAtAndAboveFifty_DoubledAtU15AndBelow()
+    {
+        Assert.Equal(1.0, Cohesion.EventWeightMultiplier(50, C), 9);
+        Assert.Equal(1.0, Cohesion.EventWeightMultiplier(70, C), 9);   // 良いチームがさらに得をする設計ではない
+        Assert.Equal(C.EventWeightCap, Cohesion.EventWeightMultiplier(15, C), 9);
+        Assert.Equal(C.EventWeightCap, Cohesion.EventWeightMultiplier(0, C), 9);   // 頭打ち（悪循環の歯止め）
+        Assert.Equal(1.0 + (C.EventWeightCap - 1.0) / 2.0, Cohesion.EventWeightMultiplier(32.5, C), 9);
     }
 
     // ===== ΔU =====

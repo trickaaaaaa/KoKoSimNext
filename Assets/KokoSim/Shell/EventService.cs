@@ -206,6 +206,9 @@ namespace KokoSim.Unity.Shell
         public static IReadOnlyList<string> RunWeek()
         {
             var rng = Rng();
+            // チーム状態（結束）の効き先⑤（issue #1601）: 週1回だけ求め、選択肢つき選手間イベントの
+            // 抽選重みへ掛ける（自校だけ）。既定1.0と同じ経路なので、呼び忘れても恒等に戻るだけ。
+            Scheduler.ChoiceWeightMultiplier = ChemistryDisplay.CurrentEventWeightMultiplier();
             var fired = Scheduler.Week(GameClock.Week, rng);
             var feed = new List<string>(fired.Count);
             foreach (var f in fired)
