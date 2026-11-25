@@ -1297,7 +1297,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-pitchchart { min-height: 310px; flex-grow: 1; margin: 0 16px 16px 16px; }
 /* 中心のボール（160px の画像を縮めて置く。寸法・位置は部品が決める） */
 .pchart__ball { position: absolute; background-image: url("project:///Assets/UI/Images/pitch/ball.png"); -unity-background-scale-mode: scale-to-fit; }
-/* 札＝球種名＋ランクのチップ（ストレートはチップの代わりに最速）。高さをチップに揃え、中身は上下中央。
+/* 札＝球種名＋ランクのチップ（ストレートは最速km/hの右にチップ）。高さをチップに揃え、中身は上下中央。
    Label の既定の余白が残ると名前とチップの芯がずれるので、札の中は余白0から組む。 */
 .pd2-pchip { position: absolute; flex-direction: row; align-items: center; height: 22px; }
 .pd2-pchip Label { margin: 0; padding: 0; }
