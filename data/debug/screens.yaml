@@ -1677,3 +1677,16 @@ screens:
       - call: StepColorForCapture(5, 3)
       - wait: 20
       - shot: 02-helmet-changed
+
+  # ── ホームのヒーロー帯の「次の大会まで／次の試合日まで」（まとめて進行・issue #1479） ──
+  - id: home-advance-until-stop-1479
+    name: "ホーム: 次の大会まで進める→止まった理由がヒーロー帯に出る。大会中は次の試合日まで（issue #1479）"
+    steps:
+      - new_game: {seed: 1}
+      - wait: 20
+      - shot: 01-home-new
+      - click: advance-next-tournament
+      - wait: 30
+      - read: =GameClock.Week
+      - read: =EventService.HasPending
+      - shot: 02-after-first-stop

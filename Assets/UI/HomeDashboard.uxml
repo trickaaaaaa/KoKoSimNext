@@ -54,6 +54,8 @@
                 <ui:Label name="weather-temp-unit" class="hm-hero__wx-unit" text="℃" />
               </ui:VisualElement>
             </ui:VisualElement>
+            <!-- 次の試合日まで進める（まとめて進行・issue #1479）。止まる条件は HomeDashboardController.Advance。 -->
+            <ui:Button name="advance-next-match" class="hm-hero__btn" text="次の試合日まで ▶" />
           </ui:VisualElement>
         </ui:VisualElement>
 
@@ -74,6 +76,8 @@
             <ui:VisualElement name="ticks" class="hm-ticks" />
             <ui:VisualElement name="tick-labels" class="hm-ticks hm-ticks--labels" />
           </ui:VisualElement>
+          <!-- 次の大会まで進める（まとめて進行・issue #1479）。目盛りの終点＝次の大会に合わせる。 -->
+          <ui:Button name="advance-next-tournament" class="hm-hero__btn hm-hero__btn--plain" text="次の大会まで ▶" />
         </ui:VisualElement>
       </ui:VisualElement>
 
