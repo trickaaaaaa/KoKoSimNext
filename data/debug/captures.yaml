@@ -610,6 +610,23 @@ captures:
     video: {from: start, to: end, fps: 30}
     probes: [FielderIdleDiag, FielderRunDiag]
 
+  # ピッチャーフライを追う投手の足（滑って見えた件）。slip は走りの足の滑りの実測
+  - id: p-fly-run
+    name: "ピッチャーフライを追って捕る投手（連番・足の滑りの実測）"
+    scenario: p-fly-lab
+    manager: home
+    view: rig
+    video: {from: start, to: end, fps: 30}
+    probes: [FielderIdleDiag, FielderRunDiag]
+
+  - id: p-fly-run-fast
+    name: "ピッチャーフライ・寄りが速め（連番・足の滑りの実測）"
+    scenario: p-fly-lab-fast
+    manager: home
+    view: rig
+    video: {from: start, to: end, fps: 30}
+    probes: [FielderIdleDiag, FielderRunDiag]
+
   - id: dp-663-1549-alt
     name: "併殺 6-6-3 控えのシード"
     scenario: dp-663-lab-alt

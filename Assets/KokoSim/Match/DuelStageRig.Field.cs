@@ -5360,6 +5360,14 @@ namespace KokoSim.Unity.Match
             _passedBallIndex = -1;
             _duelThrowFiredPitcher = false;
             _duelThrowFiredCatcher = false;
+            // ⚠ 投手は対決の「末尾で頭姿勢のまま止まる」（HoldAtEnd）を持ったまま守備に入る＝走りのループが
+            //    1周したところで固まり、クリップ内時刻 0.00 のまま位置だけ動いて足が滑る（実測: ピッチャーフライで
+            //    約2.6秒張り付いていた）。守備の間はループさせる。対決の値は EndFieldPlay の Restore が控えから戻す
+            if (_pitcher != null)
+            {
+                _pitcher.HoldAtEnd = false;
+                _pitcher.Holding = false;
+            }
 
             // 捕球予定・送球予定を先に組む（_loco の初期 Yaw 種付けに使う＝下記。issue #511）。
             BuildFieldCatchPlan(play);
