@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 試合開始前（対戦カード）画面（UI-BUILD-METHOD Step 4・issue #7 A案）。
-     スタメン設定OKの直後に挟み、両校の顔合わせを眺めてから試合へ入る。
-     左＝自校／右＝相手校の完全ミラー2カラム（先攻後攻・総合ランク・6角形・スタメン）。
+<!-- 試合開始前（対戦カード）画面（issue #7 → 2026-11-25 リデザイン: 対戦カードの帯／スタメン｜戦力比較｜スタメン）。
+     スタメン設定OKの直後に挟み、両校の顔合わせを眺めてから試合へ入る。左は常に自校・右は常に相手（先攻後攻は札で出す）。
      戻る導線は持たない（スタメン決定後は試合をやるのみ）。主要操作は「試合開始」1つだけ。
-     骨組みだけ置き、行と6角形は MatchPreviewController が部品（components.uss）で動的生成する。
-     スタイルは tokens 〜 KokoSimTheme 〜 components 〜 画面USS の順。 -->
+     骨組みだけ置き、行・レーダー・棒グラフは MatchPreviewController が部品で動的生成する。
+     この画面は共通のトップバーを出さない（試合開始フロー専用）。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
@@ -14,52 +13,95 @@
 
     <ui:VisualElement class="ui-root mp-root sbk">
 
-        <!-- 画面専用ヘッダー（共通ナビは出さない：この画面は試合開始フロー専用）。 -->
-        <ui:VisualElement class="mp-topbar">
-            <ui:Label text="試合開始前" class="mp-title" />
-            <ui:Label name="mp-match" text="" class="mp-match" />
+        <!-- ① 対戦カードの帯 -->
+        <ui:VisualElement class="mp-band">
+            <ui:VisualElement name="mp-band-stripe" class="mp-band__stripe" />
+
+            <ui:VisualElement class="mp-band__head">
+                <ui:Label text="試合開始前" class="mp-band__title f-display" />
+                <ui:Label name="mp-kind" text="" class="mp-band__kind f-body-bd" />
+                <ui:VisualElement class="mp-band__spacer" />
+                <!-- 場内放送のオン/オフ（issue #919・#1193 のスイッチ）。行ごと押せる。帯の右端（2026-11-25 オーナー決定）。 -->
+                <ui:VisualElement name="mp-announce" class="mp-announce">
+                    <ui:Label text="場内放送" class="mp-announce__label f-body-md" />
+                    <ui:VisualElement name="mp-announce-switch" class="switch">
+                        <ui:VisualElement class="switch__knob" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="mp-card">
+                <!-- 左＝自校（外側から ランク → 区切り線 → 札と校名） -->
+                <ui:VisualElement class="mp-card__half mp-card__half--own">
+                    <ui:VisualElement class="mp-rank">
+                        <ui:VisualElement name="mp-own-rank" class="mp-rank__chip-host" />
+                        <ui:Label name="mp-own-score" text="" class="mp-rank__score f-display" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="mp-card__rule" />
+                    <ui:VisualElement class="mp-team mp-team--own">
+                        <ui:Label name="mp-own-turn" text="" class="mp-team__turn f-body-bd" />
+                        <ui:Label name="mp-own-name" text="" class="mp-team__name f-display" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:Label text="対" class="mp-card__vs f-display" />
+
+                <!-- 右＝相手（左右対称：札と校名 → 区切り線 → ランク） -->
+                <ui:VisualElement class="mp-card__half mp-card__half--opp">
+                    <ui:VisualElement class="mp-team mp-team--opp">
+                        <ui:Label name="mp-opp-turn" text="" class="mp-team__turn f-body-bd" />
+                        <ui:Label name="mp-opp-name" text="" class="mp-team__name f-display" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="mp-card__rule" />
+                    <ui:VisualElement class="mp-rank">
+                        <ui:VisualElement name="mp-opp-rank" class="mp-rank__chip-host" />
+                        <ui:Label name="mp-opp-score" text="" class="mp-rank__score f-display" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 球場・天気・気温・風（値が無い項目は欄ごと隠す。項目間の縦線はコントローラが見えている項目の間にだけ置く） -->
+            <ui:VisualElement name="mp-cond" class="mp-cond" />
         </ui:VisualElement>
 
+        <!-- ② 本体：自校スタメン｜戦力比較｜相手スタメン -->
         <ui:VisualElement class="mp-body">
-
-            <!-- 左カラム：自校 -->
-            <ui:VisualElement class="mp-side">
-                <ui:VisualElement class="mp-side__head">
-                    <ui:Label name="mp-left-cap" text="自校" class="mp-side__cap" />
-                    <ui:Label name="mp-left-name" text="" class="mp-side__name" />
-                    <ui:Label name="mp-left-turn" text="" class="chip chip--tag" />
-                    <ui:VisualElement class="mp-side__spacer" />
-                    <ui:Label text="総合" class="mp-side__k" />
-                    <ui:VisualElement name="mp-left-rank" class="mp-side__rank" />
-                    <ui:Label name="mp-left-value" text="" class="mp-side__value" />
+            <ui:VisualElement class="mp-col mp-col--side">
+                <ui:VisualElement class="mp-col__head">
+                    <ui:VisualElement name="mp-own-mark" class="mp-col__mark" />
+                    <ui:Label name="mp-own-lineup-name" text="" class="mp-col__title f-display" />
+                    <ui:Label text="スタメン" class="mp-col__sub f-body" />
+                    <ui:VisualElement class="mp-band__spacer" />
+                    <ui:Label name="mp-own-dh" text="" class="mp-col__sub f-body" />
                 </ui:VisualElement>
-                <ui:VisualElement name="mp-left-radar" class="mp-radar" />
-                <ui:VisualElement name="mp-left-lineup" class="mp-lineup" />
+                <ui:VisualElement name="mp-own-lineup" class="mp-lineup" />
             </ui:VisualElement>
 
-            <!-- 右カラム：相手校（左と同一構成のミラー） -->
-            <ui:VisualElement class="mp-side mp-side--right">
-                <ui:VisualElement class="mp-side__head">
-                    <ui:Label name="mp-right-cap" text="相手" class="mp-side__cap" />
-                    <ui:Label name="mp-right-name" text="" class="mp-side__name" />
-                    <ui:Label name="mp-right-turn" text="" class="chip chip--tag" />
-                    <ui:VisualElement class="mp-side__spacer" />
-                    <ui:Label text="総合" class="mp-side__k" />
-                    <ui:VisualElement name="mp-right-rank" class="mp-side__rank" />
-                    <ui:Label name="mp-right-value" text="" class="mp-side__value" />
+            <ui:VisualElement class="mp-col mp-col--center">
+                <ui:VisualElement class="mp-col__head">
+                    <ui:Label text="戦力比較" class="mp-col__title f-display" />
                 </ui:VisualElement>
-                <ui:VisualElement name="mp-right-radar" class="mp-radar" />
-                <ui:VisualElement name="mp-right-lineup" class="mp-lineup" />
+                <ui:VisualElement class="mp-radars">
+                    <ui:VisualElement name="mp-own-radar" class="mp-radars__half" />
+                    <ui:VisualElement name="mp-opp-radar" class="mp-radars__half" />
+                </ui:VisualElement>
+                <ui:VisualElement name="mp-bars" class="mp-bars" />
             </ui:VisualElement>
 
+            <ui:VisualElement class="mp-col mp-col--side">
+                <ui:VisualElement class="mp-col__head">
+                    <ui:VisualElement name="mp-opp-mark" class="mp-col__mark mp-col__mark--opp" />
+                    <ui:Label name="mp-opp-lineup-name" text="" class="mp-col__title f-display" />
+                    <ui:Label text="スタメン" class="mp-col__sub f-body" />
+                    <ui:VisualElement class="mp-band__spacer" />
+                    <ui:Label name="mp-opp-dh" text="" class="mp-col__sub f-body" />
+                </ui:VisualElement>
+                <ui:VisualElement name="mp-opp-lineup" class="mp-lineup" />
+            </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 主要操作は1つだけ・大きく（UI原則⑦）。アクセントもここだけ（UI原則②）。 -->
-        <ui:VisualElement class="mp-foot">
-            <!-- 場内放送のオン/オフ（issue #919）。試合中の操作列と同じ切り替え・同じアプリ設定。 -->
-            <ui:Button name="mp-announce" text="場内放送" class="chip-btn" />
-            <ui:Button name="mp-start" text="試合開始" class="mp-cta" />
-        </ui:VisualElement>
+        <!-- ③ 主要操作は1つだけ・大きく（UI原則⑦）。地はスクールカラー（2026-11-25 オーナー決定）。 -->
+        <ui:Button name="mp-start" text="試合開始" class="mp-cta f-display" />
 
     </ui:VisualElement>
 </ui:UXML>

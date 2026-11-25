@@ -37,6 +37,18 @@ namespace KokoSim.Unity.Shell
             ChevronLeft,
             /// <summary>ゴミ箱（削除）。</summary>
             Trash,
+            /// <summary>家形（球場）。</summary>
+            Stadium,
+            /// <summary>太陽（晴れ）。</summary>
+            Sun,
+            /// <summary>雲（曇り）。</summary>
+            Cloud,
+            /// <summary>雲と雨粒（雨）。</summary>
+            Rain,
+            /// <summary>温度計（気温）。</summary>
+            Thermometer,
+            /// <summary>上向きの矢印（風。向きは要素の rotate で回す＝0°で真上）。</summary>
+            WindArrow,
         }
 
         /// <summary>線幅（24 座標で）。既定 2。</summary>
@@ -163,12 +175,71 @@ namespace KokoSim.Unity.Shell
                     Polyline(p, P(5, 12), P(19, 12));
                     break;
 
+                case Kind.Stadium:
+                    Polyline(p, P(3, 11), P(12, 4), P(21, 11));
+                    Polyline(p, P(5, 9.5f), P(5, 20), P(19, 20), P(19, 9.5f));
+                    Polyline(p, P(10, 20), P(10, 14), P(14, 14), P(14, 20));
+                    break;
+
+                case Kind.Sun:
+                    p.BeginPath();
+                    p.Arc(P(12, 12), 4f * s, 0f, 360f);
+                    p.Stroke();
+                    for (var i = 0; i < 8; i++)
+                    {
+                        var a = i * Mathf.PI / 4f;
+                        var dx = Mathf.Cos(a); var dy = Mathf.Sin(a);
+                        Polyline(p, P(12 + dx * 7f, 12 + dy * 7f), P(12 + dx * 9.5f, 12 + dy * 9.5f));
+                    }
+                    break;
+
+                case Kind.Cloud:
+                    Cloud(p, P, s, 0f);
+                    break;
+
+                case Kind.Rain:
+                    Cloud(p, P, s, -3f);
+                    Polyline(p, P(8, 18), P(7, 21));
+                    Polyline(p, P(12.5f, 18), P(11.5f, 21));
+                    Polyline(p, P(17, 18), P(16, 21));
+                    break;
+
+                case Kind.Thermometer:
+                    // 管（上が丸い）＋下の球。目盛りの代わりに中の液柱1本。
+                    p.BeginPath();
+                    p.MoveTo(P(10, 14.5f)); p.LineTo(P(10, 5));
+                    p.Arc(P(12, 5), 2f * s, 180f, 360f);
+                    p.LineTo(P(14, 14.5f));
+                    p.Stroke();
+                    p.BeginPath();
+                    p.Arc(P(12, 17.5f), 3.5f * s, 0f, 360f);
+                    p.Stroke();
+                    Polyline(p, P(12, 9), P(12, 15));
+                    break;
+
+                case Kind.WindArrow:
+                    Polyline(p, P(12, 21), P(12, 3));
+                    Polyline(p, P(6, 9), P(12, 3), P(18, 9));
+                    break;
+
                 case Kind.Play:
                     p.BeginPath();
                     p.MoveTo(P(7, 4.5f)); p.LineTo(P(7, 19.5f)); p.LineTo(P(19.5f, 12)); p.ClosePath();
                     p.Fill();
                     break;
             }
+        }
+
+        /// <summary>雲の輪郭（底が平らな3つの膨らみ）。<paramref name="dy"/> で上下にずらす（雨は雨粒のぶん上げる）。</summary>
+        private static void Cloud(Painter2D p, System.Func<float, float, Vector2> P, float s, float dy)
+        {
+            p.BeginPath();
+            p.MoveTo(P(7, 18 + dy));
+            p.Arc(P(7, 14.5f + dy), 3.5f * s, 90f, 270f);
+            p.Arc(P(12, 10.5f + dy), 5f * s, 200f, 340f);
+            p.Arc(P(17, 14f + dy), 4f * s, 270f, 450f);
+            p.ClosePath();
+            p.Stroke();
         }
 
         private static void Polyline(Painter2D p, params Vector2[] pts)

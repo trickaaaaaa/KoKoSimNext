@@ -53,6 +53,17 @@ namespace KokoSim.Unity.MatchPreview
             yield return null; yield return null;
             yield return Capture(doc, "01-matchup-dh");
 
+            // 長い名前の詰まり具合（6文字の校名・5文字の選手名）。描いた後の文字だけ差し替えて配置を見る。
+            var root = doc.rootVisualElement;
+            foreach (var n in new[] { "mp-own-name", "mp-opp-name", "mp-own-lineup-name", "mp-opp-lineup-name" })
+            {
+                var l = root.Q<Label>(n);
+                if (l != null) l.text = n.Contains("own") ? "福山商工高校" : "東広島中央校";
+            }
+            root.Query<Label>(className: "mp-radar__name").ForEach(l => l.text = "福山商工高校");
+            root.Query<Label>(className: "mp-row__name").ForEach(l => l.text = "長谷川 悠一郎");
+            yield return Capture(doc, "02-long-names");
+
             Debug.Log("[MP] DONE all shots");
         }
 

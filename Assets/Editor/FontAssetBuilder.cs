@@ -142,12 +142,33 @@ namespace KokoSim.EditorTools
             Debug.Log("[FontAssetBuilder]\n" + log);
         }
 
+        /// <summary>ランクの文字（S〜G）だけに使う書体（試合開始前の画面・Dela Gothic One／OFL）。</summary>
+        public const string RankFontSource = "DelaGothicOne-Regular";
+
+        /// <summary>ランクの文字。この8字しか描かない＝アトラスは最小の面で足りる。</summary>
+        public const string RankCharacters = "SABCDEFG";
+
+        /// <summary>
+        /// ランクの文字用の SDF（Dela Gothic One）を焼く。描くのは S〜G の8字だけなので 512 角1枚に収める
+        /// （和文の既定 2048×4096 で焼くと8字のために十数MBのアセットになる）。
+        /// </summary>
+        [MenuItem("KokoSim/Fonts/ランク用の SDF を生成（Dela Gothic One）")]
+        public static void BuildRankSet()
+        {
+            if (!AssetDatabase.IsValidFolder(OutDir)) AssetDatabase.CreateFolder(FontDir, "Generated");
+            var line = Build(RankFontSource, RankCharacters, production: false, atlasSize: 512);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[FontAssetBuilder]\n" + line);
+        }
+
         /// <summary>欧文専用フォント（和文グリフを持たない＝ASCIIだけ焼けばよい）。</summary>
         public static bool IsLatinOnly(string fontFileName)
             => fontFileName.StartsWith("Oswald") || fontFileName.StartsWith("BarlowSemiCondensed");
 
         /// <summary>1書体ぶんを生成して保存する。戻り値はログ1行。</summary>
-        public static string Build(string fontFileName, string characters, bool production = false)
+        /// <param name="atlasSize">0 以外ならアトラスをこの正方形にする（描く字が数字ぶんしか無い書体用）。</param>
+        public static string Build(string fontFileName, string characters, bool production = false, int atlasSize = 0)
         {
             var ttf = AssetDatabase.LoadAssetAtPath<Font>(FontDir + "/" + fontFileName + ".ttf");
             if (ttf == null) return "  失敗 " + fontFileName + ": TTF が見つからない";
@@ -160,6 +181,7 @@ namespace KokoSim.EditorTools
             var pad = dot ? DotAtlasPadding : AtlasPadding;
             var w = latin ? LatinAtlasW : (production ? ProdJpAtlas : JpAtlasW);
             var h = latin ? LatinAtlasH : (production ? ProdJpAtlas : JpAtlasH);
+            if (atlasSize > 0) { w = atlasSize; h = atlasSize; }
             var asset = FontAsset.CreateFontAsset(
                 ttf, pt, pad, GlyphRenderMode.SDFAA,
                 w, h, AtlasPopulationMode.Dynamic, enableMultiAtlasSupport: production && !latin);

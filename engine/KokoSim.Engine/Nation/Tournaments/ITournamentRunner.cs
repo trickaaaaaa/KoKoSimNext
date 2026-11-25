@@ -1,3 +1,4 @@
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 
 namespace KokoSim.Engine.Nation.Tournaments;
@@ -79,4 +80,13 @@ public interface ITournamentRunner
     /// 次戦相手が未確定（<see cref="Finished"/> 等）なら null。
     /// </summary>
     WeatherSample? PeekNextMatchWeather(WeatherCoefficients coefficients);
+
+    /// <summary>
+    /// 自校の次戦で <see cref="IPlayerMatchResolver"/>（Resolve／BeginLive）に渡される試合 rng そのものを、
+    /// 試合を解決せずに覗く（試合開始前の画面の球場表示用）。<see cref="PeekNextMatchWeather"/> と同じ Fork 鎖の
+    /// 途中までを返すだけで、本流 rng を1つも消費しない（Fork は親の状態を進めない, 不変条件#2）。
+    /// 返した rng から引くのは呼び出し側の自由（毎回新しい Fork なので何度覗いても同じ列になる）。
+    /// 次戦相手が未確定なら null。
+    /// </summary>
+    IRandomSource? PeekNextPlayerMatchRng();
 }

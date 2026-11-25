@@ -90,10 +90,25 @@ public sealed class PracticeMatchScheduler
             return new PracticeMatchOutcome(false, PracticeMatchRejection.Declined, chance, null);
 
         // 練習試合は大会ラウンドの概念がない＝コールドゲームは常にOFF（設計書05 §1.3, Q18は大会限定）。
-        var detail = resolver.Resolve(managerSchool, opponent, rng.Fork(0x9159_2AC5UL), mercyRuleEnabled: false);
+        var detail = resolver.Resolve(managerSchool, opponent, rng.Fork(MatchStreamId), mercyRuleEnabled: false);
         manager.Funds -= _c.Cost;
         LastPlayedWeek = week;
         return new PracticeMatchOutcome(true, PracticeMatchRejection.None, chance, detail);
+    }
+
+    /// <summary>受諾判定の後に試合へ渡す rng の Fork 番号（<see cref="Request"/>／<see cref="BeginRequest"/> 共通）。</summary>
+    private const ulong MatchStreamId = 0x9159_2AC5UL;
+
+    /// <summary>
+    /// 受諾された練習試合で <see cref="IPlayerMatchResolver"/> に渡される試合 rng を、試合を始めずに作る
+    /// （試合開始前の画面の天気・気温の先読み用）。<see cref="BeginRequest"/> と同じく受諾判定で1回引いてから Fork する
+    /// ＝<b>同じ種で作り直した</b> <paramref name="rng"/> を渡せば、実際の試合に渡る rng と同じ列になる。
+    /// <paramref name="rng"/> は消費する（呼び出し側は使い捨ての複製を渡す）。
+    /// </summary>
+    public static IRandomSource MatchRngAfterAcceptance(IRandomSource rng)
+    {
+        rng.NextDouble();
+        return rng.Fork(MatchStreamId);
     }
 
     /// <summary>
@@ -139,7 +154,7 @@ public sealed class PracticeMatchScheduler
         if (rng.NextDouble() >= chance)
             return new PracticeMatchLiveOutcome(false, PracticeMatchRejection.Declined, chance, null);
 
-        var live = resolver.BeginLive(managerSchool, opponent, rng.Fork(0x9159_2AC5UL), mercyRuleEnabled: false);
+        var live = resolver.BeginLive(managerSchool, opponent, rng.Fork(MatchStreamId), mercyRuleEnabled: false);
         manager.Funds -= _c.Cost;
         LastPlayedWeek = week;
         return new PracticeMatchLiveOutcome(true, PracticeMatchRejection.None, chance, live);

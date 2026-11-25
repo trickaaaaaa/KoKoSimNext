@@ -8,11 +8,11 @@ namespace KokoSim.Unity.Shell
     /// 書体の監査（design-22 §3）。画面上の文字要素の「解決済みフォント」を数え、許可した書体以外が
     /// 使われている要素を列挙する。共通部品が USS で書体を直に指定していると、既定フォントを替えても
     /// 旧書体が残る＝目視では気づきにくいので、数で確かめる。
-    /// 許可: Noto Sans JP（本文・数字）／Shippori Mincho B1（名前・見出し）／DotGothic16（掲示板の中だけ）。
+    /// 許可: Noto Sans JP（本文・数字）／Shippori Mincho B1（名前・見出し）／DotGothic16（掲示板の中だけ）／Dela Gothic One（ランクの文字だけ・試合開始前の画面）。
     /// </summary>
     public static class FontAudit
     {
-        private static readonly string[] Allowed = { "NotoSansJP", "ShipporiMinchoB1", "DotGothic16" };
+        private static readonly string[] Allowed = { "NotoSansJP", "ShipporiMinchoB1", "DotGothic16", "DelaGothicOne" };
 
         /// <summary>root 配下を数えて1行目に内訳、2行目以降に許可外の要素（書体・クラス・文字）を返す。</summary>
         public static string Report(VisualElement root)

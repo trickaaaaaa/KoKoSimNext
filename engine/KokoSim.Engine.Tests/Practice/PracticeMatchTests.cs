@@ -297,6 +297,38 @@ public sealed class PracticeMatchTests
     }
 
     /// <summary>詳細シムの継ぎ目のスタブ（乱数を1回消費して結果を作る＝決定論を検証できる）。</summary>
+    // 試合開始前の画面が天気を先読みする入口（MatchRngAfterAcceptance）は、BeginRequest が実際に試合へ渡す rng と
+    // 同じ列を作る＝画面の天気・気温と試合に効く気温が一致する。
+    [Fact]
+    public void MatchRngAfterAcceptance_MatchesRngPassedToBeginLive()
+    {
+        var s = new PracticeMatchScheduler(C);
+        var m = new Manager { Fame = 100, Funds = 10 };
+        var resolver = new RngCapturingResolver();
+        var live = s.BeginRequest(m, School(60), School(40), week: 3, resolver, Rng(77));
+        Assert.True(live.Started);
+
+        var peeked = PracticeMatchScheduler.MatchRngAfterAcceptance(Rng(77));
+        Assert.Equal(resolver.Fingerprint, Fingerprint(peeked));
+    }
+
+    private static double Fingerprint(IRandomSource rng) => rng.Fork(2).NextDouble();
+
+    private sealed class RngCapturingResolver : IPlayerMatchResolver
+    {
+        public double Fingerprint;
+
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null) => throw new NotSupportedException();
+
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
+        {
+            Fingerprint = PracticeMatchTests.Fingerprint(rng);
+            return null!;
+        }
+    }
+
     private sealed class StubResolver : IPlayerMatchResolver
     {
         public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
