@@ -137,6 +137,7 @@ internal static class CareerSaves
             .Add("socks", c.Socks.ToHex())
             .Add("capCrown", c.CapCrown.ToHex())
             .Add("capVisor", c.CapVisor.ToHex())
+            .Add("helmet", c.Helmet.ToHex())
             .Add("shoes", c.Shoes.ToHex())
             .Add("stripe", StripeToJson(c.Stripe));
     }
@@ -145,9 +146,12 @@ internal static class CareerSaves
     {
         if (v is JsonNull) return null;
         var o = v.AsObject();
+        var capCrown = Hex(o.Str("capCrown"));
+        // ヘルメットは v48（issue #1620）で増えた。キーが無い旧セーブは帽子クラウンと同色＝見た目が変わらない。
+        var helmet = o.Has("helmet") ? Hex(o.Str("helmet")) : capCrown;
         return new TeamColors(
             Hex(o.Str("shirt")), Hex(o.Str("pants")), Hex(o.Str("undershirt")), Hex(o.Str("socks")),
-            Hex(o.Str("capCrown")), Hex(o.Str("capVisor")), Hex(o.Str("shoes")), StripeFromJson(o.Obj("stripe")));
+            capCrown, Hex(o.Str("capVisor")), helmet, Hex(o.Str("shoes")), StripeFromJson(o.Obj("stripe")));
     }
 
     private static JsonObject StripeToJson(TeamStripe s) => new JsonObject()

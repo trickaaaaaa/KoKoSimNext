@@ -384,6 +384,8 @@ palettes:
         Assert.Equal(e.Team, c.Socks);
         Assert.Equal(e.Team, c.CapCrown);
         Assert.Equal(e.Visor, c.CapVisor);
+        // ヘルメットの既定は帽子クラウンと同色（issue #1620）。
+        Assert.Equal(c.CapCrown, c.Helmet);
         // 縞は表の1件では決まらない（軸が決める・issue #621）。
         Assert.Equal(TeamStripe.None, c.Stripe);
     }

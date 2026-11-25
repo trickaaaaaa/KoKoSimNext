@@ -148,6 +148,12 @@ namespace KokoSim.Unity.Match
         /// 撮影レシピの <c>colors</c>。既定 null＝配色なし（デモの既定のユニフォーム）＝従来と完全一致。
         /// </summary>
         public static int? AwayColorIdForCapture, HomeColorIdForCapture;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】配色のヘルメットだけ差し替える色（撮影レシピの <c>helmet</c>・issue #1620）。
+        /// 校IDからの配色は帽子と同色のヘルメットしか作れないので、別色の見え方はこれで撮る。null＝差し替えない。
+        /// </summary>
+        public static KokoSim.Engine.Nation.RgbColor? AwayHelmetForCapture, HomeHelmetForCapture;
 #endif
         /// <summary>
         /// 【開発用】伝令が効いていなくても「制球↑」「ミート↑」を出す（issue #1177 の見た目の撮影用。
@@ -1058,6 +1064,8 @@ namespace KokoSim.Unity.Match
                 if (HomeNameForCapture != null) { homeTeam = homeTeam with { Name = HomeNameForCapture }; _homeDisp = HomeNameForCapture; }
                 if (AwayColorIdForCapture is { } ac) _awayColors = TeamColorProvider.Palette.ColorsFor(ac);
                 if (HomeColorIdForCapture is { } hc) _homeColors = TeamColorProvider.Palette.ColorsFor(hc);
+                if (AwayHelmetForCapture is { } ah && _awayColors != null) _awayColors = _awayColors with { Helmet = ah };
+                if (HomeHelmetForCapture is { } hh && _homeColors != null) _homeColors = _homeColors with { Helmet = hh };
                 SetColumnTitles();
                 _homeTeam = homeTeam;
                 _prog = new MatchProgression(awayTeam, homeTeam, built.Ctx, built.Seed, built.Start);

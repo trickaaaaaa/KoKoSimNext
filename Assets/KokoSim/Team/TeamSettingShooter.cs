@@ -37,9 +37,9 @@ namespace KokoSim.Unity.Squad
             yield return Capture(doc, "i-teamset-0-initial");
 
             // 縞を外して無地に＋スパイクを白へ（行の並び: 0上/1ズボン/2アンダー/3ソックス/4帽子/
-            // 5スパイク/6縦縞/7縞色。行を足したら**この添字も直す**）
+            // 5ヘルメット/6スパイク/7縦縞/8縞色。行を足したら**この添字も直す**）
+            ctrl.StepForCapture(7, 1);
             ctrl.StepForCapture(6, 1);
-            ctrl.StepForCapture(5, 1);
             yield return null; yield return null;
             yield return Capture(doc, "i-teamset-1-plain");
 

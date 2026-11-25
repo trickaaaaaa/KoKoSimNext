@@ -43,6 +43,8 @@ namespace KokoSim.Unity.Debugging
         public string AwayName, HomeName;
         /// <summary>配色（TeamColorProvider.Palette.ColorsFor に渡す校ID。先攻・後攻）。null＝配色なし。</summary>
         public int? AwayColorId, HomeColorId;
+        /// <summary>ヘルメットだけ差し替える色（16進6桁。先攻・後攻）。null＝配色のまま（帽子と同色）。colors と組む（issue #1620）。</summary>
+        public KokoSim.Engine.Nation.RgbColor? AwayHelmet, HomeHelmet;
         /// <summary>撮る瞬間（例: release-0.2 / flight_end / 1.5）。</summary>
         public List<string> Shots = new List<string>();
         /// <summary>連番で撮る区間（例: from catch-0.8 to release+0.9 fps 30）。From が空なら撮らない。</summary>
@@ -231,6 +233,19 @@ namespace KokoSim.Unity.Debugging
                         if (!int.TryParse(kv.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) return false;
                         if (kv.Key == "away") r.AwayColorId = id;
                         else if (kv.Key == "home") r.HomeColorId = id;
+                        else return false;
+                    }
+                    return true;
+                }
+                case "helmet":
+                {
+                    var map = FlowMap(v);
+                    if (map == null || map.Count == 0) return false;
+                    foreach (var kv in map)
+                    {
+                        if (!KokoSim.Engine.Nation.RgbColor.TryParseHex("#" + kv.Value.TrimStart('#'), out var hc)) return false;
+                        if (kv.Key == "away") r.AwayHelmet = hc;
+                        else if (kv.Key == "home") r.HomeHelmet = hc;
                         else return false;
                     }
                     return true;

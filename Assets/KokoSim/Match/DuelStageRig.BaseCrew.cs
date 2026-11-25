@@ -122,8 +122,9 @@ namespace KokoSim.Unity.Match
                     GroundFix(a);
                     // コーチはヘルメット（走者・打者と同じ）。購入素体の素の帽子は落としてから被せる
                     if (useVendor) SetChildActive(a.Go, VendorCapMeshName, false);
-                    AttachGear(a, GearKind.Helmet, Vector3.zero, _offenseColors.Cap, layer);
-                    CollectTeamMats(a, _offenseColors.Cap);
+                    a.WearsHelmet = true;
+                    AttachGear(a, GearKind.Helmet, Vector3.zero, _offenseColors.Helmet, layer);
+                    CollectTeamMats(a, _offenseColors.Helmet);
                     a.Go.SetActive(false);
                     a.Enabled = false;
                     _coaches[i] = a;

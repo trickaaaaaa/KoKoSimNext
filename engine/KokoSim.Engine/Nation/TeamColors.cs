@@ -103,7 +103,7 @@ public sealed record TeamColorAxes(
 /// </summary>
 public sealed record TeamColors(
     RgbColor Shirt, RgbColor Pants, RgbColor Undershirt, RgbColor Socks,
-    RgbColor CapCrown, RgbColor CapVisor, RgbColor Shoes, TeamStripe Stripe)
+    RgbColor CapCrown, RgbColor CapVisor, RgbColor Helmet, RgbColor Shoes, TeamStripe Stripe)
 {
     /// <summary>
     /// スパイクの選択肢＝白・黒の二択（実物の高校野球はこの2色。2026-07-29 監督決定）。
@@ -121,7 +121,7 @@ public sealed record TeamColors(
     public static RgbColor DefaultShoes => ShoeChoices[0];
 
     /// <summary>
-    /// パレット表1件 → 7領域。導出規則は data/team-colors.yaml の先頭コメントと対。
+    /// パレット表1件 → 8領域（ヘルメットは既定で帽子クラウンと同色＝実物の高校野球どおり・issue #1620）。導出規則は data/team-colors.yaml の先頭コメントと対。
     /// <b>縞は付かない</b>（issue #621）＝縞・つば・白アンダーは校IDの軸で決まるので、
     /// 校の見た目が要るときは <see cref="TeamColorPalette.ColorsFor"/> を使う。
     /// </summary>
@@ -129,6 +129,7 @@ public sealed record TeamColors(
         Shirt: e.Base, Pants: e.Base,
         Undershirt: e.Team, Socks: e.Team,
         CapCrown: e.Team, CapVisor: e.Visor,
+        Helmet: e.Team,
         Shoes: DefaultShoes,
         Stripe: TeamStripe.None);
 }

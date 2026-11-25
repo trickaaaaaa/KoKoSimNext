@@ -3946,8 +3946,9 @@ namespace KokoSim.Unity.Match
                 GroundFix(a);
                 // 走者は打者と同じヘルメット。購入素体は帽子を素で持つので、打者・捕手と同じく落としてから被せる
                 if (useVendor) SetChildActive(a.Go, VendorCapMeshName, false);
-                AttachGear(a, GearKind.Helmet, Vector3.zero, _offenseColors.Cap, layer);
-                CollectTeamMats(a, _offenseColors.Cap);
+                a.WearsHelmet = true;
+                AttachGear(a, GearKind.Helmet, Vector3.zero, _offenseColors.Helmet, layer);
+                CollectTeamMats(a, _offenseColors.Helmet);
                 a.Go.SetActive(false);
                 a.Enabled = false;
                 _runnerCast.Add(a);
