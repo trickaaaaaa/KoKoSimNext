@@ -213,7 +213,7 @@ namespace KokoSim.Unity.MatchResult
             {
                 // 同じ打順の2行目以降＝途中出場（救援投手が打席に立った行も Entry は Starter で来るので並びで判定する）。
                 var isSub = b.Entry != BoxEntry.Starter || !seenOrders.Add(b.Order);
-                var (pos, kind) = PosOf(b, isSub);
+                var (pos, kind) = PosOf(b);
                 var row = new MatchResultBattingRow
                 {
                     Order = isSub ? 0 : b.Order, Pos = pos, PosKind = kind, Name = DisplayName(b.Name), IsSub = isSub,
@@ -275,19 +275,25 @@ namespace KokoSim.Unity.MatchResult
         }
 
         /// <summary>
-        /// 守備位置の欄。スタメンは守備位置、途中出場は実際に就いた守備位置（代打・代走のあと守備に就いた
-        /// 場合も新しい位置・監督決定 2026-11-21）。守備に就かなかった代打は「打」、代走は「走」。
+        /// 守備位置の欄。試合で実際に就いた位置を順番どおりに全部つなげる（新聞式「遊二」「打左一」）。
+        /// 代打は「打」・代走は「走」から始め、守備に就いたらその位置が続く。守備に就かなかった代打・代走は「打」「走」だけ。
+        /// 色は最後に就いた位置の系統（位置が無く「打」「走」だけなら途中出場の色）。
         /// </summary>
-        private static (string, MatchResultPosKind) PosOf(MatchRecordBatter b, bool isSub)
+        private static (string, MatchResultPosKind) PosOf(MatchRecordBatter b)
         {
-            if (!isSub) return (MatchLiveStatsProvider.PosAbbr(b.Position), KindOf(b.Position));
-            if (b.FieldedAt is { } at) return (MatchLiveStatsProvider.PosAbbr(at), KindOf(at));
-            return b.Entry switch
-            {
-                BoxEntry.PinchHit => ("打", MatchResultPosKind.Entry),
-                BoxEntry.PinchRun => ("走", MatchResultPosKind.Entry),
-                _ => (MatchLiveStatsProvider.PosAbbr(b.Position), KindOf(b.Position)),
-            };
+            var text = PosTextOf(b.Entry, b.Position, b.Positions);
+            if (b.Positions.Count > 0) return (text, KindOf(b.Positions[b.Positions.Count - 1]));
+            return b.Entry is BoxEntry.PinchHit or BoxEntry.PinchRun ? (text, MatchResultPosKind.Entry) : (text, KindOf(b.Position));
+        }
+
+        private static string PosTextOf(BoxEntry entry, FieldPosition position, IReadOnlyList<FieldPosition> positions)
+        {
+            var sb = new System.Text.StringBuilder();
+            if (entry == BoxEntry.PinchHit) sb.Append('打');
+            else if (entry == BoxEntry.PinchRun) sb.Append('走');
+            foreach (var p in positions) sb.Append(MatchLiveStatsProvider.PosAbbr(p));
+            // 並びが空で入り方の印も無い行（記録が並びを持たない前の行・救援投手が打席に立った行）は、行の守備位置を出す。
+            return sb.Length > 0 ? sb.ToString() : MatchLiveStatsProvider.PosAbbr(position);
         }
 
         private static MatchResultPosKind KindOf(FieldPosition p) => p switch
@@ -300,16 +306,8 @@ namespace KokoSim.Unity.MatchResult
             _ => MatchResultPosKind.Dh,
         };
 
-        /// <summary>
-        /// 野手成績の「位」欄（試合画面の成績タブ MatchState が使う旧表記）。スタメンは守備位置、途中出場は
-        /// 入り方（打＝代打／走＝代走／守＝守備交代）と、実際に守備に就いたならその位置（例: 打→左）。
-        /// </summary>
-        public static string PosText(BattingLine b)
-        {
-            if (b.Entry == BoxEntry.Starter) return MatchLiveStatsProvider.PosAbbr(b.Position);
-            var mark = b.Entry switch { BoxEntry.PinchHit => "打", BoxEntry.PinchRun => "走", _ => "守" };
-            return b.FieldedAt is { } at ? mark + "→" + MatchLiveStatsProvider.PosAbbr(at) : mark;
-        }
+        /// <summary>野手成績の「位」欄（試合画面の成績タブ MatchState が使う）。<see cref="PosOf"/> と同じ並び。</summary>
+        public static string PosText(BattingLine b) => PosTextOf(b.Entry, b.Position, b.Positions);
 
         /// <summary>打席の札の文字。凡打は犠打・犠飛・併殺を分ける（監督決定 2026-11-21）。</summary>
         public static string PaText(BoxScoreGridCell c) => PaText(c.Result, c.IsSacBunt, c.IsSacFly, c.OutsThisPa >= 2);

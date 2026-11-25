@@ -6,9 +6,12 @@ using KokoSim.Engine.Season;
 
 namespace KokoSim.Engine.Stats;
 
-/// <summary>打撃成績の1行（試合結果画面が描く項目だけ。<see cref="BattingLine"/> から四死球を合算して持つ）。</summary>
+/// <summary>
+/// 打撃成績の1行（試合結果画面が描く項目だけ。<see cref="BattingLine"/> から四死球を合算して持つ）。
+/// <paramref name="Positions"/> は試合で実際に就いた守備位置の並び（<see cref="BattingLine.Positions"/> と同じ）。
+/// </summary>
 public sealed record MatchRecordBatter(
-    int Order, FieldPosition Position, BoxEntry Entry, FieldPosition? FieldedAt, string Name,
+    int Order, FieldPosition Position, BoxEntry Entry, IReadOnlyList<FieldPosition> Positions, string Name,
     int AtBats, int Hits, int Rbi, int HomeRuns, int Triples, int Doubles,
     int WalksHbp, int StrikeOuts, int StolenBases);
 
@@ -95,7 +98,7 @@ public static class MatchRecordFactory
         var batting = new List<MatchRecordBatter>();
         foreach (var b in isAway ? r.AwayBatting : r.HomeBatting)
             batting.Add(new MatchRecordBatter(
-                b.Order, b.Position, b.Entry, b.FieldedAt, b.Name,
+                b.Order, b.Position, b.Entry, b.Positions, b.Name,
                 b.AtBats, b.Hits, b.Rbi, b.HomeRuns, b.Triples, b.Doubles,
                 b.Walks + b.HitByPitches, b.StrikeOuts, b.StolenBases));
 

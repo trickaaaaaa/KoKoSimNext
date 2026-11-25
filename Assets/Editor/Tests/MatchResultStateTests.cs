@@ -103,7 +103,7 @@ namespace KokoSim.EditorTests
             var home = new[]
             {
                 Bat(1, FieldPosition.RightField, "関　太一", ab: 3, h: 1),
-                Bat(1, FieldPosition.Shortstop, "代打　一郎", ab: 1, h: 1) with { Entry = BoxEntry.PinchHit, FieldedAt = FieldPosition.LeftField },
+                Bat(1, FieldPosition.Shortstop, "代打　一郎", ab: 1, h: 1) with { Entry = BoxEntry.PinchHit, Positions = new[] { FieldPosition.LeftField } },
                 Bat(2, FieldPosition.CenterField, "橋本　悠馬", ab: 3),
                 Bat(2, FieldPosition.Catcher, "代走　次郎", ab: 0) with { Entry = BoxEntry.PinchRun },
             };
@@ -121,7 +121,7 @@ namespace KokoSim.EditorTests
             Assert.AreEqual(4, bat.Count);
             Assert.AreEqual(4, pa.Count, "打席に立たなかった代走も打席結果に行がある");
             Assert.AreEqual(0, bat[1].Order, "途中出場は打順の数字を空欄に");
-            Assert.AreEqual("左", bat[1].Pos, "代打のあと守備に就いたら新しい守備位置");
+            Assert.AreEqual("打左", bat[1].Pos, "代打のあと守備に就いたら「打」に就いた位置が続く");
             Assert.AreEqual("走", bat[3].Pos);
             Assert.AreEqual(MatchResultPosKind.Entry, bat[3].PosKind);
             Assert.AreEqual("代打 一郎", pa[1].Name);
@@ -163,6 +163,34 @@ namespace KokoSim.EditorTests
             Assert.AreEqual(MatchResultPaKind.Walk, MatchResultState.PaKind(PlateAppearanceResult.HitByPitch));
         }
 
+        // 守った位置は順番どおりに全部つなげる（issue #1608・新聞式）。
+        [Test]
+        public void Pos_JoinsEveryFieldedPositionInOrder()
+        {
+            var home = new[]
+            {
+                Bat(1, FieldPosition.Shortstop, "関　太一") with { Positions = new[] { FieldPosition.Shortstop, FieldPosition.SecondBase } },
+                Bat(2, FieldPosition.DesignatedHitter, "橋本　悠馬") with { Positions = new[] { FieldPosition.DesignatedHitter, FieldPosition.LeftField } },
+                Bat(1, FieldPosition.LeftField, "代打　一郎") with
+                { Entry = BoxEntry.PinchHit, Positions = new[] { FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField } },
+                Bat(3, FieldPosition.Catcher, "守備　三郎") with { Entry = BoxEntry.DefensiveSub, Positions = new[] { FieldPosition.Catcher } },
+                Bat(4, FieldPosition.Catcher, "代走　次郎") with { Entry = BoxEntry.PinchRun },
+                Bat(5, FieldPosition.FirstBase, "旧　記録"),
+            };
+            var v = MatchResultState.Build(Game(home: home), managerIsAway: false, "北都大付属", "桜丘");
+            var bat = v.Own.Batting;
+
+            Assert.AreEqual("遊二", bat[0].Pos);
+            Assert.AreEqual("指左", bat[1].Pos, "DH解除で守備に就いたら「指」に続く");
+            Assert.AreEqual("打左中右", bat[2].Pos, "代打は「打」から始まり就いた位置が全部続く");
+            Assert.AreEqual("捕", bat[3].Pos);
+            Assert.AreEqual("走", bat[4].Pos, "守備に就かなかった代走は「走」だけ");
+            Assert.AreEqual("一", bat[5].Pos, "並びが空の行は行の守備位置");
+            Assert.AreEqual(MatchResultPosKind.Outfield, bat[2].PosKind, "色は最後に就いた位置");
+            Assert.AreEqual(MatchResultPosKind.Entry, bat[4].PosKind);
+            Assert.AreEqual("打左中右", MatchResultState.PosText(home[2]));
+        }
+
         // 過去の試合（戦績）は試合直後と同じ記録から描く（issue #1413）。セーブして読み直した記録でも表示モデルが一致する。
         [Test]
         public void ViewFromSavedAndReloadedRecord_MatchesViewFromGameResult()
@@ -170,7 +198,7 @@ namespace KokoSim.EditorTests
             var home = new[]
             {
                 Bat(1, FieldPosition.RightField, "関　太一", ab: 3, h: 1, hr: 1, rbi: 2, bb: 1, hbp: 1, sb: 1),
-                Bat(1, FieldPosition.Shortstop, "代打　一郎", ab: 1, h: 1) with { Entry = BoxEntry.PinchHit, FieldedAt = FieldPosition.LeftField },
+                Bat(1, FieldPosition.Shortstop, "代打　一郎", ab: 1, h: 1) with { Entry = BoxEntry.PinchHit, Positions = new[] { FieldPosition.LeftField } },
                 Bat(2, FieldPosition.CenterField, "橋本　悠馬", ab: 3, d: 1),
             };
             var log = new[]

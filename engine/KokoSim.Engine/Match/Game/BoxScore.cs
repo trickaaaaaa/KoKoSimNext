@@ -23,8 +23,13 @@ public sealed record BattingLine(
     public BoxEntry Entry { get; init; } = BoxEntry.Starter;
     /// <summary>途中出場のとき、代わって退いた選手名（スタメンは null）。</summary>
     public string? EnteredFor { get; init; }
-    /// <summary>途中出場の選手が実際に守備に就いた最後の位置。守備に就かなかった（代打・代走のみ）なら null。選手本来の適性ではない。</summary>
-    public FieldPosition? FieldedAt { get; init; }
+    /// <summary>
+    /// 試合で実際に就いた守備位置の並び（順番どおり・直前と同じ位置は足さない）。選手本来の適性ではない。
+    /// スタメンは開始時の位置から始まる（DHは <see cref="FieldPosition.DesignatedHitter"/>。DH解除で守備に就けば位置が続く）。
+    /// 代打・代走は空から始まり、守備に就いた位置が続く（「打」「走」は <see cref="Entry"/> が表す）。
+    /// 守備交代で入った選手は就いた位置から始まる。空＝守備に就かなかった。観測専用。
+    /// </summary>
+    public IReadOnlyList<FieldPosition> Positions { get; init; } = System.Array.Empty<FieldPosition>();
 
     /// <summary>
     /// このうち対左投手の打席数（設計書02 §2.3「左のプレミア」・issue #1072）。試合後、自校の部員の

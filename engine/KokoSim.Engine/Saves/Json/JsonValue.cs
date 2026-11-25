@@ -155,6 +155,9 @@ public sealed class JsonArray : JsonValue
         return this;
     }
 
+    /// <summary>要素の差し替え（旧版セーブの移行用）。</summary>
+    public void Set(int index, JsonValue value) => _items[index] = value;
+
     public override void Write(StringBuilder sb)
     {
         sb.Append('[');
