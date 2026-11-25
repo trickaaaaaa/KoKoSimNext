@@ -1690,6 +1690,12 @@ screens:
       - read: =GameClock.Week
       - read: =EventService.HasPending
       - shot: 02-after-first-stop
+      - click: ev-skip
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
       - click: ev-novel
       - click: ev-novel
       - click: ev-novel
@@ -1704,6 +1710,16 @@ screens:
       - read: =GameSession.Current.InTournament
       - show: HomeDashboard
       - wait: 20
+      - click: ev-skip
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - wait: 10
       - shot: 01-tournament-hero
       - click: advance-next-match
       - wait: 30
