@@ -150,6 +150,8 @@ namespace KokoSim.Unity.Debugging
                     MatchLiveController.HomeNameForCapture = null;
                     MatchLiveController.AwayColorIdForCapture = null;
                     MatchLiveController.HomeColorIdForCapture = null;
+                    MatchLiveController.AwayHelmetForCapture = null;
+                    MatchLiveController.HomeHelmetForCapture = null;
                 }
                 Finish(t0);
             }
@@ -165,6 +167,8 @@ namespace KokoSim.Unity.Debugging
                 MatchLiveController.HomeNameForCapture = _r.HomeName;
                 MatchLiveController.AwayColorIdForCapture = _r.AwayColorId;
                 MatchLiveController.HomeColorIdForCapture = _r.HomeColorId;
+                MatchLiveController.AwayHelmetForCapture = _r.AwayHelmet;
+                MatchLiveController.HomeHelmetForCapture = _r.HomeHelmet;
                 EnsureOnlyMatchLive(false);
                 yield return null;
                 EnsureOnlyMatchLive(true);

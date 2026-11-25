@@ -742,3 +742,21 @@ captures:
     force: ThroughInfieldRight
     duel_seconds: 2.5
     video: {from: start, to: start+3.0, fps: 10}
+
+  # ── ヘルメットの色は帽子と別（issue #1620）。攻撃側（先攻）のヘルメットだけ赤へ差し替えて、打者と走者が選んだ色で被るか見る ──
+  - id: helmet-color-batter-1620
+    name: "対決ビューの打者のヘルメットが、配色のヘルメット色（赤）になる（issue #1620）"
+    scenario: steal-sign-lab
+    manager: away
+    colors: {away: 9051, home: 9052}
+    helmet: {away: E11D48}
+    duel_seconds: 4
+    video: {from: start, to: start+3.0, fps: 2}
+
+  - id: helmet-color-runner-1620
+    name: "二盗の守備ビューで走者のヘルメットも配色のヘルメット色（赤）になる（issue #1620）"
+    scenario: steal-safe-lab
+    manager: away
+    colors: {away: 9051, home: 9052}
+    helmet: {away: E11D48}
+    shots: [start, catch, release+0.2, judgement]

@@ -1630,3 +1630,30 @@ screens:
       - show: HomeDashboard
       - wait: 10
       - shot: 02-captain-dialog
+
+  # ── ヘルメットの色を帽子と別に決められる（issue #1620）。プレビューは投手（帽子）の隣に打者（ヘルメット）を並べる ──
+  # 行の並び: 0上/1ズボン/2アンダー/3ソックス/4帽子/5ヘルメット/6スパイク/7縦縞/8縞色
+  - id: team-setting-helmet-1620
+    name: "チーム設定: ヘルメットの行を送ると、プレビューの打者のヘルメットだけ変わる（issue #1620）"
+    steps:
+      - new_game: {seed: 1}
+      - show: TeamSetting
+      - wait: 40
+      - shot: 01-initial
+      - call: StepForCapture(5, 3)
+      - wait: 20
+      - shot: 02-helmet-changed
+      - call: StepForCapture(4, 5)
+      - wait: 20
+      - shot: 03-cap-changed-too
+
+  - id: new-game-helmet-1620
+    name: "新規ゲーム設定: ヘルメットの行を送ると、プレビューの打者のヘルメットだけ変わる（issue #1620）"
+    steps:
+      - show: NewGameSetup
+      - call: SetForCapture(12, "検証")
+      - wait: 40
+      - shot: 01-initial
+      - call: StepColorForCapture(5, 3)
+      - wait: 20
+      - shot: 02-helmet-changed
