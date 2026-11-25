@@ -290,6 +290,11 @@ Heavy統計回帰（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯
 `pR1SafeWithNoise`）と、バントの封殺の抽選（`BuntResolver` の `ForceSafeP`）も、勝負の抽選に 1%/99% のクランプを
 掛けたままだった。どちらも外した（乱数は従来どおり1つ）。送り判断に使う見込み（`SuccessProbability` 等）は読みのためクランプのまま。
 
+**一塁の自己フォース→二塁タッチが3アウト目のとき（issue #1241・2026-11-25）**: 打者を先に一塁でアウトにすると二塁はフォースでなくタッチプレーになる。
+これで第3アウトを取るときは封殺ではなく時間の勝負＝タッチより先に本塁へ着いた三塁走者の得点を認める（`ResolveDoublePlayFirstBaseTag` が二塁のタッチの時刻を返し、
+`ApplyInPlayOut` が三塁走者の本塁到達（`RunnerTimeSeconds`・ゴロを読む遅れ込み）と比べる。乱数は引かない）。標準の二塁封殺・打者のアウトが3つ目のときは従来どおり0点。
+通常守備のゴロの三塁走者の得点は従来テーブル（`SacFlyScoreProb`）のまま（§4.6）。球数上限（40球）の打ち切りは打球が無いので走者を動かさず打者だけアウト（`AtBatResult.CutOffAtPitchLimit`）。
+
 ### 3.10 こぼれ球を拾った後の送球（issue #809・2026-11-08・表示専用）
 
 失策でこぼれた／逸れた球を拾った野手の送球は、実物の手順に揃える（`TimelineBuilder.AppendErrorReturnThrow`）。

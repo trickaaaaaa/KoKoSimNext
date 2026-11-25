@@ -48,4 +48,10 @@ public sealed record AtBatResult(PlateAppearanceResult Result, int Pitches)
     /// <see cref="PitchResolution.SqueezeRunnerCaughtAtThird"/> で通知される（打席は確定しない）。
     /// </summary>
     public SqueezeOutcome? Squeeze { get; init; }
+
+    /// <summary>
+    /// 規定球数上限（<c>AtBatResolver.MaxPitches</c>）で打ち切った凡打（issue #1241）。打球が無い＝<see cref="Play"/> も無いので、
+    /// 走者は釘付け・打者は単独アウトにする（旧テーブルで併殺や得点を引かない）。
+    /// </summary>
+    public bool CutOffAtPitchLimit { get; init; }
 }

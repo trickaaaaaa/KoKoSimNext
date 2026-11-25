@@ -812,7 +812,7 @@ public sealed class AtBatSession
         if (_pitchCount >= AtBatResolver.MaxPitches)
         {
             // 規定球数上限（ファウル粘り等）。安全側で凡打扱い（従来 for ループを抜けた後の return と同一）。
-            _result = new AtBatResult(PlateAppearanceResult.InPlayOut, AtBatResolver.MaxPitches) { PitchLog = _pitchLog };
+            _result = new AtBatResult(PlateAppearanceResult.InPlayOut, AtBatResolver.MaxPitches) { PitchLog = _pitchLog, CutOffAtPitchLimit = true };
             return new PitchResolution(EndsPlateAppearance: true);
         }
         return new PitchResolution(EndsPlateAppearance: false);
