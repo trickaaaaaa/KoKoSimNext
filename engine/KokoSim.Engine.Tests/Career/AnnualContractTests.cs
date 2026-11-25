@@ -381,4 +381,34 @@ public sealed class AnnualContractTests
         Assert.True(CostOf(("scouting", 2), ("coach_batting", 1), ("coach_pitching", 1)) <= free);
         Assert.True(CostOf(("scouting", 3), ("coach_batting", 1), ("coach_pitching", 1)) > free);
     }
+
+    // ── 契約したことがある印（issue #1594） ───────────────────────────
+
+    [Fact]
+    public void HasEverContracted_FalseUntilFirstContract_AndStaysTrueAfterCancelling()
+    {
+        var set = new ContractSet();
+        Assert.False(set.HasEverContracted("scouting"));
+        set.SetLevel("scouting", 0);                       // 0 を据えても契約したことにはならない
+        Assert.False(set.HasEverContracted("scouting"));
+        set.SetLevel("scouting", 2);
+        Assert.True(set.HasEverContracted("scouting"));
+        set.SetLevel("scouting", 0);                       // 解約しても「ある」は残る
+        Assert.True(set.HasEverContracted("scouting"));
+        Assert.False(set.HasEverContracted("expedition"));  // 契約ごとに別
+    }
+
+    [Fact]
+    public void ResetForNewSchool_ForgetsLevelScheduleAndMark()
+    {
+        var set = new ContractSet();
+        set.SetLevel("scouting", 2);
+        set.ScheduleCancel("scouting");
+        set.SetLevel("coach_batting", 1);
+        set.ResetForNewSchool("scouting");
+        Assert.Equal(0, set.LevelOf("scouting"));
+        Assert.Null(set.ScheduledLevelOf("scouting"));
+        Assert.False(set.HasEverContracted("scouting"));
+        Assert.Equal(1, set.LevelOf("coach_batting"));      // 他の契約には触れない
+    }
 }

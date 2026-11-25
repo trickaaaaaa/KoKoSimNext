@@ -176,6 +176,7 @@ namespace KokoSim.Unity.Shell
 
             ManagerTransferModel.ApplyDecision(ManagerService.Manager, _kind, transferred: true, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();
+            ManagerService.ResetScoutingForTransfer();
             // マネージャー（NPC）も入れ替わる: 既存の学校への赴任なので2年か3年（issue #1430）。
             // 独立ストリーム（不変条件#2・年度でずらし転任を重ねても毎回違う抽選にする）。
             TeamManagerLifecycle.AssignForTransfer(

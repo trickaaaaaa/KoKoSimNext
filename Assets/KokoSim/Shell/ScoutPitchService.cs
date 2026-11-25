@@ -10,6 +10,8 @@ namespace KokoSim.Unity.Shell
     /// 契約も分野も選んだ瞬間に確定する（年の途中で変えられるのは、ここで決めたあとの分野＝リスト生成前だけ）。
     /// 選択肢の中身は engine の <see cref="ScoutPitch"/>、出す週の判定は <see cref="ScoutMilestones"/>。
     /// 年額はこの契約のまま同じ年度の総括（第46週）で引かれる。
+    /// 一度も契約したことのない学校には夏の入口として強制では出さず、プレイヤーがスカウト画面から自分で切り出したときだけ
+    /// 初対面の調子で出す（issue #1594）。
     /// </summary>
     internal static class ScoutPitchService
     {
@@ -21,7 +23,8 @@ namespace KokoSim.Unity.Shell
             var contracts = ScoutPitch.ContractChoices(ManagerService.ContractList);
             if (contracts.Count == 0) return false;
 
-            var openerId = ScoutService.Level > 0 ? ScoutMilestones.ChooseFieldEventId : ScoutPitch.OfferEventId;
+            var everContracted = ManagerService.Contracts.HasEverContracted(ScoutPitch.ContractId);
+            var openerId = ScoutPitch.OpenerEventId(ScoutService.Level, everContracted);
             var opener = EventService.Scheduler.Find(openerId);
             if (opener == null) return false;
 
@@ -46,7 +49,7 @@ namespace KokoSim.Unity.Shell
                     if (picked.Level <= 0)
                     {
                         ScoutService.SelectedField = ScoutField.Omakase;
-                        Append(ev, ScoutPitch.DeclinedEventId, values);
+                        Append(ev, ScoutPitch.DeclinedEventIdFor(everContracted), values);
                         ev.Menu = null;
                         return;
                     }

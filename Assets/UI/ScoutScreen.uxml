@@ -2,7 +2,8 @@
 <!-- スカウト画面（設計書04 §2.1 受動枠 ／ §2.4 スカウト・issue #587, #867）。
      レイアウトは左に一覧・右に選んだ1人の詳細（オーナー決定2026-11-09・ワイヤー案A＝
      監督選択のB案と同じマスターディテール）。
-     スカウト網の契約段はここでは変更しない（買い物の唯一の場所は経営タブ・二重実装しない）。
+     スカウト網は、未契約で候補リストの生成前なら上部帯の「スカウトと契約する」から結ぶ（既存の契約→分野の会話・issue #1594）。
+     段の見直しは夏の入口の会話・年度末の更新、経営タブは見るだけ。
      上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="TopBar" src="Components/TopBar.uxml" />
@@ -35,6 +36,7 @@
           <ui:Label name="sc-slots" class="sc-topband__item" text="" />
           <ui:VisualElement class="sc-topband__spacer" />
           <ui:Label name="sc-milestone" class="sc-topband__item sc-topband__item--muted" text="" />
+          <ui:Button name="sc-contract" class="tp-cta sc-contract" text="スカウトと契約する" />
           <ui:Button name="sc-to-management" class="tool-btn" text="経営で変更" />
         </ui:VisualElement>
 

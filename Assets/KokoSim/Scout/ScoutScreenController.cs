@@ -12,7 +12,8 @@ namespace KokoSim.Unity.Scout
     /// （監督選択のB案＝選手一覧と同じマスターディテール）。
     /// 表示するのは <see cref="ProspectService"/> / <see cref="ScoutService"/> が持つ確定済みの状態だけで、
     /// ここでは何も抽選しない。スカウト網の契約は夏の大会後のスカウトとの会話で決める
-    /// （経営タブは見るだけ・issue #1064）。探す分野は候補リストの生成前だけここでも切り替えられる。
+    /// （経営タブは見るだけ・issue #1064）。
+    /// 一度も契約していない学校では、上部帯の「スカウトと契約する」から自分で結ぶ（issue #1594）。探す分野は候補リストの生成前だけここでも切り替えられる。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class ScoutScreenController : MonoBehaviour
@@ -38,6 +39,10 @@ namespace KokoSim.Unity.Scout
 
             var visit = _root.Q<Button>("sc-visit");
             if (visit != null) visit.clicked += Visit;
+
+            // 押すと契約→分野の会話を積み、ホームで読み終えたらこの画面へ戻る（回送は ScoutService.NavigatePending）。
+            var contract = _root.Q<Button>("sc-contract");
+            if (contract != null) contract.clicked += () => ScoutService.RaiseContractFromScreen();
 
             // 節目の会話（候補リスト到着・念押し）から来たときは候補のタブから始める（issue #1035）。
             // 候補リストを待っている時期（夏〜第24週）に自分で開いたときも同じ＝「リストは10月に届く」を
@@ -121,6 +126,7 @@ namespace KokoSim.Unity.Scout
             if (slots != null) slots.text = _view.SlotWord;
             var milestone = _root.Q<Label>("sc-milestone");
             if (milestone != null) milestone.text = _view.MilestoneWord;
+            SetShown(_root.Q<Button>("sc-contract"), _view.CanContract);
 
             var host = _root.Q<VisualElement>("sc-field-tabs");
             if (host == null) return;

@@ -121,6 +121,8 @@ namespace KokoSim.Unity.Scout
         public int FieldIndex;
         /// <summary>分野を選べるか（候補リストが生成済みなら凍結されており選べない）。</summary>
         public bool CanChooseField;
+        /// <summary>「スカウトと契約する」を出すか（未契約で、今年ぶんの候補リストの生成前）。</summary>
+        public bool CanContract;
 
         public List<ProspectRow> Rows = new List<ProspectRow>();
     }
@@ -202,6 +204,7 @@ namespace KokoSim.Unity.Scout
             v.MilestoneWord = "次の節目: " + ConfirmMonthWord() + " 入部確定（あと " + WeeksUntilConfirm() + " 週）";
 
             v.CanChooseField = ScoutService.FieldChoosable;
+            v.CanContract = ScoutService.CanContractNow;
             var idx = System.Array.IndexOf(FieldValues, ScoutService.SelectedField);
             v.FieldIndex = idx < 0 ? 0 : idx;
         }

@@ -55,6 +55,15 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
+        /// 転任時: スカウト網は学校のスカウトとの付き合いなので、新しい学校では「契約したことがない」に戻す
+        /// （初対面のスカウトに付き合いのある口ぶりをさせない・issue #1594）。他の年契約には触れない。
+        /// </summary>
+        internal static void ResetScoutingForTransfer()
+        {
+            Contracts.ResetForNewSchool("scouting");
+        }
+
+        /// <summary>
         /// 年契約の契約状態（設計書04 §1.4a）の単一ソース。買い切りの施設と違い、年額を毎年部費から払い、
         /// いつでも段を下げて解約できる。新規ゲームは全部未契約（スカウト網 Lv1 の年額は CareerCoefficients.ScoutCost と同額）。
         /// </summary>

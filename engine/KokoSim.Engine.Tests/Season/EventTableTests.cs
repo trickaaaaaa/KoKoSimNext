@@ -157,7 +157,8 @@ events:
             // スカウトの節目（issue #1035）。IDは ScoutMilestones の定数で引く。
             ScoutMilestones.ChooseFieldEventId, ScoutMilestones.ListArrivedEventId, ScoutMilestones.DeadlineEventId,
             // スカウトの一年の入口（issue #1064）。契約→分野の会話。IDは ScoutPitch の定数で引く。
-            ScoutPitch.OfferEventId, ScoutPitch.DeclinedEventId, ScoutPitch.FieldAskEventId, ScoutPitch.FieldDoneEventId,
+            ScoutPitch.OfferEventId, ScoutPitch.DeclinedEventId, ScoutPitch.FirstOfferEventId, ScoutPitch.FirstDeclinedEventId,
+            ScoutPitch.FieldAskEventId, ScoutPitch.FieldDoneEventId,
             // 入部の条件（約束・設計書04 §2.4）。IDは ScoutPromises が条件の種類から引く。
             ScoutPromises.AskEventId(ScoutPromiseKind.Regular), ScoutPromises.AskEventId(ScoutPromiseKind.PlayAsFreshman),
             ScoutPromises.AskEventId(ScoutPromiseKind.Cleanup), ScoutPromises.AskEventId(ScoutPromiseKind.TopOfOrder),
@@ -310,7 +311,7 @@ events:
         foreach (var id in new[]
                  {
                      ScoutMilestones.ChooseFieldEventId, ScoutPitch.OfferEventId, ScoutPitch.DeclinedEventId,
-                     ScoutPitch.FieldAskEventId, ScoutPitch.FieldDoneEventId,
+                     ScoutPitch.FirstOfferEventId, ScoutPitch.FirstDeclinedEventId, ScoutPitch.FieldAskEventId, ScoutPitch.FieldDoneEventId,
                  })
         {
             var e = events.Single(x => x.Id == id);

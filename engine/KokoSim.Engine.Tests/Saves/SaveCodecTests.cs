@@ -263,6 +263,44 @@ public sealed class SaveCodecTests
         Assert.Null(s.DistrictId);
     }
 
+    // 契約したことがある印（v46・issue #1594）。段が0へ戻った契約の印が往復し、段>0は段から導ける。
+    [Fact]
+    public void EverContracted_RoundTrips_ForLevelZeroContract()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Contracts.SetLevel("expedition", 1);
+        state.Contracts.SetLevel("expedition", 0);
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.True(s.Contracts.HasEverContracted("expedition"));
+        Assert.Equal(0, s.Contracts.LevelOf("expedition"));
+        Assert.True(s.Contracts.HasEverContracted("scouting"));    // 段>0
+    }
+
+    [Fact]
+    public void NeverContracted_StaysNeverContracted_AfterRoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Contracts = KokoSim.Engine.Career.ContractSet.Initial();
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.False(s.Contracts.HasEverContracted("scouting"));
+    }
+
+    // v45 以前のセーブ（印を持たない）: 契約中の学校は「契約したことがある」として読める（入口は今までどおり出る）。
+    [Fact]
+    public void V45Save_WithoutEverContractedMark_ReadsActiveContractAsContracted()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var v45 = json.Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":45");
+        Assert.True(SaveCodec.TryDeserialize(v45, out var s, out var err), err);
+        Assert.True(s.Contracts.HasEverContracted("scouting"));
+        Assert.Equal(KokoSim.Engine.Season.ScoutMilestone.ChooseField,
+            KokoSim.Engine.Season.ScoutMilestones.AfterNewTeamStarted(
+                new KokoSim.Engine.Season.SeasonCalendar(), week: 18, yearIndex: 2, list: null,
+                s.Contracts.HasEverContracted("scouting")));
+    }
+
     // v3（自校が神奈川の桜丘固定だった版）のセーブは schoolName/prefectureId/districtId を持たない。
     // 読めて、当時の固定値（桜丘・神奈川13・地区なし）で補われること。
     [Fact]

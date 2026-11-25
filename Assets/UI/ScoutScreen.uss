@@ -46,6 +46,14 @@
     background-color: var(--divider);
 }
 .sc-topband__spacer { flex-grow: 1; }
+/* 主ボタンは1画面1つ（UI原則②）。未契約で今年のリストに間に合うときだけ出る。tp-cta の寸法を上部帯（高さ40px）に収める。 */
+Button.sc-contract {
+    min-width: 0;
+    font-size: var(--fs-label);
+    letter-spacing: 0;
+    padding: var(--sp-1) var(--sp-4);
+    margin-left: var(--sp-3);
+}
 .sc-field-tabs { flex-shrink: 0; }
 
 /* ── マスターディテール（監督選択のB案）: 左=予定者一覧 / 右=選んだ1人の見立て。

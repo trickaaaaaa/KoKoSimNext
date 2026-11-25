@@ -32,23 +32,68 @@ public sealed class ScoutMilestonesTests
     [Fact]
     public void ChooseField_NoListYet_FiresRegardlessOfContract()
         => Assert.Equal(ScoutMilestone.ChooseField,
-            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: null));
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: null, hasEverContracted: true));
 
     /// <summary>前年度のリスト（合流年度＝今年度）が残っていても、今年ぶんは未生成＝分野は選べる。</summary>
     [Fact]
     public void ChooseField_LastYearsListStillStored_StillFires()
         => Assert.Equal(ScoutMilestone.ChooseField,
-            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: List(2, 1, 1, year: Year)));
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: List(2, 1, 1, year: Year), hasEverContracted: true));
 
     [Fact]
     public void ChooseField_ListAlreadyBuiltForThisYear_DoesNotFire()
         => Assert.Equal(ScoutMilestone.None,
-            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: List(2, 0, 0)));
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: List(2, 0, 0), hasEverContracted: true));
 
     [Fact]
     public void ChooseField_AfterListWeek_DoesNotFire()
         => Assert.Equal(ScoutMilestone.None,
-            ScoutMilestones.AfterNewTeamStarted(Cal, Cal.RecruitListWeek, Year, list: null));
+            ScoutMilestones.AfterNewTeamStarted(Cal, Cal.RecruitListWeek, Year, list: null, hasEverContracted: true));
+
+    /// <summary>一度も契約したことのない学校には入口を出さない（issue #1594）。契約歴があれば段0でも出す。</summary>
+    [Fact]
+    public void ChooseField_NeverContracted_DoesNotFire()
+        => Assert.Equal(ScoutMilestone.None,
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: null, hasEverContracted: false));
+
+    [Fact]
+    public void ChooseField_ContractedBeforeButLevelZeroNow_StillFires()
+    {
+        var set = new KokoSim.Engine.Career.ContractSet();
+        set.SetLevel("scouting", 2);
+        set.SetLevel("scouting", 0);
+        Assert.Equal(ScoutMilestone.ChooseField,
+            ScoutMilestones.AfterNewTeamStarted(Cal, week: 18, Year, list: null, set.HasEverContracted("scouting")));
+    }
+
+    [Fact]
+    public void CanContractNow_OnlyWhenUncontractedAndBeforeListWeek()
+    {
+        Assert.True(ScoutMilestones.CanContractNow(Cal, week: 5, slots: 0));
+        Assert.True(ScoutMilestones.CanContractNow(Cal, Cal.RecruitListWeek - 1, slots: 0));
+        Assert.False(ScoutMilestones.CanContractNow(Cal, Cal.RecruitListWeek, slots: 0));   // 年額だけ払って何も得られない
+        Assert.False(ScoutMilestones.CanContractNow(Cal, week: 18, slots: 2));               // 契約中
+    }
+
+    [Fact]
+    public void ContractHint_OnlyNeverContracted_FromSummerUntilListWeek()
+    {
+        Assert.True(ScoutMilestones.ShowContractHint(Cal, Cal.SummerTournamentStartWeek, slots: 0, hasEverContracted: false));
+        Assert.False(ScoutMilestones.ShowContractHint(Cal, Cal.SummerTournamentStartWeek - 1, slots: 0, hasEverContracted: false));
+        Assert.False(ScoutMilestones.ShowContractHint(Cal, Cal.RecruitListWeek, slots: 0, hasEverContracted: false));
+        Assert.False(ScoutMilestones.ShowContractHint(Cal, week: 18, slots: 0, hasEverContracted: true));
+        Assert.False(ScoutMilestones.ShowContractHint(Cal, week: 18, slots: 2, hasEverContracted: false));
+    }
+
+    [Fact]
+    public void OpenerEventId_SeparatesActiveLapsedAndFirstContact()
+    {
+        Assert.Equal(ScoutMilestones.ChooseFieldEventId, ScoutPitch.OpenerEventId(level: 1, everContracted: true));
+        Assert.Equal(ScoutPitch.OfferEventId, ScoutPitch.OpenerEventId(level: 0, everContracted: true));
+        Assert.Equal(ScoutPitch.FirstOfferEventId, ScoutPitch.OpenerEventId(level: 0, everContracted: false));
+        Assert.Equal(ScoutPitch.DeclinedEventId, ScoutPitch.DeclinedEventIdFor(true));
+        Assert.Equal(ScoutPitch.FirstDeclinedEventId, ScoutPitch.DeclinedEventIdFor(false));
+    }
 
     [Fact]
     public void CanChooseField_FreezesOnlyWhenThisYearsListExists()

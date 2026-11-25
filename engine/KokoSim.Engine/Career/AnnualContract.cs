@@ -216,14 +216,36 @@ public sealed class ContractSet
 {
     private readonly Dictionary<string, int> _levels = new();
     private readonly Dictionary<string, int> _scheduled = new();
+    private readonly HashSet<string> _everContracted = new();
 
     public int LevelOf(string id) => _levels.TryGetValue(id, out var v) ? v : 0;
 
-    /// <summary>段を直接据える。そのIDに予約があれば捨てる（決め直した＝予約より新しい意思）。</summary>
+    /// <summary>段を直接据える。そのIDに予約があれば捨てる（決め直した＝予約より新しい意思）。段≧1にしたら「契約したことがある」を立てる。</summary>
     public void SetLevel(string id, int level)
     {
         _levels[id] = Math.Max(0, level);
         _scheduled.Remove(id);
+        if (level > 0) _everContracted.Add(id);
+    }
+
+    /// <summary>
+    /// いまの学校で、この契約を一度でも結んだことがあるか（段が0に戻っていても「ある」）。
+    /// 段≧1なら必ず「ある」＝旧セーブ（この印を持たない）は段から読める（issue #1594）。
+    /// </summary>
+    public bool HasEverContracted(string id) => _everContracted.Contains(id) || LevelOf(id) > 0;
+
+    /// <summary>「契約したことがある」の印だけを保存用に返す（段>0の分は段から導けるので省く）。</summary>
+    public IReadOnlyCollection<string> EverContractedMarks => _everContracted;
+
+    /// <summary>保存からの復元用: 「契約したことがある」の印を据える。</summary>
+    public void MarkEverContracted(string id) => _everContracted.Add(id);
+
+    /// <summary>転任で学校が変わるとき、この契約を「契約したことがない」状態へ戻す（段0・予約なし・印なし）。</summary>
+    public void ResetForNewSchool(string id)
+    {
+        _levels.Remove(id);
+        _scheduled.Remove(id);
+        _everContracted.Remove(id);
     }
 
     public IReadOnlyDictionary<string, int> Levels => _levels;
