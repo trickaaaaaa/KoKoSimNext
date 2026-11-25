@@ -47,6 +47,7 @@ internal static class CommandLine
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
             "infield-hit-profile" => RunInfieldTiming(args[1..], profile: true),
+            "corner-line-profile" => RunCornerLineProfile(args[1..]),
             "error-kinds" => RunErrorKinds(args[1..]),
             "grounder-advance" => RunGrounderAdvance(args[1..]),
             "trace" => RunTrace(args[1..]),
@@ -693,6 +694,43 @@ internal static class CommandLine
         Console.WriteLine($"# 内野ゴロの判定margin（seed {seed}・{atBats}打席）");
         Console.WriteLine();
         Console.Write(timing.ToMarkdown());
+        return 0;
+    }
+
+    /// <summary>一塁手・三塁手の標準守備位置の検討（issue #1640）: 線際・三遊間/一二塁間の分布を実測する。</summary>
+    private static int RunCornerLineProfile(string[] args)
+    {
+        var atBats = 40000;
+        var seed = 42UL;
+        string? coefficientsPath = null;
+        string? stadiumId = null;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--at-bats":
+                case "--games":
+                    atBats = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
+                    break;
+                case "--seed":
+                    seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
+                    break;
+                case "--coefficients":
+                    coefficientsPath = RequireValue(args, ref i);
+                    break;
+                case "--stadium":
+                    stadiumId = RequireValue(args, ref i);
+                    break;
+                default:
+                    return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+
+        var p = AtBatSimulation.RunCornerLineProfile(atBats, seed, coefficientsPath, ResolveStadium(stadiumId));
+        Console.WriteLine($"# 一塁手・三塁手の線際/三遊間分布（seed {seed}・{atBats}打席）");
+        Console.WriteLine();
+        Console.Write(p.ToMarkdown());
         return 0;
     }
 

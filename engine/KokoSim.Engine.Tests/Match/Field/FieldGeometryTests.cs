@@ -87,4 +87,37 @@ public sealed class FieldGeometryTests
         Assert.Equal(118, field.CenterFenceM, 6);
         Assert.Equal(4.0, field.FenceHeightM, 6);
     }
+
+    /// <summary>
+    /// 一塁手・三塁手の標準守備位置を固定する（issue #1640）。座標を動かしたら気づけるように、
+    /// 値そのものに加え「ファウルラインへ旧値より寄っている」ことも確認する。
+    /// 実際の野球の標準守備位置の目安（10〜15ft≒3.0〜4.6m）までは寄せ切れていない＝
+    /// Heavy実測で夏場の得点/チーム帯の上限に当たったため、帯に収まる範囲で寄せた値
+    /// （旧値 16.2ft→15.8ft・隙間0.75m→0.61m。残りは docs/design/OPEN-QUESTIONS.md 参照）。
+    /// 本塁からの距離は左右対称・ほぼ不変＝29.4m前後。
+    /// </summary>
+    [Fact]
+    public void StandardPosition_CornerInfielders_AreNearTheFoulLine()
+    {
+        var (firstX, firstZ) = FieldGeometry.StandardPosition(FieldPosition.FirstBase);
+        var (thirdX, thirdZ) = FieldGeometry.StandardPosition(FieldPosition.ThirdBase);
+
+        Assert.Equal(17.2, firstX, 6);
+        Assert.Equal(24.0, firstZ, 6);
+        Assert.Equal(-17.2, thirdX, 6);
+        Assert.Equal(24.0, thirdZ, 6);
+
+        // 左右対称（三塁手は一塁手のX反転）。
+        Assert.Equal(firstX, -thirdX, 6);
+        Assert.Equal(firstZ, thirdZ, 6);
+
+        // ファウルライン（原点を通る45°線 x=z）からの垂直距離。旧値(4.95m=16.2ft)より線寄りで、
+        // 実際の野球の目安（10〜15ft≒3.0〜4.6m）に近づいた側にあること。
+        var perpFromLine = Math.Abs(firstX - firstZ) / Math.Sqrt(2.0);
+        Assert.InRange(perpFromLine, 4.6, 4.95);
+
+        // 本塁からの距離は塁間(27.43m)よりやや深い程度で、従来の29.4m付近を維持。
+        var radius = Math.Sqrt(firstX * firstX + firstZ * firstZ);
+        Assert.InRange(radius, 28.0, 31.0);
+    }
 }

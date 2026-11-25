@@ -142,10 +142,22 @@ public sealed record FieldGeometry
     {
         (FieldPosition.Pitcher, new Vector3D(0, 0, 18.44)),
         (FieldPosition.Catcher, new Vector3D(0, 0, -1.0)),
-        (FieldPosition.FirstBase, new Vector3D(17.0, 0, 24.0)),
+        // 一塁手・三塁手をファウルラインへわずかに寄せる（issue #1640）。旧値(17.0,24.0)はライン内側
+        // 9.7°≒16.2ft（実際の野球の標準守備位置の目安10〜15ftよりやや線から遠い＝守備範囲半径
+        // InfielderFieldingRadiusM(4.20m)との間に0.75mの隙間が線際に残っていた）。
+        // 深さ（Z）はそのまま＝動かすのは線からの角度だけ。
+        //
+        // 本来は隙間を0にする4.20m（13.8ft・X≈18.06）まで寄せたかったが、Heavy実測
+        // （GameRegressionTests.SummerWeatherGames_StayWithinTargetBands）で夏場の得点/チームが
+        // 帯[4.8,5.9]の上限を超えた（ライン際の数ミリ四方より三遊間/一二塁間（間に抜ける打球の体積は
+        // 線際の10倍以上・corner-line-profile実測）の守備範囲を広く失うコストの方が大きい＝この
+        // 静的な開始位置＋固定半径の守備モデルでは「線に寄せる」ほど素通しが増える側に働く）。
+        // 帯に収まる範囲で寄せられるだけ寄せた値（隙間0.75m→0.61m、約2割縮小）。
+        // 残りは docs/design/OPEN-QUESTIONS.md に追記（反応範囲モデルの見直しが要る・別issue）。
+        (FieldPosition.FirstBase, new Vector3D(17.2, 0, 24.0)),
         (FieldPosition.SecondBase, new Vector3D(9.0, 0, 40.0)),
         (FieldPosition.Shortstop, new Vector3D(-9.0, 0, 40.0)),
-        (FieldPosition.ThirdBase, new Vector3D(-17.0, 0, 24.0)),
+        (FieldPosition.ThirdBase, new Vector3D(-17.2, 0, 24.0)),
         (FieldPosition.LeftField, new Vector3D(-37.6, 0, 70.6)),
         (FieldPosition.CenterField, new Vector3D(0, 0, 82.0)),
         (FieldPosition.RightField, new Vector3D(37.6, 0, 70.6)),

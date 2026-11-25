@@ -887,7 +887,10 @@ public sealed class BaserunningPlaysTests
         var dropsWithThird = 0;
         var dropsWithSecond = 0;
         var dropsWithFirst = 0;
-        for (ulong seed = 1; seed <= 120; seed++)
+        // 120では落ちた（issue #1640: 守備位置の変更で試合内のRNG消費順が変わり、三塁走者ありの
+        // 振り逃げが120シードの中に一度も現れなくなった＝希少事象が特定の狭いシード窓に依存していた）。
+        // 200まで広げて余裕を持たせる（120〜150の間には現れることを確認済み）。
+        for (ulong seed = 1; seed <= 200; seed++)
         {
             var r = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(seed));
             var expectedAway = 0;
