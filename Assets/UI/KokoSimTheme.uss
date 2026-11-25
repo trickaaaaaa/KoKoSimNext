@@ -1297,7 +1297,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-pitchchart { min-height: 310px; flex-grow: 1; margin: 0 16px 16px 16px; }
 /* 中心のボール（160px の画像を縮めて置く。寸法・位置は部品が決める） */
 .pchart__ball { position: absolute; background-image: url("project:///Assets/UI/Images/pitch/ball.png"); -unity-background-scale-mode: scale-to-fit; }
-/* 札＝球種名＋ランクのチップ（ストレートはチップの代わりに最速）。高さをチップに揃え、中身は上下中央。
+/* 札＝球種名＋ランクのチップ（ストレートは最速km/hの右にチップ）。高さをチップに揃え、中身は上下中央。
    Label の既定の余白が残ると名前とチップの芯がずれるので、札の中は余白0から組む。 */
 .pd2-pchip { position: absolute; flex-direction: row; align-items: center; height: 22px; }
 .pd2-pchip Label { margin: 0; padding: 0; }
@@ -1305,6 +1305,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-pchip .rank-chip { width: 22px; min-width: 22px; height: 22px; padding: 0; margin: 0; flex-shrink: 0; }
 /* ストレートのみ添える最速（Issue #130）。数字 15px 太字・単位 12px。 */
 .pd2-pchip .pd2-pchip__velo { height: 22px; align-items: center; margin-left: 4px; }
+.pd2-pchip .rank-chip.pd2-pchip__rank--after-velo { margin-left: 5px; }
 .pd2-pchip__velo .nu-num { font-size: 15px; color: var(--ms-ink); -unity-text-align: middle-left; }
 .pd2-pchip .pd2-pchip__velo .nu-unit { font-size: 12px; color: var(--ms-tx-3); margin-left: 3px; padding-top: 2px; -unity-text-align: middle-left; }
 
@@ -1315,6 +1316,7 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
 .pd2-pchip--compact .rank-chip { width: 14px; min-width: 14px; height: 14px; }
 /* ストレートに添える最速も小型版に合わせる（issue #560）。ここが唯一の球速表示なので名前より小さくしない。 */
 .pd2-pchip--compact .pd2-pchip__velo { height: 18px; margin-left: 0; }
+.pd2-pchip--compact .rank-chip.pd2-pchip__rank--after-velo { margin-left: 3px; }
 .pd2-pchip--compact .pd2-pchip__velo .nu-num { font-size: 12px; }
 .pd2-pchip.pd2-pchip--compact .pd2-pchip__velo .nu-unit { font-size: 10px; margin-left: 2px; padding-top: 1px; }
 
