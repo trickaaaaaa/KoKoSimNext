@@ -27,6 +27,7 @@ pitching:
     intercept_cm: 30.0
     slope_cm_per_point: 0.22
     min_sigma_cm: 2.0
+    extra_below_cm_per_point: 0.27  # 制球50未満だけ σ に ＋これ×(50−C)（issue #1589・低制球を四球で崩れる投手に）
   # 死球（HBP, design-14 未決F・2026-07-20）: 散布結果が体側ウィンドウ（打者の内角側・高さ帯）へ入り
   # 回避に失敗した球。右打者はX負側・左打者（スイッチ含む）はX正側🟡
   hbp_body_edge_m: 0.45          # 体側ウィンドウの内縁|X|[m]（ゾーン半幅0.216+ボックス余白）
@@ -142,6 +143,7 @@ ability_effect:
 batting:
   aim_sigma_x_m: 0.10            # 投手の狙い散布σ（横）
   aim_sigma_y_m: 0.155           # 投手の狙い散布σ（縦）
+  aim_spread_control_slope_below_per_point: 0.0  # 同じ倍率の制球50未満の側（issue #1589）。0＝真ん中へ寄せない。上の行は制球50以上だけに使う
   aim_spread_control_slope_per_point: 0.008  # 制球の高い投手ほど隅を狙う・低い投手は真ん中を狙う＝狙い散布σ×max(0.5, 1+これ×(Control−50))。C50で恒等（issue walk-rate-floor-vs-elite-pitcher）
   zone_swing_base: 0.68          # ゾーン内スイング率
   chase_base: 0.28               # ゾーン外追いかけ率
