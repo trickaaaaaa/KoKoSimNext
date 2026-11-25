@@ -50,7 +50,8 @@ public static class TransferRosterConversion
 
     /// <summary>
     /// 育成選手1人を AI校の選手へ。スナップショットは試合投影と同じ値（怪我・スランプの一時補正は外す）。
-    /// 守備力だけは<b>適性を掛ける前の地力</b>を置く（AI校は配置のたびに適性を掛ける＝<see cref="AiTeamBuilder"/>）。
+    /// 守備力だけは<b>適性を掛ける前の地力</b>を置く。AI校は適性を割当の重みにだけ使い、試合の守備力には掛けない
+    /// （自校だけ掛ける非対称は仕様＝設計書05 §2.3・issue #1268。<see cref="AiTeamBuilder"/>）。
     /// 逸材フラグは AI校の怪物種別に対応する概念が無いので写さない（怪物は一芸型/総合型の生成時パッケージ）。
     /// </summary>
     public static AiPlayer ToAiPlayer(DevelopingPlayer dp, int yearIndex)
