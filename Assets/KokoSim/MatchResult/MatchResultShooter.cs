@@ -63,12 +63,18 @@ namespace KokoSim.Unity.MatchResult
             var away = StrengthTeamFactory.Create(58, AwayName, new Xoshiro256Random(99UL));
             var prog = new KokoSim.Engine.Match.Timeline.Playback.MatchProgression(away, home, new GameContext(), 2026UL);
             var done = 0;
-            for (var guard = 0; guard < 400 && done < 3 && prog.Advance(); guard++)
+            // 3以降は守備位置の入れ替え（打席を挟んで繰り返し、「遊二左」のように位置が3つ並ぶ選手を作る・issue #1608）。
+            var swaps = new[] { (3, 4), (4, 5), (3, 4), (3, 5), (5, 6) };
+            var lastSwapAt = 0;
+            for (var guard = 0; guard < 600 && done < 3 + swaps.Length && prog.Advance(); guard++)
             {
                 var o = prog.SubstitutionOptions(teamIsAway: false);
                 if (done == 0 && o.CanPinchHit && prog.PinchHit(false, o.Reserves[0])) done++;
                 else if (done == 1 && o.CanPinchRun && prog.PinchRun(false, o.Runners[0].BaseIndex, o.Reserves[0])) done++;
                 else if (done == 2 && !o.IsOffense && o.Reserves.Count > 0 && prog.DefenseAssign(false, 1, o.Reserves[0])) done++;
+                else if (done >= 3 && !o.IsOffense && guard - lastSwapAt >= 6
+                         && prog.SwapDefensivePositions(false, swaps[done - 3].Item1, swaps[done - 3].Item2))
+                { done++; lastSwapAt = guard; }
             }
             Debug.Log("[MR] subs made=" + done);
             return prog.SkipDelegateToAi(false, 50);
