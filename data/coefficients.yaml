@@ -990,24 +990,35 @@ cohesion:
   lone_wolf_share_neutral: 0.064
   summer_camp_delta: 6          # 夏合宿（通常）
   winter_camp_delta: 10         # 冬合宿（強化）
-  event_improve_delta: 3        # 選手間イベントの好転（不和解消など）。#945 監督決定 +3（合宿より小さく）
-  event_worsen_delta: -5        # 不和・サボりの悪化。#945 監督決定 −5（悪化を重く）
+  # issue #1599（オーナー決定2026-11-25）: 選手間イベントの振れ幅は対応ごとに持つ（#945の一律+3/−5を置き換え）。
+  #   叱る＝大きく振れる／話を聞く＝小さく安全／主将に任せる＝主将の統率力次第（d主将＝(統率力−49)/幅・主将不在は−1）
+  #   任せるの振れ幅 = captain_*_delta_base + captain_*_delta_per_power×d主将
+  scold_improve_delta: 5
+  scold_worsen_delta: -7
+  listen_improve_delta: 2
+  listen_worsen_delta: -2
+  captain_improve_delta_base: 4
+  captain_improve_delta_per_power: 3
+  captain_worsen_delta_base: -5
+  captain_worsen_delta_per_power: 3
   # 選択肢つき選手間イベントの好転の確率（#945・設計書23 §3.3。d軸＝(軸−50)/50、式は EventChoiceResolver）
   #   叱る = scold_base + scold_receptiveness_weight×d素直 ／ 聞く = listen_base + …×d素直 + …×d姿勢
-  #   任せる = captain_base + captain_power_slope×d主将 + captain_subject_leadership_weight×d統率（d主将＝(統率力−49)/幅・主将不在は−1）
+  #   任せる = captain_base + captain_power_slope×d主将 + captain_subject_leadership_weight×d統率
   #   全対応に choice_diligence_weight×d勤勉 を足し、[choice_prob_min, choice_prob_max] に丸める
+  # issue #1599: 話を聞く・主将に任せるの効きを強化（叱るは据え置き＝元から合う/合わない対応の差が出ていた）。
+  #   合う対応で好転7〜8割・合わない対応で2〜3割、平均的な部員でも「話を聞く」の期待値が0以上になるよう校正。
   choice_prob_min: 0.10
   choice_prob_max: 0.90
   choice_diligence_weight: 0.10
   scold_base: 0.50
   scold_receptiveness_weight: 0.35
-  listen_base: 0.55
-  listen_receptiveness_weight: -0.15
-  listen_selflessness_weight: -0.10
-  captain_base: 0.45
-  captain_power_slope: 0.40
+  listen_base: 0.52
+  listen_receptiveness_weight: -0.18
+  listen_selflessness_weight: -0.16
+  captain_base: 0.50
+  captain_power_slope: 0.26
   choice_captain_power_scale: 25
-  captain_subject_leadership_weight: -0.15
+  captain_subject_leadership_weight: -0.11
   weekly_decay: 0.10
   high_threshold: 70            # U≥これで動揺の発生閾値 +1
   low_threshold: 30             # U<これで −1

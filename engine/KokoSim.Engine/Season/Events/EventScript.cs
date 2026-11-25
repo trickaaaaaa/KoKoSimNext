@@ -29,6 +29,14 @@ public sealed record EventScript(IReadOnlyList<EventLine> Lines)
     /// </summary>
     public Career.TransferHintTier? TransferHint { get; init; }
 
+    /// <summary>
+    /// 選択肢つき選手間イベントで、この会話が当事者のどの性格（＝どの対応が効くか）を匂わせているか
+    /// （issue #1599・オーナー決定2026-11-25の見せ方(b)）。null＝どの当事者でも選べる（匂わせ無し）。
+    /// 発火時の当事者の性格から <see cref="EventChoiceResolver.BestMatchingStance"/> で決めた対応と一致する
+    /// 会話を選ぶ（<see cref="EventScheduler.PickScript"/> の personalityHint）。
+    /// </summary>
+    public EventStance? PersonalityHint { get; init; }
+
     /// <summary>1行だけの会話（旧 <c>text:</c> しか持たないイベントの後方互換）。</summary>
     public static EventScript Single(string who, string text) => new(new[] { new EventLine(who, "", text) });
 }

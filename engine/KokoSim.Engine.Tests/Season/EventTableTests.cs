@@ -1041,6 +1041,80 @@ events:
         for (var i = 0; i < 8; i++) Assert.Equal(b.NextDouble(), a.NextDouble(), 12);
     }
 
+    // ===== 性格の匂わせ（issue #1599・オーナー決定2026-11-25の見せ方(b)） =====
+
+    private const string PersonalityHintSample = @"
+events:
+  - id: clash
+    kind: Choice
+    text: ""もめた。""
+    choices:
+      - stance: scold
+        label: ""叱る""
+      - stance: listen
+        label: ""聞く""
+      - stance: captain
+        label: ""任せる""
+    variants:
+      - hint: scold
+        lines:
+          - who: narration
+            say: ""叱れば効きそう。""
+      - hint: listen
+        lines:
+          - who: narration
+            say: ""話を聞けば効きそう。""
+      - hint: captain
+        lines:
+          - who: narration
+            say: ""主将に任せれば効きそう。""
+      - lines:
+          - who: narration
+            say: ""匂わせ無し。""
+";
+
+    [Fact]
+    public void Parse_Hint_ReadsVariantPersonalityHint()
+    {
+        var e = EventTableParser.Parse(PersonalityHintSample).Single();
+        Assert.Equal(
+            new EventStance?[] { EventStance.Scold, EventStance.Listen, EventStance.Captain, null },
+            e.Variants.Select(v => v.PersonalityHint).ToArray());
+    }
+
+    [Fact]
+    public void Parse_Hint_UnknownStanceThrows()
+    {
+        Assert.Throws<FormatException>(() => EventTableParser.Parse(
+            "events:\n  - id: x\n    kind: Choice\n    text: \"t\"\n    variants:\n      - hint: yell\n        lines:\n          - who: narration\n            say: \"a\"\n"));
+    }
+
+    [Fact]
+    public void PickScript_PersonalityHint_PicksOnlyTheMatchingOrUntaggedVariant()
+    {
+        var e = EventTableParser.Parse(PersonalityHintSample).Single();
+        var rng = new Xoshiro256Random(3);
+        foreach (var week in new[] { 1, 2, 3, 4, 5 })
+        {
+            var script = EventScheduler.PickScript(e, week, 0, rng, hasOb: true, transferHint: null,
+                personalityHint: EventStance.Listen);
+            Assert.True(script.PersonalityHint is null or EventStance.Listen,
+                $"listen を匂わせたのに {script.Lines[0].Say} が選ばれた");
+        }
+    }
+
+    [Fact]
+    public void RepositoryTable_BranchedEvents_HaveAHintedVariantForEachStance()
+    {
+        foreach (var id in new[] { "skipping_practice", "grade_friction", "selfish_clash" })
+        {
+            var e = RepositoryEvents().Single(x => x.Id == id);
+            foreach (var stance in new[] { EventStance.Scold, EventStance.Listen, EventStance.Captain })
+                Assert.True(e.Variants.Any(v => v.PersonalityHint == stance),
+                    $"{id}: {stance} を匂わせる会話が無い");
+        }
+    }
+
     private static string FindDataFile(string fileName)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

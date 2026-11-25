@@ -198,9 +198,13 @@ public sealed class EventScheduler
     /// 転任の匂わせの段（issue #1606）。指定があれば、その段の会話（と段の指定が無い会話）だけから引く。
     /// null（既定）は絞らない＝従来と同じ引き方。
     /// </param>
+    /// <param name="personalityHint">
+    /// 選択肢つき選手間イベントで、当事者の性格にいちばん合う対応（issue #1599・<see cref="EventChoiceResolver.BestMatchingStance"/>）。
+    /// 指定があれば、その対応を匂わせる会話（と匂わせの無い会話）だけから引く。null（既定）は絞らない。
+    /// </param>
     public static EventScript PickScript(
         GameEvent e, int absoluteWeek, int salt, IRandomSource rng, bool hasOb = true,
-        Career.TransferHintTier? transferHint = null)
+        Career.TransferHintTier? transferHint = null, EventStance? personalityHint = null)
     {
         if (e.Variants.Count == 0) return EventScript.Single(EventRoles.Narration, e.Text);
         var candidates = e.Variants;
@@ -208,6 +212,12 @@ public sealed class EventScheduler
         {
             var open = new List<EventScript>(candidates.Count);
             foreach (var v in candidates) if (v.TransferHint is null || v.TransferHint == tier) open.Add(v);
+            if (open.Count > 0) candidates = open;
+        }
+        if (personalityHint is { } hint)
+        {
+            var open = new List<EventScript>(candidates.Count);
+            foreach (var v in candidates) if (v.PersonalityHint is null || v.PersonalityHint == hint) open.Add(v);
             if (open.Count > 0) candidates = open;
         }
         if (!hasOb)

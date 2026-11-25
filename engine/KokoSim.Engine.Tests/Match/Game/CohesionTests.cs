@@ -167,11 +167,15 @@ public sealed class CohesionTests
         Assert.True(C.WinterCampDelta > C.SummerCampDelta);
     }
 
+    /// <summary>
+    /// 対応ごとの振れ幅（issue #1599）そのものを足し引きする。式の組み立ては
+    /// <see cref="KokoSim.Engine.Season.Events.EventChoiceResolver.CohesionDelta"/> 側（EventChoiceTests）で検証する。
+    /// </summary>
     [Fact]
     public void Events_MoveDelta()
     {
-        Assert.Equal(C.EventImproveDelta, Cohesion.AfterEvent(0, improved: true, C), 12);
-        Assert.Equal(C.EventWorsenDelta, Cohesion.AfterEvent(0, improved: false, C), 12);
+        Assert.Equal(5.0, Cohesion.AfterEvent(0, 5.0), 12);
+        Assert.Equal(-7.0, Cohesion.AfterEvent(0, -7.0), 12);
         Assert.Equal(100.0, Cohesion.Value(95, 30), 12);
         Assert.Equal(0.0, Cohesion.Value(5, -30), 12);
     }

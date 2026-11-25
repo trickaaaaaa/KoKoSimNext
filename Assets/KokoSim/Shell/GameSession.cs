@@ -221,9 +221,15 @@ namespace KokoSim.Unity.Shell
         public void AdvanceCohesionWeek(int week, SeasonCalendar calendar)
             => CohesionDelta = Cohesion.AdvanceWeek(CohesionDelta, week, calendar, CohesionCoeff);
 
-        /// <summary>選手間イベントの好転・悪化（不和解消・サボり等）で結束を動かす。</summary>
-        public void ApplyCohesionEvent(bool improved)
-            => CohesionDelta = Cohesion.ClampDelta(Cohesion.AfterEvent(CohesionDelta, improved, CohesionCoeff));
+        /// <summary>
+        /// 選手間イベントの好転・悪化（不和解消・サボり等）で結束を動かす。振れ幅は対応ごとに違う
+        /// （issue #1599・叱る＝大きく振れる／話を聞く＝小さく安全／主将に任せる＝主将の統率力 <paramref name="captainPower"/> 次第）。
+        /// </summary>
+        public void ApplyCohesionEvent(KokoSim.Engine.Season.Events.EventStance stance, bool improved, double? captainPower)
+        {
+            var eventDelta = KokoSim.Engine.Season.Events.EventChoiceResolver.CohesionDelta(stance, improved, captainPower, CohesionCoeff);
+            CohesionDelta = Cohesion.ClampDelta(Cohesion.AfterEvent(CohesionDelta, eventDelta));
+        }
 
         /// <summary>在籍していない選手を含む組を消す（卒業・転校・新チーム）。</summary>
         private void PruneBatteryLedger()

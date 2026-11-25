@@ -2474,27 +2474,30 @@ events:
     cooldown_weeks: 12
     text: "主力が練習をサボっているらしい。"
     variants:
-      - lines:
+      - hint: scold   # 素直: ガツンと言えば響くタイプ（issue #1599・オーナー決定2026-11-25の見せ方(b)）
+        lines:
           - who: team_manager
             say: "監督、{player} くんがまた練習の途中で消えました。今週3回目です。"
           - who: player
             say: "さっき裏門のほうに走っていくの見ましたよ。めっちゃいいフォームで。"
           - who: team_manager
-            say: "その足、ベースランニングで使ってほしいんですけどね。"
-      - lines:
+            say: "その足、ベースランニングで使ってほしいんですけどね。{player} くん、ガツンと言えば響くタイプですし。"
+      - hint: listen  # 頑固: 頭ごなしに言うと意地になる・理由を聞いたほうが効くタイプ
+        lines:
           - who: captain
             say: "監督、{player} なんですけど、最近ずっと『腹が痛い』って言って帰るんです。"
           - who: captain
             say: "でも昨日、駅前のラーメン屋に並んでました。大盛りの食券握って。"
           - who: team_manager
-            say: "お腹、むしろ強いじゃないですか。"
-      - lines:
+            say: "お腹、むしろ強いじゃないですか。……あいつ、頭ごなしに言うと余計意地になるんで、理由を聞いたほうが早いですよ。"
+      - hint: captain  # 監督の話は右から左・主将の言うことだけは聞くタイプ
+        lines:
           - who: narration
             say: "全体練習の輪に {player} の姿が無い。ベンチにグラブだけが置いてある。"
           - who: player
             say: "あいつ、グラブ置いとけば居ることになると思ってるんすよ。"
           - who: team_manager
-            say: "出席を取りたいのは、グラブじゃなくて本人なんですけどね。"
+            say: "出席を取りたいのは、グラブじゃなくて本人なんですけどね。監督の話はスルーするのに、主将の一言には弱いんですよ、あいつ。"
     choices:
       - stance: scold
         label: "呼び出して、きっちり叱る"
@@ -2590,15 +2593,17 @@ events:
       subject: upper_grade
       other: first_year
     variants:
-      - lines:
+      - hint: scold   # 素直: ガツンと言えば響くタイプ（issue #1599・オーナー決定2026-11-25の見せ方(b)）
+        lines:
           - who: team_manager
             say: "監督、1年の {other} くん、毎日 {player} くんのスパイクを磨かされてるみたいです。"
           - who: player
             name: "{other}"
             say: "いえ、自分は全然大丈夫です。磨くの、ちょっと楽しくなってきたんで。"
           - who: team_manager
-            say: "楽しくなっちゃダメなんですよ、それ。"
-      - lines:
+            say: "楽しくなっちゃダメなんですよ、それ。{player} くん、こういうのはガツンと叱られたら素直に反省するタイプですけどね。"
+      - hint: listen  # 頑固: 頭ごなしに言うと意地になる・理由を聞いたほうが効くタイプ
+        lines:
           - who: player
             name: "{player}"
             say: "監督、1年の {other} が、俺のことを先輩って呼ばないんですよ。"
@@ -2606,14 +2611,15 @@ events:
             name: "{other}"
             say: "だって {player} さん、ノックで俺より捕ってないじゃないですか。"
           - who: captain
-            say: "どっちもやめろ。部室の酸素が薄くなる。"
-      - lines:
+            say: "どっちもやめろ。部室の酸素が薄くなる。……{player}、頭ごなしに言うと意地になるタイプだから、言い分を聞いてやったほうがいいぞ。"
+      - hint: captain  # 監督の話は右から左・主将の言うことだけは聞くタイプ
+        lines:
           - who: narration
             say: "部室の冷蔵庫に紙が貼ってある。『2年生以上専用』。その下に小さく『1年も金出してます』。"
           - who: team_manager
             say: "{player} くんと {other} くん、冷蔵庫の件で3日口きいてないです。"
           - who: player
-            say: "麦茶ひとつでここまで揉めるの、うちくらいですよ。"
+            say: "麦茶ひとつでここまで揉めるの、うちくらいですよ。{player} くん、監督の話より主将の一声のほうが効くタイプですしね。"
     choices:
       - stance: scold
         label: "二人まとめて叱る"
@@ -2719,7 +2725,8 @@ events:
       subject: selfish
       other: selfless
     variants:
-      - lines:
+      - hint: scold   # 素直: ガツンと言えば響くタイプ（issue #1599・オーナー決定2026-11-25の見せ方(b)）
+        lines:
           - who: narration
             say: "紅白戦の7回、一死三塁。サインはスクイズ。{player} はフルスイングで空振りした。"
           - who: player
@@ -2729,8 +2736,9 @@ events:
             name: "{player}"
             say: "いや、来た球がホームランの球だったから。"
           - who: team_manager
-            say: "ホームランの球って、何色なんですかね。"
-      - lines:
+            say: "ホームランの球って、何色なんですかね。{player} くん、こう見えてガツンと言われたら素直に直すタイプですよ。"
+      - hint: listen  # 頑固・目立ちたがり: 頭ごなしに言うと意地になる・理由を聞いたほうが効くタイプ
+        lines:
           - who: player
             name: "{other}"
             say: "監督、{player} がまた『俺が決める』って、走者いるのに初球から大振りしたんです。"
@@ -2739,14 +2747,15 @@ events:
             say: "でも当たってたら、今ごろ俺ヒーローですよ。"
           - who: player
             name: "{other}"
-            say: "当たってないだろ！"
-      - lines:
+            say: "当たってないだろ！……{player} は頭ごなしに注意すると余計意固地になるんで、ちゃんと言い分を聞いてやってください。"
+      - hint: captain  # 監督の話は右から左・主将の言うことだけは聞くタイプ
+        lines:
           - who: team_manager
             say: "練習試合のあと、{other} くんが {player} くんの打席にずっと文句言ってます。"
           - who: player
             say: "{player} のやつ、ベンチで『次の打席、見とけよ』って言ってからの三球三振でした。"
           - who: team_manager
-            say: "見とけって言われたので、ちゃんと見ました。"
+            say: "見とけって言われたので、ちゃんと見ました。{player} くん、監督の言葉はスルーするのに主将の一言には弱いんですよね。"
     choices:
       - stance: scold
         label: "{player} を呼んで叱る"

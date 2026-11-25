@@ -173,14 +173,57 @@ public static class EventChoiceResolver
                      + c.ListenSelflessnessWeight * D(subject.Selflessness);
                 break;
             case EventStance.Captain:
-                var dCap = captainPower is { } cp
-                    ? MathUtil.Clamp((cp - c.CaptainPowerNeutral) / c.ChoiceCaptainPowerScale, -1.0, 1.0)
-                    : -1.0;
-                p += c.CaptainBase + c.CaptainPowerSlope * dCap
+                p += c.CaptainBase + c.CaptainPowerSlope * DCaptain(captainPower, c)
                      + c.CaptainSubjectLeadershipWeight * D(subject.Leadership);
                 break;
         }
         return MathUtil.Clamp(p, c.ChoiceProbMin, c.ChoiceProbMax);
+    }
+
+    /// <summary>d主将＝(統率力−基準)/幅（−1〜+1）。主将不在は −1。</summary>
+    private static double DCaptain(double? captainPower, CohesionCoefficients c)
+        => captainPower is { } cp
+            ? MathUtil.Clamp((cp - c.CaptainPowerNeutral) / c.ChoiceCaptainPowerScale, -1.0, 1.0)
+            : -1.0;
+
+    /// <summary>
+    /// 当事者の性格だけで見て、いちばん好転しやすい対応（issue #1599・オーナー決定2026-11-25の見せ方(b)）。
+    /// 会話の中で性格を匂わせる文を選ぶための手がかりで、<b>主将の統率力は中立（d主将=0）で比較する</b>
+    /// ＝「この子にはこの対応が効く」という<b>当事者本人の性格</b>の話に絞り、たまたま今の主将が強い/弱いで
+    /// 変わらないようにする（主将の強さは画面のどこにも出ていないので、匂わせの材料にできない）。
+    /// </summary>
+    public static EventStance BestMatchingStance(PersonalityAxes subject, CohesionCoefficients c)
+    {
+        var scold = c.ScoldBase + c.ScoldReceptivenessWeight * D(subject.Receptiveness);
+        var listen = c.ListenBase + c.ListenReceptivenessWeight * D(subject.Receptiveness)
+                     + c.ListenSelflessnessWeight * D(subject.Selflessness);
+        var captain = c.CaptainBase + c.CaptainSubjectLeadershipWeight * D(subject.Leadership);
+        if (scold >= listen && scold >= captain) return EventStance.Scold;
+        return listen >= captain ? EventStance.Listen : EventStance.Captain;
+    }
+
+    /// <summary>
+    /// 選択肢つき選手間イベントの結束の振れ幅（issue #1599・オーナー決定2026-11-25）。対応ごとに性質が違う:
+    /// 叱る＝大きく振れる・話を聞く＝小さく安全・主将に任せる＝主将の統率力次第（強い主将ほど上振れ大・下振れ小、
+    /// 弱い/不在の主将ほど逆）。学業配慮（<see cref="EventStance.EasePractice"/>／<see cref="EventStance.AsUsual"/>）は
+    /// 結束を動かさない（<see cref="EventStances.MovesCohesion"/>）ので呼ばれない想定だが、保険として0を返す。
+    /// </summary>
+    public static double CohesionDelta(EventStance stance, bool improved, double? captainPower, CohesionCoefficients c)
+    {
+        switch (stance)
+        {
+            case EventStance.Scold:
+                return improved ? c.ScoldImproveDelta : c.ScoldWorsenDelta;
+            case EventStance.Listen:
+                return improved ? c.ListenImproveDelta : c.ListenWorsenDelta;
+            case EventStance.Captain:
+                var dCap = DCaptain(captainPower, c);
+                return improved
+                    ? c.CaptainImproveDeltaBase + c.CaptainImproveDeltaPerPower * dCap
+                    : c.CaptainWorsenDeltaBase + c.CaptainWorsenDeltaPerPower * dCap;
+            default:
+                return 0.0;
+        }
     }
 
     /// <summary>
