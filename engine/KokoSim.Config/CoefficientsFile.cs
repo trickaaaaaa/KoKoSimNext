@@ -1668,6 +1668,10 @@ public static class CoefficientsLoader
         public int SlumpWeeksMax { get; set; } = D.SlumpWeeksMax;
         public double SlumpPerformanceFactor { get; set; } = D.SlumpPerformanceFactor;
         public double SlumpConditionDrop { get; set; } = D.SlumpConditionDrop;
+        public int SlumpCoachingRecoveryWeeks { get; set; } = D.SlumpCoachingRecoveryWeeks;
+        public double SlumpRestShareMin { get; set; } = D.SlumpRestShareMin;
+        public int SlumpRestRecoveryWeeks { get; set; } = D.SlumpRestRecoveryWeeks;
+        public int SlumpMatchRecoveryWeeks { get; set; } = D.SlumpMatchRecoveryWeeks;
         public double PlateauCapProximity { get; set; } = D.PlateauCapProximity;
         public double PlateauWeeklyProb { get; set; } = D.PlateauWeeklyProb;
         public double PlateauGrowthFactor { get; set; } = D.PlateauGrowthFactor;
@@ -1718,6 +1722,10 @@ public static class CoefficientsLoader
             SlumpWeeksMax = SlumpWeeksMax,
             SlumpPerformanceFactor = SlumpPerformanceFactor,
             SlumpConditionDrop = SlumpConditionDrop,
+            SlumpCoachingRecoveryWeeks = SlumpCoachingRecoveryWeeks,
+            SlumpRestShareMin = SlumpRestShareMin,
+            SlumpRestRecoveryWeeks = SlumpRestRecoveryWeeks,
+            SlumpMatchRecoveryWeeks = SlumpMatchRecoveryWeeks,
             PlateauCapProximity = PlateauCapProximity,
             PlateauWeeklyProb = PlateauWeeklyProb,
             PlateauGrowthFactor = PlateauGrowthFactor,
