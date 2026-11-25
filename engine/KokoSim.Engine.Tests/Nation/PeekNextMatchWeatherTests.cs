@@ -59,11 +59,14 @@ public sealed class PeekNextMatchWeatherTests
     private sealed class CapturingResolver : IPlayerMatchResolver
     {
         public WeatherSample? Captured;
+        /// <summary>渡された試合 rng の指紋（Fork 先の最初の1つ。Fork は親を進めないので本解決に影響しない）。</summary>
+        public double RngFingerprint;
 
         public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
             TournamentMatchContext? context = null)
         {
             Captured = WeatherModel.SampleForMatch(rng.Fork(2), Weather);
+            RngFingerprint = Fingerprint(rng);
             var ctx = new GameContext { MercyRuleEnabled = mercyRuleEnabled, Weather = Weather };
             var result = GameEngine.Play(MakeTeam(manager.Name, 60), MakeTeam(opponent.Name, 55), ctx, rng.Fork(2));
             return new(result, ManagerIsAway: true);
@@ -144,5 +147,45 @@ public sealed class PeekNextMatchWeatherTests
 
         r.PlayNextPlayerMatch();
         Assert.Equal(peeked, resolver.Captured);
+    }
+
+    private static double Fingerprint(IRandomSource rng) => rng.Fork(13).NextDouble();
+
+    // 試合開始前の画面は、次戦の試合 rng を覗いて球場（県大会序盤の2択）を決める。覗いた rng は
+    // 実際に Resolve へ渡る rng と同じ列で、覗いても本流は進まない。
+    [Fact]
+    public void TournamentRunner_PeekRngMatchesRngPassedToResolve()
+    {
+        var resolver = new CapturingResolver();
+        var r = new TournamentRunner(Field(60, 7, 55), Sch(1, 60), Coeff,
+            new Xoshiro256Random(42), Schedule, "テスト大会", resolver, new FixedScoreBackgroundResolver());
+
+        var first = Fingerprint(r.PeekNextPlayerMatchRng()!);
+        Assert.Equal(first, Fingerprint(r.PeekNextPlayerMatchRng()!));
+
+        r.PlayNextPlayerMatch();
+        Assert.Equal(first, resolver.RngFingerprint);
+    }
+
+    [Fact]
+    public void BlockLeagueRunner_PeekRngMatchesRngPassedToResolve()
+    {
+        var resolver = new CapturingResolver();
+        var schools = Field(60, 5, 50);
+        var blocks = new List<IReadOnlyList<School>> { schools };
+        var r = new BlockLeagueRunner(blocks, schools[0], 2, Coeff,
+            new Xoshiro256Random(11), Schedule, "地区予選", resolver, new FixedScoreBackgroundResolver());
+
+        var peeked = Fingerprint(r.PeekNextPlayerMatchRng()!);
+        r.PlayNextPlayerMatch();
+        Assert.Equal(peeked, resolver.RngFingerprint);
+    }
+
+    [Fact]
+    public void TournamentRunner_Finished_PeekRngReturnsNull()
+    {
+        var r = new TournamentRunner(Field(1, 0, 0), Sch(1, 1), Coeff,
+            new Xoshiro256Random(42), Schedule, "テスト大会", new CapturingResolver(), new FixedScoreBackgroundResolver());
+        Assert.Null(r.PeekNextPlayerMatchRng());
     }
 }

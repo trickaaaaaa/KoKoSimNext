@@ -1,33 +1,37 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
-using KokoSim.Unity.Components;  // 部品辞書（RankChip / RadarChartView）
-using KokoSim.Unity.Shell;       // ScreenRouter / GameSession
+using KokoSim.Engine.Match.Game;
+using KokoSim.Unity.Components;  // 部品辞書（RankBadge / TeamRadar / PositionChip / NumberPatch）
+using KokoSim.Unity.Shell;       // ScreenRouter / GameSession / SchoolAccent / LineIcon
 
 namespace KokoSim.Unity.MatchPreview
 {
     /// <summary>
-    /// 試合開始前（対戦カード）画面のコントローラ（issue #7・A案）。スタメン設定OKの直後に挟まり、
-    /// 左＝自校／右＝相手校を同一構成で並べる（先攻後攻・総合ランク・6角形・スタメン一覧）。
-    /// 戻る導線は持たない（スタメン決定後は試合をやるのみ）。主要操作は「試合開始」1つだけ（UI原則⑦）で、
-    /// 押すとこの画面に留まったまま <see cref="KokoSim.Unity.Shell.MatchStartFlow"/> が準備（BeginMatch 等）を
+    /// 試合開始前（対戦カード）画面のコントローラ（issue #7 → 2026-11-25 リデザイン）。
+    /// 上に対戦カードの帯（総合ランク・校名・先攻後攻・球場/天気/気温/風）、本体は 自校スタメン｜戦力比較｜相手スタメン。
+    /// 左は常に自校・右は常に相手。戻る導線は持たない。主要操作は「試合開始」1つだけ（UI原則⑦）で、
+    /// 押すとこの画面に留まったまま <see cref="MatchStartFlow"/> が準備（BeginMatch 等）を
     /// バックグラウンドで進め、完了後に直接ライブ観戦（MatchLive）へ入る（issue #325: ホームを中継させない）。
     /// 表示専用＝ここではエンジンを進めない（帯不変・決定論に影響なし）。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class MatchPreviewController : MonoBehaviour
     {
+        /// <summary>相手校の色（スクールカラーは自校だけ＝相手は墨寄りの中立色）。</summary>
+        private static readonly Color OpponentColor = new Color32(0x3A, 0x36, 0x31, 0xFF);
+
+        /// <summary>レーダーの領域（360×266）の中心と、項目名を置く半径。</summary>
+        private static readonly Vector2 RadarCenter = new Vector2(180f, 133f);
+        private const float AxisLabelRadius = 120f;
+
         private MatchPreviewState _state;
         private VisualElement _root;
-        private RadarChartView _leftRadar, _rightRadar;
         private Button _start;
-        private System.Action _unbindAnnounce;   // 場内放送の切り替え（issue #919）
+        private System.Action _unbindAnnounce;   // 場内放送の切り替え（issue #919・#1193）
 
         // 準備中の二重起動防止（「試合開始」の連打・BackgroundGameOp 完了前の再入をブロックする）。
         private bool _starting;
-
-        // 6角形を少し小さくして軸ラベルを外へ出す（横の軸ラベルが頂点に重なっていた。design-22 G3）。
-        private const float RadiusFactor = 0.30f;
-        private const float LabelOffset = 1.40f;
 
         private void OnEnable()
         {
@@ -37,11 +41,8 @@ namespace KokoSim.Unity.MatchPreview
 
             _start = _root.Q<Button>("mp-start");
             if (_start != null) _start.clicked += OnStart;
-            _unbindAnnounce = KokoSim.Unity.Audio.MatchAnnouncer.BindToggle(_root.Q<Button>("mp-announce"));
-
-            // レーダーは部品辞書の共通部品。軸の並び・塗り色はチーム総合力パネルと同一。
-            _leftRadar = new RadarChartView(_root.Q<VisualElement>("mp-left-radar"), RadiusFactor, LabelOffset);
-            _rightRadar = new RadarChartView(_root.Q<VisualElement>("mp-right-radar"), RadiusFactor, LabelOffset);
+            _unbindAnnounce = KokoSim.Unity.Audio.MatchAnnouncer.BindSwitch(
+                _root.Q<VisualElement>("mp-announce"), _root.Q<VisualElement>("mp-announce-switch"));
 
             Render();
         }
@@ -59,60 +60,236 @@ namespace KokoSim.Unity.MatchPreview
         private void Render()
         {
             var v = _state.BuildView();
-            SetText("mp-match", v.MatchLine);
-            RenderSide("mp-left", v.Own, _leftRadar);
-            RenderSide("mp-right", v.Opponent, _rightRadar);
+            var accent = SchoolAccent.ForManager();
+
+            SetText("mp-kind", v.KindLabel);
+            RenderBandSide("mp-own", v.Own, Tint(accent, 0.78f));
+            RenderBandSide("mp-opp", v.Opponent, new Color32(0xD9, 0xD3, 0xC7, 0xFF));
+            RenderConditions(v);
+
+            RenderLineup("mp-own", v.Own, accent);
+            RenderLineup("mp-opp", v.Opponent, OpponentColor);
+
+            RenderRadar("mp-own-radar", v.Own, accent, 0.18f, v.Ready || v.Own.Lineup.Count > 0);
+            RenderRadar("mp-opp-radar", v.Opponent, OpponentColor, 0.10f, v.Ready);
+            RenderBars(v, accent);
+
+            Paint("mp-band-stripe", accent);
+            Paint("mp-own-mark", accent);
+            if (_start != null) _start.style.backgroundColor = accent;
         }
 
-        private void RenderSide(string prefix, MatchPreviewSideView side, RadarChartView radar)
-        {
-            SetText(prefix + "-cap", side.SideCaption);
-            SetText(prefix + "-name", side.TeamName);
-            SetText(prefix + "-turn", side.OrderCaption);
-            SetText(prefix + "-value", side.Lineup.Count > 0 ? "(" + side.OverallValue + ")" : "");
+        // ── ① 帯 ──
 
-            var rank = _root.Q<VisualElement>(prefix + "-rank");
-            if (rank != null)
+        private void RenderBandSide(string prefix, MatchPreviewSideView side, Color turnBg)
+        {
+            SetText(prefix + "-name", side.TeamName);
+            var turn = _root.Q<Label>(prefix + "-turn");
+            if (turn != null)
             {
-                rank.Clear();
-                if (side.Lineup.Count > 0) rank.Add(UiComponents.RankChip(side.OverallGrade));
+                turn.text = side.OrderCaption;
+                turn.style.backgroundColor = turnBg;
+            }
+            var hasTeam = side.Lineup.Count > 0;
+            SetText(prefix + "-score", hasTeam ? side.OverallValue.ToString() : "");
+            var host = _root.Q<VisualElement>(prefix + "-rank");
+            if (host != null)
+            {
+                host.Clear();
+                if (hasTeam) host.Add(new RankBadge(side.OverallGrade));
+            }
+        }
+
+        /// <summary>球場・天気・気温・風。値の無い項目は出さず、見えている項目の間にだけ縦線を置く。</summary>
+        private void RenderConditions(MatchPreviewView v)
+        {
+            var host = _root.Q<VisualElement>("mp-cond");
+            if (host == null) return;
+            host.Clear();
+            var items = new List<VisualElement>();
+
+            if (!string.IsNullOrEmpty(v.StadiumName))
+                items.Add(CondItem(LineIcon.Kind.Stadium, "", "球場", v.StadiumName));
+
+            var weather = MatchPreviewState.WeatherLabel(v);
+            if (!string.IsNullOrEmpty(weather))
+            {
+                var (kind, mod) = v.Indoor ? (LineIcon.Kind.Stadium, "")
+                    : v.Weather switch
+                    {
+                        WeatherState.Rainy => (LineIcon.Kind.Rain, "rain"),
+                        WeatherState.Cloudy => (LineIcon.Kind.Cloud, "cloud"),
+                        _ => (LineIcon.Kind.Sun, "sun"),
+                    };
+                items.Add(CondItem(kind, mod, "天気", weather));
             }
 
-            radar.SetData(side.Radar, side.OverallGrade);
+            if (!string.IsNullOrEmpty(v.Temperature))
+                items.Add(CondItem(LineIcon.Kind.Thermometer, "temp", "気温", v.Temperature));
+
+            if (v.Wind != null)
+            {
+                var wind = CondItem(LineIcon.Kind.WindArrow, "wind", "風", v.Wind.Text);
+                var icon = wind.Q(className: "mp-cond__icon");
+                if (icon != null) icon.style.rotate = new Rotate(new Angle(v.Wind.ArrowDegrees, AngleUnit.Degree));
+                items.Add(wind);
+            }
+
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (i > 0) host.Add(Classed(new VisualElement(), "mp-cond__sep"));
+                host.Add(items[i]);
+            }
+        }
+
+        private static VisualElement CondItem(LineIcon.Kind kind, string iconMod, string key, string value)
+        {
+            var item = Classed(new VisualElement(), "mp-cond__item");
+            var icon = Classed(new LineIcon(kind), "mp-cond__icon");
+            if (!string.IsNullOrEmpty(iconMod)) icon.AddToClassList("mp-cond__icon--" + iconMod);
+            item.Add(icon);
+            item.Add(Text(key, "mp-cond__k", "f-body"));
+            item.Add(Text(value, "mp-cond__v", "f-body-bd"));
+            return item;
+        }
+
+        // ── ② スタメン ──
+
+        private void RenderLineup(string prefix, MatchPreviewSideView side, Color teamColor)
+        {
+            SetText(prefix + "-lineup-name", side.TeamName);
+            SetText(prefix + "-dh", side.Lineup.Count > 0 ? (side.UsesDh ? "DHあり" : "DHなし") : "");
+            Paint(prefix + "-mark", teamColor);
 
             var host = _root.Q<VisualElement>(prefix + "-lineup");
             if (host == null) return;
             host.Clear();
-            foreach (var s in side.Lineup) host.Add(Row(s));
-            // DH制のときだけ打順外の先発投手を最下段に足す（非DHは打順内の「投」がそれに当たる）。
-            if (side.StartingPitcher != null)
-            {
-                var head = new Label("先発");
-                head.AddToClassList("mlineup-subhead");
-                host.Add(head);
-                host.Add(Row(side.StartingPitcher));
-            }
+            foreach (var s in side.Lineup) host.Add(Row(s, starter: false));
+            // 先発投手はカードの一番下に寄せる（DH の有無に関わらず出す）。
+            host.Add(Classed(new VisualElement(), "mp-lineup__fill"));
+            if (side.StartingPitcher != null) host.Add(Row(side.StartingPitcher, starter: true));
         }
 
-        // 1行＝部品辞書の MLineupRow（打順・守備位置・氏名・学年投打）。
-        // 選手個人の総合ランクチップは出さない（Issue #30 で廃止・#270）。チーム総合ランクは上のヘッダに残る。
-        private static VisualElement Row(MatchPreviewSlotView s)
+        private static VisualElement Row(MatchPreviewSlotView s, bool starter)
         {
-            var row = new VisualElement();
-            row.AddToClassList("mlineup-row");
-            var ord = Text(s.Order, "mlineup-row__ord");
-            ord.AddToClassList("f-num");
+            var row = Classed(new VisualElement(), "mp-row");
+            if (starter) row.AddToClassList("mp-row--sp");
+            var ord = starter
+                ? Text("先発", "mp-row__ord", "mp-row__ord--sp", "f-body")
+                : Text(s.Order, "mp-row__ord", "f-display");
             row.Add(ord);
-            row.Add(Text(s.PosKanji, "mlineup-row__pos"));
-            row.Add(Text(s.Name, "mlineup-row__name"));
-            row.Add(Text(s.Meta, "mlineup-row__meta"));
+            row.Add(new PositionChip(s.PosKanji));
+            row.Add(Text(s.Name, "mp-row__name", "f-display"));
+            row.Add(new NumberPatch(s.Number));
+            row.Add(Text(s.Meta, "mp-row__meta", "f-body"));
             return row;
         }
 
-        private static Label Text(string text, string cls)
+        // ── ② 戦力比較 ──
+
+        private void RenderRadar(string hostName, MatchPreviewSideView side, Color color, float fillAlpha, bool hasData)
+        {
+            var host = _root.Q<VisualElement>(hostName);
+            if (host == null) return;
+            host.Clear();
+            var area = Classed(new VisualElement(), "mp-radar");
+            host.Add(area);
+
+            var radar = new TeamRadar();
+            var values = new float[side.Factors.Length];
+            for (var i = 0; i < values.Length; i++) values[i] = hasData ? side.Factors[i] / 100f : 0f;
+            radar.SetData(values, color, fillAlpha);
+            area.Add(radar);
+
+            var labels = MatchPreviewState.FactorLabels;
+            for (var i = 0; i < labels.Length; i++)
+            {
+                var p = TeamRadar.AxisPoint(RadarCenter, AxisLabelRadius, i, labels.Length);
+                var l = Text(labels[i], "mp-radar__axis", "f-body");
+                l.style.left = p.x - 40f;
+                l.style.top = p.y - 8f;
+                area.Add(l);
+            }
+
+            var team = Classed(new VisualElement(), "mp-radar__team");
+            var mark = Classed(new VisualElement(), "mp-radar__mark");
+            mark.style.backgroundColor = color;
+            team.Add(mark);
+            var name = Text(side.TeamName, "mp-radar__name", "f-display");
+            name.style.color = color;
+            team.Add(name);
+            area.Add(team);
+
+            if (hasData) area.Add(new RankBadge(side.OverallGrade));
+        }
+
+        private void RenderBars(MatchPreviewView v, Color accent)
+        {
+            var host = _root.Q<VisualElement>("mp-bars");
+            if (host == null) return;
+            host.Clear();
+            var labels = MatchPreviewState.FactorLabels;
+            var showOpp = v.Ready;
+            for (var i = 0; i < labels.Length; i++)
+            {
+                var own = v.Own.Factors[i];
+                var opp = v.Opponent.Factors[i];
+                // 高いほう（同点は両方）を濃く・太く出す。
+                var ownHi = !showOpp || own >= opp;
+                var oppHi = showOpp && opp >= own;
+
+                var row = Classed(new VisualElement(), "mp-bar");
+
+                var ownNum = Text(own.ToString(), "mp-bar__num", "mp-bar__num--own", ownHi ? "f-num-bd" : "f-body-md");
+                if (ownHi) ownNum.style.color = accent;
+                row.Add(ownNum);
+                row.Add(Track("own", own, ownHi, accent));
+
+                row.Add(Text(labels[i], "mp-bar__label", "f-body-bd"));
+
+                row.Add(Track("opp", showOpp ? opp : 0, oppHi, OpponentColor));
+                var oppNum = Text(showOpp ? opp.ToString() : "", "mp-bar__num", "mp-bar__num--opp",
+                    oppHi ? "f-num-bd" : "f-body-md");
+                if (oppHi) oppNum.AddToClassList("mp-bar__num--hi-opp");
+                row.Add(oppNum);
+
+                host.Add(row);
+            }
+        }
+
+        private static VisualElement Track(string side, int value, bool hi, Color color)
+        {
+            var track = Classed(new VisualElement(), "mp-bar__track");
+            track.AddToClassList("mp-bar__track--" + side);
+            var fill = Classed(new VisualElement(), "mp-bar__fill");
+            fill.style.width = Length.Percent(Mathf.Clamp(value, 0, 100));
+            fill.style.backgroundColor = color;
+            if (!hi) fill.AddToClassList("mp-bar__fill--lo-" + side);
+            track.Add(fill);
+            return track;
+        }
+
+        // ── 共通 ──
+
+        /// <summary>色を白へ <paramref name="t"/> だけ寄せた色（先攻・後攻の札の淡色）。</summary>
+        private static Color Tint(Color c, float t) => Color.Lerp(c, Color.white, t);
+
+        private void Paint(string name, Color color)
+        {
+            var e = _root.Q<VisualElement>(name);
+            if (e != null) e.style.backgroundColor = color;
+        }
+
+        private static T Classed<T>(T e, string cls) where T : VisualElement
+        {
+            e.AddToClassList(cls);
+            return e;
+        }
+
+        private static Label Text(string text, params string[] classes)
         {
             var l = new Label(text);
-            l.AddToClassList(cls);
+            foreach (var c in classes) l.AddToClassList(c);
             return l;
         }
 

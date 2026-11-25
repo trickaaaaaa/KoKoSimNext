@@ -140,9 +140,9 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `DuelStageRig.SetTeamColors` | 3D 選手のマテリアルへの流し込み（攻守交代ごとに呼ぶ）。素体・クリップは作り直さず色だけ塗り替える |
 | `SchoolAccent` | UI 側のスクールカラー（上の design-22 の表） |
 
-- 主ボタンは応援団赤（`--color-cta`）のまま・文字は白
+- 主ボタンは応援団赤（`--color-cta`）のまま・文字は白（例外: 試合開始前の画面の「試合開始」はスクールカラーの地に白・2026-11-25 オーナー決定）
 - 画面固有の Label の余白リセットは**画面ルート**（例 `.lu-root Label`）に置く。`.sbk Label` に置くと全データ画面の文字がくっつく
-- 撮影のたびに書体の監査を回す（`ScreenshotBatch` が `<prefix>fonts.txt` を書く＝`FontAudit`。許可は Noto Sans JP・Shippori Mincho B1・DotGothic16 だけ）
+- 撮影のたびに書体の監査を回す（`ScreenshotBatch` が `<prefix>fonts.txt` を書く＝`FontAudit`。許可は Noto Sans JP・Shippori Mincho B1・DotGothic16・Dela Gothic One（ランクの文字だけ）だけ）
 
 > **現状の事実（2026-11-26・issue #1283。設計はオーナー確認待ちで、ここでは決めない）**: 上の「自作カードclassを新設しない」に対し、試合結果画面（`MatchResult.uxml`・`.mres-card`＋`MatchResult.uss`・色は `tokens.uss` の `--mr-*`／`--ms-*`。#1198）と、試合画面の左右のチーム欄（`.mside-*`＠`components.uss`・色は `--ms-*`。#1197）は専用の器で作られており、`.card`／`sbk` を使っていない（`MatchResult.uxml` に `sbk` クラスも `scorebook.uss` の読み込みも無い）。これらの扱い（部品辞書へ載せるか・例外として明記するか）は未決。
 
@@ -167,6 +167,7 @@ UIの文字は**役割で書体を割り当てる**。役割ごとにユーテ�
 | 本文・UI | Noto Sans JP | `.f-body`／`.f-body-md`／`.f-body-bd`（Regular/Medium/Bold） | ラベル・本文・ボタン・説明。強調は**実ウェイト**（`-md`/`-bd`）で出す |
 | 数字 | Noto Sans JP | `.f-num`／`.f-num-bd`（Regular/Bold） | 数字のセル（能力値・打率・スコア・金額・背番号・回別得点）。クラス名は残し向き先だけ Noto |
 | 掲示板（電光） | DotGothic16 | `.f-dot` | **掲示板部品の中だけ**（ScoreboardStrip / LineScorePanel）。外に出たら明朝＋サンセリフに戻す |
+| ランクの文字 | Dela Gothic One | `.f-rank`（components.uss） | **ランクの文字（S〜G）だけ**＝`RankBadge` 部品の中（試合開始前の画面の総合ランク）。焼く字は S〜G の8字だけ（`FontAssetBuilder.BuildRankSet`）。2026-11-25 オーナー決定の例外 |
 
 ### 適用の鉄則
 

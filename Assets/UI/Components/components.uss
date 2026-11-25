@@ -3122,3 +3122,25 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
     margin-left: 10px;
     --face-ring: rgba(0, 0, 0, 0);
 }
+
+/* ── RankBadge：ランクの文字の札（試合開始前の画面）────────────────────────
+   レター画像の .rank-chip と違い、文字（Dela Gothic One＝.f-rank）をランクの色の地に載せる。
+   Dela Gothic One はランクの文字（S〜G）にだけ使う（書体の例外・2026-11-25 オーナー決定）。
+   寸法・角丸・縁取りは使う画面が決める（ここは色と字の置き方だけ）。 */
+.f-rank {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/DelaGothicOne-Regular.asset?fileID=11400000&guid=adb7b7e69cc124557b2bb0265aa01c55&type=2#DelaGothicOne-Regular");
+}
+.rank-badge {
+    -unity-text-align: middle-center;
+    padding: 0;
+    margin: 0;
+    flex-shrink: 0;
+}
+.rank-badge--S { background-color: #F6E3B4; color: #6B4A00; }
+.rank-badge--A { background-color: #F6D4D0; color: #8A1F1A; }
+.rank-badge--B { background-color: #F8DCC6; color: #8A3D0C; }
+.rank-badge--C { background-color: #F3EAB8; color: #5F4D00; }
+.rank-badge--D { background-color: #DCEBC9; color: #35560F; }
+.rank-badge--E { background-color: #D6E6F3; color: #1F4F7A; }
+.rank-badge--F { background-color: #E6E3DC; color: #55524B; }
+.rank-badge--G { background-color: #E6E3DC; color: #55524B; }

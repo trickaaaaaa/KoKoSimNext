@@ -1,124 +1,435 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   MatchPreview.uss — 試合開始前（対戦カード）画面の配置のみ（UI-BUILD-METHOD Step 4）
+   MatchPreview.uss — 試合開始前（対戦カード）画面（2026-11-25 リデザイン・1600×900 基準）
    ───────────────────────────────────────────────────────────────────────
-   見た目の最小単位は components.uss（部品辞書）。ここは左右2カラムの割り付けなど
-   「この画面固有の並べ方」だけを持ち、色・余白・角丸は tokens を参照する。
-   gap/grid/擬似要素は使わない（USS非対応）。固定寸法セクションは flex-shrink:0。
+   上から ①対戦カードの帯（200px）②本体（スタメン 380｜戦力比較｜スタメン 380）③試合開始（64px）。
+   寸法・色はモック（PreGame.mock.html）の指定値。字間の em は px に直してある（UI Toolkit は em 非対応）。
+   gap は使わない（USS非対応）＝間隔は margin で取る。スクールカラーはコントローラが流し込む。
    ═══════════════════════════════════════════════════════════════════════ */
 
 .mp-root {
     flex-grow: 1;
-    background-color: var(--color-field);
+    background-color: #E7E2D7;
+    padding: 20px 24px;
+}
+/* スコアブックの Label 既定の余白を、この画面ではすべて自前で決める。
+   型セレクタ1つ（詳細度最小）にして、各部品のクラスの margin/padding が必ず勝つようにする
+   （`.mp-root Label` だとクラス1つの指定より強く、札の内側余白や字間の余白が消える）。
+   この USS は MatchPreview.uxml にしか付かないので、他画面の Label には効かない。 */
+Label {
+    margin: 0;
+    padding: 0;
 }
 
-/* 画面専用ヘッダー（共通TopBarの代替・全幅ストリップ）。ナビタブや「今週を進める」は出さない。 */
-.mp-topbar {
+/* ── ① 対戦カードの帯 ── */
+.mp-band {
+    height: 200px;
+    flex-shrink: 0;
+    background-color: #1D1B18;
+    border-radius: 16px;
+    padding: 18px 32px 0 32px;
+    overflow: hidden;
+}
+.mp-band__stripe {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+}
+.mp-band__head {
     flex-direction: row;
     align-items: center;
-    height: var(--h-header);
     flex-shrink: 0;
-    background-color: var(--color-strip);
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
 }
-.mp-title { font-size: var(--fs-page); color: var(--color-chalk); }
-.mp-match { font-size: var(--fs-label); color: var(--color-muted); margin-left: var(--sp-4); }
+.mp-band__title {
+    font-size: 17px;
+    letter-spacing: 2px;
+    color: #F6F1E7;
+}
+.mp-band__kind {
+    margin-left: 12px;
+    font-size: 12px;
+    color: #1D1B18;
+    background-color: #F6F1E7;
+    border-radius: 4px;
+    padding: 2px 9px;
+}
+.mp-band__spacer { flex-grow: 1; }
 
-/* ── 本体：左＝自校／右＝相手校の完全ミラー2カラム（同じ幅・同じ構成） ── */
-.mp-body {
+/* 場内放送（帯の右端）。文字と同じ行に小さなスイッチ。 */
+.mp-announce {
     flex-direction: row;
-    flex-grow: 1;
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-    padding-top: var(--sp-3);
+    align-items: center;
 }
-.mp-side {
+.mp-announce__label {
+    font-size: 12px;
+    color: #B5AFA4;
+    margin-right: 8px;
+}
+.mp-announce .switch {
+    background-color: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.16);
+}
+.mp-announce .switch__knob { background-color: #8C867B; }
+.mp-announce .switch--on { background-color: #F6F1E7; border-color: #F6F1E7; }
+.mp-announce .switch--on .switch__knob { background-color: #1D1B18; }
+
+/* 対戦カード：残りの半分｜96px｜残りの半分。上下中央。 */
+.mp-card {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: center;
+}
+.mp-card__half {
     flex-grow: 1;
     flex-basis: 0;
-    min-width: 0;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-panel);
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    padding-top: var(--sp-2);
-    padding-bottom: var(--sp-3);
-    margin-right: var(--sp-3);
-}
-/* 右カラムは右余白を作らない（左右の外周を対称に見せる）。USSは last-child 非対応のため修飾子で指定。 */
-.mp-side--right { margin-right: 0; }
-
-/* 校名ヘッダー行（キャプション・校名・先攻後攻・総合ランク）。線は引かず余白と地色で仕切る。 */
-.mp-side__head {
     flex-direction: row;
     align-items: center;
-    height: 44px;
+}
+.mp-card__half--own { justify-content: flex-end; }
+.mp-card__half--opp { justify-content: flex-start; }
+.mp-card__vs {
+    width: 96px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    font-size: 26px;
+    color: #8C867B;
+    padding-top: 24px;
+}
+.mp-card__rule {
+    width: 1px;
+    height: 60px;
+    flex-shrink: 0;
+    background-color: rgba(255, 255, 255, 0.16);
+    margin: 0 28px;
+}
+
+/* 総合ランク（76px の札）＋総合点（札の右・下揃え・控えめ）。 */
+.mp-rank {
+    flex-direction: row;
+    align-items: flex-end;
     flex-shrink: 0;
 }
-.mp-side__cap {
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
-    letter-spacing: 1px;
-    margin-right: var(--sp-2);
+.mp-rank__chip-host { flex-shrink: 0; }
+.mp-rank .rank-badge {
+    width: 76px;
+    height: 76px;
+    border-radius: 14px;
+    border-width: 3px;
+    border-color: rgba(255, 255, 255, 0.85);
+    font-size: 50px;
 }
-.mp-side__name {
-    font-size: var(--fs-page);
-    color: var(--color-chalk);
-    margin-right: var(--sp-2);
+.mp-rank__score {
+    margin-left: 10px;
+    font-size: 22px;
+    color: #B5AFA4;
+}
+
+/* 先攻・後攻の札＋校名。自校は右寄せ・相手は左寄せ。 */
+.mp-team { flex-shrink: 0; }
+.mp-team--own { align-items: flex-end; }
+.mp-team--opp { align-items: flex-start; }
+.mp-team__turn {
+    font-size: 13px;
+    color: #1D1B18;
+    border-radius: 4px;
+    padding: 1px 8px;
+    background-color: #D9D3C7;
+}
+.mp-team__name {
+    margin-top: 6px;
+    font-size: 46px;
+    letter-spacing: 4.6px;
+    color: #F6F1E7;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.mp-side__spacer { flex-grow: 1; }
-.mp-side__k { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
-.mp-side__rank { flex-direction: row; }
-.mp-side__value {
-    font-size: var(--fs-num);
-    color: var(--color-chalk);
-    -unity-text-align: middle-right;
-    margin-left: var(--sp-1);
 }
 
-/* 6角形（部品辞書 RadarChart が描く。軸ラベルは radar-axis 系）。
-   スタメンが増える編成（DH制＝打順外の先発投手行が付く）では、あふれさせず6角形側を縮める。 */
-.mp-radar {
-    height: 300px;
-    min-height: 220px;
-    flex-shrink: 1;
-    background-color: var(--color-panel-deep);
-    border-radius: var(--radius-panel);
-    margin-bottom: var(--sp-2);
-}
-
-/* スタメン一覧（行は部品辞書の MLineupRow ＝ 行高32px）。 */
-.mp-lineup { flex-grow: 1; }
-.mp-lineup .mlineup-row { background-color: var(--color-panel-deep); }
-
-/* ── フッター：主要操作は「試合開始」1つだけ・大きく（UI原則⑦） ── */
-.mp-foot {
+/* 球場・天気・気温・風の行（上に帯の左右いっぱいの線）。 */
+.mp-cond {
+    height: 52px;
     flex-shrink: 0;
     flex-direction: row;
     align-items: center;
-    padding-left: var(--sp-4);
-    padding-right: var(--sp-4);
-    padding-top: var(--sp-3);
-    padding-bottom: var(--sp-4);
+    justify-content: center;
+    margin-left: -32px;
+    margin-right: -32px;
+    border-top-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.12);
 }
-/* 場内放送の切り替え（issue #919）は試合開始の左。試合開始は残りの幅いっぱい（主要操作は大きく）。 */
-.mp-foot .chip-btn {
-    flex-shrink: 0;
-    margin-left: 0;
-    margin-right: var(--sp-3);
+.mp-cond__item {
+    flex-direction: row;
+    align-items: center;
 }
-.mp-cta {
-    height: 56px;
+.mp-cond__sep {
+    width: 1px;
+    height: 20px;
+    margin: 0 36px;
+    background-color: rgba(255, 255, 255, 0.16);
+}
+.mp-cond__icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 10px;
+    color: #B5AFA4;
+}
+.mp-cond__icon--sun { color: #F2C25A; }
+.mp-cond__icon--cloud { color: #B5AFA4; }
+.mp-cond__icon--rain { color: #7FA8D1; }
+.mp-cond__icon--temp { color: #E8904A; }
+.mp-cond__icon--wind { color: #B5AFA4; }
+.mp-cond__k {
+    font-size: 12px;
+    color: #B5AFA4;
+    margin-right: 10px;
+}
+.mp-cond__v {
+    font-size: 16px;
+    color: #F6F1E7;
+}
+
+/* ── ② 本体 ── */
+.mp-body {
     flex-grow: 1;
-    flex-shrink: 0;
-    background-color: var(--color-cta);
-    color: var(--color-ink);
-    font-size: var(--fs-body);
-    border-width: 0;
-    border-radius: var(--radius-panel);
+    flex-direction: row;
+    margin: 16px 0;
 }
-.mp-cta:hover { background-color: var(--color-cta-hi); }
+.mp-col {
+    background-color: #FBFAF6;
+    border-radius: 14px;
+    padding: 16px 20px;
+}
+.mp-col--side {
+    width: 380px;
+    flex-shrink: 0;
+}
+.mp-col--center {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin: 0 16px;
+}
+.mp-col__head {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom-width: 2px;
+    border-bottom-color: #1D1B18;
+}
+.mp-col__mark {
+    width: 6px;
+    height: 20px;
+    border-radius: 2px;
+    margin-right: 10px;
+    background-color: #3A3631;
+}
+.mp-col__title {
+    font-size: 19px;
+    letter-spacing: 1.5px;
+    color: #1D1B18;
+    white-space: nowrap;
+}
+.mp-col__sub {
+    font-size: 12px;
+    color: #6F6A60;
+    margin-left: 10px;
+}
+
+/* スタメン（打順の行9本＋最下段に先発投手）。 */
+.mp-lineup { flex-grow: 1; }
+.mp-row {
+    flex-direction: row;
+    align-items: center;
+    height: 36px;
+    flex-shrink: 0;
+    margin-top: 4px;     /* モックの列の gap: 4px */
+    border-bottom-width: 1px;
+    border-bottom-color: #ECE8DF;
+}
+.mp-row__ord {
+    width: 22px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    font-size: 17px;
+    color: #1D1B18;
+}
+.mp-row .sbk-pos {
+    width: 26px;
+    height: 22px;
+    margin-left: 12px;
+    border-radius: 5px;
+    border-width: 0;
+    font-size: 12px;
+}
+.mp-row__name {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-left: 12px;
+    font-size: 17px;
+    letter-spacing: 1.4px;
+    color: #1D1B18;
+    white-space: nowrap;
+}
+.mp-row .sbk-patch {
+    width: 26px;
+    height: 20px;
+    margin-left: 12px;
+    border-width: 1.5px;
+    border-color: #3A3631;
+    border-radius: 3px;
+    background-color: #FFFFFF;
+    font-size: 12px;
+    color: #1D1B18;
+}
+.mp-row__meta {
+    flex-shrink: 0;
+    margin-left: 8px;
+    font-size: 13px;
+    color: #6F6A60;
+    white-space: nowrap;
+}
+.mp-lineup__fill { flex-grow: 1; }
+.mp-row--sp {
+    height: 44px;
+    border-bottom-width: 0;
+    background-color: #F0ECE3;
+    border-radius: 9px;
+    margin: 0 -10px;
+    padding: 0 10px;
+}
+.mp-row__ord--sp {
+    font-size: 11px;
+    color: #6F6A60;
+}
+
+/* 戦力比較：上段にレーダー2つ（重ねない）、下段に左右対比の棒グラフ。 */
+.mp-radars {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+.mp-radars__half {
+    flex-grow: 1;
+    flex-basis: 0;
+    align-items: center;
+}
+.mp-radar {
+    width: 360px;
+    height: 266px;
+    flex-shrink: 0;
+}
+.mp-radar .team-radar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+.mp-radar__axis {
+    position: absolute;
+    width: 80px;
+    height: 16px;
+    -unity-text-align: middle-center;
+    font-size: 12px;
+    color: #6F6A60;
+}
+.mp-radar__team {
+    position: absolute;
+    left: 4px;
+    top: 2px;
+    flex-direction: row;
+    align-items: center;
+}
+.mp-radar__mark {
+    width: 4px;
+    height: 16px;
+    margin-right: 8px;
+}
+.mp-radar__name {
+    font-size: 16px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+.mp-radar .rank-badge {
+    position: absolute;
+    left: 158px;
+    top: 111px;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border-width: 2px;
+    border-color: #FBFAF6;
+    font-size: 28px;
+}
+
+.mp-bars {
+    flex-grow: 1;
+    justify-content: space-evenly;
+}
+.mp-bar {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: #F1EDE5;
+}
+.mp-bar__num {
+    width: 40px;
+    flex-shrink: 0;
+    font-size: 20px;
+    color: #8C867B;
+}
+.mp-bar__num--own { -unity-text-align: middle-right; margin-right: 10px; }
+.mp-bar__num--opp { -unity-text-align: middle-left; margin-left: 10px; }
+.mp-bar__track {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 16px;
+    flex-direction: row;
+    background-color: #F1EDE5;
+}
+.mp-bar__track--own {
+    justify-content: flex-end;
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+.mp-bar__track--opp {
+    justify-content: flex-start;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+/* 棒そのものには角丸を付けない。溝（track）を角丸＋overflow:hidden にして切り抜く。
+   棒に角丸を付けると、位置によって暗い棒の中に白い点が2段並ぶ描画の乱れが出た（2026-11-26 実測。
+   角丸を外すと消え、左右反転しても残った）。 */
+.mp-bar__track { overflow: hidden; }
+.mp-bar__track--opp .mp-bar__fill { background-color: #3A3631; }
+.mp-bar__fill { height: 16px; }
+.mp-bar__label {
+    width: 76px;
+    flex-shrink: 0;
+    margin: 0 10px;
+    -unity-text-align: middle-center;
+    font-size: 14px;
+    color: #4F4A42;
+}
+/* 高いほう（同点は両方）＝濃く・太く。低いほう＝棒を薄く・数値を細く淡く。 */
+.mp-bar__num--hi-opp { color: #1D1B18; }
+.mp-bar__fill--lo-own { opacity: 0.40; }
+.mp-bar__fill--lo-opp { opacity: 0.35; }
+
+/* ── ③ 試合開始 ── */
+.mp-cta {
+    height: 64px;
+    flex-shrink: 0;
+    margin: 0;
+    border-width: 0;
+    border-radius: 14px;
+    font-size: 24px;
+    letter-spacing: 9.6px;
+    color: #FFFFFF;
+    -unity-text-align: middle-center;
+}
 /* 準備中（BeginMatch 等）は押せない見た目にする（issue #325・無言で無視しない）。 */
-.mp-cta:disabled { opacity: 0.35; }
+.mp-cta:disabled { opacity: 0.45; }

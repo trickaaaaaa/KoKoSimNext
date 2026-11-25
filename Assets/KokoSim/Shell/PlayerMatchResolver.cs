@@ -152,10 +152,16 @@ namespace KokoSim.Unity.Shell
         private static (KokoSim.Engine.Match.Field.FieldGeometry Field, string? Name, string? Id) Stadium(
             TournamentMatchContext? context, IRandomSource rng, int prefectureId)
         {
-            var stadium = MatchStadium.ForStadium(GameSession.Current.Kind, context?.RoundsRemaining, rng.Fork(StadiumStreamId),
-                prefectureId);
+            var stadium = StadiumFor(context?.RoundsRemaining, rng, prefectureId);
             return (stadium?.ToFieldGeometry() ?? new KokoSim.Engine.Match.Field.FieldGeometry(), stadium?.Name, stadium?.Id);
         }
+
+        /// <summary>
+        /// 試合 rng（Resolve／BeginLive に渡るもの）から、その試合の球場を決める。実試合（<see cref="Stadium"/>）と
+        /// 試合開始前の画面（次戦の試合 rng を覗いて渡す）が同じ球場を出すための単一の入口。Fork だけ＝rng を消費しない。
+        /// </summary>
+        public static KokoSim.Engine.Match.Field.Stadium? StadiumFor(int? roundsRemaining, IRandomSource rng, int prefectureId)
+            => MatchStadium.ForStadium(GameSession.Current.Kind, roundsRemaining, rng.Fork(StadiumStreamId), prefectureId);
 
         /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
         private static int CalendarYear() => SeasonClock.SeasonBaseYear + (GameSession.Current.Year - 1);

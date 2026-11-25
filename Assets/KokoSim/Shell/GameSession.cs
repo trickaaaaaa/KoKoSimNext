@@ -783,6 +783,9 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         private int _practiceWeek;
 
+        /// <summary>申込中の練習試合の週（試合開始前の画面が、実試合と同じ種で天気を先読みするのに使う）。</summary>
+        public int PracticeWeek => _practiceWeek;
+
         /// <summary>開始した練習試合で自校が先攻か（<see cref="PlayerMatchResolver.ManagerIsAway"/> の結果を保持）。</summary>
         private bool _practiceManagerIsAway;
 

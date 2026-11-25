@@ -465,15 +465,18 @@ public sealed class BlockLeagueRunner : ITournamentRunner
 
     /// <inheritdoc/>
     public WeatherSample? PeekNextMatchWeather(WeatherCoefficients coefficients)
+        => PeekNextPlayerMatchRng() is { } rng ? WeatherModel.SampleForMatch(rng.Fork(2), coefficients) : null;
+
+    /// <inheritdoc/>
+    public IRandomSource? PeekNextPlayerMatchRng()
     {
         if (_nextOpponent is null) return null;
         var mine = CardsOf(_roundIndex).FirstOrDefault(Involves);
         if (mine is null) return null;
         // AdvanceUntilPlayerMatch / ResolveRound が自校カードで辿る鎖と同一: _rng.Fork(PlayerStream(...)) が
-        // Resolve/BeginLive の "rng" 引数、その .Fork(2) が GameEngine 側の matchRng（天候Forkの親）。
-        // 両方 Fork のみ＝ _rng は1ビットも消費しない。
-        var matchRng = _rng.Fork(PlayerStream(_roundIndex, mine.Index)).Fork(2);
-        return WeatherModel.SampleForMatch(matchRng, coefficients);
+        // Resolve/BeginLive の "rng" 引数（その .Fork(2) が GameEngine 側の matchRng＝天候Forkの親）。
+        // Fork のみ＝ _rng は1ビットも消費しない。
+        return _rng.Fork(PlayerStream(_roundIndex, mine.Index));
     }
 
     /// <summary>第 round 節（0基点）の全カード（ブロック順→ブロック内の組み順）。添字は節の中で0から通し。</summary>
