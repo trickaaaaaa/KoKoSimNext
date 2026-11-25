@@ -1074,8 +1074,8 @@ tactics:
   squeeze_min_bunt: 55
   # issue steal-thresholds-unreachable（2026-08-27）: 旧0.72は実ロスター実測の到達可能上限（p99=60.7%・
   # max=65.8%）を超えていて原理的に一度も通らない死にコードだった。当時の引き直し先 0.50 は概ねp70相当（詳細は
-  # TacticsCoefficients.StealMinSuccess のコメント参照）。現行値は下の 0.65（issue #838 で再校正）。
-  steal_min_success: 0.65          # 読まれる確率込みの成功見込みがこの値以上で仕掛ける（issue #838: 0アウトの損益分岐の近似）。
+  # TacticsCoefficients.StealMinSuccess のコメント参照）。現行値は下の 0.52（#838 で 0.65 → #1275 で 0.52）。
+  steal_min_success: 0.52          # 読まれる確率込みの成功見込みがこの値以上で仕掛ける（0アウトの閾値）。#838 で 0.65 に上げたら企図が1チーム0.25回/試合まで減ったので、目標（1チームあたり1.0〜2.0回/試合）へ #1275 で 0.52（≈1.45回・成功率≈64%）へ再校正。
   steal_prob: 0.45
   # issue #838: 損益分岐のアウト数別オフセット（セイバーメトリクス近似）と、閾値直上の崖をなだらかにする傾き。
   steal_min_success_one_out_offset: -0.03

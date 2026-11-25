@@ -100,8 +100,8 @@ public sealed class GameRegressionTests
 
         // 単独盗塁（issue steal-thresholds-unreachable, 2026-08-27）: 采配閾値の再校正で企図が
         // 実質0件から復活したので、この2本は「盗塁が死にコードへ逆戻りしていないか」を守る。
-        Assert.True(targets.StealAttemptPerGame.Contains(s.StealAttemptsPerGame),
-            $"盗塁企図/試合 {s.StealAttemptsPerGame:F3} が帯外");
+        Assert.True(targets.StealAttemptPerGame.Contains(s.StealAttemptsPerTeamGame),
+            $"盗塁企図/チーム/試合 {s.StealAttemptsPerTeamGame:F3} が帯外");
         Assert.True(targets.StealSuccessRate.Contains(s.StealSuccessRate),
             $"盗塁成功率 {s.StealSuccessRate:P1}（試行 {s.TotalStealAttempts}） が帯外");
 
