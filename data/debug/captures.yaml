@@ -759,4 +759,4 @@ captures:
     manager: away
     colors: {away: 9051, home: 9052}
     helmet: {away: E11D48}
-    shots: [start, catch, release+0.2, judgement]
+    shots: [start, catch, release+0.2, result]
