@@ -2197,7 +2197,8 @@ public static class GameEngine
             // 走塁係数は paBaserunning（設計書17 §6.1, F4）。非強制時は ctx.Baserunning と同一参照＝従来と不変。
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, paBaserunning, rng, collectMoves: true,
-                homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak, r2StealBreak, r3StealBreak);
+                homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak, r2StealBreak, r3StealBreak,
+                plainOut: res.CutOffAtPitchLimit);
             // 外野ゴロ（issue #1130）: 落ちたフライの単打で、待った一塁走者が二塁で封殺された＝打者に安打は付かない
             // （フォースアウトが成立した打球は安打にしない・公認野球規則 9.05(b)）。記録上は野選の凡打として扱う。
             // 走塁の解決は済んでいる＝ここから下の数え方（打者アウトの有無・成績・記録）だけが変わる。
