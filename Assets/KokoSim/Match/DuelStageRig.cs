@@ -1782,7 +1782,9 @@ namespace KokoSim.Unity.Match
             // 窓は GripEndSec 2.60s まで＝1.1〜1.8秒のバント系クリップは全区間）が潰していた。
             // 重みはバットを寝かせる補正と同じ（移行の進み・クロスフェードの補間込み）＝手が1コマで飛ばない
             float gripW = 1f - BuntBatFlatWeight();
-            DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim, gripW);
+            // 膝も同じ重みで切る（窓がスイング用の時刻表＝Bunt_Loop の毎周で膝が揺れる・issue #1660）。
+            // 左打者は鏡映親で見せている＝膝の回しを裏返す
+            DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim, gripW, kneeWeight: gripW, mirrored: _batter.Mirrored);
         }
 
         /// <summary>
@@ -6884,7 +6886,16 @@ namespace KokoSim.Unity.Match
             string F(Transform t) => t == null ? "-" : XZ(tr.InverseTransformPoint(t.position));
             return "clip=" + _batter.Time.ToString("F2")
                 + " 根Δ=" + d.x.ToString("F3") + "," + d.z.ToString("F3")
-                + " 左足=" + F(lf) + " 右足=" + F(rf) + " 腰=" + F(hip);
+                + " 左足=" + F(lf) + " 右足=" + F(rf) + " 腰=" + F(hip)
+                + " 左膝=" + P3(_batter.Animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg))
+                + " 右膝=" + P3(_batter.Animator.GetBoneTransform(HumanBodyBones.RightLowerLeg));
+            // 膝は高さも要る（足を固めたまま膝だけ内外へ振れる＝「グネグネ」を見る・issue #1660）
+            string P3(Transform t)
+            {
+                if (t == null) return "-";
+                var p = tr.InverseTransformPoint(t.position);
+                return "(" + p.x.ToString("F3") + "," + p.y.ToString("F3") + "," + p.z.ToString("F3") + ")";
+            }
         }
 
         private static string XZ(Vector3 p)

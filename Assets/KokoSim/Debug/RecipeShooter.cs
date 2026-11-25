@@ -181,10 +181,22 @@ namespace KokoSim.Unity.Debugging
                 // 対決ビューのまま撮る（duel_seconds）: 最初の球が投げられた瞬間から決まった秒数だけ連番で撮る
                 if (_r.DuelSeconds > 0f)
                 {
+                    // 打撃の指示（sign）はこの経路でも毎球の窓の頭で押す（守備ビューの経路と同じ）。
+                    // 押さないと最初の球が素の構えのまま進み、バントの構えが写らない（issue #1660）
+                    PitchBattingOverride duelSign = default;
+                    bool duelHasSign = !string.IsNullOrEmpty(_r.Sign) && Enum.TryParse(_r.Sign, true, out duelSign);
+                    bool duelPrevWin = false;
+                    void PressSignAtWindow()
+                    {
+                        bool w = ctrl.AtWindowForCapture;
+                        if (duelHasSign && w && !duelPrevWin && ctrl.ManagerOnOffenseForCapture) ctrl.SelectPitchBattingForCapture(duelSign);
+                        duelPrevWin = w;
+                    }
                     float waitedDuel = 0f;
                     while (!_r.DuelFromLaunch && !ctrl.InPitchPhaseForCapture)
                     {
                         if (ctrl.IsGameOver || waitedDuel > _r.TimeoutSeconds) { yield return false; yield break; }
+                        PressSignAtWindow();
                         waitedDuel += Time.unscaledDeltaTime;
                         yield return null;
                     }
@@ -198,6 +210,7 @@ namespace KokoSim.Unity.Debugging
                     float woCelebrate = -1f;
                     for (int f = 0; f < frames; f++)
                     {
+                        PressSignAtWindow();
                         if (!timeoutSent && _r.DefenseTimeoutAt >= 0f && f / (float)_r.VideoFps >= _r.DefenseTimeoutAt)
                         {
                             if (_r.TimeoutViaMenu)
