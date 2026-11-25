@@ -124,6 +124,26 @@ public sealed class TournamentArchiveTests
         Assert.Equal(1, store.Archive.LastUniformNumber(1));
     }
 
+    /// <summary>同学年では暦の新しい大会の番号が優先（夏県→夏甲子園→秋→センバツ。センバツは1月＝進級前の学年のまま記録される）。</summary>
+    [Fact]
+    public void LastUniformNumber_WithinGrade_PrefersTheLatestInCalendarOrder()
+    {
+        var order = new[]
+        {
+            (TournamentSlot.SummerPref, 11), (TournamentSlot.SummerKoshien, 12),
+            (TournamentSlot.Autumn, 13), (TournamentSlot.Senbatsu, 14),
+        };
+        // 古い方から1枠ずつ足していき、足すたびにいちばん新しい枠の番号が返ること。
+        var store = new PlayerStatStore();
+        foreach (var (slot, number) in order)
+        {
+            store.StartTournament();
+            store.FoldGame(ManagerHomeGame(sourceId: 1, hits: 1, runs: 0), managerIsAway: false);
+            store.ArchiveCurrentTournament(slot, Info(1, grade: 2, number: number));
+            Assert.Equal(number, store.Archive.LastUniformNumber(1));
+        }
+    }
+
     /// <summary>一度も大会に出ていない選手は0（＝背番号なし）。落ちない。</summary>
     [Fact]
     public void LastUniformNumber_UnknownPlayer_IsZero()

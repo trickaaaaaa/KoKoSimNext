@@ -476,13 +476,13 @@ namespace KokoSim.Unity.Players
             }
         }
 
-        // 大会枠の並び順（学年内で春→夏県→夏甲子園→秋の暦順, issue #77）。
+        // 大会枠の並び順（学年内で夏県→夏甲子園→秋→春の暦順, issue #77）。センバツは1月＝進級前の学年のまま記録される。
         private static int SlotOrder(TournamentSlot s) => s switch
         {
-            TournamentSlot.Senbatsu => 0,
-            TournamentSlot.SummerPref => 1,
-            TournamentSlot.SummerKoshien => 2,
-            TournamentSlot.Autumn => 3,
+            TournamentSlot.SummerPref => 0,
+            TournamentSlot.SummerKoshien => 1,
+            TournamentSlot.Autumn => 2,
+            TournamentSlot.Senbatsu => 3,
             _ => 9,
         };
 

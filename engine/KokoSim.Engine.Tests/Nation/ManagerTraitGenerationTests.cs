@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using Xunit;
@@ -68,7 +70,9 @@ public sealed class ManagerTraitGenerationTests
         Id = id, Name = $"標準校{id}", PrefectureId = 0, Strength = strength,
     };
 
-    // DH を検討させない（modernRules 未指定）＝控え（背番号10〜）が打順に入るのは抜擢型だけになる。
+    private static HashSet<string> OrderNames(Team t) => t.BattingOrder.Select(p => p.Name).ToHashSet();
+
+    // DH を検討させない（modernRules 未指定）＝同じ校の標準版と先発の顔ぶれが違えば、抜擢が起きている。
     [Fact]
     public void Promoter_PromotesBenchStarter_Observably_PlainNever()
     {
@@ -79,11 +83,28 @@ public sealed class ManagerTraitGenerationTests
         {
             var pro = StrengthTeamFactory.ForSchool(PromoterSchool(id, 62), yearIndex: 1);
             var plain = StrengthTeamFactory.ForSchool(PlainSchool(id, 62), yearIndex: 1);
-            if (pro.BattingOrder.Any(p => p.UniformNumber >= 10)) promoted++;
+            if (!OrderNames(pro).SetEquals(OrderNames(plain))) promoted++;
             if (plain.BattingOrder.Any(p => p.UniformNumber >= 10)) plainPromoted++;
         }
         Assert.Equal(0, plainPromoted);   // 抜擢型でなければ控えは先発しない
         Assert.True(promoted > schools / 3, $"抜擢が観測できる頻度で起きるはず: {promoted}/{schools}");
+    }
+
+    // 抜擢された控えは先発の位置番号（1〜9）を着け、押し出された先発が控えの番号へ回る。背番号は重ならない。
+    [Fact]
+    public void Promoter_PromotedStarter_WearsPositionNumber_NumbersStayUnique()
+    {
+        var promotedSchools = 0;
+        for (var id = 0; id < 40; id++)
+        {
+            var pro = StrengthTeamFactory.ForSchool(PromoterSchool(id, 62), yearIndex: 1);
+            var plain = StrengthTeamFactory.ForSchool(PlainSchool(id, 62), yearIndex: 1);
+            Assert.All(pro.BattingOrder, p => Assert.InRange(p.UniformNumber, 1, 9));
+            var all = pro.BattingOrder.Concat(pro.Reserves).Where(p => p.UniformNumber > 0).Select(p => p.UniformNumber).ToList();
+            Assert.Equal(all.Count, all.Distinct().Count());
+            if (!OrderNames(pro).SetEquals(OrderNames(plain))) promotedSchools++;
+        }
+        Assert.True(promotedSchools > 0, "抜擢が1校も起きない＝この検査が何も見ていない");
     }
 
     [Fact]

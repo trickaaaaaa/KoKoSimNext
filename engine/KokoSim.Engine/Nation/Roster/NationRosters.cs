@@ -21,6 +21,20 @@ public sealed class NationRosters
 
     public NationRosters(AiRosterDeps deps) => _deps = deps;
 
+    /// <summary>
+    /// 「その年度は夏の引退週を過ぎているか」（年度→真偽）。遅延ブートストラップは暦を見ないので、これが真の年度では
+    /// 生成の直後に3年生を引退させる＝既存校が <see cref="RetireGraduatesAll"/> で引退した後の姿と揃える。
+    /// null（既定）＝常に引退前として生成する（暦を持たない呼び出し・テスト）。
+    /// </summary>
+    public System.Func<int, bool>? GraduatesRetiredFor { get; set; }
+
+    private AiSchoolRoster BootstrapFor(School school, int yearIndex)
+    {
+        var r = AiRosterFactory.Bootstrap(school, yearIndex, _deps);
+        if (GraduatesRetiredFor?.Invoke(yearIndex) == true) AiRosterCycle.RetireGraduates(r);
+        return r;
+    }
+
     public AiRosterDeps Deps => _deps;
 
     /// <summary>登録済み（ブートストラップ済み）学校ID のスナップショット。</summary>
@@ -102,7 +116,7 @@ public sealed class NationRosters
         {
             if (!_rosters.TryGetValue(school.Id, out var r))
             {
-                r = AiRosterFactory.Bootstrap(school, yearIndex, _deps);
+                r = BootstrapFor(school, yearIndex);
                 _rosters[school.Id] = r;
             }
             else if (!r.MentalBackfillChecked)
@@ -140,7 +154,7 @@ public sealed class NationRosters
     {
         AiSchoolRoster? r;
         lock (_gate) _rosters.TryGetValue(school.Id, out r);
-        r ??= AiRosterFactory.Bootstrap(school, yearIndex, _deps);
+        r ??= BootstrapFor(school, yearIndex);
         return AiTeamBuilder.Build(r, school, yearIndex, _deps, modernRules, calendarYear);
     }
 

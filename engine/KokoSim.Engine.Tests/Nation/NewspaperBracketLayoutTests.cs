@@ -127,6 +127,27 @@ public sealed class NewspaperBracketLayoutTests
         Assert.True(b.ChampionAnchor.Y >= M.HeaderHeight + M.RowPitch);
     }
 
+    // 同名の校が2つある大会（架空校の重複名）。片方の敗退で、もう片方の校名まで灰色にしない。
+    [Fact]
+    public void Leaves_SameNamedSchools_AreEliminatedIndependently()
+    {
+        var view = new TournamentBracketView("同名", [], null, false, false,
+        [
+            new BracketRound(0, "準決勝",
+            [
+                C(0, 0, S("東高", true, 3), S("西高", false, 1), played: true),
+                C(0, 1, S("東高", false, 0), S("北高", true, 2), played: true),
+            ]),
+            new BracketRound(1, "決勝", [C(1, 0, S("東高"), S("北高"))]),
+        ]);
+        var b = NewspaperBracketLayout.Build(view, M);
+
+        var easts = b.Leaves.Where(l => l.Name == "東高").ToList();
+        Assert.Equal(2, easts.Count);
+        Assert.False(easts[0].IsEliminated);   // 1つ目の東高は勝ち上がり
+        Assert.True(easts[1].IsEliminated);    // 2つ目の東高だけ敗退
+    }
+
     [Fact]
     public void EmptyView_ReturnsEmpty()
     {

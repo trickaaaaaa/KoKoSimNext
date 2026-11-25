@@ -167,6 +167,11 @@ public static class AiRosterFactory
                 ai.Grade = grade;
                 // 上級生は (grade−1) 学年ぶんの精神力アークを載せる（進級と同じ量＝ブートストラップと通常進行で同じ値）。
                 ai.Snapshot = AiMentalModel.WithGradeArc(ai.Snapshot with { Grade = grade }, grade, deps.Roster);
+                // 怪物は逆算配分の対象外（Settle が絞る）なので、通常の進級で毎年受ける固定成長をここで過年度ぶん載せる。
+                if (ai.Phenom.IsPhenom())
+                    for (var g = 2; g <= grade; g++)
+                        ai.Snapshot = AiRosterCycle.BumpTo(
+                            ai.Snapshot, AiRosterCycle.PhenomPromotionGrowth(deps.Persistent, g), deps.Roster);
                 roster.Add(ai);
             }
         }

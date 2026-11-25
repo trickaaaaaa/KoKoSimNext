@@ -71,15 +71,24 @@ public static class NewspaperBracketLayout
         var centerX = width / 2;
         double Mirror(double x, BracketSide side) => side == BracketSide.Right ? width - x : x;
 
-        // 敗退した校（消化済みカードの負け側）。端の校名をグレーにするのに使う。
-        var eliminated = new HashSet<string>();
-        foreach (var r in rounds)
-            foreach (var c in r.Cards)
+        // 1回戦の端の校が敗退済みか。校名ではなく樹形図の位置（カード×上下）で勝ち上がりを辿る
+        // ＝同名の校が2つあっても、片方の敗退でもう片方を灰色にしない。
+        bool IsEliminated(int card, int slot)
+        {
+            for (var r = 0; r <= final; r++)
+            {
+                var c = rounds[r].Cards[card];
                 if (c.IsPlayed)
                 {
-                    var loser = c.Top.IsWinner ? c.Bottom : c.Top;
-                    if (loser.TeamName is { } n) eliminated.Add(n);
+                    if (!(slot == 0 ? c.Top : c.Bottom).IsWinner) return true;
                 }
+                else if (!c.IsBye) return false;
+                if (r == final) break;
+                slot = card % 2;
+                card /= 2;
+            }
+            return false;
+        }
 
         var leaves = new List<BracketLeaf>();
         var paths = new List<BracketPath>();
@@ -103,7 +112,7 @@ public static class NewspaperBracketLayout
                 var row = rows[side == BracketSide.Left ? 0 : 1]++;
                 var p = new BracketPoint(Mirror(m.NameWidth, side), m.HeaderHeight + (row + 0.5) * m.RowPitch);
                 leafAt[(i, s)] = p;
-                leaves.Add(new BracketLeaf(slot.TeamName, slot.IsManager, eliminated.Contains(slot.TeamName), side, p));
+                leaves.Add(new BracketLeaf(slot.TeamName, slot.IsManager, IsEliminated(i, s), side, p));
             }
         }
 
