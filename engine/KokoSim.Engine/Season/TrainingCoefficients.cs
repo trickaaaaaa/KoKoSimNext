@@ -153,6 +153,38 @@ public sealed record TrainingCoefficients
     /// <summary>1試合出場あたりの走塁判断exp（成長段階係数を乗算, AbilityKind.Baserunning へ）。</summary>
     public double MatchBaserunningExp { get; init; } = 300.0;
 
+    // === 成功体験ボーナス（設計書02 §5.3b・issue #1487）: 好打・好投・好守の試合で該当能力に少量のexp ===
+    // 量は練習の主効果（BaseMainExp=290/週）の1割前後＝練習を上回らない。大会の格で倍率が上がる（練習試合は1.0）。
+    /// <summary>好打の試合で ミート/パワー それぞれに入るexp（成長段階係数・大会の格を乗算）。</summary>
+    public double MatchSuccessBatExp { get; init; } = 40.0;
+    /// <summary>好投の試合で 制球/キレ/スタミナ それぞれに入るexp。</summary>
+    public double MatchSuccessPitchExp { get; init; } = 30.0;
+    /// <summary>好守の試合で 守備/捕球/送球精度 それぞれに入るexp。</summary>
+    public double MatchSuccessFieldExp { get; init; } = 30.0;
+    /// <summary>好打の目安: 安打数・打点（本塁打1本以上も好打）。</summary>
+    public int MatchSuccessMinHits { get; init; } = 2;
+    public int MatchSuccessMinRbi { get; init; } = 2;
+    /// <summary>好投の目安: アウト数以上かつ失点以下、または奪三振以上。</summary>
+    public int MatchSuccessMinOuts { get; init; } = 15;
+    public int MatchSuccessMaxRuns { get; init; } = 3;
+    public int MatchSuccessMinStrikeOuts { get; init; } = 7;
+    /// <summary>好守の目安: 守備に就いた野手が無失策で、チーム全体の失策もこの数以下（既定0＝無失策試合）。</summary>
+    public int MatchSuccessMaxTeamErrors { get; init; } = 0;
+    /// <summary>大会の格による倍率（大舞台ほど大きい）。練習試合は1.0。</summary>
+    public double MatchSuccessMultPractice { get; init; } = 1.0;
+    public double MatchSuccessMultPrefectural { get; init; } = 1.5;
+    public double MatchSuccessMultRegional { get; init; } = 2.0;
+    public double MatchSuccessMultKoshien { get; init; } = 3.0;
+
+    /// <summary>成功体験ボーナスの大会の格倍率（null＝練習試合）。</summary>
+    public double MatchSuccessStageMult(TournamentKind? kind) => kind switch
+    {
+        null => MatchSuccessMultPractice,
+        TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien => MatchSuccessMultKoshien,
+        TournamentKind.Regional or TournamentKind.Jingu => MatchSuccessMultRegional,
+        _ => MatchSuccessMultPrefectural,
+    };
+
     // === 投手センス→投手系能力の伸びやすさ（設計書01 §1.3・issue #1472） ===
     // 投手系（球速/制球/スタミナ/キレ/球威）の経験値にだけ掛ける。打撃の才能（伸びしろ・総合力）とは独立に
     // 投手センスで決まる＝野手として平凡でも投手センスが高い選手は、投手の練習を振ると大きく伸びる（投手転向で覚醒）。

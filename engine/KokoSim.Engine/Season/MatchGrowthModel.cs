@@ -47,6 +47,74 @@ public static class MatchGrowthModel
         }
     }
 
+    /// <summary>
+    /// 成功体験ボーナス（設計書02 §5.3b・issue #1487）。好打→ミート/パワー、好投→制球/キレ/スタミナ、
+    /// 好守→守備/捕球/送球精度へ少量のexpを付与する。<paramref name="kind"/> が大会の格（null＝練習試合）で、
+    /// 大舞台ほど倍率が大きい。成長段階係数・才能上限・必要exp曲線は練習成長と同じ（ApplyExp 経由）。乱数なし。
+    /// </summary>
+    public static void ApplySuccess(
+        GameResult detail, bool managerIsAway, IReadOnlyList<DevelopingPlayer> roster, TournamentKind? kind,
+        int week, SeasonCalendar calendar, GrowthStageTable stages, TrainingCoefficients c)
+    {
+        var batting = managerIsAway ? detail.AwayBatting : detail.HomeBatting;
+        var pitching = managerIsAway ? detail.AwayPitching : detail.HomePitching;
+        var fielding = managerIsAway ? detail.AwayFielding : detail.HomeFielding;
+        var teamErrors = managerIsAway ? detail.AwayErrors : detail.HomeErrors;
+        var stageMult = c.MatchSuccessStageMult(kind);
+
+        var byId = new Dictionary<int, DevelopingPlayer>(roster.Count);
+        foreach (var dp in roster) byId[dp.Id] = dp;
+        var ownErrors = new Dictionary<int, int>();
+        foreach (var f in fielding)
+            if (f.SourceId is { } fid) ownErrors[fid] = ownErrors.GetValueOrDefault(fid) + f.Errors;
+
+        double Scale(DevelopingPlayer dp)
+            => stages.Coefficient(dp.GrowthType, calendar.StageIndex(dp.Grade, week)) * stageMult;
+
+        foreach (var line in batting)
+        {
+            if (line.SourceId is not { } id || !byId.TryGetValue(id, out var dp)) continue;
+            if (IsGoodBatting(line, c))
+            {
+                DevelopmentModel.ApplyExp(dp, AbilityKind.Contact, c.MatchSuccessBatExp * Scale(dp), c);
+                DevelopmentModel.ApplyExp(dp, AbilityKind.Power, c.MatchSuccessBatExp * Scale(dp), c);
+            }
+            if (IsGoodFielding(line, ownErrors.GetValueOrDefault(id), teamErrors, c))
+            {
+                var exp = c.MatchSuccessFieldExp * Scale(dp);
+                DevelopmentModel.ApplyExp(dp, AbilityKind.Fielding, exp, c);
+                DevelopmentModel.ApplyExp(dp, AbilityKind.Catching, exp, c);
+                DevelopmentModel.ApplyExp(dp, AbilityKind.ThrowAccuracy, exp, c);
+            }
+        }
+
+        foreach (var line in pitching)
+        {
+            if (line.SourceId is not { } id || !byId.TryGetValue(id, out var dp)) continue;
+            if (!IsGoodPitching(line, c)) continue;
+            var exp = c.MatchSuccessPitchExp * Scale(dp);
+            DevelopmentModel.ApplyExp(dp, AbilityKind.Control, exp, c);
+            DevelopmentModel.ApplyExp(dp, AbilityKind.PitchRank, exp, c);
+            DevelopmentModel.ApplyExp(dp, AbilityKind.Stamina, exp, c);
+        }
+    }
+
+    internal static bool IsGoodBatting(BattingLine l, TrainingCoefficients c)
+        => l.Hits >= c.MatchSuccessMinHits || l.Rbi >= c.MatchSuccessMinRbi || l.HomeRuns >= 1;
+
+    internal static bool IsGoodPitching(PitchingLine l, TrainingCoefficients c)
+        => (l.Outs >= c.MatchSuccessMinOuts && l.Runs <= c.MatchSuccessMaxRuns)
+            || l.StrikeOuts >= c.MatchSuccessMinStrikeOuts;
+
+    /// <summary>守備に就いた野手（投手・DH除く）が無失策で、チームの失策も少ない試合。</summary>
+    internal static bool IsGoodFielding(BattingLine l, int ownErrors, int teamErrors, TrainingCoefficients c)
+    {
+        if (ownErrors > 0 || teamErrors > c.MatchSuccessMaxTeamErrors) return false;
+        foreach (var pos in l.Positions)
+            if (pos != FieldPosition.DesignatedHitter && pos != FieldPosition.Pitcher) return true;
+        return false;
+    }
+
     private static void GrowMentalAndBaserunning(DevelopingPlayer dp, double stageCoef, TrainingCoefficients c)
     {
         dp.Mental = GrowScalar(dp.Mental, dp.MentalCap, exp => dp.MentalExp = exp, dp.MentalExp,
