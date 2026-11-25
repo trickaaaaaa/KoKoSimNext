@@ -1690,3 +1690,22 @@ screens:
       - read: =GameClock.Week
       - read: =EventService.HasPending
       - shot: 02-after-first-stop
+      - click: ev-novel
+      - click: ev-novel
+      - click: ev-novel
+      - wait: 10
+      - shot: 03-reason-on-hero
+
+  - id: home-advance-next-match-1479
+    name: "ホーム: 大会中は次の試合日まで進める（issue #1479）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_weeks: 30
+      - read: =GameSession.Current.InTournament
+      - show: HomeDashboard
+      - wait: 20
+      - shot: 01-tournament-hero
+      - click: advance-next-match
+      - wait: 30
+      - read: =GameSession.Current.ReachedMatchDay
+      - shot: 02-after-click
