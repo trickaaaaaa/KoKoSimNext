@@ -193,6 +193,13 @@ namespace KokoSim.Unity.Shell
         public static bool ProspectConfirmed { get; set; }
 
         /// <summary>
+        /// 指定年度が、夏の3年引退（AI校の代替わり）を過ぎた時点か。引退後に初めて作る AI校のロスターから
+        /// 3年生を外すのに使う（<see cref="KokoSim.Engine.Nation.Roster.NationRosters.GraduatesRetiredFor"/>）。
+        /// </summary>
+        public static bool GraduatesRetired(int yearIndex)
+            => yearIndex == YearIndex && Week > Calendar.SummerRetireWeek;
+
+        /// <summary>
         /// 直前の週送りで入部予定者がロスターへ合流したか（issue #587）。年度替わりで
         /// <see cref="RosterService.AdvanceYear"/> が合流させたときに立つ。
         /// </summary>

@@ -58,11 +58,12 @@ public sealed class TournamentArchive
     public ArchivedPlayerStats? Get(TournamentArchiveKey key, int sourceId)
         => _slots.TryGetValue(key, out var m) && m.TryGetValue(sourceId, out var a) ? a : null;
 
-    // 1学年の中で新しい順（夏の甲子園 → 夏の県 → 秋 → 春）。LastUniformNumber の探索順。
+    // 1学年の中で新しい順（春のセンバツ → 秋 → 夏の甲子園 → 夏の県）。LastUniformNumber の探索順。
+    // センバツは1月で4月の進級より前に開かれるので、進級前の学年のまま記録される＝同学年では最も新しい。
     private static readonly TournamentSlot[] SlotsNewestFirst =
     {
+        TournamentSlot.Senbatsu, TournamentSlot.Autumn,
         TournamentSlot.SummerKoshien, TournamentSlot.SummerPref,
-        TournamentSlot.Autumn, TournamentSlot.Senbatsu,
     };
 
     /// <summary>

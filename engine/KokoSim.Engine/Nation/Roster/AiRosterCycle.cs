@@ -57,6 +57,10 @@ public static class AiRosterCycle
         // 全員が新入生中心で生成されているので、grade-1 学年ぶん (grade-1)×g を積んで加齢差を作る。
         => Settle(roster, school, yearIndex, deps, gradeFactor: g => g - 1);
 
+    /// <summary>怪物が <paramref name="newGrade"/>（2・3）へ上がる年の固定成長量（Q20 §1）。3年は引退間際で控えめ。</summary>
+    internal static double PhenomPromotionGrowth(PersistentRosterCoefficients pc, int newGrade)
+        => pc.AnnualGrowth * 0.5 * (newGrade == 3 ? pc.SeniorGrowthFactor : 1.0);
+
     /// <summary>非怪物の在校生の成長係数（2年＝満額・3年＝引退間際で控えめ・新入生＝当年成長なし）。</summary>
     private static Func<int, double> NonPhenomGradeFactor(PersistentRosterCoefficients pc) => g => g switch
     {
@@ -102,8 +106,7 @@ public static class AiRosterCycle
         var pc = deps.Persistent;
         foreach (var p in roster.Players.Where(p => p.Phenom.IsPhenom() && p.Grade >= 2))
         {
-            var w = p.Grade == 3 ? pc.SeniorGrowthFactor : 1.0;
-            p.Snapshot = BumpTo(p.Snapshot, pc.AnnualGrowth * 0.5 * w, deps.Roster);
+            p.Snapshot = BumpTo(p.Snapshot, PhenomPromotionGrowth(pc, p.Grade), deps.Roster);
         }
 
         // 非怪物の在校生を逆算配分で成長。
@@ -190,7 +193,7 @@ public static class AiRosterCycle
         // 怪物の固定成長（Q20 §1）。翌年度の学年で重みを引く。
         foreach (var (real, next) in pairs.Where(x => x.Real.Phenom.IsPhenom()))
         {
-            real.PendingBudget = pc.AnnualGrowth * 0.5 * (next.Grade == 3 ? pc.SeniorGrowthFactor : 1.0);
+            real.PendingBudget = PhenomPromotionGrowth(pc, next.Grade);
             real.PendingPitchBudget = real.PendingBudget;
         }
 

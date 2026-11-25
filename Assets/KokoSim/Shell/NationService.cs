@@ -338,7 +338,13 @@ namespace KokoSim.Unity.Shell
         private static Dictionary<int, School> _schoolById;
 
         /// <summary>全国の永続ロスター保持庫（遅延生成の単一ソース）。</summary>
-        public static NationRosters Rosters => _rosters ?? (_rosters = new NationRosters(RosterDeps));
+        public static NationRosters Rosters => _rosters ?? (_rosters = WithClock(new NationRosters(RosterDeps)));
+
+        private static NationRosters WithClock(NationRosters rosters)
+        {
+            rosters.GraduatesRetiredFor = GameClock.GraduatesRetired;
+            return rosters;
+        }
 
         /// <summary>全国の学校別成績（裏試合フルシムが積む単一ソース。今大会＋通算の2スコープ）。</summary>
         public static NationTournamentStats TournamentStats
@@ -385,7 +391,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>セーブ復元: 全国ロスター・今大会成績を据え、学校/県キャッシュを落として決定論再生成させる。</summary>
         public static void Restore(KokoSim.Engine.Saves.SaveState s)
         {
-            _rosters = NationRosters.FromSaved(RosterDeps, s.NationRosters);
+            _rosters = WithClock(NationRosters.FromSaved(RosterDeps, s.NationRosters));
             _tournamentStats = s.TournamentStats;
             _overlay = s.NationOverlay ?? new NationOverlay();
             _generated = null;

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
@@ -443,6 +444,77 @@ public sealed class AiRosterTests
         var target = AiRosterCycle.GrowthTarget(school, deps);
         Assert.True(overall > target,
             $"怪物在籍校のチーム総合がターゲットを上回らない (overall={overall}, target={target})");
+    }
+
+    // 新規生成の2・3年の怪物にも、通常の進級で毎年受ける固定成長（AnnualGrowth×0.5・3年は×SeniorGrowthFactor）が載る。
+    [Fact]
+    public void Bootstrap_UpperGradePhenoms_CarryPastYearsFixedGrowth()
+    {
+        var deps = new AiRosterDeps
+        {
+            Persistent = new PersistentRosterCoefficients
+            {
+                Phenom = new PhenomCoefficients { SpikeRatePerSchoolYear = 1.0, AllRoundRatePerSchoolYear = 0.0 },
+            },
+        };
+        var pc = deps.Persistent;
+        var school = MakeSchool(strength: 45);
+        var roster = AiRosterFactory.Bootstrap(school, 3, deps);
+
+        var checkedPhenoms = 0;
+        for (var grade = 2; grade <= 3; grade++)
+        {
+            var enrollment = 3 - (grade - 1);
+            var nextId = 1;
+            // 3年（最古）のコホートから順に採番される＝Id は Bootstrap の採番と同じになるよう、古い方から作る。
+            var cohorts = new Dictionary<int, IReadOnlyList<AiPlayer>>();
+            for (var g = 3; g >= 1; g--) cohorts[g] = AiRosterFactory.NewcomerCohort(school, 3 - (g - 1), ref nextId, deps);
+
+            foreach (var p in roster.Players.Where(p => p.Phenom.IsPhenom() && p.Grade == grade))
+            {
+                var start = cohorts[grade].Single(c => c.Id == p.Id).Snapshot;
+                var expected = AiMentalModel.WithGradeArc(start with { Grade = grade }, grade, deps.Roster);
+                for (var g = 2; g <= grade; g++)
+                    expected = AiRosterCycle.BumpTo(expected, AiRosterCycle.PhenomPromotionGrowth(pc, g), deps.Roster);
+
+                Assert.Equal(expected.Contact, p.Snapshot.Contact);
+                Assert.Equal(expected.Power, p.Snapshot.Power);
+                Assert.Equal(expected.Speed, p.Snapshot.Speed);
+                Assert.Equal(expected.Fielding, p.Snapshot.Fielding);
+                checkedPhenoms++;
+            }
+        }
+        Assert.True(checkedPhenoms > 0, "2・3年の怪物が1人も居ない＝この検査が何も見ていない");
+    }
+
+    // 夏の引退週より後に初めて作るロスターには、3年生を置かない（既存校が引退した後の姿と揃える）。
+    [Fact]
+    public void GetOrBootstrap_AfterSummerRetirement_HasNoSeniors()
+    {
+        var school = MakeSchool();
+        var before = new NationRosters(new AiRosterDeps());
+        Assert.Contains(before.GetOrBootstrap(school, 3).Players, p => p.Grade == 3);
+
+        var after = new NationRosters(new AiRosterDeps()) { GraduatesRetiredFor = year => year == 3 };
+        var roster = after.GetOrBootstrap(school, 3);
+        Assert.DoesNotContain(roster.Players, p => p.Grade == 3);
+        Assert.Contains(roster.Players, p => p.Grade == 2);
+        Assert.Contains(roster.Players, p => p.Grade == 1);
+
+        // 他の年度は引退前のまま。
+        Assert.Contains(after.GetOrBootstrap(MakeSchool(id: 8), 4).Players, p => p.Grade == 3);
+    }
+
+    [Fact]
+    public void PeekTeamFor_AfterSummerRetirement_FieldsNoSeniors_AndStoresNothing()
+    {
+        var school = MakeSchool();
+        var rosters = new NationRosters(new AiRosterDeps()) { GraduatesRetiredFor = _ => true };
+
+        var team = rosters.PeekTeamFor(school, 3);
+
+        Assert.DoesNotContain(team.BattingOrder.Concat(team.Reserves), p => p.Grade == 3);
+        Assert.Empty(rosters.Schools);
     }
 
     [Fact]
