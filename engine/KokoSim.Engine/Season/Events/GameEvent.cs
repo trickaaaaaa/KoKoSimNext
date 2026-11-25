@@ -137,6 +137,19 @@ public sealed record GameEvent
     public EventEffect Effect { get; init; } = EventEffect.None;
 
     /// <summary>
+    /// この施設を（Lv1以上）持っていると <see cref="Effect"/> が効かなくなる（雨の週は室内練習場があれば練習効率が下がらない。
+    /// issue #1480・設計書03 §4/§5.2）。null＝施設によらず効く。イベント自体は施設の有無によらず同じ抽選で起きる
+    /// ＝施設を買っても「いつ何が起きるか」の乱数列は動かない。
+    /// </summary>
+    public string? EffectNegatedByFacility { get; init; }
+
+    /// <summary>
+    /// 施設の持ち具合を踏まえた実際の効果。<see cref="EffectNegatedByFacility"/> の施設がLv1以上なら <see cref="EventEffect.None"/>。
+    /// </summary>
+    public EventEffect EffectGiven(System.Func<string, int> facilityLevelOf)
+        => EffectNegatedByFacility is { } id && facilityLevelOf(id) > 0 ? EventEffect.None : Effect;
+
+    /// <summary>
     /// 監督の対応の選択肢（issue #945）。空なら選択肢なし（読むだけのイベント）。あれば会話の最後に3択を出し、
     /// 選んだ対応と当事者の性格・主将の統率力で好転/悪化を引き、<see cref="Outcomes"/> の会話を続けて結束を動かす。
     /// </summary>
