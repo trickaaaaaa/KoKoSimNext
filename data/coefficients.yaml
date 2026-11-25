@@ -1410,6 +1410,11 @@ growth:
   slump_weeks_max: 6
   slump_performance_factor: 0.93
   slump_condition_drop: 0.15         # スランプ発生時の調子押し下げ（イベント→ConditionValue, issue #46）
+  # スランプの立て直し（設計書03 §5.5・issue #1481）。自然回復は週1。下の手当てで余分に減る
+  slump_coaching_recovery_weeks: 1   # 個別指導に指名している週の追加回復
+  slump_rest_share_min: 0.2          # 休養とみなす下限＝練習時間に占める休養枠の割合
+  slump_rest_recovery_weeks: 1       # 休養枠がそれ以上の週の追加回復
+  slump_match_recovery_weeks: 1      # 起用法: スランプ中の選手が試合で好打・好投したときの回復（1試合1回）
   plateau_cap_proximity: 3.0
   plateau_weekly_prob: 0.004
   plateau_growth_factor: 0.6

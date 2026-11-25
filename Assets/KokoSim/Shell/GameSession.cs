@@ -662,7 +662,11 @@ namespace KokoSim.Unity.Shell
         /// 出場者の ConditionValue を好投/好打で+、被弾/大敗で−へ動かす。実戦成長と同じ合流点で適用。
         /// </summary>
         private void ApplyMatchCondition(GameResult detail, bool managerWasAway)
-            => MatchConditionModel.Apply(detail, managerWasAway, RosterService.Roster, FormCoeff);
+        {
+            MatchConditionModel.Apply(detail, managerWasAway, RosterService.Roster, FormCoeff);
+            // 起用法によるスランプの立て直し（設計書03 §5.5・issue #1481）。乱数なし。
+            GrowthEventModel.SlumpRecoveryAfterMatch(detail, managerWasAway, RosterService.Roster, GrowthEventsCoeff);
+        }
 
         // 怪我（設計書03 §3.5）。週次処理（HomeState.RunInjuryWeek）と同じ既定係数を使う。
         private static readonly InjuryCoefficients InjuryCoeff = new InjuryCoefficients();

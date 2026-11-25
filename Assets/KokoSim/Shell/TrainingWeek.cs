@@ -68,6 +68,13 @@ namespace KokoSim.Unity.Shell
             return TrainingFields.Trained(TrainingPresets.Resolve(p.Plan ?? TrainingPlan.Default, Budget));
         }
 
+        /// <summary>その週の休養枠の割合（0〜1）。スランプの立て直し（設計書03 §5.5・issue #1481）が読む。練習できない週は0。</summary>
+        public static double RestShare(DevelopingPlayer p, int week)
+        {
+            if (p.IsRetired || !Calendar.CanTrain(p.Grade, week)) return 0.0;
+            return TrainingPresets.RestShare(p.Plan ?? TrainingPlan.Default, Budget);
+        }
+
         /// <summary>
         /// 1週ぶんの練習を選手 <paramref name="p"/> へ適用する（<paramref name="p"/> を破壊的に更新）。
         /// <paramref name="extraMult"/> は大会モード時の効果低下（&lt;1.0）に使う（通常週は1.0）。

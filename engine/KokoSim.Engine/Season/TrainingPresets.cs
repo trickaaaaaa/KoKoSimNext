@@ -64,6 +64,16 @@ public static class TrainingPresets
         return DistributeByWeight(TableFor(plan.Preset), budgetMinutes);
     }
 
+    /// <summary>実効配分のうち休養枠が週の練習時間（<paramref name="budgetMinutes"/>）に占める割合（0〜1）。</summary>
+    public static double RestShare(TrainingPlan plan, int budgetMinutes)
+    {
+        if (budgetMinutes <= 0) return 0.0;
+        var rest = 0;
+        foreach (var a in Resolve(plan, budgetMinutes))
+            if (a.Menu == TrainingMenu.Rest) rest += System.Math.Max(0, a.Minutes);
+        return System.Math.Min(1.0, rest / (double)budgetMinutes);
+    }
+
     private static (TrainingMenu Menu, double Weight)[] TableFor(TrainingPreset preset) => preset switch
     {
         TrainingPreset.PitcherAuto => PitcherAuto,

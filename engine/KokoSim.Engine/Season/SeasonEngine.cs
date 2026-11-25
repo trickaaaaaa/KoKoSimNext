@@ -228,7 +228,10 @@ public static class SeasonEngine
                 var growthNotices = GrowthEventModel.Week(active, growthRng, ctx.Growth, p =>
                     ctx.Calendar.CanTrain(p.Grade, week)
                         ? TrainingFields.Trained(TrainingPresets.Resolve(p.Plan ?? TrainingPlan.Default, budget))
-                        : System.Array.Empty<TrainingField>());
+                        : System.Array.Empty<TrainingField>(),
+                    p => ctx.Calendar.CanTrain(p.Grade, week)
+                        ? TrainingPresets.RestShare(p.Plan ?? TrainingPlan.Default, budget)
+                        : 0.0);
                 if (ctx.GrowthObserver is { } observe) foreach (var n in growthNotices) observe(n);
                 // 覚醒で有益スキル（issue #1471）。独立ストリーム。
                 var skillNotices = SkillAcquisitionModel.OnGrowthEvents(growthNotices,
