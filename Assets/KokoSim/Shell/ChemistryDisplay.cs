@@ -73,6 +73,9 @@ namespace KokoSim.Unity.Shell
         /// <summary>いまの自校の練習の伸びに掛ける倍率（効き先④・issue #1601・自校だけ）。週次練習の単一ソース。</summary>
         public static double CurrentTrainingMultiplier() => Cohesion.TrainingMultiplier(CurrentCohesion(), CohesionCoeff);
 
+        /// <summary>いまの自校の選択肢つき選手間イベントの抽選重みに掛ける倍率（効き先⑤・issue #1601・自校だけ）。週次イベントの単一ソース。</summary>
+        public static double CurrentEventWeightMultiplier() => Cohesion.EventWeightMultiplier(CurrentCohesion(), CohesionCoeff);
+
         private static Team ManagerTeam() => PlayerMatchResolver.BuildManagerTeam(NationService.ManagerSchoolName);
 
         private static Player FindPlayer(Team team, int id)

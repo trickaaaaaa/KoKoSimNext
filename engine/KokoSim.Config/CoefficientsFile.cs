@@ -2419,6 +2419,11 @@ public static class CoefficientsLoader
         public double CaptainPowerSlope { get; set; } = D.CaptainPowerSlope;
         public double ChoiceCaptainPowerScale { get; set; } = D.ChoiceCaptainPowerScale;
         public double CaptainSubjectLeadershipWeight { get; set; } = D.CaptainSubjectLeadershipWeight;
+        public double ErrorStreakCap { get; set; } = D.ErrorStreakCap;
+        public double ErrorStreakFloorU { get; set; } = D.ErrorStreakFloorU;
+        public double TrainingPerCohesion { get; set; } = D.TrainingPerCohesion;
+        public double EventWeightCap { get; set; } = D.EventWeightCap;
+        public double EventWeightFloorU { get; set; } = D.EventWeightFloorU;
 
         public CohesionCoefficients ToModel() => new()
         {
@@ -2451,6 +2456,11 @@ public static class CoefficientsLoader
             CaptainPowerSlope = CaptainPowerSlope,
             ChoiceCaptainPowerScale = ChoiceCaptainPowerScale,
             CaptainSubjectLeadershipWeight = CaptainSubjectLeadershipWeight,
+            ErrorStreakCap = ErrorStreakCap,
+            ErrorStreakFloorU = ErrorStreakFloorU,
+            TrainingPerCohesion = TrainingPerCohesion,
+            EventWeightCap = EventWeightCap,
+            EventWeightFloorU = EventWeightFloorU,
         };
     }
 

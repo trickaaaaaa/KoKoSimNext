@@ -38,6 +38,15 @@ public sealed class EventScheduler
     /// <summary>年の切り替えで年次フラグをリセット。</summary>
     public void ResetAnnualFlags() => _annualFlags.Clear();
 
+    /// <summary>
+    /// 効き先⑤（issue #1601）: <see cref="EventKind.Choice"/> イベント（選択肢つき選手間イベント）の
+    /// 抽選重みに掛ける倍率。既定1.0＝従来と1ビット一致（不変条件#2）。<see cref="EventKind.Random"/> の
+    /// 重みには掛けない（悪いイベントが増えるのは「選手間の揉め事」だけ・design-23 §3.4）。
+    /// 呼び出し側（Unity の <c>EventService.RunWeek</c>／ヘッドレスシムの <see cref="Season.SeasonEngine"/>）が
+    /// 週ごとに <see cref="Match.Game.Cohesion.EventWeightMultiplier"/> で求めた値を据える（自校だけ）。
+    /// </summary>
+    public double ChoiceWeightMultiplier { get; set; } = 1.0;
+
     // ── セーブ往復（issue #609）。載せないとロードでクールダウンが全部明け、
     //    直前に見たイベントが即もう一度出る。 ──
 
@@ -97,7 +106,7 @@ public sealed class EventScheduler
                 if (e.Kind != EventKind.Random && e.Kind != EventKind.Choice) continue;
                 if (!CanFire(e)) continue;
                 pool.Add(e);
-                totalWeight += e.Weight;
+                totalWeight += WeightOf(e);
             }
             if (pool.Count == 0 || totalWeight <= 0) break;
 
@@ -107,7 +116,7 @@ public sealed class EventScheduler
             var roll = rng.NextDouble() * totalWeight;
             foreach (var e in pool)
             {
-                roll -= e.Weight;
+                roll -= WeightOf(e);
                 if (roll <= 0)
                 {
                     Fire(e, week, fired, rng);
@@ -146,6 +155,9 @@ public sealed class EventScheduler
     /// <b>未設定（null）のときは出さない</b>＝監督を持たないヘッドレスシムには出ない（帯・ゴールデン不変）。
     /// </summary>
     public Func<Career.TransferHintTier?>? TransferHintFilter { get; set; }
+
+    /// <summary>抽選の重み。<see cref="EventKind.Choice"/> だけ <see cref="ChoiceWeightMultiplier"/> を掛ける（効き先⑤）。</summary>
+    private double WeightOf(GameEvent e) => e.Kind == EventKind.Choice ? e.Weight * ChoiceWeightMultiplier : e.Weight;
 
     private bool CanFire(GameEvent e)
     {
