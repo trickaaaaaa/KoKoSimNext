@@ -194,7 +194,7 @@ games_10k_tactics:
   pickoff_per_game: { min: 0.0, max: 0.05 }
   # 敬遠: 実測≈0.08/試合（両軍計）。
   intentional_walk_per_game: { min: 0.01, max: 0.30 }
-  # 一・三塁重盗: 実測≈0.004/試合（両軍計）。一・三塁で盗塁企図という稀な塁状況依存のため広め。
+  # 一・三塁重盗: 実測≈0.035/試合（両軍計・#1275 で二盗の企図を約6倍にした後に double_steal_third_break_prob 0.12 で収めた。旧コメント≈0.004 は stale）。一・三塁で盗塁企図という稀な塁状況依存のため広め。
   double_steal_third_break_per_game: { min: 0.0, max: 0.05 }
   # 単独盗塁（二盗・三盗・本盗計）の企図・成功率。issue steal-thresholds-unreachable（2026-08-27）:
   # 采配閾値（StealMinSuccess/StealThirdMinSuccess）が解決式の到達可能上限を超えていて、この帯を追加する
@@ -336,7 +336,7 @@ ability_sensitivity:
     launch:           { offense: { expect: up, min_runs: 1.5 } }
     discipline:       { offense: { expect: up, min_runs: 0.5 } }
     speed:            { offense: { expect: up, min_runs: 0.5 }, defense: { expect: down, min_runs: 1.0 } }
-    steal_fast:       { offense: { expect: up, min_runs: 0.3 } }   # 走力80の走者で盗塁20→80。#838 で今は逆向き
+    steal_fast:       { offense: { expect: up, min_runs: 0.3 } }   # 走力80の走者で盗塁20→80。#838 で一度逆向きになったが #1275 の再校正（steal_min_success 0.52）で直った
     arm:              { defense: { expect: down, min_runs: 0.2 } }
     throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
     fielding:         { defense: { expect: down, min_runs: 2.0 } }
@@ -362,4 +362,3 @@ ability_sensitivity:
   # 既知の不具合で今は満たせない項目（除外リスト）。直ったら**外す**（外し忘れは Heavy が「もう通っている」と赤くする）。
   known_defects:
     - { ability: catcher_arm,     side: defense, issue: 838, note: "向きは直った（肩20で相手得点+0.23）が min_runs 0.3 に届かない" }
-    - { ability: steal_fast,      side: offense, issue: 838, note: "成功率73%でも全員走力80の打線では走らない方が得点が多い＝損益分岐が状況で上がる（得点期待値表が要る）" }

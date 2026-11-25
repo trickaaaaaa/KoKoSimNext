@@ -181,7 +181,7 @@ public sealed record BaserunningCoefficients
     /// <summary>一・三塁で二盗を仕掛けた際、三塁走者も同時にスタートして本塁を狙う基準確率（design-14 P1-4）。
     /// 投げた塁（二塁）だけがアウト対象という原則から、成立時の三塁走者は無条件生還。
     /// issue #402で 0.0→0.4 に正値化＝実ゲームで一・三塁重盗が発火（YAML校正値と一致）。</summary>
-    public double DoubleStealThirdBreakProb { get; init; } = 0.4;
+    public double DoubleStealThirdBreakProb { get; init; } = 0.12;
     /// <summary>牽制アウト（design-14 P1-5）の基準確率。走者の盗塁パラメータ(Steal)が高いほどリードが大きく上昇、
     /// 投手センス（牽制の鋭さ・issue #1472。旧実装は Mental で代用）が高いほど下降。issue #402で 0.0→0.05 に正値化したが、issue #661 で 0.0 に戻した＝牽制は<b>盗塁企図の球にしか出ない</b>ので、
     /// 牽制球が映った瞬間に「この後、盗塁だ」と分かってしまう。0 の間は牽制の判定も絵も出ない（乱数も消費しない）。</summary>
