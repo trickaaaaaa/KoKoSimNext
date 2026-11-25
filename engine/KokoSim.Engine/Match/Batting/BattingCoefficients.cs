@@ -37,6 +37,14 @@ public sealed record BattingCoefficients
     /// 0.010 だと seed42 が 10.1% で天井を超え、0.017 だと P90 vs B75 が 17% まで膨らむ。</para>
     public double AimSpreadControlSlopePerPoint { get; init; } = 0.008;
 
+    /// <summary>
+    /// 狙い散布σの倍率の傾きのうち、制球50未満の側（issue #1589）。倍率 ＝ max(0.5, 1 + この値 × (Control−50))。
+    /// 上の <see cref="AimSpreadControlSlopePerPoint"/> は制球50以上（隅を狙う側）だけに使う。
+    /// 従来は同じ傾きで「制球の低い投手は真ん中を狙う」としていたが、それが実行散布の差を打ち消し、制球Gでも
+    /// ゾーンに集まって四球が出なかった。
+    /// </summary>
+    public double AimSpreadControlSlopeBelowPerPoint { get; init; } = 0.0;
+
     // --- 打者判断（スイング/見逃し） ---
     /// <summary>ゾーン内球へのスイング率の基準。</summary>
     public double ZoneSwingBase { get; init; } = 0.68;

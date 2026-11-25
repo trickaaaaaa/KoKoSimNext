@@ -81,7 +81,12 @@ public static class PitchSelection
         // 制球の高い投手ほど隅を狙う（issue walk-rate-floor-vs-elite-pitcher）: 狙い散布を制球に応じて広げる。
         // 制球の低い投手は逆に真ん中を狙う（隅を狙う余裕が無い＝倍率<1・下限0.5）。50 で恒等。
         // 乱数の消費は従来と同じ（同じガウス2発に倍率を掛けるだけ）。
-        var spread = Math.Max(0.5, 1.0 + coeff.AimSpreadControlSlopePerPoint * (pitcher.Control - 50));
+        // 制球50未満の側は別の傾き（issue #1589）。下側の傾きを使うのは本来の制球も50未満の投手だけ
+        //（ばてて一時的に50を割った好投手は従来どおりの傾き）。
+        var aimSlope = pitcher.Control < 50 && pitcher.BaseControl < 50
+            ? coeff.AimSpreadControlSlopeBelowPerPoint
+            : coeff.AimSpreadControlSlopePerPoint;
+        var spread = Math.Max(0.5, 1.0 + aimSlope * (pitcher.Control - 50));
         var aimX = rng.NextGaussian(0.0, coeff.AimSigmaXMeters * d.AimSigmaFactor * spread) + d.AimXOffsetM;
         var aimY = zone.CenterY + rng.NextGaussian(0.0, coeff.AimSigmaYMeters * d.AimSigmaFactor * spread) + d.AimYOffsetM;
 

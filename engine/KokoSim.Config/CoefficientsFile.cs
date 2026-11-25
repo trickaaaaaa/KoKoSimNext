@@ -530,6 +530,7 @@ public static class CoefficientsLoader
                 ControlSigmaInterceptCm = s.InterceptCm,
                 ControlSigmaSlopeCmPerPoint = s.SlopeCmPerPoint,
                 ControlSigmaMinCm = s.MinSigmaCm,
+                ControlSigmaExtraBelowCmPerPoint = s.ExtraBelowCmPerPoint,
                 HbpBodyEdgeM = HbpBodyEdgeM,
                 HbpBodyBottomM = HbpBodyBottomM,
                 HbpBodyTopM = HbpBodyTopM,
@@ -590,6 +591,7 @@ public static class CoefficientsLoader
         public double InterceptCm { get; set; } = 30.0;
         public double SlopeCmPerPoint { get; set; } = 0.22;
         public double MinSigmaCm { get; set; } = 2.0;
+        public double ExtraBelowCmPerPoint { get; set; } = 0.27;
     }
 
     private sealed class BattingDto
@@ -598,6 +600,7 @@ public static class CoefficientsLoader
         public double AimSigmaXM { get; set; } = D.AimSigmaXMeters;
         public double AimSigmaYM { get; set; } = D.AimSigmaYMeters;
         public double AimSpreadControlSlopePerPoint { get; set; } = D.AimSpreadControlSlopePerPoint;
+        public double AimSpreadControlSlopeBelowPerPoint { get; set; } = D.AimSpreadControlSlopeBelowPerPoint;
         public double ZoneSwingBase { get; set; } = D.ZoneSwingBase;
         public double ChaseBase { get; set; } = D.ChaseBase;
         public double ChaseDisciplineSlope { get; set; } = D.ChaseDisciplineSlope;
@@ -693,6 +696,7 @@ public static class CoefficientsLoader
             AimSigmaXMeters = AimSigmaXM,
             AimSigmaYMeters = AimSigmaYM,
             AimSpreadControlSlopePerPoint = AimSpreadControlSlopePerPoint,
+            AimSpreadControlSlopeBelowPerPoint = AimSpreadControlSlopeBelowPerPoint,
             ZoneSwingBase = ZoneSwingBase,
             ChaseBase = ChaseBase,
             ChaseDisciplineSlope = ChaseDisciplineSlope,

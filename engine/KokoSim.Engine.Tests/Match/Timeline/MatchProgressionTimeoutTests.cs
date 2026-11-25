@@ -226,7 +226,8 @@ public sealed class MatchProgressionTimeoutTests
         Assert.Contains(save.Decisions, d => d.Kind == GameDecisionKind.Timeout && d.AsOffense == false);
 
         var resumed = GameReplay.Restore(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, save);
-        while (resumed.Steps.MoveNext()) { /* 保存位置まで再生 */ }
+        // Restore は保存位置まで再生して返す。Steps を回すと試合の最後まで進み、
+        // その後に AI が使った伝令まで数えてしまう（乱数列しだいで壊れる）ので回さない。
         var team = resumed.Progress.OffenseOf(fielding);
         Assert.Equal(2, team.DefenseTimeoutsLeft);
         Assert.Equal(3, team.OffenseTimeoutsLeft);
