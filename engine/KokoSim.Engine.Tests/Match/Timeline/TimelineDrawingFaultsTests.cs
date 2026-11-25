@@ -255,7 +255,7 @@ public sealed class TimelineDrawingFaultsTests
         var r1 = Runner("R1"); var r2 = Runner("R2"); var r3 = Runner("R3");
         var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60 };
 
-        var tl = TimelineBuilder.BuildBatteryMiss(r1, r2, r3, catcher, C, Field);
+        var tl = TimelineBuilder.BuildBatteryMiss(r1, r2, r3, new Player { Name = "投手" }, catcher, C, Field);
 
         AssertHumanLegs(tl, "暴投・捕逸", r1, r2, r3);
     }

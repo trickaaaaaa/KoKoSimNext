@@ -1843,7 +1843,7 @@ public static class GameEngine
                             {
                                 BatteryMissPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                     WithThrowScatter(Timeline.TimelineBuilder.BuildBatteryMiss(
-                                        wpFirst, wpSecond, wpScorer, defense.Catcher, paBaserunning, ctx.Field),
+                                        wpFirst, wpSecond, wpScorer, defense.CurrentPitcher, defense.Catcher, paBaserunning, ctx.Field),
                                         System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(), defense, ctx, rng, (ulong)log.Count * 16 + 2)!),
                             };
                     }

@@ -1966,11 +1966,12 @@ public sealed class TimelineTests
         var c = new BaserunningCoefficients();
         var field = new FieldGeometry();
         var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var pitcher = new Player { Position = FieldPosition.Pitcher, Speed = 50 };
         var first = Runner("R1");
         var second = Runner("R2");
         var third = Runner("R3");
 
-        var tl = TimelineBuilder.BuildBatteryMiss(first, second, third, catcher, c, field);
+        var tl = TimelineBuilder.BuildBatteryMiss(first, second, third, pitcher, catcher, c, field);
 
         Assert.Equal(3, tl.Runners.Count);
         var legFirst = tl.Runners.Single(r => r.Runner == first);
@@ -1995,14 +1996,50 @@ public sealed class TimelineTests
     }
 
     [Fact]
+    public void BatteryMissTimeline_ThirdOccupied_PitcherCoversHomeAndCatcherThrowsThere()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var pitcher = new Player { Position = FieldPosition.Pitcher, Speed = 50 };
+
+        var tl = TimelineBuilder.BuildBatteryMiss(null, null, Runner("R3"), pitcher, catcher, c, field);
+
+        var cover = Assert.Single(tl.Moves, m => m.Role == FieldPosition.Pitcher);
+        Assert.Equal(FielderTask.CoverBase, cover.Task);
+        Assert.True(Near(cover.To, new TimelinePoint(0, 0)), "投手が本塁へ向かっていない");
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.True(Near(throwSeg.To, new TimelinePoint(0, 0)), "捕手の送球先が本塁でない");
+        Assert.Equal(FieldPosition.Pitcher, throwSeg.ToRole);
+        // 投手が着いてから投げる。
+        Assert.True(throwSeg.T0 >= cover.T1, "投手が着く前に投げている");
+    }
+
+    [Fact]
+    public void BatteryMissTimeline_NoThirdRunner_PitcherStaysAndCatcherThrowsToMound()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var pitcher = new Player { Position = FieldPosition.Pitcher, Speed = 50 };
+
+        var tl = TimelineBuilder.BuildBatteryMiss(Runner("R1"), Runner("R2"), null, pitcher, catcher, c, field);
+
+        Assert.DoesNotContain(tl.Moves, m => m.Role == FieldPosition.Pitcher);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.True(Near(throwSeg.To, new TimelinePoint(0, 18.44)), "三塁走者なしはマウンドへ返すはず");
+    }
+
+    [Fact]
     public void BatteryMissTimeline_OnlyFirstOccupied_OnlyOneLegNoScoreCaption()
     {
         var c = new BaserunningCoefficients();
         var field = new FieldGeometry();
         var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var pitcher = new Player { Position = FieldPosition.Pitcher, Speed = 50 };
         var first = Runner("R1");
 
-        var tl = TimelineBuilder.BuildBatteryMiss(first, null, null, catcher, c, field);
+        var tl = TimelineBuilder.BuildBatteryMiss(first, null, null, pitcher, catcher, c, field);
 
         var leg = Assert.Single(tl.Runners);
         Assert.Same(first, leg.Runner);
@@ -2017,9 +2054,10 @@ public sealed class TimelineTests
         var c = new BaserunningCoefficients();
         var field = new FieldGeometry();
         var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var pitcher = new Player { Position = FieldPosition.Pitcher, Speed = 50 };
         var third = Runner("R3");
 
-        var tl = TimelineBuilder.BuildBatteryMiss(null, null, third, catcher, c, field);
+        var tl = TimelineBuilder.BuildBatteryMiss(null, null, third, pitcher, catcher, c, field);
 
         var leg = Assert.Single(tl.Runners);
         Assert.True(Near(leg.To, new TimelinePoint(0, 0)), "三塁走者が生還していない");
