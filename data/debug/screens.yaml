@@ -265,6 +265,9 @@ screens:
       - read: =GameClock.Week
       - read: =GameSession.Current.CohesionDelta
       - read: =EventService.Pending.Count
+      # 第18週には他の場面も積まれる（新チーム・週次イベント）。合宿の質問だけを先頭に出し直す（週頭の結束 +6 は本番どおり入っている）
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("summer_camp", 0)
       - show: HomeDashboard
       - wait: 10
       - click: ev-novel
@@ -290,6 +293,8 @@ screens:
       - advance_weeks: 1
       - read: =GameClock.Week
       - read: =GameSession.Current.CohesionDelta
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("summer_camp", 0)
       - show: HomeDashboard
       - wait: 10
       - click: ev-novel
