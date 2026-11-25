@@ -210,6 +210,7 @@ namespace KokoSim.Unity.Home
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
             RunSkillYearFeed();                         // 年度替わりの負スキル克服（issue #1471）
             RunPromiseFeed();                           // 入部の条件（約束）の決着（設計書04 §2.4）
+            RunScoutContractHintFeed();                 // 一度も契約していない間の、契約の入口の案内（issue #1594）
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化（設計書20 §5）
             RunKoshienFeed();                           // 観るだけの甲子園の決着（設計書05 §1.1a）
@@ -426,6 +427,26 @@ namespace KokoSim.Unity.Home
         {
             var items = PromiseFeedItems("今週");
             if (items.Count > 0) PushFeed(items);
+        }
+
+        /// <summary>
+        /// スカウト網を一度も契約していない学校には夏の入口の強制イベントを出さない代わりに、
+        /// 契約の入口（スカウト画面）があることを通知フィードに1行出す（issue #1594）。
+        /// </summary>
+        private void RunScoutContractHintFeed()
+        {
+            if (!KokoSim.Unity.Shell.ScoutService.ContractHintVisible) return;
+            PushFeed(new List<FeedItem>
+            {
+                new FeedItem
+                {
+                    When = "今週",
+                    Text = "スカウトと契約すると秋に候補が届く",
+                    Kind = FeedKind.Discover,
+                    Tag = "発見",
+                    Screen = FeedLinks.Scout,
+                },
+            });
         }
 
         private static List<FeedItem> PromiseFeedItems(string when)

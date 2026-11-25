@@ -19,14 +19,25 @@ public static class ScoutPitch
     /// <summary>スカウト網の契約ID（年契約カタログのキー）。</summary>
     public const string ContractId = "scouting";
 
-    /// <summary>未契約の学校に「契約しませんか」と聞く入口の会話。</summary>
+    /// <summary>契約したことはあるが今は未契約の学校に「契約しませんか」と聞く入口の会話。</summary>
     public const string OfferEventId = "scout_contract_offer";
-    /// <summary>契約しないと決めたあとの会話（今年はスカウトなし）。</summary>
+    /// <summary>契約しないと決めたあとの会話（今年はスカウトなし）。契約したことがある学校用。</summary>
     public const string DeclinedEventId = "scout_contract_declined";
+    /// <summary>一度も契約したことのない学校で、プレイヤーが自分から契約を切り出したときの入口の会話（初対面の調子・issue #1594）。</summary>
+    public const string FirstOfferEventId = "scout_first_offer";
+    /// <summary>初めての契約を見送ったあとの会話（初対面の調子）。</summary>
+    public const string FirstDeclinedEventId = "scout_first_declined";
     /// <summary>契約を決めたあと「どんな子を探しましょう」と聞く会話。</summary>
     public const string FieldAskEventId = "scout_field_ask";
     /// <summary>分野を決めたあと「10月にリストを持ってきます」で締める会話。</summary>
     public const string FieldDoneEventId = "scout_field_done";
+
+    /// <summary>入口の会話の選び分け: 契約中なら「続けるか」、契約歴ありで未契約なら「また雇うか」、契約歴なしなら初対面の調子。</summary>
+    public static string OpenerEventId(int level, bool everContracted)
+        => level > 0 ? ScoutMilestones.ChooseFieldEventId : everContracted ? OfferEventId : FirstOfferEventId;
+
+    /// <summary>契約しないと決めたあとの会話。契約歴の有無で初対面の調子を分ける。</summary>
+    public static string DeclinedEventIdFor(bool everContracted) => everContracted ? DeclinedEventId : FirstDeclinedEventId;
 
     /// <summary>探す分野の並び（画面の並びと同じ）。</summary>
     public static IReadOnlyList<ScoutFieldChoice> FieldChoices { get; } = new[]

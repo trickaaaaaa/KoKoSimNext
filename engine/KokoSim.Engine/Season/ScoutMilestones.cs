@@ -14,7 +14,7 @@ public enum ScoutMilestone
 
 /// <summary>
 /// スカウトの節目イベントを「出すか・いつ出すか」の判定（設計書04 §2.4「年間の流れ」・issue #1035）。
-/// 候補リスト到着・念押しは、スカウト網が未契約（枠0）の年は出さない（分野選びの入口は未契約にも出す）。判定はここ1箇所に集め、乱数も時刻も使わない純関数。
+/// 候補リスト到着・念押しは、スカウト網が未契約（枠0）の年は出さない。分野選びの入口は、一度でも契約したことがある学校にだけ出す（最初の契約はプレイヤーが自分で結ぶ・issue #1594）。判定はここ1箇所に集め、乱数も時刻も使わない純関数。
 /// </summary>
 public static class ScoutMilestones
 {
@@ -37,13 +37,34 @@ public static class ScoutMilestones
     /// <summary>
     /// 新チーム発足の流れ（引退→主将指名→背番号決定）が終わった直後に、スカウトの一年の入口の会話
     /// （①スカウト網の契約 → ②探す分野・<see cref="ScoutPitch"/>）を出すか。
-    /// <b>未契約の学校にも聞く</b>（issue #1064）。今年ぶんの候補リストがまだ無い（＝決められる）ときだけ。
+    /// 今年ぶんの候補リストがまだ無い（＝決められる）ときだけ。
+    /// <b>この学校でスカウト網を一度も契約したことがない間は出さない</b>（issue #1594）。初対面のスカウトが
+    /// 「そろそろ」「今年こそ」と付き合いのある口ぶりで現れないよう、最初の契約はプレイヤーが自分でスカウト画面から結ぶ。
+    /// 一度契約したことがあれば、段が0へ戻っていても毎年聞く（issue #1064）。
     /// </summary>
-    public static ScoutMilestone AfterNewTeamStarted(SeasonCalendar calendar, int week, int yearIndex, ScoutingState? list)
+    public static ScoutMilestone AfterNewTeamStarted(
+        SeasonCalendar calendar, int week, int yearIndex, ScoutingState? list, bool hasEverContracted)
     {
+        if (!hasEverContracted) return ScoutMilestone.None;
         if (week >= calendar.RecruitListWeek) return ScoutMilestone.None;
         return HasListFor(list, yearIndex) ? ScoutMilestone.None : ScoutMilestone.ChooseField;
     }
+
+    /// <summary>
+    /// いま自分からスカウト網を契約して、今年ぶんの候補リストに間に合うか（スカウト画面の「スカウトと契約する」を出す条件・issue #1594）。
+    /// 未契約（枠0）で、リスト生成の週（第24週）より前＝年額だけ払って何も得られない契約を結ばせない。
+    /// </summary>
+    public static bool CanContractNow(SeasonCalendar calendar, int week, int slots)
+        => slots <= 0 && week < calendar.RecruitListWeek;
+
+    /// <summary>
+    /// ホームの通知フィードに「スカウトと契約すると秋に候補が届く」を出す時期か（issue #1594）。
+    /// 強制イベントを止めたぶん、契約の入口に気づけるようにする。一度も契約していない間、夏の大会の週と、
+    /// リスト生成の前の最後の週の2回だけ（毎週出すとフィードが同じ行で埋まる）。
+    /// </summary>
+    public static bool ShowContractHint(SeasonCalendar calendar, int week, int slots, bool hasEverContracted)
+        => !hasEverContracted && CanContractNow(calendar, week, slots)
+           && (week == calendar.SummerTournamentStartWeek || week == calendar.RecruitListWeek - 1);
 
     /// <summary>
     /// 候補リストを待っている時期か（夏の大会の頃〜第24週の前）。契約済みで今年ぶんのリストがまだ無いとき、

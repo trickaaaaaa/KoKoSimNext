@@ -1053,6 +1053,41 @@ screens:
       - wait: 5
       - shot: 03-lightblue
 
+  # ── スカウト網を一度も契約していない学校（issue #1594）: 夏の強制の入口は出ず、スカウト画面から自分で契約する ──
+  - id: scout-first-contract-1594
+    name: "未契約の学校: 夏の入口の強制イベントが出ない・ホームの案内・スカウト画面の「スカウトと契約する」→初対面の会話・契約後はボタンが消える（issue #1594）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - advance_to_week: 20
+      - read: =GameClock.Week
+      - read: =EventService.HasPending
+      - read: =ScoutService.NavigatePending
+      - read: =ScoutService.HasEverContracted
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-home-hint
+      - show: ScoutScreen
+      - wait: 5
+      - shot: 02-scout-uncontracted
+      - call: EventService.Clear()
+      - click: sc-contract
+      - wait: 5
+      - read: =EventService.HasPending
+      - read: =ScoutService.NavigatePending
+      - show: HomeDashboard
+      - wait: 15
+      - shot: 03-first-offer
+      - set: {ScoutService.SelectedField: Omakase}
+      - call: ManagerService.Contracts.SetLevel("scouting", 2)
+      - read: =ScoutService.HasEverContracted
+      - call: EventService.Clear()
+      - call: ScoutService.TakeNavigation()
+      - show: ScoutScreen
+      - wait: 5
+      - shot: 04-scout-contracted
+
   # ── 1280×720 で見切れ・重なる箇所（ブラウザ版QA・issue #1533）──
   # 試合の場面（采配の手札・交代パネル・選手能力パネル）は captures.yaml の overflow-1280-*-1533。
   - id: overflow-1280-1533

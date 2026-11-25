@@ -1381,7 +1381,9 @@ events:
   # スカウトの一年の入口（issue #1064）。夏の大会後に、会話の中で①スカウト網の契約 → ②探す分野、の順に選ぶ。
   # 選択肢（契約の段・分野）は ScoutPitch（engine）が持ち、ここには会話だけを書く。画面は移らない。
   # 監督には台詞を持たせない（選ぶだけ）。
-  # scout_choose_field＝契約済みの学校への入口（契約を続けるか）／scout_contract_offer＝未契約の学校への入口。
+  # scout_choose_field＝契約中の学校への入口（契約を続けるか）／scout_contract_offer＝契約したことはあるが今は未契約の学校への入口。
+  # scout_first_offer／scout_first_declined＝一度も契約したことのない学校で、プレイヤーが自分から契約を切り出したとき（初対面の調子・issue #1594）。
+  # 初対面の学校には夏の入口の会話を強制で出さない（ScoutMilestones.AfterNewTeamStarted）。
   - id: scout_choose_field
     kind: System
     scene: office
@@ -1446,6 +1448,43 @@ events:
             say: "そうですか。……来年、また聞きますからね。"
           - who: team_manager
             say: "しつこいですね。"
+
+  - id: scout_first_offer
+    kind: System
+    scene: office
+    text: "スカウトが、はじめての契約の相談に来た。"
+    variants:
+      - lines:
+          - who: scout
+            say: "はじめまして。スカウトのお話ですね。うちの網は、段によって回れる範囲が変わります。"
+          - who: team_manager
+            say: "範囲が広いほど、お値段も上がるわけですね。"
+      - lines:
+          - who: narration
+            say: "初対面のスカウトが、まっさらな手帳を机に置いた。まだ、どのページも空白だった。"
+          - who: scout
+            say: "契約してもらえたら、最初のページはこの学校のために使います。段は選べます。"
+      - lines:
+          - who: scout
+            say: "お声がけありがとうございます。まずは契約から。年額と枠の数は、選択肢のとおりです。"
+          - who: team_manager
+            say: "最初に値段を言ってくれるのは、ありがたいです。"
+
+  - id: scout_first_declined
+    kind: System
+    scene: office
+    text: "スカウト網の契約は、見送ることになった。"
+    variants:
+      - lines:
+          - who: scout
+            say: "承知しました。また気が変わったら、いつでもお声がけください。"
+          - who: team_manager
+            say: "そのときは、スカウトの画面からですね。"
+      - lines:
+          - who: scout
+            say: "分かりました。今回は、ごあいさつだけで失礼します。"
+          - who: narration
+            say: "スカウトは、まっさらな手帳を閉じて帰っていった。"
 
   - id: scout_field_ask
     kind: System
@@ -2156,7 +2195,7 @@ events:
           - who: team_manager
             say: "リストの中から、会いに行く子を「スカウト」で選んで口説きます。口説けた子が4月に入ってきます。"
           - who: team_manager
-            say: "契約にはお金がかかります。部費と相談して決めてくださいね。"
+            say: "契約は「スカウト」の画面からできます。お金がかかるので、部費と相談して決めてくださいね。"
 
   # 初めて部費で何か買えるようになった週。
   - id: tutorial_purchases

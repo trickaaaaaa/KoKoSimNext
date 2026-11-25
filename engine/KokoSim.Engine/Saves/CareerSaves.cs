@@ -95,6 +95,17 @@ internal static class CareerSaves
             foreach (var id in sids) scheduled.Add(id, c.Scheduled[id]);
             obj.Add("scheduled", scheduled);
         }
+        // 契約したことがある印（issue #1594）。段が0へ戻った契約だけ載せる＝段>0は段から導けるので旧セーブと同形。
+        var marks = new List<string>();
+        foreach (var id in c.EverContractedMarks)
+            if (c.LevelOf(id) <= 0) marks.Add(id);
+        if (marks.Count > 0)
+        {
+            marks.Sort(System.StringComparer.Ordinal);
+            var arr = new JsonArray();
+            foreach (var id in marks) arr.Add(JsonValue.Of(id));
+            obj.Add("everContracted", arr);
+        }
         return obj;
     }
 
@@ -108,6 +119,9 @@ internal static class CareerSaves
             var scheduled = o.Obj("scheduled");
             foreach (var id in scheduled.Keys) set.ScheduleLevel(id, scheduled.Int(id));
         }
+        // 契約したことがある印は v46（issue #1594）で追加。無い旧セーブは段>0なら「ある」（SetLevel が立てる）。
+        if (o.Has("everContracted"))
+            foreach (var v in o.Arr("everContracted").Items) set.MarkEverContracted(((JsonString)v).Value);
         return set;
     }
 

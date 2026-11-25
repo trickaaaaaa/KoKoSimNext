@@ -172,12 +172,42 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void RaiseAfterNewTeamStarted()
         {
-            var m = ScoutMilestones.AfterNewTeamStarted(Calendar, GameClock.Week, GameClock.YearIndex, Current);
-            if (m == ScoutMilestone.None) return;
+            var ever = HasEverContracted;
+            var m = ScoutMilestones.AfterNewTeamStarted(Calendar, GameClock.Week, GameClock.YearIndex, Current, ever);
+            if (m == ScoutMilestone.None)
+            {
+                // 一度も契約していない学校には強制の入口を出さない（issue #1594）。説明だけは同じ時期に読ませる＝契約はスカウト画面から。
+                if (!ever && CanContractNow) TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.Scouting);
+                return;
+            }
             SelectedField = ScoutField.Omakase;   // 選ばずに閉じたらお任せ（前年の選択を引きずらない）
             // 初めてのスカウトの時期: スカウトと新入生の説明（issue #1496）。契約の会話より先に読む。
             TutorialService.Raise(KokoSim.Engine.Career.TutorialScene.Scouting);
             ScoutPitchService.Raise();
+        }
+
+        /// <summary>この学校でスカウト網を一度でも契約したことがあるか（転任で新しい学校に移ると戻る・issue #1594）。</summary>
+        public static bool HasEverContracted => ManagerService.Contracts.HasEverContracted(ScoutPitch.ContractId);
+
+        /// <summary>スカウト画面の「スカウトと契約する」を出せるか（未契約で、今年ぶんの候補リストが生成される前）。</summary>
+        public static bool CanContractNow => ScoutMilestones.CanContractNow(Calendar, GameClock.Week, Slots);
+
+        /// <summary>ホームの通知フィードに契約の案内を出す時期か。</summary>
+        public static bool ContractHintVisible
+            => ScoutMilestones.ShowContractHint(Calendar, GameClock.Week, Slots, HasEverContracted);
+
+        /// <summary>
+        /// スカウト画面の「スカウトと契約する」を押した。既存の契約→分野の会話を積み、読み終えたらスカウト画面へ戻る
+        /// （issue #1594）。積めなかったら false。
+        /// </summary>
+        public static bool RaiseContractFromScreen()
+        {
+            if (!CanContractNow) return false;
+            SelectedField = ScoutField.Omakase;
+            if (!ScoutPitchService.Raise()) return false;
+            NavigatePending = true;
+            _landOnCandidates = true;
+            return true;
         }
 
         /// <summary>週に入った直後（候補リスト生成の後）に呼ぶ。リスト到着・念押しの会話を積む。</summary>
