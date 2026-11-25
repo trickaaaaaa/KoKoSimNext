@@ -452,19 +452,28 @@ public sealed class ScoutingTests
     [Fact]
     public void Resolve_OnlyTargeted_AndIsIdempotent()
     {
-        var state = Build(800009, level: 3, field: ScoutField.Omakase);
-        state.Candidates[0].Targeted = true;
-        state.Candidates[1].Targeted = true;
         var roster = new List<DevelopingPlayer> { new() };
 
-        var won = ScoutModel.Resolve(state, 60, Tier.C, true, roster, Strength, C, new Xoshiro256Random(555));
+        // 勝つ候補が出るシードを探す（勝ちが0件だと Assert.All も2回目の空確認も空集合で通ってしまう）。
+        for (ulong seed = 555; seed < 555 + 200; seed++)
+        {
+            var state = Build(800009, level: 3, field: ScoutField.Omakase);
+            state.Candidates[0].Targeted = true;
+            state.Candidates[1].Targeted = true;
+            foreach (var c in state.Candidates.Where(c => c.Targeted)) c.Visits = 3;
 
-        Assert.True(state.Resolved);
-        foreach (var c in state.Candidates) Assert.Equal(c.Targeted, c.Decided);
-        Assert.All(won, c => Assert.True(c.Targeted && c.Succeeded));
+            var won = ScoutModel.Resolve(state, 60, Tier.C, true, roster, Strength, C, new Xoshiro256Random(seed));
+            if (won.Count == 0) continue;
 
-        var again = ScoutModel.Resolve(state, 60, Tier.C, true, roster, Strength, C, new Xoshiro256Random(1));
-        Assert.Empty(again);
+            Assert.True(state.Resolved);
+            foreach (var c in state.Candidates) Assert.Equal(c.Targeted, c.Decided);
+            Assert.All(won, c => Assert.True(c.Targeted && c.Succeeded));
+
+            var again = ScoutModel.Resolve(state, 60, Tier.C, true, roster, Strength, C, new Xoshiro256Random(1));
+            Assert.Empty(again);
+            return;
+        }
+        Assert.Fail("200シード回しても勝つ候補が出ない＝冪等性を検査できない");
     }
 
     [Fact]

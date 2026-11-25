@@ -99,4 +99,26 @@ public sealed class JsonRoundTripTests
     {
         Assert.Throws<JsonParseException>(() => JsonValue.Parse(bad));
     }
+
+    [Fact]
+    public void Nesting_AtTheLimit_Parses_AndBeyondIsRejected_NotAStackOverflow()
+    {
+        var max = JsonParser.MaxDepth;
+        var ok = new string('[', max) + new string(']', max);
+        Assert.Equal(ok, Roundtrip(ok));
+
+        foreach (var opener in new[] { "[", "{\"a\":" })
+        {
+            var deep = string.Concat(Enumerable.Repeat(opener, 200_000));
+            Assert.Throws<JsonParseException>(() => JsonValue.Parse(deep));
+        }
+    }
+
+    [Fact]
+    public void SaveCodec_TryDeserialize_DeepNesting_FailsGracefully()
+    {
+        var deep = new string('[', 200_000);
+        Assert.False(KokoSim.Engine.Saves.SaveCodec.TryDeserialize(deep, out _, out var error));
+        Assert.False(string.IsNullOrEmpty(error));
+    }
 }

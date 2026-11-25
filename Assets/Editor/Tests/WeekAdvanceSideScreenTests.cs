@@ -15,6 +15,13 @@ namespace KokoSim.EditorTests
         [SetUp]
         public void NewGame() => SaveGameIO.ResetForNewGame();
 
+        [TearDown]
+        public void Cleanup()
+        {
+            EventService.Clear();
+            SaveGameIO.ResetForNewGame();
+        }
+
         private static int AbilitySum()
             => RosterService.Active.Sum(p => AbilityKinds.All.Sum(k => p.Level(k)));
 

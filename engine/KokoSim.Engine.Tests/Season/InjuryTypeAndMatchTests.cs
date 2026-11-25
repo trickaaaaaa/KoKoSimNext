@@ -57,7 +57,16 @@ public sealed class InjuryTypeAndMatchTests
             Assert.Equal(e.Name, d!.Name);
             Assert.Equal(e.RecoveryWeekFactor, d.RecoveryWeekFactor, 6);
             Assert.Equal(e.MinorShare, d.MinorShare, 6);
+            Assert.Equal(e.ModerateShare, d.ModerateShare, 6);
             Assert.Equal(e.Sites.Count, d.Sites.Count);
+            foreach (var site in e.Sites)
+            {
+                var dw = d.Sites.SingleOrDefault(x => x.Site == site.Site);
+                Assert.True(dw is not null, $"{e.Id} の部位 {site.Site} が組み込み既定に無い");
+                Assert.Equal(site.Weight, dw!.Weight, 6);
+            }
+            foreach (var scene in System.Enum.GetValues(typeof(InjuryScene)).Cast<InjuryScene>())
+                Assert.Equal(e.WeightFor(scene), d.WeightFor(scene), 6);
         }
     }
 

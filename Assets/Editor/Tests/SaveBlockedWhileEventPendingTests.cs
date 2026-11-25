@@ -36,6 +36,7 @@ namespace KokoSim.EditorTests
         {
             Assert.IsTrue(EventService.PushChoiceEvent("grade_friction", 0.0));
             var path = System.IO.Path.Combine(UnityEngine.Application.temporaryCachePath, "issue1115.sav");
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
             Assert.IsFalse(SaveGameIO.Save(path), "場面が残ったままは書かない");
             Assert.IsFalse(System.IO.File.Exists(path));
         }

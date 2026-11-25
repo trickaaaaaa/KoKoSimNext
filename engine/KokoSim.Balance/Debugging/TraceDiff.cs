@@ -17,6 +17,8 @@ public static class TraceDiff
     /// <summary>比較対象のフィールド（JSONL の短縮キー。設計書17 §4.3 を単一ソースとする）。</summary>
     private static readonly (string Path, string Label)[] ComparedFields =
     {
+        ("b", "打者"),
+        ("p", "投手"),
         ("plan.ty", "球種"),
         ("plan.ax", "狙いX"),
         ("plan.ay", "狙いY"),
@@ -24,14 +26,19 @@ public static class TraceDiff
         ("plan.stuff", "球威"),
         ("act.x", "着弾X"),
         ("act.y", "着弾Y"),
+        ("act.kmh", "実球速"),
         ("act.zone", "ゾーン内外"),
         ("bat.pSw", "スイング確率"),
         ("bat.sw", "スイング"),
         ("res.k", "球結果"),
+        ("res.ev", "打球初速"),
+        ("res.la", "打球角度"),
+        ("res.sa", "打球方向"),
         ("rng.d", "乱数消費数"),
     };
 
-    public sealed record PitchLine(int Index, JsonElement Json)
+    /// <summary><paramref name="Game"/> はトレース内の何試合目か（1始まり。game 行が無ければ 0）。</summary>
+    public sealed record PitchLine(int Index, JsonElement Json, int Game = 0)
     {
         public string Where
         {
@@ -42,7 +49,8 @@ public static class TraceDiff
                 var top = Json.GetProperty("top").GetBoolean() ? "表" : "裏";
                 var cnt = Json.GetProperty("cnt").GetString();
                 var n = Json.GetProperty("n").GetInt32();
-                return string.Create(c, $"{i}回{top} {cnt} {n}球目（通算{Json.GetProperty("N").GetInt32()}球目）");
+                var game = Game > 0 ? string.Create(c, $"{Game}試合目 ") : "";
+                return string.Create(c, $"{game}{i}回{top} {cnt} {n}球目（通算{Json.GetProperty("N").GetInt32()}球目）");
             }
         }
     }
@@ -105,12 +113,16 @@ public static class TraceDiff
     {
         var list = new List<PitchLine>();
         var idx = 0;
+        var game = 0;
         foreach (var line in System.IO.File.ReadLines(path))
         {
             if (line.Length == 0) continue;
             using var doc = JsonDocument.Parse(line);
-            if (!doc.RootElement.TryGetProperty("t", out var t) || t.GetString() != "pitch") continue;
-            list.Add(new PitchLine(idx++, doc.RootElement.Clone()));
+            if (!doc.RootElement.TryGetProperty("t", out var t)) continue;
+            var kind = t.GetString();
+            if (kind == "game") game++;
+            if (kind != "pitch") continue;
+            list.Add(new PitchLine(idx++, doc.RootElement.Clone(), game));
         }
         return list;
     }

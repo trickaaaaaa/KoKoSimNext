@@ -60,7 +60,8 @@ public static class TraceCommand
         // 交互に細かく回せば負荷の波は両側に乗り、中央値が重なった塊の外れ値を捨てる。
         // 先頭の塊はオフ→オンの順に回して JIT・TrajectoryFeatureTable の初回構築を吸収し、計測から外す
         // （オンの分はそのまま出力へ書く＝出力は全試合ぶんが試合順に並ぶ）。
-        var chunk = System.Math.Min(MeasureChunkGames, System.Math.Max(1, o.Games));
+        // 先頭の塊は捨てるので、塊が1つしか無いと何も計測できない（5試合以下で常に 0.0% になっていた）＝塊は試合数の半分まで縮める。
+        var chunk = System.Math.Min(MeasureChunkGames, System.Math.Max(1, o.Games / 2));
         double onMs = 0, offMs = 0;
         var ratios = new List<double>();
         for (var first = 0; first < o.Games; first += chunk)
@@ -83,7 +84,7 @@ public static class TraceCommand
             if (off > 0) ratios.Add(on / off);
         }
 
-        return new Summary(o.Games, sink.Lines, onMs, offMs, ratios.Count > 0 ? Median(ratios) - 1.0 : 0.0);
+        return new Summary(o.Games, sink.Lines, onMs, offMs, ratios.Count > 0 ? Median(ratios) - 1.0 : double.NaN);
     }
 
     private static double Median(List<double> values)
@@ -186,8 +187,11 @@ public static class TraceCommand
         sb.AppendLine(string.Create(c, $"  試合数 {s.Games} / 行数 {s.Lines} / シード {o.Seed}"));
         if (o.MeasureOverhead)
         {
+            var overhead = double.IsNaN(s.OverheadRatio)
+                ? "計測不能（2試合以上が要る）"
+                : s.OverheadRatio.ToString("P1", c) + "（塊ごとの比の中央値）";
             sb.AppendLine(string.Create(c,
-                $"  観測オン {s.TracedMs:F0}ms / オフ {s.UntracedMs:F0}ms（先頭の塊を除く計測分）/ オーバーヘッド {s.OverheadRatio:P1}（塊ごとの比の中央値）"));
+                $"  観測オン {s.TracedMs:F0}ms / オフ {s.UntracedMs:F0}ms（先頭の塊を除く計測分）/ オーバーヘッド {overhead}"));
         }
         return sb.ToString();
     }

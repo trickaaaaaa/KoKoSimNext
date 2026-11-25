@@ -76,15 +76,12 @@ public sealed class AssignmentSolverTests
 
     [Theory]
     [InlineData(8, 8)]
-    [InlineData(8, 20)]   // AI校の実形（守備8枠 × 在校生20人超）
     [InlineData(5, 9)]
     [InlineData(1, 1)]
     public void MatchesBruteForce_OverManyRandomMatrices(int rows, int cols)
     {
-        // 総当たりは cols! に近く伸びるので、行数の多い形は本数を絞る（8×20 は 20P8 ＝ 5,079,110,400
-        // なので総当たり不可）。ここでは総当たり可能な形だけ全比較し、大きい形は下の別テストで担保する。
-        if (rows == 8 && cols == 20) return;
-
+        // 総当たりは cols! に近く伸びるので、全比較するのは総当たり可能な形だけ。
+        // AI校の実形（8×20＝20P8 ＝ 5,079,110,400）は下の Rectangular_ ... で担保する。
         var rng = new Xoshiro256Random(20260802);
         for (var trial = 0; trial < 200; trial++)
         {

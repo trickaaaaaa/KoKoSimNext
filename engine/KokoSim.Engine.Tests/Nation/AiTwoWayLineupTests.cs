@@ -196,7 +196,7 @@ public sealed class AiTwoWayLineupTests
         Assert.True(dhFromBullpen > 0);
     }
 
-    [Fact]
+    [Fact(Skip = "報告用（Assert なし）。前後の6指標を見たいときだけ Skip を外す。")]
     public void SixFactorProfile_BeforeAfter_Report()
     {
         // 参考値（issue の完了条件「前後で TeamStrengthProfile の6指標平均を実測して報告する」）。

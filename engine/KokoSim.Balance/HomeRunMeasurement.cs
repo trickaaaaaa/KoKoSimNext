@@ -56,6 +56,30 @@ public static class HomeRunMeasurement
     /// <summary>神奈川の県ID（engine SummerRegions.KanagawaId と同じ値。internal なのでここで持つ）。</summary>
     private const int KanagawaId = 13;
 
+    private static readonly Stadium[] VenueStadiums = { Stadium.MunicipalSmall01, Stadium.MunicipalSmall02, Stadium.PrefLarge, Stadium.Yokohama, Stadium.Koshien };
+    private static readonly double[] TierLattice = { 35.0, 50.0, 65.0, 80.0 };
+
+    private static string TierId(double a, double h) => string.Create(CultureInfo.InvariantCulture, $"tier-{a:F0}-{h:F0}");
+
+    /// <summary>全条件を回したときの並び順。シードはこの通し番号で決まる（末尾に足せば既存のシードはずれない）。</summary>
+    private static List<string> SeedOrder(bool hasSave)
+    {
+        var order = new List<string> { "band" };
+        order.AddRange(VenueStadiums.Select(st => "stadium-" + st.Id));
+        order.AddRange(new[] { 7, 8, 9 }.Select(m => "weather-" + m));
+        order.AddRange(new[]
+        {
+            "band-summer-venue", "real-summer", "real-autumn", "real-koshien",
+            "koshien-teams-at-default", "koshien-teams-at-pref", "koshien-no-deep", "koshien-no-deep-of-kana", "kanagawa-at-koshien",
+        });
+        for (var x = 0; x < TierLattice.Length; x++)
+        for (var y = x; y < TierLattice.Length; y++)
+            order.Add(TierId(TierLattice[x], TierLattice[y]));
+        if (hasSave) order.Add("manager-save");
+        order.AddRange(new[] { "manager-approx", "real-autumn-finals", "autumn-finals-nation" });
+        return order;
+    }
+
     public static string Run(Options o, Action<string>? log = null)
     {
         log ??= _ => { };
@@ -64,8 +88,14 @@ public static class HomeRunMeasurement
         bool Want(string id) => o.Only is null || o.Only.Contains(id);
         // 既定は C#既定＝実ゲームと同じ。YAML を渡したときも天候は剥がす（気温は条件ごとに明示で足す）。
         var baseCtx = GameSimulation.BuildContext(o.CoefficientsPath) with { Weather = null };
-        var seed = o.Seed;
-        ulong Next() => seed += 1000;
+        // 条件ごとのシードは条件の通し番号で決める（--only で絞っても同じ条件は同じシード）。
+        var seedOrder = SeedOrder(o.SavePath is not null);
+        ulong Next(string id)
+        {
+            var k = seedOrder.IndexOf(id);
+            if (k < 0) throw new InvalidOperationException($"シード順に無い条件: {id}");
+            return o.Seed + 1000UL * (ulong)(k + 1);
+        }
 
         // ── 実ゲームの全国（年度1）。神奈川の学校の強さの分布と、各県の最強校（甲子園の代表の近似）。 ──
         var nation = NationGenerator.Generate(Vocab(), new NationCoefficients(), new Xoshiro256Random(NationSeed));
@@ -85,17 +115,17 @@ public static class HomeRunMeasurement
         // ── ① 帯の条件（simulate-games と同じ） ──
         if (Want("band"))
             rows.Add(Measure("band", "帯の条件", "平均的な2校（全能力N(50,12)）・既定球場・天候なし・采配なし・コールドなし",
-                o.Games, Next(), log, (i, g) => (BandTeam(g, "遠征校"), BandTeam(g, "地元校"), baseCtx)));
+                o.Games, Next("band"), log, (i, g) => (BandTeam(g, "遠征校"), BandTeam(g, "地元校"), baseCtx)));
 
         // ── ② 球場だけ替える（チーム・天候は帯と同じ） ──
-        foreach (var st in new[] { Stadium.MunicipalSmall01, Stadium.MunicipalSmall02, Stadium.PrefLarge, Stadium.Yokohama, Stadium.Koshien })
+        foreach (var st in VenueStadiums)
         {
             var id = "stadium-" + st.Id;
             if (!Want(id)) continue;
             var ctx = baseCtx with { Field = st.ToFieldGeometry() };
             rows.Add(Measure(id, "球場: " + st.Name,
                 string.Create(CultureInfo.InvariantCulture, $"帯の2校・両翼{st.LeftM:F0}/{st.RightM:F0}m 中堅{st.CenterM:F0}m フェンス{st.FenceHeightM:F1}m・天候なし"),
-                o.Games / 2, Next(), log, (i, g) => (BandTeam(g, "遠征校"), BandTeam(g, "地元校"), ctx)));
+                o.Games / 2, Next(id), log, (i, g) => (BandTeam(g, "遠征校"), BandTeam(g, "地元校"), ctx)));
         }
 
         // ── ③ 気温だけ替える（チーム・球場は帯と同じ） ──
@@ -107,14 +137,14 @@ public static class HomeRunMeasurement
             var ctx = baseCtx with { Weather = w };
             rows.Add(Measure(id, $"気温: {month}月",
                 string.Create(CultureInfo.InvariantCulture, $"帯の2校・既定球場・{month}月の気温（平均{w.MeanTemperatureC:F0}℃ σ{w.TemperatureStdDevC:F1}・{w.MinTemperatureC:F0}〜{w.MaxTemperatureC:F0}℃）"),
-                o.Games / 2, Next(), log, (i, g) => (BandTeam(g, "遠征校"), BandTeam(g, "地元校"), ctx)));
+                o.Games / 2, Next(id), log, (i, g) => (BandTeam(g, "遠征校"), BandTeam(g, "地元校"), ctx)));
         }
 
         // ── ④ 帯の2校のまま、実ゲームの球場・気温・コールドを足す（チームの違いと条件の違いを切り分ける） ──
         if (Want("band-summer-venue"))
             rows.Add(Measure("band-summer-venue", "帯の2校×夏の県大会の球場・気温",
                 "帯の2校・神奈川の夏の県大会の球場割当（市営級2種＋準決勝・決勝は横浜スタジアム）・7月の気温・コールドあり",
-                o.Games, Next(), log, (i, g) =>
+                o.Games, Next("band-summer-venue"), log, (i, g) =>
                 {
                     var (ctx, _) = PrefCtx(baseCtx, g, summer: true, finalShare: summerFinalShare, month: 7, calendarYear: SeasonBaseYear, rules);
                     return (BandTeam(g, "遠征校"), BandTeam(g, "地元校"), ctx);
@@ -129,7 +159,7 @@ public static class HomeRunMeasurement
             rows.Add(Measure("real-summer", "実ゲーム: 夏の県大会（神奈川）",
                 string.Create(CultureInfo.InvariantCulture,
                     $"神奈川の{kanagawa.Count}校から2校を一様に抽選・永続ロスター（年度1）＋敵AI・7月の気温・市営級2種（準決勝・決勝 {summerFinalShare:P1} は横浜スタジアム）・コールドあり（決勝以外）"),
-                o.Games, Next(), log, (i, g) =>
+                o.Games, Next("real-summer"), log, (i, g) =>
                 {
                     var (a, h) = PickPair(g, teams.Length);
                     var (ctx, _) = PrefCtx(baseCtx, g, summer: true, finalShare: summerFinalShare, month: 7, calendarYear: SeasonBaseYear, rules);
@@ -142,7 +172,7 @@ public static class HomeRunMeasurement
             rows.Add(Measure("real-autumn", "実ゲーム: 秋の県大会（神奈川）",
                 string.Create(CultureInfo.InvariantCulture,
                     $"同上の2校・9月の気温・市営級2種（準決勝・決勝 {autumnFinalShare:P1} は保土ケ谷球場）・コールドあり（決勝以外）"),
-                o.Games, Next(), log, (i, g) =>
+                o.Games, Next("real-autumn"), log, (i, g) =>
                 {
                     var (a, h) = PickPair(g, teams.Length);
                     var (ctx, _) = PrefCtx(baseCtx, g, summer: false, finalShare: autumnFinalShare, month: 9, calendarYear: SeasonBaseYear, rules);
@@ -155,7 +185,7 @@ public static class HomeRunMeasurement
             var ctxK = rules.ApplyTo(baseCtx with { Field = Stadium.Koshien.ToFieldGeometry(), Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
             rows.Add(Measure("real-koshien", "実ゲーム: 夏の甲子園",
                 "47都道府県の最強校（代表の近似）から2校を抽選・永続ロスター＋敵AI・甲子園・8月の気温・コールドなし",
-                o.Games, Next(), log, (i, g) =>
+                o.Games, Next("real-koshien"), log, (i, g) =>
                 {
                     var (a, h) = PickPair(g, teams.Length);
                     return (teams[a], teams[h], ctxK);
@@ -169,11 +199,11 @@ public static class HomeRunMeasurement
             var ctxD = rules.ApplyTo(baseCtx with { Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
             rows.Add(Measure("koshien-teams-at-default", "切り分け: 甲子園の2校×既定球場",
                 "47都道府県の最強校から2校・永続ロスター＋敵AI・既定球場（両翼95/中堅118/フェンス4m）・8月の気温",
-                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxD); }));
+                o.Games, Next("koshien-teams-at-default"), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxD); }));
             var ctxP = rules.ApplyTo(baseCtx with { Field = Stadium.PrefLarge.ToFieldGeometry(), Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
             rows.Add(Measure("koshien-teams-at-pref", "切り分け: 甲子園の2校×県営球場（広い）",
                 "47都道府県の最強校から2校・永続ロスター＋敵AI・県営級（広い）・8月の気温",
-                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxP); }));
+                o.Games, Next("koshien-teams-at-pref"), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxP); }));
         }
         if (Want("koshien-no-deep") || Want("koshien-split"))
         {
@@ -183,7 +213,7 @@ public static class HomeRunMeasurement
             var ctxK = rules.ApplyTo(baseCtx with { Field = Stadium.Koshien.ToFieldGeometry(), Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
             rows.Add(Measure("koshien-no-deep", "切り分け: 甲子園の2校×甲子園・外野後退なし",
                 "夏の甲子園と同じ（最強校2校・甲子園・8月）で、敵AIの「強打者に外野後退」だけ切る",
-                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxK); }));
+                o.Games, Next("koshien-no-deep"), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxK); }));
             // さらに外野手の守備系（走力・肩・守備・捕球・送球精度）を神奈川の外野手の平均へ落とす（打者としての走力も落ちる）。
             var kanaOf = KanaTeams().SelectMany(t => t.BattingOrder).Where(IsOf).ToList();
             int Avg(Func<Player, int> f) => (int)Math.Round(kanaOf.Average(f));
@@ -196,7 +226,7 @@ public static class HomeRunMeasurement
             }).ToArray();
             rows.Add(Measure("koshien-no-deep-of-kana", "切り分け: 甲子園・外野後退なし・外野手の守備を神奈川並みに",
                 string.Create(CultureInfo.InvariantCulture, $"上の条件で、外野手の走力/肩/守備/捕球/送球精度を神奈川の外野手の平均（{ofAvg.Speed}/{ofAvg.Arm}/{ofAvg.Fld}/{ofAvg.Cat}/{ofAvg.Acc}）へ"),
-                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, weakOf.Length); return (weakOf[a], weakOf[h], ctxK); }));
+                o.Games, Next("koshien-no-deep-of-kana"), log, (i, g) => { var (a, h) = PickPair(g, weakOf.Length); return (weakOf[a], weakOf[h], ctxK); }));
             var kana = KanaTeams();
             notes.Add(string.Create(CultureInfo.InvariantCulture,
                 $"打順のうちパワー≥{new TacticsCoefficients().OutfieldDeepMinPower}（敵AIが外野を後退させる打者）の割合: 甲子園の2校（最強校）{PowerShare(teams):P0}／神奈川の学校 {PowerShare(kana):P0}"));
@@ -212,23 +242,23 @@ public static class HomeRunMeasurement
             var ctxK = rules.ApplyTo(baseCtx with { Field = Stadium.Koshien.ToFieldGeometry(), Weather = WeatherModel.ForMonth(8) }, SeasonBaseYear);
             rows.Add(Measure("kanagawa-at-koshien", "切り分け: 神奈川の2校×甲子園",
                 "神奈川の学校から2校を一様に抽選・永続ロスター＋敵AI・甲子園・8月の気温・コールドなし",
-                o.Games, Next(), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxK); }));
+                o.Games, Next("kanagawa-at-koshien"), log, (i, g) => { var (a, h) = PickPair(g, teams.Length); return (teams[a], teams[h], ctxK); }));
         }
 
         // ── ⑥ ティア格子（実ゲームの夏の県大会の条件で、強さを指定した2校） ──
-        var lattice = new[] { 35.0, 50.0, 65.0, 80.0 };
+        var lattice = TierLattice;
         for (var x = 0; x < lattice.Length; x++)
         for (var y = x; y < lattice.Length; y++)
         {
             var sa = lattice[x];
             var sh = lattice[y];
-            var id = string.Create(CultureInfo.InvariantCulture, $"tier-{sa:F0}-{sh:F0}");
+            var id = TierId(sa, sh);
             if (!Want(id) && !Want("tier")) continue;
             var schoolA = StubSchool(-10, sa);
             var schoolH = StubSchool(-11, sh);
             rows.Add(Measure(id, string.Create(CultureInfo.InvariantCulture, $"ティア格子: {Label(sa)} vs {Label(sh)}"),
                 "StrengthTeamFactory＋敵AI（校風なし）・夏の県大会の球場割当・7月の気温・コールドあり",
-                o.Games / 2, Next(), log, (i, g) =>
+                o.Games / 2, Next(id), log, (i, g) =>
                 {
                     var away = StrengthTeamFactory.Create(sa, "先攻校", g, modernRules: rules, calendarYear: SeasonBaseYear)
                         with { Tactics = EnemyAiFactory.BrainFor(schoolA) };
@@ -249,7 +279,7 @@ public static class HomeRunMeasurement
             opponentStrength = m.Opponent.Strength;
             if (Want("manager-save"))
                 rows.Add(Measure("manager-save", $"監督の試合（セーブから再現）: {m.ManagerName} vs {m.Opponent.Name}",
-                    m.Detail, o.Games * 2, Next(), log, (i, g) =>
+                    m.Detail, o.Games * 2, Next("manager-save"), log, (i, g) =>
                     {
                         var (ctx, _) = PrefCtx(m.Ctx, g, summer: false, finalShare: 0.0, month: 9, calendarYear: m.CalendarYear, rules);
                         return m.ManagerIsAway ? (m.ManagerTeam, m.OpponentTeam, ctx) : (m.OpponentTeam, m.ManagerTeam, ctx);
@@ -265,7 +295,7 @@ public static class HomeRunMeasurement
                 string.Create(CultureInfo.InvariantCulture, $"監督の試合の近似: 強さ{ms:F0} vs {os:F0}"),
                 string.Create(CultureInfo.InvariantCulture,
                     $"StrengthTeamFactory（強さ {ms:F1} vs {os:F1}{(managerStrength is null ? "・自校の強さは仮置き" : "・自校の強さはセーブの部員から TeamStrengthProfile で算出")}）＋敵AI・神奈川の秋の序盤（市営級2種）・9月の気温・コールドあり"),
-                o.Games * 2, Next(), log, (i, g) =>
+                o.Games * 2, Next("manager-approx"), log, (i, g) =>
                 {
                     var away = StrengthTeamFactory.Create(ms, "自校", g, modernRules: rules, calendarYear: SeasonBaseYear)
                         with { Tactics = EnemyAiFactory.BrainFor(schoolM) };
@@ -285,7 +315,7 @@ public static class HomeRunMeasurement
             rows.Add(Measure("real-autumn-finals", "実ゲーム: 秋の県大会の準決勝・決勝だけ（神奈川）",
                 string.Create(CultureInfo.InvariantCulture,
                     $"神奈川の2校・9月の気温・{st.Name}（両翼{st.LeftM:F0}/{st.RightM:F0}m 中堅{st.CenterM:F0}m フェンス{st.FenceHeightM:F1}m）・決勝以外はコールドあり"),
-                o.Games, Next(), log, (i, g) =>
+                o.Games, Next("real-autumn-finals"), log, (i, g) =>
                 {
                     var (a, h) = PickPair(g, teams.Length);
                     var (ctx, _) = PrefCtx(baseCtx, g, summer: false, finalShare: 1.0, month: 9, calendarYear: SeasonBaseYear, rules);
@@ -298,7 +328,7 @@ public static class HomeRunMeasurement
             var prefIds = nation.Prefectures.Select(p => p.Id).ToArray();
             rows.Add(Measure("autumn-finals-nation", "全国の秋の県大会の準決勝・決勝（47県を一様に）",
                 "神奈川の2校（強さの物差し）・県を一様に抽選し、その県の秋の準決勝・決勝の球場・9月の気温（屋内は気温なし）・決勝以外はコールドあり",
-                o.Games, Next(), log, (i, g) =>
+                o.Games, Next("autumn-finals-nation"), log, (i, g) =>
                 {
                     var (a, h) = PickPair(g, teams.Length);
                     var pref = prefIds[g.Fork(PairingStreamId + 2).NextInt(0, prefIds.Length)];
