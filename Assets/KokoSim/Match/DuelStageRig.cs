@@ -1782,7 +1782,9 @@ namespace KokoSim.Unity.Match
             // 窓は GripEndSec 2.60s まで＝1.1〜1.8秒のバント系クリップは全区間）が潰していた。
             // 重みはバットを寝かせる補正と同じ（移行の進み・クロスフェードの補間込み）＝手が1コマで飛ばない
             float gripW = 1f - BuntBatFlatWeight();
-            DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim, gripW);
+            // 膝も同じ重みで切る（窓がスイング用の時刻表＝Bunt_Loop の毎周で膝が揺れる・issue #1660）。
+            // 左打者は鏡映親で見せている＝膝の回しを裏返す
+            DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim, gripW, kneeWeight: gripW, mirrored: _batter.Mirrored);
         }
 
         /// <summary>

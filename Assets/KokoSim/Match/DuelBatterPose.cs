@@ -24,11 +24,15 @@ namespace KokoSim.Unity.Match
         /// <summary>補正の入口。clipTime はクリップ内秒（構え0〜スイング〜走り出し）。</summary>
         /// <param name="gripWeight">握りを詰める補正（<see cref="FixGrip"/>）の効き 0..1。バント系のクリップでは0
         /// （収録の「下の手はグリップ・上の手はバットの中ほど」を潰さない。issue #1087）。</param>
+        /// <param name="kneeWeight">膝の補正（<see cref="FixKnee"/>）の効き 0..1。バント系のクリップでは0
+        /// （窓はスイング用の構えの時刻表＝1.25秒の Bunt_Loop に当てると毎周オン・オフして膝が揺れる。issue #1660）。</param>
+        /// <param name="mirrored">鏡映親で鏡像にして見せている（左打者）。膝はワールド空間で回すので、
+        /// 鏡像の空間では回す向きを裏返さないと右打者の鏡写しにならない（issue #1660）。</param>
         public static void Apply(Animator anim, in DuelCalibration cal, float clipTime, Vector3 aimPoint,
-            float gripWeight = 1f)
+            float gripWeight = 1f, float kneeWeight = 1f, bool mirrored = false)
         {
             if (anim == null) return;
-            FixKnee(anim, cal, clipTime);
+            FixKnee(anim, cal, clipTime, kneeWeight, mirrored);
             // 胴は頭・握りより先。背骨を回すと腕も頭も一緒に運ばれるので、後の2つが
             // 「回した後の体」を基準に当たり直す必要がある（逆順だと視線と握りが胴のぶんずれる）
             FixTorso(anim, cal, clipTime);
@@ -348,10 +352,10 @@ namespace KokoSim.Unity.Match
 
         // ---------------------------------------------------------------- 脚
 
-        private static void FixKnee(Animator anim, in DuelCalibration cal, float t)
+        private static void FixKnee(Animator anim, in DuelCalibration cal, float t, float weight, bool mirrored)
         {
             float w = Ramp(t, cal.KneeFromSec, cal.KneeFullSec)
-                * (1f - Ramp(t, cal.KneeFullSec, cal.KneeToSec));
+                * (1f - Ramp(t, cal.KneeFullSec, cal.KneeToSec)) * Mathf.Clamp01(weight);
             if (w <= 0.001f || Mathf.Abs(cal.KneeDeg) < 0.01f) return;
             var up = B(anim, HumanBodyBones.LeftUpperLeg);
             var foot = B(anim, HumanBodyBones.LeftFoot);
@@ -361,7 +365,9 @@ namespace KokoSim.Unity.Match
             if (axis.sqrMagnitude < 1e-6f) return;
             // 股関節→足首の軸まわりに脚ごと回す＝足首は軸上にあるので**接地は動かない**
             var footRot = foot.rotation;
-            RotateAround(up, hip, Quaternion.AngleAxis(cal.KneeDeg * w, axis.normalized));
+            // 鏡像の空間（負スケールの親の下）でワールドの回転をそのまま掛けると、絵の上では逆回りになる
+            float deg = cal.KneeDeg * w * (mirrored ? -1f : 1f);
+            RotateAround(up, hip, Quaternion.AngleAxis(deg, axis.normalized));
             foot.rotation = footRot;   // 足の向きは元のまま（つま先が回らない）
         }
     }
