@@ -1069,6 +1069,12 @@ namespace KokoSim.Unity.Home
             items.AddRange(MomentumFeedItems());
             items.AddRange(PromiseFeedItems("本日"));   // 入部の条件（約束）の決着（設計書04 §2.4）
             PushFeed(items);
+            // 公式戦のあとはマネージャーがひとこと話す（issue #1633）。結果モーダルを閉じたあとに出る＝
+            // 大会の締めの会話（DismissResult で積む）より前に並ぶ。保存できない局面で1回だけ積むのでロードで二重にならない。
+            // 同じ週に複数試合ある大会でも会話が揃わないよう、日と得点を salt にする。
+            KokoSim.Unity.Shell.EventService.PushUncapped(
+                o.ManagerWon ? "postgame_win" : "postgame_loss", null, null,
+                GameSession.Current.TournamentDay * 31 + o.ManagerScore * 7 + o.OpponentScore);
         }
 
         /// <summary>

@@ -2337,6 +2337,81 @@ events:
           - who: team_manager
             say: "はい。でも今日の夕飯は少しだけ豪華にしていいですか。"
 
+  # 公式戦の試合後（issue #1633）。勝ち負けごとにマネージャーがひとこと話す。毎試合・公式戦だけ（練習試合は出ない）。
+  # 呼び出し元（HomeState.PushMatchFeed）が結果モーダルを閉じたあとの会話として積む。大会の締めの会話より先に出る。
+  # 負けは大会が続く負け（リーグ戦の途中など）と終わる負けの両方で成り立つ文にする＝「次がある」と言い切らない。
+  - id: postgame_win
+    kind: System
+    scene: clubroom
+    text: "公式戦に勝った。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、やりましたね！"
+          - who: captain
+            say: "勝ちました。まだ実感がないです。"
+          - who: team_manager
+            say: "私もです。さっきからスコアブックを三回閉じたり開いたりしてます。"
+      - lines:
+          - who: team_manager
+            say: "勝ちました、監督！みんな、ベンチで跳ねてます。"
+          - who: captain
+            say: "跳ねてません。ちょっと浮いてるだけです。"
+          - who: team_manager
+            say: "それを跳ねてると言うんですよ。"
+      - lines:
+          - who: narration
+            say: "校歌のあと、スタンドに向かって整列した。部員の声が少しかすれている。"
+          - who: team_manager
+            say: "監督、勝てました。やりましたね。"
+          - who: player
+            name: "一年生"
+            say: "声、出しすぎて喉が……。"
+          - who: team_manager
+            say: "のど飴ならあります。全員ぶんは、ないですけど。"
+      - lines:
+          - who: team_manager
+            say: "やりましたね、監督！今日のおにぎり、いつもより大きく握ってきて正解でした。"
+          - who: captain
+            say: "それは関係ないと思います。"
+          - who: team_manager
+            say: "関係あります。験担ぎなので、次も同じ大きさにします。"
+
+  - id: postgame_loss
+    kind: System
+    scene: clubroom
+    text: "公式戦で敗れた。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "……負けてしまいましたね、監督。"
+          - who: captain
+            say: "すみません。"
+          - who: team_manager
+            say: "謝らないでください。みんな、最後まで声を出してました。私、ちゃんと聞いてましたから。"
+      - lines:
+          - who: narration
+            say: "ベンチの片付けが終わっても、誰もすぐには動かなかった。"
+          - who: team_manager
+            say: "監督、残念でしたね。でも、いい試合だったと思います。"
+          - who: captain
+            say: "……そう言ってもらえると、少し楽です。"
+      - lines:
+          - who: team_manager
+            say: "悔しいですね、監督。"
+          - who: player
+            name: "二年生"
+            say: "あと一本、出てれば……。"
+          - who: team_manager
+            say: "その一本、私も打席で数えてました。ひとまず今日は、ちゃんと食べて寝ましょう。"
+      - lines:
+          - who: team_manager
+            say: "監督、お疲れさまでした。残念でしたけど、今日のみんな、かっこよかったです。"
+          - who: captain
+            say: "かっこよくは、なかったと思います。"
+          - who: team_manager
+            say: "私が決めたので、かっこよかったです。"
+
   - id: koshien_draw
     kind: System
     scene: hall
