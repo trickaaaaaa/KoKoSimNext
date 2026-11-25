@@ -173,6 +173,8 @@ events:
             "koshien_berth_donation", "koshien_draw",
             // 秋季地区予選リーグ戦の通過（issue #1133）。
             "district_league_qualified",
+            // 公式戦の試合後の会話（issue #1633）。
+            "postgame_win", "postgame_loss",
             // 夏の敗退直後の3年引退（issue #954）。IDは SummerRetirement の定数で引く。
             SummerRetirement.PrefectureLossEventId, SummerRetirement.KoshienLossEventId,
             SummerRetirement.KoshienChampionEventId,
