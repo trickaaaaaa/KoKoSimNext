@@ -252,6 +252,15 @@ public sealed record FieldingPlay
     /// <summary>その内野手が打球ラインに最も近づいた点[m]（X=一塁側, Z=センター方向）。表示専用。</summary>
     public double? ClosestApproachX { get; init; }
     public double? ClosestApproachZ { get; init; }
+
+    /// <summary>
+    /// 表示専用（issue #1591）: 打球ラインを挟んで <see cref="ClosestInfielderRole"/> と反対側にいる内野手のうち、
+    /// 最も惜しく迫った1人（二遊間・三遊間・一二塁間を抜ける打球は実物では両側の2人が追う）。
+    /// 該当者がいない（打球が端を抜けた等）／抜けていない打球では null。判定・帯・指紋は読まない。
+    /// </summary>
+    public FieldPosition? SecondInfielderRole { get; init; }
+    public double? SecondApproachX { get; init; }
+    public double? SecondApproachZ { get; init; }
 }
 
 /// <summary>
@@ -486,6 +495,7 @@ public static class FieldingResolver
                         ClosestApproachX = miss.Point.X,
                         ClosestApproachZ = miss.Point.Z,
                     };
+                    result = WithSecondInfielder(result, fielders, path, coeff, miss.Fielder, miss.Point);
                 }
                 return result;
             }
@@ -645,7 +655,7 @@ public static class FieldingResolver
                     var through = ExtraBaseResolver.RollFrom(
                         catchPoint, path.DirectionAt(fieldTimeRaw), path.HorizontalSpeedAt(fieldTimeRaw),
                         fieldTimeRaw, fenceDist, coeff, field);
-                    return HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime, rng) with
+                    return WithSecondInfielder(HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime, rng) with
                     {
                         Result = BattedBallResult.Error,
                         ThroughInfield = true,
@@ -656,7 +666,7 @@ public static class FieldingResolver
                         ClosestInfielderRole = infielder.Position,
                         ClosestApproachX = catchPoint.X,
                         ClosestApproachZ = catchPoint.Z,
-                    };
+                    }, fielders, path, coeff, infielder, catchPoint);
                 }
                 return GroundBase(result) with
                 {
@@ -860,6 +870,64 @@ public static class FieldingResolver
         }
         return best is null ? null : (best, bestPoint);
     }
+
+    /// <summary>
+    /// 表示専用（issue #1591）: <paramref name="first"/>（最も惜しかった内野手）と打球ラインを挟んで反対側の、
+    /// 次に惜しかった内野手（投手を除く）とその最接近点を求める。打球ラインは本塁から
+    /// <paramref name="firstPoint"/> へ引いた直線。<paramref name="first"/> がほぼライン上（横ずれ1m未満）なら
+    /// どちら側でもよい。判定・乱数には一切触れない。
+    /// </summary>
+    internal static (Fielder Fielder, Vector3D Point)? FindOppositeSideInfielderMiss(
+        IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff,
+        Fielder first, Vector3D firstPoint)
+    {
+        var len = Math.Sqrt(firstPoint.X * firstPoint.X + firstPoint.Z * firstPoint.Z);
+        if (len < 1e-6) return null;
+        var dx = firstPoint.X / len;
+        var dz = firstPoint.Z / len;
+        double SideOf(Fielder f) => dx * f.Location.Z - dz * f.Location.X;
+        var firstSide = SideOf(first);
+        var anySide = Math.Abs(firstSide) < 1.0;
+
+        var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
+        var radius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
+        Fielder? best = null;
+        var bestPoint = default(Vector3D);
+        var bestShortfall = double.PositiveInfinity;
+        var t = path.HangTimeSeconds;
+        for (var i = 0; i < MaxInterceptScanSteps; i++, t += step)
+        {
+            var p = path.PositionAt(t);
+            if (Math.Sqrt(p.X * p.X + p.Z * p.Z) > coeff.InfieldDepthM) break;
+            if (path.HeightAt(t) > coeff.InfielderReachHeightM) continue;
+            foreach (var f in fielders)
+            {
+                if (!IsInfield(f) || f.Position == FieldPosition.Pitcher || f.Position == first.Position) continue;
+                if (!anySide && SideOf(f) * firstSide >= 0.0) continue;
+                var travel = Math.Max(0.0, (p - f.Location).Length - radius);
+                var shortfall = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds - t;
+                if (shortfall < bestShortfall)
+                {
+                    bestShortfall = shortfall;
+                    best = f;
+                    bestPoint = p;
+                }
+            }
+        }
+        return best is null ? null : (best, bestPoint);
+    }
+
+    private static FieldingPlay WithSecondInfielder(
+        FieldingPlay play, IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff,
+        Fielder first, Vector3D firstPoint)
+        => FindOppositeSideInfielderMiss(fielders, path, coeff, first, firstPoint) is { } second
+            ? play with
+            {
+                SecondInfielderRole = second.Fielder.Position,
+                SecondApproachX = second.Point.X,
+                SecondApproachZ = second.Point.Z,
+            }
+            : play;
 
     /// <summary>
     /// 内野ゴロの処理野手・処理時刻・捕球点を、バウンド経路（Issue #63 の <see cref="BouncePath"/>）を辿って決める

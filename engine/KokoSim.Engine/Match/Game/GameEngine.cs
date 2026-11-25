@@ -1046,6 +1046,8 @@ public static class GameEngine
                 // 初球を指定のファウルにする強制（issue #1074 の撮影用）。それ以外は同一参照＝乱数順・結果は不変
                 return force is Debugging.ForcedOutcome.ChasedFoulFly or Debugging.ForcedOutcome.BigFoul
                                or Debugging.ForcedOutcome.GroundFoul or Debugging.ForcedOutcome.HighFoul
+                               or Debugging.ForcedOutcome.ThroughInfieldLeft or Debugging.ForcedOutcome.ThroughInfieldMiddle
+                               or Debugging.ForcedOutcome.ThroughInfieldRight
                     ? built with { ForcedFoul = force }
                     : built;
             }

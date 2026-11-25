@@ -13,8 +13,8 @@ namespace KokoSim.Engine.Match.AtBat;
 public sealed record AtBatContext
 {
     /// <summary>
-    /// 初球を指定のファウルにする強制発動（issue #1074 の撮影用・デバッグ専用）。既定 None＝素通り。
-    /// <see cref="Debugging.ForcedOutcome.ChasedFoulFly"/> / <see cref="Debugging.ForcedOutcome.BigFoul"/> だけが効く。
+    /// 初球を指定のファウル／内野を抜ける安打にする強制発動（issue #1074・#1591 の撮影用・デバッグ専用）。既定 None＝素通り。
+    /// ファウル系4種と <c>ThroughInfield*</c> 3種だけが効く。
     /// </summary>
     public Debugging.ForcedOutcome ForcedFoul { get; init; }
     public Aerodynamics Aerodynamics { get; init; } = new();

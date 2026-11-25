@@ -758,42 +758,41 @@ public static class TimelineBuilder
             // 捕球点まで来ていない（StopWithinReach で手前に止まる）ので、ここを起点にしないと運びレッグが
             // 実距離を過小評価して脚力を超える（LegSpeedTests）。既定は捕球点＝体が捕球点まで来た場合。
             var firstBaseFieldEnd = fieldPoint;
-            // 内野を抜けた打球で最も惜しかった内野手（Issue #336②）。この1人だけ、通常の役割移動の前に
-            // 「打球ラインへ寄る/飛びつく」レッグを1本挟む。ThroughInfield でない打球では常に null。
+            // 内野を抜けた打球で最も惜しかった内野手（Issue #336②）と、打球ラインを挟んで反対側で次に惜しかった
+            // 内野手（issue #1591）。この最大2人だけ、通常の役割移動の前に「打球を追って走る」レッグを1本挟む。
+            // ThroughInfield でない打球では常に null。
             var missRole = play.ThroughInfield ? play.ClosestInfielderRole : null;
+            var missRole2 = play.ThroughInfield ? play.SecondInfielderRole : null;
+            var chaseLegAdded = new HashSet<FieldPosition>();
 
             foreach (var a in rule.Assignments)
             {
                 var isBallFielder = ballFielder is { } bf && a.Position == bf;
-
-                // 実捕球者でない FieldBall はボールへ行かせない（二重突進・誤処理を防ぐ）。
-                if (a.Task == FielderTask.FieldBall && ballFielder is not null && !isBallFielder)
-                    continue;
-                if (a.Task == FielderTask.Hold && !isBallFielder) continue; // 待機は移動なし
-
-                // 表の一塁カバー担当が動的な担当と一致しないなら押し出し＝持ち場待機（移動を生成しない）。
-                // 実捕球者自身の行（ボールへ向かう）は対象外。
-                if (a.Task == FielderTask.CoverBase && a.Target == "first" && !isBallFielder
-                    && a.Position != firstBaseCoverer)
-                    continue;
 
                 var fielder = Find(fielders, a.Position);
                 if (fielder is null) continue;
 
                 var from = new TimelinePoint(fielder.Location.X, fielder.Location.Z);
 
-                // 寄る/飛びつくレッグ（Issue #336②・表示専用）: この野手が最も惜しかった内野手なら、
-                // 反応時間（実測 ReactionDelaySeconds）から打球の最接近点へ向かうレッグを先に積む。
-                // 変位は CapDisplacement で上限を掛け、実際には届かせない（捕れなかった打球のため）。
+                // 打球を追うレッグ（Issue #336②→#1591・表示専用）: 抜けた打球に最も近かった内野手（と反対側の2人目）は、
+                // 反応時間（実測 ReactionDelaySeconds）の後、打球の最接近点を越えて打球の進行方向へ数歩流れる。
+                // 捕れない打球なので判定は動かさず、体だけが打球を追う。表の役割（待機・塁カバー等）が何であれ
+                // 追うレッグは必ず積む（先に積むので下の skip の影響を受けない）。
                 // 通常の役割移動(t0)はこのレッグの後ろへ押し出す＝時系列の逆転（後発レッグが先に
                 // 表示される描画バグ）を防ぐ。
                 TimelinePoint? diveEnd = null;
                 var diveT1 = 0.0;
-                if (!isBallFielder && missRole == a.Position)
+                var chaseApproach = !isBallFielder && missRole == a.Position
+                    ? (play.ClosestApproachX, play.ClosestApproachZ)
+                    : !isBallFielder && missRole2 == a.Position
+                        ? (play.SecondApproachX, play.SecondApproachZ)
+                        : ((double?)null, (double?)null);
+                if (chaseApproach.Item1 is { } approachX && chaseApproach.Item2 is { } approachZ
+                    && chaseLegAdded.Add(a.Position))
                 {
-                    var rawTarget = new TimelinePoint(
-                        play.ClosestApproachX ?? from.X, play.ClosestApproachZ ?? from.Z);
-                    var diveTarget = CapDisplacement(from, rawTarget, DiveReachCapM);
+                    var approachLen = Math.Sqrt(approachX * approachX + approachZ * approachZ);
+                    var follow = approachLen < 1e-6 ? 0.0 : ChaseFollowThroughM / approachLen;
+                    var diveTarget = new TimelinePoint(approachX * (1.0 + follow), approachZ * (1.0 + follow));
                     var diveDist = Distance(from, diveTarget);
                     if (diveDist >= 0.5)
                     {
@@ -807,6 +806,17 @@ public static class TimelineBuilder
                         diveEnd = diveTarget;
                     }
                 }
+
+                // 実捕球者でない FieldBall はボールへ行かせない（二重突進・誤処理を防ぐ）。
+                if (a.Task == FielderTask.FieldBall && ballFielder is not null && !isBallFielder)
+                    continue;
+                if (a.Task == FielderTask.Hold && !isBallFielder) continue; // 待機は移動なし
+
+                // 表の一塁カバー担当が動的な担当と一致しないなら押し出し＝持ち場待機（移動を生成しない）。
+                // 実捕球者自身の行（ボールへ向かう）は対象外。
+                if (a.Task == FielderTask.CoverBase && a.Target == "first" && !isBallFielder
+                    && a.Position != firstBaseCoverer)
+                    continue;
 
                 // 実捕球者はゾーン役割を上書きしてボールへ（保持＝戻さない）。
                 var task = isBallFielder ? FielderTask.FieldBall : a.Task;
@@ -982,16 +992,17 @@ public static class TimelineBuilder
             // 寄る/飛びつくレッグの仕上げ（Issue #336②）: 最も惜しかった内野手は、ゾーン役割が
             // CoverBase 等（自動の定位置復帰を持たない）でも、決着後は必ず定位置へ戻り切る。
             // 既に Backup/Cutoff の自動復帰で定位置に着いている場合は距離0扱いで二重には積まない。
-            if (play.ThroughInfield && play.ClosestInfielderRole is { } missRoleFinal)
+            foreach (var missRoleFinal in new[] { missRole, missRole2 })
             {
+                if (missRoleFinal is null) continue;
                 FielderMove? lastMove = null;
                 foreach (var m in moves)
                 {
-                    if (m.Role == missRoleFinal) lastMove = m;
+                    if (m.Role == missRoleFinal.Value) lastMove = m;
                 }
                 if (lastMove is { } lm)
                 {
-                    var missFielder = Find(fielders, missRoleFinal);
+                    var missFielder = Find(fielders, missRoleFinal.Value);
                     // 戻り先は出発した場所（判定が距離を測ったのと同じ守備位置）。上の Backup/Cutoff と同じ理由。
                     var homePost = missFielder is null
                         ? lm.To
@@ -1006,7 +1017,7 @@ public static class TimelineBuilder
                             var rt1 = rt0 + backDist / speed;
                             moves.Add(new FielderMove
                             {
-                                Role = missRoleFinal, T0 = rt0, T1 = rt1, To = homePost, Task = FielderTask.Chase,
+                                Role = missRoleFinal.Value, T0 = rt0, T1 = rt1, To = homePost, Task = FielderTask.Chase,
                             });
                             if (rt1 + 0.5 > returnTail) returnTail = rt1 + 0.5;
                         }
@@ -4856,12 +4867,10 @@ public static class TimelineBuilder
     internal const double FenceBodyMarginM = 0.6;
 
     /// <summary>
-    /// 抜けた打球へ「寄る/飛びつく」演出の最大変位[m]（Issue #336②・表示専用）。
-    /// FieldingCoefficients.InfielderFieldingRadiusM の既定値(4.20)と同じ意味を持つ表示専用の複製
-    /// （判定側の実値とは意図的に分離する。OutfieldDepthM と同じ設計）。捕れない打球なので
-    /// 実際の打球位置までは届かせない。
+    /// 抜けた打球を追う内野手が、最接近点を越えて打球の進行方向（本塁→最接近点の向き）へ流れる距離[m]
+    /// （issue #1591・表示専用）。「数歩」ぶん。以前の4.2m頭打ち（#336②）は撤去。
     /// </summary>
-    private const double DiveReachCapM = 4.2;
+    private const double ChaseFollowThroughM = 3.0;
 
     /// <summary>
     /// 実捕球者がいない打球（本塁打・ファウル等, FielderRole=null）で FieldBall 役の移動先をフェンス

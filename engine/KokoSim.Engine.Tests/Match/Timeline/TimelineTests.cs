@@ -3046,6 +3046,90 @@ public sealed class TimelineTests
         Assert.True(ssCountWith > ssCountWithout, "寄る演出を付けても SS の move 数が増えていない");
     }
 
+    [Fact]
+    public void ThroughInfieldLeft_SecondInfielder_AlsoChasesBall_FromContact_ThenReturns()
+    {
+        var field = new FieldGeometry();
+        var play = ThroughInfieldLeftHit() with
+        {
+            SecondInfielderRole = FieldPosition.ThirdBase,
+            SecondApproachX = -12.0,
+            SecondApproachZ = 36.0,
+        };
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        foreach (var role in new[] { FieldPosition.Shortstop, FieldPosition.ThirdBase })
+        {
+            var moves = tl.Moves.Where(m => m.Role == role).OrderBy(m => m.T0).ToList();
+            Assert.True(moves.Count >= 2, $"{role} に「追う→戻る」の複数レッグが無い");
+            Assert.Equal(FielderTask.Chase, moves[0].Task);
+            Assert.True(moves[0].T0 < TimelineBuilder.ContactAt + 0.6, $"{role} が接触の直後から動き出していない");
+            var (hx, hz) = FieldGeometry.StandardPosition(role);
+            Assert.True(Near(moves[^1].To, new TimelinePoint(hx, hz)), $"{role} が定位置へ戻り切っていない");
+            for (var i = 1; i < moves.Count; i++)
+                Assert.True(moves[i].T0 >= moves[i - 1].T0, $"{role} のレッグが時系列で逆転している");
+        }
+    }
+
+    [Fact]
+    public void ThroughInfieldLeft_ChaseLeg_IsNotCappedAndRunsPastApproachPoint()
+    {
+        var field = new FieldGeometry();
+        var play = ThroughInfieldLeftHit(); // 最接近点 (-18, 38)
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var chase = tl.Moves.Where(m => m.Role == FieldPosition.Shortstop).OrderBy(m => m.T0).First();
+        var (hx, hz) = FieldGeometry.StandardPosition(FieldPosition.Shortstop);
+        var dist = Math.Sqrt((chase.To.X - hx) * (chase.To.X - hx) + (chase.To.Z - hz) * (chase.To.Z - hz));
+        Assert.True(dist > 4.2, $"追うレッグが旧頭打ち 4.2m のまま（{dist:F1}m）");
+        // 打球の進行方向（本塁→最接近点）の延長線上で、最接近点より先まで流れる。
+        Assert.True(Math.Sqrt(chase.To.X * chase.To.X + chase.To.Z * chase.To.Z)
+                    > Math.Sqrt(18.0 * 18.0 + 38.0 * 38.0) + 1.0, "最接近点の先まで流れていない");
+    }
+
+    [Fact]
+    public void ThroughInfieldHit_FromRealPhysics_SecondInfielderIsOppositeSide_AndFingerprintFree()
+    {
+        var aero = new KokoSim.Engine.Match.Pitching.Aerodynamics();
+        var field = new FieldGeometry();
+        var coeff = new FieldingCoefficients { ErrorBaseProb = 0, IrregularBounceProb = 0 };
+        var withSecond = 0;
+        var through = 0;
+        for (var exit = 30.0; exit <= 48.0; exit += 2.0)
+        for (var launch = -8.0; launch <= 8.0; launch += 2.0)
+        foreach (var bearing in new[] { -44.0, -32.0, -20.0, -12.0, -4.0, 0.0, 4.0, 12.0, 20.0, 32.0, 44.0 })
+        {
+            var play = FieldingResolver.ResolveDetailed(
+                new KokoSim.Engine.Match.Batting.BattedBall
+                {
+                    ExitVelocityMps = exit, LaunchAngleDeg = launch, BearingDeg = bearing,
+                },
+                field, aero, KokoSim.Engine.Players.BatterAttributes.LeagueAverage,
+                field.StandardAlignment(), coeff, new Xoshiro256Random(42));
+            if (!play.ThroughInfield) { Assert.Null(play.SecondInfielderRole); continue; }
+            through++;
+            if (play.SecondInfielderRole is not { } second) continue;
+            withSecond++;
+            Assert.NotEqual(play.ClosestInfielderRole, second);
+            Assert.NotEqual(FieldPosition.Pitcher, second);
+            Assert.NotNull(play.SecondApproachX);
+            Assert.NotNull(play.SecondApproachZ);
+            // 打球ライン（本塁→最接近点）を挟んで反対側
+            var dx = play.ClosestApproachX!.Value;
+            var dz = play.ClosestApproachZ!.Value;
+            var (x1, z1) = FieldGeometry.StandardPosition(play.ClosestInfielderRole!.Value);
+            var (x2, z2) = FieldGeometry.StandardPosition(second);
+            var s1 = dx * z1 - dz * x1;
+            var s2 = dx * z2 - dz * x2;
+            if (Math.Abs(s1) >= 1.0 * Math.Sqrt(dx * dx + dz * dz))
+                Assert.True(s1 * s2 < 0.0, "2人目が打球ラインの同じ側にいる");
+        }
+        Assert.True(through > 0, "内野を抜ける打球が見つからない");
+        Assert.True(withSecond > 0, "2人目が付いた抜けた打球が1つも無い");
+    }
+
     /// <summary>
     /// 実際のエンジン出力（弾道積分→守備解決）で「旧ロジックなら内野ゾーンに誤分類されていたはずの
     /// 抜けた打球」を探し、タイムラインが外野ゾーンの陣形（＝最も惜しかった内野手の移動込み）になる

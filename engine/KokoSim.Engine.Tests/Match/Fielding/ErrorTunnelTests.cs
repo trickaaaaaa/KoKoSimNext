@@ -204,9 +204,12 @@ public sealed class ErrorTunnelTests
                 $"内野の中（{rest:F1}m）で止まる転がりがある＝お手玉の絵が出ている");
         }
 
-        // 追いかけレッグは「抜かれた内野手が飛びつく」1本だけ（外野手の回収は FieldBall 役）。
+        // 追いかけレッグは「抜かれた内野手」と、打球ラインの反対側で追う2人目の内野手だけ
+        // （外野手の回収は FieldBall 役。issue #1591）。
         var chases = tl.Moves.Where(m => m.Task == FielderTask.Chase).ToList();
-        Assert.All(chases, m => Assert.Equal(tunnel.ErrorFielderRole, m.Role));
+        Assert.All(chases, m => Assert.True(
+            m.Role == tunnel.ErrorFielderRole || m.Role == tunnel.SecondInfielderRole,
+            $"想定外の追いかけレッグ: {m.Role}"));
     }
 
     // ===== ④ 二塁走者の生還は「返球との時間勝負」 =====
