@@ -28,12 +28,18 @@ public sealed record PitchingCoefficients
     /// コントロール表示値(1〜100)から本塁面での投球散布の標準偏差σ[m]を求める。
     /// 設計書02 §1.2: σ = 30 − C×0.22 [cm]（例: C50→19cm, C100→8cm）。制球50未満は ＋extra×(50−C)（issue #1589）。
     /// </summary>
-    public double ControlSigmaMeters(int control)
+    public double ControlSigmaMeters(int control) => ControlSigmaMeters(control, control);
+
+    /// <summary>
+    /// 試合中の実効制球 <paramref name="control"/>（疲れ・重圧込み）と、本来の制球 <paramref name="baseControl"/> から σ[m] を求める。
+    /// 一次式は実効制球で、制球50未満の上乗せ（issue #1589）は本来の制球で決める＝ばてた好投手には上乗せが乗らない。
+    /// </summary>
+    public double ControlSigmaMeters(int control, int baseControl)
     {
         var cm = ControlSigmaInterceptCm - ControlSigmaSlopeCmPerPoint * control;
-        if (control < 50)
+        if (baseControl < 50)
         {
-            cm += ControlSigmaExtraBelowCmPerPoint * (50 - control);
+            cm += ControlSigmaExtraBelowCmPerPoint * (50 - baseControl);
         }
         if (cm < ControlSigmaMinCm)
         {

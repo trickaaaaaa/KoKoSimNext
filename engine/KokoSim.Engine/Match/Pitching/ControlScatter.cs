@@ -30,8 +30,18 @@ public static class ControlScatter
         int control,
         PitchingCoefficients coefficients,
         IRandomSource rng)
+        => Sample(aimX, aimY, control, control, coefficients, rng);
+
+    /// <summary>本来の制球（疲れる前・issue #1589）を別に渡す版。σ は <see cref="PitchingCoefficients.ControlSigmaMeters(int, int)"/>。</summary>
+    public static Location Sample(
+        double aimX,
+        double aimY,
+        int control,
+        int baseControl,
+        PitchingCoefficients coefficients,
+        IRandomSource rng)
     {
-        var sigma = coefficients.ControlSigmaMeters(control);
+        var sigma = coefficients.ControlSigmaMeters(control, baseControl);
         var dx = rng.NextGaussian(0.0, sigma);
         var dy = rng.NextGaussian(0.0, sigma);
         return new Location(aimX + dx, aimY + dy);

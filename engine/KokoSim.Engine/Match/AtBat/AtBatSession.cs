@@ -330,7 +330,7 @@ public sealed class AtBatSession
         var pitchFamiliarityLevel = ctx.PitchFamiliarity?.Level(plan.Type);
         ctx.PitchFamiliarity?.Advance(plan.Type, batting.PitchFamiliarityDecay);
 
-        var loc = ControlScatter.Sample(plan.AimX, plan.AimY, pitcher.Control, ctx.Pitching, rng);
+        var loc = ControlScatter.Sample(plan.AimX, plan.AimY, pitcher.Control, pitcher.BaseControl, ctx.Pitching, rng);
         var inZone = ctx.StrikeZone.Contains(loc.X, loc.Y);
         // 実着弾の縁への近さ（際の球は芯を外しやすい・issue #872）。判定に使われた実位置から引く＝狙いでなく結果で効く。
         plan = plan with { EdgeProximity = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y) };

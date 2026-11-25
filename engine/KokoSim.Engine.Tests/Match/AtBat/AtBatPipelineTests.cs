@@ -173,7 +173,8 @@ public sealed class AtBatPipelineTests
         {
             var res = AtBatResolver.ResolveDetailed(new BatterAttributes { Contact = 60 }, pitcher, ctx, root.Fork(s));
             Assert.Null(res.Timeline); // 表示専用タイムラインは常に未構築
-            if (res.Result is PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk)
+            // 死球も打球が無い結果（制球50未満の散布の上乗せ＝issue #1589 で、平均投手（制球43）でも出るようになった）。
+            if (res.Result is PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch)
                 Assert.Null(res.Play);
             else { Assert.NotNull(res.Play); checkedInPlay++; }
         }

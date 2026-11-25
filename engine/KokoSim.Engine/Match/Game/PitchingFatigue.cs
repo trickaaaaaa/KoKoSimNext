@@ -70,6 +70,7 @@ public static class PitchingFatigue
         {
             MaxVelocityKmh = System.Math.Max(105, vel),
             Control = ctrl,
+            NativeControl = basep.BaseControl, // 疲れる前の制球を残す（issue #1589）
         };
     }
 

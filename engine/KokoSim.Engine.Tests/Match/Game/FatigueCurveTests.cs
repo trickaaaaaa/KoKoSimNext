@@ -120,4 +120,17 @@ public sealed class FatigueCurveTests
         Assert.Equal(10 * step.VelocityDropPerOverPitch, v, 9);
         Assert.Equal(10 * step.ControlDropPerOverPitch, c, 9);
     }
+
+    [Fact]
+    public void Effective_KeepsNativeControl_WhileControlDrops()
+    {
+        // issue #1589: 消耗で実効の制球は下がるが、本来の制球（BaseControl）は疲れる前の値のまま。
+        // 消耗を重ねても（Effective を2度通しても）最初の値を保つ。
+        var pitcher = new PitcherAttributes { MaxVelocityKmh = 140, Control = 60, StaminaPitches = 100 };
+        var tired = PitchingFatigue.Effective(pitcher, 160, C);
+        Assert.True(tired.Control < 60);
+        Assert.Equal(60, tired.BaseControl);
+        Assert.Equal(60, PitchingFatigue.Effective(tired, 160, C).BaseControl);
+        Assert.Equal(60, pitcher.BaseControl); // 未消耗は Control そのまま
+    }
 }

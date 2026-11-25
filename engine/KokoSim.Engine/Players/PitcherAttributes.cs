@@ -32,6 +32,17 @@ public sealed record PitcherAttributes
     public int Control { get; init; } = AbilityScale.AverageDisplay;
 
     /// <summary>
+    /// 疲れ・重圧などで下がる前の本来の制球（issue #1589）。null＝<see cref="Control"/> と同じ。
+    /// 試合中の消耗（<c>PitchingFatigue.Effective</c>）が一時的に下げる前の値を残し、
+    /// 「制球の低い投手は四球で崩れる」非対称項（散布の上乗せ・狙いの下側の傾き）はこの値で判定する
+    /// ＝ばてた好投手が急に四球を連発しない。
+    /// </summary>
+    public int? NativeControl { get; init; }
+
+    /// <summary>本来の制球（<see cref="NativeControl"/> が無ければ <see cref="Control"/>）。</summary>
+    public int BaseControl => NativeControl ?? Control;
+
+    /// <summary>
     /// スタミナ＝目安投球数（§1.1e）。本来の力を保てる球数。他能力と独立に生成・管理。
     /// 内部の消耗カーブ（残量減→球速天井・制球低下）は PitchingFatigue が駆動する。
     /// 既定は「各50＝D帯」の目安投球数（<see cref="StaminaPitchesFromLevel"/>(50)＝100.5球, issue #408）。

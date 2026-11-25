@@ -35,6 +35,16 @@ public sealed class ControlScatterTests
     }
 
     [Fact]
+    public void ControlSigma_ExtraBelow_UsesNativeControl_NotTiredControl()
+    {
+        // issue #1589: 上乗せは本来の制球で決める。ばてて実効40になった本来60の投手には乗らず、本来40の投手には乗る。
+        var c = new PitchingCoefficients { ControlSigmaExtraBelowCmPerPoint = 0.3 };
+        var plain = new PitchingCoefficients { ControlSigmaExtraBelowCmPerPoint = 0.0 };
+        Assert.Equal(plain.ControlSigmaMeters(40), c.ControlSigmaMeters(40, baseControl: 60), 9);
+        Assert.Equal(plain.ControlSigmaMeters(40) + 0.03, c.ControlSigmaMeters(40, baseControl: 40), 9);
+    }
+
+    [Fact]
     public void ControlSigma_ClampsToMinimum()
     {
         var coeff = new PitchingCoefficients(); // min 2cm
