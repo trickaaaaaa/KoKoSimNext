@@ -209,7 +209,7 @@ namespace KokoSim.Unity.EditorTools
             yield return ("⑪ 振り逃げ",
                 Adapt(TimelineBuilder.BuildDropThirdStrike(Guy("打者"), Catcher(), c, field)), 0f);
             yield return ("⑫ 暴投・捕逸（一・三塁）",
-                Adapt(TimelineBuilder.BuildBatteryMiss(Guy("走一"), null, Guy("走三"), Catcher(), c, field)), 0f);
+                Adapt(TimelineBuilder.BuildBatteryMiss(Guy("走一"), null, Guy("走三"), Guy("投手"), Catcher(), c, field)), 0f);
         }
 
         private static PlaybackPlay Adapt(PlayTimeline tl) => PlayTimelineAdapter.ToPlaybackPlay(tl);

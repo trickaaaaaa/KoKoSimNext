@@ -1502,8 +1502,9 @@ public static class TimelineBuilder
     /// <param name="first">進塁前の一塁走者（いなければ null）。進塁後は二塁への走者レッグになる。</param>
     /// <param name="second">進塁前の二塁走者（いなければ null）。進塁後は三塁への走者レッグになる。</param>
     /// <param name="third">進塁前の三塁走者（いなければ null）。生還レッグになる（issue #487 の必須要件）。</param>
+    /// <param name="pitcher">投手。三塁走者がいるとき本塁のカバーに走る（脚力で到着の秒が決まる）。</param>
     public static PlayTimeline BuildBatteryMiss(
-        Player? first, Player? second, Player? third, Player catcher, BaserunningCoefficients c, FieldGeometry field)
+        Player? first, Player? second, Player? third, Player pitcher, Player catcher, BaserunningCoefficients c, FieldGeometry field)
     {
         var firstPt = BasePoint(field, "first");
         var secondPt = BasePoint(field, "second");
@@ -1530,10 +1531,25 @@ public static class TimelineBuilder
         };
         var throwStart = pickupAt
             + c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-        var throwArrive = throwStart + Distance(backstopPt, Mound) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
+        // 三塁走者がいるときは投手が本塁のカバーへ走り、捕手はそこへ返す（着くのを待ってから投げる）。
+        // いないときは今までどおり、マウンドの投手へ返す。
+        var throwTo = Mound;
+        if (third is not null)
+        {
+            var coverArrive = BatteryMissReactionSeconds
+                + Distance(Mound, Home) / pitcher.ToFielder(c.AbilityEffect).SprintSpeedMps;
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.Pitcher, T0 = BatteryMissReactionSeconds, T1 = coverArrive, To = Home,
+                Task = FielderTask.CoverBase,
+            });
+            throwStart = Math.Max(throwStart, coverArrive);
+            throwTo = Home;
+        }
+        var throwArrive = throwStart + Distance(backstopPt, throwTo) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
         ball.Add(new BallSegment
         {
-            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = backstopPt, To = Mound,
+            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = backstopPt, To = throwTo,
             FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Pitcher,
         });
 

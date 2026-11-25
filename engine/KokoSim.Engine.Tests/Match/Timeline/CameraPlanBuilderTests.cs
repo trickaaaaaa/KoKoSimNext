@@ -293,7 +293,7 @@ public sealed class CameraPlanBuilderTests
     private static PlaybackPlay BatteryMissPlay()
     {
         var tl = TimelineBuilder.BuildBatteryMiss(
-            new Player { Name = "一走", Speed = 60 }, null, null,
+            new Player { Name = "一走", Speed = 60 }, null, null, new Player { Name = "投手" },
             new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 },
             new BaserunningCoefficients(), new FieldGeometry());
         return PlayTimelineAdapter.ToPlaybackPlay(tl);
