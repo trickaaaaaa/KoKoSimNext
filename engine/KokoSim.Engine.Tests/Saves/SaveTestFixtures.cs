@@ -88,13 +88,20 @@ internal static class SaveTestFixtures
             AwayBatting = new[]
             {
                 new BattingLine(1, FieldPosition.SecondBase, "一番", 5, 4, 2, 1, 0, 1, 3, 1, 1, SourceId: 1,
-                    StolenBases: 1, Runs: 1),
+                    StolenBases: 1, Runs: 1)
+                {
+                    BattedBalls = 4, ExitVelocitySumKmh = 560.5, LaunchAngleSumDeg = 52.25,
+                    MaxExitVelocityKmh = 158.4, LongestHomeRunM = 112.5,
+                },
                 new BattingLine(2, FieldPosition.Shortstop, "二番", 4, 4, 1, 0, 0, 0, 0, 0, 1, SourceId: 2),
             },
             AwayPitching = new[]
             {
                 new PitchingLine("先発", Outs: 27, BattersFaced: 34, Hits: 5, Runs: 2, StrikeOuts: 8, Walks: 2,
-                    Pitches: 120, SourceId: 1, HomeRunsAllowed: 1, BattingAgainstByPitch: byPitch, EarnedRuns: 2),
+                    Pitches: 120, SourceId: 1, HomeRunsAllowed: 1, BattingAgainstByPitch: byPitch, EarnedRuns: 2)
+                {
+                    VelocitySamples = 120, VelocitySumKmh = 15360.5, MaxVelocityKmh = 141.2,
+                },
             },
             AwayFielding = new[]
             {

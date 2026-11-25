@@ -40,7 +40,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 49;
+    public const int CurrentVersion = 50;
 
     // ===== Serialize =====
 
@@ -475,6 +475,8 @@ public static class SaveCodec
         // （CareerSaves.TeamColorsFromJson）が帽子クラウンと同色で補う＝移行ブロックは要らない。
         // v49（issue #1482）: 合宿の見送り（summerCampSkipped/winterCampSkipped）が増えた。キーが無い旧セーブは
         // 読み込み側が false（どちらも行う）で補う＝移行ブロックは要らない。
+        // v50（issue #1493）: 成績に打球データ（平均初速・角度・最長本塁打）・球速・キャリアハイが増えた。キーが無い旧セーブは
+        // StatsSaves が未記録（0）で読む＝移行ブロックは要らない（過去の試合は打球・球速を持たない）。
         return root;
     }
 

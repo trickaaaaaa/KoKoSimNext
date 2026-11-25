@@ -244,13 +244,28 @@ internal static class StatsSaves
         .Add("cs", b.CaughtStealing)
         .Add("r", b.Runs)
         .Add("sf", b.SacrificeFlies)
-        .Add("sh", b.SacrificeHits);
+        .Add("sh", b.SacrificeHits)
+        .Add("bbn", b.BattedBalls)
+        .Add("evs", b.ExitVelocitySumKmh)
+        .Add("las", b.LaunchAngleSumDeg)
+        .Add("mev", b.MaxExitVelocityKmh)
+        .Add("lhr", b.LongestHomeRunM)
+        .Add("mh", b.MaxHitsInGame)
+        .Add("mrbi", b.MaxRbiInGame)
+        .Add("mhr", b.MaxHomeRunsInGame);
 
     // sh は issue sacrifice-bunt-counted-as-at-bat で追加。旧セーブは項目ごと無い＝0で読む。
-    public static void RestoreBattingInto(BattingStatLine target, JsonObject o) => target.Restore(
-        o.Int("g"), o.Int("pa"), o.Int("ab"), o.Int("h"), o.Int("2b"), o.Int("3b"), o.Int("hr"),
-        o.Int("rbi"), o.Int("bb"), o.Int("hbp"), o.Int("so"), o.Int("sb"), o.Int("cs"), o.Int("r"), o.Int("sf"),
-        o.Has("sh") ? o.Int("sh") : 0);
+    // bbn〜mhr（打球データ・キャリアハイ）は設計書06 §3.2b（issue #1493）で追加。旧セーブは未記録＝0。
+    public static void RestoreBattingInto(BattingStatLine target, JsonObject o)
+    {
+        target.Restore(
+            o.Int("g"), o.Int("pa"), o.Int("ab"), o.Int("h"), o.Int("2b"), o.Int("3b"), o.Int("hr"),
+            o.Int("rbi"), o.Int("bb"), o.Int("hbp"), o.Int("so"), o.Int("sb"), o.Int("cs"), o.Int("r"), o.Int("sf"),
+            o.Has("sh") ? o.Int("sh") : 0);
+        if (!o.Has("bbn")) return;
+        target.RestorePhysical(o.Int("bbn"), o.Double("evs"), o.Double("las"), o.Double("mev"), o.Double("lhr"),
+            o.Int("mh"), o.Int("mrbi"), o.Int("mhr"));
+    }
 
     // ===== PitchingStatLine =====
 
@@ -281,6 +296,11 @@ internal static class StatsSaves
             .Add("hb", p.HitBatters)
             .Add("np", p.Pitches)
             .Add("hra", p.HomeRunsAllowed)
+            .Add("vn", p.VelocitySamples)
+            .Add("vs", p.VelocitySumKmh)
+            .Add("mv", p.MaxVelocityKmh)
+            .Add("mso", p.MaxStrikeOutsInGame)
+            .Add("mouts", p.MaxOutsInGame)
             .Add("byPitch", byPitch);
     }
 
@@ -292,6 +312,9 @@ internal static class StatsSaves
         target.Restore(
             o.Int("g"), o.Int("gs"), o.Int("outs"), o.Int("bf"), o.Int("h"),
             o.Int("r"), o.Int("er"), o.Int("so"), o.Int("bb"), o.Int("hb"), o.Int("np"), o.Int("hra"));
+        // vn〜mouts（球速・キャリアハイ）は設計書06 §3.2b（issue #1493）で追加。旧セーブは未記録＝0。
+        if (o.Has("vn"))
+            target.RestorePhysical(o.Int("vn"), o.Double("vs"), o.Double("mv"), o.Int("mso"), o.Int("mouts"));
         foreach (var v in o.Arr("byPitch").Items)
         {
             var bo = v.AsObject();

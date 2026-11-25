@@ -268,12 +268,18 @@ public sealed class TeamState
         public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF, SH;
         /// <summary>このうち対左投手の打席数（対左経験の蓄積の材料, 設計書02 §2.3・issue #1072）。</summary>
         public int PaVsLeft;
+        /// <summary>打球データ（設計書06 §3.2b・観測専用）。</summary>
+        public int BattedBalls;
+        public double ExitVelocitySumKmh, LaunchAngleSumDeg, MaxExitVelocityKmh, LongestHomeRunM;
     }
     private sealed class PitAccum
     {
         public int BF, H, Runs, EarnedRuns, SO, BB, Outs, Pitches, HB, HRA;
         /// <summary>初めて成績が積まれた順（＝登板順）。</summary>
         public int Seq;
+        /// <summary>球速の記録（設計書06 §3.2b・観測専用）。</summary>
+        public int VelocitySamples;
+        public double VelocitySumKmh, MaxVelocityKmh;
         public readonly Dictionary<PitchType, PitchTypeAccum> ByPitch = new();
     }
     private sealed class PitchTypeAccum { public int AtBats, Hits, HomeRuns; }
@@ -346,6 +352,32 @@ public sealed class TeamState
         var key = KeyOf(runner);
         if (!_bat.TryGetValue(key, out var a)) { a = new BatAccum(); _bat[key] = a; }
         a.R++;
+    }
+
+    /// <summary>
+    /// 打者のインプレー打球の初速・角度を記録する（設計書06 §3.2b）。<paramref name="homeRunDistanceM"/> は本塁打の飛距離（本塁打以外は null）。
+    /// 解決済みの値の写しを積むだけ＝乱数・試合結果に影響しない観測専用。
+    /// </summary>
+    public void RecordBattedBall(Player batter, BattedBall ball, double? homeRunDistanceM)
+    {
+        var key = KeyOf(batter);
+        if (!_bat.TryGetValue(key, out var a)) { a = new BatAccum(); _bat[key] = a; }
+        a.BattedBalls++;
+        var kmh = ball.ExitVelocityKmh;
+        a.ExitVelocitySumKmh += kmh;
+        a.LaunchAngleSumDeg += ball.LaunchAngleDeg;
+        if (kmh > a.MaxExitVelocityKmh) a.MaxExitVelocityKmh = kmh;
+        if (homeRunDistanceM is { } d && d > a.LongestHomeRunM) a.LongestHomeRunM = d;
+    }
+
+    /// <summary>投手が投げた1球の球速を記録する（設計書06 §3.2b・観測専用）。</summary>
+    public void RecordPitchSpeed(Player pitcher, double velocityKmh)
+    {
+        if (velocityKmh <= 0) return;
+        var a = GetOrAddPit(KeyOf(pitcher));
+        a.VelocitySamples++;
+        a.VelocitySumKmh += velocityKmh;
+        if (velocityKmh > a.MaxVelocityKmh) a.MaxVelocityKmh = velocityKmh;
     }
 
     /// <summary>投手の対戦1打者を記録。decisivePitch＝打席確定球の球種（インプレー/被安打を生んだ球のみ, issue #180）。
@@ -523,7 +555,10 @@ public sealed class TeamState
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
-                a.HBP, a.SB, a.CS, a.R, a.SF, a.SH) { PlateAppearancesVsLeft = a.PaVsLeft };
+                a.HBP, a.SB, a.CS, a.R, a.SF, a.SH) {
+                PlateAppearancesVsLeft = a.PaVsLeft, BattedBalls = a.BattedBalls, ExitVelocitySumKmh = a.ExitVelocitySumKmh,
+                LaunchAngleSumDeg = a.LaunchAngleSumDeg, MaxExitVelocityKmh = a.MaxExitVelocityKmh, LongestHomeRunM = a.LongestHomeRunM,
+            };
     }
 
     /// <summary>
@@ -534,7 +569,10 @@ public sealed class TeamState
     {
         if (p is null || !_bat.TryGetValue(KeyOf(p), out var a)) return null;
         return new BattingLine(0, p.Position, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO,
-            p.SourceId, a.HBP, a.SB, a.CS, a.R, a.SF, a.SH) { PlateAppearancesVsLeft = a.PaVsLeft };
+            p.SourceId, a.HBP, a.SB, a.CS, a.R, a.SF, a.SH) {
+                PlateAppearancesVsLeft = a.PaVsLeft, BattedBalls = a.BattedBalls, ExitVelocitySumKmh = a.ExitVelocitySumKmh,
+                LaunchAngleSumDeg = a.LaunchAngleSumDeg, MaxExitVelocityKmh = a.MaxExitVelocityKmh, LongestHomeRunM = a.LongestHomeRunM,
+            };
     }
 
     /// <summary>1人ぶんの今日の投手成績（登板していなければ null）。観測データ（issue #923）。</summary>
@@ -542,7 +580,10 @@ public sealed class TeamState
     {
         if (p is null || !_pit.TryGetValue(KeyOf(p), out var a)) return null;
         return new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB,
-            p.UniformNumber, a.HRA, null, a.EarnedRuns);
+            p.UniformNumber, a.HRA, null, a.EarnedRuns)
+        {
+            VelocitySamples = a.VelocitySamples, VelocitySumKmh = a.VelocitySumKmh, MaxVelocityKmh = a.MaxVelocityKmh,
+        };
     }
 
     /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>
@@ -566,7 +607,10 @@ public sealed class TeamState
             IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? byPitch = a.ByPitch.Count > 0
                 ? a.ByPitch.ToDictionary(kv => kv.Key, kv => new PitchTypeBattingLine(kv.Value.AtBats, kv.Value.Hits, kv.Value.HomeRuns))
                 : null;
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns));
+            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns)
+            {
+                VelocitySamples = a.VelocitySamples, VelocitySumKmh = a.VelocitySumKmh, MaxVelocityKmh = a.MaxVelocityKmh,
+            });
         }
         Add(_starter);
         // 先発の次は実際に投げた順（成績が最初に積まれた順）。控え（Reserves）の背番号順ではない。

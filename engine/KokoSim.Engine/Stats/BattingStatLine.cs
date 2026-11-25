@@ -30,6 +30,29 @@ public sealed class BattingStatLine
     /// <summary>犠打（issue sacrifice-bunt-counted-as-at-bat）。打数にも出塁率の分母にも含めない。</summary>
     public int SacrificeHits { get; private set; }
 
+    /// <summary>打球データ（設計書06 §3.2b）: 物理を生んだインプレー打球の数。初速・角度の平均の分母。</summary>
+    public int BattedBalls { get; private set; }
+    /// <summary>インプレー打球の初速の合計[km/h]。</summary>
+    public double ExitVelocitySumKmh { get; private set; }
+    /// <summary>インプレー打球の打球角度の合計[°]。</summary>
+    public double LaunchAngleSumDeg { get; private set; }
+    /// <summary>キャリアハイ: 最高初速[km/h]（打球が無ければ0）。</summary>
+    public double MaxExitVelocityKmh { get; private set; }
+    /// <summary>キャリアハイ: 最長本塁打[m]（本塁打が無ければ0）。</summary>
+    public double LongestHomeRunM { get; private set; }
+    /// <summary>キャリアハイ: 1試合の最多安打。</summary>
+    public int MaxHitsInGame { get; private set; }
+    /// <summary>キャリアハイ: 1試合の最多打点。</summary>
+    public int MaxRbiInGame { get; private set; }
+    /// <summary>キャリアハイ: 1試合の最多本塁打。</summary>
+    public int MaxHomeRunsInGame { get; private set; }
+
+    /// <summary>平均打球初速[km/h]（打球0なら0）。</summary>
+    public double AverageExitVelocityKmh => BattedBalls > 0 ? ExitVelocitySumKmh / BattedBalls : 0.0;
+
+    /// <summary>平均打球角度[°]（打球0なら0）。</summary>
+    public double AverageLaunchAngleDeg => BattedBalls > 0 ? LaunchAngleSumDeg / BattedBalls : 0.0;
+
     /// <summary>単打＝安打−（二塁打＋三塁打＋本塁打）。</summary>
     public int Singles => Hits - Doubles - Triples - HomeRuns;
 
@@ -68,6 +91,14 @@ public sealed class BattingStatLine
         Runs += l.Runs;
         SacrificeFlies += l.SacrificeFlies;
         SacrificeHits += l.SacrificeHits;
+        BattedBalls += l.BattedBalls;
+        ExitVelocitySumKmh += l.ExitVelocitySumKmh;
+        LaunchAngleSumDeg += l.LaunchAngleSumDeg;
+        MaxExitVelocityKmh = System.Math.Max(MaxExitVelocityKmh, l.MaxExitVelocityKmh);
+        LongestHomeRunM = System.Math.Max(LongestHomeRunM, l.LongestHomeRunM);
+        MaxHitsInGame = System.Math.Max(MaxHitsInGame, l.Hits);
+        MaxRbiInGame = System.Math.Max(MaxRbiInGame, l.Rbi);
+        MaxHomeRunsInGame = System.Math.Max(MaxHomeRunsInGame, l.HomeRuns);
     }
 
     /// <summary>別の累積打撃成績を合算する（大会別アーカイブの秋合算＝県/地区/神宮, issue #77）。</summary>
@@ -89,6 +120,14 @@ public sealed class BattingStatLine
         Runs += o.Runs;
         SacrificeFlies += o.SacrificeFlies;
         SacrificeHits += o.SacrificeHits;
+        BattedBalls += o.BattedBalls;
+        ExitVelocitySumKmh += o.ExitVelocitySumKmh;
+        LaunchAngleSumDeg += o.LaunchAngleSumDeg;
+        MaxExitVelocityKmh = System.Math.Max(MaxExitVelocityKmh, o.MaxExitVelocityKmh);
+        LongestHomeRunM = System.Math.Max(LongestHomeRunM, o.LongestHomeRunM);
+        MaxHitsInGame = System.Math.Max(MaxHitsInGame, o.MaxHitsInGame);
+        MaxRbiInGame = System.Math.Max(MaxRbiInGame, o.MaxRbiInGame);
+        MaxHomeRunsInGame = System.Math.Max(MaxHomeRunsInGame, o.MaxHomeRunsInGame);
     }
 
     /// <summary>盗塁成功率（企図0なら0）。企図＝盗塁＋盗塁死。</summary>
@@ -119,5 +158,19 @@ public sealed class BattingStatLine
         Runs = runs;
         SacrificeFlies = sacrificeFlies;
         SacrificeHits = sacrificeHits;
+    }
+
+    /// <summary>セーブ復元専用: 打球データとキャリアハイ（設計書06 §3.2b）。<see cref="Restore"/> の後に呼ぶ。</summary>
+    internal void RestorePhysical(int battedBalls, double exitVelocitySumKmh, double launchAngleSumDeg,
+        double maxExitVelocityKmh, double longestHomeRunM, int maxHitsInGame, int maxRbiInGame, int maxHomeRunsInGame)
+    {
+        BattedBalls = battedBalls;
+        ExitVelocitySumKmh = exitVelocitySumKmh;
+        LaunchAngleSumDeg = launchAngleSumDeg;
+        MaxExitVelocityKmh = maxExitVelocityKmh;
+        LongestHomeRunM = longestHomeRunM;
+        MaxHitsInGame = maxHitsInGame;
+        MaxRbiInGame = maxRbiInGame;
+        MaxHomeRunsInGame = maxHomeRunsInGame;
     }
 }
