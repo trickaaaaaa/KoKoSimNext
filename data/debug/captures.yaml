@@ -21,9 +21,6 @@
 #   view        : board＝盤面だけ / panel＝画面全体 / rig＝3Dの描画先そのまま（既定 board）
 #   size        : {w: 1600, h: 900}（既定）
 #   game_scale  : true＝論理解像度を絵の大きさに合わせず、本番と同じ参照解像度 1600×900 のまま撮る（1280×720 の窓の本番の見え方。issue #1533）
-#   teams       : {away: "青雲学院高校", home: "宮前商工"}＝校名（先攻・後攻。片方だけでも可）。掲示板と左右の打順表が同じ名前になり、
-#                 デモ用の仮名の控え（「代打 一郎」など）も足さない＝製品と同じ見た目で撮る（ストアのスクショ用）。省略＝仮名のまま
-#   colors      : {away: 9051, home: 9052}＝配色（TeamColorProvider の校ID。ユニフォームの色が両校で分かれる）。省略＝配色なし
 #   shots       : 撮る瞬間。守備ビューの再生の時計[s]か、節目±秒
 #                 節目: start / catch（送球の直前の区間の終わり）/ release（最初の送球）/ flight_end（最初の飛球の着地）
 #                       judgement（最初の判定）/ result / end（再生が閉じる直前＝長さの0.15秒手前）
@@ -49,12 +46,6 @@
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
-  - id: wildpitch-cover-1635
-    name: "走者三塁の暴投で、投手が本塁カバーに走り捕手が本塁へ返す（issue #1635）"
-    scenario: wild-pitch-lab
-    manager: away
-    shots: [start, release-0.6, release-0.05, end]
-
   - id: bunt-throw-1089
     name: "バント処理の送球が低く速い（issue #1089）"
     scenario: steal-sign-lab
@@ -373,25 +364,6 @@ captures:
     video: {from: flight_end-0.6, to: flight_end+0.3, fps: 60}
     probes: [BallHoldDiag, FieldCatchDiag]
 
-  # ── ビルドと同じ読み方（索引だけ）で外野手が走るか（ブラウザ版で待機の姿勢のまま滑っていた・#1323）。
-  # 走りの向き違い・走り出しのクリップが索引の一覧から漏れていた。catalog と editor を並べて見比べる ──
-  - id: fly-run-catalog-1323
-    name: "外野フライを追う外野手（ビルドと同じ索引だけの読み方・issue #1323）"
-    scenario: fair-fly-out-lab
-    manager: away
-    view: rig
-    overrides: {DuelTuning.ForceCatalogOnly: true}
-    shots: [flight_end-2.0, flight_end-1.2, flight_end-0.5]
-    probes: [FielderIdleDiag, FielderRunDiag]
-
-  - id: fly-run-editor-1323
-    name: "外野フライを追う外野手（エディタの読み方・比較用・issue #1323）"
-    scenario: fair-fly-out-lab
-    manager: away
-    view: rig
-    shots: [flight_end-2.0, flight_end-1.2, flight_end-0.5]
-    probes: [FielderIdleDiag, FielderRunDiag]
-
   - id: steal-labels-1246
     name: "打席の頭の盗塁（失敗）で頭上ラベルが守備側の選手（issue #1246 項目1・PR #1352）"
     scenario: steal-caught-lab
@@ -598,24 +570,6 @@ captures:
     video: {from: catch-1.0, to: release+0.1, fps: 30}
     probes: [FielderRunDiag]
 
-  # ブラウザ版で内野手の足が滑る件（#1323）。上の連番をビルドと同じ索引だけの読み方で撮り、slip を並べて比べる
-  - id: dp-663-run-catalog-1323
-    name: "併殺 6-6-3 の走り込み（ビルドと同じ索引だけの読み方・issue #1323）"
-    scenario: dp-663-lab
-    manager: home
-    overrides: {DuelTuning.ForceCatalogOnly: true}
-    video: {from: catch-1.0, to: release+0.1, fps: 30}
-    probes: [FielderIdleDiag, FielderRunDiag]
-
-  # ファーストゴロで一塁カバーに走る投手の足（ブラウザ版で滑って見えた・#1323）。slip は走りの足の滑りの実測
-  - id: p-cover-1b-run-1323
-    name: "ファーストゴロで一塁カバーに走る投手（連番・足の滑りの実測・issue #1323）"
-    scenario: if-grounder-1b-cover-lab
-    manager: home
-    view: rig
-    video: {from: start, to: end, fps: 30}
-    probes: [FielderIdleDiag, FielderRunDiag]
-
   - id: dp-663-1549-alt
     name: "併殺 6-6-3 控えのシード"
     scenario: dp-663-lab-alt
@@ -650,101 +604,3 @@ captures:
     game_scale: true
     duel_seconds: 30
     video: {from: start, to: end, fps: 2}
-
-  # ── Steam ストアページのスクショ（docs/release/steam-store-page.md §4）。画面全体・1920×1080・製品と同じ見た目 ──
-  # 校名と配色を teams / colors で入れる（無いと掲示板が「遠征校(C)」、控えに「代打 一郎」が出る）。
-  - id: store-walkoff-hr
-    name: "ストア用: サヨナラ本塁打と歓喜の輪（自校＝後攻）"
-    scenario: game-end-walkoff-hr-lab
-    manager: home
-    teams: {away: "青雲学院高校", home: "宮前商工"}
-    colors: {away: 9051, home: 9052}
-    view: panel
-    size: {w: 1920, h: 1080}
-    duel_seconds: 40.0
-    video: {from: start, to: end, fps: 3}
-  - id: store-bases-loaded
-    name: "ストア用: 9回裏2死満塁フルカウントの対決（自校＝先攻で守る）"
-    scenario: bases-loaded-9th
-    manager: away
-    teams: {away: "宮前商工", home: "青雲学院高校"}
-    colors: {away: 9052, home: 9051}
-    view: panel
-    size: {w: 1920, h: 1080}
-    duel_seconds: 10.0
-    video: {from: start, to: end, fps: 4}
-  - id: store-strikeout
-    name: "ストア用: 最後の打者を三振に取ってゲームセット"
-    scenario: game-end-strikeout-lab
-    teams: {away: "青雲学院高校", home: "宮前商工"}
-    colors: {away: 9051, home: 9052}
-    view: panel
-    size: {w: 1920, h: 1080}
-    duel_seconds: 12.0
-    video: {from: start, to: end, fps: 4}
-  - id: store-tactics-offense
-    name: "ストア用: 攻撃の采配の手札（自校＝先攻）"
-    scenario: steal-sign-lab
-    manager: away
-    teams: {away: "宮前商工", home: "青雲学院高校"}
-    colors: {away: 9052, home: 9051}
-    view: panel
-    size: {w: 1920, h: 1080}
-    attempts: 1
-    cards: [batting-safety]
-  - id: store-dp
-    name: "ストア用: 併殺 6-6-3 の守備ビュー（自校＝後攻で守る）"
-    scenario: dp-663-lab
-    manager: home
-    teams: {away: "青雲学院高校", home: "宮前商工"}
-    colors: {away: 9051, home: 9052}
-    view: panel
-    size: {w: 1920, h: 1080}
-    shots: [catch-0.5, catch, release+0.2, judgement]
-
-  # ── 守備ビューの塁審とランナーコーチ（issue #1595）。塁でアウト／際どいセーフのとき、その塁の塁審が判定の動きを出す ──
-  - id: base-umpire-1b-out-1595
-    name: "サードゴロの一塁アウトで一塁塁審がアウトのコール、コーチは立っているだけ（issue #1595）"
-    scenario: if-grounder-3b-lab
-    manager: home
-    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.7]
-    video: {from: judgement-0.4, to: judgement+0.9, fps: 10}
-    probes: [BaseCrew]
-
-  - id: base-umpire-2b-steal-out-1595
-    name: "二盗失敗の二塁タッチアウトで二塁塁審がアウトのコール（issue #1595）"
-    scenario: steal-caught-lab
-    manager: home
-    shots: [start, catch, judgement-0.2, judgement+0.15, judgement+0.5, judgement+0.7]
-    probes: [BaseCrew]
-
-  - id: base-umpire-hit-runner-1595
-    name: "左翼への打球で一塁走者が三塁へ向かう長打の場面。塁審・コーチが走者の邪魔にならず、判定の無い進塁で腕を出さない（issue #1595）"
-    scenario: of-grounder-runner-lf-lab
-    manager: home
-    shots: [start, catch, result, end]
-    probes: [BaseCrew]
-
-  - id: through-infield-left-1591
-    name: "三遊間を抜ける安打で、三塁手・遊撃手の両方が接触の直後から打球を追って走る（issue #1591）"
-    scenario: of-grounder-norunner-lab
-    manager: home
-    force: ThroughInfieldLeft
-    duel_seconds: 2.5
-    video: {from: start, to: start+3.0, fps: 10}
-
-  - id: through-infield-middle-1591
-    name: "二遊間を抜ける安打で、二塁手・遊撃手の両方が接触の直後から打球を追って走る（issue #1591）"
-    scenario: of-grounder-norunner-lab
-    manager: home
-    force: ThroughInfieldMiddle
-    duel_seconds: 2.5
-    video: {from: start, to: start+3.0, fps: 10}
-
-  - id: through-infield-right-1591
-    name: "一二塁間を抜ける安打で、一塁手・二塁手の両方が接触の直後から打球を追って走る（issue #1591）"
-    scenario: of-grounder-norunner-lab
-    manager: home
-    force: ThroughInfieldRight
-    duel_seconds: 2.5
-    video: {from: start, to: start+3.0, fps: 10}
