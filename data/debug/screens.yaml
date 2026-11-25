@@ -543,6 +543,26 @@ screens:
       - read: weather-icon
       - shot: 02-match-day
 
+  - id: postgame-manager-1633
+    name: "公式戦のあと、マネージャーが勝ち負けに応じて話す会話（issue #1633）。試合→結果を閉じる→会話"
+    steps:
+      - new_game: {seed: 1}
+      - advance_weeks: 20
+      - advance_to_match_day: ""
+      - call: EventService.Clear()
+      - call: HomeState.Current.PlayMatch()
+      - read: =EventService.HasPending
+      - call: HomeState.Current.DismissResult()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-postgame
+      - click: ev-novel
+      - wait: 3
+      - shot: 02-postgame-line2
+      - click: ev-novel
+      - wait: 3
+      - shot: 03-postgame-line3
+
   - id: innings-thirds-1279
     name: "投球回の 1/3・2/3 の組み方（夏の県大会を消化した後のホームと選手詳細の成績・PR #1370・issue #1279 項目4）"
     steps:
