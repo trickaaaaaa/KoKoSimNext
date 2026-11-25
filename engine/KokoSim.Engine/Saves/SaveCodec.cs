@@ -40,7 +40,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 47;
+    public const int CurrentVersion = 48;
 
     // ===== Serialize =====
 
@@ -469,6 +469,8 @@ public static class SaveCodec
         // v47（issue #1608）: 戦績の打撃成績の守備位置が「最後に守った位置1つ」から「守った位置の並び」になった。
         // 旧セーブの行は今の位置1つ（途中出場は就いた位置があればそれ、無ければ空）から並びを作る。
         if (version < 47 && root["matchRecords"] is JsonArray mr47) MatchRecordSaves.MigrateToPositionTrail(mr47);
+        // v48（issue #1620）: 自校配色にヘルメット（helmet）が増えた。キーが無い旧セーブは読み込み側
+        // （CareerSaves.TeamColorsFromJson）が帽子クラウンと同色で補う＝移行ブロックは要らない。
         return root;
     }
 

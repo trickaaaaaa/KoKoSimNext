@@ -16,7 +16,7 @@ namespace KokoSim.Unity.Debugging
             var white = new RgbColor(0xF4, 0xF2, 0xEC);
             TeamColorProvider.ManagerOverride = new TeamColors(
                 Shirt: white, Pants: white, Undershirt: c, Socks: c,
-                CapCrown: c, CapVisor: c, Shoes: TeamColors.DefaultShoes, Stripe: TeamStripe.None);
+                CapCrown: c, CapVisor: c, Helmet: c, Shoes: TeamColors.DefaultShoes, Stripe: TeamStripe.None);
         }
     }
 }

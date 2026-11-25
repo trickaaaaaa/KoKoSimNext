@@ -165,7 +165,7 @@ public sealed class SchoolTransferStatsTests
     public void SchoolColorOverrides_RoundTripThroughSave_AndOldSavesLoadEmpty()
     {
         var shirt = new RgbColor(0x10, 0x20, 0x30);
-        var colors = new TeamColors(shirt, shirt, shirt, shirt, shirt, shirt, TeamColors.DefaultShoes,
+        var colors = new TeamColors(shirt, shirt, shirt, shirt, shirt, shirt, shirt, TeamColors.DefaultShoes,
             new TeamStripe(false, shirt, 40.0));
         var state = new SaveState { SchoolColorOverrides = { [4001] = colors } };
 

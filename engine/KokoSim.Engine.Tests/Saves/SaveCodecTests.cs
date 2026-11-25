@@ -107,6 +107,31 @@ public sealed class SaveCodecTests
         Assert.NotNull(s.TeamColorOverride);
         Assert.True(s.TeamColorOverride!.Stripe.On);
         Assert.Equal(state.TeamColorOverride!.Shirt, s.TeamColorOverride.Shirt);
+        // ヘルメット（v48・issue #1620）は帽子クラウンと別の色で往復すること。
+        Assert.Equal(state.TeamColorOverride.Helmet, s.TeamColorOverride.Helmet);
+        Assert.NotEqual(s.TeamColorOverride.CapCrown, s.TeamColorOverride.Helmet);
+    }
+
+    [Fact]
+    public void TeamColors_OldSaveWithoutHelmet_ReadsAsCapCrown()
+    {
+        var state = new SaveState
+        {
+            TeamColorOverride = new KokoSim.Engine.Nation.TeamColors(
+                new KokoSim.Engine.Nation.RgbColor(1, 2, 3), new KokoSim.Engine.Nation.RgbColor(4, 5, 6), new KokoSim.Engine.Nation.RgbColor(7, 8, 9), new KokoSim.Engine.Nation.RgbColor(10, 11, 12),
+                new KokoSim.Engine.Nation.RgbColor(0x14, 0x23, 0x1B), new KokoSim.Engine.Nation.RgbColor(0, 0, 0), new KokoSim.Engine.Nation.RgbColor(0xAA, 0xBB, 0xCC),
+                KokoSim.Engine.Nation.TeamColors.DefaultShoes, new KokoSim.Engine.Nation.TeamStripe(false, new KokoSim.Engine.Nation.RgbColor(1, 2, 3), 40.0)),
+        };
+        var json = SaveCodec.Serialize(state);
+        Assert.Contains("\"helmet\":\"#AABBCC\"", json);
+
+        // helmet キーだけ取り除いた旧セーブ（v47）を作る。
+        var stripped = System.Text.RegularExpressions.Regex.Replace(json, "\"helmet\":\"[^\"]*\",?", "")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":47");
+        Assert.DoesNotContain("helmet", stripped);
+
+        Assert.True(SaveCodec.TryDeserialize(stripped, out var s, out var err), err);
+        Assert.Equal(new KokoSim.Engine.Nation.RgbColor(0x14, 0x23, 0x1B), s.TeamColorOverride!.Helmet);
     }
 
     [Fact]
