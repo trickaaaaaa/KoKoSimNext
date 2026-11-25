@@ -223,7 +223,7 @@ namespace KokoSim.Unity.Shell
                     continue;
                 }
                 var values = BuildValues();
-                var effect = ApplyEffect(f.Event.Effect, f.Event.Id, SubjectId(), SubjectName());
+                var effect = ApplyEffect(f.Event.EffectGiven(ManagerService.Facilities.LevelOf), f.Event.Id, SubjectId(), SubjectName());
                 var e = new PresentedEvent
                 {
                     Id = f.Event.Id,
