@@ -167,6 +167,7 @@ screens:
     name: "学年間のもめ事・性格の匂わせ会話（issue #1599）"
     steps:
       - new_game: {seed: 1}
+      - advance_to_week: {week: 1, year: 2}   # grade_friction は上級生×1年生が要る＝新設直後（全員1年生）には出せない
       - call: EventService.Clear()
       - call: EventService.PushChoiceEvent("grade_friction", 0)
       - show: HomeDashboard
