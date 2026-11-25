@@ -204,7 +204,7 @@ namespace KokoSim.Unity.Match
                     || e.RunsScored > 0;
                 if (!notable) continue;
 
-                var text = e.BatterName + "　" + ResultJp(e.Result);
+                var text = e.BatterName + "　" + (e.IntentionalWalk ? "申告敬遠" : ResultJp(e.Result));
                 if (e.RunsScored > 0) text += "　＝ " + e.RunsScored + "点！";
                 feed.Add(new MatchFeedLine
                 {

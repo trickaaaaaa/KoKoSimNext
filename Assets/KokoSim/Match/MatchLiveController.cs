@@ -2921,8 +2921,9 @@ namespace KokoSim.Unity.Match
                 _t = -hold; // 経過で采配窓へ
                 // 待ってから掲げる予約（点が入ったときだけ）。実時間でなく打席の時計で数えるので倍速に追従する。
                 _nonBattedScoreAt = pendingRuns > 0 ? _t + scoreDelay : (double?)null;
-                if (_caption != null) _caption.text = _current.BatterName + "　" + ResultJp(_current.Result);
-                if (_result != null) { _result.text = ResultJp(_current.Result); _result.style.display = DisplayStyle.Flex; }
+                var noPlayResultJp = ResultJp(_current);
+                if (_caption != null) _caption.text = _current.BatterName + "　" + noPlayResultJp;
+                if (_result != null) { _result.text = noPlayResultJp; _result.style.display = DisplayStyle.Flex; }
             }
         }
 
@@ -4947,6 +4948,9 @@ namespace KokoSim.Unity.Match
             return (managerWon ? "自校の勝ち " : "自校の負け ") + r.AwayRuns + "-" + r.HomeRuns;
         }
 
+        private static string ResultJp(LivePlateAppearance pa) =>
+            pa.IntentionalWalk ? "申告敬遠" : ResultJp(pa.Result);
+
         private static string ResultJp(KokoSim.Engine.Match.AtBat.PlateAppearanceResult r)
         {
             switch (r)
@@ -5454,7 +5458,7 @@ namespace KokoSim.Unity.Match
         private static string HistoryLine(LivePlateAppearance pa)
         {
             var half = pa.Inning + "回" + (pa.IsTop ? "表" : "裏");
-            var res = pa.Play != null ? pa.Play.Result : ResultJp(pa.Result);
+            var res = pa.Play != null ? pa.Play.Result : ResultJp(pa);
             return half + " " + pa.BatterName + "　" + res;
         }
 
