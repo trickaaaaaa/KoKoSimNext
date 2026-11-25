@@ -48,8 +48,13 @@ public sealed class RacePictureMatchesVerdictTests
         Assert.True(race.Safe);
     }
 
+    /// <summary>
+    /// 勝負の抽選（<c>NextDouble</c>）はちょうど1回。送球の逸れ（issue #859）として抽選の前に正規乱数（<c>NextGaussian</c>）を
+    /// 2つ引くが、<see cref="FixedRandom"/> は <c>NextDouble</c> だけを数えるので、ここで固定するのは抽選の1回のみ
+    /// （逸れの2つは数えていない＝<c>ResolveRace</c> 全体の消費は「逸れ2つ＋抽選1つ」）。
+    /// </summary>
     [Fact]
-    public void Race_DrawsExactlyOneRandom()
+    public void Race_DrawsExactlyOneLottery_NotCountingTheThrowScatterGaussians()
     {
         var rng = new FixedRandom(0.5);
         HomePlayResolver.ResolveRace(new Player(), 2, Situation(70, 3.0), Field, C, HomePlayResolver.HomeParams(C), rng);
