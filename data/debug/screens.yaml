@@ -1064,12 +1064,14 @@ screens:
       - read: =EventService.HasPending
       - read: =ScoutService.NavigatePending
       - read: =ScoutService.HasEverContracted
+      - call: EventService.Clear()
       - show: HomeDashboard
       - wait: 10
       - shot: 01-home-hint
       - show: ScoutScreen
       - wait: 5
       - shot: 02-scout-uncontracted
+      - call: EventService.Clear()
       - click: sc-contract
       - wait: 5
       - read: =EventService.HasPending
