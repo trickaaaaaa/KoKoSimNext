@@ -1082,6 +1082,8 @@ screens:
       - set: {ScoutService.SelectedField: Omakase}
       - call: ManagerService.Contracts.SetLevel("scouting", 2)
       - read: =ScoutService.HasEverContracted
+      - call: EventService.Clear()
+      - call: ScoutService.TakeNavigation()
       - show: ScoutScreen
       - wait: 5
       - shot: 04-scout-contracted

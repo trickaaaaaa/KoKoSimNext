@@ -76,9 +76,11 @@ public sealed class ScoutMilestonesTests
     }
 
     [Fact]
-    public void ContractHint_OnlyNeverContracted_FromSummerUntilListWeek()
+    public void ContractHint_OnlyNeverContracted_AtSummerStartAndLastWeekBeforeList()
     {
         Assert.True(ScoutMilestones.ShowContractHint(Cal, Cal.SummerTournamentStartWeek, slots: 0, hasEverContracted: false));
+        Assert.True(ScoutMilestones.ShowContractHint(Cal, Cal.RecruitListWeek - 1, slots: 0, hasEverContracted: false));
+        Assert.False(ScoutMilestones.ShowContractHint(Cal, Cal.SummerTournamentStartWeek + 1, slots: 0, hasEverContracted: false));
         Assert.False(ScoutMilestones.ShowContractHint(Cal, Cal.SummerTournamentStartWeek - 1, slots: 0, hasEverContracted: false));
         Assert.False(ScoutMilestones.ShowContractHint(Cal, Cal.RecruitListWeek, slots: 0, hasEverContracted: false));
         Assert.False(ScoutMilestones.ShowContractHint(Cal, week: 18, slots: 0, hasEverContracted: true));

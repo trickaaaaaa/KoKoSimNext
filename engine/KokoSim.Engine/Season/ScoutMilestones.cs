@@ -59,10 +59,12 @@ public static class ScoutMilestones
 
     /// <summary>
     /// ホームの通知フィードに「スカウトと契約すると秋に候補が届く」を出す時期か（issue #1594）。
-    /// 強制イベントを止めたぶん、契約の入口に気づけるようにする。夏の大会の頃から第24週の前まで、一度も契約していない間だけ。
+    /// 強制イベントを止めたぶん、契約の入口に気づけるようにする。一度も契約していない間、夏の大会の週と、
+    /// リスト生成の前の最後の週の2回だけ（毎週出すとフィードが同じ行で埋まる）。
     /// </summary>
     public static bool ShowContractHint(SeasonCalendar calendar, int week, int slots, bool hasEverContracted)
-        => !hasEverContracted && CanContractNow(calendar, week, slots) && week >= calendar.SummerTournamentStartWeek;
+        => !hasEverContracted && CanContractNow(calendar, week, slots)
+           && (week == calendar.SummerTournamentStartWeek || week == calendar.RecruitListWeek - 1);
 
     /// <summary>
     /// 候補リストを待っている時期か（夏の大会の頃〜第24週の前）。契約済みで今年ぶんのリストがまだ無いとき、
