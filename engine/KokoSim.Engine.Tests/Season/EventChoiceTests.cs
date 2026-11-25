@@ -11,8 +11,8 @@ using Xunit;
 namespace KokoSim.Engine.Tests.Season;
 
 /// <summary>
-/// 選手間イベントの選択肢と好転/悪化（issue #945・設計書23 §3.3）。YAML の形・確率の式の向き・
-/// 結束の上下（+3／−5）・抽選の決定論・当事者の選び方を固定する。
+/// 選手間イベントの選択肢と好転/悪化（issue #945・#1599・設計書23 §3.3）。YAML の形・確率の式の向き・
+/// 結束の振れ幅（対応ごとに違う。#1599）・抽選の決定論・当事者の選び方を固定する。
 /// </summary>
 public sealed class EventChoiceTests
 {
@@ -189,15 +189,41 @@ events:
         }
     }
 
-    // ===== 結束の上下（監督決定: 好転 +3／悪化 −5） =====
+    // ===== 結束の振れ幅（issue #1599・オーナー決定2026-11-25: 叱る＝大きく振れる／話を聞く＝小さく安全／主将に任せる＝主将次第） =====
 
     [Fact]
-    public void Cohesion_EventDeltas_ArePlusThreeAndMinusFive()
+    public void CohesionDelta_Scold_IsLargeSwing()
     {
-        Assert.Equal(3.0, Cohesion.AfterEvent(0, improved: true, C), 12);
-        Assert.Equal(-5.0, Cohesion.AfterEvent(0, improved: false, C), 12);
-        Assert.Equal(13.0, Cohesion.AfterEvent(10, improved: true, C), 12);
-        Assert.Equal(5.0, Cohesion.AfterEvent(10, improved: false, C), 12);
+        Assert.Equal(C.ScoldImproveDelta, EventChoiceResolver.CohesionDelta(EventStance.Scold, true, null, C), 12);
+        Assert.Equal(C.ScoldWorsenDelta, EventChoiceResolver.CohesionDelta(EventStance.Scold, false, null, C), 12);
+        Assert.Equal(5.0, C.ScoldImproveDelta, 12);
+        Assert.Equal(-7.0, C.ScoldWorsenDelta, 12);
+    }
+
+    [Fact]
+    public void CohesionDelta_Listen_IsSmallAndSafe()
+    {
+        Assert.Equal(C.ListenImproveDelta, EventChoiceResolver.CohesionDelta(EventStance.Listen, true, null, C), 12);
+        Assert.Equal(C.ListenWorsenDelta, EventChoiceResolver.CohesionDelta(EventStance.Listen, false, null, C), 12);
+        Assert.True(System.Math.Abs(C.ListenImproveDelta) < System.Math.Abs(C.ScoldImproveDelta));
+        Assert.True(System.Math.Abs(C.ListenWorsenDelta) < System.Math.Abs(C.ScoldWorsenDelta));
+    }
+
+    /// <summary>主将に任せる: 振れ幅そのものが主将の統率力次第（強い主将ほど上振れ大・下振れ小。主将不在がいちばん悪い）。</summary>
+    [Fact]
+    public void CohesionDelta_Captain_DependsOnCaptainPower()
+    {
+        var strongCaptain = 49.0 + C.ChoiceCaptainPowerScale;    // dCap = +1
+        var weakCaptain = 49.0 - C.ChoiceCaptainPowerScale;      // dCap = -1
+        var strongImprove = EventChoiceResolver.CohesionDelta(EventStance.Captain, true, strongCaptain, C);
+        var weakImprove = EventChoiceResolver.CohesionDelta(EventStance.Captain, true, weakCaptain, C);
+        var noneImprove = EventChoiceResolver.CohesionDelta(EventStance.Captain, true, null, C);
+        var strongWorsen = EventChoiceResolver.CohesionDelta(EventStance.Captain, false, strongCaptain, C);
+        var weakWorsen = EventChoiceResolver.CohesionDelta(EventStance.Captain, false, weakCaptain, C);
+
+        Assert.True(strongImprove > weakImprove, "強い主将のほうが好転の上振れが大きいはず");
+        Assert.Equal(weakImprove, noneImprove, 12);   // 主将不在は d主将=-1 で弱い主将と同じ
+        Assert.True(strongWorsen > weakWorsen, "弱い主将のほうが悪化の下振れが大きい（絶対値が大きい）はず");
     }
 
     // ===== 確率の式の向き =====
@@ -260,6 +286,77 @@ events:
             p = P(s, Axes(v, 100 - v, v, 100 - v), cap);
             Assert.InRange(p, C.ChoiceProbMin, C.ChoiceProbMax);
         }
+    }
+
+    // ===== 完了条件（issue #1599・オーナー決定2026-11-25）: 合う対応で好転7〜8割・合わない対応で2〜3割 =====
+
+    /// <summary>叱る: 素直な当事者（合う）で7〜8割・頑固な当事者（合わない）で2〜3割。</summary>
+    [Fact]
+    public void Completion_Scold_MatchingReceptiveness_SevenToEightyPercent_MismatchUnderThirty()
+    {
+        var match = P(EventStance.Scold, Axes(recept: 85));
+        var mismatch = P(EventStance.Scold, Axes(recept: 15));
+        Assert.InRange(match, 0.70, 0.80);
+        Assert.InRange(mismatch, 0.20, 0.30);
+    }
+
+    /// <summary>話を聞く: 頑固＋目立ちたがり（合う）で7〜8割・素直＋献身派（合わない）で2〜3割。</summary>
+    [Fact]
+    public void Completion_Listen_MatchingStubbornAndSelfish_SevenToEightyPercent_MismatchUnderThirty()
+    {
+        var match = P(EventStance.Listen, Axes(recept: 15, selfless: 15));
+        var mismatch = P(EventStance.Listen, Axes(recept: 85, selfless: 85));
+        Assert.InRange(match, 0.70, 0.80);
+        Assert.InRange(mismatch, 0.20, 0.30);
+    }
+
+    /// <summary>
+    /// 主将に任せる: 「引っ張らない当事者」×「統率力のある主将」（合う）で7〜8割、
+    /// 「引っ張る当事者」×「統率力の弱い主将」（合わない）で2〜3割。
+    /// </summary>
+    [Fact]
+    public void Completion_Captain_MatchingWeakLeaderWithStrongCaptain_SevenToEightyPercent_MismatchUnderThirty()
+    {
+        var goodCaptainPower = 80.0 * 80.0 / 100.0;   // 統率傾向80×精神力80/100
+        var weakCaptainPower = 40.0 * 85.0 / 100.0;   // 統率傾向40×精神力85/100
+        var match = P(EventStance.Captain, Axes(lead: 15), cap: goodCaptainPower);
+        var mismatch = P(EventStance.Captain, Axes(lead: 85), cap: weakCaptainPower);
+        Assert.InRange(match, 0.70, 0.80);
+        Assert.InRange(mismatch, 0.20, 0.30);
+    }
+
+    /// <summary>平均的な部員（性格4軸・主将の統率力とも中立）でも、どれか1つは期待値0以上の対応がある（B.の完了条件）。</summary>
+    [Fact]
+    public void Completion_AverageMember_HasAtLeastOneNonNegativeExpectedValueChoice()
+    {
+        var neutralCaptainPower = C.CaptainPowerNeutral;
+        double Ev(EventStance s)
+        {
+            var p = P(s, PersonalityAxes.Neutral, cap: neutralCaptainPower);
+            var up = EventChoiceResolver.CohesionDelta(s, true, neutralCaptainPower, C);
+            var down = EventChoiceResolver.CohesionDelta(s, false, neutralCaptainPower, C);
+            return p * up + (1 - p) * down;
+        }
+
+        var evScold = Ev(EventStance.Scold);
+        var evListen = Ev(EventStance.Listen);
+        var evCaptain = Ev(EventStance.Captain);
+        Assert.True(evScold >= 0 || evListen >= 0 || evCaptain >= 0,
+            $"どの対応も期待値マイナス: scold={evScold} listen={evListen} captain={evCaptain}");
+        // 「話を聞く」が安全策として常にプラス（叱る・任せるは平均的な部員には割に合わない博打のまま）。
+        Assert.True(evListen >= 0, $"話を聞くの期待値がマイナス: {evListen}");
+        Assert.True(evScold < 0, $"叱るの期待値がプラスだと『大きく振れる博打』にならない: {evScold}");
+    }
+
+    /// <summary>性格の匂わせ（issue #1599）: 当事者の性格だけで、いちばん好転しやすい対応を正しく選ぶ。</summary>
+    [Fact]
+    public void BestMatchingStance_PicksTheHighestProbabilityStance()
+    {
+        Assert.Equal(EventStance.Scold, EventChoiceResolver.BestMatchingStance(Axes(recept: 85), C));
+        Assert.Equal(EventStance.Listen, EventChoiceResolver.BestMatchingStance(Axes(recept: 15, selfless: 15), C));
+        Assert.Equal(EventStance.Captain, EventChoiceResolver.BestMatchingStance(Axes(lead: 1), C));
+        // 性格が完全に中立の当事者には「話を聞く」が最善（listen_base がいちばん高い）。
+        Assert.Equal(EventStance.Listen, EventChoiceResolver.BestMatchingStance(PersonalityAxes.Neutral, C));
     }
 
     // ===== 抽選（決定論・主RNGを進めない） =====

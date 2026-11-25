@@ -25,6 +25,8 @@ namespace KokoSim.Engine.Season.Events;
 ///     text: "選手が練習中に故障した。"     # 通知フィード1行の要約
 ///     variants:                            # 会話まるごとN通り（無ければ text の1行だけ）
 ///       - requires_ob: true                # この会話は OB が居る学校でだけ選ぶ（issue #1615）
+///         hint: scold                      # 選択肢つきイベントだけ: 当事者の性格の匂わせ（issue #1599）。
+///                                           # 発火時の当事者に scold/listen/captain のどれが効くかで選ぶ会話を絞る
 ///         lines:
 ///           - who: player
 ///             say: "監督、すみません……足が。"
@@ -63,6 +65,7 @@ public static class EventTableParser
         var elemRequiresOb = false;
         var requiresTransferDraw = false;
         Career.TransferHintTier? elemTransferHint = null;
+        EventStance? elemPersonalityHint = null;
         double weight = 1.0;
         int cooldown = 4;
         // 効果（issue #613・#1270）。イベント直下の effects: はイベントの効果、outcomes: の要素の中は結果ごとの効果。
@@ -119,10 +122,14 @@ public static class EventTableParser
             }
             else if (currentLines is not null && currentLines.Count > 0)
             {
-                variants.Add(new EventScript(currentLines) { RequiresOb = elemRequiresOb, TransferHint = elemTransferHint });
+                variants.Add(new EventScript(currentLines)
+                {
+                    RequiresOb = elemRequiresOb, TransferHint = elemTransferHint, PersonalityHint = elemPersonalityHint,
+                });
             }
             elemRequiresOb = false;
             elemTransferHint = null;
+            elemPersonalityHint = null;
             currentLines = null;
             elemStance = null; elemImproved = null; elemLabel = null; elemImproveProb = null;
             elemEff = new EffectBuilder();
@@ -245,6 +252,7 @@ public static class EventTableParser
                     break;
                 case "requires_transfer_draw": requiresTransferDraw = value == "true"; break;
                 case "transfer_hint": elemTransferHint = ParseTransferHint(value, id); break;
+                case "hint": elemPersonalityHint = ParseStance(value); break;
                 case "text_no_ob": textNoOb = value.Length > 0 ? value : null; break;
                 case "scene": scene = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;

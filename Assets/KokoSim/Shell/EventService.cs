@@ -434,6 +434,15 @@ namespace KokoSim.Unity.Shell
 
             var week = Scheduler.AbsoluteWeek;
             var salt = subject.Id;
+
+            // 性格の匂わせ（issue #1599・オーナー決定2026-11-25の見せ方(b)）: 当事者の性格から「いちばん合う対応」を
+            // 求め、それを匂わせる会話（hint: タグつき）を優先して選ぶ。f.Script（Fire 時点で当事者を知らずに
+            // 引いた会話）は使わず、ここで当事者の性格が分かってから改めて引き直す。
+            var personalityAxes = PersonalityAxes.Of(subject);
+            var hint = EventChoiceResolver.BestMatchingStance(personalityAxes, GameSession.CohesionCoefficientsInUse);
+            var script = EventScheduler.PickScript(f.Event, week, salt, rng, RosterService.HasOb,
+                transferHint: null, personalityHint: hint);
+
             var outcomes = new Dictionary<(EventStance, bool), EventOutcome>();
             foreach (EventStance stance in System.Enum.GetValues(typeof(EventStance)))
                 foreach (var improved in new[] { true, false })
@@ -454,7 +463,7 @@ namespace KokoSim.Unity.Shell
             {
                 Id = f.Event.Id,
                 FeedText = EventTextFormat.Apply(f.Event.Text, values),
-                Lines = ResolveLines(f.Script, values),
+                Lines = ResolveLines(script, values),
                 Effect = null,
                 Choices = choices,
                 Pending = new PendingChoice
@@ -471,7 +480,8 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 監督が対応を選んだ（issue #945）。好転の確率を<b>いまの</b>当事者の性格と主将の統率力で出し、発火時に引いた
-        /// 乱数と比べて好転/悪化を決め、結束を動かし（好転 +3／悪化 −5）、結果の会話と結果行を会話の後ろに足す。
+        /// 乱数と比べて好転/悪化を決め、結束を動かし（振れ幅は対応ごとに違う。叱る＝大きく振れる／話を聞く＝小さく安全／
+        /// 主将に任せる＝主将の統率力次第。issue #1599）、結果の会話と結果行を会話の後ろに足す。
         /// 2回目以降の呼び出し・選択肢の無いイベントは何もしない（二重に結束を動かさない）。戻り値＝好転したか。
         /// </summary>
         public static bool Choose(PresentedEvent e, EventStance stance)
@@ -493,7 +503,7 @@ namespace KokoSim.Unity.Shell
             var bad = false;
             if (EventStances.MovesCohesion(stance))
             {
-                GameSession.Current.ApplyCohesionEvent(improved);
+                GameSession.Current.ApplyCohesionEvent(stance, improved, captainPower);
                 parts.Add(improved ? "チーム状態が良くなった" : "チーム状態が悪くなった");
                 bad = !improved;
             }

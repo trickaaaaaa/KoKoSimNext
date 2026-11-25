@@ -40,10 +40,28 @@ public sealed record CohesionCoefficients
     public double SummerCampDelta { get; init; } = 6.0;
     /// <summary>ΔU: 冬合宿（強化）の上乗せ（「結束↑↑」）。</summary>
     public double WinterCampDelta { get; init; } = 10.0;
-    /// <summary>ΔU: 選手間イベントが好転したとき（不和解消など）。issue #945 監督決定で +3（合宿より小さく）。</summary>
-    public double EventImproveDelta { get; init; } = 3.0;
-    /// <summary>ΔU: 不和・サボりイベントが悪化したとき。issue #945 監督決定で −5（悪化を重く）。</summary>
-    public double EventWorsenDelta { get; init; } = -5.0;
+
+    // ---- issue #1599: 選手間イベントの振れ幅を対応ごとに持つ（オーナー決定 2026-11-25・#945 の一律 +3/−5 を置き換え）----
+    // 叱る＝大きく振れる・話を聞く＝小さく安全・主将に任せる＝主将の統率力次第（強い主将なら上振れ大・弱い/不在なら下振れ大）。
+    // 式・係数は EventChoiceResolver.CohesionDelta。
+
+    /// <summary>ΔU: 叱って好転したとき（大きく振れる対応の上振れ）。</summary>
+    public double ScoldImproveDelta { get; init; } = 5.0;
+    /// <summary>ΔU: 叱って悪化したとき（大きく振れる対応の下振れ）。</summary>
+    public double ScoldWorsenDelta { get; init; } = -7.0;
+    /// <summary>ΔU: 話を聞いて好転したとき（小さく安全な対応の上振れ）。</summary>
+    public double ListenImproveDelta { get; init; } = 2.0;
+    /// <summary>ΔU: 話を聞いて悪化したとき（小さく安全な対応の下振れ）。</summary>
+    public double ListenWorsenDelta { get; init; } = -2.0;
+    /// <summary>ΔU: 主将に任せて好転したときの基準（主将の統率力が <see cref="CaptainPowerNeutral"/> のとき）。</summary>
+    public double CaptainImproveDeltaBase { get; init; } = 4.0;
+    /// <summary>ΔU: 主将に任せたときの好転側が d主将（−1〜+1）1あたりで動く量（強い主将ほど上振れが大きい）。</summary>
+    public double CaptainImproveDeltaPerPower { get; init; } = 3.0;
+    /// <summary>ΔU: 主将に任せて悪化したときの基準。</summary>
+    public double CaptainWorsenDeltaBase { get; init; } = -5.0;
+    /// <summary>ΔU: 主将に任せたときの悪化側が d主将 1あたりで動く量（弱い/不在の主将ほど下振れが大きい）。</summary>
+    public double CaptainWorsenDeltaPerPower { get; init; } = 3.0;
+
     // ---- 選択肢つき選手間イベントの好転の確率（issue #945・設計書23 §3.3。式は EventChoiceResolver）----
 
     /// <summary>選択肢つきイベントの好転の確率の下限（どの対応でも1割は好転する）。</summary>
@@ -61,26 +79,34 @@ public sealed record CohesionCoefficients
     /// <summary>厳しく叱る: 素直さ d の重み（素直なら効く・頑固なら反発）。</summary>
     public double ScoldReceptivenessWeight { get; init; } = 0.35;
 
-    /// <summary>話を聞く: 基準。</summary>
-    public double ListenBase { get; init; } = 0.55;
+    /// <summary>
+    /// 話を聞く: 基準。issue #1599 で 0.55→0.52 に調整（素直さ・姿勢の重みを強めた分、平均的な部員の好転率を
+    /// 叱る（0.50）に寄せ直した。素直さ・姿勢の両方が頑固/目立ちたがり側に寄った当事者で好転7〜8割、
+    /// 逆に寄った当事者で2〜3割に収まるよう校正）。
+    /// </summary>
+    public double ListenBase { get; init; } = 0.52;
 
-    /// <summary>話を聞く: 素直さ d の重み（負＝頑固な当事者ほど効く）。</summary>
-    public double ListenReceptivenessWeight { get; init; } = -0.15;
+    /// <summary>話を聞く: 素直さ d の重み（負＝頑固な当事者ほど効く）。issue #1599 で -0.15→-0.18 に強化。</summary>
+    public double ListenReceptivenessWeight { get; init; } = -0.18;
 
-    /// <summary>話を聞く: 試合での姿勢 d の重み（負＝目立ちたがりほど効く＝聞いてもらいたい）。</summary>
-    public double ListenSelflessnessWeight { get; init; } = -0.10;
+    /// <summary>話を聞く: 試合での姿勢 d の重み（負＝目立ちたがりほど効く＝聞いてもらいたい）。issue #1599 で -0.10→-0.16 に強化。</summary>
+    public double ListenSelflessnessWeight { get; init; } = -0.16;
 
-    /// <summary>主将に任せる: 基準（主将の統率力がふつうのとき）。</summary>
-    public double CaptainBase { get; init; } = 0.45;
+    /// <summary>
+    /// 主将に任せる: 基準（主将の統率力が <see cref="CaptainPowerNeutral"/> で当事者の統率傾向が中立のとき）。
+    /// issue #1599 で 0.45→0.50 に調整（他の2対応と同じ「中立50%」に揃え、強い主将×引っ張らない当事者＝7〜8割、
+    /// 弱い主将×引っ張る当事者＝2〜3割に収まるよう校正）。
+    /// </summary>
+    public double CaptainBase { get; init; } = 0.50;
 
-    /// <summary>主将に任せる: 主将の統率力の d主将（−1〜+1）の重み。主将不在は d主将=−1。</summary>
-    public double CaptainPowerSlope { get; init; } = 0.40;
+    /// <summary>主将に任せる: 主将の統率力の d主将（−1〜+1）の重み。主将不在は d主将=−1。issue #1599 で 0.40→0.26 に調整。</summary>
+    public double CaptainPowerSlope { get; init; } = 0.26;
 
     /// <summary>主将に任せる: d主将＝(統率力−captain_power_neutral)/この幅。</summary>
     public double ChoiceCaptainPowerScale { get; init; } = 25.0;
 
-    /// <summary>主将に任せる: 当事者の統率傾向 d の重み（負＝「引っ張る」当事者は同輩に任されるのを嫌う）。</summary>
-    public double CaptainSubjectLeadershipWeight { get; init; } = -0.15;
+    /// <summary>主将に任せる: 当事者の統率傾向 d の重み（負＝「引っ張る」当事者は同輩に任されるのを嫌う）。issue #1599 で -0.15→-0.11 に調整。</summary>
+    public double CaptainSubjectLeadershipWeight { get; init; } = -0.11;
 
     /// <summary>ΔU が週ごとに0へ戻る割合（10%）。</summary>
     public double WeeklyDecay { get; init; } = 0.10;
@@ -241,9 +267,11 @@ public static class Cohesion
     public static double AfterCamp(double delta, bool winter, CohesionCoefficients c)
         => delta + (winter ? c.WinterCampDelta : c.SummerCampDelta);
 
-    /// <summary>選手間イベントの好転／悪化。</summary>
-    public static double AfterEvent(double delta, bool improved, CohesionCoefficients c)
-        => delta + (improved ? c.EventImproveDelta : c.EventWorsenDelta);
+    /// <summary>
+    /// 選手間イベントの好転／悪化。<paramref name="eventDelta"/> は対応ごとの振れ幅そのもの
+    /// （<see cref="Season.Events.EventChoiceResolver.CohesionDelta"/> が対応・好転/悪化・主将の統率力から求める。issue #1599）。
+    /// </summary>
+    public static double AfterEvent(double delta, double eventDelta) => delta + eventDelta;
 
     /// <summary>
     /// 1週ぶん進める（自校の週送りが呼ぶ単一の入口）: まず 10% 戻し、合宿の週なら上乗せする

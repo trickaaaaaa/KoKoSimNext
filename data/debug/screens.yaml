@@ -146,6 +146,56 @@ screens:
       - call: SelectTab(3)
       - shot: 03-contracts-lv3-coach-net-red
 
+  # ── 性格の匂わせ（issue #1599）。出だしの会話に当事者の性格のヒントが乗っているかを選択肢の手前で撮る ──
+  - id: event-personality-hint-1599-skipping
+    name: "練習サボり・性格の匂わせ会話（issue #1599）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("skipping_practice", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 01-choices
+
+  - id: event-personality-hint-1599-grade-friction
+    name: "学年間のもめ事・性格の匂わせ会話（issue #1599）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: {week: 1, year: 2}   # grade_friction は上級生×1年生が要る＝新設直後（全員1年生）には出せない
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("grade_friction", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 01-choices
+
+  - id: event-personality-hint-1599-selfish-clash
+    name: "目立ちたがりと献身派の衝突・性格の匂わせ会話（issue #1599）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("selfish_clash", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - shot: 01-choices
+
   # 選択肢の結果行に信頼度が並ぶ（結束の上下＋信頼度 ±2）。好転側（roll 0）を撮る。
   - id: event-trust-interpersonal-1270
     name: "選手間の選択肢の結果行に信頼度 ＋2（issue #1270 E1）"
