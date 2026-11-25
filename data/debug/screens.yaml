@@ -632,6 +632,7 @@ screens:
     steps:
       - new_game: {seed: 1}
       - boost_roster: 70
+      - advance_weeks: 13
       - play_tournament: ""
       - call: EventService.Clear()
       - show: PlayerList
