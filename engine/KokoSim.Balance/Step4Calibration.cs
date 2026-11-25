@@ -36,7 +36,7 @@ public static class Step4Calibration
         sb.AppendLine("|---|---|---|");
         foreach (var (label, sp) in new[] { ("鈍足20", 20), ("平均50", 50), ("俊足80", 80), ("快足95", 95) })
         {
-            var b = new BatterAttributes { Speed = sp };
+            var b = new Player { Speed = sp }.ToBatter(baserun.AbilityEffect);
             var right = field.BaseDistanceM / b.SpeedToFirstMps() + fielding.RunnerReactionSeconds;
             var left = right - fielding.LeftBatterFirstStepBonusSeconds;
             sb.AppendLine($"| {label} | {right:F2} | {left:F2} |");
@@ -64,7 +64,7 @@ public static class Step4Calibration
         // 三遊間深部(約40m)→一塁(約38m送球)を肩別に。処理0.9s+持ち替え+送球。
         sb.AppendLine(DefRow("三遊間深部→一塁 送球到達", arm =>
         {
-            var throwSpeed = new FielderAttributes { ArmStrength = arm }.ThrowSpeedMps;
+            var throwSpeed = new Player { ArmStrength = arm }.ToFielder(baserun.AbilityEffect).ThrowSpeedMps;
             return 0.9 + fielding.InfieldPlayOverheadSeconds + fielding.ThrowTransferSeconds + 38.0 / throwSpeed;
         }));
         sb.AppendLine();
@@ -124,7 +124,7 @@ public static class Step4Calibration
         foreach (var kmh in new[] { 120.0, 135.0, 150.0 })
         {
             var p = new PitcherAttributes { MaxVelocityKmh = kmh };
-            var stuff = (kmh - 128.0) * 0.128;
+            var stuff = batting.ArmStuff(kmh);
             int sac = 0, force = 0, ih = 0, pop = 0, foul = 0, miss = 0;
             var rng = new Xoshiro256Random(seed ^ (ulong)kmh);
             for (var i = 0; i < 20000; i++)

@@ -20,10 +20,26 @@ namespace KokoSim.EditorTests
                     () => new OtherDistrictResult(Array.Empty<School>(), Array.Empty<OtherDistrictGame>())),
             };
 
+        private ulong _lastKey;
+
+        private void Begin(ulong key, int districtId)
+        {
+            _lastKey = key;
+            OtherDistrictBackgroundSim.Start(key, OneDistrict(districtId));
+        }
+
+        // 背景の走りを残さない（次のテストや別の試験へ裏スレッドが食い込まないように、最後に始めた走りを待つ）。
+        [TearDown]
+        public void WaitForBackgroundRun()
+        {
+            if (_lastKey != 0UL) OtherDistrictBackgroundSim.WaitForResults(_lastKey);
+            _lastKey = 0UL;
+        }
+
         [Test]
         public void WaitForResults_OfAnotherTournament_IsEmpty()
         {
-            OtherDistrictBackgroundSim.Start(1001UL, OneDistrict(3));
+            Begin(1001UL, 3);
 
             Assert.AreEqual(1, OtherDistrictBackgroundSim.WaitForResults(1001UL).Count);
             Assert.AreEqual(0, OtherDistrictBackgroundSim.WaitForResults(1002UL).Count,
@@ -33,8 +49,8 @@ namespace KokoSim.EditorTests
         [Test]
         public void IsFor_TracksTheLatestStart()
         {
-            OtherDistrictBackgroundSim.Start(2001UL, OneDistrict(1));
-            OtherDistrictBackgroundSim.Start(2002UL, OneDistrict(1));
+            Begin(2001UL, 1);
+            Begin(2002UL, 1);
 
             Assert.IsFalse(OtherDistrictBackgroundSim.IsFor(2001UL));
             Assert.IsTrue(OtherDistrictBackgroundSim.IsFor(2002UL));

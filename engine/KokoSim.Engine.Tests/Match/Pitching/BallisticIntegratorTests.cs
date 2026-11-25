@@ -35,12 +35,21 @@ public sealed class BallisticIntegratorTests
     [Fact]
     public void NoSpin_ProducesNoHorizontalDeflection()
     {
+        // 誘発変化は「回転あり − 無回転」の差なので、無回転球ではどちらも恒等に0（何も検査にならない）。
+        // 代わりに無回転球の絶対位置を見る: 真っ直ぐ投げて横に逸れず、抗力ぶん無抗力の放物運動より遅く・低く着く。
         var aero = new Aerodynamics();
+        var geo = new MoundGeometry();
         var spec = new PitchSpec { SpeedKmh = 145 };
-        var traj = PitchSimulator.Simulate(spec, aero, new MoundGeometry());
+        var traj = PitchSimulator.Simulate(spec, aero, geo);
 
-        Assert.Equal(0.0, traj.InducedVerticalBreakM, 6);
-        Assert.Equal(0.0, traj.InducedHorizontalBreakM, 6);
+        Assert.Equal(spec.ReleasePosition.X, traj.PlateCrossing.X, 9);
+
+        var vz = spec.SpeedKmh / 3.6;
+        var dragFreeT = geo.ReleaseToPlateDistanceM / vz;
+        var dragFreeY = spec.ReleasePosition.Y - 0.5 * aero.Gravity * dragFreeT * dragFreeT;
+        Assert.True(traj.FlightTimeSeconds > dragFreeT, "抗力で減速して遅く着くはず");
+        Assert.True(traj.PlateCrossing.Y < dragFreeY, "遅く着くぶん重力で余計に落ちるはず");
+        Assert.InRange(traj.FlightTimeSeconds - dragFreeT, 0.005, 0.03);
     }
 
     // --- 物理的妥当性: 145km/h・2200rpm のストレート（CLAUDE.md 指定の検証） ---
@@ -64,8 +73,8 @@ public sealed class BallisticIntegratorTests
         Assert.InRange(traj.FinalSpeedKmh, 125.0, 138.0);
         Assert.True(traj.FinalSpeedKmh < spec.SpeedKmh, "抗力で初速より遅くなるはず");
 
-        // ホップ量（誘発縦変化 IVB）: 四縫目2200rpm 相当の 30〜55cm
-        Assert.InRange(traj.InducedVerticalBreakM, 0.30, 0.55);
+        // ホップ量（誘発縦変化 IVB）: 四縫目2200rpm 相当。実測 0.429m（帯を実測の周りへ詰める）
+        Assert.InRange(traj.InducedVerticalBreakM, 0.40, 0.46);
         Assert.True(traj.InducedVerticalBreakM > 0, "バックスピンは無回転球より落ちにくい（正のホップ）");
 
         // 本塁通過高さがストライクゾーン近傍に収まる（暴れていない）

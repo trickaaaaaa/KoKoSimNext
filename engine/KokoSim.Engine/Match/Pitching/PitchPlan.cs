@@ -127,7 +127,7 @@ public static class PitchSelection
         // 球種ランク（球威×キレ）の効きは設計書15 Phase E-2 で弾道由来の変化量へ完全移管した
         // （Sharpness→rpm→変化量の経路で既に織り込み済みのため、ここでの直参照は廃止＝二重計上回避）。
         // 捕手リード（設計書01 §2①）: 良い配球ほど球威が引き立つ。50=平均で恒等（帯不変）。
-        var stuff = (reactionRaw - coeff.StuffBaseVelocityKmh) * coeff.StuffPerKmh
+        var stuff = coeff.ArmStuff(reactionRaw)
                     + (catcherLead - 50) * pitching.CatcherLeadStuffPerPoint;
 
         return new PitchPlan

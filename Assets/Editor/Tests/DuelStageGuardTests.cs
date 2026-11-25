@@ -442,6 +442,7 @@ namespace KokoSim.EditorTests
                 if (worst > 0.02f) bad.AppendLine($"ev={ev} la={la} br={br}: 逆向きに {worst:F3}m/コマ（t={worstT:F2}s）");
             }
             Debug.Log($"[1074] ファウル {n} 本を検査\n{bad}\n[1074-h]\n{heights}");
+            Assert.That(n, Is.GreaterThan(100), "前提: 検査できた本数（全件スキップでも緑にならないように）");
             Assert.That(bad.Length, Is.EqualTo(0), bad.ToString());
             Assert.That(heights.Length, Is.EqualTo(0), "空中で跳ね返る打球:\n" + heights);
         }
@@ -458,6 +459,7 @@ namespace KokoSim.EditorTests
             var co = new KokoSim.Engine.Match.Fielding.FieldingCoefficients();
             var fg = new KokoSim.Engine.Match.Field.FieldGeometry();
             var bad = new System.Text.StringBuilder();
+            int checkedCount = 0;
             foreach (var ev in new[] { 15f, 22f, 30f, 38f, 45f })
             foreach (var la in new[] { -15f, -5f, 2f, 8f, 15f, 25f, 35f, 50f, 65f, 80f })
             foreach (var br in new[] { 46f, 55f, 70f, 90f, 120f, 150f, 175f, -46f, -55f, -70f, -90f, -120f, -150f })
@@ -468,6 +470,7 @@ namespace KokoSim.EditorTests
                 rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, null, play.Ball[1]);
                 for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
                 if (rig.BattedElapsedSeconds < 0f) continue;
+                checkedCount++;
                 // 実際に描かれる球（rig を進めた結果）で見る。消えた球（null）は「画面の外」と同じ
                 bool wasOut = false;
                 for (float t = 0f; t <= 1.5f; t += 1f / 60f)
@@ -484,6 +487,7 @@ namespace KokoSim.EditorTests
                 }
                 rig.HideBall();
             }
+            Assert.That(checkedCount, Is.GreaterThan(100), "前提: 検査できた本数（全件スキップでも緑にならないように）");
             Assert.That(bad.Length, Is.EqualTo(0), "画面へ戻るファウル:\n" + bad);
         }
 

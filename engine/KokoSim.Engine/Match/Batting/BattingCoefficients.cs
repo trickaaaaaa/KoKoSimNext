@@ -217,6 +217,9 @@ public sealed record BattingCoefficients
     /// </summary>
     public double StuffPerKmh { get; init; } = 0.128;
 
+    /// <summary>反応に使う球速[km/h]からの腕の振り成分の球威（<see cref="StuffBaseVelocityKmh"/>・<see cref="StuffPerKmh"/>）。</summary>
+    public double ArmStuff(double reactionVelocityKmh) => (reactionVelocityKmh - StuffBaseVelocityKmh) * StuffPerKmh;
+
     // --- 打球生成 ---
     /// <summary>
     /// 打球初速上限[km/h] の切片（パワー0相当）。設計書02は 100 + P×0.6 だが伸び不足のため係数化。

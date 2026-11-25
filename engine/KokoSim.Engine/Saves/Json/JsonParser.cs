@@ -12,8 +12,12 @@ namespace KokoSim.Engine.Saves.Json;
 /// </summary>
 internal sealed class JsonParser
 {
+    /// <summary>入れ子の深さの上限。再帰下降なので、深い入力は StackOverflow（catch 不能）で落ちる前にここで弾く。実セーブは10段に届かない。</summary>
+    internal const int MaxDepth = 128;
+
     private readonly string _s;
     private int _i;
+    private int _depth;
 
     private JsonParser(string s) => _s = s;
 
@@ -35,8 +39,20 @@ internal sealed class JsonParser
         var c = _s[_i];
         switch (c)
         {
-            case '{': return ParseObject();
-            case '[': return ParseArray();
+            case '{':
+            {
+                Enter();
+                var o = ParseObject();
+                _depth--;
+                return o;
+            }
+            case '[':
+            {
+                Enter();
+                var a = ParseArray();
+                _depth--;
+                return a;
+            }
             case '"': return new JsonString(ParseString());
             case 't': Expect("true"); return new JsonBool(true);
             case 'f': Expect("false"); return new JsonBool(false);
@@ -45,6 +61,11 @@ internal sealed class JsonParser
                 if (c == '-' || (c >= '0' && c <= '9')) return ParseNumber();
                 throw new JsonParseException($"予期しない文字 '{c}'（位置 {_i}）");
         }
+    }
+
+    private void Enter()
+    {
+        if (++_depth > MaxDepth) throw new JsonParseException($"入れ子が深すぎる（上限 {MaxDepth}・位置 {_i}）");
     }
 
     private JsonObject ParseObject()
