@@ -214,6 +214,7 @@ namespace KokoSim.Unity.Home
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化（設計書20 §5）
             RunKoshienFeed();                           // 観るだけの甲子園の決着（設計書05 §1.1a）
+            PushFeed(NewspaperFeedItems());             // 敗退後に消化された県大会の決勝などの取りこぼし（設計書05 §1.4）
             RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
             // 指名結果は週次イベントの後＝同じ週の「ドラフト会議」の固定イベントより先に結果が出る順序逆転を避ける（issue #1029）。
             RunDraftResultFeed();
@@ -1063,6 +1064,7 @@ namespace KokoSim.Unity.Home
                     Tag = "情報",
                 },
             };
+            items.AddRange(NewspaperFeedItems());   // 地方大会新聞: このラウンドの他校の結果（設計書05 §1.4）
             items.AddRange(InjuryFeedItems());
             items.AddRange(BigStageFeedItems(_growth));
             items.AddRange(SkillFeedItems(GameSession.Current.DrainSkillNotices(), "本日"));   // 実戦経験（issue #1471）
@@ -1100,6 +1102,28 @@ namespace KokoSim.Unity.Home
                 items.Add(new FeedItem { When = "本日", Text = GrowthEventText.Feed(n, c), Kind = FeedKind.Up, Tag = "成長" });
                 KokoSim.Unity.Shell.EventService.Push(
                     GrowthEventText.EventId(n), n.Player.Name, GrowthEventText.Effect(n, c), n.Player.Id);
+            }
+            return items;
+        }
+
+        /// <summary>
+        /// 地方大会新聞（設計書05 §1.4・issue #1485）。自県の準決勝以降の結果・番狂わせ・怪物のうわさを1行ずつ流す。
+        /// 材料は <see cref="KokoSim.Unity.Shell.NewspaperService"/> が貯めた裏試合＝読み取り専用で、試合結果・乱数には触れない。
+        /// </summary>
+        private static List<FeedItem> NewspaperFeedItems()
+        {
+            var items = new List<FeedItem>();
+            foreach (var line in KokoSim.Unity.Shell.NewspaperService.Drain())
+            {
+                var news = line.Kind != KokoSim.Engine.Nation.Tournaments.NewspaperKind.Result;
+                items.Add(new FeedItem
+                {
+                    When = "本日",
+                    Text = line.Text,
+                    Kind = news ? FeedKind.Discover : FeedKind.Normal,
+                    Tag = news ? "発見" : "情報",
+                    Screen = FeedLinks.Tournament,
+                });
             }
             return items;
         }
@@ -1143,6 +1167,8 @@ namespace KokoSim.Unity.Home
             var wrapUp = GameSession.Current.ConsumeTournamentWrapUp();
             if (wrapUp is { } w)
             {
+                var news = NewspaperFeedItems();   // 敗退と同時に消化された準決勝・決勝など（設計書05 §1.4）
+                if (news.Count > 0) PushFeed(news);
                 // ブロックリーグ戦の地区予選（issue #772）は優勝が無い＝「県大会進出／敗退」で語る
                 var good = w.LeagueQualified ?? w.IsChampion;
                 var summary = w.LeagueQualified is { } q

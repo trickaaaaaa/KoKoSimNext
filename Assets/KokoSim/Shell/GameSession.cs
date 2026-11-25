@@ -576,6 +576,7 @@ namespace KokoSim.Unity.Shell
             ResultPending = false;
             LastOutcome = null;
             Stats.StartTournament();   // 今大会成績をリセット（通算は保持）
+            NewspaperService.Attach(kind, runner);   // 地方大会新聞の材料（issue #1485）
             KickPrefetch();            // 初戦ラウンドの自県裏カードを暇な時間に先行フルシムして温める。
         }
 
@@ -1404,6 +1405,7 @@ namespace KokoSim.Unity.Shell
             BannerPending = t.BannerPending;
             ResultPending = false;
             LastOutcome = null;
+            NewspaperService.Attach(t.Kind, runner);
             KickPrefetch();   // 次戦ラウンドの自県裏カードを温め直す（キャッシュはセーブに載らない）。
         }
 
