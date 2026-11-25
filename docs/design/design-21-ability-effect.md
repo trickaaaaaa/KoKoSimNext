@@ -19,6 +19,7 @@
 | 表示→物理の効き `ability_effect:` | **全員対称**（自校もAI校も）。`effective = pivot + scale×(Lv − pivot)`、pivot 50。打撃 0.50／守備 0.41／走力 0.50／**投手 0.50**（2026-11-09 #833 で 0.55/0.45 から一律に約1割寝かせ直し・§6a） |
 | 投手の扱い | 制球・キレ・球威ランク・捕手リードは Lv で寝かせる。**最速 km/h と目安球数は画面に出る単位なので据え置き**、球速は「反応オフセット」で打者側の反応だけを寝かせる（§3.2） |
 | スター | `roster.ai_star_*` は存置。lift の定義を「raw−圧縮後」→ **(強さ−40)×0.25** へ（raw 80 校でエース/主軸 +10） |
+| 外野手の守備の上位の頭打ち `ability_effect: outfield_defense_top_knee`／`_slope`（#976 追補・2026-11-15） | **外野手**（LF/CF/RF）の守備/捕球/送球精度だけ、表示Lvが膝 **70** を超えた分を傾き **0.5** 倍に寝かせてから `fielding_scale` を掛ける（`OutfieldFielding`）。各県の最強校の外野手（Lv85〜90）が壁際の打球を一瞬で処理し、夏の甲子園の三塁打が 0.03% だったため。内野手（#765）と肩（#764）は対象外。膝より下は従来と1ビット一致・0以下＝無効・`Identity` は膝 0（無効） |
 | 集計モデル `nation.aggregate_scale` | 4.0 → **7.2**（raw 差で引くようになったぶん。旧 4/0.55≈7.3 と実質据え置き） |
 | 球速の価値 `batting.contact_quality_per_kmh` | +0.003 → **−0.005**（§4） |
 
@@ -33,7 +34,7 @@
 | 入口 | 何を寝かせるか |
 |---|---|
 | `Player.ToBatter(effect)` | ミート/パワー/選球眼（Batting）・走力（Running）。弾道は「型」＝寝かせない |
-| `Player.ToFielder(effect)` | 守備/捕球/送球精度（Fielding）・**肩（Arm＝既定1.0で寝かせない・§3.3）**・走力（Running）・**捕手リード（Pitching）** |
+| `Player.ToFielder(effect)` | 守備/捕球/送球精度（Fielding。**外野手だけ `OutfieldFielding`＝膝70超を傾き0.5で寝かせてから Fielding の効き**・#976 追補・§2）・**肩（Arm＝既定1.0で寝かせない・§3.3）**・走力（Running）・**捕手リード（Pitching）** |
 | `AbilityEffectCoefficients.Pitcher(PitcherAttributes)` | 制球・PitchRank・各球種の Power/Sharpness（Pitching）。最速 km/h・目安球数・投法・球質タイプは据え置き。反応オフセットを焼く |
 | 解決式が `Player` の能力を直接読む場所 | `c.AbilityEffect.Batting(batter.Bunt)`／`Running(runner.Steal/Baserunning)` のように必ずこの写像を通す（RunnerClock の恒等オーバーロードは廃止＝呼び手が effect を渡す） |
 
@@ -138,7 +139,7 @@ GameEngine では打席頭の `EffectiveMatchup()` が唯一の入口: `batter.T
 ## 7. 残課題
 
 - 表示ランクの意味: 学校 raw 80 の 6指標は 80 前後（乖離なし）。ただし選手の「B ランク」は物理層では 66.5 相当で効く＝**Lv1 あたりの結果の差が小さい**世界。育成の手応え（+10 で何が変わるか）はプレイで要確認
-- 盗塁の企図頻度・成功率（AI の非最適選択と閾値 `steal_min_success` 0.72 の関係）は効きの導入前から低い（N(50,12) 同士で 0.09/試合）。別 issue で校正
+- 盗塁の企図頻度・成功率（AI の非最適選択と閾値 `steal_min_success` の関係）は効きの導入前から低い（N(50,12) 同士で 0.09/試合）。別 issue で校正 → **閾値は #838 で 0.65（読まれる確率込みの損益分岐）へ再校正済み**（当時の記述は 0.72。0.72 は到達不能の死にコードで、いったん 0.50 へ引き直した後に #838 で 0.65。現行値は `data/coefficients.yaml` の `steal_min_success`）。#838 後の企図頻度・成功率の実測はこの章では未更新
 - 既存セーブは在校生が入学時能力を保持し、AI校のロスターは新入生から raw へ切り替わる（2〜3年で移行）
 
 ## 8. 表示の物差しの下げ幅 Δ（issue #1080・2026-11-23）

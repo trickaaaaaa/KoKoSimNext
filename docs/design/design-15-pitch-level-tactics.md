@@ -38,7 +38,7 @@
 - 打席解決 `AtBatResolver.ResolveDetailed`（`Match/AtBat/AtBatResolver.cs:47`）は**既に1球ずつ回る密ループ**。配球→散布→打者判断→コンタクト→守備の順にRNGを消費する。だが**返り値は打席結果（enum）＋総球数に潰れ、1球ごとの中間結果は捨てられる**。
 - 采配の入口 `ITacticsBrain`（`Match/Tactics/ITacticsBrain.cs:11`）は全メソッドが「**打席頭で1回**」呼ばれる。1球ごとの呼び出しは存在しない。入力型 `TacticsSituation` に**カウント（B/S）・球数・直前の球の結果が無い**。
 - 盗塁・バント・スクイズ・敬遠・牽制は `GameEngine.PlayHalfSteps`（`Match/Game/GameEngine.cs:206`）内、**AtBatResolverの外**で打席前後に処理される。バント/スクイズは各々独立に球を回すミニループを持つ（`ResolveBuntSign` L749 等）。
-- 進行イテレータ `GameEngine.Steps`（L111）は**打席境界でのみ yield**。`GameStepKind` は `PlateAppearance` 1種のみで、`Pitch`/`Timeout` は**コメントで予約済み**（L890-903, L106-110, L216）。**yield は乱数を消費しない**＝batch `Play` と対話進行が同一結果。
+- 進行イテレータ `GameEngine.Steps`（L111）は**打席境界でのみ yield**。`GameStepKind` は `PlateAppearance` 1種のみで、`Pitch`/`Timeout` は**コメントで予約済み**（L890-903, L106-110, L216）。※着手時点の記述。現在は `Pitch` を追加済みで、`Timeout` は未追加のまま（§2.2）。**yield は乱数を消費しない**＝batch `Play` と対話進行が同一結果。
 - 決定論ゲート: `GameResultDigest`（Tests側）が `GameResult` 全体（スコア/全ログ/全統計/全カウンタ）をSHA256で正規化。カード `avg/tactics/modern × seed 1..50`。RNGは `IRandomSource` 注入・`Fork` で並列部分和（Balance側）。
 
 **設計的含意**: 境界拡張点は1箇所（`GameStepKind`）に集約済み。中核作業は「密ループを状態外出しした再開可能ステッパへ変換」する1点に絞れる。RNG消費順を触らなければ帯は不変。
@@ -68,7 +68,7 @@ return session.Result                          // 従来と同じ PlateAppearanc
 
 ### 2.2 `GameStep` に `Pitch` 境界を追加
 
-`GameStepKind` に `Pitch`（1球ごとの采配窓）と `Timeout`（伝令窓）を足す（既に予約コメントあり）。`PlayHalfSteps` の打席内で、各投球の**前**に `yield return Pitch(...)` を挟む。
+`GameStepKind` に `Pitch`（1球ごとの采配窓）を足す（実装済み）。**`Timeout`（伝令窓）は足していない**: 伝令はライブ観戦のクリック中断（#173・#289）へ統合され、`GameStepKind` は `PlateAppearance`／`Pitch` の2種のまま（`GameEngine.cs` の enum 末尾に「将来拡張: Timeout（伝令）」のコメントが残るだけ）。`PlayHalfSteps` の打席内で、各投球の**前**に `yield return Pitch(...)` を挟む。
 
 ```
 while (outs < 3):
@@ -163,8 +163,8 @@ public interface IPitchTacticsBrain {
 **Phase E-1 完了（2026-07-20）**: 性能方式は**事前計算テーブル＋バイリニア補間**（ユーザー承認）。誘発縦変化・到達時間は (球速, rpm) の2変数だけの純関数（リリース角/方位角に非依存）という性質を利用し、`TrajectoryFeatureTable`（`Match/Pitching/`）が起動時に一度だけ格子（70–176km/h×2刻み／1800–2700rpm×50刻み）をRK4で埋め、毎球はO(1)バイリニア補間で参照する。積分器 (`PitchSimulator`/`BallisticIntegrator`) はゴールデン照合の参照実装として温存（`TrajectoryFeatureTableTests`）。`AtBatSession.LastPitchFeatures` として毎球参照可能にしたが、**まだどの判定にも接続していない**（無使用の参照のみ）。実測: Balance CLI `simulate-games --games 10000 --tactics` のレポートが特徴量参照の有無で完全一致（バイト単位）、CPU時間は146.6s→147.5s（+0.6%、目標「2倍以内」に対し実質無視できる差）。`!Heavy 644`（新規12件追加）・`Heavy 20/20` 全緑、digestベースライン再取得不要（1ビットも変化せず）。
 モデル接続の合意事項（ユーザー承認・2026-07-20）: **loc（ボール/ストライク判定位置）の生成方法は変えず**、弾道由来の変化量・到達時間を独立した「欺瞞度」スカラー特徴量として既存のゾーン判定へ上乗せする方式（ControlScatterの散布モデルと弾道積分の着弾点を完全統合する案は、影響範囲が大きいため今回は見送り、将来課題として残す）。次は E-2（空振りモデル置換・全帯再校正）。
 
-**Phase E-2 完了（2026-07-20）**: `ContactModel.Resolve`/新設 `ContactModel.WhiffProbability` の空振り対数オッズを、旧 `(PitchRank−50)×StuffPerPitchRank`（球種ランク直参照）から**弾道由来の誘発変化合成量**（`PitchTrajectoryFeatures.BreakMagnitudeM = sqrt(縦²+横²)`、係数 `WhiffBreakSlope`）へ**完全置換**（ユーザー承認: 混ぜない・完全置換。Sharpness→rpm→変化量の経路で既にPitchRankが弾道へ織り込み済みのため二重計上を避ける）。到達時間項は見送り（球速項と共線になるため、1スライス1変更の原則でE-2の変更を「rank項→合成変化量項」の1変数に絞った。ユーザー承認）。物理妥当性テスト（`ContactModelTests`）: 合成変化量↑→whiff確率の単調増加、無回転相当（変化量≈0）が帯の最低水準になること、縦のみ/横のみで合成量が同じなら同確率になること、ゾーン外がゾーン内より空振りしやすいこと、を固定。
-係数校正（Balance CLI `simulate-games --games 10000 --tactics`, seed42/2024・no-tactics seed42）: `WhiffIntercept` を `-1.68→-2.40` に再校正（`WhiffBreakSlope=1.5` は初期見積りのまま）。実測: 三振19.5%/19.5%・四球8.21%/8.24%・本塁打2.81%/2.85%・得点4.05/4.11（tactics）、三振20.2%・四球8.8%・本塁打2.8%・得点4.17（no-tactics）で全て `balance-targets.yaml` 帯内。`!Heavy 648`（新規4件 `ContactModelTests`）・`Heavy 20/20` 全緑。digestは想定通り**全4カード×50シード（avg/tactics/pitch-tactics/modern）が再ベースライン**（空振り判定は無指示経路も含め全打席が通るため、Phase C以来はじめて `avg`/`modern` カードが動いた。想定通りと確認済み）。E-4の締め報告には球種別空振り率のビフォーアフターを含める（ユーザー指定）。
+**Phase E-2 完了（2026-07-20）**: `ContactModel.Resolve`/新設 `ContactModel.WhiffProbability` の空振り対数オッズを、旧 `(PitchRank−50)×StuffPerPitchRank`（球種ランク直参照）から**弾道由来の誘発変化合成量**（`PitchTrajectoryFeatures.BreakMagnitudeM = sqrt(縦²+横²)`、係数 `WhiffBreakSlope`。※判定量は #911 で `PitchDeception.BreakM`＝ストレートからの外れへ改訂済み。下の注記）へ**完全置換**（ユーザー承認: 混ぜない・完全置換。Sharpness→rpm→変化量の経路で既にPitchRankが弾道へ織り込み済みのため二重計上を避ける）。到達時間項は見送り（球速項と共線になるため、1スライス1変更の原則でE-2の変更を「rank項→合成変化量項」の1変数に絞った。ユーザー承認）。物理妥当性テスト（`ContactModelTests`）: 合成変化量↑→whiff確率の単調増加、無回転相当（変化量≈0）が帯の最低水準になること、縦のみ/横のみで合成量が同じなら同確率になること、ゾーン外がゾーン内より空振りしやすいこと、を固定。
+係数校正（Balance CLI `simulate-games --games 10000 --tactics`, seed42/2024・no-tactics seed42）: `WhiffIntercept` を `-1.68→-2.40` に再校正（`WhiffBreakSlope=1.5` は初期見積りのまま）。※その後の改訂で現行値は `WhiffIntercept=-2.52`（#578・`stuff_per_kmh` 倍化の平均中立化）／`WhiffBreakSlope=1.2`（#835・球種ごとの回転軸で変化量が増えた分。P80 vs B30 の被打率が帯下限を割ったため）。正典は `data/coefficients.yaml` の `whiff_intercept`／`whiff_break_slope`。実測: 三振19.5%/19.5%・四球8.21%/8.24%・本塁打2.81%/2.85%・得点4.05/4.11（tactics）、三振20.2%・四球8.8%・本塁打2.8%・得点4.17（no-tactics）で全て `balance-targets.yaml` 帯内。`!Heavy 648`（新規4件 `ContactModelTests`）・`Heavy 20/20` 全緑。digestは想定通り**全4カード×50シード（avg/tactics/pitch-tactics/modern）が再ベースライン**（空振り判定は無指示経路も含め全打席が通るため、Phase C以来はじめて `avg`/`modern` カードが動いた。想定通りと確認済み）。E-4の締め報告には球種別空振り率のビフォーアフターを含める（ユーザー指定）。
 
 > **判定量の定義の改訂（issue #911, 2026-11-14）**: 変化球の判定量は `BreakMagnitudeM`（無回転からの合成量）ではなく、
 > **同じ投手のストレートからの外れ**で測る（`Batting.PitchDeception.BreakM`。`AtBatSession.ComputeFeatures` が変化球の
@@ -172,8 +172,14 @@ public interface IPitchTacticsBrain {
 > あわせてキレの効き方を「キレ＝ストレートからの回転の外れの大きさ」に改訂し（`PitchSpinModel`）、回転軸がキレで連続に
 > 動くため `TrajectoryFeatureTable` は回転軸の節点（0〜180°・30°刻み）の表を回転の座標系で補間する形に作り直した
 > （Phase E-1 の「球種ごとに1枚」は廃止。入口は `LookupFeatures(aero, mound, 回転ベクトル, 球速)`）。
+>
+> **空振りとスイング判断の非対称（現状・意図かどうかは未確認）**: 空振り（`ContactModel.WhiffProbability`）は
+> `PitchDeception.BreakM` に**実球速の割引 `BreakDeceptionFactor`**（#837・設計書21 §3.5）を掛けた値を使う。一方、
+> スイング判断（`AtBatSession` が `BatterDecision.DecideSwing`／`SwingProbability` へ渡す値）は割引を掛けない
+> **生の `PitchDeception.BreakM`** のまま。つまり遅い球の変化量は、空振りでは割り引かれるがチェイスの釣られやすさでは
+> 割り引かれない。これが意図した設計かは確認できていない（事実の記録のみ）。
 
-**Phase E-3 完了（2026-07-20）**: `BatterDecision.DecideSwing` を `SwingProbability`（テスト用に分離）へ拡張し、`PitchTrajectoryFeatures.BreakMagnitudeM` を**単一係数 `ChaseBreakSlope` の符号反転**で対称に効かせた（ゾーン外+＝釣られる／ゾーン内−＝見誤って見送る、ユーザー承認の1変数原則）。追加で `StrikeZone.DistanceOutsideM`（ゾーン外への距離）と係数 `ChaseDistanceSlope` を新設し、ゾーン外側にのみ距離減衰を掛けた（ゾーン内は距離=0で常に無効なので対称性は崩れない）。**設計時の発見**: 着手前は「既存の距離減衰構造を保存する」という前提だったが、実際の `DecideSwing` は inZone 二値のみで距離減衰自体が存在しなかった。ユーザーに確認の上、本スライスで `StrikeZone.DistanceOutsideM` を新設して初めて距離減衰を導入した（「保存」ではなく「新設」）。物理妥当性テスト（`BatterDecisionTests`）: 対称性（ゾーン内外の変化量デルタが符号反転のみで一致）、ゾーン外距離に対する非増加（クランプ域では等号、非クランプ域では厳密減少）、固定距離での変化量↑→チェイス確率↑、ゾーン内は距離が無関係、を固定。
+**Phase E-3 完了（2026-07-20）**: `BatterDecision.DecideSwing` を `SwingProbability`（テスト用に分離）へ拡張し、`BreakMagnitudeM`（現行は #911 以降 `PitchDeception.BreakM`）を**単一係数 `ChaseBreakSlope` の符号反転**で対称に効かせた（ゾーン外+＝釣られる／ゾーン内−＝見誤って見送る、ユーザー承認の1変数原則）。追加で `StrikeZone.DistanceOutsideM`（ゾーン外への距離）と係数 `ChaseDistanceSlope` を新設し、ゾーン外側にのみ距離減衰を掛けた（ゾーン内は距離=0で常に無効なので対称性は崩れない）。**設計時の発見**: 着手前は「既存の距離減衰構造を保存する」という前提だったが、実際の `DecideSwing` は inZone 二値のみで距離減衰自体が存在しなかった。ユーザーに確認の上、本スライスで `StrikeZone.DistanceOutsideM` を新設して初めて距離減衰を導入した（「保存」ではなく「新設」）。物理妥当性テスト（`BatterDecisionTests`）: 対称性（ゾーン内外の変化量デルタが符号反転のみで一致）、ゾーン外距離に対する非増加（クランプ域では等号、非クランプ域では厳密減少）、固定距離での変化量↑→チェイス確率↑、ゾーン内は距離が無関係、を固定。
 係数校正: `ChaseBreakSlope`（新設・初期見積り0.15）と `ChaseDistanceSlope`（新設・初期見積り0.6）の2ノブが強く絡み合う（distanceガードが弱いとBB↓＋K↑寄り、strongいとBB↑寄り）ため、両方を実測しながら追い込んだ。最終値: `ChaseBreakSlope=0.02` / `ChaseDistanceSlope=0.15`（`WhiffIntercept`等E-2の値は再校正不要でそのまま）。実測（Balance CLI, 10000試合）: 三振19.83%/19.88%・四球8.59%/8.59%・本塁打2.79%/2.79%・得点4.09/4.06（tactics, seed42/2024）、三振20.57%・四球9.31%・本塁打2.75%・得点4.19（no-tactics, seed42）。全て帯内。既存切片（ChaseBase/ZoneSwingBase）は変更不要だった。`!Heavy 652`（新規5件 `BatterDecisionTests`）・`Heavy 20/20` 全緑。digestは想定通り全4カード再ベースライン。
 **副産物の発見（Phase Eと無関係の既存挙動）**: `TimelineTests.Timeline_FormationAssignsRoles_IncludingFieldBall`（seed固定13）が、E-3のRNG分岐シフトで偶然「実捕球者の移動距離<0.5mだとFieldBallムーブ自体を出さない」という`TimelineBuilder.BuildBattedBall`の既存仕様（コンバッカー等、バグではない）を初めて踏み、テストの「全打球にFieldBallを要求」という過剰に厳しいアサーションが破綻した。テストを「1試合中に最低1回FieldBallがあれば陣形機構は機能している」という本来の意図に合わせて緩和して解決（本番コードは無変更）。
 
@@ -181,7 +187,7 @@ public interface IPitchTacticsBrain {
 - **球種別集計の新設**: `GameSimulation.Stats` に球種別の空振り率・チェイス率を追加（`SwingsByPitchType`/`WhiffsByPitchType`/`OutOfZoneByPitchType`/`ChasesByPitchType`、enum添字の整数集計＝並列マージ順に依らず決定論）。**D-4の教訓を踏襲し集計は Balance 側に完全に閉じた**（`PitchLog` は `PlayLogEntry` から読むだけ）ため、engine側 record の `ToString()` 経由の digest 一律シフトは発生せず、digest 完全不変（再ベースライン不要）を実測確認。
 - **ビフォーアフター（Phase D の旧モデルを一時再現して同一集計器で採取）**: 旧モデルは Phase D の K/BB/HR（19.12%/8.21%/2.84%）を1桁まで完全再現し、退避の忠実性を確認。**空振り率プロファイル**が本フェーズの核心: Before は3球種とも平坦（21.3–21.5%、ランク直参照＋rawVelo が球種非依存のため差が出ない）→ After は**変化球（スライダー/フォーク）がストレートを +1.0〜1.3pt 上回る**（球速比の低い変化球ほど滞空時間が伸び誘発変化量が増える二層構造が判定に反映）。チェイス率は Before から既に変化球が約1pt高く、これは E-3 でなく Phase C の1球采配（決め球の変化球多投）由来の既存効果（no-tactics ではほぼ消える）で、E-3 の `ChaseBreakSlope=0.02` の寄与は穏やか。
 - **最終確認**: 10000試合×seed42/2024（`--tactics` あり/なし）で K/BB/HR/得点すべて `balance-targets.yaml` 帯内。`!Heavy 652`・`Heavy 20/20` 全緑。
-- **置換式の最終係数**: `whiff_intercept=-2.40` / `whiff_break_slope=1.5`（旧 `stuff_per_pitch_rank=0.012` を置換）/ `chase_break_slope=0.02` / `chase_distance_slope=0.15`。旧 rank 直参照は完全廃止し、球種の効きを Sharpness→rpm→弾道積分→誘発変化量 の物理経路に一本化（不変条件#1への最終忠実化）。
+- **置換式の最終係数**: `whiff_intercept=-2.40` / `whiff_break_slope=1.5`（旧 `stuff_per_pitch_rank=0.012` を置換。※現行値は -2.52／1.2、上記）/ `chase_break_slope=0.02` / `chase_distance_slope=0.15`。旧 rank 直参照は完全廃止し、球種の効きを Sharpness→rpm→弾道積分→誘発変化量 の物理経路に一本化（不変条件#1への最終忠実化）。
 
 **これで設計書15の全フェーズ（A/B/C/D/E）が完結した。** 1球単位の試合進行・打席内采配・弾道由来の swing/contact 判定まで、当初計画（§6）の全 DoD を満たして着地。
 
@@ -239,7 +245,7 @@ Phase D-1 でエンジン側の1球進行（`AdvancePitch`）は完成してい�
 
 ### 8.3 決定事項
 
-1. **打席の頭に短い間を置く**（既定0.6秒）。イニング間画面と同じ作り＝自動で明ける／クリックで飛ばす／
+1. **打席の頭に短い間を置く**（決定時は既定0.6秒 → 1.0秒 → 現行は **1.8秒**＝`MatchLiveController.paHeadDwellSeconds`・#504。§8.4）。イニング間画面と同じ作り＝自動で明ける／クリックで飛ばす／
    倍速で縮む。監督が打者を見てサインを出す間合いにあたる
 2. **倍速中も指示はそのまま**。間も一緒に縮む＝倍速は「采配をやめて流す」意思表示として扱う
 3. **インプレーの球は、描く前に打席を確定させる**。`BattedOf` が `_current.Play` を読むため
@@ -256,7 +262,7 @@ Phase D-1 でエンジン側の1球進行（`AdvancePitch`）は完成してい�
 
 | 段 | 何をしている | 次へ渡す条件 |
 |---|---|---|
-| `Window` | 采配窓。打者を映して指示を受け付ける | 打席の頭は `paHeadDwellSeconds`（1.0秒）、途中は即時 |
+| `Window` | 采配窓。打者を映して指示を受け付ける | 打席の頭は `paHeadDwellSeconds`（現行1.8秒・#504）、途中は即時 |
 | `Pitch` | 1球を描く（判定・カウント・アウト・塁の更新まで） | `pitchIntervalSeconds`／対決ビュー中は `duelPitchIntervalSeconds`（3.2秒） |
 | `Play` | 打球再生／結果の据え置き | 再生尺＋余韻 |
 | `Idle` | 打席の切れ目・イニング間の保留 | — |
@@ -291,7 +297,7 @@ Phase D-1 でエンジン側の1球進行（`AdvancePitch`）は完成してい�
 
 **間合いの追い込み（2026-08-01 監督指摘の2件）**
 
-- 球間 `duelPitchIntervalSeconds` 2.8 → **3.2 秒**、打席の頭 `paHeadDwellSeconds` 0.6 → **1.0 秒**
+- 球間 `duelPitchIntervalSeconds` 2.8 → **3.2 秒**、打席の頭 `paHeadDwellSeconds` 0.6 → **1.0 秒**（※現行の既定は、打席の頭が **1.8 秒**＝#504、球間は `DuelStageRig.DefaultPitchInterval` の **3.6 秒**）
   （「むしろもう少し間を開けていいかも」）。球間が「見るだけの間」から「決める間」に変わったため
 - 判定テロップが**捕球より前に出ていた**（実測 平均 0.113 秒早い・17球すべて）。UI だけが盤面の
   投球尺 0.45 秒固定のままだったのが原因で、対決ビューでは球審のコール（`DuelStageRig.CallMomentSeconds`）

@@ -10,25 +10,35 @@
 ```
 KokoSimNext/
 ├─ CLAUDE.md                  # Claude Code用ガイド（設計書索引＋不変条件＋規約）
-├─ docs/design/               # 設計書01〜07（このシリーズをそのまま格納）
+├─ docs/design/               # 設計書01〜23・UI-BUILD-METHOD・OPEN-QUESTIONS（索引は CLAUDE.md）
 ├─ engine/                    # 純C#ソリューション（Unity非依存 / .NET Standard 2.1）
 │   ├─ KokoSim.Engine/        # 打席解決・育成・大会・イベント・監督メタ
 │   ├─ KokoSim.Engine.Tests/  # 単体テスト＋統計回帰テスト
 │   └─ KokoSim.Balance/       # ヘッドレス一括シミュレーションCLI
 ├─ data/                      # YAML（球種定義・イベント・校名語彙・球場・係数）
-└─ unity/                     # Unityプロジェクト（UI Toolkit、将来3D観戦）
+├─ Assets/                    # Unityプロジェクト本体（リポジトリ直下＝Assets/・Packages/・ProjectSettings/。UI Toolkit の画面・3D対決/守備ビュー）
+└─ tools/                     # 開発スクリプト（DLL同期・Unity コンパイル検査・夜間エージェント・生成物の前処理など）
 ```
 
-- エンジンはUnityへ**ローカルパッケージとして参照**（ソース共有）。`dotnet test` がUnityなしで回る
+- 起票時の案は「`unity/` サブディレクトリ＋エンジンをローカルパッケージとして参照（ソース共有）」だったが、**実装は違う**（#785）。
+  Unity プロジェクトはリポジトリ直下の `Assets/` に置き、エンジンは `engine/` を netstandard2.1 の **DLL** としてビルドして
+  `Assets/Plugins/KokoSim/KokoSim.Engine.dll` へ配置する（`tools/sync-engine-dll.sh`）。ゲームが読む YAML も
+  `Assets/Resources/KokoSimData/` へ複製する。**どちらも生成物で Git 管理外**（コミットしない）。
+  clone 直後は `tools/install-git-hooks.sh` が一度同期し、以降は checkout／pull／rebase のあとにフックが自動で回す
+- `dotnet test` はUnityなしで回る
 - バランス係数（設計書02の変換式など）はコードに埋めず `data/` のYAMLに置く
 
 ## 2. CLAUDE.md に書く不変条件
 
-1. 二層構造: 打席解決は必ず物理層で計算する（表示値を直接確率に使わない）
-2. 決定論: すべての乱数はシード付きRandomを注入。同シード同結果
-3. エンジンにUnityEngine参照を持ち込まない
-4. バランス変更は data/ の係数編集で行い、統計回帰テストを必ず通す
-5. イベント・球種の追加はYAML編集のみで完結させる
+現行の正典は CLAUDE.md の「不変条件」5条（起票時の列挙は4・5が現行と違っていたので揃えた）:
+
+1. 二層構造: 打席・打球・守備の解決は必ず物理層で計算する（表示値を直接確率に使わない）。表示→物理の変換は一箇所（`data/coefficients.yaml` 駆動・表示能力の「効き」＝設計書21もその一部）
+2. 決定論: すべての乱数はシード付き `IRandomSource` を注入。同シード同結果
+3. エンジン純度: `engine/` 配下に `UnityEngine` 参照を持ち込まない。時刻・IO・乱数は注入する
+4. データ駆動: バランス係数・球種・イベント・校名語彙・球場は `data/` の YAML に置く（イベント・球種の追加は YAML 編集だけで完結）。
+   係数の正典は YAML だが、実ゲーム（Unity）と Balance CLI 既定は YAML を読まず C# 既定で走るため、**C# 既定は YAML と一致させる**
+   （`CoefficientsDefaultsConsistencyTests` が固定。片方だけ変えない）
+5. 統計回帰: バランスに影響する変更後は統計回帰テストを回し、`data/balance-targets.yaml` の許容帯を満たす
 
 ## 3. フェーズ計画
 

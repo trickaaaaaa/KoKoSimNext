@@ -165,6 +165,7 @@ public static class AiTeamBuilder
 
         var snappedAce = trueAce is not null ? SnapToMound(trueAce, AceRestSelector.AceUniformNumber) : null;
         // 控え投手＝マウンド組のうち、エースでも先発でもなく、守備にも就かなかった者。
+        // 温存したエースは「先発しないだけ」＝ブルペンに入り継投で投げてよい（DH に入ってもよい。負けたら温存の意味がない・#1252 項目5）。
         var bullpen = new List<Player>();
         Player? starter = null;
         if (starterAi is not null)

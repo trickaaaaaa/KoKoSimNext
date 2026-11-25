@@ -6,6 +6,6 @@ namespace KokoSim.Engine.Match.Pitching;
 /// </summary>
 public sealed record MoundGeometry
 {
-    /// <summary>リリース点から本塁到達までの水平距離[m]。18.44m − エクステンション約1.7m ≒ 16.74m。</summary>
+    /// <summary>リリース点から本塁到達までの水平距離[m]。18.44m − エクステンション約1.7m ≒ 16.74m（本塁後端基準＝意図した値・#1252 項目7）。</summary>
     public double ReleaseToPlateDistanceM { get; init; } = 16.74;
 }
