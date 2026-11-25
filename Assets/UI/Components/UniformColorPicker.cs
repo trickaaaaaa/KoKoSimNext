@@ -22,7 +22,7 @@ namespace KokoSim.Unity.Components
     public sealed class UniformColorPicker
     {
         /// <summary>編集できる領域。順序はそのまま画面の行順。</summary>
-        private enum Slot { Shirt, Pants, Undershirt, Socks, Cap, Shoes, StripeOn, StripeColor }
+        private enum Slot { Shirt, Pants, Undershirt, Socks, Cap, Helmet, Shoes, StripeOn, StripeColor }
 
         private static readonly (Slot Slot, string Label, bool GroupTop)[] RowDefs =
         {
@@ -32,6 +32,8 @@ namespace KokoSim.Unity.Components
             (Slot.Socks, "ソックス", false),
             // 帽子はクラウンとつばで1色。購入素体の帽子が1メッシュで塗り分けられないため（design-18 §3.5.1）
             (Slot.Cap, "帽子", false),
+            // ヘルメット（打者・走者）は帽子と別に決める。既定は帽子と同色（issue #1620）
+            (Slot.Helmet, "ヘルメット", false),
             // スパイクだけは全見本でなく白・黒の二択（実物がその2色しかない）
             (Slot.Shoes, "スパイク", false),
             (Slot.StripeOn, "縦縞", true),
@@ -141,6 +143,7 @@ namespace KokoSim.Unity.Components
                 case Slot.Undershirt: color = Colors.Undershirt; return true;
                 case Slot.Socks: color = Colors.Socks; return true;
                 case Slot.Cap: color = Colors.CapCrown; return true;
+                case Slot.Helmet: color = Colors.Helmet; return true;
                 case Slot.Shoes: color = Colors.Shoes; return true;
                 case Slot.StripeColor when Colors.Stripe.On: color = Colors.Stripe.Color; return true;
                 default: color = default; return false;
@@ -179,6 +182,7 @@ namespace KokoSim.Unity.Components
                 Slot.Undershirt => Colors with { Undershirt = next },
                 Slot.Socks => Colors with { Socks = next },
                 Slot.Shoes => Colors with { Shoes = next },
+                Slot.Helmet => Colors with { Helmet = next },
                 // つばはクラウンと1メッシュなので必ず一緒に動かす（別々に持たせても絵に出ない）
                 Slot.Cap => Colors with { CapCrown = next, CapVisor = next },
                 Slot.StripeColor => Colors with { Stripe = Colors.Stripe with { Color = next } },

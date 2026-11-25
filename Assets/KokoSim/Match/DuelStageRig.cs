@@ -716,7 +716,7 @@ namespace KokoSim.Unity.Match
             /// </summary>
             internal static readonly Color HairTone = new(0.16f, 0.13f, 0.11f);
 
-            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Belt, Hair;
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Helmet, Belt, Hair;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
             /// <summary>縞の本数[本/m]。シェーダへはアクターのスケールを掛けて渡す（RegionMaterial）。</summary>
@@ -724,7 +724,7 @@ namespace KokoSim.Unity.Match
 
             public UniformPalette(Color shirt, Color pants, Color undershirt, Color socks, Color cap,
                 bool stripeOn = false, Color stripeColor = default, float stripeFreqPerMeter = 0f,
-                Color? shoes = null, Color? capVisor = null)
+                Color? shoes = null, Color? capVisor = null, Color? helmet = null)
             {
                 Shirt = shirt;
                 Pants = pants;
@@ -733,6 +733,8 @@ namespace KokoSim.Unity.Match
                 Cap = cap;
                 // つばの指定が無ければクラウンと同色＝従来どおりの1色帽子（issue #621）。
                 CapVisor = capVisor ?? cap;
+                // ヘルメット（打者・走者・コーチ）の指定が無ければ帽子クラウンと同色＝従来の見た目（issue #1620）。
+                Helmet = helmet ?? cap;
                 Skin = SkinTone;
                 Hair = HairTone;
                 // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。値はパレット表の「黒」#23242A と
@@ -746,13 +748,13 @@ namespace KokoSim.Unity.Match
             }
 
             /// <summary>
-            /// エンジンの確定配色（7領域＋縞）から作る。つばは issue #621 で帽子メッシュを幾何で
+            /// エンジンの確定配色（8領域＋縞）から作る。つばは issue #621 で帽子メッシュを幾何で
             /// 二分し、クラウンと別領域になった＝ここで渡した色がそのまま絵に出る。
             /// </summary>
             public static UniformPalette From(KokoSim.Engine.Nation.TeamColors c) => new(
                 Rgb(c.Shirt), Rgb(c.Pants), Rgb(c.Undershirt), Rgb(c.Socks), Rgb(c.CapCrown),
                 c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter, Rgb(c.Shoes),
-                Rgb(c.CapVisor));
+                Rgb(c.CapVisor), Rgb(c.Helmet));
 
             private static Color Rgb(KokoSim.Engine.Nation.RgbColor c)
                 => new(c.R / 255f, c.G / 255f, c.B / 255f);
@@ -822,7 +824,8 @@ namespace KokoSim.Unity.Match
         {
             if (a == null) return;
             if (a.RegionMat != null) ApplyRegionColors(a.RegionMat, pal, a.BodyScale);
-            foreach (var m in a.TeamMats) if (m != null) m.SetColor("_BaseColor", pal.Cap);
+            var teamColor = a.WearsHelmet ? pal.Helmet : pal.Cap;
+            foreach (var m in a.TeamMats) if (m != null) m.SetColor("_BaseColor", teamColor);
             foreach (var m in a.VisorMats) if (m != null) m.SetColor("_BaseColor", pal.CapVisor);
         }
 
@@ -1137,6 +1140,7 @@ namespace KokoSim.Unity.Match
             public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
             public Material RegionMat;               // 領域塗り分けマテリアル（攻守交代の塗り替え用。一色フォールバック時はnull）
             public float BodyScale;                  // ワールドスケール（縞の刻みをオブジェクト空間へ換算するのに要る）
+            public bool WearsHelmet;                 // 被り物がヘルメット（打者・走者・コーチ）＝TeamMats はヘルメット色で塗る（issue #1620）
             public readonly List<Material> TeamMats = new();  // チーム色で塗った装備のマテリアル（帽子・捕手ヘルメット殻）
             public readonly List<Material> VisorMats = new(); // つばの色で塗った装備（帽子つば・issue #621）
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
@@ -1427,10 +1431,12 @@ namespace KokoSim.Unity.Match
             // 差し替え前は全球が振りかぶりだったので紛れていたが、セット投球にしたら露見した 2026-07-30）
             _pitcher.Time = 0f;
             _pitcher.Holding = true;
-            // ヘルメットはチーム色（2026-11-15 監督決定。2026-07-28 の暗紺固定を覆す）。プリミティブの殻だった頃は
+            // ヘルメットは帽子と別の色（自校はプレイヤーが決める・既定は帽子と同色。issue #1620）。
+            // 2026-11-15 に暗紺固定からチーム色へ変えた（2026-07-28 の決定を覆す）。プリミティブの殻だった頃は
             // 肌の顔と並んで「髪」に見えたが、生成メッシュは両耳フラップ・つば・通気孔で形が読める
-            AttachGear(_batter, GearKind.Helmet, mound, _offenseColors.Cap, layer);
-            CollectTeamMats(_batter, _offenseColors.Cap);
+            _batter.WearsHelmet = true;
+            AttachGear(_batter, GearKind.Helmet, mound, _offenseColors.Helmet, layer);
+            CollectTeamMats(_batter, _offenseColors.Helmet);
             // 捕手防具（ヘルメット殻・胸当て・レガース）は全校共通の黒（issue #659）。実物も黒が多数派で、
             // 校色だと白い帽子の高校で防具が白い塊になり形が読めなかった。マスクのケージは中の dark のまま
             AttachGear(_catcher, GearKind.CatcherGear, mound, UniformPalette.PaletteBlack, layer);
@@ -3680,6 +3686,7 @@ namespace KokoSim.Unity.Match
             if (stepped)
             {
                 GroundFix(_pitcher);   // 投球ループはルートモーションでマウンドを降りるためコマ毎に接地
+                if (_standingPreview) GroundFix(_batter);
                 // 後逸クリップも**ルートモーション付き**なのでコマ毎に接地する（issue #525 のデグレ修正）。
                 // 捕手はそれまで捕球5方向＝全部その場もの（足の上下が実測 0.075〜0.086m＝数mm）しか
                 // 使っておらず、接地補正を一度も掛けていなかった。後逸を足した時点でその前提が崩れた:
@@ -3696,7 +3703,7 @@ namespace KokoSim.Unity.Match
                 // ポーズ補正は**そのコマでポーズを書き直した体にだけ**当てる（Actor.PoseAdvanced）。
                 // 「コマが進んだ」と「ポーズを書き直した」は別物で、据え置き・恒久停止・間引きは
                 // 進んでも書き直さない＝相対回転の補正が同じポーズへ積み上がる（issue #368 実害）
-                if (_batter != null && _batter.PoseAdvanced)
+                if (_batter != null && _batter.PoseAdvanced && !_standingPreview)
                     FixBatterPose();   // 収録の破綻を骨へ当て直す（バット整列より前＝詰めた手から軸を採る）
                 AlignBat();            // バットは骨から毎コマ組み直す純関数＝二度当てが無いので常に呼ぶ
                 if (_catcher != null && _catcher.PoseAdvanced)
@@ -4349,12 +4356,13 @@ namespace KokoSim.Unity.Match
 
         /// <summary>水平視野角を基準構図（垂直2.9°@16:9）で固定し、現RT縦横比から垂直FOVを逆算する。</summary>
         /// <summary>
-        /// 【プレビュー用】1人だけを直立で立たせる（チーム設定画面の配色確認）。
+        /// 【プレビュー用】投手と打者を並べて直立で立たせる（チーム設定画面の配色確認）。
         ///
-        /// 立たせるのは<b>投手</b>。打者はヘルメット（暗紺固定）で帽子が見えず、捕手は防具で
-        /// ユニが隠れるため、配色の対象（上・ズボン・アンダー・ソックス・帽子）が全部見えるのは投手だけ。
-        /// 他の3人とバットは消す＝配色以外の情報を画から追い出す。
-        /// クリップは購入パックの直立ループへ差し替える（投球モーションのままだと絵が動きすぎる）。
+        /// 投手は帽子、打者はヘルメットを被る＝<b>帽子とヘルメットの色が同時に見える</b>（issue #1620）。
+        /// 配色の対象（上・ズボン・アンダー・ソックス・帽子・ヘルメット）はこの2人で全部見える。
+        /// 捕手は防具でユニが隠れるので出さない。捕手・球審・バットは消す＝配色以外の情報を画から追い出す。
+        /// クリップは購入パックの直立ループへ差し替える（投球・構えのモーションのままだと絵が動きすぎる）。
+        /// 打者は投手の隣（カメラから見て右）に、投手と同じ向き・同じ高さで置く。
         /// </summary>
         /// <returns>直立クリップが無くて組めなければ false（呼び元はそのままの絵で続けてよい）。</returns>
         public bool PosePreviewStanding()
@@ -4363,20 +4371,45 @@ namespace KokoSim.Unity.Match
             var clip = LoadClip(OutfielderIdleClipName);
             if (clip == null) return false;
 
-            if (_batter != null) _batter.Go.SetActive(false);
             if (_catcher != null) _catcher.Go.SetActive(false);
             if (_umpire != null) _umpire.Go.SetActive(false);
             if (_bat != null) _bat.SetActive(false);
 
-            _pitcher.HoldAtEnd = false;   // 投球用の「投げ切って止まる」を解除してループさせる
-            _pitcher.EndAt = 0f;
-            _pitcher.DefaultEndAt = 0f;   // 投球クリップ用の打ち切りもここでは要らない（末尾までループさせる）
-            _pitcher.IdleClip = clip;
-            _pitcher.IdleEndAt = 0f;
-            SwapClip(_pitcher, clip);
-            StepActor(_pitcher, 0.001f);
-            GroundFix(_pitcher);
+            StandForPreview(_pitcher, clip);
+            if (_batter != null)
+            {
+                _standingPreview = true;
+                _batter.Go.SetActive(true);
+                _batter.RebaseXZWhileIdle = false;
+                _batter.RebaseXWhileSwinging = false;
+                _batter.GroundY = _pitcher.GroundY;
+                _batter.BaseRot = _pitcher.BaseRot;
+                _batter.Go.transform.localRotation = _pitcher.BaseRot;
+                var side = new Vector3(PreviewBatterOffsetX, 0f, PreviewBatterOffsetZ);
+                _batter.BasePos = _pitcher.BasePos + side;
+                _batter.Go.transform.localPosition = _batter.BasePos;
+                StandForPreview(_batter, clip);
+            }
             return true;
+        }
+
+        /// <summary>プレビューで打者を立たせる位置＝投手からのずれ[m]。カメラ（<c>-x</c>・手前寄り）から見て右隣。</summary>
+        private const float PreviewBatterOffsetX = 0.50f;
+        private const float PreviewBatterOffsetZ = -0.75f;
+
+        /// <summary>プレビュー用に打者を直立させている間 true（打者の構え用ポーズ補正を止める）。</summary>
+        private bool _standingPreview;
+
+        private void StandForPreview(Actor a, AnimationClip clip)
+        {
+            a.HoldAtEnd = false;   // 投球用の「投げ切って止まる」を解除してループさせる
+            a.EndAt = 0f;
+            a.DefaultEndAt = 0f;   // 投球クリップ用の打ち切りもここでは要らない（末尾までループさせる）
+            a.IdleClip = clip;
+            a.IdleEndAt = 0f;
+            SwapClip(a, clip);
+            StepActor(a, 0.001f);
+            GroundFix(a);
         }
 
         /// <summary>再生中のクリップを差し替える（Playable を作り直す。SpawnActor の組み立てと同じ形）。</summary>
