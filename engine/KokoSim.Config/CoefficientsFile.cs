@@ -1854,6 +1854,8 @@ public static class CoefficientsLoader
         public double EstimateSdMin { get; set; } = D.EstimateSdMin;
         public double RevealMin { get; set; } = D.RevealMin;
         public double RevealMax { get; set; } = D.RevealMax;
+        public double DisclosureTalentEyeBase { get; set; } = D.DisclosureTalentEyeBase;
+        public double DisclosurePerTalentEye { get; set; } = D.DisclosurePerTalentEye;
 
         public ProspectScoutingCoefficients ToModel() => new()
         {
@@ -1861,6 +1863,8 @@ public static class CoefficientsLoader
             EstimateSdMin = EstimateSdMin,
             RevealMin = RevealMin,
             RevealMax = RevealMax,
+            DisclosureTalentEyeBase = DisclosureTalentEyeBase,
+            DisclosurePerTalentEye = DisclosurePerTalentEye,
         };
     }
 
@@ -3700,6 +3704,8 @@ public static class CoefficientsLoader
         private static readonly CareerCoefficients D = new();
         public double CoachingGrowthPerYear { get; set; } = D.CoachingGrowthPerYear;
         public double CoachingGrowthPerWin { get; set; } = D.CoachingGrowthPerWin;
+        public double CoachingGrowthPerNationalStageWin { get; set; } = D.CoachingGrowthPerNationalStageWin;
+        public double CoachingGrowthPerUpsetFame { get; set; } = D.CoachingGrowthPerUpsetFame;
         public double CoachingCap { get; set; } = D.CoachingCap;
         public double CoachingToStrength { get; set; } = D.CoachingToStrength;
         public int FreeKoshienThreshold { get; set; } = D.FreeKoshienThreshold;
@@ -3760,6 +3766,8 @@ public static class CoefficientsLoader
         {
             CoachingGrowthPerYear = CoachingGrowthPerYear,
             CoachingGrowthPerWin = CoachingGrowthPerWin,
+            CoachingGrowthPerNationalStageWin = CoachingGrowthPerNationalStageWin,
+            CoachingGrowthPerUpsetFame = CoachingGrowthPerUpsetFame,
             CoachingCap = CoachingCap,
             CoachingToStrength = CoachingToStrength,
             FreeKoshienThreshold = FreeKoshienThreshold,

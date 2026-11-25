@@ -50,6 +50,28 @@ public sealed class ProspectScoutingTests
                 $"段{i} の？平均({unknowns[i]:F2}) が段{i - 1}({unknowns[i - 1]:F2}) 以上");
     }
 
+    /// <summary>育成眼が高いほど開示精度が上がる。初期値（20）は上乗せなし・契約と合算して1で頭打ち（設計書04 §1.1・issue #1484）。</summary>
+    [Fact]
+    public void TalentEye_RaisesDisclosure_OnTopOfContract()
+    {
+        Assert.Equal(0.45, ProspectScouting.EffectiveDisclosure(0.45, 20, Scout), 9);
+        Assert.Equal(0.45, ProspectScouting.EffectiveDisclosure(0.45, 5, Scout), 9);
+        var mid = ProspectScouting.EffectiveDisclosure(0.45, 60, Scout);
+        var high = ProspectScouting.EffectiveDisclosure(0.45, 99, Scout);
+        Assert.True(0.45 < mid && mid < high, $"{mid} {high}");
+        Assert.Equal(1.0, ProspectScouting.EffectiveDisclosure(0.95, 99, Scout), 9);
+    }
+
+    /// <summary>育成眼が高い監督ほど、同じ契約でも推定誤差が縮み隠しパラメータの「？」が減る。</summary>
+    [Fact]
+    public void HighTalentEye_ShrinksErrorAndUnknowns()
+    {
+        var low = ProspectScouting.EffectiveDisclosure(0.15, 20, Scout);
+        var high = ProspectScouting.EffectiveDisclosure(0.15, 99, Scout);
+        Assert.True(MeanAbsoluteError(low, seed: 564000) > MeanAbsoluteError(high, seed: 564000));
+        Assert.True(MeanUnknownCount(low, seed: 565000) > MeanUnknownCount(high, seed: 565000));
+    }
+
     /// <summary>同シード同結果（不変条件#2）。</summary>
     [Fact]
     public void Survey_IsDeterministic()

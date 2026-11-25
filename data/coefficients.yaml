@@ -1515,6 +1515,8 @@ scouting:
   estimate_sd_min: 4.0    # 開示1でもσは0にしない＝最上位でも「見立て」の域を出ない
   reveal_min: 0.05        # 開示0のとき隠し1項目が判明する確率
   reveal_max: 0.85        # 開示1でも1.0にしない＝全部は見えない
+  disclosure_talent_eye_base: 20.0   # 育成眼がこの値を超えたぶんだけ開示精度に上乗せ（初期値20＝上乗せなし・#1484）
+  disclosure_per_talent_eye: 0.003   # 育成眼（基準超え）1あたりの上乗せ。契約の開示と合算して1で頭打ち
 
 # --- スカウト（設計書04 §2・issue #867）---
 # 枠の数自体は年契約「スカウト網」の段（contracts.scouting の scout_slots）が持つ。ここは
@@ -1861,6 +1863,8 @@ practice_match:
 career:
   coaching_growth_per_year: 3.0     # 采配経験による指導力上昇
   coaching_growth_per_win: 0.4      # 2026-11-15 0.8→0.4（trust_per_win と同じ理由＝実ゲームは秋の勝ちも数える）
+  coaching_growth_per_national_stage_win: 0.3   # 甲子園/センバツの勝ち1つごとの上乗せ（大舞台ほど経験が大きい・設計書04 §1.1・#1484）
+  coaching_growth_per_upset_fame: 0.1           # 金星の名声上昇1あたりの上乗せ（格上に勝つほど経験が大きい・同）
   coaching_cap: 99.0
   # 指導力→チーム力の押し上げ。0.78→0.88（issue prefecture-high-rank-distribution・2026-09-05）:
   # 母集団の strength_sd を 13→15 に広げると県1位が 80.1→85.5 に上がるので、プレイヤー側の上限も追従させる。

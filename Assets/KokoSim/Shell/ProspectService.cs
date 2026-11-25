@@ -55,9 +55,12 @@ namespace KokoSim.Unity.Shell
 
             // 事前開示精度は年契約「スカウト網」の段（design-04 §2.1 効果2）。確定した時点の段で焼き、
             // 後から契約を上げても「もう見た予定者」の見え方は変わらない（＝毎年3月に効く投資）。
+            // 監督の育成眼は見立ての精度に上乗せする（設計書04 §1.1）。画面の「契約の有無」に使う Disclosure には混ぜない。
             var disclosure = ManagerService.ContractEffects.ProspectDisclosure;
+            var surveyDisclosure = ProspectScouting.EffectiveDisclosure(
+                disclosure, ManagerService.Manager.TalentEye, ScoutCoeff);
             var reports = ProspectScouting.Survey(
-                players, disclosure, StrengthCoeff, ScoutCoeff,
+                players, surveyDisclosure, StrengthCoeff, ScoutCoeff,
                 new Xoshiro256Random(GameSeed.Master ^ (SurveyStream ^ (ulong)joinYearIndex)));
 
             Current = new IncomingClass
