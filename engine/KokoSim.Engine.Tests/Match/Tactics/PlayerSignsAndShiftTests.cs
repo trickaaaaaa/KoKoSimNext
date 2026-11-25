@@ -288,7 +288,10 @@ public sealed class PlayerSignsAndShiftTests
     {
         var res = prog.AdvancePitch();
         var guard = 0;
-        while (res != AdvancePitchResult.Finished && guard++ < 5000)
+        // issue #1589: 制球係数（control_to_sigma）の変更でRNG消費列が動き、タイブレーク無し設定の
+        // 延長が極端に長引く seed（例: seed=7・ガード5000だと打ち切り）が出た。実際は20000球未満で
+        // 必ず決着する（確認済み）ので、本物の無限ループは十分検出できる余裕を持たせて5000→20000へ。
+        while (res != AdvancePitchResult.Finished && guard++ < 20000)
         {
             if (res == AdvancePitchResult.Pitch && prog.CurrentAtBat is { } at) perWindow?.Invoke(prog, at);
             res = prog.AdvancePitch();

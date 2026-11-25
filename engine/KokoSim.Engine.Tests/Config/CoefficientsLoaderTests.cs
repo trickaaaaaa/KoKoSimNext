@@ -24,7 +24,8 @@ public sealed class CoefficientsLoaderTests
             pitching:
               control_to_sigma:
                 intercept_cm: 28.0
-                slope_cm_per_point: 0.20
+                slope_above_cm_per_point: 0.20
+                cubic_below_cm_per_point3: 0.0005
                 min_sigma_cm: 3.0
             """;
 
@@ -35,8 +36,12 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(0.9, bundle.Aerodynamics.LiftCoefficientPerSpinFactor, 6);
         Assert.Equal(16.5, bundle.Mound.ReleaseToPlateDistanceM, 6);
         Assert.Equal(28.0, bundle.Pitching.ControlSigmaInterceptCm, 6);
-        Assert.Equal(0.20, bundle.Pitching.ControlSigmaSlopeCmPerPoint, 6);
-        Assert.Equal(0.03, bundle.Pitching.ControlSigmaMeters(140), 6); // 下限 3cm
+        Assert.Equal(0.20, bundle.Pitching.ControlSigmaSlopeAbovePerPoint, 6);
+        Assert.Equal(0.0005, bundle.Pitching.ControlSigmaBelowCubicCmPerPointCubed, 6);
+        Assert.Equal(0.03, bundle.Pitching.ControlSigmaMeters(140), 6); // 下限 3cm（Control≥50側・3次項の対象外）
+        // Control<50側は3次項が乗る: 切片28cm・傾き0.20でControl30の線形部分=28-0.20*30=22cm、
+        // そこへ (50-30)^3×0.0005 = 4cm を足して 26cm。
+        Assert.Equal(0.26, bundle.Pitching.ControlSigmaMeters(30), 6);
     }
 
     [Fact]
@@ -53,7 +58,8 @@ public sealed class CoefficientsLoaderTests
             pitching:
               control_to_sigma:
                 intercept_cm: 28.0
-                slope_cm_per_point: 0.20
+                slope_above_cm_per_point: 0.20
+                cubic_below_cm_per_point3: 0.0005
                 min_sigma_cm: 3.0
             weather:
               base:
@@ -78,7 +84,7 @@ public sealed class CoefficientsLoaderTests
             aerodynamics: { drag_coefficient: 0.35 }
             mound: { release_to_plate_distance_m: 16.5 }
             pitching:
-              control_to_sigma: { intercept_cm: 28.0, slope_cm_per_point: 0.20, min_sigma_cm: 3.0 }
+              control_to_sigma: { intercept_cm: 28.0, slope_above_cm_per_point: 0.20, cubic_below_cm_per_point3: 0.0005, min_sigma_cm: 3.0 }
             """);
         Assert.Null(noWeather.Weather);
     }

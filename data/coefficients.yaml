@@ -22,10 +22,18 @@ mound:
 
 # --- 投球（表示層→物理層, 設計書02 §1.2） ---
 pitching:
-  # コントロール → 投球散布σ[cm]: σ = intercept − C×slope（例: C50→19cm, C100→8cm）
+  # コントロール → 投球散布σ[cm]: σ = intercept − C×slope_above（全域の線形部分・従来どおり0.22・不変）
+  # ＋ Control<50側だけ (50−C)^3×cubic_below の3次の上乗せ（issue #1589・2026-11-25オーナー決定＝
+  # 実行の散布を非対称化し低制球の投手の与四球率を引き上げる）。Control=50でこの項・1次導関数・2次導関数
+  # まで0なので線形部分へ切れ目なく滑らかに繋がる。線形・2次・4次（差のべき乗）も実測したが、どれも
+  # 母集団の大半（LeagueAverage=Control43付近）まで広げてしまう度合いはほぼ同じで、issue本文の目標
+  # （Control20の与四球率≈19%・17〜21%）に届く値では atbat_10k の与四球率帯（6〜10%）を10.7%まで
+  # わずかに超える（3次を採用＝Control40台への波及が指数の中では最小）。帯を動かすか目標を緩めるかは
+  # needs-human で保留中（issue #1589コメント参照・2026-11-25時点）。
   control_to_sigma:
     intercept_cm: 30.0
-    slope_cm_per_point: 0.22
+    slope_above_cm_per_point: 0.22
+    cubic_below_cm_per_point3: 0.0008
     min_sigma_cm: 2.0
   # 死球（HBP, design-14 未決F・2026-07-20）: 散布結果が体側ウィンドウ（打者の内角側・高さ帯）へ入り
   # 回避に失敗した球。右打者はX負側・左打者（スイッチ含む）はX正側🟡
@@ -142,7 +150,10 @@ ability_effect:
 batting:
   aim_sigma_x_m: 0.10            # 投手の狙い散布σ（横）
   aim_sigma_y_m: 0.155           # 投手の狙い散布σ（縦）
-  aim_spread_control_slope_per_point: 0.008  # 制球の高い投手ほど隅を狙う・低い投手は真ん中を狙う＝狙い散布σ×max(0.5, 1+これ×(Control−50))。C50で恒等（issue walk-rate-floor-vs-elite-pitcher）
+  # 制球50以上（隅を狙う側）は従来どおり0.008。制球50未満（真ん中へ寄せる側）はissue #1589で0へ変更（真ん中寄せを完全無効化）。
+  # 狙い散布σ×max(0.5, 1+これ×(Control−50))。C50で恒等（issue walk-rate-floor-vs-elite-pitcher）
+  aim_spread_control_slope_above_per_point: 0.008
+  aim_spread_control_slope_below_per_point: 0.0   # issue #1589: 真ん中寄せを弱める方針→完全無効化（Control<50もControl50と同じ狙い散布）
   zone_swing_base: 0.68          # ゾーン内スイング率
   chase_base: 0.28               # ゾーン外追いかけ率
   chase_discipline_slope: 0.0045 # 選球眼→追いかけ抑制

@@ -173,7 +173,9 @@ public sealed class AtBatPipelineTests
         {
             var res = AtBatResolver.ResolveDetailed(new BatterAttributes { Contact = 60 }, pitcher, ctx, root.Fork(s));
             Assert.Null(res.Timeline); // 表示専用タイムラインは常に未構築
-            if (res.Result is PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk)
+            // issue #1589で低制球側の実行散布を広げたぶん、LeagueAverage（Control=43<50）の死球（HBP）到達率が
+            // 上がり、このループ（100球）でも死球が出うるようになった。死球も三振・四球と同じくPlayを作らない。
+            if (res.Result is PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch)
                 Assert.Null(res.Play);
             else { Assert.NotNull(res.Play); checkedInPlay++; }
         }

@@ -9,22 +9,44 @@ namespace KokoSim.Engine.Match.Pitching;
 /// </summary>
 public sealed record PitchingCoefficients
 {
-    /// <summary>コントロール→散布σ の切片[cm]（設計書02: 30 − C×0.22）。</summary>
+    /// <summary>コントロール→散布σ の切片[cm]（設計書02: 30 − C×0.22。全域の線形部分に使う）。</summary>
     public double ControlSigmaInterceptCm { get; init; } = 30.0;
 
-    /// <summary>コントロール→散布σ の傾き[cm/能力1]。</summary>
-    public double ControlSigmaSlopeCmPerPoint { get; init; } = 0.22;
+    /// <summary>コントロール→散布σ の傾き[cm/能力1]（設計書02の0.22のまま・不変。全域の線形部分）。</summary>
+    public double ControlSigmaSlopeAbovePerPoint { get; init; } = 0.22;
+
+    /// <summary>
+    /// Control&lt;50側だけに乗る3次の上乗せ[cm/(能力差)^3]（issue #1589・2026-11-25時点は実測値のまま
+    /// needs-human で保留中。下記の母集団への波及は解決していない）。
+    /// 線形（<see cref="ControlSigmaSlopeAbovePerPoint"/>を全域に広げる案）・2次（差の2乗で上乗せする案）も
+    /// 実測したが、どちらも母集団の大半を占めるControl40台（LeagueAverage=43）まで広げてしまい、
+    /// 母集団の与四球率帯（atbat_10k・6〜10%）を破った（線形0.52で11.4%・2次0.013でも10.4%、4次でも10.1〜10.5%
+    /// ＝指数を変えても母集団コストはほぼ同じ）。3次は差が小さいうち（Control40台）はほぼ無傷のまま
+    /// （差7なら2次0.637cmに対し3次は0.148cm程度）だが、issue本文の目標（Control20の与四球率≈19%・
+    /// 17〜21%）に届く値（0.0008＝実測18.5%）でもなお母集団BB%は10.7%で帯（≤10.0%）をわずかに超える。
+    /// 「50未満だけ実行散布を広げて目標に届かせる」こと自体が母集団の一部（Control40台より下）の
+    /// 四球率も連動して上げるため、カーブの形（指数）を変えるだけでは両立しない。帯を動かすか目標を
+    /// 緩めるかはオーナー判断（issue #1589コメント参照）。
+    /// </summary>
+    public double ControlSigmaBelowCubicCmPerPointCubed { get; init; } = 0.0008;
 
     /// <summary>散布σの下限[cm]（超高コントロールでも0にしない）。</summary>
     public double ControlSigmaMinCm { get; init; } = 2.0;
 
     /// <summary>
     /// コントロール表示値(1〜100)から本塁面での投球散布の標準偏差σ[m]を求める。
-    /// 設計書02 §1.2: σ = 30 − C×0.22 [cm]（例: C50→19cm, C100→8cm）。
+    /// 設計書02 §1.2: σ = 30 − C×0.22 [cm]（例: C50→19cm, C100→8cm）。Control&lt;50側だけ、
+    /// Control50からの差の3乗に比例する上乗せ（<see cref="ControlSigmaBelowCubicCmPerPointCubed"/>・issue #1589）
+    /// が乗る。差0（Control=50）では値も傾きも線形部分と一致するため切れ目なく滑らかに繋がる。
     /// </summary>
     public double ControlSigmaMeters(int control)
     {
-        var cm = ControlSigmaInterceptCm - ControlSigmaSlopeCmPerPoint * control;
+        var cm = ControlSigmaInterceptCm - ControlSigmaSlopeAbovePerPoint * control;
+        if (control < 50)
+        {
+            var diff = 50 - control;
+            cm += ControlSigmaBelowCubicCmPerPointCubed * diff * diff * diff;
+        }
         if (cm < ControlSigmaMinCm)
         {
             cm = ControlSigmaMinCm;

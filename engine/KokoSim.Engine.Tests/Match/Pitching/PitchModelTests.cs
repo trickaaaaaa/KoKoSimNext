@@ -132,7 +132,8 @@ public sealed class PitchModelTests
     [Fact]
     public void HigherControl_SpreadsTheAim_TowardTheCorners_And50IsIdentity()
     {
-        // 狙い散布σは max(0.5, 1 + slope×(Control−50)) 倍。C50 は恒等・C90 は広く・C30 は狭い（真ん中を狙う）・乱数消費は同じ。
+        // 狙い散布σは Control≥50なら max(0.5, 1 + AbovePerPoint×(Control−50)) 倍で広がる。
+        // Control<50 は issue #1589 で傾き0＝真ん中寄せを無効化し、C50 と同じ散布のまま（非対称）。乱数消費は同じ。
         double AimSpread(int control, ulong seed)
         {
             var pitcher = new PitcherAttributes { MaxVelocityKmh = 140.0, Control = control };
@@ -145,10 +146,12 @@ public sealed class PitchModelTests
         var c50 = AimSpread(50, 9);
         var c90 = AimSpread(90, 9);
         Assert.InRange(c50, Bat.AimSigmaXMeters * 0.95, Bat.AimSigmaXMeters * 1.05);
-        var expected90 = Bat.AimSigmaXMeters * (1.0 + Bat.AimSpreadControlSlopePerPoint * 40);
-        var expected30 = Bat.AimSigmaXMeters * System.Math.Max(0.5, 1.0 - Bat.AimSpreadControlSlopePerPoint * 20);
+        var expected90 = Bat.AimSigmaXMeters * (1.0 + Bat.AimSpreadControlSlopeAbovePerPoint * 40);
+        var expected30 = Bat.AimSigmaXMeters * System.Math.Max(0.5, 1.0 + Bat.AimSpreadControlSlopeBelowPerPoint * (30 - 50));
         Assert.InRange(c90, expected90 * 0.95, expected90 * 1.05);
         Assert.InRange(c30, expected30 * 0.95, expected30 * 1.05);
+        // issue #1589: 下側の傾きが0であるあいだは、C30もC50と同じ散布（真ん中寄せしない）。
+        Assert.InRange(c30, c50 * 0.90, c50 * 1.10);
     }
 
     // --- ギア「飛ばす/流す」（§1.1f） ---
