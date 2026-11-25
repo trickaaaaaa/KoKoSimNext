@@ -17,7 +17,7 @@ namespace KokoSim.Unity.Components
         public string ShortName = "";
         public string Kire = "C";     // 有効軸ランク（ストレート=球威/Stuff、変化球=キレ/Sharpness）→S〜G。丸の数とチップ（Issue #274）
         public float AngleDeg;        // 変化の向き（右=0°・上=90°・反時計回り）。投げ手の反転は済ませた値（PitchTypeStyle.AngleFor）
-        public bool IsFastball;       // ストレートはチップを出さず最速を添える
+        public bool IsFastball;       // ストレートは最速（km/h）を添える（チップは変化球と同じく出す）
         public string VeloText = "";  // ストレートに添える最速（"148"。null/空で出さない）
     }
 
@@ -154,20 +154,16 @@ namespace KokoSim.Unity.Components
                     name.style.color = PitchTypeStyle.TextColor(pt.Type);
                     chip.Add(name);
                 }
-                // ストレートはチップの代わりに最速（球威は能力表で見せている）。
+                // ストレートは最速 km/h の右に球威のランクチップ（球威は能力表から外れていてチャートでだけ読める）。
                 VisualElement velo = null;
-                if (pt.IsFastball)
+                if (pt.IsFastball && !string.IsNullOrEmpty(pt.VeloText))
                 {
-                    if (!string.IsNullOrEmpty(pt.VeloText))
-                    {
-                        velo = UiComponents.NumUnit(pt.VeloText, "km/h", true, "pd2-pchip__velo");
-                        chip.Add(velo);
-                    }
+                    velo = UiComponents.NumUnit(pt.VeloText, "km/h", true, "pd2-pchip__velo");
+                    chip.Add(velo);
                 }
-                else
-                {
-                    chip.Add(UiComponents.RankChip(pt.Kire, RankChipSize.Small));
-                }
+                var rank = UiComponents.RankChip(pt.Kire, RankChipSize.Small);
+                if (velo != null) rank.AddToClassList("pd2-pchip__rank--after-velo");
+                chip.Add(rank);
                 // 札の実寸が確定したら置き直す（ホスト寸法が変わらない差し替えでは host 側の event が来ない）。
                 chip.RegisterCallback<GeometryChangedEvent>(_ => { if (_sizes == null) Layout(); });
                 _host.Add(chip);
