@@ -49,6 +49,12 @@
 # 名前の綴り違い（force / sign / probes / overrides）は黙って飛ばさず FAILED になる。
 
 captures:
+  - id: wildpitch-cover-1635
+    name: "走者三塁の暴投で、投手が本塁カバーに走り捕手が本塁へ返す（issue #1635）"
+    scenario: wild-pitch-lab
+    manager: away
+    shots: [start, release-0.6, release-0.05, end]
+
   - id: bunt-throw-1089
     name: "バント処理の送球が低く速い（issue #1089）"
     scenario: steal-sign-lab
