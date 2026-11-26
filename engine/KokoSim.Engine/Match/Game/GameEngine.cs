@@ -983,12 +983,11 @@ public static class GameEngine
             // 捕手の効きは Fielding（SqueezeReadPerLead は名前に反して捕手の Lead ではなく Fielding にかかる）。
             // 打席頭の brain スクイズは頭の値で1回だけ計算（＝従来と完全一致）、手動スクイズ（issue #492 C）は
             // 打席途中に押されうるので下の投球ループで球ごとに取り直す。
-            double SqueezeWasteNow() => MathUtil.Clamp(
-                ctx.Tactics.SqueezeReadBase
-                + (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Fielding) - 50) * ctx.Tactics.SqueezeReadPerLead
-                + (outs == 1 && Math.Abs(offense.Runs - defense.Runs) <= 1
-                    ? ctx.Tactics.SqueezeReadObviousBonus : 0.0),
-                0.0, ctx.Tactics.SqueezeReadMax);
+            // 守備が采配AIなら采配能力・ティアで読む力が変わる（設計書11 §1・§2・issue #1490。標準采配は×1.0）。
+            double SqueezeWasteNow() => StealReadModel.SqueezeWasteProbability(
+                ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Fielding),
+                outs == 1 && Math.Abs(offense.Runs - defense.Runs) <= 1,
+                ctx.Tactics, defense.ReadMultiplier);
             var squeezeWaste = squeezeSign is null ? 0.0 : SqueezeWasteNow();
             if (squeezeSign is not null)
             {
@@ -1342,7 +1341,7 @@ public static class GameEngine
                         // 意表ゆえ読まれにくい一方、読まれると最も無防備。
                         // 抽選は常に引く（乱数順を動かさない）が、3ボールなら外せない（四球になるため・issue #986）。
                         var pitchout = StealReadModel.RollPitchout(
-                            bases.First, defense.Catcher, currentPitcher, stealStart, paBaserunning, rng)
+                            bases.First, defense.Catcher, currentPitcher, stealStart, paBaserunning, rng, defense.ReadMultiplier)
                             && StealReadModel.CanPitchout(session.Balls)
                             || manualPitchout;   // プレイヤーのウエスト（抽選は上で必ず引く＝乱数順は不変）
                         pitchoutThisPitch = pitchout;
@@ -1451,7 +1450,7 @@ public static class GameEngine
                     {
                         var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
-                            bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng)
+                            bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng, defense.ReadMultiplier)
                             && StealReadModel.CanPitchout(session.Balls)
                             || manualPitchout;   // プレイヤーのウエスト（抽選は上で必ず引く＝乱数順は不変）
                         pitchoutThisPitch = pitchout;

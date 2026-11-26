@@ -37,18 +37,31 @@ public static class StealReadModel
         return MathUtil.Clamp(readSkill * expectedness, 0.0, c.MaxPitchoutProb);
     }
 
+    /// <summary>
+    /// スクイズをウエストで外される確率（設計書02 §4.4）。基礎＋捕手の守備（効き後・50中立）勾配＋状況の露骨さに、
+    /// 守備AIの察知力 <paramref name="readMultiplier"/>（采配能力・ティア, 標準采配は1.0）を掛けて上限クランプ。
+    /// </summary>
+    public static double SqueezeWasteProbability(
+        double catcherFieldingEffective, bool obviousSituation, TacticsCoefficients t, double readMultiplier = 1.0)
+        => MathUtil.Clamp(
+            (t.SqueezeReadBase
+             + (catcherFieldingEffective - 50) * t.SqueezeReadPerLead
+             + (obviousSituation ? t.SqueezeReadObviousBonus : 0.0)) * readMultiplier,
+            0.0, t.SqueezeReadMax);
+
     /// <summary>ピッチアウトを投げられる最大のボールカウント。次の1球が四球になる3ボールでは外さない（issue #986）。</summary>
     public const int MaxBallsForPitchout = 2;
 
     /// <summary>このボールカウントでピッチアウトを投げられるか。3ボールで外すと四球＝守備側は投げない。</summary>
     public static bool CanPitchout(int balls) => balls <= MaxBallsForPitchout;
 
-    /// <summary>ピッチアウトが出たか（＝守備が読み切ったか）。決定論・乱数注入。</summary>
+    /// <summary>ピッチアウトが出たか（＝守備が読み切ったか）。決定論・乱数注入。<paramref name="readMultiplier"/> は守備AIの察知力（采配能力・ティア, 既定1.0）。</summary>
     public static bool RollPitchout(
         Player runner, Player catcher, Player pitcher, StartType startType,
-        BaserunningCoefficients c, IRandomSource rng)
+        BaserunningCoefficients c, IRandomSource rng, double readMultiplier = 1.0)
     {
         var expectedness = Expectedness(runner, startType, c);
-        return MathUtil.Chance(PitchoutProbability(catcher, pitcher, expectedness, c), rng);
+        var p = PitchoutProbability(catcher, pitcher, expectedness, c);
+        return MathUtil.Chance(MathUtil.Clamp(p * readMultiplier, 0.0, c.MaxPitchoutProb), rng);
     }
 }

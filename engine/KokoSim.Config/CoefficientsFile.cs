@@ -2940,6 +2940,11 @@ public static class CoefficientsLoader
         public int TimeoutReserveMinTier { get; set; } = D.TimeoutReserveMinTier;
         public int TimeoutReserveKeep { get; set; } = D.TimeoutReserveKeep;
         public int TimeoutReserveFromInning { get; set; } = D.TimeoutReserveFromInning;
+        public double ReadSensePerPoint { get; set; } = D.ReadSensePerPoint;
+        public double ReadTierStep { get; set; } = D.ReadTierStep;
+        public int ReadTierNeutral { get; set; } = D.ReadTierNeutral;
+        public double ReadMultMin { get; set; } = D.ReadMultMin;
+        public double ReadMultMax { get; set; } = D.ReadMultMax;
         // ⑦ 守備位置操作層（issue #255）
         public int DefenseSwapMinTier { get; set; } = D.DefenseSwapMinTier;
         public int DefenseSwapFromInning { get; set; } = D.DefenseSwapFromInning;
@@ -3048,6 +3053,11 @@ public static class CoefficientsLoader
             TimeoutReserveMinTier = TimeoutReserveMinTier,
             TimeoutReserveKeep = TimeoutReserveKeep,
             TimeoutReserveFromInning = TimeoutReserveFromInning,
+            ReadSensePerPoint = ReadSensePerPoint,
+            ReadTierStep = ReadTierStep,
+            ReadTierNeutral = ReadTierNeutral,
+            ReadMultMin = ReadMultMin,
+            ReadMultMax = ReadMultMax,
             DefenseSwapMinTier = DefenseSwapMinTier,
             DefenseSwapFromInning = DefenseSwapFromInning,
             DefenseSwapMaxScoreDiff = DefenseSwapMaxScoreDiff,

@@ -44,6 +44,15 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     public double OptimalProbability => _optimalProb;
 
     /// <summary>
+    /// この AI が守備側のとき、こちらの作戦（スクイズ・盗塁）を読む力の倍率（設計書11 §1・§2・issue #1490）。
+    /// 采配能力が高く・ティアが高いほど大きい（名門は高精度で察知、弱い監督は見抜けない）。
+    /// </summary>
+    public double ReadMultiplier => MathUtil.Clamp(
+        1.0 + (_profile.TacticalSense - 50) * _ai.ReadSensePerPoint
+            + (_profile.TierRank - _ai.ReadTierNeutral) * _ai.ReadTierStep,
+        _ai.ReadMultMin, _ai.ReadMultMax);
+
+    /// <summary>
     /// 観測用の判断内訳を吐くか（設計書17 §5 P4, F3）。観測が有効なときだけ GameEngine が立てる。
     /// 判断そのものには一切影響しない（文字列を1本組むだけ）。
     /// </summary>

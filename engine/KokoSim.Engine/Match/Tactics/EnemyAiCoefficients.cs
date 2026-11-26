@@ -193,6 +193,20 @@ public sealed record EnemyAiCoefficients
     /// <summary>温存を解く回（この回以降は残りを使い切ってよい）。</summary>
     public int TimeoutReserveFromInning { get; init; } = 7;
 
+    // --- 作戦の察知（設計書11 §1・§2「名門はウエスト・ピッチアウトを高精度で察知」・issue #1490） ---
+    /// <summary>
+    /// 守備側AIがこちらの作戦（スクイズ・盗塁）を読む力の倍率 = 1 + (采配能力 − 50) × <see cref="ReadSensePerPoint"/>
+    /// + (ティア − <see cref="ReadTierNeutral"/>) × <see cref="ReadTierStep"/>（<see cref="ReadMultMin"/>〜<see cref="ReadMultMax"/>）。
+    /// スクイズのウエスト確率とピッチアウト確率の両方に掛かる（既存の上限クランプは掛けたあとも守る）。
+    /// 采配AIを持たない守備（標準采配）は常に×1.0＝従来と同一。
+    /// </summary>
+    public double ReadSensePerPoint { get; init; } = 0.01;
+    public double ReadTierStep { get; init; } = 0.06;
+    /// <summary>倍率が1.0になるティア（3=D。相手校の中位）。</summary>
+    public int ReadTierNeutral { get; init; } = 3;
+    public double ReadMultMin { get; init; } = 0.4;
+    public double ReadMultMax { get; init; } = 1.8;
+
     // === ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2・設計書11） ===
     // AIが「守備位置の入替（無料）」と「コンバート継投」を打てるようにする層。#209 と同じ2段運用で
     // 入れ（①既定オフで配線 → ②有効化して帯を実測 → 採否）、実測の結果このティアで採用した

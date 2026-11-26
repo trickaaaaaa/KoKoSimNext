@@ -1348,6 +1348,13 @@ enemy_ai:
   timeout_reserve_min_tier: 4                # C: 伝令の温存（残回数管理）を使うティア
   timeout_reserve_keep: 1                    # 残りがこの回数以下なら終盤まで取っておく
   timeout_reserve_from_inning: 7             # 温存を解く回
+  # 作戦の察知（設計書11 §1・§2・issue #1490）: 守備AIのウエスト率・ピッチアウト率に掛ける倍率
+  #   = 1 + (采配能力-50)×read_sense_per_point + (ティア-read_tier_neutral)×read_tier_step を min〜max にクランプ。
+  read_sense_per_point: 0.01
+  read_tier_step: 0.06
+  read_tier_neutral: 3                       # D: 倍率1.0になるティア
+  read_mult_min: 0.4
+  read_mult_max: 1.8
   # ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2）🟡実測校正
   # AIが「守備位置の入替（交代回数を消費しない無料の手）」と「コンバート継投」を打てるようにする層。
   # ⑥ 高度な継投層と同じ2段運用（①既定オフで配線 → ②有効化して帯を実測 → 採否）で入れ、
