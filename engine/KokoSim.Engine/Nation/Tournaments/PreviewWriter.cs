@@ -206,10 +206,21 @@ internal static class PreviewWriter
     {
         var headKey = "player.head." + pick.Trait + "." + LevelOf(pick.Level, stage);
         var bodyKey = "player.body." + pick.Trait;
-        var tailKey = "player.tail.g" + System.Math.Clamp(pick.Player.Grade, 1, 3);
+        var tailKey = TailKey(pick.Player.Grade, stage);
         var group = headKey + "|" + bodyKey + "|" + tailKey;
         var text = Compose(phrases, seed - 1, Salt(group, yearIndex), headKey, bodyKey, tailKey);
         return Fill(text, ("{area}", Area(stage)));
+    }
+
+    /// <summary>
+    /// 結びの置き場。3年生が引退したあと（夏の甲子園・県予選以外＝秋・地区・神宮・センバツ）の2年生は最上級生なので、
+    /// 夏用の g2（「上級生を押しのけて」など）ではなく <c>player.tail.senior2</c> から引く。
+    /// </summary>
+    internal static string TailKey(int grade, PreviewStage stage)
+    {
+        var g = System.Math.Clamp(grade, 1, 3);
+        var upperclassmenGone = stage is not (PreviewStage.SummerPrefecture or PreviewStage.SummerKoshien);
+        return g == 2 && upperclassmenGone ? "player.tail.senior2" : "player.tail.g" + g;
     }
 
     /// <summary>1校詳細の寸評に挟む導入（「注目は2年の山田。」）。氏名の全角空白は詰める。</summary>
