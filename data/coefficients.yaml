@@ -1072,6 +1072,8 @@ tactics:
   sac_bunt_max_ahead: 1
   squeeze_from_inning: 8
   squeeze_prob: 0.28
+  squeeze_vs_infield_in_factor: 0.6    # 相手の内野が前進のときスクイズ確率に掛ける倍率（設計書12 §5.2・#1491）
+  squeeze_vs_infield_deep_factor: 0.3  # 相手の内野が後退のとき（ゴロでも還れる＝打たせる）
   squeeze_max_diff_abs: 1
   squeeze_min_bunt: 55
   # issue steal-thresholds-unreachable（2026-08-27）: 旧0.72は実ロスター実測の到達可能上限（p99=60.7%・

@@ -820,6 +820,9 @@ public static class GameEngine
 
                 if (offense.Tactics is not null)
                 {
+                    // 内野の深さ読み（設計書12 §5.2・issue #1491）: 守備の指示（プレイヤーの常時方針込み）が決まった後の
+                    // 深さを攻撃側へ見せる。守備→攻撃の順で呼んでいるので、読むだけ（乱数非消費）。
+                    situation = situation with { OpponentInfield = defense.ApplyStandingDefense(defTactics).Infield };
                     // 攻撃伝令（打者へ, §3）: 打者の緊張を数打席のあいだ緩和。
                     if (offense.Tactics.CallOffenseTimeout(situation, rng) && offense.TryUseOffenseTimeout())
                     {

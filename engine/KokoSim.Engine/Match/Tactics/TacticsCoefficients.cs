@@ -30,6 +30,10 @@ public sealed record TacticsCoefficients
 
     public int SqueezeFromInning { get; init; } = 8;
     public double SqueezeProb { get; init; } = 0.28;
+    /// <summary>相手の内野が前進（本塁で刺しにくる）のとき、スクイズの確率に掛ける倍率（設計書12 §5.2・issue #1491）。1.0＝読まない。</summary>
+    public double SqueezeVsInfieldInFactor { get; init; } = 0.6;
+    /// <summary>相手の内野が後退（ゴロでも還れる）のとき、スクイズの確率に掛ける倍率。打たせて還すほうへ寄る（設計書12 §5.2）。1.0＝読まない。</summary>
+    public double SqueezeVsInfieldDeepFactor { get; init; } = 0.3;
     public int SqueezeMaxDiffAbs { get; init; } = 1;
     public int SqueezeMinBunt { get; init; } = 55;
 

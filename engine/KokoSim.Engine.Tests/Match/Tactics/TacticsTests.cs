@@ -6,6 +6,7 @@ using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Pitching;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using Xunit;
 
@@ -86,6 +87,30 @@ public sealed class TacticsTests
         Assert.Contains(OffensiveSign.Squeeze, Roll(brain, s, 300));
         var early = Situation(inning: 3, outs: 1, third: P(), batter: P(bunt: 70));
         Assert.DoesNotContain(OffensiveSign.Squeeze, Roll(brain, early, 300));
+    }
+
+    [Fact]
+    public void Brain_Squeeze_ReadsOpponentInfieldDepth()
+    {
+        // 内野が前進/後退なら仕掛けにくい（後退＝ゴロでも還れるので打たせる）。Normal が最も多い（設計書12 §5.2・issue #1491）。
+        var brain = new StandardTacticsBrain(C);
+        var s = Situation(inning: 9, outs: 1, third: P(), batter: P(bunt: 70));
+        int Squeezes(DefenseDepth d) => Roll(brain, s with { OpponentInfield = d }, 2000).Count(x => x == OffensiveSign.Squeeze);
+        var normal = Squeezes(DefenseDepth.Normal);
+        var inn = Squeezes(DefenseDepth.In);
+        var deep = Squeezes(DefenseDepth.Deep);
+        Assert.True(inn < normal, $"前進守備でスクイズが減らない: {inn} >= {normal}");
+        Assert.True(deep < inn, $"後退守備のほうが減るはず: {deep} >= {inn}");
+        Assert.True(deep > 0, "後退でも完全には消えない（倍率0.3）");
+    }
+
+    [Fact]
+    public void Brain_Squeeze_DefaultSituationIsUnchanged()
+    {
+        // OpponentInfield 未設定（Normal）は従来の確率そのまま＝RNG列も結果も不変。
+        var brain = new StandardTacticsBrain(C);
+        var s = Situation(inning: 9, outs: 1, third: P(), batter: P(bunt: 70));
+        Assert.Equal(Roll(brain, s, 300), Roll(brain, s with { OpponentInfield = DefenseDepth.Normal }, 300));
     }
 
     /// <summary>
@@ -737,6 +762,61 @@ public sealed class TacticsTests
         public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
         public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
             => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
+    }
+
+    /// <summary>内野の深さ読みの配線テスト用: 守備側は常に指定の内野深さを返し、攻撃側は受け取った深さを記録する。</summary>
+    private sealed class DepthBrain : ITacticsBrain
+    {
+        private readonly StandardTacticsBrain _inner = new(new TacticsCoefficients());
+        private readonly DefenseDepth? _infield;
+        public readonly HashSet<DefenseDepth> Seen = new();
+        public DepthBrain(DefenseDepth? infield = null) => _infield = infield;
+
+        public OffensiveSign CallOffense(in TacticsSituation s, IRandomSource rng)
+        {
+            Seen.Add(s.OpponentInfield);
+            return _inner.CallOffense(s, rng);
+        }
+
+        public DefensiveTactics CallDefense(in TacticsSituation s, IRandomSource rng)
+        {
+            var d = _inner.CallDefense(s, rng);
+            return _infield is { } depth ? d with { Infield = depth } : d;
+        }
+
+        public bool CallOffenseTimeout(in TacticsSituation s, IRandomSource rng) => false;
+        public bool CallDefenseTimeout(in TacticsSituation s, IRandomSource rng) => false;
+        public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng) => null;
+        public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng) => null;
+        public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
+        public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+            => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
+    }
+
+    [Theory]
+    [InlineData(DefenseDepth.In)]
+    [InlineData(DefenseDepth.Deep)]
+    public void Game_OffenseSeesDefenseInfieldDepth(DefenseDepth depth)
+    {
+        // 守備（後攻）が決めた内野の深さが、攻撃（先攻）の CallOffense の状況へ届く（設計書12 §5.2・issue #1491）。
+        var offense = new DepthBrain();
+        GameEngine.Play(TeamOf("A") with { Tactics = offense }, TeamOf("H") with { Tactics = new DepthBrain(depth) },
+            new GameContext(), new Xoshiro256Random(7));
+        // 先攻の攻撃が向き合う守備は後攻だけ＝見える深さは後攻が指示した値だけ。
+        Assert.Contains(depth, offense.Seen);
+        Assert.DoesNotContain(depth == DefenseDepth.In ? DefenseDepth.Deep : DefenseDepth.In, offense.Seen);
+    }
+
+    [Fact]
+    public void Game_OffenseSeesPlayersStandingInfieldDepth()
+    {
+        // プレイヤーの常時方針（内野後退）も、brain の判断より優先された深さで攻撃側へ見える。
+        var offense = new DepthBrain();
+        var home = TeamOf("H") with { Tactics = new DepthBrain() };
+        var prog = new MatchProgression(TeamOf("A") with { Tactics = offense }, home, new GameContext(), 7UL);
+        prog.SetStandingDefense(teamIsAway: false, policy: null, gear: null, infield: DefenseDepth.Deep, outfield: null);
+        while (prog.Advance()) { }
+        Assert.Contains(DefenseDepth.Deep, offense.Seen);
     }
 
     [Fact]

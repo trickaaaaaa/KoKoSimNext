@@ -2560,6 +2560,8 @@ public static class CoefficientsLoader
         public int SacBuntMaxAhead { get; set; } = D.SacBuntMaxAhead;
         public int SqueezeFromInning { get; set; } = D.SqueezeFromInning;
         public double SqueezeProb { get; set; } = D.SqueezeProb;
+        public double SqueezeVsInfieldInFactor { get; set; } = D.SqueezeVsInfieldInFactor;
+        public double SqueezeVsInfieldDeepFactor { get; set; } = D.SqueezeVsInfieldDeepFactor;
         public int SqueezeMaxDiffAbs { get; set; } = D.SqueezeMaxDiffAbs;
         public int SqueezeMinBunt { get; set; } = D.SqueezeMinBunt;
         public double StealMinSuccess { get; set; } = D.StealMinSuccess;
@@ -2713,6 +2715,8 @@ public static class CoefficientsLoader
             SacBuntMaxAhead = SacBuntMaxAhead,
             SqueezeFromInning = SqueezeFromInning,
             SqueezeProb = SqueezeProb,
+            SqueezeVsInfieldInFactor = SqueezeVsInfieldInFactor,
+            SqueezeVsInfieldDeepFactor = SqueezeVsInfieldDeepFactor,
             SqueezeMaxDiffAbs = SqueezeMaxDiffAbs,
             SqueezeMinBunt = SqueezeMinBunt,
             StealMinSuccess = StealMinSuccess,
