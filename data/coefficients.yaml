@@ -441,7 +441,11 @@ fielding:
   # ライナー表示になり、外野フライ(range≥70m)の頂点 p50 が実物オーダー(20m台)に入る（issue #451。C#既定と両面）。
   liner_apex_range_ratio: 0.15
   infielder_reach_height_m: 2.20    # 内野手が届く高さ上限（これを越える弾みは頭上を抜ける）
-  infielder_fielding_radius_m: 4.20 # 内野手の横の守備範囲（グラブ＋ダイブ）。これを抜ける強い打球だけ外野へ
+  infielder_fielding_radius_m: 4.20 # 内野手の横の守備範囲（グラブ＋ダイブ）の基準値＝守備50のとき。これを抜ける強い打球だけ外野へ
+  # 守備力で変える（issue #1661）。半径 = 基準値 +（実効守備−50）×slope、下限・上限で頭打ち。守備50で基準値と恒等
+  infielder_fielding_radius_slope_m_per_point: 0.027  # 守備1点あたりの増減[m]。叩き台: 守備20/80でおおよそ±0.8m
+  infielder_fielding_radius_floor_m: 3.4  # 守備が低くてもここまでしか狭まらない
+  infielder_fielding_radius_cap_m: 5.0    # 守備が高くてもここまでしか広がらない
   infielder_dive_reach_m: 2.0       # 飛びつきの実効リーチ（体の中心→捕球点）。半径で触れると判定した打球の処理点・処理時刻は体がここまで寄れた時刻で採る（体が3〜4m離れたまま捕球・送球しない）
   chopper_wait_factor: 0.55         # 高バウンド（チョッパー）で野手が待たされる時間の係数（内野安打に効く）
   infield_intercept_step_seconds: 0.02  # 内野境界の通過時刻を求める走査刻み

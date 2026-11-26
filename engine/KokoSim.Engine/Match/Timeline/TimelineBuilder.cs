@@ -144,6 +144,20 @@ public static class TimelineBuilder
         return new TimelinePoint(from.X + (to.X - from.X) * u, from.Z + (to.Z - from.Z) * u);
     }
 
+    /// <summary>
+    /// <paramref name="fielder"/>1人分の守備範囲[m]（<see cref="StopWithinReach"/>・<see cref="PlanMissedFlyChase"/>
+    /// で使う表示専用の寄り、issue #1661）。内野手は守備力で変わる値（<see cref="FielderAttributes.InfielderFieldingRadiusM"/>）、
+    /// 外野手は今回対象外＝<paramref name="fielderReachM"/>（<see cref="BuildBattedBall"/> の既定値）のまま。
+    /// </summary>
+    private static double ReachMFor(Fielder fielder, FieldingCoefficients? fieldingCoeff, double fielderReachM)
+    {
+        if (!FieldingResolver.IsInfield(fielder)) return fielderReachM;
+        var c = fieldingCoeff ?? new FieldingCoefficients();
+        return fielder.Attributes.InfielderFieldingRadiusM(
+            c.InfielderFieldingRadiusM, c.InfielderFieldingRadiusSlopeMPerPoint,
+            c.InfielderFieldingRadiusFloorM, c.InfielderFieldingRadiusCapM);
+    }
+
     private static TimelinePoint LeadPoint(FieldGeometry field, int fromBase, double leadM)
     {
         if (leadM <= 0) return BasePoint(field, BaseName(fromBase));
@@ -198,9 +212,11 @@ public static class TimelineBuilder
     /// 際どい飛球（上のclose fly）と並ぶ2つめの「フェア」条件＝ライン際に落ちたフェア打球（本塁打を除く）
     /// にも同じ判定オーバーレイを出す。表示用の目安値（録画で確かめて決める）＝**表示専用**:
     /// 乱数を引かず、結果（Result・塁打数）には一切触れない。
-    /// fielderReachM=野手の守備範囲[m]（既定は <see cref="FieldingCoefficients.InfielderFieldingRadiusM"/>
-    /// の初期値と同値）。**表示専用**: 守備解決は「半径ぶんは飛びついて届く」で判定しているので、
-    /// 体を打球の位置まで運ぶ必要がない。この余白ぶん処理レッグを短くしないと、体が脚力を超えて動く。
+    /// fielderReachM=野手の守備範囲[m]の既定値（既定は <see cref="FieldingCoefficients.InfielderFieldingRadiusM"/>
+    /// の初期値と同値）。内野手は<paramref name="fieldingCoeff"/>から野手ごとの守備力で変わる値に差し替える
+    /// （issue #1661。<see cref="ReachMFor"/>）。外野手はこの既定値のまま（今回は内野だけ）。**表示専用**:
+    /// 守備解決は「半径ぶんは飛びついて届く」で判定しているので、体を打球の位置まで運ぶ必要がない。
+    /// この余白ぶん処理レッグを短くしないと、体が脚力を超えて動く。
     /// </summary>
     public static PlayTimeline BuildBattedBall(
         FieldingPlay play,
@@ -881,7 +897,7 @@ public static class TimelineBuilder
                 var chaseProfile = MoveProfile.Trapezoid;
                 if (isBallFielder && PlanMissedFlyChase(
                         play, landAt, fieldedAt, landing, ClampToFence(landing, field, play.BearingDeg, FenceBodyMarginM),
-                        ballFielderTarget, moveFrom, speed, t0, fielderReachM, a.Position,
+                        ballFielderTarget, moveFrom, speed, t0, ReachMFor(fielder, fieldingCoeff, fielderReachM), a.Position,
                         ExtraBaseResolver.ReadySeconds(fieldedAt, play.FielderFielding, fieldingCoeff ?? new FieldingCoefficients()),
                         IsNearWall(landing, field, play.BearingDeg, fieldingCoeff ?? new FieldingCoefficients()))
                         is { } chase)
@@ -897,7 +913,7 @@ public static class TimelineBuilder
                 else if (isBallFielder)
                 {
                     (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
-                    to = StopWithinReach(moveFrom, to, pace * (t1 - t0), fielderReachM);
+                    to = StopWithinReach(moveFrom, to, pace * (t1 - t0), ReachMFor(fielder, fieldingCoeff, fielderReachM));
                     if (a.Position == FieldPosition.FirstBase) firstBaseFieldEnd = to; // アンアシスト運びの起点（#400）
                 }
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task, Profile = chaseProfile });
@@ -933,7 +949,7 @@ public static class TimelineBuilder
                     {
                         var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
                         var (t0, t1) = ArriveByFieldedAt(ContactAt + 0.35, ContactAt + 0.35 + dist / speed, fieldedAt);
-                        var stop = StopWithinReach(from, ballFielderTarget, speed * (t1 - t0), fielderReachM);
+                        var stop = StopWithinReach(from, ballFielderTarget, speed * (t1 - t0), ReachMFor(fielder, fieldingCoeff, fielderReachM));
                         if (bfr == FieldPosition.FirstBase) firstBaseFieldEnd = stop; // アンアシスト運びの起点（#400）
                         moves.Add(new FielderMove { Role = bfr, T0 = t0, T1 = t1, To = stop, Task = FielderTask.FieldBall });
                     }
@@ -954,7 +970,7 @@ public static class TimelineBuilder
                     var t0 = fieldedAt;
                     var t1 = Math.Max(t0 + 0.05, ContactAt + putoutArrive);
                     var speed = Math.Max(4.0, firstBaseman.Attributes.SprintSpeedMps);
-                    var to = StopWithinReach(firstBaseFieldEnd, basePt, speed * (t1 - t0), fielderReachM);
+                    var to = StopWithinReach(firstBaseFieldEnd, basePt, speed * (t1 - t0), ReachMFor(firstBaseman, fieldingCoeff, fielderReachM));
                     if (Distance(firstBaseFieldEnd, to) >= 0.5)
                     {
                         moves.Add(new FielderMove
