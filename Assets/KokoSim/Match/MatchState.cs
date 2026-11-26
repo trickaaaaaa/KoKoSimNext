@@ -113,8 +113,8 @@ namespace KokoSim.Unity.Match
             v.Feed = BuildFeed(r);
             v.HomeBat = r.HomeBatting.Select(ToBatRow).ToList();
             v.AwayBat = r.AwayBatting.Select(ToBatRow).ToList();
-            v.HomePit = r.HomePitching.Select(ToPitRow).ToList();
-            v.AwayPit = r.AwayPitching.Select(ToPitRow).ToList();
+            v.HomePit = r.PitchingForDisplay(away: false).Select(ToPitRow).ToList();
+            v.AwayPit = r.PitchingForDisplay(away: true).Select(ToPitRow).ToList();
             return v;
         }
 
