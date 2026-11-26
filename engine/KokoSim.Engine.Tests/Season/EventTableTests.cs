@@ -174,7 +174,7 @@ events:
             // 秋季地区予選リーグ戦の通過（issue #1133）。
             "district_league_qualified",
             // 公式戦の試合後の会話（issue #1633）。
-            "postgame_win", "postgame_loss",
+            PostgameTalk.WinEventId, PostgameTalk.WinBigEventId, PostgameTalk.LossEventId,
             // 夏の敗退直後の3年引退（issue #954）。IDは SummerRetirement の定数で引く。
             SummerRetirement.PrefectureLossEventId, SummerRetirement.KoshienLossEventId,
             SummerRetirement.KoshienChampionEventId,
@@ -187,6 +187,41 @@ events:
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
+    }
+
+    /// <summary>勝ちの会話の振り分け（issue #1688）。格下に順当勝ち＝あっさり。格上以上・決勝・甲子園＝大喜び。</summary>
+    [Theory]
+    [InlineData(60, 50, false, TournamentKind.Summer, PostgameTalk.WinEventId)]       // 格下・県大会の途中 → あっさり
+    [InlineData(60, 59, false, TournamentKind.Autumn, PostgameTalk.WinEventId)]       // 1点でも下なら格下
+    [InlineData(60, 60, false, TournamentKind.Summer, PostgameTalk.WinBigEventId)]    // 同点（自校以上）→ 大喜び
+    [InlineData(60, 75, false, TournamentKind.Summer, PostgameTalk.WinBigEventId)]    // 格上に勝った
+    [InlineData(60, 30, true, TournamentKind.Summer, PostgameTalk.WinBigEventId)]     // 格下相手でも決勝に勝てば大喜び
+    [InlineData(60, 30, false, TournamentKind.SummerKoshien, PostgameTalk.WinBigEventId)]    // 格下相手でも甲子園
+    [InlineData(60, 30, false, TournamentKind.SenbatsuKoshien, PostgameTalk.WinBigEventId)]  // センバツも甲子園
+    [InlineData(60, 30, false, TournamentKind.Regional, PostgameTalk.WinEventId)]     // 地区大会は甲子園ではない
+    public void PostgameWin_PicksBigOnlyForUpsetFinalOrKoshien(
+        int own, int opponent, bool wonFinal, TournamentKind kind, string expected)
+        => Assert.Equal(expected, PostgameTalk.WinEventFor(own, opponent, wonFinal, kind));
+
+    /// <summary>
+    /// 勝ちの会話の中身（issue #1688）。大喜びはマネージャーだけが話す（主将・部員のせりふを入れない）。
+    /// あっさりは短く（各会話1〜2行）、マネージャーのひとことで終える。
+    /// </summary>
+    [Fact]
+    public void PostgameWin_BigIsManagerOnly_PlainIsShort()
+    {
+        var events = RepositoryEvents().ToDictionary(e => e.Id);
+        foreach (var v in events[PostgameTalk.WinBigEventId].Variants)
+            Assert.All(v.Lines, l => Assert.Equal(EventRoles.TeamManager, l.Who));
+        foreach (var v in events[PostgameTalk.WinEventId].Variants)
+        {
+            Assert.InRange(v.Lines.Count, 1, 2);
+            Assert.All(v.Lines, l => Assert.Equal(EventRoles.TeamManager, l.Who));
+        }
+        // 格下に順当勝ちのあっさり側に、大喜びの文が混ざらない（issue の症状そのもの）。
+        var plain = string.Concat(events[PostgameTalk.WinEventId].Variants.SelectMany(v => v.Lines).Select(l => l.Say));
+        Assert.DoesNotContain("実感", plain);
+        Assert.DoesNotContain("跳ね", plain);
     }
 
     /// <summary>
