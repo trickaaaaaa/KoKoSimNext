@@ -91,8 +91,11 @@ public sealed class InfieldChargeTests
     [Fact]
     public void SlowRoller_ToThePitcher_TurnsFromInfieldHitIntoAnOut()
     {
-        var off = Grounder(12.0, -6.0, Off);
-        var on = Grounder(12.0, -6.0, On);
+        // issue #1685（2026-11-26）でもたつきを平均0.49→0.10秒へ縮めた結果、旧初速12.0m/sでは
+        // チャージ無効（off）でも既にアウトへ寄ってしまい反転が起きなくなったため10.0m/sへ選び直した
+        // （同じ種777・同じ方位-6.0°で off=内野安打→on=アウトの反転を保つ）。
+        var off = Grounder(10.0, -6.0, Off);
+        var on = Grounder(10.0, -6.0, On);
 
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "投手前のボテボテ: 捕球 {0:F3}→{1:F3}s / 走者 {2:F3}s / margin {3:F3}→{4:F3}s / {5}→{6}",

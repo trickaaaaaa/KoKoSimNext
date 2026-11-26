@@ -170,14 +170,24 @@ public sealed record FieldingCoefficients
     /// ミドルの前進上限 4→10m（捕球が早くなる方向）と、半径捕球の処理点を体が届く時刻へ採り直す（遅くなる方向）を
     /// 同時に入れた差し引きが −0.4pt（実測 60,000打席×seed 7/42/2024: 9.0/8.8/9.5%）。0.49 で 9.4/9.3/10.0%
     /// ＝従来水準（9.5/9.1/9.8%）に戻る。</para>
+    ///
+    /// <para><b>0.49 → 0.10（2026-11-26・issue #1685「捕ってから長く球を持つのをやめる」）</b>: 0.49 は
+    /// 内野安打率を合わせるための校正項として肥大しており、守備50で「捕ってから離すまで」が平均1.23秒・
+    /// 上位5%で約2.3秒に達していた（実物の内野手は0.6〜0.9秒・2〜3秒持つ内野手はいない。監督報告）。
+    /// 0.10 なら守備50で平均 0.10+0.70+0.095≈0.90秒・上位5%でも 0.10+0.70+0.30=1.10秒に収まる
+    /// （完了条件「上位5%でも約1.2秒以内」を満たす）。もたつきで埋めていた内野安打の分（旧値比で約35%減）は
+    /// ボテボテ・深い位置・送球の逸れという既存の物理項が相対的に占める比率を上げる形で吸収し
+    /// （issue #759 の内野安打内訳プローブで確認）、失策側の按分（<see cref="ErrorBaseProb"/> 等）を
+    /// 合わせて再校正した。data/coefficients.yaml と同値。</para>
     /// </summary>
-    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.49;
+    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.10;
 
 
     /// <summary>
     /// もたつきの上限（平均の何倍で頭打ちにするか）。指数分布は裾が無限に伸びるので、
     /// 「捕ってから4秒動かない内野手」が極稀に出る。<b>絵に出る量なので実在しない値は切る</b>。
-    /// 3.0 なら 1.4秒＝上位 5.0% が頭打ちで、内野安打率への寄与は 0.1pt 未満（実測）。
+    /// 3.0 なら上位 5.0% が頭打ちで、内野安打率への寄与は 0.1pt 未満（実測）。
+    /// issue #1685 で平均を 0.49→0.10 へ縮めた際も倍率はそのまま流用（上限は 1.47秒→0.30秒に自動で縮む）。
     /// data/coefficients.yaml と同値。
     /// </summary>
     public double InfieldHandleJitterMaxFactor { get; init; } = 3.0;
@@ -209,12 +219,19 @@ public sealed record FieldingCoefficients
     /// 内野安打でなく失策（<see cref="FieldingErrorKind.Bobble"/>）。0以下＝無効（従来どおり内野安打）。
     /// issue #1164（2026-11-20）で 1.3→1.45：失策の種類別按分（捕球48/悪送球34/受け手18・オーナー決定）
     /// に合わせ、按分を食っていたお手玉を閾値を上げて減らした（しきい値を超える確率はその分下がる）。
-    /// 1.47（= InfieldHandleJitterMeanSeconds×InfieldHandleJitterMaxFactor、守備50の頭打ち値）を
-    /// 超えると平均的な守備力の内野手では構造的に発生しなくなる（BobbleErrorTests が5000シード探索で検出）
-    /// ため、その手前に留める。頭打ちは守備倍率を掛けた後に行う（issue #1259）ので、守備51以上でも
+    ///
+    /// <para><b>1.45 → 0.28（2026-11-26・issue #1685）</b>: <see cref="InfieldHandleJitterMeanSeconds"/> を
+    /// 0.49→0.10 へ縮めたため、旧しきい値 1.45 は新しい頭打ち値 0.30（=0.10×3.0）を超えて構造的に発生
+    /// しなくなる（旧コメントの「1.47を超えると出なくなる」と同じ罠）。旧しきい値の「平均の何倍か」
+    /// （1.45/0.49≈2.96倍）を保つ形で 0.10×2.96≈0.296→0.28 へ縮め、しきい値を超える生起確率の形
+    /// （指数分布でおよそ上位5%）を変えないまま頭打ち値の手前に再配置した。0.28秒のもたつきは実物の
+    /// 「お手玉して拾い直す」の所要（0.3秒前後）に近く、1.45秒だった旧値（現実にはありえない長さ）より
+    /// 絵としても筋が通る。失策の種類別按分（捕球＋お手玉／悪送球／受け手）は <see cref="ErrorBaseProb"/>
+    /// 等の再校正で合わせ直した。頭打ちは守備倍率を掛けた後に行う（issue #1259）ので、守備51以上でも
     /// 倍率<1ぶんだけ確率が下がるだけで、0にはならない（単調に減る）。
+    /// </para>
     /// </summary>
-    public double BobbleErrorMinJitterSeconds { get; init; } = 1.45;
+    public double BobbleErrorMinJitterSeconds { get; init; } = 0.28;
 
     /// <summary>
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。
@@ -235,8 +252,17 @@ public sealed record FieldingCoefficients
     /// issue #810（2026-11-09）で 0.0495→0.0400：受け手の捕球ミス(<see cref="ReceiveErrorBaseProb"/>)を三段目として
     /// 新設した分だけ、捕球・送球の両方から再配分し errors_per_game を帯内（1.8–3.6）に保った。
     /// issue #1164（2026-11-20）で 0.0400→0.0220：悪送球(<see cref="ThrowErrorBaseProb"/>)・受け手
-    /// (<see cref="ReceiveErrorBaseProb"/>)へ再配分（失策の種類別按分 捕球48/悪送球34/受け手18・オーナー決定）。</summary>
-    public double ErrorBaseProb { get; init; } = 0.0220;
+    /// (<see cref="ReceiveErrorBaseProb"/>)へ再配分（失策の種類別按分 捕球48/悪送球34/受け手18・オーナー決定）。
+    /// issue #1685（2026-11-26）で 0.0220→0.3100：もたつき圧縮で<see cref="BobbleErrorMinJitterSeconds"/>（お手玉）
+    /// が実質消滅した分を埋め直すために大きく上げた。#1509 の捕球ミス回収レース追加以降、守備50の基準で
+    /// defenseTime の余裕が大きく広がっており（本issueでもたつきを縮めた分も含む）、素の捕球ロールの多くが
+    /// 回収レースで Out へ戻ってしまう＝按分を取り戻すには捕球の素の確率をかなり大きく引き上げる必要があった
+    /// （<see cref="CatchFumbleScatterSigmaM"/> は実物の「グラブ際で弾く距離」から外れない値に留め、こちらで
+    /// 吸収した）。トンネル（<see cref="TunnelShareProb"/>）は捕球ロールの内訳なのでそのままでは比例して
+    /// 増えてしまう＝従来の発生率（≈0.11–0.12/試合）を保つよう同時に下げた。実測（2000試合×seed7/42/99/2024）
+    /// 捕球+お手玉 46–50% / 悪送球 31–35% / 受け手 18–21%（オーナー決定・捕球48/悪送球34/受け手18に復元）、
+    /// errors_per_game 1.83–1.98/試合（帯1.8–3.6内、やや下限寄り）。</summary>
+    public double ErrorBaseProb { get; init; } = 0.3100;
     /// <summary>捕球(Catching−50)あたりのエラー変化（守備が平均より低い側＝弱小の傾き）。急にして弱小同士を大量失策に。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0065;
     /// <summary>守備が平均(50)より高い側の傾き（弱小側 ErrorCatchingSlope と非対称）。緩くして精鋭側に
@@ -278,8 +304,10 @@ public sealed record FieldingCoefficients
     /// issue #1164（2026-11-20）で 0.0280→0.1250：按分が実測で捕球81.4%/悪送球7.9%/受け手10.8%に偏っていた
     /// （お手玉・フライ落球が按分を食っていた）のを、オーナー決定の捕球48/悪送球34/受け手18へ校正
     /// （実測2000試合×seed7/42/99/2024で捕球46.5–49.0%/悪送球32.7–34.2%/受け手16.5–18.9%）。
-    /// 回収レース（<see cref="WildThrowScatterSigmaM"/>）で約半分がアウトに戻る分を見込んで大きく上げた。</summary>
-    public double ThrowErrorBaseProb { get; init; } = 0.1250;
+    /// 回収レース（<see cref="WildThrowScatterSigmaM"/>）で約半分がアウトに戻る分を見込んで大きく上げた。
+    /// issue #1685（2026-11-26）で 0.1250→0.1050：<see cref="ErrorBaseProb"/> を大きく上げて捕球側の按分を
+    /// 復元した分、送球側が相対的に膨らみすぎないよう少し下げて34%前後に揃えた。</summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.1050;
     /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
@@ -311,8 +339,11 @@ public sealed record FieldingCoefficients
     /// 再配分し errors_per_game を帯内（1.8–3.6）に保った（捕球・送球・受け手の按分は概ね48/34/18）。
     /// 一塁手自身が処理した打球（受け手が別にいない）には適用しない。
     /// issue #1164（2026-11-20）で 0.0150→0.0370：悪送球の確率を上げた分、三段目（受け手）に到達する
-    /// 母数が減るので、按分18%を保つため基準確率も上げた。</summary>
-    public double ReceiveErrorBaseProb { get; init; } = 0.0370;
+    /// 母数が減るので、按分18%を保つため基準確率も上げた。
+    /// issue #1685（2026-11-26）で 0.0370→0.0130：捕球側（<see cref="ErrorBaseProb"/>）を大きく上げた分、
+    /// 母数（総失策数）が増えて受け手の絶対件数も連動して増えるため、按分18%を保つには基準確率を下げる
+    /// 必要があった（実測2000試合×seed7/42/99/2024で受け手18.1–21.5%）。</summary>
+    public double ReceiveErrorBaseProb { get; init; } = 0.0130;
 
     // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
     // 守備所要時間へ加算してもう一度同じ判定基準（defenseTime+ForceOutMarginSeconds vs runnerTime）で
@@ -330,8 +361,11 @@ public sealed record FieldingCoefficients
     // ロスを守備所要時間へ加算し、同じ判定基準でもう一度評価する（間に合えばアウトに戻る）。球は捕球点の
     // すぐそばにあるのでバックアップ野手の概念は無く、回収役は常に処理野手自身（RecoveryReactionSeconds を共有）。
     /// <summary>捕球ミス1回あたりのこぼれ幅の標準偏差[m]（半正規分布からサンプル）。送球の逸れ幅
-    /// (<see cref="WildThrowScatterSigmaM"/>)より小さい＝グラブ際で弾く距離は送球が逸れる距離より近い。</summary>
-    public double CatchFumbleScatterSigmaM { get; init; } = 2.5;
+    /// (<see cref="WildThrowScatterSigmaM"/>)より小さい＝グラブ際で弾く距離は送球が逸れる距離より近い。
+    /// issue #1685（2026-11-26）で 2.5→2.8：捕球エラーの按分復元（<see cref="ErrorBaseProb"/>）に伴い
+    /// 回収レースの成立しやすさを少しだけ下げた。1.45→大幅増（例: 6.5）にすると「グラブ際で弾いた球が
+    /// 送球より遠くまで散らばる」という非物理的な絵になるため、小幅な調整に留めた。</summary>
+    public double CatchFumbleScatterSigmaM { get; init; } = 2.8;
 
     // ファウルフライ（issue #830）。打撃の接触判定で「ファウル」になった球（弾道を持たない）のうち、
     // この割合を打ち上がったファウルとして弾道を与え、ファウルグラウンドに落ちる前に野手が届けばアウト。
@@ -368,9 +402,12 @@ public sealed record FieldingCoefficients
     /// <para>0 のときは内訳ロール自体を引かない＝乱数消費順・結果とも完全に従来どおり
     /// （<see cref="ThrowErrorBaseProb"/> と同じ恒等の作法）。正値にすると
     /// 「球が外野へ行ったから走者が還った」という因果が物理層で成立する（不変条件#1）。</para>
+    /// <para>issue #1685（2026-11-26）で 0.30→0.021：<see cref="ErrorBaseProb"/>（捕球ロールの素の確率）を
+    /// 按分復元のため約14倍に上げたぶん、トンネルはその内訳なので何もしなければ同じ倍率で増えてしまう。
+    /// 従来の発生率（≈0.11–0.12/試合）を保つよう比率を下げて打ち消した。</para>
     /// data/coefficients.yaml と同値。
     /// </summary>
-    public double TunnelShareProb { get; init; } = 0.30;
+    public double TunnelShareProb { get; init; } = 0.021;
 
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 

@@ -22,8 +22,13 @@ public class BobbleErrorTests
 
     private static FieldingPlay Resolve(ulong seed, FieldingCoefficients? coeff = null, int fielding = 50)
         => FieldingResolver.ResolveDetailed(
-            // 三遊間の深い所への際どいゴロ（もたつき次第でアウトにもセーフにもなる）
-            new BattedBall { ExitVelocityMps = 28.0, LaunchAngleDeg = 4.0, BearingDeg = -18.0 },
+            // 遊撃の深い所への際どいゴロ（もたつき次第でアウトにもセーフにもなる）。
+            // issue #1685（2026-11-26）でInfieldHandleJitterMeanSeconds 0.49→0.10・
+            // BobbleErrorMinJitterSeconds 1.45→0.28 へ縮めた際に選び直した値（守備50でジッタ無しの
+            // 判定marginが−0.12秒＝0.28秒以上のジッタで安全側へ反転する、お手玉が起きる窓に入る打球）。
+            // 旧値（28.0, -18.0）はジッタの桁が1桁大きかった旧モデル専用の際どさで、縮小後は
+            // margin が−0.6秒前後まで開いてしまい二度と反転しなくなった。
+            new BattedBall { ExitVelocityMps = 19.5, LaunchAngleDeg = 4.0, BearingDeg = -12.0 },
             Field, new Aerodynamics(), BatterAttributes.LeagueAverage,
             Field.StandardAlignment(new FielderAttributes { Fielding = fielding }),
             coeff ?? Coeff, new Xoshiro256Random(seed));

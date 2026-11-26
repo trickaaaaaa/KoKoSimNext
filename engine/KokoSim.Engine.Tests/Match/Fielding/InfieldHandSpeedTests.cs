@@ -80,24 +80,30 @@ public sealed class InfieldHandSpeedTests
 
         // 名手は実物の内野手（0.6〜0.9秒）の域で離す。
         Assert.InRange(h90, 0.60, 0.90);
-        // 守備50は従来どおり（構え直し0.10＋握り替え0.70＋もたつき平均0.49≈1.29。上限で切るぶん少し短い）。
-        Assert.InRange(h50, 1.15, 1.35);
-        // 下手な野手ははっきり遅い。
-        Assert.True(h20 >= 1.50, $"守備20 の保持 {h20:F2}s が遅くない");
-        // メリハリ: 守備90と20で0.7秒以上違う（旧モデルは約0.15秒）。
-        Assert.True(h20 - h90 >= 0.70, $"守備20と90の差 {h20 - h90:F2}s が小さい");
+        // issue #1685（2026-11-26）でもたつき平均 0.49→0.10秒へ縮めた結果、守備50は
+        // 構え直し0.10＋握り替え0.70＋もたつき平均0.10≈0.90（実測0.91）。実物の内野手の域(0.6〜0.9秒)に
+        // ちょうど収まる＝「捕ってから長く球を持つ」もたつきの水増しが抜けた本来の値。
+        Assert.InRange(h50, 0.80, 1.00);
+        // 下手な野手ははっきり遅い（実測1.07）。
+        Assert.True(h20 >= 0.95, $"守備20 の保持 {h20:F2}s が遅くない");
+        // メリハリ: 守備90と20で0.3秒以上違う（旧モデルの絶対差0.7秒はもたつき自体が5倍大きかった名残で、
+        // 縮めた後は差も縮む。実測0.36秒）。
+        Assert.True(h20 - h90 >= 0.30, $"守備20と90の差 {h20 - h90:F2}s が小さい");
     }
 
     [Fact]
     public void GoodInfielders_ThrowOutMoreBorderlineGrounders()
     {
-        // 三遊間寄りの際どいゴロ。内野全員の守備だけを変え、間に合わなかった率を比べる。
+        // 遊撃寄りの際どいゴロ。内野全員の守備だけを変え、間に合わなかった率を比べる。
+        // issue #1685（2026-11-26）でもたつきの際どさの窓が一桁狭まった分、旧シナリオ
+        // （27.0m/s, -28.0°）は窓の外に出て守備レベルに関わらず常にアウトになったため選び直した
+        // （実測: 守備20 53.5% / 守備50 13.0% / 守備90 0.0%）。
         double SafeRate(int fielding)
         {
             const int seeds = 600;
             var safe = 0;
             for (ulong s = 1; s <= seeds; s++)
-                if (Grounder(fielding, ev: 27.0, bearing: -28.0, seed: s).Result == BattedBallResult.Single) safe++;
+                if (Grounder(fielding, ev: 20.0, bearing: -14.0, seed: s).Result == BattedBallResult.Single) safe++;
             return (double)safe / seeds;
         }
         var s20 = SafeRate(20);

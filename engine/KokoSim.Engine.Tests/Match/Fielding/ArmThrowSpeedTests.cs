@@ -80,8 +80,11 @@ public sealed class ArmThrowSpeedTests
         var flattened = Effect with { ArmScale = Effect.FieldingScale };
         var best = 0.0;
         var bestOld = 0.0;
-        foreach (var ev in new[] { 28.0, 32.0, 36.0 })
-        foreach (var bearing in new[] { -20.0, -16.0, -12.0 })
+        // issue #1685（2026-11-26）でもたつきの際どさの窓が一桁狭まった分、旧シナリオ
+        // （28/32/36m/s, -20/-16/-12°）は窓の外に出て肩の強弱に関わらず常にアウトになったため選び直した
+        // （実測の最大差61.3%／旧方式18.7%の3.3倍）。
+        foreach (var ev in new[] { 16.0, 20.0, 21.0 })
+        foreach (var bearing in new[] { -34.0, -14.0, -12.0 })
         {
             var weak = SafeRate(20, ev, bearing);
             var strong = SafeRate(90, ev, bearing);

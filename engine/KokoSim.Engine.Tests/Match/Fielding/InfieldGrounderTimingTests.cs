@@ -131,22 +131,19 @@ public sealed class InfieldGrounderTimingTests
     [Fact]
     public void SlowRoller_ToDeepHole_IsInfieldHit_FarMoreOftenThanARoutineGrounder()
     {
-        // 三遊間の深い所（遊撃の定位置）へ転がる緩いゴロ（初速24m/s＝86km/h）。捕球が2.18秒まで遅れる。
-        // ⚠ 「必ず内野安打」ではない。もたつきを引かなければ送球は 0.07秒 先着する＝**際どい当たり**で、
-        //    守備が一拍でも乱れると抜ける。だから固定の結果ではなく**率**で見る（上の InfieldHitRate）。
-        var slow = InfieldHitRate(24.0, -18.0, Batter());
-        var routine = InfieldHitRate(32.0, -18.0, Batter());
+        // 遊撃の深い所へ転がる緩いゴロ（初速19.3m/s≈70km/h）。
+        // issue #1685（2026-11-26）で InfieldHandleJitterMeanSeconds 0.49→0.10・
+        // BobbleErrorMinJitterSeconds 1.45→0.28 へ縮めたことで、もたつきが作る「際どさの窓」が
+        // 1.47秒幅から0.30秒幅へ一桁狭まった。旧シナリオ（24.0m/s, -18.0°）はこの狭い窓の外へ
+        // 完全に出てしまい（アウトmarginが0.6秒超）、もたつきの大小に関わらず常にアウトになる
+        // ＝率が測れなくなったため選び直した。
+        var slow = InfieldHitRate(19.3, -12.0, Batter());
+        var routine = InfieldHitRate(27.3, -12.0, Batter());
 
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
-            "緩いゴロ(24m/s) 内野安打 {0:P1} / 平凡なゴロ(32m/s) 内野安打 {1:P1}", slow, routine));
+            "緩いゴロ(19.3m/s) 内野安打 {0:P1} / 平凡なゴロ(27.3m/s) 内野安打 {1:P1}", slow, routine));
 
-        // 実測 2026-08-14: 緩いゴロ 41.0% / 同じコースの強いゴロ 15.5%。
-        // 強いゴロが 0 でないのは、深い三遊間はもともと際どい＝守備が乱れれば抜けるから
-        // （母集団全体の内野安打率は 9.5%。ここは「深い所へのゴロ」という難しい一群を見ている）。
-        // ⚠ 緩いゴロの率は issue #630（前進捕球）が入る前は 83.5% だった。チャージは<b>緩いゴロほど
-        // 前へ出る</b>のでここが最も効く＝率が半減するのは #630 の目的どおり（帯もそれに合わせて下げた）。
-        // ⚠ ミドルの前進上限 4→10m（issue middle-infielder-charge-cap・2026-08-18）で遊撃が緩いゴロへ突っ込むように
-        //    なり、緩いゴロ 41.0%→22.0% / 強いゴロ 15.5%→12.0%（母集団の内野安打率はもたつき 0.48→0.49 で水準維持）。
+        // 実測（issue #1685, 2026-11-26）: 緩いゴロ 36.4% / 同じコースの強いゴロ 0.0%。
         Assert.InRange(slow, 0.15, 0.60);
         Assert.True(routine < 0.30, $"強いゴロが {routine:P1} も抜けている");
         Assert.True(slow > routine + 0.08, "緩いゴロと強いゴロで内野安打率が変わっていない（秒軸が効いていない）");
@@ -156,8 +153,9 @@ public sealed class InfieldGrounderTimingTests
     public void FastRunner_AndLeftBatter_BeatTheThrow_OnTheSamePlay()
     {
         // 同じ打球でも、走力・左右で間に合う/間に合わないが入れ替わること（走者側の秒軸が効いている）。
-        // 初速28m/s＝101km/hのやや緩い遊ゴロ＝平均走者ならアウト、快足なら内野安打の際どい当たり。
-        const double Exit = 28.0, Bearing = -6.0;
+        // issue #1685（2026-11-26）でもたつきの際どさの窓が一桁狭まった分、旧シナリオ（28.0m/s, -6.0°）は
+        // 窓の外に出てアウト固定になったため選び直した（初速20.0m/s≈72km/hの遊ゴロ、やや深め）。
+        const double Exit = 20.0, Bearing = -12.0;
         var normal = Grounder(Exit, Bearing, Batter());
         var fast = Grounder(Exit, Bearing, Batter(speed: 92));
         var left = Grounder(Exit, Bearing, Batter(bats: Handedness.Left));
@@ -228,10 +226,14 @@ public sealed class InfieldGrounderTimingTests
         _out.WriteLine(t.ToMarkdown());
 
         Assert.True(t.Grounders > 2000, $"内野ゴロの母数が少なすぎる（{t.Grounders}）");
-        // 実際の内野安打はゴロの6〜7%規模。当ゲームは打率・BABIP帯に合わせて11%前後（#358 実測）。
-        // 上限は「守備の所要時間を水増しして得点環境を作る」回帰（修正前は19.3%）を、
-        // 下限は「オーバーヘッドを削っただけで判定余裕を戻し忘れる」回帰（実測1.5%）を捕まえるためのもの。
-        Assert.InRange(t.InfieldHitShare, 0.05, 0.15);
+        // issue #1685（2026-11-26）: 旧モデルの 9〜11% は「捕ってから長く球を持つ」もたつき
+        // （平均0.49秒・上限1.47秒）が内野安打を水増ししていた分を含む（監督報告）。もたつきを
+        // 現実域（平均0.10秒・上限0.30秒）へ縮めた結果、水増しが抜けて 1〜2% へ下がった
+        // （実測60,000打席×seed7/42/2024で1.2〜1.4%）。balance-targets.yaml にこの指標の帯は無く
+        // （内野安打率そのものは帯で縛っていない）、実際に効くAVG/errors_per_game等は帯内（Heavyで確認済み）。
+        // 上限は「守備の所要時間を水増しして得点環境を作る」回帰（#358 の症状・修正前は19.3%）を、
+        // 下限は「もたつきの仕組み自体が壊れて内野ゴロが常にアウトになる」回帰（実測0%）を捕まえるためのもの。
+        Assert.InRange(t.InfieldHitShare, 0.005, 0.035);
         // 捕ってから離すまでが現実域なら、内野ゴロの大半は余裕を持ったアウトになる。
         Assert.True(t.MarginQuantile(0.50) <= -0.4,
             $"判定margin の中央値 {t.MarginQuantile(0.50):F2}s が境界に寄りすぎ（定位置のゴロが際どくなっている）");
