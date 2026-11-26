@@ -1034,8 +1034,9 @@ namespace KokoSim.Unity.Home
         /// <summary>自校の次戦を自動消化する（要件7「はい」）。結果をフィード化する。</summary>
         public PlayerMatchOutcome PlayMatch()
         {
+            var strength = PreMatchStrength();
             var o = GameSession.Current.PlayMatch();
-            PushMatchFeed(o);
+            PushMatchFeed(o, strength);
             return o;
         }
 
@@ -1045,12 +1046,25 @@ namespace KokoSim.Unity.Home
         /// <summary>ライブ観戦した自校戦の終局結果を大会へ反映し、結果をフィード化する（PlayMatch と同じ通知）。</summary>
         public PlayerMatchOutcome CompleteMatch(KokoSim.Engine.Match.Game.GameResult result)
         {
+            var strength = PreMatchStrength();
             var o = GameSession.Current.CompleteMatch(result);
-            PushMatchFeed(o);
+            PushMatchFeed(o, strength);
             return o;
         }
 
-        private void PushMatchFeed(PlayerMatchOutcome o)
+        /// <summary>
+        /// 試合前の両校の総合力（画面に出す点数）。勝ちの会話の格上/格下の振り分け（issue #1688）に使う。
+        /// 試合の後は成長・調子で自校のロスターが動くので、結果を反映する前に控える。相手が引けなければ null（あっさり側へ倒す）。
+        /// </summary>
+        private static (int Own, int Opponent)? PreMatchStrength()
+        {
+            var opponent = GameSession.Current.Runner?.NextOpponent;
+            if (opponent == null) return null;
+            return (Tiers.DisplayPoints(TeamOverall.Of(RosterService.Active)),
+                    Tiers.DisplayPoints(OpponentRank.ProfileOf(opponent).Overall));
+        }
+
+        private void PushMatchFeed(PlayerMatchOutcome o, (int Own, int Opponent)? strength)
         {
             var verb = o.ManagerWon ? "○ 勝利" : "● 敗戦";
             var items = new List<FeedItem>
@@ -1075,8 +1089,13 @@ namespace KokoSim.Unity.Home
             // 公式戦のあとはマネージャーがひとこと話す（issue #1633）。結果モーダルを閉じたあとに出る＝
             // 大会の締めの会話（DismissResult で積む）より前に並ぶ。保存できない局面で1回だけ積むのでロードで二重にならない。
             // 同じ週に複数試合ある大会でも会話が揃わないよう、日と得点を salt にする。
+            // 勝ちは相手との力関係・大会の段階で大喜び/あっさりを分ける（issue #1688）。
+            var eventId = !o.ManagerWon
+                ? PostgameTalk.LossEventId
+                : PostgameTalk.WinEventFor(
+                    strength?.Own ?? 0, strength?.Opponent ?? int.MinValue, o.IsChampion, GameSession.Current.Kind);
             KokoSim.Unity.Shell.EventService.PushUncapped(
-                o.ManagerWon ? "postgame_win" : "postgame_loss", null, null,
+                eventId, null, null,
                 GameSession.Current.TournamentDay * 31 + o.ManagerScore * 7 + o.OpponentScore);
         }
 
