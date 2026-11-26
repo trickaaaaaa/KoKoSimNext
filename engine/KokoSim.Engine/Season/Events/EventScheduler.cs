@@ -150,6 +150,12 @@ public sealed class EventScheduler
     public Func<bool>? ObFilter { get; set; }
 
     /// <summary>
+    /// 講習会の費用を払える資金が部費にあるか（issue #1483）。足りない年は講習会の誘いを出さない。
+    /// <b>未設定（null）のときは出さない</b>＝監督を持たないヘッドレスシムには出ない（帯・ゴールデン不変）。
+    /// </summary>
+    public Func<bool>? SeminarFundsFilter { get; set; }
+
+    /// <summary>
     /// 年度末に転任の抽選がある教員監督なら、そのときの信頼度の段（issue #1606）。抽選が無い年・フリー監督は null。
     /// 校長の会話は<b>この関数が null でない年だけ</b>出し、段に合う会話だけを選ぶ。
     /// <b>未設定（null）のときは出さない</b>＝監督を持たないヘッドレスシムには出ない（帯・ゴールデン不変）。
@@ -163,6 +169,7 @@ public sealed class EventScheduler
     {
         if (e.RequiresTransferDraw && TransferHintFilter?.Invoke() == null) return false;
         if (e.RequiresOb && ObFilter is { } ob && !ob()) return false;
+        if (e.RequiresSeminarFunds && SeminarFundsFilter?.Invoke() != true) return false;
         if (e.RequiresGraduatingClass && GraduatingClassFilter is { } graduating && !graduating()) return false;
         if (CastFilter is { } cast && e.Cast != EventCast.Default && !cast(e)) return false;
         if (e.RequiresRegion is { } need && Region != need) return false;

@@ -61,6 +61,7 @@ public static class EventTableParser
         int? calendarWeek = null;
         var requiresGraduatingClass = false;
         var requiresOb = false;
+        var requiresSeminarFunds = false;
         string? textNoOb = null;
         var elemRequiresOb = false;
         var requiresTransferDraw = false;
@@ -151,6 +152,7 @@ public static class EventTableParser
                 RequiresRegion = ParseRegion(region),
                 RequiresGraduatingClass = requiresGraduatingClass,
                 RequiresOb = requiresOb,
+                RequiresSeminarFunds = requiresSeminarFunds,
                 RequiresTransferDraw = requiresTransferDraw,
                 TextWithoutOb = textNoOb,
                 Scene = ParseScene(scene),
@@ -166,6 +168,7 @@ public static class EventTableParser
             calendarWeek = null;
             requiresGraduatingClass = false;
             requiresOb = false;
+            requiresSeminarFunds = false;
             requiresTransferDraw = false;
             textNoOb = null;
             weight = 1.0;
@@ -252,6 +255,7 @@ public static class EventTableParser
                     if (listKind == "variants" && elemOpen) elemRequiresOb = value == "true";
                     else requiresOb = value == "true";
                     break;
+                case "requires_seminar_funds": requiresSeminarFunds = value == "true"; break;
                 case "requires_transfer_draw": requiresTransferDraw = value == "true"; break;
                 case "transfer_hint": elemTransferHint = ParseTransferHint(value, id); break;
                 case "hint": elemPersonalityHint = ParseStance(value); break;
@@ -330,6 +334,8 @@ public static class EventTableParser
         "as_usual" => EventStance.AsUsual,
         "camp_join" => EventStance.CampJoin,
         "camp_skip" => EventStance.CampSkip,
+        "seminar_join" => EventStance.SeminarJoin,
+        "seminar_skip" => EventStance.SeminarSkip,
         _ => throw new FormatException($"stance に未知の語: {v}"),
     };
 

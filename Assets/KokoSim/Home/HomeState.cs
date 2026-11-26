@@ -319,10 +319,28 @@ namespace KokoSim.Unity.Home
                 if (visitor != null) subjectName = visitor.Name;
             }
 
+            // 会話に出す中身（issue #1483）: 大敗＝気づいた弱点分野とその学び・名将＝戦った名将の学校名。
+            var extra = new Dictionary<string, string>();
+            foreach (var n in notices)
+            {
+                if (n.Type != lead) continue;
+                if (n.Area is KokoSim.Engine.Career.CoachingArea area)
+                {
+                    extra["area"] = ManagerGrowthText.AreaLabel(area);
+                    extra["lesson"] = ManagerGrowthText.Lesson(area);
+                }
+                break;
+            }
+            if (lead == KokoSim.Engine.Career.ManagerGrowthEventType.FamousRivalLesson)
+                extra["rival"] = string.IsNullOrEmpty(KokoSim.Unity.Shell.ManagerService.LastPowerhouseName)
+                    ? "名門校" : KokoSim.Unity.Shell.ManagerService.LastPowerhouseName;
+
             KokoSim.Unity.Shell.EventService.Push(
                 ManagerGrowthText.EventId(lead),
                 subjectName,
-                ManagerGrowthText.Effect(delta));
+                ManagerGrowthText.Effect(delta),
+                0,
+                extra);
         }
 
         /// <summary>

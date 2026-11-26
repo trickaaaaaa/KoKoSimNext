@@ -32,6 +32,8 @@
 #   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 1年生の人数（新入部員）
 #   {injury} 故障名の話し言葉（「足首の捻挫」）／ {weeks} 全治までの週数 …… injury_occurred だけが渡す（issue #695）
 #   {other} 選手間イベントの相手（cast: other: で選ぶ。issue #945）
+#   {area} 指導力の分野（打撃/投手/守備走塁）／{lesson} その分野で学んだこと（1文）／{rival} 戦った名将の学校名／{seminar_cost} 講習会の費用[万円]／{seminar_boost} 講習会で上がる量
+#       …… mgr_big_loss（{area}{lesson}）・mgr_rival_lesson（{rival}）・coaching_seminar（全部）だけが渡す（issue #1483）
 #   {camp_cost} 合宿の費用[万円] ／ {camp_weeks} 合宿の期間[週] ／ {camp_mult} 合宿の経験値の倍率 …… summer_camp / winter_camp だけが渡す（issue #1482）
 #   {koshien} {senbatsu} {jingu} ほか 大会名（data/display-names.yaml の表から入る。issue #1319）。
 #     実在の大会名は文に直接書かない＝表を替えると全部の文が替わる。「甲子園の土」も {koshien}の土 と書く
@@ -353,6 +355,69 @@ events:
             say: "今年はどこも即戦力を欲しがっています。高校生は下位まで残るかと。"
           - who: team_manager
             say: "順位はどうでも、行けるかどうかですね。"
+
+  # 指導者講習会（issue #1483）。冬のオフにマネージャーが「参加しますか？」と聞く＝費用・テーマ・効果を先に見せて、参加／見送りを選ぶ。
+  # 参加すれば確定でテーマの分野の指導力が上がる（抽選なし）。見送れば費用なし・何も起きない。
+  # 費用を払える資金があるときだけ出る（requires_seminar_funds）。テーマは年度ごとに決まる（打撃/投手/守備走塁）。
+  # 費用・上がる量は coefficients.yaml が正典＝文に数字を直書きしない（{seminar_cost}{seminar_boost}）。
+  # 結果行（○○指導が上がった・部費が減った）は提示層が実際に動いた量で足す。好転/悪化は無い（improve_prob: 1.0）。
+  - id: coaching_seminar
+    kind: Fixed
+    scene: office
+    calendar_week: 42
+    requires_seminar_funds: true
+    text: "指導者講習会の案内が届いた。マネージャーが、参加するか聞いてきた。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "監督、指導者講習会の案内が届いています。今年のテーマは{area}です。"
+          - who: team_manager
+            say: "費用は部費から{seminar_cost}万円。参加すれば、{area}の指導力が{seminar_boost}上がります。"
+          - who: team_manager
+            say: "どうしますか、監督。"
+      - lines:
+          - who: narration
+            say: "オフの週末に、他校の監督も集まる講習会がある。今年の題は{area}だ。"
+          - who: team_manager
+            say: "参加費は部費から{seminar_cost}万円です。出れば、{area}の指導力が{seminar_boost}上がるそうです。"
+          - who: team_manager
+            say: "行きますか？"
+    choices:
+      - stance: seminar_join
+        label: "講習会に参加する"
+        improve_prob: 1.0
+      - stance: seminar_skip
+        label: "今年は見送る"
+        improve_prob: 1.0
+    outcomes:
+      - stance: seminar_join
+        result: improved
+        lines:
+          - who: narration
+            say: "オフの週末、他校の監督たちに混じって、また生徒の側に座っている。講義の題は{area}。"
+          - who: team_manager
+            say: "講習、どうでしたか。"
+          - who: team_manager
+            say: "配られた資料には「{lesson}」とありました。部員にも伝えられそうですね。"
+      - stance: seminar_join
+        result: improved
+        lines:
+          - who: team_manager
+            say: "監督、講習の資料が部室に置いてありました。{area}の章ですね。"
+          - who: narration
+            say: "{lesson}の項に、赤い線が何本も引いてあった。"
+      - stance: seminar_skip
+        result: improved
+        lines:
+          - who: team_manager
+            say: "分かりました。今年の講習は見送って、部費は取っておきます。"
+      - stance: seminar_skip
+        result: improved
+        lines:
+          - who: captain
+            say: "講習会、行かないんですか。……いえ、監督が決めたことなら。"
+          - who: narration
+            say: "案内の封筒は、机の端にしまわれた。"
 
   # 3月の転任判定（総括週＝第46週・ManagerTransferModel）の前に、校長が学校の見方を匂わせる（issue #1606・設計書04 §1.3）。
   # 出るのは「教員監督で、この年度末に残留の抽選がある」年だけ（requires_transfer_draw。判定は engine の TransferHint.TierFor）。
@@ -1238,24 +1303,29 @@ events:
           - who: team_manager
             say: "ええ。{koshien}のあとからです。"
 
+  # 強さティアS/Aの学校（公式戦・練習試合を問わず）と戦った年に起きる（issue #1483）。{rival} は戦った学校名。
+  # 名将から何を教わったか（采配＝代え時・サインの出しどころ）を会話で言い切る。結果行（采配が上がった）は提示層が足す。
   - id: mgr_rival_lesson
     kind: System
     scene: ground
-    text: "名将との練習試合で学びがあった。"
+    text: "名将との一戦で、采配を教わった。"
     variants:
       - lines:
+          - who: narration
+            say: "{rival}との試合のあと、相手の名将が、ベンチの端でノートを開いて何か話していた。"
           - who: team_manager
-            say: "完敗でしたね。点差以上に、やられた感じがします。"
-          - who: manager
-            say: "同じ場面で、向こうはもう一枚代えていたな。"
+            say: "監督が教わっていたのは、投手の代え時でした。打たれてから替えるのでは遅い、と。"
           - who: team_manager
-            say: "ええ。ノートに書いておきます。"
+            say: "サインを出す場面の絞り方も、聞いていましたよ。ノートに書いておきます。"
       - lines:
           - who: narration
-            say: "試合後、相手の監督と長く立ち話をしていた。部員たちは片付けの手を止めて眺めていた。"
+            say: "試合後、{rival}の監督が、監督のノートを覗き込んで赤を入れていた。"
           - who: captain
-            say: "監督、何話してたんですか。"
+            say: "監督があんなに頭を下げてるの、初めて見ました。"
+          - who: team_manager
+            say: "一球ごとの間の取り方と、盗塁を警戒する見方を教わったそうです。次の試合から効きますね。"
 
+  # その年に大差負けがあった年に起きる（issue #1483）。{area} は指導力がいちばん低かった分野、{lesson} はそこで学び直すこと。
   - id: mgr_big_loss
     kind: System
     scene: office
@@ -1263,36 +1333,18 @@ events:
     variants:
       - lines:
           - who: narration
-            say: "勝てないまま一年が終わった。ノートには反省ばかりが並んでいる。"
+            say: "大差で負けた試合のあと、ノートを見返した。{area}の欄だけ、書き込みが極端に少ない。"
           - who: team_manager
-            say: "監督、来年の練習メニュー、一度全部見直しませんか。"
+            say: "監督、来年は{area}の教え方を一度全部見直しませんか。"
           - who: manager
-            say: "そうしよう。"
+            say: "そうしよう。{lesson}から、俺が学び直す。"
       - lines:
           - who: captain
-            say: "監督。……来年は、勝ちましょう。"
+            say: "監督。あの負けは、{area}の差でした。"
+          - who: team_manager
+            say: "{lesson}を、一から組み直してはどうでしょう。"
           - who: manager
             say: "ああ。まず俺が直す。"
-
-  - id: mgr_seminar
-    kind: System
-    scene: office
-    text: "指導者講習会に参加した。"
-    variants:
-      - lines:
-          - who: narration
-            say: "オフの週末、他校の監督たちに混じって、また生徒の側に座っている。"
-          - who: team_manager
-            say: "講習、どうでしたか。"
-          - who: manager
-            say: "半分は知っていた。残り半分が収穫だ。"
-          - who: team_manager
-            say: "その半分、今度教えてください。"
-      - lines:
-          - who: team_manager
-            say: "監督、講習の資料、部室に置いてありましたよ。読んでいいですか。"
-          - who: manager
-            say: "もちろん。"
 
   # プロ入りした自分の教え子（教え子名鑑）が訪ねてくる（issue #1615）。{player} は名鑑から選んだ教え子の名前。
   # 名鑑が空の間は起こさない（ManagerGrowthEvents.Yearly の hasProProtege）。

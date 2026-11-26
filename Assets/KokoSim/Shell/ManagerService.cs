@@ -107,7 +107,12 @@ namespace KokoSim.Unity.Shell
         // 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと）。大会の確定時に積み、年度末の成長で畳み込んで消費する
         // （2026-08-15・issue #170 の実ゲーム配線）。engine の CareerEngine（sim）と同じ FameUpsetModel を通す。
         private static readonly List<double> _pendingUpsetDeltas = new List<double>();
+        // 今年度に大差負けがあったか／最初に戦った強さティア S/A の学校（大敗からの学び・名将との練習試合の条件。
+        // 公式戦・練習試合を問わず、年度末の総括で落とす。issue #1483）。
+        private static bool _yearBlowoutLoss;
+        private static int _yearPowerhouseSchoolId = -1;
         private static readonly CareerCoefficients CareerCoeff = new CareerCoefficients();
+        private static readonly ManagerGrowthCoefficients GrowthCoeff = new ManagerGrowthCoefficients();
 
         /// <summary>
         /// 監督メタ・資金の係数（C#既定＝<c>data/coefficients.yaml career:</c> と同値・不変条件#4）。
@@ -149,7 +154,46 @@ namespace KokoSim.Unity.Shell
             _grownKoshienWinsBaseline = 0;
             _pendingDraftFame = 0;
             _pendingUpsetDeltas.Clear();
+            _yearBlowoutLoss = false;
+            _yearPowerhouseSchoolId = -1;
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
+        }
+
+        /// <summary>
+        /// 自校の1試合（公式戦・練習試合）の結果から、監督成長の条件を控える（issue #1483）。
+        /// 大差負け＝大敗からの学び、強さティア S/A の相手＝名将との練習試合の条件。乱数を引かない。
+        /// </summary>
+        public static void RecordMatchForGrowth(KokoSim.Engine.Nation.School opponent, bool blowoutLoss)
+        {
+            if (blowoutLoss) _yearBlowoutLoss = true;
+            if (opponent != null && _yearPowerhouseSchoolId < 0 && ManagerGrowthEvents.IsPowerhouse(opponent.Tier))
+                _yearPowerhouseSchoolId = opponent.Id;
+        }
+
+        /// <summary>直近の総括の年度に最初に戦った強さティア S/A の学校の名前（名将との練習試合の会話に出す）。無ければ null。</summary>
+        public static string LastPowerhouseName { get; private set; }
+
+        /// <summary>今年度ここまでに最初に戦った強さティア S/A の学校の名前。無ければ null。</summary>
+        public static string PowerhouseSchoolName
+            => _yearPowerhouseSchoolId < 0 ? null : NationService.SchoolById(_yearPowerhouseSchoolId)?.Name;
+
+        /// <summary>講習会の費用[万円]・上がる量（係数の正典。文に数字を直書きしない）。</summary>
+        public static ManagerGrowthCoefficients GrowthCoefficients => GrowthCoeff;
+
+        /// <summary>今年の講習会のテーマ。母種＋年度の独立ストリームで決まる＝同じ年なら同じ（不変条件#2）。</summary>
+        public static CoachingArea SeminarThemeThisYear()
+            => ManagerGrowthEvents.SeminarTheme(
+                new Xoshiro256Random(GameSeed.Master ^ (0xA6A9_0000UL ^ (ulong)GameClock.YearIndex)));
+
+        /// <summary>講習会の費用を払えるか（誘いを出す条件・参加できる条件）。</summary>
+        public static bool CanAttendSeminar => ManagerGrowthEvents.CanAttendSeminar(Manager, GrowthCoeff);
+
+        /// <summary>講習会に参加する（費用を引き、今年のテーマの指導力が上がる）。払えなければ何もしない。</summary>
+        public static bool AttendSeminar()
+        {
+            if (!CanAttendSeminar) return false;
+            ManagerGrowthEvents.AttendSeminar(Manager, SeminarThemeThisYear(), GrowthCoeff);
+            return true;
         }
 
         /// <summary>
@@ -203,6 +247,8 @@ namespace KokoSim.Unity.Shell
             s.ManagerGrownKoshienWinsBaseline = _grownKoshienWinsBaseline;
             s.ManagerPendingDraftFame = _pendingDraftFame;
             s.ManagerPendingUpsetDeltas = new List<double>(_pendingUpsetDeltas);
+            s.ManagerBlowoutLossThisYear = _yearBlowoutLoss;
+            s.ManagerPowerhouseSchoolId = _yearPowerhouseSchoolId;
             s.PracticeLastPlayedWeek = _practice?.LastPlayedWeek;
         }
 
@@ -219,6 +265,8 @@ namespace KokoSim.Unity.Shell
             _pendingDraftFame = s.ManagerPendingDraftFame;
             _pendingUpsetDeltas.Clear();
             if (s.ManagerPendingUpsetDeltas != null) _pendingUpsetDeltas.AddRange(s.ManagerPendingUpsetDeltas);
+            _yearBlowoutLoss = s.ManagerBlowoutLossThisYear;
+            _yearPowerhouseSchoolId = s.ManagerPowerhouseSchoolId;
             _practice = null;
             if (s.PracticeLastPlayedWeek.HasValue) Practice.Restore(s.PracticeLastPlayedWeek);
             ContractRenewalService.Clear();
@@ -290,9 +338,18 @@ namespace KokoSim.Unity.Shell
                 nationalStageWins: nationalStageWins, draftFameGain: draftFameGain,
                 // 教え子（プロ入りした自分の教え子）の訪問は、名鑑に1人以上いるときだけ（issue #1615）。
                 hasProProtege: DraftService.History.Count > 0,
-                campSkips: GameSession.Current.CampSkips);
+                campSkips: GameSession.Current.CampSkips,
+                // 大敗の学びは今年度に大差負けがあった年・名将との練習試合は強さティア S/A と戦った年だけ（issue #1483）。
+                hadBlowoutLoss: _yearBlowoutLoss,
+                facedPowerhouse: _yearPowerhouseSchoolId >= 0,
+                // 講習会は冬のオフにその場で聞いて適用済み（EventService.Choose）。年度末では二重に払わない。
+                attendSeminar: false);
             // 見送った合宿の費用は引いた。次の年度は「行う」から（issue #1482）。
             GameSession.Current.ResetCampSkips();
+            // 年内の記録は総括で使い切る。名将の名前だけは総括の会話（名将との練習試合）に出すので控えてから落とす。
+            LastPowerhouseName = PowerhouseSchoolName;
+            _yearBlowoutLoss = false;
+            _yearPowerhouseSchoolId = -1;
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 

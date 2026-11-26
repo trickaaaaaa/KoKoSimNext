@@ -205,7 +205,7 @@ public sealed class ContractRenewalTests
 
         // 勝数0の年は信頼度が TrustPoorSeasonPenalty だけ下がる＝見込みの前提（総括前の信頼度）を総括後に合わせて比べる。
         var m = new Manager { Funds = 500, Trust = 50, Fame = 10 };
-        ManagerSeasonUpdate.Apply(m, false, false, 0, new Xoshiro256Random(7), contracts: Catalog.Aggregate(set));
+        ManagerSeasonUpdate.Apply(m, false, false, 0, new Xoshiro256Random(7), contracts: Catalog.Aggregate(set), attendSeminar: false);
 
         Assert.Equal(m.Funds, CareerEngine.ProjectedFunds(500, m.Trust, m.Fame, contractCost, c), 6);
     }

@@ -34,6 +34,42 @@ namespace KokoSim.Unity.Shell
             }
         }
 
+        /// <summary>指導力の分野の呼び名（「打撃」「投手」「守備走塁」。会話の {area}・結果行の「○○指導」）。</summary>
+        public static string AreaLabel(CoachingArea a)
+        {
+            switch (a)
+            {
+                case CoachingArea.Batting: return "打撃";
+                case CoachingArea.Pitching: return "投手";
+                default: return "守備走塁";
+            }
+        }
+
+        /// <summary>その分野の指導力の値（結果行を実際に動いた量で書くために前後を測る）。</summary>
+        public static double CoachingOf(Manager m, CoachingArea a)
+        {
+            switch (a)
+            {
+                case CoachingArea.Batting: return m.CoachingBatting;
+                case CoachingArea.Pitching: return m.CoachingPitching;
+                default: return m.CoachingDefense;
+            }
+        }
+
+        /// <summary>
+        /// 講習会・大敗の振り返りで「その分野の何を学んだか」の1文（会話の {lesson}）。
+        /// 具体的な中身を言い切ることで、指導力がなぜ上がったかが分かる（issue #1483）。
+        /// </summary>
+        public static string Lesson(CoachingArea a)
+        {
+            switch (a)
+            {
+                case CoachingArea.Batting: return "ボールを呼び込む間と、振り出しの順番";
+                case CoachingArea.Pitching: return "下半身の使い方と、球数の割り振り";
+                default: return "中継の声かけと、先の塁を読む目";
+            }
+        }
+
         /// <summary>data/events.yaml のイベントID。</summary>
         public static string EventId(ManagerGrowthEventType t)
         {
@@ -44,7 +80,7 @@ namespace KokoSim.Unity.Shell
                 case ManagerGrowthEventType.ProObVisit: return "mgr_pro_ob";
                 case ManagerGrowthEventType.FamousRivalLesson: return "mgr_rival_lesson";
                 case ManagerGrowthEventType.LessonFromBigLoss: return "mgr_big_loss";
-                default: return "mgr_seminar";
+                default: return "coaching_seminar";   // 講習会は実ゲームでは冬に本人へ聞く（年度末の総括には載らない）
             }
         }
 

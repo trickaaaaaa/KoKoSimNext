@@ -101,6 +101,16 @@ public sealed class SaveState
     /// </summary>
     public List<double> ManagerPendingUpsetDeltas { get; set; } = new();
     /// <summary>
+    /// 今年度に大差負け（<see cref="Season.MatchConditionModel.IsBlowoutLoss"/>）があったか（大敗からの学びの条件・issue #1483・v51）。
+    /// 年度末の総括で落とす。旧セーブは false。
+    /// </summary>
+    public bool ManagerBlowoutLossThisYear { get; set; }
+    /// <summary>
+    /// 今年度に最初に戦った強さティア S/A の学校の ID（名将との練習試合の条件・issue #1483・v51）。未対戦は -1。
+    /// 年度末の総括で落とす。旧セーブは -1。
+    /// </summary>
+    public int ManagerPowerhouseSchoolId { get; set; } = -1;
+    /// <summary>
     /// 最後に練習試合を消化した絶対週（未消化は null）。「週1回まで」の判定を保存→読込で消さないための値。
     /// v36 で追加（issue #1114）。
     /// </summary>

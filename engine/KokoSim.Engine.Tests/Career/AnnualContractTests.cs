@@ -197,7 +197,7 @@ public sealed class AnnualContractTests
         var m = Fresh();
         var before = m.Funds;
 
-        ManagerSeasonUpdate.Apply(m, false, false, 3, new Xoshiro256Random(1234));
+        ManagerSeasonUpdate.Apply(m, false, false, 3, new Xoshiro256Random(1234), attendSeminar: false);
 
         var expected = before
                        + c.AnnualBudgetBase + c.BudgetPerTrust * m.Trust

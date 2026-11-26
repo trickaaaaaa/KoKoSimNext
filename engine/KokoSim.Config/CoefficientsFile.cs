@@ -2000,7 +2000,6 @@ public static class CoefficientsLoader
         public double FamousRivalBoost { get; set; } = D.FamousRivalBoost;
         public double BigLossProb { get; set; } = D.BigLossProb;
         public double BigLossBoost { get; set; } = D.BigLossBoost;
-        public double SeminarProb { get; set; } = D.SeminarProb;
         public double SeminarBoost { get; set; } = D.SeminarBoost;
         public double SeminarCost { get; set; } = D.SeminarCost;
         public double ProObVisitBaseProb { get; set; } = D.ProObVisitBaseProb;
@@ -2017,7 +2016,6 @@ public static class CoefficientsLoader
             FamousRivalBoost = FamousRivalBoost,
             BigLossProb = BigLossProb,
             BigLossBoost = BigLossBoost,
-            SeminarProb = SeminarProb,
             SeminarBoost = SeminarBoost,
             SeminarCost = SeminarCost,
             ProObVisitBaseProb = ProObVisitBaseProb,
