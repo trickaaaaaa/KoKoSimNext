@@ -41,7 +41,7 @@ public static class AceRestSelector
         var prob = Math.Clamp(score, ai.AceRestFloor, ai.AceRestCap);
 
         var roll = new Xoshiro256Random(
-            0xACE5_0000UL ^ (ulong)(uint)school.Id ^ ((ulong)(uint)context.MatchDay << 24) ^ context.Salt).NextDouble();
+            TournamentForkKeys.AceRestSeed ^ (ulong)(uint)school.Id ^ ((ulong)(uint)context.MatchDay << 24) ^ context.Salt).NextDouble();
         return roll < prob;
     }
 

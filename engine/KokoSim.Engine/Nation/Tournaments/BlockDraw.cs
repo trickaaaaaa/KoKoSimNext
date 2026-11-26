@@ -15,7 +15,7 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public static class BlockDraw
 {
     /// <summary>ブロック抽選の Fork ストリームID（本流・試合の Fork と衝突しない固定値）。</summary>
-    public const ulong DrawStreamId = 0xB10C_D2A3UL;
+    public const ulong DrawStreamId = TournamentForkKeys.BlockDraw;
 
     /// <param name="seedRank">夏の順位（0＝優勝。小さいほど上位）。null を返す学校は抽選側。関数自体が null＝全校抽選。</param>
     public static IReadOnlyList<IReadOnlyList<School>> Split(

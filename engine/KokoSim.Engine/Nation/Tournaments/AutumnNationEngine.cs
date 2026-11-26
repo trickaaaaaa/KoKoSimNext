@@ -82,16 +82,11 @@ public static class AutumnNationEngine
             return new AutumnPrefectureResult(pref.Id, pref.Name, regionRomaji, solePlacement, field.Count);
         }
 
-        IBackgroundMatchResolver? bg = resolution == SummerResolution.ChampionsOnly
-            ? null
-            : new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
-                afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier);
-        var prefRng = rng.Fork(0xACE0_0000UL ^ (uint)pref.Id);
-        var runner = TournamentRunner.Spectated(
-            field, coeff, prefRng, schedule, $"{pref.Name}大会", backgroundResolver: bg, thirdPlaceMatch: true);
-
-        runner.DrainBracketResolution();
-        var matches = runner.BuildBracketView().Matches;
+        var prefRng = rng.Fork(TournamentForkKeys.AutumnPrefectureStream(pref.Id));
+        var matches = PrefectureTournamentRun.Run(
+            field, $"{pref.Name}大会", prefRng, rosters, ctx, coeff, schedule, yearIndex, stats,
+            modernRules, calendarYear, brains, afterMatch, resolution, useRegionalStadiumTier,
+            summerStadiums: false, thirdPlaceMatch: true).Matches;
         var byId = field.ToDictionary(s => s.Id);
         var placement = KnockoutPlacement.FromMatches(matches, id => byId[id]);
         return new AutumnPrefectureResult(
