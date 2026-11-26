@@ -55,7 +55,7 @@ public sealed class ScoutedTeamProfileTests
         var team = StrengthTeamFactory.ForSchool(s, yearIndex: 0);
         var overall = ScoutedTeamProfile.Compute(team, C).Overall;
 
-        Assert.Equal(Tiers.FromStrength(overall), ScoutedTeamProfile.OverallTier(team, C));
+        Assert.Equal(Tiers.FromDisplayed(overall), ScoutedTeamProfile.OverallTier(team, C));
         Assert.NotEqual(s.Tier, ScoutedTeamProfile.OverallTier(team, C));
     }
 }

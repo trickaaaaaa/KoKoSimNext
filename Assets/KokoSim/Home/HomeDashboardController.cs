@@ -585,7 +585,7 @@ namespace KokoSim.Unity.Home
             rank.Add(UiComponents.RankChip(r.TierLetter, RankChipSize.Small));
             row.Add(rank);
 
-            var power = new Label(((int)System.Math.Round(r.Strength)).ToString());
+            var power = new Label(KokoSim.Engine.Nation.Tiers.DisplayPoints(r.Strength).ToString());
             power.AddToClassList("xt-c-power");
             power.AddToClassList("f-num");   // 純数値セル＝コンデンス体（書体3役, 設計書16）
             row.Add(power);
@@ -615,7 +615,7 @@ namespace KokoSim.Unity.Home
             if (facts != null)
             {
                 facts.Clear();
-                facts.Add(XtFact("総合", ((int)System.Math.Round(picked.Strength)).ToString()));
+                facts.Add(XtFact("総合", KokoSim.Engine.Nation.Tiers.DisplayPoints(picked.Strength).ToString()));
             }
 
             if (_xtOk != null) _xtOk.text = picked.IsStay ? "残留する" : "この学校へ赴任する";

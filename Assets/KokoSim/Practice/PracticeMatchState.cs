@@ -81,7 +81,7 @@ namespace KokoSim.Unity.Practice
             var v = new PracticeMatchView
             {
                 WeekLabel = GameClock.CurrentLabel(),
-                OwnLabel = own.Name + "　総合 " + own.Tier + "（" + (int)Math.Round(own.Strength) + "）",
+                OwnLabel = own.Name + "　総合 " + own.Tier + "（" + Tiers.DisplayPoints(own.Strength) + "）",
                 CostText = "¥" + scheduler.Cost.ToString("0") + "万",
             };
 
@@ -186,8 +186,8 @@ namespace KokoSim.Unity.Practice
             var d = new PracticeOpponentDetail
             {
                 Name = s.Name,
-                Overall = (int)Math.Round(strength.Overall),
-                TierLetter = Tiers.FromStrength(strength.Overall).ToString(),
+                Overall = Tiers.DisplayPoints(strength.Overall),
+                TierLetter = Tiers.FromDisplayed(strength.Overall).ToString(),
                 AcceptPercent = Percent(ManagerService.Practice.AcceptChance(ManagerService.Manager, own, s)),
             };
 
@@ -207,11 +207,11 @@ namespace KokoSim.Unity.Practice
         private static void Add(PracticeOpponentDetail d, string label, double value)
         {
             var pct = (float)Math.Max(0.0, Math.Min(1.0, value / 100.0));
-            var grade = Tiers.FromStrength(value).ToString();
+            var grade = Tiers.FromDisplayed(value).ToString();
             d.Factors.Add(new AbilityBar
             {
                 Label = label,
-                Value = (int)Math.Round(value),
+                Value = Tiers.DisplayPoints(value),
                 Grade = grade,
                 Pct = pct,
             });
@@ -219,7 +219,7 @@ namespace KokoSim.Unity.Practice
             {
                 Label = label,
                 Value01 = pct,
-                ValueText = ((int)Math.Round(value)).ToString(),
+                ValueText = Tiers.DisplayPoints(value).ToString(),
             });
         }
 
@@ -229,8 +229,8 @@ namespace KokoSim.Unity.Practice
         {
             SchoolId = s.Id,
             Name = s.Name,
-            TierLetter = Tiers.FromStrength(Profile(s).Overall).ToString(),
-            Overall = (int)Math.Round(Profile(s).Overall),
+            TierLetter = Tiers.FromDisplayed(Profile(s).Overall).ToString(),
+            Overall = Tiers.DisplayPoints(Profile(s).Overall),
             Tradition = TraditionLabel(s.Tradition),
             AcceptPercent = Percent(scheduler.AcceptChance(manager, own, s)),
             PrefectureName = prefName,

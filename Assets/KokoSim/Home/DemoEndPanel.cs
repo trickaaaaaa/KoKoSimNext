@@ -80,8 +80,8 @@ namespace KokoSim.Unity.Home
                 var overall = TeamOverall.Of(RosterService.Active);
                 var team = new VisualElement();
                 team.AddToClassList("de-row__v");
-                team.Add(UiComponents.RankChipLegacy(Tiers.FromStrength(overall).ToString()));
-                var num = new Label(overall.ToString("0"));
+                team.Add(UiComponents.RankChipLegacy(Tiers.FromDisplayed(overall).ToString()));
+                var num = new Label(Tiers.DisplayPoints(overall).ToString());
                 num.AddToClassList("de-num");
                 num.AddToClassList("f-num");
                 team.Add(num);

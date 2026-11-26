@@ -105,7 +105,7 @@ namespace KokoSim.Unity.Shell
                     SchoolName = NationService.ManagerSchoolName,
                     PrefectureName = NationService.PrefectureName(NationService.PrefectureId),
                     Strength = self.Strength,
-                    TierLetter = Tiers.FromStrength(self.Strength).ToString(),
+                    TierLetter = Tiers.FromDisplayed(self.Strength).ToString(),
                 });
             }
 
@@ -118,7 +118,7 @@ namespace KokoSim.Unity.Shell
                     SchoolName = NationService.DisplayName(c.SchoolId, c.SchoolName),
                     PrefectureName = NationService.PrefectureName(c.PrefectureId),
                     Strength = c.Strength,
-                    TierLetter = Tiers.FromStrength(c.Strength).ToString(),
+                    TierLetter = Tiers.FromDisplayed(c.Strength).ToString(),
                 });
             }
             return view;

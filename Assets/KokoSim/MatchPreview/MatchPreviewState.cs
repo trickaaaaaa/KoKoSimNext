@@ -196,8 +196,8 @@ namespace KokoSim.Unity.MatchPreview
             {
                 TeamName = teamName,
                 OrderCaption = orderCaption,
-                OverallValue = (int)Math.Round(strength.Overall),
-                OverallGrade = Tiers.FromStrength(strength.Overall).ToString(),
+                OverallValue = Tiers.DisplayPoints(strength.Overall),
+                OverallGrade = Tiers.FromDisplayed(strength.Overall).ToString(),
                 UsesDh = team.UsesDh,
                 Factors = new[]
                 {
