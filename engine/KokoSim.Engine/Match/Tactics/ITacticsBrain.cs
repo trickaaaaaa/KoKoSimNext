@@ -46,6 +46,13 @@ public interface ITacticsBrain
     (int SlotA, int SlotB)? CallDefenseSwap(in DefenseSwapSituation s, IRandomSource rng) => null;
 
     /// <summary>
+    /// DH解除（守備側, イニング頭。設計書09 §6, issue #1492）。DHの選手を就かせる守備位置を返す＝その位置の野手が退場し、
+    /// 投手が退いた野手の打順スロットで打席に立つ（以降DH消滅）。null=解除しない。
+    /// 既定実装は常に null＝この入口を知らない実装（テスト用の簡易Brain等）も従来どおり動く＝恒等。
+    /// </summary>
+    Match.Field.FieldPosition? CallReleaseDh(in DhReleaseSituation s, IRandomSource rng) => null;
+
+    /// <summary>
     /// 継投判断（守備側, 打席境界ごと。設計書11 §4, issue #209）。替えるなら理由付きで返す。null=続投。
     /// 試合エンジンは疲労・球数上限を事前計算して <see cref="PitchingChangeSituation"/> に載せて渡し、
     /// <see cref="StandardTacticsBrain"/> はそれをそのまま尊重＝従来挙動と完全一致（恒等）。高度な継投

@@ -238,6 +238,20 @@ public sealed record EnemyAiCoefficients
     public double DefenseWeightLeftField { get; init; } = 0.45;
     public double DefenseWeightFirstBase { get; init; } = 0.30;
 
+    // --- DH解除（issue #1492, 設計書09 §6・設計書11） ---
+    // DHを守備に就かせる＝守りの上手いDHが重い守備位置の下手な野手に代わり、その野手の打順に投手が入る（DH消滅）。
+    // 打線を弱める手なので、守りでリードを守りきる終盤だけ・守備の改善が打力の損失を明確に上回るときだけ打つ。
+    /// <summary>DH解除の最低ティア（4=C。野手を1人退場させ投手に打たせる上級の運用）。</summary>
+    public int DhReleaseMinTier { get; init; } = 4;
+    /// <summary>DH解除を検討する回（この回以降）。</summary>
+    public int DhReleaseFromInning { get; init; } = 8;
+    /// <summary>DH解除を検討するリード差の上限（守備側視点。リード中のみ＝1〜この値）。</summary>
+    public int DhReleaseMaxLead { get; init; } = 2;
+    /// <summary>解除に必要な改善量の最小値（守備スコアの改善 − 打力の損失）。</summary>
+    public double DhReleaseMinGain { get; init; } = 8.0;
+    /// <summary>打力の損失の換算係数（退く野手と代わりに打つ投手の打力差 × これを守備スコアの改善から引く）。</summary>
+    public double DhReleaseBatCost { get; init; } = 0.5;
+
     // --- B-1: 打力温存のコンバート継投（オーナー決定 2026-07-26） ---
     /// <summary>コンバート継投の最低ティア（5=B。交代枠を1つ払う上級の運用）。</summary>
     public int ConvertReliefMinTier { get; init; } = 5;

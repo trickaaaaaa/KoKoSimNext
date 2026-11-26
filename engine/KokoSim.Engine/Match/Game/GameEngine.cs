@@ -2760,6 +2760,10 @@ public static class GameEngine
         // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
         MaybeDefenseSwap(defense, offense, ctx, rng, inning, isTop);
 
+        // DH解除（設計書09 §6, issue #1492）: 守備位置を固めた後の並びに対して判断する。
+        // 既定Brain（Standard／無指示）は常に「解除しない」を返すので従来一致。
+        MaybeReleaseDh(defense, offense, ctx, rng, inning, isTop);
+
         // issue #619: 1球指示の予約は半回をまたがない。盗塁・牽制が3アウト目になった球は
         // 予約を消費しないまま半回が終わる（stealEndedHalf）ため、消さないと次の攻撃回の
         // 先頭打者へ持ち越される。予約は「押した次の1球」の寿命なので、ここで捨てるのが正しい。
@@ -3155,6 +3159,29 @@ public static class GameEngine
             defense.SwapDefensivePositions(d.SlotA, d.SlotB);
         }
     }
+
+    /// <summary>
+    /// 守備側のイニング頭のDH解除判断（issue #1492, 設計書09 §6）。DH制のときだけ問い合わせる。
+    /// 判断RNGは専用Forkストリームで引くため試合結果RNGを進めない（不変条件#2・裏試合帯不変）。
+    /// 既定Brain（Standard／無指示）は常に null を返すので、従来の試合結果と1ビットも変わらない。
+    /// </summary>
+    private static void MaybeReleaseDh(
+        TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng, int inning, bool isTop)
+    {
+        if (defense.Tactics is null || !defense.UsesDh) return;
+        var sit = new Tactics.DhReleaseSituation(
+            inning, ctx.RegulationInnings, defense.Runs - offense.Runs,
+            defense.CurrentLineup, SwappableSlotsOf(defense), defense.DhSlot, defense.CurrentPitcher);
+        var forked = rng.Fork(DhReleaseStreamId(inning, isTop));
+        if (defense.Tactics.CallReleaseDh(sit, forked) is { } at)
+        {
+            defense.ReleaseDh(at);
+        }
+    }
+
+    /// <summary>DH解除の判断RNG用Fork streamId（issue #1492）。継投・守備位置入替・1球采配・怪我とは別saltにする。</summary>
+    private static ulong DhReleaseStreamId(int inning, bool isTop)
+        => 0xD11E_1EA5_0000UL ^ ((ulong)(uint)inning << 32) ^ (isTop ? 1UL : 0UL);
 
     /// <summary>守備位置入替の判断RNG用Fork streamId（issue #255）。継投・1球采配・怪我とは別saltにする。</summary>
     private static ulong DefenseSwapStreamId(int inning, bool isTop)

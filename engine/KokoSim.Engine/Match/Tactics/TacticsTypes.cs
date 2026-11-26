@@ -200,6 +200,21 @@ public readonly record struct DefenseSwapSituation(
     IReadOnlyList<Player> Lineup,
     IReadOnlyList<bool> Swappable);
 
+/// <summary>
+/// DH解除の判断材料（守備側, イニング頭。設計書09 §6, issue #1492）。<see cref="Lineup"/> は打順スロット順の9人、
+/// <see cref="Swappable"/> は同じ添字で「守備位置に就いている野手枠か」（DH枠は false）、<see cref="DhSlot"/> がDHの打順スロット。
+/// DHが野手の守備位置へ就くと、その野手が退場して<see cref="Pitcher"/>がその打順スロットで打席に立つ（DHは消滅）。
+/// <see cref="StandardTacticsBrain"/> は常に null を返す＝従来挙動と1ビットも変わらない（恒等）。
+/// </summary>
+public readonly record struct DhReleaseSituation(
+    int Inning,
+    int RegulationInnings,
+    int ScoreDiff,                   // 守備側視点の得失点差（正=リード）
+    IReadOnlyList<Player> Lineup,
+    IReadOnlyList<bool> Swappable,
+    int DhSlot,
+    Player Pitcher);
+
 /// <summary>継投が発火した理由（テスト・観測用。挙動には影響しない）。</summary>
 public enum PitchingChangeReason
 {
