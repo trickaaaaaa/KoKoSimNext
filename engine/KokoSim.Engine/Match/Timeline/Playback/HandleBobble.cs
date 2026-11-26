@@ -55,31 +55,137 @@ public static class HandleBobblePlanner
     /// </summary>
     public static HandleBobble Plan(PlaybackPlay play)
     {
-        if (play?.Ball == null || play.Fumbled) return HandleBobble.NoneValue;
+        if (!TryFindHold(play, out var from, out var catchT, out var releaseT)) return HandleBobble.NoneValue;
+        // お手玉の芝居は「お手玉の失策」か「お手玉しても一塁アウト」のときだけ。
+        // 内野安打（セーフ）でお手玉は記録と絵の矛盾（2026-11-03 監督報告）なので握り直しまで＝
+        // 「握り直す間に足で稼いだ内野安打」に見える。お手玉＋アウトは矛盾しない（issue #815）。
+        var kind = play.BobbleError ? HandleBobbleKind.Fumble : KindFor(releaseT - catchT);
+        if (!play.BobbleError && kind == HandleBobbleKind.Fumble && !BatterOut(play)) kind = HandleBobbleKind.Juggle;
+        return kind == HandleBobbleKind.None
+            ? HandleBobble.NoneValue
+            : new HandleBobble(kind, from, catchT, releaseT);
+    }
+
+    /// <summary>
+    /// 「ゴロを内野手が捕って、そのまま送球する」区間を探す（<see cref="Plan"/> と <see cref="ApplyStep"/> の共通の入口）。
+    /// 本物の失策・飛球・外野の返球・打球の直後が送球でないプレーは false。
+    /// </summary>
+    public static bool TryFindHold(PlaybackPlay play, out FieldPosition fielder, out double catchT, out double releaseT)
+    {
+        fielder = FieldPosition.Pitcher;
+        catchT = releaseT = 0;
+        if (play?.Ball == null || play.Fumbled) return false;
         EndpointBallSegment? ground = null;
         foreach (var s in play.Ball)
         {
             if (s is not EndpointBallSegment eb) continue;
-            if (eb.Kind == BallSegmentKind.Flight) return HandleBobble.NoneValue;
+            if (eb.Kind == BallSegmentKind.Flight) return false;
             if (ground == null)
             {
                 if (eb.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce) ground = eb;
                 continue;
             }
             // 打球の直後に来る区間が送球でなければ（エラーのこぼれ・保持の運び等）対象外
-            if (eb.Kind != BallSegmentKind.Throw || eb.FromRole is not { } from || !IsInfielder(from))
-                return HandleBobble.NoneValue;
-            if (eb.T0 < ground.T1 - 1e-6) return HandleBobble.NoneValue;
-            // お手玉の芝居は「お手玉の失策」か「お手玉しても一塁アウト」のときだけ。
-            // 内野安打（セーフ）でお手玉は記録と絵の矛盾（2026-11-03 監督報告）なので握り直しまで＝
-            // 「握り直す間に足で稼いだ内野安打」に見える。お手玉＋アウトは矛盾しない（issue #815）。
-            var kind = play.BobbleError ? HandleBobbleKind.Fumble : KindFor(eb.T0 - ground.T1);
-            if (!play.BobbleError && kind == HandleBobbleKind.Fumble && !BatterOut(play)) kind = HandleBobbleKind.Juggle;
-            return kind == HandleBobbleKind.None
-                ? HandleBobble.NoneValue
-                : new HandleBobble(kind, from, ground.T1, eb.T0);
+            if (eb.Kind != BallSegmentKind.Throw || eb.FromRole is not { } from || !IsInfielder(from)) return false;
+            if (eb.T0 < ground.T1 - 1e-6) return false;
+            fielder = from;
+            catchT = ground.T1;
+            releaseT = eb.T0;
+            return true;
         }
-        return HandleBobble.NoneValue;
+        return false;
+    }
+
+    // ── 送球へのステップ（2026-11-26 監督報告「二塁手が捕ってからぼーっとしてセーフ」） ──────────
+    //
+    // engine のもたつき（内野安打率の校正項）が長い打席は、捕った形の据え置きが終わってから送球の収録が
+    // 始まるまで、球を持ったまま突っ立つ。握り直し（Juggle）の芝居は球を一度浮かせるだけなので、守備の低い
+    // 野手の長い保持（2〜3秒）では立ち止まりの大半が残っていた。
+    // 表示側はまず捕球の収録を流し切り（球を胸に収めて起き上がる約1秒。DuelStageRig.ApplyStepBeforeThrow）、
+    // それでも余る間に**送球の的へ横歩き（サイドステップ）で寄る**＝ここが足すのはその横歩きの一歩
+    // （前歩きは散歩に見えた＝2026-11-26 監督見比べ）。捕球時刻・投げ始め・送球の到達は1つも動かさない（表示専用・帯不変）。
+    // 長く持つこと自体をやめる根本対応は issue #1685。
+
+    /// <summary>立ち止まりがこれより短ければ足さない[s]（一歩にもならない）。</summary>
+    public const double StepMinSeconds = 0.3;
+    /// <summary>寄る速さ[m/s]（区間の平均）。台形の山がシャッフルの収録（1.35m/s）に乗る速さ。</summary>
+    public const double StepSpeedMps = 1.0;
+    /// <summary>寄る距離の上限[m]（サイドステップ2〜3歩ぶん）。</summary>
+    public const double StepMaxM = 1.0;
+    /// <summary>寄る距離は送球距離のこの割合まで（近い送球で相手へ歩いて渡しに行かない）。</summary>
+    public const double StepMaxThrowShare = 0.15;
+    /// <summary>これより短い寄りは足さない[m]（足踏みにしかならない）。</summary>
+    public const double StepMinM = 0.3;
+
+    /// <summary>
+    /// 捕ってから送球の収録が始まるまでの立ち止まりに、送球の的へ寄る一歩を足したプレーを返す（表示専用）。
+    ///
+    /// <para>寄るのは <paramref name="settleSeconds"/>（捕球の収録の尻尾・握り直しの芝居）の後から、
+    /// 送球の収録が始まる <paramref name="throwLeadSeconds"/>（投げ始めの何秒前から収録を流すか）手前まで。
+    /// 寄り終わりを収録の頭にそろえ、寄り始めは距離÷<see cref="StepSpeedMps"/> だけ前＝足が地面を滑らない速さを保つ。</para>
+    ///
+    /// <para>送球の時刻・終点はそのまま。始点だけ寄ったぶんずらす（球は手の中にあるので一緒に動く）。
+    /// その野手に保持の間の移動予定（engine の運び等）が既にあれば触らない。</para>
+    /// </summary>
+    public static PlaybackPlay ApplyStep(PlaybackPlay play, double settleSeconds, double throwLeadSeconds)
+        => ApplyStep(play, settleSeconds, throwLeadSeconds, out _, out _);
+
+    /// <summary><see cref="ApplyStep(PlaybackPlay,double,double)"/> と同じ。足した一歩（無ければ null）と、その野手を返す。</summary>
+    public static PlaybackPlay ApplyStep(PlaybackPlay play, double settleSeconds, double throwLeadSeconds,
+        out PlaybackMove? step, out FieldPosition stepper)
+    {
+        step = null;
+        stepper = FieldPosition.Pitcher;
+        if (!TryFindHold(play, out var fielder, out var catchT, out var releaseT)) return play;
+        if (play.BobbleError) return play;   // お手玉の失策は ApplyFumble の拾い直しが同じ時間を使う
+        var windowStart = catchT + Math.Max(0.0, settleSeconds);
+        var stepEnd = releaseT - Math.Max(0.0, throwLeadSeconds);
+        if (stepEnd - windowStart < StepMinSeconds) return play;
+
+        IReadOnlyList<PlaybackMove>? had = null;
+        if (play.Moves != null && play.Moves.TryGetValue(fielder, out var existing) && existing != null)
+            had = existing;
+        if (had != null)
+            foreach (var m in had)
+                if (m.T1 > catchT + 1e-6 && m.T0 < releaseT - 1e-6) return play;
+
+        EndpointBallSegment? throwSeg = null;
+        int throwIdx = -1;
+        for (int i = 0; i < play.Ball.Count; i++)
+            if (play.Ball[i] is EndpointBallSegment { Kind: BallSegmentKind.Throw } th && th.FromRole == fielder
+                && Math.Abs(th.T0 - releaseT) < 1e-6)
+            {
+                throwSeg = th;
+                throwIdx = i;
+                break;
+            }
+        if (throwSeg == null) return play;
+
+        var from = throwSeg.At(0);
+        var to = throwSeg.At(throwSeg.T1 - throwSeg.T0);
+        var dx = to.X - from.X;
+        var dz = to.Y - from.Y;
+        var throwM = Math.Sqrt(dx * dx + dz * dz);
+        if (throwM < 1e-6) return play;
+        var stepM = Math.Min(StepMaxM, Math.Min((stepEnd - windowStart) * StepSpeedMps, throwM * StepMaxThrowShare));
+        if (stepM < StepMinM) return play;
+        dx /= throwM; dz /= throwM;
+
+        var fp = PlaybackEvaluator.FielderAt(play, fielder, catchT).Pos;
+        var stepStart = stepEnd - stepM / StepSpeedMps;
+        var legs = new List<PlaybackMove>();
+        if (had != null) legs.AddRange(had);
+        step = new PlaybackMove(stepStart, stepEnd, new PlaybackVec(fp.X + dx * stepM, fp.Y + dz * stepM));
+        stepper = fielder;
+        legs.Add(step);
+        legs.Sort((a, b) => a.T0.CompareTo(b.T0));
+        var moves = new Dictionary<FieldPosition, IReadOnlyList<PlaybackMove>>();
+        if (play.Moves != null) foreach (var kv in play.Moves) moves[kv.Key] = kv.Value;
+        moves[fielder] = legs;
+
+        var balls = new List<PlaybackBallSegment>(play.Ball);
+        balls[throwIdx] = throwSeg.WithStart(new TimelinePoint(from.X + dx * stepM, from.Y + dz * stepM));
+        return play with { Ball = balls, Moves = moves };
     }
 
     /// <summary>打者走者がアウトになるプレーか（判定イベント「打」のアウトがある）。</summary>

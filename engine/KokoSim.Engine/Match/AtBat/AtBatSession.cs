@@ -542,8 +542,9 @@ public sealed class AtBatSession
             return Continue();
         }
 
-        // 初球を「内野を抜けるゴロの安打」にする強制（issue #1591 の撮影用）: 条件に合う打球をそのまま守備解決へ回す
-        if (forcedFoulNow && Debugging.ForcedThroughInfieldBall.For(ctx.ForcedFoul, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding) is { } forcedThrough)
+        // 初球を「内野を抜けるゴロの安打」／「二塁手のもたつくゴロ」にする強制（issue #1591・送球へのステップの撮影用）: 条件に合う打球をそのまま守備解決へ回す
+        if (forcedFoulNow && (Debugging.ForcedThroughInfieldBall.For(ctx.ForcedFoul, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding)
+                ?? Debugging.ForcedSlowHandleGrounder.For(ctx.ForcedFoul, ctx.Field, ctx.Aerodynamics, fielders, ctx.Fielding)) is { } forcedThrough)
         {
             var forcedPlay = FieldingResolver.ResolveDetailed(
                 forcedThrough, ctx.Field, ctx.Aerodynamics, batter, fielders, ctx.Fielding, rng);

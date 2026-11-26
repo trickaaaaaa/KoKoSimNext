@@ -69,4 +69,32 @@ public sealed class ForcedThroughInfieldTests
             .Select(kv => kv.Key).ToList();
         Assert.True(chasers.Count >= 2, $"打球を追う内野手が2人未満: {string.Join(",", chasers)}");
     }
+
+    /// <summary>
+    /// 強制発動 <see cref="ForcedOutcome.SlowHandleGrounder"/>（送球へのステップの撮影用）: 初球が二塁ゴロになり、
+    /// 二塁手が捕ってから約2秒（長い版は約2.9秒）持ってから一塁へ投げる＝表示側で立ち止まりを埋める芝居の撮影に使う。
+    /// </summary>
+    [Theory]
+    [InlineData(ForcedOutcome.SlowHandleGrounder, 1UL, 1.9, 2.3, false)]
+    [InlineData(ForcedOutcome.SlowHandleGrounder, 42UL, 1.9, 2.3, false)]
+    [InlineData(ForcedOutcome.VerySlowHandleGrounder, 1UL, 2.7, 3.1, true)]
+    public void SlowHandleGrounder_SecondBasemanHoldsTheBall(ForcedOutcome force, ulong seed, double holdMin, double holdMax, bool stepsAfterCatchTail)
+    {
+        var prog = new MatchProgression(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, seed,
+            new ScenarioStart { Inning = 1, IsTop = true, Outs = 0 });
+        prog.ForceNext(force);
+        Assert.Equal(AdvancePitchResult.Pitch, prog.AdvancePitch());
+        Assert.Equal(AdvancePitchResult.PlateAppearance, prog.AdvancePitch());
+
+        var play = prog.Current!.Play!;
+        Assert.True(HandleBobblePlanner.TryFindHold(play, out var fielder, out var catchT, out var releaseT));
+        Assert.Equal(FieldPosition.SecondBase, fielder);
+        Assert.InRange(releaseT - catchT, holdMin, holdMax);
+
+        // 捕った形だけで待つなら、どちらも横歩きが足される
+        Assert.NotSame(play, HandleBobblePlanner.ApplyStep(play, settleSeconds: 0.35, throwLeadSeconds: 0.76));
+        // 捕球の収録の尻尾（収録により約1.0〜1.2秒）を流し切った後にも余るのは、長い版だけ
+        var afterTail = HandleBobblePlanner.ApplyStep(play, settleSeconds: 1.2, throwLeadSeconds: 0.76);
+        Assert.Equal(stepsAfterCatchTail, !ReferenceEquals(play, afterTail));
+    }
 }

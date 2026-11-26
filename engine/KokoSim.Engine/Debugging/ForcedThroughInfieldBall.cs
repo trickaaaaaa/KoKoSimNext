@@ -43,3 +43,31 @@ public static class ForcedThroughInfieldBall
         return null;
     }
 }
+
+/// <summary>
+/// 強制発動「二塁手のもたつくゴロ」（<see cref="ForcedOutcome.SlowHandleGrounder"/>）の打球を作る。乱数は本流から引かず、
+/// 決まった順に候補を試して、内野を抜けずに二塁手が捕って送球するゴロを返す。見つからなければ null（強制しない）。
+/// </summary>
+public static class ForcedSlowHandleGrounder
+{
+    public static BattedBall? For(
+        ForcedOutcome kind, FieldGeometry field, Aerodynamics aero,
+        IReadOnlyList<Fielder> fielders, FieldingCoefficients coeff)
+    {
+        if (kind is not (ForcedOutcome.SlowHandleGrounder or ForcedOutcome.VerySlowHandleGrounder)) return null;
+        var probe = coeff with { ErrorBaseProb = 0.0, IrregularBounceProb = 0.0 };
+        foreach (var bearing in new[] { 12.0, 10.0, 14.0, 8.0, 16.0 })
+            for (var launch = -6.0; launch <= 2.0; launch += 2.0)
+                for (var exit = 28.0; exit <= 40.0; exit += 2.0)
+                {
+                    var ball = new BattedBall { ExitVelocityMps = exit, LaunchAngleDeg = launch, BearingDeg = bearing };
+                    var play = FieldingResolver.ResolveDetailed(
+                        ball, field, aero, BatterAttributes.LeagueAverage, fielders, probe, new Xoshiro256Random(1));
+                    if (play.ThroughInfield || play.FielderRole != FieldPosition.SecondBase) continue;
+                    if (play.Result is not (BattedBallResult.Out or BattedBallResult.Single)) continue;
+                    if (play.ThrowArriveSeconds is not > 0.0 || play.UnassistedPutout) continue;
+                    return ball;
+                }
+        return null;
+    }
+}

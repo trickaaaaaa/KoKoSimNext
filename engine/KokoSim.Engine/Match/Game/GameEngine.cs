@@ -740,6 +740,11 @@ public static class GameEngine
             {
                 Debugging.ForcedOutcome.BuntInPlay => ctx with { Baserunning = paBaserunning },
                 Debugging.ForcedOutcome.FieldingError => ctx with { Fielding = Debugging.ForcedOutcomes.ApplyFielding(ctx.Fielding, force) },
+                Debugging.ForcedOutcome.SlowHandleGrounder => ctx with { Fielding = Debugging.ForcedOutcomes.ApplySlowHandle(ctx.Fielding) },
+                Debugging.ForcedOutcome.VerySlowHandleGrounder => ctx with
+                {
+                    Fielding = Debugging.ForcedOutcomes.ApplySlowHandle(ctx.Fielding, Debugging.ForcedOutcomes.VerySlowHandleJitterSeconds),
+                },
                 _ => ctx,
             };
             // issue #1601 ②: この回で守備側が既にエラーをしていたら、結束 U（AI校も U0 で効く）に応じた
@@ -1058,7 +1063,8 @@ public static class GameEngine
                 return force is Debugging.ForcedOutcome.ChasedFoulFly or Debugging.ForcedOutcome.BigFoul
                                or Debugging.ForcedOutcome.GroundFoul or Debugging.ForcedOutcome.HighFoul
                                or Debugging.ForcedOutcome.ThroughInfieldLeft or Debugging.ForcedOutcome.ThroughInfieldMiddle
-                               or Debugging.ForcedOutcome.ThroughInfieldRight
+                               or Debugging.ForcedOutcome.ThroughInfieldRight or Debugging.ForcedOutcome.SlowHandleGrounder
+                               or Debugging.ForcedOutcome.VerySlowHandleGrounder
                     ? built with { ForcedFoul = force }
                     : built;
             }

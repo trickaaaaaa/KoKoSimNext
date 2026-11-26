@@ -614,7 +614,7 @@ captures:
     scenario: dp-663-lab
     manager: home
     video: {from: catch-1.0, to: release+0.1, fps: 30}
-    probes: [FielderRunDiag]
+    probes: [FielderRunDiag, FielderDiag]
 
   # ブラウザ版で内野手の足が滑る件（#1323）。上の連番をビルドと同じ索引だけの読み方で撮り、slip を並べて比べる
   - id: dp-663-run-catalog-1323
@@ -783,6 +783,34 @@ captures:
     force: ThroughInfieldRight
     duel_seconds: 2.5
     video: {from: start, to: start+3.0, fps: 10}
+
+  # ── 送球へのステップ（2026-11-26 監督報告「二塁手が捕ってからぼーっとしてセーフ」）。捕ってから約2.1秒で投げる二塁ゴロ ──
+  - id: step-throw-2b
+    name: "約2.1秒持つ二塁ゴロ：捕球の収録を流し切り（球を胸に収めて起き上がる）、そのまま投げる（立ち尽くさない）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: SlowHandleGrounder
+    shots: [catch, catch+0.5, catch+1.0, catch+1.5, release-0.3, release]
+    video: {from: catch-0.3, to: release+0.5, fps: 10}
+    probes: [FielderRunDiag, FielderDiag]
+
+  - id: step-throw-2b-long
+    name: "約2.9秒持つ二塁ゴロ：捕球の収録を流し切った後、余った時間を一塁へ横歩きで寄ってから投げる"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: VerySlowHandleGrounder
+    shots: [catch, catch+1.0, catch+1.5, catch+2.0, release]
+    video: {from: catch-0.3, to: release+0.5, fps: 10}
+    probes: [FielderRunDiag, FielderDiag]
+
+  - id: step-throw-2b-off
+    name: "（見比べ）同じ打球でステップを切った絵＝捕ったまま立ち止まる"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: SlowHandleGrounder
+    overrides: {DuelTuning.StepBeforeThrowEnabled: false}
+    shots: [catch, catch+0.5, catch+1.0, catch+1.5, release-0.3, release]
+    video: {from: catch-0.3, to: release+0.5, fps: 10}
 
   # ── ヘルメットの色は帽子と別（issue #1620）。攻撃側（先攻）のヘルメットだけ赤へ差し替えて、打者と走者が選んだ色で被るか見る ──
   - id: helmet-color-batter-1620
