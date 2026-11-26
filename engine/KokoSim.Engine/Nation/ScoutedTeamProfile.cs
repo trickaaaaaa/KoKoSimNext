@@ -21,9 +21,10 @@ public static class ScoutedTeamProfile
     /// 相手校のランク（総合の等級）。**画面に出す相手校のランクはここだけから引く**（issue #737）。
     /// 学校に付いた抽象的な強さ（<see cref="School.Tier"/>）は実際に出場するチームと別に動くので、
     /// 次戦の相手を見せる画面（ホーム・試合前画面）はどちらもこの値にそろえる。
+    /// 表示専用＝画面に出す点数（四捨五入）と同じランクにそろえる（<see cref="Tiers.FromDisplayed"/>）。
     /// </summary>
     public static Tier OverallTier(Team team, TeamStrengthCoefficients c)
-        => Tiers.FromStrength(Compute(team, c).Overall);
+        => Tiers.FromDisplayed(Compute(team, c).Overall);
 
     /// <summary>
     /// 試合層の <see cref="Player"/> を集計用の <see cref="DevelopingPlayer"/> へ写す（表示能力の逆投影）。

@@ -36,9 +36,9 @@ namespace KokoSim.Unity.Shell
             if (chip != null)
             {
                 chip.Clear();
-                chip.Add(KokoSim.Unity.Components.UiComponents.RankChipLegacy(Tiers.FromStrength(overall).ToString()));
+                chip.Add(KokoSim.Unity.Components.UiComponents.RankChipLegacy(Tiers.FromDisplayed(overall).ToString()));
             }
-            Set(root, "team-rank-value", System.Math.Round(overall).ToString("0"));
+            Set(root, "team-rank-value", Tiers.DisplayPoints(overall).ToString());
             Set(root, "team-state", ChemistryDisplay.CurrentTeamStateWord());
 
             // 校章のマスはスクールカラー（表示用の色）の地に白い頭文字。

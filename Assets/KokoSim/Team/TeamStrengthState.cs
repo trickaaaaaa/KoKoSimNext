@@ -36,8 +36,8 @@ namespace KokoSim.Unity.Squad
             var s = TeamStrengthProfile.Compute(RosterService.Active, Coeff);
             var v = new TeamStrengthView
             {
-                OverallValue = (int)Math.Round(s.Overall),
-                OverallGrade = Tiers.FromStrength(s.Overall).ToString(),
+                OverallValue = Tiers.DisplayPoints(s.Overall),
+                OverallGrade = Tiers.FromDisplayed(s.Overall).ToString(),
             };
 
             // レーダーの頂点順（上から時計回り）＝右の指標バー順。両者を1対1に揃える。
@@ -55,9 +55,9 @@ namespace KokoSim.Unity.Squad
 
         private static void Add(TeamStrengthView v, string label, double value)
         {
-            var iv = (int)Math.Round(value);
+            var iv = Tiers.DisplayPoints(value);
             var pct = Clamp01((float)(value / 100.0));
-            var grade = Tiers.FromStrength(value).ToString();
+            var grade = Tiers.FromDisplayed(value).ToString();
             v.Factors.Add(new AbilityBar
             {
                 Label = label,

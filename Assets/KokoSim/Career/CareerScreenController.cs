@@ -335,13 +335,13 @@ namespace KokoSim.Unity.CareerMeta
         /// <summary>監督メタ1本ぶんの能力行（0〜99帯）。ランクは全画面共通の Tiers 変換で併記する。</summary>
         private static VisualElement Ability(string label, double value)
         {
-            var v = (int)System.Math.Round(value);
+            var v = Tiers.DisplayPoints(value);
             return UiComponents.AbilityRow(new AbilityRowData
             {
                 Label = label,
                 Value = v.ToString(),
                 Pct = (float)(value / 100.0),
-                Grade = Tiers.FromStrength(value).ToString(),
+                Grade = Tiers.FromDisplayed(value).ToString(),
             });
         }
 

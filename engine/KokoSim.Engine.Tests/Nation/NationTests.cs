@@ -29,6 +29,39 @@ public sealed class NationTests
         Assert.Equal(Tier.G, Tiers.FromStrength(20));
     }
 
+    /// <summary>issue #1684: 49.6 が点数「50」と出るのにランクが E になっていた（点数は四捨五入・ランクは生の値）。</summary>
+    [Theory]
+    [InlineData(49.4, 49, Tier.E)]
+    [InlineData(49.5, 50, Tier.D)]
+    [InlineData(49.6, 50, Tier.D)]
+    [InlineData(49.99, 50, Tier.D)]
+    [InlineData(50.0, 50, Tier.D)]
+    [InlineData(39.6, 40, Tier.E)]
+    [InlineData(59.99, 60, Tier.C)]
+    [InlineData(89.4, 89, Tier.A)]
+    [InlineData(89.5, 90, Tier.S)]
+    [InlineData(29.6, 30, Tier.F)]
+    [InlineData(0.0, 0, Tier.G)]
+    public void FromDisplayed_RankFollowsDisplayedPoints(double strength, int points, Tier tier)
+    {
+        Assert.Equal(points, Tiers.DisplayPoints(strength));
+        Assert.Equal(tier, Tiers.FromDisplayed(strength));
+    }
+
+    [Fact]
+    public void FromDisplayed_RankIsAlwaysTheRankOfTheDisplayedPoints()
+    {
+        for (var v = 0.0; v <= 100.0; v += 0.01)
+            Assert.Equal(Tiers.FromStrength(Tiers.DisplayPoints(v)), Tiers.FromDisplayed(v));
+    }
+
+    [Fact]
+    public void FromStrength_BandEdgesAreUnchanged()
+    {
+        Assert.Equal(Tier.E, Tiers.FromStrength(49.99));
+        Assert.Equal(Tier.D, Tiers.FromStrength(50.0));
+    }
+
     [Fact]
     public void NameGenerator_ProducesNonEmptyNames()
     {

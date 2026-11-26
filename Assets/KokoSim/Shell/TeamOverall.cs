@@ -17,8 +17,8 @@ namespace KokoSim.Unity.Shell
         public static double Of(IReadOnlyList<DevelopingPlayer> roster)
             => roster == null || roster.Count == 0 ? 0.0 : TeamStrengthProfile.Compute(roster, Coeff).Overall;
 
-        /// <summary>ロスターの総合ランク（S〜G, 較正済み）。</summary>
+        /// <summary>ロスターの総合ランク（S〜G, 較正済み）。画面に出す点数（四捨五入）から決める。</summary>
         public static string GradeOf(IReadOnlyList<DevelopingPlayer> roster)
-            => Tiers.FromStrength(Of(roster)).ToString();
+            => Tiers.FromDisplayed(Of(roster)).ToString();
     }
 }
