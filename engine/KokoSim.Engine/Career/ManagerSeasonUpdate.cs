@@ -32,6 +32,9 @@ public static class ManagerSeasonUpdate
     /// プロ入りした教え子が名鑑に1人以上いるか（<see cref="ManagerGrowthEvents.Yearly"/>・issue #1615）。
     /// 既定 true＝名鑑を持たないキャリアシム（<see cref="CareerEngine.Run"/>）は常に「いる」扱い。
     /// </param>
+    /// <param name="hadBlowoutLoss">その年に大差負けがあったか（大敗からの学びの条件・issue #1483）。null＝得点差を持たない呼び出しは未勝利の年とみなす。</param>
+    /// <param name="facedPowerhouse">その年に強さティア S/A の学校と戦ったか（名将との練習試合の条件・issue #1483）。既定 true＝キャリアシムは常に対戦あり。</param>
+    /// <param name="attendSeminar">講習会に参加するか（issue #1483）。既定 true＝キャリアシムは参加固定。実ゲームは冬にその場で適用するので false。</param>
     /// <param name="campSkips">この年度に見送った合宿（issue #1482）。見送った合宿の費用は引かない。既定＝どちらも行う。</param>
     public static IReadOnlyList<ManagerGrowthNotice> Apply(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins,
@@ -44,7 +47,10 @@ public static class ManagerSeasonUpdate
         int nationalStageWins = 0,
         double draftFameGain = 0,
         bool hasProProtege = true,
-        Season.CampSkips campSkips = default)
+        Season.CampSkips campSkips = default,
+        bool? hadBlowoutLoss = null,
+        bool facedPowerhouse = true,
+        bool attendSeminar = true)
     {
         var c = careerCoeff ?? new CareerCoefficients();
         var mg = growthCoeff ?? new ManagerGrowthCoefficients();
@@ -59,6 +65,7 @@ public static class ManagerSeasonUpdate
         TeamManagerLifecycle.AdvanceGrade(m);
 
         // 節目イベント（甲子園経験・大敗の学び・講習会・OB訪問等）。独立ストリームで既存の乱数列を乱さない。
-        return ManagerGrowthEvents.Yearly(m, reachedKoshien, wins, milestoneRng, mg, hasProProtege);
+        return ManagerGrowthEvents.Yearly(m, reachedKoshien, wins, milestoneRng, mg, hasProProtege,
+            hadBlowoutLoss, facedPowerhouse, attendSeminar);
     }
 }

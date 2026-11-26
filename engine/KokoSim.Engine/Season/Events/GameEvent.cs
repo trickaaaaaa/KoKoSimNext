@@ -104,6 +104,12 @@ public sealed record GameEvent
     public bool RequiresOb { get; init; }
 
     /// <summary>
+    /// 講習会の費用を払える資金があるときだけ発火する（指導者講習会の誘い。issue #1483）。判定は
+    /// <see cref="EventScheduler.SeminarFundsFilter"/>。<b>未設定（null）のときは出さない</b>＝監督を持たないヘッドレスシムには出ない（帯・ゴールデン不変）。
+    /// </summary>
+    public bool RequiresSeminarFunds { get; init; }
+
+    /// <summary>
     /// この年度末に転任の抽選がある教員監督のときだけ発火する（校長の会話。issue #1606）。判定は
     /// <see cref="EventScheduler.TransferHintFilter"/>。<b>未設定（null）のときは出さない</b>＝監督を持たないヘッドレスシムには出ない。
     /// </summary>

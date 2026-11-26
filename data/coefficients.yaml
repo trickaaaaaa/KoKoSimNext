@@ -1590,7 +1590,6 @@ manager_growth:
   famous_rival_boost: 3.0
   big_loss_prob: 0.35
   big_loss_boost: 3.0
-  seminar_prob: 0.25
   seminar_boost: 2.0
   seminar_cost: 20.0
   pro_ob_visit_base_prob: 0.08

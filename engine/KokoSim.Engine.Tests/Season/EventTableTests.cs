@@ -147,7 +147,7 @@ events:
             "growth_breakthrough", "growth_slump",
             "growth_plateau", "growth_yips", "growth_yips_overcome",
             "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
-            "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
+            "mgr_pro_ob", "mgr_mentor",
             "insight_growth_type",
             // 投手の素質の見出し（issue #1523）。IDは PitcherTalentText（Unity）にベタ書き。
             "pitcher_talent_hint", "pitcher_talent_discovered",

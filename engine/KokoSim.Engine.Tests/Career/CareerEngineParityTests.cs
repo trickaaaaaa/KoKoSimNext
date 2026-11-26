@@ -45,6 +45,9 @@ public sealed class CareerEngineParityTests
             + CareerEngine.AnnualDonationIncome(m.Fame, y.ReachedKoshien, y.NationalChampion, C)
             + CareerEngine.TournamentPrizeIncome(y.Wins, 0, C)   // 大会報奨（issue #1469）。この年は甲子園に出ていない
             - CareerEngine.AnnualFixedExpense(0, C);
+        // キャリアシムは講習会に「参加する」固定（issue #1483）。資金が足りる年は費用を払う。
+        var seminar = new ManagerGrowthCoefficients();
+        if (expected >= seminar.SeminarCost) expected -= seminar.SeminarCost;
         Assert.Equal(System.Math.Max(0, expected), m.Funds, 6);
     }
 

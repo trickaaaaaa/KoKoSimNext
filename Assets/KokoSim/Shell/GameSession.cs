@@ -673,6 +673,13 @@ namespace KokoSim.Unity.Shell
             GrowthEventModel.SlumpRecoveryAfterMatch(detail, managerWasAway, RosterService.Roster, GrowthEventsCoeff);
         }
 
+        /// <summary>
+        /// 自校の1試合（公式戦・練習試合）の結果を監督成長の条件へ控える（issue #1483）。大差負けの判定は
+        /// <see cref="MatchConditionModel.IsBlowoutLoss"/>（調子の大敗ペナルティと同じ定義）。乱数なし。
+        /// </summary>
+        private static void RecordMatchForManagerGrowth(GameResult detail, bool managerWasAway, School opponent)
+            => ManagerService.RecordMatchForGrowth(opponent, MatchConditionModel.IsBlowoutLoss(detail, managerWasAway, FormCoeff));
+
         // 怪我（設計書03 §3.5）。週次処理（HomeState.RunInjuryWeek）と同じ既定係数を使う。
         private static readonly InjuryCoefficients InjuryCoeff = new InjuryCoefficients();
         private int _matchInjurySeq;
@@ -848,6 +855,7 @@ namespace KokoSim.Unity.Shell
             ApplyMatchGrowth(result, managerIsAway, official: false);
             ApplyMatchCondition(result, managerIsAway);
             ApplyMatchInjuries(result, managerIsAway);
+            RecordMatchForManagerGrowth(result, managerIsAway, PracticeOpponent);
             ApplyBatteryInnings(result, managerIsAway, isOfficial: false);
             ApplyLeftExperienceGrowth(result, managerIsAway, isOfficial: false);
             ClearPracticeMatchFlow();
@@ -868,6 +876,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                RecordMatchForManagerGrowth(detail, LastOutcome.ManagerWasAway, NationService.SchoolById(LastOutcome.OpponentId));
                 ApplyMatchSkills(detail, LastOutcome.ManagerWasAway, matchDay);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);
@@ -922,6 +931,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
+                RecordMatchForManagerGrowth(detail, LastOutcome.ManagerWasAway, NationService.SchoolById(LastOutcome.OpponentId));
                 ApplyMatchSkills(detail, LastOutcome.ManagerWasAway, matchDay);
                 ApplyMomentum(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 ApplyBatteryInnings(detail, LastOutcome.ManagerWasAway, isOfficial: true);

@@ -20,8 +20,7 @@ public static class MatchConditionModel
     {
         var batting = managerIsAway ? detail.AwayBatting : detail.HomeBatting;
         var pitching = managerIsAway ? detail.AwayPitching : detail.HomePitching;
-        var managerLost = managerIsAway ? detail.HomeWon : !detail.HomeWon && !detail.Tied;
-        var blowoutLoss = managerLost && detail.RunDifferential >= f.MatchBlowoutLossMargin;
+        var blowoutLoss = IsBlowoutLoss(detail, managerIsAway, f);
 
         var byId = new Dictionary<int, DevelopingPlayer>(roster.Count);
         foreach (var dp in roster) byId[dp.Id] = dp;
@@ -39,6 +38,13 @@ public static class MatchConditionModel
             if (!byId.TryGetValue(id, out var dp)) continue;
             ApplyDelta(dp, PitchingDelta(line, f) + (blowoutLoss ? -f.MatchBlowoutLossPenalty : 0.0));
         }
+    }
+
+    /// <summary>自校が大差（<see cref="FormCoefficients.MatchBlowoutLossMargin"/> 点差以上）で負けた試合か。監督の「大敗からの学び」の条件にも使う（issue #1483）。</summary>
+    public static bool IsBlowoutLoss(GameResult detail, bool managerIsAway, FormCoefficients f)
+    {
+        var managerLost = managerIsAway ? detail.HomeWon : !detail.HomeWon && !detail.Tied;
+        return managerLost && detail.RunDifferential >= f.MatchBlowoutLossMargin;
     }
 
     /// <summary>好打（安打・本塁打）で+、不振（規定打数以上で無安打）で−。</summary>

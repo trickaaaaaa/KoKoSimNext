@@ -29,6 +29,12 @@ public enum EventStance
     CampJoin,
     /// <summary>合宿を見送る。倍率・結束・費用がすべてなくなる。</summary>
     CampSkip,
+
+    // ── 指導者講習会の決断（issue #1483）。好転/悪化は無い（improve_prob 1.0）。費用と指導力は選んだ側が動かす ──
+    /// <summary>講習会に参加する。費用を払い、その年のテーマの分野の指導力が確定で上がる。</summary>
+    SeminarJoin,
+    /// <summary>講習会を見送る。費用はかからず、何も起きない。</summary>
+    SeminarSkip,
 }
 
 /// <summary>対応の性質。</summary>
@@ -42,6 +48,9 @@ public static class EventStances
 
     /// <summary>合宿をするか見送るかの選択か（issue #1482）。提示層が合宿の状態（倍率・結束・費用）を動かす。</summary>
     public static bool IsCampDecision(EventStance s) => s is EventStance.CampJoin or EventStance.CampSkip;
+
+    /// <summary>指導者講習会に参加するか見送るかの選択か（issue #1483）。提示層が費用と指導力を動かす。</summary>
+    public static bool IsSeminarDecision(EventStance s) => s is EventStance.SeminarJoin or EventStance.SeminarSkip;
 }
 
 /// <summary>

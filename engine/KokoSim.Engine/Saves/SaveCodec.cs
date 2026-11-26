@@ -40,7 +40,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 50;
+    public const int CurrentVersion = 51;
 
     // ===== Serialize =====
 
@@ -68,6 +68,8 @@ public static class SaveCodec
             .Add("managerPendingDraftFame", s.ManagerPendingDraftFame)
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
             .Add("managerPendingUpsetDeltas", DoublesToJson(s.ManagerPendingUpsetDeltas))
+            .Add("managerBlowoutLossThisYear", s.ManagerBlowoutLossThisYear)
+            .Add("managerPowerhouseSchoolId", s.ManagerPowerhouseSchoolId)
             .Add("practiceLastPlayedWeek", s.PracticeLastPlayedWeek.HasValue ? JsonValue.Of(s.PracticeLastPlayedWeek.Value) : JsonNull.Instance)
             .Add("nationRosters", NationRostersToJson(s.NationRosters))
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
@@ -475,6 +477,8 @@ public static class SaveCodec
         // （CareerSaves.TeamColorsFromJson）が帽子クラウンと同色で補う＝移行ブロックは要らない。
         // v49（issue #1482）: 合宿の見送り（summerCampSkipped/winterCampSkipped）が増えた。キーが無い旧セーブは
         // 読み込み側が false（どちらも行う）で補う＝移行ブロックは要らない。
+        // v51（issue #1483）: 今年度の大差負け・最初に戦った名将校（managerBlowoutLossThisYear/managerPowerhouseSchoolId）が増えた。
+        // キーが無い旧セーブは読み込み側が false／-1 で補う＝移行ブロックは要らない。
         // v50（issue #1493）: 成績に打球データ（平均初速・角度・最長本塁打）・球速・キャリアハイが増えた。キーが無い旧セーブは
         // StatsSaves が未記録（0）で読む＝移行ブロックは要らない（過去の試合は打球・球速を持たない）。
         return root;
@@ -601,6 +605,9 @@ public static class SaveCodec
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),
             // 番狂わせデルタは v12 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             ManagerPendingUpsetDeltas = DoublesFromJson(root.Arr("managerPendingUpsetDeltas")),
+            // 大敗・名将との対戦の年内記録は v51（issue #1483）で追加。キーが無い旧セーブは「なし」で補う。
+            ManagerBlowoutLossThisYear = root.Has("managerBlowoutLossThisYear") && root.Bool("managerBlowoutLossThisYear"),
+            ManagerPowerhouseSchoolId = root.Has("managerPowerhouseSchoolId") ? root.Int("managerPowerhouseSchoolId") : -1,
             // 練習試合の最終消化週は v36 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             PracticeLastPlayedWeek = root.IsNull("practiceLastPlayedWeek") ? null : root.Int("practiceLastPlayedWeek"),
             NationRosters = NationRostersFromJson(root.Arr("nationRosters")),

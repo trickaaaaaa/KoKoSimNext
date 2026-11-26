@@ -15,18 +15,23 @@ public enum ManagerGrowthEventType
     MentorCoach,        // 名伯楽との出会い（稀）: 全分野ボーナス
 }
 
-/// <summary>発火した監督成長イベント（UIフィード用の観測データ）。</summary>
-public sealed record ManagerGrowthNotice(ManagerGrowthEventType Type, double Amount);
+/// <summary>指導力の分野（打撃／投手／守備走塁）。講習会のテーマ・大敗で気づく弱点分野の表示に使う。</summary>
+public enum CoachingArea { Batting, Pitching, Defense }
+
+/// <summary>
+/// 発火した監督成長イベント（UIフィード用の観測データ）。<paramref name="Area"/> は伸びた指導力の分野
+/// （大敗からの学び＝弱点分野。それ以外は null）。会話に「どの分野を学んだか」を出すのに使う。
+/// </summary>
+public sealed record ManagerGrowthNotice(ManagerGrowthEventType Type, double Amount, CoachingArea? Area = null);
 
 /// <summary>監督成長イベントの係数（設計書04 §1.1b）。🟡確率・上昇量は検証で調整。</summary>
 public sealed record ManagerGrowthCoefficients
 {
     public double KoshienTacticalBoost { get; init; } = 5.0;      // 甲子園経験（出場年に確定発火）
-    public double FamousRivalProb { get; init; } = 0.15;
+    public double FamousRivalProb { get; init; } = 0.15;          // 文脈: 強さティアS/Aの学校と対戦した年のみ
     public double FamousRivalBoost { get; init; } = 3.0;
-    public double BigLossProb { get; init; } = 0.35;              // 文脈: 未勝利の年のみ
+    public double BigLossProb { get; init; } = 0.35;              // 文脈: その年に大差負けがあった年のみ
     public double BigLossBoost { get; init; } = 3.0;
-    public double SeminarProb { get; init; } = 0.25;              // オフ講習会
     public double SeminarBoost { get; init; } = 2.0;
     public double SeminarCost { get; init; } = 20.0;              // 万円
     public double ProObVisitBaseProb { get; init; } = 0.08;       // 名声で微増
@@ -51,9 +56,24 @@ public static class ManagerGrowthEvents
     /// false なら教え子の訪問は起こさない。<b>乱数は今までどおり引いてから捨てる</b>＝引く回数を変えると
     /// 後ろの名伯楽の抽選がずれる。既定 true＝名鑑を持たないキャリアシムは従来どおり（帯不変）。
     /// </param>
+    /// <param name="hadBlowoutLoss">
+    /// その年に大差負け（<c>FormCoefficients.MatchBlowoutLossMargin</c> 点差以上）が1試合でもあったか（issue #1483）。
+    /// 大敗からの学びの条件。null＝試合ごとの得点差を持たない呼び出し（キャリアシム）は、従来どおり
+    /// 未勝利の年を大敗の年とみなす＝帯不変。
+    /// </param>
+    /// <param name="facedPowerhouse">
+    /// その年に強さティア S/A の学校（<see cref="IsPowerhouse"/>）と戦ったか（公式戦・練習試合を問わない・issue #1483）。
+    /// 名将との練習試合の条件。既定 true＝キャリアシムは常に対戦あり＝帯不変。
+    /// </param>
+    /// <param name="attendSeminar">
+    /// 指導者講習会に参加するか（issue #1483）。参加すれば確定で効果・費用は <see cref="ManagerGrowthCoefficients.SeminarCost"/>
+    /// （資金が足りなければ参加できない）。抽選は廃止。既定 true＝キャリアシムは「参加する」固定。実ゲームは冬の
+    /// オフに本人へ聞いて <see cref="AttendSeminar"/> でその場に適用するので false を渡す（二重に適用しない）。
+    /// </param>
     public static IReadOnlyList<ManagerGrowthNotice> Yearly(
         Manager m, bool reachedKoshien, int wins, IRandomSource rng, ManagerGrowthCoefficients c,
-        bool hasProProtege = true)
+        bool hasProProtege = true, bool? hadBlowoutLoss = null, bool facedPowerhouse = true,
+        bool attendSeminar = true)
     {
         var fired = new List<ManagerGrowthNotice>();
 
@@ -64,26 +84,25 @@ public static class ManagerGrowthEvents
             fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.KoshienExperience, c.KoshienTacticalBoost));
         }
 
-        // 大敗からの学び（文脈: 未勝利の年のみ。弱点分野が伸びる）。
-        if (wins == 0 && MathUtil.Chance(c.BigLossProb, rng))
+        // 大敗からの学び（文脈: その年に大差負けがあった年のみ。弱点分野が伸びる）。
+        if ((hadBlowoutLoss ?? wins == 0) && MathUtil.Chance(c.BigLossProb, rng))
         {
-            BoostWeakest(m, c.BigLossBoost, c.Cap);
-            fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.LessonFromBigLoss, c.BigLossBoost));
+            var area = BoostWeakest(m, c.BigLossBoost, c.Cap);
+            fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.LessonFromBigLoss, c.BigLossBoost, area));
         }
 
-        // 名将との練習試合。
-        if (MathUtil.Chance(c.FamousRivalProb, rng))
+        // 名将との練習試合（文脈: 強さティアS/Aの学校と戦った年のみ。采配が伸びる）。乱数は条件によらず引く。
+        if (MathUtil.Chance(c.FamousRivalProb, rng) && facedPowerhouse)
         {
             m.TacticalSense = Math.Min(c.Cap, m.TacticalSense + c.FamousRivalBoost);
             fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.FamousRivalLesson, c.FamousRivalBoost));
         }
 
-        // 指導者講習会（オフ・資金があれば）。
-        if (m.Funds >= c.SeminarCost && MathUtil.Chance(c.SeminarProb, rng))
+        // 指導者講習会（参加するなら確定。抽選なし）。
+        if (attendSeminar && CanAttendSeminar(m, c))
         {
-            m.Funds -= c.SeminarCost;
-            BoostRandomCoaching(m, c.SeminarBoost, c.Cap, rng);
-            fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.CoachingSeminar, c.SeminarBoost));
+            var area = AttendSeminar(m, SeminarTheme(rng), c);
+            fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.CoachingSeminar, c.SeminarBoost, area));
         }
 
         // 教え子（プロ入りした自分の教え子）の訪問（名声で微増）。教え子がいなければ起こさない（乱数は引く）。
@@ -107,22 +126,41 @@ public static class ManagerGrowthEvents
         return fired;
     }
 
-    private static void BoostWeakest(Manager m, double amount, double cap)
+    /// <summary>強さティア S/A の学校か（名将との練習試合の条件・issue #1483）。</summary>
+    public static bool IsPowerhouse(Nation.Tier tier) => tier is Nation.Tier.S or Nation.Tier.A;
+
+    /// <summary>講習会に参加できるか（費用を払えるか）。</summary>
+    public static bool CanAttendSeminar(Manager m, ManagerGrowthCoefficients c) => m.Funds >= c.SeminarCost;
+
+    /// <summary>今年の講習会のテーマ（分野）。乱数を1つ引く＝実ゲームは年度ごとの独立ストリームで引く。</summary>
+    public static CoachingArea SeminarTheme(IRandomSource rng) => (CoachingArea)rng.NextInt(0, 3);
+
+    /// <summary>
+    /// 講習会に参加する（費用を引き、テーマの分野の指導力が <see cref="ManagerGrowthCoefficients.SeminarBoost"/> 上がる）。
+    /// 実ゲームでは冬のオフにマネージャーが聞いて「参加する」を選んだ時点で呼ぶ。分野を返す。
+    /// </summary>
+    public static CoachingArea AttendSeminar(Manager m, CoachingArea area, ManagerGrowthCoefficients c)
     {
-        if (m.CoachingBatting <= m.CoachingPitching && m.CoachingBatting <= m.CoachingDefense)
-            m.CoachingBatting = Math.Min(cap, m.CoachingBatting + amount);
-        else if (m.CoachingPitching <= m.CoachingDefense)
-            m.CoachingPitching = Math.Min(cap, m.CoachingPitching + amount);
-        else
-            m.CoachingDefense = Math.Min(cap, m.CoachingDefense + amount);
+        m.Funds -= c.SeminarCost;
+        Boost(m, area, c.SeminarBoost, c.Cap);
+        return area;
     }
 
-    private static void BoostRandomCoaching(Manager m, double amount, double cap, IRandomSource rng)
+    private static CoachingArea BoostWeakest(Manager m, double amount, double cap)
     {
-        switch (rng.NextInt(0, 3))
+        var area = m.CoachingBatting <= m.CoachingPitching && m.CoachingBatting <= m.CoachingDefense
+            ? CoachingArea.Batting
+            : m.CoachingPitching <= m.CoachingDefense ? CoachingArea.Pitching : CoachingArea.Defense;
+        Boost(m, area, amount, cap);
+        return area;
+    }
+
+    private static void Boost(Manager m, CoachingArea area, double amount, double cap)
+    {
+        switch (area)
         {
-            case 0: m.CoachingBatting = Math.Min(cap, m.CoachingBatting + amount); break;
-            case 1: m.CoachingPitching = Math.Min(cap, m.CoachingPitching + amount); break;
+            case CoachingArea.Batting: m.CoachingBatting = Math.Min(cap, m.CoachingBatting + amount); break;
+            case CoachingArea.Pitching: m.CoachingPitching = Math.Min(cap, m.CoachingPitching + amount); break;
             default: m.CoachingDefense = Math.Min(cap, m.CoachingDefense + amount); break;
         }
     }

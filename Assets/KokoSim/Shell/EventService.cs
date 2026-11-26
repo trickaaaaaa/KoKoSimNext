@@ -182,6 +182,8 @@ namespace KokoSim.Unity.Shell
                         GraduatingClassFilter = () => RosterService.Roster.Any(p => p.Grade >= 3),
                         // OB（卒業生）の居ない新設校では、OB会の寄付などOBが出てくる話を出さない（issue #1615）。
                         ObFilter = () => RosterService.HasOb,
+                        // 指導者講習会の誘いは、費用を払える資金があるときだけ（issue #1483）。
+                        SeminarFundsFilter = () => ManagerService.CanAttendSeminar,
                         // 転任判定の前の校長の会話は、教員監督でこの年度末に残留の抽選がある年だけ（issue #1606）。
                         TransferHintFilter = () => TransferHint.TierFor(ManagerService.Manager, ManagerService.Coefficients),
                     };
@@ -439,6 +441,7 @@ namespace KokoSim.Unity.Shell
             values["player"] = subject.Name;
             if (other != null) values["other"] = other.Name;
             AddCampValues(f.Event.Id, values);
+            AddSeminarValues(f.Event.Id, values);
 
             var week = Scheduler.AbsoluteWeek;
             var salt = subject.Id;
@@ -532,6 +535,20 @@ namespace KokoSim.Unity.Shell
                     var mult = cal.CampMultiplier(winter ? cal.WinterCampWeek : cal.SummerCampWeek, TrainingWeek.Coefficients);
                     parts.Add("今週の経験値 ×" + mult.ToString("0.0"));
                     if (!outcomeHasCohesion) parts.Add("チーム状態が良くなった");
+                }
+            }
+            // 指導者講習会の決断（issue #1483）: 「参加する」は費用を払ってその場でテーマの指導力が上がる（確定・抽選なし）。
+            // 「見送る」は何も起きない。結果行は実際に動いた量で書く。
+            if (stance == EventStance.SeminarJoin)
+            {
+                var m = ManagerService.Manager;
+                var area = ManagerService.SeminarThemeThisYear();
+                var before = ManagerGrowthText.CoachingOf(m, area);
+                var funds = m.Funds;
+                if (ManagerService.AttendSeminar())
+                {
+                    parts.Add(ManagerGrowthText.AreaLabel(area) + "指導 " + Signed(ManagerGrowthText.CoachingOf(m, area) - before));
+                    parts.Add("部費 " + Signed(m.Funds - funds) + " 万");
                 }
             }
             // 結果ごとの効果（信頼度・練習効率など）。文は実際に動いた量で書く。
@@ -676,6 +693,24 @@ namespace KokoSim.Unity.Shell
             values["camp_cost"] = (winter ? career.WinterCampCost : career.SummerCampCost).ToString("0");
             values["camp_weeks"] = KokoSim.Engine.Season.SeasonCalendar.CampWeeks.ToString();
             values["camp_mult"] = cal.CampMultiplier(week, TrainingWeek.Coefficients).ToString("0.0");
+        }
+
+        /// <summary>指導者講習会のイベント ID（issue #1483）。冬のオフに「参加しますか？」を出す。</summary>
+        internal const string SeminarEventId = "coaching_seminar";
+
+        /// <summary>
+        /// 講習会の誘いに差し込む費用・上がる量・今年のテーマとその学び（issue #1483）。値は係数の正典
+        /// （<see cref="ManagerService.GrowthCoefficients"/>）から引く＝文に数字を直書きしない。
+        /// </summary>
+        private static void AddSeminarValues(string eventId, Dictionary<string, string> values)
+        {
+            if (eventId != SeminarEventId) return;
+            var c = ManagerService.GrowthCoefficients;
+            var area = ManagerService.SeminarThemeThisYear();
+            values["seminar_cost"] = c.SeminarCost.ToString("0");
+            values["seminar_boost"] = c.SeminarBoost.ToString("0");
+            values["area"] = ManagerGrowthText.AreaLabel(area);
+            values["lesson"] = ManagerGrowthText.Lesson(area);
         }
 
         internal static Dictionary<string, string> BuildValues()

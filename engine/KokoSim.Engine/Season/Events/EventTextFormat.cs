@@ -26,6 +26,9 @@ public static class EventTextFormat
             "player", "school", "manager", "count", "injury", "weeks", "other",
             // 合宿の説明（issue #1482）。費用[万円]・期間[週]・経験値の倍率。合宿のイベントだけが渡す。
             "camp_cost", "camp_weeks", "camp_mult",
+            // 監督成長イベント（issue #1483）。伸びた指導力の分野 {area}・その分野で学んだこと {lesson}・
+            // 名将の学校名 {rival}・講習会の費用[万円] {seminar_cost}・上がる量 {seminar_boost}。
+            "area", "lesson", "rival", "seminar_cost", "seminar_boost",
         };
         foreach (var (k, _) in DisplayNames.Keys) keys.Add(k);
         return keys;

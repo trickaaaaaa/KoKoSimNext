@@ -362,7 +362,7 @@ public sealed class InjuryAndEventsTests
     [Fact]
     public void ManagerGrowth_Koshien_BoostsTactics_BigLossNeedsContext()
     {
-        var c = new ManagerGrowthCoefficients { FamousRivalProb = 0, SeminarProb = 0, ProObVisitBaseProb = 0, ProObVisitFameSlope = 0, MentorProb = 0, BigLossProb = 1.0 };
+        var c = new ManagerGrowthCoefficients { FamousRivalProb = 0, ProObVisitBaseProb = 0, ProObVisitFameSlope = 0, MentorProb = 0, BigLossProb = 1.0 };
 
         // 甲子園経験: 采配が大きく伸びる（確定発火）。
         var m1 = new Manager { TacticalSense = 30 };
@@ -382,7 +382,7 @@ public sealed class InjuryAndEventsTests
 
     private static ManagerGrowthCoefficients ProVisitOnly() => new()
     {
-        FamousRivalProb = 0, SeminarProb = 0, MentorProb = 0, BigLossProb = 0,
+        FamousRivalProb = 0, MentorProb = 0, BigLossProb = 0,
         ProObVisitBaseProb = 1.0, ProObVisitFameSlope = 0,
     };
 
@@ -414,7 +414,7 @@ public sealed class InjuryAndEventsTests
         // 教え子の訪問を止めても乱数は引いて捨てる＝同じ年の他の節目（名将・講習会・名伯楽）の抽選結果は動かない。
         var c = new ManagerGrowthCoefficients
         {
-            FamousRivalProb = 0.5, SeminarProb = 0.5, MentorProb = 0.5, BigLossProb = 0.5,
+            FamousRivalProb = 0.5, MentorProb = 0.5, BigLossProb = 0.5,
             ProObVisitBaseProb = 0.5, ProObVisitFameSlope = 0,
         };
 
