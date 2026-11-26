@@ -22,6 +22,8 @@ namespace KokoSim.UnityEditorTools
     ///     No.7 は商用の相談が済むまで体験版に入れない（issue #1318。体験版では MatchAnnouncer.Available=false で鳴らない）
     ///   ・曲の取り込みの品質とサンプルレートを下げる（Web には音の機種別設定が無いので既定値を一時的に書き換える。
     ///     効くのは品質で、サンプルレートだけ下げても変わらなかった。品質0.6/22.05kHz の音をオーナーが聞いて確認済み）
+    ///   ・写真系の画像（イベント背景・立ち絵・タイトルの水彩）の WebGL 向け最大サイズを下げる（<see cref="TextureCaps"/>）。
+    ///     Web の画面は 960×600 で、背景を 1600px・立ち絵（表示幅 208px）を 1024px のまま積む意味が無い
     ///   ・IL2CPP のコード生成を「サイズ優先」（wasm 13.7MB→11.1MB）
     /// 途中で落ちて戻し損ねても、次に回したときに最初に戻す（<see cref="RestoreLeftovers"/>）。
     ///
@@ -44,11 +46,28 @@ namespace KokoSim.UnityEditorTools
             ("Assets/KokoSim/Audio/Vendor/Suno", 0.6f, 22050),       // 応援の曲（素材は 44.1kHz）
         };
 
+        /// <summary>
+        /// 画像のフォルダと検索語 → ビルドの間だけ使う WebGL 向けの最大サイズ（長辺）。形式・圧縮は元のまま。
+        /// タイトルのロゴは文字の輪郭が甘くなるうえ gzip で 0.5MB しかないので触らない（水彩だけ）。
+        /// </summary>
+        internal static readonly (string Dir, string Filter, int MaxSize)[] TextureCaps =
+        {
+            ("Assets/UI/Images/event-bg", "t:Texture2D", 1024),                            // イベント会話の背景（画面いっぱい・元は 1600×893）
+            ("Assets/UI/Images/title", "t:Texture2D title-koshien-watercolor", 1024),     // タイトルの水彩（画面いっぱい・元は 1376×768）
+            ("Assets/UI/Images/portraits", "t:Texture2D", 512),                           // 立ち絵（表示は幅 208px・元は 768×1024 前後）
+        };
+
         private const string StadiumDir = "Assets/KokoSim/Resources";
         /// <summary>退避先（Resources の外・gitignore）。中身が残っていれば前回の戻し損ね。</summary>
         internal const string ParkDir = "Assets/WebDemoParked";
         /// <summary>音の設定の戻し用メモ（前回の戻し損ねを戻すため、ファイルに残す）。</summary>
         private const string AudioMemo = "Temp/webdemo-audio-restore.txt";
+        /// <summary>
+        /// 画像の設定の戻し先。書き換える前の .meta をそのまま写しておき、戻すときはファイルごと書き戻す
+        /// （設定を API で戻すと、Unity が既定の機種別の項目を書き足して .meta に差分が残るため）。
+        /// </summary>
+        private const string TextureMetaBackupDir = "Temp/webdemo-texture-meta";
+        private const string WebGLPlatform = "WebGL";
 
         [MenuItem("KokoSim/Build/ブラウザ体験版をビルド")]
         public static void Build() => Build("webdemo", decompressionFallback: true);
@@ -75,6 +94,7 @@ namespace KokoSim.UnityEditorTools
                 hidden = PlayerBuilder.HideDirs(PlayerBuilder.DemoExcludedResourceDirs);
                 ParkStadiums();
                 LowerAudioRates();
+                CapTextureSizes();
                 PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
                 PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
                 PlayerSettings.WebGL.decompressionFallback = decompressionFallback;
@@ -161,9 +181,44 @@ namespace KokoSim.UnityEditorTools
             }
         }
 
+        // ---- 画像 ----------------------------------------------------------------
+
+        internal static void CapTextureSizes()
+        {
+            Directory.CreateDirectory(TextureMetaBackupDir);
+            foreach (var (dir, filter, maxSize) in TextureCaps)
+            {
+                foreach (var guid in AssetDatabase.FindAssets(filter, new[] { dir }))
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    var imp = AssetImporter.GetAtPath(path) as TextureImporter;
+                    if (imp == null) continue;
+                    var after = imp.GetPlatformTextureSettings(WebGLPlatform);
+                    if (!after.overridden)
+                    {
+                        // 上書きが無い画像は既定の設定で焼かれている＝既定を写して大きさだけ変える
+                        var def = imp.GetDefaultPlatformTextureSettings();
+                        after.format = TextureImporterFormat.Automatic;
+                        after.textureCompression = def.textureCompression;
+                        after.compressionQuality = def.compressionQuality;
+                        after.crunchedCompression = def.crunchedCompression;
+                        after.resizeAlgorithm = def.resizeAlgorithm;
+                        after.maxTextureSize = def.maxTextureSize;
+                        after.overridden = true;
+                    }
+                    if (after.maxTextureSize <= maxSize) continue;
+                    // 書き換える前に .meta を写す（ファイル名は GUID・中身は元の .meta そのまま）
+                    File.Copy(path + ".meta", Path.Combine(TextureMetaBackupDir, guid), overwrite: true);
+                    after.maxTextureSize = maxSize;
+                    imp.SetPlatformTextureSettings(after);
+                    imp.SaveAndReimport();
+                }
+            }
+        }
+
         // ---- 後始末 ----------------------------------------------------------------
 
-        /// <summary>隠した声・退避した球場・書き換えた音の設定を元へ戻す。何も残っていなければ何もしない。</summary>
+        /// <summary>隠した声・退避した球場・書き換えた音と画像の設定を元へ戻す。何も残っていなければ何もしない。</summary>
         internal static void RestoreLeftovers()
         {
             var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
@@ -198,6 +253,18 @@ namespace KokoSim.UnityEditorTools
                     imp.SaveAndReimport();
                 }
                 File.Delete(AudioMemo);
+            }
+
+            if (Directory.Exists(TextureMetaBackupDir))
+            {
+                foreach (var backup in Directory.GetFiles(TextureMetaBackupDir))
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(Path.GetFileName(backup));
+                    if (string.IsNullOrEmpty(path)) { Debug.LogError("[WebDemo] 画像の設定を戻せない: " + backup); continue; }
+                    File.Copy(backup, path + ".meta", overwrite: true);
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                }
+                Directory.Delete(TextureMetaBackupDir, true);
             }
         }
     }
