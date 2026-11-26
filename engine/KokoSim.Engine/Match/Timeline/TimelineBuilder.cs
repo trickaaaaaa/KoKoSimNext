@@ -1824,6 +1824,7 @@ public static class TimelineBuilder
     /// 封殺（ForceOutAt*）・犠打成功・内野安打の絵はこの値をそのまま使う＝「判定＝絵」原則（design-18 §4.5-③）。
     /// null＝未指定（ランナー進塁の配線だけを見るテスト等の便宜）: <see cref="DefaultFielding"/> の投手処理で代用する。
     /// </param>
+    /// <param name="safetyBunt">セーフティバントか。打者の一塁への走り出し（<see cref="BuntResolver.BatterToFirstSeconds"/>）を判定と揃える。</param>
     /// <summary><see cref="BuildBunt"/> の <c>fielding</c> 省略時の既定値（テスト便宜。issue #1092）。
     /// 投手がマウンドとホームの中間あたりで平均的な肩・守備で処理したとみなす代表値＝新しい判定式は発明しない
     /// （BuntResolver.RollFielding を呼ばない固定点なので、本番経路では必ず実レースの値を渡すこと）。</summary>
@@ -1838,7 +1839,7 @@ public static class TimelineBuilder
         Player? preFirst, Player? preSecond, Player? preThird,
         Player? postFirst, Player? postSecond, Player? postThird,
         BaserunningCoefficients c, FieldGeometry field, bool isSqueeze = false, Handedness? batterSide = null,
-        BuntResolver.BuntFielding? fielding = null)
+        BuntResolver.BuntFielding? fielding = null, bool safetyBunt = false)
     {
         var side = batterSide ?? batter.Bats;
         var resolvedFielding = fielding ?? DefaultFielding(c);
@@ -2132,7 +2133,6 @@ public static class TimelineBuilder
         {
             // 犠打成功/内野安打（issue #1092）: 判定層と同じ処理点・処理時刻（resolvedFielding）＋送球経路の
             // 単一ソース（HomePlayResolver.ResolveThrowPath）を使う＝封殺の各枝と同型（design-18の「判定＝絵」原則）。
-            // 呼び出し元は safety フラグを保持していないため、打者の駆け抜けは既定として犠打側で揃える（絵の近似）。
             var situation = resolvedFielding.Situation;
             var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
             var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
@@ -2140,7 +2140,7 @@ public static class TimelineBuilder
             var throwArrive = ContactAt + throwPath.ArriveAtSeconds;
             var throwRelease = ContactAt + throwPath.ReleaseAtSeconds;
 
-            var battingTime = BuntResolver.BatterToFirstSeconds(batter, safety: false, side, c);
+            var battingTime = BuntResolver.BatterToFirstSeconds(batter, safetyBunt, side, c);
             var batterArriveRaw = ContactAt + battingTime;
             var safe = result is BuntResult.InfieldHit or BuntResult.FieldersChoice;
             // 矛盾ガード（他の封殺枝と同じ考え方): 確定済みの結果と食い違う到達順にしない。送球は物理レースの
@@ -2173,7 +2173,8 @@ public static class TimelineBuilder
                 Label = "打", T0 = ContactAt, T1 = batterArrive, From = Home, To = firstPt,
                 OutAtEnd = !safe, Force = true, Runner = batter,
             });
-            resolvedAt = Math.Max(batterArrive, throwArrive);
+            // 一塁はフォース＝アウトは送球が着いた瞬間（封殺の各枝と同じ）。セーフは打者が先に着くので従来どおり送球の到達。
+            resolvedAt = throwArrive;
             resultText = result switch
             {
                 BuntResult.SacrificeSuccess => "犠打成功",

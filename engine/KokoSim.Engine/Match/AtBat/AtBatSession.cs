@@ -373,6 +373,7 @@ public sealed class AtBatSession
             }
 
             var safety = battingOverride == Tactics.PitchBattingOverride.SafetyBunt;
+            _buntSafety = safety;
             var courseDifficulty = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y);
             // 走者は _runnersNow（この球を投げる時点の塁上。basesNow が渡されなければ打席頭のスナップショット
             // ＝GameEngine が bases.Third を無条件に渡す）を使うので、通常バント（非スクイズ）でもそのまま
@@ -786,13 +787,15 @@ public sealed class AtBatSession
     private Fielding.ThrowScatterModel.Scatter? _buntThrowScatter;
     /// <summary>直近のバント処理の物理レース結果（issue #1092。<see cref="AtBatResult.BuntFielding"/> へ写す）。</summary>
     private BuntResolver.BuntFielding? _buntFielding;
+    /// <summary>直近のバントがセーフティバントだったか（<see cref="AtBatResult.BuntSafety"/> へ写す）。</summary>
+    private bool _buntSafety;
 
     private PitchResolution FinishBunt(PlateAppearanceResult result, BuntResult bunt)
     {
         _result = new AtBatResult(result, _pitchCount)
         {
             PitchLog = _pitchLog, BuntOutcome = bunt,
-            BuntThrowScatter = _buntThrowScatter, BuntFielding = _buntFielding,
+            BuntThrowScatter = _buntThrowScatter, BuntFielding = _buntFielding, BuntSafety = _buntSafety,
         };
         return new PitchResolution(EndsPlateAppearance: true);
     }

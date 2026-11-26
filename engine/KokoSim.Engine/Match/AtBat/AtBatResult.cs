@@ -42,6 +42,9 @@ public sealed record AtBatResult(PlateAppearanceResult Result, int Pitches)
     /// 「判定＝絵」で使う単一ソース）。送球まで行かなければ null。</summary>
     public BuntResolver.BuntFielding? BuntFielding { get; init; }
 
+    /// <summary>セーフティバントの打席か（絵の打者の走り出しを判定と揃える表示用。送りバント・スクイズは false）。</summary>
+    public bool BuntSafety { get; init; }
+
     /// <summary>
     /// スクイズ試行で確定した打席の詳細結果（設計書15 Phase D-2c）。null=スクイズ経路ではない。
     /// ウエストを読まれて三塁走者だけが挟殺された場合はここではなく打席継続のまま

@@ -2240,6 +2240,76 @@ public sealed class TimelineTests
         Assert.Contains(tl.Judgements, j => j.Kind == JudgementKind.Out);
     }
 
+    /// <summary>issue #1659: 一塁はフォース＝送球が一塁に着いた瞬間にアウトの判定とテロップを出す（打者の到達を待たない）。</summary>
+    [Theory]
+    [InlineData(10)]
+    [InlineData(50)]
+    [InlineData(90)]
+    public void BuntTimeline_SacrificeSuccess_OutJudgementAndCaptionAtThrowArrive(int batterSpeed)
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = batterSpeed, Bunt = 50 };
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.SacrificeSuccess,
+            null, null, null, null, null, null, c, field, fielding: TestFielding(c));
+
+        var throwArrive = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw).T1;
+        var leg = Assert.Single(tl.Runners);
+        Assert.True(leg.T1 > throwArrive, "前提: 打者は送球より後に一塁へ着く");
+        var judgement = Assert.Single(tl.Judgements, j => j.Kind == JudgementKind.Out);
+        Assert.Equal(throwArrive, judgement.T, 9);
+        var caption = Assert.Single(tl.Captions, cap => cap.Text.Contains("一塁で刺した"));
+        Assert.Equal(throwArrive, caption.T, 9);
+        Assert.Equal(throwArrive, tl.ResolvedAt, 9);
+    }
+
+    /// <summary>issue #1659: セーフ（内野安打・野選）の判定時刻は従来どおり送球の到達。</summary>
+    [Theory]
+    [InlineData(BuntResult.InfieldHit)]
+    [InlineData(BuntResult.FieldersChoice)]
+    public void BuntTimeline_Safe_ResolvedAtStaysAtThrowArrive(BuntResult result)
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, result,
+            null, null, null, null, null, null, c, field, fielding: TestFielding(c));
+
+        var throwArrive = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw).T1;
+        Assert.Equal(throwArrive, tl.ResolvedAt, 9);
+        Assert.Equal(throwArrive, Assert.Single(tl.Captions, cap => cap.Text.StartsWith("セーフ")).T, 9);
+    }
+
+    /// <summary>issue #1659: セーフティバントの絵は、判定と同じセーフティの走り出し（構えの遅れが小さい）で打者を走らせる。</summary>
+    [Fact]
+    public void BuntTimeline_SafetyBunt_BatterRunsWithSafetyStart()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+        // 内野安打は矛盾ガードで打者側がずれるので、ガードに掛からないアウト側（SacrificeSuccess＝打者は遅い側）で比べる。
+        var sac = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.SacrificeSuccess,
+            null, null, null, null, null, null, c, field, fielding: TestFielding(c), safetyBunt: false);
+        var safety = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.SacrificeSuccess,
+            null, null, null, null, null, null, c, field, fielding: TestFielding(c), safetyBunt: true);
+
+        var expectedDelta = BuntResolver.BatterToFirstSeconds(batter, true, batter.Bats, c)
+            - BuntResolver.BatterToFirstSeconds(batter, false, batter.Bats, c);
+        Assert.NotEqual(0.0, expectedDelta);
+        var sacArrive = Assert.Single(sac.Runners).T1;
+        var safetyArrive = Assert.Single(safety.Runners).T1;
+        Assert.Equal(expectedDelta, safetyArrive - sacArrive, 6);
+    }
+
     [Fact]
     public void BuntTimeline_InfieldHit_BatterSafeAtFirst_ThrowNeverArrivesBeforeBatter()
     {
