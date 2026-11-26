@@ -71,6 +71,17 @@ public sealed record GameResult
     /// <summary>個人投手成績（登板順）。</summary>
     public IReadOnlyList<PitchingLine> AwayPitching { get; init; } = Array.Empty<PitchingLine>();
     public IReadOnlyList<PitchingLine> HomePitching { get; init; } = Array.Empty<PitchingLine>();
+    /// <summary>登板ごとの投手成績（実際の登板順・同じ投手が戻れば別の行。issue #1693）。観測専用＝digest・統計には含めない。
+    /// 同じ投手の行の合計は <see cref="AwayPitching"/>／<see cref="HomePitching"/> の1行と一致する。</summary>
+    public IReadOnlyList<PitchingLine> AwayPitchingAppearances { get; init; } = Array.Empty<PitchingLine>();
+    public IReadOnlyList<PitchingLine> HomePitchingAppearances { get; init; } = Array.Empty<PitchingLine>();
+
+    /// <summary>表示用の投手成績。登板ごとの行があればそれ、無ければ（抽象シム等）1人1行の累計。</summary>
+    public IReadOnlyList<PitchingLine> PitchingForDisplay(bool away)
+    {
+        var stints = away ? AwayPitchingAppearances : HomePitchingAppearances;
+        return stints.Count > 0 ? stints : away ? AwayPitching : HomePitching;
+    }
     /// <summary>個人守備成績（失策があった選手のみ。issue #91）。合計は AwayErrors/HomeErrors と一致する。</summary>
     public IReadOnlyList<FieldingLine> AwayFielding { get; init; } = Array.Empty<FieldingLine>();
     public IReadOnlyList<FieldingLine> HomeFielding { get; init; } = Array.Empty<FieldingLine>();
@@ -437,6 +448,8 @@ public static class GameEngine
             HomeBatting = home.BuildBattingLines(),
             AwayPitching = away.BuildPitchingLines(),
             HomePitching = home.BuildPitchingLines(),
+            AwayPitchingAppearances = away.BuildPitchingAppearanceLines(),
+            HomePitchingAppearances = home.BuildPitchingAppearanceLines(),
             AwayFielding = away.BuildFieldingLines(),
             HomeFielding = home.BuildFieldingLines(),
             AwayBatteryOuts = away.BuildBatteryOutsLines(),

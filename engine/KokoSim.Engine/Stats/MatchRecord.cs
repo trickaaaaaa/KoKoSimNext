@@ -15,7 +15,7 @@ public sealed record MatchRecordBatter(
     int AtBats, int Hits, int Rbi, int HomeRuns, int Triples, int Doubles,
     int WalksHbp, int StrikeOuts, int StolenBases);
 
-/// <summary>投手成績の1行（登板順）。投球回はアウト数で持つ。</summary>
+/// <summary>投手成績の1行（登板ごと・実際の登板順。同じ投手が戻れば別の行）。投球回はアウト数で持つ。</summary>
 public sealed record MatchRecordPitcher(
     string Name, int Outs, int Pitches, int Hits, int StrikeOuts, int WalksHbp, int Runs)
 {
@@ -103,7 +103,7 @@ public static class MatchRecordFactory
                 b.Walks + b.HitByPitches, b.StrikeOuts, b.StolenBases));
 
         var pitching = new List<MatchRecordPitcher>();
-        foreach (var p in isAway ? r.AwayPitching : r.HomePitching)
+        foreach (var p in r.PitchingForDisplay(isAway))
             pitching.Add(new MatchRecordPitcher(
                 p.Name, p.Outs, p.Pitches, p.Hits, p.StrikeOuts, p.Walks + p.HitBatters, p.Runs));
 

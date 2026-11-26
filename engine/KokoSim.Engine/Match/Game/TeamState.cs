@@ -281,6 +281,34 @@ public sealed class TeamState
         public int VelocitySamples;
         public double VelocitySumKmh, MaxVelocityKmh;
         public readonly Dictionary<PitchType, PitchTypeAccum> ByPitch = new();
+
+        public void AddSpeed(double velocityKmh)
+        {
+            VelocitySamples++;
+            VelocitySumKmh += velocityKmh;
+            if (velocityKmh > MaxVelocityKmh) MaxVelocityKmh = velocityKmh;
+        }
+
+        public void AddFaced(PlateAppearanceResult r, int runs, int outs, int pitches, PitchType? decisivePitch, int unearnedRuns)
+        {
+            BF++;
+            if (r.IsHit()) H++;
+            Runs += runs;
+            EarnedRuns += runs - unearnedRuns;
+            if (r == PlateAppearanceResult.HomeRun) HRA++;   // 被本塁打（issue #77）
+            if (r == PlateAppearanceResult.Strikeout) SO++;
+            if (r == PlateAppearanceResult.Walk) BB++;
+            if (r == PlateAppearanceResult.HitByPitch) HB++;
+            Outs += outs;
+            Pitches += pitches;
+            if (decisivePitch.HasValue && r.IsBattedBall())
+            {
+                if (!ByPitch.TryGetValue(decisivePitch.Value, out var pa)) { pa = new PitchTypeAccum(); ByPitch[decisivePitch.Value] = pa; }
+                pa.AtBats++;
+                if (r.IsHit()) pa.Hits++;
+                if (r == PlateAppearanceResult.HomeRun) pa.HomeRuns++;
+            }
+        }
     }
     private sealed class PitchTypeAccum { public int AtBats, Hits, HomeRuns; }
     private sealed class FieldAccum { public FieldPosition Position; public int Errors; }
@@ -291,6 +319,27 @@ public sealed class TeamState
     {
         if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum { Seq = _pit.Count }; _pit[key] = a; }
         return a;
+    }
+
+    // 登板ごとの成績（マウンドに上がってから降りるまで）。累計 _pit とは別の観測用の列で、同じ記録を二重に積むだけ
+    // ＝累計・試合結果・乱数には影響しない。投手が別の投手に替わるたびに新しい登板になる（同じ投手が戻れば別の行）。
+    private readonly List<(Player Key, PitAccum Acc)> _appearances = new();
+
+    /// <summary>
+    /// 今の登板の成績。onMound＝マウンドで起きた記録（対戦・球・打席外アウト）で、直前の登板と投手が違えば新しい登板を始める。
+    /// onMound でない記録（引き継ぎ走者の失点を前の投手へ付ける）は、その投手の最後の登板へ積む。
+    /// </summary>
+    private PitAccum AppearanceOf(Player key, bool onMound)
+    {
+        if (onMound)
+        {
+            if (_appearances.Count == 0 || !_appearances[_appearances.Count - 1].Key.Equals(key)) _appearances.Add((key, new PitAccum()));
+            return _appearances[_appearances.Count - 1].Acc;
+        }
+        for (var i = _appearances.Count - 1; i >= 0; i--)
+            if (_appearances[i].Key.Equals(key)) return _appearances[i].Acc;
+        _appearances.Add((key, new PitAccum()));
+        return _appearances[_appearances.Count - 1].Acc;
     }
     private readonly Dictionary<Player, FieldAccum> _field = new();
 
@@ -374,10 +423,9 @@ public sealed class TeamState
     public void RecordPitchSpeed(Player pitcher, double velocityKmh)
     {
         if (velocityKmh <= 0) return;
-        var a = GetOrAddPit(KeyOf(pitcher));
-        a.VelocitySamples++;
-        a.VelocitySumKmh += velocityKmh;
-        if (velocityKmh > a.MaxVelocityKmh) a.MaxVelocityKmh = velocityKmh;
+        var key = KeyOf(pitcher);
+        GetOrAddPit(key).AddSpeed(velocityKmh);
+        AppearanceOf(key, onMound: true).AddSpeed(velocityKmh);
     }
 
     /// <summary>投手の対戦1打者を記録。decisivePitch＝打席確定球の球種（インプレー/被安打を生んだ球のみ, issue #180）。
@@ -387,24 +435,8 @@ public sealed class TeamState
     {
         var key = KeyOf(pitcher);
         NoteFielders();
-        var a = GetOrAddPit(key);
-        a.BF++;
-        if (r.IsHit()) a.H++;
-        a.Runs += runs;
-        a.EarnedRuns += runs - unearnedRuns;
-        if (r == PlateAppearanceResult.HomeRun) a.HRA++;   // 被本塁打（issue #77）
-        if (r == PlateAppearanceResult.Strikeout) a.SO++;
-        if (r == PlateAppearanceResult.Walk) a.BB++;
-        if (r == PlateAppearanceResult.HitByPitch) a.HB++;
-        a.Outs += outs;
-        a.Pitches += pitches;
-        if (decisivePitch.HasValue && r.IsBattedBall())
-        {
-            if (!a.ByPitch.TryGetValue(decisivePitch.Value, out var pa)) { pa = new PitchTypeAccum(); a.ByPitch[decisivePitch.Value] = pa; }
-            pa.AtBats++;
-            if (r.IsHit()) pa.Hits++;
-            if (r == PlateAppearanceResult.HomeRun) pa.HomeRuns++;
-        }
+        GetOrAddPit(key).AddFaced(r, runs, outs, pitches, decisivePitch, unearnedRuns);
+        AppearanceOf(key, onMound: true).AddFaced(r, runs, outs, pitches, decisivePitch, unearnedRuns);
     }
 
     /// <summary>守備側の打席を1つ消化するたびに、いま守っている選手とその位置を控える（ボックススコアの「実際に守った位置」）。</summary>
@@ -440,6 +472,9 @@ public sealed class TeamState
         var a = GetOrAddPit(key);
         a.Runs += runs;
         a.EarnedRuns += runs - unearnedRuns;
+        var st = AppearanceOf(key, onMound: false);
+        st.Runs += runs;
+        st.EarnedRuns += runs - unearnedRuns;
     }
 
     /// <summary>
@@ -453,6 +488,7 @@ public sealed class TeamState
         var key = KeyOf(pitcher);
         var a = GetOrAddPit(key);
         a.Outs += outs;
+        AppearanceOf(key, onMound: true).Outs += outs;
     }
 
     /// <summary>
@@ -465,6 +501,7 @@ public sealed class TeamState
         var key = KeyOf(pitcher);
         var a = GetOrAddPit(key);
         a.Pitches += pitches;
+        AppearanceOf(key, onMound: true).Pitches += pitches;
     }
 
     /// <summary>当該試合でこの打者が既に完了した打席数（尻上がり等の試合内非線形スキル用, 設計書10）。</summary>
@@ -595,6 +632,17 @@ public sealed class TeamState
         return lines;
     }
 
+    private static PitchingLine ToPitchingLine(Player p, PitAccum a)
+    {
+        IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? byPitch = a.ByPitch.Count > 0
+            ? a.ByPitch.ToDictionary(kv => kv.Key, kv => new PitchTypeBattingLine(kv.Value.AtBats, kv.Value.Hits, kv.Value.HomeRuns))
+            : null;
+        return new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns)
+        {
+            VelocitySamples = a.VelocitySamples, VelocitySumKmh = a.VelocitySumKmh, MaxVelocityKmh = a.MaxVelocityKmh,
+        };
+    }
+
     /// <summary>登板順の投手成績（先発→登板した控え）。</summary>
     public IReadOnlyList<PitchingLine> BuildPitchingLines()
     {
@@ -604,18 +652,23 @@ public sealed class TeamState
         {
             if (p == null || seen.Contains(KeyOf(p)) || !_pit.TryGetValue(KeyOf(p), out var a)) return;
             seen.Add(KeyOf(p));
-            IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? byPitch = a.ByPitch.Count > 0
-                ? a.ByPitch.ToDictionary(kv => kv.Key, kv => new PitchTypeBattingLine(kv.Value.AtBats, kv.Value.Hits, kv.Value.HomeRuns))
-                : null;
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns)
-            {
-                VelocitySamples = a.VelocitySamples, VelocitySumKmh = a.VelocitySumKmh, MaxVelocityKmh = a.MaxVelocityKmh,
-            });
+            lines.Add(ToPitchingLine(p, a));
         }
         Add(_starter);
         // 先発の次は実際に投げた順（成績が最初に積まれた順）。控え（Reserves）の背番号順ではない。
         // 在フィールドから昇格した野手（issue #209 Phase C）も _pit に成績があるので同じ経路で拾える。
         foreach (var kv in _pit.OrderBy(kv => kv.Value.Seq)) Add(kv.Key);
+        return lines;
+    }
+
+    /// <summary>
+    /// 登板ごとの投手成績（実際にマウンドに上がった順・同じ投手が戻れば別の行）。観測データ（issue #1693）。
+    /// 同じ投手の行の合計は <see cref="BuildPitchingLines"/> の1行と一致する。
+    /// </summary>
+    public IReadOnlyList<PitchingLine> BuildPitchingAppearanceLines()
+    {
+        var lines = new List<PitchingLine>(_appearances.Count);
+        foreach (var (key, acc) in _appearances) lines.Add(ToPitchingLine(key, acc));
         return lines;
     }
 
