@@ -2972,6 +2972,11 @@ public static class CoefficientsLoader
         public double DefenseWeightRightField { get; set; } = D.DefenseWeightRightField;
         public double DefenseWeightLeftField { get; set; } = D.DefenseWeightLeftField;
         public double DefenseWeightFirstBase { get; set; } = D.DefenseWeightFirstBase;
+        public int DhReleaseMinTier { get; set; } = D.DhReleaseMinTier;
+        public int DhReleaseFromInning { get; set; } = D.DhReleaseFromInning;
+        public int DhReleaseMaxLead { get; set; } = D.DhReleaseMaxLead;
+        public double DhReleaseMinGain { get; set; } = D.DhReleaseMinGain;
+        public double DhReleaseBatCost { get; set; } = D.DhReleaseBatCost;
         public int ConvertReliefMinTier { get; set; } = D.ConvertReliefMinTier;
         public double ConvertReliefMinBatting { get; set; } = D.ConvertReliefMinBatting;
 
@@ -3085,6 +3090,11 @@ public static class CoefficientsLoader
             DefenseWeightRightField = DefenseWeightRightField,
             DefenseWeightLeftField = DefenseWeightLeftField,
             DefenseWeightFirstBase = DefenseWeightFirstBase,
+            DhReleaseMinTier = DhReleaseMinTier,
+            DhReleaseFromInning = DhReleaseFromInning,
+            DhReleaseMaxLead = DhReleaseMaxLead,
+            DhReleaseMinGain = DhReleaseMinGain,
+            DhReleaseBatCost = DhReleaseBatCost,
             ConvertReliefMinTier = ConvertReliefMinTier,
             ConvertReliefMinBatting = ConvertReliefMinBatting,
         };

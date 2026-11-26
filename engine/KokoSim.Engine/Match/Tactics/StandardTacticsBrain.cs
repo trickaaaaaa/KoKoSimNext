@@ -442,6 +442,9 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     /// </summary>
     public (int SlotA, int SlotB)? CallDefenseSwap(in DefenseSwapSituation s, IRandomSource rng) => null;
 
+    /// <summary>DH解除（issue #1492）。基準采配は<b>解除しない</b>＝恒等・RNG不使用（引き出しは <see cref="AiTacticsBrain.CallReleaseDh"/>）。</summary>
+    public Field.FieldPosition? CallReleaseDh(in DhReleaseSituation s, IRandomSource rng) => null;
+
     /// <summary>
     /// 継投（設計書11 §4, issue #209）。基準采配は従来の疲労球数トリガーそのまま＝engine が事前計算した
     /// <see cref="PitchingChangeSituation.FatigueTriggered"/>（目安投球数＋疲労margin。ハードキャップ撤廃, issue #356）または週間球数制限で

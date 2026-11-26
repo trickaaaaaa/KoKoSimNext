@@ -208,14 +208,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// </summary>
     public (int SlotA, int SlotB)? CallDefenseSwap(in DefenseSwapSituation s, IRandomSource rng)
     {
-        // ③ 校風による実効ティア補正（守り勝つ＝組み替えに積極的／豪腕依存＝投手任せで動かさない）。
-        var effTier = _profile.TierRank + _profile.Style switch
-        {
-            SchoolStyle.DefensiveMinded => _ai.DefensiveMindedSwapTierBonus,
-            SchoolStyle.AceDependent => -_ai.AceDependentSwapTierPenalty,
-            _ => 0,
-        };
-        if (effTier < _ai.DefenseSwapMinTier) return null;   // ② 引き出しになければ運用しない（RNG不使用）
+        if (DefenseEffectiveTier() < _ai.DefenseSwapMinTier) return null;   // ② 引き出しになければ運用しない（RNG不使用）
 
         // A-2: 終盤かつ僅差のときだけ。ここまでも RNG は引かない。
         if (s.Inning < _ai.DefenseSwapFromInning) return null;
@@ -227,6 +220,64 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         // ① 能力値: 改善に気づけるか。外すとそのまま＝好機を逃す（他の判断と同じ丸め方）。
         return MathUtil.Chance(_optimalProb, rng) ? best : null;
     }
+
+    /// <summary>③校風による守備操作の実効ティア（守り勝つ＝積極的／豪腕依存＝投手任せで動かさない）。入替・DH解除が共有する。</summary>
+    private int DefenseEffectiveTier() => _profile.TierRank + _profile.Style switch
+    {
+        SchoolStyle.DefensiveMinded => _ai.DefensiveMindedSwapTierBonus,
+        SchoolStyle.AceDependent => -_ai.AceDependentSwapTierPenalty,
+        _ => 0,
+    };
+
+    /// <summary>
+    /// DH解除（issue #1492, 設計書09 §6・設計書11）。DHを守備に就かせる手＝守りの上手いDHが負担の重い位置の下手な野手に代わり、
+    /// その野手の打順スロットへ投手が入る（DH消滅）。打線を弱める手なので<b>リードを守る終盤限定</b>。
+    /// ③校風で実効ティアを補正し、②ティア関門（既定 <c>DhReleaseMinTier</c>=4＝C 以上が通る）、①能力値で好機を掴めるかを引く。
+    /// 関門を通らない限り RNG は一切引かない。
+    /// </summary>
+    public Field.FieldPosition? CallReleaseDh(in DhReleaseSituation s, IRandomSource rng)
+    {
+        if (DefenseEffectiveTier() < _ai.DhReleaseMinTier) return null;   // ② 引き出しになければ運用しない（RNG不使用）
+        if (s.Inning < _ai.DhReleaseFromInning) return null;
+        if (s.ScoreDiff < 1 || s.ScoreDiff > _ai.DhReleaseMaxLead) return null;   // リードを守る場面のみ
+
+        var best = BestDhRelease(s);
+        if (best is null) return null;
+
+        // ① 能力値: 改善に気づけるか。外すとそのまま＝好機を逃す（他の判断と同じ丸め方）。
+        return MathUtil.Chance(_optimalProb, rng) ? best : null;
+    }
+
+    /// <summary>
+    /// DHが就いたときの利得が最大の守備位置を返す（RNG不使用＝決定論）。
+    /// 利得 = 負担重み × (DHのその位置での守備 − 退く野手の守備) − DhReleaseBatCost × max(0, 野手の打力 − 投手の打力)。
+    /// 捕手は専門職なので動かさない（重み表に載せない）。同値は打順スロットの小さい方（決定論の担保）。
+    /// </summary>
+    private Field.FieldPosition? BestDhRelease(in DhReleaseSituation s)
+    {
+        if (s.DhSlot < 0 || s.DhSlot >= s.Lineup.Count) return null;
+        var dh = s.Lineup[s.DhSlot];
+        var pitcherBat = BattingOf(s.Pitcher);
+        Field.FieldPosition? best = null;
+        var bestGain = _ai.DhReleaseMinGain;   // これ未満の改善では解除しない（> で比較＝閾値ちょうどは不採用）
+        var n = System.Math.Min(s.Lineup.Count, s.Swappable.Count);
+        for (var i = 0; i < n; i++)
+        {
+            if (i == s.DhSlot || !s.Swappable[i]) continue;
+            var fielder = s.Lineup[i];
+            if (DefenseWeight(fielder.Position) is not { } w) continue;
+            // 左投げを捕手・二塁・三塁・遊撃へ入れない規則は守備固めと同じ単一ソース（捕手は重み表に無く対象外）。
+            if (dh.Throws == Players.Handedness.Left && Field.FieldPositions.IsRightThrowOnly(fielder.Position)) continue;
+            var gain = w * (dh.AtPosition(fielder.Position).Fielding - fielder.Fielding)
+                       - _ai.DhReleaseBatCost * System.Math.Max(0.0, BattingOf(fielder) - pitcherBat);
+            if (gain > bestGain) { bestGain = gain; best = fielder.Position; }
+        }
+        return best;
+    }
+
+    /// <summary>打力の目安（ミート・パワーの平均を物理層の効きで読む。ConvertTargetFor と同じ物差し）。</summary>
+    private double BattingOf(Players.Player p)
+        => (_inner.AbilityEffect.Phys(p.Contact) + _inner.AbilityEffect.Phys(p.Power)) / 2.0;
 
     /// <summary>
     /// 守備の評価（<see cref="DefensePlacement.ScoreAt"/>＝試合前のスタメン配置と同じ1本。issue #1709）の総和を

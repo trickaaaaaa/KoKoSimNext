@@ -1382,6 +1382,12 @@ enemy_ai:
   defense_weight_right_field: 0.55
   defense_weight_left_field: 0.45
   defense_weight_first_base: 0.30
+  # DH解除（issue #1492, 設計書09 §6）: 守りの上手いDHが重い守備位置の下手な野手に代わり、その打順へ投手が入る（DH消滅）
+  dh_release_min_tier: 4                      # C: 野手を1人退場させ投手に打たせる上級の運用
+  dh_release_from_inning: 8                   # 終盤限定（この回以降）
+  dh_release_max_lead: 2                      # リードを守る場面のみ（守備側視点で1〜この値）
+  dh_release_min_gain: 8.0                    # 守備スコアの改善 − 打力の損失 がこれ以上のときだけ
+  dh_release_bat_cost: 0.5                    # 打力の損失（退く野手−投手の打力差）の換算係数
   convert_relief_min_tier: 5                  # B-1: コンバート継投（B＝交代枠を1つ払う上級の運用）
   convert_relief_min_batting: 60.0            # 元投手の (ミート+パワー)/2 がこれ以上なら打順に残す
 
