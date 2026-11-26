@@ -814,7 +814,6 @@ public static class FieldingResolver
         IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
     {
         var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
-        var radius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
         var t = path.HangTimeSeconds;
         for (var i = 0; i < MaxInterceptScanSteps; i++, t += step)
         {
@@ -825,6 +824,7 @@ public static class FieldingResolver
                 foreach (var f in fielders)
                 {
                     if (!IsInfield(f)) continue;
+                    var radius = Math.Max(0.0, InfielderRadius(f, coeff));
                     var travel = Math.Max(0.0, (p - f.Location).Length - radius);
                     var reach = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
                     if (reach <= t) return true; // この時刻・位置で捕えられる
@@ -844,7 +844,6 @@ public static class FieldingResolver
         IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
     {
         var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
-        var radius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
         Fielder? best = null;
         var bestPoint = default(Vector3D);
         var bestShortfall = double.PositiveInfinity;
@@ -857,6 +856,7 @@ public static class FieldingResolver
             foreach (var f in fielders)
             {
                 if (!IsInfield(f)) continue;
+                var radius = Math.Max(0.0, InfielderRadius(f, coeff));
                 var travel = Math.Max(0.0, (p - f.Location).Length - radius);
                 var reach = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
                 var shortfall = reach - t; // 正=間に合わない。最小=最も惜しかった。
@@ -890,7 +890,6 @@ public static class FieldingResolver
         var anySide = Math.Abs(firstSide) < 1.0;
 
         var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
-        var radius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
         Fielder? best = null;
         var bestPoint = default(Vector3D);
         var bestShortfall = double.PositiveInfinity;
@@ -904,6 +903,7 @@ public static class FieldingResolver
             {
                 if (!IsInfield(f) || f.Position == FieldPosition.Pitcher || f.Position == first.Position) continue;
                 if (!anySide && SideOf(f) * firstSide >= 0.0) continue;
+                var radius = Math.Max(0.0, InfielderRadius(f, coeff));
                 var travel = Math.Max(0.0, (p - f.Location).Length - radius);
                 var shortfall = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds - t;
                 if (shortfall < bestShortfall)
@@ -971,8 +971,9 @@ public static class FieldingResolver
         var zoneBallTime = new double[n];   // その最接近点を打球が通る時刻
         var zonePoint = new Vector3D[n];    // その最接近点
         var zoneAtGloveHeight = new bool[n]; // zone* がグラブの届く高さの点で更新済みか
-        var cutRadius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
-        var diveReach = Math.Max(0.0, Math.Min(cutRadius, coeff.InfielderDiveReachM));
+        // 守備範囲・飛びつきリーチは野手ごと（issue #1661: 守備力で半径が変わる）。
+        var cutRadius = new double[n];
+        var diveReach = new double[n];
         for (var k = 0; k < n; k++)
         {
             gloveTime[k] = double.PositiveInfinity;
@@ -983,6 +984,8 @@ public static class FieldingResolver
             zoneDist[k] = double.MaxValue;
             zoneBallTime[k] = path.HangTimeSeconds;
             zonePoint[k] = path.Landing;
+            cutRadius[k] = Math.Max(0.0, InfielderRadius(infield[k], coeff));
+            diveReach[k] = Math.Max(0.0, Math.Min(cutRadius[k], coeff.InfielderDiveReachM));
         }
 
         for (var t = path.HangTimeSeconds; t <= end + step; t += step)
@@ -1009,7 +1012,7 @@ public static class FieldingResolver
                 {
                     // 頭上抜け判定（InfielderCanCutOff）と**同じ式**。あちらが「抜けていない」と言った
                     // 打球は、必ずここで誰かが触れる時刻・点を持つ＝2つの判定が食い違わない。
-                    var travel = Math.Max(0.0, dist - cutRadius);
+                    var travel = Math.Max(0.0, dist - cutRadius[k]);
                     if (travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds <= tt)
                     {
                         cutTime[k] = tt;
@@ -1019,8 +1022,8 @@ public static class FieldingResolver
                 if (double.IsPositiveInfinity(bodyTime[k]))
                 {
                     // 処理点・処理時刻の候補（issue fielder-body-far-from-ball-at-catch）: 体が「飛びつきの
-                    // 実効リーチ」まで球に寄れた最初の時刻。半径 4.2m は「内野を抜けるか」の判定にだけ残す。
-                    var travel = Math.Max(0.0, dist - diveReach);
+                    // 実効リーチ」まで球に寄れた最初の時刻。守備範囲の半径は「内野を抜けるか」の判定にだけ残す。
+                    var travel = Math.Max(0.0, dist - diveReach[k]);
                     if (travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds <= tt)
                     {
                         bodyTime[k] = tt;
@@ -1160,9 +1163,19 @@ public static class FieldingResolver
     /// <summary>追いかけ捕球の収束判定[s]。</summary>
     private const double CatchUpToleranceSeconds = 0.005;
 
-    private static bool IsInfield(Fielder f)
+    internal static bool IsInfield(Fielder f)
         => f.Position is FieldPosition.FirstBase or FieldPosition.SecondBase
             or FieldPosition.ThirdBase or FieldPosition.Shortstop or FieldPosition.Pitcher;
+
+    /// <summary>
+    /// 内野手1人分の横の守備範囲[m]（issue #1661）。守備(Fielding)50で <see cref="FieldingCoefficients.InfielderFieldingRadiusM"/>
+    /// と恒等、守備が高いほど広がり低いほど狭まる（下限・上限つき）。<paramref name="f"/> の Attributes は
+    /// 呼び出し元で既に <c>ToFielder(effect)</c> 済みの実効値であること（不変条件#1）。
+    /// </summary>
+    internal static double InfielderRadius(Fielder f, FieldingCoefficients coeff)
+        => f.Attributes.InfielderFieldingRadiusM(
+            coeff.InfielderFieldingRadiusM, coeff.InfielderFieldingRadiusSlopeMPerPoint,
+            coeff.InfielderFieldingRadiusFloorM, coeff.InfielderFieldingRadiusCapM);
 
     /// <summary>
     /// 空中で捕れなかった打球（＝安打）の解決。着地後の転がり → 回収 → 各塁への送球 vs 打者走者。

@@ -53,4 +53,13 @@ public sealed record FielderAttributes
     /// </summary>
     public double TransferFactor(double slopePerPoint, double minFactor)
         => Math.Max(minFactor, 1.0 - (Fielding - 50) * slopePerPoint);
+
+    /// <summary>
+    /// 内野手の横の守備範囲[m]（グラブ＋ダイビングで届く半径, issue #1661）。守備(Fielding)50で
+    /// <paramref name="baseM"/> と恒等（帯不変, 不変条件#5）。守備が高いほど広がり（<paramref name="slopePerPoint"/>）、
+    /// 低いほど狭まる。<paramref name="floorM"/>・<paramref name="capM"/> で頭打ちにする。
+    /// 呼び出し側は <c>ToFielder(effect)</c> で実効値へ投影した後のインスタンスで呼ぶこと（不変条件#1）。
+    /// </summary>
+    public double InfielderFieldingRadiusM(double baseM, double slopePerPoint, double floorM, double capM)
+        => Math.Clamp(baseM + (Fielding - 50) * slopePerPoint, floorM, capM);
 }

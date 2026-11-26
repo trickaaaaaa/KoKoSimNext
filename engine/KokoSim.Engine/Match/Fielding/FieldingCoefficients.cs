@@ -497,11 +497,26 @@ public sealed record FieldingCoefficients
     public double InfielderReachHeightM { get; init; } = 2.20;
 
     /// <summary>
-    /// 内野手の横の守備範囲[m]（グラブ＋ダイビングで届く半径）。打球がこの半径内を通れば
+    /// 内野手の横の守備範囲[m]（グラブ＋ダイビングで届く半径）の基準値＝守備50のときの値。打球がこの半径内を通れば
     /// 内野手は処理できる（＝内野を抜けない）。どの内野手もこの範囲で捕えられず外野まで達する強い打球だけが
     /// 「内野を抜ける」（Issue #63 やること2＝ホール／頭上の二次展開）。大きいほど内野を抜けにくい＝帯校正ノブ。
+    /// 実際に使う値は守備力で変える（<see cref="KokoSim.Engine.Players.FielderAttributes.InfielderFieldingRadiusM"/>、
+    /// issue #1661）: 守備50でこの値と恒等（不変条件#5）、守備が高いほど広がり低いほど狭まる。
     /// </summary>
     public double InfielderFieldingRadiusM { get; init; } = 4.20;
+
+    /// <summary>
+    /// 守備力1点あたりの守備範囲の増減[m]（issue #1661）。半径 = <see cref="InfielderFieldingRadiusM"/> +
+    /// (実効守備−50)×この値。守備50で恒等（不変条件#1・design-21: 実効守備は <c>ToFielder(effect)</c> 経由）。
+    /// 叩き台 0.027＝守備20/80 でおおよそ ±0.8m（下限・上限で頭打ち）。
+    /// </summary>
+    public double InfielderFieldingRadiusSlopeMPerPoint { get; init; } = 0.027;
+
+    /// <summary>内野手の守備範囲[m]の下限（issue #1661）。守備が低くても崩れすぎないよう頭打ちにする。</summary>
+    public double InfielderFieldingRadiusFloorM { get; init; } = 3.4;
+
+    /// <summary>内野手の守備範囲[m]の上限（issue #1661）。守備が高くても広がりすぎないよう頭打ちにする。</summary>
+    public double InfielderFieldingRadiusCapM { get; init; } = 5.0;
 
     /// <summary>
     /// 飛びつきの実効リーチ[m]（体の中心から捕球点まで。伸ばした腕＋倒れ込む体）。

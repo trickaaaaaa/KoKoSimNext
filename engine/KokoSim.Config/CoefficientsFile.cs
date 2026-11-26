@@ -870,6 +870,9 @@ public static class CoefficientsLoader
         public double LinerApexRangeRatio { get; set; } = D.LinerApexRangeRatio;
         public double InfielderReachHeightM { get; set; } = D.InfielderReachHeightM;
         public double InfielderFieldingRadiusM { get; set; } = D.InfielderFieldingRadiusM;
+        public double InfielderFieldingRadiusSlopeMPerPoint { get; set; } = D.InfielderFieldingRadiusSlopeMPerPoint;
+        public double InfielderFieldingRadiusFloorM { get; set; } = D.InfielderFieldingRadiusFloorM;
+        public double InfielderFieldingRadiusCapM { get; set; } = D.InfielderFieldingRadiusCapM;
         public double InfielderDiveReachM { get; set; } = D.InfielderDiveReachM;
         public double ChopperWaitFactor { get; set; } = D.ChopperWaitFactor;
         public double InfieldInterceptStepSeconds { get; set; } = D.InfieldInterceptStepSeconds;
@@ -966,6 +969,9 @@ public static class CoefficientsLoader
             LinerApexRangeRatio = LinerApexRangeRatio,
             InfielderReachHeightM = InfielderReachHeightM,
             InfielderFieldingRadiusM = InfielderFieldingRadiusM,
+            InfielderFieldingRadiusSlopeMPerPoint = InfielderFieldingRadiusSlopeMPerPoint,
+            InfielderFieldingRadiusFloorM = InfielderFieldingRadiusFloorM,
+            InfielderFieldingRadiusCapM = InfielderFieldingRadiusCapM,
             InfielderDiveReachM = InfielderDiveReachM,
             ChopperWaitFactor = ChopperWaitFactor,
             InfieldInterceptStepSeconds = InfieldInterceptStepSeconds,
