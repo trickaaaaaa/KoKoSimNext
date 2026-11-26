@@ -2006,7 +2006,8 @@ public static class CoefficientsLoader
         public double ProObVisitFameSlope { get; set; } = D.ProObVisitFameSlope;
         public double ProObVisitBoost { get; set; } = D.ProObVisitBoost;
         public double MentorProb { get; set; } = D.MentorProb;
-        public double MentorBoost { get; set; } = D.MentorBoost;
+        public int MentorYears { get; set; } = D.MentorYears;
+        public double MentorAnnualBoost { get; set; } = D.MentorAnnualBoost;
         public double Cap { get; set; } = D.Cap;
 
         public ManagerGrowthCoefficients ToModel() => new()
@@ -2022,7 +2023,8 @@ public static class CoefficientsLoader
             ProObVisitFameSlope = ProObVisitFameSlope,
             ProObVisitBoost = ProObVisitBoost,
             MentorProb = MentorProb,
-            MentorBoost = MentorBoost,
+            MentorYears = MentorYears,
+            MentorAnnualBoost = MentorAnnualBoost,
             Cap = Cap,
         };
     }

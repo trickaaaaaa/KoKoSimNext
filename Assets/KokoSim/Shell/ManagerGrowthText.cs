@@ -13,6 +13,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>
         /// その年の会話に使う1件を選ぶ。<b>珍しい順・大きい順</b>＝甲子園 &gt; 名伯楽 &gt; 教え子の訪問 &gt;
         /// 名将 &gt; 大敗 &gt; 講習会。同率が無いので決定論（乱数を引かない）。
+        /// 名伯楽の別れ（<see cref="ManagerGrowthEventType.MentorFarewell"/>）は別の会話で必ず語るので、ここには渡さない。
         /// </summary>
         public static ManagerGrowthEventType Lead(IReadOnlyList<ManagerGrowthNotice> notices)
         {
@@ -77,6 +78,7 @@ namespace KokoSim.Unity.Shell
             {
                 case ManagerGrowthEventType.KoshienExperience: return "mgr_koshien_experience";
                 case ManagerGrowthEventType.MentorCoach: return "mgr_mentor";
+                case ManagerGrowthEventType.MentorFarewell: return "mgr_mentor_farewell";
                 case ManagerGrowthEventType.ProObVisit: return "mgr_pro_ob";
                 case ManagerGrowthEventType.FamousRivalLesson: return "mgr_rival_lesson";
                 case ManagerGrowthEventType.LessonFromBigLoss: return "mgr_big_loss";
@@ -91,6 +93,7 @@ namespace KokoSim.Unity.Shell
             {
                 case ManagerGrowthEventType.KoshienExperience: return KokoSim.Engine.Season.DisplayNames.Current.Koshien + "の経験";
                 case ManagerGrowthEventType.MentorCoach: return "名伯楽との出会い";
+                case ManagerGrowthEventType.MentorFarewell: return "名伯楽との別れ";
                 case ManagerGrowthEventType.ProObVisit: return "教え子の訪問";
                 case ManagerGrowthEventType.FamousRivalLesson: return "名将との一戦";
                 case ManagerGrowthEventType.LessonFromBigLoss: return "大敗からの学び";

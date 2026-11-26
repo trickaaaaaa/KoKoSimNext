@@ -43,6 +43,12 @@ public sealed class Manager
     /// <summary>甲子園出場回数（フリー化資格判定）。</summary>
     public int KoshienAppearances { get; set; }
 
+    /// <summary>
+    /// 名伯楽（優秀なコーチ）が付いている残り年数（design-04 §1.1b・issue #1679）。0＝付いていない。
+    /// 年度末の自然増のたびに全分野の指導力へ上乗せして1減る（<see cref="ManagerGrowthEvents.ApplyMentorYear"/>）。転任しても持ち越す。
+    /// </summary>
+    public int MentorYearsLeft { get; set; }
+
     /// <summary>指導力の平均（チーム総合力への寄与目安）。</summary>
     public double AverageCoaching => (CoachingBatting + CoachingPitching + CoachingDefense) / 3.0;
 

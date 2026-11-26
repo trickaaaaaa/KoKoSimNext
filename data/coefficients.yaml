@@ -1607,7 +1607,8 @@ manager_growth:
   pro_ob_visit_fame_slope: 0.001
   pro_ob_visit_boost: 2.0
   mentor_prob: 0.02
-  mentor_boost: 2.0
+  mentor_years: 3           # 名伯楽が付く年数（出会った年を含む・issue #1679）
+  mentor_annual_boost: 1.0  # 付いている年ごとの全分野の指導力の上乗せ（自然増に足す）
   cap: 99.0
 
 # --- 育成（練習→能力, 設計書02 §5.1） ---

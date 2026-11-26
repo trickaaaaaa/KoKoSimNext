@@ -292,11 +292,25 @@ namespace KokoSim.Unity.Home
 
         private void RunManagerGrowthFeed()
         {
-            var notices = KokoSim.Unity.Shell.ManagerService.DrainGrowthNotices();
-            if (notices.Count == 0) return;
+            var drained = KokoSim.Unity.Shell.ManagerService.DrainGrowthNotices();
+            if (drained.Count == 0) return;
+
+            // 名伯楽の別れは「年に語るのは1件」の枠に入れず、必ず別の会話で語る（issue #1679）。
+            var notices = new List<KokoSim.Engine.Career.ManagerGrowthNotice>();
+            var farewell = false;
+            foreach (var n in drained)
+            {
+                if (n.Type == KokoSim.Engine.Career.ManagerGrowthEventType.MentorFarewell) farewell = true;
+                else notices.Add(n);
+            }
+            var delta = KokoSim.Unity.Shell.ManagerService.LastGrowthDelta;
+            if (notices.Count == 0)
+            {
+                PushMentorFarewell(delta, withEffect: true);
+                return;
+            }
 
             var lead = ManagerGrowthText.Lead(notices);
-            var delta = KokoSim.Unity.Shell.ManagerService.LastGrowthDelta;
 
             PushFeed(new List<FeedItem>
             {
@@ -335,12 +349,37 @@ namespace KokoSim.Unity.Home
                 extra["rival"] = string.IsNullOrEmpty(KokoSim.Unity.Shell.ManagerService.LastPowerhouseName)
                     ? "名門校" : KokoSim.Unity.Shell.ManagerService.LastPowerhouseName;
 
+            if (lead == KokoSim.Engine.Career.ManagerGrowthEventType.MentorCoach)
+                extra["mentor_years"] = KokoSim.Unity.Shell.ManagerService.GrowthCoefficients.MentorYears.ToString();
+
             KokoSim.Unity.Shell.EventService.Push(
                 ManagerGrowthText.EventId(lead),
                 subjectName,
                 ManagerGrowthText.Effect(delta),
                 0,
                 extra);
+
+            if (farewell) PushMentorFarewell(delta, withEffect: false);
+        }
+
+        /// <summary>名伯楽が去る会話。結果行は、ほかに語る節目が無い年だけここに付ける（あれば先の会話の結果行が全部を数えている）。</summary>
+        private void PushMentorFarewell(KokoSim.Unity.Shell.ManagerGrowthDelta delta, bool withEffect)
+        {
+            var id = ManagerGrowthText.EventId(KokoSim.Engine.Career.ManagerGrowthEventType.MentorFarewell);
+            if (withEffect)
+                PushFeed(new List<FeedItem>
+                {
+                    new FeedItem
+                    {
+                        When = "今週",
+                        Text = ManagerGrowthText.Feed(KokoSim.Engine.Career.ManagerGrowthEventType.MentorFarewell, delta),
+                        Kind = FeedKind.Up,
+                        Tag = "成長",
+                        Screen = FeedLinks.Career,
+                    },
+                });
+            KokoSim.Unity.Shell.EventService.PushUncapped(
+                id, KokoSim.Unity.Shell.ManagerService.Manager.Name, withEffect ? ManagerGrowthText.Effect(delta) : null);
         }
 
         /// <summary>

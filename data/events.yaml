@@ -34,6 +34,7 @@
 #   {other} 選手間イベントの相手（cast: other: で選ぶ。issue #945）
 #   {area} 指導力の分野（打撃/投手/守備走塁）／{lesson} その分野で学んだこと（1文）／{rival} 戦った名将の学校名／{seminar_cost} 講習会の費用[万円]／{seminar_boost} 講習会で上がる量
 #       …… mgr_big_loss（{area}{lesson}）・mgr_rival_lesson（{rival}）・coaching_seminar（全部）だけが渡す（issue #1483）
+#   {mentor_years} 名伯楽が付く年数（出会った年を含む）…… mgr_mentor だけが渡す（issue #1679）
 #   {camp_cost} 合宿の費用[万円] ／ {camp_weeks} 合宿の期間[週] ／ {camp_mult} 合宿の経験値の倍率 …… summer_camp / winter_camp だけが渡す（issue #1482）
 #   {koshien} {senbatsu} {jingu} ほか 大会名（data/display-names.yaml の表から入る。issue #1319）。
 #     実在の大会名は文に直接書かない＝表を替えると全部の文が替わる。「甲子園の土」も {koshien}の土 と書く
@@ -1368,21 +1369,44 @@ events:
           - who: manager
             say: "ああ。誰よりも先にグラウンドへ来ていた。"
 
+  # 名伯楽（優秀なコーチ）が来る（issue #1679）。出会った年から {mentor_years} 年、毎年の指導力の自然増に全分野 +1。
+  # 何がどれだけの間伸びるかを会話で言い切る（年数は coefficients.yaml が正典＝{mentor_years}）。結果行は提示層が足す。
   - id: mgr_mentor
     kind: System
     scene: office
-    text: "名伯楽との出会いがあった。"
+    text: "優秀なコーチがやって来た。"
     variants:
       - lines:
           - who: narration
             say: "全国の常連校を三度率いた老将が、ふらりとグラウンドに現れた。"
           - who: team_manager
             say: "監督、二時間も話し込んでましたね。"
+          - who: team_manager
+            say: "コーチを引き受けてくださるそうです。これから{mentor_years}年、打撃も投手も守備走塁も見てもらえます。"
       - lines:
           - who: team_manager
             say: "監督、老監督が、「教えられることは何もない。ただ、私が間違えたことなら話せます」と。"
           - who: manager
-            say: "それが一番聞きたい。そう伝えてくれ。"
+            say: "それが一番聞きたい。"
+          - who: team_manager
+            say: "ベンチにも入ってくださるそうです。{mentor_years}年のあいだ、全分野の指導を支えると。"
+
+  # 名伯楽が去る（issue #1679）。継続ボーナスの最後の年。結果行は提示層が足す。
+  - id: mgr_mentor_farewell
+    kind: System
+    scene: office
+    text: "優秀なコーチが去っていった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "約束の年数が過ぎた朝、老コーチはノートを一冊だけ置いて、グラウンドを後にした。"
+          - who: team_manager
+            say: "監督、最後に「あとは自分たちで間違えなさい」と言い残していきました。"
+      - lines:
+          - who: manager
+            say: "もう今日までか。"
+          - who: team_manager
+            say: "ベンチの隅の椅子も、もう片付けられていました。教わったことは、ノートに残っています。"
 
   # 気づき: 成長タイプの見立て（設計書03 §5.6・issue #614）。
   # **断定しない**（育成眼が低いと読み違える）。会話も「かもしれない」の温度で書く。

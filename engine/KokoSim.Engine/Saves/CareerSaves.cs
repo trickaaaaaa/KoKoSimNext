@@ -31,7 +31,8 @@ internal static class CareerSaves
         .Add("koshienApp", m.KoshienAppearances)
         .Add("teamManagerPortrait", m.TeamManagerPortrait)
         .Add("teamManagerGrade", m.TeamManagerGrade)
-        .Add("teamManagerOutgoingPortrait", m.OutgoingTeamManagerPortrait);
+        .Add("teamManagerOutgoingPortrait", m.OutgoingTeamManagerPortrait)
+        .Add("mentorYearsLeft", m.MentorYearsLeft);
 
     public static Manager ManagerFromJson(JsonObject o) => new()
     {
@@ -55,6 +56,8 @@ internal static class CareerSaves
         TeamManagerPortrait = o.Int("teamManagerPortrait"),
         TeamManagerGrade = o.Int("teamManagerGrade"),
         OutgoingTeamManagerPortrait = o.Int("teamManagerOutgoingPortrait"),
+        // 名伯楽の残り年数は v52（issue #1679）。キーが無い旧セーブは0年（付いていない）で読む。
+        MentorYearsLeft = o.Has("mentorYearsLeft") ? o.Int("mentorYearsLeft") : 0,
     };
 
     // ===== FacilitySet =====

@@ -29,6 +29,8 @@ public static class EventTextFormat
             // 監督成長イベント（issue #1483）。伸びた指導力の分野 {area}・その分野で学んだこと {lesson}・
             // 名将の学校名 {rival}・講習会の費用[万円] {seminar_cost}・上がる量 {seminar_boost}。
             "area", "lesson", "rival", "seminar_cost", "seminar_boost",
+            // 名伯楽が付く年数 {mentor_years}（issue #1679）。mgr_mentor だけが渡す。
+            "mentor_years",
         };
         foreach (var (k, _) in DisplayNames.Keys) keys.Add(k);
         return keys;
