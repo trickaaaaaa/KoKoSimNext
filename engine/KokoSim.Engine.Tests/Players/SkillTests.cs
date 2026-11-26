@@ -448,6 +448,54 @@ public sealed class SkillTests
         Assert.True(LevelAfter(Skill.Lazy) <= plain, "サボり癖は伸びが同等以下のはず");
     }
 
+    private static double ContactExpAt(Skill? skill, int stageIndex, GrowthType growth = GrowthType.Standard)
+    {
+        var p = new DevelopingPlayer
+        {
+            GrowthType = growth,
+            Skills = skill is { } s ? new SkillSet(new[] { s }) : SkillSet.Empty,
+        };
+        PitcherRoleResolver.SeedAptitudeForRole(p, false);
+        p.SetLevel(AbilityKind.Contact, 70);
+        p.SetCap(AbilityKind.Contact, 99);
+        DevelopmentModel.TrainWeek(p, TrainingMenu.Batting, stageIndex, 1.0, new GrowthStageTable(), new TrainingCoefficients(), C);
+        Assert.Equal(70, p.Level(AbilityKind.Contact)); // 1週ではレベルが上がらない＝経験値をそのまま比べられる
+        return p.Exp(AbilityKind.Contact);
+    }
+
+    [Fact]
+    public void SlowStarter_StageFactor_IsLifetimeNeutralAndShiftsTiming()
+    {
+        var months = new GrowthStageTable().StageMonths;
+        var sum = 0.0;
+        for (var i = 0; i < months.Count; i++) sum += months[i] * C.SlowStarterStageFactor(i);
+        Assert.Equal(months.Sum(), sum, 2);                         // 生涯の合計は変わらない
+        Assert.True(C.SlowStarterStageFactor(0) < 1.0);              // 序盤は伸びにくい
+        Assert.True(C.SlowStarterStageFactor(4) > 1.0);              // 終盤は伸びる
+    }
+
+    [Fact]
+    public void SlowStarter_GrowsLessEarly_MoreLate_AndNoOpWithoutSkill()
+    {
+        var plainEarly = ContactExpAt(null, 0);
+        var plainLate = ContactExpAt(null, 4);
+        var slowEarly = ContactExpAt(Skill.SlowStarter, 0);
+        var slowLate = ContactExpAt(Skill.SlowStarter, 4);
+        Assert.True(plainEarly > 0 && plainLate > 0);
+        Assert.Equal(plainEarly * C.SlowStarterStageFactor(0), slowEarly, 6);
+        Assert.Equal(plainLate * C.SlowStarterStageFactor(4), slowLate, 6);
+        Assert.True(slowEarly < plainEarly);
+        Assert.True(slowLate > plainLate);
+    }
+
+    [Fact]
+    public void SlowStarter_StacksOnGrowthType_LateStartsEvenSlower()
+    {
+        var late = ContactExpAt(null, 0, GrowthType.Late);
+        var lateSlow = ContactExpAt(Skill.SlowStarter, 0, GrowthType.Late);
+        Assert.Equal(late * C.SlowStarterStageFactor(0), lateSlow, 6);
+    }
+
     [Fact]
     public void DurableAndInjuryProne_ShiftInjuryRate()
     {

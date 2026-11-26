@@ -906,6 +906,8 @@ skills:
   lazy_exp_factor: 0.85
   durable_injury_factor: 0.55
   injury_prone_injury_factor: 1.8
+  slow_starter_stage_slope: 0.2          # スロースターター: 成長段階係数へ掛ける倍率＝1＋傾き×(半期番号−基準)。序盤×0.63・終盤×1.43
+  slow_starter_pivot_stage: 1.857        # 倍率1の半期番号＝在籍月数加重の平均（52/28）。生涯の成長量は変えず時期だけずらす
   # 目玉（怪物: 複数分野に確かな上乗せ）
   monster_contact_bonus: 4.0
   monster_power_bonus: 4.0

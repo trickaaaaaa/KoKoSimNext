@@ -2228,6 +2228,8 @@ public static class CoefficientsLoader
         public double LazyExpFactor { get; set; } = D.LazyExpFactor;
         public double DurableInjuryFactor { get; set; } = D.DurableInjuryFactor;
         public double InjuryProneInjuryFactor { get; set; } = D.InjuryProneInjuryFactor;
+        public double SlowStarterStageSlope { get; set; } = D.SlowStarterStageSlope;
+        public double SlowStarterPivotStage { get; set; } = D.SlowStarterPivotStage;
         public double MonsterContactBonus { get; set; } = D.MonsterContactBonus;
         public double MonsterPowerBonus { get; set; } = D.MonsterPowerBonus;
         public double MonsterControlBonus { get; set; } = D.MonsterControlBonus;
@@ -2284,6 +2286,8 @@ public static class CoefficientsLoader
             LazyExpFactor = LazyExpFactor,
             DurableInjuryFactor = DurableInjuryFactor,
             InjuryProneInjuryFactor = InjuryProneInjuryFactor,
+            SlowStarterStageSlope = SlowStarterStageSlope,
+            SlowStarterPivotStage = SlowStarterPivotStage,
             MonsterContactBonus = MonsterContactBonus,
             MonsterPowerBonus = MonsterPowerBonus,
             MonsterControlBonus = MonsterControlBonus,

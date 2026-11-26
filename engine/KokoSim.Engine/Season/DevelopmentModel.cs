@@ -64,7 +64,10 @@ public static class DevelopmentModel
                      * selfGrowth * campMultiplier * skillExp * cohesionMultiplier;
         // 守備位置適性は守備・走塁分野（Defense 指導力）で駆動する（Fielding が代表）。
         var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
-        var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex);
+        // スロースターター: 成長段階係数を後ろへ寄せる倍率。持たなければ 1.0＝従来と1ビット一致。
+        var slowStarter = skills is not null && p.Skills.Has(Players.Skill.SlowStarter)
+            ? skills.SlowStarterStageFactor(stageIndex) : 1.0;
+        var defenseStage = stages.Coefficient(p.DefenseGrowthType ?? p.GrowthType, stageIndex) * slowStarter;
 
         var refMinutes = (double)referenceWeekMinutes;
         foreach (var (menu, minutes) in allocations)
@@ -82,7 +85,7 @@ public static class DevelopmentModel
             var eff = TrainingMenus.Effects(menu);
             if (eff.Main is { } mainAbility)
             {
-                var delta = common * scale * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex)
+                var delta = common * scale * stages.Coefficient(p.GrowthTypeFor(mainAbility), stageIndex) * slowStarter
                     * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
                     * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor);
                 if (mainAbility == AbilityKind.LaunchTendency)
@@ -92,7 +95,7 @@ public static class DevelopmentModel
             }
             foreach (var subAbility in eff.Subs)
             {
-                var delta = common * scale * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex)
+                var delta = common * scale * stages.Coefficient(p.GrowthTypeFor(subAbility), stageIndex) * slowStarter
                     * c.SubFactorFor(menu, subAbility) * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor);
                 if (subAbility == AbilityKind.LaunchTendency)
                     ApplyLaunchTendencyExp(p, delta, GrowthDirection.Up, c);
