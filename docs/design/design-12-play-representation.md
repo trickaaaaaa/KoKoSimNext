@@ -486,7 +486,7 @@ Heavy統計回帰（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯
 | **F2** | バックホーム憤死（本塁クロスプレー） | 中（帯余裕大・要再校正） | F1、Heavy再校正、Q9 |
 | 走塁バリエーション | スタート種別＋守備の読み合い | 中（采配・確率モデル） | F2 の時間勝負機構、深さの相互参照、Q10 |
 
-- **選手交代系（代打/代走/守備固め/継投/DH解除・リエントリー禁止）は実装＆配線済み**（`TeamState`/`AiTacticsBrain`）。②リッチ表現の前提ではない。`ReleaseDh` の自動配線のみ未確認（別枠・DH解除分岐 handoff §C）。
+- **選手交代系（代打/代走/守備固め/継投/DH解除・リエントリー禁止）は実装＆配線済み**（`TeamState`/`AiTacticsBrain`）。②リッチ表現の前提ではない。`ReleaseDh` の AI 配線は issue #1492 で完了（`AiTacticsBrain.CallReleaseDh`・設計書09 §6）。
 
 ---
 
