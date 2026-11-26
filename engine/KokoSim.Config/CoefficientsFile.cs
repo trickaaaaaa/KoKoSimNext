@@ -2964,6 +2964,7 @@ public static class CoefficientsLoader
         public double DefenseSwapMinGain { get; set; } = D.DefenseSwapMinGain;
         public int DefensiveMindedSwapTierBonus { get; set; } = D.DefensiveMindedSwapTierBonus;
         public int AceDependentSwapTierPenalty { get; set; } = D.AceDependentSwapTierPenalty;
+        public double DefenseWeightCatcher { get; set; } = D.DefenseWeightCatcher;
         public double DefenseWeightShortstop { get; set; } = D.DefenseWeightShortstop;
         public double DefenseWeightCenterField { get; set; } = D.DefenseWeightCenterField;
         public double DefenseWeightSecondBase { get; set; } = D.DefenseWeightSecondBase;
@@ -3076,6 +3077,7 @@ public static class CoefficientsLoader
             DefenseSwapMinGain = DefenseSwapMinGain,
             DefensiveMindedSwapTierBonus = DefensiveMindedSwapTierBonus,
             AceDependentSwapTierPenalty = AceDependentSwapTierPenalty,
+            DefenseWeightCatcher = DefenseWeightCatcher,
             DefenseWeightShortstop = DefenseWeightShortstop,
             DefenseWeightCenterField = DefenseWeightCenterField,
             DefenseWeightSecondBase = DefenseWeightSecondBase,

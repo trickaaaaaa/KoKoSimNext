@@ -61,6 +61,13 @@ public sealed record Player
     /// </summary>
     public IReadOnlyList<int>? FieldingByPosition { get; init; }
 
+    /// <summary>
+    /// 守備位置ごとの適性（添字＝<see cref="FieldPosition"/> の整数値）。null＝持たない（補正なし）。
+    /// 敵AIの守備位置入替の判断（<c>DefensePlacement</c>）が試合前の配置と同じ評価で適性を読むためだけに載せる。
+    /// 物理層の解決（守備力・捕球）は読まない。
+    /// </summary>
+    public IReadOnlyList<int>? PositionAptitudes { get; init; }
+
     /// <summary>守備位置を <paramref name="pos"/> へ変えた選手。<see cref="FieldingByPosition"/> があれば守備力もその位置の値へ差し替える。</summary>
     public Player AtPosition(FieldPosition pos)
         => FieldingByPosition is { } f && (int)pos < f.Count

@@ -227,7 +227,9 @@ public sealed record EnemyAiCoefficients
     /// <summary>③校風・豪腕依存: 入替の実効ティアをこの段だけ下げる（投手任せで守備を動かさない）。</summary>
     public int AceDependentSwapTierPenalty { get; init; } = 1;
 
-    // 守備位置ごとの負担重み（守備スコア = Σ 重み × Fielding を最大化する）。捕手・投手・DHは対象外。
+    // 守備位置ごとの重み（issue #1709: 試合前のスタメン配置と試合中の入替が同じ評価＝DefensePlacement で使う。
+    // 評価 = 重み × 実効守備力 ＋ 肩 × 位置別の肩の重み）。捕手は配置だけで使い、入替・コンバート継投の対象外。投手・DHは対象外。
+    public double DefenseWeightCatcher { get; init; } = 1.00;
     public double DefenseWeightShortstop { get; init; } = 1.00;
     public double DefenseWeightCenterField { get; init; } = 0.90;
     public double DefenseWeightSecondBase { get; init; } = 0.80;
