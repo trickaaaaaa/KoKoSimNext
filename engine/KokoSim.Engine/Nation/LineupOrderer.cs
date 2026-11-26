@@ -31,6 +31,16 @@ public sealed record LineupCoefficients
     // --- 投手の打順（issue #360）: 打撃総合が「野手平均＋この差分」以上の打撃型エースだけ
     //     野手と同じ土俵で並べる（未満は9番固定）。既定0.0=野手平均以上でだけ上位打順に入る ---
     public double PitcherBattingOrderGap { get; init; } = 0.0;
+
+    // --- 校風（設計書11 §4 オーダー編成「俊足を上位／強打を中軸」）。型なし・他の校風は恒等 ---
+    /// <summary>機動力野球: 1番・2番の選考スコアに走力をこの重みで上乗せする（俊足を上位へ）。</summary>
+    public double SmallBallSpeedWeight { get; init; } = 0.30;
+    /// <summary>強打・待球: 中軸（3〜5番）の選考はミート／パワーをこの重みで見る（長打力を中軸へ）。</summary>
+    public double PowerHittingContactWeight { get; init; } = 0.30;
+    public double PowerHittingPowerWeight { get; init; } = 0.70;
+
+    // --- 左右のバランス: 隣り合う打順の打ち手が逆（または両打ち）の候補に、隣1人につきこの点を選考スコアへ足す ---
+    public double HandBalanceBonus { get; init; } = 3.0;
 }
 
 /// <summary>
@@ -50,39 +60,58 @@ public static class LineupOrderer
     /// 打者集団を能力で並べる（守備位置は変えない・人数分だけ返す）。
     /// 1番=出塁力＋走力、2番=小技・ミート、中軸（最強打者を4番に置き3番→5番の順で補充）、
     /// 6番以降=残りを打撃総合の高い順（設計書11 §4「オーダー編成」の能力軸）。
+    /// <paramref name="style"/>＝校風（機動力野球は1・2番の走力を重く、強打・待球は中軸の長打力を重く見る）。
+    /// <paramref name="balanceHands"/>＝true で隣り合う打順の打ち手が同じになりにくいよう選考スコアへ
+    /// <see cref="LineupCoefficients.HandBalanceBonus"/> を足す。既定（null/false）は従来どおり能力だけ＝自校の既定オーダーは不変。
     /// </summary>
-    public static IReadOnlyList<Player> Arrange(IReadOnlyList<Player> batters, LineupCoefficients? coeff = null)
+    public static IReadOnlyList<Player> Arrange(IReadOnlyList<Player> batters, LineupCoefficients? coeff = null,
+        Match.Tactics.SchoolStyle? style = null, bool balanceHands = false)
     {
         var c = coeff ?? new LineupCoefficients();
         var n = batters.Count;
         var pool = batters.Select((p, i) => (Player: p, Index: i)).ToList();
         var result = new Player?[n];
 
-        Player Take(Func<Player, double> score)
+        // 左右のバランス: すでに置いた両隣と打ち手が逆（両打ちは常に可）なら1人につきボーナス。
+        double HandBonus(int slot, Player p)
+        {
+            if (!balanceHands) return 0.0;
+            var bonus = 0.0;
+            if (slot > 0 && result[slot - 1] is { } left && Differs(left, p)) bonus += c.HandBalanceBonus;
+            if (slot + 1 < n && result[slot + 1] is { } right && Differs(right, p)) bonus += c.HandBalanceBonus;
+            return bonus;
+        }
+
+        Player Take(int slot, Func<Player, double> score)
         {
             var best = pool
-                .Select(x => (x.Player, x.Index, Score: score(x.Player)))
+                .Select(x => (x.Player, x.Index, Score: score(x.Player) + HandBonus(slot, x.Player)))
                 .OrderByDescending(x => x.Score).ThenBy(x => x.Index)
                 .First();
             pool.RemoveAll(x => x.Index == best.Index);
             return best.Player;
         }
 
+        var speedBonus = style == Match.Tactics.SchoolStyle.SmallBall ? c.SmallBallSpeedWeight : 0.0;
         double OnBase(Player p) => p.Discipline * c.LeadoffDisciplineWeight
-            + p.Contact * c.LeadoffContactWeight + p.Speed * c.LeadoffSpeedWeight;
-        double SmallBall(Player p) => p.Contact * c.SecondContactWeight + p.Bunt * c.SecondBuntWeight;
+            + p.Contact * c.LeadoffContactWeight + p.Speed * (c.LeadoffSpeedWeight + speedBonus);
+        double SmallBall(Player p) => p.Contact * c.SecondContactWeight + p.Bunt * c.SecondBuntWeight
+            + p.Speed * speedBonus;
         double Overall(Player p) => BattingScore(p, c);
+        double Cleanup(Player p) => style == Match.Tactics.SchoolStyle.PowerHitting
+            ? p.Contact * c.PowerHittingContactWeight + p.Power * c.PowerHittingPowerWeight
+            : Overall(p);
 
         void Fill(int slot, Func<Player, double> score)
         {
             if (slot < 0 || slot >= n || result[slot] is not null) return;
-            result[slot] = Take(score);
+            result[slot] = Take(slot, score);
         }
 
         Fill(0, OnBase);
         Fill(1, SmallBall);
         // 中軸: 最強打者を4番（3番目のスロット, index 3）に置き、次点を3番、その次を5番に置く。
-        foreach (var slot in new[] { 3, 2, 4 }) Fill(slot, Overall);
+        foreach (var slot in new[] { 3, 2, 4 }) Fill(slot, Cleanup);
         // 残り: 打撃総合の高い順に前詰め（6番以降）。
         for (var i = 0; i < n; i++) Fill(i, Overall);
 
@@ -117,7 +146,8 @@ public static class LineupOrderer
     /// <paramref name="modernRules"/>/<paramref name="calendarYear"/> が両方揃ったときだけDHを検討する
     /// （既定 null＝DH不使用＝従来挙動と完全一致）。
     /// </summary>
-    public static Team Compose(Team team, LineupCoefficients coeff, ModernRules? modernRules, int? calendarYear)
+    public static Team Compose(Team team, LineupCoefficients coeff, ModernRules? modernRules, int? calendarYear,
+        Match.Tactics.SchoolStyle? style = null)
     {
         var c = coeff;
         var fielders = team.BattingOrder.Take(8).ToList();
@@ -132,9 +162,9 @@ public static class LineupOrderer
             // 打撃型エース（野手平均以上, issue #360）は野手と同じ土俵で役割別に並べる＝「エースで4番」が
             // 成立する。投手枠は並べ替え後の位置から参照で引き直す（Team.WithBattingOrder, issue #352）。
             if (BatsWithFielders(pitcher, fielders, c))
-                return team.WithBattingOrder(Arrange(team.BattingOrder, c));
+                return team.WithBattingOrder(Arrange(team.BattingOrder, c, style, balanceHands: true));
 
-            var arrangedFielders = Arrange(fielders, c);
+            var arrangedFielders = Arrange(fielders, c, style, balanceHands: true);
             var order = arrangedFielders.Append(pitcher).ToList();
             return team with { BattingOrder = order };
         }
@@ -142,7 +172,7 @@ public static class LineupOrderer
         // 控えから最強打者を繰り上げ、打順から抜けた投手は StartingPitcher へ（設計書09 §6）。
         var dhBatter = DhCandidates(team).OrderByDescending(p => BattingScore(p, c)).First();
         var hitters = fielders.Append(dhBatter).ToList();
-        var arranged = Arrange(hitters, c);
+        var arranged = Arrange(hitters, c, style, balanceHands: true);
         var dhSlot = IndexOfReference(arranged, dhBatter);
         var reserves = team.Reserves.Where(p => !ReferenceEquals(p, dhBatter)).ToList();
 
@@ -163,6 +193,9 @@ public static class LineupOrderer
     /// DH に入った投手が登板するときは野手登板＝DH解除（<see cref="Match.Game.TeamState.PromoteFielderToMoundDh"/>）。
     /// </summary>
     private static IReadOnlyList<Player> DhCandidates(Team team) => team.Reserves;
+
+    private static bool Differs(Player a, Player b)
+        => a.Bats == Handedness.Switch || b.Bats == Handedness.Switch || a.Bats != b.Bats;
 
     private static int IndexOfReference(IReadOnlyList<Player> list, Player target)
     {

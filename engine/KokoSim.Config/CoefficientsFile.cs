@@ -3316,6 +3316,10 @@ public static class CoefficientsLoader
         public double LineupOverallPowerWeight { get; set; } = LD.OverallPowerWeight;
         public double LineupDhPitcherBattingGap { get; set; } = LD.DhPitcherBattingGap;
         public double LineupPitcherBattingOrderGap { get; set; } = LD.PitcherBattingOrderGap;
+        public double LineupSmallBallSpeedWeight { get; set; } = LD.SmallBallSpeedWeight;
+        public double LineupPowerHittingContactWeight { get; set; } = LD.PowerHittingContactWeight;
+        public double LineupPowerHittingPowerWeight { get; set; } = LD.PowerHittingPowerWeight;
+        public double LineupHandBalanceBonus { get; set; } = LD.HandBalanceBonus;
 
         // 校風の型（能力配分の学校単位の偏り・issue #1691）。
         public double SchoolStyleSharpnessMin { get; set; } = SSD.SharpnessMin;
@@ -3442,6 +3446,10 @@ public static class CoefficientsLoader
                 OverallPowerWeight = LineupOverallPowerWeight,
                 DhPitcherBattingGap = LineupDhPitcherBattingGap,
                 PitcherBattingOrderGap = LineupPitcherBattingOrderGap,
+                SmallBallSpeedWeight = LineupSmallBallSpeedWeight,
+                PowerHittingContactWeight = LineupPowerHittingContactWeight,
+                PowerHittingPowerWeight = LineupPowerHittingPowerWeight,
+                HandBalanceBonus = LineupHandBalanceBonus,
             },
             SchoolStyles = new KokoSim.Engine.Players.SchoolStyleCoefficients
             {
