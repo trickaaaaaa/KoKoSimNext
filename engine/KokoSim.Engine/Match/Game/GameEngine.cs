@@ -2001,7 +2001,7 @@ public static class GameEngine
                         bases.First, bases.Second, bases.Third,
                         paBaserunning, ctx.Field,
                         batterSide: batter.Bats.EffectiveBats(currentPitcher.Throws),
-                        fielding: res.BuntFielding)
+                        fielding: res.BuntFielding, safetyBunt: res.BuntSafety)
                     : null;
                 buntTimeline = WithThrowScatter(buntTimeline,
                     res.BuntThrowScatter is { } buntThrow
