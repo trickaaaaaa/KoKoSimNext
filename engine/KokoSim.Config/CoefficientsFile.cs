@@ -2053,6 +2053,7 @@ public static class CoefficientsLoader
         public double MatchMentalExp { get; set; } = D.MatchMentalExp;
         public double MatchLeadExp { get; set; } = D.MatchLeadExp;
         public double MatchBaserunningExp { get; set; } = D.MatchBaserunningExp;
+        public double CaptainMatchGrowthFactor { get; set; } = D.CaptainMatchGrowthFactor;
         public double MatchSuccessBatExp { get; set; } = D.MatchSuccessBatExp;
         public double MatchSuccessPitchExp { get; set; } = D.MatchSuccessPitchExp;
         public double MatchSuccessFieldExp { get; set; } = D.MatchSuccessFieldExp;
@@ -2101,6 +2102,7 @@ public static class CoefficientsLoader
             MatchMentalExp = MatchMentalExp,
             MatchLeadExp = MatchLeadExp,
             MatchBaserunningExp = MatchBaserunningExp,
+            CaptainMatchGrowthFactor = CaptainMatchGrowthFactor,
             MatchSuccessBatExp = MatchSuccessBatExp,
             MatchSuccessPitchExp = MatchSuccessPitchExp,
             MatchSuccessFieldExp = MatchSuccessFieldExp,

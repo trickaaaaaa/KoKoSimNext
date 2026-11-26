@@ -1682,6 +1682,7 @@ training:
   match_mental_exp: 260.0
   match_lead_exp: 400.0        # 捕手として出場した試合のみ
   match_baserunning_exp: 300.0
+  captain_match_growth_factor: 1.25  # 主将本人だけ上の3つのexpに掛かる（設計書09 §8.1・部員全体には掛からない）
   # 成功体験ボーナス（設計書02 §5.3b・issue #1487）: 好打/好投/好守の試合で該当能力に少量のexp（成長段階係数×大会の格倍率）。
   # 量は練習の主効果（base_main_exp=290/週）の1割前後＝練習を上回らない。大舞台ほど大きい。
   match_success_bat_exp: 40.0     # 好打 → ミート/パワー それぞれ

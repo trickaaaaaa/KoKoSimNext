@@ -152,6 +152,8 @@ public sealed record TrainingCoefficients
     public double MatchLeadExp { get; init; } = 400.0;
     /// <summary>1試合出場あたりの走塁判断exp（成長段階係数を乗算, AbilityKind.Baserunning へ）。</summary>
     public double MatchBaserunningExp { get; init; } = 300.0;
+    /// <summary>主将に選ばれた本人の実戦成長（精神力・走塁判断・捕手リード）のexp倍率（設計書09 §8.1「重責が人を育てる」・やや促進）。部員全体には掛からない。1.0＝効果なし。</summary>
+    public double CaptainMatchGrowthFactor { get; init; } = 1.25;
 
     // === 成功体験ボーナス（設計書02 §5.3b・issue #1487）: 好打・好投・好守の試合で該当能力に少量のexp ===
     // 量は練習の主効果（BaseMainExp=290/週）の1割前後＝練習を上回らない。大会の格で倍率が上がる（練習試合は1.0）。
