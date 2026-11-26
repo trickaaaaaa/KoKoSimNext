@@ -102,6 +102,15 @@ scenarios:
     count: { balls: 1, strikes: 2 }
     seed: 20260726
 
+  - id: promo-at-bat-lab
+    name: 9回表2死の打席を初球から（投球チャート・カウント・球数を揃えて見る。issue #1689）
+    away: { school: "AI:tier=C", score: 2 }
+    home: { school: "AI:tier=C", score: 3 }
+    inning: 9
+    top: true
+    outs: 2
+    seed: 20260726
+
   - id: game-end-groundout-lab
     name: 終局検証・打球アウトで決着（9回表2死・1点リード）
     away: { school: "AI:tier=C", score: 2 }

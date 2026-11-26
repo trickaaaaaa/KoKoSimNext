@@ -717,6 +717,19 @@ captures:
     size: {w: 1920, h: 1080}
     duel_seconds: 12.0
     video: {from: start, to: end, fps: 4}
+  # ── 球数の表示（issue #1689）。打席を初球から通しで撮り、BSO・投球チャート・投手の球数が同じ瞬間に動くかを見る ──
+  # 盤面だけを本番と同じ配置のまま2倍で撮る（宣伝動画の素材にも使う）。7球目のセンターフライでゲームセット。
+  - id: promo-at-bat-board
+    name: "9回表2死の打席を初球から（盤面だけ・大きく）"
+    scenario: promo-at-bat-lab
+    teams: {away: "青雲学院高校", home: "宮前商工"}
+    colors: {away: 9051, home: 9052}
+    view: board
+    size: {w: 3200, h: 1800}
+    game_scale: true
+    attempts: 1
+    duel_seconds: 30.0
+    video: {from: start, to: end, fps: 30}
   - id: store-tactics-offense
     name: "ストア用: 攻撃の采配の手札（自校＝先攻）"
     scenario: steal-sign-lab

@@ -393,6 +393,11 @@ namespace KokoSim.Unity.Match
         private VisualElement[] _lampsB, _lampsS, _lampsO;
         private VisualElement[] _bases;
         private int _pitchIdx;
+        // この打席の投球列（_paQueue）のうち、判定を画面に出し終えた球の数（issue #1689）。球数の表示は
+        // engine の球数から「投げたがまだ判定を見せていない球」を引いて出す＝BSO・投球チャートと同じ瞬間に1増える。
+        private int _paPitchesCalled;
+        // 守備側の現投手の球数を出している Label（HUD・スタメン列の投手行）。判定の瞬間に数字だけ書き換える（issue #1689）。
+        private readonly List<Label> _defPitchCountLabels = new();
         private float _pitchClock;
         private bool _inPitchPhase;   // 投球フェーズ（B/S点灯）中か。false なら打球フェーズ/静止。
         private bool _pitchBallVisible;   // 投球フェーズで今の1球の投球軌道を流しているか（#5）。
@@ -879,6 +884,7 @@ namespace KokoSim.Unity.Match
             _shownAnyHalf = false;
             _postedAwayRuns = _postedHomeRuns = 0;   // 掲示済み得点の基準（issue #628）も試合をまたがない
             _paQueue.Clear();
+            _paPitchesCalled = 0;
             _plChart?.ClearMarks();      // 投球チャートも試合をまたがない（issue #1541）
             _paConfirmed = false;
             ClearMidPaPlayState();       // 打席途中の再生は試合をまたがない
@@ -1358,6 +1364,7 @@ namespace KokoSim.Unity.Match
             {
                 // 新しい打席の頭＝前の打席の後片付け。投球列と確定フラグをここで落とす。
                 _paQueue.Clear();
+                _paPitchesCalled = 0;
                 _plChart?.ClearMarks();   // 投球チャートは今の打席の球だけ（issue #1541）
                 _pitchIdx = 0;
                 _paConfirmed = false;
@@ -1569,7 +1576,7 @@ namespace KokoSim.Unity.Match
                     Name = def.Name,
                     Detail = TimeoutPopupModel.PitcherDetail(def.Grade, def.Throws, def.Bats),
                     // 球数だけ（目安投球数・ゲージは出さない）。確定球数＋進行中の打席ぶん（issue #397）。
-                    Stats = new List<(string, string)> { ("球数", (def.Pitches + def.PendingPitches).ToString()) },
+                    Stats = new List<(string, string)> { ("球数", ShownPitchTotal(def).ToString()) },
                     Condition = _statsProvider.ConditionOf(defenseSchoolId, def.SourceId, def.ConditionValue, def.Name),
                     ConditionEstimated = _statsProvider.IsConditionEstimated(defenseSchoolId),
                 };
@@ -2208,6 +2215,7 @@ namespace KokoSim.Unity.Match
         private void BeginPaFromSequence()
         {
             _paQueue.Clear();
+            _paPitchesCalled = 0;
             _plChart?.ClearMarks();   // 投球チャートは今の打席の球だけ（issue #1541）
             var pitches = _current.PitchSeq?.Pitches;
             if (pitches != null)
@@ -3565,6 +3573,9 @@ namespace KokoSim.Unity.Match
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
                     ShowPitchCall(pt);
                     AddPitchLocationMark(pt, _pitchIdx + 1);   // 投球チャート（issue #1541）。判定と同時に印を打つ
+                    // 球数もこの瞬間に1増やす（issue #1689）。HUD 全体は組み直さない＝打球の結果（今日の成績）を先に出さない。
+                    _paPitchesCalled = System.Math.Max(_paPitchesCalled, _pitchIdx + 1);
+                    UpdateShownPitchCounts();
                     // 打席途中の牽制（issue #486/#515）はもうここでは見ない――この球の**前**の事象なので
                     // BeginPitchRender の頭（この球の振りかぶりに入る前）で既に再生済み。
                     // 打席途中の盗塁（issue #485）: この球を実際に投げ終えた今、守備ビューで
@@ -4974,6 +4985,34 @@ namespace KokoSim.Unity.Match
         // 表示専用。数値はすべてエンジンの Snapshot（成績集計）から引く（UI再計算禁止・不変条件）。
         // 左列=自校 / 右列=相手校（ミラー）。現打者ハイライトは攻撃側の列を移り、HUDは左=投手/右=打者で固定。
 
+        /// <summary>
+        /// 守備側の現投手の、画面に出す球数（issue #1689）。engine の球数（確定＋進行中の打席ぶん）から、
+        /// 投げたがまだ判定を見せていない球を引く。HUD は采配窓（＝次の球のリリース直前）でしか組み直さないため、
+        /// engine の値をそのまま出すと BSO・投球チャートより1球遅れ、試合を終わらせた球は数えられないまま残っていた。
+        /// </summary>
+        private int ShownPitchTotal(LivePitcherToday p)
+            => ShownPitchTotal(p.Pitches + p.PendingPitches, _paQueue.Count, _paPitchesCalled, _fastMode);
+
+        /// <summary>
+        /// 画面に出す球数の式（issue #1689・EditMode テストで固定）。<paramref name="engineTotal"/>＝engine の球数、
+        /// <paramref name="queued"/>＝この打席で描く球の数（投球列）、<paramref name="called"/>＝そのうち判定を見せた数。
+        /// 高速試合モードは投球を描かない＝引かない。
+        /// </summary>
+        public static int ShownPitchTotal(int engineTotal, int queued, int called, bool fastMode)
+            => fastMode ? engineTotal : System.Math.Max(0, engineTotal - System.Math.Max(0, queued - called));
+
+        /// <summary>判定を出した瞬間に、守備側の現投手の球数だけを書き換える（HUD 全体は組み直さない。issue #1689）。</summary>
+        private void UpdateShownPitchCounts()
+        {
+            if (_prog == null || _defPitchCountLabels.Count == 0) return;
+            var snap = _preStep is { } pre ? pre.SnapshotBefore : _prog.Snapshot();
+            var offenseIsTop = _atBat?.IsTop ?? snap.OffenseIsTop;
+            var def = offenseIsTop ? snap.Home.Pitcher : snap.Away.Pitcher;
+            if (def == null) return;
+            var text = ShownPitchTotal(def).ToString();
+            foreach (var l in _defPitchCountLabels) l.text = text;
+        }
+
         private void RefreshPanel()
         {
             if (_prog == null || _statsProvider == null) return;
@@ -4992,10 +5031,11 @@ namespace KokoSim.Unity.Match
             // 校ID＝調子の真値/誤認と通算成績の帰属先（issue #634）。配色と同じ静的経路から来る。
             var ownSchoolId = ownIsAway ? _awaySchoolId : _homeSchoolId;
             var oppSchoolId = ownIsAway ? _homeSchoolId : _awaySchoolId;
+            _defPitchCountLabels.Clear();
             BuildColumn(_leftLineup, _leftPitcher, own, mirror: false, highlightOrder: offenseIsOwn ? order : 0,
-                schoolId: ownSchoolId);
+                schoolId: ownSchoolId, defending: !offenseIsOwn);
             BuildColumn(_rightLineup, _rightPitcher, opp, mirror: false, highlightOrder: offenseIsOwn ? 0 : order,
-                schoolId: oppSchoolId);
+                schoolId: oppSchoolId, defending: offenseIsOwn);
             RefreshHud(snap, offenseIsTop, order);
             ApplyDuelTeamColors(offenseIsTop);
             ApplyPitcherRattled(snap, offenseIsTop);
@@ -5033,7 +5073,7 @@ namespace KokoSim.Unity.Match
         // 左右のチーム欄（GameScreen.mock 準拠・2026-11-21）。左右とも同じ並び（ミラーしない）。
         // 打順の行 9 → 投手の行 → 控え（見出し「控え／N人」＋行）。色は固定（--ms-*）でスクールカラーは使わない。
         private void BuildColumn(VisualElement lineupHost, VisualElement pitcherHost,
-            LiveTeamSnapshot team, bool mirror, int highlightOrder, int schoolId)
+            LiveTeamSnapshot team, bool mirror, int highlightOrder, int schoolId, bool defending)
         {
             if (lineupHost != null)
             {
@@ -5044,7 +5084,7 @@ namespace KokoSim.Unity.Match
             if (pitcherHost != null)
             {
                 pitcherHost.Clear();
-                pitcherHost.Add(BuildPitcherRow(team.Pitcher));
+                pitcherHost.Add(BuildPitcherRow(team.Pitcher, defending));
                 // 控え（ベンチ入り＝背番号ありのメンバのみ。ベンチ外は出さない）。控えは1本の名簿なので
                 // そのまま背番号の昇順で並べる（issue #381）。投手として置かれている控えも同じ行の作り
                 //（背番号・名前・調子）で、材料だけ投手側の観測から引く。
@@ -5129,7 +5169,7 @@ namespace KokoSim.Unity.Match
         }
 
         // 投手の行: 空き | 「投」チップ | 名前 | 球数（N 球）。目立たせない＝地・枠なし。
-        private VisualElement BuildPitcherRow(LivePitcherToday p)
+        private VisualElement BuildPitcherRow(LivePitcherToday p, bool defending)
         {
             var row = new VisualElement();
             row.AddToClassList("mside-pitcher");
@@ -5141,7 +5181,10 @@ namespace KokoSim.Unity.Match
             // 確定球数＋進行中の打席ぶん（issue #397。LiveLineScore.PendingRuns と同型）。投球回・失点は出さない（issue #739）。
             var count = new VisualElement();
             count.AddToClassList("mside-pitcher__count");
-            count.Add(MakeLabel((p.Pitches + p.PendingPitches).ToString(), "mside-pitcher__n", "f-num-bd"));
+            // 守備側の現投手は、投げたがまだ判定を見せていない球を引く（issue #1689）。
+            var n = MakeLabel((defending ? ShownPitchTotal(p) : p.Pitches + p.PendingPitches).ToString(), "mside-pitcher__n", "f-num-bd");
+            if (defending) _defPitchCountLabels.Add(n);
+            count.Add(n);
             count.Add(MakeLabel("球", "mside-pitcher__u", "f-body"));
             row.Add(count);
             return row;
@@ -5274,7 +5317,7 @@ namespace KokoSim.Unity.Match
 
             // 球数は名前行の右端＝継投判断の主指標なので、スタッツ行のセルに埋もれさせず単体で立てる。
             // 確定球数＋進行中の打席ぶん（issue #397）。据え置きを解消し1球ごとに動かす。
-            var totalPitches = def.Pitches + def.PendingPitches;
+            var totalPitches = ShownPitchTotal(def);   // 判定を見せた球まで（issue #1689）
             // 警告色は絶対球数でなく「目安投球数に対する残量」で出す（issue #408）。生成スタミナの水準を
             // 上げて平均球数が100前後になったため、絶対 80/100 だと健康な先発が常時 alert になる。スタミナバー
             // （BuildStaminaBar）と同じ残量帯（<0.6=注意 / <0.3=警告）で数字も落とし、数字とバーの色を一致させる。
@@ -5283,7 +5326,9 @@ namespace KokoSim.Unity.Match
             idn.Add(MakeRow("mhud-spacer"));
             // 球数は「今 / この試合で投げられる最大」の分母つき。分母は週間球数制限（設計書05 §1.3）の
             // 上限から持ち越しを引いた値＝試合開始時点で固定（目安投球数は出さない）。
-            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod, MaxPitchesThisGameText(def)));
+            var pc = HudPitchCount(totalPitches.ToString(), pcMod, MaxPitchesThisGameText(def));
+            if (pc.Q<Label>(className: "mhud-pc__n") is { } pcLabel) _defPitchCountLabels.Add(pcLabel);
+            idn.Add(pc);
             // 調子の顔は打者HUDと右端を揃える＝球数のさらに右（issue #1053）。番手・球数と同じ
             // LivePitcherToday から引く＝継投直後も新しい投手の調子になる（issue #528 と同じ理由）。
             var face = new ConditionFace();
