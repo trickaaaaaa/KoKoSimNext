@@ -628,7 +628,13 @@ namespace KokoSim.Unity.Match
             // （ApproachAt と同じ規約）。球が無い／近すぎる（持っている・足元）ときは前向き扱い
             float side = 0f;
             bool haveSide = false;
-            if (moving)
+            bool sideStepping = moving && pos == _sideStep.Fielder && t >= _sideStep.T0 - 1e-4f && t <= _sideStep.T1 + 1e-4f;
+            if (sideStepping)
+            {
+                side = SideStepBallSideDeg;
+                haveSide = true;
+            }
+            else if (moving)
             {
                 var ball = LookTargetOf(_fieldPlay, pos, t);
                 if (ball.HasValue)
@@ -700,6 +706,8 @@ namespace KokoSim.Unity.Match
                 var sh = side > 0f ? ShuffleToRight : ShuffleToLeft;
                 if (cruise <= sh.VClip * LocoSpeedMax) shuffle = side > 0f ? ShuffleRightTable : ShuffleLeftTable;
             }
+            // 送球前のサイドステップは横歩きに固定する（向きの区分・速さで別の段へ落とさない）
+            if (sideStepping) { st.Facing = LocoFacing.LookRight; table = ShuffleLeftTable; shuffle = ShuffleLeftTable; }
 
             // 段を選ぶ。クランプ後にどれだけ嘘が残るかで比べる（比なので対数で見る）。
             // シャッフルは同点なら勝ち（帯の中では横向きの絵を優先）
@@ -1370,6 +1378,96 @@ namespace KokoSim.Unity.Match
         /// 胸〜頭上の高さ（1.2〜1.7m）からの自由落下が約0.5秒。</summary>
         private const float DropPopS = 0.55f;
         private const float DropPopHeightM = 0.35f;
+
+        /// <summary>
+        /// 捕ってから送球の収録が始まるまでの立ち止まりを埋める（表示専用。2026-11-26 監督報告
+        /// 「二塁手が捕ってからぼーっとしてセーフ」）。捕球・投げ始め・送球の到達の時刻は1つも動かさない。
+        ///
+        /// <para>① <b>捕球の収録を流し切る</b>: ゴロを捕る収録は、捕る瞬間の後に「球を胸へ収めて起き上がる」が
+        /// 約1秒入っていて、最後の姿勢が送球の収録の頭と同じ（実測 2026-11-26: 腰 0.73m・両手 1.10m で一致）。
+        /// 通常は <see cref="CatchHoldSeconds"/> で打ち切って待機へ戻す（すぐ投げる野手には尻尾が要らない）が、
+        /// 長く持つ打席ではこの尻尾がそのまま「捕って→収めて→投げる」のつなぎになる。流し切ったら最後のコマで待つ。</para>
+        ///
+        /// <para>② <b>それでも余る</b>とき（守備の低い野手の2秒超の保持）だけ、送球の的へ横歩きで寄る
+        /// （<see cref="HandleBobblePlanner.ApplyStep(PlaybackPlay,double,double)"/>）。寄り終わりは送球の収録の頭。</para>
+        ///
+        /// ⚠ <see cref="BuildFieldCatchPlan"/> の後に呼ぶ（その野手がどの収録で捕るかを予定表から引く）。
+        /// </summary>
+        private PlaybackPlay ApplyStepBeforeThrow(PlaybackPlay play)
+        {
+            if (!HandleBobblePlanner.TryFindHold(play, out var holder, out var catchAt, out var releaseAt)) return play;
+            PlaybackBallSegment throwSeg = null;
+            foreach (var seg in play.Ball)
+                if (IsThrowSegment(seg) && seg.FromRole == holder && Mathf.Abs((float)(seg.T0 - releaseAt)) < 1e-4f)
+                {
+                    throwSeg = seg;
+                    break;
+                }
+            if (throwSeg == null) return play;
+            var from = throwSeg.At(0.0);
+            var to = throwSeg.At(throwSeg.T1 - throwSeg.T0);
+            float dist = new Vector2((float)(to.X - from.X), (float)(to.Y - from.Y)).magnitude;
+            // 寄ると送球距離が縮む。収録の境目（15m）をまたぐと頭の時刻が 0.08s ずれるので、長いほうを採る
+            // （寄り終わりが収録の頭より遅れると、投げ始めた体が地面を滑る。早く終わるぶんには一瞬止まるだけ）
+            float lead = Mathf.Max(SelectFieldThrow(holder, dist).Release,
+                SelectFieldThrow(holder, Mathf.Max(0f, dist - (float)HandleBobblePlanner.StepMaxM)).Release);
+            float throwStart = (float)releaseAt - lead;
+
+            // ① 捕球の収録の尻尾。普通の捕球（飛び込み・お手玉・走りながら掬う、は各自の尻尾を持つ）だけ
+            float tail = 0f;
+            for (int i = 0; i < _catchEvents.Count; i++)
+            {
+                var e = _catchEvents[i];
+                if (e.Pos != holder || Mathf.Abs(e.TCatch - (float)catchAt) > 0.05f) continue;
+                if (e.Kind != FieldCatchKind.Catch || e.RunThrough || e.SkipClip) break;
+                var an = AnchorOf(e.Kind, e.Anchor);
+                if (an.PostCatchFollowSeconds >= 0f) break;   // 捕った形で打ち切る収録（一塁手・三塁手の受け）
+                var clip = LoadClip(an.Clip);
+                if (clip != null) tail = Mathf.Max(0f, clip.length - an.Moment);
+                break;
+            }
+            if (tail > CatchHoldSeconds && throwStart - (float)catchAt > CatchHoldSeconds + HoldFollowMinExtraSeconds)
+                _holdFollow = (holder, (float)catchAt, Mathf.Min((float)catchAt + tail, throwStart), throwStart);
+
+            // ② 余りを横歩きで寄る。歩き出すのは尻尾（握り直しならその芝居も）の後
+            float settle = Mathf.Max(CatchHoldSeconds, _holdFollow.TailEnd > 0f ? tail : 0f);
+            if (_bobble.Kind == HandleBobbleKind.Juggle)
+                settle = Mathf.Max(settle, JuggleStartAfterCatchS + JuggleAirS);
+            var stepped = HandleBobblePlanner.ApplyStep(play, settle, lead, out var step, out var stepper);
+            if (step != null)
+            {
+                _sideStep = (stepper, (float)step.T0, (float)step.T1);
+                // 歩き出したら走りの段へ渡す（尻尾の最後のコマで待つのは歩き出しまで）
+                if (_holdFollow.TailEnd > 0f) _holdFollow.Until = (float)step.T0;
+            }
+            return stepped;
+        }
+
+        /// <summary>尻尾を流すのは、通常の据え置きよりこれ以上長く空くときだけ[s]（わずかな差で芝居を替えない）。</summary>
+        private const float HoldFollowMinExtraSeconds = 0.15f;
+
+        /// <summary>
+        /// 長く持つ内野手の捕球の収録を流し切る予定（<see cref="ApplyStepBeforeThrow"/>。無ければ TailEnd &lt; 0）。
+        /// <c>TailEnd</c>＝収録が終わる時刻、<c>Until</c>＝走りの段へ返す時刻（送球の収録の頭か、横歩きの歩き出し）。
+        /// </summary>
+        private (FieldPosition Fielder, float CatchT, float TailEnd, float Until) _holdFollow
+            = (FieldPosition.Pitcher, 0f, -1f, -1f);
+
+        /// <summary>この捕球予定が、収録を流し切る対象か。</summary>
+        private bool IsHoldFollow(FieldCatchEvent e)
+            => _holdFollow.TailEnd > 0f && e.Pos == _holdFollow.Fielder
+               && Mathf.Abs(e.TCatch - _holdFollow.CatchT) < 0.05f && e.Kind == FieldCatchKind.Catch && !e.RunThrough;
+
+        /// <summary>
+        /// 送球前のサイドステップの区間（<see cref="ApplyStepBeforeThrow"/> が足した一歩。無ければ T1 &lt; 0）。
+        /// この間だけ走りの向きの基準を「球は進行方向の右手側」に固定する＝胸を的の右へ向け、
+        /// 左肩を送球の的へ向けたまま横へ寄る（Shuffle_L）。球は手の中なので、球の位置からは向きが決まらない。
+        /// 収録も横歩きに固定する（遅いコマで歩きの段へ切り替わると足どりが途中で変わる）。
+        /// </summary>
+        private (FieldPosition Fielder, float T0, float T1) _sideStep = (FieldPosition.Pitcher, -1f, -1f);
+
+        /// <summary>サイドステップの間、進行方向から見た「球の方向」として使う角度[度]（負＝右手側）。</summary>
+        private const float SideStepBallSideDeg = -90f;
 
         /// <summary>この捕球予定が「もたつきのお手玉」の弾く瞬間か（本物の失策のお手玉は含まない）。</summary>
         private bool IsBobbleFumble(FieldCatchEvent e)
@@ -2194,11 +2292,15 @@ namespace KokoSim.Unity.Match
                     a.RootDrivenY = false;
                     // 走りながら掬う外野ゴロ（issue #1079）: 捕った形で止めず収録を最後まで流す＝TypeF は捕った後も
                     // 前へ踏み出し続けるので、engine が勢いのまま運ぶ間（RunOut）に足が動く。最後のコマで送球まで待つ
-                    if (e.RunThrough) endAt = clip.length - 1e-3f;
+                    if (e.RunThrough || IsHoldFollow(e)) endAt = clip.length - 1e-3f;
                     SetActorClip(a, clip, t - e.TStart + e.ClipHead, endAt);
                     a.Speed = 1f;                       // 走りの倍率を持ち越さない
+                    bool holdFollow = IsHoldFollow(e);
                     a.HoldSeconds = cutOnMiss ? MissHoldSeconds
-                        : e.RunThrough ? RunThroughEndHoldSeconds : CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
+                        : e.RunThrough ? RunThroughEndHoldSeconds
+                        // 長く持つ内野手は収録を流し切り、最後のコマ（球を胸に収めた形＝送球の収録の頭と同じ）で待つ
+                        : holdFollow ? Mathf.Max(CatchHoldSeconds, _holdFollow.Until - _holdFollow.TailEnd) + 0.1f
+                        : CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
                     FielderMotion st;
                     if (_loco.TryGetValue(e.Pos, out st))
                     {
@@ -2210,9 +2312,10 @@ namespace KokoSim.Unity.Match
                         // （打ち切りには必ず据え置きを添える＝design-18 §4.5-⑬⑭ と同じ失敗）。
                         // 落球（issue #813）も捕球の収録なので、尻尾まで流すと「捕った形」で立ち続ける＝短く切る
                         // 届かなかった芝居は着地で打ち切って短く据え置く（issue #1075 追記3）
-                        st.CatchUntil = e.TCatch + (e.RunThrough
-                            ? clip.length - anchor.Moment + RunThroughEndHoldSeconds
-                            : CatchTailSeconds(e.Kind, anchor));
+                        st.CatchUntil = holdFollow ? _holdFollow.Until
+                            : e.TCatch + (e.RunThrough
+                                ? clip.length - anchor.Moment + RunThroughEndHoldSeconds
+                                : CatchTailSeconds(e.Kind, anchor));
                         st.CatchEvent = i;
                         // **グラブが球の来る方を向くように体を回す**。走る向きを速度ベクトルへ
                         // 合わせたのと同じ考え方で、今度は合わせる対象がグラブになる。
@@ -5332,6 +5435,8 @@ namespace KokoSim.Unity.Match
             if (_fieldPlay != null) EndFieldPlay();
             play = StripPostResolutionReturnMoves(play);
             _bobble = DuelTuning.HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
+            _sideStep = (FieldPosition.Pitcher, -1f, -1f);
+            _holdFollow = (FieldPosition.Pitcher, 0f, -1f, -1f);
             if (_bobble.Kind == HandleBobbleKind.Fumble)
             {
                 var fumbleAn = FieldFumbleAnchors[FumbleSideFor(play, _bobble)];
@@ -5371,6 +5476,18 @@ namespace KokoSim.Unity.Match
 
             // 捕球予定・送球予定を先に組む（_loco の初期 Yaw 種付けに使う＝下記。issue #511）。
             BuildFieldCatchPlan(play);
+            // 長く持つ内野手の立ち止まりを埋める（捕球の収録を流し切る＋余れば横歩き）。どの収録で捕るかを
+            // 予定表から引くので捕球予定の後。横歩きを足したらプレーが変わる＝捕球予定を組み直す
+            if (DuelTuning.HandleBobbleEnabled && DuelTuning.StepBeforeThrowEnabled && _bobble.Kind != HandleBobbleKind.Fumble)
+            {
+                var stepped = ApplyStepBeforeThrow(play);
+                if (!ReferenceEquals(stepped, play))
+                {
+                    play = stepped;
+                    _fieldPlay = play;
+                    BuildFieldCatchPlan(play);
+                }
+            }
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             BuildFieldTagPlan(play);           // ⚠ 捕球の後（タッチする野手を捕球の予定表から引く。issue #489）
             BuildBaseCallPlan(play);           // 塁審のアウト／セーフの演技（issue #1595）
@@ -5497,6 +5614,8 @@ namespace KokoSim.Unity.Match
             _fieldPlay = null;
             _fieldPlan = null;
             _bobble = HandleBobble.NoneValue;
+            _sideStep = (FieldPosition.Pitcher, -1f, -1f);
+            _holdFollow = (FieldPosition.Pitcher, 0f, -1f, -1f);
             _hrHit = false;
             _hrFence = false;
             _hrStyle = KokoSim.Engine.Match.Timeline.HomeRunStyle.Standard;

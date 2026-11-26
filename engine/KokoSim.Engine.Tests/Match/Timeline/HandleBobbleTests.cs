@@ -132,6 +132,82 @@ public sealed class HandleBobbleTests
         Assert.True(leg.T1 <= after.Ball[2].T1, "拾う前に寄り終わる");
     }
 
+    // ── 送球へのステップ（2026-11-26 監督報告「二塁手が捕ってからぼーっとしてセーフ」） ──
+
+    private const double Settle = 0.35;   // 捕った形の据え置き（Unity の CatchHoldSeconds）
+    private const double Lead = 0.76;     // 送球の収録が投げる何秒前から始まるか（通常の送球）
+
+    [Fact]
+    public void StepWalksTowardTheTargetAndEndsWhenTheThrowClipStarts()
+    {
+        var play = Grounder(2.13, 4.28);
+        var after = HandleBobblePlanner.ApplyStep(play, Settle, Lead);
+        var leg = after.Moves[FieldPosition.ThirdBase].Single();
+        Assert.Equal(4.28 - Lead, leg.T1, 9);
+        Assert.True(leg.T0 >= 2.13 + Settle - 1e-9, "捕った形を見せてから歩き出す");
+
+        // 的（一塁）へ近づく
+        var a = PlaybackEvaluator.FielderAt(after, FieldPosition.ThirdBase, 2.13).Pos;
+        var z = PlaybackEvaluator.FielderAt(after, FieldPosition.ThirdBase, 4.28).Pos;
+        Assert.True(Dist(z.X, z.Y, 19.4, 19.4) < Dist(a.X, a.Y, 19.4, 19.4) - HandleBobblePlanner.StepMinM);
+        // 足が滑らない速さ（寄りの区間の平均が StepSpeedMps）
+        Assert.Equal(HandleBobblePlanner.StepSpeedMps, Dist(a.X, a.Y, z.X, z.Y) / (leg.T1 - leg.T0), 6);
+
+        // 送球の時刻・終点はそのまま。始点は寄ったぶんだけ同じ向きへずれる（球は手の中）
+        var thrown = (EndpointBallSegment)after.Ball[2];
+        var original = (EndpointBallSegment)play.Ball[2];
+        Assert.Equal(original.T0, thrown.T0, 9);
+        Assert.Equal(original.T1, thrown.T1, 9);
+        var oEnd = original.At(original.T1 - original.T0);
+        var tEnd = thrown.At(thrown.T1 - thrown.T0);
+        Assert.Equal(oEnd.X, tEnd.X, 6);
+        Assert.Equal(oEnd.Y, tEnd.Y, 6);
+        var o0 = original.At(0);
+        var t0 = thrown.At(0);
+        Assert.Equal(z.X - a.X, t0.X - o0.X, 6);
+        Assert.Equal(z.Y - a.Y, t0.Y - o0.Y, 6);
+    }
+
+    [Fact]
+    public void ShortHoldGetsNoStep()
+    {
+        // 捕ってから0.9秒で投げる＝据え置きと送球の収録で埋まる
+        var play = Grounder(2.13, 3.03);
+        Assert.Same(play, HandleBobblePlanner.ApplyStep(play, Settle, Lead));
+    }
+
+    [Fact]
+    public void StepIsCappedSoTheFielderDoesNotWalkTheBallOver()
+    {
+        var play = Grounder(2.13, 9.0);
+        var after = HandleBobblePlanner.ApplyStep(play, Settle, Lead);
+        var a = PlaybackEvaluator.FielderAt(after, FieldPosition.ThirdBase, 2.13).Pos;
+        var z = PlaybackEvaluator.FielderAt(after, FieldPosition.ThirdBase, 9.0).Pos;
+        Assert.True(Dist(a.X, a.Y, z.X, z.Y) <= HandleBobblePlanner.StepMaxM + 1e-6);
+    }
+
+    [Fact]
+    public void BobbleErrorAndRealErrorsAreLeftToTheirOwnActing()
+    {
+        var bobble = Grounder(2.13, 4.28, bobble: true);
+        Assert.Same(bobble, HandleBobblePlanner.ApplyStep(bobble, Settle, Lead));
+        var fumbled = Grounder(2.13, 4.28, fumbled: true);
+        Assert.Same(fumbled, HandleBobblePlanner.ApplyStep(fumbled, Settle, Lead));
+    }
+
+    [Fact]
+    public void ExistingMoveDuringTheHoldIsNotOverridden()
+    {
+        var play = Grounder(2.13, 4.28) with
+        {
+            Moves = new Dictionary<FieldPosition, IReadOnlyList<PlaybackMove>>
+            {
+                [FieldPosition.ThirdBase] = new[] { new PlaybackMove(2.13, 3.0, new PlaybackVec(-12, 24), MoveProfile.RunOut) },
+            },
+        };
+        Assert.Same(play, HandleBobblePlanner.ApplyStep(play, Settle, Lead));
+    }
+
     [Fact]
     public void FlyBallsAreNotTouched()
     {

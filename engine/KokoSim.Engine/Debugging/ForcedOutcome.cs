@@ -73,6 +73,17 @@ public enum ForcedOutcome
     ThroughInfieldMiddle,
     /// <summary>打席の初球を「一二塁間を抜けるゴロの安打」にする（<see cref="ThroughInfieldLeft"/> と同じ作り）。</summary>
     ThroughInfieldRight,
+    /// <summary>
+    /// 打席の初球を「二塁手が捕って一塁へ投げるゴロ」にし、捕ってから投げるまでのもたつきを
+    /// <see cref="ForcedOutcomes.SlowHandleJitterSeconds"/> に固定する（2026-11-26 送球へのステップの撮影用）。
+    /// 打球は <see cref="ThroughInfieldLeft"/> と同じく決まった順で探す（乱数を引かない）。失策は起こさない。
+    /// </summary>
+    SlowHandleGrounder,
+    /// <summary>
+    /// <see cref="SlowHandleGrounder"/> のさらに長い版（もたつき <see cref="ForcedOutcomes.VerySlowHandleJitterSeconds"/>＝
+    /// 守備の低い野手の上限に近い保持）。捕球の収録を流し切っても余る時間を横歩きで寄る絵の撮影用。
+    /// </summary>
+    VerySlowHandleGrounder,
 
     // ── 走塁（盗塁企図を強制したうえで成否を固定する） ──
     StealSuccess,
@@ -120,6 +131,32 @@ public static class ForcedOutcomes
         // こぼれ幅を広げる＝拾い直して一塁に間に合う（記録はアウト・issue #817）ことを減らす。間に合ってしまった打席は次へ持ち越す
         ? c with { ErrorBaseProb = 1.0, ErrorMinProb = 1.0, ErrorMaxProb = 1.0, FlyErrorBaseProb = 1.0, TunnelShareProb = 0.0, CatchFumbleScatterSigmaM = 4.0 }
         : c;
+
+    /// <summary><see cref="ForcedOutcome.SlowHandleGrounder"/> のもたつき[s]（守備50の握り替えと合わせて捕ってから約2.1秒で投げる）。</summary>
+    public const double SlowHandleJitterSeconds = 1.3;
+    /// <summary><see cref="ForcedOutcome.VerySlowHandleGrounder"/> のもたつき[s]（捕ってから約2.9秒で投げる）。</summary>
+    public const double VerySlowHandleJitterSeconds = 2.1;
+
+    /// <summary>
+    /// <see cref="ForcedOutcome.SlowHandleGrounder"/> の1打席ぶんの守備係数。もたつきの平均を非常に大きくし、上限で
+    /// <see cref="SlowHandleJitterSeconds"/> に頭打ちさせる（抽選は残る＝乱数の消費順は変わらない）。守備力の伸縮・
+    /// お手玉の失策・捕球と送球の失策は切る（もたつきの長さだけを固定して、絵の確認に余計な分岐を入れない）。
+    /// </summary>
+    public static Match.Fielding.FieldingCoefficients ApplySlowHandle(
+        Match.Fielding.FieldingCoefficients c, double jitterSeconds = SlowHandleJitterSeconds)
+    {
+        const double mean = 1000.0;
+        return c with
+        {
+            InfieldHandleJitterMeanSeconds = mean,
+            InfieldHandleJitterMaxFactor = jitterSeconds / mean,
+            InfieldHandleJitterFieldingSlope = 0.0,
+            BobbleErrorMinJitterSeconds = 0.0,
+            ErrorBaseProb = 0.0, ErrorMinProb = 0.0, ErrorMaxProb = 0.0,
+            ThrowErrorBaseProb = 0.0,
+            IrregularBounceProb = 0.0,
+        };
+    }
 
     /// <summary>盗塁企図そのものを起こす種別か（走者一塁・二塁空きが前提）。</summary>
     public static bool ForcesStealAttempt(this ForcedOutcome f)

@@ -11,6 +11,8 @@ namespace KokoSim.Unity.Match
     {
         /// <summary>もたつきの芝居を付けるか（見比べ撮影用の静的スイッチ。既定 true）。</summary>
         public static bool HandleBobbleEnabled = true;
+        /// <summary>捕ってから投げるまでの立ち止まりを埋めるか（捕球の収録を流し切る＋余れば送球の的へサイドステップで寄る）（見比べ撮影用の静的スイッチ。既定 true）。</summary>
+        public static bool StepBeforeThrowEnabled = true;
 
         /// <summary>
         /// タッチプレーで逸れを捕った形を見せる最短の秒（捕球の瞬間から。12fps で約1コマ強）と、そこからタッチの
