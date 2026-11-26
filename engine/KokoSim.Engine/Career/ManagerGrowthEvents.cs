@@ -12,7 +12,8 @@ public enum ManagerGrowthEventType
     LessonFromBigLoss,  // 大敗からの学び: 弱点分野の指導力上昇
     CoachingSeminar,    // 指導者講習会（オフ・費用と引き換え）
     ProObVisit,         // 教え子（プロ入りした自分の教え子）の訪問: 采配・育成眼上昇
-    MentorCoach,        // 名伯楽との出会い（稀）: 全分野ボーナス
+    MentorCoach,        // 名伯楽との出会い（稀）: 出会った年から MentorYears 年、毎年の自然増に全分野 +MentorAnnualBoost
+    MentorFarewell,     // 名伯楽が去る: 継続ボーナスの最後の年（issue #1679）
 }
 
 /// <summary>指導力の分野（打撃／投手／守備走塁）。講習会のテーマ・大敗で気づく弱点分野の表示に使う。</summary>
@@ -38,7 +39,8 @@ public sealed record ManagerGrowthCoefficients
     public double ProObVisitFameSlope { get; init; } = 0.001;
     public double ProObVisitBoost { get; init; } = 2.0;
     public double MentorProb { get; init; } = 0.02;               // 名伯楽（稀）
-    public double MentorBoost { get; init; } = 2.0;
+    public int MentorYears { get; init; } = 3;                    // 出会った年を含めて何年効くか（issue #1679）
+    public double MentorAnnualBoost { get; init; } = 1.0;         // 効いている年ごとの全分野の上乗せ
     public double Cap { get; init; } = 99.0;
 }
 
@@ -114,16 +116,31 @@ public static class ManagerGrowthEvents
             fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.ProObVisit, c.ProObVisitBoost));
         }
 
-        // 名伯楽との出会い（稀・全分野）。
-        if (MathUtil.Chance(c.MentorProb, rng))
+        // 名伯楽との出会い（稀）。出会った年から MentorYears 年、毎年の自然増に全分野を上乗せする（issue #1679）。
+        // 効いている間は出会わない（乱数は条件によらず引く＝後ろの抽選がずれない）。出会った年の分はここで足す。
+        if (MathUtil.Chance(c.MentorProb, rng) && m.MentorYearsLeft == 0 && c.MentorYears > 0)
         {
-            m.CoachingBatting = Math.Min(c.Cap, m.CoachingBatting + c.MentorBoost);
-            m.CoachingPitching = Math.Min(c.Cap, m.CoachingPitching + c.MentorBoost);
-            m.CoachingDefense = Math.Min(c.Cap, m.CoachingDefense + c.MentorBoost);
-            fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.MentorCoach, c.MentorBoost));
+            m.MentorYearsLeft = c.MentorYears;
+            fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.MentorCoach, c.MentorAnnualBoost));
+            if (ApplyMentorYear(m, c))
+                fired.Add(new ManagerGrowthNotice(ManagerGrowthEventType.MentorFarewell, c.MentorAnnualBoost));
         }
 
         return fired;
+    }
+
+    /// <summary>
+    /// 名伯楽が付いている年の上乗せ（毎年の自然増の直後に1回）。全分野の指導力を <see cref="ManagerGrowthCoefficients.MentorAnnualBoost"/>
+    /// 上げて残り年数を1減らす。付いていなければ何もしない。残りが0になった（＝コーチが去る）なら true。
+    /// </summary>
+    public static bool ApplyMentorYear(Manager m, ManagerGrowthCoefficients c)
+    {
+        if (m.MentorYearsLeft <= 0) return false;
+        m.CoachingBatting = Math.Min(c.Cap, m.CoachingBatting + c.MentorAnnualBoost);
+        m.CoachingPitching = Math.Min(c.Cap, m.CoachingPitching + c.MentorAnnualBoost);
+        m.CoachingDefense = Math.Min(c.Cap, m.CoachingDefense + c.MentorAnnualBoost);
+        m.MentorYearsLeft--;
+        return m.MentorYearsLeft == 0;
     }
 
     /// <summary>強さティア S/A の学校か（名将との練習試合の条件・issue #1483）。</summary>

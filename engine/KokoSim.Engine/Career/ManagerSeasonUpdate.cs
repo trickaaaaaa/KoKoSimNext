@@ -64,8 +64,19 @@ public static class ManagerSeasonUpdate
         // マネージャー（NPC）も進級（issue #1430）。3年の夏の入れ替えは別経路（TeamManagerLifecycle.Succeed）。
         TeamManagerLifecycle.AdvanceGrade(m);
 
+        // 名伯楽が付いている年は、自然増に全分野の上乗せ（issue #1679）。残りが尽きた年は別れの通知を先頭に置く。
+        var farewell = ManagerGrowthEvents.ApplyMentorYear(m, mg);
+
         // 節目イベント（甲子園経験・大敗の学び・講習会・OB訪問等）。独立ストリームで既存の乱数列を乱さない。
-        return ManagerGrowthEvents.Yearly(m, reachedKoshien, wins, milestoneRng, mg, hasProProtege,
+        var yearly = ManagerGrowthEvents.Yearly(m, reachedKoshien, wins, milestoneRng, mg, hasProProtege,
             hadBlowoutLoss, facedPowerhouse, attendSeminar);
+        if (!farewell) return yearly;
+
+        var all = new List<ManagerGrowthNotice>(yearly.Count + 1)
+        {
+            new(ManagerGrowthEventType.MentorFarewell, mg.MentorAnnualBoost),
+        };
+        all.AddRange(yearly);
+        return all;
     }
 }
