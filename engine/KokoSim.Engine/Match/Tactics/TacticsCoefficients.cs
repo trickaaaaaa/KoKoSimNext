@@ -47,8 +47,12 @@ public sealed record TacticsCoefficients
     /// 見込みで比べると、盗塁のうまい走者ほど読まれて実成功が見込みを約7ポイント下回っていた。0.65 で走った盗塁の
     /// 実成功は 69〜72%（simulate-games tactics 2000試合×2シード）。得点期待値表（run expectancy）は持たず、
     /// アウト数別の固定オフセット（<see cref="StealMinSuccessOneOutOffset"/>/<see cref="StealMinSuccessTwoOutOffset"/>）で
-    /// 近似する（表の自前構築はオーナー決定で対象外）。</para></summary>
-    public double StealMinSuccess { get; init; } = 0.65;
+    /// 近似する（表の自前構築はオーナー決定で対象外）。</para>
+    ///
+    /// <para>issue #1275（2026-11-26）: #838 の 0.65 では企図が1チーム0.25回/試合まで減り、オーナー目標（1チーム
+    /// 1.0〜2.0回/試合）に届かなかった。0.65→0.52 へ再校正（tactics 2000試合×2シード: 1チーム約1.4回/試合・
+    /// 成功率約64%）。0.55 で約1.05回・0.50 で約1.7回。</para></summary>
+    public double StealMinSuccess { get; init; } = 0.52;
     /// <summary>1アウトの損益分岐オフセット（<see cref="StealMinSuccess"/>への加算）。負＝閾値が下がり無死より
     /// 仕掛けやすい（1死は二塁へ進めれば外野フライなどでも還れて進塁の価値が無死よりやや高い、という
     /// 近似の目安 -0.03。issue #838）。</summary>

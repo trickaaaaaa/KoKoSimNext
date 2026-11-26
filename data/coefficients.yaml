@@ -512,7 +512,7 @@ baserunning:
   catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
   steal_third_lead_m: 6.0          # 三盗の二塁走者のリード[m]（issue #949）。走る距離＝塁間27.43m−これ。旧 steal_third_success_bias −0.35（判定にだけ効き絵に出ない補正）を撤去し物理だけで決める。「同じ走力・同じ捕手で二盗より少し下」に校正（起票時の3〜4mでは二盗の4〜6割にしかならず、監督決定で6.0mに改訂・2026-11-14）
   steal_home_distance_m: 21.5      # 三塁走者が本塁を突くときの残り距離[m]（issue #637）。三塁→本塁27.43mからリード約6mを引く。単独本盗は採用しない（issue #788）ので一・三塁重盗の絵の到達時刻にだけ使う
-  double_steal_third_break_prob: 0.4  # 一・三塁重盗（design-14 P1-4）: 三塁走者も同時スタート（2026-07-17校正）
+  double_steal_third_break_prob: 0.12  # 一・三塁重盗（design-14 P1-4）: 三塁走者も同時スタート（2026-07-17校正・#1275 で 0.4→0.12＝二盗の企図を目標の約6倍へ上げた結果 重盗が 0.017→0.118/試合に増え、参考帯 0〜0.05 を超えたので企図に対する割合を絞った）
   pickoff_base_prob: 0.0           # 牽制アウト（design-14 P1-5）の基準確率。issue #661 でオフ（0.05→0）＝牽制は盗塁企図の球にしか出ず、映った瞬間に盗塁が読めるため。0の間は判定も絵も出ない
   pickoff_runner_lead_slope: 0.0015
   pickoff_pitcher_sense_slope: 0.001
@@ -1074,8 +1074,8 @@ tactics:
   squeeze_min_bunt: 55
   # issue steal-thresholds-unreachable（2026-08-27）: 旧0.72は実ロスター実測の到達可能上限（p99=60.7%・
   # max=65.8%）を超えていて原理的に一度も通らない死にコードだった。当時の引き直し先 0.50 は概ねp70相当（詳細は
-  # TacticsCoefficients.StealMinSuccess のコメント参照）。現行値は下の 0.65（issue #838 で再校正）。
-  steal_min_success: 0.65          # 読まれる確率込みの成功見込みがこの値以上で仕掛ける（issue #838: 0アウトの損益分岐の近似）。
+  # TacticsCoefficients.StealMinSuccess のコメント参照）。現行値は下の 0.52（#838 で 0.65 → #1275 で 0.52）。
+  steal_min_success: 0.52          # 読まれる確率込みの成功見込みがこの値以上で仕掛ける（0アウトの閾値）。#838 で 0.65 に上げたら企図が1チーム0.25回/試合まで減ったので、目標（1チームあたり1.0〜2.0回/試合）へ #1275 で 0.52（≈1.45回・成功率≈64%）へ再校正。
   steal_prob: 0.45
   # issue #838: 損益分岐のアウト数別オフセット（セイバーメトリクス近似）と、閾値直上の崖をなだらかにする傾き。
   steal_min_success_one_out_offset: -0.03

@@ -199,10 +199,12 @@ games_10k_tactics:
   # 牽制アウト: issue steal-thresholds-unreachable（2026-08-27）で盗塁企図が実質0件から復活したため
   # 実測≈0.029/試合（両軍計・3000試合）に上がった（旧コメント「実測≈0.001」はstale）が、帯は元々
   # 参考帯として広め（0.0-0.05）に取ってあったのでそのまま収まる。
+  # issue #1275: 牽制は #661 で pickoff_base_prob 0.0＝オフにしたので実測は 0（上の 0.029 も stale）。帯 0.0〜0.05 は
+  # 「牽制が黙って復活していない」ことだけを見る上限ガード（min 0 なので機能停止は検知しない＝今は 0 が正）。
   pickoff_per_game: { min: 0.0, max: 0.05 }
   # 敬遠: 実測≈0.08/試合（両軍計）。
   intentional_walk_per_game: { min: 0.01, max: 0.30 }
-  # 一・三塁重盗: 実測≈0.004/試合（両軍計）。一・三塁で盗塁企図という稀な塁状況依存のため広め。
+  # 一・三塁重盗: 実測≈0.035/試合（両軍計・#1275 で二盗の企図を約6倍にした後に double_steal_third_break_prob 0.12 で収めた。旧コメント≈0.004 は stale）。一・三塁で盗塁企図という稀な塁状況依存のため広め。
   double_steal_third_break_per_game: { min: 0.0, max: 0.05 }
   # 単独盗塁（二盗・三盗・本盗計）の企図・成功率。issue steal-thresholds-unreachable（2026-08-27）:
   # 采配閾値（StealMinSuccess/StealThirdMinSuccess）が解決式の到達可能上限を超えていて、この帯を追加する
@@ -210,7 +212,11 @@ games_10k_tactics:
   # 閾値を実測レンジへ再校正した後の実測（3000試合・tactics有効・seed7）は 企図0.24/試合・成功率37.5%。
   # 成功率の帯は現実の高校野球水準（65-70%）より低いレンジになる＝解決式の物理層自体の天井が低いため
   # （design-02 §4.2「リーグ平均を動かすなら jump/pop time を動かす」、本issueのスコープ外）。
-  steal_attempt_per_game: { min: 0.05, max: 0.60 }
+  # issue #1275（2026-11-26・オーナー判断）: #838 で決めた目標「1チーム 1.0〜2.0回/試合」の反映漏れを直した
+  # （#838 は steal_success_rate の上限しか更新していなかった）。他の帯と違いこの帯だけ**1チームあたり**
+  # （両軍計÷2）で測る。#838 後の実測は 1チーム約0.25回/試合で下限を大きく割っていたため、
+  # tactics.steal_min_success 0.65→0.52 へ再校正（実測 2000試合×seed42/2024: 1.44/1.40回・成功率63.6%）。
+  steal_attempt_per_game: { min: 1.0, max: 2.0 }
   # issue #637（2026-10-10・ユーザー承認）: 上限 0.55→0.65。本盗の解決式が「必ず失敗」だった頃は、僅差の終盤に
   # 毎球10%で仕掛ける本盗（成功0%）が合計の成功率を押し下げていた。本盗を走力70前後以上だけが仕掛ける
   # ギャンブル枠へ直すと企図は 0.23→0.18/試合、成功率は 44.0%→56.2%（seed42）/36.8%→45.4%（別シード）。
@@ -344,7 +350,7 @@ ability_sensitivity:
     launch:           { offense: { expect: up, min_runs: 1.5 } }
     discipline:       { offense: { expect: up, min_runs: 0.5 } }
     speed:            { offense: { expect: up, min_runs: 0.5 }, defense: { expect: down, min_runs: 1.0 } }
-    steal_fast:       { offense: { expect: up, min_runs: 0.3 } }   # 走力80の走者で盗塁20→80。#838 で今は逆向き
+    steal_fast:       { offense: { expect: up, min_runs: 0.3 } }   # 走力80の走者で盗塁20→80。#838 で一度逆向きになったが #1275 の再校正（steal_min_success 0.52）で直った
     arm:              { defense: { expect: down, min_runs: 0.2 } }
     throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
     fielding:         { defense: { expect: down, min_runs: 2.0 } }
@@ -370,4 +376,3 @@ ability_sensitivity:
   # 既知の不具合で今は満たせない項目（除外リスト）。直ったら**外す**（外し忘れは Heavy が「もう通っている」と赤くする）。
   known_defects:
     - { ability: catcher_arm,     side: defense, issue: 838, note: "向きは直った（肩20で相手得点+0.23）が min_runs 0.3 に届かない" }
-    - { ability: steal_fast,      side: offense, issue: 838, note: "成功率73%でも全員走力80の打線では走らない方が得点が多い＝損益分岐が状況で上がる（得点期待値表が要る）" }
