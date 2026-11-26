@@ -640,7 +640,7 @@ namespace KokoSim.Unity.Match
         public const int BaseHeight = 540;
 
         private const string LayerName = "DuelStage";
-        private const float MoundDistance = 18.44f;
+        private const float MoundDistance = (float)KokoSim.Engine.Match.Field.FieldGeometry.MoundM;
         private const float MoundHeight = 0.254f;
         private const float TargetHeight = 1.75f;
         // §4.2 確定（2026-07-26 監督判定）。撮影ハーネスは**この刻みで通す**必要がある

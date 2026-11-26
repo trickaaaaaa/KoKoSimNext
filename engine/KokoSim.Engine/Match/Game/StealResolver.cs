@@ -93,8 +93,8 @@ public static class StealResolver
     private const double MinMarginSeconds = 0.05;
 
     /// <summary>塁間[m]（90ft）。三盗の走る距離＝これ−二塁走者のリード（<see cref="BaserunningCoefficients.StealThirdLeadM"/>）。
-    /// 判定は球場の寸法を受け取らないが、塁間は公認野球規則で全球場共通（<see cref="KokoSim.Engine.Match.Field.FieldGeometry.BaseDistanceM"/> と同値）。</summary>
-    public const double BasePathM = 27.43;
+    /// 判定は球場の寸法を受け取らないが、塁間は公認野球規則で全球場共通（<see cref="KokoSim.Engine.Match.Field.FieldGeometry.StandardBaseDistanceM"/> が単一ソース）。</summary>
+    public const double BasePathM = KokoSim.Engine.Match.Field.FieldGeometry.StandardBaseDistanceM;
 
     /// <summary>走者所要時間[s]。ギャンブル始動(<see cref="StartType.Gamble"/>)は好ジャンプで短縮（G3）。
     /// 二盗は<see cref="BaserunningCoefficients.StealLeadDistanceM"/>、三盗は塁間−二塁走者のリード

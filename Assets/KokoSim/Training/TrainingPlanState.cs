@@ -831,34 +831,10 @@ namespace KokoSim.Unity.Training
             _ => "カスタム",
         };
 
-        private static string PositionJp(FieldPosition pos) => pos switch
-        {
-            FieldPosition.Pitcher => "投",
-            FieldPosition.Catcher => "捕",
-            FieldPosition.FirstBase => "一",
-            FieldPosition.SecondBase => "二",
-            FieldPosition.ThirdBase => "三",
-            FieldPosition.Shortstop => "遊",
-            FieldPosition.LeftField => "左",
-            FieldPosition.CenterField => "中",
-            FieldPosition.RightField => "右",
-            _ => "?",
-        };
+        private static string PositionJp(FieldPosition pos) => FieldPositionNames.Abbr(pos);
 
         /// <summary>能力タブの守備適性行の名前（2字。1字の PositionJp はアイコンに使う, issue #327③）。</summary>
-        private static string PositionFullJp(FieldPosition pos) => pos switch
-        {
-            FieldPosition.Pitcher => "投手",
-            FieldPosition.Catcher => "捕手",
-            FieldPosition.FirstBase => "一塁",
-            FieldPosition.SecondBase => "二塁",
-            FieldPosition.ThirdBase => "三塁",
-            FieldPosition.Shortstop => "遊撃",
-            FieldPosition.LeftField => "左翼",
-            FieldPosition.CenterField => "中堅",
-            FieldPosition.RightField => "右翼",
-            _ => "?",
-        };
+        private static string PositionFullJp(FieldPosition pos) => FieldPositionNames.Kanji2(pos);
 
         private static string MenuJp(TrainingMenu m) => m switch
         {

@@ -24,12 +24,12 @@ namespace KokoSim.Unity.Squad
         // 3Dアセットが無い環境（購入素体・クリップ未導入）では組めないので、そのときだけ模式図へ落ちる。
 
         /// <summary>
-        /// 直立の投手を正面から見る構図。投手はマウンド (0, MoundHeight, 18.44) に
+        /// 直立の投手を正面から見る構図。投手はマウンド (0, MoundHeight, FieldGeometry.MoundM=18.44) に
         /// yaw236°（購入AAクリップは素で+Z向き）で立つので、その正面＝(-0.83, 0, -0.56) 方向へカメラを置く。
         /// 数値は実測で詰めた（目測でカメラを置くと外す・グラブ検証と同じ教訓）。
         /// </summary>
         private static readonly Vector3 PreviewCamPos = new(-2.35f, 1.30f, 16.85f);
-        private static readonly Vector3 PreviewLookAt = new(0f, 1.10f, 18.44f);
+        private static readonly Vector3 PreviewLookAt = new(0f, 1.10f, (float)KokoSim.Engine.Match.Field.FieldGeometry.MoundM);
         /// <summary>
         /// 画面の縦に収める実寸[m]。角度でなく寸法で渡す＝欄の縦横比が変わっても背丈が変わらない
         /// （画角固定にすると横長の欄で頭と足が切れる。2026-07-29 実測）。1.75mの素体＋余白。
