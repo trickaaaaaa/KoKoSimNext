@@ -23,9 +23,9 @@ public sealed record BalanceTargets
     /// <summary>二塁打率（打席あたり）。</summary>
     public Band DoubleRate { get; init; } = new(0.035, 0.065);
     /// <summary>三塁打率（打席あたり）。</summary>
-    public Band TripleRate { get; init; } = new(0.002, 0.009);
+    public Band TripleRate { get; init; } = new(0.002, 0.015);
     /// <summary>二塁打÷本塁打。長打の「種類の配分」が壊れていないことを直接見る指標（実野球はおよそ2〜2.5）。</summary>
-    public Band DoublesPerHomeRun { get; init; } = new(2.00, 4.50);
+    public Band DoublesPerHomeRun { get; init; } = new(2, 9);
 }
 
 /// <summary>Phase 2（試合）の許容帯。</summary>
@@ -38,15 +38,15 @@ public sealed record GameTargets
     /// <summary>本塁クロスプレー憤死/試合の参考帯（設計書12 §3 F2, Q9）。広め＝得点帯と競合させない warn 相当。</summary>
     public Band HomePlayOutsPerGame { get; init; } = new(0.12, 0.50);
     /// <summary>三塁憤死/試合の参考帯（単打の一塁→三塁レース, Issue #89, 設計書12 §3.5）。広め＝warn 相当。</summary>
-    public Band ThirdPlayOutsPerGame { get; init; } = new(0.02, 0.40);
+    public Band ThirdPlayOutsPerGame { get; init; } = new(0.02, 0.45);
     /// <summary>併殺打/試合の参考帯（両軍計。GIDP, Issue #369。物理レース化後。実測≈1.06）。</summary>
-    public Band DoublePlayPerGame { get; init; } = new(0.70, 2.20);
+    public Band DoublePlayPerGame { get; init; } = new(1, 1.7);
 
     /// <summary>失策数/試合（両軍計）。乱数生成母平均≈3.4（弱小裾の大量失策込み・中央値C50同士は≈2.4）。issue #123で新設。</summary>
     public Band ErrorsPerGame { get; init; } = new(1.8, 3.6);
 
     /// <summary>外野失策シェア（外野失策÷全失策。issue #532）。修正前0.393＝フライ捕球に難度が無かった。実野球はおよそ1割。</summary>
-    public Band OutfieldErrorShare { get; init; } = new(0.05, 0.20);
+    public Band OutfieldErrorShare { get; init; } = new(0.05, 0.22);
 
     // ===== design-14 第1段（P1）新プレー発生率/試合（両軍計）。采配Brain不要＝無指示でも発生する常時系 =====
     public Band FieldersChoicePerGame { get; init; } = new(0.10, 1.20);
@@ -63,7 +63,7 @@ public sealed record GameTacticsTargets
 {
     public required Band RunsPerTeam { get; init; }
     public Band PickoffPerGame { get; init; } = new(0.0, 0.05);
-    public Band IntentionalWalkPerGame { get; init; } = new(0.0, 0.30);
+    public Band IntentionalWalkPerGame { get; init; } = new(0.01, 0.3);
     public Band DoubleStealThirdBreakPerGame { get; init; } = new(0.0, 0.05);
     /// <summary>単独盗塁（二盗・三盗・本盗計）の企図/試合。issue steal-thresholds-unreachable（2026-08-27）:
     /// 采配閾値が解決式の到達可能上限を超えていて長らく実質0件だった。閾値を実測レンジへ再校正した後の
@@ -76,17 +76,17 @@ public sealed record GameTacticsTargets
     /// 動かす」参照、本issueのスコープ外）ため、帯は現行物理層の実測値（3000試合で37.5%）を中心に取る。</summary>
     public Band StealSuccessRate { get; init; } = new(0.20, 0.80);
     // 1球采配（設計書15 Phase C-2）: 追い込まれ矯正/3-0待て/決め球切替の影響を最も受ける指標。
-    public Band StrikeoutRate { get; init; } = new(0.16, 0.22);
+    public Band StrikeoutRate { get; init; } = new(0.13, 0.23);
     public Band WalkRate { get; init; } = new(0.06, 0.10);
-    public Band HomeRunRate { get; init; } = new(0.010, 0.022);
+    public Band HomeRunRate { get; init; } = new(0.003, 0.01);
     /// <summary>バント経路の封殺率（ForceOutAtSecond/Third/Home合算）。打球の物理レースで処理点・処理時刻・
     /// 処理野手を決めるようになった（issue #1092）。オーナー決定（2026-11-17）: 高校野球の犠打企図あたり
     /// 封殺5〜10%・内野安打5〜10%・残りが犠打成功（70〜80%）＋小フライ/ファウルで打席継続。</summary>
-    public Band BuntForceOutRate { get; init; } = new(0.04, 0.11);
+    public Band BuntForceOutRate { get; init; } = new(0.04, 0.13);
     /// <summary>バント経路の犠打成功率（打者アウト・走者進塁）。オーナー決定の目安70〜80%（issue #1092）。</summary>
     public Band SacrificeBuntSuccessRate { get; init; } = new(0.68, 0.82);
     /// <summary>バント経路の内野安打率（オールセーフ含む）。オーナー決定の目安5〜10%（issue #1092）。</summary>
-    public Band BuntInfieldHitRate { get; init; } = new(0.04, 0.11);
+    public Band BuntInfieldHitRate { get; init; } = new(0.03, 0.11);
     /// <summary>スクイズでボールが実際にプレーされたときの三塁走者の本塁封殺率。同上、ゆるいスモークテスト帯。</summary>
     public Band SqueezeRunnerOutAtHomeRate { get; init; } = new(0.0, 0.05);
 }
@@ -125,9 +125,9 @@ public sealed record LowTierMercyTargets
     /// <summary>自校がコールドで負ける率（ほぼ互角の相手＝強度40）。</summary>
     public Band MercyLossRateVsE40 { get; init; } = new(0.02, 0.12);
     /// <summary>自校がコールドで負ける率（強度45）。issue の例＝「E(45) 相手のコールド負け ≤15%」。</summary>
-    public Band MercyLossRateVsE45 { get; init; } = new(0.05, 0.15);
+    public Band MercyLossRateVsE45 { get; init; } = new(0.05, 0.2);
     /// <summary>自校がコールドで負ける率（1ティア上＝強度50）。</summary>
-    public Band MercyLossRateVsD50 { get; init; } = new(0.12, 0.27);
+    public Band MercyLossRateVsD50 { get; init; } = new(0.12, 0.32);
     /// <summary>自校が完封されたコールドで負ける率（「8−0」型・強度45）。</summary>
     public Band MercyShutoutLossRateVsE45 { get; init; } = new(0.01, 0.07);
 }
@@ -135,15 +135,15 @@ public sealed record LowTierMercyTargets
 public sealed record LowTierTargets
 {
     /// <summary>自校の得点（ほぼ互角の相手＝強度40）。</summary>
-    public Band ManagerRunsVsE40 { get; init; } = new(5.5, 8.0);
+    public Band ManagerRunsVsE40 { get; init; } = new(5, 8);
     /// <summary>自校の得点（1ティア上＝強度50）。</summary>
-    public Band ManagerRunsVsD50 { get; init; } = new(3.2, 5.4);
+    public Band ManagerRunsVsD50 { get; init; } = new(2.8, 5.4);
     /// <summary>自校の得点（2ティア上＝強度60）。</summary>
-    public Band ManagerRunsVsC60 { get; init; } = new(1.9, 3.6);
+    public Band ManagerRunsVsC60 { get; init; } = new(1.6, 3.6);
     /// <summary>自校が完封される率（1ティア上）。校正前 0.212。</summary>
-    public Band ManagerShutoutRateVsD50 { get; init; } = new(0.02, 0.14);
+    public Band ManagerShutoutRateVsD50 { get; init; } = new(0.02, 0.2);
     /// <summary>自校が完封される率（2ティア上）。校正前 0.403。</summary>
-    public Band ManagerShutoutRateVsC60 { get; init; } = new(0.08, 0.28);
+    public Band ManagerShutoutRateVsC60 { get; init; } = new(0.08, 0.32);
     /// <summary>表示1ティア（強度10ポイント）ごとの得点比＝勾配。校正前 0.42 / 校正後 0.61–0.67。</summary>
     public Band RunsRatioPerTier { get; init; } = new(0.52, 0.80);
 }
@@ -162,13 +162,13 @@ public sealed record MatchupGridTargets
     /// <summary>S投手(90) vs F打者(30) の K%（裾の天井）。</summary>
     public Band StrikeoutRateP90B30 { get; init; } = new(0.32, 0.52);
     /// <summary>互角（P50 vs B45）の K%＝飽和が互角近傍を動かしていないこと。</summary>
-    public Band StrikeoutRateP50B45 { get; init; } = new(0.17, 0.28);
+    public Band StrikeoutRateP50B45 { get; init; } = new(0.15, 0.28);
     /// <summary>F投手(35) vs B打者(75) の被打率（逆側の裾。パワー50固定）。</summary>
-    public Band AverageP35B75 { get; init; } = new(0.260, 0.360);
+    public Band AverageP35B75 { get; init; } = new(0.26, 0.43);
     /// <summary>A投手(80) vs F打者(30) の被打率（格下でも「当たれば飛ぶ」余地）。</summary>
     public Band AverageP80B30 { get; init; } = new(0.120, 0.220);
     /// <summary>A投手(80) vs F打者(30) の BB%（下限＝四球が消えない。issue walk-rate-floor-vs-elite-pitcher）。</summary>
-    public Band WalkRateP80B30 { get; init; } = new(0.025, 0.08);
+    public Band WalkRateP80B30 { get; init; } = new(0.02, 0.08);
     /// <summary>S投手(90) vs B打者(75) の BB%。</summary>
     public Band WalkRateP90B75 { get; init; } = new(0.03, 0.13);
     /// <summary>互角（P50 vs B45）の BB%＝隅狙いが互角近傍を動かしていないこと。</summary>
@@ -217,16 +217,17 @@ public static class BalanceTargetsLoader
     public static BalanceTargets Parse(string yaml)
     {
         var a = Root(yaml).Atbat10k ?? throw new InvalidDataException("atbat_10k セクションがありません。");
+        var d = new BalanceTargets { BattingAverage = default!, StrikeoutRate = default!, WalkRate = default!, HomeRunRate = default! };
         return new BalanceTargets
         {
             BattingAverage = a.BattingAverage!.ToBand(),
             StrikeoutRate = a.StrikeoutRate!.ToBand(),
             WalkRate = a.WalkRate!.ToBand(),
             HomeRunRate = a.HomeRunRate!.ToBand(),
-            Slugging = a.Slugging?.ToBand() ?? new Band(0.340, 0.480),
-            DoubleRate = a.DoubleRate?.ToBand() ?? new Band(0.035, 0.065),
-            TripleRate = a.TripleRate?.ToBand() ?? new Band(0.002, 0.009),
-            DoublesPerHomeRun = a.DoublesPerHomeRun?.ToBand() ?? new Band(2.00, 4.50),
+            Slugging = a.Slugging?.ToBand() ?? d.Slugging,
+            DoubleRate = a.DoubleRate?.ToBand() ?? d.DoubleRate,
+            TripleRate = a.TripleRate?.ToBand() ?? d.TripleRate,
+            DoublesPerHomeRun = a.DoublesPerHomeRun?.ToBand() ?? d.DoublesPerHomeRun,
         };
     }
 
@@ -235,21 +236,22 @@ public static class BalanceTargetsLoader
     public static GameTargets ParseGame(string yaml)
     {
         var g = Root(yaml).Games10k ?? throw new InvalidDataException("games_10k セクションがありません。");
+        var d = new GameTargets { RunsPerTeam = default!, PitchesPerGame = default!, MinutesPerGame = default!, InningsPerGame = default! };
         return new GameTargets
         {
             RunsPerTeam = g.RunsPerTeam!.ToBand(),
             PitchesPerGame = g.PitchesPerGame!.ToBand(),
             MinutesPerGame = g.MinutesPerGame!.ToBand(),
             InningsPerGame = g.InningsPerGame!.ToBand(),
-            HomePlayOutsPerGame = g.HomePlayOutsPerGame?.ToBand() ?? new Band(0.12, 0.50),
-            ThirdPlayOutsPerGame = g.ThirdPlayOutsPerGame?.ToBand() ?? new Band(0.02, 0.40),
-            DoublePlayPerGame = g.DoublePlayPerGame?.ToBand() ?? new Band(0.70, 2.20),
-            ErrorsPerGame = g.ErrorsPerGame?.ToBand() ?? new Band(1.8, 3.6),
-            OutfieldErrorShare = g.OutfieldErrorShare?.ToBand() ?? new Band(0.05, 0.20),
-            FieldersChoicePerGame = g.FieldersChoicePerGame?.ToBand() ?? new Band(0.10, 1.20),
-            DroppedThirdStrikePerGame = g.DroppedThirdStrikePerGame?.ToBand() ?? new Band(0.02, 0.40),
-            ErrorExtraAdvancePerGame = g.ErrorExtraAdvancePerGame?.ToBand() ?? new Band(0.10, 0.80),
-            WildPitchPerGame = g.WildPitchPerGame?.ToBand() ?? new Band(0.15, 1.00),
+            HomePlayOutsPerGame = g.HomePlayOutsPerGame?.ToBand() ?? d.HomePlayOutsPerGame,
+            ThirdPlayOutsPerGame = g.ThirdPlayOutsPerGame?.ToBand() ?? d.ThirdPlayOutsPerGame,
+            DoublePlayPerGame = g.DoublePlayPerGame?.ToBand() ?? d.DoublePlayPerGame,
+            ErrorsPerGame = g.ErrorsPerGame?.ToBand() ?? d.ErrorsPerGame,
+            OutfieldErrorShare = g.OutfieldErrorShare?.ToBand() ?? d.OutfieldErrorShare,
+            FieldersChoicePerGame = g.FieldersChoicePerGame?.ToBand() ?? d.FieldersChoicePerGame,
+            DroppedThirdStrikePerGame = g.DroppedThirdStrikePerGame?.ToBand() ?? d.DroppedThirdStrikePerGame,
+            ErrorExtraAdvancePerGame = g.ErrorExtraAdvancePerGame?.ToBand() ?? d.ErrorExtraAdvancePerGame,
+            WildPitchPerGame = g.WildPitchPerGame?.ToBand() ?? d.WildPitchPerGame,
         };
     }
 
@@ -278,21 +280,22 @@ public static class BalanceTargetsLoader
     {
         var g = Root(yaml).Games10kTactics
             ?? throw new InvalidDataException("games_10k_tactics セクションがありません。");
+        var d = new GameTacticsTargets { RunsPerTeam = default! };
         return new GameTacticsTargets
         {
             RunsPerTeam = g.RunsPerTeam!.ToBand(),
-            PickoffPerGame = g.PickoffPerGame?.ToBand() ?? new Band(0.0, 0.05),
-            IntentionalWalkPerGame = g.IntentionalWalkPerGame?.ToBand() ?? new Band(0.0, 0.30),
-            DoubleStealThirdBreakPerGame = g.DoubleStealThirdBreakPerGame?.ToBand() ?? new Band(0.0, 0.05),
-            StealAttemptPerGame = g.StealAttemptPerGame?.ToBand() ?? new Band(1.0, 2.0),
-            StealSuccessRate = g.StealSuccessRate?.ToBand() ?? new Band(0.20, 0.80),
-            StrikeoutRate = g.StrikeoutRate?.ToBand() ?? new Band(0.16, 0.22),
-            WalkRate = g.WalkRate?.ToBand() ?? new Band(0.06, 0.10),
-            HomeRunRate = g.HomeRunRate?.ToBand() ?? new Band(0.010, 0.022),
-            BuntForceOutRate = g.BuntForceOutRate?.ToBand() ?? new Band(0.04, 0.11),
-            SacrificeBuntSuccessRate = g.SacrificeBuntSuccessRate?.ToBand() ?? new Band(0.68, 0.82),
-            BuntInfieldHitRate = g.BuntInfieldHitRate?.ToBand() ?? new Band(0.04, 0.11),
-            SqueezeRunnerOutAtHomeRate = g.SqueezeRunnerOutAtHomeRate?.ToBand() ?? new Band(0.0, 0.05),
+            PickoffPerGame = g.PickoffPerGame?.ToBand() ?? d.PickoffPerGame,
+            IntentionalWalkPerGame = g.IntentionalWalkPerGame?.ToBand() ?? d.IntentionalWalkPerGame,
+            DoubleStealThirdBreakPerGame = g.DoubleStealThirdBreakPerGame?.ToBand() ?? d.DoubleStealThirdBreakPerGame,
+            StealAttemptPerGame = g.StealAttemptPerGame?.ToBand() ?? d.StealAttemptPerGame,
+            StealSuccessRate = g.StealSuccessRate?.ToBand() ?? d.StealSuccessRate,
+            StrikeoutRate = g.StrikeoutRate?.ToBand() ?? d.StrikeoutRate,
+            WalkRate = g.WalkRate?.ToBand() ?? d.WalkRate,
+            HomeRunRate = g.HomeRunRate?.ToBand() ?? d.HomeRunRate,
+            BuntForceOutRate = g.BuntForceOutRate?.ToBand() ?? d.BuntForceOutRate,
+            SacrificeBuntSuccessRate = g.SacrificeBuntSuccessRate?.ToBand() ?? d.SacrificeBuntSuccessRate,
+            BuntInfieldHitRate = g.BuntInfieldHitRate?.ToBand() ?? d.BuntInfieldHitRate,
+            SqueezeRunnerOutAtHomeRate = g.SqueezeRunnerOutAtHomeRate?.ToBand() ?? d.SqueezeRunnerOutAtHomeRate,
         };
     }
 
