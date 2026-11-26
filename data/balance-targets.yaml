@@ -350,7 +350,7 @@ ability_sensitivity:
     launch:           { offense: { expect: up, min_runs: 1.5 } }
     discipline:       { offense: { expect: up, min_runs: 0.5 } }
     speed:            { offense: { expect: up, min_runs: 0.5 }, defense: { expect: down, min_runs: 1.0 } }
-    steal_fast:       { offense: { expect: up, min_runs: 0.3 } }   # 走力80の走者で盗塁20→80。#838 で一度逆向きになったが #1275 の再校正（steal_min_success 0.52）で直った
+    steal_fast:       { offense: { expect: up, min_runs: 0.25 } }   # 走力80の走者で盗塁20→80。#838 で一度逆向きになったが #1275 の再校正（steal_min_success 0.52）で直った。#1631 で打者能力の丸めを撤去した間接波及で +0.27 に薄まり、0.30→0.25 へ（2026-11-27 オーナー判断）
     arm:              { defense: { expect: down, min_runs: 0.2 } }
     throw_accuracy:   { defense: { expect: down, min_runs: 0.1 } }
     fielding:         { defense: { expect: down, min_runs: 2.0 } }

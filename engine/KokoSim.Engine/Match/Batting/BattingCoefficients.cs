@@ -416,7 +416,7 @@ public sealed record BattingCoefficients
     public double BearingFlyAngleDeg { get; init; } = 25.0;
 
     /// <summary>打球の平均角[deg]を弾道値から線形補間。</summary>
-    public double MeanLaunchAngle(int launchTendency)
+    public double MeanLaunchAngle(double launchTendency)
         => LaunchAngleAtLt1 + (LaunchAngleAtLt100 - LaunchAngleAtLt1) * (launchTendency - 1) / 99.0;
 
     /// <summary>

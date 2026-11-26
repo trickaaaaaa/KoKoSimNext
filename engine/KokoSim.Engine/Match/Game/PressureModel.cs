@@ -153,7 +153,10 @@ public static class PressureModel
     public static BatterAttributes ApplyBatter(BatterAttributes b, double multiplier)
     {
         if (multiplier == 1.0) return b;
-        return b with { Contact = ClampAbility(b.Contact * multiplier) };
+        // 打者側は丸めない（issue #1631）: ここが GameEngine.EffectiveMatchup の最終段。
+        // プレッシャー→主将→動揺→伝令→相性→勢いの倍率chainを double のまま受け切り、以降の
+        // エンドラン/チャンス/速球打ち・変化球打ちへも double で引き渡す。
+        return b with { Contact = ClampBatterAbility(b.Contact * multiplier) };
     }
 
     /// <summary>投手へ適用（コントロールσに補正）。倍率1.0なら恒等。</summary>
@@ -164,4 +167,6 @@ public static class PressureModel
     }
 
     private static int ClampAbility(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
+
+    private static double ClampBatterAbility(double v) => Math.Clamp(v, 1.0, 100.0);
 }

@@ -2969,7 +2969,9 @@ public static class GameEngine
             intentionalWalk));
     }
 
-    private static int ClampAbility(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
+    // 丸めない（issue #1631）: エンドラン・チャンスの倍率は、ここに届くまでの実効ミート・パワー・弾道
+    // （プレッシャー等の倍率chain）がすでに丸めていない double。ここで int に丸めると小さな効きが消える。
+    private static double ClampAbility(double v) => Math.Clamp(v, 1.0, 100.0);
 
     /// <summary>外野手か（フェンス激突の対象判定用）。</summary>
     private static bool IsOutfield(Match.Field.FieldPosition pos)
