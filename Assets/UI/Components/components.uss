@@ -2339,6 +2339,42 @@
     background-color: var(--sb-face);
 }
 
+/* 勝率バー（issue #1494）。左＝先攻・右＝後攻。面は掲示板の黒の上＝先攻はストライク系の琥珀・後攻はヒット系の水色。
+   幅の比は MatchLiveController（FastModeFeed）が flex-grow で与える。 */
+.fm-wp {
+    flex-direction: row;
+    align-items: center;
+    width: 80%;
+    max-width: 760px;
+    margin-top: var(--sp-4);
+    flex-shrink: 0;
+}
+.fm-wp__pct { width: 200px; flex-shrink: 0; font-size: var(--fs-body); color: var(--sb-ink-1); white-space: nowrap; }
+.fm-wp__pct--away { -unity-text-align: middle-left; }
+.fm-wp__pct--home { -unity-text-align: middle-right; }
+.fm-wp__bar { flex-grow: 1; flex-direction: row; height: 20px; background-color: var(--sb-cell-bg); }
+.fm-wp__seg { height: 100%; flex-basis: 0; }
+.fm-wp__seg--away { background-color: var(--sb-call-strike); }
+.fm-wp__seg--home { background-color: var(--sb-call-hit); }
+
+/* テキスト速報（issue #1494）。打席結果を1行ずつ・新しいものが上。得点が入った行だけ明るく。 */
+.fm-feed {
+    width: 80%;
+    max-width: 760px;
+    max-height: 300px;
+    margin-top: var(--sp-4);
+    overflow: hidden;
+    flex-shrink: 1;
+}
+.fm-feed__line {
+    font-size: var(--fs-label);
+    color: var(--sb-ink-2);
+    padding: var(--sp-1) 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--sb-board-line);
+}
+.fm-feed__line--run { color: var(--sb-ink-1); }
+
 /* ═══ ScoreBug：盤面左上の常時表示バグ（試合画面改修・器は Components/ScoreBug.uxml）═══════
    野球中継のアレ。打席の演出中も切らさずカウント・塁・両校の得点を出しっぱなしにする。
    面は掲示板の黒（--sb-face）＋インク枠＝design-19 の黒島語彙で、盤面の絵の上でも沈まない。
@@ -3144,3 +3180,23 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 .rank-badge--E { background-color: #D6E6F3; color: #1F4F7A; }
 .rank-badge--F { background-color: #E6E3DC; color: #55524B; }
 .rank-badge--G { background-color: #E6E3DC; color: #55524B; }
+
+/* ═══ 日本地図（JapanMapElement・県選択と勢力図マップで共有）═══════════════════════════ */
+.pmap {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+/* 乗せた区画の名前の札。カーソルの横に出す黒い札（掲示板の黒＝design-19 の黒島語彙）。
+   画面ごとの「Label の余白を0に戻す」規則（.pms-root Label 等）より強くして札の余白を効かせる。 */
+.pmap .pmap__tip {
+    position: absolute;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-1);
+    background-color: var(--sbk-ink);
+    color: var(--color-on-fill);
+    font-size: var(--fs-page);
+    border-radius: var(--sbk-r-chip);
+}

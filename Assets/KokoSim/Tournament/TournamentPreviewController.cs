@@ -15,16 +15,18 @@ namespace KokoSim.Unity.Tournament
     ///   1. トーナメント: 自校の勝ち上がり＋各回戦の結果（既定）
     ///   2. 大会展望: 優勝争いの構図＋注目選手
     ///   3. 校別詳細: トーナメント表の高校名クリックで開く（ベンチ入りメンバー表＋チーム寸評, issue #189）
+    ///   4. 勢力図: 県ごとの最強校の総合力をランク色で塗った日本地図（issue #1494）。大会が開かれていなくても開ける
     /// 本機能は大会モード中のみ有効。開催中でなければ空状態を出す。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class TournamentPreviewController : MonoBehaviour
     {
         private VisualElement _root;
-        private VisualElement _empty, _bracketView, _previewView, _detailView;
+        private VisualElement _empty, _bracketView, _previewView, _detailView, _mapView, _subrowTop;
+        private PowerMapPanel _powerMap;
 
-        /// <summary>3ビュー切替（Bracket=トーナメント / Preview=大会展望 / Detail=校別詳細）。</summary>
-        private enum ViewMode { Bracket, Preview, Detail }
+        /// <summary>ビュー切替（Bracket=トーナメント / Preview=大会展望 / Detail=校別詳細 / Map=勢力図）。</summary>
+        private enum ViewMode { Bracket, Preview, Detail, Map }
         private ViewMode _mode;
         private string _detailSchool;   // Detail 表示中の校名（クリック元＝樹形図の高校名, issue #189）
 
@@ -35,6 +37,9 @@ namespace KokoSim.Unity.Tournament
             _bracketView = _root.Q<VisualElement>("tp-view-bracket");
             _previewView = _root.Q<VisualElement>("tp-view-preview");
             _detailView = _root.Q<VisualElement>("tp-view-detail");
+            _mapView = _root.Q<VisualElement>("tp-view-map");
+            _subrowTop = _root.Q<VisualElement>("tp-subrow-top");
+            _powerMap = new PowerMapPanel(_root.Q<VisualElement>("tp-map"), _root.Q<VisualElement>("tp-map-legend"));
 
             // 画面を開き直すたびトーナメントから始める（大会の現況が最初に目に入る）。
             _mode = ViewMode.Bracket;
@@ -46,6 +51,10 @@ namespace KokoSim.Unity.Tournament
             if (back != null) back.clicked += () => { _mode = ViewMode.Bracket; Render(); };
             var export = _root.Q<Button>("tp-export-html");
             if (export != null) export.clicked += ExportPamphlet;
+            var goMap = _root.Q<Button>("tp-go-map");
+            if (goMap != null) goMap.clicked += () => { _mode = ViewMode.Map; Render(); };
+            var mapBack = _root.Q<Button>("tp-map-back");
+            if (mapBack != null) mapBack.clicked += () => { _mode = ViewMode.Bracket; Render(); };
             var detailBack = _root.Q<Button>("tp-detail-back");
             if (detailBack != null) detailBack.clicked += () => { _mode = ViewMode.Bracket; Render(); };
 
@@ -71,6 +80,13 @@ namespace KokoSim.Unity.Tournament
             Render();
         }
 
+        /// <summary>勢力図を明示的に開く（スクショ・自動検証用。通常は「勢力図」ボタンから遷移する）。</summary>
+        public void ShowPowerMapView()
+        {
+            _mode = ViewMode.Map;
+            Render();
+        }
+
         /// <summary>校別詳細を明示的に開く（スクショ・自動検証用。通常は樹形図の高校名クリックから遷移する）。</summary>
         public void ShowSchoolDetail(string schoolName)
         {
@@ -92,11 +108,15 @@ namespace KokoSim.Unity.Tournament
 
             RenderTopBar();
 
-            Show(_empty, !open);
+            var mapMode = _mode == ViewMode.Map;
+            Show(_subrowTop, !mapMode);
+            Show(_mapView, mapMode);
+            Show(_empty, !open && !mapMode);
             Show(_bracketView, open && _mode == ViewMode.Bracket);
             Show(_previewView, open && _mode == ViewMode.Preview);
             Show(_detailView, open && _mode == ViewMode.Detail);
 
+            if (mapMode) { _powerMap.Refresh(); return; }
             if (!open) return;
 
             switch (_mode)

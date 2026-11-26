@@ -292,6 +292,8 @@ namespace KokoSim.Unity.Match
         private bool _fastMode;
         private double _fastModeClock;
         private VisualElement _fastModeBoard;
+        private FastModeFeed _fastFeed;        // 勝率バー＋テキスト速報（issue #1494）
+        private double _homePrior = 0.5;       // 試合前の後攻の勝率（勝率バーの出発点）
 
         // 3カラム（左=自校 / 右=相手）＋マッチアップHUD。表示専用（数値はエンジン集計 Snapshot から引く）。
         // 左下コーナーは「上=投手HUD／下=指示パネル」の常設スタック（issue #289）。HUD はスロットの
@@ -694,6 +696,7 @@ namespace KokoSim.Unity.Match
             WireFastMode("spd-fast");
             _fastModeBoard = _root.Q<VisualElement>("fastmode-board");
             if (_fastModeBoard != null) _fastModeBoard.style.display = DisplayStyle.None;
+            _fastFeed = _fastModeBoard != null ? new FastModeFeed(_fastModeBoard) : null;
             _duelHost = _root.Q<VisualElement>("duel-host");
             _duelHost?.Clear();   // OnEnable ごとの積み上がり防止（field-host と同じ運用）
             _duelImg = null;
@@ -970,6 +973,7 @@ namespace KokoSim.Unity.Match
 
         private void BuildGame()
         {
+            _homePrior = 0.5;
             // 大会/タウンフローからの実試合を観戦するライブ要求があればそれを消費する（一度きり）。
             var req = Pending;
             Pending = null;
@@ -987,6 +991,7 @@ namespace KokoSim.Unity.Match
                 _homeColors = req.HomeColors;
                 _awaySchoolId = req.AwaySchoolId;
                 _homeSchoolId = req.HomeSchoolId;
+                _homePrior = PregameHomePrior(_awaySchoolId, _homeSchoolId);
                 _crowd = req.Crowd;
                 KokoSim.Unity.Audio.MatchBrassBand.Begin(req.BrassBand, req.AwaySchoolId, req.HomeSchoolId);
                 KokoSim.Unity.Audio.MatchSfx.IsKoshienMatch = req.BrassBand;   // 応援が鳴る＝甲子園
@@ -4444,6 +4449,7 @@ namespace KokoSim.Unity.Match
                 if (_inningBreakOn) { _inningBreakOn = false; _inningBreakClock = 0f; _afterInningBreak = null; SetVisible(_inningBreak, false); }
                 ClearSubTelop();   // 交代テロップも畳む（高速中の交代は実況履歴の1行だけ。issue #920）
                 ClearTimeoutScene();   // 伝令の場面も（issue #1174）
+                _fastFeed?.Begin(_prog);   // 速報はここから先だけ積む（入る前の打席は出さない）
                 PostFastModeBoard();
             }
             else
@@ -4488,11 +4494,27 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void PostFastModeBoard()
         {
+            _fastFeed?.Update(_prog, _awayDisp, _homeDisp, _homePrior);   // 勝率バー・速報は確定済みの実況ログだけから出す＝CurrentAtBat の罠に触れない
             if (_prog?.Current is not { } current) return;   // まだ1打席も確定していない（滅多にない）
             _atBat = null;   // RefreshPanel を snap.OffenseIsTop/CurrentBatterOrder のフォールバックへ倒す
             PostLineScore(current.Inning, current.IsTop, finished: false);
             RefreshPanel();
         }
+
+        /// <summary>試合前の後攻の勝率（勝率バーの出発点）。両校の強さが引けなければ 0.5＝力の差を見ない。</summary>
+        private static double PregameHomePrior(int awaySchoolId, int homeSchoolId)
+        {
+            var away = SchoolStrength(awaySchoolId);
+            var home = SchoolStrength(homeSchoolId);
+            return away.HasValue && home.HasValue
+                ? KokoSim.Engine.Nation.AggregateMatch.WinProbability(home.Value, away.Value, new KokoSim.Engine.Nation.NationCoefficients())
+                : 0.5;
+        }
+
+        private static double? SchoolStrength(int schoolId)
+            => schoolId == NationService.ManagerSchoolId
+                ? TeamOverall.Of(RosterService.Active)
+                : NationService.SchoolById(schoolId)?.Strength;
 
         // 試合開始の既定ビュー（issue #312）: 対決ビューから始める。DuelStageRig が使えない環境
         // （3Dアセット未導入・生成失敗）では従来どおり俯瞰にフォールバックする。

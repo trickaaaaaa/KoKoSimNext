@@ -19,6 +19,12 @@
         <ui:VisualElement class="main">
           <ui:VisualElement class="col-full">
 
+            <!-- 勢力図マップへの入口（issue #1494）。大会が開かれていなくても開ける＝ビューの外に置く。
+                 マップ表示中は畳む（戻るボタンは tp-view-map の中）。 -->
+            <ui:VisualElement name="tp-subrow-top" class="tp-subrow">
+                <ui:Button name="tp-go-map" class="tp-back" text="勢力図" />
+            </ui:VisualElement>
+
             <!-- 空状態：大会モード中でないとき（本機能は開催中のみ機能する） -->
             <ui:VisualElement name="tp-empty" class="tp-empty">
                 <ui:Label class="tp-empty__title" text="現在開催中の大会はありません" />
@@ -113,6 +119,22 @@
                         </ui:ScrollView>
 
                     </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- ビュー4：勢力図マップ（issue #1494・design-06 §3.5）。県ごとに最強校の総合力をランク色5段で塗る。
+                 地図は Painter2D の JapanMapElement（県選択と共通）。凡例はランクチップ（色＋文字）。 -->
+            <ui:VisualElement name="tp-view-map">
+                <ui:VisualElement class="tp-masthead">
+                    <ui:VisualElement class="rule-head">
+                        <ui:VisualElement class="rule-head__rule" />
+                        <ui:Label class="rule-head__text f-display" text="勢力図" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:Button name="tp-map-back" class="tp-back" text="◀ 大会に戻る" />
+                <ui:VisualElement class="card tp-map-card">
+                    <ui:VisualElement name="tp-map" class="tp-map" />
+                    <ui:VisualElement name="tp-map-legend" class="tp-map-legend" />
                 </ui:VisualElement>
             </ui:VisualElement>
 

@@ -312,6 +312,10 @@ namespace KokoSim.Unity.MatchResult
         /// <summary>打席の札の文字。凡打は犠打・犠飛・併殺を分ける（監督決定 2026-11-21）。</summary>
         public static string PaText(BoxScoreGridCell c) => PaText(c.Result, c.IsSacBunt, c.IsSacFly, c.OutsThisPa >= 2);
 
+        /// <summary>実況ログ（<see cref="PlayLogEntry"/>）の1打席の札の文字。申告敬遠は四球と分ける（高速試合モードの速報・issue #1494）。</summary>
+        public static string PaText(PlayLogEntry e)
+            => e.IntentionalWalk ? "申告敬遠" : PaText(e.Result, e.IsSacBunt, e.IsSacFly, e.OutsThisPa >= 2);
+
         /// <summary><see cref="PaText(BoxScoreGridCell)"/> の記録版。</summary>
         public static string PaText(MatchRecordPa c) => PaText(c.Result, c.SacBunt, c.SacFly, c.DoublePlay);
 

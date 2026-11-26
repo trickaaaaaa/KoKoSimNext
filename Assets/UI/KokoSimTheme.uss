@@ -559,6 +559,12 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-subrow { flex-direction: row; align-items: center; flex-shrink: 0; }
 Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の margin:0 に勝つため型＋クラス */
 
+/* 勢力図マップ（issue #1494）。縦スクロールの中なので高さは固定、地図が残りを使い、凡例は左下に並べる。 */
+.tp-map-card { height: 640px; flex-direction: column; }
+.tp-map { flex-grow: 1; min-height: 0; }
+.tp-map-legend { flex-direction: row; flex-shrink: 0; align-items: center; padding-top: var(--sp-2); }
+.tp-map-legend__chip { margin-right: var(--sp-2); }
+
 /* 次戦カード（トーナメントビューの要点）。 */
 .tp-next {
     background-color: var(--sf-card); border-radius: var(--radius-card);
