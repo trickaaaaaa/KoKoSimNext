@@ -380,6 +380,31 @@ captures:
     video: {from: start, to: end, fps: 24}
     probes: [BatterRootDiag]
 
+  # ── セーフティバントは投げるまで打つ構え・リリースの直前に構え直す（issue #1658）。送りバント（bunt-stance-1660-*）は札を押した時点で構える＝並べて見る。
+  # BatterClipDiag（BatterRootDiag の隣）で打者のクリップ名・時刻・バント構えの真偽がコマごとに出る＝リリース前は false、直前に true へ変わることを確かめる ──
+  - id: safety-stance-1658-R
+    name: "セーフティバントの構え直し・右打者（issue #1658）"
+    scenario: offense-timeout-top-lab
+    manager: away
+    force: BuntInPlay
+    sign: SafetyBunt
+    view: rig
+    duel_from: launch
+    duel_seconds: 8.0
+    video: {from: start, to: end, fps: 24}
+    probes: [BatterRootDiag]
+  - id: safety-stance-1658-L
+    name: "セーフティバントの構え直し・左打者（issue #1658）"
+    scenario: offense-timeout-left-lab
+    manager: away
+    force: BuntInPlay
+    sign: SafetyBunt
+    view: rig
+    duel_from: launch
+    duel_seconds: 8.0
+    video: {from: start, to: end, fps: 24}
+    probes: [BatterRootDiag]
+
   # ── フライの捕球直前に球が放物線を外れて減速しないか（issue #1336）。毎コマの球の高さ（BallHoldDiag）で
   # 捕球の瞬間まで落ち続けるかを見る。flight_end＝engine の飛球区間の終わり（捕球）──
   - id: fly-catch-1336
