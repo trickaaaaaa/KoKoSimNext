@@ -317,6 +317,64 @@ screens:
       - read: =GameSession.Current.CohesionDelta
       - read: =TrainingWeek.CampMultiplier(18)
 
+  # ── 指導者講習会（issue #1483）。冬のオフ（第42週）に出る質問（費用・今年のテーマ・効果）→ 選ぶ → 何を学んで何が上がったか ──
+  - id: seminar-join-1483
+    name: "指導者講習会の誘い→参加する（テーマの指導力が上がり部費が減る・結果行・issue #1483）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: 41
+      - set: {ManagerService.Manager.Funds: 100}
+      - read: =ManagerService.Manager.CoachingBatting
+      - read: =ManagerService.Manager.CoachingPitching
+      - read: =ManagerService.Manager.CoachingDefense
+      - advance_weeks: 1
+      - read: =GameClock.Week
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("coaching_seminar", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - shot: 01-invitation
+      - click: ev-novel
+      - wait: 5
+      - shot: 02-choices
+      - click: .choice-btn[0]
+      - wait: 5
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - shot: 03-join-outcome-result
+      - read: =ManagerService.Manager.CoachingBatting
+      - read: =ManagerService.Manager.CoachingPitching
+      - read: =ManagerService.Manager.CoachingDefense
+      - read: =ManagerService.Manager.Funds
+
+  - id: seminar-skip-1483
+    name: "指導者講習会の誘い→見送る（費用なし・何も上がらない・issue #1483）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: 41
+      - set: {ManagerService.Manager.Funds: 100}
+      - advance_weeks: 1
+      - call: EventService.Clear()
+      - call: EventService.PushChoiceEvent("coaching_seminar", 0)
+      - show: HomeDashboard
+      - wait: 10
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 3
+      - click: ev-novel
+      - wait: 5
+      - click: .choice-btn[1]
+      - wait: 5
+      - shot: 01-skip-outcome
+      - read: =ManagerService.Manager.Funds
+
   # ── 転任判定の前の校長の会話（issue #1606）。教員監督・在任3年目の2月（第44週）。信頼度の段ごとに撮る ──
 
   - id: principal-talk-high-1606
