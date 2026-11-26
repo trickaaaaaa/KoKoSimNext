@@ -1883,3 +1883,27 @@ screens:
       - click: tp-go-map
       - wait: 30
       - shot: 05-power-map-in-tournament
+
+  - id: match-date-column-1707
+    name: "記録［戦績］タブ: 10〜12月の日付と赴任校の間が1桁の月の行と同じだけ空く（1600×900 と 1280×720 の game_scale・issue #1707）"
+    steps:
+      - new_game: {seed: 5}
+      - boost_roster: 78
+      - advance_to_week: 46
+      - call: EventService.Clear()
+      - show: RecordsScreen
+      - click: .seg-tab[2]
+      - shot: {name: 01-matches-1600, h: 1700}
+
+  - id: match-date-column-1707-small
+    name: "同上を 1280×720 の窓の本番の見え方（0.8倍）で（issue #1707）"
+    game_scale: true
+    size: {w: 1280, h: 720}
+    steps:
+      - new_game: {seed: 5}
+      - boost_roster: 78
+      - advance_to_week: 46
+      - call: EventService.Clear()
+      - show: RecordsScreen
+      - click: .seg-tab[2]
+      - shot: {name: 01-matches-1280, h: 1700}
