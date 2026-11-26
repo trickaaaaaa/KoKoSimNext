@@ -33,7 +33,7 @@ public static class MatchGrowthModel
         {
             if (line.SourceId is not { } id || line.PlateAppearances <= 0) continue;
             if (!byId.TryGetValue(id, out var dp) || !grown.Add(id)) continue;
-            var stage = stages.Coefficient(dp.GrowthType, calendar.StageIndex(dp.Grade, week));
+            var stage = StageWithCaptain(dp, stages, calendar, week, c);
             GrowMentalAndBaserunning(dp, stage, c);
             if (line.Position == FieldPosition.Catcher) GrowLead(dp, stage, c);
         }
@@ -42,9 +42,17 @@ public static class MatchGrowthModel
         {
             if (line.SourceId is not { } id || line.BattersFaced <= 0) continue;
             if (!byId.TryGetValue(id, out var dp) || !grown.Add(id)) continue;
-            var stage = stages.Coefficient(dp.GrowthType, calendar.StageIndex(dp.Grade, week));
+            var stage = StageWithCaptain(dp, stages, calendar, week, c);
             GrowMentalAndBaserunning(dp, stage, c);
         }
+    }
+
+    /// <summary>成長段階係数。主将に選ばれた本人だけ <see cref="TrainingCoefficients.CaptainMatchGrowthFactor"/> を掛ける（設計書09 §8.1）。</summary>
+    private static double StageWithCaptain(DevelopingPlayer dp, GrowthStageTable stages, SeasonCalendar calendar,
+        int week, TrainingCoefficients c)
+    {
+        var stage = stages.Coefficient(dp.GrowthType, calendar.StageIndex(dp.Grade, week));
+        return dp.IsCaptain ? stage * c.CaptainMatchGrowthFactor : stage;
     }
 
     /// <summary>

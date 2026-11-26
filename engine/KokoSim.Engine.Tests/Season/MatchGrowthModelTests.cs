@@ -92,6 +92,42 @@ public sealed class MatchGrowthModelTests
     }
 
     [Fact]
+    public void Captain_GrowsFasterThanTeammates_OnlyCaptainHimself()
+    {
+        var captain = Fielder(1);
+        captain.IsCaptain = true;
+        var mate = Fielder(2);
+        var roster = new List<DevelopingPlayer> { captain, mate };
+        var game = Game(new[]
+        {
+            Bat(1, FieldPosition.Catcher, captain.Id, 4),
+            Bat(2, FieldPosition.Shortstop, mate.Id, 4),
+        }, Array.Empty<PitchingLine>());
+
+        MatchGrowthModel.Apply(game, managerIsAway: false, roster, week: 10, Calendar, Stages, C);
+
+        var stage = Stages.Coefficient(GrowthType.Standard, Calendar.StageIndex(2, 10));
+        Assert.Equal(C.MatchMentalExp * stage * C.CaptainMatchGrowthFactor, captain.MentalExp, 6);
+        Assert.Equal(C.MatchMentalExp * stage, mate.MentalExp, 6);
+        Assert.Equal(C.MatchBaserunningExp * stage * C.CaptainMatchGrowthFactor, captain.Exp(AbilityKind.Baserunning), 6);
+        Assert.Equal(C.MatchLeadExp * stage * C.CaptainMatchGrowthFactor, captain.LeadExp, 6);
+    }
+
+    [Fact]
+    public void Captain_WithFactorOne_GrowsSameAsTeammate()
+    {
+        var c = new TrainingCoefficients { CaptainMatchGrowthFactor = 1.0 };
+        var captain = Fielder(1);
+        captain.IsCaptain = true;
+        var game = Game(new[] { Bat(1, FieldPosition.LeftField, captain.Id, 4) }, Array.Empty<PitchingLine>());
+
+        MatchGrowthModel.Apply(game, managerIsAway: false, new List<DevelopingPlayer> { captain }, week: 10, Calendar, Stages, c);
+
+        var stage = Stages.Coefficient(GrowthType.Standard, Calendar.StageIndex(2, 10));
+        Assert.Equal(c.MatchMentalExp * stage, captain.MentalExp, 6);
+    }
+
+    [Fact]
     public void Growth_StopsAtHiddenCap_AndDiscardsExcess()
     {
         var p = Fielder(1);
