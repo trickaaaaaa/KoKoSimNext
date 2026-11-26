@@ -1622,7 +1622,54 @@ namespace KokoSim.Unity.Match
         public void PrepareBatterBunt(bool bunting, float leadSeconds = 0f)
         {
             if (!Available) return;
+            _safetySquareCountdown = -1f;   // 構えを指定し直す＝構え直しの予約は捨てる（バントなら直接入る・戻すなら戻す）
             SetBatterBunting(bunting, leadSeconds);
+        }
+
+        // セーフティバントの構え直し（issue #1658）: 投げるまでは打つ構えのまま、リリースの直前に構え直す。
+        // 構えへの移行クリップ（Idle_To_Bunt 1.10秒）を速回しして収める＝送りバント・スクイズの早い構えとは別の絵。
+        // 構え直しは打者のスイング予約（バント当て／空振りはリリースの約0.06秒後に始まる）より前に終える。
+        private float _safetySquareCountdown = -1f;
+        private const float SafetySquareSeconds = 0.40f;       // 移行クリップを見せ切る実秒
+        private const float SafetySquareLeadSeconds = 0.38f;   // リリースの何秒前に構え直しを始めるか
+        private const float SafetySquareFadeSeconds = 0.10f;   // 打つ構え→移行の繋ぎ（速回しなので通常の繋ぎより短く）
+
+        /// <summary>
+        /// セーフティバントの球で、打者の構え直しを「リリースの <see cref="SafetySquareLeadSeconds"/> 前」に予約する。
+        /// <paramref name="releaseIn"/> はこの呼び出しからリリースまでの実秒（猶予が無い球は 0＝その場でバント構えへ直接入る）。
+        /// 足上げ（PreLoad）は止める＝打つ足上げをしてからバントへ変わる絵にしない。
+        /// </summary>
+        public void ScheduleBatterSafetySquare(float releaseIn)
+        {
+            if (!Available || _batter == null || _batterBunting) return;
+            _preLoadCountdown = -1f;
+            _batterPreLoaded = false;
+            if (releaseIn <= SafetySquareLeadSeconds + 0.02f)
+            {
+                _safetySquareCountdown = -1f;
+                SetBatterBunting(true, 0f);
+                return;
+            }
+            _safetySquareCountdown = releaseIn - SafetySquareLeadSeconds;
+        }
+
+        private void StartSafetySquare()
+        {
+            _safetySquareCountdown = -1f;
+            if (_batter == null || _batterBunting) return;
+            if (_buntLoopClip == null || _buntIdleToStanceClip == null)
+            {
+                SetBatterBunting(true, 0f);   // 移行クリップが無い環境は直接バント構え（無いものはnull流儀）
+                return;
+            }
+            bool wasIdling = _batter.Clip == _batter.IdleClip;
+            _batterBunting = true;
+            _batter.IdleClip = _buntLoopClip;
+            _batter.IdleEndAt = 0f;
+            if (!wasIdling) return;   // 一発物の最中は復帰時に切り替わる（SetBatterBunting と同じ作法）
+            CrossfadeActorToClip(_batter, _buntIdleToStanceClip, 0f, 0f, SafetySquareFadeSeconds);
+            _batter.Speed = _buntIdleToStanceClip.length / SafetySquareSeconds;   // SetActorClip の後（差し替えで持ち越さないため）
+            GroundFix(_batter);
         }
 
         private void SetBatterBunting(bool bunting, float leadSeconds = 0f)
@@ -1952,7 +1999,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void StartPreLoad()
         {
-            if (_batter == null || _swingMissClip == null || _batterBunting) return;
+            if (_batter == null || _swingMissClip == null || _batterBunting || _safetySquareCountdown >= 0f) return;
             bool idle = _batter.Clip == _batter.IdleClip && Mathf.Approximately(_batter.EndAt, _batter.IdleEndAt)
                         && _batter.HoldRemaining <= 0f && _swingCountdown < 0f;
             if (!idle) return;
@@ -2032,6 +2079,7 @@ namespace KokoSim.Unity.Match
                 _batter.Speed = 1f;
             }
             _batTrailSwing = false;   // 打席の仕切り直し＝バット軌跡の武装も持ち越さない（issue #444）
+            _safetySquareCountdown = -1f;
             _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
             _swingPendingIsLoad = false;
             _batterTakeLoad = false;
@@ -3463,6 +3511,7 @@ namespace KokoSim.Unity.Match
             _passedBallCountdown = -1f;
             _swingCountdown = -1f;
             _preLoadCountdown = -1f;
+            _safetySquareCountdown = -1f;
             foreach (var a in new[] { _pitcher, _catcher, _batter, _umpire })
             {
                 if (a == null || a.Go == null || !a.Graph.IsValid() || a.Clip == null) continue;
@@ -3626,6 +3675,13 @@ namespace KokoSim.Unity.Match
                     SetActorClip(_umpire, _pendingUmpireClip, _umpireCallStartAt, _umpireCallEndAt);
                     _umpire.Speed = UmpireCallPlaybackRate;   // SetActorClip の後（差し替えで持ち越さないため）
                 }
+            }
+
+            // セーフティバントの構え直し（リリースの直前。issue #1658）
+            if (_safetySquareCountdown >= 0f)
+            {
+                _safetySquareCountdown -= deltaTime;
+                if (_safetySquareCountdown < 0f) StartSafetySquare();
             }
 
             // 足上げ（PreLoad）の開始予約（リリースの前から。issue batter-timing-load-earlier）

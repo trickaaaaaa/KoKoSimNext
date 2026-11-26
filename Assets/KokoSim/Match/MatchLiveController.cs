@@ -1960,10 +1960,11 @@ namespace KokoSim.Unity.Match
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnAnyBase,
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
-                // セーフティバント（issue #1473）: 走力で内野安打を狙う＝走者が居なくても出せる。構えの前倒しはバントと同じ。
+                // セーフティバント（issue #1473）: 走力で内野安打を狙う＝走者が居なくても出せる。
+                // 構えは前倒しせず、投げるまでは打つ構えのまま**リリースの直前に構え直す**（不意を突く絵。issue #1658）。
                 new SignDef { Id = "batting-safety", Label = "セーフティバント", CardLabel = "セーフティ\nバント", Icon = "セ", Art = "safety", Offense = true, Group = "batting",
                     GroupLabel = "打撃",
-                    OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.SafetyBunt; PrepareBuntStance(true); },
+                    OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.SafetyBunt; PrepareBuntStance(false); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 new SignDef { Id = "batting-squeeze", Label = "スクイズ", CardLabel = "スクイズ", Icon = "決", Art = "squeeze", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
@@ -2310,13 +2311,16 @@ namespace KokoSim.Unity.Match
             // 移行クリップを通すか直接構えるかを猶予で選ぶ。
             var buntNow = (index >= 0 && index < _paQueue.Count && IsBuntSign(_paQueue[index].Token))
                           || PendingBuntSign();
+            // セーフティバントだけは構えを前倒ししない（リリース直前の構え直しを rig へ予約する。issue #1658）
+            var safetyNow = (index >= 0 && index < _paQueue.Count && IsSafetyBuntSign(_paQueue[index].Token))
+                            || PendingSafetyBuntSign();
             var afterField = _windupAfterFieldPlay;
             _windupAfterFieldPlay = false;
             // 打席の途中でも、投手がセット姿勢で止まっていれば振りかぶりから（継投で左右を当て直した窓の後。
             // issue #818）。前の球の予約は当て直しのときに捨ててあるので、予約頼みでは投げ始めない
             var awaitsWindup = _duelRig != null && _duelRig.Available && _duelRig.PitcherAwaitsWindup;
             var useWindup = (index == 0 || forceWindup || afterField || awaitsWindup) && DuelPacingActive;
-            PrepareBuntStance(buntNow, useWindup ? DuelStageRig.WindupSeconds : 0f);
+            PrepareBuntStance(buntNow && !safetyNow, useWindup ? DuelStageRig.WindupSeconds : 0f);
 
             if (useWindup)
             {
@@ -2325,10 +2329,12 @@ namespace KokoSim.Unity.Match
                 _pitchClock = -DuelStageRig.WindupSeconds + carry;
                 _pitchFirstPending = true;
                 _duelRig.OnPitchWindup();
+                if (safetyNow) ScheduleSafetySquare(DuelStageRig.WindupSeconds);   // OnPitchWindup が打者を構えへ戻すので、その後に予約する
                 return;
             }
             _pitchClock = carry;
             _pitchFirstPending = false;
+            if (safetyNow) ScheduleSafetySquare(0f);
             BeginPitchBall(index);
         }
 
@@ -2702,6 +2708,23 @@ namespace KokoSim.Unity.Match
         {
             if (!DuelPacingActive) return;
             _duelRig?.PrepareBatterBunt(bunting, leadSeconds);
+        }
+
+        private bool PendingSafetyBuntSign()
+        {
+            if (_prog == null) return false;
+            var offenseIsAway = _atBat?.IsTop ?? _prog.IsTeamOnOffense(true);
+            return _prog.PendingPitchBattingOverride(offenseIsAway) is PitchBattingOverride.SafetyBunt;
+        }
+
+        private static bool IsSafetyBuntSign(PitchToken pt)
+            => pt.BattingSign is KokoSim.Engine.Match.Tactics.PitchBattingOverride.SafetyBunt;
+
+        /// <summary>セーフティバントの構え直しをリリースの手前に予約する（issue #1658）。表示専用。</summary>
+        private void ScheduleSafetySquare(float releaseIn)
+        {
+            if (!DuelPacingActive) return;
+            _duelRig?.ScheduleBatterSafetySquare(releaseIn);
         }
 
         /// <summary>その球にバント・セーフティバント・スクイズの指示が出ているか（issue #490）。表示専用。</summary>
