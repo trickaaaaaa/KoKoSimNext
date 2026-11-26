@@ -605,62 +605,10 @@ public static class GameEngine
         // 載る添字（log.Count）。乱数は消費しないので挟んでも結果は不変。Phase A では消費側が読み飛ばす。
         GameStep Pitch() => new(GameStepKind.Pitch, inning, isTop, log.Count);
 
-        // イニング頭は投手が落ち着いて入り直す（動揺はイニングを跨がない）。
-        defense.ClearRattled();
-
-        // 守備に就く半回の頭の継投（issue #1052・2026-11-17 ユーザー確認）。3アウト直後には継投を判断せず
-        // （MaybeChangePitcher の outs>=3 は素通り）、ここ＝最初の打者を迎える前・この半回の乱数を引く前で判断する。
-        // ①攻撃中に投手へ代打を送っていたら、その代打がそのまま投手に就く（投手不在のまま半回を始めない）。
-        // ②続けて継投判断（回の頭から新しい投手）。チーム最初の守備（1回）は先発の頭なので判断しない。
-        if (defense.TakeMoundFromPinchHitter()) p.RecordPitchingChange(defense, isTop);
-        if (inning > 1)
-            MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf: 0, outs: 0, halfHead: true);
-
-        // タイブレーク（設計書09 §7）: 無死一・二塁＋前打席からの継続打順で開始。
-        var tieBreak = ctx.TieBreakEnabled && inning >= ctx.TieBreakStartInning;
-        if (tieBreak)
-        {
-            bases.Second = offense.PreviousBatter(2);
-            bases.First = offense.PreviousBatter(1);
-        }
-
-        // 場面ジャンプ（設計書17 §3.4）: 最初の半イニングだけ、宣言された塁・アウト・カウントから始める。
-        // タイブレークより後に置く＝両方指定されたらシナリオの宣言が勝つ（デバッグの意図が最優先）。
-        var pendingBalls = 0;
-        var pendingStrikes = 0;
-        if (p.ConsumeScenarioStart() is { } seeded)
-        {
-            outs = seeded.Outs;
-            // 走者はタイブレークと同じ流儀で「直前の打者たち」を置く（誰を置くかを宣言せずに済ませる割り切り）。
-            bases.Third = seeded.OnThird ? offense.PreviousBatter(3) : null;
-            bases.Second = seeded.OnSecond ? offense.PreviousBatter(2) : null;
-            bases.First = seeded.OnFirst ? offense.PreviousBatter(1) : null;
-            pendingBalls = seeded.Balls;
-            pendingStrikes = seeded.Strikes;
-            // 半回頭の ClearRattled の後に注ぐ（先に注ぐと消える）。守備側投手が動揺した状態で始める（issue #1178）。
-            if (seeded.PitcherRattled) defense.StartRattled();
-        }
-        // タイブレーク／場面ジャンプで最初から塁にいる走者は、この半イニングの頭の投手の責任にする。
-        if (bases.First is { } seededFirst) responsible[seededFirst] = defense.CurrentPitcher;
-        if (bases.Second is { } seededSecond) responsible[seededSecond] = defense.CurrentPitcher;
-        if (bases.Third is { } seededThird) responsible[seededThird] = defense.CurrentPitcher;
-
-        // 守備固め（設計書09 §6）: イニング頭に守備側が控えを起用。控え空/無指示なら素通り＝従来一致。
-        MaybeDefensiveSub(defense, offense, ctx, rng, inning, bases);
-
-        // 守備位置の入替（設計書09 §2.3, issue #255）: 交代を挟んだ後の並びに対して組み替える。
-        // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
-        MaybeDefenseSwap(defense, offense, ctx, rng, inning, isTop);
-
-        // issue #619: 1球指示の予約は半回をまたがない。盗塁・牽制が3アウト目になった球は
-        // 予約を消費しないまま半回が終わる（stealEndedHalf）ため、消さないと次の攻撃回の
-        // 先頭打者へ持ち越される。予約は「押した次の1球」の寿命なので、ここで捨てるのが正しい。
-        // 読み書きのみで乱数を消費しない＝無指示のシム・統計帯は不変。
-        offense.SetPendingPitchBattingOverride(null);
-        offense.SetPendingSteal(null, StealTarget.Second);
-        offense.ConsumePendingOffensiveSign();
-        defense.SetPendingPitchDefenseOverride(null, null);
-        // 際どい所（issue #872→#1473）はほかの構えと同じく解除するまで続く＝半回をまたいで残す（ここでは下ろさない）。
+        // 半イニングの頭（継投判断・タイブレーク/場面ジャンプの座席・守備固め・入替・1球指示予約の掃除）。
+        // 切り出しのみで挙動は従来のインラインと完全一致（issue #1641）。
+        var (tieBreak, pendingBalls, pendingStrikes) =
+            InitializeHalfInning(p, offense, defense, ctx, rng, inning, isTop, bases, responsible, ref outs);
 
         while (outs < 3)
         {
@@ -871,97 +819,12 @@ public static class GameEngine
             // 実効能力の算出結果は ctx.Fatigue と同値＝変わるのは継投「時期」（ShouldRelieve）だけ。
             var fatigue = defense.FatigueFor(ctx.Fatigue);
             // 投手・打者の実効能力（疲労→調子→スキル→プレッシャー）。**純関数の連鎖で乱数非消費**。
-            // 打席頭と、采配窓で継投・代打が入ったときの束縛し直し（RebindMatchup）が同じ式を通る＝一箇所に置く。
+            // 打席頭と、采配窓で継投・代打が入ったときの束縛し直し（RebindMatchup）が同じ式を通る＝一箇所に置く
+            // （切り出し先は BuildEffectiveMatchup・issue #1641。式そのものは従来のインラインと完全一致）。
             (PitcherAttributes Pitcher, BatterAttributes BatterBase, SkillPlayMods PlayMods) EffectiveMatchup()
-            {
-                // 表示→物理の効き（設計書21）: 投手は制球・キレを Lv で寝かせる（球速の反応は PitchSelection・スタミナは据え置き）。
-                var pit = PitchingFatigue.Effective(
-                    ctx.Batting.AbilityEffect.Pitcher(currentPitcher.Pitching), defense.FatiguePitches, fatigue,
-                    defense.EffectiveBaseStamina(currentPitcher));
-                // 調子・当日の出来（設計書02 §3.3/§3.3b）。
-                pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, defense.DayFormOf(currentPitcher), ctx.Form);
-                // 表示→物理の効き（設計書21）は ToBatter の中＝ここが打者側の唯一の入口。
-                var bat = Players.FormModel.ApplyBatter(batter.ToBatter(ctx.Batting.AbilityEffect), batter.Condition, offense.DayFormOf(batter), ctx.Form);
-
-                // スキル（設計書10）: 目慣れ/尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
-                // 立ち上がり難はイニング、火消しは途中登板（この試合で継投済み＝いまの投手は先発でない。再出場禁止なので
-                // 先発がマウンドへ戻ることはない）、つなぎの打撃は走者の有無で効く（issue #907）。
-                var priorPa = offense.PriorPlateAppearances(batter);
-                var priorBf = defense.PriorBattersFaced(currentPitcher);
-                var inRelief = defense.PitcherChanges > 0;
-                bat = SkillModel.ApplyBatter(bat, batter.Skills, priorPa, ctx.Skills);
-                pit = SkillModel.ApplyPitcher(pit, currentPitcher.Skills, priorBf, ctx.Skills, inning, inRelief);
-                var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills,
-                    inning, inRelief, runnersOn: bases.RunnerCount > 0);
-
-                // チャンス○×（得点圏）・ピンチ○×（得点圏 or 終盤の接戦）: プレッシャー倍率の振れに掛かる側
-                // （設計書10 §0.1・issue #907）。場面外・スキルなしは None＝従来と1ビットも変わらない。
-                var risp = bases.Second is not null || bases.Third is not null;
-                var pinch = risp || (inning >= ctx.Pressure.LateInningFrom
-                                     && Math.Abs(offense.Runs - defense.Runs) <= ctx.Pressure.CloseScoreDiff);
-                var batterTrait = risp ? SkillModel.BatterPressureTrait(batter.Skills) : PressureTrait.None;
-                var pitcherTrait = pinch ? SkillModel.PitcherPressureTrait(currentPitcher.Skills) : PressureTrait.None;
-
-                // 実効ミート・制球に掛かる倍率（プレッシャー→主将→動揺→伝令→相性→勢い）は double のまま掛け合わせ、
-                // 最後に1回だけ整数へ丸める（段ごとに丸めると 制球50×1.008＝50.4→50 のように小さな効きが消え、順序でも結果が変わる・issue #1241）。
-                // 倍率の順序・乱数不使用は従来のまま。
-
-                // プレッシャー×精神力（設計書02 §3）: 緩和=伝令、負側増幅=疲労・動揺。精神力50なら恒等。
-                var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
-                var pitMul = PressureModel.Multiplier(
-                    ctx.Batting.AbilityEffect.Phys(currentPitcher.Mental), PressureModel.WithSideBonus(pressureIdx, defenseExtraPressure, ctx.Pressure), ctx.Pressure,
-                    defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
-                    defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills,
-                    defenseMorale);
-                var batMul = PressureModel.Multiplier(
-                    ctx.Batting.AbilityEffect.Phys(batter.Mental), PressureModel.WithSideBonus(pressureIdx, offenseExtraPressure, ctx.Pressure), ctx.Pressure,
-                    offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills,
-                    moraleMitigation: offenseMorale);
-
-                // 主将（設計書09 §8.1, issue #860 A）: 在場なら常時チーム全員を底上げ。退場すると次打席で消える。
-                // ベンチでも底上げの3割（CaptainBenchFactor）は残る＝Bの伝令ボーナスと両取り可（2026-11-10 監督決定）。
-                // 精神力に関係なく効く＝プレッシャーのMultiplierとは別枠（恒等倍率1.0が既定）。
-                pitMul *= defense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills);
-                batMul *= offense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills);
-
-                // 動揺と伝令の手応え（issue #714）。どちらも精神力に関係なく効く＝伝令を送る意味が見える大きさ。
-                // 動揺: 制球が落ちる。伝令の効果窓: 守備=制球／攻撃=ミートが上がる（大一番ほど・采配と素直さで増減）。
-                // 伝令役が主将なら通常上限1.4を超える（issue #860 B・TimeoutMessenger.Factor）。
-                // 乱数は使わない＝RNG列は不変（結果は効果の分だけ変わる）。
-                if (defense.PitcherRattled && ctx.Tactics.RattledControlPenalty > 0.0)
-                    pitMul *= 1.0 - ctx.Tactics.RattledControlPenalty;
-                if (defense.DefenseCalmPa > 0)
-                    pitMul *= PressureModel.CalmMultiplier(pressureIdx,
-                        defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
-                        ctx.Personalities.CoachingReceptivity(currentPitcher.Receptiveness), ctx.Tactics,
-                        TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
-                            ctx.Tactics, ctx.Personalities, defense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
-                        // 結束（設計書23 §3.4）: 伝令の効きに 1 + c1×(U−50)/50。U=50 で恒等。
-                        * Cohesion.MessengerMultiplier(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion));
-                if (offense.OffenseCalmPa > 0)
-                    batMul *= PressureModel.CalmMultiplier(pressureIdx,
-                        offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
-                        ctx.Personalities.CoachingReceptivity(batter.Receptiveness), ctx.Tactics,
-                        TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
-                            ctx.Tactics, ctx.Personalities, offense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
-                        * Cohesion.MessengerMultiplier(offense.CohesionValue(ctx.Cohesion), ctx.Cohesion));
-
-                // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
-                // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。
-                // 段階0（AI校・裏試合・統計シムは常にこちら）なら恒等＝帯不変。
-                // バッテリーの相性（設計書23 §2.4）: ピンチ（プレッシャー指数が高い場面）だけ制球に倍率（pinch_control_per_k=0.20＝最大+20%）。
-                // 勢い（#863・最大+6%）より大きい（Q52 で引き上げ）。K=0・圧が低い場面では恒等。乱数不使用。
-                pitMul *= BatteryChemistry.PinchControlMultiplier(
-                    defense.BatteryK(currentPitcher, ctx.Chemistry), pressureIdx, ctx.Pressure.MaxIndex, ctx.Chemistry);
-
-                if (offenseMomentum > 0) batMul *= MomentumModel.Multiplier(offenseMomentum, ctx.Momentum);
-                if (defenseMomentum > 0) pitMul *= MomentumModel.Multiplier(defenseMomentum, ctx.Momentum);
-
-                pit = PressureModel.ApplyPitcher(pit, pitMul);
-                bat = PressureModel.ApplyBatter(bat, batMul);
-
-                return (pit, bat, mods);
-            }
+                => BuildEffectiveMatchup(ctx, currentPitcher, defense, fatigue, batter, offense, inning, bases,
+                    pressureIdx, offenseExtraPressure, defenseExtraPressure, offenseMorale, defenseMorale,
+                    offenseMomentum, defenseMomentum);
             var (pitcher, batterBase, playMods) = EffectiveMatchup();
             // ここまで（調子・スキル・プレッシャー）が打席内で不変な実効打者能力の土台。以降のサイン補正
             // （エンドラン/得点圏）と打撃姿勢は毎球評価しうる（issue #492）ので、土台を控えておき
@@ -2829,6 +2692,175 @@ public static class GameEngine
                 ? pl.ToFielder(ctx.Baserunning.AbilityEffect).ThrowAccuracy
                 : 50,
             rng.Fork(0x859_0000_0000UL ^ salt));
+    }
+
+    /// <summary>
+    /// 半イニングの頭（issue #1641・PlayHalfSteps 分割の第一弾）: 守備側の半回頭の継投判断、タイブレーク／
+    /// 場面ジャンプの走者・アウト・カウントの座席、守備固め・守備位置入替、1球指示予約の掃除をまとめる。
+    /// PlayHalfSteps のインラインをそのまま切り出しただけで、RNG消費の順序・回数・結果は一切変えない。
+    /// </summary>
+    private static (bool TieBreak, int PendingBalls, int PendingStrikes) InitializeHalfInning(
+        GameProgress p, TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng,
+        int inning, bool isTop, BaseState bases, Dictionary<Player, Player> responsible, ref int outs)
+    {
+        // イニング頭は投手が落ち着いて入り直す（動揺はイニングを跨がない）。
+        defense.ClearRattled();
+
+        // 守備に就く半回の頭の継投（issue #1052・2026-11-17 ユーザー確認）。3アウト直後には継投を判断せず
+        // （MaybeChangePitcher の outs>=3 は素通り）、ここ＝最初の打者を迎える前・この半回の乱数を引く前で判断する。
+        // ①攻撃中に投手へ代打を送っていたら、その代打がそのまま投手に就く（投手不在のまま半回を始めない）。
+        // ②続けて継投判断（回の頭から新しい投手）。チーム最初の守備（1回）は先発の頭なので判断しない。
+        if (defense.TakeMoundFromPinchHitter()) p.RecordPitchingChange(defense, isTop);
+        if (inning > 1)
+            MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, p.Log.Count, runsThisHalf: 0, outs: 0, halfHead: true);
+
+        // タイブレーク（設計書09 §7）: 無死一・二塁＋前打席からの継続打順で開始。
+        var tieBreak = ctx.TieBreakEnabled && inning >= ctx.TieBreakStartInning;
+        if (tieBreak)
+        {
+            bases.Second = offense.PreviousBatter(2);
+            bases.First = offense.PreviousBatter(1);
+        }
+
+        // 場面ジャンプ（設計書17 §3.4）: 最初の半イニングだけ、宣言された塁・アウト・カウントから始める。
+        // タイブレークより後に置く＝両方指定されたらシナリオの宣言が勝つ（デバッグの意図が最優先）。
+        var pendingBalls = 0;
+        var pendingStrikes = 0;
+        if (p.ConsumeScenarioStart() is { } seeded)
+        {
+            outs = seeded.Outs;
+            // 走者はタイブレークと同じ流儀で「直前の打者たち」を置く（誰を置くかを宣言せずに済ませる割り切り）。
+            bases.Third = seeded.OnThird ? offense.PreviousBatter(3) : null;
+            bases.Second = seeded.OnSecond ? offense.PreviousBatter(2) : null;
+            bases.First = seeded.OnFirst ? offense.PreviousBatter(1) : null;
+            pendingBalls = seeded.Balls;
+            pendingStrikes = seeded.Strikes;
+            // 半回頭の ClearRattled の後に注ぐ（先に注ぐと消える）。守備側投手が動揺した状態で始める（issue #1178）。
+            if (seeded.PitcherRattled) defense.StartRattled();
+        }
+        // タイブレーク／場面ジャンプで最初から塁にいる走者は、この半イニングの頭の投手の責任にする。
+        if (bases.First is { } seededFirst) responsible[seededFirst] = defense.CurrentPitcher;
+        if (bases.Second is { } seededSecond) responsible[seededSecond] = defense.CurrentPitcher;
+        if (bases.Third is { } seededThird) responsible[seededThird] = defense.CurrentPitcher;
+
+        // 守備固め（設計書09 §6）: イニング頭に守備側が控えを起用。控え空/無指示なら素通り＝従来一致。
+        MaybeDefensiveSub(defense, offense, ctx, rng, inning, bases);
+
+        // 守備位置の入替（設計書09 §2.3, issue #255）: 交代を挟んだ後の並びに対して組み替える。
+        // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
+        MaybeDefenseSwap(defense, offense, ctx, rng, inning, isTop);
+
+        // issue #619: 1球指示の予約は半回をまたがない。盗塁・牽制が3アウト目になった球は
+        // 予約を消費しないまま半回が終わる（stealEndedHalf）ため、消さないと次の攻撃回の
+        // 先頭打者へ持ち越される。予約は「押した次の1球」の寿命なので、ここで捨てるのが正しい。
+        // 読み書きのみで乱数を消費しない＝無指示のシム・統計帯は不変。
+        offense.SetPendingPitchBattingOverride(null);
+        offense.SetPendingSteal(null, StealTarget.Second);
+        offense.ConsumePendingOffensiveSign();
+        defense.SetPendingPitchDefenseOverride(null, null);
+        // 際どい所（issue #872→#1473）はほかの構えと同じく解除するまで続く＝半回をまたいで残す（ここでは下ろさない）。
+
+        return (tieBreak, pendingBalls, pendingStrikes);
+    }
+
+    /// <summary>
+    /// 実効能力の構築（issue #1641・PlayHalfSteps 分割の第一弾）: 疲労→調子→スキル→プレッシャー（主将/動揺/
+    /// 伝令/相性/勢い）を純関数の連鎖で適用する。乱数は一切消費しない。打席頭と、采配窓で継投・代打が入った
+    /// ときの束縛し直し（RebindMatchup）の両方からこの1関数を呼ぶ＝式は一箇所にしかない。
+    /// </summary>
+    private static (PitcherAttributes Pitcher, BatterAttributes BatterBase, SkillPlayMods PlayMods) BuildEffectiveMatchup(
+        GameContext ctx, Player currentPitcher, TeamState defense, FatigueCoefficients fatigue,
+        Player batter, TeamState offense, int inning, BaseState bases, int pressureIdx,
+        int offenseExtraPressure, int defenseExtraPressure, double offenseMorale, double defenseMorale,
+        int offenseMomentum, int defenseMomentum)
+    {
+        // 表示→物理の効き（設計書21）: 投手は制球・キレを Lv で寝かせる（球速の反応は PitchSelection・スタミナは据え置き）。
+        var pit = PitchingFatigue.Effective(
+            ctx.Batting.AbilityEffect.Pitcher(currentPitcher.Pitching), defense.FatiguePitches, fatigue,
+            defense.EffectiveBaseStamina(currentPitcher));
+        // 調子・当日の出来（設計書02 §3.3/§3.3b）。
+        pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, defense.DayFormOf(currentPitcher), ctx.Form);
+        // 表示→物理の効き（設計書21）は ToBatter の中＝ここが打者側の唯一の入口。
+        var bat = Players.FormModel.ApplyBatter(batter.ToBatter(ctx.Batting.AbilityEffect), batter.Condition, offense.DayFormOf(batter), ctx.Form);
+
+        // スキル（設計書10）: 目慣れ/尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
+        // 立ち上がり難はイニング、火消しは途中登板（この試合で継投済み＝いまの投手は先発でない。再出場禁止なので
+        // 先発がマウンドへ戻ることはない）、つなぎの打撃は走者の有無で効く（issue #907）。
+        var priorPa = offense.PriorPlateAppearances(batter);
+        var priorBf = defense.PriorBattersFaced(currentPitcher);
+        var inRelief = defense.PitcherChanges > 0;
+        bat = SkillModel.ApplyBatter(bat, batter.Skills, priorPa, ctx.Skills);
+        pit = SkillModel.ApplyPitcher(pit, currentPitcher.Skills, priorBf, ctx.Skills, inning, inRelief);
+        var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills,
+            inning, inRelief, runnersOn: bases.RunnerCount > 0);
+
+        // チャンス○×（得点圏）・ピンチ○×（得点圏 or 終盤の接戦）: プレッシャー倍率の振れに掛かる側
+        // （設計書10 §0.1・issue #907）。場面外・スキルなしは None＝従来と1ビットも変わらない。
+        var risp = bases.Second is not null || bases.Third is not null;
+        var pinch = risp || (inning >= ctx.Pressure.LateInningFrom
+                             && Math.Abs(offense.Runs - defense.Runs) <= ctx.Pressure.CloseScoreDiff);
+        var batterTrait = risp ? SkillModel.BatterPressureTrait(batter.Skills) : PressureTrait.None;
+        var pitcherTrait = pinch ? SkillModel.PitcherPressureTrait(currentPitcher.Skills) : PressureTrait.None;
+
+        // 実効ミート・制球に掛かる倍率（プレッシャー→主将→動揺→伝令→相性→勢い）は double のまま掛け合わせ、
+        // 最後に1回だけ整数へ丸める（段ごとに丸めると 制球50×1.008＝50.4→50 のように小さな効きが消え、順序でも結果が変わる・issue #1241）。
+        // 倍率の順序・乱数不使用は従来のまま。
+
+        // プレッシャー×精神力（設計書02 §3）: 緩和=伝令、負側増幅=疲労・動揺。精神力50なら恒等。
+        var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
+        var pitMul = PressureModel.Multiplier(
+            ctx.Batting.AbilityEffect.Phys(currentPitcher.Mental), PressureModel.WithSideBonus(pressureIdx, defenseExtraPressure, ctx.Pressure), ctx.Pressure,
+            defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
+            defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0, pitcherTrait, ctx.Skills,
+            defenseMorale);
+        var batMul = PressureModel.Multiplier(
+            ctx.Batting.AbilityEffect.Phys(batter.Mental), PressureModel.WithSideBonus(pressureIdx, offenseExtraPressure, ctx.Pressure), ctx.Pressure,
+            offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills), trait: batterTrait, skills: ctx.Skills,
+            moraleMitigation: offenseMorale);
+
+        // 主将（設計書09 §8.1, issue #860 A）: 在場なら常時チーム全員を底上げ。退場すると次打席で消える。
+        // ベンチでも底上げの3割（CaptainBenchFactor）は残る＝Bの伝令ボーナスと両取り可（2026-11-10 監督決定）。
+        // 精神力に関係なく効く＝プレッシャーのMultiplierとは別枠（恒等倍率1.0が既定）。
+        pitMul *= defense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills);
+        batMul *= offense.CaptainPresenceMultiplier(ctx.Tactics, ctx.Skills);
+
+        // 動揺と伝令の手応え（issue #714）。どちらも精神力に関係なく効く＝伝令を送る意味が見える大きさ。
+        // 動揺: 制球が落ちる。伝令の効果窓: 守備=制球／攻撃=ミートが上がる（大一番ほど・采配と素直さで増減）。
+        // 伝令役が主将なら通常上限1.4を超える（issue #860 B・TimeoutMessenger.Factor）。
+        // 乱数は使わない＝RNG列は不変（結果は効果の分だけ変わる）。
+        if (defense.PitcherRattled && ctx.Tactics.RattledControlPenalty > 0.0)
+            pitMul *= 1.0 - ctx.Tactics.RattledControlPenalty;
+        if (defense.DefenseCalmPa > 0)
+            pitMul *= PressureModel.CalmMultiplier(pressureIdx,
+                defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
+                ctx.Personalities.CoachingReceptivity(currentPitcher.Receptiveness), ctx.Tactics,
+                TimeoutMessenger.Factor(defense.DefenseMessenger, currentPitcher, toPitcher: true,
+                    ctx.Tactics, ctx.Personalities, defense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
+                // 結束（設計書23 §3.4）: 伝令の効きに 1 + c1×(U−50)/50。U=50 で恒等。
+                * Cohesion.MessengerMultiplier(defense.CohesionValue(ctx.Cohesion), ctx.Cohesion));
+        if (offense.OffenseCalmPa > 0)
+            batMul *= PressureModel.CalmMultiplier(pressureIdx,
+                offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral),
+                ctx.Personalities.CoachingReceptivity(batter.Receptiveness), ctx.Tactics,
+                TimeoutMessenger.Factor(offense.OffenseMessenger, batter, toPitcher: false,
+                    ctx.Tactics, ctx.Personalities, offense.Captain, ctx.Batting.AbilityEffect.DeltaInt)
+                * Cohesion.MessengerMultiplier(offense.CohesionValue(ctx.Cohesion), ctx.Cohesion));
+
+        // チームの勢い（issue #863）: 格上撃破・サヨナラ・終盤の逆転勝ちで上がった段階ぶん、
+        // 攻撃側はミート・守備側は制球に小さな倍率をかける（伝令の落ち着きと同じ経路）。乱数不使用。
+        // 段階0（AI校・裏試合・統計シムは常にこちら）なら恒等＝帯不変。
+        // バッテリーの相性（設計書23 §2.4）: ピンチ（プレッシャー指数が高い場面）だけ制球に倍率（pinch_control_per_k=0.20＝最大+20%）。
+        // 勢い（#863・最大+6%）より大きい（Q52 で引き上げ）。K=0・圧が低い場面では恒等。乱数不使用。
+        pitMul *= BatteryChemistry.PinchControlMultiplier(
+            defense.BatteryK(currentPitcher, ctx.Chemistry), pressureIdx, ctx.Pressure.MaxIndex, ctx.Chemistry);
+
+        if (offenseMomentum > 0) batMul *= MomentumModel.Multiplier(offenseMomentum, ctx.Momentum);
+        if (defenseMomentum > 0) pitMul *= MomentumModel.Multiplier(defenseMomentum, ctx.Momentum);
+
+        pit = PressureModel.ApplyPitcher(pit, pitMul);
+        bat = PressureModel.ApplyBatter(bat, batMul);
+
+        return (pit, bat, mods);
     }
 
     /// <summary>バント処理の送球の行き先（塁番号）。結果から決まる（封殺の塁／それ以外は一塁）。</summary>
