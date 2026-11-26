@@ -109,6 +109,9 @@ public static class SkillGenerator
         // 目玉（極稀・1プレイに何度も会わない華）。怪物はどの選手にも。
         if (MathUtil.Chance(c.MarqueeSkillProb, rng)) visible.Add(Skill.Monster);
 
+        // スロースターター: 既存スキルの抽選列を動かさないよう、最後に引く（独立ストリームの末尾）。
+        TryAdd(Skill.SlowStarter, c.CommonSkillProb * 0.5);
+
         if (visible.Count == 0 && hidden.Count == 0) return SkillSet.Empty;
         return new SkillSet(visible, hidden);
     }

@@ -157,6 +157,11 @@ skills:
     hidden_eligible: true
     name: ケガしやすい
     description: 怪我をしやすい体質（負・克服の余地あり）
+  - id: SlowStarter
+    category: constitution
+    hidden_eligible: true
+    name: スロースターター
+    description: 入部直後は伸びにくいが、学年が進むほど伸びる（両刃・生涯の伸びは変わらない）
 
   # --- 目玉（少数の華・極稀） ---
   - id: Monster

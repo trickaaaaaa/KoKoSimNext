@@ -101,6 +101,19 @@ public sealed record SkillCoefficients
     public double LazyExpFactor { get; init; } = 0.85;
     public double DurableInjuryFactor { get; init; } = 0.55;
     public double InjuryProneInjuryFactor { get; init; } = 1.8;
+    /// <summary>
+    /// スロースターター: 成長段階係数（設計書02 §5.2）へ掛ける倍率の傾き。倍率＝1＋傾き×(半期番号−基準)。
+    /// 序盤（1年前半）は 1−傾き×基準 に下がり、終盤（3年）は 1＋傾き×(4−基準) に上がる。
+    /// </summary>
+    public double SlowStarterStageSlope { get; init; } = 0.2;
+    /// <summary>
+    /// スロースターター: 倍率が1になる半期番号。在籍月数[6,6,6,6,4]で加重した半期番号の平均（52/28）に置き、
+    /// 生涯の成長量が変わらず時期だけがずれるようにする。
+    /// </summary>
+    public double SlowStarterPivotStage { get; init; } = 1.857;
+
+    /// <summary>スロースターターが成長段階係数へ掛ける倍率（半期番号 0〜4）。</summary>
+    public double SlowStarterStageFactor(int stageIndex) => 1.0 + SlowStarterStageSlope * (stageIndex - SlowStarterPivotStage);
 
     // --- 目玉（怪物: 複数分野に控えめだが確かな上乗せ） ---
     public double MonsterContactBonus { get; init; } = 4.0;
