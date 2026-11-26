@@ -192,6 +192,9 @@ public static class NationGenerator
         var styleRng = rng.Fork(0x57A1_0000UL ^ (ulong)id);
         var style = SampleStyle(styleRng);
         var tacticalSense = (int)MathUtil.Clamp(styleRng.NextGaussian(50, 16), 5, 95);
+        // 校風の型の尖り方（issue #1691）: 強さと無相関の同じ隔離ストリームからもう1つ引く（主RNG非消費）。
+        // 「はっきり尖る学校」と「ほんのり寄る学校」を混在させる（実数値への写しは data 駆動＝SchoolStyleAllocation.Sharpness）。
+        var styleIntensityRoll = styleRng.NextDouble();
 
         // 県内地区（地理固定割の県のみ）。独立ストリーム(Fork)で均等抽選＝他の生成列を乱さない。
         int? districtId = districtCount > 0
@@ -212,6 +215,7 @@ public static class NationGenerator
             Strength = strength,
             Fame = fame,
             Style = style,
+            StyleIntensityRoll = styleIntensityRoll,
             TacticalSense = tacticalSense,
             DistrictId = districtId,
             ManagerTraits = traits,

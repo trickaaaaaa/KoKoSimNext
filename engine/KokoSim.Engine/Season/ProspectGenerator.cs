@@ -588,6 +588,9 @@ public sealed record RosterCoefficients
 
     /// <summary>打順編成＋DH使用判断（issue #54, 設計書11 §4）。自校・AI校で共有する。</summary>
     public LineupCoefficients Lineup { get; init; } = new();
+
+    /// <summary>校風の型（能力配分の学校単位の偏り・issue #1691）。AI校の永続ロスターと使い捨て生成の両方が使う。</summary>
+    public Players.SchoolStyleCoefficients SchoolStyles { get; init; } = new();
 }
 
 /// <summary>

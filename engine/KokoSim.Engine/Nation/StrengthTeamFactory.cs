@@ -46,7 +46,7 @@ public static class StrengthTeamFactory
         EnemyAiCoefficients? aiCoeff = null, FormCoefficients? form = null)
         => Create(school.Strength, school.Name, SeedFor(school.Id, yearIndex),
             personalityCoeff, nameVocab, rosterCoeff, modernRules, calendarYear,
-            school.ManagerTraits, aiCoeff, form, school.Style);
+            school.ManagerTraits, aiCoeff, form, school.Style, school.StyleIntensityRoll);
 
     /// <summary>校ID＋年度から生成シードを導出する（決定論・不変条件#2）。</summary>
     public static IRandomSource SeedFor(int schoolId, int yearIndex)
@@ -56,7 +56,7 @@ public static class StrengthTeamFactory
         PersonalityCoefficients? personalityCoeff = null, PlayerNameVocab? nameVocab = null,
         RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null,
         IReadOnlyList<ManagerTrait>? traits = null, EnemyAiCoefficients? aiCoeff = null,
-        FormCoefficients? form = null, SchoolStyle? style = null)
+        FormCoefficients? form = null, SchoolStyle? style = null, double styleIntensityRoll = 0.5)
     {
         var pc = personalityCoeff ?? new PersonalityCoefficients();
         var vocab = nameVocab ?? new PlayerNameVocab();
@@ -76,6 +76,14 @@ public static class StrengthTeamFactory
         var starLift = lift * (1.0 + rc.AiStarCastDrop);   // 脇役の中心から見た上乗せ＝圧縮後 + lift
         var starSlots = PickStarSlots(rng.Fork(StarSalt), FieldSlots.Length, rc.AiStarHitters);
         var ac = rc.Archetypes;   // 球質タイプ係数は自校生成と同じ RosterCoefficients に同居
+        // 校風の型（issue #1691）: 総合はほぼ不変・配分だけ振り替える上乗せ。野手は全員均一、投手はエースと
+        // 2番手以降で別枠（豪腕依存だけ非対称）。Player.StyleOffset に焼き込む（デバッグ・テスト用）。
+        // 6指標（TeamStrengthProfile）の打撃/投手/守備/機動には偏りがそのまま出る＝差し引いて中立化しない。
+        // 総合（6指標の加重平均）は SchoolStyleCoefficients 側で配分比を校正して吸収する。
+        var styleSharpness = SchoolStyleAllocation.Sharpness(styleIntensityRoll, rc.SchoolStyles);
+        var fielderStyle = SchoolStyleAllocation.ForFielder(style, styleSharpness, rc.SchoolStyles);
+        var aceStyle = SchoolStyleAllocation.ForPitcher(style, styleSharpness, isAce: true, rc.SchoolStyles);
+        var otherPitcherStyle = SchoolStyleAllocation.ForPitcher(style, styleSharpness, isAce: false, rc.SchoolStyles);
         var archSalt = 0x7B15_0000UL;   // 球質タイプ用の Fork ソルト（主RNG非消費）
         var order = new List<Player>(9);
         // 性格・氏名・投打・学年は Fork（親状態非消費）で付与するため、既存の能力ロール列＝乱数消費列を
@@ -96,7 +104,7 @@ public static class StrengthTeamFactory
             var pr = Profile(rc, rng, ref profileSalt, starter: true);
             order.Add(AiMentalModel.WithGradeArc(
                 WithHandedness(PositionPlayer(pos, castCenter, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
-                        battingLift: starSlots.Contains(slot) ? starLift : 0.0), pr.Hand, 0.0, castCenter, rc, pos)
+                        battingLift: starSlots.Contains(slot) ? starLift : 0.0, styleOffset: fielderStyle), pr.Hand, 0.0, castCenter, rc, pos)
                     with { UniformNumber = PositionNumber(pos), Grade = pr.Grade },
                 pr.Grade, rc, physical: true));
         }
@@ -107,7 +115,7 @@ public static class StrengthTeamFactory
         var acePr = Profile(rc, rng, ref profileSalt, starter: true);
         order.Add(AiMentalModel.WithGradeArc(
             WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc, mental,
-                    pitchingLift: starLift), acePr.Hand, MoundRoleWeight, castCenter, rc)
+                    pitchingLift: starLift, styleOffset: aceStyle), acePr.Hand, MoundRoleWeight, castCenter, rc)
                 with { UniformNumber = 1, Grade = acePr.Grade },
             acePr.Grade, rc, physical: true));
 
@@ -117,7 +125,8 @@ public static class StrengthTeamFactory
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
             bullpen.Add(AiMentalModel.WithGradeArc(
-                WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental),
+                WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental,
+                        styleOffset: otherPitcherStyle),
                         pr.Hand, MoundRoleWeight, castCenter, rc)
                     with { UniformNumber = number, Grade = pr.Grade },
                 pr.Grade, rc, physical: true));
@@ -126,7 +135,8 @@ public static class StrengthTeamFactory
         var reliefTail = rng.Fork(0x9A20_0000UL);
         var pr20 = Profile(rc, rng, ref profileSalt, starter: false);
         bullpen.Add(AiMentalModel.WithGradeArc(
-            WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental),
+            WithHandedness(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental,
+                    styleOffset: otherPitcherStyle),
                     pr20.Hand, MoundRoleWeight, castCenter, rc)
                 with { UniformNumber = numbers.Mound[3], Grade = pr20.Grade },
             pr20.Grade, rc, physical: true));
@@ -141,7 +151,8 @@ public static class StrengthTeamFactory
             var ability = rng.Fork(benchSalt++);   // 控えの能力ロールは Fork（主RNG非消費）
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
             bench.Add(AiMentalModel.WithGradeArc(
-                WithHandedness(PositionPlayer(BenchSlots[i], castCenter - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc),
+                WithHandedness(PositionPlayer(BenchSlots[i], castCenter - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
+                        styleOffset: fielderStyle),
                         pr.Hand, 0.0, castCenter, rc, BenchSlots[i])
                     with { UniformNumber = numbers.BenchFielders[i], Grade = pr.Grade },
                 pr.Grade, rc, physical: true));
@@ -410,7 +421,8 @@ public static class StrengthTeamFactory
     internal static Player CreatePlayer(string playerName, FieldPosition pos, double strength, double pitcherWeight,
         IRandomSource rng, PersonalityCoefficients pc, ulong salt,
         PitcherArchetypeCoefficients ac, ulong archetypeSalt, RosterCoefficients rc,
-        AiMentalDraw? mental = null, double battingLift = 0.0, double pitchingLift = 0.0)
+        AiMentalDraw? mental = null, double battingLift = 0.0, double pitchingLift = 0.0,
+        SchoolStyleOffset styleOffset = default)
     {
         var onMound = pos == FieldPosition.Pitcher;
         // 打撃中心: 本業(strength) ↔ 専門外(strength×OffSpecialtyFactor) を w で補間。主軸の上乗せは補間の後に足す
@@ -420,32 +432,36 @@ public static class StrengthTeamFactory
         // 打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）: パワーを希少側にしてミートへ振り替え（打撃指標不変）
         // ＋5能力の凸凹配分（重みは専用 Fork から＝主RNG非消費）。Ability() の呼び出し順・回数は従来どおり保つ。
         var prof = AiBattingProfile.Draw(rng.Fork(salt ^ AiBattingProfile.ProfileSalt), rc);
-        var contact = Ability((battingCenter + rc.AiPowerSkew) * prof.Contact, rng);
-        var power = Ability(Math.Max(0.0, battingCenter - rc.AiPowerSkew) * prof.Power, rng);
+        // 校風の型の上乗せ（issue #1691）は個人差の乗算(prof.X)より後ろに足す＝学校内で均一な素の加算
+        // （乗算に巻き込まれると個人差ぶんブレて狙った配分比から外れるため）。
+        var contact = Ability((battingCenter + rc.AiPowerSkew) * prof.Contact + styleOffset.Contact, rng);
+        var power = Ability(Math.Max(0.0, battingCenter - rc.AiPowerSkew) * prof.Power + styleOffset.Power, rng);
         // 弾道は型の軸（物差しの対象外）＝天井は 99 のまま（乱数の消費は Ability と同じ1回）。
         var launch = Math.Min(99, Ability(50, rng));
-        var discipline = Ability((strength + battingLift) * prof.Discipline, rng);
-        var speed = Ability(strength, rng);
+        var discipline = Ability((strength + battingLift) * prof.Discipline + styleOffset.Discipline, rng);
+        var speed = Ability(strength + styleOffset.Speed, rng);
         // 肩は身体系＝個人差を自校と同じ σ で引く（issue #767。消費数は Ability と同じ1回）。
         // 送球精度は従来どおり肩と同じ標準正規値から σ6 で作る＝旧値と1ビット一致（肩の幅だけ広げる）。
         var armZ = rng.NextGaussian(0.0, 1.0);
-        var arm = (int)MathUtil.Clamp(Math.Round(strength + rc.AiArmSd * armZ), 10, AbilityScale.PhysMax99);
-        var throwAccuracy = (int)MathUtil.Clamp(Math.Round(strength + 6.0 * armZ), 10, AbilityScale.PhysMax99);
-        var fielding = Ability(strength * prof.Fielding, rng);
-        var catching = Ability(strength * prof.Catching, rng);
+        var arm = (int)MathUtil.Clamp(Math.Round(strength + rc.AiArmSd * armZ + styleOffset.ArmStrength), 10, AbilityScale.PhysMax99);
+        var throwAccuracy = (int)MathUtil.Clamp(Math.Round(strength + 6.0 * armZ + styleOffset.ArmStrength), 10, AbilityScale.PhysMax99);
+        var fielding = Ability(strength * prof.Fielding + styleOffset.Fielding, rng);
+        var catching = Ability(strength * prof.Catching + styleOffset.Catching, rng);
 
         PitcherAttributes? pitching = null;
         if (onMound)
         {
             var pitchingCenter = strength + pitchingLift;
-            var control = Ability(pitchingCenter, rng);
-            var staminaLevel = Ability(pitchingCenter, rng);
-            var pitchRank = Ability(pitchingCenter, rng);
+            // 校風の型（issue #1691）は4能力それぞれの中心へ個別に足す（現行の係数では4つとも同値だが、
+            // 将来attribute別に振り替える余地を残す）。
+            var control = Ability(pitchingCenter + styleOffset.Control, rng);
+            var staminaLevel = Ability(pitchingCenter + styleOffset.Stamina, rng);
+            var pitchRank = Ability(pitchingCenter + styleOffset.PitchRank, rng);
             // 球速も他能力と同じく個体差を持つ（旧実装は強さの決定関数で、同じ強さの学校のエースが全員同じ球速＝
             // AI校に技巧派が存在できなかった）。自校（RosterTeamBuilder）と同じ「球速Level→km/h」の形に揃える。
             // 球速だけは 99 で切り詰めず、やわらかい天井（RosterCoefficients.VelocitySoftCap）で上側を寝かせる（issue #908）。
             // 乱数は Ability と同じく正規分布を1回だけ引く＝主RNGの消費列は変わらない。膝より下は旧値と同じ整数Lv。
-            var velocityRaw = Math.Max(10.0, Math.Round(rng.NextGaussian(pitchingCenter, 6)));
+            var velocityRaw = Math.Max(10.0, Math.Round(rng.NextGaussian(pitchingCenter + styleOffset.Velocity, 6)));
 
             // 球質タイプで配分を振り替える（総合はほぼ不変・Fork＝主RNG非消費）。
             var archetype = PitcherArchetypes.Sample(rng.Fork(archetypeSalt), ac);
@@ -502,10 +518,13 @@ public static class StrengthTeamFactory
             ThrowAccuracy = throwAccuracy,
             Fielding = fielding,
             Catching = catching,
-            Bunt = (int)MathUtil.Clamp(strength, 10, AbilityScale.PhysMax99),
+            // バント・盗塁・走塁判断は TeamStrengthProfile の6指標に入らない（走力複合は Speed/Steal のみ）ので
+            // 機動力の型オフセット(styleOffset.Speed)をそのまま乗せてよい（中立化の対象外・issue #1691）。
+            Bunt = (int)MathUtil.Clamp(strength + styleOffset.Speed, 10, AbilityScale.PhysMax99),
             Steal = speed,
             Baserunning = speed,
             Pitching = pitching,
+            StyleOffset = styleOffset,
             Receptiveness = personality.Receptiveness,
             Diligence = personality.Diligence,
             Selflessness = personality.Selflessness,
@@ -524,16 +543,17 @@ public static class StrengthTeamFactory
     /// <summary>守備位置の選手（単一生成器の w=0 呼び出し＝明確な野手）。</summary>
     internal static Player PositionPlayer(FieldPosition pos, double strength, IRandomSource rng,
         PersonalityCoefficients pc, ulong salt, string playerName, AiMentalDraw? mental = null,
-        RosterCoefficients? rc = null, double battingLift = 0.0)
+        RosterCoefficients? rc = null, double battingLift = 0.0, SchoolStyleOffset styleOffset = default)
         => CreatePlayer(playerName, pos, strength, pitcherWeight: 0.0, rng, pc, salt,
-            new PitcherArchetypeCoefficients(), 0UL, rc ?? new RosterCoefficients(), mental, battingLift: battingLift);
+            new PitcherArchetypeCoefficients(), 0UL, rc ?? new RosterCoefficients(), mental, battingLift: battingLift,
+            styleOffset: styleOffset);
 
     /// <summary>投手枠の選手（単一生成器へ投手寄せ重みを渡す）。</summary>
     internal static Player Pitcher(string name, double strength, double pitcherWeight, IRandomSource rng,
         PersonalityCoefficients pc, ulong salt, PitcherArchetypeCoefficients ac, ulong archetypeSalt,
-        RosterCoefficients rc, AiMentalDraw? mental = null, double pitchingLift = 0.0)
+        RosterCoefficients rc, AiMentalDraw? mental = null, double pitchingLift = 0.0, SchoolStyleOffset styleOffset = default)
         => CreatePlayer(name, FieldPosition.Pitcher, strength, pitcherWeight, rng, pc, salt, ac, archetypeSalt, rc, mental,
-            pitchingLift: pitchingLift);
+            pitchingLift: pitchingLift, styleOffset: styleOffset);
 }
 
 /// <summary>

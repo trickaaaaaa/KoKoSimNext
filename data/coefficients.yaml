@@ -2439,6 +2439,30 @@ roster:
   # 投手の打順（issue #360）: 打撃総合が「野手平均＋この差分」以上の打撃型エースだけ野手と同じ
   # 土俵で並べる（未満は9番固定）。0.0=野手平均以上でだけ上位打順に入る。
   lineup_pitcher_batting_order_gap: 0.0
+  # 校風の型（能力配分の学校単位の偏り・issue #1691, design-05 §2.3）。生成時に各能力の中心へ足す。
+  # 6指標（TeamStrengthProfile）の打撃/投手/守備/機動はこのオフセットがそのまま出る（中立化しない＝
+  # 可視の偏りが狙い）。総合（6指標の加重平均）が動かないよう、各型の3つの値の比はあらかじめ解いてある
+  # （SchoolStyleCoefficients のコメント参照・SchoolStyleArchetypeTests が固定）。対象は型を持つ校風だけ
+  # （型なし＝Standard/TotalBaseballは常に0＝丸いまま）。
+  # 尖り方（school_style_sharpness_*）: 学校ごとに強さと無相関に抽選し、同じ校風でも「はっきり尖る学校」と
+  # 「ほんのり寄る学校」を混在させる（School.StyleIntensityRoll を実数へ写す幅）。
+  school_style_sharpness_min: 0.4
+  school_style_sharpness_max: 1.6
+  # 打高投低（PowerHitting）: 打撃（ミート/パワー/選球眼）を厚く、投手・守備を薄く。
+  school_style_power_hitting_batting: 14.0
+  school_style_power_hitting_pitching: -7.0
+  school_style_power_hitting_defense: -5.0
+  # 投守型（DefensiveMinded）: 投手・守備/捕球/肩を厚く、打撃を薄く。
+  school_style_defensive_minded_pitching: 10.0
+  school_style_defensive_minded_defense: 6.0
+  school_style_defensive_minded_batting: -20.0
+  # 機動力（SmallBall）: 走力・盗塁・バントを厚く、パワーを薄く（ミート/選球眼は触らない）。
+  school_style_small_ball_mobility: 10.0
+  school_style_small_ball_power: -12.0
+  # 豪腕依存（AceDependent）: エースへの集中を大きく。エースは投手4能力に上乗せ、2番手以降投手と
+  # 野手（打撃3能力）は同じだけ薄くする。
+  school_style_ace_dependent_ace_boost: 18.0
+  school_style_ace_dependent_others_penalty: -6.0
 
 # ===== AI校の永続ロスター（設計書 OPEN-QUESTIONS Q19/Q20 · #80/#82）=====
 # 他校の選手個人が入学〜引退の3年間在籍し節目成長する（使い捨て生成を廃止）。怪物（Phenom）も同居。

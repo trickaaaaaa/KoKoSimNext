@@ -47,6 +47,14 @@ public sealed class School
     public Match.Tactics.SchoolStyle Style { get; set; } = Match.Tactics.SchoolStyle.Standard;
 
     /// <summary>
+    /// 校風の型の「尖り方」の抽選値（0〜1・issue #1691）。学校の強さとは無相関（Fork で <see cref="Style"/> と
+    /// 同じ隔離ストリームから引く）。はっきり尖る学校（1に近い）とほんのり寄る学校（0に近い）が混在する。
+    /// 実際のオフセットへの写し方は <see cref="Players.SchoolStyleAllocation.Sharpness"/>（data/coefficients.yaml 駆動）。
+    /// 既定0.5＝中位（型なしの校風には無関係）。
+    /// </summary>
+    public double StyleIntensityRoll { get; set; } = 0.5;
+
+    /// <summary>
     /// 監督傾向＝采配の癖（issue #55, 決定1: A-1）。校風と別軸で0〜2個まで重なる。空＝傾向なし。
     /// Nation は決定論生成（保存されず毎回再生成）なので、この新フィールドは既存セーブを壊さない
     /// （＝セーブに後付けで配らない: 既存世界を継続しても AI校は再生成され、破壊的変更にならない）。

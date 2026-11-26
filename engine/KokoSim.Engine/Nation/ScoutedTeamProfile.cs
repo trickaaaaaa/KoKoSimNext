@@ -49,6 +49,7 @@ public static class ScoutedTeamProfile
             PitcherSense = p.PitcherSense,
             Leadership = p.Leadership,
             Archetype = p.Pitching.Archetype,
+            StyleOffset = p.StyleOffset,
         };
         // 投影済み Player は守備位置適性を失っているので、逆投影では既知の配置（投手として置かれているか）から
         // 導出がその役割を返すよう適性を置き直す（#377: 役割を選手に持たせない）。

@@ -3299,9 +3299,24 @@ public static class CoefficientsLoader
         public double LineupDhPitcherBattingGap { get; set; } = LD.DhPitcherBattingGap;
         public double LineupPitcherBattingOrderGap { get; set; } = LD.PitcherBattingOrderGap;
 
+        // 校風の型（能力配分の学校単位の偏り・issue #1691）。
+        public double SchoolStyleSharpnessMin { get; set; } = SSD.SharpnessMin;
+        public double SchoolStyleSharpnessMax { get; set; } = SSD.SharpnessMax;
+        public double SchoolStylePowerHittingBatting { get; set; } = SSD.PowerHittingBatting;
+        public double SchoolStylePowerHittingPitching { get; set; } = SSD.PowerHittingPitching;
+        public double SchoolStylePowerHittingDefense { get; set; } = SSD.PowerHittingDefense;
+        public double SchoolStyleDefensiveMindedPitching { get; set; } = SSD.DefensiveMindedPitching;
+        public double SchoolStyleDefensiveMindedDefense { get; set; } = SSD.DefensiveMindedDefense;
+        public double SchoolStyleDefensiveMindedBatting { get; set; } = SSD.DefensiveMindedBatting;
+        public double SchoolStyleSmallBallMobility { get; set; } = SSD.SmallBallMobility;
+        public double SchoolStyleSmallBallPower { get; set; } = SSD.SmallBallPower;
+        public double SchoolStyleAceDependentAceBoost { get; set; } = SSD.AceDependentAceBoost;
+        public double SchoolStyleAceDependentOthersPenalty { get; set; } = SSD.AceDependentOthersPenalty;
+
         private static readonly PitcherArchetypeCoefficients AD = new();
         private static readonly KokoSim.Engine.Players.BatterArchetypeCoefficients BAD = new();
         private static readonly LineupCoefficients LD = new();
+        private static readonly KokoSim.Engine.Players.SchoolStyleCoefficients SSD = new();
 
         public RosterCoefficients ToModel() => new()
         {
@@ -3409,6 +3424,21 @@ public static class CoefficientsLoader
                 OverallPowerWeight = LineupOverallPowerWeight,
                 DhPitcherBattingGap = LineupDhPitcherBattingGap,
                 PitcherBattingOrderGap = LineupPitcherBattingOrderGap,
+            },
+            SchoolStyles = new KokoSim.Engine.Players.SchoolStyleCoefficients
+            {
+                SharpnessMin = SchoolStyleSharpnessMin,
+                SharpnessMax = SchoolStyleSharpnessMax,
+                PowerHittingBatting = SchoolStylePowerHittingBatting,
+                PowerHittingPitching = SchoolStylePowerHittingPitching,
+                PowerHittingDefense = SchoolStylePowerHittingDefense,
+                DefensiveMindedPitching = SchoolStyleDefensiveMindedPitching,
+                DefensiveMindedDefense = SchoolStyleDefensiveMindedDefense,
+                DefensiveMindedBatting = SchoolStyleDefensiveMindedBatting,
+                SmallBallMobility = SchoolStyleSmallBallMobility,
+                SmallBallPower = SchoolStyleSmallBallPower,
+                AceDependentAceBoost = SchoolStyleAceDependentAceBoost,
+                AceDependentOthersPenalty = SchoolStyleAceDependentOthersPenalty,
             },
             IntakeMean = IntakeMean,
             IntakeSd = IntakeSd,

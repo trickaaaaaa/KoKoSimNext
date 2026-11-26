@@ -87,6 +87,13 @@ public static class AiRosterFactory
         var lift = rc.StarLift(school.Strength);
         var (starPitchers, starHitters) = PickStars(leans, weights, rc, rng.Fork(StarSalt));
 
+        // 校風の型（issue #1691）: 新入生の中心にも学校の型を乗せる＝永続ロスターは代替わりしても型が保たれる。
+        // StrengthTeamFactory.Create と同じ写像（単一ソース＝SchoolStyleAllocation）を通す。
+        var styleSharpness = Players.SchoolStyleAllocation.Sharpness(school.StyleIntensityRoll, rc.SchoolStyles);
+        var fielderStyle = Players.SchoolStyleAllocation.ForFielder(school.Style, styleSharpness, rc.SchoolStyles);
+        var aceStyle = Players.SchoolStyleAllocation.ForPitcher(school.Style, styleSharpness, isAce: true, rc.SchoolStyles);
+        var otherPitcherStyle = Players.SchoolStyleAllocation.ForPitcher(school.Style, styleSharpness, isAce: false, rc.SchoolStyles);
+
         for (var i = 0; i < pc.CohortSize; i++)
         {
             var aptitudes = apts[i];
@@ -100,11 +107,12 @@ public static class AiRosterFactory
             var snap = leansPitcher
                 ? StrengthTeamFactory.Pitcher(name, center, weight, rng, deps.Personality,
                         salt++, rc.Archetypes, archSalt++, rc, mental,
-                        pitchingLift: starPitchers.Contains(i) ? lift : 0.0)
+                        pitchingLift: starPitchers.Contains(i) ? lift : 0.0,
+                        styleOffset: starPitchers.Contains(i) ? aceStyle : otherPitcherStyle)
                     with { Grade = 1 }
                 : StrengthTeamFactory.PositionPlayer(
                         BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name, mental, rc,
-                        battingLift: starHitters.Contains(i) ? lift : 0.0)
+                        battingLift: starHitters.Contains(i) ? lift : 0.0, styleOffset: fielderStyle)
                     with { Grade = 1 };
 
             // 打者の型（issue #1066）: 長所は伸び短所は伸びない成長配分を決める。マウンドに置かれるかに関わらず

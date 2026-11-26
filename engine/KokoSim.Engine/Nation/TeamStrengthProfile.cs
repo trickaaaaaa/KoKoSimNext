@@ -114,6 +114,13 @@ public static class TeamStrengthProfile
     // --- 1選手の合成（サブ重み合計1.0）。PlayerStrengthProfile（選手個人のカテゴリ別ランク）も同じ式を共有する ---
 
     /// <remarks><paramref name="d"/>＝表示Lvに足す物差しの下げ幅（チーム総合は Δ・選手個人は 0。弾道は型の軸で足さない）。</remarks>
+    /// <remarks>
+    /// 校風の型の上乗せ（issue #1691）はここでは差し引かない＝打撃の指標は生成時の配分がそのまま出る
+    /// （「打高投低の学校は打撃指標が高く出る」という可視の偏りが狙いそのもの）。総合力が型の有無で
+    /// 動かないのは6指標の<b>加重和</b>（<see cref="WeightedOverall"/>）側で係数を校正して吸収する
+    /// （<see cref="Players.SchoolStyleCoefficients"/> のコメント参照）。永続ロスターは
+    /// <see cref="Nation.Roster.AiRosterCycle.SolveGrowthG"/> の逆算配分がさらに毎年ターゲットへ合わせ直す。
+    /// </remarks>
     internal static double BatterComposite(DevelopingPlayer p, TeamStrengthCoefficients c, int d = 0)
         => (p.Level(AbilityKind.Contact) + d) * c.ContactWeight
          + (p.Level(AbilityKind.Power) + d) * c.PowerWeight
