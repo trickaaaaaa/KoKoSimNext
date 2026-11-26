@@ -5844,6 +5844,14 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用（issue #1494）: 高速試合モードへ入る（速度ボタンの「高速」と同じ経路）。</summary>
         public void EnterFastModeForCapture() => SetFastMode(true);
 
+        /// <summary>スクショ用（issue #1494）: 高速試合モードを半イニング <paramref name="halves"/> ぶん進める（采配窓で止めたままでも進む）。</summary>
+        public void FastTickForCapture(int halves)
+        {
+            if (!_fastMode || _prog == null) return;
+            for (var i = 0; i < halves && !_prog.IsFinished; i++) _prog.AdvanceUntilInningEnd();
+            PostFastModeBoard();
+        }
+
         /// <summary>
         /// スクショ用: いま<b>打席の頭の采配窓</b>で止まっているか（まだ1球も投げていない＝設計書15 §8 の肝）。
         /// この状態で撮った絵が「打者を見てからサインを出せる」ことの証拠になる。
