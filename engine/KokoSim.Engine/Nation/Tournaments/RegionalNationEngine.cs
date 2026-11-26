@@ -69,7 +69,7 @@ public static class RegionalNationEngine
             }
             else
             {
-                var regionRng = rng.Fork(0xB10C_0000UL ^ (uint)StableHash(fmt.Region));
+                var regionRng = rng.Fork(TournamentForkKeys.RegionalRegion ^ (uint)StableHash(fmt.Region));
                 var placements = new List<(string, IReadOnlyList<School>)>();
                 foreach (var p in prefIds.OrderBy(x => x))
                 {
@@ -87,7 +87,7 @@ public static class RegionalNationEngine
                     // カード記録は球場割当なし（StadiumPlan.None）で回す＝本編の乱数列には触れない
                     // （TournamentRecorder の球場抽選は専用 Fork のみで消費し、対戦解決の rng は進めない）。
                     // センバツの「選手一人一人の地区大会成績」再シム（QualifierStatsSim）の入力になる。
-                    var recorder = new TournamentRecorder(StadiumPlan.None, regionRng.Fork(0xB10C_57AD_0000UL));
+                    var recorder = new TournamentRecorder(StadiumPlan.None, regionRng.Fork(TournamentForkKeys.RegionalRecorder));
                     var knock = Knockout.Run(entrants, coeff, regionRng, thirdPlaceMatch: true, recorder: recorder);
                     placement = knock.Placement.Select(s => s.Id).ToList();
                     matches = recorder.Records;

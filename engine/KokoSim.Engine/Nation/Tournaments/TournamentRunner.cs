@@ -1161,13 +1161,6 @@ public sealed class TournamentRunner : ITournamentRunner
             OpponentId: p.Opp.Id);
     }
 
-    /// <summary>得点差(margin)から表示用スコアを合成する（敗者0〜3点＋差）。決定論（注入乱数）。</summary>
-    private (int WinnerScore, int LoserScore) SynthesizeScore(int margin)
-    {
-        var loser = _rng.NextInt(0, 4);
-        return (loser + Math.Max(1, margin), loser);
-    }
-
     /// <summary>
     /// 裏試合カード（自校非関与）を解決する。フルシム有効なら両校ロスターを <see cref="GameEngine"/> で解いて
     /// 実スコアを返し（＋全国成績へ畳み込み）、無効なら従来の集計モデル（<see cref="AggregateMatch"/>）を使う。
@@ -1204,7 +1197,7 @@ public sealed class TournamentRunner : ITournamentRunner
             return (winner, loser, Math.Max(decisive.AwayRuns, decisive.HomeRuns), Math.Min(decisive.AwayRuns, decisive.HomeRuns));
         }
         var (w, l, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
-        var (ws, ls) = SynthesizeScore(margin);
+        var (ws, ls) = AggregateScore.Synthesize(margin, _rng);
         return (w, l, ws, ls);
     }
 
@@ -1385,14 +1378,14 @@ public sealed class TournamentRunner : ITournamentRunner
     /// <paramref name="attempt"/>（引き分け再試合回, issue #253）は上位ビットへ載せる＝ attempt=0 は従来のIDと完全一致。
     /// </summary>
     private static ulong BackgroundStream(int roundsRemaining, int slot, int attempt = 0)
-        => 0xB6B6_0000UL ^ ((ulong)roundsRemaining << 16) ^ (uint)slot ^ ((ulong)(uint)attempt << 40);
+        => TournamentForkKeys.CardStream(TournamentForkKeys.KnockoutBackground, roundsRemaining, slot, attempt);
 
     /// <summary>
     /// 自校戦の詳細シム用 Fork ストリームID（ラウンド×スロット×再試合回で一意・決定論）。本流とは別系列。
     /// <paramref name="attempt"/>（引き分け再試合回, issue #253）は上位ビットへ載せる＝ attempt=0 は従来のIDと完全一致。
     /// </summary>
     private static ulong PlayerMatchStream(int roundsRemaining, int slot, int attempt = 0)
-        => 0xA5A50000UL ^ ((ulong)roundsRemaining << 16) ^ (uint)slot ^ ((ulong)(uint)attempt << 40);
+        => TournamentForkKeys.CardStream(TournamentForkKeys.KnockoutPlayer, roundsRemaining, slot, attempt);
 
     private int IndexOfManager(School?[] cur)
     {

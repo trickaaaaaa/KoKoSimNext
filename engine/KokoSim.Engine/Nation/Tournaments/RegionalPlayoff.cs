@@ -13,7 +13,7 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public static class RegionalPlayoff
 {
     /// <summary>抽選ストリームの分岐ID（'PLYD'）。</summary>
-    public const ulong DrawStreamId = 0x50_4C_59_44UL;
+    public const ulong DrawStreamId = TournamentForkKeys.RegionalPlayoffDraw;
     /// <summary>試合ストリームの分岐IDの基点（'PLYM'）。組の添字を足して使う。</summary>
     public const ulong MatchStreamId = 0x50_4C_59_4DUL;
 

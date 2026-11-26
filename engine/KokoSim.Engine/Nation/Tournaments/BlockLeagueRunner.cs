@@ -429,8 +429,7 @@ public sealed class BlockLeagueRunner : ITournamentRunner
         else
         {
             var (w, _, margin) = AggregateMatch.PlayDetailed(c.A, c.B, _coeff, _rng);
-            var loser = _rng.NextInt(0, 4);
-            var win = loser + Math.Max(1, margin);
+            var (win, loser) = AggregateScore.Synthesize(margin, _rng);
             (aScore, bScore) = w.Id == c.A.Id ? (win, loser) : (loser, win);
         }
         Record(round, c, aScore, bScore, mercy, Involves(c));
@@ -504,10 +503,10 @@ public sealed class BlockLeagueRunner : ITournamentRunner
     private static string RoundNameFor(int round) => "リーグ第" + (round + 1) + "戦";
 
     private static ulong PlayerStream(int round, int card, int attempt = 0)
-        => 0xA7A7_0000UL ^ ((ulong)(uint)round << 16) ^ (uint)card ^ ((ulong)(uint)attempt << 40);
+        => TournamentForkKeys.CardStream(TournamentForkKeys.LeaguePlayer, round, card, attempt);
 
     private static ulong BackgroundStream(int round, int card, int attempt = 0)
-        => 0xB7B7_0000UL ^ ((ulong)(uint)round << 16) ^ (uint)card ^ ((ulong)(uint)attempt << 40);
+        => TournamentForkKeys.CardStream(TournamentForkKeys.LeagueBackground, round, card, attempt);
 
     // ===== セーブ往復 =====
 

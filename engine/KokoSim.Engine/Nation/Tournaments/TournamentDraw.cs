@@ -25,7 +25,7 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public static class TournamentDraw
 {
     /// <summary>抽選ストリームの分岐ID（'DRAW'）。呼び出し側は <c>rng.Fork(DrawStreamId)</c> を渡す。</summary>
-    public const ulong DrawStreamId = 0x44_52_41_57UL;
+    public const ulong DrawStreamId = TournamentForkKeys.TournamentDraw;
 
     /// <summary>シード校数の上限（実際の県大会のシードは多くても16校規模）。</summary>
     public const int MaxSeeds = 16;

@@ -162,27 +162,15 @@ public static class NationalTournamentEngine
                 ChampionId: sole?.Id ?? PrefectureResult.NoChampion, EntrantCount: field.Count);
         }
 
-        // ChampionsOnly は集計モデル（backgroundResolver=null）＝1球シムも成績畳み込みもしない軽量経路。
-        IBackgroundMatchResolver? bg = resolution == SummerResolution.ChampionsOnly
-            ? null
-            : new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
-                afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier, summerStadiums: true);
         // 北海道・東京の分割区画は forkキーへ分割位置を足して別ストリーム化（無分割の県は従来キーのまま不変）。
-        var splitBit = region.Split is { } sp ? (uint)(sp + 1) << 24 : 0u;
-        var prefRng = rng.Fork(0xF00D_0000UL ^ (uint)region.PrefectureId ^ splitBit);
-        // 自校非関与の区画＝観戦扱いで全カードを裏試合として解く。nominal manager に field[0] を渡すと
-        // 球数台帳がその1校だけ自校キーで記録され、読み手（裏試合の回復・エース温存）が引けなくなる。
-        var runner = TournamentRunner.Spectated(
-            field, coeff, prefRng, schedule, $"{region.Name}大会", backgroundResolver: bg);
-
-        // issue #529: 敗退直後は残りブラケットが未消化（TournamentRunner.StepBracketResolution へ
-        // スライス駆動化された）。この県は自校非関与＝画面遷移を待たせる懸念がなく、この呼び出し自体が
-        // 既に NationBackgroundSim のジョブ単位（1県丸ごと）で背景スレッド上を走っているので、ここで
-        // 同期に最後まで消化して優勝校を確定してよい。
-        runner.DrainBracketResolution();
-        var matches = runner.BuildBracketView().Matches;
+        var prefRng = rng.Fork(TournamentForkKeys.SummerPrefectureStream(region.PrefectureId, region.Split));
+        var view = PrefectureTournamentRun.Run(
+            field, $"{region.Name}大会", prefRng, rosters, ctx, coeff, schedule, yearIndex, stats,
+            modernRules, calendarYear, brains, afterMatch, resolution, useRegionalStadiumTier,
+            summerStadiums: true, thirdPlaceMatch: false);
+        var matches = view.Matches;
         var championId = ChampionIdOf(matches);
-        return new PrefectureResult(region.PrefectureId, region.Name, runner.ChampionName,
+        return new PrefectureResult(region.PrefectureId, region.Name, view.ChampionName,
             WinsBySchoolOf(matches), championId, ChampionPathOf(matches, championId), field.Count);
     }
 

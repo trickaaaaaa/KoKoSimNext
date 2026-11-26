@@ -21,7 +21,7 @@ public sealed record TournamentMatchContext(
     public int RestRoundsRemaining => AceRestRoundsRemaining ?? RoundsRemaining;
 
     /// <summary>エース温存の抽選シードに混ぜる大会ごとの値の基準ストリームID。</summary>
-    public const ulong AceRestSaltStream = 0xACE5_5A17UL;
+    public const ulong AceRestSaltStream = TournamentForkKeys.AceRestSalt;
 
     /// <summary>
     /// 大会の基準乱数（母種＾年＾種別で決まる）から温存抽選用の塩を導く。Fork は親を進めない純導出＝本編の乱数列は動かない。
