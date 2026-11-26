@@ -50,6 +50,7 @@ public sealed class PreviewPhrasesTests
             yield return "player.body." + t;
         }
         for (var g = 1; g <= 3; g++) yield return "player.tail.g" + g;
+        yield return "player.tail.senior2";
     }
 
     [Fact]
@@ -79,8 +80,8 @@ public sealed class PreviewPhrasesTests
         // 全国生成で最大の県（東京）は287校。余裕を見て320
         foreach (var t in Traits)
         foreach (var l in Levels)
-        for (var g = 1; g <= 3; g++)
-            Assert.True(N($"player.head.{t}.{l}") * N("player.body." + t) * N("player.tail.g" + g) >= 320, $"{t}/{l}/g{g}");
+        foreach (var tail in new[] { "g1", "g2", "g3", "senior2" })
+            Assert.True(N($"player.head.{t}.{l}") * N("player.body." + t) * N("player.tail." + tail) >= 320, $"{t}/{l}/{tail}");
     }
 
     /// <summary>
@@ -214,6 +215,40 @@ public sealed class PreviewPhrasesTests
         // 甲子園の展望では「全国」で書く（県の大会と同じ選手でも舞台で言い方が変わる）
         var koshien = PreviewWriterProbe.NotableBlurb(ranked[0], field, 1, PreviewStage.SummerKoshien, 3, Phrases);
         Assert.DoesNotContain("県内", koshien);
+    }
+
+    /// <summary>
+    /// 3年生が引退したあとの大会（秋・地区・神宮・センバツ）の2年生は最上級生。「上級生を押しのけて」などの
+    /// 夏用の結びを出さず、夏の大会の2年生は従来どおり（issue #1687）。
+    /// </summary>
+    [Theory]
+    [InlineData(PreviewStage.Autumn, true)]
+    [InlineData(PreviewStage.DistrictLeague, true)]
+    [InlineData(PreviewStage.Regional, true)]
+    [InlineData(PreviewStage.Jingu, true)]
+    [InlineData(PreviewStage.SenbatsuKoshien, true)]
+    [InlineData(PreviewStage.SummerPrefecture, false)]
+    [InlineData(PreviewStage.SummerKoshien, false)]
+    public void SecondYearTail_FollowsWhetherThirdYearsAreStillAround(PreviewStage stage, bool upperclassmenGone)
+    {
+        var summerOnly = Phrases.Pool("player.tail.g2");
+        var senior2 = Phrases.Pool("player.tail.senior2");
+        var banned = new[] { "上級生を押しのけ", "最上級生に負けない", "2年生ながら", "2年生にして", "2年生らしからぬ" };
+        var player = new KokoSim.Engine.Players.Player { Grade = 2 };
+        foreach (var trait in Traits)
+        for (var seed = 1; seed <= 40; seed++)
+        for (var year = 1; year <= 3; year++)
+        {
+            var text = PreviewWriter.PlayerBlurb(new PreviewWriter.Pick(player, trait, 70, 70, trait.StartsWith("ace.")),
+                seed, stage, year, Phrases);
+            if (upperclassmenGone)
+            {
+                Assert.Contains(senior2, t => text.EndsWith(t));
+                foreach (var w in banned) Assert.DoesNotContain(w, text);
+            }
+            else
+                Assert.Contains(summerOnly, t => text.EndsWith(t));
+        }
     }
 
     /// <summary>同じ出場校・同じ年なら同じ文。年が変われば文も変わる。</summary>
