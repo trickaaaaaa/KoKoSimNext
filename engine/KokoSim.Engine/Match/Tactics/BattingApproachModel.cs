@@ -38,5 +38,6 @@ public static class BattingApproachModel
             _ => batter,   // Normal / WorkCount は能力を動かさない
         };
 
-    private static int Clamp(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
+    // 丸めない（issue #1631）: 打撃姿勢はエンドラン・チャンスと同じ経路で double のまま積み重なる。
+    private static double Clamp(double v) => Math.Clamp(v, 1.0, 100.0);
 }

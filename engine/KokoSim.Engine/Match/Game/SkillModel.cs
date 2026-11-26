@@ -33,7 +33,8 @@ public static class SkillModel
         }
 
         if (contact == b.Contact && power == b.Power) return b;
-        return b with { Contact = Clamp(contact), Power = Clamp(power) };
+        // 打者側は丸めない（issue #1631）。
+        return b with { Contact = ClampBatter(contact), Power = ClampBatter(power) };
     }
 
     /// <summary>
@@ -167,4 +168,7 @@ public static class SkillModel
         => skills.Has(Skill.Streaky) ? c.StreakyVarianceFactor : 1.0;
 
     private static int Clamp(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
+
+    /// <summary>打者側は丸めない（issue #1631）。範囲だけ [1,100] に収める。</summary>
+    private static double ClampBatter(double v) => Math.Clamp(v, 1.0, 100.0);
 }

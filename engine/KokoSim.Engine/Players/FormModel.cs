@@ -119,8 +119,9 @@ public static class FormModel
         if (step == 0 && dayForm == 0.0) return b;
         return b with
         {
-            Contact = ClampAbility(b.Contact + step * f.ContactPerStep + dayForm * f.ContactPerDayForm),
-            Power = ClampAbility(b.Power + step * f.PowerPerStep + dayForm * f.PowerPerDayForm),
+            // 打者の実効能力は丸めない（issue #1631）: BatterAttributes は double で物理層入力まで小さな補正を運ぶ。
+            Contact = ClampBatterAbility(b.Contact + step * f.ContactPerStep + dayForm * f.ContactPerDayForm),
+            Power = ClampBatterAbility(b.Power + step * f.PowerPerStep + dayForm * f.PowerPerDayForm),
         };
     }
 
@@ -224,4 +225,7 @@ public static class FormModel
     // step×perStepがちょうど.5になる区間がある（例: 50+1×2.5=52.5）。既定のMath.Roundは偶数丸めで調子一段分の
     // 補正が丸ごと消えることがあるため、必ず補正の向きに丸める（issue #1211）。
     private static int ClampAbility(double v) => (int)MathUtil.Clamp(Math.Round(v, MidpointRounding.AwayFromZero), 1, 100);
+
+    /// <summary>打者側は丸めない（issue #1631）。範囲だけ [1,100] に収める。</summary>
+    private static double ClampBatterAbility(double v) => Math.Clamp(v, 1.0, 100.0);
 }

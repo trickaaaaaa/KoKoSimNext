@@ -355,7 +355,7 @@ scenarios:
     inning: 1
     top: true
     outs: 0
-    seed: 20263541
+    seed: 20263894 # issue #1631: 打者実効能力の丸め撤去で打球が動き、20263541 では「あと一歩届かない」幅から外れたため選び直し
 
   - id: fly-near-miss-right-lab
     name: 守備検証・横へ追ってあと一歩届かない・球は右手側（1回表無死）
@@ -410,7 +410,7 @@ scenarios:
     top: true
     outs: 0
     bases: [1]
-    seed: 20263000
+    seed: 20263010 # issue #1631: 打者実効能力の丸め撤去で打球が動き、20263000 では RunIn/RunOut が消えたため選び直し
   - id: of-grounder-runner-cf-lab
     name: 守備検証・走者一塁でセンターが転がる球を走りながら掬う（1回表無死一塁）
     away: { school: "AI:tier=C", score: 0 }

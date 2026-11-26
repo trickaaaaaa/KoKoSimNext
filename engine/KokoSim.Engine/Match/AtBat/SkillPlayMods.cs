@@ -55,5 +55,7 @@ public readonly record struct SkillPlayMods(
         };
     }
 
-    private static int Clamp(double v) => System.Math.Clamp((int)System.Math.Round(v), 1, 100);
+    // 丸めない（issue #1631）: ここに届くまでの実効ミート・選球眼（プレッシャー等の倍率chain）はすでに
+    // 丸めていない double。ここで int に丸めると小さな効きが消え、球種で結果が変わってしまう。
+    private static double Clamp(double v) => System.Math.Clamp(v, 1.0, 100.0);
 }

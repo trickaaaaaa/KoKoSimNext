@@ -108,7 +108,8 @@ public static class MomentumModel
     {
         var m = Multiplier(level, c);
         if (m == 1.0) return b;
-        return b with { Contact = ClampAbility(b.Contact * m) };
+        // 打者側は丸めない（issue #1631）: 小さな倍率が物理層の入力に届くまで double のまま保つ。
+        return b with { Contact = ClampBatterAbility(b.Contact * m) };
     }
 
     /// <summary>投手へ適用（<see cref="PressureModel.ApplyPitcher"/> と同じ経路）。倍率1.0なら恒等。</summary>
@@ -120,4 +121,6 @@ public static class MomentumModel
     }
 
     private static int ClampAbility(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
+
+    private static double ClampBatterAbility(double v) => Math.Clamp(v, 1.0, 100.0);
 }
