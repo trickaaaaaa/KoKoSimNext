@@ -52,7 +52,7 @@ public sealed class FormationTable
     public static BallZone Classify(double bearingDeg, double rangeM)
     {
         if (rangeM < 15.0) return BallZone.Bunt;
-        if (rangeM <= 46.0) return bearingDeg < 0 ? BallZone.InfieldLeft : BallZone.InfieldRight;
+        if (rangeM <= FieldGeometry.OutfieldBoundaryM) return bearingDeg < 0 ? BallZone.InfieldLeft : BallZone.InfieldRight;
         if (bearingDeg < -15.0) return BallZone.OutfieldLeft;
         if (bearingDeg > 15.0) return BallZone.OutfieldRight;
         return BallZone.OutfieldCenter;

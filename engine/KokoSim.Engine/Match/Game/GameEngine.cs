@@ -2369,7 +2369,7 @@ public static class GameEngine
                             timeline, bhPlay, ctx.Field, fcHome.T1, paBaserunning);
                         homeThrowAdded = true;
                     }
-                    else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield)
+                    else if (safeAtHome is { } s && (bhPlay.RangeM > Field.FieldGeometry.OutfieldBoundaryM || bhPlay.ThroughInfield)
                         && !HasOutAtOtherBase(runnerMoves))
                     {
                         // 外野安打での生還は際どくなくても返球を描く（ボールが外野で死なない, #7）。
@@ -2393,7 +2393,7 @@ public static class GameEngine
                 // 浅い打球（46m以下）でも、他の塁で走者を刺したならその送球は実在する＝必ず描く（issue #801:
                 // 一・二塁の単打で一塁走者が三塁で刺されたのに、送球が1本も無いまま 7.6 秒でアウトになっていた）。
                 if (!homeThrowAdded && res.Play is { } ofHit
-                    && (ofHit.RangeM > 46.0 || ofHit.ThroughInfield || HasOutAtOtherBase(runnerMoves))
+                    && (ofHit.RangeM > Field.FieldGeometry.OutfieldBoundaryM || ofHit.ThroughInfield || HasOutAtOtherBase(runnerMoves))
                     && (ofHit.Result is Match.Fielding.BattedBallResult.Single
                             or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple
                         || (ofHit.Result == Match.Fielding.BattedBallResult.Error && timeline.ErrorPickupAt is null)))

@@ -90,7 +90,7 @@ public static class TimelineBuilder
     private const double BuntThrowGuardSeconds = 0.15;
 
     private static readonly TimelinePoint Home = new(0, 0);
-    private static readonly TimelinePoint Mound = new(0, 18.44);
+    private static readonly TimelinePoint Mound = new(0, FieldGeometry.MoundM);
 
     /// <summary>
     /// このプレーの守備開始位置（<see cref="PlayTimeline.FielderStarts"/>）。判定が距離・時間を出したのと
@@ -354,7 +354,7 @@ public static class TimelineBuilder
         // 打球の行方の手がかり（issue fence-carom-and-over-the-head-cues ③）。絵だけでは
         // 「アウトじゃない＝じゃあ長打か」と結果から逆算するしかなかったので、言葉でも出す。
         // 判定は増やさない＝engine が既に持っている観測（着地点の深さ・ReachedFence）を写すだけ。
-        if (play.Result != BattedBallResult.HomeRun && play.RangeM > 46.0
+        if (play.Result != BattedBallResult.HomeRun && play.RangeM > FieldGeometry.OutfieldBoundaryM
             && play.FielderRole is { } overRole && Find(fielders, overRole) is { } overFielder)
         {
             var startRange = Math.Sqrt(
@@ -405,7 +405,7 @@ public static class TimelineBuilder
         }
         if (play.ThrowArriveSeconds is { } throwArrive && play.Result is BattedBallResult.Out or BattedBallResult.Single or BattedBallResult.Error)
         {
-            if (!play.IsFly && play.RangeM <= 46.0)
+            if (!play.IsFly && play.RangeM <= FieldGeometry.OutfieldBoundaryM)
             {
                 var firstBase = BasePoint(field, "first");
                 var physicalArrive = ContactAt + throwArrive;
@@ -2411,7 +2411,7 @@ public static class TimelineBuilder
 
         // 投手のお手玉＝拾った本人が投手。自分から自分へは投げないし、他所へ投げる理由も無い＝そのまま持っている。
         if (fromRole == FieldPosition.Pitcher) return timeline;
-        var deep = Distance(Home, from) > OutfieldDepthM;
+        var deep = Distance(Home, from) > FieldGeometry.OutfieldBoundaryM;
         // 投手がマウンドを離れている（本塁バックアップ・一塁カバー・戻りの途中）なら投手へは返さない。
         // 送球が着く頃の位置ではなく**投げ始めの位置**で見る＝実物の野手も「いま居る人」へ投げる。
         var pitcherOnMound = Distance(FielderPositionAt(timeline, FieldPosition.Pitcher, t0), Mound) < ErrorReturnPitcherOnMoundM;
@@ -3077,7 +3077,7 @@ public static class TimelineBuilder
         // 経路（下の本処理）まで進めたら、際どければ「セーフ」演出へ差し替える。
         if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
 
-        if (play.IsFly || play.RangeM > 46.0) return timeline; // 内野ゴロ以外は対象外
+        if (play.IsFly || play.RangeM > FieldGeometry.OutfieldBoundaryM) return timeline; // 内野ゴロ以外は対象外
 
         // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す。
         BallSegment? existingThrow = null;
@@ -3260,7 +3260,7 @@ public static class TimelineBuilder
         // relayToFirst=false: 対象塁を踏むだけで一塁へは投げない（issue #797）。打者は一塁に生きる。
         if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
 
-        if (play.IsFly || play.RangeM > 46.0) return timeline; // ゲート自体が内野ゴロ限定（Q31）＝保守的に同じ条件
+        if (play.IsFly || play.RangeM > FieldGeometry.OutfieldBoundaryM) return timeline; // ゲート自体が内野ゴロ限定（Q31）＝保守的に同じ条件
 
         // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す（AppendDoublePlayThrows と同型）。
         BallSegment? existingThrow = null;
@@ -3452,7 +3452,7 @@ public static class TimelineBuilder
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
         BaserunningCoefficients? coefficients = null, bool runnerOut = true, double? selfForceSprintSpeedMps = null)
     {
-        if (play.IsFly || play.RangeM > 46.0) return timeline; // ゲート自体が内野ゴロ限定（issue 3-6-tag-double-play）＝保守的に同じ条件
+        if (play.IsFly || play.RangeM > FieldGeometry.OutfieldBoundaryM) return timeline; // ゲート自体が内野ゴロ限定（issue 3-6-tag-double-play）＝保守的に同じ条件
 
         // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す（AppendSelfForceDoublePlayThrows と同型）。
         BallSegment? existingThrow = null;
@@ -4361,7 +4361,7 @@ public static class TimelineBuilder
     }
 
     /// <summary>この打球が外野扱いの安打か（着地が外野／バウンドで内野を抜けた, Issue #63）。表示専用。</summary>
-    private static bool IsOutfieldHit(FieldingPlay play) => play.RangeM > OutfieldDepthM || play.ThroughInfield;
+    private static bool IsOutfieldHit(FieldingPlay play) => play.RangeM > FieldGeometry.OutfieldBoundaryM || play.ThroughInfield;
 
     /// <summary>
     /// 打球の処理点＝エンジンの回収点(FieldedX/Z)。ボールの終端・実捕球者の移動先・送球の起点を
@@ -4642,12 +4642,8 @@ public static class TimelineBuilder
 
     private static string PositionName(FieldPosition p) => FieldPositionNames.Katakana(p);
 
-    /// <summary>内野/外野の「表示上の」境界[m]。表示専用の定数で、FieldingResolver の守備閾値
-    /// （InfieldDepthM）とは意図的に分離する（キャプション用の値を判定へ流用しないため）。</summary>
-    private const double OutfieldDepthM = 46.0;
-
     /// <summary>
-    /// 安打の方向名。内野を抜けた打球（着地が OutfieldDepthM 超）は着地方位で左中右に分類し、
+    /// 安打の方向名。内野を抜けた打球（着地が FieldGeometry.OutfieldBoundaryM 超）は着地方位で左中右に分類し、
     /// 内野内なら処理野手のポジション名を使う。頭上を抜けた打球を「セカンド前」等と誤表示しない。
     /// FormationTable.Classify と同じ外野境界(±15°)を使う。判定・乱数には影響しない。
     /// </summary>

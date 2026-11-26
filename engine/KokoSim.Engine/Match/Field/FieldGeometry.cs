@@ -72,8 +72,18 @@ public sealed record FieldGeometry
     /// </summary>
     public bool Indoor { get; init; }
 
+    /// <summary>内野/外野の境界（本塁からの距離）[m]。打球の内外野分類（ゾーン・走塁判断・キャプション）の単一ソース。
+    /// 守備解決の閾値 <c>FieldingCoefficients.InfieldDepthM</c>（係数）とは意図的に分離する。</summary>
+    public const double OutfieldBoundaryM = 46.0;
+
+    /// <summary>本塁からマウンド（投手板）までの距離[m]（60フィート6インチ）。全球場共通。</summary>
+    public const double MoundM = 18.44;
+
+    /// <summary>公認野球規則の塁間[m]（90ft）。全球場共通。</summary>
+    public const double StandardBaseDistanceM = 27.43;
+
     /// <summary>塁間27.43m（90ft）。一塁は45°右。</summary>
-    public double BaseDistanceM { get; init; } = 27.43;
+    public double BaseDistanceM { get; init; } = StandardBaseDistanceM;
 
     /// <summary>
     /// 本塁からバックネットまでの距離[m]（issue #830）。ファウルグラウンドの奥行き＝この内側に落ちる飛球は
@@ -140,7 +150,7 @@ public sealed record FieldGeometry
 
     private static readonly (FieldPosition Pos, Vector3D Loc)[] Positions =
     {
-        (FieldPosition.Pitcher, new Vector3D(0, 0, 18.44)),
+        (FieldPosition.Pitcher, new Vector3D(0, 0, MoundM)),
         (FieldPosition.Catcher, new Vector3D(0, 0, -1.0)),
         (FieldPosition.FirstBase, new Vector3D(17.0, 0, 24.0)),
         (FieldPosition.SecondBase, new Vector3D(9.0, 0, 40.0)),

@@ -39,7 +39,7 @@ namespace KokoSim.Unity.NewGame
 
         // プレビューの構図はチーム設定画面と同じ（直立の投手を正面から。数値は実測で詰めたもの）。
         private static readonly Vector3 PreviewCamPos = new(-2.35f, 1.30f, 16.85f);
-        private static readonly Vector3 PreviewLookAt = new(0f, 1.10f, 18.44f);
+        private static readonly Vector3 PreviewLookAt = new(0f, 1.10f, (float)KokoSim.Engine.Match.Field.FieldGeometry.MoundM);
         private const float PreviewFrameHeightM = 1.95f;
 
         private VisualElement _root;
