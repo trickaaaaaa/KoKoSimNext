@@ -613,7 +613,7 @@ public static class GameEngine
         while (outs < 3)
         {
             // 選手交代（設計書09 §6, 攻撃側）: 代走→代打。控え空/無指示なら素通り＝従来と完全一致。
-            MaybeOffenseSubs(p, offense, defense, ctx, rng, inning, outs, bases);
+            MaybeOffenseSubs(p, offense, defense, ctx, rng, inning, isTop, outs, bases);
 
             // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。乱数は消費しない。
             Timeline.Playback.LiveAtBat LiveAtBatOf(Player b, Player pit, int balls, int strikes, int pitchNumberInPa) => new()
@@ -752,9 +752,14 @@ public static class GameEngine
 
                 if (defense.Tactics is not null)
                 {
-                    defTactics = defense.Tactics.CallDefense(situation, rng);
+                    // 采配の判断は本流rngを直接引かず専用Forkストリームから（issue #1644）。判断ロジックを
+                    // 変えてもForkした側の消費量が変わるだけで、本流の列・以降の打席結果は1ビットも動かない。
+                    defTactics = defense.Tactics.CallDefense(
+                        situation, rng.Fork(TacticsCallStreamId(inning, isTop, log.Count, CallDefenseSalt)));
                     // 守備伝令（マウンドへ, §3）: 動揺を解除し、負補正を数打席のあいだ緩和。
-                    if (defense.Tactics.CallDefenseTimeout(situation, rng) && defense.TryUseDefenseTimeout())
+                    if (defense.Tactics.CallDefenseTimeout(
+                            situation, rng.Fork(TacticsCallStreamId(inning, isTop, log.Count, CallDefenseTimeoutSalt)))
+                        && defense.TryUseDefenseTimeout())
                     {
                         defense.ClearRattled();
                         // 伝令役の人選（issue #716/#860 B）: 乱数を使わない＝RNG列は不変。主将を渡すと
@@ -771,15 +776,18 @@ public static class GameEngine
                     // 内野の深さ読み（設計書12 §5.2・issue #1491）: 守備の指示（プレイヤーの常時方針込み）が決まった後の
                     // 深さを攻撃側へ見せる。守備→攻撃の順で呼んでいるので、読むだけ（乱数非消費）。
                     situation = situation with { OpponentInfield = defense.ApplyStandingDefense(defTactics).Infield };
-                    // 攻撃伝令（打者へ, §3）: 打者の緊張を数打席のあいだ緩和。
-                    if (offense.Tactics.CallOffenseTimeout(situation, rng) && offense.TryUseOffenseTimeout())
+                    // 攻撃伝令（打者へ, §3）: 打者の緊張を数打席のあいだ緩和。本流rng非引用（issue #1644）。
+                    if (offense.Tactics.CallOffenseTimeout(
+                            situation, rng.Fork(TacticsCallStreamId(inning, isTop, log.Count, CallOffenseTimeoutSalt)))
+                        && offense.TryUseOffenseTimeout())
                     {
                         offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
                             offense.AvailableReserves, batter, toPitcher: false,
                             offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities,
                             offense.Captain, ctx.Batting.AbilityEffect.DeltaInt));
                     }
-                    sign = offense.Tactics.CallOffense(situation, rng);
+                    sign = offense.Tactics.CallOffense(
+                        situation, rng.Fork(TacticsCallStreamId(inning, isTop, log.Count, CallOffenseSalt)));
                     // 約束の見張り（設計書04 §2.4）: 「バントさせないで」の打者へはバント・スクイズのサインを出さない。
                     // brain の判断（乱数の消費）はそのままで、結果だけ強攻に読み替える。見張りが無ければ素通り。
                     if (offense.PromiseGuard?.BlocksBunt(batter) == true
@@ -1297,12 +1305,14 @@ public static class GameEngine
                 else if (stealAttempt is { } thirdStart && stealTarget == StealTarget.Third
                     && stealFeasible == StealTarget.Third && bases.Second is { })
                 {
-                    var pickedOffSecond = PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng);
+                    // 走塁係数は paBaserunning（issue #1644・設計書17 §6.1, F4。一塁側の牽制/盗塁判定と揃える）。
+                    // 非強制時は ctx.Baserunning と同一参照＝従来の乱数順・結果に不変。
+                    var pickedOffSecond = PickoffResolver.Resolve(bases.Second, currentPitcher, paBaserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
-                    if (ctx.CaptureTimelines && ctx.Baserunning.PickoffBaseProb > 0.0)
+                    if (ctx.CaptureTimelines && paBaserunning.PickoffBaseProb > 0.0)
                         pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                             WithThrowScatter(Timeline.TimelineBuilder.BuildPickoff(
-                                bases.Second, currentPitcher, "second", pickedOffSecond, ctx.Baserunning, ctx.Field),
+                                bases.Second, currentPitcher, "second", pickedOffSecond, paBaserunning, ctx.Field),
                                 System.Array.Empty<Match.Timeline.ThrowScatterAssigner.JudgedThrow>(), defense, ctx, rng, (ulong)log.Count * 16 + 7)!);
                     if (pickedOffSecond)
                     {
@@ -1316,7 +1326,7 @@ public static class GameEngine
                     {
                         var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
-                            bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng, defense.ReadMultiplier)
+                            bases.Second, defense.Catcher, currentPitcher, thirdStart, paBaserunning, rng, defense.ReadMultiplier)
                             && StealReadModel.CanPitchout(session.Balls)
                             || manualPitchout;   // プレイヤーのウエスト（抽選は上で必ず引く＝乱数順は不変）
                         pitchoutThisPitch = pitchout;
@@ -1324,7 +1334,7 @@ public static class GameEngine
                         var thirdBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.ThirdBase);
                         var thirdQuickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
                         var steal = StealResolver.ResolveVerdict(
-                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart, StealTarget.Third,
+                            bases.Second, defense.Catcher, paBaserunning, rng, pitchout, thirdStart, StealTarget.Third,
                             receiver: thirdBaseReceiver, pitcherQuickOffsetSeconds: thirdQuickOffset);
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.Second, safe, third: true);
@@ -1345,7 +1355,7 @@ public static class GameEngine
                             stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                 Timeline.TimelineBuilder.BuildSteal(
                                     thirdStealer, defense.Catcher, steal.Result,
-                                    ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart,
+                                    paBaserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart,
                                     doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds, steal.ThrowScatter,
                                     thirdQuickOffset));
                         if (outs >= 3) runnerOutEndsHalf = true;   // issue #779: この球は投げる
@@ -2744,7 +2754,7 @@ public static class GameEngine
         if (bases.Third is { } seededThird) responsible[seededThird] = defense.CurrentPitcher;
 
         // 守備固め（設計書09 §6）: イニング頭に守備側が控えを起用。控え空/無指示なら素通り＝従来一致。
-        MaybeDefensiveSub(defense, offense, ctx, rng, inning, bases);
+        MaybeDefensiveSub(defense, offense, ctx, rng, inning, isTop, p.Log.Count, bases);
 
         // 守備位置の入替（設計書09 §2.3, issue #255）: 交代を挟んだ後の並びに対して組み替える。
         // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
@@ -3090,15 +3100,37 @@ public static class GameEngine
         => salt ^ ((ulong)(uint)inning << 48) ^ ((isTop ? 1UL : 0UL) << 47)
                 ^ ((ulong)(uint)paIndex << 16) ^ (ulong)(uint)pitchNumber;
 
+    // ===== issue #1644: 采配の判断（半イニング頭・打席頭）は本流rngを直接引かず専用Forkストリームから引く。
+    // 判断ロジックを変えても、Forkした側の消費量が変わるだけで本流の列・ほかの打席の結果は1ビットも動かない
+    // （Fork() 自体は本流の状態を消費しない＝continuationは不変）。PitchStreamId と同じ (inning,isTop,paIndex) の
+    // 詰め方を再利用し、pitchNumber は使わない（常に0）・salt だけ呼び先ごとに変えて重ならないようにする。
+
+    private static ulong TacticsCallStreamId(int inning, bool isTop, int paIndex, ulong salt)
+        => PitchStreamId(inning, isTop, paIndex, pitchNumber: 0, salt);
+
+    private const ulong CallDefenseSalt = 0xCA1D_0000UL;          // 守備指示（CallDefense）
+    private const ulong CallDefenseTimeoutSalt = 0xCA1D_7000UL;   // 守備伝令（CallDefenseTimeout）
+    private const ulong CallOffenseTimeoutSalt = 0x0FFE_0000UL;   // 攻撃伝令（CallOffenseTimeout）
+    private const ulong CallOffenseSalt = 0x0FF5_0000UL;          // 攻撃サイン（CallOffense）
+    private const ulong DefensiveSubSalt = 0xD5B0_0000UL;         // 守備固め（CallDefensiveSub, 半イニング頭）
+    private const ulong PinchRunSalt = 0x91C2_0000UL;             // 代走（CallPinchRun）
+    private const ulong PinchHitSalt = 0x91C3_0000UL;             // 代打（CallPinchHit）
+
     // ===== 選手交代（設計書09 §6, C-2）。控えが非空かつBrainありの時だけ判断＝既定オフで従来一致。 =====
 
-    /// <summary>守備側のイニング頭の守備固め判断。</summary>
+    /// <summary>
+    /// 守備側のイニング頭の守備固め判断。判断RNGは専用Forkストリームで引くため本流rngを進めない
+    /// （issue #1644・不変条件#2）。<paramref name="paIndex"/> はこの半イニング開始時点の打席数
+    /// （<c>p.Log.Count</c>）で、継投の半回頭判断（<see cref="ReliefHeadStreamId"/>）と同じ値を使うがsaltが別なので重ならない。
+    /// </summary>
     private static void MaybeDefensiveSub(
-        TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng, int inning, BaseState bases)
+        TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng,
+        int inning, bool isTop, int paIndex, BaseState bases)
     {
         if (defense.Tactics is null || defense.Reserves.Count == 0) return;
         var sit = SubSituationFor(defense, offense, ctx, inning, outs: 0, bases);
-        if (defense.Tactics.CallDefensiveSub(sit, rng) is { } d && defense.PromiseGuard?.BlocksEntry(d.Sub) != true)
+        var forked = rng.Fork(TacticsCallStreamId(inning, isTop, paIndex, DefensiveSubSalt));
+        if (defense.Tactics.CallDefensiveSub(sit, forked) is { } d && defense.PromiseGuard?.BlocksEntry(d.Sub) != true)
         {
             defense.DefensiveSub(d.Out, d.Sub);
         }
@@ -3136,14 +3168,21 @@ public static class GameEngine
         return flags;
     }
 
-    /// <summary>攻撃側の打席頭の代走・代打判断（代走が先＝走者を確定してから打者を替える）。</summary>
+    /// <summary>
+    /// 攻撃側の打席頭の代走・代打判断（代走が先＝走者を確定してから打者を替える）。判断RNGは専用Fork
+    /// ストリームで引くため本流rngを進めない（issue #1644・不変条件#2）。
+    /// </summary>
     private static void MaybeOffenseSubs(
-        GameProgress p, TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int inning, int outs, BaseState bases)
+        GameProgress p, TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng,
+        int inning, bool isTop, int outs, BaseState bases)
     {
         if (offense.Tactics is null || offense.Reserves.Count == 0) return;
+        var paIndex = p.Log.Count;
 
         // 代走: 塁上の鈍足走者を速い控えへ。塁の参照も差し替える。
-        if (offense.Tactics.CallPinchRun(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
+        if (offense.Tactics.CallPinchRun(
+                SubSituationFor(offense, defense, ctx, inning, outs, bases),
+                rng.Fork(TacticsCallStreamId(inning, isTop, paIndex, PinchRunSalt)))
             is { } r && offense.PromiseGuard?.BlocksEntry(r.Sub) != true
             && offense.PinchRunFor(r.Runner, r.Sub, out var inserted))
         {
@@ -3157,7 +3196,9 @@ public static class GameEngine
 
         // 代打: 次打者を厚い控えへ（投手枠はStandard側で除外）。
         if (offense.Reserves.Count > 0
-            && offense.Tactics.CallPinchHit(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
+            && offense.Tactics.CallPinchHit(
+                SubSituationFor(offense, defense, ctx, inning, outs, bases),
+                rng.Fork(TacticsCallStreamId(inning, isTop, paIndex, PinchHitSalt)))
             is { } sub
             // 約束の見張り: 「代打を出さないで」の打者へは送らない／「1年夏は出さないで」の控えは出さない。
             && !(offense.PromiseGuard is { } guard
