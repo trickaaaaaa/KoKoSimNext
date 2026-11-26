@@ -1,4 +1,5 @@
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Pitching;
 
@@ -15,6 +16,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     private readonly StandardTacticsBrain _inner;
     private readonly AiProfile _profile;
     private readonly EnemyAiCoefficients _ai;
+    private readonly DefensePlacement _placement;
     private readonly double _optimalProb;
 
     public AiTacticsBrain(
@@ -24,10 +26,13 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         EnemyAiCoefficients? aiCoeff = null,
         Players.FormCoefficients? form = null,
         Nation.LineupCoefficients? lineup = null,
-        Players.SkillCoefficients? skills = null)
+        Players.SkillCoefficients? skills = null,
+        FieldingCoefficients? fielding = null,
+        Nation.Roster.PersistentRosterCoefficients? roster = null)
     {
         _profile = profile;
         _ai = aiCoeff ?? new EnemyAiCoefficients();
+        _placement = new DefensePlacement(_ai, fielding, roster);
         // ③ 校風で采配係数を偏らせ、⑥b 相手校一律の交代 baseline を重ねて、共通の基準采配を構成する。
         var styled = ApplyStyle(baseCoeff ?? new TacticsCoefficients(), profile.Style, _ai);
         var withBaseline = ApplyAiBaseline(styled, _ai);
@@ -224,9 +229,12 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     }
 
     /// <summary>
-    /// 守備スコア（Σ 守備位置の負担重み × Fielding）を最も改善する1組を返す（RNG不使用＝決定論）。
-    /// 入替(a,b)の改善量 = (w[posB] - w[posA]) × (fieldA - fieldB)＝「上手い方を重い位置へ」。
-    /// 捕手は専門職（リード・捕球）なので動かさない＝重み表に載せず候補から外す。
+    /// 守備の評価（<see cref="DefensePlacement.ScoreAt"/>＝試合前のスタメン配置と同じ1本。issue #1709）の総和を
+    /// 最も改善する1組を返す（RNG不使用＝決定論）。入替(a,b)の改善量 =
+    /// 新しい配置の評価 − 今の配置の評価（位置の重み×適性込みの守備力＋肩の重み。打撃は枠に依らず相殺する）。
+    /// スタメンの時点で同じ評価の最適配置になっているので、顔ぶれが同じなら改善は出ない＝入替が起きるのは
+    /// 途中交代で配置が崩れたときだけ。
+    /// 捕手は専門職（リード・捕球）なので動かさない＝候補から外す。
     /// 同値は (slotA, slotB) の小さい方を採る（決定論の担保）。
     /// </summary>
     private (int SlotA, int SlotB)? BestSwap(in DefenseSwapSituation s)
@@ -236,29 +244,22 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         var n = System.Math.Min(s.Lineup.Count, s.Swappable.Count);
         for (var a = 0; a < n; a++)
         {
-            if (!s.Swappable[a] || DefenseWeight(s.Lineup[a].Position) is not { } wa) continue;
+            if (!s.Swappable[a] || DefenseWeight(s.Lineup[a].Position) is null) continue;
             for (var b = a + 1; b < n; b++)
             {
-                if (!s.Swappable[b] || DefenseWeight(s.Lineup[b].Position) is not { } wb) continue;
-                var gain = (wb - wa) * (s.Lineup[a].Fielding - s.Lineup[b].Fielding);
+                if (!s.Swappable[b] || DefenseWeight(s.Lineup[b].Position) is null) continue;
+                var pa = s.Lineup[a]; var pb = s.Lineup[b];
+                var gain = _placement.ScoreAt(pa, pb.Position) + _placement.ScoreAt(pb, pa.Position)
+                           - _placement.ScoreAt(pa, pa.Position) - _placement.ScoreAt(pb, pb.Position);
                 if (gain > bestGain) { bestGain = gain; best = (a, b); }
             }
         }
         return best;
     }
 
-    /// <summary>守備位置の負担重み。投手・捕手・DHは入替対象外なので null。</summary>
-    private double? DefenseWeight(Field.FieldPosition pos) => pos switch
-    {
-        Field.FieldPosition.Shortstop => _ai.DefenseWeightShortstop,
-        Field.FieldPosition.CenterField => _ai.DefenseWeightCenterField,
-        Field.FieldPosition.SecondBase => _ai.DefenseWeightSecondBase,
-        Field.FieldPosition.ThirdBase => _ai.DefenseWeightThirdBase,
-        Field.FieldPosition.RightField => _ai.DefenseWeightRightField,
-        Field.FieldPosition.LeftField => _ai.DefenseWeightLeftField,
-        Field.FieldPosition.FirstBase => _ai.DefenseWeightFirstBase,
-        _ => null,
-    };
+    /// <summary>守備位置の重み。投手・捕手・DHは入替・コンバート継投の対象外なので null。</summary>
+    private double? DefenseWeight(Field.FieldPosition pos)
+        => pos == Field.FieldPosition.Catcher ? null : _placement.Weight(pos);
 
     /// <summary>
     /// 継投（設計書11 §4, issue #209）。基本トリガー（疲労・球数上限）は必ず尊重（Standardと同一・RNG不使用）。

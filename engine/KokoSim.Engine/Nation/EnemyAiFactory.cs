@@ -25,11 +25,13 @@ public static class EnemyAiFactory
         EnemyAiCoefficients? aiCoeff = null,
         Players.FormCoefficients? form = null,
         LineupCoefficients? lineup = null,
-        Players.SkillCoefficients? skills = null)
+        Players.SkillCoefficients? skills = null,
+        Match.Fielding.FieldingCoefficients? fielding = null,
+        Roster.PersistentRosterCoefficients? roster = null)
     {
         var ai = aiCoeff ?? new EnemyAiCoefficients();
         var withTraits = ManagerTraitEffects.ApplyTactics(tactics ?? new TacticsCoefficients(), school.ManagerTraits, ai);
-        return new AiTacticsBrain(ProfileFor(school), withTraits, baserunning, ai, form, lineup, skills);
+        return new AiTacticsBrain(ProfileFor(school), withTraits, baserunning, ai, form, lineup, skills, fielding, roster);
     }
 }
 

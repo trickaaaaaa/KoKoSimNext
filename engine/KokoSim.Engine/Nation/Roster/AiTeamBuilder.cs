@@ -3,6 +3,7 @@ using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
@@ -92,6 +93,7 @@ public static class AiTeamBuilder
                 ConditionValue = v,
                 Condition = FormModel.Quantize(v),
                 LeftExperiencePa = LeftExperiencePaOf(p),
+                PositionAptitudes = p.Aptitudes,
             };
         }
 
@@ -131,7 +133,8 @@ public static class AiTeamBuilder
             var step = FormModel.Step(FormModel.Quantize(ConditionValueOf(p)));
             return step >= deps.EnemyAi.PromoterMinConditionStep ? deps.EnemyAi.PromoterConditionWeight * step : 0.0;
         }
-        var assignment = AssignFieldPositions(fieldCandidates, deps.Fielding, deps.Roster.Lineup, deps.Persistent,
+        var assignment = AssignFieldPositions(fieldCandidates,
+            new DefensePlacement(deps.EnemyAi, deps.Fielding, deps.Persistent), deps.Roster.Lineup, deps.Persistent,
             PromoterBonus);
         for (var slot = 0; slot < FieldSlots.Length; slot++)
         {
@@ -248,15 +251,15 @@ public static class AiTeamBuilder
     }
 
     /// <summary>
-    /// 守備8枠への割当（issue #384）。重みは実効守備力＝地力(Fielding)×適性補正（自校の
-    /// <see cref="Season.EffectiveFielding"/> と同じ式）に、<b>打撃総合×係数</b>を足したもの
+    /// 守備8枠への割当（issue #384）。重みは<see cref="DefensePlacement.Score"/>（位置の重み×実効守備力＋肩×位置別の肩の重み−左投げ罰。
+    /// 試合中の守備位置の入替も同じ評価を通す＝issue #1709）に、<b>打撃総合×係数</b>を足したもの
     /// （issue ai-two-way-hitting-pitchers-start-as-fielders）。打撃は候補ごとの定数なので「どの枠に置くか」は
     /// 守備で、「誰を出すか」は守備＋打撃で決まる＝守備だけで先発を選び打てる選手を座らせる偏りを直す。
     /// 戻り値は枠→候補の添字（候補不足なら −1）。<paramref name="bonus"/> は候補ごとの定数の上乗せ
     /// （監督傾向・抜擢型の調子。枠に依らない＝「誰を出すか」だけに効く。issue #1047）。
     /// </summary>
     private static int[] AssignFieldPositions(
-        IReadOnlyList<AiPlayer> fielders, Match.Fielding.FieldingCoefficients coeff,
+        IReadOnlyList<AiPlayer> fielders, DefensePlacement placement,
         LineupCoefficients lineup, PersistentRosterCoefficients pc, System.Func<AiPlayer, double>? bonus = null)
     {
         var empty = new int[FieldSlots.Length];
@@ -269,40 +272,12 @@ public static class AiTeamBuilder
             var batting = LineupOrderer.BattingScore(fielders[i].Snapshot, lineup) * pc.FieldSlotBattingWeight
                           + (bonus?.Invoke(fielders[i]) ?? 0.0);
             for (var slot = 0; slot < FieldSlots.Length; slot++)
-            {
-                // 実効守備力は地力×適性補正（掛け算）＝今の物差しで掛ける（issue #1080）。
-                var raw = Season.EffectiveFielding.Raw(
-                    AbilityScale.Phys(fielders[i].Snapshot.Fielding), fielders[i].Aptitude(FieldSlots[slot]), coeff);
-                if (fielders[i].Snapshot.Throws == Players.Handedness.Left)
-                    raw -= LeftThrowPenalty(FieldSlots[slot]);
-                w[slot, i] = raw + batting
-                             + AbilityScale.Phys(fielders[i].Snapshot.ArmStrength) * pc.FieldSlotArmWeight(FieldSlots[slot]);
-            }
+                w[slot, i] = placement.Score(fielders[i].Snapshot, fielders[i].Aptitude(FieldSlots[slot]), FieldSlots[slot])
+                             + batting;
         }
 
         return Core.AssignmentSolver.MaxWeight(w);
     }
-
-    /// <summary>
-    /// 左投げを <see cref="FieldPositions.IsRightThrowOnly"/> の位置へ座らせないための重み罰
-    /// （issue ai-lefty-not-at-c-2b-3b-ss）。
-    ///
-    /// <para>⚠ ハード除外（候補から外す）にしない＝<b>右投げの野手が4人未満のチームで割当そのものが
-    /// 成立しなくなる</b>（<c>AssignmentSolver.MaxWeight</c> が解を返せない）。罰の大小で「どうしても
-    /// 入れる場合の妥協順」を表す＝<b>三塁 → 二塁 → 捕手 → 遊撃</b>（監督決定 2026-08-13。
-    /// 遊撃がいちばん譲れない）。</para>
-    ///
-    /// <para>値は実効守備力（高々150程度）より1桁大きく、かつ位置どうしの差もそれより大きい。
-    /// ＝右投げが足りているうちは必ず右投げが勝ち、足りないときは妥協順のとおりに崩れる。</para>
-    /// </summary>
-    private static double LeftThrowPenalty(FieldPosition pos) => pos switch
-    {
-        FieldPosition.ThirdBase => 1000.0,
-        FieldPosition.SecondBase => 2000.0,
-        FieldPosition.Catcher => 3000.0,
-        FieldPosition.Shortstop => 4000.0,
-        _ => 0.0,
-    };
 
     /// <summary>投手の起用序列スコア（球速レベル＋制球＋キレ＋スタミナレベル）。</summary>
     /// <summary>

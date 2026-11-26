@@ -1373,7 +1373,8 @@ enemy_ai:
   defense_swap_min_gain: 4.0                  # 守備スコアの最小改善量（これ以下では動かさない）
   defensive_minded_swap_tier_bonus: 1         # 守り勝つ: 組み替えに積極的
   ace_dependent_swap_tier_penalty: 1          # 豪腕依存: 投手任せで守備を動かさない
-  # 守備位置ごとの負担重み（守備スコア = Σ 重み × Fielding）。捕手・投手・DHは入替対象外なので持たない。
+  # 守備位置ごとの重み（#1709: 試合前のスタメン配置と試合中の入替が通る同じ評価 = 重み × 実効守備力 + 肩 × 位置別の肩の重み）。投手・DHは持たない。
+  defense_weight_catcher: 1.00                # 捕手は配置だけで使う（入替・コンバート継投の対象外）
   defense_weight_shortstop: 1.00
   defense_weight_center_field: 0.90
   defense_weight_second_base: 0.80
