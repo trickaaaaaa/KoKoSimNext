@@ -1055,6 +1055,12 @@ public sealed class TeamState
            ?? (Tactics as AiTacticsBrain)?.Profile.TacticalSense
            ?? neutral;
 
+    /// <summary>
+    /// 守備としてこちらの作戦（スクイズ・盗塁）を読む力の倍率（issue #1490）。采配AI（敵AI・スキップ後の委任）なら
+    /// 采配能力とティアで変わり、プレイヤー自身の采配・標準采配は常に1.0（従来どおり）。
+    /// </summary>
+    public double ReadMultiplier => (Tactics as AiTacticsBrain)?.ReadMultiplier ?? 1.0;
+
     /// <summary>場面ジャンプ（設計書17 §3.4）で「動揺した状態で始める」ための注入口。連続出塁の数え直しは0から。</summary>
     public void StartRattled()
     {

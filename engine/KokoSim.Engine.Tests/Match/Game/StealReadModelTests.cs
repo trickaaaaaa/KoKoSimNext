@@ -158,4 +158,63 @@ public sealed class StealReadModelTests
                 StealReadModel.RollPitchout(runner, catcher, pitcher, StartType.Normal, C, b));
         }
     }
+
+    // --- 守備AIの察知力（設計書11 §1・§2・issue #1490） ---
+
+    private static int CountPitchouts(double readMultiplier)
+    {
+        var runner = Runner(steal: 70);
+        var catcher = Catcher(lead: 70);
+        var pitcher = Pitcher(sense: 60);
+        var rng = new Xoshiro256Random(3);
+        var n = 0;
+        for (var i = 0; i < 4000; i++)
+            if (StealReadModel.RollPitchout(runner, catcher, pitcher, StartType.Normal, C, rng, readMultiplier)) n++;
+        return n;
+    }
+
+    [Fact]
+    public void RollPitchout_ReadMultiplierOne_MatchesDefault()
+    {
+        var runner = Runner(steal: 70);
+        var catcher = Catcher(lead: 70);
+        var pitcher = Pitcher(sense: 60);
+        var a = new Xoshiro256Random(5);
+        var b = new Xoshiro256Random(5);
+        for (var i = 0; i < 200; i++)
+            Assert.Equal(
+                StealReadModel.RollPitchout(runner, catcher, pitcher, StartType.Normal, C, a),
+                StealReadModel.RollPitchout(runner, catcher, pitcher, StartType.Normal, C, b, 1.0));
+    }
+
+    [Fact]
+    public void RollPitchout_SharperReadMultiplier_PitchesOutMoreOften()
+    {
+        var dull = CountPitchouts(0.4);
+        var plain = CountPitchouts(1.0);
+        var sharp = CountPitchouts(1.8);
+        Assert.True(dull < plain && plain < sharp, $"察知力が高いほどピッチアウトが増えるはず: {dull} < {plain} < {sharp}");
+    }
+
+    [Fact]
+    public void RollPitchout_ReadMultiplier_StillRespectsMaxPitchoutProb()
+    {
+        var c = new BaserunningCoefficients { MaxPitchoutProb = 0.10 };
+        var rng = new Xoshiro256Random(8);
+        var n = 0;
+        for (var i = 0; i < 4000; i++)
+            if (StealReadModel.RollPitchout(Runner(steal: 95), Catcher(lead: 99), Pitcher(sense: 99), StartType.Normal, c, rng, 1.8)) n++;
+        Assert.InRange(n / 4000.0, 0.06, 0.14);
+    }
+
+    [Fact]
+    public void SqueezeWasteProbability_ScalesWithReadMultiplier_AndKeepsMax()
+    {
+        var t = new TacticsCoefficients();
+        var plain = StealReadModel.SqueezeWasteProbability(50, false, t);
+        Assert.Equal(t.SqueezeReadBase, plain, 12);
+        Assert.Equal(plain * 1.5, StealReadModel.SqueezeWasteProbability(50, false, t, 1.5), 12);
+        Assert.Equal(plain * 0.5, StealReadModel.SqueezeWasteProbability(50, false, t, 0.5), 12);
+        Assert.Equal(t.SqueezeReadMax, StealReadModel.SqueezeWasteProbability(99, true, t, 100.0), 12);
+    }
 }

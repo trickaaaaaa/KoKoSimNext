@@ -443,4 +443,46 @@ public sealed class EnemyAiTests
         var sign = brain.CallOffense(s, new Xoshiro256Random(3));
         Assert.True(sign is OffensiveSign.SacrificeBunt or OffensiveSign.Swing);
     }
+
+    // --- 作戦の察知（設計書11 §1・§2・issue #1490） ---
+
+    private static double ReadMult(int sense, int tier)
+        => new AiTacticsBrain(new AiProfile(sense, tier, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai).ReadMultiplier;
+
+    [Fact]
+    public void ReadMultiplier_NeutralProfile_IsOne()
+        => Assert.Equal(1.0, ReadMult(50, Ai.ReadTierNeutral), 12);
+
+    [Fact]
+    public void ReadMultiplier_RisesWithTacticalSense_AndTier()
+    {
+        Assert.True(ReadMult(20, 3) < ReadMult(50, 3) && ReadMult(50, 3) < ReadMult(90, 3));
+        Assert.True(ReadMult(50, 0) < ReadMult(50, 3) && ReadMult(50, 3) < ReadMult(50, 7));
+        Assert.True(ReadMult(90, 7) > ReadMult(90, 0), "名門の名将は弱小の名将より読む");
+    }
+
+    [Fact]
+    public void ReadMultiplier_IsClamped()
+    {
+        Assert.Equal(Ai.ReadMultMax, ReadMult(1000, 7), 12);
+        Assert.Equal(Ai.ReadMultMin, ReadMult(-1000, 0), 12);
+    }
+
+    [Fact]
+    public void TeamState_ReadMultiplier_FollowsAiBrain_AndIsOneWithoutOne()
+    {
+        var ai = new AiTacticsBrain(new AiProfile(90, 7, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
+        Team Make(ITacticsBrain? brain) => new()
+        {
+            Name = "T",
+            BattingOrder = Enumerable.Range(0, 8).Select(i => new Player { Position = (FieldPosition)(i + 1) })
+                .Append(new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage })
+                .ToList(),
+            PitcherSlot = 8,
+            Tactics = brain,
+        };
+        Assert.Equal(ai.ReadMultiplier, new TeamState(Make(ai)).ReadMultiplier, 12);
+        Assert.Equal(1.0, new TeamState(Make(null)).ReadMultiplier, 12);
+        Assert.Equal(1.0, new TeamState(Make(new StandardTacticsBrain())).ReadMultiplier, 12);
+    }
 }
