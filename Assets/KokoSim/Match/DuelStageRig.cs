@@ -1630,8 +1630,8 @@ namespace KokoSim.Unity.Match
         // 構えへの移行クリップ（Idle_To_Bunt 1.10秒）を速回しして収める＝送りバント・スクイズの早い構えとは別の絵。
         // 構え直しは打者のスイング予約（バント当て／空振りはリリースの約0.06秒後に始まる）より前に終える。
         private float _safetySquareCountdown = -1f;
-        private const float SafetySquareSeconds = 0.40f;       // 移行クリップを見せ切る実秒
-        private const float SafetySquareLeadSeconds = 0.38f;   // リリースの何秒前に構え直しを始めるか
+        private const float SafetySquareSeconds = 0.45f;       // 移行クリップを見せ切る実秒
+        private const float SafetySquareLeadSeconds = 0.50f;   // リリースの何秒前に構え直しを始めるか
         private const float SafetySquareFadeSeconds = 0.10f;   // 打つ構え→移行の繋ぎ（速回しなので通常の繋ぎより短く）
 
         /// <summary>
