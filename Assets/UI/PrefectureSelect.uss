@@ -41,23 +41,3 @@
     flex-grow: 1;
     min-height: 0;
 }
-
-/* ── 地図の部品（JapanMapElement） ───────────────────────────── */
-
-.pmap {
-    flex-grow: 1;
-    min-height: 0;
-}
-
-/* 乗せた区画の名前の札。カーソルの横に出す黒い札（掲示板の黒＝design-19 の黒島語彙） */
-.pms-root .pmap__tip {   /* .pms-root Label（余白0）より強くして札の余白を効かせる */
-    position: absolute;
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    padding-top: var(--sp-1);
-    padding-bottom: var(--sp-1);
-    background-color: var(--sbk-ink);
-    color: var(--color-on-fill);
-    font-size: var(--fs-page);
-    border-radius: var(--sbk-r-chip);
-}

@@ -1799,3 +1799,26 @@ screens:
       - wait: 30
       - read: =GameSession.Current.ReachedMatchDay
       - shot: 02-after-click
+
+  - id: power-map-1494
+    name: "大会・全国の勢力図マップ: 県ごとの最強校の総合力をランク色で塗る・大会が無いときも開ける・戻るで元のビューへ（issue #1494）"
+    steps:
+      - new_game: {seed: 1}
+      - show: TournamentPreview
+      - wait: 5
+      - shot: 00-no-tournament-entry
+      - click: tp-go-map
+      - wait: 30
+      - shot: 01-power-map
+      - hover: tp-map
+      - shot: 02-power-map-hover
+      - click: tp-map-back
+      - wait: 5
+      - shot: 03-back-to-empty
+      - advance_weeks: 20
+      - show: TournamentPreview
+      - wait: 10
+      - shot: 04-tournament-entry
+      - click: tp-go-map
+      - wait: 30
+      - shot: 05-power-map-in-tournament

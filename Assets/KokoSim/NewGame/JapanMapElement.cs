@@ -38,6 +38,12 @@ namespace KokoSim.Unity.NewGame
         /// <summary>いま乗せている区画（無ければ null）。</summary>
         public MapFeature Hovered => _hover_;
 
+        /// <summary>区画の塗り色。null を返した区画は既定の陸の色（勢力図マップ・issue #1494）。</summary>
+        public Func<MapFeature, Color?> FillOf { get; set; }
+
+        /// <summary>名前の札の文言。null なら <see cref="LabelOf"/>（勢力図マップ・issue #1494）。</summary>
+        public Func<MapFeature, string> TipOf { get; set; }
+
         public JapanMapElement()
         {
             AddToClassList("pmap");
@@ -63,6 +69,9 @@ namespace KokoSim.Unity.NewGame
             SetHover(null, default);
             MarkDirtyRepaint();
         }
+
+        /// <summary>塗り色・札の文言の元データが変わった（描き直す）。</summary>
+        public void Refresh() => MarkDirtyRepaint();
 
         /// <summary>要素のローカル座標 → 図の座標。</summary>
         public Vector2 ToMap(Vector2 local)
@@ -109,7 +118,7 @@ namespace KokoSim.Unity.NewGame
             }
             else
             {
-                _tip.text = LabelOf(f);
+                _tip.text = TipOf?.Invoke(f) ?? LabelOf(f);
                 _tip.style.display = DisplayStyle.Flex;
                 // 名前の札はカーソルの右下。右端・下端で切れるなら反対側へ
                 var flipX = local.x > contentRect.width - 140f;
@@ -171,9 +180,11 @@ namespace KokoSim.Unity.NewGame
             {
                 var hovered = ReferenceEquals(f, _hover_);
                 if (hovered != (pass == 1)) continue;
-                p2d.fillColor = hovered ? _hover : (f.Split == 1 ? _landAlt : _land);
+                var custom = FillOf?.Invoke(f);
+                // 色で塗り分けた区画は、乗せても塗りを墨で潰さず枠だけ墨にする（何色かを読めなくしない）
+                p2d.fillColor = custom.HasValue ? custom.Value : hovered ? _hover : (f.Split == 1 ? _landAlt : _land);
                 p2d.strokeColor = hovered ? _hover : _line;
-                p2d.lineWidth = LineWidth;
+                p2d.lineWidth = hovered && custom.HasValue ? LineWidth * 2f : LineWidth;
                 p2d.lineJoin = LineJoin.Round;
                 p2d.BeginPath();
                 foreach (var ring in f.Rings)

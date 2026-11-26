@@ -867,3 +867,11 @@ captures:
     colors: {away: 9051, home: 9052}
     helmet: {away: E11D48}
     shots: [start, catch, release+0.2, result]
+
+  - id: fast-mode-feed-1494
+    name: "高速試合モード: 勝率バーとテキスト速報（issue #1494）。入った直後・3半回あと・7半回あとで、バーの幅が動き速報が積まれる"
+    scenario: steal-sign-lab
+    manager: away
+    duel_view: true
+    view: panel
+    window_calls: [EnterFastModeForCapture, wait(0.5), shot, FastTickForCapture(3), wait(0.5), shot, FastTickForCapture(4), wait(0.5), shot]

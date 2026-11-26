@@ -40,6 +40,18 @@
                          中身の充填は MatchLiveController.PostFastModeBoard が LineScorePanel.Fill を叩く。 -->
                     <ui:VisualElement name="fastmode-board" class="fastmode-board" style="display: none;">
                         <ui:Instance template="LineScorePanel" />
+                        <!-- 勝率バー（issue #1494）。左＝先攻・右＝後攻。表示専用の簡易の期待勝率（engine の LiveWinProbability）。
+                             割合の幅はコントローラが fm-wp-away の flex-grow 比で出す。 -->
+                        <ui:VisualElement name="fm-wp" class="fm-wp">
+                            <ui:Label name="fm-wp-away-pct" class="fm-wp__pct fm-wp__pct--away f-num" text="" />
+                            <ui:VisualElement class="fm-wp__bar">
+                                <ui:VisualElement name="fm-wp-away" class="fm-wp__seg fm-wp__seg--away" />
+                                <ui:VisualElement name="fm-wp-home" class="fm-wp__seg fm-wp__seg--home" />
+                            </ui:VisualElement>
+                            <ui:Label name="fm-wp-home-pct" class="fm-wp__pct fm-wp__pct--home f-num" text="" />
+                        </ui:VisualElement>
+                        <!-- テキスト速報（issue #1494）。打席結果を1行ずつ、新しいものが上。中身は MatchLiveController が積む。 -->
+                        <ui:VisualElement name="fm-feed" class="fm-feed" />
                     </ui:VisualElement>
                     <!-- 中継風の常時表示バグ。盤面の左上に出しっぱなしにして、打席の演出中も
                          カウント・塁・両校の得点を切らさない。俯瞰と対決ビューのどちらでも同じ位置に残る。 -->
