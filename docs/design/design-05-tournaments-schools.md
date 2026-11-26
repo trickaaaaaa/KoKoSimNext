@@ -464,6 +464,34 @@
   - ②はハード除外にせず**重み罰**にする。右投げが4人に満たないチームで割当そのものが成立しなくなるため。妥協順は **三塁 → 二塁 → 捕手 → 遊撃**（監督決定 2026-08-13。遊撃がいちばん譲れない）
   - **自校（プレイヤーの部員）は対象外**。ポジションはプレイヤーが決める（issue #93）
 
+- **チームの型（能力配分の学校単位の偏り・2026-11-26実装・issue #1691）**: 強さランクが低ければ全部低い・高ければ全部高いという
+  丸い形だけだとチームの個性が出ない。**一部の学校だけ**、総合の強さ（`School.Strength`）は変えずに能力の配分を大きく偏らせる
+  （設計書11 §3 と対応）。
+  - 対象は既存の校風（`SchoolStyle`）4種のみ。`PowerHitting`=打高投低（打撃厚く・投手守備薄く）／`DefensiveMinded`=投守型
+    （投手守備厚く・打撃薄く）／`SmallBall`=機動力型（走力厚く・パワー薄く）／`AceDependent`=豪腕依存（エースの投手4能力だけ
+    大きく上乗せ・2番手以降投手と野手は薄く）。`Standard`／`TotalBaseball`は丸いまま（変更なし）。
+  - 偏りの強さ（`School.StyleIntensityRoll`）は学校ごとに強さと無相関に Fork で抽選し、`SchoolStyleAllocation.Sharpness`
+    （`roster.school_style_sharpness_min/max`＝0.4〜1.6）で実数へ写す＝同じ校風でも「はっきり尖る学校」と「ほんのり寄る学校」が
+    混在する。
+  - 配分は `SchoolStyleAllocation.ForFielder`/`ForPitcher`（`engine/.../Players/SchoolStyleArchetype.cs`）が単一ソース。
+    新入生生成の中心（`StrengthTeamFactory.CreatePlayer`／`AiRosterFactory.NewcomerCohort`）の両方に同じ写像で乗せる
+    （永続ロスター・使い捨て生成（裏試合集計）の両経路で型が一致する）。選手ごとの上乗せは `Player.StyleOffset`（デバッグ・
+    テスト用の記録。6指標の集計では差し引かない）。
+  - **6指標（`TeamStrengthProfile`）の打撃/投手/守備/機動の個別指標には配分の偏りがそのまま出る**（可視の偏りが狙いそのもの）。
+    一方、**チーム総合（6指標の加重平均）は型の有無でほぼ動かない**。これは測定時に差し引いて中立化する方式ではなく、
+    `data/coefficients.yaml` の `school_style_*` 側で各型3つの値の比をあらかじめ解いて校正してある
+    （加重平均の係数と、選手層（控え野手の`AverageLevel`・控え投手の`PitcherComposite`）への伝播を込みで解いた一次方程式。
+    詳細は `SchoolStyleCoefficients` のXMLコメント）。能力の天井（10〜99）付近では強豪校ほど非線形にわずかにずれる
+    （`SchoolStyleArchetypeTests` が許容帯を固定・多数校の平均で検証）。永続ロスターは `AiRosterCycle.SolveGrowthG` の
+    逆算配分が残差もすべて毎年吸収する。
+  - **型は学校単位で持ち、年を超えても保たれる**（`AiRosterFactory.NewcomerCohort` が毎年の新入生にも同じ校風オフセットを
+    乗せる）。`SchoolStyleArchetypeTests.PersistentRoster_KeepsPowerHittingBiasOnAverage_AcrossMultipleYears` が複数年
+    進めても偏りが消えないことを固定する。
+  - **試合の中身**（6指標の加重平均だけでなく実際の試合結果で尖りが出ることの実測・`SchoolStyleGameImpactTests`、strength60・
+    尖り方最大、同強度の `Standard` 校と対戦）: 打高投低は合計得点/試合が型なしの**1.61倍**（目安1.5倍以上）、
+    8失点以上を喰らった試合でも**32.0%**勝つ（型なしは9.3%）。投守型は合計得点/試合が型なしの**0.53倍**（目安0.85倍以下）。
+  - `nation_dominance`（一強抑制の安全網）・既存 Heavy 帯は型の導入後も帯内（2026-11-26実測）。
+
 ### 2.4 エディタ（元祖踏襲）
 - 校名・所在地・ティアの編集、新設校の追加、既存校の削除
 - 自作新設校での最弱スタート（元祖踏襲の人気プレイ）

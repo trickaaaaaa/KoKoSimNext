@@ -61,6 +61,11 @@ AI校の采配能力（設計書04）を、判断の質に反映する。弱い�
   中心 = mental_mean + (Strength−50)×`ai_mental_strength_slope`、「守り勝つ」「全員野球」は精神・統率に
   `ai_style_mental_bonus` を上乗せ、進級ごとに `ai_mental_per_grade`）。主将も自校と同じ規則（最上級生の統率力最大）で置く
   ＝プレッシャー・動揺・盗塁の読み・伝令・主将の緩和・6指標「精神」が校ごとに違う。乱数は専用 Fork（他の能力ロール不変）
+- **能力配分の項（2026-11-26・issue #1691）**: 校風は采配・精神だけでなく、一部の学校では**能力配分**にも効く（詳細は
+  設計書05 §2.3）。`PowerHitting`/`DefensiveMinded`/`SmallBall`/`AceDependent` の4校風だけが対象で、総合の強さ
+  （`School.Strength`）は変えずに打撃⇔投手⇔守備⇔機動の配分だけ振り替える。`Standard`／`TotalBaseball`は丸いまま。
+  偏りの強さは学校ごとに強さと無相関に抽選（`School.StyleIntensityRoll`）し、同じ校風でも尖り方が混在する。
+  乱数は専用 Fork（能力ロール・精神・采配のいずれの乱数列も不変）。
 
 ### 3.1 監督傾向（采配の癖、issue #55）
 

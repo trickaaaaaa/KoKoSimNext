@@ -49,6 +49,13 @@ public sealed class DevelopingPlayer
     public PitcherArchetype? Archetype { get; init; }
 
     /// <summary>
+    /// 校風の型による能力配分の上乗せ（試合層の <see cref="Players.Player.StyleOffset"/> からの逆投影・issue #1691）。
+    /// 主にデバッグ・テストでの検証用（<see cref="Nation.TeamStrengthProfile"/> は差し引かない）。
+    /// <see cref="Nation.ScoutedTeamProfile"/> が集計用に一時的に載せる。セーブには載せない（自校の選手は生成時に型を持たない）。
+    /// </summary>
+    public Players.SchoolStyleOffset StyleOffset { get; init; } = Players.SchoolStyleOffset.None;
+
+    /// <summary>
     /// 投打の利き（設計書01 §1.1c）。既定は右。生成時は投手らしさ・能力が出てから判定するので set 可
     /// （issue #1475・<see cref="HandednessModel"/>）。生成後に書き換えるのは生成器だけ。
     /// </summary>
@@ -344,6 +351,7 @@ public sealed class DevelopingPlayer
             Bats = Bats,
             LeftExperiencePa = LeftExperiencePa,
             Archetype = Archetype,
+            StyleOffset = StyleOffset,
             GrowthType = GrowthType,
             PitchingGrowthType = PitchingGrowthType,
             BattingGrowthType = BattingGrowthType,

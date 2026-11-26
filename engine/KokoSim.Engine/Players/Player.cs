@@ -149,6 +149,14 @@ public sealed record Player
     /// </summary>
     public double BatterArchetypeIntensity { get; init; } = 1.0;
 
+    /// <summary>
+    /// 校風の型による能力配分の上乗せ（隠し・issue #1691）。生成時に各能力の中心へ足した値をそのまま持つ
+    /// （主にデバッグ・テストでの検証用。<see cref="Nation.TeamStrengthProfile"/> は差し引かない＝6指標には
+    /// 偏りがそのまま出る）。既定 <see cref="SchoolStyleOffset.None"/>＝型なし。自校の選手・旧セーブは常にこれ
+    /// （<see cref="Nation.StrengthTeamFactory"/>・<see cref="Nation.Roster.AiRosterFactory"/> だけが付与する）。
+    /// </summary>
+    public SchoolStyleOffset StyleOffset { get; init; } = SchoolStyleOffset.None;
+
     /// <summary>調子（設計書02 §3.3）。週次の波を Season 層が更新し、投影時に載せる。試合中は補正係数として作用。</summary>
     public Condition Condition { get; init; } = Condition.Normal;
 
