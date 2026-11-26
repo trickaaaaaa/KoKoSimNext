@@ -122,6 +122,12 @@ public readonly record struct TacticsSituation(
     /// 相対基準に使う（issue #976 追補・<see cref="TacticsCoefficients.OutfieldDeepAboveLineupMean"/>）。0＝未設定（絶対基準だけ）。
     /// </summary>
     public double OffenseLineupMeanPower { get; init; }
+
+    /// <summary>
+    /// 守備側のいまの内野の深さ（設計書12 §5.2・issue #1491）。守備の采配（常時方針込み）が打席頭で決まった後の値で、
+    /// 攻撃側の判断（<see cref="TacticsCoefficients.SqueezeVsInfieldInFactor"/> 等）が読む。既定 Normal＝読みなし。
+    /// </summary>
+    public DefenseDepth OpponentInfield { get; init; } = DefenseDepth.Normal;
 }
 
 /// <summary>

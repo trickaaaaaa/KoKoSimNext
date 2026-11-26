@@ -41,7 +41,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             && System.Math.Abs(s.ScoreDiff) <= _c.SqueezeMaxDiffAbs
             && (s.Inning >= _c.SqueezeFromInning || s.TieBreak)
             && P(s.Batter.Bunt) >= _c.SqueezeMinBunt
-            && rng.NextDouble() < _c.SqueezeProb)
+            && rng.NextDouble() < _c.SqueezeProb * SqueezeInfieldFactor(s.OpponentInfield))
         {
             return OffensiveSign.Squeeze;
         }
@@ -73,6 +73,13 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
         return OffensiveSign.Swing;
     }
+
+    private double SqueezeInfieldFactor(DefenseDepth infield) => infield switch
+    {
+        DefenseDepth.In => _c.SqueezeVsInfieldInFactor,
+        DefenseDepth.Deep => _c.SqueezeVsInfieldDeepFactor,
+        _ => 1.0,
+    };
 
     public DefensiveTactics CallDefense(in TacticsSituation s, IRandomSource rng)
     {
