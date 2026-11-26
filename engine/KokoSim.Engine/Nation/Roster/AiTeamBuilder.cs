@@ -206,7 +206,7 @@ public static class AiTeamBuilder
             PitcherSlot = 8,
             Reserves = Match.Game.TeamReserves.Merge(bullpen, bench),
         };
-        var composed = LineupOrderer.Compose(team, deps.Roster.Lineup, modernRules, calendarYear);
+        var composed = LineupOrderer.Compose(team, deps.Roster.Lineup, modernRules, calendarYear, school.Style);
         // 主将（設計書09 §8）: 自校と同じ規則（最上級生の統率力最大）で AI 校にも置く（issue ai-school-mental-fixed-50）。
         // ベンチ入り20人の中から選ぶ（Compose 後の参照＝Team.Captain の在場判定は参照一致）。
         var withCaptain = composed with { Captain = CaptainSelector.SelectFromPlayers(StrengthTeamFactory.AllPlayers(composed)) };

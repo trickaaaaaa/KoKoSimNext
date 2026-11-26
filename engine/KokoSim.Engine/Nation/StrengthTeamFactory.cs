@@ -173,7 +173,7 @@ public static class StrengthTeamFactory
         };
         // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。既に確定した能力ロールだけを材料にする決定論変換
         // （rng は使わない）＝展望（TournamentPreview）と実戦（Shell）が同じここを通り自動で一致する。
-        var composed = LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);
+        var composed = LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear, style);
         // 主将（設計書09 §8）: 自校と同じ規則（最上級生の統率力最大）で AI 校にも置く（issue ai-school-mental-fixed-50）。
         // 参照は Compose 後の打順・控えの実体から選ぶ（Team.Captain の在場判定は参照一致）。
         var captain = CaptainSelector.SelectFromPlayers(AllPlayers(composed), delta: 0);   // まだ物理Lv（issue #1080）

@@ -127,6 +127,8 @@ public sealed class EnemyLineupCompositionTests
     {
         // 中軸(4→3→5番)・残り(6→7→8番)は打撃総合の高い順に「補充」される保証がある
         // （leadoff/2番が出塁力・小技で先取りすることはあっても、補充順そのものは崩れない）。
+        // 左右のバランス（隣が逆打ちなら選考スコアに加点）が効くぶん、順序の逆転は両隣ぶんのボーナス差までは許す。
+        var tolerance = 2 * C.HandBalanceBonus;
         foreach (var id in Enumerable.Range(1, 15))
         {
             var team = StrengthTeamFactory.ForSchool(Sch(id), yearIndex: 1);
@@ -134,7 +136,7 @@ public sealed class EnemyLineupCompositionTests
             var scores = pickOrder.Select(i => LineupOrderer.BattingScore(team.BattingOrder[i], C)).ToList();
             for (var i = 1; i < scores.Count; i++)
             {
-                Assert.True(scores[i - 1] >= scores[i] - 1e-9,
+                Assert.True(scores[i - 1] >= scores[i] - tolerance - 1e-9,
                     $"校{id}: 補充順の打撃総合が降順でない: {string.Join(", ", scores)}");
             }
         }
