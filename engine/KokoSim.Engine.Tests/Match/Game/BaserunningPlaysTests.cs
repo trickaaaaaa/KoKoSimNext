@@ -690,7 +690,7 @@ public sealed class BaserunningPlaysTests
     {
         // issue #402: 実ゲーム既定を data/coefficients.yaml の校正値へ揃えた（以前は 0＝機能オフ）。
         // 全係数の一致は CoefficientsDefaultsConsistencyTests が保証する。ここは重盗が既定で有効なことの回帰ピン。
-        Assert.Equal(0.4, new GameContext().Baserunning.DoubleStealThirdBreakProb);
+        Assert.Equal(0.12, new GameContext().Baserunning.DoubleStealThirdBreakProb);
     }
 
     [Fact]
