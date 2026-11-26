@@ -347,7 +347,10 @@ screens:
       - wait: 3
       - click: ev-novel
       - wait: 3
-      - shot: 03-join-outcome-result
+      - shot: 03-join-outcome
+      - click: ev-novel
+      - wait: 3
+      - shot: 04-result-line
       - read: =ManagerService.Manager.CoachingBatting
       - read: =ManagerService.Manager.CoachingPitching
       - read: =ManagerService.Manager.CoachingDefense
