@@ -89,6 +89,34 @@ public sealed class ErrorPickupThrowTests
         Assert.True(back.T0 > tl.Runners.Max(r => r.T1), "走者が止まる前に投手へ返している");
     }
 
+    /// <summary>
+    /// 走者が着くのが遅いとき（球のほうが先に着いてしまう）、遅らせる分は<b>投げ始め</b>で取る。
+    /// T0 を据え置いて T1 だけ遅らせると、遅れた分まで飛ぶ時間になり3Dの送球が高い山なりになる（issue #1748）。
+    /// </summary>
+    [Fact]
+    public void LateLeadRunner_DelayGoesIntoTheRelease_NotIntoTheFlight()
+    {
+        var play = ShortstopBobble();
+        var before = Build(play);
+        var pick = before.ErrorPickupAt!.Value;
+        var runner = new RunnerLeg
+        {
+            Label = "走1", T0 = TimelineBuilder.ContactAt + 0.1, T1 = pick + 5.0,
+            From = Base("second"), To = Base("third"),
+        };
+        before = before with { Runners = before.Runners.Append(runner).ToList() };
+
+        var tl = TimelineBuilder.AppendErrorReturnThrow(before, play, Field);
+        var toThird = tl.Ball.Skip(before.Ball.Count).First();
+        Assert.Equal("third", toThird.ToBase);
+
+        var physicalFlight = Dist(toThird.From, toThird.To) / play.FielderThrowSpeedMps!.Value;
+        Assert.Equal(physicalFlight, toThird.T1 - toThird.T0, 3);
+        Assert.True(toThird.T1 > runner.T1, "セーフの走者より先に球が着いている");
+        Assert.True(toThird.T0 > pick + 1.0, "遅れた分を投げ始めへ回していない（拾ってすぐ投げて浮かせている）");
+        Assert.True(KokoSim.Engine.Match.Timeline.Playback.EndpointBallSegment.ThrowRiseM(toThird.T1 - toThird.T0) < 3.0, "送球の山が高すぎる");
+    }
+
     /// <summary>拾った時点で全員止まっている → 従来どおり1本で投手へ返す。</summary>
     [Fact]
     public void EveryoneAlreadyStopped_SingleThrowToThePitcher()

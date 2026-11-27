@@ -1459,11 +1459,14 @@ public static partial class TimelineBuilder
             var heldFrom = t0;
             if (leadRole != fromRole && Distance(from, leadTo) >= 5.0)
             {
-                var physical = t0 + LegSeconds(Distance(from, leadTo), ThrowSpeedOf(play));
+                var flightSeconds = LegSeconds(Distance(from, leadTo), ThrowSpeedOf(play));
+                var physical = t0 + flightSeconds;
                 var arrive = GuardAgainstVerdict(physical, physical, lead.ArriveAt, runnerOut: false);
+                // 走者より先に着いて見えないための遅れは<b>投げ始め</b>で取る（拾った野手は球を持って構える）。
+                // T0 を据え置いて T1 だけ遅らせると、遅れた分まで飛ぶ時間になり山なりの高さ（g·T²/8）が跳ね上がる（issue #1748）。
                 ballLead.Add(new BallSegment
                 {
-                    Kind = BallSegmentKind.Throw, T0 = t0, T1 = arrive, From = from, To = leadTo,
+                    Kind = BallSegmentKind.Throw, T0 = arrive - flightSeconds, T1 = arrive, From = from, To = leadTo,
                     FromRole = fromRole, ToRole = leadRole, ToBase = lead.BaseName,
                 });
                 holder = leadRole;
@@ -2014,6 +2017,14 @@ public static partial class TimelineBuilder
     }
 
     /// <summary>
+    /// <see cref="GuardAgainstVerdict"/> で到達が物理より後ろへずれたとき、その遅れを<b>投げ始め</b>へ回した T0 を返す
+    /// （issue #1748）。T1 だけ遅らせると遅れた分まで飛ぶ時間になり、3D の山の高さ（g·T²/8）が跳ね上がる。
+    /// 到達が物理より前へ詰められた（アウト確定側）ときは遅れ 0 ＝ T0 は据え置き。
+    /// </summary>
+    private static double ThrowStartForArrive(double releaseAt, double physicalArrive, double guardedArrive)
+        => releaseAt + Math.Max(0.0, guardedArrive - physicalArrive);
+
+    /// <summary>
     /// 野選（FC）で「打」（打者走者）の誤ったアウト表現を実際の結末（セーフ）へ訂正する
     /// （issue double-play-throw-pace-and-second-out-call の追加報告）。<see cref="BuildBattedBall"/> は
     /// 二塁封殺・野選の区別を知らずに、打球の基礎解決（処理点→一塁の直接送球1本の前提）だけで
@@ -2225,7 +2236,7 @@ public static partial class TimelineBuilder
         if (relayToFirst)
             ball.Add(new BallSegment
             {
-                Kind = BallSegmentKind.Throw, T0 = pivotAt, T1 = firstArrive,
+                Kind = BallSegmentKind.Throw, T0 = ThrowStartForArrive(pivotAt, firstArrivePhysical, firstArrive), T1 = firstArrive,
                 From = second, To = first,
                 FromRole = pivotRole, ToRole = firstRole, ToBase = "first",
             });
@@ -2442,7 +2453,7 @@ public static partial class TimelineBuilder
         if (relayToFirst)
             ball.Add(new BallSegment
             {
-                Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = firstArrive,
+                Kind = BallSegmentKind.Throw, T0 = ThrowStartForArrive(throwStart, firstArrivePhysical, firstArrive), T1 = firstArrive,
                 From = targetPt, To = first,
                 FromRole = relayRole, ToRole = firstRole, ToBase = "first",
             });
@@ -2842,7 +2853,7 @@ public static partial class TimelineBuilder
         var receiver = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
         ball.Add(new BallSegment
         {
-            Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = firstArrive,
+            Kind = BallSegmentKind.Throw, T0 = ThrowStartForArrive(releaseAt, physical, firstArrive), T1 = firstArrive,
             From = Home, To = first,
             FromRole = toHome.ToRole ?? FieldPosition.Catcher,
             ToRole = receiver, ToBase = "first",
