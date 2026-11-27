@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Batting;
 using KokoSim.Engine.Match.Field;
@@ -85,18 +87,25 @@ public static class ForcedInfieldLineOutBall
     {
         if (kind != ForcedOutcome.InfieldLineOut) return null;
         var probe = coeff with { ErrorBaseProb = 0.0, IrregularBounceProb = 0.0, FlyErrorBaseProb = 0.0 };
+        // 野手がほとんど動かずに捕る（正面のライナー）打球を選ぶ＝捕った後の体の動きを見るのに、走り込みの動きが混ざらない
+        BattedBall? best = null;
+        var bestMove = double.PositiveInfinity;
         foreach (var bearing in new[] { -14.0, -10.0, -18.0, -6.0, 6.0, 10.0, 14.0, -22.0, 18.0, 22.0 })
-            for (var launch = 0.0; launch <= 12.0; launch += 2.0)
-                for (var exit = 46.0; exit >= 34.0; exit -= 2.0)
+            for (var launch = 0.0; launch <= 12.0; launch += 1.0)
+                for (var exit = 46.0; exit >= 30.0; exit -= 1.0)
                 {
                     var ball = new BattedBall { ExitVelocityMps = exit, LaunchAngleDeg = launch, BearingDeg = bearing };
                     var play = FieldingResolver.ResolveDetailed(
                         ball, field, aero, BatterAttributes.LeagueAverage, fielders, probe, new Xoshiro256Random(1));
                     if (play.Result != BattedBallResult.Out || !play.IsFly || play.Class != BattedBallClass.Liner) continue;
                     if (play.FielderRole is not { } who || !IsInfielder(who)) continue;
-                    return ball;
+                    var f = fielders.First(x => x.Position == who);
+                    var move = Math.Sqrt(Math.Pow(play.LandingX - f.Location.X, 2) + Math.Pow(play.LandingZ - f.Location.Z, 2));
+                    if (move >= bestMove - 1e-9) continue;
+                    bestMove = move;
+                    best = ball;
                 }
-        return null;
+        return best;
     }
 
     private static bool IsInfielder(FieldPosition p) =>
