@@ -289,6 +289,11 @@ namespace KokoSim.Unity.Match
                     var focus = head.position + up * 0.09f;
                     ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-front" + tag + ".png"));
                     ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-side" + tag + ".png"));
+                    var smrs = a.Go.GetComponentsInChildren<SkinnedMeshRenderer>();
+                    foreach (var smr in smrs) smr.enabled = false;
+                    ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-caponly-front.png"));
+                    ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-caponly-side.png"));
+                    foreach (var smr in smrs) smr.enabled = true;
                 }
                 return sb.ToString();
             }
