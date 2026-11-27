@@ -244,8 +244,9 @@ namespace KokoSim.Unity.Match
         private bool _umpHeadCloseDone;
 
         /// <summary>
-        /// 撮影レシピの probes 用（issue #1740）: 一塁塁審の頭まわりの装備の寸法（頭ボーン枠・実寸[m]）を返し、
-        /// 初回だけ正面と横の寄りを screenshots/_umpire-head-*.png へ撮る。
+        /// 撮影レシピの probes 用（issue #1740）: 一塁塁審の頭まわりを寄りで撮る（初回だけ）。
+        /// screenshots/_umpire-head-front.png（正面）・-side.png（横）・-three-quarter.png（斜め上）。
+        /// 絵の赤点は頭の枠の高さの定規（0.05m刻み・大は0.1m ごと）、緑点は前後の定規（y=0.1・0.05m刻み）。
         /// </summary>
         internal string BaseUmpHeadCloseForCapture
         {
@@ -255,131 +256,35 @@ namespace KokoSim.Unity.Match
                 if (a == null || !a.Enabled || a.Animator == null) return "-";
                 var head = a.Animator.GetBoneTransform(HumanBodyBones.Head);
                 if (head == null) return "no-head";
-                var sb = new System.Text.StringBuilder();
-                foreach (var r in head.GetComponentsInChildren<Renderer>(true))
-                {
-                    var bnd = r.bounds;
-                    var hu = head.TransformDirection(a.HeadUpLocal).normalized;
-                    var hf = head.TransformDirection(a.HeadFwdLocal).normalized;
-                    var hr = Vector3.Cross(hu, hf).normalized;
-                    var blo = new Vector3(9f, 9f, 9f); var bhi = new Vector3(-9f, -9f, -9f);
-                    for (int k = 0; k < 8; k++)
-                    {
-                        var corner = bnd.center + Vector3.Scale(bnd.extents, new Vector3((k & 1) == 0 ? -1 : 1, (k & 2) == 0 ? -1 : 1, (k & 4) == 0 ? -1 : 1)) - head.position;
-                        var l = new Vector3(Vector3.Dot(corner, hr), Vector3.Dot(corner, hu), Vector3.Dot(corner, hf));
-                        blo = Vector3.Min(blo, l); bhi = Vector3.Max(bhi, l);
-                    }
-                    sb.Append(r.name).Append(" lo=").Append(blo.ToString("F3")).Append(" hi=").Append(bhi.ToString("F3")).Append(' ');
-                }
-                if (!_umpHeadCloseDone)
-                {
-                    _umpHeadCloseDone = true;
-                    sb.Append(SkullExtentsText(a, head)).Append(SliceText(a, head));
-                    var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
-                    var tag = "";
-                    var face = head.TransformDirection(a.HeadFwdLocal).normalized;
-                    var up = head.TransformDirection(a.HeadUpLocal).normalized;
-                    var side = Vector3.Cross(up, face).normalized;
-                    var focus = head.position + up * 0.09f;
-                    ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-front" + tag + ".png"));
-                    ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-side" + tag + ".png"));
-                    var wide = head.position + up * 0.13f;
-                    ShootHeadClose(wide + (face * 0.8f + side * 0.5f + up * 0.3f).normalized * 0.8f, wide, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-three-quarter.png"));
-                    var smrs = a.Go.GetComponentsInChildren<SkinnedMeshRenderer>();
-                    foreach (var smr in smrs) smr.enabled = false;
-                    ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-caponly-front.png"));
-                    ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-caponly-side.png"));
-                    foreach (var smr in smrs) smr.enabled = true;
-                }
-                return sb.ToString();
-            }
-        }
-
-        /// <summary>素体の頭まわりの頂点（頭ボーンの0.3m以内）を、頭の枠（+Y=頭蓋上・+Z=顔前）で見た範囲。</summary>
-        private string SkullExtentsText(Actor a, Transform head)
-        {
-            var up = head.TransformDirection(a.HeadUpLocal).normalized;
-            var fwd = head.TransformDirection(a.HeadFwdLocal).normalized;
-            var right = Vector3.Cross(up, fwd).normalized;
-            var lo = new Vector3(9f, 9f, 9f); var hi = new Vector3(-9f, -9f, -9f);
-            var brow = new Vector3(9f, 9f, 9f); var browHi = new Vector3(-9f, -9f, -9f);
-            var verts = new List<Vector3>();
-            foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>())
-            {
-                var m = new Mesh();
-                smr.BakeMesh(m, true);
-                m.GetVertices(verts);
-                foreach (var v in verts)
-                {
-                    var w = smr.transform.position + smr.transform.rotation * v - head.position;
-                    var l = new Vector3(Vector3.Dot(w, right), Vector3.Dot(w, up), Vector3.Dot(w, fwd));
-                    if (l.y < -0.02f || Mathf.Abs(l.x) > 0.14f || Mathf.Abs(l.z) > 0.2f) continue;
-                    if (Mathf.Abs(l.x) > 0.1f || Mathf.Abs(l.z) > 0.14f) continue;
-                    lo = Vector3.Min(lo, l); hi = Vector3.Max(hi, l);
-                    if (l.y > 0.08f && l.y < 0.12f) { brow = Vector3.Min(brow, l); browHi = Vector3.Max(browHi, l); }
-                }
-                Object.Destroy(m);
-            }
-            return " skull lo=" + lo.ToString("F3") + " hi=" + hi.ToString("F3") + " browband lo=" + brow.ToString("F3") + " hi=" + browHi.ToString("F3") + " ";
-        }
-
-        private bool _plateHeadDone;
-
-        internal string PlateUmpHeadCloseForCapture
-        {
-            get
-            {
-                var a = _umpire;
-                if (a == null || a.Animator == null || _plateHeadDone) return "-";
-                var head = a.Animator.GetBoneTransform(HumanBodyBones.Head);
-                if (head == null) return "no-head";
-                _plateHeadDone = true;
+                if (_umpHeadCloseDone) return string.Join(",", BaseUmpireHeadGearForTest());
+                _umpHeadCloseDone = true;
                 var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
                 var face = head.TransformDirection(a.HeadFwdLocal).normalized;
                 var up = head.TransformDirection(a.HeadUpLocal).normalized;
                 var side = Vector3.Cross(up, face).normalized;
                 var focus = head.position + up * 0.09f;
-                ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_plate-head-front.png"));
-                ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_plate-head-side.png"));
-                return SliceText(a, head);
+                ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-front.png"));
+                ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-side.png"));
+                var wide = head.position + up * 0.13f;
+                ShootHeadClose(wide + (face * 0.8f + side * 0.5f + up * 0.3f).normalized * 0.8f, wide, head.position, up, face,
+                    System.IO.Path.Combine(dir, "_umpire-head-three-quarter.png"));
+                return string.Join(",", BaseUmpireHeadGearForTest());
             }
         }
 
-        /// <summary>頭の枠の高さごとの前後・左右の範囲（帽子メッシュと頭の頂点を並べる診断）。</summary>
-        private string SliceText(Actor a, Transform head)
+        /// <summary>一塁塁審の頭・胸ボーンの下に付いている装備パーツの名前（塁審は帽子だけでマスク・胸当てが無いことの検査用）。</summary>
+        internal string[] BaseUmpireHeadGearForTest()
         {
-            var up = head.TransformDirection(a.HeadUpLocal).normalized;
-            var fwd = head.TransformDirection(a.HeadFwdLocal).normalized;
-            var right = Vector3.Cross(up, fwd).normalized;
-            Vector3 L(Vector3 w) { w -= head.position; return new Vector3(Vector3.Dot(w, right), Vector3.Dot(w, up), Vector3.Dot(w, fwd)); }
-            var capPts = new List<Vector3>();
-            foreach (var mf in head.GetComponentsInChildren<MeshFilter>(true))
-                foreach (var v in mf.sharedMesh.vertices) capPts.Add(L(mf.transform.TransformPoint(v)));
-            var skullPts = new List<Vector3>();
-            var verts = new List<Vector3>();
-            foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>())
+            var names = new List<string>();
+            var a = _baseUmps[0];
+            if (a == null || a.Animator == null) return names.ToArray();
+            foreach (var bone in new[] { HumanBodyBones.Head, HumanBodyBones.UpperChest, HumanBodyBones.Chest, HumanBodyBones.Spine })
             {
-                var m = new Mesh();
-                smr.BakeMesh(m, true);
-                m.GetVertices(verts);
-                foreach (var v in verts) skullPts.Add(L(smr.transform.position + smr.transform.rotation * v));
-                Object.Destroy(m);
+                var t = a.Animator.GetBoneTransform(bone);
+                if (t == null) continue;
+                foreach (var r in t.GetComponentsInChildren<MeshRenderer>(true)) names.Add(r.name);
             }
-            var sb = new System.Text.StringBuilder("\n");
-            for (float y = 0f; y < 0.32f; y += 0.03f)
-            {
-                foreach (var (name, pts) in new[] { ("cap  ", capPts), ("skull", skullPts) })
-                {
-                    float xl = 9, xh = -9, zl = 9, zh = -9; int n = 0;
-                    foreach (var p in pts)
-                    {
-                        if (p.y < y || p.y >= y + 0.03f || Mathf.Abs(p.x) > 0.3f || Mathf.Abs(p.z) > 0.35f) continue;
-                        n++; xl = Mathf.Min(xl, p.x); xh = Mathf.Max(xh, p.x); zl = Mathf.Min(zl, p.z); zh = Mathf.Max(zh, p.z);
-                    }
-                    if (n > 0) sb.Append("y=").Append(y.ToString("0.00")).Append(' ').Append(name).Append(" x[").Append(xl.ToString("F3")).Append(',').Append(xh.ToString("F3")).Append("] z[").Append(zl.ToString("F3")).Append(',').Append(zh.ToString("F3")).Append("]\n");
-                }
-            }
-            return sb.ToString();
+            return names.ToArray();
         }
 
         private void ShootHeadClose(Vector3 eye, Vector3 focus, Vector3 origin, Vector3 up, Vector3 fwd, string path)
