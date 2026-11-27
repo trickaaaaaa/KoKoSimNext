@@ -283,6 +283,8 @@ namespace KokoSim.Unity.Match
                     var focus = head.position + up * 0.09f;
                     ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-front" + tag + ".png"));
                     ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-side" + tag + ".png"));
+                    var wide = head.position + up * 0.13f;
+                    ShootHeadClose(wide + (face * 0.8f + side * 0.5f + up * 0.3f).normalized * 0.8f, wide, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-three-quarter.png"));
                     var smrs = a.Go.GetComponentsInChildren<SkinnedMeshRenderer>();
                     foreach (var smr in smrs) smr.enabled = false;
                     ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-caponly-front.png"));
@@ -385,7 +387,7 @@ namespace KokoSim.Unity.Match
             var go = new GameObject("head-close-cam");
             var cam = go.AddComponent<Camera>();
             cam.CopyFrom(_camera);
-            cam.fieldOfView = 18f;
+            cam.fieldOfView = 30f;
             cam.transform.position = eye;
             cam.transform.LookAt(focus);
             var rt = new RenderTexture(512, 512, 24, RenderTextureFormat.ARGB32);
