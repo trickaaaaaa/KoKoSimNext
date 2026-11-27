@@ -288,11 +288,11 @@ namespace KokoSim.Unity.Match
             foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>())
             {
                 var m = new Mesh();
-                smr.BakeMesh(m);
+                smr.BakeMesh(m, true);
                 m.GetVertices(verts);
                 foreach (var v in verts)
                 {
-                    var w = smr.transform.TransformPoint(v) - head.position;
+                    var w = smr.transform.position + smr.transform.rotation * v - head.position;
                     var l = new Vector3(Vector3.Dot(w, right), Vector3.Dot(w, up), Vector3.Dot(w, fwd));
                     if (l.y < -0.02f || l.magnitude > 0.3f) continue;
                     lo = Vector3.Min(lo, l); hi = Vector3.Max(hi, l);
