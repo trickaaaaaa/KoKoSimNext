@@ -767,7 +767,7 @@ captures:
   #    12-ui＝枠を選んだ比較欄 / 13-ui＝控え0を選んだ比較欄。攻撃: 11-ui＝開いた直後 / 12-ui＝控え0を選んだ比較欄 ──
   - id: substitution-injury-1729-defense
     name: "交代パネル（守備）：故障中の選手に怪我のタグが出る（issue #1729）"
-    scenario: bases-loaded-9th
+    scenario: dh-mound-lab
     manager: home
     view: panel
     attempts: 1
