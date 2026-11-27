@@ -294,7 +294,7 @@ namespace KokoSim.Unity.Match
                 {
                     var w = smr.transform.position + smr.transform.rotation * v - head.position;
                     var l = new Vector3(Vector3.Dot(w, right), Vector3.Dot(w, up), Vector3.Dot(w, fwd));
-                    if (l.y < -0.02f || l.magnitude > 0.3f) continue;
+                    if (l.y < -0.02f || Mathf.Abs(l.x) > 0.14f || Mathf.Abs(l.z) > 0.2f) continue;
                     lo = Vector3.Min(lo, l); hi = Vector3.Max(hi, l);
                 }
                 Object.Destroy(m);
