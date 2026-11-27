@@ -1,404 +1,535 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   TrainingPlan.uss — 練習計画 画面レイアウト（UI-BUILD-METHOD Step 4）
+   TrainingPlan.uss — 練習 画面（一覧と練習メニューの配分）
    ───────────────────────────────────────────────────────────────────────
-   アトム（rank-chip / num-badge / stat-bar / chip / switch / step-btn /
-   panel / banner / modal-scrim / modal-card）は components.uss、数値・色は tokens.uss。
-   ここには画面固有の「配置」だけを書き、値はすべて var(--...) を参照する（直書き禁止）。
-   ・列幅はヘッダー(.tp-th--X)とデータ(.tcell--X)が同一 --col-* を参照（横ずれの構造対策）。
-   ・設定編集は右枠でなく統合モーダル(tp-modal)で行う（プリセット選択＋カスタム＋伸びバー）。
+   練習画面のリデザイン（1600×900 基準）。上の共通の帯（TopBar）は触らない。
+   部品（rank のチップ・switch・LineIcon・DashedFrame・LabeledStackBar・tm-bg--X）は部品辞書、
+   色は tokens.uss / scorebook.uss の変数。ここには画面固有の配置と寸法だけを書く。
+   ・列幅は列見出し（.tp-th）と行（.tp-cell）が同じ .tp-col--X を共有する（横ずれ防止）。
+   ・枠の太さが変わる要素（個別指導の枠・星のボタン）はふだんから透明の枠を持ち、大きさを変えない。
    ═══════════════════════════════════════════════════════════════════════ */
 
 .tp-root {
     flex-grow: 1;
-    background-color: var(--color-field);
-    color: var(--color-chalk);
-    font-size: var(--fs-body);
+    background-color: var(--sbk-paper-deep);
+    color: var(--sbk-text);
+}
+/* 画面内の Label の既定余白を外す（.sbk Label に置くと全データ画面が崩れる）。共通の帯（TopBar）は
+   触らないので、本体（.tp-body）・ポップアップ（.tpm-card / .tpc-card）・トーストだけに効かせる。 */
+.tp-body Label, .tpm-card Label, .tpc-card Label { margin: 0; padding: 0; }
+.tp-body Button, .tpm-card Button, .tpc-card Button { margin: 0; }
+.tp-root .tpm-spacer { flex-grow: 1; }
+
+.tp-root .tp-body {
+    flex-grow: 1;
+    flex-direction: column;
+    padding: 16px 24px 20px 24px;
+    min-height: 0;
 }
 
-/* ═══ SUB STRIP: 合宿バナー + 個別指導3枠 ═══ */
-.tp-strip {
-    flex-shrink: 0;
-    flex-direction: row;
-    align-items: stretch;
-    background-color: var(--color-strip);
-    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line);
-    padding-left: var(--sp-4); padding-right: var(--sp-4);
-    padding-top: 10px; padding-bottom: 10px;
-}
-.tp-camp { flex-grow: 1; margin-right: 14px; }   /* .banner を継承 */
-.tp-camp__title { font-size: var(--fs-label); color: var(--color-chalk); }
-.tp-camp__mult { font-size: var(--fs-th); color: var(--color-chalk); margin-left: var(--sp-2); }   /* 数値ラベルは本文色（黄はデータに使わない・4-B） */
-.tp-camp__note { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
-.tp-camp__head { flex-direction: row; align-items: center; }
-.tp-camp__body { flex-grow: 1; }
-
-.tp-coach { flex-direction: row; align-items: center; }
-.tp-coach__head { flex-direction: column; margin-right: var(--sp-3); width: 190px; }
-.tp-coach__title { font-size: var(--fs-label); color: var(--color-muted); white-space: normal; }
-/* 個別指導3枠が空きのままだと何をする枠か画面から読めない問題の補足（Issue #273・issue #126の効果説明）。 */
-.tp-coach__slots { flex-direction: row; }
-.nom-slot {
+/* ═══ ① 個別指導の帯 ═══ */
+.tp-root .tp-coach {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
-    min-width: 128px; height: 44px;   /* 指名中は「背番号 名前 ×」が入るので幅は中身なり（issue #707） */
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
-    padding-left: var(--sp-2); padding-right: var(--sp-2); margin-left: var(--sp-2);
+    height: 72px;
+    background-color: var(--sbk-sheet);
+    border-radius: 14px;
+    padding: 0 20px;
+    margin-bottom: 14px;
 }
-.nom-slot--empty { border-color: var(--color-line-soft); }
-.nom-slot__num {
-    font-size: var(--fs-label); color: var(--color-on-fill); background-color: var(--ink); width: 22px; height: 22px;
-    -unity-text-align: middle-center; border-radius: var(--radius-chip); margin-right: var(--sp-2);
-}
-.nom-slot--empty .nom-slot__num { background-color: var(--color-line); color: var(--color-muted); }
-.nom-slot__name { font-size: var(--fs-label); color: var(--color-chalk); flex-grow: 1; flex-shrink: 0; margin-right: var(--sp-1); }   /* 名前は flex-grow で押し、×を枠の右端へ（issue #707） */
-.nom-slot--empty .nom-slot__name { color: var(--color-faint); }
-/* 指名中の枠を外す×（issue #707）。 */
-.nom-slot__x {
-    flex-shrink: 0; width: 22px; height: 22px; -unity-text-align: middle-center;
-    font-size: var(--fs-label); color: var(--color-muted); border-radius: var(--radius-chip);
-}
-.nom-slot__x:hover { color: var(--sky); background-color: var(--color-panel-hover); }
+.tp-root .tp-coach__head { width: 150px; flex-shrink: 0; margin-right: 14px; }
+.tp-root .tp-coach__title { font-size: 18px; letter-spacing: 1.4px; color: var(--sbk-text); }
+.tp-root .tp-coach__count { flex-direction: row; align-items: flex-end; margin-top: 2px; }
+.tp-root .tp-coach__count-num { font-size: 14px; color: var(--sbk-text); }
+.tp-root .tp-coach__count-cap { font-size: 12px; color: var(--sbk-sub); margin-left: 3px; margin-bottom: 1px; }
+.tp-root .tp-coach__slots { flex-direction: row; align-items: center; }
 
-/* ═══ ROSTER TABLE（全幅） ═══ */
-.tp-table { flex-grow: 1; flex-direction: column; }
-.tp-toolbar {
+/* 1枠：300×50。指名中はスクールカラーの2px枠＋6%の地（C# で色を流す）。空きは点線（DashedFrame）。 */
+.tp-root .tp-slot {
     flex-shrink: 0;
+    width: 300px; height: 50px;
+    border-radius: 10px;
+    border-width: 2px; border-color: rgba(0, 0, 0, 0);
     flex-direction: row; align-items: center;
-    height: var(--h-toolbar); background-color: var(--color-strip);
-    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line);
-    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    padding: 0 8px 0 12px;
+    margin-right: 14px;
 }
-.tp-toolbar__title { font-size: var(--fs-body); color: var(--color-chalk); }
-.tp-toolbar__count { font-size: var(--fs-th); color: var(--color-muted); margin-left: var(--sp-2); }
-.tp-toolbar__spacer { flex-grow: 1; }
-.tp-toolbar__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-left: 14px; margin-right: var(--sp-1); letter-spacing: 1px; }
-.tp-toolbar__group { flex-direction: row; }
+.tp-root .tp-slot--empty { justify-content: center; padding: 0; border-width: 0; }
+.tp-root .tp-slot__star { width: 18px; height: 18px; flex-shrink: 0; color: var(--sbk-star); margin-right: 10px; }
+.tp-root .tp-slot__num { margin-right: 10px; }
+.tp-root .tp-slot__body { flex-grow: 1; flex-shrink: 1; min-width: 0; flex-direction: row; align-items: center; margin-right: 10px; overflow: hidden; }
+.tp-root .tp-slot__name { font-size: 17px; letter-spacing: 1px; color: var(--sbk-text); }
+.tp-root .tp-slot__meta { font-size: 12px; color: var(--sbk-sub); margin-left: 10px; }
+.tp-root .tp-slot__x {
+    width: 30px; height: 30px; flex-shrink: 0;
+    border-radius: 6px; border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--sbk-mute);
+    align-items: center; justify-content: center;
+    padding: 0;
+}
+.tp-root .tp-slot__x:hover { background-color: var(--sbk-rule-soft); }
+.tp-root .tp-slot__x .licon { width: 16px; height: 16px; }
+.tp-root .tp-slot__empty { flex-direction: row; align-items: center; }
+.tp-root .tp-slot__empty-t { font-size: 13px; color: var(--sbk-mute); }
+.tp-root .tp-slot__empty-star { width: 14px; height: 14px; color: var(--sbk-mute); margin: 0 4px; }
 
-/* header row（列幅は --col-* をデータと共有） */
-.tp-thead {
+/* 背番号の箱（白地＋墨の1.5px枠・角丸3） */
+.tp-root .tp-num {
     flex-shrink: 0;
-    flex-direction: row; align-items: center;
-    height: var(--h-thead); background-color: var(--color-panel-deep);
-    border-bottom-width: 0;
-    /* 見出しの列開始位置を行パネルの内容インセットに合わせる。スコアブック（.sbk）では行の井の左右余白が0・
-       枠が1px（scorebook.uss の .sbk .row-well / .sbk .row-panel）なので、左右とも 枠1+pad16=17
-       （＋スクロールバー用ガター6は .tp-thead__gutter）。 */
-    padding-left: 17px; padding-right: 17px;
+    height: 22px; min-width: 28px;
+    background-color: var(--sbk-card);
+    border-width: 1.5px; border-color: var(--sbk-patch-line); border-radius: 3px;
+    font-size: 12px; color: var(--sbk-text);
+    -unity-text-align: middle-center;
+    padding: 0 4px;
 }
-/* 固定列は flex-shrink: 0（付けないと隣の flex-grow 列の中身が広い行だけ幅を奪われ列がずれる＝横ずれの真因）。
-   見出しLabelは既定 margin/padding を持つので 0 に潰し、データ列(VisualElement)と列境界を一致させる。 */
-.tp-th { font-size: var(--fs-th); color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
-.tp-th--nom { width: var(--col-nom); }
-.tp-th--id { width: var(--col-id); }
-.tp-th--rank { width: var(--col-rank); }
-.tp-th--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
-.tp-th--copy { width: var(--col-copy); -unity-text-align: middle-center; }
-/* ヘッダーは ScrollView の外にあるため縦スクロールバー分だけ広い。右端に同幅のガターを置いて
-   flex-grow の設定列を行内容と同じ幅にし、複製列をデータと揃える。 */
-.tp-thead__gutter { width: var(--scrollbar-w); flex-shrink: 0; }
+.tp-root .tp-num--row { width: 30px; min-width: 30px; padding: 0; }
 
-.tp-scroll { flex-grow: 1; }
-
-/* rows：行の器（白パネル＋インク枠＋ベタ影＋行間・ホバー・選択）は共通部品 .row-panel が担う
-   （components.uss）。ここでは列幅など TrainingPlan 固有のセルだけを定義する。
-   列幅はヘッダー（tp-th--*）と同一 --col-* を参照する。 */
-.tcell { flex-direction: row; align-items: center; flex-shrink: 0; }
-.tcell--id { width: var(--col-id); }
-.tcell--rank { width: var(--col-rank); }
-.tcell--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
-.tcell--copy { width: var(--col-copy); justify-content: center; }
-.tcell--nom { width: var(--col-nom); }
-
-/* 個別指導の指名★（issue #707）。指名中＝空色の塗り（モーダルの .nom-btn--on と同じ色）・未指名＝線の色。
-   行ごとに反復する導線なのでアンバーにしない（UI原則②）。 */
-.nom-star {
-    width: 34px; height: 34px; -unity-text-align: middle-center;
-    font-size: 20px; color: var(--color-line);
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
-}
-.nom-star:hover { border-color: var(--sky); color: var(--sky); }
-.nom-star--on { background-color: var(--sky); border-color: var(--sky); color: var(--color-on-fill); }
-.nom-star--on:hover { color: var(--color-on-fill); }
-/* カテゴリ別ランク4組は独立列に出したので折返し禁止で1行に固定する（Issue #273）。 */
-.tcell--rank .cat-rank-chips { flex-wrap: nowrap; }
-
-.trow__num { margin-right: 12px; }   /* .num-badge を継承 */
-.trow__idtext { flex-direction: column; }
-/* 上段＝名前＋学年＋投打を同じ行に（Issue #273。ベンチ外チップ撤去で全行この1段のみ＝Issue #294）。 */
-.trow__top { flex-direction: row; align-items: center; }
-.trow__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-2); }
-.trow__name:hover { color: var(--sky); }
-
-/* preset-open：行の「練習設定」列＝プリセット名＋主眼メニュー｜配分積み上げバー｜変更（クリックでモーダル）。
-   旧「余白の正体」（space-between の空き帯）に積み上げバーを渡す（Issue #133-③・案B）。 */
-.preset-open {
-    flex-direction: row; align-items: center; justify-content: space-between;
-    height: 52px; flex-grow: 1;
-    background-color: var(--sf-inset);
-    border-width: var(--border-w); border-color: transparent; border-radius: var(--radius-card);
-    padding-left: 16px; padding-right: 14px; margin-right: var(--sp-4);
-}
-.preset-open:hover { border-color: var(--line-focus); background-color: var(--sf-hover); }
-.preset-open__texts { flex-direction: column; flex-grow: 0; flex-shrink: 0; width: 240px; }
-/* 積み上げバー（部品 .stack-bar）を空き帯いっぱいに伸ばす。テキスト（主眼メニュー名）が凡例を兼ねる。 */
-.preset-open__bar { flex-grow: 1; margin-left: var(--sp-3); margin-right: var(--sp-4); }
-/* 2行は器（52px−枠）に収める（issue #734）。Label 既定の padding/margin（4px）とフォントの行送り（20px→31px）を
-   そのまま積むと中身が87pxになり行枠へはみ出す＝余白を外し、各行の高さを字面＋αに固定して縦中央に置く。 */
-.preset-open__label {
-    font-size: 20px; color: var(--color-chalk);
-    height: 25px; margin: 0; padding: 0; -unity-text-align: middle-left;
-}
-.preset-open__label--custom { color: var(--sky); }
-.preset-open__focus {
-    font-size: var(--fs-label); color: var(--color-muted);
-    height: 23px; margin: 0; padding: 0; -unity-text-align: middle-left;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* 行ごとに反復する導線なのでアクセントにしない（30行ぶん黄が並ぶと希少性が壊れる＝UI原則②）。 */
-.preset-open__go { font-size: var(--fs-label); color: var(--color-muted); flex-shrink: 0; }
-
-/* copy（列見出しと同じ「複製」2字表記, Issue #273 ④。1字幅の正方形ボタンから拡幅） */
-.copy-btn {
-    width: 42px; height: 34px; -unity-text-align: middle-center;
-    background-color: var(--color-panel-deep); color: var(--sky);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: var(--fs-cap);
-}
-.copy-btn:hover { border-color: var(--sky); background-color: var(--color-panel-hover); }
-
-/* ═══ ability bar 行（伸びバー・プリセット強調で共用） ═══ */
-/* 伸びバーは部品辞書 components.uss の .abil-row に一本化（issue #3）。ここは空状態の文言だけ残す。 */
-.gain-none { font-size: var(--fs-label); color: var(--color-faint); margin-top: var(--sp-1); }
-
-/* ═══ 統合モーダル（tp-modal = modal-scrim, card = modal-card。issue #222 で全面刷新） ═══
-   1440×840（パネル1600×900基準）・プリセット帯＋3カラム高密度化でスクロールを撲滅する。
-   design-19 デーゲームNBスキンへ追いつかせる（旧ダークREFINEブロックは廃止・白地カード＋インク枠＋
-   ベタ影＋赤CTAへ統一）。区切りは罫線でなく面の明度（--sf-card/--sf-raise/--sf-base）で作る（UI原則④）。 */
-.tpm-card {
-    width: 1440px; max-width: 96%;
-    height: 840px; max-height: 96%;
-    background-color: var(--sf-card);
-    border-color: var(--ink);
-    border-top-width: var(--nb-border-card); border-left-width: var(--nb-border-card);
-    border-right-width: var(--nb-card-edge); border-bottom-width: var(--nb-card-edge);
-    border-radius: 0;
+/* ═══ ② 部員別 練習割当 ═══ */
+.tp-root .tp-table {
+    flex-grow: 1; min-height: 0;
+    flex-direction: column;
+    background-color: var(--sbk-sheet);
+    border-radius: 14px;
     overflow: hidden;
 }
-.tpc-card {
-    width: 720px; max-width: 86%; max-height: 82%;
-    border-color: var(--ink);
-    border-top-width: var(--nb-border-card); border-left-width: var(--nb-border-card);
-    border-right-width: var(--nb-card-edge); border-bottom-width: var(--nb-card-edge);
-    border-radius: 0;
-}
-
-/* ── ヘッダー：前後選手・背番号・名前・委任・個別指導・閉じる（issue #222⑥） ── */
-.tpm-head {
+.tp-root .tp-toolbar {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: 12px; padding-bottom: 12px;
-    background-color: var(--sf-raise);
-    border-bottom-width: var(--nb-border); border-bottom-color: var(--ink);
+    height: 58px;
+    margin: 0 20px;
+    border-bottom-width: 2px; border-bottom-color: var(--sbk-text);
 }
-.tpm-nav-btn {
-    font-size: var(--fs-cap); color: var(--sky); background-color: var(--sf-card);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
-    padding-left: 10px; padding-right: 10px; padding-top: var(--sp-1); padding-bottom: var(--sp-1);
-    margin-left: var(--sp-1); margin-right: var(--sp-1); flex-shrink: 0;
-}
-.tpm-nav-btn:hover { border-color: var(--sky); }
-.tpm-nav-btn:disabled { opacity: 0.35; }
-.tpm-head__id { flex-direction: column; margin-left: var(--sp-2); }
-.tpm-head__namerow { flex-direction: row; align-items: center; }
-.tpm-head__metarow { flex-direction: row; align-items: center; margin-top: 2px; }
-.tpm-head__meta { margin-left: 0; }
-.tpm-head__cats { margin-left: var(--sp-2); }
-.tpm-delegate { flex-direction: row; align-items: center; margin-left: var(--sp-3); margin-right: var(--sp-3); }
-.tpm-delegate .switch { margin-right: var(--sp-2); }
-.tpm-delegate__state { font-size: var(--fs-cap); color: var(--color-muted); width: 44px; }
-.tpm-close {
-    width: 32px; height: 32px; -unity-text-align: middle-center;
-    background-color: var(--sf-card); color: var(--color-chalk);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0; font-size: var(--fs-th);
-}
-.tpm-close:hover { border-color: var(--ink); }
+.tp-root .tp-toolbar__title { font-size: 18px; letter-spacing: 1.4px; color: var(--sbk-text); margin-right: 14px; }
+.tp-root .tp-toolbar__count-num { font-size: 14px; color: var(--sbk-text); }
+.tp-root .tp-toolbar__count-cap { font-size: 12px; color: var(--sbk-sub); margin-left: 3px; }
+.tp-root .tp-toolbar__spacer { flex-grow: 1; }
+.tp-root .tp-toolbar__cap { font-size: 12px; color: var(--sbk-sub); margin-right: 10px; }
+.tp-root .tp-toolbar__cap--gap { margin-left: 18px; }
 
-/* ── タブ（配分⇄能力・issue #327③）：プリセット帯の左端に置く＝縦の帯を増やさない
-   （伸びる能力14行=474pxで縦は満杯。帯を足すと1440×840で②-bの見切れが再発する）。
-   見た目はメンバー設定の比較タブ（.ms-tab）と同型のセグメント切替を、モーダルのNBスキン
-   （--sf-card地＋--color-line枠＋選択=--sky。.tpm-preset-chip と同じ配色系）で組む。 */
-.tpm-tabs { flex-direction: row; flex-shrink: 0; margin-right: var(--sp-4); }
-.tpm-tab {
-    width: 92px; height: 34px;
+/* つまみ型の切り替え（地 #ECE8DF・余白3・角丸9。選択中は白地＋淡い1px枠＋墨の太字） */
+.tp-root .tp-seg {
+    flex-direction: row;
+    background-color: var(--sbk-rule-soft);
+    border-radius: 9px;
+    padding: 3px;
+}
+.tp-root .tp-seg__item {
+    height: 30px;
+    padding: 0 14px;
+    border-radius: 6px;
+    border-width: 1px; border-color: rgba(0, 0, 0, 0);
+    font-size: 13px; color: var(--sbk-sub);
     -unity-text-align: middle-center;
-    font-size: var(--fs-label); color: var(--color-muted);
-    background-color: var(--sf-card);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
-    margin: 0 2px 0 0; padding: 0;
 }
-.tpm-tab:hover { color: var(--color-chalk); }
-.tpm-tab--on, .tpm-tab--on:hover { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
+.tp-root .tp-seg__item:hover { color: var(--sbk-text); }
+.tp-root .tp-seg__item--on { background-color: var(--sbk-card); border-color: var(--sbk-card-line); color: var(--sbk-text); }
 
-/* ── プリセット帯：横1行のチップ列＋残りバジェット（常時視界内・issue #222③④） ── */
-.tpm-preset-strip {
-    flex-shrink: 0;
-    flex-direction: row; align-items: center;
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
-    background-color: var(--sf-raise);
-    border-bottom-width: var(--nb-border); border-bottom-color: var(--ink);
-}
-.tpm-preset-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
-.tpm-preset-chip {
-    font-size: var(--fs-cap); color: var(--color-chalk); background-color: var(--sf-card);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
-    padding-left: 12px; padding-right: 12px; padding-top: 5px; padding-bottom: 5px; margin-right: var(--sp-2);
-}
-.tpm-preset-chip:hover { border-color: var(--sky); }
-.tpm-preset-chip--on { background-color: var(--sky); color: var(--color-on-fill); border-color: var(--sky); }
-.tp-ed-section__lock { font-size: var(--fs-cap); color: var(--color-warn); margin-left: var(--sp-3); }
-.tpm-budget { flex-shrink: 0; width: 220px; margin-left: var(--sp-3); }
-.tp-ed-bar__remain { font-size: var(--fs-cap); color: var(--color-muted); margin-bottom: 3px; }
-.tp-ed-bar__remain--limit { color: var(--color-warn); }   /* 残り0分は警告色で強調（issue #222③） */
-
-/* ── 本体：3カラム（野手/投手練習｜守備｜伸びる能力）。21+13行がスクロールなしで一望（issue #222①） ── */
-.tpm-body3 {
-    flex-direction: row; flex-grow: 1; flex-shrink: 1; min-height: 0;
-    background-color: var(--sf-base);
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-3); padding-bottom: var(--sp-3);
-}
-.tpm-col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: column; margin-right: 18px; }
-.tpm-col--growth { margin-right: 0; min-height: 0; }
-.tpm-col--scroll { min-height: 0; }   /* 中の ScrollView を欄の高さで止める（issue #1533） */
-.tpm-col--last { margin-right: 0; }   /* 能力タブの右端カラム（issue #327③） */
-.tpm-col__title { font-size: var(--fs-cap); color: var(--color-chalk); letter-spacing: 1px; flex-shrink: 0; margin-bottom: var(--sp-2); }
-.tpm-col__list { flex-direction: column; flex-shrink: 0; }
-/* 能力タブの球種チャート（issue #735）。投手能力の5行の下の空きを埋める（選手詳細と同じ部品）。 */
-.tpm-pitchchart { flex-grow: 1; min-height: 240px; margin-top: var(--sp-3); }
-/* 節見出し（野手練習/投手練習・Issue #133-⑥）。列見出しより一段淡い従属見出し。 */
-.tpm-menugroup { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: 3px; }
-/* 伸びる能力カラムは部品辞書のコンパクト行（.abil-row--compact＝行高32px固定・間隔2px）で
-   14行を一望に収める（1440×840で 14×32+13×2=474px ≤ 欄477px・issue #327②-b）。 */
-/* 1440×840 未満のウィンドウでは詰めても入り切らないことがある。他2列は密度優先で現状維持のまま、
-   伸びる能力カラムだけスクロールを許容し、黙って行が切り落とされる事故を防ぐ（issue #327②-b）。 */
-.tpm-growth-scroll { flex-grow: 1; min-height: 0; }
-
-/* ── menu slot（issue #222①②③・攻撃メニューと守備ポジションで共用・行高32px基準） ── */
-.mslot {
+/* 列見出し＋行で共通の列幅（44｜300｜188｜残り｜84｜40・間隔14） */
+.tp-root .tp-thead {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
     height: 32px;
-    background-color: var(--sf-card);
-    border-width: var(--border-w); border-color: var(--color-line);
-    padding-left: var(--sp-2); padding-right: 6px;
-    margin-bottom: 4px;
+    margin: 0 20px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft);
 }
-.mslot--locked { opacity: 0.5; }
-.mslot__icon {
-    width: 22px; height: 22px; flex-shrink: 0; -unity-text-align: middle-center;
-    background-color: var(--color-panel-deep); color: var(--ink);
-    border-radius: 0; margin-right: 6px; font-size: var(--fs-cap);
-}
-.mslot__name { width: var(--col-mslot-name); flex-shrink: 0; font-size: var(--fs-cap); color: var(--color-chalk); }
-.mslot__meta { width: 40px; flex-shrink: 0; font-size: var(--fs-cap); color: var(--color-muted); -unity-text-align: middle-right; margin-right: var(--sp-1); }
-.mslot__slider { margin-left: var(--sp-1); margin-right: var(--sp-2); }
-.mslot__min { width: var(--col-mslot-min); flex-shrink: 0; justify-content: flex-end; margin-right: 2px; }
-.mslot__min .nu-num { font-size: var(--fs-cap); color: var(--color-chalk); }
-.mslot__min .nu-unit { font-size: var(--fs-cap); }
-/* ±ボタンはこの画面だけコンパクトサイズへ縮小（部品既定28pxは密度が要る他画面向け）。 */
-.mslot .step-btn { width: 22px; height: 22px; font-size: var(--fs-cap); margin-left: 2px; margin-right: 0; border-radius: 0; }
+.tp-root .tp-th { font-size: 12px; color: var(--sbk-mute); }
+.tp-root .tp-col--nom { width: 44px;  flex-shrink: 0; }
+.tp-root .tp-col--id { width: 300px; flex-shrink: 0; margin-left: 14px; }
+.tp-root .tp-col--rank { width: 188px; flex-shrink: 0; margin-left: 14px; }
+.tp-root .tp-col--menu { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 14px; }
+.tp-root .tp-col--go { width: 84px;  flex-shrink: 0; margin-left: 14px; }
+.tp-root .tp-col--copy { width: 40px;  flex-shrink: 0; margin-left: 14px; }
+.tp-root .tp-thead__gutter { width: var(--scrollbar-w); flex-shrink: 0; }
 
-/* ── フッター：週テンプレ（呼出＋削除）＋元に戻す＋決定（issue #222⑤⑥） ── */
-.tpm-foot {
+.tp-root .tp-scroll { flex-grow: 1; min-height: 0; }
+.tp-root .tp-rows { padding: 0 20px; }
+
+/* 選手の行：高さ56・下に淡い1px線 */
+.tp-root .trow {
+    flex-direction: row; align-items: center;
+    height: 56px; flex-shrink: 0;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft);
+}
+.tp-root .trow:hover { background-color: var(--sbk-paper); }
+.tp-root .tp-cell { flex-direction: row; align-items: center; }
+
+/* 指導：星のボタン（34角・角丸8）。未指名は線画の星、指名中は塗りの星＋金の地 */
+.tp-root .tp-star {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    border-width: 1px; border-color: rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+    align-items: center; justify-content: center;
+    padding: 0;
+    color: var(--sbk-star-off);
+}
+.tp-root .tp-star:hover { border-color: var(--sbk-card-line-hover); }
+.tp-root .tp-star .licon { width: 20px; height: 20px; }
+.tp-root .tp-star--on { background-color: var(--sbk-star-bg); color: var(--sbk-star); }
+
+/* 選手：背番号の箱・名前（明朝18）・学年と投打 */
+.tp-root .tp-cell--id { overflow: hidden; }
+.tp-root .trow__name { font-size: 18px; letter-spacing: 1px; color: var(--sbk-text); margin-left: 12px; }
+.tp-root .trow__meta { font-size: 12px; color: var(--sbk-sub); margin-left: 12px; }
+
+/* 能力：「打・走・守・投」の見出しとランクのチップ（22角）の組を間隔10で */
+.tp-root .tp-ranks { flex-direction: row; align-items: center; }
+.tp-root .tp-ranks__pair { flex-direction: row; align-items: center; margin-right: 10px; }
+.tp-root .tp-ranks__label { font-size: 11px; color: var(--sbk-mute); margin-right: 4px; }
+.tp-root .tp-chip22 { width: 22px; min-width: 22px; height: 22px; margin: 0; padding: 0; font-size: 12px; }
+.tp-root .tp-chip20 { width: 20px; min-width: 20px; height: 20px; margin: 0; padding: 0; font-size: 11px; }
+
+/* 練習メニュー：型の名前（104）｜横棒（残り）・間隔14 */
+.tp-root .tp-menu__type { width: 104px; flex-shrink: 0; font-size: 14px; color: var(--sbk-text); }
+.tp-root .tp-menu__bar { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 14px; }
+
+/* 変更・複製 */
+.tp-root .tp-go {
+    width: 84px; height: 36px;
+    border-radius: 8px;
+    border-width: 1.5px; border-color: var(--sbk-text);
+    background-color: rgba(0, 0, 0, 0);
+    flex-direction: row; align-items: center; justify-content: center;
+    padding: 0;
+}
+.tp-root .tp-go:hover { background-color: var(--sbk-card); }
+.tp-root .tp-go__t { font-size: 13px; color: var(--sbk-text); }
+.tp-root .tp-go .licon { width: 14px; height: 14px; color: var(--sbk-text); margin-left: 4px; }
+.tp-root .tp-copy {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    border-width: 1px; border-color: var(--sbk-rule);
+    background-color: rgba(0, 0, 0, 0);
+    align-items: center; justify-content: center;
+    padding: 0;
+    color: var(--sbk-info);
+}
+.tp-root .tp-copy:hover { background-color: var(--sbk-card); }
+.tp-root .tp-copy .licon { width: 18px; height: 18px; }
+
+/* ═══ 練習メニューの配分（ポップアップ） ═══ */
+.tp-root .tpm-scrim { background-color: var(--sbk-ink-scrim); }
+.tp-root .tpm-card {
+    position: absolute;
+    left: 48px; right: 48px; top: 34px; bottom: 34px;
+    background-color: var(--sbk-sheet);
+    border-width: 0;
+    border-radius: 18px;
+    overflow: hidden;
+}
+.tp-root .tpm-cap { font-size: 12px; color: var(--sbk-sub); }
+
+/* アイコンだけの四角いボタン（前・次・閉じる） */
+.tp-root .tpm-iconbtn {
+    width: 38px; height: 38px; flex-shrink: 0;
+    border-radius: 9px;
+    border-width: 1px; border-color: var(--sbk-rule);
+    background-color: var(--sbk-card);
+    align-items: center; justify-content: center;
+    padding: 0;
+    color: var(--sbk-text);
+}
+.tp-root .tpm-iconbtn .licon { width: 18px; height: 18px; }
+.tp-root .tpm-iconbtn:hover { border-color: var(--sbk-mute); }
+.tp-root .tpm-iconbtn:disabled { color: var(--sbk-rule); }
+.tp-root .tpm-iconbtn--next { margin-left: 6px; }
+.tp-root .tpm-close { width: 40px; height: 40px; border-width: 0; background-color: var(--sbk-rule-soft); margin-left: 14px; }
+
+/* ① 選手の見出し（高さ92・下に淡い1px線） */
+.tp-root .tpm-head {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
-    background-color: var(--sf-raise);
-    border-top-width: var(--nb-border); border-top-color: var(--ink);
+    height: 92px;
+    padding: 0 28px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft);
 }
-.tp-tpl__title { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-3); }
-.tp-tpl__list { flex-direction: row; flex-wrap: wrap; align-items: center; }
-.tpl-chip {
-    flex-direction: row; align-items: center;
-    background-color: var(--sf-card);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
-    padding-left: 10px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; margin-right: var(--sp-2);
+.tp-root .tpm-head__num {
+    width: 44px; height: 34px; flex-shrink: 0;
+    background-color: var(--sbk-card);
+    border-width: 2px; border-color: var(--sbk-text); border-radius: 4px;
+    font-size: 18px; color: var(--sbk-text);
+    -unity-text-align: middle-center;
+    margin-left: 18px;
 }
-.tpl-chip:hover { border-color: var(--sky); }
-.tpl-chip--locked { opacity: 0.5; }
-.tpl-chip--none { color: var(--color-faint); background-color: transparent; border-color: transparent; }
-.tpl-chip__label { font-size: var(--fs-cap); color: var(--color-chalk); }
-.tpl-chip__del { font-size: var(--fs-cap); color: var(--color-muted); margin-left: var(--sp-2); }
-.tpl-chip__del:hover { color: var(--color-warn); }
-.tp-tpl__save {
-    font-size: var(--fs-cap); color: var(--sky);
-    background-color: var(--sf-card); border-width: var(--border-w); border-color: var(--sky); border-radius: 0;
-    padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: 4px; padding-bottom: 4px; margin-left: var(--sp-2);
-}
-.tp-tpl__save:hover { background-color: var(--color-panel-hover); }
-.tp-ed-head__spacer { flex-grow: 1; }
-.tpm-revert {
-    font-size: var(--fs-cap); color: var(--color-chalk);
-    background-color: var(--sf-card); border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
-    padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: 6px; padding-bottom: 6px; margin-right: var(--sp-3);
-}
-.tpm-revert:hover { border-color: var(--ink); }
-.tpm-done {
-    font-size: var(--fs-label); color: var(--color-on-fill); background-color: var(--color-cta);
-    border-width: var(--border-w); border-color: var(--color-cta); border-radius: 0;
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
-}
-.tpm-done:hover { background-color: var(--color-cta-hi); }
+.tp-root .tpm-head__id { margin-left: 18px; }
+.tp-root .tpm-head__name { font-size: 28px; letter-spacing: 2.2px; color: var(--sbk-text); }
+.tp-root .tpm-head__metarow { flex-direction: row; align-items: center; margin-top: 4px; }
+.tp-root .tpm-head__meta { font-size: 13px; color: var(--sbk-sub); margin-right: 12px; }
+.tp-root .tpm-head__cats .tp-ranks__pair { margin-right: 8px; }
 
-/* ── 選択選手ヘッダーの部品（モーダルで再利用） ── */
-.tp-ed-head__meta { font-size: var(--fs-cap); color: var(--color-muted); white-space: normal; }
-.tp-ed-id {
-    flex-shrink: 0;
-    width: 50px; height: 50px;
-    align-items: center; justify-content: center; flex-direction: column;
-    border-width: var(--border-w); border-color: var(--ink); border-radius: 0; margin-right: var(--sp-3);
+/* 個別指導のボタン（高さ40・角丸9）。枠の太さは指名中/未指名で 1.5 に揃える＝大きさを変えない */
+.tp-root .tpm-nom {
+    height: 40px;
+    border-radius: 9px;
+    border-width: 1.5px; border-color: var(--sbk-rule);
+    background-color: var(--sbk-card);
+    flex-direction: row; align-items: center;
+    padding: 0 16px;
+    color: var(--sbk-info);
 }
-.tp-ed-id__cap { font-size: 12px; color: var(--color-muted); letter-spacing: 1px; }
-.tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--color-chalk); }
-.tp-ed-who__name { font-size: var(--fs-body); color: var(--color-chalk); margin-right: var(--sp-2); }
-.nom-btn {
-    font-size: var(--fs-cap); color: var(--sky);
-    background-color: var(--sf-card); border-width: var(--border-w); border-color: var(--sky); border-radius: 0;
-    padding-left: var(--sp-2); padding-right: var(--sp-2); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
+.tp-root .tpm-nom .licon { width: 16px; height: 16px; margin-right: 8px; }
+.tp-root .tpm-nom__t { font-size: 14px; color: var(--sbk-info); }
+.tp-root .tpm-nom--on { background-color: var(--sbk-star-bg); border-color: var(--sbk-star); color: var(--sbk-star); }
+.tp-root .tpm-nom--on .tpm-nom__t { color: var(--sbk-star-fg); }
+
+.tp-root .tpm-delegate { flex-direction: row; align-items: center; margin-left: 14px; }
+.tp-root .tpm-delegate .switch { margin-right: 8px; }
+.tp-root .tpm-delegate__state { font-size: 13px; color: var(--sbk-info); }
+
+/* ② メニューの型の行（高さ76） */
+.tp-root .tpm-presetrow {
     flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 76px;
+    padding: 0 28px;
 }
-.nom-btn:hover { background-color: var(--color-panel-hover); }
-.nom-btn--on, .nom-btn--on:hover { background-color: var(--sky); color: var(--color-on-fill); }
+.tp-root .tpm-presetrow > .tpm-cap { margin-right: 10px; }
+.tp-root .tpm-presets { flex-direction: row; align-items: center; }
+.tp-root .tpm-preset {
+    height: 40px;
+    padding: 0 16px;
+    margin-right: 10px;
+    border-radius: 9px;
+    border-width: 1px; border-color: var(--sbk-rule);
+    background-color: var(--sbk-card);
+    font-size: 14px; color: var(--sbk-info);
+    -unity-text-align: middle-center;
+}
+.tp-root .tpm-preset:hover { border-color: var(--sbk-mute); }
+.tp-root .tpm-preset--on, .tp-root .tpm-preset--on:hover { background-color: var(--sbk-text); border-color: var(--sbk-text); color: var(--color-on-fill); }
+.tp-root .tpm-preset--locked { opacity: 0.45; }
+.tp-root .tpm-lock { font-size: 12px; color: var(--sbk-mute); }
+
+.tp-root .tpm-budget { width: 250px; flex-shrink: 0; }
+.tp-root .tpm-budget__top { flex-direction: row; align-items: flex-end; height: 36px; }
+.tp-root .tpm-budget__top > .tpm-cap { margin-bottom: 6px; }
+.tp-root .tpm-budget__total { font-size: 28px; color: var(--sbk-text); }
+.tp-root .tpm-budget__total--short { color: var(--sbk-short); }
+.tp-root .tpm-budget__of { font-size: 14px; color: var(--sbk-sub); margin-left: 4px; margin-bottom: 5px; }
+.tp-root .tpm-budget__remain { font-size: 12px; color: var(--sbk-short); margin-right: 8px; margin-bottom: 6px; }
+.tp-root .tpm-budget__bar { margin-top: 4px; }
+.tp-root .tpm-budget__bar .lstack { background-color: var(--sbk-rule-soft); }
+
+/* ③ 本体（3列：残りの半分｜残りの半分｜440・間隔28） */
+.tp-root .tpm-body {
+    flex-grow: 1; min-height: 0;
+    flex-direction: row;
+    padding: 4px 28px 0 28px;
+}
+.tp-root .tpm-col { flex-grow: 1; flex-basis: 0; min-width: 0; margin-right: 28px; }
+.tp-root .tpm-list { flex-shrink: 0; }
+
+.tp-root .tpm-group {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 30px;
+    border-bottom-width: 2px; border-bottom-color: var(--sbk-text);
+}
+.tp-root .tpm-group--gap { margin-top: 14px; }
+.tp-root .tpm-group__name { font-size: 16px; letter-spacing: 1.3px; color: var(--sbk-text); }
+.tp-root .tpm-group__note { font-size: 12px; color: var(--sbk-mute); margin-left: 8px; }
+.tp-root .tpm-group__sum { font-size: 15px; color: var(--sbk-text); }
+.tp-root .tpm-group__unit { font-size: 12px; color: var(--sbk-sub); margin-left: 2px; }
+
+/* 練習の行：記号26｜項目名｜(適性44)｜棒92｜分数40｜増減62・間隔10 */
+.tp-root .mrow {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 34px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-faint);
+}
+.tp-root .mrow--tall { height: 42px; }
+.tp-root .mrow__icon {
+    width: 26px; height: 26px; flex-shrink: 0;
+    border-radius: 6px;
+    font-size: 13px; color: var(--color-on-fill);
+    -unity-text-align: middle-center;
+}
+.tp-root .mrow__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: 14px; color: var(--sbk-text); margin-left: 10px; }
+.tp-root .mrow__apt { width: 44px; flex-shrink: 0; flex-direction: row; align-items: center; margin-left: 10px; }
+.tp-root .mrow__apt-v { font-size: 12px; color: var(--sbk-mute); margin-left: 4px; }
+.tp-root .mrow__bar { width: 92px; flex-shrink: 0; margin-left: 10px; }
+.tp-root .mrow__min { width: 40px; flex-shrink: 0; flex-direction: row; align-items: flex-end; justify-content: flex-end; margin-left: 10px; }
+.tp-root .mrow__min-v { font-size: 17px; color: var(--sbk-text); }
+.tp-root .mrow__min-u { font-size: 11px; color: var(--sbk-text); margin-left: 1px; margin-bottom: 2px; }
+.tp-root .mrow__step {
+    width: 62px; height: 28px; flex-shrink: 0;
+    flex-direction: row;
+    margin-left: 10px;
+    border-width: 1px; border-color: var(--sbk-rule); border-radius: 7px;
+    background-color: var(--sbk-card);
+    overflow: hidden;
+}
+.tp-root .mrow__btn {
+    flex-grow: 1; flex-basis: 0;
+    height: 100%;
+    border-width: 0; border-radius: 0;
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 15px; color: var(--sbk-text);
+    -unity-text-align: middle-center;
+    padding: 0;
+}
+.tp-root .mrow__btn:hover { background-color: var(--sbk-paper); }
+.tp-root .mrow__btn--plus { border-left-width: 1px; border-left-color: var(--sbk-rule); }
+.tp-root .mrow__btn--off, .tp-root .mrow__btn--off:hover { color: var(--sbk-rule); background-color: rgba(0, 0, 0, 0); }
+.tp-root .mrow__btn--full, .tp-root .mrow__btn--full:hover { color: var(--sbk-mute-soft); background-color: rgba(0, 0, 0, 0); }
+/* 0分の行は薄く（記号30%・項目名と分数は淡色、項目名は細字） */
+.tp-root .mrow--zero .mrow__icon { opacity: 0.3; }
+.tp-root .mrow--zero .mrow__name, .tp-root .mrow--zero .mrow__min-v, .tp-root .mrow--zero .mrow__min-u { color: var(--sbk-mute); }
+
+/* 練習時間の棒（高さ8・地 #ECE8DF・塗りは項目の色・120分で満タン）。ドラッグで分数を変えられる */
+.tp-root .mrow__bar .ta-slider { flex-grow: 0; flex-basis: auto; width: 100%; height: 8px; border-width: 0; border-radius: 4px; background-color: var(--sbk-rule-soft); }
+.tp-root .mrow__bar .ta-slider__fill { border-radius: 4px; }
+
+/* この配分で伸びる能力（地 #F3F0E8・角丸12・余白 上下12 左右18・下18あける） */
+.tp-root .tpm-growth {
+    width: 440px; flex-shrink: 0;
+    background-color: var(--sbk-growth-bg);
+    border-radius: 12px;
+    padding: 12px 18px;
+    margin-bottom: 18px;
+}
+.tp-root .tpm-ggroup {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 26px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-well);
+}
+.tp-root .tpm-ggroup--gap { margin-top: 10px; }
+.tp-root .tpm-ggroup__name { font-size: 13px; color: var(--sbk-info); }
+.tp-root .tpm-ggroup__note { font-size: 11px; color: var(--sbk-mute); }
+.tp-root .tpm-glist { flex-shrink: 0; }
+
+/* 能力の行：能力名64｜ランク20｜数値34（右寄せ）｜伸びの棒（残り）・間隔10 */
+.tp-root .grow {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 26px;
+}
+.tp-root .grow--still { opacity: 0.45; }
+.tp-root .grow__name { width: 64px; flex-shrink: 0; font-size: 13px; color: var(--sbk-text); }
+.tp-root .grow__chip { margin-left: 10px; }
+.tp-root .grow__val { width: 34px; flex-shrink: 0; font-size: 13px; color: var(--sbk-text); -unity-text-align: middle-right; margin-left: 10px; }
+.tp-root .grow__track { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 10px; }
+.tp-root .grow__fill { height: 10px; border-radius: 3px; }
+.tp-root .grow__text { font-size: 13px; color: var(--sbk-info); margin-left: 10px; }
+.tp-root .grow__tag {
+    font-size: 11px; color: var(--color-on-fill);
+    border-radius: 4px;
+    padding: 1px 7px;
+    margin-left: 10px;
+}
+
+/* ④ 下の操作の行（高さ76・上に淡い1px線） */
+.tp-root .tpm-foot {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 76px;
+    padding: 0 28px;
+    border-top-width: 1px; border-top-color: var(--sbk-rule-soft);
+}
+.tp-root .tpm-foot > .tpm-cap { margin-right: 12px; }
+.tp-root .tpm-tplsel {
+    width: 220px; height: 42px; flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    background-color: var(--sbk-card);
+    border-width: 1px; border-color: var(--sbk-rule); border-radius: 9px;
+    padding: 0 12px 0 14px;
+}
+.tp-root .tpm-tplsel:hover { border-color: var(--sbk-mute); }
+.tp-root .tpm-tplsel__label { flex-grow: 1; font-size: 14px; color: var(--sbk-text); -unity-text-align: middle-left; }
+.tp-root .tpm-tplsel__label--none { color: var(--sbk-mute); }
+.tp-root .tpm-tplsel .licon { width: 16px; height: 16px; color: var(--sbk-info); }
+.tp-root .tpm-tplsel--locked { opacity: 0.45; }
+.tp-root .tpm-tplsave {
+    height: 42px;
+    margin-left: 12px;
+    padding: 0 16px;
+    border-radius: 9px;
+    border-width: 1px; border-color: var(--sbk-rule);
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 14px; color: var(--sbk-info);
+}
+.tp-root .tpm-tplsave:hover { background-color: var(--sbk-card); }
+.tp-root .tpm-revert {
+    height: 46px;
+    padding: 0 22px;
+    border-radius: 9px;
+    border-width: 1.5px; border-color: var(--sbk-text);
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 15px; color: var(--sbk-text);
+}
+.tp-root .tpm-revert:hover { background-color: var(--sbk-card); }
+.tp-root .tpm-done {
+    width: 160px; height: 46px;
+    margin-left: 12px;
+    border-radius: 9px;
+    border-width: 0;
+    font-size: 16px; letter-spacing: 3.2px; color: var(--color-on-fill);
+}
+
+/* 週テンプレートの一覧（選択欄の上に開く） */
+.tp-root .tpm-tplmenu {
+    position: absolute;
+    left: 125px; bottom: 66px;
+    width: 220px;
+    background-color: var(--sbk-card);
+    border-width: 1px; border-color: var(--sbk-rule); border-radius: 9px;
+    padding: 4px 0;
+    display: none;
+}
+.tp-root .tpm-tplmenu__item { flex-direction: row; align-items: center; height: 36px; padding: 0 6px 0 14px; }
+.tp-root .tpm-tplmenu__item:hover { background-color: var(--sbk-paper); }
+.tp-root .tpm-tplmenu__item--on .tpm-tplmenu__name { color: var(--sbk-text); }
+.tp-root .tpm-tplmenu__name { flex-grow: 1; font-size: 14px; color: var(--sbk-info); }
+.tp-root .tpm-tplmenu__del {
+    width: 28px; height: 28px;
+    border-width: 0; border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    align-items: center; justify-content: center;
+    padding: 0;
+    color: var(--sbk-mute);
+}
+.tp-root .tpm-tplmenu__del:hover { background-color: var(--sbk-rule-soft); }
+.tp-root .tpm-tplmenu__del .licon { width: 14px; height: 14px; }
 
 /* ═══ 複製ピッカー（tp-copy-modal・コピー元を選ぶ, Issue #133-⑤） ═══ */
-.tpc-head {
+.tp-root .tpc-card {
+    width: 760px; max-width: 86%; max-height: 82%;
+    background-color: var(--sbk-sheet);
+    border-width: 0;
+    border-radius: 18px;
+    overflow: hidden;
+}
+.tp-root .tpc-head {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: 14px; padding-bottom: 14px;
-    background-color: var(--sf-raise);
-    border-bottom-width: var(--nb-border); border-bottom-color: var(--ink);
+    height: 72px;
+    padding: 0 24px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft);
 }
-.tpc-scroll { flex-grow: 1; min-height: 0; }
-.tpc-list { padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
-.tpc-row {
+.tp-root .tpc-head__name { font-size: 22px; letter-spacing: 1.5px; color: var(--sbk-text); }
+.tp-root .tpc-head__cap { font-size: 13px; color: var(--sbk-sub); margin-left: 12px; }
+.tp-root .tpc-scroll { flex-grow: 1; min-height: 0; }
+.tp-root .tpc-list { padding: 4px 24px 12px 24px; }
+.tp-root .tpc-row {
     flex-direction: row; align-items: center;
-    padding-left: var(--sp-2); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
-    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line-soft);
+    height: 56px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft);
 }
-.tpc-row:hover { background-color: var(--color-row-hover); }
-.tpc-row__body { width: 190px; flex-shrink: 0; margin-left: var(--sp-2); }
-.tpc-row__name { font-size: var(--fs-body); color: var(--color-chalk); }
-.tpc-row__meta { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
-.tpc-row__plan { flex-grow: 1; flex-direction: column; margin-left: var(--sp-3); }
-.tpc-row__preset { font-size: var(--fs-label); color: var(--color-chalk); margin-bottom: 4px; }
-/* ピッカー行内の積み上げバーは行の全幅を使う（.preset-open__bar の余白を打ち消す） */
-.tpc-row__plan .preset-open__bar { margin-left: 0; margin-right: 0; }
+.tp-root .tpc-row:hover { background-color: var(--sbk-paper); }
+.tp-root .tpc-row__body { width: 190px; flex-shrink: 0; margin-left: 12px; }
+.tp-root .tpc-row__name { font-size: 16px; letter-spacing: 1px; color: var(--sbk-text); }
+.tp-root .tpc-row__meta { font-size: 12px; color: var(--sbk-sub); margin-top: 2px; }
+.tp-root .tpc-row__preset { width: 96px; flex-shrink: 0; font-size: 13px; color: var(--sbk-text); margin-left: 12px; }
+.tp-root .tpc-row__bar { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 12px; }
 
 /* toast */
-.tp-toast {
+.tp-root .tp-toast {
     position: absolute; bottom: 24px; left: 50%;
     translate: -50% 0;
-    background-color: var(--sky); color: var(--color-on-fill);
-    font-size: var(--fs-th); padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: 0;
+    background-color: var(--sbk-text); color: var(--color-on-fill);
+    font-size: 14px; padding: 10px 20px; border-radius: 9px;
     display: none;
 }

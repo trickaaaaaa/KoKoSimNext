@@ -115,6 +115,41 @@
 .stack-bar__seg--flyball    { background-color: var(--tm-flyball); }
 .stack-bar__seg--groundball { background-color: var(--tm-groundball); }
 
+/* ── 練習メニューの色（地）：tm-bg--X。記号・棒・区切りで共通（値は tokens.uss --tm-*） ── */
+.tm-bg--batting    { background-color: var(--tm-batting); }
+.tm-bg--power      { background-color: var(--tm-power); }
+.tm-bg--discipline { background-color: var(--tm-discipline); }
+.tm-bg--strength   { background-color: var(--tm-strength); }
+.tm-bg--defense    { background-color: var(--tm-defense); }
+.tm-bg--throwing   { background-color: var(--tm-throwing); }
+.tm-bg--baserun    { background-color: var(--tm-baserun); }
+.tm-bg--bunt       { background-color: var(--tm-bunt); }
+.tm-bg--pitching   { background-color: var(--tm-pitching); }
+.tm-bg--breaking   { background-color: var(--tm-breaking); }
+.tm-bg--velocity   { background-color: var(--tm-velocity); }
+.tm-bg--running    { background-color: var(--tm-running); }
+.tm-bg--defpos     { background-color: var(--tm-defpos); }
+.tm-bg--defpos-alt { background-color: var(--tm-defpos-alt); }
+.tm-bg--flyball    { background-color: var(--tm-flyball); }
+.tm-bg--groundball { background-color: var(--tm-groundball); }
+
+/* ── LabeledStackBar：区切りに名前と数を書く積み上げ横棒（練習画面のリデザイン）──
+   区切りは flex-grow で比例・間は2px・角は棒の外側だけ丸める（overflow で切る）。
+   余り（lstack__rest）は塗らない＝親の地が見える。文字は白・区切りより広ければ隠す（C# 側）。 */
+.lstack {
+    flex-direction: row;
+    height: 26px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.lstack__seg { height: 100%; flex-basis: 0; flex-shrink: 1; min-width: 0; align-items: center; justify-content: center; overflow: hidden; }
+.lstack__seg--next { margin-left: 2px; }
+.lstack__rest { height: 100%; flex-basis: 0; flex-shrink: 1; min-width: 0; }
+.lstack__txt { position: absolute; flex-direction: row; align-items: center; }
+/* 文字は「.lstack .x」（クラス2つ）で書く＝画面ルートの Label の余白リセット（クラス＋型）に負けない */
+.lstack .lstack__name { font-size: 11px; color: var(--color-on-fill); margin: 0; padding: 0; }
+.lstack .lstack__count { font-size: 11px; color: var(--color-on-fill); opacity: 0.8; margin: 0 0 0 4px; padding: 0; }
+
 /* ── TimeAllocSlider：練習時間ドラッグバー（issue #222②） ─
    トラックをクリック/ドラッグした位置を10分刻みへスナップして割り当てる。埋まっていない
    右側は未配分（＝伸ばせる余地）。委任中は .ta-slider--locked で静的表示（ポインタ配線なし）。 */

@@ -240,6 +240,81 @@ namespace KokoSim.Unity.Components
             return bar;
         }
 
+        // ===== LabeledStackBar（区切りに名前と数を書く積み上げ横棒・練習画面のリデザイン） =====
+
+        /// <summary>区切り1つぶんの入力。長さは <see cref="Weight"/> に比例（flex-grow）。</summary>
+        public sealed class LabeledStackSegment
+        {
+            public string ColorClass = "";  // 色クラス（tm-bg--X。値は tokens.uss --tm-*）
+            public float Weight;            // 長さの重み（練習なら分）
+            public string Name = "";        // 区切りの中に書く名前（空＝書かない）
+            public string Count = "";       // 名前の後ろに書く数（不透明度80%）
+            public string Tooltip = "";
+        }
+
+        /// <summary>
+        /// 積み上げ横棒。区切りは <see cref="LabeledStackSegment.Weight"/> を flex-grow に入れて比例させ、
+        /// 区切りの間を2pxあける。<paramref name="total"/>（練習なら1日の分数）に満たないぶんは色を塗らない
+        /// 余りとして右に残す。<paramref name="showText"/> なら区切りの中に名前と数を白で書き、
+        /// 区切りが文字より狭いときは文字を隠す（実際の幅で判定する＝重ならない）。
+        /// </summary>
+        public static VisualElement LabeledStackBar(IReadOnlyList<LabeledStackSegment> segments, float total, bool showText)
+        {
+            var bar = new VisualElement();
+            bar.AddToClassList("lstack");
+            var used = 0f;
+            var first = true;
+            foreach (var s in segments)
+            {
+                if (s.Weight <= 0f) continue;
+                used += s.Weight;
+                var seg = new VisualElement();
+                seg.AddToClassList("lstack__seg");
+                if (!first) seg.AddToClassList("lstack__seg--next");
+                first = false;
+                if (!string.IsNullOrEmpty(s.ColorClass)) seg.AddToClassList(s.ColorClass);
+                seg.style.flexGrow = s.Weight;
+                seg.tooltip = s.Tooltip;
+                if (showText && !string.IsNullOrEmpty(s.Name))
+                {
+                    var txt = new VisualElement();
+                    txt.AddToClassList("lstack__txt");
+                    txt.pickingMode = PickingMode.Ignore;
+                    var name = new Label(s.Name);
+                    name.AddToClassList("lstack__name");
+                    name.AddToClassList("f-body-bd");
+                    txt.Add(name);
+                    if (!string.IsNullOrEmpty(s.Count))
+                    {
+                        var cnt = new Label(s.Count);
+                        cnt.AddToClassList("lstack__count");
+                        cnt.AddToClassList("f-num");
+                        txt.Add(cnt);
+                    }
+                    seg.Add(txt);
+                    void Fit()
+                    {
+                        var room = seg.layout.width;
+                        var need = txt.layout.width;
+                        if (float.IsNaN(room) || float.IsNaN(need)) return;
+                        txt.style.visibility = need + 6f <= room ? Visibility.Visible : Visibility.Hidden;
+                    }
+                    seg.RegisterCallback<GeometryChangedEvent>(_ => Fit());
+                    txt.RegisterCallback<GeometryChangedEvent>(_ => Fit());
+                }
+                bar.Add(seg);
+            }
+            if (total > used)
+            {
+                var rest = new VisualElement();
+                rest.AddToClassList("lstack__rest");
+                if (!first) rest.AddToClassList("lstack__seg--next");
+                rest.style.flexGrow = total - used;
+                bar.Add(rest);
+            }
+            return bar;
+        }
+
         /// <summary>
         /// 練習メニュー → 積み上げバー色クラス（tokens.uss --tm-*）の対応（Issue #133・ユーザー確定
         /// 「メニュー別に色分け」）。ポジション別守備＋内外野汎用は判別不能な色数になるため defpos の

@@ -472,23 +472,54 @@ screens:
       - show: TrainingPlan
       - shot: 01-training-plan
 
+  - id: training-redesign
+    name: "練習画面のリデザイン（一覧・個別指導の帯・配分のポップアップ・週テンプレート・白と黄のスクールカラー）"
+    size: {w: 1600, h: 900}
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - show: TrainingPlan
+      - call: Nominate(0)
+      - call: Nominate(3)
+      - wait: 5
+      - shot: 01-list
+      - call: OpenModal(0)
+      - wait: 5
+      - shot: 02-modal
+      - click: template-save
+      - click: tpl-select
+      - wait: 3
+      - shot: 03-template-menu
+      - call: CancelModal()
+      - call: SchoolColorProbe.Set("#F4F2EC")
+      - call: Render()
+      - call: OpenModal(0)
+      - wait: 5
+      - shot: 04-modal-white
+      - call: CancelModal()
+      - call: SchoolColorProbe.Set("#F2C200")
+      - call: Render()
+      - wait: 5
+      - shot: 05-list-yellow
+      - call: OpenModal(3)
+      - wait: 5
+      - shot: 06-modal-yellow
+
   - id: training-plan-details-1287
-    name: "練習計画の細部（戻ると球種チャート・モーダルの状態・トースト・Esc。issue #1287）"
+    name: "練習計画の細部（戻るとモーダルの状態・トースト・Esc。issue #1287。能力タブは練習画面のリデザインで廃止）"
     steps:
       - new_game: {seed: 1}
       - show: TrainingPlan
       - call: OpenModal(0)
-      - click: tab-abil
       - wait: 5
-      - shot: 01-abil-first
+      - shot: 01-modal-first
       - show: HomeDashboard
       - show: TrainingPlan
       - wait: 5
       - shot: 02-after-return-closed
       - call: OpenModal(0)
-      - click: tab-abil
       - wait: 5
-      - shot: 03-abil-second
+      - shot: 03-modal-second
       - click: template-save
       - wait: 3
       - shot: 04-toast-over-scrim

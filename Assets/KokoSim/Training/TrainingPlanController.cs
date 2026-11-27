@@ -1,15 +1,19 @@
+using System.Collections.Generic;
+using KokoSim.Engine.Nation;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using UnityEngine;
 using UnityEngine.UIElements;
-using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
+using KokoSim.Unity.Components; // 部品辞書（RankChip / LabeledStackBar / DashedFrame / TimeAllocSlider）
+using KokoSim.Unity.Shell;      // LineIcon / SchoolAccent
 
 namespace KokoSim.Unity.Training
 {
     /// <summary>
-    /// 練習計画のコントローラ（設計書06 §3.3）。UIDocument（sourceAsset = TrainingPlan.uxml）へ
-    /// TrainingPlanState（ViewModel）をバインドする。共通トップバー・合宿バナー・個別指導3枠・
-    /// 部員別テーブル（背番号/総合/練習設定/複製・全幅）を動的生成し、設定編集は統合モーダル
-    /// （プリセット選択＋カスタム±30分＋守備適性＋伸びバー）で行う。
+    /// 練習画面のコントローラ（設計書06 §3.3・練習画面のリデザイン）。UIDocument（TrainingPlan.uxml）へ
+    /// TrainingPlanState（ViewModel）をバインドする。個別指導の帯（3枠）・部員別の練習割当（行＝練習名と分数を
+    /// 書いた横棒）・練習メニューの配分のポップアップ（タブなしの1画面：野手練習｜投手練習＋守備位置｜伸びる能力）を組む。
+    /// 機能の入口（指名・絞り込み・変更・複製・型・±・テンプレート・元に戻す・決定・前後・手動）は ViewModel のまま。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class TrainingPlanController : MonoBehaviour
@@ -19,17 +23,23 @@ namespace KokoSim.Unity.Training
         private static readonly (string Label, int Mode)[] BenchFilters =
             { ("全員", 0), ("ベンチ入り", 1), ("ベンチ外", 2) };
 
+        // 練習の行の棒が満タンになる分数の、1日の分数に対する割合（300分なら120分）。
+        private const float BarFullShareOfBudget = 0.4f;
+
+        // 空き枠の点線（--sbk-star-off と同じ色。DashedFrame は色を C# で受け取る部品）。
+        private static readonly Color EmptySlotDash = new Color32(0xC9, 0xC2, 0xB4, 0xFF);
+
         private TrainingPlanState _state;
         private VisualElement _root;
         private VisualElement _modal;
         private VisualElement _copyModal;
         private bool _modalOpen;
         // モーダルを開いている間は後ろの部員一覧を作り直さない（決定を押すまで一覧の表示を変えない・issue #1534）。
-        // 開いた瞬間の1回（選んだ行の強調）だけ描き、閉じたら最新に描き直す。
         private bool _rowsFrozen;
-        private bool _abilityTab;   // モーダルのタブ（false=配分／true=能力, issue #327③）
         private bool _copyOpen;     // 複製ピッカー（コピー元を選ぶ, Issue #133-⑤）
         private int _copyTarget;    // コピー先の選手索引
+        private bool _tplMenuOpen;  // 週テンプレートの一覧（選択欄から開く）
+        private Color _accent;
 
         private void OnEnable()
         {
@@ -38,20 +48,19 @@ namespace KokoSim.Unity.Training
             _modalOpen = false;
             _rowsFrozen = false;
             _copyOpen = false;
-            _abilityTab = false;
+            _tplMenuOpen = false;
             _copyTarget = 0;
-            _abilPitchChart = null;
             _menuSig = null;
-            _defenseSig = null;
             _menuRows.Clear();
-            _defenseRows.Clear();
             _toastJob = null;
             _root = GetComponent<UIDocument>().rootVisualElement;
             _modal = _root.Q<VisualElement>("tp-modal");
             _copyModal = _root.Q<VisualElement>("tp-copy-modal");
+            AddIcons();
             WireStaticButtons();
             WireOverlayClose(_modal, () => _modalOpen, CancelModal);   // 暗幕・Esc は「決定」以外＝取り消し（issue #1534）
             WireOverlayClose(_copyModal, () => _copyOpen, CloseCopyPicker);
+            WireTemplateMenuDismiss();
             Render();
         }
 
@@ -59,7 +68,23 @@ namespace KokoSim.Unity.Training
         {
             _toastJob?.Pause();
             _toastJob = null;
-            _abilPitchChart = null;
+        }
+
+        // UXML のアイコンだけのボタンに線画を差す（木は画面に戻るたびに作り直されるので毎回）。
+        private void AddIcons()
+        {
+            AddIcon("sel-prev", LineIcon.Kind.ChevronLeft);
+            AddIcon("sel-next", LineIcon.Kind.ChevronRight);
+            AddIcon("modal-close", LineIcon.Kind.Close);
+            AddIcon("copy-close", LineIcon.Kind.Close);
+            AddIcon("tpl-select", LineIcon.Kind.ChevronDown);
+        }
+
+        private void AddIcon(string name, LineIcon.Kind kind)
+        {
+            var host = _root.Q<VisualElement>(name);
+            if (host == null || host.Q<LineIcon>() != null) return;
+            host.Add(new LineIcon(kind));
         }
 
         /// <summary>スクリムクリック・Escで閉じる（issue #222⑥）。カード内クリックは伝播停止し、
@@ -77,27 +102,46 @@ namespace KokoSim.Unity.Training
             card?.RegisterCallback<ClickEvent>(e => e.StopPropagation());
         }
 
+        // 週テンプレートの一覧は、選択欄と一覧の外を押したら閉じる。
+        private void WireTemplateMenuDismiss()
+        {
+            var card = _modal?.Q<VisualElement>(className: "modal-card");
+            if (card == null) return;
+            card.RegisterCallback<ClickEvent>(e =>
+            {
+                if (!_tplMenuOpen) return;
+                var t = e.target as VisualElement;
+                var sel = _root.Q<VisualElement>("tpl-select");
+                var menu = _root.Q<VisualElement>("tpl-menu");
+                if (t != null && ((sel != null && sel.Contains(t)) || (menu != null && menu.Contains(t)))) return;
+                _tplMenuOpen = false;
+                Render();
+            });
+        }
+
         private void WireStaticButtons()
         {
-            // 共通トップバーの「今週を進める」で週送り（合宿・成長段階プレビューが連動）。
-            // 全タブ共通の進週処理へ集約（issue #134: 大会モード中はホームへ回送して日送りへ引き継ぐ）。
-            Click("advance", () => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(() =>
+            // 共通トップバーの「今週を進める」で週送り。全タブ共通の進週処理へ集約（issue #134）。
+            Click("advance", () => WeekAdvance.FromSideScreen(() =>
             {
                 // 年度替わりで部員が入れ替わったら一覧を引き直す。開いていたモーダルは別人を指すので閉じる（issue #1250）。
                 if (_state.SyncRoster()) { _modalOpen = false; _copyOpen = false; }
                 Render();
             }));
             // モーダル内の操作（対象は選択選手）。押下後も Render で開いたまま最新化する。
-            Click("template-save", () => { _state.SaveTemplate(); Toast("週テンプレを保存しました"); Render(); });
+            Click("template-save", () => { _state.SaveTemplate(); _tplMenuOpen = false; Toast("週テンプレートを保存しました"); Render(); });
+            Click("tpl-select", () =>
+            {
+                if (_state.BuildView().Templates.Count == 0) return;
+                _tplMenuOpen = !_tplMenuOpen;
+                Render();
+            });
             Click("delegate-toggle", () => { _state.ToggleDelegate(_state.SelectedIndex); Render(); });
             Click("sel-nom", () => Nominate(_state.SelectedIndex));
             // 前後選手切替（issue #222⑥・一覧の現在フィルタ/ソート順）。
-            Click("sel-prev", () => { _state.StepSelected(-1); Render(); _modal?.Focus(); });
-            Click("sel-next", () => { _state.StepSelected(+1); Render(); _modal?.Focus(); });
+            Click("sel-prev", () => { _state.StepSelected(-1); _tplMenuOpen = false; Render(); _modal?.Focus(); });
+            Click("sel-next", () => { _state.StepSelected(+1); _tplMenuOpen = false; Render(); _modal?.Focus(); });
             Click("modal-revert", () => { _state.RevertSelected(); Toast("配分を元に戻しました"); Render(); });
-            // 配分⇄能力タブ（issue #327③）。前後選手送りはタブを保ったまま選手だけ替わる。
-            Click("tab-alloc", () => { _abilityTab = false; Render(); });
-            Click("tab-abil", () => { _abilityTab = true; Render(); });
             // 「決定」だけが変更を残す。×・暗幕・Esc は開いた時点へ戻して閉じる（issue #1534）。
             Click("modal-close", CancelModal);
             Click("modal-done", CommitModal);
@@ -125,7 +169,7 @@ namespace KokoSim.Unity.Training
             _state.SelectPlayer(index);
             _state.BeginEdit();   // 決定以外で閉じたら戻す控え（issue #1534）
             _modalOpen = true;
-            _abilityTab = false;   // 開き直しは常に配分タブから（モーダルの主目的は練習設定）
+            _tplMenuOpen = false;
             Render();
             _modal?.BringToFront();
             _root.Q<Label>("toast")?.BringToFront();
@@ -149,41 +193,31 @@ namespace KokoSim.Unity.Training
         private void CloseModal()
         {
             _modalOpen = false;
+            _tplMenuOpen = false;
             Render();
         }
 
         private void Render()
         {
             var v = _state.BuildView();
+            _accent = SchoolAccent.ForManager();
 
-            // 共通トップバー（スコアボード）: 掲示板の升目（週・夏予選までの残り）とチーム総合力ランクを埋める。
-            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
-            KokoSim.Unity.Shell.TopBarMeters.Fill(_root);   // 部費残高・名声（ManagerService 単一ソース）
+            // 共通トップバー（スコアボード）: 掲示板の升目とチーム総合力ランクを埋める。
+            ScoreboardStrip.Fill(_root);
+            TopBarMeters.Fill(_root);   // 部費残高・名声（ManagerService 単一ソース）
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChip(v.TeamRankGrade)); }
 
-            SetText("roster-title", "部員別 練習割当");
-            SetText("roster-count", "/ " + v.RosterCount + "名");
+            SetText("roster-count", v.ShownCount.ToString());
+            SetText("thead-menu", "練習メニュー（1日 " + v.Budget + "分）");
 
-            BuildCampBanner(v);
             BuildNominations(v);
             BuildFilters(v);
             if (!(_modalOpen && _rowsFrozen)) BuildRows(v);
             _rowsFrozen = _modalOpen;
             BuildModal(v);
             BuildCopyModal(v);
-        }
-
-        // ── 合宿バナー ──────────────────────────────
-        private void BuildCampBanner(TrainingPlanView v)
-        {
-            var banner = _root.Q<VisualElement>("camp-banner");
-            if (banner != null) banner.style.display = v.CampActive ? DisplayStyle.Flex : DisplayStyle.None;
-            SetText("camp-title", v.CampTitle);
-            SetText("camp-mult", v.CampMult + " 経験値");
-            SetText("camp-note", v.CampNote);
-            var note = _root.Q<VisualElement>("camp-note");
-            if (note != null) note.style.display = v.CampNote.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            SchoolAccent.Apply(_root, _accent);
         }
 
         // ── 個別指導3枠 ─────────────────────────────
@@ -202,56 +236,60 @@ namespace KokoSim.Unity.Training
         private void BuildNominations(TrainingPlanView v)
         {
             _nomSlotCount = v.Nominations.Count;
+            SetText("nom-count", v.NominatedCount.ToString());
+            SetText("nom-cap", "/ " + v.Nominations.Count + "枠");
             var host = _root.Q<VisualElement>("nom-slots");
             if (host == null) return;
             host.Clear();
-            for (var s = 0; s < v.Nominations.Count; s++)
-            {
-                var n = v.Nominations[s];
-                var slot = new VisualElement();
-                slot.AddToClassList("nom-slot");
-                if (n.Empty) slot.AddToClassList("nom-slot--empty");
-
-                var num = new Label((s + 1).ToString());
-                num.AddToClassList("nom-slot__num");
-                slot.Add(num);
-
-                var name = new Label(n.Label);
-                name.AddToClassList("nom-slot__name");
-                slot.Add(name);
-
-                // 指名中の枠は×で外せる（issue #707）。
-                if (!n.Empty)
-                {
-                    var idx = n.Index; // 捕捉
-                    var x = new Label("×");
-                    x.AddToClassList("nom-slot__x");
-                    x.tooltip = "個別指導から外す";
-                    x.RegisterCallback<ClickEvent>(_ => Nominate(idx));
-                    slot.Add(x);
-                }
-
-                host.Add(slot);
-            }
+            foreach (var n in v.Nominations) host.Add(n.Empty ? EmptySlot() : FilledSlot(n));
         }
 
-        // ── フィルタ／ソート ─────────────────────────
+        private VisualElement FilledSlot(NominationSlot n)
+        {
+            var slot = new VisualElement();
+            slot.AddToClassList("tp-slot");
+            slot.AddToClassList("acc-bd");
+            slot.style.backgroundColor = SchoolAccent.Tint(_accent, 0.06f);
+
+            var star = new LineIcon(LineIcon.Kind.StarFilled);
+            star.AddToClassList("tp-slot__star");
+            slot.Add(star);
+
+            slot.Add(NumBox(n.NumText, "tp-slot__num"));
+
+            var body = new VisualElement();
+            body.AddToClassList("tp-slot__body");
+            body.Add(Text(n.Name, "tp-slot__name f-display"));
+            body.Add(Text(n.GradeLabel + " " + n.HandLabel, "tp-slot__meta"));
+            slot.Add(body);
+
+            var idx = n.Index; // 捕捉
+            var x = IconButton(LineIcon.Kind.Close, "tp-slot__x", () => Nominate(idx));
+            x.tooltip = "個別指導から外す";
+            slot.Add(x);
+            return slot;
+        }
+
+        private static VisualElement EmptySlot()
+        {
+            var slot = new VisualElement();
+            slot.AddToClassList("tp-slot");
+            slot.AddToClassList("tp-slot--empty");
+            slot.Add(new DashedFrame { LineColor = EmptySlotDash, LineWidth = 1.5f, Radius = 10f });
+            var row = new VisualElement();
+            row.AddToClassList("tp-slot__empty");
+            row.Add(Text("空き ― 一覧の", "tp-slot__empty-t"));
+            var star = new LineIcon(LineIcon.Kind.Star);
+            star.AddToClassList("tp-slot__empty-star");
+            row.Add(star);
+            row.Add(Text("で指名", "tp-slot__empty-t"));
+            slot.Add(row);
+            return slot;
+        }
+
+        // ── 絞り込み ───────────────────────────────
         private void BuildFilters(TrainingPlanView v)
         {
-            var yearHost = _root.Q<VisualElement>("year-filters");
-            if (yearHost != null)
-            {
-                yearHost.Clear();
-                foreach (var (label, grade) in YearFilters)
-                {
-                    var g = grade; // 捕捉
-                    var chip = MakeChip(label, v.YearFilter == grade);
-                    chip.RegisterCallback<ClickEvent>(_ => { _state.SetYearFilter(g); Render(); });
-                    yearHost.Add(chip);
-                }
-            }
-
-            // 在籍（全員/ベンチ入り/ベンチ外, Issue #133-④）。ベンチ判定は背番号1–20=入り・0=外。
             var benchHost = _root.Q<VisualElement>("bench-filters");
             if (benchHost != null)
             {
@@ -259,154 +297,135 @@ namespace KokoSim.Unity.Training
                 foreach (var (label, mode) in BenchFilters)
                 {
                     var m = mode; // 捕捉
-                    var chip = MakeChip(label, v.BenchFilter == mode);
-                    chip.RegisterCallback<ClickEvent>(_ => { _state.SetBenchFilter(m); Render(); });
-                    benchHost.Add(chip);
+                    benchHost.Add(SegItem(label, v.BenchFilter == mode, () => { _state.SetBenchFilter(m); Render(); }));
+                }
+            }
+
+            var yearHost = _root.Q<VisualElement>("year-filters");
+            if (yearHost != null)
+            {
+                yearHost.Clear();
+                foreach (var (label, grade) in YearFilters)
+                {
+                    var g = grade; // 捕捉
+                    yearHost.Add(SegItem(label, v.YearFilter == grade, () => { _state.SetYearFilter(g); Render(); }));
                 }
             }
         }
 
-        // ── 部員別テーブル（全幅・すっきり） ─────────────
+        private static VisualElement SegItem(string text, bool on, System.Action onClick)
+        {
+            var item = new Label(text);
+            item.AddToClassList("tp-seg__item");
+            if (on) { item.AddToClassList("tp-seg__item--on"); item.AddToClassList("f-body-bd"); }
+            item.RegisterCallback<ClickEvent>(_ => onClick());
+            return item;
+        }
+
+        // ── 部員別 練習割当 ─────────────────────────
         private void BuildRows(TrainingPlanView v)
         {
             var rows = _root.Q<VisualElement>("train-rows");
             if (rows == null) return;
             rows.Clear();
-            foreach (var r in v.Rows)
-            {
-                var idx = r.Index; // 捕捉
-                var row = new VisualElement();
-                row.AddToClassList("trow");
-                row.AddToClassList("row-panel");   // 共通部品：白パネル＋インク枠＋ベタ影（components.uss）
-                row.AddToClassList("row-panel--dense");   // 高密度バリアント（Issue #273）
-                if (r.Selected) row.AddToClassList("row-panel--selected");
-
-                // 個別指導の指名（★。押すたびに指名⇄解除, issue #707）。先頭列＝一覧を見ながら選べる。
-                var nomCell = new VisualElement();
-                nomCell.AddToClassList("tcell"); nomCell.AddToClassList("tcell--nom");
-                var star = new Label("★");
-                star.AddToClassList("nom-star");
-                if (r.Nominated) star.AddToClassList("nom-star--on");
-                star.tooltip = r.Nominated ? "個別指導から外す" : "個別指導に指名";
-                star.RegisterCallback<ClickEvent>(_ => Nominate(idx));
-                nomCell.Add(star);
-                row.Add(nomCell);
-
-                // 背番号／選手／学年／投打（投/野ポジションは非表示）。学年・投打は名前と同じ上段へ
-                // （Issue #273：ベンチ外選手だけメタ行に「ベンチ外」チップが乗り2行になる＝それ以外は1行）。
-                var idCell = new VisualElement();
-                idCell.AddToClassList("tcell"); idCell.AddToClassList("tcell--id");
-                var num = new Label(r.NumText);
-                num.AddToClassList("num-badge"); num.AddToClassList("trow__num");
-                if (r.BenchOut) num.AddToClassList("num-badge--out");
-                idCell.Add(num);
-                var idText = new VisualElement();
-                idText.AddToClassList("trow__idtext");
-                var top = new VisualElement();
-                top.AddToClassList("trow__top");
-                var nameLbl = new Label(r.Name);
-                nameLbl.AddToClassList("trow__name");
-                nameLbl.RegisterCallback<ClickEvent>(_ => OpenModal(idx));
-                top.Add(nameLbl);
-                top.Add(Tag(r.GradeLabel, "chip chip--tag"));
-                top.Add(Tag(r.HandLabel, "chip chip--tag"));   // 投打（Issue #133-②）
-                idText.Add(top);
-                idCell.Add(idText);
-                row.Add(idCell);
-
-                // 能力（カテゴリ別ランク4組・総合ランクは廃止, Issue #133-①）。id列の固定幅470pxを
-                // 圧迫していたのを独立列へ分離＝ベンチ外チップが増えても見切れない（Issue #273）。
-                var rankCell = new VisualElement();
-                rankCell.AddToClassList("tcell"); rankCell.AddToClassList("tcell--rank");
-                rankCell.Add(UiComponents.CategoryRankChipsCompact(r.Strength));
-                row.Add(rankCell);
-
-                // 練習設定（プリセット名＋主眼メニュー｜配分の積み上げ横バー｜変更▸・クリックでモーダル）
-                var presetCell = new VisualElement();
-                presetCell.AddToClassList("tcell"); presetCell.AddToClassList("tcell--preset");
-                var open = new VisualElement();
-                open.AddToClassList("preset-open");
-                var texts = new VisualElement(); texts.AddToClassList("preset-open__texts");
-                var pl = new Label(r.PresetJp); pl.AddToClassList("preset-open__label");
-                if (r.PresetJp == "カスタム") pl.AddToClassList("preset-open__label--custom");
-                texts.Add(pl);
-                var focus = new Label(r.FocusSummary); focus.AddToClassList("preset-open__focus"); texts.Add(focus);
-                open.Add(texts);
-                open.Add(AllocationBar(r.Chips, v.Budget));   // 空き帯にメニュー別色の積み上げバー（Issue #133-③）
-                var go = new Label("変更 ▶"); go.AddToClassList("preset-open__go"); open.Add(go);
-                open.RegisterCallback<ClickEvent>(_ => OpenModal(idx));
-                presetCell.Add(open);
-                row.Add(presetCell);
-
-                // 複製（コピー元を選んでこの選手へ写す, Issue #133-⑤。直上固定「↑」は廃止）
-                var copyCell = new VisualElement();
-                copyCell.AddToClassList("tcell"); copyCell.AddToClassList("tcell--copy");
-                var copy = new Label("複製");
-                copy.AddToClassList("copy-btn");
-                copy.RegisterCallback<ClickEvent>(_ => OpenCopyPicker(idx));
-                copyCell.Add(copy);
-                row.Add(copyCell);
-
-                rows.Add(row);
-            }
+            foreach (var r in v.Rows) rows.Add(BuildRow(r, v.Budget));
         }
 
-        // ── 統合モーダル ────────────────────────────
+        private VisualElement BuildRow(PlayerTrainRow r, int budget)
+        {
+            var idx = r.Index; // 捕捉
+            var row = new VisualElement();
+            row.AddToClassList("trow");
+
+            // 指導：星のボタン（押すたびに指名⇄解除, issue #707）
+            var nomCell = Cell("tp-col--nom");
+            var star = IconButton(r.Nominated ? LineIcon.Kind.StarFilled : LineIcon.Kind.Star, "tp-star", () => Nominate(idx));
+            if (r.Nominated) star.AddToClassList("tp-star--on");
+            star.tooltip = r.Nominated ? "個別指導から外す" : "個別指導に指名";
+            nomCell.Add(star);
+            row.Add(nomCell);
+
+            // 選手：背番号の箱・名前・学年と投打（ベンチ外は背番号「—」）
+            var idCell = Cell("tp-col--id");
+            idCell.AddToClassList("tp-cell--id");
+            idCell.Add(NumBox(r.NumText, "tp-num--row"));
+            var name = Text(r.Name, "trow__name f-display");
+            name.RegisterCallback<ClickEvent>(_ => OpenModal(idx));
+            idCell.Add(name);
+            idCell.Add(Text(r.GradeLabel + " " + r.HandLabel, "trow__meta"));
+            row.Add(idCell);
+
+            // 能力：打・走・守・投
+            var rankCell = Cell("tp-col--rank");
+            rankCell.Add(RankPairs(r.Strength, "tp-chip22"));
+            row.Add(rankCell);
+
+            // 練習メニュー：型の名前｜練習名と分数を書いた横棒（押すと配分のポップアップ）
+            var menuCell = Cell("tp-col--menu");
+            menuCell.Add(Text(r.PresetJp, "tp-menu__type f-body-bd"));
+            var barHost = new VisualElement();
+            barHost.AddToClassList("tp-menu__bar");
+            barHost.Add(AllocationBar(r.Chips, budget, true));
+            menuCell.Add(barHost);
+            menuCell.RegisterCallback<ClickEvent>(_ => OpenModal(idx));
+            row.Add(menuCell);
+
+            // 変更 ›
+            var goCell = Cell("tp-col--go");
+            var go = new Button(() => OpenModal(idx));
+            go.text = "";
+            go.AddToClassList("tp-go");
+            go.Add(Text("変更", "tp-go__t f-body-bd"));
+            go.Add(new LineIcon(LineIcon.Kind.ChevronRight));
+            goCell.Add(go);
+            row.Add(goCell);
+
+            // 複製（コピー元を選んでこの選手へ写す, Issue #133-⑤）
+            var copyCell = Cell("tp-col--copy");
+            var copy = IconButton(LineIcon.Kind.Copy, "tp-copy", () => OpenCopyPicker(idx));
+            copy.tooltip = "ほかの選手から複製";
+            copyCell.Add(copy);
+            row.Add(copyCell);
+            return row;
+        }
+
+        // ── 練習メニューの配分（ポップアップ） ─────────────
         private void BuildModal(TrainingPlanView v)
         {
             if (_modal != null) _modal.style.display = _modalOpen ? DisplayStyle.Flex : DisplayStyle.None;
             if (!_modalOpen) return;
 
-            // ヘッダー（背番号・名前・学年/利き手＋カテゴリ別ランク。総合ランクは廃止・投/野ポジションは出さない）
+            // 選手の見出し（背番号・名前・学年/投打＋カテゴリ別ランク。投/野ポジションは出さない）
             SetText("sel-num", v.SelNumText);
             SetText("sel-name", v.SelectedName);
             SetText("sel-meta", v.SelYear + "・" + v.SelHand);
             var cats = _root.Q<VisualElement>("sel-cats");
-            if (cats != null) { cats.Clear(); cats.Add(UiComponents.CategoryRankChipsCompact(v.SelStrength)); }
-            var benchTag = _root.Q<Label>("sel-benchout");
-            if (benchTag != null) benchTag.style.display = v.SelBenchOut ? DisplayStyle.Flex : DisplayStyle.None;
+            if (cats != null) { cats.Clear(); cats.Add(RankPairs(v.SelStrength, "tp-chip20")); }
 
             var nom = _root.Q<Button>("sel-nom");
-            if (nom != null) { nom.text = "★ " + v.SelNomLabel; nom.EnableInClassList("nom-btn--on", v.SelNominated); }
+            if (nom != null)
+            {
+                nom.text = "";
+                nom.Clear();
+                nom.Add(new LineIcon(v.SelNominated ? LineIcon.Kind.StarFilled : LineIcon.Kind.Star));
+                nom.Add(Text(v.SelNominated ? "個別指導 指名中" : "個別指導に指名",
+                    v.SelNominated ? "tpm-nom__t f-body-bd" : "tpm-nom__t"));
+                nom.EnableInClassList("tpm-nom--on", v.SelNominated);
+            }
 
             var delToggle = _root.Q<VisualElement>("delegate-toggle");
             if (delToggle != null) delToggle.EnableInClassList("switch--on", v.DelegateOn);
             SetText("delegate-state", v.DelegateStateLabel);
 
-            // 前後選手（issue #222⑥）：一覧の端では押せない（見た目でも分かる）。
-            var prevBtn = _root.Q<Button>("sel-prev");
-            if (prevBtn != null) prevBtn.SetEnabled(v.SelHasPrev);
-            var nextBtn = _root.Q<Button>("sel-next");
-            if (nextBtn != null) nextBtn.SetEnabled(v.SelHasNext);
-
-            // 配分⇄能力タブ（issue #327③）。本体はタブで差し替え、プリセット帯の配分専用部品
-            // （チップ列・委任ロック・残りバジェット）は能力タブでは隠す。
-            var allocTab = !_abilityTab;
-            _root.Q<Button>("tab-alloc")?.EnableInClassList("tpm-tab--on", allocTab);
-            _root.Q<Button>("tab-abil")?.EnableInClassList("tpm-tab--on", _abilityTab);
-            ShowIf("tpm-body-alloc", allocTab);
-            ShowIf("tpm-body-abil", _abilityTab);
-            ShowIf("tpm-presets", allocTab);
-            ShowIf("tpm-budget", allocTab);
-            ShowIf("menu-lock-hint", v.DelegateOn && allocTab);
+            // 前後選手（issue #222⑥）：一覧の端では押せない。
+            _root.Q<Button>("sel-prev")?.SetEnabled(v.SelHasPrev);
+            _root.Q<Button>("sel-next")?.SetEnabled(v.SelHasNext);
 
             BuildPresetOptions(v);
-            BuildMenuList(v);
-            BuildDefenseGrid(v);
+            ShowIf("menu-lock-hint", v.DelegateOn);
+            BuildBudget(v);
+            BuildMenuRows(v);
             BuildGrowth(v);
-            BuildAbilityColumns(v);
-
-            // 週バジェット残り＋バー（残り0分は強調して「なぜ増えないか」を視界内で分かるようにする, issue #222③）
-            SetText("sel-remain", "残り " + v.SelectedRemaining + " / " + v.Budget + "分");
-            var remainLabel = _root.Q<Label>("sel-remain");
-            remainLabel?.EnableInClassList("tp-ed-bar__remain--limit", v.AtBudgetLimit);
-            var budgetFill = _root.Q<VisualElement>("sel-budget-fill");
-            if (budgetFill != null)
-            {
-                var pct = v.Budget > 0 ? Mathf.Clamp01((float)v.SelectedTotal / v.Budget) * 100f : 0f;
-                budgetFill.style.width = Length.Percent(pct);
-            }
-
             BuildTemplates(v);
             KeepOverlayFocus();
         }
@@ -426,55 +445,7 @@ namespace KokoSim.Unity.Training
             if (el != null) el.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // 能力タブ（issue #327③・案A）: 投手能力｜守備適性｜野手能力の3カラム。行は部品辞書の
-        // AbilityRow コンパクト行（伸びる能力一覧と同じ行高32px・UI原則①⑤）。
-        private void BuildAbilityColumns(TrainingPlanView v)
-        {
-            if (!_abilityTab) return;
-            FillAbilityList("tpm-abil-pitcher", v.SelPitcherAbilities);
-            FillPitchChart(v);
-            FillAbilityList("tpm-abil-defense", v.SelDefenseAptitudes);
-            FillAbilityList("tpm-abil-fielder", v.SelFielderAbilities);
-        }
-
-        // 能力タブの球種チャート（issue #735・監督決定 2026-11-03: 選手詳細と同じ通常版）。器は UXML に常設＝初回だけ
-        // 部品を差し込み、選手切替のたびにデータだけ入れ替える。
-        private KokoSim.Unity.Components.PitchChartView _abilPitchChart;
-        private void FillPitchChart(TrainingPlanView v)
-        {
-            var host = _root.Q<VisualElement>("tpm-abil-pitchchart");
-            if (host == null) return;
-            _abilPitchChart ??= new KokoSim.Unity.Components.PitchChartView(host);
-            _abilPitchChart.SetData(v.SelPitches);
-        }
-
-        private void FillAbilityList(string hostName, System.Collections.Generic.List<AbilityRowInfo> rows)
-        {
-            var host = _root.Q<VisualElement>(hostName);
-            if (host == null) return;
-            host.Clear();
-            foreach (var a in rows) host.Add(AbilityValueRow(a));
-        }
-
-        // 能力タブの1行。値・ランクは現在能力（作りは選手詳細 PlayerDetailController.BuildAbil と同型）。
-        // 弾道は優劣のないタイプ軸なのでバー・数値を出さない（issue #219）。
-        private static VisualElement AbilityValueRow(AbilityRowInfo a)
-            => UiComponents.AbilityRow(new AbilityRowData
-            {
-                Icon = a.Icon,
-                Label = a.Jp,
-                Value = string.IsNullOrEmpty(a.ValueText) ? a.Value.ToString() : a.ValueText,
-                Pct = a.Value / 100f,
-                Grade = a.Grade,
-                TypeLabel = a.TypeLabel,
-                // スタミナ＝目安投球数（issue #356）はバー無し数値行（弾道のタイプ軸と同じくバーを隠す）。
-                HideBar = a.HideBar || !string.IsNullOrEmpty(a.TypeLabel),
-                Unit = a.Unit,
-                Size = AbilityRowSize.Compact,
-            });
-
-        // プリセット帯（issue #222④）：横1行のチップ列。説明はツールチップで持たせ、
-        // カード内の「伸びる能力」5本バーは廃止（右カラムの実効ドライランが同じ役割を実データで担う）。
+        // メニューの型（7つ）。説明はツールチップ。委任中は選べない。
         private void BuildPresetOptions(TrainingPlanView v)
         {
             var host = _root.Q<VisualElement>("tpm-presets");
@@ -485,176 +456,274 @@ namespace KokoSim.Unity.Training
             {
                 var preset = po.Preset; // 捕捉
                 var chip = new Label(po.Jp);
-                chip.AddToClassList("tpm-preset-chip");
-                if (po.Selected) chip.AddToClassList("tpm-preset-chip--on");
+                chip.AddToClassList("tpm-preset");
+                if (po.Selected) { chip.AddToClassList("tpm-preset--on"); chip.AddToClassList("f-body-bd"); }
+                if (v.DelegateOn) chip.AddToClassList("tpm-preset--locked");
                 chip.tooltip = po.Desc;
                 chip.RegisterCallback<ClickEvent>(_ => { _state.SetPreset(sel, preset); Render(); });
                 host.Add(chip);
             }
         }
 
-        // 行は値が変わっても作り直さない（作り直すと掴んだポインタ／長押しの予約先が消える・issue #1278）。
-        // 構成（選手・委任・メニューの並び）が前回と同じなら既存の行の値だけ更新する。
-        private string _menuSig, _defenseSig;
-        private readonly System.Collections.Generic.List<MenuRowView> _menuRows = new System.Collections.Generic.List<MenuRowView>();
-        private readonly System.Collections.Generic.List<MenuRowView> _defenseRows = new System.Collections.Generic.List<MenuRowView>();
-
-        private void BuildMenuList(TrainingPlanView v)
+        // 1日の配分：合計（満たないときは色を変えて「残り N分」）と、使っている練習の色の棒（文字なし・余りは地の色）。
+        private void BuildBudget(TrainingPlanView v)
         {
-            var host = _root.Q<VisualElement>("tpm-menus");
-            if (host == null) return;
-            var sel = v.SelectedIndex;
+            SetText("sel-total", v.SelectedTotal.ToString());
+            SetText("sel-budget", "/ " + v.Budget + "分");
+            var short_ = v.SelectedRemaining > 0;
+            _root.Q<Label>("sel-total")?.EnableInClassList("tpm-budget__total--short", short_);
+            SetText("sel-remain", "残り " + v.SelectedRemaining + "分");
+            ShowIf("sel-remain", short_);
+            var host = _root.Q<VisualElement>("sel-alloc-bar");
+            if (host != null) { host.Clear(); host.Add(AllocationBar(v.SelectedChips, v.Budget, false)); }
+            SetText("sum-fielder", v.SelFielderMinutes.ToString());
+            SetText("sum-pitcher", v.SelPitcherMinutes.ToString());
+            SetText("sum-defense", v.SelDefenseMinutes.ToString());
+        }
 
-            var sig = new System.Text.StringBuilder().Append(sel).Append('|').Append(v.DelegateOn);
-            foreach (var s in v.SelectedSlots) sig.Append('|').Append(s.Menu).Append(':').Append(s.SectionJp);
-            if (sig.ToString() == _menuSig && _menuRows.Count == v.SelectedSlots.Count)
+        // 練習の行は値が変わっても作り直さない（作り直すと掴んだポインタ／長押しの予約先が消える・issue #1278）。
+        // 構成（選手・委任・予算）が前回と同じなら既存の行の値だけ更新する。
+        private string _menuSig;
+        private readonly List<MenuRowView> _menuRows = new List<MenuRowView>();
+
+        private void BuildMenuRows(TrainingPlanView v)
+        {
+            var fielderHost = _root.Q<VisualElement>("tpm-fielder");
+            var pitcherHost = _root.Q<VisualElement>("tpm-pitcher");
+            var defenseHost = _root.Q<VisualElement>("tpm-defense");
+            if (fielderHost == null || pitcherHost == null || defenseHost == null) return;
+            var sel = v.SelectedIndex;
+            var full = Mathf.Max(TrainingPresets.StepMinutes,
+                Mathf.RoundToInt(v.Budget * BarFullShareOfBudget / TrainingPresets.StepMinutes) * TrainingPresets.StepMinutes);
+
+            var sig = sel + "|" + v.DelegateOn + "|" + v.Budget + "|" + fielderHost.childCount + "|" + defenseHost.childCount;
+            var count = v.SelectedSlots.Count + v.DefenseSlots.Count;
+            if (sig == _menuSig && _menuRows.Count == count)
             {
-                for (var i = 0; i < _menuRows.Count; i++)
-                {
-                    var s = v.SelectedSlots[i];
-                    _menuRows[i].Update(s.Minutes, s.Minutes + v.SelectedRemaining, v.AtBudgetLimit);
-                }
+                var i = 0;
+                foreach (var s in v.SelectedSlots) _menuRows[i++].Update(s.Minutes, full, v.AtBudgetLimit);
+                foreach (var d in v.DefenseSlots) _menuRows[i++].Update(d.Minutes, full, v.AtBudgetLimit);
                 return;
             }
 
-            host.Clear();
+            fielderHost.Clear(); pitcherHost.Clear(); defenseHost.Clear();
             _menuRows.Clear();
-            _menuSig = sig.ToString();
             foreach (var s in v.SelectedSlots)
             {
-                // 打撃系/投手系の繋ぎ目に節見出し（Issue #133-⑥。既存の節見出しスタイルを流用）。
-                if (s.SectionJp != "")
-                {
-                    var head = new Label(s.SectionJp);
-                    head.AddToClassList("tpm-menugroup");
-                    host.Add(head);
-                }
-
                 var menu = s.Menu; // 捕捉
                 var row = new MenuRowView(
-                    s.Icon, s.MenuJp, null, "主効果 " + s.MainEffectJp,
-                    s.Minutes, s.Minutes + v.SelectedRemaining, UiComponents.TrainingMenuColorClass(menu),
-                    v.DelegateOn, v.AtBudgetLimit,
+                    s.Icon, s.MenuJp, null, null, s.MainEffectJp.Length > 0 ? "主効果 " + s.MainEffectJp : null,
+                    "tm-bg--" + UiComponents.TrainingMenuColorClass(menu), UiComponents.TrainingMenuColorClass(menu),
+                    !s.Pitcher, s.Minutes, full, v.DelegateOn, v.AtBudgetLimit,
                     () => { _state.AdjustMinutes(sel, menu, -1); Render(); },
                     () => { _state.AdjustMinutes(sel, menu, +1); Render(); },
                     m => { _state.SetMinutes(sel, menu, m); Render(); });
                 _menuRows.Add(row);
-                host.Add(row);
+                (s.Pitcher ? pitcherHost : fielderHost).Add(row);
             }
-        }
-
-        // 守備適性も攻撃メニューと同じ粒度（mslot 行）で縦に並べる（1画面3カラム化, issue #222①）。
-        private void BuildDefenseGrid(TrainingPlanView v)
-        {
-            var host = _root.Q<VisualElement>("tpm-defense");
-            if (host == null) return;
-            var sel = v.SelectedIndex;
-
-            var sig = new System.Text.StringBuilder().Append(sel).Append('|').Append(v.DelegateOn);
-            foreach (var d in v.DefenseSlots) sig.Append('|').Append(d.Menu).Append(':').Append(d.Aptitude);
-            if (sig.ToString() == _defenseSig && _defenseRows.Count == v.DefenseSlots.Count)
-            {
-                for (var i = 0; i < _defenseRows.Count; i++)
-                {
-                    var d = v.DefenseSlots[i];
-                    _defenseRows[i].Update(d.Minutes, d.Minutes + v.SelectedRemaining, v.AtBudgetLimit);
-                }
-                return;
-            }
-
-            host.Clear();
-            _defenseRows.Clear();
-            _defenseSig = sig.ToString();
             foreach (var d in v.DefenseSlots)
             {
                 var menu = d.Menu; // 捕捉
                 var row = new MenuRowView(
-                    d.Label, d.Label + "守備", "適" + d.Aptitude, null,
-                    d.Minutes, d.Minutes + v.SelectedRemaining, "defpos",
-                    v.DelegateOn, v.AtBudgetLimit,
+                    d.Label, d.FullJp, d.Grade, d.Aptitude.ToString(), null,
+                    "tm-bg--defpos", "defpos",
+                    false, d.Minutes, full, v.DelegateOn, v.AtBudgetLimit,
                     () => { _state.AdjustMinutes(sel, menu, -1); Render(); },
                     () => { _state.AdjustMinutes(sel, menu, +1); Render(); },
                     m => { _state.SetMinutes(sel, menu, m); Render(); });
-                _defenseRows.Add(row);
-                host.Add(row);
+                _menuRows.Add(row);
+                defenseHost.Add(row);
             }
+            _menuSig = sel + "|" + v.DelegateOn + "|" + v.Budget + "|" + fielderHost.childCount + "|" + defenseHost.childCount;
         }
 
-        // 練習メニュー1行（issue #222①②③）: アイコン／名前／(任意)適性値／ドラッグバー／分／±。
-        // 攻撃メニューと守備ポジションで共用（36px基準の1行に圧縮・行高32px基準の趣旨に沿う）。
+        /// <summary>
+        /// 練習の1行：記号｜項目名｜(適性)｜棒（ドラッグで分数を変える）｜分数｜−＋。
+        /// 0分の行は薄く、使っている行は項目名を太字に。−は0分で、＋は合計が1日の分数に達したら押せない色。
+        /// </summary>
         private sealed class MenuRowView : VisualElement
         {
             private readonly UiComponents.TimeAllocSliderElement _slider;
+            private readonly Label _name;
+            private readonly Label _minutes;
+            private readonly Button _minus;
             private readonly Button _plus;
             private readonly bool _locked;
-            private VisualElement _minutes;
-            private int _shownMinutes;
+            private bool _minusOn, _plusOn;
 
             public MenuRowView(
-                string icon, string name, string meta, string tip,
-                int minutes, int maxMinutes, string colorClass,
-                bool locked, bool atLimit,
+                string icon, string name, string aptGrade, string aptValue, string tip,
+                string iconClass, string sliderColorClass, bool tall,
+                int minutes, int fullMinutes, bool locked, bool atLimit,
                 System.Action onMinus, System.Action onPlus, System.Action<int> onSet)
             {
                 _locked = locked;
-                AddToClassList("mslot");
-                if (locked) AddToClassList("mslot--locked");
+                AddToClassList("mrow");
+                if (tall) AddToClassList("mrow--tall");
                 if (!string.IsNullOrEmpty(tip)) tooltip = tip;
 
-                var ic = new Label(icon); ic.AddToClassList("mslot__icon"); Add(ic);
-                var nm = new Label(name); nm.AddToClassList("mslot__name"); Add(nm);
+                var ic = new Label(icon);
+                ic.AddToClassList("mrow__icon");
+                ic.AddToClassList("f-body-bd");
+                ic.AddToClassList(iconClass);
+                Add(ic);
 
-                if (!string.IsNullOrEmpty(meta))
+                _name = new Label(name);
+                _name.AddToClassList("mrow__name");
+                Add(_name);
+
+                if (aptGrade != null)
                 {
-                    // 「適50」等の和文＋数字混植（Oswald 時代の作法で単一Labelへf-numを付けない）。
-                    var mt = new Label(meta); mt.AddToClassList("mslot__meta"); Add(mt);
+                    var apt = new VisualElement();
+                    apt.AddToClassList("mrow__apt");
+                    var chip = UiComponents.RankChipLegacy(aptGrade);
+                    chip.AddToClassList("tp-chip20");
+                    apt.Add(chip);
+                    var val = new Label(aptValue);
+                    val.AddToClassList("mrow__apt-v");
+                    val.AddToClassList("f-num");
+                    apt.Add(val);
+                    Add(apt);
                 }
 
-                _slider = UiComponents.TimeAllocSlider(minutes, maxMinutes, TrainingPresets.StepMinutes, colorClass, locked, onSet);
-                _slider.AddToClassList("mslot__slider");
-                Add(_slider);
+                var barHost = new VisualElement();
+                barHost.AddToClassList("mrow__bar");
+                _slider = UiComponents.TimeAllocSlider(minutes, fullMinutes, TrainingPresets.StepMinutes, sliderColorClass, locked, onSet);
+                barHost.Add(_slider);
+                Add(barHost);
 
-                _shownMinutes = minutes;
-                _minutes = UiComponents.NumUnitAuto(minutes + "分", false, "mslot__min");
-                Add(_minutes);
+                var min = new VisualElement();
+                min.AddToClassList("mrow__min");
+                _minutes = new Label();
+                _minutes.AddToClassList("mrow__min-v");
+                _minutes.AddToClassList("f-num-bd");
+                min.Add(_minutes);
+                var unit = new Label("分");
+                unit.AddToClassList("mrow__min-u");
+                min.Add(unit);
+                Add(min);
 
-                Add(StepButton("−", onMinus, locked));
-                _plus = StepButton("＋", onPlus, locked || atLimit);
-                Add(_plus);
+                var step = new VisualElement();
+                step.AddToClassList("mrow__step");
+                _minus = StepButton("−", () => { if (_minusOn) onMinus(); });
+                _plus = StepButton("＋", () => { if (_plusOn) onPlus(); });
+                _plus.AddToClassList("mrow__btn--plus");
+                step.Add(_minus);
+                step.Add(_plus);
+                Add(step);
+
+                Update(minutes, fullMinutes, atLimit);
             }
 
-            public void Update(int minutes, int maxMinutes, bool atLimit)
+            public void Update(int minutes, int fullMinutes, bool atLimit)
             {
-                _slider.SetValue(minutes, maxMinutes);
-                if (minutes != _shownMinutes)
-                {
-                    _shownMinutes = minutes;
-                    var fresh = UiComponents.NumUnitAuto(minutes + "分", false, "mslot__min");
-                    var at = IndexOf(_minutes);
-                    Remove(_minutes);
-                    Insert(at, fresh);
-                    _minutes = fresh;
-                }
-                var plusDisabled = _locked || atLimit;
-                _plus.SetEnabled(!plusDisabled);
-                _plus.EnableInClassList("step-btn--locked", plusDisabled);
+                _slider.SetValue(minutes, fullMinutes);
+                _minutes.text = minutes.ToString();
+                var zero = minutes <= 0;
+                EnableInClassList("mrow--zero", zero);
+                _name.EnableInClassList("f-body-bd", !zero);
+                _minusOn = !_locked && !zero;
+                _plusOn = !_locked && !atLimit;
+                _minus.EnableInClassList("mrow__btn--off", !_minusOn);
+                _plus.EnableInClassList("mrow__btn--full", !_plusOn);
+            }
+
+            // 長押しオートリピート（issue #222②）: 押しっぱなし時に一定間隔で再発火する。
+            private static Button StepButton(string text, System.Action onClick)
+            {
+                var b = new Button { text = text };
+                b.clickable = new Clickable(onClick, 400, 80);
+                b.AddToClassList("mrow__btn");
+                return b;
             }
         }
 
-        // この設定で伸びる能力（実効ドライラン）。
+        // この配分で伸びる能力：野手11・投手5。今の能力値とランク＋伸びの棒（スクールカラー・伸びの量に比例）。
         private void BuildGrowth(TrainingPlanView v)
         {
-            var host = _root.Q<VisualElement>("tpm-growth");
-            if (host == null) return;
-            host.Clear();
-            if (v.SelectedGrowth.Count == 0)
+            var fielder = _root.Q<VisualElement>("tpm-growth-fielder");
+            var pitcher = _root.Q<VisualElement>("tpm-growth-pitcher");
+            if (fielder == null || pitcher == null) return;
+            fielder.Clear(); pitcher.Clear();
+            foreach (var g in v.SelectedGrowth) (g.Pitcher ? pitcher : fielder).Add(GrowthRow(g));
+        }
+
+        private static VisualElement GrowthRow(GainBar g)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("grow");
+            if (!g.Grows) row.AddToClassList("grow--still");
+            row.Add(Text(g.AbilityJp, "grow__name"));
+
+            if (g.Text.Length > 0)
             {
-                var none = new Label("休養のみ（この設定では伸びません）");
-                none.AddToClassList("gain-none");
-                host.Add(none);
-                return;
+                // 数値のない能力（弾道＝タイプ・球速＝km/h）：ランク〜棒の列をまとめて文字で出す。
+                row.Add(Text(g.Text, "grow__text"));
+                if (g.Grows) row.Add(Text("伸びる", "grow__tag f-body-bd acc-bg"));
+                return row;
             }
-            foreach (var gb in v.SelectedGrowth) host.Add(AbilityBar(gb, true));
+
+            var chip = UiComponents.RankChipLegacy(g.Grade);
+            chip.AddToClassList("tp-chip20");
+            chip.AddToClassList("grow__chip");
+            row.Add(chip);
+            row.Add(Text(g.Value.ToString(), "grow__val f-num"));
+            var track = new VisualElement();
+            track.AddToClassList("grow__track");
+            if (g.Grows)
+            {
+                var fill = new VisualElement();
+                fill.AddToClassList("grow__fill");
+                fill.AddToClassList("acc-bg");
+                fill.style.width = Length.Percent((float)g.Fraction * 100f);
+                track.Add(fill);
+            }
+            row.Add(track);
+            return row;
+        }
+
+        // 週テンプレート：選択欄（今の配分と同じ中身のテンプレートの名前）＋上に開く一覧（押すと適用・×で削除）。
+        private void BuildTemplates(TrainingPlanView v)
+        {
+            var none = v.Templates.Count == 0;
+            var label = _root.Q<Label>("tpl-current");
+            if (label != null)
+            {
+                label.text = none ? "保存なし" : v.ActiveTemplate.Length > 0 ? v.ActiveTemplate : "未選択";
+                label.EnableInClassList("tpm-tplsel__label--none", v.ActiveTemplate.Length == 0);
+            }
+            _root.Q<VisualElement>("tpl-select")?.EnableInClassList("tpm-tplsel--locked", none);
+            if (none) _tplMenuOpen = false;
+
+            var menu = _root.Q<VisualElement>("tpl-menu");
+            if (menu == null) return;
+            menu.style.display = _tplMenuOpen ? DisplayStyle.Flex : DisplayStyle.None;
+            menu.Clear();
+            if (!_tplMenuOpen) return;
+            menu.BringToFront();
+            var sel = v.SelectedIndex;
+            foreach (var name in v.Templates)
+            {
+                var n = name; // 捕捉
+                var item = new VisualElement();
+                item.AddToClassList("tpm-tplmenu__item");
+                if (n == v.ActiveTemplate) item.AddToClassList("tpm-tplmenu__item--on");
+                var lbl = Text(n, n == v.ActiveTemplate ? "tpm-tplmenu__name f-body-bd" : "tpm-tplmenu__name");
+                item.Add(lbl);
+                if (!v.DelegateOn)
+                    item.RegisterCallback<ClickEvent>(_ =>
+                    {
+                        _state.ApplyTemplate(sel, n);
+                        _tplMenuOpen = false;
+                        Toast(n + " を適用しました");
+                        Render();
+                    });
+                var del = IconButton(LineIcon.Kind.Close, "tpm-tplmenu__del", () => { _state.RemoveTemplate(n); Render(); });
+                del.tooltip = "削除";
+                del.RegisterCallback<ClickEvent>(e => e.StopPropagation());
+                item.Add(del);
+                menu.Add(item);
+            }
         }
 
         // ── 複製ピッカー（コピー元を選ぶ・Issue #133-⑤） ─────────
@@ -677,21 +746,17 @@ namespace KokoSim.Unity.Training
                 var src = r.Index; var srcName = r.Name; // 捕捉
                 var row = new VisualElement();
                 row.AddToClassList("tpc-row");
-
-                var num = new Label(r.NumText);
-                num.AddToClassList("num-badge");
-                if (r.BenchOut) num.AddToClassList("num-badge--out");
-                row.Add(num);
+                row.Add(NumBox(r.NumText, "tp-num--row"));
 
                 var body = new VisualElement(); body.AddToClassList("tpc-row__body");
-                var name = new Label(r.Name); name.AddToClassList("tpc-row__name"); body.Add(name);
-                var meta = new Label(r.GradeLabel + "・" + r.HandLabel); meta.AddToClassList("tpc-row__meta"); body.Add(meta);
+                body.Add(Text(r.Name, "tpc-row__name f-display"));
+                body.Add(Text(r.GradeLabel + " " + r.HandLabel, "tpc-row__meta"));
                 row.Add(body);
 
-                var plan = new VisualElement(); plan.AddToClassList("tpc-row__plan");
-                var preset = new Label(r.PresetJp); preset.AddToClassList("tpc-row__preset"); plan.Add(preset);
-                plan.Add(AllocationBar(r.Chips, v.Budget));   // どんな配分かを見て選べる（一覧と同じ積み上げバー）
-                row.Add(plan);
+                row.Add(Text(r.PresetJp, "tpc-row__preset f-body-bd"));
+                var bar = new VisualElement(); bar.AddToClassList("tpc-row__bar");
+                bar.Add(AllocationBar(r.Chips, v.Budget, true));   // どんな配分かを見て選べる（一覧と同じ横棒）
+                row.Add(bar);
 
                 row.RegisterCallback<ClickEvent>(_ =>
                 {
@@ -704,122 +769,76 @@ namespace KokoSim.Unity.Training
             }
         }
 
-        // 週テンプレの呼出＋削除（issue #222⑤）: チップクリック＝選択選手へ適用、×＝削除。
-        private void BuildTemplates(TrainingPlanView v)
-        {
-            var host = _root.Q<VisualElement>("template-list");
-            if (host == null) return;
-            host.Clear();
-            if (v.Templates.Count == 0)
-            {
-                var none = new Label("保存なし");
-                none.AddToClassList("tpl-chip"); none.AddToClassList("tpl-chip--none");
-                host.Add(none);
-                return;
-            }
-            var sel = v.SelectedIndex;
-            foreach (var name in v.Templates)
-            {
-                var n = name; // 捕捉
-                var chip = new VisualElement();
-                chip.AddToClassList("tpl-chip");
-                if (v.DelegateOn) chip.AddToClassList("tpl-chip--locked");
-
-                var label = new Label(n);
-                label.AddToClassList("tpl-chip__label");
-                if (!v.DelegateOn)
-                    label.RegisterCallback<ClickEvent>(_ =>
-                    {
-                        _state.ApplyTemplate(sel, n);
-                        Toast(n + " を適用しました");
-                        Render();
-                    });
-                chip.Add(label);
-
-                var del = new Label("×");
-                del.AddToClassList("tpl-chip__del");
-                del.RegisterCallback<ClickEvent>(e =>
-                {
-                    e.StopPropagation();
-                    _state.RemoveTemplate(n);
-                    Render();
-                });
-                chip.Add(del);
-
-                host.Add(chip);
-            }
-        }
-
         // ── 部品ファクトリ ─────────────────────────
-        // 能力バー1行は部品辞書の AbilityRow に一本化（UI原則⑤）。
-        // showLevel=true で「今週の成長」ラベル（＋N / 空 / —）を右端に付す。バーは今週の伸び、
-        // ランクチップは**現在の能力値**を表す（相対強調バーは Grade 空でチップ無し）。
-        private static VisualElement AbilityBar(GainBar gb, bool showLevel)
+        // 練習の配分の横棒（部品辞書 LabeledStackBar）。長さは分に比例し、1日の分数に満たないぶんは塗らない。
+        private static VisualElement AllocationBar(List<MenuSlot> chips, int budget, bool showText)
         {
-            var grows = gb.LevelsGained > 0 || gb.Progress > 0.0001;
-            return UiComponents.AbilityRow(new AbilityRowData
-            {
-                Icon = gb.Icon,
-                Label = gb.AbilityJp,
-                Pct = (float)gb.Progress,
-                Grade = gb.Grade,
-                TypeLabel = gb.TypeLabel,
-                KeepChipSlot = gb.KeepChipSlot,
-                // 行高32px固定のコンパクト行（issue #327②-b）。1440×840 で14行が
-                // スクロールなしで一望できる密度（14×32+13×2=474px ≤ 欄477px）。
-                Size = AbilityRowSize.Compact,
-                Dim = showLevel && !grows,   // 伸びない能力は淡色（一覧には常に出す）
-                // 右端は「＋N」（レベルアップ）と「—」（伸びない）だけ。伸びている途中は空にし、
-                // 進み具合はバーで読ませる（％表記は撤去・issue #327①）。
-                Note = showLevel
-                    ? (gb.LevelsGained > 0 ? "＋" + gb.LevelsGained
-                        : grows ? "" : "—")
-                    : "",
-                NoteMuted = !grows,
-            });
-        }
-
-        // 練習配分の積み上げ横バー（Issue #133-③・部品辞書 StackedBar）。幅は Budget を分母に正規化し、
-        // 休養は塗らない＝右側の余白として残す。色クラス対応（メニュー別）は部品辞書に集約。
-        private static VisualElement AllocationBar(System.Collections.Generic.List<MenuSlot> chips, int budget)
-        {
-            var segs = new System.Collections.Generic.List<UiComponents.StackedBarSegment>();
+            var segs = new List<UiComponents.LabeledStackSegment>();
             foreach (var c in chips)
-                segs.Add(new UiComponents.StackedBarSegment
+                segs.Add(new UiComponents.LabeledStackSegment
                 {
-                    StyleClass = UiComponents.TrainingMenuColorClass(c.Menu),
-                    Fraction = budget > 0 ? (float)c.Minutes / budget : 0f,
+                    ColorClass = "tm-bg--" + (c.AltShade ? "defpos-alt" : UiComponents.TrainingMenuColorClass(c.Menu)),
+                    Weight = c.Minutes,
+                    Name = c.ShortJp,
+                    Count = c.Minutes.ToString(),
                     Tooltip = c.MenuJp + " " + c.Minutes + "分",
                 });
-            var bar = UiComponents.StackedBar(segs);
-            bar.AddToClassList("preset-open__bar");
-            return bar;
+            return UiComponents.LabeledStackBar(segs, budget, showText);
         }
 
-        private static Label Tag(string text, string classes)
+        // 「打・走・守・投」の見出しとランクのチップの組（チップの大きさはクラスで渡す）。
+        private static VisualElement RankPairs(PlayerStrength s, string chipClass)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("tp-ranks");
+            AddRankPair(box, "打", s.BattingTier, chipClass);
+            AddRankPair(box, "走", s.MobilityTier, chipClass);
+            AddRankPair(box, "守", s.DefenseTier, chipClass);
+            AddRankPair(box, "投", s.PitchingTier, chipClass);
+            return box;
+        }
+
+        private static void AddRankPair(VisualElement box, string label, Tier tier, string chipClass)
+        {
+            var pair = new VisualElement();
+            pair.AddToClassList("tp-ranks__pair");
+            pair.Add(Text(label, "tp-ranks__label"));
+            var chip = UiComponents.RankChipLegacy(tier.ToString());
+            chip.AddToClassList(chipClass);
+            pair.Add(chip);
+            box.Add(pair);
+        }
+
+        private static Label NumBox(string text, string extraClass)
+        {
+            var num = new Label(text);
+            num.AddToClassList("tp-num");
+            num.AddToClassList("f-num-bd");
+            if (!string.IsNullOrEmpty(extraClass)) num.AddToClassList(extraClass);
+            return num;
+        }
+
+        private static VisualElement Cell(string colClass)
+        {
+            var c = new VisualElement();
+            c.AddToClassList("tp-cell");
+            c.AddToClassList(colClass);
+            return c;
+        }
+
+        private static Button IconButton(LineIcon.Kind kind, string cls, System.Action onClick)
+        {
+            var b = new Button(onClick) { text = "" };
+            b.AddToClassList(cls);
+            b.Add(new LineIcon(kind));
+            return b;
+        }
+
+        private static Label Text(string text, string classes)
         {
             var t = new Label(text);
             foreach (var c in classes.Split(' ')) if (!string.IsNullOrEmpty(c)) t.AddToClassList(c);
             return t;
-        }
-
-        private static VisualElement MakeChip(string text, bool on)
-        {
-            var c = new Label(text);
-            c.AddToClassList("filter-chip");
-            if (on) c.AddToClassList("filter-chip--on");
-            return c;
-        }
-
-        // 長押しオートリピート（issue #222②）: UITK Clickable(action, delay, interval) で
-        // 押しっぱなし時に一定間隔で onClick を再発火させる（既定Buttonの単発クリックだけでは連打が要る）。
-        private static Button StepButton(string text, System.Action onClick, bool disabled)
-        {
-            var b = new Button { text = text };
-            b.clickable = new Clickable(onClick, 400, 80);
-            b.AddToClassList("step-btn");
-            if (disabled) { b.SetEnabled(false); b.AddToClassList("step-btn--locked"); }
-            return b;
         }
 
         // ── ユーティリティ ─────────────────────────
