@@ -792,6 +792,41 @@ namespace KokoSim.EditorTests
                 "塁審にマスク・胸当てが付いている: " + string.Join(",", gear));
         }
 
+        // ---- 攻撃伝令の場面は本塁の上を通らない（issue #1741） ----
+
+        /// <summary>
+        /// 攻撃伝令の場面のあいだ、伝令役も打者も本塁の上を通らず、伝令役は最初のコマから打者の横にいること
+        /// （入ってくる足取りを映さない）。ベンチが打者と反対側（後攻の右打者・先攻の左打者）だと、ベンチから
+        /// 一直線の道が本塁を横切った。ベンチ側×打席の左右の4通りを見る。
+        /// </summary>
+        [TestCase(true, false, TestName = "OffenseTimeout_StaysOffHomePlate_Bench1B_RightBatter")]
+        [TestCase(true, true, TestName = "OffenseTimeout_StaysOffHomePlate_Bench1B_LeftBatter")]
+        [TestCase(false, false, TestName = "OffenseTimeout_StaysOffHomePlate_Bench3B_RightBatter")]
+        [TestCase(false, true, TestName = "OffenseTimeout_StaysOffHomePlate_Bench3B_LeftBatter")]
+        public void OffenseTimeout_StaysOffHomePlate_AndStartsBesideTheBatter(bool bench1B, bool batterLeft)
+        {
+            var rig = Rig;
+            rig.SetHandedness(batterLeft, false);
+            float settle = 1f / DuelStageRig.PoseFps;
+            for (int i = 0; i < 12; i++) rig.Tick(settle);
+            if (!rig.BeginOffenseTimeoutScene(bench1B)) Assert.Ignore("攻撃伝令の場面が組めない（収録未導入の端末）");
+
+            const float dt = 1f / 60f;
+            float minMsg = float.MaxValue, minBat = float.MaxValue, maxApart = 0f;
+            for (float t = 0f; t < 40f && !rig.TimeoutSceneDone; t += dt)
+            {
+                var (b, m) = rig.TimeoutPositionsForCapture();
+                minMsg = Mathf.Min(minMsg, m.magnitude);
+                minBat = Mathf.Min(minBat, b.magnitude);
+                maxApart = Mathf.Max(maxApart, Vector2.Distance(b, m));
+                rig.Tick(dt);
+            }
+            Assert.That(rig.TimeoutSceneDone, "場面が終わらない");
+            Assert.That(minMsg, Is.GreaterThan(1.0f), $"伝令役が本塁のそば（{minMsg:F2}m）を通った");
+            Assert.That(minBat, Is.GreaterThan(0.6f), $"打者が本塁のそば（{minBat:F2}m）を通った");
+            Assert.That(maxApart, Is.LessThan(1.0f), $"伝令役が打者から離れた（{maxApart:F2}m）＝ベンチから入ってくる足取りが映っている");
+        }
+
         // ---- バントのあとの打者走者の足の滑り（issue #1734） ----
 
         /// <summary>
