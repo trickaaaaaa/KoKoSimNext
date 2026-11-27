@@ -212,6 +212,9 @@ namespace KokoSim.Unity.Home
                 };
                 foreach (var scene in scenes)
                 {
+                    EventService.Clear();       // 前の段の積み残しが先に出て場面が埋もれないよう、場面だけにする
+                    NewTeamService.Clear();
+                    UniformNumberService.Clear();
                     DraftService.RaiseScene(scene.Item2, scene.Item3);
                     Debug.Log("[EV] ドラフト場面を積んだ: " + scene.Item1 + " pending=" + EventService.Pending.Count);
 
@@ -219,7 +222,7 @@ namespace KokoSim.Unity.Home
                     yield return null; yield return null;
                     var nov5 = doc4.rootVisualElement.Q<VisualElement>("ev-novel");
                     var adv3 = doc4.rootVisualElement.Q<Button>("advance");
-                    Submit(adv3);
+                    if (nov5.resolvedStyle.display == DisplayStyle.None) Submit(adv3);   // 開いていなければ実経路の週送りで開く
                     yield return null; yield return null;
                     Debug.Log("[EV] ドラフト提示後 display=" + nov5.resolvedStyle.display + " pending=" + EventService.Pending.Count);
 
