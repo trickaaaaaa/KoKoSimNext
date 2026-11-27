@@ -348,7 +348,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>【開発用】塁審の帽子の位置の見比べ（BaseUmpireCapMount への加算[m]）。</summary>
         public static float BaseUmpCapAddYForCapture, BaseUmpCapAddZForCapture;
-        public static float BaseUmpCapScaleForCapture = 1f;
+        public static float BaseUmpCapScaleForCapture = 1f, BaseUmpCapScaleZForCapture = 1f;
 
         /// <summary>【開発用】比較シート撮影向けに着衣メッシュ資産を差し替える（null=既定のSlim0）。</summary>
         internal static string UniformMeshOverrideForCapture;
