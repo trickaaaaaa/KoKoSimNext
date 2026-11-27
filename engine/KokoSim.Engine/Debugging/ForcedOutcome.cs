@@ -84,6 +84,11 @@ public enum ForcedOutcome
     /// 守備の低い野手の上限に近い保持）。捕球の収録を流し切っても余る時間を横歩きで寄る絵の撮影用。
     /// </summary>
     VerySlowHandleGrounder,
+    /// <summary>
+    /// 打席の初球を「内野手が通り道でノーバウンド捕球するライナーのアウト」にする（issue #1724 の撮影用）。
+    /// 実際の守備位置でライナー捕球が成立する打球を決まった順で探して当てる（乱数を引かない）。
+    /// </summary>
+    InfieldLineOut,
 
     // ── 走塁（盗塁企図を強制したうえで成否を固定する） ──
     StealSuccess,

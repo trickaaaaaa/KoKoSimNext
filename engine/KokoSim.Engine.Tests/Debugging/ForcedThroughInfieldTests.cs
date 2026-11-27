@@ -97,4 +97,25 @@ public sealed class ForcedThroughInfieldTests
         var afterTail = HandleBobblePlanner.ApplyStep(play, settleSeconds: 1.2, throwLeadSeconds: 0.76);
         Assert.Equal(stepsAfterCatchTail, !ReferenceEquals(play, afterTail));
     }
+    /// <summary>
+    /// 強制発動 <see cref="ForcedOutcome.InfieldLineOut"/>（issue #1724 の撮影用）: 初球が、内野手が通り道で
+    /// ノーバウンド捕球するライナーのアウトになる。
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(42UL)]
+    public void InfieldLineOut_FirstPitchIsALineDriveCaughtByAnInfielder(ulong seed)
+    {
+        var field = new FieldGeometry();
+        Assert.NotNull(ForcedInfieldLineOutBall.For(
+            ForcedOutcome.InfieldLineOut, field, new KokoSim.Engine.Match.Pitching.Aerodynamics(), field.StandardAlignment(), new FieldingCoefficients()));
+
+        var prog = new MatchProgression(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, seed,
+            new ScenarioStart { Inning = 1, IsTop = true, Outs = 0 });
+        prog.ForceNext(ForcedOutcome.InfieldLineOut);
+        Assert.Equal(AdvancePitchResult.Pitch, prog.AdvancePitch());
+        Assert.Equal(AdvancePitchResult.PlateAppearance, prog.AdvancePitch());
+        Assert.Equal(PlateAppearanceResult.InPlayOut, prog.Current!.Result);
+        Assert.NotNull(prog.Current.Play);
+    }
 }

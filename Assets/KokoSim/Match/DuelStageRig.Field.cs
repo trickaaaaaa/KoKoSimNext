@@ -1573,6 +1573,8 @@ namespace KokoSim.Unity.Match
             public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
             public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
             public float PulledM;     // 捕球点を engine の終点から**軌跡に沿って**遡らせた量[m]
+            public float RewoundS, RewoundM, EndH;
+            public string HProf;   // 空中捕球の時刻の付け替え（診断用）: 遡った秒・水平距離[m]・付け替え前の終点の高さ[m]
             public float LineOffM;    // 捕球点が球の線（終点へ来る向き）から**横へ**外れた量[m]（issue #782・実測用）
             /// <summary>
             /// 捕球のために野手の体を寄せる量（ステージ XZ）。球の線の上の捕球点へ、収録のグラブの距離まで
@@ -1955,16 +1957,25 @@ namespace KokoSim.Unity.Match
                 // 空中の球の捕球時刻は「区間の終点（高さ0）」でなく「放物線がグラブの高さを通る時刻」（issue #1336）。
                 // 終点で高さ0の球をグラブの高さで捕ると、捕球の0.3秒前から球を放物線の外へ寄せることになり、
                 // 落下が急に止まって吸い込まれて見えた。engine の時刻・判定には触れない（絵の捕球時刻だけ）
+                float rewoundS = 0f, rewoundM = 0f, endH0 = 0f; string hProf = null;
                 bool aerialCatch = !isThrow && !missBy.HasValue && eb != null && eb.Kind == BallSegmentKind.Flight
                     && (kind == FieldCatchKind.Catch || kind == FieldCatchKind.Dive || kind == FieldCatchKind.Drop);
                 if (aerialCatch)
                 {
                     double tg = AerialGloveCrossLocalT(seg, an.GloveY, tLocal);
+                    rewoundS = (float)(tLocal - tg);
+                    endH0 = (float)end.H;
+                    var hp = new StringBuilder();
+                    for (double bk = 0.0; bk <= 0.8 && tLocal - bk >= 0.0; bk += 0.1)
+                        hp.Append(string.Format(System.Globalization.CultureInfo.InvariantCulture, "-{0:F1}:{1:F2}/{2:F1} ", bk, seg.At(tLocal - bk).H, (seg.At(tLocal - bk).X - seg.At(tLocal).X)));
+                    hProf = hp.ToString();
                     if (tg < tLocal)
                     {
+                        var end0 = end;
                         tLocal = tg;
                         tc = (float)(seg.T0 + tLocal);
                         end = seg.At(tLocal);
+                        rewoundM = new Vector2((float)(end.X - end0.X), (float)(end.Y - end0.Y)).magnitude;
                     }
                 }
                 float reach = new Vector2(an.GloveX, an.GloveZ).magnitude * CatchReachSlack;
@@ -2082,6 +2093,7 @@ namespace KokoSim.Unity.Match
                     HoldUntil = holdUntil,
                     FielderGapM = bestD,
                     PulledM = pulled,
+                    RewoundS = rewoundS, RewoundM = rewoundM, EndH = endH0, HProf = hProf,
                 });
                 switch (kind)
                 {
@@ -2934,6 +2946,18 @@ namespace KokoSim.Unity.Match
                 p.y, _ball.activeInHierarchy, _ballShadow != null && _ballShadow.activeSelf, glove);
         }
 
+        /// <summary>EditMode テスト用: 組んだ捕球の予定（捕る人・種別・捕球点・体の寄せ量[m]・絵の捕球時刻）。</summary>
+        internal (FieldPosition Pos, string Kind, Vector3 Point, float BodyShiftM, float TCatch)[] CatchPlanForTest()
+        {
+            var r = new (FieldPosition, string, Vector3, float, float)[_catchEvents.Count];
+            for (int i = 0; i < r.Length; i++)
+            {
+                var e = _catchEvents[i];
+                r[i] = (e.Pos, e.Kind.ToString(), e.Point, e.BodyShift.magnitude, e.TCatch);
+            }
+            return r;
+        }
+
         /// <summary>EditMode テスト用: 組んだ送球の予定（投げ手・流し始め・リリース）。</summary>
         internal (FieldPosition From, float TFire, float TRelease)[] ThrowPlanForTest()
         {
@@ -2975,6 +2999,40 @@ namespace KokoSim.Unity.Match
                     e.From, e.TFire, e.TRelease, e.Rate, move, live ? 1 : 0, root.x, root.z, lf.x, lf.z, rf.x, rf.z);
             }
             return "throw=-";
+        }
+
+        /// <summary>
+        /// 【撮影用】内野手の空中捕球の後の滑り（issue #1724）。毎コマ1行ぶんを返す。
+        /// <c>shift</c> は体の寄せのいまの量[m]、<c>eng</c> は engine の野手位置、<c>root</c>/<c>lf</c>/<c>rf</c> は
+        /// いま描かれている足元と両足首の stage-local の水平位置（足の地面に対する滑りを後から読む材料）。
+        /// <c>gap</c> は捕球点と engine の野手位置の水平距離、<c>pt</c> は捕球点（水平）、<c>tc</c> は絵の捕球時刻。
+        /// </summary>
+        public string CatchSlipDiagForCapture()
+        {
+            if (_fieldPlay == null) return "play=-";
+            for (int i = 0; i < _catchEvents.Count; i++)
+            {
+                var e = _catchEvents[i];
+                if (!HoldsBall(e.Kind) || e.Rolling) continue;
+                var a = FielderActor(e.Pos);
+                if (a == null || a.Go == null) continue;
+                var eng = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, _fieldT).Pos;
+                var root = StagePos(a);
+                Vector3 lf = Vector3.zero, rf = Vector3.zero;
+                if (a.Animator != null && _root != null)
+                {
+                    var l = a.Animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                    var r = a.Animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                    if (l != null) lf = _root.transform.InverseTransformPoint(l.position);
+                    if (r != null) rf = _root.transform.InverseTransformPoint(r.position);
+                }
+                var shift = CatchBodyShiftNow(a);
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0} {1} aerial={2} tc={3:F3} hold={4:F2} gap={5:F3} bs={6:F3} rew={19:F3}s/{20:F2}m endH={21:F2} hp=[{22}] shift={7:F3},{8:F3} pt={9:F3},{10:F3} eng={11:F3},{12:F3} root={13:F3},{14:F3} lf={15:F3},{16:F3} rf={17:F3},{18:F3}",
+                    e.Pos, e.Kind, e.Aerial ? 1 : 0, e.TCatch, CatchHoldSeconds, e.FielderGapM, e.BodyShift.magnitude, shift.x, shift.y,
+                    e.Point.x, e.Point.z, eng.X, eng.Y, root.x, root.z, lf.x, lf.z, rf.x, rf.z, e.RewoundS, e.RewoundM, e.EndH, e.HProf);
+            }
+            return "catch=-";
         }
 
         /// <summary>
@@ -5985,20 +6043,34 @@ namespace KokoSim.Unity.Match
                 : Vector3.Lerp(enginePos, e.Point, w);
 
         /// <summary>
+        /// 空中捕球の捕球時刻を、区間の終点から遡らせてよい水平距離の上限[m]（issue #1724）。
+        /// 低く強いライナーは、捕る付近ではずっとグラブの高さより下を飛ぶので、遡ると「打った直後の上がり際」まで
+        /// 行き着く（実測: 0.23秒・5.9m）。捕球点が engine の野手から届かない所へずれ、体を寄せて捕ってから
+        /// 保持の後に元の位置へ平行移動で戻す＝足を動かさずに滑って見えた。急に落ちるフライが遡る分
+        /// （数十cm〜1m）は従来どおり許し、それより大きく遡るなら付け替えない（終点で捕る）。
+        /// </summary>
+        private static double AerialGloveRewindMaxM = 1.0;   // 撮影の見比べ（captures.yaml overrides）で書き換えるので const にしない
+
+        /// <summary>
         /// 飛球の区間 <paramref name="seg"/> が下りながら高さ <paramref name="gloveY"/>[m] を通る、区間内の時刻[s]。
-        /// 通らなければ（弾道が低く最後までグラブより下）<paramref name="endLocal"/> をそのまま返す。
+        /// 通らなければ（弾道が低く最後までグラブより下）、または終点から水平に
+        /// <see cref="AerialGloveRewindMaxM"/> を超えて遡るなら <paramref name="endLocal"/> をそのまま返す。
         /// </summary>
         private static double AerialGloveCrossLocalT(PlaybackBallSegment seg, double gloveY, double endLocal)
         {
             const double step = 0.005, maxBack = 0.5;
-            if (seg.At(endLocal).H >= gloveY) return endLocal;
+            var endPos = seg.At(endLocal);
+            if (endPos.H >= gloveY) return endLocal;
             double hi = endLocal;
             for (double back = step; back <= maxBack && endLocal - back >= 0.0; back += step)
             {
                 double lo = endLocal - back;
-                if (seg.At(lo).H >= gloveY)
+                var p = seg.At(lo);
+                if (System.Math.Sqrt((p.X - endPos.X) * (p.X - endPos.X) + (p.Y - endPos.Y) * (p.Y - endPos.Y)) > AerialGloveRewindMaxM)
+                    return endLocal;
+                if (p.H >= gloveY)
                 {
-                    double hl = seg.At(lo).H, hh = seg.At(hi).H;
+                    double hl = p.H, hh = seg.At(hi).H;
                     return hl > hh ? lo + (hi - lo) * (hl - gloveY) / (hl - hh) : lo;
                 }
                 hi = lo;

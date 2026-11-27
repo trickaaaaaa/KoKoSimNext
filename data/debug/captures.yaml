@@ -79,6 +79,43 @@ captures:
     video: {from: catch-0.8, to: release+0.9, fps: 30}
     probes: [ThrowSlipDiag]
 
+  # ── 内野手がライナーをノーバウンドで捕った後に、捕球の姿勢のまま位置が滑らないか（issue #1724）。
+  # CatchSlipDiag の毎コマ実測（捕球点と engine の野手位置の距離・体の寄せ量・足元と両足首の位置）で、
+  # 捕球〜保持〜畳むまでの水平移動と足の滑りを測る。catch＝送球の直前の区間の終わり ──
+  - id: infield-liner-slip-1724
+    name: "内野ライナーを捕った後の滑り（issue #1724・捕球〜保持の水平移動と足の滑りの実測）"
+    scenario: fair-fly-out-lab
+    manager: away
+    force: InfieldLineOut
+    video: {from: start, to: end, fps: 30}
+    probes: [CatchSlipDiag, BallHoldDiag, FieldCatchDiag]
+
+  - id: infield-liner-slip-1724-before
+    name: "内野ライナーを捕った後の滑り・修正前の見比べ（遡り上限を外す・issue #1724）"
+    scenario: fair-fly-out-lab
+    manager: away
+    force: InfieldLineOut
+    overrides: {DuelStageRig.AerialGloveRewindMaxM: 1000}
+    video: {from: start, to: end, fps: 30}
+    probes: [CatchSlipDiag, BallHoldDiag, FieldCatchDiag]
+
+  - id: fly-slip-1724
+    name: "外野フライを捕った後の滑りが出ない（issue #1724 の回帰確認・遡りは従来どおり）"
+    scenario: fair-fly-out-lab
+    manager: away
+    view: rig
+    video: {from: flight_end-0.6, to: end, fps: 30}
+    probes: [CatchSlipDiag, BallHoldDiag]
+
+  - id: fly-slip-1724-before
+    name: "外野フライを捕った後の滑り・修正前の見比べ（遡り上限を外す・issue #1724）"
+    scenario: fair-fly-out-lab
+    manager: away
+    view: rig
+    overrides: {DuelStageRig.AerialGloveRewindMaxM: 1000}
+    video: {from: flight_end-0.6, to: end, fps: 30}
+    probes: [CatchSlipDiag, BallHoldDiag]
+
   - id: foul-chased-1074
     name: "あと一歩届かなかったファウルフライを守備ビューで見せる（issue #1074 (a)）"
     scenario: of-grounder-norunner-lab

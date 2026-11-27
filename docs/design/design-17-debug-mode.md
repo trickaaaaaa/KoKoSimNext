@@ -323,10 +323,10 @@ public enum ForcedOutcome
 ```
 
 > **このスケッチは起票時の案で、実装とは違う**。現行の `ForcedOutcome`（`engine/KokoSim.Engine/Debugging/ForcedOutcome.cs`）は
-> `None` を除いて**28種**。`PassedBall` は持たず（`WildPitch` の強制は `PassedBallProb = 0` に寄せる）、`Error` は `ReachedOnError`、
+> `None` を除いて**29種**。`PassedBall` は持たず（`WildPitch` の強制は `PassedBallProb = 0` に寄せる）、`Error` は `ReachedOnError`、
 > `TriplePlay`／`Balk`／`Squeeze`／`EnterTieBreak`／`WalkOff` は持たない（§12.1）。スケッチに無い種別として、
 > 撮影用の `BuntInPlay`（#1089）・`ChasedFoulFly`／`BigFoul`／`GroundFoul`／`HighFoul`（#1074）・
-> `ThroughInfieldLeft`／`ThroughInfieldMiddle`／`ThroughInfieldRight`（#1591・#1639）・`FieldingError`（#1247）を足してある。
+> `ThroughInfieldLeft`／`ThroughInfieldMiddle`／`ThroughInfieldRight`（#1591・#1639）・`InfieldLineOut`（#1724・内野手が通り道で捕るライナーのアウト）・`FieldingError`（#1247）を足してある。
 
 - 適用は「次の1球」または「次の1打席」の**一度きり**（1球采配の override と同型）。
 - **実装方針**: 該当の抽選を丸ごとスキップし、結果を固定して以降のパイプライン（走者進塁・記録・タイムライン生成）は通常どおり流す。
