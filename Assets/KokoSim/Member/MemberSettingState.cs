@@ -179,8 +179,13 @@ namespace KokoSim.Unity.Member
         /// <summary>カーソルを合わせた選手。未選択なら比較の左、選択中(_picked)があれば右に出る。-1＝ホバーなし。</summary>
         public void SetHovered(int index) => _hovered = index;
 
-        /// <summary>カーソルが外れた（枠/チップの PointerLeave）。表示が残らないようホバーを解除する。</summary>
-        public void ClearHovered(int index) { if (_hovered == index) _hovered = -1; }
+        /// <summary>カーソルが一覧の外へ出た。ホバーを解除する（枠と枠の隙間では呼ばない＝比較が既定の選手へ戻ってチラつかない）。変わったら true。</summary>
+        public bool ClearHovered()
+        {
+            if (_hovered < 0) return false;
+            _hovered = -1;
+            return true;
+        }
 
         public void SetTab(int tab) => _tab = Math.Clamp(tab, 0, 1);
 

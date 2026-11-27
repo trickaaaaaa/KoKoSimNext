@@ -1707,6 +1707,42 @@ screens:
       - hover: .ms-row[2]
       - shot: 02-compare-two
 
+  - id: hover-gap-no-flicker-1727
+    name: "スタメン設定・メンバー設定：行から行へ動かす隙間で比較が既定の選手へ戻らない／一覧の外へ出ると戻る（#1727）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: NewTeamService.Skip()
+      - show: LineupSetting
+      - wait: 5
+      - shot: 01-lineup-default
+      - hover: .lu-row[3]
+      - wait: 2
+      - shot: 02-lineup-row3
+      # 行3から離れた（隙間にいる）：行の leave では戻さないので行3のまま
+      - leave: .lu-row[3]
+      - wait: 2
+      - shot: 03-lineup-gap
+      - hover: .lu-bench-row[0]
+      - wait: 2
+      - shot: 04-lineup-bench0
+      # 一覧（本体の3列）の外へ出た：既定（1番打者）へ戻る
+      - leave: .lu-body
+      - wait: 2
+      - shot: 05-lineup-outside
+      - show: MemberSetting
+      - wait: 5
+      - shot: 06-member-default
+      - hover: .ms-row[0]
+      - wait: 2
+      - shot: 07-member-row0
+      - leave: .ms-row[0]
+      - wait: 2
+      - shot: 08-member-gap
+      - leave: .ms-body
+      - wait: 2
+      - shot: 09-member-outside
+
   # ── セーブデータ画面のリデザイン：1枠ずつのカード＋いま遊んでいるデータ ──
   # 手動3へ実際に保存して最後に消す（手動1・2には触らない）。手動3に本物のセーブがある環境では回さない。
 
