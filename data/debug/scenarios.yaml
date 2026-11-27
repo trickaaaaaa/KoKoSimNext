@@ -64,8 +64,7 @@ scenarios:
     outs: 1
     bases: [2]
     count: { balls: 3, strikes: 0 }
-    force: WildPitch
-    seed: 20260723
+    seed: 320   # 2球目が暴投になるシード（強制発動は着弾コース次第で空振りするため自然な解決で固定。WildPitchScenarioTests が見張る）
 
   - id: wild-pitch-first-lab
     name: 暴投検証（3ボール・走者一塁のみ。issue #1769）
@@ -76,8 +75,7 @@ scenarios:
     outs: 1
     bases: [1]
     count: { balls: 3, strikes: 0 }
-    force: WildPitch
-    seed: 20260723
+    seed: 320   # wild-pitch-second-lab と同じ（2球目が暴投）
 
   - id: dropped-third-strike-lab
     name: 振り逃げ検証（2死・一塁空き）
