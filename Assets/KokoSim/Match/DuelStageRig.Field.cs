@@ -4465,6 +4465,17 @@ namespace KokoSim.Unity.Match
                         r.HideAt.HasValue ? r.HideAt.Value.ToString("F2") : "—"));
                 }
             }
+            if (_fieldPlay?.Runners != null)
+                foreach (var r in _fieldPlay.Runners)
+                    for (int k = 0; k < r.Segs.Count; k++)
+                    {
+                        var sg = r.Segs[k];
+                        double dur = sg.T1 - sg.T0, dist = System.Math.Sqrt(
+                            (sg.To.X - sg.From.X) * (sg.To.X - sg.From.X) + (sg.To.Y - sg.From.Y) * (sg.To.Y - sg.From.Y));
+                        sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                            "seg\t{0}\t#{1}\tT0={2:F2}\tT1={3:F2}\tdist={4:F1}m\tv={5:F2}m/s",
+                            r.Label, k, sg.T0, sg.T1, dist, dur > 1e-4 ? dist / dur : 0));
+                    }
             sb.AppendLine("走者(毎コマ)\tt\tspeed\t段\t倍率\tslip");
             foreach (var e in _runnerTrace)
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
