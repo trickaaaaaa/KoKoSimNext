@@ -216,7 +216,9 @@ namespace KokoSim.Unity.Debugging
                             if (_r.TimeoutViaMenu)
                             {
                                 // 画面の操作と同じ流れで送る（issue #1174）。球の途中なら送れないので次のコマで試す
-                                timeoutSent = ctrl.SendTimeoutViaMenuForCapture(_r.TimeoutMessengerIndex);
+                                timeoutSent = _r.TimeoutByOpponent
+                                    ? ctrl.SendOpponentTimeoutForCapture(_r.TimeoutMessengerIndex)
+                                    : ctrl.SendTimeoutViaMenuForCapture(_r.TimeoutMessengerIndex);
                                 if (timeoutSent) sceneSeen = false;
                             }
                             else

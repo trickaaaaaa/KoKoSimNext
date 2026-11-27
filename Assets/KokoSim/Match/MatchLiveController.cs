@@ -554,11 +554,17 @@ namespace KokoSim.Unity.Match
         private readonly Queue<KokoSim.Engine.Match.Broadcast.TelopCard> _subTelopQueue = new();
         private float _subTelopClock;
         private bool _subTelopOn;
-        // 守備伝令の場面（issue #1174）。伝令を送った中断で予約し、再開して球の合間に入ったら流す。
-        // 予約の中身はテロップの1行（伝令役の背番号＋名前／記録員）。null＝予約なし
-        private KokoSim.Engine.Match.Broadcast.TelopRow _timeoutScenePending;
+        // 伝令の場面（守備＝issue #1174・攻撃＝#1175）。自校の伝令は送った中断で、相手校の伝令（采配AI・issue #1739）は
+        // 打席の頭で、どちらもここへ予約し、球の合間に入ったら流す。
+        private sealed class TimeoutSceneItem
+        {
+            public bool TeamIsAway;   // 伝令を送った側が先攻か（ベンチの側・テロップの校名）
+            public bool Offense;      // 攻撃伝令（打者への耳打ち）か
+            public KokoSim.Engine.Match.Broadcast.TelopRow Row;   // 伝令役の背番号＋名前／記録員
+        }
+        private readonly List<TimeoutSceneItem> _timeoutScenes = new();
         private bool _timeoutSceneOn;
-        private bool _timeoutSceneOffense;  // 予約・流している場面が攻撃伝令（打者への耳打ち・issue #1175）か
+        private int _timeoutLogCount;   // 既に取り込んだ采配AIの伝令ログ件数（_prog.Timeouts との差分検知。issue #1739）
         private bool _timeoutSceneRig;      // 3Dの場面を流しているか（false＝テロップだけ）
         private float _timeoutSceneClock;
         // 投球・打球の描画の途中で出したか（そのときは対決ビューの芝居も止める＝明けたら続きから）。
@@ -921,12 +927,13 @@ namespace KokoSim.Unity.Match
             _inningBreakClock = 0f;
             _inningBreakOn = false;
             _subLogCount = 0;
+            _timeoutLogCount = 0;
             _subTelopQueue.Clear();
             _subTelopClock = 0f;
             _subTelopOn = false;
             _subTelopFreezeRig = false;
             _subTelopPumpAfter = false;
-            _timeoutScenePending = null;
+            _timeoutScenes.Clear();
             _timeoutSceneOn = false;
             _announcedKey = null;
             _pitchBattingChoice = null;
@@ -1656,8 +1663,12 @@ namespace KokoSim.Unity.Match
             if (!_fastMode && (kind == MatchProgression.PlayerTimeoutResult.Defense
                                || kind == MatchProgression.PlayerTimeoutResult.Offense))
             {
-                _timeoutScenePending = TimeoutTelopRow(messenger);
-                _timeoutSceneOffense = kind == MatchProgression.PlayerTimeoutResult.Offense;
+                _timeoutScenes.Add(new TimeoutSceneItem
+                {
+                    TeamIsAway = _managerIsAway,
+                    Offense = kind == MatchProgression.PlayerTimeoutResult.Offense,
+                    Row = TimeoutTelopRow(messenger),
+                });
             }
             if (_prog != null) ApplyPitcherRattled(_prog.Snapshot(), _atBat?.IsTop ?? _prog.Snapshot().OffenseIsTop);   // 守備伝令で動揺が解けた絵を即座に（issue #1178）
             UpdatePauseMenu();   // 残数と送信済み表示を反映
@@ -2435,6 +2446,7 @@ namespace KokoSim.Unity.Match
         // 高速試合モード中は履歴だけ（止めない）。観測データの表示のみ＝試合結果に影響しない。
         private void DrainSubstitutionEvents()
         {
+            DrainTimeoutEvents();   // 采配AIの伝令も同じ「直前の進行で増えた分」の取り込み（issue #1739）
             var log = _prog?.Substitutions;
             if (log == null) return;
             // 交代の下書きを取り消すと engine は再生し直す＝ログが短くなることがある。
@@ -2461,7 +2473,7 @@ namespace KokoSim.Unity.Match
             if (_subTelopOn || _subTelopQueue.Count == 0 || _subTelop == null) return;
             if (_inningBreakOn || _paused || _fastMode || _gameOver) return;
             // 伝令の場面が先（issue #1174「伝令の場面 → 交代テロップ」の順）。場面が明けたら EndTimeoutScene が呼び直す
-            if (_timeoutSceneOn || _timeoutScenePending != null) return;
+            if (_timeoutSceneOn || NextTimeoutScene() != null) return;
             var card = _subTelopQueue.Dequeue();
             // 判定・得点・旧ポップアップが残っていると重なって読みづらいので先に畳む。
             HidePitchCall();
@@ -2516,9 +2528,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>伝令役のテロップの1行（背番号＋名前。控えが0人で記録員が走ったら「記録員」）。守備位置は出さない。</summary>
         private static KokoSim.Engine.Match.Broadcast.TelopRow TimeoutTelopRow(Player messenger) =>
-            messenger != null
-                ? new KokoSim.Engine.Match.Broadcast.TelopRow("伝令", "", messenger.UniformNumber, messenger.Name, "", null)
-                : new KokoSim.Engine.Match.Broadcast.TelopRow("伝令", "", 0, "記録員", "", null);
+            KokoSim.Engine.Match.Broadcast.TimeoutTelop.Row(messenger == null
+                ? null
+                : new KokoSim.Engine.Match.Game.SubstitutionPlayer(messenger.SourceId, messenger.UniformNumber, messenger.Name));
 
         /// <summary>
         /// 予約した伝令の場面を始める。球の合間（采配窓・切れ目）に限る＝投球・打球の途中なら終わるまで待つ。
@@ -2526,27 +2538,68 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void TryBeginTimeoutScene()
         {
-            if (_timeoutSceneOn || _timeoutScenePending == null) return;
+            if (_timeoutSceneOn || _timeoutScenes.Count == 0) return;
             if (_gameOver || _paused || _fastMode || _inningBreakOn || _gameTelopOn) return;
             if (_stage != LiveStage.Window && _stage != LiveStage.Idle) return;
             if (FieldPlayActive || _subTelopOn) return;
-            // 送った側の半回でなくなっていたら（守備伝令の直後に3アウト目を取った等）捨てずに預かる。
-            // 伝令の効き目は次のその側の半回へ持ち越される＝その半回の窓で場面を流す（issue #1246）。
-            // 判定はエンジンの局面（3アウトで次の半回の攻守）＝半回が閉じた後の切れ目では流さない。
-            if (_prog == null || _prog.IsTeamOnOffense(_managerIsAway) != _timeoutSceneOffense) return;
-            var row = _timeoutScenePending;
-            _timeoutScenePending = null;
+            var item = NextTimeoutScene();
+            if (item == null) return;
+            _timeoutScenes.Remove(item);
             HidePitchCall();
             HideScoreCall();
-            bool bench1B = DuelStageRig.BenchIsFirstBaseSide(_managerIsAway);
-            _timeoutSceneRig = DuelPacingActive && (_timeoutSceneOffense
+            bool bench1B = DuelStageRig.BenchIsFirstBaseSide(item.TeamIsAway);
+            _timeoutSceneRig = DuelPacingActive && (item.Offense
                 ? _duelRig.BeginOffenseTimeoutScene(bench1B)
                 : _duelRig.BeginTimeoutScene(bench1B));
-            var card = new KokoSim.Engine.Match.Broadcast.TelopCard(_managerIsAway, new[] { row });
-            _subTelop?.Show(card, _managerIsAway ? _awayDisp : _homeDisp, PitcherHudClearance());
+            var card = new KokoSim.Engine.Match.Broadcast.TelopCard(item.TeamIsAway, new[] { item.Row });
+            _subTelop?.Show(card, item.TeamIsAway ? _awayDisp : _homeDisp, PitcherHudClearance());
             _timeoutSceneOn = true;
             _timeoutSceneClock = 0f;
         }
+
+        /// <summary>
+        /// 次に流す予約。同じ打席の頭で重なったら守備側 → 攻撃側の順（issue #1739）。送った側の半回でなくなっていたら
+        /// （守備伝令の直後に3アウト目を取った等）捨てずに預かる。伝令の効き目は次のその側の半回へ持ち越される＝
+        /// その半回の窓で場面を流す（issue #1246）。判定はエンジンの局面（3アウトで次の半回の攻守）。
+        /// </summary>
+        private TimeoutSceneItem NextTimeoutScene()
+        {
+            if (_prog == null) return null;
+            TimeoutSceneItem offense = null;
+            foreach (var it in _timeoutScenes)
+            {
+                if (_prog.IsTeamOnOffense(it.TeamIsAway) != it.Offense) continue;
+                if (!it.Offense) return it;
+                offense ??= it;
+            }
+            return offense;
+        }
+
+        // 采配AIの伝令（相手校・委任中の自校）のログを取り込む（issue #1739）。実況履歴に1行ずつ残し、高速試合モード以外では
+        // 自校の伝令と同じ場面とテロップを予約する。観測データの表示のみ＝試合結果に影響しない。
+        private void DrainTimeoutEvents()
+        {
+            var log = _prog?.Timeouts;
+            if (log == null) return;
+            if (_timeoutLogCount > log.Count) _timeoutLogCount = log.Count;
+            for (var i = _timeoutLogCount; i < log.Count; i++)
+            {
+                var e = log[i];
+                PushHistory("☎ " + KokoSim.Engine.Match.Broadcast.TimeoutTelop.HistoryLine(e, e.TeamIsAway ? _awayDisp : _homeDisp));
+                // 撮影ハーネスは自動進行しない＝既存の撮影を変えないよう場面は予約しない（相手校の伝令は撮影専用の入口から入れる）
+                if (_fastMode || _gameOver || CaptureMode) continue;
+                QueueTimeoutScene(e);
+            }
+            _timeoutLogCount = log.Count;
+        }
+
+        private void QueueTimeoutScene(KokoSim.Engine.Match.Game.TimeoutEvent e)
+            => _timeoutScenes.Add(new TimeoutSceneItem
+            {
+                TeamIsAway = e.TeamIsAway,
+                Offense = e.IsOffense,
+                Row = KokoSim.Engine.Match.Broadcast.TimeoutTelop.Row(e.Messenger),
+            });
 
         /// <summary>場面を畳んで進行へ戻す（散り終えた・クリックで飛ばした）。交代テロップが待っていれば続けて出す。</summary>
         private void EndTimeoutScene()
@@ -2556,6 +2609,9 @@ namespace KokoSim.Unity.Match
             _timeoutSceneClock = 0f;
             _duelRig?.EndTimeoutScene();
             _subTelop?.Hide();
+            // 同じ打席の頭で攻守の伝令が重なっていれば続けて流す（守備側 → 攻撃側。issue #1739）
+            TryBeginTimeoutScene();
+            if (_timeoutSceneOn) return;
             TryBeginSubTelop();
             if (_subTelopOn) return;
             if (_gameOver || _paused) return;
@@ -2565,7 +2621,7 @@ namespace KokoSim.Unity.Match
         /// <summary>伝令の場面を予約ごと畳む（高速試合モードへ入る・終局）。進行は起こさない。</summary>
         private void ClearTimeoutScene()
         {
-            _timeoutScenePending = null;
+            _timeoutScenes.Clear();
             if (!_timeoutSceneOn) return;
             _timeoutSceneOn = false;
             _timeoutSceneClock = 0f;
@@ -2586,6 +2642,31 @@ namespace KokoSim.Unity.Match
             bool sent = _timeoutSentThisPause;
             OnResume();
             return sent;
+        }
+
+        /// <summary>
+        /// 撮影専用（issue #1739）: 相手校が伝令を送ったことにする（攻守はいまの局面から）。エンジンの伝令（動揺解除・効果窓・印）を動かし、
+        /// 采配AIの伝令を取り込むのと同じ予約・実況履歴の経路へ入れる。送れなかった（他の背景処理中・エンジンが先行中など）ら false。
+        /// <paramref name="messengerIndex"/>＝控えの添字（負＝記録員）。
+        /// </summary>
+        internal bool SendOpponentTimeoutForCapture(int messengerIndex)
+        {
+            if (_prog == null || _gameOver) return false;
+            if (BackgroundGameOp.Running || EngineAheadOfScreen) return false;
+            bool oppIsAway = !_managerIsAway;
+            var reserves = _prog.TimeoutMessengerCandidates(oppIsAway);
+            var messenger = messengerIndex >= 0 && messengerIndex < reserves.Count ? reserves[messengerIndex] : null;
+            var kind = _prog.CallTimeout(oppIsAway, messenger != null ? messengerIndex : (int?)null, ShownOffenseIsTop);
+            if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return false;
+            bool offense = kind == MatchProgression.PlayerTimeoutResult.Offense;
+            var snap = _prog.Snapshot();
+            ApplyPitcherRattled(snap, _atBat?.IsTop ?? snap.OffenseIsTop);
+            var e = new KokoSim.Engine.Match.Game.TimeoutEvent(
+                _atBat?.Inning ?? 1, _atBat?.IsTop ?? snap.OffenseIsTop, oppIsAway, offense, _prog.PlayLog.Count,
+                messenger == null ? null : new KokoSim.Engine.Match.Game.SubstitutionPlayer(messenger.SourceId, messenger.UniformNumber, messenger.Name));
+            PushHistory("☎ " + KokoSim.Engine.Match.Broadcast.TimeoutTelop.HistoryLine(e, oppIsAway ? _awayDisp : _homeDisp));
+            if (!_fastMode) QueueTimeoutScene(e);
+            return true;
         }
 
         // ── サヨナラの場面（issue #1176） ──
@@ -3452,7 +3533,7 @@ namespace KokoSim.Unity.Match
             }
 
             // 守備伝令の場面（issue #1174）。交代テロップより先に流し、終わるまで進行を止めて待つ。
-            if (_timeoutScenePending != null && !_timeoutSceneOn) TryBeginTimeoutScene();
+            if (_timeoutScenes.Count > 0 && !_timeoutSceneOn) TryBeginTimeoutScene();
             if (_timeoutSceneOn)
             {
                 _timeoutSceneClock += Time.deltaTime * _speed;
