@@ -4555,7 +4555,6 @@ namespace KokoSim.Unity.Match
             yield return TimeoutNod2ClipName;
             yield return TimeoutUmpireClipName;
             yield return TimeoutCrouchToStandClipName;
-            yield return OtBatterBackClipName;
             yield return OtBatterWalkClipName;
             yield return OtBatterIdleClipName;
             yield return OtMessengerIdleClipName;

@@ -88,6 +88,14 @@ namespace KokoSim.Unity.Match
         /// <summary>伝令の場面（守備＝#1174・攻撃＝#1175 のどちらか）を流しているか。</summary>
         public bool TimeoutSceneActive => _toActive || _otActive;
 
+        /// <summary>撮影・検査用: 伝令の場面のあいだの打者と伝令役のステージ座標（x,z。本塁が原点）。</summary>
+        internal (Vector2 Batter, Vector2 Messenger) TimeoutPositionsForCapture()
+        {
+            var b = _batter != null && _batter.Go != null ? StagePos(_batter) : Vector3.zero;
+            var m = _messenger != null && _messenger.Go != null ? StagePos(_messenger) : Vector3.zero;
+            return (new Vector2(b.x, b.z), new Vector2(m.x, m.z));
+        }
+
         /// <summary>場面が終わった（散り終えた）か。呼び出し側はこれを見て <see cref="EndTimeoutScene"/> を呼ぶ。</summary>
         public bool TimeoutSceneDone => (_toActive && _toLeaveStartT >= 0f && _toT - _toLeaveStartT >= DuelTuning.TimeoutLeaveSeconds)
             || OffenseTimeoutSceneDone;
