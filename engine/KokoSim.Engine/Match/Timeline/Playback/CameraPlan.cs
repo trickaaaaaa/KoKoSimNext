@@ -466,7 +466,7 @@ public static class CameraPlanBuilder
         // 下の critical（差し迫った走塁）より先に判定する＝力の入る封殺の打者走者レッグは
         // 接触直後からずっと OutAtEnd=true で有効なので、先に判定しないと critical 側の
         // ballNow=BallAt(leadT) が同じ理由で一塁側へ先取りしてしまう（実測で確認済み）。
-        if (covering is null && IsKind(nextUpcoming, BallSegmentKind.Throw))
+        if (covering is null && (IsKind(nextUpcoming, BallSegmentKind.Throw) || IsKind(nextUpcoming, BallSegmentKind.Carry)))
         {
             var held = PlaybackEvaluator.BallAt(play, actualT);
             if (held.HasValue)

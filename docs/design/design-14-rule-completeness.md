@@ -520,6 +520,7 @@
 - **実装方針**:
   - 進塁: `GameEngine.cs` の投球ループ内（捕手へ到達/通過した球=Ball/CalledStrike/SwingingStrikeのみ対象）で低確率判定→`BaserunningModel.ApplyBatteryMiss` が全走者1つ進塁・三塁走者は生還。
   - 絵（issue #487）: `TimelineBuilder.BuildBatteryMiss`（乱数不使用の純関数）が「後逸したボールが転がる→捕手が追って拾う→投手へ返球」と、進塁前の走者配置から組んだ走者ごとのレッグ（三塁走者は生還レッグ）を1本のタイムラインに合成。`GameContext.CaptureTimelines` が真のときだけ `LivePitch.BatteryMissPlay` に載る（打席途中の盗塁・牽制と同じ「1球観測が唯一の運び口」経路、`MatchLiveController` の `EnterBatteryMissPlay` 系が再生）。
+  - 捕手の送球先（issue #1769）: 三塁走者がいれば投手が本塁カバー（#1635）。いなければ先頭の走者（二塁走者→三塁・一塁走者だけ→二塁）の向かう塁へ物理どおりに投げたときの到達と走者の到着を比べ、**あとの差が `BatteryMissSureSafeSeconds`（0.5秒・表示の定数＝判定に使わない）未満なら塁へ投げ**（受け手は三塁手／遊撃手。セーフのままなので到達は走者の到着の少しあと＝遅れは投げ始めで取る・#1748）、**以上なら投げずに球を持つ**（Carry）。どちらも全走者が止まってからマウンドの投手へ返す。走者が走っている間は投手へ返さない。
   - 暴投=投手責、パスボール=捕手責は意味上分けるが、記録・絵は合算1カウント・同じ絵に簡略化（2026-08-05 issue決定。engine 側に責任種別のフィールドを足さない）。
 - **係数**: `BaserunningCoefficients.WildPitchProb` / `PassedBallProb`（走者ありのみ）。
 - **乱数順**: 走者ありの打席のみで判定を追加（走者無しでは消費しない＝走者無しの帯は不変）。絵の構築（`BuildBatteryMiss`）は乱数を一切消費しない。

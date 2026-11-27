@@ -55,6 +55,9 @@ public static partial class TimelineBuilder
     private const double BatteryMissRollSeconds = 0.55;
     /// <summary>暴投・捕逸: ボールが転がって止まる位置＝本塁からバックネット側（-Z）へこの距離[m]（演出用の固定値）。</summary>
     private const double BatteryMissBackstopM = 6.0;
+    /// <summary>暴投・捕逸（issue #1769）: 先頭の走者の向かう塁へ物理どおりに投げたときの到達が、走者の到着よりこの秒数以上あとなら
+    /// 「確実にセーフ」＝捕手は投げずに球を持つ（表示の定数＝判定には使わない。撮影で見て決める）。</summary>
+    private const double BatteryMissSureSafeSeconds = 0.5;
     /// <summary>スクイズ不成立の挟殺（issue #1061）: 三塁走者が球の到達時点で三塁→本塁線上のどこまで出ているか
     /// （三塁を0・本塁を1とする割合。演出用の固定値。<see cref="SqueezeResolver"/> は走者の位置を持たない）。</summary>
     private const double RundownRunnerStartFraction = 0.20;
@@ -597,8 +600,8 @@ public static partial class TimelineBuilder
         };
 
         // 捕手が追って拾う→送球姿勢を作って投手へ戻す（issue #487「捕手が追う→拾って戻す」）。
-        var catcherArrive = BatteryMissReactionSeconds
-            + Distance(Home, backstopPt) / catcher.ToFielder(c.AbilityEffect).SprintSpeedMps;
+        var catcherAbility = catcher.ToFielder(c.AbilityEffect);
+        var catcherArrive = BatteryMissReactionSeconds + Distance(Home, backstopPt) / catcherAbility.SprintSpeedMps;
         var pickupAt = Math.Max(BatteryMissRollSeconds, catcherArrive);
         var moves = new List<FielderMove>
         {
@@ -609,10 +612,41 @@ public static partial class TimelineBuilder
             },
         };
         var throwStart = pickupAt
-            + c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+            + c.PopTransferSeconds * catcherAbility.TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+
+        // 走者レッグ（design-14 P2-8: 全走者1つ進塁、三塁走者は生還）。ApplyBatteryMiss はアウトを作らない
+        // ため、判定オーバーレイ（Judgements）は積まない（盗塁・牽制の「セーフのみ際どさ未評価」と同じ扱い）。
+        var runners = new List<RunnerLeg>();
+        double? firstArrive = null, secondArrive = null;
+        if (first is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(first, 1, 2, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走一", T0 = 0.0, T1 = t1, From = firstPt, To = secondPt, OutAtEnd = false, Runner = first });
+            firstArrive = t1;
+        }
+        if (second is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(second, 2, 3, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走二", T0 = 0.0, T1 = t1, From = secondPt, To = thirdPt, OutAtEnd = false, Runner = second });
+            secondArrive = t1;
+        }
+        double? scoreAt = null;
+        if (third is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(third, 3, 4, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走三", T0 = 0.0, T1 = t1, From = thirdPt, To = Home, OutAtEnd = false, Runner = third });
+            scoreAt = t1;
+        }
+        var runnersStoppedAt = 0.0;
+        foreach (var leg in runners) runnersStoppedAt = Math.Max(runnersStoppedAt, leg.T1);
+
         // 三塁走者がいるときは投手が本塁のカバーへ走り、捕手はそこへ返す（着くのを待ってから投げる）。
-        // いないときは今までどおり、マウンドの投手へ返す。
-        var throwTo = Mound;
+        // いないときは、先頭の走者（二塁走者→三塁、一塁走者だけ→二塁）の向かう塁へ間に合いそうなら投げ（issue #1769）、
+        // 確実にセーフなら投げずに持つ。どちらも全走者が止まってからマウンドの投手へ返す＝走者が走っている間に返さない。
+        double lastEvent;
         if (third is not null)
         {
             var coverArrive = BatteryMissReactionSeconds
@@ -623,41 +657,73 @@ public static partial class TimelineBuilder
                 Task = FielderTask.CoverBase,
             });
             throwStart = Math.Max(throwStart, coverArrive);
-            throwTo = Home;
+            var throwArrive = throwStart + Distance(backstopPt, Home) / catcherAbility.ThrowSpeedMps;
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = backstopPt, To = Home,
+                FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Pitcher,
+            });
+            lastEvent = Math.Max(throwArrive, runnersStoppedAt);
         }
-        var throwArrive = throwStart + Distance(backstopPt, throwTo) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
-        ball.Add(new BallSegment
+        else
         {
-            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = backstopPt, To = throwTo,
-            FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Pitcher,
-        });
+            var leadBase = second is not null ? "third" : first is not null ? "second" : null;
+            var leadPt = leadBase == "third" ? thirdPt : secondPt;
+            var leadRole = leadBase == "third" ? FieldPosition.ThirdBase : FieldPosition.Shortstop;
+            var leadArrive = second is not null ? secondArrive : firstArrive;
 
-        // 走者レッグ（design-14 P2-8: 全走者1つ進塁、三塁走者は生還）。ApplyBatteryMiss はアウトを作らない
-        // ため、判定オーバーレイ（Judgements）は積まない（盗塁・牽制の「セーフのみ際どさ未評価」と同じ扱い）。
-        var runners = new List<RunnerLeg>();
-        var lastEvent = throwArrive;
-        if (first is not null)
-        {
-            var t1 = HomePlayResolver.RunnerTimeSeconds(first, 1, 2, field, c);
-            runners.Add(new RunnerLeg
-                { Label = "走一", T0 = 0.0, T1 = t1, From = firstPt, To = secondPt, OutAtEnd = false, Runner = first });
-            lastEvent = Math.Max(lastEvent, t1);
-        }
-        if (second is not null)
-        {
-            var t1 = HomePlayResolver.RunnerTimeSeconds(second, 2, 3, field, c);
-            runners.Add(new RunnerLeg
-                { Label = "走二", T0 = 0.0, T1 = t1, From = secondPt, To = thirdPt, OutAtEnd = false, Runner = second });
-            lastEvent = Math.Max(lastEvent, t1);
-        }
-        double? scoreAt = null;
-        if (third is not null)
-        {
-            var t1 = HomePlayResolver.RunnerTimeSeconds(third, 3, 4, field, c);
-            runners.Add(new RunnerLeg
-                { Label = "走三", T0 = 0.0, T1 = t1, From = thirdPt, To = Home, OutAtEnd = false, Runner = third });
-            lastEvent = Math.Max(lastEvent, t1);
-            scoreAt = t1;
+            var holder = FieldPosition.Catcher;
+            var holderAt = backstopPt;
+            var heldFrom = throwStart;
+            var throwSpeed = catcherAbility.ThrowSpeedMps;
+            if (leadArrive is { } runnerAt)
+            {
+                var flight = Distance(backstopPt, leadPt) / throwSpeed;
+                var physicalArrive = throwStart + flight;
+                if (physicalArrive - runnerAt < BatteryMissSureSafeSeconds)
+                {
+                    // 走者はセーフ＝送球は走者の到着の少しあとに着く。遅れは投げ始めで取る（T1 だけ遅らせると
+                    // 飛ぶ時間が伸びて山なりになる・#1748）。持っている間は球が捕手の手に居る（Carry）。
+                    var arrive = Math.Max(physicalArrive, runnerAt + VerdictGuardLagSeconds);
+                    var releaseAt = arrive - flight;
+                    if (releaseAt > pickupAt)
+                        ball.Add(new BallSegment
+                        {
+                            Kind = BallSegmentKind.Carry, T0 = pickupAt, T1 = releaseAt, From = backstopPt, To = backstopPt,
+                            FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Catcher,
+                        });
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = arrive, From = backstopPt, To = leadPt,
+                        FromRole = FieldPosition.Catcher, ToRole = leadRole, ToBase = leadBase,
+                    });
+                    moves.Add(new FielderMove
+                    {
+                        Role = leadRole, T0 = BatteryMissReactionSeconds,
+                        T1 = Math.Max(0.3, arrive - 0.15), To = leadPt, Task = FielderTask.CoverBase,
+                    });
+                    holder = leadRole;
+                    holderAt = leadPt;
+                    heldFrom = arrive;
+                    throwSpeed = new FielderAttributes().ThrowSpeedMps;
+                }
+            }
+
+            // プレーが止まってから投手へ返す（持っている野手が持ち直す間を置く）。
+            var backT0 = Math.Max(heldFrom, runnersStoppedAt) + ErrorReturnTransferSeconds;
+            if (holder == FieldPosition.Catcher && ball[^1].Kind != BallSegmentKind.Carry)
+                ball.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Carry, T0 = pickupAt, T1 = backT0, From = backstopPt, To = backstopPt,
+                    FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Catcher,
+                });
+            var backT1 = backT0 + Distance(holderAt, Mound) / throwSpeed;
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = backT0, T1 = backT1, From = holderAt, To = Mound,
+                FromRole = holder, ToRole = FieldPosition.Pitcher,
+            });
+            lastEvent = backT1;
         }
 
         var captions = new List<TimelineCaption> { new(0.02, "後逸——ボールが転がる！") };
