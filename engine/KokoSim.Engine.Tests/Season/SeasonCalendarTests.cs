@@ -80,10 +80,10 @@ public sealed class SeasonCalendarTests
     // --- 出場が決まった大会を数える（センバツ・地区大会・神宮） ---
 
     [Theory]
-    [InlineData(24, 15)]   // 秋の後・選考待ちの冬のはじめ
-    [InlineData(30, 9)]
-    [InlineData(38, 1)]    // 選考発表の前週
-    [InlineData(39, 0)]    // 発表週＝センバツ開幕
+    [InlineData(24, 18)]   // 秋の後・選考待ちの冬のはじめ
+    [InlineData(30, 12)]
+    [InlineData(41, 1)]    // 選考発表の前週
+    [InlineData(42, 0)]    // 発表週（2月1週目）＝センバツ開幕
     public void NextTournament_SenbatsuBerth_CountsDownToAnnounceWeek(int week, int weeksLeft)
     {
         var entered = new[] { TournamentKind.SenbatsuKoshien };
@@ -113,7 +113,7 @@ public sealed class SeasonCalendarTests
     {
         var entered = new[] { TournamentKind.SenbatsuKoshien };
         // 秋の開幕前・秋の開幕週・センバツ開幕後は、決まっていても従来どおり。
-        foreach (var w in new[] { 0, 13, 22, 23, 40, 49 })
+        foreach (var w in new[] { 0, 13, 22, 23, 43, 49 })
             Assert.Equal(_cal.NextTournament(w), _cal.NextTournament(w, entered));
     }
 
@@ -168,15 +168,19 @@ public sealed class SeasonCalendarTests
             Assert.Equal(w == _cal.ProspectConfirmWeek, _cal.IsProspectConfirmWeek(w));
     }
 
-    // センバツ選考発表週（設計書05 §1.5b）: 冬合宿（第38週）の直後・1月であること。
-    // 神宮大会（11月頃）〜選考発表（1月）の間に現実の実プレイ週（冬合宿）が挟まるため、
+    // センバツ選考発表週（設計書05 §1.5b・issue #1732）: 2月1週目＝第42週に固定。
+    // 神宮大会（11月頃）〜選考発表の間に現実の実プレイ週（冬合宿）が挟まるため、
     // 地区大会・神宮大会と違い週アンカーが要る＝ここで固定する。
     [Fact]
-    public void SenbatsuAnnounceWeek_IsJanuary_AfterWinterCamp_NoCollision()
+    public void SenbatsuAnnounceWeek_IsFebruaryWeek1_AfterWinterCamp_NoCollision()
     {
-        var (month, _, yearOffset) = _cal.DateOf(_cal.SenbatsuAnnounceWeek);
-        Assert.Equal(1, month);
+        var (month, weekOfMonth, yearOffset) = _cal.DateOf(_cal.SenbatsuAnnounceWeek);
+        Assert.Equal(2, month);
+        Assert.Equal(1, weekOfMonth);
         Assert.Equal(1, yearOffset);
+        Assert.Equal(42, _cal.SenbatsuAnnounceWeek);
+        Assert.NotEqual(_cal.WinterGrowthNodeWeek, _cal.SenbatsuAnnounceWeek);
+        Assert.True(_cal.WinterGrowthNodeWeek < _cal.SenbatsuAnnounceWeek);
 
         Assert.True(_cal.SenbatsuAnnounceWeek > _cal.WinterCampWeek);
         Assert.NotEqual(_cal.WinterCampWeek, _cal.SenbatsuAnnounceWeek);
@@ -187,6 +191,20 @@ public sealed class SeasonCalendarTests
 
         for (var w = 0; w < _cal.WeeksPerYear; w++)
             Assert.Equal(w == _cal.SenbatsuAnnounceWeek, _cal.IsSenbatsuAnnounceWeek(w));
+    }
+
+    // 1年を1週ずつ送ったとき、選考発表の週は1回だけ通る。2月1週目より前には1回も通らない（issue #1732）。
+    [Fact]
+    public void SenbatsuAnnounceWeek_IsPassedExactlyOnce_AndNeverBeforeFebruary()
+    {
+        var hits = new System.Collections.Generic.List<int>();
+        for (var w = 0; w < _cal.WeeksPerYear; w++)
+            if (_cal.IsSenbatsuAnnounceWeek(w)) hits.Add(w);
+
+        var only = Assert.Single(hits);
+        var (month, _, yearOffset) = _cal.DateOf(only);
+        Assert.Equal((2, 1), (month, yearOffset));
+        for (var w = 0; w < only; w++) Assert.False(_cal.IsSenbatsuAnnounceWeek(w));
     }
 
     [Fact]
