@@ -640,6 +640,23 @@ captures:
     attempts: 1
     window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(DesignatedHitter), PickSubstitutionSlotForCapture(Pitcher), shot, ApplySubstitutionForCapture, shot, CancelSubstitutionForCapture]
 
+  # ── 選手交代のポップアップのリデザイン（固定の配色・2人のカード・野手／投手のタブ・9列の守備適性） ──
+  - id: substitution-redesign-defense
+    name: "選手交代（守備）：未選択→退く選択→交代決定→投手タブ→継投→守備位置の入れ替え→確定後"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(RightField), shot, PickSubstitutionCandidateForCapture(0), shot, ToggleSubstitutionCmpViewForCapture, shot, CancelSubstitutionForCapture, OpenSubstitutionForCapture, PickSubstitutionSlotForCapture(Pitcher), PickSubstitutionCandidateForCapture(1), shot, CancelSubstitutionForCapture, OpenSubstitutionForCapture, PickSubstitutionSlotForCapture(LeftField), PickSubstitutionSlotForCapture(CenterField), shot, ApplySubstitutionForCapture, shot, CancelSubstitutionForCapture]
+
+  - id: substitution-redesign-offense
+    name: "選手交代（攻撃）：代打の未選択→控えを選んだ姿"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture]
+
   # ── 采配の手札のホバー（issue #1534）。11-ui 以降＝カードを1枚持ち上げた絵 ──
   - id: tcard-hover-1534-away-1280
     name: "采配の手札のホバーの浮き上がりが隣のカードと投手欄の数字を隠さない（issue #1534）"
