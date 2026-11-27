@@ -1,0 +1,289 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.AtBat;
+using KokoSim.Engine.Match.Fielding;
+using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Timeline.Playback;
+using KokoSim.Engine.Nation;
+using KokoSim.Unity.Match;
+using UnityEngine;
+
+namespace KokoSim.UnityEditorTools
+{
+    /// <summary>
+    /// 【開発用・エディタ限定】ファウルの打球が画面の中で跳ね返って見える件の実測（issue #1074・#1543・#1766）。
+    ///
+    /// <para>実試合（engine をヘッドレスで回す）のファウルを全部拾い、<b>対決ビュー</b>の経路（<see cref="DuelStageRig.OnPitchReleased"/>
+    /// → <see cref="DuelStageRig.Tick"/>）と、守備ビューへ切り替わるファウル（<see cref="FoulViewKind"/> が None 以外）の
+    /// <b>守備ビュー</b>の経路（<see cref="DuelStageRig.BeginFieldPlay"/> → <see cref="DuelStageRig.SetFieldTime"/>）を、
+    /// MatchLiveController と同じ順序で再生して、毎コマの球の<b>画面上の位置</b>（対決カメラ／守備カメラのビューポート）を測る。
+    /// 見た目の問題なので世界座標でなく画面座標で測る（カメラが動けば、球が真っ直ぐ飛んでいても画面では折り返す）。</para>
+    ///
+    /// <para>拾う条件: ①水平に往復（進んだ向きと逆へ戻った px）②画面から出て戻る ③落ちてから上がる（高さ[m]で測り、
+    /// 地面のバウンドと区別するため最大の跳ね上がりを出す）。結果は <c>out/foul-rebound-1766/report.txt</c>。
+    /// 呼び方: MCP execute_code で <c>KokoSim.UnityEditorTools.FoulReboundProbe.Run(100, 1)</c>。</para>
+    /// </summary>
+    public static class FoulReboundProbe
+    {
+        private const string Dir = "out/foul-rebound-1766";
+        private const int W = 960;
+        private const int H = 540;
+        private const float Dt = 1f / 60f;
+
+        /// <summary>水平に戻った量がこの px を超えたら拾う（画面 960 幅で 1px 未満の揺れは数えない）。</summary>
+        public const float HorizontalBackPx = 3f;
+
+        public sealed class Foul
+        {
+            public int Seed, Pa, Pitch;
+            public PlaybackPlay Play;
+            public PlaybackBallSegment Batted;
+            public float PlateX, PlateY;
+            public string Describe() =>
+                $"seed={Seed} pa={Pa} p={Pitch} view={Play.FoulView} {Batted.GetType().Name} T={Batted.T0:F2}-{Batted.T1:F2} plate=({PlateX:F2},{PlateY:F2})";
+        }
+
+        public struct Sample
+        {
+            public float T;
+            public bool Visible;
+            public float X, Y;       // 画面 px（左上原点）
+            public float HeightM;
+            public float Depth;
+        }
+
+        public sealed class Finding
+        {
+            public string View;      // duel / field
+            public float BackPx;
+            public float BackAt;
+            public int Reentries;
+            public float VerticalRiseM;
+            public float VerticalRiseAt;
+            public int VisibleFrames;
+            public bool IsBad => BackPx > HorizontalBackPx || Reentries > 0;
+        }
+
+        // ---- 実試合のファウルを拾う ----
+
+        public static List<Foul> CollectFouls(int games, ulong seed0)
+        {
+            var list = new List<Foul>();
+            for (int g = 0; g < games; g++)
+            {
+                ulong seed = seed0 + (ulong)g;
+                var rng = new Xoshiro256Random(seed);
+                var away = StrengthTeamFactory.Create(60.0, "遠征校", rng.Fork(1));
+                var home = StrengthTeamFactory.Create(60.0, "地元校", rng.Fork(2));
+                var ctx = new GameContext { CaptureTimelines = true, CapturePitches = true };
+                var prog = new MatchProgression(away, home, ctx, seed);
+                int pa = 0;
+                while (!prog.IsFinished)
+                {
+                    if (!prog.Advance()) break;
+                    var cur = prog.Current;
+                    if (cur == null) break;
+                    pa++;
+                    for (int i = 0; i < cur.PitchSeq.Pitches.Count; i++)
+                    {
+                        var pt = cur.PitchSeq.Pitches[i];
+                        if (pt.Kind != PitchKind.Foul || pt.FoulFlight == null) continue;
+                        var seg = BattedSegmentOf(pt.FoulFlight);
+                        if (seg == null) continue;
+                        list.Add(new Foul
+                        {
+                            Seed = (int)seed, Pa = pa, Pitch = i, Play = pt.FoulFlight, Batted = seg,
+                            PlateX = (float)(pt.LocationX ?? 0.0), PlateY = (float)(pt.LocationY ?? 0.75),
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+
+        /// <summary>打球タイムラインの先頭は投球セグメント。その次が打球（MatchLiveController.BattedOf と同じ）。</summary>
+        public static PlaybackBallSegment BattedSegmentOf(PlaybackPlay play)
+        {
+            foreach (var s in play.Ball)
+            {
+                if (s is PitchSegment) continue;
+                if (s is EndpointBallSegment eb && eb.Kind == KokoSim.Engine.Match.Timeline.BallSegmentKind.Pitch) continue;
+                return s;
+            }
+            return null;
+        }
+
+        // ---- 再生 ----
+
+        public static DuelStageRig NewRig()
+        {
+            var rig = new DuelStageRig();
+            if (!rig.Available) { rig.Dispose(); return null; }
+            rig.EnsureSize(W, H);
+            for (int i = 0; i < 24; i++) rig.Tick(1f / DuelStageRig.PoseFps);
+            return rig;
+        }
+
+        private static Sample Snap(DuelStageRig rig, float t)
+        {
+            var local = rig.BallLocalForCapture;
+            var vp = rig.BallViewportForCapture;
+            if (local == null || vp == null) return new Sample { T = t, Visible = false };
+            var v = vp.Value;
+            bool inFrame = v.z > 0f && v.x >= 0f && v.x <= 1f && v.y >= 0f && v.y <= 1f;
+            return new Sample { T = t, Visible = inFrame, X = v.x * W, Y = (1f - v.y) * H, HeightM = local.Value.y, Depth = v.z };
+        }
+
+        /// <summary>
+        /// 1本のファウルを MatchLiveController と同じ順序で流す。守備ビューで見せるファウルは、対決ビューの打球が
+        /// 画面から出る（または保険の秒数）まで対決ビューで見せ、その続きを守備ビューで見せる。
+        /// </summary>
+        public static void Replay(DuelStageRig rig, Foul f, List<Sample> duel, List<Sample> field)
+        {
+            var pitch = new DuelPitchFlight(f.PlateX, f.PlateY, f.PlateX, f.PlateY, 0.5f, 0.05f, 0.2f, 140f);
+            rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, pitch, f.Batted);
+            for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(Dt);
+            bool toField = f.Play.FoulView != FoulViewKind.None;
+            float clock = 0f;
+            float safety = 1.6f;
+            while (clock < safety)
+            {
+                if (toField && rig.BattedOutOfFrame) break;
+                duel.Add(Snap(rig, clock));
+                rig.Tick(Dt);
+                clock += Dt;
+            }
+            if (!toField) { rig.HideBall(); return; }
+
+            // 対決ビューで見せたぶんを飛ばして、守備ビューは続きから（MatchLiveController.ContactMomentOf）
+            float shown = rig.BattedElapsedSeconds;
+            var head = f.Play.Ball[0];
+            double t1 = head.T1;
+            double? nextCap = null;
+            foreach (var cap in f.Play.Caps) if (cap.T > t1 && (!nextCap.HasValue || cap.T < nextCap.Value)) nextCap = cap.T;
+            double start = nextCap ?? t1;
+            if (shown > 0) start = Math.Max(start, t1 + shown);
+
+            double last = f.Play.ResAt;
+            foreach (var s in f.Play.Ball) if (s.T1 > last) last = s.T1;
+            if (f.Play.Moves != null) foreach (var kv in f.Play.Moves) foreach (var m in kv.Value) if (m.T1 > last) last = m.T1;
+            double end = Math.Min(f.Play.Dur, last + 0.6 + 1.0);
+
+            rig.BeginFieldPlay(f.Play, (float)start);
+            float ft = (float)start;
+            float t0 = ft;
+            while (ft < end)
+            {
+                rig.SetFieldTime(ft);
+                rig.Tick(Dt);
+                field.Add(Snap(rig, ft - t0));
+                ft += Dt;
+            }
+            rig.EndFieldPlay();
+            rig.HideBall();
+        }
+
+        // ---- 解析 ----
+
+        public static Finding Analyze(string view, List<Sample> s)
+        {
+            var r = new Finding { View = view };
+            // 水平の往復: 見えているコマの x の動きのうち、全体の進む向きと逆へ戻った合計 px
+            var vis = new List<Sample>();
+            bool wasVisible = false, wasHidden = false;
+            foreach (var x in s)
+            {
+                if (x.Visible)
+                {
+                    if (wasHidden && wasVisible) r.Reentries++;
+                    vis.Add(x);
+                    wasVisible = true;
+                    wasHidden = false;
+                }
+                else if (wasVisible) wasHidden = true;
+            }
+            r.VisibleFrames = vis.Count;
+            if (vis.Count >= 2)
+            {
+                float net = vis[vis.Count - 1].X - vis[0].X;
+                float dir = Mathf.Abs(net) < 1e-3f ? 0f : Mathf.Sign(net);
+                if (dir == 0f)
+                {
+                    // 正味ゼロ＝進んでから同じだけ戻った。最初に動いた向きを「進む向き」にする
+                    for (int i = 1; i < vis.Count; i++)
+                        if (Mathf.Abs(vis[i].X - vis[0].X) > 1f) { dir = Mathf.Sign(vis[i].X - vis[0].X); break; }
+                }
+                float sum = 0f, worst = 0f;
+                for (int i = 1; i < vis.Count; i++)
+                {
+                    float along = (vis[i].X - vis[i - 1].X) * dir;
+                    if (along < 0f) { sum -= along; if (-along > worst) { worst = -along; r.BackAt = vis[i].T; } }
+                }
+                r.BackPx = sum;
+            }
+            // 落ちてから上がる（高さ[m]）: 最初に頂点を過ぎた後の最大の跳ね上がり
+            if (vis.Count >= 3)
+            {
+                float peak = float.MinValue; int peakIdx = 0;
+                for (int i = 0; i < vis.Count; i++) if (vis[i].HeightM > peak) { peak = vis[i].HeightM; peakIdx = i; }
+                float minAfter = float.MaxValue;
+                for (int i = peakIdx; i < vis.Count; i++)
+                {
+                    minAfter = Mathf.Min(minAfter, vis[i].HeightM);
+                    float rise = vis[i].HeightM - minAfter;
+                    if (rise > r.VerticalRiseM) { r.VerticalRiseM = rise; r.VerticalRiseAt = vis[i].T; }
+                }
+            }
+            return r;
+        }
+
+        /// <summary>実試合 <paramref name="games"/> 試合のファウルを再生して測り、レポートを書く。返り値はレポート本文。</summary>
+        public static string Run(int games = 100, ulong seed0 = 1)
+        {
+            Directory.CreateDirectory(Dir);
+            var fouls = CollectFouls(games, seed0);
+            var rig = NewRig();
+            if (rig == null) return "DuelStageRig が組めない（素体/クリップ未導入）";
+            var sb = new StringBuilder();
+            int duelN = 0, fieldN = 0, duelBad = 0, fieldBad = 0, none = 0, chased = 0, big = 0;
+            var badLines = new StringBuilder();
+            try
+            {
+                foreach (var f in fouls)
+                {
+                    var duel = new List<Sample>();
+                    var field = new List<Sample>();
+                    Replay(rig, f, duel, field);
+                    // ボールの出入りで次の球へ持ち越さないよう、少し空回しして構えへ戻す
+                    for (int i = 0; i < 90; i++) rig.Tick(Dt);
+                    if (f.Play.FoulView == FoulViewKind.None) none++;
+                    else if (f.Play.FoulView == FoulViewKind.BigFoul) big++;
+                    else chased++;
+
+                    var d = Analyze("duel", duel);
+                    duelN++;
+                    if (d.IsBad) { duelBad++; badLines.AppendLine($"[対決] {f.Describe()} 戻り{d.BackPx:F1}px@{d.BackAt:F2}s 再入{d.Reentries} 跳ね{d.VerticalRiseM:F2}m@{d.VerticalRiseAt:F2}s 見えたコマ{d.VisibleFrames}"); }
+                    if (field.Count > 0)
+                    {
+                        var fl = Analyze("field", field);
+                        fieldN++;
+                        if (fl.IsBad) { fieldBad++; badLines.AppendLine($"[守備] {f.Describe()} 戻り{fl.BackPx:F1}px@{fl.BackAt:F2}s 再入{fl.Reentries} 跳ね{fl.VerticalRiseM:F2}m@{fl.VerticalRiseAt:F2}s 見えたコマ{fl.VisibleFrames}"); }
+                    }
+                }
+            }
+            finally { rig.Dispose(); }
+
+            sb.AppendLine($"試合 {games}（seed {seed0}〜）・打球つきファウル {fouls.Count} 本（通常 {none} / 追ったフライ {chased} / 大ファウル {big}）");
+            sb.AppendLine($"対決ビュー: {duelN} 本中 {duelBad} 本が水平に {HorizontalBackPx}px 超戻る／画面へ再入");
+            sb.AppendLine($"守備ビュー: {fieldN} 本中 {fieldBad} 本が同様");
+            sb.AppendLine(badLines.ToString());
+            File.WriteAllText(Path.Combine(Dir, "report.txt"), sb.ToString());
+            return sb.ToString();
+        }
+    }
+}
+#endif

@@ -3562,6 +3562,10 @@ namespace KokoSim.Unity.Match
             => _ball == null || !_ball.activeSelf || _camera == null ? (Vector3?)null
                 : _camera.WorldToViewportPoint(_ball.transform.position);
 
+        /// <summary>検査用: いま描かれている球のステージローカル位置（非表示なら null）。対決・守備どちらのビューでも同じ。</summary>
+        public Vector3? BallLocalForCapture
+            => _ball == null || !_ball.activeSelf ? (Vector3?)null : _ball.transform.localPosition;
+
         /// <summary>検査用: 打球の計算上の位置のビューポート座標（描くかどうかに関係なく）。</summary>
         public Vector3? BattedViewportForCapture(float t)
             => _batted == null || _camera == null ? (Vector3?)null
