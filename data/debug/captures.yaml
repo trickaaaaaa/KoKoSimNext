@@ -64,7 +64,7 @@ captures:
     manager: away
     force: BuntInPlay
     sign: Bunt
-    shots: [end]
+    shots: [1.4, 2.4, 3.4, 4.4]
     probes: [RunnerDiag]
 
   - id: bunt-runner-slip-1734-before
@@ -73,7 +73,7 @@ captures:
     manager: away
     force: BuntInPlay
     sign: Bunt
-    shots: [end]
+    shots: [1.4, 2.4, 3.4, 4.4]
     probes: [RunnerDiag]
     overrides: {DuelTuning.BatterOverrunLegOffForCapture: true}
 
