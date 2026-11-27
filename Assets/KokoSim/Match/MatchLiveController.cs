@@ -5994,6 +5994,20 @@ namespace KokoSim.Unity.Match
         public void HoverScoutRowForCapture(int index) => _scoutPanel?.HoverRowForCapture(index);
         public bool ScoutOpenForCapture => _scoutPanel != null && _scoutPanel.IsOpen;
 
+        /// <summary>スクショ用（issue #1729）: 自校の部員を stride 人おきに故障させる（捻挫・軽度／疲労性炎症・中度を交互に）。交代パネルの怪我タグの確認用。</summary>
+        public void InjureRosterForCapture(int stride)
+        {
+            if (stride <= 0) return;
+            var roster = KokoSim.Unity.Shell.RosterService.Roster;
+            for (var i = 0; i < roster.Count; i += stride)
+            {
+                var minor = (i / stride) % 2 == 0;
+                roster[i].Injury = minor ? KokoSim.Engine.Players.InjurySeverity.Minor : KokoSim.Engine.Players.InjurySeverity.Moderate;
+                roster[i].InjuryType = minor ? KokoSim.Engine.Players.InjuryType.Sprain : KokoSim.Engine.Players.InjuryType.Inflammation;
+                roster[i].InjuryWeeksRemaining = minor ? 2 : 3;
+            }
+        }
+
         /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
         public void OpenSubstitutionForCapture() => _subPanel?.Open();
 
