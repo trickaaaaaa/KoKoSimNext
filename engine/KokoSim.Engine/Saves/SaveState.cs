@@ -217,6 +217,12 @@ public sealed class SaveState
     /// </summary>
     public DraftHistory Draft { get; set; } = new();
 
+    /// <summary>
+    /// 指名を確定した最後の年度（1始まり・0＝まだ・issue #1731）。大会中の日送りでも指名が確定する＝大会の途中でセーブして
+    /// 読み込んだとき、同じ年度の指名を二度確定しない（教え子名鑑・祝い金・場面の二重）ための印。キーを持たない旧セーブは0。
+    /// </summary>
+    public int DraftNominatedYearIndex { get; set; }
+
     // --- 歴代大会結果（年度別の到達ラウンドと優勝校・issue #600。v8 で追加） ---
     /// <summary>
     /// 自校の歴代大会結果（設計書06 §3.9）。空＝まだ大会を1つも終えていない

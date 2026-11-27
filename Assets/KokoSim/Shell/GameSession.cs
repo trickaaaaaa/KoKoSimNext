@@ -638,6 +638,8 @@ namespace KokoSim.Unity.Shell
         {
             if (!InTournament) return false;
             TournamentDay++;
+            // 大会の実月日が10月4週目に入った日にドラフトの指名を確定し、その日の試合と試合の間に場面を出す（issue #1731）。
+            DraftService.OnTournamentDay(Kind, TournamentDay);
             return TournamentDay % 7 == 0;
         }
 

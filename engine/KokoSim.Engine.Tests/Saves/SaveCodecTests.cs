@@ -1592,6 +1592,23 @@ public sealed class SaveCodecTests
         Assert.Equal(0, s.PendingMatchPressure);
     }
 
+    // ===== 指名を確定した最後の年度（issue #1731） =====
+
+    [Fact]
+    public void DraftNominatedYearIndex_RoundTrips_AndOldSavesLoadAsZero()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.DraftNominatedYearIndex = 3;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(3, s.DraftNominatedYearIndex);
+
+        var old = json.Replace(",\"draftNominatedYearIndex\":3", "");
+        Assert.DoesNotContain("draftNominatedYearIndex", old);
+        Assert.True(SaveCodec.TryDeserialize(old, out var s2, out var err2), err2);
+        Assert.Equal(0, s2.DraftNominatedYearIndex);
+    }
+
     // ===== 成長タイプの分野別化（issue #866・v25） =====
 
     [Fact]

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using KokoSim.Engine.Career;
+using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Season.Events;
@@ -133,7 +134,7 @@ events:
     {
         var required = new[]
         {
-            "entrance_ceremony", "summer_camp", "culture_festival", "winter_camp", "draft_meeting", "graduation",
+            "entrance_ceremony", "summer_camp", "culture_festival", "winter_camp", "graduation",
             // "injury"（週次の故障の会話）は issue #695 で削除＝効果が無く、誰も故障していないのに語っていた。
             "rain_week", "media_coverage", "ob_donation",
             // "ace_hidden_injury"（エースの違和感）は issue #1477 で削除＝選択肢も効果も無いまま出ていた。
@@ -169,7 +170,9 @@ events:
             ScoutPromises.AcceptedEventId, ScoutPromises.DeclinedEventId,
             // 年契約の更新（issue #1034）。IDは ContractRenewal の定数で引く。
             KokoSim.Engine.Career.ContractRenewal.EventId,
-            "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
+            "draft_candidate", "draft_scout_visit",
+            // ドラフトの場面（issue #1731）。IDは DraftScene の定数で引く（指名の確定で1場面だけ積む）。
+            DraftScene.NoCandidatesEventId, DraftScene.AllNominatedEventId, DraftScene.AllMissedEventId, DraftScene.MixedEventId,
             "koshien_berth_donation", "koshien_draw",
             // 秋季地区予選リーグ戦の通過（issue #1133）。
             "district_league_qualified",
@@ -299,16 +302,19 @@ events:
     }
 
     /// <summary>
-    /// ドラフト会議の固定イベントが指名の週（<see cref="SeasonCalendar.DraftWeek"/>）に出ること（issue #1029）。
-    /// 週がずれると、指名結果のノベルを見たあとに会議当日の場面が来る順序逆転になる。
-    /// 片方だけ動かすと赤になる。
+    /// ドラフトの場面は指名の確定で1場面だけ積む（issue #1731）。暦で出る固定イベントの会議（旧 draft_meeting）や、
+    /// 1人ずつの指名・祝い金の場面（旧 draft_nominated / draft_missed / draft_ob_greeting）は残さない
+    /// ＝残ると、同じ年にドラフトの会話が2回以上出る。
     /// </summary>
     [Fact]
-    public void DraftMeeting_FiresOnDraftWeek()
+    public void DraftScenes_AreSystemEvents_AndOldPerPickScenesAreGone()
     {
-        var e = RepositoryEvents().First(x => x.Id == "draft_meeting");
-        Assert.Equal(EventKind.Fixed, e.Kind);
-        Assert.Equal(new SeasonCalendar().DraftWeek, e.CalendarWeek);
+        var events = RepositoryEvents();
+        foreach (var id in DraftScene.AllEventIds)
+            Assert.Equal(EventKind.System, events.First(x => x.Id == id).Kind);
+
+        foreach (var gone in new[] { "draft_meeting", "draft_nominated", "draft_missed", "draft_ob_greeting" })
+            Assert.DoesNotContain(events, x => x.Id == gone);
     }
 
     /// <summary>
@@ -906,7 +912,7 @@ events:
         Assert.DoesNotContain("OB", byId["senbatsu_berth_donation"].TextFor(hasOb: false));
 
         // OB なしの学校で選ばれうる会話に「OB」「卒業生」「先輩」が混ざらない（印の付け忘れを見張る）。
-        foreach (var e in byId.Values.Where(e => !e.RequiresOb && e.Id != "draft_ob_greeting"))
+        foreach (var e in byId.Values.Where(e => !e.RequiresOb))
             foreach (var v in e.Variants.Where(v => !v.RequiresOb))
                 foreach (var line in v.Lines)
                     Assert.False(

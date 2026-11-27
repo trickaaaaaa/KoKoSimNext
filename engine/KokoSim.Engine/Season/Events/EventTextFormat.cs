@@ -31,6 +31,8 @@ public static class EventTextFormat
             "area", "lesson", "rival", "seminar_cost", "seminar_boost",
             // 名伯楽が付く年数 {mentor_years}（issue #1679）。mgr_mentor だけが渡す。
             "mentor_years",
+            // ドラフトの場面（issue #1731）。指名された者の名前（順位順）{drafted}・指名されなかった者の名前 {missed}。draft_scene_* だけが渡す。
+            "drafted", "missed",
         };
         foreach (var (k, _) in DisplayNames.Keys) keys.Add(k);
         return keys;
