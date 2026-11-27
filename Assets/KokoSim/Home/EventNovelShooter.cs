@@ -215,7 +215,8 @@ namespace KokoSim.Unity.Home
                     EventService.Clear();       // 前の段の積み残しが先に出て場面が埋もれないよう、場面だけにする
                     NewTeamService.Clear();
                     UniformNumberService.Clear();
-                    GameSession.Current.ConsumeBanner();   // 12週ぶん回した後は大会開幕のバナーが先に出る
+                    GameSession.Current.ConsumeBanner();   // 週を回した後は大会開幕のバナー・転任の打診が先に出る
+                    ManagerTransferService.Clear();
                     DraftService.RaiseScene(scene.Item2, scene.Item3);
                     Debug.Log("[EV] ドラフト場面を積んだ: " + scene.Item1 + " pending=" + EventService.Pending.Count);
 
