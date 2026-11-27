@@ -884,7 +884,8 @@ namespace KokoSim.EditorTests
             public float DepthM;      // 野手の立ち位置から見た捕球点の奥行き（+＝前＝本塁側へ寄る…engineのy減る）
             public float ShortM;      // 野手が捕球点へ届ききらない量（engine の移動の終点が捕球点の手前）
             public float RunSpeed;
-            public string Label => $"{(Roll ? "roll" : "fly")} lat={LateralM:+0;-0;0} depth={DepthM:+0;-0;0} short={ShortM:0.0} v={RunSpeed:0.0}";
+            public bool RunThrough;   // 走者ありの外野ゴロを走りながら掬う（RunIn・issue #1079）
+            public string Label => $"{(Roll ? (RunThrough ? "runthru" : "roll") : "fly")} lat={LateralM:+0;-0;0} depth={DepthM:+0;-0;0} short={ShortM:0.0} v={RunSpeed:0.0}";
         }
 
         private struct SweepResult
@@ -928,6 +929,11 @@ namespace KokoSim.EditorTests
                 FielderStarts = new Dictionary<KokoSim.Engine.Match.Field.FieldPosition, KokoSim.Engine.Match.Timeline.TimelinePoint> { [cf] = start },
                 Result = "テスト", Duration = tEnd + 4.0, ResolvedAt = tEnd + 4.0,
             };
+            if (c.RunThrough)
+            {
+                var rt = KokoSim.Engine.Match.Timeline.TimelineBuilder.ApplyOutfieldRunThrough(tl, cf, run, tEnd, tEnd + 1.2);
+                if (rt.HasValue) tl = rt.Value.Timeline;
+            }
             return KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
         }
 
@@ -995,6 +1001,9 @@ namespace KokoSim.EditorTests
             foreach (var depth in new[] { 0f, 8f, -8f })
             foreach (var sh in new[] { 0f, 0.6f })
                 yield return new SweepCase { Roll = roll, LateralM = lat, DepthM = depth, ShortM = sh, RunSpeed = 7f };
+            foreach (var lat in new[] { -16f, -10f, 10f, 16f })
+            foreach (var depth in new[] { 0f, 8f, -8f })
+                yield return new SweepCase { Roll = true, RunThrough = true, LateralM = lat, DepthM = depth, ShortM = 0f, RunSpeed = 7f };
         }
 
         private static string SweepTable(List<SweepResult> rs)
