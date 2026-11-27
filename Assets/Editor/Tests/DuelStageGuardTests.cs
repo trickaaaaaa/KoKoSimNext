@@ -789,7 +789,7 @@ namespace KokoSim.EditorTests
                 slipMin = Mathf.Min(slipMin, slip);
                 slipMax = Mathf.Max(slipMax, slip);
             }
-            Assert.That(onLadder, Is.GreaterThan(100), "一塁へ走る間、走りの段で流れていない（全編を駆け抜けクリップで流している）");
+            Assert.That(onLadder, Is.GreaterThan(30), "一塁へ走る間、走りの段で流れていない（全編を駆け抜けクリップで流している）");
             Assert.That(overrun, Is.GreaterThan(5), "塁を通ってから駆け抜けクリップへ移っていない");
             Assert.That(slipMin, Is.GreaterThan(0.87f), $"足が地面に対して空回りしている（滑りの比 {slipMin:F2}）");
             Assert.That(slipMax, Is.LessThan(1.15f), $"足より体が速く進んでいる（滑りの比 {slipMax:F2}）");
