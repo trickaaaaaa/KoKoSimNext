@@ -175,7 +175,12 @@ public static class ForcedOutcomes
     public static Match.Game.BaserunningCoefficients Apply(
         Match.Game.BaserunningCoefficients c, ForcedOutcome f) => f switch
     {
-        ForcedOutcome.WildPitch => c with { WildPitchProb = 1.0, PassedBallProb = 0.0 },
+        // 暴投は着弾コースのゲート（CanBatteryMiss）と投手の制球の傾きでも絞られる＝確率1.0だけでは強制にならず
+        // 最初の打席に暴投が出ない（撮影が空振りする）。コースのゲートを全開・制球の傾きを0にして最初の対象球で必ず出す。
+        ForcedOutcome.WildPitch => c with
+        {
+            WildPitchProb = 1.0, WildPitchControlSlope = 0.0, PassedBallProb = 0.0, BatteryMissLowY = 99.0,
+        },
         ForcedOutcome.DroppedThirdStrike => c with { DropThirdStrikeReachProb = 1.0, DropThirdStrikeCatchingSlope = 0.0 },
         ForcedOutcome.FieldersChoice => c with { FieldersChoiceProb = 1.0, DoublePlayProb = 0.0 },
         ForcedOutcome.DoublePlay => c with { DoublePlayProb = 1.0, SpeedSlope = 0.0 },

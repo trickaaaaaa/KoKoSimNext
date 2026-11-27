@@ -2015,19 +2015,113 @@ public sealed class TimelineTests
         Assert.True(throwSeg.T0 >= cover.T1, "投手が着く前に投げている");
     }
 
+    private static (BaserunningCoefficients C, FieldGeometry Field, Player Catcher, Player Pitcher) BatteryMissCast(int arm = 50)
+        => (new BaserunningCoefficients(), new FieldGeometry(),
+            new Player { Position = FieldPosition.Catcher, ArmStrength = arm, Fielding = 50 },
+            new Player { Position = FieldPosition.Pitcher, Speed = 50 });
+
     [Fact]
-    public void BatteryMissTimeline_NoThirdRunner_PitcherStaysAndCatcherThrowsToMound()
+    public void BatteryMissTimeline_SecondRunner_CatcherThrowsToThirdAfterRunnerArrives_ThenReturnsToPitcher()
     {
-        var c = new BaserunningCoefficients();
-        var field = new FieldGeometry();
-        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
-        var pitcher = new Player { Position = FieldPosition.Pitcher, Speed = 50 };
+        // issue #1769: 走者二塁（三塁は空き）の暴投で、捕手は走者の向かう三塁へ投げる（受け手は三塁手）。
+        var (c, field, catcher, pitcher) = BatteryMissCast();
+        var second = Runner("R2", speed: 30, baserunning: 30);
 
-        var tl = TimelineBuilder.BuildBatteryMiss(Runner("R1"), Runner("R2"), null, pitcher, catcher, c, field);
+        var tl = TimelineBuilder.BuildBatteryMiss(null, second, null, pitcher, catcher, c, field);
 
+        var leg = Assert.Single(tl.Runners);
+        var toThird = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw && b.ToRole == FieldPosition.ThirdBase);
+        Assert.Equal(FieldPosition.Catcher, toThird.FromRole);
+        Assert.Equal("third", toThird.ToBase);
+        Assert.True(Near(toThird.To, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)));
+        Assert.True(toThird.T1 > leg.T1, "走者はセーフ＝送球は走者の到着より後に着く");
+        // 球が飛ぶ時間は物理どおり（距離÷捕手の送球の速さ）。遅れは投げ始めで取る（山なりにしない・#1748）。
+        var dist = System.Math.Sqrt(System.Math.Pow(toThird.To.X - toThird.From.X, 2) + System.Math.Pow(toThird.To.Z - toThird.From.Z, 2));
+        Assert.Equal(dist / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps, toThird.T1 - toThird.T0, 3);
+        // 三塁手が三塁に入っている。
+        var cover = Assert.Single(tl.Moves, m => m.Role == FieldPosition.ThirdBase);
+        Assert.Equal(FielderTask.CoverBase, cover.Task);
+        Assert.True(Near(cover.To, toThird.To));
+        // 三塁手が受けたあと、プレーが止まってから投手へ返す。走者が走っている間は投手へ返さない。
+        var back = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw && b.ToRole == FieldPosition.Pitcher);
+        Assert.Equal(FieldPosition.ThirdBase, back.FromRole);
+        Assert.True(Near(back.To, new TimelinePoint(0, 18.44)));
+        Assert.True(back.T0 >= toThird.T1, "三塁手が受ける前に返している");
+        Assert.True(back.T0 >= leg.T1, "走者が走っている間に投手へ返している");
         Assert.DoesNotContain(tl.Moves, m => m.Role == FieldPosition.Pitcher);
-        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
-        Assert.True(Near(throwSeg.To, new TimelinePoint(0, 18.44)), "三塁走者なしはマウンドへ返すはず");
+    }
+
+    [Fact]
+    public void BatteryMissTimeline_FirstRunnerOnly_CatcherThrowsToSecondTheShortstopCovers()
+    {
+        var (c, field, catcher, pitcher) = BatteryMissCast();
+        var first = Runner("R1", speed: 30, baserunning: 30);
+
+        var tl = TimelineBuilder.BuildBatteryMiss(first, null, null, pitcher, catcher, c, field);
+
+        var leg = Assert.Single(tl.Runners);
+        var toSecond = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "second");
+        Assert.Equal(FieldPosition.Shortstop, toSecond.ToRole);
+        Assert.True(toSecond.T1 > leg.T1);
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.Shortstop && m.Task == FielderTask.CoverBase);
+        var back = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw && b.ToRole == FieldPosition.Pitcher);
+        Assert.Equal(FieldPosition.Shortstop, back.FromRole);
+        Assert.True(back.T0 >= leg.T1);
+    }
+
+    [Fact]
+    public void BatteryMissTimeline_FirstAndSecond_LeadRunnerDecidesTheThrowAndReturnWaitsForEveryRunner()
+    {
+        var (c, field, catcher, pitcher) = BatteryMissCast();
+        var first = Runner("R1", speed: 30, baserunning: 30);
+        var second = Runner("R2", speed: 99, baserunning: 99);
+
+        var tl = TimelineBuilder.BuildBatteryMiss(first, second, null, pitcher, catcher, c, field);
+
+        // 先頭は二塁走者（三塁へ向かう）。一塁走者のために二塁へは投げない。
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Throw && b.ToBase == "second");
+        var lastStop = tl.Runners.Max(r => r.T1);
+        var back = tl.Ball.Last(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(FieldPosition.Pitcher, back.ToRole);
+        Assert.True(back.T0 >= lastStop, "全走者が止まる前に投手へ返している");
+    }
+
+    /// <summary>球を拾うのも投げるのも遅い捕手（足・守備・肩が最低）。走者の足が速いと「確実にセーフ」になる。</summary>
+    private static Player SlowCatcher() =>
+        new() { Position = FieldPosition.Catcher, ArmStrength = 0, Fielding = 1, Speed = 1 };
+
+    [Fact]
+    public void BatteryMissTimeline_SurelySafe_CatcherHoldsTheBallUntilEveryRunnerStops()
+    {
+        // 確実にセーフ（物理どおりに投げても走者の到着より0.5秒以上あとにしか届かない）＝投げずに持つ。
+        var (c, field, _, pitcher) = BatteryMissCast();
+        var first = Runner("R1", speed: 99, baserunning: 99);
+
+        var tl = TimelineBuilder.BuildBatteryMiss(first, null, null, pitcher, SlowCatcher(), c, field);
+
+        var leg = Assert.Single(tl.Runners);
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Throw && b.ToRole != FieldPosition.Pitcher);
+        Assert.DoesNotContain(tl.Moves, m => m.Role == FieldPosition.Shortstop || m.Role == FieldPosition.SecondBase);
+        var hold = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Carry);
+        Assert.Equal(FieldPosition.Catcher, hold.FromRole);
+        Assert.Equal(FieldPosition.Catcher, hold.ToRole);
+        var back = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(FieldPosition.Catcher, back.FromRole);
+        Assert.Equal(FieldPosition.Pitcher, back.ToRole);
+        Assert.True(back.T0 >= leg.T1, "走者が走っている間に投手へ返している");
+        Assert.Equal(back.T0, hold.T1, 6);
+    }
+
+    [Fact]
+    public void BatteryMissTimeline_ThrowOrHoldSplitsOnTheSureSafeThreshold()
+    {
+        // 同じ捕手・同じ場面で走者の足だけを変えると「投げる」から「持つ」へ切り替わる。
+        var (c, field, _, pitcher) = BatteryMissCast();
+        var slow = TimelineBuilder.BuildBatteryMiss(Runner("遅", 20, 20), null, null, pitcher, SlowCatcher(), c, field);
+        var fast = TimelineBuilder.BuildBatteryMiss(Runner("速", 99, 99), null, null, pitcher, SlowCatcher(), c, field);
+
+        Assert.Contains(slow.Ball, b => b.Kind == BallSegmentKind.Throw && b.ToRole == FieldPosition.Shortstop);
+        Assert.DoesNotContain(fast.Ball, b => b.Kind == BallSegmentKind.Throw && b.ToRole == FieldPosition.Shortstop);
     }
 
     [Fact]

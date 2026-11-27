@@ -220,9 +220,11 @@ public sealed class CameraPlanBuilderTests
     [Fact]
     public void Build_ThrowBoxGrowsWithBall_StartsOnTheThrowerNotTheMidpoint()
     {
-        var play = BatteryMissPlay();
-        var throwStart = play.Ball[^1].T0;
-        var from = play.Ball[^1].At(0);
+        var play = BatteryMissThrowToBasePlay();
+        var throwSeg = play.Ball.First(b => b is EndpointBallSegment { Kind: BallSegmentKind.Throw });
+        // 手前の握り（Carry）が同じ時刻で終わるので、境界の1コマ後を送球開始として見る。
+        var throwStart = throwSeg.T0 + 0.001;
+        var from = throwSeg.At(0);
 
         var fr = CameraFraming.Default with { MaxZoom = 20.0, ThrowFollowsBall = false };
         var jump = CameraPlanBuilder.Build(play, fr, throwStart);
@@ -289,11 +291,22 @@ public sealed class CameraPlanBuilderTests
         }
     }
 
-    /// <summary>暴投・捕逸の再生プレー（球がバックネットで死に、捕手が拾いに走る素材）。</summary>
+    /// <summary>暴投・捕逸の再生プレー（球がバックネットで死に、捕手が拾いに走る素材）。足の速い一走と鈍い捕手＝
+    /// 確実にセーフで捕手が投げずに持ち、最後の送球は捕手から投手へ返すだけ（走者のいる塁へは投げない・issue #1769）。</summary>
     private static PlaybackPlay BatteryMissPlay()
     {
         var tl = TimelineBuilder.BuildBatteryMiss(
-            new Player { Name = "一走", Speed = 60 }, null, null, new Player { Name = "投手" },
+            new Player { Name = "一走", Speed = 99, Baserunning = 99 }, null, null, new Player { Name = "投手" },
+            new Player { Position = FieldPosition.Catcher, ArmStrength = 0, Fielding = 1, Speed = 1 },
+            new BaserunningCoefficients(), new FieldGeometry());
+        return PlayTimelineAdapter.ToPlaybackPlay(tl);
+    }
+
+    /// <summary>暴投・捕逸の再生プレー（足の遅い一走・普通の捕手＝捕手が二塁へ投げる素材。issue #1769）。</summary>
+    private static PlaybackPlay BatteryMissThrowToBasePlay()
+    {
+        var tl = TimelineBuilder.BuildBatteryMiss(
+            new Player { Name = "一走", Speed = 30, Baserunning = 30 }, null, null, new Player { Name = "投手" },
             new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 },
             new BaserunningCoefficients(), new FieldGeometry());
         return PlayTimelineAdapter.ToPlaybackPlay(tl);
@@ -303,7 +316,7 @@ public sealed class CameraPlanBuilderTests
     private static double TimeWhileBallIsLoose(PlaybackPlay play)
     {
         var rollEnd = play.Ball[0].T1;
-        var throwStart = play.Ball[^1].T0;
+        var throwStart = play.Ball[1].T0;   // 転がりの次＝捕手が拾って持ち始める（Carry）
         Assert.True(throwStart > rollEnd, "球が死んでいる区間が無い＝この素材では検証にならない");
         return (rollEnd + throwStart) / 2.0;
     }
@@ -322,7 +335,7 @@ public sealed class CameraPlanBuilderTests
     private static double TimeWhileBallIsHeld(PlaybackPlay play)
     {
         var rollEnd = play.Ball[0].T1;
-        var throwStart = play.Ball[^1].T0;
+        var throwStart = play.Ball[1].T0;   // 転がりの次＝捕手が拾って持ち始める（Carry）
         Assert.True(throwStart > rollEnd, "保持区間が無い＝この素材では検証にならない");
         return (rollEnd + throwStart) / 2.0;
     }
