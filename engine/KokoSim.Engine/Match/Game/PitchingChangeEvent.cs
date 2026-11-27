@@ -25,6 +25,12 @@ public enum PitchingChangeKind
     /// Backfill は「旧投手が就いた守備位置」＝<see cref="PitchingChangeKind.TwoWaySwap"/> と同じ意味で使う。
     /// </summary>
     PitcherConvertedRelief,
+
+    /// <summary>
+    /// 指名打者の登板（規則5.11）。DH の選手が自分の打順のままマウンドへ上がり、DH は消滅する。
+    /// 旧投手は退場・守備の補充は無い（Backfill は使わない）。
+    /// </summary>
+    DhToMound,
 }
 
 /// <summary>

@@ -211,6 +211,64 @@ public sealed class SubstitutionTests
         Assert.Equal(state.CurrentPitcher, state.CurrentLineup[leftSlot]);
     }
 
+    // ===== DHの選手の登板（issue #1725・規則5.11） =====
+
+    [Fact]
+    public void PromoteDhToMound_DhPitchesInOwnBattingSlot_DhVanishes_OldPitcherRetires()
+    {
+        var state = new TeamState(MakeDhTeam());
+        var dhSlot = state.DhSlot;
+        var dh = state.CurrentLineup[dhSlot];
+        var oldPitcher = state.CurrentPitcher;
+        var fieldersBefore = state.CurrentLineup.Where((_, i) => i != dhSlot).ToList();
+
+        Assert.True(state.PromoteDhToMound());
+
+        Assert.False(state.UsesDh);
+        // 元DHが元DHの打順のままマウンドへ。以降その打順で投手として打つ。
+        Assert.Equal(dh.Name, state.CurrentPitcher.Name);
+        Assert.Equal(FieldPosition.Pitcher, state.CurrentLineup[dhSlot].Position);
+        Assert.Equal(dh.Name, state.CurrentLineup[dhSlot].Name);
+        Assert.Equal(dhSlot, state.PitcherSlot);
+        Assert.Equal(state.CurrentPitcher, state.CurrentLineup[dhSlot]);
+        // 旧投手は退場（再登板できない）。野手は誰も動かない・退場しない。
+        Assert.True(state.IsRetired(oldPitcher));
+        Assert.Equal(fieldersBefore, state.CurrentLineup.Where((_, i) => i != dhSlot).ToList());
+        Assert.All(fieldersBefore, f => Assert.False(state.IsRetired(f)));
+        // 打順9人のまま守備は9人（投手含む）で成立。
+        Assert.Equal(9, state.DefensiveAlignment(new FieldGeometry()).Count);
+        // 交代回数・継投回数・継投ログ。
+        Assert.Equal(1, state.Substitutions);
+        Assert.Equal(1, state.PitcherChanges);
+        Assert.Equal(PitchingChangeKind.DhToMound, state.LastPitchingChange!.Value.Kind);
+        Assert.Equal(oldPitcher.Name, state.LastPitchingChange.Value.OutPitcherName);
+        Assert.Equal(dh.Name, state.LastPitchingChange.Value.InPitcherName);
+    }
+
+    [Fact]
+    public void PromoteDhToMound_IsIrreversible_AndRejectedWithoutDh()
+    {
+        var state = new TeamState(MakeDhTeam());
+        Assert.True(state.PromoteDhToMound());
+        Assert.False(state.PromoteDhToMound());   // DH はもう居ない
+        Assert.False(state.ReleaseDh());
+
+        var nonDh = new TeamState(MakeTeam());
+        Assert.False(nonDh.PromoteDhToMound());
+        Assert.Equal(0, nonDh.Substitutions);
+        Assert.Null(nonDh.LastPitchingChange);
+    }
+
+    [Fact]
+    public void PromoteDhToMound_OldPitcherCannotComeBack()
+    {
+        var state = new TeamState(MakeDhTeam());
+        var oldPitcher = state.CurrentPitcher;
+        Assert.True(state.PromoteDhToMound());
+        Assert.False(state.ChangePitcherTo(oldPitcher));   // 控えに居ない＝リエントリー禁止
+        Assert.DoesNotContain(oldPitcher, state.ReliefRankingCandidates);
+    }
+
     // ===== DH枠は守備者の検索に出ない（issue #1207）。控えから繰り上げたDHは控え時の守備位置を残す。 =====
 
     /// <summary>控え捕手がDHに繰り上がり、正捕手（先発）より前の打順（0番）に座るチーム。</summary>

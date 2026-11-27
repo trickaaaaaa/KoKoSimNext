@@ -274,6 +274,90 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.Equal(after2.CurrentPitcher.Name, after2.Lineup[after2.DhSlot].Name);
     }
 
+    // ===== DHの選手の登板（issue #1725・規則5.11） =====
+
+    private static MatchProgression NewDhProg(ulong seed)
+        => new(DhTeam("A"), DhTeam("H"), new GameContext { CaptureTimelines = true }, seed);
+
+    [Fact]
+    public void PromoteDhToMound_ThroughTheSeam_DhPitchesInOwnSlot()
+    {
+        var prog = NewDhProg(23UL);
+        var opt = AdvanceUntilDefense(prog, teamIsAway: false);
+        Assert.NotNull(opt);
+        Assert.True(opt!.CanReleaseDh);
+        var dh = opt.Lineup[opt.DhSlot];
+        var oldPitcher = opt.CurrentPitcher;
+
+        Assert.True(prog.PromoteDhToMound(teamIsAway: false));
+
+        var after = prog.SubstitutionOptions(teamIsAway: false);
+        Assert.False(after.UsesDh);
+        Assert.Equal(dh.Name, after.CurrentPitcher.Name);
+        Assert.Equal(opt.DhSlot, after.PitcherSlot);
+        Assert.Equal(dh.Name, after.Lineup[after.PitcherSlot].Name);
+        Assert.DoesNotContain(after.Lineup, p => p.Name == oldPitcher.Name);
+        // 不可逆・重ねて実行できない。
+        Assert.False(prog.PromoteDhToMound(teamIsAway: false));
+        // 継投ログ（種類つき）が積まれる。
+        Assert.Contains(prog.PitchingChanges, c => c.Change.Kind == PitchingChangeKind.DhToMound);
+    }
+
+    [Fact]
+    public void PromoteDhToMound_OnNonDhTeam_IsRejected()
+    {
+        var prog = NewProg(23UL);
+        Assert.NotNull(AdvanceUntilDefense(prog, teamIsAway: false));
+        Assert.False(prog.PromoteDhToMound(teamIsAway: false));
+    }
+
+    [Theory]
+    [InlineData(3UL)]
+    [InlineData(31UL)]
+    public void PromoteDhToMound_SaveLoadRoundTrip_ProducesTheSameResult(ulong seed)
+    {
+        var prog = NewDhProg(seed);
+        var applied = false;
+        while (!applied && prog.Advance())
+        {
+            var def = prog.SubstitutionOptions(teamIsAway: false);
+            if (!def.IsOffense && def.UsesDh && prog.ConfirmedPlateAppearances >= 6)
+                applied = prog.PromoteDhToMound(teamIsAway: false);
+        }
+        Assert.True(applied, "シナリオがDHの登板を実際に行使していない（テストの前提が崩れている）");
+        for (var i = 0; i < 10 && prog.Advance(); i++) { /* 登板後も数打席進める */ }
+
+        var save = prog.Save();
+        var straight = GameResultDigest.Sha256Of(prog.FinishRemaining());
+
+        var json = JsonSerializer.Serialize(save);
+        var back = JsonSerializer.Deserialize<GameSaveState>(json)!;
+        var resumed = GameReplay.Restore(DhTeam("A"), DhTeam("H"), new GameContext { CaptureTimelines = true }, back);
+        while (resumed.Steps.MoveNext()) { /* 続行 */ }
+        var restored = GameResultDigest.Sha256Of(GameEngine.BuildResult(resumed.Progress));
+
+        Assert.Equal(straight, restored);
+    }
+
+    [Fact]
+    public void PromoteDhToMound_SameSeedSameOperation_SameResult()
+    {
+        string Run()
+        {
+            var prog = NewDhProg(7UL);
+            var done = false;
+            while (prog.Advance())
+            {
+                var def = prog.SubstitutionOptions(teamIsAway: false);
+                if (!done && !def.IsOffense && def.UsesDh && prog.ConfirmedPlateAppearances >= 8)
+                    done = prog.PromoteDhToMound(teamIsAway: false);
+            }
+            Assert.True(done);
+            return GameResultDigest.Sha256Of(prog.BuildResult());
+        }
+        Assert.Equal(Run(), Run());
+    }
+
     // ===== 3. リエントリー禁止 =====
 
     [Fact]

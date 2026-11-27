@@ -277,6 +277,15 @@
 - 在フィールド野手をマウンドへ上げる**投野交代**（issue #209）は別コマンド（`RelieveWith`）。
   こちらは「野手が上がって旧投手が空き守備へ回る」＝向きが逆
 
+### 6.2a DHの登板（指枠 ⇄ 投枠・issue #1725）
+
+DH の選手をマウンドへ上げる交代。公認野球規則5.11どおり、**DH はその試合で消滅**し、元DHは**自分の打順のまま**投手として打つ
+（打順は9人のまま・守備位置の補充は無い）。今の投手は打順外なので**退場**する（再登板できない）。
+- 球数・疲労は新投手の分を選手単位で読む（`LoadStintOf`・#235 と同じ）。交代回数・継投回数を1つ数え、
+  継投ログは `PitchingChangeKind.DhToMound`。決定列は `GameDecisionKind.PromoteDhToMound`（取り消しの再生・セーブ復元も同じ経路）
+- 約束（`ScoutPromises`）の見張りは他の登板と同じ（UI が登板する選手を `BreaksOnEntry(pitches: true)` で確かめる）
+- 範囲外: 旧投手を守備位置へ回す形（旧投手を残して野手を押し出す）／AI がこの手を使うこと（AI の采配は変えない＝帯不変）
+
 ### 6.3 守備側の交代UI＝「守備の割当」（issue #256）
 
 守備中の交代は**1操作＝「誰を・どの守備に割り当てるか」**に統合した（旧・投手交代／守備交代／守備位置／DH解除の4タブを廃止）。
@@ -293,6 +302,7 @@
 | 在フィールド ⇄ 在フィールド | 守備位置の入替 | `MatchProgression.SwapDefensivePositions` |
 | 投枠 → 控え投入＋元投手を守備位置へ | コンバート継投 | `MatchProgression.ConvertPitcherAndRelieve` |
 | 指枠 ⇄ 守備位置枠 ／ 指枠を退場 | DH解除 | `MatchProgression.ReleaseDh(pos / null)` |
+| 指枠 ⇄ 投枠 | DHの登板（DH消滅・旧投手退場） | `MatchProgression.PromoteDhToMound`（→`TeamState.PromoteDhToMound`） |
 
 - **継投候補はプレイヤーもAIも同一集合** `TeamState.ReliefRankingCandidates`（ブルペン＋ベンチ＋在フィールドの守備野手）を通る
   （`SubstitutionOptions.ReliefCandidates`）。在フィールド野手を指名すると投野交代になる（§6.2 と向きが逆）。
