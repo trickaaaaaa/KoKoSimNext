@@ -1979,8 +1979,7 @@ screens:
     name: "自校の公式戦の直後、結果ポップアップを閉じるまで試合後のひとこと（会話）が開かず、OK のあとに開く（#1730）"
     steps:
       - new_game: {seed: 7, prefecture: 14, school: 桜丘, district: 0}
-      - boost_roster: 95
-      - advance_to_week: 17
+      - advance_weeks: 40
       - advance_to_match_day: ""
       - call: HomeState.Current.PlayMatch()
       - read: =EventService.HasPending
