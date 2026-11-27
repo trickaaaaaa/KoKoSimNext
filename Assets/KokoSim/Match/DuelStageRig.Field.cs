@@ -1573,7 +1573,8 @@ namespace KokoSim.Unity.Match
             public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
             public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
             public float PulledM;     // 捕球点を engine の終点から**軌跡に沿って**遡らせた量[m]
-            public float RewoundS, RewoundM, EndH;   // 空中捕球の時刻の付け替え（診断用）: 遡った秒・水平距離[m]・付け替え前の終点の高さ[m]
+            public float RewoundS, RewoundM, EndH;
+            public string HProf;   // 空中捕球の時刻の付け替え（診断用）: 遡った秒・水平距離[m]・付け替え前の終点の高さ[m]
             public float LineOffM;    // 捕球点が球の線（終点へ来る向き）から**横へ**外れた量[m]（issue #782・実測用）
             /// <summary>
             /// 捕球のために野手の体を寄せる量（ステージ XZ）。球の線の上の捕球点へ、収録のグラブの距離まで
@@ -1956,7 +1957,7 @@ namespace KokoSim.Unity.Match
                 // 空中の球の捕球時刻は「区間の終点（高さ0）」でなく「放物線がグラブの高さを通る時刻」（issue #1336）。
                 // 終点で高さ0の球をグラブの高さで捕ると、捕球の0.3秒前から球を放物線の外へ寄せることになり、
                 // 落下が急に止まって吸い込まれて見えた。engine の時刻・判定には触れない（絵の捕球時刻だけ）
-                float rewoundS = 0f, rewoundM = 0f, endH0 = 0f;
+                float rewoundS = 0f, rewoundM = 0f, endH0 = 0f; string hProf = null;
                 bool aerialCatch = !isThrow && !missBy.HasValue && eb != null && eb.Kind == BallSegmentKind.Flight
                     && (kind == FieldCatchKind.Catch || kind == FieldCatchKind.Dive || kind == FieldCatchKind.Drop);
                 if (aerialCatch)
@@ -1964,6 +1965,10 @@ namespace KokoSim.Unity.Match
                     double tg = AerialGloveCrossLocalT(seg, an.GloveY, tLocal);
                     rewoundS = (float)(tLocal - tg);
                     endH0 = (float)end.H;
+                    var hp = new StringBuilder();
+                    for (double bk = 0.0; bk <= 0.8 && tLocal - bk >= 0.0; bk += 0.1)
+                        hp.Append(string.Format(System.Globalization.CultureInfo.InvariantCulture, "-{0:F1}:{1:F2}/{2:F1} ", bk, seg.At(tLocal - bk).H, (seg.At(tLocal - bk).X - seg.At(tLocal).X)));
+                    hProf = hp.ToString();
                     if (tg < tLocal)
                     {
                         var end0 = end;
@@ -2088,7 +2093,7 @@ namespace KokoSim.Unity.Match
                     HoldUntil = holdUntil,
                     FielderGapM = bestD,
                     PulledM = pulled,
-                    RewoundS = rewoundS, RewoundM = rewoundM, EndH = endH0,
+                    RewoundS = rewoundS, RewoundM = rewoundM, EndH = endH0, HProf = hProf,
                 });
                 switch (kind)
                 {
@@ -3011,9 +3016,9 @@ namespace KokoSim.Unity.Match
                 }
                 var shift = CatchBodyShiftNow(a);
                 return string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "{0} {1} aerial={2} tc={3:F3} hold={4:F2} gap={5:F3} bs={6:F3} rew={19:F3}s/{20:F2}m endH={21:F2} shift={7:F3},{8:F3} pt={9:F3},{10:F3} eng={11:F3},{12:F3} root={13:F3},{14:F3} lf={15:F3},{16:F3} rf={17:F3},{18:F3}",
+                    "{0} {1} aerial={2} tc={3:F3} hold={4:F2} gap={5:F3} bs={6:F3} rew={19:F3}s/{20:F2}m endH={21:F2} hp=[{22}] shift={7:F3},{8:F3} pt={9:F3},{10:F3} eng={11:F3},{12:F3} root={13:F3},{14:F3} lf={15:F3},{16:F3} rf={17:F3},{18:F3}",
                     e.Pos, e.Kind, e.Aerial ? 1 : 0, e.TCatch, CatchHoldSeconds, e.FielderGapM, e.BodyShift.magnitude, shift.x, shift.y,
-                    e.Point.x, e.Point.z, eng.X, eng.Y, root.x, root.z, lf.x, lf.z, rf.x, rf.z, e.RewoundS, e.RewoundM, e.EndH);
+                    e.Point.x, e.Point.z, eng.X, eng.Y, root.x, root.z, lf.x, lf.z, rf.x, rf.z, e.RewoundS, e.RewoundM, e.EndH, e.HProf);
             }
             return "catch=-";
         }
