@@ -247,4 +247,144 @@ public sealed class BoxScoreEntryTests
         Assert.Equal(a.AwayBatting.Select(l => string.Join(",", l.Positions)), b.AwayBatting.Select(l => string.Join(",", l.Positions)));
         Assert.All(a.AwayBatting.Concat(a.HomeBatting).Where(l => l.Entry == BoxEntry.Starter), l => Assert.NotEmpty(l.Positions));
     }
+
+    // ===== DH制の先発投手が途中から打順に入る（issue #1726） =====
+
+    private const int SecondSlot = 2;
+    private const int DhSlot = 8;
+
+    [Fact]
+    public void DH解除で投手が打順に入ったら_打席が無くても入った枠の直下に出る()
+    {
+        var s = new TeamState(MakeDhTeam());
+        Assert.True(s.ReleaseDh(FieldPosition.SecondBase));
+        DefendOnePa(s);
+
+        var lines = s.BuildBattingLines().ToList();
+        var i = lines.FindIndex(l => l.Name == "先発P");
+        Assert.True(i > 0);
+        Assert.Equal("SecondBase先発", lines[i - 1].Name);   // 退いた二塁手の直下
+        Assert.Equal(SecondSlot + 1, lines[i].Order);
+        Assert.Equal("SecondBase先発", lines[i].EnteredFor);
+        Assert.Equal(BoxEntry.Starter, lines[i].Entry);
+        Assert.Equal(0, lines[i].PlateAppearances);
+        Assert.Equal(new[] { FieldPosition.Pitcher }, lines[i].Positions);
+    }
+
+    [Fact]
+    public void DH解除で守備に就かせない形でも_投手はDH枠の直下に出る()
+    {
+        var s = new TeamState(MakeDhTeam());
+        Assert.True(s.ReleaseDh());
+        DefendOnePa(s);
+
+        var lines = s.BuildBattingLines().ToList();
+        var i = lines.FindIndex(l => l.Name == "先発P");
+        Assert.Equal("DH先発", lines[i - 1].Name);
+        Assert.Equal(DhSlot + 1, lines[i].Order);
+    }
+
+    [Fact]
+    public void DH解除のあと元DHを登板させたら_先発投手は投から二の並びで入った枠に出る()
+    {
+        var s = new TeamState(MakeDhTeam());
+        Assert.True(s.ReleaseDh(FieldPosition.SecondBase));
+        DefendOnePa(s);
+        // 元DH（二塁へ入った選手）を投野交代でマウンドへ。先発投手は二塁へ回る。
+        Assert.True(s.RelieveWith(s.CurrentLineup[DhSlot], allowBenchBackfill: false));
+        DefendOnePa(s);
+
+        var lines = s.BuildBattingLines().ToList();
+        var i = lines.FindIndex(l => l.Name == "先発P");
+        Assert.Equal("SecondBase先発", lines[i - 1].Name);
+        Assert.Equal(SecondSlot + 1, lines[i].Order);
+        Assert.Equal(new[] { FieldPosition.Pitcher, FieldPosition.SecondBase }, lines[i].Positions);
+    }
+
+    [Fact]
+    public void DH解除で入った投手に打席があっても_入った枠の直下に出る()
+    {
+        var s = new TeamState(MakeDhTeam());
+        Assert.True(s.ReleaseDh(FieldPosition.SecondBase));
+        s.RecordBatting(s.CurrentLineup[SecondSlot], PlateAppearanceResult.Single, rbi: 0);
+
+        var lines = s.BuildBattingLines().ToList();
+        var i = lines.FindIndex(l => l.Name == "先発P");
+        Assert.Equal("SecondBase先発", lines[i - 1].Name);
+        Assert.Equal(SecondSlot + 1, lines[i].Order);
+        Assert.Equal(1, lines[i].AtBats);
+        Assert.Equal(1, lines[i].Hits);
+        Assert.Single(lines, l => l.Name == "先発P");
+    }
+
+    [Fact]
+    public void 救援投手が打席に立った行も_入った枠の直下に出る()
+    {
+        // 投手枠が継投で動いた後（投野交代）に控え投手が上がって打つ。元の投手枠（9番）に決め打ちしない。
+        var s = new TeamState(MakeTeam());
+        Assert.True(s.RelieveWith(s.CurrentLineup[LeftSlot], allowBenchBackfill: false));   // 左翼手が登板・投手は左翼へ
+        var reliever = s.Reserves.First(r => r.Name == "控え一");
+        Assert.True(s.RelieveWith(reliever));
+        s.RecordBatting(s.CurrentLineup[LeftSlot], PlateAppearanceResult.Single, rbi: 0);
+
+        var line = s.BuildBattingLines().Single(l => l.Name == "控え一");
+        Assert.Equal(LeftSlot + 1, line.Order);
+    }
+
+    [Fact]
+    public void コンバート継投のDH制の枝でも_元投手は押し出された野手の枠の直下に出る()
+    {
+        var s = new TeamState(MakeDhTeam());
+        Assert.True(s.ConvertPitcherAndRelieve(FieldPosition.LeftField, s.Reserves.First(r => r.Name == "控え一")));
+        DefendOnePa(s);
+
+        var lines = s.BuildBattingLines().ToList();
+        var i = lines.FindIndex(l => l.Name == "先発P");
+        Assert.Equal("LeftField先発", lines[i - 1].Name);
+        Assert.Equal(LeftSlot + 1, lines[i].Order);
+        Assert.Equal(new[] { FieldPosition.Pitcher, FieldPosition.LeftField }, lines[i].Positions);
+    }
+
+    private static Team WithStrongBenchDefender(Team team, bool dh)
+    {
+        var order = team.BattingOrder.ToList();
+        if (dh) order[DhSlot] = order[DhSlot] with { Contact = 1, Power = 1, Fielding = 1 };
+        var reserves = team.Reserves.Select(r => r.Name == "控え中" ? r with { Fielding = 99 } : r).ToList();
+        return new Team
+        {
+            Name = team.Name, BattingOrder = order, PitcherSlot = 8, DhSlot = dh ? DhSlot : -1,
+            StartingPitcher = team.StartingPitcher, Reserves = reserves,
+        };
+    }
+
+    [Fact]
+    public void 野手登板でDHが消える枝_ベンチ野手の補充も打席が無くても出る()
+    {
+        var s = new TeamState(WithStrongBenchDefender(MakeDhTeam(), dh: true));
+        Assert.True(s.RelieveWith(s.CurrentLineup[LeftSlot]));
+        Assert.Equal("控え中", s.CurrentLineup[DhSlot].Name);   // ②でベンチ野手が入った
+        DefendOnePa(s);
+
+        var lines = s.BuildBattingLines().ToList();
+        var i = lines.FindIndex(l => l.Name == "控え中");
+        Assert.Equal("DH先発", lines[i - 1].Name);
+        Assert.Equal(DhSlot + 1, lines[i].Order);
+        Assert.Equal(BoxEntry.DefensiveSub, lines[i].Entry);
+        Assert.Equal(new[] { FieldPosition.LeftField }, lines[i].Positions);
+    }
+
+    [Fact]
+    public void 非DHの継投で控え野手が空き守備に入る形も_打席が無くても出る()
+    {
+        var s = new TeamState(WithStrongBenchDefender(MakeTeam(), dh: false));
+        Assert.True(s.RelieveWith(s.CurrentLineup[LeftSlot]));
+        Assert.Equal("控え中", s.CurrentLineup[8].Name);
+        DefendOnePa(s);
+
+        var lines = s.BuildBattingLines().ToList();
+        var i = lines.FindIndex(l => l.Name == "控え中");
+        Assert.Equal("先発P", lines[i - 1].Name);
+        Assert.Equal(9, lines[i].Order);
+        Assert.Equal(new[] { FieldPosition.LeftField }, lines[i].Positions);
+    }
 }
