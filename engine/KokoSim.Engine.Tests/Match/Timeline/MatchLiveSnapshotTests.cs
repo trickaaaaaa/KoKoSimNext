@@ -4,6 +4,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using Xunit;
@@ -118,6 +119,73 @@ public sealed class MatchLiveSnapshotTests
             Assert.Equal(boxAb, snapAb);
             Assert.Equal(boxHits, snapHits);
         }
+    }
+
+    /// <summary>一塁走者・二塁空きの間、常に盗塁を試みるブレイン（PlayerAttributionTests と同型）。</summary>
+    private sealed class AlwaysStealBrain : ITacticsBrain, IPitchTacticsBrain
+    {
+        public OffensiveSign CallOffense(in TacticsSituation s, IRandomSource rng) => OffensiveSign.Swing;
+        public DefensiveTactics CallDefense(in TacticsSituation s, IRandomSource rng) => DefensiveTactics.Default;
+        public bool CallOffenseTimeout(in TacticsSituation s, IRandomSource rng) => false;
+        public bool CallDefenseTimeout(in TacticsSituation s, IRandomSource rng) => false;
+        public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng) => null;
+        public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng) => null;
+        public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
+        public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+            => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
+
+        public PitchTacticsDirective? CallPitchAction(in PitchTacticsSituation s, IRandomSource rng)
+            => s.Base.OnFirst is not null && s.Base.OnSecond is null
+                ? new PitchTacticsDirective(StealAttempt: StartType.Normal)
+                : null;
+    }
+
+    // 打者の帯に出す今日の本塁打・盗塁（issue #1743）がエンジン集計から引け、打席ごとに増える。
+    [Fact]
+    public void Snapshot_TodaysHomeRunsAndStolenBases_MatchBoxScoreAndGrowPerPlateAppearance()
+    {
+        var sawHr = false;
+        var sawSb = false;
+        for (var seed = 1UL; seed <= 40UL; seed++)
+        {
+            var prog = new MatchProgression(
+                Team("A", withSourceIds: false, withBench: false),
+                Team("H", withSourceIds: true, withBench: false) with { Tactics = new AlwaysStealBrain() },
+                new GameContext(), seed);
+            var before = prog.Snapshot();
+            while (prog.Advance())
+            {
+                var after = prog.Snapshot();
+                var cur = prog.Current;
+                var lineup = cur.IsTop ? after.Away.Lineup : after.Home.Lineup;
+                var lineupBefore = cur.IsTop ? before.Away.Lineup : before.Home.Lineup;
+                var slot = lineup[cur.BatterOrder - 1];
+                var slotBefore = lineupBefore[cur.BatterOrder - 1];
+                Assert.Equal(
+                    slotBefore.HomeRuns + (cur.Result == PlateAppearanceResult.HomeRun ? 1 : 0), slot.HomeRuns);
+                Assert.True(slot.StolenBases >= slotBefore.StolenBases);
+                before = after;
+            }
+
+            var result = prog.BuildResult();
+            var snap = prog.Snapshot();
+            foreach (var (lineup, box) in new[] { (snap.Home.Lineup, result.HomeBatting), (snap.Away.Lineup, result.AwayBatting) })
+            {
+                var snapHr = lineup.Sum(s => s.HomeRuns);
+                var snapSb = lineup.Sum(s => s.StolenBases);
+                Assert.True(snapHr <= box.Sum(b => b.HomeRuns));
+                Assert.True(snapSb <= box.Sum(b => b.StolenBases));
+                if (result.PitcherChanges == 0 && box.Count == 9)
+                {
+                    Assert.Equal(box.Sum(b => b.HomeRuns), snapHr);
+                    Assert.Equal(box.Sum(b => b.StolenBases), snapSb);
+                }
+                sawHr |= snapHr > 0;
+                sawSb |= snapSb > 0;
+            }
+        }
+        Assert.True(sawHr, "40試合で本塁打が1本も出ていない＝検証が空");
+        Assert.True(sawSb, "40試合で盗塁が1回も無い＝検証が空");
     }
 
     // 現投手の今日の成績が打席消化で計上され、球数・投球回が最終ボックススコアの先発投手と一致する。

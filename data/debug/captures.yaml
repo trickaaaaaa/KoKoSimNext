@@ -181,6 +181,22 @@ captures:
     duel_seconds: 0.1
     overrides: {MatchLiveController.CalmBadgeForceForCapture: true}
 
+  - id: batter-band-1743
+    name: "打者の帯の2段目（打率・本塁打・打点・盗塁）の幅と桁（issue #1743）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    duel_seconds: 0.1
+
+  - id: batter-band-hr-1743
+    name: "本塁打の打席の結果が出た直後に、その打者の帯の本塁打・打点が増える（issue #1743）"
+    scenario: steal-sign-lab
+    manager: away
+    force: HomeRun
+    view: panel
+    duel_seconds: 40.0
+    shots: [start, result+0.3, end]
+
   - id: rattled-1178
     name: "投手が動揺している間、頭上で渦巻きが回り、投げる前に汗が飛ぶ（issue #1178・後攻＝自校の投手）"
     scenario: pitcher-rattled-lab

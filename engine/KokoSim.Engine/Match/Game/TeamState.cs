@@ -679,7 +679,7 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// ライブ観戦のスタメン列（現在の打順9人・交代反映済み）＋各選手の今日の成績（打数/安打/打点）。
+    /// ライブ観戦のスタメン列（現在の打順9人・交代反映済み）＋各選手の今日の成績（打数/安打/打点/本塁打/盗塁）。
     /// <see cref="BuildBattingLines"/> はオリジナル9人基準のボックススコアなので、現ラインナップの per-slot 表示には
     /// こちらを使う。観測データ＝試合結果に影響しない。
     /// </summary>
@@ -694,7 +694,8 @@ public sealed class TeamState
             var displayPos = _usesDh && i == _dhSlot ? FieldPosition.DesignatedHitter : p.Position;
             slots.Add(new LiveBatterSlot(
                 i + 1, p.SourceId, p.UniformNumber, p.Name, displayPos, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue, p.Grade, p.Throws));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue, p.Grade, p.Throws,
+                a?.HR ?? 0, a?.SB ?? 0));
         }
         return slots;
     }
@@ -737,7 +738,8 @@ public sealed class TeamState
             var a = _bat.TryGetValue(KeyOf(p), out var acc) ? acc : null;
             list.Add(new LiveBatterSlot(
                 0, p.SourceId, p.UniformNumber, p.Name, p.Position, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue, p.Grade, p.Throws));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue, p.Grade, p.Throws,
+                a?.HR ?? 0, a?.SB ?? 0));
         }
         return list;
     }
