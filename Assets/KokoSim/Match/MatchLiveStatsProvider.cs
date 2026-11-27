@@ -106,6 +106,20 @@ namespace KokoSim.Unity.Match
         /// <para>値は<b>実効守備力ランク</b>＝ Fielding × 適性補正（issue #371 でメンバー設定・スタメン設定が
         /// 採った定義と同じ）。生の適性ランクは出さない＝3画面で同じものを見せる。</para>
         /// </summary>
+        /// <summary>
+        /// 守備適性の9ポジション（投捕一二三遊左中右）の実効守備力の値（<see cref="AptitudeGradesOf"/> と同じ定義・同じ並び）。
+        /// 選手交代の比較（9列の表）でランクと数値を並べるのに使う。自校の名簿に居ない選手は null。
+        /// </summary>
+        public IReadOnlyList<int> AptitudeValuesOf(int schoolId, int? sourceId)
+        {
+            if (!_lookup.IsManagerSchool(schoolId)) return null;
+            var found = FindDeveloping(sourceId);
+            if (found == null) return null;
+            var values = new List<int>(AptOrder.Length);
+            foreach (var pos in AptOrder) values.Add(EffectiveFielding.Rank(found, pos, FieldingCoeff.Default));
+            return values;
+        }
+
         public IReadOnlyList<string> AptitudeGradesOf(int schoolId, int? sourceId)
         {
             if (!_lookup.IsManagerSchool(schoolId)) return null;

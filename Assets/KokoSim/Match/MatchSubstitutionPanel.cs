@@ -40,13 +40,17 @@ namespace KokoSim.Unity.Match
         private readonly VisualElement _root;
         private readonly System.Action _onApplied;
 
-        private VisualElement _scrim, _kinds, _outRows, _inRows, _cmpRows, _cmpToggle;
-        private ScrollView _cmpScroll;
-        private Label _phase, _outsCap, _insCap, _note;
+        private VisualElement _scrim, _kinds, _guide, _outRows, _inRows, _cmpRows, _cmpToggle, _cardA, _cardB, _apt, _note;
+        private Label _phase, _outsCap, _insCap, _insCount, _capA, _capB, _queue;
         private Button _ok, _close, _cancel, _commit;
+        private string _notePlain = "";
         // 確定した交代（issue #718・文言は #796）: 「試合へ戻る」までは「全部やめる」で開く前へ戻せる。
         private readonly List<string> _reserved = new();
-        private VisualElement _queue;
+
+        // 比較の表のタブ（0＝野手・1＝投手）。開いたときは野手。投手が絡む操作になったら投手へ自動で倒し、
+        // 外れたら野手へ戻す（その間は手で切り替えられる）。
+        private int _cmpTab;
+        private bool _lastPitcherCtx;
 
         private MatchProgression _prog;
         private bool _teamIsAway;
@@ -72,7 +76,6 @@ namespace KokoSim.Unity.Match
         private int _defInIndex = -1;    // 控え一覧の添字（枠→控え）
         private FieldPosition? _convertTo;  // 継投時に元投手を回す守備位置（null=退場）
         private bool _dhWithdraw;        // 指枠を「そのまま退場」させる
-        private bool _cmpFielderOverride;   // 投手が絡む操作でも打撃・守備ビューを見たい（トグル選択）
 
         // 入部の条件（約束）の見張り（設計書04 §2.4）。保留中の操作で約束を破る選手（描画のたびに引き直す）と、
         // 「約束を破って確定」を出している操作の鍵（null＝出していない。操作が変わったら下ろす）。
@@ -85,18 +88,19 @@ namespace KokoSim.Unity.Match
         /// （<see cref="MatchLiveStatsProvider.AptitudeGradesOf"/>）に任せて注入する。null なら帯を出さない。
         /// </param>
         public MatchSubstitutionPanel(VisualElement root, System.Action onApplied,
-            System.Func<int?, IReadOnlyList<string>> aptitudeGrades = null,
+            System.Func<int?, IReadOnlyList<int>> aptitudeValues = null,
             System.Func<Player, List<PitchChartDatum>> pitchChart = null,
             System.Func<Player, Condition> conditionOf = null)
         {
             _root = root;
             _onApplied = onApplied;
-            _aptitudeGrades = aptitudeGrades;
+            _aptitudeValues = aptitudeValues;
             _pitchChart = pitchChart;
             _conditionOf = conditionOf;
         }
 
-        private readonly System.Func<int?, IReadOnlyList<string>> _aptitudeGrades;
+        // 守備適性の9ポジション（投捕一二三遊左中右）の実効守備力（MatchLiveStatsProvider.AptitudeValuesOf）。相手校・名簿外は null。
+        private readonly System.Func<int?, IReadOnlyList<int>> _aptitudeValues;
         private readonly System.Func<Player, List<PitchChartDatum>> _pitchChart;
         // 調子の顔（試合中の HUD と同じ源＝MatchLiveStatsProvider.ConditionOf）。交代画面は自校だけなので真値で出す。
         private readonly System.Func<Player, Condition> _conditionOf;
@@ -108,21 +112,42 @@ namespace KokoSim.Unity.Match
         {
             _scrim = _root.Q<VisualElement>("sub-modal");
             _kinds = _root.Q<VisualElement>("msub-kinds");
+            _guide = _root.Q<VisualElement>("msub-guide");
             _outRows = _root.Q<VisualElement>("msub-out-rows");
             _inRows = _root.Q<VisualElement>("msub-in-rows");
             _cmpRows = _root.Q<VisualElement>("msub-cmp-rows");
             _cmpToggle = _root.Q<VisualElement>("msub-cmp-toggle");
-            // ScrollView 本体（窓の高さを持つ要素）。_cmpRows.parent は contentContainer なので届かない。
-            _cmpScroll = _root.Q<ScrollView>(className: "msub-cmp-scroll");
+            _cardA = _root.Q<VisualElement>("msub-cmp-a");
+            _cardB = _root.Q<VisualElement>("msub-cmp-b");
+            _apt = _root.Q<VisualElement>("msub-apt");
             _phase = _root.Q<Label>("msub-phase");
             _outsCap = _root.Q<Label>("msub-outs-cap");
             _insCap = _root.Q<Label>("msub-ins-cap");
-            _note = _root.Q<Label>("msub-note");
+            _insCount = _root.Q<Label>("msub-ins-count");
+            _capA = _root.Q<Label>("msub-cap-a");
+            _capB = _root.Q<Label>("msub-cap-b");
+            _note = _root.Q<VisualElement>("msub-note");
             _ok = _root.Q<Button>("msub-ok");
             _close = _root.Q<Button>("msub-close");
             _cancel = _root.Q<Button>("msub-cancel");
             _commit = _root.Q<Button>("msub-commit");
-            _queue = _root.Q<VisualElement>("msub-queue");
+            _queue = _root.Q<Label>("msub-queue");
+
+            // 線画（閉じる×・カードの間の矢印・ボタンの＋と▶）。
+            AddIcon(_close, LineIcon.Kind.Close);
+            AddIcon(_root.Q<VisualElement>("msub-cmp-arrow"), LineIcon.Kind.Walk);
+            if (_ok != null && _ok.Q<Label>() == null)
+            {
+                _ok.text = "";
+                _ok.Add(Text("この操作を確定", "sx-btn__t f-body-bd"));
+                AddIcon(_ok, LineIcon.Kind.Plus);
+            }
+            if (_commit != null && _commit.Q<Label>() == null)
+            {
+                _commit.text = "";
+                _commit.Add(Text("試合へ戻る", "sx-btn__t f-body-bd"));
+                AddIcon(_commit, LineIcon.Kind.Play);
+            }
 
             Click("msub-close", CancelAll);
             Click("msub-cancel", CancelAll);
@@ -275,7 +300,7 @@ namespace KokoSim.Unity.Match
         public void ToggleCmpFielderViewForCapture()
         {
             if (!_open) return;
-            _cmpFielderOverride = !_cmpFielderOverride;
+            _cmpTab = _cmpTab == 0 ? 1 : 0;
             Render();
         }
 
@@ -287,7 +312,7 @@ namespace KokoSim.Unity.Match
         public void CancelAllForCapture() => CancelAll();
 
         /// <summary>スクショ用: 保留中の操作の要約（フッター文）。確定できる状態かの確認に使う。</summary>
-        public string NoteForCapture => _note?.text ?? "";
+        public string NoteForCapture => _notePlain;
 
         /// <summary>
         /// スクショ用: 指枠の「そのまま退かせる」を選ぶ（<see cref="BuildDhWithdrawChoice"/> の行と同一経路）。
@@ -344,7 +369,8 @@ namespace KokoSim.Unity.Match
             _defInIndex = -1;
             _convertTo = null;
             _dhWithdraw = false;
-            _cmpFielderOverride = false;
+            _cmpTab = 0;
+            _lastPitcherCtx = false;
             if (_opt != null && !_opt.IsOffense)
             {
                 BuildDefenseModel();
@@ -426,48 +452,70 @@ namespace KokoSim.Unity.Match
             if (_opt == null) return;
             var forced = ForcedPitcherChangePending;
             if (_phase != null)
-                _phase.text = _opt.IsFinished ? "試合終了"
-                    : forced ? "球数制限：投手を交代してください"
-                    : _opt.IsOffense ? "攻撃中" : "守備中";
+                _phase.text = _opt.IsFinished ? "試合終了" : _opt.IsOffense ? "攻撃中" : "守備中";
             // 交代するまで閉じさせない（Close 側のガードと対で、押せる/押せないを見た目にも出す）。
             _close?.SetEnabled(!forced);
             _cancel?.SetEnabled(!forced);
             CollectBreakers();
             BuildKinds();
+            BuildGuide(forced);
             if (_opt.IsOffense) { BuildOffenseOut(); BuildOffenseIn(); }
             else { BuildDefenseAssign(); BuildDefenseCandidates(); }
             BuildCompare();
             BuildFooter();
         }
 
+        // 攻撃中だけ「代打／代走」のつまみ型の切り替え（守備中は割当へ統合・issue #256）。
         private void BuildKinds()
         {
             if (_kinds == null) return;
             _kinds.Clear();
-            if (!_opt.IsOffense) return;   // 守備中はタブ無し（割当へ統合, issue #256）
+            _kinds.style.display = _opt.IsOffense ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!_opt.IsOffense) return;
             foreach (var (kind, label) in new[] { (SubstitutionKind.PinchHit, "代打"), (SubstitutionKind.PinchRun, "代走") })
             {
-                var cell = new Label(label);
-                cell.AddToClassList("seg__cell");
-                if (kind == _offKind) cell.AddToClassList("seg__cell--on");
-                else if (kind == SubstitutionKind.PinchRun && !_opt.CanPinchRun) cell.AddToClassList("seg__cell--off");
-                else if (kind == SubstitutionKind.PinchHit && !_opt.CanPinchHit) cell.AddToClassList("seg__cell--off");
+                var on = kind == _offKind;
+                var cell = Text(label, on ? "sx-kinds__item sx-kinds__item--on f-body-bd" : "sx-kinds__item");
+                if (!on && ((kind == SubstitutionKind.PinchRun && !_opt.CanPinchRun) || (kind == SubstitutionKind.PinchHit && !_opt.CanPinchHit)))
+                    cell.AddToClassList("sx-kinds__item--off");
                 var k = kind;
                 cell.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _offKind = k; ResetSelection(); Render(); });
                 _kinds.Add(cell);
             }
         }
 
-        // ── 攻撃中：左＝退く選手／走者 ──
+        // 手順の案内（① › ②）。球数制限の強制交代のときは代わりに赤字で理由を出す。
+        private void BuildGuide(bool forced)
+        {
+            if (_guide == null) return;
+            _guide.Clear();
+            if (forced)
+            {
+                _guide.Add(Text("球数制限：投手を交代してください", "sx-guide__warn f-body-bd"));
+                return;
+            }
+            string first, second;
+            if (_opt.IsOffense && _offKind == SubstitutionKind.PinchRun) { first = "塁上の走者を選ぶ"; second = "控えから代走を選ぶ"; }
+            else if (_opt.IsOffense) { first = "次打者が退く"; second = "控えから代打を選ぶ"; }
+            else { first = "打順表から退く選手を選ぶ"; second = "控えから入る選手を選ぶ"; }
+            _guide.Add(Text("1", "sx-guide__no f-body-bd"));
+            _guide.Add(Text(first, "sx-guide__t"));
+            var sep = new LineIcon(LineIcon.Kind.ChevronRight);
+            sep.AddToClassList("sx-guide__sep");
+            _guide.Add(sep);
+            _guide.Add(Text("2", "sx-guide__no f-body-bd"));
+            _guide.Add(Text(second, "sx-guide__t"));
+        }
+
+        // ── 攻撃中：左＝打順表（代打は次打者・代走は塁上の走者だけが対象） ──
 
         private void BuildOffenseOut()
         {
             if (_outRows == null) return;
             _outRows.Clear();
-            if (_outsCap != null) _outsCap.text = _offKind == SubstitutionKind.PinchRun ? "退く走者" : "退く選手";
+            if (_outsCap != null) _outsCap.text = "打順表";
 
-            // 控えを選んだ時点で、該当行を「旧 → 新」の即時プレビューへ切り替える（issue #452 指摘2）。
-            var inName = _offInIndex >= 0 && _offInIndex < _opt.Reserves.Count ? NameOf(_opt.Reserves[_offInIndex]) : null;
+            var incoming = _offInIndex >= 0 && _offInIndex < _opt.Reserves.Count ? _opt.Reserves[_offInIndex] : null;
             for (var i = 0; i < _opt.Lineup.Count; i++)
             {
                 var p = _opt.Lineup[i];
@@ -475,20 +523,20 @@ namespace KokoSim.Unity.Match
                 var tag = "";
                 var selectable = false;
                 var picked = false;
-                string preview = null;
                 if (_offKind == SubstitutionKind.PinchHit)
                 {
-                    if (i == _opt.UpcomingBatterSlot) { tag = "次打者"; picked = true; preview = inName; }
+                    if (i == _opt.UpcomingBatterSlot) { tag = "次打者"; picked = true; selectable = true; }
                 }
                 else
                 {
                     var b = BaseOf(p);
-                    if (b >= 0) { selectable = true; tag = BaseName(b); picked = _baseIndex == b; if (picked) preview = inName; }
+                    if (b >= 0) { selectable = true; tag = BaseName(b); picked = _baseIndex == b; }
                 }
                 // 位置は「いま試合で就いている位置」＝DH の枠は「指」（Player.Position には本来の位置が残る・issue #931）。
-                var row = LineupRow(i + 1, p, PosJp(MatchScoutView.LineupPosition(_opt, i)), selectable, picked, tag, chipActive: false,
-                    previewTo: preview, onCancel: preview == null ? null : CancelOffensePick);
-                if (selectable)
+                var preview = picked && incoming != null ? RowPreview.To(incoming) : (RowPreview?)null;
+                var row = LineupRow(i + 1, p, PosJp(MatchScoutView.LineupPosition(_opt, i)), selectable, picked, tag,
+                    preview, preview == null ? null : CancelOffensePick);
+                if (selectable && _offKind == SubstitutionKind.PinchRun)
                     row.RegisterCallback<ClickEvent>(e =>
                     {
                         e.StopPropagation();
@@ -504,6 +552,7 @@ namespace KokoSim.Unity.Match
             if (_inRows == null) return;
             _inRows.Clear();
             if (_insCap != null) _insCap.text = "控え";
+            if (_insCount != null) _insCount.text = _opt.Reserves.Count.ToString();
             for (var i = 0; i < _opt.Reserves.Count; i++)
             {
                 var idx = i;
@@ -513,14 +562,10 @@ namespace KokoSim.Unity.Match
             }
             foreach (var p in _opt.UsedReserves) _inRows.Add(BenchRow(p, used: true, picked: false));
             if (_opt.Reserves.Count == 0 && _opt.UsedReserves.Count == 0)
-            {
-                var empty = new Label("控えが登録されていない。");
-                empty.AddToClassList("cmp-card__empty");
-                _inRows.Add(empty);
-            }
+                _inRows.Add(Text("控えが登録されていない。", "sx-empty"));
         }
 
-        // ── 守備中：左＝守備の割当10枠 ──
+        // ── 守備中：左＝打順表（守備の割当10枠） ──
 
         private void BuildDefenseAssign()
         {
@@ -528,7 +573,7 @@ namespace KokoSim.Unity.Match
             _outRows.Clear();
             if (_outsCap != null) _outsCap.text = "打順表";
 
-            // 操作が決まった行は「旧 → 新」の即時プレビューに切り替える（issue #452 指摘2・3）。
+            // 操作が決まった行は「退く → 入る」の即時プレビューに切り替える（issue #452 指摘2・3）。
             var op = ResolveDef();
             for (var i = 0; i < _slots.Count; i++)
             {
@@ -536,51 +581,64 @@ namespace KokoSim.Unity.Match
                 var slotIdx = i;
                 var picked = i == _pickedSlot || i == _pickedSlot2;
                 var order = s.LineupSlot >= 0 ? s.LineupSlot + 1 : 0;   // DHの投手は打順外＝"—"
-                var preview = DefPreviewText(op, i);
-                var row = LineupRow(order, s.Player, PosJp(s.Pos), selectable: true, picked, tag: "", chipActive: true,
-                    previewTo: preview, onCancel: preview == null ? null : CancelDefenseOp);
+                var preview = DefPreview(op, i);
+                var row = LineupRow(order, s.Player, PosJp(s.Pos), selectable: true, picked || preview != null, tag: "",
+                    preview, preview == null ? null : CancelDefenseOp);
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickSlot(slotIdx); Render(); });
                 _outRows.Add(row);
             }
         }
 
+        /// <summary>行の「→ 後の姿」：入る選手／移る守備位置／退場のどれか1つ。</summary>
+        private readonly struct RowPreview
+        {
+            public readonly Player In;
+            public readonly FieldPosition? Pos;
+            public readonly bool Leaves;
+            private RowPreview(Player incoming, FieldPosition? pos, bool leaves) { In = incoming; Pos = pos; Leaves = leaves; }
+            public static RowPreview To(Player p) => new RowPreview(p, null, false);
+            public static RowPreview Move(FieldPosition pos) => new RowPreview(null, pos, false);
+            public static RowPreview Out() => new RowPreview(null, null, true);
+        }
+
         /// <summary>
-        /// この枠に出す「→ 後の姿」のプレビュー文字列（無い枠は null。issue #452 指摘2）。
-        /// 入る選手名／移る守備位置／退場・自動補充を、確定前の見込みとして行内に出す。
+        /// この枠に出す「→ 後の姿」（無い枠は null。issue #452 指摘2）。
+        /// 入る選手／移る守備位置／退場を、確定前の見込みとして行内に出す。
         /// </summary>
-        private string DefPreviewText(in DefOp op, int slotIdx)
+        private RowPreview? DefPreview(in DefOp op, int slotIdx)
         {
             var s = _slots[slotIdx];
             switch (op.Kind)
             {
                 case DefKind.Relieve:
-                    return s.Role == SlotRole.Pitcher ? NameOf(op.Incoming) : null;
+                    return s.Role == SlotRole.Pitcher ? RowPreview.To(op.Incoming) : (RowPreview?)null;
                 case DefKind.Convert:
-                    if (s.Role == SlotRole.Pitcher) return NameOf(op.Incoming);
-                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return NameOf(_opt.CurrentPitcher);
+                    if (s.Role == SlotRole.Pitcher) return RowPreview.To(op.Incoming);
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return RowPreview.To(_opt.CurrentPitcher);
                     return null;
                 case DefKind.PromoteFielder:
                     // 単純な入れ替え＝投手枠に野手、その守備位置に今の投手（issue #452）。
                     // DHでは投手が打順外＝入れ替えが成立せず、元DHがその守備位置に就く（DH解除）。
-                    if (s.Role == SlotRole.Pitcher) return NameOf(op.Incoming);
-                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return NameOf(SwapBackfiller());
-                    if (s.Role == SlotRole.Dh) return PosJp(op.Pos) + "へ";
+                    if (s.Role == SlotRole.Pitcher) return RowPreview.To(op.Incoming);
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return RowPreview.To(SwapBackfiller());
+                    if (s.Role == SlotRole.Dh) return RowPreview.Move(op.Pos);
                     return null;
                 case DefKind.FielderSwap:
-                    if (slotIdx == _pickedSlot) return PosJp(_slots[_pickedSlot2].Pos) + "へ";
-                    if (slotIdx == _pickedSlot2) return PosJp(_slots[_pickedSlot].Pos) + "へ";
+                    if (slotIdx == _pickedSlot) return RowPreview.Move(_slots[_pickedSlot2].Pos);
+                    if (slotIdx == _pickedSlot2) return RowPreview.Move(_slots[_pickedSlot].Pos);
                     return null;
                 case DefKind.Assign:
-                    return slotIdx == _pickedSlot ? NameOf(op.Incoming) : null;
+                    return slotIdx == _pickedSlot ? RowPreview.To(op.Incoming) : (RowPreview?)null;
                 case DefKind.DhToPos:
-                    if (s.Role == SlotRole.Dh) return PosJp(op.Pos) + "へ";
-                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return "退場";
+                    if (s.Role == SlotRole.Dh) return RowPreview.Move(op.Pos);
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return RowPreview.Out();
                     return null;
                 case DefKind.DhWithdraw:
-                    return s.Role == SlotRole.Dh ? "退場" : null;
+                    return s.Role == SlotRole.Dh ? RowPreview.Out() : (RowPreview?)null;
                 case DefKind.DhToMound:
-                    if (s.Role == SlotRole.Dh) return PosJp(FieldPosition.Pitcher) + "へ";
-                    if (s.Role == SlotRole.Pitcher) return "退場";
+                    // DHの登板（issue #1725）：元DHがマウンドへ、今の投手は退場。
+                    if (s.Role == SlotRole.Dh) return RowPreview.Move(FieldPosition.Pitcher);
+                    if (s.Role == SlotRole.Pitcher) return RowPreview.Out();
                     return null;
                 default:
                     return null;   // None / Invalid はプレビュー無し
@@ -632,7 +690,8 @@ namespace KokoSim.Unity.Match
         {
             if (_inRows == null) return;
             _inRows.Clear();
-            if (_insCap != null) _insCap.text = "控え（背番号順）";
+            if (_insCap != null) _insCap.text = "控え";
+            if (_insCount != null) _insCount.text = _cands.Count.ToString();
 
             for (var i = 0; i < _cands.Count; i++)
             {
@@ -645,11 +704,7 @@ namespace KokoSim.Unity.Match
             foreach (var p in _opt.UsedReserves)
                 _inRows.Add(BenchRow(p, used: true, picked: false));
             if (_cands.Count == 0 && !_opt.UsedReserves.Any())
-            {
-                var empty = new Label("控えが登録されていない。");
-                empty.AddToClassList("cmp-card__empty");
-                _inRows.Add(empty);
-            }
+                _inRows.Add(Text("控えが登録されていない。", "sx-empty"));
 
             // 文脈の追加選択（選ばなければ既定挙動）。
             var a = Picked(_pickedSlot);
@@ -669,38 +724,53 @@ namespace KokoSim.Unity.Match
             _dhWithdraw = false;
         }
 
-        /// <summary>継投で元投手をどうするか（既定＝退場／守備位置を選ぶとコンバート継投）。</summary>
+        /// <summary>継投で元投手をどうするか（既定＝退場／守備位置を選ぶとコンバート継投）。見出し＋選択肢1行。</summary>
         private void BuildConvertChoices()
         {
-            var cap = new Label("元の投手");
-            cap.AddToClassList("msub-group");
-            _inRows.Add(cap);
-
-            var retire = ChoiceRow("退場させる（通常の継投）", _convertTo == null);
+            var box = ChoiceBox("元の投手");
+            var opts = box.Q<VisualElement>(className: "sx-choice__opts");
+            var retire = ChoiceOption("退場", _convertTo == null, "退場させる（通常の継投）");
             retire.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = null; Render(); });
-            _inRows.Add(retire);
-
+            opts.Add(retire);
             // 行き先の列挙は守備位置順のまま（_slots は打順順になったので位置順で引き直す。issue #452）。
             foreach (var pos in FielderOrder)
             {
                 var s = _slots.FirstOrDefault(t => t.Role == SlotRole.Fielder && t.Pos == pos);
                 if (s.Player == null) continue;
                 var to = pos;
-                var row = ChoiceRow(PosJp(to) + "へ回す（" + NameOf(s.Player) + " が退場）", _convertTo == to);
-                row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = to; Render(); });
-                _inRows.Add(row);
+                var chip = ChoiceOption(PosJp(to), _convertTo == to, PosJp(to) + "へ回す（" + NameOf(s.Player) + " が退場）");
+                chip.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = to; Render(); });
+                opts.Add(chip);
             }
+            _inRows.Add(box);
         }
 
-        /// <summary>指枠の行き先。守備位置枠をクリック＝その守備でDH解除／ここで「そのまま退場」も選べる。</summary>
+        /// <summary>指枠の行き先。守備位置の枠を押す＝その守備でDH解除／ここで「そのまま退かせる」も選べる。</summary>
         private void BuildDhWithdrawChoice()
         {
-            var hint = new Label("守備位置の枠をクリック＝その守備に就いてDH解除。または:");
-            hint.AddToClassList("msub-hint");
-            _inRows.Add(hint);
-            var withdraw = ChoiceRow("そのまま退かせる（投手が打席へ）", _dhWithdraw);
+            var box = ChoiceBox("指名打者");
+            var withdraw = ChoiceOption("そのまま退かせる", _dhWithdraw, "投手が打順に入る（守備位置の枠を押すとその守備でDH解除）");
             withdraw.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _dhWithdraw = true; _pickedSlot2 = -1; Render(); });
-            _inRows.Add(withdraw);
+            box.Q<VisualElement>(className: "sx-choice__opts").Add(withdraw);
+            _inRows.Add(box);
+        }
+
+        private static VisualElement ChoiceBox(string caption)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("sx-choice");
+            box.Add(Text(caption, "sx-choice__cap f-body-bd"));
+            var opts = new VisualElement();
+            opts.AddToClassList("sx-choice__opts");
+            box.Add(opts);
+            return box;
+        }
+
+        private static Label ChoiceOption(string text, bool on, string tip)
+        {
+            var o = Text(text, on ? "sx-choice__opt sx-choice__opt--on f-body-bd" : "sx-choice__opt");
+            o.tooltip = tip;
+            return o;
         }
 
         // ── 導出：守備の割当操作 ──
@@ -778,77 +848,215 @@ namespace KokoSim.Unity.Match
             return dh.Player;
         }
 
-        // ── 右：能力比較 ──
+        // ── 右：比較（2人のカード・野手／投手のタブの表・9列の守備適性） ──
 
         private void BuildCompare()
         {
             var (outgoing, incoming, isPitcherCtx, capA, capB) = CompareSubjects();
-            // 投手が絡む操作でも打撃・守備を見たいという要望への対応（トグルは選択中だけ効く・既定は投球）。
-            var pitcherView = isPitcherCtx && !_cmpFielderOverride;
-            BuildCmpToggle(isPitcherCtx);
-            // 空カードには「次に何を選べばよいか」を出す（開いた直後の空状態の道標。issue #452 指摘4）。
-            FillCard("msub-cmp-a", outgoing, EmptyCardTextA(), pitcherView);
-            FillCard("msub-cmp-b", incoming, EmptyCardTextB(), pitcherView);
+            // 投手が絡む操作になったら投手タブへ、外れたら野手タブへ自動で倒す（その間は手で切り替えられる）。
+            if (isPitcherCtx != _lastPitcherCtx) { _cmpTab = isPitcherCtx ? 1 : 0; _lastPitcherCtx = isPitcherCtx; }
+            var pitcherView = _cmpTab == 1;
 
-            // 投手ビューはカードに持ち球チャートが乗るぶん表の窓を縮め、モーダル全体の高さを一定に保つ。
-            _cmpScroll?.EnableInClassList("msub-cmp-scroll--pitch", pitcherView);
+            FillCard(_cardA, outgoing, capA);
+            FillCard(_cardB, incoming, capB);
+            if (_capA != null) _capA.text = capA;
+            if (_capB != null) _capB.text = capB;
+            BuildCmpTabs();
 
-            if (_cmpRows == null) return;
-            _cmpRows.Clear();
-            // 比較列の高さは左の打順表で決まる＝野手ビューの9行（弾道〜精神力）が素の組では入らず、
-            // 守備交代の判断に一番要る「守備」「捕球」が既定で窓の外に落ちていた（issue #452）。
-            // 密な組に切り替え、グループ名は独立行を持たせずヘッダのラベル列へ畳む。
-            // 投手ビュー（5行）も同じ組にする＝同じ表が選択のたびに行高を変えると比較にならない。
-            UiComponents.SetCompareDense(_cmpRows, true);
-            _cmpRows.Add(UiComponents.CompareHeader(capA, capB, pitcherView ? "投球" : "打撃・走守"));
-            foreach (var (label, x, y, typeAxis) in MatchAbilityColumns.CompareRows(outgoing, incoming, pitcherView))
+            if (_cmpRows != null)
             {
-                if (typeAxis)
-                    _cmpRows.Add(CompareRowEl(label, x, y, TypeText(x), TypeText(y), hideBar: true));
-                else
-                    _cmpRows.Add(CompareRowEl(label, x, y));
+                _cmpRows.Clear();
+                _cmpRows.EnableInClassList("sx-table__rows--fill", !pitcherView);
+                foreach (var (label, x, y, typeAxis) in MatchAbilityColumns.CompareRows(outgoing, incoming, pitcherView))
+                    _cmpRows.Add(CompareRowEl(label, x, y, typeAxis, fill: !pitcherView));
+                // 投手タブは表の下に2人の持ち球チャート（球速は km/h・球威はストレートのランクでここに出る＝他の画面と同じ）。
+                if (pitcherView) _cmpRows.Add(PitchChartRow(outgoing, incoming));
             }
-
-            // 守備適性の帯（issue #452・監督選択の案A）。メンバー設定・スタメン設定と同じく**野手ビューのときだけ**出す。
-            // 盤面（252px）はモーダルの残り高さに入らないので、同じ情報を9列×2行の帯へ畳んだ部品を使う。
-            if (!pitcherView && _aptitudeGrades != null)
-            {
-                var aptA = _aptitudeGrades(outgoing?.SourceId);
-                var aptB = _aptitudeGrades(incoming?.SourceId);
-                if (aptA != null || aptB != null)
-                    _cmpRows.Add(UiComponents.AptitudeStrip(aptA, aptB, capA, capB));
-            }
+            BuildAptitude(outgoing, incoming, capA, capB);
         }
 
-        /// <summary>
-        /// 投手が絡む操作（継投／投野交代）のときだけ「投球／打撃・守備」の切替を出す
-        /// （「投手を変えるとき投手能力しか見えず、守備位置を一緒に考えられない」への対応）。
-        /// 高さは常に同じ（.msub-cmp-toggle が予約）＝出し分けで比較欄の位置が動かない。
-        /// </summary>
-        private void BuildCmpToggle(bool showToggle)
+        private void BuildCmpTabs()
         {
             if (_cmpToggle == null) return;
             _cmpToggle.Clear();
-            if (!showToggle) return;
-            _cmpToggle.Add(UiComponents.SegTabs(new[] { "投球", "打撃・守備" }, _cmpFielderOverride ? 1 : 0, i =>
+            for (var i = 0; i < 2; i++)
             {
-                _cmpFielderOverride = i == 1;
-                Render();
-            }));
+                var tab = i;
+                var on = _cmpTab == i;
+                var cell = Text(i == 0 ? "野手" : "投手", on ? "sx-tabs__item sx-tabs__item--on f-body-bd" : "sx-tabs__item");
+                cell.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _cmpTab = tab; Render(); });
+                _cmpToggle.Add(cell);
+            }
         }
 
-        /// <summary>左カード（退く側）の空状態文言。何も選んでいないとき次の一手を指す。</summary>
-        private string EmptyCardTextA()
+        // 2人のカード：札（退く／入る）＋学年・投打、背番号の箱＋名前＋調子の顔。未選択なら「未選択」だけ。
+        private void FillCard(VisualElement el, Player p, string caption)
         {
-            if (_opt.IsOffense) return _offKind == SubstitutionKind.PinchRun ? "走者を選ぶ" : "次打者なし";
-            return "枠を選ぶ";
+            if (el == null) return;
+            el.Clear();
+            if (p == null)
+            {
+                el.Add(Text("未選択", "sx-pcard__empty"));
+                return;
+            }
+            var top = new VisualElement();
+            top.AddToClassList("sx-pcard__top");
+            top.Add(Text(caption, "sx-pcard__tag f-body-bd"));
+            top.Add(Text(SubstitutionDisplay.GradeAndHand(p), "sx-pcard__meta"));
+            el.Add(top);
+
+            var who = new VisualElement();
+            who.AddToClassList("sx-pcard__who");
+            who.Add(NumBox(SubstitutionDisplay.Number(p), "sx-num--card"));
+            who.Add(Text(p.Name, "sx-pcard__name f-display"));
+            var face = CondFace(p, "sx-face24");
+            if (face != null) who.Add(face);
+            el.Add(who);
         }
 
-        /// <summary>右カード（入る側）の空状態文言。</summary>
-        private string EmptyCardTextB()
+        // 比較の表の1行：項目名｜退く｜入る。セルは数値＋ランクのチップ（高いほうを太字・同値は両方）。
+        // 弾道（タイプ軸）は文字だけ。選んでいない側は空。
+        private static VisualElement CompareRowEl(string label, int a, int b, bool typeAxis, bool fill)
         {
-            if (_opt.IsOffense) return "控えを選ぶ";
-            return Picked(_pickedSlot) == null ? "—" : "控えか枠を選ぶ";
+            var row = new VisualElement();
+            row.AddToClassList("sx-trow");
+            if (fill) row.AddToClassList("sx-trow--fill");
+            row.Add(Text(label, "sx-trow__label"));
+            var weights = typeAxis ? (false, false) : SubstitutionDisplay.Weights(a, b);
+            row.Add(CompareCell(a, typeAxis, weights.Item1));
+            row.Add(CompareCell(b, typeAxis, weights.Item2));
+            return row;
+        }
+
+        private static VisualElement CompareCell(int v, bool typeAxis, bool bold)
+        {
+            var cell = new VisualElement();
+            cell.AddToClassList("sx-tcell");
+            if (v < 0) return cell;
+            if (typeAxis)
+            {
+                cell.Add(Text(LaunchTendencyLabels.Jp(v), "sx-tcell__text"));
+                return cell;
+            }
+            cell.Add(Text(v.ToString(), bold ? "sx-tcell__v f-num-bd" : "sx-tcell__v f-body-md"));
+            var chip = UiComponents.RankChipLegacy(KokoSim.Engine.Nation.Tiers.FromStrength(v).ToString());
+            chip.AddToClassList("sx-chip22");
+            cell.Add(chip);
+            return cell;
+        }
+
+        // 投手タブの持ち球チャート（部品 PitchChartView・compact）。表の「退く｜入る」の列に揃えて並べる。
+        private VisualElement PitchChartRow(Player a, Player b)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("sx-charts");
+            row.Add(Text("持ち球", "sx-trow__label sx-charts__label"));
+            row.Add(PitchChartHost(a));
+            row.Add(PitchChartHost(b));
+            return row;
+        }
+
+        private VisualElement PitchChartHost(Player p)
+        {
+            var host = new VisualElement();
+            host.AddToClassList("sx-charts__host");
+            if (p == null || _pitchChart == null) return host;
+            var pitches = _pitchChart(p);
+            if (pitches == null || pitches.Count == 0) return host;
+            var chart = new VisualElement();
+            chart.AddToClassList("sx-charts__chart");
+            host.Add(chart);
+            new PitchChartView(chart, compact: true).SetData(pitches);
+            return host;
+        }
+
+        // 守備適性の9列の表（投捕一二三遊左中右 × 退く／入る）。値は実効守備力（メンバー設定・スタメン設定と同じ定義）。
+        // 今回就く位置の列は赤枠で囲む。どちらのタブでも出す。
+        private static readonly string[] AptPositionsJp = { "投", "捕", "一", "二", "三", "遊", "左", "中", "右" };
+        private static readonly FieldPosition[] AptPositions =
+        {
+            FieldPosition.Pitcher, FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase, FieldPosition.ThirdBase,
+            FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
+        };
+
+        private void BuildAptitude(Player a, Player b, string capA, string capB)
+        {
+            if (_apt == null) return;
+            _apt.Clear();
+            var head = new VisualElement();
+            head.AddToClassList("sx-apt__head");
+            head.Add(Text("守備適性", "sx-apt__title f-body-bd"));
+            head.Add(Text("赤枠は今回就く位置", "sx-apt__note"));
+            _apt.Add(head);
+
+            var valsA = a == null || _aptitudeValues == null ? null : _aptitudeValues(a.SourceId);
+            var valsB = b == null || _aptitudeValues == null ? null : _aptitudeValues(b.SourceId);
+            var targets = AptTargets();
+
+            var grid = new VisualElement();
+            grid.AddToClassList("sx-apt__grid");
+            var labels = new VisualElement();
+            labels.AddToClassList("sx-apt__col");
+            labels.AddToClassList("sx-apt__col--labels");
+            labels.Add(Cell("sx-apt__pos"));
+            var la = Cell("sx-apt__cell"); la.Add(Text(capA, "sx-tag sx-tag--out f-body-bd")); labels.Add(la);
+            var lb = Cell("sx-apt__cell"); lb.Add(Text(capB, "sx-tag sx-tag--in f-body-bd")); labels.Add(lb);
+            grid.Add(labels);
+
+            for (var i = 0; i < AptPositions.Length; i++)
+            {
+                var col = new VisualElement();
+                col.AddToClassList("sx-apt__col");
+                var target = targets.Contains(AptPositions[i]);
+                if (target) col.AddToClassList("sx-apt__col--target");
+                var pos = Cell("sx-apt__pos");
+                pos.Add(Text(AptPositionsJp[i], target ? "sx-apt__posname sx-apt__posname--target f-body-bd" : "sx-apt__posname"));
+                col.Add(pos);
+                col.Add(AptCell(valsA, i));
+                col.Add(AptCell(valsB, i));
+                grid.Add(col);
+            }
+            _apt.Add(grid);
+        }
+
+        private static VisualElement AptCell(IReadOnlyList<int> vals, int i)
+        {
+            var cell = Cell("sx-apt__cell");
+            if (vals == null || i >= vals.Count) return cell;
+            var chip = UiComponents.RankChipLegacy(KokoSim.Engine.Nation.Tiers.FromStrength(vals[i]).ToString());
+            chip.AddToClassList("sx-chip20");
+            cell.Add(chip);
+            cell.Add(Text(vals[i].ToString(), "sx-apt__v f-num"));
+            return cell;
+        }
+
+        /// <summary>今回就く守備位置（守備適性の赤枠）。入る選手が就く位置と、動く選手が移る先。攻撃中は無し。</summary>
+        private HashSet<FieldPosition> AptTargets()
+        {
+            var set = new HashSet<FieldPosition>();
+            if (_opt == null || _opt.IsOffense) return set;
+            var op = ResolveDef();
+            switch (op.Kind)
+            {
+                case DefKind.Assign:
+                case DefKind.DhToPos:
+                    set.Add(op.Pos);
+                    break;
+                case DefKind.Relieve:
+                case DefKind.DhToMound:
+                    set.Add(FieldPosition.Pitcher);
+                    break;
+                case DefKind.Convert:
+                case DefKind.PromoteFielder:
+                    set.Add(FieldPosition.Pitcher);
+                    set.Add(op.Pos);
+                    break;
+                case DefKind.FielderSwap:
+                    set.Add(_slots[_pickedSlot].Pos);
+                    set.Add(_slots[_pickedSlot2].Pos);
+                    break;
+            }
+            return set;
         }
 
         private (Player Out, Player In, bool PitcherView, string CapA, string CapB) CompareSubjects()
@@ -886,123 +1094,127 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        // ── 注記＋確定 ──
+        // ── 下の操作の行：交代の内容の説明＋ボタン3つ ──
 
         private void BuildFooter()
         {
-            var (ready, note, warn) = FooterState();
+            var state = FooterState();
+            var ready = state.Ready;
+            var parts = state.Parts;
             var breakKey = ready ? BreakKey() : null;
             if (breakKey != _armedBreak) _armedBreak = null;   // 操作が変わったら押し直し
-            if (breakKey != null)
-            {
-                note = note + "　約束を破る：" + breakKey;
-                warn = true;
-            }
+            _notePlain = SubstitutionDisplay.Plain(parts) + (breakKey != null ? "　約束を破る：" + breakKey : "");
             if (_note != null)
             {
-                _note.text = note;
-                _note.EnableInClassList("msub-note--warn", warn);
+                _note.Clear();
+                if (ready)
+                {
+                    var icon = new LineIcon(LineIcon.Kind.Swap);
+                    icon.AddToClassList("sx-note__icon");
+                    _note.Add(icon);
+                }
+                foreach (var part in parts) _note.Add(NotePartEl(part, ready));
+                if (breakKey != null) _note.Add(Text("　約束を破る：" + breakKey, "sx-note__warn f-body-bd"));
             }
             if (_ok != null)
             {
-                _ok.text = _armedBreak != null ? "約束を破って確定 ＋"
-                    : _opt.IsOffense
-                        ? (_offKind == SubstitutionKind.PinchRun ? "この代走を確定 ＋" : "この代打を確定 ＋")
-                        : "この操作を確定 ＋";
+                var label = _ok.Q<Label>(className: "sx-btn__t");
+                if (label != null)
+                    label.text = _armedBreak != null ? "約束を破って確定"
+                        : _opt.IsOffense
+                            ? (_offKind == SubstitutionKind.PinchRun ? "この代走を確定" : "この代打を確定")
+                            : "この操作を確定";
                 _ok.SetEnabled(ready);
             }
-            var forced = ForcedPitcherChangePending;
-            if (_commit != null)
-            {
-                // 「確定」は左のボタンだけが使う言葉（issue #796）。戻るボタンは件数によらず同じ文言
-                _commit.text = "試合へ戻る ▶";
-                _commit.SetEnabled(!forced);
-            }
+            _commit?.SetEnabled(!ForcedPitcherChangePending);
             if (_cancel != null) _cancel.text = _reserved.Count > 0 ? "全部やめる" : "やめる";
             BuildQueue();
         }
 
-        // 確定した交代の一覧（試合へ戻る前）。1件ごとに1行・番号つき。
-        private void BuildQueue()
+        private static VisualElement NotePartEl(NotePart part, bool ready)
         {
-            if (_queue == null) return;
-            _queue.Clear();
-            _queue.style.display = _reserved.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            if (_reserved.Count == 0) return;
-            var cap = new Label("確定した交代（" + _reserved.Count + "件・試合へ戻るまで取り消せる）");
-            cap.AddToClassList("msub-queue__cap");
-            _queue.Add(cap);
-            // 打順表の下の空きに収める＝直近2件だけ出す（1件で2行になるため）（件数は見出しに出ている）。
-            for (var i = System.Math.Max(0, _reserved.Count - 2); i < _reserved.Count; i++)
+            switch (part.Kind)
             {
-                var line = new Label((i + 1) + ". " + _reserved[i]);
-                line.AddToClassList("msub-queue__item");
-                _queue.Add(line);
+                case NotePartKind.Player:
+                    return Text(part.Text, "sx-note__player f-body-bd");
+                case NotePartKind.Pos:
+                    var chip = new PositionChip(part.Text);
+                    chip.AddToClassList("sx-pos--note");
+                    chip.AddToClassList("f-body-bd");
+                    return chip;
+                case NotePartKind.Muted:
+                    return Text(part.Text, ready ? "sx-note__muted" : "sx-note__hint");
+                default:
+                    return Text(part.Text, "sx-note__t");
             }
         }
 
-        private (bool Ready, string Note, bool Warn) FooterState()
+        // 確定した交代（試合へ戻る前）。見出しの右に件数の札だけ出す（中身は打順表がすでに交代後の姿）。
+        private void BuildQueue()
         {
-            if (_opt.IsFinished) return (false, "試合が終了している。", true);
+            if (_queue == null) return;
+            _queue.style.display = _reserved.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            _queue.text = "確定済み " + _reserved.Count + "件";
+            var lines = new List<string>();
+            for (var i = 0; i < _reserved.Count; i++) lines.Add((i + 1) + ". " + _reserved[i]);
+            _queue.tooltip = string.Join("\n", lines);
+        }
+
+        private (bool Ready, List<NotePart> Parts) FooterState()
+        {
+            var none = new List<NotePart>();
+            if (_opt.IsFinished) return (false, SubstitutionDisplay.Hint("試合が終了している。"));
             if (_opt.IsOffense)
             {
+                var incoming = _offInIndex >= 0 && _offInIndex < _opt.Reserves.Count ? _opt.Reserves[_offInIndex] : null;
                 if (_offKind == SubstitutionKind.PinchHit)
                 {
-                    if (_opt.Reserves.Count == 0) return (false, "控えが残っていない。", true);
-                    return _offInIndex >= 0
-                        ? (true, "代打を送る。退いた選手は再出場できない。", false)
-                        : (false, "控えから代打を選ぶ。", false);
+                    if (_opt.Reserves.Count == 0) return (false, SubstitutionDisplay.Hint("控えが残っていない。"));
+                    var batter = _opt.UpcomingBatterSlot >= 0 && _opt.UpcomingBatterSlot < _opt.Lineup.Count ? _opt.Lineup[_opt.UpcomingBatterSlot] : null;
+                    return incoming != null ? (true, SubstitutionDisplay.PinchHit(incoming, batter)) : (false, none);
                 }
-                if (_opt.Runners.Count == 0) return (false, "塁上に走者がいない。", true);
-                if (_opt.Reserves.Count == 0) return (false, "控えが残っていない。", true);
-                if (_baseIndex < 0) return (false, "代走に出す走者を選ぶ。", false);
-                return _offInIndex >= 0
-                    ? (true, "代走を送る。退いた選手は再出場できない。", false)
-                    : (false, "控えから代走を選ぶ。", false);
+                if (_opt.Runners.Count == 0) return (false, SubstitutionDisplay.Hint("塁上に走者がいない。"));
+                if (_opt.Reserves.Count == 0) return (false, SubstitutionDisplay.Hint("控えが残っていない。"));
+                if (_baseIndex < 0) return (false, incoming != null ? SubstitutionDisplay.Hint("代走に出す走者を選ぶ。") : none);
+                return incoming != null
+                    ? (true, SubstitutionDisplay.PinchRun(incoming, BaseName(_baseIndex), RunnerAt(_baseIndex)))
+                    : (false, SubstitutionDisplay.Hint("控えから代走を選ぶ。"));
             }
 
             var op = ResolveDef();
             switch (op.Kind)
             {
                 case DefKind.Relieve:
-                    return (true, NameOf(op.Incoming) + " が登板し、" + NameOf(_opt.CurrentPitcher) + " は退場（再登板できない）。", false);
+                    return (true, SubstitutionDisplay.Relieve(op.Incoming, _opt.CurrentPitcher));
                 case DefKind.Convert:
-                    return (true, NameOf(op.Incoming) + " が登板。" + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
-                        + " を守る（後で再登板できる）。" + PosJp(op.Pos) + " の " + NameOf(op.Outgoing) + " が退場。"
-                        + (_opt.UsesDh ? "DHは解除され、" + NameOf(_opt.Lineup[_opt.DhSlot]) + " も退場（以降DHなし）。" : ""), false);
+                    return (true, SubstitutionDisplay.Convert(op.Incoming, _opt.CurrentPitcher, op.Pos, op.Outgoing,
+                        _opt.UsesDh ? _opt.Lineup[_opt.DhSlot] : null));
                 case DefKind.PromoteFielder:
                     // 単純な入れ替え。非DHは誰も退場しない＝元投手は後で再登板できる（issue #452）。
                     return _opt.UsesDh
-                        ? (true, NameOf(op.Incoming) + " をマウンドへ。DHの " + NameOf(SwapBackfiller()) + " が "
-                            + PosJp(op.Pos) + " を守り、" + NameOf(_opt.CurrentPitcher)
-                            + " は退場（以降DHなし）。", false)
-                        : (true, NameOf(op.Incoming) + " と " + NameOf(_opt.CurrentPitcher) + " を入れ替える。"
-                            + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
-                            + " を守る（誰も退場しない・後で再登板できる）。", false);
+                        ? (true, SubstitutionDisplay.PromoteFielderDh(op.Incoming, SwapBackfiller(), op.Pos, _opt.CurrentPitcher))
+                        : (true, SubstitutionDisplay.PromoteFielder(op.Incoming, _opt.CurrentPitcher, op.Pos));
                 case DefKind.FielderSwap:
-                    return (true, NameOf(_slots[_pickedSlot].Player) + "（" + PosJp(_slots[_pickedSlot].Pos) + "）と "
-                        + NameOf(_slots[_pickedSlot2].Player) + "（" + PosJp(_slots[_pickedSlot2].Pos)
-                        + "）の守備位置を入れ替える（誰も退場しない）。", false);
+                    return (true, SubstitutionDisplay.FielderSwap(_slots[_pickedSlot].Player, _slots[_pickedSlot].Pos,
+                        _slots[_pickedSlot2].Player, _slots[_pickedSlot2].Pos));
                 case DefKind.Assign:
-                    return (true, NameOf(op.Incoming) + " が " + PosJp(op.Pos) + " に就き、" + NameOf(op.Outgoing)
-                        + " が退場（再出場できない）。", false);
+                    return (true, SubstitutionDisplay.Assign(op.Incoming, op.Pos, op.Outgoing));
                 case DefKind.DhToPos:
-                    return (true, "DHが " + PosJp(op.Pos) + " を守り、" + NameOf(op.Outgoing)
-                        + " が退場。投手が打順へ入る（以降DHなし）。", false);
+                    var dh = _slots[_pickedSlot].Role == SlotRole.Dh ? _slots[_pickedSlot].Player : _slots[_pickedSlot2].Player;
+                    return (true, SubstitutionDisplay.DhToPos(dh, op.Pos, op.Outgoing));
                 case DefKind.DhWithdraw:
-                    return (true, "DHをそのまま退かせ、投手が打席へ入る（以降DHなし）。", false);
+                    return (true, SubstitutionDisplay.DhWithdraw(op.Outgoing));
                 case DefKind.DhToMound:
-                    return (true, NameOf(op.Incoming) + " がマウンドへ。DHは解除され、" + NameOf(_opt.CurrentPitcher)
-                        + " は退場（再登板できない・以降DHなし）。", false);
+                    return (true, SubstitutionDisplay.DhToMound(op.Incoming, _opt.CurrentPitcher));
                 case DefKind.Invalid:
-                    return (false, "この組み合わせでは操作できない（控え→指は不可）。", true);
+                    return (false, SubstitutionDisplay.Hint("この組み合わせでは操作できない（控え→指は不可）。"));
                 default:
                     var a = Picked(_pickedSlot);
-                    if (a is { Role: SlotRole.Pitcher }) return (false, _opt.UsesDh ? "控えを選べば継投／別の守備枠を選べば投野交代／指枠を選べばDHが登板。" : "控えを選べば継投／別の守備枠を選べば投野交代。", false);
-                    if (a is { Role: SlotRole.Dh }) return (false, "守備位置の枠を選べばDH解除／投枠を選べばDHが登板／控えは指枠に就けない。", false);
-                    if (a != null) return (false, "別の守備枠を選べば入替／控えを選べば守備固め。", false);
-                    if (_defInIndex >= 0) return (false, "入れる枠を選ぶ（投手の枠なら継投）。", false);
-                    return (false, "動かす枠か、入れる控えを選ぶ。", false);
+                    if (a is { Role: SlotRole.Pitcher }) return (false, SubstitutionDisplay.Hint(_opt.UsesDh ? "控えを選べば継投／別の守備枠を選べば投野交代／指枠を選べばDHが登板。" : "控えを選べば継投／別の守備枠を選べば投野交代。"));
+                    if (a is { Role: SlotRole.Dh }) return (false, SubstitutionDisplay.Hint("守備位置の枠を選べばDH解除／投枠を選べばDHが登板／控えは指枠に就けない。"));
+                    if (a != null) return (false, SubstitutionDisplay.Hint("別の守備枠を選べば入替／控えを選べば守備固め。"));
+                    if (_defInIndex >= 0) return (false, SubstitutionDisplay.Hint("入れる枠を選ぶ（投手の枠なら継投）。"));
+                    return (false, none);
             }
         }
 
@@ -1024,7 +1236,7 @@ namespace KokoSim.Unity.Match
                 return;
             }
             _armedBreak = null;
-            var (_, description, _) = FooterState();   // 確定した交代の一覧に残す一文（適用前の局面で組む）
+            var description = SubstitutionDisplay.Plain(FooterState().Parts);   // 確定した交代の一覧に残す一文（適用前の局面で組む）
             bool ok;
             if (_opt.IsOffense)
             {
@@ -1060,8 +1272,8 @@ namespace KokoSim.Unity.Match
                 Render();
                 if (_note != null)
                 {
-                    _note.text = "この操作はもう行えない（局面が変わった）。";
-                    _note.AddToClassList("msub-note--warn");
+                    _note.Clear();
+                    _note.Add(Text("この操作はもう行えない（局面が変わった）。", "sx-note__warn f-body-bd"));
                 }
                 return;
             }
@@ -1160,73 +1372,98 @@ namespace KokoSim.Unity.Match
         private static string BaseName(int i) => i == 0 ? "一塁" : i == 1 ? "二塁" : "三塁";
 
         /// <summary>
-        /// 打順行（スタメン設定と同じ lineup-row 部品）。chipActive=true で守備位置チップを操作対象として活かす。
-        /// previewTo を渡すと「旧名 → previewTo」の即時プレビュー行になり（issue #452 指摘2）、
-        /// onCancel があれば行末に ✕（保留中の操作の選び直し）を出す。プレビュー中は投打の付帯情報を
-        /// 省く（比較は右カードが担う）。
+        /// 打順表の1行：打順｜守備位置のチップ｜選手（背番号の箱＋名前）｜右端（札・投打・調子の顔）。
+        /// 交代に関わる行（<paramref name="picked"/>）だけ赤枠＋薄い赤の地。<paramref name="preview"/> があれば
+        /// 選手の列を「退く → 入る」（または「→ 守備位置へ」「→ 退場」）にして、右端を「× 取消」にする。
+        /// 枠はふだんから透明で持つ＝選んでも行の大きさは変わらない。
         /// </summary>
-        private VisualElement LineupRow(int order, Player p, string posText, bool selectable, bool picked, string tag, bool chipActive,
-            string previewTo = null, System.Action onCancel = null)
+        private VisualElement LineupRow(int order, Player p, string posText, bool selectable, bool picked, string tag,
+            RowPreview? preview, System.Action onCancel)
         {
             var row = new VisualElement();
-            row.AddToClassList("lineup-row");
-            if (picked) row.AddToClassList("lineup-row--picked");
-            if (!selectable && !picked) row.AddToClassList("msub-row--off");
+            row.AddToClassList("sx-lrow");
+            if (picked) row.AddToClassList("sx-lrow--picked");
+            if (!selectable && !picked) row.AddToClassList("sx-lrow--off");
 
-            var ord = new Label(order > 0 ? order.ToString() : "—");
-            ord.AddToClassList("lineup-row__ord");
-            row.Add(ord);
-
+            row.Add(Text(order > 0 ? order.ToString() : "—", "sx-lrow__ord f-display"));
             var posCell = new VisualElement();
-            posCell.AddToClassList("lineup-row__pos");
-            var chip = new Label(posText);
-            chip.AddToClassList("pos-chip");
-            if (chipActive) { if (picked) chip.AddToClassList("pos-chip--picked"); }
-            else chip.AddToClassList("pos-chip--fixed");
+            posCell.AddToClassList("sx-lrow__pos");
+            var chip = new PositionChip(posText);
+            chip.AddToClassList("sx-pos24");
+            chip.AddToClassList("f-body-bd");
             posCell.Add(chip);
             row.Add(posCell);
 
-            if (!string.IsNullOrEmpty(tag))
+            var who = new VisualElement();
+            who.AddToClassList("sx-lrow__who");
+            if (preview is { } pv)
             {
-                var t = new Label(tag);
-                t.AddToClassList("msub-base-tag");
-                row.Add(t);
-            }
-
-            var name = new Label(NameOf(p));
-            name.AddToClassList("lineup-row__name");
-            if (previewTo != null) name.AddToClassList("lineup-row__name--out");
-            row.Add(name);
-            if (previewTo == null) AddPromiseTag(row, p);
-
-            if (previewTo != null)
-            {
-                var arrow = new Label("→");
-                arrow.AddToClassList("lineup-row__arrow");
-                row.Add(arrow);
-                var incoming = new Label(previewTo);
-                incoming.AddToClassList("lineup-row__incoming");
-                incoming.AddToClassList("f-display");   // 人名は明朝（書体3役）
-                row.Add(incoming);
+                who.Add(NumBox(SubstitutionDisplay.Number(p), "sx-num--gone"));
+                who.Add(Text(p?.Name ?? "—", "sx-lrow__name sx-lrow__name--gone f-display-lg"));
+                var arrow = new LineIcon(LineIcon.Kind.Walk);
+                arrow.AddToClassList("sx-lrow__arrow");
+                who.Add(arrow);
+                if (pv.In != null)
+                {
+                    who.Add(NumBox(SubstitutionDisplay.Number(pv.In), "sx-num--in"));
+                    who.Add(Text(pv.In.Name, "sx-lrow__name sx-lrow__name--in f-display"));
+                }
+                else if (pv.Pos is { } to)
+                {
+                    var toChip = new PositionChip(PosJp(to));
+                    toChip.AddToClassList("sx-pos24");
+                    toChip.AddToClassList("f-body-bd");
+                    who.Add(toChip);
+                    who.Add(Text("へ", "sx-lrow__to f-body-bd"));
+                }
+                else who.Add(Text("退場", "sx-lrow__to f-body-bd"));
             }
             else
             {
-                var info = new Label(HandLabel(p));
-                info.AddToClassList("lineup-row__info");
-                row.Add(info);
+                who.Add(NumBox(SubstitutionDisplay.Number(p), null));
+                who.Add(Text(p?.Name ?? "—", "sx-lrow__name f-display"));
+                AddPromiseTag(who, p);
             }
-
-            var rowFace = CondFace(p, "msub-cond");
-            if (rowFace != null) row.Add(rowFace);
+            row.Add(who);
 
             if (onCancel != null)
             {
-                var x = new Button(() => onCancel()) { text = "×" };
-                x.AddToClassList("lineup-row__x");
+                var x = new Button(() => onCancel()) { text = "" };
+                x.AddToClassList("sx-cancel");
+                AddIcon(x, LineIcon.Kind.Close);
+                x.Add(Text("取消", "sx-cancel__t f-body-bd"));
                 x.RegisterCallback<ClickEvent>(e => e.StopPropagation());   // 行クリック（枠選択）に化けさせない
                 row.Add(x);
+                return row;
             }
 
+            var info = new VisualElement();
+            info.AddToClassList("sx-lrow__info");
+            if (!string.IsNullOrEmpty(tag)) info.Add(Text(tag, "sx-rtag f-body-bd"));
+            info.Add(Text(HandLabel(p), "sx-hand"));
+            var face = CondFace(p, "sx-face24");
+            if (face != null) info.Add(face);
+            row.Add(info);
+            return row;
+        }
+
+        /// <summary>
+        /// 控えの1行：背番号の箱｜名前｜投打｜調子の顔。入る選手として選んだ行は赤枠＋薄い赤の地＋背番号と名前も赤。
+        /// 出場済み（<paramref name="used"/>・再出場できない）は名前を淡色にして末尾に置く（札は付けない・issue #1534）。
+        /// </summary>
+        private VisualElement BenchRow(Player p, bool used, bool picked)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("sx-brow");
+            if (picked) row.AddToClassList("sx-brow--picked");
+            if (used) row.AddToClassList("sx-brow--used");
+            row.Add(NumBox(SubstitutionDisplay.Number(p), picked ? "sx-num--in" : used ? "sx-num--gone" : null));
+            var name = Text(p?.Name ?? "—", "sx-brow__name f-display");
+            row.Add(name);
+            if (!used) AddPromiseTag(row, p);
+            row.Add(Text(HandLabel(p), "sx-hand"));
+            var face = CondFace(p, "sx-face22");
+            if (face != null) row.Add(face);
             return row;
         }
 
@@ -1239,101 +1476,33 @@ namespace KokoSim.Unity.Match
             return face;
         }
 
-        private static VisualElement ChoiceRow(string text, bool picked)
+        // 背番号の箱（白地＋墨の1.5px枠・角丸3）。extra で退く（淡色）／入る（赤）／カード（大）を足す。
+        private static Label NumBox(string text, string extra)
         {
-            var row = new VisualElement();
-            row.AddToClassList("bench-row");
-            if (picked) row.AddToClassList("bench-row--picked");
-            var name = new Label(text);
-            name.AddToClassList("bench-row__name");
-            // 選択肢は選手名でなく**文**（「退場させる（通常の継投）」等）なので折り返させる。
-            // bench-row__name は名前用に1行省略なので、そのままだと控え列を詰めた分だけ
-            // 文末が「…」で落ちて何を選ぶのか読めない（issue #452）。
-            name.AddToClassList("msub-choice__text");
-            row.Add(name);
-            return row;
+            var num = Text(text, "sx-num f-num-bd");
+            if (!string.IsNullOrEmpty(extra)) num.AddToClassList(extra);
+            return num;
         }
 
-        /// <summary>
-        /// 控え行（スタメン設定と同じ bench-row 部品）。守備位置は出さない。出場済みの控え（<paramref name="used"/>）は
-        /// 名前を省略せず全部出し、薄い色で沈める＝タグは付けない（issue #1534 項目7。タグが幅を取って名前が「···」で切れていた）。
-        /// </summary>
-        private VisualElement BenchRow(Player p, bool used, bool picked)
+        private static Label Text(string text, string classes)
         {
-            var row = new VisualElement();
-            row.AddToClassList("bench-row");
-            if (picked) row.AddToClassList("bench-row--picked");
-            if (used) row.AddToClassList("msub-row--used");
-
-            var name = new Label(NameOf(p));
-            name.AddToClassList("bench-row__name");
-            row.Add(name);
-            if (!used) AddPromiseTag(row, p);
-            var benchFace = CondFace(p, "msub-cond");
-            if (benchFace != null) row.Add(benchFace);
-            return row;
+            var t = new Label(text);
+            foreach (var c in classes.Split(' ')) if (c.Length > 0) t.AddToClassList(c);
+            return t;
         }
 
-        private void FillCard(string host, Player p, string placeholder, bool pitcherView)
+        private static VisualElement Cell(string cls)
         {
-            var el = _root.Q<VisualElement>(host);
-            if (el == null) return;
-            el.Clear();
-            if (p == null)
-            {
-                var empty = new Label(placeholder);
-                empty.AddToClassList("cmp-card__empty");
-                el.Add(empty);
-                return;
-            }
-            var name = new Label(NameOf(p));
-            name.AddToClassList("cmp-card__name");
-            el.Add(name);
-
-            var meta = new VisualElement();
-            meta.AddToClassList("cmp-card__meta");
-            var hand = new Label(HandLabel(p));
-            hand.AddToClassList("bench-row__tag");
-            meta.Add(hand);
-            var cardFace = CondFace(p, "msub-cond--card");
-            if (cardFace != null) meta.Add(cardFace);
-            el.Add(meta);
-
-            // 持ち球のミニ球種チャート（部品 PitchChartView・compact）。メンバー設定・スタメン設定と同じく
-            // 投手ビューのときだけ出す（ビューでゲート・投/野区分ではゲートしない, issue #93/#293）。
-            // 継投は「同じキレでもスライダーかフォークか」で判断が変わる（監督決定 2026-08-09）。
-            if (!pitcherView || _pitchChart == null) return;
-            var pitches = _pitchChart(p);
-            if (pitches == null || pitches.Count == 0) return;
-            var chartHost = new VisualElement();
-            chartHost.AddToClassList("cmp-card__pitch");
-            el.Add(chartHost);
-            new PitchChartView(chartHost, compact: true).SetData(pitches);
+            var c = new VisualElement();
+            c.AddToClassList(cls);
+            return c;
         }
 
-        // 比較行（ラベル・並び・スタミナ/球威の逆変換）は MatchAbilityColumns が単一ソース（issue #602）。
-        // 能力ビューア（両校の一覧）と同じ表を引く＝画面をまたいでも項目の順が変わらない。
-
-        // 単位つきの値（旧・スタミナの「135球」）はスタミナのLevel化で無くなった＝unit は取らない。
-        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false)
-            => UiComponents.CompareRow(new CompareRowData
-            {
-                Label = label,
-                ValueA = a, ValueB = b,
-                HasA = a >= 0, HasB = b >= 0,
-                Winner = hideBar || a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0,
-                TextA = a >= 0 ? textA : null,
-                TextB = b >= 0 ? textB : null,
-                // ランク併記（監督決定 2026-08-09）。メンバー設定・スタメン設定（PlayerCompareTabs）と
-                // 同じ規則にする＝弾道のようなタイプ軸（優劣なし＝hideBar）以外の全行にチップを出し、
-                // 段はエンジンの Tiers.FromStrength 一本（UI側で帯を作り直さない, issue #326②）。
-                GradeA = hideBar || a < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(a).ToString(),
-                GradeB = hideBar || b < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(b).ToString(),
-                HideBar = hideBar,
-            });
-
-        private static string TypeText(int launchTendency)
-            => launchTendency < 0 ? null : LaunchTendencyLabels.Jp(launchTendency);
+        private static void AddIcon(VisualElement host, LineIcon.Kind kind)
+        {
+            if (host == null || host.Q<LineIcon>() != null) return;
+            host.Add(new LineIcon(kind));
+        }
 
         private static string NameOf(Player p)
             => p == null ? "—" : p.UniformNumber > 0 ? p.UniformNumber + "  " + p.Name : p.Name;

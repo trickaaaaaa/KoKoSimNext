@@ -766,7 +766,7 @@ namespace KokoSim.Unity.Match
             // 交代パネルは自校の選手だけを扱う＝自校の校IDで引く（選手IDは校ごとに1から振る・issue #923）。
             // 校IDは試合ごとに変わるので、呼ばれた時点の値を読む。
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied,
-                sid => _statsProvider.AptitudeGradesOf(OwnSchoolId, sid),
+                sid => _statsProvider.AptitudeValuesOf(OwnSchoolId, sid),
                 p => _statsProvider.PitchChartOf(OwnSchoolId, p),
                 p => _statsProvider.ConditionOf(OwnSchoolId, p.SourceId, p.ConditionValue, p.Name));
             _subPanel.Bind();

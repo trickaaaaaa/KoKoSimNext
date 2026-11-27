@@ -233,3 +233,350 @@
 .msub-cond { width: 26px; height: 26px; flex-shrink: 0; margin-left: var(--sp-2); }
 .msub-cond--card { width: 20px; height: 20px; flex-shrink: 0; margin-left: auto; }
 .bench-row .msub-cond { width: 22px; height: 22px; margin-left: var(--sp-1); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   選手交代のポップアップ（リデザイン・sx-*）。1600×900 基準で 1314×800。
+   試合中の画面なのでスクールカラーは使わず、墨・紙色・赤（--sbk-red）の固定の配色で描く。
+   上の msub-* は偵察パネル（mscout）などが使うので残している（交代モーダルはもう使っていない）。
+   ・ルールは「.sx-scrim .x」（クラス2つ）で書く＝下の Label の余白リセット（クラス＋型）に勝つ。
+   ・枠の太さが変わる要素（行・守備適性の列）はふだんから透明の枠を持ち、大きさを変えない。
+   ═══════════════════════════════════════════════════════════════════════ */
+.sx-scrim { background-color: var(--sbk-ink-scrim-60); }
+.sx-card Label { margin: 0; padding: 0; }
+.sx-card Button { margin: 0; }
+.sx-scrim .sx-card {
+    position: absolute;
+    left: 143px; right: 143px; top: 50px; bottom: 50px;
+    background-color: var(--sbk-sheet);
+    border-width: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    padding: 0;
+}
+.sx-scrim .sx-spacer { flex-grow: 1; }
+
+/* ① 見出しの行（高さ76） */
+.sx-scrim .sx-head {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 76px;
+    padding: 0 28px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule-soft);
+}
+.sx-scrim .sx-title { font-size: 26px; letter-spacing: 3px; color: var(--sbk-text); }
+.sx-scrim .sx-badge {
+    font-size: 13px; color: var(--color-on-fill);
+    background-color: var(--sbk-text);
+    border-radius: 5px;
+    padding: 3px 10px;
+    margin-left: 14px;
+}
+.sx-scrim .sx-kinds {
+    flex-direction: row;
+    background-color: var(--sbk-rule-soft);
+    border-radius: 7px;
+    padding: 2px;
+    margin-left: 14px;
+}
+.sx-scrim .sx-kinds__item {
+    height: 26px; padding: 0 12px; border-radius: 5px;
+    font-size: 13px; color: var(--sbk-sub);
+    -unity-text-align: middle-center;
+}
+.sx-scrim .sx-kinds__item--on { background-color: var(--sbk-card); color: var(--sbk-text); }
+.sx-scrim .sx-kinds__item--off { opacity: 0.45; }
+.sx-scrim .sx-guide { flex-direction: row; align-items: center; margin-left: 18px; }
+.sx-scrim .sx-guide__no {
+    width: 20px; height: 20px; border-radius: 10px;
+    background-color: var(--sbk-rule-soft);
+    font-size: 12px; color: var(--sbk-info);
+    -unity-text-align: middle-center;
+}
+.sx-scrim .sx-guide__t { font-size: 13px; color: var(--sbk-sub); margin-left: 6px; }
+.sx-scrim .sx-guide__sep { width: 14px; height: 14px; color: var(--sbk-mute); margin: 0 10px; }
+.sx-scrim .sx-guide__warn { font-size: 13px; color: var(--sbk-red); }
+.sx-scrim .sx-queue {
+    font-size: 12px; color: var(--color-on-fill);
+    background-color: var(--sbk-out-band);
+    border-radius: 5px;
+    padding: 3px 10px;
+    margin-right: 14px;
+}
+.sx-scrim .sx-close {
+    width: 40px; height: 40px; flex-shrink: 0;
+    background-color: var(--sbk-rule-soft);
+    border-width: 0; border-radius: 9px;
+    align-items: center; justify-content: center;
+    padding: 0;
+    color: var(--sbk-info);
+}
+.sx-scrim .sx-close .licon { width: 18px; height: 18px; }
+.sx-scrim .sx-close:disabled { opacity: 0.45; }
+
+/* ② 本体（430｜300｜残り・間隔24） */
+.sx-scrim .sx-body {
+    flex-grow: 1; min-height: 0;
+    flex-direction: row;
+    padding: 14px 28px 0 28px;
+}
+.sx-scrim .sx-col { flex-direction: column; min-height: 0; flex-shrink: 0; }
+.sx-scrim .sx-col--lineup { width: 430px; }
+.sx-scrim .sx-col--bench { width: 300px; margin-left: 24px; }
+.sx-scrim .sx-colhead {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 34px;
+    border-bottom-width: 2px; border-bottom-color: var(--sbk-text);
+    margin-bottom: 6px;
+}
+.sx-scrim .sx-colhead__name { font-size: 17px; letter-spacing: 1.4px; color: var(--sbk-text); }
+.sx-scrim .sx-colhead__note { font-size: 12px; color: var(--sbk-sub); margin-left: 8px; }
+.sx-scrim .sx-colhead__count { font-size: 14px; color: var(--sbk-text); }
+.sx-scrim .sx-colhead__unit { font-size: 12px; color: var(--sbk-sub); margin-left: 2px; }
+.sx-scrim .sx-scroll { flex-grow: 1; min-height: 0; }
+
+/* 背番号の箱（白地＋1.5px枠・角丸3） */
+.sx-scrim .sx-num {
+    flex-shrink: 0;
+    height: 22px; min-width: 28px;
+    padding: 0 3px;
+    background-color: var(--sbk-card);
+    border-width: 1.5px; border-color: var(--sbk-patch-line); border-radius: 3px;
+    font-size: 12px; color: var(--sbk-text);
+    -unity-text-align: middle-center;
+}
+.sx-scrim .sx-num--gone { border-color: var(--sbk-gone); color: var(--sbk-mute); }
+.sx-scrim .sx-num--in { border-color: var(--sbk-red); color: var(--sbk-red); }
+.sx-scrim .sx-num--card {
+    height: 26px; min-width: 34px;
+    border-width: 2px; border-color: var(--sbk-text); border-radius: 4px;
+    font-size: 14px;
+}
+
+/* 守備位置のチップ（PositionChip を高さ24・13px に） */
+.sx-scrim .sx-pos24 { width: 28px; height: 24px; font-size: 13px; border-radius: 5px; border-width: 0; }
+.sx-scrim .sx-face24 { width: 24px; height: 24px; flex-shrink: 0; }
+.sx-scrim .sx-face22 { width: 22px; height: 22px; flex-shrink: 0; }
+.sx-scrim .sx-hand { font-size: 12px; color: var(--sbk-sub); flex-shrink: 0; }
+
+/* 打順表の行（高さ58・間4・角丸9・白地・2pxの枠は常に持つ） */
+.sx-scrim .sx-lrow {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 58px;
+    margin-bottom: 4px;
+    padding: 0 10px 0 6px;
+    background-color: var(--sbk-card);
+    border-width: 2px; border-color: rgba(0, 0, 0, 0); border-radius: 9px;
+}
+.sx-scrim .sx-lrow--picked { border-color: var(--sbk-red); background-color: var(--sbk-red-tint); }
+.sx-scrim .sx-lrow--off { opacity: 0.45; }
+.sx-scrim .sx-lrow__ord { width: 26px; flex-shrink: 0; font-size: 18px; color: var(--sbk-text); -unity-text-align: middle-center; }
+.sx-scrim .sx-lrow__pos { width: 28px; flex-shrink: 0; margin-left: 10px; align-items: center; }
+.sx-scrim .sx-lrow__who { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; margin-left: 10px; overflow: hidden; }
+.sx-scrim .sx-lrow__name { font-size: 18px; letter-spacing: 1px; color: var(--sbk-text); margin-left: 10px; flex-shrink: 0; }
+.sx-scrim .sx-lrow__name--gone { font-size: 16px; color: var(--sbk-mute); margin-left: 8px; }
+.sx-scrim .sx-lrow__name--in { color: var(--sbk-red); margin-left: 8px; }
+.sx-scrim .sx-lrow__arrow { width: 18px; height: 18px; flex-shrink: 0; color: var(--sbk-red); margin: 0 8px; }
+.sx-scrim .sx-lrow__to { font-size: 14px; color: var(--sbk-red); margin-left: 6px; }
+.sx-scrim .sx-lrow__info { flex-shrink: 0; flex-direction: row; align-items: center; margin-left: 10px; }
+.sx-scrim .sx-lrow__info .sx-hand { margin-right: 12px; }
+.sx-scrim .sx-rtag {
+    font-size: 12px; color: var(--sbk-info);
+    background-color: var(--sbk-rule-soft);
+    border-radius: 4px; padding: 1px 6px;
+    margin-right: 10px;
+}
+.sx-scrim .sx-cancel {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 30px; padding: 0 10px;
+    margin-left: 10px;
+    background-color: var(--sbk-card);
+    border-width: 1px; border-color: var(--sbk-red-line); border-radius: 7px;
+    color: var(--sbk-red);
+}
+.sx-scrim .sx-cancel .licon { width: 12px; height: 12px; }
+.sx-scrim .sx-cancel__t { font-size: 12px; color: var(--sbk-red); margin-left: 4px; }
+
+/* 控えの行（高さ46・間4・角丸9・白地） */
+.sx-scrim .sx-brow {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 46px;
+    margin-bottom: 4px;
+    padding: 0 10px;
+    background-color: var(--sbk-card);
+    border-width: 2px; border-color: rgba(0, 0, 0, 0); border-radius: 9px;
+}
+.sx-scrim .sx-brow--picked { border-color: var(--sbk-red); background-color: var(--sbk-red-tint); }
+.sx-scrim .sx-brow__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: 17px; letter-spacing: 1px; color: var(--sbk-text); margin-left: 10px; }
+.sx-scrim .sx-brow--picked .sx-brow__name { color: var(--sbk-red); }
+.sx-scrim .sx-brow--used .sx-brow__name { color: var(--sbk-mute-soft); }
+.sx-scrim .sx-brow--used .sx-face22 { opacity: 0.45; }
+.sx-scrim .sx-brow .sx-hand { margin: 0 10px; }
+.sx-scrim .sx-empty { font-size: 13px; color: var(--sbk-mute); padding: 8px 4px; }
+
+/* 継投の「元の投手」・DHの「指名打者」の追加の選択（見出し＋選択肢1行） */
+.sx-scrim .sx-choice {
+    flex-shrink: 0;
+    margin-top: 6px;
+    padding: 8px 10px 4px 10px;
+    background-color: var(--sbk-card);
+    border-radius: 9px;
+}
+.sx-scrim .sx-choice__cap { font-size: 12px; color: var(--sbk-info); }
+.sx-scrim .sx-choice__opts { flex-direction: row; flex-wrap: wrap; margin-top: 6px; }
+.sx-scrim .sx-choice__opt {
+    height: 26px; padding: 0 10px;
+    margin: 0 6px 6px 0;
+    border-width: 1px; border-color: var(--sbk-rule); border-radius: 6px;
+    font-size: 12px; color: var(--sbk-info);
+    -unity-text-align: middle-center;
+}
+.sx-scrim .sx-choice__opt--on { background-color: var(--sbk-text); border-color: var(--sbk-text); color: var(--color-on-fill); }
+
+/* 比較（地 #F3F0E8・角丸14・余白 上下14 左右18・下16あける） */
+.sx-scrim .sx-cmp {
+    flex-grow: 1; flex-basis: 0; min-width: 0;
+    margin: 0 0 16px 24px;
+    padding: 14px 18px;
+    background-color: var(--sbk-growth-bg);
+    border-radius: 14px;
+}
+.sx-scrim .sx-cards { flex-shrink: 0; flex-direction: row; }
+.sx-scrim .sx-cards__arrow { width: 28px; flex-shrink: 0; align-items: center; justify-content: center; color: var(--sbk-red); }
+.sx-scrim .sx-cards__arrow .licon { width: 22px; height: 22px; }
+.sx-scrim .sx-pcard {
+    flex-grow: 1; flex-basis: 0; min-width: 0;
+    min-height: 82px;
+    padding: 10px 12px 12px 12px;
+    background-color: var(--sbk-sheet);
+    border-top-width: 4px; border-radius: 10px;
+}
+.sx-scrim .sx-pcard--out { border-top-color: var(--sbk-out-band); }
+.sx-scrim .sx-pcard--in { border-top-color: var(--sbk-red); }
+.sx-scrim .sx-pcard__top { flex-direction: row; align-items: center; }
+.sx-scrim .sx-pcard__tag { font-size: 12px; color: var(--color-on-fill); border-radius: 4px; padding: 1px 8px; }
+.sx-scrim .sx-pcard--out .sx-pcard__tag { background-color: var(--sbk-out-band); }
+.sx-scrim .sx-pcard--in .sx-pcard__tag { background-color: var(--sbk-red); }
+.sx-scrim .sx-pcard__meta { font-size: 12px; color: var(--sbk-sub); margin-left: 8px; }
+.sx-scrim .sx-pcard__who { flex-direction: row; align-items: center; margin-top: 8px; }
+.sx-scrim .sx-pcard__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: 21px; letter-spacing: 1.2px; color: var(--sbk-text); margin-left: 10px; }
+.sx-scrim .sx-pcard__empty { font-size: 13px; color: var(--sbk-mute); margin-top: 22px; -unity-text-align: middle-center; }
+
+/* 能力の表：項目名96｜退く｜入る */
+.sx-scrim .sx-table { flex-grow: 1; min-height: 0; margin-top: 10px; }
+.sx-scrim .sx-table__head {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 32px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-rule);
+}
+.sx-scrim .sx-tabs {
+    width: 96px; flex-shrink: 0;
+    flex-direction: row;
+    background-color: var(--sbk-tab-bg);
+    border-radius: 7px;
+    padding: 2px;
+}
+.sx-scrim .sx-tabs__item {
+    flex-grow: 1;
+    height: 22px; padding: 0 4px; border-radius: 5px;
+    font-size: 12px; color: var(--sbk-sub);
+    -unity-text-align: middle-center;
+}
+.sx-scrim .sx-tabs__item--on { background-color: var(--sbk-card); color: var(--sbk-text); }
+.sx-scrim .sx-table__colhead { flex-grow: 1; flex-basis: 0; align-items: center; justify-content: center; }
+.sx-scrim .sx-tag { font-size: 11px; color: var(--color-on-fill); border-radius: 4px; padding: 1px 8px; }
+.sx-scrim .sx-tag--out { background-color: var(--sbk-out-band); }
+.sx-scrim .sx-tag--in { background-color: var(--sbk-red); }
+.sx-scrim .sx-table__rows { flex-grow: 1; min-height: 0; flex-direction: column; }
+.sx-scrim .sx-trow {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 34px;
+    border-bottom-width: 1px; border-bottom-color: var(--sbk-table-line);
+}
+.sx-scrim .sx-trow--fill { flex-grow: 1; flex-basis: 0; height: auto; min-height: 27px; }
+.sx-scrim .sx-trow__label { width: 96px; flex-shrink: 0; font-size: 14px; color: var(--sbk-info); }
+.sx-scrim .sx-tcell { flex-grow: 1; flex-basis: 0; flex-direction: row; align-items: center; justify-content: center; }
+.sx-scrim .sx-tcell__v { min-width: 26px; font-size: 17px; color: var(--sbk-text); -unity-text-align: middle-right; margin-right: 8px; }
+.sx-scrim .sx-tcell__text { font-size: 14px; color: var(--sbk-text); }
+.sx-scrim .sx-chip22 { width: 22px; min-width: 22px; height: 22px; margin: 0; padding: 0; font-size: 12px; }
+.sx-scrim .sx-chip20 { width: 20px; min-width: 20px; height: 20px; margin: 0; padding: 0; font-size: 11px; }
+.sx-scrim .sx-charts { flex-grow: 1; min-height: 110px; flex-direction: row; margin-top: 6px; }
+.sx-scrim .sx-charts__label { padding-top: 6px; }
+.sx-scrim .sx-charts__host { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.sx-scrim .sx-charts__chart { flex-grow: 1; }
+
+/* 守備適性（40｜9等分・間2・段 20/30/30） */
+.sx-scrim .sx-apt { flex-shrink: 0; margin-top: 10px; }
+.sx-scrim .sx-apt__head { flex-direction: row; align-items: flex-end; margin-bottom: 4px; }
+.sx-scrim .sx-apt__title { font-size: 13px; color: var(--sbk-info); }
+.sx-scrim .sx-apt__note { font-size: 11px; color: var(--sbk-mute); margin-left: 8px; margin-bottom: 1px; }
+.sx-scrim .sx-apt__grid { flex-direction: row; }
+.sx-scrim .sx-apt__col {
+    flex-grow: 1; flex-basis: 0; min-width: 0;
+    margin-left: 2px;
+    border-width: 2px; border-color: rgba(0, 0, 0, 0); border-radius: 8px;
+}
+.sx-scrim .sx-apt__col--labels { min-width: 40px; flex-grow: 0; flex-basis: auto; margin-left: 0; align-items: flex-start; }
+.sx-scrim .sx-apt__col--labels .sx-tag { padding: 1px 5px; }
+.sx-scrim .sx-apt__col--target { border-color: var(--sbk-red); background-color: var(--sbk-sheet); }
+.sx-scrim .sx-apt__pos { height: 20px; align-items: center; justify-content: center; }
+.sx-scrim .sx-apt__posname { font-size: 12px; color: var(--sbk-sub); }
+.sx-scrim .sx-apt__posname--target { color: var(--sbk-red); }
+.sx-scrim .sx-apt__cell { height: 30px; flex-direction: row; align-items: center; justify-content: center; }
+.sx-scrim .sx-apt__v { font-size: 11px; color: var(--sbk-info); margin-left: 3px; }
+
+/* ③ 下の操作の行（高さ84） */
+.sx-scrim .sx-foot {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 84px;
+    padding: 0 28px;
+    border-top-width: 1px; border-top-color: var(--sbk-rule-soft);
+}
+.sx-scrim .sx-note { flex-shrink: 1; min-width: 0; flex-direction: row; align-items: center; overflow: hidden; }
+.sx-scrim .sx-note__icon { width: 20px; height: 20px; flex-shrink: 0; color: var(--sbk-red); margin-right: 8px; }
+.sx-scrim .sx-note__t { font-size: 15px; color: var(--sbk-info); flex-shrink: 0; }
+.sx-scrim .sx-note__player { font-size: 15px; color: var(--sbk-text); margin: 0 3px; flex-shrink: 0; }
+.sx-scrim .sx-note__muted { font-size: 13px; color: var(--sbk-mute); flex-shrink: 0; }
+.sx-scrim .sx-note__hint { font-size: 13px; color: var(--sbk-mute); }
+.sx-scrim .sx-note__warn { font-size: 13px; color: var(--sbk-red); flex-shrink: 0; }
+.sx-scrim .sx-pos--note { width: auto; height: 22px; padding: 0 7px; margin: 0 4px; font-size: 13px; border-radius: 4px; border-width: 0; }
+.sx-scrim .sx-btn {
+    flex-shrink: 0;
+    height: 52px;
+    margin-left: 12px;
+    border-radius: 11px;
+    flex-direction: row; align-items: center; justify-content: center;
+}
+.sx-scrim .sx-btn--ghost {
+    padding: 0 22px;
+    border-width: 1px; border-color: var(--sbk-rule);
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 15px; color: var(--sbk-info);
+}
+.sx-scrim .sx-btn--line {
+    padding: 0 20px;
+    border-width: 1.5px; border-color: var(--sbk-text);
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--sbk-text);
+}
+.sx-scrim .sx-btn--line .sx-btn__t { font-size: 15px; color: var(--sbk-text); }
+.sx-scrim .sx-btn--line .licon { width: 16px; height: 16px; margin-left: 8px; }
+.sx-scrim .sx-btn--go {
+    width: 260px;
+    border-width: 0;
+    background-color: var(--sbk-red);
+    color: var(--color-on-fill);
+}
+.sx-scrim .sx-btn--go .sx-btn__t { font-size: 17px; letter-spacing: 2.7px; color: var(--color-on-fill); }
+.sx-scrim .sx-btn--go .licon { width: 14px; height: 14px; margin-left: 10px; }
+.sx-scrim .sx-btn--ghost:hover, .sx-scrim .sx-btn--line:hover { background-color: var(--sbk-card); }
+.sx-scrim .sx-btn:disabled { opacity: 1; color: var(--sbk-mute-soft); border-color: var(--sbk-mute-soft); }
+.sx-scrim .sx-btn:disabled .sx-btn__t { color: var(--sbk-mute-soft); }
+.sx-scrim .sx-btn--go:disabled { background-color: var(--sbk-rule); color: var(--color-on-fill); }
+.sx-scrim .sx-btn--go:disabled .sx-btn__t { color: var(--color-on-fill); }
