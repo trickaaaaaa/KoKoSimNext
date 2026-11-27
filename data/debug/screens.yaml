@@ -1733,10 +1733,10 @@ screens:
       - show: MemberSetting
       - wait: 5
       - shot: 06-member-default
-      - hover: .ms-row[2]
+      - hover: .ms-row[0]
       - wait: 2
-      - shot: 07-member-row2
-      - leave: .ms-row[2]
+      - shot: 07-member-row0
+      - leave: .ms-row[0]
       - wait: 2
       - shot: 08-member-gap
       - leave: .ms-body
