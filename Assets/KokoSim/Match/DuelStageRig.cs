@@ -6196,8 +6196,8 @@ namespace KokoSim.Unity.Match
                         // 選手向けに較正した帽子メッシュは額が突き抜けて顔の前へずれる＝この素体に合わせたクラウン＋つばをプリミティブで作る
                         GearPart(c, PrimitiveType.Sphere, "ucap-crown", new Vector3(0f, 0.19f, 0.01f),
                             new Vector3(0.21f, 0.26f, 0.25f), accent, layer);
-                        GearPart(c, PrimitiveType.Cube, "ucap-brim", new Vector3(0f, 0.115f, 0.14f),
-                            new Vector3(0.15f, 0.012f, 0.09f), accent, layer);
+                        GearPart(c, PrimitiveType.Cube, "ucap-brim", new Vector3(0f, 0.118f, 0.165f),
+                            new Vector3(0.17f, 0.012f, 0.12f), accent, layer);
                         break;
                     case GearKind.UmpireGear:
                         // 球審: 帽子型クラウン＋マスク。マスクは捕手と同じ生成メッシュ（2026-08-05 監督指示。
