@@ -5555,7 +5555,10 @@ namespace KokoSim.Unity.Match
             // 再入: 前のプレーを先に畳む。畳まないと PlaceFielder に汚された投手・捕手の基準を Snapshot してしまう
             if (_fieldPlay != null) EndFieldPlay();
             play = StripPostResolutionReturnMoves(play);
-            if (!DuelTuning.BatterOverrunLegOffForCapture) play = AddBatterOverrunLeg(play);
+#if UNITY_EDITOR
+            if (!DuelTuning.BatterOverrunLegOffForCapture)
+#endif
+                play = AddBatterOverrunLeg(play);
             _bobble = DuelTuning.HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
             _sideStep = (FieldPosition.Pitcher, -1f, -1f);
             _holdFollow = (FieldPosition.Pitcher, 0f, -1f, -1f);
