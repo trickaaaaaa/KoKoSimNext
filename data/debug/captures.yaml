@@ -906,6 +906,38 @@ captures:
     shots: [catch]
     probes: [BaseUmpHeadClose]
 
+  - id: base-umpire-head-1740-a
+    name: "塁審の頭の帽子位置の見比べ（一時・issue #1740）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    shots: [catch]
+    probes: [BaseUmpHeadClose]
+    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.05, DuelTuning.BaseUmpCapAddZForCapture: 0.0}
+
+  - id: base-umpire-head-1740-b
+    name: "塁審の頭の帽子位置の見比べ（一時・issue #1740）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    shots: [catch]
+    probes: [BaseUmpHeadClose]
+    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.08, DuelTuning.BaseUmpCapAddZForCapture: 0.0}
+
+  - id: base-umpire-head-1740-c
+    name: "塁審の頭の帽子位置の見比べ（一時・issue #1740）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    shots: [catch]
+    probes: [BaseUmpHeadClose]
+    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.05, DuelTuning.BaseUmpCapAddZForCapture: 0.03}
+
+  - id: base-umpire-head-1740-d
+    name: "塁審の頭の帽子位置の見比べ（一時・issue #1740）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    shots: [catch]
+    probes: [BaseUmpHeadClose]
+    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.08, DuelTuning.BaseUmpCapAddZForCapture: 0.03}
+
   - id: base-umpire-2b-steal-out-1595
     name: "二盗失敗の二塁タッチアウトで二塁塁審がアウトのコール（issue #1595）"
     scenario: steal-caught-lab
