@@ -332,6 +332,10 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         // 交代先がいなければ高度トリガーも意味を持たない（＝RNGを引かず素通り）。
         if (!s.ReliefAvailable) return null;
 
+        // この回にもう替えた投手を、高度トリガー（崩れ・動揺・僅差終盤）でまた替えない。崩れは回の失点を数えるので、
+        // 継いだ投手にも付いて回り、打席ごとに投手を替え続けてしまう（issue #1742）。疲労の基本トリガーは上で通してある。
+        if (s.PitcherChangedThisInning) return null;
+
         // ②ティア関門×③校風で高度トリガーの発火条件だけを判定（ここまで RNG は一切引かない）。
         var reason = EvaluateAdvancedRelief(s);
         if (reason is null) return null;

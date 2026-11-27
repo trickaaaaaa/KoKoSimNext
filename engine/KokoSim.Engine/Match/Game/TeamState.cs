@@ -1355,6 +1355,67 @@ public sealed class TeamState
     }
 
     /// <summary>
+    /// 采配AIに見せる継投の候補（人選用）。<see cref="EligibleReliefCandidates"/> から、いま登板させても意味のない
+    /// 野手を外す（issue #1742）: ①この回に投手から守備へ回ったばかりの選手（同じ回に投手へ戻して往復しない）、
+    /// ②この試合で投げた疲れが持ち回しで残っていて、目安投球数に達している選手（戻した瞬間に、またはすぐ疲労の基本トリガー
+    /// （<see cref="PitchingFatigue.ShouldRelieve"/>）に当たる＝目安＋マージンの手前で止める）、③この試合ですでに一度マウンドへ戻した選手。
+    /// 外すだけで、残りの並びは変えない。
+    /// </summary>
+    public IReadOnlyList<Player> ReliefCandidatesForAi(FatigueCoefficients fatigue, int inning)
+    {
+        NoteInning(inning);
+        var all = EligibleReliefCandidates;
+        List<Player>? kept = null;
+        for (var i = 0; i < all.Count; i++)
+        {
+            var c = all[i];
+            if (IsSpentForMound(c, fatigue)) { kept ??= new List<Player>(all.Take(i)); continue; }
+            kept?.Add(c);
+        }
+        return kept ?? all;
+    }
+
+    private bool IsSpentForMound(Player candidate, FatigueCoefficients fatigue)
+    {
+        if (_reserves.Contains(candidate)) return false;   // 控えはまだ投げていない
+        if (_returnsToMound.GetValueOrDefault(KeyOf(candidate)) >= 1) return true;   // 一度戻した投手は、また降りたら戻さない
+        if (_demotions.TryGetValue(KeyOf(candidate), out var d) && d.Inning == _inning && _inning > 0) return true;
+        var asPitcher = candidate with { Position = FieldPosition.Pitcher };
+        return _stint.TryGetValue(asPitcher, out var s)
+               && PitchingFatigue.ShouldRelieve(asPitcher, s.Fatigue, fatigue, EffectiveBaseStamina(asPitcher) - fatigue.RelievePitchMargin);
+    }
+
+    // ===== 投手→野手→投手の往復（公認野球規則 5.10・issue #1742） =====
+    // 投手が守備へ回った回に、同じ回で投手へ戻れるのは1度まで。回は呼び出し側が NoteInning で知らせる
+    // （0＝知らされていない＝追跡しない。直接 TeamState を触るテスト・統計用の素組みは従来のまま）。
+    private int _inning;
+    private readonly Dictionary<Player, (int Inning, int Returns)> _demotions = new();
+
+    /// <summary>この試合で一度マウンドを降りてから、また投手へ戻った回数（AI は一度戻した選手を再び戻さない＝往復の歯止め）。</summary>
+    private readonly Dictionary<Player, int> _returnsToMound = new();
+
+    /// <summary>いまの回を知らせる（往復の規則の判定用）。</summary>
+    public void NoteInning(int inning) => _inning = inning;
+
+    private void NoteDemotedToField(Player pitcher)
+    {
+        if (_inning <= 0) return;
+        var key = KeyOf(pitcher);
+        _demotions[key] = (_inning, _demotions.TryGetValue(key, out var d) && d.Inning == _inning ? d.Returns : 0);
+    }
+
+    /// <summary>この回に投手から守備へ回って、すでにマウンドへ1度戻った選手は、同じ回に再び投手へ戻れない。</summary>
+    private bool MayReturnToMound(Player onField)
+        => _inning <= 0 || !_demotions.TryGetValue(KeyOf(onField), out var d) || d.Inning != _inning || d.Returns < 1;
+
+    private void NoteReturnedToMound(Player onField, bool wasPitcher)
+    {
+        if (wasPitcher) _returnsToMound[KeyOf(onField)] = _returnsToMound.GetValueOrDefault(KeyOf(onField)) + 1;
+        if (_inning > 0 && _demotions.TryGetValue(KeyOf(onField), out var d) && d.Inning == _inning)
+            _demotions[KeyOf(onField)] = (d.Inning, d.Returns + 1);
+    }
+
+    /// <summary>
     /// 既定の継投（<see cref="TryChangePitcher"/>）の約束を守る版。見張りが無ければ従来とまったく同じ。
     /// 見張りがあれば、約束の子を飛ばして名簿順で控えの投手→控えの誰か、の順に選び、控えに投げられる子が
     /// いなければ守っている野手をマウンドへ回す（オーナー決定 2026-11-24「野手を投手に回してでも約束を守る」）。
@@ -1440,9 +1501,13 @@ public sealed class TeamState
         if (fSlot < 0) return ChangePitcherTo(sub);
         // 昇格に渡すのは打順の現物（古い実体の Position で空き守備を決めると別の位置を backfill する）。
         var onField = _lineup[fSlot];
-        return _usesDh
+        if (!MayReturnToMound(onField)) return false;   // 同じ回に投手→野手→投手は1度まで（規則5.10）
+        var wasPitcher = _stint.ContainsKey(onField with { Position = FieldPosition.Pitcher });
+        var ok = _usesDh
             ? PromoteFielderToMoundDh(onField, fSlot, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill)
             : PromoteFielderToMound(onField, fSlot, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill);
+        if (ok) NoteReturnedToMound(onField, wasPitcher);
+        return ok;
     }
 
     /// <summary>
@@ -1494,6 +1559,7 @@ public sealed class TeamState
         }
 
         // ①: 投野交代（旧投手を空き守備へ回す・両者残留）。_retired/_bench に触れない＝リエントリー禁止に抵触しない。
+        NoteDemotedToField(retiringPitcher);
         _lineup[_pitcherSlot] = Rekey(retiringPitcher, retiringPitcher with { Position = vacated });
         _lineup[fSlot] = mound;
         CurrentPitcher = mound;
@@ -1741,6 +1807,7 @@ public sealed class TeamState
             _pitcherSlot = fSlot;
         }
 
+        NoteDemotedToField(oldPitcher);
         SaveStintOf(oldPitcher);
         CurrentPitcher = mound;
         LoadStintOf(mound);
@@ -1772,7 +1839,16 @@ public sealed class TeamState
     // 退場した投手は戻れないので、既存の交代経路の見え方は変わらない。
     private readonly Dictionary<Player, (int Pitches, double Fatigue)> _stint = new();
 
-    private void SaveStintOf(Player pitcher) => _stint[pitcher] = (PitchesThrown, FatiguePitches);
+    private void SaveStintOf(Player pitcher)
+    {
+        _stint[pitcher] = (PitchesThrown, FatiguePitches);
+        _lastPitcherChangeInning = _inning;   // 投手が替わるすべての経路がここを通る
+    }
+
+    private int _lastPitcherChangeInning;
+
+    /// <summary>この回（<see cref="NoteInning"/> で知らされた回）にすでに投手が替わっているか。0＝回を知らされていない＝常に false。</summary>
+    public bool PitcherChangedInInning(int inning) => inning > 0 && _lastPitcherChangeInning == inning;
 
     /// <summary>その投手の前回降板時点の球数・疲労を復元する（初登板なら0＝従来どおり）。</summary>
     private void LoadStintOf(Player pitcher)

@@ -184,7 +184,8 @@ public readonly record struct PitchingChangeSituation(
     Player? CurrentPitcher = null,               // 現投手（守備へ回す候補。打力を見る）
     IReadOnlyList<Player>? DefenseLineup = null, // 打順スロット順の現ラインナップ（Position つき）
     IReadOnlyList<bool>? SwappableSlots = null,  // 各スロットが守備位置を動かせるか（投手・DHは false）
-    bool UsesDh = false);                        // DH制か（コンバート継投は非DHのみ＝「打順に残す」判断）
+    bool UsesDh = false,                         // DH制か（コンバート継投は非DHのみ＝「打順に残す」判断）
+    bool PitcherChangedThisInning = false);      // この回にもう投手が替わっているか（高度トリガーで連続して替えない・issue #1742）
 
 /// <summary>
 /// 守備位置の入替（コンバート）の判断に渡す状況（issue #255, 設計書09 §2.3 / 設計書11）。守備側視点。
