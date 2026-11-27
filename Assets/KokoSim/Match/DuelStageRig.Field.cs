@@ -6049,7 +6049,7 @@ namespace KokoSim.Unity.Match
         /// 保持の後に元の位置へ平行移動で戻す＝足を動かさずに滑って見えた。急に落ちるフライが遡る分
         /// （数十cm〜1m）は従来どおり許し、それより大きく遡るなら付け替えない（終点で捕る）。
         /// </summary>
-        private const double AerialGloveRewindMaxM = 1000.0;
+        private const double AerialGloveRewindMaxM = 1.0;
 
         /// <summary>
         /// 飛球の区間 <paramref name="seg"/> が下りながら高さ <paramref name="gloveY"/>[m] を通る、区間内の時刻[s]。
