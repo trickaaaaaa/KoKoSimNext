@@ -14,9 +14,9 @@ public static partial class GameSimulation
     /// お手玉・捕球・トンネル・悪送球・一塁手の捕球ミス（issue #810）・外野手のファンブル（issue #811）・
     /// フライ落球と、悪送球を拾い直してアウトにした打席、悪送球の逸れ幅分布と逸れ方の内訳。
     /// </summary>
-    public static string RunErrorKinds(int games, ulong seed)
+    public static string RunErrorKinds(int games, ulong seed, string? coefficientsPath = null)
     {
-        var ctx = BuildContext(null, null) with { Weather = null };
+        var ctx = BuildContext(coefficientsPath, null) with { Weather = null };
         var root = new Xoshiro256Random(seed);
         var forks = new IRandomSource[games];
         for (var i = 0; i < games; i++) forks[i] = root.Fork((ulong)i);

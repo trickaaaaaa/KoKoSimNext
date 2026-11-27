@@ -887,7 +887,8 @@ public sealed class BaserunningPlaysTests
         var dropsWithThird = 0;
         var dropsWithSecond = 0;
         var dropsWithFirst = 0;
-        for (ulong seed = 1; seed <= 120; seed++)
+        // 120試合では三塁走者ありの振り逃げが0件になる種がある（issue #1685 で試合の流れが変わり0件になった）＝240試合。
+        for (ulong seed = 1; seed <= 240; seed++)
         {
             var r = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(seed));
             var expectedAway = 0;

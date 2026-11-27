@@ -129,7 +129,8 @@ public sealed class CatchErrorRunnerRaceTests
     public void RecoveredCatchError_LeavesNewFieldsNull()
     {
         // こぼれ幅を極小に固定＝必ず拾い直してアウトに戻る（CatchFumbleRecoveryTests と同じ手口）。
-        var coeff = AlwaysCatchError with { CatchFumbleScatterSigmaM = 0.0001 };
+        // 拾い上げの間（CatchFumblePickupSeconds, issue #1685）も 0 にする＝こぼれ幅だけで回収が決まる。
+        var coeff = AlwaysCatchError with { CatchFumbleScatterSigmaM = 0.0001, CatchFumblePickupSeconds = 0.0 };
         var play = Grounder(coeff, 1);
 
         Assert.Equal(BattedBallResult.Out, play.Result);

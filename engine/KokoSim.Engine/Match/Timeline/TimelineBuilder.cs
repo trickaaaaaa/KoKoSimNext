@@ -1995,6 +1995,14 @@ public static partial class TimelineBuilder
         => play.FielderThrowSpeedMps is { } v && v > 1.0 ? v : FallbackThrowSpeedMps;
 
     /// <summary>
+    /// 内野ゴロ→一塁送球を描く速度[m/s]（issue #1685）。判定が使った送球の飛行（体勢による球の弱まり＋失速、
+    /// <see cref="FieldingPlay.FirstThrowSpeedMps"/>）の見かけの速さ。肩どおりで描くと、判定の送球の秒の差が
+    /// 「捕ってから投げるまで」の保持に紛れ込み、長く持つ絵に戻る。無ければ肩どおり。
+    /// </summary>
+    private static double FirstThrowSpeedOf(FieldingPlay play)
+        => play.FirstThrowSpeedMps is { } v && v > 1.0 ? v : ThrowSpeedOf(play);
+
+    /// <summary>
     /// 判定との矛盾を防ぐために送球到達をずらす最小の間[s]（Issue #301③ 方針「物理優先＋矛盾ガード」）。
     /// </summary>
     private const double VerdictGuardLagSeconds = 0.20;
@@ -3319,7 +3327,7 @@ public static partial class TimelineBuilder
         FieldingPlay play, TimelinePoint fieldPoint, TimelinePoint firstBase, double arrive, double fieldedAt,
         FieldPosition receiver)
     {
-        var speed = ThrowSpeedOf(play);
+        var speed = FirstThrowSpeedOf(play);
         var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), speed);
         var t0 = Math.Max(fieldedAt, arrive - flightToFirst);
         var tBase = t0 + flightToFirst;

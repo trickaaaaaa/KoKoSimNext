@@ -14,11 +14,19 @@ namespace KokoSim.Engine.Tests.Match.Fielding;
 /// <summary>
 /// お手玉の失策（2026-11-03 監督報告「あれだけファンブルしたら内野安打じゃなくて普通にエラーでは？」）。
 /// もたつきがお手玉級で、もたつきが無ければアウトだったセーフは失策（FieldingErrorKind.Bobble）。
+///
+/// <para>issue #1685 でもたつきを平均0.12秒へ縮め、この分岐は既定で無効（<c>BobbleErrorMinJitterSeconds</c>=0）に
+/// した（お手玉の失策は捕球ミスの拾い直しで起きる形へ作り直した）。分岐そのものはデバッグ・テスト用に残すので、
+/// ここでは #1685 以前の係数（もたつき平均0.49秒・しきい値1.45秒）を明示して、分岐が正しく働くことを固定する。</para>
 /// </summary>
 public class BobbleErrorTests
 {
     private static readonly FieldGeometry Field = new();
-    private static readonly FieldingCoefficients Coeff = new() { ErrorBaseProb = 0, ThrowErrorBaseProb = 0 };
+    private static readonly FieldingCoefficients Coeff = new()
+    {
+        ErrorBaseProb = 0, ThrowErrorBaseProb = 0,
+        InfieldHandleJitterMeanSeconds = 0.49, BobbleErrorMinJitterSeconds = 1.45,
+    };
 
     private static FieldingPlay Resolve(ulong seed, FieldingCoefficients? coeff = null, int fielding = 50)
         => FieldingResolver.ResolveDetailed(

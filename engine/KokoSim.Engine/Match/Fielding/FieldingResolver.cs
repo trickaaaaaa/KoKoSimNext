@@ -201,6 +201,14 @@ public sealed record FieldingPlay
     public ThrowScatterModel.Scatter? FirstThrowScatter { get; init; }
 
     /// <summary>
+    /// 内野ゴロ→一塁送球の「見かけの球速」[m/s]（issue #1685）。判定が使った送球の飛行時間
+    /// （<see cref="FieldingResolver.FirstBaseThrowFlightSeconds"/>＝体勢による球の弱まり＋距離による失速）で
+    /// 捕球点→一塁の距離を割った値。絵はこの速さで送球を飛ばす＝判定の送球の秒が球の飛行に出て、
+    /// 捕ってから投げるまで（保持）には紛れ込まない。一塁送球を判定しない打球は null（肩どおり）。
+    /// </summary>
+    public double? FirstThrowSpeedMps { get; init; }
+
+    /// <summary>
     /// 捕球ミスが拾い直せず確定した打席で、処理野手がこぼれ球を拾い直して次の送球に移れる時刻[s]
     /// （接触基準。issue #816）。<see cref="FieldedAtSeconds"/> は最初に球へ触れた時刻（=こぼれた瞬間）の
     /// ままなので、塁上の走者が次塁を狙うかどうかの判断（<see cref="KokoSim.Engine.Match.Game.HomePlayResolver"/>）
@@ -563,9 +571,14 @@ public static class FieldingResolver
                                         coeff.ThrowScatterLateralSecPerCm, coeff.ThrowScatterHighSecPerCm, coeff.ThrowScatterShortHopSecPerCm,
                                         coeff.ThrowScatterCatchingReliefSlope, coeff.ThrowScatterCatchingReliefMinFactor);
             }
+            // 一塁送球の飛行（issue #1685）: 前へ突っ込みながら・一塁と逆へ流れながらの送球は球が弱く、
+            // 長い送球は失速する。内野安打の校正を「捕ってから長く持つ」から送球の物理へ移した項。
+            var throwFlight = FirstBaseThrowFlightSeconds(
+                throwDist, infielder, chargeFrac, AwayMomentumFraction(infielder, catchPoint, fieldTimeRaw, field.FirstBase), coeff, handFactor);
             var throwTime = fieldTime + coeff.InfieldPlayOverheadSeconds
-                            + transfer + handleJitter + throwDist / infielder.Attributes.ThrowSpeedMps
+                            + transfer + handleJitter + throwFlight
                             + throwScatterBias;
+            var firstThrowSpeed = throwFlight > 1e-9 ? throwDist / throwFlight : infielder.Attributes.ThrowSpeedMps;
             // アンアシスト刺殺（3U, Issue #400）: 処理野手が一塁手なら、投手カバーへ送球する以外に「自分で
             // ベースを踏む」選択肢を持つ。捕球点がベース至近なら握り替え0.70sを払わずに済むぶん自重で踏むほうが
             // 速い＝実際の 3U が発生する。所要は握り替え・送球を除いた「捕球点→一塁ベースを走り込む」時間で、
@@ -605,8 +618,11 @@ public static class FieldingResolver
                     // こぼれた球は捕球点のすぐそば＝バックアップ野手という概念は無く、回収役は常に処理野手自身。
                     // こぼれ幅→拾い直しのロス（反応遅延+こぼれ幅÷脚力）を守備所要時間へ加算してもう一度
                     // 同じ判定基準で再評価する。間に合えば「弾いたのに一塁アウト」が構造的に成立する。
+                    // 転がった球を地面から拾い上げる間（CatchFumblePickupSeconds, issue #1685）も払う＝
+                    // お手玉の失策は「捕ってから長く持つ」でなく、ここ（弾いて拾い直す）で起きる。
                     var scatterM = Math.Abs(rng.NextGaussian(0.0, coeff.CatchFumbleScatterSigmaM));
-                    var recovery = coeff.RecoveryReactionSeconds + scatterM / infielder.Attributes.SprintSpeedMps;
+                    var recovery = coeff.RecoveryReactionSeconds + coeff.CatchFumblePickupSeconds
+                                   + scatterM / infielder.Attributes.SprintSpeedMps;
                     if (defenseTime + recovery + coeff.ForceOutMarginSeconds <= runnerTime)
                     {
                         result = BattedBallResult.Out;
@@ -710,6 +726,7 @@ public static class FieldingResolver
                     CatchErrorReadyAtSeconds = catchErrorReadyAtSeconds,
                     CatchErrorHandlingSeconds = catchErrorHandlingSeconds,
                     FirstThrowScatter = firstThrowScatter,
+                    FirstThrowSpeedMps = firstThrowSpeed,
                 };
             }
             // お手玉の失策（2026-11-03 監督報告「あれだけファンブルしたら内野安打じゃなくて普通にエラーでは？」）:
@@ -737,6 +754,7 @@ public static class FieldingResolver
                     ErrorFielderRole = infielder.Position,
                     ErrorAtSeconds = fieldTime,   // 「エラー」は弾いた瞬間（捕球直後）に出す
                     FirstThrowScatter = firstThrowScatter,
+                    FirstThrowSpeedMps = firstThrowSpeed,
                 };
             }
             // 間に合わず内野安打（失策ロールは引かない＝main の校正モデルを保つ）。
@@ -755,6 +773,7 @@ public static class FieldingResolver
                 FielderThrowAccuracy = throwAccuracy,
                 JudgementMarginSeconds = judgementMargin,
                 FirstThrowScatter = firstThrowScatter,
+                FirstThrowSpeedMps = firstThrowSpeed,
             };
         }
 
@@ -789,6 +808,57 @@ public static class FieldingResolver
             ThrowScatterModel.SigmaCmForAccuracy(throwAccuracy), receiverCatching: 50,
             coeff.ThrowScatterLateralSecPerCm, coeff.ThrowScatterHighSecPerCm, coeff.ThrowScatterShortHopSecPerCm,
             coeff.ThrowScatterCatchingReliefSlope, coeff.ThrowScatterCatchingReliefMinFactor);
+
+    /// <summary>
+    /// 内野ゴロ→一塁送球の飛行時間[s]（issue #1685）。乱数不使用。
+    ///
+    /// <para>球速 = 肩 ×(1 − <see cref="FieldingCoefficients.ChargeThrowSpeedPenalty"/>×前進率
+    /// − <see cref="FieldingCoefficients.AwayMomentumThrowSpeedPenalty"/>×流れ率)（下限
+    /// <see cref="FieldingCoefficients.InfieldThrowSpeedFactorMin"/>。短いトスほど弱まりを薄める
+    /// <see cref="FieldingCoefficients.InfieldThrowPostureFullDistanceM"/>。弱まりは守備の手さばき倍率
+    /// <paramref name="handFactor"/>（握り替えと同じ <c>TransferFactor</c>・守備50で×1.0）で伸縮）。前へ突っ込みながら（ボテボテ）・
+    /// 一塁と逆へ流れながら（三遊間・二遊間の深い所）の送球は、足を踏ん張れず球が弱い。
+    /// 飛行時間 = 距離÷球速×(1＋距離×<see cref="FieldingCoefficients.ThrowDistanceDragPerM"/>)
+    /// ＝長い送球ほど失速して山なりになる（外野の返球 <see cref="ExtraBaseResolver.ThrowArriveSeconds"/> と同じ失速の式）。</para>
+    /// </summary>
+    public static double FirstBaseThrowFlightSeconds(
+        double throwDistM, Fielder thrower, double chargeFrac, double awayFrac, FieldingCoefficients coeff,
+        double handFactor = 1.0)
+    {
+        // 短いトス（一塁手→ベースカバーの投手など）は下半身を使わないので体勢の影響を受けにくい＝
+        // 距離が InfieldThrowPostureFullDistanceM に届くまで弱まりを比例で薄める。
+        var posture = coeff.InfieldThrowPostureFullDistanceM > 0.0
+            ? Math.Min(1.0, throwDistM / coeff.InfieldThrowPostureFullDistanceM) : 1.0;
+        // 体勢の悪さの弱まりは手さばき（握り替えと同じ守備の倍率 handFactor）で伸縮する＝上手い内野手ほど
+        // 足を運び直して強い球を投げられる（issue #765 の「上手い内野手ほど機敏」を、保持でなく送球の側にも持たせる）。
+        var factor = Math.Max(coeff.InfieldThrowSpeedFactorMin,
+            1.0 - posture * handFactor
+                * (coeff.ChargeThrowSpeedPenalty * chargeFrac + coeff.AwayMomentumThrowSpeedPenalty * awayFrac));
+        var speed = thrower.Attributes.ThrowSpeedMps * factor;
+        return throwDistM / speed * (1.0 + throwDistM * coeff.ThrowDistanceDragPerM);
+    }
+
+    /// <summary>
+    /// 捕球した瞬間に、体が一塁と<b>逆向きへ</b>どれだけ流れているか（0〜1, issue #1685）。乱数不使用。
+    /// 守備位置→捕球点を走った向きと捕球点→一塁の向きのなす角の余弦の負の部分（真逆へ走っていれば1）に、
+    /// 走った速さ÷全力（守備位置から捕球点までの距離÷（捕球時刻−反応遅延）を全力で頭打ち）を掛ける。
+    /// 正面の打球（ほぼ動かない）・一塁側へ動いて捕る打球は0。
+    /// </summary>
+    public static double AwayMomentumFraction(Fielder f, Vector3D catchPoint, double catchSeconds, Vector3D firstBase)
+    {
+        var rx = catchPoint.X - f.Location.X;
+        var rz = catchPoint.Z - f.Location.Z;
+        var run = Math.Sqrt(rx * rx + rz * rz);
+        var tx = firstBase.X - catchPoint.X;
+        var tz = firstBase.Z - catchPoint.Z;
+        var toFirst = Math.Sqrt(tx * tx + tz * tz);
+        if (run < 1e-6 || toFirst < 1e-6) return 0.0;
+        var away = Math.Max(0.0, -(rx * tx + rz * tz) / (run * toFirst));
+        var sprint = f.Attributes.SprintSpeedMps;
+        var runSeconds = Math.Max(0.1, catchSeconds - f.Attributes.ReactionDelaySeconds);
+        var speed = Math.Min(sprint, run / runSeconds);
+        return away * speed / sprint;
+    }
 
     internal static double DrawHandleJitter(FieldingCoefficients coeff, IRandomSource rng, double jitterFactor = 1.0)
     {
@@ -1335,7 +1405,10 @@ public static class FieldingResolver
         // 「守備を上げるほど失策が減る」勾配を残す（下限へ潰さない, issue #123）。
         var catchingDelta = f.Attributes.Catching - 50;
         var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
-        var errProb = coeff.ErrorBaseProb - catchingDelta * slope + extraProb;
+        // 守備（手さばき）の倍率（issue #1685）: 下手な内野手ほど握り損ね・お手玉が増える。守備50で×1.0。
+        // 以前はもたつき（指数分布）の守備伸縮とお手玉のしきい値がこの差を作っていた。
+        var handling = f.Attributes.TransferFactor(coeff.CatchErrorFieldingSlope, coeff.CatchErrorFieldingFactorMin);
+        var errProb = (coeff.ErrorBaseProb - catchingDelta * slope) * handling + extraProb;
         return MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng);
     }
 

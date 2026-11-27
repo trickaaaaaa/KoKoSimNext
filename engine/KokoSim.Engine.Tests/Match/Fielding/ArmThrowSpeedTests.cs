@@ -80,8 +80,10 @@ public sealed class ArmThrowSpeedTests
         var flattened = Effect with { ArmScale = Effect.FieldingScale };
         var best = 0.0;
         var bestOld = 0.0;
-        foreach (var ev in new[] { 28.0, 32.0, 36.0 })
-        foreach (var bearing in new[] { -20.0, -16.0, -12.0 })
+        // 遊撃の右（三遊間側）へ流れながら捕る緩め〜中くらいのゴロ。issue #1685 でもたつきを縮めたので、
+        // 旧来の格子（初速28〜36m/s・方位−20〜−12°）は肩によらずアウトになった。
+        foreach (var ev in new[] { 20.0, 22.0, 24.0 })
+        foreach (var bearing in new[] { -14.0, -10.0, -6.0 })
         {
             var weak = SafeRate(20, ev, bearing);
             var strong = SafeRate(90, ev, bearing);
