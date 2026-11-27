@@ -106,7 +106,7 @@ namespace KokoSim.Unity.Match
                     GroundFix(a);
                     AttachGear(a, GearKind.Cap, Vector3.zero, UniformPalette.Umpire.Cap, layer,
                         capMountPos: BaseUmpireCapMount + new Vector3(0f, DuelTuning.BaseUmpCapAddYForCapture, DuelTuning.BaseUmpCapAddZForCapture),
-                        capMountScale: Vector3.Scale(BaseUmpireCapScale, new Vector3(DuelTuning.BaseUmpCapScaleForCapture, DuelTuning.BaseUmpCapScaleForCapture, DuelTuning.BaseUmpCapScaleZForCapture)));
+                        capMountScale: Vector3.Scale(BaseUmpireCapScale, new Vector3(DuelTuning.BaseUmpCapScaleForCapture, DuelTuning.BaseUmpCapScaleYForCapture, DuelTuning.BaseUmpCapScaleZForCapture)));
                     a.Go.SetActive(false);
                     a.Enabled = false;
                     _baseUmps[i] = a;
@@ -282,7 +282,7 @@ namespace KokoSim.Unity.Match
                     _umpHeadCloseDone = true;
                     sb.Append(SkullExtentsText(a, head)).Append(SliceText(a, head));
                     var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
-                    var tag = "_s" + DuelTuning.BaseUmpCapScaleForCapture.ToString("0.00") + "_sz" + DuelTuning.BaseUmpCapScaleZForCapture.ToString("0.00") + "_y" + DuelTuning.BaseUmpCapAddYForCapture.ToString("0.00") + "_z" + DuelTuning.BaseUmpCapAddZForCapture.ToString("0.00");
+                    var tag = "_s" + DuelTuning.BaseUmpCapScaleForCapture.ToString("0.00") + "_sy" + DuelTuning.BaseUmpCapScaleYForCapture.ToString("0.00") + "_sz" + DuelTuning.BaseUmpCapScaleZForCapture.ToString("0.00") + "_y" + DuelTuning.BaseUmpCapAddYForCapture.ToString("0.00") + "_z" + DuelTuning.BaseUmpCapAddZForCapture.ToString("0.00");
                     var face = head.TransformDirection(a.HeadFwdLocal).normalized;
                     var up = head.TransformDirection(a.HeadUpLocal).normalized;
                     var side = Vector3.Cross(up, face).normalized;
