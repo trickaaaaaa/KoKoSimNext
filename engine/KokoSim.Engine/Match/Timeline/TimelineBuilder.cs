@@ -1451,16 +1451,21 @@ public static partial class TimelineBuilder
         // 投手へ返すのはプレーが止まってから＝受け手が持ち直して、全走者が止まった後に返す。
         if (LeadRunningTarget(timeline, field, t0) is { } lead)
         {
+            // 拾い直せず確定した捕球ミス（issue #1733）: 判定は「拾い直し＋握り替え・もたつき＋飛翔」でも一塁に間に合わないと
+            // 決めている。投げ始めを拾った直後（0.25秒）にすると、判定が間に合わないと言った一塁へ投げれば間に合う絵になる。
+            // 判定が払った手間と同じだけ構えてから投げる＝先の塁も、一塁へ投げたら遅いのと同じ時計で描く。
+            var leadT0 = play.ErrorKind == FieldingErrorKind.Catch && play.CatchErrorHandlingSeconds is { } handling
+                ? Math.Max(t0, pickAt + handling) : t0;
             var leadTo = BasePoint(field, lead.BaseName);
             var leadRole = CoverRoleAt(timeline, leadTo, DefaultBaseGuard(lead.BaseName));
             var ballLead = new List<BallSegment>(timeline.Ball);
             var holder = fromRole;
             var holderAt = from;
-            var heldFrom = t0;
+            var heldFrom = leadT0;
             if (leadRole != fromRole && Distance(from, leadTo) >= 5.0)
             {
                 var flightSeconds = LegSeconds(Distance(from, leadTo), ThrowSpeedOf(play));
-                var physical = t0 + flightSeconds;
+                var physical = leadT0 + flightSeconds;
                 var arrive = GuardAgainstVerdict(physical, physical, lead.ArriveAt, runnerOut: false);
                 // 走者より先に着いて見えないための遅れは<b>投げ始め</b>で取る（拾った野手は球を持って構える）。
                 // T0 を据え置いて T1 だけ遅らせると、遅れた分まで飛ぶ時間になり山なりの高さ（g·T²/8）が跳ね上がる（issue #1748）。
