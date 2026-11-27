@@ -86,8 +86,8 @@ public static class ForcedInfieldLineOutBall
         if (kind != ForcedOutcome.InfieldLineOut) return null;
         var probe = coeff with { ErrorBaseProb = 0.0, IrregularBounceProb = 0.0, FlyErrorBaseProb = 0.0 };
         foreach (var bearing in new[] { -14.0, -10.0, -18.0, -6.0, 6.0, 10.0, 14.0, -22.0, 18.0, 22.0 })
-            for (var launch = 2.0; launch <= 12.0; launch += 2.0)
-                for (var exit = 36.0; exit <= 46.0; exit += 2.0)
+            for (var launch = 0.0; launch <= 12.0; launch += 2.0)
+                for (var exit = 46.0; exit >= 34.0; exit -= 2.0)
                 {
                     var ball = new BattedBall { ExitVelocityMps = exit, LaunchAngleDeg = launch, BearingDeg = bearing };
                     var play = FieldingResolver.ResolveDetailed(
