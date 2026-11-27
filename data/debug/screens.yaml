@@ -1716,7 +1716,7 @@ screens:
       - call: NewTeamService.Skip()
       - set: {RosterService.Active.0.Injury: Minor, RosterService.Active.0.InjuryType: Sprain, RosterService.Active.0.InjuryWeeksRemaining: 2}
       - set: {RosterService.Active.1.Injury: Moderate, RosterService.Active.1.InjuryType: Inflammation, RosterService.Active.1.InjuryWeeksRemaining: 3}
-      - set: {RosterService.Active.12.Injury: Moderate, RosterService.Active.12.InjuryType: Inflammation, RosterService.Active.12.InjuryWeeksRemaining: 3}
+      - set: {RosterService.Active.9.Injury: Moderate, RosterService.Active.9.InjuryType: Inflammation, RosterService.Active.9.InjuryWeeksRemaining: 3}
       - show: LineupSetting
       - wait: 5
       - shot: 01-lineup-injury
