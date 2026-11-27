@@ -264,6 +264,7 @@ namespace KokoSim.Unity.Match
                 if (!_umpHeadCloseDone)
                 {
                     _umpHeadCloseDone = true;
+                    sb.Append(SkullExtentsText(a, head));
                     var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
                     var face = head.TransformDirection(a.HeadFwdLocal).normalized;
                     var up = head.TransformDirection(a.HeadUpLocal).normalized;
@@ -274,6 +275,31 @@ namespace KokoSim.Unity.Match
                 }
                 return sb.ToString();
             }
+        }
+
+        /// <summary>素体の頭まわりの頂点（頭ボーンの0.3m以内）を、頭の枠（+Y=頭蓋上・+Z=顔前）で見た範囲。</summary>
+        private string SkullExtentsText(Actor a, Transform head)
+        {
+            var up = head.TransformDirection(a.HeadUpLocal).normalized;
+            var fwd = head.TransformDirection(a.HeadFwdLocal).normalized;
+            var right = Vector3.Cross(up, fwd).normalized;
+            var lo = new Vector3(9f, 9f, 9f); var hi = new Vector3(-9f, -9f, -9f);
+            var verts = new List<Vector3>();
+            foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                var m = new Mesh();
+                smr.BakeMesh(m);
+                m.GetVertices(verts);
+                foreach (var v in verts)
+                {
+                    var w = smr.transform.TransformPoint(v) - head.position;
+                    var l = new Vector3(Vector3.Dot(w, right), Vector3.Dot(w, up), Vector3.Dot(w, fwd));
+                    if (l.y < -0.02f || l.magnitude > 0.3f) continue;
+                    lo = Vector3.Min(lo, l); hi = Vector3.Max(hi, l);
+                }
+                Object.Destroy(m);
+            }
+            return " skull lo=" + lo.ToString("F3") + " hi=" + hi.ToString("F3") + " ";
         }
 
         private void ShootHeadClose(Vector3 eye, Vector3 focus, string path)
