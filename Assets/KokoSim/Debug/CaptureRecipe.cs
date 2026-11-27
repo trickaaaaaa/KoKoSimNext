@@ -64,6 +64,8 @@ namespace KokoSim.Unity.Debugging
         public bool TimeoutViaMenu;
         /// <summary>TimeoutViaMenu の伝令役（控えの添字。負＝記録員）。</summary>
         public int TimeoutMessengerIndex = -1;
+        /// <summary>timeout_at の伝令を相手校が送る（issue #1739）。true のとき自校ではなく相手校の伝令の場面が流れる。</summary>
+        public bool TimeoutByOpponent;
         /// <summary>毎コマ記録する実測（DuelStageRig の *ForCapture のメンバー名）。</summary>
         public List<string> Probes = new List<string>();
         /// <summary>
@@ -197,6 +199,14 @@ namespace KokoSim.Unity.Debugging
                     if (mv == "recorder") { r.TimeoutMessengerIndex = -1; return true; }
                     return int.TryParse(mv, System.Globalization.NumberStyles.Integer,
                         System.Globalization.CultureInfo.InvariantCulture, out r.TimeoutMessengerIndex) && r.TimeoutMessengerIndex >= 0;
+                }
+                case "timeout_side":
+                {
+                    // 伝令を送る側（issue #1739）: own（既定）／opponent（相手校＝采配AIの伝令の見せ方）
+                    var sv = Unquote(v);
+                    if (sv == "own") { r.TimeoutByOpponent = false; return true; }
+                    if (sv == "opponent") { r.TimeoutByOpponent = true; return true; }
+                    return false;
                 }
                 case "duel_from":
                 {

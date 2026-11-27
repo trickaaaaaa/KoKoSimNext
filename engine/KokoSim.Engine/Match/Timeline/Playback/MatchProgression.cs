@@ -951,6 +951,12 @@ public sealed class MatchProgression
     public System.Collections.Generic.IReadOnlyList<SubstitutionEvent> Substitutions => _p.Substitutions;
 
     /// <summary>
+    /// 采配AIが送った伝令のログ（issue #1739。相手校の伝令を画面で見せる）。打席の頭で積まれる。
+    /// 自校の伝令（<see cref="CallTimeout"/>）は含まない。交代の下書きの取り消しで再生し直すと件数が減ることがある。観測専用。
+    /// </summary>
+    public System.Collections.Generic.IReadOnlyList<TimeoutEvent> Timeouts => _p.Timeouts;
+
+    /// <summary>
     /// スキップ: 以降の采配を委任AI（設計書11・自分の采配能力＝TacticalSense）へ委ね、残りを一括解決して
     /// 最終結果を返す。途中までの采配（適用済みの代打など）は状態に載っているので当然引き継がれる。
     /// managerIsAway=委任する監督のチームが先攻(away)か。委任先は該当チームのみ（相手は従来どおり）。

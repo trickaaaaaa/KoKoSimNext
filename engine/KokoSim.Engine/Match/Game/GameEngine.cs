@@ -65,6 +65,10 @@ public sealed record GameResult
     /// 観測専用＝決定論digest・統計帯には含めない（<see cref="GameProgress.Substitutions"/> の差分観測）。</summary>
     public IReadOnlyList<SubstitutionEvent> SubstitutionLog { get; init; } = Array.Empty<SubstitutionEvent>();
 
+    /// <summary>采配AIが送った伝令のログ（issue #1739。攻撃／守備・伝令役・何打席目の頭か）。観測専用＝乱数を使わず、
+    /// 決定論digest・統計帯には含めない（<see cref="GameProgress.Timeouts"/>）。プレイヤー自身の伝令は含まない（画面が自前で流す）。</summary>
+    public IReadOnlyList<TimeoutEvent> TimeoutLog { get; init; } = Array.Empty<TimeoutEvent>();
+
     /// <summary>個人打撃成績（打順順9人）。</summary>
     public IReadOnlyList<BattingLine> AwayBatting { get; init; } = Array.Empty<BattingLine>();
     public IReadOnlyList<BattingLine> HomeBatting { get; init; } = Array.Empty<BattingLine>();
@@ -444,6 +448,7 @@ public static class GameEngine
             Log = p.Log,
             PitchingChangeLog = p.PitchingChanges,
             SubstitutionLog = p.Substitutions,
+            TimeoutLog = p.Timeouts,
             AwayBatting = away.BuildBattingLines(),
             HomeBatting = home.BuildBattingLines(),
             AwayPitching = away.BuildPitchingLines(),
@@ -765,10 +770,12 @@ public static class GameEngine
                         defense.ClearRattled();
                         // 伝令役の人選（issue #716/#860 B）: 乱数を使わない＝RNG列は不変。主将を渡すと
                         // ベンチの主将が通常上限1.4超えの係数で自然に最有力候補になる。
-                        defense.StartDefenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
+                        var defMessenger = TimeoutMessenger.AiPick(
                             defense.AvailableReserves, currentPitcher, toPitcher: true,
                             defense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities,
-                            defense.Captain, ctx.Batting.AbilityEffect.DeltaInt));
+                            defense.Captain, ctx.Batting.AbilityEffect.DeltaInt);
+                        defense.StartDefenseCalm(ctx.Tactics.TimeoutDurationPa, defMessenger);
+                        p.RecordTimeout(inning, isTop, ReferenceEquals(defense, p.Away), isOffense: false, log.Count, defMessenger);
                     }
                 }
 
@@ -782,10 +789,12 @@ public static class GameEngine
                             situation, rng.Fork(TacticsCallStreamId(inning, isTop, log.Count, CallOffenseTimeoutSalt)))
                         && offense.TryUseOffenseTimeout())
                     {
-                        offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa, TimeoutMessenger.AiPick(
+                        var offMessenger = TimeoutMessenger.AiPick(
                             offense.AvailableReserves, batter, toPitcher: false,
                             offense.TimeoutSense(ctx.Tactics.TimeoutSenseNeutral), ctx.Tactics, ctx.Personalities,
-                            offense.Captain, ctx.Batting.AbilityEffect.DeltaInt));
+                            offense.Captain, ctx.Batting.AbilityEffect.DeltaInt);
+                        offense.StartOffenseCalm(ctx.Tactics.TimeoutDurationPa, offMessenger);
+                        p.RecordTimeout(inning, isTop, ReferenceEquals(offense, p.Away), isOffense: true, log.Count, offMessenger);
                     }
                     sign = offense.Tactics.CallOffense(
                         situation, rng.Fork(TacticsCallStreamId(inning, isTop, log.Count, CallOffenseSalt)));
@@ -3349,6 +3358,17 @@ public sealed class GameProgress
     /// 観測専用＝乱数を使わず、試合結果・決定論digest・統計帯に影響しない。
     /// </summary>
     public List<SubstitutionEvent> Substitutions { get; } = new();
+
+    /// <summary>
+    /// 采配AIが送った伝令のログ（issue #1739）。<see cref="RecordTimeout"/> が打席の頭の采配で積む観測専用データで、
+    /// 乱数を使わず試合結果・決定論digest・統計帯に影響しない。
+    /// </summary>
+    public List<TimeoutEvent> Timeouts { get; } = new();
+
+    /// <summary>采配AIの伝令を <see cref="Timeouts"/> へ積む。<paramref name="plateAppearance"/>＝その伝令を送った打席の <see cref="Log"/> 上の添字（0始まり）。</summary>
+    public void RecordTimeout(int inning, bool isTop, bool teamIsAway, bool isOffense, int plateAppearance, Player? messenger)
+        => Timeouts.Add(new TimeoutEvent(inning, isTop, teamIsAway, isOffense, plateAppearance,
+            messenger is null ? null : new SubstitutionPlayer(messenger.SourceId, messenger.UniformNumber, messenger.Name)));
 
     // 前回見たときの両校の出場選手（交代の差分取りの基準）。CapturePitches のときだけ持つ。
     private LineupPicture? _awayPicture, _homePicture;
