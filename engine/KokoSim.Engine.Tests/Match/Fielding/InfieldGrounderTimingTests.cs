@@ -134,11 +134,15 @@ public sealed class InfieldGrounderTimingTests
         // 三遊間の深い所（遊撃の定位置）へ転がる緩いゴロ（初速24m/s＝86km/h）。捕球が2.18秒まで遅れる。
         // ⚠ 「必ず内野安打」ではない。もたつきを引かなければ送球は 0.07秒 先着する＝**際どい当たり**で、
         //    守備が一拍でも乱れると抜ける。だから固定の結果ではなく**率**で見る（上の InfieldHitRate）。
-        var slow = InfieldHitRate(24.0, -18.0, Batter());
-        var routine = InfieldHitRate(32.0, -18.0, Batter());
+        // ⚠ issue #1685 でもたつき（平均0.49→0.12秒）を縮め、内野安打を送球の物理（突っ込み・流れながらの弱い送球、
+        //    長い送球の失速）へ移した。方位−18°の緩いゴロは遊撃が真っ直ぐ突っ込んで一塁へ向き直れる＝ほぼアウトになり、
+        //    際どいのは遊撃の右（三遊間側）へ流れながら捕る当たりになった。そこで方位−14°・初速22m/s（79km/h）の緩いゴロと
+        //    同じコースの平凡なゴロ（32m/s）を比べる。
+        var slow = InfieldHitRate(22.0, -14.0, Batter());
+        var routine = InfieldHitRate(32.0, -14.0, Batter());
 
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
-            "緩いゴロ(24m/s) 内野安打 {0:P1} / 平凡なゴロ(32m/s) 内野安打 {1:P1}", slow, routine));
+            "緩いゴロ(22m/s) 内野安打 {0:P1} / 平凡なゴロ(32m/s) 内野安打 {1:P1}", slow, routine));
 
         // 実測 2026-08-14: 緩いゴロ 41.0% / 同じコースの強いゴロ 15.5%。
         // 強いゴロが 0 でないのは、深い三遊間はもともと際どい＝守備が乱れれば抜けるから
@@ -156,8 +160,9 @@ public sealed class InfieldGrounderTimingTests
     public void FastRunner_AndLeftBatter_BeatTheThrow_OnTheSamePlay()
     {
         // 同じ打球でも、走力・左右で間に合う/間に合わないが入れ替わること（走者側の秒軸が効いている）。
-        // 初速28m/s＝101km/hのやや緩い遊ゴロ＝平均走者ならアウト、快足なら内野安打の際どい当たり。
-        const double Exit = 28.0, Bearing = -6.0;
+        // 初速24m/s＝86km/hのやや緩い遊ゴロ（三遊間寄り）＝平均走者ならたいていアウト、快足なら内野安打の際どい当たり。
+        // issue #1685 でもたつきを縮めた（平均0.49→0.12秒）ので、旧来の 28m/s・方位−6° は快足でも0.4秒先にアウトになった。
+        const double Exit = 24.0, Bearing = -14.0;
         var normal = Grounder(Exit, Bearing, Batter());
         var fast = Grounder(Exit, Bearing, Batter(speed: 92));
         var left = Grounder(Exit, Bearing, Batter(bats: Handedness.Left));
@@ -217,6 +222,55 @@ public sealed class InfieldGrounderTimingTests
         Assert.True(min >= 0.79 && min <= 0.85, $"もたつき無しの保持 {min:F3}s が 0.80s から外れている");
         // 中央値の上限は #358 の回帰（1.58s）を捕まえるための歯止め
         Assert.True(median <= 1.30, $"保持の中央値 {median:F3}s が長すぎる（#358 の回帰: 1.58s）");
+    }
+
+    // ===== 母集団: 捕ってから投げるまでが長すぎない（issue #1685） =====
+
+    [Fact]
+    public void HoldAtCatchPoint_Top5Percent_IsWithinAboutOnePointTwoSeconds()
+    {
+        // 守備50の内野で、いろいろな内野ゴロ（初速・方位・打球角を振る）を解き、捕ってから投げるまでの秒を集める。
+        // issue #1685 以前はもたつき（平均0.49秒）のせいで上位5%が約2.3秒（監督報告「二塁手が捕ってから
+        // ぼーっとしてセーフ」）。実物の高校生は0.6〜0.9秒。
+        //  ・判定の保持＝送球の到達 − 捕球 − 送球の飛行（構え直し＋握り替え＋前進の罰＋もたつき＋送球の逸れの遅れ）
+        //  ・絵の保持＝2D俯瞰の送球の投げ始め − 捕球。一塁手が捕って投手のベースカバーへ渡す打球は、投手が一塁へ
+        //    着くまで持って待つ（issue #672・受け手の都合）ので絵の側からは除く（判定の保持には含める）。
+        var engineHolds = new List<double>();
+        var drawnHolds = new List<double>();
+        var rng = new Xoshiro256Random(1685);
+        for (var i = 0; i < 4000; i++)
+        {
+            var ev = 18.0 + rng.NextDouble() * 24.0;
+            var bearing = -42.0 + rng.NextDouble() * 84.0;
+            var launch = -4.0 + rng.NextDouble() * 10.0;
+            var p = Grounder(ev, bearing, Batter(), launchAngleDeg: launch, seed: (ulong)i * 7919 + 1);
+            if (p.IsFly || p.ThroughInfield || p.UnassistedPutout || p.ThrowArriveSeconds is null || p.FieldedAtSeconds is null) continue;
+            if (p.Result is not (BattedBallResult.Out or BattedBallResult.Single)) continue;
+            var dx = Field.FirstBase.X - p.FieldedX!.Value;
+            var dz = Field.FirstBase.Z - p.FieldedZ!.Value;
+            engineHolds.Add(p.ThrowArriveSeconds.Value - p.FieldedAtSeconds.Value
+                            - System.Math.Sqrt(dx * dx + dz * dz) / p.FirstThrowSpeedMps!.Value);
+            if (p.FielderRole == FieldPosition.FirstBase) continue;
+            var t = TimelineBuilder.BuildBattedBall(
+                p, Field.StandardAlignment(), Field, null, runnersOn: false, TimelineBuilder.DescribeResult(p));
+            var seg = System.Linq.Enumerable.FirstOrDefault(t.Ball, b => b.Kind == BallSegmentKind.Throw);
+            if (seg is null) continue;
+            const double ContactAt = 0.85;   // TimelineBuilder の接触時刻（private const と同値・既存テストと同じ書き方）
+            drawnHolds.Add(seg.T0 - (ContactAt + p.FieldedAtSeconds.Value));
+        }
+        engineHolds.Sort();
+        drawnHolds.Sort();
+        static double Q(List<double> xs, double q) => xs[(int)(q * (xs.Count - 1))];
+        foreach (var (label, xs) in new[] { ("判定", engineHolds), ("絵（一塁手処理を除く）", drawnHolds) })
+        {
+            _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "捕ってから投げるまで（{0}・守備50・{1}本）: p50 {2:F2}s / p90 {3:F2}s / p95 {4:F2}s / p99 {5:F2}s / 最大 {6:F2}s",
+                label, xs.Count, Q(xs, 0.50), Q(xs, 0.90), Q(xs, 0.95), Q(xs, 0.99), xs[^1]));
+        }
+
+        Assert.True(drawnHolds.Count > 1500, $"テスト前提: 一塁送球のある内野ゴロが {drawnHolds.Count} 本しかない");
+        Assert.True(Q(engineHolds, 0.95) <= 1.20, $"判定の保持の上位5% {Q(engineHolds, 0.95):F2}s が 1.2秒を超えている（issue #1685 の回帰）");
+        Assert.True(Q(drawnHolds, 0.95) <= 1.20, $"絵の保持の上位5% {Q(drawnHolds, 0.95):F2}s が 1.2秒を超えている（issue #1685 の回帰）");
     }
 
     // ===== 母集団: 内野安打が出過ぎない・出なさすぎない =====

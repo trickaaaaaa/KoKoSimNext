@@ -87,8 +87,9 @@ public sealed class UnassistedPutoutTests
     [Fact]
     public void FirstBaseman_FieldingWideOfBag_StillThrows()
     {
-        // 同じ一塁手でも一二塁間寄り（捕球点がベースから約7.7m）では、走るより送球が速い＝3-1 のまま。
-        var play = Grounder(exitVelocityMps: 22.0, bearingDeg: 30.0);
+        // 同じ一塁手でも一二塁間寄り（捕球点がベースから約8.2m）では、走るより送球が速い＝3-1 のまま。
+        // issue #1685 で一塁送球に失速と体勢の弱まりが乗り、分かれ目が約7.5m→約8mへ外へ寄った（方位30°→28°）。
+        var play = Grounder(exitVelocityMps: 22.0, bearingDeg: 28.0);
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "{0} 捕球点({1:F1},{2:F1}) ベースまで{3:F2}m 3U={4} {5}",
             play.FielderRole, play.FieldedX, play.FieldedZ, DistToFirst(play), play.UnassistedPutout, play.Result));

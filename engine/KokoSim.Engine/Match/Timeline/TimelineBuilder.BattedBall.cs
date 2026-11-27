@@ -379,9 +379,9 @@ public static partial class TimelineBuilder
                         // defenseTime + 回収ロス（RecoveredThrowOutSeconds）。逸れ方は回収レースの値の写し
                         // （ThrowRecovery.LandingPoint と同じ「塁から送球方向へ逸れ幅ぶん延長した点」）。
                         var errantRest = Overshoot(fieldPoint, firstBase, scatterM);
-                        var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
+                        var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), FirstThrowSpeedOf(play));
                         var t0 = Math.Max(fieldedAt, physicalArrive - flightToFirst);
-                        var deadAt = t0 + LegSeconds(Distance(fieldPoint, errantRest), ThrowSpeedOf(play));
+                        var deadAt = t0 + LegSeconds(Distance(fieldPoint, errantRest), FirstThrowSpeedOf(play));
                         ball.Add(new BallSegment
                         {
                             Kind = BallSegmentKind.Throw,
@@ -426,7 +426,7 @@ public static partial class TimelineBuilder
                         // Overshoot）。アウトの時刻は判定が決めた recoveredCatchOutSeconds（絵は逆算で合わせる。
                         // issue #815 の悪送球回収と同じ作法）。
                         var fumbleRest = Overshoot(Home, fieldPoint, fumbleScatterM);
-                        var flightToFirst = LegSeconds(Distance(fumbleRest, firstBase), ThrowSpeedOf(play));
+                        var flightToFirst = LegSeconds(Distance(fumbleRest, firstBase), FirstThrowSpeedOf(play));
                         var outAt = Math.Max(ContactAt + fumbleOutSeconds, fieldedAt + flightToFirst);
                         // 受け手が一塁へ着くまで送球を持って待つ（issue #672 と同じ扱い。上限は走者到達の少し前）。
                         // 抜けていると「一塁手→投手」のトスが投手より先に無人の一塁へ着く（実測 最大0.24s）。
@@ -466,7 +466,7 @@ public static partial class TimelineBuilder
                     }
                     else
                     {
-                        var flight = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
+                        var flight = LegSeconds(Distance(fieldPoint, firstBase), FirstThrowSpeedOf(play));
                         arrive = GuardAgainstVerdict(physicalArrive, fieldedAt + flight, runnerAnchor, firstOut);
                         // 受け手が一塁へ着くまで送球を持って待つ（issue #672）。「間」で吸収＝送球の見た目の速度は
                         // 肩どおりのまま（T0 を後ろへずらすだけ）。アウトは判定の「走者到達の0.60秒前以前」を

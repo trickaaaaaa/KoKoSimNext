@@ -662,16 +662,18 @@ internal static class CommandLine
     {
         var games = 2000;
         var seed = 42UL;
+        string? coefficientsPath = null;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
                 case "--games": games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
                 case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
                 default: return Fail($"未知のオプション: {args[i]}");
             }
         }
-        Console.Write(GameSimulation.RunErrorKinds(games, seed));
+        Console.Write(GameSimulation.RunErrorKinds(games, seed, coefficientsPath));
         return 0;
     }
 

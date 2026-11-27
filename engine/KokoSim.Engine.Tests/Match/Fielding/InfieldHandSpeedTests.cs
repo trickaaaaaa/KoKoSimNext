@@ -39,7 +39,8 @@ public sealed class InfieldHandSpeedTests
             Field, Aero, BatterAttributes.LeagueAverage, Field.StandardAlignment(Fielder(fielding)), Coeff,
             new Xoshiro256Random(seed * 7919));
 
-    /// <summary>捕ってから離すまで[s]＝送球の到達 − 捕球 − 送球の飛行時間（前進捕球の罰を含む）。</summary>
+    /// <summary>捕ってから離すまで[s]＝送球の到達 − 捕球 − 送球の飛行時間（前進捕球の罰を含む）。
+    /// 飛行時間は判定が使った送球の見かけの速さ（<see cref="FieldingPlay.FirstThrowSpeedMps"/>＝体勢の弱まり＋失速, issue #1685）で割る。</summary>
     private static double MeanHold(int fielding)
     {
         const int seeds = 2000;
@@ -53,7 +54,7 @@ public sealed class InfieldHandSpeedTests
             var dist = System.Math.Sqrt(
                 (Field.FirstBase.X - p.FieldedX!.Value) * (Field.FirstBase.X - p.FieldedX.Value)
                 + (Field.FirstBase.Z - p.FieldedZ!.Value) * (Field.FirstBase.Z - p.FieldedZ.Value));
-            sum += p.ThrowArriveSeconds!.Value - p.FieldedAtSeconds!.Value - dist / p.FielderThrowSpeedMps!.Value;
+            sum += p.ThrowArriveSeconds!.Value - p.FieldedAtSeconds!.Value - dist / p.FirstThrowSpeedMps!.Value;
             n++;
         }
         Assert.True(n > seeds / 2, $"テスト前提: 遊撃手の送球が {n}/{seeds} しかない");
@@ -79,25 +80,27 @@ public sealed class InfieldHandSpeedTests
             "捕ってから離すまで（平均）: 守備20 {0:F2}s / 守備50 {1:F2}s / 守備90 {2:F2}s", h20, h50, h90));
 
         // 名手は実物の内野手（0.6〜0.9秒）の域で離す。
-        Assert.InRange(h90, 0.60, 0.90);
-        // 守備50は従来どおり（構え直し0.10＋握り替え0.70＋もたつき平均0.49≈1.29。上限で切るぶん少し短い）。
-        Assert.InRange(h50, 1.15, 1.35);
-        // 下手な野手ははっきり遅い。
-        Assert.True(h20 >= 1.50, $"守備20 の保持 {h20:F2}s が遅くない");
-        // メリハリ: 守備90と20で0.7秒以上違う（旧モデルは約0.15秒）。
-        Assert.True(h20 - h90 >= 0.70, $"守備20と90の差 {h20 - h90:F2}s が小さい");
+        Assert.InRange(h90, 0.60, 0.85);
+        // 守備50＝構え直し0.10＋握り替え0.70＋もたつき平均0.12≈0.92（issue #1685 で 0.49→0.12。それまでは≈1.29）。
+        Assert.InRange(h50, 0.85, 1.00);
+        // 下手な野手ははっきり遅い（それでも実物の遅い高校生の域＝1.3秒前後まで）。
+        Assert.InRange(h20, 1.05, 1.35);
+        // メリハリ: 守備90と20で0.3秒以上違う（旧モデル #765 以前は約0.15秒）。#765 の 0.7秒差はもたつき平均0.49の
+        // 伸縮が作っていた差で、もたつきを実物の長さへ縮めた issue #1685 で握り替え中心の差（傾き0.025で≈0.56秒）になった。
+        Assert.True(h20 - h90 >= 0.30, $"守備20と90の差 {h20 - h90:F2}s が小さい");
     }
 
     [Fact]
     public void GoodInfielders_ThrowOutMoreBorderlineGrounders()
     {
-        // 三遊間寄りの際どいゴロ。内野全員の守備だけを変え、間に合わなかった率を比べる。
+        // 三遊間寄りの際どいゴロ（遊撃が右へ流れながら捕る緩いゴロ。issue #1685 でもたつきを縮めたので、旧来の
+        // 初速27m/s・方位−28°は守備によらずアウトになった）。内野全員の守備だけを変え、間に合わなかった率を比べる。
         double SafeRate(int fielding)
         {
             const int seeds = 600;
             var safe = 0;
             for (ulong s = 1; s <= seeds; s++)
-                if (Grounder(fielding, ev: 27.0, bearing: -28.0, seed: s).Result == BattedBallResult.Single) safe++;
+                if (Grounder(fielding, ev: 22.0, bearing: -14.0, seed: s).Result == BattedBallResult.Single) safe++;
             return (double)safe / seeds;
         }
         var s20 = SafeRate(20);

@@ -170,14 +170,23 @@ public sealed record FieldingCoefficients
     /// ミドルの前進上限 4→10m（捕球が早くなる方向）と、半径捕球の処理点を体が届く時刻へ採り直す（遅くなる方向）を
     /// 同時に入れた差し引きが −0.4pt（実測 60,000打席×seed 7/42/2024: 9.0/8.8/9.5%）。0.49 で 9.4/9.3/10.0%
     /// ＝従来水準（9.5/9.1/9.8%）に戻る。</para>
+    ///
+    /// <para><b>0.49 → 0.12（issue #1685「捕ってから長く球を持つのをやめる」）</b>: 0.49 は内野安打率を合わせる
+    /// 校正項として肥大し、守備50で「捕ってから離すまで」が平均約1.3秒・頭打ち2.3秒（守備の低い野手は約2.9秒）に
+    /// 達していた（実物の高校生は0.6〜0.9秒。監督報告「二塁手が捕ってからぼーっとしてセーフ」）。0.12 で守備50の
+    /// 保持は 0.80〜1.16秒（頭打ち0.36秒）。減った内野安打は実際の起き方へ物理層で振り替えた:
+    /// ボテボテ（前へ突っ込みながらの送球は弱い <see cref="ChargeThrowSpeedPenalty"/>）・深い位置
+    /// （一塁と逆へ流れながらの送球は弱い <see cref="AwayMomentumThrowSpeedPenalty"/>＋長い送球の失速
+    /// <see cref="ThrowDistanceDragPerM"/>を一塁送球にも適用）・高いバウンド（<see cref="ChopperWaitFactor"/> 0.55→0.85）。
+    /// 実測（60,000打席×seed 42/7）: 内野安打 7.7/7.3% → 8.2/7.6%。</para>
     /// </summary>
-    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.49;
+    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.12;
 
 
     /// <summary>
     /// もたつきの上限（平均の何倍で頭打ちにするか）。指数分布は裾が無限に伸びるので、
     /// 「捕ってから4秒動かない内野手」が極稀に出る。<b>絵に出る量なので実在しない値は切る</b>。
-    /// 3.0 なら 1.4秒＝上位 5.0% が頭打ちで、内野安打率への寄与は 0.1pt 未満（実測）。
+    /// 3.0 なら上位 5.0% が頭打ち（issue #1685 で平均 0.12 にしてからは 0.36秒）。
     /// data/coefficients.yaml と同値。
     /// </summary>
     public double InfieldHandleJitterMaxFactor { get; init; } = 3.0;
@@ -188,10 +197,14 @@ public sealed record FieldingCoefficients
     /// 外野返球・中継と共有の <see cref="ThrowTransferFieldingSlope"/>（0.004）のままだと守備90と20で
     /// 「捕ってから離すまで」が約0.15秒しか違わず、上手い内野手が機敏に見えなかった。
     /// 守備50で×1.0＝リーグ平均の野手（統計帯の母集団）は変わらない。data/coefficients.yaml と同値。
+    /// issue #1685 で 0.014→0.025：もたつき（平均0.49→0.12秒）の守備伸縮が作っていた守備の差を握り替えへ寄せた
+    /// （守備20→80 の相手得点差を main の −2.97 と同水準に保つ・オーナー判断 2026-11-27）。表示の守備20で約0.91秒、
+    /// 上手い側は下限 <see cref="InfieldTransferFactorMin"/> で頭打ち。
     /// </summary>
-    public double InfieldTransferFieldingSlope { get; init; } = 0.014;
+    public double InfieldTransferFieldingSlope { get; init; } = 0.025;
 
-    /// <summary>内野の握り替え倍率の下限（最速側のクランプ, issue #765）。効きを通すと表示 Lv100 でも倍率は約0.713で届かない（死んだクランプ＝安全弁のみ）。</summary>
+    /// <summary>内野の握り替え倍率の下限（最速側のクランプ, issue #765）。issue #1685 で傾きを 0.025 にしてから、
+    /// 表示のおおよそ守備85以上で効く（握り替え0.455秒＝捕ってから離すまで約0.56秒が最速）。</summary>
     public double InfieldTransferFactorMin { get; init; } = 0.65;
 
     /// <summary>
@@ -213,8 +226,13 @@ public sealed record FieldingCoefficients
     /// 超えると平均的な守備力の内野手では構造的に発生しなくなる（BobbleErrorTests が5000シード探索で検出）
     /// ため、その手前に留める。頭打ちは守備倍率を掛けた後に行う（issue #1259）ので、守備51以上でも
     /// 倍率<1ぶんだけ確率が下がるだけで、0にはならない（単調に減る）。
+    ///
+    /// <para><b>1.45 → 0（無効, issue #1685）</b>: もたつきを平均0.12秒（頭打ち0.36秒）へ縮めたので、
+    /// 「もたつきでセーフ」はもう失策と呼べる長さにならない。お手玉の失策は捕球ミス（<see cref="ErrorBaseProb"/>）が
+    /// 弾いた球を拾い直す回収レース（<see cref="CatchFumblePickupSeconds"/>）で起きる形へ作り直した。
+    /// 分岐とこの係数はデバッグの強制発動・テスト用に残す（正値で従来どおり働く）。</para>
     /// </summary>
-    public double BobbleErrorMinJitterSeconds { get; init; } = 1.45;
+    public double BobbleErrorMinJitterSeconds { get; init; } = 0.0;
 
     /// <summary>
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。
@@ -235,8 +253,12 @@ public sealed record FieldingCoefficients
     /// issue #810（2026-11-09）で 0.0495→0.0400：受け手の捕球ミス(<see cref="ReceiveErrorBaseProb"/>)を三段目として
     /// 新設した分だけ、捕球・送球の両方から再配分し errors_per_game を帯内（1.8–3.6）に保った。
     /// issue #1164（2026-11-20）で 0.0400→0.0220：悪送球(<see cref="ThrowErrorBaseProb"/>)・受け手
-    /// (<see cref="ReceiveErrorBaseProb"/>)へ再配分（失策の種類別按分 捕球48/悪送球34/受け手18・オーナー決定）。</summary>
-    public double ErrorBaseProb { get; init; } = 0.0220;
+    /// (<see cref="ReceiveErrorBaseProb"/>)へ再配分（失策の種類別按分 捕球48/悪送球34/受け手18・オーナー決定）。
+    /// issue #1685 で 0.0220→0.085：もたつき由来のお手玉の失策（約0.7/試合）を無くし、お手玉は「弾いて拾い直しが
+    /// 間に合わない」捕球ミスで起きる形へ作り直した。拾い直しに拾い上げの間（<see cref="CatchFumblePickupSeconds"/>）を
+    /// 足したうえで、按分（捕球側48%）を保つ水準まで上げた。トンネルは内訳なので <see cref="TunnelShareProb"/> を下げて
+    /// 件数を保った。実測（2000試合×seed 42）: 失策 2.97→2.49/試合・捕球側48.4%/悪送球33.2%/受け手18.4%。</summary>
+    public double ErrorBaseProb { get; init; } = 0.085;
     /// <summary>捕球(Catching−50)あたりのエラー変化（守備が平均より低い側＝弱小の傾き）。急にして弱小同士を大量失策に。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0065;
     /// <summary>守備が平均(50)より高い側の傾き（弱小側 ErrorCatchingSlope と非対称）。緩くして精鋭側に
@@ -311,8 +333,9 @@ public sealed record FieldingCoefficients
     /// 再配分し errors_per_game を帯内（1.8–3.6）に保った（捕球・送球・受け手の按分は概ね48/34/18）。
     /// 一塁手自身が処理した打球（受け手が別にいない）には適用しない。
     /// issue #1164（2026-11-20）で 0.0150→0.0370：悪送球の確率を上げた分、三段目（受け手）に到達する
-    /// 母数が減るので、按分18%を保つため基準確率も上げた。</summary>
-    public double ReceiveErrorBaseProb { get; init; } = 0.0370;
+    /// 母数が減るので、按分18%を保つため基準確率も上げた。
+    /// issue #1685 で 0.0370→0.028：お手玉の失策を作り直して総数が変わった分、按分18%に戻した。</summary>
+    public double ReceiveErrorBaseProb { get; init; } = 0.028;
 
     // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
     // 守備所要時間へ加算してもう一度同じ判定基準（defenseTime+ForceOutMarginSeconds vs runnerTime）で
@@ -332,6 +355,19 @@ public sealed record FieldingCoefficients
     /// <summary>捕球ミス1回あたりのこぼれ幅の標準偏差[m]（半正規分布からサンプル）。送球の逸れ幅
     /// (<see cref="WildThrowScatterSigmaM"/>)より小さい＝グラブ際で弾く距離は送球が逸れる距離より近い。</summary>
     public double CatchFumbleScatterSigmaM { get; init; } = 2.5;
+    /// <summary>弾いて転がった球を地面から拾い上げる間[s]（issue #1685）。拾い直しのロス＝反応遅延
+    /// （<see cref="RecoveryReactionSeconds"/>）＋こぼれ幅÷脚力＋これ。外野の拾い上げ（OutfieldPickupSeconds）と同じ
+    /// 0.30秒だが、別の動作なので係数は分ける。お手玉の失策はここで起きる（もたつきの長さでは起こさない）。</summary>
+    public double CatchFumblePickupSeconds { get; init; } = 0.30;
+
+    /// <summary>内野ゴロの捕球ミス（お手玉・トンネル）の確率に掛ける守備（手さばき）の倍率の傾き（issue #1685）。
+    /// 倍率 = max(<see cref="CatchErrorFieldingFactorMin"/>, 1 − (効き後の守備−50)×この値)。守備50で×1.0＝帯不変。
+    /// 下手な内野手ほど握り損ね・お手玉が増える。以前はもたつきの守備伸縮（<see cref="InfieldHandleJitterFieldingSlope"/> 0.036）と
+    /// お手玉のしきい値がこの差を作っていた。0.05 は守備20→80 の相手得点差を main と同水準に保つ値（ability-sweep 実測）。
+    /// 0で捕球（Catching）だけで決まる。</summary>
+    public double CatchErrorFieldingSlope { get; init; } = 0.05;
+    /// <summary>捕球ミスの守備倍率の下限（issue #1685）。</summary>
+    public double CatchErrorFieldingFactorMin { get; init; } = 0.25;
 
     // ファウルフライ（issue #830）。打撃の接触判定で「ファウル」になった球（弾道を持たない）のうち、
     // この割合を打ち上がったファウルとして弾道を与え、ファウルグラウンドに落ちる前に野手が届けばアウト。
@@ -369,8 +405,11 @@ public sealed record FieldingCoefficients
     /// （<see cref="ThrowErrorBaseProb"/> と同じ恒等の作法）。正値にすると
     /// 「球が外野へ行ったから走者が還った」という因果が物理層で成立する（不変条件#1）。</para>
     /// data/coefficients.yaml と同値。
+    ///
+    /// <para>issue #1685 で 0.30→0.11：捕球ミスの基準確率（<see cref="ErrorBaseProb"/>）を上げた分、
+    /// トンネルの件数（≈0.15〜0.18/試合）を保つよう割合を下げた。</para>
     /// </summary>
-    public double TunnelShareProb { get; init; } = 0.30;
+    public double TunnelShareProb { get; init; } = 0.11;
 
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 
@@ -448,6 +487,7 @@ public sealed record FieldingCoefficients
     /// <summary>
     /// 送球距離1mあたりの失速係数[1/m]。到達時間 = 距離÷送球速度×(1 + 距離×この値)。
     /// 長い送球ほど山なり／中継が要るぶん遅くなることを、しきい値なしの連続量で表す。
+    /// 外野の返球に加え、issue #1685 から内野ゴロ→一塁送球（<see cref="FieldingResolver.FirstBaseThrowFlightSeconds"/>）にも掛ける。
     /// </summary>
     public double ThrowDistanceDragPerM { get; init; } = 0.0045;
 
@@ -531,8 +571,10 @@ public sealed record FieldingCoefficients
     /// 高く弾むバウンド（チョッパー）で内野手が待たされる時間の係数（Issue #63 やること1）。
     /// 待ち時間 = この係数 × √(2×最大バウンド頂点/g)＝頂点からの自由落下時間。
     /// 大きいほど高バウンドが内野安打になりやすい。0で従来（待ちなし）。
+    /// issue #1685 で 0.55→0.85：内野安打の校正をもたつきから実際の起き方へ移した一つ（高く弾んだ打球は落ちてくるのを待つ）。
+    /// 1.0（頂点から地面まで）は待ちすぎ＝落ちてくる途中のグラブの高さで捕る分を残す。
     /// </summary>
-    public double ChopperWaitFactor { get; init; } = 0.55;
+    public double ChopperWaitFactor { get; init; } = 0.85;
 
     /// <summary>内野境界の通過時刻を求める走査の時間刻み[s]（頭上抜けの判定精度）。</summary>
     public double InfieldInterceptStepSeconds { get; init; } = 0.02;
@@ -585,6 +627,24 @@ public sealed record FieldingCoefficients
     /// <summary>前進捕球いっぱいのときの送球精度の低下[点]（走りながらの送球は逸れる）。
     /// 前進量に比例して野手の ThrowAccuracy から引き、悪送球ロール（design-14 P1-6b）へ効かせる。</summary>
     public double ChargeThrowAccuracyPenalty { get; init; } = 6.0;
+
+    /// <summary>前進捕球いっぱいのときの一塁送球の球速の低下（肩に対する割合, issue #1685）。前進量に比例。
+    /// 前へ突っ込みながら捕って投げる送球（ボテボテ）は足を踏ん張れず球が弱い＝送球の飛行が延びる
+    /// （<see cref="FieldingResolver.FirstBaseThrowFlightSeconds"/>）。保持（捕ってから投げるまで）には足さない。</summary>
+    public double ChargeThrowSpeedPenalty { get; init; } = 0.20;
+
+    /// <summary>一塁と真逆へ全力で流れながら捕ったときの一塁送球の球速の低下（肩に対する割合, issue #1685）。
+    /// 流れ率（<see cref="FieldingResolver.AwayMomentumFraction"/>）に比例。三遊間・二遊間の深い所で捕って
+    /// 体が一塁と逆へ流れている送球は弱い＝送球の飛行が延びる。</summary>
+    public double AwayMomentumThrowSpeedPenalty { get; init; } = 0.50;
+
+    /// <summary>体勢による一塁送球の球速の倍率の下限（issue #1685）。前進と流れが重なっても肩の半分は出る。</summary>
+    public double InfieldThrowSpeedFactorMin { get; init; } = 0.50;
+
+    /// <summary>体勢による一塁送球の弱まりが満額になる送球距離[m]（issue #1685）。これより短い送球は距離に比例して
+    /// 弱まりを薄める＝一塁手→ベースカバーの投手のような短いトスは、下半身を使わないので体勢の影響を受けにくい。
+    /// 0以下で常に満額。</summary>
+    public double InfieldThrowPostureFullDistanceM { get; init; } = 20.0;
 
     /// <summary>イレギュラーバウンドの発生確率（一律。球場の土質との接続は将来の別Issue）。</summary>
     public double IrregularBounceProb { get; init; } = 0.030;

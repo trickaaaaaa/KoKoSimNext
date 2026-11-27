@@ -829,6 +829,9 @@ public static class CoefficientsLoader
         public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
         public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
         public double CatchFumbleScatterSigmaM { get; set; } = D.CatchFumbleScatterSigmaM;
+        public double CatchFumblePickupSeconds { get; set; } = D.CatchFumblePickupSeconds;
+        public double CatchErrorFieldingSlope { get; set; } = D.CatchErrorFieldingSlope;
+        public double CatchErrorFieldingFactorMin { get; set; } = D.CatchErrorFieldingFactorMin;
         public double FoulFlyShare { get; set; } = D.FoulFlyShare;
         public double FoulFlyLaunchMeanDeg { get; set; } = D.FoulFlyLaunchMeanDeg;
         public double FoulFlyLaunchSigmaDeg { get; set; } = D.FoulFlyLaunchSigmaDeg;
@@ -882,6 +885,10 @@ public static class CoefficientsLoader
         public double ChargeMaxAdvanceMiddleM { get; set; } = D.ChargeMaxAdvanceMiddleM;
         public double ChargeThrowPenaltySeconds { get; set; } = D.ChargeThrowPenaltySeconds;
         public double ChargeThrowAccuracyPenalty { get; set; } = D.ChargeThrowAccuracyPenalty;
+        public double ChargeThrowSpeedPenalty { get; set; } = D.ChargeThrowSpeedPenalty;
+        public double AwayMomentumThrowSpeedPenalty { get; set; } = D.AwayMomentumThrowSpeedPenalty;
+        public double InfieldThrowSpeedFactorMin { get; set; } = D.InfieldThrowSpeedFactorMin;
+        public double InfieldThrowPostureFullDistanceM { get; set; } = D.InfieldThrowPostureFullDistanceM;
         public double IrregularBounceProb { get; set; } = D.IrregularBounceProb;
         public double IrregularBounceLateralDeg { get; set; } = D.IrregularBounceLateralDeg;
         public double IrregularBounceRestitutionSwing { get; set; } = D.IrregularBounceRestitutionSwing;
@@ -929,6 +936,9 @@ public static class CoefficientsLoader
             WildThrowScatterSigmaM = WildThrowScatterSigmaM,
             RecoveryReactionSeconds = RecoveryReactionSeconds,
             CatchFumbleScatterSigmaM = CatchFumbleScatterSigmaM,
+            CatchFumblePickupSeconds = CatchFumblePickupSeconds,
+            CatchErrorFieldingSlope = CatchErrorFieldingSlope,
+            CatchErrorFieldingFactorMin = CatchErrorFieldingFactorMin,
             FoulFlyShare = FoulFlyShare,
             FoulFlyLaunchMeanDeg = FoulFlyLaunchMeanDeg,
             FoulFlyLaunchSigmaDeg = FoulFlyLaunchSigmaDeg,
@@ -981,6 +991,10 @@ public static class CoefficientsLoader
             ChargeMaxAdvanceMiddleM = ChargeMaxAdvanceMiddleM,
             ChargeThrowPenaltySeconds = ChargeThrowPenaltySeconds,
             ChargeThrowAccuracyPenalty = ChargeThrowAccuracyPenalty,
+            ChargeThrowSpeedPenalty = ChargeThrowSpeedPenalty,
+            AwayMomentumThrowSpeedPenalty = AwayMomentumThrowSpeedPenalty,
+            InfieldThrowSpeedFactorMin = InfieldThrowSpeedFactorMin,
+            InfieldThrowPostureFullDistanceM = InfieldThrowPostureFullDistanceM,
             IrregularBounceProb = IrregularBounceProb,
             IrregularBounceLateralDeg = IrregularBounceLateralDeg,
             IrregularBounceRestitutionSwing = IrregularBounceRestitutionSwing,
