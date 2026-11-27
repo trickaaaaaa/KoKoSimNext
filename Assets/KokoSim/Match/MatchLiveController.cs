@@ -3692,13 +3692,17 @@ namespace KokoSim.Unity.Match
                         var wasDuelOn = _duelOn;
                         var shownFoul = wasDuelOn ? (_duelRig?.BattedElapsedSeconds ?? -1f) : -1f;
                         // 投手はリリースの時点で「duelPitchIntervalSeconds 後に次を投げる」前提で振りかぶりを
-                        // 予約済み。下で間合いを打球の飛行時間まで延ばし、時計も接触時刻へ巻き戻すので、
-                        // 次のリリースまでの残りが変わった分だけ予約もずらす（issue #770）。
+                        // 予約済み。下で時計を接触時刻へ巻き戻すので、次のリリースまでの残りが変わった分だけ
+                        // 予約もずらす（issue #770）。
                         var releaseRemainBefore = duelPitchIntervalSeconds - _pitchClock;
                         // 「ファール」の判定は守備ビューで見せるための物（issue #1134）。ここは対決の構図のまま
                         // 球審コール（ShowPitchCall）が出る経路なので、外して二重に出さない。
                         _view.SetPlay(_pendingFoulFlight with { Judgements = System.Array.Empty<PlaybackJudgement>() });
-                        _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
+                        // 対決ビューのまま見せるファウルは、打球が画面から出た後を待たない（打球の描画は
+                        // BattedMaxSeconds=1.5s で必ず終わるので、いつもの間合い内に収まる）。落ちるまで間合いを
+                        // 延ばすと、高く上がったファウルフライだけ投手が棒立ちで待つ（issue #1767）。
+                        // 俯瞰固定中は盤面が打球を見せる唯一の場所なので、従来どおり落ちるまで待つ
+                        _foulFlightHoldSeconds = DuelPacingActive ? (float?)null : (float)_pendingFoulFlight.Dur;
                         _pitchBallVisible = true;
                         // 対決ビューから来た場合は接触の瞬間から（投球セグメントの二重表示を避ける,
                         // issue #330）＋対決ビューで見せた打球のぶんは飛ばす＝**対決ビューが今出している
@@ -3709,8 +3713,7 @@ namespace KokoSim.Unity.Match
                         _pendingFoulFlight = null;
                         if (DuelPacingActive && !FoulReleaseShiftDisabledForCapture)
                         {
-                            var releaseRemainAfter = Mathf.Max(duelPitchIntervalSeconds, _foulFlightHoldSeconds.Value)
-                                                     - _pitchClock;
+                            var releaseRemainAfter = duelPitchIntervalSeconds - _pitchClock;
                             _duelRig?.ShiftNextRelease(releaseRemainAfter - releaseRemainBefore);
                         }
                     }
