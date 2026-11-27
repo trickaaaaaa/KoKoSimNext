@@ -126,7 +126,9 @@ namespace KokoSim.Unity.Home
                      && !KokoSim.Unity.Shell.GameSession.Current.ResultPending) OnAdvance();
             else if (demoEndRequested) _demoEnd?.Show();
             // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
-            else TryShowEvent();
+            // 結果モーダルの表示待ちなら開かない。試合後のひとこと（#1633）は結果の後（OnResultOk）に出す（issue #1730）。
+            else if (!(KokoSim.Unity.Shell.GameSession.Current.ResultPending
+                     && KokoSim.Unity.Shell.GameSession.Current.LastOutcome != null)) TryShowEvent();
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
             if (session.ResultPending && session.LastOutcome != null)

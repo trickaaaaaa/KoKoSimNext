@@ -1974,3 +1974,20 @@ screens:
       - show: RecordsScreen
       - click: .seg-tab[2]
       - shot: {name: 01-matches-1280, h: 1700}
+
+  - id: match-result-before-talk-1730
+    name: "自校の公式戦の直後、結果ポップアップを閉じるまで試合後のひとこと（会話）が開かず、OK のあとに開く（#1730）"
+    steps:
+      - new_game: {seed: 7, prefecture: 14, school: 桜丘, district: 0}
+      - advance_weeks: 40
+      - advance_to_match_day: ""
+      - call: HomeState.Current.PlayMatch()
+      - read: =EventService.HasPending
+      - read: =GameSession.Current.ResultPending
+      - show: HomeDashboard
+      - wait: 10
+      - read: =EventService.HasPending
+      - shot: 01-result-modal-no-talk
+      - click: tm-result-ok
+      - wait: 3000ms
+      - shot: 02-after-ok-talk
