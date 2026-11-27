@@ -8,8 +8,7 @@ namespace KokoSim.Engine.Tests.Debugging;
 
 /// <summary>
 /// 暴投の絵の検証用シナリオ（issue #1769・data/debug/scenarios.yaml の wild-pitch-second/first-lab）が、
-/// 最初の打席のうちに暴投の再生（BatteryMissPlay）を作ること。強制発動は使わず自然な解決をシードで固定している
-/// （暴投は着弾コースがゲートに入る球でだけ起きる）。係数変更で動いたらこのテストが赤くなる→シードを選び直す。
+/// 強制発動（WildPitch）で最初の打席のうちに暴投の再生（BatteryMissPlay）を作ること（撮影ハーネスが頼る）。
 /// </summary>
 public sealed class WildPitchScenarioTests
 {
@@ -21,6 +20,8 @@ public sealed class WildPitchScenarioTests
         Assert.True(DebugScenarioLoader.LoadFromRepoOrEmpty().TryGet(id, out var def), id + " が無い");
         var built = ScenarioBuilder.Build(def, new GameContext { CaptureTimelines = true, CapturePitches = true }, 1UL);
         var prog = new MatchProgression(built.Away, built.Home, built.Ctx, built.Seed, built.Start);
+        Assert.True(ForcedOutcomes.TryParse(def.Force, out var force));
+        prog.ForceNext(force);
 
         AdvancePitchResult r;
         do { r = prog.AdvancePitch(); } while (r == AdvancePitchResult.Pitch && prog.LastPitch?.BatteryMissPlay is null);
