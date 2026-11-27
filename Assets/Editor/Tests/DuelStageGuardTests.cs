@@ -896,7 +896,7 @@ namespace KokoSim.EditorTests
             public float BallLateralMaxM;     // 捕球前0.3秒の、描かれた球の engine の線からの横ずれの最大
             public float BallAlongMaxM;       // 同・線に沿った遅れの最大
             public float SpeedRatio;          // 捕球直前（最後の3コマ）の描かれた球の速さ ÷ engine の速さ
-            public float PopMaxM;             // 捕球の時刻をまたぐ1コマ（1/60s）で描かれた球が動いた量＝捕球点からグラブへ飛び移る量
+            public float PopMaxM;             // 捕球の時刻をまたぐ1コマ（1/60s）で描かれた球が動いた量（球自身の動きを含む参考値。判定には使わない）
         }
 
         private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay SweepPlay(SweepCase c)
