@@ -285,8 +285,8 @@ namespace KokoSim.Unity.Match
                     var up = head.TransformDirection(a.HeadUpLocal).normalized;
                     var side = Vector3.Cross(up, face).normalized;
                     var focus = head.position + up * 0.09f;
-                    ShootHeadClose(focus + face * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-front" + tag + ".png"));
-                    ShootHeadClose(focus + side * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-side" + tag + ".png"));
+                    ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-front" + tag + ".png"));
+                    ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-side" + tag + ".png"));
                 }
                 return sb.ToString();
             }
@@ -320,7 +320,7 @@ namespace KokoSim.Unity.Match
             return " skull lo=" + lo.ToString("F3") + " hi=" + hi.ToString("F3") + " browband lo=" + brow.ToString("F3") + " hi=" + browHi.ToString("F3") + " ";
         }
 
-        private void ShootHeadClose(Vector3 eye, Vector3 focus, string path)
+        private void ShootHeadClose(Vector3 eye, Vector3 focus, Vector3 origin, Vector3 up, Vector3 fwd, string path)
         {
             var go = new GameObject("head-close-cam");
             var cam = go.AddComponent<Camera>();
@@ -335,6 +335,21 @@ namespace KokoSim.Unity.Match
             RenderTexture.active = rt;
             var tex = new Texture2D(512, 512, TextureFormat.RGB24, false);
             tex.ReadPixels(new Rect(0, 0, 512, 512), 0, 0);
+            for (int ty = 0; ty <= 8; ty++)
+                for (int tz = -3; tz <= 3; tz++)
+                {
+                    // 定規: 赤=頭の枠の高さ（z=0・5cm刻み、10cmごとは大）、緑=前後（y=0.1・5cm刻み）
+                    var pr = cam.WorldToScreenPoint(origin + up * (ty * 0.05f));
+                    var pg = cam.WorldToScreenPoint(origin + up * 0.1f + fwd * (tz * 0.05f));
+                    int rr = ty % 2 == 0 ? 5 : 2;
+                    for (int dx = -rr; dx <= rr; dx++) for (int dy = -rr; dy <= rr; dy++)
+                    {
+                        int x = (int)pr.x + dx, y = (int)pr.y + dy;
+                        if (x >= 0 && x < 512 && y >= 0 && y < 512) tex.SetPixel(x, y, Color.red);
+                        x = (int)pg.x + dx; y = (int)pg.y + dy;
+                        if (x >= 0 && x < 512 && y >= 0 && y < 512) tex.SetPixel(x, y, Color.green);
+                    }
+                }
             tex.Apply();
             RenderTexture.active = prev;
             System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
