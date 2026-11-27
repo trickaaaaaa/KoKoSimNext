@@ -280,7 +280,7 @@ namespace KokoSim.Unity.Match
                 if (!_umpHeadCloseDone)
                 {
                     _umpHeadCloseDone = true;
-                    sb.Append(SkullExtentsText(a, head));
+                    sb.Append(SkullExtentsText(a, head)).Append(SliceText(a, head));
                     var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
                     var tag = "_s" + DuelTuning.BaseUmpCapScaleForCapture.ToString("0.00") + "_sz" + DuelTuning.BaseUmpCapScaleZForCapture.ToString("0.00") + "_y" + DuelTuning.BaseUmpCapAddYForCapture.ToString("0.00") + "_z" + DuelTuning.BaseUmpCapAddZForCapture.ToString("0.00");
                     var face = head.TransformDirection(a.HeadFwdLocal).normalized;
@@ -325,6 +325,43 @@ namespace KokoSim.Unity.Match
                 Object.Destroy(m);
             }
             return " skull lo=" + lo.ToString("F3") + " hi=" + hi.ToString("F3") + " browband lo=" + brow.ToString("F3") + " hi=" + browHi.ToString("F3") + " ";
+        }
+
+        /// <summary>頭の枠の高さごとの前後・左右の範囲（帽子メッシュと頭の頂点を並べる診断）。</summary>
+        private string SliceText(Actor a, Transform head)
+        {
+            var up = head.TransformDirection(a.HeadUpLocal).normalized;
+            var fwd = head.TransformDirection(a.HeadFwdLocal).normalized;
+            var right = Vector3.Cross(up, fwd).normalized;
+            Vector3 L(Vector3 w) { w -= head.position; return new Vector3(Vector3.Dot(w, right), Vector3.Dot(w, up), Vector3.Dot(w, fwd)); }
+            var capPts = new List<Vector3>();
+            foreach (var mf in head.GetComponentsInChildren<MeshFilter>(true))
+                foreach (var v in mf.sharedMesh.vertices) capPts.Add(L(mf.transform.TransformPoint(v)));
+            var skullPts = new List<Vector3>();
+            var verts = new List<Vector3>();
+            foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                var m = new Mesh();
+                smr.BakeMesh(m, true);
+                m.GetVertices(verts);
+                foreach (var v in verts) skullPts.Add(L(smr.transform.position + smr.transform.rotation * v));
+                Object.Destroy(m);
+            }
+            var sb = new System.Text.StringBuilder("\n");
+            for (float y = 0f; y < 0.32f; y += 0.03f)
+            {
+                foreach (var (name, pts) in new[] { ("cap  ", capPts), ("skull", skullPts) })
+                {
+                    float xl = 9, xh = -9, zl = 9, zh = -9; int n = 0;
+                    foreach (var p in pts)
+                    {
+                        if (p.y < y || p.y >= y + 0.03f || Mathf.Abs(p.x) > 0.3f || Mathf.Abs(p.z) > 0.35f) continue;
+                        n++; xl = Mathf.Min(xl, p.x); xh = Mathf.Max(xh, p.x); zl = Mathf.Min(zl, p.z); zh = Mathf.Max(zh, p.z);
+                    }
+                    if (n > 0) sb.Append("y=").Append(y.ToString("0.00")).Append(' ').Append(name).Append(" x[").Append(xl.ToString("F3")).Append(',').Append(xh.ToString("F3")).Append("] z[").Append(zl.ToString("F3")).Append(',').Append(zh.ToString("F3")).Append("]\n");
+                }
+            }
+            return sb.ToString();
         }
 
         private void ShootHeadClose(Vector3 eye, Vector3 focus, Vector3 origin, Vector3 up, Vector3 fwd, string path)
