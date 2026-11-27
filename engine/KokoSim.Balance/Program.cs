@@ -53,6 +53,7 @@ internal static class CommandLine
             "trace-diff" => RunTraceDiff(args[1..]),
             "captain-usage" => RunCaptainUsage(args[1..]),
             "hr-measure" => RunHrMeasure(args[1..]),
+            "over-the-head" => RunOverTheHead(args[1..]),
             _ => Fail($"未知のコマンド: {args[0]}"),
         };
     }
@@ -569,6 +570,30 @@ internal static class CommandLine
         return 0;
     }
 
+    /// <summary>「頭を越えた！」字幕の対象打球の実測（issue #1738）。係数・帯・解決式は一切変えない計測専用コマンド。</summary>
+    private static int RunOverTheHead(string[] args)
+    {
+        var atBats = 400000;
+        var seed = 42UL;
+        string? reportPath = null;
+        string? stadiumId = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--stadium": stadiumId = RequireValue(args, ref i); break;
+                case "--at-bats": atBats = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        var text = AtBatSimulation.OverTheHeadProbe(atBats, seed, ResolveStadium(stadiumId));
+        Console.Write(text);
+        WriteReport(reportPath, text);
+        return 0;
+    }
+
     /// <summary>本塁打の実測（issue #1014）。係数・帯・解決式は一切変えない計測専用コマンド。</summary>
     private static int RunHrMeasure(string[] args)
     {
@@ -844,6 +869,7 @@ internal static class CommandLine
         Console.WriteLine("使い方:");
         Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram] [--apex] [--by-pitcher-rank] [--matchup-grid] [--pa-per-game 76]");
         Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--weather] [--tactics]");
+        Console.WriteLine("  over-the-head   [--at-bats N] [--seed S] [--report path] [--stadium ID]   # 「頭を越えた！」字幕の対象打球の実測（issue #1738・計測のみ）");
         Console.WriteLine("  hr-measure      [--games N]   [--seed S] [--report path] [--save path/to.sav] [--only id,id] [--coefficients path]");
         Console.WriteLine("                  # 本塁打の実測（issue #1014・計測のみ）: 帯の条件／球場別／季節の気温／実ゲーム条件（県大会・甲子園）／ティア格子／監督の試合");
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
