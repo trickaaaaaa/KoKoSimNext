@@ -280,12 +280,13 @@ namespace KokoSim.Unity.Match
                     _umpHeadCloseDone = true;
                     sb.Append(SkullExtentsText(a, head));
                     var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
+                    var tag = "_y" + DuelTuning.BaseUmpCapAddYForCapture.ToString("0.00") + "_z" + DuelTuning.BaseUmpCapAddZForCapture.ToString("0.00");
                     var face = head.TransformDirection(a.HeadFwdLocal).normalized;
                     var up = head.TransformDirection(a.HeadUpLocal).normalized;
                     var side = Vector3.Cross(up, face).normalized;
                     var focus = head.position + up * 0.09f;
-                    ShootHeadClose(focus + face * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-front.png"));
-                    ShootHeadClose(focus + side * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-side.png"));
+                    ShootHeadClose(focus + face * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-front" + tag + ".png"));
+                    ShootHeadClose(focus + side * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-side" + tag + ".png"));
                 }
                 return sb.ToString();
             }
