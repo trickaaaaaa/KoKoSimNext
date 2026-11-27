@@ -60,10 +60,6 @@ namespace KokoSim.Unity.Match
             return new Vector2((float)b.X, (float)b.Y);
         }
 
-        /// <summary>塁審の帽子の取り付け位置[m]（頭の枠＝+Y頭蓋上・+Z顔前）。U2素体は頭ボーンが顔の中ほどにあり、選手（購入素体）向けの位置だと帽子が顔まで下がる。</summary>
-        private static readonly Vector3 BaseUmpireCapMount = Vector3.zero;
-        private static readonly Vector3 BaseUmpireCapScale = Vector3.one;
-
         private readonly Actor[] _baseUmps = new Actor[3];
         private readonly Actor[] _coaches = new Actor[2];
 
@@ -104,9 +100,7 @@ namespace KokoSim.Unity.Match
                     a.IdleClip = umpIdle;
                     StepActor(a, 0.001f);
                     GroundFix(a);
-                    AttachGear(a, GearKind.Cap, Vector3.zero, UniformPalette.Umpire.Cap, layer,
-                        capMountPos: BaseUmpireCapMount + new Vector3(0f, DuelTuning.BaseUmpCapAddYForCapture, DuelTuning.BaseUmpCapAddZForCapture),
-                        capMountScale: Vector3.Scale(BaseUmpireCapScale, new Vector3(DuelTuning.BaseUmpCapScaleForCapture, DuelTuning.BaseUmpCapScaleYForCapture, DuelTuning.BaseUmpCapScaleZForCapture)));
+                    AttachGear(a, GearKind.BaseUmpireCap, Vector3.zero, UniformPalette.Umpire.Cap, layer);
                     a.Go.SetActive(false);
                     a.Enabled = false;
                     _baseUmps[i] = a;
@@ -282,7 +276,7 @@ namespace KokoSim.Unity.Match
                     _umpHeadCloseDone = true;
                     sb.Append(SkullExtentsText(a, head)).Append(SliceText(a, head));
                     var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
-                    var tag = "_s" + DuelTuning.BaseUmpCapScaleForCapture.ToString("0.00") + "_sy" + DuelTuning.BaseUmpCapScaleYForCapture.ToString("0.00") + "_sz" + DuelTuning.BaseUmpCapScaleZForCapture.ToString("0.00") + "_y" + DuelTuning.BaseUmpCapAddYForCapture.ToString("0.00") + "_z" + DuelTuning.BaseUmpCapAddZForCapture.ToString("0.00");
+                    var tag = "";
                     var face = head.TransformDirection(a.HeadFwdLocal).normalized;
                     var up = head.TransformDirection(a.HeadUpLocal).normalized;
                     var side = Vector3.Cross(up, face).normalized;

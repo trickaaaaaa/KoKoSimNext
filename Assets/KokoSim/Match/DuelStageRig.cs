@@ -6013,7 +6013,7 @@ namespace KokoSim.Unity.Match
         // ---- 被り物・防具（design-18 §3.3。役割ごとに出し分け＝打者ヘルメット/守備帽子） --------
 
         /// <summary>役割別の装備セット。高校野球のヘルメットは両耳フラップ付き＝帽子とシルエットで判別できる。</summary>
-        private enum GearKind { Cap, Helmet, CatcherGear, UmpireGear }
+        private enum GearKind { Cap, Helmet, CatcherGear, UmpireGear, BaseUmpireCap }
 
         // 捕手の被り物の素の装着位置[m]（gear-headコンテナ＝頭ボーン原点・+Y頭蓋上・+Z顔前）。
         // キャリブレーションの CatcherHelmetOffset / CatcherMaskOffset はこれに**加算**される
@@ -6054,7 +6054,7 @@ namespace KokoSim.Unity.Match
         /// コンテナはlossyScale逆数でワールドスケール1に戻してあるので、子パーツは実寸(m)で置く。
         /// </summary>
         private void AttachGear(Actor actor, GearKind kind, Vector3 gazeLocal, Color accent, int layer,
-            Color? visorAccent = null, Vector3? capMountPos = null, Vector3? capMountScale = null)
+            Color? visorAccent = null)
         {
             var head = actor.Animator.GetBoneTransform(HumanBodyBones.Head);
             var dark = new Color(0.13f, 0.13f, 0.15f);
@@ -6094,8 +6094,7 @@ namespace KokoSim.Unity.Match
                 {
                     mount = new GameObject("gear-offset");
                     mount.transform.SetParent(c.transform, false);
-                    if (capMountPos.HasValue) { mount.transform.localPosition = capMountPos.Value; mount.transform.localScale = capMountScale ?? Vector3.one; }
-                    else if (kind == GearKind.Cap) _capMount = mount.transform;
+                    if (kind == GearKind.Cap) _capMount = mount.transform;
                     else if (actor == _batter) _helmetMount = mount.transform;
                     else
                     {
@@ -6191,6 +6190,14 @@ namespace KokoSim.Unity.Match
                                 new Vector3(0.23f, 0.18f, 0.22f), accent, layer);
                             FaceCage(c, "cmask", accent, layer);
                         }
+                        break;
+                    case GearKind.BaseUmpireCap:
+                        // 塁審: 帽子だけ（マスク・胸当ては無い。issue #1740）。U2素体の頭は選手（購入素体）より縦に長く前後に深く、
+                        // 選手向けに較正した帽子メッシュは額が突き抜けて顔の前へずれる＝この素体に合わせたクラウン＋つばをプリミティブで作る
+                        GearPart(c, PrimitiveType.Sphere, "ucap-crown", new Vector3(0f, 0.19f, 0.01f),
+                            new Vector3(0.21f, 0.26f, 0.25f), accent, layer);
+                        GearPart(c, PrimitiveType.Cube, "ucap-brim", new Vector3(0f, 0.115f, 0.14f),
+                            new Vector3(0.15f, 0.012f, 0.09f), accent, layer);
                         break;
                     case GearKind.UmpireGear:
                         // 球審: 帽子型クラウン＋マスク。マスクは捕手と同じ生成メッシュ（2026-08-05 監督指示。
