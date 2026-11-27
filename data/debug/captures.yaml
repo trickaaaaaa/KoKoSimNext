@@ -504,6 +504,17 @@ captures:
     shots: [judgement, judgement+0.5, judgement+1.2]
     probes: [ErrorMark, FieldLabels]
 
+  # 走者一塁・内野ゴロのお手玉（issue #1733）。拾い直した遊撃手が先の塁（二塁）へ投げる。投げ始め(release)は
+  # 拾い直し(catch)から判定の手間ぶん遅れ、同じ時計で一塁へ投げても打者の到達に間に合わない。
+  # probes.jsonl で拾い直しの時刻・送球の投げ始めを、summary.json の節目で打者の一塁到達と比べる
+  - id: catch-error-runner-1733
+    name: "走者一塁の内野ゴロのお手玉→拾い直して先の塁へ投げる（issue #1733）"
+    scenario: catch-error-runner-lab
+    manager: home
+    force: FieldingError
+    shots: [catch, release-0.3, release+0.2, judgement, end]
+    probes: [ErrorMark, FieldLabels]
+
   # ── 采配の手札を1列で左右に（左＝サイン／右＝構え）・新しい4つ（issue #1473）──
   # どれも 01-window で攻撃・守備の左右に分けた手札が見える。02-pressed が押した直後、03-after がその球の後。
   # 場面は1回表・無死一塁（steal-sign-lab）。manager: away＝自校が攻撃、home＝自校が守備。

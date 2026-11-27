@@ -117,6 +117,53 @@ public sealed class ErrorPickupThrowTests
         Assert.True(KokoSim.Engine.Match.Timeline.Playback.EndpointBallSegment.ThrowRiseM(toThird.T1 - toThird.T0) < 3.0, "送球の山が高すぎる");
     }
 
+    /// <summary>
+    /// 拾い直せず確定した捕球ミス（issue #1733）: 判定は「拾い直し＋握り替え・もたつき＋飛翔」でも一塁が間に合わないと決めている。
+    /// 絵の先の塁への送球も、判定が払った手間ぶん構えてから投げる（拾った直後に投げて、一塁なら間に合って見える絵にしない）。
+    /// </summary>
+    [Fact]
+    public void UnrecoveredCatchError_ThrowStartsAfterTheHandlingTheVerdictPaid()
+    {
+        const double handling = 1.1;
+        var play = ShortstopBobble() with { CatchErrorHandlingSeconds = handling };
+        var before = Build(play);
+        var pick = before.ErrorPickupAt!.Value;
+        var runner = new RunnerLeg
+        {
+            Label = "走1", T0 = TimelineBuilder.ContactAt + 0.1, T1 = pick + 1.5,
+            From = Base("first"), To = Base("second"),
+        };
+        before = before with { Runners = before.Runners.Append(runner).ToList() };
+
+        var tl = TimelineBuilder.AppendErrorReturnThrow(before, play, Field);
+        var toLead = tl.Ball.Skip(before.Ball.Count).First();
+        Assert.Equal("second", toLead.ToBase);
+        Assert.True(toLead.T0 >= pick + handling - 1e-9, $"手間ぶん構えずに投げている（T0={toLead.T0:F2} < {pick + handling:F2}）");
+
+        // 同じ手間のあとに一塁へ投げた場合の到達は、判定で「間に合わない」と決まった打者の到達より後になる
+        var toFirstArrive = pick + handling + Dist(before.ErrorPickupPoint!.Value, Base("first")) / play.FielderThrowSpeedMps!.Value;
+        Assert.True(toFirstArrive > toLead.T0, "前提: 一塁送球の到達は送球の投げ始めより後");
+    }
+
+    /// <summary>手間が無い（判定がお手玉の回収レースを持たない失策）なら従来どおり拾った直後に投げる。</summary>
+    [Fact]
+    public void ErrorWithoutHandling_KeepsTheShortTransfer()
+    {
+        var play = ShortstopBobble();
+        var before = Build(play);
+        var pick = before.ErrorPickupAt!.Value;
+        var runner = new RunnerLeg
+        {
+            Label = "走1", T0 = TimelineBuilder.ContactAt + 0.1, T1 = pick + 0.3,
+            From = Base("second"), To = Base("third"),
+        };
+        before = before with { Runners = before.Runners.Append(runner).ToList() };
+
+        var tl = TimelineBuilder.AppendErrorReturnThrow(before, play, Field);
+        var toThird = tl.Ball.Skip(before.Ball.Count).First();
+        Assert.Equal(pick + 0.25, toThird.T0, 6);
+    }
+
     /// <summary>拾った時点で全員止まっている → 従来どおり1本で投手へ返す。</summary>
     [Fact]
     public void EveryoneAlreadyStopped_SingleThrowToThePitcher()

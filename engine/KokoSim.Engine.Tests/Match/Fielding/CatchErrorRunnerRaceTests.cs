@@ -98,6 +98,33 @@ public sealed class CatchErrorRunnerRaceTests
             play.FieldedAtSeconds, play.CatchErrorReadyAtSeconds, play.CatchErrorScatterM));
     }
 
+    /// <summary>
+    /// 拾い直せず確定した捕球ミス（issue #1733）の「拾い直し完了＋離すまでの手間＋一塁への送球」は、判定が一塁に間に合わないと
+    /// 決めた打者走者の到達より後になる＝絵がこの手間を払えば、判定が「間に合わない」と言った一塁へ投げれば間に合う絵にならない。
+    /// </summary>
+    [Fact]
+    public void UnrecoveredCatchError_HandlingMakesTheRethrowToFirstLateForTheBatter()
+    {
+        var found = 0;
+        for (ulong seed = 1; seed <= 3000 && found < 25; seed++)
+        {
+            var play = Grounder(AlwaysCatchError, seed);
+            if (play.Result != BattedBallResult.Error || play.ErrorKind != FieldingErrorKind.Catch
+                || play.CatchErrorReadyAtSeconds is not { } ready) continue;
+            if (play.FielderRole == FieldPosition.FirstBase) continue;   // 一塁手は自力で踏む（送球の秒でない）
+            found++;
+
+            var handling = Assert.NotNull(play.CatchErrorHandlingSeconds);
+            var dx = play.FieldedX!.Value - Field.FirstBase.X;
+            var dz = play.FieldedZ!.Value - Field.FirstBase.Z;
+            var flight = System.Math.Sqrt(dx * dx + dz * dz) / play.FielderThrowSpeedMps!.Value;
+            var rethrowArrive = ready + handling + flight;
+            Assert.True(rethrowArrive > play.BatterToFirstSeconds,
+                $"拾い直したあと一塁へ投げても間に合わないはずが {rethrowArrive:F2}s < 打者 {play.BatterToFirstSeconds:F2}s");
+        }
+        Assert.True(found >= 10, $"拾い直せない捕球ミスが少なすぎる（{found}件）");
+    }
+
     [Fact]
     public void RecoveredCatchError_LeavesNewFieldsNull()
     {
@@ -109,6 +136,7 @@ public sealed class CatchErrorRunnerRaceTests
         Assert.NotNull(play.RecoveredCatchScatterM);
         Assert.Null(play.CatchErrorScatterM);
         Assert.Null(play.CatchErrorReadyAtSeconds);
+        Assert.Null(play.CatchErrorHandlingSeconds);
     }
 
     [Fact]

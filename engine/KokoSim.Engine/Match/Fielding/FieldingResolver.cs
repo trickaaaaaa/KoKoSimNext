@@ -210,6 +210,15 @@ public sealed record FieldingPlay
     /// </summary>
     public double? CatchErrorReadyAtSeconds { get; init; }
 
+    /// <summary>
+    /// 拾い直せず確定した捕球ミスで、拾い直したあと球を離すまでの手間[s]（issue #1733。表示専用）。
+    /// 判定は回収レースで「拾い直し＋<b>捕ってから離すまで（守備の握り替え・もたつき）</b>＋送球の飛翔」と一塁到達を比べて
+    /// 間に合わないと決めている＝絵の拾い直し後の送球も同じ手間を払わないと、判定が「間に合わない」と言った一塁へ
+    /// 投げれば間に合うように見える。<see cref="CatchErrorReadyAtSeconds"/> と対（それ以外は null）。
+    /// 値は判定の守備所要時間から捕球時刻と送球の移動を引いた残り＝新しい乱数は引かない。
+    /// </summary>
+    public double? CatchErrorHandlingSeconds { get; init; }
+
     /// <summary>ファウルフライのアウト（issue #830）。落下点はファウルグラウンド。</summary>
     public bool FoulFly { get; init; }
 
@@ -588,7 +597,7 @@ public static class FieldingResolver
                     fielders, infielder, coeff, rng, errorBonus, throwAccuracy, firstThrowScatter, unassistedPutout);
                 double? recoveredScatterM = null, recoveredOutSeconds = null, wildScatterM = null;
                 double? recoveredCatchScatterM = null, recoveredCatchOutSeconds = null;
-                double? catchErrorScatterM = null, catchErrorReadyAtSeconds = null;
+                double? catchErrorScatterM = null, catchErrorReadyAtSeconds = null, catchErrorHandlingSeconds = null;
                 var recoveredByBackup = false;
                 if (errorKind == FieldingErrorKind.Catch)
                 {
@@ -614,6 +623,9 @@ public static class FieldingResolver
                         // 塁上の走者の次塁判断・守備との時間勝負が「弾いた直後に送球できる」誤った前提を使わずに済む。
                         catchErrorScatterM = scatterM;
                         catchErrorReadyAtSeconds = fieldTime + recovery;
+                        // 拾い直したあと離すまでの手間（表示専用・issue #1733）。一塁手の自力で踏む場合は握り替えを払わず走る。
+                        var travelSeconds = throwDist / (unassistedPutout ? infielder.Attributes.SprintSpeedMps : infielder.Attributes.ThrowSpeedMps);
+                        catchErrorHandlingSeconds = Math.Max(0.0, defenseTime - fieldTime - travelSeconds);
                     }
                 }
                 if (errorKind == FieldingErrorKind.Throw)
@@ -696,6 +708,7 @@ public static class FieldingResolver
                     RecoveredCatchOutSeconds = recoveredCatchOutSeconds,
                     CatchErrorScatterM = catchErrorScatterM,
                     CatchErrorReadyAtSeconds = catchErrorReadyAtSeconds,
+                    CatchErrorHandlingSeconds = catchErrorHandlingSeconds,
                     FirstThrowScatter = firstThrowScatter,
                 };
             }
