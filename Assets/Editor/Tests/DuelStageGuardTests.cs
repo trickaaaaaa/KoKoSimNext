@@ -689,6 +689,47 @@ namespace KokoSim.EditorTests
                 $"送球クリップを流している間（{e.TFire:F2}〜{e.TRelease:F2}s）に engine の位置が {moved:F2}m 動く＝体が滑る");
         }
 
+        // ---- 内野手がライナーをノーバウンドで捕った後の滑り（issue #1724） ----
+
+        /// <summary>
+        /// 低く強いライナーを内野手が正面で捕るとき、絵の捕球点は engine の野手の位置から届く範囲に収まること。
+        /// 捕球の時刻を「グラブの高さを通る時刻」へ遡らせすぎると、捕球点が打った直後の上がり際まで本塁寄りへ数m
+        /// ずれ、体をそこまで寄せて捕ってから保持の後に平行移動で戻す＝足を動かさずに滑る（体の寄せ＝0なら滑らない）。
+        /// </summary>
+        [TestCase(46f, 1.31f, 0.94)]   // 実測した強いライナー（打ち出し高さ1.0m・頂点1.3m）
+        [TestCase(34f, 1.8f, 1.52)]    // 少し高く長い滞空
+        public void InfielderLineDriveCatch_DoesNotShiftTheBodyToAFarCatchPoint(float exit, float apex, double hang)
+        {
+            var rig = Rig;
+            var ss = KokoSim.Engine.Match.Field.FieldPosition.Shortstop;
+            var pt = new KokoSim.Engine.Match.Timeline.TimelinePoint(-9.2, 37.1);
+            var tl = new KokoSim.Engine.Match.Timeline.PlayTimeline
+            {
+                Ball = new List<KokoSim.Engine.Match.Timeline.BallSegment>
+                {
+                    new KokoSim.Engine.Match.Timeline.BallSegment
+                    {
+                        Kind = KokoSim.Engine.Match.Timeline.BallSegmentKind.Flight, T0 = 0.85, T1 = 0.85 + hang,
+                        From = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 0), To = pt,
+                        ApexHeightM = apex, LaunchHeightM = 1.0,
+                    },
+                },
+                FielderStarts = new Dictionary<KokoSim.Engine.Match.Field.FieldPosition, KokoSim.Engine.Match.Timeline.TimelinePoint>
+                {
+                    [ss] = pt,
+                },
+                Result = "テスト", Duration = 5.0, ResolvedAt = 5.0,
+            };
+            rig.BeginFieldPlay(KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl), 0f);
+            var plan = rig.CatchPlanForTest();
+            Assert.That(plan.Length, Is.GreaterThan(0), "前提: 捕球の予定が組まれた");
+            Assert.That(plan[0].Pos, Is.EqualTo(ss));
+            Assert.That(plan[0].BodyShiftM, Is.LessThan(0.3f),
+                $"体を {plan[0].BodyShiftM:F2}m 寄せて捕る＝捕った後に元の位置へ平行移動で戻る（足を据えたまま滑る）");
+            var d = new Vector2(plan[0].Point.x - (float)pt.X, plan[0].Point.z - (float)pt.Z).magnitude;
+            Assert.That(d, Is.LessThan(1.2f), $"捕球点が engine の野手の位置から {d:F2}m 離れている");
+        }
+
         private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay RunThroughPlay(double fieldedAt, double release)
         {
             var fieldPt = new KokoSim.Engine.Match.Timeline.TimelinePoint(-18.5, 71.7);
