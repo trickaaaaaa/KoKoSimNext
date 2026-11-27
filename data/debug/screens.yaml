@@ -1991,3 +1991,33 @@ screens:
       - click: tm-result-ok
       - wait: 3000ms
       - shot: 02-after-ok-talk
+
+  - id: bracket-finish-wait-1764
+    name: "敗退直後の「試合結果を集計中」が消えて、OK のあと試合後のひとことが開く（#1764・待ちを延ばして状態を読む）"
+    steps:
+      - new_game: {seed: 7, prefecture: 14, school: 桜丘, district: 0}
+      - advance_weeks: 40
+      - advance_to_match_day: ""
+      - read: =NationBackgroundSim.Throttle
+      - read: =ScreenRouter.Instance.CurrentScreen
+      - call: HomeState.Current.PlayMatch()
+      - read: =BracketFinishSim.Running
+      - read: =BracketFinishSim.Total
+      - read: =NationBackgroundSim.Throttle
+      - show: HomeDashboard
+      - read: =NationBackgroundSim.Throttle
+      - wait: 3000ms
+      - read: =BracketFinishSim.Running
+      - read: =BracketFinishSim.Done
+      - read: =BracketFinishSim.Total
+      - shot: 01-after-3s
+      - wait: 10000ms
+      - read: =BracketFinishSim.Running
+      - read: =BracketFinishSim.Done
+      - read: =EventService.HasPending
+      - shot: 02-after-13s
+      - click: tm-result-ok
+      - wait: 8000ms
+      - read: =EventService.HasPending
+      - read: =BracketFinishSim.Running
+      - shot: 03-after-ok-8s
