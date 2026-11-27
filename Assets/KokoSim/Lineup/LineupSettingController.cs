@@ -31,11 +31,21 @@ namespace KokoSim.Unity.Lineup
 
             Click("lu-ok", OnOk);
             Click("lu-cancel", OnCancel);
+            WireHoverReset();
             // DH切替（2択）。選ばれていない側を押したときだけ切り替える。
             _root.Q<Label>("lu-dh-on")?.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); SetDh(true); });
             _root.Q<Label>("lu-dh-off")?.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); SetDh(false); });
 
             Render();
+        }
+
+        // ホバーを戻すのは、カーソルが一覧（本体の3列）の外へ出たときだけ。行・カード・列どうしの隙間では戻さない。
+        private void WireHoverReset()
+        {
+            _root.Q<VisualElement>(className: "lu-body")?.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                if (_state.ClearHovered()) RenderCompareOnly();
+            });
         }
 
         private void SetDh(bool on)
@@ -159,7 +169,6 @@ namespace KokoSim.Unity.Lineup
                 var pidx = r.PlayerIndex;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickRow(slot); Render(); });
                 row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
-                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
                 host.Add(row);
             }
         }
@@ -260,7 +269,6 @@ namespace KokoSim.Unity.Lineup
             var spIdx = v.StartingPitcherIndex;
             card.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _state.ClickStartingPitcher(); Render(); });
             card.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(spIdx); RenderCompareOnly(); });
-            card.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(spIdx); RenderCompareOnly(); });
             host.Add(card);
         }
 
@@ -322,7 +330,6 @@ namespace KokoSim.Unity.Lineup
                 var idx = b.Index;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickBench(idx); Render(); });
                 row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
-                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
                 host.Add(row);
             }
         }

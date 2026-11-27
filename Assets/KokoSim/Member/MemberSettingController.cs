@@ -52,6 +52,12 @@ namespace KokoSim.Unity.Member
 
             Click("ms-auto", () => { _state.AutoAssign(); Render(); });
 
+            // ホバーを戻すのは、カーソルが一覧（本体の4列）の外へ出たときだけ。枠・行・列どうしの隙間では戻さない。
+            _root.Q<VisualElement>(className: "ms-body")?.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                if (_state.ClearHovered()) RenderCompareOnly();
+            });
+
             // 共通トップバーの「今週を進める」を配線（issue #134: 以前は未配線で死にボタンだった）。
             // ScreenRouter が SetActive で付け外しするだけなので、OnDisable で必ず外す（多重登録＝多重進週の防止）。
             _advanceBtn = _root.Q<Button>("advance");
@@ -211,7 +217,6 @@ namespace KokoSim.Unity.Member
             var pidx = slot.PlayerIndex;
             el.RegisterCallback<ClickEvent>(_ => { _state.ClickSlot(n); Render(); });
             el.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
-            el.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
         }
 
         // カーソル移動での比較プレビューは比較パネルだけ更新（盤面は再構築しない＝ホバー対象がぶれない）。
@@ -239,7 +244,6 @@ namespace KokoSim.Unity.Member
                 var idx = p.Index;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickPool(idx); Render(); });
                 row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
-                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
                 host.Add(row);
             }
         }

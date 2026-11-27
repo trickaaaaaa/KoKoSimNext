@@ -558,8 +558,13 @@ namespace KokoSim.Unity.Lineup
         /// <summary>カーソルを合わせた選手。未選択なら比較の左、選択中なら比較の右に出る。-1＝ホバーなし。</summary>
         public void SetHovered(int index) => _hovered = index;
 
-        /// <summary>カーソルが外れた（行/チップの PointerLeave）。表示が残らないようホバーを解除する。</summary>
-        public void ClearHovered(int index) { if (_hovered == index) _hovered = -1; }
+        /// <summary>カーソルが一覧の外へ出た。ホバーを解除する（行と行の隙間では呼ばない＝比較が既定の選手へ戻ってチラつかない）。変わったら true。</summary>
+        public bool ClearHovered()
+        {
+            if (_hovered < 0) return false;
+            _hovered = -1;
+            return true;
+        }
         public void SetTab(int tab) => _tab = Math.Clamp(tab, 0, 1);
         private void ClearPick() { _picked = -1; _posPickSlot = -1; _pickKind = PickKind.None; }
 
