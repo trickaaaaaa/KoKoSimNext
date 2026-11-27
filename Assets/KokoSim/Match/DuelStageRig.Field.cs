@@ -1569,7 +1569,12 @@ namespace KokoSim.Unity.Match
             /// 球は捕球点まで放物線に**差分だけ**足して寄せる（速度は放物線のまま）。
             /// </summary>
             public bool Aerial;
-            public Vector3 EngineAtCatch;   // Aerial のとき、TCatch の engine の球位置（stage-local）。捕球点との差が寄せる量
+            /// <summary>
+            /// 球の寄せを「engine の位置に捕球の瞬間の残り差を重みつきで足す」形にするか（空中の球＋転がりのゴロ・issue #1768）。
+            /// 立たない送球は従来どおり捕球点へ補間する。
+            /// </summary>
+            public bool AdditiveBlend;
+            public Vector3 EngineAtCatch;   // AdditiveBlend のとき、TCatch の engine の球位置（stage-local）。捕球点との差が寄せる量
             public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
             public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
             public float PulledM;     // 捕球点を engine の終点から**軌跡に沿って**遡らせた量[m]
@@ -2067,12 +2072,13 @@ namespace KokoSim.Unity.Match
                     lineOff = 0f;
                     _missDiag += $" 余裕={catchMargin:F2}s 野手と落下点={bestD:F2}m";
                 }
+                bool rollingCatch = !isThrow && (eb != null ? eb.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce : seg is RollSegment);
                 _catchEvents.Add(new FieldCatchEvent
                 {
                     BodyShift = bodyShift,
                     LineOffM = lineOff,
                     RunThrough = runThroughCatch,
-                    Rolling = !isThrow && (eb != null ? eb.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce : seg is RollSegment),
+                    Rolling = rollingCatch,
                     GloveErrM = -1f,
                     ScatterShown = scattered && (eb.ScatterIsShortHop
                         || Mathf.Abs((float)eb.ScatterVerticalM) >= ThrowScatterHeightPickM
@@ -2089,6 +2095,7 @@ namespace KokoSim.Unity.Match
                     Anchor = anchor,
                     Point = pt,
                     Aerial = aerialCatch,
+                    AdditiveBlend = aerialCatch || rollingCatch,
                     EngineAtCatch = new Vector3((float)end.X, (float)end.H, (float)end.Y),
                     HoldUntil = holdUntil,
                     FielderGapM = bestD,
@@ -2957,6 +2964,21 @@ namespace KokoSim.Unity.Match
             }
             return r;
         }
+
+        /// <summary>EditMode テスト用（issue #1768）: 組んだ捕球の予定の実測（球を捕る芝居だけ）。</summary>
+        internal (FieldPosition Pos, bool Rolling, float TCatch, Vector3 Point, Vector3 EngineAtCatch, float GapM, float PulledM, float LineOffM, Vector2 BodyShift)[] CatchMeasureForTest()
+        {
+            var r = new List<(FieldPosition, bool, float, Vector3, Vector3, float, float, float, Vector2)>();
+            foreach (var e in _catchEvents)
+            {
+                if (!HoldsBall(e.Kind)) continue;
+                r.Add((e.Pos, e.Rolling, e.TCatch, e.Point, e.EngineAtCatch, e.FielderGapM, e.PulledM, e.LineOffM, e.BodyShift));
+            }
+            return r.ToArray();
+        }
+
+        /// <summary>EditMode テスト用（issue #1768）: いま描かれている球の位置（stage-local）。<see cref="SetFieldTime"/>＋Tick の後に読む。</summary>
+        internal Vector3 BallLocalPointForTest() => _ball == null ? Vector3.zero : _ball.transform.localPosition;
 
         /// <summary>EditMode テスト用: 組んだ送球の予定（投げ手・流し始め・リリース）。</summary>
         internal (FieldPosition From, float TFire, float TRelease)[] ThrowPlanForTest()
@@ -6101,12 +6123,13 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 球を捕球点へ寄せた位置（<paramref name="w"/> は 0→1 の重み）。ゴロ・送球は従来どおり捕球点へ補間する。
-        /// 空中の球（issue #1336）は engine の放物線に「捕球の瞬間の残り差」を重みつきで足す＝終端の速度が
-        /// 放物線の落下速度のまま残る（捕球点へ補間すると終端速度が0になり、落下が止まって吸い込まれて見えた）。
+        /// 球を捕球点へ寄せた位置（<paramref name="w"/> は 0→1 の重み）。送球は従来どおり捕球点へ補間する。
+        /// 空中の球（issue #1336）とゴロ（issue #1768）は engine の軌跡に「捕球の瞬間の残り差」を重みつきで足す＝
+        /// 終端の速度が放物線の落下速度・転がる速さのまま残る（捕球点へ補間すると終端速度が0になり、
+        /// 球が減速しながら止まった点へ寄って吸い込まれて見えた）。
         /// </summary>
         private static Vector3 BlendBallToCatch(FieldCatchEvent e, Vector3 enginePos, float w)
-            => e.Aerial
+            => e.AdditiveBlend
                 ? enginePos + (e.Point - e.EngineAtCatch) * w
                 : Vector3.Lerp(enginePos, e.Point, w);
 

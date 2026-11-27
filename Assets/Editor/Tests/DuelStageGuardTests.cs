@@ -874,5 +874,172 @@ namespace KokoSim.EditorTests
             tl = rt.Value.Timeline with { Ball = ball };
             return KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
         }
+
+        // ---- 外野手が左右に走りながら捕るときの球の吸い込み（issue #1768） ----
+
+        private struct SweepCase
+        {
+            public bool Roll;
+            public float LateralM;    // 野手が捕球点へ横に走る距離（符号つき・+x＝一塁側）
+            public float DepthM;      // 野手の立ち位置から見た捕球点の奥行き（+＝前＝本塁側へ寄る…engineのy減る）
+            public float ShortM;      // 野手が捕球点へ届ききらない量（engine の移動の終点が捕球点の手前）
+            public float RunSpeed;
+            public string Label => $"{(Roll ? "roll" : "fly")} lat={LateralM:+0;-0;0} depth={DepthM:+0;-0;0} short={ShortM:0.0} v={RunSpeed:0.0}";
+        }
+
+        private struct SweepResult
+        {
+            public SweepCase C;
+            public bool Caught;
+            public float TCatch, LineOffM, PulledM, GapM, BodyShiftM, BodyAlongM, BodyPerpM, RunSpeedAtCatch;
+            public float BallLateralMaxM;     // 捕球前0.3秒の、描かれた球の engine の線からの横ずれの最大
+            public float BallAlongMaxM;       // 同・線に沿った遅れの最大
+            public float SpeedRatio;          // 捕球直前（最後の3コマ）の描かれた球の速さ ÷ engine の速さ
+        }
+
+        private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay SweepPlay(SweepCase c)
+        {
+            var cf = KokoSim.Engine.Match.Field.FieldPosition.CenterField;
+            var start = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 80);
+            var land = new KokoSim.Engine.Match.Timeline.TimelinePoint(c.LateralM, 80 - c.DepthM);
+            // 野手は反応 1.0s から c.RunSpeed で捕球点（の手前 ShortM）へ走る。球はその着く時刻に着く
+            double dist = System.Math.Sqrt(c.LateralM * c.LateralM + c.DepthM * c.DepthM);
+            double t0 = 1.0, tEnd = t0 + (dist - c.ShortM) / c.RunSpeed + (c.ShortM > 0 ? 0.05 : 0.0);
+            var run = new KokoSim.Engine.Match.Timeline.TimelinePoint(
+                land.X - (dist > 1e-6 ? c.LateralM / dist * c.ShortM : 0), land.Z + (dist > 1e-6 ? c.DepthM / dist * c.ShortM : 0));
+            var seg = new KokoSim.Engine.Match.Timeline.BallSegment
+            {
+                Kind = c.Roll ? KokoSim.Engine.Match.Timeline.BallSegmentKind.Roll : KokoSim.Engine.Match.Timeline.BallSegmentKind.Flight,
+                T0 = 0.85, T1 = tEnd,
+                From = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 0), To = land,
+                ApexHeightM = c.Roll ? 0 : 22.0, LaunchHeightM = 1.0,
+            };
+            var tl = new KokoSim.Engine.Match.Timeline.PlayTimeline
+            {
+                Ball = new List<KokoSim.Engine.Match.Timeline.BallSegment> { seg },
+                Moves = new List<KokoSim.Engine.Match.Timeline.FielderMove>
+                {
+                    new KokoSim.Engine.Match.Timeline.FielderMove
+                    {
+                        Role = cf, T0 = t0, T1 = tEnd, To = run,
+                        Task = KokoSim.Engine.Match.Timeline.FielderTask.FieldBall,
+                    },
+                },
+                FielderStarts = new Dictionary<KokoSim.Engine.Match.Field.FieldPosition, KokoSim.Engine.Match.Timeline.TimelinePoint> { [cf] = start },
+                Result = "テスト", Duration = tEnd + 4.0, ResolvedAt = tEnd + 4.0,
+            };
+            return KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+        }
+
+        private SweepResult RunSweepCase(DuelStageRig rig, SweepCase c)
+        {
+            var res = new SweepResult { C = c };
+            var play = SweepPlay(c);
+            rig.BeginFieldPlay(play, 0f);
+            var m = rig.CatchMeasureForTest();
+            if (m.Length == 0) return res;
+            var e = m[0];
+            res.Caught = true;
+            res.TCatch = e.TCatch; res.LineOffM = e.LineOffM; res.PulledM = e.PulledM; res.GapM = e.GapM;
+            res.BodyShiftM = e.BodyShift.magnitude;
+            var pa = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.FielderAt(play, e.Pos, e.TCatch - 0.05f).Pos;
+            var pb = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.FielderAt(play, e.Pos, e.TCatch + 0.05f).Pos;
+            var v = new Vector2((float)(pb.X - pa.X), (float)(pb.Y - pa.Y)) / 0.1f;
+            res.RunSpeedAtCatch = v.magnitude;
+            if (v.magnitude > 0.5f && res.BodyShiftM > 1e-4f)
+            {
+                var vd = v.normalized;
+                res.BodyAlongM = Vector2.Dot(e.BodyShift, vd);
+                res.BodyPerpM = Mathf.Abs(e.BodyShift.x * vd.y - e.BodyShift.y * vd.x);
+            }
+
+            float dt = 1f / 60f;
+            float tPrev = float.NaN; Vector3 dPrev = default, ePrev = default;
+            float speedNum = 0f, speedDen = 0f; int nTail = 0;
+            for (float t = 0f; t < e.TCatch + 0.05f; t += dt)
+            {
+                rig.SetFieldTime(t);
+                rig.Tick(dt);
+                if (t < e.TCatch - 0.6f) continue;
+                var b = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.BallAt(play, t);
+                if (!b.HasValue) continue;
+                var eng = new Vector3((float)b.Value.X, (float)b.Value.H, (float)b.Value.Y);
+                var disp = rig.BallLocalPointForTest();
+                if (!float.IsNaN(tPrev) && t < e.TCatch)
+                {
+                    var ed = eng - ePrev;
+                    var dd = disp - dPrev;
+                    if (t >= e.TCatch - 3.5f * dt) { speedNum += dd.magnitude; speedDen += ed.magnitude; nTail++; }
+                    if (t >= e.TCatch - 0.3f)
+                    {
+                        var dir = new Vector2(ed.x, ed.z);
+                        if (dir.sqrMagnitude > 1e-8f)
+                        {
+                            dir.Normalize();
+                            var off = new Vector2(disp.x - eng.x, disp.z - eng.z);
+                            res.BallLateralMaxM = Mathf.Max(res.BallLateralMaxM, Mathf.Abs(off.x * dir.y - off.y * dir.x));
+                            res.BallAlongMaxM = Mathf.Max(res.BallAlongMaxM, Mathf.Abs(Vector2.Dot(off, dir)));
+                        }
+                    }
+                }
+                tPrev = t; dPrev = disp; ePrev = eng;
+            }
+            res.SpeedRatio = speedDen > 1e-4f ? speedNum / speedDen : 1f;
+            return res;
+        }
+
+        private static IEnumerable<SweepCase> SweepCases()
+        {
+            foreach (var roll in new[] { false, true })
+            foreach (var lat in new[] { 0f, -16f, -10f, 10f, 16f })
+            foreach (var depth in new[] { 0f, 8f, -8f })
+            foreach (var sh in new[] { 0f, 0.6f })
+                yield return new SweepCase { Roll = roll, LateralM = lat, DepthM = depth, ShortM = sh, RunSpeed = 7f };
+        }
+
+        private static string SweepTable(List<SweepResult> rs)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("case\tcaught\ttCatch\trunV\tgap\tpulled\tlineOff\tbodyShift\tbodyAlong\tbodyPerp\tballLatMax\tballAlongMax\tspeedRatio");
+            foreach (var r in rs)
+                sb.AppendLine(string.Format(ci, "{0}\t{1}\t{2:F2}\t{3:F1}\t{4:F2}\t{5:F2}\t{6:F3}\t{7:F2}\t{8:F2}\t{9:F2}\t{10:F3}\t{11:F3}\t{12:F2}",
+                    r.C.Label, r.Caught ? 1 : 0, r.TCatch, r.RunSpeedAtCatch, r.GapM, r.PulledM, r.LineOffM, r.BodyShiftM, r.BodyAlongM, r.BodyPerpM,
+                    r.BallLateralMaxM, r.BallAlongMaxM, r.SpeedRatio));
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 外野手が左右・前後へ走って捕るとき、描かれた球が捕球の直前に engine の線（放物線・転がり）を外れて
+        /// グラブへ吸い込まれないこと（issue #1768）。捕球前0.3秒の球の横ずれが小さく、ゴロは捕球直前の速さが
+        /// engine の転がる速さのまま残る（捕球点へ補間すると終端速度が0になり、減速しながら止まった点へ寄っていた）。
+        /// 実測の表は <c>out/issue1768-sweep.tsv</c> に書く。
+        /// </summary>
+        [Test]
+        public void OutfieldCatch_BallStaysOnItsLine_WhileFielderRunsSideways()
+        {
+            var rig = Rig;
+            var rs = new List<SweepResult>();
+            foreach (var c in SweepCases())
+            {
+                rs.Add(RunSweepCase(rig, c));
+                rig.EndFieldPlay();
+            }
+            var dir = System.IO.Path.Combine(Application.dataPath, "..", "out");
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "issue1768-sweep.tsv"), SweepTable(rs));
+
+            var bad = new System.Text.StringBuilder();
+            int caught = 0;
+            foreach (var r in rs)
+            {
+                if (!r.Caught) continue;
+                caught++;
+                if (r.BallLateralMaxM > 0.03f) bad.AppendLine($"{r.C.Label}: 球が線から横へ {r.BallLateralMaxM:F3}m");
+                if (r.C.Roll && r.SpeedRatio < 0.75f) bad.AppendLine($"{r.C.Label}: 捕球直前の球の速さが engine の {r.SpeedRatio:P0}");
+            }
+            Assert.That(caught, Is.GreaterThan(rs.Count / 2), "前提: 捕球の予定が組めた本数");
+            Assert.That(bad.Length, Is.EqualTo(0), "捕球の直前に球が線を外れる／減速して吸い込まれる:\n" + bad);
+        }
     }
 }
