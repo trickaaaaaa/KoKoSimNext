@@ -277,6 +277,14 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 対決ビューHUDの打者の本塁打・打点・盗塁（通算＋本日の合算, issue #1743）。通算は試合前までの値のまま
+        /// （試合後に通算へ畳んでも二重に数えない）。通算も本日も無い選手（打数0で数も0）だけ「—」。
+        /// </summary>
+        public static string LiveCount(BattingStatLine? career, int careerCount, int todayCount, int todayAtBats)
+            => career == null && todayCount == 0 && todayAtBats == 0
+                ? "—" : (careerCount + todayCount).ToString();
+
+        /// <summary>
         /// 対決ビューHUD用のライブ防御率（通算＋本日の合算, issue #449）。
         /// 表示値＝(通算自責＋本日自責)×27÷(通算アウト＋本日アウト)。通算が無い投手は本日分のみ。
         /// 登板なし かつ 本日アウト0 は「—」。

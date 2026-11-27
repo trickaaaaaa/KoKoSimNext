@@ -8,6 +8,7 @@ using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
+using KokoSim.Engine.Stats;   // BattingStatLine（打者の帯の通算）
 using KokoSim.Unity.Components;   // 部品辞書（LineScorePanel / ScoreBug）
 using KokoSim.Unity.Shell;
 using UnityEngine;
@@ -300,6 +301,13 @@ namespace KokoSim.Unity.Match
         // 中身だけを打席ごとに入れ替え、SignPad は入れ替えない（選択状態・攻守フェーズを保持する）。
         private VisualElement _leftLineup, _rightLineup, _leftPitcher, _rightPitcher, _hudHost, _capHistHost;
         private VisualElement _hudPitcherSlot, _hudBatterSlot;
+        // 打者の帯の成績セル。打席の結果が出た時点で書き換える（issue #1743）。通算は試合前までの値のまま持つ
+        // ＝今日の分は観測の `LiveBatterSlot` から足し直すので、試合後に通算へ畳んでも二重にならない。
+        private Label _hudBatAvg, _hudBatHr, _hudBatRbi, _hudBatSb;
+        private BattingStatLine _hudBatCareer;
+        private string _hudBatName;
+        private int _hudBatOrder;
+        private bool _hudBatIsTop, _hudBatLiveDone;
         private Label _leftTeam, _rightTeam;
 
         // 1球采配（設計書15 Phase C-3 → issue #289 で SignPad 化）。ITacticsBrain を経由しない
@@ -3042,6 +3050,7 @@ namespace KokoSim.Unity.Match
                 else
                 {
                     PostResolvedScore(_current.Inning, _current.IsTop);   // 点が動かない結果は待つ理由がない
+                    UpdateBatterHudStats();
                 }
                 _t = -hold; // 経過で采配窓へ
                 // 待ってから掲げる予約（点が入ったときだけ）。実時間でなく打席の時計で数えるので倍速に追従する。
@@ -3893,6 +3902,7 @@ namespace KokoSim.Unity.Match
             if (_nonBattedScoreAt is null) return;
             _nonBattedScoreAt = null;
             if (_current != null) PostResolvedScore(_current.Inning, _current.IsTop);
+            UpdateBatterHudStats();   // 押し出しの打点は点を掲げる時点で帯へ（issue #1743）
         }
 
         /// <summary>再生を打ち切ってから次打席へ移るまでの余韻[秒]。</summary>
@@ -3991,6 +4001,7 @@ namespace KokoSim.Unity.Match
                 _result.text = play.Result;
                 _result.style.display = _t >= _resultShowAt ? DisplayStyle.Flex : DisplayStyle.None;
             }
+            if (_t >= _resultShowAt) UpdateBatterHudStats();   // 結果を見せたら帯の本塁打・打点も増やす（issue #1743）
 
             // ラインスコア（issue #438）: 最後の生還走者が本塁に帰ってから掲げる（得点の先出しをしない）。
             if (_t >= _lineScorePostAt)
@@ -5383,6 +5394,7 @@ namespace KokoSim.Unity.Match
             if (_hudPitcherSlot == null || _hudBatterSlot == null) return;
             _hudPitcherSlot.Clear();
             _hudBatterSlot.Clear();
+            _hudBatAvg = _hudBatHr = _hudBatRbi = _hudBatSb = null;
             // 打席開始前はHUDだけ空（指示パネルは常設のまま）。
             var m = _atBat != null ? new Matchup(_atBat) : _current != null ? new Matchup(_current) : (Matchup?)null;
             if (m is not { } mu) return;
@@ -5558,14 +5570,26 @@ namespace KokoSim.Unity.Match
             idn.Add(face);
             band.Add(idn);
 
-            // 2段目＝成績。打率は通算＋本日の合算（issue #449。通算なしは本日分のみ、通算なしかつ
-            // 本日打数0のみ「—」）。本塁打・打点は通算のみ（issue範囲外・据え置き）＝等幅セルに割ると
-            // 同格の3項目に見えるが、意味の違いはここに残す。
-            var b = _statsProvider.CareerBatting(schoolId, m.BatterSourceId);
+            // 2段目＝成績。打率・本塁打・打点・盗塁とも通算＋本日の合算（打率は issue #449、他は issue #1743）。
+            // 通算なしは本日分のみ、通算なしかつ本日の打数0のみ「—」。本塁打・打点は打席の結果が出た時点で
+            // 書き換える（UpdateBatterHudStats）。盗塁は走者として決めた分が、その選手が次に打席に立つ帯に載る。
+            // 4セルは帯の幅を変えず等幅で割る（HudCell は flex-grow 1）。
+            _hudBatCareer = _statsProvider.CareerBatting(schoolId, m.BatterSourceId);
+            _hudBatName = m.BatterName;
+            _hudBatOrder = m.BatterOrder;
+            _hudBatIsTop = offenseIsTop;
+            _hudBatLiveDone = false;
             var stats = HudStatsRow();
-            stats.Add(HudCell("打率", MatchLiveStatsProvider.LiveAvg(b, batterToday?.AtBats ?? 0, batterToday?.Hits ?? 0), first: true));
-            stats.Add(HudCell("本塁打", b == null ? "—" : b.HomeRuns.ToString()));
-            stats.Add(HudCell("打点", b == null ? "—" : b.Rbi.ToString()));
+            var avgCell = HudCell("打率", "", first: true);
+            var hrCell = HudCell("本塁打", "");
+            var rbiCell = HudCell("打点", "");
+            var sbCell = HudCell("盗塁", "");
+            stats.Add(avgCell); stats.Add(hrCell); stats.Add(rbiCell); stats.Add(sbCell);
+            _hudBatAvg = avgCell.Q<Label>(className: "mhud-cell__val");
+            _hudBatHr = hrCell.Q<Label>(className: "mhud-cell__val");
+            _hudBatRbi = rbiCell.Q<Label>(className: "mhud-cell__val");
+            _hudBatSb = sbCell.Q<Label>(className: "mhud-cell__val");
+            ApplyBatterHudStats(batterToday);
             band.Add(stats);
 
             // 特殊能力（自校の選手だけ・issue #738 案A＝成績の下にチップ段）。打者帯は打撃の能力だけ（issue #781）。
@@ -5578,6 +5602,42 @@ namespace KokoSim.Unity.Match
             var pas = BuildTodayPlateAppearances(m, offenseIsTop);
             if (pas != null) band.Add(pas);
             return band;
+        }
+
+        private void ApplyBatterHudStats(LiveBatterSlot today)
+        {
+            var c = _hudBatCareer;
+            var ab = today?.AtBats ?? 0;
+            SetHudCellValue(_hudBatAvg, MatchLiveStatsProvider.LiveAvg(c, ab, today?.Hits ?? 0));
+            SetHudCellValue(_hudBatHr, MatchLiveStatsProvider.LiveCount(c, c?.HomeRuns ?? 0, today?.HomeRuns ?? 0, ab));
+            SetHudCellValue(_hudBatRbi, MatchLiveStatsProvider.LiveCount(c, c?.Rbi ?? 0, today?.Rbi ?? 0, ab));
+            SetHudCellValue(_hudBatSb, MatchLiveStatsProvider.LiveCount(c, c?.StolenBases ?? 0, today?.StolenBases ?? 0, ab));
+        }
+
+        /// <summary>
+        /// 打席の結果を見せた時点で、帯が映している打者の成績セルを確定後の観測へ書き換える（issue #1743）。
+        /// 帯は采配窓でしか組み直さないので、そのままだと本塁打を打った走塁の間も打席前の数字のまま。
+        /// 帯の打者と今の打席の打者が違う（代打など）ときは何もしない。1打席に1回だけ。
+        /// </summary>
+        private void UpdateBatterHudStats()
+        {
+            if (_hudBatLiveDone || _hudBatAvg == null || _prog == null || _current == null) return;
+            _hudBatLiveDone = true;
+            if (_current.IsTop != _hudBatIsTop || _current.BatterOrder != _hudBatOrder
+                || _current.BatterName != _hudBatName) return;
+            var snap = _prog.Snapshot();
+            var lineup = _current.IsTop ? snap.Away.Lineup : snap.Home.Lineup;
+            if (_hudBatOrder < 1 || _hudBatOrder > lineup.Count) return;
+            var slot = lineup[_hudBatOrder - 1];
+            if (slot.Name != _hudBatName) return;
+            ApplyBatterHudStats(slot);
+        }
+
+        private static void SetHudCellValue(Label v, string text)
+        {
+            if (v == null) return;
+            v.text = text;
+            v.EnableInClassList("f-num", IsNumText(text));
         }
 
         /// <summary>
