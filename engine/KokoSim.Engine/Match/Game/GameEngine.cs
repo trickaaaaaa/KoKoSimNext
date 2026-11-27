@@ -3037,6 +3037,7 @@ public static class GameEngine
         int inning, bool isTop, int paIndex, int runsThisHalf, int outs, bool halfHead = false)
     {
         if (outs >= 3) return;
+        defense.NoteInning(inning);
         var fatigue = defense.FatigueFor(ctx.Fatigue);
         var staminaTarget = defense.EffectiveBaseStamina(defense.CurrentPitcher);
         var fatigueTriggered = PitchingFatigue.ShouldRelieve(
@@ -3049,14 +3050,15 @@ public static class GameEngine
             // 継投人選の候補＝控え全員＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
             // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
             // 約束の見張り（設計書04 §2.4）: 登板させると約束を破る子は候補から外す（見張りが無ければ従来の候補そのもの）。
-            var candidates = defense.EligibleReliefCandidates;
+            var candidates = defense.ReliefCandidatesForAi(fatigue, inning);
             var sit = new PitchingChangeSituation(
                 inning, ctx.RegulationInnings, outs,
                 defense.Runs - offense.Runs, runsThisHalf, defense.PitcherRattled,
                 fatigueTriggered, atWeekly, defense.FatiguePitches, staminaTarget,
                 fatigue.RelievePitchMargin, candidates.Count > 0, candidates,
                 // コンバート継投（issue #255 B-1）の判断材料。既定Brainは参照しない＝恒等。
-                defense.CurrentPitcher, defense.CurrentLineup, SwappableSlotsOf(defense), defense.UsesDh);
+                defense.CurrentPitcher, defense.CurrentLineup, SwappableSlotsOf(defense), defense.UsesDh,
+                defense.PitcherChangedInInning(inning));
             var forked = rng.Fork(halfHead ? ReliefHeadStreamId(inning, isTop, paIndex) : ReliefStreamId(inning, isTop, paIndex));
             if (brain.CallPitchingChange(sit, forked) is { } decision)
             {

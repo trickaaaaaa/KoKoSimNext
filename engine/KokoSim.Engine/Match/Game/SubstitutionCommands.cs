@@ -132,6 +132,7 @@ internal static class SubstitutionCommands
         var team = p.OffenseOf(teamIsAway);
         var candidates = team.AvailablePitcherCandidates;
         if (candidateIndex < 0 || candidateIndex >= candidates.Count) return false;
+        team.NoteInning(p.Inning);
         if (!team.ConvertPitcherAndRelieve(pos, candidates[candidateIndex])) return false;
         // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
         p.RecordPitchingChange(team, isTop: !teamIsAway);
@@ -149,6 +150,7 @@ internal static class SubstitutionCommands
         var team = p.OffenseOf(teamIsAway);
         var candidates = team.ReliefRankingCandidates;
         if (candidateIndex < 0 || candidateIndex >= candidates.Count) return false;
+        team.NoteInning(p.Inning);
         if (!team.RelieveWith(candidates[candidateIndex], p.Ctx.ReliefBackfill)) return false;
         // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
         p.RecordPitchingChange(team, isTop: !teamIsAway);
@@ -167,6 +169,7 @@ internal static class SubstitutionCommands
         var team = p.OffenseOf(teamIsAway);
         var candidates = team.ReliefRankingCandidates;
         if (candidateIndex < 0 || candidateIndex >= candidates.Count) return false;
+        team.NoteInning(p.Inning);
         if (!team.RelieveWith(candidates[candidateIndex], p.Ctx.ReliefBackfill, allowBenchBackfill: false)) return false;
         // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
         p.RecordPitchingChange(team, isTop: !teamIsAway);
