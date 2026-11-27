@@ -241,6 +241,66 @@ namespace KokoSim.Unity.Match
             }
         }
 
+        private bool _umpHeadCloseDone;
+
+        /// <summary>
+        /// 撮影レシピの probes 用（issue #1740）: 一塁塁審の頭まわりの装備の寸法（頭ボーン枠・実寸[m]）を返し、
+        /// 初回だけ正面と横の寄りを screenshots/_umpire-head-*.png へ撮る。
+        /// </summary>
+        internal string BaseUmpHeadCloseForCapture
+        {
+            get
+            {
+                var a = _baseUmps[0];
+                if (a == null || !a.Enabled || a.Animator == null) return "-";
+                var head = a.Animator.GetBoneTransform(HumanBodyBones.Head);
+                if (head == null) return "no-head";
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in head.GetComponentsInChildren<Renderer>(true))
+                {
+                    var bnd = r.bounds;
+                    sb.Append(r.name).Append(" c=").Append(head.InverseTransformPoint(bnd.center).ToString("F3")).Append(' ');
+                }
+                if (!_umpHeadCloseDone)
+                {
+                    _umpHeadCloseDone = true;
+                    var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
+                    var face = head.TransformDirection(a.HeadFwdLocal).normalized;
+                    var up = head.TransformDirection(a.HeadUpLocal).normalized;
+                    var side = Vector3.Cross(up, face).normalized;
+                    var focus = head.position + up * 0.09f;
+                    ShootHeadClose(focus + face * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-front.png"));
+                    ShootHeadClose(focus + side * 0.7f, focus, System.IO.Path.Combine(dir, "_umpire-head-side.png"));
+                }
+                return sb.ToString();
+            }
+        }
+
+        private void ShootHeadClose(Vector3 eye, Vector3 focus, string path)
+        {
+            var go = new GameObject("head-close-cam");
+            var cam = go.AddComponent<Camera>();
+            cam.CopyFrom(_camera);
+            cam.fieldOfView = 18f;
+            cam.transform.position = eye;
+            cam.transform.LookAt(focus);
+            var rt = new RenderTexture(512, 512, 24, RenderTextureFormat.ARGB32);
+            cam.targetTexture = rt;
+            cam.Render();
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(512, 512, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, 512, 512), 0, 0);
+            tex.Apply();
+            RenderTexture.active = prev;
+            System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.Destroy(tex);
+            cam.targetTexture = null;
+            rt.Release();
+            Object.Destroy(rt);
+            Object.Destroy(go);
+        }
+
         /// <summary>プレーの終わり: 判定の演技を畳んで待機へ戻す（次のプレーへ持ち越さない）。</summary>
         private void ResetBaseCrew()
         {
