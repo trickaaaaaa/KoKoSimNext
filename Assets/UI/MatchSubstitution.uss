@@ -415,9 +415,13 @@
 .sx-scrim .sx-brow--used .sx-brow__name { color: var(--sbk-mute-soft); }
 .sx-scrim .sx-brow--used .sx-face22 { opacity: 0.45; }
 .sx-scrim .sx-brow .sx-hand { margin: 0 10px; }
-/* 怪我タグ（共通部品 UiComponents.InjuryTag）。行では名前の右に並べ、比較のカードでは名前の下の1段。 */
-.sx-scrim .sbk-injury.sx-injury { align-self: center; flex-shrink: 0; margin-left: 8px; }
-.sx-scrim .sx-pcard .sbk-injury.sx-injury { align-self: flex-start; margin-left: 0; margin-top: 4px; }
+/* 怪我タグ（共通部品 UiComponents.InjuryTag）。行では名前の下の1段（名前と同じ左端）、比較のカードでは名前の下。 */
+.sx-scrim .sx-lrow__col { flex-shrink: 0; flex-direction: column; justify-content: center; }
+.sx-scrim .sx-brow__col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: column; justify-content: center; margin-left: 10px; }
+.sx-scrim .sx-brow__col .sx-brow__name { flex-grow: 0; flex-basis: auto; margin-left: 0; }
+.sx-scrim .sbk-injury.sx-injury { align-self: flex-start; flex-shrink: 0; margin-top: 1px; }
+.sx-scrim .sx-lrow__col .sbk-injury.sx-injury { margin-left: 10px; }
+.sx-scrim .sx-pcard .sbk-injury.sx-injury { margin-top: 4px; }
 .sx-scrim .sx-empty { font-size: 13px; color: var(--sbk-mute); padding: 8px 4px; }
 
 /* 継投の「元の投手」・DHの「指名打者」の追加の選択（見出し＋選択肢1行） */
