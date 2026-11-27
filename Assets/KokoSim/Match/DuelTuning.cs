@@ -365,6 +365,9 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用（issue #1095 の見比べ）: 真にすると閉じない（胸を的へ向けたまま投げる旧挙動）。</summary>
         public static bool ThrowClosedWindupOffForCapture;
 
+        /// <summary>スクショ用（issue #1734 の見比べ）: 真にすると打者走者の駆け抜けレッグを補わない（旧挙動）。</summary>
+        public static bool BatterOverrunLegOffForCapture;
+
         /// <summary>スクショ用: 外野手の閉じる角度を収録によらずこの値[度]にする（負＝表のまま）。</summary>
         public static float OutfieldClosedYawOverrideForCapture = -1f;
 

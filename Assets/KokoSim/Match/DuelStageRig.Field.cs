@@ -4328,6 +4328,12 @@ namespace KokoSim.Unity.Match
                     }
                 }
                 // 到達の芝居の間は位置だけ engine の真値へ置き続ける
+                if (dt > 0f && _runnerTrace.Count < 2000)
+                {
+                    Vector2 pp;
+                    float vv = RunnerXZ(r, Mathf.Max(0f, t - dt), out pp) ? (cur - pp).magnitude / dt : 0f;
+                    _runnerTrace.Add((r.Label, t, vv, firstBaseArrival ? -2 : -3, a.Speed, 0f));
+                }
                 PlaceRunner(a, cur.x, cur.y, st.Yaw);
                 _runnerMotion[idx] = st;
                 return;
@@ -5457,6 +5463,45 @@ namespace KokoSim.Unity.Match
         /// <summary>打球プレーを再生中か（守備カメラが効いているか）。</summary>
         public bool FieldPlayActive => _fieldPlay != null;
 
+        /// <summary>engine の一塁駆け抜けレッグ（<c>TimelineBuilder.FirstBaseOverrunDistanceM</c>）と同じ、塁の先まで走り抜ける距離[m]。</summary>
+        private const float BatterOverrunDistanceM = 3.5f;
+
+        /// <summary>
+        /// 打者走者の本塁→一塁レッグだけで終わっているプレー（バント・振り逃げ等。engine は打球の内野ゴロでしか
+        /// 一塁駆け抜けのレッグを積まない）に、engine と同じ式の駆け抜けレッグを足す（issue #1734・表示専用）。
+        ///
+        /// 足さないと <see cref="IsBatterArrivingAtFirst"/> が「最終レッグの起点＝本塁」のレッグ全体を駆け抜けの
+        /// 減速クリップ（全長2.67s）で流す＝約4秒かけて走り→歩きへ減速する足の運びのまま27mを進み、足が地面を滑る。
+        /// 足すと本塁→一塁は走りの段で流れ、塁を通過してから減速クリップへ移る（内野ゴロと同じ）。
+        /// 判定の時刻・位置は変わらない（足すのは終端より後の区間だけ）。
+        /// </summary>
+        private static PlaybackPlay AddBatterOverrunLeg(PlaybackPlay play)
+        {
+            if (play.Runners == null || play.Runners.Count == 0) return play;
+            List<PlaybackRunner> list = null;
+            for (int i = 0; i < play.Runners.Count; i++)
+            {
+                var r = play.Runners[i];
+                if (!IsBatterArrivingAtFirst(r)) continue;
+                var last = r.Segs[r.Segs.Count - 1];
+                double fx = last.From.X - FieldDiagramGeometry.First.X, fz = last.From.Y - FieldDiagramGeometry.First.Y;
+                if (fx * fx + fz * fz < 1.0) continue;   // 起点が一塁＝すでに駆け抜けのレッグ
+                double dx = last.To.X - last.From.X, dz = last.To.Y - last.From.Y;
+                double len = System.Math.Sqrt(dx * dx + dz * dz);
+                if (len < 1e-6) continue;
+                double approachSpeed = len / System.Math.Max(0.05, last.T1 - last.T0);
+                double overrunSeconds = System.Math.Max(0.3, 2.0 * BatterOverrunDistanceM / System.Math.Max(1.0, approachSpeed));
+                var segs = new List<PlaybackRun>(r.Segs)
+                {
+                    new PlaybackRun(last.T1, last.T1 + overrunSeconds, last.To,
+                        new PlaybackVec(last.To.X + dx / len * BatterOverrunDistanceM, last.To.Y + dz / len * BatterOverrunDistanceM)),
+                };
+                list ??= new List<PlaybackRunner>(play.Runners);
+                list[i] = r with { Segs = segs };
+            }
+            return list == null ? play : play with { Runners = list };
+        }
+
         /// <summary>
         /// 3Dの守備ビュー用に、決着後の定位置復帰レッグ（Backup/Cutoff の戻り・寄った内野手の戻り
         /// [Issue #336②]）を取り除いた <see cref="PlaybackPlay"/> を作る（issue #406①）。
@@ -5510,6 +5555,7 @@ namespace KokoSim.Unity.Match
             // 再入: 前のプレーを先に畳む。畳まないと PlaceFielder に汚された投手・捕手の基準を Snapshot してしまう
             if (_fieldPlay != null) EndFieldPlay();
             play = StripPostResolutionReturnMoves(play);
+            if (!DuelTuning.BatterOverrunLegOffForCapture) play = AddBatterOverrunLeg(play);
             _bobble = DuelTuning.HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
             _sideStep = (FieldPosition.Pitcher, -1f, -1f);
             _holdFollow = (FieldPosition.Pitcher, 0f, -1f, -1f);

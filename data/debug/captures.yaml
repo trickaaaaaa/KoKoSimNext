@@ -67,6 +67,16 @@ captures:
     shots: [end]
     probes: [RunnerDiag]
 
+  - id: bunt-runner-slip-1734-before
+    name: "同・駆け抜けレッグを補わない旧挙動（issue #1734 の見比べ）"
+    scenario: steal-sign-lab
+    manager: away
+    force: BuntInPlay
+    sign: Bunt
+    shots: [end]
+    probes: [RunnerDiag]
+    overrides: {DuelTuning.BatterOverrunLegOffForCapture: true}
+
   - id: grounder-runner-slip-1734
     name: "通常の内野ゴロの打者走者の足の滑りの実測・バントとの比較用（issue #1734）"
     scenario: if-grounder-3b-lab
