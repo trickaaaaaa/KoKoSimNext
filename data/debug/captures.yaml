@@ -620,6 +620,15 @@ captures:
     attempts: 1
     window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(LeftField), shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture]
 
+  # ── DHの登板（issue #1725）。11-ui＝開いた直後／12-ui＝指枠＋投枠を選んだ「指⇄投」のプレビュー／13-ui＝確定後の打順表 ──
+  - id: dh-to-mound-1725
+    name: "交代パネルで指枠と投枠を選ぶとDHの登板になる（issue #1725）"
+    scenario: dh-mound-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(DesignatedHitter), PickSubstitutionSlotForCapture(Pitcher), shot, ApplySubstitutionForCapture, shot, CancelSubstitutionForCapture]
+
   # ── 采配の手札のホバー（issue #1534）。11-ui 以降＝カードを1枚持ち上げた絵 ──
   - id: tcard-hover-1534-away-1280
     name: "采配の手札のホバーの浮き上がりが隣のカードと投手欄の数字を隠さない（issue #1534）"

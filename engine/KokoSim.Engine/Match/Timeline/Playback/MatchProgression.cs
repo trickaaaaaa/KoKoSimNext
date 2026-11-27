@@ -487,6 +487,17 @@ public sealed class MatchProgression
         return true;
     }
 
+    /// <summary>
+    /// DHの選手の登板（規則5.11・issue #1725・不可逆）。DH の選手が自分の打順のままマウンドへ上がり、DH は消滅する。
+    /// 今の投手は退場（再登板できない）。守備位置の補充は無い。DH制でなければ false。
+    /// </summary>
+    public bool PromoteDhToMound(bool teamIsAway)
+    {
+        if (!SubstitutionCommands.PromoteDhToMound(_p, teamIsAway)) return false;
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.PromoteDhToMound, teamIsAway, BenchIndex: 0, PitchIndex: PendingPitchIndex));
+        return true;
+    }
+
     /// <summary>原本から「まだ使える分」を除いた差＝使い切った控え（原本の並びを保つ）。</summary>
     private static IReadOnlyList<Player> Unavailable(IReadOnlyList<Player> roster, IReadOnlyList<Player> available)
     {

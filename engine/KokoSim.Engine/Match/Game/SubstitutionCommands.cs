@@ -105,6 +105,16 @@ internal static class SubstitutionCommands
     public static bool ReleaseDh(GameProgress p, bool teamIsAway, FieldPosition? at)
         => p.OffenseOf(teamIsAway).ReleaseDh(at);
 
+    /// <summary>DHの選手の登板（規則5.11・不可逆）。DH は消滅し、元DHが自分の打順のまま投げる。今の投手は退場。</summary>
+    public static bool PromoteDhToMound(GameProgress p, bool teamIsAway)
+    {
+        var team = p.OffenseOf(teamIsAway);
+        if (!team.PromoteDhToMound()) return false;
+        // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
+        p.RecordPitchingChange(team, isTop: !teamIsAway);
+        return true;
+    }
+
     /// <summary>
     /// 守備位置の入替＝コンバート（issue #235）。打順スロット slotA と slotB の守備位置を交換する。
     /// 選手の出入りが無いので交代回数は消費しない（野球ルール上「交代」ではない）。

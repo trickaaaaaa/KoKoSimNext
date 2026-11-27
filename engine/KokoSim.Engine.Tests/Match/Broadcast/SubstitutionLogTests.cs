@@ -176,6 +176,20 @@ public sealed class SubstitutionLogTests
     }
 
     [Fact]
+    public void DhTeam_PromoteDhToMound_IsLoggedAsOneRelief_InTheDhsOwnOrder()
+    {
+        var prog = new MatchProgression(DhTeam("A"), DhTeam("H"), Ctx(), 7UL);
+        ToTopHead(prog);
+        Assert.True(prog.PromoteDhToMound(teamIsAway: false));
+        var relief = Assert.Single(Assert.Single(prog.Substitutions).Entries);
+        Assert.Equal(SubstitutionEntryKind.Relief, relief.Kind);
+        Assert.Equal("HDH", relief.In.Name);
+        Assert.Equal(9, relief.Order);   // DHの打順のまま
+        Assert.Equal(FieldPosition.Pitcher, relief.Position);
+        Assert.Equal("H先発P", relief.Out!.Name);
+    }
+
+    [Fact]
     public void CancelledDraft_RemovesItsEntries()
     {
         var prog = new MatchProgression(Team("A"), Team("H"), Ctx(), 7UL);

@@ -139,6 +139,8 @@ public enum GameDecisionKind
     IntentionalWalk,
     /// <summary>ウエスト（issue #1473）。OffenseIsAway=**攻撃側**が先攻か（指示は守備側＝その逆に載る）。On=入れる／解く。1球限り。</summary>
     Pitchout,
+    /// <summary>DHの選手の登板（規則5.11・issue #1725）。OffenseIsAway=**守備側**が先攻か。DH は消滅し、旧投手は退場する。</summary>
+    PromoteDhToMound,
 }
 
 /// <summary>復元された進行（状態＋続きを回すための enumerator）。drain して <see cref="GameEngine.BuildResult"/> へ。</summary>
@@ -301,6 +303,9 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.ReleaseDh:
                     SubstitutionCommands.ReleaseDh(p, d.OffenseIsAway, d.At);
+                    break;
+                case GameDecisionKind.PromoteDhToMound:
+                    SubstitutionCommands.PromoteDhToMound(p, d.OffenseIsAway);
                     break;
                 case GameDecisionKind.SwapDefense:
                     SubstitutionCommands.SwapDefense(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);

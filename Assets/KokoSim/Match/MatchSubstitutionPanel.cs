@@ -25,11 +25,11 @@ namespace KokoSim.Unity.Match
     /// issue #718 で廃止済み＝控え→枠／枠→控えのどちらの順でも選べ（<see cref="ClickCandidate"/>）、継投も枠を選んで入れる。</para>
     ///
     /// <para>操作は「誰を・どこへ」の一手に統一し、結果を導出する：
-    /// 枠→枠＝入替（可逆・在フィールド同士）／枠(投)↔在フィールド野手＝投野交代／枠(指)↔守備位置＝DH解除／
+    /// 枠→枠＝入替（可逆・在フィールド同士）／枠(投)↔在フィールド野手＝投野交代／枠(指)↔守備位置＝DH解除／枠(指)↔枠(投)＝DHの登板（DH消滅・旧投手退場）／
     /// 枠→控え＝投入（不可逆・退場が出る）。継投・投野交代は AI と同じ候補集合（<see cref="SubstitutionOptions.ReliefCandidates"/>）
     /// を通り、engine の <see cref="MatchProgression.Relieve"/>／<see cref="MatchProgression.DefenseAssign"/>／
     /// <see cref="MatchProgression.SwapDefensivePositions"/>／<see cref="MatchProgression.ConvertPitcherAndRelieve"/>／
-    /// <see cref="MatchProgression.ReleaseDh"/> へ振り分ける。判断ロジックはエンジンに委ね、ここは表示と実行呼び出しだけ
+    /// <see cref="MatchProgression.ReleaseDh"/>／<see cref="MatchProgression.PromoteDhToMound"/> へ振り分ける。判断ロジックはエンジンに委ね、ここは表示と実行呼び出しだけ
     /// （不変条件#3 エンジン純度）。確定した交代は engine に下書きとして積まれ、確定してもモーダルは
     /// 閉じない（issue報告「投手交代と守備位置を一斉に変えられない」への対応）＝継投→守備位置の
     /// 入れ替えのように複数操作を同じセッションで続けて行える。「試合へ戻る」で試合へ持ち帰り、
@@ -578,6 +578,10 @@ namespace KokoSim.Unity.Match
                     return null;
                 case DefKind.DhWithdraw:
                     return s.Role == SlotRole.Dh ? "退場" : null;
+                case DefKind.DhToMound:
+                    if (s.Role == SlotRole.Dh) return PosJp(FieldPosition.Pitcher) + "へ";
+                    if (s.Role == SlotRole.Pitcher) return "退場";
+                    return null;
                 default:
                     return null;   // None / Invalid はプレビュー無し
             }
@@ -701,7 +705,7 @@ namespace KokoSim.Unity.Match
 
         // ── 導出：守備の割当操作 ──
 
-        private enum DefKind { None, Relieve, Convert, PromoteFielder, FielderSwap, Assign, DhToPos, DhWithdraw, Invalid }
+        private enum DefKind { None, Relieve, Convert, PromoteFielder, FielderSwap, Assign, DhToPos, DhWithdraw, DhToMound, Invalid }
 
         private readonly struct DefOp
         {
@@ -749,7 +753,12 @@ namespace KokoSim.Unity.Match
                     return new DefOp(DefKind.DhToPos, pos: b.Pos, outgoing: b.Player);
                 if (a.Role == SlotRole.Fielder && b.Role == SlotRole.Dh)
                     return new DefOp(DefKind.DhToPos, pos: a.Pos, outgoing: a.Player);
-                return new DefOp(DefKind.Invalid);   // 投⇄指 など
+                // 投⇄指＝DHの登板（規則5.11・issue #1725）。DHが自分の打順のままマウンドへ、今の投手は退場。
+                if (a.Role == SlotRole.Dh && b.Role == SlotRole.Pitcher)
+                    return new DefOp(DefKind.DhToMound, a.Player, outgoing: b.Player);
+                if (a.Role == SlotRole.Pitcher && b.Role == SlotRole.Dh)
+                    return new DefOp(DefKind.DhToMound, b.Player, outgoing: a.Player);
+                return new DefOp(DefKind.Invalid);
             }
             return new DefOp(DefKind.None);
         }
@@ -866,6 +875,8 @@ namespace KokoSim.Unity.Match
                     return (_slots[_pickedSlot].Player, _slots[_pickedSlot2].Player, false, "1人目", "2人目");
                 case DefKind.Assign:
                     return (op.Outgoing, op.Incoming, false, "退く", "入る");
+                case DefKind.DhToMound:
+                    return (_opt.CurrentPitcher, op.Incoming, true, "降板", "登板");
                 case DefKind.DhToPos:
                     return (op.Outgoing, _slots[_pickedSlot].Role == SlotRole.Dh ? _slots[_pickedSlot].Player : _slots[_pickedSlot2].Player,
                         false, "退く", "DH");
@@ -980,12 +991,15 @@ namespace KokoSim.Unity.Match
                         + " が退場。投手が打順へ入る（以降DHなし）。", false);
                 case DefKind.DhWithdraw:
                     return (true, "DHをそのまま退かせ、投手が打席へ入る（以降DHなし）。", false);
+                case DefKind.DhToMound:
+                    return (true, NameOf(op.Incoming) + " がマウンドへ。DHは解除され、" + NameOf(_opt.CurrentPitcher)
+                        + " は退場（再登板できない・以降DHなし）。", false);
                 case DefKind.Invalid:
-                    return (false, "この組み合わせでは操作できない（投⇄指・控え→指は不可）。", true);
+                    return (false, "この組み合わせでは操作できない（控え→指は不可）。", true);
                 default:
                     var a = Picked(_pickedSlot);
-                    if (a is { Role: SlotRole.Pitcher }) return (false, "控えを選べば継投／別の守備枠を選べば投野交代。", false);
-                    if (a is { Role: SlotRole.Dh }) return (false, "守備位置の枠を選べばDH解除／控えは指枠に就けない。", false);
+                    if (a is { Role: SlotRole.Pitcher }) return (false, _opt.UsesDh ? "控えを選べば継投／別の守備枠を選べば投野交代／指枠を選べばDHが登板。" : "控えを選べば継投／別の守備枠を選べば投野交代。", false);
+                    if (a is { Role: SlotRole.Dh }) return (false, "守備位置の枠を選べばDH解除／投枠を選べばDHが登板／控えは指枠に就けない。", false);
                     if (a != null) return (false, "別の守備枠を選べば入替／控えを選べば守備固め。", false);
                     if (_defInIndex >= 0) return (false, "入れる枠を選ぶ（投手の枠なら継投）。", false);
                     return (false, "動かす枠か、入れる控えを選ぶ。", false);
@@ -1033,6 +1047,7 @@ namespace KokoSim.Unity.Match
                     DefKind.Assign => _prog.DefenseAssign(_teamIsAway, op.SlotA, op.Incoming),
                     DefKind.DhToPos => _prog.ReleaseDh(_teamIsAway, op.Pos),
                     DefKind.DhWithdraw => _prog.ReleaseDh(_teamIsAway, null),
+                    DefKind.DhToMound => _prog.PromoteDhToMound(_teamIsAway),
                     _ => false,
                 };
             }
@@ -1093,6 +1108,7 @@ namespace KokoSim.Unity.Match
                 case DefKind.Relieve:
                 case DefKind.Convert:
                 case DefKind.PromoteFielder:
+                case DefKind.DhToMound:
                     Check(op.Incoming, ScoutPromiseTracker.BreaksOnEntry(op.Incoming?.SourceId, pitches: true));
                     break;
                 case DefKind.Assign:

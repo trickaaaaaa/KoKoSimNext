@@ -1811,6 +1811,36 @@ public sealed class TeamState
     }
 
     /// <summary>
+    /// DHの選手の登板（公認野球規則5.11）: DH の選手が<b>自分の打順スロットのまま</b>マウンドへ上がり、DH は消滅する
+    /// （<see cref="UsesDh"/> は false）。今の投手は打順外なので退場する（リエントリー禁止）。守備位置の補充は無い
+    /// ＝野手は誰も動かない。球数・疲労は新投手の分を選手単位で読む（<see cref="LoadStintOf"/>・#235）。
+    /// DH制でなければ false。乱数を使わない。
+    /// </summary>
+    public bool PromoteDhToMound()
+    {
+        if (!_usesDh) return false;
+        var outgoing = CurrentPitcher;
+        var dh = _lineup[_dhSlot];
+        var mound = Rekey(dh, dh with { Position = FieldPosition.Pitcher });
+        _retired.Add(KeyOf(outgoing));
+        _lineup[_dhSlot] = mound;
+        CurrentPitcher = mound;
+        _pitcherSlot = _dhSlot;
+        _usesDh = false;
+        SaveStintOf(outgoing);
+        LoadStintOf(mound);
+        PitcherChanges++;
+        Substitutions++;   // DH解除はロスターイベント（ReleaseDh と同じく計上）
+        LastPitchingChange = new PitchingChangeOutcome(
+            PitchingChangeKind.DhToMound,
+            outgoing.Name, outgoing.UniformNumber, outgoing.SourceId,
+            mound.Name, mound.UniformNumber, mound.SourceId,
+            null, null, 0, null);
+        ClearRattled();
+        return true;
+    }
+
+    /// <summary>
     /// スロット slot の選手を控え sub に置換する共通処理（退いた選手の守備位置を継承・リエントリー禁止）。
     /// 非DHの投手スロットへ代打した場合、投手本人は退場扱いになるため、守備再開前に必ず継投すること
     /// （C-2 の GameEngine が強制。TryChangePitcher が投手スロットの打者を新投手で上書きする）。
