@@ -306,14 +306,16 @@ captures:
     name: "走者二塁の暴投: 捕手が三塁へ投げ、三塁手が受けてから投手へ返す（issue #1769）"
     scenario: wild-pitch-second-lab
     manager: away
-    shots: [start, release-0.2, release+0.4, end]
-    video: {from: start, to: end, fps: 24}
+    view: panel
+    duel_seconds: 14.0
+    video: {from: start, to: end, fps: 8}
   - id: wildpitch-first-1769
     name: "走者一塁の暴投: 捕手が二塁へ投げ、塁に入った野手が受けてから投手へ返す（issue #1769）"
     scenario: wild-pitch-first-lab
     manager: away
-    shots: [start, release-0.2, release+0.4, end]
-    video: {from: start, to: end, fps: 24}
+    view: panel
+    duel_seconds: 14.0
+    video: {from: start, to: end, fps: 8}
   # ── 打球の無いサヨナラ（issue #1262）。押し出し四球／暴投で決着しても場面が流れる ──
   - id: walkoff-1262-walk
     name: "サヨナラの場面・押し出し四球（issue #1262）"
