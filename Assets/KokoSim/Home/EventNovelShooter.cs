@@ -213,6 +213,7 @@ namespace KokoSim.Unity.Home
                 foreach (var scene in scenes)
                 {
                     DraftService.RaiseScene(scene.Item2, scene.Item3);
+                    Debug.Log("[EV] ドラフト場面を積んだ: " + scene.Item1 + " pending=" + EventService.Pending.Count);
 
                     var doc4 = Open("HomeDashboard");
                     yield return null; yield return null;
@@ -220,6 +221,7 @@ namespace KokoSim.Unity.Home
                     var adv3 = doc4.rootVisualElement.Q<Button>("advance");
                     Submit(adv3);
                     yield return null; yield return null;
+                    Debug.Log("[EV] ドラフト提示後 display=" + nov5.resolvedStyle.display + " pending=" + EventService.Pending.Count);
 
                     var shot = 0;
                     for (var i = 0; i < 14 && nov5.resolvedStyle.display != DisplayStyle.None; i++)
