@@ -1989,5 +1989,5 @@ screens:
       - read: =EventService.HasPending
       - shot: 01-result-modal-no-talk
       - click: tm-result-ok
-      - wait: 30
+      - wait: 3000ms
       - shot: 02-after-ok-talk
