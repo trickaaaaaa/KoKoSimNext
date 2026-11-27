@@ -321,6 +321,17 @@ scenarios:
     bases: [1]
     seed: 20260736
 
+  # DH制の守備（1回表無死・自校が守る）。交代パネルの「指⇄投」＝DHの登板の撮影用（issue #1725）
+  - id: dh-mound-lab
+    name: DH制で守備・交代パネルでDHを登板させる（1回表無死）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "player", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    modern_rules: { dh: true, tiebreak: true }
+    seed: 20260737
+
   # ── 外野手があと一歩届かない飛球（issue #1075 追記3・#1084）。追う向きごとに1つ。最初の打席の打球が
   # 捕球余裕 −0.5〜0s で外野に落ちる＝3Dでは追う向きに合った「届かない」芝居（グラブの先を球が抜ける）が出る。
   #   back  … 右翼手の頭を越える（ライトへの三塁打・余裕 −0.32s）→ 背走ジャンプ
