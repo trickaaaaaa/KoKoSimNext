@@ -79,6 +79,17 @@ captures:
     video: {from: catch-0.8, to: release+0.9, fps: 30}
     probes: [ThrowSlipDiag]
 
+  # ── 内野手がライナーをノーバウンドで捕った後に、捕球の姿勢のまま位置が滑らないか（issue #1724）。
+  # CatchSlipDiag の毎コマ実測（捕球点と engine の野手位置の距離・体の寄せ量・足元と両足首の位置）で、
+  # 捕球〜保持〜畳むまでの水平移動と足の滑りを測る。catch＝送球の直前の区間の終わり ──
+  - id: infield-liner-slip-1724
+    name: "内野ライナーを捕った後の滑り（issue #1724・捕球〜保持の水平移動と足の滑りの実測）"
+    scenario: fair-fly-out-lab
+    manager: away
+    force: InfieldLineOut
+    video: {from: start, to: end, fps: 30}
+    probes: [CatchSlipDiag, BallHoldDiag, FieldCatchDiag]
+
   - id: foul-chased-1074
     name: "あと一歩届かなかったファウルフライを守備ビューで見せる（issue #1074 (a)）"
     scenario: of-grounder-norunner-lab

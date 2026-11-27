@@ -71,3 +71,34 @@ public static class ForcedSlowHandleGrounder
         return null;
     }
 }
+
+/// <summary>
+/// 強制発動「内野手が捕るライナーのアウト」（<see cref="ForcedOutcome.InfieldLineOut"/>・issue #1724 の撮影用）の打球を作る。
+/// 乱数は本流から引かず、決まった順に候補を試して、内野手が通り道（<c>TryLineDriveCatch</c>）でノーバウンド捕球する
+/// ライナーを返す。見つからなければ null（強制しない）。
+/// </summary>
+public static class ForcedInfieldLineOutBall
+{
+    public static BattedBall? For(
+        ForcedOutcome kind, FieldGeometry field, Aerodynamics aero,
+        IReadOnlyList<Fielder> fielders, FieldingCoefficients coeff)
+    {
+        if (kind != ForcedOutcome.InfieldLineOut) return null;
+        var probe = coeff with { ErrorBaseProb = 0.0, IrregularBounceProb = 0.0, FlyErrorBaseProb = 0.0 };
+        foreach (var bearing in new[] { -14.0, -10.0, -18.0, -6.0, 6.0, 10.0, 14.0, -22.0, 18.0, 22.0 })
+            for (var launch = 2.0; launch <= 12.0; launch += 2.0)
+                for (var exit = 36.0; exit <= 46.0; exit += 2.0)
+                {
+                    var ball = new BattedBall { ExitVelocityMps = exit, LaunchAngleDeg = launch, BearingDeg = bearing };
+                    var play = FieldingResolver.ResolveDetailed(
+                        ball, field, aero, BatterAttributes.LeagueAverage, fielders, probe, new Xoshiro256Random(1));
+                    if (play.Result != BattedBallResult.Out || !play.IsFly || play.Class != BattedBallClass.Liner) continue;
+                    if (play.FielderRole is not { } who || !IsInfielder(who)) continue;
+                    return ball;
+                }
+        return null;
+    }
+
+    private static bool IsInfielder(FieldPosition p) =>
+        p is FieldPosition.FirstBase or FieldPosition.SecondBase or FieldPosition.ThirdBase or FieldPosition.Shortstop;
+}

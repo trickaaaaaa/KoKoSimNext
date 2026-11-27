@@ -950,7 +950,7 @@ public static class GameEngine
                                or Debugging.ForcedOutcome.GroundFoul or Debugging.ForcedOutcome.HighFoul
                                or Debugging.ForcedOutcome.ThroughInfieldLeft or Debugging.ForcedOutcome.ThroughInfieldMiddle
                                or Debugging.ForcedOutcome.ThroughInfieldRight or Debugging.ForcedOutcome.SlowHandleGrounder
-                               or Debugging.ForcedOutcome.VerySlowHandleGrounder
+                               or Debugging.ForcedOutcome.VerySlowHandleGrounder or Debugging.ForcedOutcome.InfieldLineOut
                     ? built with { ForcedFoul = force }
                     : built;
             }
