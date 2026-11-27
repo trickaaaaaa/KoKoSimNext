@@ -13,6 +13,33 @@ namespace KokoSim.Engine.Match.Timeline;
 public static partial class TimelineBuilder
 {
     /// <summary>
+    /// 字幕「頭を越えた！」を出す打球か（issue #1738）。外野へ落ちた安打のうち、
+    /// (1) 着地が回収した野手の守備位置より後ろ（<see cref="OverTheHeadBehindM"/> 超）で、かつ
+    /// (2) 野手が着地から <see cref="OverTheHeadMinChaseSeconds"/> 以上たってから球に追いついた
+    /// （背走が間に合わず、球が野手の後ろへ抜けて転がったあとを追った）ものだけ。
+    /// 旧条件は (1) だけで、背走して捕ったフライ（外野へ飛んだ凡打の67%）や、着地とほぼ同時に拾った単打
+    /// （字幕の付いた単打の約8割）にまで付いていた。(2) は絵と同じ量（着地から回収までの秒）なので、
+    /// 字幕が付いた安打は実測でほぼ二塁打以上になる。表示専用＝判定・乱数・帯は動かない。
+    /// </summary>
+    internal static bool IsOverTheHead(FieldingPlay play, IReadOnlyList<Fielder> fielders)
+    {
+        if (play.Result is not (BattedBallResult.Single or BattedBallResult.Double or BattedBallResult.Triple)
+            || play.RangeM <= FieldGeometry.OutfieldBoundaryM
+            || play.FieldedAtSeconds is not { } fieldedAt || fieldedAt - play.HangTimeSeconds < OverTheHeadMinChaseSeconds
+            || play.FielderRole is not { } role) return false;
+        var fielder = fielders.FirstOrDefault(f => f.Position == role);
+        if (fielder is null) return false;
+        var startRange = Math.Sqrt(fielder.Location.X * fielder.Location.X + fielder.Location.Z * fielder.Location.Z);
+        return play.RangeM > startRange + OverTheHeadBehindM;
+    }
+
+    /// <summary>「頭を越えた」と言える、着地から野手が球に追いつくまでの最小の秒（走力約7m/sで約7m＝落下点で待てていない）。</summary>
+    internal const double OverTheHeadMinChaseSeconds = 1.0;
+
+    /// <summary>「頭を越えた」と言える、回収した野手の守備位置から着地までの後ろ向きの距離[m]。</summary>
+    internal const double OverTheHeadBehindM = 1.0;
+
+    /// <summary>
     /// <see cref="BuildBattedBall"/> の段間の受け渡し（中間結果）。回収点・捕球/着地時刻・一塁カバー役・失策球の行き先など
     /// 前段で決まる値をフィールドに持ち、段（打球の飛行→一塁送球→打者走者→判定→守備の寄り→失策の追い→キャプション）を
     /// 書いた順に呼ぶ。<b>段の呼び出し順が挙動そのもの</b>（後段は前段が決めた値を読む）。乱数は引かない。
@@ -263,14 +290,8 @@ public static partial class TimelineBuilder
 
             // 打球の行方の手がかり（issue fence-carom-and-over-the-head-cues ③）。絵だけでは
             // 「アウトじゃない＝じゃあ長打か」と結果から逆算するしかなかったので、言葉でも出す。
-            // 判定は増やさない＝engine が既に持っている観測（着地点の深さ・ReachedFence）を写すだけ。
-            if (play.Result != BattedBallResult.HomeRun && play.RangeM > FieldGeometry.OutfieldBoundaryM
-                && play.FielderRole is { } overRole && Find(fielders, overRole) is { } overFielder)
-            {
-                var startRange = Math.Sqrt(
-                    overFielder.Location.X * overFielder.Location.X + overFielder.Location.Z * overFielder.Location.Z);
-                if (play.RangeM > startRange + 1.0) captions.Add(new TimelineCaption(landAt, "頭を越えた！"));
-            }
+            // 判定は増やさない＝engine が既に持っている観測（着地点の深さ・捕球の余裕・ReachedFence）を写すだけ。
+            if (IsOverTheHead(play, fielders)) captions.Add(new TimelineCaption(landAt, "頭を越えた！"));
             if (play.Carom is { } caromCaption)
                 captions.Add(new TimelineCaption(ContactAt + caromCaption.HitAtSeconds, "フェンス直撃！"));
         }
