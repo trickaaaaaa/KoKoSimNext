@@ -3392,6 +3392,8 @@ public sealed class GameProgress
         Home = home;
         Ctx = ctx;
         Rng = rng;
+        away.BindMatchInjuries(Injuries);
+        home.BindMatchInjuries(Injuries);
         if (ctx.CapturePitches)
         {
             _awayPicture = LineupPicture.Of(away);

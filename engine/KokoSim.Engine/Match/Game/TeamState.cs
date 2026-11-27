@@ -25,6 +25,8 @@ public sealed class TeamState
     // 並びは背番号順＝プレイヤーが決めた優先度（issue #270）。使った選手はここから抜く。
     private readonly List<Player> _reserves;
     private readonly HashSet<Player> _retired = new(); // 退場者（高校野球=リエントリー禁止で再出場不可）
+    private readonly List<Player> _retiredOrder = new(); // 退場者の退いた順（伝令役の候補の並びを決定論にする）
+    private IReadOnlyList<MatchInjuryEvent> _matchInjuries = Array.Empty<MatchInjuryEvent>();
     private readonly string?[] _replacedAtSlot = new string?[9]; // 各スロットで直近に退いた選手名（ライブ観戦の交代表示・観測用）
     // ボックススコアの出場表記用（観測専用＝試合結果・乱数に触れない）。途中出場の入り方・入った打順枠・誰の代わりか、
     // 守備に就いた位置の並び（順番どおり・直前と同じ位置は足さない）。守備位置は「実際に守った位置」だけを持ち、選手本来の適性は使わない。
@@ -1271,7 +1273,7 @@ public sealed class TeamState
         // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
         var outgoing = CurrentPitcher;
         // 実況上の区別は「控えから出たか／守備に就いていた者が回ったか」。ここは常に控えからの登板。
-        _retired.Add(KeyOf(outgoing));
+        Retire(KeyOf(outgoing));
         // 誰が上がっても本人の投手能力で投げる（#381。旧実装はここで潜在能力を詰め替えていた）。
         // 守備位置は「投手」へ揃える。控えの本来の守備位置（中堅など）のまま打順へ入れると、
         // 打順の守備位置が重複して守備位置から打順を引く側（交代パネルの打順表）が同じ選手を2行出す（issue #1063）。
@@ -1323,6 +1325,53 @@ public sealed class TeamState
 
     /// <summary>まだ使っていない控え（名簿順＝背番号順）。交代UIの指名候補。</summary>
     public IReadOnlyList<Player> AvailableReserves => _reserves;
+
+    private void Retire(Player key)
+    {
+        if (_retired.Add(key)) _retiredOrder.Add(key);
+    }
+
+    /// <summary>この試合の怪我の記録（<see cref="GameProgress.Injuries"/>）を結ぶ。伝令役の候補から怪我で退いた選手を外すのに使う（観測専用）。</summary>
+    internal void BindMatchInjuries(IReadOnlyList<MatchInjuryEvent> injuries) => _matchInjuries = injuries;
+
+    /// <summary>この試合で怪我をした選手か（<see cref="GameResult.Injuries"/> に積む試合中の怪我。試合前から故障中は含まない）。</summary>
+    public bool WasInjuredThisMatch(Player p)
+    {
+        foreach (var e in _matchInjuries)
+        {
+            if (e.TeamName != Name) continue;
+            if (e.PlayerSourceId is int id && p.SourceId is int pid ? id == pid
+                : e.PlayerName == p.Name && e.PlayerNumber == p.UniformNumber) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 伝令役の候補（設計書09 §3・issue #1736）＝ベンチに居る選手。未出場の控え（<see cref="AvailableReserves"/>・先頭）に続けて、
+    /// 交代で退いた選手を退いた順に並べる。控えを先頭に置くので、控えの添字だけで記録された従来の決定列は同じ人を指す。
+    /// 出場中の選手と、この試合で怪我をして退いた選手は入らない（試合前から故障中の選手は入る）。
+    /// </summary>
+    public IReadOnlyList<Player> MessengerCandidates
+    {
+        get
+        {
+            if (_retiredOrder.Count == 0) return _reserves;
+            var list = new List<Player>(_reserves);
+            foreach (var p in _retiredOrder)
+            {
+                if (IsInPlay(p) || WasInjuredThisMatch(p)) continue;
+                list.Add(p);
+            }
+            return list;
+        }
+    }
+
+    private bool IsInPlay(Player p)
+    {
+        if (KeyOf(CurrentPitcher).Equals(p)) return true;
+        foreach (var l in _lineup) if (KeyOf(l).Equals(p)) return true;
+        return false;
+    }
 
     // ===== 約束の見張り（設計書04 §2.4）。PromiseGuard が null なら全部が従来の値をそのまま返す。 =====
 
@@ -1537,7 +1586,7 @@ public sealed class TeamState
             {
                 // ②: 旧投手は退場（リエントリー禁止）。ベンチ野手が旧投手の打順スロットへ入り、空いた守備位置を守る。
                 _reserves.Remove(benchFielder);
-                _retired.Add(KeyOf(retiringPitcher));
+                Retire(KeyOf(retiringPitcher));
                 _replacedAtSlot[_pitcherSlot] = retiringPitcher.Name;
                 _lineup[_pitcherSlot] = Rekey(benchFielder, benchFielder with { Position = vacated });
                 NoteEnteredLineup(_lineup[_pitcherSlot], _pitcherSlot, retiringPitcher.Name, pitchedBefore: false);
@@ -1605,7 +1654,7 @@ public sealed class TeamState
         }
 
         // 共通: 野手Fをマウンドへ（打順スロット維持）、旧投手Pは退場、DH解除。
-        _retired.Add(KeyOf(retiringPitcher));
+        Retire(KeyOf(retiringPitcher));
         _lineup[fSlot] = mound;
         CurrentPitcher = mound;
         _pitcherSlot = fSlot;
@@ -1615,7 +1664,7 @@ public sealed class TeamState
         {
             // ②: ベンチ野手が空き守備へ・元DHの打順スロットへ入る。元DHは退場（リエントリー禁止）。
             _reserves.Remove(benchFielder!);
-            _retired.Add(KeyOf(dh));
+            Retire(KeyOf(dh));
             _replacedAtSlot[_dhSlot] = dh.Name;
             _lineup[_dhSlot] = Rekey(benchFielder!, benchFielder! with { Position = vacated });
             NoteEnteredLineup(_lineup[_dhSlot], _dhSlot, dh.Name, pitchedBefore: false);
@@ -1785,14 +1834,14 @@ public sealed class TeamState
         var displaced = _lineup[fSlot];
         var mound = Rekey(reliever, reliever with { Position = FieldPosition.Pitcher });
 
-        _retired.Add(KeyOf(displaced));
+        Retire(KeyOf(displaced));
         _replacedAtSlot[fSlot] = displaced.Name;
         if (_usesDh)
         {
             // 規則5.11: 投手が守備に就けば DH は消滅する。元投手は押し出された野手の打順スロットで打ち、
             // 新投手が DH の打順スロットへ入る（打順は9人のまま）。元 DH は守る位置が無く退場する。
             var dh = _lineup[_dhSlot];
-            _retired.Add(KeyOf(dh));
+            Retire(KeyOf(dh));
             _replacedAtSlot[_dhSlot] = dh.Name;
             _lineup[fSlot] = Rekey(oldPitcher, oldPitcher with { Position = to });
             NoteEnteredLineup(_lineup[fSlot], fSlot, displaced.Name, pitchedBefore: true);
@@ -1875,7 +1924,7 @@ public sealed class TeamState
             var fielder = FielderAt(pos);
             var target = fielder is null ? -1 : IndexOf(fielder);
             if (target < 0) return false;
-            _retired.Add(KeyOf(_lineup[target]));
+            Retire(KeyOf(_lineup[target]));
             replacedName = _lineup[target].Name;
             _replacedAtSlot[target] = replacedName;   // 観測: 守備位置に就いた選手が退いた
             _lineup[_dhSlot] = Rekey(dhPlayer, dhPlayer.AtPosition(pos));   // 守備力も就く位置の適性で作り直す（#1245）
@@ -1883,7 +1932,7 @@ public sealed class TeamState
         }
         else
         {
-            _retired.Add(KeyOf(dhPlayer));
+            Retire(KeyOf(dhPlayer));
             replacedName = dhPlayer.Name;
             _replacedAtSlot[_dhSlot] = replacedName;   // 観測: DHが退いて投手が打順へ
             pitcherSlot = _dhSlot;
@@ -1909,7 +1958,7 @@ public sealed class TeamState
         var outgoing = CurrentPitcher;
         var dh = _lineup[_dhSlot];
         var mound = Rekey(dh, dh with { Position = FieldPosition.Pitcher });
-        _retired.Add(KeyOf(outgoing));
+        Retire(KeyOf(outgoing));
         _lineup[_dhSlot] = mound;
         CurrentPitcher = mound;
         _pitcherSlot = _dhSlot;
@@ -1943,7 +1992,7 @@ public sealed class TeamState
         _entry[entrantKey] = (kind, slot, outgoing.Name);
         // 守備交代で入った選手は、就いた位置から始まる（代打・代走は守備に就いた打席から足す）。
         if (kind == BoxEntry.DefensiveSub) NotePosition(_lineup[slot], _lineup[slot].Position);
-        _retired.Add(KeyOf(outgoing));
+        Retire(KeyOf(outgoing));
         _replacedAtSlot[slot] = outgoing.Name;   // ライブ観戦の交代表示用（観測データ）
         Substitutions++;
         return true;

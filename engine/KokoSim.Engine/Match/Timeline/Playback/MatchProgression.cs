@@ -605,7 +605,7 @@ public sealed class MatchProgression
     public PlayerTimeoutResult CallTimeout(bool teamIsAway, int? messengerIndex = null, bool? shownOffenseIsTop = null)
     {
         if (IsFinished) return PlayerTimeoutResult.Unavailable;
-        var reserves = _p.OffenseOf(teamIsAway).AvailableReserves;
+        var reserves = _p.OffenseOf(teamIsAway).MessengerCandidates;
         var idx = messengerIndex is int i && i >= 0 && i < reserves.Count ? i : -1;
         bool? asOffense = shownOffenseIsTop is bool shown ? shown == teamIsAway : null;
         var kind = SubstitutionCommands.CallTimeout(_p, teamIsAway, idx >= 0 ? idx : null, asOffense);
@@ -616,11 +616,12 @@ public sealed class MatchProgression
     }
 
     /// <summary>
-    /// 伝令役の候補（issue #716）＝いまベンチに居る控え（未出場）。<see cref="CallTimeout"/> の messengerIndex はこの並び。
+    /// 伝令役の候補（issue #716・#1736）＝いまベンチに居る未出場の控え＋交代で退いた選手（<see cref="TeamState.MessengerCandidates"/>）。
+    /// <see cref="CallTimeout"/> の messengerIndex はこの並び。
     /// 表示専用の読み口（乱数・状態を動かさない）。0人なら伝令役を選ばず記録員が走る扱い。
     /// </summary>
     public IReadOnlyList<Player> TimeoutMessengerCandidates(bool teamIsAway)
-        => _p.OffenseOf(teamIsAway).AvailableReserves;
+        => _p.OffenseOf(teamIsAway).MessengerCandidates;
 
     /// <summary>
     /// 1球采配（設計書15 Phase C-3）: 次の1球への打撃指示（強攻/待て）を予約する。

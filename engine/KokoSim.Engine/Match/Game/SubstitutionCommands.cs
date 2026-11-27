@@ -25,7 +25,7 @@ internal static class SubstitutionCommands
     public static int CallTimeout(GameProgress p, bool teamIsAway, int? messengerIndex, bool? asOffense = null)
     {
         var team = p.OffenseOf(teamIsAway);
-        var reserves = team.AvailableReserves;
+        var reserves = team.MessengerCandidates;
         var messenger = messengerIndex is int i && i >= 0 && i < reserves.Count ? reserves[i] : null;
         var duration = p.Ctx.Tactics.TimeoutDurationPa;
         if (asOffense ?? IsOnOffense(p, teamIsAway))
