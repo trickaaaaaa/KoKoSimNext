@@ -17,6 +17,13 @@ public sealed record AtBatResult(PlateAppearanceResult Result, int Pitches)
     public PlayTimeline? Timeline { get; init; }
 
     /// <summary>
+    /// 悪送球を拾い直してアウトの打席が走者ありだったとき（issue #1735）だけ入る、<see cref="Timeline"/> の
+    /// 「一塁へ正着する普通の送球」版。併殺・封殺・転送で最初の送球を差し替える経路は、この絵を土台にする
+    /// （逸れた球を拾い直す絵は差し替え先の送球を持たない）。GameEngine が走塁結果を見て選ぶ。
+    /// </summary>
+    public PlayTimeline? TimelineWithoutRecoveredThrow { get; init; }
+
+    /// <summary>
     /// 守備解決の幾何（設計書12 §2.2, F1）。CaptureTimeline 時のみ非null＝統計シムはゼロコスト。
     /// GameEngine が塁状況確定後に併殺の送球連鎖などを組むため、処理野手・捕球点・送球時刻を持ち回す。
     /// </summary>

@@ -99,12 +99,26 @@ public sealed class MisplayOutPictureTests
         Assert.Equal(3.0, Dist(thrown.To, first), 3);
         Assert.Equal(Dist(fieldPoint, first) + 3.0, Dist(fieldPoint, thrown.To), 3);
 
-        // 一塁手が逸れた球へ走り、アウトの時刻に拾う
+        // 一塁手が逸れた球へ走って拾い、拾った球を持って一塁へ戻って踏む＝アウト（issue #1735）。
+        // 拾う時刻はアウトの時刻より、塁へ戻る時間（逸れ幅÷脚力）だけ前。
         var outAt = TimelineBuilder.ContactAt + 3.8;
+        var firstBaseman = Field.StandardAlignment().First(f => f.Position == FieldPosition.FirstBase);
+        var returnSeconds = 3.0 / Math.Max(4.0, firstBaseman.Attributes.SprintSpeedMps);
         var pick = Assert.Single(tl.Moves, m => m.Task == FielderTask.Chase);
         Assert.Equal(FieldPosition.FirstBase, pick.Role);
-        Assert.Equal(outAt, pick.T1, 6);
+        Assert.Equal(outAt - returnSeconds, pick.T1, 6);
         Assert.Equal(0.0, Dist(pick.To, thrown.To), 6);
+
+        var back = Assert.Single(tl.Moves, m => m.Role == FieldPosition.FirstBase && m.Task == FielderTask.CoverBase && m.T0 >= pick.T1 - 1e-9);
+        Assert.Equal(pick.T1, back.T0, 6);
+        Assert.Equal(outAt, back.T1, 6);
+        Assert.Equal(0.0, Dist(back.To, first), 6);
+        var carry = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Carry);
+        Assert.Equal(FieldPosition.FirstBase, carry.FromRole);
+        Assert.Equal("first", carry.ToBase);
+        Assert.Equal(pick.T1, carry.T0, 6);
+        Assert.Equal(outAt, carry.T1, 6);
+        Assert.Equal(0.0, Dist(carry.From, thrown.To), 6);
 
         // 判定はアウト（エラーは出さない）・時刻は判定が決めた時刻
         var j = Assert.Single(tl.Judgements);
@@ -142,13 +156,27 @@ public sealed class MisplayOutPictureTests
         Assert.Equal(outAt, j.T, 6);
     }
 
-    /// <summary>走者がいる打席は従来の絵（一塁へ正着する送球）。併殺・封殺の組み直しが最初の送球を差し替えるため。</summary>
+    /// <summary>走者がいる打席でも、逸れた球を拾い直して一塁へ戻る絵は走者なしと同じ（issue #1735）。</summary>
     [Fact]
-    public void RecoveredThrowWithRunnersOn_KeepsThePlainOutPicture()
+    public void RecoveredThrowWithRunnersOn_DrawsTheSameRecoveryPicture()
     {
         var play = RecoveredThrow(scatterM: 3.0, byBackup: false, outSeconds: 3.8, batterToFirst: 4.6);
         var tl = TimelineBuilder.BuildBattedBall(
             play, Field.StandardAlignment(), Field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var thrown = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        Assert.Null(thrown.ToBase);
+        Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Carry && b.ToBase == "first");
+        Assert.Single(tl.Moves, m => m.Task == FielderTask.Chase);
+    }
+
+    /// <summary>併殺などが最初の送球を差し替える土台（drawRecoveredThrow=false）は従来の絵＝一塁へ正着する送球。</summary>
+    [Fact]
+    public void RecoveredThrow_PlainBaseForReplacingPaths_KeepsTheStraightThrow()
+    {
+        var play = RecoveredThrow(scatterM: 3.0, byBackup: false, outSeconds: 3.8, batterToFirst: 4.6);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: true, TimelineBuilder.DescribeResult(play),
+            drawRecoveredThrow: false);
         Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw && b.ToBase == "first");
         Assert.DoesNotContain(tl.Moves, m => m.Task == FielderTask.Chase);
     }

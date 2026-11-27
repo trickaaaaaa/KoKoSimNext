@@ -638,17 +638,18 @@ public sealed class AtBatSession
 
         // タイムライン出力（CHANGELOG 32: 既定オフ。UI再生時のみ構築＝乱数不使用）。
         Timeline.PlayTimeline? timeline = null;
+        Timeline.PlayTimeline? timelineWithoutRecoveredThrow = null;
         if (ctx.CaptureTimeline)
         {
-            timeline = Timeline.TimelineBuilder.BuildBattedBall(
-                play, fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
-                Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
-                ctx.Fielding.CatchCloseCallMarginSeconds, ctx.Fielding.InfielderFieldingRadiusM,
-                _batterPlayer, ctx.Fielding);
+            timeline = BuildBattedBallTimeline(play, ctx, fielders, drawRecoveredThrow: true);
+            // 走者ありの「悪送球を拾い直してアウト」は、併殺・封殺などが最初の送球を差し替える場合の土台も控える（issue #1735）
+            if (ctx.RunnersOn && play.RecoveredThrowScatterM is not null)
+                timelineWithoutRecoveredThrow = BuildBattedBallTimeline(play, ctx, fielders, drawRecoveredThrow: false);
         }
         _result = new AtBatResult(pa, _pitchCount)
         {
             Timeline = timeline,
+            TimelineWithoutRecoveredThrow = timelineWithoutRecoveredThrow,
             // F2: 本塁クロスプレー（バックホーム憤死）が結果に効くため、幾何を常時保持する
             // （F1では捕捉時のみ＝統計シムゼロコストだったが、F2で判定入力になったので常時計算）。
             Play = play,
@@ -656,6 +657,14 @@ public sealed class AtBatSession
         };
         return new PitchResolution(EndsPlateAppearance: true);
     }
+
+    private Timeline.PlayTimeline BuildBattedBallTimeline(
+        FieldingPlay play, AtBatContext ctx, IReadOnlyList<Fielder> fielders, bool drawRecoveredThrow)
+        => Timeline.TimelineBuilder.BuildBattedBall(
+            play, fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
+            Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
+            ctx.Fielding.CatchCloseCallMarginSeconds, ctx.Fielding.InfielderFieldingRadiusM,
+            _batterPlayer, ctx.Fielding, drawRecoveredThrow: drawRecoveredThrow);
 
     /// <summary>
     /// この1球の解決済みの値をそのまま写す（設計書15 §4）。新たな抽選はしない。

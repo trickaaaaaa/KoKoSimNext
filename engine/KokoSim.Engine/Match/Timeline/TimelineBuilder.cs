@@ -233,12 +233,14 @@ public static partial class TimelineBuilder
         double fielderReachM = 4.20,
         Player? batter = null,
         FieldingCoefficients? fieldingCoeff = null,
-        double fairLineThresholdM = 1.5)
+        double fairLineThresholdM = 1.5,
+        bool drawRecoveredThrow = true)
     {
         // 段ごとの中身と段間で受け渡す値は TimelineBuilder.BattedBall.cs の BattedBallBuild（issue #1642）。
         return new BattedBallBuild(
             play, fielders, field, formations ?? FormationTable.Default, runnersOn, resultText,
-            closeCallMarginSeconds, closeFlyMarginSeconds, fielderReachM, batter, fieldingCoeff, fairLineThresholdM)
+            closeCallMarginSeconds, closeFlyMarginSeconds, fielderReachM, batter, fieldingCoeff, fairLineThresholdM,
+            drawRecoveredThrow)
             .Build();
     }
 

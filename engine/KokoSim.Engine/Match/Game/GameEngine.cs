@@ -2202,6 +2202,12 @@ public static class GameEngine
 
             // タイムラインへ走者レッグを合成（CHANGELOG 32: 走者進塁の動きも再生対象）。
             var timeline = res.Timeline;
+            // 悪送球を拾い直してアウト（issue #1735）: 走者がいても、併殺・封殺・転送などで最初の送球を差し替える
+            // 経路が無ければ逸れた球を拾い直す絵のまま。差し替える経路があれば一塁へ正着する普通の送球を土台にする。
+            if (res.TimelineWithoutRecoveredThrow is { } plainFirstThrow
+                && (batterSafeOnFc || runnerMoves.Any(m => m.Out || m.SelfForceDoublePlayLead || m.FirstBaseSelfForceTag
+                                                           || m.ForceOnly || m.HomeForceRelay)))
+                timeline = plainFirstThrow;
             if (timeline is not null)
             {
                 if (runnerMoves.Count > 0)
