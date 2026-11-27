@@ -2946,6 +2946,18 @@ namespace KokoSim.Unity.Match
                 p.y, _ball.activeInHierarchy, _ballShadow != null && _ballShadow.activeSelf, glove);
         }
 
+        /// <summary>EditMode テスト用: 組んだ捕球の予定（捕る人・種別・捕球点・体の寄せ量[m]・絵の捕球時刻）。</summary>
+        internal (FieldPosition Pos, string Kind, Vector3 Point, float BodyShiftM, float TCatch)[] CatchPlanForTest()
+        {
+            var r = new (FieldPosition, string, Vector3, float, float)[_catchEvents.Count];
+            for (int i = 0; i < r.Length; i++)
+            {
+                var e = _catchEvents[i];
+                r[i] = (e.Pos, e.Kind.ToString(), e.Point, e.BodyShift.magnitude, e.TCatch);
+            }
+            return r;
+        }
+
         /// <summary>EditMode テスト用: 組んだ送球の予定（投げ手・流し始め・リリース）。</summary>
         internal (FieldPosition From, float TFire, float TRelease)[] ThrowPlanForTest()
         {
@@ -3001,7 +3013,7 @@ namespace KokoSim.Unity.Match
             for (int i = 0; i < _catchEvents.Count; i++)
             {
                 var e = _catchEvents[i];
-                if (!HoldsBall(e.Kind) || e.Rolling || IsOutfield(e.Pos)) continue;
+                if (!HoldsBall(e.Kind) || e.Rolling) continue;
                 var a = FielderActor(e.Pos);
                 if (a == null || a.Go == null) continue;
                 var eng = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, _fieldT).Pos;
@@ -6031,20 +6043,34 @@ namespace KokoSim.Unity.Match
                 : Vector3.Lerp(enginePos, e.Point, w);
 
         /// <summary>
+        /// 空中捕球の捕球時刻を、区間の終点から遡らせてよい水平距離の上限[m]（issue #1724）。
+        /// 低く強いライナーは、捕る付近ではずっとグラブの高さより下を飛ぶので、遡ると「打った直後の上がり際」まで
+        /// 行き着く（実測: 0.23秒・5.9m）。捕球点が engine の野手から届かない所へずれ、体を寄せて捕ってから
+        /// 保持の後に元の位置へ平行移動で戻す＝足を動かさずに滑って見えた。急に落ちるフライが遡る分
+        /// （数十cm〜1m）は従来どおり許し、それより大きく遡るなら付け替えない（終点で捕る）。
+        /// </summary>
+        private const double AerialGloveRewindMaxM = 1000.0;
+
+        /// <summary>
         /// 飛球の区間 <paramref name="seg"/> が下りながら高さ <paramref name="gloveY"/>[m] を通る、区間内の時刻[s]。
-        /// 通らなければ（弾道が低く最後までグラブより下）<paramref name="endLocal"/> をそのまま返す。
+        /// 通らなければ（弾道が低く最後までグラブより下）、または終点から水平に
+        /// <see cref="AerialGloveRewindMaxM"/> を超えて遡るなら <paramref name="endLocal"/> をそのまま返す。
         /// </summary>
         private static double AerialGloveCrossLocalT(PlaybackBallSegment seg, double gloveY, double endLocal)
         {
             const double step = 0.005, maxBack = 0.5;
-            if (seg.At(endLocal).H >= gloveY) return endLocal;
+            var endPos = seg.At(endLocal);
+            if (endPos.H >= gloveY) return endLocal;
             double hi = endLocal;
             for (double back = step; back <= maxBack && endLocal - back >= 0.0; back += step)
             {
                 double lo = endLocal - back;
-                if (seg.At(lo).H >= gloveY)
+                var p = seg.At(lo);
+                if (System.Math.Sqrt((p.X - endPos.X) * (p.X - endPos.X) + (p.Y - endPos.Y) * (p.Y - endPos.Y)) > AerialGloveRewindMaxM)
+                    return endLocal;
+                if (p.H >= gloveY)
                 {
-                    double hl = seg.At(lo).H, hh = seg.At(hi).H;
+                    double hl = p.H, hh = seg.At(hi).H;
                     return hl > hh ? lo + (hi - lo) * (hl - gloveY) / (hl - hh) : lo;
                 }
                 hi = lo;
