@@ -1707,6 +1707,20 @@ screens:
       - hover: .ms-row[2]
       - shot: 02-compare-two
 
+  # 怪我タグの部品を交代パネルと共有にした後も、スタメン設定の見た目が変わらないこと（issue #1729）
+  - id: lineup-injury-1729
+    name: "スタメン設定の怪我タグ（打順の行・控え・先発投手）が部品共有後も崩れない（issue #1729）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: NewTeamService.Skip()
+      - set: {RosterService.Active.0.Injury: Minor, RosterService.Active.0.InjuryType: Sprain, RosterService.Active.0.InjuryWeeksRemaining: 2}
+      - set: {RosterService.Active.1.Injury: Moderate, RosterService.Active.1.InjuryType: Inflammation, RosterService.Active.1.InjuryWeeksRemaining: 3}
+      - set: {RosterService.Active.12.Injury: Moderate, RosterService.Active.12.InjuryType: Inflammation, RosterService.Active.12.InjuryWeeksRemaining: 3}
+      - show: LineupSetting
+      - wait: 5
+      - shot: 01-lineup-injury
+
   - id: hover-gap-no-flicker-1727
     name: "スタメン設定・メンバー設定：行から行へ動かす隙間で比較が既定の選手へ戻らない／一覧の外へ出ると戻る（#1727）"
     steps:
