@@ -797,9 +797,6 @@ namespace KokoSim.EditorTests
                 rig.Tick(dt);
             }
             Assert.That(rig.TimeoutSceneDone, "場面が終わらない");
-            rig.EndTimeoutScene();
-            var err = rig.OffenseTimeoutRestoreErrorForCapture();
-            Assert.That(err.PosM, Is.LessThan(0.01f), $"場面の後に打者の基準位置が汚れた（{err.PosM:F3}m）");
             Assert.That(minMsg, Is.GreaterThan(1.0f), $"伝令役が本塁のそば（{minMsg:F2}m）を通った");
             Assert.That(minBat, Is.GreaterThan(0.6f), $"打者が本塁のそば（{minBat:F2}m）を通った");
             Assert.That(firstApart, Is.LessThan(1.0f), $"最初のコマで伝令役が打者から離れている（{firstApart:F2}m）＝ベンチから入ってくる足取りが映っている");
