@@ -327,6 +327,28 @@ namespace KokoSim.Unity.Match
             return " skull lo=" + lo.ToString("F3") + " hi=" + hi.ToString("F3") + " browband lo=" + brow.ToString("F3") + " hi=" + browHi.ToString("F3") + " ";
         }
 
+        private bool _plateHeadDone;
+
+        internal string PlateUmpHeadCloseForCapture
+        {
+            get
+            {
+                var a = _umpire;
+                if (a == null || a.Animator == null || _plateHeadDone) return "-";
+                var head = a.Animator.GetBoneTransform(HumanBodyBones.Head);
+                if (head == null) return "no-head";
+                _plateHeadDone = true;
+                var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
+                var face = head.TransformDirection(a.HeadFwdLocal).normalized;
+                var up = head.TransformDirection(a.HeadUpLocal).normalized;
+                var side = Vector3.Cross(up, face).normalized;
+                var focus = head.position + up * 0.09f;
+                ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_plate-head-front.png"));
+                ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_plate-head-side.png"));
+                return SliceText(a, head);
+            }
+        }
+
         /// <summary>頭の枠の高さごとの前後・左右の範囲（帽子メッシュと頭の頂点を並べる診断）。</summary>
         private string SliceText(Actor a, Transform head)
         {
