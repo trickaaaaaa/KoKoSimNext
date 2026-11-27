@@ -730,6 +730,71 @@ namespace KokoSim.EditorTests
             Assert.That(d, Is.LessThan(1.2f), $"捕球点が engine の野手の位置から {d:F2}m 離れている");
         }
 
+        // ---- バントのあとの打者走者の足の滑り（issue #1734） ----
+
+        /// <summary>
+        /// 本塁→一塁のレッグ1本だけの打者走者（バント・振り逃げ。engine は内野ゴロでしか駆け抜けのレッグを積まない）は、
+        /// 一塁に着くまで走りの段で流れ（足の運びと進みが合う）、塁を通ってから駆け抜けの減速クリップへ移ること。
+        /// 駆け抜けのレッグを補わないと、本塁→一塁の全編を減速クリップ（全長2.67s）で流す＝走り→歩きの足の運びのまま
+        /// 約4秒で27mを進み、足が地面を滑る（診断は走者の毎コマの段: -2＝駆け抜けクリップ）。
+        /// </summary>
+        [Test]
+        public void BuntBatterRunner_RunsOnTheLadderToFirst_ThenOverruns()
+        {
+            var rig = Rig;
+            var tl = new KokoSim.Engine.Match.Timeline.PlayTimeline
+            {
+                Ball = new List<KokoSim.Engine.Match.Timeline.BallSegment>
+                {
+                    new KokoSim.Engine.Match.Timeline.BallSegment
+                    {
+                        Kind = KokoSim.Engine.Match.Timeline.BallSegmentKind.Roll, T0 = 0.85, T1 = 1.6,
+                        From = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 0),
+                        To = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 4),
+                    },
+                },
+                Runners = new List<KokoSim.Engine.Match.Timeline.RunnerLeg>
+                {
+                    new KokoSim.Engine.Match.Timeline.RunnerLeg
+                    {
+                        Label = "打", T0 = 0.85, T1 = 5.32,
+                        From = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 0),
+                        To = new KokoSim.Engine.Match.Timeline.TimelinePoint(
+                            KokoSim.Engine.Match.Field.FieldDiagramGeometry.First.X,
+                            KokoSim.Engine.Match.Field.FieldDiagramGeometry.First.Y),
+                        Force = true,
+                    },
+                },
+                Result = "テスト", Duration = 7.0, ResolvedAt = 7.0,
+            };
+            rig.BeginFieldPlay(KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl), 0f);
+            float step = 1f / DuelStageRig.PoseFps;
+            for (float t = 0f; t < 6.4f; t += step)
+            {
+                rig.SetFieldTime(t);
+                rig.Tick(step);
+            }
+
+            int onLadder = 0, overrun = 0;
+            float slipMin = float.MaxValue, slipMax = 0f;
+            foreach (var line in rig.RunnerDiagForCapture().Split('\n'))
+            {
+                var f = line.Split('\t');
+                if (f.Length != 6 || f[0] != "打" || !float.TryParse(f[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ft)) continue;
+                int ladder = int.Parse(f[3]);
+                if (ladder == -2) { overrun++; Assert.That(ft, Is.GreaterThan(5.3f), $"塁に着く前（t={ft:F2}s）から駆け抜けクリップを流している"); }
+                if (ladder < 0) continue;
+                onLadder++;
+                float slip = float.Parse(f[5], System.Globalization.CultureInfo.InvariantCulture);
+                slipMin = Mathf.Min(slipMin, slip);
+                slipMax = Mathf.Max(slipMax, slip);
+            }
+            Assert.That(onLadder, Is.GreaterThan(100), "一塁へ走る間、走りの段で流れていない（全編を駆け抜けクリップで流している）");
+            Assert.That(overrun, Is.GreaterThan(5), "塁を通ってから駆け抜けクリップへ移っていない");
+            Assert.That(slipMin, Is.GreaterThan(0.87f), $"足が地面に対して空回りしている（滑りの比 {slipMin:F2}）");
+            Assert.That(slipMax, Is.LessThan(1.15f), $"足より体が速く進んでいる（滑りの比 {slipMax:F2}）");
+        }
+
         private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay RunThroughPlay(double fieldedAt, double release)
         {
             var fieldPt = new KokoSim.Engine.Match.Timeline.TimelinePoint(-18.5, 71.7);
