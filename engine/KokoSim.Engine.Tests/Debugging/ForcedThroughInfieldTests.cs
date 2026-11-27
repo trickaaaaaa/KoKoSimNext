@@ -98,6 +98,32 @@ public sealed class ForcedThroughInfieldTests
         Assert.Equal(stepsAfterCatchTail, !ReferenceEquals(play, afterTail));
     }
     /// <summary>
+    /// 強制発動 <see cref="ForcedOutcome.RecoveredWildThrowGrounder"/>（issue #1735 の撮影用）: 初球が二塁ゴロで、
+    /// 一塁送球が逸れ、一塁手が拾い直して塁へ戻ってアウトになる。絵では一塁手がアウトの時刻に塁の上にいる。
+    /// </summary>
+    [Theory]
+    [InlineData(1UL, false)]
+    [InlineData(42UL, false)]
+    [InlineData(1UL, true)]
+    public void RecoveredWildThrowGrounder_FirstBasemanReturnsToTheBagForTheOut(ulong seed, bool runnerOnSecond)
+    {
+        var prog = new MatchProgression(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, seed,
+            new ScenarioStart { Inning = 1, IsTop = true, Outs = 0, OnSecond = runnerOnSecond });
+        prog.ForceNext(ForcedOutcome.RecoveredWildThrowGrounder);
+        Assert.Equal(AdvancePitchResult.Pitch, prog.AdvancePitch());
+        Assert.Equal(AdvancePitchResult.PlateAppearance, prog.AdvancePitch());
+
+        var play = prog.Current!.Play!;
+        var outJudge = Assert.Single(play.Judgements, j => j.Label == "打" && j.Kind == JudgementKind.Out);
+        // 逸れた球を拾い直した打席＝一塁手が持ち運ぶ区間がある
+        Assert.Contains(play.Ball, b => b.FromRole == FieldPosition.FirstBase && b.ToBase == "first");
+        // アウトの瞬間に一塁手は一塁ベースの上にいる（issue #1735）
+        var field = new FieldGeometry();
+        var (pos, _) = PlaybackEvaluator.FielderAt(play, FieldPosition.FirstBase, outJudge.T + 0.01);
+        Assert.InRange(System.Math.Sqrt((pos.X - field.FirstBase.X) * (pos.X - field.FirstBase.X) + (pos.Y - field.FirstBase.Z) * (pos.Y - field.FirstBase.Z)), 0.0, 0.5);
+    }
+
+    /// <summary>
     /// 強制発動 <see cref="ForcedOutcome.InfieldLineOut"/>（issue #1724 の撮影用）: 初球が、内野手が通り道で
     /// ノーバウンド捕球するライナーのアウトになる。
     /// </summary>

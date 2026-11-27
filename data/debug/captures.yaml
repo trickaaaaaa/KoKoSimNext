@@ -965,6 +965,26 @@ captures:
     shots: [catch, catch+0.5, catch+1.0, catch+1.5, release-0.3, release]
     video: {from: catch-0.3, to: release+0.5, fps: 10}
 
+  # ── 一塁送球が逸れて一塁手が拾い直す（issue #1735）。拾った球を持って一塁へ戻って踏んでからアウトになる。
+  # probes の FielderDiag（pos=FirstBase の actualX/Z と一塁ベース (19.40, 19.40) の距離）でアウトの瞬間のベースとの距離を実測する ──
+  - id: wild-recover-1735
+    name: "二塁ゴロの送球が逸れ、一塁手が拾い直して一塁へ戻ってからアウト（走者なし・issue #1735）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: RecoveredWildThrowGrounder
+    seed: 3
+    shots: [release, judgement-0.8, judgement-0.4, judgement, judgement+0.4]
+    video: {from: release-0.2, to: judgement+0.6, fps: 10}
+    probes: [FielderDiag]
+
+  - id: wild-recover-runner-1735
+    name: "同じ場面で走者二塁（走者ありでも拾い直して戻る絵のまま・issue #1735）"
+    scenario: wild-recover-runner-lab
+    manager: home
+    shots: [release, judgement-0.8, judgement-0.4, judgement, judgement+0.4]
+    video: {from: release-0.2, to: judgement+0.6, fps: 10}
+    probes: [FielderDiag]
+
   # ── ヘルメットの色は帽子と別（issue #1620）。攻撃側（先攻）のヘルメットだけ赤へ差し替えて、打者と走者が選んだ色で被るか見る ──
   - id: helmet-color-batter-1620
     name: "対決ビューの打者のヘルメットが、配色のヘルメット色（赤）になる（issue #1620）"

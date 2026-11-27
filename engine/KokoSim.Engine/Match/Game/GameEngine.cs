@@ -702,6 +702,7 @@ public static class GameEngine
                 Debugging.ForcedOutcome.BuntInPlay => ctx with { Baserunning = paBaserunning },
                 Debugging.ForcedOutcome.FieldingError => ctx with { Fielding = Debugging.ForcedOutcomes.ApplyFielding(ctx.Fielding, force) },
                 Debugging.ForcedOutcome.SlowHandleGrounder => ctx with { Fielding = Debugging.ForcedOutcomes.ApplySlowHandle(ctx.Fielding) },
+                Debugging.ForcedOutcome.RecoveredWildThrowGrounder => ctx with { Fielding = Debugging.ForcedOutcomes.ApplyRecoveredWildThrow(ctx.Fielding) },
                 Debugging.ForcedOutcome.VerySlowHandleGrounder => ctx with
                 {
                     Fielding = Debugging.ForcedOutcomes.ApplySlowHandle(ctx.Fielding, Debugging.ForcedOutcomes.VerySlowHandleJitterSeconds),
@@ -951,6 +952,7 @@ public static class GameEngine
                                or Debugging.ForcedOutcome.ThroughInfieldLeft or Debugging.ForcedOutcome.ThroughInfieldMiddle
                                or Debugging.ForcedOutcome.ThroughInfieldRight or Debugging.ForcedOutcome.SlowHandleGrounder
                                or Debugging.ForcedOutcome.VerySlowHandleGrounder or Debugging.ForcedOutcome.InfieldLineOut
+                               or Debugging.ForcedOutcome.RecoveredWildThrowGrounder
                     ? built with { ForcedFoul = force }
                     : built;
             }
@@ -2202,6 +2204,12 @@ public static class GameEngine
 
             // タイムラインへ走者レッグを合成（CHANGELOG 32: 走者進塁の動きも再生対象）。
             var timeline = res.Timeline;
+            // 悪送球を拾い直してアウト（issue #1735）: 走者がいても、併殺・封殺・転送などで最初の送球を差し替える
+            // 経路が無ければ逸れた球を拾い直す絵のまま。差し替える経路があれば一塁へ正着する普通の送球を土台にする。
+            if (res.TimelineWithoutRecoveredThrow is { } plainFirstThrow
+                && (batterSafeOnFc || runnerMoves.Any(m => m.Out || m.SelfForceDoublePlayLead || m.FirstBaseSelfForceTag
+                                                           || m.ForceOnly || m.HomeForceRelay)))
+                timeline = plainFirstThrow;
             if (timeline is not null)
             {
                 if (runnerMoves.Count > 0)

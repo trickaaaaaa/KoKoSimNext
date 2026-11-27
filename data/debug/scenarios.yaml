@@ -500,6 +500,19 @@ scenarios:
     force: FieldingError
     seed: 20263303
 
+  # 二塁ゴロの一塁送球が逸れ、一塁手が拾い直して一塁へ戻ってアウト（issue #1735）。走者二塁（封殺・併殺の無い進塁だけ）の比較用。
+  # 強制発動 RecoveredWildThrowGrounder が打球・悪送球・小さい逸れ幅を作る（シードは問わない）。走者なしは of-grounder-norunner-lab を使う
+  - id: wild-recover-runner-lab
+    name: 守備検証・走者二塁で二塁ゴロの送球が逸れ、一塁手が拾い直して戻ってアウト（1回表無死二塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [2]
+    force: RecoveredWildThrowGrounder
+    seed: 20263500
+
   # ファーストゴロで投手が一塁カバーに入って受ける（ブラウザ版で投手の足が滑って見えた件・#1323）。最初の打席が 3-1。
   # チームは呼び出し側シード 1 で組む前提（if-grounder-3b-lab と同じ）
   - id: if-grounder-1b-cover-lab

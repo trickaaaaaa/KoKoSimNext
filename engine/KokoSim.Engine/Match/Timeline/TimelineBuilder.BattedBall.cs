@@ -52,6 +52,7 @@ public static partial class TimelineBuilder
         private readonly FieldGeometry field;
         private readonly FormationTable table;
         private readonly bool runnersOn;
+        private readonly bool drawRecoveredThrow;
         private readonly string resultText;
         private readonly double closeCallMarginSeconds;
         private readonly double closeFlyMarginSeconds;
@@ -103,6 +104,8 @@ public static partial class TimelineBuilder
         private FieldPosition? recoveredRole = null;
         private double recoveredPickupAt = 0.0;
         private double recoveredOutAt = 0.0;
+        // 一塁手自身が拾い直した場合に球を持って戻る先（一塁。issue #1735）。バックアップが拾う場合は null。
+        private TimelinePoint? recoveredReturnTo = null;
         // 受け手（一塁カバー役）が一塁へ着く見込み時刻（issue #672）。カバーの移動レッグと同じ式
         // （接触＋反応0.35s＋距離÷脚力）。投手の一塁カバーは全力で走っても約3.85秒かかるが、一塁手が
         // 処理する早い送球は 2.7〜3.5 秒で着く＝**投手が来る前に球だけが無人の一塁へ着いてアウトになる**
@@ -112,8 +115,9 @@ public static partial class TimelineBuilder
         public BattedBallBuild(
             FieldingPlay play, IReadOnlyList<Fielder> fielders, FieldGeometry field, FormationTable table, bool runnersOn,
             string resultText, double closeCallMarginSeconds, double closeFlyMarginSeconds, double fielderReachM,
-            Player? batter, FieldingCoefficients? fieldingCoeff, double fairLineThresholdM)
+            Player? batter, FieldingCoefficients? fieldingCoeff, double fairLineThresholdM, bool drawRecoveredThrow = true)
         {
+            this.drawRecoveredThrow = drawRecoveredThrow;
             this.play = play;
             this.fielders = fielders;
             this.field = field;
@@ -370,10 +374,10 @@ public static partial class TimelineBuilder
                         errorChaser = play.FielderRole;
                     }
                     else if (play.Result == BattedBallResult.Out && play.RecoveredThrowScatterM is { } scatterM
-                             && play.RecoveredThrowOutSeconds is { } recoveredOut && !play.UnassistedPutout && !runnersOn)
+                             && play.RecoveredThrowOutSeconds is { } recoveredOut && !play.UnassistedPutout && drawRecoveredThrow)
                     {
-                        // 走者なしの打席だけ。走者がいると GameEngine が併殺・二塁封殺で「最初の送球」を差し替える
-                        // （AppendDoublePlayThrows）ので、逸れた一塁送球と拾いに走るレッグが行き場を失う＝従来の絵へ落とす
+                        // 走者がいる打席で GameEngine が併殺・二塁封殺などで「最初の送球」を差し替える場合は、
+                        // 呼び出し側が drawRecoveredThrow=false で従来の絵（一塁へ正着する送球）を組ませる（issue #1735）。
                         // 悪送球を拾い直してアウト（issue #815・表示専用）: 送球は一塁を逸れて塁の先へ抜け、
                         // 一塁手自身かバックアップ（右翼手）が拾い直す。アウトの時刻は判定が決めた
                         // defenseTime + 回収ロス（RecoveredThrowOutSeconds）。逸れ方は回収レースの値の写し
@@ -411,9 +415,19 @@ public static partial class TimelineBuilder
                         }
                         else
                         {
-                            // 一塁手自身が拾い直す（返球不要＝拾った瞬間がアウト。design-12 §3.8 の回収モデル）
+                            // 一塁手自身が拾い直す（design-12 §3.8・issue #1260 の往復モデル）: 逸れた球まで拾いに行き、
+                            // 拾った球を持って一塁へ戻って踏む＝アウト。拾う時刻はアウトの時刻から塁へ戻る時間を引いて逆算する
+                            // （判定の往復 2×逸れ幅÷脚力 の戻り半分と同じ式。issue #1735）。
                             recoveredRole = firstBaseCoverer;
-                            recoveredPickupAt = outAt;
+                            recoveredReturnTo = firstBase;
+                            var selfSpeed = Math.Max(4.0, Find(fielders, firstBaseCoverer)?.Attributes.SprintSpeedMps ?? 4.0);
+                            var backSeconds = Distance(errantRest, firstBase) / selfSpeed;
+                            // 一塁へ走り込む途中の投手カバーは、判定の往復式（塁にいる前提）より塁へ着くのが遅い（issue #672 と同じ事情）。
+                            // 着いてから往復できる時刻までアウトの絵を遅らせる（上限は走者到達の少し前＝判定の「間に合う」を覆さない）。
+                            if (coverReadyAt is { } selfReady)
+                                outAt = Math.Max(outAt, Math.Min(selfReady + 2.0 * backSeconds, runnerAnchor - ReceiverSetSeconds));
+                            recoveredOutAt = outAt;
+                            recoveredPickupAt = Math.Max(deadAt, outAt - backSeconds);
                         }
                         firstThrowArriveAt = outAt;
                     }
@@ -1057,6 +1071,21 @@ public static partial class TimelineBuilder
                 t1 = Math.Max(t1, t0 + Distance(from, pickTo) / speed);
                 moves.Add(new FielderMove { Role = pickRole, T0 = t0, T1 = t1, To = pickTo, Task = FielderTask.Chase });
                 if (t1 + 0.5 > returnTail) returnTail = t1 + 0.5;
+                if (recoveredReturnTo is { } backTo)
+                {
+                    // 拾った球を持って塁へ戻り、踏んだ瞬間がアウト（issue #1735）。戻りは脚力の上限を超えない
+                    // （拾うのが遅れた極端な場合だけ、アウトの時刻より少し後ろへ延びる）。
+                    var backEnd = Math.Max(recoveredOutAt, t1 + Distance(pickTo, backTo) / speed);
+                    moves.Add(new FielderMove { Role = pickRole, T0 = t1, T1 = backEnd, To = backTo, Task = FielderTask.CoverBase });
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Carry,
+                        T0 = t1, T1 = backEnd,
+                        From = pickTo, To = backTo,
+                        FromRole = pickRole, ToRole = pickRole, ToBase = "first",
+                    });
+                    if (backEnd + 0.5 > returnTail) returnTail = backEnd + 0.5;
+                }
                 if (recoveredOutAt + 0.5 > returnTail) returnTail = recoveredOutAt + 0.5;
             }
         }

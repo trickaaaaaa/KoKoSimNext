@@ -56,7 +56,7 @@ public static class ForcedSlowHandleGrounder
         ForcedOutcome kind, FieldGeometry field, Aerodynamics aero,
         IReadOnlyList<Fielder> fielders, FieldingCoefficients coeff)
     {
-        if (kind is not (ForcedOutcome.SlowHandleGrounder or ForcedOutcome.VerySlowHandleGrounder)) return null;
+        if (kind is not (ForcedOutcome.SlowHandleGrounder or ForcedOutcome.VerySlowHandleGrounder or ForcedOutcome.RecoveredWildThrowGrounder)) return null;
         var probe = coeff with { ErrorBaseProb = 0.0, IrregularBounceProb = 0.0 };
         foreach (var bearing in new[] { 12.0, 10.0, 14.0, 8.0, 16.0 })
             for (var launch = -6.0; launch <= 2.0; launch += 2.0)
@@ -68,6 +68,9 @@ public static class ForcedSlowHandleGrounder
                     if (play.ThroughInfield || play.FielderRole != FieldPosition.SecondBase) continue;
                     if (play.Result is not (BattedBallResult.Out or BattedBallResult.Single)) continue;
                     if (play.ThrowArriveSeconds is not > 0.0 || play.UnassistedPutout) continue;
+                    // 逸れた送球を一塁手が拾い直してアウト（issue #1735）になる打球だけ
+                    if (kind == ForcedOutcome.RecoveredWildThrowGrounder
+                        && (play.RecoveredThrowScatterM is null || play.RecoveredThrowByBackup)) continue;
                     return ball;
                 }
         return null;
