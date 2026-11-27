@@ -49,6 +49,16 @@ namespace KokoSim.Unity.Shell
             Thermometer,
             /// <summary>上向きの矢印（風。向きは要素の rotate で回す＝0°で真上）。</summary>
             WindArrow,
+            /// <summary>星（線画。個別指導の未指名）。</summary>
+            Star,
+            /// <summary>星（塗り。個別指導の指名中）。</summary>
+            StarFilled,
+            /// <summary>重なった四角（複製）。</summary>
+            Copy,
+            /// <summary>×（閉じる・外す）。</summary>
+            Close,
+            /// <summary>下向きの山形（選択欄を開く）。</summary>
+            ChevronDown,
         }
 
         /// <summary>線幅（24 座標で）。既定 2。</summary>
@@ -220,6 +230,35 @@ namespace KokoSim.Unity.Shell
                 case Kind.WindArrow:
                     Polyline(p, P(12, 21), P(12, 3));
                     Polyline(p, P(6, 9), P(12, 3), P(18, 9));
+                    break;
+
+                case Kind.Star:
+                case Kind.StarFilled:
+                    p.BeginPath();
+                    for (var i = 0; i < 10; i++)
+                    {
+                        // 5つの頂点（半径9）と谷（半径4）を交互に。真上から時計回り。
+                        var a = -Mathf.PI / 2f + i * Mathf.PI / 5f;
+                        var rad = i % 2 == 0 ? 9f : 4f;
+                        var pt = P(12 + Mathf.Cos(a) * rad, 12.6f + Mathf.Sin(a) * rad);
+                        if (i == 0) p.MoveTo(pt); else p.LineTo(pt);
+                    }
+                    p.ClosePath();
+                    if (_kind == Kind.StarFilled) p.Fill(); else p.Stroke();
+                    break;
+
+                case Kind.Copy:
+                    Polyline(p, P(9, 9), P(20, 9), P(20, 20), P(9, 20), P(9, 9));
+                    Polyline(p, P(15, 9), P(15, 4), P(4, 4), P(4, 15), P(9, 15));
+                    break;
+
+                case Kind.Close:
+                    Polyline(p, P(6, 6), P(18, 18));
+                    Polyline(p, P(18, 6), P(6, 18));
+                    break;
+
+                case Kind.ChevronDown:
+                    Polyline(p, P(6, 9), P(12, 15), P(18, 9));
                     break;
 
                 case Kind.Play:

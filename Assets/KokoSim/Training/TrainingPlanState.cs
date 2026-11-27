@@ -24,44 +24,33 @@ namespace KokoSim.Unity.Training
     {
         public TrainingMenu Menu;
         public string MenuJp = "";
-        public string Icon = "";
+        public string ShortJp = "";      // 一覧の横棒に書く略称（打撃・フライ・左守 など）
+        public string Icon = "";         // ポップアップの記号（漢字1文字）
         public string MainEffectJp = "";
         public int Minutes;
-        public string SectionJp = "";   // 非空＝このスロットの直前に節見出しを挿す（野手練習/投手練習, Issue #133-⑥）
+        public bool Pitcher;             // 投手練習のまとまり（false＝野手練習）
+        public bool AltShade;            // 守備位置の区切りを1つおきに暗くする（隣り合う区切りの区別）
     }
 
-    /// <summary>今週の見込み（exp進捗）。1週ドライラン後の「次レベルまでの割合」を主効果能力ごとに提示し、
-    /// レベルアップが起きない週でもバーが伸びて死に列にならないようにする（設計書02 §5.1）。</summary>
+    /// <summary>
+    /// 「この配分で伸びる能力」の1行。今の能力値とランク＋この配分で1週に伸びる量（レベル単位の実数）。
+    /// 伸びの棒の長さ＝<see cref="Fraction"/>（その選手の取りうる最大の伸びを1とした割合）。
+    /// </summary>
     public sealed class GainBar
     {
+        public AbilityKind Kind;
         public string AbilityJp = "";
-        public string Icon = "";
-        public double Progress;    // 0..1（次レベルまでの割合）
-        public int LevelsGained;   // この週で上がったレベル数（0=進捗のみ）
-        public int Value;          // 現在の能力値（0=未設定＝相対強調バー）
-        public string Grade = "";  // 現在値のランク S〜G（空＝ランクを持たない相対バー）
-        // 弾道など優劣のないタイプ軸（issue #219）: 非空なら Grade の代わりにこのラベルをチップ表示する
-        public string TypeLabel = "";
-        public bool KeepChipSlot;  // ランクを持たない軸（球速, issue #736）: チップ幅の空きでバー位置をそろえる
+        public bool Pitcher;       // 投手能力のまとまり（false＝野手能力）
+        public int Value;          // 今の能力値
+        public string Grade = "";  // 今の能力値のランク S〜G（文字の行は空）
+        // 数値を出さない能力（弾道＝タイプ、球速＝km/h）は文字で出す。非空ならランク〜棒の列をこの文字にまとめる。
+        public string Text = "";
+        public double Amount;      // この配分での1週の伸び（レベル単位・0＝伸びない。弾道は向きを問わず絶対値）
+        public double Fraction;    // 0..1（取りうる最大の伸びで満タン）
+        public bool Grows;         // 伸びる（false の行は淡色・棒なし）
     }
 
-    /// <summary>能力タブの1行（issue #327③・案A）。現在能力の値とランク。作りは選手詳細
-    /// （PlayerDetailState）と同じ＝ランクは Tiers.FromStrength、弾道は優劣のないタイプ軸（issue #219）、
-    /// 球速の表示値だけ km/h 表記（issue #94。バー割合・ランクは内部値のまま）。</summary>
-    public sealed class AbilityRowInfo
-    {
-        public string Jp = "";
-        public string Icon = "";       // 漢字1文字アイコン（SDF収録字）
-        public int Value;              // 内部値 0..100（バー割合・ランクの元）
-        public string Grade = "";      // ランク S〜G（空＝チップ無し）
-        public string TypeLabel = "";  // 弾道のタイプ軸ラベル（非空ならランクの代わりに表示）
-        public string ValueText = "";  // 表示値の上書き（球速のkm/h・スタミナの目安投球数）。空なら Value をそのまま表示
-        // スタミナ＝目安投球数（issue #356）: 上限なし＝バーを出さず数値＋和文単位で見せる。
-        public bool HideBar;           // true: バーもランクチップも出さない
-        public string Unit = "";       // 非空かつ HideBar のとき ValueText をこの単位付きで表示（例「135球」）
-    }
-
-    /// <summary>プリセット選択肢（プリセット帯の1チップ。説明はツールチップで持つ, issue #222④）。</summary>
+    /// <summary>プリセット選択肢（メニューの型のボタン1つ。説明はツールチップで持つ）。</summary>
     public sealed class PresetOption
     {
         public TrainingPreset Preset;
@@ -70,21 +59,26 @@ namespace KokoSim.Unity.Training
         public bool Selected;
     }
 
-    /// <summary>守備ポジション別の適性と割当（守備適性割当口）。</summary>
+    /// <summary>守備ポジション別の適性と割当（守備位置の練習の行）。</summary>
     public sealed class DefenseSlot
     {
         public FieldPosition Pos;
         public TrainingMenu Menu;
-        public string Label = "";   // 投/捕/一…
-        public int Aptitude;        // 現在の適性値
-        public int Minutes;         // 割当分
+        public string Label = "";      // 投/捕/一…（記号）
+        public string FullJp = "";     // 投手/捕手/一塁…（項目名）
+        public int Aptitude;           // 現在の適性値
+        public string Grade = "";      // 適性のランク
+        public int Minutes;            // 割当分
     }
 
-    /// <summary>個別指導の枠1つ（issue #707）。</summary>
+    /// <summary>個別指導の枠1つ（issue #707）。空き枠は Index=-1。</summary>
     public sealed class NominationSlot
     {
-        public int Index = -1;          // 空き枠は -1
-        public string Label = "空き";
+        public int Index = -1;
+        public string NumText = "";
+        public string Name = "";
+        public string GradeLabel = "";
+        public string HandLabel = "";
         public bool Empty => Index < 0;
     }
 
@@ -98,12 +92,7 @@ namespace KokoSim.Unity.Training
         public string HandLabel = "右投右打";
         public PlayerStrength Strength;    // カテゴリ別ランク4種（打撃/走力/守備/投手, Issue #133。総合ランクは廃止）
         public string PresetJp = "お任せ";
-        public string FocusSummary = "";   // 現在の主眼メニュー（分の多い順・行の余白に表示）
-        public List<MenuSlot> Chips = new List<MenuSlot>();  // 積み上げ配分バーの元データ（メニュー別 分・固定順, Issue #133-③）
-        public int UsedMin;
-        public int UsagePct;
-        public List<string> Gains = new List<string>();      // 伸び見込み（ミート+1 等・旧表示）
-        public List<GainBar> GainBars = new List<GainBar>();  // 今週の見込み（exp進捗バー・新表示）
+        public List<MenuSlot> Chips = new List<MenuSlot>();  // 横棒の元データ（メニュー別 分・固定順, Issue #133-③）
         public bool Selected;
         public bool Nominated;   // 個別指導に指名中（部員表の★列, issue #707）
     }
@@ -111,50 +100,41 @@ namespace KokoSim.Unity.Training
     public sealed class TrainingPlanView
     {
         public int Budget;
-        public string WeekLabel = "";
-        public int RosterCount;
+        public int RosterCount;      // 在籍の全員
+        public int ShownCount;       // 絞り込み後に一覧へ出ている人数
         public string TeamRankGrade = "F";   // 共通トップバーのチーム総合力ランク
-
-        // 合宿バナー
-        public bool CampActive;
-        public string CampTitle = "";
-        public string CampMult = "";
-        public string CampNote = "";
 
         // 個別指導3枠（Index＝ロスター添字・空き枠は -1。枠の×で外すのに使う, issue #707）
         public List<NominationSlot> Nominations = new List<NominationSlot>();
+        public int NominatedCount;
 
-        // 選択選手（エディタ）
+        // 選択選手（ポップアップ）
         public int SelectedIndex;
         public string SelectedName = "";
         public string SelNumText = "—";
-        public bool SelBenchOut;
         public string SelYear = "1年";
         public string SelHand = "右投右打";
         public PlayerStrength SelStrength;   // カテゴリ別ランク（総合ランクは廃止, Issue #133-①）
         public bool SelNominated;
-        public string SelNomLabel = "個別指導に指名";
         public int SelectedTotal;
         public int SelectedRemaining;
-        public bool SelectedIsCustom;
+        public int SelFielderMinutes;   // 野手練習の合計
+        public int SelPitcherMinutes;   // 投手練習の合計
+        public int SelDefenseMinutes;   // 守備位置の合計
         public bool DelegateOn;
         public string DelegateStateLabel = "手動";
         public bool SelHasPrev;
         public bool SelHasNext;
-        public bool AtBudgetLimit;   // 残り0分（issue #222③・±/バーを無効表示にするための旗）
+        public bool AtBudgetLimit;   // 残り0分（＋を押せない）
 
         public List<PlayerTrainRow> Rows = new List<PlayerTrainRow>();
-        public List<MenuSlot> SelectedSlots = new List<MenuSlot>();   // 選択選手のメニュー別 分（編集用）
-        public List<DefenseSlot> DefenseSlots = new List<DefenseSlot>(); // 守備適性割当口（9ポジション）
-        public List<PresetOption> PresetOptions = new List<PresetOption>(); // 統合モーダルのプリセット一覧
-        public List<GainBar> SelectedGrowth = new List<GainBar>();    // この設定で伸びる能力（現在設定の伸びバー）
-        // 能力タブ（issue #327③・案A: 投手能力｜守備適性｜野手能力の3カラム）
-        public List<AbilityRowInfo> SelPitcherAbilities = new List<AbilityRowInfo>();
-        // 能力タブの投手能力列の下に出す持ち球（issue #735）。全選手に出す（投/野で出し分けない・#93）。
-        public List<KokoSim.Unity.Components.PitchChartDatum> SelPitches = new List<KokoSim.Unity.Components.PitchChartDatum>();
-        public List<AbilityRowInfo> SelDefenseAptitudes = new List<AbilityRowInfo>();
-        public List<AbilityRowInfo> SelFielderAbilities = new List<AbilityRowInfo>();
+        public List<MenuSlot> SelectedSlots = new List<MenuSlot>();   // 選択選手のメニュー別 分（野手→投手の順）
+        public List<DefenseSlot> DefenseSlots = new List<DefenseSlot>(); // 守備位置の練習（9ポジション）
+        public List<PresetOption> PresetOptions = new List<PresetOption>(); // メニューの型
+        public List<MenuSlot> SelectedChips = new List<MenuSlot>();   // 1日の配分の横棒（一覧と同じ順）
+        public List<GainBar> SelectedGrowth = new List<GainBar>();    // この配分で伸びる能力（野手11→投手5）
         public List<string> Templates = new List<string>();          // 保存済み週テンプレ名
+        public string ActiveTemplate = "";   // 今の配分と同じ中身の週テンプレ（無ければ空＝「保存なし」/未選択）
         public List<PlayerTrainRow> CopyRows = new List<PlayerTrainRow>(); // 複製ピッカー用の全部員（フィルタ非適用・学年順, Issue #133-⑤）
 
         // フィルタの選択状態
@@ -218,7 +198,6 @@ namespace KokoSim.Unity.Training
             TrainingPreset.Custom,
         };
 
-        private readonly SeasonCalendar _calendar = new SeasonCalendar();
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
 
         /// <summary>週テンプレ1件（名前＋配分のスナップショット, issue #222⑤）。呼出で他選手へ適用する。</summary>
@@ -494,7 +473,6 @@ namespace KokoSim.Unity.Training
             {
                 Budget = Budget,
                 RosterCount = _roster.Count,
-                WeekLabel = KokoSim.Unity.Shell.GameClock.CurrentLabel(),   // 共通「YYYY年M月W週目」（共有現在週）
                 SelectedIndex = _selected,
                 SelectedName = _roster[_selected].Name,
                 YearFilter = _yearFilter,
@@ -505,11 +483,11 @@ namespace KokoSim.Unity.Training
             // チーム総合力（共通トップバー表示）＝6指標のリーグ標準化総合を Tier 変換（③, 全画面統一）。
             view.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(_roster);
 
-            BuildCampBanner(view);
             BuildNominations(view);
 
-            // 行は「誰・カテゴリ別ランク・投打・現在のプリセット＋配分バー」を持つ（詳細編集は統合モーダル）。
+            // 行は「誰・カテゴリ別ランク・投打・現在のプリセット＋配分の横棒」を持つ（詳細編集はポップアップ）。
             foreach (var i in SortedFilteredIndices()) view.Rows.Add(MakeRow(i));
+            view.ShownCount = view.Rows.Count;
 
             // 複製ピッカー（コピー元を選ぶ, Issue #133-⑤）は一覧のフィルタに関わらず全部員から選べる（学年順・安定）。
             var all = new List<int>();
@@ -535,15 +513,14 @@ namespace KokoSim.Unity.Training
                 HandLabel = HandednessLabels.Combined(src.Throws, src.Bats),
                 Strength = PlayerStrengthProfile.Compute(src, Coeff),
                 PresetJp = _delegated[i] ? "委任" : PresetJp(PlanOf(i).Preset),
-                FocusSummary = _delegated[i] ? "コーチ一任" : FocusSummary(ResolvedAllocations(i)),
                 Chips = AllocationChips(i),
                 Selected = i == _selected,
                 Nominated = src.IndividualCoaching,
             };
         }
 
-        /// <summary>積み上げ配分バーの元データ（Issue #133-③）。解決済み配分を BarMenuOrder の固定順で列挙。
-        /// 休養は除外＝バー右側の余白として残り時間が読める。</summary>
+        /// <summary>配分の横棒の元データ（Issue #133-③）。解決済み配分を BarMenuOrder の固定順で列挙。
+        /// 休養は除外＝棒の右側の余白として残り時間が読める。守備位置は1つおきに暗い色（AltShade）。</summary>
         private List<MenuSlot> AllocationChips(int index)
         {
             var alloc = new Dictionary<TrainingMenu, int>();
@@ -555,27 +532,26 @@ namespace KokoSim.Unity.Training
                 }
 
             var list = new List<MenuSlot>();
+            var defPos = 0;
             foreach (var m in BarMenuOrder)
-                if (alloc.TryGetValue(m, out var min))
-                    list.Add(new MenuSlot { Menu = m, MenuJp = MenuJp(m), Minutes = min });
+            {
+                if (!alloc.TryGetValue(m, out var min)) continue;
+                var isPos = UiColorIsDefensePosition(m);
+                list.Add(new MenuSlot
+                {
+                    Menu = m, MenuJp = MenuJp(m), ShortJp = MenuShortJp(m), Icon = MenuIcon(m), Minutes = min,
+                    Pitcher = IsPitcherMenu(m),
+                    AltShade = isPos && (defPos++ % 2 == 1),
+                });
+            }
             return list;
-        }
-
-        private void BuildCampBanner(TrainingPlanView view)
-        {
-            var mult = _calendar.CampMultiplier(_week, _training, KokoSim.Unity.Shell.GameSession.Current.CampSkips);
-            view.CampActive = mult > 1.0;
-            if (!view.CampActive) return;
-            var winter = mult >= _training.WinterCampMult;
-            view.CampTitle = winter ? "冬合宿・鍛錬期" : "夏合宿";
-            view.CampMult = "×" + mult.ToString("0.0");
-            view.CampNote = winter ? "対外試合禁止期間（12〜3月）" : "";
         }
 
         private void BuildNominations(TrainingPlanView view)
         {
             var nominatedIdx = new List<int>();
             for (var i = 0; i < _roster.Count; i++) if (_roster[i].IndividualCoaching) nominatedIdx.Add(i);
+            view.NominatedCount = nominatedIdx.Count;
 
             view.Nominations.Clear();
             for (var s = 0; s < _training.IndividualCoachingSlots; s++)
@@ -583,7 +559,12 @@ namespace KokoSim.Unity.Training
                 if (s < nominatedIdx.Count)
                 {
                     var idx = nominatedIdx[s];
-                    view.Nominations.Add(new NominationSlot { Index = idx, Label = NumTextAt(idx) + " " + _roster[idx].Name });
+                    var p = _roster[idx];
+                    view.Nominations.Add(new NominationSlot
+                    {
+                        Index = idx, NumText = NumTextAt(idx), Name = p.Name,
+                        GradeLabel = p.Grade + "年", HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
+                    });
                 }
                 else view.Nominations.Add(new NominationSlot());
             }
@@ -593,18 +574,16 @@ namespace KokoSim.Unity.Training
         {
             var sel = _roster[_selected];
             view.SelNumText = NumTextAt(_selected);
-            view.SelBenchOut = _roster[_selected].UniformNumber == 0;
             view.SelYear = sel.Grade + "年";
             view.SelHand = HandednessLabels.Combined(sel.Throws, sel.Bats);
             view.SelStrength = PlayerStrengthProfile.Compute(sel, Coeff);
             view.SelNominated = sel.IndividualCoaching;
-            view.SelNomLabel = view.SelNominated ? "個別指導 指名中" : "個別指導に指名";
             view.DelegateOn = _delegated[_selected];
             view.DelegateStateLabel = _delegated[_selected] ? "委任中" : "手動";
             view.SelHasPrev = CanStepSelected(-1);
             view.SelHasNext = CanStepSelected(+1);
 
-            // 能力系メニューの編集スロット。
+            // 野手練習・投手練習の編集スロット。
             var selAlloc = new Dictionary<TrainingMenu, int>();
             foreach (var a in ResolvedAllocations(_selected)) selAlloc[a.Menu] = a.Minutes;
             var total = 0;
@@ -612,31 +591,39 @@ namespace KokoSim.Unity.Training
             {
                 selAlloc.TryGetValue(m, out var min);
                 total += min;
+                var pitcher = IsPitcherMenu(m);
+                if (pitcher) view.SelPitcherMinutes += min; else view.SelFielderMinutes += min;
                 view.SelectedSlots.Add(new MenuSlot
                 {
-                    Menu = m, MenuJp = MenuJp(m), Icon = MenuIcon(m), MainEffectJp = MainEffectJp(m), Minutes = min,
-                    // 打撃系/投手系の繋ぎ目に節見出しを挿す（Issue #133-⑥。EditableMenus は野手系→投手系の順）。
-                    SectionJp = m == EditableMenus[0] ? "野手練習" : m == TrainingMenu.Pitching ? "投手練習" : "",
+                    Menu = m, MenuJp = MenuJp(m), ShortJp = MenuShortJp(m), Icon = MenuIcon(m),
+                    MainEffectJp = MainEffectJp(m), Minutes = min, Pitcher = pitcher,
                 });
             }
 
-            // 守備適性割当口（9ポジション）。
+            // 守備位置の練習（9ポジション・守備適性つき）。
             foreach (var (pos, menu) in DefenseMenus)
             {
                 selAlloc.TryGetValue(menu, out var dmin);
                 total += dmin;
+                view.SelDefenseMinutes += dmin;
+                var apt = sel.Aptitude(pos);
                 view.DefenseSlots.Add(new DefenseSlot
                 {
-                    Pos = pos, Menu = menu, Label = PositionJp(pos), Aptitude = sel.Aptitude(pos), Minutes = dmin,
+                    Pos = pos, Menu = menu, Label = PositionJp(pos), FullJp = PositionFullJp(pos),
+                    Aptitude = apt, Grade = Tiers.FromStrength(apt).ToString(), Minutes = dmin,
                 });
             }
 
+            // 汎用守備（内野/外野）は編集の行が無いが、プリセット等で入っていれば合計に数える（予算の残りと揃える）。
+            foreach (var m in new[] { TrainingMenu.DefenseInfield, TrainingMenu.DefenseOutfield })
+                if (selAlloc.TryGetValue(m, out var gmin)) { total += gmin; view.SelDefenseMinutes += gmin; }
+
             view.SelectedTotal = total;
             view.SelectedRemaining = Budget - total;
-            view.SelectedIsCustom = PlanOf(_selected).Preset == TrainingPreset.Custom;
             view.AtBudgetLimit = view.SelectedRemaining <= 0;
+            view.SelectedChips = AllocationChips(_selected);
 
-            // プリセット選択肢（チップ＋ツールチップの説明）。
+            // プリセット選択肢（ボタン＋ツールチップの説明）。
             var cur = PlanOf(_selected).Preset;
             foreach (var p in SelectablePresets)
                 view.PresetOptions.Add(new PresetOption
@@ -647,109 +634,119 @@ namespace KokoSim.Unity.Training
                     Selected = !_delegated[_selected] && p == cur,
                 });
 
-            // 現在設定の伸びバー（この設定で伸びる能力・実効ドライラン）。
+            // この配分で伸びる能力（今の能力値＋1週の伸び）。
             view.SelectedGrowth.AddRange(BuildGrowthBars(_selected));
-
-            // 能力タブ（issue #327③・案A）: 現在能力を投手｜守備適性｜野手の3カラムで提示。
-            foreach (var k in PitcherAbilityOrder) view.SelPitcherAbilities.Add(AbilityInfoOf(sel, k));
-            // 持ち球は選手詳細と同じ生成ロジック・ストレートに最速 km/h を添える（単一ソース・issue #735 / #130）。
-            view.SelPitches = KokoSim.Unity.Players.PitchData.ToPitchChartData(
-                KokoSim.Unity.Players.PlayerDetailState.BuildPitchData(sel),
-                (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(sel.Level(AbilityKind.Velocity))));
-            foreach (var k in FielderAbilityOrder) view.SelFielderAbilities.Add(AbilityInfoOf(sel, k));
-            foreach (var (pos, _) in DefenseMenus)
-                view.SelDefenseAptitudes.Add(new AbilityRowInfo
-                {
-                    Jp = PositionFullJp(pos),
-                    Icon = PositionJp(pos),
-                    Value = sel.Aptitude(pos),
-                    Grade = Tiers.FromStrength(sel.Aptitude(pos)).ToString(),
-                });
+            view.ActiveTemplate = ActiveTemplateName(_selected);
         }
 
-        // 能力タブの表示順（issue #327③）。投手は伸びる能力一覧と同順だが、球威は下の持ち球チャートの
-        // ストレートのランクと同じ値なので外す（issue #1033）。野手は選手詳細（PlayerDetailState）と同順。
-        private static readonly AbilityKind[] PitcherAbilityOrder =
-        {
-            AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank,
-        };
-        private static readonly AbilityKind[] FielderAbilityOrder =
-        {
-            AbilityKind.LaunchTendency, AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline,
-            AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.Fielding, AbilityKind.Catching,
-        };
-
-        /// <summary>能力タブの1行（選手詳細と同じ作り: ランク=Tiers.FromStrength・弾道=タイプ軸・
-        /// 球速の表示値=km/h。変換はエンジンの公開APIに一本化しUI側で式を再実装しない（issue #94）。</summary>
-        private static AbilityRowInfo AbilityInfoOf(DevelopingPlayer p, AbilityKind k)
-        {
-            var v = p.Level(k);
-            var info = new AbilityRowInfo { Jp = AbilityJp(k), Icon = AbilityIcon(k), Value = v };
-            if (k == AbilityKind.LaunchTendency)
-                info.TypeLabel = KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(v);
-            else
-                // スタミナも Level のまま出す（目安投球数での表示はやめた）＝比較パネル・選手詳細と同じもの
-                // （監督決定 2026-08-09, issue #561）。上限なし（issue #356）は変わらず、Lv100超はバーが振り切れる。
-                info.Grade = Tiers.FromStrength(v).ToString();
-            if (k == AbilityKind.Velocity)
-            {
-                // 球速は km/h という実寸で読む量＝ランク分けしない（issue #736）。チップもバーも出さず数字＋単位だけ。
-                info.Grade = "";
-                info.HideBar = true;
-                info.Unit = "km/h";
-                info.ValueText = ((int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(v))).ToString();
-            }
-            return info;
-        }
-
-        // 「この設定で伸びる能力」に常時並べる能力（打撃→走守→投手の全能力）。伸びない能力も出し、
-        // 効果のある能力だけバーが伸びる。走塁は練習メニュー経路が無いので一覧から除く。
-        private static readonly AbilityKind[] GrowthDisplayOrder =
+        // 「この配分で伸びる能力」に並べる能力。野手11→投手5。変化球（球種）は出さない（キレに含まれる）。
+        private static readonly AbilityKind[] FielderGrowthOrder =
         {
             AbilityKind.LaunchTendency, AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline, AbilityKind.Bunt,
             AbilityKind.Speed, AbilityKind.Steal, AbilityKind.ArmStrength, AbilityKind.ThrowAccuracy, AbilityKind.Fielding, AbilityKind.Catching,
+        };
+        private static readonly AbilityKind[] PitcherGrowthOrder =
+        {
             AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank, AbilityKind.Stuff,
         };
 
-        /// <summary>現在の設定（解決済み配分）での各能力の1週成長を、非破壊ドライランで算出（設計書02 §5.1）。
-        /// 全能力を常に列挙し、バーは「今週の成長量（＝進んだレベル進捗）」。効果の無い能力は 0（伸びない）。</summary>
+        // 伸びとみなす下限（浮動小数の誤差を伸びに数えない）。
+        private const double GrowthEpsilon = 1e-6;
+
+        /// <summary>
+        /// 今の配分での各能力の1週の伸びを、非破壊ドライランで求める（設計書02 §5.1）。
+        /// 棒の長さは「この選手が1つの練習に1日の全部を注いだときの、全能力の中で最大の伸び」を満タンにした割合。
+        /// 伸びない能力も行は出す（淡色・棒なし）。
+        /// </summary>
         private List<GainBar> BuildGrowthBars(int index)
         {
+            var src = _roster[index];
+            var gains = DryRunGains(src, null);
+            var max = MaxPossibleGain(index);
+
             var bars = new List<GainBar>();
-
-            // 実選手の複製で非破壊ドライラン（Issue #223・捨てるインスタンス）。Clone は Plan・IndividualCoaching を
-            // 引き継ぐので、週送りの実適用（TrainingWeek.Apply）と同じ入力・同じエンジンAPIから伸びが出る
-            // ＝プレビューバーと実際の伸びが一致する（issue #484）。監督の分野別指導力（#115）・性格・体質
-            // スキル・施設連動 budget は全て TrainingWeek.Apply の中で通す。
-            var p = _roster[index].Clone();
-            var beforeProg = new Dictionary<AbilityKind, double>();
-            var beforeLv = new Dictionary<AbilityKind, int>();
-            foreach (var k in GrowthDisplayOrder) { beforeProg[k] = LevelProgress(p, k); beforeLv[k] = p.Level(k); }
-
-            // チーム状態（結束）の効き先④（issue #1601）も実適用と同じ単一ソースから渡す＝プレビューバーと実際の伸びが一致する。
-            KokoSim.Unity.Shell.TrainingWeek.Apply(p, _week, roster: _roster,
-                cohesionMultiplier: KokoSim.Unity.Shell.ChemistryDisplay.CurrentTrainingMultiplier());   // 練習不可週は内部で何もしない（バーは全て0）
-
-            foreach (var k in GrowthDisplayOrder)
-            {
-                var gain = LevelProgress(p, k) - beforeProg[k];   // 今週進んだレベル進捗（0=伸びない）
-                if (gain < 0) gain = 0;
-                bars.Add(new GainBar
-                {
-                    AbilityJp = AbilityJp(k), Icon = AbilityIcon(k),
-                    Progress = System.Math.Clamp(gain, 0.0, 1.0),   // 1レベル=満タン、複数レベルはLevelsGainedで表示
-                    LevelsGained = p.Level(k) - beforeLv[k],
-                    // ランク併記は「今週の伸び」ではなく**現在の能力値**を表す（UI原則③）。
-                    // 弾道は優劣のないタイプ軸なのでランクチップではなくタイプラベルを出す（issue #219）。
-                    Value = p.Level(k),
-                    // 球速はランク分けしない（issue #736）。バーは「今週の伸び」なので残す。
-                    Grade = k == AbilityKind.LaunchTendency || k == AbilityKind.Velocity
-                        ? "" : Tiers.FromStrength(p.Level(k)).ToString(),
-                    TypeLabel = k == AbilityKind.LaunchTendency ? KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(p.Level(k)) : "",
-                    KeepChipSlot = k == AbilityKind.Velocity,
-                });
-            }
+            foreach (var k in FielderGrowthOrder) bars.Add(MakeGainBar(src, k, false, gains[k], max));
+            foreach (var k in PitcherGrowthOrder) bars.Add(MakeGainBar(src, k, true, gains[k], max));
             return bars;
+        }
+
+        private static GainBar MakeGainBar(DevelopingPlayer p, AbilityKind k, bool pitcher, double amount, double max)
+        {
+            var v = p.Level(k);
+            var grows = amount > GrowthEpsilon;
+            var bar = new GainBar
+            {
+                Kind = k, AbilityJp = AbilityJp(k), Pitcher = pitcher, Value = v,
+                Amount = grows ? amount : 0.0,
+                Grows = grows,
+                Fraction = grows && max > GrowthEpsilon ? System.Math.Clamp(amount / max, 0.0, 1.0) : 0.0,
+            };
+            // 弾道は優劣のないタイプ軸（issue #219）、球速は km/h という実寸（issue #736）＝どちらも文字で出す。
+            if (k == AbilityKind.LaunchTendency)
+                bar.Text = KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(v);
+            else if (k == AbilityKind.Velocity)
+                bar.Text = (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(v)) + " km/h";
+            else
+                bar.Grade = Tiers.FromStrength(v).ToString();
+            return bar;
+        }
+
+        /// <summary>
+        /// 選手の複製に1週の練習をかけ、能力ごとの伸び（レベル＋次までの割合の差分）を返す。
+        /// <paramref name="planOverride"/> が null なら選手の今の計画。週送りの実適用（TrainingWeek.Apply）と
+        /// 同じ入口を通す＝見込みと実際の伸びが一致する（issue #484）。弾道は下げる練習もあるので絶対値。
+        /// </summary>
+        private Dictionary<AbilityKind, double> DryRunGains(DevelopingPlayer src, TrainingPlan planOverride)
+        {
+            var p = src.Clone();
+            if (planOverride != null) p.Plan = planOverride;
+            var before = new Dictionary<AbilityKind, double>();
+            foreach (var k in FielderGrowthOrder) before[k] = LevelProgress(p, k);
+            foreach (var k in PitcherGrowthOrder) before[k] = LevelProgress(p, k);
+
+            // チーム状態（結束）の効き先④（issue #1601）も実適用と同じ単一ソースから渡す。
+            KokoSim.Unity.Shell.TrainingWeek.Apply(p, _week, roster: _roster,
+                cohesionMultiplier: KokoSim.Unity.Shell.ChemistryDisplay.CurrentTrainingMultiplier());   // 練習不可週は何もしない（全て0）
+
+            var gains = new Dictionary<AbilityKind, double>();
+            foreach (var kv in before)
+            {
+                var d = LevelProgress(p, kv.Key) - kv.Value;
+                gains[kv.Key] = kv.Key == AbilityKind.LaunchTendency ? System.Math.Abs(d) : System.Math.Max(0.0, d);
+            }
+            return gains;
+        }
+
+        // 取りうる最大の伸びのキャッシュ（±のたびに14回のドライランを回さない）。配分では変わらない入力だけをキーにする。
+        private DevelopingPlayer _maxGainPlayer;
+        private string _maxGainKey;
+        private double _maxGain;
+
+        /// <summary>
+        /// この選手が、1日の全部を1つの練習（野手・投手練習の各メニュー）に注いだときの伸びの最大（全能力の中で）。
+        /// 伸びの棒の満タン。個別指導・週・予算・チーム状態で変わるのでキーに含める。
+        /// </summary>
+        private double MaxPossibleGain(int index)
+        {
+            var src = _roster[index];
+            var key = _week + "|" + Budget + "|" + src.IndividualCoaching + "|"
+                + KokoSim.Unity.Shell.ChemistryDisplay.CurrentTrainingMultiplier().ToString("R");
+            if (ReferenceEquals(src, _maxGainPlayer) && key == _maxGainKey) return _maxGain;
+
+            var max = 0.0;
+            foreach (var m in EditableMenus)
+            {
+                var plan = new TrainingPlan
+                {
+                    Preset = TrainingPreset.Custom,
+                    Allocations = new List<MenuAllocation> { new MenuAllocation(m, Budget) },
+                };
+                foreach (var g in DryRunGains(src, plan).Values) if (g > max) max = g;
+            }
+            _maxGainPlayer = src;
+            _maxGainKey = key;
+            _maxGain = max;
+            return max;
         }
 
         /// <summary>連続レベル進捗＝レベル＋（次までのexp割合）。週差分を取ると「今週の成長量」になる。</summary>
@@ -758,6 +755,37 @@ namespace KokoSim.Unity.Training
             var req = _training.RequiredExp(p.Level(k));
             return p.Level(k) + (req > 0 ? p.Exp(k) / req : 0.0);
         }
+
+        /// <summary>今の配分と中身が同じ週テンプレの名前（無ければ空）。選択欄の表示に使う。</summary>
+        private string ActiveTemplateName(int index)
+        {
+            var cur = AllocationKey(CustomSnapshot(index));
+            foreach (var t in _templates)
+                if (AllocationKey(t.Plan.Allocations) == cur) return t.Name;
+            return "";
+        }
+
+        private static string AllocationKey(IEnumerable<MenuAllocation> alloc)
+        {
+            var sum = new SortedDictionary<int, int>();
+            if (alloc != null)
+                foreach (var a in alloc)
+                {
+                    if (a.Menu == TrainingMenu.Rest || a.Minutes <= 0) continue;
+                    sum.TryGetValue((int)a.Menu, out var cur);
+                    sum[(int)a.Menu] = cur + a.Minutes;
+                }
+            var sb = new System.Text.StringBuilder();
+            foreach (var kv in sum) sb.Append(kv.Key).Append(':').Append(kv.Value).Append(';');
+            return sb.ToString();
+        }
+
+        private static bool IsPitcherMenu(TrainingMenu m)
+            => m == TrainingMenu.Pitching || m == TrainingMenu.BreakingBall
+               || m == TrainingMenu.VelocityTraining || m == TrainingMenu.Running;
+
+        private static bool UiColorIsDefensePosition(TrainingMenu m)
+            => m >= TrainingMenu.DefenseP && m <= TrainingMenu.DefenseOutfield;
 
         private static string PresetDesc(TrainingPreset preset) => preset switch
         {
@@ -808,17 +836,6 @@ namespace KokoSim.Unity.Training
         /// <summary>背番号の表示テキスト（ベンチ外は「—」）。単一ソースは DevelopingPlayer.UniformNumber。</summary>
         private string NumTextAt(int index)
             => _roster[index].UniformNumber == 0 ? "—" : _roster[index].UniformNumber.ToString();
-
-        /// <summary>現在の配分の主眼メニューを分の多い順に上位3件、「投込・変化球・球速」の形で。</summary>
-        private static string FocusSummary(IReadOnlyList<MenuAllocation> alloc)
-        {
-            var sorted = new List<MenuAllocation>();
-            foreach (var a in alloc) if (a.Menu != TrainingMenu.Rest && a.Minutes > 0) sorted.Add(a);
-            sorted.Sort((x, y) => y.Minutes.CompareTo(x.Minutes));
-            var names = new List<string>();
-            foreach (var a in sorted) { if (names.Count >= 3) break; names.Add(MenuJp(a.Menu)); }
-            return names.Count == 0 ? "休養のみ" : string.Join("・", names);
-        }
 
         private static string PresetJp(TrainingPreset preset) => preset switch
         {
@@ -891,6 +908,23 @@ namespace KokoSim.Unity.Training
             _ => m.ToString(),
         };
 
+        /// <summary>一覧の横棒に書く略称（2〜3字）。守備位置は「左守」の形。</summary>
+        private static string MenuShortJp(TrainingMenu m) => m switch
+        {
+            TrainingMenu.FlyBallHitting => "フライ",
+            TrainingMenu.GroundBallHitting => "ゴロ",
+            TrainingMenu.DefenseP => "投守",
+            TrainingMenu.DefenseC => "捕守",
+            TrainingMenu.Defense1B => "一守",
+            TrainingMenu.Defense2B => "二守",
+            TrainingMenu.Defense3B => "三守",
+            TrainingMenu.DefenseSS => "遊守",
+            TrainingMenu.DefenseLF => "左守",
+            TrainingMenu.DefenseCF => "中守",
+            TrainingMenu.DefenseRF => "右守",
+            _ => MenuJp(m),
+        };
+
         // SDF丸ゴフォントで確実に描画される漢字1文字アイコン（絵文字はグリフ欠落の恐れ）。
         private static string MenuIcon(TrainingMenu m) => m switch
         {
@@ -905,7 +939,7 @@ namespace KokoSim.Unity.Training
             TrainingMenu.Throwing => "遠",
             TrainingMenu.Pitching => "投",
             TrainingMenu.BreakingBall => "変",
-            TrainingMenu.Running => "持",
+            TrainingMenu.Running => "ス",
             TrainingMenu.VelocityTraining => "速",
             TrainingMenu.Bunt => "犠",
             TrainingMenu.Rest => "休",
@@ -918,29 +952,6 @@ namespace KokoSim.Unity.Training
             if (eff.Main is AbilityKind k) return AbilityJp(k);
             return m == TrainingMenu.Rest ? "休養" : "守備適性";
         }
-
-        // 能力アイコン（SDF丸ゴ収録の漢字1文字）。
-        private static string AbilityIcon(AbilityKind k) => k switch
-        {
-            AbilityKind.Contact => "ミ",
-            AbilityKind.Power => "パ",
-            AbilityKind.LaunchTendency => "弾",
-            AbilityKind.Discipline => "選",
-            AbilityKind.Speed => "走",
-            AbilityKind.ArmStrength => "肩",
-            AbilityKind.Fielding => "守",
-            AbilityKind.Catching => "捕",
-            AbilityKind.Velocity => "速",
-            AbilityKind.Control => "制",
-            AbilityKind.Stamina => "ス",
-            AbilityKind.PitchRank => "球",
-            AbilityKind.Stuff => "威",
-            AbilityKind.Bunt => "犠",
-            AbilityKind.Steal => "盗",
-            AbilityKind.Baserunning => "塁",
-            AbilityKind.ThrowAccuracy => "送",
-            _ => "能",
-        };
 
         // 能力表示名は単一ソース（KokoSim.Unity.Shell.AbilityLabels）に集約（issue #94）。
         private static string AbilityJp(AbilityKind k) => KokoSim.Unity.Shell.AbilityLabels.Jp(k);
