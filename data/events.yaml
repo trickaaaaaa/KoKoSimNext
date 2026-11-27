@@ -2595,7 +2595,7 @@ events:
   # 負けは大会が続く負け（リーグ戦の途中など）と終わる負けの両方で成り立つ文にする＝「次がある」と言い切らない。
   - id: postgame_win
     kind: System
-    scene: clubroom
+    scene: bench
     text: "公式戦に勝った。"
     variants:
       - lines:
@@ -2606,11 +2606,11 @@ events:
             say: "勝ちました、監督。お疲れさまでした。"
       - lines:
           - who: team_manager
-            say: "監督、勝利です。みんなにも声をかけてきます。"
+            say: "監督、勝利です。みんなの声、まだベンチに残ってますね。"
 
   - id: postgame_win_big
     kind: System
-    scene: clubroom
+    scene: bench
     text: "公式戦に勝った。"
     variants:
       - lines:
@@ -2636,7 +2636,7 @@ events:
 
   - id: postgame_loss
     kind: System
-    scene: clubroom
+    scene: bench
     text: "公式戦で敗れた。"
     variants:
       - lines:
