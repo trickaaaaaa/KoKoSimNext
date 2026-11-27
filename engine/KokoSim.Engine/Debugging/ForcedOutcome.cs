@@ -85,6 +85,12 @@ public enum ForcedOutcome
     /// </summary>
     VerySlowHandleGrounder,
     /// <summary>
+    /// 打席の初球を「二塁手が捕って一塁へ投げたが逸れ、一塁手が拾い直して塁へ戻ってアウト」のゴロにする
+    /// （issue #1735 の撮影用）。悪送球を必ず引き、逸れ幅を小さくして拾い直しが間に合う形に寄せる（打球は
+    /// <see cref="SlowHandleGrounder"/> と同じく決まった順で探す・乱数を引かない）。間に合わなかった打席は失策になる＝撮り直す。
+    /// </summary>
+    RecoveredWildThrowGrounder,
+    /// <summary>
     /// 打席の初球を「内野手が通り道でノーバウンド捕球するライナーのアウト」にする（issue #1724 の撮影用）。
     /// 実際の守備位置でライナー捕球が成立する打球を決まった順で探して当てる（乱数を引かない）。
     /// </summary>
@@ -162,6 +168,19 @@ public static class ForcedOutcomes
             IrregularBounceProb = 0.0,
         };
     }
+
+    /// <summary>
+    /// <see cref="ForcedOutcome.RecoveredWildThrowGrounder"/> の1打席ぶんの守備係数。悪送球の確率を1へ寄せ（捕球の失策・
+    /// イレギュラーは切る）、逸れ幅の標準偏差を小さくして一塁手の拾い直しが間に合う形にする。
+    /// </summary>
+    public static Match.Fielding.FieldingCoefficients ApplyRecoveredWildThrow(Match.Fielding.FieldingCoefficients c)
+        => c with
+        {
+            ErrorBaseProb = 0.0, ErrorMinProb = 0.0, ErrorMaxProb = 1.0,
+            ThrowErrorBaseProb = 50.0,
+            IrregularBounceProb = 0.0,
+            WildThrowScatterSigmaM = 2.0,
+        };
 
     /// <summary>盗塁企図そのものを起こす種別か（走者一塁・二塁空きが前提）。</summary>
     public static bool ForcesStealAttempt(this ForcedOutcome f)

@@ -702,6 +702,7 @@ public static class GameEngine
                 Debugging.ForcedOutcome.BuntInPlay => ctx with { Baserunning = paBaserunning },
                 Debugging.ForcedOutcome.FieldingError => ctx with { Fielding = Debugging.ForcedOutcomes.ApplyFielding(ctx.Fielding, force) },
                 Debugging.ForcedOutcome.SlowHandleGrounder => ctx with { Fielding = Debugging.ForcedOutcomes.ApplySlowHandle(ctx.Fielding) },
+                Debugging.ForcedOutcome.RecoveredWildThrowGrounder => ctx with { Fielding = Debugging.ForcedOutcomes.ApplyRecoveredWildThrow(ctx.Fielding) },
                 Debugging.ForcedOutcome.VerySlowHandleGrounder => ctx with
                 {
                     Fielding = Debugging.ForcedOutcomes.ApplySlowHandle(ctx.Fielding, Debugging.ForcedOutcomes.VerySlowHandleJitterSeconds),
@@ -951,6 +952,7 @@ public static class GameEngine
                                or Debugging.ForcedOutcome.ThroughInfieldLeft or Debugging.ForcedOutcome.ThroughInfieldMiddle
                                or Debugging.ForcedOutcome.ThroughInfieldRight or Debugging.ForcedOutcome.SlowHandleGrounder
                                or Debugging.ForcedOutcome.VerySlowHandleGrounder or Debugging.ForcedOutcome.InfieldLineOut
+                               or Debugging.ForcedOutcome.RecoveredWildThrowGrounder
                     ? built with { ForcedFoul = force }
                     : built;
             }
