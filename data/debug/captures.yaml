@@ -494,6 +494,52 @@ captures:
     video: {from: flight_end-0.6, to: flight_end+0.3, fps: 60}
     probes: [BallHoldDiag, FieldCatchDiag]
 
+  # ── 外野のゴロの捕球の直前に、球が減速して止まった点へ吸い込まれないか（issue #1768）。ゴロの球の寄せを
+  # 「engine の転がりに捕球の瞬間の残り差を足す」形にした。BallHoldDiag の毎コマの球高・グラブ距離と、
+  # FieldCatchLineDiag の捕球点の横ずれ・手前へ寄せた量・体の寄せで、捕球の0.3秒前から保持までを見る。
+  # 走者なし（止まって捕る）と走者あり（走りながら掬う・#1079）の左翼／中堅／右翼 ──
+  - id: ground-catch-1768-lf-norunner
+    name: "左翼ゴロを走者なしで捕る・捕球直前の球の寄り方（issue #1768）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    view: rig
+    shots: [catch-0.3, catch-0.1, catch]
+    video: {from: catch-0.6, to: catch+0.3, fps: 60}
+    probes: [BallHoldDiag, FieldCatchLineDiag]
+  - id: ground-catch-1768-lf-runner
+    name: "左翼ゴロを走りながら掬う・捕球直前の球の寄り方（issue #1768）"
+    scenario: of-grounder-runner-lf-lab
+    manager: home
+    view: rig
+    shots: [catch-0.3, catch-0.1, catch]
+    video: {from: catch-0.6, to: catch+0.3, fps: 60}
+    probes: [BallHoldDiag, FieldCatchLineDiag]
+  - id: ground-catch-1768-cf-runner
+    name: "中堅ゴロを走りながら掬う・捕球直前の球の寄り方（issue #1768）"
+    scenario: of-grounder-runner-cf-lab
+    manager: home
+    view: rig
+    shots: [catch-0.3, catch-0.1, catch]
+    video: {from: catch-0.6, to: catch+0.3, fps: 60}
+    probes: [BallHoldDiag, FieldCatchLineDiag]
+  - id: ground-catch-1768-rf-runner
+    name: "右翼ゴロを走りながら掬う・捕球直前の球の寄り方（issue #1768）"
+    scenario: of-grounder-runner-rf-lab
+    manager: home
+    view: rig
+    shots: [catch-0.3, catch-0.1, catch]
+    video: {from: catch-0.6, to: catch+0.3, fps: 60}
+    probes: [BallHoldDiag, FieldCatchLineDiag]
+  # 外野フライの横走り（#1336 の fly-catch-1336 の左右版）。捕球点の横ずれ・体の寄せを FieldCatchLineDiag で見る
+  - id: fly-catch-1768
+    name: "外野フライを捕る・捕球点の横ずれと体の寄せ（issue #1768）"
+    scenario: fair-fly-out-lab
+    manager: away
+    view: rig
+    shots: [flight_end-0.3, flight_end-0.1, flight_end]
+    video: {from: flight_end-0.6, to: flight_end+0.3, fps: 60}
+    probes: [BallHoldDiag, FieldCatchLineDiag, CatchSlipDiag]
+
   # ── ビルドと同じ読み方（索引だけ）で外野手が走るか（ブラウザ版で待機の姿勢のまま滑っていた・#1323）。
   # 走りの向き違い・走り出しのクリップが索引の一覧から漏れていた。catalog と editor を並べて見比べる ──
   - id: fly-run-catalog-1323
