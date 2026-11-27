@@ -183,7 +183,7 @@ events:
             SummerRetirement.KoshienChampionEventId,
             // マネージャーの引き継ぎ（issue #1430）。IDは TeamManagerLifecycle の定数で引く。
             KokoSim.Engine.Career.TeamManagerLifecycle.EventId,
-            "senbatsu_berth_donation", "senbatsu_draw", "senbatsu_not_selected",
+            "senbatsu_berth_donation", "senbatsu_draw", "senbatsu_not_selected", "senbatsu_not_entered",
             "booster_club_fund", "gear_broken", "local_company_support",
             "outside_coach_visit", "self_practice_awakened", "exam_week_slump",
             "region_snow_indoor", "region_local_festival", "region_urban_ground_share",
@@ -268,6 +268,22 @@ events:
         {
             var head = string.Concat(v.Lines.Take(2).Select(l => l.Say));
             Assert.Contains("{senbatsu}", head);
+        }
+    }
+
+    /// <summary>地区大会に出ていない年の選考発表（issue #1732）は、マネージャーのひとことだけの短い場面。監督には喋らせない。</summary>
+    [Fact]
+    public void SenbatsuNotEntered_IsShortAndTheManagerOnlyTalks()
+    {
+        var e = RepositoryEvents().Single(x => x.Id == SenbatsuAnnounceScene.NotEnteredEventId);
+        Assert.Contains("{senbatsu}", e.Text);
+        Assert.NotEmpty(e.Variants);
+        foreach (var v in e.Variants)
+        {
+            Assert.InRange(v.Lines.Count, 1, 2);
+            Assert.Contains("{senbatsu}", string.Concat(v.Lines.Select(l => l.Say)));
+            Assert.DoesNotContain(v.Lines, l => l.Who == "manager" || l.Who == "player");
+            Assert.Contains(v.Lines, l => l.Who == "team_manager");
         }
     }
 

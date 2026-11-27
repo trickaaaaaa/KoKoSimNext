@@ -59,7 +59,7 @@ namespace KokoSim.Unity.Shell
             if (fieldIds == null || fieldIds.Count == 0) return;   // 神宮大会が一度も走っていない（新規ゲーム等）
 
             var yearIndex = GameClock.YearIndex;
-            // 選考は第39週（暦の翌年1〜2月）・大会は翌年3月＝出場年は年度の暦年ではなく実開催の暦年（issue #1218）。
+            // 選考は第42週（暦の翌年2月1週目）・大会は翌年3月＝出場年は年度の暦年ではなく実開催の暦年（issue #1218）。
             var calendarYear = SeasonClock.CalendarYear(yearIndex, GameClock.Week);
             RecordAppearances(fieldIds, calendarYear);
 
@@ -78,12 +78,16 @@ namespace KokoSim.Unity.Shell
             var title = Title(yearIndex);
             var seed = GameSeed.Master ^ (ulong)(9700 + yearIndex * 10 + (int)TournamentKind.SenbatsuKoshien);
 
-            if (!selected)
+            var kind = SenbatsuAnnounceScene.KindOf(selected, entered);
+            if (kind != SenbatsuAnnounceKind.Selected)
             {
-                // 選外のイベントは「候補だった（秋季地区大会に出た）年」だけ。出ていない年は観るだけのセンバツへ入る。
-                if (entered)
-                    EventService.Push("senbatsu_not_selected", subjectName: null,
+                // 選外の場面は「候補だった（秋季地区大会に出た）年」だけ。出ていない年はマネージャーのひとことだけの短い場面で流す（#1732）。
+                // どちらも観るだけのセンバツへ入る。
+                if (kind == SenbatsuAnnounceKind.NotSelected)
+                    EventService.Push(SenbatsuAnnounceScene.NotSelectedEventId, subjectName: null,
                         PresentedEffect.Bad(KokoSim.Engine.Season.DisplayNames.Current.Senbatsu + "出場ならず。"));
+                else
+                    EventService.Push(SenbatsuAnnounceScene.NotEnteredEventId, subjectName: null, effect: null);
                 var spectated = BuildSpectatedRunner(field, title, seed, yearIndex);
                 GameSession.Current.EnterSpectatedSenbatsu(title, spectated, field);
                 return;

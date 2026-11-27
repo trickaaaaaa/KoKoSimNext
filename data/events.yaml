@@ -2827,6 +2827,25 @@ events:
           - who: team_manager
             say: "悔しいうちは伸びますよ。次の練習からです。"
 
+  # センバツの選考発表で、秋の地区大会に出ていない年（候補ですらない年）の短い場面（issue #1732）。
+  # マネージャーのひとことだけ（監督には喋らせない）。そのあと観るだけのセンバツへ入る。結果行は出さない。
+  - id: senbatsu_not_entered
+    kind: System
+    scene: clubroom
+    text: "{senbatsu}の選考発表があった。今年はうちに関係ない。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "今年は地区大会にも出てませんし……{senbatsu}は、まあ、テレビで観ましょうか。"
+      - lines:
+          - who: team_manager
+            say: "{senbatsu}の出場校の発表です。うちの名前を探すのは、来年からにしましょう。"
+      - lines:
+          - who: narration
+            say: "{senbatsu}の選考発表の日。部室のテレビには、よその学校の名前だけが流れていった。"
+          - who: team_manager
+            say: "おにぎり、買ってきますね。観戦用に。"
+
   # 「エースの違和感」（ace_hidden_injury）は選択肢も効果も無いまま出ていたので削除（2026-11-23 作らないと決定・#1477）。
 
   # --- 選手間イベント（選択肢つき・issue #945・設計書23 §3.3） ---

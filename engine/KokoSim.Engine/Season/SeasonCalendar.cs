@@ -81,19 +81,20 @@ public sealed record SeasonCalendar
     public int RecruitListWeek { get; init; } = 24;
 
     /// <summary>
-    /// センバツ選考発表の週（1月 ≒ 第39週。冬合宿（<see cref="WinterCampWeek"/>=38）の直後に置き正面衝突を
-    /// 避ける。設計書05 §1.5b）。32校は地区大会・明治神宮大会が終わった時点（即座連鎖の末尾）で既に
+    /// センバツ選考発表の週（2月1週目 ＝ 第42週。ドラフトを10月4週目に固定した（<see cref="DraftWeek"/>）のと同じく
+    /// 暦の週に固定する。issue #1732・設計書05 §1.5b）。32校は地区大会・明治神宮大会が終わった時点（即座連鎖の末尾）で既に
     /// 確定済み＝この週は保存済みの結果を読み上げるノベルを1本出すだけで、乱数もロジックも新たに引かない。
     /// </summary>
-    public int SenbatsuAnnounceWeek { get; init; } = 39;
+    public int SenbatsuAnnounceWeek { get; init; } = 42;
 
     /// <summary>
     /// AI校の節目成長・冬明けノードの週（冬合宿（<see cref="WinterCampWeek"/>=38）の直後 ≒ 第39週。
     /// 設計書05 §2.3・issue #843）。年間成長予算（<see cref="Nation.Roster.AiPlayer.PendingBudget"/>）の
     /// 残り全額をここで使い切る＝4月の年度替わりより前に、前の夏の節目で翌夏に向けて積んだ成長を完了させる（issue #1058）
-    /// （<see cref="SenbatsuAnnounceWeek"/> と同週。センバツ選考発表が起こす地区大会成績の打ち直し背景
-    /// （SenbatsuQualifierStatsSim）と同じロスターを読み書きするため、**無関係ではない**＝
-    /// Shell 側（GameClock.EnterWeek）が背景の完了を待ってから当ノードを書くことで衝突を避ける。issue #1226）。
+    /// （選考発表週 <see cref="SenbatsuAnnounceWeek"/>＝第42週とは別の週。地区大会成績の打ち直し背景
+    /// （SenbatsuQualifierStatsSim・神宮大会の終わりで起動）と同じロスターを読み書きするため、**無関係ではない**＝
+    /// Shell 側（GameClock.EnterWeek）が背景の完了を待ってから当ノードを書くことで衝突を避ける。issue #1226。
+    /// 選考発表を第42週へ動かしても、成長は冬合宿の直後（第39週）のまま動かさない。issue #1732）。
     /// </summary>
     public int WinterGrowthNodeWeek { get; init; } = 39;
 

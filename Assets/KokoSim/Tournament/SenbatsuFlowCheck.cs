@@ -107,9 +107,15 @@ namespace KokoSim.Unity.Tournament
                 else
                 {
                     var spectated = GameSession.Current.HasSpectatedSenbatsu;
+                    var notSelected = HasQueued("senbatsu_not_selected");
+                    var notEntered = HasQueued("senbatsu_not_entered");
                     Check("観るだけのセンバツ or 選外イベントのいずれか",
-                        spectated || HasQueued("senbatsu_not_selected"),
+                        spectated || notSelected,
                         "spectated=" + spectated);
+                    // 秋の地区大会に出た年は選外の場面、出ていない年は短い場面（どちらか1つだけ・#1732）。
+                    Check("選外の場面と地区大会に出ていない年の場面は、どちらか1つだけ",
+                        notSelected != notEntered,
+                        "not_selected=" + notSelected + " not_entered=" + notEntered);
                     if (spectated)
                         Check("観戦の出場校が32校", GameSession.Current.SenbatsuField.Count == 32,
                             "field=" + GameSession.Current.SenbatsuField.Count);
