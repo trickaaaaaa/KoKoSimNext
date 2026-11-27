@@ -35,7 +35,7 @@ namespace KokoSim.UnityEditorTools
         private const float Dt = 1f / 60f;
 
         /// <summary>水平に戻った量がこの px を超えたら拾う（画面 960 幅で 1px 未満の揺れは数えない）。</summary>
-        public const float HorizontalBackPx = 3f;
+        public const float HorizontalBackPx = 8f;
 
         public sealed class Foul
         {
@@ -44,7 +44,8 @@ namespace KokoSim.UnityEditorTools
             public PlaybackBallSegment Batted;
             public float PlateX, PlateY;
             public string Describe() =>
-                $"seed={Seed} pa={Pa} p={Pitch} view={Play.FoulView} {Batted.GetType().Name} T={Batted.T0:F2}-{Batted.T1:F2} plate=({PlateX:F2},{PlateY:F2})";
+                Batted == null ? $"seed={Seed} pa={Pa} p={Pitch} 打球なし plate=({PlateX:F2},{PlateY:F2})"
+                    : $"seed={Seed} pa={Pa} p={Pitch} view={Play.FoulView} {Batted.GetType().Name} T={Batted.T0:F2}-{Batted.T1:F2} plate=({PlateX:F2},{PlateY:F2})";
         }
 
         public struct Sample
@@ -54,6 +55,8 @@ namespace KokoSim.UnityEditorTools
             public float X, Y;       // 画面 px（左上原点）
             public float HeightM;
             public float Depth;
+            public float FrameH, AimY;
+            public float LX, LZ;     // ステージローカルの水平位置[m]（カメラの動きを除いた球そのものの位置）
         }
 
         public sealed class Finding
@@ -65,7 +68,9 @@ namespace KokoSim.UnityEditorTools
             public float VerticalRiseM;
             public float VerticalRiseAt;
             public int VisibleFrames;
-            public bool IsBad => BackPx > HorizontalBackPx || Reentries > 0;
+            public string ExitSide = "-";
+            public float WorldBackM, WorldBackAt;   // 球そのもの（世界）の水平の戻り[m]。カメラの動きは含まない
+            public bool IsBad => BackPx > HorizontalBackPx || Reentries > 0 || WorldBackM > 0.05f;
         }
 
         // ---- 実試合のファウルを拾う ----
@@ -91,9 +96,9 @@ namespace KokoSim.UnityEditorTools
                     for (int i = 0; i < cur.PitchSeq.Pitches.Count; i++)
                     {
                         var pt = cur.PitchSeq.Pitches[i];
-                        if (pt.Kind != PitchKind.Foul || pt.FoulFlight == null) continue;
-                        var seg = BattedSegmentOf(pt.FoulFlight);
-                        if (seg == null) continue;
+                        if (pt.Kind != PitchKind.Foul) continue;
+                        var seg = pt.FoulFlight == null ? null : BattedSegmentOf(pt.FoulFlight);
+                        if (seg == null && pt.FoulFlight != null) continue;
                         list.Add(new Foul
                         {
                             Seed = (int)seed, Pa = pa, Pitch = i, Play = pt.FoulFlight, Batted = seg,
@@ -135,7 +140,7 @@ namespace KokoSim.UnityEditorTools
             if (local == null || vp == null) return new Sample { T = t, Visible = false };
             var v = vp.Value;
             bool inFrame = v.z > 0f && v.x >= 0f && v.x <= 1f && v.y >= 0f && v.y <= 1f;
-            return new Sample { T = t, Visible = inFrame, X = v.x * W, Y = (1f - v.y) * H, HeightM = local.Value.y, Depth = v.z };
+            return new Sample { T = t, Visible = inFrame, X = v.x * W, Y = (1f - v.y) * H, HeightM = local.Value.y, Depth = v.z, LX = local.Value.x, LZ = local.Value.z, FrameH = rig.FieldFrameShownForCapture.FrameH, AimY = rig.FieldFrameShownForCapture.AimY };
         }
 
         /// <summary>
@@ -146,6 +151,13 @@ namespace KokoSim.UnityEditorTools
         {
             var pitch = new DuelPitchFlight(f.PlateX, f.PlateY, f.PlateX, f.PlateY, 0.5f, 0.05f, 0.2f, 140f);
             rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, pitch, f.Batted);
+            if (f.Batted == null)
+            {
+                // 打球を持たないファウル（バント系など）: リリースから 1.6 秒の球の動きをそのまま測る
+                for (float c = 0f; c < 1.6f; c += Dt) { duel.Add(Snap(rig, c)); rig.Tick(Dt); }
+                rig.HideBall();
+                return;
+            }
             for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(Dt);
             bool toField = f.Play.FoulView != FoulViewKind.None;
             float clock = 0f;
@@ -207,23 +219,57 @@ namespace KokoSim.UnityEditorTools
                 else if (wasVisible) wasHidden = true;
             }
             r.VisibleFrames = vis.Count;
+            for (int i = 0; i < s.Count; i++)
+            {
+                if (s[i].Visible || s[i].Depth == 0f) continue;
+                if (i == 0 || !s[i - 1].Visible) continue;
+                r.ExitSide = s[i].Y < 0f ? "上" : s[i].Y > H ? "下" : s[i].X < 0f ? "左" : "右";
+                break;
+            }
             if (vis.Count >= 2)
             {
-                float net = vis[vis.Count - 1].X - vis[0].X;
+                // コマごとの細かい揺れ（カメラの追従のガタつき）は「跳ね返り」ではないので、前後4コマの移動平均で均してから測る
+                var sm = new float[vis.Count];
+                for (int i = 0; i < vis.Count; i++)
+                {
+                    float acc = 0f; int n = 0;
+                    for (int k = Mathf.Max(0, i - 4); k <= Mathf.Min(vis.Count - 1, i + 4); k++) { acc += vis[k].X; n++; }
+                    sm[i] = acc / n;
+                }
+                float net = sm[sm.Length - 1] - sm[0];
                 float dir = Mathf.Abs(net) < 1e-3f ? 0f : Mathf.Sign(net);
                 if (dir == 0f)
                 {
                     // 正味ゼロ＝進んでから同じだけ戻った。最初に動いた向きを「進む向き」にする
-                    for (int i = 1; i < vis.Count; i++)
-                        if (Mathf.Abs(vis[i].X - vis[0].X) > 1f) { dir = Mathf.Sign(vis[i].X - vis[0].X); break; }
+                    for (int i = 1; i < sm.Length; i++)
+                        if (Mathf.Abs(sm[i] - sm[0]) > 1f) { dir = Mathf.Sign(sm[i] - sm[0]); break; }
                 }
                 float sum = 0f, worst = 0f;
-                for (int i = 1; i < vis.Count; i++)
+                for (int i = 1; i < sm.Length; i++)
                 {
-                    float along = (vis[i].X - vis[i - 1].X) * dir;
+                    float along = (sm[i] - sm[i - 1]) * dir;
                     if (along < 0f) { sum -= along; if (-along > worst) { worst = -along; r.BackAt = vis[i].T; } }
                 }
                 r.BackPx = sum;
+            }
+            // 球そのものの水平の戻り（画面ではなくステージ上）。見えているかどうかに関係なく、描かれている全コマで測る
+            var drawn = new List<Sample>();
+            foreach (var x in s) if (x.Depth != 0f || x.Visible) drawn.Add(x);
+            if (drawn.Count >= 2)
+            {
+                var a = drawn[0]; var b = drawn[drawn.Count - 1];
+                var d = new Vector2(b.LX - a.LX, b.LZ - a.LZ);
+                if (d.magnitude > 0.05f)
+                {
+                    d.Normalize();
+                    float sumW = 0f, worstW = 0f;
+                    for (int i = 1; i < drawn.Count; i++)
+                    {
+                        float along = Vector2.Dot(new Vector2(drawn[i].LX - drawn[i - 1].LX, drawn[i].LZ - drawn[i - 1].LZ), d);
+                        if (along < 0f) { sumW -= along; if (-along > worstW) { worstW = -along; r.WorldBackAt = drawn[i].T; } }
+                    }
+                    r.WorldBackM = sumW;
+                }
             }
             // 落ちてから上がる（高さ[m]）: 最初に頂点を過ぎた後の最大の跳ね上がり
             if (vis.Count >= 3)
@@ -241,6 +287,30 @@ namespace KokoSim.UnityEditorTools
             return r;
         }
 
+
+        /// <summary>1本の毎コマの位置を出す（原因の切り分け用）。duel / field の両方。</summary>
+        public static string Trace(int seed, int pa, int pitch)
+        {
+            var rig = NewRig();
+            if (rig == null) return "rig 無し";
+            var sb = new StringBuilder();
+            try
+            {
+                foreach (var f in CollectFouls(1, (ulong)seed))
+                {
+                    if (f.Pa != pa || f.Pitch != pitch) continue;
+                    var duel = new List<Sample>(); var field = new List<Sample>();
+                    Replay(rig, f, duel, field);
+                    sb.AppendLine(f.Describe());
+                    sb.AppendLine("view\tT\tvis\tpxX\tpxY\theightM\tlocalX\tlocalZ\tdepth\tframeH\taimY");
+                    foreach (var x in duel) sb.AppendLine($"duel\t{x.T:F3}\t{(x.Visible ? 1 : 0)}\t{x.X:F1}\t{x.Y:F1}\t{x.HeightM:F2}\t{x.LX:F2}\t{x.LZ:F2}\t{x.Depth:F1}\t{x.FrameH:F1}\t{x.AimY:F1}");
+                    foreach (var x in field) sb.AppendLine($"field\t{x.T:F3}\t{(x.Visible ? 1 : 0)}\t{x.X:F1}\t{x.Y:F1}\t{x.HeightM:F2}\t{x.LX:F2}\t{x.LZ:F2}\t{x.Depth:F1}\t{x.FrameH:F1}\t{x.AimY:F1}");
+                }
+            }
+            finally { rig.Dispose(); }
+            return sb.ToString();
+        }
+
         /// <summary>実試合 <paramref name="games"/> 試合のファウルを再生して測り、レポートを書く。返り値はレポート本文。</summary>
         public static string Run(int games = 100, ulong seed0 = 1)
         {
@@ -249,7 +319,7 @@ namespace KokoSim.UnityEditorTools
             var rig = NewRig();
             if (rig == null) return "DuelStageRig が組めない（素体/クリップ未導入）";
             var sb = new StringBuilder();
-            int duelN = 0, fieldN = 0, duelBad = 0, fieldBad = 0, none = 0, chased = 0, big = 0;
+            int duelN = 0, fieldN = 0, duelBad = 0, fieldBad = 0, none = 0, chased = 0, big = 0, noBall = 0;
             var badLines = new StringBuilder();
             try
             {
@@ -260,24 +330,25 @@ namespace KokoSim.UnityEditorTools
                     Replay(rig, f, duel, field);
                     // ボールの出入りで次の球へ持ち越さないよう、少し空回しして構えへ戻す
                     for (int i = 0; i < 90; i++) rig.Tick(Dt);
-                    if (f.Play.FoulView == FoulViewKind.None) none++;
+                    if (f.Play == null) noBall++;
+                    else if (f.Play.FoulView == FoulViewKind.None) none++;
                     else if (f.Play.FoulView == FoulViewKind.BigFoul) big++;
                     else chased++;
 
                     var d = Analyze("duel", duel);
                     duelN++;
-                    if (d.IsBad) { duelBad++; badLines.AppendLine($"[対決] {f.Describe()} 戻り{d.BackPx:F1}px@{d.BackAt:F2}s 再入{d.Reentries} 跳ね{d.VerticalRiseM:F2}m@{d.VerticalRiseAt:F2}s 見えたコマ{d.VisibleFrames}"); }
+                    if (d.IsBad) { duelBad++; badLines.AppendLine($"[対決] {f.Describe()} 戻り{d.BackPx:F1}px@{d.BackAt:F2}s 世界戻り{d.WorldBackM:F2}m@{d.WorldBackAt:F2}s 再入{d.Reentries}(出た側{d.ExitSide}) 跳ね{d.VerticalRiseM:F2}m@{d.VerticalRiseAt:F2}s 見えたコマ{d.VisibleFrames}"); }
                     if (field.Count > 0)
                     {
                         var fl = Analyze("field", field);
                         fieldN++;
-                        if (fl.IsBad) { fieldBad++; badLines.AppendLine($"[守備] {f.Describe()} 戻り{fl.BackPx:F1}px@{fl.BackAt:F2}s 再入{fl.Reentries} 跳ね{fl.VerticalRiseM:F2}m@{fl.VerticalRiseAt:F2}s 見えたコマ{fl.VisibleFrames}"); }
+                        if (fl.IsBad) { fieldBad++; badLines.AppendLine($"[守備] {f.Describe()} 戻り{fl.BackPx:F1}px@{fl.BackAt:F2}s 世界戻り{fl.WorldBackM:F2}m@{fl.WorldBackAt:F2}s 再入{fl.Reentries}(出た側{fl.ExitSide}) 跳ね{fl.VerticalRiseM:F2}m@{fl.VerticalRiseAt:F2}s 見えたコマ{fl.VisibleFrames}"); }
                     }
                 }
             }
             finally { rig.Dispose(); }
 
-            sb.AppendLine($"試合 {games}（seed {seed0}〜）・打球つきファウル {fouls.Count} 本（通常 {none} / 追ったフライ {chased} / 大ファウル {big}）");
+            sb.AppendLine($"試合 {games}（seed {seed0}〜）・ファウル {fouls.Count} 本（通常 {none} / 打球なし {noBall} / 追ったフライ {chased} / 大ファウル {big}）");
             sb.AppendLine($"対決ビュー: {duelN} 本中 {duelBad} 本が水平に {HorizontalBackPx}px 超戻る／画面へ再入");
             sb.AppendLine($"守備ビュー: {fieldN} 本中 {fieldBad} 本が同様");
             sb.AppendLine(badLines.ToString());

@@ -5158,7 +5158,9 @@ namespace KokoSim.Unity.Match
                 double rel = t - flight.T0;
                 float h = rel > half ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
                 aimY = Mathf.Max(FieldAimYMin, h * 0.5f);
-                frameH = Mathf.Max(frameH, h + DuelTuning.FieldMarginM * 2f);
+                float flightGain = _fieldPlay != null && _fieldPlay.FoulView == KokoSim.Engine.Match.Fielding.FoulViewKind.ChasedFly
+                    ? DuelTuning.FoulFlightFrameGain : 1f;
+                frameH = Mathf.Max(frameH, h * flightGain + DuelTuning.FieldMarginM * 2f);
             }
             else
             {
@@ -5390,6 +5392,9 @@ namespace KokoSim.Unity.Match
         private float _fieldAimY = FieldAimYMin;
 
 
+
+        /// <summary>検査用: いま画面に出ている守備カメラの枠（縦の実寸 m・注視点の高さ m）。</summary>
+        public (float FrameH, float AimY) FieldFrameShownForCapture => (_fieldFrameHShown, _fieldAimY);
 
         /// <summary>ズーム表示値（速度上限を通した後）。0未満＝未初期化（プレー頭で目標へ直接合わせる）。</summary>
         private float _fieldFrameHShown = -1f;
