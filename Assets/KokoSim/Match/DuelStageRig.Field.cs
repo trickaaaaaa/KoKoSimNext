@@ -5156,10 +5156,12 @@ namespace KokoSim.Unity.Match
                 double half = (flight.T1 - flight.T0) * 0.5;
                 float apex = Mathf.Max(0f, (float)flight.At(half).H);
                 double rel = t - flight.T0;
-                float h = rel > half ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
+                // 追ったファウルフライは落ちるまで頂点基準の枠を据える（issue #1766）。下降で枠を詰めると、球が枠の
+                // 端へ寄る向きにも拡大が掛かって画面の中で横へ滑って戻る（高いフライで10〜25px）。インプレーは従来どおり詰める
+                bool chased = _fieldPlay != null && _fieldPlay.FoulView == KokoSim.Engine.Match.Fielding.FoulViewKind.ChasedFly;
+                float h = rel > half && !chased ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
                 aimY = Mathf.Max(FieldAimYMin, h * 0.5f);
-                float flightGain = _fieldPlay != null && _fieldPlay.FoulView == KokoSim.Engine.Match.Fielding.FoulViewKind.ChasedFly
-                    ? DuelTuning.FoulFlightFrameGain : 1f;
+                float flightGain = chased ? DuelTuning.FoulFlightFrameGain : 1f;
                 frameH = Mathf.Max(frameH, h * flightGain + DuelTuning.FieldMarginM * 2f);
             }
             else

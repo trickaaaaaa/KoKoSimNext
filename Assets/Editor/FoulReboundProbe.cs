@@ -207,11 +207,19 @@ namespace KokoSim.UnityEditorTools
             // 水平の往復: 見えているコマの x の動きのうち、全体の進む向きと逆へ戻った合計 px
             var vis = new List<Sample>();
             bool wasVisible = false, wasHidden = false;
+            float lastLX = 0f, lastLZ = 0f, lastH = 0f;
             foreach (var x in s)
             {
                 if (x.Visible)
                 {
                     if (wasHidden && wasVisible) r.Reentries++;
+                    // 止まった球（着地後）が画面の中で動くのはカメラの寄り直し＝球の跳ね返りではないので、水平の戻りの測定からは外す
+                    bool still = vis.Count > 0 && Mathf.Abs(x.HeightM - lastH) < 0.02f
+                        && Mathf.Abs(x.LX - lastLX) < 0.02f && Mathf.Abs(x.LZ - lastLZ) < 0.02f;
+                    lastLX = x.LX; lastLZ = x.LZ; lastH = x.HeightM;
+                    wasVisible = true;
+                    wasHidden = false;
+                    if (still) continue;
                     vis.Add(x);
                     wasVisible = true;
                     wasHidden = false;
@@ -287,6 +295,47 @@ namespace KokoSim.UnityEditorTools
             return r;
         }
 
+
+
+        /// <summary>
+        /// 追ったファウルフライ（守備ビューで見せる）を engine の組むタイムラインで作る（落下に 0.2 秒遅れて捕手が着く形）。
+        /// 実試合を回さずに高いフライだけを試せる。
+        /// </summary>
+        public static Foul SyntheticChasedFoul(float ev, float la, float br)
+        {
+            var ball = new KokoSim.Engine.Match.Batting.BattedBall { ExitVelocityMps = ev, LaunchAngleDeg = la, BearingDeg = br };
+            var aero = new KokoSim.Engine.Match.Pitching.Aerodynamics();
+            var co = new FieldingCoefficients();
+            var fg = new KokoSim.Engine.Match.Field.FieldGeometry();
+            var bare = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball, aero, co, fg, false, false, false);
+            double hang = bare.Ball[1].T1 - bare.Ball[1].T0;
+            var chase = new FoulChase(KokoSim.Engine.Match.Field.FieldPosition.Catcher, 0.0, -1.0, hang + 0.2, hang);
+            var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball, aero, co, fg, false, false, false, chase);
+            var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+            return new Foul { Play = play, Batted = BattedSegmentOf(play), PlateX = 0.1f, PlateY = 0.8f };
+        }
+
+        /// <summary>合成した追ったフライの毎コマ（原因の切り分け用）。</summary>
+        public static string TraceSynthetic(float ev, float la, float br, int every = 6)
+        {
+            var rig = NewRig();
+            if (rig == null) return "rig 無し";
+            var sb = new StringBuilder();
+            try
+            {
+                var f = SyntheticChasedFoul(ev, la, br);
+                var duel = new List<Sample>(); var field = new List<Sample>();
+                Replay(rig, f, duel, field);
+                sb.AppendLine("T\tvis\tpxX\tpxY\theightM\tlocalX\tlocalZ\tframeH\taimY");
+                for (int i = 0; i < field.Count; i += every)
+                {
+                    var x = field[i];
+                    sb.AppendLine($"{x.T:F2}\t{(x.Visible ? 1 : 0)}\t{x.X:F1}\t{x.Y:F1}\t{x.HeightM:F1}\t{x.LX:F1}\t{x.LZ:F1}\t{x.FrameH:F1}\t{x.AimY:F1}");
+                }
+            }
+            finally { rig.Dispose(); }
+            return sb.ToString();
+        }
 
         /// <summary>1本の毎コマの位置を出す（原因の切り分け用）。duel / field の両方。</summary>
         public static string Trace(int seed, int pa, int pitch)
