@@ -26,10 +26,12 @@ namespace KokoSim.Engine.Match.Game;
 /// <see cref="Players.FormModel.Observe"/> が計算する（設計書02 §3.3, issue #47）。</param>
 /// <param name="Grade">学年（1-3）。両校とも <see cref="Player.Grade"/> から引ける（相手校も生成時に採番済み）。</param>
 /// <param name="Throws">投げる手。3D守備ビューが左投げの野手を左右反転して描くのに使う（issue #795）。</param>
+/// <param name="HomeRuns">今日の本塁打（打者の帯の通算＋本日の合算に使う・issue #1743）。</param>
+/// <param name="StolenBases">今日の盗塁（走者として決めたぶん。その選手が次に打席に立ったとき帯に出る・issue #1743）。</param>
 public sealed record LiveBatterSlot(
     int Order, int? SourceId, int Number, string Name, FieldPosition Position, Handedness Bats,
     int AtBats, int Hits, int Rbi, string? ReplacedName, double ConditionValue = 0.0,
-    int Grade = 0, Handedness Throws = Handedness.Right);
+    int Grade = 0, Handedness Throws = Handedness.Right, int HomeRuns = 0, int StolenBases = 0);
 
 /// <summary>ライブ観戦の現投手の今日の成績。通算防御率は Shell 側で (校ID, <see cref="SourceId"/>) から join する。</summary>
 /// <param name="SourceId">校内選手ID（両校とも持つ。校をまたいで一意ではない, issue #634）。</param>
