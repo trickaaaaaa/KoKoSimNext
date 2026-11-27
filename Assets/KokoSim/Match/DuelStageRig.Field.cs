@@ -2224,6 +2224,9 @@ namespace KokoSim.Unity.Match
         /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
         private const float CatchBallBlendSeconds = 0.30f;
 
+        /// <summary>捕った球を捕球点から描かれたグラブへ移すのにかける時間[s]（ポーズ1コマ＝1/12s 相当・issue #1768）。</summary>
+        private const float CatchHandoffSeconds = 0.10f;
+
         /// <summary>
         /// 届かない飛球（issue #1084）を追う向き。<see cref="ApproachAt"/> は走る向きと「野手→落下点」を比べるが、
         /// 届かない野手は落下点へまっすぐ走る（PR #1083 の到着レッグ）ので常に「前」になる。こちらは
@@ -6207,7 +6210,11 @@ namespace KokoSim.Unity.Match
                 if (t >= e.TCatch)   // 捕ってから次の区間まではグラブに追従
                 {
                     _ballHeldNow = true;
-                    return CatchGloveNow(e) + JuggleOffset(e, t);
+                    var held = CatchGloveNow(e) + JuggleOffset(e, t);
+                    // 捕球の瞬間は球が捕球点にあり、描かれたグラブは IK の取り残しぶん離れている。その差を1コマで
+                    // 詰めると球がグラブへ飛び移る（吸い込まれる）ので、捕球点からグラブへ少しかけて移す（issue #1768）
+                    float us = (t - e.TCatch) / CatchHandoffSeconds;
+                    return us < 1f ? Vector3.Lerp(e.Point, held, us * us * (3f - 2f * us)) : held;
                 }
                 if (t < e.TCatch - CatchBallBlendSeconds) continue;
                 float u = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
