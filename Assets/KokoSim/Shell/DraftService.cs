@@ -55,9 +55,10 @@ namespace KokoSim.Unity.Shell
 
         private static readonly List<DraftBandChange> _changes = new List<DraftBandChange>();
 
-        // 同じ年度で二度指名しないためのガード（0＝未実施）。セーブには載せない
-        // ＝指名週は年に一度しか入らないので、復元後に再入場することがない。
-        private static int _lastNominatedYear;
+        // 指名の確定の入口は2つ（週入り／大会の日送り）。どちらから来ても同じ年度で二度確定しないための歯止め
+        // （issue #1731）。大会の途中でセーブしても読み込み後に二重にならないよう、最後に確定した年度はセーブに載せる。
+        private static readonly DraftNominationGate Gate =
+            new DraftNominationGate(new SeasonCalendar(), TournamentEntry.Schedule);
 
         /// <summary>教え子名鑑（過年度の指名確定）。セーブ v7 で永続化する。</summary>
         public static DraftHistory History
@@ -137,34 +138,67 @@ namespace KokoSim.Unity.Shell
             return taken;
         }
 
-        /// <summary>直近の指名で入ったOBの一時金（指名1人ごと・issue #1469）。ホームが会話を積んだら空にする。</summary>
+        /// <summary>直近の指名で入ったOBの一時金（指名1人ごと・issue #1469）。ホームが通知フィードへ流したら空にする。</summary>
         public static IReadOnlyList<(DraftPick Pick, double Amount)> LastOBDonations { get; set; } =
             System.Array.Empty<(DraftPick, double)>();
 
         /// <summary>
-        /// 10月最終週の指名確定（設計書20 §3.2）。対象は3年生の候補だけで、指名された者を
-        /// 教え子名鑑へ積む。返り値には指名漏れも含む（通知フィードが「指名されなかった」を出すため）。
-        /// 同じ年度で二度呼ばれたら null を返す。
+        /// 共有週が週に入った。ドラフトの週（10月4週目）なら指名を確定して場面を積む（二度目の年度は何もしない）。
+        /// 通常の週送りも、大会の後始末でまとめて進む週送りも、1週ずつここを通る（<see cref="GameClock"/> の週入りフック）。
         /// </summary>
-        public static DraftResult RunNomination(int yearIndex, int calendarYear)
+        public static void OnWeekEntered(int yearIndex, int week, int calendarYear)
         {
-            if (yearIndex <= _lastNominatedYear) return null;
+            if (Gate.TryClaimOnWeekEntered(yearIndex, week)) Nominate(yearIndex, calendarYear);
+        }
 
+        /// <summary>
+        /// 大会モードの日が進んだ。大会の実月日が10月4週目に入った日なら、その日のうちに指名を確定して場面を積む
+        /// （大会の間は共有週が止まっているので、週入りだけだと大会が終わるまで指名が来ない。issue #1731）。
+        /// 後始末で共有週が第28週を通るときは、確定済みなので何もしない。
+        /// </summary>
+        public static void OnTournamentDay(TournamentKind kind, int tournamentDay)
+        {
+            var yearIndex = GameClock.YearIndex;
+            if (Gate.TryClaimOnTournamentDay(yearIndex, kind, tournamentDay))
+                Nominate(yearIndex, GameClock.DraftYear());
+        }
+
+        /// <summary>
+        /// 指名の確定（設計書20 §3.2）。対象は3年生の候補だけで、指名された者を教え子名鑑へ積み、
+        /// 結果（指名漏れも含む）を通知フィード用に残し、ドラフトの場面を<b>1つだけ</b>積む。
+        /// </summary>
+        private static void Nominate(int yearIndex, int calendarYear)
+        {
             var rng = new Xoshiro256Random(GameSeed.Master ^ (NominationStream ^ (ulong)yearIndex));
             var result = DraftEngine.RunNomination(yearIndex, Pool, StatsOf, Coefficients, Strength, rng);
             History.AddFrom(result, calendarYear, UniformNumberOf);
 
-            _lastNominatedYear = yearIndex;
             LastNomination = result;
-            // プロ入りOBの一時金（issue #1469 O2）。指名を確定したその週に部費へ入れ、会話はホームが積む。
+            // プロ入りOBの一時金（issue #1469 O2）。指名を確定したその週に部費へ入れる。会話は別に積まず、場面の結果の行へ入れる。
             LastOBDonations = ManagerService.ApplyDraftNominations(result);
-            return result;
+            RaiseScene(result, LastOBDonations);
+        }
+
+        /// <summary>
+        /// ドラフトの会話を1場面で積む（issue #1731）。指名が何人いても場面は1つ。結果の行は指名・指名漏れの全員ぶん＋祝い金。
+        /// 上限を通さない（落ちると三年間見てきた選手の最後が通知1行で終わる）。
+        /// </summary>
+        internal static void RaiseScene(DraftResult result, IReadOnlyList<(DraftPick Pick, double Amount)> donations)
+        {
+            var content = DraftScene.Build(result, donations);
+            var effect = content.ResultSentence.Length == 0
+                ? null
+                : content.ResultIsGood
+                    ? PresentedEffect.Good(content.ResultSentence)
+                    : PresentedEffect.Bad(content.ResultSentence);
+            EventService.PushUncapped(content.EventId, content.LeadName, effect, result.Year, content.Values);
         }
 
         /// <summary>セーブ保存: 教え子名鑑を DTO へ写す（issue #586）。</summary>
         public static void Capture(KokoSim.Engine.Saves.SaveState s)
         {
             s.Draft = History;
+            s.DraftNominatedYearIndex = Gate.LastYearIndex;
         }
 
         /// <summary>
@@ -176,7 +210,7 @@ namespace KokoSim.Unity.Shell
             _history = s.Draft ?? new DraftHistory();
             _bands = null;
             _changes.Clear();
-            _lastNominatedYear = 0;
+            Gate.LastYearIndex = s.DraftNominatedYearIndex;
             LastNomination = null;
             LastOBDonations = System.Array.Empty<(DraftPick, double)>();
             RefreshBands();   // 基準だけ採る（_bands が null なので差分は出ない）
@@ -188,7 +222,7 @@ namespace KokoSim.Unity.Shell
             _history = null;
             _bands = null;
             _changes.Clear();
-            _lastNominatedYear = 0;
+            Gate.LastYearIndex = 0;
             LastNomination = null;
             LastOBDonations = System.Array.Empty<(DraftPick, double)>();
         }

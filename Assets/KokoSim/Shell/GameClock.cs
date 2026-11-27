@@ -131,10 +131,11 @@ namespace KokoSim.Unity.Shell
             ContractRenewalService.RaiseForWeek();
 
             // ドラフト（設計書20 §4・issue #586）。注目度の再評価は毎週（候補入り／評価の増減を拾うため）、
-            // 指名の確定は10月最終週だけ。どちらも母種由来の独立ストリームで、本編の乱数列は進めない＝帯不変。
+            // 指名の確定と会話は10月4週目だけ（issue #1731）。どの週送りも1週ずつここを通るので、大会の後始末でまとめて
+            // 進む週送りでも拾える。大会の最中は大会の日送り（GameSession.AdvanceDay）が先に確定し、ここは二度目で何もしない。
+            // どちらも母種由来の独立ストリームで、本編の乱数列は進めない＝帯不変。
             DraftService.RefreshBands();
-            if (Calendar.IsDraftWeek(Week))
-                DraftService.RunNomination(YearIndex, DraftYear());
+            DraftService.OnWeekEntered(YearIndex, Week, DraftYear());
 
             // 大会開幕週なら大会モードへ入る（要件1）。二重入場を避けるため通常モードのときだけ。
             // 甲子園はここでは始まらない（暦の週を持たず、夏の県大会の後始末から直接つなぐ・設計書05 §1.1a）。
@@ -217,7 +218,7 @@ namespace KokoSim.Unity.Shell
         /// 指名週（10月最終週）の暦年（issue #586）。暦年の起点は Shell 側の
         /// <see cref="SeasonClock.SeasonBaseYear"/> にしか無いので、engine へ渡す値をここで作る。
         /// </summary>
-        private static int DraftYear() => SeasonClock.CalendarYear(YearIndex, Week);
+        internal static int DraftYear() => SeasonClock.CalendarYear(YearIndex, Week);
 
         /// <summary>シーズン頭（週0・年度1）へ戻す。監督成長の年度ガードも初期化する（issue #171）。</summary>
         public static void Reset()

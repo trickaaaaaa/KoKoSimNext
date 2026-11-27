@@ -296,6 +296,14 @@ namespace KokoSim.Unity.Shell
         public static void PushUncapped(string eventId, string subjectName, PresentedEffect effect, int salt = 0)
             => Push(eventId, subjectName, effect, salt, null, capped: false);
 
+        /// <summary>
+        /// <see cref="PushUncapped(string, string, PresentedEffect, int)"/> に、その出来事だけが知っている差し込み語
+        /// （ドラフトの {drafted}・{missed} など・issue #1731）を足す版。語は <see cref="KokoSim.Engine.Season.Events.EventTextFormat.KnownKeys"/> に登録済みのものだけを渡す。
+        /// </summary>
+        public static void PushUncapped(string eventId, string subjectName, PresentedEffect effect, int salt,
+            IReadOnlyDictionary<string, string> extra)
+            => Push(eventId, subjectName, effect, salt, extra, capped: false);
+
         /// <summary>組み立て済みの会話を、週の件数上限を通さずにキューへ積む（スカウトの入口など・issue #1064）。</summary>
         internal static void PushPresented(PresentedEvent e) => _pending.Add(e);
 

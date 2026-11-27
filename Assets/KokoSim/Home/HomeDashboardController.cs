@@ -226,7 +226,10 @@ namespace KokoSim.Unity.Home
         private bool StepDay()
         {
             _state.AdvanceDay();
-            if (_state.ReachedMatchDay)
+            // ドラフトの指名が確定した日は、試合日でも先に場面を読む（読み終えたら OnNovelClosed が試合の開始確認へ続ける・issue #1731）。
+            var draftSceneDue = KokoSim.Unity.Shell.EventService.HasPendingWhere(
+                id => System.Linq.Enumerable.Contains(KokoSim.Engine.Career.Draft.DraftScene.AllEventIds, id));
+            if (_state.ReachedMatchDay && !draftSceneDue)
             {
                 _stopReason = "試合日";
                 Render();

@@ -101,6 +101,7 @@ public static class SaveCodec
             .Add("matchInjurySeq", s.MatchInjurySeq)
             .Add("bigStageSeq", s.BigStageSeq)
             .Add("draft", DraftSaves.ToJson(s.Draft))
+            .Add("draftNominatedYearIndex", s.DraftNominatedYearIndex)
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("matchRecords", MatchRecordSaves.ToJson(s.MatchRecords))
             .Add("events", EventSaves.ToJson(s.Events))
@@ -713,6 +714,8 @@ public static class SaveCodec
         // 教え子名鑑は v7 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
         s.Draft = new DraftHistory();
         DraftSaves.RestoreInto(s.Draft, root.Arr("draft"));
+        // 指名を確定した最後の年度は issue #1731 で追加。キーが無い旧セーブは0（まだ）。
+        s.DraftNominatedYearIndex = root.Has("draftNominatedYearIndex") ? root.Int("draftNominatedYearIndex") : 0;
 
         // 歴代大会結果は v8 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
         s.TournamentHistory = new TournamentHistory();

@@ -189,34 +189,46 @@ namespace KokoSim.Unity.Home
                 }
             }
 
-            // ── ドラフト（issue #617）──
-            // 指名は10月最終週にしか走らないので、結果だけ据えて**提示は実経路**（週送り → RunDraftFeed）に通す。
-            if (RosterService.Active.Count >= 2)
+            // ── ドラフト（issue #617・#1731）──
+            // 指名の確定は10月4週目にしか走らないので、確定の結果だけ据えて**場面の組み立てと提示は実経路**
+            // （DraftService.RaiseScene → 週送り → ノベル）に通す。複数指名（混在・祝い金つき）と候補なしの2場面を撮る。
+            if (RosterService.Active.Count >= 3)
             {
                 var a = RosterService.Active[0];
                 var b = RosterService.Active[1];
-                DraftService.LastNomination = new KokoSim.Engine.Career.Draft.DraftResult(1, new[]
+                var c = RosterService.Active[2];
+                var pickA = new KokoSim.Engine.Career.Draft.DraftPick(
+                    a.Id, a.Name, 78.0, KokoSim.Engine.Career.Draft.DraftRankBand.UpperRound, true, 3);
+                var pickB = new KokoSim.Engine.Career.Draft.DraftPick(
+                    b.Id, b.Name, 41.0, KokoSim.Engine.Career.Draft.DraftRankBand.LowerRound, false, 0);
+                var pickC = new KokoSim.Engine.Career.Draft.DraftPick(
+                    c.Id, c.Name, 64.0, KokoSim.Engine.Career.Draft.DraftRankBand.MiddleRound, true, 5);
+                var scenes = new[]
                 {
-                    new KokoSim.Engine.Career.Draft.DraftPick(
-                        a.Id, a.Name, 78.0, KokoSim.Engine.Career.Draft.DraftRankBand.UpperRound, true, 3),
-                    new KokoSim.Engine.Career.Draft.DraftPick(
-                        b.Id, b.Name, 41.0, KokoSim.Engine.Career.Draft.DraftRankBand.LowerRound, false, 0),
-                });
-
-                var doc4 = Open("HomeDashboard");
-                yield return null; yield return null;
-                var nov5 = doc4.rootVisualElement.Q<VisualElement>("ev-novel");
-                var adv3 = doc4.rootVisualElement.Q<Button>("advance");
-                Submit(adv3);
-                yield return null; yield return null;
-
-                var shot = 0;
-                for (var i = 0; i < 14 && nov5.resolvedStyle.display != DisplayStyle.None; i++)
+                    ("multi", new KokoSim.Engine.Career.Draft.DraftResult(1, new[] { pickA, pickB, pickC }),
+                        new[] { (pickA, 70.0), (pickC, 50.0) }),
+                    ("none", new KokoSim.Engine.Career.Draft.DraftResult(1, new KokoSim.Engine.Career.Draft.DraftPick[0]),
+                        new (KokoSim.Engine.Career.Draft.DraftPick, double)[0]),
+                };
+                foreach (var scene in scenes)
                 {
-                    Debug.Log("[EV] ドラフト: " + Text(doc4, "ev-speaker") + " / " + Text(doc4, "ev-say"));
-                    yield return Capture(doc4, string.Format("D{0:00}-draft", shot++));
-                    Click(nov5);
+                    DraftService.RaiseScene(scene.Item2, scene.Item3);
+
+                    var doc4 = Open("HomeDashboard");
                     yield return null; yield return null;
+                    var nov5 = doc4.rootVisualElement.Q<VisualElement>("ev-novel");
+                    var adv3 = doc4.rootVisualElement.Q<Button>("advance");
+                    Submit(adv3);
+                    yield return null; yield return null;
+
+                    var shot = 0;
+                    for (var i = 0; i < 14 && nov5.resolvedStyle.display != DisplayStyle.None; i++)
+                    {
+                        Debug.Log("[EV] ドラフト(" + scene.Item1 + "): " + Text(doc4, "ev-speaker") + " / " + Text(doc4, "ev-say"));
+                        yield return Capture(doc4, string.Format("D{0:00}-draft-{1}", shot++, scene.Item1));
+                        Click(nov5);
+                        yield return null; yield return null;
+                    }
                 }
             }
 

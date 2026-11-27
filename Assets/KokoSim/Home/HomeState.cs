@@ -216,8 +216,7 @@ namespace KokoSim.Unity.Home
             RunKoshienFeed();                           // 観るだけの甲子園の決着（設計書05 §1.1a）
             PushFeed(NewspaperFeedItems());             // 敗退後に消化された県大会の決勝などの取りこぼし（設計書05 §1.4）
             RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
-            // 指名結果は週次イベントの後＝同じ週の「ドラフト会議」の固定イベントより先に結果が出る順序逆転を避ける（issue #1029）。
-            RunDraftResultFeed();
+            RunDraftResultFeed();                       // 指名結果の通知フィード（ドラフトの会話は確定時に1場面で積み済み・issue #1731）
             // 練習効率の補正を1週ぶん減らす（issue #615）。**練習を適用した後**に呼ぶ＝
             // 「N週」と言われた週にちゃんとN回効く（先に減らすと1週ぶん短くなる）。
             KokoSim.Unity.Shell.TrainingBoostService.Tick();
@@ -672,8 +671,9 @@ namespace KokoSim.Unity.Home
         }
 
         /// <summary>
-        /// 指名確定（10月最終週）の結果を通知フィードとノベルへ流す。週次イベント（<c>draft_meeting</c>＝
-        /// 「ドラフト会議」の固定イベント）より<b>後</b>に呼ぶ＝同じ週の中で会議 → 指名結果の順に並ぶ（issue #1029）。
+        /// 指名確定（10月4週目）の結果を通知フィードへ流す（1人1行・祝い金の行つき）。ドラフトの会話は指名の確定時に
+        /// <see cref="KokoSim.Unity.Shell.DraftService"/> が1場面で積み済み（issue #1731）＝ここはフィードだけ。
+        /// 週送り・大会の日送り・大会の後始末のどこで確定しても流せるよう、確定した結果が残っていれば流す。
         /// </summary>
         private void RunDraftResultFeed()
         {
@@ -702,20 +702,10 @@ namespace KokoSim.Unity.Home
                             Tag = "情報",
                             Screen = FeedLinks.Players, PlayerId = pick.PlayerId,
                         });
-
-                    // 指名の可否はどちらもノベルで見せる（issue #617）。指名漏れを黙って流すと、
-                    // 三年間見てきた選手の最後が通知1行で終わる。
-                    // 上限を通さない: 会議の固定イベントが先に枠を使うので、指名の可否が上限で落ちないようにする。
-                    KokoSim.Unity.Shell.EventService.PushUncapped(
-                        pick.Nominated ? "draft_nominated" : "draft_missed", pick.Name,
-                        pick.Nominated
-                            ? KokoSim.Unity.Shell.PresentedEffect.Good(pick.Name + " が NPB " + pick.Round + " 位で指名された！")
-                            : KokoSim.Unity.Shell.PresentedEffect.Bad(pick.Name + " に指名は無かった"),
-                        pick.PlayerId);
                 }
 
-                // プロ入りOBの挨拶訪問（設計書03 §5.1・issue #1469 O2）。一時金は指名の確定時に部費へ入っている
-                // （ManagerService.ApplyDraftNominations）。ここは会話と通知を積むだけ＝額は入れた値をそのまま書く。
+                // プロ入りOBの祝い金（設計書03 §5.1・issue #1469 O2）。部費は指名の確定時に入っている
+                // （ManagerService.ApplyDraftNominations）。額は入れた値をそのまま書く。会話は指名の場面の結果の行に入っている。
                 foreach (var d in KokoSim.Unity.Shell.DraftService.LastOBDonations)
                 {
                     var amount = System.Math.Round(d.Amount).ToString("0");
@@ -727,8 +717,6 @@ namespace KokoSim.Unity.Home
                         Tag = "情報",
                         Screen = FeedLinks.Players, PlayerId = d.Pick.PlayerId,
                     });
-                    KokoSim.Unity.Shell.EventService.PushUncapped("draft_ob_greeting", d.Pick.Name,
-                        KokoSim.Unity.Shell.PresentedEffect.Good("部費 ＋" + amount + " 万！"), d.Pick.PlayerId);
                 }
                 KokoSim.Unity.Shell.DraftService.LastOBDonations =
                     System.Array.Empty<(KokoSim.Engine.Career.Draft.DraftPick, double)>();
@@ -1082,6 +1070,7 @@ namespace KokoSim.Unity.Home
         public void AdvanceDay()
         {
             var practiceDue = GameSession.Current.AdvanceDay();
+            RunDraftResultFeed();   // この日にドラフトの指名が確定していれば通知フィードへ（issue #1731）
             if (!practiceDue) return;
             RunPracticeWeek(_training.TournamentPracticeMult);
             RunInjuryWeek();
@@ -1288,6 +1277,7 @@ namespace KokoSim.Unity.Home
                     RunTournamentWeekTail();
                     KokoSim.Unity.Shell.GameClock.Advance();
                 }
+                RunDraftResultFeed();   // 後始末の週送りで指名が確定した年は通知フィードへ（issue #1731）
 
                 // 夏の県大会の直後は甲子園へ直接つなぐ（設計書05 §1.1a）。暦の開幕週を作ると
                 // 3年引退（第18週）と正面衝突して出場校の3年が甲子園の前に引退するため、ここでつなぐ。

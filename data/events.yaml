@@ -35,6 +35,7 @@
 #   {area} 指導力の分野（打撃/投手/守備走塁）／{lesson} その分野で学んだこと（1文）／{rival} 戦った名将の学校名／{seminar_cost} 講習会の費用[万円]／{seminar_boost} 講習会で上がる量
 #       …… mgr_big_loss（{area}{lesson}）・mgr_rival_lesson（{rival}）・coaching_seminar（全部）だけが渡す（issue #1483）
 #   {mentor_years} 名伯楽が付く年数（出会った年を含む）…… mgr_mentor だけが渡す（issue #1679）
+#   {drafted} 指名された者の名前（順位順・「、」区切り）／{missed} 指名されなかった者の名前 …… draft_scene_* だけが渡す（issue #1731）
 #   {camp_cost} 合宿の費用[万円] ／ {camp_weeks} 合宿の期間[週] ／ {camp_mult} 合宿の経験値の倍率 …… summer_camp / winter_camp だけが渡す（issue #1482）
 #   {koshien} {senbatsu} {jingu} ほか 大会名（data/display-names.yaml の表から入る。issue #1319）。
 #     実在の大会名は文に直接書かない＝表を替えると全部の文が替わる。「甲子園の土」も {koshien}の土 と書く
@@ -195,7 +196,7 @@ events:
           - who: narration
             say: "夏の夕方、いつもの時間にグラウンドの照明が落ちた。"
 
-  # 10月第3週。第28週（指名の週）は draft_meeting が使う＝同じ週に Fixed が2本出ないよう1週前に置く（EventTableTests が固定）。
+  # 10月第3週。第28週は指名の週（ドラフトの場面が出る）＝同じ週に会話が並ばないよう1週前に置く（EventTableTests が固定）。
   - id: culture_festival
     kind: Fixed
     scene: school
@@ -330,32 +331,6 @@ events:
             say: "合宿なし、了解しました。そのぶん、毎日の練習で追い込みます。"
           - who: narration
             say: "冬の夕方、グラウンドの照明がいつもの時間に落ちた。"
-
-  # 指名の確定と同じ週（SeasonCalendar.DraftWeek＝28）。EventTableTests が DraftWeek との一致を固定している
-  # ＝片方だけ動かすと赤になる。同じ週の中では、会議の場面が指名結果のノベルより先に並ぶ（HomeState.AdvanceWeek）。
-  - id: draft_meeting
-    kind: Fixed
-    scene: clubroom
-    calendar_week: 28
-    text: "ドラフト会議。教え子に指名がかかるか。"
-    variants:
-      - lines:
-          - who: narration
-            say: "ドラフト会議。部室の小さなテレビの前に、全員が座り込んでいる。"
-          - who: player
-            say: "監督、始まりますよ。"
-      - lines:
-          - who: team_manager
-            say: "監督、電話は繋がるようにしてありますか。"
-          - who: manager
-            say: "ああ、机の上だ。"
-          - who: narration
-            say: "誰も、その電話のほうを見ないようにしていた。"
-      - lines:
-          - who: scout
-            say: "今年はどこも即戦力を欲しがっています。高校生は下位まで残るかと。"
-          - who: team_manager
-            say: "順位はどうでも、行けるかどうかですね。"
 
   # 指導者講習会（issue #1483）。冬のオフにマネージャーが「参加しますか？」と聞く＝費用・テーマ・効果を先に見せて、参加／見送りを選ぶ。
   # 参加すれば確定でテーマの分野の指導力が上がる（抽選なし）。見送れば費用なし・何も起きない。
@@ -2082,72 +2057,134 @@ events:
           - who: team_manager
             say: "お願いする相手は、スカウトさんじゃなくて部費です。"
 
-  - id: draft_nominated
+  # ドラフトの場面（issue #1731）。指名の確定（10月4週目＝SeasonCalendar.DraftWeek）で**1場面だけ**積む。
+  # 会議の様子 → 指名の結果、を1つにまとめ、結果は最終行に全員ぶん並べる（HomeState でなく DraftService が積む）。
+  # 型は4つ: draft_scene_none（3年に候補が1人もいない・短く流す）／_nominated（全員指名）／_missed（全員漏れ）／_mixed（混在）。
+  # 差し込み語: {player}＝主役（一番上位の指名者・いなければ最初の漏れ）、{drafted}＝指名された者（順位順）、{missed}＝指名されなかった者。
+  # 何人でも読める言い回しにする（1人でも3人でも「{drafted}」が名前の並びに入る）。
+  # OB会の祝い金（部費）は結果の最終行に入る（別の場面にしない）。OBに触れる会話は requires_ob を付ける。
+  - id: draft_scene_none
     kind: System
     scene: clubroom
-    text: "教え子に指名がかかった。"
+    text: "ドラフト会議。今年は教え子の指名がない。"
     variants:
       - lines:
           - who: narration
-            say: "電話が鳴った。部室の全員が、一斉に振り向いた。"
-          - who: player
-            say: "……監督。呼ばれました。"
+            say: "ドラフト会議の日。部室のテレビはつけてあるが、誰も前に座っていない。"
+          - who: team_manager
+            say: "監督、今年うちからの指名は……まあ、ありえませんね。"
+          - who: captain
+            say: "言い切りましたね、マネージャー。"
+      - lines:
+          - who: team_manager
+            say: "ドラフト会議、始まりましたよ。うちの名前が呼ばれることはないので、安心して見ていてください。"
+          - who: captain
+            say: "安心の意味がおかしいです。"
           - who: narration
-            say: "部員たちの声で、あとの言葉は聞こえなかった。"
+            say: "テレビの中で、他校の名前が次々に読み上げられていった。"
       - lines:
-          - who: player
-            say: "監督。……行ってきます。"
+          - who: narration
+            say: "ドラフト会議の中継を、マネージャーが一人でノートに取っている。"
+          - who: team_manager
+            say: "うちからの指名は……ええ、ありえません。来年のために、書いておきます。"
+          - who: scout
+            say: "気の長い話ですね。"
+
+  - id: draft_scene_nominated
+    kind: System
+    scene: clubroom
+    text: "ドラフト会議。教え子に指名がかかった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "ドラフト会議。部室の小さなテレビの前に、全員が座り込んでいる。"
+          - who: team_manager
+            say: "監督、電話は繋がるようにしてありますか。"
           - who: manager
-            say: "ああ。よくやった。"
+            say: "ああ、机の上だ。"
+          - who: narration
+            say: "電話が鳴った。部室の全員が、一斉に振り向いた。"
+          - who: captain
+            say: "監督、{drafted}、呼ばれました。"
       - lines:
+          - who: narration
+            say: "ドラフト会議が始まって、一時間。部室は誰も口をきかなかった。"
+          - who: narration
+            say: "画面に名前が出た。{drafted}。部員たちの声で、あとの言葉は聞こえなかった。"
           - who: team_manager
             say: "うちから指名者が出るなんて。監督、泣かないでくださいよ。"
           - who: captain
             say: "マネージャーのほうが泣いてますって。"
+      - requires_ob: true
+        lines:
+          - who: narration
+            say: "ドラフト会議。名前が読み上げられるたびに、部室のテレビの音が大きく聞こえた。"
+          - who: captain
+            say: "監督、{drafted}、呼ばれました。"
+          - who: manager
+            say: "ああ。よくやった。"
+          - who: team_manager
+            say: "OBの方々から、もう電話が来ています。お祝いの話が早いこと。"
 
-  - id: draft_missed
+  - id: draft_scene_missed
     kind: System
     scene: clubroom
-    text: "教え子の指名は無かった。"
+    text: "ドラフト会議。教え子の指名は無かった。"
     variants:
       - lines:
           - who: narration
-            say: "最後の名前が読み上げられて、テレビが野球以外の話題に移った。"
+            say: "ドラフト会議。最後の名前が読み上げられて、テレビが野球以外の話題に移った。"
           - who: team_manager
-            say: "……よく三年、続けましたね。"
+            say: "みんな、よく三年間続けましたね。"
+          - who: captain
+            say: "呼ばれるところまで来たんです。それだけでも、すごいことです。"
+      - lines:
+          - who: narration
+            say: "ドラフト会議が終わった。{missed}の名前は、最後まで読み上げられなかった。"
+          - who: team_manager
+            say: "……電話、鳴りませんでしたね。"
+          - who: manager
+            say: "テレビを消そう。"
+          - who: captain
+            say: "お疲れさまでした。みんなで、あとで顔を見に行きます。"
       - lines:
           - who: player
+            name: "{player}"
             say: "監督、すみません。……呼ばれませんでした。"
           - who: manager
             say: "謝ることじゃない。"
           - who: captain
             say: "そうだぞ。呼ばれるところまで来たんだ。"
 
-  # プロ入りOBの挨拶訪問（設計書03 §5.1・issue #1469 O2）。指名された年に一時金が部費へ入る
-  # （1位100／2〜3位70／4〜7位50／育成30万。額は coefficients.yaml career.pro_donation_*）。
-  # 結果行（部費 ＋N 万）は提示層が足す。指名1人につき1回、draft_nominated の後に出る。
-  - id: draft_ob_greeting
+  - id: draft_scene_mixed
     kind: System
-    scene: office
-    text: "プロ入りの挨拶とともに、OB会から祝い金が届いた。"
+    scene: clubroom
+    text: "ドラフト会議。指名された教え子も、されなかった教え子もいた。"
     variants:
       - lines:
-          - who: team_manager
-            say: "監督、{player} くんの指名のお祝いだって、OB会の方が見えています。"
           - who: narration
-            say: "差し出された封筒には「後輩たちの道具に」と書き添えてあった。"
-          - who: player
-            say: "……俺、まだ何もしてないんですけど。"
-      - lines:
-          - who: narration
-            say: "{player} が契約の挨拶に部室へ顔を出した。後ろにOB会長が、のし袋を持って立っていた。"
+            say: "ドラフト会議。名前が読み上げられるたび、部室の空気が上がったり下がったりした。"
           - who: team_manager
-            say: "「プロを出した部には、OBも張り切るんですよ」だそうです。"
-      - lines:
+            say: "{drafted}は、呼ばれました。{missed}は、呼ばれませんでした。"
           - who: captain
-            say: "監督、{player} 先輩のプロ入りで、OBの方々から寄付が集まったそうです。"
+            say: "どちらも、うちの自慢の三年生です。"
+      - lines:
+          - who: narration
+            say: "テレビの前で、歓声とため息が同時に起きた。呼ばれたのは{drafted}。{missed}の名前は、最後まで出なかった。"
           - who: team_manager
-            say: "電話が鳴りっぱなしでしたよ。今日だけで三回、同じ話を聞きました。"
+            say: "喜んでいいのか、慰めていいのか。忙しい夜ですね。"
+          - who: manager
+            say: "全員に声をかけよう。"
+          - who: captain
+            say: "はい。順番に回ります。"
+      - requires_ob: true
+        lines:
+          - who: team_manager
+            say: "{drafted}の指名で、OBの方が張り切っています。{missed}のことも、気にかけてくださるそうです。"
+          - who: captain
+            say: "ありがたいです。みんなに伝えます。"
+          - who: narration
+            say: "部室のテレビは、もう次の話題に移っていた。"
 
   # 夏の敗退直後の3年引退（issue #954）。終わり方の3通りで会話を分ける（優勝の年に敗戦の台詞を出さない）。
   # 呼び出し元は大会の後始末（HomeState.DismissResult）。この会話を読んだあとに主将指名 → 背番号決定へ進む。
