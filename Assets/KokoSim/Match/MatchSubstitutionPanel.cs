@@ -77,6 +77,11 @@ namespace KokoSim.Unity.Match
         private FieldPosition? _convertTo;  // 継投時に元投手を回す守備位置（null=退場）
         private bool _dhWithdraw;        // 指枠を「そのまま退場」させる
 
+        // カーソルを乗せているだけの行（選択ではない）。比較欄の右だけをこの行で仮に出す。-1＝乗せていない。
+        // 控えの添字（攻撃＝Reserves・守備＝_cands）と、守備の枠の添字（枠⇄枠の2人目）。
+        private int _hoverBench = -1;
+        private int _hoverSlot = -1;
+
         // 入部の条件（約束）の見張り（設計書04 §2.4）。保留中の操作で約束を破る選手（描画のたびに引き直す）と、
         // 「約束を破って確定」を出している操作の鍵（null＝出していない。操作が変わったら下ろす）。
         private readonly List<Player> _breakers = new();
@@ -148,6 +153,9 @@ namespace KokoSim.Unity.Match
                 _commit.Add(Text("試合へ戻る", "sx-btn__t f-body-bd"));
                 AddIcon(_commit, LineIcon.Kind.Play);
             }
+
+            // ホバーを戻すのは、カーソルが一覧（本体の3列）の外へ出たときだけ。行どうし・列どうしの隙間では戻さない。
+            _root.Q<VisualElement>(className: "sx-body")?.RegisterCallback<PointerLeaveEvent>(_ => SetHover(-1, -1));
 
             Click("msub-close", CancelAll);
             Click("msub-cancel", CancelAll);
@@ -263,6 +271,28 @@ namespace KokoSim.Unity.Match
                 return;
             }
             if (index >= 0 && index < _cands.Count) { ClickCandidate(index); Render(); }
+        }
+
+        /// <summary>スクショ用: 控え一覧の n 番目の行にカーソルを乗せる（本物の PointerEnterEvent を行へ送る。issue #1728）。</summary>
+        public void HoverCandidateForCapture(int index) => SendPointer(RowAt(_inRows, index), enter: true);
+
+        /// <summary>スクショ用: 打順表の守備位置の枠の行にカーソルを乗せる（枠⇄枠の2人目。issue #1728）。</summary>
+        public void HoverSlotForCapture(FieldPosition pos) => SendPointer(RowAt(_outRows, _slots.FindIndex(s => s.Pos == pos)), enter: true);
+
+        /// <summary>スクショ用: 控え一覧の n 番目の行からカーソルが外れた（隣の行との隙間。一覧の外へは出ていない）。</summary>
+        public void LeaveCandidateRowForCapture(int index) => SendPointer(RowAt(_inRows, index), enter: false);
+
+        /// <summary>スクショ用: カーソルが一覧の外へ出た（本体の PointerLeaveEvent）。</summary>
+        public void LeaveListForCapture() => SendPointer(_root?.Q<VisualElement>(className: "sx-body"), enter: false);
+
+        private static VisualElement RowAt(VisualElement rows, int index)
+            => rows != null && index >= 0 && index < rows.childCount ? rows[index] : null;
+
+        private static void SendPointer(VisualElement el, bool enter)
+        {
+            if (el == null) return;
+            if (enter) { using (var e = PointerEnterEvent.GetPooled()) { e.target = el; el.SendEvent(e); } }
+            else { using (var e = PointerLeaveEvent.GetPooled()) { e.target = el; el.SendEvent(e); } }
         }
 
         /// <summary>
@@ -450,6 +480,8 @@ namespace KokoSim.Unity.Match
         private void Render()
         {
             if (_opt == null) return;
+            _hoverBench = -1;
+            _hoverSlot = -1;
             var forced = ForcedPitcherChangePending;
             if (_phase != null)
                 _phase.text = _opt.IsFinished ? "試合終了" : _opt.IsOffense ? "攻撃中" : "守備中";
@@ -558,6 +590,7 @@ namespace KokoSim.Unity.Match
                 var idx = i;
                 var row = BenchRow(_opt.Reserves[i], used: false, picked: _offInIndex == i);
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _offInIndex = idx; Render(); });
+                row.RegisterCallback<PointerEnterEvent>(_ => SetHover(idx, -1));
                 _inRows.Add(row);
             }
             foreach (var p in _opt.UsedReserves) _inRows.Add(BenchRow(p, used: true, picked: false));
@@ -585,6 +618,7 @@ namespace KokoSim.Unity.Match
                 var row = LineupRow(order, s.Player, PosJp(s.Pos), selectable: true, picked || preview != null, tag: "",
                     preview, preview == null ? null : CancelDefenseOp);
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickSlot(slotIdx); Render(); });
+                row.RegisterCallback<PointerEnterEvent>(_ => SetHover(-1, slotIdx));
                 _outRows.Add(row);
             }
         }
@@ -698,6 +732,7 @@ namespace KokoSim.Unity.Match
                 var idx = i;
                 var row = BenchRow(_cands[i], used: false, picked: _defInIndex == i);
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickCandidate(idx); Render(); });
+                row.RegisterCallback<PointerEnterEvent>(_ => SetHover(idx, -1));
                 _inRows.Add(row);
             }
             // 出場済みは1本の名簿から一度だけ出す（旧 UsedBullpen＋UsedBench の連結を畳んだ。issue #381）。
@@ -850,7 +885,42 @@ namespace KokoSim.Unity.Match
 
         // ── 右：比較（2人のカード・野手／投手のタブの表・9列の守備適性） ──
 
+        // カーソルを乗せた行を、クリックしたときと同じ選択として仮に当てて比較欄だけを描く（導出は ResolveDef / CompareSubjects をそのまま通す）。
+        // 乗せても決まるのは右だけ＝左（退く側）が決まっていて、右がまだクリックで決まっていないときに限る。
         private void BuildCompare()
+        {
+            var (offIn, defIn, slot2) = (_offInIndex, _defInIndex, _pickedSlot2);
+            ApplyHoverAsSelection();
+            try { BuildCompareCore(); }
+            finally { (_offInIndex, _defInIndex, _pickedSlot2) = (offIn, defIn, slot2); }
+        }
+
+        private void ApplyHoverAsSelection()
+        {
+            if (_hoverBench < 0 && _hoverSlot < 0) return;
+            if (_opt.IsOffense)
+            {
+                var leftDecided = _offKind == SubstitutionKind.PinchHit ? _opt.UpcomingBatterSlot >= 0 : RunnerAt(_baseIndex) != null;
+                if (_hoverBench >= 0 && _hoverBench < _opt.Reserves.Count && _offInIndex < 0 && leftDecided)
+                    _offInIndex = _hoverBench;
+                return;
+            }
+            if (_pickedSlot < 0 || _pickedSlot2 >= 0 || _defInIndex >= 0 || _dhWithdraw) return;
+            if (_hoverBench >= 0 && _hoverBench < _cands.Count)
+                _defInIndex = _hoverBench;
+            else if (_hoverSlot >= 0 && _hoverSlot < _slots.Count && _hoverSlot != _pickedSlot)
+                _pickedSlot2 = _hoverSlot;
+        }
+
+        private void SetHover(int bench, int slot)
+        {
+            if (!_open || _opt == null || (_hoverBench == bench && _hoverSlot == slot)) return;
+            _hoverBench = bench;
+            _hoverSlot = slot;
+            BuildCompare();
+        }
+
+        private void BuildCompareCore()
         {
             var (outgoing, incoming, isPitcherCtx, capA, capB) = CompareSubjects();
             // 投手が絡む操作になったら投手タブへ、外れたら野手タブへ自動で倒す（その間は手で切り替えられる）。
@@ -884,7 +954,7 @@ namespace KokoSim.Unity.Match
                 var tab = i;
                 var on = _cmpTab == i;
                 var cell = Text(i == 0 ? "野手" : "投手", on ? "sx-tabs__item sx-tabs__item--on f-body-bd" : "sx-tabs__item");
-                cell.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _cmpTab = tab; Render(); });
+                cell.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _cmpTab = tab; BuildCompare(); });
                 _cmpToggle.Add(cell);
             }
         }

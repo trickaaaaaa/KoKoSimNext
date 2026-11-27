@@ -6019,6 +6019,12 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 控え一覧の n 番目を選ぶ（行内プレビューを出す。issue #452）。</summary>
         public void PickSubstitutionCandidateForCapture(int index) => _subPanel?.PickCandidateForCapture(index);
 
+        /// <summary>スクショ用（issue #1728）: 控えの行にカーソルを乗せる／行から外す（隙間）／一覧の外へ出す。比較欄の右がホバーで替わるかの確認用。</summary>
+        public void HoverSubstitutionCandidateForCapture(int index) => _subPanel?.HoverCandidateForCapture(index);
+        public void HoverSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition pos) => _subPanel?.HoverSlotForCapture(pos);
+        public void LeaveSubstitutionCandidateRowForCapture(int index) => _subPanel?.LeaveCandidateRowForCapture(index);
+        public void LeaveSubstitutionListForCapture() => _subPanel?.LeaveListForCapture();
+
         /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者。issue #452）。</summary>
         public void PickSubstitutionRunnerForCapture(int baseIndex) => _subPanel?.PickRunnerForCapture(baseIndex);
 

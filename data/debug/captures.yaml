@@ -744,6 +744,25 @@ captures:
     attempts: 1
     window_calls: [OpenSubstitutionForCapture, shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture]
 
+  # ── 交代パネルのホバー（issue #1728）。守備: 11-ui＝左だけ選んだ姿 / 12-ui＝控え0に乗せた（右に出る）/ 13-ui＝行の隙間（右は残る）/
+  #    14-ui＝控え1に乗せた / 15-ui＝一覧の外（右は空）/ 16-ui＝控え0をクリックで決めた / 17-ui＝決めた後に控え1へ乗せても右は替わらない /
+  #    18-ui＝別の枠（外野）を決めた後に枠へ乗せた（枠⇄枠の2人目）/ 19-ui＝一覧の外
+  - id: substitution-hover-1728-defense
+    name: "交代パネル（守備）：左を選ぶ→候補に乗せる→隙間→別の候補→外へ→クリックで固定（issue #1728）"
+    scenario: steal-sign-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, PickSubstitutionSlotForCapture(RightField), shot, HoverSubstitutionCandidateForCapture(0), shot, LeaveSubstitutionCandidateRowForCapture(0), shot, HoverSubstitutionCandidateForCapture(1), shot, LeaveSubstitutionListForCapture, shot, PickSubstitutionCandidateForCapture(0), shot, HoverSubstitutionCandidateForCapture(1), shot, CancelSubstitutionForCapture, OpenSubstitutionForCapture, PickSubstitutionSlotForCapture(LeftField), HoverSubstitutionSlotForCapture(CenterField), shot, LeaveSubstitutionListForCapture, shot, CancelSubstitutionForCapture]
+
+  - id: substitution-hover-1728-offense
+    name: "交代パネル（攻撃）：代打の控えに乗せる→別の控え→外へ（issue #1728）"
+    scenario: steal-sign-lab
+    manager: away
+    view: panel
+    attempts: 1
+    window_calls: [OpenSubstitutionForCapture, shot, HoverSubstitutionCandidateForCapture(0), shot, HoverSubstitutionCandidateForCapture(1), shot, LeaveSubstitutionListForCapture, shot, CancelSubstitutionForCapture]
+
   # ── 采配の手札のホバー（issue #1534）。11-ui 以降＝カードを1枚持ち上げた絵 ──
   - id: tcard-hover-1534-away-1280
     name: "采配の手札のホバーの浮き上がりが隣のカードと投手欄の数字を隠さない（issue #1534）"
