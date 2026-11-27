@@ -896,6 +896,7 @@ namespace KokoSim.EditorTests
             public float BallLateralMaxM;     // 捕球前0.3秒の、描かれた球の engine の線からの横ずれの最大
             public float BallAlongMaxM;       // 同・線に沿った遅れの最大
             public float SpeedRatio;          // 捕球直前（最後の3コマ）の描かれた球の速さ ÷ engine の速さ
+            public float PopMaxM;             // 捕球の瞬間〜0.15秒後に、描かれた球が1コマ（1/60s）で動いた量の最大＝グラブへ飛び移る量
         }
 
         private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay SweepPlay(SweepCase c)
@@ -962,10 +963,18 @@ namespace KokoSim.EditorTests
             float dt = 1f / 60f;
             float tPrev = float.NaN; Vector3 dPrev = default, ePrev = default;
             float speedNum = 0f, speedDen = 0f; int nTail = 0;
-            for (float t = 0f; t < e.TCatch + 0.05f; t += dt)
+            Vector3 popPrev = default; bool havePop = false;
+            for (float t = 0f; t < e.TCatch + 0.15f; t += dt)
             {
                 rig.SetFieldTime(t);
                 rig.Tick(dt);
+                if (t >= e.TCatch - dt)
+                {
+                    var dp = rig.BallLocalPointForTest();
+                    if (havePop) res.PopMaxM = Mathf.Max(res.PopMaxM, (dp - popPrev).magnitude);
+                    popPrev = dp; havePop = true;
+                }
+                if (t >= e.TCatch + 0.05f) continue;
                 if (t < e.TCatch - 0.6f) continue;
                 var b = KokoSim.Engine.Match.Timeline.Playback.PlaybackEvaluator.BallAt(play, t);
                 if (!b.HasValue) continue;
@@ -1010,11 +1019,11 @@ namespace KokoSim.EditorTests
         {
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("case\tcaught\ttCatch\trunV\tgap\tpulled\tlineOff\tbodyShift\tbodyAlong\tbodyPerp\tballLatMax\tballAlongMax\tspeedRatio");
+            sb.AppendLine("case\tcaught\ttCatch\trunV\tgap\tpulled\tlineOff\tbodyShift\tbodyAlong\tbodyPerp\tballLatMax\tballAlongMax\tspeedRatio\tpopMax");
             foreach (var r in rs)
-                sb.AppendLine(string.Format(ci, "{0}\t{1}\t{2:F2}\t{3:F1}\t{4:F2}\t{5:F2}\t{6:F3}\t{7:F2}\t{8:F2}\t{9:F2}\t{10:F3}\t{11:F3}\t{12:F2}",
+                sb.AppendLine(string.Format(ci, "{0}\t{1}\t{2:F2}\t{3:F1}\t{4:F2}\t{5:F2}\t{6:F3}\t{7:F2}\t{8:F2}\t{9:F2}\t{10:F3}\t{11:F3}\t{12:F2}\t{13:F2}",
                     r.C.Label, r.Caught ? 1 : 0, r.TCatch, r.RunSpeedAtCatch, r.GapM, r.PulledM, r.LineOffM, r.BodyShiftM, r.BodyAlongM, r.BodyPerpM,
-                    r.BallLateralMaxM, r.BallAlongMaxM, r.SpeedRatio));
+                    r.BallLateralMaxM, r.BallAlongMaxM, r.SpeedRatio, r.PopMaxM));
             return sb.ToString();
         }
 
