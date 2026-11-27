@@ -100,7 +100,7 @@ namespace KokoSim.Unity.Match
                     a.IdleClip = umpIdle;
                     StepActor(a, 0.001f);
                     GroundFix(a);
-                    AttachGear(a, GearKind.Cap, Vector3.zero, UniformPalette.Umpire.Cap, layer);
+                    AttachGear(a, GearKind.BaseUmpireCap, Vector3.zero, UniformPalette.Umpire.Cap, layer);
                     a.Go.SetActive(false);
                     a.Enabled = false;
                     _baseUmps[i] = a;
@@ -239,6 +239,92 @@ namespace KokoSim.Unity.Match
                 }
                 return sb.ToString();
             }
+        }
+
+        private bool _umpHeadCloseDone;
+
+        /// <summary>
+        /// 撮影レシピの probes 用（issue #1740）: 一塁塁審の頭まわりを寄りで撮る（初回だけ）。
+        /// screenshots/_umpire-head-front.png（正面）・-side.png（横）・-three-quarter.png（斜め上）。
+        /// 絵の赤点は頭の枠の高さの定規（0.05m刻み・大は0.1m ごと）、緑点は前後の定規（y=0.1・0.05m刻み）。
+        /// </summary>
+        internal string BaseUmpHeadCloseForCapture
+        {
+            get
+            {
+                var a = _baseUmps[0];
+                if (a == null || !a.Enabled || a.Animator == null) return "-";
+                var head = a.Animator.GetBoneTransform(HumanBodyBones.Head);
+                if (head == null) return "no-head";
+                if (_umpHeadCloseDone) return string.Join(",", BaseUmpireHeadGearForTest());
+                _umpHeadCloseDone = true;
+                var dir = System.IO.Path.Combine(Application.dataPath, "..", "screenshots");
+                var face = head.TransformDirection(a.HeadFwdLocal).normalized;
+                var up = head.TransformDirection(a.HeadUpLocal).normalized;
+                var side = Vector3.Cross(up, face).normalized;
+                var focus = head.position + up * 0.09f;
+                ShootHeadClose(focus + face * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-front.png"));
+                ShootHeadClose(focus + side * 0.7f, focus, head.position, up, face, System.IO.Path.Combine(dir, "_umpire-head-side.png"));
+                var wide = head.position + up * 0.13f;
+                ShootHeadClose(wide + (face * 0.8f + side * 0.5f + up * 0.3f).normalized * 0.8f, wide, head.position, up, face,
+                    System.IO.Path.Combine(dir, "_umpire-head-three-quarter.png"));
+                return string.Join(",", BaseUmpireHeadGearForTest());
+            }
+        }
+
+        /// <summary>一塁塁審の頭・胸ボーンの下に付いている装備パーツの名前（塁審は帽子だけでマスク・胸当てが無いことの検査用）。</summary>
+        internal string[] BaseUmpireHeadGearForTest()
+        {
+            var names = new List<string>();
+            var a = _baseUmps[0];
+            if (a == null || a.Animator == null) return names.ToArray();
+            foreach (var bone in new[] { HumanBodyBones.Head, HumanBodyBones.UpperChest, HumanBodyBones.Chest, HumanBodyBones.Spine })
+            {
+                var t = a.Animator.GetBoneTransform(bone);
+                if (t == null) continue;
+                foreach (var r in t.GetComponentsInChildren<MeshRenderer>(true)) names.Add(r.name);
+            }
+            return names.ToArray();
+        }
+
+        private void ShootHeadClose(Vector3 eye, Vector3 focus, Vector3 origin, Vector3 up, Vector3 fwd, string path)
+        {
+            var go = new GameObject("head-close-cam");
+            var cam = go.AddComponent<Camera>();
+            cam.CopyFrom(_camera);
+            cam.fieldOfView = 30f;
+            cam.transform.position = eye;
+            cam.transform.LookAt(focus);
+            var rt = new RenderTexture(512, 512, 24, RenderTextureFormat.ARGB32);
+            cam.targetTexture = rt;
+            cam.Render();
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(512, 512, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, 512, 512), 0, 0);
+            for (int ty = 0; ty <= 8; ty++)
+                for (int tz = -3; tz <= 3; tz++)
+                {
+                    // 定規: 赤=頭の枠の高さ（z=0・5cm刻み、10cmごとは大）、緑=前後（y=0.1・5cm刻み）
+                    var pr = cam.WorldToScreenPoint(origin + up * (ty * 0.05f));
+                    var pg = cam.WorldToScreenPoint(origin + up * 0.1f + fwd * (tz * 0.05f));
+                    int rr = ty % 2 == 0 ? 5 : 2;
+                    for (int dx = -rr; dx <= rr; dx++) for (int dy = -rr; dy <= rr; dy++)
+                    {
+                        int x = (int)pr.x + dx, y = (int)pr.y + dy;
+                        if (x >= 0 && x < 512 && y >= 0 && y < 512) tex.SetPixel(x, y, Color.red);
+                        x = (int)pg.x + dx; y = (int)pg.y + dy;
+                        if (x >= 0 && x < 512 && y >= 0 && y < 512) tex.SetPixel(x, y, Color.green);
+                    }
+                }
+            tex.Apply();
+            RenderTexture.active = prev;
+            System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.Destroy(tex);
+            cam.targetTexture = null;
+            rt.Release();
+            Object.Destroy(rt);
+            Object.Destroy(go);
         }
 
         /// <summary>プレーの終わり: 判定の演技を畳んで待機へ戻す（次のプレーへ持ち越さない）。</summary>

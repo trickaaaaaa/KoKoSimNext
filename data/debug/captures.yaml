@@ -899,6 +899,13 @@ captures:
     video: {from: judgement-0.4, to: judgement+0.9, fps: 10}
     probes: [BaseCrew]
 
+  - id: base-umpire-head-1740
+    name: "塁審の頭まわり（帽子だけでマスクが無いか）。寄りは screenshots/_umpire-head-front.png と _umpire-head-side.png（issue #1740）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    shots: [catch]
+    probes: [BaseUmpHeadClose]
+
   - id: base-umpire-2b-steal-out-1595
     name: "二盗失敗の二塁タッチアウトで二塁塁審がアウトのコール（issue #1595）"
     scenario: steal-caught-lab

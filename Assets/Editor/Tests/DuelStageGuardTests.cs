@@ -730,6 +730,43 @@ namespace KokoSim.EditorTests
             Assert.That(d, Is.LessThan(1.2f), $"捕球点が engine の野手の位置から {d:F2}m 離れている");
         }
 
+        // ---- 塁審は帽子だけ（マスク・胸当てが無い。issue #1740） ----
+
+        /// <summary>
+        /// 塁審の頭には帽子（ucap-*）だけが付き、球審用のマスク（umask-*）・捕手用の防具（cmask-*）・胸当て（chest-*）が
+        /// 付かないこと。塁審は球審と同じ U2素体＋着衣なので、選手向けの帽子メッシュを被せると額が突き抜けて顔を覆い、
+        /// マスクを被って見えた（絵でしか気づけない・例外もログも出ない）。
+        /// </summary>
+        [Test]
+        public void BaseUmpire_WearsACapOnly()
+        {
+            var rig = Rig;
+            var tl = new KokoSim.Engine.Match.Timeline.PlayTimeline
+            {
+                Ball = new List<KokoSim.Engine.Match.Timeline.BallSegment>
+                {
+                    new KokoSim.Engine.Match.Timeline.BallSegment
+                    {
+                        Kind = KokoSim.Engine.Match.Timeline.BallSegmentKind.Flight, T0 = 0.85, T1 = 2.0,
+                        From = new KokoSim.Engine.Match.Timeline.TimelinePoint(0, 0),
+                        To = new KokoSim.Engine.Match.Timeline.TimelinePoint(-9.2, 37.1),
+                        ApexHeightM = 1.8, LaunchHeightM = 1.0,
+                    },
+                },
+                FielderStarts = new Dictionary<KokoSim.Engine.Match.Field.FieldPosition, KokoSim.Engine.Match.Timeline.TimelinePoint>
+                {
+                    [KokoSim.Engine.Match.Field.FieldPosition.Shortstop] = new KokoSim.Engine.Match.Timeline.TimelinePoint(-9.2, 37.1),
+                },
+                Result = "テスト", Duration = 5.0, ResolvedAt = 5.0,
+            };
+            rig.BeginFieldPlay(KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl), 0f);
+            var gear = rig.BaseUmpireHeadGearForTest();
+            Assert.That(gear, Is.Not.Empty, "塁審が組めていない（検査が空振りしている）");
+            Assert.That(gear, Has.Some.StartsWith("ucap-"), "塁審に帽子が付いていない");
+            Assert.That(gear, Has.None.StartsWith("umask").Or.StartsWith("cmask").Or.StartsWith("chest"),
+                "塁審にマスク・胸当てが付いている: " + string.Join(",", gear));
+        }
+
         // ---- バントのあとの打者走者の足の滑り（issue #1734） ----
 
         /// <summary>
