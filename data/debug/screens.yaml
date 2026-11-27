@@ -770,20 +770,35 @@ screens:
       - shot: 03-long-names
 
   - id: senbatsu-watch-1265
-    name: "観るだけのセンバツが大会タブと通知フィードに出る（PR #1365・issue #1265）"
+    name: "観るだけのセンバツが大会タブと通知フィードに出る（選考発表は第42週＝2月1週目・PR #1365・issue #1265 / #1732）"
     steps:
       - new_game: {seed: 1}
-      - advance_to_week: 39
+      - advance_to_week: 41
+      - read: =GameSession.Current.HasSpectatedSenbatsu
+      - advance_to_week: 42
       - read: =GameSession.Current.HasSpectatedSenbatsu
       - call: EventService.Clear()
       - show: TournamentPreview
-      - shot: 01-tournament-tab-week39
-      - advance_to_week: 41
+      - shot: 01-tournament-tab-week42
+      - advance_to_week: 44
       - read: =GameSession.Current.HasSpectatedSenbatsu
       - call: EventService.Clear()
       - show: HomeDashboard
       - read: feed-list
-      - shot: 02-home-feed-week41
+      - shot: 02-home-feed-week44
+
+  - id: senbatsu-not-entered-1732
+    name: "秋の地区大会に出ていない年のセンバツ選考発表は第42週に1回だけ、短い場面で流す（issue #1732）"
+    steps:
+      - new_game: {seed: 1}
+      - advance_to_week: 41
+      - read: =EventService.Pending.Count
+      - advance_to_week: 42
+      - read: =EventService.Pending.Count
+      - read: =GameSession.Current.HasSpectatedSenbatsu
+      - show: HomeDashboard
+      - read: feed-list
+      - shot: 01-home-week42
 
   - id: transfer-records-1261
     name: "転任で記録・配色が学校に付いて回る（記録画面の赴任校列・配色・PR #1417・issue #1261）"
