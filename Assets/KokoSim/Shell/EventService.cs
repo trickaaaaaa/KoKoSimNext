@@ -16,6 +16,12 @@ namespace KokoSim.Unity.Shell
         public string Name;
         /// <summary>本文。</summary>
         public string Say;
+        /// <summary>
+        /// 話者がマネージャー（<see cref="EventRoles.TeamManager"/> / <see cref="EventRoles.TeamManagerOutgoing"/>）のとき、
+        /// <b>会話を積んだ時点</b>の立ち絵番号（0＝控え無し＝表示時の今の番号を使う）。入れ替え（3年の夏）の前に積んだ会話が
+        /// 入れ替えの後に開かれても、積んだときのマネージャーの絵で話す（issue #1737）。
+        /// </summary>
+        public int Portrait;
     }
 
     /// <summary>
@@ -136,6 +142,8 @@ namespace KokoSim.Unity.Shell
         /// <summary>対応ごとの選択肢の定義（好転の確率の固定値 improve_prob を読む・issue #1270）。</summary>
         public Dictionary<EventStance, EventChoice> Choices;
         public string SubjectName;
+        /// <summary>発火時のマネージャーの立ち絵番号（選んだあとに足す結果の会話にも同じ絵を使う・issue #1737）。</summary>
+        public int TeamManagerPortrait;
     }
 
     /// <summary>
@@ -485,6 +493,7 @@ namespace KokoSim.Unity.Shell
                     Outcomes = outcomes,
                     Choices = choiceDefs,
                     SubjectName = subject.Name,
+                    TeamManagerPortrait = ManagerService.Manager.TeamManagerPortrait,
                 },
             };
         }
@@ -568,7 +577,7 @@ namespace KokoSim.Unity.Shell
             }
             var lines = new List<PresentedLine>(e.Lines);
             if (outcome != null)
-                lines.AddRange(ResolveLines(outcome.Script, pending.Values));
+                lines.AddRange(ResolveLines(outcome.Script, pending.Values, pending.TeamManagerPortrait));
             e.Lines = WithResult(lines, effect);
             e.Effect = effect;
             e.Choices = null;
@@ -760,9 +769,12 @@ namespace KokoSim.Unity.Shell
             return n;
         }
 
+        /// <param name="teamManagerPortrait">新しい側のマネージャーの立ち絵番号（0＝いまの番号）。</param>
         internal static IReadOnlyList<PresentedLine> ResolveLines(
-            EventScript script, Dictionary<string, string> values)
+            EventScript script, Dictionary<string, string> values, int teamManagerPortrait = 0)
         {
+            var m = ManagerService.Manager;
+            if (teamManagerPortrait <= 0) teamManagerPortrait = m.TeamManagerPortrait;
             var lines = new List<PresentedLine>(script.Lines.Count);
             foreach (var l in script.Lines)
             {
@@ -772,6 +784,9 @@ namespace KokoSim.Unity.Shell
                     Who = l.Who,
                     Name = EventTextFormat.Apply(name, values),
                     Say = EventTextFormat.Apply(l.Say, values),
+                    Portrait = l.Who == EventRoles.TeamManager ? teamManagerPortrait
+                        : l.Who == EventRoles.TeamManagerOutgoing ? m.OutgoingTeamManagerPortrait
+                        : 0,
                 });
             }
             return lines;

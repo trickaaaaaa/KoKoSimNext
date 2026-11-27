@@ -189,7 +189,7 @@ namespace KokoSim.Unity.Home
                 _portrait.EnableInClassList("ev-por--none", narration || result);
                 _portrait.EnableInClassList("ev-por--photo", EventPortraits.HasImage(line.Who));
                 if (_role != null) _role.text = EventPortraits.RoleLabel(line.Who);
-                if (_portraitImage != null) EventPortraits.ApplyImageClass(_portraitImage, line.Who);
+                if (_portraitImage != null) EventPortraits.ApplyImageClass(_portraitImage, line.Who, line.Portrait);
             }
 
             if (_speaker != null)
@@ -294,8 +294,10 @@ namespace KokoSim.Unity.Home
         /// 10人の立ち絵（tm01〜tm10）から今の番号で選ぶ（issue #1430）。新しい側は今のマネージャー
         /// （<see cref="Manager.TeamManagerPortrait"/>）、引退する側は入れ替わりの直前に控えた番号
         /// （<see cref="Manager.OutgoingTeamManagerPortrait"/>）を使う。
+        /// <paramref name="portrait"/> は会話を積んだ時点に控えた番号（0＝控え無し＝今の番号）で、
+        /// 入れ替えの前に積まれた会話が後で開かれても積んだときの絵で話す（issue #1737）。
         /// </summary>
-        public static void ApplyImageClass(VisualElement el, string who)
+        public static void ApplyImageClass(VisualElement el, string who, int portrait = 0)
         {
             foreach (var role in ImageRoles) el.RemoveFromClassList("ev-por__image--" + role);
             for (var i = 1; i <= TeamManagerLifecycle.PortraitCount; i++)
@@ -303,9 +305,10 @@ namespace KokoSim.Unity.Home
             if (!HasImage(who)) return;
             if (who == EventRoles.TeamManager || who == EventRoles.TeamManagerOutgoing)
             {
-                var portrait = who == EventRoles.TeamManagerOutgoing
-                    ? ManagerService.Manager.OutgoingTeamManagerPortrait
-                    : ManagerService.Manager.TeamManagerPortrait;
+                if (portrait < 1)
+                    portrait = who == EventRoles.TeamManagerOutgoing
+                        ? ManagerService.Manager.OutgoingTeamManagerPortrait
+                        : ManagerService.Manager.TeamManagerPortrait;
                 if (portrait < 1 || portrait > TeamManagerLifecycle.PortraitCount) portrait = 1;
                 el.AddToClassList("ev-por__image--team_manager-" + portrait.ToString("00"));
                 return;
