@@ -55,6 +55,30 @@ scenarios:
     force: WildPitch
     seed: 20260723
 
+  - id: wild-pitch-second-lab
+    name: 暴投検証（3ボール・走者二塁＝三塁は空き。issue #1769）
+    away: { school: "player", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 5
+    top: true
+    outs: 1
+    bases: [2]
+    count: { balls: 3, strikes: 0 }
+    force: WildPitch
+    seed: 20260723
+
+  - id: wild-pitch-first-lab
+    name: 暴投検証（3ボール・走者一塁のみ。issue #1769）
+    away: { school: "player", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 5
+    top: true
+    outs: 1
+    bases: [1]
+    count: { balls: 3, strikes: 0 }
+    force: WildPitch
+    seed: 20260723
+
   - id: dropped-third-strike-lab
     name: 振り逃げ検証（2死・一塁空き）
     away: { school: "player", score: 1 }
