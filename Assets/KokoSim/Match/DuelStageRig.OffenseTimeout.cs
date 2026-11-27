@@ -9,10 +9,9 @@ namespace KokoSim.Unity.Match
     ///
     /// <b>表示だけ</b>の芝居で、engine（効き目・乱数・決定論）には一切触れない。位置・時刻・位相はここの固定値。
     ///
-    /// 流れ: 球審がタイム → **いきなり耳打ちの場面から**（伝令が打者の横に立ち、顔を寄せて片手を口もとへ・
-    /// 打者は首を向けてうなずく）→ 球審がタイムを解く → 打者は打席へ歩いて戻る（伝令はその場に立ったまま）→ 畳む。
-    /// 伝令がベンチから入ってくるところと、ベンチへ戻るところは映さない（issue #1741。ベンチが打者と反対側だと、
-    /// ベンチから一直線の道が本塁の上を通っていた）。
+    /// 流れ: 球審がタイム → 打者が打席を外して下がる・伝令がベンチから走ってきて途中で歩きに変わり、打者の外側
+    /// （捕手と反対側＝本塁から遠い側）に並ぶ → 耳打ち（伝令が顔を寄せて片手を口もとへ・打者は首を向けて
+    /// うなずく）→ 球審がタイムを解く → 伝令はベンチへ戻り、打者は打席へ歩いて戻る → 畳む（構えへ戻す）。
     ///
     /// 耳打ちの形は収録に無いので、評価した後の骨に後から足す（design-18 §3.1「クリップ内部の緩急は改変しない」）。
     /// 回す量はすべて骨の親のローカル空間で「向き→向き」の写像として作る＝左打者の鏡映親ノードの下でも同じ式で効く
@@ -24,6 +23,7 @@ namespace KokoSim.Unity.Match
     public sealed partial class DuelStageRig
     {
         // ---- 収録（issue #1175 の割り当て） ----------------------------------------------------
+        private const string OtBatterBackClipName = "AA_Baseball_Batter_Movement_Walk_B_Loop";
         private const string OtBatterWalkClipName = "AA_Baseball_Batter_Movement_Walk_F_Loop";
         private const string OtBatterIdleClipName = "AA_Baseball_Batter_Idle_Loop";
         /// <summary>
@@ -43,14 +43,17 @@ namespace KokoSim.Unity.Match
         private const float OtHeadTurnMaxDeg = 65f;
 
 
-        private enum OtLeg { Talk, Leave, Done }
+        private enum OtLeg { Back, Turn, Talk, Leave, Done }
+        private enum OtMsgLeg { Wait, Run, Decel, WalkIn, Turn, Talk, LeaveWalk, LeaveRun }
 
         private bool _otActive;
         private float _otT;
         private float _otTalkStartT = -1f, _otLeaveStartT = -1f;
         private OtLeg _otBatterLeg;
-        private Vector2 _otB0, _otB1, _otM, _otBatterPos;
-        private float _otBatterYaw, _otBatterTalkYaw, _otMsgTalkYaw;
+        private OtMsgLeg _otMsgLeg;
+        private float _otMsgLegT, _otBatterLegT;
+        private Vector2 _otB0, _otB1, _otM, _otMsgStart, _otMsgPos, _otBatterPos;
+        private float _otBatterYaw, _otMsgYaw, _otBatterTalkYaw, _otMsgTalkYaw;
         private float _otSide;            // 打者の側（右打者＝−1＝三塁側・左打者＝+1）
         private float _otWhisperW;        // 耳打ちの後補正の効き（0..1）
         private DuelActorSnapshot _otBatterSnap;
@@ -66,10 +69,10 @@ namespace KokoSim.Unity.Match
         {
             if (!Available || _toActive || _otActive || FieldPlayActive || _batter == null || _batter.Animator == null) return false;
             var run = LoadClip(TimeoutRunClipName);
+            var back = LoadClip(OtBatterBackClipName);
             var bIdle = LoadClip(OtBatterIdleClipName);
-            var bStand = LoadClip(OtBatterStandClipName);
-            var mIdle = LoadClip(OtMessengerIdleClipName);
-            if (run == null || bIdle == null || bStand == null || mIdle == null || LoadClip(OtBatterWalkClipName) == null) return false;
+            if (run == null || back == null || bIdle == null || LoadClip(OtBatterWalkClipName) == null
+                || LoadClip(OtBatterStandClipName) == null) return false;
             if (!EnsureMessenger(run)) return false;
             Repaint(_messenger, _offenseColors);   // 伝令は攻撃側の選手
 
@@ -81,14 +84,20 @@ namespace KokoSim.Unity.Match
             var bp = StagePos(_batter);
             _otB0 = new Vector2(bp.x, bp.z);
             _otB1 = _otB0 + new Vector2(_otSide * DuelTuning.OtBatterBackM, 0f);
-            // 伝令は打者の**ベンチ側**に立つ（ベンチが打者と反対側＝後攻の右打者などなら本塁側）。
-            // 耳打ちの手・首の向きは立った側から決まる（ApplyWhisperPose）
+            // 伝令はベンチから一直線に来て、打者の**ベンチ側**に並ぶ（2026-11-21 監督指摘「打者の前でかくっと
+            // 曲がらず一直線に」）。ベンチが打者と反対側（後攻の右打者など）なら本塁側に立つ＝一直線の道が
+            // 打者の体を突き抜けない。耳打ちの手・首の向きは立った側から決まる（ApplyWhisperPose）
             float s = benchFirstBaseSide ? 1f : -1f;
             _otM = _otB1 + new Vector2(s * DuelTuning.OtPairGapM, 0f);
             _otBatterTalkYaw = s * DuelTuning.OtFaceInDeg;     // センター方向から伝令の側へ
             _otMsgTalkYaw = -s * DuelTuning.OtFaceInDeg;       // センター方向から打者の側へ
 
-            // 2人とも最初のコマから耳打ちの立ち位置・向きにいる（入ってくる足取りと打者が下がる足取りは映さない）
+            var bench = new Vector2(TimeoutBenchFront1B.x * s, TimeoutBenchFront1B.y);
+            var from = bench - _otM;
+            float d = from.magnitude;
+            _otMsgStart = d > DuelTuning.TimeoutStartRadiusM ? _otM + from / d * DuelTuning.TimeoutStartRadiusM : bench;
+
+            // 打者: 本塁を向いたまま後ろ歩きで下がる
             _batter.HoldAtEnd = false;
             _batter.Holding = false;
             _batter.HoldRemaining = 0f;
@@ -97,14 +106,16 @@ namespace KokoSim.Unity.Match
             _batter.IdleEndAt = 0f;
             _batter.SpeedSwitchAt = -1f;
             SetRootMotion(_batter, false);
-            _otBatterPos = _otB1;
-            _otBatterYaw = _otBatterTalkYaw;
-            CrossfadeActorToClip(_batter, bStand, 0.5f * bStand.length, 0f, 0f);   // 手を下ろして立つ（バットは片手で下げる）
-            _batter.IdleClip = bStand;
+            _otBatterPos = _otB0;
+            _otBatterYaw = YawToward(_otB1, _otB0);   // 体は本塁側を向き、背中の方へ下がる
+            CrossfadeActorToClip(_batter, back, 0f, 0f, 0.3f);
+            _batter.IdleClip = back;
             _batter.Speed = 1f;
             PlaceFielder(_batter, _otBatterPos.x, _otBatterPos.y, _otBatterYaw);
-            _otBatterLeg = OtLeg.Talk;
+            _otBatterLeg = OtLeg.Back;
+            _otBatterLegT = 0f;
 
+            // 伝令: ベンチ前（遠ければ画面外）から走ってくる
             var m = _messenger;
             m.Go.SetActive(true);
             m.Enabled = true;
@@ -114,18 +125,21 @@ namespace KokoSim.Unity.Match
             m.DefaultEndAt = 0f;
             m.IdleEndAt = 0f;
             SetRootMotion(m, false);
-            SetActorClip(m, mIdle, 0f, 0f);
-            m.IdleClip = mIdle;
-            m.Speed = 1f;
-            PlaceFielder(m, _otM.x, _otM.y, _otMsgTalkYaw);
+            _otMsgPos = _otMsgStart;
+            _otMsgYaw = YawToward(_otMsgStart, _otM) - TimeoutRunMoveDir;
+            SetActorClip(m, run, 0.4f * run.length, 0f);
+            m.IdleClip = run;
+            m.Speed = 0f;
+            PlaceFielder(m, _otMsgPos.x, _otMsgPos.y, _otMsgYaw);
+            _otMsgLeg = OtMsgLeg.Wait;
+            _otMsgLegT = 0f;
 
             UmpireCallsTime();
 
             _otActive = true;
             _otT = 0f;
-            _otTalkStartT = 0f;
-            _otLeaveStartT = -1f;
-            _otWhisperW = 1f;   // 最初のコマから耳打ちの形
+            _otTalkStartT = _otLeaveStartT = -1f;
+            _otWhisperW = 0f;
             _otMouthEarM = -1f;
             ApplyOffenseTimeoutCamera();
             return true;
@@ -150,11 +164,13 @@ namespace KokoSim.Unity.Match
             if (!_otActive) return;
             _otT += dt;
             StepOtBatter(dt);
-            if (_messenger != null && _messenger.Go != null) PlaceFielder(_messenger, _otM.x, _otM.y, _otMsgTalkYaw);
-            if (_otLeaveStartT < 0f && _otT - _otTalkStartT >= DuelTuning.OtTalkSeconds) BeginOtLeave();
+            StepOtMessenger(dt);
+
+            if (_otTalkStartT < 0f && _otBatterLeg == OtLeg.Talk && _otMsgLeg == OtMsgLeg.Talk) _otTalkStartT = _otT;
+            if (_otTalkStartT >= 0f && _otLeaveStartT < 0f && _otT - _otTalkStartT >= DuelTuning.OtTalkSeconds) BeginOtLeave();
 
             // 耳打ちの効き: 話し始めで寄せ、散り始めで戻す
-            float wantW = _otLeaveStartT < 0f ? 1f : 0f;
+            float wantW = _otTalkStartT >= 0f && _otLeaveStartT < 0f ? 1f : 0f;
             _otWhisperW = Mathf.MoveTowards(_otWhisperW, wantW, dt / 0.45f);
 
             // 後補正はポーズを評価し直したコマにだけ当てる（評価の間は骨がそのまま残る＝二度当てしない）
@@ -167,8 +183,32 @@ namespace KokoSim.Unity.Match
 
         private void StepOtBatter(float dt)
         {
+            _otBatterLegT += dt;
             switch (_otBatterLeg)
             {
+                case OtLeg.Back:
+                {
+                    // 後ろ歩き（収録の前進量で足を合わせる）。体の向きは本塁側のまま
+                    float stepM = OtBatterWalkVClip * dt;
+                    var to = _otB1 - _otBatterPos;
+                    if (to.magnitude <= stepM)
+                    {
+                        _otBatterPos = _otB1;
+                        _otBatterLeg = OtLeg.Turn;
+                        _otBatterLegT = 0f;
+                        var idle = LoadClip(OtBatterStandClipName);   // 手を下ろして立つ（バットは片手で下げる）
+                        CrossfadeActorToClip(_batter, idle, 0.5f * idle.length, 0f, 0.35f);
+                        _batter.IdleClip = idle;
+                        _batter.Speed = 1f;
+                    }
+                    else _otBatterPos += to.normalized * stepM;
+                    break;
+                }
+                case OtLeg.Turn:
+                    // 待機のまま伝令の来る方（センター方向から外側へ）へ向き直る
+                    _otBatterYaw = Mathf.MoveTowardsAngle(_otBatterYaw, _otBatterTalkYaw, 200f * dt);
+                    if (Mathf.Abs(Mathf.DeltaAngle(_otBatterYaw, _otBatterTalkYaw)) < 0.5f) { _otBatterLeg = OtLeg.Talk; _otBatterLegT = 0f; }
+                    break;
                 case OtLeg.Talk:
                     break;
                 case OtLeg.Leave:
@@ -203,11 +243,127 @@ namespace KokoSim.Unity.Match
             PlaceFielder(_batter, _otBatterPos.x, _otBatterPos.y, _otBatterYaw);
         }
 
+        private void StepOtMessenger(float dt)
+        {
+            var a = _messenger;
+            if (a == null || a.Go == null) return;
+            _otMsgLegT += dt;
+            var run = LoadClip(TimeoutRunClipName);
+            var walk = LoadClip(TimeoutWalkClipName);
+            float speed = 0f, moveDir = TimeoutRunMoveDir, vClip = TimeoutRunVClip;
+            Vector2 target = _otM;
+            switch (_otMsgLeg)
+            {
+                case OtMsgLeg.Wait:
+                    a.Speed = 0f;
+                    if (_otT >= 0.3f) { _otMsgLeg = OtMsgLeg.Run; _otMsgLegT = 0f; a.Speed = 1f; }
+                    break;
+                case OtMsgLeg.Run:
+                {
+                    speed = DuelTuning.TimeoutRunSpeed;
+                    // 残りの道のりが減速＋歩きの分になったら落とす
+                    if (Vector2.Distance(_otMsgPos, _otM) <= TimeoutDecelM + 0.6f)
+                    {
+                        _otMsgLeg = OtMsgLeg.Decel;
+                        _otMsgLegT = 0f;
+                        CrossfadeActorToClip(a, LoadClip(OverrunClipName), 0f, 0f, TimeoutFadeSeconds);
+                        a.IdleClip = walk;
+                    }
+                    break;
+                }
+                case OtMsgLeg.Decel:
+                {
+                    float u = Mathf.Clamp01(_otMsgLegT / OverrunDecelEndsAt);
+                    speed = Mathf.Lerp(DuelTuning.TimeoutRunSpeed, DuelTuning.TimeoutWalkSpeed, u);
+                    moveDir = OverrunMoveDirDeg;
+                    vClip = 0f;
+                    if (u >= 1f)
+                    {
+                        _otMsgLeg = OtMsgLeg.WalkIn;
+                        _otMsgLegT = 0f;
+                        CrossfadeActorToClip(a, walk, 0f, 0f, TimeoutFadeSeconds);
+                        a.IdleClip = walk;
+                    }
+                    break;
+                }
+                case OtMsgLeg.WalkIn:
+                    speed = DuelTuning.TimeoutWalkSpeed;
+                    moveDir = TimeoutWalkMoveDir;
+                    vClip = TimeoutWalkVClip;
+                    break;
+                case OtMsgLeg.Turn:
+                    _otMsgYaw = Mathf.MoveTowardsAngle(_otMsgYaw, _otMsgTalkYaw, TimeoutYawRateDegPerSec * dt);
+                    if (Mathf.Abs(Mathf.DeltaAngle(_otMsgYaw, _otMsgTalkYaw)) < 0.5f) { _otMsgLeg = OtMsgLeg.Talk; _otMsgLegT = 0f; }
+                    break;
+                case OtMsgLeg.Talk:
+                    break;
+                case OtMsgLeg.LeaveWalk:
+                    speed = DuelTuning.TimeoutWalkSpeed;
+                    moveDir = TimeoutWalkMoveDir;
+                    vClip = TimeoutWalkVClip;
+                    target = _otMsgStart;
+                    if (_otMsgLegT >= TimeoutLeaveWalkSeconds)
+                    {
+                        _otMsgLeg = OtMsgLeg.LeaveRun;
+                        _otMsgLegT = 0f;
+                        CrossfadeActorToClip(a, run, 0f, 0f, TimeoutFadeSeconds);
+                        a.IdleClip = run;
+                    }
+                    break;
+                case OtMsgLeg.LeaveRun:
+                    speed = DuelTuning.TimeoutRunSpeed;
+                    target = _otMsgStart;
+                    break;
+            }
+
+            if (speed > 0f)
+            {
+                var to = target - _otMsgPos;
+                float dist = to.magnitude;
+                float stepM = speed * dt;
+                if (dist <= stepM || dist < 1e-4f)
+                {
+                    _otMsgPos = target;
+                    if (_otMsgLeg == OtMsgLeg.WalkIn || _otMsgLeg == OtMsgLeg.Decel)
+                    {
+                        // 着いた: 待機へ替えて、打者の方へ向き直る
+                        _otMsgLeg = OtMsgLeg.Turn;
+                        _otMsgLegT = 0f;
+                        var idle = LoadClip(OtMessengerIdleClipName);
+                        if (idle != null)
+                        {
+                            CrossfadeActorToClip(a, idle, 0f, 0f, 0.35f);
+                            a.IdleClip = idle;
+                        }
+                        a.Speed = 1f;
+                    }
+                }
+                else
+                {
+                    _otMsgPos += to / dist * stepM;
+                    float wantYaw = YawToward(Vector2.zero, to) - moveDir;
+                    _otMsgYaw = Mathf.MoveTowardsAngle(_otMsgYaw, wantYaw, 540f * dt);
+                }
+                if (_otMsgLeg != OtMsgLeg.Turn)
+                    a.Speed = vClip > 0f ? Mathf.Clamp(speed / vClip, LocoSpeedMin, LocoSpeedMax) : 1f;
+            }
+            PlaceFielder(a, _otMsgPos.x, _otMsgPos.y, _otMsgYaw);
+        }
+
         private void BeginOtLeave()
         {
             _otLeaveStartT = _otT;
             UmpireCallsTime();   // タイムを解く（守備伝令の場面と同じ収録で「プレー再開」の合図に見せる）
-            _otBatterLeg = OtLeg.Leave;   // 伝令はその場に立ったまま（耳打ちの形だけ解ける）
+            _otBatterLeg = OtLeg.Leave;
+            _otBatterLegT = 0f;
+            var walk = LoadClip(TimeoutWalkClipName);
+            _otMsgLeg = OtMsgLeg.LeaveWalk;
+            _otMsgLegT = 0f;
+            if (walk != null && _messenger != null)
+            {
+                CrossfadeActorToClip(_messenger, walk, 0f, 0f, TimeoutFadeSeconds);
+                _messenger.IdleClip = walk;
+            }
         }
 
         // ---- 耳打ちの後補正 ------------------------------------------------------------------
