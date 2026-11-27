@@ -44,16 +44,6 @@ namespace KokoSim.Unity.Lineup
         public Condition Condition = Condition.Normal;
     }
 
-    /// <summary>怪我チップ（「捻挫・中度／あと」＋数字＋単位「日」「週」）。数字と和文は別 Label で組むため3つに分ける。</summary>
-    public sealed class InjuryChipView
-    {
-        public static readonly InjuryChipView None = new InjuryChipView();
-        public string Head = "";    // 「捻挫・中度／あと」
-        public string Digits = "";  // 「3」
-        public string Unit = "";    // 「日」（大会中）／「週」
-        public bool IsEmpty => Head.Length == 0;
-    }
-
     /// <summary>
     /// 入部の条件（約束）の印（設計書04 §2.4）。約束が生きている選手に付け、いまの並びで試合に入ると破るなら
     /// <see cref="Breaks"/> が立つ（警告色）。約束が無ければ空。
@@ -634,21 +624,6 @@ namespace KokoSim.Unity.Lineup
             return new PromiseChipView { Label = ScoutPromises.Label(p.Promise), Breaks = breaks };
         }
 
-        /// <summary>故障中の表示（傷病名・段階・完治までの残り）。健常なら空（設計書03 §3.5）。大会中は日、それ以外は週。</summary>
-        private static InjuryChipView InjuryChip(DevelopingPlayer p)
-        {
-            if (p.Injury == KokoSim.Engine.Players.InjurySeverity.None) return InjuryChipView.None;
-            var gs = KokoSim.Unity.Shell.GameSession.Current;
-            var (amount, unit) = KokoSim.Unity.Shell.InjuryLabel.Remaining(p, gs.InTournament, gs.TournamentDay);
-            return new InjuryChipView
-            {
-                Head = KokoSim.Unity.Shell.InjuryLabel.Type(p.InjuryType) + "・"
-                       + KokoSim.Unity.Shell.InjuryLabel.Severity(p.Injury) + "／あと ",
-                Digits = amount.ToString(),
-                Unit = unit,
-            };
-        }
-
         /// <summary>
         /// スタメン（＋DH先発）に怪我人がいるときの警告（設計書03 §3.5「押して出場」）。
         /// 出場させると悪化する可能性があり、悪化しなくても全治が延びる＝原則として損な選択であることを明示する。
@@ -712,7 +687,7 @@ namespace KokoSim.Unity.Lineup
                     IsPicked = _picked == _idx[i] && _pickKind == PickKind.OrderPlayer,
                     IsPosPicked = _pickKind == PickKind.SlotPosition && _posPickSlot == i,
                     IsCaptain = p.IsCaptain,
-                    Injury = InjuryChip(p),
+                    Injury = KokoSim.Unity.Shell.InjuryLabel.Chip(p),
                     Promise = PromiseChip(p, breaking),
                     Condition = FormModel.Quantize(p.ConditionValue),
                 });
@@ -735,7 +710,7 @@ namespace KokoSim.Unity.Lineup
                 v.StartingPitcherEraText = pit.Era;
                 v.StartingPitcherInningsText = pit.Ip;
                 v.StartingPitcherStrikeoutsText = pit.K;
-                v.StartingPitcherInjury = InjuryChip(sp);
+                v.StartingPitcherInjury = KokoSim.Unity.Shell.InjuryLabel.Chip(sp);
                 v.StartingPitcherPromise = PromiseChip(sp, breaking);
                 v.StartingPitcherCondition = FormModel.Quantize(sp.ConditionValue);
             }
@@ -757,7 +732,7 @@ namespace KokoSim.Unity.Lineup
                     GradeLabel = p.Grade + "年",
                     HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
-                    Injury = InjuryChip(p),
+                    Injury = KokoSim.Unity.Shell.InjuryLabel.Chip(p),
                     Promise = PromiseChip(p, breaking),
                     Condition = FormModel.Quantize(p.ConditionValue),
                 });

@@ -845,6 +845,21 @@ namespace KokoSim.Unity.Components
         }
 
         /// <summary>
+        /// 怪我タグ（傷病名・段階・あと N 日／週。設計書03 §3.5）。スタメン設定と試合中の交代パネルが共有する。
+        /// 呼び出し側は <see cref="InjuryChipView.IsEmpty"/> のとき作らない（健常な選手には何も出さない）。
+        /// 見た目は .sbk の下の .sbk-injury（交代パネルも .sbk の中）。
+        /// </summary>
+        public static VisualElement InjuryTag(InjuryChipView chip)
+        {
+            var tag = new VisualElement();
+            tag.AddToClassList("sbk-injury");
+            tag.AddToClassList("sbk-injury--row");
+            tag.Add(new Label(chip.Head));
+            tag.Add(NumUnit(chip.Digits, chip.Unit));
+            return tag;
+        }
+
+        /// <summary>
         /// 数字＋和文単位を Label 分割して並べる（設計書16 §2・決定2-B「混植セルは Label を分ける」）。
         /// 数字だけ f-num（bold で f-num-bd）に載せ、単位は f-body のまま。
         /// 例: NumUnit("2", "年")／NumUnit("45", "名")／NumUnit("15", "週")。

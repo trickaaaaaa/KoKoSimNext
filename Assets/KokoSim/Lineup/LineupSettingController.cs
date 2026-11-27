@@ -244,7 +244,7 @@ namespace KokoSim.Unity.Lineup
             sub.Add(info);
             if (!v.StartingPitcherInjury.IsEmpty)
             {
-                var tag = InjuryTag(v.StartingPitcherInjury);
+                var tag = UiComponents.InjuryTag(v.StartingPitcherInjury);
                 tag.style.marginLeft = 8;
                 sub.Add(tag);
             }
@@ -510,7 +510,7 @@ namespace KokoSim.Unity.Lineup
             if (injury.IsEmpty && promise.IsEmpty) return;
             var line = new VisualElement();
             line.AddToClassList("lu-row__name-cell");
-            if (!injury.IsEmpty) line.Add(InjuryTag(injury));
+            if (!injury.IsEmpty) line.Add(UiComponents.InjuryTag(injury));
             if (!promise.IsEmpty)
             {
                 var tag = UiComponents.PromiseTag(promise.Label, promise.Breaks);
@@ -519,16 +519,6 @@ namespace KokoSim.Unity.Lineup
             }
             host.Add(line);
         }
-        private static VisualElement InjuryTag(InjuryChipView chip)
-        {
-            var tag = new VisualElement();
-            tag.AddToClassList("sbk-injury");
-            tag.AddToClassList("sbk-injury--row");
-            tag.Add(new Label(chip.Head));
-            tag.Add(UiComponents.NumUnit(chip.Digits, chip.Unit));
-            return tag;
-        }
-
         private static ConditionFace Face(Condition c, string sizeClass)
         {
             var face = new ConditionFace();

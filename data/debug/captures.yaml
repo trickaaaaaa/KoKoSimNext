@@ -763,6 +763,24 @@ captures:
     attempts: 1
     window_calls: [OpenSubstitutionForCapture, shot, HoverSubstitutionCandidateForCapture(0), shot, HoverSubstitutionCandidateForCapture(1), shot, LeaveSubstitutionListForCapture, shot, CancelSubstitutionForCapture]
 
+  # ── 交代パネルの怪我タグ（issue #1729）。自校の部員を3人おきに故障させてから開く。守備: 11-ui＝開いた直後（打順の行・控えの行）/
+  #    12-ui＝枠を選んだ比較欄 / 13-ui＝控え0を選んだ比較欄。攻撃: 11-ui＝開いた直後 / 12-ui＝控え0を選んだ比較欄 ──
+  - id: substitution-injury-1729-defense
+    name: "交代パネル（守備）：故障中の選手に怪我のタグが出る（issue #1729）"
+    scenario: dh-mound-lab
+    manager: home
+    view: panel
+    attempts: 1
+    window_calls: [InjureRosterForCapture(3), OpenSubstitutionForCapture, shot, PickSubstitutionSlotForCapture(RightField), shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture]
+
+  - id: substitution-injury-1729-offense
+    name: "交代パネル（攻撃）：故障中の控え・打順の選手に怪我のタグが出る（issue #1729）"
+    scenario: wild-pitch-lab
+    manager: away
+    view: panel
+    attempts: 1
+    window_calls: [InjureRosterForCapture(3), OpenSubstitutionForCapture, shot, PickSubstitutionCandidateForCapture(0), shot, CancelSubstitutionForCapture]
+
   # ── 采配の手札のホバー（issue #1534）。11-ui 以降＝カードを1枚持ち上げた絵 ──
   - id: tcard-hover-1534-away-1280
     name: "采配の手札のホバーの浮き上がりが隣のカードと投手欄の数字を隠さない（issue #1534）"
