@@ -73,6 +73,32 @@ namespace KokoSim.Unity.Shell
             => p == null ? 0 : InjuryModel.WeeksToFullRecovery(p, Coeff);
 
         /// <summary>
+        /// 怪我タグの中身（傷病名・段階・あと N 日／週）。健常なら空。スタメン設定と試合中の交代パネルが共有する
+        /// （文言と残りの数え方をここ1箇所に置く）。大会中は日、それ以外は週。
+        /// </summary>
+        public static InjuryChipView Chip(DevelopingPlayer p)
+        {
+            if (p == null || p.Injury == InjurySeverity.None) return InjuryChipView.None;
+            var gs = GameSession.Current;
+            var (amount, unit) = Remaining(p, gs.InTournament, gs.TournamentDay);
+            return new InjuryChipView
+            {
+                Head = Type(p.InjuryType) + "・" + Severity(p.Injury) + "／あと ",
+                Digits = amount.ToString(),
+                Unit = unit,
+            };
+        }
+
+        /// <summary>試合中の選手（<see cref="Player.SourceId"/>）に対応する自校の部員の怪我タグ。部員でなければ・健常なら空。</summary>
+        public static InjuryChipView ChipOf(int? sourceId)
+        {
+            if (sourceId is not { } id || id <= 0) return InjuryChipView.None;
+            foreach (var p in RosterService.Roster)
+                if (p.Id == id) return Chip(p);
+            return InjuryChipView.None;
+        }
+
+        /// <summary>
         /// 完治までの残りを「単位つき」で返す。大会中（日送り）は日、それ以外（週送り）は週。
         /// 健常なら (0, "")。
         /// </summary>
@@ -84,5 +110,15 @@ namespace KokoSim.Unity.Shell
                 ? (InjuryModel.DaysToFullRecovery(weeks, tournamentDay), "日")
                 : (weeks, "週");
         }
+    }
+
+    /// <summary>怪我チップ（「捻挫・中度／あと」＋数字＋単位「日」「週」）。数字と和文は別 Label で組むため3つに分ける。</summary>
+    public sealed class InjuryChipView
+    {
+        public static readonly InjuryChipView None = new InjuryChipView();
+        public string Head = "";    // 「捻挫・中度／あと」
+        public string Digits = "";  // 「3」
+        public string Unit = "";    // 「日」（大会中）／「週」
+        public bool IsEmpty => Head.Length == 0;
     }
 }

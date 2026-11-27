@@ -982,6 +982,7 @@ namespace KokoSim.Unity.Match
             var face = CondFace(p, "sx-face24");
             if (face != null) who.Add(face);
             el.Add(who);
+            AddInjuryTag(el, p);
         }
 
         // 比較の表の1行：項目名｜退く｜入る。セルは数値＋ランクのチップ（高いほうを太字・同値は両方）。
@@ -1423,6 +1424,16 @@ namespace KokoSim.Unity.Match
             row.Add(UiComponents.PromiseTag(label, _breakers.Contains(p)));
         }
 
+        /// <summary>自校の故障中の選手の怪我タグ（傷病名・段階・あと N 日／週。スタメン設定と同じ部品）。健常・相手校は付けない。</summary>
+        private static void AddInjuryTag(VisualElement host, Player p)
+        {
+            var chip = InjuryLabel.ChipOf(p?.SourceId);
+            if (chip.IsEmpty) return;
+            var tag = UiComponents.InjuryTag(chip);
+            tag.AddToClassList("sx-injury");
+            host.Add(tag);
+        }
+
         // ── 表示ヘルパ ──
 
         private Player RunnerAt(int baseIndex)
@@ -1492,6 +1503,7 @@ namespace KokoSim.Unity.Match
             {
                 who.Add(NumBox(SubstitutionDisplay.Number(p), null));
                 who.Add(Text(p?.Name ?? "—", "sx-lrow__name f-display"));
+                AddInjuryTag(who, p);
                 AddPromiseTag(who, p);
             }
             row.Add(who);
@@ -1530,6 +1542,7 @@ namespace KokoSim.Unity.Match
             row.Add(NumBox(SubstitutionDisplay.Number(p), picked ? "sx-num--in" : used ? "sx-num--gone" : null));
             var name = Text(p?.Name ?? "—", "sx-brow__name f-display");
             row.Add(name);
+            if (!used) AddInjuryTag(row, p);
             if (!used) AddPromiseTag(row, p);
             row.Add(Text(HandLabel(p), "sx-hand"));
             var face = CondFace(p, "sx-face22");
