@@ -6054,7 +6054,7 @@ namespace KokoSim.Unity.Match
         /// コンテナはlossyScale逆数でワールドスケール1に戻してあるので、子パーツは実寸(m)で置く。
         /// </summary>
         private void AttachGear(Actor actor, GearKind kind, Vector3 gazeLocal, Color accent, int layer,
-            Color? visorAccent = null)
+            Color? visorAccent = null, Vector3? capMountPos = null)
         {
             var head = actor.Animator.GetBoneTransform(HumanBodyBones.Head);
             var dark = new Color(0.13f, 0.13f, 0.15f);
@@ -6094,7 +6094,8 @@ namespace KokoSim.Unity.Match
                 {
                     mount = new GameObject("gear-offset");
                     mount.transform.SetParent(c.transform, false);
-                    if (kind == GearKind.Cap) _capMount = mount.transform;
+                    if (capMountPos.HasValue) mount.transform.localPosition = capMountPos.Value;
+                    else if (kind == GearKind.Cap) _capMount = mount.transform;
                     else if (actor == _batter) _helmetMount = mount.transform;
                     else
                     {
