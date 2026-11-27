@@ -263,7 +263,17 @@ namespace KokoSim.Unity.Match
                 foreach (var r in head.GetComponentsInChildren<Renderer>(true))
                 {
                     var bnd = r.bounds;
-                    sb.Append(r.name).Append(" c=").Append(head.InverseTransformPoint(bnd.center).ToString("F3")).Append(' ');
+                    var hu = head.TransformDirection(a.HeadUpLocal).normalized;
+                    var hf = head.TransformDirection(a.HeadFwdLocal).normalized;
+                    var hr = Vector3.Cross(hu, hf).normalized;
+                    var blo = new Vector3(9f, 9f, 9f); var bhi = new Vector3(-9f, -9f, -9f);
+                    for (int k = 0; k < 8; k++)
+                    {
+                        var corner = bnd.center + Vector3.Scale(bnd.extents, new Vector3((k & 1) == 0 ? -1 : 1, (k & 2) == 0 ? -1 : 1, (k & 4) == 0 ? -1 : 1)) - head.position;
+                        var l = new Vector3(Vector3.Dot(corner, hr), Vector3.Dot(corner, hu), Vector3.Dot(corner, hf));
+                        blo = Vector3.Min(blo, l); bhi = Vector3.Max(bhi, l);
+                    }
+                    sb.Append(r.name).Append(" lo=").Append(blo.ToString("F3")).Append(" hi=").Append(bhi.ToString("F3")).Append(' ');
                 }
                 if (!_umpHeadCloseDone)
                 {
@@ -288,6 +298,7 @@ namespace KokoSim.Unity.Match
             var fwd = head.TransformDirection(a.HeadFwdLocal).normalized;
             var right = Vector3.Cross(up, fwd).normalized;
             var lo = new Vector3(9f, 9f, 9f); var hi = new Vector3(-9f, -9f, -9f);
+            var brow = new Vector3(9f, 9f, 9f); var browHi = new Vector3(-9f, -9f, -9f);
             var verts = new List<Vector3>();
             foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>())
             {
@@ -299,11 +310,13 @@ namespace KokoSim.Unity.Match
                     var w = smr.transform.position + smr.transform.rotation * v - head.position;
                     var l = new Vector3(Vector3.Dot(w, right), Vector3.Dot(w, up), Vector3.Dot(w, fwd));
                     if (l.y < -0.02f || Mathf.Abs(l.x) > 0.14f || Mathf.Abs(l.z) > 0.2f) continue;
+                    if (Mathf.Abs(l.x) > 0.1f || Mathf.Abs(l.z) > 0.14f) continue;
                     lo = Vector3.Min(lo, l); hi = Vector3.Max(hi, l);
+                    if (l.y > 0.08f && l.y < 0.12f) { brow = Vector3.Min(brow, l); browHi = Vector3.Max(browHi, l); }
                 }
                 Object.Destroy(m);
             }
-            return " skull lo=" + lo.ToString("F3") + " hi=" + hi.ToString("F3") + " ";
+            return " skull lo=" + lo.ToString("F3") + " hi=" + hi.ToString("F3") + " browband lo=" + brow.ToString("F3") + " hi=" + browHi.ToString("F3") + " ";
         }
 
         private void ShootHeadClose(Vector3 eye, Vector3 focus, string path)

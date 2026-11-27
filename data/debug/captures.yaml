@@ -905,7 +905,7 @@ captures:
     manager: home
     shots: [catch]
     probes: [BaseUmpHeadClose]
-    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.07, DuelTuning.BaseUmpCapAddZForCapture: -0.05}
+    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.0, DuelTuning.BaseUmpCapAddZForCapture: 0.0}
 
   - id: base-umpire-2b-steal-out-1595
     name: "二盗失敗の二塁タッチアウトで二塁塁審がアウトのコール（issue #1595）"
