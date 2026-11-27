@@ -58,6 +58,22 @@ captures:
     shots: [release-0.1, release+0.15, release+0.3, release+0.45, end]
     probes: [BallHoldDiag]
 
+  - id: bunt-runner-slip-1734
+    name: "バントのあとの打者走者の足の滑りの実測（issue #1734）"
+    scenario: steal-sign-lab
+    manager: away
+    force: BuntInPlay
+    sign: Bunt
+    shots: [end]
+    probes: [RunnerDiag]
+
+  - id: grounder-runner-slip-1734
+    name: "通常の内野ゴロの打者走者の足の滑りの実測・バントとの比較用（issue #1734）"
+    scenario: if-grounder-3b-lab
+    manager: home
+    shots: [end]
+    probes: [RunnerDiag]
+
   - id: throw-video-lf-before
     name: "左翼ゴロの送球・振りかぶりで体を閉じない（issue #1079 / #1095 の見比べ・旧）"
     scenario: of-grounder-runner-lf-lab

@@ -4086,6 +4086,8 @@ namespace KokoSim.Unity.Match
         private float _runnerMaxPosErr, _runnerMaxSpeed;
         private float _runnerSlipMax, _runnerSlipMin;
         private float _runnerHeadMin;
+        /// <summary>走者の毎コマの実測（label, t, 速さ, 段, 倍率, 滑りの比）。診断専用（issue #1734）。</summary>
+        private readonly List<(string label, float t, float speed, int ladder, float mul, float ratio)> _runnerTrace = new();
 
         /// <summary>走者プールを生成する（2回目以降は何もしない）。装備は帽子だけ＝グラブは持たせない。</summary>
         private void EnsureRunnerCast(GameObject bodyPrefab, bool useVendor, int layer)
@@ -4354,6 +4356,7 @@ namespace KokoSim.Unity.Match
                     float ratio = speed / Mathf.Max(0.01f, RunnerLadder[want].VClip * mul);
                     _runnerSlipMax = Mathf.Max(_runnerSlipMax, ratio);
                     _runnerSlipMin = Mathf.Min(_runnerSlipMin, ratio);
+                    if (_runnerTrace.Count < 2000) _runnerTrace.Add((r.Label, t, speed, want, mul, ratio));
                 }
             }
 
@@ -4462,6 +4465,10 @@ namespace KokoSim.Unity.Match
                         r.HideAt.HasValue ? r.HideAt.Value.ToString("F2") : "—"));
                 }
             }
+            sb.AppendLine("走者(毎コマ)\tt\tspeed\t段\t倍率\tslip");
+            foreach (var e in _runnerTrace)
+                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}\t{1:F2}\t{2:F2}\t{3}\t{4:F2}\t{5:F2}", e.label, e.t, e.speed, e.ladder, e.mul, e.ratio));
             return sb.ToString();
         }
 
@@ -5597,6 +5604,7 @@ namespace KokoSim.Unity.Match
             _runnerMaxPosErr = _runnerMaxSpeed = 0f;
             _runnerHeadMin = float.MaxValue;
             _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
+            _runnerTrace.Clear();
 
             _fieldInfieldFixed = DuelTuning.FieldInfieldFixedFrame && IsInfieldGrounder(play);
             _fieldInfieldFollow = !DuelTuning.FieldInfieldFixedFrame && DuelTuning.InfieldFollowFrameH.HasValue && IsInfieldGrounder(play);
