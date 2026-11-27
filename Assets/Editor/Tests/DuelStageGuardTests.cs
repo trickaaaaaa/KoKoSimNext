@@ -896,7 +896,7 @@ namespace KokoSim.EditorTests
             public float BallLateralMaxM;     // 捕球前0.3秒の、描かれた球の engine の線からの横ずれの最大
             public float BallAlongMaxM;       // 同・線に沿った遅れの最大
             public float SpeedRatio;          // 捕球直前（最後の3コマ）の描かれた球の速さ ÷ engine の速さ
-            public float PopMaxM;             // 捕球の瞬間〜0.15秒後に、描かれた球が1コマ（1/60s）で動いた量の最大＝グラブへ飛び移る量
+            public float PopMaxM;             // 捕球の時刻をまたぐ1コマ（1/60s）で描かれた球が動いた量＝捕球点からグラブへ飛び移る量
         }
 
         private static KokoSim.Engine.Match.Timeline.Playback.PlaybackPlay SweepPlay(SweepCase c)
@@ -971,7 +971,7 @@ namespace KokoSim.EditorTests
                 if (t >= e.TCatch - dt)
                 {
                     var dp = rig.BallLocalPointForTest();
-                    if (havePop) res.PopMaxM = Mathf.Max(res.PopMaxM, (dp - popPrev).magnitude);
+                    if (havePop && t >= e.TCatch && t - dt < e.TCatch) res.PopMaxM = (dp - popPrev).magnitude;
                     popPrev = dp; havePop = true;
                 }
                 if (t >= e.TCatch + 0.05f) continue;
