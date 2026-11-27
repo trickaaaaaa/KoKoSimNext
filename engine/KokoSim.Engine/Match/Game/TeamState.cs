@@ -31,6 +31,8 @@ public sealed class TeamState
     private readonly List<Player> _entrants = new();
     private readonly Dictionary<Player, (BoxEntry Kind, int Slot, string ForName)> _entry = new();
     private readonly Dictionary<Player, List<FieldPosition>> _positionTrail = new();
+    // 途中出場の記録を持たない選手（救援投手など）が最初に打席に立った打順枠。表の並び位置に使う。
+    private readonly Dictionary<Player, int> _batSlot = new();
     private bool _usesDh;
     private int _dhSlot;
     private int _pitcherSlot;
@@ -381,6 +383,7 @@ public sealed class TeamState
     {
         var key = KeyOf(batter);
         if (!_bat.TryGetValue(key, out var a)) { a = new BatAccum(); _bat[key] = a; }
+        if (!_batSlot.ContainsKey(key)) { var slot = IndexOf(batter); if (slot >= 0) _batSlot[key] = slot; }
         a.PA++;
         if (isSacFly) a.SF++;
         if (isSacBunt) a.SH++;
@@ -581,11 +584,12 @@ public sealed class TeamState
                 Entry = e.Kind, EnteredFor = e.ForName, Positions = TrailOf(key),
             });
         }
-        // 救援投手など途中出場で打席に立った選手を追記（合計がチーム安打と一致する）。
+        // 救援投手など途中出場の記録を持たずに打席に立った選手を追記（合計がチーム安打と一致する）。
         foreach (var kv in _bat)
         {
             if (starters.Contains(kv.Key) || _entry.ContainsKey(kv.Key)) continue;
-            lines.Add(Line(_team.PitcherSlot + 1, kv.Key, kv.Key.Position, kv.Value) with { Positions = TrailOf(kv.Key) });
+            var order = (_batSlot.TryGetValue(kv.Key, out var slot) ? slot : _team.PitcherSlot) + 1;
+            lines.Add(Line(order, kv.Key, kv.Key.Position, kv.Value) with { Positions = TrailOf(kv.Key) });
         }
         // 打順の枠順（同じ枠は スタメン→途中出場の入った順）。OrderBy は安定ソート。
         return lines.OrderBy(l => l.Order).ToList();
@@ -1471,6 +1475,7 @@ public sealed class TeamState
                 _retired.Add(KeyOf(retiringPitcher));
                 _replacedAtSlot[_pitcherSlot] = retiringPitcher.Name;
                 _lineup[_pitcherSlot] = Rekey(benchFielder, benchFielder with { Position = vacated });
+                NoteEnteredLineup(_lineup[_pitcherSlot], _pitcherSlot, retiringPitcher.Name, pitchedBefore: false);
                 _lineup[fSlot] = mound;
                 CurrentPitcher = mound;
                 _pitcherSlot = fSlot;
@@ -1547,6 +1552,7 @@ public sealed class TeamState
             _retired.Add(KeyOf(dh));
             _replacedAtSlot[_dhSlot] = dh.Name;
             _lineup[_dhSlot] = Rekey(benchFielder!, benchFielder! with { Position = vacated });
+            NoteEnteredLineup(_lineup[_dhSlot], _dhSlot, dh.Name, pitchedBefore: false);
             backfiller = benchFielder!;
         }
         else
@@ -1723,6 +1729,7 @@ public sealed class TeamState
             _retired.Add(KeyOf(dh));
             _replacedAtSlot[_dhSlot] = dh.Name;
             _lineup[fSlot] = Rekey(oldPitcher, oldPitcher with { Position = to });
+            NoteEnteredLineup(_lineup[fSlot], fSlot, displaced.Name, pitchedBefore: true);
             _lineup[_dhSlot] = mound;
             _pitcherSlot = _dhSlot;
             _usesDh = false;
@@ -1786,22 +1793,26 @@ public sealed class TeamState
         var dhPlayer = _lineup[_dhSlot];
         var pitcher = Rekey(CurrentPitcher, CurrentPitcher with { Position = FieldPosition.Pitcher });
         int pitcherSlot;
+        string replacedName;
         if (dhFieldsAt is { } pos)
         {
             var fielder = FielderAt(pos);
             var target = fielder is null ? -1 : IndexOf(fielder);
             if (target < 0) return false;
             _retired.Add(KeyOf(_lineup[target]));
-            _replacedAtSlot[target] = _lineup[target].Name;   // 観測: 守備位置に就いた選手が退いた
+            replacedName = _lineup[target].Name;
+            _replacedAtSlot[target] = replacedName;   // 観測: 守備位置に就いた選手が退いた
             _lineup[_dhSlot] = Rekey(dhPlayer, dhPlayer.AtPosition(pos));   // 守備力も就く位置の適性で作り直す（#1245）
             pitcherSlot = target;
         }
         else
         {
             _retired.Add(KeyOf(dhPlayer));
-            _replacedAtSlot[_dhSlot] = dhPlayer.Name;   // 観測: DHが退いて投手が打順へ
+            replacedName = dhPlayer.Name;
+            _replacedAtSlot[_dhSlot] = replacedName;   // 観測: DHが退いて投手が打順へ
             pitcherSlot = _dhSlot;
         }
+        NoteEnteredLineup(pitcher, pitcherSlot, replacedName, pitchedBefore: true);
         _lineup[pitcherSlot] = pitcher;
         CurrentPitcher = pitcher;
         _pitcherSlot = pitcherSlot;
@@ -1860,6 +1871,22 @@ public sealed class TeamState
         _replacedAtSlot[slot] = outgoing.Name;   // ライブ観戦の交代表示用（観測データ）
         Substitutions++;
         return true;
+    }
+
+    /// <summary>
+    /// 試合に出ていた選手（先発投手・救援投手）が打順の枠へ入ったとき、または控えが空いた守備へ補充で入ったときに、
+    /// 打席が無くても成績表へ載せる印を付ける（入った枠の直下・誰の代わりか）。先発投手だけは「スタメン」のまま。
+    /// 守備位置の並びは入った位置から始める（<paramref name="pitchedBefore"/>＝その前に投げていた）。
+    /// </summary>
+    private void NoteEnteredLineup(Player inserted, int slot, string replacedName, bool pitchedBefore)
+    {
+        var key = KeyOf(inserted);
+        if (_entry.ContainsKey(key)) return;
+        var kind = key.Equals(KeyOf(_starter)) ? BoxEntry.Starter : BoxEntry.DefensiveSub;
+        _entrants.Add(key);
+        _entry[key] = (kind, slot, replacedName);
+        if (pitchedBefore) NotePosition(inserted, FieldPosition.Pitcher);
+        NotePosition(inserted, inserted.Position);
     }
 
     /// <summary>
