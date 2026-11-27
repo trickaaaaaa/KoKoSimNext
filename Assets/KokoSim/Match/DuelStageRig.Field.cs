@@ -4086,6 +4086,8 @@ namespace KokoSim.Unity.Match
         private float _runnerMaxPosErr, _runnerMaxSpeed;
         private float _runnerSlipMax, _runnerSlipMin;
         private float _runnerHeadMin;
+        /// <summary>走者の毎コマの実測（label, t, 速さ, 段, 倍率, 滑りの比）。診断専用（issue #1734）。</summary>
+        private readonly List<(string label, float t, float speed, int ladder, float mul, float ratio)> _runnerTrace = new();
 
         /// <summary>走者プールを生成する（2回目以降は何もしない）。装備は帽子だけ＝グラブは持たせない。</summary>
         private void EnsureRunnerCast(GameObject bodyPrefab, bool useVendor, int layer)
@@ -4326,6 +4328,12 @@ namespace KokoSim.Unity.Match
                     }
                 }
                 // 到達の芝居の間は位置だけ engine の真値へ置き続ける
+                if (dt > 0f && _runnerTrace.Count < 2000)
+                {
+                    Vector2 pp;
+                    float vv = RunnerXZ(r, Mathf.Max(0f, t - dt), out pp) ? (cur - pp).magnitude / dt : 0f;
+                    _runnerTrace.Add((r.Label, t, vv, firstBaseArrival ? -2 : -3, a.Speed, 0f));
+                }
                 PlaceRunner(a, cur.x, cur.y, st.Yaw);
                 _runnerMotion[idx] = st;
                 return;
@@ -4354,6 +4362,7 @@ namespace KokoSim.Unity.Match
                     float ratio = speed / Mathf.Max(0.01f, RunnerLadder[want].VClip * mul);
                     _runnerSlipMax = Mathf.Max(_runnerSlipMax, ratio);
                     _runnerSlipMin = Mathf.Min(_runnerSlipMin, ratio);
+                    if (_runnerTrace.Count < 2000) _runnerTrace.Add((r.Label, t, speed, want, mul, ratio));
                 }
             }
 
@@ -4462,6 +4471,21 @@ namespace KokoSim.Unity.Match
                         r.HideAt.HasValue ? r.HideAt.Value.ToString("F2") : "—"));
                 }
             }
+            if (_fieldPlay?.Runners != null)
+                foreach (var r in _fieldPlay.Runners)
+                    for (int k = 0; k < r.Segs.Count; k++)
+                    {
+                        var sg = r.Segs[k];
+                        double dur = sg.T1 - sg.T0, dist = System.Math.Sqrt(
+                            (sg.To.X - sg.From.X) * (sg.To.X - sg.From.X) + (sg.To.Y - sg.From.Y) * (sg.To.Y - sg.From.Y));
+                        sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                            "seg\t{0}\t#{1}\tT0={2:F2}\tT1={3:F2}\tdist={4:F1}m\tv={5:F2}m/s",
+                            r.Label, k, sg.T0, sg.T1, dist, dur > 1e-4 ? dist / dur : 0));
+                    }
+            sb.AppendLine("走者(毎コマ)\tt\tspeed\t段\t倍率\tslip");
+            foreach (var e in _runnerTrace)
+                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}\t{1:F2}\t{2:F2}\t{3}\t{4:F2}\t{5:F2}", e.label, e.t, e.speed, e.ladder, e.mul, e.ratio));
             return sb.ToString();
         }
 
@@ -5439,6 +5463,45 @@ namespace KokoSim.Unity.Match
         /// <summary>打球プレーを再生中か（守備カメラが効いているか）。</summary>
         public bool FieldPlayActive => _fieldPlay != null;
 
+        /// <summary>engine の一塁駆け抜けレッグ（<c>TimelineBuilder.FirstBaseOverrunDistanceM</c>）と同じ、塁の先まで走り抜ける距離[m]。</summary>
+        private const float BatterOverrunDistanceM = 3.5f;
+
+        /// <summary>
+        /// 打者走者の本塁→一塁レッグだけで終わっているプレー（バント・振り逃げ等。engine は打球の内野ゴロでしか
+        /// 一塁駆け抜けのレッグを積まない）に、engine と同じ式の駆け抜けレッグを足す（issue #1734・表示専用）。
+        ///
+        /// 足さないと <see cref="IsBatterArrivingAtFirst"/> が「最終レッグの起点＝本塁」のレッグ全体を駆け抜けの
+        /// 減速クリップ（全長2.67s）で流す＝約4秒かけて走り→歩きへ減速する足の運びのまま27mを進み、足が地面を滑る。
+        /// 足すと本塁→一塁は走りの段で流れ、塁を通過してから減速クリップへ移る（内野ゴロと同じ）。
+        /// 判定の時刻・位置は変わらない（足すのは終端より後の区間だけ）。
+        /// </summary>
+        private static PlaybackPlay AddBatterOverrunLeg(PlaybackPlay play)
+        {
+            if (play.Runners == null || play.Runners.Count == 0) return play;
+            List<PlaybackRunner> list = null;
+            for (int i = 0; i < play.Runners.Count; i++)
+            {
+                var r = play.Runners[i];
+                if (!IsBatterArrivingAtFirst(r)) continue;
+                var last = r.Segs[r.Segs.Count - 1];
+                double fx = last.From.X - FieldDiagramGeometry.First.X, fz = last.From.Y - FieldDiagramGeometry.First.Y;
+                if (fx * fx + fz * fz < 1.0) continue;   // 起点が一塁＝すでに駆け抜けのレッグ
+                double dx = last.To.X - last.From.X, dz = last.To.Y - last.From.Y;
+                double len = System.Math.Sqrt(dx * dx + dz * dz);
+                if (len < 1e-6) continue;
+                double approachSpeed = len / System.Math.Max(0.05, last.T1 - last.T0);
+                double overrunSeconds = System.Math.Max(0.3, 2.0 * BatterOverrunDistanceM / System.Math.Max(1.0, approachSpeed));
+                var segs = new List<PlaybackRun>(r.Segs)
+                {
+                    new PlaybackRun(last.T1, last.T1 + overrunSeconds, last.To,
+                        new PlaybackVec(last.To.X + dx / len * BatterOverrunDistanceM, last.To.Y + dz / len * BatterOverrunDistanceM)),
+                };
+                list ??= new List<PlaybackRunner>(play.Runners);
+                list[i] = r with { Segs = segs };
+            }
+            return list == null ? play : play with { Runners = list };
+        }
+
         /// <summary>
         /// 3Dの守備ビュー用に、決着後の定位置復帰レッグ（Backup/Cutoff の戻り・寄った内野手の戻り
         /// [Issue #336②]）を取り除いた <see cref="PlaybackPlay"/> を作る（issue #406①）。
@@ -5492,6 +5555,10 @@ namespace KokoSim.Unity.Match
             // 再入: 前のプレーを先に畳む。畳まないと PlaceFielder に汚された投手・捕手の基準を Snapshot してしまう
             if (_fieldPlay != null) EndFieldPlay();
             play = StripPostResolutionReturnMoves(play);
+#if UNITY_EDITOR
+            if (!DuelTuning.BatterOverrunLegOffForCapture)
+#endif
+                play = AddBatterOverrunLeg(play);
             _bobble = DuelTuning.HandleBobbleEnabled ? HandleBobblePlanner.Plan(play) : HandleBobble.NoneValue;
             _sideStep = (FieldPosition.Pitcher, -1f, -1f);
             _holdFollow = (FieldPosition.Pitcher, 0f, -1f, -1f);
@@ -5597,6 +5664,7 @@ namespace KokoSim.Unity.Match
             _runnerMaxPosErr = _runnerMaxSpeed = 0f;
             _runnerHeadMin = float.MaxValue;
             _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
+            _runnerTrace.Clear();
 
             _fieldInfieldFixed = DuelTuning.FieldInfieldFixedFrame && IsInfieldGrounder(play);
             _fieldInfieldFollow = !DuelTuning.FieldInfieldFixedFrame && DuelTuning.InfieldFollowFrameH.HasValue && IsInfieldGrounder(play);
