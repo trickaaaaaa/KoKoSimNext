@@ -912,7 +912,7 @@ captures:
     manager: home
     shots: [catch]
     probes: [BaseUmpHeadClose]
-    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.05, DuelTuning.BaseUmpCapAddZForCapture: 0.0}
+    overrides: {DuelTuning.BaseUmpCapScaleForCapture: 0.75, DuelTuning.BaseUmpCapAddYForCapture: 0.05, DuelTuning.BaseUmpCapAddZForCapture: -0.01}
 
   - id: base-umpire-head-1740-b
     name: "塁審の頭の帽子位置の見比べ（一時・issue #1740）"
@@ -920,7 +920,7 @@ captures:
     manager: home
     shots: [catch]
     probes: [BaseUmpHeadClose]
-    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.08, DuelTuning.BaseUmpCapAddZForCapture: 0.0}
+    overrides: {DuelTuning.BaseUmpCapScaleForCapture: 0.75, DuelTuning.BaseUmpCapAddYForCapture: 0.07, DuelTuning.BaseUmpCapAddZForCapture: -0.01}
 
   - id: base-umpire-head-1740-c
     name: "塁審の頭の帽子位置の見比べ（一時・issue #1740）"
@@ -928,7 +928,7 @@ captures:
     manager: home
     shots: [catch]
     probes: [BaseUmpHeadClose]
-    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.05, DuelTuning.BaseUmpCapAddZForCapture: 0.03}
+    overrides: {DuelTuning.BaseUmpCapScaleForCapture: 0.85, DuelTuning.BaseUmpCapAddYForCapture: 0.05, DuelTuning.BaseUmpCapAddZForCapture: -0.01}
 
   - id: base-umpire-head-1740-d
     name: "塁審の頭の帽子位置の見比べ（一時・issue #1740）"
@@ -936,7 +936,7 @@ captures:
     manager: home
     shots: [catch]
     probes: [BaseUmpHeadClose]
-    overrides: {DuelTuning.BaseUmpCapAddYForCapture: 0.08, DuelTuning.BaseUmpCapAddZForCapture: 0.03}
+    overrides: {DuelTuning.BaseUmpCapScaleForCapture: 0.85, DuelTuning.BaseUmpCapAddYForCapture: 0.07, DuelTuning.BaseUmpCapAddZForCapture: -0.01}
 
   - id: base-umpire-2b-steal-out-1595
     name: "二盗失敗の二塁タッチアウトで二塁塁審がアウトのコール（issue #1595）"
