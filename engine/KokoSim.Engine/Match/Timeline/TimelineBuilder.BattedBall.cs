@@ -17,8 +17,8 @@ public static partial class TimelineBuilder
     /// (1) 着地が回収した野手の守備位置より後ろ（<see cref="OverTheHeadBehindM"/> 超）で、かつ
     /// (2) 野手が着地から <see cref="OverTheHeadMinChaseSeconds"/> 以上たってから球に追いついた
     /// （背走が間に合わず、球が野手の後ろへ抜けて転がったあとを追った）ものだけ。
-    /// 旧条件は (1) だけで、背走して捕ったフライ（凡打の67%）や、着地とほぼ同時に拾った単打
-    /// （字幕の付いた安打の約8割）にまで付いていた。(2) は絵と同じ量（着地から回収までの秒）なので、
+    /// 旧条件は (1) だけで、背走して捕ったフライ（外野へ飛んだ凡打の67%）や、着地とほぼ同時に拾った単打
+    /// （字幕の付いた単打の約8割）にまで付いていた。(2) は絵と同じ量（着地から回収までの秒）なので、
     /// 字幕が付いた安打は実測でほぼ二塁打以上になる。表示専用＝判定・乱数・帯は動かない。
     /// </summary>
     internal static bool IsOverTheHead(FieldingPlay play, IReadOnlyList<Fielder> fielders)
