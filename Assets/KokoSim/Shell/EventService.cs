@@ -304,6 +304,21 @@ namespace KokoSim.Unity.Shell
             IReadOnlyDictionary<string, string> extra)
             => Push(eventId, subjectName, effect, salt, extra, capped: false);
 
+        /// <summary>いまのキューの長さ。<see cref="MoveToFront"/> の起点に控える。</summary>
+        public static int Mark() => _pending.Count;
+
+        /// <summary>
+        /// <paramref name="from"/> 以降に積んだ会話を、並びを保ったままキューの先頭へ動かす。
+        /// 試合後のひとことを、同じ週に先に溜まっていた別の会話より先に開くために使う（issue #1787）。
+        /// </summary>
+        public static void MoveToFront(int from)
+        {
+            if (from < 1 || from >= _pending.Count) return;
+            var moved = _pending.GetRange(from, _pending.Count - from);
+            _pending.RemoveRange(from, _pending.Count - from);
+            _pending.InsertRange(0, moved);
+        }
+
         /// <summary>組み立て済みの会話を、週の件数上限を通さずにキューへ積む（スカウトの入口など・issue #1064）。</summary>
         internal static void PushPresented(PresentedEvent e) => _pending.Add(e);
 
