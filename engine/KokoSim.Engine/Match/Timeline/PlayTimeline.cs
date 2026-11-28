@@ -175,6 +175,12 @@ public sealed record RunnerLeg
     /// </summary>
     public bool Returning { get; init; }
     /// <summary>
+    /// 表示専用（issue #1765）: 外野への単打で一塁を回った打者走者が、返球が内野へ戻ったあと一塁へ歩いて戻るレッグ。
+    /// 帰塁（<see cref="Returning"/>＝牽制で頭から戻る）とは別物＝到達演技（滑り込み）を出さず、守備ビューの
+    /// 「まだ見るもの」の終わりにも数えない。判定・帯には無関係。
+    /// </summary>
+    public bool WalkBack { get; init; }
+    /// <summary>
     /// この走者の本人（対決ビューの頭上フルネームラベル用, issue #393）。表示専用＝判定・乱数順には使わない。
     /// 同じ Label を持つレッグ群は同一人物なので同じ参照を持つ想定（<see cref="Playback.PlayTimelineAdapter"/> が
     /// Label でグルーピングする際、先頭レッグのこの値をそのまま使う）。既定 null（構築元が選手を渡さない経路）。

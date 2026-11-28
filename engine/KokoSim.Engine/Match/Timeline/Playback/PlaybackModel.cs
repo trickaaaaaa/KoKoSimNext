@@ -155,6 +155,10 @@ public sealed record PlaybackRun(double T0, double T1, PlaybackVec From, Playbac
     /// <see cref="RunnerLeg.Returning"/> をそのまま運ぶ。
     /// </summary>
     public bool Returning { get; init; }
+    /// <summary>
+    /// 表示専用（issue #1765）: 一塁を回った打者走者が一塁へ歩いて戻るレッグ。<see cref="RunnerLeg.WalkBack"/> をそのまま運ぶ。
+    /// </summary>
+    public bool WalkBack { get; init; }
 }
 
 /// <summary>走者（複数レッグ＋任意の消滅時刻 hideAt＋表示ラベル）。mock: runners[i]。</summary>

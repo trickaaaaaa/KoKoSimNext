@@ -143,7 +143,9 @@ public sealed class FieldViewCutTests
             foreach (var s in r.Segs)
             {
                 if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;
-                if (s.T1 > last) last = s.T1;
+                // 一塁を回った打者走者の歩いて戻る分（issue #1765）は頭の部分だけ待つ（長い歩きを全部待たない）
+                var end = s.WalkBack ? Math.Min(s.T1, s.T0 + PlaybackDisplaySync.WalkBackViewSeconds) : s.T1;
+                if (end > last) last = end;
             }
         return last;
     }

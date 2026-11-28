@@ -58,6 +58,13 @@ public static class PlaybackDisplaySync
         return t;
     }
 
+    /// <summary>
+    /// 一塁を回った打者走者が歩いて戻るレッグ（<see cref="PlaybackRun.WalkBack"/>・issue #1765）を、守備ビューが
+    /// 待つ長さ[s]（歩き出しから）。戻りの歩き全部（3秒前後）を待つと外野単打のたびにテンポが落ちる＝
+    /// 「回って、返球が戻ったら引き返す」が見える頭の部分だけ待ち、あとは少し間をおいて切る（凡打の駆け抜けを待たない方針と同じ）。
+    /// </summary>
+    public const double WalkBackViewSeconds = 1.2;
+
     /// <summary>この距離[m]未満しか動かないレッグは「その場に居るだけ」（待機・定点。<c>AppendHeldRunners</c> が To==From で張る）。
     /// 走者レッグの静止判定の単一ソース（issue #1264④。厳密一致と 0.5m 閾値が混在していた）。</summary>
     public const double StationaryLegMaxM = 0.5;
@@ -101,7 +108,8 @@ public static class PlaybackDisplaySync
             foreach (var s in r.Segs)
             {
                 if (IsStationaryLeg(s)) continue;   // その場に居るだけ
-                if (s.T1 > last) last = s.T1;
+                var end = s.WalkBack ? Math.Min(s.T1, s.T0 + WalkBackViewSeconds) : s.T1;
+                if (end > last) last = end;
             }
         }
         return last;
