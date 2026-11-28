@@ -2228,9 +2228,9 @@ screens:
       - read: =EventService.Pending.0.Id
       - read: =EventService.Pending.Count
       - show: HomeDashboard
-      - wait: 10
+      - wait: 14000ms
       - click: tm-result-ok
-      - wait: 3000ms
+      - wait: 8000ms
       - shot: 01-after-ok-talk
       - read: =EventService.Pending.0.Id
 
