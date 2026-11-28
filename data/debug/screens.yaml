@@ -2331,3 +2331,25 @@ screens:
       - read: =GameClock.Week
       - read: =GameSession.Current.PendingSenbatsuFieldIds
       - shot: 01-home
+
+  - id: member-locked-in-tournament-1749
+    name: "大会中はメンバー設定の背番号・ベンチ入りを変えられない（大会前は操作できる・自校が負けたあとは戻る・issue #1749）"
+    steps:
+      - new_game: {seed: 1}
+      - show: MemberSetting
+      - read: ms-auto
+      - shot: 01-before-tournament
+      - advance_weeks: 20
+      - read: =GameSession.Current.InTournament
+      - read: =GameSession.Current.UniformNumbersLocked
+      - show: MemberSetting
+      - wait: 3
+      - read: ms-auto
+      - click: ms-auto
+      - click: .ms-row__x[0]
+      - shot: 02-in-tournament
+      - play_tournament: ""
+      - show: MemberSetting
+      - wait: 3
+      - read: =GameSession.Current.UniformNumbersLocked
+      - shot: 03-after-tournament
