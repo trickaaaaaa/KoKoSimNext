@@ -55,7 +55,7 @@ namespace KokoSim.Unity.Shell
         public static Stadium? ForStadium(TournamentKind kind, int? roundsRemaining, IRandomSource? rng, int? prefectureId = null)
             => kind switch
             {
-                TournamentKind.Summer or TournamentKind.Autumn
+                TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.Spring
                     => RegionalStadiumTier.ForStadium(roundsRemaining, rng, prefectureId, summer: kind == TournamentKind.Summer),
                 TournamentKind.AutumnDistrict
                     => RegionalStadiumTier.ForStadium(roundsRemaining, rng, prefectureId: null),

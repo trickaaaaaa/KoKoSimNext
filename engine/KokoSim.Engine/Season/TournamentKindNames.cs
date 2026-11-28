@@ -17,14 +17,16 @@ public static class TournamentKindNames
         TournamentKind.Regional => "地区大会",
         TournamentKind.Jingu => DisplayNames.Current.Jingu,
         TournamentKind.AutumnDistrict => "地区予選",
+        TournamentKind.Spring => "春",
+        TournamentKind.SpringRegional => "春季地区大会",
         _ => throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "未対応の大会種別"),
     };
 
-    /// <summary>県単位の大会か（夏・秋季県大会・地区予選）。全国／地区ブロックの大会は県名を添えない。</summary>
+    /// <summary>県単位の大会か（夏・春秋の県大会・地区予選）。全国／地区ブロックの大会は県名を添えない。</summary>
     public static bool IsPrefectural(TournamentKind kind)
-        => kind is TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict;
+        => kind is TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict or TournamentKind.Spring;
 
-    /// <summary>日付の小書き用（"夏の大会" / "甲子園" / "センバツ"）。夏・秋だけ「の大会」を足す。</summary>
+    /// <summary>日付の小書き用（"夏の大会" / "甲子園" / "センバツ"）。夏・秋・春だけ「の大会」を足す。</summary>
     public static string Short(TournamentKind kind)
-        => kind is TournamentKind.Summer or TournamentKind.Autumn ? Of(kind) + "の大会" : Of(kind);
+        => kind is TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.Spring ? Of(kind) + "の大会" : Of(kind);
 }
