@@ -1143,6 +1143,7 @@ namespace KokoSim.Unity.Home
                 : PostgameTalk.WinEventFor(
                     strength?.Own ?? 0, strength?.Opponent ?? int.MinValue, o.IsChampion, GameSession.Current.Kind);
             var salt = GameSession.Current.TournamentDay * 31 + o.ManagerScore * 7 + o.OpponentScore;
+            var talkStart = KokoSim.Unity.Shell.EventService.Mark();
             KokoSim.Unity.Shell.EventService.PushUncapped(eventId, null, null, salt);
             // 勝ちの会話の直後にMVPの会話を続ける（大会の締めの会話より前・issue #1745）。最終行にご褒美の中身。
             if (mvp != null)
@@ -1153,6 +1154,8 @@ namespace KokoSim.Unity.Home
                     reward == null ? null : KokoSim.Unity.Shell.PresentedEffect.Good(reward + "！"), salt,
                     new Dictionary<string, string> { { "mvp_deed", MatchMvp.Describe(mvp.Pick) } });
             }
+            // 同じ週に先に溜まっていた会話（部員の会話など）より、試合後のひとことを先に開く（issue #1787）。
+            KokoSim.Unity.Shell.EventService.MoveToFront(talkStart);
         }
 
         /// <summary>今日のMVPの通知フィード1行（ご褒美の中身つき）。</summary>
