@@ -306,6 +306,24 @@ namespace KokoSim.Unity.MatchResult
             _ => MatchResultPosKind.Dh,
         };
 
+        /// <summary>
+        /// 守備位置の並びを、1行が maxPerLine 字以内になるよう改行で折り返す（縮めず順番どおり全部出す）。
+        /// 行数は最小にし、各行の字数は均す（5字＝3＋2・9字＝3＋3＋3）。
+        /// </summary>
+        public static string WrapPos(string text, int maxPerLine)
+        {
+            if (string.IsNullOrEmpty(text) || maxPerLine < 1 || text.Length <= maxPerLine) return text;
+            var lines = (text.Length + maxPerLine - 1) / maxPerLine;
+            var perLine = (text.Length + lines - 1) / lines;
+            var sb = new System.Text.StringBuilder(text.Length + lines);
+            for (var i = 0; i < text.Length; i += perLine)
+            {
+                if (i > 0) sb.Append('\n');
+                sb.Append(text, i, System.Math.Min(perLine, text.Length - i));
+            }
+            return sb.ToString();
+        }
+
         /// <summary>野手成績の「位」欄（試合画面の成績タブ MatchState が使う）。<see cref="PosOf"/> と同じ並び。</summary>
         public static string PosText(BattingLine b) => PosTextOf(b.Entry, b.Position, b.Positions);
 

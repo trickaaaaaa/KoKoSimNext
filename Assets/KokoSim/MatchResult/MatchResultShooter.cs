@@ -56,6 +56,13 @@ namespace KokoSim.Unity.MatchResult
 
         private enum Kind { Win, Lose, Extra, Subs }
 
+        /// <summary>撮影レシピ（data/debug/screens.yaml）から呼ぶ。守備位置が何度も入れ替わった選手のいる試合を結果画面へ流す（issue #1692）。</summary>
+        public static void ShowSubsGameForRecipe()
+        {
+            var ctrl = Object.FindFirstObjectByType<MatchResultController>(FindObjectsInactive.Include);
+            ctrl.RenderForCapture(PlaySubsGame(), managerIsAway: false, AwayName, HomeName);
+        }
+
         // 自校（後攻）が代打・代走・守備交代を出した試合を作る（自動試合は交代をしないので進行体を直接操作する）。
         private static GameResult PlaySubsGame()
         {
@@ -64,7 +71,7 @@ namespace KokoSim.Unity.MatchResult
             var prog = new KokoSim.Engine.Match.Timeline.Playback.MatchProgression(away, home, new GameContext(), 2026UL);
             var done = 0;
             // 守備位置の入れ替えは交代と独立に、打席を挟んで繰り返す（「遊二左」のように位置が3つ並ぶ選手を作る・issue #1608）。
-            var swaps = new[] { (3, 4), (4, 5), (3, 4), (3, 5), (5, 6), (4, 6) };
+            var swaps = new[] { (3, 4), (4, 5), (3, 4), (3, 5), (5, 6), (4, 6), (3, 4), (3, 4), (3, 4), (3, 4), (3, 4), (3, 4), (3, 4), (3, 4) };
             var swapIdx = 0;
             var lastSwapAt = 0;
             for (var guard = 0; guard < 800 && (done < 3 || swapIdx < swaps.Length) && prog.Advance(); guard++)

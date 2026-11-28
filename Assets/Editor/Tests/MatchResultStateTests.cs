@@ -191,6 +191,34 @@ namespace KokoSim.EditorTests
             Assert.AreEqual("打左中右", MatchResultState.PosText(home[2]));
         }
 
+        // 何度も往復した選手でも、位置は縮めず順番どおり全部出す。表示側は折り返すだけ（issue #1692）。
+        [Test]
+        public void Pos_ManyRoundTrips_KeepsEveryPosition_AndWrapsWithoutLoss()
+        {
+            var seq = new[]
+            {
+                FieldPosition.SecondBase, FieldPosition.Pitcher, FieldPosition.ThirdBase, FieldPosition.Pitcher, FieldPosition.ThirdBase,
+                FieldPosition.Pitcher, FieldPosition.ThirdBase, FieldPosition.Pitcher, FieldPosition.ThirdBase,
+            };
+            var home = new[] { Bat(1, FieldPosition.ThirdBase, "新田　快斗") with { Positions = seq } };
+            var v = MatchResultState.Build(Game(home: home), managerIsAway: false, "北都大付属", "桜丘");
+
+            Assert.AreEqual("二投三投三投三投三", v.Own.Batting[0].Pos, "往復をまとめず省かず全部");
+            Assert.AreEqual("二投三\n投三投\n三投三", MatchResultState.WrapPos(v.Own.Batting[0].Pos, 3));
+        }
+
+        [Test]
+        public void WrapPos_BalancesLines_AndLeavesShortTextAlone()
+        {
+            Assert.AreEqual("", MatchResultState.WrapPos("", 3));
+            Assert.AreEqual("遊二", MatchResultState.WrapPos("遊二", 3));
+            Assert.AreEqual("打左中", MatchResultState.WrapPos("打左中", 3));
+            Assert.AreEqual("打左\n中右", MatchResultState.WrapPos("打左中右", 3));
+            Assert.AreEqual("打左中\n右一", MatchResultState.WrapPos("打左中右一", 3));
+            Assert.AreEqual("三投三\n投三投\n三", MatchResultState.WrapPos("三投三投三投三", 3));
+            Assert.AreEqual("三投三\n投三投\n三投", MatchResultState.WrapPos("三投三投三投三投", 3));
+        }
+
         // 過去の試合（戦績）は試合直後と同じ記録から描く（issue #1413）。セーブして読み直した記録でも表示モデルが一致する。
         [Test]
         public void ViewFromSavedAndReloadedRecord_MatchesViewFromGameResult()
