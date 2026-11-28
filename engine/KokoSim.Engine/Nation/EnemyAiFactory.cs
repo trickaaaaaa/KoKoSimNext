@@ -28,10 +28,27 @@ public static class EnemyAiFactory
         Players.SkillCoefficients? skills = null,
         Match.Fielding.FieldingCoefficients? fielding = null,
         Roster.PersistentRosterCoefficients? roster = null)
+        => BrainFor(ProfileFor(school), school.ManagerTraits, tactics, baserunning, aiCoeff, form, lineup, skills, fielding, roster);
+
+    /// <summary>
+    /// 三層プロファイルと監督傾向から敵AI采配を組む（<see cref="BrainFor(School,TacticsCoefficients?,BaserunningCoefficients?,EnemyAiCoefficients?,Players.FormCoefficients?,LineupCoefficients?,Players.SkillCoefficients?,Match.Fielding.FieldingCoefficients?,Roster.PersistentRosterCoefficients?)"/>
+    /// の本体）。学校オブジェクトを持たない呼び出し（保存した試合の再生）が同じブレインを再構成できる入口。
+    /// </summary>
+    public static AiTacticsBrain BrainFor(
+        AiProfile profile,
+        IReadOnlyList<ManagerTrait> managerTraits,
+        TacticsCoefficients? tactics = null,
+        BaserunningCoefficients? baserunning = null,
+        EnemyAiCoefficients? aiCoeff = null,
+        Players.FormCoefficients? form = null,
+        LineupCoefficients? lineup = null,
+        Players.SkillCoefficients? skills = null,
+        Match.Fielding.FieldingCoefficients? fielding = null,
+        Roster.PersistentRosterCoefficients? roster = null)
     {
         var ai = aiCoeff ?? new EnemyAiCoefficients();
-        var withTraits = ManagerTraitEffects.ApplyTactics(tactics ?? new TacticsCoefficients(), school.ManagerTraits, ai);
-        return new AiTacticsBrain(ProfileFor(school), withTraits, baserunning, ai, form, lineup, skills, fielding, roster);
+        var withTraits = ManagerTraitEffects.ApplyTactics(tactics ?? new TacticsCoefficients(), managerTraits, ai);
+        return new AiTacticsBrain(profile, withTraits, baserunning, ai, form, lineup, skills, fielding, roster);
     }
 }
 

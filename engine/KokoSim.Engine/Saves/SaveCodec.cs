@@ -5,6 +5,7 @@ using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
+using KokoSim.Engine.Replay;
 using KokoSim.Engine.Saves.Json;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
@@ -40,7 +41,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 52;
+    public const int CurrentVersion = 53;
 
     // ===== Serialize =====
 
@@ -104,6 +105,7 @@ public static class SaveCodec
             .Add("draftNominatedYearIndex", s.DraftNominatedYearIndex)
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("matchRecords", MatchRecordSaves.ToJson(s.MatchRecords))
+            .Add("matchReplays", MatchReplaySaves.ToJson(s.MatchReplays))
             .Add("events", EventSaves.ToJson(s.Events))
             .Add("tutorial", TutorialSaves.ToJson(s.Tutorial))
             .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
@@ -478,6 +480,8 @@ public static class SaveCodec
         // （CareerSaves.TeamColorsFromJson）が帽子クラウンと同色で補う＝移行ブロックは要らない。
         // v49（issue #1482）: 合宿の見送り（summerCampSkipped/winterCampSkipped）が増えた。キーが無い旧セーブは
         // 読み込み側が false（どちらも行う）で補う＝移行ブロックは要らない。
+        // v53（issue #1580）: 注目試合の再生データ（matchReplays）が増えた。キーが無い旧セーブは読み込み側が空で補う
+        // ＝移行ブロックは要らない（過去の試合の入力は残していなかったので復元できない）。
         // v52（issue #1679）: 監督に名伯楽の残り年数（manager.mentorYearsLeft）が増えた。キーが無い旧セーブは
         // 読み込み側（CareerSaves.ManagerFromJson）が0年で補う＝移行ブロックは要らない。
         // v51（issue #1483）: 今年度の大差負け・最初に戦った名将校（managerBlowoutLossThisYear/managerPowerhouseSchoolId）が増えた。
@@ -724,6 +728,10 @@ public static class SaveCodec
         // 戦績は v40 で追加（issue #1413）。Migrate が旧セーブへ空配列を補うので素直に読む。
         s.MatchRecords = new MatchRecordBook();
         MatchRecordSaves.RestoreInto(s.MatchRecords, root.Arr("matchRecords"));
+
+        // 注目試合の再生データは v53 で追加（issue #1580）。キーが無い旧セーブは空（過去の試合の入力は残していなかった）。
+        s.MatchReplays = new MatchReplayBook();
+        if (root.Has("matchReplays")) MatchReplaySaves.RestoreInto(s.MatchReplays, root.Arr("matchReplays"));
 
         return s;
     }

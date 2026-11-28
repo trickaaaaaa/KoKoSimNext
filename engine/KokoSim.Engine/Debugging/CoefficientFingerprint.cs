@@ -64,6 +64,18 @@ public static class CoefficientFingerprint
         return hex.ToString();
     }
 
+    /// <summary>任意の値（記録・結果の束など）を同じ歩き方で文字列化し、SHA256 の先頭 <paramref name="hexLength"/> 桁にする。</summary>
+    internal static string OfValue(object? value, int hexLength = Length)
+    {
+        var sb = new StringBuilder(8192);
+        Walk(sb, value, 0);
+        using var sha = SHA256.Create();
+        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
+        var hex = new StringBuilder(hexLength);
+        for (var i = 0; i < hexLength / 2; i++) hex.Append(bytes[i].ToString("x2", CultureInfo.InvariantCulture));
+        return hex.ToString();
+    }
+
     private static void Append(StringBuilder sb, string name, object? value)
     {
         sb.Append(name).Append('=');

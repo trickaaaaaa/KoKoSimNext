@@ -207,7 +207,9 @@ namespace KokoSim.Unity.Shell
                         // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
                         useRegionalStadiumTier: true, summerStadiums: kind == TournamentKind.Summer,
                         // 秋季地区予選は県の決勝球場を使わない（決定27・MatchStadium と同じ・issue #1020）
-                        prefectureFinalStadiums: kind != TournamentKind.AutumnDistrict));
+                        prefectureFinalStadiums: kind != TournamentKind.AutumnDistrict,
+                        // 自県の上位ティア校の試合は再生データを残す（issue #1580）
+                        replays: new MatchReplayCollector(kind, yearIndex)));
             }
 
             // 甲子園・センバツ・地区大会・神宮＝自校戦と同じ球場（設計書13 §1）。天候は夏の甲子園だけ（Issue #803/#971）。
@@ -215,7 +217,8 @@ namespace KokoSim.Unity.Shell
             if (kind == TournamentKind.SummerKoshien) ctx = ctx with { Weather = WeatherModel.ForTournament(Schedule, kind) };
             return new MemoizingBackgroundResolver(
                 new BackgroundMatchResolver(NationService.Rosters, ctx, yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: brains));
+                    modernRules: null, calendarYear: calendarYear, brains: brains,
+                    replays: new MatchReplayCollector(kind, yearIndex)));
         }
 
         /// <summary>裏カード（自校非関与）の成績を全国の今大会・通算スコープへ積む。全大会共通の唯一の口。</summary>

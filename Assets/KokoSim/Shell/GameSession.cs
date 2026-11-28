@@ -12,6 +12,7 @@ using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Practice;
+using KokoSim.Engine.Replay;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
@@ -165,6 +166,16 @@ namespace KokoSim.Unity.Shell
         /// 結果画面の源。主語は学校（転任で去った学校の戦績は旧校のキーへ付け替わる・issue #1261 と同じ）。
         /// </summary>
         public MatchRecordBook MatchHistory { get; private set; } = new MatchRecordBook();
+
+        /// <summary>
+        /// 注目試合（自校の全試合＋自県の上位ティア校＋甲子園）の再生データ（issue #1580）。試合の中身ではなく、
+        /// 同じエンジンで解き直すための入力（開始乱数状態・両校の出場メンバーと能力・試合設定・采配の決定列）を残す。
+        /// 自校が関わった試合は全履歴、他校同士は直近2年（OPEN-QUESTIONS Q15 未決3）。閲覧画面は別 issue。
+        /// </summary>
+        public MatchReplayBook MatchReplays { get; private set; } = new MatchReplayBook();
+
+        /// <summary>いま解いている自校の一戦の入力の控え（<see cref="PlayerMatchResolver"/> が積み、終局の記録が取り出す）。</summary>
+        public PendingOwnReplay PendingReplay { get; set; }
 
         /// <summary>
         /// 試合前スタメン設定（打順・守備位置・DH・先発）。試合開始フローのスタメン画面で確定して書き込む。
@@ -878,6 +889,8 @@ namespace KokoSim.Unity.Shell
             RecordMatchForManagerGrowth(result, managerIsAway, PracticeOpponent);
             ApplyBatteryInnings(result, managerIsAway, isOfficial: false);
             ApplyLeftExperienceGrowth(result, managerIsAway, isOfficial: false);
+            // 練習試合も自校の試合＝再生データを残す（大会ではないので Kind は null）。
+            StoreOwnReplay(result, null, 0, 0, "練習試合", -1, NotableReason.OwnSchool);
             ClearPracticeMatchFlow();
         }
 
@@ -985,6 +998,43 @@ namespace KokoSim.Unity.Shell
                 OwnRuns = outcome.ManagerScore, OpponentRuns = outcome.OpponentScore, MercyEnded = outcome.MercyEnded,
             };
             MatchHistory.Add(outcome.Detail is { } detail ? MatchRecordFactory.From(detail, meta) : meta);
+            var reasons = NotableReason.OwnSchool;
+            if (Kind == TournamentKind.SummerKoshien || Kind == TournamentKind.SenbatsuKoshien) reasons |= NotableReason.Koshien;
+            StoreOwnReplay(outcome.Detail, Kind, month, day, outcome.RoundName, matchDay, reasons);
+        }
+
+        /// <summary>
+        /// 自校の一戦の再生データを台帳へ積む（issue #1580）。解いた入力は <see cref="PendingReplay"/> が控えている。
+        /// 一括消化・ライブ観戦・練習試合の全経路がここを通る。場面ジャンプ等で再生できない試合・詳細の無い試合は積まない。
+        /// 乱数を使わない＝試合・帯・決定論に影響しない。
+        /// </summary>
+        private void StoreOwnReplay(
+            GameResult detail, TournamentKind? kind, int month, int day, string roundName, int matchDay,
+            NotableReason reasons)
+        {
+            var pending = PendingReplay;
+            PendingReplay = null;
+            if (pending == null || detail == null) return;
+            var inputs = pending.ResolveInputs();
+            if (inputs == null) return;
+
+            var opponentBrain = ReplayBrainSpec.FromSchool(pending.Opponent);
+            var managerId = NationService.ManagerSchoolId;
+            var meta = new MatchReplayRecord
+            {
+                Year = Year, Kind = kind, Month = month, Day = day, RoundName = roundName ?? "", MatchDay = matchDay,
+            };
+            var record = MatchReplayFactory.Create(
+                inputs,
+                pending.ManagerIsAway ? null : opponentBrain,
+                pending.ManagerIsAway ? opponentBrain : null,
+                detail, reasons,
+                pending.ManagerIsAway ? managerId : pending.Opponent.Id,
+                pending.ManagerIsAway ? pending.Opponent.Id : managerId,
+                meta);
+            if (record == null) return;
+            MatchReplays.Add(record);
+            MatchReplays.Prune(Year);
         }
 
         public void ConsumeResult() => ResultPending = false;
@@ -1299,6 +1349,8 @@ namespace KokoSim.Unity.Shell
             s.ManagerPostingBaselineSpringAppearances = PostingHistory.BaselineSpringAppearances;
             s.TournamentHistory = History;
             s.MatchRecords = MatchHistory;
+            MatchReplays.Prune(Year);   // 他校同士の古い試合は保存の前に落とす（直近2年だけ・issue #1580）
+            s.MatchReplays = MatchReplays;
             s.Tournament = CaptureTournament();
             s.Koshien = CaptureSpectatedKoshien();
             s.Senbatsu = CaptureSpectatedSenbatsu();
@@ -1404,6 +1456,7 @@ namespace KokoSim.Unity.Shell
                 s.ManagerPostingBaselineSummerAppearances, s.ManagerPostingBaselineSpringAppearances);
             History = s.TournamentHistory;
             MatchHistory = s.MatchRecords;
+            MatchReplays = s.MatchReplays ?? new MatchReplayBook();
             ClearTransient();
             LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
             MomentumLevel = s.MomentumLevel;   // 同上（v24・issue #863）
@@ -1461,6 +1514,8 @@ namespace KokoSim.Unity.Shell
             PostingHistory.ResetForNewGame();
             History = new TournamentHistory();
             MatchHistory = new MatchRecordBook();
+            MatchReplays = new MatchReplayBook();
+            PendingReplay = null;
             Year = 1;
             MomentumLevel = 0;
             PendingMatchPressure = 0;

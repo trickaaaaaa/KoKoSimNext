@@ -3,6 +3,7 @@ using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Replay;
 using KokoSim.Engine.Stats;
 
 namespace KokoSim.Engine.Nation.Tournaments;
@@ -26,6 +27,7 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
     private readonly bool _useRegionalStadiumTier;
     private readonly bool _summerStadiums;
     private readonly bool _prefectureFinalStadiums;
+    private readonly IMatchReplayCollector? _replays;
 
     /// <summary>
     /// 球場抽選の専用ストリームid（設計書13）。自校の試合（Shell の PlayerMatchResolver）と同じ値＝
@@ -55,12 +57,16 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
     /// 準決勝・決勝を県の決勝球場（<see cref="RegionalStadiumTier.FinalStadiumFor"/>）で戦うか。既定 true（夏・秋の県大会）。
     /// 秋季地区予選は false＝県を渡さず汎用の県営級（Shell の MatchStadium と同じ・2026-11-15 決定27・issue #1020）。
     /// </param>
+    /// <param name="replays">
+    /// 注目試合の再生データの受け口（issue #1580）。試合ごとに残す理由を尋ね、残す試合だけ解いた入力
+    /// （開始乱数状態・両チーム・試合設定）を渡す。null＝残さない。結果・乱数には触れない＝決定論不変。
+    /// </param>
     public BackgroundMatchResolver(
         NationRosters rosters, GameContext ctx, int yearIndex,
         NationTournamentStats? stats = null, ModernRules? modernRules = null, int? calendarYear = null,
         IEnemyBrainFactory? brains = null, System.Action<int, int, GameResult>? onMatch = null,
         System.Action? afterMatch = null, bool useRegionalStadiumTier = false, bool summerStadiums = false,
-        bool prefectureFinalStadiums = true)
+        bool prefectureFinalStadiums = true, IMatchReplayCollector? replays = null)
     {
         _rosters = rosters;
         _ctx = ctx;
@@ -74,6 +80,7 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
         _useRegionalStadiumTier = useRegionalStadiumTier;
         _summerStadiums = summerStadiums;
         _prefectureFinalStadiums = prefectureFinalStadiums;
+        _replays = replays;
     }
 
     public GameResult Resolve(School away, School home, IRandomSource rng, TournamentMatchContext? context = null)
@@ -92,8 +99,17 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
             ? _ctx with { Field = RegionalStadiumTier.For(context?.RoundsRemaining, rng.Fork(StadiumStreamId),
                 _prefectureFinalStadiums ? home.PrefectureId : null, _summerStadiums) }
             : _ctx;
+        var matchRng = rng.Fork(2);
+        // 注目試合は開始前の乱数状態を控える（Fork は新しい乱数源＝控えても本流・試合の乱数列は動かない）。
+        var replayReasons = _replays?.Evaluate(away, home) ?? NotableReason.None;
+        var replayState = replayReasons != NotableReason.None ? (matchRng as Core.Xoshiro256Random)?.CaptureState() : null;
         var result = GameEngine.Play(
-            awayTeam, homeTeam, ctx, rng.Fork(2), awayPitchRecovery: awayRecovery, homePitchRecovery: homeRecovery);
+            awayTeam, homeTeam, ctx, matchRng, awayPitchRecovery: awayRecovery, homePitchRecovery: homeRecovery);
+        if (replayState is not null
+            && MatchReplayFactory.ForBackground(
+                away, home, awayTeam, homeTeam, ctx, replayState, awayRecovery, homeRecovery, result, replayReasons, context)
+                is { } replay)
+            _replays!.Collect(replay);
         _stats?.FoldMatch(away.Id, home.Id, result);
         _onMatch?.Invoke(away.Id, home.Id, result);
         _afterMatch?.Invoke();   // #208: 試合の合間でワーカーがスロットル（Paused=停止）を反映できる継ぎ目。

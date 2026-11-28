@@ -206,7 +206,9 @@ namespace KokoSim.Unity.Shell
             };
             return new MemoizingBackgroundResolver(
                 new BackgroundMatchResolver(NationService.Rosters, ctx, yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory()));
+                    modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory(),
+                    // 甲子園の全試合は再生データを残す（issue #1580）
+                    replays: new MatchReplayCollector(TournamentKind.SummerKoshien, yearIndex)));
         }
 
         /// <summary>裏カードの成績を全国の今大会スコープへ積む（自校戦は自校ストアが持つ＝帰属先は1つ）。</summary>
