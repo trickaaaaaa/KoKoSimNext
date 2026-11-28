@@ -331,6 +331,8 @@ Explore調査の結果、**多くの経路は既に大会種別に依存しな�
 
 起票はオーナー承認後（本issueでは起票しない）。依存のある順に並べる。括弧内は依存先。
 
+未決だった Q63〜Q66 は 2026-11-28 にオーナー決定で決着（OPEN-QUESTIONS 参照）: 実測は⑨で行う・春に3位決定戦は入れない・形式はまず全県共通（実形式は⑧）・春だけの成績スコープは作らない。
+
 1. **春季大会の骨格**（依存なし）: `TournamentKind.Spring`/`SpringRegional` の追加、`SeasonCalendar`への
    `SpringTournamentStartWeek`定数、`TournamentDate`/`TournamentSchedule`への開幕月日、
    `TournamentKindNames`・`CrowdTurnout`・`TournamentPressure`・`MatchStadium`の switch 拡張
