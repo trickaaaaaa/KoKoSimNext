@@ -40,7 +40,7 @@ public sealed record GameTargets
     /// <summary>三塁憤死/試合の参考帯（単打の一塁→三塁レース, Issue #89, 設計書12 §3.5）。広め＝warn 相当。</summary>
     public Band ThirdPlayOutsPerGame { get; init; } = new(0.02, 0.45);
     /// <summary>併殺打/試合の参考帯（両軍計。GIDP, Issue #369。物理レース化後。実測≈1.06）。</summary>
-    public Band DoublePlayPerGame { get; init; } = new(1, 1.7);
+    public Band DoublePlayPerGame { get; init; } = new(0.9, 1.7);
 
     /// <summary>失策数/試合（両軍計）。乱数生成母平均≈3.4（弱小裾の大量失策込み・中央値C50同士は≈2.4）。issue #123で新設。</summary>
     public Band ErrorsPerGame { get; init; } = new(1.8, 3.6);
@@ -127,7 +127,7 @@ public sealed record LowTierMercyTargets
     /// <summary>自校がコールドで負ける率（強度45）。issue の例＝「E(45) 相手のコールド負け ≤15%」。</summary>
     public Band MercyLossRateVsE45 { get; init; } = new(0.05, 0.2);
     /// <summary>自校がコールドで負ける率（1ティア上＝強度50）。</summary>
-    public Band MercyLossRateVsD50 { get; init; } = new(0.12, 0.32);
+    public Band MercyLossRateVsD50 { get; init; } = new(0.12, 0.36);
     /// <summary>自校が完封されたコールドで負ける率（「8−0」型・強度45）。</summary>
     public Band MercyShutoutLossRateVsE45 { get; init; } = new(0.01, 0.07);
 }
