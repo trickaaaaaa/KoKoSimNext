@@ -296,8 +296,8 @@ namespace KokoSim.Unity.MatchResult
                 MatchResultPosKind.Dh => "mside-pos--dh",
                 _ => "mres-pos--entry",
             };
-            // 位置が2つ以上つながる行は、文字数ぶん欄を広げる（文字は詰めない）。4字を超えたら折り返して全部出す。
-            var lines = MatchResultState.WrapPos(text, 4).Split('\n');
+            // 位置が2つ以上つながる行は、文字数ぶん欄を広げる（文字は詰めない）。5字以上は欄の幅（3字）で折り返して全部出す。
+            var lines = (text.Length <= 4 ? text : MatchResultState.WrapPos(text, 3)).Split('\n');
             var chip = Cell(string.Join("\n", lines), "mside-pos", "mres-pos", cls, "f-body-bd");
             var longest = 0;
             foreach (var l in lines) if (l.Length > longest) longest = l.Length;
