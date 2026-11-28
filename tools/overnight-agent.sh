@@ -407,7 +407,9 @@ Assembly-CSharp.csproj が生成され、\\`bash tools/check-unity-compile.sh\\`
   # マージ（main 未保護なので即マージ。Fixes 行で issue クローズ）。
   # gh の終了コードは信用しない: マージ成功後に --delete-branch だけ失敗すると非ゼロになり
   # 「マージ成功なのに🔴」と誤報するため、PR の実状態(MERGED)で判定する。
-  local prnum; prnum="$(gh pr list --head "$branch" --state all --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
+  # PR 番号はマージ前に open のものを取る（--state all だと、同じ issue の前の夜にマージ済みの
+  # 同名ブランチ PR を拾い、今夜のマージが失敗しても「マージ済み」と誤報しうる）。
+  local prnum; prnum="$(gh pr list --head "$branch" --state open --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
   gh pr merge "$branch" --squash --delete-branch >/dev/null 2>&1
   if [ -n "$prnum" ] && [ "$(gh pr view "$prnum" --json state --jq .state 2>/dev/null)" = "MERGED" ]; then
     note "- ✅ #$num $title — マージ済み（PR #${prnum}）"
@@ -667,9 +669,22 @@ ${resume_note#*|}"
   # ローカルにコミットがあっても消えていた（#318 は実装完成・全緑のまま消滅し、
   # git fsck の dangling commit から救出した）。分岐の外へ出して常に通す。
   # マージ済みなら origin/main..HEAD が空になるのでこの条件で自然に除外される。
-  # squash マージ済みでもブランチのコミットは origin/main..HEAD に残るので、PR の実状態で除外する
-  local merged_pr; merged_pr="$(gh pr list --head "$branch" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
-  if [ -z "$merged_pr" ] && [ -d "$wt" ] && [ -n "$(git -C "$wt" log --oneline refs/remotes/origin/main..HEAD 2>/dev/null)" ]; then
+  # squash マージ済みでもブランチのコミットは origin/main..HEAD に残るので、PR の実状態で除外する。
+  # ただし「同じブランチ名のマージ済み PR がある」だけで除外してはいけない。同じ issue を別の夜に
+  # 続けると同名ブランチ（issue/N-agent）を使い回すため、前の夜にマージした PR が見えてしまい、
+  # 今夜の作業が退避されずに消えた（実例: #1789。前夜の測定 PR #1800 がマージ済みだったため、
+  # タイムアウト時の WIP コミットが push されず worktree ごと消え、git fsck から救出した）。
+  # マージされた PR の先頭が今の HEAD を含む（HEAD がその祖先）ときだけ「マージ済み」とみなす。
+  # 判定できない（オブジェクトが手元に無い等）ときは退避する側に倒す。
+  local merged_heads already_merged=0 h head_sha
+  head_sha="$(git -C "$wt" rev-parse HEAD 2>/dev/null)"
+  merged_heads="$(gh pr list --head "$branch" --state merged --limit 20 --json headRefOid --jq '.[].headRefOid' 2>/dev/null)"
+  for h in $merged_heads; do
+    if [ -n "$head_sha" ] && { [ "$h" = "$head_sha" ] || git -C "$wt" merge-base --is-ancestor "$head_sha" "$h" 2>/dev/null; }; then
+      already_merged=1; break
+    fi
+  done
+  if [ "$already_merged" = 0 ] && [ -d "$wt" ] && [ -n "$(git -C "$wt" log --oneline refs/remotes/origin/main..HEAD 2>/dev/null)" ]; then
     local why="PR 作成前に終了"
     if echo "$labels" | grep -q needs-human; then why="判断待ち（needs-human）"
     elif echo "$labels" | grep -q agent-failed; then why="実装失敗（agent-failed）"
@@ -677,8 +692,10 @@ ${resume_note#*|}"
     elif [ "$timed_out" = 1 ]; then why="タイムアウト"
     fi
     lock "$REPO_LOCK"
-    # 既に PR がある（マージ工程で弾かれた等）ならブランチを push し直すだけでよい。
-    local existing; existing="$(gh pr list --head "$branch" --state all --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
+    # 既に open の PR がある（マージ工程で弾かれた等）ならブランチを push し直すだけでよい。
+    # 閉じた・マージ済みの PR（前の夜の同名ブランチ）へ push しても PR には載らず、
+    # 「保全した」と報告しながら誰も見ない場所に置くだけになるので open に限る。
+    local existing; existing="$(gh pr list --head "$branch" --state open --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
     if [ -n "$existing" ]; then
       git -C "$wt" push origin "$branch" >>"$log" 2>&1 \
         && note "- 💾 #$num 作業は PR #${existing} に push 済みで保全（理由: ${why}）" \
