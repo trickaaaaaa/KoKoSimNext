@@ -11,8 +11,9 @@ using Xunit;
 namespace KokoSim.Engine.Tests.Season;
 
 /// <summary>
-/// 投手役の創発と単一生成器（Issue #366a / #377）。「投手か否か」は選手が覚えている属性ではなく
-/// 守備位置適性からの導出であること、生成に役割ゲートが無く打撃が連続量であることを検証する。
+/// 投手役の創発と単一生成器（Issue #366a / #377 / #1792）。生成に役割ゲートが無く打撃が連続量であること、
+/// 在籍中の「投手寄りか」は実際の投手能力（物差しの変更・issue #1792）から導出し、選手が覚えている属性ではないことを検証する。
+/// 生成時の能力配分（w/wRole）だけは旧来どおり適性ベースのまま（オーナー決定・分布不変）。
 /// </summary>
 public sealed class PitcherRoleEmergenceTests
 {
@@ -29,14 +30,14 @@ public sealed class PitcherRoleEmergenceTests
     private static double BattingLevel(DevelopingPlayer p)
         => (p.Level(AbilityKind.Contact) + p.Level(AbilityKind.Power)) / 2.0;
 
-    // --- 判定が1箇所にしかない（#377 の本丸） ---
+    // --- 判定が1箇所にしかない（#377 の本丸・#1792 で物差しが能力ベースへ） ---
 
     /// <summary>
-    /// <see cref="PitcherRoleResolver.LeansPitcher(DevelopingPlayer)"/> は <see cref="PitcherRoleResolver"/> の判定と常に一致する。
-    /// 判定のコピーが再び生えたら（特に供給バイアスを落とした素の比較に戻ったら）ここが落ちる。
+    /// 生成時の能力配分（w/wRole, <see cref="PitcherRoleResolver.IsNaturalPitcher(int,int,RosterCoefficients)"/>）は
+    /// 旧来どおり適性ベースのまま（オーナー決定・分布不変）。これ自体は #1792 で変えていない。
     /// </summary>
     [Fact]
-    public void IsPitcher_AlwaysMatchesResolver_IncludingSupplyBias()
+    public void IsNaturalPitcher_StillAptitudeBased_ForGenerationWeights()
     {
         var rng = new Xoshiro256Random(377);
         var biasMattered = 0;
@@ -44,15 +45,11 @@ public sealed class PitcherRoleEmergenceTests
         for (var i = 0; i < 20000; i++)
         {
             var apt = AptitudeRoller.Roll(C, rng.Fork((ulong)i));
-            var p = new DevelopingPlayer();
-            foreach (var pos in AptitudeRoller.AllPositions) p.SetAptitude(pos, apt[(int)pos]);
-
-            Assert.Equal(PitcherRoleResolver.IsNaturalPitcher(apt, C), PitcherRoleResolver.LeansPitcher(p));
 
             // 供給バイアスが効いた個体（素の比較なら野手・バイアス込みなら投手）を数える。
             var pitcherApt = apt[(int)FieldPosition.Pitcher];
             var bestField = AptitudeRoller.BestField(apt);
-            if (pitcherApt <= bestField && PitcherRoleResolver.LeansPitcher(p)) biasMattered++;
+            if (pitcherApt <= bestField && PitcherRoleResolver.IsNaturalPitcher(apt, C)) biasMattered++;
         }
 
         // バイアス無しの判定に戻っていたら 0 になる（実測では全体の15%強がこの帯にいる）。
@@ -60,20 +57,63 @@ public sealed class PitcherRoleEmergenceTests
             $"供給バイアスが判定に効いていない（境界帯の投手が {biasMattered} 人しかいない）");
     }
 
-    /// <summary>投手役は状態でなく導出なので、適性を書き換えればその場で切り替わる。</summary>
+    /// <summary>
+    /// 在籍中の投手寄り判定（issue #1792）は実際の能力（投手総合 vs 打撃・守備総合）からの導出であって、
+    /// 適性を書き換えても（遊びの帯を超えない限り）切り替わらない＝旧来の適性ベースの契約からは変わった。
+    /// </summary>
     [Fact]
-    public void IsPitcher_FollowsAptitude_NotStoredState()
+    public void LeansPitcher_FollowsAbility_NotAptitude()
     {
         var p = new DevelopingPlayer();
         PitcherRoleResolver.SeedAptitudeForRole(p, true);
         Assert.True(PitcherRoleResolver.LeansPitcher(p));
 
-        PitcherRoleResolver.SeedAptitudeForRole(p, false);
-        Assert.False(PitcherRoleResolver.LeansPitcher(p));
-
-        // 守備適性が上がれば（本人の投手適性はそのままでも）投手ではなくなる。
-        PitcherRoleResolver.SeedAptitudeForRole(p, true);
+        // 適性だけ書き換えても（能力は変えていない）判定は変わらない＝適性は在籍中の判定に効かない。
+        p.SetAptitude(FieldPosition.Pitcher, 1);
         p.SetAptitude(FieldPosition.Shortstop, 99);
+        Assert.True(PitcherRoleResolver.LeansPitcher(p));
+    }
+
+    /// <summary>投手寄りか野手寄りかは、投手能力と打撃・守備能力のどちらが高いかで決まる。</summary>
+    [Fact]
+    public void LeansPitcher_FollowsAbility_HighPitchingBeatsHighBatting()
+    {
+        var pitcher = new DevelopingPlayer();
+        foreach (var k in new[] { AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank })
+            pitcher.SetLevel(k, 80);
+        foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.ArmStrength })
+            pitcher.SetLevel(k, 30);
+        Assert.True(PitcherRoleResolver.LeansPitcher(pitcher));
+
+        var fielder = new DevelopingPlayer();
+        foreach (var k in new[] { AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank })
+            fielder.SetLevel(k, 30);
+        foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.ArmStrength })
+            fielder.SetLevel(k, 80);
+        Assert.False(PitcherRoleResolver.LeansPitcher(fielder));
+    }
+
+    /// <summary>
+    /// 遊び（ヒステリシス）: 投手寄りと判定された後、能力が1つ上下しただけ（遊びの帯の中）では判定が入れ替わらない。
+    /// 帯を超える大きな変化では切り替わる。
+    /// </summary>
+    [Fact]
+    public void LeansPitcher_Hysteresis_SmallChangeDoesNotFlip_LargeChangeDoes()
+    {
+        var p = new DevelopingPlayer();
+        foreach (var k in new[] { AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank })
+            p.SetLevel(k, 60);
+        foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.ArmStrength })
+            p.SetLevel(k, 30);
+        Assert.True(PitcherRoleResolver.LeansPitcher(p)); // 前回判定=投手寄りが確定
+
+        // 制球が1だけ下がる（能力が1つ下がる程度）→ 遊びの帯の中なので投手寄りのまま。
+        p.SetLevel(AbilityKind.Control, 59);
+        Assert.True(PitcherRoleResolver.LeansPitcher(p));
+
+        // 打撃・守備側を大きく伸ばす（帯を超える）→ 野手寄りへ切り替わる。
+        foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.ArmStrength })
+            p.SetLevel(k, 90);
         Assert.False(PitcherRoleResolver.LeansPitcher(p));
     }
 

@@ -50,12 +50,14 @@ public sealed class PitcherTalentTests
     public void Candidate_DoesNotLookAtTheRole_StagnantPitcherQualifiesToo()
     {
         // 投手として使っている選手（投手適性が最良）でも、伸び悩んでいれば（差が大きければ）対象になる。
+        // issue #1792: 役の最終判定は実際の能力ベースへ移った。見える投手能力（visiblePhys=20）が
+        // 他の能力（20）より表示Lvで低い（AbilityScale.Disp が −Δ するため）のは、まさにこのテストが
+        // 言う「伸び悩み」そのもの＝能力ベースでは「投手として振るわない」側に転ぶ個体で構わない
+        // （適性のSeedAptitudeForRoleは「見出し判定が役を見ない」ことの前提を示す材料としてだけ残す）。
         var pitcher = Make(1, 55, 20);
         PitcherRoleResolver.SeedAptitudeForRole(pitcher, true);
         var fielder = Make(2, 55, 20);
         PitcherRoleResolver.SeedAptitudeForRole(fielder, false);
-        Assert.True(PitcherRoleResolver.LeansPitcher(pitcher));
-        Assert.False(PitcherRoleResolver.LeansPitcher(fielder));
         Assert.True(PitcherTalentModel.IsCandidate(pitcher, Ic));
         Assert.True(PitcherTalentModel.IsCandidate(fielder, Ic));
     }

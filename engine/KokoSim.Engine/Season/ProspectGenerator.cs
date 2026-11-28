@@ -41,6 +41,45 @@ public sealed record RosterCoefficients
     public double PitcherAptitudeWeightSpan { get; init; } = 6.0;
 
     /// <summary>
+    /// 投手寄りか（<see cref="PitcherRoleResolver.LeansPitcher(DevelopingPlayer, RosterCoefficients)"/>）の
+    /// 判定ゲタ（issue #1792）。投手総合（<see cref="Nation.TeamStrengthProfile.PitcherComposite"/>）が
+    /// 打撃・守備の総合（<see cref="Nation.TeamStrengthProfile.NonPitcherComposite"/>）をこの値ぶん超えたら投手寄り。
+    /// 生成時の能力配分（<see cref="PitcherWeight"/>/<see cref="RoleWeight"/>）は旧来どおり適性ベースのまま変えない
+    /// （オーナー決定・分布不変）が、その配分で出来上がった能力を測ってから投手寄りかどうかを判定し直す側がこのゲタを使う。
+    /// 入部時点の投手寄り率が旧判定の実測（32.88%）に揃うよう校正する（Balance CLI `pitcher-role-calibration`）。
+    /// </summary>
+    public double PitcherRoleGeta { get; init; } = 4.75;
+
+    /// <summary>
+    /// 投手寄り判定の遊び（ヒステリシス）半幅（issue #1792）。投手総合−打撃守備総合が
+    /// [<see cref="PitcherRoleGeta"/>−この値, +この値] の帯に収まっている間は前回の判定
+    /// （<see cref="DevelopingPlayer.PitcherRoleLastLeansPitcher"/>）を保つ＝能力が1つ上下しただけで
+    /// 判定が入れ替わらない。<b>必ず <see cref="PitcherRoleGeta"/> の絶対値以上に取る</b>（不変条件）:
+    /// そうしないと、能力をわざと同一レベルへ揃えた検証用の素体（全能力が同じ値＝差0）で遊びが効かず、
+    /// <see cref="PitcherRoleResolver.SeedAptitudeForRole"/> で明示的に指定した役割が反映されない。
+    /// </summary>
+    public double PitcherRoleHysteresisBand { get; init; } = 10.0;
+
+    /// <summary>
+    /// 投手寄り判定の強さ補正の傾き（issue #1792）。<see cref="PitcherRoleGeta"/> は一般校
+    /// （<see cref="TalentCenterDefault"/>）で校正した定数ゲタだが、投手総合の一部（球速・スタミナ）は
+    /// 身体系ベースライン（<see cref="PhysicalCenterFor"/>・talentCenterへの連動が専門配分と傾きが違う）を
+    /// 引くため、ゲタを定数のままにすると弱小校ほど投手寄りに／強豪校ほど野手寄りに判定が寄る
+    /// （Issue #174「投手供給率は校の強さに連動しない」に抵触）。選手自身の「投手総合と打撃・守備総合の
+    /// 平均」（<see cref="PitcherRoleResolver.LeansPitcher(DevelopingPlayer,RosterCoefficients)"/> が計算する
+    /// baseline）が <see cref="PitcherRoleStrengthReference"/> からどれだけずれているかに、この傾きを掛けて
+    /// 差へ足し戻す＝校の強さで生じた物差しのズレだけを打ち消す（w による投手寄せそのものは変えない）。
+    /// </summary>
+    public double PitcherRoleStrengthSlope { get; init; } = 0.09;
+
+    /// <summary>
+    /// <see cref="PitcherRoleStrengthSlope"/> の補正が0になる基準点（投手総合と打撃・守備総合の平均の
+    /// 単位）。<see cref="TalentCenterDefault"/>（一般校）での実測値に合わせる＝一般校では
+    /// <see cref="PitcherRoleGeta"/> の校正（32.88%・Balance CLI `pitcher-role-calibration`）がそのまま効く。
+    /// </summary>
+    public double PitcherRoleStrengthReference { get; init; } = 20.32;
+
+    /// <summary>
     /// 「捕手として読める」下限適性（#589・設計書04 §2.3）。判定は
     /// <see cref="CatcherRoleResolver.ReadsAsCatcher(int,RosterCoefficients)"/> に集約する。
     ///
@@ -662,15 +701,17 @@ public static class ProspectGenerator
     }
 
     /// <summary>
-    /// 投手供給の下限（#377）。投手として読める選手が1人も居ないコホートに、投手適性が最も惜しい1人を
-    /// 判定境界のすぐ上まで引き上げて必ず1人立たせる。AI校側の
+    /// 投手供給の下限（#377・issue #1792で物差しを能力ベースへ）。投手として読める選手が1人も居ない
+    /// コホートに、最も惜しい1人（投手総合−打撃守備総合が最大＝<see cref="PitcherRoleResolver.RoleDiff"/>）を
+    /// 判定だけ投手側へ倒して必ず1人立たせる。AI校側の
     /// <see cref="Nation.Roster.PersistentRosterCoefficients.PitcherCountFloor"/> と同じ役目。
     ///
     /// 供給バイアスを保っても投手適性者0人のコホートは実測2.12%出るので、判定だけでは
     /// 「投手適性者0人の学校が出ない」を満たせない。乱数を使わない決定論操作（不変条件#2）。
     ///
     /// 能力は既に配分済みなので、底上げされた投手は投手能力が低いままになる＝
-    /// 「その年は投手が居ない」という苦作がそのまま絵に出る（能力まで底上げしない）。
+    /// 「その年は投手が居ない」という苦作がそのまま絵に出る（能力は一切触らず、判定の「前回判定」
+    /// <see cref="DevelopingPlayer.PitcherRoleLastLeansPitcher"/> だけを true に固定する）。
     /// </summary>
     private static void EnsurePitcherSupply(List<DevelopingPlayer> cohort, RosterCoefficients c)
     {
@@ -678,26 +719,19 @@ public static class ProspectGenerator
         foreach (var p in cohort)
             if (PitcherRoleResolver.LeansPitcher(p, c)) return;
 
-        // 判定の余裕（投手適性＋バイアス−最良守備適性）が最大＝最も惜しい1人。同点は先頭優先で決定論。
+        // 投手総合−打撃守備総合が最大＝最も惜しい1人。同点は先頭優先で決定論。
         DevelopingPlayer? best = null;
-        var bestMargin = double.NegativeInfinity;
-        var bestField = 0;
+        var bestDiff = double.NegativeInfinity;
         foreach (var p in cohort)
         {
-            var field = 0;
-            foreach (var pos in AllPositions)
-                if (pos != FieldPosition.Pitcher) field = Math.Max(field, p.Aptitude(pos));
-            var margin = p.Aptitude(FieldPosition.Pitcher) + c.PitcherAptitudeBias - field;
-            if (margin <= bestMargin) continue;
+            var diff = PitcherRoleResolver.RoleDiff(p, c);
+            if (diff <= bestDiff) continue;
             best = p;
-            bestMargin = margin;
-            bestField = field;
+            bestDiff = diff;
         }
         if (best == null) return;
 
-        // 判定は apt + bias > bestField。ちょうど跨ぐ最小値まで引き上げる（能力には触れない）。
-        var lifted = (int)Math.Ceiling(bestField - c.PitcherAptitudeBias) + 1;
-        best.SetAptitude(FieldPosition.Pitcher, (int)MathUtil.Clamp(lifted, 1, 99));
+        best.PitcherRoleLastLeansPitcher = true;
     }
 
     /// <summary>
@@ -969,6 +1003,11 @@ public static class ProspectGenerator
         p.Bats = HandednessModel.Bats(hand, p.Throws,
             HandednessModel.BatterTypeScore(p.Level(AbilityKind.Contact), p.Level(AbilityKind.Power),
                 p.Level(AbilityKind.Speed), p.Level(AbilityKind.ArmStrength)), c);
+
+        // 投手寄り判定の遊み「前回判定」の初期値（issue #1792）。能力が出揃った直後に一度だけ判定して
+        // 書き込む＝入部時点の投手寄り率はこの1回（前回判定が無い＝遊び無しの素の比較）で決まる。
+        // 乱数は使わない（決定論。LeansPitcher 自体も乱数を読まない純粋な比較）。
+        PitcherRoleResolver.LeansPitcher(p, c);
 
         return p;
     }

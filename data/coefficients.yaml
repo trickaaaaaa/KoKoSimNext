@@ -2159,6 +2159,15 @@ roster:
   # 投手適性→投手能力の創発（#174）: 生成時決め打ちを廃し投手も適性から創発させる。
   pitcher_aptitude_bias: 8.0       # 投手適性への供給バイアス（創発投手率を狙い値へ。帯校正で決める）
   pitcher_aptitude_weight_span: 6.0 # 投手寄せ重みwのロジスティック幅（小=二極化/大=なだらか）
+  # 投手寄りか（#1792・在籍中の判定）: 投手総合−打撃守備総合（strength_slope補正後）がこのゲタを超えたら投手寄り。
+  # 入部時点の投手寄り率が旧判定の実測(32.88%)に揃うよう校正（Balance CLI pitcher-role-calibration）。
+  pitcher_role_geta: 4.75
+  # 投手寄り判定の遊み（ヒステリシス）半幅。必ず pitcher_role_geta の絶対値以上に取る（不変条件）。
+  pitcher_role_hysteresis_band: 10.0
+  # 校の強さ補正の傾き・基準点（#1792）: 球速・スタミナが身体系ベースライン経由でtalentCenterに
+  # 別の傾きで連動するぶんを打ち消す（無補正だと弱小校27%/強豪校22%前後に偏る＝#174「校の強さに連動しない」に抵触）。
+  pitcher_role_strength_slope: 0.09
+  pitcher_role_strength_reference: 20.32
   # 捕手供給の下限（#589・設計書04 §2.3）: 捕手として読める下限適性。50=適性補正が付かない点(×1.0)。
   # これ未満しか居ないコホートで最も惜しい1人をここまで引き上げる（実測発動率 0.122%）。
   catcher_aptitude_floor: 50.0
