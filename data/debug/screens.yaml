@@ -2281,6 +2281,8 @@ screens:
       - new_game: {seed: 1, prefecture: 13}
       - advance_to_week: 22
       - call: WrapUpTimings.Clear()
+      - advance_weeks: 1
+      - read: =GameSession.Current.Kind
       - play_tournament: ""
       - read: =WrapUpTimings.Report
       - read: =GameClock.Week
@@ -2294,6 +2296,8 @@ screens:
       - boost_roster: 95
       - advance_to_week: 22
       - call: WrapUpTimings.Clear()
+      - advance_weeks: 1
+      - read: =GameSession.Current.Kind
       - play_tournament: ""
       - read: =WrapUpTimings.Report
       - read: =GameClock.Week
