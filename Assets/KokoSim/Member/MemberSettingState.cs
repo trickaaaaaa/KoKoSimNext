@@ -60,6 +60,7 @@ namespace KokoSim.Unity.Member
     {
         public int AssignedCount;
         public int BenchOutCount;
+        public bool Locked;              // 大会中（自校が残っている間）は背番号・ベンチ入りを変えられない
         public string TeamRankGrade = "C";
         public List<SlotView> Slots = new List<SlotView>();
         public List<PoolView> Pool = new List<PoolView>();
@@ -112,10 +113,18 @@ namespace KokoSim.Unity.Member
         private int _hovered = -1;
         private int _tab;
 
-        public MemberSettingState()
+        private readonly Func<bool> _isLocked;
+
+        public MemberSettingState() : this(() => GameSession.Current.UniformNumbersLocked) { }
+
+        public MemberSettingState(Func<bool> isLocked)
         {
+            _isLocked = isLocked;
             _roster = RosterService.Active;
         }
+
+        /// <summary>背番号・ベンチ入りを固めている間か。true の間は割当の4操作が何もしない。</summary>
+        public bool Locked => _isLocked();
 
         /// <summary>
         /// 在籍一覧が変わっていたら引き直す（週送りの年度替わり・issue #1250）。選択・ホバーは同じ選手を
@@ -146,6 +155,7 @@ namespace KokoSim.Unity.Member
         /// </summary>
         public void ClickSlot(int number)
         {
+            if (Locked) return;
             if (_picked >= 0)
             {
                 UniformNumberAssigner.Place(_roster, _roster[_picked], number);
@@ -162,6 +172,7 @@ namespace KokoSim.Unity.Member
         /// </summary>
         public void ClickPool(int index)
         {
+            if (Locked) return;
             if (index < 0 || index >= _roster.Count) return;
             if (_picked < 0) { _picked = index; return; }
             if (_picked == index) { _picked = -1; return; }
@@ -172,6 +183,7 @@ namespace KokoSim.Unity.Member
         /// <summary>枠の割当を解除（ベンチ外へ）。</summary>
         public void ClearSlot(int number)
         {
+            if (Locked) return;
             var holder = IndexOfNumber(number);
             if (holder >= 0) UniformNumberAssigner.Clear(_roster[holder]);
         }
@@ -190,13 +202,18 @@ namespace KokoSim.Unity.Member
         public void SetTab(int tab) => _tab = Math.Clamp(tab, 0, 1);
 
         /// <summary>能力順で背番号を仮割当し直す（自動割当ボタン）。</summary>
-        public void AutoAssign() { UniformNumberAssigner.AutoAssign(_roster); _picked = -1; }
+        public void AutoAssign()
+        {
+            if (Locked) return;
+            UniformNumberAssigner.AutoAssign(_roster);
+            _picked = -1;
+        }
 
         // ── View 構築 ──
 
         public MemberSettingView BuildView()
         {
-            var v = new MemberSettingView { Tab = _tab };
+            var v = new MemberSettingView { Tab = _tab, Locked = Locked };
 
             for (var n = 1; n <= Slots; n++)
             {

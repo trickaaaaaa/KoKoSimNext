@@ -116,6 +116,10 @@ namespace KokoSim.Unity.Member
 
             RenderNewTeamBand();
 
+            // 大会中は操作の入口をすべて止める（×・自動割当を隠す／押せなくする。選手の行は比較用に見るだけ）。
+            _root.EnableInClassList("ms-locked", v.Locked);
+            _root.Q<Button>("ms-auto")?.SetEnabled(!v.Locked);
+
             SetText("ms-assigned", v.AssignedCount.ToString());
             SetText("ms-out-count", v.BenchOutCount.ToString());
 

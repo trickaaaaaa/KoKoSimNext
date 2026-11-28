@@ -134,6 +134,10 @@
     margin-left: 10px;
 }
 .ms-col .ms-row__x:hover { color: var(--sbk-text); }
+/* 大会中は背番号を変えられない＝外す×を出さず、自動割当は押せない見た目にする */
+.ms-locked .ms-row__x { display: none; }
+.sbk Button.ms-auto-btn:disabled { opacity: 0.4; }
+.sbk Button.ms-auto-btn:disabled:hover { background-color: var(--sbk-text); }
 
 /* ── 3列目：ベンチ外の入れ物（縦いっぱい）と自動割当ボタン ── */
 .ms-out {
