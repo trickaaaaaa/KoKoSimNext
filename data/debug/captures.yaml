@@ -248,6 +248,49 @@ captures:
     timeout_at: 0.5
     timeout_messenger: 0
     video: {from: start, to: end, fps: 24}
+  # 立った捕手の防具（胸プロテクター・レガース）が体に沿っているか（issue #1791）。probes の数字は
+  # 構え（しゃがみ・対決ビュー）→歩き→立ち話の同じ式の並び。絵は捕手を正面(0)・斜め(45)・横(90)から寄りで追う
+  - id: catcher-gear-stand-1791
+    name: "伝令の場面の捕手の防具の実測（issue #1791・実測のみ）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: panel
+    duel_seconds: 20.0
+    timeout_at: 0.5
+    timeout_messenger: 0
+    probes: [CatcherGearDiag]
+    video: {from: start, to: end, fps: 12}
+  - id: catcher-gear-stand-front-1791
+    name: "伝令の場面の捕手を正面から寄りで（issue #1791）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: rig
+    duel_seconds: 20.0
+    timeout_at: 0.5
+    timeout_messenger: 0
+    probes: [CatcherGearDiag]
+    video: {from: start, to: end, fps: 12}
+    overrides: {DuelTuning.TimeoutCatcherCamAzimuthForCapture: 0}
+  - id: catcher-gear-stand-diag-1791
+    name: "伝令の場面の捕手を斜め前から寄りで（issue #1791）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: rig
+    duel_seconds: 20.0
+    timeout_at: 0.5
+    timeout_messenger: 0
+    video: {from: start, to: end, fps: 12}
+    overrides: {DuelTuning.TimeoutCatcherCamAzimuthForCapture: 45}
+  - id: catcher-gear-stand-side-1791
+    name: "伝令の場面の捕手を横から寄りで（issue #1791）"
+    scenario: pitcher-rattled-lab
+    manager: home
+    view: rig
+    duel_seconds: 20.0
+    timeout_at: 0.5
+    timeout_messenger: 0
+    video: {from: start, to: end, fps: 12}
+    overrides: {DuelTuning.TimeoutCatcherCamAzimuthForCapture: 90}
   - id: timeout-scene-1174-recorder
     name: "守備伝令の場面・控えが走らず記録員が伝令（issue #1174）"
     scenario: pitcher-rattled-lab
@@ -393,7 +436,7 @@ captures:
     name: "1球の判定テロップ（ストライク／ボール等）が画像で出る（issue #1179）"
     scenario: fresh-start
     view: panel
-    duel_seconds: 9.0
+    duel_seconds: 20.0
     video: {from: start, to: end, fps: 12}
 
   - id: telop-strikeout-1179
