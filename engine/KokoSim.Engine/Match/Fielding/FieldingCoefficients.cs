@@ -180,7 +180,7 @@ public sealed record FieldingCoefficients
     /// <see cref="ThrowDistanceDragPerM"/>を一塁送球にも適用）・高いバウンド（<see cref="ChopperWaitFactor"/> 0.55→0.85）。
     /// 実測（60,000打席×seed 42/7）: 内野安打 7.7/7.3% → 8.2/7.6%。</para>
     /// </summary>
-    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.12;
+    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.08;
 
 
     /// <summary>
@@ -574,7 +574,7 @@ public sealed record FieldingCoefficients
     /// issue #1685 で 0.55→0.85：内野安打の校正をもたつきから実際の起き方へ移した一つ（高く弾んだ打球は落ちてくるのを待つ）。
     /// 1.0（頂点から地面まで）は待ちすぎ＝落ちてくる途中のグラブの高さで捕る分を残す。
     /// </summary>
-    public double ChopperWaitFactor { get; init; } = 0.85;
+    public double ChopperWaitFactor { get; init; } = 0.55;
 
     /// <summary>内野境界の通過時刻を求める走査の時間刻み[s]（頭上抜けの判定精度）。</summary>
     public double InfieldInterceptStepSeconds { get; init; } = 0.02;
@@ -586,6 +586,53 @@ public sealed record FieldingCoefficients
     /// 0で従来（投手も他内野手と同じ反応）。処理野手の割り当てにのみ効き、頭上抜け判定（帯校正）には影響しない。
     /// </summary>
     public double PitcherFieldingReactionPenaltySeconds { get; init; } = 0.35;
+
+    // --- 内野の到達の式（加速・横移動・強打球, issue #1789 やること4②）---
+    // FielderReachSeconds（走って詰める距離÷脚力＋反応遅延、だけ）は「止まった状態から一歩目で全力」
+    // 「横・前・後ろが同じ速さ」「打球の強さで一歩目の遅れが変わらない」の3点が甘く、二遊間がどの方向の
+    // 強いゴロにも定位置から広く追いつけてしまっていた（センター前の安打がほぼ出ない・issue #1640と同根）。
+    // 3つの係数は中立（旧式と同一）に近づけることができる: Accel→∞・LateralSpeedFactor=1・
+    // FastGrounderReactionThresholdMps=∞ がそれぞれの無効値。
+    //
+    // 採用（2026-11-29・オーナー承認 案R）: Accel=14 と FastGrounderReaction* を有効、LateralSpeedFactor は中立
+    // （0.9 でも抜ける割合が 2.0→2.6% しか動かず得点だけ +0.1 したため）。加速で間を抜けるゴロが増える一方、
+    // 処理点が遅れて内野安打も増えるので、内野安打の側（InfieldHandleJitterMeanSeconds 0.12→0.08・ChopperWaitFactor
+    // 0.85→0.55・ChargeThrowPenaltySeconds/ChargeThrowSpeedPenalty/AwayMomentumThrowSpeedPenalty を0）を締めて
+    // 得点帯を保った。80,000打席 seed42: ゴロが内野を抜ける割合 2.0%→6.7%（間の方向で11〜12%・正面は1%のまま）、
+    // 内野安打 ゴロの8.9%→3.4%。夏場帯の上限 6.35→6.45・併殺帯の下限 1.00→0.90 を張り直した（data/balance-targets.yaml）。
+
+    /// <summary>
+    /// 野手の加速度[m/s²]（止まった状態からトップスピード=<see cref="KokoSim.Engine.Players.FielderAttributes.SprintSpeedMps"/>
+    /// に乗るまでの立ち上がり）。旧式は距離をすべてトップスピードで割っていた（一歩目から全力）。
+    /// 距離 d の走行時間 = d≤トップスピード²/(2×この値) なら √(2d/この値)、それ以外は
+    /// トップスピード/この値 + (d−トップスピード²/(2×この値))/トップスピード。
+    /// 大きいほど旧式に近い（∞＝無効値）。採用値14の根拠は冒頭のメモ。
+    /// </summary>
+    public double InfielderAccelMps2 { get; init; } = 14.0;
+
+    /// <summary>
+    /// 横（<see cref="KokoSim.Engine.Core.Vector3D.X"/>方向＝一塁/三塁側）へ動くときのトップスピード倍率
+    /// （issue #1789 やること4②）。クロスオーバーステップを要る横の動きは前後より遅い。
+    /// 実効トップスピード = SprintSpeedMps×(1−横移動の割合×(1−この値))。横移動の割合は守備位置→捕球点の
+    /// 変位をX（横）とZ（奥行き）成分へ分け、|ΔX|/(|ΔX|+|ΔZ|) で見る（0=完全に前後、1=完全に横）。
+    /// 1.0＝割引なし（現状の既定。効きが小さく得点だけ動いたため。冒頭のメモ）。
+    /// </summary>
+    public double InfielderLateralSpeedFactor { get; init; } = 1.0;
+
+    /// <summary>
+    /// 強い打球で一歩目の反応が遅れ始める、打球の水平速度のしきい[m/s]（issue #1789 やること4②）。
+    /// 判定時点の打球速度（<see cref="BouncePath.HorizontalSpeedAt"/>）がこれを上回るぶんだけ、
+    /// 読みに手間取る追加反応遅延（<see cref="FastGrounderReactionExtraSecPerMps"/>・上限
+    /// <see cref="FastGrounderReactionExtraMaxSeconds"/>）が反応遅延へ乗る。30.0≈108km/h（これ以下は変化なし）。
+    /// ∞＝無効値（常に変化なし）。効きは小さい（外すと抜ける割合 −0.6pt）が、強い打球ほど読みに手間取る形として有効。
+    /// </summary>
+    public double FastGrounderReactionThresholdMps { get; init; } = 30.0;
+
+    /// <summary>しきいを超える打球速度1m/sあたりの追加反応遅延[s]（issue #1789 やること4②）。</summary>
+    public double FastGrounderReactionExtraSecPerMps { get; init; } = 0.02;
+
+    /// <summary>強打球の追加反応遅延の上限[s]（issue #1789 やること4②）。</summary>
+    public double FastGrounderReactionExtraMaxSeconds { get; init; } = 0.16;
 
     // --- 前進捕球（チャージ, issue #630）---
     // 従来は処理野手が「守備位置に最も近い経路上の点」で打球を待った＝ボテボテのゴロほど長く突っ立って
@@ -622,7 +669,7 @@ public sealed record FieldingCoefficients
 
     /// <summary>前進捕球いっぱいのときの握り替え追加時間[s]（走りながら捕る＝体勢が悪い）。
     /// 前進量に比例して掛ける。前進で縮んだ捕球時刻をそのぶん食い戻す＝一方的な守備強化にしない項。</summary>
-    public double ChargeThrowPenaltySeconds { get; init; } = 0.12;
+    public double ChargeThrowPenaltySeconds { get; init; } = 0.0;
 
     /// <summary>前進捕球いっぱいのときの送球精度の低下[点]（走りながらの送球は逸れる）。
     /// 前進量に比例して野手の ThrowAccuracy から引き、悪送球ロール（design-14 P1-6b）へ効かせる。</summary>
@@ -631,12 +678,12 @@ public sealed record FieldingCoefficients
     /// <summary>前進捕球いっぱいのときの一塁送球の球速の低下（肩に対する割合, issue #1685）。前進量に比例。
     /// 前へ突っ込みながら捕って投げる送球（ボテボテ）は足を踏ん張れず球が弱い＝送球の飛行が延びる
     /// （<see cref="FieldingResolver.FirstBaseThrowFlightSeconds"/>）。保持（捕ってから投げるまで）には足さない。</summary>
-    public double ChargeThrowSpeedPenalty { get; init; } = 0.20;
+    public double ChargeThrowSpeedPenalty { get; init; } = 0.0;
 
     /// <summary>一塁と真逆へ全力で流れながら捕ったときの一塁送球の球速の低下（肩に対する割合, issue #1685）。
     /// 流れ率（<see cref="FieldingResolver.AwayMomentumFraction"/>）に比例。三遊間・二遊間の深い所で捕って
     /// 体が一塁と逆へ流れている送球は弱い＝送球の飛行が延びる。</summary>
-    public double AwayMomentumThrowSpeedPenalty { get; init; } = 0.50;
+    public double AwayMomentumThrowSpeedPenalty { get; init; } = 0.0;
 
     /// <summary>体勢による一塁送球の球速の倍率の下限（issue #1685）。前進と流れが重なっても肩の半分は出る。</summary>
     public double InfieldThrowSpeedFactorMin { get; init; } = 0.50;

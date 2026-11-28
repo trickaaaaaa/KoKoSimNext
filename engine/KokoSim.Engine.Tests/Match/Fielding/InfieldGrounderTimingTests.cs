@@ -138,11 +138,14 @@ public sealed class InfieldGrounderTimingTests
         //    長い送球の失速）へ移した。方位−18°の緩いゴロは遊撃が真っ直ぐ突っ込んで一塁へ向き直れる＝ほぼアウトになり、
         //    際どいのは遊撃の右（三遊間側）へ流れながら捕る当たりになった。そこで方位−14°・初速22m/s（79km/h）の緩いゴロと
         //    同じコースの平凡なゴロ（32m/s）を比べる。
-        var slow = InfieldHitRate(22.0, -14.0, Batter());
-        var routine = InfieldHitRate(32.0, -14.0, Batter());
+        // ⚠ issue #1789 で内野の到達に加速を入れ、内野安打の側（もたつき 0.12→0.08・チョッパー待ち・前進/流れながらの
+        //    送球の減速を外す）を締めたので、方位−14°・22m/s は平均走者では 0% になった。遊撃の正面寄り（方位−10°）へ
+        //    転がる、さらに緩いゴロ（18m/s＝65km/h）が際どい当たりになった（実測 28% / 同じコースの強いゴロ 0%）。
+        var slow = InfieldHitRate(18.0, -10.0, Batter());
+        var routine = InfieldHitRate(32.0, -10.0, Batter());
 
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
-            "緩いゴロ(22m/s) 内野安打 {0:P1} / 平凡なゴロ(32m/s) 内野安打 {1:P1}", slow, routine));
+            "緩いゴロ(18m/s) 内野安打 {0:P1} / 平凡なゴロ(32m/s) 内野安打 {1:P1}", slow, routine));
 
         // 実測 2026-08-14: 緩いゴロ 41.0% / 同じコースの強いゴロ 15.5%。
         // 強いゴロが 0 でないのは、深い三遊間はもともと際どい＝守備が乱れれば抜けるから
@@ -162,7 +165,9 @@ public sealed class InfieldGrounderTimingTests
         // 同じ打球でも、走力・左右で間に合う/間に合わないが入れ替わること（走者側の秒軸が効いている）。
         // 初速24m/s＝86km/hのやや緩い遊ゴロ（三遊間寄り）＝平均走者ならたいていアウト、快足なら内野安打の際どい当たり。
         // issue #1685 でもたつきを縮めた（平均0.49→0.12秒）ので、旧来の 28m/s・方位−6° は快足でも0.4秒先にアウトになった。
-        const double Exit = 24.0, Bearing = -14.0;
+        // issue #1789 で内野安打の側を締めたので 24m/s では平均走者も左打者も 0% になった。20m/s（72km/h）へ選び直した
+        // （実測 内野安打率: 走力50右 14% / 走力92右 100% / 走力50左 64%）。
+        const double Exit = 20.0, Bearing = -14.0;
         var normal = Grounder(Exit, Bearing, Batter());
         var fast = Grounder(Exit, Bearing, Batter(speed: 92));
         var left = Grounder(Exit, Bearing, Batter(bats: Handedness.Left));
@@ -285,7 +290,10 @@ public sealed class InfieldGrounderTimingTests
         // 実際の内野安打はゴロの6〜7%規模。当ゲームは打率・BABIP帯に合わせて11%前後（#358 実測）。
         // 上限は「守備の所要時間を水増しして得点環境を作る」回帰（修正前は19.3%）を、
         // 下限は「オーバーヘッドを削っただけで判定余裕を戻し忘れる」回帰（実測1.5%）を捕まえるためのもの。
-        Assert.InRange(t.InfieldHitShare, 0.05, 0.15);
+        // issue #1789（2026-11-29・オーナー承認 案R）: ゴロの安打の中身を「ほぼ全部が内野安打」から「間を抜ける安打中心」へ
+        // 入れ替えるため、内野安打をゴロの約9%→約3.3%へ締めた（実際の6〜7%より低い。抜ける安打の増加ぶんを相殺して
+        // 得点帯を保つための水準）。下限 0.05→0.025。下限の役目（判定余裕の戻し忘れ＝実測1.5%の回帰を捕まえる）は保つ。
+        Assert.InRange(t.InfieldHitShare, 0.025, 0.15);
         // 捕ってから離すまでが現実域なら、内野ゴロの大半は余裕を持ったアウトになる。
         Assert.True(t.MarginQuantile(0.50) <= -0.4,
             $"判定margin の中央値 {t.MarginQuantile(0.50):F2}s が境界に寄りすぎ（定位置のゴロが際どくなっている）");

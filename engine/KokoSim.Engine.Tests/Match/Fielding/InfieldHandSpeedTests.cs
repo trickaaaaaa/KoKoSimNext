@@ -79,9 +79,10 @@ public sealed class InfieldHandSpeedTests
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "捕ってから離すまで（平均）: 守備20 {0:F2}s / 守備50 {1:F2}s / 守備90 {2:F2}s", h20, h50, h90));
 
-        // 名手は実物の内野手（0.6〜0.9秒）の域で離す。
-        Assert.InRange(h90, 0.60, 0.85);
-        // 守備50＝構え直し0.10＋握り替え0.70＋もたつき平均0.12≈0.92（issue #1685 で 0.49→0.12。それまでは≈1.29）。
+        // 名手は実物の内野手（0.6〜0.9秒）の域で離す。issue #1789 でもたつき平均 0.12→0.08 にして守備90 が 0.59s に
+        // なったので下限を 0.60→0.55 へ（守備20 との差は 0.5秒以上のまま＝能力差は残っている）。
+        Assert.InRange(h90, 0.55, 0.85);
+        // 守備50＝構え直し0.10＋握り替え0.70＋もたつき平均0.08≈0.88（issue #1685 で 0.49→0.12、#1789 で 0.12→0.08。それまでは≈1.29）。
         Assert.InRange(h50, 0.85, 1.00);
         // 下手な野手ははっきり遅い（それでも実物の遅い高校生の域＝1.3秒前後まで）。
         Assert.InRange(h20, 1.05, 1.35);
@@ -95,12 +96,14 @@ public sealed class InfieldHandSpeedTests
     {
         // 三遊間寄りの際どいゴロ（遊撃が右へ流れながら捕る緩いゴロ。issue #1685 でもたつきを縮めたので、旧来の
         // 初速27m/s・方位−28°は守備によらずアウトになった）。内野全員の守備だけを変え、間に合わなかった率を比べる。
+        // issue #1789 で内野の到達に加速を入れ、内野安打の側（もたつき 0.12→0.08 ほか）を締めたので、旧 22m/s・−14°は
+        // 守備50でもアウト（守備20 だけセーフ）になった。三遊間の深い所へ流れる 26m/s・−26°へ選び直した（実測 守備20/50/90＝99/66/0%）。
         double SafeRate(int fielding)
         {
             const int seeds = 600;
             var safe = 0;
             for (ulong s = 1; s <= seeds; s++)
-                if (Grounder(fielding, ev: 22.0, bearing: -14.0, seed: s).Result == BattedBallResult.Single) safe++;
+                if (Grounder(fielding, ev: 26.0, bearing: -26.0, seed: s).Result == BattedBallResult.Single) safe++;
             return (double)safe / seeds;
         }
         var s20 = SafeRate(20);

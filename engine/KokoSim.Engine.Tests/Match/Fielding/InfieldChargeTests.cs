@@ -220,8 +220,10 @@ public sealed class InfieldChargeTests
     public void Charging_CostsTransferTimeAndThrowAccuracy()
     {
         const double Exit = 12.0, Bearing = -6.0;
+        // issue #1789 で既定の握り替え追加（ChargeThrowPenaltySeconds）は 0.12→0.0（内野安打の締め）。仕組みとして
+        // 効くことはここで値を入れて確かめる（0.12＝旧既定）。送球精度の低下は既定のまま有効。
         var free = Grounder(Exit, Bearing, On with { ChargeThrowPenaltySeconds = 0.0, ChargeThrowAccuracyPenalty = 0.0 });
-        var costly = Grounder(Exit, Bearing, On);
+        var costly = Grounder(Exit, Bearing, On with { ChargeThrowPenaltySeconds = 0.12 });
 
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "ペナルティ無し 到達 {0:F3}s Ac{1} / 有り 到達 {2:F3}s Ac{3}",

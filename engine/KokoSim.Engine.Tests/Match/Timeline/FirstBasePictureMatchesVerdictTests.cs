@@ -80,7 +80,8 @@ public sealed class FirstBasePictureMatchesVerdictTests
             margins.Add(throwToFirst.T1 - leg.T1);   // 正＝走者が勝った量
         }
 
-        Assert.True(margins.Count >= 50, $"内野安打が {margins.Count} 件しか採れていない");
+        // issue #1789 で内野安打をゴロの約9%→約3.3%へ締めたので、40試合で採れる件数が 50 前後→34 に減った（下限 50→30）。
+        Assert.True(margins.Count >= 30, $"内野安打が {margins.Count} 件しか採れていない");
         margins.Sort();
         var p10 = margins[margins.Count / 10];
         var p90 = margins[margins.Count * 9 / 10];
