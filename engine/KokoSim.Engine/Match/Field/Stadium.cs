@@ -11,9 +11,9 @@ public enum StadiumTier
 }
 
 /// <summary>
-/// 球場（設計書13-stadiums ①物理層）。寸法をパラメータ化し FieldGeometry を生成する。
-/// ②環境（風）・③ビジュアルは後回し。<see cref="Wind"/> は②用の箱（現状 null）。
-/// エンジン純度維持（不変条件#3）: 生成・ロードは KokoSim.Config 側で行う。
+/// 球場（設計書13-stadiums ①物理層＋②環境の風）。寸法をパラメータ化し FieldGeometry を生成する。
+/// ②環境は風だけ実装済み（issue #1614）。<see cref="WindBearingDeg"/> が球場固有の風の癖（甲子園の浜風のみ）。
+/// ③ビジュアルは後回し。エンジン純度維持（不変条件#3）: 生成・ロードは KokoSim.Config 側で行う。
 /// </summary>
 public sealed record Stadium
 {
@@ -33,8 +33,13 @@ public sealed record Stadium
     /// <summary>フェンス高 [m]。</summary>
     public double FenceHeightM { get; init; } = 2.5;
 
-    /// <summary>②環境用の箱（球場固有風）。今回未使用（設計書13-stadiums §5）。</summary>
-    public string? Wind { get; init; }
+    /// <summary>
+    /// 球場固有の風の癖（issue #1614・設計書13-stadiums §5改訂）: 風向きの平均バイアス[度]
+    /// （<see cref="FieldGeometry.FenceDistance"/> と同じ方位角の規約。0=中堅方向、+=一塁/右翼側、−=三塁/左翼側）。
+    /// null＝癖なし（<see cref="Game.WindModel"/> が向きを一様乱数で引く＝平均すると無風と同じ）。
+    /// 2026-11-28 オーナー決定: 最初は甲子園の浜風（右翼から左翼へ＝-90°）だけ設定し、他の球場は省略する。
+    /// </summary>
+    public double? WindBearingDeg { get; init; }
 
     /// <summary>
     /// 3D表示に使う球場モデルの名前（<c>data/stadiums/&lt;Model&gt;.obj</c>。issue #904）。null なら汎用の
@@ -58,6 +63,7 @@ public sealed record Stadium
         CenterFenceM = CenterM,
         FenceHeightM = FenceHeightM,
         Indoor = Indoor,
+        WindBiasBearingDeg = WindBearingDeg,
     };
 
     /// <summary>
@@ -82,6 +88,7 @@ public sealed record Stadium
         CenterM = 118.0,
         FenceHeightM = 2.6,
         Model = "koshien",
+        WindBearingDeg = -90.0,   // 浜風＝右翼から左翼へ（issue #1614・2026-11-28 オーナー決定）
     };
 
     /// <summary>

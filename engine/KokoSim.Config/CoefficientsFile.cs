@@ -31,6 +31,8 @@ public sealed record CoefficientsBundle
     public FatigueCoefficients Fatigue { get; init; } = new();
     /// <summary>試合ごとの天候（月別気温モデル, Issue #120/#803/#971）。null＝weather ブロック無し＝無効（従来挙動）。</summary>
     public MonthlyWeatherCoefficients? Weather { get; init; }
+    /// <summary>試合ごとの風（issue #1614）。<see cref="GameContext.Weather"/>が有効な試合だけで実際に効く（WindModel参照）。</summary>
+    public WindCoefficients Wind { get; init; } = new();
     public PitchRecoveryCoefficients PitchRecovery { get; init; } = new();
     public KokoSim.Engine.Players.FormCoefficients Form { get; init; } = new();
     public KokoSim.Engine.Players.SkillCoefficients Skills { get; init; } = new();
@@ -113,6 +115,7 @@ public static class CoefficientsLoader
         public FatigueDto? Fatigue { get; set; }
         public AbilityEffectDto? AbilityEffect { get; set; }
         public MonthlyWeatherDto? Weather { get; set; }
+        public WindDto? Wind { get; set; }
         public PitchRecoveryDto? PitchRecovery { get; set; }
         public FormDto? Form { get; set; }
         public SkillsDto? Skills { get; set; }
@@ -163,6 +166,7 @@ public static class CoefficientsLoader
             Baserunning = (Baserunning?.ToModel() ?? new BaserunningCoefficients()) with { AbilityEffect = effect },
             Fatigue = Fatigue?.ToModel() ?? new FatigueCoefficients(),
             Weather = Weather?.ToModel(),   // Issue #120/#803: weather ブロック無し＝null＝無効（従来挙動）
+            Wind = Wind?.ToModel() ?? new WindCoefficients(),   // issue #1614: wind ブロック無し＝C#既定（Weatherが有効な試合だけで効く）
             PitchRecovery = PitchRecovery?.ToModel() ?? new PitchRecoveryCoefficients(),
             Form = Form?.ToModel() ?? new KokoSim.Engine.Players.FormCoefficients(),
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
@@ -1525,6 +1529,24 @@ public static class CoefficientsLoader
         {
             Base = Base?.ToModel() ?? WeatherModel.Base,
             Months = Months?.Select(m => m.ToModel()).ToArray() ?? WeatherModel.DefaultMonths,
+        };
+    }
+
+    /// <summary>風係数の DTO（issue #1614）。省略したフィールドは既定（<see cref="WindCoefficients"/>の素の既定値）で埋める。</summary>
+    private sealed class WindDto
+    {
+        private static readonly WindCoefficients D = new();
+        public bool Enabled { get; set; } = D.Enabled;
+        public double SpeedStdDevMps { get; set; } = D.SpeedStdDevMps;
+        public double MaxSpeedMps { get; set; } = D.MaxSpeedMps;
+        public double BiasBearingSpreadDeg { get; set; } = D.BiasBearingSpreadDeg;
+
+        public WindCoefficients ToModel() => new()
+        {
+            Enabled = Enabled,
+            SpeedStdDevMps = SpeedStdDevMps,
+            MaxSpeedMps = MaxSpeedMps,
+            BiasBearingSpreadDeg = BiasBearingSpreadDeg,
         };
     }
 

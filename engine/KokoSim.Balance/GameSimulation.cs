@@ -562,6 +562,7 @@ public static partial class GameSimulation
             // Issue #120/#803/#971: 天候（月別気温）モデル。null＝weather ブロック無し＝無効。
             // Heavy の summer 帯（games_10k_summer）は夏の甲子園（8月）想定なので8月ぶんを使う（従来と同値）。
             Weather = b.Weather?.ForMonth(8),
+            Wind = b.Wind,   // issue #1614: Weather が有効な試合（--apply-weather）だけで実際に効く
             Form = b.Form,
             Skills = b.Skills,
             Pressure = b.Pressure,

@@ -50,7 +50,7 @@ public static class ForcedFoulBall
             for (var kmh = 150.0; kmh <= 185.0; kmh += 5.0)
             {
                 var ball = new BattedBall { ExitVelocityMps = kmh / 3.6, LaunchAngleDeg = 28.0, BearingDeg = bearing };
-                var g = BallisticIntegrator.IntegrateToGround(ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
+                var g = BallisticIntegrator.IntegrateToGround(ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, wind: field.Wind);
                 var along = FoulView.AlongLine(g.LandingPosition.X, g.LandingPosition.Z);
                 if (FoulView.Classify(bearing, along, null, field, coeff) == FoulViewKind.BigFoul) return ball;
             }

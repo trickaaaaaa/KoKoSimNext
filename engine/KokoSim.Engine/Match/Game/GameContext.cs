@@ -37,6 +37,21 @@ public sealed record GameContext
     public WeatherSample? ResolvedWeather { get; init; }
 
     /// <summary>
+    /// 試合ごとの風（issue #1614）の係数。<see cref="WindModel.ApplyForMatch"/> は <see cref="Weather"/> が
+    /// 有効（かつ屋外）のときだけこの係数で風を引く＝天候と風は1つの「その日の天気」の有効フラグに相乗りする
+    /// （<see cref="WindCoefficients"/> のドキュメント参照）。風だけ単独で切るには <c>Enabled=false</c> を渡す。
+    /// </summary>
+    public WindCoefficients Wind { get; init; } = new();
+
+    /// <summary>
+    /// その試合に実際に効いた風（issue #1614）。<see cref="WindModel.ApplyForMatch"/> が専用Forkストリームで
+    /// 1回だけ抽選した結果をここへ写す（以降の再取得はこのコピーを読むだけ＝再抽選しない）。
+    /// <see cref="Weather"/> が null／無効、<see cref="Wind"/> が無効、屋内、またはまだ試合開始前
+    /// （<see cref="WindModel.ApplyForMatch"/> 未適用）なら null（＝表示側は風欄を隠す）。
+    /// </summary>
+    public WindSample? ResolvedWind { get; init; }
+
+    /// <summary>
     /// その試合の球場名（issue #803・電光掲示板の球場表示）。甲子園・地方大会の汎用ティア球場は
     /// Shell 側（<see cref="Match.Field.Stadium"/>）の実体名をここへ写す。地区大会・神宮大会のように
     /// 球場割当が未配線の大会は null（＝推測で埋めない。表示側は球場欄を隠す）。

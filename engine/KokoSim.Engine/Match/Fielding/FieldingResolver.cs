@@ -330,7 +330,7 @@ public static class FieldingResolver
         var flightSamples = trackFlightPath ? new List<BallisticIntegrator.FlightSample>() : null;
         var ground = BallisticIntegrator.IntegrateToGround(
             ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, fenceDistanceM: fenceDist,
-            sampleStepSeconds: coeff.LineDriveScanStepSeconds, samples: flightSamples);
+            sampleStepSeconds: coeff.LineDriveScanStepSeconds, samples: flightSamples, wind: field.Wind);
 
         // 通り道のライナー捕球（issue #1135）: 着地点（本塁打／フェンス直撃の判定より先）を待たず、
         // 飛行経路の途中で野手が正面にいればノーバウンド捕球でアウトにする。遊撃手の胸の高さを通って
@@ -1528,7 +1528,7 @@ public static class FieldingResolver
         IReadOnlyList<Fielder> fielders, FieldingCoefficients coeff, double runnerTime)
     {
         var ground = BallisticIntegrator.IntegrateToGround(
-            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
+            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, wind: field.Wind);
         if (ground.ApexHeightM < coeff.FlyApexThresholdM) return null;
         var landing = ground.LandingPosition;
         if (!field.InFoulTerritory(landing)) return null;

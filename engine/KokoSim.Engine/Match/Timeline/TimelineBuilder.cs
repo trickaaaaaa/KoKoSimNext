@@ -264,7 +264,7 @@ public static partial class TimelineBuilder
         bool runnerOnFirst, bool runnerOnSecond, bool runnerOnThird, FoulChase? chase = null)
     {
         var ground = BallisticIntegrator.IntegrateToGround(
-            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
+            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, wind: field.Wind);
         var landing = new TimelinePoint(ground.LandingPosition.X, ground.LandingPosition.Z);
         var isFly = ground.ApexHeightM >= coeff.FlyApexThresholdM;
         var landAt = ContactAt + ground.HangTimeSeconds;

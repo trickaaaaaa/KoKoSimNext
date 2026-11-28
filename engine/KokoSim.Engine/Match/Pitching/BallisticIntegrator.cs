@@ -59,7 +59,8 @@ public static class BallisticIntegrator
         const int maxSteps = 200_000;
         for (var step = 0; step < maxSteps; step++)
         {
-            var next = Rk4Step(state, spin, aero, dt);
+            // 投球には風を効かせない（issue #1614）: 常に無風で積分する。
+            var next = Rk4Step(state, spin, aero, dt, Vector3D.Zero);
 
             if (next.Position.Z >= targetZ)
             {
@@ -128,6 +129,11 @@ public static class BallisticIntegrator
     /// 非nullのとき、t=0（接触点）から着地まで <paramref name="sampleStepSeconds"/> おきの (時刻, 位置) を
     /// 時刻順に追加する。積分そのものは1ビットも変えない＝観測の記録だけ（不変条件#1/#2に影響なし）。
     /// </param>
+    /// <param name="wind">
+    /// 風速ベクトル[m/s]（地面基準、issue #1614）。打球にだけ効かせる軸なので、呼び出し元は
+    /// <see cref="Field.FieldGeometry.Wind"/>（試合ごとに <see cref="Game.WindModel.ApplyForMatch"/> が差し替える）を渡す。
+    /// 既定ゼロ＝無風＝従来の弾道と1ビットも変わらない。
+    /// </param>
     public static GroundResult IntegrateToGround(
         Vector3D contactPoint,
         Vector3D initialVelocity,
@@ -136,7 +142,8 @@ public static class BallisticIntegrator
         double dt = 0.001,
         double fenceDistanceM = double.PositiveInfinity,
         double sampleStepSeconds = 0.0,
-        List<FlightSample>? samples = null)
+        List<FlightSample>? samples = null,
+        Vector3D wind = default)
     {
         var state = new State(contactPoint, initialVelocity);
         var time = 0.0;
@@ -158,7 +165,7 @@ public static class BallisticIntegrator
         const int maxSteps = 200_000;
         for (var step = 0; step < maxSteps; step++)
         {
-            var next = Rk4Step(state, spin, aero, dt);
+            var next = Rk4Step(state, spin, aero, dt, wind);
             if (next.Position.Y > apex)
             {
                 apex = next.Position.Y;
@@ -224,26 +231,34 @@ public static class BallisticIntegrator
 
     private static double HorizontalRange(Vector3D p) => Math.Sqrt(p.X * p.X + p.Z * p.Z);
 
-    private static State Rk4Step(State s, Vector3D spin, Aerodynamics aero, double dt)
+    private static State Rk4Step(State s, Vector3D spin, Aerodynamics aero, double dt, Vector3D wind)
     {
-        var (k1p, k1v) = Derivative(s, spin, aero);
+        var (k1p, k1v) = Derivative(s, spin, aero, wind);
         var s2 = new State(s.Position + k1p * (dt / 2), s.Velocity + k1v * (dt / 2));
-        var (k2p, k2v) = Derivative(s2, spin, aero);
+        var (k2p, k2v) = Derivative(s2, spin, aero, wind);
         var s3 = new State(s.Position + k2p * (dt / 2), s.Velocity + k2v * (dt / 2));
-        var (k3p, k3v) = Derivative(s3, spin, aero);
+        var (k3p, k3v) = Derivative(s3, spin, aero, wind);
         var s4 = new State(s.Position + k3p * dt, s.Velocity + k3v * dt);
-        var (k4p, k4v) = Derivative(s4, spin, aero);
+        var (k4p, k4v) = Derivative(s4, spin, aero, wind);
 
         var pos = s.Position + (k1p + 2 * k2p + 2 * k3p + k4p) * (dt / 6);
         var vel = s.Velocity + (k1v + 2 * k2v + 2 * k3v + k4v) * (dt / 6);
         return new State(pos, vel);
     }
 
-    /// <summary>状態微分: dPosition = Velocity, dVelocity = 加速度（重力+抗力+マグヌス）。</summary>
-    private static (Vector3D dPos, Vector3D dVel) Derivative(State s, Vector3D spin, Aerodynamics aero)
+    /// <summary>
+    /// 状態微分: dPosition = Velocity, dVelocity = 加速度（重力+抗力+マグヌス）。
+    /// <paramref name="wind"/> は風速ベクトル[m/s]（地面基準・Y成分は常に0想定、issue #1614）。
+    /// 抗力・マグヌス力は「空気に対する相対速度」v_rel = v − wind で計算する（風に押されるのは空気との
+    /// 相対運動そのものなので）。位置の微分（dPos）は地面基準の速度 v のまま＝実際に飛ぶ経路は v が決める。
+    /// 重力は風と無関係。<see cref="IntegrateToPlate"/>（投球）は常に wind=Vector3D.Zero を渡す
+    /// （issue #1614: 風は打球の飛びだけに効かせる・投球には効かせない）。
+    /// </summary>
+    private static (Vector3D dPos, Vector3D dVel) Derivative(State s, Vector3D spin, Aerodynamics aero, Vector3D wind)
     {
         var v = s.Velocity;
-        var speed = v.Length;
+        var vRel = v - wind;
+        var speed = vRel.Length;
 
         // 重力
         var accel = new Vector3D(0, -aero.Gravity, 0);
@@ -252,12 +267,12 @@ public static class BallisticIntegrator
         {
             var area = aero.CrossSectionalArea;
 
-            // 抗力: F = -0.5 ρ Cd A |v| v → a = F/m
+            // 抗力: F = -0.5 ρ Cd A |v_rel| v_rel → a = F/m
             var dragMag = 0.5 * aero.AirDensity * aero.DragCoefficient * area * speed / aero.BallMassKg;
-            accel -= v * dragMag;
+            accel -= vRel * dragMag;
 
-            // マグヌス力: 方向 = (ω × v) の単位ベクトル, 大きさ = 0.5 ρ Cl A |v|^2
-            var cross = Vector3D.Cross(spin, v);
+            // マグヌス力: 方向 = (ω × v_rel) の単位ベクトル, 大きさ = 0.5 ρ Cl A |v_rel|^2
+            var cross = Vector3D.Cross(spin, vRel);
             var crossLen = cross.Length;
             if (crossLen > 0)
             {
