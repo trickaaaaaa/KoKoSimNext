@@ -43,6 +43,20 @@
 #   shot: 01-name | {name: 01-name, h: 1400}   いまの画面を撮る（同時に書体監査を summary.json へ）
 
 screens:
+  # ── 注目試合の再生データ（#1580）: 自校の試合が台帳に積まれ、セーブを通っても同じ件数で戻る ──
+
+  - id: match-replays-1580
+    name: "新規→夏の大会を消化→自校の試合ぶんの再生データが積まれる→セーブして読み直しても件数が同じ（#1580）"
+    steps:
+      - new_game: {seed: 7, prefecture: 14, school: 桜丘, district: 0}
+      - advance_weeks: 16
+      - play_tournament: ""
+      - read: =GameSession.Current.MatchHistory.Count
+      - read: =GameSession.Current.MatchReplays.Count
+      - read: =KokoSim.Engine.Replay.MatchReplayVersion.Current
+      - call: SaveSlots.Save("manual3")
+      - read: =SaveSlots.AnySaveExists()
+
   # ── 製品版（スレッドのある側）の通し確認・Web 体験版の直しで壊れていないか（#1323） ──
 
   - id: regression-playthrough-1323
