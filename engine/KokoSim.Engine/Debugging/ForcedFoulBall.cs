@@ -22,6 +22,8 @@ public static class ForcedFoulBall
             ForcedOutcome.GroundFoul => new BattedBall { ExitVelocityMps = 30.0, LaunchAngleDeg = -12.0, BearingDeg = -60.0 },
             // バックネットを越えて後ろのスタンドへ（守備ビューへは移らない＝対決ビューのまま）
             ForcedOutcome.HighFoul => new BattedBall { ExitVelocityMps = 33.0, LaunchAngleDeg = 62.0, BearingDeg = 135.0 },
+            // 鋭いライナー性のファウル（一塁側のファウルグラウンドへ低く速く）
+            ForcedOutcome.LinerFoul => new BattedBall { ExitVelocityMps = 40.0, LaunchAngleDeg = 8.0, BearingDeg = 55.0 },
             _ => null,
         };
 
