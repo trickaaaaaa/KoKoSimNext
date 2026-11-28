@@ -21,11 +21,12 @@ namespace KokoSim.Unity.Shell
         /// static 状態を書き換える直前に必ず呼ぶ。</summary>
         public static void EnsureAllCompleted()
         {
-            NationBackgroundSim.EnsureCompleted();
-            BracketFinishSim.EnsureCompleted();
-            KoshienQualifierStatsSim.EnsureCompleted();
-            SenbatsuQualifierStatsSim.EnsureCompleted();
-            GameSession.Current.JoinPrefetch();
+            // 1ms 以上待ったものだけ後始末の計測（WrapUpTimings）へ残す
+            using (WrapUpTimings.Measure("5 週送り内の完了待ち NationBackgroundSim", 1)) NationBackgroundSim.EnsureCompleted();
+            using (WrapUpTimings.Measure("5 週送り内の完了待ち BracketFinishSim", 1)) BracketFinishSim.EnsureCompleted();
+            using (WrapUpTimings.Measure("5 週送り内の完了待ち KoshienQualifierStatsSim", 1)) KoshienQualifierStatsSim.EnsureCompleted();
+            using (WrapUpTimings.Measure("5 週送り内の完了待ち SenbatsuQualifierStatsSim", 1)) SenbatsuQualifierStatsSim.EnsureCompleted();
+            using (WrapUpTimings.Measure("5 週送り内の完了待ち JoinPrefetch", 1)) GameSession.Current.JoinPrefetch();
         }
     }
 }

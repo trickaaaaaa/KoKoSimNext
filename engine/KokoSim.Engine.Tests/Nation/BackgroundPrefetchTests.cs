@@ -168,6 +168,45 @@ public sealed class BackgroundPrefetchTests
                 stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits));
     }
 
+    /// <summary>
+    /// 自校敗退後の残りブラケット消化も、ラウンドごとに並列で先読みしてから本解決しても、素のフルシムと
+    /// バイト一致すること（秋の県大会のあとの待ちを縮める・issue #1747）。
+    /// </summary>
+    [Theory]
+    [InlineData(32, 42UL)]
+    [InlineData(32, 7UL)]
+    [InlineData(11, 999UL)]
+    public void BracketResolution_ParallelPrefetchPerRound_MatchesPlain(int count, ulong seed)
+    {
+        var plain = RunPlain(MakePrefecture(4000, count), seed);
+
+        var schools = MakePrefecture(4000, count);
+        var stats = new NationTournamentStats();
+        var bg = new MemoizingBackgroundResolver(
+            new BackgroundMatchResolver(new NationRosters(new AiRosterDeps()), new GameContext(), 1, stats: null));
+        var runner = new TournamentRunner(
+            schools, schools[0], Coeff, new Xoshiro256Random(seed), Schedule, "残", null, bg,
+            onBackgroundMatch: (a, h, g) => stats.FoldMatch(a, h, g));
+        while (!runner.Finished) runner.PlayNextPlayerMatch();
+        Assert.True(runner.BracketResolutionPending, "自校が早く負けず、残りの消化が無い＝検査にならない");
+
+        var warmed = 0;
+        while (runner.BracketResolutionPending)
+        {
+            warmed += runner.CurrentRoundPrefetchJobs().Count;
+            runner.PrefetchCurrentRoundBackgroundCards(maxParallelism: 4);
+            runner.StepBracketResolution();
+        }
+
+        Assert.True(warmed > 0, "敗退後のラウンドで先読みの仕事が1つも返らない");
+        Assert.Equal(plain.Champion, runner.ChampionName);
+        Assert.Equal(StatTotals(plain.Stats), StatTotals(stats));
+        foreach (var id in plain.Stats.Schools)
+            Assert.Equal(
+                plain.Stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits),
+                stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits));
+    }
+
     [Fact]
     public void Prefetch_DoesNotDoubleFold_Stats()
     {

@@ -1295,13 +1295,16 @@ namespace KokoSim.Unity.Home
                 // 出場校決定戦は1日きり＝続く地区大会が週を進めるので、ここでは進めない。
                 var weeks = w.IsRegionalPlayoff ? 0 : KokoSim.Unity.Shell.GameClock.WeeksAfterTournament(w.Kind, w.TournamentDay);
                 var baseline = w.IsRegionalPlayoff ? 0 : KokoSim.Engine.Season.TournamentDate.BaselineClockWeeks(w.TournamentDay);
-                if (baseline > 0) KokoSim.Unity.Shell.GameClock.Advance(baseline);
-                for (var i = baseline; i < weeks; i++)
+                using (KokoSim.Unity.Shell.WrapUpTimings.Measure("0 後始末の週送り（練習・怪我・GameClock.Advance）"))
                 {
-                    RunPracticeWeek(1.0);
-                    RunInjuryWeek();
-                    RunTournamentWeekTail();
-                    KokoSim.Unity.Shell.GameClock.Advance();
+                    if (baseline > 0) KokoSim.Unity.Shell.GameClock.Advance(baseline);
+                    for (var i = baseline; i < weeks; i++)
+                    {
+                        RunPracticeWeek(1.0);
+                        RunInjuryWeek();
+                        RunTournamentWeekTail();
+                        KokoSim.Unity.Shell.GameClock.Advance();
+                    }
                 }
                 RunDraftResultFeed();   // 後始末の週送りで指名が確定した年は通知フィードへ（issue #1731）
 

@@ -20,6 +20,8 @@ namespace KokoSim.Unity.Shell
     {
         private const int StepSleepMs = 2;     // ラウンド間でメインへ時間を譲る（#208 と同じ作法）。
         private const int PausedPollMs = 16;
+        private static readonly int PrefetchParallelism =
+            BackgroundWork.Parallelism(Math.Max(1, Math.Min(6, Environment.ProcessorCount - 2)));
 
         private static volatile Task _task;
         private static int _done;            // Interlocked。消化済みラウンド数（進捗バーの分子）。
@@ -76,7 +78,13 @@ namespace KokoSim.Unity.Shell
             while (BackgroundWork.Threaded && NationBackgroundSim.Throttle == NationBackgroundSim.SimThrottle.Paused)
                 BackgroundWork.Sleep(PausedPollMs);
 
-            runner.StepBracketResolution();
+            // 残りカードはフルシム（1試合に数百ms）なので、ラウンドの裏カードを先に並列で温めてから本解決する
+            // （本解決はキャッシュ命中で即返る。結果は逐次と一致＝BackgroundPrefetchTests・issue #1747）。
+            using (WrapUpTimings.Measure("2' 残りブラケットの1ラウンド（先読み＋本解決）", 1))
+            {
+                runner.PrefetchCurrentRoundBackgroundCards(PrefetchParallelism);
+                runner.StepBracketResolution();
+            }
             Interlocked.Increment(ref _done);
             BackgroundWork.Sleep(StepSleepMs);   // 区画間で必ずメインスレッドへ時間を譲る。
             return runner.BracketResolutionPending;

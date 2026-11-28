@@ -877,7 +877,8 @@ public sealed class TournamentRunner : ITournamentRunner
     /// <inheritdoc />
     public IReadOnlyList<Action> CurrentRoundPrefetchJobs()
     {
-        if (_backgroundResolver is null || Finished || _thirdPlacePending) return Array.Empty<Action>();
+        // 自校敗退後の残りブラケット消化（BracketResolutionPending）も、ラウンドごとに同じ契約で温められる。
+        if (_backgroundResolver is null || (Finished && !BracketResolutionPending) || _thirdPlacePending) return Array.Empty<Action>();
         var resolver = _backgroundResolver;
         var cur = _current;
         if (cur.Length < 2) return Array.Empty<Action>();

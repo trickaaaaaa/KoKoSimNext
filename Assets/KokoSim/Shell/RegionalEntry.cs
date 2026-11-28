@@ -54,9 +54,12 @@ namespace KokoSim.Unity.Shell
 
         private static bool Start(bool? managerPlayoffWon)
         {
-            AutumnBackgroundSim.EnsureCompleted();
-            BracketFinishSim.EnsureCompleted();
-            GameSession.Current.FlushPendingBracketFold();
+            using (WrapUpTimings.Measure("1 秋の全国県大会の完了待ち AutumnBackgroundSim"))
+                AutumnBackgroundSim.EnsureCompleted();
+            using (WrapUpTimings.Measure("2 自県の残り試合 BracketFinishSim"))
+                BracketFinishSim.EnsureCompleted();
+            using (WrapUpTimings.Measure("2b 敗退の畳み込み FlushPendingBracketFold"))
+                GameSession.Current.FlushPendingBracketFold();
 
             var myPlacement = GameSession.Current.LastAutumnPlacementIds;
             if (myPlacement == null || myPlacement.Count == 0) return false;   // 異常系。地区大会を飛ばす。
@@ -107,12 +110,16 @@ namespace KokoSim.Unity.Shell
             if (!qualifies)
             {
                 // 自校は出場しない＝観戦もせず同期で解決し、そのまま神宮の判定へ渡す。
-                var runner = TournamentRunner.Spectated(field, NationCoeff, new Xoshiro256Random(seed),
-                    TournamentEntry.Schedule, title, thirdPlaceMatch: ThirdPlaceRule.AppliesTo(TournamentKind.Regional));
-                runner.DrainBracketResolution();
-                var byId = field.ToDictionary(s => s.Id);
-                var placement = KnockoutPlacement.FromMatches(runner.BuildBracketView().Matches, id => byId[id])
-                    .Select(s => s.Id).ToList();
+                List<int> placement;
+                using (WrapUpTimings.Measure("3a 自地区の地区大会を同期で解く"))
+                {
+                    var runner = TournamentRunner.Spectated(field, NationCoeff, new Xoshiro256Random(seed),
+                        TournamentEntry.Schedule, title, thirdPlaceMatch: ThirdPlaceRule.AppliesTo(TournamentKind.Regional));
+                    runner.DrainBracketResolution();
+                    var byId = field.ToDictionary(s => s.Id);
+                    placement = KnockoutPlacement.FromMatches(runner.BuildBracketView().Matches, id => byId[id])
+                        .Select(s => s.Id).ToList();
+                }
                 return JinguEntry.ContinueFrom(myRegion, placement, yearIndex);
             }
 
