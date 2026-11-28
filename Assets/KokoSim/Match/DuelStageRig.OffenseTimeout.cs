@@ -83,7 +83,7 @@ namespace KokoSim.Unity.Match
             _otB1 = _otB0 + new Vector2(_otSide * DuelTuning.OtBatterBackM, 0f);
             // 伝令は打者の**外側**（本塁から遠い側）に立つ。ベンチがどちらでも同じ側＝打者が打席へ戻る道（本塁側）を
             // 塞がない（オーナー判断 2026-11-28）。耳打ちの手・首の向きは立った側から決まる（ApplyWhisperPose）
-            float s = -_otSide;
+            float s = _otSide;
             _otM = _otB1 + new Vector2(s * DuelTuning.OtPairGapM, 0f);
             _otBatterTalkYaw = s * DuelTuning.OtFaceInDeg;     // センター方向から伝令の側へ
             _otMsgTalkYaw = -s * DuelTuning.OtFaceInDeg;       // センター方向から打者の側へ
