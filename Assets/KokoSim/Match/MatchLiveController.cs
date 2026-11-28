@@ -2557,7 +2557,7 @@ namespace KokoSim.Unity.Match
             HideScoreCall();
             bool bench1B = DuelStageRig.BenchIsFirstBaseSide(item.TeamIsAway);
             _timeoutSceneRig = DuelPacingActive && (item.Offense
-                ? _duelRig.BeginOffenseTimeoutScene(bench1B)
+                ? _duelRig.BeginOffenseTimeoutScene()
                 : _duelRig.BeginTimeoutScene(bench1B));
             var card = new KokoSim.Engine.Match.Broadcast.TelopCard(item.TeamIsAway, new[] { item.Row });
             _subTelop?.Show(card, item.TeamIsAway ? _awayDisp : _homeDisp, PitcherHudClearance());

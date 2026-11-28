@@ -13,6 +13,7 @@ namespace KokoSim.Unity.Match
     /// 打者は首を向けてうなずく）→ 球審がタイムを解く → 打者は打席へ歩いて戻る（伝令はその場に立ったまま）→ 畳む。
     /// 伝令がベンチから入ってくるところと、ベンチへ戻るところは映さない（issue #1741。ベンチが打者と反対側だと、
     /// ベンチから一直線の道が本塁の上を通っていた）。
+    /// 伝令は打者の外側に立つ＝打者が打席へ戻る道を塞がない。
     ///
     /// 耳打ちの形は収録に無いので、評価した後の骨に後から足す（design-18 §3.1「クリップ内部の緩急は改変しない」）。
     /// 回す量はすべて骨の親のローカル空間で「向き→向き」の写像として作る＝左打者の鏡映親ノードの下でも同じ式で効く
@@ -59,10 +60,9 @@ namespace KokoSim.Unity.Match
         private float _otMouthEarM = -1f; // 撮影・検査用: 耳打ち中の伝令の口と打者の耳の距離の最小[m]
 
         /// <summary>
-        /// 攻撃伝令の場面を始める。<paramref name="benchFirstBaseSide"/>＝伝令が一塁側のベンチから出てくるか
-        /// （<see cref="BenchIsFirstBaseSide"/> で決める）。組めないときは false＝呼び出し側はテロップだけで済ませる。
+        /// 攻撃伝令の場面を始める。組めないときは false＝呼び出し側はテロップだけで済ませる。
         /// </summary>
-        public bool BeginOffenseTimeoutScene(bool benchFirstBaseSide)
+        public bool BeginOffenseTimeoutScene()
         {
             if (!Available || _toActive || _otActive || FieldPlayActive || _batter == null || _batter.Animator == null) return false;
             var run = LoadClip(TimeoutRunClipName);
@@ -81,9 +81,9 @@ namespace KokoSim.Unity.Match
             var bp = StagePos(_batter);
             _otB0 = new Vector2(bp.x, bp.z);
             _otB1 = _otB0 + new Vector2(_otSide * DuelTuning.OtBatterBackM, 0f);
-            // 伝令は打者の**ベンチ側**に立つ（ベンチが打者と反対側＝後攻の右打者などなら本塁側）。
-            // 耳打ちの手・首の向きは立った側から決まる（ApplyWhisperPose）
-            float s = benchFirstBaseSide ? 1f : -1f;
+            // 伝令は打者の**外側**（本塁から遠い側）に立つ。ベンチがどちらでも同じ側＝打者が打席へ戻る道（本塁側）を
+            // 塞がない（オーナー判断 2026-11-28）。耳打ちの手・首の向きは立った側から決まる（ApplyWhisperPose）
+            float s = _otSide;
             _otM = _otB1 + new Vector2(s * DuelTuning.OtPairGapM, 0f);
             _otBatterTalkYaw = s * DuelTuning.OtFaceInDeg;     // センター方向から伝令の側へ
             _otMsgTalkYaw = -s * DuelTuning.OtFaceInDeg;       // センター方向から打者の側へ
@@ -150,7 +150,6 @@ namespace KokoSim.Unity.Match
             if (!_otActive) return;
             _otT += dt;
             StepOtBatter(dt);
-            if (_messenger != null && _messenger.Go != null) PlaceFielder(_messenger, _otM.x, _otM.y, _otMsgTalkYaw);
             if (_otLeaveStartT < 0f && _otT - _otTalkStartT >= DuelTuning.OtTalkSeconds) BeginOtLeave();
 
             // 耳打ちの効き: 話し始めで寄せ、散り始めで戻す
