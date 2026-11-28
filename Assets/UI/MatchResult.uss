@@ -202,8 +202,7 @@
 .mres-pos { margin-left: 0; }
 .mres-pos--w2 { width: 30px; }
 .mres-pos--w3 { width: 40px; }
-.mres-pos--w4 { width: 50px; }   /* 4つ以上は欄（40px）より広い。左右へ5pxずつはみ出す */
-.mres-pos--multi { height: auto; min-height: 22px; padding: 3px 0; }   /* 5つ以上は折り返す。行が伸びる */
+.mres-pos--multi { height: auto; min-height: 22px; padding: 3px 0; }   /* 4つ以上は欄の幅（3字）で折り返す。行が伸びる */
 .mres-pos--entry { background-color: var(--ms-chip); color: var(--ms-tx-2); }
 
 /* 打席結果の札（高さ26px・角丸6px・13px。枠は内側1px） */
