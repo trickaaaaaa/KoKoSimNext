@@ -3463,11 +3463,11 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 接触直後に打球の画面速度を抑える（issue #1766 C案）。速いライナーは、飛んできた球が接触の1コマで
         /// 来た線をそのまま逆へ戻り、画面速度が約9倍に跳ねて「跳ね返った」ように見えた。打球の時刻・物理（<see cref="BattedPointAt"/>）は
-        /// そのままに、描く球だけ軌道上を <see cref="BattedContactLagSeconds"/>（約1コマ）遅らせて出し、
+        /// そのままに、描く球だけ軌道上を <see cref="BattedContactLagSeconds"/>（約2コマ）遅らせて出し、
         /// <see cref="BattedContactEaseSeconds"/> までに本来の時刻へ追い付かせる＝当たった手応え（一瞬の溜め）。表示専用。
         /// </summary>
-        private const float BattedContactLagSeconds = 1f / 60f;
-        private const float BattedContactEaseSeconds = 0.07f;
+        private const float BattedContactLagSeconds = 0.03f;
+        private const float BattedContactEaseSeconds = 0.09f;
 
         /// <summary>描く打球の位置。<see cref="BattedPointAt"/> の軌道を、接触直後だけ少し遅れた時刻で引く（表示専用）。</summary>
         private Vector3 BattedShownPointAt(float t)
