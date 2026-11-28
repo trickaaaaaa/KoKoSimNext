@@ -393,6 +393,44 @@ namespace KokoSim.EditorTests
         }
 
         /// <summary>
+        /// 接触直後の打球は描く位置だけ接触点から追い付く（issue #1766 C案）。最初のコマは軌道（物理）より接触点に近く、
+        /// 0.09 秒を過ぎれば軌道に重なる＝打球の時刻・物理はずらさない。
+        /// </summary>
+        [TestCase(40f, 8f, 150f)]    // 真後ろへの鋭いライナー
+        [TestCase(38f, 5f, -70f)]    // 三塁側への鋭いライナー
+        public void BattedBall_EasesAwayFromContact_ThenRejoinsTheTrajectory(float exitMps, float launchDeg, float bearingDeg)
+        {
+            var rig = Rig;
+            var ball = new KokoSim.Engine.Match.Batting.BattedBall
+                { ExitVelocityMps = exitMps, LaunchAngleDeg = launchDeg, BearingDeg = bearingDeg };
+            var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball,
+                new KokoSim.Engine.Match.Pitching.Aerodynamics(), new KokoSim.Engine.Match.Fielding.FieldingCoefficients(),
+                new KokoSim.Engine.Match.Field.FieldGeometry(), false, false, false);
+            var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+            rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, null, play.Ball[1]);
+            for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
+            Assert.That(rig.BattedElapsedSeconds, Is.GreaterThanOrEqualTo(0f), "前提: 打球になった");
+
+            var contact = rig.BattedPointForCapture(0f).Value;
+            rig.Tick(1f / 60f);
+            float t = rig.BattedElapsedSeconds;
+            Assert.That(t, Is.LessThan(0.09f), "前提: まだ接触直後");
+            var shown = rig.BallLocalForCapture;
+            if (shown.HasValue)
+            {
+                var truth = rig.BattedPointForCapture(t).Value;
+                Assert.That(Vector3.Distance(shown.Value, contact), Is.LessThan(Vector3.Distance(truth, contact) * 0.6f),
+                    "接触直後の最初のコマは、軌道より接触点の近くに描く");
+            }
+            for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
+            Assert.That(rig.BattedElapsedSeconds, Is.GreaterThan(0.09f));
+            var later = rig.BallLocalForCapture;
+            if (later.HasValue)
+                Assert.That(Vector3.Distance(later.Value, rig.BattedPointForCapture(rig.BattedElapsedSeconds).Value), Is.LessThan(1e-3f),
+                    "0.09秒を過ぎたら軌道に重なる");
+        }
+
+        /// <summary>
         /// 叩きつけた速いファウルは着地点（セグメントの終わり）で止まる。そのとき球が宙に残ったまま真下へ落ちる
         /// （自由落下のままだと打点 0.7m から落ちきるのに 0.38 秒かかり、水平は 0.1 秒で止まる）と、
         /// 壁にぶつかって落ちたように見えた（issue #1766）。水平が止まった時点で球は地面にいること。
