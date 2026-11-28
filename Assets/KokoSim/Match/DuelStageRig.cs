@@ -3415,7 +3415,7 @@ namespace KokoSim.Unity.Match
         {
             _battedT += deltaTime;
             if (_battedT > BattedMaxSeconds) { HideBall(); return; }
-            var p = BattedPointAt(_battedT);
+            var p = BattedShownPointAt(_battedT);
             // 一度画面の外へ出た打球は戻さない（issue #1074）。真後ろへの弱い飛球は画面の上へ抜けたあと落ちてきて
             // 上端から入り直し、叩きつけた速いファウルは横の端から入り直して、固定の構図では「画面の端で跳ね返った」
             // ように見えた。行方は画面の外＝そこで描くのをやめる。
@@ -3458,6 +3458,24 @@ namespace KokoSim.Unity.Match
             int drop = 0;
             while (drop + 1 < _trail.Count && _trail[drop + 1].w < cut) drop++;
             if (drop > 0) _trail.RemoveRange(0, drop);
+        }
+
+        /// <summary>
+        /// 接触直後に打球の画面速度を抑える秒数（issue #1766 C案）。速いライナーは、飛んできた球が接触の1コマで
+        /// 来た線をそのまま逆へ戻り、画面速度が約9倍に跳ねて「跳ね返った」ように見えた。打球の時刻・物理（<see cref="BattedPointAt"/>）は
+        /// そのままに、描く位置だけ接触点から滑らかに追い付かせて「当たった」手応えにする。
+        /// </summary>
+        private const float BattedContactEaseSeconds = 0.05f;
+
+        /// <summary>描く打球の位置。<see cref="BattedPointAt"/> の軌道に、接触点から追い付く見た目の遅れを掛ける（表示専用）。</summary>
+        private Vector3 BattedShownPointAt(float t)
+        {
+            var p = BattedPointAt(t);
+            if (t >= BattedContactEaseSeconds) return p;
+            float u = Mathf.Max(0f, t) / BattedContactEaseSeconds;
+            float g = u * u * (3f - 2f * u);   // 出だしの速さ0→終わりは軌道の速さに滑らかにつながる
+            var p0 = BattedPointAt(0f);
+            return p0 + (p - p0) * g;
         }
 
         /// <summary>打球の位置（ステージローカル）。engine のセグメント＋打点合わせの補正。</summary>
@@ -3568,10 +3586,10 @@ namespace KokoSim.Unity.Match
         public Vector3? BallLocalForCapture
             => _ball == null || !_ball.activeSelf ? (Vector3?)null : _ball.transform.localPosition;
 
-        /// <summary>検査用: 打球の計算上の位置のビューポート座標（描くかどうかに関係なく）。</summary>
+        /// <summary>検査用: 打球の描く位置（接触直後の見た目の遅れを含む）のビューポート座標（描くかどうかに関係なく）。</summary>
         public Vector3? BattedViewportForCapture(float t)
             => _batted == null || _camera == null ? (Vector3?)null
-                : _camera.WorldToViewportPoint(_root.transform.TransformPoint(BattedPointAt(t)));
+                : _camera.WorldToViewportPoint(_root.transform.TransformPoint(BattedShownPointAt(t)));
 
         /// <summary>
         /// 打球が対決構図のビューポートから出たか（issue #481）。呼び出し側（<c>MatchLiveController</c>）は
@@ -3591,7 +3609,7 @@ namespace KokoSim.Unity.Match
                 // 判定のフレームでまだ乗り換えていないことがある。ここを「画面外」と返すと据え置きが始まらず、
                 // 打球を1コマも描かずに守備ビューへ切り替わる＝これから打点（画面の中）に出る球として扱う。
                 if (_battedT < 0f) return _batted == null || _ballT < 0f;
-                var local = BattedPointAt(_battedT);
+                var local = BattedShownPointAt(_battedT);
                 var vp = _camera.WorldToViewportPoint(_root.transform.TransformPoint(local));
                 bool inFrame = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
                 return !inFrame;
@@ -6664,7 +6682,7 @@ namespace KokoSim.Unity.Match
         public string BattedDiagForCapture()
         {
             if (_battedT < 0f) return "batted=なし";
-            var local = BattedPointAt(_battedT);
+            var local = BattedShownPointAt(_battedT);
             var vp = _camera.WorldToViewportPoint(_root.transform.TransformPoint(local));
             bool inFrame = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
             return "batted t=" + _battedT.ToString("F3") + "s"
