@@ -331,6 +331,9 @@ namespace KokoSim.Unity.Shell
 
         public bool InTournament => Mode == GameMode.Tournament && Runner != null;
 
+        /// <summary>背番号・ベンチ入りを固めている間（自校が大会に残っている間）。メンバー設定画面はこれだけを見る。</summary>
+        public bool UniformNumbersLocked => InTournament && UniformNumberLock.IsLocked(Runner);
+
         // ===== 観るだけの甲子園（自校が出場していない年・設計書05 §1.1a） =====
         // 自校が県予選で敗退しても甲子園は開催され、展望とトーナメント表は閲覧できる（オーナー決定 2026-08-21）。
         // 対話モード（Mode=Tournament）には入らない＝プレイヤーは通常どおり週を進め、その経過日ぶんだけ
@@ -577,6 +580,8 @@ namespace KokoSim.Unity.Shell
         public void EnterTournament(TournamentKind kind, string title, ITournamentRunner runner,
             IReadOnlyList<School> field = null)
         {
+            // 大会中は背番号を入れ替えられなくなる＝固まる前に、空いたベンチ入りを今の自動補充の作法で埋めておく。
+            UniformNumberAssigner.FillVacancies(RosterService.Active);
             Mode = GameMode.Tournament;
             Kind = kind;
             Title = title;
