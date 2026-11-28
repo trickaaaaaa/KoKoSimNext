@@ -315,6 +315,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static Vector3 TimeoutCameraPos = new Vector3(5.5f, 7.0f, 5.0f);
 
+        /// <summary>撮影用: 0以上なら伝令の場面のカメラを輪の捕手の寄りにする（捕手の正面から時計回りの角度[度]。issue #1791）。</summary>
+        public static float TimeoutCatcherCamAzimuthForCapture = -1f;
+
         /// <summary>縦に収めたい実寸[m]（輪の全身と足元のマウンド。構図は画角でなく実寸で決める＝3d-character.md）。</summary>
         public static float TimeoutFrameHeightM = 7.5f;
 

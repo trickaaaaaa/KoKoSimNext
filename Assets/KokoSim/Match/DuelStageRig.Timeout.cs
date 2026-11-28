@@ -253,6 +253,18 @@ namespace KokoSim.Unity.Match
             FramePreview(DuelTuning.TimeoutCameraPos, new Vector3(_toCenter.x, DuelTuning.TimeoutLookY, _toCenter.y), DuelTuning.TimeoutFrameHeightM);
         }
 
+        /// <summary>撮影用: 輪の捕手を寄りで追う（<see cref="DuelTuning.TimeoutCatcherCamAzimuthForCapture"/>）。</summary>
+        private void FollowCatcherForCapture()
+        {
+            float az = DuelTuning.TimeoutCatcherCamAzimuthForCapture;
+            if (az < 0f || !_toActive) return;
+            var cm = _toMembers.Find(m => m.Role == TimeoutRole.Catcher);
+            if (cm == null) return;
+            float yaw = (cm.Yaw + az) * Mathf.Deg2Rad;
+            var p = cm.Pos + new Vector2(Mathf.Sin(yaw), Mathf.Cos(yaw)) * 2.0f;
+            FramePreview(new Vector3(p.x, 1.25f, p.y), new Vector3(cm.Pos.x, 0.85f, cm.Pos.y), 1.7f);
+        }
+
         /// <summary>stage-local の a から b を向く yaw[度]（素の向き +Z のクリップ用）。</summary>
         private static float YawToward(Vector2 a, Vector2 b) => Mathf.Atan2(b.x - a.x, b.y - a.y) * Mathf.Rad2Deg;
 
@@ -265,6 +277,7 @@ namespace KokoSim.Unity.Match
             AdvanceRattledFx(deltaTime);   // 伝令で動揺が解けた渦巻きは場面の中で消えていく（issue #1178）
             bool posed = StepPoseQuantum(deltaTime);
             StepTimeoutScene(deltaTime);
+            FollowCatcherForCapture();
             StepOffenseTimeoutScene(deltaTime, posed);   // 攻撃伝令の場面（issue #1175）
         }
 
