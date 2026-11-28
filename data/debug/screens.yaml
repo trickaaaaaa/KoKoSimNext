@@ -2216,3 +2216,24 @@ screens:
       - click: tm-result-ok
       - wait: 3000ms
       - shot: 02-after-ok-talk
+
+  # ── 試合結果の打撃成績: 守備位置が何度も入れ替わった選手の欄が折り返して、打順・名前に重ならない（#1692） ──
+  - id: match-result-pos-wrap-1692
+    name: "試合結果の打撃成績・打席結果で、5つ以上つながる守備位置が折り返して全部出る（打順・名前と重ならない）"
+    steps:
+      - new_game: {seed: 1}
+      - show: MatchResult
+      - call: MatchResultShooter.ShowSubsGameForRecipe()
+      - wait: 5
+      - shot: {name: 01-result, h: 1500}
+
+  - id: match-result-pos-wrap-1692-small
+    name: "同・本番の参照解像度 1600×900 を 1280×720 の窓で見たときの見え方（ブラウザ版相当）"
+    game_scale: true
+    size: {w: 1280, h: 720}
+    steps:
+      - new_game: {seed: 1}
+      - show: MatchResult
+      - call: MatchResultShooter.ShowSubsGameForRecipe()
+      - wait: 5
+      - shot: 01-result
