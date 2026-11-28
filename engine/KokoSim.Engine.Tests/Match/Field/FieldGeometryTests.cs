@@ -87,4 +87,28 @@ public sealed class FieldGeometryTests
         Assert.Equal(118, field.CenterFenceM, 6);
         Assert.Equal(4.0, field.FenceHeightM, 6);
     }
+
+    /// <summary>
+    /// 一塁手・三塁手の標準守備位置を固定する（issue #1640）。座標を動かしたら落ちる。
+    /// ファウルラインから垂直に 3.95m（約13ft）・線沿いに本塁から 31.0m（一塁/三塁ベースの約3.6m後ろ）。
+    /// 旧値 (±17.0, 24.0)（線から 4.95m・線沿い 29.0m）より線寄りかつ深い。
+    /// </summary>
+    [Fact]
+    public void StandardPosition_CornerInfielders_AreFixed()
+    {
+        var (firstX, firstZ) = FieldGeometry.StandardPosition(FieldPosition.FirstBase);
+        var (thirdX, thirdZ) = FieldGeometry.StandardPosition(FieldPosition.ThirdBase);
+
+        Assert.Equal(19.12, firstX, 6);
+        Assert.Equal(24.71, firstZ, 6);
+        Assert.Equal(-19.12, thirdX, 6);
+        Assert.Equal(24.71, thirdZ, 6);
+
+        // ファウルライン（x=z の45°線）からの垂直距離と、線沿いの深さ。
+        var perpFromLine = (firstZ - firstX) / Math.Sqrt(2.0);
+        var alongLine = (firstX + firstZ) / Math.Sqrt(2.0);
+        Assert.Equal(3.95, perpFromLine, 2);
+        Assert.Equal(31.0, alongLine, 1);
+        Assert.True(alongLine > new FieldGeometry().BaseDistanceM, "一塁手・三塁手はベースより後ろに立つ");
+    }
 }

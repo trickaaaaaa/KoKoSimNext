@@ -64,7 +64,7 @@ public sealed class InfieldChargeTests
     [InlineData(12.0, -18.0)]   // 三塁線寄りのボテボテ
     [InlineData(12.0, -6.0)]    // 投手前のボテボテ
     [InlineData(12.0, 8.0)]     // 一二塁間のボテボテ
-    [InlineData(16.0, 20.0)]    // 一塁線寄りの緩いゴロ
+    [InlineData(16.0, 24.0)]    // 一塁線寄りの緩いゴロ（#1640 で一塁手が線寄り・深くなり、方位20°＝線から25°の緩いゴロは投手が捕るようになった）
     public void SlowGrounder_IsChargedForward(double exit, double bearing)
     {
         var off = Grounder(exit, bearing, Off);

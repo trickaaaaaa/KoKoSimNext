@@ -152,10 +152,15 @@ public sealed record FieldGeometry
     {
         (FieldPosition.Pitcher, new Vector3D(0, 0, MoundM)),
         (FieldPosition.Catcher, new Vector3D(0, 0, -1.0)),
-        (FieldPosition.FirstBase, new Vector3D(17.0, 0, 24.0)),
+        // 一塁手・三塁手はファウルラインから垂直に 3.95m（約13ft）・線沿いに本塁から 31.0m（ベースの 3.6m 後ろ）
+        // ＝線から 7.3°・本塁から 31.2m（issue #1640）。旧値 (±17.0, 24.0) は線から 4.95m・線沿い 29.0m（9.7°・29.4m）で、
+        // 線際 0〜5° のゴロが 7% 抜けていた。線へ 1m・深く 2m 寄せると線際の抜けが約3割に減り、深さで横の届く角度が
+        // 広がるので三遊間・一二塁間の空きは小さく済む（Balance CLI corner-line-games 12000試合の実測）。
+        // MLB Statcast の標準守備位置の範囲（三塁手は右打者に線から 3〜15°・本塁から 80〜130ft）に入る。
+        (FieldPosition.FirstBase, new Vector3D(19.12, 0, 24.71)),
         (FieldPosition.SecondBase, new Vector3D(9.0, 0, 40.0)),
         (FieldPosition.Shortstop, new Vector3D(-9.0, 0, 40.0)),
-        (FieldPosition.ThirdBase, new Vector3D(-17.0, 0, 24.0)),
+        (FieldPosition.ThirdBase, new Vector3D(-19.12, 0, 24.71)),
         (FieldPosition.LeftField, new Vector3D(-37.6, 0, 70.6)),
         (FieldPosition.CenterField, new Vector3D(0, 0, 82.0)),
         (FieldPosition.RightField, new Vector3D(37.6, 0, 70.6)),
