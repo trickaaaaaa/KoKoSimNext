@@ -792,6 +792,44 @@ namespace KokoSim.EditorTests
                 "塁審にマスク・胸当てが付いている: " + string.Join(",", gear));
         }
 
+        // ---- 攻撃伝令の場面は本塁の上を通らない（issue #1741） ----
+
+        /// <summary>
+        /// 攻撃伝令の場面のあいだ、伝令役も打者も本塁の上を通らず、伝令役は最初のコマから打者の横にいて（入ってくる足取りを映さない）、
+        /// 打者が打席へ戻る帰りの全コマで打者と伝令役が重ならないこと（終わりは打者が打席へ戻るので離れてよい）。
+        /// 伝令は打者の外側に立つのでベンチ側（先攻/後攻）に依らない＝右打者・左打者の2通り（ベンチ側は引数に無い）。
+        /// 以前は伝令がベンチ側に立ち、ベンチが打者と反対側（後攻の右打者・先攻の左打者）だと
+        /// ベンチから一直線の道が本塁を横切り、立ったままの伝令を打者が通り抜けた。
+        /// </summary>
+        [TestCase(false, TestName = "OffenseTimeout_StaysOffHomePlate_RightBatter")]
+        [TestCase(true, TestName = "OffenseTimeout_StaysOffHomePlate_LeftBatter")]
+        public void OffenseTimeout_StaysOffHomePlate_AndNeverOverlapsTheBatter(bool batterLeft)
+        {
+            var rig = Rig;
+            rig.SetHandedness(batterLeft, false);
+            float settle = 1f / DuelStageRig.PoseFps;
+            for (int i = 0; i < 12; i++) rig.Tick(settle);
+            if (!rig.BeginOffenseTimeoutScene()) Assert.Ignore("攻撃伝令の場面が組めない（収録未導入の端末）");
+
+            const float dt = 1f / 60f;
+            float minMsg = float.MaxValue, minBat = float.MaxValue, minApart = float.MaxValue, firstApart = -1f;
+            for (float t = 0f; t < 40f && !rig.TimeoutSceneDone; t += dt)
+            {
+                var (b, m) = rig.TimeoutPositionsForCapture();
+                minMsg = Mathf.Min(minMsg, m.magnitude);
+                minBat = Mathf.Min(minBat, b.magnitude);
+                float apart = Vector2.Distance(b, m);
+                minApart = Mathf.Min(minApart, apart);
+                if (firstApart < 0f) firstApart = apart;
+                rig.Tick(dt);
+            }
+            Assert.That(rig.TimeoutSceneDone, "場面が終わらない");
+            Assert.That(minMsg, Is.GreaterThan(1.0f), $"伝令役が本塁のそば（{minMsg:F2}m）を通った");
+            Assert.That(minBat, Is.GreaterThan(0.6f), $"打者が本塁のそば（{minBat:F2}m）を通った");
+            Assert.That(firstApart, Is.LessThan(1.0f), $"最初のコマで伝令役が打者から離れている（{firstApart:F2}m）＝ベンチから入ってくる足取りが映っている");
+            Assert.That(minApart, Is.GreaterThan(0.4f), $"打者と伝令役が重なった（最小 {minApart:F2}m）");
+        }
+
         // ---- バントのあとの打者走者の足の滑り（issue #1734） ----
 
         /// <summary>
