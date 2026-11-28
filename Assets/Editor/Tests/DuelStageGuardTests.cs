@@ -393,6 +393,32 @@ namespace KokoSim.EditorTests
         }
 
         /// <summary>
+        /// 叩きつけた速いファウルは着地点（セグメントの終わり）で止まる。そのとき球が宙に残ったまま真下へ落ちる
+        /// （自由落下のままだと打点 0.7m から落ちきるのに 0.38 秒かかり、水平は 0.1 秒で止まる）と、
+        /// 壁にぶつかって落ちたように見えた（issue #1766）。水平が止まった時点で球は地面にいること。
+        /// </summary>
+        [TestCase(30f, -12f, -60f)]
+        [TestCase(35f, -15f, 70f)]
+        [TestCase(30f, -8f, 100f)]
+        public void FoulBall_ThatStopsAtItsLanding_IsOnTheGroundWhenItStops(float exitMps, float launchDeg, float bearingDeg)
+        {
+            var rig = Rig;
+            var ball = new KokoSim.Engine.Match.Batting.BattedBall
+                { ExitVelocityMps = exitMps, LaunchAngleDeg = launchDeg, BearingDeg = bearingDeg };
+            var tl = KokoSim.Engine.Match.Timeline.TimelineBuilder.BuildFoulFlight(ball,
+                new KokoSim.Engine.Match.Pitching.Aerodynamics(), new KokoSim.Engine.Match.Fielding.FieldingCoefficients(),
+                new KokoSim.Engine.Match.Field.FieldGeometry(), false, false, false);
+            var play = KokoSim.Engine.Match.Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(tl);
+            rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, null, play.Ball[1]);
+            for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(1f / 240f);
+            Assert.That(rig.BattedElapsedSeconds, Is.GreaterThanOrEqualTo(0f), "前提: 打球になった");
+            float dur = (float)(play.Ball[1].T1 - play.Ball[1].T0);
+            Assert.That(dur, Is.LessThan(0.3f), "前提: 自由落下より先に着地する当たり");
+            var p = rig.BattedPointForCapture(dur).Value;
+            Assert.That(p.y, Is.LessThan(0.05f), $"水平が止まる着地の時刻（{dur:F2}s）に球が高さ {p.y:F2}m の宙に残っている");
+        }
+
+        /// <summary>
         /// 同じ見張りを初速・角度・方向の格子で掃く（issue #1074「ファウルが画面内で跳ね返る」）。打球の進む向きに対して
         /// 逆向きに動くコマが無いこと、物理の着地よりずっと早く地面に着いて跳ね上がらないこと
         /// （上がっていく低いライナーを「転がり」で描いていて、打者の目の前で地面に当たり 2m 近く跳ね上がっていた）。

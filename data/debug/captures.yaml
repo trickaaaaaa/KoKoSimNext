@@ -173,6 +173,14 @@ captures:
     duel_seconds: 3.0
     video: {from: start, to: end, fps: 20}
 
+  - id: foul-liner-1766
+    name: "鋭いライナー性のファウルが対決ビューで跳ね返って見える（issue #1766）"
+    scenario: of-grounder-norunner-lab
+    manager: home
+    force: LinerFoul
+    duel_seconds: 2.0
+    video: {from: start, to: end, fps: 60}
+
   - id: calm-badge-1177
     name: "伝令が効いている間の制球↑（投手の帯の上）・ミート↑（打者の帯の下）（issue #1177）"
     scenario: steal-sign-lab

@@ -3396,6 +3396,8 @@ namespace KokoSim.Unity.Match
             // 打点から地面までの自由落下時間。左右のずれ（±0.4m程度）もこの時間で解消する
             // ⚠ 区間の長さを超えない（issue #1543）。叩きつけたファウルのようにセグメントが fade より先に終わる（球が
             //    着地点で静止する）と、残りの補正が静止した球を打球の進む向きと逆へ引き戻し「跳ね返った」ように見えた
+            //    高さも同じ: 自由落下（4.9t²）のままだと、着地点で止まった球が宙に浮いたまま真下へ落ちる（issue #1766）ので、
+            //    落ちきる時刻を fade に揃える（区間が長いときは fade＝自由落下時間なので従来と同じ曲線）
             _battedFade = Mathf.Min(Mathf.Sqrt(2f * Mathf.Max(0.05f, Mathf.Abs(_battedOffset.y)) / 9.8f), _battedDur);
             _battedT = 0f;
             _battedLeftFrame = false;
@@ -3472,7 +3474,7 @@ namespace KokoSim.Unity.Match
             // 最初のフレームから上がる（平らな区間が無い）。ゴロは従来どおり max（打点から落ちて弾む）。
             float h = (float)b.H;
             float y = _battedFromGround && _battedOffset.y > 0f
-                ? Mathf.Max(h, _battedOffset.y - 4.9f * t * t)   // 打点から落ちる／追い越されたら弧へ乗る
+                ? Mathf.Max(h, _battedFade > 1e-4f ? _battedOffset.y * (1f - (t * t) / (_battedFade * _battedFade)) : 0f)   // 打点から落ちる／追い越されたら弧へ乗る
                 : h + _battedOffset.y * k;                       // 打点の高さから始まるプロファイル（差は線形に解消）
             return new Vector3(
                 (float)b.X + _battedOffset.x * k,
