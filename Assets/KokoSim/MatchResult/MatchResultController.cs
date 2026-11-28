@@ -296,9 +296,13 @@ namespace KokoSim.Unity.MatchResult
                 MatchResultPosKind.Dh => "mside-pos--dh",
                 _ => "mres-pos--entry",
             };
-            // 位置が2つ以上つながる行は、文字数ぶん欄を広げる（文字は詰めない）。
-            var chip = Cell(text, "mside-pos", "mres-pos", cls, "f-body-bd");
-            if (text.Length >= 2) chip.AddToClassList(text.Length switch { 2 => "mres-pos--w2", 3 => "mres-pos--w3", _ => "mres-pos--w4" });
+            // 位置が2つ以上つながる行は、文字数ぶん欄を広げる（文字は詰めない）。4字を超えたら折り返して全部出す。
+            var lines = MatchResultState.WrapPos(text, 4).Split('\n');
+            var chip = Cell(string.Join("\n", lines), "mside-pos", "mres-pos", cls, "f-body-bd");
+            var longest = 0;
+            foreach (var l in lines) if (l.Length > longest) longest = l.Length;
+            if (longest >= 2) chip.AddToClassList(longest switch { 2 => "mres-pos--w2", 3 => "mres-pos--w3", _ => "mres-pos--w4" });
+            if (lines.Length > 1) chip.AddToClassList("mres-pos--multi");
             wrap.Add(chip);
             return wrap;
         }

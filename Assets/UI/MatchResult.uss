@@ -146,11 +146,11 @@
     flex-shrink: 0;
     flex-direction: row;
     align-items: center;
-    height: 38px;
+    min-height: 38px;
     border-bottom-width: 1px;
     border-bottom-color: var(--ms-chip);
 }
-.mres-tr--head { height: 30px; border-bottom-color: var(--mr-rule); }
+.mres-tr--head { min-height: 30px; border-bottom-color: var(--mr-rule); }
 .mres-tr--total { border-top-width: 1.5px; border-top-color: var(--ms-ink); border-bottom-width: 0; }
 .mres-th { font-size: 11px; color: var(--ms-tx-3); -unity-text-align: middle-right; }
 .mres-th--center { -unity-text-align: middle-center; }
@@ -203,6 +203,7 @@
 .mres-pos--w2 { width: 30px; }
 .mres-pos--w3 { width: 40px; }
 .mres-pos--w4 { width: 50px; }   /* 4つ以上は欄（40px）より広い。左右へ5pxずつはみ出す */
+.mres-pos--multi { height: auto; min-height: 22px; padding: 3px 0; }   /* 5つ以上は折り返す。行が伸びる */
 .mres-pos--entry { background-color: var(--ms-chip); color: var(--ms-tx-2); }
 
 /* 打席結果の札（高さ26px・角丸6px・13px。枠は内側1px） */

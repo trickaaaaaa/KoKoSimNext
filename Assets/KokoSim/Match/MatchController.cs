@@ -78,7 +78,7 @@ namespace KokoSim.Unity.Match
             {
                 var row = StRow(false);
                 row.Add(StCell(r.Order, "st-ord", false));
-                row.Add(StCell(r.Pos, "st-pos", false));
+                row.Add(StCell(MatchResult.MatchResultState.WrapPos(r.Pos, 3), "st-pos", false));
                 row.Add(StCell(r.Name, "st-name", false));
                 row.Add(StCell(r.Ab.ToString(), "st-num", false));
                 row.Add(StNum(r.H, r.H > 0));
