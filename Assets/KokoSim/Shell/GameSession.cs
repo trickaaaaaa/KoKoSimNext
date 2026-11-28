@@ -675,6 +675,24 @@ namespace KokoSim.Unity.Shell
             GrowthEventModel.SlumpRecoveryAfterMatch(detail, managerWasAway, RosterService.Roster, GrowthEventsCoeff);
         }
 
+        private MatchMvpResult _mvpNotice;
+
+        /// <summary>
+        /// 今日のMVP（設計書02 §5.3c・issue #1745）: 公式戦に勝った試合の自校でいちばん活躍した1人へご褒美（活躍した分野の経験値と調子一段）。
+        /// 練習試合は呼ばない。負けなら何も起きない。結果は通知フィード・会話用に貯め、ホーム画面が <see cref="DrainMvpNotice"/> で引き取る。乱数なし。
+        /// </summary>
+        private void ApplyMatchMvp(GameResult detail, bool managerWasAway)
+            => _mvpNotice = MatchMvp.Apply(detail, managerWasAway, RosterService.Roster, Kind,
+                GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
+
+        /// <summary>今日のMVPの結果を取り出して空にする（無ければ null）。</summary>
+        public MatchMvpResult DrainMvpNotice()
+        {
+            var r = _mvpNotice;
+            _mvpNotice = null;
+            return r;
+        }
+
         /// <summary>
         /// 自校の1試合（公式戦・練習試合）の結果を監督成長の条件へ控える（issue #1483）。大差負けの判定は
         /// <see cref="MatchConditionModel.IsBlowoutLoss"/>（調子の大敗ペナルティと同じ定義）。乱数なし。
@@ -876,6 +894,7 @@ namespace KokoSim.Unity.Shell
                 FoldOpponentIntoNation(detail, LastOutcome);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway, official: true);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchMvp(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 RecordMatchForManagerGrowth(detail, LastOutcome.ManagerWasAway, NationService.SchoolById(LastOutcome.OpponentId));
@@ -931,6 +950,7 @@ namespace KokoSim.Unity.Shell
                 FoldOpponentIntoNation(detail, LastOutcome);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway, official: true);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchMvp(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
                 ApplyBigStage(detail, LastOutcome.ManagerWasAway, LastOutcome.OpponentId);
                 RecordMatchForManagerGrowth(detail, LastOutcome.ManagerWasAway, NationService.SchoolById(LastOutcome.OpponentId));

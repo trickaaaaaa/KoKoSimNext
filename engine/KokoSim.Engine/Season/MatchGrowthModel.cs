@@ -76,8 +76,7 @@ public static class MatchGrowthModel
         foreach (var f in fielding)
             if (f.SourceId is { } fid) ownErrors[fid] = ownErrors.GetValueOrDefault(fid) + f.Errors;
 
-        double Scale(DevelopingPlayer dp)
-            => stages.Coefficient(dp.GrowthType, calendar.StageIndex(dp.Grade, week)) * stageMult;
+        double Scale(DevelopingPlayer dp) => SuccessScale(dp, stages, calendar, week, stageMult);
 
         foreach (var line in batting)
         {
@@ -106,6 +105,10 @@ public static class MatchGrowthModel
             DevelopmentModel.ApplyExp(dp, AbilityKind.Stamina, exp, c);
         }
     }
+
+    /// <summary>成功体験ボーナス1回ぶんの成長段階係数×大会の格倍率。今日のMVPのご褒美（<see cref="MatchMvp"/>）も同じ値を使う。</summary>
+    internal static double SuccessScale(DevelopingPlayer dp, GrowthStageTable stages, SeasonCalendar calendar, int week, double stageMult)
+        => stages.Coefficient(dp.GrowthType, calendar.StageIndex(dp.Grade, week)) * stageMult;
 
     internal static bool IsGoodBatting(BattingLine l, TrainingCoefficients c)
         => l.Hits >= c.MatchSuccessMinHits || l.Rbi >= c.MatchSuccessMinRbi || l.HomeRuns >= 1;

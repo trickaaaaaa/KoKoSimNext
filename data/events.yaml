@@ -36,6 +36,7 @@
 #       …… mgr_big_loss（{area}{lesson}）・mgr_rival_lesson（{rival}）・coaching_seminar（全部）だけが渡す（issue #1483）
 #   {mentor_years} 名伯楽が付く年数（出会った年を含む）…… mgr_mentor だけが渡す（issue #1679）
 #   {drafted} 指名された者の名前（順位順・「、」区切り）／{missed} 指名されなかった者の名前 …… draft_scene_* だけが渡す（issue #1731）
+#   {mvp_deed} 今日のMVPの活躍の一文（「4打数3安打、2打点」「9回1失点、10奪三振の完投」）…… postgame_mvp だけが渡す（issue #1745）
 #   {camp_cost} 合宿の費用[万円] ／ {camp_weeks} 合宿の期間[週] ／ {camp_mult} 合宿の経験値の倍率 …… summer_camp / winter_camp だけが渡す（issue #1482）
 #   {koshien} {senbatsu} {jingu} ほか 大会名（data/display-names.yaml の表から入る。issue #1319）。
 #     実在の大会名は文に直接書かない＝表を替えると全部の文が替わる。「甲子園の土」も {koshien}の土 と書く
@@ -2670,6 +2671,29 @@ events:
             say: "やりましたね、監督！今日のおにぎり、いつもより大きく握ってきて正解でした。"
           - who: team_manager
             say: "験担ぎなので、また同じ大きさにします。"
+
+  # 公式戦に勝ったあとのMVPの会話（issue #1745）。勝ちの会話（postgame_win / postgame_win_big）の直後に続けて出る。
+  # {player}＝MVPの選手、{mvp_deed}＝活躍の一文（成績から組む）。最終行のご褒美の結果行は呼び出し元が実際に動いた中身で足す。
+  - id: postgame_mvp
+    kind: System
+    scene: bench
+    text: "公式戦に勝った。今日のMVPが決まった。"
+    variants:
+      - lines:
+          - who: team_manager
+            say: "今日のMVPは{player}君ですね。"
+          - who: team_manager
+            say: "{mvp_deed}。スコアブックの余白に、花丸をつけておきました。"
+      - lines:
+          - who: team_manager
+            say: "監督、今日のMVPは{player}君です。"
+          - who: team_manager
+            say: "{mvp_deed}でした。文句なしですね。"
+      - lines:
+          - who: team_manager
+            say: "今日のMVPは、{player}君ですね。"
+          - who: team_manager
+            say: "{mvp_deed}。ベンチでみんな、同じことを言ってました。"
 
   - id: postgame_loss
     kind: System
