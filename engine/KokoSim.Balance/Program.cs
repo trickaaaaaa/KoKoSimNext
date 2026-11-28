@@ -49,6 +49,7 @@ internal static class CommandLine
             "infield-hit-profile" => RunInfieldTiming(args[1..], profile: true),
             "corner-line-profile" => RunCornerLineProfile(args[1..]),
             "corner-line-games" => RunCornerLineGames(args[1..]),
+            "grounder-gap-profile" => RunGrounderGapProfile(args[1..]),
             "error-kinds" => RunErrorKinds(args[1..]),
             "grounder-advance" => RunGrounderAdvance(args[1..]),
             "trace" => RunTrace(args[1..]),
@@ -722,6 +723,43 @@ internal static class CommandLine
         Console.WriteLine($"# 内野ゴロの判定margin（seed {seed}・{atBats}打席）");
         Console.WriteLine();
         Console.Write(timing.ToMarkdown());
+        return 0;
+    }
+
+    /// <summary>内野ゴロの向き別の「抜けた/止まった」と処理野手の内訳（issue #1789）。</summary>
+    private static int RunGrounderGapProfile(string[] args)
+    {
+        var atBats = 40000;
+        var seed = 42UL;
+        string? coefficientsPath = null;
+        string? stadiumId = null;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--at-bats":
+                case "--games":
+                    atBats = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
+                    break;
+                case "--seed":
+                    seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
+                    break;
+                case "--coefficients":
+                    coefficientsPath = RequireValue(args, ref i);
+                    break;
+                case "--stadium":
+                    stadiumId = RequireValue(args, ref i);
+                    break;
+                default:
+                    return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+
+        var p = AtBatSimulation.RunGrounderGapProfile(atBats, seed, coefficientsPath, ResolveStadium(stadiumId));
+        Console.WriteLine($"# 内野ゴロの向き別：止まった/抜けた（seed {seed}・{atBats}打席）");
+        Console.WriteLine();
+        Console.Write(p.ToMarkdown());
         return 0;
     }
 

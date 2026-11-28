@@ -889,6 +889,20 @@ public static class FieldingResolver
     private const int MaxInterceptScanSteps = 20_000;
 
     /// <summary>
+    /// 野手がある距離を詰めて打球に触れるまでの時間[s]（反応遅延込み）。投手は投げ終わりで体勢が崩れている
+    /// ぶん、<see cref="FieldingCoefficients.PitcherFieldingReactionPenaltySeconds"/> だけ余分にかかる
+    /// （issue #1789）。<see cref="InfielderCanCutOff"/>・<see cref="FieldInfieldGrounder"/> の cutTime・
+    /// 表示専用の最接近探索（<see cref="FindClosestInfielderMiss"/>・<see cref="FindOppositeSideInfielderMiss"/>）
+    /// 全てがこの1つの式を通ることで、「内野を抜けるか」の判定と「誰がどこで触れるか」が食い違わない。
+    /// </summary>
+    private static double FielderReachSeconds(Fielder f, double travel, FieldingCoefficients coeff)
+    {
+        var reach = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
+        if (f.Position == FieldPosition.Pitcher) reach += coeff.PitcherFieldingReactionPenaltySeconds;
+        return reach;
+    }
+
+    /// <summary>
     /// いずれかの内野手が、打球が内野の外縁を越える前に守備範囲（横の半径＋グラブの届く高さ）で
     /// 打球のライン上を捕えられるか（Issue #63 やること2の判定）。乱数は消費しない＝決定論。
     /// 捕えられない＝ホールを抜く／頭上を越すほど強い打球のときだけ内野を抜けたと判定する。
@@ -909,8 +923,7 @@ public static class FieldingResolver
                     if (!IsInfield(f)) continue;
                     var radius = Math.Max(0.0, InfielderRadius(f, coeff));
                     var travel = Math.Max(0.0, (p - f.Location).Length - radius);
-                    var reach = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
-                    if (reach <= t) return true; // この時刻・位置で捕えられる
+                    if (FielderReachSeconds(f, travel, coeff) <= t) return true; // この時刻・位置で捕えられる
                 }
             }
         }
@@ -941,8 +954,7 @@ public static class FieldingResolver
                 if (!IsInfield(f)) continue;
                 var radius = Math.Max(0.0, InfielderRadius(f, coeff));
                 var travel = Math.Max(0.0, (p - f.Location).Length - radius);
-                var reach = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
-                var shortfall = reach - t; // 正=間に合わない。最小=最も惜しかった。
+                var shortfall = FielderReachSeconds(f, travel, coeff) - t; // 正=間に合わない。最小=最も惜しかった。
                 if (shortfall < bestShortfall)
                 {
                     bestShortfall = shortfall;
@@ -988,7 +1000,7 @@ public static class FieldingResolver
                 if (!anySide && SideOf(f) * firstSide >= 0.0) continue;
                 var radius = Math.Max(0.0, InfielderRadius(f, coeff));
                 var travel = Math.Max(0.0, (p - f.Location).Length - radius);
-                var shortfall = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds - t;
+                var shortfall = FielderReachSeconds(f, travel, coeff) - t;
                 if (shortfall < bestShortfall)
                 {
                     bestShortfall = shortfall;
@@ -1093,10 +1105,10 @@ public static class FieldingResolver
                 if (aboveGlove) continue;
                 if (double.IsPositiveInfinity(cutTime[k]))
                 {
-                    // 頭上抜け判定（InfielderCanCutOff）と**同じ式**。あちらが「抜けていない」と言った
-                    // 打球は、必ずここで誰かが触れる時刻・点を持つ＝2つの判定が食い違わない。
+                    // 頭上抜け判定（InfielderCanCutOff）と**同じ式**（投手の追加反応遅延込み）。あちらが
+                    // 「抜けていない」と言った打球は、必ずここで誰かが触れる時刻・点を持つ＝2つの判定が食い違わない。
                     var travel = Math.Max(0.0, dist - cutRadius[k]);
-                    if (travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds <= tt)
+                    if (FielderReachSeconds(f, travel, coeff) <= tt)
                     {
                         cutTime[k] = tt;
                         cutPoint[k] = p;
@@ -1107,16 +1119,14 @@ public static class FieldingResolver
                     // 処理点・処理時刻の候補（issue fielder-body-far-from-ball-at-catch）: 体が「飛びつきの
                     // 実効リーチ」まで球に寄れた最初の時刻。守備範囲の半径は「内野を抜けるか」の判定にだけ残す。
                     var travel = Math.Max(0.0, dist - diveReach[k]);
-                    if (travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds <= tt)
+                    if (FielderReachSeconds(f, travel, coeff) <= tt)
                     {
                         bodyTime[k] = tt;
                         bodyPoint[k] = p;
                     }
                 }
                 if (!double.IsPositiveInfinity(gloveTime[k])) continue;
-                var reach = dist / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
-                if (f.Position == FieldPosition.Pitcher) reach += coeff.PitcherFieldingReactionPenaltySeconds;
-                if (reach <= tt) gloveTime[k] = tt; // この点・時刻で実捕球できる
+                if (FielderReachSeconds(f, dist, coeff) <= tt) gloveTime[k] = tt; // この点・時刻で実捕球できる
             }
         }
 
