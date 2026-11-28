@@ -37,15 +37,18 @@ namespace KokoSim.UnityEditorTools
         /// <summary>水平に戻った量がこの px を超えたら拾う（画面 960 幅で 1px 未満の揺れは数えない）。</summary>
         public const float HorizontalBackPx = 8f;
 
+        private static string KindOf(PlaybackBallSegment seg) => seg is EndpointBallSegment e ? "/" + e.Kind : "";
+
         public sealed class Foul
         {
             public int Seed, Pa, Pitch;
             public PlaybackPlay Play;
             public PlaybackBallSegment Batted;
             public float PlateX, PlateY;
+            public float Apex, Dist, Hang, Speed;   // 打球の頂点高さ[m]・着地までの水平距離[m]・滞空[s]・平均水平速度[m/s]
             public string Describe() =>
                 Batted == null ? $"seed={Seed} pa={Pa} p={Pitch} 打球なし plate=({PlateX:F2},{PlateY:F2})"
-                    : $"seed={Seed} pa={Pa} p={Pitch} view={Play.FoulView} {Batted.GetType().Name} T={Batted.T0:F2}-{Batted.T1:F2} plate=({PlateX:F2},{PlateY:F2})";
+                    : $"seed={Seed} pa={Pa} p={Pitch} view={Play.FoulView} {Batted.GetType().Name}{KindOf(Batted)} apex={Apex:F1}m dist={Dist:F1}m hang={Hang:F2}s v={Speed:F1}m/s T={Batted.T0:F2}-{Batted.T1:F2} plate=({PlateX:F2},{PlateY:F2})";
         }
 
         public struct Sample
@@ -104,10 +107,24 @@ namespace KokoSim.UnityEditorTools
                             Seed = (int)seed, Pa = pa, Pitch = i, Play = pt.FoulFlight, Batted = seg,
                             PlateX = (float)(pt.LocationX ?? 0.0), PlateY = (float)(pt.LocationY ?? 0.75),
                         });
+                        if (seg != null) Characterize(list[list.Count - 1]);
                     }
                 }
             }
             return list;
+        }
+
+        private static void Characterize(Foul f)
+        {
+            var seg = f.Batted;
+            double apex = 0;
+            const int N = 40;
+            for (int i = 0; i <= N; i++) apex = Math.Max(apex, seg.At((seg.T1 - seg.T0) * i / N).H);
+            var a = seg.At(0); var b = seg.At(seg.T1 - seg.T0);
+            f.Apex = (float)apex;
+            f.Hang = (float)(seg.T1 - seg.T0);
+            f.Dist = (float)Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+            f.Speed = f.Hang > 1e-3f ? f.Dist / f.Hang : 0f;
         }
 
         /// <summary>打球タイムラインの先頭は投球セグメント。その次が打球（MatchLiveController.BattedOf と同じ）。</summary>
@@ -296,6 +313,92 @@ namespace KokoSim.UnityEditorTools
         }
 
 
+
+        /// <summary>
+        /// 均さない生のコマ列で、画面上の進行方向（最初→最後に見えたコマ）と逆へ動いた量[px]・奥行きが縮む→伸びる反転を測る。
+        /// 速いライナーは数コマで画面を出るので、移動平均（±4コマ）をかけると反転ごと消える（issue #1766）。
+        /// </summary>
+        public static (float backPx, float backAt, float backYpx, float backYAt, int depthFlips, int visFrames) AnalyzeRaw(List<Sample> s)
+        {
+            var vis = new List<Sample>();
+            foreach (var x in s) if (x.Visible) vis.Add(x);
+            if (vis.Count < 2) return (0, 0, 0, 0, 0, vis.Count);
+            var net = new Vector2(vis[vis.Count - 1].X - vis[0].X, vis[vis.Count - 1].Y - vis[0].Y);
+            if (net.magnitude < 1e-3f) net = new Vector2(1, 0);
+            net.Normalize();
+            float sum = 0f, worst = 0f, at = 0f;
+            for (int i = 1; i < vis.Count; i++)
+            {
+                float along = Vector2.Dot(new Vector2(vis[i].X - vis[i - 1].X, vis[i].Y - vis[i - 1].Y), net);
+                if (along < 0f) { sum -= along; if (-along > worst) { worst = -along; at = vis[i].T; } }
+            }
+            // 縦（画面の上下）だけの戻り: 最初に動いた縦の向きに対して
+            float dy = vis[vis.Count - 1].Y - vis[0].Y;
+            float dirY = Mathf.Abs(dy) < 1e-3f ? 0f : Mathf.Sign(dy);
+            float sumY = 0f, worstY = 0f, atY = 0f;
+            for (int i = 1; i < vis.Count; i++)
+            {
+                float along = (vis[i].Y - vis[i - 1].Y) * dirY;
+                if (along < 0f) { sumY -= along; if (-along > worstY) { worstY = -along; atY = vis[i].T; } }
+            }
+            int flips = 0; float lastSign = 0f;
+            for (int i = 1; i < vis.Count; i++)
+            {
+                float dd = vis[i].Depth - vis[i - 1].Depth;
+                if (Mathf.Abs(dd) < 1e-4f) continue;
+                float sg = Mathf.Sign(dd);
+                if (lastSign != 0f && sg != lastSign) flips++;
+                lastSign = sg;
+            }
+            return (sum, at, sumY, atY, flips, vis.Count);
+        }
+
+        /// <summary>
+        /// ライナー性のファウル（打球の 頂点が <paramref name="maxApex"/> m 以下・平均水平速度が <paramref name="minSpeed"/> m/s 以上）だけを
+        /// 対決ビューで再生し、均さない生のコマで測る（issue #1766）。<paramref name="dump"/> 本までは毎コマを出す。
+        /// </summary>
+        public static string RunLiners(int games = 100, ulong seed0 = 1, float maxApex = 8f, float minSpeed = 25f, int dump = 6)
+        {
+            Directory.CreateDirectory(Dir);
+            var fouls = CollectFouls(games, seed0);
+            var rig = NewRig();
+            if (rig == null) return "DuelStageRig が組めない";
+            var sb = new StringBuilder();
+            int n = 0, bad = 0, shown = 0;
+            var lines = new StringBuilder();
+            var all = new StringBuilder();
+            try
+            {
+                foreach (var f in fouls)
+                {
+                    if (f.Batted == null || f.Apex > maxApex || f.Speed < minSpeed) continue;
+                    var duel = new List<Sample>(); var field = new List<Sample>();
+                    Replay(rig, f, duel, field);
+                    for (int i = 0; i < 90; i++) rig.Tick(Dt);
+                    n++;
+                    var r = AnalyzeRaw(duel);
+                    var a = Analyze("duel", duel);
+                    bool isBad = r.backPx > 2f || r.backYpx > 2f || r.depthFlips > 0 || a.IsBad;
+                    if (isBad) bad++;
+                    string tag = isBad ? "BAD " : "ok  ";
+                    string line = $"{tag}{f.Describe()} 生戻り{r.backPx:F1}px@{r.backAt:F3} 縦戻り{r.backYpx:F1}px@{r.backYAt:F3} 奥行反転{r.depthFlips} 見えたコマ{r.visFrames} 総コマ{duel.Count} 世界戻り{a.WorldBackM:F2}m 再入{a.Reentries} 出た側{a.ExitSide}";
+                    lines.AppendLine(line);
+                    if (isBad && shown < dump)
+                    {
+                        shown++;
+                        all.AppendLine(line);
+                        all.AppendLine("T\tvis\tpxX\tpxY\theightM\tlocalX\tlocalZ\tdepth");
+                        foreach (var x in duel) all.AppendLine($"{x.T:F3}\t{(x.Visible ? 1 : 0)}\t{x.X:F1}\t{x.Y:F1}\t{x.HeightM:F2}\t{x.LX:F2}\t{x.LZ:F2}\t{x.Depth:F1}");
+                    }
+                }
+            }
+            finally { rig.Dispose(); }
+            sb.AppendLine($"ライナー性ファウル（頂点<={maxApex}m・平均水平速度>={minSpeed}m/s）: ファウル全 {fouls.Count} 本中 {n} 本、うち反転あり {bad} 本");
+            sb.AppendLine(lines.ToString());
+            sb.AppendLine(all.ToString());
+            File.WriteAllText(Path.Combine(Dir, "liners.txt"), sb.ToString());
+            return sb.ToString().Length > 6000 ? sb.ToString().Substring(0, 6000) + "…（全文は out/foul-rebound-1766/liners.txt）" : sb.ToString();
+        }
 
         /// <summary>
         /// 追ったファウルフライ（守備ビューで見せる）を engine の組むタイムラインで作る（落下に 0.2 秒遅れて捕手が着く形）。
