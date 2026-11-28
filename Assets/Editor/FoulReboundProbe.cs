@@ -164,7 +164,7 @@ namespace KokoSim.UnityEditorTools
         /// 1本のファウルを MatchLiveController と同じ順序で流す。守備ビューで見せるファウルは、対決ビューの打球が
         /// 画面から出る（または保険の秒数）まで対決ビューで見せ、その続きを守備ビューで見せる。
         /// </summary>
-        public static void Replay(DuelStageRig rig, Foul f, List<Sample> duel, List<Sample> field)
+        public static void Replay(DuelStageRig rig, Foul f, List<Sample> duel, List<Sample> field, List<Sample> pre = null)
         {
             var pitch = new DuelPitchFlight(f.PlateX, f.PlateY, f.PlateX, f.PlateY, 0.5f, 0.05f, 0.2f, 140f);
             rig.OnPitchReleased(-1f, DuelPitchOutcome.FoulContact, pitch, f.Batted);
@@ -175,7 +175,7 @@ namespace KokoSim.UnityEditorTools
                 rig.HideBall();
                 return;
             }
-            for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) rig.Tick(Dt);
+            for (int i = 0; i < 400 && rig.BattedElapsedSeconds < 0f; i++) { if (pre != null) pre.Add(Snap(rig, i * Dt)); rig.Tick(Dt); }
             bool toField = f.Play.FoulView != FoulViewKind.None;
             float clock = 0f;
             float safety = 1.6f;
@@ -372,22 +372,25 @@ namespace KokoSim.UnityEditorTools
                 foreach (var f in fouls)
                 {
                     if (f.Batted == null || f.Apex > maxApex || f.Speed < minSpeed) continue;
-                    var duel = new List<Sample>(); var field = new List<Sample>();
-                    Replay(rig, f, duel, field);
+                    var duel = new List<Sample>(); var field = new List<Sample>(); var pre = new List<Sample>();
+                    Replay(rig, f, duel, field, pre);
                     for (int i = 0; i < 90; i++) rig.Tick(Dt);
                     n++;
+                    var joined = new List<Sample>(pre); joined.AddRange(duel);
+                    var rj = AnalyzeRaw(joined);
                     var r = AnalyzeRaw(duel);
                     var a = Analyze("duel", duel);
-                    bool isBad = r.backPx > 2f || r.backYpx > 2f || r.depthFlips > 0 || a.IsBad;
+                    bool isBad = r.backPx > 2f || r.backYpx > 2f || r.depthFlips > 0 || a.IsBad || rj.backPx > 2f;
                     if (isBad) bad++;
                     string tag = isBad ? "BAD " : "ok  ";
-                    string line = $"{tag}{f.Describe()} 生戻り{r.backPx:F1}px@{r.backAt:F3} 縦戻り{r.backYpx:F1}px@{r.backYAt:F3} 奥行反転{r.depthFlips} 見えたコマ{r.visFrames} 総コマ{duel.Count} 世界戻り{a.WorldBackM:F2}m 再入{a.Reentries} 出た側{a.ExitSide}";
+                    string line = $"{tag}{f.Describe()} 生戻り{r.backPx:F1}px@{r.backAt:F3} 縦戻り{r.backYpx:F1}px@{r.backYAt:F3} 奥行反転{r.depthFlips} 見えたコマ{r.visFrames} 総コマ{duel.Count} 世界戻り{a.WorldBackM:F2}m 再入{a.Reentries} 出た側{a.ExitSide} 投球込み生戻り{rj.backPx:F1}px@{rj.backAt:F3} 縦戻り{rj.backYpx:F1}px 反転{rj.depthFlips} 投球コマ{pre.Count}";
                     lines.AppendLine(line);
                     if (isBad && shown < dump)
                     {
                         shown++;
                         all.AppendLine(line);
                         all.AppendLine("T\tvis\tpxX\tpxY\theightM\tlocalX\tlocalZ\tdepth");
+                        foreach (var x in pre) all.AppendLine($"{x.T - pre.Count * Dt:F3}p\t{(x.Visible ? 1 : 0)}\t{x.X:F1}\t{x.Y:F1}\t{x.HeightM:F2}\t{x.LX:F2}\t{x.LZ:F2}\t{x.Depth:F1}");
                         foreach (var x in duel) all.AppendLine($"{x.T:F3}\t{(x.Visible ? 1 : 0)}\t{x.X:F1}\t{x.Y:F1}\t{x.HeightM:F2}\t{x.LX:F2}\t{x.LZ:F2}\t{x.Depth:F1}");
                     }
                 }
