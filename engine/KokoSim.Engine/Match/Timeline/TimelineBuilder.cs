@@ -438,9 +438,17 @@ public static partial class TimelineBuilder
             // 盗塁死は常にタッチプレー（Force既定false, issue #489）。フォース概念自体が無い。
             new() { Label = "走", T0 = 0.0, T1 = runnerArrive, From = fromPt, To = toPt, OutAtEnd = !safe, Runner = runner },
         };
-        var judgements = safe
-            ? new List<JudgementEvent>()
-            : new List<JudgementEvent> { new() { Label = "走", T = runnerArrive, Kind = JudgementKind.Out } };
+        // 盗塁は毎回送球とタッチの勝負になるので、セーフでも判定を積む（際どさは判定の CloseCall にだけ載せる）。
+        var judgements = new List<JudgementEvent>
+        {
+            safe
+                ? new()
+                {
+                    Label = "走", T = runnerArrive, Kind = JudgementKind.Safe, BaseCall = true,
+                    CloseCall = Math.Abs(defenseTime - runnerTime) < c.CloseCallMarginSeconds,
+                }
+                : new() { Label = "走", T = runnerArrive, Kind = JudgementKind.Out },
+        };
 
         // 一・三塁の重盗（design-14 P1-4）: 二盗の送球中に三塁走者が本塁へ生還（成立時は無条件セーフ）。
         // 送球先（二塁）の勝負とは別レッグで、本塁到達まで走る。表示専用・結果不変。
@@ -468,8 +476,7 @@ public static partial class TimelineBuilder
             Ball = ball.ToArray(),
             Moves = moves.ToArray(),
             Runners = runners.ToArray(),
-            // 判定イベント（Issue #260）: 盗塁死は当該レッグ終端で確定。セーフは際どさを未評価のため
-            // 積まない（表示条件は #59 のまま維持＝従来もセーフの盗塁は判定オーバーレイの対象外）。
+            // 判定イベント（Issue #260）: 当該レッグ終端（走者の到着）で確定。セーフも毎回積む（issue #1790）。
             Judgements = judgements.ToArray(),
             Captions = captions.ToArray(),
         };
