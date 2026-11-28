@@ -357,7 +357,7 @@ namespace KokoSim.UnityEditorTools
         /// ライナー性のファウル（打球の 頂点が <paramref name="maxApex"/> m 以下・平均水平速度が <paramref name="minSpeed"/> m/s 以上）だけを
         /// 対決ビューで再生し、均さない生のコマで測る（issue #1766）。<paramref name="dump"/> 本までは毎コマを出す。
         /// </summary>
-        public static string RunLiners(int games = 100, ulong seed0 = 1, float maxApex = 8f, float minSpeed = 25f, int dump = 6)
+        public static string RunLiners(int games = 100, ulong seed0 = 1, float maxApex = 8f, float minSpeed = 25f, int dump = 6, float minDist = 0f)
         {
             Directory.CreateDirectory(Dir);
             var fouls = CollectFouls(games, seed0);
@@ -371,7 +371,7 @@ namespace KokoSim.UnityEditorTools
             {
                 foreach (var f in fouls)
                 {
-                    if (f.Batted == null || f.Apex > maxApex || f.Speed < minSpeed) continue;
+                    if (f.Batted == null || f.Apex > maxApex || f.Speed < minSpeed || f.Dist < minDist) continue;
                     var duel = new List<Sample>(); var field = new List<Sample>(); var pre = new List<Sample>();
                     Replay(rig, f, duel, field, pre);
                     for (int i = 0; i < 90; i++) rig.Tick(Dt);
