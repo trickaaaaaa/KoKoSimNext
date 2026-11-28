@@ -4204,13 +4204,38 @@ namespace KokoSim.Unity.Match
             return false;
         }
 
+        /// <summary>末尾の歩いて戻るレッグ（<see cref="PlaybackRun.WalkBack"/>）を除いた最後のレッグの添字（無ければ最後）。</summary>
+        private static int LastNonWalkBackIndex(PlaybackRunner r)
+        {
+            int i = r.Segs.Count - 1;
+            while (i > 0 && r.Segs[i].WalkBack) i--;
+            return i;
+        }
+
+        /// <summary>
+        /// 一塁を通過してから止まるまでの区間（<paramref name="bagIdx"/>＝一塁から出る最初のレッグ、
+        /// <paramref name="lastIdx"/>＝止まるレッグ）。内野ゴロの駆け抜け（#443）は1本、外野単打の一塁回り（#1765）は
+        /// 弧の数本＝区間の頭は一塁から出る最初のレッグ。一塁から出るレッグが無ければ最後のレッグ1本。
+        /// </summary>
+        private static void BatterOverrunSpan(PlaybackRunner r, out int bagIdx, out int lastIdx)
+        {
+            lastIdx = LastNonWalkBackIndex(r);
+            bagIdx = lastIdx;
+            for (int i = 1; i <= lastIdx; i++)
+            {
+                double fx = r.Segs[i].From.X - FieldDiagramGeometry.First.X, fz = r.Segs[i].From.Y - FieldDiagramGeometry.First.Y;
+                if (fx * fx + fz * fz < 1.0) { bagIdx = i; return; }
+            }
+        }
+
         /// <summary>この走者が最後に止まる時刻と、その塁でどうなったか。</summary>
         private static bool RunnerFinal(
             PlaybackRunner r, out float t1, out bool outAtEnd, out bool closeCall, out bool force, out bool returning)
         {
             t1 = 0f; outAtEnd = false; closeCall = false; force = false; returning = false;
             if (r?.Segs == null || r.Segs.Count == 0) return false;
-            var last = r.Segs[r.Segs.Count - 1];
+            // 一塁を回った打者走者が歩いて戻るレッグ（issue #1765）は到達ではない＝その前の、回って止まったレッグを見る
+            var last = r.Segs[LastNonWalkBackIndex(r)];
             // 塁上で動かないレッグ（待機）は到達ではない
             if (PlaybackDisplaySync.IsStationaryLeg(last))
                 return false;
@@ -4280,8 +4305,9 @@ namespace KokoSim.Unity.Match
                     // 減速クリップへ切り替える（通過前には切り替えない）。クリップの減速が終わる時刻
                     // （OverrunDecelEndsAt）を、engine のオーバーランレッグの終端（t1＝停止点）へ
                     // 再生倍率で合わせる（速度の受け渡しは再生倍率で吸収する方式＝監督決定の選択肢①）。
-                    var last = r.Segs[r.Segs.Count - 1];
-                    float tStart = (float)last.T0;
+                    // 一塁を通過する最初のレッグの頭（外野単打の一塁回り #1765 は弧の数本＝その最初）から止まるレッグの終端まで
+                    BatterOverrunSpan(r, out var bagIdx, out _);
+                    float tStart = (float)r.Segs[bagIdx].T0;
                     if (t >= tStart)
                     {
                         var clip = LoadClip(OverrunClipName);
@@ -4293,9 +4319,14 @@ namespace KokoSim.Unity.Match
                             _runnerHeadMin = Mathf.Min(_runnerHeadMin, t - tStart);
                             SetActorClip(a, clip, (t - tStart) * rate, 0f);
                             a.Speed = rate;
-                            a.HoldSeconds = ArriveHoldSeconds;
+                            float clipEnd = tStart + clip.length / rate;
+                            // 歩いて戻る（#1765）なら、歩き出すまで減速の終わりの形のまま待つ（待機の構えへ戻さない）
+                            float holdUntil = clipEnd + ArriveHoldSeconds;
+                            var lastSeg = r.Segs[r.Segs.Count - 1];
+                            if (lastSeg.WalkBack) holdUntil = Mathf.Max(holdUntil, (float)lastSeg.T0);
+                            a.HoldSeconds = holdUntil - clipEnd;
                             st.Ladder = int.MinValue;
-                            st.ArriveUntil = tStart + clip.length / rate + ArriveHoldSeconds;
+                            st.ArriveUntil = holdUntil;
                             // 向きはここでスナップしない（issue #443③）。直進レッグなので現状維持で足り、
                             // 下の据え置き区間で MoveTowardsAngle により毎コマ寄せる。
                             st.Started = true;
@@ -4340,8 +4371,12 @@ namespace KokoSim.Unity.Match
             {
                 if (firstBaseArrival && st.ArriveFired)
                 {
-                    // オーバーラン中は直進レッグの方向へ毎コマ寄せる（issue #443③。ハードスナップしない）。
-                    var last = r.Segs[r.Segs.Count - 1];
+                    // オーバーラン中は、いま走っているレッグの方向へ毎コマ寄せる（issue #443③。ハードスナップしない）。
+                    // 一塁回り（#1765）は弧の数本＝いまの時刻が入るレッグ（止まったあと・歩き出す前は止まるレッグ）の向き。
+                    BatterOverrunSpan(r, out var bagNow, out var lastNow);
+                    var last = r.Segs[lastNow];
+                    for (int k = bagNow; k <= lastNow; k++)
+                        if (t < r.Segs[k].T1) { last = r.Segs[k]; break; }
                     var dir = new Vector2((float)(last.To.X - last.From.X), (float)(last.To.Y - last.From.Y));
                     if (dir.sqrMagnitude > 1e-6f)
                     {
@@ -5512,8 +5547,14 @@ namespace KokoSim.Unity.Match
                 var r = play.Runners[i];
                 if (!IsBatterArrivingAtFirst(r)) continue;
                 var last = r.Segs[r.Segs.Count - 1];
-                double fx = last.From.X - FieldDiagramGeometry.First.X, fz = last.From.Y - FieldDiagramGeometry.First.Y;
-                if (fx * fx + fz * fz < 1.0) continue;   // 起点が一塁＝すでに駆け抜けのレッグ
+                // 一塁から出るレッグがすでにある＝駆け抜け（#443）や一塁回り（#1765）を engine が積んでいる
+                bool leavesFirst = false;
+                for (int k = 1; k < r.Segs.Count && !leavesFirst; k++)
+                {
+                    double fx = r.Segs[k].From.X - FieldDiagramGeometry.First.X, fz = r.Segs[k].From.Y - FieldDiagramGeometry.First.Y;
+                    leavesFirst = fx * fx + fz * fz < 1.0;
+                }
+                if (leavesFirst) continue;
                 double dx = last.To.X - last.From.X, dz = last.To.Y - last.From.Y;
                 double len = System.Math.Sqrt(dx * dx + dz * dz);
                 if (len < 1e-6) continue;

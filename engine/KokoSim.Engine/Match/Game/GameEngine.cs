@@ -2509,6 +2509,11 @@ public static class GameEngine
                         timeline = Match.Timeline.TimelineBuilder.AlignTaggedRunnerToThrow(
                             timeline, outAtOtherBaseName, errReturn.AnchorLabel);
                 }
+
+                // 外野への単打で一塁に止まる打者走者は、一塁を回って返球が内野へ戻ったら一塁へ戻る（issue #1765）。
+                // 返球の送球が全部積まれたあとに足す＝戻る時刻を外野からの返球の到達から決めるため（表示専用）。
+                if (res.Play is { } roundPlay)
+                    timeline = Match.Timeline.TimelineBuilder.AppendBatterOverrunRound(timeline, roundPlay, ctx.Field);
             }
 
             // 振り逃げ（第3ストライク不捕球, design-14 P1-2）: 一塁空き or 2アウトの三振でのみ判定。
