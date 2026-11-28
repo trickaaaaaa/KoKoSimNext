@@ -101,7 +101,8 @@ namespace KokoSim.Unity.Match
             if (float.IsPositiveInfinity(gearBack)) return null;
 
             var spine = up;
-            float lean = Mathf.Atan2(Vector3.Dot(spine, front), spine.y) * Mathf.Rad2Deg;
+            var hspine = new Vector3(spine.x, 0f, spine.z);
+            float lean = Mathf.Atan2(hspine.magnitude, spine.y) * Mathf.Rad2Deg;
             return new ChestGearGap(gearBack - torsoFront, lean);
         }
 
@@ -191,6 +192,17 @@ namespace KokoSim.Unity.Match
                   .Append("/back").Append(l.BackGapM.ToString("F3", ci))
                   .Append("/off").Append(l.OffsetDeg.ToString("F0", ci))
                   .Append("/t").Append(l.TMin.ToString("F2", ci)).Append('-').Append(l.TMax.ToString("F2", ci));
+            }
+            var lmr = _catcher.Animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg)?.Find("gear-leg")?.GetComponentInChildren<MeshRenderer>(true);
+            if (lmr != null)
+            {
+                var mat = lmr.sharedMaterial;
+                sb.Append(" legMeshL[size=").Append(lmr.bounds.size.ToString("F2", ci))
+                  .Append(" scale=").Append(lmr.transform.lossyScale.ToString("F2", ci))
+                  .Append(" layer=").Append(lmr.gameObject.layer)
+                  .Append(" shader=").Append(mat != null && mat.shader != null ? mat.shader.name : "-")
+                  .Append(" color=").Append(mat != null && mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor").ToString() : "-")
+                  .Append(" visible=").Append(lmr.isVisible).Append(']');
             }
             return sb.ToString();
         }
