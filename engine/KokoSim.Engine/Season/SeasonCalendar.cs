@@ -35,6 +35,10 @@ public enum TournamentKind
     /// 直接 <see cref="Autumn"/> から始まる（design-05 §1.5, issue autumn-district-tournament-not-wired）。
     /// </summary>
     AutumnDistrict,
+    /// <summary>春季県大会（4月・県単位のトーナメント）。暦の週 <see cref="SeasonCalendar.SpringTournamentStartWeek"/> に開幕する想定（設計書05 春季大会計画 §1）。</summary>
+    Spring,
+    /// <summary>春季地区大会（関東大会等10地区）。<see cref="Spring"/> の後始末から即座連鎖し、暦の週を持たない。</summary>
+    SpringRegional,
 }
 
 /// <summary>
@@ -54,6 +58,11 @@ public sealed record SeasonCalendar
     public int SummerCampWeek { get; init; } = 18;
     /// <summary>冬合宿の週（12月末〜1月）。</summary>
     public int WinterCampWeek { get; init; } = 38;
+
+    /// <summary>春季県大会が開幕する週（4月3週目 ≒ 第2週。週0は入学・仮入部の週なので1週間置く。春季大会計画 §1）。
+    /// 定数だけで、<see cref="TournamentStartingAt"/>・<see cref="NextTournament(int)"/> にはまだ配線しない（大会には入れない）。
+    /// 地区大会（<see cref="TournamentKind.SpringRegional"/>）は暦の週を持たず県大会の後始末から連鎖する。</summary>
+    public int SpringTournamentStartWeek { get; init; } = 2;
 
     /// <summary>夏の地方大会が開幕する週（7月1週目 ≒ 第13週。現実の夏の地方予選は7月上旬開幕。設計書05 §1.1 / OPEN-QUESTIONS Q23）。
     /// 大会は「大会モード」1週ターン内で抽象日を一気消化するため、開幕週はトーナメント内部日程(MatchDay)には影響しない

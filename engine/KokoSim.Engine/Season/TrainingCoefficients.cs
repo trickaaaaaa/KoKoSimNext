@@ -206,7 +206,7 @@ public sealed record TrainingCoefficients
     {
         null => MatchSuccessMultPractice,
         TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien => MatchSuccessMultKoshien,
-        TournamentKind.Regional or TournamentKind.Jingu => MatchSuccessMultRegional,
+        TournamentKind.Regional or TournamentKind.SpringRegional or TournamentKind.Jingu => MatchSuccessMultRegional,
         _ => MatchSuccessMultPrefectural,
     };
 

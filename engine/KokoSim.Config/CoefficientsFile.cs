@@ -359,6 +359,10 @@ public static class CoefficientsLoader
         public int RestDaysAfterSemifinal { get; set; } = D.RestDaysAfterSemifinal;
         public int LeagueRoundSpreadDays { get; set; } = D.LeagueRoundSpreadDays;
         public int MaxGamesPerDay { get; set; } = D.MaxGamesPerDay;
+        public int SpringOpenMonth { get; set; } = D.SpringOpenMonth;
+        public int SpringOpenDay { get; set; } = D.SpringOpenDay;
+        public int SpringRegionalOpenMonth { get; set; } = D.SpringRegionalOpenMonth;
+        public int SpringRegionalOpenDay { get; set; } = D.SpringRegionalOpenDay;
         public int SummerOpenMonth { get; set; } = D.SummerOpenMonth;
         public int SummerOpenDay { get; set; } = D.SummerOpenDay;
         public int AutumnOpenMonth { get; set; } = D.AutumnOpenMonth;
@@ -384,6 +388,10 @@ public static class CoefficientsLoader
             RestDaysAfterSemifinal = RestDaysAfterSemifinal,
             LeagueRoundSpreadDays = LeagueRoundSpreadDays,
             MaxGamesPerDay = MaxGamesPerDay,
+            SpringOpenMonth = SpringOpenMonth,
+            SpringOpenDay = SpringOpenDay,
+            SpringRegionalOpenMonth = SpringRegionalOpenMonth,
+            SpringRegionalOpenDay = SpringRegionalOpenDay,
             SummerOpenMonth = SummerOpenMonth,
             SummerOpenDay = SummerOpenDay,
             AutumnOpenMonth = AutumnOpenMonth,

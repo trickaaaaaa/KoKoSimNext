@@ -146,8 +146,8 @@ public sealed record GrowthEventCoefficients
     public double BigStageProb(TournamentKind kind) => kind switch
     {
         TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien => BigStageProbKoshien,
-        TournamentKind.Regional or TournamentKind.Jingu => BigStageProbRegional,
-        TournamentKind.Summer or TournamentKind.Autumn => BigStageProbPrefectural,
+        TournamentKind.Regional or TournamentKind.SpringRegional or TournamentKind.Jingu => BigStageProbRegional,
+        TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.Spring => BigStageProbPrefectural,
         _ => 0.0,
     };
 

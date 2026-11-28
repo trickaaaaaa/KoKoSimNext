@@ -47,6 +47,8 @@ namespace KokoSim.Unity.Shell
             TournamentKind.SenbatsuKoshien => KokoSim.Engine.Season.DisplayNames.Current.Senbatsu + "まで",
             TournamentKind.Regional => "地区大会まで",
             TournamentKind.Jingu => KokoSim.Engine.Season.DisplayNames.Current.JinguShort + "まで",
+            TournamentKind.Spring => "春季大会まで",
+            TournamentKind.SpringRegional => "春季地区大会まで",
             _ => "秋大会まで",
         };
 
@@ -57,7 +59,7 @@ namespace KokoSim.Unity.Shell
         public static string SeasonCountdownLabel(TournamentKind kind) => kind switch
         {
             TournamentKind.Summer or TournamentKind.SummerKoshien => "夏の大会まで",
-            TournamentKind.SenbatsuKoshien => "春の大会まで",
+            TournamentKind.SenbatsuKoshien or TournamentKind.Spring or TournamentKind.SpringRegional => "春の大会まで",
             _ => "秋の大会まで",
         };
 
@@ -76,6 +78,8 @@ namespace KokoSim.Unity.Shell
                 TournamentKind.SenbatsuKoshien => names.Senbatsu,
                 TournamentKind.Regional => "地区大会",
                 TournamentKind.Jingu => names.JinguShort,
+                TournamentKind.Spring => "春季大会" + pref,
+                TournamentKind.SpringRegional => "春季地区大会",
                 _ => "秋季大会" + pref,
             };
         }

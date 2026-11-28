@@ -41,6 +41,8 @@ public static class TournamentDate
     /// <summary>大会種別ごとの実開幕月日（<see cref="TournamentSchedule"/> ＝ YAML 駆動）。</summary>
     public static (int Month, int Day) OpeningOf(TournamentSchedule schedule, TournamentKind kind) => kind switch
     {
+        TournamentKind.Spring => (schedule.SpringOpenMonth, schedule.SpringOpenDay),
+        TournamentKind.SpringRegional => (schedule.SpringRegionalOpenMonth, schedule.SpringRegionalOpenDay),
         TournamentKind.Summer => (schedule.SummerOpenMonth, schedule.SummerOpenDay),
         TournamentKind.SummerKoshien => (schedule.KoshienOpenMonth, schedule.KoshienOpenDay),
         TournamentKind.Regional => (schedule.RegionalOpenMonth, schedule.RegionalOpenDay),

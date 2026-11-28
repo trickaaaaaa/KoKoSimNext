@@ -166,7 +166,7 @@ public static class WeatherModel
 
     /// <summary>
     /// 大会の天気係数（背景で解く裏試合など、試合ごとの日付を持たない呼び出し向け）。大会の開幕月で引く
-    /// （夏の県大会＝7月・甲子園＝8月・秋季県大会＝9月・地区大会＝10月・神宮＝11月・センバツ＝3月）。
+    /// （春季県大会＝4月・春季地区大会＝5月・夏の県大会＝7月・甲子園＝8月・秋季県大会＝9月・地区大会＝10月・神宮＝11月・センバツ＝3月）。
     /// </summary>
     public static WeatherCoefficients ForTournament(TournamentSchedule schedule, TournamentKind kind)
         => ForMonth(TournamentDate.OpeningOf(schedule, kind).Month);

@@ -31,8 +31,8 @@ public static class CrowdTurnouts
             2 or 3 => CrowdTurnout.Half,
             _ => CrowdTurnout.Sparse,
         },
-        TournamentKind.Autumn => roundsRemaining is 1 or 2 ? CrowdTurnout.Half : CrowdTurnout.Sparse,
-        TournamentKind.Regional or TournamentKind.Jingu => CrowdTurnout.Half,
+        TournamentKind.Autumn or TournamentKind.Spring => roundsRemaining is 1 or 2 ? CrowdTurnout.Half : CrowdTurnout.Sparse,
+        TournamentKind.Regional or TournamentKind.SpringRegional or TournamentKind.Jingu => CrowdTurnout.Half,
         _ => CrowdTurnout.Sparse,   // 秋の地区予選など
     };
 }

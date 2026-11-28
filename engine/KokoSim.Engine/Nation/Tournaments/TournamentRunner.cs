@@ -56,6 +56,15 @@ public sealed record TournamentSchedule
     /// <summary>ブロックリーグ戦の第 <paramref name="leagueRound"/> 節（0基点）の試合日。</summary>
     public int LeagueMatchDay(int leagueRound) => FirstRoundDay + Math.Max(0, leagueRound) * Math.Max(1, LeagueRoundSpreadDays);
 
+    /// <summary>春季県大会の実開幕月（表示専用。暦の週は <see cref="SeasonCalendar.SpringTournamentStartWeek"/>）。</summary>
+    public int SpringOpenMonth { get; init; } = 4;
+    /// <summary>春季県大会の実開幕日（第2週＝4月15〜21日に収まる日）。</summary>
+    public int SpringOpenDay { get; init; } = 16;
+    /// <summary>春季地区大会の実開幕月（表示専用。春季県大会の後始末から即座連鎖するため週アンカーとは無関係）。</summary>
+    public int SpringRegionalOpenMonth { get; init; } = 5;
+    /// <summary>春季地区大会の実開幕日。</summary>
+    public int SpringRegionalOpenDay { get; init; } = 17;
+
     /// <summary>夏の地方大会の実開幕月（表示専用・issue #583）。</summary>
     public int SummerOpenMonth { get; init; } = 7;
     /// <summary>夏の地方大会の実開幕日。</summary>

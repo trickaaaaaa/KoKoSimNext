@@ -1864,6 +1864,11 @@ tournament:
   # 小さい県（〜100校）は従来の分散日数のまま。0で上限なし。
   max_games_per_day: 16
   # 実開幕月日（表示専用）。週暦は50週×7日＝350日で実暦と一致しないので、大会期間だけ実カレンダーで数える。
+  # 春季県大会（4月・暦の週は SeasonCalendar.SpringTournamentStartWeek＝第2週）と春季地区大会（5月・県大会の後始末から即座連鎖）。
+  spring_open_month: 4
+  spring_open_day: 16
+  spring_regional_open_month: 5
+  spring_regional_open_day: 17
   summer_open_month: 7
   summer_open_day: 10
   autumn_open_month: 9
