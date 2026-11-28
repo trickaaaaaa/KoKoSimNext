@@ -3461,19 +3461,21 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 接触直後に打球の画面速度を抑える秒数（issue #1766 C案）。速いライナーは、飛んできた球が接触の1コマで
+        /// 接触直後に打球の画面速度を抑える（issue #1766 C案）。速いライナーは、飛んできた球が接触の1コマで
         /// 来た線をそのまま逆へ戻り、画面速度が約9倍に跳ねて「跳ね返った」ように見えた。打球の時刻・物理（<see cref="BattedPointAt"/>）は
-        /// そのままに、描く位置だけ接触点から滑らかに追い付かせて「当たった」手応えにする。
+        /// そのままに、描く位置だけ「<see cref="BattedContactHoldSeconds"/> は接触点に留め、<see cref="BattedContactEaseSeconds"/> までに
+        /// 軌道へ追い付く」ようにして、当たった手応え（一瞬の溜め）にする。
         /// </summary>
-        private const float BattedContactEaseSeconds = 0.05f;
+        private const float BattedContactHoldSeconds = 0.02f;
+        private const float BattedContactEaseSeconds = 0.06f;
 
         /// <summary>描く打球の位置。<see cref="BattedPointAt"/> の軌道に、接触点から追い付く見た目の遅れを掛ける（表示専用）。</summary>
         private Vector3 BattedShownPointAt(float t)
         {
             var p = BattedPointAt(t);
             if (t >= BattedContactEaseSeconds) return p;
-            float u = Mathf.Max(0f, t) / BattedContactEaseSeconds;
-            float g = u * u * (3f - 2f * u);   // 出だしの速さ0→終わりは軌道の速さに滑らかにつながる
+            float u = Mathf.Clamp01((t - BattedContactHoldSeconds) / (BattedContactEaseSeconds - BattedContactHoldSeconds));
+            float g = u * u * (3f - 2f * u);   // 溜めの後は滑らかに軌道へ乗る
             var p0 = BattedPointAt(0f);
             return p0 + (p - p0) * g;
         }
