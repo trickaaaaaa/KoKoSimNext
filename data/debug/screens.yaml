@@ -2272,3 +2272,28 @@ screens:
       - call: MatchResultShooter.ShowSubsGameForRecipe()
       - wait: 5
       - shot: 01-result
+
+  # ── 秋の県大会のあとの後始末の段ごとの所要時間（issue #1747）。WrapUpTimings.Report を summary.json の reads に残す ──
+
+  - id: autumn-wrapup-timing-weak-1747
+    name: "秋の県大会で早く負ける年（地区大会に出ない）の後始末の所要時間（issue #1747・神奈川）"
+    steps:
+      - new_game: {seed: 1, prefecture: 13}
+      - advance_to_week: 22
+      - call: WrapUpTimings.Clear()
+      - play_tournament: ""
+      - read: =WrapUpTimings.Report
+      - read: =GameClock.Week
+      - read: =GameSession.Current.PendingSenbatsuFieldIds
+
+  - id: autumn-wrapup-timing-strong-1747
+    name: "秋の県大会を勝ち上がる年（地区大会へ出る）の後始末の所要時間（issue #1747・神奈川）"
+    steps:
+      - new_game: {seed: 1, prefecture: 13}
+      - boost_roster: 95
+      - advance_to_week: 22
+      - call: WrapUpTimings.Clear()
+      - play_tournament: ""
+      - read: =WrapUpTimings.Report
+      - read: =GameClock.Week
+      - read: =GameSession.Current.PendingSenbatsuFieldIds

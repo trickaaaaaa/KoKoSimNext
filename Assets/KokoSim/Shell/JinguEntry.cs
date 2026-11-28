@@ -26,7 +26,9 @@ namespace KokoSim.Unity.Shell
             if (myRegionPlacement == null || myRegionPlacement.Count == 0) return false;
             var myRegionChampionId = myRegionPlacement[0];
 
-            var otherRegions = ComputeOtherRegions(myRegion, yearIndex);
+            IReadOnlyList<RegionalResult> otherRegions;
+            using (WrapUpTimings.Measure("3b 他地区の地区大会 ComputeOtherRegions（神宮の組み合わせ）"))
+                otherRegions = ComputeOtherRegions(myRegion, yearIndex);
 
             var field = new List<School>();
             var myChampion = myRegionChampionId == ManagerSchoolId
@@ -68,14 +70,19 @@ namespace KokoSim.Unity.Shell
                 return true;
             }
 
-            var spectated = TournamentRunner.Spectated(field, NationCoeff, new Xoshiro256Random(seed),
-                TournamentEntry.Schedule, title);
-            spectated.DrainBracketResolution();
-            var byId = field.ToDictionary(s => s.Id);
-            var jinguChampionId = KnockoutPlacement.FromMatches(spectated.BuildBracketView().Matches, id => byId[id])
-                .Select(s => s.Id).FirstOrDefault();
+            int jinguChampionId;
+            using (WrapUpTimings.Measure("3c 神宮大会を同期で解く"))
+            {
+                var spectated = TournamentRunner.Spectated(field, NationCoeff, new Xoshiro256Random(seed),
+                    TournamentEntry.Schedule, title);
+                spectated.DrainBracketResolution();
+                var byId = field.ToDictionary(s => s.Id);
+                jinguChampionId = KnockoutPlacement.FromMatches(spectated.BuildBracketView().Matches, id => byId[id])
+                    .Select(s => s.Id).FirstOrDefault();
+            }
             var jinguChampionRegion = RegionOfChampion(jinguChampionId, myRegion, myRegionChampionId, otherRegions);
-            SenbatsuEntry.ContinueFrom(myRegion, myRegionPlacement, otherRegions, jinguChampionRegion, yearIndex);
+            using (WrapUpTimings.Measure("3d センバツ32校の選考 SenbatsuEntry.ContinueFrom"))
+                SenbatsuEntry.ContinueFrom(myRegion, myRegionPlacement, otherRegions, jinguChampionRegion, yearIndex);
             return false;
         }
 
@@ -91,17 +98,21 @@ namespace KokoSim.Unity.Shell
             // 自校が神宮大会で優勝せず敗退したときは LastJinguChampionId がまだ背景畳み込み待ち
             // （RegionalEntry.EnterJinguAfterRegionalTournament と同じ理由・2026-08-22 実機検証で発見）。
             // 先に完了させないと ?? PrefectureResult.NoChampion に落ちて「神宮に王者が居ない」扱いになる。
-            BracketFinishSim.EnsureCompleted();
+            using (WrapUpTimings.Measure("4a 神宮の敗退後の残り試合 BracketFinishSim"))
+                BracketFinishSim.EnsureCompleted();
             GameSession.Current.FlushPendingBracketFold();
 
             var myPlacement = GameSession.Current.MyRegionPlacementIds;
             if (myPlacement == null || myPlacement.Count == 0) return false;
             var myRegion = PrefectureNames.RegionOf(NationService.PrefectureId);
 
-            var otherRegions = ComputeOtherRegions(myRegion, GameClock.YearIndex);
+            IReadOnlyList<RegionalResult> otherRegions;
+            using (WrapUpTimings.Measure("4b 他地区の地区大会 ComputeOtherRegions（神宮のあとのセンバツ選考）"))
+                otherRegions = ComputeOtherRegions(myRegion, GameClock.YearIndex);
             var jinguChampionId = GameSession.Current.LastJinguChampionId ?? PrefectureResult.NoChampion;
             var jinguChampionRegion = RegionOfChampion(jinguChampionId, myRegion, myPlacement[0], otherRegions);
-            SenbatsuEntry.ContinueFrom(myRegion, myPlacement, otherRegions, jinguChampionRegion, GameClock.YearIndex);
+            using (WrapUpTimings.Measure("4c センバツ32校の選考 SenbatsuEntry.ContinueFrom"))
+                SenbatsuEntry.ContinueFrom(myRegion, myPlacement, otherRegions, jinguChampionRegion, GameClock.YearIndex);
             return false;
         }
 
