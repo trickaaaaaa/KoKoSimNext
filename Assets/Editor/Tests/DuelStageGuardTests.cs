@@ -394,7 +394,7 @@ namespace KokoSim.EditorTests
 
         /// <summary>
         /// 接触直後の打球は描く位置だけ接触点から追い付く（issue #1766 C案）。最初のコマは軌道（物理）より接触点に近く、
-        /// 0.06 秒を過ぎれば軌道に重なる＝打球の時刻・物理はずらさない。
+        /// 0.07 秒を過ぎれば軌道に重なる＝打球の時刻・物理はずらさない。
         /// </summary>
         [TestCase(40f, 8f, 150f)]    // 真後ろへの鋭いライナー
         [TestCase(38f, 5f, -70f)]    // 三塁側への鋭いライナー
@@ -414,7 +414,7 @@ namespace KokoSim.EditorTests
             var contact = rig.BattedPointForCapture(0f).Value;
             rig.Tick(1f / 60f);
             float t = rig.BattedElapsedSeconds;
-            Assert.That(t, Is.LessThan(0.06f), "前提: まだ接触直後");
+            Assert.That(t, Is.LessThan(0.07f), "前提: まだ接触直後");
             var shown = rig.BallLocalForCapture;
             if (shown.HasValue)
             {
@@ -423,11 +423,11 @@ namespace KokoSim.EditorTests
                     "接触直後の最初のコマは、軌道より接触点の近くに描く");
             }
             for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
-            Assert.That(rig.BattedElapsedSeconds, Is.GreaterThan(0.06f));
+            Assert.That(rig.BattedElapsedSeconds, Is.GreaterThan(0.07f));
             var later = rig.BallLocalForCapture;
             if (later.HasValue)
                 Assert.That(Vector3.Distance(later.Value, rig.BattedPointForCapture(rig.BattedElapsedSeconds).Value), Is.LessThan(1e-3f),
-                    "0.06秒を過ぎたら軌道に重なる");
+                    "0.07秒を過ぎたら軌道に重なる");
         }
 
         /// <summary>
