@@ -718,6 +718,87 @@ screens:
       - wait: 3
       - shot: 03-postgame-line3
 
+  - id: postgame-mvp-1745-a
+    name: "公式戦に勝ったあと、勝ちの会話に続いて今日のMVPの会話が出る（issue #1745・seed 1）"
+    steps:
+      - new_game: {seed: 1}
+      - boost_roster: {level: 60, cap: 99}
+      - advance_weeks: 20
+      - advance_to_match_day: ""
+      - call: EventService.Clear()
+      - call: HomeState.Current.PlayMatch()
+      - read: =EventService.HasPending
+      - call: HomeState.Current.DismissResult()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-line1
+      - click: ev-novel
+      - wait: 3
+      - shot: 02-line2
+      - click: ev-novel
+      - wait: 3
+      - shot: 03-line3
+      - click: ev-novel
+      - wait: 3
+      - shot: 04-line4
+      - click: ev-novel
+      - wait: 3
+      - shot: 05-line5
+
+  - id: postgame-mvp-1745-b
+    name: "公式戦に勝ったあと、勝ちの会話に続いて今日のMVPの会話が出る（issue #1745・seed 2）"
+    steps:
+      - new_game: {seed: 2}
+      - boost_roster: {level: 60, cap: 99}
+      - advance_weeks: 20
+      - advance_to_match_day: ""
+      - call: EventService.Clear()
+      - call: HomeState.Current.PlayMatch()
+      - read: =EventService.HasPending
+      - call: HomeState.Current.DismissResult()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-line1
+      - click: ev-novel
+      - wait: 3
+      - shot: 02-line2
+      - click: ev-novel
+      - wait: 3
+      - shot: 03-line3
+      - click: ev-novel
+      - wait: 3
+      - shot: 04-line4
+      - click: ev-novel
+      - wait: 3
+      - shot: 05-line5
+
+  - id: postgame-mvp-1745-c
+    name: "公式戦に勝ったあと、勝ちの会話に続いて今日のMVPの会話が出る（issue #1745・seed 3）"
+    steps:
+      - new_game: {seed: 3}
+      - boost_roster: {level: 60, cap: 99}
+      - advance_weeks: 20
+      - advance_to_match_day: ""
+      - call: EventService.Clear()
+      - call: HomeState.Current.PlayMatch()
+      - read: =EventService.HasPending
+      - call: HomeState.Current.DismissResult()
+      - show: HomeDashboard
+      - wait: 10
+      - shot: 01-line1
+      - click: ev-novel
+      - wait: 3
+      - shot: 02-line2
+      - click: ev-novel
+      - wait: 3
+      - shot: 03-line3
+      - click: ev-novel
+      - wait: 3
+      - shot: 04-line4
+      - click: ev-novel
+      - wait: 3
+      - shot: 05-line5
+
   - id: player-physical-stats-1493
     name: "選手詳細の成績欄に打球データ（平均初速・角度・最長本塁打）・球速・キャリアハイが並ぶ（通算／公式戦通算／大会別・issue #1493）"
     size: {w: 1600, h: 1500}
