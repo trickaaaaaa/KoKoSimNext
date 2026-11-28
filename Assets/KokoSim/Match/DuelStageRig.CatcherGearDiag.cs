@@ -183,6 +183,19 @@ namespace KokoSim.Unity.Match
             sb.Append("chest=");
             if (chest.HasValue) sb.Append(chest.Value.GapM.ToString("F3", ci)).Append("(lean ").Append(chest.Value.LeanDeg.ToString("F0", ci)).Append(')');
             else sb.Append("none");
+            if (_cChestMount != null && BodyFrame(_catcher.Animator, out var bu, out var br, out var bf))
+            {
+                var cm = _cChestMount.GetComponentInChildren<MeshFilter>();
+                if (cm != null)
+                {
+                    var t = cm.transform;
+                    var centerRel = t.TransformPoint(cm.sharedMesh.bounds.center) - _catcher.Animator.GetBoneTransform(HumanBodyBones.Neck).position;
+                    sb.Append(" chestMesh[upErr=").Append(Vector3.Angle(t.up, bu).ToString("F0", ci))
+                      .Append(" faceErr=").Append(Vector3.Angle(t.forward, bf).ToString("F0", ci))
+                      .Append(" centerBelowNeck=").Append(Vector3.Dot(centerRel, -bu).ToString("F2", ci))
+                      .Append(" centerFront=").Append(Vector3.Dot(centerRel, bf).ToString("F2", ci)).Append(']');
+                }
+            }
             for (int side = 0; side < 2; side++)
             {
                 var l = MeasureLegGuard(side);

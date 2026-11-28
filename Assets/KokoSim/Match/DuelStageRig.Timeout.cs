@@ -260,6 +260,9 @@ namespace KokoSim.Unity.Match
             if (az < 0f || !_toActive) return;
             var cm = _toMembers.Find(m => m.Role == TimeoutRole.Catcher);
             if (cm == null) return;
+            foreach (var m in _toMembers)   // 寄りの絵は捕手だけを残す（輪の他の人がカメラを塞ぐ）
+                if (m != cm && m.A != null && m.A.Go != null) m.A.Go.SetActive(false);
+            if (_pitcher != null && _pitcher.Go != null) _pitcher.Go.SetActive(false);
             float yaw = (cm.Yaw + az) * Mathf.Deg2Rad;
             var p = cm.Pos + new Vector2(Mathf.Sin(yaw), Mathf.Cos(yaw)) * 2.0f;
             FramePreview(new Vector3(p.x, 1.25f, p.y), new Vector3(cm.Pos.x, 0.85f, cm.Pos.y), 1.7f);
