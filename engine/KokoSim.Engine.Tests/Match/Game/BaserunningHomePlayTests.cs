@@ -312,10 +312,13 @@ public sealed class BaserunningHomePlayTests
 
         Assert.Equal(3000, deep.runs);       // 後退＝献上＝無条件生還
         Assert.Equal(0, deep.homeOuts);
-        Assert.InRange(normal.runs, 600, 1500); // 通常＝従来テーブル(SacFlyScoreProb≈0.30)、憤死なし
-        Assert.Equal(0, normal.homeOuts);
+        // 通常＝本塁の時間の勝負（issue #1788）。前進より送球が長い分、生還しやすく憤死も出る。
+        Assert.InRange(normal.runs, 1700, 2200);
+        Assert.True(normal.homeOuts > 0, "通常守備で本塁憤死が一度も出ない（送球vs走者の時間の勝負になっていない）");
         // 前進＝本塁で勝負。平均走者は自重が多く生還を抑える（通常より下）＝AIの前進が報われる。
         Assert.True(inn.runs < normal.runs, $"内野前進が生還を抑えていない: In={inn.runs} Normal={normal.runs}");
+        // 深さの順（後退＞通常＞前進）を保つ。
+        Assert.True(deep.runs > normal.runs, $"後退が通常より生還を抑えていない: Deep={deep.runs} Normal={normal.runs}");
     }
 
     [Fact]

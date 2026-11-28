@@ -1108,10 +1108,10 @@ public static class BaserunningModel
         }
 
         var runs = 0;
-        // 3塁走者の生還。内野ゴロ(併殺なし)は守備深さ駆動の本塁レース（G1, 設計書12 §4/§5）、
-        // フライ(犠飛)は捕球時刻起点のタッチアップ物理レース（Issue #90, 設計書12 §3.5）、
-        // 内野ゴロの通常守備（前進・後退でも封殺でもない）・併殺成立後・home無しは従来の SacFlyScoreProb テーブル
-        // （設計書12 §4.6「通常=従来テーブル」。実試合のゴロでも通る＝犠飛専用の表ではない・issue #1241）。
+        // 3塁走者の生還。内野ゴロ(併殺なし)は守備深さ駆動の本塁レース（G1, 設計書12 §4/§5。通常守備も
+        // issue #1788 で物理レース化＝下のC分岐）、フライ(犠飛)は捕球時刻起点のタッチアップ物理レース
+        // （Issue #90, 設計書12 §3.5）。home無し（単体テスト等）・併殺成立後だが打者の一塁到達時刻が無い
+        // 経路だけが従来の SacFlyScoreProb テーブルに残る（実試合のゴロはもう通らない・issue #1241/#1788）。
         if (r3 is not null && !r3RacedBack)
         {
             // フォースの三塁走者（満塁ゴロ）: 自重できない（後続に押し出される）。
@@ -1233,6 +1233,84 @@ public static class BaserunningModel
                 }
                 // 自重は三塁に残る（bases.Third は r3 のまま）。
             }
+            // 併殺成立・二塁封殺だけ（A・B, issue #1788）: 一塁走者の併殺/野選（ResolveDoublePlay、dpTarget=Second。
+            // r2/r3が居る満塁のTarget=Third/Homeは必ずr3Forced＝上の2枝で既に処理済み＝ここに来るのはそれ以外）
+            // で extraOuts>0 になった打球。守備の送球は二塁(＋一塁への転送)で使い切っていて本塁へは投げていない
+            // ＝三塁走者は無条件で生還する（乱数を引かない。後退の献上と同じ扱い）。
+            else if (!r3Forced && extraOuts > 0 && home is { IsFly: false, BatterToFirstSeconds: not null })
+            {
+                runs++;
+                mv?.Add(new RunnerMove(r3, 3, 4, false));
+                bases.Third = null;
+                r3 = null;
+            }
+            // 通常守備（C, issue #1788）: 前進と同じ本塁の時間の勝負だが、通常守備の送球は前進より長い分
+            // 生還しやすい（後退＞通常＞前進を保つ）。前進と違い、見込み（prob=三塁走者の生還見込み）が
+            // 高すぎる（NormalDepthHomeThrowMaxRunnerSuccess を超える）ときは守備が本塁を捨て、一塁で
+            // 確実に打者を取る（1点は渡すが追加アウトのリスクを負わない）。
+            else if (home is { IsFly: false } hn && extraOuts == 0 && hn.InfieldDepth == Tactics.DefenseDepth.Normal)
+            {
+                var delay = r3StealBreak ? coeff.StealBreakGrounderStartDelaySeconds : coeff.HomeGrounderStartDelaySeconds;
+                var prob = HomePlayResolver.SuccessProbability(r3, 3, hn.Situation, hn.Field, coeff, delay);
+                if (HomeSendDecision.ShouldSend(prob, currentOuts, hn.Aggression, hn.Tactics))
+                {
+                    if (prob > coeff.NormalDepthHomeThrowMaxRunnerSuccess)
+                    {
+                        // 見込みが薄い＝守備は本塁を捨てて一塁で確実に打者を取る（送球は一塁の1本。RNG非消費）。
+                        runs++;
+                        mv?.Add(new RunnerMove(r3, 3, 4, false));
+                        bases.Third = null;
+                        r3 = null;
+                    }
+                    else
+                    {
+                        var backHomeMargin = HomePlayResolver.Margin(r3, 3, hn.Situation, hn.Field, coeff, delay);
+                        var backHomeCloseCall = Math.Abs(backHomeMargin) < coeff.CloseCallMarginSeconds;
+                        var (backHomeOutcome, backHomeLate, backHomeScatter) = HomePlayResolver.ResolveWithWildThrowVerdict(
+                            r3, 3, hn.Situation, hn.Field, coeff, HomePlayResolver.HomeParams(coeff), rng, delay);
+                        // 守備は本塁へ投げた＝この打球の送球はこの1本（打者を一塁で刺す送球は無い）。打者は野選で生きる／
+                        // 本塁で刺したときだけ捕手の一塁転送と競う（前進・満塁の本塁封殺と同じ作法）。
+                        homeThrowUsed = true;
+                        if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
+                        {
+                            runs++;
+                            mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay, ThrowScatter = backHomeScatter });
+                            if (backHomeOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+                            {
+                                bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
+                                runs += PushRunnersOnWildThrow(bases, mv);
+                            }
+                            // 野選: 一塁の打者はそのまま生きる（一塁走者は押し出されて二塁へ。後段の一塁走者カスケードが担う）。
+                            batterSafeOnFc = true;
+                            battersOwnOut = 0;
+                            bases.First = batter;
+                            mv?.Add(new RunnerMove(batter, 0, 1, false));
+                        }
+                        else
+                        {
+                            extraOuts++; homeOuts++; // バックホーム憤死（本塁で刺殺）
+                            var relayed = hn.BatterToFirstSeconds is not null;
+                            var (homeRelayScatter, homeRelayNoise) = relayed
+                                ? HomePlayResolver.SampleThrowScatter(50, coeff, rng)
+                                : (default(Fielding.ThrowScatterModel.Scatter), 0.0);
+                            mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
+                                { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay + backHomeLate, ThrowScatter = backHomeScatter,
+                                  HomeForceRelay = relayed, RelayThrowScatter = relayed ? homeRelayScatter : null });
+                            if (relayed && MathUtil.Chance(HomeForceRelayBatterSafeProbability(hn, coeff, homeRelayNoise), rng))
+                            {
+                                batterSafeOnFc = true;
+                                battersOwnOut = 0;
+                                bases.First = batter;
+                                mv?.Add(new RunnerMove(batter, 0, 1, false));
+                            }
+                        }
+                        // 返球が逸れた分岐は押し上げ済みの三塁（元の二塁走者）を消さない（issue #830 と同じ不具合）
+                        if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow) bases.Third = null;
+                        r3 = null;
+                    }
+                }
+                // 自重は三塁に残る（bases.Third は r3 のまま）。
+            }
             // 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）: フライ捕球の実試合経路（home!=null・IsFly）は
             // 定数テーブルでなく物理レース。走者は捕球時刻にスタート（二次リードなし＝全塁間を走る）、深い外野
             // フライは送球が長く生還、浅いフライは自重。送り判定→秒の勝負で生還 or 本塁憤死（本塁と同じ流儀）。
@@ -1281,8 +1359,10 @@ public static class BaserunningModel
                 }
                 // 自重（浅いフライ）は三塁に残る（RNG非消費＝本塁レースの流儀, 不変条件#2）。
             }
-            // 従来テーブル（home無し・内野ゴロの通常守備・併殺成立後。設計書12 §4.6）。フライで先に走者が戻れずアウトになった打席
-            // （extraOuts>0）は対象外＝犠飛は無い（#1130 以前はここへ落ちて固定確率で生還していた）。
+            // 従来テーブル（設計書12 §4.6。issue #1788 で実試合のゴロ経路は上のA/B/Cへ全部移った）。残るのは
+            // home無し（単体テスト等）と、home はあるが打者の一塁到達時刻が組めない（BatterToFirstSeconds無し）
+            // 併殺成立後の経路だけ＝物理レースが組めない従来互換の経路。フライで先に走者が戻れずアウトになった
+            // 打席（extraOuts>0）は対象外＝犠飛は無い（#1130 以前はここへ落ちて固定確率で生還していた）。
             else if (home is not { IsFly: true } && MathUtil.Chance(coeff.SacFlyScoreProb, rng))
             {
                 runs++;

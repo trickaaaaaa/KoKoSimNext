@@ -479,6 +479,13 @@ public sealed record BaserunningCoefficients
     /// ヒットの走者(既に進行中)と違い、打球を読んでから走り出すぶん遅い＝内野前進で刺せる余地を作る。
     /// 1.55 で「内野前進は生還率を抑える(通常より下)＝AIの前進判断が正しく報われる」。</summary>
     public double HomeGrounderStartDelaySeconds { get; init; } = 1.55;
+    /// <summary>通常守備（G1）で三塁走者の生還見込み（P_r3_safe）がこれを超えたら、守備は本塁を狙わず
+    /// 一塁で確実に打者を取る（1点は渡すが追加アウトのリスクを負わない。issue #1788・design-12 §4.6）。
+    /// 前進（<see cref="HomeGrounderStartDelaySeconds"/> と同じ送り判定だが本塁投げが常時＝このノブ自体を
+    /// 持たない）と違い、通常守備の送球は前進より長く、見込みが薄い本塁勝負は「併殺を狙わず一塁のみ」
+    /// （<see cref="DoublePlayAttemptMinRelaySuccess"/>）と同じ考え方。これ以下なら本塁へ投げて勝負する。
+    /// Heavy の得点帯・本塁憤死帯で校正するノブ（他の係数は動かさない）。</summary>
+    public double NormalDepthHomeThrowMaxRunnerSuccess { get; init; } = 0.70;
 
     // === 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2, 監督決定2026-11-15）===
     // 本塁で1人目を刺した直後、同じボールを持った捕手がそのまま2人目にもタッチできるかを物理層で解く。
