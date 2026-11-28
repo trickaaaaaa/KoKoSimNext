@@ -1133,6 +1133,13 @@ public static class GameEngine
                 {
                     stealAttempt ??= StartType.Normal;
                 }
+                // 三盗の強制（issue #1790 の撮影用）: 走者二塁のみ（一塁・三塁が空き）の StealSuccess/StealCaught だけ三盗を起こす。
+                else if (forcedThisPa && force is Debugging.ForcedOutcome.StealSuccess or Debugging.ForcedOutcome.StealCaught
+                    && session.PitchCount == 0 && bases.First is null && bases.Second is not null && bases.Third is null)
+                {
+                    stealAttempt ??= StartType.Normal;
+                    stealTarget = StealTarget.Third;
+                }
 
                 // 盗塁の再生データ（issue #485）: 盗塁企図が「実際の走塁勝負」で解決した球にだけ載る観測。
                 // CaptureTimelines が真のときだけ組む＝統計シム・裏試合はゼロコスト・乱数消費ゼロ（BuildBattedBall と同作法）。
@@ -1344,9 +1351,18 @@ public static class GameEngine
                         // 送球の逸れ（issue #841）の受け手＝三塁カバーの三塁手（BuildSteal の三盗送球と同じ約束）。
                         var thirdBaseReceiver = defense.PlayerAtPosition(Field.FieldPosition.ThirdBase);
                         var thirdQuickOffset = SkillModel.QuickDeliveryOffsetSeconds(currentPitcher.Skills, ctx.Skills);
-                        var steal = StealResolver.ResolveVerdict(
-                            bases.Second, defense.Catcher, paBaserunning, rng, pitchout, thirdStart, StealTarget.Third,
-                            receiver: thirdBaseReceiver, pitcherQuickOffsetSeconds: thirdQuickOffset);
+                        var steal = force switch
+                        {
+                            Debugging.ForcedOutcome.StealSuccess => StealResolver.Forced(
+                                bases.Second, defense.Catcher, paBaserunning, StealResult.Safe, pitchout, thirdStart, StealTarget.Third,
+                                receiver: thirdBaseReceiver, pitcherQuickOffsetSeconds: thirdQuickOffset),
+                            Debugging.ForcedOutcome.StealCaught => StealResolver.Forced(
+                                bases.Second, defense.Catcher, paBaserunning, StealResult.CaughtStealing, pitchout, thirdStart, StealTarget.Third,
+                                receiver: thirdBaseReceiver, pitcherQuickOffsetSeconds: thirdQuickOffset),
+                            _ => StealResolver.ResolveVerdict(
+                                bases.Second, defense.Catcher, paBaserunning, rng, pitchout, thirdStart, StealTarget.Third,
+                                receiver: thirdBaseReceiver, pitcherQuickOffsetSeconds: thirdQuickOffset),
+                        };
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.Second, safe, third: true);
                         stealRecRunner = thirdStealer; stealRecSuccess = safe; stealRecThird = true;   // issue #626: 巻き戻し対象

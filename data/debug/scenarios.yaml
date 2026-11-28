@@ -269,6 +269,18 @@ scenarios:
     force: StealSuccess
     seed: 20260736
 
+  # 三盗（issue #1790）。走者二塁のみ（一塁・三塁が空き）の最初の打席の初球で三盗を企図する
+  - id: steal-third-safe-lab
+    name: 盗塁検証・三盗成功（1回表無死二塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [2]
+    force: StealSuccess
+    seed: 20260736
+
   - id: steal-caught-lab
     name: 盗塁検証・二盗失敗（1回表無死一塁）
     away: { school: "AI:tier=C", score: 0 }
