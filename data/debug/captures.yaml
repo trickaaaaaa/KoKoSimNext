@@ -255,7 +255,7 @@ captures:
     scenario: pitcher-rattled-lab
     manager: home
     view: panel
-    duel_seconds: 9.0
+    duel_seconds: 13.0
     timeout_at: 0.5
     timeout_messenger: 0
     probes: [CatcherGearDiag]
@@ -265,7 +265,7 @@ captures:
     scenario: pitcher-rattled-lab
     manager: home
     view: rig
-    duel_seconds: 9.0
+    duel_seconds: 13.0
     timeout_at: 0.5
     timeout_messenger: 0
     probes: [CatcherGearDiag]
@@ -276,7 +276,7 @@ captures:
     scenario: pitcher-rattled-lab
     manager: home
     view: rig
-    duel_seconds: 9.0
+    duel_seconds: 13.0
     timeout_at: 0.5
     timeout_messenger: 0
     video: {from: start, to: end, fps: 12}
@@ -286,7 +286,7 @@ captures:
     scenario: pitcher-rattled-lab
     manager: home
     view: rig
-    duel_seconds: 9.0
+    duel_seconds: 13.0
     timeout_at: 0.5
     timeout_messenger: 0
     video: {from: start, to: end, fps: 12}
@@ -436,7 +436,7 @@ captures:
     name: "1球の判定テロップ（ストライク／ボール等）が画像で出る（issue #1179）"
     scenario: fresh-start
     view: panel
-    duel_seconds: 9.0
+    duel_seconds: 13.0
     video: {from: start, to: end, fps: 12}
 
   - id: telop-strikeout-1179
