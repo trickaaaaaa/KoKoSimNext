@@ -212,8 +212,13 @@ public sealed record JudgementEvent
     public required JudgementKind Kind { get; init; }
     /// <summary>
     /// セーフ側は際どい判定のときだけ積む（アウトは常時表示するため使わない, Issue #59 の表示条件を維持）。
+    /// 盗塁のセーフだけは毎回積み（issue #1790）、際どさはこのフラグだけに載せる。
     /// </summary>
     public bool CloseCall { get; init; }
+    /// <summary>
+    /// 際どさによらず塁審が判定の動作をする判定（盗塁のセーフ・issue #1790）。表示専用。
+    /// </summary>
+    public bool BaseCall { get; init; }
     /// <summary>
     /// 表示専用の飛距離[m]（Issue #354・本塁打のみ）。判定に使った着地までの水平距離
     /// （<c>FieldingPlay.RangeM</c>）をそのまま観測データとして運ぶ＝乱数を引かない（帯不変）。

@@ -146,7 +146,7 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// そのプレーの塁審の判定を洗い出す。対象は塁で出たアウトと際どいセーフだけ（走者がただ進塁しただけの場面で
+        /// そのプレーの塁審の判定を洗い出す。対象は塁で出たアウトと際どいセーフ・盗塁のセーフだけ（走者がただ進塁しただけの場面で
         /// 毎回腕を出さない）。判定の種類と時刻は engine の判定イベント（<see cref="PlaybackPlay.Judgements"/>）の値。
         /// 「どの塁か」は、アウト／際どいセーフの印が付いた走者のレッグの行き先から引く
         /// （飛球の捕球アウトは走者のレッグに印が付かない＝球審・外野の仕事なので対象外）。
@@ -163,7 +163,7 @@ namespace KokoSim.Unity.Match
                 if (r?.Segs == null) continue;
                 foreach (var seg in r.Segs)
                 {
-                    if (!seg.OutAtEnd && !seg.CloseCall) continue;
+                    if (!seg.OutAtEnd && !seg.CloseCall && !IsBaseCallSafeLeg(play, r, seg)) continue;
                     if (PlaybackDisplaySync.IsStationaryLeg(seg)) continue;
                     var to = new Vector2((float)seg.To.X, (float)seg.To.Y);
                     int ump = -1;
@@ -184,7 +184,7 @@ namespace KokoSim.Unity.Match
             foreach (var j in judgements)
             {
                 bool isOut = j.Kind == KokoSim.Engine.Match.Timeline.JudgementKind.Out;
-                bool closeSafe = j.Kind == KokoSim.Engine.Match.Timeline.JudgementKind.Safe && j.CloseCall;
+                bool closeSafe = j.Kind == KokoSim.Engine.Match.Timeline.JudgementKind.Safe && (j.CloseCall || j.BaseCall);
                 if (!isOut && !closeSafe) continue;
                 int pick = -1;
                 float bestDt = float.MaxValue;
@@ -199,6 +199,16 @@ namespace KokoSim.Unity.Match
                 used[pick] = true;
                 _baseCalls.Add(new BaseCall { Ump = legs[pick].Ump, TStart = (float)j.T - BaseCallLeadSeconds, Out = isOut });
             }
+        }
+
+        /// <summary>盗塁のセーフ（際どさによらず塁審が動く判定）の決着レッグか。判定の走者ラベルと終端時刻で引く。</summary>
+        private static bool IsBaseCallSafeLeg(PlaybackPlay play, PlaybackRunner runner, PlaybackRun seg)
+        {
+            foreach (var j in play.Judgements)
+                if (j.BaseCall && j.Kind == KokoSim.Engine.Match.Timeline.JudgementKind.Safe
+                    && j.Label == runner.Label && System.Math.Abs(j.T - seg.T1) < 0.01)
+                    return true;
+            return false;
         }
 
         /// <summary>予定の時刻が来た判定を流す。絶対時刻で判定する＝途中から再生を始めても同じ絵になる。</summary>

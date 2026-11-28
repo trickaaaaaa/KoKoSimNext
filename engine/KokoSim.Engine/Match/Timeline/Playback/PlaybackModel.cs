@@ -175,7 +175,7 @@ public readonly record struct PlaybackCaption(double T, string Text);
 /// の再生側ミラー。走者レッグとは独立した確定時刻を持つ。
 /// </summary>
 public readonly record struct PlaybackJudgement(double T, JudgementKind Kind, bool CloseCall, string Label,
-    double? DistanceM = null, double? DisplayT = null);
+    double? DistanceM = null, double? DisplayT = null, bool BaseCall = false);
 
 /// <summary>1プレーの再生データ（mock: PLAYS[i]）。</summary>
 public sealed record PlaybackPlay

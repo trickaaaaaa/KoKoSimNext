@@ -632,6 +632,31 @@ captures:
     shots: [start+0.5, catch, end]
     probes: [FieldLabels]
 
+  # ── 盗塁のセーフ／アウトのテロップと塁審（issue #1790）。home＝自校が守備＝守備ビューで見る ──
+  - id: steal-call-second-safe-1790
+    name: "二盗成功で「セーフ」のテロップと二塁塁審のセーフ（issue #1790）"
+    scenario: steal-safe-lab
+    manager: home
+    view: panel
+    shots: [judgement, judgement+0.3, end]
+    probes: [BaseCrew]
+
+  - id: steal-call-third-safe-1790
+    name: "三盗成功で「セーフ」のテロップと三塁塁審のセーフ（issue #1790）"
+    scenario: steal-third-safe-lab
+    manager: home
+    view: panel
+    shots: [judgement, judgement+0.3, end]
+    probes: [BaseCrew]
+
+  - id: steal-call-second-out-1790
+    name: "盗塁死は従来どおり「アウト」（issue #1790）"
+    scenario: steal-caught-lab
+    manager: home
+    view: panel
+    shots: [judgement, judgement+0.3, end]
+    probes: [BaseCrew]
+
   - id: error-mark-if-1247
     name: "内野ゴロのエラーで「！」が弾いた野手に付く（issue #1247 項目2・PR #1353）"
     scenario: if-grounder-3b-lab
