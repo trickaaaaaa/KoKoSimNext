@@ -138,4 +138,94 @@ public sealed class BallisticIntegratorTests
         Assert.Equal(fine.FlightTimeSeconds, coarse.FlightTimeSeconds, 4);
         Assert.Equal(fine.CrossingPosition.Y, coarse.CrossingPosition.Y, 4);
     }
+
+    // --- 打球への風（issue #1614）: IntegrateToGround にだけ効く。既知の符号・大小関係を固定する。 ---
+
+    private static Vector3D FlyBallVelocity(double speedMps, double launchAngleDeg)
+    {
+        var rad = launchAngleDeg * Math.PI / 180.0;
+        return new Vector3D(0, speedMps * Math.Sin(rad), speedMps * Math.Cos(rad));
+    }
+
+    [Fact]
+    public void Wind_OmittedParameter_MatchesExplicitZeroVector()
+    {
+        // 既定（無風）は IntegrateToGround の既存の呼び出し（wind 引数なし）と1ビットも変わらない。
+        var aero = new Aerodynamics();
+        var contact = new Vector3D(0, 1.0, 0);
+        var v0 = FlyBallVelocity(40.0, 28.0);
+
+        var withoutArg = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero);
+        var withZero = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero, wind: Vector3D.Zero);
+
+        Assert.Equal(withoutArg.LandingPosition.X, withZero.LandingPosition.X, 12);
+        Assert.Equal(withoutArg.LandingPosition.Z, withZero.LandingPosition.Z, 12);
+        Assert.Equal(withoutArg.HangTimeSeconds, withZero.HangTimeSeconds, 12);
+    }
+
+    [Fact]
+    public void Tailwind_IncreasesCarryDistance()
+    {
+        // 追い風（打球の進行方向=+Zへ吹く）は空気に対する相対速度を下げ、抗力が弱まる＝遠くへ飛ぶ。
+        var aero = new Aerodynamics();
+        var contact = new Vector3D(0, 1.0, 0);
+        var v0 = FlyBallVelocity(40.0, 28.0);
+
+        var noWind = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero);
+        var tailwind = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero, wind: new Vector3D(0, 0, 5.0));
+
+        Assert.True(tailwind.LandingPosition.Z > noWind.LandingPosition.Z,
+            $"追い風5m/sで飛距離が伸びるはず: 無風Z={noWind.LandingPosition.Z:F2} 追い風Z={tailwind.LandingPosition.Z:F2}");
+    }
+
+    [Fact]
+    public void Headwind_DecreasesCarryDistance()
+    {
+        // 向かい風（打球の進行方向と逆=−Zへ吹く）は相対速度を上げ、抗力が強まる＝縮む。
+        var aero = new Aerodynamics();
+        var contact = new Vector3D(0, 1.0, 0);
+        var v0 = FlyBallVelocity(40.0, 28.0);
+
+        var noWind = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero);
+        var headwind = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero, wind: new Vector3D(0, 0, -5.0));
+
+        Assert.True(headwind.LandingPosition.Z < noWind.LandingPosition.Z,
+            $"向かい風5m/sで飛距離が縮むはず: 無風Z={noWind.LandingPosition.Z:F2} 向かい風Z={headwind.LandingPosition.Z:F2}");
+    }
+
+    [Theory]
+    [InlineData(5.0)]
+    [InlineData(-5.0)]
+    public void Crosswind_DeflectsLandingPoint_InTheDirectionTheWindBlows(double windX)
+    {
+        // 横風（+X＝一塁/右翼側へ吹く）は打球をその方向へ流す（符号が正しいこと）。
+        var aero = new Aerodynamics();
+        var contact = new Vector3D(0, 1.0, 0);
+        var v0 = FlyBallVelocity(40.0, 28.0);   // 中堅方向(X=0)へ打つ＝風の効きだけを見る
+
+        var noWind = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero);
+        var crosswind = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero, wind: new Vector3D(windX, 0, 0));
+
+        Assert.Equal(0.0, noWind.LandingPosition.X, 9);   // 無風は横に流れない
+        if (windX > 0)
+            Assert.True(crosswind.LandingPosition.X > 0, $"+X の風は+X側へ流すはず: X={crosswind.LandingPosition.X:F2}");
+        else
+            Assert.True(crosswind.LandingPosition.X < 0, $"-X の風は-X側へ流すはず: X={crosswind.LandingPosition.X:F2}");
+    }
+
+    [Fact]
+    public void StrongerCrosswind_DeflectsFurther()
+    {
+        // 風が強いほど流れが大きい（単調性）。
+        var aero = new Aerodynamics();
+        var contact = new Vector3D(0, 1.0, 0);
+        var v0 = FlyBallVelocity(40.0, 28.0);
+
+        var light = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero, wind: new Vector3D(2.0, 0, 0));
+        var strong = BallisticIntegrator.IntegrateToGround(contact, v0, Vector3D.Zero, aero, wind: new Vector3D(6.0, 0, 0));
+
+        Assert.True(strong.LandingPosition.X > light.LandingPosition.X,
+            $"風が強いほど流れが大きいはず: 2m/s={light.LandingPosition.X:F2} 6m/s={strong.LandingPosition.X:F2}");
+    }
+
 }

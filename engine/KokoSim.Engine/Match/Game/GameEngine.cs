@@ -203,6 +203,9 @@ public static class GameEngine
         // 派生させた ctx に差し替える。Fork は親 rng の状態を進めない＝以降の乱数順・決定論は不変。
         // Weather が null／無効なら ctx はそのまま（従来挙動と完全一致）。
         ctx = WeatherModel.ApplyForMatch(ctx, rng);
+        // 試合ごとの風（issue #1614）。気温と同じく専用Forkストリームで1回引き、FieldGeometry.Wind を差し替える。
+        // Weather が無効（または屋内）なら ctx はそのまま＝風も従来挙動と完全一致（WindModel.ApplyForMatch 内で判定）。
+        ctx = WindModel.ApplyForMatch(ctx, rng);
 
         // デバッグ観測（設計書17 §4, F1）。既定オフ＝この分岐に入らず従来と完全に同じ経路。
         // ヘッダは「まだ1回も引いていない乱数状態」を持つ必要があるので、dayForm 抽選より前に組む。

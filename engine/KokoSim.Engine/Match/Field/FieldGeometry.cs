@@ -72,6 +72,25 @@ public sealed record FieldGeometry
     /// </summary>
     public bool Indoor { get; init; }
 
+    /// <summary>
+    /// その試合の風速ベクトル[m/s]（地面基準・水平のみ・issue #1614）。試合ごとに
+    /// <see cref="Game.WindModel.ApplyForMatch"/> が差し替える。既定ゼロ＝無風＝従来の弾道と1ビットも変わらない。
+    /// 打球の飛行（<see cref="Pitching.BallisticIntegrator.IntegrateToGround"/>）にだけ効かせる軸で、
+    /// 投球（<see cref="Pitching.BallisticIntegrator.IntegrateToPlate"/>）には意図的に効かせない。
+    /// <see cref="Pitching.Aerodynamics"/> には乗せない（<see cref="Pitching.TrajectoryFeatureTable"/> の
+    /// キャッシュキーが<see cref="Pitching.Aerodynamics"/>自体のため、試合ごとに変わる風を乗せると投球テーブルが
+    /// 毎試合作り直しになる＝性能劣化。気温のときの反省＝節点補間の教訓）。
+    /// </summary>
+    public Vector3D Wind { get; init; } = Vector3D.Zero;
+
+    /// <summary>
+    /// 球場固有の風の癖（issue #1614）: 風向きの平均バイアス[度]（<see cref="FenceDistance"/> と同じ方位角の規約。
+    /// 0=中堅方向、+=一塁/右翼側、−=三塁/左翼側）。null＝癖なし＝<see cref="Game.WindModel"/> は向きを一様乱数で引く。
+    /// 非nullの球場（例: 甲子園の浜風＝右翼から左翼へ＝-90°）は、この角度を中心に散らして引く。
+    /// <see cref="Stadium.WindBearingDeg"/> の写し。
+    /// </summary>
+    public double? WindBiasBearingDeg { get; init; }
+
     /// <summary>内野/外野の境界（本塁からの距離）[m]。打球の内外野分類（ゾーン・走塁判断・キャプション）の単一ソース。
     /// 守備解決の閾値 <c>FieldingCoefficients.InfieldDepthM</c>（係数）とは意図的に分離する。</summary>
     public const double OutfieldBoundaryM = 46.0;

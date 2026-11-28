@@ -822,6 +822,18 @@ weather:
     - {month: 11, mean_temperature_c: 17.0, temperature_std_dev_c: 3.0, min_temperature_c: 9.0, max_temperature_c: 25.0, rain_prob: 0.20}
     - {month: 12, mean_temperature_c: 12.0, temperature_std_dev_c: 3.0, min_temperature_c: 4.0, max_temperature_c: 20.0, rain_prob: 0.25}
 
+# --- 試合ごとの風（issue #1614・design-13-stadiums §5改訂）。打球の飛びにだけ効かせる（投球には効かせない）。---
+# weather（気温・雨）が有効な試合だけで実際に効く（1つの「その日の天気」の有効フラグに相乗り。WindCoefficients参照）。
+# 2026-11-28 オーナー決定: 強さ0〜6m/s・強風は稀（半正規分布で平均≈1.6m/s）。向きは球場固有の癖
+# （data/stadiums.yaml の wind_bearing_deg。最初は甲子園の浜風だけ）があればその方向中心に散らし、
+# 無い球場は一様乱数＝向きが打ち消し合い平均すると無風と同じになる。
+# 実プレイ側は C#既定（WindModel.Base＝新規WindCoefficients()）がこの値と一致している（CoefficientsDefaultsConsistencyTests・不変条件#4）。
+wind:
+  enabled: true
+  speed_std_dev_mps: 2.0          # 半正規分布|N(0,σ)|の標準偏差。σ=2.0でP(>3m/s)≈13%・P(>5m/s)≈1%
+  max_speed_mps: 6.0              # 強さの上限（クランプ）
+  bias_bearing_spread_deg: 35.0   # 球場固有の癖がある場合、その平均方位角を中心に散らす標準偏差[度]
+
 # --- 試合間の回復モデル（設計書02 §1.1e・issue #41: 連戦で目安投球数が回復し切らない） ---
 # 前登板からの休養日数 × 直近ウィンドウの球数 → 実効の目安投球数を減衰させる。🟡 実測校正前のプレースホルダ。
 # 本流へ配線済み（PlayerMatchResolver／BackgroundMatchResolver が PitchRecoveryLookup 経由で台帳を読む）。

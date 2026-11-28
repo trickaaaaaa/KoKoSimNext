@@ -82,7 +82,9 @@ public static class StadiumCatalogParser
             RightM = Num(map, "right", left),
             CenterM = Num(map, "center", 118.0),
             FenceHeightM = Num(map, "fence_height", 2.5),
-            Wind = map.TryGetValue("wind", out var wind) && wind.Length > 0 ? wind : null,
+            WindBearingDeg = map.TryGetValue("wind_bearing_deg", out var windText)
+                && double.TryParse(windText, NumberStyles.Float, CultureInfo.InvariantCulture, out var windDeg)
+                ? windDeg : null,
             Model = map.TryGetValue("model", out var model) && model.Length > 0 ? model : null,
             Indoor = map.TryGetValue("indoor", out var indoor) && string.Equals(indoor, "true", System.StringComparison.OrdinalIgnoreCase),
         };

@@ -5,7 +5,9 @@
 # model: 3D表示のモデル名（data/stadiums/<model>.obj）。省略時は standard を寸法へ伸縮（issue #904）。
 # indoor: true＝屋内（ドーム）。天候・気温（coefficients.yaml weather の月の表・#971）を効かせない＝空気密度も投手の消耗も基準のまま
 #   （issue #1020）。省略時は false（屋外）。
-# wind: ②環境用の箱。今回未使用（設計書13-stadiums §5）。将来の風雨システムで有効化。
+# wind_bearing_deg: 球場固有の風の癖（issue #1614）。球場も indoor も省略すれば屋外・向きは一様乱数（平均すると無風と同じ）。
+#   方位角は fence_distance と同じ規約: 0=中堅方向, +=一塁/右翼側, -=三塁/左翼側。強さの分布は coefficients.yaml wind。
+#   2026-11-28 オーナー決定: 最初は甲子園の浜風（右翼から左翼へ=-90°）だけ設定し、他の球場は省略する。
 # 表示名は命名権（企業名）除去済みの施設名（stadiums-research.md）。甲子園は商標配慮で「甲子園」表記。
 
 # ── 架空基礎タイプ（序盤ラウンド）＋聖地 ─────────────────────────
@@ -47,7 +49,7 @@ stadiums:
     fence_height: 2.6
     tier: national
     model: koshien
-    # wind: 浜風  # ②用の箱。今回未使用
+    wind_bearing_deg: -90   # 浜風＝右翼から左翼へ（issue #1614・2026-11-28 オーナー決定）
   - id: jingu
     name: 明治神宮野球場
     left: 97.5

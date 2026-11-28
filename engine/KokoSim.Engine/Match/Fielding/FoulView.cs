@@ -54,7 +54,7 @@ public static class FoulView
         IReadOnlyList<Fielder> fielders, FieldingCoefficients coeff)
     {
         var ground = BallisticIntegrator.IntegrateToGround(
-            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
+            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, wind: field.Wind);
         if (ground.ApexHeightM < coeff.FlyApexThresholdM) return null;
         var landing = ground.LandingPosition;
         if (!field.InFoulTerritory(landing)) return null;
