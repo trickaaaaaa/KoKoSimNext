@@ -2285,6 +2285,7 @@ screens:
       - read: =WrapUpTimings.Report
       - read: =GameClock.Week
       - read: =GameSession.Current.PendingSenbatsuFieldIds
+      - shot: 01-home
 
   - id: autumn-wrapup-timing-strong-1747
     name: "秋の県大会を勝ち上がる年（地区大会へ出る）の後始末の所要時間（issue #1747・神奈川）"
@@ -2297,3 +2298,4 @@ screens:
       - read: =WrapUpTimings.Report
       - read: =GameClock.Week
       - read: =GameSession.Current.PendingSenbatsuFieldIds
+      - shot: 01-home
