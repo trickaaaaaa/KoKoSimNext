@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Unity.Match;
+using KokoSim.UnityEditorTools;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -587,6 +588,30 @@ namespace KokoSim.EditorTests
             Assert.That(LaunchFoul(rig, ev, la, br, px, 0.75f, chase), "前提: 打球になった");
             float back = BackwardTravel(rig, out float at);
             Assert.That(back, Is.LessThan(0.1f), $"追ったフライの打球が逆へ合計 {back:F2}m 戻った（t={at:F2}s）");
+        }
+
+        /// <summary>
+        /// 高く上がった追ったファウルフライが、守備ビューの画面の上へ抜けて落ちてきて入り直さないこと（issue #1766）。
+        /// 縦枠を「頂点＋余白」で決めていたため、注視点より手前を飛ぶ球は遠近で大きく写って頂点付近で画面の上端を越え、
+        /// 抜けて戻る＝画面の端で跳ね返って見えた（実試合100試合の追ったフライ24本中5本）。
+        /// </summary>
+        [TestCase(24f, 80f, 100f)]
+        [TestCase(24f, 80f, -120f)]
+        [TestCase(23f, 82f, 135f)]
+        [TestCase(25f, 78f, -100f)]
+        public void FoulFly_Chased_DoesNotLeaveFieldFrameAndReturn(float ev, float la, float br)
+        {
+            var rig = Rig;
+            var f = FoulReboundProbe.SyntheticChasedFoul(ev, la, br);
+            Assert.That(f.Play.FoulView, Is.EqualTo(KokoSim.Engine.Match.Fielding.FoulViewKind.ChasedFly), "前提: 追ったフライ");
+            var duel = new List<FoulReboundProbe.Sample>();
+            var field = new List<FoulReboundProbe.Sample>();
+            FoulReboundProbe.Replay(rig, f, duel, field);
+            Assert.That(field.Count, Is.GreaterThan(60), "前提: 守備ビューで見せた");
+            var r = FoulReboundProbe.Analyze("field", field);
+            Assert.That(r.Reentries, Is.EqualTo(0), $"球が画面（{r.ExitSide}）から出たあと戻ってきた");
+            Assert.That(r.BackPx, Is.LessThan(FoulReboundProbe.HorizontalBackPx), $"画面の中で水平に {r.BackPx:F1}px 戻った（t={r.BackAt:F2}s）");
+            Assert.That(r.WorldBackM, Is.LessThan(0.05f), $"球そのものが水平に {r.WorldBackM:F2}m 戻った（t={r.WorldBackAt:F2}s）");
         }
 
         /// <summary>打球の無い球（見送り）は見せるものが無い＝待たせない（従来どおり「画面外」扱い）。</summary>

@@ -202,6 +202,13 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static float FieldZoomSpeedCapMPerSecond = 12f;
 
+        /// <summary>
+        /// 守備ビューで見せる「追ったファウルフライ」の縦枠に掛ける余裕（issue #1766）。縦の実寸は「高さ＋余白」で決めているが（この倍率は高さの項だけに掛ける）、
+        /// 注視点より手前を高く飛ぶ球は遠近で大きく写り、頂点付近で画面の上へ抜けて落ちてくるまで見えなくなる
+        /// （追ったフライ24本中5本・実測。抜けて戻る＝画面の端で跳ね返って見える）。
+        /// </summary>
+        public static float FoulFlightFrameGain = 1.4f;
+
         /// <summary>打者が打席を外して下がる距離[m]（本塁から遠ざかる向き）。</summary>
         public static float OtBatterBackM = 1.3f;
 

@@ -5156,9 +5156,13 @@ namespace KokoSim.Unity.Match
                 double half = (flight.T1 - flight.T0) * 0.5;
                 float apex = Mathf.Max(0f, (float)flight.At(half).H);
                 double rel = t - flight.T0;
-                float h = rel > half ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
+                // 追ったファウルフライは落ちるまで頂点基準の枠を据える（issue #1766）。下降で枠を詰めると、球が枠の
+                // 端へ寄る向きにも拡大が掛かって画面の中で横へ滑って戻る（高いフライで10〜25px）。インプレーは従来どおり詰める
+                bool chased = _fieldPlay != null && _fieldPlay.FoulView == KokoSim.Engine.Match.Fielding.FoulViewKind.ChasedFly;
+                float h = rel > half && !chased ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
                 aimY = Mathf.Max(FieldAimYMin, h * 0.5f);
-                frameH = Mathf.Max(frameH, h + DuelTuning.FieldMarginM * 2f);
+                float flightGain = chased ? DuelTuning.FoulFlightFrameGain : 1f;
+                frameH = Mathf.Max(frameH, h * flightGain + DuelTuning.FieldMarginM * 2f);
             }
             else
             {
@@ -5390,6 +5394,9 @@ namespace KokoSim.Unity.Match
         private float _fieldAimY = FieldAimYMin;
 
 
+
+        /// <summary>検査用: いま画面に出ている守備カメラの枠（縦の実寸 m・注視点の高さ m）。</summary>
+        public (float FrameH, float AimY) FieldFrameShownForCapture => (_fieldFrameHShown, _fieldAimY);
 
         /// <summary>ズーム表示値（速度上限を通した後）。0未満＝未初期化（プレー頭で目標へ直接合わせる）。</summary>
         private float _fieldFrameHShown = -1f;
