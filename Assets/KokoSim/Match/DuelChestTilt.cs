@@ -30,6 +30,9 @@ namespace KokoSim.Unity.Match
         /// <summary>前傾角の上限[度]。素体の姿勢が崩れた瞬間に胸当てが暴れないようにする。</summary>
         public float MaxDeg = 70f;
 
+        /// <summary>撮影の実測用: いまの前傾角と、土台の前向きの水平方位[度]。</summary>
+        public float LastLeanDeg, LastFwdYawDeg;
+
         private void LateUpdate()
         {
             if (Hips == null || Neck == null || Container == null
@@ -42,6 +45,8 @@ namespace KokoSim.Unity.Match
             fwd.Normalize();
 
             var lean = Mathf.Clamp(Mathf.Atan2(Vector3.Dot(spine, fwd), spine.y) * Mathf.Rad2Deg, 0f, MaxDeg);
+            LastLeanDeg = lean;
+            LastFwdYawDeg = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
             var rot = Quaternion.Euler(lean, 0f, 0f);
             var shoulderWorld = (LeftShoulder.position + RightShoulder.position) * 0.5f + spine * ShoulderLift;
             var shoulder = Container.InverseTransformPoint(shoulderWorld);

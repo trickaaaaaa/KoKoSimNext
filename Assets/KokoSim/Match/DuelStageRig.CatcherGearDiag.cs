@@ -190,6 +190,13 @@ namespace KokoSim.Unity.Match
                 {
                     var t = cm.transform;
                     var centerRel = t.TransformPoint(cm.sharedMesh.bounds.center) - _catcher.Animator.GetBoneTransform(HumanBodyBones.Neck).position;
+                    var tilt = _cChestTilt;
+                    var bfh = new Vector3(bf.x, 0f, bf.z);
+                    if (tilt != null)
+                        sb.Append(" tilt[lean=").Append(tilt.LastLeanDeg.ToString("F0", ci))
+                          .Append(" containerYaw=").Append(tilt.LastFwdYawDeg.ToString("F0", ci))
+                          .Append(" bodyFrontYaw=").Append((Mathf.Atan2(bfh.x, bfh.z) * Mathf.Rad2Deg).ToString("F0", ci))
+                          .Append(" actorYaw=").Append(_catcher.Go.transform.eulerAngles.y.ToString("F0", ci)).Append(']');
                     sb.Append(" chestMesh[upErr=").Append(Vector3.Angle(t.up, bu).ToString("F0", ci))
                       .Append(" faceErr=").Append(Vector3.Angle(t.forward, bf).ToString("F0", ci))
                       .Append(" centerBelowNeck=").Append(Vector3.Dot(centerRel, -bu).ToString("F2", ci))
