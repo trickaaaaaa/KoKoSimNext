@@ -120,6 +120,23 @@ public sealed class MatchMvpTests
     }
 
     [Fact]
+    public void PitcherWhoOnlySingledOnce_IsNotRewardedOrDescribedForBatting()
+    {
+        // 完投のエースが1安打（打点なし）だけ: 好打の目安に届かないので、打撃は話にも経験値にも入れない。
+        var g = Game(new[] { Bat(9, 9, hits: 1) }, new[] { Pit(9, 27, 1, 10) });
+        var pick = Choose(g, Player(9))!;
+
+        Assert.True(pick.PitchingActive);
+        Assert.False(pick.BattingActive);
+        Assert.Equal("9回1失点、10奪三振の完投", MatchMvp.Describe(pick));
+
+        var p = Player(9);
+        var r = MatchMvp.Apply(g, false, new[] { p }, TournamentKind.Summer, 10, Calendar, Stages, C)!;
+        Assert.False(r.Reward.Batting);
+        Assert.Equal(0.0, p.Exp(AbilityKind.Contact));
+    }
+
+    [Fact]
     public void Tie_BreaksByRbi_ThenInnings_ThenBattingOrder_AndIsRepeatable()
     {
         // 点数がちょうど同じ: A＝4安打(4)・打点0、B＝1安打(1)+1打点(1)+1得点…は異なるので組む。

@@ -6,7 +6,8 @@ namespace KokoSim.Engine.Season;
 /// <summary>今日のMVPに選ばれた1人と、その活躍の中身（設計書02 §5.3c・issue #1745）。</summary>
 public sealed record MatchMvpPick(
     int PlayerId, string Name, double Score, double BattingScore, double PitchingScore,
-    BattingLine? Batting, PitchingLine? Pitching, bool CompleteGame, bool Shutout);
+    BattingLine? Batting, PitchingLine? Pitching, bool CompleteGame, bool Shutout,
+    bool BattingActive, bool PitchingActive);
 
 /// <summary>ご褒美が実際に動かしたもの。打撃（ミート/パワー）・投球（制球/キレ/スタミナ）・調子。</summary>
 public sealed record MatchMvpReward(bool Batting, bool Pitching, bool Condition);
@@ -64,9 +65,17 @@ public static class MatchMvp
         }
         if (best == null) return null;
 
+        // 活躍した分野: 点数が大きい方は必ず。もう一方は点数が正で、成功体験ボーナスの「好打／好投」の目安も満たすときだけ
+        // （完投した投手が1安打しただけで、打撃の経験値まで入らないように）。
+        var batDominant = best.BattingScore >= best.PitchingScore;
+        var batActive = best.Batting != null && best.BattingScore > 0.0
+            && (batDominant || MatchGrowthModel.IsGoodBatting(best.Batting, c));
+        var pitActive = best.Pitching != null && best.PitchingScore > 0.0
+            && (!batDominant || MatchGrowthModel.IsGoodPitching(best.Pitching, c));
+
         return new MatchMvpPick(
             best.Id, byId[best.Id].Name, best.Score, best.BattingScore, best.PitchingScore,
-            best.Batting, best.Pitching, best.CompleteGame, best.Shutout);
+            best.Batting, best.Pitching, best.CompleteGame, best.Shutout, batActive, pitActive);
     }
 
     /// <summary>
@@ -85,9 +94,9 @@ public static class MatchMvp
         if (dp == null) return null;
 
         var scale = MatchGrowthModel.SuccessScale(dp, stages, calendar, week, c.MatchSuccessStageMult(kind));
-        var grewBat = pick.BattingScore > 0.0
+        var grewBat = pick.BattingActive
             && Grow(dp, BatAbilities, c.MatchSuccessBatExp * scale * c.MvpRewardMult, c);
-        var grewPitch = pick.PitchingScore > 0.0
+        var grewPitch = pick.PitchingActive
             && Grow(dp, PitchAbilities, c.MatchSuccessPitchExp * scale * c.MvpRewardMult, c);
 
         var before = FormModel.Quantize(dp.ConditionValue);
@@ -160,8 +169,8 @@ public static class MatchMvp
     /// <summary>活躍の一文（例「4打数3安打、1本塁打、2打点」「9回1失点、10奪三振の完投」）。打者・投手・両方で言い回しを分ける。</summary>
     public static string Describe(MatchMvpPick pick)
     {
-        var bat = pick.BattingScore > 0.0 && pick.Batting != null ? DescribeBatting(pick.Batting) : null;
-        var pit = pick.PitchingScore > 0.0 && pick.Pitching != null ? DescribePitching(pick.Pitching, pick) : null;
+        var bat = pick.BattingActive && pick.Batting != null ? DescribeBatting(pick.Batting) : null;
+        var pit = pick.PitchingActive && pick.Pitching != null ? DescribePitching(pick.Pitching, pick) : null;
         if (bat != null && pit != null) return pit + "。打っても" + bat;
         return pit ?? bat ?? "";
     }
