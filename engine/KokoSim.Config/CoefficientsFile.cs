@@ -1145,6 +1145,7 @@ public static class CoefficientsLoader
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
         public double HomeGrounderStartDelaySeconds { get; set; } = D.HomeGrounderStartDelaySeconds;
+        public double NormalDepthHomeThrowMaxRunnerSuccess { get; set; } = D.NormalDepthHomeThrowMaxRunnerSuccess;
         // 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2）
         public double HomeDoubleTagSeconds { get; set; } = D.HomeDoubleTagSeconds;
         public double HomeDoubleTagSuccessBias { get; set; } = D.HomeDoubleTagSuccessBias;
@@ -1356,6 +1357,7 @@ public static class CoefficientsLoader
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,
             HomeGrounderStartDelaySeconds = HomeGrounderStartDelaySeconds,
+            NormalDepthHomeThrowMaxRunnerSuccess = NormalDepthHomeThrowMaxRunnerSuccess,
             HomeDoubleTagSeconds = HomeDoubleTagSeconds,
             HomeDoubleTagSuccessBias = HomeDoubleTagSuccessBias,
             ThirdTagSeconds = ThirdTagSeconds,

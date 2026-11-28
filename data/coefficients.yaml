@@ -655,6 +655,9 @@ baserunning:
   throw_scatter_catching_relief_min_factor: 0.60
   home_tag_seconds: 0.28                      # issue #1139: 0.12→0.28（捕手ブロック込みでやや長め）。home_success_bias/tag_up_success_bias を増分(0.16)差し引いてmargin不変
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
+  # 通常守備（G1）で三塁走者の生還見込み(P_r3_safe)がこれを超えたら守備は本塁を狙わず一塁で確実に打者を取る
+  # （1点は渡すが追加アウトのリスクを負わない。issue #1788・design-12 §4.6）。これ以下なら本塁へ投げて勝負する。
+  normal_depth_home_throw_max_runner_success: 0.70
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅
   home_success_bias: 1.41                    # #316: 走者の加速をモデル化した分(-0.43s)を引いて 2.00→1.57。issue #1139: home_tag_secondsの増分(+0.16)をさらに引いて 1.57→1.41
   # 本塁でのダブルタッチアウト（issue #984, OPEN-QUESTIONS Q27選択肢2, 監督決定2026-11-15）: 1人目を本塁で
