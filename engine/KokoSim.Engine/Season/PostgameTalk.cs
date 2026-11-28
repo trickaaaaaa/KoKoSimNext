@@ -12,6 +12,8 @@ public static class PostgameTalk
     public const string WinEventId = "postgame_win";
     public const string WinBigEventId = "postgame_win_big";
     public const string LossEventId = "postgame_loss";
+    /// <summary>勝ちの会話の直後に続く「今日のMVP」の会話（issue #1745）。公式戦に勝ったときだけ。</summary>
+    public const string MvpEventId = "postgame_mvp";
 
     /// <summary>勝ちの会話のイベントID。相手の点数が自校以上なら格上＝大喜び。</summary>
     public static string WinEventFor(

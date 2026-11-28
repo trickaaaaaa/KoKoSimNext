@@ -112,6 +112,19 @@ public static class FormModel
         return Condition.Terrible;
     }
 
+    /// <summary>
+    /// 調子を一段上げる（今日のMVPのご褒美・issue #1745）。いまの段の次の段の下限まで引き上げる（すでに絶好調ならそのまま）。
+    /// 段の中の位置は問わず、次の段に入る最小の値にする＝一段だけ上がる。乱数なし。
+    /// </summary>
+    public static double RaiseOneTier(double v) => Quantize(v) switch
+    {
+        Condition.Terrible => -0.54,
+        Condition.Poor => -0.19,
+        Condition.Normal => 0.20,
+        Condition.Good => 0.55,
+        _ => v,
+    };
+
     /// <summary>打者へ適用（コンタクト・打球初速に補正, §3.3）。Normal＋dayForm=0 なら恒等。</summary>
     public static BatterAttributes ApplyBatter(BatterAttributes b, Condition c, double dayForm, FormCoefficients f)
     {

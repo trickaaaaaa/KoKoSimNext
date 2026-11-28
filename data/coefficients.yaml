@@ -1728,6 +1728,20 @@ training:
   match_success_mult_prefectural: 1.5
   match_success_mult_regional: 2.0
   match_success_mult_koshien: 3.0
+  # 今日のMVP（設計書02 §5.3c・issue #1745）: 公式戦に勝った試合の自校でいちばん活躍した1人の点数式とご褒美の大きさ。
+  # 打者＝安打1・長打+1・本塁打+2・打点1・得点0.5・盗塁0.5／投手＝投球回1・奪三振0.3・失点−1・完投+1・完封+1。両方した選手は合算
+  mvp_hit: 1.0
+  mvp_extra_base_hit: 1.0
+  mvp_home_run: 2.0
+  mvp_rbi: 1.0
+  mvp_run: 0.5
+  mvp_stolen_base: 0.5
+  mvp_inning: 1.0
+  mvp_strike_out: 0.3
+  mvp_run_allowed: 1.0
+  mvp_complete_game: 1.0
+  mvp_shutout: 1.0
+  mvp_reward_mult: 3.0
   # 投手センス→投手系能力（球速/制球/スタミナ/キレ/球威）の伸びやすさ（設計書01 §1.3・issue #1472）。
   # 倍率 = clamp(1 + (投手センス物理Lv − neutral) × slope, min, max)。打撃の才能とは独立＝投手転向で覚醒が起きる
   pitcher_sense_growth_neutral: 30.0   # 倍率1.0の投手センス（物理Lv）。既定の新入生の投手役の平均（実測30.8）

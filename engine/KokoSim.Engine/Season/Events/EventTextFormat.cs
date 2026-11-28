@@ -33,6 +33,8 @@ public static class EventTextFormat
             "mentor_years",
             // ドラフトの場面（issue #1731）。指名された者の名前（順位順）{drafted}・指名されなかった者の名前 {missed}。draft_scene_* だけが渡す。
             "drafted", "missed",
+            // 今日のMVP（issue #1745）。活躍の一文 {mvp_deed}（「4打数3安打、2打点」など）。postgame_mvp だけが渡す。
+            "mvp_deed",
         };
         foreach (var (k, _) in DisplayNames.Keys) keys.Add(k);
         return keys;

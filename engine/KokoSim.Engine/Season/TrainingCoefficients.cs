@@ -178,6 +178,29 @@ public sealed record TrainingCoefficients
     public double MatchSuccessMultRegional { get; init; } = 2.0;
     public double MatchSuccessMultKoshien { get; init; } = 3.0;
 
+    // === 今日のMVP（設計書02 §5.3c・issue #1745）: 公式戦に勝った試合の自校でいちばん活躍した1人 ===
+    // 活躍の点数＝勝利への貢献を同じ物差しにした簡単な式。打者と投手の両方をした選手は合算。
+    /// <summary>安打1本の点。</summary>
+    public double MvpHit { get; init; } = 1.0;
+    /// <summary>長打（二塁打・三塁打・本塁打）1本に足す点。</summary>
+    public double MvpExtraBaseHit { get; init; } = 1.0;
+    /// <summary>本塁打1本に足す点（長打の点に上乗せ）。</summary>
+    public double MvpHomeRun { get; init; } = 2.0;
+    public double MvpRbi { get; init; } = 1.0;
+    public double MvpRun { get; init; } = 0.5;
+    public double MvpStolenBase { get; init; } = 0.5;
+    /// <summary>投球1回（3アウト）の点。1/3回は1/3。</summary>
+    public double MvpInning { get; init; } = 1.0;
+    public double MvpStrikeOut { get; init; } = 0.3;
+    /// <summary>失点1点の減点。</summary>
+    public double MvpRunAllowed { get; init; } = 1.0;
+    /// <summary>完投（自校の投手が1人だけ）の上乗せ。</summary>
+    public double MvpCompleteGame { get; init; } = 1.0;
+    /// <summary>完封（完投で相手の得点0）の上乗せ（完投の上乗せに足す）。</summary>
+    public double MvpShutout { get; init; } = 1.0;
+    /// <summary>MVPのご褒美の大きさ＝成功体験ボーナスの何倍の経験値を活躍した分野へ足すか（同じ大会の格の倍率・同じ経路）。</summary>
+    public double MvpRewardMult { get; init; } = 3.0;
+
     /// <summary>成功体験ボーナスの大会の格倍率（null＝練習試合）。</summary>
     public double MatchSuccessStageMult(TournamentKind? kind) => kind switch
     {

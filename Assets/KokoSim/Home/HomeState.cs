@@ -1128,6 +1128,8 @@ namespace KokoSim.Unity.Home
             items.AddRange(NewspaperFeedItems());   // 地方大会新聞: このラウンドの他校の結果（設計書05 §1.4）
             items.AddRange(InjuryFeedItems());
             items.AddRange(BigStageFeedItems(_growth));
+            var mvp = o.ManagerWon ? GameSession.Current.DrainMvpNotice() : null;   // 今日のMVP（issue #1745）
+            if (mvp != null) items.Add(MvpFeedItem(mvp));
             items.AddRange(SkillFeedItems(GameSession.Current.DrainSkillNotices(), "本日"));   // 実戦経験（issue #1471）
             items.AddRange(MomentumFeedItems());
             items.AddRange(PromiseFeedItems("本日"));   // 入部の条件（約束）の決着（設計書04 §2.4）
@@ -1140,9 +1142,30 @@ namespace KokoSim.Unity.Home
                 ? PostgameTalk.LossEventId
                 : PostgameTalk.WinEventFor(
                     strength?.Own ?? 0, strength?.Opponent ?? int.MinValue, o.IsChampion, GameSession.Current.Kind);
-            KokoSim.Unity.Shell.EventService.PushUncapped(
-                eventId, null, null,
-                GameSession.Current.TournamentDay * 31 + o.ManagerScore * 7 + o.OpponentScore);
+            var salt = GameSession.Current.TournamentDay * 31 + o.ManagerScore * 7 + o.OpponentScore;
+            KokoSim.Unity.Shell.EventService.PushUncapped(eventId, null, null, salt);
+            // 勝ちの会話の直後にMVPの会話を続ける（大会の締めの会話より前・issue #1745）。最終行にご褒美の中身。
+            if (mvp != null)
+            {
+                var reward = MatchMvp.RewardText(mvp.Reward);
+                KokoSim.Unity.Shell.EventService.PushUncapped(
+                    PostgameTalk.MvpEventId, mvp.Pick.Name,
+                    reward == null ? null : KokoSim.Unity.Shell.PresentedEffect.Good(reward + "！"), salt,
+                    new Dictionary<string, string> { { "mvp_deed", MatchMvp.Describe(mvp.Pick) } });
+            }
+        }
+
+        /// <summary>今日のMVPの通知フィード1行（ご褒美の中身つき）。</summary>
+        private static FeedItem MvpFeedItem(MatchMvpResult mvp)
+        {
+            var reward = MatchMvp.RewardText(mvp.Reward);
+            return new FeedItem
+            {
+                When = "本日",
+                Text = mvp.Pick.Name + " が今日のMVP" + (reward == null ? "" : "（" + reward + "）"),
+                Kind = FeedKind.Up, Tag = "成長",
+                Screen = FeedLinks.Players, PlayerId = mvp.Pick.PlayerId,
+            };
         }
 
         /// <summary>
