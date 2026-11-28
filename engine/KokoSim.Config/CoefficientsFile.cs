@@ -892,6 +892,11 @@ public static class CoefficientsLoader
         public double ChopperWaitFactor { get; set; } = D.ChopperWaitFactor;
         public double InfieldInterceptStepSeconds { get; set; } = D.InfieldInterceptStepSeconds;
         public double PitcherFieldingReactionPenaltySeconds { get; set; } = D.PitcherFieldingReactionPenaltySeconds;
+        public double InfielderAccelMps2 { get; set; } = D.InfielderAccelMps2;
+        public double InfielderLateralSpeedFactor { get; set; } = D.InfielderLateralSpeedFactor;
+        public double FastGrounderReactionThresholdMps { get; set; } = D.FastGrounderReactionThresholdMps;
+        public double FastGrounderReactionExtraSecPerMps { get; set; } = D.FastGrounderReactionExtraSecPerMps;
+        public double FastGrounderReactionExtraMaxSeconds { get; set; } = D.FastGrounderReactionExtraMaxSeconds;
         public double ChargeSlowBallSpeedMps { get; set; } = D.ChargeSlowBallSpeedMps;
         public double ChargeMaxAdvanceCornerM { get; set; } = D.ChargeMaxAdvanceCornerM;
         public double ChargeMaxAdvanceMiddleM { get; set; } = D.ChargeMaxAdvanceMiddleM;
@@ -998,6 +1003,11 @@ public static class CoefficientsLoader
             ChopperWaitFactor = ChopperWaitFactor,
             InfieldInterceptStepSeconds = InfieldInterceptStepSeconds,
             PitcherFieldingReactionPenaltySeconds = PitcherFieldingReactionPenaltySeconds,
+            InfielderAccelMps2 = InfielderAccelMps2,
+            InfielderLateralSpeedFactor = InfielderLateralSpeedFactor,
+            FastGrounderReactionThresholdMps = FastGrounderReactionThresholdMps,
+            FastGrounderReactionExtraSecPerMps = FastGrounderReactionExtraSecPerMps,
+            FastGrounderReactionExtraMaxSeconds = FastGrounderReactionExtraMaxSeconds,
             ChargeSlowBallSpeedMps = ChargeSlowBallSpeedMps,
             ChargeMaxAdvanceCornerM = ChargeMaxAdvanceCornerM,
             ChargeMaxAdvanceMiddleM = ChargeMaxAdvanceMiddleM,

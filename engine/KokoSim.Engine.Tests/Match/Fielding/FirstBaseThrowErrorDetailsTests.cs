@@ -59,10 +59,11 @@ public sealed class FirstBaseThrowErrorDetailsTests
         var receive = 0;
         var poorErrors = 0;
         var eliteErrors = 0;
-        // 方位28°＝捕球点がベースから約8m（一塁手が投手へトスする側。issue #1685 で分かれ目が外へ寄ったので30°→28°）
+        // 方位30°＝捕球点がベースから約8m（一塁手が投手へトスする側。issue #1685 で分かれ目が外へ寄ったので30°→28°、
+        // issue #1789 で内野の到達に加速を入れ、28〜29°は400本に1本ほど二塁手が捕るようになったので30°へ戻した）
         for (ulong seed = 1; seed <= 400; seed++)
         {
-            var poor = Grounder(bearingDeg: 28.0, pitcherCatching: 10, seed, throwErrorBase: 0.0);
+            var poor = Grounder(bearingDeg: 30.0, pitcherCatching: 10, seed, throwErrorBase: 0.0);
             Assert.Equal(FieldPosition.FirstBase, poor.FielderRole);
             if (poor.UnassistedPutout) continue;   // 捕球点が seed で揺れる。送球する場合だけ見る
             if (poor.ErrorKind == FieldingErrorKind.Receive)
@@ -71,7 +72,7 @@ public sealed class FirstBaseThrowErrorDetailsTests
                 Assert.Equal(FieldPosition.Pitcher, poor.ErrorFielderRole);
             }
             if (poor.Result == BattedBallResult.Error) poorErrors++;
-            if (Grounder(bearingDeg: 28.0, pitcherCatching: 95, seed, throwErrorBase: 0.0).Result == BattedBallResult.Error) eliteErrors++;
+            if (Grounder(bearingDeg: 30.0, pitcherCatching: 95, seed, throwErrorBase: 0.0).Result == BattedBallResult.Error) eliteErrors++;
         }
         Assert.True(receive > 0, "一塁手処理の送球に受け手（投手）の捕球ミスが引かれていない");
         Assert.True(poorErrors > eliteErrors, $"受け手＝投手の捕球力が効いていない: 低{poorErrors} 高{eliteErrors}");

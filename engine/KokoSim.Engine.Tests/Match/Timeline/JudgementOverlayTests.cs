@@ -35,10 +35,13 @@ public sealed class JudgementOverlayTests
         // ⚠ シードを振る。守備の所要にもたつき（InfieldHandleJitterMeanSeconds）が乗ってからは、
         // 同じ当たりでも内野安打になるのは<b>裾を引いた回</b>だけ＝1シードだけ走査すると
         // 内野安打が1件も出ずテストが空回りする（実測 2026-08-14）。
+        // issue #1789 で内野安打の側を締めたので、方位5°（二塁手の正面寄り）だけでは内野安打が出なくなった。
+        // 三遊間（−14°・−26°）も走査する。
+        foreach (var bearing in new[] { 5.0, -14.0, -26.0 })
         for (var velo = 5.0; velo <= 45.0; velo += 0.5)
             for (ulong seed = 1; seed <= 20; seed++)
             {
-                var ball = new BattedBall { ExitVelocityMps = velo, LaunchAngleDeg = -3, BearingDeg = 5 };
+                var ball = new BattedBall { ExitVelocityMps = velo, LaunchAngleDeg = -3, BearingDeg = bearing };
                 var play = FieldingResolver.ResolveDetailed(
                     ball, Field, Aero, BatterAttributes.LeagueAverage, Field.StandardAlignment(), coeff,
                     new Xoshiro256Random(seed));

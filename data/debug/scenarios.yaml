@@ -228,7 +228,8 @@ scenarios:
     # ショートゴロ。係数変更で解が動いたら選び直す（SelfForceDoublePlayScenarioTests が赤くなる）。
     # engine 単体で 6-6-3 になっても、撮影（監督が守備側）では別の打球になるシードがある。
     # 選び直したら撮影レシピ dp-663-1549 で遊撃手が自分で踏むことまで確かめる
-    seed: 20261124946
+    # 2026-11-28: 内野の到達の式の見直し（issue #1789 やること4②）で選び直し。
+    seed: 20261125129
 
 
   - id: dp-663-lab-alt
@@ -253,7 +254,9 @@ scenarios:
     top: true
     outs: 0
     bases: [1]
-    seed: 20261124078   # セカンドゴロ。係数変更で解が動いたら選び直す（SelfForceDoublePlayScenarioTests が赤くなる）
+    # セカンドゴロ。係数変更で解が動いたら選び直す（SelfForceDoublePlayScenarioTests が赤くなる）。
+    # 2026-11-28: 内野の到達の式の見直し（issue #1789 やること4②）で選び直し。
+    seed: 20261124118
 
   # ── 盗塁の捕手送球の絵の検証（issue #662）。最初の打席の初球で必ず二盗を企図する ──
   # 走塁系の強制は「走者一塁・二塁空き・打席の初球」でだけ効く（ForceNextForCapture の注記）。

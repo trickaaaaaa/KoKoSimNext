@@ -41,11 +41,25 @@ public static partial class AtBatSimulation
         /// <summary>[bin, hand] 投手が処理した打球の初速合計[km/h]（平均の算出用）。</summary>
         public required double[,] PitcherExitVelocitySum { get; init; }
 
+        /// <summary>
+        /// 処理（捕球/処理点）までの時刻の刻み幅[s]（issue #1789 やること4②「まず測る」）。
+        /// 各内野手が定位置からどれだけ詰めて処理したかを、処理までの時刻で分けて見る。
+        /// </summary>
+        public const double TimeBinWidthSeconds = 0.2;
+        public const int TimeBinCount = 10; // 0.0〜2.0秒
+
+        /// <summary>[timeBin, position] 処理点の定位置からの距離[m]の合計（内野で止まった打球のみ）。</summary>
+        public required double[,] ClosedDistanceSumM { get; init; }
+        /// <summary>[timeBin, position] 上の合計の件数。</summary>
+        public required int[,] ClosedDistanceCount { get; init; }
+
         private static readonly FieldPosition[] InfieldPositions =
         {
             FieldPosition.Pitcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
             FieldPosition.ThirdBase, FieldPosition.Shortstop,
         };
+
+        private static readonly string[] PositionLabels = { "投", "一", "二", "三", "遊" };
 
         public static string HandName(int hand) => hand == 0 ? "右打者" : "左打者";
 
@@ -84,6 +98,28 @@ public static partial class AtBatSimulation
                 }
                 sb.AppendLine();
             }
+
+            sb.AppendLine("## 詰めた距離（処理までの時刻別・野手別。issue #1789 やること4②「まず測る」）");
+            sb.AppendLine();
+            sb.AppendLine("内野で止まった打球（両打席計）について、処理点と定位置の距離[m]の平均を、接触からその点へ球が");
+            sb.AppendLine("届いた時刻（処理時刻）で分ける。時刻が長いほど「追いついて詰められる距離」が大きいか見る。");
+            sb.AppendLine();
+            sb.AppendLine("| 処理までの時刻[s] | 投 | 一 | 二 | 三 | 遊 |");
+            sb.AppendLine("|---|---:|---:|---:|---:|---:|");
+            for (var tb = 0; tb < TimeBinCount; tb++)
+            {
+                var low = tb * TimeBinWidthSeconds;
+                var cells = new string[PositionLabels.Length];
+                for (var p = 0; p < PositionLabels.Length; p++)
+                {
+                    var count = ClosedDistanceCount[tb, p];
+                    cells[p] = count > 0
+                        ? $"{(ClosedDistanceSumM[tb, p] / count).ToString("F1", c)}m(n={count})"
+                        : "-";
+                }
+                sb.AppendLine(c, $"| {low:F1}〜{low + TimeBinWidthSeconds:F1} | {cells[0]} | {cells[1]} | {cells[2]} | {cells[3]} | {cells[4]} |");
+            }
+            sb.AppendLine();
             return sb.ToString();
         }
 
@@ -104,19 +140,32 @@ public static partial class AtBatSimulation
         const int bins = GrounderGapProfile.BinCount;
         const int hands = GrounderGapProfile.HandCount;
         const int positions = 5;
+        const int timeBins = GrounderGapProfile.TimeBinCount;
         // レイアウト: [0..B*H)=ゴロ系, [B*H..2*B*H)=抜けた, [2*B*H..3*B*H)=安打,
         //            [3*B*H..3*B*H+B*H*5)=処理野手別, 末尾=投手処理の初速合計(double とビット一致させず別配列で集計)
         var binsHands = bins * hands;
         var width = binsHands * 3 + binsHands * positions;
+        var distWidth = timeBins * positions; // [timeBin, position] 詰めた距離の合計・件数
         var totalInt = new int[width];
         var totalPitcherKmh = new double[binsHands];
+        var totalClosedDistSum = new double[distWidth];
+        var totalClosedDistCount = new int[distWidth];
         var gate = new object();
 
+        // 内野5ポジションの定位置（issue #1789 やること4②「まず測る」）。StandardAlignment は打者ごとに
+        // 変わらない（switch等は無い）ので、一度だけ引けば十分＝並列ループ内は読むだけ（決定論・乱数不使用）。
+        var standardLocation = new Vector3D[positions];
+        foreach (var f in ctx.Fielders)
+        {
+            var posIdx = PositionIndex(f.Position);
+            if (posIdx >= 0) standardLocation[posIdx] = f.Location;
+        }
+
         Parallel.For(0, atBats,
-            () => (new int[width], new double[binsHands]),
+            () => (new int[width], new double[binsHands], new double[distWidth], new int[distWidth]),
             (i, _, local) =>
             {
-                var (localInt, localKmh) = local;
+                var (localInt, localKmh, localDistSum, localDistCount) = local;
                 var rng = forks[i];
                 var batter = SampleBatter(rng);
                 var pitcher = SamplePitcher(rng);
@@ -137,15 +186,7 @@ public static partial class AtBatSimulation
 
                 if (!through && play.FielderRole is { } role)
                 {
-                    var posIdx = role switch
-                    {
-                        FieldPosition.Pitcher => 0,
-                        FieldPosition.FirstBase => 1,
-                        FieldPosition.SecondBase => 2,
-                        FieldPosition.ThirdBase => 3,
-                        FieldPosition.Shortstop => 4,
-                        _ => -1,
-                    };
+                    var posIdx = PositionIndex(role);
                     if (posIdx >= 0)
                     {
                         localInt[3 * binsHands + idx * positions + posIdx]++;
@@ -154,9 +195,23 @@ public static partial class AtBatSimulation
                             var ball = detailed.PitchLog is { Count: > 0 } log ? log[^1].BattedBall : null;
                             if (ball is not null) localKmh[idx] += ball.ExitVelocityKmh;
                         }
+
+                        // 詰めた距離（issue #1789 やること4②「まず測る」）: 処理点と定位置の水平距離を、
+                        // 処理時刻（接触からその点へ球が届くまでの時刻）でビン分けして集計する。
+                        if (play.FieldedAtSeconds is { } fieldedAt && play.FieldedX is { } fx && play.FieldedZ is { } fz)
+                        {
+                            var home = standardLocation[posIdx];
+                            var dx = fx - home.X;
+                            var dz = fz - home.Z;
+                            var closedM = Math.Sqrt(dx * dx + dz * dz);
+                            var tb = Math.Clamp(
+                                (int)(fieldedAt / GrounderGapProfile.TimeBinWidthSeconds), 0, timeBins - 1);
+                            localDistSum[tb * positions + posIdx] += closedM;
+                            localDistCount[tb * positions + posIdx]++;
+                        }
                     }
                 }
-                return (localInt, localKmh);
+                return (localInt, localKmh, localDistSum, localDistCount);
             },
             local =>
             {
@@ -164,6 +219,8 @@ public static partial class AtBatSimulation
                 {
                     for (var k = 0; k < width; k++) totalInt[k] += local.Item1[k];
                     for (var k = 0; k < binsHands; k++) totalPitcherKmh[k] += local.Item2[k];
+                    for (var k = 0; k < distWidth; k++) totalClosedDistSum[k] += local.Item3[k];
+                    for (var k = 0; k < distWidth; k++) totalClosedDistCount[k] += local.Item4[k];
                 }
             });
 
@@ -186,6 +243,17 @@ public static partial class AtBatSimulation
             }
         }
 
+        var closedDistSum2 = new double[timeBins, positions];
+        var closedDistCount2 = new int[timeBins, positions];
+        for (var tb = 0; tb < timeBins; tb++)
+        {
+            for (var p = 0; p < positions; p++)
+            {
+                closedDistSum2[tb, p] = totalClosedDistSum[tb * positions + p];
+                closedDistCount2[tb, p] = totalClosedDistCount[tb * positions + p];
+            }
+        }
+
         return new GrounderGapProfile
         {
             Grounders = grounders,
@@ -193,6 +261,18 @@ public static partial class AtBatSimulation
             Hits = hits2,
             HandledBy = handledBy,
             PitcherExitVelocitySum = pitcherKmh,
+            ClosedDistanceSumM = closedDistSum2,
+            ClosedDistanceCount = closedDistCount2,
         };
     }
+
+    private static int PositionIndex(FieldPosition position) => position switch
+    {
+        FieldPosition.Pitcher => 0,
+        FieldPosition.FirstBase => 1,
+        FieldPosition.SecondBase => 2,
+        FieldPosition.ThirdBase => 3,
+        FieldPosition.Shortstop => 4,
+        _ => -1,
+    };
 }
