@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════
    SaveSlots.uss — セーブデータ画面（「システム」タブ／タイトルの「つづきから」）
    ───────────────────────────────────────────────────────────────────────
-   上＝画面内の切り替えと「タイトルへ戻る」。セーブデータのページは 左＝枠ごとのカード／右＝いま遊んでいるデータ。
+   上＝画面内の切り替えと「タイトルへ戻る」。セーブデータのページは 3枠のカード（部品 SaveSlotCard）を横に並べる。
+   タイトルから入る「つづきから」は画面ルートに ss-root--night（墨の地・見出しの行・ダイヤモンドの線画）。
    色は tokens（scorebook.uss の --sbk-*）を参照する。gap は無いので間隔は margin で作る。
    校名の編集・設定・クレジットのページは下のほうの節（.ss-body 以下）で、ここの上部の行を共用する。
    ═══════════════════════════════════════════════════════════════════════ */
@@ -69,157 +70,76 @@
 .ss-title-btn .licon { width: 16px; height: 16px; margin-right: 8px; }
 .ss-title-btn__txt { margin: 0; padding: 0; font-size: 14px; color: var(--sbk-info); }
 
-/* ── ② 本体：左＝枠のカード（残り全部）／右＝いま遊んでいるデータ（420px） ── */
-.ss-saves { flex-direction: row; flex-grow: 1; min-height: 0; }
-.ss-saves__left { flex-grow: 1; flex-basis: 0; min-width: 0; min-height: 0; }
-.ss-slots-scroll { flex-grow: 1; min-height: 0; }
+/* 使用中の枠の数（「2 / 3 枠を使用中」）。ゲーム内は切り替えの右・つづきからは見出しの行の右端 */
+.ss-count { flex-direction: row; align-items: flex-end; flex-shrink: 0; margin-left: 24px; }
+.ss-count Label { margin: 0; padding: 0; }
+.ss-count .ss-count__n { font-size: 16px; color: var(--sbk-text); }
+.ss-count .ss-count__rest { margin-left: 4px; margin-bottom: 1px; font-size: 13px; color: var(--sbk-sub); }
+
+/* ── ② セーブデータのページ：3枠のカード（部品 SaveSlotCard）を横に3等分・上下中央 ── */
+.ss-saves { flex-grow: 1; min-height: 0; flex-direction: column; }
 .ss-saves Label { margin: 0; padding: 0; }
+.ss-slots {
+    flex-grow: 1;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+}
+.ss-slots .ssc { margin-right: 24px; }
+.ss-slots .ssc--last { margin-right: 0; }
 
 /* 保存できない理由・読み込みや保存の失敗（本当の警告だけ＝警告色） */
 .ss-saves .ss-note {
     flex-shrink: 0;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     font-size: 13px;
     color: var(--color-warn);
     white-space: normal;
 }
 
-/* ── 枠のカード（高さ172px・間隔12px）。ふだんは 1px枠＋1px内余白、プレイ中は 2px枠＋0内余白＝大きさは同じ ── */
-.ss-card {
-    flex-direction: row;
-    align-items: center;
-    height: 172px;
-    flex-shrink: 0;
-    margin-bottom: 12px;
-    background-color: var(--sbk-patch-bg);
-    border-radius: 14px;
-    border-width: 1px;
-    border-color: var(--sbk-card-line);
-    padding: 1px;
-}
-.sbk .ss-card--playing { border-width: 2px; padding: 0; border-color: var(--color-accent); }
-/* 空いている枠：背景なし・点線（DashedFrame が外周に重なる） */
-.ss-card--empty { background-color: rgba(0, 0, 0, 0); border-color: rgba(0, 0, 0, 0); }
+/* つづきからの見出しの行（ゲーム内では隠す） */
+.ss-heading { flex-direction: row; align-items: flex-end; flex-shrink: 0; margin-top: 18px; margin-bottom: 26px; }   /* 切り替えの行の下16px＋18＝34px */
+.ss-heading Label { margin: 0; padding: 0; }
+.ss-heading .ss-heading__title { font-size: 38px; letter-spacing: 5.3px; color: var(--sbk-night-paper); }
+.ss-heading .ss-heading__sub { margin-left: 18px; margin-bottom: 8px; font-size: 14px; color: var(--sbk-night-sub); }
+.ss-heading__spacer { flex-grow: 1; }
+.ss-heading .ss-count { margin-bottom: 8px; }
 
-/* 左端：枠の番号（76px・右に線） */
-.ss-card__no {
-    width: 76px;
-    flex-shrink: 0;
-    align-self: stretch;
-    align-items: center;
-    justify-content: center;
-    border-right-width: 1px;
-    border-right-color: var(--sbk-rule-soft);
+/* ═══ つづきから（タイトルから入る・墨の地） ═══════════════════════════ */
+.sbk.ss-root--night { background-color: var(--sbk-night); }
+.ss-root--night .ss-main { padding: 30px 56px 40px 56px; overflow: hidden; }
+.ss-root--night .ss-header { height: 46px; }
+.ss-root--night .ss-slots .ssc { margin-right: 28px; }
+.ss-root--night .ss-slots .ssc--last { margin-right: 0; }
+.ss-root--night .ss-count .ss-count__n { font-size: 17px; color: var(--sbk-night-paper); }
+.ss-root--night .ss-count .ss-count__rest { color: var(--sbk-night-sub); }
+/* 透明度はモック（sRGB で混ぜる）と同じ見え方の値（UI はリニア空間で混ぜる。SaveSlotCard.uss の注記）。（）がモックの指定 */
+.sbk.ss-root--night .ss-tabs .seg-tabs { background-color: rgba(255, 255, 255, 0.016); border-radius: 11px; }   /* （白8%） */
+.sbk.ss-root--night .ss-tabs .seg-tab,
+.sbk.ss-root--night .ss-tabs .seg-tab:hover {
+    height: 38px;
+    padding: 0 22px;
+    border-radius: 8px;
+    color: var(--sbk-night-sub);
 }
-.ss-card--empty .ss-card__no { border-right-width: 0; }
-.ss-card__no-k { font-size: 11px; color: var(--sbk-sub); }
-.ss-card__no-v { font-size: 30px; color: var(--sbk-text); }
-.ss-card--empty .ss-card__no-k,
-.ss-card--empty .ss-card__no-v { color: var(--sbk-mute); }
-/* 空きの枠の番号の右の点線（縦） */
-.ss-card__vrule { width: 2px; align-self: stretch; flex-shrink: 0; }
-
-/* 中：情報（3行・行の間隔12px） */
-.ss-card__info { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 24px; margin-right: 24px; justify-content: center; }
-.ss-card__head { flex-direction: row; align-items: flex-end; }
-.ss-card__name { font-size: 26px; letter-spacing: 2.1px; color: var(--sbk-text); white-space: nowrap; }
-.ss-saves .ss-card__pref { font-size: 19px; letter-spacing: 1.1px; color: var(--sbk-info); margin-left: 14px; padding-bottom: 2px; }
-/* 「プレイ中」の札（スクールカラー地に白。色は SchoolAccent.Apply が流す） */
-.ss-saves .ss-card__playing {
-    align-self: center;
-    margin-left: 14px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    color: var(--sbk-card);
-    background-color: var(--color-accent);
+.sbk.ss-root--night .ss-tabs .seg-tab:hover { color: var(--sbk-night-paper); }
+.sbk.ss-root--night .ss-tabs .seg-tab--on,
+.sbk.ss-root--night .ss-tabs .seg-tab--on:hover {
+    background-color: var(--sbk-night-paper);
+    color: var(--sbk-night);
 }
-.ss-card__items { flex-direction: row; align-items: flex-end; margin-top: 12px; }
-.ss-item { margin-right: 30px; flex-shrink: 0; }
-.ss-item__k { font-size: 11px; color: var(--sbk-mute); }
-.ss-item__v { flex-direction: row; align-items: flex-end; height: 32px; margin-top: 4px; }
-.ss-item__big { font-size: 20px; color: var(--sbk-text); }                    /* 明朝の値（「9月2週」） */
-.ss-item__score { font-size: 26px; color: var(--sbk-text); }                  /* 総合の点数（明朝） */
-.ss-item__num { font-size: 20px; color: var(--sbk-text); }                    /* 太字の数字（勝敗・回数） */
-.ss-saves .ss-item__unit { font-size: 13px; color: var(--sbk-info); padding-bottom: 3px; margin-left: 2px; margin-right: 4px; }
-.ss-saves .ss-item__sep { font-size: 13px; color: var(--sbk-mute-soft); padding-bottom: 3px; margin-left: 4px; margin-right: 8px; }
-.ss-saves .ss-item__year { font-size: 13px; color: var(--sbk-info); padding-bottom: 3px; margin-left: 8px; }
-.ss-saves .ss-item__tag {
-    align-self: center;
-    margin-left: 8px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    color: var(--sbk-info);
-    background-color: var(--sbk-rule-soft);
-    white-space: nowrap;
+.sbk.ss-root--night Button.ss-title-btn { height: 42px; border-color: rgba(255, 255, 255, 0.067); border-radius: 10px; }   /* （白22%） */
+.sbk.ss-root--night Button.ss-title-btn:hover { border-color: rgba(255, 255, 255, 0.175); }
+.ss-root--night .ss-title-btn .licon,
+.ss-root--night .ss-title-btn__txt { color: var(--sbk-night-btn); }
+/* 内野のダイヤモンドの線画（右上にはみ出す。InfieldDiamondLines が描く） */
+.ss-diamond {
+    position: absolute;
+    width: 900px;
+    height: 900px;
+    right: -210px;
+    top: -160px;
 }
-.ss-item__none { font-size: 20px; color: var(--sbk-mute); }                   /* 値がない項目の「—」 */
-.sbk .ss-item .rank-chip { min-width: 30px; width: 30px; height: 30px; padding: 0; margin: 0 8px 1px 0; flex-shrink: 0; }
-.ss-saves .ss-card__saved { font-size: 12px; color: var(--sbk-mute); margin-top: 12px; }
-.ss-card__vacant { font-size: 16px; color: var(--sbk-mute); }
-
-/* 右端：操作（間隔10px・右の余白24px） */
-.ss-card__ops { flex-direction: row; align-items: center; flex-shrink: 0; margin-right: 22px; }
-.sbk Button.ss-op-trash {
-    width: 44px;
-    height: 44px;
-    margin: 0;
-    padding: 0;
-    border-width: 0;
-    border-radius: 10px;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--sbk-danger);
-    align-items: center;
-    justify-content: center;
-}
-.sbk Button.ss-op-trash:hover { background-color: var(--sbk-rule-soft); }
-.ss-op-trash .licon { width: 20px; height: 20px; }
-.sbk Button.ss-op {
-    flex-direction: row;
-    align-items: center;
-    height: 48px;
-    margin: 0 0 0 10px;
-    padding: 0 20px;
-    border-width: 1.5px;
-    border-color: var(--sbk-text);
-    border-radius: 10px;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--sbk-text);
-    font-size: 15px;
-}
-.sbk Button.ss-op--fill { border-width: 0; background-color: var(--sbk-text); color: var(--sbk-card); }
-.sbk Button.ss-op--fill:hover { background-color: var(--sbk-ink); }
-.ss-op .licon { width: 16px; height: 16px; margin-right: 8px; }
-.ss-op__txt { font-size: 15px; color: var(--sbk-card); }
-
-/* ── 右列：いま遊んでいるデータ ── */
-.ss-now {
-    width: 420px;
-    flex-shrink: 0;
-    margin-left: 16px;
-    padding: 22px 24px;
-    background-color: var(--sbk-patch-bg);
-    border-radius: 14px;
-}
-.ss-now__title { font-size: 18px; letter-spacing: 1.4px; color: var(--sbk-text); }
-.ss-now__school { flex-direction: row; align-items: flex-end; margin-top: 16px; }
-.ss-now__name { font-size: 24px; letter-spacing: 1.9px; color: var(--sbk-text); }
-.ss-saves .ss-now__pref { font-size: 18px; letter-spacing: 1.1px; color: var(--sbk-info); margin-left: 14px; padding-bottom: 2px; }
-.ss-now__rows { margin-top: 16px; border-top-width: 2px; border-top-color: var(--sbk-text); }
-.ss-now__row {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 40px;
-    flex-shrink: 0;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--sbk-rule-soft);
-}
-.ss-now__k { font-size: 13px; color: var(--sbk-sub); }
-.ss-now__v { flex-direction: row; align-items: center; }
-.ss-now__v Label { font-size: 15px; color: var(--sbk-text); }
-.sbk .ss-now__v .rank-chip { min-width: 22px; width: 22px; height: 22px; padding: 0; margin: 0 8px 0 0; flex-shrink: 0; }
 
 /* ── 校名の編集・設定・クレジットのページ（2カラム本体） ─────────────── */
 .ss-body {

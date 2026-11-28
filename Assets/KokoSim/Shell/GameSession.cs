@@ -636,6 +636,9 @@ namespace KokoSim.Unity.Shell
             });
         }
 
+        /// <summary>自県裏カードの先読みがまだ走っているか（待たずに見るだけ）。</summary>
+        public bool PrefetchRunning { get { var t = _prefetchTask; return t != null && !t.IsCompleted; } }
+
         /// <summary>プレフェッチ完了を待つ（本解決の直前・static状態を書き換える節目の前に呼び、背景と前景の
         /// 同時アクセスを避ける。issue #1226 で <see cref="BackgroundSims"/> からも呼べるよう公開）。
         /// 通常は既に完了済み＝即返る。</summary>

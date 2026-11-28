@@ -42,7 +42,10 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void SetSchoolIdentity(string name, int prefectureId, int? districtId)
         {
-            ManagerSchoolName = string.IsNullOrWhiteSpace(name) ? DefaultSchoolName : name.Trim();
+            // 自校名は「高校」を含まない幹で持つ（SchoolNames の約束）。#1358 より前の新規作成は末尾の「高校」を
+            // 外さずに保存していた＝読み込みでも幹へ揃える（表示で「検証高校高校」になっていた）。
+            var stem = string.IsNullOrWhiteSpace(name) ? "" : KokoSim.Engine.Nation.SchoolNames.Stem(name.Trim());
+            ManagerSchoolName = stem.Length == 0 ? DefaultSchoolName : stem;
             PrefectureId = prefectureId;
             DistrictId = districtId;
             _prefecture = null;

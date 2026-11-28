@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using KokoSim.Engine.Saves;
@@ -154,6 +155,57 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>スロットから読み込んで全サービスへ復元する。</summary>
         public static bool Load(string slotId, out string error) => SaveGameIO.Load(PathFor(slotId), out error);
+
+        /// <summary>
+        /// 保存の手順（<see cref="LoadingJob"/> で回す）。裏のシムが止まるのをコマをまたいで待ち（絵が動く）、
+        /// 状態を写すのはメインスレッド、変換・圧縮・書き出しは別スレッド。結果は <paramref name="done"/> へ
+        /// （メインスレッドで）。中身は <see cref="Save"/> と同じ＝書き出すものは変わらない。
+        /// </summary>
+        public static IEnumerator SaveRoutine(string slotId, Action<bool> done)
+        {
+            yield return LoadingJob.WaitBackgroundIdle();
+            var path = PathFor(slotId);
+            var state = SaveGameIO.BeginSave();
+            if (state == null) { done?.Invoke(false); yield break; }
+            var ok = false;
+            var write = LoadingJob.OnWorker(() => ok = SaveGameIO.WriteState(path, state));
+            yield return write;
+            if (write.Exception != null)
+            {
+                UnityEngine.Debug.LogException(write.Exception.GetBaseException());
+                ok = false;
+            }
+            if (ok) SaveGameIO.CompleteSave(path, state);
+            done?.Invoke(ok);
+        }
+
+        /// <summary>
+        /// 読み込みの手順（<see cref="LoadingJob"/> で回す）。裏のシムが止まるのを待ち、読み込み・展開・変換は別スレッド、
+        /// 全サービスへ戻すのはメインスレッド。結果は <paramref name="done"/> へ（失敗時は理由つき）。
+        /// </summary>
+        public static IEnumerator LoadRoutine(string slotId, Action<bool, string> done)
+        {
+            yield return LoadingJob.WaitBackgroundIdle();
+            var path = PathFor(slotId);
+            SaveState state = null;
+            string error = null;
+            var ok = false;
+            var read = LoadingJob.OnWorker(() =>
+            {
+                ok = SaveGameIO.TryReadState(path, out var s, out var e);
+                state = s;
+                error = e;
+            });
+            yield return read;
+            if (read.Exception != null)
+            {
+                UnityEngine.Debug.LogException(read.Exception.GetBaseException());
+                ok = false;
+            }
+            if (!ok) { done?.Invoke(false, error); yield break; }
+            SaveGameIO.ApplyLoaded(path, state);
+            done?.Invoke(true, null);
+        }
 
         /// <summary>
         /// いま遊んでいる進行の枠か（この進行で最後に保存／読込した枠）。新しく始めてまだ保存していない間は

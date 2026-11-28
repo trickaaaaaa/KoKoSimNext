@@ -1,0 +1,93 @@
+/* ロードの汎用ポップアップ（LoadingPopup.uxml）。配色は紙色と墨だけ＝スクールカラーを使わない
+   （どの画面の上でも同じ見た目）。試合中の画面にも出るので .sbk には頼らず、色はここで閉じる。
+   明滅する点と流れる棒は LoadingPopupView が時刻から毎コマ計算する（USS の transition は使わない）。 */
+
+.ldp {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    /* 墨 #1d1b18 の幕（モックの62%と同じ見え方。UI はリニア空間で混ぜるので 62% だと紙色の上で薄く出る＝実測 151 対 106）。
+       下の操作は受け付けない */
+    background-color: rgba(29, 27, 24, 0.83);
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+
+.ldp__card {
+    width: 560px;
+    flex-shrink: 0;
+    border-radius: 20px;
+    background-color: #FBFAF6;
+    padding: 30px 36px 34px 36px;
+    flex-direction: column;
+}
+
+.ldp__row {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    flex-shrink: 0;
+}
+
+.ldp__title {
+    margin: 0; padding: 0;
+    font-size: 28px;
+    letter-spacing: 8px;   /* 0.3em */
+    color: #1D1B18;
+}
+
+.ldp__dots {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 14px;
+    flex-shrink: 0;
+}
+.ldp__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background-color: #1D1B18;
+    margin-right: 7px;
+}
+
+.ldp__spacer { flex-grow: 1; }
+
+.ldp__pct {
+    flex-direction: row;
+    align-items: flex-end;
+    flex-shrink: 0;
+}
+.ldp__pct-num {
+    margin: 0; padding: 0;
+    font-size: 36px;
+    color: #1D1B18;
+}
+.ldp__pct-unit {
+    padding: 0;
+    margin: 0 0 6px 3px;
+    font-size: 16px;
+    color: #6F6A60;
+}
+
+.ldp__msg {
+    margin: 10px 0 0 0; padding: 0;
+    font-size: 14px;
+    color: #6F6A60;
+}
+
+.ldp__track {
+    position: relative;
+    height: 8px;
+    margin-top: 22px;
+    border-radius: 4px;
+    background-color: #ECE8DF;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.ldp__fill {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 0;
+    border-radius: 4px;
+    background-color: #1D1B18;
+}

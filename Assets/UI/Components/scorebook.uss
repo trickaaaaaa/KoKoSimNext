@@ -97,6 +97,13 @@
     --sbk-field-line: rgba(243, 239, 230, 0.8);   /* 球場の絵：ファウルライン */
     --sbk-field-base: #F6F3EC;     /* 球場の絵：塁 */
     --sbk-danger: #A0473C;         /* 元に戻せない操作（削除）のアイコンと確定ボタン */
+    /* セーブ枠のカード（つづきから／セーブデータで共有・SaveSlotCard） */
+    --sbk-danger-line: #E3C9C4;    /* 削除ボタンの枠 */
+    --sbk-latest: #F2C25A;         /* 「最新」の札と枠（つづきから） */
+    --sbk-night: #1D1B18;          /* つづきからの画面の地（墨） */
+    --sbk-night-paper: #F6F1E7;    /* 墨の地の上の紙色（見出し・選択中のつまみ） */
+    --sbk-night-sub: #B5AFA4;      /* 墨の地の上の補足 */
+    --sbk-night-btn: #D9D3C7;      /* 墨の地の上の枠だけのボタンの文字 */
 
     background-color: var(--sbk-paper);
     color: var(--sbk-text);

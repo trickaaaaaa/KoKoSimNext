@@ -1,0 +1,213 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   SaveSlotCard.uss — セーブ枠のカード（部品辞書）。つづきから／セーブデータの両方で同じ部品を使い、
+   違うのは画面の地（.ssc-on-night＝墨の地／付けない＝紙色の地）・目印の札と枠・ボタンだけ。
+   組み立ては SaveSlotCard.cs。縦長のカード（高さ600・角丸20）を、上から 色の帯 → 中身 → ボタン の3段で組む。
+   box-shadow は使えないので「最新」「プレイ中」の3px枠は border で作り、枠の無いカードも透明の3px枠を持つ
+   ＝大きさがそろう。gap は無いので間隔は margin で作る。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 透明度はモック（ブラウザ＝sRGB で混ぜる）と同じ見え方になる値にしてある。Unity の UI はリニア空間で混ぜるので、
+   同じ％だと暗い地の上の白は明るく・明るい地の上の墨は薄く出る（実測: 墨62%の幕が紙色の上で 151 に対しモック 106）。
+   各値の横の（）がモックの指定値。 */
+.ssc {
+    height: 600px;
+    flex-shrink: 0;
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    border-radius: 20px;
+    border-width: 3px;
+    border-color: rgba(0, 0, 0, 0);
+    overflow: hidden;
+    flex-direction: column;
+}
+.ssc Label { margin: 0; padding: 0; }
+
+/* データのある枠：紙色の地。目印の枠（最新＝黄／プレイ中＝墨） */
+.ssc--filled { background-color: var(--sbk-sheet); color: var(--sbk-text); }
+.ssc--latest { border-color: var(--sbk-latest); }
+.ssc--playing { border-color: var(--sbk-text); }
+
+/* ── 上の段：色の帯（スクールカラー・C# が地を塗る） ── */
+.ssc__band {
+    height: 200px;
+    flex-shrink: 0;
+    padding: 20px 26px 22px 26px;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: #34302B;   /* 色を持たない古いセーブ＝炭色（SchoolAccent.Charcoal と同じ値。C# が上書き） */
+}
+.ssc__tags { flex-direction: row; align-items: center; flex-shrink: 0; }
+.ssc .ssc__no {
+    font-size: 13px;
+    letter-spacing: 1.3px;
+    color: #FFFFFF;
+    background-color: rgba(255, 255, 255, 0.07);   /* （白18%） */
+    border-radius: 5px;
+    padding: 2px 10px;
+}
+.ssc .ssc__mark {
+    margin-left: 10px;
+    font-size: 12px;
+    color: var(--sbk-text);
+    border-radius: 5px;
+    padding: 2px 9px;
+}
+.ssc__mark--latest { background-color: var(--sbk-latest); }
+.ssc__mark--playing { background-color: #FFFFFF; }
+.ssc__band-spacer { flex-grow: 1; }
+.ssc .ssc__name {
+    font-size: 42px;
+    letter-spacing: 3.4px;
+    color: #FFFFFF;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.ssc .ssc__pref {
+    margin-top: 4px;
+    font-size: 21px;
+    letter-spacing: 2.5px;
+    color: rgba(255, 255, 255, 0.75);   /* （白86%） */
+    flex-shrink: 0;
+}
+/* 枠の番号の透かし（右下にはみ出して帯の外は切れる） */
+.ssc .ssc__wm {
+    position: absolute;
+    right: -14px;
+    bottom: -88px;
+    font-size: 220px;
+    color: rgba(255, 255, 255, 0.03);   /* （白9%） */
+}
+
+/* ── 中の段：中身 ── */
+.ssc__body {
+    flex-grow: 1;
+    min-height: 0;
+    padding: 26px 26px 20px 26px;
+    flex-direction: column;
+}
+.ssc__when { flex-direction: row; align-items: flex-end; flex-shrink: 0; }
+.ssc .ssc__week { font-size: 32px; color: var(--sbk-text); }
+.ssc .ssc__year { margin-left: 12px; margin-bottom: 3px; font-size: 15px; color: var(--sbk-info); }
+.ssc .ssc__phase {
+    margin-left: 12px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--sbk-info);
+    background-color: var(--sbk-rule-soft);
+    border-radius: 5px;
+    padding: 3px 10px;
+}
+
+/* 3つの数字：上に墨の2px線・左右いっぱいに均等に離す */
+.ssc__stats {
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top-width: 2px;
+    border-top-color: var(--sbk-text);
+    flex-direction: row;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+.ssc__stat { flex-direction: column; flex-shrink: 0; }
+.ssc .ssc__stat-k { font-size: 12px; color: var(--sbk-mute); }
+.ssc__stat-v {
+    margin-top: 8px;
+    height: 46px;
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+.ssc__stat-v--text { align-items: flex-end; padding-bottom: 4px; }
+.ssc .rank-badge.ssc__rank {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    font-size: 28px;
+}
+.ssc .ssc__score { margin-left: 10px; font-size: 26px; color: var(--sbk-info); }
+.ssc .ssc__num { font-size: 28px; color: var(--sbk-text); }
+.ssc .ssc__unit { margin: 0 0 4px 3px; font-size: 13px; color: var(--sbk-info); }
+.ssc .ssc__unit--gap { margin-right: 6px; }
+.ssc .ssc__unit--pre { margin: 0 3px 4px 0; }
+.ssc .ssc__sep { margin: 0 5px 4px 5px; font-size: 15px; color: var(--sbk-night-sub); }
+.ssc .ssc__none { font-size: 22px; color: var(--sbk-night-sub); }
+
+/* 保存日時（中身のいちばん下＝手前に伸びる空き .ssc__fill を置く） */
+.ssc__fill { flex-grow: 1; }
+.ssc__saved { flex-direction: row; align-items: center; flex-shrink: 0; }
+.ssc__saved .licon { width: 15px; height: 15px; color: var(--sbk-mute); }
+.ssc .ssc__saved-at { margin-left: 8px; font-size: 13px; color: var(--sbk-sub); }
+.ssc .ssc__saved-ago { margin-left: 8px; font-size: 13px; color: var(--sbk-text); }
+
+/* ── 下の段：ボタン（並びは画面ごと） ── */
+.ssc__ops {
+    flex-direction: row;
+    padding: 0 26px 26px 26px;
+    flex-shrink: 0;
+}
+.ssc Button.ssc-btn {
+    height: 58px;
+    margin: 0;
+    padding: 0;
+    border-radius: 13px;
+    border-width: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.ssc Button.ssc-btn--gap { margin-left: 10px; }
+.ssc Button.ssc-btn--ink,
+.ssc Button.ssc-btn--ink:hover { background-color: var(--sbk-text); color: #FFFFFF; }
+.ssc Button.ssc-btn--ink:hover { background-color: #34302B; }
+.ssc Button.ssc-btn--line,
+.ssc Button.ssc-btn--line:hover {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 1.5px;
+    border-color: var(--sbk-text);
+    color: var(--sbk-text);
+}
+.ssc Button.ssc-btn--line:hover { background-color: rgba(29, 27, 24, 0.05); }
+.ssc Button.ssc-btn--grow { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.ssc Button.ssc-btn--load-side { width: 128px; }
+.ssc Button.ssc-btn--trash,
+.ssc Button.ssc-btn--trash:hover {
+    width: 58px;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 1.5px;
+    border-color: var(--sbk-danger-line);
+    color: var(--sbk-danger);
+}
+.ssc Button.ssc-btn--trash:hover { background-color: rgba(160, 71, 60, 0.06); }
+.ssc-btn--trash .licon { width: 20px; height: 20px; }
+.ssc Button.ssc-btn:disabled { opacity: 0.4; }
+
+.ssc .ssc-btn--ink .ssc-btn__txt, .ssc .ssc-btn--ink .licon { color: #FFFFFF; }
+.ssc .ssc-btn--line .ssc-btn__txt { color: var(--sbk-text); }
+.ssc .ssc-btn--trash .licon { color: var(--sbk-danger); }
+.ssc .ssc-btn__txt--load { font-size: 20px; letter-spacing: 6px; margin-left: 6px; }
+.ssc .ssc-btn__txt--load-side { font-size: 18px; letter-spacing: 1.8px; }
+.ssc .ssc-btn__txt--save { font-size: 20px; letter-spacing: 4px; margin-left: 4px; }
+.ssc-btn .licon { width: 16px; height: 16px; flex-shrink: 0; }
+.ssc-btn .licon--after { margin-left: 4px; }
+.ssc-btn .licon--before { margin-right: 10px; width: 18px; height: 18px; }
+
+/* ── 空いている枠：地なし・点線（DashedFrame）・中央に「空き」 ── */
+.ssc--empty { justify-content: center; align-items: center; border-width: 0; }
+.ssc--empty .ssc__no { position: absolute; left: 26px; top: 20px; }
+.ssc .ssc__wm--top { top: 10px; bottom: auto; }
+.ssc .ssc__vacant { font-size: 30px; letter-spacing: 9px; padding-left: 9px; color: var(--sbk-mute); }
+.ssc .ssc__vacant-sub { margin-top: 12px; font-size: 13px; color: var(--sbk-sub); }
+.ssc--empty .ssc__ops--empty {
+    position: absolute;
+    left: 26px; right: 26px; bottom: 26px;
+    padding: 0;
+}
+
+/* 墨の地（つづきから）の上の空き枠 */
+.ssc-on-night .ssc--empty .ssc__no { color: var(--sbk-night-sub); background-color: rgba(255, 255, 255, 0.016); }   /* （白8%） */
+.ssc-on-night .ssc--empty .ssc__wm { color: rgba(255, 255, 255, 0.009); }   /* （白5%） */
+/* 紙色の地（セーブデータ）の上の空き枠 */
+.ssc-on-paper .ssc--empty .ssc__no { color: var(--sbk-sub); background-color: var(--sbk-well); }
+.ssc-on-paper .ssc--empty .ssc__wm { color: rgba(29, 27, 24, 0.10); }   /* （墨5%） */

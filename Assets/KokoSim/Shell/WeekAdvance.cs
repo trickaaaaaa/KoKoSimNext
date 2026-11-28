@@ -56,7 +56,7 @@ namespace KokoSim.Unity.Shell
                 return;
             }
             // 背景の試合後処理中は、ホームと同じく週を進めない（メインスレッドの GameClock/ロスター変更と競合する, issue #138）。
-            if (BackgroundGameOp.Running) return;
+            if (BackgroundGameOp.Running || LoadingJob.Running) return;
             // ブラウザ版は裏の仕事を回し切ってから進める（#1588・ホームの週送りと同じ）。
             if (BackgroundWork.Busy)
             {
@@ -73,6 +73,25 @@ namespace KokoSim.Unity.Shell
                 ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
                 return;
             }
+            // 重い節目の週（年度替わり・大会入り・AI校の節目成長など）は、ロードのポップアップを出し、裏シムが止まるのを
+            // コマをまたいで待ってから進める（ホームの週送りと同じ判定）。普段の週はそのまま進める。
+            if (GameClock.NextWeekIsHeavy())
+            {
+                var message = GameClock.NextWeekIsNewYear() ? "新年度の準備をしています" : null;
+                LoadingJob.Run("進行中", message, HeavyRoutine(render));
+                return;
+            }
+            Step(render);
+        }
+
+        private static System.Collections.IEnumerator HeavyRoutine(System.Action render)
+        {
+            yield return LoadingJob.WaitBackgroundIdle();
+            Step(render);
+        }
+
+        private static void Step(System.Action render)
+        {
             // 週の中身（練習・怪我・成長・調子・週次イベント・各種フィード）はホームの「今週を進める」と同じ
             // 入口 HomeState.AdvanceWeek を通す（issue #1113）。クロックだけ進めると中身が丸ごと飛ぶ。
             KokoSim.Unity.Home.HomeState.Current.AdvanceWeek();

@@ -186,7 +186,7 @@ namespace KokoSim.Unity.Home
         {
             // issue #138: 試合後処理をバックグラウンドで回している間は週送りを受け付けない
             // （メインスレッドの GameClock/ロスター変更が背景処理と競合するのを防ぐ）。
-            if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;
+            if (KokoSim.Unity.Shell.BackgroundGameOp.Running || KokoSim.Unity.Shell.LoadingJob.Running) return;
             _stopReason = null;
             // 新チームの背番号を確定するまで週を進めない（issue #954）。確定の画面へ戻す。
             if (KokoSim.Unity.Shell.UniformNumberService.Pending) { GoToUniformNumbers(); return; }
@@ -199,6 +199,16 @@ namespace KokoSim.Unity.Home
                 // 試合日に着いていたら日を進めず、開始確認を出し直すだけにする。進めると「いいえ」の後に
                 // 押すたび大会の日付だけが試合日を追い越し、大会明けの時計送り（TournamentDay/7 週）も増えていた。
                 if (_state.ReachedMatchDay) { ShowMatchDay(); return; }
+            }
+
+            // 止まるまで進める・重い節目の週（年度替わり・大会入り・AI校の節目成長など）は、ロードのポップアップを
+            // 出したまま1歩ずつコマを返して進める（何も出さずに数秒固まって見えていた）。普段の1週はそのまま進める。
+            var heavy = !_state.InTournament && KokoSim.Unity.Shell.GameClock.NextWeekIsHeavy();
+            if (untilStop || heavy)
+            {
+                var message = heavy && KokoSim.Unity.Shell.GameClock.NextWeekIsNewYear() ? "新年度の準備をしています" : null;
+                KokoSim.Unity.Shell.LoadingJob.Run("進行中", message, AdvanceRoutine(untilStop), immediate: heavy);
+                return;
             }
 
             var inTournament = _state.InTournament;
@@ -215,6 +225,33 @@ namespace KokoSim.Unity.Home
                 if (!untilStop) break;
                 // 大会が終わった・始まった（モードが変わった）ら、日と週を取り違えて進めないよう繰り返しを終える。
                 if (_state.InTournament != inTournament || (inTournament && _state.TournamentFinished)) break;
+            }
+            Render();
+        }
+
+        /// <summary>
+        /// <see cref="Advance"/> の繰り返しを、1歩ごとにコマを返しながら回す（<see cref="KokoSim.Unity.Shell.LoadingJob"/> の手順）。
+        /// 1歩の中身・止まる条件は同期版と同じ。重い節目の手前では裏シムが止まるのをコマをまたいで待つ
+        /// （節目の中の完了待ちは即返る）。ブラウザ版は同期版と同じく、裏の仕事を回し切ってから1歩進める。
+        /// </summary>
+        private System.Collections.IEnumerator AdvanceRoutine(bool untilStop)
+        {
+            var inTournament = _state.InTournament;
+            for (var step = 0; step < MaxAdvanceSteps; step++)
+            {
+                if (!KokoSim.Unity.Shell.BackgroundWork.Threaded)
+                {
+                    if (KokoSim.Unity.Shell.BackgroundWork.Busy)
+                        yield return (System.Func<bool>)(() => !KokoSim.Unity.Shell.BackgroundWork.Busy);
+                }
+                else if (!_state.InTournament && KokoSim.Unity.Shell.GameClock.NextWeekIsHeavy())
+                    yield return KokoSim.Unity.Shell.LoadingJob.WaitBackgroundIdle();
+                if (step > 0 && KokoSim.Unity.Shell.BackgroundGameOp.Running) break;
+
+                if (inTournament ? StepDay() : StepWeek()) yield break;   // 止まる場面に着いた（その場面の画面は出した）
+                if (!untilStop) break;
+                if (_state.InTournament != inTournament || (inTournament && _state.TournamentFinished)) break;
+                yield return null;   // 1歩ごとにコマを返す＝ポップアップの点と棒が動く
             }
             Render();
         }
@@ -638,18 +675,20 @@ namespace KokoSim.Unity.Home
 
         private void OnTransferConfirm()
         {
-            // 確定は裏の全シムの完了待ちを含み得る同期処理（issue #1226）。ManualWait で「転任準備中」を
-            // 1フレーム先に描画してからブロックへ入る（OnSave/OnLoad と同じ作法）。
+            // 確定は裏の全シムの完了待ちを含む（issue #1226）。完了はコマをまたいで待ち（ポップアップが動く）、
+            // 止まってから確定する＝確定の中の待ちは即返る。
             var pick = _xtPick;
-            KokoSim.Unity.Shell.ManualWait.Run(_root, "転任準備中",
-                () => KokoSim.Unity.Shell.ManagerTransferService.Confirm(pick), ok =>
-            {
-                if (!ok) return;
-                if (_xt != null) _xt.style.display = DisplayStyle.None;
-                Render();
-                if (_state.BannerPending) ShowBanner();
-                else TryShowEvent();
-            });
+            KokoSim.Unity.Shell.LoadingJob.Run("準備中", "新しい学校の準備をしています", TransferRoutine(pick));
+        }
+
+        private System.Collections.IEnumerator TransferRoutine(int? pick)
+        {
+            yield return KokoSim.Unity.Shell.LoadingJob.WaitBackgroundIdle();
+            if (!KokoSim.Unity.Shell.ManagerTransferService.Confirm(pick)) yield break;
+            if (_xt != null) _xt.style.display = DisplayStyle.None;
+            Render();
+            if (_state.BannerPending) ShowBanner();
+            else TryShowEvent();
         }
 
         // 隠しパラメータ一覧（選手詳細と同じ判明ルール）から取り出す。未判明は「？」のまま出す。
@@ -788,7 +827,7 @@ namespace KokoSim.Unity.Home
                 // クリックでホームへ弾き戻されてから出ていた（週送りの分岐と同じ順に揃える）。
                 else if (_state.BannerPending) ShowBanner();
                 else TryShowEvent();
-            });
+            }, "集計中", "他地区の結果を待っています");
         }
 
         private void Render()

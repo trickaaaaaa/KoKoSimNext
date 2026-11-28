@@ -59,6 +59,10 @@ namespace KokoSim.Unity.Shell
             Close,
             /// <summary>下向きの山形（選択欄を開く）。</summary>
             ChevronDown,
+            /// <summary>時計（セーブ枠の保存日時）。</summary>
+            Clock,
+            /// <summary>フロッピー（上書き保存）。</summary>
+            Floppy,
         }
 
         /// <summary>線幅（24 座標で）。既定 2。</summary>
@@ -259,6 +263,19 @@ namespace KokoSim.Unity.Shell
 
                 case Kind.ChevronDown:
                     Polyline(p, P(6, 9), P(12, 15), P(18, 9));
+                    break;
+
+                case Kind.Clock:
+                    p.BeginPath();
+                    p.Arc(P(12, 12), 9f * s, 0f, 360f);
+                    p.Stroke();
+                    Polyline(p, P(12, 7), P(12, 12), P(15.5f, 14));
+                    break;
+
+                case Kind.Floppy:
+                    Polyline(p, P(5, 4), P(16, 4), P(19, 7), P(19, 20), P(5, 20), P(5, 4));
+                    Polyline(p, P(8, 4), P(8, 9), P(15, 9), P(15, 4));
+                    Polyline(p, P(8, 20), P(8, 14), P(16, 14), P(16, 20));
                     break;
 
                 case Kind.Play:

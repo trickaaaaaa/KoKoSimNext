@@ -203,18 +203,33 @@ public sealed class TrajectoryFeatureTable
     public static void Prewarm(
         Aerodynamics aero, MoundGeometry mound, double minDensity, double maxDensity, int maxParallelism = 1)
     {
+        var steps = PrewarmSteps(aero, mound, minDensity, maxDensity);
+        System.Threading.Tasks.Parallel.For(0, steps.Count,
+            new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = System.Math.Max(1, maxParallelism) },
+            i => steps[i]());
+    }
+
+    /// <summary>
+    /// <see cref="Prewarm"/> と同じ表を1枚ずつ作る手順の一覧（1要素＝1枚）。スレッドの無い環境（ブラウザ版）で
+    /// 1枚ごとに区切って作り、その間に画面を描くのに使う。作る表も中身も <see cref="Prewarm"/> と同じ。
+    /// </summary>
+    public static System.Collections.Generic.IReadOnlyList<System.Action> PrewarmSteps(
+        Aerodynamics aero, MoundGeometry mound, double minDensity, double maxDensity)
+    {
         var tiltDegs = new System.Collections.Generic.List<double>();
         for (var n = 0; n * TiltNodeStepDeg <= 180.0 + 1e-9; n++) tiltDegs.Add(n * TiltNodeStepDeg);
         var kMin = (int)System.Math.Floor((minDensity - DensityAnchor) / DensityNodeStep);
         var kMax = (int)System.Math.Ceiling((maxDensity - DensityAnchor) / DensityNodeStep);
-        var jobs = new System.Collections.Generic.List<(Aerodynamics, double)>();
+        var steps = new System.Collections.Generic.List<System.Action>();
         foreach (var tilt in tiltDegs)
             for (var k = kMin; k <= kMax; k++)
-                jobs.Add((k == 0 && aero.AirDensity == DensityAnchor
-                    ? aero : aero with { AirDensity = DensityAnchor + k * DensityNodeStep }, tilt));
-        System.Threading.Tasks.Parallel.For(0, jobs.Count,
-            new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = System.Math.Max(1, maxParallelism) },
-            i => GetOrBuild(jobs[i].Item1, mound, jobs[i].Item2));
+            {
+                var a = k == 0 && aero.AirDensity == DensityAnchor
+                    ? aero : aero with { AirDensity = DensityAnchor + k * DensityNodeStep };
+                var t = tilt;
+                steps.Add(() => GetOrBuild(a, mound, t));
+            }
+        return steps;
     }
 
     /// <summary>

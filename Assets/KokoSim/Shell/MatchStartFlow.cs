@@ -85,13 +85,15 @@ namespace KokoSim.Unity.Shell
                             // （OnEnable が ResultPending を見て大会結果モーダルを出す）。
                             BackgroundGameOp.Run(
                                 () => homeState.CompleteMatch(result),
-                                () => ScreenRouter.Instance?.ShowDeferred("HomeDashboard"));
+                                () => ScreenRouter.Instance?.ShowDeferred("HomeDashboard"),
+                                "集計中", "試合結果を記録しています");
                         },
                     };
                     // 呼び出し元（MatchPreview の Show の内側）から同期 Show するとネストして
                     // 全画面が非アクティブに落ちるため、次フレームへ遅延して配信外で切り替える。
                     ScreenRouter.Instance?.ShowDeferred("MatchLive");
-                });
+                },
+                "試合準備中", null);
         }
 
         /// <summary>
@@ -135,7 +137,8 @@ namespace KokoSim.Unity.Shell
                     // 同じ重さなので同じ退避経路に載せる（メインスレッドを止めない, issue #138 と同型）。
                     BackgroundGameOp.Run(
                         () => GameSession.Current.CompletePracticeMatch(result),
-                        () => ScreenRouter.Instance?.ShowDeferred("HomeDashboard"));
+                        () => ScreenRouter.Instance?.ShowDeferred("HomeDashboard"),
+                        "集計中", null);
                 },
             };
             ScreenRouter.Instance?.ShowDeferred("MatchLive");
