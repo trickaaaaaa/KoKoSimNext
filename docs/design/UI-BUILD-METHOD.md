@@ -127,6 +127,9 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `GrowthChart` | 成長推移の折れ線（`GrowthChartView`・`.gchart`・issue #1027）。左に目盛り＋線、下に区切りラベル、右に凡例（色見本＋名前＋今の値）。**線の色は凡例の色見本（`.gchart__sw--*`＝`--tm-*`）の解決済み背景色を読む**＝C# に色を持たない。横軸は呼び出し側が渡す区切りで等分（選手詳細では「1年／2年／3年」） |
 | `ChoiceButton` | 同じ重みの選択肢1つ（`UiComponents.ChoiceButton`・`.choice-btn`）。白地＋墨1px枠、hover／選択は墨2px。応援団赤は使わない・確率や説明文は添えない。イベントの3択（issue #945）は会話ボックスの中に縦並び（`.ev__choices`） |
 | `ConfirmDialog` | 問い1行＋はい／いいえの確認（`.confirm-card`／`.confirm-q`／`.confirm-btns`。`modal-scrim`＋`modal-card`＋`dlg-btn` と組む）。セーブ削除・タイトルへ戻る・経営の購入と年契約（issue #1534）で共有。問いは「○○を○万で買いますか？」の形で、補足の文は足さない |
+| `SaveSlotCard` | セーブ枠のカード（`SaveSlotCard.cs`＋`Components/SaveSlotCard.uss`・2026-11-28）。縦長（高さ600・角丸20）を 色の帯（スクールカラー＝保存時に概要へ書いた表示用の色・無い古いセーブは炭色）→ 中身（時期・3つの数字・保存日時）→ ボタン の3段で組む。つづきから（墨の地・「最新」の札と黄の枠・読み込む＋削除）とセーブデータ（紙色の地・「プレイ中」の札と墨の枠・読み込む＋上書き保存＋削除）で同じ部品を使い、地は入れ物の `ssc-on-night`／`ssc-on-paper` で切り替える。表示データは `SaveSlotCardData.From(SaveSlotInfo)`（古いセーブの欠けた値は null＝「—」）。透明度はモックと同じ見え方の値（UI はリニア空間で混ぜる＝USS の注記） |
+| `LoadingPopup` | ロードの汎用ポップアップ（待ち表示・処理中表示の唯一の部品・2026-11-28。旧 WaitOverlay を置き換え）。見た目は `Assets/Resources/UI/LoadingPopup.uxml/.uss`（実行時に全画面のルートへ差し込むため Resources）、窓口は `LoadingPopup.Show/SetProgress/SetMessage/Hide`。見出し＋明滅する3点＋割合／一言／進捗の棒（割合が無ければ短い棒が流れる）。紙色と墨だけ（スクールカラーを使わない）。0.3秒たって終わらない処理だけ出し、出したら0.5秒は残す（メインスレッドを止める処理は `immediate`）。段を踏む重い操作は `LoadingJob`（裏シムの完了をコマをまたいで待つ・変換は別スレッド）で包む。裏の処理（`BackgroundGameOp` の見出し・残りブラケット・全国裏試合のブースト）は窓口が自分で拾う |
+| `InfieldDiamondLines` | 内野のダイヤモンドの線画（Painter2D・900四方基準）。つづきからの地の飾り |
 | `TierChoice` | 段の選択肢1行（`UiComponents.TierChoice`・`.tier-choice`・issue #1034）。`ChoiceButton` と同じ器に「段名｜年額（右揃えの NumUnit）｜効果の1文」を列で並べる。選ばれた段は `choice-btn--selected`（墨2px）。年契約の更新モーダルで1系統1枚のカードに縦並び |
 
 #### チームカラー（design-18 §3.5・tokens.uss と同型の流し込みパターン）

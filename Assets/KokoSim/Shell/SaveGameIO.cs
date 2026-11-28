@@ -225,16 +225,42 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static bool Save(string path)
         {
-            if (!CanSave) return false;
+            var state = BeginSave();
+            if (state == null) return false;
+            if (!WriteState(path, state)) return false;
+            CompleteSave(path, state);
+            return true;
+        }
+
+        // ── セーブの3段（セーブデータ画面は LoadingJob で段ごとにコマをまたぐ＝待つ間も絵が動く） ──
+        // 1) BeginSave（メインスレッド）: 裏シムを畳んで全サービスから状態を写す
+        // 2) WriteState（別スレッド可）: 変換・圧縮・ファイル書き出し。共有状態には触らない
+        // 3) CompleteSave（メインスレッド）: ブラウザ版の書き出し・「プレイ中」の枠の記録
+        // 2) の間はメインスレッドが状態を書き換えないこと（幕が操作を塞ぎ、裏シムは 1) で止めてある）。
+
+        /// <summary>セーブの1段目（メインスレッド）。保存できない局面は null。</summary>
+        public static SaveState BeginSave()
+        {
+            if (!CanSave) return null;
             BackgroundSims.EnsureAllCompleted();   // issue #1226: 待つシムの組み合わせを呼び先ごとに書き分けない
-            var raw = Encoding.UTF8.GetBytes(SaveCodec.Serialize(Capture()));
+            return Capture();
+        }
+
+        /// <summary>セーブの2段目（別スレッドで呼んでよい）。変換・圧縮・原子的な書き出し。失敗は false。</summary>
+        public static bool WriteState(string path, SaveState state)
+        {
+            var raw = Encoding.UTF8.GetBytes(SaveCodec.Serialize(state));
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            if (!TryWriteAtomic(path, raw)) return false;
+            return TryWriteAtomic(path, raw);
+        }
+
+        /// <summary>セーブの3段目（メインスレッド）。書き出しが成功したときだけ呼ぶ。</summary>
+        public static void CompleteSave(string path, SaveState state)
+        {
             WebStorage.Flush();   // ブラウザ版は IndexedDB へ書き出さないと開き直しで消える
-            LastSavedAt = (GameClock.YearIndex, GameClock.Week);
+            LastSavedAt = (state.YearIndex, state.Week);
             ActivePath = path;
-            return true;
         }
 
         /// <summary>
@@ -277,14 +303,27 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static bool Load(string path, out string error)
         {
+            if (!TryReadState(path, out var state, out error)) return false;
+            ApplyLoaded(path, state);
+            return true;
+        }
+
+        /// <summary>ロードの1段目（別スレッドで呼んでよい）。読み込み・展開・変換。共有状態には触らない。</summary>
+        public static bool TryReadState(string path, out SaveState state, out string error)
+        {
+            state = null;
             if (!TryReadText(path, out var json, out error)) return false;
-            if (!SaveCodec.TryDeserialize(json, out var state, out error)) return false;
+            return SaveCodec.TryDeserialize(json, out state, out error);
+        }
+
+        /// <summary>ロードの2段目（メインスレッド）。旧進行の裏シムを畳んでから全サービスへ戻す。</summary>
+        public static void ApplyLoaded(string path, SaveState state)
+        {
             BackgroundSims.EnsureAllCompleted();
             Restore(state);
             // 読んだ直後は「その地点が保存済み」＝未保存の経過は0週から数え直す。
             LastSavedAt = (GameClock.YearIndex, GameClock.Week);
             ActivePath = path;
-            return true;
         }
 
         /// <summary>

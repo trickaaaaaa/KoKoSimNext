@@ -48,7 +48,7 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>表札に出す自校名（校名＋「高校」）。校名の幹だけを保持し、接尾は表示側で付ける。
         /// 「県立」は付けない＝校名はプレイヤーが自由に決めるもので、設置者は決めていない。</summary>
-        public static string SchoolDisplayName() => NationService.ManagerSchoolName + "高校";
+        public static string SchoolDisplayName() => KokoSim.Engine.Nation.SchoolNames.Full(NationService.ManagerSchoolName);
 
         /// <summary>校章代わりの1文字（校名の先頭字）。空なら「校」。</summary>
         private static string BadgeOf(string name)

@@ -110,6 +110,7 @@ namespace KokoSim.Unity.Shell
             BackgroundWork.Pump();
             MainThreadDispatcher.Drain();
             BackgroundGameOp.CheckStall();   // 戻らない裏処理の見張り（Q30・ログは1度だけ）
+            LoadingJob.Tick();               // 待つしかない操作の手順を1コマ進める（ポップアップを出したまま）
 
             // 新チーム発足（夏の3年引退の翌週）の主将指名／夏・秋の大会開幕バナー／監督オファー（設計書04 §1.3）は、
             // どの画面で週を進めてもホームで出す（導線を1箇所に集約する, 設計書09 §8 / issue #134）。回送元は
@@ -139,10 +140,38 @@ namespace KokoSim.Unity.Shell
             }
 
             if (_pending == null) return;
+            // 入るときに3Dの舞台をその場で組む画面は、先にロードのポップアップを今の画面へ1度描いてから切り替える
+            // （組む間は前の画面が止まったまま見えていた）。組み終わったら消す（最低表示時間ぶんは残る）。
+            if (HeavyEntryTitle(_pending) is { } title && _heavyEntryFrames < 0)
+            {
+                LoadingPopup.Show(title, null, immediate: true);
+                if (_screens.TryGetValue(_current ?? "", out var cur))
+                    LoadingPopup.Refresh(cur.GetComponent<UIDocument>()?.rootVisualElement);
+                _heavyEntryFrames = 2;
+                return;
+            }
+            if (_heavyEntryFrames > 0) { _heavyEntryFrames--; return; }
             var target = _pending;
             _pending = null;
             Show(target);
+            if (_heavyEntryFrames == 0)
+            {
+                _heavyEntryFrames = -1;
+                LoadingPopup.Hide();
+            }
         }
+
+        // 入るときに3Dの舞台を組む画面と、その間のポップアップの見出し。
+        private static string HeavyEntryTitle(string screen) => screen switch
+        {
+            "MatchLive" => "試合準備中",
+            "NewGameSetup" => "準備中",
+            "TeamSetting" => "準備中",
+            _ => null,
+        };
+
+        // 重い画面へ切り替える前に待つ残りコマ（-1＝待っていない）。
+        private int _heavyEntryFrames = -1;
 
         private void Start()
         {
@@ -217,7 +246,7 @@ namespace KokoSim.Unity.Shell
         public void ShowDeferred(string target) => _pending = target;
 
         // #208: 画面ごとの背景シム消化ペース。ライブ観戦=停止／試合直前の対戦カード・結果=全開で集中消化／他=通常。
-        // ブースト＝静止画面なので並列全開で回し、下端に「ロード中」を出す（MatchPreview＝両校ランク/スタメン表示）。
+        // ブースト＝静止画面なので並列全開で回し、ロードのポップアップ（LoadingPopup）を出す（MatchPreview＝両校ランク/スタメン表示）。
         private static NationBackgroundSim.SimThrottle ThrottleFor(string screen) => screen switch
         {
             "MatchLive" => NationBackgroundSim.SimThrottle.Paused,
@@ -261,8 +290,8 @@ namespace KokoSim.Unity.Shell
             }
 
             // プレイヤーが待つしかない場面（セーブ/ロード・裏試合の結果待ち・試合開始/結果集計の重い
-            // 後処理）を画面によらず必ず見せる。表示条件はオーバーレイ側が毎フレーム判定して出す/消す。
-            WaitOverlayController.Attach(root);
+            // 後処理）を画面によらず必ず見せる。出す/消すはポップアップ側が毎コマ判定する。
+            LoadingPopup.Attach(root);
         }
     }
 }

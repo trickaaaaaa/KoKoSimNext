@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ロードの汎用ポップアップ（どの画面の上にも同じ見た目で出す待ち表示・部品は1つ）。
+     画面ルートの末尾へ LoadingPopupView が差し込む＝画面ごとの UXML には書かない（実行時に Resources から読むため
+     Resources に置いている）。中身は 1段目＝見出し＋明滅する3つの点＋割合／2段目＝一言／3段目＝進捗の棒。
+     見出し・一言・割合は呼び出し側（LoadingPopup の窓口）が決める。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="LoadingPopup.uss" />
+    <ui:VisualElement name="ldp" class="ui-root ldp">
+        <ui:VisualElement class="ldp__card">
+            <ui:VisualElement class="ldp__row">
+                <ui:Label name="ldp-title" class="ldp__title f-display" text="ロード中" />
+                <ui:VisualElement class="ldp__dots">
+                    <ui:VisualElement name="ldp-dot0" class="ldp__dot" />
+                    <ui:VisualElement name="ldp-dot1" class="ldp__dot" />
+                    <ui:VisualElement name="ldp-dot2" class="ldp__dot" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ldp__spacer" />
+                <ui:VisualElement name="ldp-pct" class="ldp__pct">
+                    <ui:Label name="ldp-pct-num" class="ldp__pct-num f-display" text="0" />
+                    <ui:Label class="ldp__pct-unit f-body" text="%" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="ldp-msg" class="ldp__msg f-body" text="" />
+            <ui:VisualElement name="ldp-track" class="ldp__track">
+                <ui:VisualElement name="ldp-fill" class="ldp__fill" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -17,6 +17,13 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public static class BackgroundSims
     {
+        /// <summary>上の全シムのどれかがまだ走っているか（待たずに見るだけ）。<see cref="LoadingJob.WaitBackgroundIdle"/> が
+        /// コマをまたいで待つのに使う＝止まってから <see cref="EnsureAllCompleted"/> を呼べば即返る。</summary>
+        public static bool AnyRunning =>
+            NationBackgroundSim.Running || BracketFinishSim.Running
+            || KoshienQualifierStatsSim.Running || SenbatsuQualifierStatsSim.Running
+            || GameSession.Current.PrefetchRunning;
+
         /// <summary>上の全シムの完了を待つ。ロード・冬の節目・年度替わり・監督の転任など、
         /// static 状態を書き換える直前に必ず呼ぶ。</summary>
         public static void EnsureAllCompleted()

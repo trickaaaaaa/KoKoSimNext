@@ -436,41 +436,6 @@
 .abil-row--lg .abil-row__bar { height: 12px; margin-right: var(--sp-4); }
 .abil-row--lg .abil-row__value { width: 58px; font-size: 34px; }
 
-/* ── WaitOverlay：待つしかない場面の全画面ブロッキング表示 ───────────────
-   セーブ/ロード/裏試合の結果待ちなど、操作しても進まない間は必ずこれを全画面に出す
-   （ユーザー要望：バーを出す場合は大きくわかりやすく）。土台は既存の modal-scrim/modal-card
-   （暗幕＋中央カード、部品辞書の外へ出ない＝UI原則⑤）で、中身だけ見出し級の大きな
-   ラベルと太い進捗バーにする。進捗が不明な処理（同期I/O・母数0の背景処理）は
-   wait-overlay__fill--indeterminate でバーを往復アニメにし、「止まっている」ように
-   見えるのを防ぐ（駆動は WaitOverlayController）。 */
-.wait-overlay__card {
-    padding: 32px 48px;
-    min-width: 420px;
-    align-items: center;
-}
-.wait-overlay__label {
-    font-size: var(--fs-callout);   /* 盤面の大型読み上げと同じ級＝見た目の大きさで「待機」を示す */
-    color: var(--color-chalk);
-    margin-bottom: var(--sp-4);
-}
-.wait-overlay__track {
-    position: relative;   /* __fill の絶対配置(left/top/bottom)をこの矩形内に収める */
-    width: 320px;
-    height: 20px;
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w);
-    border-color: var(--color-line);
-}
-.wait-overlay__fill {
-    position: absolute;
-    top: 0; bottom: 0; left: 0;
-    width: 0;
-    background-color: var(--color-lamp);   /* 唯一のアクセント許容枠＝「いま進んでいる」ことの表示 */
-}
-.wait-overlay__fill--indeterminate {
-    width: 30%;
-}
-
 /* ── NumberBadge：背番号バッジ ─────────────────────────────────────── */
 .num-badge {
     width: 30px;

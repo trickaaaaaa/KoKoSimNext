@@ -1968,53 +1968,176 @@ screens:
       - wait: 2
       - shot: 09-member-outside
 
-  # ── セーブデータ画面のリデザイン：1枠ずつのカード＋いま遊んでいるデータ ──
+  # ── セーブ・ロードのリデザイン：縦長のカード3枚（つづきから／セーブデータで共通）＋ロードの汎用ポップアップ ──
   # 手動3へ実際に保存して最後に消す（手動1・2には触らない）。手動3に本物のセーブがある環境では回さない。
 
   - id: save-data-redesign
-    name: "セーブデータ画面：枠ごとのカード（概要が無い古いセーブは「—」）・保存した枠にプレイ中・確認の文言・タイトル経由"
+    name: "セーブデータ／つづきから：共通カード・プレイ中と最新・空き枠・確認の文言・保存中のポップアップ・ほかの3ページ"
     steps:
       - new_game: {seed: 1}
       - call: EventService.Clear()
       - set: {SaveSlots.Entry: Tab}
       - show: SaveSlots
       - wait: 5
-      - shot: 01-before-save
-      - call: SaveSlots.Save("manual3")
-      - show: HomeDashboard
-      - set: {SaveSlots.Entry: Tab}
-      - show: SaveSlots
-      - wait: 5
-      - shot: 02-saved-playing
-      - show: HomeDashboard
-      - show: SaveSlots
-      - click: .ss-op-trash[0]
-      - shot: 03-confirm-delete
-      - show: HomeDashboard
-      - show: SaveSlots
-      - click: .ss-op--fill[0]
-      - shot: 04-confirm-overwrite
+      - shot: 01-ingame-before-save
+      # 空きの枠（手動3）の「ここに保存」＝墨のボタンの3つ目（手動1・2の上書き保存の後ろ）
+      - click: .ssc-btn--ink[2]
+      - wait: 3
+      - shot: 02-saving-popup
+      - wait: 3000ms
+      - read: =SaveSlots.IsActive("manual3")
+      - shot: 03-ingame-saved-playing
+      - click: .ssc-btn--trash[2]
+      - shot: 04-confirm-delete
+      - click: ss-confirm-no
+      - click: .ssc-btn--ink[1]
+      - shot: 05-confirm-overwrite
+      - click: ss-confirm-no
+      - click: .ssc-btn--line[0]
+      - shot: 06-confirm-load
+      - click: ss-confirm-no
       - show: HomeDashboard
       - set: {SaveSlots.Entry: Title}
       - show: SaveSlots
       - wait: 5
-      - shot: 05-title-entry
+      - shot: 07-continue-all-used
       - call: SaveSlots.Delete("manual3")
+      - show: HomeDashboard
+      - show: SaveSlots
+      - wait: 5
+      - shot: 08-continue-after-delete
+      - call: ShowPage(1)
+      - wait: 5
+      - shot: 09-continue-settings
       - show: HomeDashboard
       - set: {SaveSlots.Entry: Tab}
       - show: SaveSlots
       - wait: 5
-      - shot: 06-after-delete
-      # 上の切り替えの行を共用するほかの3ページ（校名の編集／設定／クレジット）
+      - shot: 10-ingame-after-delete
       - call: ShowPage(1)
       - wait: 5
-      - shot: 07-rename
+      - shot: 11-rename
       - call: ShowPage(2)
       - wait: 5
-      - shot: 08-settings
+      - shot: 12-settings
       - call: ShowPage(3)
       - wait: 5
-      - shot: 09-credits
+      - shot: 13-credits
+
+  # 色の付く学校（転任先）と、長い校名（帯に1行で収める・末尾の「高校」は二重にしない）。手動3だけを使い最後に消す
+  - id: save-data-color
+    name: "セーブ枠のカード：スクールカラーの帯・長い校名の縮小・校名の「高校」が二重にならない"
+    steps:
+      - new_game: {seed: 1}
+      - transfer: ""
+      - call: EventService.Clear()
+      - read: =TopBarMeters.SchoolDisplayName()
+      - set: {SaveSlots.Entry: Tab}
+      - show: SaveSlots
+      - wait: 5
+      - click: .ssc-btn--ink[2]
+      - wait: 3000ms
+      - shot: 01-ingame-color
+      - call: NationService.SetSchoolIdentity("いちき串木野中央高校", 45, null)
+      - read: =TopBarMeters.SchoolDisplayName()
+      - show: HomeDashboard
+      - show: SaveSlots
+      - wait: 5
+      - click: .ssc-btn--ink[2]
+      - wait: 5
+      - click: ss-confirm-yes
+      - wait: 3000ms
+      - shot: 02-ingame-long-name
+      - show: HomeDashboard
+      - set: {SaveSlots.Entry: Title}
+      - show: SaveSlots
+      - wait: 5
+      - shot: 03-continue-long-name
+      - call: SaveSlots.Delete("manual3")
+
+  # 大きなセーブを実際に読み込む（つづきから）。待つ間にポップアップの点と棒が動くか（2枚の棒の位置が違う）を撮る。
+  # 手動2に年数の進んだセーブがある環境用（読むだけでファイルは変えない）
+  - id: load-big-save
+    name: "つづきからで大きなセーブを読み込む：待つ間もポップアップが動く・読み終えたらホーム"
+    steps:
+      - set: {SaveSlots.Entry: Title}
+      - show: SaveSlots
+      - wait: 5
+      - click: .ssc-btn--ink[1]
+      - wait: 1500ms
+      - shot: 01-loading-a
+      - wait: 700ms
+      - shot: 02-loading-b
+      - wait: 60000ms
+      - read: =ScreenRouter.Instance.CurrentScreen
+      - read: =LoadingJob.Running
+      - shot: 03-after-load
+
+  # 週送りの節目（年度替わり）と「次の大会まで」：ポップアップを出したまま進み、終われば消える
+  - id: advance-popup
+    name: "週送り：年度替わりの週はポップアップ（新年度の準備）・次の大会までもポップアップ・普段の週は出ない"
+    steps:
+      - new_game: {seed: 3}
+      - advance_to_week: 49
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - read: =GameClock.YearIndex
+      - click: advance
+      - wait: 3
+      - shot: 01-new-year-popup
+      - wait: 8000ms
+      - read: =GameClock.YearIndex
+      - read: =GameClock.Week
+      - read: =LoadingJob.Running
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - click: advance
+      - wait: 3
+      - read: =LoadingPopup.Visible
+      - read: =GameClock.Week
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - click: advance-next-tournament
+      - wait: 400ms
+      - shot: 02-until-stop
+      - wait: 15000ms
+      - read: =GameClock.Week
+      - read: =LoadingJob.Running
+      - read: =GameSession.Current.InTournament
+      - shot: 03-after-until-stop
+
+  - id: advance-popup-frame
+    name: "年度替わりの週送り：押した直後のコマでポップアップが出ている"
+    steps:
+      - new_game: {seed: 3}
+      - advance_to_week: 49
+      - call: EventService.Clear()
+      - show: HomeDashboard
+      - wait: 5
+      - click: advance
+      - wait: 1
+      - read: =LoadingPopup.Visible
+      - shot: 01-new-year-popup-frame
+      - wait: 8000ms
+      - read: =GameClock.YearIndex
+
+  # ロードの汎用ポップアップ（割合あり・なし）。見た目だけを撮る＝窓口を直に叩く
+  - id: loading-popup
+    name: "ロードの汎用ポップアップ：進み具合が分かる（割合と伸びる棒）／分からない（流れる棒）"
+    steps:
+      - new_game: {seed: 1}
+      - call: EventService.Clear()
+      - call: LoadingPopup.Show("ロード中", "選手データを読み込んでいます", true)
+      - call: LoadingPopup.SetProgress(0.62)
+      - wait: 5
+      - shot: 01-progress
+      - call: LoadingPopup.Show("セーブ中", null, true)
+      - wait: 400ms
+      - shot: 02-indeterminate
+      - call: LoadingPopup.Hide()
 
   # 共通トップバーのチーム状態（結束の言葉）。game_scale＝1280×720 の窓の本番の見え方（0.8倍）
   - id: team-state-1600

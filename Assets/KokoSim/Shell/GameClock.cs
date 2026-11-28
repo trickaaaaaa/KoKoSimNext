@@ -69,6 +69,25 @@ namespace KokoSim.Unity.Shell
             Step(delta);   // 巻き戻し（練習画面のプレビュー）は遷移フックを回さない
         }
 
+        /// <summary>
+        /// 次の1週に入るとき、重い節目の処理（裏シムの完了待ち・AI校の成長や進級・大会入り・センバツ選考）が走るか。
+        /// 週送りがロードのポップアップを出すかの判定だけに使う（毎週出すと最低表示時間ぶん週送りが遅くなる）。
+        /// 判定は <see cref="Advance"/>／<see cref="EnterWeek"/> の分岐と同じ暦の問い合わせ＝節目を足したらここにも足す。
+        /// </summary>
+        public static bool NextWeekIsHeavy()
+        {
+            var w = Week + 1;
+            if (w >= Calendar.WeeksPerYear) return true;   // 年度替わり
+            return Calendar.TournamentStartingAt(w) != null
+                   || Calendar.IsRecruitListWeek(w)
+                   || Calendar.IsSenbatsuAnnounceWeek(w)
+                   || Calendar.IsWinterGrowthNodeWeek(w)
+                   || CaptainSelector.IsNewTeamStartWeek(w, Calendar);
+        }
+
+        /// <summary>次の1週が年度替わりか（ポップアップの一言を選ぶのに使う）。</summary>
+        public static bool NextWeekIsNewYear() => Week + 1 >= Calendar.WeeksPerYear;
+
         /// <summary>週インデックスの加算だけ（遷移フックなし）。</summary>
         private static void Step(int delta)
         {

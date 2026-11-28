@@ -27,7 +27,9 @@ namespace KokoSim.Unity.Shell
             }
             // 点数は上の帯（TopBarMeters）と同じ丸め。
             var overall = (int)System.Math.Round(TeamOverall.Of(RosterService.Active));
-            return new SaveSummary(Phase(), overall, wins, losses, spring, summer);
+            // カードの色の帯に塗るスクールカラー（ホームと同じ表示用の色＝色味の無い色は炭色・白文字で読める暗さ）。
+            var color = "#" + UnityEngine.ColorUtility.ToHtmlStringRGB(SchoolAccent.ForManager());
+            return new SaveSummary(Phase(), overall, wins, losses, spring, summer) { Color = color };
         }
 
         /// <summary>時期の名前。大会中はその大会の呼び名、それ以外は次の大会の呼び名＋「前」。</summary>

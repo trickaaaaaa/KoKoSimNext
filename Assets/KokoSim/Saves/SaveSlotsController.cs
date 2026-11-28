@@ -7,15 +7,15 @@ using KokoSim.Unity.Shell;        // SaveSlots / ScreenRouter
 namespace KokoSim.Unity.Saves
 {
     /// <summary>
-    /// セーブデータ画面。<b>手動3枠</b>を1枠ずつのカードで並べ、カードの中に中身（校名・時期・チーム総合・
-    /// 監督通算・甲子園出場・保存日時）と操作（削除／読み込む／ここに上書き保存）を置く
-    /// （オート枠は廃止・監督決定 2026-08-09）。右列は、いま遊んでいるデータ。
+    /// セーブデータ画面。<b>手動3枠</b>を縦長のカード3枚（部品 <see cref="SaveSlotCard"/>）で横に並べ、カードの中に
+    /// 中身（校名・時期・チーム総合・監督通算・甲子園出場・保存日時）と操作を置く（オート枠は廃止・監督決定 2026-08-09）。
     ///
     /// <para>タイトルの「つづきから」と共通ナビの「システム」タブの2箇所から同じ画面を開く。
     /// <see cref="SaveSlots.Entry"/> で分岐する: タイトル経由（<see cref="SaveSlotsEntry.Title"/>）は
-    /// 「今保存すべき進行状態が無い」ため読込／削除だけで、右列も出さない（オーナー判断・issue #508）。タブ経由
-    /// （<see cref="SaveSlotsEntry.Tab"/>）は保存と「タイトルへ戻る」（issue #730 でホームの
-    /// ≡メニューから移設）も出す。</para>
+    /// 「今保存すべき進行状態が無い」ため読込／削除だけ（オーナー判断・issue #508）。墨の地に「つづきから」の見出しと
+    /// 「最新」の札を出す。タブ経由（<see cref="SaveSlotsEntry.Tab"/>）は紙色の地で、保存と「プレイ中」の札も出す。
+    /// カードは同じ部品で、違うのは地・目印の札と枠・ボタンだけ。「タイトルへ戻る」はどちらにも出す
+    /// （ゲーム内は確認を挟む・つづきからは失う進行が無いのでそのまま戻る）。</para>
     ///
     /// <para>カードの中身は、保存のときにセーブへ一緒に書いた概要（<see cref="KokoSim.Engine.Saves.SaveSummary"/>）を
     /// 見出しの流し読みで読む＝本体は組み立てない。概要が無い古いセーブの項目は「—」。</para>
@@ -27,7 +27,6 @@ namespace KokoSim.Unity.Saves
         private VisualElement _confirm;
         private string _errorText = "";
         private Action _confirmAction;   // 確認ダイアログで「はい」を押したときにやること
-        private Color _accent = SchoolAccent.Default;
         /// <summary>進行中のゲームの上で開いているか（保存・タイトルへ戻るはこのときだけ）。</summary>
         private bool _inGame;
         private VisualElement _titleConfirm;
@@ -59,22 +58,22 @@ namespace KokoSim.Unity.Saves
             _confirmYes = Wire("ss-confirm-yes", OnConfirmYes);
             _confirmNo = Wire("ss-confirm-no", CloseConfirm);
             CloseConfirm();   // 画面を離れても隠した状態は残る＝必ず閉じた状態から始める
-            // スクールカラー（プレイ中の枠と札）。タイトル経由は進行が無い＝配色を引かない（引くと初期化が走る）。
-            _accent = _inGame ? SchoolAccent.ForManager() : SchoolAccent.Default;
+            // タイトル経由（つづきから）は墨の地・見出しの行・ダイヤモンドの線画。
+            _root.Q<VisualElement>(className: "ss-root")?.EnableInClassList("ss-root--night", !_inGame);
+            SetupDiamond(!_inGame);
             _titleConfirm = _root.Q<VisualElement>("ss-title-confirm");
             _titleBtn = Wire("ss-title", OnTitleRequest);
             _titleYes = Wire("ss-title-yes", OnTitleConfirm);
             _titleNo = Wire("ss-title-no", OnTitleCancel);
             if (_titleBtn != null)
             {
-                _titleBtn.style.display = _inGame ? DisplayStyle.Flex : DisplayStyle.None;
+                _titleBtn.style.display = DisplayStyle.Flex;
                 _titleBtn.Clear();   // 中身（左向きの矢印＋文字）。開き直しで二重に足さない
                 _titleBtn.Add(new LineIcon(LineIcon.Kind.ChevronLeft) { Stroke = 2.2f });
                 var titleText = new Label("タイトルへ戻る");
                 titleText.AddToClassList("ss-title-btn__txt");
                 _titleBtn.Add(titleText);
             }
-            SetShown("ss-now", _inGame);
 
             _errorText = "";
             // 校名の編集はゲーム中だけ（タイトル経由は全国がまだ生成されていない＝引いた時点で生成が走る）。
@@ -112,6 +111,8 @@ namespace KokoSim.Unity.Saves
             SetShown("ss-page-rename", _page == renamePage);
             SetShown("ss-page-credits", _page == _creditsPage);
             SetShown("ss-page-settings", _page == _settingsPage);
+            SetShown("ss-heading", !_inGame && _page == 0);
+            SetShown("ss-count-header", _inGame && _page == 0);
             if (_page == _settingsPage) BuildSettingsPage();
             if (_page == renamePage) _rename.Open();
             else if (_page == 0) Render();
@@ -273,11 +274,10 @@ namespace KokoSim.Unity.Saves
         {
             RenderNote();
             RenderSlots();
-            RenderNow();
         }
 
         /// <summary>
-        /// 左列の上の1行。出すのは<b>本当の警告だけ</b>＝操作の失敗と、保存できない理由（UI原則②）。
+        /// 見出しの上の1行。出すのは<b>本当の警告だけ</b>＝操作の失敗と、保存できない理由（UI原則②）。
         /// 何も無ければ隠す（空き枠の案内などは出さない＝カードが見せている）。
         /// </summary>
         private void RenderNote()
@@ -291,264 +291,78 @@ namespace KokoSim.Unity.Saves
             note.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
-        // ── 左列：枠のカード ──────────────────────────────────
+        // ── 3枠のカード ──────────────────────────────────
 
         private void RenderSlots()
         {
             var host = _root.Q<VisualElement>("ss-slots");
             if (host == null) return;
             host.Clear();
-            for (var i = 0; i < SaveSlots.AllSlotIds.Length; i++)
-                host.Add(BuildCard(SaveSlots.ReadInfo(SaveSlots.AllSlotIds[i]), i + 1));
-            SchoolAccent.Apply(host, _accent);   // プレイ中の枠と札へスクールカラーを流す
+            host.EnableInClassList(SaveSlotCard.OnNightClass, !_inGame);
+            host.EnableInClassList(SaveSlotCard.OnPaperClass, _inGame);
+
+            var cards = new SaveSlotCardData[SaveSlots.AllSlotIds.Length];
+            var used = 0;
+            var latest = -1;
+            for (var i = 0; i < cards.Length; i++)
+            {
+                var info = SaveSlots.ReadInfo(SaveSlots.AllSlotIds[i]);
+                var d = SaveSlotCardData.From(info, i + 1);
+                d.IsPlaying = _inGame && info.Exists && SaveSlots.IsActive(info.SlotId);
+                cards[i] = d;
+                if (!info.Exists) continue;
+                used++;
+                if (!info.Corrupt && (latest < 0 || info.SavedAt > cards[latest].SavedAt)) latest = i;
+            }
+            if (latest >= 0) cards[latest].IsLatest = true;
+
+            var mode = _inGame ? SaveSlotCardMode.InGame : SaveSlotCardMode.Continue;
+            var now = DateTime.Now;
+            for (var i = 0; i < cards.Length; i++)
+            {
+                var d = cards[i];
+                var actions = new SaveSlotCard.Actions
+                {
+                    Load = () => AskLoad(d),
+                    Delete = () => AskDelete(d),
+                    // 空きへの保存は確認なし・上書きは確認を挟む。保存はゲーム中だけ。
+                    Save = _inGame ? (d.Exists ? (Action)(() => AskOverwrite(d)) : () => DoSave(d.SlotId)) : null,
+                    CanSave = _inGame && SaveGameIO.CanSave,
+                };
+                var card = SaveSlotCard.Build(d, mode, actions, now);
+                if (i == cards.Length - 1) card.AddToClassList("ssc--last");
+                host.Add(card);
+            }
+            RenderCount(used, cards.Length);
         }
 
-        private VisualElement BuildCard(SaveSlotInfo info, int number)
+        /// <summary>「2 / 3 枠を使用中」（ゲーム内は切り替えの右・つづきからは見出しの行の右端）。</summary>
+        private void RenderCount(int used, int total)
         {
-            var card = new VisualElement();
-            card.AddToClassList("ss-card");
-            var playing = _inGame && info.Exists && SaveSlots.IsActive(info.SlotId);
-
-            // 左端：枠の番号
-            var no = new VisualElement();
-            no.AddToClassList("ss-card__no");
-            no.Add(Text("手動", "ss-card__no-k"));
-            no.Add(Text(number.ToString(), "ss-card__no-v", "f-display"));
-            card.Add(no);
-
-            if (!info.Exists)
-            {
-                // 空いている枠：点線の枠・番号の右も点線・中央に「空き」・右端に「＋ ここに保存」（ゲーム中だけ）
-                card.AddToClassList("ss-card--empty");
-                var frame = new DashedFrame { Radius = 14f, LineColor = EmptyLine };
-                frame.style.left = -1f; frame.style.top = -1f; frame.style.right = -1f; frame.style.bottom = -1f;
-                card.Insert(0, frame);
-                card.Add(new DashedRule(EmptyLine));
-
-                var info0 = new VisualElement();
-                info0.AddToClassList("ss-card__info");
-                info0.Add(Text("空き", "ss-card__vacant"));
-                card.Add(info0);
-
-                if (_inGame)
-                {
-                    var ops0 = new VisualElement();
-                    ops0.AddToClassList("ss-card__ops");
-                    var id0 = info.SlotId;
-                    var save0 = OpButton("ここに保存", () => DoSave(id0), fill: true, plus: true);   // 空きへの保存は確認なし
-                    save0.SetEnabled(SaveGameIO.CanSave);
-                    ops0.Add(save0);
-                    card.Add(ops0);
-                }
-                return card;
-            }
-
-            if (playing)
-            {
-                card.AddToClassList("ss-card--playing");
-                card.AddToClassList("acc-bd");
-            }
-
-            // 中：情報（校名・県／4項目／保存日時）
-            var body = new VisualElement();
-            body.AddToClassList("ss-card__info");
-
-            var head = new VisualElement();
-            head.AddToClassList("ss-card__head");
-            // 校名は**そのセーブの中身**から出す（issue #624）。実行中の自校名ではない。
-            head.Add(Text(info.Corrupt ? "読み込めません" : SchoolOf(info), "ss-card__name", "f-display"));
-            if (!info.Corrupt && info.PrefectureId is { } pref)
-                head.Add(Text(KokoSim.Engine.Nation.PrefectureNames.JapaneseOf(pref), "ss-card__pref", "f-display-lg"));
-            if (playing) head.Add(Text("プレイ中", "ss-card__playing", "acc-bg", "f-body-bd"));
-            body.Add(head);
-
-            if (!info.Corrupt)
-            {
-                var sum = info.Summary;
-                var items = new VisualElement();
-                items.AddToClassList("ss-card__items");
-
-                var when = Item(items, "時期");
-                when.Add(Text(info.WeekLabel, "ss-item__big", "f-display"));
-                when.Add(Text(info.YearIndex + "年目", "ss-item__year"));
-                if (sum != null && !string.IsNullOrEmpty(sum.Phase)) when.Add(Text(sum.Phase, "ss-item__tag"));
-
-                var overall = Item(items, "チーム総合");
-                if (sum == null) overall.Add(None());
-                else
-                {
-                    overall.Add(UiComponents.RankChip(SaveSummaries.GradeOf(sum.Overall)));
-                    overall.Add(Text(sum.Overall.ToString(), "ss-item__score", "f-display"));
-                }
-
-                var career = Item(items, "監督通算");
-                if (sum == null) career.Add(None());
-                else
-                {
-                    career.Add(Text(sum.Wins.ToString(), "ss-item__num", "f-num-bd"));
-                    career.Add(Text("勝", "ss-item__unit"));
-                    career.Add(Text(sum.Losses.ToString(), "ss-item__num", "f-num-bd"));
-                    career.Add(Text("敗", "ss-item__unit"));
-                }
-
-                var koshien = Item(items, KokoSim.Engine.Season.DisplayNames.Current.Koshien + "出場");
-                if (sum == null) koshien.Add(None());
-                else
-                {
-                    koshien.Add(Text("春", "ss-item__unit"));
-                    koshien.Add(Text(sum.SpringAppearances.ToString(), "ss-item__num", "f-num-bd"));
-                    koshien.Add(Text("回", "ss-item__unit"));
-                    koshien.Add(Text("／", "ss-item__sep"));
-                    koshien.Add(Text("夏", "ss-item__unit"));
-                    koshien.Add(Text(sum.SummerAppearances.ToString(), "ss-item__num", "f-num-bd"));
-                    koshien.Add(Text("回", "ss-item__unit"));
-                }
-                body.Add(items);
-            }
-
-            body.Add(Text("保存日時　" + info.SavedAt.ToString("yyyy/MM/dd HH:mm") + "（" + DaysAgo(info.SavedAt) + "）",
-                "ss-card__saved", "f-num"));
-            card.Add(body);
-
-            // 右端：操作。壊れた枠は削除だけ。保存はゲーム中だけ。
-            var ops = new VisualElement();
-            ops.AddToClassList("ss-card__ops");
-            var trash = new Button(() => AskDelete(info));
-            trash.AddToClassList("ss-op-trash");
-            trash.Add(new LineIcon(LineIcon.Kind.Trash) { Stroke = 1.9f });
-            ops.Add(trash);
-            if (!info.Corrupt)
-            {
-                ops.Add(OpButton("読み込む", () => AskLoad(info), fill: false));
-                if (_inGame)
-                {
-                    var save = OpButton("ここに上書き保存", () => AskOverwrite(info), fill: true);
-                    save.SetEnabled(SaveGameIO.CanSave);
-                    ops.Add(save);
-                }
-            }
-            card.Add(ops);
-            return card;
+            var host = _root.Q<VisualElement>(_inGame ? "ss-count-header" : "ss-count-heading");
+            if (host == null) return;
+            host.Clear();
+            host.Add(Text(used.ToString(), "ss-count__n", "f-num-bd"));
+            host.Add(Text("/ " + total + " 枠を使用中", "ss-count__rest", "f-body"));
         }
 
-        private static readonly Color EmptyLine = new Color32(0xC9, 0xC2, 0xB4, 0xFF);   // 空きの枠の点線（#c9c2b4）
-
-        /// <summary>項目（上に見出し・下に高さ32pxの値）を足し、値を入れる器を返す。</summary>
-        private static VisualElement Item(VisualElement host, string caption)
+        /// <summary>つづきからの地に敷く内野のダイヤモンドの線画（ゲーム内では外す）。</summary>
+        private void SetupDiamond(bool show)
         {
-            var item = new VisualElement();
-            item.AddToClassList("ss-item");
-            item.Add(Text(caption, "ss-item__k"));
-            var v = new VisualElement();
-            v.AddToClassList("ss-item__v");
-            item.Add(v);
-            host.Add(item);
-            return v;
+            var host = _root.Q<VisualElement>("ss-diamond-host");
+            if (host == null) return;
+            host.Clear();
+            if (!show) return;
+            var lines = new InfieldDiamondLines();
+            lines.AddToClassList("ss-diamond");
+            host.Add(lines);
         }
-
-        /// <summary>値がない項目（概要を書く前の古いセーブ）。</summary>
-        private static Label None() => Text("—", "ss-item__none");
 
         private static Label Text(string text, params string[] classes)
         {
             var l = new Label(text);
             foreach (var c in classes) l.AddToClassList(c);
             return l;
-        }
-
-        private static Button OpButton(string text, Action onClick, bool fill, bool plus = false)
-        {
-            var b = new Button(onClick);
-            b.AddToClassList("ss-op");
-            b.AddToClassList("f-body-bd");
-            if (fill) b.AddToClassList("ss-op--fill");
-            if (plus)
-            {
-                b.Add(new LineIcon(LineIcon.Kind.Plus) { Stroke = 2.4f });
-                b.Add(Text(text, "ss-op__txt", "f-body-bd"));
-            }
-            else b.text = text;
-            return b;
-        }
-
-        /// <summary>保存日時のかっこ内（当日＝今日／前日＝昨日／それより前＝N日前）。</summary>
-        private static string DaysAgo(DateTime savedAt)
-        {
-            var days = (DateTime.Now.Date - savedAt.Date).Days;
-            return days <= 0 ? "今日" : days == 1 ? "昨日" : days + "日前";
-        }
-
-        private static string SchoolOf(SaveSlotInfo info) => info.SchoolNameOrDefault + "高校";
-
-        /// <summary>空きの枠の番号の右に引く縦の点線。</summary>
-        private sealed class DashedRule : VisualElement
-        {
-            private readonly Color _color;
-
-            public DashedRule(Color color)
-            {
-                _color = color;
-                pickingMode = PickingMode.Ignore;
-                AddToClassList("ss-card__vrule");
-                generateVisualContent += OnGenerate;
-            }
-
-            private void OnGenerate(MeshGenerationContext mgc)
-            {
-                var r = contentRect;
-                if (float.IsNaN(r.height) || r.height <= 0f) return;
-                var p = mgc.painter2D;
-                p.strokeColor = _color;
-                p.lineWidth = 1.5f;
-                var x = r.width * 0.5f;
-                for (var y = 0f; y < r.height; y += 9f)
-                {
-                    p.BeginPath();
-                    p.MoveTo(new Vector2(x, y));
-                    p.LineTo(new Vector2(x, Mathf.Min(r.height, y + 5f)));
-                    p.Stroke();
-                }
-            }
-        }
-
-        // ── 右列：いま遊んでいるデータ（ゲーム中だけ） ────────────────
-
-        private void RenderNow()
-        {
-            if (!_inGame) return;   // タイトル経由は進行が無い（値を引くと初期化が走る）
-            SetText("ss-now-name", TopBarMeters.SchoolDisplayName());
-            SetText("ss-now-pref", KokoSim.Engine.Nation.PrefectureNames.JapaneseOf(NationService.PrefectureId));
-
-            var host = _root.Q<VisualElement>("ss-now-rows");
-            if (host == null) return;
-            host.Clear();
-
-            var s = GameSession.Current;
-            var sum = SaveSummaries.Current();
-            var year = GameClock.YearIndex;
-            host.Add(NowRow("年目", Text(year + "年目（" + SeasonClock.CalendarYear(year, GameClock.Week) + "年）", "f-num")));
-            host.Add(NowRow("日付", Text(ScoreboardStrip.DateNow(), "f-num")));
-            host.Add(NowRow("時期", Text(sum.Phase)));
-            var (_, record) = ScoreboardStrip.RecordNow();
-            host.Add(NowRow("戦績", Text(
-                (s.InTournament ? KokoSim.Engine.Season.TournamentKindNames.Short(s.Kind) + " " : "") + record, "f-num")));
-            host.Add(NowRow("チーム総合",
-                UiComponents.RankChip(SaveSummaries.GradeOf(sum.Overall)), Text(sum.Overall.ToString(), "f-num")));
-            host.Add(NowRow("監督通算", Text(sum.Wins + "勝" + sum.Losses + "敗", "f-num")));
-            host.Add(NowRow(KokoSim.Engine.Season.DisplayNames.Current.Koshien + "出場",
-                Text("春 " + sum.SpringAppearances + "回／夏 " + sum.SummerAppearances + "回", "f-num")));
-        }
-
-        private static VisualElement NowRow(string caption, params VisualElement[] value)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("ss-now__row");
-            row.Add(Text(caption, "ss-now__k"));
-            var v = new VisualElement();
-            v.AddToClassList("ss-now__v");
-            foreach (var e in value) v.Add(e);
-            row.Add(v);
-            return row;
         }
 
         private static string SlotLabel(string slotId) => slotId switch
@@ -562,11 +376,11 @@ namespace KokoSim.Unity.Saves
         // ── 操作（確認 → 実行） ─────────────────────────────────
 
         /// <summary>上書き保存の確認（空きへの保存は確認なしで <see cref="DoSave"/>）。</summary>
-        private void AskOverwrite(SaveSlotInfo info)
+        private void AskOverwrite(SaveSlotCardData d)
         {
             if (!_inGame || !SaveGameIO.CanSave) return;
-            var id = info.SlotId;
-            Ask(SlotLabel(id) + "（" + SchoolOf(info) + "・" + info.WeekLabel + "）に上書きします。よろしいですか？",
+            var id = d.SlotId;
+            Ask(SlotLabel(id) + "（" + d.SchoolName + "・" + d.WeekLabel + "）に上書きします。よろしいですか？",
                 "上書き保存", danger: false, () => DoSave(id));
         }
 
@@ -574,18 +388,18 @@ namespace KokoSim.Unity.Saves
         /// 読み込みの確認。ゲーム中は「保存していない進行は失われます」を挟む。タイトル経由は失う進行が無いので
         /// 確認せずに読み込む。
         /// </summary>
-        private void AskLoad(SaveSlotInfo info)
+        private void AskLoad(SaveSlotCardData d)
         {
-            var id = info.SlotId;
+            var id = d.SlotId;
             if (!_inGame) { DoLoad(id); return; }
-            Ask(SlotLabel(id) + "（" + SchoolOf(info) + "・" + info.WeekLabel + "）を読み込みます。保存していない進行は失われます。",
+            Ask(SlotLabel(id) + "（" + d.SchoolName + "・" + d.WeekLabel + "）を読み込みます。保存していない進行は失われます。",
                 "読み込む", danger: false, () => DoLoad(id));
         }
 
-        private void AskDelete(SaveSlotInfo info)
+        private void AskDelete(SaveSlotCardData d)
         {
-            var id = info.SlotId;
-            var what = info.Corrupt ? "読み込めないデータ" : SchoolOf(info);
+            var id = d.SlotId;
+            var what = d.Corrupt ? "読み込めないデータ" : d.SchoolName;
             Ask(SlotLabel(id) + "（" + what + "）のデータを削除します。元に戻せません。",
                 "削除する", danger: true, () =>
                 {
@@ -627,12 +441,10 @@ namespace KokoSim.Unity.Saves
 
         private void DoLoad(string slotId)
         {
-            // ファイル読込＋復元は同期処理（メインスレッドを止める）。ManualWait で「ロード中」を
-            // 1フレーム先に描画してからブロックへ入り、何も表示されず固まって見えるのを防ぐ（要望対応）。
-            // SaveGameIO.Load は復元の前に旧進行の裏シムの完了を自分で待つ（issue #1226）＝
-            // ここ（_inGame でもロードできる経路）から呼んでも別セーブの結果は混ざらない。
-            string error = null;
-            ManualWait.Run(_root, "ロード中", () => SaveSlots.Load(slotId, out error), ok =>
+            // 読み込み・展開・変換は別スレッド、全サービスへ戻すのはメインスレッド（LoadingJob が段ごとにコマをまたぐ
+            // ＝待つ間もポップアップの点と棒が動く）。SaveSlots.LoadRoutine は復元の前に旧進行の裏シムの完了を待つ
+            // （issue #1226）＝ここ（_inGame でもロードできる経路）から呼んでも別セーブの結果は混ざらない。
+            LoadingJob.Run("ロード中", null, SaveSlots.LoadRoutine(slotId, (ok, error) =>
             {
                 if (!ok)
                 {
@@ -644,7 +456,7 @@ namespace KokoSim.Unity.Saves
                 KokoSim.Unity.Home.HomeState.Reset();
                 // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
                 ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
-            });
+            }));
         }
 
         /// <summary>ゲーム中だけ配線される。保存できない局面ではボタンが押せない状態だが、
@@ -652,20 +464,21 @@ namespace KokoSim.Unity.Saves
         private void DoSave(string slotId)
         {
             if (!_inGame || !SaveGameIO.CanSave) return;
-            // SaveGameIO.Save は裏試合の完了待ち（Task.Wait）を含み得る同期処理。ManualWait で
-            // 「セーブ中」を1フレーム先に描画してからブロックへ入る（要望対応、DoLoad と同じ作法）。
-            ManualWait.Run(_root, "セーブ中", () => SaveSlots.Save(slotId), ok =>
+            // 裏シムの完了待ちはコマをまたぎ、変換・書き出しは別スレッド（SaveSlots.SaveRoutine）。
+            LoadingJob.Run("セーブ中", null, SaveSlots.SaveRoutine(slotId, ok =>
             {
                 _errorText = ok ? "" : "保存に失敗しました。";
                 Render();   // その枠のカード（時期・保存日時・プレイ中）を保存直後の内容へ更新する
-            });
+            }));
         }
 
         // ===== タイトルへ戻る（issue #730 でホームの ≡メニューから移設。挙動は #509 のまま） =====
 
         private void OnTitleRequest()
         {
-            if (!_inGame || BackgroundGameOp.Running || _titleConfirm == null) return;
+            // つづきから（タイトル経由）は失う進行が無い＝確認なしでタイトルへ戻る。
+            if (!_inGame) { ScreenRouter.Instance?.ShowDeferred("TitleScreen"); return; }
+            if (BackgroundGameOp.Running || LoadingJob.Running || _titleConfirm == null) return;
             var since = _root.Q<Label>("ss-title-since");
             if (since != null) since.text = LastSavedText();
             _titleConfirm.style.display = DisplayStyle.Flex;

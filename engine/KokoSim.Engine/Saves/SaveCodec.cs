@@ -143,6 +143,7 @@ public static class SaveCodec
                 .Add("summaryLosses", sum.Losses)
                 .Add("summarySpringApp", sum.SpringAppearances)
                 .Add("summarySummerApp", sum.SummerAppearances);
+            if (IsHexColor(sum.Color)) root.Add("summaryColor", sum.Color!);
         }
         return root.ToString();
     }
@@ -233,7 +234,17 @@ public static class SaveCodec
     {
         "version", "week", "yearIndex", "schoolName", "prefectureId",
         "summaryPhase", "summaryOverall", "summaryWins", "summaryLosses", "summarySpringApp", "summarySummerApp",
+        "summaryColor",
     };
+
+    /// <summary>"#RRGGBB" の形か（概要のスクールカラー。それ以外は読まない＝画面は炭色）。</summary>
+    public static bool IsHexColor(string? s)
+    {
+        if (s is null || s.Length != 7 || s[0] != '#') return false;
+        for (var i = 1; i < 7; i++)
+            if (!Uri.IsHexDigit(s[i])) return false;
+        return true;
+    }
 
     private static int? IntOrNull(object? token)
         => token is JsonHeaderScanner.NumberToken n && n.TryInt(out var v) ? v : null;
@@ -244,6 +255,9 @@ public static class SaveCodec
            && IntOrNull(v[6]) is { } overall && IntOrNull(v[7]) is { } wins && IntOrNull(v[8]) is { } losses
            && IntOrNull(v[9]) is { } spring && IntOrNull(v[10]) is { } summer
             ? new SaveSummary(phase, overall, wins, losses, spring, summer)
+            {
+                Color = v[11] is string c && IsHexColor(c) ? c : null,
+            }
             : null;
 
     /// <summary>
@@ -638,6 +652,10 @@ public static class SaveCodec
                 ? new SaveSummary(root.Str("summaryPhase") ?? "", root.Int("summaryOverall"),
                     root.Int("summaryWins"), root.Int("summaryLosses"),
                     root.Int("summarySpringApp"), root.Int("summarySummerApp"))
+                {
+                    Color = root.Has("summaryColor") && root["summaryColor"] is JsonString cs && IsHexColor(cs.Value)
+                        ? cs.Value : null,
+                }
                 : null,
             SchoolName = root.Str("schoolName") ?? "桜丘",
             PrefectureId = root.Int("prefectureId"),

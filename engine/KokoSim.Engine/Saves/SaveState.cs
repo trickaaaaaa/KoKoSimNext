@@ -33,7 +33,14 @@ namespace KokoSim.Engine.Saves;
 /// <param name="SpringAppearances">センバツの出場回数（監督通算）。</param>
 /// <param name="SummerAppearances">夏の甲子園の出場回数（監督通算）。</param>
 public sealed record SaveSummary(
-    string Phase, int Overall, int Wins, int Losses, int SpringAppearances, int SummerAppearances);
+    string Phase, int Overall, int Wins, int Losses, int SpringAppearances, int SummerAppearances)
+{
+    /// <summary>
+    /// カードの色の帯に塗るスクールカラー（表示用に変換した後の色・"#RRGGBB"）。6項目とは別のキーで書き、
+    /// 無い（色を書く前のセーブ）・形が違うときは null＝画面は炭色で塗る。null でも概要そのものは有効。
+    /// </summary>
+    public string? Color { get; init; }
+}
 
 public sealed class SaveState
 {

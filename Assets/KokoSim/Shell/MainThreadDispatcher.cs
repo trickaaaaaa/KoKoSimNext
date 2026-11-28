@@ -44,7 +44,7 @@ namespace KokoSim.Unity.Shell
     ///
     /// <para>見張り（Q30・issue #1317）: <paramref name="work"/> が戻らない（無限ループ・デッドロック）と Running が
     /// 立ちっぱなしになる。<see cref="StallLimitSeconds"/> を超えたら <see cref="Stalled"/> が立ち、
-    /// <see cref="CheckStall"/> がログを1度だけ出す（画面は <c>WaitOverlayController</c> が案内する）。
+    /// <see cref="CheckStall"/> がログを1度だけ出す（画面は <c>LoadingPopup</c> が案内する）。
     /// <b>スロットは強制解放しない</b>＝裏で走り続ける work と次の処理が同じ静的状態を触るのを避けるため
     /// （オーナー判断・案B：知らせるだけ）。</para>
     /// </summary>
@@ -63,6 +63,14 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>現在の秒。既定は単調増加の実時間（Unity 非依存）。テストが差し替える。</summary>
         internal static Func<double> Clock = () => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+
+        private const string DefaultTitle = "処理中";
+
+        /// <summary>待つ間のポップアップの見出し（最後に <see cref="Run(Action, Action, string, string)"/> で渡したもの）。</summary>
+        public static string Title { get; private set; } = DefaultTitle;
+
+        /// <summary>待つ間のポップアップの一言（null＝出さない）。</summary>
+        public static string Message { get; private set; }
 
         /// <summary>重い試合後処理が進行中か（メインスレッドの週送り等が割り込まないよう参照する）。</summary>
         public static bool Running
@@ -87,7 +95,13 @@ namespace KokoSim.Unity.Shell
         /// <paramref name="work"/>（engine の逐次処理）を別スレッドで実行し、完了後 <paramref name="onDone"/> を
         /// メインスレッドで呼ぶ。既に実行中なら false を返して何もしない（二重起動防止）。
         /// </summary>
-        public static bool Run(Action work, Action onDone)
+        public static bool Run(Action work, Action onDone) => Run(work, onDone, DefaultTitle, null);
+
+        /// <summary>
+        /// <see cref="Run(Action, Action)"/> に、待つ間のポップアップ（<see cref="LoadingPopup"/>）の見出しと一言を添える。
+        /// 見出しは場面ごとに呼び出し側が決める（試合準備中・集計中など）。
+        /// </summary>
+        public static bool Run(Action work, Action onDone, string title, string message)
         {
             var slot = new TaskCompletionSource<bool>();
             lock (SlotGate)
@@ -95,6 +109,8 @@ namespace KokoSim.Unity.Shell
                 if (Running) return false;
                 Volatile.Write(ref _slot, slot);
             }
+            Title = string.IsNullOrEmpty(title) ? DefaultTitle : title;
+            Message = message;
             _startedAt = Clock();
             _stallLogged = false;
             if (BackgroundWork.AnyPending)
@@ -105,6 +121,17 @@ namespace KokoSim.Unity.Shell
                 BackgroundWork.WhenIdle(() =>
                 {
                     _startedAt = Clock();   // 見張りの秒は work を始めてから数える
+                    Start(slot, work, onDone);
+                });
+                return true;
+            }
+            if (!BackgroundWork.Threaded)
+            {
+                // ブラウザ版は work がその場（メインスレッド）で走る＝先にポップアップを1度描いてから始める
+                // （そのまま始めると幕を描く前に止まり、何も出ずに固まって見えていた）。
+                LoadingJob.AfterFrames(2, () =>
+                {
+                    _startedAt = Clock();
                     Start(slot, work, onDone);
                 });
                 return true;

@@ -1411,6 +1411,35 @@ public sealed class SaveCodecTests
         Assert.Null(header.Value.PrefectureId);
     }
 
+    /// <summary>スクールカラーは概要と一緒に往復し、見出しの流し読みでも読める。</summary>
+    [Fact]
+    public void Summary_ColorRoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Summary = new SaveSummary("秋の大会", 63, 68, 28, 0, 0) { Color = "#7A1F2B" };
+        var json = SaveCodec.Serialize(state);
+
+        Assert.Equal("#7A1F2B", SaveCodec.PeekHeader(json)!.Value.Summary!.Color);
+        Assert.True(SaveCodec.TryDeserialize(json, out var back, out var err), err);
+        Assert.Equal(state.Summary, back.Summary);
+    }
+
+    /// <summary>色が無い・形が違うセーブは、色だけ null で概要そのものは読める（画面は炭色）。</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData(",\"summaryColor\":\"red\"")]
+    [InlineData(",\"summaryColor\":42")]
+    public void PeekHeader_MissingColor_KeepsSummary(string colorPart)
+    {
+        var json = "{\"version\":8,\"week\":3,\"yearIndex\":1,\"summaryPhase\":\"夏の大会前\",\"summaryOverall\":31,"
+                   + "\"summaryWins\":1,\"summaryLosses\":2,\"summarySpringApp\":0,\"summarySummerApp\":0" + colorPart + "}";
+
+        var sum = SaveCodec.PeekHeader(json)!.Value.Summary;
+        Assert.NotNull(sum);
+        Assert.Equal(31, sum!.Overall);
+        Assert.Null(sum.Color);
+    }
+
     /// <summary>概要を持たない状態を書き出しても概要の項目は出ず、読み戻すと null のまま。</summary>
     [Fact]
     public void Summary_AbsentWhenNotSet()
