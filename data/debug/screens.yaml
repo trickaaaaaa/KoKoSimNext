@@ -2217,6 +2217,41 @@ screens:
       - wait: 3000ms
       - shot: 02-after-ok-talk
 
+  - id: postgame-talk-first-1787-loss
+    name: "敗戦直後、同じ週に溜まっていた会話があっても、OK のあと最初に開くのは球場背景の試合後のひとこと（#1787）"
+    steps:
+      - new_game: {seed: 7, prefecture: 14, school: 桜丘, district: 0}
+      - advance_weeks: 40
+      - advance_to_match_day: ""
+      - read: =EventService.Pending.Count
+      - call: HomeState.Current.PlayMatch()
+      - read: =EventService.Pending.0.Id
+      - read: =EventService.Pending.Count
+      - show: HomeDashboard
+      - wait: 10
+      - click: tm-result-ok
+      - wait: 3000ms
+      - shot: 01-after-ok-talk
+      - read: =EventService.Pending.0.Id
+
+  - id: postgame-talk-first-1787-win
+    name: "勝利直後も、OK のあと最初に開くのは球場背景の試合後のひとこと（#1787）"
+    steps:
+      - new_game: {seed: 7, prefecture: 14, school: 桜丘, district: 0}
+      - boost_roster: 95
+      - advance_weeks: 40
+      - advance_to_match_day: ""
+      - read: =EventService.Pending.Count
+      - call: HomeState.Current.PlayMatch()
+      - read: =EventService.Pending.0.Id
+      - read: =EventService.Pending.Count
+      - show: HomeDashboard
+      - wait: 10
+      - click: tm-result-ok
+      - wait: 3000ms
+      - shot: 01-after-ok-talk
+      - read: =EventService.Pending.0.Id
+
   # ── 試合結果の打撃成績: 守備位置が何度も入れ替わった選手の欄が折り返して、打順・名前に重ならない（#1692） ──
   - id: match-result-pos-wrap-1692
     name: "試合結果の打撃成績・打席結果で、5つ以上つながる守備位置が折り返して全部出る（打順・名前と重ならない）"
