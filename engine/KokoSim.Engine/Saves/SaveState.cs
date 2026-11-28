@@ -3,6 +3,7 @@ using KokoSim.Engine.Career;
 using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
+using KokoSim.Engine.Replay;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
@@ -236,6 +237,14 @@ public sealed class SaveState
     /// ので過去ぶんは復元できない）か、まだ公式戦をしていない。
     /// </summary>
     public MatchRecordBook MatchRecords { get; set; } = new();
+
+    // --- 注目試合の再生データ（issue #1580。v53 で追加） ---
+    /// <summary>
+    /// 注目試合（自校の全試合＋自県の上位ティア校＋甲子園）を同じエンジンで解き直すための入力
+    /// （<see cref="MatchReplayBook"/>）。再生した中身は持たない。自校が関わった試合は全履歴、他は直近2年。
+    /// 空＝旧セーブか、まだ記録した試合がない。
+    /// </summary>
+    public MatchReplayBook MatchReplays { get; set; } = new();
 
     // --- 週次イベントの発火状態（issue #609。v9 で追加） ---
     /// <summary>

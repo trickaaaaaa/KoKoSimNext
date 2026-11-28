@@ -141,6 +141,12 @@ public enum GameDecisionKind
     Pitchout,
     /// <summary>DHの選手の登板（規則5.11・issue #1725）。OffenseIsAway=**守備側**が先攻か。DH は消滅し、旧投手は退場する。</summary>
     PromoteDhToMound,
+    /// <summary>
+    /// スキップ（以降の采配を委任AIへ委ねる・<see cref="Timeline.Playback.MatchProgression.SkipDelegateToAi"/>）。
+    /// OffenseIsAway=委任する監督のチームが先攻か。TargetIndex=監督の采配能力／BenchIndex=ティア。
+    /// 決定列へ積む＝保存した試合の再生で、委任後の采配が同じ打席・同じ球から再現される。
+    /// </summary>
+    DelegateToAi,
 }
 
 /// <summary>復元された進行（状態＋続きを回すための enumerator）。drain して <see cref="GameEngine.BuildResult"/> へ。</summary>
@@ -324,6 +330,10 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.ForcedOutcome:
                     if (d.Forced is { } forced) p.ForceNext(forced);
+                    break;
+                case GameDecisionKind.DelegateToAi:
+                    p.OffenseOf(d.OffenseIsAway).OverrideTactics(
+                        new Tactics.AiTacticsBrain(Tactics.AiProfile.Delegated(d.TargetIndex, d.BenchIndex)));
                     break;
                 case GameDecisionKind.Timeout:
                     SubstitutionCommands.CallTimeout(p, d.OffenseIsAway, d.TargetIndex >= 0 ? d.TargetIndex : null, d.AsOffense);

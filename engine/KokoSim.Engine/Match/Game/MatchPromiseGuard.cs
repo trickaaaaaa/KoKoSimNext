@@ -34,6 +34,12 @@ public sealed class MatchPromiseGuard
     /// <summary>見張る約束が1つも無いか（無ければ Team に載せない）。</summary>
     public bool IsEmpty => _noPinchHitFor.Count == 0 && _noBunt.Count == 0 && _noEntry.Count == 0 && _noPitch.Count == 0;
 
+    /// <summary>見張る選手IDの4集合（保存した試合の再生用に中身をそのまま取り出す）。</summary>
+    public IReadOnlyCollection<int> NoPinchHitForIds => _noPinchHitFor;
+    public IReadOnlyCollection<int> NoBuntIds => _noBunt;
+    public IReadOnlyCollection<int> NoEntryIds => _noEntry;
+    public IReadOnlyCollection<int> NoPitchIds => _noPitch;
+
     /// <summary>この打者に代打を送ると約束を破るか。</summary>
     public bool BlocksPinchHitFor(Player? batter) => Has(_noPinchHitFor, batter);
 

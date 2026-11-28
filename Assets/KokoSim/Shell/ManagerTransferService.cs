@@ -200,6 +200,7 @@ namespace KokoSim.Unity.Shell
                 GameSession.Current.Stats.Career.ReplaceWith(result.ArrivingCareer);
                 // 戦績も学校に付いて回る（issue #1413）: 去る学校の試合は旧校へ、転任先がかつて戦った試合は自校へ。
                 GameSession.Current.MatchHistory.HandOverSchool(result.OldSchoolId, target.SchoolId);
+                GameSession.Current.MatchReplays.HandOverSchool(result.OldSchoolId, target.SchoolId);
                 TeamColorProvider.LeaveSchool(result.OldSchoolId, departingColors);
                 TeamColorProvider.ArriveAtSchool(target.SchoolId);
             }

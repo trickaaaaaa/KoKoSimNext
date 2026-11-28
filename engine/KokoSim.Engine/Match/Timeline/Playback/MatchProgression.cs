@@ -255,6 +255,21 @@ public sealed class MatchProgression
     }
 
     /// <summary>
+    /// 保存した試合の再生（<see cref="Replay.MatchReplayer"/>）に要る入力一式（両チーム・試合設定・開始乱数状態・
+    /// 持ち越し・ここまでの采配決定列）。場面ジャンプの試合や、乱数状態を捕捉できない構築は null（再生できない）。
+    /// 読むだけ＝進行・乱数には触れない。
+    /// </summary>
+    public Replay.MatchReplayInputs? CaptureReplayInputs()
+    {
+        if (_scenarioStart is not null) return null;
+        var state = _rngState ?? (_seedable ? new Xoshiro256Random(_seed).CaptureState() : null);
+        if (state is null) return null;
+        return new Replay.MatchReplayInputs(
+            _awayTeam, _homeTeam, _ctx, state, _awayPitchRecovery, _homePitchRecovery,
+            _awayPriorWeekPitches, _homePriorWeekPitches, _decisions.ToArray());
+    }
+
+    /// <summary>
     /// 采配窓（打席前）: 次打席の攻撃側に代打を送る。offenseIsAway=攻撃側が先攻(away)か。
     /// 適用できたら保存/委任でも再現できるよう決定列に記録する。采配なし（未呼び出し）ならバッチと一致。
     /// </summary>
@@ -965,6 +980,9 @@ public sealed class MatchProgression
     {
         var brain = new AiTacticsBrain(AiProfile.Delegated(managerTacticalSense, tierRank));
         _p.OffenseOf(managerIsAway).OverrideTactics(brain);
+        // 決定列へ積む＝保存した試合の再生（GameReplay）が委任の始まりを同じ位置で再現する。
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.DelegateToAi, managerIsAway,
+            BenchIndex: tierRank, PitchIndex: PendingPitchIndex, TargetIndex: managerTacticalSense));
         return DrainToEnd();
     }
 

@@ -158,7 +158,9 @@ namespace KokoSim.Unity.Shell
             var ctx = new GameContext { Field = MatchStadium.For(TournamentKind.SenbatsuKoshien) };
             return new MemoizingBackgroundResolver(
                 new BackgroundMatchResolver(NationService.Rosters, ctx, yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory()));
+                    modernRules: null, calendarYear: calendarYear, brains: new EnemyAiBrainFactory(),
+                    // センバツ（甲子園）の全試合は再生データを残す（issue #1580）
+                    replays: new MatchReplayCollector(TournamentKind.SenbatsuKoshien, yearIndex)));
         }
 
         private static void FoldBackgroundMatch(int awayId, int homeId, GameResult g)

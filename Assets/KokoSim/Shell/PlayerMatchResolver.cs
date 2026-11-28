@@ -6,6 +6,7 @@ using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Replay;
 using KokoSim.Engine.Season;
 
 namespace KokoSim.Unity.Shell
@@ -41,11 +42,23 @@ namespace KokoSim.Unity.Shell
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
             var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
             var managerIsAway = ManagerIsAway(manager, opponent);
+            var matchRng = rng.Fork(2);
+            // 注目試合の再生データ（issue #1580）: 開始前の乱数状態を控える。Fork は新しい乱数源＝控えても試合は変わらない。
+            var replayState = (matchRng as Xoshiro256Random)?.CaptureState();
             var result = managerIsAway
-                ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2), mgrCarry, oppCarry,
+                ? GameEngine.Play(mgrTeam, oppTeam, ctx, matchRng, mgrCarry, oppCarry,
                     awayPitchRecovery: mgrRecovery, homePitchRecovery: oppRecovery)
-                : GameEngine.Play(oppTeam, mgrTeam, ctx, rng.Fork(2), oppCarry, mgrCarry,
+                : GameEngine.Play(oppTeam, mgrTeam, ctx, matchRng, oppCarry, mgrCarry,
                     awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery);
+            if (replayState != null)
+            {
+                var inputs = managerIsAway
+                    ? new MatchReplayInputs(mgrTeam, oppTeam, ctx, replayState, mgrRecovery, oppRecovery, mgrCarry, oppCarry,
+                        System.Array.Empty<GameDecision>())
+                    : new MatchReplayInputs(oppTeam, mgrTeam, ctx, replayState, oppRecovery, mgrRecovery, oppCarry, mgrCarry,
+                        System.Array.Empty<GameDecision>());
+                GameSession.Current.PendingReplay = new PendingOwnReplay(managerIsAway, opponent, inputs, null);
+            }
             return new PlayerMatchDetail(result, ManagerIsAway: managerIsAway);
         }
 
@@ -89,6 +102,8 @@ namespace KokoSim.Unity.Shell
                 : new MatchProgression(oppTeam, mgrTeam, ctx, rng.Fork(2),
                     awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery,
                     awayPriorWeekPitches: oppCarry, homePriorWeekPitches: mgrCarry);
+            // 注目試合の再生データ（issue #1580）: 采配の決定列は終局で進行体から取る（ここでは進行体を覚えるだけ）。
+            GameSession.Current.PendingReplay = new PendingOwnReplay(managerIsAway, opponent, null, prog);
             return new PlayerMatchLive(prog, ManagerIsAway: managerIsAway);
         }
 
