@@ -2346,7 +2346,6 @@ screens:
       - wait: 3
       - read: ms-auto
       - click: ms-auto
-      - click: .ms-row__x[0]
       - shot: 02-in-tournament
       - play_tournament: ""
       - show: MemberSetting
