@@ -119,6 +119,8 @@ public sealed class DevelopingPlayerCloneTests
         Assert.Equal(original.SlumpWeeks, clone.SlumpWeeks);
         Assert.Equal(original.HasYips, clone.HasYips);
         Assert.Equal(PitcherRoleResolver.LeansPitcher(original), PitcherRoleResolver.LeansPitcher(clone));
+        // 遊み「前回判定」自体も複製する（issue #1792・v54）。
+        Assert.Equal(original.PitcherRoleLastLeansPitcher, clone.PitcherRoleLastLeansPitcher);
         Assert.Equal(original.Plan, clone.Plan);
         Assert.True(original.Skills.Has(Skill.Grinder) == clone.Skills.Has(Skill.Grinder));
         Assert.True(original.Skills.IsHidden(Skill.Monster) == clone.Skills.IsHidden(Skill.Monster));

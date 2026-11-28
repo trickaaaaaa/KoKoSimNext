@@ -41,7 +41,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 53;
+    public const int CurrentVersion = 54;
 
     // ===== Serialize =====
 
@@ -480,6 +480,10 @@ public static class SaveCodec
         // （CareerSaves.TeamColorsFromJson）が帽子クラウンと同色で補う＝移行ブロックは要らない。
         // v49（issue #1482）: 合宿の見送り（summerCampSkipped/winterCampSkipped）が増えた。キーが無い旧セーブは
         // 読み込み側が false（どちらも行う）で補う＝移行ブロックは要らない。
+        // v54（issue #1792）: 部員に投手寄り判定の遊み「前回判定」（pitcherRoleHyst）が増えた。キーが無い旧セーブは
+        // 読み込み側（DevelopingPlayerSaves.FromJson）が null で補う＝移行ブロックは要らない
+        // （次の LeansPitcher 呼び出しが遊び無しの素の比較で決め、以後はその結果に従う。判定の物差しが
+        // 守備位置適性から実際の投手能力へ変わったため、旧セーブの選手も読み込み後は新しい物差しで判定される）。
         // v53（issue #1580）: 注目試合の再生データ（matchReplays）が増えた。キーが無い旧セーブは読み込み側が空で補う
         // ＝移行ブロックは要らない（過去の試合の入力は残していなかったので復元できない）。
         // v52（issue #1679）: 監督に名伯楽の残り年数（manager.mentorYearsLeft）が増えた。キーが無い旧セーブは

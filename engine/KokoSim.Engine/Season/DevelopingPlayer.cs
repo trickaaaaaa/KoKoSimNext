@@ -42,6 +42,14 @@ public sealed class DevelopingPlayer
     // 守備位置適性から導出する（PitcherRoleResolver.LeansPitcher）。投手は配置であって属性ではない。
 
     /// <summary>
+    /// 投手寄り判定の遊び（ヒステリシス）が参照する「前回の判定」（issue #1792・セーブ v54）。
+    /// これ自体は選手の属性ではなく、<see cref="Season.PitcherRoleResolver.LeansPitcher(DevelopingPlayer, RosterCoefficients)"/>
+    /// が判定するたびに書き直すキャッシュ。null＝まだ一度も判定していない（新規生成直後・旧セーブ）＝
+    /// 次の判定は遊び無しの素の比較で決め、以後はその結果をここへ書き戻していく。
+    /// </summary>
+    public bool? PitcherRoleLastLeansPitcher { get; set; }
+
+    /// <summary>
     /// 球質タイプ（試合層の <see cref="PitcherAttributes.Archetype"/> からの逆投影・issue #1302）。投手総合が型の上乗せを
     /// 差し引くための材料で、<see cref="Nation.ScoutedTeamProfile"/> が集計用に一時的に載せる。セーブには載せない
     /// （自校の選手は生成時に型を捨てている）。null＝型なし＝差し引かない。
@@ -329,7 +337,10 @@ public sealed class DevelopingPlayer
     /// </summary>
     public double AverageLevel(int delta)
     {
-        var kinds = PitcherRoleResolver.LeansPitcher(this) ? AbilityKinds.Pitching : BatterCore;
+        // CurrentRole（再評価・上書きをしない読み取り専用, issue #1792）: ここは「今の役割を読むだけ」の側
+        // （PitcherRoleResolver.CurrentRole のコメント参照）。LeansPitcher を呼ぶと、既にチーム編成等が
+        // 決めた役割を能力の遊びの帯で勝手に上書きし、同じチームを集計するだけの TeamStrengthProfile と食い違う。
+        var kinds = PitcherRoleResolver.CurrentRole(this) ? AbilityKinds.Pitching : BatterCore;
         var sum = 0.0;
         foreach (var k in kinds) sum += _level[(int)k] + delta;
         return sum / kinds.Length;
@@ -395,6 +406,7 @@ public sealed class DevelopingPlayer
             HasYips = HasYips,
             YipsAbility = YipsAbility,
             YipsDrop = YipsDrop,
+            PitcherRoleLastLeansPitcher = PitcherRoleLastLeansPitcher,
         };
         // 投手役は適性からの導出なので複製しない（#377）。適性は下でコピーするため結果は一致する。
         for (var i = 0; i < Count; i++)

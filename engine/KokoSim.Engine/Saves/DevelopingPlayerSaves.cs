@@ -99,6 +99,8 @@ internal static class DevelopingPlayerSaves
             .Add("hasYips", p.HasYips)
             .Add("yipsAbility", EnumJson.WriteNullable(p.YipsAbility))
             .Add("yipsDrop", p.YipsDrop)
+            // 投手寄り判定の遊び「前回判定」（v54・issue #1792）。null＝まだ一度も判定していない。
+            .Add("pitcherRoleHyst", p.PitcherRoleLastLeansPitcher is { } h ? JsonValue.Of(h) : JsonNull.Instance)
             .Add("level", level)
             .Add("exp", exp)
             .Add("cap", cap)
@@ -209,6 +211,10 @@ internal static class DevelopingPlayerSaves
             HasYips = o.Bool("hasYips"),
             YipsAbility = o.Has("yipsAbility") ? EnumJson.ReadNullable<AbilityKind>(o.Str("yipsAbility")) : null,
             YipsDrop = o.Has("yipsDrop") ? o.Int("yipsDrop") : 0,
+            // v53以前（キー欠損）は null＝まだ判定していない。次の LeansPitcher 呼び出しが遊び無しの
+            // 素の比較で決め、以後はその結果に従う（issue #1792: 旧セーブは「現行の遊び無し判定」で初期化、の実体）。
+            PitcherRoleLastLeansPitcher = o.Has("pitcherRoleHyst") && !o.IsNull("pitcherRoleHyst")
+                ? o.Bool("pitcherRoleHyst") : (bool?)null,
         };
 
         // 能力・守備位置の列挙は末尾追加のみ。保存時より列挙が増えていたら、増えた分の列は旧セーブに無い＝

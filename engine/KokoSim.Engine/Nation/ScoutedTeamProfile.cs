@@ -39,7 +39,12 @@ public static class ScoutedTeamProfile
         return roster;
     }
 
-    private static DevelopingPlayer ToDeveloping(Player p)
+    /// <summary>
+    /// internal: <see cref="Roster.AiRosterFactory"/> が生成直後の <c>AiPlayer</c>（<see cref="Player"/> を持つ）を
+    /// 能力ベースの <see cref="Season.PitcherRoleResolver.LeansPitcher(Season.DevelopingPlayer, Season.RosterCoefficients)"/>
+    /// に通すのにも使う（issue #1792・怪物パッケージの対象選び）。
+    /// </summary>
+    internal static DevelopingPlayer ToDeveloping(Player p)
     {
         var dp = new DevelopingPlayer
         {

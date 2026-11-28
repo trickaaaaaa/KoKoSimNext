@@ -92,10 +92,14 @@ public static class TeamStrengthProfile
         // 野手＝非投手を総合力（AverageLevel）降順。投手＝投手合成の降順。
         // チーム総合と6指標は今の物差し（表示Lv＋Δ・issue #1080）で測る＝数字もランクも物差しによらず同じ。
         // 選手個人の PlayerStrengthProfile は表示Lvのまま（d=0）＝個人のランクは Δ 下がる（狙い）。
+        // 役割は CurrentRole（読み取り専用, issue #1792）で振り分ける。LeansPitcher（能力の遊びの帯で
+        // 再評価・上書きする側）を使うと、既にチーム編成が決めた役割（例: 苦作で底上げされた、実際の
+        // 投手能力は低いままの投手）がここで「野手」へ上書きされ、同じチームの集計なのに人数が食い違う
+        // （PitcherRoleResolver.CurrentRole のコメント参照）。
         const int d = AbilityScale.Delta;
-        var fielders = roster.Where(p => !PitcherRoleResolver.LeansPitcher(p))
+        var fielders = roster.Where(p => !PitcherRoleResolver.CurrentRole(p))
             .OrderByDescending(p => p.AverageLevel(d)).ToList();
-        var pitchers = roster.Where(p => PitcherRoleResolver.LeansPitcher(p))
+        var pitchers = roster.Where(p => PitcherRoleResolver.CurrentRole(p))
             .OrderByDescending(p => PitcherComposite(p, c, d)).ToList();
 
         var regulars = fielders.Take(c.LineupSize).ToList();
@@ -150,6 +154,14 @@ public static class TeamStrengthProfile
     }
 
     private static readonly PitcherArchetypeCoefficients DefaultArchetypes = new();
+
+    /// <summary>
+    /// 投手総合と比べる「打撃・守備の総合」（issue #1792）。<see cref="Season.PitcherRoleResolver.LeansPitcher"/>
+    /// がこれと <see cref="PitcherComposite"/> を比べて投手寄りかどうかを決める＝打撃・守備の重みはここだけで持つ
+    /// （<see cref="BatterComposite"/>・<see cref="DefenseComposite"/> と同じ式を共有し、二重定義しない）。
+    /// </summary>
+    internal static double NonPitcherComposite(DevelopingPlayer p, TeamStrengthCoefficients c, int d = 0)
+        => (BatterComposite(p, c, d) + DefenseComposite(p, c, d)) / 2.0;
 
     internal static double DefenseComposite(DevelopingPlayer p, TeamStrengthCoefficients c, int d = 0)
         => (p.Level(AbilityKind.Fielding) + d) * c.FieldingWeight

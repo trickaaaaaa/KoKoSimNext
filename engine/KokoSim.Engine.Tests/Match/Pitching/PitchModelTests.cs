@@ -277,8 +277,11 @@ public sealed class PitchModelTests
                     fielders.Average(p => p.LearnedPitches.Count) + 0.5,
             "投手の変化球本数が野手を明確に上回っていない");
         // 断崖は無いが、変化球を1本も持たない投手は例外的（＝適性が判定境界すれすれの個体）に留まる。
+        // issue #1792: 変化球の本数は生成時の適性ベースの重み wRole のまま（オーナー決定・分布不変）だが、
+        // 「投手として読むか」は在籍後は能力ベースの別判定に変わった。両者が指す境界がちょうど一致しないぶん、
+        // wRoleが低い（≒変化球0本）まま能力だけ投手側に倒れる個体が実測1割強に増えた（旧: 10%未満→新: 11.5%）。
         var noBreaking = pitchers.Count(p => p.LearnedPitches.Count == 0) / (double)pitchers.Count;
-        Assert.True(noBreaking < 0.10, $"変化球ゼロの投手が多すぎる: {noBreaking:P1}");
+        Assert.True(noBreaking < 0.13, $"変化球ゼロの投手が多すぎる: {noBreaking:P1}");
 
         // 投手適性が高い野手ほど変化球を持ちやすい（旧「投手経歴」フラグの代わりに連続量が担う, #366b）。
         var apt = fielders.OrderByDescending(p => p.Aptitude(FieldPosition.Pitcher)).ToList();

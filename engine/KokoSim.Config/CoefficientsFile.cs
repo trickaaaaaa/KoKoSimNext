@@ -3171,6 +3171,10 @@ public static class CoefficientsLoader
         public int IntakeMax { get; set; } = D.IntakeMax;
         public double PitcherAptitudeBias { get; set; } = D.PitcherAptitudeBias;
         public double PitcherAptitudeWeightSpan { get; set; } = D.PitcherAptitudeWeightSpan;
+        public double PitcherRoleGeta { get; set; } = D.PitcherRoleGeta;
+        public double PitcherRoleHysteresisBand { get; set; } = D.PitcherRoleHysteresisBand;
+        public double PitcherRoleStrengthSlope { get; set; } = D.PitcherRoleStrengthSlope;
+        public double PitcherRoleStrengthReference { get; set; } = D.PitcherRoleStrengthReference;
         public double CatcherAptitudeFloor { get; set; } = D.CatcherAptitudeFloor;
         // 総合力（名声由来）
         public double TalentCenterDefault { get; set; } = D.TalentCenterDefault;
@@ -3554,6 +3558,10 @@ public static class CoefficientsLoader
             IntakeMax = IntakeMax,
             PitcherAptitudeBias = PitcherAptitudeBias,
             PitcherAptitudeWeightSpan = PitcherAptitudeWeightSpan,
+            PitcherRoleGeta = PitcherRoleGeta,
+            PitcherRoleHysteresisBand = PitcherRoleHysteresisBand,
+            PitcherRoleStrengthSlope = PitcherRoleStrengthSlope,
+            PitcherRoleStrengthReference = PitcherRoleStrengthReference,
             CatcherAptitudeFloor = CatcherAptitudeFloor,
             TalentCenterDefault = TalentCenterDefault,
             IntakeDrop = IntakeDrop,

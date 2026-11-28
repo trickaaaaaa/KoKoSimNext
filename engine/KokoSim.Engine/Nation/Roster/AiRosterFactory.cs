@@ -287,14 +287,16 @@ public static class AiRosterFactory
 
     /// <summary>
     /// 怪物種別に合うコホート成員を選ぶ（投手系→投手向き・鉄砲肩→捕外向き・打撃系→野手向き）。見つからねば −1。
-    /// 判定の材料は配置でなく**適性**（issue #384）。旧実装は生成時に固定した Position を見ていたが、
-    /// 選手が配置を持たなくなったので「その守備位置が最良適性か」で読み替える。
+    /// 投手寄りかどうかは生成が終わった個体の実際の能力で判定する（issue #1792・自校の
+    /// <see cref="Season.ProspectPhenom"/> と同じ物差し＝<see cref="PitcherRoleResolver.LeansPitcher(Season.DevelopingPlayer, RosterCoefficients)"/>）。
+    /// <see cref="ScoutedTeamProfile.ToDeveloping"/> で投影した使い捨ての <see cref="Season.DevelopingPlayer"/> に
+    /// 判定させる（この個体だけの遊び状態なので初回＝素の比較）。鉄砲肩の守備位置は配置でなく**適性**
+    /// （issue #384。選手が配置を持たなくなったので「その守備位置が最良適性か」で読み替える）。
     /// </summary>
     private static int PickPhenomMember(
         List<AiPlayer> players, PhenomType type, IRandomSource rng, RosterCoefficients rc)
     {
-        bool LeansPitcher(AiPlayer p) => PitcherRoleResolver.IsNaturalPitcher(
-            p.Aptitude(FieldPosition.Pitcher), AptitudeRoller.BestField(p.Aptitudes), rc);
+        bool LeansPitcher(AiPlayer p) => PitcherRoleResolver.LeansPitcher(ScoutedTeamProfile.ToDeveloping(p.Snapshot), rc);
 
         bool Match(AiPlayer p) => type switch
         {
